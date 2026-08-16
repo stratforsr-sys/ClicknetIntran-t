@@ -159,7 +159,7 @@ Q71 avgör om denna är akut: rekryteras 25 personer av en person är den det.
 
 ---
 
-## E4 — M2 Tid och närvaro · KÄRNAN BYGGD, AVSTÄNGD AV K12
+## E4 — M2 Tid och närvaro · BYGGD, AVSTÄNGD AV K12
 
 Får inte aktiveras i produktion innan intresseavvägningen är skriven och
 daterad. Koden finns och är testad; påslaget sker med `M2_AKTIV` i
@@ -170,24 +170,24 @@ daterad. Koden finns och är testad; påslaget sker med `M2_AKTIV` i
 | E4.1 | AC-2.1 | Stämpling in/ut/rast på max 2 knapptryck, mobil och kiosk | KLAR — bakom M2_AKTIV |
 | E4.2 | AC-2.2 | Fungerar offline, händelsen köas lokalt med **ursprunglig** tidsstämpel | KLAR — bakom M2_AKTIV |
 | E4.3 | AC-2.3 | Ingen `time_event` kan raderas eller ändras. Rättelse skapar ny rad | KLAR — trigger i databasen |
-| E4.4 | AC-2.4 | Automatisk stängning vid schemaslut med flagga för rättelse | BLOCKERAD |
+| E4.4 | AC-2.4 | Automatisk stängning vid schemaslut med flagga för rättelse | KLAR — stänger vid schemaslut, märks för rättelse |
 | E4.5 | AC-2.5 | Rättelseflöde med chefsattest, båda versioner synliga | KLAR — bakom M2_AKTIV |
-| E4.6 | AC-2.6, K2 | **Arbetstidsjournal** med jour-, över- och mertid åtskilda, PDF och CSV under 5 sekunder, dold i vardagen under `/admin/arbetstid` | BLOCKERAD |
-| E4.7 | AC-2.7, K3 | Journaldata bevaras 3 år, undantagen gallring | BLOCKERAD |
+| E4.6 | AC-2.6, K2 | **Arbetstidsjournal** med jour-, över- och mertid åtskilda, PDF och CSV under 5 sekunder, dold i vardagen under `/admin/arbetstid` | KLAR — /admin/arbetstid med CSV, olänkad |
+| E4.7 | AC-2.7, K3 | Journaldata bevaras 3 år, undantagen gallring | KLAR — egen tabell, undantagen gallringen |
 | E4.8 | AC-2.8 | Live-vy "på plats nu" med namn och in-tid, aldrig rastlängd | KLAR — bakom M2_AKTIV |
 | E4.9 | AC-2.9, K4 | Ingen platsdata samlas in — verifieras med kodgranskning | KLAR — ingen kolumn finns |
-| E4.10 | AC-2.23–2.26 | Rastschema per anställd och veckodag, avvikelsetyperna early_start, overrun, missing, unscheduled, konfigurerbar tolerans | BLOCKERAD av K29 |
-| E4.11 | AC-2.34 | Inställningsvy för raster: mall per bolag, team eller person | BLOCKERAD |
-| E4.12 | AC-2.35 | Schemaändring skapar ny rad. **Historiska avvikelser omvärderas aldrig** | BLOCKERAD |
-| E4.13 | AC-2.36 | Anställda notifieras och kvitterar innan avvikelser genereras mot nytt schema | BLOCKERAD |
-| E4.14 | AC-2.10, AC-2.27, K16 | Chefsvy visar endast avvikelser. Verifieras mot **API**, inte UI | BLOCKERAD |
-| E4.15 | AC-2.28 | Anställd ser egna avvikelser i sin helhet och kan kommentera | BLOCKERAD |
-| E4.16 | AC-2.29, K31 | `missing` lyfts som arbetsmiljösignal, inte disciplinärt | BLOCKERAD |
-| E4.17 | AC-2.30, K13, K17 | Ingen automatisk konsekvens. Avvikelsedata oåtkomlig för provision och lönekostnad | BLOCKERAD |
-| E4.18 | AC-2.31, AC-2.11, K18 | Gallring efter 90 dagar, månadsaggregat kvar 12 månader | BLOCKERAD |
-| E4.19 | AC-2.12, AC-2.32, K19 | Varje chefsöppning av avvikelsevyn loggas | BLOCKERAD |
+| E4.10 | AC-2.23–2.26 | Rastschema per anställd och veckodag, avvikelsetyperna early_start, overrun, missing, unscheduled, konfigurerbar tolerans | KLAR — bakom RAST_AKTIV (K29) |
+| E4.11 | AC-2.34 | Inställningsvy för raster: mall per bolag, team eller person | KLAR — /tid/schema, mall per bolag, team eller person |
+| E4.12 | AC-2.35 | Schemaändring skapar ny rad. **Historiska avvikelser omvärderas aldrig** | KLAR — nytt valid_from, historik omvärderas aldrig |
+| E4.13 | AC-2.36 | Anställda notifieras och kvitterar innan avvikelser genereras mot nytt schema | KLAR — utan kvittens genereras inga avvikelser |
+| E4.14 | AC-2.10, AC-2.27, K16 | Chefsvy visar endast avvikelser. Verifieras mot **API**, inte UI | KLAR — vyn rör aldrig time_event |
+| E4.15 | AC-2.28 | Anställd ser egna avvikelser i sin helhet och kan kommentera | KLAR — egna avvikelser med svarsfält |
+| E4.16 | AC-2.29, K31 | `missing` lyfts som arbetsmiljösignal, inte disciplinärt | KLAR — missing märks som arbetsmiljösignal |
+| E4.17 | AC-2.30, K13, K17 | Ingen automatisk konsekvens. Avvikelsedata oåtkomlig för provision och lönekostnad | KLAR — ingen automatisk konsekvens byggd |
+| E4.18 | AC-2.31, AC-2.11, K18 | Gallring efter 90 dagar, månadsaggregat kvar 12 månader | KLAR — 90 dagar, aggregat 12 månader |
+| E4.19 | AC-2.12, AC-2.32, K19 | Varje chefsöppning av avvikelsevyn loggas | KLAR — deviation.viewed i loggen |
 | E4.20 | AC-2.22 | Tyst 48-timmarsnotis till sales_manager | BLOCKERAD |
-| E4.21 | AC-2.19, AC-2.20 | Orden övertid, mertid och jourtid får inte förekomma i något vardagsgränssnitt | BLOCKERAD |
+| E4.21 | AC-2.19, AC-2.20 | Orden övertid, mertid och jourtid får inte förekomma i något vardagsgränssnitt | KLAR — orden finns bara i arbetstidsjournalen |
 | E4.22 | K20 | Omprövning av raststämpling efter 6 månader — kalenderpost | BLOCKERAD |
 
 ## E4b — Lönerapport · ~2 veckor

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import { Notis } from "@/components/ui/Notis";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { getCurrentUser, canManageEmployees, fullName } from "@/lib/auth";
@@ -19,12 +19,15 @@ import {
   timmarOchMinuter,
   type Handelse,
 } from "@/lib/tid";
+import { AVVIKELSE_ETIKETT, AVVIKELSE_FORKLARING, type Avvikelsetyp } from "@/lib/raster";
 import { Stamplar } from "./Stamplar";
 import { Rattelse } from "./Rattelse";
-import { beslutaRattelse } from "./actions";
+import { beslutaRattelse, kvitteraRastschema, kommenteraAvvikelse } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Tid — Clicknet Nav" };
+
+const DAGNAMN = ["", "Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag", "Lördag", "Söndag"];
 
 export default async function TidSida() {
   const user = await getCurrentUser();
@@ -76,6 +79,26 @@ export default async function TidSida() {
       .sort((a, b) => a.sedan.localeCompare(b.sedan));
   }
 
+  // AC-2.28: den anställda ser sina egna avvikelser i sin helhet.
+  const { data: minaAvvikelser } = await supabase
+    .from("break_deviation")
+    .select("id, work_date, kind, minutes, employee_comment")
+    .eq("employee_id", user.employee.id)
+    .order("work_date", { ascending: false })
+    .limit(20);
+
+  // AC-2.36: ett nytt rastschema börjar inte gälla förrän det kvitterats.
+  const [{ data: mittRastschema }, { data: minaKvitton }] = await Promise.all([
+    supabase
+      .from("scheduled_break")
+      .select("id, weekday, window_start, window_end, duration_minutes, valid_from")
+      .order("valid_from", { ascending: false }),
+    supabase.from("break_schedule_ack").select("schedule_id").eq("employee_id", user.employee.id),
+  ]);
+
+  const kvitterade = new Set((minaKvitton ?? []).map((k) => k.schedule_id));
+  const attKvittera = (mittRastschema ?? []).filter((r) => !kvitterade.has(r.id));
+
   // AC-2.5: chefens kö. Bara det som väntar på beslut.
   const { data: vantande } = chef
     ? await supabase
@@ -96,9 +119,19 @@ export default async function TidSida() {
               : "Stämplingen är byggd men inte påslagen."}
           </p>
         </div>
-        {M2_AKTIV && <Badge ton={lage === "inne" ? "ok" : lage === "rast" ? "warn" : "neutral"}>
-          {lage === "inne" ? "Instämplad" : lage === "rast" ? "På rast" : "Utstämplad"}
-        </Badge>}
+        <div className="flex flex-wrap items-center gap-2">
+          {chef && (
+            <>
+              <ButtonLink href="/tid/avvikelser" variant="sekundar">Avvikelser</ButtonLink>
+              <ButtonLink href="/tid/schema" variant="sekundar">Scheman</ButtonLink>
+            </>
+          )}
+          {M2_AKTIV && (
+            <Badge ton={lage === "inne" ? "ok" : lage === "rast" ? "warn" : "neutral"}>
+              {lage === "inne" ? "Instämplad" : lage === "rast" ? "På rast" : "Utstämplad"}
+            </Badge>
+          )}
+        </div>
       </div>
 
       {!M2_AKTIV && (
@@ -212,6 +245,67 @@ export default async function TidSida() {
                         </Button>
                       </form>
                     </div>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
+          {attKvittera.length > 0 && (
+            <Card className="h-fit" status="warn">
+              <CardHeader
+                titel="Nytt rastschema"
+                beskrivning="Läs igenom och kvittera. Innan du gjort det bedöms inga avvikelser mot det."
+              />
+              <ul className="flex flex-col gap-3">
+                {attKvittera.map((r) => (
+                  <li key={r.id} className="flex flex-col gap-2">
+                    <p className="text-small text-ink-700">
+                      {DAGNAMN[r.weekday]} {r.window_start.slice(0, 5)}–{r.window_end.slice(0, 5)},{" "}
+                      {r.duration_minutes} min · gäller från {r.valid_from}
+                    </p>
+                    <form action={kvitteraRastschema}>
+                      <input type="hidden" name="schema_id" value={r.id} />
+                      <Button type="submit" size="sm">Jag har läst</Button>
+                    </form>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
+          {(minaAvvikelser ?? []).length > 0 && (
+            <Card className="h-fit">
+              <CardHeader
+                titel="Mina avvikelser"
+                beskrivning="Du ser dem i sin helhet och kan svara på var och en."
+              />
+              <ul className="flex flex-col gap-4">
+                {(minaAvvikelser ?? []).map((a) => (
+                  <li key={a.id} className="flex flex-col gap-1.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="tnum text-small text-ink-500">{a.work_date}</span>
+                      <Badge ton={a.kind === "missing" ? "danger" : "warn"}>
+                        {AVVIKELSE_ETIKETT[a.kind as Avvikelsetyp]}
+                      </Badge>
+                    </div>
+                    <p className="text-small text-ink-500">
+                      {AVVIKELSE_FORKLARING[a.kind as Avvikelsetyp]}
+                    </p>
+                    {a.employee_comment ? (
+                      <p className="text-small text-ink-700">Ditt svar: {a.employee_comment}</p>
+                    ) : (
+                      <form action={kommenteraAvvikelse} className="flex flex-wrap gap-2">
+                        <input type="hidden" name="avvikelse_id" value={a.id} />
+                        <input
+                          name="kommentar"
+                          required
+                          placeholder="Vad hände?"
+                          className="min-w-0 flex-1 rounded-sm bg-canvas px-3 py-2 text-small text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                        />
+                        <Button type="submit" size="sm" variant="sekundar">Svara</Button>
+                      </form>
+                    )}
                   </li>
                 ))}
               </ul>

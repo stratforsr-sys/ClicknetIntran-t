@@ -199,3 +199,175 @@ export async function beslutaRattelse(form: FormData): Promise<void> {
   await logga(user.employee.id, godkann ? "time.correction_approved" : "time.correction_rejected", id);
   revalidatePath("/tid", "layout");
 }
+
+// -----------------------------------------------------------------------------
+// Scheman (AC-2.34, AC-2.35, AC-2.36)
+//
+// Ett schema ändras aldrig. Varje ändring är en NY rad med nytt `valid_from`,
+// och den gamla står kvar. Utan det kan en ändring i efterhand skapa
+// avvikelser för någon som följde reglerna som gällde då — AC-2.35 kallar det
+// ett hårt krav, och det är den enda regeln i M2 som inte går att mjuka upp.
+// -----------------------------------------------------------------------------
+
+async function kravSchemaansvarig() {
+  const user = await getCurrentUser();
+  if (!canManageEmployees(user) || !user?.employee) {
+    throw new Error("Bara säljchef och administratör får ändra scheman.");
+  }
+  return user;
+}
+
+function niva(form: FormData) {
+  const scope = String(form.get("scope") ?? "company");
+  const id = String(form.get("scope_id") ?? "") || null;
+  return {
+    scope,
+    employee_id: scope === "employee" ? id : null,
+    team_id: scope === "team" ? id : null,
+  };
+}
+
+export async function sparaArbetsschema(_prev: TidState, form: FormData): Promise<TidState> {
+  const user = await kravSchemaansvarig();
+  const { scope, employee_id, team_id } = niva(form);
+
+  const veckodagar = form.getAll("veckodag").map(Number).filter((d) => d >= 1 && d <= 7);
+  const start = String(form.get("start_time") ?? "");
+  const slut = String(form.get("end_time") ?? "");
+  const galler = String(form.get("valid_from") ?? "") || new Date().toISOString().slice(0, 10);
+
+  if (veckodagar.length === 0) return { fel: "Välj minst en veckodag." };
+  if (!start || !slut) return { fel: "Fyll i både start och slut." };
+  if (slut <= start) return { fel: "Sluttiden måste ligga efter starttiden." };
+  if (scope !== "company" && !(employee_id ?? team_id))
+    return { fel: "Välj vem schemat gäller." };
+
+  const { error } = await supabaseAdmin()
+    .from("work_schedule")
+    .insert(
+      veckodagar.map((weekday) => ({
+        scope,
+        employee_id,
+        team_id,
+        weekday,
+        start_time: start,
+        end_time: slut,
+        valid_from: galler,
+        created_by: user.employee!.id,
+      })),
+    );
+
+  if (error) return { fel: "Schemat kunde inte sparas." };
+
+  await logga(user.employee!.id, "schedule.work_set", employee_id ?? team_id ?? "company", {
+    scope,
+    veckodagar,
+    start,
+    slut,
+    galler_fran: galler,
+  });
+  revalidatePath("/tid", "layout");
+  return { ok: `Sparat. Gäller från ${galler}.` };
+}
+
+export async function sparaRastschema(_prev: TidState, form: FormData): Promise<TidState> {
+  const user = await kravSchemaansvarig();
+  const { scope, employee_id, team_id } = niva(form);
+
+  const veckodagar = form.getAll("veckodag").map(Number).filter((d) => d >= 1 && d <= 7);
+  const fonsterStart = String(form.get("window_start") ?? "");
+  const fonsterSlut = String(form.get("window_end") ?? "");
+  const langd = Number(form.get("duration_minutes") ?? 30);
+  const ordning = Number(form.get("sort") ?? 1);
+  const galler = String(form.get("valid_from") ?? "") || new Date().toISOString().slice(0, 10);
+
+  // AC-2.26: minst fem minuter, och gransen ligger i databasen ocksa.
+  const tol = Math.max(5, Number(form.get("tolerans") ?? 5));
+
+  if (veckodagar.length === 0) return { fel: "Välj minst en veckodag." };
+  if (!fonsterStart || !fonsterSlut) return { fel: "Fyll i tidsfönstret." };
+  if (fonsterSlut < fonsterStart) return { fel: "Fönstret slutar före det börjar." };
+  if (!Number.isFinite(langd) || langd < 1) return { fel: "Rastens längd måste vara minst en minut." };
+  if (scope !== "company" && !(employee_id ?? team_id))
+    return { fel: "Välj vem schemat gäller." };
+
+  const { error } = await supabaseAdmin()
+    .from("scheduled_break")
+    .insert(
+      veckodagar.map((weekday) => ({
+        scope,
+        employee_id,
+        team_id,
+        weekday,
+        sort: ordning,
+        window_start: fonsterStart,
+        window_end: fonsterSlut,
+        duration_minutes: Math.round(langd),
+        tol_early_start: tol,
+        tol_overrun: tol,
+        tol_missing: tol,
+        valid_from: galler,
+        created_by: user.employee!.id,
+      })),
+    );
+
+  if (error) return { fel: "Rastschemat kunde inte sparas." };
+
+  await logga(user.employee!.id, "schedule.break_set", employee_id ?? team_id ?? "company", {
+    scope,
+    veckodagar,
+    fonster: `${fonsterStart}–${fonsterSlut}`,
+    langd,
+    tolerans: tol,
+    galler_fran: galler,
+  });
+  revalidatePath("/tid", "layout");
+  return { ok: `Sparat. Gäller från ${galler}. Avvikelser börjar först när berörda kvitterat.` };
+}
+
+/** AC-2.36: utan kvittens bedöms ingenting. Tystnad är inte ett godkännande. */
+export async function kvitteraRastschema(form: FormData): Promise<void> {
+  const user = await getCurrentUser();
+  if (!user?.employee) return;
+
+  const schemaId = String(form.get("schema_id"));
+  if (!schemaId) return;
+
+  // Bara scheman som faktiskt galler den inloggade — RLS avgor.
+  const rls = await supabaseServer();
+  const { data: schema } = await rls
+    .from("scheduled_break")
+    .select("id")
+    .eq("id", schemaId)
+    .maybeSingle();
+  if (!schema) return;
+
+  await supabaseAdmin()
+    .from("break_schedule_ack")
+    .upsert(
+      { schedule_id: schemaId, employee_id: user.employee.id },
+      { onConflict: "schedule_id,employee_id" },
+    );
+
+  await logga(user.employee.id, "schedule.break_acked", schemaId);
+  revalidatePath("/tid", "layout");
+}
+
+/** AC-2.28: den anställda ser sina avvikelser i sin helhet och kan kommentera. */
+export async function kommenteraAvvikelse(form: FormData): Promise<void> {
+  const user = await getCurrentUser();
+  if (!user?.employee) return;
+
+  const id = String(form.get("avvikelse_id"));
+  const text = String(form.get("kommentar") ?? "").trim();
+  if (!id || !text) return;
+
+  await supabaseAdmin()
+    .from("break_deviation")
+    .update({ employee_comment: text })
+    .eq("id", id)
+    .eq("employee_id", user.employee.id);
+
+  await logga(user.employee.id, "deviation.commented", id);
+  revalidatePath("/tid", "layout");
+}

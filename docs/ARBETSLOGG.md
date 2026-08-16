@@ -4,6 +4,63 @@ Läs denna före arbete. Uppdatera efteråt.
 
 ---
 
+## 2026-08-16 · M2 färdigbyggd — schema, journal, rastavvikelser
+
+Fortsättning samma dag. Nu är hela stämplingsmodulen byggd utom två poster.
+Den är fortfarande avstängd: `M2_AKTIV` och `RAST_AKTIV` står på false.
+
+**Levererat**
+
+- Migration `0010`: `work_schedule` och `work_time_journal`. `0011`:
+  `scheduled_break`, `break_schedule_ack`, `break_deviation` och
+  `break_deviation_month`.
+- `src/lib/raster.ts` — avvikelsemotorn. Fyra typer enligt AC-2.24, tolerans
+  per typ, och regeln att en rast som börjar efter önskad senaste starttid
+  aldrig ger avvikelse (AC-2.25).
+- `/tid/schema` (AC-2.34): arbets- och rastschema per bolag, team eller person.
+- `/tid/avvikelser` (AC-2.10): chefens vy. Varje öppning loggas.
+- `/admin/arbetstid` (AC-2.6): compliance-vyn med CSV. Inte länkad från menyn.
+- Nattjobb `/api/jobb/tid` 02:30: stänger glömda utstämplingar vid schemaslut,
+  skriver journalen, genererar avvikelser och gallrar. I den ordningen — en dag
+  måste vara stängd innan den kan bedömas, och bedömd innan den får gallras.
+
+**Fyra val värda att känna till**
+
+- **Avvikelsemotorn har noll importer.** Den fick dem först, och testet vägrade
+  ladda filen. Det var inte ett testproblem utan ett designfel: motorn ska
+  bedöma en färdig lista, inte också bestämma vad listan innehåller. Vilka
+  händelser som räknas avgörs av `gallande()` hos den som anropar. Nu går
+  motorn att prova utan att starta något annat.
+- **Varje avvikelse bär id:t på schemat den dömdes mot.** Det är beviset för
+  AC-2.35: en schemaändring kan inte i efterhand skapa avvikelser för någon som
+  följde reglerna som gällde då.
+- **Toleransen läggs till gränsen, aldrig dras ifrån.** Den som arbetat fem
+  timmar och tre minuter utan rast har inte gjort något fel. Varje gräns som
+  kan tolkas åt två håll faller ut till den anställdas fördel.
+- **Ingen sluttid hittas på.** Saknas arbetsschema stängs en glömd utstämpling
+  inte alls — en påhittad tid i en lönegrundande logg är värre än en öppen dag
+  som någon får reda ut.
+
+**Verifierat**
+
+- `npm run test:raster`: 31 kontroller. Varje regel provad åt båda hållen —
+  inte bara att avvikelsen upptäcks, utan att den **inte** upptäcks när
+  personen följde schemat. Inklusive att ett schema som träder i kraft senare
+  inte dömer en dag som redan varit.
+- `npm run test:rls`: 114 kontroller, tolv nya. Anna kan varken lägga sig ett
+  eget rastschema, kvittera i Bertils namn, skriva ner sin egen avvikelse eller
+  radera den. Teamledaren ser ingen arbetstidsjournal — den är ledningens.
+- AC-2.21 kontrollerad med grep: orden övertid, mertid och jourtid förekommer
+  bara i arbetstidsjournalen och i jobbet som skriver kolumnerna.
+- AC-2.9 kontrollerad likadant: ingen kolumn eller kod för position finns.
+
+**Kvar i M2**
+
+E4.20 (tyst 48-timmarsnotis — kräver transaktionell e-post) och E4.22
+(kalenderpost för omprövning efter 6 månader). Samt hela E4b lönerapport.
+
+---
+
 ## 2026-08-16 · E4 M2 Stämpling — kärnan byggd, avstängd av K12
 
 Beställt som "det viktigaste". Byggt och testat, men levererat avstängt:

@@ -80,6 +80,10 @@ async function stad() {
   await db.query(`alter table time_event disable trigger time_event_orubblig`);
   await db.query(`delete from time_event where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`alter table time_event enable trigger time_event_orubblig`);
+  await db.query(`delete from break_deviation where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
+  await db.query(`delete from work_time_journal where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
+  await db.query(`delete from scheduled_break where scope = 'company' and window_start = '11:30' and duration_minutes = 30`);
+  await db.query(`delete from work_schedule where scope = 'company' and start_time = '08:00' and end_time = '17:00'`);
   await db.query(`update employee set team_id = null where team_id in (select id from team where name like 'rlstest-%')`);
   await db.query(`delete from employee where email like $1`, [PREFIX + "%"]);
   await db.query(`delete from team where name like 'rlstest-%'`);
@@ -300,6 +304,80 @@ console.log("\n\x1b[1mStämpling: egen tid, chefens insyn och oföränderlighet\
   ok("och vägrar radering", raderFel !== null, (raderFel ?? "").slice(0, 40));
 }
 
+console.log("\n\x1b[1mScheman och avvikelser\x1b[0m");
+{
+  const { rows: sch } = await db.query(
+    `insert into scheduled_break (scope, weekday, window_start, window_end, duration_minutes)
+     values ('company', 1, '11:30', '13:00', 30) returning id`,
+  );
+  const schemaId = sch[0].id;
+
+  const annasSchema = await las(tA, "scheduled_break", "select=id");
+  ok("Anna ser bolagets rastschema", annasSchema.length >= 1, `såg ${annasSchema.length}`);
+
+  const w1 = await fetch(`${URL}/rest/v1/scheduled_break`, {
+    method: "POST", headers: som(tA),
+    body: JSON.stringify({ scope: "employee", employee_id: saljareA.id, weekday: 1,
+      window_start: "10:00", window_end: "10:30", duration_minutes: 90 }),
+  });
+  ok("Anna kan INTE lägga sig ett eget rastschema", !w1.ok, `HTTP ${w1.status}`);
+
+  const w2 = await fetch(`${URL}/rest/v1/scheduled_break?id=eq.${schemaId}`, {
+    method: "PATCH", headers: som(tD), body: JSON.stringify({ duration_minutes: 60 }),
+  });
+  ok("inte ens säljchefen ändrar ett schema via API:t", !w2.ok, `HTTP ${w2.status}`);
+
+  // AC-2.36: kvittensen ar den anstalldas, ingen annans.
+  const w3 = await fetch(`${URL}/rest/v1/break_schedule_ack`, {
+    method: "POST", headers: som(tA),
+    body: JSON.stringify({ schedule_id: schemaId, employee_id: saljareB.id }),
+  });
+  ok("Anna kan INTE kvittera i Bertils namn", !w3.ok, `HTTP ${w3.status}`);
+
+  await db.query(
+    `insert into break_deviation (employee_id, work_date, kind, minutes, schedule_id)
+     values ($1::uuid, current_date - 1, 'overrun', 20, $3::uuid),
+            ($2::uuid, current_date - 1, 'missing', 45, $3::uuid)`,
+    [saljareA.id, saljareB.id, schemaId],
+  );
+
+  const annasAvv = await las(tA, "break_deviation", "select=employee_id");
+  ok("Anna ser bara sin egen avvikelse", annasAvv.length === 1 && annasAvv[0].employee_id === saljareA.id,
+    `såg ${annasAvv.length}`);
+
+  const evasAvv = await las(tE, "break_deviation", "select=id");
+  ok("Eva på ekonomi ser inga avvikelser alls", evasAvv.length === 0, `såg ${evasAvv.length}`);
+
+  const chefensAvv = await las(tD, "break_deviation", "select=id");
+  ok("Säljchefen ser båda", chefensAvv.length >= 2, `såg ${chefensAvv.length}`);
+
+  // AC-2.17, K13, K17: avvikelser far inte skrivas om av den bedomda.
+  const w4 = await fetch(`${URL}/rest/v1/break_deviation?employee_id=eq.${saljareA.id}`, {
+    method: "PATCH", headers: som(tA), body: JSON.stringify({ minutes: 0 }),
+  });
+  ok("Anna kan INTE skriva ner sin egen avvikelse", !w4.ok, `HTTP ${w4.status}`);
+
+  const w5 = await fetch(`${URL}/rest/v1/break_deviation?employee_id=eq.${saljareA.id}`, {
+    method: "DELETE", headers: som(tA),
+  });
+  ok("och inte radera den", !w5.ok, `HTTP ${w5.status}`);
+
+  // AC-2.6: journalen ar en compliance-vy — egen rad, annars bara ledningen.
+  await db.query(
+    `insert into work_time_journal (employee_id, work_date, worked_minutes)
+     values ($1::uuid, current_date - 1, 450), ($2::uuid, current_date - 1, 480)`,
+    [saljareA.id, saljareB.id],
+  );
+
+  const annasJournal = await las(tA, "work_time_journal", "select=employee_id");
+  ok("Anna ser sin egen journalrad", annasJournal.length === 1, `såg ${annasJournal.length}`);
+  const ledarensJournal = await las(tC, "work_time_journal", "select=employee_id");
+  ok("teamledaren ser INGEN journal — den är ledningens", ledarensJournal.length === 0,
+    `såg ${ledarensJournal.length}`);
+  const chefensJournal = await las(tD, "work_time_journal", "select=employee_id");
+  ok("säljchefen ser båda raderna", chefensJournal.length >= 2, `såg ${chefensJournal.length}`);
+}
+
 console.log("\n\x1b[1mUtbildning: malgrupp, facit och egna forsok\x1b[0m");
 {
   const { rows: k } = await db.query(
@@ -500,7 +578,7 @@ console.log("\n\x1b[1mSteg två: kod via e-post\x1b[0m");
 }
 
 console.log("\n\x1b[1mAnonym anslutning\x1b[0m");
-for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event"]) {
+for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation"]) {
   const r = await fetch(`${URL}/rest/v1/${t}?select=*`, { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` } });
   const j = await r.json();
   ok(`${t} ger inga rader anonymt`, !Array.isArray(j) || j.length === 0, Array.isArray(j) ? `${j.length} rader` : `HTTP ${r.status}`);
