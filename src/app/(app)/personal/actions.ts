@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { getCurrentUser, canManageEmployees } from "@/lib/auth";
-import { ROLES, type Role } from "@/lib/roles";
+import { getCurrentUser, canManageEmployees, hasRole } from "@/lib/auth";
+import { ROLES, PERMISSIONS, type Role, type Permission } from "@/lib/roles";
 
 export type FormState = { fel?: string; ok?: string };
 
@@ -347,4 +347,49 @@ async function ledsAv(
     aktuell = svar.data?.manager_id ?? null;
   }
   return false;
+}
+
+/**
+ * AC-13.13. Lonekostnadsbehorigheten ges per person, aldrig per roll — PRD
+ * §1.4 varnar uttryckligen for att knyta den till `admin`, eftersom den som
+ * far hjalpa till med IT da automatiskt ser allas ersattning.
+ *
+ * Darfor racker det inte att fa hantera personal: bara saljchef och VD far
+ * dela ut den. En teknisk administrator kan alltsa inte ge den till sig sjalv.
+ */
+export async function andraBehorighet(form: FormData): Promise<void> {
+  const user = await getCurrentUser();
+  if (!hasRole(user, "sales_manager", "ceo") || !user?.employee) {
+    throw new Error("Bara säljchef och VD får dela ut lönekostnadsbehörigheten.");
+  }
+
+  const db = supabaseAdmin();
+  const employeeId = String(form.get("employee_id"));
+  const behorighet = String(form.get("behorighet"));
+  const pa = String(form.get("pa")) === "1";
+
+  if (!PERMISSIONS.includes(behorighet as Permission)) return;
+
+  if (pa) {
+    await db.from("employee_permission").upsert({
+      employee_id: employeeId,
+      permission: behorighet,
+      granted_by: user.employee.id,
+    });
+  } else {
+    await db
+      .from("employee_permission")
+      .delete()
+      .eq("employee_id", employeeId)
+      .eq("permission", behorighet);
+  }
+
+  await logga(
+    user.employee.id,
+    pa ? "permission.granted" : "permission.revoked",
+    "employee",
+    employeeId,
+    { behorighet },
+  );
+  revalidatePath(`/personal/${employeeId}`);
 }

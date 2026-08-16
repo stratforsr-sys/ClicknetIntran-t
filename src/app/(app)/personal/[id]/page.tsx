@@ -4,18 +4,27 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Ikon } from "@/components/shell/Ikon";
-import { getCurrentUser, canManageEmployees, fullName } from "@/lib/auth";
+import { getCurrentUser, canManageEmployees, hasRole, fullName } from "@/lib/auth";
 import {
   EMPLOYMENT_TYPE_LABEL,
   ROLES,
   ROLE_LABEL,
   STATUS_LABEL,
   MFA_REQUIRED_ROLES,
+  PERMISSIONS,
+  PERMISSION_LABEL,
   type Role,
 } from "@/lib/roles";
 import { supabaseServer } from "@/lib/supabase/server";
 import { KONTROLL } from "@/components/ui/Field";
-import { aktivera, andraRoll, kvitteraOffboarding, offboarda, sattOrganisation } from "../actions";
+import {
+  aktivera,
+  andraBehorighet,
+  andraRoll,
+  kvitteraOffboarding,
+  offboarda,
+  sattOrganisation,
+} from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +68,15 @@ export default async function AnstalldSida({ params }: { params: Promise<{ id: s
     .select("id, label, state, skipped_reason, sort")
     .eq("employee_id", id)
     .order("sort");
+
+  // AC-13.13: lonekostnadsbehorigheten delas ut av saljchef och VD, inte av
+  // den tekniska administratoren (PRD §1.4).
+  const { data: behRader } = await supabase
+    .from("employee_permission")
+    .select("permission")
+    .eq("employee_id", id);
+  const behorigheter = new Set((behRader ?? []).map((b) => b.permission));
+  const farDelaUtBehorighet = hasRole(user, "sales_manager", "ceo");
 
   const farHantera = canManageEmployees(user);
   const avslutad = a.status === "offboarded";
@@ -148,6 +166,49 @@ export default async function AnstalldSida({ params }: { params: Promise<{ id: s
           )}
         </Card>
       </div>
+
+      {/* AC-13.13: behorigheten ges per person, oberoende av roll. */}
+      {farDelaUtBehorighet && !avslutad && (
+        <Card>
+          <CardHeader
+            titel="Särskild behörighet"
+            beskrivning="Ges per person, aldrig per roll. Varje ändring loggas med vem som beviljade."
+          />
+          <ul className="flex flex-col gap-1">
+            {PERMISSIONS.map((b) => {
+              const pa = behorigheter.has(b);
+              return (
+                <li key={b}>
+                  <form action={andraBehorighet}>
+                    <input type="hidden" name="employee_id" value={a.id} />
+                    <input type="hidden" name="behorighet" value={b} />
+                    <input type="hidden" name="pa" value={pa ? "0" : "1"} />
+                    <button
+                      type="submit"
+                      className={`flex min-h-11 w-full items-center gap-3 rounded-sm px-3 text-left text-body transition-colors duration-fast ${
+                        pa ? "bg-accent-tint text-accent-ink" : "text-ink-700 hover:bg-surface-alt"
+                      }`}
+                    >
+                      <span
+                        className={`grid size-5 shrink-0 place-items-center rounded-xs ${
+                          pa ? "bg-accent text-ink-inv" : "ring-1 ring-ink-300"
+                        }`}
+                      >
+                        {pa && <Ikon namn="kontroll" className="size-3.5" />}
+                      </span>
+                      <span className="flex-1">{PERMISSION_LABEL[b]}</span>
+                    </button>
+                  </form>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="mt-3 text-small text-ink-500">
+            Ser vad kollegorna kostar. Ge den till dig och VD — inte till en teknisk
+            administratör, som annars ser allas ersättning på köpet.
+          </p>
+        </Card>
+      )}
 
       {/* E1.13: team och chef avgor vem som ser personens uppgifter. */}
       {farHantera && !avslutad && (

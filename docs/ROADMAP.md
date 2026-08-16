@@ -70,7 +70,7 @@ förhållande till tillväxten.
 | E1.12 | AC-1.8 | **Konton utan inloggning på 45 dagar flaggas** — kräver schemalagt jobb (R11) | EJ PÅBÖRJAD |
 | E1.13 | — | **Teamhantering i UI**: skapa team, sätt teamledare, koppla anställd till team och chef | KLAR |
 | E1.14 | — | **Egen profilsida**: se sina uppgifter, byta lösenord, aktivera MFA | KLAR |
-| E1.15 | §1.4 | **Admin-vy för `payroll_cost_viewer`** — tilldelas per person, varje ändring loggad (AC-13.13) | EJ PÅBÖRJAD |
+| E1.15 | §1.4 | **Admin-vy för `payroll_cost_viewer`** — tilldelas per person, varje ändring loggad (AC-13.13) | KLAR |
 
 ---
 

@@ -73,6 +73,7 @@ async function stad() {
   await db.query(`delete from audit_log where object_id in (select id::text from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`update team set lead_id = null where lead_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`delete from document where slug like 'rlstest-%'`);
+  await db.query(`delete from employee_permission where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`update employee set team_id = null where team_id in (select id from team where name like 'rlstest-%')`);
   await db.query(`delete from employee where email like $1`, [PREFIX + "%"]);
   await db.query(`delete from team where name like 'rlstest-%'`);
@@ -230,6 +231,39 @@ console.log("\n\x1b[1mRutinbibliotek: publicerat, utkast och malgrupp\x1b[0m");
   ok("Anna får 0 rader när hon frågar direkt efter utkastets id", utk.length === 0, `såg ${utk.length}`);
   const chefsfraga = await las(tA, "document", `select=slug&id=eq.${chefsdok}`);
   ok("Anna får 0 rader när hon frågar direkt efter chefsdokumentets id", chefsfraga.length === 0, `såg ${chefsfraga.length}`);
+}
+
+console.log("\n\x1b[1mLönekostnadsbehörigheten ges per person\x1b[0m");
+{
+  // AC-13.13. Behorigheten ar den enda vagen till M13, sa den som kan satta
+  // den pa sig sjalv har i praktiken redan lonekostnaderna.
+  const w = await fetch(`${URL}/rest/v1/employee_permission`, {
+    method: "POST", headers: som(tA),
+    body: JSON.stringify({ employee_id: saljareA.id, permission: "payroll_cost_viewer" }),
+  });
+  ok("Anna kan INTE ge sig själv lönekostnadsbehörighet", !w.ok, `HTTP ${w.status}`);
+
+  await db.query(
+    `insert into employee_permission (employee_id, permission) values ($1::uuid, 'payroll_cost_viewer')`,
+    [ekonomi.id],
+  );
+
+  const evas = await las(tE, "employee_permission", "select=permission");
+  ok("Eva ser sin egen behörighet", evas.length === 1 && evas[0].permission === "payroll_cost_viewer");
+
+  const annas = await las(tA, "employee_permission", "select=permission");
+  ok("Anna ser inte Evas behörighet", annas.length === 0, `såg ${annas.length}`);
+
+  const cecilias = await las(tC, "employee_permission", "select=permission");
+  ok("Teamledaren ser den inte heller", cecilias.length === 0, `såg ${cecilias.length}`);
+
+  const davids = await las(tD, "employee_permission", "select=employee_id");
+  ok("Säljchefen ser vem som har den", davids.some((r) => r.employee_id === ekonomi.id));
+
+  const d = await fetch(`${URL}/rest/v1/employee_permission?employee_id=eq.${ekonomi.id}`, {
+    method: "DELETE", headers: som(tD),
+  });
+  ok("men kan INTE dra in den via API:t", !d.ok, `HTTP ${d.status}`);
 }
 
 console.log("\n\x1b[1mTeam ger teamledaren insyn — och bara den\x1b[0m");

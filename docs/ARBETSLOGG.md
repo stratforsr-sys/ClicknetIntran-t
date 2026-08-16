@@ -4,7 +4,7 @@ Läs denna före arbete. Uppdatera efteråt.
 
 ---
 
-## 2026-08-16 · E1.13 Teamhantering
+## 2026-08-16 · E1.13 Teamhantering + E1.15 Lönekostnadsbehörighet
 
 **Levererat**
 
@@ -25,13 +25,25 @@ Läs denna före arbete. Uppdatera efteråt.
 - Chefskedjan kollas mot ringar innan den sparas. Databasen skriver gladeligen
   A→B→A, och sedan snurrar varje vy som följer kedjan uppåt tills den ger upp.
 
+**E1.15: `payroll_cost_viewer` (AC-13.13)**
+
+Kort "Särskild behörighet" på personens sida. Den delas ut av **säljchef och
+VD, inte av den som får hantera personal** — PRD §1.4 varnar uttryckligen för
+att knyta lönedata till `admin`, eftersom den som hjälper till med IT då ser
+allas ersättning på köpet. En teknisk administratör kan alltså inte ge den
+till sig själv. `permission.granted` och `permission.revoked` i loggen.
+
 **Verifierat**
 
-- `node tests/rls.mjs`: 59 kontroller, alla godkända. Sju nya som mäter det
-  som faktiskt betyder något: Cecilia ser inte Bertil före teamkopplingen, ser
-  honom efter, Eva på ekonomi ser honom aldrig, och varken Anna eller Cecilia
-  kan skapa team, göra sig till teamledare eller peka ut sig själv som chef
-  via API:t.
+- `node tests/rls.mjs`: 65 kontroller, alla godkända. Tretton nya. För team:
+  Cecilia ser inte Bertil före kopplingen, ser honom efter, Eva på ekonomi ser
+  honom aldrig, och varken Anna eller Cecilia kan skapa team, göra sig till
+  teamledare eller peka ut sig själv som chef via API:t. För behörigheten: Anna
+  kan inte ge sig själv den, Eva ser sin egen, ingen annan än säljchefen ser
+  vem som har den, och inte ens han kan dra in den via API:t.
+- Hela teamflödet kört i produktion: team skapat, ledare satt, person kopplad
+  och bortkopplad, teamet borttaget — alla fem händelserna i `audit_log`.
+  Testdatat är bortstädat, databasen står med noll team.
 
 ---
 
