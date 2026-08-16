@@ -73,7 +73,9 @@ async function stad() {
   await db.query(`delete from audit_log where object_id in (select id::text from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`update team set lead_id = null where lead_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`delete from document where slug like 'rlstest-%'`);
+  await db.query(`update employee set team_id = null where team_id in (select id from team where name like 'rlstest-%')`);
   await db.query(`delete from employee where email like $1`, [PREFIX + "%"]);
+  await db.query(`delete from team where name like 'rlstest-%'`);
 }
 
 await stad();
@@ -228,6 +230,49 @@ console.log("\n\x1b[1mRutinbibliotek: publicerat, utkast och malgrupp\x1b[0m");
   ok("Anna får 0 rader när hon frågar direkt efter utkastets id", utk.length === 0, `såg ${utk.length}`);
   const chefsfraga = await las(tA, "document", `select=slug&id=eq.${chefsdok}`);
   ok("Anna får 0 rader när hon frågar direkt efter chefsdokumentets id", chefsfraga.length === 0, `såg ${chefsfraga.length}`);
+}
+
+console.log("\n\x1b[1mTeam ger teamledaren insyn — och bara den\x1b[0m");
+{
+  // Cecilia leder teamet. Bertil ligger i det men rapporterar inte till henne,
+  // sa det ar teamkopplingen ensam som prövas har.
+  const { rows: t } = await db.query(
+    `insert into team (name, lead_id) values ('rlstest-nord', $1::uuid) returning id`,
+    [ledare.id],
+  );
+  const teamId = t[0].id;
+
+  const fore = (await las(tC, "employee")).map((r) => r.email);
+  ok("Cecilia ser inte Bertil innan han läggs i teamet", !fore.includes(saljareB.epost));
+
+  await db.query(`update employee set team_id = $1::uuid where id = $2::uuid`, [teamId, saljareB.id]);
+
+  const efter = (await las(tC, "employee")).map((r) => r.email);
+  ok("Cecilia ser Bertil när han ligger i hennes team", efter.includes(saljareB.epost), efter.join(", "));
+
+  const davidsSyn = (await las(tD, "employee")).map((r) => r.email);
+  ok("David ser honom också", davidsSyn.includes(saljareB.epost));
+
+  const evasSyn = (await las(tE, "employee")).map((r) => r.email);
+  ok("Eva på ekonomi ser honom inte", !evasSyn.includes(saljareB.epost), evasSyn.join(", "));
+
+  // Skrivvagen: team ar inte ett fritt falt for den som rakar vara inloggad.
+  const w1 = await fetch(`${URL}/rest/v1/team`, {
+    method: "POST", headers: som(tA), body: JSON.stringify({ name: "rlstest-fejk" }),
+  });
+  ok("Anna kan INTE skapa ett team via API:t", !w1.ok, `HTTP ${w1.status}`);
+
+  const w2 = await fetch(`${URL}/rest/v1/team?id=eq.${teamId}`, {
+    method: "PATCH", headers: som(tA), body: JSON.stringify({ lead_id: saljareA.id }),
+  });
+  ok("Anna kan INTE göra sig själv till teamledare", !w2.ok, `HTTP ${w2.status}`);
+
+  const w3 = await fetch(`${URL}/rest/v1/employee?id=eq.${saljareB.id}`, {
+    method: "PATCH", headers: som(tC), body: JSON.stringify({ manager_id: ledare.id }),
+  });
+  ok("Cecilia kan INTE peka ut sig själv som Bertils chef", !w3.ok, `HTTP ${w3.status}`);
+
+  await db.query(`update employee set team_id = null where id = $1::uuid`, [saljareB.id]);
 }
 
 console.log("\n\x1b[1mSteg två: kod via e-post\x1b[0m");

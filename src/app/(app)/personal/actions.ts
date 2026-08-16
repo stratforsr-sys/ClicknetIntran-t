@@ -237,3 +237,114 @@ export async function kvitteraOffboarding(form: FormData): Promise<void> {
   );
   revalidatePath(`/personal/${employeeId}`);
 }
+
+// -----------------------------------------------------------------------------
+// Team och organisation (E1.13)
+//
+// Ett team ar inte bara en etikett. `leads_employee()` i databasen slapper in
+// en teamledare pa medlemmarnas rader, sa varje andring har verkar direkt pa
+// vem som ser vems personuppgifter. Darfor loggas alla fyra atgarderna.
+// -----------------------------------------------------------------------------
+
+export async function skapaTeam(_prev: FormState, form: FormData): Promise<FormState> {
+  const user = await kravChef();
+  const db = supabaseAdmin();
+
+  const namn = String(form.get("namn") ?? "").trim();
+  if (!namn) return { fel: "Teamet behöver ett namn." };
+
+  const { data: fanns } = await db.from("team").select("id").ilike("name", namn).maybeSingle();
+  if (fanns) return { fel: "Det finns redan ett team med det namnet." };
+
+  const { data: rad, error } = await db
+    .from("team")
+    .insert({ name: namn })
+    .select("id")
+    .single();
+  if (error || !rad) return { fel: "Teamet kunde inte skapas." };
+
+  await logga(user.employee!.id, "team.created", "team", rad.id, { namn });
+  revalidatePath("/personal/team");
+  return { ok: `Teamet ${namn} är skapat.` };
+}
+
+/** Namn och teamledare i ett svep — bada ar egenskaper hos teamet. */
+export async function sparaTeam(form: FormData): Promise<void> {
+  const user = await kravChef();
+  const db = supabaseAdmin();
+
+  const teamId = String(form.get("team_id"));
+  const namn = String(form.get("namn") ?? "").trim();
+  const ledare = String(form.get("lead_id") ?? "") || null;
+  if (!teamId || !namn) return;
+
+  await db.from("team").update({ name: namn, lead_id: ledare }).eq("id", teamId);
+  await logga(user.employee!.id, "team.updated", "team", teamId, { namn, ledare });
+  revalidatePath("/personal/team");
+}
+
+/**
+ * Bara tomma team gar att ta bort. Alternativet — att slanga ut medlemmarna
+ * med teamet — ar en tyst andring av vem som ser vem, och sadant ska man
+ * behova gora med berat mod, en person i taget.
+ */
+export async function taBortTeam(form: FormData): Promise<void> {
+  const user = await kravChef();
+  const db = supabaseAdmin();
+
+  const teamId = String(form.get("team_id"));
+  if (!teamId) return;
+
+  const { count } = await db
+    .from("employee")
+    .select("id", { count: "exact", head: true })
+    .eq("team_id", teamId);
+  if ((count ?? 0) > 0) return;
+
+  await db.from("team").delete().eq("id", teamId);
+  await logga(user.employee!.id, "team.deleted", "team", teamId);
+  revalidatePath("/personal/team");
+}
+
+/** Team och narmaste chef for en person. */
+export async function sattOrganisation(form: FormData): Promise<void> {
+  const user = await kravChef();
+  const db = supabaseAdmin();
+
+  const employeeId = String(form.get("employee_id"));
+  const teamId = String(form.get("team_id") ?? "") || null;
+  const chefId = String(form.get("manager_id") ?? "") || null;
+  if (!employeeId) return;
+
+  // En chefskedja som gar i ring later databasen sig gladeligen skriva, och
+  // sedan snurrar varje vy som foljer kedjan uppat tills den ger upp.
+  if (chefId === employeeId) return;
+  if (chefId && (await ledsAv(db, chefId, employeeId))) return;
+
+  await db.from("employee").update({ team_id: teamId, manager_id: chefId }).eq("id", employeeId);
+  await logga(user.employee!.id, "employee.org_changed", "employee", employeeId, {
+    team: teamId,
+    chef: chefId,
+  });
+  revalidatePath(`/personal/${employeeId}`);
+  revalidatePath("/personal/team");
+}
+
+/** Leder `rot` till slut fram till `sokt` uppat i chefskedjan? */
+async function ledsAv(
+  db: ReturnType<typeof supabaseAdmin>,
+  start: string,
+  sokt: string,
+): Promise<boolean> {
+  let aktuell: string | null = start;
+  for (let steg = 0; aktuell && steg < 20; steg++) {
+    if (aktuell === sokt) return true;
+    const svar: { data: { manager_id: string | null } | null } = await db
+      .from("employee")
+      .select("manager_id")
+      .eq("id", aktuell)
+      .maybeSingle();
+    aktuell = svar.data?.manager_id ?? null;
+  }
+  return false;
+}

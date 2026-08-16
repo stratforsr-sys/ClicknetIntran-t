@@ -4,6 +4,37 @@ Läs denna före arbete. Uppdatera efteråt.
 
 ---
 
+## 2026-08-16 · E1.13 Teamhantering
+
+**Levererat**
+
+- `/personal/team`: skapa team, döp om, sätt teamledare, ta bort tomma team.
+  Varje team visar sina medlemmar rakt upp och ner, och en egen ruta listar
+  dem som saknar team.
+- Kort "Organisation" på personens egen sida: team och närmaste chef.
+- Fyra nya händelser i loggen: `team.created`, `team.updated`, `team.deleted`,
+  `employee.org_changed`.
+
+**Tre val värda att känna till**
+
+- Medlemmarna listas på teamsidan med flit. `leads_employee()` i databasen
+  släpper in teamledaren på medlemmarnas rader, så den som sätter en ledare
+  ska se exakt vilka personuppgifter hen just gav bort.
+- Bara tomma team går att ta bort. Att slänga ut medlemmarna med teamet är en
+  tyst ändring av vem som ser vem.
+- Chefskedjan kollas mot ringar innan den sparas. Databasen skriver gladeligen
+  A→B→A, och sedan snurrar varje vy som följer kedjan uppåt tills den ger upp.
+
+**Verifierat**
+
+- `node tests/rls.mjs`: 59 kontroller, alla godkända. Sju nya som mäter det
+  som faktiskt betyder något: Cecilia ser inte Bertil före teamkopplingen, ser
+  honom efter, Eva på ekonomi ser honom aldrig, och varken Anna eller Cecilia
+  kan skapa team, göra sig till teamledare eller peka ut sig själv som chef
+  via API:t.
+
+---
+
 ## 2026-08-16 · Steg två byts från app till kod via e-post
 
 Beställt efter att TOTP levererats: en kod till mejlen är enklare att leva med

@@ -1,7 +1,9 @@
 import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
 import { cn } from "./cn";
 
-const KONTROLL =
+/** Delad av Input och Select. Exporterad for de fa formular som har flera
+ *  identiska falt pa samma sida och darfor inte kan anvanda id per falt. */
+export const KONTROLL =
   "w-full rounded-sm bg-surface px-4 py-2.5 text-body text-ink-900 " +
   "shadow-elev-1 ring-1 ring-transparent placeholder:text-ink-300 " +
   "transition-shadow duration-fast ease-brand " +

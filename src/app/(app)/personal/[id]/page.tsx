@@ -14,7 +14,8 @@ import {
   type Role,
 } from "@/lib/roles";
 import { supabaseServer } from "@/lib/supabase/server";
-import { aktivera, andraRoll, kvitteraOffboarding, offboarda } from "../actions";
+import { KONTROLL } from "@/components/ui/Field";
+import { aktivera, andraRoll, kvitteraOffboarding, offboarda, sattOrganisation } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,8 @@ export default async function AnstalldSida({ params }: { params: Promise<{ id: s
   const { data: a } = await supabase
     .from("employee")
     .select(
-      "id, first_name, last_name, email, status, employment_type, start_date, end_date, employee_number, created_at",
+      `id, first_name, last_name, email, status, employment_type, start_date,
+       end_date, employee_number, created_at, team_id, manager_id`,
     )
     .eq("id", id)
     .maybeSingle();
@@ -39,6 +41,18 @@ export default async function AnstalldSida({ params }: { params: Promise<{ id: s
     .select("role")
     .eq("employee_id", id);
   const roller = new Set((rollRader ?? []).map((r) => r.role as Role));
+
+  // Bada listorna behovs for valjarna nedan. En avslutad person ska inte ga
+  // att peka ut som chef.
+  const [{ data: teamLista }, { data: kollegor }] = await Promise.all([
+    supabase.from("team").select("id, name").order("name"),
+    supabase
+      .from("employee")
+      .select("id, first_name, last_name")
+      .neq("status", "offboarded")
+      .neq("id", id)
+      .order("first_name"),
+  ]);
 
   const { data: checklista } = await supabase
     .from("offboarding_task")
@@ -134,6 +148,65 @@ export default async function AnstalldSida({ params }: { params: Promise<{ id: s
           )}
         </Card>
       </div>
+
+      {/* E1.13: team och chef avgor vem som ser personens uppgifter. */}
+      {farHantera && !avslutad && (
+        <Card>
+          <CardHeader
+            titel="Organisation"
+            beskrivning="Teamledaren och närmaste chef ser den här personens uppgifter. Ändringen loggas."
+          />
+          <form action={sattOrganisation} className="flex flex-wrap items-end gap-3">
+            <input type="hidden" name="employee_id" value={a.id} />
+
+            <label className="flex min-w-[12rem] flex-1 flex-col gap-1.5">
+              <span className="text-small font-semibold text-ink-700">Team</span>
+              <select
+                name="team_id"
+                defaultValue={a.team_id ?? ""}
+                className={`${KONTROLL} appearance-none pr-10`}
+              >
+                <option value="">Inget team</option>
+                {(teamLista ?? []).map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex min-w-[12rem] flex-1 flex-col gap-1.5">
+              <span className="text-small font-semibold text-ink-700">Närmaste chef</span>
+              <select
+                name="manager_id"
+                defaultValue={a.manager_id ?? ""}
+                className={`${KONTROLL} appearance-none pr-10`}
+              >
+                <option value="">Ingen chef</option>
+                {(kollegor ?? []).map((k) => (
+                  <option key={k.id} value={k.id}>
+                    {fullName(k)}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <Button type="submit" size="sm">
+              Spara
+            </Button>
+          </form>
+
+          {(teamLista ?? []).length === 0 && (
+            <p className="mt-3 text-small text-ink-500">
+              Det finns inga team än.{" "}
+              <Link href="/personal/team" className="underline hover:text-ink-900">
+                Skapa ett
+              </Link>
+              .
+            </p>
+          )}
+        </Card>
+      )}
 
       {/* AC-1.4 och AC-1.7 */}
       {farHantera && !avslutad && (

@@ -40,7 +40,12 @@ export default async function Personal() {
             {lista.length} {lista.length === 1 ? "person" : "personer"} i registret.
           </p>
         </div>
-        {farHantera && <ButtonLink href="/personal/ny" variant="primar">Lägg upp anställd</ButtonLink>}
+        {farHantera && (
+          <div className="flex flex-wrap gap-2">
+            <ButtonLink href="/personal/team" variant="sekundar">Team</ButtonLink>
+            <ButtonLink href="/personal/ny" variant="primar">Lägg upp anställd</ButtonLink>
+          </div>
+        )}
       </div>
 
       {lista.length === 0 ? (
