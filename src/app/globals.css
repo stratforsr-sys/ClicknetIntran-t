@@ -1,0 +1,166 @@
+@import "tailwindcss";
+
+/* =========================================================================
+   Clicknet Nav — designtokens
+   UI-PRD §4. Detta är den enda filen i systemet som far innehalla hexvarden.
+   Kvalitetssparren i §11 forbjuder literaler i komponenter.
+
+   Varumarkesbasen ar #17BAA2, avlast fran clicknet.se (aktiva menyval).
+   Den klarar bara 2,45:1 mot vit text och far darfor aldrig bara vit text.
+   brand-600 (#0B7F6E, 4,91:1) ar handlingsfargen. Se DECISIONS.md D-U2.
+   ========================================================================= */
+
+@theme {
+  /* --- Varumarke ------------------------------------------------------- */
+  --color-brand-950: #051A17; /* djupast, sidopanelens botten */
+  --color-brand-900: #092B26; /* sidopanel */
+  --color-brand-800: #0D3A33; /* hover i sidopanel */
+  --color-brand-700: #0A5F53; /* text pa ljus tonplatta */
+  --color-brand-600: #0B7F6E; /* PRIMAR HANDLING — enda tonen med vit text */
+  --color-brand-500: #17BAA2; /* varumarkeston, endast pa morka ytor */
+  --color-brand-400: #4FD3BE;
+  --color-brand-200: #A7E9DE;
+  --color-brand-100: #DCF5F0; /* ljus tonplatta, aktiv nav, valda chips */
+  --color-brand-50:  #F0FAF8;
+
+  /* --- Arbetsyta ------------------------------------------------------- */
+  --color-canvas:      #F4F6F7;
+  --color-surface:     #FFFFFF;
+  --color-surface-alt: #FAFBFB;
+
+  /* --- Text ------------------------------------------------------------ */
+  --color-ink-900: #0E1A19;
+  --color-ink-700: #354443;
+  --color-ink-500: #6B7A79;
+  --color-ink-300: #A9B4B3;
+  --color-ink-inv: #FFFFFF;
+
+  /* --- Status. ENDAST status, aldrig dekoration (UI-PRD §4.1) ---------- */
+  --color-ok:     #1E9E7A;
+  --color-warn:   #E8B93B;
+  --color-danger: #D2544B;
+  --color-info:   #3E86C9;
+
+  /* Tonade statuspiller: mork text pa ljus platta. Alla >= 5,8:1. */
+  --color-ok-ink:       #0B5F48;
+  --color-ok-tint:      #E3F5EE;
+  --color-warn-ink:     #7A5606;
+  --color-warn-tint:    #FBF0D2;
+  --color-danger-ink:   #8E2F28;
+  --color-danger-tint:  #FBE7E5;
+  --color-info-ink:     #1B4F7E;
+  --color-info-tint:    #E4EFF9;
+  --color-brand-ink:    #0A5F53;
+  --color-brand-tint:   #DCF5F0;
+
+  /* --- Accent. Sparsamt: raknare som kraver handling ------------------- */
+  --color-accent:      #F2A03D;
+  --color-accent-ink:  #7A4708;
+  --color-accent-tint: #FDEBD4;
+
+  /* --- Radie (UI-PRD §4.3) --------------------------------------------- */
+  --radius-xs:   8px;
+  --radius-sm:   12px;
+  --radius-md:   16px;
+  --radius-lg:   24px;
+  --radius-full: 999px;
+
+  /* --- Elevation (UI-PRD §4.2). Tva lager, varumarkestonad skugga ------ */
+  --shadow-elev-1: 0 1px 2px rgba(14, 26, 25, 0.04), 0 8px 24px -8px rgba(14, 26, 25, 0.08);
+  --shadow-elev-2: 0 2px 4px rgba(14, 26, 25, 0.05), 0 16px 32px -12px rgba(14, 26, 25, 0.12);
+  --shadow-elev-3: 0 4px 8px rgba(14, 26, 25, 0.06), 0 24px 48px -16px rgba(14, 26, 25, 0.16);
+  --shadow-elev-4: 0 8px 16px rgba(14, 26, 25, 0.08), 0 40px 80px -24px rgba(14, 26, 25, 0.24);
+  --shadow-elev-brand: 0 4px 12px -2px rgba(11, 127, 110, 0.32);
+
+  /* --- Typografi (UI-PRD §4.4) ----------------------------------------- */
+  --font-display: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+  --font-sans:    var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+  --font-mono:    var(--font-mono-data), ui-monospace, monospace;
+
+  --text-display: 32px;
+  --text-display--line-height: 1.15;
+  --text-display--font-weight: 600;
+  --text-h1: 24px;
+  --text-h1--line-height: 1.2;
+  --text-h1--font-weight: 600;
+  --text-h2: 18px;
+  --text-h2--line-height: 1.3;
+  --text-h2--font-weight: 600;
+  --text-body: 15px;
+  --text-body--line-height: 1.55;
+  --text-small: 13px;
+  --text-small--line-height: 1.5;
+  --text-micro: 11px;
+  --text-micro--line-height: 1.4;
+  --text-micro--font-weight: 600;
+  --text-micro--letter-spacing: 0.08em;
+
+  /* --- Rorelse (UI-PRD §4.6) ------------------------------------------- */
+  --ease-brand: cubic-bezier(0.32, 0.72, 0, 1);
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+}
+
+/* 8-punktsskalan. Inga mellanvarden (UI-PRD §4.5). */
+@theme { --spacing: 4px; }
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink-700);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, h4 {
+    color: var(--color-ink-900);
+    font-family: var(--font-display);
+    text-wrap: balance;
+  }
+
+  /* AC-U3.1: tid, belopp och telefonnummer med tabellsiffror. */
+  .tnum {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+
+  /* AC-U5.3: synligt fokuslage overallt, 2 px ring med 2 px avstand. */
+  :focus-visible {
+    outline: 2px solid var(--color-brand-600);
+    outline-offset: 2px;
+    border-radius: var(--radius-xs);
+  }
+  .on-dark :focus-visible {
+    outline-color: var(--color-brand-500);
+  }
+
+  /* AC-U4.3: prefers-reduced-motion ersatter rorelse med direkt bytе. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* AC-U2.5: hover hojer skuggan OCH flyttar kortet 1 px uppat. */
+  .lift {
+    transition: box-shadow var(--duration-fast) var(--ease-brand),
+                transform var(--duration-fast) var(--ease-brand);
+  }
+  .lift:hover {
+    box-shadow: var(--shadow-elev-2);
+    transform: translateY(-1px);
+  }
+}
