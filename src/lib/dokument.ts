@@ -125,3 +125,28 @@ export function prefixfraga(q: string): string | null {
     })
     .join(" & ");
 }
+
+/**
+ * AC-1.3: vilka rutiner som ar obligatoriska for en person.
+ *
+ * Samma regel som RLS-funktionen `matches_audience()` i 0003, men uttryckt i
+ * TypeScript sa att den gar att stalla en fraga om NAGON ANNAN an sig sjalv —
+ * databasen svarar alltid utifran den som fragar. Tom lista betyder alla, i
+ * bada leden.
+ *
+ * Halls de tva i otakt blir foljden att en nyanstalld far en lista som inte
+ * stammer med vad hon faktiskt ser. Andras den ena maste den andra folja med.
+ */
+export function riktarSigTill(
+  dok: { audience_roles: string[] | null; audience_teams: string[] | null },
+  roller: string[],
+  teamId: string | null,
+): boolean {
+  const rollkrav = dok.audience_roles ?? [];
+  const teamkrav = dok.audience_teams ?? [];
+
+  const rollOk = rollkrav.length === 0 || rollkrav.some((r) => roller.includes(r));
+  const teamOk = teamkrav.length === 0 || (teamId !== null && teamkrav.includes(teamId));
+
+  return rollOk && teamOk;
+}

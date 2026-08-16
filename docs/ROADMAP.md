@@ -60,14 +60,14 @@ förhållande till tillväxten.
 | E1.2 | AC-1.1, K33 | **MFA obligatoriskt** för sales_manager, ceo, finance, admin och alla med payroll_cost_viewer: engångskod via e-post, spärr i middleware, enheten ihågkommen 30 dagar | BYGGD MEN AVSTÄNGD — `MFA_REQUIRED_ROLES` är tom tills mejlmallen bär koden, se DRIFTSATTNING punkt 0. **K33 är inte uppfylld så länge.** |
 | E1.3 | AC-1.2 | Väntar på aktivering | KLAR |
 | E1.4 | AC-1.3 | Upplägg skapar konto och roll | KLAR |
-| E1.5 | AC-1.3 | **Automatisk tilldelning** av rutiner, kurser, schema och team vid upplägg | BLOCKERAD av E8 (rutindelen går nu att bygga) |
+| E1.5 | AC-1.3 | **Automatisk tilldelning** av rutiner, kurser, schema och team vid upplägg | DELVIS — rutiner och team klara, kurser väntar på E8 och schema på E4 |
 | E1.6 | AC-1.4 | Offboarding: roller, sessioner, status, historik | KLAR |
 | E1.7 | AC-1.4 | **Offboarding stänger dialer-kö och spärrar iCal-flöde** | BLOCKERAD av E7, E12 |
 | E1.8 | AC-1.4 | **Öppna ärenden avslutas med notis vid offboarding** | BLOCKERAD av E3 |
 | E1.9 | AC-1.5 | Rollbyte loggas med vem som beviljade | KLAR |
 | E1.10 | AC-1.6 | RLS på alla persondatatabeller, verifierat | KLAR |
 | E1.11 | AC-1.7 | Offboarding-checklista med kvittens och motiveringstvång | KLAR |
-| E1.12 | AC-1.8 | **Konton utan inloggning på 45 dagar flaggas** — kräver schemalagt jobb (R11) | EJ PÅBÖRJAD |
+| E1.12 | AC-1.8 | **Konton utan inloggning på 45 dagar flaggas** — kräver schemalagt jobb (R11) | KLAR |
 | E1.13 | — | **Teamhantering i UI**: skapa team, sätt teamledare, koppla anställd till team och chef | KLAR |
 | E1.14 | — | **Egen profilsida**: se sina uppgifter, byta lösenord, aktivera MFA | KLAR |
 | E1.15 | §1.4 | **Admin-vy för `payroll_cost_viewer`** — tilldelas per person, varje ändring loggad (AC-13.13) | KLAR |

@@ -4,6 +4,43 @@ Läs denna före arbete. Uppdatera efteråt.
 
 ---
 
+## 2026-08-16 · E1.5 Tilldelning vid upplägg + E1.12 Oanvända konton
+
+**E1.5 — vad en nyanställd får på sig (AC-1.3)**
+
+- Team går nu att sätta redan i upplägget. Det avgör både vilka rutiner som
+  blir obligatoriska och vem som ser personens uppgifter, så att sätta det i
+  efterhand var att göra fel sak först.
+- Rutinerna tilldelas inte som kopior per person — de följer av målgruppen.
+  Det som saknades var **beviset**: utan en rad i loggen går det inte att i
+  efterhand visa vad någon faktiskt fick på sig dag ett. Nu skrivs
+  `onboarding.documents_assigned` med antal och slugar.
+- Kort "Obligatoriska rutiner" på personens sida: vad som gäller för hen och
+  vad som är kvitterat. Frågan gäller någon annan än den inloggade, och
+  databasen svarar alltid utifrån den som frågar — därför räknas målgruppen ut
+  i `riktarSigTill()`, en tvilling till `matches_audience()` i migration 0003.
+  **Ändras den ena måste den andra följa med**, annars får en nyanställd en
+  lista som inte stämmer med vad hon ser.
+- Kurser och schema kvarstår: de kräver E8 och E4.
+
+**E1.12 — konton som ingen använt på 45 dagar (AC-1.8, R11)**
+
+- Migration `0006`: `employee.inactive_flagged_at`. Flaggan lagras i stället
+  för att räknas fram vid varje visning — inte för prestanda, utan för att
+  kolumnen säger **när** larmet gick. Ett räkneuttryck kan bara svara "just nu".
+- Schemalagt jobb `/api/jobb/konton`, dagligen 05:00 via `vercel.json`. Speglar
+  senaste inloggning från auth till personalregistret och flaggar, eller tar
+  bort flaggan när kontot använts igen. Båda riktningarna loggas.
+- Har kontot aldrig använts räknas tiden från upplägget. Annars hade en
+  nyanställd flaggats direkt, och en som aldrig loggat in aldrig alls.
+- Saknas `CRON_SECRET` svarar rutten 503 i stället för att köra oskyddat. En
+  öppen rutt som skriver i personalregistret är inget att ha.
+- `/api` är nu publik i middleware. Rutterna där autentiserar sig själva, och
+  ett schemalagt jobb har ingen session att visa upp — utan detta hade det
+  omdirigerats till inloggningssidan och tyst gjort ingenting.
+
+---
+
 ## 2026-08-16 · E1.13 Teamhantering + E1.15 Lönekostnadsbehörighet
 
 **Levererat**

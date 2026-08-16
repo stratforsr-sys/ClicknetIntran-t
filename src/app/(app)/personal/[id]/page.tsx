@@ -16,6 +16,7 @@ import {
   type Role,
 } from "@/lib/roles";
 import { supabaseServer } from "@/lib/supabase/server";
+import { riktarSigTill } from "@/lib/dokument";
 import { KONTROLL } from "@/components/ui/Field";
 import {
   aktivera,
@@ -78,7 +79,31 @@ export default async function AnstalldSida({ params }: { params: Promise<{ id: s
   const behorigheter = new Set((behRader ?? []).map((b) => b.permission));
   const farDelaUtBehorighet = hasRole(user, "sales_manager", "ceo");
 
+  // AC-1.3: vad personen faktiskt har pa sig. Fragan galler nagon annan an
+  // den inloggade, sa malgruppen raknas ut har i stallet for av RLS — se
+  // riktarSigTill(), tvillingen till matches_audience() i 0003.
   const farHantera = canManageEmployees(user);
+  let attKvittera: { id: string; slug: string; title: string; klar: boolean }[] = [];
+  if (farHantera) {
+    const [{ data: dok }, { data: ack }] = await Promise.all([
+      supabase
+        .from("document")
+        .select("id, slug, title, version, audience_roles, audience_teams")
+        .eq("status", "published")
+        .eq("requires_ack", true)
+        .order("title"),
+      supabase.from("document_ack").select("document_id, version").eq("employee_id", id),
+    ]);
+    const kvitterat = new Set((ack ?? []).map((k) => `${k.document_id}:${k.version}`));
+    attKvittera = (dok ?? [])
+      .filter((d) => riktarSigTill(d, [...roller], a.team_id))
+      .map((d) => ({
+        id: d.id,
+        slug: d.slug,
+        title: d.title,
+        klar: kvitterat.has(`${d.id}:${d.version}`),
+      }));
+  }
   const avslutad = a.status === "offboarded";
   const kraverMfa = [...roller].some((r) => MFA_REQUIRED_ROLES.includes(r));
 
@@ -166,6 +191,36 @@ export default async function AnstalldSida({ params }: { params: Promise<{ id: s
           )}
         </Card>
       </div>
+
+      {/* AC-1.3: rutinerna foljer roll och team — ingen kopia per person. */}
+      {farHantera && !avslutad && attKvittera.length > 0 && (
+        <Card>
+          <CardHeader
+            titel="Obligatoriska rutiner"
+            beskrivning={`${attKvittera.filter((d) => d.klar).length} av ${attKvittera.length} kvitterade. Följer av rollen och teamet.`}
+          />
+          <ul className="flex flex-col gap-1">
+            {attKvittera.map((d) => (
+              <li key={d.id}>
+                <Link
+                  href={`/rutiner/${d.slug}`}
+                  className="flex min-h-11 items-center gap-3 rounded-sm px-3 text-body text-ink-700 transition-colors duration-fast hover:bg-surface-alt hover:text-ink-900"
+                >
+                  <span
+                    className={`grid size-5 shrink-0 place-items-center rounded-xs ${
+                      d.klar ? "bg-ok text-ink-inv" : "ring-1 ring-ink-300"
+                    }`}
+                  >
+                    {d.klar && <Ikon namn="kontroll" className="size-3.5" />}
+                  </span>
+                  <span className="flex-1">{d.title}</span>
+                  {!d.klar && <Badge ton="warn">Ej kvitterad</Badge>}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       {/* AC-13.13: behorigheten ges per person, oberoende av roll. */}
       {farDelaUtBehorighet && !avslutad && (

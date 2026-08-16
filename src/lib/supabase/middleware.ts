@@ -5,8 +5,14 @@ import { bygCsp } from "@/lib/csp";
 import { kvittoGiltigt, STEG2_KAKA } from "@/lib/mfa";
 import { MFA_REQUIRED_ROLES } from "@/lib/roles";
 
-/** Publika vagar. Allt annat kraver session. */
-const PUBLIC = ["/logga-in", "/auth", "/uppstart"];
+/**
+ * Publika vagar. Allt annat kraver session.
+ *
+ * /api star med eftersom rutterna dar autentiserar sig sjalva — det
+ * schemalagda jobbet har ingen session att visa upp, och skulle annars
+ * omdirigeras till inloggningssidan och tyst gora ingenting.
+ */
+const PUBLIC = ["/logga-in", "/auth", "/uppstart", "/api"];
 
 /**
  * Kraver den har anvandaren steg tva? Rollerna lases med anvandarens egen
@@ -94,7 +100,7 @@ export async function updateSession(request: NextRequest) {
    * Att detta ligger i mellanvaran och inte i en layout ar avsiktligt: da
    * galler det aven for route handlers och for sidor som byggs till senare.
    */
-  const undantag = path.startsWith("/logga-in") || path.startsWith("/auth");
+  const undantag = path.startsWith("/logga-in") || path.startsWith("/auth") || path.startsWith("/api");
   if (user && !undantag) {
     const giltigt = await kvittoGiltigt(request.cookies.get(STEG2_KAKA)?.value, user.id);
     if (!giltigt) {

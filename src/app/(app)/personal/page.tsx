@@ -18,7 +18,9 @@ export default async function Personal() {
   // RLS avgor vad som kommer tillbaka. Ingen filtrering i UI:t.
   const { data: anstallda } = await supabase
     .from("employee")
-    .select("id, first_name, last_name, email, status, employment_type, start_date")
+    .select(
+      "id, first_name, last_name, email, status, employment_type, start_date, inactive_flagged_at",
+    )
     .order("status")
     .order("first_name");
 
@@ -30,6 +32,7 @@ export default async function Personal() {
 
   const lista = anstallda ?? [];
   const farHantera = canManageEmployees(user);
+  const flaggade = lista.filter((a) => a.inactive_flagged_at && a.status !== "offboarded");
 
   return (
     <div className="flex flex-col gap-4 pt-2">
@@ -47,6 +50,33 @@ export default async function Personal() {
           </div>
         )}
       </div>
+
+      {/* AC-1.8, R11: utan katalogtjanst finns ingen annan som marker att ett
+          konto blivit kvarglomt. */}
+      {farHantera && flaggade.length > 0 && (
+        <Card status="warn">
+          <p className="text-body text-ink-900">
+            {flaggade.length === 1
+              ? "Ett konto har inte använts på 45 dagar."
+              : `${flaggade.length} konton har inte använts på 45 dagar.`}{" "}
+            <span className="text-ink-500">
+              Granska om personen slutat utan att avslutas i navet.
+            </span>
+          </p>
+          <ul className="mt-3 flex flex-wrap gap-2">
+            {flaggade.map((a) => (
+              <li key={a.id}>
+                <Link
+                  href={`/personal/${a.id}`}
+                  className="inline-flex min-h-9 items-center rounded-full bg-warn-tint px-3 text-small text-warn-ink hover:brightness-95"
+                >
+                  {fullName(a)}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       {lista.length === 0 ? (
         <Card>
@@ -83,7 +113,14 @@ export default async function Personal() {
                       href={`/personal/${a.id}`}
                       className="flex min-h-11 flex-col justify-center rounded-xs"
                     >
-                      <span className="font-semibold text-ink-900">{fullName(a)}</span>
+                      <span className="font-semibold text-ink-900">
+                        {fullName(a)}
+                        {a.inactive_flagged_at && a.status !== "offboarded" && (
+                          <span className="ml-2 align-middle">
+                            <Badge ton="warn">Oanvänt konto</Badge>
+                          </span>
+                        )}
+                      </span>
                       <span className="text-small text-ink-500">{a.email}</span>
                     </Link>
                   </td>

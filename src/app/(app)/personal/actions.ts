@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { getCurrentUser, canManageEmployees, hasRole } from "@/lib/auth";
 import { ROLES, PERMISSIONS, type Role, type Permission } from "@/lib/roles";
+import { riktarSigTill } from "@/lib/dokument";
 
 export type FormState = { fel?: string; ok?: string };
 
@@ -53,6 +54,7 @@ export async function laggUppAnstalld(_prev: FormState, form: FormData): Promise
     const anstallningsform = String(form.get("anstallningsform") ?? "permanent");
     const startdatum = String(form.get("startdatum") ?? "") || null;
     const anstallningsnummer = String(form.get("anstallningsnummer") ?? "").trim() || null;
+    const teamId = String(form.get("team_id") ?? "") || null;
 
     if (!epost || !fornamn || !efternamn) return { fel: "Namn och e-post måste fyllas i." };
     if (!ROLES.includes(roll)) return { fel: "Okänd roll." };
@@ -84,6 +86,7 @@ export async function laggUppAnstalld(_prev: FormState, form: FormData): Promise
         employment_type: anstallningsform,
         start_date: startdatum,
         employee_number: anstallningsnummer,
+        team_id: teamId,
         status: "onboarding",
       })
       .select("id")
@@ -97,7 +100,25 @@ export async function laggUppAnstalld(_prev: FormState, form: FormData): Promise
       granted_by: user.employee!.id,
     });
 
-    await logga(user.employee!.id, "employee.created", "employee", rad.id, { epost, roll });
+    await logga(user.employee!.id, "employee.created", "employee", rad.id, { epost, roll, team: teamId });
+
+    // AC-1.3: rutinerna tilldelas av malgruppen, inte av en kopia per person.
+    // Det som saknades var beviset — utan en rad i loggen gar det inte att i
+    // efterhand visa vad en nyanstalld faktiskt fick pa sig fran dag ett.
+    const { data: dokument } = await db
+      .from("document")
+      .select("id, slug, audience_roles, audience_teams")
+      .eq("status", "published")
+      .eq("requires_ack", true);
+
+    const tilldelade = (dokument ?? []).filter((d) => riktarSigTill(d, [roll], teamId));
+    if (tilldelade.length > 0) {
+      await logga(user.employee!.id, "onboarding.documents_assigned", "employee", rad.id, {
+        antal: tilldelade.length,
+        rutiner: tilldelade.map((d) => d.slug),
+      });
+    }
+
     nyId = rad.id;
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
