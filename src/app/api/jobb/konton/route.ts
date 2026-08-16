@@ -7,6 +7,8 @@ export const maxDuration = 60;
 /** AC-1.8, R11. Grasen ligger i PRD:n och andras inte utan att den andras. */
 const DAGAR = 45;
 
+const tidpunkt = (v: string | null) => (v ? Date.parse(v) : null);
+
 /**
  * Schemalagt jobb: hamtar hem senaste inloggning fran auth och flaggar konton
  * som legat oanvanda for lange.
@@ -52,7 +54,10 @@ export async function GET(request: NextRequest) {
   for (const a of anstallda ?? []) {
     const senast = a.auth_user_id ? (inloggningar.get(a.auth_user_id) ?? null) : null;
 
-    if (senast !== a.last_sign_in_at) {
+    // Jamfor som tidpunkt, inte som text. Auth svarar "...555Z" och Postgres
+    // "...555+00:00" — samma ogonblick, olika strangar. En strangjamforelse
+    // hade skrivit om varenda rad varje natt utan att nagot andrats.
+    if (tidpunkt(senast) !== tidpunkt(a.last_sign_in_at)) {
       await db.from("employee").update({ last_sign_in_at: senast }).eq("id", a.id);
       speglade++;
     }
