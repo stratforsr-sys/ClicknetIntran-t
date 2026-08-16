@@ -81,15 +81,35 @@ export function arstalDatum(manader: number): string {
 }
 
 /**
- * Fritext -> prefix-tsquery.
+ * Svenska bestamda och plurala andelser som Postgres snowball-stemmer inte
+ * tar bort. Empiriskt uppmatt mot databasen: "bilen" och "rutinen" stammas
+ * till "bil" och "rutin", men "huset", "avtalet" och "lakarintyget" lamnas
+ * oforandrade. Foljden ar att ett dokument som innehaller "lakarintyg" inte
+ * hittas av nagon som skriver "lakarintyget" — ett ord de nyss last.
+ */
+const ANDELSER = ["erna", "arna", "orna", "et", "en", "ar", "er", "or", "n", "t"];
+
+function stamvarianter(ord: string): string[] {
+  const ut = [ord];
+  for (const a of ANDELSER) {
+    if (ord.length > a.length + 3 && ord.endsWith(a)) {
+      ut.push(ord.slice(0, -a.length));
+      break;
+    }
+  }
+  return ut;
+}
+
+/**
+ * Fritext -> tsquery med prefix och avklippta andelser.
  *
- * Den svenska snowball-stemmern klarar inte bestämd form av sammansatta ord:
- * "läkarintyget" stannar oförändrat medan brödtextens "läkarintyg" stämmas
- * till "läkarintyg", och en exakt sökning ger då noll träffar på ett ord som
- * uppenbart finns. Prefixsökning täcker det fallet utan att kräva en egen
- * ordlista, och är dessutom vad folk förväntar sig av ett sökfält.
+ * Anvands som andra forsok nar den vanliga sokningen inte gav nagot. Varje ord
+ * blir "(ord:* | stam:*)", sa bade den som skriver for mycket ("lakarintyget")
+ * och den som skriver for lite ("sjukanm") far traff. Orden ar redan rensade
+ * till bokstaver och siffror, sa ingenting av anvandarens text nar tsquery-
+ * syntaxen.
  *
- * Returnerar null om ingenting sökbart återstår efter rensningen.
+ * Returnerar null om ingenting sokbart aterstar efter rensningen.
  */
 export function prefixfraga(q: string): string | null {
   const ord = q
@@ -98,5 +118,10 @@ export function prefixfraga(q: string): string | null {
     .filter((o) => o.length >= 2)
     .slice(0, 8);
   if (ord.length === 0) return null;
-  return ord.map((o) => `${o}:*`).join(" & ");
+  return ord
+    .map((o) => {
+      const varianter = stamvarianter(o).map((v) => `${v}:*`);
+      return varianter.length > 1 ? `(${varianter.join(" | ")})` : varianter[0];
+    })
+    .join(" & ");
 }
