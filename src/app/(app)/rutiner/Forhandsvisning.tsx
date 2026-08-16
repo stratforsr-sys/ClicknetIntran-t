@@ -1,7 +1,6 @@
 "use client";
 
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { Markdown } from "@/components/Markdown";
 
 /**
  * Egen fil for att kunna laddas med next/dynamic. Markdown-parsern ar 48 kB
@@ -9,5 +8,5 @@ import remarkGfm from "remark-gfm";
  * forsta laddningen av redigeringsvyn.
  */
 export default function Forhandsvisning({ text }: { text: string }) {
-  return <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>;
+  return <Markdown text={text} />;
 }

@@ -210,7 +210,8 @@
     padding-left: 16px;
     color: var(--color-ink-500);
   }
-  .prosa table { width: 100%; border-collapse: collapse; }
+  .prosa-tabell { overflow-x: auto; }
+  .prosa table { width: 100%; min-width: 24rem; border-collapse: collapse; }
   .prosa th, .prosa td {
     border-bottom: 1px solid var(--color-canvas);
     padding: 8px 12px;

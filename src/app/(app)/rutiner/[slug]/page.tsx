@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { Markdown } from "@/components/Markdown";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button, ButtonLink } from "@/components/ui/Button";
@@ -91,7 +90,7 @@ export default async function Rutindokument({ params }: { params: Promise<{ slug
             {/* AC-5.10 och AC-U3.3: radlangd max 70 tecken i lopande text. */}
             <article className="prosa mt-6 max-w-[70ch]">
               {d.body_md.trim() ? (
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{d.body_md}</ReactMarkdown>
+                <Markdown text={d.body_md} />
               ) : (
                 <p className="text-ink-500">Dokumentet har inget innehåll än.</p>
               )}
@@ -167,7 +166,6 @@ export default async function Rutindokument({ params }: { params: Promise<{ slug
             </p>
             <form action={kvittera}>
               <input type="hidden" name="document_id" value={d.id} />
-              <input type="hidden" name="version" value={d.version} />
               <input type="hidden" name="slug" value={d.slug} />
               <Button type="submit">Kvittera</Button>
             </form>

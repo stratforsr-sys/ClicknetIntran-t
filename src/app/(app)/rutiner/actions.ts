@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { supabaseAdmin } from "@/lib/supabase/server";
+import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { getCurrentUser, hasRole } from "@/lib/auth";
 import { DOC_TYPES, tillSlug, type DocType } from "@/lib/dokument";
 
@@ -206,15 +206,33 @@ export async function kvittera(form: FormData): Promise<void> {
   if (!user?.employee) return;
 
   const id = String(form.get("document_id"));
-  const version = Number(form.get("version"));
   const slug = String(form.get("slug"));
 
-  await supabaseAdmin()
+  // Dokumentet lases via anvandarens egen klient, sa RLS avgor om hen alls far
+  // se det. Utan det steget kan vem som helst posta en kvittens for ett
+  // dokument utanfor sin malgrupp, och kvittensrapporten — som ar det som
+  // visas upp vid en arbetsmiljoinspektion — blir vardelos.
+  const rls = await supabaseServer();
+  const { data: dok } = await rls
+    .from("document")
+    .select("id, version, status, requires_ack")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!dok || dok.status !== "published" || !dok.requires_ack) return;
+
+  // Versionen tas ur databasen, inte ur formularet. Annars kvitterar den som
+  // hade en gammal flik oppen fel version, och den nya andringen raknas som
+  // last av nagon som aldrig sett den.
+  const { error } = await supabaseAdmin()
     .from("document_ack")
     .upsert(
-      { document_id: id, version, employee_id: user.employee.id },
+      { document_id: id, version: dok.version, employee_id: user.employee.id },
       { onConflict: "document_id,employee_id,version" },
     );
+  if (error) return;
+
+  await logga(user.employee.id, "document.acked", id, { version: dok.version });
 
   revalidatePath(`/rutiner/${slug}`);
   revalidatePath("/");
