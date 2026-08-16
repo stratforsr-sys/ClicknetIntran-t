@@ -1,7 +1,49 @@
 # Driftsättning — vad som måste göras utanför koden
 
-Två inställningar i Supabase kan inte sättas från repot. Båda är verifierade
-som fel i nuläget.
+Inställningar i Supabase som inte kan sättas från repot.
+
+---
+
+## 0. Mejlet måste bära koden · BLOCKERAR INLOGGNING FÖR CHEFER
+
+Steg två vid inloggning är en engångskod till e-posten (E1.2). Två saker
+avgör om den kommer fram.
+
+**a) Mallen måste innehålla koden.** Supabases standardmall för magisk länk
+innehåller bara en länk, ingen kod. Utan `{{ .Token }}` i mallen får
+mottagaren ett mejl utan det som ska skrivas in.
+
+[Authentication → Email Templates → Magic Link](https://supabase.com/dashboard/project/kwsyvqymebamiqnxqjgj/auth/templates):
+lägg in koden i mallen, till exempel
+
+```html
+<p>Din kod till Clicknet Nav: <strong>{{ .Token }}</strong></p>
+<p>Koden gäller i en timme. Har du inte försökt logga in kan du strunta i det här mejlet.</p>
+```
+
+**b) Egen avsändare (SMTP) måste vara påslagen.** Supabases inbyggda
+mejlutskick tar ett par mejl i timmen och är uttryckligen inte till för drift.
+Med den kvar slutar inloggningen fungera så fort ett par personer loggar in
+samma timme — tyst, för avsändaren märker inget.
+
+[Project Settings → Authentication → SMTP Settings](https://supabase.com/dashboard/project/kwsyvqymebamiqnxqjgj/settings/auth):
+koppla in en riktig leverantör (Resend, Postmark eller Brevo) med avsändare på
+er egen domän. Det är samma leverantör som E0 ändå behöver för
+granskningspåminnelserna i M5.
+
+Koden går att ta fram utan mejl så länge b) inte är löst:
+
+```bash
+node -e '
+const B=process.env.NEXT_PUBLIC_SUPABASE_URL,K=process.env.SUPABASE_SERVICE_ROLE_KEY;
+const r=await fetch(B+"/auth/v1/admin/generate_link",{method:"POST",
+ headers:{apikey:K,Authorization:"Bearer "+K,"Content-Type":"application/json"},
+ body:JSON.stringify({type:"magiclink",email:"zen@clicknet.se"})});
+const j=await r.json();console.log("Kod:",j.email_otp??j.properties.email_otp);'
+```
+
+Det är en nödutgång för den som sitter fast, inte en arbetsrutin: den kräver
+service role-nyckeln och går förbi hela poängen med steg två.
 
 ---
 

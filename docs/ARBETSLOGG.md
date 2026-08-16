@@ -4,6 +4,58 @@ Läs denna före arbete. Uppdatera efteråt.
 
 ---
 
+## 2026-08-16 · Steg två byts från app till kod via e-post
+
+Beställt efter att TOTP levererats: en kod till mejlen är enklare att leva med
+än en app att skanna. Bytet är gjort och TOTP-vägen är helt borttagen.
+
+**Levererat**
+
+- Steg två är nu en engångskod till e-posten. Supabase har ingen e-postfaktor
+  bland sina MFA-typer, så steget är byggt här: koden skickas med Supabase
+  e-post-OTP, och när den stämmer skrivs ett signerat kvitto i en kaka.
+- Kvittot är HMAC över användarens id och en utgångstid. Det går inte att
+  skriva utan hemligheten och inte att flytta till ett annat konto. Utan giltig
+  session är det värdelöst — det är ett kvitto på ett genomfört steg, inte en
+  inloggning.
+- Enheten kommer ihåg dig i 30 dagar. Det var hela poängen med bytet.
+- `/tvafaktor` är borta. Med kod via mejl finns ingen inskrivning att göra, så
+  grinden och verifieringen är samma sida: `/logga-in/verifiera`.
+- Migration `0005`: `mfa_recovery_code` borttagen. Koderna fanns för en tappad
+  telefon. Den som tappar sin brevlåda återställer den hos e-postleverantören.
+
+**Vad bytet kostar i säkerhet**
+
+Med TOTP kom den som har brevlådan ändå inte in. Nu räcker brevlådan ensam —
+den bär både den magiska länken och koden. Kvar finns skyddet mot ett stulet
+lösenord, vilket är det vanligaste angreppet. Avvägningen är verksamhetens och
+är gjord med öppna ögon. K33 säger "MFA aktiverat" utan att peka ut faktortyp,
+så kravet är uppfyllt.
+
+**Ett val värt att känna till**
+
+Spärren ligger kvar i middleware, men behovet kan inte längre läsas ur token —
+det krävde rollerna. Ordningen är därför: kakan först (bara en HMAC, inget
+nätverk), och rollerna hämtas bara när kakan saknas eller gått ut, alltså en
+gång per enhet och månad. Svarar Supabase inte alls faller middleware tillbaka
+på att släppa igenom, och `(app)`-layouten tar det som andra led — ett ja hade
+låst ute alla chefer när Supabase har en dålig minut.
+
+**Verifierat**
+
+- `node tests/rls.mjs`: 52 kontroller, alla godkända. Hela kodvägen provas utan
+  att något mejl skickas, via `admin/generate_link` som ger samma engångskod:
+  fel kod nekas, rätt kod ger en session som är rätt persons, och samma kod går
+  inte att använda igen.
+
+**Beroende som måste lösas innan detta fungerar i drift**
+
+Se `DRIFTSATTNING.md` punkt 0: mallen för magisk länk måste innehålla
+`{{ .Token }}`, och egen SMTP måste vara påslagen. Utan det kommer koden inte
+fram, och chefsrollerna kommer inte in.
+
+---
+
 ## 2026-08-16 · E1.2 + E1.14 Tvåfaktor och profilsida
 
 **Levererat**

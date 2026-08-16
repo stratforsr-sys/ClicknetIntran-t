@@ -1,14 +1,15 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { supabaseServer } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
+import { kraverMfa, kvittoGiltigt, STEG2_KAKA } from "@/lib/mfa";
 import { Verifiera } from "./Verifiera";
 
 export const metadata = { title: "Bekräfta inloggning — Clicknet Nav" };
 
 /**
- * Steg tva vid inloggning. Mellanvaran skickar hit varje session som star pa
- * aal1 men har en verifierad faktor — alltsa: ratt losenord, men andra steget
- * saknas. Sidan ligger under /logga-in eftersom den ar en del av inloggningen
- * och darfor inte far krava en fardig session for att fa renderas.
+ * Steg tva vid inloggning. Sidan ligger under /logga-in eftersom den ar en del
+ * av inloggningen och darfor inte far krava ett fardigt steg tva for att fa
+ * ritas — annars skickar mellanvaran hit och hit igen.
  */
 export default async function VerifieraSida({
   searchParams,
@@ -16,17 +17,11 @@ export default async function VerifieraSida({
   searchParams: Promise<{ nasta?: string }>;
 }) {
   const sp = await searchParams;
-  const supabase = await supabaseServer();
-
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) redirect("/logga-in");
 
-  const { data: niva } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-  if (niva?.currentLevel === niva?.nextLevel) redirect("/");
-
-  const { data: faktorer } = await supabase.auth.mfa.listFactors();
-  const faktor = (faktorer?.all ?? []).find((f) => f.status === "verified");
-  if (!faktor) redirect("/");
+  const kvitto = (await cookies()).get(STEG2_KAKA)?.value;
+  if (!kraverMfa(user) || (await kvittoGiltigt(kvitto, user.authUserId))) redirect("/");
 
   // Oppen vidarebefordran ar en riktig risk pa just den har sidan: det ar hit
   // en angripare vill styra nagon precis efter en lyckad inloggning. Bara
@@ -41,12 +36,20 @@ export default async function VerifieraSida({
             C
           </span>
           <h1 className="text-display text-ink-900">Ett steg till</h1>
-          <p className="text-body text-ink-500">{user.email}</p>
+          <p className="text-body text-ink-500">
+            Din roll når personuppgifter och lönedata. Därför bekräftar vi att det är du.
+          </p>
         </div>
 
         <div className="rounded-md bg-surface p-6 shadow-elev-1">
-          <Verifiera faktorId={faktor.id} nasta={nasta} />
+          <Verifiera epost={user.email} nasta={nasta} />
         </div>
+
+        <form action="/auth/logga-ut" method="post" className="mt-6 text-center">
+          <button type="submit" className="text-small text-ink-500 underline hover:text-ink-900">
+            Logga ut i stället
+          </button>
+        </form>
       </div>
     </main>
   );

@@ -1,16 +1,17 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { getCurrentUser, fullName } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
-import { kraverMfa, harVerifieradFaktor } from "@/lib/mfa";
+import { kraverMfa, kvittoGiltigt, STEG2_KAKA } from "@/lib/mfa";
 import {
   ROLE_LABEL,
   PERMISSION_LABEL,
   EMPLOYMENT_TYPE_LABEL,
   STATUS_LABEL,
 } from "@/lib/roles";
-import { Mfa } from "./Mfa";
+import { Steg2 } from "./Steg2";
 import { Losenord } from "./Losenord";
 
 export const metadata = { title: "Min profil — Clicknet Nav" };
@@ -25,8 +26,9 @@ export default async function ProfilSida() {
     ? await supabase.from("team").select("name").eq("id", user.employee.team_id).maybeSingle()
     : { data: null };
 
-  const harFaktor = harVerifieradFaktor(user);
   const obligatorisk = kraverMfa(user);
+  const kvitto = (await cookies()).get(STEG2_KAKA)?.value;
+  const enhetenIhagkommen = await kvittoGiltigt(kvitto, user.authUserId);
 
   return (
     <div className="flex flex-col gap-4 pt-2">
@@ -44,16 +46,16 @@ export default async function ProfilSida() {
             <Losenord />
           </Card>
 
-          <Card status={obligatorisk && !harFaktor ? "danger" : undefined}>
+          <Card>
             <CardHeader
-              titel="Tvåfaktor"
+              titel="Kod vid inloggning"
               beskrivning={
                 obligatorisk
-                  ? "Din roll når känsliga uppgifter. Därför är tvåfaktor obligatoriskt."
-                  : "Ett extra steg vid inloggning. Rekommenderas."
+                  ? "Din roll når känsliga uppgifter. Därför bekräftas nya enheter med en kod."
+                  : "Ett extra steg vid inloggning på nya enheter."
               }
             />
-            <Mfa harFaktor={harFaktor} obligatorisk={obligatorisk} />
+            <Steg2 obligatorisk={obligatorisk} enhetenIhagkommen={enhetenIhagkommen} />
           </Card>
         </div>
 

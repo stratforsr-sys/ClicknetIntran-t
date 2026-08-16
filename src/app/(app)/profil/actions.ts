@@ -1,15 +1,14 @@
 "use server";
 
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/env";
 import { getCurrentUser } from "@/lib/auth";
-import { kraverMfa, harVerifieradFaktor, genereraKoder, hashaKod, ANTAL_KODER } from "@/lib/mfa";
+import { skapaKvitto, STEG2_KAKA, STEG2_DYGN } from "@/lib/mfa";
 
 export type ProfilState = { fel?: string; ok?: string };
-export type KodState = ProfilState & { koder?: string[] };
 
 const MIN_LOSENORD = 12;
 
@@ -82,118 +81,90 @@ export async function bytLosenord(_prev: ProfilState, form: FormData): Promise<P
 }
 
 // -----------------------------------------------------------------------------
-// Tvafaktor
+// Steg tva: engangskod till e-posten
 // -----------------------------------------------------------------------------
 
 /**
- * Anropas nar klienten verifierat sin nya faktor. Att servern raknar faktorer
- * sjalv, i stallet for att tro pa klientens ord, ar hela poangen: koderna far
- * bara skapas till nagon som faktiskt kommit hela vagen genom inskrivningen.
- *
- * Aldre oanvanda koder tas bort. Tio giltiga listor kan inte finnas samtidigt.
+ * Skickar koden. Adressen tas ur sessionen, aldrig ur formularet — annars vore
+ * det en vag att be navet mejla vem som helst.
  */
-export async function skapaAterstallningskoder(): Promise<KodState> {
+export async function skickaKod(_prev: ProfilState, _form: FormData): Promise<ProfilState> {
   const user = await getCurrentUser();
-  if (!user?.employee) return { fel: "Du måste vara inloggad." };
-
-  if (!harVerifieradFaktor(user)) return { fel: "Aktivera tvåfaktor först." };
-
-  const koder = genereraKoder();
-  const admin = supabaseAdmin();
-
-  await admin.from("mfa_recovery_code").delete().eq("employee_id", user.employee.id);
-  const { error } = await admin.from("mfa_recovery_code").insert(
-    koder.map((kod) => ({ employee_id: user.employee!.id, code_hash: hashaKod(kod) })),
-  );
-  if (error) return { fel: "Koderna kunde inte sparas. Försök igen." };
-
-  await logga(user.employee.id, "mfa.recovery_codes_created", user.authUserId, {
-    antal: ANTAL_KODER,
-  });
-  revalidatePath("/profil");
-  return { koder, ok: "Spara koderna nu. De visas inte igen." };
-}
-
-/** Loggar inskrivningen. Sjalva verifieringen sker mot Supabase i webblasaren. */
-export async function loggaInskrivenFaktor(): Promise<void> {
-  const user = await getCurrentUser();
-  if (!user?.employee || !harVerifieradFaktor(user)) return;
-  await logga(user.employee.id, "mfa.enrolled", user.authUserId);
-  revalidatePath("/profil");
-}
-
-/**
- * Den som maste ha tvafaktor far inte stanga av den sjalv. Regeln ligger har,
- * pa servern, och inte bara som en dold knapp i granssnittet.
- */
-export async function stangAvTvafaktor(
-  _prev: ProfilState,
-  _form: FormData,
-): Promise<ProfilState> {
-  const user = await getCurrentUser();
-  if (!user?.employee) return { fel: "Du måste vara inloggad." };
-  if (kraverMfa(user))
-    return { fel: "Din roll kräver tvåfaktor. Den går inte att stänga av." };
+  if (!user) return { fel: "Du måste vara inloggad." };
 
   const supabase = await supabaseServer();
-  for (const faktor of user.factors) {
-    await supabase.auth.mfa.unenroll({ factorId: faktor.id });
+  const { error } = await supabase.auth.signInWithOtp({
+    email: user.email,
+    options: { shouldCreateUser: false },
+  });
+
+  if (error) {
+    const m = error.message.toLowerCase();
+    if (m.includes("rate") || m.includes("too many") || m.includes("seconds"))
+      return { fel: "En kod är redan skickad. Vänta en minut innan du begär en ny." };
+    return { fel: "Koden kunde inte skickas. Kontrollera mejlutskicket i Supabase." };
   }
 
-  await supabaseAdmin().from("mfa_recovery_code").delete().eq("employee_id", user.employee.id);
-  await logga(user.employee.id, "mfa.disabled", user.authUserId);
-  revalidatePath("/profil");
-  return { ok: "Tvåfaktor är avstängd." };
+  return { ok: `Kod skickad till ${user.email}. Den gäller i en timme.` };
 }
 
 /**
- * Aterstallning ar ett steg-upp, inte en vag in i kontot: den som kommer hit
- * har redan bevisat sitt losenord eller sin magiska lank. Koden tar bort
- * faktorn och tvingar fram en ny inskrivning — den slapper alltsa inte in
- * nagon utan andra faktor, den byter ut telefonen.
+ * Kontrollerar koden och skriver kvittot. Att kvittot satts har, efter att
+ * Supabase sagt ja, ar hela spärren: mellanvaran tittar bara pa kvittot och
+ * behover darfor ingen egen kunskap om koder.
  */
-export async function anvandAterstallningskod(
-  _prev: ProfilState,
-  form: FormData,
-): Promise<ProfilState> {
+export async function verifieraKod(_prev: ProfilState, form: FormData): Promise<ProfilState> {
   const user = await getCurrentUser();
-  if (!user?.employee) return { fel: "Du måste vara inloggad." };
+  if (!user) return { fel: "Du måste vara inloggad." };
 
-  const kod = String(form.get("kod") ?? "").trim();
-  if (!kod) return { fel: "Skriv in en av dina återställningskoder." };
+  const kod = String(form.get("kod") ?? "").replace(/\s/g, "");
+  if (!kod) return { fel: "Skriv in koden från mejlet." };
 
-  const admin = supabaseAdmin();
-  const { data: rad } = await admin
-    .from("mfa_recovery_code")
-    .select("id")
-    .eq("employee_id", user.employee.id)
-    .eq("code_hash", hashaKod(kod))
-    .is("used_at", null)
-    .maybeSingle();
+  const supabase = await supabaseServer();
+  const { data, error } = await supabase.auth.verifyOtp({
+    email: user.email,
+    token: kod,
+    type: "email",
+  });
 
-  if (!rad) {
-    await logga(user.employee.id, "mfa.recovery_failed", user.authUserId, {
+  if (error || !data.user) {
+    if (user.employee) {
+      await logga(user.employee.id, "auth.step2_failed", user.authUserId, { ip: await klientIp() });
+    }
+    const m = (error?.message ?? "").toLowerCase();
+    if (m.includes("expired")) return { fel: "Koden har gått ut. Begär en ny." };
+    return { fel: "Koden stämmer inte. Kontrollera att du tagit den senaste." };
+  }
+
+  // Koden kom till ratt brevlada, men verifyOtp slapper igenom vilket konto
+  // som helst som adressen pekar pa. Kontrollen ar billig och stanger frangan.
+  if (data.user.id !== user.authUserId) return { fel: "Koden hör till ett annat konto." };
+
+  const { varde, utgang } = await skapaKvitto(user.authUserId);
+  const kakor = await cookies();
+  kakor.set(STEG2_KAKA, varde, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    expires: utgang,
+  });
+
+  if (user.employee) {
+    await logga(user.employee.id, "auth.step2_verified", user.authUserId, {
+      dygn: STEG2_DYGN,
       ip: await klientIp(),
     });
-    return { fel: "Koden gäller inte. Varje kod fungerar en gång." };
   }
-
-  await admin
-    .from("mfa_recovery_code")
-    .update({ used_at: new Date().toISOString(), used_ip: await klientIp() })
-    .eq("id", rad.id);
-
-  const { data: faktorer } = await admin.auth.admin.mfa.listFactors({ userId: user.authUserId });
-  for (const faktor of faktorer?.factors ?? []) {
-    await admin.auth.admin.mfa.deleteFactor({ id: faktor.id, userId: user.authUserId });
-  }
-
-  await logga(user.employee.id, "mfa.recovered", user.authUserId, { ip: await klientIp() });
-
-  // Token i handen namner fortfarande den borttagna faktorn. Utan en ny token
-  // skickar mellanvaran anvandaren tillbaka hit i all evighet.
-  const supabase = await supabaseServer();
-  await supabase.auth.refreshSession();
-
-  return { ok: "Tvåfaktorn är borttagen. Skriv in en ny app nu." };
+  return { ok: "Klart." };
 }
+
+/** Kvittot bort fran den har enheten. Nasta inloggning kraver en ny kod. */
+export async function glomEnheten(): Promise<void> {
+  const user = await getCurrentUser();
+  const kakor = await cookies();
+  kakor.delete(STEG2_KAKA);
+  if (user?.employee) await logga(user.employee.id, "auth.step2_forgotten", user.authUserId);
+  revalidatePath("/profil");
+}
+
