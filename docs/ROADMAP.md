@@ -159,21 +159,23 @@ Q71 avgör om denna är akut: rekryteras 25 personer av en person är den det.
 
 ---
 
-## E4 — M2 Tid och närvaro · ~3 veckor · SPÄRRAD AV K12
+## E4 — M2 Tid och närvaro · KÄRNAN BYGGD, AVSTÄNGD AV K12
 
-Får inte aktiveras i produktion innan intresseavvägningen är skriven och daterad.
+Får inte aktiveras i produktion innan intresseavvägningen är skriven och
+daterad. Koden finns och är testad; påslaget sker med `M2_AKTIV` i
+`src/lib/tid.ts`. Utkast till K12 och K14 ligger i `docs/`.
 
 | # | AC | Vad | Status |
 |---|---|---|---|
-| E4.1 | AC-2.1 | Stämpling in/ut/rast på max 2 knapptryck, mobil och kiosk | BLOCKERAD |
-| E4.2 | AC-2.2 | Fungerar offline, händelsen köas lokalt med **ursprunglig** tidsstämpel | BLOCKERAD |
-| E4.3 | AC-2.3 | Ingen `time_event` kan raderas eller ändras. Rättelse skapar ny rad | BLOCKERAD |
+| E4.1 | AC-2.1 | Stämpling in/ut/rast på max 2 knapptryck, mobil och kiosk | KLAR — bakom M2_AKTIV |
+| E4.2 | AC-2.2 | Fungerar offline, händelsen köas lokalt med **ursprunglig** tidsstämpel | KLAR — bakom M2_AKTIV |
+| E4.3 | AC-2.3 | Ingen `time_event` kan raderas eller ändras. Rättelse skapar ny rad | KLAR — trigger i databasen |
 | E4.4 | AC-2.4 | Automatisk stängning vid schemaslut med flagga för rättelse | BLOCKERAD |
-| E4.5 | AC-2.5 | Rättelseflöde med chefsattest, båda versioner synliga | BLOCKERAD |
+| E4.5 | AC-2.5 | Rättelseflöde med chefsattest, båda versioner synliga | KLAR — bakom M2_AKTIV |
 | E4.6 | AC-2.6, K2 | **Arbetstidsjournal** med jour-, över- och mertid åtskilda, PDF och CSV under 5 sekunder, dold i vardagen under `/admin/arbetstid` | BLOCKERAD |
 | E4.7 | AC-2.7, K3 | Journaldata bevaras 3 år, undantagen gallring | BLOCKERAD |
-| E4.8 | AC-2.8 | Live-vy "på plats nu" med namn och in-tid, aldrig rastlängd | BLOCKERAD |
-| E4.9 | AC-2.9, K4 | Ingen platsdata samlas in — verifieras med kodgranskning | BLOCKERAD |
+| E4.8 | AC-2.8 | Live-vy "på plats nu" med namn och in-tid, aldrig rastlängd | KLAR — bakom M2_AKTIV |
+| E4.9 | AC-2.9, K4 | Ingen platsdata samlas in — verifieras med kodgranskning | KLAR — ingen kolumn finns |
 | E4.10 | AC-2.23–2.26 | Rastschema per anställd och veckodag, avvikelsetyperna early_start, overrun, missing, unscheduled, konfigurerbar tolerans | BLOCKERAD av K29 |
 | E4.11 | AC-2.34 | Inställningsvy för raster: mall per bolag, team eller person | BLOCKERAD |
 | E4.12 | AC-2.35 | Schemaändring skapar ny rad. **Historiska avvikelser omvärderas aldrig** | BLOCKERAD |

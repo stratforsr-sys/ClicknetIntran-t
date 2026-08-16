@@ -1,5 +1,6 @@
 import type { CurrentUser } from "@/lib/auth";
 import { canManageEmployees, hasRole } from "@/lib/auth";
+import { M2_AKTIV } from "@/lib/tid";
 
 export type NavItem = {
   href: string;
@@ -21,6 +22,9 @@ export function navFor(user: CurrentUser | null): NavItem[] {
   if (user?.employee) {
     items.push({ href: "/rutiner", label: "Rutiner", ikon: "rutiner" });
     items.push({ href: "/utbildning", label: "Utbildning", ikon: "utbildning" });
+    // K12: posten dyker upp forst nar modulen slas pa. En meny som pekar pa en
+    // funktion som inte far anvandas ar samre an ingen post alls.
+    if (M2_AKTIV) items.push({ href: "/tid", label: "Tid", ikon: "tid" });
   }
 
   if (canManageEmployees(user) || hasRole(user, "ceo", "team_lead")) {

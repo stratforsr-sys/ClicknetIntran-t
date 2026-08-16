@@ -4,6 +4,61 @@ Läs denna före arbete. Uppdatera efteråt.
 
 ---
 
+## 2026-08-16 · E4 M2 Stämpling — kärnan byggd, avstängd av K12
+
+Beställt som "det viktigaste". Byggt och testat, men levererat avstängt:
+PRD §11 säger att M2 inte får aktiveras i produktion innan intresseavvägningen
+för raststämpling är skriven och daterad. Samma stycke säger att det är
+billigt att bygga i förväg — så det är precis vad som gjorts.
+
+**Levererat**
+
+- Migration `0009`: `time_event` med in, ut, rastens början och slut.
+- `/tid`: stämpelknappar, dagens rader, arbetad tid, rättelseflöde,
+  "på plats nu" för chef och chefens beslutskö.
+- Två strömbrytare i `src/lib/tid.ts`, inte en: `M2_AKTIV` för in och ut,
+  `RAST_AKTIV` för rasten. De vilar på olika rättslig grund — in och ut på
+  anställningsavtalet och arbetstidslagen, rasten på en intresseavvägning. Att
+  kunna köra in och ut utan rast är ett riktigt mellanläge, inte en genväg.
+- Utkast till K12 (intresseavvägning) och K14 (information till personalen)
+  ligger i `docs/`. De är det som faktiskt blockerar, inte koden.
+
+**Tre val värda att känna till**
+
+- **AC-2.3 ligger i en trigger, inte i återkallade rättigheter.** Navets alla
+  skrivningar sker med service role, som går förbi rättigheter — en spärr på
+  den nivån hade skyddat mot alla utom oss själva. Triggern gäller varje roll
+  utan undantag. Enda vägen att ta bort en stämpling är att medvetet koppla ur
+  skyddet, vilket kräver ett aktivt handgrepp och syns.
+- **Läget lagras inte, det räknas fram** ur händelserna. En sparad status kan
+  hamna ur fas med raderna den bygger på, och raderna är sanningen eftersom de
+  aldrig ändras.
+- **AC-2.9 löstes genom att inte bygga något.** Det finns ingen kolumn för
+  position. Det som inte kan lagras kan heller inte läcka, och det behöver
+  ingen kodgranskning för att intyga.
+
+**Verifierat**
+
+- `npm run test:tid`: 24 kontroller på ren logik — läget ur händelserna,
+  rättelser som ersätter utan att radera, rasten borträknad ur arbetad tid,
+  och att ogiltiga övergångar nekas.
+- `npm run test:rls`: 98 kontroller, tio nya för M2. Anna ser bara sin egen
+  stämpling, Eva på ekonomi ser ingens, och **varken hon eller säljchefen kan
+  flytta eller radera en tid** — testat både via API:t och via den direkta
+  databasanslutningen med fulla rättigheter.
+- Triggern provad mot fem försök att ändra: tid, typ, person, radering och ett
+  beslut på en rad som ingen begärt rättelse för. Alla nekade. Den enda
+  tillåtna ändringen — att fastställa en väntande rättelse — går igenom exakt
+  en gång.
+
+**Kvar i E4**
+
+E4.4 (automatisk stängning vid schemaslut, kräver schema), E4.6–E4.7
+(arbetstidsjournal), E4.10–E4.19 (rastschema och avvikelser, blockerade av
+K29), E4.20–E4.22. Och hela E4b lönerapport.
+
+---
+
 ## 2026-08-16 · E8 M6 Utbildning och certifiering
 
 Modulen som gör att 25 nya säljare kan lära sig samma sak utan att chefen

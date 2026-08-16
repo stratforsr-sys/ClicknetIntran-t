@@ -75,6 +75,11 @@ async function stad() {
   await db.query(`delete from document where slug like 'rlstest-%'`);
   await db.query(`delete from course where slug like 'rlstest-%'`);
   await db.query(`delete from employee_permission where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
+  // AC-2.3 galler aven testdata: enda vagen bort ar att medvetet koppla ur
+  // skyddet. Att det kravs ett aktivt handgrepp ar sjalva poangen.
+  await db.query(`alter table time_event disable trigger time_event_orubblig`);
+  await db.query(`delete from time_event where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
+  await db.query(`alter table time_event enable trigger time_event_orubblig`);
   await db.query(`update employee set team_id = null where team_id in (select id from team where name like 'rlstest-%')`);
   await db.query(`delete from employee where email like $1`, [PREFIX + "%"]);
   await db.query(`delete from team where name like 'rlstest-%'`);
@@ -232,6 +237,67 @@ console.log("\n\x1b[1mRutinbibliotek: publicerat, utkast och malgrupp\x1b[0m");
   ok("Anna får 0 rader när hon frågar direkt efter utkastets id", utk.length === 0, `såg ${utk.length}`);
   const chefsfraga = await las(tA, "document", `select=slug&id=eq.${chefsdok}`);
   ok("Anna får 0 rader när hon frågar direkt efter chefsdokumentets id", chefsfraga.length === 0, `såg ${chefsfraga.length}`);
+}
+
+console.log("\n\x1b[1mStämpling: egen tid, chefens insyn och oföränderlighet\x1b[0m");
+{
+  const { rows: t } = await db.query(
+    `insert into time_event (employee_id, kind, occurred_at) values
+       ($1::uuid, 'in',  now() - interval '4 h'),
+       ($2::uuid, 'in',  now() - interval '3 h')
+     returning id, employee_id`,
+    [saljareA.id, saljareB.id],
+  );
+  const annasStampling = t.find((r) => r.employee_id === saljareA.id).id;
+  const bertilsStampling = t.find((r) => r.employee_id === saljareB.id).id;
+
+  const annas = await las(tA, "time_event", "select=employee_id");
+  ok("Anna ser bara sin egen stämpling", annas.length === 1 && annas[0].employee_id === saljareA.id,
+    `såg ${annas.length}`);
+
+  const direkt = await las(tA, "time_event", `select=id&id=eq.${bertilsStampling}`);
+  ok("och får 0 rader när hon frågar efter Bertils", direkt.length === 0, `såg ${direkt.length}`);
+
+  const evas = await las(tE, "time_event", "select=id");
+  ok("Eva på ekonomi ser ingens", evas.length === 0, `såg ${evas.length}`);
+
+  const chefens = await las(tD, "time_event", "select=id");
+  ok("Säljchefen ser båda", chefens.length >= 2, `såg ${chefens.length}`);
+
+  // AC-2.3: ingen far skriva egna stamplingar, och ingen far andra en befintlig.
+  const w1 = await fetch(`${URL}/rest/v1/time_event`, {
+    method: "POST", headers: som(tA),
+    body: JSON.stringify({ employee_id: saljareA.id, kind: "out", occurred_at: new Date().toISOString() }),
+  });
+  ok("Anna kan INTE stämpla via API:t förbi server actionen", !w1.ok, `HTTP ${w1.status}`);
+
+  const w2 = await fetch(`${URL}/rest/v1/time_event?id=eq.${annasStampling}`, {
+    method: "PATCH", headers: som(tA), body: JSON.stringify({ occurred_at: new Date().toISOString() }),
+  });
+  ok("Anna kan INTE flytta sin egen in-tid", !w2.ok, `HTTP ${w2.status}`);
+
+  const w3 = await fetch(`${URL}/rest/v1/time_event?id=eq.${annasStampling}`, {
+    method: "DELETE", headers: som(tA),
+  });
+  ok("Anna kan INTE radera den", !w3.ok, `HTTP ${w3.status}`);
+
+  const w4 = await fetch(`${URL}/rest/v1/time_event?id=eq.${bertilsStampling}`, {
+    method: "PATCH", headers: som(tD), body: JSON.stringify({ occurred_at: new Date().toISOString() }),
+  });
+  ok("inte ens säljchefen kan ändra någons tid", !w4.ok, `HTTP ${w4.status}`);
+
+  // Och samma sak nere i databasen, dar service role annars gar forbi allt.
+  let dbFel = null;
+  try {
+    await db.query(`update time_event set occurred_at = now() where id = $1::uuid`, [annasStampling]);
+  } catch (e) { dbFel = e.message; }
+  ok("databasen vägrar även med full behörighet", dbFel !== null, (dbFel ?? "").slice(0, 45));
+
+  let raderFel = null;
+  try {
+    await db.query(`delete from time_event where id = $1::uuid`, [annasStampling]);
+  } catch (e) { raderFel = e.message; }
+  ok("och vägrar radering", raderFel !== null, (raderFel ?? "").slice(0, 40));
 }
 
 console.log("\n\x1b[1mUtbildning: malgrupp, facit och egna forsok\x1b[0m");
@@ -434,7 +500,7 @@ console.log("\n\x1b[1mSteg två: kod via e-post\x1b[0m");
 }
 
 console.log("\n\x1b[1mAnonym anslutning\x1b[0m");
-for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification"]) {
+for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event"]) {
   const r = await fetch(`${URL}/rest/v1/${t}?select=*`, { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` } });
   const j = await r.json();
   ok(`${t} ger inga rader anonymt`, !Array.isArray(j) || j.length === 0, Array.isArray(j) ? `${j.length} rader` : `HTTP ${r.status}`);
