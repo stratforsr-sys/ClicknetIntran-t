@@ -60,7 +60,7 @@ förhållande till tillväxten.
 | E1.2 | AC-1.1, K33 | **MFA obligatoriskt** för sales_manager, ceo, finance, admin och alla med payroll_cost_viewer: TOTP-inskrivning, spärr i middleware, återställningskoder | EJ PÅBÖRJAD |
 | E1.3 | AC-1.2 | Väntar på aktivering | KLAR |
 | E1.4 | AC-1.3 | Upplägg skapar konto och roll | KLAR |
-| E1.5 | AC-1.3 | **Automatisk tilldelning** av rutiner, kurser, schema och team vid upplägg | BLOCKERAD av E2, E8 |
+| E1.5 | AC-1.3 | **Automatisk tilldelning** av rutiner, kurser, schema och team vid upplägg | BLOCKERAD av E8 (rutindelen går nu att bygga) |
 | E1.6 | AC-1.4 | Offboarding: roller, sessioner, status, historik | KLAR |
 | E1.7 | AC-1.4 | **Offboarding stänger dialer-kö och spärrar iCal-flöde** | BLOCKERAD av E7, E12 |
 | E1.8 | AC-1.4 | **Öppna ärenden avslutas med notis vid offboarding** | BLOCKERAD av E3 |
@@ -74,24 +74,24 @@ förhållande till tillväxten.
 
 ---
 
-## E2 — M5 Rutiner och dokument · NÄST PÅ TUR · ~3 veckor
+## E2 — M5 Rutiner och dokument · I DRIFT (kvar: E2.5, E2.12 bilagor, E2.13) · ~3 veckor
 
 Modulen som skalar dig som chef. Måste finnas före onboardingvågen.
 
 | # | AC | Vad | Status |
 |---|---|---|---|
-| E2.1 | AC-5.1 | Tabeller `document`, `document_version`, `document_ack` med `owner_id` och `review_due` som NOT NULL på databasnivå | EJ PÅBÖRJAD |
-| E2.2 | — | Redigering i markdown med förhandsgranskning | EJ PÅBÖRJAD |
-| E2.3 | AC-5.4 | Varje sparning skapar ny version, tidigare versioner läsbara | EJ PÅBÖRJAD |
-| E2.4 | AC-5.2 | Förfallen granskning märks "EJ GRANSKAD SEDAN {datum}" för alla läsare | EJ PÅBÖRJAD |
-| E2.5 | AC-5.3 | Notiser till ägaren 30, 7 och 0 dagar före. Efter 30 dagars försening till sales_manager | EJ PÅBÖRJAD |
-| E2.6 | AC-5.5 | Kvittens kopplad till **versionen** — ny version kräver ny kvittens | EJ PÅBÖRJAD |
-| E2.7 | AC-5.6 | Kvittensrapport: vilka som kvitterat, vilka som inte | EJ PÅBÖRJAD |
-| E2.8 | AC-5.7 | Fritextsök över `body_md`, titel och extraherad PDF-text, svar under 500 ms | EJ PÅBÖRJAD |
-| E2.9 | AC-5.8 | Målgruppsstyrning per roll och team. Ej behörig får 404, inte "åtkomst nekad" | EJ PÅBÖRJAD |
-| E2.10 | AC-5.9 | Dokumenttyperna `work_env_policy`, `risk_assessment`, `task_allocation` med årlig `review_due` | EJ PÅBÖRJAD |
-| E2.11 | AC-5.10 | Läsvy fullt användbar på 375 px, radlängd max 70 tecken | EJ PÅBÖRJAD |
-| E2.12 | — | Mappträd, filterchips, bilagor via Supabase Storage med signerade tidsbegränsade URL:er | EJ PÅBÖRJAD |
+| E2.1 | AC-5.1 | Tabeller `document`, `document_version`, `document_ack` med `owner_id` och `review_due` som NOT NULL på databasnivå | KLAR |
+| E2.2 | — | Redigering i markdown med förhandsgranskning | KLAR |
+| E2.3 | AC-5.4 | Varje sparning skapar ny version, tidigare versioner läsbara | KLAR |
+| E2.4 | AC-5.2 | Förfallen granskning märks "EJ GRANSKAD SEDAN {datum}" för alla läsare | KLAR |
+| E2.5 | AC-5.3 | Notiser till ägaren 30, 7 och 0 dagar före. Efter 30 dagars försening till sales_manager | EJ PÅBÖRJAD — kräver E0 transaktionell e-post |
+| E2.6 | AC-5.5 | Kvittens kopplad till **versionen** — ny version kräver ny kvittens | KLAR |
+| E2.7 | AC-5.6 | Kvittensrapport: vilka som kvitterat, vilka som inte | KLAR |
+| E2.8 | AC-5.7 | Fritextsök över `body_md`, titel och kategori (svensk tsvector, GIN) | DELVIS — PDF-text kvar, se E2.12 |
+| E2.9 | AC-5.8 | Målgruppsstyrning per roll och team. Ej behörig får 404, inte "åtkomst nekad" | KLAR |
+| E2.10 | AC-5.9 | Dokumenttyperna `work_env_policy`, `risk_assessment`, `task_allocation` med årlig `review_due` | KLAR |
+| E2.11 | AC-5.10 | Läsvy fullt användbar på 375 px, radlängd max 70 tecken | KLAR |
+| E2.12 | — | Mappträd och filterchips | KLAR. Bilagor via Storage + PDF-textextraktion | EJ PÅBÖRJAD |
 | E2.13 | — | Global sökning i toppraden aktiveras (kortkommando `/`) | EJ PÅBÖRJAD |
 
 ---

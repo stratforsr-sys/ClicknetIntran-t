@@ -101,3 +101,58 @@ och den som måste finnas innan onboardingvågen i höst.
 - K32 arbetsmiljöpolicy och uppgiftsfördelning vid 10 anställda:
   deadline cirka fyra veckor, oberoende av intranätet.
 - A2 kollektivavtal, A3 lönesystem, A5 Inkio-API, A6 dialerns API.
+
+
+---
+
+## 2026-08-16 — E2, M5 Rutinbibliotek
+
+Migration `0003_rutiner.sql`: `document`, `document_version`, `document_ack`,
+`document_view`. `owner_id` och `review_due` är NOT NULL på databasnivå, så
+AC-5.1 går inte att kringgå ens från en server action med servicerollen.
+Kvittensens primärnyckel innehåller versionen — en ny version ger därför en ny
+rad, inte en uppdaterad, och gammal kvittens står kvar som historik (AC-5.5).
+
+**Byggt**
+
+- Lista med fritextsök (svensk `tsvector`, GIN-index, `websearch`), kategorichips
+  ur den faktiska datan och statusmärkning per dokument.
+- Läsvy med markdown, versionshistorik, klistrad kvittensknapp och 404 för den
+  som står utanför målgruppen (AC-5.8).
+- Redaktör med förhandsgranskning, målgrupp per roll och ägarbyte.
+- Kvittensrapport med de okvitterade överst (AC-5.6).
+- Startsidans "Att göra" hämtar nu okvitterade rutiner och egna dokument med
+  förfallen granskning.
+
+**Två avsiktliga val**
+
+Versionsnumret höjs bara när rubrik eller brödtext ändrats. En rättad kategori
+tvingar alltså inte fram ny kvittens från alla — en kvittens som krävs utan
+skäl är den snabbaste vägen till att folk klickar utan att läsa.
+
+Markdown-parsern laddas med `next/dynamic` först när någon trycker
+Förhandsgranska. Redigeringsvyn gick från 154 kB till 112 kB första laddning.
+
+**Behörighetstestet**
+
+`tests/rls.mjs` utökat med tolv kontroller för rutinbiblioteket. Verifierat mot
+riktig databas med riktiga inloggningar: en säljare ser den öppna rutinen men
+varken utkastet eller chefsdokumentet, får noll rader när hon frågar direkt på
+deras id, kan inte skapa eller ändra dokument via API:t, kan inte kvittera i
+någon annans namn och ser bara sin egen kvittens. 45 kontroller totalt, alla
+godkända.
+
+**Kvar i E2**
+
+- E2.5 påminnelser 30/7/0 dagar — kräver transaktionell e-post (E0).
+- Bilagor i Supabase Storage med signerade URL:er, och textextraktion ur PDF
+  så att bilagornas innehåll också blir sökbart. Medvetet uppskjutet, inte
+  bortglömt: sök över brödtext och titel täcker det som skrivs i navet, PDF
+  täcker det som lyfts in utifrån.
+- Global sökning i toppraden (E2.13).
+
+**Nästa steg**
+
+E3 — M4 Personalärenden med SLA, eller E8 — M6 Utbildning. Utbildning låser
+upp E1.5 automatisk tilldelning vid upplägg, och är det som gör onboardingen
+självgående. Ärenden är det som avlastar chefen mest per dag.

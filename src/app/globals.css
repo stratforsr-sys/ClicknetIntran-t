@@ -164,3 +164,58 @@
     transform: translateY(-1px);
   }
 }
+
+@layer components {
+  /* Lasvy for rutindokument. Markdown far inga egna tokens — allt kommer
+     fran systemet, sa att ett dokument inte kan se ut som en egen produkt. */
+  .prosa {
+    color: var(--color-ink-700);
+  }
+  .prosa > * + * { margin-top: 16px; }
+  .prosa h1, .prosa h2, .prosa h3 {
+    color: var(--color-ink-900);
+    font-family: var(--font-display);
+    margin-top: 32px;
+  }
+  .prosa h1 { font-size: var(--text-h1); line-height: 1.2; font-weight: 600; }
+  .prosa h2 { font-size: var(--text-h2); line-height: 1.3; font-weight: 600; }
+  .prosa h3 { font-size: var(--text-body); font-weight: 600; }
+  .prosa ul, .prosa ol { padding-left: 24px; }
+  .prosa ul { list-style: disc; }
+  .prosa ol { list-style: decimal; }
+  .prosa li + li { margin-top: 4px; }
+  .prosa a {
+    color: var(--color-brand-700);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .prosa strong { color: var(--color-ink-900); font-weight: 600; }
+  .prosa code {
+    font-family: var(--font-mono);
+    font-size: var(--text-small);
+    background: var(--color-canvas);
+    border-radius: var(--radius-xs);
+    padding: 2px 6px;
+  }
+  .prosa pre {
+    background: var(--color-brand-950);
+    color: var(--color-ink-inv);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+    overflow-x: auto;
+  }
+  .prosa pre code { background: none; padding: 0; color: inherit; }
+  .prosa blockquote {
+    border-left: 3px solid var(--color-brand-500);
+    padding-left: 16px;
+    color: var(--color-ink-500);
+  }
+  .prosa table { width: 100%; border-collapse: collapse; }
+  .prosa th, .prosa td {
+    border-bottom: 1px solid var(--color-canvas);
+    padding: 8px 12px;
+    text-align: left;
+  }
+  .prosa th { font-size: var(--text-micro); text-transform: uppercase; color: var(--color-ink-500); }
+  .prosa hr { border: 0; border-top: 1px solid var(--color-canvas); margin: 32px 0; }
+}

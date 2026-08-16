@@ -11,6 +11,8 @@ const P: Record<string, string> = {
   tillbaka: "M19 12H5M11 18l-6-6 6-6",
   plus: "M12 5v14M5 12h14",
   kontroll: "M20 6 9 17l-5-5",
+  rutiner: "M6 3h9l5 5v13H6zM15 3v5h5M9.5 13h6M9.5 17h4",
+  varning: "M12 9v4M12 17h.01M10.3 3.9 2.5 17.4A2 2 0 0 0 4.2 20.5h15.6a2 2 0 0 0 1.7-3.1L13.7 3.9a2 2 0 0 0-3.4 0Z",
 };
 
 export function Ikon({ namn, className = "size-5" }: { namn: string; className?: string }) {

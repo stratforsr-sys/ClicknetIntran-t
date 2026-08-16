@@ -72,6 +72,7 @@ async function stad() {
   }
   await db.query(`delete from audit_log where object_id in (select id::text from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`update team set lead_id = null where lead_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
+  await db.query(`delete from document where slug like 'rlstest-%'`);
   await db.query(`delete from employee where email like $1`, [PREFIX + "%"]);
 }
 
@@ -163,8 +164,74 @@ console.log("\n\x1b[1mAvslutad anställd tappar all åtkomst omedelbart\x1b[0m")
   await db.query(`update employee set status = 'active' where id = $1::uuid`, [saljareA.id]);
 }
 
+console.log("\n\x1b[1mRutinbibliotek: publicerat, utkast och malgrupp\x1b[0m");
+{
+  // Tre dokument som tacker de tre vagar RLS kan slappa igenom eller stanga.
+  const skapaDok = async (slug, titel, status, malgrupp, agare) => {
+    const { rows } = await db.query(
+      `insert into document (title, slug, category_path, body_md, owner_id, review_due,
+                             doc_type, requires_ack, audience_roles, status, created_by, version,
+                             published_at)
+       values ($1,$2,'Test','Brödtext',$3::uuid, current_date + 200, 'routine', true, $4::text[],
+               $5, $3::uuid, 1, case when $5 = 'published' then now() else null end)
+       returning id`,
+      [titel, slug, agare, malgrupp, status],
+    );
+    return rows[0].id;
+  };
+
+  const alla = await skapaDok("rlstest-alla", "Öppen rutin", "published", [], chef.id);
+  const utkast = await skapaDok("rlstest-utkast", "Utkast", "draft", [], chef.id);
+  const chefsdok = await skapaDok("rlstest-chef", "Endast chefer", "published", ["sales_manager"], chef.id);
+
+  const annas = await las(tA, "document", "select=slug");
+  const sluggar = annas.map((d) => d.slug).filter((s) => s.startsWith("rlstest-"));
+  ok("Anna ser den publicerade rutinen utan målgrupp", sluggar.includes("rlstest-alla"));
+  ok("Anna ser INTE utkastet", !sluggar.includes("rlstest-utkast"), sluggar.join(", "));
+  ok("Anna ser INTE dokumentet som riktar sig till säljchefer", !sluggar.includes("rlstest-chef"), sluggar.join(", "));
+
+  const davids = (await las(tD, "document", "select=slug")).map((d) => d.slug);
+  ok("David ser alla tre", ["rlstest-alla", "rlstest-utkast", "rlstest-chef"].every((x) => davids.includes(x)));
+
+  // Skrivvagen: ett dokument far bara skapas och andras av en server action.
+  const w1 = await fetch(`${URL}/rest/v1/document`, {
+    method: "POST", headers: som(tA),
+    body: JSON.stringify({ title: "Fejk", slug: "rlstest-fejk", body_md: "x",
+      owner_id: saljareA.id, review_due: "2030-01-01", created_by: saljareA.id }),
+  });
+  ok("Anna kan INTE skapa ett dokument via API:t", !w1.ok, `HTTP ${w1.status}`);
+
+  const w2 = await fetch(`${URL}/rest/v1/document?id=eq.${alla}`, {
+    method: "PATCH", headers: som(tA), body: JSON.stringify({ body_md: "ändrat" }),
+  });
+  ok("Anna kan INTE ändra en rutin via API:t", !w2.ok, `HTTP ${w2.status}`);
+  const { rows: kvar } = await db.query(`select body_md from document where id = $1::uuid`, [alla]);
+  ok("och brödtexten står oförändrad i databasen", kvar[0].body_md === "Brödtext", kvar[0].body_md);
+
+  const w3 = await fetch(`${URL}/rest/v1/document_ack`, {
+    method: "POST", headers: som(tA),
+    body: JSON.stringify({ document_id: alla, employee_id: saljareB.id, version: 1 }),
+  });
+  ok("Anna kan INTE kvittera i Bertils namn", !w3.ok, `HTTP ${w3.status}`);
+
+  // Kvittenser ar personuppgifter: ingen ska kunna kartlagga vem som inte last.
+  await db.query(
+    `insert into document_ack (document_id, employee_id, version) values ($1::uuid,$2::uuid,1),($1::uuid,$3::uuid,1)`,
+    [alla, saljareA.id, saljareB.id],
+  );
+  const ack = await las(tA, "document_ack", "select=employee_id");
+  ok("Anna ser bara sin egen kvittens", ack.length === 1 && ack[0].employee_id === saljareA.id, `såg ${ack.length}`);
+  const ackChef = await las(tD, "document_ack", "select=employee_id");
+  ok("David ser båda kvittenserna", ackChef.length >= 2, `såg ${ackChef.length}`);
+
+  const utk = await las(tA, "document", `select=slug&id=eq.${utkast}`);
+  ok("Anna får 0 rader när hon frågar direkt efter utkastets id", utk.length === 0, `såg ${utk.length}`);
+  const chefsfraga = await las(tA, "document", `select=slug&id=eq.${chefsdok}`);
+  ok("Anna får 0 rader när hon frågar direkt efter chefsdokumentets id", chefsfraga.length === 0, `såg ${chefsfraga.length}`);
+}
+
 console.log("\n\x1b[1mAnonym anslutning\x1b[0m");
-for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations"]) {
+for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view"]) {
   const r = await fetch(`${URL}/rest/v1/${t}?select=*`, { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` } });
   const j = await r.json();
   ok(`${t} ger inga rader anonymt`, !Array.isArray(j) || j.length === 0, Array.isArray(j) ? `${j.length} rader` : `HTTP ${r.status}`);

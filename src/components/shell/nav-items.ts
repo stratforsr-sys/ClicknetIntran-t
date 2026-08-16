@@ -16,6 +16,12 @@ export type NavItem = {
 export function navFor(user: CurrentUser | null): NavItem[] {
   const items: NavItem[] = [{ href: "/", label: "Hem", ikon: "hem" }];
 
+  // Rutiner ligger overst efter Hem: det ar den vy alla anstallda har arende
+  // till, till skillnad fran personal- och adminvyerna nedanfor.
+  if (user?.employee) {
+    items.push({ href: "/rutiner", label: "Rutiner", ikon: "rutiner" });
+  }
+
   if (canManageEmployees(user) || hasRole(user, "ceo", "team_lead")) {
     items.push({ href: "/personal", label: "Personal", ikon: "personal" });
   }
