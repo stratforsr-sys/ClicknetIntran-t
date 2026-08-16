@@ -104,7 +104,9 @@ export function Sidebar({
                 type="submit"
                 aria-label="Logga ut"
                 title="Logga ut"
-                className="grid size-9 place-items-center rounded-full text-brand-200 transition-colors duration-fast hover:bg-brand-800 hover:text-ink-inv"
+                // AC-U5.5: minsta traffyta 44x44 px. Ikonen ar mindre an sa,
+                // men klickytan far inte vara det.
+                className="grid size-11 place-items-center rounded-full text-brand-200 transition-colors duration-fast hover:bg-brand-800 hover:text-ink-inv"
               >
                 <Ikon namn="ut" />
               </button>

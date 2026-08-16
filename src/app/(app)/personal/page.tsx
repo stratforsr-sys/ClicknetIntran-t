@@ -72,11 +72,15 @@ export default async function Personal() {
                   key={a.id}
                   className="border-b border-canvas transition-colors duration-fast last:border-0 hover:bg-surface-alt"
                 >
-                  <td className="px-6 py-4">
-                    <Link href={`/personal/${a.id}`} className="font-semibold text-ink-900 hover:text-brand-700">
-                      {fullName(a)}
+                  <td className="px-6 py-2">
+                    {/* Hela cellen ar traffyta, inte bara textraden (AC-U5.5). */}
+                    <Link
+                      href={`/personal/${a.id}`}
+                      className="flex min-h-11 flex-col justify-center rounded-xs"
+                    >
+                      <span className="font-semibold text-ink-900">{fullName(a)}</span>
+                      <span className="text-small text-ink-500">{a.email}</span>
                     </Link>
-                    <p className="text-small text-ink-500">{a.email}</p>
                   </td>
                   <td className="px-6 py-4 text-small text-ink-700">
                     {(rollPer.get(a.id) ?? []).map((r) => ROLE_LABEL[r]).join(", ") || "—"}
