@@ -4,6 +4,75 @@ Läs denna före arbete. Uppdatera efteråt.
 
 ---
 
+## 2026-08-16 · E8 M6 Utbildning och certifiering
+
+Modulen som gör att 25 nya säljare kan lära sig samma sak utan att chefen
+upprepar introduktionen trettio gånger.
+
+**Levererat**
+
+- Migration `0007`: `course`, `course_module`, `quiz_question`, `quiz_option`,
+  `module_progress`, `course_attempt`, `certification`. `0008` lade till
+  `due_days`.
+- `/utbildning` med kurslista och läge per kurs, `/utbildning/[slug]` med
+  innehåll i ordning, modulvy med läsning eller prov, redigeringsvy och
+  `/utbildning/oversikt` (AC-6.6).
+- Kurser tilldelas av målgruppen precis som rutinerna, och loggas vid upplägg
+  som `onboarding.courses_assigned` (AC-6.4). Pågående kurser hamnar i
+  "Att göra" på startsidan.
+
+**Fyra val värda att känna till**
+
+- **Rätt svar lämnar aldrig servern.** `quiz_option` har ingen RLS-policy alls,
+  så tabellen ger noll rader åt varje inloggad — inte ens säljchefen. Vyn
+  hämtar alternativen med service role och skickar dem utan `is_correct`, och
+  rättningen sker i en server action. Facit går alltså inte att läsa ur
+  sidkällan hur mycket man än letar.
+- **Ett försök raderas aldrig.** `course_attempt` är en logg, inte ett
+  tillstånd. Godkänt och underkänt är lika mycket bevis, och spärrtiden i
+  AC-6.2 går inte att råka kringgå om historiken kan städas bort.
+- **Frågor skrivs som text**, en per stycke med `*` framför det rätta svaret.
+  Den som skriver en kurs gör det i ett svep, ofta genom att klistra in från
+  ett underlag — ett formular med "lägg till alternativ" tre gånger per fråga
+  gör samma arbete tio gånger långsammare.
+- **Fristen räknas i dagar från anställningens start**, inte som ett fast
+  datum. En kurs som ska vara klar inom två veckor blir då rätt för var och en
+  som börjar, utan att någon sätter om datumet vid varje nyanställning.
+
+**Två buggar hittade under provkörning**
+
+1. `Input`-komponenten sätter `name={namn}` efter sin spread och skrev därmed
+   över modulformulärets fältnamn med sitt eget id. Följden: rubriken kom fram
+   tom och modulen sparades aldrig. Rättat med ett rått `<input>` där id och
+   name behöver skilja sig åt.
+2. `revalidatePath("/utbildning")` täcker bara den exakta sidan, så en sparad
+   modul syntes inte i redigeringsvyn. Numera `"layout"`, som tar hela grenen.
+
+**Verifierat**
+
+- `node --experimental-strip-types tests/utbildning.mjs`: 26 kontroller på ren
+  logik — frågetolken, lägesberäkningen, spärrtiden och certifikatets
+  giltighet. Bland annat att ett utgånget certifikat väger tyngre än att man
+  sitter mitt i en omtagning, och att en passerad frist väger tyngre än att man
+  inte börjat.
+- `node tests/rls.mjs`: 87 kontroller. Femton nya för M6: Anna ser den öppna
+  kursen men varken chefskursen eller utkastet, hon får noll rader när hon
+  frågar direkt efter deras id, **varken hon eller säljchefen kommer åt facit**,
+  och hon kan inte bocka av en modul, posta ett godkänt försök eller utfärda
+  ett certifikat åt sig själv.
+- Hela flödet kört i produktion: kurs skapad, två moduler, prov med två frågor,
+  publicerad, läst, prov med 50 % → underkänt med spärrtid till nästa dag,
+  omtag med 100 % → godkänt, certifikat utfärdat och kopplat till försöket.
+  Allt i `audit_log`.
+
+**Kvar i E8**
+
+E8.5 (dialerspärr, kräver E12), E8.7 (rollspel, kräver Storage), E8.8
+(påminnelse 30 dagar före utgång, kräver transaktionell e-post) och E8.9
+(kursinnehållet, ditt arbete).
+
+---
+
 ## 2026-08-16 · E1.5 Tilldelning vid upplägg + E1.12 Oanvända konton
 
 **E1.5 — vad en nyanställd får på sig (AC-1.3)**

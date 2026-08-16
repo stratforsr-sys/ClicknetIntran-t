@@ -96,21 +96,21 @@ Modulen som skalar dig som chef. Måste finnas före onboardingvågen.
 
 ---
 
-## E8 — M6 Utbildning och certifiering · ~3 veckor
+## E8 — M6 Utbildning och certifiering · I DRIFT (kvar: E8.5, E8.7, E8.8, E8.9)
 
 Flyttad fram från Fas 2 enligt §1.6. Det är denna modul som gör att 25 nya
 säljare kan lära sig samma sak utan att du upprepar introduktionen trettio gånger.
 
 | # | AC | Vad | Status |
 |---|---|---|---|
-| E8.1 | AC-6.1 | Kurs med moduler i ordning, progression sparad per modul | EJ PÅBÖRJAD |
-| E8.2 | AC-6.2 | Quiz med konfigurerbar godkäntgräns och spärrtid vid omtag | EJ PÅBÖRJAD |
-| E8.3 | AC-6.3 | Godkänd kurs skapar certifikat med utgångsdatum | EJ PÅBÖRJAD |
-| E8.4 | AC-6.4 | Kurser tilldelas automatiskt utifrån roll vid anställning | EJ PÅBÖRJAD |
+| E8.1 | AC-6.1 | Kurs med moduler i ordning, progression sparad per modul | KLAR |
+| E8.2 | AC-6.2 | Quiz med konfigurerbar godkäntgräns och spärrtid vid omtag | KLAR |
+| E8.3 | AC-6.3 | Godkänd kurs skapar certifikat med utgångsdatum | KLAR |
+| E8.4 | AC-6.4 | Kurser tilldelas automatiskt utifrån roll vid anställning | KLAR |
 | E8.5 | AC-6.5 | `blocks_capability` styr dialer-kö: utan giltig certifiering endast begränsat segment | BLOCKERAD av E12 |
-| E8.6 | AC-6.6 | Progressvy per person och team: klara, pågående, försenade, utgångna | EJ PÅBÖRJAD |
-| E8.7 | AC-6.7 | Rollspelscertifiering: uppladdat testsamtal bedöms mot rubrik | EJ PÅBÖRJAD |
-| E8.8 | AC-6.8 | Utgående certifikat notifierar 30 dagar i förväg | EJ PÅBÖRJAD |
+| E8.6 | AC-6.6 | Progressvy per person och team: klara, pågående, försenade, utgångna | KLAR |
+| E8.7 | AC-6.7 | Rollspelscertifiering: uppladdat testsamtal bedöms mot rubrik | EJ PÅBÖRJAD — kräver Storage, samma beroende som E2.12 |
+| E8.8 | AC-6.8 | Utgående certifikat notifierar 30 dagar i förväg | EJ PÅBÖRJAD — kräver transaktionell e-post (E0), som E2.5 |
 | E8.9 | Bilaga B | **Kursinnehåll skrivet** — 8 kurser. Se U11: tjänsteutbudet är bredare än SEO | EJ PÅBÖRJAD |
 
 ---
