@@ -57,7 +57,7 @@ förhållande till tillväxten.
 | # | AC | Vad | Status |
 |---|---|---|---|
 | E1.1 | AC-1.1 | Inloggning med magisk länk och lösenord | KLAR |
-| E1.2 | AC-1.1, K33 | **MFA obligatoriskt** för sales_manager, ceo, finance, admin och alla med payroll_cost_viewer: TOTP-inskrivning, spärr i middleware, återställningskoder | EJ PÅBÖRJAD |
+| E1.2 | AC-1.1, K33 | **MFA obligatoriskt** för sales_manager, ceo, finance, admin och alla med payroll_cost_viewer: TOTP-inskrivning, spärr i middleware, återställningskoder | KLAR |
 | E1.3 | AC-1.2 | Väntar på aktivering | KLAR |
 | E1.4 | AC-1.3 | Upplägg skapar konto och roll | KLAR |
 | E1.5 | AC-1.3 | **Automatisk tilldelning** av rutiner, kurser, schema och team vid upplägg | BLOCKERAD av E8 (rutindelen går nu att bygga) |
@@ -69,7 +69,7 @@ förhållande till tillväxten.
 | E1.11 | AC-1.7 | Offboarding-checklista med kvittens och motiveringstvång | KLAR |
 | E1.12 | AC-1.8 | **Konton utan inloggning på 45 dagar flaggas** — kräver schemalagt jobb (R11) | EJ PÅBÖRJAD |
 | E1.13 | — | **Teamhantering i UI**: skapa team, sätt teamledare, koppla anställd till team och chef | EJ PÅBÖRJAD |
-| E1.14 | — | **Egen profilsida**: se sina uppgifter, byta lösenord, aktivera MFA | EJ PÅBÖRJAD |
+| E1.14 | — | **Egen profilsida**: se sina uppgifter, byta lösenord, aktivera MFA | KLAR |
 | E1.15 | §1.4 | **Admin-vy för `payroll_cost_viewer`** — tilldelas per person, varje ändring loggad (AC-13.13) | EJ PÅBÖRJAD |
 
 ---

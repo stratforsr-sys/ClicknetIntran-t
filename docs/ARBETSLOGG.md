@@ -4,6 +4,57 @@ Läs denna före arbete. Uppdatera efteråt.
 
 ---
 
+## 2026-08-16 · E1.2 + E1.14 Tvåfaktor och profilsida
+
+**Levererat**
+
+- Migration `0004_mfa.sql`: `mfa_recovery_code` med RLS utan policyer. Ingen
+  inloggad ser raden, inte ens sin egen — hashen hjälper ägaren noll och är en
+  angreppsyta om den läcker vidare.
+- `/profil` (E1.14): egna uppgifter, byte av lösenord, hantering av tvåfaktor.
+  Namnet i sidopanelen är vägen dit.
+- Tvåfaktor med TOTP (E1.2, AC-1.1, K33). Inskrivningen sker i webbläsaren mot
+  Supabase, så hemligheten passerar aldrig vår egen server.
+- Tio återställningskoder om 50 bitar, sha256 i databasen, klartext en enda
+  gång vid utskrift. En kod tar bort faktorn och tvingar fram en ny
+  inskrivning — den loggar alltså inte in någon på egen hand.
+- Två grindar: `/tvafaktor` för den som **måste** ha MFA men saknar den, och
+  `/logga-in/verifiera` för den som har en faktor men står kvar på aal1.
+- Loggat i `audit_log`: `mfa.enrolled`, `mfa.disabled`, `mfa.recovered`,
+  `mfa.recovery_failed`, `mfa.recovery_codes_created`, `auth.password_changed`.
+
+**Två val värda att känna till**
+
+- AAL-kontrollen ligger i middleware, inte i en layout. Då gäller den även
+  route handlers och sidor som byggs till senare, utan att någon behöver minnas
+  att lägga in den.
+- MFA-faktorerna bärs med i `getCurrentUser` i stället för att hämtas separat.
+  `mfa.listFactors()` gör om samma `getUser()`-anrop, och kontrollen sker på
+  varje sidvisning — det hade blivit ett extra nätverksanrop per sida.
+
+**Verifierat**
+
+- `node tests/rls.mjs`: 54 kontroller, alla godkända. Åtta av dem nya, och
+  testet räknar själv ut TOTP-koden enligt RFC 6238 i stället för att lita på
+  att Supabase gör rätt: rätt kod ger en token på aal2, fel kod ger 422, och
+  lösenordstoken står kvar på aal1.
+- TOTP är påslaget i Supabase-projektet. Provat mot en engångsanvändare innan
+  spärren aktiverades — en spärr mot en avstängd funktion hade låst ute alla
+  chefer.
+
+**Konsekvens vid driftsättning**
+
+`zen@clicknet.se` har `sales_manager` + `admin` och möts därför av
+`/tvafaktor` vid nästa sidladdning. En autentiseringsapp behövs för att komma
+vidare. Utvägen är att logga ut; kontot kan inte låsas ute permanent.
+
+**Kvar i E1**
+
+E1.5 (automatisk tilldelning), E1.12 (45-dagarsflaggan, kräver schemalagt
+jobb), E1.13 (teamhantering i UI), E1.15 (admin-vy för `payroll_cost_viewer`).
+
+---
+
 ## 2026-08-16 · E0 Fundament + E1 Identitet
 
 **Levererat**

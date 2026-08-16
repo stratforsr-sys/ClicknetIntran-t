@@ -87,18 +87,26 @@ export function Sidebar({
         </nav>
 
         <div className="mt-4 border-t border-brand-800 pt-4">
-          <div className="flex items-center gap-3 px-2">
-            <div className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-800 text-small font-semibold text-brand-200">
-              {namn
-                .split(" ")
-                .map((d) => d.charAt(0))
-                .slice(0, 2)
-                .join("")}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-small font-semibold text-ink-inv">{namn}</p>
-              <p className="truncate text-micro uppercase text-brand-200">{roll}</p>
-            </div>
+          <div className="flex items-center gap-2 px-2">
+            {/* Namnet ar vagen till den egna profilen. Det ar dar folk letar. */}
+            <Link
+              href="/profil"
+              onClick={stang}
+              aria-current={path.startsWith("/profil") ? "page" : undefined}
+              className="flex min-w-0 flex-1 items-center gap-3 rounded-full py-1 pr-2 transition-colors duration-fast hover:bg-brand-800/60"
+            >
+              <div className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-800 text-small font-semibold text-brand-200">
+                {namn
+                  .split(" ")
+                  .map((d) => d.charAt(0))
+                  .slice(0, 2)
+                  .join("")}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-small font-semibold text-ink-inv">{namn}</p>
+                <p className="truncate text-micro uppercase text-brand-200">{roll}</p>
+              </div>
+            </Link>
             <form action="/auth/logga-ut" method="post">
               <button
                 type="submit"

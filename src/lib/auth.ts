@@ -17,6 +17,12 @@ export type CurrentUser = {
   } | null;
   roles: Role[];
   permissions: Permission[];
+  /**
+   * MFA-faktorer foljer med anvandarobjektet fran Supabase. De bars med har i
+   * stallet for att hamtas separat: mfa.listFactors() gor om samma anrop, och
+   * MFA-kontrollen sker pa varje sidvisning.
+   */
+  factors: { id: string; status: string; factor_type: string }[];
 };
 
 /**
@@ -35,8 +41,21 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     .eq("auth_user_id", user.id)
     .maybeSingle();
 
+  const factors = (user.factors ?? []).map((f) => ({
+    id: f.id,
+    status: f.status as string,
+    factor_type: f.factor_type as string,
+  }));
+
   if (!employee) {
-    return { authUserId: user.id, email: user.email ?? "", employee: null, roles: [], permissions: [] };
+    return {
+      authUserId: user.id,
+      email: user.email ?? "",
+      employee: null,
+      roles: [],
+      permissions: [],
+      factors,
+    };
   }
 
   const [{ data: roleRows }, { data: permRows }] = await Promise.all([
@@ -50,6 +69,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     employee,
     roles: (roleRows ?? []).map((r) => r.role as Role),
     permissions: (permRows ?? []).map((p) => p.permission as Permission),
+    factors,
   };
 });
 

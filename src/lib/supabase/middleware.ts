@@ -44,6 +44,28 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  /**
+   * AC-1.1: den som har en faktor MASTE anvanda den. Sessionen sitter kvar pa
+   * aal1 tills koden matats in, sa "har faktor men star pa aal1" ar samma sak
+   * som "halvvags inloggad". Kontrollen lases ur token som redan finns i
+   * handen och kostar darfor inget extra anrop.
+   *
+   * Att detta ligger i mellanvaran och inte i en layout ar avsiktligt: da
+   * galler det aven for route handlers och for sidor som byggs till senare.
+   */
+  if (user) {
+    const { data: niva } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    const halvvags = niva?.currentLevel === "aal1" && niva?.nextLevel === "aal2";
+    const undantag = path.startsWith("/logga-in") || path.startsWith("/auth");
+    if (halvvags && !undantag) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/logga-in/verifiera";
+      url.search = "";
+      url.searchParams.set("nasta", path);
+      return NextResponse.redirect(url);
+    }
+  }
+
   if (user && path === "/logga-in") {
     const url = request.nextUrl.clone();
     url.pathname = "/";

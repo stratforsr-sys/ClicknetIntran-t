@@ -11,6 +11,7 @@
  * Testanvandarna skapas och raderas av testet. Prefix: rlstest+
  */
 import pg from "pg";
+import { createHmac } from "node:crypto";
 
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
 const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.SUPABASE_PUBLISHABLE_KEY;
@@ -61,6 +62,26 @@ async function las(tok, tabell, fraga = "select=*") {
   const r = await fetch(`${URL}/rest/v1/${tabell}?${fraga}`, { headers: som(tok) });
   const j = await r.json();
   return Array.isArray(j) ? j : [];
+}
+
+/**
+ * TOTP enligt RFC 6238. Testet raknar ut koden sjalv i stallet for att havda
+ * att Supabase gor ratt — det ar skillnaden mellan att prova flodet och att
+ * lita pa det.
+ */
+function totp(hemlighetBase32, tid = Date.now()) {
+  const alfabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  let bitar = "";
+  for (const c of hemlighetBase32.toUpperCase().replace(/=+$/, "")) {
+    bitar += alfabet.indexOf(c).toString(2).padStart(5, "0");
+  }
+  const nyckel = Buffer.from((bitar.match(/.{8}/g) ?? []).map((b) => parseInt(b, 2)));
+  const steg = Buffer.alloc(8);
+  steg.writeBigInt64BE(BigInt(Math.floor(tid / 30000)));
+  const h = createHmac("sha1", nyckel).update(steg).digest();
+  const i = h[h.length - 1] & 0x0f;
+  const kod = ((h[i] & 0x7f) << 24) | ((h[i + 1] & 0xff) << 16) | ((h[i + 2] & 0xff) << 8) | (h[i + 3] & 0xff);
+  return String(kod % 1_000_000).padStart(6, "0");
 }
 
 async function stad() {
@@ -230,8 +251,77 @@ console.log("\n\x1b[1mRutinbibliotek: publicerat, utkast och malgrupp\x1b[0m");
   ok("Anna får 0 rader när hon frågar direkt efter chefsdokumentets id", chefsfraga.length === 0, `såg ${chefsfraga.length}`);
 }
 
+console.log("\n\x1b[1mTvåfaktor\x1b[0m");
+{
+  const tA = await loggaIn(saljareA.epost);
+
+  // Aterstallningskoderna ar bararen av kontot om telefonen forsvinner. Ingen
+  // inloggad far se dem — inte ens sina egna hashar.
+  await db.query(
+    `insert into mfa_recovery_code (employee_id, code_hash) values ($1::uuid, $2)`,
+    [saljareA.id, "a".repeat(64)],
+  );
+  const koder = await las(tA, "mfa_recovery_code", "select=code_hash");
+  ok("Anna ser inte ens sina egna återställningskoder", koder.length === 0, `såg ${koder.length}`);
+
+  const wk = await fetch(`${URL}/rest/v1/mfa_recovery_code`, {
+    method: "POST", headers: som(tA),
+    body: JSON.stringify({ employee_id: saljareA.id, code_hash: "b".repeat(64) }),
+  });
+  ok("Anna kan INTE lägga till en egen återställningskod", !wk.ok, `HTTP ${wk.status}`);
+
+  const { rows: dubbelt } = await db.query(
+    `select count(*)::int as n from mfa_recovery_code where employee_id = $1::uuid`,
+    [saljareA.id],
+  );
+  ok("och databasen har fortfarande bara den ena raden", dubbelt[0].n === 1, `${dubbelt[0].n} rader`);
+
+  // Hela steg tva, pa riktigt: skriv in en TOTP-faktor och los ut den. Det ar
+  // den vagen mellanvaran haller stangd tills koden ar inmatad.
+  const rEnroll = await fetch(`${URL}/auth/v1/factors`, {
+    method: "POST", headers: som(tA),
+    body: JSON.stringify({ factor_type: "totp", issuer: "Clicknet Nav" }),
+  });
+  const faktor = await rEnroll.json();
+  ok("TOTP går att skriva in", rEnroll.ok && Boolean(faktor.totp?.secret), faktor.msg ?? "");
+
+  if (faktor.id) {
+    const rChall = await fetch(`${URL}/auth/v1/factors/${faktor.id}/challenge`, {
+      method: "POST", headers: som(tA), body: "{}",
+    });
+    const utmaning = await rChall.json();
+    const rVer = await fetch(`${URL}/auth/v1/factors/${faktor.id}/verify`, {
+      method: "POST", headers: som(tA),
+      body: JSON.stringify({ challenge_id: utmaning.id, code: totp(faktor.totp.secret) }),
+    });
+    const verifierad = await rVer.json();
+    ok("rätt engångskod ger en ny token", rVer.ok && Boolean(verifierad.access_token), verifierad.msg ?? "");
+
+    if (verifierad.access_token) {
+      const krav = JSON.parse(Buffer.from(verifierad.access_token.split(".")[1], "base64url"));
+      ok("och den token står på aal2", krav.aal === "aal2", `aal=${krav.aal}`);
+    }
+
+    // Fel kod far inte lyfta nivan. Utmaningen ar forbrukad, sa en ny behovs.
+    const rChall2 = await fetch(`${URL}/auth/v1/factors/${faktor.id}/challenge`, {
+      method: "POST", headers: som(tA), body: "{}",
+    });
+    const utmaning2 = await rChall2.json();
+    const rFel = await fetch(`${URL}/auth/v1/factors/${faktor.id}/verify`, {
+      method: "POST", headers: som(tA),
+      body: JSON.stringify({ challenge_id: utmaning2.id, code: "000000" }),
+    });
+    ok("fel engångskod nekas", !rFel.ok, `HTTP ${rFel.status}`);
+
+    // Den forsta token, den fran losenordet, star kvar pa aal1 med en faktor
+    // som nasta niva. Exakt det tillstand mellanvaran skickar till /verifiera.
+    const krav1 = JSON.parse(Buffer.from(tA.split(".")[1], "base64url"));
+    ok("lösenordstoken står kvar på aal1", krav1.aal === "aal1", `aal=${krav1.aal}`);
+  }
+}
+
 console.log("\n\x1b[1mAnonym anslutning\x1b[0m");
-for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view"]) {
+for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "mfa_recovery_code"]) {
   const r = await fetch(`${URL}/rest/v1/${t}?select=*`, { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` } });
   const j = await r.json();
   ok(`${t} ger inga rader anonymt`, !Array.isArray(j) || j.length === 0, Array.isArray(j) ? `${j.length} rader` : `HTTP ${r.status}`);
