@@ -38,6 +38,58 @@ Läs denna före arbete. Uppdatera efteråt.
 - AC-1.4: dialer-kö och iCal-flöde kan inte stängas än — de systemen finns
   inte i navet. Checklistan täcker dem manuellt tills M9 och M3 byggs.
 
+## 2026-08-16 (samma dag) · Granskning av kod, säkerhet och prestanda
+
+**Genomfört på riktigt system, inte genom kodläsning:** `tests/rls.mjs` skapar
+fem användare med olika roller, loggar in som var och en och mäter vad de
+faktiskt får ut ur databasen. 33 kontroller. Hela personalflödet kördes
+dessutom manuellt i webbläsaren, inklusive offboarding, med efterkontroll mot
+databasen och auth-API:t.
+
+**Fyra brister hittade och lagade**
+
+1. **Skrivförsök gav HTTP 204 i stället för 403.** Ingen data ändrades — RLS
+   höll — men svaret var missvisande och konstruktionen skör. Skrivrätten är
+   nu borttagen helt från `anon` och `authenticated` (0002).
+2. **`log_audit` gick att anropa som RPC.** PostgREST exponerar varje funktion
+   i `public`. En säljare hade kunnat posta godtyckliga händelser och göra
+   loggen obrukbar som bevis. Rättigheten återkallad (0002).
+3. **Offboardad anställd kunde läsa sin egen rad.** Rollbaserad åtkomst var
+   redan stängd. Policyn kräver nu `status <> 'offboarded'` även för egen rad,
+   som tredje led efter bannlysning och middleware (0002).
+4. **Klickytor under 44 px.** Utloggningsknappen mätte 36 × 36 och namnlänken
+   i personallistan 27 × 19. Båda uppfyller nu AC-U5.5.
+
+**Headers**
+
+CSP med nonce per svar, satt i middleware. Krävde att rendering tvingas
+dynamisk — ett prerenderat svar kan inte bära ett nonce som varierar, och utan
+nonce blockerade `strict-dynamic` Next:s egna inline-skript. Felet hade gett en
+sida som såg korrekt ut men aldrig hydrerade. Upptäckt genom att räkna
+nonce-attribut i det levererade svaret.
+
+Därtill X-Frame-Options DENY, nosniff, Referrer-Policy, Permissions-Policy som
+stänger kamera, mikrofon och plats, COOP same-origin, och `no-store` på
+persondatavyerna.
+
+**Prestanda**
+
+TTFB 0,24–0,44 s mot produktionsdomänen. Delad JS-bunt 103 kB. Startsidan
+långt under kravet på 1,5 s i AC-11.3, men det är mätt på ett nästan tomt
+register — mätningen ska göras om när rutinbiblioteket har innehåll.
+
+**Verifierat i webbläsare**
+
+Inloggning, upplägg av anställd, rolltilldelning och offboarding fungerar hela
+vägen. Efter offboarding: status satt, alla roller återkallade, åtta
+checklistposter skapade, auth-kontot bannlyst, inloggningsförsök nekat med
+`user_banned`, och databasen vägrar hoppa över en checklistpost utan motivering.
+
+**Kvarstår, kräver åtgärd i Supabase-panelen — se docs/DRIFTSATTNING.md**
+
+- Magiska länkar omdirigerar till `localhost:3000`. Blockerande.
+- Registreringen är öppen för vem som helst.
+
 **Nästa steg**
 
 E2 — M5 Rutinbibliotek. Det är modulen som skalar chefen (PRD §1.6 prio 1)
