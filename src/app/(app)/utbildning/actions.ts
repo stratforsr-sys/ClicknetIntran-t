@@ -72,7 +72,7 @@ export async function skapaKurs(_prev: KursState, form: FormData): Promise<KursS
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
   }
 
-  revalidatePath("/utbildning");
+  revalidatePath("/utbildning", "layout");
   redirect(`/utbildning/${slug}/redigera`);
 }
 
@@ -120,7 +120,7 @@ export async function sparaKurs(_prev: KursState, form: FormData): Promise<KursS
   await logga(user.employee!.id, fore?.status !== status ? "course.status_changed" : "course.updated", id, {
     status,
   });
-  revalidatePath("/utbildning");
+  revalidatePath("/utbildning", "layout");
   return { ok: status === "published" ? "Kursen är publicerad." : "Sparat." };
 }
 
@@ -201,7 +201,7 @@ export async function sparaModul(_prev: KursState, form: FormData): Promise<Kurs
     modul: titel,
     kind,
   });
-  revalidatePath("/utbildning");
+  revalidatePath("/utbildning", "layout");
   return { ok: "Modulen är sparad." };
 }
 
@@ -214,7 +214,7 @@ export async function taBortModul(form: FormData): Promise<void> {
 
   await db.from("course_module").delete().eq("id", modulId);
   await logga(user.employee!.id, "course.module_removed", kursId, { modul: modulId });
-  revalidatePath("/utbildning");
+  revalidatePath("/utbildning", "layout");
 }
 
 /** Flyttar en modul ett steg. Ordningen ar hela poangen med AC-6.1. */
@@ -244,7 +244,7 @@ export async function flyttaModul(form: FormData): Promise<void> {
   await db.from("course_module").update({ sort: lista[j].sort }).eq("id", lista[i].id);
 
   await logga(user.employee!.id, "course.modules_reordered", kursId);
-  revalidatePath("/utbildning");
+  revalidatePath("/utbildning", "layout");
 }
 
 // -----------------------------------------------------------------------------
@@ -350,7 +350,7 @@ export async function klarModul(form: FormData): Promise<void> {
     );
 
   await certifieraOmKlar(user, kursId);
-  revalidatePath("/utbildning");
+  revalidatePath("/utbildning", "layout");
 }
 
 /**
@@ -455,6 +455,6 @@ export async function lamnaQuiz(_prev: KursState, form: FormData): Promise<KursS
     }
   }
 
-  revalidatePath("/utbildning");
+  revalidatePath("/utbildning", "layout");
   return { ok: `${poang} % rätt. Godkänt.` };
 }
