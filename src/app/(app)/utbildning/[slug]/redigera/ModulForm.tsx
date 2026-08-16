@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { Field, Input, KONTROLL } from "@/components/ui/Field";
+import { Field, KONTROLL } from "@/components/ui/Field";
 import { Notis } from "@/components/ui/Notis";
 import { sparaModul, type KursState } from "../../actions";
 
@@ -49,12 +49,16 @@ export function ModulForm({
       <div className="flex flex-wrap items-end gap-3">
         <div className="min-w-[14rem] flex-1">
           <Field label="Rubrik" namn={namn("titel")}>
-            <Input
-              namn={namn("titel")}
+            {/* Ratt element direkt, inte <Input>: den satter name={namn} efter
+                sin spread och skulle skriva over faltets namn med sitt id. Har
+                behovs bada — unikt id per modul, men samma name i alla. */}
+            <input
+              id={namn("titel")}
               name="titel"
               defaultValue={modul?.title ?? ""}
               required
               placeholder="Så bokar du ett möte"
+              className={KONTROLL}
             />
           </Field>
         </div>
