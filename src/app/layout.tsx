@@ -19,6 +19,17 @@ const mono = JetBrains_Mono({
   display: "swap",
 });
 
+/**
+ * Allt renderas dynamiskt. Skalet: CSP:n satter ett nytt nonce per svar, och
+ * ett prerenderat svar kan inte bara ett nonce som varierar. Utan detta far
+ * Next:s egna inline-skript inget nonce och blockeras av 'strict-dynamic' —
+ * sidan renderar men hydrerar aldrig.
+ *
+ * Kostnaden ar noll i praktiken: varje vy bakom inloggning ar redan dynamisk
+ * eftersom den laser sessionscookien. Endast /logga-in var statisk.
+ */
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Clicknet Nav",
   description: "Intranät för Clicknet.",
