@@ -1,12 +1,23 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { SUPABASE_ANON_KEY, SUPABASE_URL, isConfigured } from "@/lib/env";
+import { bygCsp } from "@/lib/csp";
 
 /** Publika vagar. Allt annat kraver session. */
 const PUBLIC = ["/logga-in", "/auth", "/uppstart"];
 
 export async function updateSession(request: NextRequest) {
-  let response = NextResponse.next({ request });
+  // Nytt nonce per svar. Maste satta pa BADE requesten (sa Next kan lasa det
+  // nar sidan renderas) och svaret (sa webblasaren far regeln).
+  const nonce = btoa(crypto.randomUUID());
+  const csp = bygCsp(nonce);
+
+  const headers = new Headers(request.headers);
+  headers.set("x-nonce", nonce);
+  headers.set("content-security-policy", csp);
+
+  let response = NextResponse.next({ request: { headers } });
+  response.headers.set("content-security-policy", csp);
 
   if (!isConfigured) return response;
 
@@ -15,7 +26,8 @@ export async function updateSession(request: NextRequest) {
       getAll: () => request.cookies.getAll(),
       setAll: (list) => {
         list.forEach(({ name, value }) => request.cookies.set(name, value));
-        response = NextResponse.next({ request });
+        response = NextResponse.next({ request: { headers } });
+        response.headers.set("content-security-policy", csp);
         list.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
       },
     },
