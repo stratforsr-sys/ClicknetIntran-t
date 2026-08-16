@@ -12,6 +12,7 @@ import {
   STATUS_LABEL,
   granskningslage,
   kategoridelar,
+  prefixfraga,
   type DocType,
 } from "@/lib/dokument";
 
@@ -34,14 +35,31 @@ export default async function Rutiner({ searchParams }: { searchParams: Promise<
     .order("category_path")
     .order("title");
 
-  if (sp.q?.trim()) fraga = fraga.textSearch("search", sp.q.trim(), { type: "websearch", config: "swedish" });
-  if (sp.kategori) fraga = fraga.like("category_path", `${sp.kategori}%`);
-  if (sp.typ) fraga = fraga.eq("doc_type", sp.typ);
-  if (sp.status) fraga = fraga.eq("status", sp.status);
-  else fraga = fraga.neq("status", "archived");
+  const q = sp.q?.trim();
+  const filtrera = <T extends typeof fraga>(f: T) => {
+    let x = f;
+    if (sp.kategori) x = x.like("category_path", `${sp.kategori}%`) as T;
+    if (sp.typ) x = x.eq("doc_type", sp.typ) as T;
+    x = (sp.status ? x.eq("status", sp.status) : x.neq("status", "archived")) as T;
+    return x;
+  };
 
-  const { data: dokument } = await fraga;
-  const lista = dokument ?? [];
+  if (q) fraga = fraga.textSearch("search", q, { type: "websearch", config: "swedish" });
+  const { data: dokument } = await filtrera(fraga);
+  let lista = dokument ?? [];
+
+  // Ger den stämmade sökningen inget, prova prefix innan vi säger "inga träffar".
+  const pf = q && lista.length === 0 ? prefixfraga(q) : null;
+  if (pf) {
+    const bred = supabase
+      .from("document")
+      .select("id, title, slug, category_path, doc_type, status, review_due, requires_ack, version, owner_id")
+      .textSearch("search", pf, { config: "swedish" })
+      .order("category_path")
+      .order("title");
+    const { data: brett } = await filtrera(bred);
+    lista = brett ?? [];
+  }
 
   const [namnPer, { data: minaKvittenser }] = await Promise.all([
     agarnamn(lista.map((d) => d.owner_id)),
@@ -51,8 +69,16 @@ export default async function Rutiner({ searchParams }: { searchParams: Promise<
   ]);
   const kvitterat = new Set((minaKvittenser ?? []).map((k) => `${k.document_id}:${k.version}`));
 
-  // Mappträd byggt ur de kategorier som faktiskt finns, inte ur en fast lista.
-  const kategorier = [...new Set(lista.map((d) => kategoridelar(d.category_path)[0]).filter(Boolean))].sort();
+  // Mappträdet byggs ur alla dokument användaren får läsa, inte ur det som
+  // råkar synas just nu — annars försvinner de andra kategorierna i samma
+  // stund som man klickar på en av dem, och man kan inte byta utan att backa.
+  const { data: allaKat } = await supabase
+    .from("document")
+    .select("category_path")
+    .neq("status", "archived");
+  const kategorier = [
+    ...new Set((allaKat ?? []).map((d) => kategoridelar(d.category_path)[0]).filter(Boolean)),
+  ].sort();
 
   const forfallna = lista.filter((d) => granskningslage(d.review_due).lage === "forfallen").length;
 

@@ -79,3 +79,24 @@ export function arstalDatum(manader: number): string {
   d.setMonth(d.getMonth() + manader);
   return d.toISOString().slice(0, 10);
 }
+
+/**
+ * Fritext -> prefix-tsquery.
+ *
+ * Den svenska snowball-stemmern klarar inte bestämd form av sammansatta ord:
+ * "läkarintyget" stannar oförändrat medan brödtextens "läkarintyg" stämmas
+ * till "läkarintyg", och en exakt sökning ger då noll träffar på ett ord som
+ * uppenbart finns. Prefixsökning täcker det fallet utan att kräva en egen
+ * ordlista, och är dessutom vad folk förväntar sig av ett sökfält.
+ *
+ * Returnerar null om ingenting sökbart återstår efter rensningen.
+ */
+export function prefixfraga(q: string): string | null {
+  const ord = q
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((o) => o.length >= 2)
+    .slice(0, 8);
+  if (ord.length === 0) return null;
+  return ord.map((o) => `${o}:*`).join(" & ");
+}
