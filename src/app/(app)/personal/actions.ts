@@ -119,6 +119,23 @@ export async function laggUppAnstalld(_prev: FormState, form: FormData): Promise
       });
     }
 
+    // AC-6.4: kurserna foljer samma modell som rutinerna — malgruppen avgor,
+    // och loggen ar beviset pa vad som gallde vid anstallningen.
+    const { data: kurser } = await db
+      .from("course")
+      .select("id, slug, audience_roles")
+      .eq("status", "published");
+
+    const kursTilldelade = (kurser ?? []).filter((k) =>
+      riktarSigTill({ audience_roles: k.audience_roles, audience_teams: [] }, [roll], teamId),
+    );
+    if (kursTilldelade.length > 0) {
+      await logga(user.employee!.id, "onboarding.courses_assigned", "employee", rad.id, {
+        antal: kursTilldelade.length,
+        kurser: kursTilldelade.map((k) => k.slug),
+      });
+    }
+
     nyId = rad.id;
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };

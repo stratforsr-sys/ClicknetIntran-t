@@ -73,6 +73,7 @@ async function stad() {
   await db.query(`delete from audit_log where object_id in (select id::text from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`update team set lead_id = null where lead_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`delete from document where slug like 'rlstest-%'`);
+  await db.query(`delete from course where slug like 'rlstest-%'`);
   await db.query(`delete from employee_permission where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`update employee set team_id = null where team_id in (select id from team where name like 'rlstest-%')`);
   await db.query(`delete from employee where email like $1`, [PREFIX + "%"]);
@@ -233,6 +234,91 @@ console.log("\n\x1b[1mRutinbibliotek: publicerat, utkast och malgrupp\x1b[0m");
   ok("Anna får 0 rader när hon frågar direkt efter chefsdokumentets id", chefsfraga.length === 0, `såg ${chefsfraga.length}`);
 }
 
+console.log("\n\x1b[1mUtbildning: malgrupp, facit och egna forsok\x1b[0m");
+{
+  const { rows: k } = await db.query(
+    `insert into course (slug, title, status, audience_roles, owner_id, pass_threshold)
+     values ('rlstest-kurs','Rlstest kurs','published','{}', $1::uuid, 80),
+            ('rlstest-chefskurs','Rlstest chefskurs','published','{sales_manager}', $1::uuid, 80),
+            ('rlstest-utkast','Rlstest utkast','draft','{}', $1::uuid, 80)
+     returning id, slug`,
+    [chef.id],
+  );
+  const oppen = k.find((r) => r.slug === "rlstest-kurs").id;
+  const chefskurs = k.find((r) => r.slug === "rlstest-chefskurs").id;
+  const utkast = k.find((r) => r.slug === "rlstest-utkast").id;
+
+  const { rows: m } = await db.query(
+    `insert into course_module (course_id, sort, title, kind) values ($1::uuid, 1, 'Provet', 'quiz') returning id`,
+    [oppen],
+  );
+  const { rows: q } = await db.query(
+    `insert into quiz_question (module_id, sort, prompt) values ($1::uuid, 1, 'Vad gäller?') returning id`,
+    [m[0].id],
+  );
+  await db.query(
+    `insert into quiz_option (question_id, sort, label, is_correct)
+     values ($1::uuid, 1, 'Rätt svar', true), ($1::uuid, 2, 'Fel svar', false)`,
+    [q[0].id],
+  );
+
+  const annas = (await las(tA, "course", "select=slug")).map((r) => r.slug);
+  ok("Anna ser den öppna kursen", annas.includes("rlstest-kurs"), annas.join(", "));
+  ok("Anna ser INTE chefskursen", !annas.includes("rlstest-chefskurs"));
+  ok("Anna ser INTE utkastet", !annas.includes("rlstest-utkast"));
+
+  const davids = (await las(tD, "course", "select=slug")).map((r) => r.slug);
+  ok("David ser alla tre", ["rlstest-kurs", "rlstest-chefskurs", "rlstest-utkast"].every((x) => davids.includes(x)));
+
+  const direkt = await las(tA, "course", `select=slug&id=eq.${chefskurs}`);
+  ok("Anna får 0 rader när hon frågar direkt efter chefskursens id", direkt.length === 0, `såg ${direkt.length}`);
+  const direktUtkast = await las(tA, "course", `select=slug&id=eq.${utkast}`);
+  ok("och 0 rader för utkastet", direktUtkast.length === 0, `såg ${direktUtkast.length}`);
+
+  // Karnan i AC-6.2: facit far inte ga att lasa ur webblasaren.
+  const fragor = await las(tA, "quiz_question", "select=prompt");
+  ok("Anna ser frågorna", fragor.length >= 1, `såg ${fragor.length}`);
+
+  const facit = await fetch(`${URL}/rest/v1/quiz_option?select=label,is_correct`, { headers: som(tA) });
+  ok("Anna kan INTE läsa svarsalternativen med facit", !facit.ok, `HTTP ${facit.status}`);
+  const facitChef = await fetch(`${URL}/rest/v1/quiz_option?select=is_correct`, { headers: som(tD) });
+  ok("inte ens säljchefen kommer åt facit via API:t", !facitChef.ok, `HTTP ${facitChef.status}`);
+
+  // Ingen far skriva sig sjalv godkand.
+  const w1 = await fetch(`${URL}/rest/v1/module_progress`, {
+    method: "POST", headers: som(tA),
+    body: JSON.stringify({ employee_id: saljareA.id, module_id: m[0].id }),
+  });
+  ok("Anna kan INTE bocka av en modul via API:t", !w1.ok, `HTTP ${w1.status}`);
+
+  const w2 = await fetch(`${URL}/rest/v1/certification`, {
+    method: "POST", headers: som(tA),
+    body: JSON.stringify({ employee_id: saljareA.id, course_id: oppen }),
+  });
+  ok("Anna kan INTE utfärda ett certifikat åt sig själv", !w2.ok, `HTTP ${w2.status}`);
+
+  const w3 = await fetch(`${URL}/rest/v1/course_attempt`, {
+    method: "POST", headers: som(tA),
+    body: JSON.stringify({ course_id: oppen, employee_id: saljareA.id, score: 100, passed: true }),
+  });
+  ok("Anna kan INTE posta ett godkänt försök", !w3.ok, `HTTP ${w3.status}`);
+
+  // Resultat ar personuppgifter: bara egna, chefens och teamledarens.
+  await db.query(
+    `insert into course_attempt (course_id, module_id, employee_id, score, passed)
+     values ($1::uuid, $2::uuid, $3::uuid, 40, false), ($1::uuid, $2::uuid, $4::uuid, 90, true)`,
+    [oppen, m[0].id, saljareA.id, saljareB.id],
+  );
+
+  const annasForsok = await las(tA, "course_attempt", "select=employee_id,score");
+  ok("Anna ser bara sitt eget försök", annasForsok.length === 1 && annasForsok[0].employee_id === saljareA.id,
+    `såg ${annasForsok.length}`);
+  const evasForsok = await las(tE, "course_attempt", "select=employee_id");
+  ok("Eva på ekonomi ser inga alls", evasForsok.length === 0, `såg ${evasForsok.length}`);
+  const chefensForsok = await las(tD, "course_attempt", "select=employee_id");
+  ok("Säljchefen ser båda", chefensForsok.length >= 2, `såg ${chefensForsok.length}`);
+}
+
 console.log("\n\x1b[1mLönekostnadsbehörigheten ges per person\x1b[0m");
 {
   // AC-13.13. Behorigheten ar den enda vagen till M13, sa den som kan satta
@@ -348,7 +434,7 @@ console.log("\n\x1b[1mSteg två: kod via e-post\x1b[0m");
 }
 
 console.log("\n\x1b[1mAnonym anslutning\x1b[0m");
-for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view"]) {
+for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification"]) {
   const r = await fetch(`${URL}/rest/v1/${t}?select=*`, { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` } });
   const j = await r.json();
   ok(`${t} ger inga rader anonymt`, !Array.isArray(j) || j.length === 0, Array.isArray(j) ? `${j.length} rader` : `HTTP ${r.status}`);

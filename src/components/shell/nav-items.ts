@@ -20,6 +20,7 @@ export function navFor(user: CurrentUser | null): NavItem[] {
   // till, till skillnad fran personal- och adminvyerna nedanfor.
   if (user?.employee) {
     items.push({ href: "/rutiner", label: "Rutiner", ikon: "rutiner" });
+    items.push({ href: "/utbildning", label: "Utbildning", ikon: "utbildning" });
   }
 
   if (canManageEmployees(user) || hasRole(user, "ceo", "team_lead")) {

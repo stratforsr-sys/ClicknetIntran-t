@@ -8,6 +8,7 @@ import { Ikon } from "@/components/shell/Ikon";
 import { getCurrentUser, canManageEmployees, hasRole } from "@/lib/auth";
 import { ROLE_LABEL, STATUS_LABEL } from "@/lib/roles";
 import { granskningslage } from "@/lib/dokument";
+import { kursLage, LAGE_ETIKETT, LAGE_TON } from "@/lib/utbildning";
 import { supabaseServer } from "@/lib/supabase/server";
 
 /**
@@ -53,6 +54,50 @@ export default async function Startsida() {
       .order("review_due"),
   ]);
 
+  // AC-6.6 pa startsidan: en kurs som ligger och skraper ar lika mycket en
+  // uppgift som en okvitterad rutin.
+  const [{ data: kurser }, { data: kursModuler }, { data: minProgress }, { data: minaCert }] =
+    await Promise.all([
+      supabase
+        .from("course")
+        .select("id, slug, title, due_days")
+        .eq("status", "published")
+        .order("title"),
+      supabase.from("course_module").select("id, course_id"),
+      supabase.from("module_progress").select("module_id").eq("employee_id", user.employee.id),
+      supabase
+        .from("certification")
+        .select("course_id, issued_at, expires_at")
+        .eq("employee_id", user.employee.id)
+        .order("issued_at", { ascending: false }),
+    ]);
+
+  const modulerPerKurs = new Map<string, string[]>();
+  for (const m of kursModuler ?? []) {
+    modulerPerKurs.set(m.course_id, [...(modulerPerKurs.get(m.course_id) ?? []), m.id]);
+  }
+  const klaraModuler = new Set((minProgress ?? []).map((p) => p.module_id));
+  const certPerKurs = new Map<string, { issued_at: string; expires_at: string | null }>();
+  for (const c of minaCert ?? []) if (!certPerKurs.has(c.course_id)) certPerKurs.set(c.course_id, c);
+
+  const kursUppgifter = (kurser ?? [])
+    .map((k) => {
+      const ids = modulerPerKurs.get(k.id) ?? [];
+      return {
+        ...k,
+        antal: ids.length,
+        klara: ids.filter((id) => klaraModuler.has(id)).length,
+        lage: kursLage({
+          certifikat: certPerKurs.get(k.id) ?? null,
+          klaraModuler: ids.filter((id) => klaraModuler.has(id)).length,
+          antalModuler: ids.length,
+          startDatum: user.employee!.start_date,
+          fristDagar: k.due_days,
+        }),
+      };
+    })
+    .filter((k) => k.antal > 0 && k.lage !== "certifierad");
+
   const ackade = new Set((minaAck ?? []).map((a) => `${a.document_id}:${a.version}`));
   const okvitterade = (kravDok ?? []).filter((d) => !ackade.has(`${d.id}:${d.version}`));
   const forfallna = mittAgande ?? [];
@@ -79,7 +124,7 @@ export default async function Startsida() {
             titel="Att göra"
             beskrivning="Kvittenser, kurser och ärenden som väntar på dig."
           />
-          {okvitterade.length === 0 && forfallna.length === 0 ? (
+          {okvitterade.length === 0 && forfallna.length === 0 && kursUppgifter.length === 0 ? (
             <EmptyState
               rubrik="Ingenting väntar på dig"
               text="Här samlas rutiner du inte kvitterat, kurser som pågår och ärenden med svar."
@@ -93,6 +138,15 @@ export default async function Startsida() {
                   titel={d.title}
                   detalj={`Version ${d.version} · ${granskningslage(d.review_due).text}`}
                   markering={<Badge ton="accent">Kvittera</Badge>}
+                />
+              ))}
+              {kursUppgifter.map((k) => (
+                <Uppgift
+                  key={`kurs-${k.id}`}
+                  href={`/utbildning/${k.slug}`}
+                  titel={k.title}
+                  detalj={`${k.klara} av ${k.antal} moduler klara`}
+                  markering={<Badge ton={LAGE_TON[k.lage]}>{LAGE_ETIKETT[k.lage]}</Badge>}
                 />
               ))}
               {forfallna.map((d) => (
