@@ -17,6 +17,11 @@ const PUBLIC = ["/logga-in", "/auth", "/uppstart"];
  * spärren finns anda kvar i (app)-layouten som andra led.
  */
 async function behoverSteg2(token: string, authUserId: string): Promise<boolean> {
+  // Samma strombrytare som kraverMfa(). Utan den skulle en tom rollista anda
+  // slappa igenom pa rattigheten nedan, och eftersom kodsidan da skickar
+  // tillbaka hit vore resultatet en slinga i stallet for en spärr.
+  if (MFA_REQUIRED_ROLES.length === 0) return false;
+
   try {
     const svar = await fetch(
       `${SUPABASE_URL}/rest/v1/employee` +
