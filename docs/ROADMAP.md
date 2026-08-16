@@ -57,7 +57,7 @@ förhållande till tillväxten.
 | # | AC | Vad | Status |
 |---|---|---|---|
 | E1.1 | AC-1.1 | Inloggning med magisk länk och lösenord | KLAR |
-| E1.2 | AC-1.1, K33 | **MFA obligatoriskt** för sales_manager, ceo, finance, admin och alla med payroll_cost_viewer: engångskod via e-post, spärr i middleware, enheten ihågkommen 30 dagar | KLAR — kräver SMTP och `{{ .Token }}` i mallen, se DRIFTSATTNING |
+| E1.2 | AC-1.1, K33 | **MFA obligatoriskt** för sales_manager, ceo, finance, admin och alla med payroll_cost_viewer: engångskod via e-post, spärr i middleware, enheten ihågkommen 30 dagar | BYGGD MEN AVSTÄNGD — `MFA_REQUIRED_ROLES` är tom tills mejlmallen bär koden, se DRIFTSATTNING punkt 0. **K33 är inte uppfylld så länge.** |
 | E1.3 | AC-1.2 | Väntar på aktivering | KLAR |
 | E1.4 | AC-1.3 | Upplägg skapar konto och roll | KLAR |
 | E1.5 | AC-1.3 | **Automatisk tilldelning** av rutiner, kurser, schema och team vid upplägg | BLOCKERAD av E8 (rutindelen går nu att bygga) |

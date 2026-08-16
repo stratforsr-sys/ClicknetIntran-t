@@ -54,6 +54,12 @@ Se `DRIFTSATTNING.md` punkt 0: mallen för magisk länk måste innehålla
 `{{ .Token }}`, och egen SMTP måste vara påslagen. Utan det kommer koden inte
 fram, och chefsrollerna kommer inte in.
 
+**Samma dag: kravet avstängt igen.** Mejlet kom fram men innehöll bara en
+"sign in"-länk, ingen kod — och länken fungerar inte, av samma orsak som
+DRIFTSATTNING punkt 1. `MFA_REQUIRED_ROLES` är därför tom. Koden, spärren och
+kvittot står kvar orörda och testade; det är en rad att slå på igen. Så länge
+listan är tom är K33 inte uppfylld, och inloggning sker med lösenord.
+
 ---
 
 ## 2026-08-16 · E1.2 + E1.14 Tvåfaktor och profilsida

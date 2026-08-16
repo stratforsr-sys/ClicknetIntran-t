@@ -52,7 +52,7 @@ export default async function ProfilSida() {
               beskrivning={
                 obligatorisk
                   ? "Din roll når känsliga uppgifter. Därför bekräftas nya enheter med en kod."
-                  : "Ett extra steg vid inloggning på nya enheter."
+                  : "Ett extra steg vid inloggning på nya enheter. Avstängt tills vidare."
               }
             />
             <Steg2 obligatorisk={obligatorisk} enhetenIhagkommen={enhetenIhagkommen} />

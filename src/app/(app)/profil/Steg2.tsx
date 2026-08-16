@@ -24,11 +24,11 @@ export function Steg2({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
-        {obligatorisk ? <Badge ton="ok">På</Badge> : <Badge ton="neutral">Behövs inte</Badge>}
+        {obligatorisk ? <Badge ton="ok">På</Badge> : <Badge ton="warn">Avstängd</Badge>}
         <p className="text-small text-ink-500">
           {obligatorisk
             ? "Vid inloggning på en ny enhet skickas en kod till din mejl."
-            : "Din roll når inga känsliga uppgifter, så navet frågar inte efter någon kod."}
+            : "Inloggning sker med lösenord. Koden slås på när mejlutskicket bär den."}
         </p>
       </div>
 

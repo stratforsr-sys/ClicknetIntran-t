@@ -28,6 +28,12 @@ export const STEG2_DYGN = 30;
  */
 export function kraverMfa(user: CurrentUser | null): boolean {
   if (!user?.employee) return false;
+
+  // Tom lista = kravet ar avstangt i hela navet. Aven rattigheten slas av har,
+  // sa att den dag nagon far payroll_cost_viewer inte plotsligt star utanfor
+  // pa grund av ett halvt pakopplat krav. En strombrytare, inte tva.
+  if (MFA_REQUIRED_ROLES.length === 0) return false;
+
   if (user.roles.some((r) => MFA_REQUIRED_ROLES.includes(r))) return true;
   return user.permissions.includes("payroll_cost_viewer");
 }

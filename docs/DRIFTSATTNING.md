@@ -4,7 +4,16 @@ Inställningar i Supabase som inte kan sättas från repot.
 
 ---
 
-## 0. Mejlet måste bära koden · BLOCKERAR INLOGGNING FÖR CHEFER
+## 0. Mejlet måste bära koden · KRAVET ÄR AVSTÄNGT TILLS DETTA ÄR GJORT
+
+**Läge 2026-08-16:** verifierat att mejlet innehåller en "sign in"-länk men
+ingen kod, och att länken inte fungerar (samma orsak som punkt 1 nedan).
+Därför står `MFA_REQUIRED_ROLES` i `src/lib/roles.ts` tom och ingen möts av
+kodsteget. Inloggning sker med lösenord. **K33 är inte uppfylld.**
+
+Hela steget är byggt och testat och slås på genom att sätta tillbaka rollerna
+i den listan — men gör det först när a) och b) nedan är klara, annars låses
+chefsrollerna ute.
 
 Steg två vid inloggning är en engångskod till e-posten (E1.2). Två saker
 avgör om den kommer fram.

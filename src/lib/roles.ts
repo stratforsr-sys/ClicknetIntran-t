@@ -26,8 +26,21 @@ export const ROLE_LABEL: Record<Role, string> = {
 /**
  * PRD §5.1: MFA ar obligatoriskt for chefs- och ekonomiroller samt for alla med
  * payroll_cost_viewer (AC-1.1, K33).
+ *
+ * AVSTANGT 2026-08-16. Listan ar tom med flit, inte av forbiseende: mejlmallen
+ * bar an sa lange bara en lank och ingen kod, sa ett pakopplat krav hade last
+ * ute precis de roller det skulle skydda. Inloggning sker med losenord tills
+ * vidare.
+ *
+ * Sla pa igen genom att satta tillbaka rollerna nedan. Ingenting annat behover
+ * roras — spärren, kodsidan och kvittot star kvar och testas.
+ *
+ *   ["sales_manager", "ceo", "finance", "admin"]
+ *
+ * Forutsattningen ar DRIFTSATTNING punkt 0: {{ .Token }} i mallen och egen
+ * SMTP. K33 ar alltsa inte uppfylld sa lange listan ar tom.
  */
-export const MFA_REQUIRED_ROLES: Role[] = ["sales_manager", "ceo", "finance", "admin"];
+export const MFA_REQUIRED_ROLES: Role[] = [];
 
 export const PERMISSIONS = ["payroll_cost_viewer"] as const;
 export type Permission = (typeof PERMISSIONS)[number];
