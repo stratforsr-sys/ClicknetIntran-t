@@ -113,6 +113,16 @@ export function Schemaform({
               Glömd utstämpling stängs här, och märks för rättelse.
             </span>
           </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-small font-semibold text-ink-700">
+              Tolerans sen ankomst (minuter)
+            </span>
+            <input id={p("tollate")} type="number" name="tol_late" min={1} defaultValue={1} required className={KONTROLL} />
+            <span className="text-small text-ink-500">
+              Instämpling senare än så räknas som sen och syns för chefen. Minst 1 — med noll
+              larmar systemet på sekundskillnader mellan telefonens klocka och serverns.
+            </span>
+          </label>
         </div>
       ) : (
         <>
@@ -137,8 +147,8 @@ export function Schemaform({
             </label>
             <label className="flex flex-col gap-1.5">
               <span className="text-small font-semibold text-ink-700">Tolerans (minuter)</span>
-              <input id={p("tol")} type="number" name="tolerans" min={5} defaultValue={5} required className={KONTROLL} />
-              <span className="text-small text-ink-500">Minst 5.</span>
+              <input id={p("tol")} type="number" name="tolerans" min={1} defaultValue={1} required className={KONTROLL} />
+              <span className="text-small text-ink-500">Minst 1.</span>
             </label>
             <label className="flex flex-col gap-1.5">
               <span className="text-small font-semibold text-ink-700">Rast nummer</span>

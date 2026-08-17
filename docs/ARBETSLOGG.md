@@ -4,6 +4,65 @@ Läs denna före arbete. Uppdatera efteråt.
 
 ---
 
+## 2026-08-17 · Sen ankomst — och toleransen ner till en minut
+
+Beställt samma kväll: en minut för sent ska synas, inte fem. Två saker, och de
+var inte samma sak.
+
+**Fältet i schemaformuläret mätte inte det du trodde**
+
+Toleransen som stod på "minst 5" satt i *rastschemat* och användes bara av
+avvikelsemotorn — rast som börjar för tidigt, drar över eller uteblir. Sen
+ankomst till arbetsdagen mättes inte alls. `start_time` användes enbart till
+att visa tiden i listan; bara `end_time` gjorde något skarpt.
+
+**Byggt**
+
+- Migration `0014`: `work_schedule.tol_late` (minst 1), tabellerna
+  `late_arrival` och `late_arrival_month`, och rastens tre toleranser sänkta
+  från minst 5 till minst 1.
+- `src/lib/narvaro.ts` — noll importer. Dagens första instämpling jämförs mot
+  schemats start plus tolerans.
+- Nattjobbet skriver raden, med id:t på schemat den dömdes mot.
+- **Chefsvyn larmar samma dag.** Nattjobbet skriver historiken, men larmet får
+  inte vänta till imorgon — kortet räknar ut det ur dagens stämplingar med
+  samma funktion.
+- Den anställda ser sina egna sena dagar. Det som registreras om dig ska du
+  kunna läsa.
+
+**Tre val**
+
+- **Noll tillåts inte, en minut är golvet.** Telefonens klocka och serverns går
+  isär med sekunder och knapptrycket tar tid att nå fram. Med noll larmar
+  systemet på folk som var i tid, och ett larm som ljuger slutar man lyssna på.
+- **Toleransen läggs till gränsen.** 08:01 med en minuts tolerans är i tid,
+  08:02 är två minuter sent — förseningen räknas från schemat, inte från
+  toleransen. Samma princip som i rastmotorn: gränsen faller ut till den
+  anställdas fördel.
+- **Dagens första instämpling avgör.** Den som stämplar ut och in igen efter
+  lunch kommer inte för sent en andra gång.
+
+**Avvikelse från PRD:n**
+
+AC-2.26 säger minst fem minuters tolerans för rastavvikelser. Den är sänkt till
+en på beställning. Avvikelsen står i migration 0014 så att nästa läsare ser att
+det är ett beslut och inte ett slarv.
+
+**Vad som INTE hänger i det här**
+
+Ingen automatisk konsekvens, och sen ankomst blockerar inte löneperioden.
+K13 och K17 gäller likadant: datan når varken provision eller lönekostnadsvyn.
+Larmet talar om för chefen att något hände — vad som ska göras åt det är en
+mänsklig fråga.
+
+**Verifierat**
+
+`npm run test:narvaro`: 20 kontroller, varje regel åt båda hållen — inte bara
+att förseningen upptäcks, utan att den inte upptäcks när personen var i tid.
+Bygget och typkollen körda lokalt.
+
+---
+
 ## 2026-08-17 · Stämplingen påslagen — in och ut, inte rast
 
 `M2_AKTIV = true`. Säljarna börjar stämpla imorgon. `RAST_AKTIV` står kvar på

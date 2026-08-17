@@ -9,6 +9,7 @@ import {
   type Handelse,
 } from "@/lib/tid";
 import { avvikelser, gallandeSchema, tagnaRaster, type Rastschema } from "@/lib/raster";
+import { senAnkomst } from "@/lib/narvaro";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -22,6 +23,7 @@ const AGGREGAT_MANADER = 12;
  *
  *   1. Stanger glomda utstamplingar vid schemaslut (AC-2.4)
  *   2. Skriver gardagens rader till arbetstidsjournalen (AC-2.6, AC-2.7)
+ *      och bedomer sen ankomst mot arbetsschemat
  *   3. Genererar rastavvikelser mot det schema som gallde DA (AC-2.24, AC-2.35)
  *   4. Gallrar detaljer aldre an 90 dagar, efter att de summerats (AC-2.31)
  *   5. Lyfter rattelser som legat over 48 timmar (AC-2.22)
@@ -54,7 +56,9 @@ export async function GET(request: NextRequest) {
         .select("id, employee_id, kind, occurred_at, source, supersedes_id, correction_state")
         .gte("occurred_at", fran)
         .lte("occurred_at", till),
-      db.from("work_schedule").select("id, scope, employee_id, team_id, weekday, end_time, valid_from"),
+      db
+        .from("work_schedule")
+        .select("id, scope, employee_id, team_id, weekday, start_time, end_time, tol_late, valid_from"),
       db
         .from("scheduled_break")
         .select(
@@ -74,6 +78,7 @@ export async function GET(request: NextRequest) {
   let stangda = 0;
   let journalrader = 0;
   let nyaAvvikelser = 0;
+  let sena = 0;
 
   for (const p of personal ?? []) {
     const egna = gallande(perPerson.get(p.id) ?? []);
@@ -141,6 +146,40 @@ export async function GET(request: NextRequest) {
       { onConflict: "employee_id,work_date" },
     );
     if (!journalFel) journalrader++;
+
+    // 2b. Sen ankomst. Bedoms mot schemat som gallde DA, och raden bar id:t
+    //     pa det — en schemaandring far inte i efterhand gora nagon sen som
+    //     foljde reglerna som gallde da (samma princip som AC-2.35).
+    const dagensSchema = gallandeSchema(
+      (scheman ?? []).filter((s) => s.weekday === veckodag),
+      p.id,
+      p.team_id,
+      datum,
+    )[0];
+
+    if (dagensSchema) {
+      const sen = senAnkomst(egna, {
+        start_time: dagensSchema.start_time,
+        tol_late: dagensSchema.tol_late ?? 1,
+        schedule_id: dagensSchema.id,
+      });
+
+      if (sen) {
+        const { error: senFel } = await db.from("late_arrival").upsert(
+          {
+            employee_id: p.id,
+            work_date: datum,
+            scheduled_start: sen.schemalagd,
+            arrived_at: sen.ankom,
+            minutes_late: sen.minuter,
+            tolerance_minutes: sen.tolerans,
+            schedule_id: sen.schedule_id,
+          },
+          { onConflict: "employee_id,work_date" },
+        );
+        if (!senFel) sena++;
+      }
+    }
 
     // 3. Avvikelser. RAST_AKTIV ar spärren fran K29 — utan dokumenterat
     //    rastschema genereras ingenting alls.
@@ -217,6 +256,46 @@ export async function GET(request: NextRequest) {
   const gallrade = (attSummera ?? []).length;
   if (gallrade > 0) await db.from("break_deviation").delete().lt("work_date", detaljGrans);
 
+  // Sena dagar gallras likadant: detaljen bort efter 90 dagar, antalet och
+  // minuterna kvar per manad i 12.
+  const { data: senaAttSummera } = await db
+    .from("late_arrival")
+    .select("employee_id, work_date, minutes_late")
+    .lt("work_date", detaljGrans);
+
+  const senSumma = new Map<string, { antal: number; minuter: number }>();
+  for (const s of senaAttSummera ?? []) {
+    const nyckel = `${s.employee_id}|${s.work_date.slice(0, 7)}-01`;
+    const f = senSumma.get(nyckel) ?? { antal: 0, minuter: 0 };
+    f.antal += 1;
+    f.minuter += s.minutes_late;
+    senSumma.set(nyckel, f);
+  }
+
+  for (const [nyckel, v] of senSumma) {
+    const [employee_id, month] = nyckel.split("|");
+    const { data: fanns } = await db
+      .from("late_arrival_month")
+      .select("antal, minuter")
+      .eq("employee_id", employee_id)
+      .eq("month", month)
+      .maybeSingle();
+
+    await db.from("late_arrival_month").upsert(
+      {
+        employee_id,
+        month,
+        antal: (fanns?.antal ?? 0) + v.antal,
+        minuter: (fanns?.minuter ?? 0) + v.minuter,
+      },
+      { onConflict: "employee_id,month" },
+    );
+  }
+
+  if ((senaAttSummera ?? []).length > 0) {
+    await db.from("late_arrival").delete().lt("work_date", detaljGrans);
+  }
+
   const gransAggregat = new Date();
   gransAggregat.setMonth(gransAggregat.getMonth() - AGGREGAT_MANADER);
   await db
@@ -264,6 +343,7 @@ export async function GET(request: NextRequest) {
     stangda,
     journalrader,
     avvikelser: nyaAvvikelser,
+    sena,
     gallrade,
     rattelser_over_frist: lyfta,
     raster_aktiva: RAST_AKTIV,

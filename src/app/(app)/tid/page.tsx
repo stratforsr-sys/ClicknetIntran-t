@@ -23,7 +23,8 @@ import {
   RATTELSE_FRIST_TIMMAR,
   type Handelse,
 } from "@/lib/tid";
-import { AVVIKELSE_ETIKETT, AVVIKELSE_FORKLARING, type Avvikelsetyp } from "@/lib/raster";
+import { AVVIKELSE_ETIKETT, AVVIKELSE_FORKLARING, gallandeSchema, type Avvikelsetyp } from "@/lib/raster";
+import { senAnkomst, forsening } from "@/lib/narvaro";
 import { Stamplar } from "./Stamplar";
 import { Rattelse } from "./Rattelse";
 import { beslutaRattelse, kvitteraRastschema, kommenteraAvvikelse } from "./actions";
@@ -55,21 +56,55 @@ export default async function TidSida() {
   // AC-2.8: namn och in-tid. Aldrig rastlangd — darfor hamtas bara 'in' och
   // 'out', och rasterna lamnas utanfor fragan helt.
   let paPlats: { namn: string; sedan: string }[] = [];
+  let senaIdag: { namn: string; minuter: number; ankom: string; schemalagd: string }[] = [];
   if (chef && M2_AKTIV) {
-    const [{ data: personal }, { data: idag }] = await Promise.all([
-      supabase.from("employee").select("id, first_name, last_name").neq("status", "offboarded"),
+    const idagsDatum = new Date().toISOString().slice(0, 10);
+    const veckodag = ((new Date().getDay() + 6) % 7) + 1;
+
+    const [{ data: personal }, { data: idag }, { data: scheman }] = await Promise.all([
+      supabase
+        .from("employee")
+        .select("id, first_name, last_name, team_id")
+        .neq("status", "offboarded"),
       supabase
         .from("time_event")
         .select("employee_id, kind, occurred_at, correction_state, supersedes_id, id, source")
         .gte("occurred_at", dygnetsStart())
         .in("kind", ["in", "out"])
         .order("occurred_at"),
+      supabase
+        .from("work_schedule")
+        .select("id, scope, employee_id, team_id, weekday, start_time, tol_late, valid_from")
+        .eq("weekday", veckodag),
     ]);
 
     const perPerson = new Map<string, Handelse[]>();
     for (const h of idag ?? []) {
       perPerson.set(h.employee_id, [...(perPerson.get(h.employee_id) ?? []), h]);
     }
+
+    // Larmet ska ga samma dag, inte i nattjobbets rapport dagen efter. Samma
+    // funktion bedomer bada — vyn far bara svaret tidigare.
+    senaIdag = (personal ?? [])
+      .map((p) => {
+        const mitt = gallandeSchema(scheman ?? [], p.id, p.team_id, idagsDatum)[0];
+        if (!mitt) return null;
+
+        const sen = senAnkomst(gallande(perPerson.get(p.id) ?? []), {
+          start_time: mitt.start_time,
+          tol_late: mitt.tol_late ?? 1,
+        });
+        if (!sen) return null;
+
+        return {
+          namn: fullName(p),
+          minuter: sen.minuter,
+          ankom: klockan(sen.ankom),
+          schemalagd: sen.schemalagd,
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null)
+      .sort((a, b) => b.minuter - a.minuter);
 
     paPlats = (personal ?? [])
       .map((p) => {
@@ -90,6 +125,15 @@ export default async function TidSida() {
     .eq("employee_id", user.employee.id)
     .order("work_date", { ascending: false })
     .limit(20);
+
+  // Den anställda ser sina egna sena dagar i sin helhet. Samma princip som
+  // AC-2.28 för avvikelser: det som registreras om dig ska du kunna läsa.
+  const { data: minaSena } = await supabase
+    .from("late_arrival")
+    .select("id, work_date, minutes_late, scheduled_start, arrived_at")
+    .eq("employee_id", user.employee.id)
+    .order("work_date", { ascending: false })
+    .limit(10);
 
   // AC-2.36: ett nytt rastschema börjar inte gälla förrän det kvitterats.
   const [{ data: mittRastschema }, { data: minaKvitton }] = await Promise.all([
@@ -241,6 +285,30 @@ export default async function TidSida() {
         </div>
 
         <div className="flex flex-col gap-4">
+          {/* Larmet gar samma dag. Nattjobbet skriver raden till historiken,
+              men chefen ska inte behova vanta till imorgon for att se det. */}
+          {chef && M2_AKTIV && senaIdag.length > 0 && (
+            <Card className="h-fit" status="danger">
+              <CardHeader
+                titel={senaIdag.length === 1 ? "En sen idag" : `${senaIdag.length} sena idag`}
+                beskrivning="Instämpling efter schemalagd start plus tolerans."
+              />
+              <ul className="flex flex-col gap-3">
+                {senaIdag.map((s) => (
+                  <li key={s.namn} className="flex flex-wrap items-baseline justify-between gap-2">
+                    <span className="text-body text-ink-900">{s.namn}</span>
+                    <span className="tnum text-small text-danger-ink">
+                      {forsening(s.minuter)} sen
+                    </span>
+                    <span className="tnum w-full text-micro text-ink-500">
+                      {s.ankom} mot {s.schemalagd}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
           {chef && (
             <Card className="h-fit">
               <CardHeader titel="På plats nu" beskrivning="Namn och in-tid. Inget mer." />
@@ -316,6 +384,25 @@ export default async function TidSida() {
                       <input type="hidden" name="schema_id" value={r.id} />
                       <Button type="submit" size="sm">Jag har läst</Button>
                     </form>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
+          {(minaSena ?? []).length > 0 && (
+            <Card className="h-fit">
+              <CardHeader
+                titel="Mina sena dagar"
+                beskrivning="Det som registrerats om dig ska du kunna läsa. Detaljerna gallras efter 90 dagar."
+              />
+              <ul className="flex flex-col gap-2">
+                {(minaSena ?? []).map((s) => (
+                  <li key={s.id} className="flex flex-wrap items-baseline justify-between gap-2">
+                    <span className="tnum text-body text-ink-900">{s.work_date}</span>
+                    <span className="tnum text-small text-ink-700">
+                      {forsening(s.minutes_late)} efter {s.scheduled_start.slice(0, 5)}
+                    </span>
                   </li>
                 ))}
               </ul>

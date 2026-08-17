@@ -235,10 +235,15 @@ export async function sparaArbetsschema(_prev: TidState, form: FormData): Promis
   const start = String(form.get("start_time") ?? "");
   const slut = String(form.get("end_time") ?? "");
   const galler = String(form.get("valid_from") ?? "") || new Date().toISOString().slice(0, 10);
+  const tolLate = Number(form.get("tol_late") ?? 1);
 
   if (veckodagar.length === 0) return { fel: "Välj minst en veckodag." };
   if (!start || !slut) return { fel: "Fyll i både start och slut." };
   if (slut <= start) return { fel: "Sluttiden måste ligga efter starttiden." };
+  // Noll slapps inte igenom. Sekundskillnader mellan telefon och server hade
+  // gjort systemet till en logg over folk som var i tid.
+  if (!Number.isInteger(tolLate) || tolLate < 1)
+    return { fel: "Toleransen för sen ankomst måste vara minst 1 minut." };
   if (scope !== "company" && !(employee_id ?? team_id))
     return { fel: "Välj vem schemat gäller." };
 
@@ -252,6 +257,7 @@ export async function sparaArbetsschema(_prev: TidState, form: FormData): Promis
         weekday,
         start_time: start,
         end_time: slut,
+        tol_late: tolLate,
         valid_from: galler,
         created_by: user.employee!.id,
       })),
@@ -264,6 +270,7 @@ export async function sparaArbetsschema(_prev: TidState, form: FormData): Promis
     veckodagar,
     start,
     slut,
+    tolerans_sen: tolLate,
     galler_fran: galler,
   });
   revalidatePath("/tid", "layout");
@@ -281,8 +288,10 @@ export async function sparaRastschema(_prev: TidState, form: FormData): Promise<
   const ordning = Number(form.get("sort") ?? 1);
   const galler = String(form.get("valid_from") ?? "") || new Date().toISOString().slice(0, 10);
 
-  // AC-2.26: minst fem minuter, och gransen ligger i databasen ocksa.
-  const tol = Math.max(5, Number(form.get("tolerans") ?? 5));
+  // AC-2.26 sager minst fem minuter. Sankt till en pa bestallning 2026-08-17 —
+  // en medveten avvikelse fran PRD:n, se migration 0014. Gransen ligger i
+  // databasen ocksa.
+  const tol = Math.max(1, Number(form.get("tolerans") ?? 1));
 
   if (veckodagar.length === 0) return { fel: "Välj minst en veckodag." };
   if (!fonsterStart || !fonsterSlut) return { fel: "Fyll i tidsfönstret." };
