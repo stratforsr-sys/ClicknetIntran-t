@@ -4,6 +4,35 @@ Inställningar i Supabase som inte kan sättas från repot.
 
 ---
 
+## Stämplingen är påslagen sedan 2026-08-17 · in och ut, inte rast
+
+`M2_AKTIV = true` i `src/lib/tid.ts`. In- och utstämpling vilar på
+anställningsavtalet och arbetstidslagens krav på förda anteckningar, och
+kräver ingen intresseavvägning.
+
+`RAST_AKTIV = false` står kvar. Raststämpling är övervakning av när en människa
+äter lunch och kräver K12 skriven och daterad, K14-informationen kvitterad och
+K29, det dokumenterade rastschemat. Så länge den är av drar navet **inga**
+raster från arbetad tid: den registrerade tiden är från instämpling till
+utstämpling, och rasten hanteras utanför systemet.
+
+**Innan första dagen:**
+
+1. **Lägg upp arbetstiderna** under `/tid/schema`, minst en bolagsrad per
+   veckodag. Utan schema stänger nattjobbet aldrig en glömd utstämpling — den
+   dagen står öppen tills någon rättar den för hand, och en öppen dag blockerar
+   löneperioden.
+2. **Lägg upp de anställda** under `/personal/ny`. Var och en får ett
+   tillfälligt lösenord som visas en gång.
+3. **Berätta hur det fungerar.** Att tiden sätts när knappen trycks, att en
+   felstämpling rättas med en begäran till chefen och aldrig raderas, och att
+   rasten inte stämplas än.
+
+När rasten senare slås på: sätt `RAST_PASLAGET` till samma datum. Det är den
+som räknar fram omprövningsdatumet i K20, sex månader senare.
+
+---
+
 ## 0. Mejlet måste bära koden · KRAVET ÄR AVSTÄNGT TILLS DETTA ÄR GJORT
 
 **Läge 2026-08-16:** verifierat att mejlet innehåller en "sign in"-länk men

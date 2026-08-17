@@ -2,28 +2,64 @@
  * M2 Tid och närvaro. Ren logik — inga anrop, inga hemligheter.
  *
  * ===========================================================================
- * K12 ÄR EN SPÄRR. `M2_AKTIV` står med flit på false.
+ * TVÅ STRÖMBRYTARE, INTE EN. De vilar på olika grund.
  *
- * PRD §11: "M2 får inte aktiveras i produktion innan intresseavvägningen är
- * skriven och daterad." Raststämpling är övervakning av när en människa äter
- * lunch, och den avvägningen ska vara gjord på papper INNAN den första
- * stämplingen sker — inte efteråt, när det redan finns data att förklara.
+ *   M2_AKTIV   — in- och utstämpling. PÅSLAGEN 2026-08-17. Vilar på
+ *                anställningsavtalet och på arbetstidslagens krav på förda
+ *                anteckningar. Kräver inte K12.
+ *   RAST_AKTIV — raststämpling. AVSTÄNGD. Kräver K12, intresseavvägningen,
+ *                skriven och daterad, samt K14, informationen till personalen,
+ *                och K29, det dokumenterade rastschemat.
  *
- * Slås på genom att sätta konstanterna nedan till true. Ingenting annat
- * behöver röras.
+ * Raststämpling är övervakning av när en människa äter lunch. Den avvägningen
+ * ska vara gjord på papper INNAN den första rasten stämplas — inte efteråt,
+ * när det redan finns data att förklara. Att köra in och ut utan rast är
+ * därför ett riktigt mellanläge, inte en genväg förbi K12.
  *
- *   M2_AKTIV   — in- och utstämpling. Vilar på anställningsavtalet och på
- *                arbetstidslagens krav på förda anteckningar.
- *   RAST_AKTIV — raststämpling. Kräver K12 dokumenterad och daterad, samt
- *                K14, informationen till personalen.
- *
- * De är två konstanter och inte en, eftersom de vilar på olika grund. Att
- * kunna köra in och ut utan rast är ett riktigt mellanläge, inte en genväg.
+ * Utan rastschema drar navet inga raster från arbetad tid. Tiden som
+ * redovisas är från instämpling till utstämpling, och rasten hanteras utanför
+ * systemet tills K12 och K29 är på plats.
  * ===========================================================================
  */
 
-export const M2_AKTIV = false;
+export const M2_AKTIV = true;
 export const RAST_AKTIV = false;
+
+/**
+ * Datum då respektive strömbrytare slogs på. Behövs för K20: raststämplingen
+ * ska omprövas sex månader efter påslaget, och en omprövning utan startdatum
+ * blir aldrig av. Sätt datumet i samma ändring som du sätter flaggan till true.
+ */
+export const M2_PASLAGET = "2026-08-17";
+export const RAST_PASLAGET: string | null = null;
+
+/** K20. */
+export const OMPROVNING_MANADER = 6;
+
+/** Sista dag för omprövning, eller null när rasten inte är påslagen. */
+export function omprovningSenast(paslaget: string | null = RAST_PASLAGET): string | null {
+  if (!paslaget) return null;
+  const d = new Date(paslaget);
+  d.setMonth(d.getMonth() + OMPROVNING_MANADER);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * AC-2.22: en rättelse som blivit liggande ska lyftas till säljchefen.
+ *
+ * Notisen är i det här läget tyst på riktigt — navet mejlar inte än (E0.8 är
+ * pausad), så den syns som en markering i chefens kö och som en rad i
+ * händelseloggen. Det är samma gräns som utlöser mejlet den dag posten finns.
+ */
+export const RATTELSE_FRIST_TIMMAR = 48;
+
+export function harVantatForLange(
+  begard: string,
+  nu: Date = new Date(),
+  timmar: number = RATTELSE_FRIST_TIMMAR,
+): boolean {
+  return nu.getTime() - Date.parse(begard) > timmar * 3600_000;
+}
 
 export type Stamptyp = "in" | "out" | "break_start" | "break_end";
 

@@ -5,7 +5,18 @@
  *
  *   node --experimental-strip-types tests/tid.mjs
  */
-import { lageNu, gallande, arbetadeMinuter, tillatna, tillaten, timmarOchMinuter } from "../src/lib/tid.ts";
+import {
+  lageNu,
+  gallande,
+  arbetadeMinuter,
+  tillatna,
+  tillaten,
+  timmarOchMinuter,
+  harVantatForLange,
+  omprovningSenast,
+  M2_AKTIV,
+  RAST_AKTIV,
+} from "../src/lib/tid.ts";
 
 let fel = 0;
 const ok = (namn, villkor, extra = "") => {
@@ -80,6 +91,26 @@ console.log("\n\x1b[1mBara giltiga övergångar\x1b[0m");
   ok("dubbel instämpling nekas", tillaten("inne", "in") === false);
   ok("utstämpling utan att vara inne nekas", tillaten("ute", "out") === false);
   ok("rast avslutas inte när man är ute", tillaten("ute", "break_end") === false);
+}
+
+console.log("\n\x1b[1mStrömbrytarna och fristerna\x1b[0m");
+{
+  ok("in- och utstämpling är påslagen", M2_AKTIV === true);
+  ok("raststämpling är fortfarande av tills K12 är daterad", RAST_AKTIV === false);
+  ok("utan rast finns ingen rastknapp", tillatna("inne").join() === "out");
+
+  const nu = new Date("2026-08-17T12:00:00.000Z");
+  ok("en rättelse på två timmar har inte väntat för länge",
+    harVantatForLange("2026-08-17T10:00:00.000Z", nu) === false);
+  ok("en på tre dygn har det",
+    harVantatForLange("2026-08-14T10:00:00.000Z", nu) === true);
+  ok("gränsen går vid 48 timmar",
+    harVantatForLange("2026-08-15T11:59:00.000Z", nu) === true &&
+    harVantatForLange("2026-08-15T12:01:00.000Z", nu) === false);
+
+  ok("utan påslagen rast finns inget omprövningsdatum", omprovningSenast(null) === null);
+  ok("sex månader efter påslaget", omprovningSenast("2026-09-01") === "2027-03-01",
+    String(omprovningSenast("2026-09-01")));
 }
 
 console.log(fel === 0 ? "\n\x1b[32mAlla kontroller godkända.\x1b[0m\n" : `\n\x1b[31m${fel} underkända.\x1b[0m\n`);

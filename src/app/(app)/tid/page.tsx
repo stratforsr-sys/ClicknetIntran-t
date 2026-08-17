@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -17,6 +18,9 @@ import {
   lageNu,
   tillatna,
   timmarOchMinuter,
+  omprovningSenast,
+  harVantatForLange,
+  RATTELSE_FRIST_TIMMAR,
   type Handelse,
 } from "@/lib/tid";
 import { AVVIKELSE_ETIKETT, AVVIKELSE_FORKLARING, type Avvikelsetyp } from "@/lib/raster";
@@ -103,10 +107,21 @@ export default async function TidSida() {
   const { data: vantande } = chef
     ? await supabase
         .from("time_event")
-        .select("id, employee_id, kind, occurred_at, note, supersedes_id")
+        .select("id, employee_id, kind, occurred_at, note, supersedes_id, created_at")
         .eq("correction_state", "pending")
-        .order("occurred_at")
+        .order("created_at")
     : { data: null };
+
+  // AC-2.4 hanger pa att det finns ett schema att stanga vid. Utan schema
+  // stanger nattjobbet ingenting alls — med flit, en pahittad sluttid i en
+  // lonegrundande logg ar varre an en oppen dag. Men chefen maste fa veta det,
+  // annars vaxer hogen med glomda utstamplingar tyst tills lonerapporten
+  // vagrar generera.
+  const { count: antalScheman } = chef
+    ? await supabase.from("work_schedule").select("id", { count: "exact", head: true })
+    : { count: null };
+
+  const omprovning = omprovningSenast();
 
   return (
     <div className="flex flex-col gap-4 pt-2">
@@ -138,6 +153,34 @@ export default async function TidSida() {
         <Notis ton="warn">
           Modulen väntar på K12: intresseavvägningen för raststämpling ska vara skriven och
           daterad innan den första stämplingen sker. Se <code>docs/DRIFTSATTNING.md</code>.
+        </Notis>
+      )}
+
+      {M2_AKTIV && !RAST_AKTIV && (
+        <Notis ton="info">
+          Rasten stämplas inte. Tiden som registreras är från instämpling till utstämpling — dra av
+          rasten när du stämplar ut, eller stämpla ut över lunchen. Raststämpling slås på först när
+          intresseavvägningen (K12) är skriven och daterad.
+        </Notis>
+      )}
+
+      {/* Utan schema stanger nattjobbet ingen glomd utstampling. */}
+      {chef && M2_AKTIV && antalScheman === 0 && (
+        <Notis ton="danger">
+          Inget arbetsschema är upplagt. Glömda utstämplingar stängs därför aldrig automatiskt, och
+          varje sådan dag blockerar löneperioden tills någon rättar den för hand.{" "}
+          <Link href="/tid/schema" className="font-semibold underline">
+            Lägg upp arbetstiderna
+          </Link>{" "}
+          innan första dagen.
+        </Notis>
+      )}
+
+      {/* K20: omprovningen far ett datum i samma stund rasten slas pa. */}
+      {chef && omprovning && (
+        <Notis ton="info">
+          Raststämplingen ska omprövas senast <strong>{omprovning}</strong>, sex månader efter
+          påslaget. Sätt en kalenderpost — navet påminner inte förrän notisspåret finns.
         </Notis>
       )}
 
@@ -224,9 +267,14 @@ export default async function TidSida() {
               <ul className="flex flex-col gap-4">
                 {(vantande ?? []).map((r) => (
                   <li key={r.id} className="flex flex-col gap-2">
-                    <p className="text-body text-ink-900">
+                    <p className="flex flex-wrap items-center gap-2 text-body text-ink-900">
                       {TYP_ETIKETT[r.kind as keyof typeof TYP_ETIKETT]} →{" "}
                       <span className="tnum">{klockan(r.occurred_at)}</span>
+                      {/* AC-2.22: den som blivit liggande lyfts, tyst mot den
+                          anstallda och synligt for chefen. */}
+                      {harVantatForLange(r.created_at) && (
+                        <Badge ton="danger">Väntat över {RATTELSE_FRIST_TIMMAR} h</Badge>
+                      )}
                     </p>
                     {r.note && <p className="text-small text-ink-500">{r.note}</p>}
                     <div className="flex flex-wrap gap-2">

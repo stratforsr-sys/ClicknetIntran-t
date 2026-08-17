@@ -1,6 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { M2_AKTIV, RAST_AKTIV, gallande, arbetadeMinuter, type Handelse } from "@/lib/tid";
+import {
+  M2_AKTIV,
+  RAST_AKTIV,
+  RATTELSE_FRIST_TIMMAR,
+  gallande,
+  arbetadeMinuter,
+  type Handelse,
+} from "@/lib/tid";
 import { avvikelser, gallandeSchema, tagnaRaster, type Rastschema } from "@/lib/raster";
 
 export const dynamic = "force-dynamic";
@@ -11,12 +18,13 @@ const GALLRING_DAGAR = 90;
 const AGGREGAT_MANADER = 12;
 
 /**
- * Nattjobbet for M2. Kors efter dygnets slut och gor fyra saker, i ordning:
+ * Nattjobbet for M2. Kors efter dygnets slut och gor fem saker, i ordning:
  *
  *   1. Stanger glomda utstamplingar vid schemaslut (AC-2.4)
  *   2. Skriver gardagens rader till arbetstidsjournalen (AC-2.6, AC-2.7)
  *   3. Genererar rastavvikelser mot det schema som gallde DA (AC-2.24, AC-2.35)
  *   4. Gallrar detaljer aldre an 90 dagar, efter att de summerats (AC-2.31)
+ *   5. Lyfter rattelser som legat over 48 timmar (AC-2.22)
  *
  * Ordningen ar inte godtycklig: en dag maste vara stangd innan den kan
  * bedomas, och bedomd innan den far gallras.
@@ -28,7 +36,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ fel: "Nekad" }, { status: 401 });
 
   if (!M2_AKTIV) {
-    return NextResponse.json({ hoppade_over: "M2 är inte påslagen (K12)" });
+    return NextResponse.json({ hoppade_over: "M2 är inte påslagen" });
   }
 
   const db = supabaseAdmin();
@@ -216,12 +224,48 @@ export async function GET(request: NextRequest) {
     .delete()
     .lt("month", gransAggregat.toISOString().slice(0, 10));
 
+  // 5. AC-2.22: rattelser som blivit liggande over 48 timmar lyfts till
+  //    saljchefen. Notisen ar tyst mot den anstallda med flit — det ar chefen
+  //    som ska agera, inte den som redan vantar. Sa lange navet inte mejlar
+  //    syns den som markering i chefens ko och som rad i handelseloggen.
+  const fristGrans = new Date(Date.now() - RATTELSE_FRIST_TIMMAR * 3600_000).toISOString();
+
+  const { data: liggande } = await db
+    .from("time_event")
+    .select("id, employee_id, created_at")
+    .eq("correction_state", "pending")
+    .lt("created_at", fristGrans);
+
+  let lyfta = 0;
+  for (const r of liggande ?? []) {
+    // En rad per rattelse, inte en per natt. En upprepad notis blir brus, och
+    // brus laser man forbi.
+    const { data: redanLoggad } = await db
+      .from("audit_log")
+      .select("id")
+      .eq("action", "time.correction_overdue")
+      .eq("object_id", r.id)
+      .maybeSingle();
+
+    if (redanLoggad) continue;
+
+    await db.from("audit_log").insert({
+      actor_id: null,
+      action: "time.correction_overdue",
+      object_type: "time_event",
+      object_id: r.id,
+      meta: { begard: r.created_at, timmar: RATTELSE_FRIST_TIMMAR },
+    });
+    lyfta++;
+  }
+
   return NextResponse.json({
     datum,
     stangda,
     journalrader,
     avvikelser: nyaAvvikelser,
     gallrade,
+    rattelser_over_frist: lyfta,
     raster_aktiva: RAST_AKTIV,
   });
 }

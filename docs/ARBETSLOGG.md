@@ -4,6 +4,43 @@ Läs denna före arbete. Uppdatera efteråt.
 
 ---
 
+## 2026-08-17 · Stämplingen påslagen — in och ut, inte rast
+
+`M2_AKTIV = true`. Säljarna börjar stämpla imorgon. `RAST_AKTIV` står kvar på
+false: raststämpling kräver K12 daterad, och den är inte skriven. Mellanläget
+var byggt för precis det här och behövde inte snickras ihop i efterhand.
+
+Konsekvensen ska vara uttalad, inte underförstådd: **navet drar inga raster
+från arbetad tid.** Registrerad tid är från instämpling till utstämpling. Den
+som vill ha rasten avdragen stämplar ut över lunchen. Det står som en notis
+överst i vyn, inte bara i den här loggen.
+
+**Byggt i samma push**
+
+- E4.20, AC-2.22: rättelser som legat över 48 timmar märks i chefens kö och får
+  en rad i händelseloggen från nattjobbet. En rad per rättelse, inte en per
+  natt — en upprepad notis blir brus, och brus läser man förbi. Tyst mot den
+  anställda med flit: det är chefen som ska agera, inte den som redan väntar.
+- E4.22, K20: `RAST_PASLAGET` och `omprovningSenast()`. Omprövningsdatumet
+  räknas fram ur påslagsdatumet och visas för chefen. Sätts när rasten slås på.
+- Varning i chefsvyn när **inget arbetsschema finns**. Det var ett tyst hål:
+  utan schema stänger nattjobbet ingen glömd utstämpling — med flit, en påhittad
+  sluttid i en lönegrundande logg är värre — men ingen fick veta det. Högen med
+  öppna dagar hade vuxit tills löneperioden vägrade generera.
+
+**Läget i produktionsdatan när detta skrevs**
+
+Två anställda upplagda, noll arbetsscheman, noll stämplingar. Säljarna som ska
+stämpla imorgon finns alltså inte i navet än, och arbetstiderna är inte satta.
+Koden är klar; de två sakerna är inte kod.
+
+**Verifierat**
+
+`npm run test:tid`: 34 kontroller, åtta nya. Bygget kört lokalt eftersom
+Vercels kö låg 40 minuter efter.
+
+---
+
 ## 2026-08-17 · E3 M4 Personalärenden — och en trasig import i E4b
 
 Migration `0013`. Modulen som avlastar chefen mest per dag: frågan som idag
