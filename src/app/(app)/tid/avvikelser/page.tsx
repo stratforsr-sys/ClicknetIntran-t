@@ -2,8 +2,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { KONTROLL } from "@/components/ui/Field";
 import { Notis } from "@/components/ui/Notis";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { avslutaAvvikelse } from "../lonerapport/actions";
 import { Ikon } from "@/components/shell/Ikon";
 import { getCurrentUser, canManageEmployees, hasRole, fullName } from "@/lib/auth";
 import { supabaseServer, supabaseAdmin } from "@/lib/supabase/server";
@@ -37,7 +40,7 @@ export default async function AvvikelseSida() {
   const [{ data: avvikelser }, { data: personal }] = await Promise.all([
     supabase
       .from("break_deviation")
-      .select("id, employee_id, work_date, kind, minutes, employee_comment, detected_at")
+      .select("id, employee_id, work_date, kind, minutes, employee_comment, detected_at, resolved_at, resolution")
       .order("work_date", { ascending: false })
       .limit(200),
     supabase.from("employee").select("id, first_name, last_name"),
@@ -80,6 +83,12 @@ export default async function AvvikelseSida() {
         varken provision eller lönekostnadsvyn.
       </Notis>
 
+      <Notis ton="info">
+        Att avsluta en avvikelse är att kvittera att den är omhändertagen, ingenting annat. Ingen
+        automatik hänger i knappen. Däremot går löneperioden inte att attestera så länge avvikelser
+        står öppna — den som inte tittats på ska inte tyst följa med in i ett löneunderlag.
+      </Notis>
+
       {!RAST_AKTIV && (
         <Notis ton="warn">
           Genereringen är avstängd tills K29 är uppfylld. Listan nedan är därför tom.
@@ -99,7 +108,7 @@ export default async function AvvikelseSida() {
             <table className="w-full min-w-[40rem] border-collapse">
               <thead>
                 <tr className="border-b border-canvas">
-                  {["Datum", "Person", "Vad", "Omfattning", "Kommentar"].map((h) => (
+                  {["Datum", "Person", "Vad", "Omfattning", "Kommentar", "Avslut"].map((h) => (
                     <th key={h} scope="col" className="px-6 py-3 text-left text-micro uppercase text-ink-500">
                       {h}
                     </th>
@@ -123,6 +132,26 @@ export default async function AvvikelseSida() {
                     </td>
                     <td className="px-6 py-3 text-small text-ink-500">
                       {a.employee_comment ?? "—"}
+                    </td>
+                    <td className="px-6 py-3">
+                      {a.resolved_at ? (
+                        <span className="text-small text-ink-500">
+                          {a.resolution || "Avslutad"}
+                        </span>
+                      ) : (
+                        <form action={avslutaAvvikelse} className="flex items-center gap-2">
+                          <input type="hidden" name="avvikelse_id" value={a.id} />
+                          <input
+                            type="text"
+                            name="anteckning"
+                            placeholder="Anteckning (frivillig)"
+                            className={`${KONTROLL} w-48`}
+                          />
+                          <Button type="submit" variant="sekundar" size="sm">
+                            Avsluta
+                          </Button>
+                        </form>
+                      )}
                     </td>
                   </tr>
                 ))}

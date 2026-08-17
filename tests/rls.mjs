@@ -81,6 +81,11 @@ async function stad() {
   await db.query(`delete from time_event where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`alter table time_event enable trigger time_event_orubblig`);
   await db.query(`delete from break_deviation where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
+  // Loneperioder fran testet ar alltid utkast. En attesterad period gar inte
+  // att stada bort — det ar hela poangen med AC-2.16, och provas i stallet i
+  // tests/lonerapport-db.mjs inuti en transaktion som rullas tillbaka.
+  await db.query(`delete from payroll_row where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
+  await db.query(`delete from payroll_period where status = 'draft' and period_start in ('2019-03-01','2019-04-01')`);
   await db.query(`delete from work_time_journal where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`delete from scheduled_break where scope = 'company' and window_start = '11:30' and duration_minutes = 30`);
   await db.query(`delete from work_schedule where scope = 'company' and start_time = '08:00' and end_time = '17:00'`);
@@ -577,8 +582,62 @@ console.log("\n\x1b[1mSteg två: kod via e-post\x1b[0m");
   ok("samma kod går inte att använda igen", !rAter.ok, `HTTP ${rAter.status}`);
 }
 
+console.log("\n\x1b[1mLönerapporten är ledningens och ekonomins\x1b[0m");
+{
+  const { rows: per } = await db.query(
+    `insert into payroll_period (period_start, period_end) values ('2019-03-01','2019-03-31') returning id`,
+  );
+  const period = per[0].id;
+
+  await db.query(
+    `insert into payroll_row (period_id, employee_id, worked_minutes) values ($1::uuid,$2::uuid,600),($1::uuid,$3::uuid,540)`,
+    [period, saljareA.id, saljareB.id],
+  );
+
+  const annas = await las(tA, "payroll_row");
+  ok("Anna ser sin egen rad", annas.length === 1 && annas[0].employee_id === saljareA.id, `såg ${annas.length}`);
+
+  const annasFraga = await las(tA, "payroll_row", `employee_id=eq.${saljareB.id}`);
+  ok("och noll rader när hon frågar direkt på Bertils id", annasFraga.length === 0, `såg ${annasFraga.length}`);
+
+  const annasPeriod = await las(tA, "payroll_period");
+  ok("Anna ser inte perioderna", annasPeriod.length === 0, `såg ${annasPeriod.length}`);
+
+  // AC-2.10: teamledaren far se avvikelser i sitt team. Loneunderlag ar nagot
+  // annat — det ar ledningens och ekonomins, aven for egna teammedlemmar.
+  const cecilias = await las(tC, "payroll_row");
+  ok("Cecilia ser ingen annans löneunderlag, inte ens Annas", cecilias.length === 0, `såg ${cecilias.length}`);
+
+  const davids = await las(tD, "payroll_row");
+  ok("David som säljchef ser båda raderna", davids.length === 2, `såg ${davids.length}`);
+
+  const evas = await las(tE, "payroll_row");
+  ok("Eva på ekonomi ser båda raderna", evas.length === 2, `såg ${evas.length}`);
+  ok("och kommer åt perioden", (await las(tE, "payroll_period")).length >= 1);
+
+  const wA = await fetch(`${URL}/rest/v1/payroll_row`, {
+    method: "POST", headers: som(tA),
+    body: JSON.stringify({ period_id: period, employee_id: saljareA.id, worked_minutes: 99999 }),
+  });
+  ok("Anna kan inte skriva sitt eget underlag", !wA.ok, `HTTP ${wA.status}`);
+
+  const wC = await fetch(`${URL}/rest/v1/payroll_period`, {
+    method: "POST", headers: som(tC),
+    body: JSON.stringify({ period_start: "2019-04-01", period_end: "2019-04-30" }),
+  });
+  ok("Cecilia kan inte skapa en period", !wC.ok, `HTTP ${wC.status}`);
+
+  const wD = await fetch(`${URL}/rest/v1/payroll_row?period_id=eq.${period}`, {
+    method: "PATCH", headers: som(tD), body: JSON.stringify({ worked_minutes: 0 }),
+  });
+  ok("inte ens David skriver underlaget via API:t — det gör servern", !wD.ok, `HTTP ${wD.status}`);
+
+  await db.query(`delete from payroll_row where period_id = $1::uuid`, [period]);
+  await db.query(`delete from payroll_period where id = $1::uuid`, [period]);
+}
+
 console.log("\n\x1b[1mAnonym anslutning\x1b[0m");
-for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation"]) {
+for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column"]) {
   const r = await fetch(`${URL}/rest/v1/${t}?select=*`, { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` } });
   const j = await r.json();
   ok(`${t} ger inga rader anonymt`, !Array.isArray(j) || j.length === 0, Array.isArray(j) ? `${j.length} rader` : `HTTP ${r.status}`);

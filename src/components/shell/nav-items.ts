@@ -27,6 +27,13 @@ export function navFor(user: CurrentUser | null): NavItem[] {
     if (M2_AKTIV) items.push({ href: "/tid", label: "Tid", ikon: "tid" });
   }
 
+  // Loneunderlaget ar ledningens och ekonomins (AC-2.13). Teamledaren har
+  // avvikelsevyn, inte den har. Posten foljer M2: utan stampling finns inget
+  // underlag att rapportera.
+  if (M2_AKTIV && hasRole(user, "sales_manager", "ceo", "finance", "admin")) {
+    items.push({ href: "/tid/lonerapport", label: "Lönerapport", ikon: "klocka" });
+  }
+
   if (canManageEmployees(user) || hasRole(user, "ceo", "team_lead")) {
     items.push({ href: "/personal", label: "Personal", ikon: "personal" });
   }

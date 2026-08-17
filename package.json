@@ -13,7 +13,9 @@
     "test:utbildning": "node --experimental-strip-types tests/utbildning.mjs",
     "test:tid": "node --experimental-strip-types tests/tid.mjs",
     "test:raster": "node --experimental-strip-types tests/raster.mjs",
-    "test": "npm run test:rls && npm run test:tid && npm run test:raster && npm run test:utbildning"
+    "test:lonerapport": "node --experimental-strip-types tests/lonerapport.mjs",
+    "test:lonerapport-db": "node tests/lonerapport-db.mjs",
+    "test": "npm run test:rls && npm run test:tid && npm run test:raster && npm run test:utbildning && npm run test:lonerapport && npm run test:lonerapport-db"
   },
   "dependencies": {
     "@supabase/ssr": "^0.7.0",

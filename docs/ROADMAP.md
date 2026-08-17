@@ -159,7 +159,7 @@ Q71 avgör om denna är akut: rekryteras 25 personer av en person är den det.
 
 ---
 
-## E4 — M2 Tid och närvaro · BYGGD, AVSTÄNGD AV K12
+## E4 — M2 Tid och närvaro · FÄRDIGBYGGD (utom E4.20, E4.22), AVSTÄNGD AV K12
 
 Får inte aktiveras i produktion innan intresseavvägningen är skriven och
 daterad. Koden finns och är testad; påslaget sker med `M2_AKTIV` i
@@ -190,16 +190,16 @@ daterad. Koden finns och är testad; påslaget sker med `M2_AKTIV` i
 | E4.21 | AC-2.19, AC-2.20 | Orden övertid, mertid och jourtid får inte förekomma i något vardagsgränssnitt | KLAR — orden finns bara i arbetstidsjournalen |
 | E4.22 | K20 | Omprövning av raststämpling efter 6 månader — kalenderpost | BLOCKERAD |
 
-## E4b — Lönerapport · ~2 veckor
+## E4b — Lönerapport · KLAR (2026-08-17)
 
 | # | AC | Vad | Status |
 |---|---|---|---|
-| E4b.1 | AC-2.13 | Lönerapport per period och person: arbetad tid, frånvaro per typ, avvikelser. **Ingen övertid** | BLOCKERAD |
-| E4b.2 | AC-2.14 | Kan inte genereras vid oavslutade avvikelser. Systemet listar vad som blockerar | BLOCKERAD |
-| E4b.3 | AC-2.15, K5b | Attesteras av människa, attesten låser perioden | BLOCKERAD |
-| E4b.4 | AC-2.16 | Attesterad period är oföränderlig, korrigering som justeringspost | BLOCKERAD |
-| E4b.5 | AC-2.17, K5 | Ingen beräknad lön, inget belopp, ingen semesterrätt | BLOCKERAD |
-| E4b.6 | AC-2.18 | Konfigurerbart exportformat mot lönesystemet (A3) | BLOCKERAD |
+| E4b.1 | AC-2.13 | Lönerapport per period och person: arbetad tid, frånvaro per typ, avvikelser. **Ingen övertid** | KLAR — frånvaro per typ tomt tills E7 finns |
+| E4b.2 | AC-2.14 | Kan inte genereras vid oavslutade avvikelser. Systemet listar vad som blockerar | KLAR — rättelser, öppna dagar och avvikelser listas |
+| E4b.3 | AC-2.15, K5b | Attesteras av människa, attesten låser perioden | KLAR — ekonomi får inte attestera |
+| E4b.4 | AC-2.16 | Attesterad period är oföränderlig, korrigering som justeringspost | KLAR — triggrar, provade mot databasen |
+| E4b.5 | AC-2.17, K5 | Ingen beräknad lön, inget belopp, ingen semesterrätt | KLAR — beloppsfält går inte att lägga till |
+| E4b.6 | AC-2.18 | Konfigurerbart exportformat mot lönesystemet (A3) | KLAR — kolumnerna ligger i payroll_export_column |
 
 ---
 

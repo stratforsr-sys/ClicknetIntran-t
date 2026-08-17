@@ -4,6 +4,56 @@ Läs denna före arbete. Uppdatera efteråt.
 
 ---
 
+## 2026-08-17 · E4b Lönerapport — M2 är färdigbyggd
+
+Migration `0012`. Sista stora biten i M2: underlaget som går till lönekörningen.
+Navet räknar fortfarande ingen lön (AC-2.17, K5) — det redovisar minuter och
+antal, och kolumnen `amount` finns inte att skriva till ens för den som vill.
+
+**Byggt**
+
+- `payroll_period`, `payroll_row`, `payroll_adjustment`, `payroll_export_column`.
+- `src/lib/lonerapport.ts` — noll importer, samma regel som avvikelsemotorn.
+  Blockeringar, öppna dagar och CSV-formatering.
+- `/tid/lonerapport` med periodlista, generering, attest och justeringsposter.
+- `/tid/lonerapport/[id]/csv` — kolumnerna kommer ur tabellen, inte ur koden.
+- Avvikelser kan avslutas på `/tid/avvikelser`. Det saknades helt, och utan det
+  hade AC-2.14 varit en spärr utan nyckel.
+
+**Fyra val**
+
+- **Spärren förklarar sig.** AC-2.14 kräver att rapporten inte går att generera
+  när något är oavslutat. Ett nej utan lista är en återvändsgränd, så
+  `blockeringar()` lämnar tillbaka vad, vem och vilken dag — väntande rättelser,
+  dagar utan utstämpling, oavslutade avvikelser.
+- **Kontrollen görs om vid attest.** Underlaget kan ha skrivits i tisdags och en
+  rättelse kommit in i onsdags. Attesten gäller läget nu, inte då.
+- **Frånvarofältet står tomt, inte noll.** M3 finns inte. En kolumn som alltid
+  visar noll ljuger tystare än en som saknas, så `absence_minutes` är `{}` och
+  vyn säger varför.
+- **Ekonomi får läsa och exportera men inte attestera.** Attesten är en
+  underskrift, och den som håller i lönekörningen ska inte skriva under sitt
+  eget underlag.
+
+**Verifierat**
+
+- `npm run test:lonerapport`: 23 kontroller på ren logik.
+- `npm run test:lonerapport-db`: 16 kontroller mot riktig databas, inuti en
+  transaktion som rullas tillbaka. Attesterad period går varken att skriva om,
+  flytta eller ta bort; justeringsposten går in men kan sedan aldrig ändras;
+  `amount` som exportfält avvisas av kolumnvillkoret.
+- `npm run test:rls`: 124 kontroller, tio nya. Anna ser sin egen rad men noll
+  när hon frågar på Bertils id, Cecilia som teamledare ser ingen alls, och inte
+  ens säljchefen skriver underlaget via API:t — det gör servern.
+
+**Kvar i M2**
+
+E4.20 (tyst 48-timmarsnotis) och E4.22 (kalenderpost för omprövning). Båda
+väntar på notisspåret. Allt annat i E4 och E4b är byggt och testat, och hela
+modulen står fortfarande avstängd bakom `M2_AKTIV` tills K12 är daterad.
+
+---
+
 ## 2026-08-17 · Tillfälliga lösenord — inloggning utan e-post
 
 E-postspåret pausat på beställning. Sändlagret finns på main (`src/lib/epost.ts`,
