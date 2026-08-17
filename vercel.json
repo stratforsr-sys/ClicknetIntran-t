@@ -8,6 +8,10 @@
     {
       "path": "/api/jobb/tid",
       "schedule": "30 2 * * *"
+    },
+    {
+      "path": "/api/jobb/arenden",
+      "schedule": "0 7 * * *"
     }
   ]
 }

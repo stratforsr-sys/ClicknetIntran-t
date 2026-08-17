@@ -4,6 +4,65 @@ Läs denna före arbete. Uppdatera efteråt.
 
 ---
 
+## 2026-08-17 · E3 M4 Personalärenden — och en trasig import i E4b
+
+Migration `0013`. Modulen som avlastar chefen mest per dag: frågan som idag
+kommer på Teams, i korridoren eller i en SMS-tråd får en plats där den inte
+tappas bort.
+
+**Byggt**
+
+- `case_category` med de sju kategorierna ur PRD:n, svarstid per kategori.
+  `hr_case` (`case` är reserverat i SQL), `case_message`.
+- `src/lib/arenden.ts` — noll importer. Frist, SLA-läge, median och förslaget
+  om att skriva en rutin.
+- `/arenden` som inkorg med SLA-status som färgad kant, `/arenden/nytt`,
+  `/arenden/[id]` med hela dialogen, `/arenden/statistik`.
+- Nattjobb `/api/jobb/arenden` 07:00 som eskalerar det som passerat fristen.
+
+**Fyra val**
+
+- **Ingen intern anteckning finns, och ska inte läggas till.** AC-4.4 lovar att
+  den anställda ser hela dialogen. Ett fält som chefen kan skriva i utan att
+  den berörda ser det gör ärendet till något annat än det utger sig för.
+- **Fristen fryses vid upplägget.** Ändras kategorins svarstid i morgon flyttar
+  det inte gårdagens löfte.
+- **Varningen skalar med fristen.** Ett dygnsärende varnar vid sex timmar kvar,
+  ett veckoärende vid fyrtiotvå. Ett fast antal timmar hade varit för tidigt
+  för det ena och för sent för det andra.
+- **Loggen bär aldrig rubriken på ett konfidentiellt ärende.** Den som läser
+  händelseloggen ska se att ett ärende skapades, inte vad det gällde.
+
+**Eskaleringen är en markering, inte ett mejl**
+
+E0.8 är pausad, så jobbet färgar posten i inkorgen och räknar upp "över tiden"
+i stället för att skicka något. När notisspåret finns är det den raden som
+utlöser mejlet. Jobbet är avsiktligt tyst mot den anställda: ett automatiskt
+"ditt ärende är försenat" hjälper ingen som redan väntar.
+
+**Rättat i samma push**
+
+Gårdagens E4b-push byggde inte. `Atgarder.tsx` importerade `./actions` men
+filen ligger en nivå upp. Vercel hann fånga det innan någon annan gjorde det —
+och det är värt att notera att inget lokalt test hade hittat felet, eftersom
+testerna kör ren logik och aldrig laddar sidorna.
+
+**Verifierat**
+
+- `npm run test:arenden`: 21 kontroller på ren logik.
+- `npm run test:rls`: 145 kontroller, fjorton nya för M4. Cecilia som
+  teamledare ser noll ärenden, Eva på ekonomi likaså, och en tilldelning öppnar
+  ett vanligt ärende men aldrig ett konfidentiellt. Anna kan varken stänga
+  Bertils ärende eller skriva i det, och ett skickat meddelande går inte att
+  skriva om ens med servicerollen.
+
+**Kvar i E3**
+
+Anonyma ärenden (AC-4.6) är förberedda i datamodellen men avstängda i
+`ANONYMA_ARENDEN` tills bolaget passerar 50 anställda.
+
+---
+
 ## 2026-08-17 · E4b Lönerapport — M2 är färdigbyggd
 
 Migration `0012`. Sista stora biten i M2: underlaget som går till lönekörningen.

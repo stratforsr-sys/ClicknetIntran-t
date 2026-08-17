@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Field, Input, Select } from "@/components/ui/Field";
 import { Notis } from "@/components/ui/Notis";
 import { BLOCKERING_ETIKETT } from "@/lib/lonerapport";
-import { generera, attestera, laggJustering, type PeriodState } from "./actions";
+import { generera, attestera, laggJustering, type PeriodState } from "../actions";
 
 type Person = { id: string; namn: string };
 

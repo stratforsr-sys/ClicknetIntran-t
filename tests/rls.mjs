@@ -63,6 +63,16 @@ async function las(tok, tabell, fraga = "select=*") {
   return Array.isArray(j) ? j : [];
 }
 
+/** Kor SQL som service role och lamnar tillbaka felmeddelandet, eller null. */
+async function nekarSql(sql, params = []) {
+  try {
+    await db.query(sql, params);
+    return null;
+  } catch (e) {
+    return e.message;
+  }
+}
+
 async function stad() {
   const { rows } = await db.query(`select id, auth_user_id from employee where email like $1`, [PREFIX + "%"]);
   for (const r of rows) {
@@ -84,6 +94,11 @@ async function stad() {
   // Loneperioder fran testet ar alltid utkast. En attesterad period gar inte
   // att stada bort — det ar hela poangen med AC-2.16, och provas i stallet i
   // tests/lonerapport-db.mjs inuti en transaktion som rullas tillbaka.
+  // Ett skickat meddelande gar inte att ta bort — samma sorts sparr som pa
+  // time_event, och samma satt att stada: koppla ur den medvetet.
+  await db.query(`alter table case_message disable trigger case_message_orubblig`);
+  await db.query(`delete from hr_case where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
+  await db.query(`alter table case_message enable trigger case_message_orubblig`);
   await db.query(`delete from payroll_row where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`delete from payroll_period where status = 'draft' and period_start in ('2019-03-01','2019-04-01')`);
   await db.query(`delete from work_time_journal where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
@@ -582,6 +597,72 @@ console.log("\n\x1b[1mSteg två: kod via e-post\x1b[0m");
   ok("samma kod går inte att använda igen", !rAter.ok, `HTTP ${rAter.status}`);
 }
 
+console.log("\n\x1b[1mAC-4.3: konfidentiella ärenden når bara säljchef och VD\x1b[0m");
+{
+  const nyttArende = async (agare, kategori, rubrik, konfidentiellt) => {
+    const { rows } = await db.query(
+      `insert into hr_case (employee_id, created_by, category, subject, confidential, sla_hours, due_at)
+       values ($1::uuid,$1::uuid,$2,$3,$4,48, now() + interval '48 hours') returning id`,
+      [agare, kategori, rubrik, konfidentiellt],
+    );
+    await db.query(`insert into case_message (case_id, author_id, body) values ($1::uuid,$2::uuid,'Provtext')`, [
+      rows[0].id, agare,
+    ]);
+    return rows[0].id;
+  };
+
+  const oppet = await nyttArende(saljareA.id, "equipment", "rlstest-tangentbord", false);
+  const hemligt = await nyttArende(saljareA.id, "conflict", "rlstest-konflikt", true);
+  const bertils = await nyttArende(saljareB.id, "pay", "rlstest-provision", false);
+
+  const annas = await las(tA, "hr_case");
+  ok("Anna ser sina två egna ärenden", annas.length === 2, `såg ${annas.length}`);
+  ok("och inte Bertils", !annas.some((a) => a.id === bertils));
+
+  const annasFraga = await las(tA, "hr_case", `id=eq.${bertils}`);
+  ok("noll rader när hon frågar direkt på Bertils ärende", annasFraga.length === 0);
+
+  const cecilias = await las(tC, "hr_case");
+  ok("Cecilia som teamledare ser inga ärenden alls", cecilias.length === 0, `såg ${cecilias.length}`);
+
+  const davids = await las(tD, "hr_case");
+  ok("David som säljchef ser alla tre", davids.length === 3, `såg ${davids.length}`);
+  ok("inklusive det konfidentiella", davids.some((a) => a.id === hemligt));
+
+  const evas = await las(tE, "hr_case");
+  ok("Eva på ekonomi ser inga ärenden — det är inte hennes bord", evas.length === 0, `såg ${evas.length}`);
+
+  // Tilldelning ger insyn i ett oppet arende, men aldrig i ett konfidentiellt.
+  await db.query(`update hr_case set assigned_to = $1::uuid where id = $2::uuid`, [ledare.id, oppet]);
+  await db.query(`update hr_case set assigned_to = $1::uuid where id = $2::uuid`, [ledare.id, hemligt]);
+
+  const ceciliaNu = await las(tC, "hr_case");
+  ok("tilldelad ser det öppna ärendet", ceciliaNu.some((a) => a.id === oppet));
+  ok("men tilldelning öppnar INTE ett konfidentiellt", !ceciliaNu.some((a) => a.id === hemligt));
+
+  const hemligaMeddelanden = await las(tC, "case_message", `case_id=eq.${hemligt}`);
+  ok("och inte heller dess meddelanden", hemligaMeddelanden.length === 0, `såg ${hemligaMeddelanden.length}`);
+
+  const annasMeddelanden = await las(tA, "case_message", `case_id=eq.${bertils}`);
+  ok("Anna kommer inte åt Bertils dialog", annasMeddelanden.length === 0);
+
+  const wB = await fetch(`${URL}/rest/v1/hr_case?id=eq.${bertils}`, {
+    method: "PATCH", headers: som(tA), body: JSON.stringify({ status: "resolved" }),
+  });
+  ok("Anna kan inte stänga Bertils ärende", !wB.ok, `HTTP ${wB.status}`);
+
+  const wM = await fetch(`${URL}/rest/v1/case_message`, {
+    method: "POST", headers: som(tA),
+    body: JSON.stringify({ case_id: bertils, author_id: saljareA.id, body: "hej" }),
+  });
+  ok("och inte skriva i den", !wM.ok, `HTTP ${wM.status}`);
+
+  const andra = await nekarSql(
+    `update case_message set body = 'omskrivet' where case_id = $1::uuid`, [oppet],
+  );
+  ok("ett skickat meddelande går inte att skriva om", andra !== null);
+}
+
 console.log("\n\x1b[1mLönerapporten är ledningens och ekonomins\x1b[0m");
 {
   const { rows: per } = await db.query(
@@ -637,7 +718,7 @@ console.log("\n\x1b[1mLönerapporten är ledningens och ekonomins\x1b[0m");
 }
 
 console.log("\n\x1b[1mAnonym anslutning\x1b[0m");
-for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column"]) {
+for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category"]) {
   const r = await fetch(`${URL}/rest/v1/${t}?select=*`, { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` } });
   const j = await r.json();
   ok(`${t} ger inga rader anonymt`, !Array.isArray(j) || j.length === 0, Array.isArray(j) ? `${j.length} rader` : `HTTP ${r.status}`);

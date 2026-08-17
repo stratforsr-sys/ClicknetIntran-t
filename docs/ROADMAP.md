@@ -63,7 +63,7 @@ förhållande till tillväxten.
 | E1.5 | AC-1.3 | **Automatisk tilldelning** av rutiner, kurser, schema och team vid upplägg | DELVIS — rutiner och team klara, kurser väntar på E8 och schema på E4 |
 | E1.6 | AC-1.4 | Offboarding: roller, sessioner, status, historik | KLAR |
 | E1.7 | AC-1.4 | **Offboarding stänger dialer-kö och spärrar iCal-flöde** | BLOCKERAD av E7, E12 |
-| E1.8 | AC-1.4 | **Öppna ärenden avslutas med notis vid offboarding** | BLOCKERAD av E3 |
+| E1.8 | AC-1.4 | **Öppna ärenden avslutas med notis vid offboarding** | EJ PÅBÖRJAD — E3 finns nu, spärren är borta |
 | E1.9 | AC-1.5 | Rollbyte loggas med vem som beviljade | KLAR |
 | E1.10 | AC-1.6 | RLS på alla persondatatabeller, verifierat | KLAR |
 | E1.11 | AC-1.7 | Offboarding-checklista med kvittens och motiveringstvång | KLAR |
@@ -115,18 +115,18 @@ säljare kan lära sig samma sak utan att du upprepar introduktionen trettio gå
 
 ---
 
-## E3 — M4 Personalärenden · ~2 veckor
+## E3 — M4 Personalärenden · KLAR (2026-08-17), utom AC-4.6
 
 | # | AC | Vad | Status |
 |---|---|---|---|
-| E3.1 | AC-4.1 | Kategorier: lön/provision, utrustning, schema, arbetsmiljö, konflikt, utveckling, övrigt | EJ PÅBÖRJAD |
-| E3.2 | AC-4.2 | Konfigurerbar SLA per kategori med automatisk eskalering | EJ PÅBÖRJAD |
-| E3.3 | AC-4.3 | Konfidentiellt ärende synligt endast för sales_manager och ceo, verifierat på RLS-nivå | EJ PÅBÖRJAD |
-| E3.4 | AC-4.4 | Anställd ser sina egna ärenden och hela dialogen | EJ PÅBÖRJAD |
-| E3.5 | AC-4.5 | Statistikvy: antal per kategori, team och månad samt median lösningstid | EJ PÅBÖRJAD |
-| E3.6 | AC-4.6 | Datamodellen stödjer anonymt ärende, avstängt via feature flag (visselblåsning vid 50 anställda) | EJ PÅBÖRJAD |
-| E3.7 | AC-4.7 | Vid ≥3 liknande frågor föreslår systemet att skapa ett dokument i M5 | EJ PÅBÖRJAD |
-| E3.8 | — | Inkorgsmönster: lista vänster, tråd höger, SLA-status som färgad kant | EJ PÅBÖRJAD |
+| E3.1 | AC-4.1 | Kategorier: lön/provision, utrustning, schema, arbetsmiljö, konflikt, utveckling, övrigt | KLAR |
+| E3.2 | AC-4.2 | Konfigurerbar SLA per kategori med automatisk eskalering | KLAR — nattjobb 07:00, markering tills notiser finns |
+| E3.3 | AC-4.3 | Konfidentiellt ärende synligt endast för sales_manager och ceo, verifierat på RLS-nivå | KLAR — verifierat mot API:t |
+| E3.4 | AC-4.4 | Anställd ser sina egna ärenden och hela dialogen | KLAR — ingen intern anteckning finns |
+| E3.5 | AC-4.5 | Statistikvy: antal per kategori, team och månad samt median lösningstid | KLAR |
+| E3.6 | AC-4.6 | Datamodellen stödjer anonymt ärende, avstängt via feature flag (visselblåsning vid 50 anställda) | DELVIS — kolumnen finns, flaggan står på false |
+| E3.7 | AC-4.7 | Vid ≥3 liknande frågor föreslår systemet att skapa ett dokument i M5 | KLAR — 3 per kategori på 90 dagar |
+| E3.8 | — | Inkorgsmönster: lista vänster, tråd höger, SLA-status som färgad kant | KLAR — lista och tråd på egna sidor |
 
 ---
 

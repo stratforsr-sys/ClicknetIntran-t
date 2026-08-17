@@ -22,6 +22,8 @@ export function navFor(user: CurrentUser | null): NavItem[] {
   if (user?.employee) {
     items.push({ href: "/rutiner", label: "Rutiner", ikon: "rutiner" });
     items.push({ href: "/utbildning", label: "Utbildning", ikon: "utbildning" });
+    // Arenden galler alla: den anstallda ser sina egna, chefen ser inkorgen.
+    items.push({ href: "/arenden", label: "Ärenden", ikon: "meny" });
     // K12: posten dyker upp forst nar modulen slas pa. En meny som pekar pa en
     // funktion som inte far anvandas ar samre an ingen post alls.
     if (M2_AKTIV) items.push({ href: "/tid", label: "Tid", ikon: "tid" });
