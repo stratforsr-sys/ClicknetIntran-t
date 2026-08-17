@@ -3,15 +3,52 @@
 import { useActionState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import { Field, Input, Select } from "@/components/ui/Field";
 import { Notis } from "@/components/ui/Notis";
+import { Losenordsruta } from "@/components/ui/Losenordsruta";
 import { Ikon } from "@/components/shell/Ikon";
 import { ROLES, ROLE_LABEL, EMPLOYMENT_TYPE_LABEL } from "@/lib/roles";
 import { laggUppAnstalld, type FormState } from "../actions";
 
 export function Formular({ team }: { team: { id: string; name: string }[] }) {
   const [state, action, vantar] = useActionState<FormState, FormData>(laggUppAnstalld, {});
+
+  // Upplagget avslutas har i stallet for pa personalkortet. Losenordet far
+  // inte folja med i en URL, och det ar det enda tillfallet det gar att visa.
+  if (state.losenord) {
+    return (
+      <div className="flex flex-col gap-4 pt-2">
+        <div>
+          <h1 className="text-display text-ink-900">Upplagd</h1>
+          <p className="mt-1 max-w-[70ch] text-body text-ink-500">{state.ok}</p>
+        </div>
+
+        <Card className="max-w-[46rem]">
+          <div className="flex flex-col gap-5">
+            <Losenordsruta losenord={state.losenord} />
+
+            <div className="flex flex-wrap items-center gap-3">
+              {state.anstalldId && (
+                <ButtonLink href={`/personal/${state.anstalldId}`} variant="primar">
+                  Till personalkortet
+                </ButtonLink>
+              )}
+              {/* Hel omladdning, inte Link: samma rutt behaller komponentens
+                  state och formularet hade kommit tillbaka ifyllt med det
+                  gamla svaret. */}
+              <a
+                href="/personal/ny"
+                className="text-small font-semibold text-ink-500 hover:text-ink-900"
+              >
+                Lägg upp en till
+              </a>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4 pt-2">
@@ -26,9 +63,9 @@ export function Formular({ team }: { team: { id: string; name: string }[] }) {
       <div>
         <h1 className="text-display text-ink-900">Lägg upp anställd</h1>
         <p className="mt-1 max-w-[70ch] text-body text-ink-500">
-          Kontot skapas direkt och personen kan logga in med lösenord. Rutinerna som gäller rollen
-          och teamet blir obligatoriska från dag ett — kurser och schema följer när de modulerna
-          byggs.
+          Kontot skapas direkt med ett tillfälligt lösenord som visas en gång när du sparar — navet
+          mejlar inte än, så du lämnar över det personligen. Rutinerna som gäller rollen och teamet
+          blir obligatoriska från dag ett.
         </p>
       </div>
 

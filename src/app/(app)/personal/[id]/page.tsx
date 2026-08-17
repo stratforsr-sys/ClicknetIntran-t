@@ -26,6 +26,7 @@ import {
   offboarda,
   sattOrganisation,
 } from "../actions";
+import { Inloggningskort } from "./Inloggningskort";
 
 export const dynamic = "force-dynamic";
 
@@ -191,6 +192,10 @@ export default async function AnstalldSida({ params }: { params: Promise<{ id: s
           )}
         </Card>
       </div>
+
+      {farHantera && !avslutad && (
+        <Inloggningskort anstalldId={a.id} namn={fullName(a)} />
+      )}
 
       {/* AC-1.3: rutinerna foljer roll och team — ingen kopia per person. */}
       {farHantera && !avslutad && attKvittera.length > 0 && (

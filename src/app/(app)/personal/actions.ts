@@ -1,13 +1,19 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { getCurrentUser, canManageEmployees, hasRole } from "@/lib/auth";
 import { ROLES, PERMISSIONS, type Role, type Permission } from "@/lib/roles";
 import { riktarSigTill } from "@/lib/dokument";
+import { nyttTillfalligtLosenord } from "@/lib/losenord";
 
-export type FormState = { fel?: string; ok?: string };
+export type FormState = {
+  fel?: string;
+  ok?: string;
+  /** Visas en gang for chefen och sparas ingenstans. Se laggUppAnstalld. */
+  losenord?: string;
+  anstalldId?: string;
+};
 
 /**
  * Skrivningar gar via service role, aldrig via klientens RLS. Skalet ar att
@@ -43,6 +49,8 @@ async function logga(
 /** AC-1.3: en anstalld laggs upp en gang och far allt tilldelat. */
 export async function laggUppAnstalld(_prev: FormState, form: FormData): Promise<FormState> {
   let nyId: string;
+  let namn: string;
+  let losenord: string;
   try {
     const user = await kravChef();
     const db = supabaseAdmin();
@@ -63,8 +71,15 @@ export async function laggUppAnstalld(_prev: FormState, form: FormData): Promise
     if (fanns) return { fel: "Det finns redan en anställd med den e-postadressen." };
 
     // Auth-konto forst. Utan katalogtjanst ar navet identitetskallan (§1.7).
+    //
+    // Kontot far ett tillfalligt losenord direkt. Sa lange navet inte mejlar
+    // finns ingen annan vag in: en magisk lank kraver ett fungerande utskick,
+    // och ett konto utan losenord ar ett konto ingen kan logga in pa.
+    losenord = nyttTillfalligtLosenord();
+
     const { data: skapad, error: authFel } = await db.auth.admin.createUser({
       email: epost,
+      password: losenord,
       email_confirm: true,
       user_metadata: { fornamn, efternamn },
     });
@@ -74,6 +89,13 @@ export async function laggUppAnstalld(_prev: FormState, form: FormData): Promise
       const { data: lista } = await db.auth.admin.listUsers({ page: 1, perPage: 200 });
       authUserId = lista?.users.find((u) => u.email?.toLowerCase() === epost)?.id ?? null;
       if (!authUserId) return { fel: `Kontot kunde inte skapas: ${authFel.message}` };
+
+      // Kontot fanns redan i auth utan att ha en rad i personalregistret.
+      // Losenordet maste sattas anda, annars visar vi ett ord som inte gar in.
+      const { error: satFel } = await db.auth.admin.updateUserById(authUserId, {
+        password: losenord,
+      });
+      if (satFel) return { fel: `Lösenordet kunde inte sättas: ${satFel.message}` };
     }
 
     const { data: rad, error: dbFel } = await db
@@ -137,12 +159,59 @@ export async function laggUppAnstalld(_prev: FormState, form: FormData): Promise
     }
 
     nyId = rad.id;
+    namn = `${fornamn} ${efternamn}`;
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
   }
 
   revalidatePath("/personal");
-  redirect(`/personal/${nyId}`);
+
+  // Ingen omdirigering langre. Losenordet visas en gang, och det gar inte att
+  // gora pa nasta sida utan att skicka ordet i en URL — dar det hamnar i
+  // webbhistorik, i Vercels loggar och i varje mellanliggande proxy.
+  return { ok: `${namn} är upplagd.`, losenord, anstalldId: nyId };
+}
+
+export type LosenordState = { fel?: string; losenord?: string };
+
+/**
+ * Nytt tillfalligt losenord at nagon som star utanfor sitt konto.
+ *
+ * Sjalva ordet skrivs aldrig i loggen — bara att det byttes, av vem och for
+ * vem. En logg som innehaller losenord ar en losenordslista med tidsstampel.
+ */
+export async function aterstallLosenord(
+  _prev: LosenordState,
+  form: FormData,
+): Promise<LosenordState> {
+  try {
+    const user = await kravChef();
+    const db = supabaseAdmin();
+
+    const anstalldId = String(form.get("employee_id") ?? "");
+    const { data: a } = await db
+      .from("employee")
+      .select("id, email, auth_user_id, status")
+      .eq("id", anstalldId)
+      .maybeSingle();
+
+    if (!a) return { fel: "Personen finns inte." };
+    if (!a.auth_user_id) return { fel: "Personen saknar inloggningskonto." };
+
+    // AC-1.4: ett avslutat konto ar bannlyst. Ett nytt losenord dit vore att
+    // tyst oppna en dorr som offboardingen stangde.
+    if (a.status === "offboarded") return { fel: "Kontot är avslutat och ska inte öppnas igen." };
+
+    const losenord = nyttTillfalligtLosenord();
+    const { error } = await db.auth.admin.updateUserById(a.auth_user_id, { password: losenord });
+    if (error) return { fel: `Lösenordet kunde inte sättas: ${error.message}` };
+
+    await logga(user.employee!.id, "auth.temp_password_set", "employee", a.id, { epost: a.email });
+
+    return { losenord };
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Något gick fel." };
+  }
 }
 
 /** AC-1.5: rollbyte loggas med vem som beviljade. */

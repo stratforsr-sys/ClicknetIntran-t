@@ -9,7 +9,10 @@ import { loggaInMedLosenord, skickaMagiskLank, type LoginState } from "./actions
 const TOM: LoginState = {};
 
 export default function LoggaIn() {
-  const [metod, setMetod] = useState<"lank" | "losenord">("lank");
+  // Losenord ligger forst tills utskicken fungerar. Den magiska lanken kraver
+  // bade rattad Site URL i Supabase och en riktig avsandare — tills dess leder
+  // den till en sida som inte finns, och det ar en dalig forsta upplevelse.
+  const [metod, setMetod] = useState<"lank" | "losenord">("losenord");
   const [lankState, skickaLank, lankVantar] = useActionState(skickaMagiskLank, TOM);
   const [losenState, loggaIn, losenVantar] = useActionState(loggaInMedLosenord, TOM);
 
@@ -45,11 +48,11 @@ export default function LoggaIn() {
                 aria-label="Välj inloggningssätt"
                 className="mb-6 flex gap-1 rounded-full bg-canvas p-1"
               >
-                <Flik aktiv={metod === "lank"} onClick={() => setMetod("lank")}>
-                  Magisk länk
-                </Flik>
                 <Flik aktiv={metod === "losenord"} onClick={() => setMetod("losenord")}>
                   Lösenord
+                </Flik>
+                <Flik aktiv={metod === "lank"} onClick={() => setMetod("lank")}>
+                  Magisk länk
                 </Flik>
               </div>
 

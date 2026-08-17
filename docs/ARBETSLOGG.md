@@ -4,6 +4,51 @@ Läs denna före arbete. Uppdatera efteråt.
 
 ---
 
+## 2026-08-17 · Tillfälliga lösenord — inloggning utan e-post
+
+E-postspåret pausat på beställning. Sändlagret finns på main (`src/lib/epost.ts`,
+`npm run epost:test`) men används av ingenting ännu — clicknet.se är redan
+verifierad i Resend med DKIM och bounce-MX, så det som återstår där är en nyckel
+i miljön och SMTP-inställningen i Supabase.
+
+Under tiden behövde inloggningen fungera utan utskick. Den gjorde den inte:
+`laggUppAnstalld` skapade ett auth-konto **utan lösenord**, och den enda vägen
+in — magisk länk — pekar mot `localhost:3000`. Formuläret påstod samtidigt att
+"personen kan logga in med lösenord". En nyanställd hade inte kommit in alls.
+
+**Byggt**
+
+- `src/lib/losenord.ts` — tillfälliga lösenord ur 31 tecken som går att läsa
+  upp i telefon. Inga nollor mot O, inga ettor mot l. Fyra grupper om fem,
+  knappt 100 bitar.
+- Upplägget sätter lösenordet direkt och visar det **en gång**. Omdirigeringen
+  till personalkortet är borttagen: ordet hade behövt följa med i en URL, och
+  där hamnar det i webbhistorik, i Vercels loggar och i varje proxy på vägen.
+- Kort "Inloggning" på personalkortet: chefen sätter ett nytt tillfälligt
+  lösenord åt den som står utanför. Utan utskick finns ingen självbetjäning —
+  "glömt lösenord" är ett mejl.
+- Inloggningssidan öppnar på Lösenord i stället för Magisk länk.
+
+**Två val**
+
+Loggen får raden `auth.temp_password_set` med vem och för vem, aldrig ordet.
+En logg som innehåller lösenord är en lösenordslista med tidsstämpel.
+
+Ingen kopieringsknapp i rutan. Ett lösenord i urklipp följer med till nästa
+fönster utan att någon ber om det.
+
+**Kvar**
+
+Den anställda tvingas inte byta vid första inloggningen — det kräver en flagga
+i middleware och byggs när e-posten ändå tas upp igen. Så länge chefen känner
+ordet är kontot inte bara den anställdas, och loggen bygger på att det är det.
+Rättelser i M2 och kvittenser i M5 pekar ut en person.
+
+Sessioner nollställs inte vid lösenordsbyte. Supabase kräver användarens egen
+token för det, och admin-vägen finns inte i klienten.
+
+---
+
 ## 2026-08-16 · M2 färdigbyggd — schema, journal, rastavvikelser
 
 Fortsättning samma dag. Nu är hela stämplingsmodulen byggd utom två poster.
