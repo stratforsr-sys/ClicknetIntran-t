@@ -6,6 +6,7 @@
  *   node --experimental-strip-types tests/narvaro.mjs
  */
 import { senAnkomst, forsening, minutOnDagen } from "../src/lib/narvaro.ts";
+import { svenskTidpunkt } from "../src/lib/klocka.ts";
 
 let fel = 0;
 const ok = (namn, villkor, extra = "") => {
@@ -13,9 +14,10 @@ const ok = (namn, villkor, extra = "") => {
   if (!villkor) fel++;
 };
 
-// Lokal tid, sa att provet betyder samma sak som produktionen gor.
-const in_ = (tid) => ({ kind: "in", occurred_at: `2026-08-18T${tid}:00` });
-const ut = (tid) => ({ kind: "out", occurred_at: `2026-08-18T${tid}:00` });
+// Tiderna ar svensk vaggtid, som scheman alltid ar. Byggs genom klockan sa
+// att provet betyder samma sak oavsett var det kors.
+const in_ = (tid) => ({ kind: "in", occurred_at: svenskTidpunkt("2026-08-18", tid).toISOString() });
+const ut = (tid) => ({ kind: "out", occurred_at: svenskTidpunkt("2026-08-18", tid).toISOString() });
 
 const schema = { start_time: "08:00:00", tol_late: 1, schedule_id: "s1" };
 

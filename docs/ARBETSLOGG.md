@@ -4,6 +4,62 @@ Läs denna före arbete. Uppdatera efteråt.
 
 ---
 
+## 2026-08-19 · Tidszonsbuggen — larmet var dött från början
+
+Nattjobben hade inte kört på två nätter. En instämpling stod öppen sedan
+måndag kväll, journalen saknade rader och noll sena ankomster hade upptäckts.
+Två fel, och det andra var värre.
+
+**Ett: tre cron-poster på en plan som tar två**
+
+`vercel.json` deklarerade tre jobb. Hobby-planen tar två per projekt, och
+resultatet var att inget kördes. Ett schemalagt jobb som inte kör ser exakt
+likadant ut som ett som inte hade något att göra — tills någon råkar titta i
+databasen.
+
+Nu är det ett jobb, `/api/jobb/natt`, som kör alla tre stegen. Varje steg för
+sig, ett fel stoppar inte de andra, och varje körning skriver ett kvitto i
+loggen. De tre enskilda rutterna finns kvar för manuell körning.
+
+Jobbet letar dessutom fjorton dagar bakåt efter dygn som saknar journalrad i
+stället för att bara titta på igår. En missad natt läks av nästa körning.
+
+**Två: all väggtid räknades i serverns tidszon**
+
+Koden gjorde `new Date(iso).getHours()` och `new Date("2026-08-17T17:00:00")`.
+På min maskin är tidszonen Europe/Stockholm och allt såg rätt ut. På Vercel är
+den UTC:
+
+- En instämpling 09:05 svensk tid lästes som 07:05 — två timmar FÖRE
+  arbetsdagens start. **Ingen kunde bli sen. Larmet var dött innan det byggdes.**
+- Ett schema som slutar 17:00 blev 17:00 UTC, alltså 19:00 svensk tid.
+  Automatstängningen låg två timmar fel.
+- Rastmotorn hade samma fel, orört sedan i somras. Det hade slagit till dagen
+  K12 blev klar.
+
+`src/lib/klocka.ts` räknar nu all väggtid mot `Europe/Stockholm` uttryckligen,
+inklusive de två dygn om året då offseten ändras. Testet körs med TZ=UTC,
+TZ=Europe/Stockholm och TZ=America/New_York och måste ge identiska svar — det
+är hela poängen.
+
+**Tre saker till som föll ut ur samma genomgång**
+
+- Autostängningen kunde sätta en sluttid FÖRE dagens sista stämpling. Den som
+  stämplade in 18:08 på ett schema som slutar 17:00 hade fått en utstämpling
+  före sin instämpling. Nu lämnas dagen öppen och skälet skrivs i loggen.
+- En öppen dag får ingen journalrad längre. Siffran hade blivit "från
+  instämpling till midnatt", vilket är en påhittad arbetsdag i ett
+  lönegrundande arkiv. Dagen plockas upp av nästa körning i stället.
+- Sen ankomst bedöms före journalen. Att någon kom sent är känt även innan
+  dagen är avslutad, och en öppen dag ska inte dölja förseningen.
+
+**Verifierat**
+
+141 kontroller på ren logik, alla gröna under TZ=UTC. Nattjobbet kört skarpt
+mot produktion.
+
+---
+
 ## 2026-08-17 · Sen ankomst — och toleransen ner till en minut
 
 Beställt samma kväll: en minut för sent ska synas, inte fem. Två saker, och de

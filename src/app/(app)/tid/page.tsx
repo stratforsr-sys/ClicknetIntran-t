@@ -25,6 +25,7 @@ import {
 } from "@/lib/tid";
 import { AVVIKELSE_ETIKETT, AVVIKELSE_FORKLARING, gallandeSchema, type Avvikelsetyp } from "@/lib/raster";
 import { senAnkomst, forsening } from "@/lib/narvaro";
+import { svensktDatum, svenskVeckodag } from "@/lib/klocka";
 import { Stamplar } from "./Stamplar";
 import { Rattelse } from "./Rattelse";
 import { beslutaRattelse, kvitteraRastschema, kommenteraAvvikelse } from "./actions";
@@ -58,8 +59,8 @@ export default async function TidSida() {
   let paPlats: { namn: string; sedan: string }[] = [];
   let senaIdag: { namn: string; minuter: number; ankom: string; schemalagd: string }[] = [];
   if (chef && M2_AKTIV) {
-    const idagsDatum = new Date().toISOString().slice(0, 10);
-    const veckodag = ((new Date().getDay() + 6) % 7) + 1;
+    const idagsDatum = svensktDatum(new Date());
+    const veckodag = svenskVeckodag(new Date());
 
     const [{ data: personal }, { data: idag }, { data: scheman }] = await Promise.all([
       supabase

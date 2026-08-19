@@ -10,11 +10,14 @@
  * innebär av ansvar för att siffran är rätt.
  * ===========================================================================
  *
- * Filen har noll importer, av samma skäl som avvikelsemotorn i `raster.ts`:
+ * Filen importerar bara klockan: ett dygn är ett svenskt kalenderdygn, inte
+ * serverns. I övrigt gäller samma regel som avvikelsemotorn i `raster.ts`:
  * den ska gå att prova utan att starta något annat. Vilka händelser som räknas
  * avgörs av `gallande()` hos den som anropar — modulen bedömer en färdig lista,
  * den bestämmer inte vad listan innehåller.
  */
+
+import { svensktDatum } from "./klocka.ts";
 
 /** Så mycket av en stämpling som E4b behöver veta. */
 export type Stampling = { kind: string; occurred_at: string };
@@ -34,10 +37,9 @@ export const BLOCKERING_ETIKETT: Record<Blockeringstyp, string> = {
   avvikelse: "Oavslutad avvikelse",
 };
 
-/** Dagen en tidsstämpel hör till, i lokal tid. */
+/** Dagen en tidsstämpel hör till, i svensk tid. */
 export function dagen(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return svensktDatum(iso);
 }
 
 /**

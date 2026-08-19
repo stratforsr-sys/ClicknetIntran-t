@@ -11,6 +11,8 @@
  * Det gör den möjlig att prova utan att starta något annat.
  */
 
+import { svenskaMinuter } from "./klocka.ts";
+
 export type Handelse = {
   id: string;
   kind: "in" | "out" | "break_start" | "break_end";
@@ -60,10 +62,11 @@ export function minuterFranTid(tid: string): number {
   return h * 60 + (m || 0);
 }
 
-function minuterPaDygnet(iso: string): number {
-  const d = new Date(iso);
-  return d.getHours() * 60 + d.getMinutes();
-}
+/**
+ * Rasten bedoms mot svensk vaggtid. `getHours()` hade gett serverns zon, och pa
+ * Vercel ar den UTC — se `klocka.ts`.
+ */
+const minuterPaDygnet = svenskaMinuter;
 
 /** Rasterna som faktiskt togs. Listan ska redan vara filtrerad och tidsordnad. */
 export function tagnaRaster(giltiga: Handelse[]): { start: string; slut: string | null }[] {

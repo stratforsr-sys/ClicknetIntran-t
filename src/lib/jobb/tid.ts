@@ -3,6 +3,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { RAST_AKTIV, RATTELSE_FRIST_TIMMAR, gallande, arbetadeMinuter, type Handelse } from "@/lib/tid";
 import { avvikelser, gallandeSchema, tagnaRaster, type Rastschema } from "@/lib/raster";
 import { senAnkomst } from "@/lib/narvaro";
+import {
+  svensktDatum,
+  svenskTidpunkt,
+  svenskDygnsslut,
+  svenskVeckodag,
+  dagarBakat,
+} from "@/lib/klocka";
 
 /** AC-2.31: detaljerna gallras efter 90 dagar, aggregatet star kvar i 12 manader. */
 const GALLRING_DAGAR = 90;
@@ -29,8 +36,8 @@ export type Tidutfall = {
   rattelser_over_frist: number;
 };
 
-const datumStrang = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+/** Allt datumrakande sker i svenska kalenderdygn. Se `klocka.ts`. */
+const datumStrang = (d: Date) => svensktDatum(d);
 
 /**
  * Nattjobbet for M2. Gor for varje dygn som saknar journalrad, i ordning:
@@ -74,34 +81,31 @@ export async function korTidjobbet(db: SupabaseClient): Promise<Tidutfall> {
   ]);
 
   // Vilka dygn ar redan avslutade? Ett dygn med journalrad rors inte igen.
-  const aldsta = new Date();
-  aldsta.setDate(aldsta.getDate() - IKAPP_DAGAR);
+  const idag = svensktDatum(new Date());
 
   const { data: klara } = await db
     .from("work_time_journal")
     .select("work_date")
-    .gte("work_date", datumStrang(aldsta));
+    .gte("work_date", dagarBakat(idag, IKAPP_DAGAR));
 
   const avslutade = new Set((klara ?? []).map((r) => String(r.work_date).slice(0, 10)));
 
-  const attGora: Date[] = [];
+  const attGora: string[] = [];
   for (let i = IKAPP_DAGAR; i >= 1; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    if (!avslutade.has(datumStrang(d))) attGora.push(d);
+    const datum = dagarBakat(idag, i);
+    if (!avslutade.has(datum)) attGora.push(datum);
   }
 
-  for (const dag of attGora) {
-    const datum = datumStrang(dag);
-    const fran = `${datum}T00:00:00.000`;
-    const till = `${datum}T23:59:59.999`;
-    const veckodag = ((dag.getDay() + 6) % 7) + 1;
+  for (const datum of attGora) {
+    const fran = svenskTidpunkt(datum, "00:00").toISOString();
+    const till = svenskDygnsslut(datum);
+    const veckodag = svenskVeckodag(fran);
 
     const { data: handelser } = await db
       .from("time_event")
       .select("id, employee_id, kind, occurred_at, source, supersedes_id, correction_state")
-      .gte("occurred_at", new Date(fran).toISOString())
-      .lte("occurred_at", new Date(till).toISOString());
+      .gte("occurred_at", fran)
+      .lte("occurred_at", till);
 
     if ((handelser ?? []).length === 0) continue;
     utfall.dagar.push(datum);
@@ -127,7 +131,9 @@ export async function korTidjobbet(db: SupabaseClient): Promise<Tidutfall> {
       let autoStangd = false;
 
       if (sista.kind !== "out") {
-        const slut = dagensSchema ? new Date(`${datum}T${dagensSchema.end_time}`) : null;
+        // Schematiden ar svensk vaggtid. `new Date("...T17:00")` hade blivit
+        // 17:00 i serverns zon, alltsa 19:00 svensk tid pa Vercel.
+        const slut = dagensSchema ? svenskTidpunkt(datum, dagensSchema.end_time) : null;
 
         // Sluttiden far aldrig hamna fore den sista stamplingen. Den som
         // stamplade in 18:08 pa ett schema som slutar 17:00 skulle annars fa en
@@ -177,25 +183,9 @@ export async function korTidjobbet(db: SupabaseClient): Promise<Tidutfall> {
         }
       }
 
-      // 2. Journalen.
-      const arbetat = arbetadeMinuter(egna, new Date(till));
-      const rastMinuter = tagnaRaster(egna)
-        .filter((r) => r.slut)
-        .reduce((s, r) => s + Math.round((Date.parse(r.slut!) - Date.parse(r.start)) / 60000), 0);
-
-      const { error: journalFel } = await db.from("work_time_journal").upsert(
-        {
-          employee_id: p.id,
-          work_date: datum,
-          worked_minutes: arbetat,
-          break_minutes: rastMinuter,
-          auto_closed: autoStangd,
-        },
-        { onConflict: "employee_id,work_date" },
-      );
-      if (!journalFel) utfall.journalrader++;
-
-      // 2b. Sen ankomst, mot schemat som gallde DA.
+      // 2. Sen ankomst, mot schemat som gallde DA. Bedoms fore journalen:
+      //    att nagon kom sent ar kant redan innan dagen ar avslutad, och en
+      //    oppen dag far darfor inte dolja forseningen.
       if (dagensSchema) {
         const sen = senAnkomst(egna, {
           start_time: dagensSchema.start_time,
@@ -220,7 +210,32 @@ export async function korTidjobbet(db: SupabaseClient): Promise<Tidutfall> {
         }
       }
 
-      // 3. Rastavvikelser.
+      // 3. Journalen. En dag som fortfarande ar oppen far INGEN rad: siffran
+      //    hade blivit "fran instampling till midnatt", vilket ar en pahittad
+      //    arbetsdag i ett lonegrundande arkiv. Dagen lamnas utan rad, plockas
+      //    upp av nasta korning och syns under tiden som blockering i
+      //    loneperioden (AC-2.14).
+      const fortfarandeOppen = gallande(egna)[gallande(egna).length - 1]?.kind !== "out";
+      if (fortfarandeOppen) continue;
+
+      const arbetat = arbetadeMinuter(egna, new Date(till));
+      const rastMinuter = tagnaRaster(egna)
+        .filter((r) => r.slut)
+        .reduce((s, r) => s + Math.round((Date.parse(r.slut!) - Date.parse(r.start)) / 60000), 0);
+
+      const { error: journalFel } = await db.from("work_time_journal").upsert(
+        {
+          employee_id: p.id,
+          work_date: datum,
+          worked_minutes: arbetat,
+          break_minutes: rastMinuter,
+          auto_closed: autoStangd,
+        },
+        { onConflict: "employee_id,work_date" },
+      );
+      if (!journalFel) utfall.journalrader++;
+
+      // 4. Rastavvikelser.
       if (!RAST_AKTIV) continue;
 
       const mittRastschema = gallandeSchema(
@@ -266,9 +281,7 @@ export async function korTidjobbet(db: SupabaseClient): Promise<Tidutfall> {
 
 /** 4. Summera forst, radera sedan — aldrig tvartom. */
 async function gallra(db: SupabaseClient, utfall: Tidutfall) {
-  const grans = new Date();
-  grans.setDate(grans.getDate() - GALLRING_DAGAR);
-  const detaljGrans = datumStrang(grans);
+  const detaljGrans = dagarBakat(svensktDatum(new Date()), GALLRING_DAGAR);
 
   const { data: attSummera } = await db
     .from("break_deviation")
@@ -345,8 +358,9 @@ async function gallra(db: SupabaseClient, utfall: Tidutfall) {
 
   const gransAggregat = new Date();
   gransAggregat.setMonth(gransAggregat.getMonth() - AGGREGAT_MANADER);
-  await db.from("break_deviation_month").delete().lt("month", datumStrang(gransAggregat));
-  await db.from("late_arrival_month").delete().lt("month", datumStrang(gransAggregat));
+  const aggregatGrans = svensktDatum(gransAggregat);
+  await db.from("break_deviation_month").delete().lt("month", aggregatGrans);
+  await db.from("late_arrival_month").delete().lt("month", aggregatGrans);
 }
 
 /** 5. AC-2.22. En rad per rattelse, inte en per natt — brus laser man forbi. */

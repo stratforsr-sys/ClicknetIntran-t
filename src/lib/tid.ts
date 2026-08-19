@@ -22,6 +22,8 @@
  * ===========================================================================
  */
 
+import { svenskDygnsstart, svenskKlocka } from "./klocka.ts";
+
 export const M2_AKTIV = true;
 export const RAST_AKTIV = false;
 
@@ -159,14 +161,16 @@ export function timmarOchMinuter(minuter: number): string {
   return m === 0 ? `${h} h` : `${h} h ${m} min`;
 }
 
-/** Klockslag utan datum, för listor där dagen redan är given. */
+/** Klockslag utan datum, för listor där dagen redan är given. Svensk väggtid. */
 export function klockan(iso: string): string {
-  return new Date(iso).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
+  return svenskKlocka(iso);
 }
 
-/** Dagens gräns i lokal tid, som ISO. Stämplingar hör till dygnet de skedde. */
+/**
+ * Dygnets gräns i svensk tid, som ISO. Stämplingar hör till det svenska dygn
+ * de skedde — inte till serverns. Med serverns midnatt hamnade allt mellan
+ * 00:00 och 02:00 svensk tid på gårdagen i vyn.
+ */
 export function dygnetsStart(nu: Date = new Date()): string {
-  const d = new Date(nu);
-  d.setHours(0, 0, 0, 0);
-  return d.toISOString();
+  return svenskDygnsstart(nu);
 }

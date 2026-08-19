@@ -1,8 +1,9 @@
 /**
  * Sen ankomst mot arbetsschemat.
  *
- * Noll importer, samma regel som avvikelsemotorn: modulen bedömer en färdig
- * lista och bestämmer inte vad listan innehåller.
+ * Modulen bedömer en färdig lista och bestämmer inte vad listan innehåller.
+ * Enda importen är klockan: väggtiden måste räknas i Europe/Stockholm och inte
+ * mot serverns tidszon. Se `klocka.ts` för vad som gick fel innan.
  *
  * ===========================================================================
  * Två regler som inte får ändras utan att någon tänkt efter:
@@ -16,6 +17,8 @@
  *      på dagen kommer inte för sent en andra gång.
  * ===========================================================================
  */
+
+import { svenskaMinuter } from "./klocka.ts";
 
 /** Så mycket av en stämpling som modulen behöver veta. */
 export type Instampling = { kind: string; occurred_at: string };
@@ -41,11 +44,6 @@ export function minutOnDagen(tid: string): number {
   return h * 60 + m;
 }
 
-function lokalaMinuter(iso: string): number {
-  const d = new Date(iso);
-  return d.getHours() * 60 + d.getMinutes();
-}
-
 /**
  * Var personen sen den här dagen?
  *
@@ -67,7 +65,7 @@ export function senAnkomst(
   if (!forsta) return null;
 
   const schemalagd = minutOnDagen(schema.start_time);
-  const faktisk = lokalaMinuter(forsta.occurred_at);
+  const faktisk = svenskaMinuter(forsta.occurred_at);
   const minuter = faktisk - schemalagd;
 
   // Toleransen adderas till gränsen. Exakt på gränsen är i tid.
