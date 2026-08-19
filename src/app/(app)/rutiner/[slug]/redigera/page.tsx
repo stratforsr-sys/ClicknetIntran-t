@@ -17,7 +17,7 @@ export default async function RedigeraDokument({ params }: { params: Promise<{ s
   const { data: d } = await supabaseAdmin()
     .from("document")
     .select(
-      `id, slug, title, category_path, body_md, doc_type, review_due, requires_ack,
+      `id, slug, title, category_path, body_md, doc_type, review_due, decided_on, requires_ack,
        audience_roles, owner_id, status, version`,
     )
     .eq("slug", slug)
@@ -46,6 +46,7 @@ export default async function RedigeraDokument({ params }: { params: Promise<{ s
         body_md: d.body_md ?? "",
         doc_type: d.doc_type as DocType,
         review_due: d.review_due,
+        decided_on: d.decided_on,
         requires_ack: d.requires_ack,
         audience_roles: (d.audience_roles ?? []) as Role[],
         status: d.status,

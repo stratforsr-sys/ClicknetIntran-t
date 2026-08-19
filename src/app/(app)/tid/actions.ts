@@ -4,14 +4,13 @@ import { revalidatePath } from "next/cache";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { getCurrentUser, canManageEmployees } from "@/lib/auth";
 import {
-  M2_AKTIV,
-  RAST_AKTIV,
   dygnetsStart,
   lageNu,
   tillaten,
   type Handelse,
   type Stamptyp,
 } from "@/lib/tid";
+import { hamtaLage } from "@/lib/sparrar";
 
 export type TidState = { fel?: string; ok?: string };
 
@@ -53,7 +52,8 @@ async function dagens(employeeId: string): Promise<Handelse[]> {
  * var någon befann sig är `source`, och det säger 'app' eller 'kiosk'.
  */
 export async function stampla(_prev: TidState, form: FormData): Promise<TidState> {
-  if (!M2_AKTIV) return { fel: "Stämplingen är inte påslagen än." };
+  const sparr = await hamtaLage();
+  if (!sparr.stampling) return { fel: "Stämplingen är avstängd just nu." };
 
   const user = await getCurrentUser();
   if (!user?.employee) return { fel: "Du måste vara inloggad." };
@@ -61,12 +61,12 @@ export async function stampla(_prev: TidState, form: FormData): Promise<TidState
 
   const typ = String(form.get("typ") ?? "") as Stamptyp;
   if (!TYPER.includes(typ)) return { fel: "Okänd stämpling." };
-  if (!RAST_AKTIV && (typ === "break_start" || typ === "break_end"))
+  if (!sparr.rast && (typ === "break_start" || typ === "break_end"))
     return { fel: "Raststämpling är inte påslagen." };
 
   const handelser = await dagens(user.employee.id);
   const lage = lageNu(handelser);
-  if (!tillaten(lage, typ)) {
+  if (!tillaten(lage, typ, sparr.rast)) {
     return { fel: "Det gick inte — sidan visade ett annat läge. Ladda om och försök igen." };
   }
 
@@ -119,7 +119,8 @@ export async function stampla(_prev: TidState, form: FormData): Promise<TidState
  * historiken.
  */
 export async function begarRattelse(_prev: TidState, form: FormData): Promise<TidState> {
-  if (!M2_AKTIV) return { fel: "Stämplingen är inte påslagen än." };
+  const sparr = await hamtaLage();
+  if (!sparr.stampling) return { fel: "Stämplingen är avstängd just nu." };
 
   const user = await getCurrentUser();
   if (!user?.employee) return { fel: "Du måste vara inloggad." };

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { M2_AKTIV } from "@/lib/tid";
+import { hamtaLage } from "@/lib/sparrar";
 import { korTidjobbet } from "@/lib/jobb/tid";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +17,8 @@ export async function GET(request: NextRequest) {
   if (request.headers.get("authorization") !== `Bearer ${hemlighet}`)
     return NextResponse.json({ fel: "Nekad" }, { status: 401 });
 
-  if (!M2_AKTIV) return NextResponse.json({ hoppade_over: "M2 är inte påslagen" });
+  const lage = await hamtaLage();
+  if (!lage.stampling) return NextResponse.json({ hoppade_over: "stämplingen är avstängd" });
 
-  return NextResponse.json(await korTidjobbet(supabaseAdmin()));
+  return NextResponse.json(await korTidjobbet(supabaseAdmin(), lage.rast));
 }

@@ -8,8 +8,6 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { getCurrentUser, canManageEmployees, fullName } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import {
-  M2_AKTIV,
-  RAST_AKTIV,
   TYP_ETIKETT,
   arbetadeMinuter,
   dygnetsStart,
@@ -26,6 +24,7 @@ import {
 import { AVVIKELSE_ETIKETT, AVVIKELSE_FORKLARING, gallandeSchema, type Avvikelsetyp } from "@/lib/raster";
 import { senAnkomst, forsening } from "@/lib/narvaro";
 import { svensktDatum, svenskVeckodag } from "@/lib/klocka";
+import { hamtaLage } from "@/lib/sparrar";
 import { Stamplar } from "./Stamplar";
 import { Rattelse } from "./Rattelse";
 import { beslutaRattelse, kvitteraRastschema, kommenteraAvvikelse } from "./actions";
@@ -41,6 +40,7 @@ export default async function TidSida() {
 
   const supabase = await supabaseServer();
   const chef = canManageEmployees(user);
+  const sparr = await hamtaLage();
 
   const { data: mina } = await supabase
     .from("time_event")
@@ -58,7 +58,7 @@ export default async function TidSida() {
   // 'out', och rasterna lamnas utanfor fragan helt.
   let paPlats: { namn: string; sedan: string }[] = [];
   let senaIdag: { namn: string; minuter: number; ankom: string; schemalagd: string }[] = [];
-  if (chef && M2_AKTIV) {
+  if (chef && sparr.stampling) {
     const idagsDatum = svensktDatum(new Date());
     const veckodag = svenskVeckodag(new Date());
 
@@ -174,7 +174,7 @@ export default async function TidSida() {
         <div>
           <h1 className="text-display text-ink-900">Tid</h1>
           <p className="mt-1 text-body text-ink-500">
-            {M2_AKTIV
+            {sparr.stampling
               ? `${timmarOchMinuter(minuter)} registrerat idag.`
               : "Stämplingen är byggd men inte påslagen."}
           </p>
@@ -184,9 +184,10 @@ export default async function TidSida() {
             <>
               <ButtonLink href="/tid/avvikelser" variant="sekundar">Avvikelser</ButtonLink>
               <ButtonLink href="/tid/schema" variant="sekundar">Scheman</ButtonLink>
+              <ButtonLink href="/tid/sparrar" variant="sekundar">Spärrar</ButtonLink>
             </>
           )}
-          {M2_AKTIV && (
+          {sparr.stampling && (
             <Badge ton={lage === "inne" ? "ok" : lage === "rast" ? "warn" : "neutral"}>
               {lage === "inne" ? "Instämplad" : lage === "rast" ? "På rast" : "Utstämplad"}
             </Badge>
@@ -194,23 +195,23 @@ export default async function TidSida() {
         </div>
       </div>
 
-      {!M2_AKTIV && (
+      {!sparr.stampling && (
         <Notis ton="warn">
           Modulen väntar på K12: intresseavvägningen för raststämpling ska vara skriven och
           daterad innan den första stämplingen sker. Se <code>docs/DRIFTSATTNING.md</code>.
         </Notis>
       )}
 
-      {M2_AKTIV && !RAST_AKTIV && (
+      {sparr.stampling && !sparr.rast && (
         <Notis ton="info">
           Rasten stämplas inte. Tiden som registreras är från instämpling till utstämpling — dra av
-          rasten när du stämplar ut, eller stämpla ut över lunchen. Raststämpling slås på först när
-          intresseavvägningen (K12) är skriven och daterad.
+          rasten när du stämplar ut, eller stämpla ut över lunchen. Vad som krävs för att slå på
+          raststämpling står under Spärrar.
         </Notis>
       )}
 
       {/* Utan schema stanger nattjobbet ingen glomd utstampling. */}
-      {chef && M2_AKTIV && antalScheman === 0 && (
+      {chef && sparr.stampling && antalScheman === 0 && (
         <Notis ton="danger">
           Inget arbetsschema är upplagt. Glömda utstämplingar stängs därför aldrig automatiskt, och
           varje sådan dag blockerar löneperioden tills någon rättar den för hand.{" "}
@@ -235,13 +236,13 @@ export default async function TidSida() {
             <CardHeader
               titel="Stämpla"
               beskrivning={
-                RAST_AKTIV
+                sparr.rast
                   ? "In, ut och rast. Tiden sätts när du trycker."
                   : "In och ut. Tiden sätts när du trycker."
               }
             />
-            {M2_AKTIV ? (
-              <Stamplar lage={lage} tillatna={tillatna(lage)} />
+            {sparr.stampling ? (
+              <Stamplar lage={lage} tillatna={tillatna(lage, sparr.rast)} />
             ) : (
               <p className="text-small text-ink-500">
                 Knapparna visas när modulen slås på.
@@ -270,7 +271,7 @@ export default async function TidSida() {
                     {h.source === "offline_queue" && <Badge ton="info">Utan nät</Badge>}
                     {h.source === "correction" && <Badge ton="warn">Rättad</Badge>}
                     {h.source === "system_auto_close" && <Badge ton="warn">Stängd av navet</Badge>}
-                    {M2_AKTIV && <Rattelse handelse={h} />}
+                    {sparr.stampling && <Rattelse handelse={h} />}
                   </li>
                 ))}
               </ul>
@@ -288,7 +289,7 @@ export default async function TidSida() {
         <div className="flex flex-col gap-4">
           {/* Larmet gar samma dag. Nattjobbet skriver raden till historiken,
               men chefen ska inte behova vanta till imorgon for att se det. */}
-          {chef && M2_AKTIV && senaIdag.length > 0 && (
+          {chef && sparr.stampling && senaIdag.length > 0 && (
             <Card className="h-fit" status="danger">
               <CardHeader
                 titel={senaIdag.length === 1 ? "En sen idag" : `${senaIdag.length} sena idag`}
@@ -313,7 +314,7 @@ export default async function TidSida() {
           {chef && (
             <Card className="h-fit">
               <CardHeader titel="På plats nu" beskrivning="Namn och in-tid. Inget mer." />
-              {!M2_AKTIV ? (
+              {!sparr.stampling ? (
                 <p className="text-small text-ink-500">Visas när modulen slås på.</p>
               ) : paPlats.length === 0 ? (
                 <p className="text-small text-ink-500">Ingen är instämplad.</p>
@@ -459,7 +460,7 @@ export default async function TidSida() {
         </div>
       </div>
 
-      {M2_AKTIV && giltiga.length === 0 && lage === "ute" && (
+      {sparr.stampling && giltiga.length === 0 && lage === "ute" && (
         <EmptyState
           rubrik="Dagen har inte börjat"
           text="Stämpla in när du sätter dig. Ett tryck räcker."

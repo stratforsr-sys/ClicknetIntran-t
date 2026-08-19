@@ -13,6 +13,7 @@ import {
   DOC_TYPES,
   DOC_TYPE_LABEL,
   LAGKRAVDA_TYPER,
+  SPARRTYPER,
   arstalDatum,
   type DocType,
 } from "@/lib/dokument";
@@ -30,6 +31,7 @@ export type Utkast = {
   body_md: string;
   doc_type: DocType;
   review_due: string;
+  decided_on?: string | null;
   requires_ack: boolean;
   audience_roles: Role[];
   status?: string;
@@ -54,6 +56,7 @@ export function Redaktor({
   const [brodtext, setBrodtext] = useState(utkast.body_md);
   const [visaForhandsvisning, setVisaForhandsvisning] = useState(false);
   const [reviewDue, setReviewDue] = useState(utkast.review_due);
+  const barSparr = SPARRTYPER.includes(typ);
 
   const nytt = !utkast.id;
   const lagkravd = LAGKRAVDA_TYPER.includes(typ);
@@ -219,6 +222,19 @@ export function Redaktor({
                     onChange={(e) => setReviewDue(e.target.value)}
                   />
                 </Field>
+
+                {/* En intresseavvagning utan datum gar inte att aberopa. Faltet
+                    visas darfor bara for de typer som bar en sparr, och spa­rren
+                    i databasen slapper inte igenom ett paslag utan det. */}
+                {barSparr && (
+                  <Field
+                    label="Beslutsdatum"
+                    namn="decided_on"
+                    hjalp="Dagen dokumentet beslutades och undertecknades. Krävs för att kunna slå på det spärren skyddar."
+                  >
+                    <Input namn="decided_on" type="date" defaultValue={utkast.decided_on ?? ""} />
+                  </Field>
+                )}
 
                 <label className="flex min-h-11 cursor-pointer items-start gap-3">
                   <input

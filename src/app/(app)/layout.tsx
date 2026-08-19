@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { Skal } from "@/components/shell/Skal";
 import { navFor } from "@/components/shell/nav-items";
+import { hamtaLage } from "@/lib/sparrar";
 import { getCurrentUser, fullName } from "@/lib/auth";
 import { ROLE_LABEL } from "@/lib/roles";
 import { isConfigured } from "@/lib/env";
@@ -37,9 +38,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   const roll = user.roles.length ? ROLE_LABEL[user.roles[0]] : "Väntar på roll";
+  const lage = await hamtaLage();
+
 
   return (
-    <Skal items={navFor(user)} namn={fullName(user.employee)} roll={roll}>
+    <Skal items={navFor(user, lage.stampling)} namn={fullName(user.employee)} roll={roll}>
       {children}
     </Skal>
   );

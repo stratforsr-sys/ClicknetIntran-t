@@ -2,37 +2,36 @@
  * M2 Tid och närvaro. Ren logik — inga anrop, inga hemligheter.
  *
  * ===========================================================================
- * TVÅ STRÖMBRYTARE, INTE EN. De vilar på olika grund.
+ * VAD SOM ÄR PÅSLAGET AVGÖRS INTE HÄR LÄNGRE.
  *
- *   M2_AKTIV   — in- och utstämpling. PÅSLAGEN 2026-08-17. Vilar på
- *                anställningsavtalet och på arbetstidslagens krav på förda
- *                anteckningar. Kräver inte K12.
- *   RAST_AKTIV — raststämpling. AVSTÄNGD. Kräver K12, intresseavvägningen,
- *                skriven och daterad, samt K14, informationen till personalen,
- *                och K29, det dokumenterade rastschemat.
+ * Läget ligger i tabellen `compliance_gate` och läses med `hamtaLage()` i
+ * `src/lib/sparrar.ts`. Raststämplingen kan inte slås på förrän K12 är daterad,
+ * K14 kvitterad och ett rastschema finns — och det villkoret kontrolleras av en
+ * trigger i databasen, inte av den som råkar redigera den här filen.
+ *
+ * Kvar här finns bara nödstoppen. De är enkelriktade: de stänger av något som
+ * databasen säger är på, aldrig tvärtom. Sätt en till true och deploya om något
+ * måste stoppas omedelbart.
  *
  * Raststämpling är övervakning av när en människa äter lunch. Den avvägningen
- * ska vara gjord på papper INNAN den första rasten stämplas — inte efteråt,
- * när det redan finns data att förklara. Att köra in och ut utan rast är
- * därför ett riktigt mellanläge, inte en genväg förbi K12.
+ * ska vara gjord på papper INNAN den första rasten stämplas — inte efteråt, när
+ * det redan finns data att förklara.
  *
- * Utan rastschema drar navet inga raster från arbetad tid. Tiden som
- * redovisas är från instämpling till utstämpling, och rasten hanteras utanför
- * systemet tills K12 och K29 är på plats.
+ * Utan påslagen rast drar navet inga raster från arbetad tid. Tiden som
+ * redovisas är från instämpling till utstämpling.
  * ===========================================================================
  */
 
 import { svenskDygnsstart, svenskKlocka } from "./klocka.ts";
 
-export const M2_AKTIV = true;
-export const RAST_AKTIV = false;
+export const NODSTOPP_STAMPLING = false;
+export const NODSTOPP_RAST = false;
 
 /**
- * Datum då respektive strömbrytare slogs på. Behövs för K20: raststämplingen
- * ska omprövas sex månader efter påslaget, och en omprövning utan startdatum
- * blir aldrig av. Sätt datumet i samma ändring som du sätter flaggan till true.
+ * Datum då raststämplingen slogs på. Behövs för K20: den ska omprövas sex
+ * månader efter påslaget, och en omprövning utan startdatum blir aldrig av.
+ * Sätts av `slaPa()` i spärrvyn, men står här tills notisspåret kan påminna.
  */
-export const M2_PASLAGET = "2026-08-17";
 export const RAST_PASLAGET: string | null = null;
 
 /** K20. */
@@ -119,16 +118,21 @@ export function gallande(handelser: Handelse[]): Handelse[] {
     .sort((a, b) => a.occurred_at.localeCompare(b.occurred_at));
 }
 
-/** Vilka knappar som får tryckas. AC-2.1: högst två tryck, aldrig ett felval. */
-export function tillatna(lage: Lage): Stamptyp[] {
+/**
+ * Vilka knappar som får tryckas. AC-2.1: högst två tryck, aldrig ett felval.
+ *
+ * `rastPa` skickas in i stället för att läsas ur en konstant — läget bor i
+ * databasen och den som ritar knapparna har redan hämtat det.
+ */
+export function tillatna(lage: Lage, rastPa: boolean): Stamptyp[] {
   if (lage === "ute") return ["in"];
-  if (lage === "inne") return RAST_AKTIV ? ["break_start", "out"] : ["out"];
+  if (lage === "inne") return rastPa ? ["break_start", "out"] : ["out"];
   return ["break_end"];
 }
 
 /** Är övergången giltig? Samma regel som knapparna, men på servern. */
-export function tillaten(lage: Lage, typ: Stamptyp): boolean {
-  return tillatna(lage).includes(typ);
+export function tillaten(lage: Lage, typ: Stamptyp, rastPa: boolean): boolean {
+  return tillatna(lage, rastPa).includes(typ);
 }
 
 /**

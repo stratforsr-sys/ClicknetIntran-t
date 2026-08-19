@@ -50,9 +50,10 @@ function lasFormular(form: FormData) {
   const brodtext = String(form.get("brodtext") ?? "");
   const docType = String(form.get("doc_type") ?? "routine") as DocType;
   const reviewDue = String(form.get("review_due") ?? "");
+  const decidedOn = String(form.get("decided_on") ?? "").trim() || null;
   const kraverKvittens = form.get("kraver_kvittens") === "on";
   const malgrupp = form.getAll("malgrupp").map(String).filter(Boolean);
-  return { titel, kategori, brodtext, docType, reviewDue, kraverKvittens, malgrupp };
+  return { titel, kategori, brodtext, docType, reviewDue, decidedOn, kraverKvittens, malgrupp };
 }
 
 /** AC-5.1: publicering utan agare och granskningsdatum ar omojlig. */
@@ -89,6 +90,7 @@ export async function skapaDokument(_prev: DokumentState, form: FormData): Promi
         body_md: f.brodtext,
         owner_id: agare,
         review_due: f.reviewDue,
+        decided_on: f.decidedOn,
         doc_type: f.docType,
         requires_ack: f.kraverKvittens,
         audience_roles: f.malgrupp,
@@ -162,6 +164,7 @@ export async function sparaDokument(_prev: DokumentState, form: FormData): Promi
         body_md: f.brodtext,
         owner_id: String(form.get("owner_id") ?? "") || undefined,
         review_due: f.reviewDue,
+        decided_on: f.decidedOn,
         doc_type: f.docType,
         requires_ack: f.kraverKvittens,
         audience_roles: f.malgrupp,

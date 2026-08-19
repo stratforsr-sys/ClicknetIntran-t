@@ -6,7 +6,7 @@ import { Notis } from "@/components/ui/Notis";
 import { Ikon } from "@/components/shell/Ikon";
 import { getCurrentUser, canManageEmployees, fullName } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
-import { RAST_AKTIV } from "@/lib/tid";
+import { hamtaLage } from "@/lib/sparrar";
 import { Schemaform } from "./Schemaform";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +19,7 @@ export default async function SchemaSida() {
   if (!canManageEmployees(user)) redirect("/tid");
 
   const supabase = await supabaseServer();
+  const sparr = await hamtaLage();
   const [{ data: personal }, { data: team }, { data: arbete }, { data: raster }] = await Promise.all([
     supabase
       .from("employee")
@@ -67,7 +68,7 @@ export default async function SchemaSida() {
         </p>
       </div>
 
-      {!RAST_AKTIV && (
+      {!sparr.rast && (
         <Notis ton="warn">
           Rastschemat går att lägga in nu, men avvikelser genereras inte förrän K29 är uppfylld:
           schemat ska vara dokumenterat i förväg enligt ATL 15 §, och de berörda ska ha kvitterat

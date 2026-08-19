@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { RAST_AKTIV, RATTELSE_FRIST_TIMMAR, gallande, arbetadeMinuter, type Handelse } from "@/lib/tid";
+import { RATTELSE_FRIST_TIMMAR, gallande, arbetadeMinuter, type Handelse } from "@/lib/tid";
 import { avvikelser, gallandeSchema, tagnaRaster, type Rastschema } from "@/lib/raster";
 import { senAnkomst } from "@/lib/narvaro";
 import {
@@ -55,7 +55,7 @@ const datumStrang = (d: Date) => svensktDatum(d);
  * Ordningen ar inte godtycklig: en dag maste vara stangd innan den kan bedomas,
  * och bedomd innan den far gallras.
  */
-export async function korTidjobbet(db: SupabaseClient): Promise<Tidutfall> {
+export async function korTidjobbet(db: SupabaseClient, rastPa: boolean): Promise<Tidutfall> {
   const utfall: Tidutfall = {
     dagar: [],
     stangda: 0,
@@ -236,7 +236,7 @@ export async function korTidjobbet(db: SupabaseClient): Promise<Tidutfall> {
       if (!journalFel) utfall.journalrader++;
 
       // 4. Rastavvikelser.
-      if (!RAST_AKTIV) continue;
+      if (!rastPa) continue;
 
       const mittRastschema = gallandeSchema(
         (raster ?? []).filter((r) => r.weekday === veckodag),

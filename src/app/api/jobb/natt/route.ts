@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { M2_AKTIV } from "@/lib/tid";
+import { hamtaLage } from "@/lib/sparrar";
 import { korTidjobbet } from "@/lib/jobb/tid";
 import { korKontojobbet } from "@/lib/jobb/konton";
 import { korArendejobbet } from "@/lib/jobb/arenden";
@@ -28,12 +28,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ fel: "Nekad" }, { status: 401 });
 
   const db = supabaseAdmin();
+  const lage = await hamtaLage();
   const start = Date.now();
   const resultat: Record<string, unknown> = {};
   const fel: Record<string, string> = {};
 
   const steg: [string, () => Promise<unknown>][] = [
-    ["tid", () => (M2_AKTIV ? korTidjobbet(db) : Promise.resolve({ hoppade_over: "stämplingen är av" }))],
+    ["tid", () => (lage.stampling ? korTidjobbet(db, lage.rast) : Promise.resolve({ hoppade_over: "stämplingen är av" }))],
     ["konton", () => korKontojobbet(db)],
     ["arenden", () => korArendejobbet(db)],
   ];

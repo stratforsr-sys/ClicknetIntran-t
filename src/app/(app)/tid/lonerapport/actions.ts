@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { getCurrentUser, hasRole, fullName, type CurrentUser } from "@/lib/auth";
-import { gallande, RAST_AKTIV, type Handelse } from "@/lib/tid";
+import { gallande, type Handelse } from "@/lib/tid";
+import { hamtaLage } from "@/lib/sparrar";
 import { blockeringar, type Blockering } from "@/lib/lonerapport";
 
 export type PeriodState = { fel?: string; ok?: string; blockeringar?: Blockering[] };
@@ -83,7 +84,7 @@ async function samlaBlockeringar(start: string, slut: string): Promise<Blockerin
       .select("id, employee_id, kind, occurred_at, source, supersedes_id, correction_state")
       .gte("occurred_at", fran)
       .lte("occurred_at", till),
-    RAST_AKTIV
+    (await hamtaLage()).rast
       ? db
           .from("break_deviation")
           .select("employee_id, work_date, kind")

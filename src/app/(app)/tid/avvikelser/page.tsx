@@ -10,7 +10,7 @@ import { avslutaAvvikelse } from "../lonerapport/actions";
 import { Ikon } from "@/components/shell/Ikon";
 import { getCurrentUser, canManageEmployees, hasRole, fullName } from "@/lib/auth";
 import { supabaseServer, supabaseAdmin } from "@/lib/supabase/server";
-import { RAST_AKTIV } from "@/lib/tid";
+import { hamtaLage } from "@/lib/sparrar";
 import { AVVIKELSE_ETIKETT, AVVIKELSE_FORKLARING, type Avvikelsetyp } from "@/lib/raster";
 
 export const dynamic = "force-dynamic";
@@ -36,6 +36,7 @@ export default async function AvvikelseSida() {
   if (!user?.employee) redirect("/");
 
   const supabase = await supabaseServer();
+  const sparr = await hamtaLage();
 
   const [{ data: avvikelser }, { data: personal }] = await Promise.all([
     supabase
@@ -89,7 +90,7 @@ export default async function AvvikelseSida() {
         står öppna — den som inte tittats på ska inte tyst följa med in i ett löneunderlag.
       </Notis>
 
-      {!RAST_AKTIV && (
+      {!sparr.rast && (
         <Notis ton="warn">
           Genereringen är avstängd tills K29 är uppfylld. Listan nedan är därför tom.
         </Notis>

@@ -7,6 +7,8 @@ export const DOC_TYPES = [
   "script",
   "price_list",
   "case",
+  "interest_assessment",
+  "staff_information",
 ] as const;
 
 export type DocType = (typeof DOC_TYPES)[number];
@@ -20,7 +22,16 @@ export const DOC_TYPE_LABEL: Record<DocType, string> = {
   script: "Manus",
   price_list: "Prislista",
   case: "Referenscase",
+  interest_assessment: "Intresseavvägning",
+  staff_information: "Information till personalen",
 };
+
+/**
+ * Typerna som bär en spärr. En intresseavvägning utan beslutsdatum duger inte
+ * som grund för behandling, och informationen till personalen är inte
+ * information förrän någon kvitterat den — se `compliance_gate`.
+ */
+export const SPARRTYPER: DocType[] = ["interest_assessment", "staff_information"];
 
 /**
  * AC-5.9. De tre forsta ar de dokumenttyper AFS 2023:1 kraver, och de ar

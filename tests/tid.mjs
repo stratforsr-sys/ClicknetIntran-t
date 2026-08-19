@@ -14,8 +14,8 @@ import {
   timmarOchMinuter,
   harVantatForLange,
   omprovningSenast,
-  M2_AKTIV,
-  RAST_AKTIV,
+  NODSTOPP_STAMPLING,
+  NODSTOPP_RAST,
 } from "../src/lib/tid.ts";
 
 let fel = 0;
@@ -86,18 +86,22 @@ console.log("\n\x1b[1mArbetad tid\x1b[0m");
 
 console.log("\n\x1b[1mBara giltiga övergångar\x1b[0m");
 {
-  ok("ute kan bara stämpla in", tillatna("ute").join() === "in");
-  ok("rast kan bara avslutas", tillatna("rast").join() === "break_end");
-  ok("dubbel instämpling nekas", tillaten("inne", "in") === false);
-  ok("utstämpling utan att vara inne nekas", tillaten("ute", "out") === false);
-  ok("rast avslutas inte när man är ute", tillaten("ute", "break_end") === false);
+  ok("ute kan bara stämpla in", tillatna("ute", true).join() === "in");
+  ok("rast kan bara avslutas", tillatna("rast", true).join() === "break_end");
+  ok("dubbel instämpling nekas", tillaten("inne", "in", true) === false);
+  ok("utstämpling utan att vara inne nekas", tillaten("ute", "out", true) === false);
+  ok("rast avslutas inte när man är ute", tillaten("ute", "break_end", true) === false);
+  ok("rastknappen nekas nar rasten ar avstangd", tillaten("inne", "break_start", false) === false);
 }
 
 console.log("\n\x1b[1mStrömbrytarna och fristerna\x1b[0m");
 {
-  ok("in- och utstämpling är påslagen", M2_AKTIV === true);
-  ok("raststämpling är fortfarande av tills K12 är daterad", RAST_AKTIV === false);
-  ok("utan rast finns ingen rastknapp", tillatna("inne").join() === "out");
+  // Vad som ar pasla­get avgors av compliance_gate i databasen. I koden finns
+  // bara nodstoppen, och de ska sta oanvanda.
+  ok("nödstoppet för stämpling är inte draget", NODSTOPP_STAMPLING === false);
+  ok("nödstoppet för rast är inte draget", NODSTOPP_RAST === false);
+  ok("utan påslagen rast finns ingen rastknapp", tillatna("inne", false).join() === "out");
+  ok("med påslagen rast finns den", tillatna("inne", true).join() === "break_start,out");
 
   const nu = new Date("2026-08-17T12:00:00.000Z");
   ok("en rättelse på två timmar har inte väntat för länge",
