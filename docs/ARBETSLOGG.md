@@ -4,6 +4,67 @@ Läs denna före arbete. Uppdatera efteråt.
 
 ---
 
+## 2026-08-19 · Spärren flyttar in i databasen
+
+K12 gick inte att "bygga" — det är ett beslut någon ska fatta och datera. Det
+som gick att bygga är maskineriet runt omkring, och det är där felet satt.
+
+Fram till nu var spärren en kommentar i `src/lib/tid.ts` och en konstant som
+någon skulle komma ihåg att ändra i samma stund som juridiken blev klar. Två
+saker som ska hända samtidigt, på två ställen, av två olika personer. Det
+håller inte över tid, och det går inte att visa för någon utomstående.
+
+**Så fungerar det nu**
+
+`compliance_gate` bär läget. En trigger vägrar slå på raststämplingen förrän
+tre saker finns i databasen: K12 publicerad **och daterad**, K14 kvitterad av
+varje aktiv anställd, och minst ett rastschema (K29). Villkoren ligger i
+databasen och inte i koden av samma skäl som AC-2.3 — navets skrivningar sker
+med en nyckel som går förbi rättigheter, och en regel som bara finns i en
+server action gäller tills någon skriver en annan.
+
+Funktionen `sparr_saknas()` driver både triggern och listan i vyn. Att de läser
+ur samma källa är avsiktligt: en lista som räknas ut på två ställen hinner
+glida isär, och då står det "allt klart" på sidan medan knappen vägrar.
+
+Koden läser läget i stället för att äga det. Kvar i `tid.ts` finns bara
+nödstoppen, och de är enkelriktade — de stänger av något databasen säger är på,
+aldrig tvärtom.
+
+**Att slå av kräver ingenting**
+
+Ingen motivering, inga villkor, ett klick. En spärr ska aldrig vara svårare att
+stänga än att öppna: den dag något visar sig fel ska vägen tillbaka inte vara
+ett ärende.
+
+**Utkasten är omskrivna**
+
+K12 täcker nu tre behandlingar i stället för en, eftersom sen ankomst byggdes i
+tisdags och också är övervakning. In- och utstämpling vilar på ATL och
+anställningsavtalet och behöver ingen avvägning; sen ankomst och raststämpling
+gör det, och de bedöms var för sig. Skyddsåtgärderna i avsnitt 5 är inte
+avsiktsförklaringar — varje rad går att kontrollera i koden.
+
+K14 är omskriven i du-form och säger rakt ut att rasten inte stämplas, att
+ingenting händer automatiskt vid sen ankomst, och att en felaktig tid rättas men
+aldrig raderas.
+
+Båda ligger som **utkast** i rutinbiblioteket. Skriptet
+`scripts/seed-sparrdokument.mjs` la in dem; det publicerar ingenting och sätter
+inget beslutsdatum. Det är ditt beslut, och spärren släpper inte igenom något
+annat ändå.
+
+**Kvar för att kunna slå på raststämpling**
+
+1. Låt någon med dataskyddskompetens läsa K12-utkastet.
+2. Fyll i slutsatsen, sätt beslutsdatum i redaktören, publicera.
+3. Publicera K14 och låt alla kvittera den.
+4. Rastschemat finns redan.
+
+Då tänds knappen under Tid → Spärrar. Inte förr.
+
+---
+
 ## 2026-08-19 · Tidszonsbuggen — larmet var dött från början
 
 Nattjobben hade inte kört på två nätter. En instämpling stod öppen sedan

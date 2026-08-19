@@ -28,8 +28,16 @@ utstämpling, och rasten hanteras utanför systemet.
    felstämpling rättas med en begäran till chefen och aldrig raderas, och att
    rasten inte stämplas än.
 
-När rasten senare slås på: sätt `RAST_PASLAGET` till samma datum. Det är den
-som räknar fram omprövningsdatumet i K20, sex månader senare.
+**Raststämplingen slås på under Tid → Spärrar**, inte i koden. Knappen är
+låst tills K12 är publicerad och daterad, K14 kvitterad av alla aktiva och ett
+rastschema finns. Villkoren kontrolleras av en trigger i databasen, och listan
+i vyn kommer ur samma funktion som triggern dömer efter.
+
+Utkast till båda dokumenten ligger i rutinbiblioteket (skapade av
+`scripts/seed-sparrdokument.mjs`). Beslutsdatumet sätts i redaktören.
+
+I koden finns bara nödstoppen `NODSTOPP_STAMPLING` och `NODSTOPP_RAST`. De
+stänger av något som databasen säger är påslaget — aldrig tvärtom.
 
 ---
 
