@@ -5,6 +5,213 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-08-20 · M3 Frånvaro: en modul som är byggd kring vad den inte får veta
+
+E7 i sin helhet utom E7.10. Tre migrationer, en regelmotor, åtta vyer och ett
+kalenderflöde. Den största modulen som gick att bygga utan att vänta på någon
+integration — och den som blir akut när 25 säljare rekryteras.
+
+Tre frågor besvarades först, eftersom de styrde seeden: semesteråret är
+**1 april–31 mars**, **kollektivavtal saknas** (A2), och **saldon matas in för
+hand** per person.
+
+### Det bärande beslutet: sjukfrånvaro delar inte tabell med ledighet
+
+K35 och AC-3.21 säger att ingen orsak, diagnos eller symtombeskrivning får
+registreras, och att det inte får finnas ett fritextfält där något sådant kan
+hamna. Den enda formuleringen av det kravet som går att *prova* är den
+absoluta: **`sick_report` har noll textkolumner.** Inte "inga som är tänkta för
+orsak" — noll.
+
+Provet i `tests/rls.mjs` frågar `information_schema` och faller den dag någon
+lägger till en textkolumn på tabellen, oavsett vad den skulle heta och hur väl
+motiverad den vore. Samma mekanik som `tests/registerutdrag.mjs` använder mot
+främmande nycklar: kravet bevakas av schemat, inte av minnet.
+
+Det är också hela skälet till att sjukfrånvaro *inte* är en rad i
+`absence_request`. Den tabellen **har** två textfält — chefens motivering till
+avslag (AC-3.13) och till överstyrning (AC-3.12) — och båda är rimliga för en
+semesteransökan. Delade de tabell med sjukfrånvaron hade K35 hängt på att ingen
+chef någonsin skriver fel sak i rutan. Ett krav som hänger på att ingen gör fel
+är inget krav. Nu finns rutan inte.
+
+### Reglerna bor i databasen, som provisionsreglerna ska göra
+
+E7.15 räknar upp sju knappar: ansökningsfrist, huvudsemesterfönster,
+spärrperiod, bemanningstak, maxlängd, karens och attestnivå per typ. Alla sju
+ligger i tabeller — `absence_type`, `absence_policy`, `absence_blackout`,
+`staffing_cap` — och ändras i `/franvaro/regler`.
+
+`src/lib/franvaro.ts` innehåller **inget tal ur semesterlagen**. Varje gräns
+motorn dömer efter kommer in som argument. Det gör två saker: reglerna går att
+ändra utan deploy, och de går att *visa* för den som ska följa dem. AC-3.13
+kräver att den anställda ser reglerna före inskick, och `reglerFor()` skriver
+listan ur samma tabellrader som `provaRegler()` dömer efter. Att skriva listan
+för hand i vyn hade gett en sida som säger en sak och ett avslag som säger en
+annan — samma resonemang som `sparr_saknas` i 0016.
+
+Ett regelbrott är en **varning, aldrig en spärr**. Chefen ska kunna godkänna
+ändå, men då med en motivering, och motiveringstvånget är ett check-villkor i
+databasen och inte bara en kodregel. En regel som blockerar tvingar fram vägen
+runt systemet, och då vet ingen längre vem som är ledig — vilket var hela
+poängen med modulen.
+
+`rules_broken` fryses vid inskicket. Ändras en frist i morgon får det inte göra
+gårdagens ansökan regelvidrig i efterhand — samma linje som `hr_case.sla_hours`
+och AC-2.35.
+
+### Sjuksidan har ingen anmälningsknapp
+
+AC-3.6 förbjuder den, och sidan är byggd därefter: **telefonlistan står först i
+trädet**, registreringsformuläret under, rubricerat "Registrera efter samtalet".
+Ordningen är kravet och får inte kastas om med CSS.
+
+Ett samtal till en människa är den enda punkten på hela dagen då någon märker
+att en kollega inte mår bra. En knapp hade tagit bort den.
+
+Spärren mot att detta blir en knapp ligger i databasen:
+`absence_type_sjuk_ansoks_inte` gör det omöjligt att sätta `requestable` på
+typen `sick`. Utan villkoret hade en kryssruta i regelvyn kunnat skapa knappen,
+och då hade kravet hängt på att ingen kryssar i den.
+
+Chefsfallbacken i AC-3.18 är inbyggd i ringordningen i stället för som ett
+undantag i koden: har personen ingen chef hoppas plats 1 över, och nästa i
+ordningen blir den man ringer.
+
+### AC-3.16: fristerna räknas från första sjukdagen, aldrig från registreringen
+
+`first_sick_day` skilt från `registered_at` är hela poängen. Den som blir sjuk
+på lördagen och ringer på måndagen har varit sjuk sedan lördagen. Räknades
+fristerna i K37 från registreringen kunde en sen anmälan flytta lagens frister
+framför sig — och det är precis vad de finns för att hindra. Efter chefens
+bekräftelse vägrar en trigger att första sjukdagen ändras, eftersom fristerna
+redan är uträknade ur den.
+
+### AC-3.19: den anställda ser sin egen lucka först
+
+En schemalagd dag utan stämpling och utan registrerad frånvaro är en
+**påminnelse**, inte en anklagelse — den vanligaste förklaringen är att någon
+glömde registrera sin VAB-dag.
+
+Fördröjningen sitter därför i RLS-policyn och inte i en vy som låter bli att
+rita raden: `visible_to_manager_from` ligger ett dygn fram, och chefen får noll
+rader tills dess. Hinner personen registrera sin frånvaro innan dess får chefen
+aldrig veta att det fanns en lucka. Det är hela poängen, och en vy som bara
+undviker att visa raden hade gett den bort i första API-anrop.
+
+### AC-3.26: var gränsen går, och varför den inte är gratis
+
+Sjukminuter **når** löneunderlaget. Sjuklöneperioden dag 1–14 är arbetsgivarens,
+och ett löneunderlag utan sjukfrånvaro är fel underlag. Minuterna hamnar i
+`payroll_row.absence_minutes` under nyckeln `sick` — kolumnen som stått tom
+sedan 0012 med kommentaren att `{}` betyder "inte mätt", inte "ingen frånvaro".
+
+Själva `sick_report` är stängd för `finance`, `admin` och `payroll_cost_viewer`.
+Första sjukdagen, antalet tillfällen och rehabsignalen når aldrig den som räknar
+kostnad eller provision. Det provas mot API:t: ekonomi får noll rader både på
+listan och på en direkt fråga på id, och noll även med lönekostnadsbehörigheten
+påslagen — K26 ger tillgång till kostnad, inte till hälsa.
+
+E13 och E15 är inte byggda. Att provet inte kan visa att en provisionsvy låter
+bli att läsa härifrån är en begränsning i vad som finns, inte i provet: RLS ger
+noll rader för de rollerna, så vyn kan inte läsa även om någon skriver den.
+**Villkoret står i ROADMAP E7.14** — hämta frånvaro via `absence_minutes`,
+aldrig genom att joina `sick_report`.
+
+### iCal-flödet bär varken typ eller sjukdom
+
+Ett flöde är en URL utan inloggning. Klistras den in i Google Calendar ligger
+innehållet därefter hos Google, och ingen rotation av adressen tar tillbaka det
+som redan synkats dit.
+
+Posterna heter därför **"Namn — Ledig"**. Att någon är föräldraledig eller
+vabbar är en upplysning om varför, och den hör hemma bakom inloggning.
+`SAMMANFATTNING` i `src/lib/ical.ts` är en konstant och inte ett fält: det ska
+krävas en kodändring, inte en konfigurationsändring, för att lägga till typen.
+Sjukfrånvaro har ingen väg in i filen alls — funktionen tar emot `Ledighet[]`,
+och den typen kan inte bära en sjukperiod.
+
+Provet läser filen som text och kräver att orden "Semester", "Sjuk", "VAB",
+`vacation`, `sick` och `parental` inte förekommer. Det är hela säkerhetskravet,
+och därför provas det på utfallet och inte på hur det byggdes.
+
+**E1.7 är därmed halvlöst.** Offboarding ska spärra flödet, och vägen ut
+kontrollerar ägarens `status` vid varje hämtning. Ingen åtgärd behövs i
+offboardingkoden — samma resonemang som notisklockan i 0018: en spärr som kräver
+att en annan del av systemet kommer ihåg att stänga den står en dag öppen.
+
+### Bemanningen räknas på servern, och bara antalet lämnar den
+
+E7.2 kräver en bemanningsvy vid ansökan. Den behöver veta hur många i teamet som
+är borta en viss dag — men den som ansöker ska inte kunna läsa vilka de är.
+
+Med användarens egen token hade frågan gett noll rader för en säljare, och
+varningen hade tyst blivit "ingen är borta". Räkningen sker därför med service
+role på servern, och `varstaBemanningsdag()` lämnar tillbaka ett datum och en
+siffra. Namnen lämnar aldrig servern.
+
+Taket varnar per dag och inte per period: en vecka där tre är lediga på
+onsdagen och ingen annan dag ska varna för onsdagen.
+
+### E7.10 lämnas öppen, med motivering
+
+K36 kräver att läkarintyget är åtkomstbegränsat och att varje öppning loggas.
+Filen kan inte laddas upp — Supabase Storage finns inte, samma beroende som
+E2.12 och E8.7.
+
+Byggt är kvittensen: dag 8-fristen kan markeras klar och
+`certificate_received_on` säger vilken dag intyget kom in. Navet vet **att** ett
+intyg finns, inte vad det innehåller.
+
+Att bygga öppningsloggen nu vore sämre än att låta bli. En logg över noll
+öppningar av en fil som inte finns ser i en granskning ut precis som en uppfylld
+K36 — och den dagen filen läggs till minns ingen att loggen aldrig provades.
+
+### Rättat utanför uppdraget
+
+`tests/registerutdrag.mjs` föll direkt när det kördes: `news_post.author_id` och
+`notification_seen.employee_id` saknades i `src/lib/registerutdrag.ts` sedan
+0018 byggdes. **`npm test` var alltså rött på main när passet började.**
+
+Provet gjorde exakt vad det byggdes för. Det är värt att notera att det ändå
+tog ett dygn innan någon körde det — ett prov som fångar rätt sak fångar
+ingenting om sviten inte körs före push.
+
+Sexton nya rader lades till i `KALLOR` och `UNDANTAG`, elva av dem E7:s egna.
+Sjukanmälan är en uppgift om hälsa och därmed en särskild kategori enligt
+artikel 9, vilket gör den viktigare att kunna få ut i ett registerutdrag, inte
+mindre.
+
+### ROADMAP-rättelser
+
+E7.4 stod BLOCKERAD av E4b, som blev klar 2026-08-17. E0.9 och X6 stod EJ
+PÅBÖRJAD om test per modul; `tests/rls.mjs` har 22 avsnitt och täcker varje
+byggd modul. Punkterna stängs inte helt — kravet följer med varje ny modul, och
+E7 lade till sina fem avsnitt.
+
+### Prov
+
+Fjorton sviter nu. `tests/franvaro.mjs` har 115 kontroller på ren logik och
+skickar in sina egna regler — ett prov som läste seed-värden ur databasen hade
+slutat prova motorn och börjat prova seeden. `tests/rls.mjs` fick fem nya
+avsnitt.
+
+Fjorton konstruktionsvillkor provades mot riktiga databasen i en transaktion som
+rullades tillbaka: överlappande godkänd ledighet, godkännande av regelbrott utan
+motivering, avslag utan skäl, del av dag över flera dygn, två pågående
+sjukperioder, radering av en sjukanmälan, flyttad första sjukdag efter
+bekräftelse, omskrivet saldo. Alla nekar.
+
+Nattjobbet och iCal-rutten provades skarpt mot produktion. Jobbet skapade fem
+påminnelser, alla dolda för chefen. Flödet svarar 200 med `text/calendar`, 404
+på fel adress, och räknaren tickar.
+
+### Nästa steg
+
+`docs/NASTA_SESSION.md`.
+
+---
+
 ## 2026-08-20 · Klockan börjar ringa, och nyheterna får någonstans att ta vägen
 
 Tre saker: offboardingen slutar lämna ärenden efter sig, nyhetsinlägg med

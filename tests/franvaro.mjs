@@ -31,6 +31,7 @@ import {
   upprepadKorttid,
   varstaBemanningsdag,
 } from "../src/lib/franvaro.ts";
+import { ical } from "../src/lib/ical.ts";
 
 let fel = 0;
 const ok = (namn, villkor, extra = "") => {
@@ -583,6 +584,51 @@ ok("samma dag", periodtext("2026-10-05", "2026-10-05") === "5 oktober 2026");
 ok("samma månad", periodtext("2026-10-05", "2026-10-09") === "5–9 oktober 2026");
 ok("samma år", periodtext("2026-10-28", "2026-11-03") === "28 oktober–3 november 2026");
 ok("över årsskiftet", periodtext("2026-12-28", "2027-01-03") === "28 december 2026–3 januari 2027");
+
+// -----------------------------------------------------------------------------
+rubrik("E7.3: kalenderflödet läcker varken typ eller sjukdom");
+
+const flode = ical(
+  [
+    { id: "abc-123", namn: "Anna Andersson", starts_on: "2026-10-05", ends_on: "2026-10-09", part_day_minutes: null },
+    { id: "def-456", namn: "Bo, Bengtsson", starts_on: "2026-11-02", ends_on: "2026-11-02", part_day_minutes: 120 },
+  ],
+  "Ledighet — teamet",
+  new Date("2026-08-20T12:00:00Z"),
+);
+
+ok("filen är ett kalenderdokument", flode.startsWith("BEGIN:VCALENDAR") && flode.trimEnd().endsWith("END:VCALENDAR"));
+ok("två poster", (flode.match(/BEGIN:VEVENT/g) ?? []).length === 2);
+ok("raderna avslutas med CRLF enligt RFC 5545", flode.includes("\r\n") && !/[^\r]\n/.test(flode));
+
+// Det har ar hela sakerhetskravet, och darfor provas det som text: ordet far
+// inte finnas i filen, oavsett hur den byggdes.
+ok("ordet Ledig och inget annat", flode.includes("SUMMARY:Anna Andersson — Ledig"));
+for (const ord of ["Semester", "Föräldraledighet", "Sjuk", "sjuk", "VAB", "Vård", "vacation", "sick", "parental"]) {
+  ok(`flödet nämner aldrig "${ord}"`, !flode.includes(ord));
+}
+
+ok("komma i namnet escapas", flode.includes("SUMMARY:Bo\\, Bengtsson — Ledig"));
+ok("heldagspost, inte klockslag", flode.includes("DTSTART;VALUE=DATE:20261005"));
+// DTEND ar exklusiv: en ledighet till och med den 9:e slutar den 10:e.
+ok("DTEND är dagen efter sista dagen", flode.includes("DTEND;VALUE=DATE:20261010"));
+ok("en endagsledighet slutar dagen efter", flode.includes("DTEND;VALUE=DATE:20261103"));
+ok("UID är stabil så posten inte dyker upp som ny vid varje synk", flode.includes("UID:abc-123@"));
+ok("ledighet blockerar inte mötesbokning", flode.includes("TRANSP:TRANSPARENT"));
+ok("flödet är enkelriktat", flode.includes("METHOD:PUBLISH") && !flode.includes("METHOD:REQUEST"));
+
+// Ett langt namn far inte bryta formatet. Raden viks vid 75 oktetter och
+// fortsattningen borjar med ett mellanslag.
+const langt = ical(
+  [{ id: "x", namn: "Överlångt Namnsson-Åkerström Von Bergendahl Storstrand", starts_on: "2026-10-05", ends_on: "2026-10-05", part_day_minutes: null }],
+  "Ledighet",
+  new Date("2026-08-20T12:00:00Z"),
+);
+ok(
+  "långa rader viks och ingen rad överskrider 75 oktetter",
+  langt.split("\r\n").every((r) => Buffer.from(r, "utf8").length <= 75),
+);
+ok("vikningen bevarar innehållet", langt.replace(/\r\n /g, "").includes("Överlångt Namnsson-Åkerström Von Bergendahl Storstrand — Ledig"));
 
 console.log(fel === 0 ? "\n\x1b[32mAlla prov gick igenom.\x1b[0m" : `\n\x1b[31m${fel} prov föll.\x1b[0m`);
 process.exit(fel === 0 ? 0 : 1);

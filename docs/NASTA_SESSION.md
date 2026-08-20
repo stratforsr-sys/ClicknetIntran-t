@@ -3,7 +3,7 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-08-20
+**Senast uppdaterad:** 2026-08-20 (fjärde passet)
 
 ---
 
@@ -33,7 +33,7 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
 set -a && . $HOME/.clicknet/nav.env && set +a && npm test
 ```
 
-Tolv sviter. `tests/rls.mjs` går mot den **riktiga** databasen och skapar och
+Fjorton sviter. `tests/rls.mjs` går mot den **riktiga** databasen och skapar och
 städar sina egna användare (prefix `rlstest+`). Den rör aldrig driftdata — det
 som måste provas skarpt görs i en transaktion som rullas tillbaka.
 
@@ -42,6 +42,13 @@ främmande nycklar och jämför dem mot utdragets lista.
 
 `tests/offboarding-db.mjs` kör offboardingens egna satser i en transaktion som
 rullas tillbaka.
+
+`tests/franvaro.mjs` är ren logik utan databas: regelmotorn får sina regler
+inskickade, precis som i drift.
+
+**Kör sviten före push.** `npm test` var rött på main när det här passet
+började — `news_post.author_id` och `notification_seen.employee_id` saknades i
+`registerutdrag.ts` sedan 0018. Provet fångade rätt sak; ingen körde det.
 
 ---
 
@@ -60,7 +67,9 @@ rullas tillbaka.
 | Bottennavigering | Under 768 px: Hem, Sök, Stämpla, Mer |
 | Registerutdrag | Klart. `/profil` → Hämta registerutdrag |
 | Nyheter | `/nyheter`. Målgrupp per roll och team, fäst överst, utkast |
-| Notisklockan | **Fungerar.** Ärenden, nyheter, rutiner, kurser — målgruppsstyrt via RLS |
+| Notisklockan | **Fungerar.** Ärenden, nyheter, rutiner, kurser, frånvaro — målgruppsstyrt via RLS |
+| Frånvaro och ledighet | **I drift sedan 2026-08-20.** `/franvaro`. Ansökan, sjukfrånvaro, regler, planering |
+| Kalenderflöde | `/api/ical/[token]`. Bär aldrig sjukfrånvaro och aldrig frånvarotyp |
 
 ### Två saker användaren själv måste göra
 
@@ -161,6 +170,77 @@ ett andra svar på samma fråga.
 
 ---
 
+## Vad som byggdes 2026-08-20 (fjärde passet)
+
+### E7 / M3 Frånvaro och ledighet — KLAR utom E7.10
+
+Migrationerna `0019`, `0020`, `0021`. Åtta vyer under `/franvaro` plus
+`/api/ical/[token]`. Hela resonemanget står i arbetsloggen; det här är vad du
+behöver veta för att inte råka riva något.
+
+**Reglerna är konfiguration, inte kod.** Ansökningsfrist, huvudsemesterfönster,
+spärrperiod, bemanningstak, maxlängd, karens och attestnivå ligger i
+`absence_type`, `absence_policy`, `absence_blackout` och `staffing_cap`, och
+ändras i `/franvaro/regler`. `src/lib/franvaro.ts` innehåller inget tal ur
+semesterlagen — varje gräns kommer in som argument. Lägger du till en regel:
+lägg den i en tabell, inte i ett `if`.
+
+**`sick_report` har noll textkolumner, och det är inte en tillfällighet.** K35
+kräver att det inte får finnas ett fält där en diagnos kan hamna, och den enda
+formuleringen som går att prova är den absoluta. `tests/rls.mjs` frågar
+`information_schema` och faller om någon lägger till en textkolumn på tabellen.
+Behöver du spara något om ett sjukfall: läs rubriken i migration 0020 först.
+
+**Sjukfrånvaro delar med flit inte tabell med ledighet.** `absence_request` har
+två motiveringsfält som chefen skriver i (avslag och överstyrning). De hör inte
+hemma på sjukvägen och finns inte där.
+
+**Ingen sjukanmälningsknapp.** Telefonlistan står först i trädet på
+`/franvaro/sjuk`, registreringen under. Ordningen är kravet (AC-3.6). Spärren
+mot att typen `sick` görs ansökningsbar ligger i ett check-villkor i databasen.
+
+**Gränsen i AC-3.26:** sjukminuter når `payroll_row.absence_minutes` — det måste
+de, sjuklöneperioden är arbetsgivarens. Själva `sick_report` är stängd för
+`finance`, `admin` och `payroll_cost_viewer`. **Bygger du E13 provision eller
+E15 lönekostnad: hämta frånvaro via `absence_minutes`, aldrig genom att joina
+`sick_report`.**
+
+**iCal-flödet bär aldrig sjukfrånvaro och aldrig frånvarotyp.** Posterna heter
+"Namn — Ledig". `SAMMANFATTNING` i `src/lib/ical.ts` är en konstant just för att
+det ska krävas en kodändring att ändra det. Offboarding spärrar flödet
+automatiskt — vägen ut läser ägarens `status` vid varje hämtning.
+
+**Nattjobbet fick ett fjärde steg.** Eskalering av obekräftade sjukanmälningar
+efter 48 h, K37-frister, och påminnelser om oregistrerad frånvaro. Det sista
+kräver att stämplingen är på; jobbet avgör det självt.
+
+### Vad som är öppet i E7
+
+**E7.10 läkarintyg (K36).** Kräver Supabase Storage, samma beroende som E2.12
+och E8.7. Byggt är kvittensen "intyg mottaget den X" utan filen. Öppningsloggen
+finns inte, för det finns ingen fil att öppna — och en logg över noll öppningar
+av en fil som inte finns ser ut som en uppfylld K36 i en granskning. Bygg den
+när Storage finns, inte före.
+
+**E7.16 uppsägningstid** ligger i E9 anställningsavtal, inte här.
+
+### Att göra i produktion
+
+**Mottagarordningen vid sjukanmälan har inga telefonnummer.** Två platser är
+seedade — närmaste chef, sedan säljchefen — men numren är tomma. Sidan visar
+namnen utan nummer tills du fyller i dem under `/franvaro/regler`. Det är det
+enda som gör telefonlistan användbar.
+
+**Bemanningstaket är inte satt.** Utan tak varnar ingen ansökan för bemanning.
+Sätts under `/franvaro/regler`, per team eller för hela bolaget.
+
+**Fem påminnelser om oregistrerad frånvaro** skapades när nattjobbet provades:
+Simon 17–19 augusti, Zen 18–19 augusti. De är riktiga — dagarna saknar både
+stämpling och frånvaro. Zens öppna instämpling från 17 augusti (se ovan) hänger
+ihop med det.
+
+---
+
 ## Vad som står på tur
 
 I prioritetsordning för att få säljarna igång.
@@ -174,7 +254,8 @@ I prioritetsordning för att få säljarna igång.
 5. **E5.3** startsidan under 1,5 s på 4G — aldrig mätt.
 6. **E5.7 resten**: toast nere till höger med ångra efter en åtgärd. Klockan är
    byggd, den biten är inte.
-7. Därefter Storage-spåret, E7 frånvaro, E10+E9 rekrytering.
+7. Därefter **Storage-spåret** — det låser upp E2.12 bilagor, E8.7 rollspel
+   och E7.10 läkarintyg på en gång — och sedan E10+E9 rekrytering.
 
 ### E6.2 gallringsjobbet är blockerat, inte bortglömt
 

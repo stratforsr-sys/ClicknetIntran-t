@@ -62,7 +62,7 @@ förhållande till tillväxten.
 | E1.4 | AC-1.3 | Upplägg skapar konto och roll | KLAR |
 | E1.5 | AC-1.3 | **Automatisk tilldelning** av rutiner, kurser, schema och team vid upplägg | DELVIS — rutiner och team klara, kurser väntar på E8 och schema på E4 |
 | E1.6 | AC-1.4 | Offboarding: roller, sessioner, status, historik | KLAR |
-| E1.7 | AC-1.4 | **Offboarding stänger dialer-kö och spärrar iCal-flöde** | BLOCKERAD av E7, E12 |
+| E1.7 | AC-1.4 | **Offboarding stänger dialer-kö och spärrar iCal-flöde** | DELVIS — iCal-flödet spärras sedan 2026-08-20. Vägen ut läser ägarens `status` vid varje hämtning, så offboardingkoden behöver inte minnas det. Dialer-kön kvar, BLOCKERAD av E12 |
 | E1.8 | AC-1.4 | **Öppna ärenden avslutas med notis vid offboarding** | KLAR — stängs med skäl i `resolution`, egen punkt först i checklistan (AC-1.7), och tilldelningar går tillbaka till inkorgen |
 | E1.9 | AC-1.5 | Rollbyte loggas med vem som beviljade | KLAR |
 | E1.10 | AC-1.6 | RLS på alla persondatatabeller, verifierat | KLAR |
@@ -194,7 +194,7 @@ daterad. Koden finns och är testad; påslaget sker med `M2_AKTIV` i
 
 | # | AC | Vad | Status |
 |---|---|---|---|
-| E4b.1 | AC-2.13 | Lönerapport per period och person: arbetad tid, frånvaro per typ, avvikelser. **Ingen övertid** | KLAR — frånvaro per typ tomt tills E7 finns |
+| E4b.1 | AC-2.13 | Lönerapport per period och person: arbetad tid, frånvaro per typ, avvikelser. **Ingen övertid** | KLAR — frånvaro per typ fylls av E7 sedan 2026-08-20 |
 | E4b.2 | AC-2.14 | Kan inte genereras vid oavslutade avvikelser. Systemet listar vad som blockerar | KLAR — rättelser, öppna dagar och avvikelser listas |
 | E4b.3 | AC-2.15, K5b | Attesteras av människa, attesten låser perioden | KLAR — ekonomi får inte attestera |
 | E4b.4 | AC-2.16 | Attesterad period är oföränderlig, korrigering som justeringspost | KLAR — triggrar, provade mot databasen |
@@ -203,28 +203,57 @@ daterad. Koden finns och är testad; påslaget sker med `M2_AKTIV` i
 
 ---
 
-## E7 — M3 Frånvaro och ledighet · ~4 veckor
+## E7 — M3 Frånvaro och ledighet · I DRIFT sedan 2026-08-20 (kvar: E7.10)
+
+Reglerna ligger i `absence_type`, `absence_policy`, `absence_blackout` och
+`staffing_cap` — **inte i kod**. Ändras en frist i `/franvaro/regler` gäller den
+i samma stund, både för regelmotorn och för texten den anställda ser före
+inskick. Semesterlagens miniminivå är seedad; A2 besvarades 2026-08-20 med att
+kollektivavtal saknas.
+
+Semesteråret är **1 april–31 mars** (3 § semesterlagen), beslutat 2026-08-20.
 
 | # | AC | Vad | Status |
 |---|---|---|---|
-| E7.1 | AC-3.1 | Ansökan för alla typer inklusive del av dag | EJ PÅBÖRJAD |
-| E7.2 | AC-3.2 | Bemanningsvy vid ansökan med varning vid överskriden tröskel | EJ PÅBÖRJAD |
-| E7.3 | AC-3.3 | **iCal-flöde** med hemlig roterbar URL, enkelriktat | EJ PÅBÖRJAD |
-| E7.4 | AC-3.4 | Godkänd frånvaro flödar in i lönerapporten | EJ PÅBÖRJAD — **inte blockerad.** E4b blev KLAR 2026-08-17 och `payroll_row.absence_minutes` står redan i `0012` och väntar |
-| E7.5 | AC-3.5 | Saldon endast om manuellt inmatade, varning om äldre än 45 dagar | EJ PÅBÖRJAD |
-| E7.6 | AC-3.6, AC-3.27 | **Ingen digital sjukanmälningsknapp.** Telefon först, registrering efteråt. Mottagarordning konfigurerbar | EJ PÅBÖRJAD |
-| E7.7 | AC-3.16–3.18 | `sick_report` med `first_sick_day` skilt från `registered_at`. Chefsbekräftelse, eskalering efter 48 h, chefsfallback | EJ PÅBÖRJAD |
-| E7.8 | AC-3.19 | Oregistrerad frånvaro flaggas som påminnelse, den anställde ser den först | EJ PÅBÖRJAD |
-| E7.9 | AC-3.21, K35 | **Ingen orsak, diagnos eller symtombeskrivning** får registreras — inget fritextfält | EJ PÅBÖRJAD |
-| E7.10 | AC-3.22, K36 | Läkarintyg åtkomstbegränsat, varje öppning loggad | EJ PÅBÖRJAD |
-| E7.11 | AC-3.23, K37 | Automatiska frister: dag 8 intyg, dag 15 Försäkringskassan, dag 30 plan för återgång | EJ PÅBÖRJAD |
-| E7.12 | AC-3.24 | Återinsjuknande inom 5 dagar kopplas till föregående period | EJ PÅBÖRJAD |
-| E7.13 | AC-3.25 | Upprepad korttidsfrånvaro ger tyst signal om rehabiliteringsansvar | EJ PÅBÖRJAD |
-| E7.14 | AC-3.26 | Sjukdata exkluderad från alla prestations-, provisions- och kostnadsvyer | EJ PÅBÖRJAD |
-| E7.15 | M3.2 | **Regelmotor**: ansökningsfrist, huvudsemesterfönster, spärrperiod, bemanningstak, maxlängd, karens, attestnivå per typ | EJ PÅBÖRJAD |
-| E7.16 | AC-3.7–3.10 | Semesterlagens stöd: beskedsfrist 2 månader, femårsvarning för sparade dagar, uppsägningstid | EJ PÅBÖRJAD |
-| E7.17 | AC-3.11–3.13 | Regler konfigureras i UI, överstyrning kräver motivering, den anställde ser reglerna före inskick | EJ PÅBÖRJAD |
-| E7.18 | AC-3.14 | Årlig semesterplaneringsvy med luckor och överlapp | EJ PÅBÖRJAD |
+| E7.1 | AC-3.1 | Ansökan för alla typer inklusive del av dag | KLAR — `/franvaro/ny`, del av dag i minuter på en enda dag |
+| E7.2 | AC-3.2 | Bemanningsvy vid ansökan med varning vid överskriden tröskel | KLAR — räknas per dag på servern. Bara antal och datum lämnar servern, aldrig vilka |
+| E7.3 | AC-3.3 | **iCal-flöde** med hemlig roterbar URL, enkelriktat | KLAR — `/api/ical/[token]`. **Bär aldrig sjukfrånvaro och aldrig typ**; posterna heter "Namn — Ledig". Provat skarpt |
+| E7.4 | AC-3.4 | Godkänd frånvaro flödar in i lönerapporten | KLAR — `payroll_row.absence_minutes` fylls med minuter per typ, inklusive sjuk |
+| E7.5 | AC-3.5 | Saldon endast om manuellt inmatade, varning om äldre än 45 dagar | KLAR — på personalkortet, append-only, med intjänandeår för femårsvarningen |
+| E7.6 | AC-3.6, AC-3.27 | **Ingen digital sjukanmälningsknapp.** Telefon först, registrering efteråt. Mottagarordning konfigurerbar | KLAR — telefonlistan står först i trädet. Spärren mot att typen görs ansökningsbar ligger i databasen |
+| E7.7 | AC-3.16–3.18 | `sick_report` med `first_sick_day` skilt från `registered_at`. Chefsbekräftelse, eskalering efter 48 h, chefsfallback | KLAR — eskaleringen i nattjobbet, fallbacken inbyggd i ringordningen |
+| E7.8 | AC-3.19 | Oregistrerad frånvaro flaggas som påminnelse, den anställde ser den först | KLAR — fördröjningen sitter i RLS-policyn, inte i en vy |
+| E7.9 | AC-3.21, K35 | **Ingen orsak, diagnos eller symtombeskrivning** får registreras — inget fritextfält | KLAR — `sick_report` har **noll textkolumner**, och `tests/rls.mjs` frågar `information_schema` och faller om någon läggs till |
+| E7.10 | AC-3.22, K36 | Läkarintyg åtkomstbegränsat, varje öppning loggad | **ÖPPEN — kräver Supabase Storage (E2.12).** Se nedan |
+| E7.11 | AC-3.23, K37 | Automatiska frister: dag 8 intyg, dag 15 Försäkringskassan, dag 30 plan för återgång | KLAR — räknat från första sjukdagen, dagnumren konfigurerbara |
+| E7.12 | AC-3.24 | Återinsjuknande inom 5 dagar kopplas till föregående period | KLAR — `previous_report_id` sätts vid registrering |
+| E7.13 | AC-3.25 | Upprepad korttidsfrånvaro ger tyst signal om rehabiliteringsansvar | KLAR — 6 tillfällen på 12 månader, konfigurerbart. Ingen notis till den anställda, ingen automatisk konsekvens |
+| E7.14 | AC-3.26 | Sjukdata exkluderad från alla prestations-, provisions- och kostnadsvyer | KLAR för det som finns — `sick_report` ger 0 rader för `finance`, `admin` och `payroll_cost_viewer`, verifierat mot API:t. **E13 och E15 måste hämta frånvaro via `payroll_row.absence_minutes`, aldrig genom att joina `sick_report`** |
+| E7.15 | M3.2 | **Regelmotor**: ansökningsfrist, huvudsemesterfönster, spärrperiod, bemanningstak, maxlängd, karens, attestnivå per typ | KLAR — allt i tabeller. Inget tal ur semesterlagen står i `src/lib/franvaro.ts` |
+| E7.16 | AC-3.7–3.10 | Semesterlagens stöd: beskedsfrist 2 månader, femårsvarning för sparade dagar, uppsägningstid | DELVIS — beskedsfristen och femårsvarningen är byggda. Uppsägningstid hör till E9 anställningsavtal, inte hit |
+| E7.17 | AC-3.11–3.13 | Regler konfigureras i UI, överstyrning kräver motivering, den anställde ser reglerna före inskick | KLAR — `/franvaro/regler`. Motiveringstvånget är ett check-villkor i databasen, inte bara en kodregel |
+| E7.18 | AC-3.14 | Årlig semesterplaneringsvy med luckor och överlapp | KLAR — `/franvaro/planering`, en vecka per kolumn. Sjukfrånvaro visas aldrig |
+
+### E7.10 är öppen med flit, inte bortglömd
+
+K36 kräver att läkarintyget är åtkomstbegränsat och att **varje öppning loggas**.
+Filen kan inte laddas upp: Supabase Storage är inte uppsatt, samma beroende som
+E2.12 bilagor och E8.7 rollspel.
+
+Det som är byggt är kvittensen: dag 8-fristen kan markeras klar och
+`sick_report.certificate_received_on` säger vilken dag intyget kom in. Navet vet
+alltså **att** ett intyg finns, inte vad det innehåller.
+
+Att bygga öppningsloggen nu vore värre än att låta bli. En logg över noll
+öppningar av en fil som inte finns ser i en granskning ut precis som en uppfylld
+K36 — och den dagen filen läggs till är det ingen som minns att loggen aldrig
+provades. Punkten stängs när Storage finns.
+
+### E7.16 uppsägningstid ligger inte här
+
+AC-3.10 handlar om uppsägningstid enligt LAS. Den hör till anställningsavtalet
+(E9.1) och till offboardingen (E1.6), inte till frånvaromodulen. Att lägga en
+uppsägningstidsberäkning i en semesteransökan hade varit fel plats för rätt sak.
 
 ---
 
@@ -344,7 +373,7 @@ Kräver Inkios API-dokumentation, autentiseringsmodell och webhook-events.
 |---|---|---|
 | Klart | E0 delvis, E1 delvis | — |
 | Fas 1 kvar | E1 rest, E2, E3, E8, E5, E6 | ~12 |
-| Fas 2 | E7, E9, E10 | ~10 |
+| Fas 2 | E9, E10 (E7 klar utom E7.10) | ~6 |
 | Fas 3 | E11, E12, E13, E15 | ~13 |
 | **Totalt till fullt system** | | **10–12 månader vid 15 h/vecka** |
 
