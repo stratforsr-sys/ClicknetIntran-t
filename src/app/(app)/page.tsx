@@ -9,11 +9,29 @@ import { getCurrentUser, canManageEmployees, hasRole } from "@/lib/auth";
 import { ROLE_LABEL, STATUS_LABEL } from "@/lib/roles";
 import { granskningslage } from "@/lib/dokument";
 import { kursLage, LAGE_ETIKETT, LAGE_TON } from "@/lib/utbildning";
+import { slaLage } from "@/lib/arenden";
+import { hamtaLage } from "@/lib/sparrar";
+import {
+  arbetadeMinuter,
+  dygnetsStart,
+  lageNu,
+  tillatna,
+  timmarOchMinuter,
+  type Handelse,
+} from "@/lib/tid";
 import { supabaseServer } from "@/lib/supabase/server";
+import { Stamplar } from "./tid/Stamplar";
+
+export const dynamic = "force-dynamic";
 
 /**
  * UI-PRD §7: startsidan har ingen hero och ingen illustration.
  * Forsta skarmen ska ge handling, inte valkomnande.
+ *
+ * §12 Q9: ordningen ar rollstyrd. Saljaren ser stampelknappen forst — det ar
+ * det enda hen gor har varje dag, och hen gor det fran telefonen i dorren.
+ * Chefen ser sina koer forst, for hens arende med sidan ar att veta vad som
+ * ligger och vantar pa ett beslut.
  *
  * "Att gora" hamtar bara ur levererade moduler. En rad som inte gar att
  * atgarda hor inte hemma har — da blir listan nagot man slutar titta pa.
@@ -23,36 +41,49 @@ export default async function Startsida() {
   if (!user?.employee) return null;
 
   const supabase = await supabaseServer();
-  const { count: antalAktiva } = await supabase
-    .from("employee")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "active");
-  const { count: antalOnboarding } = await supabase
-    .from("employee")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "onboarding");
+  const sparr = await hamtaLage();
+
+  // Behorigheterna star var for sig med flit. "Chef" ar inte en roll utan tre
+  // olika saker: se personalen, hantera arenden och attestera rattelser. Ett
+  // enda samlat begrepp hade gett teamledaren en arendeko hen inte kan rora.
+  const serPersonal = canManageEmployees(user) || hasRole(user, "ceo", "team_lead");
+  const hanterarArenden = hasRole(user, "sales_manager", "ceo");
+  const attesterar = canManageEmployees(user);
+  const serAvvikelser = canManageEmployees(user) || hasRole(user, "team_lead");
+  const chef = serPersonal || hanterarArenden;
 
   // RLS avgor vilka dokument som syns: audience_roles filtreras redan i
   // policyn, sa listan nedan behover inte upprepa den kontrollen.
-  const [{ data: kravDok }, { data: minaAck }, { data: mittAgande }] = await Promise.all([
-    supabase
-      .from("document")
-      .select("id, slug, title, version, review_due")
-      .eq("status", "published")
-      .eq("requires_ack", true)
-      .order("review_due"),
-    supabase
-      .from("document_ack")
-      .select("document_id, version")
-      .eq("employee_id", user.employee.id),
-    supabase
-      .from("document")
-      .select("id, slug, title, review_due")
-      .eq("owner_id", user.employee.id)
-      .eq("status", "published")
-      .lte("review_due", new Date().toISOString().slice(0, 10))
-      .order("review_due"),
-  ]);
+  const [{ data: kravDok }, { data: minaAck }, { data: mittAgande }, { data: minaArenden }] =
+    await Promise.all([
+      supabase
+        .from("document")
+        .select("id, slug, title, version, review_due")
+        .eq("status", "published")
+        .eq("requires_ack", true)
+        .order("review_due"),
+      supabase
+        .from("document_ack")
+        .select("document_id, version")
+        .eq("employee_id", user.employee.id),
+      supabase
+        .from("document")
+        .select("id, slug, title, review_due")
+        .eq("owner_id", user.employee.id)
+        .eq("status", "published")
+        .lte("review_due", new Date().toISOString().slice(0, 10))
+        .order("review_due"),
+      // AC-11.1 lovar arenden i listan. `waiting` satts nar nagon ANNAN an
+      // agaren skrivit i traden — alltsa precis nar ledningen har svarat och
+      // bollen ligger hos den anstallda. Se arenden/actions.ts.
+      supabase
+        .from("hr_case")
+        .select("id, subject, status, resolved_at, due_at, sla_hours")
+        .eq("employee_id", user.employee.id)
+        .eq("status", "waiting")
+        .is("resolved_at", null)
+        .order("due_at"),
+    ]);
 
   // AC-6.6 pa startsidan: en kurs som ligger och skraper ar lika mycket en
   // uppgift som en okvitterad rutin.
@@ -101,8 +132,205 @@ export default async function Startsida() {
   const ackade = new Set((minaAck ?? []).map((a) => `${a.document_id}:${a.version}`));
   const okvitterade = (kravDok ?? []).filter((d) => !ackade.has(`${d.id}:${d.version}`));
   const forfallna = mittAgande ?? [];
+  const obesvarade = minaArenden ?? [];
 
-  const chef = canManageEmployees(user) || hasRole(user, "ceo", "team_lead");
+  // Stamplingen. Bara dagens handelser — resten hor hemma pa /tid.
+  let stamplingslage = null;
+  if (sparr.stampling) {
+    const { data: idag } = await supabase
+      .from("time_event")
+      .select("id, kind, occurred_at, source, supersedes_id, correction_state, note")
+      .eq("employee_id", user.employee.id)
+      .gte("occurred_at", dygnetsStart())
+      .order("occurred_at");
+
+    const handelser: Handelse[] = idag ?? [];
+    const lage = lageNu(handelser);
+    stamplingslage = {
+      lage,
+      tillatna: tillatna(lage, sparr.rast),
+      minuter: arbetadeMinuter(handelser),
+    };
+  }
+
+  /**
+   * Chefens ko.
+   *
+   * Avvikelserna raknas medvetet INTE. K19 kraver att varje chefsoppning av
+   * avvikelsevyn loggas, och en siffra pa startsidan hade betytt en oppning
+   * per sidladdning — bade en logg full av brus och en insyn som skett utan
+   * att nagon valde den. Posten ar darfor en lank och ingenting mer.
+   */
+  const [{ data: koArenden }, { count: attKvittera }] = await Promise.all([
+    hanterarArenden
+      ? supabase
+          .from("hr_case")
+          .select("id, due_at, sla_hours, resolved_at")
+          .is("resolved_at", null)
+          .in("status", ["new", "in_progress"])
+      : Promise.resolve({ data: null }),
+    attesterar && sparr.stampling
+      ? supabase
+          .from("time_event")
+          .select("id", { count: "exact", head: true })
+          .eq("correction_state", "pending")
+      : Promise.resolve({ count: null }),
+  ]);
+
+  const overTiden = (koArenden ?? []).filter((a) => slaLage(a) === "over").length;
+  const snart = (koArenden ?? []).filter((a) => slaLage(a) === "snart").length;
+
+  const [{ count: antalAktiva }, { count: antalOnboarding }] = serPersonal
+    ? await Promise.all([
+        supabase.from("employee").select("id", { count: "exact", head: true }).eq("status", "active"),
+        supabase
+          .from("employee")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "onboarding"),
+      ])
+    : [{ count: null }, { count: null }];
+
+  const stampelkort = stamplingslage ? (
+    <Card status="brand">
+      <CardHeader
+        titel="Stämpla"
+        beskrivning={
+          stamplingslage.lage === "ute"
+            ? "Tiden sätts när du trycker."
+            : `Arbetad tid idag: ${timmarOchMinuter(stamplingslage.minuter)}.`
+        }
+      />
+      <Stamplar lage={stamplingslage.lage} tillatna={stamplingslage.tillatna} />
+      <div className="mt-4">
+        <Link href="/tid" className="text-small font-semibold text-brand-700 hover:text-brand-900">
+          Dagens stämplingar
+        </Link>
+      </div>
+    </Card>
+  ) : null;
+
+  const attGora = (
+    <Card>
+      <CardHeader
+        titel="Att göra"
+        beskrivning="Kvittenser, kurser och ärenden som väntar på dig."
+      />
+      {okvitterade.length === 0 &&
+      forfallna.length === 0 &&
+      kursUppgifter.length === 0 &&
+      obesvarade.length === 0 ? (
+        <EmptyState
+          rubrik="Ingenting väntar på dig"
+          text="Här samlas rutiner du inte kvitterat, kurser som pågår och ärenden med svar."
+        />
+      ) : (
+        <ul className="flex flex-col">
+          {okvitterade.map((d) => (
+            <Uppgift
+              key={d.id}
+              href={`/rutiner/${d.slug}`}
+              titel={d.title}
+              detalj={`Version ${d.version} · ${granskningslage(d.review_due).text}`}
+              markering={<Badge ton="accent">Kvittera</Badge>}
+            />
+          ))}
+          {obesvarade.map((a) => (
+            <Uppgift
+              key={`arende-${a.id}`}
+              href={`/arenden/${a.id}`}
+              titel={a.subject}
+              detalj="Ledningen har svarat och väntar på dig"
+              markering={<Badge ton={slaLage(a) === "over" ? "danger" : "accent"}>Svara</Badge>}
+            />
+          ))}
+          {kursUppgifter.map((k) => (
+            <Uppgift
+              key={`kurs-${k.id}`}
+              href={`/utbildning/${k.slug}`}
+              titel={k.title}
+              detalj={`${k.klara} av ${k.antal} moduler klara`}
+              markering={<Badge ton={LAGE_TON[k.lage]}>{LAGE_ETIKETT[k.lage]}</Badge>}
+            />
+          ))}
+          {forfallna.map((d) => (
+            <Uppgift
+              key={`agare-${d.id}`}
+              href={`/rutiner/${d.slug}/redigera`}
+              titel={d.title}
+              detalj={`Du äger dokumentet · ${granskningslage(d.review_due).text}`}
+              markering={<Badge ton="danger">Granska</Badge>}
+            />
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+
+  const koposter: { href: string; text: string; detalj: string; ton: "danger" | "warn" | "neutral" }[] = [];
+  if (hanterarArenden && overTiden > 0)
+    koposter.push({
+      href: "/arenden",
+      text: `${overTiden} ärende${overTiden === 1 ? "" : "n"} över tiden`,
+      detalj: "Svarstiden har passerat",
+      ton: "danger",
+    });
+  if (hanterarArenden && snart > 0)
+    koposter.push({
+      href: "/arenden",
+      text: `${snart} snart förfallna`,
+      detalj: "Sista fjärdedelen av fristen",
+      ton: "warn",
+    });
+  if (attesterar && (attKvittera ?? 0) > 0)
+    koposter.push({
+      href: "/tid",
+      text: `${attKvittera} rättelse${attKvittera === 1 ? "" : "r"} att besluta`,
+      detalj: "Både den gamla och den nya tiden visas",
+      ton: "warn",
+    });
+  if (serAvvikelser && sparr.stampling)
+    koposter.push({
+      href: "/tid/avvikelser",
+      text: "Rastavvikelser",
+      detalj: "Din öppning av vyn loggas",
+      ton: "neutral",
+    });
+
+  const kokort = chef ? (
+    <Card>
+      <CardHeader titel="Din kö" beskrivning="Det som väntar på ditt beslut." />
+      {koposter.length === 0 ? (
+        <EmptyState rubrik="Kön är tom" text="Inget ärende och ingen rättelse väntar på dig." />
+      ) : (
+        <ul className="flex flex-col">
+          {koposter.map((p) => (
+            <Uppgift
+              key={p.href + p.text}
+              href={p.href}
+              titel={p.text}
+              detalj={p.detalj}
+              markering={p.ton === "neutral" ? null : <Badge ton={p.ton}>Öppna</Badge>}
+            />
+          ))}
+        </ul>
+      )}
+    </Card>
+  ) : null;
+
+  const personalkort = serPersonal ? (
+    <Card>
+      <CardHeader titel="Personalen" />
+      <dl className="flex flex-col gap-3">
+        <Rad etikett="Aktiva" varde={antalAktiva ?? 0} />
+        <Rad etikett="Under onboarding" varde={antalOnboarding ?? 0} />
+      </dl>
+      <div className="mt-5">
+        <ButtonLink href="/personal" size="sm">
+          Öppna personalregistret
+        </ButtonLink>
+      </div>
+    </Card>
+  ) : null;
 
   return (
     <div className="flex flex-col gap-4 pt-2">
@@ -118,76 +346,17 @@ export default async function Startsida() {
         </p>
       </div>
 
+      {/* Ordningen ar hela poangen med E5.4, och den maste halla aven pa
+          375 px dar allt ligger i en enda spalt. Darfor byter korten plats i
+          traden i stallet for med CSS. */}
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader
-            titel="Att göra"
-            beskrivning="Kvittenser, kurser och ärenden som väntar på dig."
-          />
-          {okvitterade.length === 0 && forfallna.length === 0 && kursUppgifter.length === 0 ? (
-            <EmptyState
-              rubrik="Ingenting väntar på dig"
-              text="Här samlas rutiner du inte kvitterat, kurser som pågår och ärenden med svar."
-            />
-          ) : (
-            <ul className="flex flex-col">
-              {okvitterade.map((d) => (
-                <Uppgift
-                  key={d.id}
-                  href={`/rutiner/${d.slug}`}
-                  titel={d.title}
-                  detalj={`Version ${d.version} · ${granskningslage(d.review_due).text}`}
-                  markering={<Badge ton="accent">Kvittera</Badge>}
-                />
-              ))}
-              {kursUppgifter.map((k) => (
-                <Uppgift
-                  key={`kurs-${k.id}`}
-                  href={`/utbildning/${k.slug}`}
-                  titel={k.title}
-                  detalj={`${k.klara} av ${k.antal} moduler klara`}
-                  markering={<Badge ton={LAGE_TON[k.lage]}>{LAGE_ETIKETT[k.lage]}</Badge>}
-                />
-              ))}
-              {forfallna.map((d) => (
-                <Uppgift
-                  key={`agare-${d.id}`}
-                  href={`/rutiner/${d.slug}/redigera`}
-                  titel={d.title}
-                  detalj={`Du äger dokumentet · ${granskningslage(d.review_due).text}`}
-                  markering={<Badge ton="danger">Granska</Badge>}
-                />
-              ))}
-            </ul>
-          )}
-        </Card>
-
+        <div className="flex flex-col gap-4 lg:col-span-2">
+          {chef ? kokort : stampelkort}
+          {attGora}
+        </div>
         <div className="flex flex-col gap-4">
-          {chef && (
-            <Card status="brand">
-              <CardHeader titel="Personalen" />
-              <dl className="flex flex-col gap-3">
-                <Rad etikett="Aktiva" varde={antalAktiva ?? 0} />
-                <Rad etikett="Under onboarding" varde={antalOnboarding ?? 0} />
-              </dl>
-              <div className="mt-5">
-                <ButtonLink href="/personal" size="sm">
-                  Öppna personalregistret
-                </ButtonLink>
-              </div>
-            </Card>
-          )}
-
-          <Card>
-            <CardHeader titel="Byggstatus" beskrivning="Vad som finns i navet idag." />
-            <ul className="flex flex-col gap-2.5 text-small">
-              <Modul namn="Identitet och behörighet" ton="ok" status="I drift" />
-              <Modul namn="Rutinbibliotek" ton="ok" status="I drift" />
-              <Modul namn="Personalärenden" ton="neutral" status="Planerad" />
-              <Modul namn="Utbildning" ton="neutral" status="Planerad" />
-              <Modul namn="Stämpling" ton="neutral" status="Planerad" />
-            </ul>
-          </Card>
+          {chef ? stampelkort : null}
+          {personalkort}
         </div>
       </div>
     </div>
@@ -228,22 +397,5 @@ function Rad({ etikett, varde }: { etikett: string; varde: number }) {
       <dt className="text-small text-ink-500">{etikett}</dt>
       <dd className="tnum text-h1 text-ink-900">{varde}</dd>
     </div>
-  );
-}
-
-function Modul({
-  namn,
-  status,
-  ton,
-}: {
-  namn: string;
-  status: string;
-  ton: "ok" | "neutral";
-}) {
-  return (
-    <li className="flex items-center justify-between gap-3">
-      <span className="text-ink-700">{namn}</span>
-      <Badge ton={ton}>{status}</Badge>
-    </li>
   );
 }
