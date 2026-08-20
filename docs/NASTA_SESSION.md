@@ -10,9 +10,12 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
 ## Arbetsregler i det här repot
 
 - **Inga lokala byggen eller kloner** — allt ska gå direkt mot GitHub-repot.
-  *Avvikelse som är känd av användaren:* när Vercels webhook hängde klonades
-  repot till en scratchpad för att kunna köra `tsc`, `npm test` och
-  `vercel deploy --prod`. Det är disponerat och redovisat, inte glömt.
+  Verifieringen är Vercels egen build: en trasig build ersätter aldrig den
+  version som körs.
+  *Avvikelser som är kända av användaren:* när Vercels webhook hängde klonades
+  repot till en scratchpad för `tsc`, `npm test` och `vercel deploy --prod`.
+  Migrationer och tester körs också från en scratchpad, eftersom de behöver
+  `pg` och `DATABASE_URL`.
 - Committa som `stratforsr-sys <stratforsr@gmail.com>`.
 - Pusha rakt till `main`. Inga feature-branches. `main` deployar automatiskt
   till Vercel.
@@ -30,9 +33,12 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
 set -a && . $HOME/.clicknet/nav.env && set +a && npm test
 ```
 
-Tio sviter. `tests/rls.mjs` går mot den **riktiga** databasen och skapar och
+Elva sviter. `tests/rls.mjs` går mot den **riktiga** databasen och skapar och
 städar sina egna användare (prefix `rlstest+`). Den rör aldrig driftdata — det
 som måste provas skarpt görs i en transaktion som rullas tillbaka.
+
+`tests/registerutdrag.mjs` behöver `DATABASE_URL`: den frågar schemat efter
+främmande nycklar och jämför dem mot utdragets lista.
 
 ---
 
@@ -46,7 +52,10 @@ som måste provas skarpt görs i en transaktion som rullas tillbaka.
 | Nattjobb | Ett jobb, `/api/jobb/natt`, 02:30. Hämtar igen 14 dygn bakåt |
 | Lönerapport | Klar, med attest och oföränderlig period |
 | Personalärenden | Klara, med SLA och konfidentialitet |
-| Tvingat lösenordsbyte | **Nytt 2026-08-20.** Se nedan |
+| Tvingat lösenordsbyte | **Spärr i databasen sedan 2026-08-20.** Se nedan |
+| Startsida | Rollstyrd. Chefens kö, säljarens stämpelknapp |
+| Bottennavigering | Under 768 px: Hem, Sök, Stämpla, Mer |
+| Registerutdrag | Klart. `/profil` → Hämta registerutdrag |
 
 ### Två saker användaren själv måste göra
 
@@ -55,100 +64,91 @@ som måste provas skarpt görs i en transaktion som rullas tillbaka.
    utstämplingen före instämplingen. Den behöver en rättelse, annars blockerar
    den löneperioden. Samma stämpling gav en registrerad sen ankomst på 548
    minuter som ser ut att vara ett test.
-2. **Supabase-panelen** (uppgift #2): Site URL pekar fortfarande på localhost,
+2. **Supabase-panelen**: Site URL pekar fortfarande på localhost,
    registreringen är öppen, och det delade lösenordet är inte bytt.
 
 ---
 
-## Vad som byggdes 2026-08-20
+## Vad som byggdes 2026-08-20 (andra passet)
 
-### 1. Behörighetsprov för `late_arrival` och `compliance_gate` — KLART
+### Lösenordstvånget är nu en spärr i databasen — KLART
 
-Commit `53fff70`. De två tabellerna hade byggts utan den RLS-täckning
-Definition of Done p. 4 kräver. 34 nya kontroller i `tests/rls.mjs`.
+Migration `0017`. Provet som överlämningen bad om visade att tvånget bara satt i
+mellanvaran: ett flaggat konto som gick rakt på API:t fick ut sin egen rad ur
+`employee` och ett dokument ur `document`. Nu ger varje tabell noll rader.
 
-Provet går hela vägen fram till ett **lyckat** påslag av raststämplingen, i en
-rullad transaktion — en spärr som aldrig går att öppna är inte en spärr utan
-ett oupptäckt fel.
+Villkoret bor i `public.kraver_losenordsbyte()` och läser flaggan ur JWT:n. Det
+sitter i de fem hjälpfunktioner som nästan varje policy går genom, plus i de
+fem policyer som inte frågar någon av dem.
 
-Sidoupptäckt: tre gamla kontroller räknade rader med `=== 3` och `=== 2` och
-föll så fort det fanns riktiga ärenden och löneperioder i databasen. De letar
-numera efter sina egna id:n.
+**Gränsen går vid API:t, inte vid servern.** `getCurrentUser()` och
+`behoverSteg2()` faller tillbaka på service role just för flaggade konton — utan
+det tappar `/byt-losenord` namnkontrollen i lösenordsregeln, och steg två skulle
+hoppas över för ett flaggat chefskonto. Rör inte det utan att läsa kommentarerna
+i `src/lib/auth.ts` och `src/lib/supabase/middleware.ts`.
 
-### 2. Tvingat lösenordsbyte vid första inloggningen — KLART
+15 nya kontroller i `tests/rls.mjs`.
 
-Uppgift #14. Tillfälliga lösenord gick tidigare att behålla för alltid, och de
-är kända av chefen som läste upp dem.
+### `scripts/krav-losenordsbyte.mjs` — KLART
 
-**Så fungerar det**
+Sätter flaggan på konton som redan fanns. Torrkörning är normalläget:
 
-- Flaggan bor i auth-kontots `app_metadata`, nyckel `byt_losenord`. Se
-  `src/lib/losenordsbyte.ts` för varför just där: `user_metadata` får
-  användaren själv skriva i, och mellanvaran har redan svaret från `getUser()`
-  så kontrollen kostar ingen extra databasfråga.
-- `src/lib/supabase/middleware.ts` skickar den som har flaggan till
-  `/byt-losenord` från **varje** annan adress. Att det sitter i mellanvaran och
-  inte i en layout är avsiktligt: en server action är ett POST till sidans egen
-  adress och passerar där, så ett flaggat konto kan inte skriva något heller.
-- Kontrollen ligger **efter** steg två (MFA). En chef som bytt enhet ska
-  bekräfta enheten först — annars kan den som kommit över ett tillfälligt
-  lösenord sätta ett eget och låsa ute den rätta ägaren.
-- `/byt-losenord` ligger utanför `(app)` och har ingen navigering. Det finns
-  inget att klicka på som inte studsar tillbaka.
+```
+node --env-file=$HOME/.clicknet/nav.env scripts/krav-losenordsbyte.mjs --alla
+node --env-file=$HOME/.clicknet/nav.env scripts/krav-losenordsbyte.mjs --kor anna@clicknet.se
+```
 
-**Regelmotorn** — `src/lib/losenordskrav.ts`, ren logik, inga imports.
+Kör den på dem som fått ett tillfälligt lösenord upplåst. **Den som flaggas
+måste kunna sitt nuvarande lösenord** — bytessidan kräver det. Den som inte kan
+det behöver ett nytt tillfälligt lösenord från personalkortet i stället.
 
-Följer NIST SP 800-63B, inte den gamla vanan med versal + siffra + tecken. Den
-vanan ger `Sommar2026!`: fyra krav uppfyllda och ett ord högt upp i varje
-ordlista. Här gäller i stället längd, spärrlista, tangentbordsrader,
-upprepning, och att namn och e-post ur den egna profilen inte får stå i ordet.
-Alla fel visas på en gång — ett i taget är en pina.
+De två konton som finns idag (`simon@`, `zen@`) är **inte** flaggade. Det är ett
+val: de kan redan sina lösenord, och det finns ingen anledning att tvinga dem
+förrän säljarna läggs upp.
 
-Styrkemätaren i formuläret är en **uppskattning** och avgör ingenting.
-`granska()` dömer, både i webbläsaren och en gång till på servern.
+### E5 startsida, bottenrad och hopfällbar panel — KLART
 
-**En bugg som testet hittade:** spärrlistan innehöll `abc`, matchat som
-delsträng. Det nekade ungefär vartannat hundrade slumpat tillfälligt lösenord —
-chefen hade alltså kunnat dela ut ord som navet självt vägrade ta emot. Korta
-ord matchas nu bara när de är hela lösenordet. `tests/losenordskrav.mjs`
-slumpar 500 tillfälliga lösenord och granskar dem, just för att den sortens
-regel ska falla direkt.
+E5.1, E5.4, E5.5, E5.6. Kvar i E5: **E5.2 nyhetsinlägg**, **E5.3 under 1,5 s på
+4G** (aldrig mätt) och **E5.7 notissystem med ångra**.
 
-**Bytet ligger på ett ställe:** `src/lib/losenordsbyte-server.ts`. Profilsidan
-krävde tidigare bara längd och att e-postadressen inte stod i ordet, medan den
-tvingade sidan hade hela spärrlistan. Två vägar in i samma konto med olika krav
-är detsamma som att bara ha det svagare kravet.
+### E6.4 registerutdrag — KLART
 
-**Kvar på den här punkten:**
+`/personal/[id]/registerutdrag` ger JSON. Länk på `/profil`. Filbilagor saknas
+tills Storage finns (E2.12).
 
-- [ ] **Befintliga konton är inte flaggade.** Flaggan sätts när ett konto
-      skapas eller ett lösenord återställs. De som redan finns går fria. Skriv
-      `scripts/krav-losenordsbyte.mjs` som sätter `app_metadata.byt_losenord`
-      på valda konton, och kör den på dem som fått ett tillfälligt lösenord
-      upplåst. Användaren har inte lagt upp säljarna än, så det brådskar inte —
-      men det ska inte glömmas.
-- [ ] Provet av flödet är inte skrivet. `tests/rls.mjs` borde visa att ett
-      flaggat konto får noll rader ur API:t och att flaggan inte går att skriva
-      bort med användarens egen token (`user_metadata`-vägen).
+`tests/registerutdrag.mjs` jämför listan mot databasens främmande nycklar och
+faller när en ny kolumn pekar på `employee` utan att vara redovisad. **Lägger du
+till en tabell med persondata måste den in i `src/lib/registerutdrag.ts`** —
+annars faller provet, vilket är hela poängen.
 
 ---
 
 ## Vad som står på tur
 
-Uppgiftslistan i verktyget är sanningen; det här är den korta versionen i
-prioritetsordning för att få säljarna igång.
+I prioritetsordning för att få säljarna igång.
 
-1. **Flagga befintliga konton** (se ovan) — liten, och en förutsättning för att
-   tvånget ska betyda något.
-2. **#2 Supabase-panelen** — användarens eget arbete, men påminn.
-3. **#13 X7 pilot** med tre personer i två veckor innan bredd.
-4. **#7 E5 M11** rollstyrd startsida och mobilnavigering. Säljarna stämplar från
-   telefonen; startsidan är det första de ser och den är inte byggd för det än.
-5. **#8 E6 M12** gallringsjobb och registerutdrag. Gallringen är delvis byggd i
-   nattjobbet men registerutdraget saknas, och K14 lovar det.
-6. Därefter #10 global sökning, #9 Storage-spåret, #11 E7 frånvaro,
-   #12 E10+E9 rekrytering.
+1. **Supabase-panelen** — användarens eget arbete, men påminn.
+2. **X7 pilot** med tre personer i två veckor innan bredd.
+3. **E5.2 nyhetsinlägg** med målgruppsstyrning. Sista biten av startsidan.
+4. **E1.8** öppna ärenden avslutas med notis vid offboarding. Spärren är borta
+   sedan E3 finns.
+5. **E8.9 kursinnehåll** — åtta kurser ska skrivas. Ingen kod, men det är det
+   som gör att 25 säljare kan lära sig samma sak utan att du upprepar dig.
+6. **E2.13 global sökning** i toppraden.
+7. Därefter #9 Storage-spåret, E7 frånvaro, E10+E9 rekrytering.
 
-Spåren **#1 E0.8 transaktionell e-post**, **#3 notiser** och **#5 domän** är
-pausade på användarens uttryckliga begäran ("skippa mejl grejen helt", "glöm
-domän"). Ta inte upp dem igen utan att bli tillfrågad.
+### E6.2 gallringsjobbet är blockerat, inte bortglömt
+
+`retention_until` finns inte som kolumn någonstans. Att bygga jobbet betyder att
+först bestämma vilka tabeller som ska bära en gallringsfrist och hur lång den
+är. Det är **P0.6 registerförteckningen** som ska svara på det, och den är inte
+skriven.
+
+Ett gallringsjobb med påhittade frister raderar personaldata enligt en gissning
+och ser samtidigt ut att uppfylla K10. Bygg det inte förrän fristerna finns.
+
+### Pausat på användarens uttryckliga begäran
+
+Spåren **E0.8 transaktionell e-post**, **notiser** och **domän** är pausade
+("skippa mejl grejen helt", "glöm domän"). Ta inte upp dem igen utan att bli
+tillfrågad.
