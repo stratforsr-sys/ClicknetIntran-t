@@ -4,6 +4,49 @@ Läs denna före arbete. Uppdatera efteråt.
 
 ---
 
+## 2026-08-20 · Behörighetsprovet hann inte i kapp bygget
+
+Definition of Done p. 4 kräver att fel roll får noll rader, per modul, mot den
+riktiga databasen. `late_arrival`, `late_arrival_month` och `compliance_gate`
+byggdes utan den täckningen. De påståenden som stod i migrationerna — att
+ekonomin aldrig ser en sen ankomst, att spärren bara går att ändra av servern —
+var alltså skrivna men obevisade.
+
+34 nya kontroller. Det som faktiskt provas:
+
+- Ekonomin får **0 rader** ur `late_arrival` och `late_arrival_month`. Det är
+  K13 och K17 i praktiken: att låta bli att bygga vyn räcker inte, raden ska
+  inte gå att hämta ur API:t heller.
+- Teamledaren ser den som rapporterar till henne, inte den som ligger bredvid.
+- Den bedömda kan varken skriva ner sina egna minuter eller radera raden, och
+  säljchefen kan inte skriva en sen ankomst för hand.
+- `compliance_gate` går att **läsa** för alla inloggade. Det är avsiktligt och
+  provas som ett krav, inte som ett tillåtet läckage: öppenhet om vad som
+  övervakas är hela poängen. Ändra får bara servern.
+
+**Spärren provas hela vägen fram till ett lyckat påslag**
+
+Ett prov som bara visar att knappen vägrar är värdelöst — en spärr som aldrig
+går att öppna är inte en spärr, det är ett fel som ingen upptäckt än. Så testet
+bygger upp underlaget bit för bit och kontrollerar att rätt sak fattas i varje
+läge: utkast till avvägning, publicerad men odaterad, en enda okvitterad av
+sex. Sedan slår det på spärren, konstaterar att den står på med namn på den som
+beslutade, och slår av den igen.
+
+Allt det sker i en transaktion som rullas tillbaka, och testet kontrollerar
+efteråt att driftläget står orört. Att prova det skarpt vore att slå på
+raststämplingen i produktion.
+
+**Sidoupptäckt: tre gamla kontroller hade börjat ljuga**
+
+`hr_case` och `payroll_row` räknades med `=== 3` respektive `=== 2`. Det höll så
+länge databasen bara innehöll testdata. Nu finns riktiga ärenden och riktiga
+löneperioder där, så kontrollerna föll — inte för att behörigheten var fel,
+utan för att provet räknade fel saker. De letar numera efter sina egna id:n.
+Ett test som knäcks av att någon använder systemet är ett dåligt test.
+
+---
+
 ## 2026-08-19 · Spärren flyttar in i databasen
 
 K12 gick inte att "bygga" — det är ett beslut någon ska fatta och datera. Det

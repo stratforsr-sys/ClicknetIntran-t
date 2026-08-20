@@ -73,6 +73,26 @@ async function nekarSql(sql, params = []) {
   }
 }
 
+/**
+ * Samma sak, men inuti en sparpunkt.
+ *
+ * Ett fel i Postgres avbryter hela transaktionen — utan sparpunkt kan man
+ * alltsa bara prova EN sak som ska neka innan resten faller av sig sjalv.
+ */
+let sparpunkt = 0;
+async function nekarSpar(sql, params = []) {
+  const namn = `p${++sparpunkt}`;
+  await db.query(`savepoint ${namn}`);
+  try {
+    await db.query(sql, params);
+    await db.query(`release savepoint ${namn}`);
+    return null;
+  } catch (e) {
+    await db.query(`rollback to savepoint ${namn}`);
+    return e.message;
+  }
+}
+
 async function stad() {
   const { rows } = await db.query(`select id, auth_user_id from employee where email like $1`, [PREFIX + "%"]);
   for (const r of rows) {
@@ -398,6 +418,233 @@ console.log("\n\x1b[1mScheman och avvikelser\x1b[0m");
   ok("säljchefen ser båda raderna", chefensJournal.length >= 2, `såg ${chefensJournal.length}`);
 }
 
+console.log("\n\x1b[1mSen ankomst: den bedomda ser sin rad, ekonomin ser ingen\x1b[0m");
+{
+  // Sen ankomst ar den kansligaste raden i M2: den namner en person vid namn
+  // och sager att hen missko­tte sig. K13 och K17 sager att den aldrig far na
+  // lonen — och da racker det inte att lata bli att bygga vyn, ekonomin ska
+  // inte kunna hamta raden ur API:t heller.
+  await db.query(
+    `insert into late_arrival (employee_id, work_date, scheduled_start, arrived_at,
+                               minutes_late, tolerance_minutes)
+     values ($1::uuid, current_date - 2, '09:00', now() - interval '2 days', 7, 1),
+            ($2::uuid, current_date - 2, '09:00', now() - interval '2 days', 3, 1)`,
+    [saljareA.id, saljareB.id],
+  );
+  await db.query(
+    `insert into late_arrival_month (employee_id, month, antal, minuter)
+     values ($1::uuid, date_trunc('month', current_date)::date, 1, 7),
+            ($2::uuid, date_trunc('month', current_date)::date, 1, 3)`,
+    [saljareA.id, saljareB.id],
+  );
+
+  const annas = await las(tA, "late_arrival", "select=employee_id,minutes_late");
+  ok("Anna ser sin egen sena ankomst", annas.length === 1 && annas[0].employee_id === saljareA.id,
+    `såg ${annas.length}`);
+
+  const direkt = await las(tA, "late_arrival", `select=id&employee_id=eq.${saljareB.id}`);
+  ok("och 0 rader när hon frågar direkt på Bertils id", direkt.length === 0, `såg ${direkt.length}`);
+
+  const cecilias = await las(tC, "late_arrival", "select=employee_id");
+  ok("Cecilia ser Anna som rapporterar till henne", cecilias.some((r) => r.employee_id === saljareA.id));
+  ok("men INTE Bertil som inte gör det", !cecilias.some((r) => r.employee_id === saljareB.id),
+    `såg ${cecilias.length}`);
+
+  const evas = await las(tE, "late_arrival", "select=id");
+  ok("Eva på ekonomi ser 0 rader — K13 och K17", evas.length === 0, `såg ${evas.length}`);
+
+  const evasManad = await las(tE, "late_arrival_month", "select=employee_id");
+  ok("och inte heller månadssummorna", evasManad.length === 0, `såg ${evasManad.length}`);
+
+  const davids = await las(tD, "late_arrival", "select=id");
+  ok("Säljchefen ser båda", davids.length >= 2, `såg ${davids.length}`);
+
+  const annasManad = await las(tA, "late_arrival_month", "select=employee_id");
+  ok("Anna ser sin egen månadssumma", annasManad.length === 1, `såg ${annasManad.length}`);
+
+  // AC-2.17: den bedomda far kommentera via en server action, aldrig skriva om
+  // sjalva bedomningen.
+  const w1 = await fetch(`${URL}/rest/v1/late_arrival?employee_id=eq.${saljareA.id}`, {
+    method: "PATCH", headers: som(tA), body: JSON.stringify({ minutes_late: 1 }),
+  });
+  ok("Anna kan INTE skriva ner sina egna minuter", !w1.ok, `HTTP ${w1.status}`);
+
+  const w2 = await fetch(`${URL}/rest/v1/late_arrival?employee_id=eq.${saljareA.id}`, {
+    method: "DELETE", headers: som(tA),
+  });
+  ok("och inte radera raden", !w2.ok, `HTTP ${w2.status}`);
+
+  const w3 = await fetch(`${URL}/rest/v1/late_arrival`, {
+    method: "POST", headers: som(tD),
+    body: JSON.stringify({ employee_id: saljareB.id, work_date: "2019-01-02",
+      scheduled_start: "09:00", arrived_at: new Date().toISOString(),
+      minutes_late: 90, tolerance_minutes: 1 }),
+  });
+  ok("inte ens säljchefen kan skriva en sen ankomst för hand", !w3.ok, `HTTP ${w3.status}`);
+
+  const { rows: oror } = await db.query(
+    `select minutes_late from late_arrival where employee_id = $1::uuid`, [saljareA.id],
+  );
+  ok("och de sju minuterna står kvar i databasen", oror[0]?.minutes_late === 7, String(oror[0]?.minutes_late));
+}
+
+console.log("\n\x1b[1mSparren for raststampling sitter i databasen, inte i koden\x1b[0m");
+{
+  // Lasningen ar avsiktligt oppen. Att var och en kan se vad som ar pasla­get
+  // och pa vilken grund ar sjalva poangen med oppenhet kring overvakning —
+  // det ar andringen som ska vara svar, inte insynen.
+  const annas = await las(tA, "compliance_gate", "select=key,enabled");
+  ok("Anna ser vilka spärrar som finns och vad som är påslaget", annas.length >= 2, `såg ${annas.length}`);
+  ok("inklusive att raststämplingen står av",
+    annas.find((r) => r.key === "raststampling")?.enabled === false);
+
+  for (const [namn, tok] of [["Anna", tA], ["David", tD]]) {
+    const w = await fetch(`${URL}/rest/v1/compliance_gate?key=eq.raststampling`, {
+      method: "PATCH", headers: som(tok),
+      body: JSON.stringify({ enabled: true, enabled_at: new Date().toISOString() }),
+    });
+    ok(`${namn} kan INTE slå på raststämplingen via API:t`, !w.ok, `HTTP ${w.status}`);
+  }
+
+  const wDel = await fetch(`${URL}/rest/v1/compliance_gate?key=eq.stampling`, {
+    method: "DELETE", headers: som(tD),
+  });
+  ok("och ingen tar bort en spärr via API:t", !wDel.ok, `HTTP ${wDel.status}`);
+
+  const { rows: kvar } = await db.query(`select enabled from compliance_gate where key = 'raststampling'`);
+  ok("raststämplingen står fortfarande av i databasen", kvar[0].enabled === false);
+
+  // -------------------------------------------------------------------------
+  // Resten provas med full behorighet, i en transaktion som rullas tillbaka.
+  // Provet MASTE ga hela vagen fram till ett lyckat paslag — en spa­rr som
+  // aldrig gar att oppna ar inte en spa­rr, det ar ett fel som ingen upptackt.
+  // Att gora det skarpt vore att sla pa raststamplingen i drift.
+  // -------------------------------------------------------------------------
+  const saknasFor = async (key) =>
+    (await db.query(`select public.sparr_saknas($1) as s`, [key])).rows[0].s ?? [];
+  const har = (lista, del) => lista.some((r) => r.includes(del));
+
+  await db.query("begin");
+  try {
+    const utanBevis = await nekarSpar(
+      `update compliance_gate set enabled = true, enabled_at = now(), enabled_by = $1::uuid
+        where key = 'raststampling'`,
+      [chef.id],
+    );
+    ok("inte ens service role slår på den utan underlag", utanBevis !== null);
+    ok("och felet räknar upp vad som saknas", (utanBevis ?? "").includes("Detta saknas"),
+      (utanBevis ?? "").slice(0, 60));
+
+    const bort = await nekarSpar(`delete from compliance_gate where key = 'raststampling'`);
+    ok("en spärr går inte att radera bort — bara stänga av", bort !== null, (bort ?? "").slice(0, 40));
+
+    // Bevisen, ett i taget, sa att varje villkor provas var for sig.
+    const nyttDok = async (slug, titel, typ, status, decided) => {
+      const { rows } = await db.query(
+        `insert into document (title, slug, category_path, body_md, owner_id, review_due, doc_type,
+                               requires_ack, audience_roles, status, created_by, version,
+                               published_at, decided_on)
+         values ($1,$2,'Test','Brödtext',$3::uuid, current_date + 200, $4, $5, '{}', $6, $3::uuid, 1,
+                 case when $6 = 'published' then now() else null end, $7)
+         returning id`,
+        [titel, slug, chef.id, typ, typ === "staff_information", status, decided],
+      );
+      return rows[0].id;
+    };
+
+    const k12 = await nyttDok("rlstest-k12", "Rlstest avvägning", "interest_assessment", "draft", null);
+    const k14 = await nyttDok("rlstest-k14", "Rlstest information", "staff_information", "published", null);
+
+    await db.query(
+      `update compliance_gate set interest_assessment_id = $1::uuid, staff_information_id = $2::uuid
+        where key = 'raststampling'`,
+      [k12, k14],
+    );
+
+    let saknas = await saknasFor("raststampling");
+    ok("ett utkast till avvägning duger inte", har(saknas, "inte publicerad"), saknas.join(" | "));
+    ok("och personalen har inte kvitterat än", har(saknas, "har inte kvitterat"), saknas.join(" | "));
+
+    await db.query(`update document set status = 'published', published_at = now() where id = $1::uuid`, [k12]);
+    saknas = await saknasFor("raststampling");
+    ok("publicerad men odaterad avvägning duger inte heller",
+      har(saknas, "saknar beslutsdatum"), saknas.join(" | "));
+    ok("och den räknas inte längre som opublicerad", !har(saknas, "inte publicerad"));
+
+    await db.query(`update document set decided_on = current_date where id = $1::uuid`, [k12]);
+
+    // K14 ska vara kvitterad av VAR OCH EN som ar aktiv, inte av nagon.
+    const { rows: aktiva } = await db.query(`select count(*)::int as n from employee where status = 'active'`);
+    await db.query(
+      `insert into document_ack (document_id, employee_id, version)
+       select $1::uuid, e.id, 1 from employee e where e.status = 'active'
+          and e.id <> $2::uuid`,
+      [k14, saljareB.id],
+    );
+    saknas = await saknasFor("raststampling");
+    ok(`en enda okvitterad av ${aktiva[0].n} räcker för att hålla spärren stängd`,
+      har(saknas, "har inte kvitterat"), saknas.join(" | "));
+
+    await db.query(
+      `insert into document_ack (document_id, employee_id, version) values ($1::uuid,$2::uuid,1)`,
+      [k14, saljareB.id],
+    );
+
+    // K29. Rastschemat fran forra blocket ligger kvar, men provet ska sta pa
+    // egna ben aven om blocken flyttas isar.
+    const { rows: r } = await db.query(`select count(*)::int as n from scheduled_break`);
+    if (r[0].n === 0) {
+      await db.query(
+        `insert into scheduled_break (scope, weekday, window_start, window_end, duration_minutes)
+         values ('company', 2, '11:30', '13:00', 30)`,
+      );
+    }
+
+    saknas = await saknasFor("raststampling");
+    ok("med daterad K12, kvitterad K14 och ett rastschema saknas ingenting",
+      saknas.length === 0, saknas.join(" | "));
+
+    const utanVem = await nekarSpar(
+      `update compliance_gate set enabled = true, enabled_at = now(), enabled_by = null
+        where key = 'raststampling'`,
+    );
+    ok("men ett påslag utan vem som beslutat nekas ändå", utanVem !== null, (utanVem ?? "").slice(0, 45));
+
+    const pa = await nekarSpar(
+      `update compliance_gate set enabled = true, enabled_at = now(), enabled_by = $1::uuid
+        where key = 'raststampling'`,
+      [chef.id],
+    );
+    ok("och med allt på plats går den att slå på", pa === null, (pa ?? "").slice(0, 60));
+
+    const { rows: nu } = await db.query(
+      `select enabled, enabled_by from compliance_gate where key = 'raststampling'`,
+    );
+    ok("läget står påslaget med namn på den som beslutade",
+      nu[0].enabled === true && nu[0].enabled_by === chef.id);
+
+    // Vagen tillbaka ska alltid vara oppen, aven utan underlag.
+    const av = await nekarSpar(`update compliance_gate set enabled = false where key = 'raststampling'`);
+    ok("och alltid att slå av igen", av === null, (av ?? "").slice(0, 40));
+
+    const avStampling = await nekarSpar(
+      `update compliance_gate set enabled = false where key = 'stampling'`,
+    );
+    ok("samma sak för in- och utstämplingen — nödbromsen kräver ingen blankett",
+      avStampling === null, (avStampling ?? "").slice(0, 40));
+  } finally {
+    await db.query("rollback");
+  }
+
+  const { rows: efterat } = await db.query(
+    `select key, enabled from compliance_gate order by key`,
+  );
+  ok("efter rullbacken står stämplingen på",
+    efterat.find((r) => r.key === "stampling")?.enabled === true);
+  ok("och raststämplingen av — testet lämnade inga spår i driften",
+    efterat.find((r) => r.key === "raststampling")?.enabled === false);
+}
+
 console.log("\n\x1b[1mUtbildning: malgrupp, facit och egna forsok\x1b[0m");
 {
   const { rows: k } = await db.query(
@@ -625,9 +872,12 @@ console.log("\n\x1b[1mAC-4.3: konfidentiella ärenden når bara säljchef och VD
   const cecilias = await las(tC, "hr_case");
   ok("Cecilia som teamledare ser inga ärenden alls", cecilias.length === 0, `såg ${cecilias.length}`);
 
-  const davids = await las(tD, "hr_case");
-  ok("David som säljchef ser alla tre", davids.length === 3, `såg ${davids.length}`);
-  ok("inklusive det konfidentiella", davids.some((a) => a.id === hemligt));
+  // Antalet sager ingenting: testet kor mot samma databas som driften, och dar
+  // ligger riktiga arenden. Fragan ar om just de har tre syns.
+  const davids = (await las(tD, "hr_case")).map((a) => a.id);
+  ok("David som säljchef ser alla tre testärendena",
+    [oppet, hemligt, bertils].every((i) => davids.includes(i)), `såg ${davids.length} totalt`);
+  ok("inklusive det konfidentiella", davids.includes(hemligt));
 
   const evas = await las(tE, "hr_case");
   ok("Eva på ekonomi ser inga ärenden — det är inte hennes bord", evas.length === 0, `såg ${evas.length}`);
@@ -689,10 +939,13 @@ console.log("\n\x1b[1mLönerapporten är ledningens och ekonomins\x1b[0m");
   const cecilias = await las(tC, "payroll_row");
   ok("Cecilia ser ingen annans löneunderlag, inte ens Annas", cecilias.length === 0, `såg ${cecilias.length}`);
 
-  const davids = await las(tD, "payroll_row");
+  // Samma sak har: raknar man alla rader raknar man in driftens loneperioder.
+  const iPerioden = (rader) => rader.filter((r) => r.period_id === period);
+
+  const davids = iPerioden(await las(tD, "payroll_row"));
   ok("David som säljchef ser båda raderna", davids.length === 2, `såg ${davids.length}`);
 
-  const evas = await las(tE, "payroll_row");
+  const evas = iPerioden(await las(tE, "payroll_row"));
   ok("Eva på ekonomi ser båda raderna", evas.length === 2, `såg ${evas.length}`);
   ok("och kommer åt perioden", (await las(tE, "payroll_period")).length >= 1);
 
@@ -718,7 +971,7 @@ console.log("\n\x1b[1mLönerapporten är ledningens och ekonomins\x1b[0m");
 }
 
 console.log("\n\x1b[1mAnonym anslutning\x1b[0m");
-for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category"]) {
+for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate"]) {
   const r = await fetch(`${URL}/rest/v1/${t}?select=*`, { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` } });
   const j = await r.json();
   ok(`${t} ger inga rader anonymt`, !Array.isArray(j) || j.length === 0, Array.isArray(j) ? `${j.length} rader` : `HTTP ${r.status}`);
