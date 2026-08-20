@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { SUPABASE_ANON_KEY, SUPABASE_URL, isConfigured } from "@/lib/env";
+import { SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY, SUPABASE_URL, isConfigured } from "@/lib/env";
 import { bygCsp } from "@/lib/csp";
 import { kvittoGiltigt, STEG2_KAKA } from "@/lib/mfa";
 import { MFA_REQUIRED_ROLES } from "@/lib/roles";
@@ -23,18 +23,39 @@ const PUBLIC = ["/logga-in", "/auth", "/uppstart", "/api"];
  * pa nej. Ett ja hade last ute alla nar Supabase har en dalig minut, och
  * spärren finns anda kvar i (app)-layouten som andra led.
  */
-async function behoverSteg2(token: string, authUserId: string): Promise<boolean> {
+async function behoverSteg2(
+  token: string,
+  authUserId: string,
+  flaggadForByte: boolean,
+): Promise<boolean> {
   // Samma strombrytare som kraverMfa(). Utan den skulle en tom rollista anda
   // slappa igenom pa rattigheten nedan, och eftersom kodsidan da skickar
   // tillbaka hit vore resultatet en slinga i stallet for en spärr.
   if (MFA_REQUIRED_ROLES.length === 0) return false;
+
+  /**
+   * Undantaget for konton som ska byta losenord.
+   *
+   * Sedan migration 0017 ger den tokenen noll rader ur varje tabell. En
+   * flaggad saljchef hade darfor sett ut som ett konto helt utan roller,
+   * alltsa ett som inte behover steg tva — och da hade ordningen kastats om.
+   * Den som kommit over ett tillfalligt losenord for ett chefskonto hade fatt
+   * satta ett eget UTAN att bekrafta enheten forst, vilket ar precis det som
+   * ordningen langre ner finns till for att hindra.
+   *
+   * Bara for de kontona, och bara for den har enda fragan. Alla andra lases
+   * fortfarande med anvandarens egen token, sa RLS avgor vad som syns och
+   * mellanvaran far inte mer an den behover.
+   */
+  const nyckel = flaggadForByte && SUPABASE_SERVICE_KEY ? SUPABASE_SERVICE_KEY : SUPABASE_ANON_KEY;
+  const bararen = flaggadForByte && SUPABASE_SERVICE_KEY ? SUPABASE_SERVICE_KEY : token;
 
   try {
     const svar = await fetch(
       `${SUPABASE_URL}/rest/v1/employee` +
         `?select=employee_role(role),employee_permission(permission)` +
         `&auth_user_id=eq.${authUserId}&status=eq.active`,
-      { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` } },
+      { headers: { apikey: nyckel, Authorization: `Bearer ${bararen}` } },
     );
     if (!svar.ok) return false;
 
@@ -102,12 +123,13 @@ export async function updateSession(request: NextRequest) {
    * galler det aven for route handlers och for sidor som byggs till senare.
    */
   const undantag = path.startsWith("/logga-in") || path.startsWith("/auth") || path.startsWith("/api");
+  const skaByta = Boolean(user && kraverByte(user.app_metadata));
   if (user && !undantag) {
     const giltigt = await kvittoGiltigt(request.cookies.get(STEG2_KAKA)?.value, user.id);
     if (!giltigt) {
       const { data } = await supabase.auth.getSession();
       const token = data.session?.access_token;
-      if (token && (await behoverSteg2(token, user.id))) {
+      if (token && (await behoverSteg2(token, user.id, skaByta))) {
         const url = request.nextUrl.clone();
         url.pathname = "/logga-in/verifiera";
         url.search = "";
@@ -131,8 +153,13 @@ export async function updateSession(request: NextRequest) {
    * en server action ar ett POST till sidans egen adress, och den passerar
    * har. Ett konto med tvang kommer alltsa inte at att SKRIVA nagot heller,
    * inte bara at att titta.
+   *
+   * Sedan migration 0017 ar det har inte langre den enda spa­rren. Databasen
+   * ger samma konto noll rader ur varje tabell, aven for den som gar rakt pa
+   * API:t och aldrig ser en enda av navets sidor. Omdirigeringen har finns
+   * kvar for att den ger en vag framat i stallet for en tom skarm.
    */
-  if (user && kraverByte(user.app_metadata) && !undantag && path !== BYTESVAG) {
+  if (user && skaByta && !undantag && path !== BYTESVAG) {
     const url = request.nextUrl.clone();
     url.pathname = BYTESVAG;
     url.search = "";
