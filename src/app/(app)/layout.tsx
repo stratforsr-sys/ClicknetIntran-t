@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { Skal } from "@/components/shell/Skal";
 import { navFor } from "@/components/shell/nav-items";
+import { SIDOPANEL_KAKA, arHopfalld } from "@/components/shell/sidopanel";
 import { hamtaLage } from "@/lib/sparrar";
 import { getCurrentUser, fullName } from "@/lib/auth";
 import { ROLE_LABEL } from "@/lib/roles";
@@ -40,6 +41,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const roll = user.roles.length ? ROLE_LABEL[user.roles[0]] : "Väntar på roll";
   const lage = await hamtaLage();
 
+  // Sidopanelens lage lases har och inte i webblasaren, sa att en hopfalld
+  // panel ritas hopfalld pa en gang i stallet for att fallas ihop efterat.
+  const hopfalld = arHopfalld((await cookies()).get(SIDOPANEL_KAKA)?.value);
 
   return (
     <Skal
@@ -47,6 +51,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       namn={fullName(user.employee)}
       roll={roll}
       stamplingPa={lage.stampling}
+      hopfalldFranStart={hopfalld}
     >
       {children}
     </Skal>
