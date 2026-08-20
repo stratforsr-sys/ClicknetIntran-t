@@ -844,6 +844,96 @@ console.log("\n\x1b[1mSteg två: kod via e-post\x1b[0m");
   ok("samma kod går inte att använda igen", !rAter.ok, `HTTP ${rAter.status}`);
 }
 
+console.log("\n\x1b[1mTvingat lösenordsbyte stänger API:t, inte bara sidorna\x1b[0m");
+{
+  /**
+   * Eget konto, inte Anna eller David. Flaggan bor i app_metadata och foljer
+   * med i varje ny token — flaggades nagon av dem skulle sektionerna efter
+   * den har lasa med en token som plotsligt inte ser nagot, och felet skulle
+   * dyka upp langt fran sin orsak.
+   *
+   * Rollen ar sales_manager med flit: det ar den breda atkomsten som ar varst
+   * att lamna oppen for ett konto vars losenord tva personer kan.
+   */
+  const flaggad = await skapa("f", "Fredrik", "sales_manager");
+
+  const laesKonto = async () =>
+    (await (await fetch(`${URL}/auth/v1/admin/users/${flaggad.authId}`, { headers: ADMIN })).json());
+
+  const sattFlagga = async (varde) => {
+    const nu = (await laesKonto()).app_metadata ?? {};
+    await fetch(`${URL}/auth/v1/admin/users/${flaggad.authId}`, {
+      method: "PUT", headers: ADMIN,
+      body: JSON.stringify({ app_metadata: { ...nu, byt_losenord: varde } }),
+    });
+  };
+
+  // Utgangslaget. Utan det sager noll rader langre ner ingenting — ett konto
+  // som aldrig sag nagot ar inget bevis for att en spa­rr fungerar.
+  const tFore = await loggaIn(flaggad.epost);
+  const foreEmployee = await las(tFore, "employee");
+  ok("en säljchef utan tvång ser personalregistret", foreEmployee.length > 1, `såg ${foreEmployee.length}`);
+
+  await sattFlagga(true);
+  const tEfter = await loggaIn(flaggad.epost);
+
+  const nyttal = JSON.parse(Buffer.from(tEfter.split(".")[1], "base64url").toString());
+  ok("flaggan följer med i token", nyttal.app_metadata?.byt_losenord === true,
+    JSON.stringify(nyttal.app_metadata));
+
+  // Fyra tabeller som slapper in varje inloggad utan vidare, och tre som gar
+  // via rollerna. Bade vagarna maste stanga, annars ar spa­rren bara delvis.
+  for (const t of ["employee", "employee_role", "document", "hr_case", "company", "team", "case_category", "compliance_gate"]) {
+    const rader = await las(tEfter, t);
+    ok(`${t} ger noll rader med tvång`, rader.length === 0, `såg ${rader.length}`);
+  }
+
+  // Ett dokument som riktar sig till ALLA ar den vag som slapp igenom fore
+  // 0017: matches_audience svarade ja utan att titta pa vem som fragade.
+  await db.query(
+    `insert into document (title, slug, category_path, body_md, owner_id, review_due, doc_type,
+                           requires_ack, audience_roles, status, created_by, version, published_at)
+     values ('Öppet för alla','rlstest-oppet','Test','Brödtext',$1::uuid, current_date + 200,
+             'routine', false, '{}', 'published', $1::uuid, 1, now())`,
+    [chef.id],
+  );
+  ok("inte heller ett dokument utan målgrupp", (await las(tEfter, "document")).length === 0);
+
+  // Skrivvagarna. app_metadata far bara service role rora — annars kunde den
+  // sparrade sjalv stanga av spa­rren.
+  const som2 = { apikey: ANON, Authorization: `Bearer ${tEfter}`, "Content-Type": "application/json" };
+  const rApp = await fetch(`${URL}/auth/v1/user`, {
+    method: "PUT", headers: som2, body: JSON.stringify({ app_metadata: { byt_losenord: false } }),
+  });
+  ok("egen token får inte skriva app_metadata", rApp.status === 403, `HTTP ${rApp.status}`);
+
+  // user_metadata far den daremot skriva i, och det ska inte spela nagon roll.
+  // Det ar hela skalet till att flaggan inte bor dar.
+  const rUser = await fetch(`${URL}/auth/v1/user`, {
+    method: "PUT", headers: som2, body: JSON.stringify({ data: { byt_losenord: false } }),
+  });
+  const tTredje = await loggaIn(flaggad.epost);
+  const p3 = JSON.parse(Buffer.from(tTredje.split(".")[1], "base64url").toString());
+  ok("en egen user_metadata-flagga stänger inte av tvånget",
+    rUser.ok && p3.app_metadata?.byt_losenord === true && p3.user_metadata?.byt_losenord === false,
+    `app=${p3.app_metadata?.byt_losenord} user=${p3.user_metadata?.byt_losenord}`);
+  ok("och API:t är fortfarande stängt efteråt", (await las(tTredje, "employee")).length === 0);
+
+  /**
+   * Och tillbaka. En spa­rr som inte gar att oppna ar inte en spa­rr utan ett
+   * oupptackt fel — samma resonemang som provet av raststamplingen i 0015.
+   * Det ar ocksa den enda kontroll som visar att bytet faktiskt slapper in
+   * personen igen, vilket ar vad hela flodet finns till for.
+   */
+  await sattFlagga(false);
+  const tSlut = await loggaIn(flaggad.epost);
+  const slutEmployee = await las(tSlut, "employee");
+  ok("efter bytet ser säljchefen registret igen",
+    slutEmployee.length === foreEmployee.length, `såg ${slutEmployee.length} av ${foreEmployee.length}`);
+
+  await db.query(`delete from document where slug = 'rlstest-oppet'`);
+}
+
 console.log("\n\x1b[1mAC-4.3: konfidentiella ärenden når bara säljchef och VD\x1b[0m");
 {
   const nyttArende = async (agare, kategori, rubrik, konfidentiellt) => {
