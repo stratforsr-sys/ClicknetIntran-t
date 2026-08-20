@@ -102,6 +102,8 @@ async function stad() {
   }
   await db.query(`delete from audit_log where object_id in (select id::text from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`update team set lead_id = null where lead_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
+  await db.query(`delete from news_post where slug like 'rlstest-%'`);
+  await db.query(`delete from notification_seen where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`delete from document where slug like 'rlstest-%'`);
   await db.query(`delete from course where slug like 'rlstest-%'`);
   await db.query(`delete from employee_permission where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
@@ -1060,8 +1062,116 @@ console.log("\n\x1b[1mLönerapporten är ledningens och ekonomins\x1b[0m");
   await db.query(`delete from payroll_period where id = $1::uuid`, [period]);
 }
 
+console.log("\n\x1b[1mNyheter når målgruppen och ingen annan\x1b[0m");
+{
+  const nyttInlagg = async (slug, titel, roller, teams, status = "published") => {
+    const { rows } = await db.query(
+      `insert into news_post (slug, title, body_md, audience_roles, audience_teams, status,
+                              author_id, published_at)
+       values ($1,$2,'Brödtext',$3::text[],$4::uuid[],$5,$6::uuid,
+               case when $5 = 'published' then now() else null end)
+       returning id`,
+      [slug, titel, roller, teams, status, chef.id],
+    );
+    return rows[0].id;
+  };
+
+  const tillAlla = await nyttInlagg("rlstest-nyhet-alla", "Till alla", "{}", "{}");
+  const tillSaljare = await nyttInlagg("rlstest-nyhet-saljare", "Till säljare", "{salesperson}", "{}");
+  const tillEkonomi = await nyttInlagg("rlstest-nyhet-ekonomi", "Till ekonomi", "{finance}", "{}");
+  const utkast = await nyttInlagg("rlstest-nyhet-utkast", "Utkast", "{}", "{}", "draft");
+
+  const slugar = async (tok) => (await las(tok, "news_post", "select=slug")).map((r) => r.slug);
+
+  const annas = await slugar(tA);
+  ok("Anna ser inlägget till alla", annas.includes("rlstest-nyhet-alla"), annas.join(", "));
+  ok("och inlägget till säljare", annas.includes("rlstest-nyhet-saljare"));
+  ok("men inte det till ekonomi", !annas.includes("rlstest-nyhet-ekonomi"));
+  ok("och inte utkastet", !annas.includes("rlstest-nyhet-utkast"));
+
+  const evas = await slugar(tE);
+  ok("Eva på ekonomi ser sitt eget", evas.includes("rlstest-nyhet-ekonomi"));
+  ok("men inte säljarnas", !evas.includes("rlstest-nyhet-saljare"));
+
+  // Direkt fraga pa id:t, inte bara listan. En vy kan filtrera; ett API far
+  // inte lamna ut raden alls.
+  const direkt = await las(tA, "news_post", `select=slug&id=eq.${tillEkonomi}`);
+  ok("noll rader när Anna frågar direkt på ekonomins inlägg", direkt.length === 0, `såg ${direkt.length}`);
+
+  const davids = await slugar(tD);
+  ok("David som säljchef ser även utkastet", davids.includes("rlstest-nyhet-utkast"));
+
+  // Malgrupp pa team: Anna ar i Cecilias team, Bertil ar inte i nagot.
+  // Teamet sätts här och återställs efteråt, så att provet inte beror på vad
+  // en tidigare sektion råkade lämna kvar.
+  const { rows: [{ team_id: annasTeamFore }] } = await db.query(
+    `select team_id from employee where id = $1::uuid`, [saljareA.id]);
+  const { rows: [provTeam] } = await db.query(
+    `insert into team (name) values ('rlstest-nyhetsteam') returning id`);
+  await db.query(`update employee set team_id = $1::uuid where id = $2::uuid`,
+    [provTeam.id, saljareA.id]);
+
+  await nyttInlagg("rlstest-nyhet-team", "Till ett team", "{}", `{${provTeam.id}}`);
+  const medTeam = await slugar(await loggaIn(saljareA.epost));
+  const utanTeam = await slugar(tB);
+  ok("teamets inlägg når teamets medlem", medTeam.includes("rlstest-nyhet-team"),
+    medTeam.join(", "));
+  ok("men inte den som står utanför teamet", !utanTeam.includes("rlstest-nyhet-team"),
+    utanTeam.join(", "));
+
+  await db.query(`update employee set team_id = $1 where id = $2::uuid`,
+    [annasTeamFore, saljareA.id]);
+  await db.query(`delete from team where id = $1::uuid`, [provTeam.id]);
+
+  const skriv = await fetch(`${URL}/rest/v1/news_post`, {
+    method: "POST", headers: som(tD),
+    body: JSON.stringify({ slug: "rlstest-nyhet-api", title: "Via API", author_id: chef.id }),
+  });
+  ok("inte ens säljchefen skriver ett inlägg via API:t", !skriv.ok, `HTTP ${skriv.status}`);
+
+  // Ett publicerat inlagg utan tidpunkt gar inte att sortera och syns aldrig
+  // som nytt i klockan. Villkoret ska gora det omojligt.
+  const utanTid = await nekarSql(
+    `insert into news_post (slug, title, status, author_id)
+     values ('rlstest-nyhet-utan-tid','Utan tid','published',$1::uuid)`, [chef.id]);
+  ok("publicerat utan published_at nekas av databasen", utanTid !== null,
+    utanTid ? "" : "gick igenom");
+
+  void tillAlla;
+  void tillSaljare;
+}
+
+console.log("\n\x1b[1mKlockans tidpunkt är var och ens egen\x1b[0m");
+{
+  await db.query(
+    `insert into notification_seen (employee_id, seen_at) values ($1::uuid, now()), ($2::uuid, now())
+     on conflict (employee_id) do update set seen_at = excluded.seen_at`,
+    [saljareA.id, saljareB.id],
+  );
+
+  const annas = await las(tA, "notification_seen", "select=employee_id");
+  ok("Anna ser sin egen rad", annas.length === 1 && annas[0].employee_id === saljareA.id,
+    `såg ${annas.length}`);
+
+  const direkt = await las(tA, "notification_seen", `select=employee_id&employee_id=eq.${saljareB.id}`);
+  ok("och noll rader när hon frågar på Bertils", direkt.length === 0, `såg ${direkt.length}`);
+
+  // Kunde man skriva nagon annans tidpunkt gick det att tysta deras klocka.
+  const skriv = await fetch(`${URL}/rest/v1/notification_seen`, {
+    method: "POST", headers: som(tA),
+    body: JSON.stringify({ employee_id: saljareB.id, seen_at: new Date().toISOString() }),
+  });
+  ok("ingen kan skriva någon annans tidpunkt", !skriv.ok, `HTTP ${skriv.status}`);
+
+  const egen = await fetch(`${URL}/rest/v1/notification_seen?employee_id=eq.${saljareA.id}`, {
+    method: "PATCH", headers: som(tA),
+    body: JSON.stringify({ seen_at: new Date().toISOString() }),
+  });
+  ok("inte ens sin egen — det gör servern", !egen.ok, `HTTP ${egen.status}`);
+}
+
 console.log("\n\x1b[1mAnonym anslutning\x1b[0m");
-for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate"]) {
+for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate", "news_post", "notification_seen"]) {
   const r = await fetch(`${URL}/rest/v1/${t}?select=*`, { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` } });
   const j = await r.json();
   ok(`${t} ger inga rader anonymt`, !Array.isArray(j) || j.length === 0, Array.isArray(j) ? `${j.length} rader` : `HTTP ${r.status}`);
