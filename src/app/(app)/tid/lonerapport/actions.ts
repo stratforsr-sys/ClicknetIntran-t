@@ -6,6 +6,8 @@ import { getCurrentUser, hasRole, fullName, type CurrentUser } from "@/lib/auth"
 import { gallande, type Handelse } from "@/lib/tid";
 import { hamtaLage } from "@/lib/sparrar";
 import { blockeringar, type Blockering } from "@/lib/lonerapport";
+import { franvarominuter } from "@/lib/franvaro";
+import { schemaminuter } from "@/lib/franvaro-server";
 
 export type PeriodState = { fel?: string; ok?: string; blockeringar?: Blockering[] };
 
@@ -176,6 +178,58 @@ export async function generera(_prev: PeriodState, form: FormData): Promise<Peri
       antalAvvikelser.set(a.employee_id, (antalAvvikelser.get(a.employee_id) ?? 0) + 1);
     }
 
+    /**
+     * E7.4, AC-3.4: godkänd frånvaro flödar in i lönerapporten.
+     *
+     * Kolumnen `absence_minutes` har stått tom sedan 0012 med kommentaren att
+     * `{}` betyder "inte mätt" och inte "ingen frånvaro". Nu mäts den.
+     *
+     * SJUKFRÅNVARON ÄR MED, OCH DET ÄR AVSIKTLIGT. Sjuklöneperioden dag 1–14
+     * är arbetsgivarens, och ett löneunderlag utan sjukfrånvaro är fel
+     * underlag. AC-3.26 förbjuder sjukdata i prestations-, provisions- och
+     * kostnadsvyer — inte i lönen. Gränsen dras i RLS: `sick_report` som rad
+     * är stängd för `finance` och `payroll_cost_viewer`, och det som når hit
+     * är minuter per typ och period, inte första sjukdagen eller antalet
+     * tillfällen. Se rubriken i migration 0020.
+     *
+     * K5 gäller: minuter, aldrig belopp. Ingen karensberäkning, inget avdrag.
+     */
+    const minuterForDag = await schemaminuter();
+
+    const [{ data: ledighet }, { data: sjukperioder }] = await Promise.all([
+      db
+        .from("absence_request")
+        .select("employee_id, type_id, starts_on, ends_on, part_day_minutes")
+        .eq("status", "approved")
+        .lte("starts_on", period.period_end)
+        .gte("ends_on", period.period_start),
+      db
+        .from("sick_report")
+        .select("employee_id, first_sick_day, last_sick_day, extent_percent")
+        .is("cancelled_at", null)
+        .lte("first_sick_day", period.period_end),
+    ]);
+
+    const perioder = [
+      ...(ledighet ?? []),
+      ...(sjukperioder ?? []).map((s) => ({
+        employee_id: s.employee_id,
+        type_id: "sick",
+        starts_on: s.first_sick_day,
+        // En pågående sjukperiod räknas till periodens slut och inte längre.
+        ends_on: s.last_sick_day ?? period.period_end,
+        part_day_minutes: null,
+        extent_percent: s.extent_percent,
+      })),
+    ];
+
+    const franvaro = franvarominuter(
+      perioder,
+      period.period_start,
+      period.period_end,
+      minuterForDag,
+    );
+
     await db.from("payroll_row").delete().eq("period_id", period.id);
 
     const rader = (personal ?? []).map((p) => {
@@ -187,6 +241,7 @@ export async function generera(_prev: PeriodState, form: FormData): Promise<Peri
         break_minutes: f.rast,
         auto_closed_days: f.autoStangda,
         deviation_count: antalAvvikelser.get(p.id) ?? 0,
+        absence_minutes: franvaro.get(p.id) ?? {},
       };
     });
 

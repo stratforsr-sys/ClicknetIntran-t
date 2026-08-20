@@ -27,6 +27,11 @@ import {
   sattOrganisation,
 } from "../actions";
 import { Inloggningskort } from "./Inloggningskort";
+import { Saldon } from "./Saldon";
+import { supabaseAdmin } from "@/lib/supabase/server";
+import { svensktDatum } from "@/lib/klocka";
+import { saldotArGammalt, type Regelverk } from "@/lib/franvaro";
+import { REGELFALT } from "@/lib/franvaro-server";
 
 export const dynamic = "force-dynamic";
 
@@ -106,6 +111,66 @@ export default async function AnstalldSida({ params }: { params: Promise<{ id: s
       }));
   }
   const avslutad = a.status === "offboarded";
+
+  /**
+   * E7.5: franvarosaldon. Lases med service role for att kunna visa HELA
+   * historiken — `absence_balance_read` ger den anstallda sina egna rader, men
+   * den har vyn ar chefens och ska visa vem som matade in vad och nar.
+   *
+   * Bara for den som far hantera personal. AC-2.17 och K5: navet raknar ingen
+   * semesterratt, sa varje siffra har ar nagons pastaende.
+   */
+  const admin = supabaseAdmin();
+  const idagDatum = svensktDatum();
+
+  const [{ data: policyRad }, { data: franvarotyper }, { data: saldorader }] = farHantera
+    ? await Promise.all([
+        admin.from("absence_policy").select(REGELFALT).maybeSingle(),
+        admin.from("absence_type").select("id, label, uses_balance").order("sort"),
+        admin
+          .from("absence_balance")
+          .select("type_id, days, as_of, earned_year, entered_at, entered_by")
+          .eq("employee_id", id)
+          .order("as_of", { ascending: false })
+          .order("entered_at", { ascending: false }),
+      ])
+    : [{ data: null }, { data: null }, { data: null }];
+
+  const policy = policyRad as Regelverk | null;
+  const typetikett = new Map((franvarotyper ?? []).map((t) => [t.id, t.label]));
+
+  const inmatare = [...new Set((saldorader ?? []).map((r) => r.entered_by))];
+  const { data: inmatarnamn } = inmatare.length
+    ? await admin.from("employee").select("id, first_name, last_name").in("id", inmatare)
+    : { data: [] };
+  const inmatarkarta = new Map((inmatarnamn ?? []).map((p) => [p.id, fullName(p)]));
+
+  // Senaste raden per typ och intjanandear galler. Aldre rader ar historik och
+  // star kvar att lasa — se triggern i 0019.
+  const senaste = new Map<string, (typeof saldorader extends null ? never : NonNullable<typeof saldorader>[number])>();
+  for (const r of saldorader ?? []) {
+    const nyckel = `${r.type_id}:${r.earned_year ?? "-"}`;
+    if (!senaste.has(nyckel)) senaste.set(nyckel, r);
+  }
+
+  const saldoRader = [...senaste.values()].map((r) => ({
+    type_id: r.type_id,
+    label: typetikett.get(r.type_id) ?? r.type_id,
+    days: Number(r.days),
+    as_of: String(r.as_of).slice(0, 10),
+    earned_year: r.earned_year,
+    gammalt: policy ? saldotArGammalt(String(r.as_of).slice(0, 10), policy, idagDatum) : false,
+  }));
+
+  const saldoHistorik = (saldorader ?? [])
+    .filter((r) => !senaste.has(`${r.type_id}:${r.earned_year ?? "-"}`) || senaste.get(`${r.type_id}:${r.earned_year ?? "-"}`) !== r)
+    .map((r) => ({
+      type_id: r.type_id,
+      days: Number(r.days),
+      as_of: String(r.as_of).slice(0, 10),
+      entered_at: r.entered_at,
+      namn: inmatarkarta.get(r.entered_by) ?? "Okänd",
+    }));
   const kraverMfa = [...roller].some((r) => MFA_REQUIRED_ROLES.includes(r));
 
   return (
@@ -327,6 +392,20 @@ export default async function AnstalldSida({ params }: { params: Promise<{ id: s
             </p>
           )}
         </Card>
+      )}
+
+      {/* E7.5: saldon matas in for hand och rors aldrig av navets egna
+          berakningar — for det finns inga. Kortet ligger fore avslutskortet
+          eftersom det anvands lopande, medan avslutet anvands en gang. */}
+      {farHantera && !avslutad && policy && (
+        <Saldon
+          employeeId={a.id}
+          rader={saldoRader}
+          historik={saldoHistorik}
+          typer={(franvarotyper ?? []) as { id: string; label: string; uses_balance: boolean }[]}
+          idag={idagDatum}
+          fristDagar={policy.balance_stale_days}
+        />
       )}
 
       {/* AC-1.4 och AC-1.7 */}

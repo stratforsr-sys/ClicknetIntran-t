@@ -45,6 +45,18 @@ export const KALLOR: Kalla[] = [
   { tabell: "hr_case", kolumn: "employee_id", andamal: "Personalärenden" },
   { tabell: "document", kolumn: "owner_id", andamal: "Rutiner du äger" },
   { tabell: "course", kolumn: "owner_id", andamal: "Kurser du äger" },
+  { tabell: "news_post", kolumn: "author_id", andamal: "Nyhetsinlägg du skrivit" },
+  { tabell: "notification_seen", kolumn: "employee_id", andamal: "När du senast öppnade notisklockan" },
+
+  // E7 M3. Sjukanmälan är en uppgift om hälsa och därmed en särskild kategori
+  // enligt artikel 9 — vilket gör den viktigare att kunna få ut, inte mindre.
+  // Raderna bär datum, omfattning och tidpunkter; ingen orsak finns lagrad
+  // (K35), så utdraget kan inte innehålla en heller.
+  { tabell: "absence_request", kolumn: "employee_id", andamal: "Dina ledighetsansökningar" },
+  { tabell: "absence_balance", kolumn: "employee_id", andamal: "Inmatade frånvarosaldon" },
+  { tabell: "sick_report", kolumn: "employee_id", andamal: "Dina sjukanmälningar" },
+  { tabell: "absence_reminder", kolumn: "employee_id", andamal: "Påminnelser om oregistrerad frånvaro" },
+  { tabell: "calendar_feed", kolumn: "employee_id", andamal: "Ditt kalenderflöde" },
 ];
 
 /**
@@ -79,4 +91,22 @@ export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
   { tabell: "time_event", kolumn: "decided_by", skal: "Vem som beslutade om en rättelse" },
   { tabell: "time_event", kolumn: "requested_by", skal: "Vem som begärde rättelsen" },
   { tabell: "work_schedule", kolumn: "created_by", skal: "Vem som lade schemat" },
+
+  // E7. Alla pekar ut vem som GJORDE något åt någon annan.
+  { tabell: "absence_balance", kolumn: "entered_by", skal: "Vem som matade in saldot" },
+  { tabell: "absence_blackout", kolumn: "created_by", skal: "Vem som lade spärrperioden" },
+  { tabell: "absence_call_order", kolumn: "employee_id", skal: "Utpekad mottagare av sjukanmälan" },
+  { tabell: "absence_call_order", kolumn: "created_by", skal: "Vem som satte mottagarordningen" },
+  { tabell: "absence_policy", kolumn: "updated_by", skal: "Vem som ändrade reglerna" },
+  { tabell: "absence_reminder", kolumn: "resolved_by", skal: "Vem som stängde påminnelsen" },
+  { tabell: "absence_request", kolumn: "created_by", skal: "Vem som lade upp ansökan" },
+  { tabell: "absence_request", kolumn: "decided_by", skal: "Vem som beslutade om andras ledighet" },
+  { tabell: "absence_request", kolumn: "withdrawn_by", skal: "Vem som drog tillbaka eller ställde in" },
+  { tabell: "calendar_feed", kolumn: "revoked_by", skal: "Vem som stängde flödet" },
+  { tabell: "sick_deadline", kolumn: "completed_by", skal: "Vem som kvitterade fristen" },
+  { tabell: "sick_report", kolumn: "cancelled_by", skal: "Vem som ställde in anmälan" },
+  { tabell: "sick_report", kolumn: "confirmed_by", skal: "Vem som bekräftade andras anmälan" },
+  { tabell: "sick_report", kolumn: "registered_by", skal: "Vem som knappade in anmälan" },
+  { tabell: "sick_report", kolumn: "reported_to", skal: "Vem samtalet gick till" },
+  { tabell: "staffing_cap", kolumn: "created_by", skal: "Vem som satte bemanningstaket" },
 ];

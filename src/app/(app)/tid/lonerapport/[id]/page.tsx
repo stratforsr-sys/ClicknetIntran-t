@@ -29,7 +29,7 @@ export default async function PeriodSida({ params }: { params: Promise<{ id: str
   const [{ data: rader }, { data: justeringar }, { data: personal }] = await Promise.all([
     supabase
       .from("payroll_row")
-      .select("employee_id, worked_minutes, break_minutes, auto_closed_days, deviation_count")
+      .select("employee_id, worked_minutes, break_minutes, auto_closed_days, deviation_count, absence_minutes")
       .eq("period_id", period.id),
     supabase
       .from("payroll_adjustment")
@@ -38,6 +38,11 @@ export default async function PeriodSida({ params }: { params: Promise<{ id: str
       .order("created_at"),
     supabase.from("employee").select("id, first_name, last_name").order("first_name"),
   ]);
+
+  // E7.4: etiketterna kommer ur absence_type, inte ur en lista i den har filen.
+  // Byter nagon namn pa en franvarotyp ska rapporten folja med.
+  const { data: typer } = await supabase.from("absence_type").select("id, label").order("sort");
+  const typnamn = new Map((typer ?? []).map((t) => [t.id, t.label]));
 
   const namn = new Map((personal ?? []).map((p) => [p.id, fullName(p)]));
 
@@ -57,6 +62,12 @@ export default async function PeriodSida({ params }: { params: Promise<{ id: str
   const last = period.status === "attested";
   const farAttestera = hasRole(user, "sales_manager", "ceo", "admin");
   const summa = lista.reduce((s, r) => s + r.worked_minutes + r.justering, 0);
+
+  // Vilka typer som faktiskt forekommer i perioden. En kolumn per typ som
+  // alltid ar tom gor tabellen bredare utan att saga nagot.
+  const franvarotyper = [...new Set(lista.flatMap((r) => Object.keys(r.absence_minutes ?? {})))].sort(
+    (a, b) => (typnamn.get(a) ?? a).localeCompare(typnamn.get(b) ?? b, "sv"),
+  );
 
   return (
     <div className="flex flex-col gap-4 pt-2">
@@ -149,10 +160,54 @@ export default async function PeriodSida({ params }: { params: Promise<{ id: str
             </table>
           </div>
 
-          <p className="mt-4 max-w-[70ch] text-small text-ink-500">
-            Frånvaro per typ saknas tills M3 finns. Fältet står tomt med flit — en kolumn som
-            alltid visar noll ljuger tystare än en som saknas.
-          </p>
+          {/* E7.4 / AC-2.13: franvaro per typ. Kolumnen stod tom fran 0012 till
+              E7 byggdes, med kommentaren att {} betyder "inte matt" och inte
+              "ingen franvaro". Skillnaden galler fortfarande. */}
+          <div className="mt-6">
+            <h3 className="text-h2 text-ink-900">Frånvaro per typ</h3>
+            {franvarotyper.length === 0 ? (
+              <p className="mt-2 max-w-[70ch] text-small text-ink-500">
+                Ingen registrerad frånvaro i perioden. Underlaget är genererat, så det här är noll
+                — inte omätt.
+              </p>
+            ) : (
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full min-w-[36rem] border-collapse text-left">
+                  <thead>
+                    <tr className="border-b border-canvas">
+                      <th className="py-2 pr-4 text-small font-semibold text-ink-500">Person</th>
+                      {franvarotyper.map((t) => (
+                        <th key={t} className="py-2 pr-4 text-right text-small font-semibold text-ink-500">
+                          {typnamn.get(t) ?? t}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lista
+                      .filter((r) => Object.keys(r.absence_minutes ?? {}).length > 0)
+                      .map((r) => (
+                        <tr key={r.employee_id} className="border-b border-canvas last:border-0">
+                          <td className="py-2 pr-4 text-body text-ink-900">{r.namn}</td>
+                          {franvarotyper.map((t) => (
+                            <td key={t} className="tnum py-2 pr-4 text-right text-body text-ink-900">
+                              {r.absence_minutes?.[t]
+                                ? timmarOchMinuter(r.absence_minutes[t])
+                                : "—"}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <p className="mt-3 max-w-[70ch] text-micro text-ink-500">
+              Minuter, aldrig belopp (AC-2.17, K5). Sjukfrånvaro står med som minuter eftersom
+              sjuklöneperioden är arbetsgivarens — men själva sjukanmälan når varken ekonomi eller
+              lönekostnadsvyn (AC-3.26).
+            </p>
+          </div>
         </Card>
       )}
 

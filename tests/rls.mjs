@@ -121,6 +121,23 @@ async function stad() {
   await db.query(`alter table case_message disable trigger case_message_orubblig`);
   await db.query(`delete from hr_case where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`alter table case_message enable trigger case_message_orubblig`);
+  // E7. Bade sjukanmalan och saldo har triggrar som vagrar delete och update.
+  // Att stadningen kraver ett aktivt handgrepp ar samma poang som pa
+  // time_event: sparren galler aven den som skrev den.
+  await db.query(`alter table sick_report disable trigger sick_report_last`);
+  await db.query(`delete from sick_deadline where report_id in (select id from sick_report where employee_id in (select id from employee where email like $1))`, [PREFIX + "%"]);
+  await db.query(`delete from sick_report where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
+  await db.query(`alter table sick_report enable trigger sick_report_last`);
+  await db.query(`alter table absence_balance disable trigger absence_balance_orubblig`);
+  await db.query(`delete from absence_balance where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
+  await db.query(`alter table absence_balance enable trigger absence_balance_orubblig`);
+  await db.query(`alter table absence_request disable trigger absence_request_last`);
+  await db.query(`delete from absence_request where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
+  await db.query(`alter table absence_request enable trigger absence_request_last`);
+  await db.query(`delete from absence_reminder where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
+  await db.query(`delete from calendar_feed where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
+  await db.query(`delete from absence_blackout where label like 'rlstest-%'`);
+  await db.query(`delete from staffing_cap where created_by in (select id from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`delete from payroll_row where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`delete from payroll_period where status = 'draft' and period_start in ('2019-03-01','2019-04-01')`);
   await db.query(`delete from work_time_journal where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
@@ -1170,8 +1187,201 @@ console.log("\n\x1b[1mKlockans tidpunkt är var och ens egen\x1b[0m");
   ok("inte ens sin egen — det gör servern", !egen.ok, `HTTP ${egen.status}`);
 }
 
+// =============================================================================
+// E7 / M3 Franvaro och ledighet
+// =============================================================================
+
+console.log("\n\x1b[1mK35: sick_report kan inte bara en orsak\x1b[0m");
+{
+  // AC-3.21 kraver att det inte far FINNAS ett falt dar en diagnos, en orsak
+  // eller en symtombeskrivning kan hamna. Den enda formuleringen av det kravet
+  // som gar att prova ar den absoluta: noll textkolumner.
+  //
+  // Provet fragar schemat och inte koden. Det faller den dag nagon lagger till
+  // en textkolumn pa tabellen, oavsett vad den skulle heta och hur val
+  // motiverad den vore — samma mekanik som tests/registerutdrag.mjs anvander
+  // mot frammande nycklar.
+  const { rows } = await db.query(
+    `select column_name, data_type
+       from information_schema.columns
+      where table_schema = 'public' and table_name = 'sick_report'
+        and data_type in ('text','character varying','character')`,
+  );
+  ok(
+    "sick_report har noll textkolumner",
+    rows.length === 0,
+    rows.length ? `hittade ${rows.map((r) => r.column_name).join(", ")}` : "",
+  );
+
+  // Sparren mot en digital sjukanmalningsknapp (AC-3.6) ligger i databasen.
+  // nekarSql och inte nekarSpar: avsnittet kor utanfor en transaktion, och
+  // utan transaktion finns ingen sparpunkt att rulla tillbaka till. Varje sats
+  // autocommittas, sa ett fel har smittar ingenting.
+  const nekad = await nekarSql(`update absence_type set requestable = true where id = 'sick'`);
+  ok("sjukfranvaro gar inte att gora ansokningsbar", nekad !== null, nekad ? "" : "SLAPPTE IGENOM");
+}
+
+console.log("\n\x1b[1mAC-3.26: sjukdata nar varken ekonomi eller fel chef\x1b[0m");
+{
+  // Anna ar sjuk. Cecilia leder henne, David ar saljchef, Eva ar ekonomi och
+  // Bertil ar en kollega utan ledarroll.
+  const { rows: [anmalan] } = await db.query(
+    `insert into sick_report (employee_id, first_sick_day, registered_by, extent_percent)
+     values ($1::uuid, current_date - 2, $1::uuid, 100) returning id`,
+    [saljareA.id],
+  );
+
+  await db.query(
+    `insert into sick_deadline (report_id, kind, due_on)
+     values ($1::uuid, 'certificate', current_date + 5)`,
+    [anmalan.id],
+  );
+
+  const egen = await las(tA, "sick_report");
+  ok("Anna ser sin egen sjukanmalan", egen.length === 1, `såg ${egen.length}`);
+
+  const ledarens = await las(tC, "sick_report");
+  ok("Cecilia ser den — hon leder Anna", ledarens.length === 1, `såg ${ledarens.length}`);
+
+  const chefens = await las(tD, "sick_report");
+  ok("David ser den — saljchef", chefens.length === 1, `såg ${chefens.length}`);
+
+  const kollegans = await las(tB, "sick_report");
+  ok("Bertil ser 0 rader", kollegans.length === 0, `såg ${kollegans.length}`);
+
+  // Det har ar AC-3.26 pa API-niva. Ekonomi raknar lon och kostnad; forsta
+  // sjukdagen och antalet tillfallen ar inte deras.
+  const ekonomins = await las(tE, "sick_report");
+  ok("Ekonomi ser 0 rader", ekonomins.length === 0, `såg ${ekonomins.length}`);
+
+  // Aven med lonekostnadsbehorigheten. K26 ger tillgang till kostnad, inte
+  // till halsa.
+  await db.query(
+    `insert into employee_permission (employee_id, permission) values ($1::uuid, 'payroll_cost_viewer')
+     on conflict do nothing`,
+    [ekonomi.id],
+  );
+  const tE2 = await loggaIn(ekonomi.epost);
+  const medBehorighet = await las(tE2, "sick_report");
+  ok(
+    "inte heller med payroll_cost_viewer",
+    medBehorighet.length === 0,
+    `såg ${medBehorighet.length}`,
+  );
+
+  // Direkt fraga pa id ger inte heller nagot. En policy som filtrerar listan
+  // men slapper igenom en punktfraga ar ingen policy.
+  const punkt = await las(tE2, "sick_report", `id=eq.${anmalan.id}&select=*`);
+  ok("direkt fraga pa id ger ocksa 0 rader", punkt.length === 0, `såg ${punkt.length}`);
+
+  const fristEkonomi = await las(tE2, "sick_deadline");
+  ok("fristerna foljer anmalan — ekonomi ser 0", fristEkonomi.length === 0, `såg ${fristEkonomi.length}`);
+
+  const fristLedare = await las(tC, "sick_deadline");
+  ok("Cecilia ser fristen", fristLedare.length === 1, `såg ${fristLedare.length}`);
+
+  await db.query(`delete from employee_permission where employee_id = $1::uuid`, [ekonomi.id]);
+}
+
+console.log("\n\x1b[1mLedighetsansokan: egen alltid, chefens folk, ingen annan\x1b[0m");
+{
+  const { rows: [ansokan] } = await db.query(
+    `insert into absence_request (employee_id, created_by, type_id, starts_on, ends_on)
+     values ($1::uuid, $1::uuid, 'vacation', current_date + 40, current_date + 44) returning id`,
+    [saljareA.id],
+  );
+
+  ok("Anna ser sin ansokan", (await las(tA, "absence_request")).length === 1);
+  ok("Cecilia ser den som ledare", (await las(tC, "absence_request")).length === 1);
+  ok("David ser den som saljchef", (await las(tD, "absence_request")).length === 1);
+  ok("Bertil ser 0 rader", (await las(tB, "absence_request")).length === 0);
+  // Ekonomi far franvaron som minuter i loneunderlaget, aldrig som ansokan.
+  ok("Ekonomi ser 0 rader", (await las(tE, "absence_request")).length === 0);
+
+  const punkt = await las(tB, "absence_request", `id=eq.${ansokan.id}&select=*`);
+  ok("Bertils direkta fraga pa id ger ocksa 0", punkt.length === 0, `såg ${punkt.length}`);
+
+  // Skrivning gar aldrig via API:t — samma regel som resten av navet.
+  const skriv = await fetch(`${URL}/rest/v1/absence_request?id=eq.${ansokan.id}`, {
+    method: "PATCH",
+    headers: som(tA),
+    body: JSON.stringify({ status: "approved" }),
+  });
+  const efter = await db.query(`select status from absence_request where id = $1::uuid`, [ansokan.id]);
+  ok(
+    "Anna kan inte godkanna sin egen ansokan via API:t",
+    efter.rows[0].status === "submitted",
+    `HTTP ${skriv.status}, status ${efter.rows[0].status}`,
+  );
+}
+
+console.log("\n\x1b[1mAC-3.19: den anstallda ser sin lucka forst\x1b[0m");
+{
+  // En paminnelse som annu inte ar synlig for chefen.
+  await db.query(
+    `insert into absence_reminder (employee_id, work_date, visible_to_manager_from)
+     values ($1::uuid, current_date - 3, now() + interval '12 hours')`,
+    [saljareA.id],
+  );
+
+  ok("Anna ser sin egen paminnelse direkt", (await las(tA, "absence_reminder")).length === 1);
+  ok(
+    "Cecilia ser den inte an — fordrojningen har inte gatt ut",
+    (await las(tC, "absence_reminder")).length === 0,
+  );
+  ok("David ser den inte heller", (await las(tD, "absence_reminder")).length === 0);
+
+  // Nar fordrojningen gatt ut ska den synas. En sparr som inte gar att oppna
+  // ar inte en sparr utan ett oupptackt fel — samma resonemang som provet av
+  // raststamplingen och av losenordstvanget.
+  await db.query(
+    `update absence_reminder set visible_to_manager_from = now() - interval '1 hour'
+      where employee_id = $1::uuid`,
+    [saljareA.id],
+  );
+  ok("efter fordrojningen ser Cecilia den", (await las(tC, "absence_reminder")).length === 1);
+  ok("Bertil ser den aldrig", (await las(tB, "absence_reminder")).length === 0);
+}
+
+console.log("\n\x1b[1mSaldon och regler\x1b[0m");
+{
+  await db.query(
+    `insert into absence_balance (employee_id, type_id, days, as_of, entered_by)
+     values ($1::uuid, 'vacation', 12.5, current_date, $2::uuid)`,
+    [saljareA.id, chef.id],
+  );
+
+  ok("Anna ser sitt eget saldo", (await las(tA, "absence_balance")).length === 1);
+  ok("Cecilia ser det som ledare", (await las(tC, "absence_balance")).length === 1);
+  // Saldot ar ett personalarende i dagar, inte ett loneunderlag i minuter.
+  ok("Ekonomi ser 0 rader", (await las(tE, "absence_balance")).length === 0);
+  ok("Bertil ser 0 rader", (await las(tB, "absence_balance")).length === 0);
+
+  // AC-3.13: reglerna maste ga att lasa INNAN man skickar in. En regel man far
+  // veta forst i avslaget ar inget bakhall — men den maste da synas for alla.
+  ok("varje inloggad ser franvarotyperna", (await las(tA, "absence_type")).length > 0);
+  ok("varje inloggad ser regelverket", (await las(tA, "absence_policy")).length === 1);
+  ok("varje inloggad ser mottagarordningen", (await las(tA, "absence_call_order")).length > 0);
+}
+
+console.log("\n\x1b[1mKalenderflodet ar agarens egen hemlighet\x1b[0m");
+{
+  await db.query(
+    `insert into calendar_feed (employee_id, scope, token)
+     values ($1::uuid, 'mine', 'rlstest-token-som-ar-minst-trettiotva-tecken')`,
+    [saljareA.id],
+  );
+
+  ok("Anna ser sitt eget flode", (await las(tA, "calendar_feed")).length === 1);
+  ok("David ser det — ledningen svarar for vilka floden som ar oppna", (await las(tD, "calendar_feed")).length === 1);
+  // Token ar hemligheten. Ser Cecilia raden ser hon ocksa adressen, och ett
+  // teamflode ar redan hennes egen vag till samma uppgifter.
+  ok("Cecilia ser 0 rader", (await las(tC, "calendar_feed")).length === 0);
+  ok("Bertil ser 0 rader", (await las(tB, "calendar_feed")).length === 0);
+}
+
 console.log("\n\x1b[1mAnonym anslutning\x1b[0m");
-for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate", "news_post", "notification_seen"]) {
+for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate", "news_post", "notification_seen", "absence_type", "absence_policy", "absence_blackout", "staffing_cap", "absence_balance", "absence_request", "absence_call_order", "sick_report", "sick_deadline", "absence_reminder", "calendar_feed"]) {
   const r = await fetch(`${URL}/rest/v1/${t}?select=*`, { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` } });
   const j = await r.json();
   ok(`${t} ger inga rader anonymt`, !Array.isArray(j) || j.length === 0, Array.isArray(j) ? `${j.length} rader` : `HTTP ${r.status}`);

@@ -32,6 +32,10 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
     { data: minaCert },
     { data: meddelanden },
     { data: personer },
+    { data: ansokningar },
+    { data: obekraftadSjuk },
+    { data: paminnelser },
+    { data: franvarotyper },
   ] = await Promise.all([
     supabase.from("notification_seen").select("seen_at").eq("employee_id", mig).maybeSingle(),
     supabase
@@ -67,6 +71,31 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
       .order("created_at", { ascending: false })
       .limit(MAX_NOTISER * 2),
     supabase.from("employee").select("id, first_name, last_name"),
+    // E7. Bada fragorna gar med anvandarens EGEN token, precis som resten av
+    // filen. `absence_request_read` slapper igenom egen rad, den man leder och
+    // ledningen; `absence_reminder_read` doljer paminnelsen for chefen tills
+    // fordrojningen gatt ut (AC-3.19). Ett eget filter har hade varit ett
+    // andra svar pa samma fraga.
+    supabase
+      .from("absence_request")
+      .select("id, employee_id, type_id, starts_on, ends_on, status, submitted_at, decided_at")
+      .in("status", ["submitted", "approved", "rejected"])
+      .order("submitted_at", { ascending: false })
+      .limit(MAX_NOTISER * 2),
+    supabase
+      .from("sick_report")
+      .select("id, employee_id, first_sick_day, registered_at, confirmed_at, escalated_at")
+      .is("confirmed_at", null)
+      .is("cancelled_at", null)
+      .order("registered_at", { ascending: false })
+      .limit(MAX_NOTISER),
+    supabase
+      .from("absence_reminder")
+      .select("id, employee_id, work_date, created_at")
+      .is("resolved_at", null)
+      .order("work_date", { ascending: false })
+      .limit(MAX_NOTISER),
+    supabase.from("absence_type").select("id, label"),
   ]);
 
   // Ingen rad = allt ar olast. Ratt hall att fela at: en nyanstalld ska se
@@ -165,6 +194,86 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
       href: `/arenden/${m.case_id}`,
       tidpunkt: m.created_at,
       olast: arNy(m.created_at),
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // E7 Frånvaro
+  //
+  // Tre sorters post, och de skiljer sig åt i VEM de gäller — vilket RLS redan
+  // har svarat på. Raden är antingen min egen eller någons jag leder, och koden
+  // nedan behöver bara veta vilketdera för att välja formulering.
+  //
+  // K35: ingen av posterna bär en orsak, för ingen orsak finns lagrad.
+  // ---------------------------------------------------------------------------
+  const typnamn = new Map((franvarotyper ?? []).map((t) => [t.id, t.label]));
+
+  for (const a of ansokningar ?? []) {
+    const mitt = a.employee_id === mig;
+
+    if (a.status === "submitted" && !mitt) {
+      // Väntar på mitt beslut. Att raden syns betyder att jag leder personen
+      // eller är ledning — RLS har redan avgjort det.
+      notiser.push({
+        id: `franvaro-${a.id}`,
+        typ: "franvaro",
+        rubrik: `${namn.get(a.employee_id) ?? "En medarbetare"} söker ledigt`,
+        detalj: `${typnamn.get(a.type_id) ?? a.type_id} · ${a.starts_on}`,
+        href: `/franvaro/${a.id}`,
+        tidpunkt: a.submitted_at ?? "",
+        olast: arNy(a.submitted_at),
+      });
+      continue;
+    }
+
+    // Beslut på min egen ansökan. Ett godkännande är lika mycket besked som
+    // ett avslag — den som inte får veta planerar inte sin semester.
+    if (mitt && (a.status === "approved" || a.status === "rejected") && a.decided_at) {
+      notiser.push({
+        id: `franvaro-beslut-${a.id}`,
+        typ: "franvaro",
+        rubrik: a.status === "approved" ? "Din ledighet är godkänd" : "Din ansökan avslogs",
+        detalj: `${typnamn.get(a.type_id) ?? a.type_id} · ${a.starts_on}`,
+        href: `/franvaro/${a.id}`,
+        tidpunkt: a.decided_at,
+        olast: arNy(a.decided_at),
+      });
+    }
+  }
+
+  for (const s of obekraftadSjuk ?? []) {
+    if (s.employee_id === mig) continue;
+    notiser.push({
+      id: `sjuk-${s.id}`,
+      typ: "franvaro",
+      rubrik: `${namn.get(s.employee_id) ?? "En medarbetare"} är sjukanmäld`,
+      detalj: s.escalated_at
+        ? `Sedan ${s.first_sick_day} · ingen har bekräftat`
+        : `Sedan ${s.first_sick_day} · bekräfta att du sett den`,
+      href: "/franvaro/sjuk",
+      tidpunkt: s.registered_at,
+      olast: arNy(s.registered_at),
+    });
+  }
+
+  // AC-3.19. Egna påminnelser formuleras som en påminnelse, andras som en
+  // uppgift — och andras syns bara efter fördröjningen, vilket policyn i 0020
+  // sköter. Den anställda ser alltså sin lucka först och kan rätta den innan
+  // någon annan fått veta att den fanns.
+  for (const p of paminnelser ?? []) {
+    const mitt = p.employee_id === mig;
+    notiser.push({
+      id: `franvaro-lucka-${p.id}`,
+      typ: "franvaro",
+      rubrik: mitt
+        ? `Ingen frånvaro registrerad ${p.work_date}`
+        : `${namn.get(p.employee_id) ?? "En medarbetare"} saknar registrering ${p.work_date}`,
+      detalj: mitt
+        ? "Du var schemalagd men stämplade inte. Registrera din frånvaro."
+        : "Schemalagd dag utan stämpling eller frånvaro",
+      href: "/franvaro",
+      tidpunkt: p.created_at,
+      olast: arNy(p.created_at),
     });
   }
 

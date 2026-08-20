@@ -4,6 +4,7 @@ import { hamtaLage } from "@/lib/sparrar";
 import { korTidjobbet } from "@/lib/jobb/tid";
 import { korKontojobbet } from "@/lib/jobb/konton";
 import { korArendejobbet } from "@/lib/jobb/arenden";
+import { korFranvarojobbet } from "@/lib/jobb/franvaro";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -37,6 +38,10 @@ export async function GET(request: NextRequest) {
     ["tid", () => (lage.stampling ? korTidjobbet(db, lage.rast) : Promise.resolve({ hoppade_over: "stämplingen är av" }))],
     ["konton", () => korKontojobbet(db)],
     ["arenden", () => korArendejobbet(db)],
+    // E7: eskalering av obekraftade sjukanmalningar, K37-frister och
+    // paminnelser om oregistrerad franvaro. Steget kor aven nar stamplingen ar
+    // av — bara paminnelserna kraver den, och det avgor jobbet sjalvt.
+    ["franvaro", () => korFranvarojobbet(db, lage.stampling)],
   ];
 
   for (const [namn, kor] of steg) {

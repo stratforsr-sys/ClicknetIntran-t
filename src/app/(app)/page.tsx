@@ -161,21 +161,38 @@ export default async function Startsida() {
    * per sidladdning — bade en logg full av brus och en insyn som skett utan
    * att nagon valde den. Posten ar darfor en lank och ingenting mer.
    */
-  const [{ data: koArenden }, { count: attKvittera }] = await Promise.all([
-    hanterarArenden
-      ? supabase
-          .from("hr_case")
-          .select("id, due_at, sla_hours, resolved_at")
-          .is("resolved_at", null)
-          .in("status", ["new", "in_progress"])
-      : Promise.resolve({ data: null }),
-    attesterar && sparr.stampling
-      ? supabase
-          .from("time_event")
-          .select("id", { count: "exact", head: true })
-          .eq("correction_state", "pending")
-      : Promise.resolve({ count: null }),
-  ]);
+  const [{ data: koArenden }, { count: attKvittera }, { data: koFranvaro }, { data: obekraftadSjuk }] =
+    await Promise.all([
+      hanterarArenden
+        ? supabase
+            .from("hr_case")
+            .select("id, due_at, sla_hours, resolved_at")
+            .is("resolved_at", null)
+            .in("status", ["new", "in_progress"])
+        : Promise.resolve({ data: null }),
+      attesterar && sparr.stampling
+        ? supabase
+            .from("time_event")
+            .select("id", { count: "exact", head: true })
+            .eq("correction_state", "pending")
+        : Promise.resolve({ count: null }),
+      // E7. Bada laser med anvandarens egen token: absence_request_read och
+      // sick_report_read slapper igenom egen rad, den man leder och ledningen.
+      // Egna rader filtreras bort i koden — ingen beslutar om sin egen ledighet,
+      // och en ko med sin egen ansokan i ar en ko man inte kan tomma.
+      supabase
+        .from("absence_request")
+        .select("id, employee_id, starts_on, rules_broken")
+        .eq("status", "submitted"),
+      supabase
+        .from("sick_report")
+        .select("id, employee_id")
+        .is("confirmed_at", null)
+        .is("cancelled_at", null),
+    ]);
+
+  const attBesluta = (koFranvaro ?? []).filter((a) => a.employee_id !== user.employee!.id);
+  const attBekrafta = (obekraftadSjuk ?? []).filter((s) => s.employee_id !== user.employee!.id);
 
   const overTiden = (koArenden ?? []).filter((a) => slaLage(a) === "over").length;
   const snart = (koArenden ?? []).filter((a) => slaLage(a) === "snart").length;
@@ -288,6 +305,27 @@ export default async function Startsida() {
       detalj: "Både den gamla och den nya tiden visas",
       ton: "warn",
     });
+  // AC-3.17: en obekraftad sjukanmalan ligger overst. Bekraftelsen ar inte
+  // administration utan hela poangen — nagon ska ha sett anmalan, och den som
+  // ar sjuk ska veta att nagon gjort det.
+  if (attBekrafta.length > 0)
+    koposter.push({
+      href: "/franvaro/sjuk",
+      text: `${attBekrafta.length} ${attBekrafta.length === 1 ? "sjukanmälan" : "sjukanmälningar"} att bekräfta`,
+      detalj: "Bekräfta att du sett den",
+      ton: "danger",
+    });
+
+  if (attBesluta.length > 0)
+    koposter.push({
+      href: "/franvaro/attest",
+      text: `${attBesluta.length} ${attBesluta.length === 1 ? "ledighetsansökan" : "ledighetsansökningar"} att besluta`,
+      detalj: attBesluta.some((a) => ((a.rules_broken ?? []) as string[]).length > 0)
+        ? "Minst en bryter mot en regel"
+        : "Alla följer reglerna",
+      ton: "warn",
+    });
+
   if (serAvvikelser && sparr.stampling)
     koposter.push({
       href: "/tid/avvikelser",

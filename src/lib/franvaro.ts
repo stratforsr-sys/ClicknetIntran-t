@@ -646,9 +646,9 @@ export const STATUS_ETIKETT: Record<Ansokningsstatus, string> = {
   cancelled: "Inställd",
 };
 
-export const STATUS_TON: Record<Ansokningsstatus, "accent" | "success" | "danger" | "neutral"> = {
+export const STATUS_TON: Record<Ansokningsstatus, "accent" | "ok" | "danger" | "neutral"> = {
   submitted: "accent",
-  approved: "success",
+  approved: "ok",
   rejected: "danger",
   withdrawn: "neutral",
   cancelled: "neutral",

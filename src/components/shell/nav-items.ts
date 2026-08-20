@@ -29,6 +29,10 @@ export function navFor(user: CurrentUser | null, stamplingPa: boolean): NavItem[
     // K12: posten dyker upp forst nar modulen slas pa. En meny som pekar pa en
     // funktion som inte far anvandas ar samre an ingen post alls.
     if (stamplingPa) items.push({ href: "/tid", label: "Tid", ikon: "tid" });
+    // E7 galler alla och kraver inte stampling: en semesteransokan hanger inte
+    // pa om K12 ar avgjord. Bara paminnelserna om oregistrerad franvaro gor
+    // det, och de hanteras i nattjobbet.
+    items.push({ href: "/franvaro", label: "Frånvaro", ikon: "klocka" });
   }
 
   // Loneunderlaget ar ledningens och ekonomins (AC-2.13). Teamledaren har
