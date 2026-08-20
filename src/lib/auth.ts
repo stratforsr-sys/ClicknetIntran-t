@@ -1,5 +1,6 @@
 import { cache } from "react";
-import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
+import { kraverByte } from "@/lib/losenordsbyte";
 import type { Permission, Role } from "@/lib/roles";
 
 export type CurrentUser = {
@@ -29,7 +30,23 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data: employee } = await supabase
+  /**
+   * Migration 0017 stanger API:t for den som inte bytt sitt tillfalliga
+   * losenord: med anvandarens egen token ger varje tabell noll rader.
+   *
+   * Servern behover anda veta vem personen ar. Tva stallen kraver det medan
+   * tvanget star kvar: /byt-losenord nekar ett losenord som innehaller det
+   * egna namnet, och steg tva maste kunna se rollen for att fa komma FORE
+   * bytet. Utan den har raden hade ett flaggat chefskonto sett ut som ett
+   * konto helt utan roller — och sluppit bekrafta enheten.
+   *
+   * Granserna ar alltsa olika med flit: flaggan stanger API:t, inte servern.
+   * Service role lamnar aldrig servern, och mellanvaran har redan skickat
+   * kontot till /byt-losenord fran varje annan adress.
+   */
+  const las = kraverByte(user.app_metadata) ? supabaseAdmin() : supabase;
+
+  const { data: employee } = await las
     .from("employee")
     .select("id, first_name, last_name, email, status, team_id, employment_type, start_date")
     .eq("auth_user_id", user.id)
@@ -46,8 +63,8 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   }
 
   const [{ data: roleRows }, { data: permRows }] = await Promise.all([
-    supabase.from("employee_role").select("role").eq("employee_id", employee.id),
-    supabase.from("employee_permission").select("permission").eq("employee_id", employee.id),
+    las.from("employee_role").select("role").eq("employee_id", employee.id),
+    las.from("employee_permission").select("permission").eq("employee_id", employee.id),
   ]);
 
   return {
