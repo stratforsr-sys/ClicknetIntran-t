@@ -46,7 +46,7 @@ förhållande till tillväxten.
 | E0.6 | **Sentry eller motsvarande felrapportering** | EJ PÅBÖRJAD |
 | E0.7 | **Strukturerad loggning och larm vid integrationsfel** | EJ PÅBÖRJAD |
 | E0.8 | **Transaktionell e-post** från hej@clicknet.se med SPF, DKIM, DMARC (R13) | EJ PÅBÖRJAD |
-| E0.9 | **Testuppsättning**: minst ett test per modul som verifierar att fel roll får 0 rader (DoD p. 4) | EJ PÅBÖRJAD |
+| E0.9 | **Testuppsättning**: minst ett test per modul som verifierar att fel roll får 0 rader (DoD p. 4) | KLAR för byggda moduler — `tests/rls.mjs` har ett eget avsnitt per modul och går mot riktiga databasen med riktiga inloggningar. **Varje ny modul lägger till sitt eget avsnitt**; punkten stängs aldrig, den följer med |
 | E0.10 | **Backup verifierad** genom testad återläsning, kvartalsvis rutin | EJ PÅBÖRJAD |
 | E0.11 | Eget domännamn, t.ex. nav.clicknet.se | EJ PÅBÖRJAD |
 
@@ -210,7 +210,7 @@ daterad. Koden finns och är testad; påslaget sker med `M2_AKTIV` i
 | E7.1 | AC-3.1 | Ansökan för alla typer inklusive del av dag | EJ PÅBÖRJAD |
 | E7.2 | AC-3.2 | Bemanningsvy vid ansökan med varning vid överskriden tröskel | EJ PÅBÖRJAD |
 | E7.3 | AC-3.3 | **iCal-flöde** med hemlig roterbar URL, enkelriktat | EJ PÅBÖRJAD |
-| E7.4 | AC-3.4 | Godkänd frånvaro flödar in i lönerapporten | BLOCKERAD av E4b |
+| E7.4 | AC-3.4 | Godkänd frånvaro flödar in i lönerapporten | EJ PÅBÖRJAD — **inte blockerad.** E4b blev KLAR 2026-08-17 och `payroll_row.absence_minutes` står redan i `0012` och väntar |
 | E7.5 | AC-3.5 | Saldon endast om manuellt inmatade, varning om äldre än 45 dagar | EJ PÅBÖRJAD |
 | E7.6 | AC-3.6, AC-3.27 | **Ingen digital sjukanmälningsknapp.** Telefon först, registrering efteråt. Mottagarordning konfigurerbar | EJ PÅBÖRJAD |
 | E7.7 | AC-3.16–3.18 | `sick_report` med `first_sick_day` skilt från `registered_at`. Chefsbekräftelse, eskalering efter 48 h, chefsfallback | EJ PÅBÖRJAD |
@@ -331,7 +331,7 @@ Kräver Inkios API-dokumentation, autentiseringsmodell och webhook-events.
 | X3 | Startsida under 1,5 s, sök under 500 ms, stämpling under 2 s | EJ PÅBÖRJAD |
 | X4 | 99,5 % drift 07–19 vardagar, stämpling med offline-fallback | EJ PÅBÖRJAD |
 | X5 | Signerade tidsbegränsade URL:er för alla filer | EJ PÅBÖRJAD |
-| X6 | Test som verifierar att fel roll får 0 rader — per modul | EJ PÅBÖRJAD |
+| X6 | Test som verifierar att fel roll får 0 rader — per modul | KLAR för byggda moduler, se E0.9. Samma svit, samma krav på varje ny modul |
 | X7 | **Pilot med 3 personer i två veckor** före bredd (§11.4) | EJ PÅBÖRJAD |
 | X8 | Mörkt läge — beslutat att skjutas upp, tokens förberedda | UPPSKJUTET |
 | X9 | Logotyp B1 (ljus bakgrund) och B3 (symbolmärke) som SVG | BLOCKERAD |

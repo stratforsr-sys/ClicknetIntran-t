@@ -33,7 +33,7 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
 set -a && . $HOME/.clicknet/nav.env && set +a && npm test
 ```
 
-Tretton sviter. `tests/rls.mjs` går mot den **riktiga** databasen och skapar och
+Tolv sviter. `tests/rls.mjs` går mot den **riktiga** databasen och skapar och
 städar sina egna användare (prefix `rlstest+`). Den rör aldrig driftdata — det
 som måste provas skarpt görs i en transaktion som rullas tillbaka.
 
