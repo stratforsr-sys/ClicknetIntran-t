@@ -104,6 +104,29 @@ export default async function ProfilSida() {
               </dd>
             </div>
           </dl>
+
+          {/*
+            AC-12.4, K25. Rattigheten star i K14, och en rattighet man maste
+            be nagon om ar en rattighet man later bli att anvanda — darfor en
+            lank och inte ett formular till chefen.
+
+            Vanlig <a> och inte <Link>: svaret ar en fil att ladda ner, och
+            klientnavigering hade forsokt rendera JSON som en sida.
+          */}
+          <div className="mt-6 border-t border-canvas pt-5">
+            <h3 className="text-small font-semibold text-ink-900">Dina uppgifter i navet</h3>
+            <p className="mt-1 text-small text-ink-500">
+              Hämta allt navet har registrerat om dig, tabell för tabell. Filen är
+              din — hämtningen loggas, men innehållet läser ingen annan.
+            </p>
+            <a
+              href={`/personal/${user.employee.id}/registerutdrag`}
+              download
+              className="mt-3 inline-flex min-h-11 items-center rounded-full bg-canvas px-4 text-small font-semibold text-ink-900 transition-colors duration-fast hover:bg-ink-300/30"
+            >
+              Hämta registerutdrag
+            </a>
+          </div>
         </Card>
       </div>
     </div>
