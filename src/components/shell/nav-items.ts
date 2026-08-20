@@ -19,6 +19,9 @@ export function navFor(user: CurrentUser | null, stamplingPa: boolean): NavItem[
   // Rutiner ligger overst efter Hem: det ar den vy alla anstallda har arende
   // till, till skillnad fran personal- och adminvyerna nedanfor.
   if (user?.employee) {
+    // Nyheter fore rutiner: det ar det som andras oftast, och den som inte
+    // hittar dit last aldrig beskedet.
+    items.push({ href: "/nyheter", label: "Nyheter", ikon: "logg" });
     items.push({ href: "/rutiner", label: "Rutiner", ikon: "rutiner" });
     items.push({ href: "/utbildning", label: "Utbildning", ikon: "utbildning" });
     // Arenden galler alla: den anstallda ser sina egna, chefen ser inkorgen.
