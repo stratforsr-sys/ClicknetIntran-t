@@ -9,6 +9,7 @@ import { ROLE_LABEL } from "@/lib/roles";
 import { isConfigured } from "@/lib/env";
 import { kraverMfa, kvittoGiltigt, STEG2_KAKA } from "@/lib/mfa";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { hamtaNotiser } from "@/lib/notiser-server";
 import { VantarPaAktivering } from "./VantarPaAktivering";
 import { EjKonfigurerad } from "./EjKonfigurerad";
 
@@ -45,6 +46,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // panel ritas hopfalld pa en gang i stallet for att fallas ihop efterat.
   const hopfalld = arHopfalld((await cookies()).get(SIDOPANEL_KAKA)?.value);
 
+  // Klockan hor till skalet och hamtas darfor har, en gang per sidvisning.
+  // Lases med anvandarens egen token — malgruppsstyrningen sitter i RLS.
+  const notiser = await hamtaNotiser(user);
+
   return (
     <Skal
       items={navFor(user, lage.stampling)}
@@ -52,6 +57,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       roll={roll}
       stamplingPa={lage.stampling}
       hopfalldFranStart={hopfalld}
+      notiser={notiser}
     >
       {children}
     </Skal>
