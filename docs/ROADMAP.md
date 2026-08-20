@@ -232,12 +232,12 @@ daterad. Koden finns och är testad; påslaget sker med `M2_AKTIV` i
 
 | # | AC | Vad | Status |
 |---|---|---|---|
-| E5.1 | AC-11.1 | Startsidan visar stämpling, mina uppgifter, nya rutiner, obesvarade kvittenser, pågående kurser | PÅGÅR — skalet finns, källorna saknas |
+| E5.1 | AC-11.1 | Startsidan visar stämpling, mina uppgifter, nya rutiner, obesvarade kvittenser, pågående kurser | KLAR — inklusive ärenden som väntar på svar |
 | E5.2 | AC-11.2 | Nyhetsinlägg med målgruppsstyrning | EJ PÅBÖRJAD |
 | E5.3 | AC-11.3 | Sidan laddar under 1,5 s på 4G | EJ PÅBÖRJAD |
-| E5.4 | §12 Q9 | Rollstyrd startsida: säljaren ser stämpling, chefen ser köer och avvikelser | EJ PÅBÖRJAD |
-| E5.5 | §6 | **Bottennavigering under 768 px**: Hem, Sök, Stämpla, Mer | EJ PÅBÖRJAD |
-| E5.6 | §5.1 | Hopfällbar sidopanel med sparat läge per användare | EJ PÅBÖRJAD |
+| E5.4 | §12 Q9 | Rollstyrd startsida: säljaren ser stämpling, chefen ser köer och avvikelser | KLAR — ordningen byter plats i trädet, inte med CSS |
+| E5.5 | §6 | **Bottennavigering under 768 px**: Hem, Sök, Stämpla, Mer | KLAR — stämpelposten bara när modulen är på |
+| E5.6 | §5.1 | Hopfällbar sidopanel med sparat läge per användare | KLAR — läget i en kaka, så servern vet det före första ritningen |
 | E5.7 | §5.7 | Notissystem nere till höger med ångra-möjlighet | EJ PÅBÖRJAD |
 
 ---
@@ -247,9 +247,9 @@ daterad. Koden finns och är testad; påslaget sker med `M2_AKTIV` i
 | # | AC | Vad | Status |
 |---|---|---|---|
 | E6.1 | AC-12.1 | `audit_log` täcker samtliga sju händelsetyper | PÅGÅR — M1:s händelser klara |
-| E6.2 | AC-12.2, K10 | **Nattligt gallringsjobb** som verkställer `retention_until` och skriver kvittens | EJ PÅBÖRJAD |
+| E6.2 | AC-12.2, K10 | **Nattligt gallringsjobb** som verkställer `retention_until` och skriver kvittens | BLOCKERAD av P0.6 — ingen tabell bär `retention_until`, och fristerna är inte skrivna. Ett jobb med påhittade frister raderar personaldata enligt en gissning |
 | E6.3 | AC-12.3 | Objekt i låst dossier undantas från gallring | BLOCKERAD av E11 |
-| E6.4 | AC-12.4, K25 | **Registerutdrag**: all data om en person som JSON plus filer | EJ PÅBÖRJAD |
+| E6.4 | AC-12.4, K25 | **Registerutdrag**: all data om en person som JSON plus filer | KLAR för JSON — `/personal/[id]/registerutdrag`, länk på /profil. Filer väntar på Storage (E2.12). `tests/registerutdrag.mjs` faller när en ny kolumn pekar på `employee` utan att vara redovisad |
 | E6.5 | AC-12.5 | Adoptionsstatistik: DAU/WAU, sökningar utan träff, dokument utan visningar 90 dagar | EJ PÅBÖRJAD |
 
 ---
