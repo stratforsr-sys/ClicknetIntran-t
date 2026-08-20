@@ -1,6 +1,56 @@
 # Arbetslogg — Clicknet Nav
 
 Läs denna före arbete. Uppdatera efteråt.
+Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
+
+---
+
+## 2026-08-20 · Ett tillfälligt lösenord ska vara tillfälligt
+
+Chefen läser upp ordet, den anställda skriver in det — och sedan gällde det för
+alltid. Två personer kan kontot, och loggen bygger på att en person kan det.
+
+Flaggan bor i auth-kontots `app_metadata` och inte i en kolumn i `employee`.
+Två skäl: `user_metadata` får användaren själv skriva i, och en spärr den
+spärrade kan stänga av är ingen spärr; och mellanvaran hämtar redan `getUser()`
+på varje sidladdning, så kontrollen kostar ingen extra fråga.
+
+Spärren sitter i mellanvaran. En server action är ett POST till sidans egen
+adress och passerar därför samma väg — ett flaggat konto kan alltså inte
+**skriva** något heller, inte bara inte titta. Den ligger efter steg två med
+flit: en chef som bytt enhet bekräftar enheten först, annars kan den som kommit
+över ett tillfälligt lösenord sätta ett eget och låsa ute den rätta ägaren.
+
+**Reglerna följer NIST och inte vanan**
+
+`Sommar2026!` uppfyller versal, gemen, siffra och specialtecken, och står högt
+upp i varje ordlista. `src/lib/losenordskrav.ts` tittar i stället på längd,
+spärrlista, tangentbordsrader, upprepning, och om namn eller e-post ur den egna
+profilen står i ordet. Alla fel visas på en gång — ett i taget är en pina, där
+man rättar längden och får veta att ordet står i listan, rättar det och får
+veta att namnet står i det.
+
+Styrkemätaren i formuläret är en uppskattning och avgör ingenting. Den finns
+för att en människa ska se skillnad på tre ord och ett ord med en trea i.
+
+**Testet hittade en bugg innan koden nådde någon**
+
+Spärrlistan innehöll `abc`, matchad som delsträng. Ungefär vartannat hundrade
+slumpat tillfälligt lösenord innehåller de tre bokstäverna i följd — chefen
+hade alltså kunnat dela ut ord som navet självt vägrade ta emot, utan att någon
+förstod varför. Korta ord matchas nu bara när de utgör hela lösenordet.
+`tests/losenordskrav.mjs` slumpar 500 tillfälliga lösenord och granskar dem,
+just för att den sortens regel ska falla direkt.
+
+**Två vägar, ett regelverk**
+
+Profilsidan hade sitt eget byte sedan tidigare, med bara längdkrav och en
+kontroll av e-postadressen. Den tvingade sidan hade hela spärrlistan. Två vägar
+in i samma konto med olika krav är detsamma som att bara ha det svagare kravet,
+så bytet ligger nu i `src/lib/losenordsbyte-server.ts` och delas.
+
+**Kvar:** befintliga konton är inte flaggade — flaggan sätts vid skapande och
+vid återställning. Se `docs/NASTA_SESSION.md`.
 
 ---
 

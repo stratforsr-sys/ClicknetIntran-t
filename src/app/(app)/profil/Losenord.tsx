@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Field";
 import { Notis } from "@/components/ui/Notis";
+import { MIN_TECKEN } from "@/lib/losenordskrav";
 import { bytLosenord, type ProfilState } from "./actions";
 
 const TOM: ProfilState = {};
@@ -23,9 +24,15 @@ export function Losenord() {
       <Field
         label="Nytt lösenord"
         namn="nytt"
-        hjalp="Minst 12 tecken. En mening du minns slår ett kort krångligt ord."
+        hjalp={`Minst ${MIN_TECKEN} tecken. En mening du minns slår ett kort krångligt ord.`}
       >
-        <Input namn="nytt" type="password" autoComplete="new-password" required minLength={12} />
+        <Input
+          namn="nytt"
+          type="password"
+          autoComplete="new-password"
+          required
+          minLength={MIN_TECKEN}
+        />
       </Field>
 
       <Field label="Upprepa nytt lösenord" namn="upprepa">

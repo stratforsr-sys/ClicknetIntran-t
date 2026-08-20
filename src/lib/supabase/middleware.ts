@@ -4,6 +4,7 @@ import { SUPABASE_ANON_KEY, SUPABASE_URL, isConfigured } from "@/lib/env";
 import { bygCsp } from "@/lib/csp";
 import { kvittoGiltigt, STEG2_KAKA } from "@/lib/mfa";
 import { MFA_REQUIRED_ROLES } from "@/lib/roles";
+import { BYTESVAG, kraverByte } from "@/lib/losenordsbyte";
 
 /**
  * Publika vagar. Allt annat kraver session.
@@ -114,6 +115,28 @@ export async function updateSession(request: NextRequest) {
         return NextResponse.redirect(url);
       }
     }
+  }
+
+  /**
+   * Tvingat losenordsbyte.
+   *
+   * Ligger EFTER steg tva med flit. En chef som bytt enhet ska bekrafta
+   * enheten forst — annars kan den som kommit over ett tillfalligt losenord
+   * satta ett eget och darmed las­a ute den ratta agaren.
+   *
+   * Flaggan ligger i `app_metadata` och foljer med i svaret fran getUser(),
+   * som anda hamtas har. Kontrollen kostar alltsa ingenting extra.
+   *
+   * Att den sitter i mellanvaran och inte i en layout ar samma skal som ovan:
+   * en server action ar ett POST till sidans egen adress, och den passerar
+   * har. Ett konto med tvang kommer alltsa inte at att SKRIVA nagot heller,
+   * inte bara at att titta.
+   */
+  if (user && kraverByte(user.app_metadata) && !undantag && path !== BYTESVAG) {
+    const url = request.nextUrl.clone();
+    url.pathname = BYTESVAG;
+    url.search = "";
+    return NextResponse.redirect(url);
   }
 
   if (user && path === "/logga-in") {

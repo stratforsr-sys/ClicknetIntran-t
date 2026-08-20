@@ -6,6 +6,23 @@ import { getCurrentUser, canManageEmployees, hasRole } from "@/lib/auth";
 import { ROLES, PERMISSIONS, type Role, type Permission } from "@/lib/roles";
 import { riktarSigTill } from "@/lib/dokument";
 import { nyttTillfalligtLosenord } from "@/lib/losenord";
+import { FLAGGA } from "@/lib/losenordsbyte";
+
+/**
+ * Markerar att kontot maste byta losenord vid nasta inloggning.
+ *
+ * Las-andra-skriv i stallet for en rak skrivning: GoTrue slar visserligen
+ * ihop nycklarna i `app_metadata`, men dar ligger ocksa `provider` och
+ * `providers` som auth sjalv ager. Skulle beteendet nagon gang bli "ersatt"
+ * i stallet for "sla ihop" vore priset ett konto som inte gar att logga in
+ * pa, och det ar inte vart att spara en fraga pa.
+ */
+async function kravByte(db: ReturnType<typeof supabaseAdmin>, authUserId: string) {
+  const { data } = await db.auth.admin.getUserById(authUserId);
+  await db.auth.admin.updateUserById(authUserId, {
+    app_metadata: { ...(data?.user?.app_metadata ?? {}), [FLAGGA]: true },
+  });
+}
 
 export type FormState = {
   fel?: string;
@@ -82,6 +99,10 @@ export async function laggUppAnstalld(_prev: FormState, form: FormData): Promise
       password: losenord,
       email_confirm: true,
       user_metadata: { fornamn, efternamn },
+      // Ordet gar fran chef till anstalld muntligt. Det ar alltsa kant av tva
+      // fran forsta sekunden, och da ar det inte ett losenord an — det ar en
+      // nyckel till dorren dar man byter las.
+      app_metadata: { [FLAGGA]: true },
     });
 
     let authUserId = skapad?.user?.id ?? null;
@@ -96,6 +117,7 @@ export async function laggUppAnstalld(_prev: FormState, form: FormData): Promise
         password: losenord,
       });
       if (satFel) return { fel: `Lösenordet kunde inte sättas: ${satFel.message}` };
+      await kravByte(db, authUserId);
     }
 
     const { data: rad, error: dbFel } = await db
@@ -205,6 +227,9 @@ export async function aterstallLosenord(
     const losenord = nyttTillfalligtLosenord();
     const { error } = await db.auth.admin.updateUserById(a.auth_user_id, { password: losenord });
     if (error) return { fel: `Lösenordet kunde inte sättas: ${error.message}` };
+
+    // Ett aterstallt losenord ar lika kant som ett nyss utdelat. Samma tvang.
+    await kravByte(db, a.auth_user_id);
 
     await logga(user.employee!.id, "auth.temp_password_set", "employee", a.id, { epost: a.email });
 

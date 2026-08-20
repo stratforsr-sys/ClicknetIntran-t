@@ -2,15 +2,12 @@
 
 import { cookies, headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@supabase/supabase-js";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/env";
 import { getCurrentUser } from "@/lib/auth";
 import { skapaKvitto, STEG2_KAKA, STEG2_DYGN } from "@/lib/mfa";
+import { utforBytLosenord } from "@/lib/losenordsbyte-server";
 
 export type ProfilState = { fel?: string; ok?: string };
-
-const MIN_LOSENORD = 12;
 
 async function logga(
   actorId: string,
@@ -40,43 +37,26 @@ async function klientIp(): Promise<string | null> {
 /**
  * AC-1.7. Det nuvarande losenordet kravs aven om sessionen redan ar giltig:
  * en olast dator ska inte racka for att lasa ut agaren ur sitt eget konto.
- * Kontrollen gors mot en engangsklient sa att den palogade sessionen inte rors.
+ *
+ * Sjalva bytet ligger i `utforBytLosenord` och delas med `/byt-losenord`.
+ * Tidigare krävde den har vagen bara langd och att e-postadressen inte stod i
+ * ordet, medan den tvingade sidan hade hela sparrlistan. Tva vagar in i samma
+ * konto med olika krav ar detsamma som att bara ha det svagare kravet.
  */
 export async function bytLosenord(_prev: ProfilState, form: FormData): Promise<ProfilState> {
   const user = await getCurrentUser();
   if (!user?.employee) return { fel: "Du måste vara inloggad." };
 
-  const nuvarande = String(form.get("nuvarande") ?? "");
-  const nytt = String(form.get("nytt") ?? "");
-  const upprepa = String(form.get("upprepa") ?? "");
+  const resultat = await utforBytLosenord(
+    user,
+    String(form.get("nuvarande") ?? ""),
+    String(form.get("nytt") ?? ""),
+    String(form.get("upprepa") ?? ""),
+  );
 
-  if (!nuvarande || !nytt) return { fel: "Fyll i både nuvarande och nytt lösenord." };
-  if (nytt !== upprepa) return { fel: "De två nya lösenorden är inte lika." };
-  if (nytt.length < MIN_LOSENORD)
-    return { fel: `Lösenordet behöver vara minst ${MIN_LOSENORD} tecken.` };
-  if (nytt === nuvarande) return { fel: "Det nya lösenordet är samma som det gamla." };
-  if (nytt.toLowerCase().includes(user.email.split("@")[0].toLowerCase()))
-    return { fel: "Lösenordet får inte innehålla din e-postadress." };
-
-  const kontroll = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const { error: felIn } = await kontroll.auth.signInWithPassword({
-    email: user.email,
-    password: nuvarande,
-  });
-  if (felIn) return { fel: "Det nuvarande lösenordet stämmer inte." };
-  await kontroll.auth.signOut();
-
-  const supabase = await supabaseServer();
-  const { error } = await supabase.auth.updateUser({ password: nytt });
-  if (error) {
-    if (error.message.toLowerCase().includes("weak") || error.message.includes("password"))
-      return { fel: "Lösenordet är för svagt. Välj ett längre och mer unikt." };
-    return { fel: "Lösenordet kunde inte bytas. Försök igen." };
-  }
-
-  await logga(user.employee.id, "auth.password_changed", user.authUserId);
+  // Profilen visar en rad. Star det flera fel far de sta pa samma rad hellre
+  // an att bara det forsta visas — nasta forsok ska inte behova gissa.
+  if (resultat.fel) return { fel: resultat.fel.join(" ") };
   return { ok: "Lösenordet är bytt." };
 }
 

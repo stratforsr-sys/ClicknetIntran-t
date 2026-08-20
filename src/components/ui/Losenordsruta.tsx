@@ -23,9 +23,9 @@ export function Losenordsruta({ losenord, namn }: { losenord: string; namn?: str
       </p>
 
       <p className="max-w-[70ch] text-small text-ink-500">
-        Läs upp det för personen och be hen byta lösenord under Profil vid första inloggningen.
-        Så länge ni delar ordet är det inte längre bara hens konto — och loggen bygger på att det
-        är det.
+        Läs upp det för personen. Navet ber om ett eget lösenord direkt vid inloggningen och
+        släpper inte in någon förbi den sidan, så du behöver inte påminna. Så länge ni delar
+        ordet är det inte bara hens konto — och loggen bygger på att det är det.
       </p>
     </div>
   );

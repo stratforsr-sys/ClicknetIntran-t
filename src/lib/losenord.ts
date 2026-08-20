@@ -1,7 +1,10 @@
-import "server-only";
-
 /**
  * Tillfalliga losenord for konton som laggs upp av en chef.
+ *
+ * Ingen `server-only` langre. Modulen bar ingen hemlighet — den ar ren logik
+ * over `crypto.getRandomValues`, och markeringen gjorde bara att den inte gick
+ * att kora i `tests/losenordskrav.mjs`. Att ordet aldrig lamnar servern ar
+ * anropar­nas ansvar, och de ar server actions.
  *
  * Sa lange navet inte mejlar gar losenordet fran chef till anstalld muntligt
  * eller pa en lapp. Det styr utformningen: inga tecken som gar att hora fel
