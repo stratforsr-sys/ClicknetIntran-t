@@ -63,7 +63,7 @@ förhållande till tillväxten.
 | E1.5 | AC-1.3 | **Automatisk tilldelning** av rutiner, kurser, schema och team vid upplägg | DELVIS — rutiner och team klara, kurser väntar på E8 och schema på E4 |
 | E1.6 | AC-1.4 | Offboarding: roller, sessioner, status, historik | KLAR |
 | E1.7 | AC-1.4 | **Offboarding stänger dialer-kö och spärrar iCal-flöde** | BLOCKERAD av E7, E12 |
-| E1.8 | AC-1.4 | **Öppna ärenden avslutas med notis vid offboarding** | EJ PÅBÖRJAD — E3 finns nu, spärren är borta |
+| E1.8 | AC-1.4 | **Öppna ärenden avslutas med notis vid offboarding** | KLAR — stängs med skäl i `resolution`, egen punkt först i checklistan (AC-1.7), och tilldelningar går tillbaka till inkorgen |
 | E1.9 | AC-1.5 | Rollbyte loggas med vem som beviljade | KLAR |
 | E1.10 | AC-1.6 | RLS på alla persondatatabeller, verifierat | KLAR |
 | E1.11 | AC-1.7 | Offboarding-checklista med kvittens och motiveringstvång | KLAR |
@@ -233,12 +233,12 @@ daterad. Koden finns och är testad; påslaget sker med `M2_AKTIV` i
 | # | AC | Vad | Status |
 |---|---|---|---|
 | E5.1 | AC-11.1 | Startsidan visar stämpling, mina uppgifter, nya rutiner, obesvarade kvittenser, pågående kurser | KLAR — inklusive ärenden som väntar på svar |
-| E5.2 | AC-11.2 | Nyhetsinlägg med målgruppsstyrning | EJ PÅBÖRJAD |
+| E5.2 | AC-11.2 | Nyhetsinlägg med målgruppsstyrning | KLAR — `news_post`, samma `matches_audience` som rutinerna. Roll och team, fäst överst, utkast |
 | E5.3 | AC-11.3 | Sidan laddar under 1,5 s på 4G | EJ PÅBÖRJAD |
 | E5.4 | §12 Q9 | Rollstyrd startsida: säljaren ser stämpling, chefen ser köer och avvikelser | KLAR — ordningen byter plats i trädet, inte med CSS |
 | E5.5 | §6 | **Bottennavigering under 768 px**: Hem, Sök, Stämpla, Mer | KLAR — stämpelposten bara när modulen är på |
 | E5.6 | §5.1 | Hopfällbar sidopanel med sparat läge per användare | KLAR — läget i en kaka, så servern vet det före första ritningen |
-| E5.7 | §5.7 | Notissystem nere till höger med ångra-möjlighet | EJ PÅBÖRJAD |
+| E5.7 | §5.7 | Notissystem nere till höger med ångra-möjlighet | DELVIS — klockan i toppraden är byggd (ärenden, nyheter, rutiner, kurser, målgruppsstyrt via RLS). Kvar: toast nere till höger med ångra efter en åtgärd |
 
 ---
 
