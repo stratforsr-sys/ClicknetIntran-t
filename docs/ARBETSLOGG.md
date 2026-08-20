@@ -5,6 +5,184 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-08-20 · Tvånget flyttar in i databasen, och startsidan slutar ljuga
+
+Fyra saker: restpunkterna från lösenordstvånget, startsidan enligt E5, en
+bottenrad för telefonen, och registerutdraget som K14 lovar personalen.
+
+### Ett tvång som inte gällde API:t
+
+Överlämningen bad om ett prov på att ett flaggat konto får noll rader ur API:t.
+Provet skrevs — och visade att det inte stämde. Ett konto med
+`app_metadata.byt_losenord = true` loggade in rakt mot token-endpointen, frågade
+PostgREST och fick ut sin egen rad ur `employee` och ett dokument ur `document`.
+Mellanvaran var aldrig inblandad; den ser bara trafik som går genom navets sidor.
+
+Det var inget litet hål. Hela poängen med tvånget är att ett tillfälligt
+lösenord är känt av två personer från första sekunden — chefen läste upp det.
+Så länge ordet går att använda för att hämta data är tvånget en artighetsfras.
+
+Migration `0017` gör om det till en spärr i databasen, samma flytt som K12 gjorde
+i `0015`. Villkoret ligger i `public.kraver_losenordsbyte()`, som läser flaggan
+ur JWT:n — den följer med i token, så frågan kostar ingen tabelläsning. Den
+sitter sedan i de fem hjälpfunktioner nästan varje policy går igenom
+(`current_employee_id`, `has_role`, `has_any_role`, `leads_employee`,
+`matches_audience`), plus i de fem policyer som inte frågar någon av dem.
+
+`matches_audience` var den intressanta: den svarar ja på ett dokument som riktar
+sig till alla, alltså **utan att titta på vem som frågar**. Det var precis den
+vägen provet fick ut ett dokument. Villkoret måste därför stå först i funktionen
+och inte inuti något `exists`.
+
+Fyra policyer släppte dessutom in varje inloggad utan vidare: `company_read`,
+`team_read`, `case_category_read` och `compliance_gate_read`. Var för sig är det
+uppslagsdata — men teamlistan bär ledarnas id och spärrtabellen visar vad
+organisationen slagit på och när.
+
+**Gränsen går vid API:t, inte vid servern**
+
+Flaggan stänger `authenticated`-vägen. Servern har kvar sin service role, och
+det behövs på två ställen medan tvånget står kvar:
+
+- `/byt-losenord` nekar ett lösenord som innehåller det egna namnet. Utan
+  namnet faller den regeln tyst bort — och det är den enda sidan där den
+  verkligen behövs.
+- Steg två måste kunna läsa rollerna för att få komma **före** bytet. Utan
+  undantaget hade ett flaggat chefskonto sett ut som ett konto helt utan
+  roller, alltså ett som inte behöver MFA, och då hade ordningen kastats om.
+  Den som kommit över ett tillfälligt lösenord för ett chefskonto hade fått
+  sätta ett eget utan att bekräfta enheten — precis det ordningen finns för
+  att hindra. (`MFA_REQUIRED_ROLES` är tom idag, så det var latent, inte akut.)
+
+Därför faller `getCurrentUser()` tillbaka på service role just för flaggade
+konton, och `behoverSteg2()` i mellanvaran gör detsamma för sin enda fråga.
+Alla andra läses fortfarande med användarens egen token.
+
+15 nya kontroller i `tests/rls.mjs`, inklusive vägen tillbaka: efter att flaggan
+tagits bort ser säljchefen registret igen, 8 rader av 8. En spärr som inte går
+att öppna är inte en spärr utan ett oupptäckt fel — samma resonemang som provet
+av raststämplingen.
+
+### Skriptet som når konton som redan fanns
+
+`scripts/krav-losenordsbyte.mjs`. Flaggan sattes bara vid upplägg och vid
+återställning, så alla konton som fanns innan tvånget byggdes gick fria.
+
+Torrkörning är normalläget och `--kor` krävs för att något ska hända. Det är
+inte försiktighet för sakens skull: en körning med fel urval skickar hela navet
+till `/byt-losenord`, och den som inte kan sitt gamla lösenord kommer inte vidare
+därifrån — sidan kräver det. Skriptet skriver också ut just den varningen efter
+en lyckad körning.
+
+Inga beroenden, bara `fetch`. Skrivningen går mot GoTrues admin-API och inte mot
+`auth.users` med SQL: `raw_app_meta_data` är auth-schemats egen kolumn och det
+finns ingen utfästelse om att den får skrivas utifrån.
+
+En bugg som provet mot riktig databas hittade: `Prefer: return=minimal` svarar
+201 med tom kropp, inte 204. Att lita på statuskoden och ändå anropa `.json()`
+gav ett "Unexpected end of JSON input" som såg ut som ett avvisat anrop — fast
+skrivningen hade gått igenom.
+
+### Startsidan
+
+Kortet "Byggstatus" visade Personalärenden, Utbildning och **Stämpling** som
+"Planerad". Alla tre har varit i drift sedan 16–17 augusti. Kortet är borta, inte
+rättat: en lista över vad som är byggt är utvecklarens vy, inte säljarens.
+
+- **E5.4 rollstyrd ordning.** Säljaren ser stämpelknappen först — det är det
+  enda hen gör här varje dag. Chefen ser sin kö först. Ordningen byter plats i
+  trädet och inte med CSS, så att den håller även på 375 px där allt ligger i en
+  spalt.
+- **Chefens kö** samlar ärenden över tiden, ärenden i sista fjärdedelen av
+  fristen, och rättelser som väntar på beslut. Behörigheterna står var för sig:
+  "chef" är inte en roll utan tre olika saker, och ett samlat begrepp hade gett
+  teamledaren en ärendekö hen inte kan röra.
+- **Avvikelserna räknas medvetet inte.** K19 kräver att varje chefsöppning av
+  avvikelsevyn loggas. En siffra på startsidan hade betytt en öppning per
+  sidladdning — både en logg full av brus och en insyn som skedde utan att någon
+  valde den. Posten är en länk och ingenting mer.
+- **E5.1**: "Att göra" lovade ärenden i sin egen beskrivning men hämtade dem
+  inte. Nu ligger de där de hör hemma. `waiting` sätts när någon *annan* än
+  ägaren skrivit i tråden, alltså precis när ledningen svarat och bollen ligger
+  hos den anställda.
+
+### Bottenrad och hopfällbar panel
+
+**E5.5**, under 768 px: Hem, Sök, Stämpla, Mer. Säljaren stämplar in i dörren,
+med telefonen i ena handen och något annat i den andra, och tummen når
+underkanten — inte hamburgaren i motsatt hörn. AC-2.1 lovar max två knapptryck,
+och ett går åt till att öppna menyn om det är enda vägen dit.
+
+Stämpelposten visas bara när modulen är på, samma regel som sidopanelen följer.
+Hamburgaren i toppraden är samtidigt dold under 768 px: två knappar som öppnar
+samma panel, en i varje hörn, är en fråga för läsaren utan svar.
+
+Sökknappen flyttar fokus till toppradens fält via en händelse i stället för en
+prop. Två sökfält på samma skärm är två ställen att undra över.
+
+**E5.6**, hopfällbar sidopanel. Läget ligger i en kaka och inte i localStorage,
+och skälet är vad man ser första halvsekunden: localStorage går bara att läsa
+efter att sidan ritats, så en hopfälld panel hade hunnit ritas utfälld och sedan
+slagit ihop sig vid varje sidladdning. Kakan följer med i requesten, så servern
+vet det innan den skickar något. Kakan följer webbläsaren och inte kontot — på
+en delad kioskdator får nästa person föregående persons läge. Det är en
+vyinställning utan personuppgifter, och en kolumn plus en fråga per sidvisning
+är fel pris för det.
+
+### E6.4 Registerutdrag
+
+K14 lovar personalen det i klartext, och det är artikel 15. Nu finns det:
+`/personal/[id]/registerutdrag` ger en JSON-fil med allt navet registrerat om
+personen, tabell för tabell, med ändamålet utskrivet för varje.
+
+Två får hämta: personen själv, och den som förvaltar registret. Teamledaren står
+utanför med flit — hen ser sitt team i vardagen, men utdraget är hela innehållet
+inklusive lönerader och ärenden. Länken sitter på `/profil`: en rättighet man
+måste be någon om är en rättighet man låter bli att använda.
+
+Hämtningen går med service role och inte med den frågandes egen token. RLS är
+byggd för vardagsvyerna — en säljare ser sin egen rad i `payroll_row` men ingen
+rad alls i `document_view` — och ett utdrag som speglade vyerna hade undanhållit
+precis det som är mest angeläget att få se: vad navet registrerar utan att visa.
+
+Loggen skrivs **före** svaret skickas, och misslyckas den lämnas filen inte ut.
+Ett utdrag är ett utlämnande av samtliga personuppgifter om en människa; går
+loggningen fel efteråt har det redan skett utan spår.
+
+**Provet är det som gör listan värd något.** `tests/registerutdrag.mjs` frågar
+databasen efter varje främmande nyckel mot `employee` — 45 stycken — och kräver
+att var och en står antingen i `KALLOR`, alltså följer med i utdraget, eller i
+`UNDANTAG` med ett skäl. Skälet: ett utdrag som saknar en tabell ser exakt
+likadant ut som ett utdrag där den tabellen var tom. Den som begär ut sina
+uppgifter kan inte se att något fattas, och den som byggde tabellen har för
+länge sedan glömt att utdraget finns. En handunderhållen lista slutar stämma,
+tyst.
+
+`UNDANTAG` är kolumner som pekar på `employee` utan att bära uppgifter *om* den
+personen — `granted_by`, `attested_by`, `decided_by`. De säger vem som gjorde
+något åt någon annan. Att ta med dem hade gjort utdraget till en lista över
+andras ärenden och löner, ett dataintrång utklätt till en rättighet.
+
+Prövat mot riktiga data: 23 tabeller, noll fel, 33 rader plus 64 loggrader för
+ett verkligt konto.
+
+### E6.2 gallringsjobbet — inte byggt, och det är ett beslut
+
+`retention_until` finns inte som kolumn i någon tabell. Att bygga jobbet betyder
+alltså att först bestämma vilka tabeller som ska bära en gallringsfrist och hur
+lång den är — och det är ingen teknisk fråga. **P0.6 registerförteckningen** är
+dokumentet som ska svara på det, och den står som EJ PÅBÖRJAD.
+
+Ett gallringsjobb med påhittade frister raderar personaldata enligt en gissning.
+Det är sämre än inget jobb alls, för det ser ut att uppfylla K10. Punkten står
+kvar som blockerad av P0.6 tills fristerna är skrivna.
+
+### Nästa steg
+
+`docs/NASTA_SESSION.md`.
+
+---
+
 ## 2026-08-20 · Ett tillfälligt lösenord ska vara tillfälligt
 
 Chefen läser upp ordet, den anställda skriver in det — och sedan gällde det för
