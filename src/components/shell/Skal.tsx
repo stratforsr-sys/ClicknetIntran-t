@@ -6,6 +6,7 @@ import { Topbar } from "./Topbar";
 import { Bottennav } from "./Bottennav";
 import { SIDOPANEL_KAKA } from "./sidopanel";
 import type { NavItem } from "./nav-items";
+import type { Notis } from "@/lib/notiser";
 
 export function Skal({
   items,
@@ -13,6 +14,7 @@ export function Skal({
   roll,
   stamplingPa,
   hopfalldFranStart,
+  notiser,
   children,
 }: {
   items: NavItem[];
@@ -20,6 +22,7 @@ export function Skal({
   roll: string;
   stamplingPa: boolean;
   hopfalldFranStart: boolean;
+  notiser: Notis[];
   children: ReactNode;
 }) {
   const [oppen, setOppen] = useState(false);
@@ -63,7 +66,7 @@ export function Skal({
             : "px-4 lg:pl-[18rem] transition-[padding] duration-base ease-brand"
         }
       >
-        <Topbar oppnaMeny={() => setOppen(true)} />
+        <Topbar oppnaMeny={() => setOppen(true)} notiser={notiser} />
         {/* Innehallsyta maximalt 1440 px, centrerad (UI-PRD §6).
             Under 768 px ligger bottenraden over sidans nederkant, sa
             innehallet behover en botten som ar hogre an raden ar. */}
