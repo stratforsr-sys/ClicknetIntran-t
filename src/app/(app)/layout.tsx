@@ -42,7 +42,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
 
   return (
-    <Skal items={navFor(user, lage.stampling)} namn={fullName(user.employee)} roll={roll}>
+    <Skal
+      items={navFor(user, lage.stampling)}
+      namn={fullName(user.employee)}
+      roll={roll}
+      stamplingPa={lage.stampling}
+    >
       {children}
     </Skal>
   );
