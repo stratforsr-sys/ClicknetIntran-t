@@ -33,12 +33,15 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
 set -a && . $HOME/.clicknet/nav.env && set +a && npm test
 ```
 
-Elva sviter. `tests/rls.mjs` går mot den **riktiga** databasen och skapar och
+Tretton sviter. `tests/rls.mjs` går mot den **riktiga** databasen och skapar och
 städar sina egna användare (prefix `rlstest+`). Den rör aldrig driftdata — det
 som måste provas skarpt görs i en transaktion som rullas tillbaka.
 
 `tests/registerutdrag.mjs` behöver `DATABASE_URL`: den frågar schemat efter
 främmande nycklar och jämför dem mot utdragets lista.
+
+`tests/offboarding-db.mjs` kör offboardingens egna satser i en transaktion som
+rullas tillbaka.
 
 ---
 
@@ -56,6 +59,8 @@ främmande nycklar och jämför dem mot utdragets lista.
 | Startsida | Rollstyrd. Chefens kö, säljarens stämpelknapp |
 | Bottennavigering | Under 768 px: Hem, Sök, Stämpla, Mer |
 | Registerutdrag | Klart. `/profil` → Hämta registerutdrag |
+| Nyheter | `/nyheter`. Målgrupp per roll och team, fäst överst, utkast |
+| Notisklockan | **Fungerar.** Ärenden, nyheter, rutiner, kurser — målgruppsstyrt via RLS |
 
 ### Två saker användaren själv måste göra
 
@@ -108,8 +113,7 @@ förrän säljarna läggs upp.
 
 ### E5 startsida, bottenrad och hopfällbar panel — KLART
 
-E5.1, E5.4, E5.5, E5.6. Kvar i E5: **E5.2 nyhetsinlägg**, **E5.3 under 1,5 s på
-4G** (aldrig mätt) och **E5.7 notissystem med ångra**.
+E5.1, E5.4, E5.5, E5.6. (E5.2 och klockan kom i tredje passet nedan.)
 
 ### E6.4 registerutdrag — KLART
 
@@ -123,19 +127,54 @@ annars faller provet, vilket är hela poängen.
 
 ---
 
+## Vad som byggdes 2026-08-20 (tredje passet)
+
+### E1.8 offboarding och öppna ärenden — KLART
+
+Öppna ärenden på den som slutar stängs med skäl i `resolution`, och en extra
+punkt läggs **först** i offboardingchecklistan. Statistiken blir ren av att
+tråden stängs, men frågan i den kan leva vidare — punkten går inte att hoppa
+över utan motivering (AC-1.7). Ärenden personen *handlade* stängs inte, men
+tilldelningen tas bort så att de går tillbaka till inkorgen.
+
+### E5.2 nyheter — KLART
+
+`/nyheter`. Skrivs av säljchef, VD eller administratör. Målgrupp som kryssrutor
+per roll och team; ingen ruta ikryssad betyder alla. Utkast syns bara för
+författaren och ledningen.
+
+### Notisklockan — KLART
+
+Klockan i toppraden var en död knapp. Nu visar den ärenden, nyheter, rutiner att
+kvittera och kurser — både personligt riktat och via målgrupp.
+
+**Den lagrar inga notiser.** Posterna räknas fram ur `document`, `course`,
+`news_post` och `case_message` vid läsning. Det enda som sparas är
+`notification_seen.seen_at`, alltså när personen senast öppnade klockan. Skälet
+står i migration 0018 och i `src/lib/notiser.ts`: en notistabell kräver att varje
+producent kommer ihåg att skriva sin rad, och den som glömmer ger en tyst lucka.
+
+**Lägger du till något som ska synas i klockan** räcker det att lägga till en
+källa i `hamtaNotiser()` i `src/lib/notiser-server.ts`. Läs med användarens egen
+token — målgruppsstyrningen sitter i RLS, och ett eget filter i den filen blir
+ett andra svar på samma fråga.
+
+---
+
 ## Vad som står på tur
 
 I prioritetsordning för att få säljarna igång.
 
 1. **Supabase-panelen** — användarens eget arbete, men påminn.
 2. **X7 pilot** med tre personer i två veckor innan bredd.
-3. **E5.2 nyhetsinlägg** med målgruppsstyrning. Sista biten av startsidan.
-4. **E1.8** öppna ärenden avslutas med notis vid offboarding. Spärren är borta
-   sedan E3 finns.
-5. **E8.9 kursinnehåll** — åtta kurser ska skrivas. Ingen kod, men det är det
+3. **E8.9 kursinnehåll** — åtta kurser ska skrivas. Ingen kod, men det är det
    som gör att 25 säljare kan lära sig samma sak utan att du upprepar dig.
-6. **E2.13 global sökning** i toppraden.
-7. Därefter #9 Storage-spåret, E7 frånvaro, E10+E9 rekrytering.
+4. **E2.13 global sökning** i toppraden. `news_post` har redan en `search`-kolumn
+   av samma sort som `document`, så båda går att fråga på samma sätt.
+5. **E5.3** startsidan under 1,5 s på 4G — aldrig mätt.
+6. **E5.7 resten**: toast nere till höger med ångra efter en åtgärd. Klockan är
+   byggd, den biten är inte.
+7. Därefter Storage-spåret, E7 frånvaro, E10+E9 rekrytering.
 
 ### E6.2 gallringsjobbet är blockerat, inte bortglömt
 
