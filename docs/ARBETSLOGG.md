@@ -5,6 +5,116 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-08-20 · Klockan börjar ringa, och nyheterna får någonstans att ta vägen
+
+Tre saker: offboardingen slutar lämna ärenden efter sig, nyhetsinlägg med
+målgrupp, och klockan i toppraden som varit en död knapp sedan skalet byggdes.
+
+### E1.8 Offboarding och öppna ärenden
+
+En avslutad anställd lämnade efter sig trådar som ingen kunde svara på — kontot
+bannlyses i samma andetag — medan fristen fortsatte ticka och drog med sig
+SLA-statistiken i AC-4.5.
+
+De stängs nu, men inte tyst. `resolution` säger varför, varje stängning får en
+rad i loggen, och fanns det öppna ärenden läggs en extra punkt **först** i
+offboardingchecklistan. Den punkten är hela poängen: statistiken blir ren av att
+tråden stängs, men frågan i den kan mycket väl leva vidare. Ett ärende om
+provision på en affär som ligger kvar hos kunden slutar inte existera för att
+den som ställde frågan slutat. AC-1.7 låter inte punkten hoppas över utan
+motivering, och det är den enda notis navet kan ge så länge E0.8 saknas.
+
+Ärenden där personen var **handläggare** rör andra anställda och stängs därför
+inte — men tilldelningen tas bort så att de går tillbaka till inkorgen. En
+kvarglömd tilldelning är ett ärende som ingen tittar på fast alla tror att någon
+gör det.
+
+`tests/offboarding-db.mjs` kör exakt de två satserna handlingen kör, i en
+transaktion som rullas tillbaka. Den fångar två saker som är lätta att få fel:
+`hr_case_avslut` kräver att `resolved_at` sätts i samma andetag som status blir
+`resolved`, och utan `is null`-filtret hade en resolution från mars skrivits över
+med "anställningen avslutades i augusti".
+
+### E5.2 Nyhetsinlägg
+
+`news_post` med samma målgruppsmönster som rutinbiblioteket. Att återanvända
+`matches_audience()` och inte hitta på ett eget filter är inte bekvämlighet:
+funktionen bär redan spärren för konton som måste byta lösenord (0017), och ett
+eget filter hade tappat den tyst.
+
+Målgruppen är kryssrutor och inte en flervalslista. Den som skriver ska se hela
+mottagarkretsen samtidigt utan att scrolla, för det är det enda valet i
+formuläret som inte går att göra ogjort efter publicering. Ingen ruta ikryssad
+betyder alla, och det står utskrivet under rutorna — en "Alla"-ruta som styr de
+andra har tre lägen i praktiken, och det tredje förklarar ingen.
+
+`published_at` sätts bara första gången. Ett inlägg som avpubliceras och
+publiceras igen ska inte dyka upp som nytt i allas klockor en andra gång; det är
+samma besked, och en klocka som upprepar sig slutar man titta i.
+
+Ett villkor i databasen gör det omöjligt att ha status `published` utan
+`published_at`. Ett sådant inlägg går inte att sortera och skulle aldrig synas
+som nytt i klockan — alltså ett inlägg som ser publicerat ut men inte når någon.
+
+### Klockan
+
+Den var en `<button>` utan `onClick`. Nu visar den allt som är riktat till
+personen: nytt ärende eller svar i ett ärende, nyhetsinlägg, ny rutin att
+kvittera, ny kurs — både det som är personligt och det som kommer via målgrupp.
+
+**Klockan lagrar inga notiser.** Det fanns en enklare väg: en
+`notification`-tabell där varje handling skriver en rad. Den valdes bort. Varje
+ny producent måste då komma ihåg att skriva sin rad, och den som glömmer ger en
+tyst lucka — en kurs som läggs upp utan att någon får veta ser precis ut som en
+kurs ingen brydde sig om. Raderna som redan finns är dessutom sanningen: en
+okvitterad rutin är okvitterad oavsett vad en notistabell påstår.
+
+Posterna räknas därför fram vid läsning, precis som `lageNu()` räknar fram
+stämpelläget ur händelserna. Det enda som lagras är en tidpunkt per person:
+`notification_seen.seen_at`, alltså när hen senast öppnade klockan. Saknas raden
+är allt oläst — rätt håll att fela åt, en nyanställd ska se sina rutiner och
+kurser, inte en tom klocka.
+
+**Målgruppen sitter i RLS, inte i den här filen.** `hamtaNotiser()` läser med
+användarens egen token. `news_post_read`, `document_read` och `course_read` går
+alla genom `matches_audience()`, så databasen har redan svarat på frågan "är det
+här riktat till mig". Ett eget filter hade varit ett andra svar på samma fråga,
+och två svar glider isär. Det är också därför konfidentiella ärenden inte behöver
+nämnas i notiskoden alls.
+
+Ett nytt ärende skapar alltid ett första `case_message` (se `skapaArende`), så
+en enda fråga — meddelanden skrivna av någon annan än mig — täcker både "någon
+skrev ett ärende" och "någon svarade". Att leta efter båda separat hade gett
+dubbletter på det första. Ett meddelande per ärende räcker: tre svar i samma tråd
+är en notis, inte tre.
+
+**Markeringarna fryses vid öppningen.** Att öppna klockan skickar iväg "senast
+sedd", och utan frysningen hade raderna tappat sina prickar mitt framför ögonen
+på den som just öppnade — man hinner se att det fanns något nytt, men inte vad.
+Prickarna står kvar tills panelen stängs.
+
+Kursen fick en `published_at`-kolumn. `created_at` dög inte: ett utkast kan ligga
+i tre veckor innan det slås på, och då hade kursen varit "ny" i klockan sedan
+den dagen någon började skriva den. Befintliga publicerade kurser fick sitt
+`created_at` — det bästa som går att veta i efterhand, och alternativet vore att
+de aldrig syns.
+
+**Provat mot riktiga data** med en riktig inloggning: en säljare ser nyheten till
+säljare men inte den till ekonomi, ser svaret i sitt eget ärende, sin okvitterade
+rutin och sin påbörjade kurs. Inbäddningen `case_message → hr_case` ger ett
+objekt och inte en lista, vilket är vad koden antar.
+
+18 nya kontroller i `tests/rls.mjs`: målgrupp per roll och per team, utkast som
+bara författaren och ledningen ser, noll rader vid direkt fråga på id, och att
+ingen kan skriva någon annans `notification_seen` — kunde man det gick det att
+tysta någon annans klocka.
+
+### Nästa steg
+
+`docs/NASTA_SESSION.md`.
+
+---
+
 ## 2026-08-20 · Tvånget flyttar in i databasen, och startsidan slutar ljuga
 
 Fyra saker: restpunkterna från lösenordstvånget, startsidan enligt E5, en
