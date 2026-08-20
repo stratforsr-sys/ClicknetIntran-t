@@ -4,6 +4,8 @@ import { useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Ikon } from "./Ikon";
 import { SOK_HANDELSE } from "./Bottennav";
+import { Notisklocka } from "./Notisklocka";
+import type { Notis } from "@/lib/notiser";
 
 /**
  * UI-PRD §5.2. Sokfaltet ar understruket i vila enligt referens A — inte en
@@ -14,7 +16,7 @@ import { SOK_HANDELSE } from "./Bottennav";
  * sokbart innehall. Nar fler moduler finns blir det en samlad traffsida — men
  * ett falt som soker i ratt sak slar ett falt som ar avstangt.
  */
-export function Topbar({ oppnaMeny }: { oppnaMeny: () => void }) {
+export function Topbar({ oppnaMeny, notiser }: { oppnaMeny: () => void; notiser: Notis[] }) {
   const sok = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const sp = useSearchParams();
@@ -80,13 +82,7 @@ export function Topbar({ oppnaMeny }: { oppnaMeny: () => void }) {
         </kbd>
       </form>
 
-      <button
-        type="button"
-        aria-label="Notiser"
-        className="grid size-11 shrink-0 place-items-center rounded-full text-ink-700 transition-colors duration-fast hover:bg-surface"
-      >
-        <Ikon namn="klocka" />
-      </button>
+      <Notisklocka notiser={notiser} />
     </header>
   );
 }
