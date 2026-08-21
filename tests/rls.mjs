@@ -150,8 +150,16 @@ async function stad() {
   await db.query(`delete from calendar_feed where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`delete from absence_blackout where label like 'rlstest-%'`);
   await db.query(`delete from staffing_cap where created_by in (select id from employee where email like $1)`, [PREFIX + "%"]);
+  // 0025. Berakningarna och lonerna forst — de hanger i personerna och i
+  // loneperioderna som stadas har nedan. Loneuppgiften kraver samma medvetna
+  // handgrepp som sjukanmalan: sparren galler aven den som skrev den.
+  await db.query(`delete from cost_calculation where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
+  await db.query(`delete from revenue_entry where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
+  await db.query(`alter table salary_basis disable trigger salary_basis_last`);
+  await db.query(`delete from salary_basis where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
+  await db.query(`alter table salary_basis enable trigger salary_basis_last`);
   await db.query(`delete from payroll_row where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
-  await db.query(`delete from payroll_period where status = 'draft' and period_start in ('2019-03-01','2019-04-01')`);
+  await db.query(`delete from payroll_period where status = 'draft' and period_start in ('2019-03-01','2019-04-01','2019-05-01')`);
   await db.query(`delete from work_time_journal where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`delete from scheduled_break where scope = 'company' and window_start = '11:30' and duration_minutes = 30`);
   await db.query(`delete from work_schedule where scope = 'company' and start_time = '08:00' and end_time = '17:00'`);
@@ -1655,6 +1663,131 @@ console.log("\n\x1b[1mFiler: bucketen ar stangd och varje oppning skrivs (K36, X
   });
 }
 
+console.log("\n\x1b[1mLonekostnad: behorigheten ar payroll_cost_viewer, inte en roll (K26)\x1b[0m");
+{
+  // E15. Anna har en lon och en berakning. Fragan ar vilka som ser dem.
+  const { rows: [period] } = await db.query(
+    `insert into payroll_period (period_start, period_end, status)
+     values (date '2019-05-01', date '2019-05-31', 'draft') returning id`,
+  );
+  await db.query(
+    `insert into payroll_row (period_id, employee_id, worked_minutes, absence_minutes)
+     values ($1::uuid, $2::uuid, 9600, '{"sick": 480}'::jsonb)`,
+    [period.id, saljareA.id],
+  );
+  await db.query(
+    `insert into salary_basis (employee_id, monthly_salary, valid_from, entered_by)
+     values ($1::uuid, 35000, date '2019-01-01', $2::uuid)`,
+    [saljareA.id, chef.id],
+  );
+  await db.query(
+    `insert into cost_calculation
+       (period_id, employee_id, monthly_salary, gross_salary, employer_fee, total_cost, rates_used, calculated_by)
+     values ($1::uuid, $2::uuid, 35000, 35000, 10997, 45997, '{"standard": 31.42}'::jsonb, $3::uuid)`,
+    [period.id, saljareA.id, chef.id],
+  );
+
+  // Ingen roll racker. Inte ens saljchefen och inte ens ekonomi.
+  for (const [namn, tok] of [["Anna", tA], ["Cecilia", tC], ["David (saljchef)", tD], ["Eva (ekonomi)", tE]]) {
+    const lon = await las(tok, "salary_basis");
+    const berakning = await las(tok, "cost_calculation");
+    const satser = await las(tok, "cost_rate");
+    ok(
+      `${namn} ser 0 rader utan payroll_cost_viewer`,
+      lon.length === 0 && berakning.length === 0 && satser.length === 0,
+      `lon ${lon.length}, berakning ${berakning.length}, satser ${satser.length}`,
+    );
+  }
+
+  // Anna ser inte ens sin EGEN lonekostnad. Raden bar bolagets kalkyl pa en
+  // person, inte personens egen loneuppgift — den vet hon redan.
+  ok(
+    "inte heller sin egen — raden ar bolagets kalkyl, inte hennes loneuppgift",
+    (await las(tA, "cost_calculation", `employee_id=eq.${saljareA.id}&select=*`)).length === 0,
+  );
+
+  // Med behorigheten oppnar sig allt.
+  await db.query(
+    `insert into employee_permission (employee_id, permission) values ($1::uuid, 'payroll_cost_viewer')
+     on conflict do nothing`,
+    [ekonomi.id],
+  );
+  const tEK = await loggaIn(ekonomi.epost);
+  ok("med payroll_cost_viewer ser Eva lonen", (await las(tEK, "salary_basis")).length >= 1);
+  ok("och berakningen", (await las(tEK, "cost_calculation")).length >= 1);
+  ok("och satserna", (await las(tEK, "cost_rate")).length >= 1);
+
+  // AC-3.26 / E7.14, och detta ar hela skalet till varningen i ROADMAP:
+  // behorigheten ger tillgang till KOSTNAD, aldrig till HALSA. En vy som
+  // forsokte joina sick_report hade fatt noll rader — alltsa tyst fel data.
+  ok(
+    "men fortfarande 0 rader ur sick_report — K26 ger kostnad, inte halsa",
+    (await las(tEK, "sick_report")).length === 0,
+  );
+  ok(
+    "franvaron nas i stallet som minuter i loneunderlaget",
+    (await las(tEK, "payroll_row", `period_id=eq.${period.id}&select=absence_minutes`)).length >= 0,
+  );
+
+  // Skrivning gar aldrig via API:t, aven for den behoriga.
+  const skriv = await fetch(`${URL}/rest/v1/salary_basis`, {
+    method: "POST",
+    headers: som(tEK),
+    body: JSON.stringify({
+      employee_id: saljareB.id, monthly_salary: 1, valid_from: "2019-01-01", entered_by: ekonomi.id,
+    }),
+  });
+  ok("ingen skriver en lon via API:t", !skriv.ok, `HTTP ${skriv.status}`);
+
+  await db.query(`delete from employee_permission where employee_id = $1::uuid`, [ekonomi.id]);
+
+  // Konstruktionsvillkoren.
+  await db.query("begin");
+  ok(
+    "en loneuppgift gar inte att skriva om",
+    Boolean(await nekarSql(`update salary_basis set monthly_salary = 1 where employee_id = $1::uuid`, [saljareA.id])),
+  );
+  await db.query("rollback");
+
+  await db.query("begin");
+  ok(
+    "en berakning gar inte att skriva om",
+    Boolean(await nekarSql(`update cost_calculation set total_cost = 1 where period_id = $1::uuid`, [period.id])),
+  );
+  await db.query("rollback");
+
+  await db.query("begin");
+  // K27: bara aret, och det ska vara ett rimligt artal.
+  ok(
+    "ett personnummer gar inte att stoppa in som fodelsear",
+    Boolean(await nekarSql(`update employee set birth_year = 19950101 where id = $1::uuid`, [saljareA.id])),
+  );
+  await db.query("rollback");
+
+  // AC-13.10 / K27: det finns ingen kolumn nagonstans i navet som bar ett
+  // fodelsedatum eller ett personnummer. Provas mot schemat, inte mot minnet —
+  // samma mekanik som K35-provet pa sick_report.
+  const misstankta = await db.query(
+    `select table_name, column_name
+     from information_schema.columns
+     where table_schema = 'public'
+       and (column_name ~* 'personnummer|person_number|ssn|national_id'
+            or column_name ~* '^birth_date$|^birthdate$|^date_of_birth$|^fodelsedatum$')`,
+  );
+  ok(
+    "ingen kolumn i navet bar personnummer eller fodelsedatum (K27)",
+    misstankta.rows.length === 0,
+    misstankta.rows.map((r) => `${r.table_name}.${r.column_name}`).join(", "),
+  );
+
+  await db.query(`delete from cost_calculation where period_id = $1::uuid`, [period.id]);
+  await db.query(`alter table salary_basis disable trigger salary_basis_last`);
+  await db.query(`delete from salary_basis where employee_id = $1::uuid`, [saljareA.id]);
+  await db.query(`alter table salary_basis enable trigger salary_basis_last`);
+  await db.query(`delete from payroll_row where period_id = $1::uuid`, [period.id]);
+  await db.query(`delete from payroll_period where id = $1::uuid`, [period.id]);
+}
+
 console.log("\n\x1b[1mRollspel: rubriken syns i forvag, och ingen bedomer utan att lyssna\x1b[0m");
 {
   // E8.7. Anna gor rollspelet, Cecilia leder henne, Bertil ar en kollega.
@@ -1794,7 +1927,7 @@ console.log("\n\x1b[1mGlobal sokning: RLS avgor, och fragan gar att stalla\x1b[0
 }
 
 console.log("\n\x1b[1mAnonym anslutning\x1b[0m");
-for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate", "news_post", "notification_seen", "absence_type", "absence_policy", "absence_blackout", "staffing_cap", "absence_balance", "absence_request", "absence_call_order", "sick_report", "sick_deadline", "absence_reminder", "calendar_feed", "file_object", "file_access_log", "roleplay_criterion", "roleplay_submission", "roleplay_score"]) {
+for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate", "news_post", "notification_seen", "absence_type", "absence_policy", "absence_blackout", "staffing_cap", "absence_balance", "absence_request", "absence_call_order", "sick_report", "sick_deadline", "absence_reminder", "calendar_feed", "file_object", "file_access_log", "roleplay_criterion", "roleplay_submission", "roleplay_score", "cost_rate", "salary_basis", "revenue_entry", "cost_calculation"]) {
   const r = await fetch(`${URL}/rest/v1/${t}?select=*`, { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` } });
   const j = await r.json();
   ok(`${t} ger inga rader anonymt`, !Array.isArray(j) || j.length === 0, Array.isArray(j) ? `${j.length} rader` : `HTTP ${r.status}`);

@@ -5,6 +5,7 @@ import { korTidjobbet } from "@/lib/jobb/tid";
 import { korKontojobbet } from "@/lib/jobb/konton";
 import { korArendejobbet } from "@/lib/jobb/arenden";
 import { korFranvarojobbet } from "@/lib/jobb/franvaro";
+import { korSatsjobbet } from "@/lib/jobb/satser";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -42,6 +43,10 @@ export async function GET(request: NextRequest) {
     // paminnelser om oregistrerad franvaro. Steget kor aven nar stamplingen ar
     // av — bara paminnelserna kraver den, och det avgor jobbet sjalvt.
     ["franvaro", () => korFranvarojobbet(db, lage.stampling)],
+    // E15.8/K28: satser vars datum for oversyn passerat ger ett arende till
+    // agaren. En foraldrad arbetsgivaravgift ger fel lonekostnad utan att
+    // nagonstans se fel ut.
+    ["satser", () => korSatsjobbet(db)],
   ];
 
   for (const [namn, kor] of steg) {

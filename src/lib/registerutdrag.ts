@@ -69,6 +69,14 @@ export const KALLOR: Kalla[] = [
   // bedömning av den. Själva betyget och återkopplingen ligger i
   // `course_attempt`, som redan står ovan.
   { tabell: "roleplay_submission", kolumn: "employee_id", andamal: "Dina inlämnade rollspel" },
+
+  // 0025 E15. Lönen och vad bolaget räknat att du kostar. Att lönekostnaden är
+  // sekretessbelagd i vardagen (K26) gör den inte mindre till en uppgift OM
+  // personen — artikel 15 gäller ändå, och ett utdrag som utelämnar den vore
+  // ett utdrag som döljer det mest närgångna navet räknat fram.
+  { tabell: "salary_basis", kolumn: "employee_id", andamal: "Din inmatade månadslön" },
+  { tabell: "cost_calculation", kolumn: "employee_id", andamal: "Beräknad lönekostnad per period" },
+  { tabell: "revenue_entry", kolumn: "employee_id", andamal: "Inmatad intäkt per period" },
 ];
 
 /**
@@ -129,4 +137,9 @@ export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
   { tabell: "file_object", kolumn: "uploaded_by", skal: "Vem som laddade upp filen" },
   { tabell: "file_object", kolumn: "removed_by", skal: "Vem som tog bort filen" },
   { tabell: "roleplay_submission", kolumn: "graded_by", skal: "Vem som bedömde andras rollspel" },
+  { tabell: "cost_rate", kolumn: "owner_id", skal: "Vem som äger en sats (K28)" },
+  { tabell: "cost_rate", kolumn: "created_by", skal: "Vem som satte satsen" },
+  { tabell: "cost_calculation", kolumn: "calculated_by", skal: "Vem som körde beräkningen" },
+  { tabell: "salary_basis", kolumn: "entered_by", skal: "Vem som matade in lönen" },
+  { tabell: "revenue_entry", kolumn: "entered_by", skal: "Vem som matade in intäkten" },
 ];

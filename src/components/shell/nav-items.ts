@@ -42,6 +42,15 @@ export function navFor(user: CurrentUser | null, stamplingPa: boolean): NavItem[
     items.push({ href: "/tid/lonerapport", label: "Lönerapport", ikon: "klocka" });
   }
 
+  // K26/E15.1: lonekostnad ar en EGEN behorighet, inte en roll. Posten dyker
+  // upp for den som har `payroll_cost_viewer` och for ingen annan — ekonomi
+  // utan den ser den inte, och saljchefen ser den inte heller om hen inte
+  // fatt den tilldelad. Kretsen som ser vad folk KOSTAR ar mindre an den som
+  // skoter loner.
+  if (user?.permissions.includes("payroll_cost_viewer")) {
+    items.push({ href: "/lonekostnad", label: "Lönekostnad", ikon: "kontroll" });
+  }
+
   if (canManageEmployees(user) || hasRole(user, "ceo", "team_lead")) {
     items.push({ href: "/personal", label: "Personal", ikon: "personal" });
   }
