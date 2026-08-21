@@ -7,6 +7,13 @@
  * att fraga databasen. Sjalva uppladdningen och signeringen ligger i
  * `filer-server.ts`.
  *
+ * Reglerna har provas TVA GANGER: en gang i webblasaren pa det filen sager sig
+ * vara, och en gang pa servern pa det Storage faktiskt tog emot. Den forsta
+ * ger ett begripligt fel innan nagot laddas upp, den andra ar den som galler.
+ * Sedan uppladdningen gar direkt fran webblasaren till Storage ar den andra
+ * ingen dubbelkontroll utan den enda riktiga: det som klienten pastar om sin
+ * fil ar bara ett pastaende.
+ *
  * ===========================================================================
  * K35: FILNAMNET AR ETT FRITEXTFALT.
  *
@@ -16,16 +23,30 @@
  * ===========================================================================
  */
 
-export type Andamal = "sick_certificate" | "document_attachment";
+export type Andamal = "sick_certificate" | "document_attachment" | "roleplay";
 
 /** Vad varje andamal far bara. Samma lista som check-villkoret i 0022. */
 export const TILLATNA_TYPER: Record<Andamal, string[]> = {
   sick_certificate: ["application/pdf", "image/jpeg", "image/png"],
   document_attachment: ["application/pdf", "image/jpeg", "image/png"],
+  // E8.7: ljud, inte video. Ett testsamtal ar ett samtal, och en videofil hade
+  // dragit in ansikten i en bedomning som handlar om vad nagon sager.
+  roleplay: ["audio/mpeg", "audio/mp4", "audio/wav", "audio/webm"],
 };
 
-/** Bucketens tak. Star i 0022 och upprepas har for att kunna nekas tidigt. */
-export const MAX_BYTE = 10 * 1024 * 1024;
+/**
+ * Taket per andamal. Bucketens eget tak (0024) ar det hogsta av dem.
+ *
+ * Ett intyg ar en sida. En inspelning ar en kvart, och en kvart i mp3 ar
+ * omkring fjorton megabyte — darav skillnaden. Att satta ett gemensamt tak pa
+ * fyrtio hade betytt att en fyrtio megabyte stor PDF gick att lagga som
+ * bilaga, och den ar aldrig avsiktlig.
+ */
+export const MAX_BYTE: Record<Andamal, number> = {
+  sick_certificate: 10 * 1024 * 1024,
+  document_attachment: 10 * 1024 * 1024,
+  roleplay: 40 * 1024 * 1024,
+};
 
 /**
  * Hur lange en signerad URL lever.
@@ -39,6 +60,7 @@ export const URL_SEKUNDER = 30;
 export const ANDAMAL_ETIKETT: Record<Andamal, string> = {
   sick_certificate: "Läkarintyg",
   document_attachment: "Bilaga",
+  roleplay: "Inspelat testsamtal",
 };
 
 export type Filfel =
@@ -59,10 +81,11 @@ export function provaFil(
 ): Filfel | null {
   if (fil.size === 0) return { kod: "tom", text: "Filen är tom." };
 
-  if (fil.size > MAX_BYTE)
+  const tak = MAX_BYTE[andamal];
+  if (fil.size > tak)
     return {
       kod: "storlek",
-      text: `Filen är ${Math.ceil(fil.size / 1024 / 1024)} MB. Högst ${MAX_BYTE / 1024 / 1024} MB.`,
+      text: `Filen är ${Math.ceil(fil.size / 1024 / 1024)} MB. Högst ${tak / 1024 / 1024} MB.`,
     };
 
   // Webblasaren skickar ibland med teckenuppsattning: "application/pdf; charset=..."
@@ -70,7 +93,10 @@ export function provaFil(
   if (!TILLATNA_TYPER[andamal].includes(typ))
     return {
       kod: "typ",
-      text: "Filen måste vara en PDF, JPG eller PNG.",
+      text:
+        andamal === "roleplay"
+          ? "Inspelningen måste vara en ljudfil: MP3, M4A, WAV eller WEBM."
+          : "Filen måste vara en PDF, JPG eller PNG.",
     };
 
   return null;
@@ -96,13 +122,17 @@ export function visningsnamn(fil: {
     // heter "Lakarintyg" med a-diaeresis, som allt annat en manniska laser.
     return `Lakarintyg ${dag}${andelse(fil.mime_type)}`;
   }
-  return fil.filename ?? `Bilaga${andelse(fil.mime_type)}`;
+  return fil.filename ?? `${ANDAMAL_ETIKETT[fil.purpose]}${andelse(fil.mime_type)}`;
 }
 
 function andelse(mime: string): string {
   if (mime === "application/pdf") return ".pdf";
   if (mime === "image/jpeg") return ".jpg";
   if (mime === "image/png") return ".png";
+  if (mime === "audio/mpeg") return ".mp3";
+  if (mime === "audio/mp4") return ".m4a";
+  if (mime === "audio/wav") return ".wav";
+  if (mime === "audio/webm") return ".webm";
   return "";
 }
 
@@ -123,4 +153,9 @@ export function storlek(byte: number): string {
  */
 export function bygStig(andamal: Andamal, id: string): string {
   return `${andamal}/${id}`;
+}
+
+/** Vad `accept` pa filvaljaren ska sta pa. Samma lista, annat format. */
+export function accept(andamal: Andamal): string {
+  return TILLATNA_TYPER[andamal].join(",");
 }

@@ -6,7 +6,8 @@ import { KONTROLL } from "@/components/ui/Field";
 import { Notis } from "@/components/ui/Notis";
 import { Ikon } from "@/components/shell/Ikon";
 import { storlek } from "@/lib/filer";
-import { laddaUppBilaga, taBortBilaga, type DokumentState } from "./actions";
+import { Filuppladdning } from "@/components/Filuppladdning";
+import { forberedBilaga, registreraBilaga, taBortBilaga, type DokumentState } from "./actions";
 
 export type Bilaga = {
   id: string;
@@ -37,9 +38,8 @@ export function Bilagor({
   bilagor: Bilaga[];
   farRedigera: boolean;
 }) {
-  const [uppState, uppAction, laddar] = useActionState<DokumentState, FormData>(laddaUppBilaga, {});
   const [bortState, bortAction] = useActionState<DokumentState, FormData>(taBortBilaga, {});
-  const fel = uppState.fel ?? bortState.fel;
+  const fel = bortState.fel;
 
   if (bilagor.length === 0 && !farRedigera) return null;
 
@@ -92,27 +92,15 @@ export function Bilagor({
       )}
 
       {farRedigera && (
-        <form action={uppAction} className="mt-3 flex flex-wrap items-end gap-2">
-          <input type="hidden" name="id" value={dokumentId} />
-          <label htmlFor="bilaga" className="flex flex-col gap-1">
-            <span className="text-micro text-ink-500">Lägg till en bilaga</span>
-            <input
-              id="bilaga"
-              name="fil"
-              type="file"
-              accept="application/pdf,image/jpeg,image/png"
-              className={`${KONTROLL} max-w-72 py-1.5 text-small`}
-            />
-          </label>
-          <Button type="submit" size="sm" variant="sekundar" laddar={laddar}>
-            Ladda upp
-          </Button>
-          <p className="w-full text-micro text-ink-500">
-            PDF, JPG eller PNG, högst 10 MB. Texten i en PDF blir sökbar i navet. En bilaga skapar
-            ingen ny version och kräver därför ingen ny kvittens.
-          </p>
-        </form>
+        <Filuppladdning
+          andamal="document_attachment"
+          etikett="Lägg till en bilaga"
+          hjalp="PDF, JPG eller PNG. Texten i en PDF blir sökbar i navet. En bilaga skapar ingen ny version och kräver därför ingen ny kvittens."
+          forbered={(namn, mime, byte) => forberedBilaga(dokumentId, namn, mime, byte)}
+          registrera={(fileId, namn) => registreraBilaga(dokumentId, fileId, namn)}
+        />
       )}
+
     </div>
   );
 }

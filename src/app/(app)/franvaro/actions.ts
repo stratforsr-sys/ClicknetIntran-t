@@ -22,7 +22,7 @@ import {
   REGELFALT,
   TYPFALT,
 } from "@/lib/franvaro-server";
-import { laddaUppFil } from "@/lib/filer-server";
+import { forberedUppladdning, registreraFil } from "@/lib/filer-server";
 
 export type FranvaroState = { fel?: string; ok?: string };
 
@@ -769,23 +769,27 @@ export async function rotaFlode(_prev: FranvaroState, form: FormData): Promise<F
 // syns.
 // =============================================================================
 
-export async function laddaUppIntyg(_prev: FranvaroState, form: FormData): Promise<FranvaroState> {
+type Intygsbehorighet =
+  | { ok: false; fel: string }
+  | {
+      ok: true;
+      employeeId: string;
+      anmalan: { id: string; employee_id: string; certificate_received_on: string | null };
+    };
+
+/** Far den har personen lamna in ett intyg pa den har anmalan? */
+async function kravIntygsbehorighet(rapportId: string): Promise<Intygsbehorighet> {
   const user = await getCurrentUser();
-  if (!user?.employee) return { fel: "Du måste vara inloggad." };
-
-  const id = String(form.get("id") ?? "");
-  const fil = form.get("fil");
-
-  if (!(fil instanceof File) || fil.size === 0) return { fel: "Välj en fil först." };
+  if (!user?.employee) return { ok: false, fel: "Du måste vara inloggad." };
 
   const db = supabaseAdmin();
   const { data: anmalan } = await db
     .from("sick_report")
     .select("id, employee_id, cancelled_at, certificate_received_on")
-    .eq("id", id)
+    .eq("id", rapportId)
     .maybeSingle();
 
-  if (!anmalan || anmalan.cancelled_at) return { fel: "Anmälan finns inte." };
+  if (!anmalan || anmalan.cancelled_at) return { ok: false, fel: "Anmälan finns inte." };
 
   // Den sjuke sjalv, den som leder hen, eller ledningen. Samma krets som far
   // SE anmalan (0020) — ett intyg som fler far ladda upp an lasa vore en
@@ -794,31 +798,57 @@ export async function laddaUppIntyg(_prev: FranvaroState, form: FormData): Promi
   const egen = anmalan.employee_id === user.employee.id;
   const ledare = await lederPersonen(user, anmalan.employee_id);
   if (!egen && !ledare && !hasRole(user, "sales_manager", "ceo"))
-    return { fel: "Du har inte behörighet att lämna in intyg för den här anmälan." };
+    return { ok: false, fel: "Du har inte behörighet att lämna in intyg för den här anmälan." };
 
-  const resultat = await laddaUppFil({
+  return { ok: true, employeeId: user.employee.id, anmalan };
+}
+
+export async function forberedIntyg(
+  rapportId: string,
+  filnamn: string,
+  mimetyp: string,
+  storlek: number,
+) {
+  const kontroll = await kravIntygsbehorighet(rapportId);
+  if (!kontroll.ok) return { fel: kontroll.fel };
+
+  return forberedUppladdning({ andamal: "sick_certificate", filnamn, mimetyp, storlek });
+}
+
+export async function registreraIntyg(
+  rapportId: string,
+  fileId: string,
+  filnamn: string,
+): Promise<FranvaroState> {
+  const kontroll = await kravIntygsbehorighet(rapportId);
+  if (!kontroll.ok) return { fel: kontroll.fel };
+  const { employeeId, anmalan } = kontroll;
+
+  const resultat = await registreraFil({
+    fileId,
     andamal: "sick_certificate",
-    fil,
-    uploadedBy: user.employee.id,
+    filnamn,
+    uploadedBy: employeeId,
     subjectEmployeeId: anmalan.employee_id,
     sickReportId: anmalan.id,
   });
 
   if ("fel" in resultat) return { fel: resultat.fel };
 
+  const db = supabaseAdmin();
   if (!anmalan.certificate_received_on) {
     await db
       .from("sick_report")
       .update({ certificate_received_on: svensktDatum() })
-      .eq("id", id)
+      .eq("id", rapportId)
       .is("certificate_received_on", null);
   }
 
   // Dag 8-fristen ar uppfylld i och med att intyget ligger har.
   await db
     .from("sick_deadline")
-    .update({ completed_by: user.employee.id, completed_at: new Date().toISOString() })
-    .eq("report_id", id)
+    .update({ completed_by: employeeId, completed_at: new Date().toISOString() })
+    .eq("report_id", rapportId)
     .eq("kind", "certificate")
     .is("completed_at", null);
 

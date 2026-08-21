@@ -12,18 +12,14 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
 
   /**
-   * Uppladdade filer gar genom en server action, och gransen dar ar 1 MB som
-   * standard. Bucketen slapper in 10 MB (0022), sa utan den har raden hade en
-   * fotograferad intygssida fran en telefon fallit pa mellanvaran med ett fel
-   * som inte sager vad som var fel.
+   * Ingen hojd `serverActions.bodySizeLimit` har, och det ar ett medvetet val.
    *
-   * 12 och inte 10: kroppen bar aven falt och grans-strangar, och en fil pa
-   * exakt tio megabyte ska nekas av regeln i filer.ts med ett begripligt
-   * meddelande, inte av ramverket.
+   * Uppladdade filer gar INTE genom navet. De gar direkt fran webblasaren till
+   * Supabase Storage via en signerad uppladdningslank — Vercel tar emot hogst
+   * 4,5 MB i kroppen till en serverlos funktion, och en hojd grans i Next hade
+   * darfor bara flyttat felet till plattformen, som svarar med nagot som inte
+   * sager vad anvandaren gjorde. Se src/components/Filuppladdning.tsx.
    */
-  experimental: {
-    serverActions: { bodySizeLimit: "12mb" },
-  },
 
   async headers() {
     return [

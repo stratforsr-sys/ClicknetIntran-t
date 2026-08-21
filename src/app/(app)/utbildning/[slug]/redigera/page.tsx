@@ -4,6 +4,7 @@ import { Ikon } from "@/components/shell/Ikon";
 import { getCurrentUser, hasRole } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { skrivFragor } from "@/lib/utbildning";
+import { skrivKriterier } from "@/lib/rollspel";
 import { Redaktor } from "./Redaktor";
 import type { Modul } from "./ModulForm";
 
@@ -34,7 +35,11 @@ export default async function RedigeraKurs({ params }: { params: Promise<{ slug:
 
   const { data: rader } = await db
     .from("course_module")
-    .select("id, sort, title, body_md, kind, quiz_question(sort, prompt, quiz_option(sort, label, is_correct))")
+    .select(
+      `id, sort, title, body_md, kind,
+       quiz_question(sort, prompt, quiz_option(sort, label, is_correct)),
+       roleplay_criterion(sort, label, guidance, max_points)`,
+    )
     .eq("course_id", kurs.id)
     .order("sort");
 
@@ -53,6 +58,11 @@ export default async function RedigeraKurs({ params }: { params: Promise<{ slug:
             .sort((a, b) => a.sort - b.sort)
             .map((a) => ({ label: a.label, ratt: a.is_correct })),
         })),
+    ),
+    kriterier: skrivKriterier(
+      [...m.roleplay_criterion]
+        .sort((a, b) => a.sort - b.sort)
+        .map((k) => ({ label: k.label, guidance: k.guidance, max_points: k.max_points })),
     ),
   }));
 

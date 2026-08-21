@@ -36,6 +36,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
     { data: obekraftadSjuk },
     { data: paminnelser },
     { data: franvarotyper },
+    { data: rollspel },
   ] = await Promise.all([
     supabase.from("notification_seen").select("seen_at").eq("employee_id", mig).maybeSingle(),
     supabase
@@ -96,6 +97,14 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
       .order("work_date", { ascending: false })
       .limit(MAX_NOTISER),
     supabase.from("absence_type").select("id, label"),
+    // E8.7. Bade riktningarna i en fraga: RLS ger egna inlamningar och deras
+    // som man leder (0024), sa raden nedan blir "ditt rollspel ar bedomt" for
+    // saljaren och "ett rollspel vantar" for chefen.
+    supabase
+      .from("roleplay_submission")
+      .select("id, employee_id, submitted_at, graded_at, attempt_id, course(title, slug)")
+      .order("submitted_at", { ascending: false })
+      .limit(MAX_NOTISER),
   ]);
 
   // Ingen rad = allt ar olast. Ratt hall att fela at: en nyanstalld ska se
@@ -254,6 +263,39 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
       tidpunkt: s.registered_at,
       olast: arNy(s.registered_at),
     });
+  }
+
+  // E8.7 / AC-6.7. Ett inlämnat rollspel väntar på chefen; ett bedömt är ett
+  // besked till säljaren. Båda är riktade till den som läser, och den som inte
+  // berörs får inga rader ur databasen — därför behövs inget filter här utöver
+  // att skilja på vems rollspel det är.
+  for (const r of rollspel ?? []) {
+    const mitt = r.employee_id === mig;
+    const kurs = r.course as unknown as { title: string; slug: string } | null;
+
+    if (!r.graded_at && !mitt) {
+      notiser.push({
+        id: `rollspel-${r.id}`,
+        typ: "kurs",
+        rubrik: `${namn.get(r.employee_id) ?? "En medarbetare"} har lämnat in ett rollspel`,
+        detalj: `${kurs?.title ?? "Kurs"} · lyssna och bedöm mot rubriken`,
+        href: "/utbildning/rollspel",
+        tidpunkt: r.submitted_at,
+        olast: arNy(r.submitted_at),
+      });
+    }
+
+    if (r.graded_at && mitt) {
+      notiser.push({
+        id: `rollspel-bedomt-${r.id}`,
+        typ: "kurs",
+        rubrik: "Ditt rollspel är bedömt",
+        detalj: `${kurs?.title ?? "Kurs"} · återkopplingen finns i modulen`,
+        href: kurs ? `/utbildning/${kurs.slug}` : "/utbildning",
+        tidpunkt: r.graded_at,
+        olast: arNy(r.graded_at),
+      });
+    }
   }
 
   // AC-3.19. Egna påminnelser formuleras som en påminnelse, andras som en

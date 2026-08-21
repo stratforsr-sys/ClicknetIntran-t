@@ -64,6 +64,11 @@ export const KALLOR: Kalla[] = [
   // och hämtas via filen, eftersom `actor_id` där pekar på den som läste och
   // inte på den filen handlar om.
   { tabell: "file_object", kolumn: "subject_employee_id", andamal: "Filer om dig" },
+
+  // 0024 E8.7. Ett inlämnat rollspel är en inspelning av din egen röst och en
+  // bedömning av den. Själva betyget och återkopplingen ligger i
+  // `course_attempt`, som redan står ovan.
+  { tabell: "roleplay_submission", kolumn: "employee_id", andamal: "Dina inlämnade rollspel" },
 ];
 
 /**
@@ -123,4 +128,5 @@ export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
   { tabell: "file_access_log", kolumn: "actor_id", skal: "Vem som öppnade en fil" },
   { tabell: "file_object", kolumn: "uploaded_by", skal: "Vem som laddade upp filen" },
   { tabell: "file_object", kolumn: "removed_by", skal: "Vem som tog bort filen" },
+  { tabell: "roleplay_submission", kolumn: "graded_by", skal: "Vem som bedömde andras rollspel" },
 ];

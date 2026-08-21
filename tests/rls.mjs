@@ -130,6 +130,9 @@ async function stad() {
   // men inte ett ensamt delete — och testets filer hanger i sjukanmalningar
   // som stads bort har nedan. Handgreppet ar detsamma som pa sick_report:
   // sparren galler aven den som skrev den.
+  // 0024. Rollspelen forst: de haller i filerna, och kurserna raderas langre
+  // ned i samma funktion.
+  await db.query(`delete from roleplay_submission where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`alter table file_object disable trigger file_object_last`);
   await db.query(`delete from file_object where uploaded_by in (select id from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`alter table file_object enable trigger file_object_last`);
@@ -1652,6 +1655,108 @@ console.log("\n\x1b[1mFiler: bucketen ar stangd och varje oppning skrivs (K36, X
   });
 }
 
+console.log("\n\x1b[1mRollspel: rubriken syns i forvag, och ingen bedomer utan att lyssna\x1b[0m");
+{
+  // E8.7. Anna gor rollspelet, Cecilia leder henne, Bertil ar en kollega.
+  const { rows: [kurs] } = await db.query(
+    `insert into course (slug, title, status, owner_id, pass_threshold, published_at)
+     values ('rlstest-rollspel','Rlstest rollspel','published',$1::uuid, 70, now()) returning id`,
+    [chef.id],
+  );
+  const { rows: [modul] } = await db.query(
+    `insert into course_module (course_id, sort, title, kind) values ($1::uuid, 1, 'Testsamtal', 'roleplay') returning id`,
+    [kurs.id],
+  );
+  const { rows: [krit] } = await db.query(
+    `insert into roleplay_criterion (module_id, sort, label, guidance, max_points)
+     values ($1::uuid, 1, 'Behovsanalys', 'Staller oppna fragor', 10) returning id`,
+    [modul.id],
+  );
+
+  // AC-6.7: den som ska bedomas ska se rubriken INNAN hon spelar in. En
+  // bedomning mot kriterier man far se i efterhand ar ett omdome, inte en
+  // bedomning.
+  ok(
+    "Anna ser rubriken innan hon spelar in",
+    (await las(tA, "roleplay_criterion", `id=eq.${krit.id}&select=*`)).length === 1,
+  );
+
+  const stig = "roleplay/rlstest-samtal";
+  await fetch(`${URL}/storage/v1/object/filer/${stig}`, {
+    method: "POST",
+    headers: { apikey: SECRET, Authorization: `Bearer ${SECRET}`, "Content-Type": "audio/mpeg" },
+    body: new Uint8Array(2048),
+  });
+  const { rows: [fil] } = await db.query(
+    `insert into file_object (bucket, path, purpose, subject_employee_id, filename, mime_type, size_bytes, checksum, uploaded_by)
+     values ('filer', $2, 'roleplay', $1::uuid, 'samtal.mp3', 'audio/mpeg', 2048, repeat('d',64), $1::uuid)
+     returning id`,
+    [saljareA.id, stig],
+  );
+  const { rows: [inlamning] } = await db.query(
+    `insert into roleplay_submission (module_id, course_id, employee_id, file_id)
+     values ($1::uuid, $2::uuid, $3::uuid, $4::uuid) returning id`,
+    [modul.id, kurs.id, saljareA.id, fil.id],
+  );
+
+  ok("Anna ser sin egen inlamning", (await las(tA, "roleplay_submission")).length === 1);
+  ok("Cecilia ser den — hon leder Anna", (await las(tC, "roleplay_submission")).length === 1);
+  ok("Bertil ser 0 rader", (await las(tB, "roleplay_submission")).length === 0);
+  ok("Ekonomi ser 0 rader", (await las(tE, "roleplay_submission")).length === 0);
+
+  // Inspelningen ar en fil om en person, och den arver inte nagon annan rads
+  // policy — villkoret ar utskrivet i 0024 och ska ge samma krets.
+  ok(
+    "Bertil kommer inte at inspelningen",
+    (await las(tB, "file_object", `id=eq.${fil.id}&select=*`)).length === 0,
+  );
+  ok(
+    "Cecilia gor det",
+    (await las(tC, "file_object", `id=eq.${fil.id}&select=*`)).length === 1,
+  );
+
+  // Sparren i 0024. Det ar forsta gangen atkomstloggen anvands till nagot
+  // annat an att granskas i efterhand.
+  await db.query("begin");
+  const utanLyssning = await nekarSql(
+    `update roleplay_submission set graded_by = $2::uuid, graded_at = now() where id = $1::uuid`,
+    [inlamning.id, ledare.id],
+  );
+  ok("bedomning utan att ha oppnat inspelningen nekas", Boolean(utanLyssning), utanLyssning?.slice(0, 60));
+  await db.query("rollback");
+
+  await db.query(
+    `insert into file_access_log (file_id, actor_id, action, purpose)
+     values ($1::uuid, $2::uuid, 'open', 'roleplay')`,
+    [fil.id, ledare.id],
+  );
+
+  await db.query("begin");
+  const efterLyssning = await nekarSql(
+    `update roleplay_submission set graded_by = $2::uuid, graded_at = now() where id = $1::uuid`,
+    [inlamning.id, ledare.id],
+  );
+  ok("efter att hon oppnat den gar det", efterLyssning === null, efterLyssning?.slice(0, 60) ?? "");
+  await db.query("rollback");
+
+  // Nagon ANNAN som lyssnat hjalper inte — sparren fragar efter den som satter
+  // betyget, inte efter att nagon over huvud taget lyssnat.
+  await db.query("begin");
+  const annanLyssnade = await nekarSql(
+    `update roleplay_submission set graded_by = $2::uuid, graded_at = now() where id = $1::uuid`,
+    [inlamning.id, chef.id],
+  );
+  ok("en annan lyssnares oppning duger inte", Boolean(annanLyssnade));
+  await db.query("rollback");
+
+  ok("Anna ser att Cecilia oppnat inspelningen", (await las(tA, "file_access_log", `file_id=eq.${fil.id}&select=*`)).length === 1);
+
+  await fetch(`${URL}/storage/v1/object/filer/${stig}`, {
+    method: "DELETE",
+    headers: { apikey: SECRET, Authorization: `Bearer ${SECRET}` },
+  });
+}
+
 console.log("\n\x1b[1mGlobal sokning: RLS avgor, och fragan gar att stalla\x1b[0m");
 {
   // E2.13. Traffsidan stallar fem fragor med anvandarens egen token. Den har
@@ -1689,7 +1794,7 @@ console.log("\n\x1b[1mGlobal sokning: RLS avgor, och fragan gar att stalla\x1b[0
 }
 
 console.log("\n\x1b[1mAnonym anslutning\x1b[0m");
-for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate", "news_post", "notification_seen", "absence_type", "absence_policy", "absence_blackout", "staffing_cap", "absence_balance", "absence_request", "absence_call_order", "sick_report", "sick_deadline", "absence_reminder", "calendar_feed", "file_object", "file_access_log"]) {
+for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate", "news_post", "notification_seen", "absence_type", "absence_policy", "absence_blackout", "staffing_cap", "absence_balance", "absence_request", "absence_call_order", "sick_report", "sick_deadline", "absence_reminder", "calendar_feed", "file_object", "file_access_log", "roleplay_criterion", "roleplay_submission", "roleplay_score"]) {
   const r = await fetch(`${URL}/rest/v1/${t}?select=*`, { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` } });
   const j = await r.json();
   ok(`${t} ger inga rader anonymt`, !Array.isArray(j) || j.length === 0, Array.isArray(j) ? `${j.length} rader` : `HTTP ${r.status}`);

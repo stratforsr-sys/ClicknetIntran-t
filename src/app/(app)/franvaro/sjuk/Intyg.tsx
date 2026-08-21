@@ -1,11 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
-import { Button } from "@/components/ui/Button";
-import { KONTROLL } from "@/components/ui/Field";
-import { Notis } from "@/components/ui/Notis";
+import { Filuppladdning } from "@/components/Filuppladdning";
 import { storlek } from "@/lib/filer";
-import { laddaUppIntyg, type FranvaroState } from "../actions";
+import { forberedIntyg, registreraIntyg } from "../actions";
 
 export type Intygsfil = {
   id: string;
@@ -43,22 +40,9 @@ export function Intyg({
   mottaget: string | null;
   egenAnmalan: boolean;
 }) {
-  const [state, action, laddar] = useActionState<FranvaroState, FormData>(laddaUppIntyg, {});
-
   return (
     <div className="mt-3 rounded-sm bg-surface-alt p-3">
       <p className="text-small font-semibold text-ink-700">Läkarintyg</p>
-
-      {state.fel && (
-        <div className="mt-2">
-          <Notis ton="danger">{state.fel}</Notis>
-        </div>
-      )}
-      {state.ok && (
-        <div className="mt-2">
-          <Notis ton="ok">{state.ok}</Notis>
-        </div>
-      )}
 
       {filer.length === 0 ? (
         <p className="mt-1 text-small text-ink-500">
@@ -102,29 +86,15 @@ export function Intyg({
         </ul>
       )}
 
-      <form action={action} className="mt-3 flex flex-wrap items-end gap-2">
-        <input type="hidden" name="id" value={rapportId} />
-        <label htmlFor={`fil_${rapportId}`} className="flex flex-col gap-1">
-          <span className="text-micro text-ink-500">
-            {filer.length === 0 ? "Lämna in intyget" : "Lämna in ett till"}
-          </span>
-          {/* Rakt <input> och inte <Input>: flera anmalningar pa samma sida
-              hade annars delat id. Samma skal som i Chefshandlingar. */}
-          <input
-            id={`fil_${rapportId}`}
-            name="fil"
-            type="file"
-            accept="application/pdf,image/jpeg,image/png"
-            className={`${KONTROLL} max-w-72 py-1.5 text-small`}
-          />
-        </label>
-        <Button type="submit" size="sm" variant="sekundar" laddar={laddar}>
-          Ladda upp
-        </Button>
-      </form>
+      <Filuppladdning
+        andamal="sick_certificate"
+        etikett={filer.length === 0 ? "Lämna in intyget" : "Lämna in ett till"}
+        forbered={(namn, mime, byte) => forberedIntyg(rapportId, namn, mime, byte)}
+        registrera={(fileId, namn) => registreraIntyg(rapportId, fileId, namn)}
+      />
 
       <p className="mt-2 text-micro text-ink-500">
-        PDF, JPG eller PNG, högst 10 MB. Filen når bara dig{egenAnmalan ? ", din chef" : ", den som anmälan gäller"} och
+        PDF, JPG eller PNG. Filen når bara dig{egenAnmalan ? ", din chef" : ", den som anmälan gäller"} och
         ledningen. Varje öppning loggas och syns i listan ovan — även för den
         som är sjuk.
       </p>

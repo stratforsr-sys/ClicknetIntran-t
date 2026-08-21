@@ -96,70 +96,149 @@ export async function signeraOchLogga(
 }
 
 /**
- * Lagger en fil i bucketen och skriver raden.
+ * ===========================================================================
+ * UPPLADDNINGEN GAR INTE GENOM SERVERN. DET AR INTE EN OPTIMERING.
  *
- * Behorigheten kontrolleras av ANROPAREN — den skiljer sig at per andamal
- * (chefen far ladda upp ett intyg at den sjuke, men bara agaren far lagga en
- * bilaga pa sin rutin), och den skillnaden hor hemma dar handlingen bor.
+ * Vercel tar emot hogst 4,5 MB i kroppen till en serverlos funktion, och en
+ * server action ar en sadan. En intygssida fotograferad med telefon ar ofta
+ * storre an sa, och en kvart inspelat samtal ar det alltid — felet hade
+ * kommit fran plattformen, med ett meddelande som inte sager nagot om vad
+ * anvandaren gjorde.
+ *
+ * Darfor tva steg:
+ *
+ *   1. `forberedUppladdning()` kontrollerar behorighet och lamnar tillbaka en
+ *      signerad uppladdningslank. Ingen rad skrivs an.
+ *   2. Webblasaren lagger filen direkt i bucketen.
+ *   3. `registreraFil()` fragar Storage vad som FAKTISKT kom in, provar
+ *      reglerna mot det, och skriver raden.
+ *
+ * Steg 3 provar om, och det ar viktigare an det later: efter omlaggningen ar
+ * det klienten som beskriver sin egen fil i steg 1. Ett pastaende om storlek
+ * och typ ar inte en kontroll. Storage sallar ocksa sjalvt pa bucketens tak
+ * och mime-lista, sa en fil som ljuger kommer sallan ens forbi steg 2 — men
+ * den som avgor ar steg 3.
+ *
+ * En fil utan rad nas inte av nagon: hela vagen till innehallet gar genom
+ * `file_object`. Stannar ett forsok mellan steg 2 och 3 ligger det darfor kvar
+ * som ett spoke i bucketen tills nagon stadar — och det ar ratt sida att fela
+ * at. Alternativet vore en rad utan fil, som syns i ett registerutdrag och i
+ * en lista men ger 404 nar nagon klickar.
+ * ===========================================================================
+ */
+
+export type Uppladdningslank = {
+  fileId: string;
+  bucket: string;
+  path: string;
+  token: string;
+};
+
+/**
+ * Steg 1. Kontrollerar behorigheten och oppnar en vag in i bucketen.
+ *
+ * Behorigheten kontrolleras av ANROPAREN innan den har anropas — den skiljer
+ * sig at per andamal, och den skillnaden hor hemma dar handlingen bor.
+ */
+export async function forberedUppladdning(args: {
+  andamal: Andamal;
+  filnamn: string;
+  mimetyp: string;
+  storlek: number;
+}): Promise<Uppladdningslank | { fel: string }> {
+  const fel = provaFil(args.andamal, { type: args.mimetyp, size: args.storlek });
+  if (fel) return { fel: fel.text };
+
+  const fileId = crypto.randomUUID();
+  const path = bygStig(args.andamal, fileId);
+
+  const { data, error } = await supabaseAdmin()
+    .storage.from("filer")
+    .createSignedUploadUrl(path);
+
+  if (error || !data) return { fel: error?.message ?? "Uppladdningen kunde inte förberedas." };
+
+  return { fileId, bucket: "filer", path, token: data.token };
+}
+
+/**
+ * Steg 3. Skriver raden — efter att ha fragat Storage vad som kom in.
  *
  * Filen namnges med sitt eget uuid. Det som anvandaren skrev finns kvar i
- * `filename` for bilagor och ingenstans alls for lakarintyg (K35).
+ * `filename` for bilagor och rollspel, och ingenstans alls for lakarintyg
+ * (K35).
  */
-export async function laddaUppFil(args: {
+export async function registreraFil(args: {
+  fileId: string;
   andamal: Andamal;
-  fil: File;
+  filnamn: string;
   uploadedBy: string;
   subjectEmployeeId?: string | null;
   sickReportId?: string | null;
   documentId?: string | null;
 }): Promise<{ id: string } | { fel: string }> {
-  const fel = provaFil(args.andamal, { type: args.fil.type, size: args.fil.size });
-  if (fel) return { fel: fel.text };
-
   const db = supabaseAdmin();
-  const id = crypto.randomUUID();
-  const stig = bygStig(args.andamal, id);
-  const buffert = Buffer.from(await args.fil.arrayBuffer());
-  const mime = args.fil.type.split(";")[0].trim().toLowerCase();
+  const path = bygStig(args.andamal, args.fileId);
 
-  const { error: uppladdningsfel } = await db.storage
+  // Vad ligger dar egentligen? `list` med sokning pa filnamnet ger storlek och
+  // mime-typ som Storage sjalvt registrerade, inte som klienten pastod.
+  const { data: poster } = await db.storage
     .from("filer")
-    .upload(stig, buffert, { contentType: mime, upsert: false });
+    .list(args.andamal, { search: args.fileId, limit: 1 });
 
-  if (uppladdningsfel) return { fel: uppladdningsfel.message };
+  const post = poster?.[0];
+  if (!post) return { fel: "Filen kom aldrig fram. Försök igen." };
+
+  const storlek = Number(post.metadata?.size ?? 0);
+  const mime = String(post.metadata?.mimetype ?? "").split(";")[0].trim().toLowerCase();
+
+  const fel = provaFil(args.andamal, { type: mime, size: storlek });
+  if (fel) {
+    await db.storage.from("filer").remove([path]);
+    return { fel: fel.text };
+  }
+
+  // Laddas ned en gang for att kunna sagas att den ar densamma i efterhand.
+  // Ett intyg som byts ut mot ett annat ska ga att upptacka.
+  const { data: innehall } = await db.storage.from("filer").download(path);
+  const checksum = innehall
+    ? createHash("sha256").update(Buffer.from(await innehall.arrayBuffer())).digest("hex")
+    : null;
+
+  if (!checksum) {
+    await db.storage.from("filer").remove([path]);
+    return { fel: "Filen gick inte att läsa tillbaka. Försök igen." };
+  }
 
   const { error: radfel } = await db.from("file_object").insert({
-    id,
+    id: args.fileId,
     bucket: "filer",
-    path: stig,
+    path,
     purpose: args.andamal,
     subject_employee_id: args.subjectEmployeeId ?? null,
     sick_report_id: args.sickReportId ?? null,
     document_id: args.documentId ?? null,
     // K35: ett lakarintyg bar aldrig med sig namnet det hade pa datorn.
-    filename: args.andamal === "sick_certificate" ? null : args.fil.name.slice(0, 200),
+    filename: args.andamal === "sick_certificate" ? null : args.filnamn.slice(0, 200),
     mime_type: mime,
-    size_bytes: args.fil.size,
-    checksum: createHash("sha256").update(buffert).digest("hex"),
+    size_bytes: storlek,
+    checksum,
     uploaded_by: args.uploadedBy,
   });
 
-  // Blev raden aldrig skriven ar filen i bucketen inte nabar for nagon — den
-  // enda vagen dit gar genom en rad. Den stads bort direkt i stallet for att
-  // ligga kvar som ett spoke ingen kan redovisa i ett registerutdrag.
   if (radfel) {
-    await db.storage.from("filer").remove([stig]);
+    await db.storage.from("filer").remove([path]);
     return { fel: radfel.message };
   }
 
   await db.from("file_access_log").insert({
-    file_id: id,
+    file_id: args.fileId,
     actor_id: args.uploadedBy,
     action: "upload",
     purpose: args.andamal,
   });
 
-  return { id };
+  return { id: args.fileId };
 }
 
 /**

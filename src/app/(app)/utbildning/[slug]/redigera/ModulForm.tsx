@@ -15,6 +15,7 @@ export type Modul = {
   body_md: string;
   kind: string;
   fragor: string;
+  kriterier: string;
 };
 
 export function ModulForm({
@@ -68,7 +69,7 @@ export function ModulForm({
           aria-label="Modultyp"
           className="flex gap-1 rounded-full bg-canvas p-1"
         >
-          {(["reading", "quiz"] as const).map((v) => (
+          {(["reading", "quiz", "roleplay"] as const).map((v) => (
             <button
               key={v}
               type="button"
@@ -79,21 +80,21 @@ export function ModulForm({
                 kind === v ? "bg-surface text-ink-900 shadow-elev-1" : "text-ink-500 hover:text-ink-900"
               }`}
             >
-              {v === "reading" ? "Läsning" : "Prov"}
+              {v === "reading" ? "Läsning" : v === "quiz" ? "Prov" : "Rollspel"}
             </button>
           ))}
         </div>
       </div>
 
       <Field
-        label={kind === "quiz" ? "Text före provet" : "Innehåll"}
+        label={kind === "quiz" ? "Text före provet" : kind === "roleplay" ? "Instruktion till säljaren" : "Innehåll"}
         namn={namn("innehall")}
         hjalp="Markdown. Rubriker, listor och tabeller fungerar."
       >
         <textarea
           id={namn("innehall")}
           name="innehall"
-          rows={kind === "quiz" ? 4 : 12}
+          rows={kind === "reading" ? 12 : 6}
           defaultValue={modul?.body_md ?? ""}
           className={`${KONTROLL} resize-y font-mono text-small`}
         />
@@ -111,6 +112,23 @@ export function ModulForm({
             rows={12}
             defaultValue={modul?.fragor ?? ""}
             placeholder={"Vad gör du vid sjukdom?\n* Ringer chefen samma dag\n- Mejlar veckan efter\n\nNär behövs läkarintyg?\n* Från dag 8\n- Aldrig"}
+            className={`${KONTROLL} resize-y font-mono text-small`}
+          />
+        </Field>
+      )}
+
+      {kind === "roleplay" && (
+        <Field
+          label="Rubrik att bedöma mot"
+          namn={namn("kriterier")}
+          hjalp="Ett kriterium per rad: rubrik | poängtak | vad som krävs för full poäng. Säljaren ser hela rubriken innan hon spelar in — det är hela poängen med en rubrik."
+        >
+          <textarea
+            id={namn("kriterier")}
+            name="kriterier"
+            rows={8}
+            defaultValue={modul?.kriterier ?? ""}
+            placeholder={"Behovsanalys | 5 | Ställer minst tre öppna frågor innan lösning nämns\nInvändningar | 3 | Bemöter utan att avbryta\nAvslut | 5 | Föreslår ett konkret nästa steg med datum"}
             className={`${KONTROLL} resize-y font-mono text-small`}
           />
         </Field>

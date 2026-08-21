@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { getCurrentUser, hasRole } from "@/lib/auth";
 import { DOC_TYPES, tillSlug, type DocType } from "@/lib/dokument";
-import { laddaUppFil, taBortInnehall } from "@/lib/filer-server";
+import { forberedUppladdning, registreraFil, taBortInnehall } from "@/lib/filer-server";
 import { pdfText } from "@/lib/pdf";
 
 export type DokumentState = { fel?: string };
@@ -333,22 +333,34 @@ async function raknaOmBilagetext(dokumentId: string) {
     .eq("id", dokumentId);
 }
 
-export async function laddaUppBilaga(
-  _prev: DokumentState,
-  form: FormData,
-): Promise<DokumentState> {
-  const id = String(form.get("id") ?? "");
-  const fil = form.get("fil");
-
+export async function forberedBilaga(
+  dokumentId: string,
+  filnamn: string,
+  mimetyp: string,
+  storlek: number,
+) {
   try {
-    const user = await kravRedaktor(id);
-    if (!(fil instanceof File) || fil.size === 0) return { fel: "Välj en fil först." };
+    await kravRedaktor(dokumentId);
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Du saknar behörighet." };
+  }
+  return forberedUppladdning({ andamal: "document_attachment", filnamn, mimetyp, storlek });
+}
 
-    const resultat = await laddaUppFil({
+export async function registreraBilaga(
+  dokumentId: string,
+  fileId: string,
+  filnamn: string,
+): Promise<DokumentState> {
+  try {
+    const user = await kravRedaktor(dokumentId);
+
+    const resultat = await registreraFil({
+      fileId,
       andamal: "document_attachment",
-      fil,
+      filnamn,
       uploadedBy: user.employee!.id,
-      documentId: id,
+      documentId: dokumentId,
     });
 
     if ("fel" in resultat) return { fel: resultat.fel };
@@ -356,10 +368,10 @@ export async function laddaUppBilaga(
     // Textextraktionen sker EFTER att filen ligger uppe. Gar den fel ar
     // bilagan anda inlamnad — en inskannad PDF utan textlager ska ga att
     // bifoga, den blir bara inte sokbar.
-    if (fil.type.startsWith("application/pdf")) await raknaOmBilagetext(id);
+    await raknaOmBilagetext(dokumentId);
 
-    await logga(user.employee!.id, "document.attachment_added", id, { fil: resultat.id });
-    revalidatePath("/rutiner");
+    await logga(user.employee!.id, "document.attachment_added", dokumentId, { fil: fileId });
+    revalidatePath("/rutiner", "layout");
     return {};
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Bilagan kunde inte läggas till." };
@@ -380,7 +392,7 @@ export async function taBortBilaga(_prev: DokumentState, form: FormData): Promis
     await raknaOmBilagetext(dokumentId);
 
     await logga(user.employee!.id, "document.attachment_removed", dokumentId, { fil: fileId });
-    revalidatePath("/rutiner");
+    revalidatePath("/rutiner", "layout");
     return {};
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Bilagan kunde inte tas bort." };

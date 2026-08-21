@@ -194,6 +194,15 @@ export default async function Startsida() {
   const attBesluta = (koFranvaro ?? []).filter((a) => a.employee_id !== user.employee!.id);
   const attBekrafta = (obekraftadSjuk ?? []).filter((s) => s.employee_id !== user.employee!.id);
 
+  // E8.7: inlamnade rollspel som ingen bedomt. RLS ger bara egna rader plus
+  // dem man leder (0024), sa filtret nedan tar bort just de egna — resten ar
+  // per definition nagon annans, och alltsa chefens att bedoma.
+  const { data: koRollspel } = await supabase
+    .from("roleplay_submission")
+    .select("id, employee_id, submitted_at")
+    .is("graded_at", null);
+  const attBedoma = (koRollspel ?? []).filter((r) => r.employee_id !== user.employee!.id);
+
   const overTiden = (koArenden ?? []).filter((a) => slaLage(a) === "over").length;
   const snart = (koArenden ?? []).filter((a) => slaLage(a) === "snart").length;
 
@@ -323,6 +332,14 @@ export default async function Startsida() {
       detalj: attBesluta.some((a) => ((a.rules_broken ?? []) as string[]).length > 0)
         ? "Minst en bryter mot en regel"
         : "Alla följer reglerna",
+      ton: "warn",
+    });
+
+  if (attBedoma.length > 0)
+    koposter.push({
+      href: "/utbildning/rollspel",
+      text: `${attBedoma.length} rollspel att bedöma`,
+      detalj: "Lyssna först — öppningen loggas och syns för säljaren",
       ton: "warn",
     });
 

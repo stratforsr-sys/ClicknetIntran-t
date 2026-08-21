@@ -40,10 +40,12 @@ ok(
     size: 1000,
   })?.kod === "typ",
 );
-ok("en ljudfil nekas an — E8.7 ar inte byggd", provaFil("sick_certificate", { type: "audio/mpeg", size: 1000 })?.kod === "typ");
+ok("en ljudfil nekas som intyg", provaFil("sick_certificate", { type: "audio/mpeg", size: 1000 })?.kod === "typ");
+ok("men slapps in som rollspel", provaFil("roleplay", { type: "audio/mpeg", size: 1000 }) === null);
+ok("och en PDF nekas som rollspel", provaFil("roleplay", { type: "application/pdf", size: 1000 })?.kod === "typ");
 ok("en tom fil nekas", provaFil("sick_certificate", { type: "application/pdf", size: 0 })?.kod === "tom");
-ok("en for stor fil nekas", provaFil("sick_certificate", { type: "application/pdf", size: MAX_BYTE + 1 })?.kod === "storlek");
-ok("exakt gransen slapps in", provaFil("sick_certificate", { type: "application/pdf", size: MAX_BYTE }) === null);
+ok("en for stor fil nekas", provaFil("sick_certificate", { type: "application/pdf", size: MAX_BYTE.sick_certificate + 1 })?.kod === "storlek");
+ok("exakt gransen slapps in", provaFil("sick_certificate", { type: "application/pdf", size: MAX_BYTE.sick_certificate }) === null);
 
 // Webblasare skickar ibland med teckenuppsattning i content-type. Utan
 // normaliseringen hade en giltig PDF nekats beroende pa vilken webblasare den
@@ -86,6 +88,13 @@ ok(
   visningsnamn({ purpose: "document_attachment", filename: "Prislista 2026.pdf", mime_type: "application/pdf" }) ===
     "Prislista 2026.pdf",
 );
+// Ett rollspel ar den egna rosten, inte en uppgift om halsa. Namnet far folja
+// med, och utan namn blir det en begriplig etikett i stallet for "Bilaga".
+ok(
+  "en inspelning utan namn far en begriplig etikett",
+  visningsnamn({ purpose: "roleplay", filename: null, mime_type: "audio/mpeg" }) ===
+    "Inspelat testsamtal.mp3",
+);
 
 rubrik("Sokvagen");
 // Sokvagen syns i den signerade URL:en, alltsa i adressfaltet och i varje
@@ -101,8 +110,15 @@ ok("megabyte med komma", storlek(1_500_000) === "1,4 MB");
 
 rubrik("Konstanterna haller vad rubrikerna lovar");
 ok("URL:en lever kort", URL_SEKUNDER <= 60, `${URL_SEKUNDER} s`);
-ok("taket ar 10 MB", MAX_BYTE === 10 * 1024 * 1024);
+ok("intygstaket ar 10 MB", MAX_BYTE.sick_certificate === 10 * 1024 * 1024);
+// En kvart inspelat samtal i mp3 ar omkring fjorton megabyte. Med samma tak som
+// for ett intyg hade halva rollspelen nekats vid inlamningen.
+ok("inspelningar far vara storre", MAX_BYTE.roleplay > MAX_BYTE.sick_certificate, `${MAX_BYTE.roleplay / 1024 / 1024} MB`);
+ok("bilagan har samma tak som intyget", MAX_BYTE.document_attachment === MAX_BYTE.sick_certificate);
 ok("intyg och bilaga slapper in samma typer", TILLATNA_TYPER.sick_certificate.join() === TILLATNA_TYPER.document_attachment.join());
+ok("rollspelet slapper bara in ljud", TILLATNA_TYPER.roleplay.every((t) => t.startsWith("audio/")));
+// Video hade dragit in ansikten i en bedomning som handlar om vad nagon sager.
+ok("och aldrig video", TILLATNA_TYPER.roleplay.every((t) => !t.startsWith("video/")));
 ok("varje andamal har en etikett pa svenska", Object.keys(TILLATNA_TYPER).every((a) => Boolean(ANDAMAL_ETIKETT[a])));
 
 console.log(fel === 0 ? "\n\x1b[32mAlla prov gick igenom.\x1b[0m" : `\n\x1b[31m${fel} prov föll.\x1b[0m`);

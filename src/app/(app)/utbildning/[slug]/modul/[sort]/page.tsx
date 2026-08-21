@@ -11,6 +11,7 @@ import { supabaseServer, supabaseAdmin } from "@/lib/supabase/server";
 import { sparrTill, tidkvar } from "@/lib/utbildning";
 import { klarModul } from "../../../actions";
 import { Quiz } from "./Quiz";
+import { Rollspel, type Inlamning } from "./Rollspel";
 
 export const dynamic = "force-dynamic";
 
@@ -96,6 +97,56 @@ export default async function ModulSida({
     if (senaste && !senaste.passed) sparr = sparrTill(senaste.created_at, kurs.retry_wait_hours);
   }
 
+  // E8.7. Bade rubriken och inlamningarna lases med anvandarens egen token:
+  // `roleplay_criterion` arver modulens policy och `roleplay_submission` visar
+  // bara egna rader for en saljare (0024).
+  let kriterier: { id: string; label: string; guidance: string | null; max_points: number }[] = [];
+  let inlamningar: Inlamning[] = [];
+
+  if (modul.kind === "roleplay") {
+    const [{ data: rubrik }, { data: rader }] = await Promise.all([
+      supabase
+        .from("roleplay_criterion")
+        .select("id, sort, label, guidance, max_points")
+        .eq("module_id", modul.id)
+        .order("sort"),
+      supabase
+        .from("roleplay_submission")
+        .select("id, file_id, submitted_at, graded_at, attempt_id, file_object(size_bytes)")
+        .eq("module_id", modul.id)
+        .eq("employee_id", user.employee.id)
+        .order("submitted_at", { ascending: false }),
+    ]);
+
+    kriterier = (rubrik ?? []).map((k) => ({
+      id: k.id,
+      label: k.label,
+      guidance: k.guidance,
+      max_points: k.max_points,
+    }));
+
+    const forsoksIds = (rader ?? []).map((r) => r.attempt_id).filter(Boolean) as string[];
+    const { data: forsok } = forsoksIds.length
+      ? await supabase.from("course_attempt").select("id, score, passed, note").in("id", forsoksIds)
+      : { data: [] };
+    const perForsok = new Map((forsok ?? []).map((f) => [f.id, f]));
+
+    inlamningar = (rader ?? []).map((r) => {
+      const f = r.attempt_id ? perForsok.get(r.attempt_id) : undefined;
+      return {
+        id: r.id,
+        fileId: r.file_id,
+        byte:
+          (r.file_object as unknown as { size_bytes: number } | null)?.size_bytes ?? 0,
+        inlamnad: r.submitted_at,
+        bedomd: r.graded_at,
+        godkant: f?.passed ?? null,
+        poang: f?.score ?? null,
+        aterkoppling: f?.note ?? null,
+      };
+    });
+  }
+
   return (
     <div className="flex flex-col gap-4 pt-2">
       <Link
@@ -147,6 +198,17 @@ export default async function ModulSida({
               fragor={fragor}
               nastaHref={nastaHref}
             />
+          )}
+        </Card>
+      ) : modul.kind === "roleplay" ? (
+        <Card className="max-w-[70ch]">
+          <Rollspel modulId={modul.id} kriterier={kriterier} inlamningar={inlamningar} />
+          {klar && (
+            <div className="mt-5">
+              <Link href={nastaHref}>
+                <Button variant="sekundar">{nasta ? "Nästa modul" : "Till kursen"}</Button>
+              </Link>
+            </div>
           )}
         </Card>
       ) : (

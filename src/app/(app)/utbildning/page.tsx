@@ -86,6 +86,14 @@ export default async function UtbildningSida() {
               Progress
             </ButtonLink>
           )}
+          {/* E8.7. Sidan tar hand om behorigheten sjalv — RLS ger noll rader
+              at den som inte leder nagon, sa knappen visar en tom ko i stallet
+              for att sakna en vy. */}
+          {farSeAlla && (
+            <ButtonLink href="/utbildning/rollspel" variant="sekundar">
+              Rollspel
+            </ButtonLink>
+          )}
           {farRedigera && (
             <ButtonLink href="/utbildning/ny" variant="primar">
               Ny kurs
