@@ -1243,7 +1243,10 @@ console.log("\n\x1b[1mAC-3.26: sjukdata nar varken ekonomi eller fel chef\x1b[0m
   const ledarens = await las(tC, "sick_report");
   ok("Cecilia ser den — hon leder Anna", ledarens.length === 1, `såg ${ledarens.length}`);
 
-  const chefens = await las(tD, "sick_report");
+  // Fragan pa id och inte pa hela listan: David ser ALL sjukfranvaro i navet,
+  // och den forsta riktiga sjukanmalan hade annars gjort provet rott utan att
+  // nagot var fel. Samma fella som kalenderflodet gick i.
+  const chefens = await las(tD, "sick_report", `id=eq.${anmalan.id}&select=*`);
   ok("David ser den — saljchef", chefens.length === 1, `såg ${chefens.length}`);
 
   const kollegans = await las(tB, "sick_report");
@@ -1293,7 +1296,12 @@ console.log("\n\x1b[1mLedighetsansokan: egen alltid, chefens folk, ingen annan\x
 
   ok("Anna ser sin ansokan", (await las(tA, "absence_request")).length === 1);
   ok("Cecilia ser den som ledare", (await las(tC, "absence_request")).length === 1);
-  ok("David ser den som saljchef", (await las(tD, "absence_request")).length === 1);
+  // Pa id, inte pa listan: saljchefen ser alla ansokningar i navet, och den
+  // forsta riktiga semesteransokan skulle annars falla provet.
+  ok(
+    "David ser den som saljchef",
+    (await las(tD, "absence_request", `id=eq.${ansokan.id}&select=*`)).length === 1,
+  );
   ok("Bertil ser 0 rader", (await las(tB, "absence_request")).length === 0);
   // Ekonomi far franvaron som minuter i loneunderlaget, aldrig som ansokan.
   ok("Ekonomi ser 0 rader", (await las(tE, "absence_request")).length === 0);
@@ -1373,7 +1381,14 @@ console.log("\n\x1b[1mKalenderflodet ar agarens egen hemlighet\x1b[0m");
   );
 
   ok("Anna ser sitt eget flode", (await las(tA, "calendar_feed")).length === 1);
-  ok("David ser det — ledningen svarar for vilka floden som ar oppna", (await las(tD, "calendar_feed")).length === 1);
+  // David ar saljchef och ser DARFOR alla floden i navet, inklusive de riktiga.
+  // Fragan galler om han ser Annas — inte hur manga rader tabellen rakar ha.
+  // Ett prov som raknar hela tabellen provar driftdata och inte policyn, och
+  // blir rott den dag nagon skapar sitt flode pa riktigt. Det hande 2026-08-20.
+  ok(
+    "David ser det — ledningen svarar for vilka floden som ar oppna",
+    (await las(tD, "calendar_feed", `select=*&employee_id=eq.${saljareA.id}`)).length === 1,
+  );
   // Token ar hemligheten. Ser Cecilia raden ser hon ocksa adressen, och ett
   // teamflode ar redan hennes egen vag till samma uppgifter.
   ok("Cecilia ser 0 rader", (await las(tC, "calendar_feed")).length === 0);
