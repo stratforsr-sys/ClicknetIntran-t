@@ -3,7 +3,7 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-08-20 (fjärde passet)
+**Senast uppdaterad:** 2026-08-21 (storage-passet)
 
 ---
 
@@ -12,10 +12,8 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
 - **Inga lokala byggen eller kloner** — allt ska gå direkt mot GitHub-repot.
   Verifieringen är Vercels egen build: en trasig build ersätter aldrig den
   version som körs.
-  *Avvikelser som är kända av användaren:* när Vercels webhook hängde klonades
-  repot till en scratchpad för `tsc`, `npm test` och `vercel deploy --prod`.
-  Migrationer och tester körs också från en scratchpad, eftersom de behöver
-  `pg` och `DATABASE_URL`.
+  *Avvikelser som är kända av användaren:* migrationer och tester körs från en
+  scratchpad-klon, eftersom de behöver `pg` och `DATABASE_URL`.
 - Committa som `stratforsr-sys <stratforsr@gmail.com>`.
 - Pusha rakt till `main`. Inga feature-branches. `main` deployar automatiskt
   till Vercel.
@@ -33,22 +31,19 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
 set -a && . $HOME/.clicknet/nav.env && set +a && npm test
 ```
 
-Fjorton sviter. `tests/rls.mjs` går mot den **riktiga** databasen och skapar och
-städar sina egna användare (prefix `rlstest+`). Den rör aldrig driftdata — det
-som måste provas skarpt görs i en transaktion som rullas tillbaka.
+Sjutton sviter, 753 kontroller. `tests/rls.mjs` går mot den **riktiga**
+databasen och skapar och städar sina egna användare (prefix `rlstest+`).
 
-`tests/registerutdrag.mjs` behöver `DATABASE_URL`: den frågar schemat efter
-främmande nycklar och jämför dem mot utdragets lista.
+**Kör sviten före push.** Den var röd på main när det här passet började — för
+andra gången i rad. Båda gångerna av samma sort: ett prov som räknade rader i
+en tabell som bär driftdata. `calendar_feed` krävde exakt en rad för säljchefen,
+och Zens riktiga flöde gjorde att han såg två.
 
-`tests/offboarding-db.mjs` kör offboardingens egna satser i en transaktion som
-rullas tillbaka.
-
-`tests/franvaro.mjs` är ren logik utan databas: regelmotorn får sina regler
-inskickade, precis som i drift.
-
-**Kör sviten före push.** `npm test` var rött på main när det här passet
-började — `news_post.author_id` och `notification_seen.employee_id` saknades i
-`registerutdrag.ts` sedan 0018. Provet fångade rätt sak; ingen körde det.
+**Lärdomen är värd att skriva ut:** en kontroll som lyder
+`(await las(tD, "tabell")).length === 1` för en roll som ser ALLA rader blir
+röd i samma stund någon använder funktionen på riktigt. Fråga på provradens id
+i stället. Tre sådana rättades 2026-08-21; leta efter fler om en ny modul
+skriver liknande kontroller.
 
 ---
 
@@ -62,16 +57,18 @@ började — `news_post.author_id` och `notification_seen.employee_id` saknades 
 | Nattjobb | Ett jobb, `/api/jobb/natt`, 02:30. Hämtar igen 14 dygn bakåt |
 | Lönerapport | Klar, med attest och oföränderlig period |
 | Personalärenden | Klara, med SLA och konfidentialitet |
-| Tvingat lösenordsbyte | **Spärr i databasen sedan 2026-08-20.** Se nedan |
+| Tvingat lösenordsbyte | Spärr i databasen sedan 2026-08-20 |
 | Startsida | Rollstyrd. Chefens kö, säljarens stämpelknapp |
 | Bottennavigering | Under 768 px: Hem, Sök, Stämpla, Mer |
-| Registerutdrag | Klart. `/profil` → Hämta registerutdrag |
+| Registerutdrag | Klart, **inklusive filer och vem som öppnat dem** |
 | Nyheter | `/nyheter`. Målgrupp per roll och team, fäst överst, utkast |
-| Notisklockan | **Fungerar.** Ärenden, nyheter, rutiner, kurser, frånvaro — målgruppsstyrt via RLS |
-| Frånvaro och ledighet | **I drift sedan 2026-08-20.** `/franvaro`. Ansökan, sjukfrånvaro, regler, planering |
+| Notisklockan | Ärenden, nyheter, rutiner, kurser, frånvaro, rollspel |
+| Frånvaro och ledighet | I drift sedan 2026-08-20. **E7 är helt klar sedan 2026-08-21** |
 | Kalenderflöde | `/api/ical/[token]`. Bär aldrig sjukfrånvaro och aldrig frånvarotyp |
+| **Filer** | **I drift sedan 2026-08-21.** Läkarintyg, bilagor, rollspel |
+| **Global sökning** | **I drift sedan 2026-08-21.** `/sok`, kortkommando `/` |
 
-### Två saker användaren själv måste göra
+### Tre saker användaren själv måste göra
 
 1. **Zen står instämplad sedan måndag 2026-08-17 18:08.** Dagen lämnades
    avsiktligt öppen — schemat slutar 17:00, så en autostängning hade satt
@@ -80,182 +77,134 @@ började — `news_post.author_id` och `notification_seen.employee_id` saknades 
    minuter som ser ut att vara ett test.
 2. **Supabase-panelen**: Site URL pekar fortfarande på localhost,
    registreringen är öppen, och det delade lösenordet är inte bytt.
+3. **Telefonnummer i mottagarordningen och bemanningstak** under
+   `/franvaro/regler`. Utan numren är telefonlistan vid sjukanmälan namn utan
+   nummer; utan tak varnar ingen ansökan för bemanning.
 
 ---
 
-## Vad som byggdes 2026-08-20 (andra passet)
+## Vad som byggdes 2026-08-21 (storage-passet)
 
-### Lösenordstvånget är nu en spärr i databasen — KLART
+Hela storage-spåret plus den globala sökningen. Migrationerna `0022_filer`,
+`0023_bilagor`, `0024_rollspel`. Resonemangen står i arbetsloggen; det här är
+vad du behöver veta för att inte råka riva något.
 
-Migration `0017`. Provet som överlämningen bad om visade att tvånget bara satt i
-mellanvaran: ett flaggat konto som gick rakt på API:t fick ut sin egen rad ur
-`employee` och ett dokument ur `document`. Nu ger varje tabell noll rader.
+### Det finns exakt en väg till en fil, och den skriver loggen först
 
-Villkoret bor i `public.kraver_losenordsbyte()` och läser flaggan ur JWT:n. Det
-sitter i de fem hjälpfunktioner som nästan varje policy går genom, plus i de
-fem policyer som inte frågar någon av dem.
+`/filer/[id]`. Rutten läser filens rad **med användarens egen token**, skriver
+öppningen i `file_access_log`, och skickar först därefter vidare till en
+signerad URL som lever i trettio sekunder.
 
-**Gränsen går vid API:t, inte vid servern.** `getCurrentUser()` och
-`behoverSteg2()` faller tillbaka på service role just för flaggade konton — utan
-det tappar `/byt-losenord` namnkontrollen i lösenordsregeln, och steg två skulle
-hoppas över för ett flaggat chefskonto. Rör inte det utan att läsa kommentarerna
-i `src/lib/auth.ts` och `src/lib/supabase/middleware.ts`.
+**Går loggskrivningen fel utfärdas ingen URL.** Det är avsiktligt och tvärtemot
+den vanliga regeln att loggning inte ska fälla en funktion — här är loggen
+själva kravet (K36).
 
-15 nya kontroller i `tests/rls.mjs`.
+**Lägger du till en fil någonstans:** använd `src/components/Filuppladdning.tsx`
+och länka till `/filer/[id]` med ett vanligt `<a>`. Aldrig `<Link>` — Next
+förladdar länkar när musen nuddar dem, och varje förladdning hade blivit en
+loggad öppning som aldrig skedde.
 
-### `scripts/krav-losenordsbyte.mjs` — KLART
+### Uppladdningen går inte genom navet
 
-Sätter flaggan på konton som redan fanns. Torrkörning är normalläget:
+Vercel tar emot högst **4,5 MB** i kroppen till en serverlös funktion, och en
+server action är en sådan. Filen går därför direkt från webbläsaren till Storage
+via en signerad uppladdningslänk, i tre steg: `forberedUppladdning()` →
+webbläsaren laddar upp → `registreraFil()` frågar Storage vad som faktiskt kom
+in och skriver raden.
 
-```
-node --env-file=$HOME/.clicknet/nav.env scripts/krav-losenordsbyte.mjs --alla
-node --env-file=$HOME/.clicknet/nav.env scripts/krav-losenordsbyte.mjs --kor anna@clicknet.se
-```
+Det tredje steget provar reglerna på nytt, och det måste det: efter omläggningen
+är det klienten som beskriver sin egen fil i steg ett.
 
-Kör den på dem som fått ett tillfälligt lösenord upplåst. **Den som flaggas
-måste kunna sitt nuvarande lösenord** — bytessidan kräver det. Den som inte kan
-det behöver ett nytt tillfälligt lösenord från personalkortet i stället.
+### Bucketen är stängd med en restriktiv policy
 
-De två konton som finns idag (`simon@`, `zen@`) är **inte** flaggade. Det är ett
-val: de kan redan sina lösenord, och det finns ingen anledning att tvinga dem
-förrän säljarna läggs upp.
+`storage.objects` har en **restriktiv** policy som nekar allt i bucketen `filer`
+för `authenticated` och `anon`. En restriktiv policy AND:as med samtliga
+tillåtande och går därför inte att OR:a bort med en ny policy någon lägger till
+senare. Service role och signerade URL:er påverkas inte.
 
-### E5 startsida, bottenrad och hopfällbar panel — KLART
+### Två textfält som inte får finnas
 
-E5.1, E5.4, E5.5, E5.6. (E5.2 och klockan kom i tredje passet nedan.)
+**Filnamnet på ett läkarintyg.** `filename` är NULL för `sick_certificate`,
+tvingat av ett check-villkor: en fil som heter `cancerbesked.pdf` bär en diagnos.
+Namnet som visas räknas fram ur datumet.
 
-### E6.4 registerutdrag — KLART
+**Extraherad PDF-text på filraden.** Texten ligger i `document.attachment_text`
+och aldrig på `file_object` — den tabellen bär också läkarintyg, och en
+textkolumn där hade fyllts *automatiskt* med innehållet i ett intyg. Läs
+rubriken i `0023` innan du flyttar den.
 
-`/personal/[id]/registerutdrag` ger JSON. Länk på `/profil`. Filbilagor saknas
-tills Storage finns (E2.12).
+### Öppningarna ligger inte i `audit_log`
 
-`tests/registerutdrag.mjs` jämför listan mot databasens främmande nycklar och
-faller när en ny kolumn pekar på `employee` utan att vara redovisad. **Lägger du
-till en tabell med persondata måste den in i `src/lib/registerutdrag.ts`** —
-annars faller provet, vilket är hela poängen.
+`audit_log_read` släpper in `admin`, som med flit är utestängd från
+`sick_report` (AC-3.26). En rad om att någon öppnat ett läkarintyg hade
+berättat precis det 0020 stängde. `file_access_log` har därför sin egen
+behörighet: den som får se filen ser vem som öppnat den — **inklusive den som
+är sjuk själv**, vilket är halva poängen med K36.
 
----
+### En fil raderas inte för sig, men en människa går att radera
 
-## Vad som byggdes 2026-08-20 (tredje passet)
+Triggern på `file_object` släpper igenom en radering när personen eller
+dokumentet redan är borta, och nekar den när den står ensam. Utan det undantaget
+hade `delete from employee` fallit, och E6.2 gallringsjobbet en dag dött på en
+främmande nyckel mitt i natten.
 
-### E1.8 offboarding och öppna ärenden — KLART
+### E8.7: två regler som är hela modulen
 
-Öppna ärenden på den som slutar stängs med skäl i `resolution`, och en extra
-punkt läggs **först** i offboardingchecklistan. Statistiken blir ren av att
-tråden stängs, men frågan i den kan leva vidare — punkten går inte att hoppa
-över utan motivering (AC-1.7). Ärenden personen *handlade* stängs inte, men
-tilldelningen tas bort så att de går tillbaka till inkorgen.
+**Rubriken syns före inspelningen** — `roleplay_criterion` ärver modulens
+läsbehörighet. **Den som inte öppnat inspelningen får inte bedöma den** — en
+trigger frågar `file_access_log`. Det är första gången åtkomstloggen används
+till något annat än att granskas i efterhand.
 
-### E5.2 nyheter — KLART
+Kön ligger på `/utbildning/rollspel`, i chefens "Din kö" och i notisklockan.
 
-`/nyheter`. Skrivs av säljchef, VD eller administratör. Målgrupp som kryssrutor
-per roll och team; ingen ruta ikryssad betyder alla. Utkast syns bara för
-författaren och ledningen.
+### E2.13: sökningen frågar med användarens egen token
 
-### Notisklockan — KLART
+Fem källor, alla med den inloggades token — RLS avgör vad som syns. Lägger du
+till en källa: gör likadant, och skriv inget eget målgruppsfilter.
 
-Klockan i toppraden var en död knapp. Nu visar den ärenden, nyheter, rutiner att
-kvittera och kurser — både personligt riktat och via målgrupp.
-
-**Den lagrar inga notiser.** Posterna räknas fram ur `document`, `course`,
-`news_post` och `case_message` vid läsning. Det enda som sparas är
-`notification_seen.seen_at`, alltså när personen senast öppnade klockan. Skälet
-står i migration 0018 och i `src/lib/notiser.ts`: en notistabell kräver att varje
-producent kommer ihåg att skriva sin rad, och den som glömmer ger en tyst lucka.
-
-**Lägger du till något som ska synas i klockan** räcker det att lägga till en
-källa i `hamtaNotiser()` i `src/lib/notiser-server.ts`. Läs med användarens egen
-token — målgruppsstyrningen sitter i RLS, och ett eget filter i den filen blir
-ett andra svar på samma fråga.
-
----
-
-## Vad som byggdes 2026-08-20 (fjärde passet)
-
-### E7 / M3 Frånvaro och ledighet — KLAR utom E7.10
-
-Migrationerna `0019`, `0020`, `0021`. Åtta vyer under `/franvaro` plus
-`/api/ical/[token]`. Hela resonemanget står i arbetsloggen; det här är vad du
-behöver veta för att inte råka riva något.
-
-**Reglerna är konfiguration, inte kod.** Ansökningsfrist, huvudsemesterfönster,
-spärrperiod, bemanningstak, maxlängd, karens och attestnivå ligger i
-`absence_type`, `absence_policy`, `absence_blackout` och `staffing_cap`, och
-ändras i `/franvaro/regler`. `src/lib/franvaro.ts` innehåller inget tal ur
-semesterlagen — varje gräns kommer in som argument. Lägger du till en regel:
-lägg den i en tabell, inte i ett `if`.
-
-**`sick_report` har noll textkolumner, och det är inte en tillfällighet.** K35
-kräver att det inte får finnas ett fält där en diagnos kan hamna, och den enda
-formuleringen som går att prova är den absoluta. `tests/rls.mjs` frågar
-`information_schema` och faller om någon lägger till en textkolumn på tabellen.
-Behöver du spara något om ett sjukfall: läs rubriken i migration 0020 först.
-
-**Sjukfrånvaro delar med flit inte tabell med ledighet.** `absence_request` har
-två motiveringsfält som chefen skriver i (avslag och överstyrning). De hör inte
-hemma på sjukvägen och finns inte där.
-
-**Ingen sjukanmälningsknapp.** Telefonlistan står först i trädet på
-`/franvaro/sjuk`, registreringen under. Ordningen är kravet (AC-3.6). Spärren
-mot att typen `sick` görs ansökningsbar ligger i ett check-villkor i databasen.
-
-**Gränsen i AC-3.26:** sjukminuter når `payroll_row.absence_minutes` — det måste
-de, sjuklöneperioden är arbetsgivarens. Själva `sick_report` är stängd för
-`finance`, `admin` och `payroll_cost_viewer`. **Bygger du E13 provision eller
-E15 lönekostnad: hämta frånvaro via `absence_minutes`, aldrig genom att joina
-`sick_report`.**
-
-**iCal-flödet bär aldrig sjukfrånvaro och aldrig frånvarotyp.** Posterna heter
-"Namn — Ledig". `SAMMANFATTNING` i `src/lib/ical.ts` är en konstant just för att
-det ska krävas en kodändring att ändra det. Offboarding spärrar flödet
-automatiskt — vägen ut läser ägarens `status` vid varje hämtning.
-
-**Nattjobbet fick ett fjärde steg.** Eskalering av obekräftade sjukanmälningar
-efter 48 h, K37-frister, och påminnelser om oregistrerad frånvaro. Det sista
-kräver att stämplingen är på; jobbet avgör det självt.
-
-### Vad som är öppet i E7
-
-**E7.10 läkarintyg (K36).** Kräver Supabase Storage, samma beroende som E2.12
-och E8.7. Byggt är kvittensen "intyg mottaget den X" utan filen. Öppningsloggen
-finns inte, för det finns ingen fil att öppna — och en logg över noll öppningar
-av en fil som inte finns ser ut som en uppfylld K36 i en granskning. Bygg den
-när Storage finns, inte före.
-
-**E7.16 uppsägningstid** ligger i E9 anställningsavtal, inte här.
-
-### Att göra i produktion
-
-**Mottagarordningen vid sjukanmälan har inga telefonnummer.** Två platser är
-seedade — närmaste chef, sedan säljchefen — men numren är tomma. Sidan visar
-namnen utan nummer tills du fyller i dem under `/franvaro/regler`. Det är det
-enda som gör telefonlistan användbar.
-
-**Bemanningstaket är inte satt.** Utan tak varnar ingen ansökan för bemanning.
-Sätts under `/franvaro/regler`, per team eller för hela bolaget.
-
-**Fem påminnelser om oregistrerad frånvaro** skapades när nattjobbet provades:
-Simon 17–19 augusti, Zen 18–19 augusti. De är riktiga — dagarna saknar både
-stämpling och frånvaro. Zens öppna instämpling från 17 augusti (se ovan) hänger
-ihop med det.
+**Fällan som redan trampats i:** PostgREST separerar villkoren i `or()` med
+kommatecken. Ett osskyddat kommatecken i sökrutan gav HTTP 400 på hela sidan.
+Använd `orVillkor()` i `src/lib/sokning.ts`, aldrig en handskriven sträng.
 
 ---
 
 ## Vad som står på tur
 
-I prioritetsordning för att få säljarna igång.
+Q71 besvarades 2026-08-21: **flera personer rekryterar**, så E10 är inte akut.
+Det gör E15 till nästa stora epic.
 
-1. **Supabase-panelen** — användarens eget arbete, men påminn.
-2. **X7 pilot** med tre personer i två veckor innan bredd.
-3. **E8.9 kursinnehåll** — åtta kurser ska skrivas. Ingen kod, men det är det
-   som gör att 25 säljare kan lära sig samma sak utan att du upprepar dig.
-4. **E2.13 global sökning** i toppraden. `news_post` har redan en `search`-kolumn
-   av samma sort som `document`, så båda går att fråga på samma sätt.
-5. **E5.3** startsidan under 1,5 s på 4G — aldrig mätt.
-6. **E5.7 resten**: toast nere till höger med ångra efter en åtgärd. Klockan är
-   byggd, den biten är inte.
-7. Därefter **Storage-spåret** — det låser upp E2.12 bilagor, E8.7 rollspel
-   och E7.10 läkarintyg på en gång — och sedan E10+E9 rekrytering.
+1. **Supabase-panelen och Zens stämpling** — användarens eget arbete, men
+   påminn.
+2. **E8.9 kursinnehåll** — åtta kurser ska skrivas. Ingen kod, men det är det
+   som gör att 25 säljare kan lära sig samma sak utan att du upprepar dig. Nu
+   går det dessutom att lägga ett rollspel sist i varje kurs.
+3. **X7 pilot** med tre personer i två veckor innan bredd.
+4. **E15 M13 lönekostnadsvy**, ~2 veckor. Inte blockerad utom E15.7.
+   Innan den byggs behövs svar på: **vem äger arbetsgivaravgift, pension och
+   försäkringssatser, och var står de idag?** `cost_rate` ska seedas ur den
+   källan och ingen annan.
+5. **E9.1 avtalsmallar** — går att bygga utan A14. E9.2 e-signering är fortsatt
+   blockerad.
+6. **E0.6 felrapportering** bör ligga före piloten. Tre personer som hittar
+   buggar utan att de når dig är en pilot som inte mäter något.
+7. **E5.3 / X3** — startsidan under 1,5 s på 4G, aldrig mätt.
+8. **E5.7 resten**: toast nere till höger med ångra efter en åtgärd.
+9. **E10 M7 rekrytering**, ~4 veckor, när ovanstående är gjort.
+
+### Villkor som styr E15 när den byggs
+
+- **AC-3.26 / E7.14:** hämta frånvaro via `payroll_row.absence_minutes`. Aldrig
+  genom att joina `sick_report` — RLS ger noll rader för `finance` och
+  `payroll_cost_viewer`, så en vy som försöker får tyst fel data i stället för
+  ett felmeddelande. Verifiera i `tests/rls.mjs`.
+- **K27 / E15.6:** endast födelseår. Inga personnummer någonstans.
+- **E15.2 / §13.2:** alla satser i `cost_rate`, ingen procentsats som literal i
+  kod. Samma linje som E7.15 drog för frånvaroreglerna.
+- **AC-13.8 / E15.5:** varje beräkning sparas med `rates_used`, så att en
+  historisk siffra går att förklara när satserna ändrats.
+- **K5 / AC-2.17** gäller fortfarande i lönerapporten: den räknar ingen lön.
+  Lönekostnadsvyn är något annat och får räkna — håll isär dem, och skriv ut
+  varför i migrationen.
 
 ### E6.2 gallringsjobbet är blockerat, inte bortglömt
 
@@ -269,6 +218,13 @@ och ser samtidigt ut att uppfylla K10. Bygg det inte förrän fristerna finns.
 
 ### Pausat på användarens uttryckliga begäran
 
-Spåren **E0.8 transaktionell e-post**, **notiser** och **domän** är pausade
-("skippa mejl grejen helt", "glöm domän"). Ta inte upp dem igen utan att bli
-tillfrågad.
+Spåren **E0.8 transaktionell e-post**, **notisutskick** och **eget domännamn**
+är pausade ("skippa mejl grejen helt", "glöm domän"). Ta inte upp dem igen utan
+att bli tillfrågad.
+
+### Obesvarat
+
+- **A14** e-signeringsleverantör. Blockerar E9.2, men inte E9.1.
+- **E15:** vem äger arbetsgivaravgift, pension och försäkringssatser.
+- **Q78–Q80** provision. Blockerar E13.
+- **A5** Inkio, **A6** dialer. Blockerar E11 och E12.

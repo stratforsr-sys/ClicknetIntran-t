@@ -30,7 +30,7 @@ förhållande till tillväxten.
 | P0.10 | **Mät baslinjer** före lansering: krediteringar 12 mån, ramp-tid | EJ PÅBÖRJAD | Effektbevis mot VD |
 | P0.11 | **Onboarding-checklista** i pappersform, användbar nu | EJ PÅBÖRJAD | Rekryteringsvågen |
 | P0.12 | Svar på **Q78, Q79, Q80** — provision vid avslut, garantilönens karaktär, betalningskälla | EJ PÅBÖRJAD | E13 |
-| P0.13 | Svar på **A2** kollektivavtal och **A3** lönesystem | EJ PÅBÖRJAD | M2, M3, lönerapport |
+| P0.13 | Svar på **A2** kollektivavtal och **A3** lönesystem | A2 besvarad 2026-08-20 (kollektivavtal saknas). **A3 besvarad 2026-08-21: inget lönesystem, lön görs för hand.** `payroll_export_column` står orörd tills ett system väljs | M2, M3, lönerapport |
 
 ---
 
@@ -74,7 +74,7 @@ förhållande till tillväxten.
 
 ---
 
-## E2 — M5 Rutiner och dokument · I DRIFT (kvar: E2.5, E2.12 bilagor, E2.13) · ~3 veckor
+## E2 — M5 Rutiner och dokument · I DRIFT (kvar: E2.5) · ~3 veckor
 
 Modulen som skalar dig som chef. Måste finnas före onboardingvågen.
 
@@ -84,19 +84,19 @@ Modulen som skalar dig som chef. Måste finnas före onboardingvågen.
 | E2.2 | — | Redigering i markdown med förhandsgranskning | KLAR |
 | E2.3 | AC-5.4 | Varje sparning skapar ny version, tidigare versioner läsbara | KLAR |
 | E2.4 | AC-5.2 | Förfallen granskning märks "EJ GRANSKAD SEDAN {datum}" för alla läsare | KLAR |
-| E2.5 | AC-5.3 | Notiser till ägaren 30, 7 och 0 dagar före. Efter 30 dagars försening till sales_manager | EJ PÅBÖRJAD — kräver E0 transaktionell e-post |
+| E2.5 | AC-5.3 | Notiser till ägaren 30, 7 och 0 dagar före. Efter 30 dagars försening till sales_manager | EJ PÅBÖRJAD — kräver E0.8 transaktionell e-post, som är pausad på användarens begäran |
 | E2.6 | AC-5.5 | Kvittens kopplad till **versionen** — ny version kräver ny kvittens | KLAR |
 | E2.7 | AC-5.6 | Kvittensrapport: vilka som kvitterat, vilka som inte | KLAR |
-| E2.8 | AC-5.7 | Fritextsök över `body_md`, titel och kategori (svensk tsvector, GIN) | DELVIS — PDF-text kvar, se E2.12 |
+| E2.8 | AC-5.7 | Fritextsök över `body_md`, titel och kategori (svensk tsvector, GIN) | KLAR — sedan 0023 även texten ur bifogade PDF:er, med vikt `D` så att en bilaga aldrig slår en rubrik |
 | E2.9 | AC-5.8 | Målgruppsstyrning per roll och team. Ej behörig får 404, inte "åtkomst nekad" | KLAR |
 | E2.10 | AC-5.9 | Dokumenttyperna `work_env_policy`, `risk_assessment`, `task_allocation` med årlig `review_due` | KLAR |
 | E2.11 | AC-5.10 | Läsvy fullt användbar på 375 px, radlängd max 70 tecken | KLAR |
-| E2.12 | — | Mappträd och filterchips | KLAR. Bilagor via Storage + PDF-textextraktion | EJ PÅBÖRJAD |
-| E2.13 | — | Global sökning i toppraden aktiveras (kortkommando `/`) | EJ PÅBÖRJAD |
+| E2.12 | — | Mappträd, filterchips, bilagor via Storage och PDF-textextraktion | KLAR 2026-08-21 — bilagor ärver dokumentets målgrupp via `file_object` (0022), texten hamnar i `document.attachment_text` och **aldrig** på filraden, se rubriken i 0023 |
+| E2.13 | — | Global sökning i toppraden aktiveras (kortkommando `/`) | KLAR 2026-08-21 — `/sok` över rutiner, bilagor, nyheter, kurser, personal och egna ärenden. Varje fråga med användarens egen token; RLS avgör |
 
 ---
 
-## E8 — M6 Utbildning och certifiering · I DRIFT (kvar: E8.5, E8.7, E8.8, E8.9)
+## E8 — M6 Utbildning och certifiering · I DRIFT (kvar: E8.5, E8.8, E8.9)
 
 Flyttad fram från Fas 2 enligt §1.6. Det är denna modul som gör att 25 nya
 säljare kan lära sig samma sak utan att du upprepar introduktionen trettio gånger.
@@ -109,7 +109,7 @@ säljare kan lära sig samma sak utan att du upprepar introduktionen trettio gå
 | E8.4 | AC-6.4 | Kurser tilldelas automatiskt utifrån roll vid anställning | KLAR |
 | E8.5 | AC-6.5 | `blocks_capability` styr dialer-kö: utan giltig certifiering endast begränsat segment | BLOCKERAD av E12 |
 | E8.6 | AC-6.6 | Progressvy per person och team: klara, pågående, försenade, utgångna | KLAR |
-| E8.7 | AC-6.7 | Rollspelscertifiering: uppladdat testsamtal bedöms mot rubrik | EJ PÅBÖRJAD — kräver Storage, samma beroende som E2.12 |
+| E8.7 | AC-6.7 | Rollspelscertifiering: uppladdat testsamtal bedöms mot rubrik | KLAR 2026-08-21 — rubriken syns **före** inspelningen, och en trigger vägrar spara en bedömning från någon som aldrig öppnat filen. Återkoppling obligatorisk. Ljud, aldrig video |
 | E8.8 | AC-6.8 | Utgående certifikat notifierar 30 dagar i förväg | EJ PÅBÖRJAD — kräver transaktionell e-post (E0), som E2.5 |
 | E8.9 | Bilaga B | **Kursinnehåll skrivet** — 8 kurser. Se U11: tjänsteutbudet är bredare än SEO | EJ PÅBÖRJAD |
 
@@ -132,7 +132,7 @@ säljare kan lära sig samma sak utan att du upprepar introduktionen trettio gå
 
 ## E10 — M7 Rekrytering · ~4 veckor
 
-Q71 avgör om denna är akut: rekryteras 25 personer av en person är den det.
+Q71 besvarades 2026-08-21: **flera personer rekryterar**, så epicet är inte akut. E15 lönekostnad (~2 v) går före E10 (~4 v).
 
 | # | AC | Vad | Status |
 |---|---|---|---|
@@ -154,7 +154,7 @@ Q71 avgör om denna är akut: rekryteras 25 personer av en person är den det.
 | # | Vad | Status |
 |---|---|---|
 | E9.1 | Avtalsmallar för anställning, kopplade till upplägg av anställd | EJ PÅBÖRJAD |
-| E9.2 | E-signering — leverantör ej vald (A14) | BLOCKERAD |
+| E9.2 | E-signering — leverantör ej vald (A14) | BLOCKERAD — A14 fortfarande obesvarad 2026-08-21. **E9.1 avtalsmallar går att bygga utan den** |
 | E9.3 | Anställningsavtalet ska reglera Q78 och Q79 | BLOCKERAD av P0.12 |
 
 ---
@@ -199,11 +199,11 @@ daterad. Koden finns och är testad; påslaget sker med `M2_AKTIV` i
 | E4b.3 | AC-2.15, K5b | Attesteras av människa, attesten låser perioden | KLAR — ekonomi får inte attestera |
 | E4b.4 | AC-2.16 | Attesterad period är oföränderlig, korrigering som justeringspost | KLAR — triggrar, provade mot databasen |
 | E4b.5 | AC-2.17, K5 | Ingen beräknad lön, inget belopp, ingen semesterrätt | KLAR — beloppsfält går inte att lägga till |
-| E4b.6 | AC-2.18 | Konfigurerbart exportformat mot lönesystemet (A3) | KLAR — kolumnerna ligger i payroll_export_column |
+| E4b.6 | AC-2.18 | Konfigurerbart exportformat mot lönesystemet (A3) | KLAR — kolumnerna ligger i `payroll_export_column`. A3 besvarad 2026-08-21: lön görs för hand, inget system valt, så kolumnerna lämnas som de är |
 
 ---
 
-## E7 — M3 Frånvaro och ledighet · I DRIFT sedan 2026-08-20 (kvar: E7.10)
+## E7 — M3 Frånvaro och ledighet · KLAR 2026-08-21
 
 Reglerna ligger i `absence_type`, `absence_policy`, `absence_blackout` och
 `staffing_cap` — **inte i kod**. Ändras en frist i `/franvaro/regler` gäller den
@@ -224,7 +224,7 @@ Semesteråret är **1 april–31 mars** (3 § semesterlagen), beslutat 2026-08-2
 | E7.7 | AC-3.16–3.18 | `sick_report` med `first_sick_day` skilt från `registered_at`. Chefsbekräftelse, eskalering efter 48 h, chefsfallback | KLAR — eskaleringen i nattjobbet, fallbacken inbyggd i ringordningen |
 | E7.8 | AC-3.19 | Oregistrerad frånvaro flaggas som påminnelse, den anställde ser den först | KLAR — fördröjningen sitter i RLS-policyn, inte i en vy |
 | E7.9 | AC-3.21, K35 | **Ingen orsak, diagnos eller symtombeskrivning** får registreras — inget fritextfält | KLAR — `sick_report` har **noll textkolumner**, och `tests/rls.mjs` frågar `information_schema` och faller om någon läggs till |
-| E7.10 | AC-3.22, K36 | Läkarintyg åtkomstbegränsat, varje öppning loggad | **ÖPPEN — kräver Supabase Storage (E2.12).** Se nedan |
+| E7.10 | AC-3.22, K36 | Läkarintyg åtkomstbegränsat, varje öppning loggad | KLAR 2026-08-21 — enda vägen är `/filer/[id]`, som loggar **före** den signerade URL:en delas ut. Går skrivningen fel lämnas filen inte ut. Den som är sjuk ser själv vilka som öppnat intyget |
 | E7.11 | AC-3.23, K37 | Automatiska frister: dag 8 intyg, dag 15 Försäkringskassan, dag 30 plan för återgång | KLAR — räknat från första sjukdagen, dagnumren konfigurerbara |
 | E7.12 | AC-3.24 | Återinsjuknande inom 5 dagar kopplas till föregående period | KLAR — `previous_report_id` sätts vid registrering |
 | E7.13 | AC-3.25 | Upprepad korttidsfrånvaro ger tyst signal om rehabiliteringsansvar | KLAR — 6 tillfällen på 12 månader, konfigurerbart. Ingen notis till den anställda, ingen automatisk konsekvens |
@@ -234,20 +234,20 @@ Semesteråret är **1 april–31 mars** (3 § semesterlagen), beslutat 2026-08-2
 | E7.17 | AC-3.11–3.13 | Regler konfigureras i UI, överstyrning kräver motivering, den anställde ser reglerna före inskick | KLAR — `/franvaro/regler`. Motiveringstvånget är ett check-villkor i databasen, inte bara en kodregel |
 | E7.18 | AC-3.14 | Årlig semesterplaneringsvy med luckor och överlapp | KLAR — `/franvaro/planering`, en vecka per kolumn. Sjukfrånvaro visas aldrig |
 
-### E7.10 är öppen med flit, inte bortglömd
+### E7.10 stängdes 2026-08-21, och loggen byggdes med filen
 
-K36 kräver att läkarintyget är åtkomstbegränsat och att **varje öppning loggas**.
-Filen kan inte laddas upp: Supabase Storage är inte uppsatt, samma beroende som
-E2.12 bilagor och E8.7 rollspel.
+Punkten låg öppen med motiveringen att en logg över noll öppningar av en fil som
+inte finns i en granskning ser precis ut som en uppfylld K36. Den byggdes därför
+i samma migration som filen (`0022_filer`).
 
-Det som är byggt är kvittensen: dag 8-fristen kan markeras klar och
-`sick_report.certificate_received_on` säger vilken dag intyget kom in. Navet vet
-alltså **att** ett intyg finns, inte vad det innehåller.
+Kravet är byggt som **en** sak, inte två: `/filer/[id]` läser filens rad med
+användarens egen token, skriver öppningen, och skickar först därefter vidare
+till en signerad URL som lever i trettio sekunder. Ingen handling lämnar tillbaka
+en adress till webbläsaren. Går loggskrivningen fel utfärdas ingen URL.
 
-Att bygga öppningsloggen nu vore värre än att låta bli. En logg över noll
-öppningar av en fil som inte finns ser i en granskning ut precis som en uppfylld
-K36 — och den dagen filen läggs till är det ingen som minns att loggen aldrig
-provades. Punkten stängs när Storage finns.
+Öppningarna ligger i `file_access_log` och **inte** i `audit_log`. Den senare
+läses av `admin`, som med flit är utestängd från `sick_report` (AC-3.26) — en
+rad om att någon öppnat ett läkarintyg hade berättat precis det 0020 stängde.
 
 ### E7.16 uppsägningstid ligger inte här
 
@@ -278,7 +278,7 @@ uppsägningstidsberäkning i en semesteransökan hade varit fel plats för rätt
 | E6.1 | AC-12.1 | `audit_log` täcker samtliga sju händelsetyper | PÅGÅR — M1:s händelser klara |
 | E6.2 | AC-12.2, K10 | **Nattligt gallringsjobb** som verkställer `retention_until` och skriver kvittens | BLOCKERAD av P0.6 — ingen tabell bär `retention_until`, och fristerna är inte skrivna. Ett jobb med påhittade frister raderar personaldata enligt en gissning |
 | E6.3 | AC-12.3 | Objekt i låst dossier undantas från gallring | BLOCKERAD av E11 |
-| E6.4 | AC-12.4, K25 | **Registerutdrag**: all data om en person som JSON plus filer | KLAR för JSON — `/personal/[id]/registerutdrag`, länk på /profil. Filer väntar på Storage (E2.12). `tests/registerutdrag.mjs` faller när en ny kolumn pekar på `employee` utan att vara redovisad |
+| E6.4 | AC-12.4, K25 | **Registerutdrag**: all data om en person som JSON plus filer | KLAR — filerna redovisas sedan 2026-08-21 som rader i `file_object`, plus `file_access_log`: vem som öppnat dem och när. `tests/registerutdrag.mjs` faller när en ny kolumn pekar på `employee` utan att vara redovisad |
 | E6.5 | AC-12.5 | Adoptionsstatistik: DAU/WAU, sökningar utan träff, dokument utan visningar 90 dagar | EJ PÅBÖRJAD |
 
 ---
@@ -359,7 +359,7 @@ Kräver Inkios API-dokumentation, autentiseringsmodell och webhook-events.
 | X2 | **375 px** fungerar för stämpling, ledighet, rutiner, kurser, ärenden | PÅGÅR |
 | X3 | Startsida under 1,5 s, sök under 500 ms, stämpling under 2 s | EJ PÅBÖRJAD |
 | X4 | 99,5 % drift 07–19 vardagar, stämpling med offline-fallback | EJ PÅBÖRJAD |
-| X5 | Signerade tidsbegränsade URL:er för alla filer | EJ PÅBÖRJAD |
+| X5 | Signerade tidsbegränsade URL:er för alla filer | KLAR 2026-08-21 — 30 sekunder, och det finns bara en väg till en fil: `/filer/[id]`. Bucketen är stängd för användartokens av en **restriktiv** policy på `storage.objects`, som inte går att OR:a bort med en tillåtande policy |
 | X6 | Test som verifierar att fel roll får 0 rader — per modul | KLAR för byggda moduler, se E0.9. Samma svit, samma krav på varje ny modul |
 | X7 | **Pilot med 3 personer i två veckor** före bredd (§11.4) | EJ PÅBÖRJAD |
 | X8 | Mörkt läge — beslutat att skjutas upp, tokens förberedda | UPPSKJUTET |
@@ -372,8 +372,8 @@ Kräver Inkios API-dokumentation, autentiseringsmodell och webhook-events.
 | Fas | Epics | Veckor enligt PRD |
 |---|---|---|
 | Klart | E0 delvis, E1 delvis | — |
-| Fas 1 kvar | E1 rest, E2, E3, E8, E5, E6 | ~12 |
-| Fas 2 | E9, E10 (E7 klar utom E7.10) | ~6 |
+| Fas 1 kvar | E1 rest, E2.5, E8.5/E8.8/E8.9, E5.3/E5.7, E6 | ~8 |
+| Fas 2 | E9, E10 (E7 helt klar sedan 2026-08-21) | ~6 |
 | Fas 3 | E11, E12, E13, E15 | ~13 |
 | **Totalt till fullt system** | | **10–12 månader vid 15 h/vecka** |
 

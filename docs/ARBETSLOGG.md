@@ -5,6 +5,221 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-08-21 · Filer: en väg in, en väg ut, och en logg som är själva tillgången
+
+Storage-spåret i sin helhet. E7.10 läkarintyg, E2.12 bilagor med PDF-text,
+E8.7 rollspelscertifiering och X5 signerade URL:er — fyra punkter i tre epic
+som alla väntade på samma sak. Dessutom E2.13 global sökning, som föll ut
+gratis när bilagornas text hamnade i samma index.
+
+Fyra migrationer: `0022_filer`, `0023_bilagor`, `0024_rollspel`.
+
+### Sviten var röd när passet började. Igen.
+
+`tests/rls.mjs` krävde att säljchefen ser **exakt en** rad i `calendar_feed`.
+Policyn var rätt — `sales_manager` ska se alla flöden. Det som ändrats var
+datan: Zen skapade ett riktigt flöde 2026-08-20 när iCal-rutten provades
+skarpt, och David såg därmed två rader.
+
+Provet räknade rader i en tabell som bär driftdata. Två kontroller till hade
+samma fel latent — sjukanmälan och ledighetsansökan — och de hade blivit röda
+vid första riktiga sjukanmälan respektive semesteransökan. Alla tre frågar nu
+på provradens id.
+
+Det är andra passet i rad som börjar med en röd svit, och båda gångerna av
+samma sort: ett prov som var rätt när det skrevs och som driften sedan gick
+förbi. Skillnaden mot förra gången är att det inte var koden som gled — det var
+antagandet att testdatabasen är tom.
+
+### K36 är byggt som en sak, inte som två
+
+Kravet läser lätt som två: filen ska vara åtkomstbegränsad, **och** varje
+öppning ska loggas. Byggt som två blir loggen något man passerar på vägen till
+filen, och den som en gång fått adressen kan dela den vidare utan att nästa
+öppning syns.
+
+Därför finns exakt en väg till en fil i hela navet: `/filer/[id]`. Rutten
+läser filens rad **med användarens egen token** — ger RLS ingen rad finns filen
+inte för hen — skriver öppningen, och skickar först därefter vidare till en
+signerad URL som lever i trettio sekunder. Ingen handling lämnar tillbaka en
+adress till webbläsaren, och ingen sida ritar en.
+
+**Går loggskrivningen fel blir det ingen URL.** Det är tvärtemot den vanliga
+regeln att loggning aldrig ska kunna fälla en funktion, och här är den vanliga
+regeln fel: loggen *är* kravet. En fil som gick att öppna utan att det syns är
+precis vad K36 förbjuder, och ett tyst tapp i loggen ser i en granskning ut som
+en fil ingen öppnat. Samma val som registerutdraget redan gjort i 0018.
+
+Att det är en omdirigering och inte en knapp har en följd till: `<a>` och
+aldrig `<Link>`. Next förladdar länkar när musen nuddar dem, och varje sådan
+förladdning hade blivit en loggad öppning som aldrig skedde. En logg med
+påhittade rader är sämre än ingen.
+
+### Bucketen är stängd på ett sätt som inte går att öppna av misstag
+
+`storage.objects` har RLS på och inga tillåtande policyer, vilket redan ger noll
+rader. Det räckte inte som konstruktion: nästa person som behöver en fil någon
+annanstans lägger till en tillåtande policy, permissiva policyer OR:as, och
+bucketen står öppen.
+
+Därför ligger en **restriktiv** policy där. En restriktiv policy AND:as med
+samtliga tillåtande och går inte att OR:a bort. Service role påverkas inte, och
+signerade URL:er valideras på signaturen och inte via tabellen — provat skarpt:
+uppladdning med service role 200, hämtning via signerad URL utan någon nyckel
+alls 200, samma sökväg med anon-nyckel 400, listning med en inloggad användares
+token noll rader.
+
+### Öppningarna ligger inte i `audit_log`, och det är inte en smaksak
+
+Den uppenbara platsen för "vem öppnade vad" är händelseloggen. Den är fel plats,
+och skälet är exakt en rad i 0001: `audit_log_read` släpper in `admin`.
+
+En rad som säger "Cecilia öppnade Annas läkarintyg" hade berättat för admin att
+Anna har en sjukanmälan — och admin är med flit utestängd från `sick_report`
+sedan 0020, eftersom AC-3.26 drar gränsen där. Den allmänna loggen kan alltså
+inte bära den här händelsen utan att läcka det 0020 stängde.
+
+`file_access_log` har därför sin egen behörighet: den som får se filen ser vem
+som öppnat den. **Att den som är sjuk själv ser vilka som läst hennes intyg är
+inte en bieffekt utan halva poängen med K36** — och det syns både på
+`/franvaro/sjuk` och i registerutdraget.
+
+### K35 gäller filnamnet också
+
+`sick_report` har noll textkolumner för att det inte ska finnas någonstans för
+en diagnos att hamna. Ett uppladdat intyg som heter `cancerbesked.pdf` hade
+gjort hela den insatsen meningslös: filnamnet är text som användaren skrivit,
+det hade lagrats bredvid sjukanmälan, och det hade dessutom stått i klartext i
+den signerade URL:en och därmed i varje webbläsarhistorik den hamnar i.
+
+`filename` är därför **NULL** för `sick_certificate`, tvingat av ett
+check-villkor. Namnet som visas räknas fram ur datumet, och sökvägen i bucketen
+är filens uuid. Ingenting användaren skrivit följer med.
+
+Samma resonemang stoppade den uppenbara lösningen för PDF-sökningen. En kolumn
+`extracted_text` på `file_object` hade varit naturlig — och den tabellen bär
+också läkarintyg. Till skillnad från ett filnamn, som någon åtminstone måste
+skriva, hade den fyllts **automatiskt** med innehållet i ett intyg. Diagnosen i
+databasen och sedan i sökindexet, utan att någon bestämt det. Texten ligger
+därför i `document.attachment_text`, och en sjukanmälan har ingen sådan kolumn
+att skriva till.
+
+### En fil raderas inte för sig — men en människa går att radera
+
+Raderingsspärren på `file_object` skrevs först som ett rakt förbud. Den föll på
+sitt eget prov: `delete from employee` går genom en kaskad, och en spärr mot att
+städa bort bevis hade blivit en spärr mot att radera personen bevisen handlar
+om. E6.2 gallringsjobbet hade en dag fallit på en främmande nyckel mitt i natten.
+
+Regeln är därför: en fil får bara försvinna **tillsammans med** den rad den hör
+till. Triggern släpper igenom en radering när personen eller dokumentet redan är
+borta, och nekar den när den står ensam. `file_access_log` har samma undantag
+mot filen. Provat åt båda hållen: ett ensamt delete nekas, en kaskad från ett
+dokument tar med både bilagan och dess logg.
+
+### Vercel tar emot 4,5 MB, och det upptäcktes för sent
+
+Uppladdningen byggdes först genom en server action. Den fungerar — under 4,5
+megabyte, som är Vercels gräns för kroppen till en serverlös funktion. En
+intygssida fotograferad med telefon är ofta större. En kvart inspelat samtal är
+det alltid.
+
+Felet hade kommit från plattformen, med ett meddelande som inte säger något om
+vad användaren gjorde, och det hade träffat just de filer modulen finns för.
+Uppladdningen är därför omlagd i tre steg: servern kontrollerar behörighet och
+öppnar en signerad uppladdningslänk, webbläsaren lägger filen **direkt** i
+bucketen, och servern frågar sedan Storage vad som faktiskt kom in.
+
+Det tredje steget provar reglerna en gång till, och det är viktigare än det
+låter: efter omläggningen är det klienten som beskriver sin egen fil i steg ett.
+Ett påstående om storlek och typ är ingen kontroll. Provat att länken bara duger
+en gång, och att en uppladdning utan länk nekas av den restriktiva policyn.
+
+En fil som stannar mellan steg två och tre blir ett spöke i bucketen som ingen
+når — hela vägen till innehållet går genom `file_object`. Det är rätt sida att
+fela åt. Alternativet vore en rad utan fil, som syns i ett registerutdrag och
+ger 404 när någon klickar.
+
+### E2.12: bilagans text väger minst
+
+`document.search` byggdes om till att omfatta `attachment_text` med vikt `D`,
+den lägsta. Det är ingen detalj: en trettio sidor lång PDF innehåller fler ord
+än något dokument har i sin rubrik, och utan viktningen hade bilagorna kommit
+först i varje sökning. Den som söker "prislista" ska få dokumentet som **heter**
+prislista. Uppmätt mot databasen är rubrikvikten tio gånger högre.
+
+En bilaga skapar ingen ny version och kräver därför ingen ny kvittens. Hade den
+gjort det vore trettio kvittenser den enda följden av att någon byter ut en
+prislista, och kvittensen hade snabbt slutat betyda något.
+
+Provat skarpt: en riktig PDF upp, texten in i indexet, och en sökning på ett ord
+som bara står inuti filen hittar dokumentet.
+
+### E2.13: sökningen frågar med användarens egen token
+
+Fem frågor — rutiner och deras bilagor, nyheter, kurser, personal, egna ärenden
+— alla med den inloggades token. Det är hela behörighetsmodellen på sidan: ett
+utkast, en nyhet till ekonomi, ett konfidentiellt ärende och en kollega man inte
+får se i registret ger noll rader ur databasen.
+
+Följden är att sidan inte behöver veta någonting om målgrupper, och att den inte
+kan glömma en regel som läggs till i en modul senare. Samma val som
+`hamtaNotiser()` gjorde för klockan.
+
+**Ett kommatecken slog ut hela träffsidan.** PostgREST separerar villkoren i en
+`or` med kommatecken och tolkar dem innan Postgres ser dem, så en sökning på
+"Anna, Bertil" gav HTTP 400 — inte noll träffar, utan ett trasigt sidsvar.
+Mönstret citeras nu, citattecken och bakstreck escapas inuti citaten, och fyra
+knepiga strängar bevakas i `tests/rls.mjs`. Det hittades genom att fråga API:t,
+inte genom att läsa koden.
+
+### E8.7: två regler som gör rollspelet till något annat än ett omdöme
+
+**Rubriken syns före inspelningen.** `roleplay_criterion` ärver modulens
+läsbehörighet, så den som ska bedömas ser exakt vad hon bedöms på innan hon
+spelar in. En bedömning mot kriterier man får se först i efterhand är inte en
+bedömning — det är ett omdöme med en tabell framför sig. Samma linje som AC-3.13
+drog för frånvaroreglerna: den som ska följa en regel ska kunna läsa den före.
+
+**Den som inte öppnat inspelningen får inte bedöma den.** Spärren är en trigger
+som frågar `file_access_log` — samma logg K36 kräver för läkarintyg. Det är
+första gången åtkomstloggen används till något annat än att kunna granskas i
+efterhand, och användningen är sund: ett betyg på ett samtal ingen lyssnat på är
+värre än inget betyg alls.
+
+Kryphålet finns kvar — man kan öppna filen och låta bli att lyssna — och går
+inte att täppa till. Skillnaden mellan "gick inte att göra av misstag" och "gick
+att göra med avsikt" är hela vad en spärr kan åstadkomma här, och den
+skillnaden är värd något.
+
+Två saker till: återkopplingen är obligatorisk, för ett betyg utan ord lärde
+ingen sig något av. Och bara ljud, aldrig video — en videofil hade dragit in
+ansikten i en bedömning som handlar om vad någon säger.
+
+Certifieringen fick gå att köra för en **utpekad person**. Ett rollspel bedöms av
+chefen, och utan den ändringen hade chefen fått certifikatet på en kurs hon inte
+gått.
+
+### Prov
+
+Nu sjutton sviter, 753 kontroller. Fyra nya: `filer`, `pdf`, `sokning`,
+`rollspel`. `tests/rls.mjs` fick tre nya avsnitt — filer, rollspel och global
+sökning — med 41 kontroller.
+
+Det som provas mot riktiga databasen och inte mot koden: att bucketen är stängd
+för en inloggad användares token, att den signerade URL:en fungerar utan nycklar,
+att ekonomi får noll rader på ett läkarintyg även med `payroll_cost_viewer`, att
+Cecilia inte kan radera bort att hon läst intyget, att ett intyg inte kan bära
+ett filnamn, och att en bedömning från någon som aldrig öppnat inspelningen
+nekas — men går igenom efter att hon öppnat den, och inte om någon *annan*
+lyssnat.
+
+### Nästa steg
+
+`docs/NASTA_SESSION.md`.
+
+---
+
 ## 2026-08-20 · M3 Frånvaro: en modul som är byggd kring vad den inte får veta
 
 E7 i sin helhet utom E7.10. Tre migrationer, en regelmotor, åtta vyer och ett
