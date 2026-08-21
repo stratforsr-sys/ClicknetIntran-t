@@ -124,6 +124,13 @@ async function stad() {
   // E7. Bade sjukanmalan och saldo har triggrar som vagrar delete och update.
   // Att stadningen kraver ett aktivt handgrepp ar samma poang som pa
   // time_event: sparren galler aven den som skrev den.
+  // 0022. Filens sparr slapper igenom en kaskad fran den rad den hor till,
+  // men inte ett ensamt delete — och testets filer hanger i sjukanmalningar
+  // som stads bort har nedan. Handgreppet ar detsamma som pa sick_report:
+  // sparren galler aven den som skrev den.
+  await db.query(`alter table file_object disable trigger file_object_last`);
+  await db.query(`delete from file_object where uploaded_by in (select id from employee where email like $1)`, [PREFIX + "%"]);
+  await db.query(`alter table file_object enable trigger file_object_last`);
   await db.query(`alter table sick_report disable trigger sick_report_last`);
   await db.query(`delete from sick_deadline where report_id in (select id from sick_report where employee_id in (select id from employee where email like $1))`, [PREFIX + "%"]);
   await db.query(`delete from sick_report where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
@@ -1395,8 +1402,200 @@ console.log("\n\x1b[1mKalenderflodet ar agarens egen hemlighet\x1b[0m");
   ok("Bertil ser 0 rader", (await las(tB, "calendar_feed")).length === 0);
 }
 
+console.log("\n\x1b[1mFiler: bucketen ar stangd och varje oppning skrivs (K36, X5)\x1b[0m");
+{
+  // En riktig fil i bucketen, inte bara en rad. Halva kravet handlar om att
+  // sjalva innehallet inte gar att na, och det gar inte att prova pa en rad.
+  const stig = "sick_certificate/rlstest-intyg";
+  // En avslutad period langt bak. Anna har redan en pagaende anmalan fran
+  // avsnittet ovan, och `sick_report_ingen_dubbel` slapper med ratta inte in
+  // tva perioder som overlappar.
+  const { rows: [anmalan] } = await db.query(
+    `insert into sick_report (employee_id, first_sick_day, last_sick_day, registered_by, extent_percent)
+     values ($1::uuid, current_date - 40, current_date - 38, $1::uuid, 100) returning id`,
+    [saljareA.id],
+  );
+
+  await fetch(`${URL}/storage/v1/object/filer/${stig}`, {
+    method: "POST",
+    headers: { apikey: SECRET, Authorization: `Bearer ${SECRET}`, "Content-Type": "application/pdf" },
+    body: new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34]),
+  });
+
+  const { rows: [fil] } = await db.query(
+    `insert into file_object
+       (bucket, path, purpose, subject_employee_id, sick_report_id, mime_type, size_bytes, checksum, uploaded_by)
+     values ('filer', $2, 'sick_certificate', $1::uuid, $3::uuid, 'application/pdf', 8, repeat('a',64), $1::uuid)
+     returning id`,
+    [saljareA.id, stig, anmalan.id],
+  );
+
+  await db.query(
+    `insert into file_access_log (file_id, actor_id, action, purpose)
+     values ($1::uuid, $2::uuid, 'open', 'sick_certificate')`,
+    [fil.id, ledare.id],
+  );
+
+  // ---------------------------------------------------------------------
+  // Raden: samma krets som far se sjukanmalan, ingen annan.
+  // ---------------------------------------------------------------------
+  ok("Anna ser sitt eget intyg", (await las(tA, "file_object")).length === 1);
+  ok("Cecilia ser det — hon leder Anna", (await las(tC, "file_object")).length === 1);
+  ok(
+    "David ser det som saljchef",
+    (await las(tD, "file_object", `id=eq.${fil.id}&select=*`)).length === 1,
+  );
+  ok("Bertil ser 0 rader", (await las(tB, "file_object")).length === 0);
+  ok(
+    "Bertils direkta fraga pa id ger ocksa 0",
+    (await las(tB, "file_object", `id=eq.${fil.id}&select=*`)).length === 0,
+  );
+
+  // AC-3.26: ekonomi far sjukminuterna via loneunderlaget. Intyget ar nagot
+  // annat, och K26 ger tillgang till kostnad — inte till halsa.
+  ok("Ekonomi ser 0 rader", (await las(tE, "file_object")).length === 0);
+  await db.query(
+    `insert into employee_permission (employee_id, permission) values ($1::uuid, 'payroll_cost_viewer')
+     on conflict do nothing`,
+    [ekonomi.id],
+  );
+  const tE3 = await loggaIn(ekonomi.epost);
+  ok("inte heller med payroll_cost_viewer", (await las(tE3, "file_object")).length === 0);
+  ok(
+    "och inte pa en direkt fraga pa id",
+    (await las(tE3, "file_object", `id=eq.${fil.id}&select=*`)).length === 0,
+  );
+
+  // ---------------------------------------------------------------------
+  // Oppningsloggen foljer filen. Den sjuke ser sjalv vem som last intyget —
+  // det ar transparensen i K36, inte en bieffekt.
+  // ---------------------------------------------------------------------
+  ok("Anna ser vem som oppnat hennes intyg", (await las(tA, "file_access_log")).length === 1);
+  ok("Cecilia ser loggen", (await las(tC, "file_access_log")).length === 1);
+  ok("Bertil ser 0 rader i loggen", (await las(tB, "file_access_log")).length === 0);
+  ok("Ekonomi ser 0 rader i loggen", (await las(tE3, "file_access_log")).length === 0);
+  await db.query(`delete from employee_permission where employee_id = $1::uuid`, [ekonomi.id]);
+
+  // ---------------------------------------------------------------------
+  // Bucketen. Den som kan sokvagen ska anda inte komma at innehallet — det ar
+  // hela skalet till att sokvagen inte behover vara hemlig.
+  // ---------------------------------------------------------------------
+  const direkt = await fetch(`${URL}/storage/v1/object/filer/${stig}`, { headers: som(tA) });
+  ok("Anna nar inte filen direkt i bucketen", direkt.status !== 200, `HTTP ${direkt.status}`);
+
+  const anonym = await fetch(`${URL}/storage/v1/object/filer/${stig}`, {
+    headers: { apikey: ANON, Authorization: `Bearer ${ANON}` },
+  });
+  ok("anonymt nas den inte heller", anonym.status !== 200, `HTTP ${anonym.status}`);
+
+  const lista = await fetch(`${URL}/storage/v1/object/list/filer`, {
+    method: "POST",
+    headers: som(tA),
+    body: JSON.stringify({ prefix: "sick_certificate", limit: 100 }),
+  });
+  const listrader = await lista.json();
+  ok(
+    "och gar inte att lista fram",
+    !Array.isArray(listrader) || listrader.length === 0,
+    Array.isArray(listrader) ? `${listrader.length} rader` : `HTTP ${lista.status}`,
+  );
+
+  // ...men den signerade URL:en fungerar, utan nagon nyckel alls. Det ar den
+  // enda vagen in, och den som `signeraOchLogga()` utfardar efter att ha
+  // skrivit raden.
+  const sign = await fetch(`${URL}/storage/v1/object/sign/filer/${stig}`, {
+    method: "POST",
+    headers: { apikey: SECRET, Authorization: `Bearer ${SECRET}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ expiresIn: 30 }),
+  });
+  const signerad = await sign.json();
+  const hamtad = signerad.signedURL
+    ? await fetch(`${URL}/storage/v1${signerad.signedURL}`)
+    : { status: 0 };
+  ok("signerad URL ger filen utan nycklar", hamtad.status === 200, `HTTP ${hamtad.status}`);
+
+  // ---------------------------------------------------------------------
+  // Skrivning gar aldrig via API:t. En logg man kan skriva i sjalv ar ett
+  // pastaende, och en fil man kan koppla till en annan anmalan ar ett lack.
+  // ---------------------------------------------------------------------
+  const skrivFil = await fetch(`${URL}/rest/v1/file_object`, {
+    method: "POST",
+    headers: som(tD),
+    body: JSON.stringify({
+      bucket: "filer", path: "sick_certificate/rlstest-forfalskad", purpose: "sick_certificate",
+      subject_employee_id: saljareA.id, sick_report_id: anmalan.id,
+      mime_type: "application/pdf", size_bytes: 1, checksum: "b".repeat(64), uploaded_by: chef.id,
+    }),
+  });
+  ok("inte ens David skriver en filrad via API:t", !skrivFil.ok, `HTTP ${skrivFil.status}`);
+
+  const skrivLogg = await fetch(`${URL}/rest/v1/file_access_log`, {
+    method: "POST",
+    headers: som(tA),
+    body: JSON.stringify({ file_id: fil.id, actor_id: saljareA.id, action: "open", purpose: "sick_certificate" }),
+  });
+  ok("ingen skriver i oppningsloggen via API:t", !skrivLogg.ok, `HTTP ${skrivLogg.status}`);
+
+  const raderaLogg = await fetch(`${URL}/rest/v1/file_access_log?file_id=eq.${fil.id}`, {
+    method: "DELETE",
+    headers: som(tC),
+  });
+  const kvarEfter = await db.query(`select count(*)::int as n from file_access_log where file_id = $1::uuid`, [fil.id]);
+  ok("Cecilia kan inte radera bort att hon last intyget", kvarEfter.rows[0].n === 1, `HTTP ${raderaLogg.status}`);
+
+  // ---------------------------------------------------------------------
+  // Konstruktionsvillkoren, i en transaktion som rullas tillbaka.
+  // ---------------------------------------------------------------------
+  await db.query("begin");
+  ok(
+    "K35: ett lakarintyg kan inte bara ett filnamn",
+    Boolean(await nekarSql(`update file_object set filename = 'cancerbesked.pdf' where id = $1::uuid`, [fil.id])),
+  );
+  await db.query("rollback");
+
+  await db.query("begin");
+  ok(
+    "filen kan inte flyttas till nagon annans anmalan",
+    Boolean(await nekarSql(`update file_object set subject_employee_id = $2::uuid where id = $1::uuid`, [fil.id, saljareB.id])),
+  );
+  await db.query("rollback");
+
+  await db.query("begin");
+  ok(
+    "en fil raderas inte for sig — da foljer oppningsloggen med",
+    Boolean(await nekarSql(`delete from file_object where id = $1::uuid`, [fil.id])),
+  );
+  await db.query("rollback");
+
+  await db.query("begin");
+  ok(
+    "en rad i oppningsloggen gar inte att skriva om",
+    Boolean(await nekarSql(`update file_access_log set actor_id = $2::uuid where file_id = $1::uuid`, [fil.id, saljareA.id])),
+  );
+  await db.query("rollback");
+
+  await db.query("begin");
+  ok(
+    "ett word-dokument gar inte att lagga in",
+    Boolean(await nekarSql(
+      `insert into file_object (bucket, path, purpose, subject_employee_id, sick_report_id, mime_type, size_bytes, checksum, uploaded_by)
+       values ('filer','sick_certificate/rlstest-word','sick_certificate',$1::uuid,$2::uuid,'application/msword',10,repeat('a',64),$1::uuid)`,
+      [saljareA.id, anmalan.id],
+    )),
+  );
+  await db.query("rollback");
+
+  const bucket = await db.query(`select public from storage.buckets where id = 'filer'`);
+  ok("bucketen ar privat", bucket.rows[0]?.public === false);
+
+  await fetch(`${URL}/storage/v1/object/filer/${stig}`, {
+    method: "DELETE",
+    headers: { apikey: SECRET, Authorization: `Bearer ${SECRET}` },
+  });
+}
+
 console.log("\n\x1b[1mAnonym anslutning\x1b[0m");
-for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate", "news_post", "notification_seen", "absence_type", "absence_policy", "absence_blackout", "staffing_cap", "absence_balance", "absence_request", "absence_call_order", "sick_report", "sick_deadline", "absence_reminder", "calendar_feed"]) {
+for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate", "news_post", "notification_seen", "absence_type", "absence_policy", "absence_blackout", "staffing_cap", "absence_balance", "absence_request", "absence_call_order", "sick_report", "sick_deadline", "absence_reminder", "calendar_feed", "file_object", "file_access_log"]) {
   const r = await fetch(`${URL}/rest/v1/${t}?select=*`, { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` } });
   const j = await r.json();
   ok(`${t} ger inga rader anonymt`, !Array.isArray(j) || j.length === 0, Array.isArray(j) ? `${j.length} rader` : `HTTP ${r.status}`);

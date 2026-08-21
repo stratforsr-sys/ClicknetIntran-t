@@ -67,6 +67,22 @@ export async function hamtaRegisterutdrag(
       : { data: [] };
   data.case_message = { andamal: "Dialog i dina ärenden", rader: meddelanden ?? [] };
 
+  // K36: vem som oppnat filerna om dig. Hamtas via filen och inte pa
+  // `actor_id` — den kolumnen pekar pa den som last, och pa den vagen hade
+  // utdraget blivit en lista over andras lakarintyg man rakat oppna.
+  //
+  // Att den HAR ar sjalva poangen med loggen. Ett utdrag som redovisar att ett
+  // lakarintyg finns men inte vem som last det svarar pa halva fragan.
+  const filIds = (data.file_object?.rader ?? []).map((r) => (r as { id: string }).id);
+  const { data: oppningar } =
+    filIds.length > 0
+      ? await db.from("file_access_log").select("*").in("file_id", filIds).order("ts")
+      : { data: [] };
+  data.file_access_log = {
+    andamal: "Vem som öppnat filerna om dig, och när",
+    rader: oppningar ?? [],
+  };
+
   // Handelseloggen fran bada hallen: det du gjorde, och det som gjordes med
   // ditt konto. AC-12.1 raknar bada som uppgifter om personen.
   const [{ data: somAktor }, { data: somObjekt }] = await Promise.all([
@@ -95,7 +111,7 @@ export async function hamtaRegisterutdrag(
     anmarkning: [
       "Utdraget innehåller de uppgifter navet har om dig, tabell för tabell.",
       "Lösenordet finns inte med. Navet lagrar det inte — det ligger hashat hos Supabase och går inte att läsa ut, varken av dig eller av oss.",
-      "Bilagor och uppladdade filer saknas ännu. Fillagringen är inte byggd (E2.12), så det finns inga att lämna ut.",
+      "Uppladdade filer redovisas som rader under file_object: när filen kom in, hur stor den är och dess kontrollsumma. Själva innehållet hämtas i navet, och varje sådan öppning står under file_access_log — även våra egna.",
       "Kolumner som slutar på _by eller _id pekar på andra personer i registret. De står som identifierare och inte som namn, eftersom uppgiften då hade varit om någon annan än dig.",
       "Dialogen i dina ärenden är med i sin helhet, alltså även det ledningen skrivit till dig.",
     ],

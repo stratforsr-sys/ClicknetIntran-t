@@ -22,6 +22,7 @@ import {
   REGELFALT,
   TYPFALT,
 } from "@/lib/franvaro-server";
+import { laddaUppFil } from "@/lib/filer-server";
 
 export type FranvaroState = { fel?: string; ok?: string };
 
@@ -751,4 +752,81 @@ export async function rotaFlode(_prev: FranvaroState, form: FormData): Promise<F
       ? "Flödet är stängt. Den gamla adressen ger inget mer."
       : "Ny adress skapad. Den gamla slutade fungera i samma stund.",
   };
+}
+
+// =============================================================================
+// Lakarintyg (E7.10, AC-3.22, K36)
+//
+// Filen laggs i bucketen, raden i `file_object`, och dag 8-fristen kvitteras i
+// samma andetag. Att kvittera fristen HAR och inte som ett separat klick ar
+// hela poangen: en frist som star kvar rod fast intyget ligger i navet gor att
+// ingen litar pa fristerna, och da bevakar de ingenting.
+//
+// Sjalva laget "intyg mottaget" fanns redan innan filen gick att ladda upp
+// (`certificate_received_on`). Det star kvar, och en fil ar inte ett krav for
+// att kunna kvittera — ett intyg kan komma pa papper och laggas i en parm. Det
+// som ar nytt ar att det GAR att lagga in filen, och att varje oppning da
+// syns.
+// =============================================================================
+
+export async function laddaUppIntyg(_prev: FranvaroState, form: FormData): Promise<FranvaroState> {
+  const user = await getCurrentUser();
+  if (!user?.employee) return { fel: "Du måste vara inloggad." };
+
+  const id = String(form.get("id") ?? "");
+  const fil = form.get("fil");
+
+  if (!(fil instanceof File) || fil.size === 0) return { fel: "Välj en fil först." };
+
+  const db = supabaseAdmin();
+  const { data: anmalan } = await db
+    .from("sick_report")
+    .select("id, employee_id, cancelled_at, certificate_received_on")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!anmalan || anmalan.cancelled_at) return { fel: "Anmälan finns inte." };
+
+  // Den sjuke sjalv, den som leder hen, eller ledningen. Samma krets som far
+  // SE anmalan (0020) — ett intyg som fler far ladda upp an lasa vore en
+  // konstig ordning, och en som farre far ladda upp an lasa hade tvingat den
+  // sjuke att mejla intyget till nagon i stallet.
+  const egen = anmalan.employee_id === user.employee.id;
+  const ledare = await lederPersonen(user, anmalan.employee_id);
+  if (!egen && !ledare && !hasRole(user, "sales_manager", "ceo"))
+    return { fel: "Du har inte behörighet att lämna in intyg för den här anmälan." };
+
+  const resultat = await laddaUppFil({
+    andamal: "sick_certificate",
+    fil,
+    uploadedBy: user.employee.id,
+    subjectEmployeeId: anmalan.employee_id,
+    sickReportId: anmalan.id,
+  });
+
+  if ("fel" in resultat) return { fel: resultat.fel };
+
+  if (!anmalan.certificate_received_on) {
+    await db
+      .from("sick_report")
+      .update({ certificate_received_on: svensktDatum() })
+      .eq("id", id)
+      .is("certificate_received_on", null);
+  }
+
+  // Dag 8-fristen ar uppfylld i och med att intyget ligger har.
+  await db
+    .from("sick_deadline")
+    .update({ completed_by: user.employee.id, completed_at: new Date().toISOString() })
+    .eq("report_id", id)
+    .eq("kind", "certificate")
+    .is("completed_at", null);
+
+  // INGEN rad i audit_log. Den lases av admin, som med flit inte far veta att
+  // en sjukanmalan finns (AC-3.26). Uppladdningen star i file_access_log, som
+  // bara den som far se filen kan lasa. Se rubriken i 0022.
+
+  revalidatePath("/franvaro/sjuk");
+  revalidatePath("/");
+  return { ok: "Intyget är mottaget. Varje öppning av det loggas." };
 }

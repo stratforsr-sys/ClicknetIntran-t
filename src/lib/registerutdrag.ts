@@ -57,6 +57,13 @@ export const KALLOR: Kalla[] = [
   { tabell: "sick_report", kolumn: "employee_id", andamal: "Dina sjukanmälningar" },
   { tabell: "absence_reminder", kolumn: "employee_id", andamal: "Påminnelser om oregistrerad frånvaro" },
   { tabell: "calendar_feed", kolumn: "employee_id", andamal: "Ditt kalenderflöde" },
+
+  // 0022. Filer som är uppgifter OM dig — i dag läkarintyg. Raden bär storlek,
+  // checksumma och tidpunkt; själva filen hämtas separat, se `hamtaFiler` i
+  // registerutdrag-server.ts. Öppningarna av dem ligger i `file_access_log`
+  // och hämtas via filen, eftersom `actor_id` där pekar på den som läste och
+  // inte på den filen handlar om.
+  { tabell: "file_object", kolumn: "subject_employee_id", andamal: "Filer om dig" },
 ];
 
 /**
@@ -109,4 +116,11 @@ export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
   { tabell: "sick_report", kolumn: "registered_by", skal: "Vem som knappade in anmälan" },
   { tabell: "sick_report", kolumn: "reported_to", skal: "Vem samtalet gick till" },
   { tabell: "staffing_cap", kolumn: "created_by", skal: "Vem som satte bemanningstaket" },
+
+  // 0022 filer. `actor_id` i åtkomstloggen pekar på den som ÖPPNADE en fil.
+  // Hämtas via filen i stället — se `hamtaRegisterutdrag`. Att hämta den på
+  // actor_id hade gett en lista över andras läkarintyg som man råkat öppna.
+  { tabell: "file_access_log", kolumn: "actor_id", skal: "Vem som öppnade en fil" },
+  { tabell: "file_object", kolumn: "uploaded_by", skal: "Vem som laddade upp filen" },
+  { tabell: "file_object", kolumn: "removed_by", skal: "Vem som tog bort filen" },
 ];

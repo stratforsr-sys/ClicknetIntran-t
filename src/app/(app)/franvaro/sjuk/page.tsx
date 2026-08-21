@@ -22,6 +22,7 @@ import {
 import { REGELFALT } from "@/lib/franvaro-server";
 import { Sjukregistrering } from "./Sjukregistrering";
 import { Chefshandlingar } from "./Chefshandlingar";
+import { Intyg, type Intygsfil } from "./Intyg";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Sjukfrånvaro — Clicknet Nav" };
@@ -153,6 +154,63 @@ export default async function Sjuksida() {
     fristPerRapport.set(f.report_id, [...(fristPerRapport.get(f.report_id) ?? []), f]);
   }
 
+  /**
+   * E7.10, K36: intygen och vem som öppnat dem.
+   *
+   * Båda frågorna går med användarens EGEN token. `file_object` ärver
+   * sjukanmälans policy och `file_access_log` ärver filens (0022), så
+   * databasen har redan svarat på vem som får se vad. Ett eget filter här
+   * hade blivit ett andra svar på samma fråga.
+   *
+   * Namnen på dem som öppnat slås däremot upp med service role, precis som
+   * namnen ovan: `employee` är inte läsbar för en säljare, och utan det hade
+   * loggen visat uuid:n för den vars intyg det gäller — alltså varit oläslig
+   * för just den person kravet finns till för.
+   */
+  const rapportIds = alla.map((a) => a.id);
+  const { data: intygsfiler } = rapportIds.length
+    ? await supabase
+        .from("file_object")
+        .select("id, sick_report_id, uploaded_at, size_bytes, removed_at")
+        .eq("purpose", "sick_certificate")
+        .in("sick_report_id", rapportIds)
+        .is("removed_at", null)
+        .order("uploaded_at")
+    : { data: [] };
+
+  const filIds = (intygsfiler ?? []).map((f) => f.id);
+  const { data: oppningar } = filIds.length
+    ? await supabase
+        .from("file_access_log")
+        .select("file_id, actor_id, action, ts")
+        .in("file_id", filIds)
+        .eq("action", "open")
+        .order("ts", { ascending: false })
+    : { data: [] };
+
+  const oppnarIds = [...new Set((oppningar ?? []).map((o) => o.actor_id))].filter(
+    (id) => !namn.has(id),
+  );
+  const { data: oppnare } = oppnarIds.length
+    ? await db.from("employee").select("id, first_name, last_name").in("id", oppnarIds)
+    : { data: [] };
+  for (const p of oppnare ?? []) namn.set(p.id, fullName(p));
+
+  const intygPerRapport = new Map<string, Intygsfil[]>();
+  for (const f of intygsfiler ?? []) {
+    const rader = (oppningar ?? [])
+      .filter((o) => o.file_id === f.id)
+      .map((o) => ({
+        vem: namn.get(o.actor_id) ?? "Okänd",
+        nar: o.ts as string,
+        egen: o.actor_id === mig,
+      }));
+    intygPerRapport.set(f.sick_report_id, [
+      ...(intygPerRapport.get(f.sick_report_id) ?? []),
+      { id: f.id, uppladdat: f.uploaded_at as string, byte: f.size_bytes as number, oppningar: rader },
+    ]);
+  }
+
   const chef = andras.length > 0 || hasRole(user, "sales_manager", "ceo", "team_lead");
 
   return (
@@ -274,6 +332,13 @@ export default async function Sjuksida() {
                           .map((f) => ({ id: f.id, etikett: FRIST_ETIKETT[f.kind as Fristtyp] }))}
                       />
 
+                      <Intyg
+                        rapportId={a.id}
+                        filer={intygPerRapport.get(a.id) ?? []}
+                        mottaget={a.certificate_received_on}
+                        egenAnmalan={false}
+                      />
+
                       {regler &&
                         (() => {
                           const signal = upprepadKorttid(
@@ -308,15 +373,27 @@ export default async function Sjuksida() {
             ) : (
               <ul className="flex flex-col gap-3">
                 {mina.map((a) => (
-                  <li key={a.id} className="flex items-baseline justify-between gap-3">
-                    <span className="text-small text-ink-700">
-                      {a.last_sick_day
-                        ? periodtext(a.first_sick_day, a.last_sick_day)
-                        : `${a.first_sick_day} — pågår`}
-                    </span>
-                    <span className="shrink-0 text-micro text-ink-300">
-                      {a.extent_percent < 100 ? `${a.extent_percent} %` : "Heltid"}
-                    </span>
+                  <li key={a.id} className="border-b border-canvas pb-3 last:border-0 last:pb-0">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-small text-ink-700">
+                        {a.last_sick_day
+                          ? periodtext(a.first_sick_day, a.last_sick_day)
+                          : `${a.first_sick_day} — pågår`}
+                      </span>
+                      <span className="shrink-0 text-micro text-ink-300">
+                        {a.extent_percent < 100 ? `${a.extent_percent} %` : "Heltid"}
+                      </span>
+                    </div>
+
+                    {/* K36: den sjuke ser sitt eget intyg och vilka som öppnat
+                        det. Ett intyg man lämnat ifrån sig utan att se vad som
+                        hänt med det är precis vad loggen finns emot. */}
+                    <Intyg
+                      rapportId={a.id}
+                      filer={intygPerRapport.get(a.id) ?? []}
+                      mottaget={a.certificate_received_on}
+                      egenAnmalan
+                    />
                   </li>
                 ))}
               </ul>
@@ -341,8 +418,9 @@ export default async function Sjuksida() {
                 </li>
               </ul>
               <p className="mt-4 text-micro text-ink-500">
-                Läkarintyget kvitteras som mottaget. Filen kan inte laddas upp i navet än — se
-                ROADMAP E7.10.
+                Läkarintyget kan lämnas in som fil i navet. Den når bara den som är sjuk, närmaste
+                chef och ledningen — aldrig ekonomi — och varje öppning loggas och visas för den
+                anmälan gäller (K36).
               </p>
             </Card>
           )}
