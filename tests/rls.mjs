@@ -1652,6 +1652,42 @@ console.log("\n\x1b[1mFiler: bucketen ar stangd och varje oppning skrivs (K36, X
   });
 }
 
+console.log("\n\x1b[1mGlobal sokning: RLS avgor, och fragan gar att stalla\x1b[0m");
+{
+  // E2.13. Traffsidan stallar fem fragor med anvandarens egen token. Den har
+  // bevakar bada saker som kan ga fel: att nagon ser for mycket, och att
+  // fragan inte gar att stalla alls.
+  const { orVillkor } = await import("../src/lib/sokning.ts");
+
+  const sok = async (tok, tabell, kolumner, ord) => {
+    const r = await fetch(
+      `${URL}/rest/v1/${tabell}?select=id&or=(${encodeURIComponent(orVillkor(kolumner, ord))})`,
+      { headers: som(tok) },
+    );
+    return { status: r.status, rader: await r.json() };
+  };
+
+  const anna = await sok(tA, "employee", ["first_name", "last_name", "email"], "Anna");
+  ok("Anna hittar sig sjalv i personalsoket", anna.status === 200 && anna.rader.length >= 1);
+
+  // AC-5.9 och personalregistrets policy: en saljare ser inte saljchefen.
+  // Sokningen far inte vara en genvag forbi det.
+  const david = await sok(tA, "employee", ["first_name", "last_name", "email"], "David");
+  ok(
+    "men inte saljchefen — soket ar ingen genvag forbi registret",
+    david.status === 200 && david.rader.length === 0,
+    `${david.rader.length ?? 0} rader`,
+  );
+
+  // Det som foll i utvecklingen: ett kommatecken i sokrutan ar PostgREST-
+  // syntax, och en oskyddad sokning pa "Anna, Bertil" svarade HTTP 400 —
+  // alltsa ett trasigt sidsvar i stallet for noll traffar.
+  for (const knepigt of ["Anna, Bertil", "50 %", 'citat"tecken', "parentes)"]) {
+    const r = await sok(tA, "employee", ["first_name", "last_name"], knepigt);
+    ok(`"${knepigt}" gar att soka pa`, r.status === 200, `HTTP ${r.status}`);
+  }
+}
+
 console.log("\n\x1b[1mAnonym anslutning\x1b[0m");
 for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate", "news_post", "notification_seen", "absence_type", "absence_policy", "absence_blackout", "staffing_cap", "absence_balance", "absence_request", "absence_call_order", "sick_report", "sick_deadline", "absence_reminder", "calendar_feed", "file_object", "file_access_log"]) {
   const r = await fetch(`${URL}/rest/v1/${t}?select=*`, { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` } });

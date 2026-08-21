@@ -12,9 +12,9 @@ import type { Notis } from "@/lib/notiser";
  * tung ifylld ruta. Hojs till elev-1 och far ring i fokus.
  * Toppraden scrollar inte bort och ar max 64 px hog.
  *
- * Soket gar till rutinbiblioteket sa lange det ar den enda modulen med
- * sokbart innehall. Nar fler moduler finns blir det en samlad traffsida — men
- * ett falt som soker i ratt sak slar ett falt som ar avstangt.
+ * Soket gar till /sok sedan E2.13: en samlad traffsida over rutiner och deras
+ * bilagor, nyheter, kurser, personal och egna arenden. Varje fraga dar stalls
+ * med anvandarens egen token, sa RLS avgor vad som syns.
  */
 export function Topbar({ oppnaMeny, notiser }: { oppnaMeny: () => void; notiser: Notis[] }) {
   const sok = useRef<HTMLInputElement>(null);
@@ -64,7 +64,7 @@ export function Topbar({ oppnaMeny, notiser }: { oppnaMeny: () => void; notiser:
           e.preventDefault();
           const q = new FormData(e.currentTarget).get("q");
           const text = String(q ?? "").trim();
-          router.push(text ? `/rutiner?q=${encodeURIComponent(text)}` : "/rutiner");
+          router.push(text ? `/sok?q=${encodeURIComponent(text)}` : "/sok");
         }}
         className="group flex min-w-0 flex-1 items-center gap-3 rounded-sm border-b border-ink-300/60 px-2 py-2 transition-shadow duration-fast ease-brand focus-within:border-transparent focus-within:bg-surface focus-within:px-4 focus-within:shadow-elev-2 focus-within:ring-2 focus-within:ring-brand-600">
         <Ikon namn="sok" className="size-5 shrink-0 text-ink-500" />
@@ -73,7 +73,7 @@ export function Topbar({ oppnaMeny, notiser }: { oppnaMeny: () => void; notiser:
           type="search"
           name="q"
           defaultValue={sp.get("q") ?? ""}
-          placeholder="Sök i rutiner"
+          placeholder="Sök i navet"
           aria-label="Sök i navet"
           className="min-w-0 flex-1 bg-transparent text-body text-ink-900 placeholder:text-ink-300 focus:outline-none"
         />
