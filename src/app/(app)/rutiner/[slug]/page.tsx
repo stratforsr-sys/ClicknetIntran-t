@@ -10,6 +10,8 @@ import { getCurrentUser, hasRole, fullName } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { DOC_TYPE_LABEL, STATUS_LABEL, granskningslage, type DocType } from "@/lib/dokument";
 import { ROLE_LABEL, type Role } from "@/lib/roles";
+import { visningsnamn } from "@/lib/filer";
+import { Bilagor, type Bilaga } from "../Bilagor";
 import { kvittera, markeraGranskad, registreraVisning } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -57,6 +59,28 @@ export default async function Rutindokument({ params }: { params: Promise<{ slug
   const g = granskningslage(d.review_due);
   const arAgare = user?.employee?.id === d.owner_id;
   const farRedigera = hasRole(user, "sales_manager", "admin") || arAgare;
+
+  // E2.12. Fragan gar med anvandarens egen token: `file_object` arver
+  // dokumentets policy (0022), sa den som inte far se dokumentet ser inte
+  // heller att det har bilagor.
+  const { data: bilagerader } = await supabase
+    .from("file_object")
+    .select("id, filename, mime_type, size_bytes")
+    .eq("purpose", "document_attachment")
+    .eq("document_id", d.id)
+    .is("removed_at", null)
+    .order("uploaded_at");
+
+  const bilagor: Bilaga[] = (bilagerader ?? []).map((b) => ({
+    id: b.id,
+    namn: visningsnamn({
+      purpose: "document_attachment",
+      filename: b.filename,
+      mime_type: b.mime_type,
+    }),
+    byte: b.size_bytes,
+    sokbar: b.mime_type === "application/pdf",
+  }));
   const behoverKvittens = d.requires_ack && d.status === "published" && !minKvittens;
 
   return (
@@ -96,6 +120,12 @@ export default async function Rutindokument({ params }: { params: Promise<{ slug
               )}
             </article>
           </Card>
+
+          {(bilagor.length > 0 || farRedigera) && (
+            <Card>
+              <Bilagor dokumentId={d.id} bilagor={bilagor} farRedigera={farRedigera} />
+            </Card>
+          )}
 
           {(versioner?.length ?? 0) > 1 && (
             <Card>

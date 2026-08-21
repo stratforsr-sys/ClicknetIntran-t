@@ -104,6 +104,8 @@ async function stad() {
   await db.query(`update team set lead_id = null where lead_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`delete from news_post where slug like 'rlstest-%'`);
   await db.query(`delete from notification_seen where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
+  // 0022/0023. Bilagorna forsvinner i kaskaden fran dokumentet, men
+  // sjukintygen hanger i sjukanmalningar och behover det medvetna handgreppet.
   await db.query(`delete from document where slug like 'rlstest-%'`);
   await db.query(`delete from course where slug like 'rlstest-%'`);
   await db.query(`delete from employee_permission where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
@@ -1587,6 +1589,62 @@ console.log("\n\x1b[1mFiler: bucketen ar stangd och varje oppning skrivs (K36, X
 
   const bucket = await db.query(`select public from storage.buckets where id = 'filer'`);
   ok("bucketen ar privat", bucket.rows[0]?.public === false);
+
+  // ---------------------------------------------------------------------
+  // E2.12: en bilaga arver dokumentets malgrupp, utan ett eget villkor.
+  //
+  // Det ar hela poangen med att policyn i 0022 fragar `exists (select 1 from
+  // document ...)` i stallet for att skriva av behorigheten. Andras
+  // dokumentets malgrupp foljer bilagan med i samma stund.
+  // ---------------------------------------------------------------------
+  const bilagedok = async (slug, malgrupp) => {
+    const { rows } = await db.query(
+      `insert into document (title, slug, category_path, body_md, owner_id, review_due,
+                             doc_type, audience_roles, status, created_by, version, published_at)
+       values ($1,$2,'Test','Brodtext',$3::uuid, current_date + 200, 'routine', $4::text[],
+               'published', $3::uuid, 1, now())
+       returning id`,
+      [slug, slug, chef.id, malgrupp],
+    );
+    const { rows: fr } = await db.query(
+      `insert into file_object (bucket, path, purpose, document_id, filename, mime_type, size_bytes, checksum, uploaded_by)
+       values ('filer', $2, 'document_attachment', $1::uuid, 'Prislista.pdf', 'application/pdf', 12, repeat('c',64), $3::uuid)
+       returning id`,
+      [rows[0].id, `document_attachment/${slug}`, chef.id],
+    );
+    return fr[0].id;
+  };
+
+  const oppenBilaga = await bilagedok("rlstest-bilaga-alla", []);
+  const chefsBilaga = await bilagedok("rlstest-bilaga-chef", ["sales_manager"]);
+
+  ok(
+    "Anna ser bilagan pa den oppna rutinen",
+    (await las(tA, "file_object", `id=eq.${oppenBilaga}&select=*`)).length === 1,
+  );
+  ok(
+    "Anna ser INTE bilagan pa chefsrutinen — inte ens att den finns",
+    (await las(tA, "file_object", `id=eq.${chefsBilaga}&select=*`)).length === 0,
+  );
+  ok(
+    "David ser bada",
+    (await las(tD, "file_object", `id=in.(${oppenBilaga},${chefsBilaga})&select=*`)).length === 2,
+  );
+
+  // En bilaga bar inget subjekt: den handlar om ett dokument, inte om en
+  // person. Darfor ska den inte dyka upp i nagons registerutdrag.
+  const utanSubjekt = await db.query(
+    `select count(*)::int as n from file_object where id = $1::uuid and subject_employee_id is null`,
+    [oppenBilaga],
+  );
+  ok("en bilaga har inget subjekt och hamnar inte i ett registerutdrag", utanSubjekt.rows[0].n === 1);
+
+  // Dokumentet raderas i stadningen, och da ska bilagan folja med av sig
+  // sjalv. Provas har sa att kaskaden inte upptacks forst nar nagon undrar
+  // varfor filer ligger kvar utan dokument.
+  await db.query(`delete from document where slug = 'rlstest-bilaga-alla'`);
+  const efterKaskad = await db.query(`select count(*)::int as n from file_object where id = $1::uuid`, [oppenBilaga]);
+  ok("bilagan foljer med nar dokumentet raderas", efterKaskad.rows[0].n === 0);
 
   await fetch(`${URL}/storage/v1/object/filer/${stig}`, {
     method: "DELETE",

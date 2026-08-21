@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { getCurrentUser, hasRole } from "@/lib/auth";
 import { DOC_TYPES, tillSlug, type DocType } from "@/lib/dokument";
+import { laddaUppFil, taBortInnehall } from "@/lib/filer-server";
+import { pdfText } from "@/lib/pdf";
 
 export type DokumentState = { fel?: string };
 
@@ -291,5 +293,96 @@ export async function registreraVisning(dokumentId: string, employeeId: string):
       .eq("employee_id", employeeId);
   } else {
     await db.from("document_view").insert({ document_id: dokumentId, employee_id: employeeId });
+  }
+}
+
+// =============================================================================
+// Bilagor (E2.12)
+//
+// Filen laggs i `file_object` med `purpose = 'document_attachment'` och arver
+// dokumentets egen behorighet (0022). Ar en PDF med ett textlager laggs texten
+// i `document.attachment_text` sa att den gar att soka i (0023).
+//
+// EN BILAGA SKAPAR INGEN NY VERSION. AC-5.4 och AC-5.5 skulle annars ge alla
+// som kvitterat dokumentet en ny kvittens att gora varje gang nagon byter ut en
+// prislista, och en kvittens som kommer for ofta slutar betyda nagot.
+// =============================================================================
+
+/** Raknar om sokbar text ur SAMTLIGA bilagor pa dokumentet. */
+async function raknaOmBilagetext(dokumentId: string) {
+  const db = supabaseAdmin();
+  const { data: filer } = await db
+    .from("file_object")
+    .select("id, bucket, path, mime_type")
+    .eq("purpose", "document_attachment")
+    .eq("document_id", dokumentId)
+    .is("removed_at", null);
+
+  const delar: string[] = [];
+  for (const f of filer ?? []) {
+    if (f.mime_type !== "application/pdf") continue;
+    const { data } = await db.storage.from(f.bucket).download(f.path);
+    if (!data) continue;
+    const text = await pdfText(new Uint8Array(await data.arrayBuffer()));
+    if (text) delar.push(text);
+  }
+
+  await db
+    .from("document")
+    .update({ attachment_text: delar.length ? delar.join("\n\n") : null })
+    .eq("id", dokumentId);
+}
+
+export async function laddaUppBilaga(
+  _prev: DokumentState,
+  form: FormData,
+): Promise<DokumentState> {
+  const id = String(form.get("id") ?? "");
+  const fil = form.get("fil");
+
+  try {
+    const user = await kravRedaktor(id);
+    if (!(fil instanceof File) || fil.size === 0) return { fel: "Välj en fil först." };
+
+    const resultat = await laddaUppFil({
+      andamal: "document_attachment",
+      fil,
+      uploadedBy: user.employee!.id,
+      documentId: id,
+    });
+
+    if ("fel" in resultat) return { fel: resultat.fel };
+
+    // Textextraktionen sker EFTER att filen ligger uppe. Gar den fel ar
+    // bilagan anda inlamnad — en inskannad PDF utan textlager ska ga att
+    // bifoga, den blir bara inte sokbar.
+    if (fil.type.startsWith("application/pdf")) await raknaOmBilagetext(id);
+
+    await logga(user.employee!.id, "document.attachment_added", id, { fil: resultat.id });
+    revalidatePath("/rutiner");
+    return {};
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Bilagan kunde inte läggas till." };
+  }
+}
+
+export async function taBortBilaga(_prev: DokumentState, form: FormData): Promise<DokumentState> {
+  const fileId = String(form.get("fil_id") ?? "");
+  const dokumentId = String(form.get("id") ?? "");
+
+  try {
+    const user = await kravRedaktor(dokumentId);
+    await taBortInnehall(fileId, user.employee!.id);
+
+    // Texten raknas om ur de bilagor som ar kvar. Att i stallet dra bort den
+    // borttagna filens del hade krävt att texten lagrades per fil — och den
+    // kolumnen far inte finnas, se rubriken i 0023.
+    await raknaOmBilagetext(dokumentId);
+
+    await logga(user.employee!.id, "document.attachment_removed", dokumentId, { fil: fileId });
+    revalidatePath("/rutiner");
+    return {};
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Bilagan kunde inte tas bort." };
   }
 }
