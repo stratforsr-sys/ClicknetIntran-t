@@ -228,7 +228,7 @@ Semesteråret är **1 april–31 mars** (3 § semesterlagen), beslutat 2026-08-2
 | E7.11 | AC-3.23, K37 | Automatiska frister: dag 8 intyg, dag 15 Försäkringskassan, dag 30 plan för återgång | KLAR — räknat från första sjukdagen, dagnumren konfigurerbara |
 | E7.12 | AC-3.24 | Återinsjuknande inom 5 dagar kopplas till föregående period | KLAR — `previous_report_id` sätts vid registrering |
 | E7.13 | AC-3.25 | Upprepad korttidsfrånvaro ger tyst signal om rehabiliteringsansvar | KLAR — 6 tillfällen på 12 månader, konfigurerbart. Ingen notis till den anställda, ingen automatisk konsekvens |
-| E7.14 | AC-3.26 | Sjukdata exkluderad från alla prestations-, provisions- och kostnadsvyer | KLAR för det som finns — `sick_report` ger 0 rader för `finance`, `admin` och `payroll_cost_viewer`, verifierat mot API:t. **E13 och E15 måste hämta frånvaro via `payroll_row.absence_minutes`, aldrig genom att joina `sick_report`** |
+| E7.14 | AC-3.26 | Sjukdata exkluderad från alla prestations-, provisions- och kostnadsvyer | KLAR för det som finns — `sick_report` ger 0 rader för `finance`, `admin` och `payroll_cost_viewer`, verifierat mot API:t. **E13 och E15 måste hämta frånvaro via `payroll_row.absence_minutes`, aldrig genom att joina `sick_report`**. E15 gör det sedan 2026-08-21, och kopplingen är strukturell: beräkningen hänger på en löneperiod, och minuterna finns bara där. Kvar att hålla för E13 |
 | E7.15 | M3.2 | **Regelmotor**: ansökningsfrist, huvudsemesterfönster, spärrperiod, bemanningstak, maxlängd, karens, attestnivå per typ | KLAR — allt i tabeller. Inget tal ur semesterlagen står i `src/lib/franvaro.ts` |
 | E7.16 | AC-3.7–3.10 | Semesterlagens stöd: beskedsfrist 2 månader, femårsvarning för sparade dagar, uppsägningstid | DELVIS — beskedsfristen och femårsvarningen är byggda. Uppsägningstid hör till E9 anställningsavtal, inte hit |
 | E7.17 | AC-3.11–3.13 | Regler konfigureras i UI, överstyrning kräver motivering, den anställde ser reglerna före inskick | KLAR — `/franvaro/regler`. Motiveringstvånget är ett check-villkor i databasen, inte bara en kodregel |
@@ -336,18 +336,18 @@ Kräver Inkios API-dokumentation, autentiseringsmodell och webhook-events.
 
 ---
 
-## E15 — M13 Lönekostnadsvy · ~2 veckor
+## E15 — M13 Lönekostnadsvy · I DRIFT sedan 2026-08-21 (kvar: E15.7, blockerad av E11)
 
 | # | AC | Vad | Status |
 |---|---|---|---|
-| E15.1 | AC-13.1, K26 | Kräver `payroll_cost_viewer`, 0 rader utan — verifierat på API-nivå | EJ PÅBÖRJAD |
-| E15.2 | AC-13.3, §13.2 | Alla satser i `cost_rate`, ingen procentsats som literal i kod | EJ PÅBÖRJAD |
-| E15.3 | AC-13.4, AC-13.5 | Beräkningsordningen i §13.1. Åldersvillkor per kalendermånad inklusive 25 000-taket | EJ PÅBÖRJAD |
-| E15.4 | AC-13.6, AC-13.7 | Per säljare, team och bolag. **Täckningsbidrag och break-even i kronor sålt** | EJ PÅBÖRJAD |
-| E15.5 | AC-13.8 | Varje beräkning sparad med `rates_used` så historiska siffror kan förklaras | EJ PÅBÖRJAD |
-| E15.6 | AC-13.10, K27 | **Endast födelseår.** Inga personnummer någonstans i systemet | EJ PÅBÖRJAD |
-| E15.7 | AC-13.11 | Prognosläge mot pipeline | BLOCKERAD av E11 |
-| E15.8 | §13.3, K28 | Årlig påminnelse om satsunderhåll med dokumenterad ägare | EJ PÅBÖRJAD |
+| E15.1 | AC-13.1, K26 | Kräver `payroll_cost_viewer`, 0 rader utan — verifierat på API-nivå | KLAR — Anna, teamledaren, **säljchefen** och **ekonomi** får alla noll rader utan behörigheten. Ingen ser ens sin egen lönekostnad |
+| E15.2 | AC-13.3, §13.2 | Alla satser i `cost_rate`, ingen procentsats som literal i kod | KLAR — `src/lib/lonekostnad.ts` innehåller inget tal ur skattelagstiftningen. Saknad sats faller tillbaka på **noll**, aldrig på ett dolt standardvärde |
+| E15.3 | AC-13.4, AC-13.5 | Beräkningsordningen i §13.1. Åldersvillkor per kalendermånad inklusive 25 000-taket | KLAR — åldern följer **årets ingång** och är exakt känd av födelseåret allena (K27). Det som är per kalendermånad är taket, så perioden delas på månadsskiften |
+| E15.4 | AC-13.6, AC-13.7 | Per säljare, team och bolag. **Täckningsbidrag och break-even i kronor sålt** | KLAR — break-even kräver att täckningsgraden sätts, den seedas med flit inte. Täckningsbidrag kräver inmatad intäkt tills E11/E13 finns; ingen intäkt är ett giltigt läge och visas inte som noll |
+| E15.5 | AC-13.8 | Varje beräkning sparad med `rates_used` så historiska siffror kan förklaras | KLAR — bär både satserna och underlaget de tillämpades på. Raden är oföränderlig |
+| E15.6 | AC-13.10, K27 | **Endast födelseår.** Inga personnummer någonstans i systemet | KLAR — `employee.birth_year`, och `tests/rls.mjs` frågar `information_schema` och faller om någon lägger till en kolumn som bär personnummer eller födelsedatum |
+| E15.7 | AC-13.11 | Prognosläge mot pipeline | BLOCKERAD av E11 — enda återstående punkten i epicet |
+| E15.8 | §13.3, K28 | Årlig påminnelse om satsunderhåll med dokumenterad ägare | KLAR — femte steget i nattjobbet. Saknas ägare går ärendet till säljchefen; en sats som ingen äger är precis den som blir föråldrad |
 
 ---
 
@@ -374,7 +374,7 @@ Kräver Inkios API-dokumentation, autentiseringsmodell och webhook-events.
 | Klart | E0 delvis, E1 delvis | — |
 | Fas 1 kvar | E1 rest, E2.5, E8.5/E8.8/E8.9, E5.3/E5.7, E6 | ~8 |
 | Fas 2 | E9, E10 (E7 helt klar sedan 2026-08-21) | ~6 |
-| Fas 3 | E11, E12, E13, E15 | ~13 |
+| Fas 3 | E11, E12, E13 (E15 klar sedan 2026-08-21 utom E15.7) | ~11 |
 | **Totalt till fullt system** | | **10–12 månader vid 15 h/vecka** |
 
 Den siffran är PRD:ns egen och tar redan hänsyn till att ungefär 60 % av tiden

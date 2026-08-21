@@ -5,6 +5,158 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-08-21 · E15: en modul som får räkna kronor, och en som fortfarande inte får
+
+E15 M13 lönekostnadsvy, hela epicet utom E15.7 som är blockerat av E11.
+Migration `0025_lonekostnad`.
+
+Tre frågor besvarades först, och de styrde vad som byggdes: Q71 — **flera
+personer rekryterar**, så E10 är inte akut och E15 gick före. A3 — **inget
+lönesystem, lön görs för hand**, så exportkolumnerna lämnades orörda. Och
+satsfrågan: **bolaget har varken tjänstepension eller försäkringar**, bara
+arbetsgivaravgift.
+
+### Den bärande gränsen: vad som är ett underlag och vad som är ett beslut
+
+0012 slog fast K5 och AC-2.17 med ord som inte lämnar mycket utrymme: "Så fort
+en krona räknas fram här blir navet ett lönesystem." Nu räknar navet kronor.
+Skillnaden måste därför gå att säga, och den är inte kosmetisk:
+
+**Lönerapporten är ett underlag som lämnar navet.** Den ska stämma med vad
+någon får ut, den attesteras av en människa och blir oföränderlig. Den får inte
+gissa, och därför får den inte räkna.
+
+**Lönekostnadsvyn är ett beslutsunderlag som stannar i navet.** Den svarar på
+"vad kostar den här säljaren, och hur mycket måste hon sälja för att bära sin
+egen kostnad". Den är en uppskattning, den lämnas aldrig till någon myndighet,
+och den har en egen behörighet.
+
+Kolumnerna i `payroll_row` är fortfarande minuter och antal. Kronorna bor i
+egna tabeller som `finance` inte ser.
+
+### K27 är inte en kompromiss, och det tog en stunds räknande att se
+
+AC-13.5 kräver åldersvillkor, och K27 tillåter bara födelseår. Det ser ut som
+en konflikt där man får nöja sig med ungefär rätt sats.
+
+Det är det inte. Båda nedsättningarna — ungdomarnas och de äldres — utgår från
+åldern **vid årets ingång**. Den som är född år B har den 1 januari år Y fyllt
+exakt Y − B − 1 år, oavsett vilken månad hen fyller år. Födelseåret ger alltså
+rätt sats **exakt**, och ett födelsedatum hade inte gjort svaret bättre. Bara
+mer persondata.
+
+Det som faktiskt är per kalendermånad i AC-13.5 är **taket**: den lägre satsen
+för unga gäller upp till ett belopp per månad. En löneperiod 16 mars–15 april
+har därför två tak, inte ett, och `manaderIPerioden()` delar perioden för att
+komma åt det. Provet räknar just det fallet.
+
+`tests/rls.mjs` frågar dessutom `information_schema` efter varje kolumn i navet
+vars namn antyder personnummer eller födelsedatum, och faller om någon någonsin
+lägger till en. Samma mekanik som K35-provet mot `sick_report`.
+
+### Frånvaron kommer ur löneunderlaget, och det är byggt så att den måste
+
+ROADMAP E7.14 varnade: hämta frånvaro via `payroll_row.absence_minutes`, aldrig
+genom att joina `sick_report`, eftersom den tabellen ger **noll rader** för
+`payroll_cost_viewer` — alltså tyst fel data i stället för ett felmeddelande.
+Noll sjukminuter ser ut som en frisk säljare.
+
+Varningen räckte inte som konstruktion. Den gjordes strukturell: beräkningen
+hänger på en **löneperiod** och inte på ett datumintervall. Minuterna finns bara
+i `payroll_row`, och `payroll_row` finns bara för en period. Det finns ingen
+naturlig väg att skriva frågan fel.
+
+Provat: en användare med `payroll_cost_viewer` ser lönen, beräkningen och
+satserna — och fortfarande noll rader ur `sick_report`. K26 ger tillgång till
+kostnad, aldrig till hälsa.
+
+### K26: fyra roller får noll rader
+
+Behörigheten ligger i en egen tabell sedan 0001, med motiveringen att den ska
+tilldelas per person. Provet visar vad det betyder: Anna, teamledaren,
+**säljchefen** och **ekonomi** får alla noll rader ur `salary_basis`,
+`cost_calculation` och `cost_rate`. Ingen roll räcker.
+
+Ingen ser heller sin **egen** lönekostnad. Det låter hårt och är avsiktligt:
+raden bär arbetsgivaravgift och break-even, alltså bolagets kalkyl på en person
+— inte personens egen löneuppgift. Den senare vet hon redan, och får den ur sitt
+anställningsavtal. Undantaget är registerutdraget, som går via service role.
+
+### Inga tal ur skattelagstiftningen i koden
+
+E15.2 och §13.2 kräver att varje sats ligger i `cost_rate`. Sök efter en siffra
+i `src/lib/lonekostnad.ts` och du ska hitta 0, 1, 12 och 100 — noll, ett,
+antalet månader på ett år, och procentnämnaren. Allt annat kommer in som
+argument.
+
+Följden är att en satsändring är en rad och inte en deploy, och att `rates_used`
+kan bevara exakt vad en historisk siffra byggde på (AC-13.8). Den kolumnen bär
+både satserna **och underlaget de tillämpades på** — en procentsats förklarar
+ingenting utan talet den gällde.
+
+Saknas en sats faller den tillbaka på **noll**, inte på ett "rimligt
+standardvärde". En arbetsgivaravgift på noll ser fel ut direkt i vyn; ett dolt
+standardvärde på 31,42 hade sett rätt ut och tyst gjort `cost_rate` överflödig.
+
+### Tre ställen där siffran hellre är för hög än för låg
+
+Ett break-even är en siffra någon fattar beslut på. En underskattad kostnad är
+farlig där, en överskattad bara försiktig. Tre val följer av det:
+
+**Frånvaro kostar som standard fullt.** Faktorn per frånvarotyp är
+konfigurerbar och saknas den gäller 100 % — alltså inget avdrag. Att koda in
+sjuklöneregler hade varit att gissa i en fråga som hör till ett lönesystem.
+
+**Saknas födelseåret används full arbetsgivaravgift.** Nedsättningen kräver ett
+år; utan det är det dyra alternativet det säkra.
+
+**Täckningsgraden seedas inte alls.** En påhittad täckningsgrad ger ett
+break-even i kronor som ser exakt ut och är gissat, och just den siffran är hela
+skälet att vyn finns. Vyn säger i stället att den saknas, tills någon sätter
+den — samma linje som `sparr_saknas` i 0016.
+
+### Vilken siffra som bör kontrolleras
+
+31,42 % och 10,21 % är stabila och 25 000 kr är månadstaket. **Åldersgränsen för
+den äldre nedsättningen är seedad till 66 och bör stämmas av mot Skatteverket** —
+den följer pensionsåldern och har flyttats flera gånger. Den berör ingen i
+bolaget i dag, och att den är en rad och inte ett tal i koden är hela poängen:
+rättelsen kostar ingenting.
+
+### E15.8: en sats utan ägare är själv problemet
+
+Nattjobbet fick ett femte steg. En sats vars datum för översyn passerat ger ett
+ärende till ägaren. Saknas ägare går ärendet till säljchefen i stället för att
+inte skapas — en sats som ingen äger är precis den som blir föråldrad. Samma
+mönster som chefsfallbacken i sjukanmälans ringordning: en lucka i
+konfigurationen får inte bli tystnad.
+
+Ett ärende och inte en notis, för ett ärende har en handläggare, en frist och en
+kvittens. Och femte steget i **ett** jobb — Hobby-planen tar fortfarande två
+cron-poster.
+
+### Prov
+
+Nu arton sviter, 831 kontroller. `tests/lonekostnad.mjs` har 60 och skickar in
+sina **egna** satser, precis som frånvaroprovet gör med sina regler: ett prov som
+läste seeden hade blivit rött den dag arbetsgivaravgiften ändras, utan att något
+var fel.
+
+Det som provas mot riktiga databasen: att fyra roller får noll rader, att
+behörigheten öppnar allt utom hälsodata, att en löneuppgift och en beräkning
+inte går att skriva om, att ett personnummer inte går att stoppa in som
+födelseår, och att ingen kolumn i hela navet bär ett personnummer eller ett
+födelsedatum.
+
+En detalj provet fångade: svensk sifferformatering använder **hårt** mellanslag
+som tusenavgränsare. Den som jämför strängar någon annanstans behöver veta det.
+
+### Nästa steg
+
+`docs/NASTA_SESSION.md`.
+
+---
+
 ## 2026-08-21 · Filer: en väg in, en väg ut, och en logg som är själva tillgången
 
 Storage-spåret i sin helhet. E7.10 läkarintyg, E2.12 bilagor med PDF-text,

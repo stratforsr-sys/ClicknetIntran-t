@@ -3,7 +3,7 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-08-21 (storage-passet)
+**Senast uppdaterad:** 2026-08-21 (storage-passet och E15)
 
 ---
 
@@ -31,7 +31,7 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
 set -a && . $HOME/.clicknet/nav.env && set +a && npm test
 ```
 
-Sjutton sviter, 753 kontroller. `tests/rls.mjs` går mot den **riktiga**
+Arton sviter, 831 kontroller. `tests/rls.mjs` går mot den **riktiga**
 databasen och skapar och städar sina egna användare (prefix `rlstest+`).
 
 **Kör sviten före push.** Den var röd på main när det här passet började — för
@@ -67,8 +67,9 @@ skriver liknande kontroller.
 | Kalenderflöde | `/api/ical/[token]`. Bär aldrig sjukfrånvaro och aldrig frånvarotyp |
 | **Filer** | **I drift sedan 2026-08-21.** Läkarintyg, bilagor, rollspel |
 | **Global sökning** | **I drift sedan 2026-08-21.** `/sok`, kortkommando `/` |
+| **Lönekostnad** | **I drift sedan 2026-08-21.** `/lonekostnad`. Kräver `payroll_cost_viewer` |
 
-### Tre saker användaren själv måste göra
+### Fyra saker användaren själv måste göra
 
 1. **Zen står instämplad sedan måndag 2026-08-17 18:08.** Dagen lämnades
    avsiktligt öppen — schemat slutar 17:00, så en autostängning hade satt
@@ -80,6 +81,12 @@ skriver liknande kontroller.
 3. **Telefonnummer i mottagarordningen och bemanningstak** under
    `/franvaro/regler`. Utan numren är telefonlistan vid sjukanmälan namn utan
    nummer; utan tak varnar ingen ansökan för bemanning.
+4. **Lönekostnaden saknar tre saker innan den visar något:** ingen har
+   `payroll_cost_viewer` (tilldelas per person under Personal), inga
+   månadslöner är inmatade, och täckningsgraden är inte satt. Allt tre görs
+   under `/lonekostnad/satser`. **Kontrollera också åldersgränsen för den äldre
+   nedsättningen** — den är seedad till 66, följer pensionsåldern och har
+   flyttats flera gånger. Den berör ingen i bolaget i dag.
 
 ---
 
@@ -168,6 +175,68 @@ Använd `orVillkor()` i `src/lib/sokning.ts`, aldrig en handskriven sträng.
 
 ---
 
+## Vad som byggdes 2026-08-21 (E15 lönekostnad)
+
+Migration `0025_lonekostnad`. Hela epicet utom E15.7, som är blockerat av E11.
+
+### Lönerapporten räknar fortfarande ingen lön
+
+K5 och AC-2.17 står kvar. Skillnaden mot den nya vyn är inte kosmetisk:
+lönerapporten är ett **underlag som lämnar navet** och får därför inte gissa;
+lönekostnadsvyn är ett **beslutsunderlag som stannar här**, med en egen
+behörighet. Kolumnerna i `payroll_row` är fortfarande minuter och antal.
+
+**Blandar du ihop dem blir navet ett lönesystem.** Läs rubriken i 0025 först.
+
+### K26: fyra roller får noll rader
+
+`payroll_cost_viewer` och ingenting annat. Anna, teamledaren, **säljchefen** och
+**ekonomi** får alla noll rader utan den. Ingen ser heller sin egen
+lönekostnad — raden bär bolagets kalkyl på en person, inte personens egen
+löneuppgift.
+
+### Frånvaron kommer ur löneunderlaget, strukturellt
+
+Beräkningen hänger på en **löneperiod**, inte ett datumintervall. Minuterna
+finns bara i `payroll_row`, så det finns ingen naturlig väg att skriva frågan
+fel. Det var precis vad ROADMAP E7.14 varnade för, och samma villkor gäller
+**E13 provision** när den byggs.
+
+### K27: födelseåret räcker exakt
+
+Både ungdoms- och äldrenedsättningen utgår från åldern **vid årets ingång**, och
+den som är född år B har den 1 januari år Y fyllt exakt Y − B − 1 år oavsett
+födelsemånad. Det som är per kalendermånad i AC-13.5 är **taket**, inte åldern —
+därför delas perioden på månadsskiften.
+
+`tests/rls.mjs` frågar `information_schema` och faller om någon någonsin lägger
+till en kolumn som bär personnummer eller födelsedatum.
+
+### Inga tal ur skattelagstiftningen i koden
+
+Sök i `src/lib/lonekostnad.ts` och du hittar 0, 1, 12 och 100. Allt annat kommer
+ur `cost_rate`. **Saknas en sats blir den noll**, aldrig ett dolt
+standardvärde — en nolla syns i vyn, ett standardvärde hade sett rätt ut och
+tyst gjort tabellen överflödig.
+
+### Tre ställen där siffran hellre är för hög
+
+Frånvaro kostar som standard **fullt** (faktorn per typ är konfigurerbar).
+Saknas födelseåret används **full** arbetsgivaravgift. Och täckningsgraden
+seedas **inte alls** — en gissad täckningsgrad ger ett break-even som ser exakt
+ut och är påhittat, och just den siffran är hela skälet att vyn finns.
+
+För ett break-even är en underskattad kostnad farlig och en överskattad bara
+försiktig.
+
+### Ingen pension och inga försäkringar
+
+Användarens besked 2026-08-21. De är därför inte seedade och ska inte läggas
+till "för säkerhets skull" — en sats på noll i vyn ser ut som en kostnad någon
+glömt fylla i.
+
+---
+
 ## Vad som står på tur
 
 Q71 besvarades 2026-08-21: **flera personer rekryterar**, så E10 är inte akut.
@@ -179,32 +248,26 @@ Det gör E15 till nästa stora epic.
    som gör att 25 säljare kan lära sig samma sak utan att du upprepar dig. Nu
    går det dessutom att lägga ett rollspel sist i varje kurs.
 3. **X7 pilot** med tre personer i två veckor innan bredd.
-4. **E15 M13 lönekostnadsvy**, ~2 veckor. Inte blockerad utom E15.7.
-   Innan den byggs behövs svar på: **vem äger arbetsgivaravgift, pension och
-   försäkringssatser, och var står de idag?** `cost_rate` ska seedas ur den
-   källan och ingen annan.
-5. **E9.1 avtalsmallar** — går att bygga utan A14. E9.2 e-signering är fortsatt
+4. **E9.1 avtalsmallar** — går att bygga utan A14. E9.2 e-signering är fortsatt
    blockerad.
-6. **E0.6 felrapportering** bör ligga före piloten. Tre personer som hittar
+5. **E0.6 felrapportering** bör ligga före piloten. Tre personer som hittar
    buggar utan att de når dig är en pilot som inte mäter något.
-7. **E5.3 / X3** — startsidan under 1,5 s på 4G, aldrig mätt.
-8. **E5.7 resten**: toast nere till höger med ångra efter en åtgärd.
-9. **E10 M7 rekrytering**, ~4 veckor, när ovanstående är gjort.
+6. **E5.3 / X3** — startsidan under 1,5 s på 4G, aldrig mätt.
+7. **E5.7 resten**: toast nere till höger med ångra efter en åtgärd.
+8. **E10 M7 rekrytering**, ~4 veckor, när ovanstående är gjort.
 
-### Villkor som styr E15 när den byggs
+### Villkoren som styrde E15 gäller nu E13 provision
+
+E15 följer dem sedan 2026-08-21. **E13 måste följa samma:**
 
 - **AC-3.26 / E7.14:** hämta frånvaro via `payroll_row.absence_minutes`. Aldrig
   genom att joina `sick_report` — RLS ger noll rader för `finance` och
   `payroll_cost_viewer`, så en vy som försöker får tyst fel data i stället för
-  ett felmeddelande. Verifiera i `tests/rls.mjs`.
-- **K27 / E15.6:** endast födelseår. Inga personnummer någonstans.
-- **E15.2 / §13.2:** alla satser i `cost_rate`, ingen procentsats som literal i
-  kod. Samma linje som E7.15 drog för frånvaroreglerna.
-- **AC-13.8 / E15.5:** varje beräkning sparas med `rates_used`, så att en
-  historisk siffra går att förklara när satserna ändrats.
-- **K5 / AC-2.17** gäller fortfarande i lönerapporten: den räknar ingen lön.
-  Lönekostnadsvyn är något annat och får räkna — håll isär dem, och skriv ut
-  varför i migrationen.
+  ett felmeddelande.
+- **E13.1 / AC-10.1:** provisionsregler som konfiguration, inte kod. Samma linje
+  som `absence_policy` och `cost_rate` redan drog. Lägg dem gärna i `cost_rate`
+  om de är satser, annars i en egen tabell — men inte i ett `if`.
+- **K13 / E13.9:** provisionsdata och tiddata får inte kunna samköras i någon vy.
 
 ### E6.2 gallringsjobbet är blockerat, inte bortglömt
 
