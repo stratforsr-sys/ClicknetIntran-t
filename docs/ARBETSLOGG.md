@@ -5,6 +5,263 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-08-22 · Felrapportering, avtalsmallar, ångra — och två fel som proven hittade
+
+Fyra punkter i den ordning användaren bad om dem: E0.6, E9.1, E5.7 och
+E5.3/X3. Migrationer `0026_felrapportering`, `0027_rpc_stangs_for_klienten`,
+`0028_avtalsmallar`. 831 → 957 kontroller.
+
+Sviten var **grön** när passet började, för första gången på tre pass. Den blev
+röd en gång under vägen, och det avsnittet står sist här nere eftersom det är
+det som är värt något.
+
+### E0.6: varför det inte blev Sentry
+
+ROADMAP säger "Sentry eller motsvarande". Det blev motsvarande, och valet följer
+av beslut som redan var fattade snarare än av en åsikt om Sentry:
+
+1. **K23.** En stackspårning bär sökväg, `employee_id` och ibland ett värde ur
+   en rad. Sentry är ett personuppgiftsbiträde till, och P0.6
+   registerförteckningen som ska redovisa det är inte skriven. Exakt samma skäl
+   blockerar E6.2 gallringsjobbet — det vore inkonsekvent att låta det stoppa
+   det ena och inte det andra.
+2. **CSP:n.** `connect-src` är `'self'` plus Supabase. En tredjepartsvärd kräver
+   att den öppnas.
+3. **Larmvägen.** Sentry larmar med mejl, och mejl är pausat. En felrapportering
+   vars enda utgång är avstängd mäter ingenting.
+4. **A14-lärdomen.** Ett obesvarat leverantörsval ska inte blockera funktionen.
+   Egen tabell går att byta mot Sentry senare; det omvända går inte.
+
+**Det fanns ingen felgräns alls i navet.** Varken `error.tsx` eller
+`global-error.tsx` fanns, så ett renderingsfel gav Next standardsida och ingen
+fick veta. Det var det största hålet, inte avsaknaden av en tjänst.
+
+#### Digesten är det enda som håller ihop de två halvorna
+
+I produktion ger Next klienten **bara** `error.digest`, aldrig meddelandet — med
+flit, eftersom ett felmeddelande berättar hur systemet är byggt. Klientens
+felgräns kan alltså inte rapportera vad felet var.
+
+Därför `instrumentation.ts` och `onRequestError`, som är samma krok Sentry själv
+hakar i. Servern skriver raden med text och stack, klienten skriver samma
+digest, och `registrera_fel` lägger ihop dem. Utan den filen hade kön bestått av
+rader som säger "fel på /franvaro (a1b2c3d4)" och inget mer.
+
+#### En automatisk rapport är en grupp, inte en händelse
+
+Ett trasigt anrop på startsidan är inte ett fel per besök, det är ETT fel som
+träffat tjugo personer. Dedupliceringen ligger på ett partiellt unikt index på
+`(digest, path)`. Utan den skriver en kraschloop tusen rader i minuten och
+begraver nästa bugg.
+
+Ett avslutat fel som kommer tillbaka återgår **inte** tyst till `new` —
+räknaren går upp så att återfallet syns, men en människa får fatta beslutet igen.
+
+#### Maskeringen är förutsättningen för att släppa in admin
+
+`file_access_log` i 0022 stängde ute `admin`, eftersom en rad där bär uppgiften
+att någon är sjuk. Felkön släpper in admin — och det behövde motiveras, inte
+bara bestämmas.
+
+Skillnaden är vad raden bär. En felrapport bär en sökväg och en maskerad
+feltext, och den som ska laga felet är admin. Men "maskerad" måste betyda något:
+postgres svarar `Key (email)=(anna@clicknet.se) already exists`, och då ligger en
+e-postadress i tabellen. `maskera()` tar bort e-post, personnummer och uuid.
+
+**Faller maskeringen faller också skälet att släppa in admin.** Därför provas
+den för sig i `tests/fel.mjs`, med det verkliga postgres-felet som testfall.
+
+Maskeringen sker före klippet. Klipps texten först kan ett halvt personnummer
+överleva klippet och slippa undan maskeringen — det provas också.
+
+#### Knappen är hela poängen
+
+Tre pilotanvändare som hittar buggar utan att de når någon är en pilot som inte
+mäter något. `/fel/nytt` är därför öppen för **alla** inloggade, utan
+rollkontroll, och posten i sidopanelen heter "Rapportera fel" för den som inte
+är chef. En rapportväg som kräver behörighet rapporterar bara de fel cheferna
+själva stöter på.
+
+Formuläret har ett fält och en kryssruta. Allt annat — sidan, webbläsaren,
+tidpunkten, vem du är — vet navet redan. Sidan läses ur `document.referrer`,
+inte ur `location.pathname`: formuläret ligger på `/fel/nytt`, alltså den enda
+sida i navet där felet garanterat inte var.
+
+Rapportören ser sin egen rapport i kön. Utan det är knappen en brevlåda utan
+lucka — man skickar in något, får aldrig veta om det lästes, och slutar skicka.
+
+### E9.1: tre beslut, och ett som användaren bör titta på
+
+Avtalsmallar går att bygga utan A14. E9.2 e-signering är fortsatt blockerad, och
+ingenting i schemat förutsätter vilken leverantör det blir.
+
+**Avtalet fryser malltexten.** `contract.body_md` är det färdigrenderade
+dokumentet, inte en pekare till mallen. Det som en människa skrev under är det
+som stod då. En trigger nekar att ett utfärdat avtal skrivs om; det går att dra
+tillbaka, inte att ändra. Följden är trevlig: en publicerad mall går att
+stavfelsrätta utan att arkivera den, eftersom rättningen inte kan nå bakåt.
+
+**Lönen skrivs in i avtalet och läses inte ur `salary_basis`.** Två skäl, och
+det andra är det viktigare: `salary_basis` ligger bakom `payroll_cost_viewer`
+(K26) medan den som lägger upp en anställd är en bredare krets — men framför
+allt är riktningen omvänd. Avtalet är *källan* till siffran. 0025 säger det
+redan rakt ut: den anställda får sin lön "ur sitt anställningsavtal". Avtalet
+skriver därför heller ingen rad *i* `salary_basis`; den tabellen är append-only
+med eget `entered_by`, och en automatisk rad hade sett ut som en inmatning.
+
+**En ofylld platshållare renderas aldrig som tomt.** `{{manadslon}}` som blev en
+tom rad ger ett avtal utan lön som går att skriva under. Okända fält stoppas när
+mallen sparas — den som skriver har texten framför sig och vet vad hon menade —
+och saknade värden när avtalet skapas.
+
+Ett utkast syns **inte** för den det gäller. RLS släpper fram raden först när
+den är `issued`. Ett utkast där någon provar sig fram med en siffra ska inte
+ligga synligt för den siffran handlar om.
+
+#### Personnummer: det du bör titta på
+
+Navet lagrar inget personnummer någonstans, och `tests/rls.mjs` faller den dag
+en **kolumn** som bär ett dyker upp. `contract.variables` är jsonb — alltså
+precis stället där ett kunde smyga in utan att den kontrollen ser det.
+
+Lösningen blev ett check-villkor som nekar personnummerformade strängar i hela
+jsonben, plus samma kontroll i koden för att ge ett begripligt besked. Ett prov
+faller om någon lägger till `personnummer` som mallvariabel.
+
+**Följden är verklig:** det utskrivna anställningsavtalet har en rad där
+personnumret fylls i för hand. Det är ovanligt, och det är en konsekvens av
+K27-linjen snarare än av ett krav på avtal. Vill du att navet ska bära numret
+är det K27 som ska omprövas medvetet — jag har byggt så att det inte går att
+kringgå av misstag, inte så att beslutet är fattat.
+
+Utskrift i stället för PDF-generering: `pdf.ts` **läser** en PDF, den skriver
+ingen, och att välja ett bibliotek är ett större beslut än E9.1 behöver fatta.
+`globals.css` fick ett `@media print`-block — det fanns inget förut.
+
+### E5.7: ångra är en invers åtgärd, inte en fördröjd skrivning
+
+Det vanliga mönstret är att vänta åtta sekunder med att utföra något och avbryta
+om någon trycker ångra. Det går sönder på första kontakten med verkligheten:
+användaren stänger fliken, nätet dör, funktionen skalas ned — och åtgärden hon
+*trodde* var gjord blev aldrig av. Ett tyst uteblivet arkiverande är värre än
+ett arkiverande hon får ångra.
+
+Här sker åtgärden direkt, och ångra kör motsatsen som en **egen rad** i
+`audit_log`. Den ursprungliga raden står kvar; att sudda den hade gjort loggen
+till en berättelse om vad som blev kvar, inte om vad som hände.
+
+Det avgör vilka knappar som får finnas. Tre gör det: arkivera nyhet, avsluta
+felrapport, arkivera avtalsmall. Publicera nyhet får ingen — det går inte att ta
+ur någons minne, och den spärren stod redan skriven i nyheternas `actions.ts`.
+Stämpling får ingen (AC-2.3). Utfärda avtal får ingen; det heter "dra tillbaka"
+och kräver ett skäl.
+
+Att nyheten går att ångra beror på en regel som redan fanns: `published_at`
+sätts bara första gången, så ett återpublicerat inlägg dyker inte upp som nytt i
+någons klocka. Utan den hade arkiveringen inte varit ångrabar utan biverkning.
+
+Kvittot går via en kortlivad kaka i stället för klienttillstånd, eftersom
+åtgärderna är server actions som omdirigerar. **Dispatchern litar inte på den:**
+listan är stängd, id-formen provas, och varje gren gör om hela
+behörighetskontrollen. Att kvittot bara *visas* för den som gjorde åtgärden är
+en följd av att kakan sattes i hennes svar — och en följd är inte ett skydd.
+
+Nedräkningen pausar under pekaren och stängs av helt vid tangentbordsfokus. En
+ångra-knapp som försvinner mitt i ett tangentbordssteg finns inte för den som
+använder tangentbord.
+
+### E5.3 / X3: mätt för första gången
+
+`scripts/mat-startsidan.mjs`. Skriven som ett skript och inte som en
+engångsmätning, så att siffran går att ta om när navet vuxit.
+
+**Startsidan klarar 1,5 s i båda profilerna.**
+
+| | Normalt 4G (10 Mbit/s, 50 ms) | Trängt 4G (3 Mbit/s, 100 ms) |
+|---|---|---|
+| Uppkoppling | 150 ms | 300 ms |
+| Svar | 480 ms | 530 ms |
+| Hämtning | 133 ms | 442 ms |
+| **Totalt** | **762 ms** | **1 272 ms** |
+| Marginal | 738 ms | 228 ms |
+
+Vad som är mätt och vad som är räknat, eftersom skillnaden avgör hur mycket
+siffran är värd:
+
+- **Mätt:** nyttolasten (162 kB över nätet, komprimerat), mellanvarans svarstid
+  mot produktionen (250 ms median), och de nio vågorna mot riktiga databasen.
+- **Uppskattat:** 20 ms per våga inifrån Vercel. Funktionen och Supabase står
+  båda i eu-north-1, så det är pessimistiskt tilltaget.
+- **Inte mätt:** den inloggade sidans TTFB från produktionen. Sidan ligger bakom
+  inloggning och en session går inte att skapa från ett skript utan att göra
+  avkall på något. **Det kräver en riktig webbläsare med en riktig session** —
+  det är den enda siffran som saknas, och den ersätter uppskattningen ovan.
+
+Två fällor på vägen är värda att skriva ut. Nodes `fetch` sätter sin egen
+`accept-encoding` och packar upp svaret, så både `arrayBuffer().byteLength` och
+`content-length` gav den **uppackade** storleken — 513 kB där curl ger 162 kB.
+En 4G-uppskattning byggd på den blir tre gånger för pessimistisk, och den första
+körningen sa följaktligen "över 1,5 s". Skriptet använder curl nu.
+
+Den andra: många snabba anrop i rad ger ibland ett TLS-handslag som inte går
+igenom, och det tog ned hela mätningen på sista filen. Ett återförsök, inte ett
+avbrott.
+
+**Det som faktiskt är värt något i mätningen är inte totalsiffran utan de nio
+vågorna.** Startsidan och layouten hämtar data i nio *sekventiella* omgångar —
+varje `await` väntar in den förra. Notisklockan är den tyngsta ensam (13 frågor
+i en våga, vilket är rätt: de går parallellt). Det är vågorna som växer när
+navet växer, och det är den enda delen som går att göra något åt i kod. I dag
+kostar de inte tillräckligt för att motivera en omskrivning; noteringen finns
+för den dag marginalen på 228 ms äts upp.
+
+### Två fel som proven hittade, och det ena är en säkerhetsbrist
+
+#### `revoke ... from anon, authenticated` gjorde ingenting
+
+Det nya provet "registrera_fel går inte att anropa som inloggad" föll direkt.
+Orsaken visade sig gälla 0002 lika mycket som 0026.
+
+Postgres ger EXECUTE på en ny funktion till **PUBLIC** som standard. Att sedan
+skriva `revoke execute on function ... from anon, authenticated` tar bort de
+*explicita* granterna till de två rollerna — som aldrig fanns. PUBLIC-granten
+står kvar, `authenticated` är en del av PUBLIC, och kommandot går igenom utan
+varning och ändrar ingenting. I ACL:en syns det som posten `=X/postgres`.
+
+**Följden: `log_audit` har gått att anropa från vilken inloggad session som helst
+ända sedan 0002.** Funktionen är security definer och skriver till `audit_log`,
+så en säljare kunde posta godtyckliga händelser till händelseloggen.
+
+Ingen data läckte — funktionen skriver, den läser inte, och `audit_log_read` har
+hela tiden släppt in bara sales_manager, ceo och admin. Det som stod på spel är
+loggens **värde som bevis**, alltså precis det AC-12.1 och K10 behöver den till.
+
+0027 stänger båda, ger service role tillbaka det den behöver, och lägger
+`alter default privileges ... revoke execute on functions from public` så att
+nästa migration inte får samma hål. Läsfunktionerna som anropas inifrån
+RLS-policyer behåller sina explicita granter — utan dem ger varje tabell noll
+rader åt alla.
+
+Provet finns kvar för båda funktionerna.
+
+#### Fjärde gången: en radräkning för en roll som ser allt
+
+`tests/rls.mjs` blev röd i AC-3.19-avsnittet: "David ser den inte heller",
+`(await las(tD, "absence_reminder")).length === 0`.
+
+Nattjobbet hade klockan 03:07 lagt in riktiga påminnelser för Zen och Simon, och
+äldre påminnelser hade passerat sin `visible_to_manager_from`. David är säljchef
+och ser **alla**. Provet blev alltså rött av att funktionen används på riktigt.
+
+Det är exakt det NASTA_SESSION varnade för efter tre likadana 2026-08-21, och nu
+har det hänt en fjärde gång i ett avsnitt ingen rörde. Rättat på samma sätt:
+frågan ställs på provradens id.
+
+**Regeln är värd att upprepa:** en roll som ser alla rader får aldrig provas med
+en radräkning. De nya avsnitten för E0.6 och E9.1 är skrivna så från början.
+
+---
+
 ## 2026-08-21 · E15: en modul som får räkna kronor, och en som fortfarande inte får
 
 E15 M13 lönekostnadsvy, hela epicet utom E15.7 som är blockerat av E11.

@@ -30,7 +30,8 @@
     "test:lonekostnad": "node --experimental-strip-types tests/lonekostnad.mjs",
     "test:fel": "node --experimental-strip-types tests/fel.mjs",
     "test:avtal": "node --experimental-strip-types tests/avtal.mjs",
-    "test:toast": "node --experimental-strip-types tests/toast.mjs"
+    "test:toast": "node --experimental-strip-types tests/toast.mjs",
+    "mat:startsidan": "node scripts/mat-startsidan.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.7.0",

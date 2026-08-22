@@ -3,7 +3,7 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-08-21 (storage-passet och E15)
+**Senast uppdaterad:** 2026-08-22 (E0.6, E9.1, E5.7, E5.3)
 
 ---
 
@@ -31,19 +31,20 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
 set -a && . $HOME/.clicknet/nav.env && set +a && npm test
 ```
 
-Arton sviter, 831 kontroller. `tests/rls.mjs` går mot den **riktiga**
+Tjugoen sviter, 957 kontroller. `tests/rls.mjs` går mot den **riktiga**
 databasen och skapar och städar sina egna användare (prefix `rlstest+`).
 
-**Kör sviten före push.** Den var röd på main när det här passet började — för
-andra gången i rad. Båda gångerna av samma sort: ett prov som räknade rader i
-en tabell som bär driftdata. `calendar_feed` krävde exakt en rad för säljchefen,
-och Zens riktiga flöde gjorde att han såg två.
+Sviten var **grön** när passet 2026-08-22 började — första gången på tre pass.
 
-**Lärdomen är värd att skriva ut:** en kontroll som lyder
+**Lärdomen som nu inträffat fyra gånger:** en kontroll som lyder
 `(await las(tD, "tabell")).length === 1` för en roll som ser ALLA rader blir
-röd i samma stund någon använder funktionen på riktigt. Fråga på provradens id
-i stället. Tre sådana rättades 2026-08-21; leta efter fler om en ny modul
-skriver liknande kontroller.
+röd i samma stund någon använder funktionen på riktigt. Tre rättades
+2026-08-21 (`calendar_feed` med flera). Den fjärde föll 2026-08-22 i
+AC-3.19-avsnittet: nattjobbet hade lagt in riktiga `absence_reminder`-rader för
+Zen och Simon klockan 03:07, och säljchefen ser alla.
+
+**Fråga alltid på provradens id.** Leta efter fler om en ny modul skriver
+liknande kontroller — det finns troligen kvar några.
 
 ---
 
@@ -68,6 +69,9 @@ skriver liknande kontroller.
 | **Filer** | **I drift sedan 2026-08-21.** Läkarintyg, bilagor, rollspel |
 | **Global sökning** | **I drift sedan 2026-08-21.** `/sok`, kortkommando `/` |
 | **Lönekostnad** | **I drift sedan 2026-08-21.** `/lonekostnad`. Kräver `payroll_cost_viewer` |
+| **Felrapportering** | **I drift sedan 2026-08-22.** `/fel` och `/fel/nytt`. Egen tabell, inte Sentry |
+| **Avtalsmallar** | **I drift sedan 2026-08-22.** `/avtal`. E9.2 e-signering fortsatt blockerad |
+| **Kvitto med ångra** | **I drift sedan 2026-08-22.** Nere till höger, tre ångrabara åtgärder |
 
 ### Fyra saker användaren själv måste göra
 
@@ -87,6 +91,102 @@ skriver liknande kontroller.
    under `/lonekostnad/satser`. **Kontrollera också åldersgränsen för den äldre
    nedsättningen** — den är seedad till 66, följer pensionsåldern och har
    flyttats flera gånger. Den berör ingen i bolaget i dag.
+
+---
+
+## Vad som byggdes 2026-08-22
+
+Fyra punkter i den ordning användaren bad om dem. Migrationerna `0026`, `0027`,
+`0028`. Resonemangen står i arbetsloggen; det här är vad du behöver veta för
+att inte riva något.
+
+### E0.6: felrapportering, och varför det inte är Sentry
+
+Fyra skäl, alla utskrivna i `0026`: K23 med P0.6 oskriven, CSP:n som bara
+släpper igenom Supabase, att Sentrys larmväg är mejl som är pausat, och
+A14-lärdomen att ett obesvarat leverantörsval inte ska blockera funktionen.
+Egen tabell går att byta mot Sentry senare; det omvända går inte.
+
+**`onRequestError` i `src/instrumentation.ts` är enda stället där meddelandet
+finns.** I produktion får klienten bara `error.digest`, aldrig texten. Servern
+skriver raden med text, klienten skriver samma digest, `registrera_fel` lägger
+ihop dem. Rör du den filen: kön blir rader som säger "fel på /franvaro
+(a1b2c3d4)" och inget mer.
+
+**Automatiska rapporter dedupliceras** på `(digest, path)` via ett partiellt
+unikt index. En kraschloop blir en rad med en räknare. Ett avslutat fel som
+kommer tillbaka återgår inte tyst till `new`.
+
+**`maskera()` i `src/lib/fel.ts` bär hela behörigheten.** Felkön släpper in
+`admin`, till skillnad från `file_access_log` i 0022. Det håller bara så länge
+maskeringen tar bort e-post, personnummer och uuid ur feltexter — postgres
+skriver ut krockande värden i klartext. Ändrar du den: läs rubriken
+"Behörighet" i 0026 först, och kör `tests/fel.mjs`.
+
+**`/fel/nytt` har ingen rollkontroll, med flit.** Den som råkar ut för ett fel
+är oftast en säljare. Sidan läser sidan-man-kom-från ur `document.referrer` —
+`location.pathname` hade gett "/fel/nytt" på varenda rapport.
+
+### E9.1: avtalsmallar
+
+**Avtalet fryser malltexten.** `contract.body_md` är det renderade dokumentet.
+En trigger nekar att ett utfärdat avtal skrivs om — det går att dra tillbaka,
+inte att ändra. Därför går en publicerad mall att stavfelsrätta fritt.
+
+**Lönen läses aldrig ur `salary_basis`.** K26 gör kretsarna olika, men framför
+allt är riktningen omvänd: avtalet är källan. 0025 säger redan att den anställda
+får sin lön ur sitt anställningsavtal. Avtalet skriver heller ingen rad *i*
+`salary_basis`.
+
+**Ett utkast syns inte för den det gäller.** RLS släpper fram raden först vid
+`issued`.
+
+**Inget personnummer.** `variables` är jsonb, alltså stället där ett kunde smyga
+förbi schemakontrollen i `tests/rls.mjs`. Ett check-villkor nekar
+personnummerformade strängar i hela jsonben, och ett prov faller om någon lägger
+till det som mallvariabel. Följden: det utskrivna avtalet har en rad som fylls i
+för hand. **Vill du att navet ska bära numret är det K27 som ska omprövas — se
+punkt 5 nedan.**
+
+### E5.7: ångra är en invers åtgärd
+
+Åtgärden sker direkt; ångra kör motsatsen som en egen rad i `audit_log`. Inte en
+fördröjd skrivning — den går sönder när användaren stänger fliken.
+
+**Bara åtgärder med äkta invers får knappen.** Tre finns i dag: arkivera nyhet,
+avsluta felrapport, arkivera avtalsmall. Lägger du till en fjärde: lägg den i
+`ANGRABARA` i `src/lib/toast.ts` OCH i dispatchern i `(app)/angra/actions.ts`,
+som gör om hela behörighetskontrollen. Listan i kakan är inte ett skydd.
+
+Publicera nyhet får aldrig en ångra-knapp. Stämpling heller (AC-2.3).
+
+### E5.3 / X3: startsidan är mätt
+
+**Klarar 1,5 s.** 762 ms på normalt 4G, 1 272 ms på trängt — 228 ms marginal.
+`node --env-file=$HOME/.clicknet/nav.env scripts/mat-startsidan.mjs` kör om det.
+
+Det värdefulla är inte totalsiffran utan att startsidan och layouten hämtar data
+i **nio sekventiella vågor**. Det är vågorna som växer när navet växer. I dag
+kostar de inte nog för att motivera en omskrivning.
+
+Mätningen saknar en sak: inloggad TTFB från produktionen. Den kräver en riktig
+session i en webbläsare, och 20 ms per våga är uppskattat tills den finns.
+
+### E0.6-passet hittade en säkerhetsbrist i 0002
+
+`revoke execute on function ... from anon, authenticated` tar **inte** bort
+PUBLIC-granten som Postgres ger varje ny funktion. Kommandot går igenom utan
+varning och ändrar ingenting.
+
+Följden: **`log_audit` har gått att anropa från vilken inloggad session som helst
+sedan 0002.** En säljare kunde skriva i händelseloggen. Ingen data läckte, men
+loggens värde som bevis gjorde det. `0027` stänger det och lägger
+`alter default privileges` så att nästa funktion inte får samma hål.
+
+**Skriver du en ny security definer-funktion:** den är nu stängd för klienten
+som standard. Behöver den anropas inifrån en RLS-policy måste du ge den
+`grant execute ... to authenticated` explicit, annars ger tabellen noll rader
+åt alla.
 
 ---
 
@@ -239,22 +339,38 @@ glömt fylla i.
 
 ## Vad som står på tur
 
-Q71 besvarades 2026-08-21: **flera personer rekryterar**, så E10 är inte akut.
-Det gör E15 till nästa stora epic.
+E0.6, E9.1, E5.7 och E5.3 är gjorda 2026-08-22. **Det som stod före piloten är
+därmed avklarat** — felrapporteringen finns, så tre personer som hittar buggar
+når dig nu.
 
 1. **Supabase-panelen och Zens stämpling** — användarens eget arbete, men
-   påminn.
-2. **E8.9 kursinnehåll** — åtta kurser ska skrivas. Ingen kod, men det är det
+   påminn. Se listan ovan.
+2. **X7 pilot** med tre personer i två veckor innan bredd. Inget tekniskt
+   blockerar den längre. Peka pilotdeltagarna på "Rapportera fel" i
+   sidopanelen — det är den vägen som gör piloten mätbar.
+3. **E8.9 kursinnehåll** — åtta kurser ska skrivas. Ingen kod, men det är det
    som gör att 25 säljare kan lära sig samma sak utan att du upprepar dig. Nu
    går det dessutom att lägga ett rollspel sist i varje kurs.
-3. **X7 pilot** med tre personer i två veckor innan bredd.
-4. **E9.1 avtalsmallar** — går att bygga utan A14. E9.2 e-signering är fortsatt
-   blockerad.
-5. **E0.6 felrapportering** bör ligga före piloten. Tre personer som hittar
-   buggar utan att de når dig är en pilot som inte mäter något.
-6. **E5.3 / X3** — startsidan under 1,5 s på 4G, aldrig mätt.
-7. **E5.7 resten**: toast nere till höger med ångra efter en åtgärd.
-8. **E10 M7 rekrytering**, ~4 veckor, när ovanstående är gjort.
+4. **Skriv den första avtalsmallen.** `/avtal/mallar/ny`. Modulen är byggd men
+   det finns ingen mall, och utan en publicerad mall går det inte att skapa ett
+   avtal. Det är den enda av de nya funktionerna som inte gör något förrän du
+   matat in innehåll.
+5. **Personnumret i anställningsavtalet — ett beslut som är ditt.** Navet lagrar
+   inga personnummer (K27), så det utskrivna avtalet har en rad som fylls i för
+   hand. Det går att ändra, men då är det K27-linjen som ska omprövas medvetet.
+   Jag har byggt så att den inte går att kringgå av misstag.
+6. **E10 M7 rekrytering**, ~4 veckor, när ovanstående är gjort.
+
+### Mindre saker som ligger och väntar
+
+- **Sök och stämpling är inte mätta** (X3). Startsidan är det.
+  `scripts/mat-startsidan.mjs` går att peka om.
+- **Inloggad TTFB från produktionen** saknas i 4G-mätningen. Kräver en riktig
+  session i en webbläsare; tills dess är 20 ms per våga uppskattat.
+- **E0.7** är delvis gjord: serverfel skrivs nu strukturerat. Nattjobben larmar
+  fortfarande inte av sig själva.
+- **Leta efter fler radräkningar i `tests/rls.mjs`** — se testavsnittet ovan.
+  Fyra har fallit, det finns troligen kvar några.
 
 ### Villkoren som styrde E15 gäller nu E13 provision
 
@@ -287,7 +403,12 @@ att bli tillfrågad.
 
 ### Obesvarat
 
-- **A14** e-signeringsleverantör. Blockerar E9.2, men inte E9.1.
+- **A14** e-signeringsleverantör. Blockerar E9.2. **E9.1 är byggd utan den**
+  (2026-08-22) och `contract` är förberedd — signeringen blir ett steg efter
+  `issued`.
 - **E15:** vem äger arbetsgivaravgift, pension och försäkringssatser.
 - **Q78–Q80** provision. Blockerar E13.
 - **A5** Inkio, **A6** dialer. Blockerar E11 och E12.
+- **Personnumret i anställningsavtalet.** Navet lagrar inget (K27), så
+  utskriften har en rad som fylls i för hand. Vill du ändra det är det
+  K27-linjen som ska omprövas, inte avtalsmodulen.

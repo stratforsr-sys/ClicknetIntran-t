@@ -43,8 +43,8 @@ förhållande till tillväxten.
 | E0.3 | Supabase eu-north-1, migrationsflöde med checksumma | KLAR |
 | E0.4 | RLS-mönster etablerat och verifierat mot anonym anslutning | KLAR |
 | E0.5 | Deploy från main till Vercel | KLAR |
-| E0.6 | **Sentry eller motsvarande felrapportering** | EJ PÅBÖRJAD |
-| E0.7 | **Strukturerad loggning och larm vid integrationsfel** | EJ PÅBÖRJAD |
+| E0.6 | **Sentry eller motsvarande felrapportering** | KLAR 2026-08-22 — **motsvarande, inte Sentry**: `error_report` i egen databas (0026). Skälen står i migrationen: K23 utan skriven P0.6, CSP:n, och att Sentrys larmväg är mejl som är pausat. `onRequestError` i `instrumentation.ts` fångar serversidan, `error.tsx` och `global-error.tsx` klienten — ingen felgräns fanns förut. `/fel/nytt` är öppen för alla inloggade |
+| E0.7 | **Strukturerad loggning och larm vid integrationsfel** | DELVIS sedan 2026-08-22 — `onRequestError` skriver varje serverfel till `error_report` OCH till Vercels logg med samma digest. Kvar: nattjobben och integrationerna larmar fortfarande inte av sig själva, och larmvägen ut ur navet är notisklockan eftersom mejl är pausat |
 | E0.8 | **Transaktionell e-post** från hej@clicknet.se med SPF, DKIM, DMARC (R13) | EJ PÅBÖRJAD |
 | E0.9 | **Testuppsättning**: minst ett test per modul som verifierar att fel roll får 0 rader (DoD p. 4) | KLAR för byggda moduler — `tests/rls.mjs` har ett eget avsnitt per modul och går mot riktiga databasen med riktiga inloggningar. **Varje ny modul lägger till sitt eget avsnitt**; punkten stängs aldrig, den följer med |
 | E0.10 | **Backup verifierad** genom testad återläsning, kvartalsvis rutin | EJ PÅBÖRJAD |
@@ -153,8 +153,8 @@ Q71 besvarades 2026-08-21: **flera personer rekryterar**, så epicet är inte ak
 
 | # | Vad | Status |
 |---|---|---|
-| E9.1 | Avtalsmallar för anställning, kopplade till upplägg av anställd | EJ PÅBÖRJAD |
-| E9.2 | E-signering — leverantör ej vald (A14) | BLOCKERAD — A14 fortfarande obesvarad 2026-08-21. **E9.1 avtalsmallar går att bygga utan den** |
+| E9.1 | Avtalsmallar för anställning, kopplade till upplägg av anställd | KLAR 2026-08-22 — `contract_template` och `contract` (0028). Avtalet **fryser** malltexten vid utfärdande och går inte att skriva om. Lönen skrivs in i avtalet, läses aldrig ur `salary_basis` (K26 + riktningen). En ofylld platshållare renderas aldrig som tomt. Utskrift via webbläsaren; ingen PDF-generator togs in. Länk från `/personal/[id]` |
+| E9.2 | E-signering — leverantör ej vald (A14) | BLOCKERAD — A14 fortfarande obesvarad. E9.1 är byggd utan den (2026-08-22) och `contract` är förberedd: signeringen blir ett steg efter `issued`, och inget i schemat förutsätter leverantör |
 | E9.3 | Anställningsavtalet ska reglera Q78 och Q79 | BLOCKERAD av P0.12 |
 
 ---
@@ -263,11 +263,11 @@ uppsägningstidsberäkning i en semesteransökan hade varit fel plats för rätt
 |---|---|---|---|
 | E5.1 | AC-11.1 | Startsidan visar stämpling, mina uppgifter, nya rutiner, obesvarade kvittenser, pågående kurser | KLAR — inklusive ärenden som väntar på svar |
 | E5.2 | AC-11.2 | Nyhetsinlägg med målgruppsstyrning | KLAR — `news_post`, samma `matches_audience` som rutinerna. Roll och team, fäst överst, utkast |
-| E5.3 | AC-11.3 | Sidan laddar under 1,5 s på 4G | EJ PÅBÖRJAD |
+| E5.3 | AC-11.3 | Sidan laddar under 1,5 s på 4G | **MÄTT 2026-08-22, klarar kravet.** 762 ms på normalt 4G, 1 272 ms på trängt (228 ms marginal). `scripts/mat-startsidan.mjs` går att köra om. Mätt: 162 kB över nätet, 250 ms mellanvara, nio vågor mot riktiga databasen. Uppskattat: 20 ms per våga inifrån Vercel. **Inte mätt: inloggad TTFB från produktionen — kräver en riktig session i en webbläsare** |
 | E5.4 | §12 Q9 | Rollstyrd startsida: säljaren ser stämpling, chefen ser köer och avvikelser | KLAR — ordningen byter plats i trädet, inte med CSS |
 | E5.5 | §6 | **Bottennavigering under 768 px**: Hem, Sök, Stämpla, Mer | KLAR — stämpelposten bara när modulen är på |
 | E5.6 | §5.1 | Hopfällbar sidopanel med sparat läge per användare | KLAR — läget i en kaka, så servern vet det före första ritningen |
-| E5.7 | §5.7 | Notissystem nere till höger med ångra-möjlighet | DELVIS — klockan i toppraden är byggd (ärenden, nyheter, rutiner, kurser, målgruppsstyrt via RLS). Kvar: toast nere till höger med ångra efter en åtgärd |
+| E5.7 | §5.7 | Notissystem nere till höger med ångra-möjlighet | KLAR 2026-08-22 — klockan i toppraden plus kvitto nere till höger. **Ångra är en verklig invers åtgärd, inte en fördröjd skrivning**, så bara åtgärder med äkta invers får knappen: arkivera nyhet, avsluta felrapport, arkivera avtalsmall. Dispatchern gör om behörighetskontrollen |
 
 ---
 
@@ -357,7 +357,7 @@ Kräver Inkios API-dokumentation, autentiseringsmodell och webhook-events.
 |---|---|---|
 | X1 | **WCAG 2.1 AA**: kontrast, tangentbord, fokus, `aria-describedby` på formulärfel | PÅGÅR |
 | X2 | **375 px** fungerar för stämpling, ledighet, rutiner, kurser, ärenden | PÅGÅR |
-| X3 | Startsida under 1,5 s, sök under 500 ms, stämpling under 2 s | EJ PÅBÖRJAD |
+| X3 | Startsida under 1,5 s, sök under 500 ms, stämpling under 2 s | PÅGÅR — **startsidan mätt 2026-08-22 och klarar kravet**, se E5.3. Sök och stämpling är inte mätta. Verktyget finns i `scripts/mat-startsidan.mjs` och går att peka om |
 | X4 | 99,5 % drift 07–19 vardagar, stämpling med offline-fallback | EJ PÅBÖRJAD |
 | X5 | Signerade tidsbegränsade URL:er för alla filer | KLAR 2026-08-21 — 30 sekunder, och det finns bara en väg till en fil: `/filer/[id]`. Bucketen är stängd för användartokens av en **restriktiv** policy på `storage.objects`, som inte går att OR:a bort med en tillåtande policy |
 | X6 | Test som verifierar att fel roll får 0 rader — per modul | KLAR för byggda moduler, se E0.9. Samma svit, samma krav på varje ny modul |
@@ -372,8 +372,8 @@ Kräver Inkios API-dokumentation, autentiseringsmodell och webhook-events.
 | Fas | Epics | Veckor enligt PRD |
 |---|---|---|
 | Klart | E0 delvis, E1 delvis | — |
-| Fas 1 kvar | E1 rest, E2.5, E8.5/E8.8/E8.9, E5.3/E5.7, E6 | ~8 |
-| Fas 2 | E9, E10 (E7 helt klar sedan 2026-08-21) | ~6 |
+| Fas 1 kvar | E1 rest, E2.5, E8.5/E8.8/E8.9, E6 (E0.6, E5.3 och E5.7 klara 2026-08-22) | ~7 |
+| Fas 2 | E9.2 (blockerad av A14), E10 — E9.1 klar 2026-08-22, E7 klar 2026-08-21 | ~5 |
 | Fas 3 | E11, E12, E13 (E15 klar sedan 2026-08-21 utom E15.7) | ~11 |
 | **Totalt till fullt system** | | **10–12 månader vid 15 h/vecka** |
 
