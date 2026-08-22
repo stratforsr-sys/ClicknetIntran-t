@@ -83,6 +83,12 @@ export const KALLOR: Kalla[] = [
   // raden säger att just du satt i navet vid en viss tidpunkt och att något
   // gick fel för dig. Texten är dessutom dina egna ord.
   { tabell: "error_report", kolumn: "reporter_id", andamal: "Felrapporter du skickat och fel du råkat ut för" },
+
+  // 0028 E9.1. Ditt anställningsavtal. Raden bär den frysta avtalstexten och
+  // de värden som fylldes i — lön, befattning, uppsägningstid. Det är den
+  // mest närgångna uppgift navet har om en anställning, och den enda som
+  // personen själv skrivit under.
+  { tabell: "contract", kolumn: "employee_id", andamal: "Dina anställningsavtal" },
 ];
 
 /**
@@ -147,6 +153,13 @@ export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
 
   // 0026. Vem som tog hand om någon annans felrapport.
   { tabell: "error_report", kolumn: "handled_by", skal: "Vem som hanterade en felrapport" },
+
+  // 0028. Vem som skrev, utfärdade eller drog tillbaka någon annans avtal.
+  { tabell: "contract", kolumn: "created_by", skal: "Vem som skapade avtalet" },
+  { tabell: "contract", kolumn: "issued_by", skal: "Vem som utfärdade avtalet" },
+  { tabell: "contract", kolumn: "withdrawn_by", skal: "Vem som drog tillbaka avtalet" },
+  { tabell: "contract_template", kolumn: "created_by", skal: "Vem som skrev mallen" },
+  { tabell: "contract_template", kolumn: "updated_by", skal: "Vem som ändrade mallen" },
   { tabell: "cost_rate", kolumn: "created_by", skal: "Vem som satte satsen" },
   { tabell: "cost_calculation", kolumn: "calculated_by", skal: "Vem som körde beräkningen" },
   { tabell: "salary_basis", kolumn: "entered_by", skal: "Vem som matade in lönen" },

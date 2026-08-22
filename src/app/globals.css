@@ -220,3 +220,49 @@
   .prosa th { font-size: var(--text-micro); text-transform: uppercase; color: var(--color-ink-500); }
   .prosa hr { border: 0; border-top: 1px solid var(--color-canvas); margin: 32px 0; }
 }
+
+/* =============================================================================
+   Utskrift (E9.1)
+   =============================================================================
+   Kom med avtalen. Ett anstallningsavtal skrivs ut och skrivs under pa papper
+   sa lange E9.2 e-signering ar blockerad av A14, och det som hamnar pa
+   papperet ska vara dokumentet — inte sidopanelen, notisklockan och
+   bottenraden.
+
+   Reglerna sitter pa elementtyp och inte pa en klass, sa att en vy som byggs
+   senare far dem utan att nagon kommer ihag att lagga till dem. Skalet ar
+   alltid samma tre element (Sidebar, Topbar, Bottennav), och de ar de enda
+   aside/header/nav pa toppniva i (app)-layouten.
+
+   Innehallsytans vanstermarginal kommer fran sidopanelen och maste nollas
+   ocksa — annars trycks texten in mot hoger kant pa papperet.
+   ============================================================================= */
+@media print {
+  aside,
+  header,
+  body > div > div > nav {
+    display: none !important;
+  }
+
+  body > div > div {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  main {
+    padding-bottom: 0 !important;
+    max-width: none !important;
+  }
+
+  /* Bakgrundsfarger trycks inte som standard, och en yta som ar vit pa
+     skarmen ska vara vit pa papperet — inte gra med en osynlig skugga. */
+  body {
+    background: #fff !important;
+  }
+
+  /* En underskriftsrad far aldrig hamna ensam pa en ny sida, och en rubrik
+     far inte sta sist pa en sida med brodtexten pa nasta. */
+  h1, h2, h3 {
+    break-after: avoid;
+  }
+}

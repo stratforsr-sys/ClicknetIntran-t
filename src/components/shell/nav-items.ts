@@ -54,6 +54,23 @@ export function navFor(user: CurrentUser | null, stamplingPa: boolean): NavItem[
   if (canManageEmployees(user) || hasRole(user, "ceo", "team_lead")) {
     items.push({ href: "/personal", label: "Personal", ikon: "personal" });
   }
+
+  /**
+   * E9.1. Posten galler tva olika saker beroende pa vem som ser den, och det
+   * ar avsiktligt att den finns for bada.
+   *
+   * Den som hanterar avtal ser mallarna och alla avtal. Alla andra ser sina
+   * EGNA utfardade avtal, och att kunna lasa sitt eget anstallningsavtal utan
+   * att be nagon leta upp det ar hela nyttan for dem som inte ar chefer.
+   * RLS i 0028 avgor skillnaden.
+   */
+  if (user?.employee) {
+    items.push({
+      href: "/avtal",
+      label: hasRole(user, "sales_manager", "ceo", "admin") ? "Avtal" : "Mitt avtal",
+      ikon: "rutiner",
+    });
+  }
   if (hasRole(user, "sales_manager", "ceo", "admin")) {
     items.push({ href: "/logg", label: "Händelselogg", ikon: "logg" });
   }

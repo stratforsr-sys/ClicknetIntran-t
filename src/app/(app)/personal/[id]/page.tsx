@@ -212,6 +212,19 @@ export default async function AnstalldSida({ params }: { params: Promise<{ id: s
               <Button type="submit" size="sm">Markera som aktiv</Button>
             </form>
           )}
+
+          {/* E9.1. Vagen till avtalet gar via personen, for det ar har man ar
+              nar man lagger upp nagon. Listan over alla avtal ligger pa /avtal. */}
+          {farHantera && !avslutad && (
+            <p className="mt-6 text-small text-ink-500">
+              <Link
+                href={`/avtal/nytt?person=${a.id}`}
+                className="text-brand-700 underline underline-offset-2"
+              >
+                Skapa anställningsavtal
+              </Link>
+            </p>
+          )}
         </Card>
 
         <Card>

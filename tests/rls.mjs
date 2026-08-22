@@ -2050,8 +2050,124 @@ console.log("\n\x1b[1mE0.6: felrapporter nar den som ska laga dem, och ingen ann
   await db.query(`delete from error_report where path like $1`, [SOKVAG + "%"]);
 }
 
+// =============================================================================
+// E9.1 Avtalsmallar (0028)
+// =============================================================================
+
+console.log("\n\x1b[1mE9.1: mallen ar bolagets, avtalet ar personens — och forst nar det ar utfardat\x1b[0m");
+{
+  const { rows: [mall] } = await db.query(
+    `insert into contract_template (slug, title, body_md, status, created_by)
+     values ('rlstest-mall', 'Testmall', 'Hej {{fornamn}}', 'published', $1::uuid) returning id`,
+    [chef.id],
+  );
+
+  // Ett UTKAST om Anna.
+  const { rows: [utkast] } = await db.query(
+    `insert into contract (employee_id, template_id, template_slug, title, body_md, variables, status, created_by)
+     values ($1::uuid, $2::uuid, 'rlstest-mall', 'Testmall', 'Hej Anna', '{"fornamn":"Anna"}'::jsonb, 'draft', $3::uuid)
+     returning id`,
+    [saljareA.id, mall.id, chef.id],
+  );
+
+  const ser = async (tok, tabell, id) => (await las(tok, tabell, `select=id&id=eq.${id}`)).length;
+
+  // Mallen ar bolagets avtalsvillkor i klartext. En publicerad mall som varje
+  // saljare kan lasa ar en forhandlingsposition som lackt.
+  ok("saljaren ser inte mallen", (await ser(tA, "contract_template", mall.id)) === 0);
+  ok("teamledaren ser inte mallen", (await ser(tC, "contract_template", mall.id)) === 0);
+  ok("ekonomi ser inte mallen", (await ser(tE, "contract_template", mall.id)) === 0);
+  ok("saljchefen ser mallen", (await ser(tD, "contract_template", mall.id)) === 1);
+
+  /**
+   * Kravet som ar hela poangen med statusen.
+   *
+   * Ett utkast dar nagon provar sig fram med en siffra far inte ligga synligt
+   * for den siffran handlar om. Anna ska se sitt avtal nar det ar ett
+   * ERBJUDANDE, inte medan det ar ett utkast.
+   */
+  ok("Anna ser INTE sitt avtal medan det ar utkast", (await ser(tA, "contract", utkast.id)) === 0);
+  ok("saljchefen ser utkastet", (await ser(tD, "contract", utkast.id)) === 1);
+
+  await db.query(
+    `update contract set status = 'issued', issued_at = now(), issued_by = $2::uuid where id = $1::uuid`,
+    [utkast.id, chef.id],
+  );
+
+  ok("nar det ar utfardat ser Anna det", (await ser(tA, "contract", utkast.id)) === 1);
+  ok("men Bertil ser det aldrig", (await ser(tB, "contract", utkast.id)) === 0);
+  // Teamledaren leder sitt team, hon forhandlar inte deras loner.
+  ok("och inte heller teamledaren", (await ser(tC, "contract", utkast.id)) === 0);
+  ok("och inte ekonomi", (await ser(tE, "contract", utkast.id)) === 0);
+
+  // Ett utfardat avtal ar ett bevis pa vad man kom overens om. Triggern i 0028.
+  const skrivOm = await nekarSql(
+    `update contract set body_md = 'Nagot annat' where id = $1::uuid`,
+    [utkast.id],
+  );
+  ok("ett utfardat avtal gar inte att skriva om", skrivOm !== null, skrivOm ? "" : "SLAPPTE IGENOM");
+
+  const bytLon = await nekarSql(
+    `update contract set variables = '{"manadslon":"99999"}'::jsonb where id = $1::uuid`,
+    [utkast.id],
+  );
+  ok("och inte att andra varden i", bytLon !== null, bytLon ? "" : "SLAPPTE IGENOM");
+
+  const tillbakaTillUtkast = await nekarSql(
+    `update contract set status = 'draft' where id = $1::uuid`,
+    [utkast.id],
+  );
+  ok("och inte att gora till utkast igen", tillbakaTillUtkast !== null, tillbakaTillUtkast ? "" : "SLAPPTE IGENOM");
+
+  // Men det ska ga att dra tillbaka. En sparr som inte gar att oppna at ratt
+  // hall ar ett oupptackt fel.
+  const drarTillbaka = await nekarSql(
+    `update contract set status = 'withdrawn', withdrawn_at = now(), withdrawn_by = $2::uuid
+      where id = $1::uuid`,
+    [utkast.id, chef.id],
+  );
+  ok("men det gar att dra tillbaka", drarTillbaka === null, drarTillbaka ?? "");
+
+  /**
+   * K27-linjen, forsvarad dar den annars hade brutits.
+   *
+   * `variables` ar jsonb, alltsa precis det stalle dar ett personnummer kan
+   * smyga in utan att schemakontrollen langre ned i den har sviten ser det.
+   */
+  const pnr = await nekarSql(
+    `insert into contract (employee_id, template_slug, title, body_md, variables, created_by)
+     values ($1::uuid, 'rlstest-mall', 'T', 'text', '{"nagot":"850101-1234"}'::jsonb, $2::uuid)`,
+    [saljareA.id, chef.id],
+  );
+  ok("ett personnummer i variables nekas", pnr !== null, pnr ? "" : "SLAPPTE IGENOM");
+
+  const pnrUtanStreck = await nekarSql(
+    `insert into contract (employee_id, template_slug, title, body_md, variables, created_by)
+     values ($1::uuid, 'rlstest-mall', 'T', 'text', '{"nagot":"198501011234"}'::jsonb, $2::uuid)`,
+    [saljareA.id, chef.id],
+  );
+  ok("aven utan bindestreck", pnrUtanStreck !== null, pnrUtanStreck ? "" : "SLAPPTE IGENOM");
+
+  // Och ett vanligt belopp ska sjalvklart ga igenom.
+  const belopp = await nekarSql(
+    `insert into contract (employee_id, template_slug, title, body_md, variables, created_by)
+     values ($1::uuid, 'rlstest-mall', 'T', 'text', '{"manadslon":"32000"}'::jsonb, $2::uuid)`,
+    [saljareA.id, chef.id],
+  );
+  ok("men en vanlig manadslon gar igenom", belopp === null, belopp ?? "");
+
+  const skriv = await fetch(`${URL}/rest/v1/contract`, {
+    method: "POST", headers: som(tD),
+    body: JSON.stringify({ employee_id: saljareA.id, template_slug: "x", title: "x", body_md: "x" }),
+  });
+  ok("inte ens saljchefen skriver ett avtal direkt mot API:t", !skriv.ok, `HTTP ${skriv.status}`);
+
+  await db.query(`delete from contract where employee_id = $1::uuid`, [saljareA.id]);
+  await db.query(`delete from contract_template where slug = 'rlstest-mall'`);
+}
+
 console.log("\n\x1b[1mAnonym anslutning\x1b[0m");
-for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate", "news_post", "notification_seen", "absence_type", "absence_policy", "absence_blackout", "staffing_cap", "absence_balance", "absence_request", "absence_call_order", "sick_report", "sick_deadline", "absence_reminder", "calendar_feed", "file_object", "file_access_log", "roleplay_criterion", "roleplay_submission", "roleplay_score", "cost_rate", "salary_basis", "revenue_entry", "cost_calculation", "error_report"]) {
+for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate", "news_post", "notification_seen", "absence_type", "absence_policy", "absence_blackout", "staffing_cap", "absence_balance", "absence_request", "absence_call_order", "sick_report", "sick_deadline", "absence_reminder", "calendar_feed", "file_object", "file_access_log", "roleplay_criterion", "roleplay_submission", "roleplay_score", "cost_rate", "salary_basis", "revenue_entry", "cost_calculation", "error_report", "contract", "contract_template"]) {
   const r = await fetch(`${URL}/rest/v1/${t}?select=*`, { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` } });
   const j = await r.json();
   ok(`${t} ger inga rader anonymt`, !Array.isArray(j) || j.length === 0, Array.isArray(j) ? `${j.length} rader` : `HTTP ${r.status}`);
