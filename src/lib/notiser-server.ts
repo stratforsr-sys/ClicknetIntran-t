@@ -37,6 +37,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
     { data: paminnelser },
     { data: franvarotyper },
     { data: rollspel },
+    { data: felrapporter },
   ] = await Promise.all([
     supabase.from("notification_seen").select("seen_at").eq("employee_id", mig).maybeSingle(),
     supabase
@@ -104,6 +105,14 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
       .from("roleplay_submission")
       .select("id, employee_id, submitted_at, graded_at, attempt_id, course(title, slug)")
       .order("submitted_at", { ascending: false })
+      .limit(MAX_NOTISER),
+    // E0.6. Samma monster igen: RLS i 0026 ger chefen alla rader och alla
+    // andra bara sina egna, sa fragan behover inget rollfilter. Vad raden
+    // BETYDER avgors nedan av vem som rapporterade den.
+    supabase
+      .from("error_report")
+      .select("id, kind, path, body, message, digest, status, blocking, reporter_id, first_seen_at, handled_at")
+      .order("last_seen_at", { ascending: false })
       .limit(MAX_NOTISER),
   ]);
 
@@ -316,6 +325,52 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
       href: "/franvaro",
       tidpunkt: p.created_at,
       olast: arNy(p.created_at),
+    });
+  }
+
+  /**
+   * E0.6. Notisen betyder olika saker at olika hall, och skillnaden gors utan
+   * att fraga efter rollen:
+   *
+   *   - ar raden NAGON ANNANS kan bara den som far hantera kon se den alls
+   *     (RLS i 0026), sa "ny rapport" ar det enda den kan betyda,
+   *   - ar raden DIN egen ar en ny rapport bara ett eko av det du nyss
+   *     skickade. Det som ar varr att veta ar att nagon svarat.
+   *
+   * Utan den asymmetrin hade rapportoren fatt en notis om sin egen rapport i
+   * samma sekund hon tryckte skicka, och kretsen som ska laga fel hade fatt en
+   * notis varje gang de sjalva avslutade nagot.
+   */
+  for (const f of felrapporter ?? []) {
+    const mitt = f.reporter_id === mig;
+
+    if (mitt) {
+      if (f.status === "new" || !f.handled_at) continue;
+      notiser.push({
+        id: `fel-svar-${f.id}`,
+        typ: "fel",
+        rubrik:
+          f.status === "closed" ? "Din felrapport är avslutad" : "Någon tittar på din felrapport",
+        detalj: f.path,
+        href: "/fel",
+        tidpunkt: f.handled_at,
+        olast: arNy(f.handled_at),
+      });
+      continue;
+    }
+
+    if (f.status !== "new") continue;
+    notiser.push({
+      id: `fel-${f.id}`,
+      typ: "fel",
+      rubrik: f.blocking ? "Ett fel stoppade någon" : "Nytt fel rapporterat",
+      detalj:
+        f.kind === "manual"
+          ? `${namn.get(f.reporter_id ?? "") ?? "En medarbetare"} · ${f.path}`
+          : `Navet fångade ett fel på ${f.path}`,
+      href: "/fel",
+      tidpunkt: f.first_seen_at,
+      olast: arNy(f.first_seen_at),
     });
   }
 

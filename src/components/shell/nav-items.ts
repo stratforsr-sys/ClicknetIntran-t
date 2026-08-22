@@ -57,6 +57,23 @@ export function navFor(user: CurrentUser | null, stamplingPa: boolean): NavItem[
   if (hasRole(user, "sales_manager", "ceo", "admin")) {
     items.push({ href: "/logg", label: "Händelselogg", ikon: "logg" });
   }
+
+  /**
+   * E0.6. Posten star sist och galler ALLA som har en anstalldrad.
+   *
+   * Det ar avsiktligt att saljaren ser den. En felrapportering som bara
+   * cheferna hittar till rapporterar bara de fel cheferna sjalva ramlar pa,
+   * och X7-piloten gar ut pa tre personer som inte ar chefer. Sidan visar
+   * olika saker beroende pa vem som oppnar den — RLS avgor — men vagen dit
+   * ar densamma for alla.
+   */
+  if (user?.employee) {
+    items.push({
+      href: "/fel",
+      label: hasRole(user, "sales_manager", "ceo", "admin") ? "Fel" : "Rapportera fel",
+      ikon: "varning",
+    });
+  }
   if (hasRole(user, "admin")) {
     items.push({ href: "/design", label: "Designsystem", ikon: "design" });
   }

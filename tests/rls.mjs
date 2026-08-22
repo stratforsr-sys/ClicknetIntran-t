@@ -1346,29 +1346,40 @@ console.log("\n\x1b[1mLedighetsansokan: egen alltid, chefens folk, ingen annan\x
 console.log("\n\x1b[1mAC-3.19: den anstallda ser sin lucka forst\x1b[0m");
 {
   // En paminnelse som annu inte ar synlig for chefen.
-  await db.query(
+  const { rows: [paminnelse] } = await db.query(
     `insert into absence_reminder (employee_id, work_date, visible_to_manager_from)
-     values ($1::uuid, current_date - 3, now() + interval '12 hours')`,
+     values ($1::uuid, current_date - 3, now() + interval '12 hours') returning id`,
     [saljareA.id],
   );
 
-  ok("Anna ser sin egen paminnelse direkt", (await las(tA, "absence_reminder")).length === 1);
-  ok(
-    "Cecilia ser den inte an — fordrojningen har inte gatt ut",
-    (await las(tC, "absence_reminder")).length === 0,
-  );
-  ok("David ser den inte heller", (await las(tD, "absence_reminder")).length === 0);
+  /**
+   * Fragan stalls PA PROVRADENS ID.
+   *
+   * Kontrollerna har raknade forut rader i hela tabellen, och foll 2026-08-22
+   * nar nattjobbet lagt in riktiga paminnelser for Zen och Simon: David ar
+   * saljchef och ser ALLA, sa `length === 0` blev falskt av att funktionen
+   * anvands pa riktigt.
+   *
+   * Det ar fjarde gangen samma sort — se NASTA_SESSION. Regeln ar: en roll som
+   * ser alla rader far aldrig provas med en radrakning.
+   */
+  const serPaminnelse = async (tok) =>
+    (await las(tok, "absence_reminder", `select=id&id=eq.${paminnelse.id}`)).length;
+
+  ok("Anna ser sin egen paminnelse direkt", (await serPaminnelse(tA)) === 1);
+  ok("Cecilia ser den inte an — fordrojningen har inte gatt ut", (await serPaminnelse(tC)) === 0);
+  ok("David ser den inte heller", (await serPaminnelse(tD)) === 0);
 
   // Nar fordrojningen gatt ut ska den synas. En sparr som inte gar att oppna
   // ar inte en sparr utan ett oupptackt fel — samma resonemang som provet av
   // raststamplingen och av losenordstvanget.
   await db.query(
     `update absence_reminder set visible_to_manager_from = now() - interval '1 hour'
-      where employee_id = $1::uuid`,
-    [saljareA.id],
+      where id = $1::uuid`,
+    [paminnelse.id],
   );
-  ok("efter fordrojningen ser Cecilia den", (await las(tC, "absence_reminder")).length === 1);
-  ok("Bertil ser den aldrig", (await las(tB, "absence_reminder")).length === 0);
+  ok("efter fordrojningen ser Cecilia den", (await serPaminnelse(tC)) === 1);
+  ok("Bertil ser den aldrig", (await serPaminnelse(tB)) === 0);
 }
 
 console.log("\n\x1b[1mSaldon och regler\x1b[0m");
@@ -1926,8 +1937,121 @@ console.log("\n\x1b[1mGlobal sokning: RLS avgor, och fragan gar att stalla\x1b[0
   }
 }
 
+// =============================================================================
+// E0.6 Felrapportering (0026)
+// =============================================================================
+
+console.log("\n\x1b[1mE0.6: felrapporter nar den som ska laga dem, och ingen annan\x1b[0m");
+{
+  // Egen sokvag sa att avsnittet kan stada efter sig utan att rora nagot
+  // riktigt fel som ligger i tabellen.
+  const SOKVAG = "/rlstest/fel";
+
+  const { rows: [minRapport] } = await db.query(
+    `insert into error_report (kind, path, body, reporter_id, blocking)
+     values ('manual', $1, 'Knappen gjorde ingenting', $2::uuid, true) returning id`,
+    [SOKVAG, saljareA.id],
+  );
+
+  // Automatisk rapport utan avsandare — felet intraffade for nagon som inte
+  // var inloggad.
+  const { rows: [anonym] } = await db.query(
+    `insert into error_report (kind, path, digest, message)
+     values ('automatic', $1, 'testdigest1', 'Trasigt anrop') returning id`,
+    [SOKVAG + "/auto"],
+  );
+
+  // Fragan stalls PA PROVRADENS ID och inte pa antalet rader i tabellen.
+  // En kontroll som lyder length === 1 for David, som ser ALLA rader, blir rod
+  // i samma stund nagon rapporterar ett riktigt fel. Det har fallt tre ganger
+  // forut i den har sviten — se NASTA_SESSION.
+  const ser = async (tok, id) => (await las(tok, "error_report", `select=id&id=eq.${id}`)).length;
+
+  ok("rapportoren ser sin egen rapport", (await ser(tA, minRapport.id)) === 1);
+  ok("en kollega ser den inte", (await ser(tB, minRapport.id)) === 0);
+  // Cecilia LEDER Anna och ser hennes franvaro och hennes rollspel. Kretsen for
+  // felrapporter foljer inte chefslinjen utan handelseloggen — teamledaren ska
+  // inte kunna lasa vad hennes saljare tycker ar trasigt i navet.
+  ok("teamledaren ser den inte, trots att hon leder rapportoren", (await ser(tC, minRapport.id)) === 0);
+  ok("ekonomi ser den inte", (await ser(tE, minRapport.id)) === 0);
+  ok("saljchefen ser den", (await ser(tD, minRapport.id)) === 1);
+
+  ok("en rapport utan avsandare ar osynlig for saljaren", (await ser(tA, anonym.id)) === 0);
+  ok("men syns for den som ska laga den", (await ser(tD, anonym.id)) === 1);
+
+  // Grupperingen. Samma digest och samma sokvag ska bli EN rad med en raknare.
+  // Utan det skriver en kraschloop tusen rader och begraver nasta bugg.
+  await db.query(`select registrera_fel($1,$2,$3)`, ["grupp1", SOKVAG + "/g", "Samma fel"]);
+  await db.query(`select registrera_fel($1,$2,$3)`, ["grupp1", SOKVAG + "/g", "Samma fel"]);
+  await db.query(`select registrera_fel($1,$2,$3)`, ["grupp1", SOKVAG + "/annan", "Samma fel"]);
+
+  const { rows: grupp } = await db.query(
+    `select path, occurrences from error_report where digest = 'grupp1' order by path`,
+  );
+  ok("samma fel pa samma sida blir en rad", grupp.length === 2, `${grupp.length} rader`);
+  ok("och raknas upp", grupp.find((g) => g.path.endsWith("/g"))?.occurrences === 2);
+  ok("samma fel pa en annan sida ar en egen rad", grupp.find((g) => g.path.endsWith("/annan"))?.occurrences === 1);
+
+  // Ett avslutat fel som kommer tillbaka ska INTE tyst atergaa till 'new' —
+  // men det ska synas att det kom tillbaka.
+  await db.query(`update error_report set status = 'closed' where digest = 'grupp1' and path = $1`, [SOKVAG + "/g"]);
+  await db.query(`select registrera_fel($1,$2,$3)`, ["grupp1", SOKVAG + "/g", "Samma fel"]);
+  const { rows: [ater] } = await db.query(
+    `select status, occurrences from error_report where digest = 'grupp1' and path = $1`,
+    [SOKVAG + "/g"],
+  );
+  ok("ett avslutat fel oppnas inte av sig sjalvt", ater.status === "closed");
+  ok("men raknaren gar upp sa att aterfallet syns", ater.occurrences === 3);
+
+  // 0002 punkt 2: PostgREST exponerar varje funktion i public som RPC. Utan
+  // revoke kunde vem som helst fylla kon med skrap.
+  const rpc = await fetch(`${URL}/rest/v1/rpc/registrera_fel`, {
+    method: "POST", headers: som(tA),
+    body: JSON.stringify({ p_digest: "fusk", p_path: "/fusk" }),
+  });
+  ok("registrera_fel gar inte att anropa som inloggad", !rpc.ok, `HTTP ${rpc.status}`);
+
+  /**
+   * Samma prov pa log_audit, och det ar inte overflodigt.
+   *
+   * Provet ovan foll forsta gangen det kordes, och skalet var att revoken i
+   * 0026 var skriven som den i 0002: `from anon, authenticated`. Det tar bort
+   * explicita granter, inte den till PUBLIC som Postgres ger varje ny funktion
+   * — sa BADA funktionerna gick att anropa. 0027 stanger det.
+   *
+   * En saljare som kan skriva i handelseloggen gor loggen obrukbar som bevis,
+   * vilket ar precis vad AC-12.1 behover den till.
+   */
+  const loggfusk = await fetch(`${URL}/rest/v1/rpc/log_audit`, {
+    method: "POST", headers: som(tA),
+    body: JSON.stringify({ p_action: "fusk.event" }),
+  });
+  ok("log_audit gar inte att anropa som inloggad", !loggfusk.ok, `HTTP ${loggfusk.status}`);
+
+  const skriv = await fetch(`${URL}/rest/v1/error_report`, {
+    method: "POST", headers: som(tA),
+    body: JSON.stringify({ kind: "manual", path: "/x", body: "text" }),
+  });
+  ok("ingen skriver en rapport direkt mot API:t", !skriv.ok, `HTTP ${skriv.status}`);
+
+  // Ingen far heller stanga sin egen rapport for att slippa fragorna.
+  const stang = await fetch(`${URL}/rest/v1/error_report?id=eq.${minRapport.id}`, {
+    method: "PATCH", headers: som(tA),
+    body: JSON.stringify({ status: "closed" }),
+  });
+  ok("rapportoren kan inte avsluta sin egen rapport", !stang.ok, `HTTP ${stang.status}`);
+
+  // Villkoren i 0026.
+  const utanText = await nekarSql(`insert into error_report (kind, path) values ('manual', '/x')`);
+  ok("en manuell rapport utan text nekas", utanText !== null, utanText ? "" : "SLAPPTE IGENOM");
+  const utanDigest = await nekarSql(`insert into error_report (kind, path) values ('automatic', '/x')`);
+  ok("en automatisk rapport utan digest nekas", utanDigest !== null, utanDigest ? "" : "SLAPPTE IGENOM");
+
+  await db.query(`delete from error_report where path like $1`, [SOKVAG + "%"]);
+}
+
 console.log("\n\x1b[1mAnonym anslutning\x1b[0m");
-for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate", "news_post", "notification_seen", "absence_type", "absence_policy", "absence_blackout", "staffing_cap", "absence_balance", "absence_request", "absence_call_order", "sick_report", "sick_deadline", "absence_reminder", "calendar_feed", "file_object", "file_access_log", "roleplay_criterion", "roleplay_submission", "roleplay_score", "cost_rate", "salary_basis", "revenue_entry", "cost_calculation"]) {
+for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate", "news_post", "notification_seen", "absence_type", "absence_policy", "absence_blackout", "staffing_cap", "absence_balance", "absence_request", "absence_call_order", "sick_report", "sick_deadline", "absence_reminder", "calendar_feed", "file_object", "file_access_log", "roleplay_criterion", "roleplay_submission", "roleplay_score", "cost_rate", "salary_basis", "revenue_entry", "cost_calculation", "error_report"]) {
   const r = await fetch(`${URL}/rest/v1/${t}?select=*`, { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` } });
   const j = await r.json();
   ok(`${t} ger inga rader anonymt`, !Array.isArray(j) || j.length === 0, Array.isArray(j) ? `${j.length} rader` : `HTTP ${r.status}`);

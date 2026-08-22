@@ -12,7 +12,7 @@
  * brydde sig om.
  */
 
-export type Notistyp = "arende" | "nyhet" | "rutin" | "kurs" | "franvaro";
+export type Notistyp = "arende" | "nyhet" | "rutin" | "kurs" | "franvaro" | "fel";
 
 export type Notis = {
   /** Stabil over sidladdningar — den bar "last"-markeringen medan panelen ar oppen. */
@@ -32,6 +32,7 @@ export const TYP_ETIKETT: Record<Notistyp, string> = {
   rutin: "Rutin",
   kurs: "Utbildning",
   franvaro: "Frånvaro",
+  fel: "Fel",
 };
 
 export const TYP_IKON: Record<Notistyp, string> = {
@@ -40,6 +41,7 @@ export const TYP_IKON: Record<Notistyp, string> = {
   rutin: "rutiner",
   kurs: "utbildning",
   franvaro: "klocka",
+  fel: "varning",
 };
 
 /**

@@ -77,6 +77,12 @@ export const KALLOR: Kalla[] = [
   { tabell: "salary_basis", kolumn: "employee_id", andamal: "Din inmatade månadslön" },
   { tabell: "cost_calculation", kolumn: "employee_id", andamal: "Beräknad lönekostnad per period" },
   { tabell: "revenue_entry", kolumn: "employee_id", andamal: "Inmatad intäkt per period" },
+
+  // 0026 E0.6. En felrapport bär vad du skrev, vilken sida du var på och när.
+  // Att den är teknisk gör den inte till något annat än en uppgift om dig:
+  // raden säger att just du satt i navet vid en viss tidpunkt och att något
+  // gick fel för dig. Texten är dessutom dina egna ord.
+  { tabell: "error_report", kolumn: "reporter_id", andamal: "Felrapporter du skickat och fel du råkat ut för" },
 ];
 
 /**
@@ -138,6 +144,9 @@ export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
   { tabell: "file_object", kolumn: "removed_by", skal: "Vem som tog bort filen" },
   { tabell: "roleplay_submission", kolumn: "graded_by", skal: "Vem som bedömde andras rollspel" },
   { tabell: "cost_rate", kolumn: "owner_id", skal: "Vem som äger en sats (K28)" },
+
+  // 0026. Vem som tog hand om någon annans felrapport.
+  { tabell: "error_report", kolumn: "handled_by", skal: "Vem som hanterade en felrapport" },
   { tabell: "cost_rate", kolumn: "created_by", skal: "Vem som satte satsen" },
   { tabell: "cost_calculation", kolumn: "calculated_by", skal: "Vem som körde beräkningen" },
   { tabell: "salary_basis", kolumn: "entered_by", skal: "Vem som matade in lönen" },
