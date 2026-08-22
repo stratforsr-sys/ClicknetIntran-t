@@ -9,6 +9,37 @@
  *   DATABASE_URL=... SUPABASE_URL=... SUPABASE_SECRET_KEY=... node tests/rls.mjs
  *
  * Testanvandarna skapas och raderas av testet. Prefix: rlstest+
+ *
+ * ---------------------------------------------------------------------------
+ * REGELN SOM HAR BRUTITS FYRA GANGER — las den innan du skriver en ny kontroll
+ * ---------------------------------------------------------------------------
+ *
+ * En kontroll far ALDRIG rakna rader i en hel tabell for en roll vars RLS
+ * slapper igenom fler rader an provets egna. Skriv i stallet fragan pa
+ * PROVRADENS ID:
+ *
+ *     // Fel — raknar aven driftens rader
+ *     ok("David ser den", (await las(tD, "sick_report")).length === 1);
+ *
+ *     // Ratt — provar policyn, inte hur manga rader tabellen rakar ha
+ *     ok("David ser den", (await las(tD, "sick_report", `id=eq.${id}&select=*`)).length === 1);
+ *
+ * Skalet ar inte teoretiskt. Fyra kontroller har fallit pa exakt det har, alla
+ * i samma stund navet borjade anvandas pa riktigt: kalenderflodet 2026-08-20
+ * (nagon skapade sitt flode), tva till 2026-08-21, och absence_reminder
+ * 2026-08-22 (nattjobbet la in riktiga paminnelser klockan 03:07). Provet var
+ * rott utan att nagot var trasigt, vilket ar det dyraste slaget av rott.
+ *
+ * TVA UNDANTAG, och bara tva:
+ *
+ *   1. `=== 0` gar alltid bra. Ser rollen fler rader an noll ar det ett verkligt
+ *      fel, oavsett var raden kom ifran. Det ar hela poangen med provet.
+ *   2. `>= n` gar bra nar det som provas ar att nagot alls slapps igenom.
+ *
+ * En roll som bara ser sina EGNA rader (Anna, Bertil) far raknas — provets
+ * anvandare skapas nyss och kan inte aga driftdata. En teamledare ser sitt
+ * folk, vilket i dag ar bara provets anvandare, men det ar en egenskap hos
+ * uppsattningen och inte hos policyn: fraga pa id aven dar.
  */
 import pg from "pg";
 
@@ -1251,16 +1282,19 @@ console.log("\n\x1b[1mAC-3.26: sjukdata nar varken ekonomi eller fel chef\x1b[0m
     [saljareA.id],
   );
 
-  await db.query(
+  const { rows: [frist] } = await db.query(
     `insert into sick_deadline (report_id, kind, due_on)
-     values ($1::uuid, 'certificate', current_date + 5)`,
+     values ($1::uuid, 'certificate', current_date + 5) returning id`,
     [anmalan.id],
   );
 
   const egen = await las(tA, "sick_report");
   ok("Anna ser sin egen sjukanmalan", egen.length === 1, `såg ${egen.length}`);
 
-  const ledarens = await las(tC, "sick_report");
+  // Pa id ocksa har. Cecilia ser sitt eget folk, och i dag bestar hennes krets
+  // bara av provets egna anvandare — men det ar en egenskap hos uppsattningen,
+  // inte hos policyn. Far hon en riktig medarbetare raknar listan hens rader.
+  const ledarens = await las(tC, "sick_report", `id=eq.${anmalan.id}&select=*`);
   ok("Cecilia ser den — hon leder Anna", ledarens.length === 1, `såg ${ledarens.length}`);
 
   // Fragan pa id och inte pa hela listan: David ser ALL sjukfranvaro i navet,
@@ -1300,7 +1334,7 @@ console.log("\n\x1b[1mAC-3.26: sjukdata nar varken ekonomi eller fel chef\x1b[0m
   const fristEkonomi = await las(tE2, "sick_deadline");
   ok("fristerna foljer anmalan — ekonomi ser 0", fristEkonomi.length === 0, `såg ${fristEkonomi.length}`);
 
-  const fristLedare = await las(tC, "sick_deadline");
+  const fristLedare = await las(tC, "sick_deadline", `id=eq.${frist.id}&select=*`);
   ok("Cecilia ser fristen", fristLedare.length === 1, `såg ${fristLedare.length}`);
 
   await db.query(`delete from employee_permission where employee_id = $1::uuid`, [ekonomi.id]);
@@ -1315,7 +1349,10 @@ console.log("\n\x1b[1mLedighetsansokan: egen alltid, chefens folk, ingen annan\x
   );
 
   ok("Anna ser sin ansokan", (await las(tA, "absence_request")).length === 1);
-  ok("Cecilia ser den som ledare", (await las(tC, "absence_request")).length === 1);
+  ok(
+    "Cecilia ser den som ledare",
+    (await las(tC, "absence_request", `id=eq.${ansokan.id}&select=*`)).length === 1,
+  );
   // Pa id, inte pa listan: saljchefen ser alla ansokningar i navet, och den
   // forsta riktiga semesteransokan skulle annars falla provet.
   ok(
@@ -1384,14 +1421,17 @@ console.log("\n\x1b[1mAC-3.19: den anstallda ser sin lucka forst\x1b[0m");
 
 console.log("\n\x1b[1mSaldon och regler\x1b[0m");
 {
-  await db.query(
+  const { rows: [saldo] } = await db.query(
     `insert into absence_balance (employee_id, type_id, days, as_of, entered_by)
-     values ($1::uuid, 'vacation', 12.5, current_date, $2::uuid)`,
+     values ($1::uuid, 'vacation', 12.5, current_date, $2::uuid) returning id`,
     [saljareA.id, chef.id],
   );
 
   ok("Anna ser sitt eget saldo", (await las(tA, "absence_balance")).length === 1);
-  ok("Cecilia ser det som ledare", (await las(tC, "absence_balance")).length === 1);
+  ok(
+    "Cecilia ser det som ledare",
+    (await las(tC, "absence_balance", `id=eq.${saldo.id}&select=*`)).length === 1,
+  );
   // Saldot ar ett personalarende i dagar, inte ett loneunderlag i minuter.
   ok("Ekonomi ser 0 rader", (await las(tE, "absence_balance")).length === 0);
   ok("Bertil ser 0 rader", (await las(tB, "absence_balance")).length === 0);
@@ -1464,7 +1504,10 @@ console.log("\n\x1b[1mFiler: bucketen ar stangd och varje oppning skrivs (K36, X
   // Raden: samma krets som far se sjukanmalan, ingen annan.
   // ---------------------------------------------------------------------
   ok("Anna ser sitt eget intyg", (await las(tA, "file_object")).length === 1);
-  ok("Cecilia ser det — hon leder Anna", (await las(tC, "file_object")).length === 1);
+  ok(
+    "Cecilia ser det — hon leder Anna",
+    (await las(tC, "file_object", `id=eq.${fil.id}&select=*`)).length === 1,
+  );
   ok(
     "David ser det som saljchef",
     (await las(tD, "file_object", `id=eq.${fil.id}&select=*`)).length === 1,
@@ -1495,7 +1538,10 @@ console.log("\n\x1b[1mFiler: bucketen ar stangd och varje oppning skrivs (K36, X
   // det ar transparensen i K36, inte en bieffekt.
   // ---------------------------------------------------------------------
   ok("Anna ser vem som oppnat hennes intyg", (await las(tA, "file_access_log")).length === 1);
-  ok("Cecilia ser loggen", (await las(tC, "file_access_log")).length === 1);
+  ok(
+    "Cecilia ser loggen",
+    (await las(tC, "file_access_log", `file_id=eq.${fil.id}&select=*`)).length === 1,
+  );
   ok("Bertil ser 0 rader i loggen", (await las(tB, "file_access_log")).length === 0);
   ok("Ekonomi ser 0 rader i loggen", (await las(tE3, "file_access_log")).length === 0);
   await db.query(`delete from employee_permission where employee_id = $1::uuid`, [ekonomi.id]);
@@ -1844,7 +1890,10 @@ console.log("\n\x1b[1mRollspel: rubriken syns i forvag, och ingen bedomer utan a
   );
 
   ok("Anna ser sin egen inlamning", (await las(tA, "roleplay_submission")).length === 1);
-  ok("Cecilia ser den — hon leder Anna", (await las(tC, "roleplay_submission")).length === 1);
+  ok(
+    "Cecilia ser den — hon leder Anna",
+    (await las(tC, "roleplay_submission", `id=eq.${inlamning.id}&select=*`)).length === 1,
+  );
   ok("Bertil ser 0 rader", (await las(tB, "roleplay_submission")).length === 0);
   ok("Ekonomi ser 0 rader", (await las(tE, "roleplay_submission")).length === 0);
 
