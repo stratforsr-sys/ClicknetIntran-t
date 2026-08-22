@@ -2047,7 +2047,13 @@ console.log("\n\x1b[1mE0.6: felrapporter nar den som ska laga dem, och ingen ann
   const utanDigest = await nekarSql(`insert into error_report (kind, path) values ('automatic', '/x')`);
   ok("en automatisk rapport utan digest nekas", utanDigest !== null, utanDigest ? "" : "SLAPPTE IGENOM");
 
-  await db.query(`delete from error_report where path like $1`, [SOKVAG + "%"]);
+  // Stadar bade provraderna och de tva sokvagar som fuskproven ovan anvander.
+  // `/fusk` behovs for att provet SKA neka — men gor det inte det, vilket det
+  // inte gjorde forsta gangen det kordes, ligger raden kvar i produktionen och
+  // skrapar i felkon. Ett prov som lamnar spar nar det faller ar ett prov man
+  // slutar lita pa.
+  await db.query(`delete from error_report where path like $1 or path = '/fusk'`, [SOKVAG + "%"]);
+  await db.query(`delete from audit_log where action = 'fusk.event'`);
 }
 
 // =============================================================================
