@@ -14,6 +14,7 @@ import {
   tillSlug,
   trasigaKlamrar,
 } from "@/lib/avtal";
+import { sattKvitto } from "../angra/actions";
 
 export type AvtalState = { fel?: string };
 
@@ -162,6 +163,10 @@ export async function sattMallstatus(form: FormData): Promise<void> {
     object_type: "contract_template",
     object_id: mall.slug,
   });
+
+  if (status === "archived") {
+    await sattKvitto({ text: "Mallen är arkiverad.", angra: { handling: "mall.arkiverad", id } });
+  }
 
   revalidatePath("/avtal/mallar");
   revalidatePath(`/avtal/mallar/${mall.slug}`);

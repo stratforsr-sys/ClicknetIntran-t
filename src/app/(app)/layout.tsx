@@ -10,6 +10,7 @@ import { isConfigured } from "@/lib/env";
 import { kraverMfa, kvittoGiltigt, STEG2_KAKA } from "@/lib/mfa";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { hamtaNotiser } from "@/lib/notiser-server";
+import { TOAST_KAKA, franKaka } from "@/lib/toast";
 import { VantarPaAktivering } from "./VantarPaAktivering";
 import { EjKonfigurerad } from "./EjKonfigurerad";
 
@@ -50,6 +51,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // Lases med anvandarens egen token — malgruppsstyrningen sitter i RLS.
   const notiser = await hamtaNotiser(user);
 
+  // E5.7. Kvittot for den atgard som just utfordes. Ligger i en kortlivad kaka
+  // eftersom atgarderna ar server actions som omdirigerar — ett tillstand satt
+  // fore navigeringen hade forsvunnit med den.
+  const kvitto = franKaka((await cookies()).get(TOAST_KAKA)?.value);
+
   return (
     <Skal
       items={navFor(user, lage.stampling)}
@@ -58,6 +64,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       stamplingPa={lage.stampling}
       hopfalldFranStart={hopfalld}
       notiser={notiser}
+      kvitto={kvitto}
     >
       {children}
     </Skal>

@@ -7,6 +7,8 @@ import { Bottennav } from "./Bottennav";
 import { SIDOPANEL_KAKA } from "./sidopanel";
 import type { NavItem } from "./nav-items";
 import type { Notis } from "@/lib/notiser";
+import type { Kvitto } from "@/lib/toast";
+import { Toast } from "@/components/ui/Toast";
 
 export function Skal({
   items,
@@ -15,6 +17,7 @@ export function Skal({
   stamplingPa,
   hopfalldFranStart,
   notiser,
+  kvitto,
   children,
 }: {
   items: NavItem[];
@@ -23,6 +26,7 @@ export function Skal({
   stamplingPa: boolean;
   hopfalldFranStart: boolean;
   notiser: Notis[];
+  kvitto: Kvitto | null;
   children: ReactNode;
 }) {
   const [oppen, setOppen] = useState(false);
@@ -73,6 +77,9 @@ export function Skal({
         <main className="mx-auto max-w-[1440px] pb-28 md:pb-16">{children}</main>
       </div>
       <Bottennav stamplingPa={stamplingPa} oppnaMeny={() => setOppen(true)} />
+      {/* Sist i trädet och `fixed`: kvittot ligger over allt annat och ska
+          inte kunna hamna under bottenraden pa en telefon. */}
+      <Toast kvitto={kvitto} />
     </div>
   );
 }

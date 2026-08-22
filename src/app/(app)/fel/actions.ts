@@ -6,6 +6,7 @@ import { getCurrentUser, hasRole } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { skrivFel } from "@/lib/fel-server";
 import { MAX_BODY, type Felstatus } from "@/lib/fel";
+import { sattKvitto } from "../angra/actions";
 
 export type FelState = { fel?: string };
 
@@ -83,6 +84,13 @@ export async function sattStatus(form: FormData): Promise<void> {
     object_type: "error_report",
     object_id: id,
   });
+
+  // E5.7. Bara avslutet far en angra-knapp. "Tittar pa den" och "oppna igen"
+  // ar inte atgarder man rakar gora — avslut ar det, och det ar det som gor en
+  // rapport osynlig i kon.
+  if (status === "closed") {
+    await sattKvitto({ text: "Felrapporten är avslutad.", angra: { handling: "fel.avslutad", id } });
+  }
 
   revalidatePath("/fel");
 }

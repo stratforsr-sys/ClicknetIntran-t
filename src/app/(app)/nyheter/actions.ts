@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser, hasRole } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { ROLES, type Role } from "@/lib/roles";
+import { sattKvitto } from "../angra/actions";
 
 export type NyhetState = { fel?: string };
 
@@ -166,6 +167,15 @@ export async function arkiveraNyhet(form: FormData): Promise<void> {
     action: "news.archived",
     object_type: "news_post",
     object_id: nu.slug,
+  });
+
+  // E5.7. Arkivering ar den enda av nyheternas atgarder som har en akta
+  // invers: `published_at` sätts bara forsta gangen, sa ett aterpublicerat
+  // inlagg dyker inte upp som nytt i nagons klocka. Publiceringen sjalv far
+  // ingen angra-knapp — se resonemanget i src/lib/toast.ts.
+  await sattKvitto({
+    text: "Inlägget är arkiverat.",
+    angra: { handling: "nyhet.arkiverad", id },
   });
 
   revalidatePath("/nyheter");

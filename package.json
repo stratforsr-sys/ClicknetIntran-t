@@ -19,7 +19,7 @@
     "test:arenden": "node --experimental-strip-types tests/arenden.mjs",
     "test:narvaro": "node --experimental-strip-types tests/narvaro.mjs",
     "test:klocka": "node --experimental-strip-types tests/klocka.mjs",
-    "test": "TZ=UTC npm run test:rls && npm run test:fel && npm run test:avtal && npm run test:filer && npm run test:pdf && npm run test:sokning && npm run test:rollspel && npm run test:lonekostnad && npm run test:klocka && npm run test:tid && npm run test:franvaro && npm run test:losenord && npm run test:raster && npm run test:narvaro && npm run test:utbildning && npm run test:lonerapport && npm run test:lonerapport-db && npm run test:arenden && npm run test:registerutdrag && npm run test:offboarding",
+    "test": "TZ=UTC npm run test:rls && npm run test:fel && npm run test:avtal && npm run test:toast && npm run test:filer && npm run test:pdf && npm run test:sokning && npm run test:rollspel && npm run test:lonekostnad && npm run test:klocka && npm run test:tid && npm run test:franvaro && npm run test:losenord && npm run test:raster && npm run test:narvaro && npm run test:utbildning && npm run test:lonerapport && npm run test:lonerapport-db && npm run test:arenden && npm run test:registerutdrag && npm run test:offboarding",
     "test:registerutdrag": "node --experimental-strip-types tests/registerutdrag.mjs",
     "test:offboarding": "node tests/offboarding-db.mjs",
     "test:franvaro": "node --experimental-strip-types tests/franvaro.mjs",
@@ -29,7 +29,8 @@
     "test:rollspel": "node --experimental-strip-types tests/rollspel.mjs",
     "test:lonekostnad": "node --experimental-strip-types tests/lonekostnad.mjs",
     "test:fel": "node --experimental-strip-types tests/fel.mjs",
-    "test:avtal": "node --experimental-strip-types tests/avtal.mjs"
+    "test:avtal": "node --experimental-strip-types tests/avtal.mjs",
+    "test:toast": "node --experimental-strip-types tests/toast.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.7.0",
