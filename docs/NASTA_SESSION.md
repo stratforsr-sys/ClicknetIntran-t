@@ -3,7 +3,7 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-08-22 (E0.6, E9.1, E5.7, E5.3)
+**Senast uppdaterad:** 2026-08-23 (testhardning, E6.5, X3 klart)
 
 ---
 
@@ -31,20 +31,29 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
 set -a && . $HOME/.clicknet/nav.env && set +a && npm test
 ```
 
-Tjugoen sviter, 957 kontroller. `tests/rls.mjs` går mot den **riktiga**
+Tjugotvå sviter, 998 kontroller. `tests/rls.mjs` går mot den **riktiga**
 databasen och skapar och städar sina egna användare (prefix `rlstest+`).
 
-Sviten var **grön** när passet 2026-08-22 började — första gången på tre pass.
+Sviten var **grön** när passet 2026-08-23 började, och när det slutade.
 
-**Lärdomen som nu inträffat fyra gånger:** en kontroll som lyder
-`(await las(tD, "tabell")).length === 1` för en roll som ser ALLA rader blir
-röd i samma stund någon använder funktionen på riktigt. Tre rättades
-2026-08-21 (`calendar_feed` med flera). Den fjärde föll 2026-08-22 i
-AC-3.19-avsnittet: nattjobbet hade lagt in riktiga `absence_reminder`-rader för
-Zen och Simon klockan 03:07, och säljchefen ser alla.
+**Två av tre körningar dog på nätverket** (`Connection terminated`, `ETIMEDOUT`
+mitt i en inloggning) utan en enda fallen kontroll. Läs en röd körning innan du
+tror på den — ett avbrott ser i förbifarten ut som ett fel i navet.
 
-**Fråga alltid på provradens id.** Leta efter fler om en ny modul skriver
-liknande kontroller — det finns troligen kvar några.
+**Radräkningarna är genomgångna 2026-08-23 och regeln står nu utskriven överst
+i `rls.mjs`.** Samtliga 105 i den filen plus 51 i övriga sviter. Leta inte om:
+
+- Säljchefen och ekonomin var redan rättade (21 och 22 augusti).
+- `absence_policy === 1` är bevisbart stabilt — tabellen är en singleton
+  (`id boolean primary key check (id)`).
+- De rena logiksviterna (raster, franvaro, lonerapport, lonekostnad, arenden,
+  tid, avtal, rollspel, utbildning) räknar inte databasrader alls.
+- **Teamledaren rättades detta pass.** Sex kontroller räknade hela tabellen för
+  Cecilia. De var gröna — men bara för att de sju tabellerna är TOMMA i
+  produktionen. De hade svarat likadant om hon kunnat se allt, och blir röda så
+  fort piloten börjar.
+
+**Fråga alltid på provradens id.** Undantagen är `=== 0` och `>= n`.
 
 ---
 
@@ -72,6 +81,7 @@ liknande kontroller — det finns troligen kvar några.
 | **Felrapportering** | **I drift sedan 2026-08-22.** `/fel` och `/fel/nytt`. Egen tabell, inte Sentry |
 | **Avtalsmallar** | **I drift sedan 2026-08-22.** `/avtal`. E9.2 e-signering fortsatt blockerad |
 | **Kvitto med ångra** | **I drift sedan 2026-08-22.** Nere till höger, tre ångrabara åtgärder |
+| **Adoptionsstatistik** | **I drift sedan 2026-08-23.** `/adoption`. DAU/WAU, träfflösa sökningar, glömda dokument. Säljchef, VD, admin |
 
 ### Fyra saker användaren själv måste göra
 
@@ -91,6 +101,60 @@ liknande kontroller — det finns troligen kvar några.
    under `/lonekostnad/satser`. **Kontrollera också åldersgränsen för den äldre
    nedsättningen** — den är seedad till 66, följer pensionsåldern och har
    flyttats flera gånger. Den berör ingen i bolaget i dag.
+
+---
+
+## Vad som byggdes 2026-08-23
+
+Migration `0029_adoption`. Resonemangen står i arbetsloggen; det här är vad du
+behöver veta för att inte riva något.
+
+### E6.5: adoption får inte bli en närvaroregistrering
+
+**`activity_day` bär en dag, inte ett spår.** En rad per person och dygn. Inget
+klockslag, ingen sökväg, ingen sida. Navet har redan en närvaroregistrering (M2)
+med rättelse, attest och lönepåverkan omkring sig — ett andra informellt spår
+utan den styrningen är sådant som används till något annat när det väl finns.
+
+**Tabellen har ingen select-policy alls, och det är avsiktligt.** Ingen läser
+per-person-raderna via API:t, inte ens säljchefen. Siffrorna kommer ut genom
+`adoption_aktivitet()`, `adoption_sokmissar()` och `adoption_glomda_dokument()`,
+som svarar med antal och bär rollvillkoret själva. Lägger du till ett mått: gör
+likadant, och skriv inget rollfilter i sidan.
+
+**`search_miss` har ingen person** — inte en dold kolumn, ingen kolumn alls.
+
+**`activity_day` står i `KALLOR` i `src/lib/registerutdrag.ts`.** Raden handlar
+om personen, så den ska med i utdraget (artikel 15). Tar du bort den faller
+`tests/registerutdrag.mjs`. Den fällde passet en gång.
+
+**Kakan i mellanvaran sätts EFTER rpc-anropet.** `setAll` byter ut hela
+`response`-objektet när tokenen förnyas, så en kaka satt före försvinner tyst —
+och då bokförs dagen om vid varje sidbyte.
+
+### X3 är färdigmätt, och sökningen är det trängsta
+
+| Mått | Vågor | Trängt 4G | Krav | Marginal |
+|---|---|---|---|---|
+| Startsida | 9 | 1 162 ms | 1,5 s | 338 ms |
+| **Sök** | 4 | **404 ms** | 500 ms | **96 ms** |
+| Stämpling | 15 | 651 ms | 2 s | 1 349 ms |
+
+**Sökningens 96 ms är den minsta marginalen i navet.** En sjätte källa ryms i
+den befintliga vågen; ett steg som måste vänta in sökningen gör det inte.
+
+**Stämplingens 15 vågor är sex i actionen och nio i omrenderingen av `/tid`**,
+som `revalidatePath` tvingar fram. Omrenderingen är dyrare än stämplingen — det
+är där en åtgärd ligger om siffran blir ett problem, inte i `stampla()`.
+
+Sök och stämpling mäts som **mjuk navigering**: skalet renderas inte om och
+uppkopplingen räknas inte. Startsidans 1,5 s gäller den som öppnar navet; de här
+två gäller den som redan är inne.
+
+`npm run mat:startsidan` och `npm run mat:sok-stampling`. Det gemensamma ligger
+i `scripts/lib/matning.mjs`. **Städningen kopplar ur AC-2.3-spärren** för att
+kunna radera mätningens egen stämpling, och rör aldrig `audit_log` bredare än på
+`actor_id`.
 
 ---
 
@@ -339,9 +403,9 @@ glömt fylla i.
 
 ## Vad som står på tur
 
-E0.6, E9.1, E5.7 och E5.3 är gjorda 2026-08-22. **Det som stod före piloten är
-därmed avklarat** — felrapporteringen finns, så tre personer som hittar buggar
-når dig nu.
+E6.5 och X3 är gjorda 2026-08-23. **Piloten kan nu både rapportera fel och
+mätas** — `/fel` fångar buggarna, `/adoption` visar om navet används alls. Alla
+tre prestandakraven är mätta och klarade.
 
 1. **Supabase-panelen och Zens stämpling** — användarens eget arbete, men
    påminn. Se listan ovan.
@@ -359,18 +423,32 @@ når dig nu.
    inga personnummer (K27), så det utskrivna avtalet har en rad som fylls i för
    hand. Det går att ändra, men då är det K27-linjen som ska omprövas medvetet.
    Jag har byggt så att den inte går att kringgå av misstag.
-6. **E10 M7 rekrytering**, ~4 veckor, när ovanstående är gjort.
+6. **E10 M7 rekrytering**, ~4 veckor, när ovanstående är gjort. **Läs punkten
+   om mejlspåret nedan först** — tre av tio delar hänger på det som är pausat.
 
 ### Mindre saker som ligger och väntar
 
-- **Sök och stämpling är inte mätta** (X3). Startsidan är det.
-  `scripts/mat-startsidan.mjs` går att peka om.
-- **Inloggad TTFB från produktionen** saknas i 4G-mätningen. Kräver en riktig
-  session i en webbläsare; tills dess är 20 ms per våga uppskattat.
+- **Inloggad TTFB från produktionen** saknas fortfarande i 4G-mätningen. Kräver
+  en riktig session i en webbläsare; tills dess är 20 ms per våga uppskattat.
+  Det är den enda kvarvarande uppskattningen i X3.
 - **E0.7** är delvis gjord: serverfel skrivs nu strukturerat. Nattjobben larmar
   fortfarande inte av sig själva.
-- **Leta efter fler radräkningar i `tests/rls.mjs`** — se testavsnittet ovan.
-  Fyra har fallit, det finns troligen kvar några.
+- **Sökningens marginal är 96 ms** på trängt 4G. Håll ögonen på den när en ny
+  källa läggs till i `/sok`.
+
+### E10: tre av tio delar hänger på det pausade mejlspåret
+
+Upptäckt 2026-08-23 vid planeringen, innan något byggdes. **E10.1** (IMAP-parser
+mot jobb@clicknet.se), **E10.4** (.ics-bilaga och påminnelser via e-post) och
+**E10.7** (avslagsmail) förutsätter alla E0.8, som är pausat på din begäran.
+
+De sju övriga går att bygga utan mejl: E10.2 ansökningssidan, E10.3 stegflödet,
+E10.5 no_show, E10.6 scorecard, E10.8 gallringen (fristen står i AC-7.8/K21 och
+är alltså skriven, till skillnad från E6.2:s), E10.9 anställd-flödet och E10.10
+trattrapporten.
+
+Förslaget är att bygga de sju och lämna en tydlig söm där mejlet kopplas in —
+inte att låta hela epicet vänta på ett spår du pausat. Det är ditt beslut.
 
 ### Villkoren som styrde E15 gäller nu E13 provision
 

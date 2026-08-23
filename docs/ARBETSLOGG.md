@@ -5,6 +5,166 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-08-23 · Testhärdning, adoptionsstatistik och X3 färdigmätt
+
+Tre punkter i den ordning användaren bad om dem: radräkningarna i proven, E6.5
+och resten av X3. Migration `0029_adoption`. 957 → 998 kontroller.
+
+Sviten var **grön** när passet började — andra gången i rad. Två av tre
+körningar dog dock på nätverket innan de kom fram (`Connection terminated`,
+`ETIMEDOUT` mitt i en inloggning), utan en enda fallen kontroll. Det är värt att
+veta för nästa session: **en röd körning ska läsas innan man tror på den.** Ett
+avbrott mitt i ser i förbifarten ut som ett fel i navet.
+
+### Radräkningarna: hypotesen var fel, och det som fanns var värre
+
+NASTA_SESSION sa "det finns troligen kvar några". Genomgången av samtliga 105
+radräkningar i `tests/rls.mjs` plus de 51 i övriga tjugo sviter gav ett annat
+svar: **säljchefen och ekonomin är redan rättade**, från passen 21 och 22
+augusti. Av de 105 är 66 stycken `=== 0`, vilket alltid är säker riktning.
+
+Två slutsatser föll bort på vägen och båda är värda att skriva ner, så att ingen
+gör om arbetet:
+
+- **`absence_policy` med exakt en rad är inte skört.** Tabellen har
+  `id boolean primary key default true check (id)` — den kan aldrig få en andra
+  rad. Provet är bevisbart stabilt.
+- **De rena logiksviterna räknar inte databasrader.** raster, franvaro,
+  lonerapport, lonekostnad, arenden, tid, avtal, rollspel och utbildning provar
+  funktioner mot påhittade indata. Deras 51 räkningar kan inte falla på drift.
+
+Det som däremot fanns var **teamledaren**, och bristen var av ett annat slag än
+den letade efter. Sex kontroller räknade hela tabellen för Cecilia:
+`sick_report`, `sick_deadline`, `absence_request`, `absence_balance`,
+`file_object`, `file_access_log` och `roleplay_submission`.
+
+De var gröna. Men de var gröna **av fel skäl**, och det syns först när man
+räknar i datan i stället för i koden:
+
+| Tabell | Rader i produktionen |
+|---|---|
+| sick_report, sick_deadline | 0 |
+| absence_request, absence_balance | 0 |
+| file_object, file_access_log | 0 |
+| roleplay_submission | 0 |
+
+Sju tomma tabeller. Kontrollen `(await las(tC, "sick_report")).length === 1`
+bevisade alltså ingenting om policyn — den bekräftade bara att tabellen var tom
+i övrigt. Den hade svarat likadant om teamledaren kunnat se **allt**.
+
+Och alla sju fylls så fort piloten börjar. Den dagen blir de röda utan att något
+är trasigt, precis som kalenderflödet blev 2026-08-20.
+
+Rättningen är samma som för David: fråga på provradens id. Regeln står nu
+utskriven överst i `rls.mjs` med de två undantagen (`=== 0` alltid, `>= n`
+likaså) och med de fyra tillfällena uppräknade, så att nästa modul inte
+återinför formen.
+
+**Kvar att veta:** teamledarens krets består i dag bara av provets egna
+användare, eftersom testet skapar Cecilia och pekar Anna på henne. Det är en
+egenskap hos uppsättningen och inte hos policyn — därför fråga på id även där.
+
+### E6.5: varför adoption inte får bli en närvaroregistrering
+
+`audit_log` bär skrivningar. En säljare som loggar in, läser tre rutiner och går
+hem skriver ingenting där. En DAU räknad ur händelseloggen hade mätt hur många
+som **ändrar** något, inte hur många som **använder** navet — och siffran hade
+sett rimlig ut, vilket är det som gör den farlig. `last_sign_in_at` bär bara
+senaste gången och kan inte svara på hur många som var inne i tisdags.
+
+Alltså en egen tabell. Och där ligger hela beslutet:
+
+**`activity_day` bär en dag, inte ett spår.** En rad per person och dygn. Inget
+klockslag, ingen sökväg, ingen sida. Navet har redan en närvaroregistrering (M2)
+med rättelse, attest och lönepåverkan omkring sig. Ett andra, informellt spår
+utan den styrningen är sådant som ser ofarligt ut när det byggs och används till
+något annat när det väl finns.
+
+**Tabellen har ingen select-policy alls.** RLS är påslagen och ingen policy
+släpper igenom någon — per-person-raderna går inte att läsa via API:t, inte ens
+för säljchefen. Siffrorna kommer ut genom `adoption_aktivitet()`, som svarar med
+antal. Provet i `rls.mjs` frågar därför både på listan och på den egna raden: en
+policy som döljer listan men släpper igenom en punktfråga är ingen policy.
+
+**Raden följer däremot med i registerutdraget.** Den handlar om personen, alltså
+har hen rätt att få ut den (artikel 15). Utdraget körs med service role och
+påverkas inte av att policyn saknas. `activity_day` står i `KALLOR` — och det är
+inte frivilligt: utan raden faller `tests/registerutdrag.mjs`, vilket är precis
+vad den kontrollen finns till för. Den fällde det här passet en gång.
+
+**`search_miss` har ingen person.** Inte en policy som döljer vem som sökte —
+ingen kolumn att dölja. AC-12.5 frågar vad folk söker efter utan att hitta, och
+svaret behöver texten, inte vem som skrev den. En rad per unik sträng med en
+räknare, samma form som `error_report` i 0026 och av samma skäl: en logg per
+sökning hade vuxit utan tak och sagt mindre.
+
+#### Kakan sätts efter rpc-anropet, inte före
+
+Dagsstämpeln ligger i mellanvaran — det enda stället som ser varje begäran — och
+hålls tillbaka av en kaka med dagens datum. Högst ett anrop per person, enhet och
+dygn.
+
+Den detalj som kostade en omskrivning: `setAll` i Supabase-klienten **byter ut
+hela `response`-objektet** när tokenen förnyas. En kaka satt före `rpc()` hade
+suttit på det gamla objektet och försvunnit tyst — och dagen hade bokförts om
+vid varje sidbyte. Kakan sätts därför sist, på `response` som den står då.
+
+#### Två normaliseringar som ser små ut
+
+`registrera_sokmiss` gör `btrim(left(lower(btrim(...)), 100))`. Den **yttre**
+btrim är inte överflödig: kapningen till 100 tecken kan sluta mitt i ett
+mellanslag, och då hade tabellvillkoret `q = lower(btrim(q))` nekat raden. En
+lång sökning hade fallit i stället för att bokföras. Provet täcker exakt det
+fallet.
+
+`klibbighet()` och `tackning()` svarar `null` och inte `0` när nämnaren saknas.
+En nolla hade sett ut som ett svar.
+
+### X3: sök och stämpling mäts som något man gör när man redan är inne
+
+Kravet på startsidan är 1,5 s och gäller den som **öppnar** navet. Kraven här är
+500 ms och 2 s och gäller den som **redan står på en sida** och skriver i
+sökrutan eller trycker på knappen. I Next är det en mjuk navigering respektive
+ett server action-svar: skalet med notisklockans tretton frågor renderas inte om,
+och skriptet är redan hämtat. Uppkopplingen räknas därför inte heller.
+
+Att räkna med dem hade mätt en helt annan händelse än den kravet handlar om, och
+gjort båda måtten hopplösa av fel skäl.
+
+| Mått | Vågor | Normalt 4G | Trängt 4G | Krav |
+|---|---|---|---|---|
+| Sök | 4 | 296 ms | **404 ms** | 500 ms |
+| Stämpling | 15 | 525 ms | 651 ms | 2 s |
+
+**Sökningens marginal på trängt nät är 96 ms — den minsta i navet.** Startsidan
+har 338 ms och stämplingen 1 349 ms. Lägger någon till en sjätte källa i
+sökningen ryms den i den befintliga vågen; lägger någon till ett steg som måste
+vänta in sökningen gör den inte det.
+
+**Stämplingens 15 vågor är sex i actionen och nio i omrenderingen av `/tid`**,
+som `revalidatePath` tvingar fram. Omrenderingen är alltså dyrare än själva
+stämplingen. Det är där en åtgärd ligger om siffran någonsin blir ett problem —
+inte i `stampla()`.
+
+En sak som förvånade: **en sökning utan träff kostar lika mycket som en med.**
+Med träff går en våg åt att slå upp rollnamn för personerna i träffen; utan
+träff går samma våg åt att bokföra sökmissen (E6.5). Fyra vågor i båda fallen.
+
+Det gemensamma är utbrutet till `scripts/lib/matning.mjs`. Startsidan mättes om
+efteråt och gav samma struktur: 9 vågor, 162 kB.
+
+#### Städningen måste koppla ur AC-2.3
+
+Mätningen skriver en riktig stämpling, och den går inte att radera — inte ens
+via en cascade från `employee`. Triggern kopplas ur medvetet, precis som i
+`tests/rls.mjs`. `audit_log` städas på `actor_id` och aldrig bredare: driftens
+rader är bevis (AC-12.1) och får inte försvinna för att någon mätte en sida.
+
+Två avbrutna körningar hann lämna en mätanvändare kvar innan det var på plats.
+`stad()` körs därför både före och efter, så att nästa körning självläker.
+
+---
+
 ## 2026-08-22 · Felrapportering, avtalsmallar, ångra — och två fel som proven hittade
 
 Fyra punkter i den ordning användaren bad om dem: E0.6, E9.1, E5.7 och

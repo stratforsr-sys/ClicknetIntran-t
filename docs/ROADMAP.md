@@ -279,7 +279,7 @@ uppsägningstidsberäkning i en semesteransökan hade varit fel plats för rätt
 | E6.2 | AC-12.2, K10 | **Nattligt gallringsjobb** som verkställer `retention_until` och skriver kvittens | BLOCKERAD av P0.6 — ingen tabell bär `retention_until`, och fristerna är inte skrivna. Ett jobb med påhittade frister raderar personaldata enligt en gissning |
 | E6.3 | AC-12.3 | Objekt i låst dossier undantas från gallring | BLOCKERAD av E11 |
 | E6.4 | AC-12.4, K25 | **Registerutdrag**: all data om en person som JSON plus filer | KLAR — filerna redovisas sedan 2026-08-21 som rader i `file_object`, plus `file_access_log`: vem som öppnat dem och när. `tests/registerutdrag.mjs` faller när en ny kolumn pekar på `employee` utan att vara redovisad |
-| E6.5 | AC-12.5 | Adoptionsstatistik: DAU/WAU, sökningar utan träff, dokument utan visningar 90 dagar | EJ PÅBÖRJAD |
+| E6.5 | AC-12.5 | Adoptionsstatistik: DAU/WAU, sökningar utan träff, dokument utan visningar 90 dagar | **KLAR 2026-08-23.** `/adoption`, migration `0029`. **Ingen siffra går att bryta ner på person:** `activity_day` har ingen select-policy alls och `search_miss` ingen kolumn för vem som sökte. Läsning sker genom `adoption_*`-funktioner som svarar med antal. Dagsstämpeln ligger i mellanvaran, spärrad av en kaka — ett anrop per person och dygn |
 
 ---
 
@@ -357,7 +357,7 @@ Kräver Inkios API-dokumentation, autentiseringsmodell och webhook-events.
 |---|---|---|
 | X1 | **WCAG 2.1 AA**: kontrast, tangentbord, fokus, `aria-describedby` på formulärfel | PÅGÅR |
 | X2 | **375 px** fungerar för stämpling, ledighet, rutiner, kurser, ärenden | PÅGÅR |
-| X3 | Startsida under 1,5 s, sök under 500 ms, stämpling under 2 s | PÅGÅR — **startsidan mätt 2026-08-22 och klarar kravet**, se E5.3. Sök och stämpling är inte mätta. Verktyget finns i `scripts/mat-startsidan.mjs` och går att peka om |
+| X3 | Startsida under 1,5 s, sök under 500 ms, stämpling under 2 s | **KLAR 2026-08-23 — alla tre mätta och alla tre klarar kravet.** Startsida 1 162 ms på trängt 4G (9 vågor). Sök **404 ms** (4 vågor) — marginalen 96 ms är den minsta i navet. Stämpling 651 ms (15 vågor, varav nio i omrenderingen av `/tid`). Sök och stämpling mäts som mjuk navigering: skalet renderas inte om och uppkopplingen räknas inte. `npm run mat:startsidan` och `npm run mat:sok-stampling`; det gemensamma i `scripts/lib/matning.mjs`. **Inte mätt: inloggad TTFB från produktionen** |
 | X4 | 99,5 % drift 07–19 vardagar, stämpling med offline-fallback | EJ PÅBÖRJAD |
 | X5 | Signerade tidsbegränsade URL:er för alla filer | KLAR 2026-08-21 — 30 sekunder, och det finns bara en väg till en fil: `/filer/[id]`. Bucketen är stängd för användartokens av en **restriktiv** policy på `storage.objects`, som inte går att OR:a bort med en tillåtande policy |
 | X6 | Test som verifierar att fel roll får 0 rader — per modul | KLAR för byggda moduler, se E0.9. Samma svit, samma krav på varje ny modul |
@@ -372,7 +372,7 @@ Kräver Inkios API-dokumentation, autentiseringsmodell och webhook-events.
 | Fas | Epics | Veckor enligt PRD |
 |---|---|---|
 | Klart | E0 delvis, E1 delvis | — |
-| Fas 1 kvar | E1 rest, E2.5, E8.5/E8.8/E8.9, E6 (E0.6, E5.3 och E5.7 klara 2026-08-22) | ~7 |
+| Fas 1 kvar | E1 rest, E2.5, E8.5/E8.8/E8.9, E6.1 (E6.5 och X3 klara 2026-08-23; E0.6, E5.3 och E5.7 klara 2026-08-22). E6.2 och E6.3 blockerade | ~6 |
 | Fas 2 | E9.2 (blockerad av A14), E10 — E9.1 klar 2026-08-22, E7 klar 2026-08-21 | ~5 |
 | Fas 3 | E11, E12, E13 (E15 klar sedan 2026-08-21 utom E15.7) | ~11 |
 | **Totalt till fullt system** | | **10–12 månader vid 15 h/vecka** |
