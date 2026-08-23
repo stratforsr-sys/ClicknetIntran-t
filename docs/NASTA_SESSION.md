@@ -443,9 +443,15 @@ mot jobb@clicknet.se), **E10.4** (.ics-bilaga och påminnelser via e-post) och
 **E10.7** (avslagsmail) förutsätter alla E0.8, som är pausat på din begäran.
 
 De sju övriga går att bygga utan mejl: E10.2 ansökningssidan, E10.3 stegflödet,
-E10.5 no_show, E10.6 scorecard, E10.8 gallringen (fristen står i AC-7.8/K21 och
-är alltså skriven, till skillnad från E6.2:s), E10.9 anställd-flödet och E10.10
-trattrapporten.
+E10.5 no_show, E10.6 scorecard, E10.8 gallringen, E10.9 anställd-flödet och
+E10.10 trattrapporten.
+
+**Rättelse till en tidigare formulering i den här filen:** gallringsfristen för
+kandidatdata är INTE skriven. ROADMAP säger bara att `gdpr_purge_at` ska sättas
+automatiskt, aldrig efter hur länge. E10.8 står därför på samma linje som E6.2:
+fristen är konfiguration utan seedat värde, och jobbet vägrar köra tills den är
+satt. Skillnaden mot E6.2 är att kolumnen finns från början, så inget behöver
+byggas om när siffran kommer.
 
 Förslaget är att bygga de sju och lämna en tydlig söm där mejlet kopplas in —
 inte att låta hela epicet vänta på ett spår du pausat. Det är ditt beslut.

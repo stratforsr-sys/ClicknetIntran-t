@@ -194,6 +194,7 @@ async function stad() {
   await db.query(`delete from work_time_journal where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`delete from scheduled_break where scope = 'company' and window_start = '11:30' and duration_minutes = 30`);
   await db.query(`delete from work_schedule where scope = 'company' and start_time = '08:00' and end_time = '17:00'`);
+  await db.query(`delete from candidate where email like $1`, [PREFIX + "%"]);
   await db.query(`update employee set team_id = null where team_id in (select id from team where name like 'rlstest-%')`);
   await db.query(`delete from employee where email like $1`, [PREFIX + "%"]);
   await db.query(`delete from team where name like 'rlstest-%'`);
@@ -2221,6 +2222,67 @@ console.log("\n\x1b[1mE9.1: mallen ar bolagets, avtalet ar personens — och for
   await db.query(`delete from contract_template where slug = 'rlstest-mall'`);
 }
 
+console.log("\n\x1b[1mE10: kandidaten nas av den som rekryterar, och ingen annan\x1b[0m");
+{
+  const { rows: [kand] } = await db.query(
+    `insert into candidate (first_name, last_name, email, source_slug, created_by)
+     values ('Kim', 'Sokande', $1, 'linkedin', $2::uuid) returning id`,
+    [PREFIX + "kandidat@example.com", chef.id],
+  );
+  await db.query(
+    `insert into interview_scorecard (candidate_id, stage, interviewer_id, recommendation)
+     values ($1::uuid, 'screening', $2::uuid, 'yes')`,
+    [kand.id, chef.id],
+  );
+
+  // Saljchefen far det pa rollen sa att modulen fungerar direkt.
+  ok(
+    "saljchefen ser kandidaten",
+    (await las(tD, "candidate", `id=eq.${kand.id}&select=*`)).length === 1,
+  );
+
+  // Alla andra ar utestangda. En kandidat ar en namngiven manniska som sokt
+  // jobb hos oss, och kretsen ar den som rekryterar.
+  for (const [namn, tok] of [["Anna", tA], ["Cecilia (teamledare)", tC], ["Eva (ekonomi)", tE]]) {
+    const lista = await las(tok, "candidate");
+    const punkt = await las(tok, "candidate", `id=eq.${kand.id}&select=*`);
+    const steg = await las(tok, "candidate_stage_event");
+    ok(
+      `${namn} far 0 rader — bade i listan och pa id`,
+      lista.length === 0 && punkt.length === 0 && steg.length === 0,
+      `lista ${lista.length}, punkt ${punkt.length}, steg ${steg.length}`,
+    );
+  }
+
+  // Behorigheten ar en permission och inte bara en roll: Q71 sager att flera
+  // personer rekryterar, och vilka det ar foljer inte av rollen.
+  await db.query(
+    `insert into employee_permission (employee_id, permission) values ($1::uuid, 'recruiter')
+     on conflict do nothing`,
+    [saljareA.id],
+  );
+  const tR = await loggaIn(saljareA.epost);
+  ok(
+    "med behorigheten recruiter oppnar sig modulen",
+    (await las(tR, "candidate", `id=eq.${kand.id}&select=*`)).length === 1,
+  );
+  await db.query(`delete from employee_permission where employee_id = $1::uuid`, [saljareA.id]);
+
+  // Skrivning gar genom server actions, aldrig direkt mot API:t.
+  const skriv = await fetch(`${URL}/rest/v1/candidate`, {
+    method: "POST", headers: som(tD),
+    body: JSON.stringify({ first_name: "X", last_name: "Y", email: "x@y.se", source_slug: "annat" }),
+  });
+  ok("inte ens saljchefen skapar en kandidat direkt mot API:t", !skriv.ok, `HTTP ${skriv.status}`);
+
+  const flytta = await fetch(`${URL}/rest/v1/candidate?id=eq.${kand.id}`, {
+    method: "PATCH", headers: som(tD), body: JSON.stringify({ stage: "screening" }),
+  });
+  ok("och flyttar inget steg den vagen heller", !flytta.ok, `HTTP ${flytta.status}`);
+
+  await db.query(`delete from candidate where id = $1::uuid`, [kand.id]);
+}
+
 console.log("\n\x1b[1mE6.5: adoption raknas i antal, och gar aldrig att bryta ner pa person\x1b[0m");
 {
   const rpc = async (tok, funktion, args = {}) => {
@@ -2296,7 +2358,7 @@ console.log("\n\x1b[1mE6.5: adoption raknas i antal, och gar aldrig att bryta ne
 }
 
 console.log("\n\x1b[1mAnonym anslutning\x1b[0m");
-for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate", "news_post", "notification_seen", "absence_type", "absence_policy", "absence_blackout", "staffing_cap", "absence_balance", "absence_request", "absence_call_order", "sick_report", "sick_deadline", "absence_reminder", "calendar_feed", "file_object", "file_access_log", "roleplay_criterion", "roleplay_submission", "roleplay_score", "cost_rate", "salary_basis", "revenue_entry", "cost_calculation", "error_report", "contract", "contract_template", "activity_day", "search_miss"]) {
+for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate", "news_post", "notification_seen", "absence_type", "absence_policy", "absence_blackout", "staffing_cap", "absence_balance", "absence_request", "absence_call_order", "sick_report", "sick_deadline", "absence_reminder", "calendar_feed", "file_object", "file_access_log", "roleplay_criterion", "roleplay_submission", "roleplay_score", "cost_rate", "salary_basis", "revenue_entry", "cost_calculation", "error_report", "contract", "contract_template", "activity_day", "search_miss", "candidate", "candidate_stage_event", "interview_scorecard", "recruitment_source", "recruitment_policy"]) {
   const r = await fetch(`${URL}/rest/v1/${t}?select=*`, { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` } });
   const j = await r.json();
   ok(`${t} ger inga rader anonymt`, !Array.isArray(j) || j.length === 0, Array.isArray(j) ? `${j.length} rader` : `HTTP ${r.status}`);

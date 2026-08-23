@@ -56,6 +56,19 @@ export function navFor(user: CurrentUser | null, stamplingPa: boolean): NavItem[
   }
 
   /**
+   * E10. Q71: FLERA PERSONER REKRYTERAR, och vilka det ar foljer inte av
+   * rollen. Ledningen far posten pa rollen sa att modulen fungerar direkt;
+   * alla andra far den tilldelad som `recruiter` under Personal.
+   *
+   * Skillnaden mot K26 ar avsiktlig. Lonekostnad kraver behorigheten AV ALLA,
+   * och det ar en av sakerna som fortfarande maste goras for hand innan den
+   * vyn visar nagot. Rekrytering ska inte krava samma steg for att ens starta.
+   */
+  if (hasRole(user, "sales_manager", "ceo", "admin") || user?.permissions.includes("recruiter")) {
+    items.push({ href: "/rekrytering", label: "Rekrytering", ikon: "personal" });
+  }
+
+  /**
    * E9.1. Posten galler tva olika saker beroende pa vem som ser den, och det
    * ar avsiktligt att den finns for bada.
    *

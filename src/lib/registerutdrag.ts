@@ -54,6 +54,11 @@ export const KALLOR: Kalla[] = [
   // byggs av den svarar med antal och aldrig med namn.
   { tabell: "activity_day", kolumn: "employee_id", andamal: "Dagar du använt navet" },
 
+  // E10 / 0030. Blev du anställd genom navets rekrytering finns din
+  // kandidatrad kvar och pekar på dig. Den bär hela processen: steg, källa och
+  // intervjuomdömen. Det är uppgifter om dig och ska med i ditt utdrag.
+  { tabell: "candidate", kolumn: "hired_employee_id", andamal: "Din rekryteringsprocess" },
+
   // E7 M3. Sjukanmälan är en uppgift om hälsa och därmed en särskild kategori
   // enligt artikel 9 — vilket gör den viktigare att kunna få ut, inte mindre.
   // Raderna bär datum, omfattning och tidpunkter; ingen orsak finns lagrad
@@ -170,4 +175,12 @@ export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
   { tabell: "cost_calculation", kolumn: "calculated_by", skal: "Vem som körde beräkningen" },
   { tabell: "salary_basis", kolumn: "entered_by", skal: "Vem som matade in lönen" },
   { tabell: "revenue_entry", kolumn: "entered_by", skal: "Vem som matade in intäkten" },
+
+  // 0030 E10. En kandidat är inte en anställd, så raderna handlar i regel om
+  // någon annan än den som begär utdraget. Undantaget står i KALLOR ovan:
+  // `candidate.hired_employee_id` pekar på den som faktiskt blev anställd.
+  { tabell: "candidate", kolumn: "created_by", skal: "Vem som lade upp kandidaten" },
+  { tabell: "candidate_stage_event", kolumn: "by_employee", skal: "Vem som flyttade en kandidat" },
+  { tabell: "interview_scorecard", kolumn: "interviewer_id", skal: "Vem som intervjuade en kandidat" },
+  { tabell: "recruitment_policy", kolumn: "updated_by", skal: "Vem som ändrade rekryteringsreglerna" },
 ];
