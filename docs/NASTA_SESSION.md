@@ -24,6 +24,10 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
   `node --env-file=$HOME/.clicknet/nav.env scripts/apply-sql.mjs`. Aldrig
   `prisma migrate` eller motsvarande.
 - Nycklar ligger i `~/.clicknet/nav.env`.
+- **`vercel.json` har `"regions": ["arn1"]`. Rör den inte.** Funktionerna måste
+  köra i samma region som Supabase (`eu-north-1`). Utan raden hamnar de i
+  Vercels standard `iad1` och varje databasfråga går över Atlanten — det kostade
+  ~460 ms per tur i stället för ~30.
 - ASCII i kodkommentarer och commit-meddelanden. Svenska i allt som en
   människa läser i produkten.
 - Läs `docs/ARBETSLOGG.md` före arbete, uppdatera den efteråt.
@@ -166,13 +170,26 @@ tilldelning av alla och därför fortfarande står tom.
 rad nekas också — det går inte att skilja från ett samordningsnummer. Med
 bindestreck går det igenom, och numret har ett eget fält.
 
-### X3 är färdigmätt, och sökningen är det trängsta
+### X3 mättes om från grunden kvällen 2026-08-23 — siffrorna nedan är ERSATTA
 
-| Mått | Vågor | Trängt 4G | Krav | Marginal |
-|---|---|---|---|---|
-| Startsida | 9 | 1 162 ms | 1,5 s | 338 ms |
-| **Sök** | 4 | **404 ms** | 500 ms | **96 ms** |
-| Stämpling | 15 | 651 ms | 2 s | 1 349 ms |
+**Tabellen som stod här var fel.** Den byggde på `MS_PER_VAG = 20`, ett antagande
+om att Vercels funktion står i samma region som databasen. Det gjorde den inte —
+den stod i `iad1` och databasen i `eu-north-1`. Se arbetsloggen 2026-08-23 kväll.
+
+Gällande siffror, mätta inloggat mot produktionen med `npm run mat:inloggad`:
+
+| Sida | Median (varm) | Krav |
+|---|---|---|
+| Startsidan | ~550–660 ms | 1 500 ms |
+| Stämplingsvyn | ~630 ms | 2 000 ms |
+| **Sökningen** | **~460–570 ms** | **500 ms** |
+| Rutinerna | ~470–500 ms | 1 500 ms |
+
+Mätningen bär hela HTTP-anropet och är därför strängare än kravet, som gäller
+mjuk navigering. Nätgolvet från en mätmaskin är ~215 ms.
+
+**Läs medianen av flera körningar.** En kall funktion ger 1 300 ms där en varm
+ger 470.
 
 **Sökningens 96 ms är den minsta marginalen i navet.** En sjätte källa ryms i
 den befintliga vågen; ett steg som måste vänta in sökningen gör det inte.
@@ -436,6 +453,36 @@ glömt fylla i.
 ---
 
 ## Vad som står på tur
+
+### Fyra säkerhetspunkter från genomgången 2026-08-23 kväll
+
+Grunden är stark — RLS på samtliga 68 tabeller, ingen skrivrätt för klienten,
+behörighetskontroll först i varje server action. Ingen av punkterna nedan är en
+öppen dörr. Fullständig genomgång i arbetsloggen.
+
+1. **Sätt `STEG2_SECRET` i Vercel.** Utan den signeras steg två-kvittot med
+   `SUPABASE_SERVICE_ROLE_KEY` — samma hemlighet ger full förbigång av RLS.
+   Fallbacken är medveten, men de två bör inte vara samma nyckel.
+   *Följd:* alla chefer måste bekräfta sin enhet en gång till.
+2. **`sattKvitto` är exporterad ur en `"use server"`-fil** och är därmed en
+   publik ändpunkt. Ingen XSS (React escapar), men en hjälpare ska inte
+   publiceras som handling.
+3. **`CRON_SECRET` jämförs med `!==`** — byt till konstanttidsjämförelse.
+4. **`anon` har `execute` på tretton RLS-predikat.** Avsiktligt enligt 0027/0028
+   och läcker ingenting, men granten behövs inte.
+
+### Prestanda: det som är kvar
+
+- **Sessionen valideras två gånger per anrop** — `auth.getUser()` i mellanvaran
+  och igen i `getCurrentUser()`. Att skicka vidare den verifierade identiteten i
+  en request-header sparar en tur (~30–50 ms). *Gjordes inte:* `setAll` byter ut
+  hela `response` när tokenen förnyas, så headern måste sättas efter det, och en
+  miss där tappar den förnyade sessionskakan tyst. Värt att göra, men med prov.
+- **`hamtaNotiser()` ställer fortfarande sexton frågor per sidvisning**, varav
+  två utan filter (`employee`, `course_module`). De ligger numera utanför den
+  blockerande vägen, så de syns inte i laddtiden — men de kostar kapacitet.
+- **Sökningens marginal är fortfarande den minsta i navet.**
+
 
 E6.5 och X3 är gjorda 2026-08-23. **Piloten kan nu både rapportera fel och
 mätas** — `/fel` fångar buggarna, `/adoption` visar om navet används alls. Alla

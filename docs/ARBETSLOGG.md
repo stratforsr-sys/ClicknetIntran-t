@@ -5,6 +5,190 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-08-23 (kväll) · Genomgång av säkerhet och prestanda
+
+Användaren beskrev navet som "otroligt segt". Det stämde, och orsaken låg inte i
+koden utan under den — men koden bidrog också. Fem commits, ingen ny migration.
+
+### Funktionerna stod på fel kontinent
+
+`vercel.json` saknade `regions`. Vercels standard är `iad1`, Washington DC.
+Supabase står i `eu-north-1`, Stockholm. **Varje databasfråga i navet gick över
+Atlanten och tillbaka.**
+
+Mätt mot produktionen, isolerat. `/api/ical/[token]` gör noll frågor när token
+är kortare än 32 tecken och exakt en när den är längre — den enda skillnaden
+mellan de två anropen är en databastur:
+
+| | 0 frågor | 1 fråga | skillnad |
+|---|---|---|---|
+| iad1 (före) | ~330 ms | ~790 ms | **~460 ms** |
+| arn1 (efter) | ~250 ms | ~280 ms | **~30 ms** |
+
+Samma fråga från en maskin i Stockholm med återbrukad anslutning: ~50 ms.
+
+En rad i `vercel.json` gjorde varje databastur i navet ungefär **femton gånger
+billigare**. Startsidans nio vågor kostade före fixen omkring fyra sekunder i
+ren väntan.
+
+### X3-mätningen kunde aldrig ha upptäckt det
+
+`scripts/lib/matning.mjs` räknar vågor och multiplicerar med `MS_PER_VAG = 20`.
+Talet står med motiveringen att "latensen härifrån till Supabase är HÖGRE än
+från Vercels funktion, som står i samma region som databasen".
+
+**Den meningen var fel, och det var den enda antagandet i hela X3.** Alla
+X3-siffror var därför ungefär tjugo gånger för låga per våga. Startsidans
+"762 ms på normalt 4G" var i verkligheten flera sekunder.
+
+Läxan är inte att talet var fel utan att det var **ett antagande om produktion
+som aldrig mättes mot produktion**. `scripts/mat-inloggad.mjs` finns nu och gör
+just det: skapar en riktig användare, bygger sessionskakan i `@supabase/ssr`:s
+format och hämtar sidorna över nätet som en webbläsare. `npm run mat:inloggad`.
+
+Skriptet vägrar räkna ett svar som inte är 200 som godkänt. Första körningen
+gick mot en gammal deploy-adress, fick fyra 302:or till Vercels inloggning och
+rapporterade "alla sidor klarar sitt krav". **En mätning som ser grön ut när den
+misslyckats är sämre än ingen mätning.**
+
+### Vågorna: sex omgångar där en räckte
+
+Startsidan ställde sina frågor i sex omgångar efter varandra. Ingen av dem
+behövde svaret från den förra — de väntade för att de råkade stå i den ordningen
+i filen. Nu är det en `Promise.all`. De villkorade frågorna står kvar som
+villkorade; `Promise.resolve` håller platsen utan att kosta en tur.
+
+`getCurrentUser()` gjorde tre frågor: användaren, `employee`, och sedan roller
+och rättigheter. Nu en enda, med rollerna inbäddade. Varje sida i navet börjar
+med det anropet.
+
+**De inbäddade relationerna måste namnge sin främmandenyckel.** `employee_role`
+och `employee_permission` pekar båda *två* gånger på `employee` — en gång på den
+som har rollen (`employee_id`) och en gång på den som delade ut den
+(`granted_by`). Utan namn avvisar PostgREST hela frågan med `PGRST201`, och då
+blir `employee` null och **varje inloggad ser "väntar på aktivering"**.
+Typecheck säger ingenting om det; det syns först mot databasen. Båda varianterna
+provades mot produktionsdatabasen innan de gick in.
+
+### Notisklockan höll tillbaka hela navet
+
+`hamtaNotiser()` ställer sexton frågor. De går parallellt, men de låg i
+`(app)/layout.tsx` — och **en layout måste vara klar innan någon del av sidan
+får skickas.** Sexton frågor som ingen bett om höll alltså tillbaka både skalet
+och innehållet vid varje sidvisning.
+
+Nu ligger de bakom `<Suspense>` i `components/shell/Klocka.tsx`. Ingen fråga är
+borttagen och ingenting läser annorlunda — det som ändrats är vad som får vänta
+på vad. `Skal` och `Topbar` tar numera en färdig nod (`klocka`) i stället för en
+lista notiser, just för att toppraden ska kunna ritas innan svaren finns.
+
+### Det som inte handlade om millisekunder
+
+**Navet hade ingen `loading.tsx` någonstans.** Utan en laddningsgräns gör ett
+klick i menyn ingenting synligt förrän servern är helt färdig: skärmen står
+still, den gamla sidan ligger kvar, och den som klickade vet inte om trycket
+togs emot — så hen klickar igen.
+
+Det är den delen av "segt" som ingen mätning fångar. En sida som tar 600 ms och
+svarar direkt känns snabbare än en som tar 400 ms och står stilla hela vägen.
+`src/app/(app)/loading.tsx` täcker allt bakom inloggningen.
+
+Formen är med flit innehållslös. Ett skelett som gissar sidans form har fel på
+de flesta sidor, och ett skelett med fel form är ett hopp till när det rätta
+kommer.
+
+### Sökningen, och en skrivning som stod i vägen
+
+Sökmissen skrevs med `await` **före** svaret. Den träffade alltså just den
+sökning som redan varit långsammast — den som inte hittade något och därför
+hunnit prova både den smala och den breda frågan. Nu `after()` från
+`next/server`: körs efter att svaret gått iväg men innan funktionen får
+avslutas. Ett lösryckt löfte utan `await` hade plattformen kunnat avbryta mitt
+i, och då hade statistiken tappat rader utan att någon märkt det.
+
+Rollerna i träfflistan bäddas in i personalfrågan i stället för en följdfråga.
+
+### `raknaPeriod` gjorde femtio turer för ett knapptryck
+
+Två frågor per anställd inuti loopen — en för lönen, en för raden — och de gick
+efter varandra. Nu hämtas lönerna i en fråga (`hamtaLonerFor`) och raderna
+skrivs i en `insert`. Beräkningen är oförändrad; det som ändrats är när
+databasen frågas, inte vad den svarar.
+
+### Mellanvaran betalade för besked den inte behövde
+
+`/api` hoppar nu över hela sessionskontrollen. Rutterna där autentiserar sig
+själva — nattjobbet med `CRON_SECRET`, kalenderflödet med sin hemliga adress,
+felrutten med sitt ursprung. Nattjobbet betalade en tur till Supabase Auth för
+att få reda på att det inte har någon session.
+
+### Resultat
+
+Inloggad, median av sex hämtningar, varm funktion. Nätgolvet från mätmaskinen är
+~215 ms — även en statisk fil från CDN:en kostar så mycket härifrån.
+
+| Sida | Före | Efter | Krav |
+|---|---|---|---|
+| Startsidan | 1 029 ms | ~550–660 ms | 1 500 |
+| Stämplingsvyn | 722 ms | ~630 ms | 2 000 |
+| Sökningen | 1 231 ms | ~460–570 ms | 500 |
+| Rutinerna | 954 ms | ~470–500 ms | 1 500 |
+
+"Före" är mätt **efter** regionfixen. Mot iad1 var siffrorna flera sekunder, och
+den jämförelsen går inte att göra om — gamla deploy-adresser är skyddade och
+svarar 302.
+
+Sökningen ligger på gränsen till sitt krav. Kravet gäller mjuk navigering utan
+uppkopplingskostnad, och mätningen ovan bär hela HTTP-anropet, så den är
+strängare än kravet. Marginalen är ändå den minsta i navet — håll ögonen på den.
+
+**Siffrorna varierar mycket mellan körningar.** En kall funktion ger 1 300 ms
+där en varm ger 470. Läs medianen av flera körningar, inte en enskild.
+
+### Säkerhetsgenomgången
+
+Genomgång av RLS, behörighetskontroller, nyckelhantering, CSP och rutter.
+**Grunden är genomgående stark:**
+
+- RLS är påslaget på **samtliga 68 tabeller**, ingen har noll policyer av
+  misstag (de fyra som har det — `activity_day`, `search_miss`, `quiz_option`,
+  `schema_migrations` — är avsiktliga och ger klienten noll rader).
+- **Ingen skrivrätt alls** för `anon` eller `authenticated` direkt på någon
+  tabell.
+- Varje server action kontrollerar behörighet **först**, före varje
+  `supabaseAdmin()`. Ångra-dispatchern gör om hela kontrollen och litar inte på
+  kvittot. Genomgången hittade ingen handling som saknar kontroll.
+- `log_audit` och `registrera_fel` är stängda för klienten — 0027 gjorde det den
+  påstår.
+- Markdown renderas utan `rehype-raw`, så ett dokument kan inte smuggla skript.
+- Ingen `"use client"`-fil importerar serverkod eller service role-nyckeln.
+
+**Det som bör åtgärdas, i ordning:**
+
+1. **`STEG2_SECRET` är inte satt i Vercel.** `src/lib/mfa.ts` faller då tillbaka
+   på `SUPABASE_SERVICE_ROLE_KEY` som HMAC-nyckel för steg två-kvittot.
+   Fallbacken är medveten och dokumenterad, men den kopplar ihop två skilda
+   säkerhetsdomäner: samma hemlighet signerar enhetskvitton och ger full
+   förbigång av RLS. Sätt en egen. **Följd att veta innan:** alla chefer måste
+   bekräfta sin enhet på nytt en gång.
+2. **`sattKvitto` är exporterad ur en `"use server"`-fil** och är därmed en
+   publik ändpunkt, inte bara en intern hjälpare. Den kan bara sätta ens egen
+   toast-kaka och texten renderas av React, så det är ingen XSS — men en
+   hjälpfunktion ska inte publiceras som en handling. Flytta den, eller låt den
+   ta emot bara det som `ANGRABARA` tillåter.
+3. **`CRON_SECRET` jämförs med `!==`.** Byt till en konstanttidsjämförelse. Låg
+   risk över HTTP, men det är två rader.
+4. **`anon` har `execute` på tretton RLS-predikat** (`has_role`,
+   `leads_employee`, `far_rekrytera` med flera). Det är avsiktligt enligt 0027
+   och 0028 och läcker ingenting — alla utgår från `auth.uid()`, som är null för
+   `anon`. Men granten behövs inte, och den gör nästa `security definer`-funktion
+   lättare att skriva fel. Överväg `authenticated` ensamt.
+
+Ingen av punkterna är en öppen dörr. Punkt 1 är den enda med verklig
+konsekvens om något annat går fel.
+
+---
+
 ## 2026-08-23 · Testhärdning, adoptionsstatistik, X3 färdigmätt och E10 påbörjad
 
 Fyra punkter i den ordning användaren bad om dem: radräkningarna i proven, E6.5,
