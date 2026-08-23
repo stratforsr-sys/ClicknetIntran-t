@@ -23,7 +23,23 @@ const KNAPP: Record<Stamptyp, { text: string; variant: "primar" | "sekundar" }> 
  * AC-2.2: tappar nätet skrivs klockslaget ner i webbläsarens lagring och
  * skickas när sidan öppnas igen, med tiden det faktiskt hände.
  */
-export function Stamplar({ lage, tillatna }: { lage: Lage; tillatna: Stamptyp[] }) {
+export function Stamplar({
+  lage,
+  tillatna,
+  kompakt = false,
+}: {
+  lage: Lage;
+  tillatna: Stamptyp[];
+  /**
+   * Startsidans snabbvalsrad. Knapparna star da bland andra knappar och
+   * laget star redan i statusbandet ovanfor, sa den avslutande raden med
+   * "Du ar instampad" hade sagt samma sak en gang till.
+   *
+   * Ko-formularet for stamplingar gjorda utan natverk ar kvar aven kompakt.
+   * Det ar inte utsmyckning — utan det tappas stamplingen (AC-2.2).
+   */
+  kompakt?: boolean;
+}) {
   const router = useRouter();
   const [state, skicka, vantar] = useActionState(stampla, TOM);
   const [koat, setKoat] = useState<{ typ: Stamptyp; tid: string } | null>(null);
@@ -104,13 +120,15 @@ export function Stamplar({ lage, tillatna }: { lage: Lage; tillatna: Stamptyp[] 
         ))}
       </div>
 
-      <p className="text-small text-ink-500">
-        {lage === "ute"
-          ? "Du är inte instämplad."
-          : lage === "rast"
-            ? "Du är på rast."
-            : "Du är instämplad."}
-      </p>
+      {!kompakt && (
+        <p className="text-small text-ink-500">
+          {lage === "ute"
+            ? "Du är inte instämplad."
+            : lage === "rast"
+              ? "Du är på rast."
+              : "Du är instämplad."}
+        </p>
+      )}
     </div>
   );
 }

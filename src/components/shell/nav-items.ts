@@ -33,6 +33,18 @@ export function navFor(user: CurrentUser | null, stamplingPa: boolean): NavItem[
     // pa om K12 ar avgjord. Bara paminnelserna om oregistrerad franvaro gor
     // det, och de hanteras i nattjobbet.
     items.push({ href: "/franvaro", label: "Frånvaro", ikon: "klocka" });
+
+    /**
+     * E13. Posten galler alla, och visar olika saker beroende pa vem som
+     * oppnar den — RLS i 0031 avgor. Saljaren ser sin EGEN intjanade
+     * provision; ekonomi och VD ser allas och bokfor dem.
+     *
+     * Skillnaden mot lonekostnaden ar avsiktlig. Den raden ar bolagets kalkyl
+     * PA en person och stangd for alla utom `payroll_cost_viewer`. Den har ar
+     * personens egen intjaning, och att kunna se vad man arbetat ihop utan att
+     * be nagon leta upp det ar hela nyttan.
+     */
+    items.push({ href: "/provision", label: "Provision", ikon: "kontroll" });
   }
 
   // Loneunderlaget ar ledningens och ekonomins (AC-2.13). Teamledaren har

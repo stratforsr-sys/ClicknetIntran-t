@@ -11,23 +11,27 @@ import { granskningslage } from "@/lib/dokument";
 import { kursLage, LAGE_ETIKETT, LAGE_TON } from "@/lib/utbildning";
 import { slaLage } from "@/lib/arenden";
 import { hamtaLage } from "@/lib/sparrar";
+import { gallandeSchema } from "@/lib/raster";
+import { svensktDatum, svenskVeckodag } from "@/lib/klocka";
+import { hamtaProvision } from "@/lib/provision-server";
+import { kronor, manadFore, manadsnamn, manadsnyckel, sammanfatta } from "@/lib/provision";
 import {
   arbetadeMinuter,
   dygnetsStart,
+  gallande,
   lageNu,
   tillatna,
-  timmarOchMinuter,
   type Handelse,
 } from "@/lib/tid";
 import { supabaseServer } from "@/lib/supabase/server";
 import { Stamplar } from "./tid/Stamplar";
+import { Statusband } from "./Statusband";
+import { Dagslinje } from "./Dagslinje";
+import { snabbvalFor } from "./snabbval";
 
 export const dynamic = "force-dynamic";
 
 /**
- * UI-PRD §7: startsidan har ingen hero och ingen illustration.
- * Forsta skarmen ska ge handling, inte valkomnande.
- *
  * §12 Q9: ordningen ar rollstyrd. Saljaren ser stampelknappen forst — det ar
  * det enda hen gor har varje dag, och hen gor det fran telefonen i dorren.
  * Chefen ser sina koer forst, for hens arende med sidan ar att veta vad som
@@ -35,6 +39,26 @@ export const dynamic = "force-dynamic";
  *
  * "Att gora" hamtar bara ur levererade moduler. En rad som inte gar att
  * atgarda hor inte hemma har — da blir listan nagot man slutar titta pa.
+ *
+ * ===========================================================================
+ * OMBYGGD 2026-08-23. TRE SAKER ANDRADES, OCH ETT AV DEM ETT AVSTEG.
+ *
+ * 1. UI-PRD §7 sa att startsidan inte har nagon hero. Den har nu ett
+ *    STATUSBAND — halsning, levande stamplingslage och arbetad tid som tickar.
+ *    Avsteget ar bestallarens beslut och star i DECISIONS.md. Skillnaden mot
+ *    en hero ar att bandet bar information: det svarar pa "ar jag inne och hur
+ *    lange" utan en sidladdning till /tid.
+ *
+ * 2. Dagen ritas som en TIDSLINJE. Den ar en avbildning av vad som stamplats,
+ *    aldrig en bedomning av det — se `src/lib/dagslinje.ts` for varfor inget
+ *    fargas rott har.
+ *
+ * 3. PROVISIONEN star pa samma sida som tiden. Det var K13 emot. Bestallaren
+ *    ompravade K13 2026-08-23 efter en direkt fraga. Det som star kvar: ingen
+ *    FRAGA joinar de tva tabellerna, och rastavvikelser nar fortfarande aldrig
+ *    provisionen — den delen ar ett loften till personalen i K12 §5 och ar
+ *    inte omprovad.
+ * ===========================================================================
  */
 export default async function Startsida() {
   const user = await getCurrentUser();
@@ -51,7 +75,6 @@ export default async function Startsida() {
   const attesterar = canManageEmployees(user);
   const serAvvikelser = canManageEmployees(user) || hasRole(user, "team_lead");
   const chef = serPersonal || hanterarArenden;
-
 
   /**
    * ===========================================================================
@@ -71,8 +94,12 @@ export default async function Startsida() {
    * forst om den verkligen gor det. Det gjorde ingen av de fem som lag har.
    * ===========================================================================
    */
+  const nu = new Date();
   const idagFran = dygnetsStart();
   const idagDatum = new Date().toISOString().slice(0, 10);
+  const idagSvenskt = svensktDatum(nu);
+  const veckodag = svenskVeckodag(nu);
+  const dennaManad = manadsnyckel(nu);
 
   const [
     { data: kravDok },
@@ -84,6 +111,9 @@ export default async function Startsida() {
     { data: minProgress },
     { data: minaCert },
     { data: idag },
+    { data: scheman },
+    { data: rastscheman },
+    provisionsposter,
     { data: koArenden },
     { count: attKvittera },
     { data: koFranvaro },
@@ -147,6 +177,32 @@ export default async function Startsida() {
           .order("occurred_at")
       : Promise.resolve({ data: null }),
 
+    // Dagens schema, for tidslinjens ram och for "kvar till schemats slut".
+    // RLS ger bolagets, teamets och det egna — `gallandeSchema` valjer sedan
+    // den mest specifika, precis som nattjobbet gor.
+    sparr.stampling
+      ? supabase
+          .from("work_schedule")
+          .select("scope, employee_id, team_id, start_time, end_time, valid_from")
+          .eq("weekday", veckodag)
+          .lte("valid_from", idagSvenskt)
+      : Promise.resolve({ data: null }),
+
+    // Rastschemat behovs bara till nedrakningen, och nedrakningen finns bara
+    // nar rasten ar pa. Utan schemalagd langd raknas ingenting ner — en
+    // nedrakning mot en gissad rastlangd vore varre an ingen alls.
+    sparr.rast
+      ? supabase
+          .from("scheduled_break")
+          .select("scope, employee_id, team_id, sort, duration_minutes, valid_from")
+          .eq("weekday", veckodag)
+          .lte("valid_from", idagSvenskt)
+      : Promise.resolve({ data: null }),
+
+    // E13. Egna poster, tolv manader bakat — kortet visar innevarande manad,
+    // men jamforelsen med forra manaden och arssumman kommer ur samma svar.
+    hamtaProvision(user.employee.id, manadFore(dennaManad, 11)),
+
     /**
      * Chefens ko.
      *
@@ -202,7 +258,7 @@ export default async function Startsida() {
   ]);
 
   // ---------------------------------------------------------------------------
-  // Harifran och ner rakans det bara i minnet. Ingen fraga till.
+  // Harifran och ner raknas det bara i minnet. Ingen fraga till.
   // ---------------------------------------------------------------------------
 
   const modulerPerKurs = new Map<string, string[]>();
@@ -236,16 +292,57 @@ export default async function Startsida() {
   const forfallna = mittAgande ?? [];
   const obesvarade = minaArenden ?? [];
 
+  const handelser: Handelse[] = idag ?? [];
   let stamplingslage = null;
   if (sparr.stampling) {
-    const handelser: Handelse[] = idag ?? [];
     const lage = lageNu(handelser);
+    const giltiga = gallande(handelser);
+    const senaste = giltiga[giltiga.length - 1] ?? null;
+
     stamplingslage = {
       lage,
       tillatna: tillatna(lage, sparr.rast),
       minuter: arbetadeMinuter(handelser),
+      // Nar det nuvarande laget borjade. Utstamplad person har inget "sedan".
+      sedan: lage === "ute" ? null : (senaste?.occurred_at ?? null),
     };
   }
+
+  const dagsschema =
+    gallandeSchema(
+      (scheman ?? []) as {
+        scope: string;
+        employee_id: string | null;
+        team_id: string | null;
+        valid_from: string;
+        start_time: string;
+        end_time: string;
+      }[],
+      user.employee.id,
+      user.employee.team_id,
+      idagSvenskt,
+    )[0] ?? null;
+
+  // Forsta rasten i schemat bar langden nedrakningen mats mot. Fler raster an
+  // en pa samma dag: nedrakningen galler den som pagar, och `sort 1` ar den
+  // enda som har en langd att rakna mot innan navet vet vilken rast det ar.
+  const rastLangd =
+    gallandeSchema(
+      (rastscheman ?? []) as {
+        scope: string;
+        employee_id: string | null;
+        team_id: string | null;
+        valid_from: string;
+        sort: number;
+        duration_minutes: number;
+      }[],
+      user.employee.id,
+      user.employee.team_id,
+      idagSvenskt,
+    ).sort((a, b) => a.sort - b.sort)[0]?.duration_minutes ?? null;
+
+  const provision = sammanfatta(provisionsposter, nu);
+  const harProvision = provisionsposter.length > 0;
 
   const attBesluta = (koFranvaro ?? []).filter((a) => a.employee_id !== user.employee!.id);
   const attBekrafta = (obekraftadSjuk ?? []).filter((s) => s.employee_id !== user.employee!.id);
@@ -254,25 +351,47 @@ export default async function Startsida() {
   const overTiden = (koArenden ?? []).filter((a) => slaLage(a) === "over").length;
   const snart = (koArenden ?? []).filter((a) => slaLage(a) === "snart").length;
 
+  const snabbval = snabbvalFor(user, sparr.stampling);
 
-  const stampelkort = stamplingslage ? (
+  /**
+   * DAGSKORTET. Stampelknapparna, dagens linje och snabbvalen i ett.
+   *
+   * De hor ihop for att de svarar pa samma fraga: vad gor jag har och nu. Att
+   * dela dem i tre kort hade gett tre rubriker att lasa innan man hittar
+   * knappen man kom for.
+   */
+  const dagskort = (
     <Card status="brand">
-      <CardHeader
-        titel="Stämpla"
-        beskrivning={
-          stamplingslage.lage === "ute"
-            ? "Tiden sätts när du trycker."
-            : `Arbetad tid idag: ${timmarOchMinuter(stamplingslage.minuter)}.`
-        }
-      />
-      <Stamplar lage={stamplingslage.lage} tillatna={stamplingslage.tillatna} />
-      <div className="mt-4">
-        <Link href="/tid" className="text-small font-semibold text-brand-700 hover:text-brand-900">
-          Dagens stämplingar
-        </Link>
-      </div>
+      {stamplingslage ? (
+        <>
+          <Stamplar lage={stamplingslage.lage} tillatna={stamplingslage.tillatna} kompakt />
+          <div className="mt-5">
+            <Dagslinje
+              handelser={handelser}
+              schema={dagsschema}
+              rastLangd={rastLangd}
+              serverTid={nu.toISOString()}
+            />
+          </div>
+        </>
+      ) : (
+        <p className="text-small text-ink-500">
+          Stämplingen är avstängd. Snabbvalen nedan fungerar som vanligt.
+        </p>
+      )}
+
+      {snabbval.length > 0 && (
+        <div className="mt-5 flex flex-wrap gap-2 border-t border-canvas pt-5">
+          {snabbval.map((s) => (
+            <ButtonLink key={s.href} href={s.href} size="sm" variant="sekundar">
+              <Ikon namn={s.ikon} className="size-4" />
+              {s.text}
+            </ButtonLink>
+          ))}
+        </div>
+      )}
     </Card>
-  ) : null;
+  );
 
   const attGora = (
     <Card>
@@ -411,6 +530,72 @@ export default async function Startsida() {
     </Card>
   ) : null;
 
+  /**
+   * ARENDEKORTET SYNS BARA NAR DET HAR NAGOT ATT SAGA.
+   *
+   * Bestallarens val 2026-08-23. Ett kort som varje dag sager "inga arenden"
+   * ar en ruta man slutar lasa, och nar den en dag sager nagot annat har ogat
+   * redan lart sig att hoppa over den. Vagen till ett nytt arende ligger i
+   * snabbvalen ovan och forsvinner alltsa aldrig.
+   */
+  const egnaArenden = obesvarade.length;
+  const oppnaIKon = hanterarArenden ? (koArenden ?? []).length : 0;
+
+  // Kortet upprepar INTE "over tiden" och "snart forfallna". De star redan i
+  // kon ovan, och en siffra som star pa tva stallen pa samma skarm blir en
+  // siffra man borjar jamfora i stallet for att agera pa.
+  const arendekort =
+    egnaArenden + oppnaIKon > 0 ? (
+      <Card>
+        <CardHeader titel="Ärenden" />
+        <dl className="flex flex-col gap-3">
+          {egnaArenden > 0 && <Rad etikett="Väntar på ditt svar" varde={egnaArenden} />}
+          {oppnaIKon > 0 && <Rad etikett="Öppna i kön" varde={oppnaIKon} />}
+        </dl>
+        <div className="mt-5 flex flex-wrap gap-2">
+          <ButtonLink href="/arenden" size="sm">
+            Öppna ärenden
+          </ButtonLink>
+          <ButtonLink href="/arenden/nytt" size="sm" variant="diskret">
+            Nytt ärende
+          </ButtonLink>
+        </div>
+      </Card>
+    ) : null;
+
+  /**
+   * PROVISIONSKORTET.
+   *
+   * Visar INTJANAT, aldrig utbetalt och aldrig berakat — navet raknar ingen
+   * provision, se `src/lib/provision.ts`. Kortet doljs helt tills den forsta
+   * posten bokforts: en ruta med "0 kr" varje dag ar inte information, det ar
+   * en paminnelse om att modulen inte anvands an.
+   */
+  const provisionskort = harProvision ? (
+    <Card>
+      <CardHeader titel="Din provision" beskrivning={manadsnamn(provision.denna.manad)} />
+      <p className="tnum text-display text-ink-900">{kronor(provision.denna.belopp)}</p>
+      <dl className="mt-4 flex flex-col gap-3">
+        {provision.denna.affarer !== null && (
+          <Rad etikett="Affärer" varde={provision.denna.affarer} />
+        )}
+        <div className="flex items-baseline justify-between gap-4">
+          <dt className="text-small text-ink-500">Förra månaden</dt>
+          <dd className="tnum text-body text-ink-900">{kronor(provision.forra.belopp)}</dd>
+        </div>
+        <div className="flex items-baseline justify-between gap-4">
+          <dt className="text-small text-ink-500">Hittills i år</dt>
+          <dd className="tnum text-body text-ink-900">{kronor(provision.iAr)}</dd>
+        </div>
+      </dl>
+      <div className="mt-5">
+        <ButtonLink href="/provision" size="sm">
+          Se posterna
+        </ButtonLink>
+      </div>
+    </Card>
+  ) : null;
+
   const personalkort = serPersonal ? (
     <Card>
       <CardHeader titel="Personalen" />
@@ -426,30 +611,34 @@ export default async function Startsida() {
     </Card>
   ) : null;
 
+  const roller = user.roles.length
+    ? user.roles.map((r) => ROLE_LABEL[r]).join(" · ")
+    : "Din roll är inte satt än.";
+
   return (
     <div className="flex flex-col gap-4 pt-2">
-      <div>
-        <h1 className="text-display text-ink-900">
-          Hej {user.employee.first_name}
-        </h1>
-        <p className="mt-1 text-body text-ink-500">
-          {user.roles.length
-            ? user.roles.map((r) => ROLE_LABEL[r]).join(" · ")
-            : "Din roll är inte satt än."}{" "}
-          · {STATUS_LABEL[user.employee.status] ?? user.employee.status}
-        </p>
-      </div>
+      <Statusband
+        fornamn={user.employee.first_name}
+        undertext={`${roller} · ${STATUS_LABEL[user.employee.status] ?? user.employee.status}`}
+        lage={stamplingslage?.lage ?? null}
+        minuterVidRendering={stamplingslage?.minuter ?? 0}
+        serverTid={nu.toISOString()}
+        sedan={stamplingslage?.sedan ?? null}
+      />
+
+      {dagskort}
 
       {/* Ordningen ar hela poangen med E5.4, och den maste halla aven pa
           375 px dar allt ligger i en enda spalt. Darfor byter korten plats i
           traden i stallet for med CSS. */}
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="flex flex-col gap-4 lg:col-span-2">
-          {chef ? kokort : stampelkort}
+          {kokort}
           {attGora}
         </div>
         <div className="flex flex-col gap-4">
-          {chef ? stampelkort : null}
+          {arendekort}
+          {provisionskort}
           {personalkort}
         </div>
       </div>

@@ -77,3 +77,61 @@ sig själv därefter.
 ## D-T6 · Migrationer körs med checksumma, aldrig via Supabase-gränssnittet
 **2026-08-16.** Definition of Done p. 3. `schema_migrations` har RLS påslagen utan
 policy, så tabellen syns inte via REST-API:t.
+
+## D-U9 · Startsidan får ett statusband — avsteg från UI-PRD §7
+**2026-08-23.** Beställarbeslut. §7 sa att startsidan inte har någon hero och
+ingen illustration: "första skärmen ska ge handling, inte välkomnande". Regeln
+var rätt och gäller fortfarande för illustrationer och välkomsttexter.
+
+**Beslut:** ett statusband överst med hälsning, levande stämplingsläge och
+arbetad tid som tickar. Skillnaden mot en hero är att bandet **bär
+information** — det svarar på "är jag inne och hur länge" utan en sidladdning
+till `/tid`. Ett band som bara hälsade hade fallit på samma invändning som förut.
+
+**Konsekvens:** startsidans första skärm är två rader högre, och stämpelknappen
+ligger alltså längre ned på en telefon. Det var hela skälet till §7 från början.
+**Det här är inte uppmätt i en webbläsare** — bandet är byggt kompakt (två rader,
+ingen bild) just för att knappen ska rymmas ovanför vikningen på 375 px, men
+någon bör titta på det på en riktig telefon under piloten. Blir det trångt är
+åtgärden att flytta snabbvalslänkarna under korten, inte att ta bort bandet.
+
+## D-K13 · K13 omprövas: provision och tid får stå på samma sida
+**2026-08-23.** Beställarbeslut efter direkt fråga. K13 sa att provisionsdata och
+tiddata inte får samköras i någon vy. Beställaren valde att båda ska stå på
+startsidan och att K13 skrivs om.
+
+**Vad beslutet gäller:** att en säljare ser sin egen arbetade tid och sin egen
+intjänade provision på samma skärm.
+
+**Vad som står kvar, och varför:**
+
+- **Ingen fråga joinar tabellerna.** `time_event` och `commission_entry` hämtas
+  var för sig och möts först i webbläsaren. Det kostar ingenting att hålla, och
+  det gör att ingen vy kan börja sortera säljare efter tid mot intjäning.
+- **Rastavvikelser och sen ankomst når fortfarande aldrig provisionen.** Den
+  delen av K13 är ett uttryckligt löfte till personalen i K12-intresseavvägningen
+  §5 ("Data når varken provision eller lönekostnadsvy") och är **inte** omprövad.
+  Att ompröva den kräver att K12 skrivs om och beslutas på nytt.
+
+**Konsekvens:** K13 i kravlistan behöver formuleras om till att gälla
+avvikelsedata, inte all tiddata. Tills det är gjort står den här posten som den
+gällande läsningen.
+
+## D-E13 · Provisionen är en huvudbok, inte en motor
+**2026-08-23.** Q78–Q80 är obesvarade och Inkio (A5) finns inte. Navet räknar
+därför ingen provision — `commission_entry` tar emot poster som någon annan
+bestämt, precis som `salary_basis` gör med månadslönen.
+
+**Beslut:** beloppet är signerat och en rättelse är en **negativ post**, inte en
+överskrivning. Skälet är att intjänad provision ackumuleras: `salary_basis`
+modell — ny rad med nytt `valid_from` ersätter den gamla — hade dubbelräknats av
+varje summering.
+
+**Konsekvens:** när Inkio kopplas in skriver den i samma tabell med
+`source = 'inkio'` och sitt eget id i `external_ref`. Det partiella unika
+indexet gör importen idempotent. Ingen vy behöver röras den dagen.
+
+**Behörigheten skiljer sig medvetet från K26/lönekostnad:** den anställda ser sin
+egen rad. Lönekostnaden är bolagets kalkyl *på* en person; provisionen är
+personens egen intjäning. Att dölja den för den som tjänat in den vore inte
+sekretess utan hemlighetsmakeri. Andras poster ser bara ekonomi och VD.

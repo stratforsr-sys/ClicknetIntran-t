@@ -100,6 +100,11 @@ export const KALLOR: Kalla[] = [
   // mest närgångna uppgift navet har om en anställning, och den enda som
   // personen själv skrivit under.
   { tabell: "contract", kolumn: "employee_id", andamal: "Dina anställningsavtal" },
+
+  // 0031 E13. Vad du tjänat in i provision, post för post. Till skillnad från
+  // lönekostnaden ser du den redan i navet — men den ska med här ändå, för
+  // utdraget ska vara fullständigt och inte bara innehålla det som är dolt.
+  { tabell: "commission_entry", kolumn: "employee_id", andamal: "Din intjänade provision" },
 ];
 
 /**
@@ -183,4 +188,7 @@ export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
   { tabell: "candidate_stage_event", kolumn: "by_employee", skal: "Vem som flyttade en kandidat" },
   { tabell: "interview_scorecard", kolumn: "interviewer_id", skal: "Vem som intervjuade en kandidat" },
   { tabell: "recruitment_policy", kolumn: "updated_by", skal: "Vem som ändrade rekryteringsreglerna" },
+
+  // 0031 E13.
+  { tabell: "commission_entry", kolumn: "entered_by", skal: "Vem som bokförde provisionen" },
 ];

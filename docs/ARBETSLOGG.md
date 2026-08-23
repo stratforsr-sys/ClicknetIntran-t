@@ -5,6 +5,122 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-08-23 (sent) · Startsidan byggs om, och provisionen får sin första skiva
+
+Beställarens uppdrag: startsidan ska ge rollstyrda snabbval — stämpla in, ut,
+rast — plus ett litet ärendekort och ett kort som visar lönen. Fyra frågor
+ställdes innan något byggdes, och tre av svaren ändrade vad som gick att göra.
+
+### Frågan om lönen ledde till en annan modul än den som efterfrågades
+
+"Ett kort där man ser sin lön" går inte att bygga som det står. Navet lagrar
+ingen lönesumma den anställda får se: `salary_basis` är stängd för alla utom
+`payroll_cost_viewer` (K26), och lönerapporten bär minuter och antal, aldrig
+kronor (K5, AC-2.17).
+
+Beställarens svar: **det ska stå intjänad provision, och den kommer med
+Inkio-integrationen.** Alltså E13, som var blockerad av Q78–Q80 och A5.
+
+Lösningen är en huvudbok utan motor. `commission_entry` tar emot poster som
+någon annan bestämt — inga satser, ingen trappa, ingen procentsats i en `if`.
+Det är samma linje som 0025 drog för lönekostnaden, och skälet är detsamma: en
+gissad sats ser exakt ut och är påhittad, och just den siffran är den folk
+kommer att bråka om.
+
+**Rättelsen är en negativ post, inte en överskrivning.** Det är den enda
+skillnaden mot `salary_basis`, och den är nödvändig: intjänad provision
+ackumuleras, så "ny rad med nytt värde" hade dubbelräknats av varje summering.
+
+**Sömmen mot Inkio är lagd men inte kopplad.** `source` och `external_ref` med
+ett partiellt unikt index gör importen idempotent — samma affär kan skickas två
+gånger utan att bli två poster. När A5 besvaras skriver Inkio i samma tabell och
+ingen vy behöver röras.
+
+**Behörigheten skiljer sig från K26 med flit.** Den anställda ser sin egen rad.
+Lönekostnaden är bolagets kalkyl *på* en person; provisionen är personens egen
+intjäning. Andras poster ser bara ekonomi och VD — beställaren sa "ekonomi/VD",
+och säljchefen står därför utanför. En roll till är en rad i
+`far_hantera_provision()`.
+
+### K13 omprövades, och en del av den står kvar
+
+K13 sa att provisionsdata och tiddata inte får samköras i någon vy. Uppdraget
+krävde båda på startsidan. Frågan ställdes rakt ut, och beställaren valde att
+K13 skrivs om.
+
+Det som står kvar utan att kosta något:
+
+- **Ingen fråga joinar tabellerna.** De hämtas var för sig i samma våg och möts
+  i webbläsaren. Ingen vy kan alltså börja sortera säljare efter tid mot
+  intjäning.
+- **Rastavvikelser och sen ankomst når fortfarande aldrig provisionen.** Den
+  delen är ett uttryckligt löfte till personalen i K12-intresseavvägningen §5
+  och är inte omprövad. Att ompröva den kräver att K12 beslutas på nytt.
+
+Se D-K13 i `DECISIONS.md`.
+
+### Tidslinjen är en avbildning, inte en bedömning
+
+Dagskortet ritar dagens stämplingar som segment mot schemat, med en markör för
+nu och en nedräkning för den som är på rast.
+
+**Ingenting färgas rött.** Det är inte en utebliven detalj. En linje som blir röd
+när rasten drog över är en bedömning — och bedömningar hör hemma i
+avvikelsemotorn, som har toleranser, kvittenskrav (AC-2.36) och en loggad
+chefsöppning (K19) omkring sig. En sådan bedömning på startsidan hade dessutom
+stått framför näsan på den som just kom tillbaka från lunch.
+
+**Nedräkningen är byggd åt den som är på rast, inte åt någon annan.** Siffran
+syns bara i personens egen vy. Den som får veta att rasten snart är slut *medan*
+den pågår kan avsluta i tid — och då finns det ingen avvikelse att bedöma alls.
+Det är samma uppgift som avvikelsemotorn annars räknar fram i efterhand, men
+med motsatt verkan.
+
+**Zens öppna stämpling provades särskilt.** Renderas sidan dygnet efter en
+stämpling som aldrig stängdes blir `nu` mindre än starten. Segmentet fylls då
+till dygnets slut i stället för att få negativ bredd. `tests/dagslinje.mjs`
+håller det.
+
+### Statusbandet är ett avsteg från UI-PRD §7
+
+§7 sa att startsidan inte har någon hero. Beställaren bad om ett band med
+personlighet, och det finns nu: hälsning, levande läge och arbetad tid som
+tickar. Skillnaden mot en hero är att bandet bär information — det svarar på "är
+jag inne och hur länge" utan en sidladdning till `/tid`.
+
+**Tiden tickar i webbläsaren, och första renderingen använder serverns siffra
+oförändrad.** Utan det blir det en hydreringskrock: servern skriver 192 minuter,
+webbläsaren 193, och React kastar om hela trädet. Tickandet startar först i
+effekten. Samma mönster i tidslinjen.
+
+### Ärendekortet syns bara när det har något att säga
+
+Beställarens val. Ett kort som varje dag säger "inga ärenden" är en ruta man
+slutar läsa, och när den en dag säger något annat har ögat redan lärt sig att
+hoppa över den. Vägen till ett nytt ärende ligger i snabbvalen och försvinner
+alltså aldrig.
+
+Kortet upprepar heller inte "över tiden" och "snart förfallna" — de står redan i
+chefens kö, och en siffra som står på två ställen på samma skärm blir en siffra
+man börjar jämföra i stället för att agera på.
+
+### Två saker som fångades under arbetet
+
+**`kronor()` skriver U+2212 MINUS SIGN**, för det är vad sv-SE använder. Ett
+kopierat belopp gick därför inte att klistra tillbaka i rättelseformuläret —
+navet nekade ett tal det själv skrivit ut. `tolkaBelopp` känner igen tecknet nu,
+och provet kör hela vändan display → inmatning.
+
+**En hjälpare höll på att bli en publik ändpunkt igen.** `foreslagenManad` låg
+exporterad ur `"use server"`-filen innan den togs bort. Det är exakt bristen som
+säkerhetsgenomgången hittade i `sattKvitto` samma dag. Filen har nu en rubrik som
+säger att den exporterar en enda sak, och varför.
+
+### Läget efter passet
+
+Migration `0031_provision`. Typecheck grön, hela sviten grön: **1 175
+kontroller**, varav två nya sviter (`provision`, `dagslinje`).
+
 ## 2026-08-23 (kväll) · Genomgång av säkerhet och prestanda
 
 Användaren beskrev navet som "otroligt segt". Det stämde, och orsaken låg inte i
