@@ -32,7 +32,8 @@
     "test:avtal": "node --experimental-strip-types tests/avtal.mjs",
     "test:toast": "node --experimental-strip-types tests/toast.mjs",
     "mat:startsidan": "node scripts/mat-startsidan.mjs",
-    "test:adoption": "node --experimental-strip-types tests/adoption.mjs"
+    "test:adoption": "node --experimental-strip-types tests/adoption.mjs",
+    "mat:sok-stampling": "node scripts/mat-sok-och-stampling.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.7.0",
