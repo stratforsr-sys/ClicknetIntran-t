@@ -39,10 +39,10 @@ export default async function Kandidatsida({ params }: { params: Promise<{ id: s
 
   const { data: k } = await supabase
     .from("candidate")
-    .select(
-      "id, first_name, last_name, email, phone, role_title, source_slug, stage, stage_at, " +
-      "applied_at, closed_at, rejected_reason, no_show_count, talent_pool, talent_pool_consent, gdpr_purge_at",
-    )
+    // EN strang, inte tva hopslagna med +. Supabase harleder radens typ ur
+    // select-litteralen, och en uttryckssats gar den inte att lasa — resultatet
+    // blir `GenericStringError` och varje faltatkomst ett typfel.
+    .select("id, first_name, last_name, email, phone, role_title, source_slug, stage, stage_at, applied_at, closed_at, rejected_reason, no_show_count, talent_pool, talent_pool_consent, gdpr_purge_at")
     .eq("id", id)
     .single();
 

@@ -42,11 +42,20 @@ export const ROLE_LABEL: Record<Role, string> = {
  */
 export const MFA_REQUIRED_ROLES: Role[] = [];
 
-export const PERMISSIONS = ["payroll_cost_viewer"] as const;
+/**
+ * Behorigheter som INTE foljer av en roll.
+ *
+ * Listan speglar check-villkoret pa `employee_permission.permission` (0001,
+ * utokad i 0030). Lagger du till en har maste du lagga till den dar ocksa —
+ * annars nekar databasen tilldelningen och granssnittet ser ut att ha gatt
+ * sonder.
+ */
+export const PERMISSIONS = ["payroll_cost_viewer", "recruiter"] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
 export const PERMISSION_LABEL: Record<Permission, string> = {
   payroll_cost_viewer: "Lönekostnad (M13)",
+  recruiter: "Rekryterare (M7)",
 };
 
 export const EMPLOYMENT_TYPE_LABEL: Record<string, string> = {
