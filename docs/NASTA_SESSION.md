@@ -3,7 +3,7 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-08-23 (testhardning, E6.5, X3 klart, E10 paborjad)
+**Senast uppdaterad:** 2026-08-23 (sent: startsidan ombyggd, E13 forsta skivan)
 
 ---
 
@@ -69,13 +69,13 @@ i `rls.mjs`.** Samtliga 105 i den filen plus 51 i övriga sviter. Leta inte om:
 | Sak | Status |
 |---|---|
 | In- och utstämpling | **Påslagen.** `compliance_gate.stampling` |
-| Raststämpling | Avstängd. Kräver K12 + K14 + rastschema |
+| Raststämpling | Avstängd. **Två steg kvar, se nedan.** Rastschemat finns redan |
 | Sen ankomst | Påslagen, tolerans 1 minut, larm samma dag till chef |
 | Nattjobb | Ett jobb, `/api/jobb/natt`, 02:30. Hämtar igen 14 dygn bakåt |
 | Lönerapport | Klar, med attest och oföränderlig period |
 | Personalärenden | Klara, med SLA och konfidentialitet |
 | Tvingat lösenordsbyte | Spärr i databasen sedan 2026-08-20 |
-| Startsida | Rollstyrd. Chefens kö, säljarens stämpelknapp |
+| Startsida | **Ombyggd 2026-08-23.** Statusband, snabbval, dagens tidslinje, ärende- och provisionskort |
 | Bottennavigering | Under 768 px: Hem, Sök, Stämpla, Mer |
 | Registerutdrag | Klart, **inklusive filer och vem som öppnat dem** |
 | Nyheter | `/nyheter`. Målgrupp per roll och team, fäst överst, utkast |
@@ -90,6 +90,48 @@ i `rls.mjs`.** Samtliga 105 i den filen plus 51 i övriga sviter. Leta inte om:
 | **Kvitto med ångra** | **I drift sedan 2026-08-22.** Nere till höger, tre ångrabara åtgärder |
 | **Adoptionsstatistik** | **I drift sedan 2026-08-23.** `/adoption`. DAU/WAU, träfflösa sökningar, glömda dokument. Säljchef, VD, admin |
 | **Rekrytering** | **I drift sedan 2026-08-23.** `/rekrytering`. Steg, scorecards, tratt per källa. Behörighet `recruiter` eller ledningsroll |
+| **Provision** | **I drift sedan 2026-08-23.** `/provision`. Manuell inmatning av ekonomi/VD. Alla ser sin egen. Inkio-sömmen lagd, inte kopplad |
+
+### Raststämplingen: två steg kvar, och båda är dina
+
+Rastschemat finns redan (K29 uppfylld), K12 och K14 ligger som **utkast** i
+rutinbiblioteket och är kopplade till spärren. Det som återstår:
+
+1. **Publicera K12 och sätt beslutsdatum.** `/rutiner` → "Intresseavvägning —
+   registrering av arbetstid" → redigera → fyll i avsnitt 6 och 7, som är
+   avsiktligt tomma, sätt beslutsdatum och publicera.
+2. **Publicera K14** ("Så registreras din arbetstid"). Därefter måste **varje
+   aktiv anställd kvittera den** — i dag är det en person (Zen), så det är ett
+   klick.
+
+Sedan slås spärren på under `/tid/sparrar`. Triggern i databasen kontrollerar
+villkoren, inte koden.
+
+**Jag publicerade dem inte åt dig med flit.** En intresseavvägning med
+beslutsdatum är ett arbetsgivarbeslut enligt art. 6.1.f, och dokumentets egen
+ingress säger att det ska läsas av någon med dataskyddskompetens innan det
+beslutas. Avsnitt 6 och 7 — själva avvägningen och beslutet — är tomma.
+
+### Kontrollera rastlängden INNAN du slår på
+
+Rastschemat säger **10 minuter**, fönster 10:50–13:00, tolerans 5 min. Det ser
+ut som ett testvärde. Konsekvensen är uppmätt mot avvikelsemotorn:
+
+| Vad någon gör | Vad som registreras |
+|---|---|
+| 10 min rast 11:00 | inga avvikelser |
+| **30 min lunch 12:00** | **overrun, 20 min** |
+| **60 min lunch 12:00** | **overrun, 50 min** |
+| lunch + kaffepaus | overrun 20 min + unscheduled |
+| ingen rast alls | missing, 180 min |
+
+Med den här längden får alltså **var och en som äter lunch en avvikelse varje
+dag**. Det gör avvikelsevyn oläslig från dag ett, och det är den vy K12 lovar
+personalen ska vara sparsam.
+
+Ett schema ändras aldrig (AC-2.35) — en ny längd är en **ny rad med nytt
+`valid_from`**, upplagd under `/tid/schema`. Gamla rader är historik och ska
+ligga kvar.
 
 ### Fyra saker användaren själv måste göra
 
@@ -109,6 +151,68 @@ i `rls.mjs`.** Samtliga 105 i den filen plus 51 i övriga sviter. Leta inte om:
    under `/lonekostnad/satser`. **Kontrollera också åldersgränsen för den äldre
    nedsättningen** — den är seedad till 66, följer pensionsåldern och har
    flyttats flera gånger. Den berör ingen i bolaget i dag.
+
+---
+
+## Vad som byggdes 2026-08-23 (sent) — startsidan och E13
+
+Migration `0031_provision`. Hela resonemanget står i arbetsloggen; det här är
+vad du behöver veta för att inte riva något.
+
+### Provisionen är en huvudbok utan motor
+
+`commission_entry` tar emot poster som någon annan bestämt. **Navet räknar ingen
+provision** — Q78–Q80 är obesvarade, och AC-10.1 kräver konfiguration, inte kod.
+Lägger du till satser: gör dem till data, inte till ett `if`.
+
+**En rättelse är en NEGATIV post.** Tabellen är append-only och triggern nekar
+både update och delete. Skillnaden mot `salary_basis` är avsiktlig: intjäning
+ackumuleras, så "ny rad med nytt värde" hade dubbelräknats av varje summering.
+
+**Inkio-sömmen är `source` + `external_ref`** med ett partiellt unikt index.
+Importen blir idempotent, och ingen vy behöver röras när A5 besvaras.
+
+**Den anställda ser sin egen rad** — till skillnad från K26/lönekostnad. Andras
+ser bara ekonomi och VD. Säljchefen står utanför; en roll till är en rad i
+`far_hantera_provision()`.
+
+### K13 är omprövad, men bara till hälften
+
+Provision och tid får stå på samma sida (beställarbeslut, se D-K13). Det som
+står kvar: **ingen fråga joinar tabellerna**, och **rastavvikelser når
+fortfarande aldrig provisionen**. Det senare är ett löfte till personalen i
+K12-intresseavvägningen §5 och kräver att K12 beslutas om på nytt för att ändras.
+
+Rör du startsidan: håll de två hämtningarna åtskilda. De ligger i samma våg men
+är två frågor, och det är hela skyddet som är kvar.
+
+### Tidslinjen bedömer ingenting
+
+`src/lib/dagslinje.ts` ritar dagens stämplingar. **Inget färgas rött, och det är
+avsiktligt.** Bedömningar hör hemma i avvikelsemotorn, som har toleranser,
+kvittenskrav (AC-2.36) och loggad chefsöppning (K19) omkring sig.
+
+Rastnedräkningen syns **bara i personens egen vy**. Den som avslutar i tid får
+ingen avvikelse alls — det är hela poängen med att räkna ner i stället för att
+räkna efteråt.
+
+### Startsidan hämtar nu tre frågor till, i samma våg
+
+Schemat, rastschemat och provisionen lades i den befintliga `Promise.all`.
+Vågantalet är oförändrat. **X3-mätningen är inte omkörd efter ombyggnaden** —
+`npm run mat:inloggad` när du vill ha en färsk siffra. Kravet är 1 500 ms och
+marginalen var ~850 ms före.
+
+### Två fällor som redan trampats i
+
+**`kronor()` skriver U+2212 MINUS SIGN**, inte ASCII-bindestreck — det är vad
+sv-SE använder. `tolkaBelopp` känner igen båda, och provet kör hela vändan
+display → inmatning. Tar du bort raden går ett kopierat belopp inte att klistra
+tillbaka i rättelseformuläret.
+
+**Exportera ingenting mer ur `provision/actions.ts`.** Allt som exporteras ur en
+`"use server"`-fil blir en publik ändpunkt. En hjälpare låg där och togs bort —
+samma brist som säkerhetsgenomgången hittade i `sattKvitto`.
 
 ---
 
@@ -531,9 +635,16 @@ någonstans i repot. Sätt `recruitment_policy.purge_after_days` så börjar
 `gdpr_purge_at` fyllas i av sig självt, och då — men först då — går jobbet att
 bygga.
 
-### Villkoren som styrde E15 gäller nu E13 provision
+### E13 provision: skivan som är byggd, och resten
 
-E15 följer dem sedan 2026-08-21. **E13 måste följa samma:**
+**Byggt 2026-08-23:** `commission_entry`, `/provision`, kortet på startsidan.
+Manuell inmatning av ekonomi och VD.
+
+**Kvar och blockerat:** provisionsREGLERNA (Q78–Q80) och Inkio-importen (A5).
+Sömmen för importen finns — `source = 'inkio'` och `external_ref` — så
+integrationen kan skrivas utan schemaändring.
+
+**Villkoren som styrde E15 gäller fortfarande E13:**
 
 - **AC-3.26 / E7.14:** hämta frånvaro via `payroll_row.absence_minutes`. Aldrig
   genom att joina `sick_report` — RLS ger noll rader för `finance` och
@@ -542,7 +653,10 @@ E15 följer dem sedan 2026-08-21. **E13 måste följa samma:**
 - **E13.1 / AC-10.1:** provisionsregler som konfiguration, inte kod. Samma linje
   som `absence_policy` och `cost_rate` redan drog. Lägg dem gärna i `cost_rate`
   om de är satser, annars i en egen tabell — men inte i ett `if`.
-- **K13 / E13.9:** provisionsdata och tiddata får inte kunna samköras i någon vy.
+- **K13 / E13.9:** **omprövad 2026-08-23, se D-K13.** Provision och tid får stå
+  på samma sida. Det som står kvar: ingen fråga joinar tabellerna, och
+  rastavvikelser når fortfarande aldrig provisionen — det senare är ett löfte i
+  K12 §5 och är inte omprövat.
 
 ### E6.2 gallringsjobbet är blockerat, inte bortglömt
 
