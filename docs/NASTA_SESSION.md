@@ -3,7 +3,7 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-08-23 (testhardning, E6.5, X3 klart)
+**Senast uppdaterad:** 2026-08-23 (testhardning, E6.5, X3 klart, E10 paborjad)
 
 ---
 
@@ -15,6 +15,9 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
   *Avvikelser som är kända av användaren:* migrationer och tester körs från en
   scratchpad-klon, eftersom de behöver `pg` och `DATABASE_URL`.
 - Committa som `stratforsr-sys <stratforsr@gmail.com>`.
+- **`npm run typecheck` fore varje push.** Godkant av anvandaren 2026-08-23.
+  Vercel ar fortfarande det som verifierar bygget, men ett typfel som fangas
+  lokalt kostar tjugo sekunder i stallet for en misslyckad deploy.
 - Pusha rakt till `main`. Inga feature-branches. `main` deployar automatiskt
   till Vercel.
 - Migrationer är handskriven SQL i `supabase/migrations/`, körs med
@@ -82,6 +85,7 @@ i `rls.mjs`.** Samtliga 105 i den filen plus 51 i övriga sviter. Leta inte om:
 | **Avtalsmallar** | **I drift sedan 2026-08-22.** `/avtal`. E9.2 e-signering fortsatt blockerad |
 | **Kvitto med ångra** | **I drift sedan 2026-08-22.** Nere till höger, tre ångrabara åtgärder |
 | **Adoptionsstatistik** | **I drift sedan 2026-08-23.** `/adoption`. DAU/WAU, träfflösa sökningar, glömda dokument. Säljchef, VD, admin |
+| **Rekrytering** | **I drift sedan 2026-08-23.** `/rekrytering`. Steg, scorecards, tratt per källa. Behörighet `recruiter` eller ledningsroll |
 
 ### Fyra saker användaren själv måste göra
 
@@ -131,6 +135,36 @@ om personen, så den ska med i utdraget (artikel 15). Tar du bort den faller
 **Kakan i mellanvaran sätts EFTER rpc-anropet.** `setAll` byter ut hela
 `response`-objektet när tokenen förnyas, så en kaka satt före försvinner tyst —
 och då bokförs dagen om vid varje sidbyte.
+
+### E10 rekrytering: första skivan, och tre delar som inte gick
+
+**Byggt:** E10.3 stegflödet, E10.5 no_show, E10.6 scorecard, E10.10 tratten,
+E10.2 delvis (uppläggning för hand — den publika ansökningssidan återstår).
+
+**Går inte att bygga:** E10.1, E10.4 och E10.7 förutsätter alla E0.8 e-post, som
+är pausat. Sömmen är lagd så att de kan läggas till utan schemaändring.
+
+**Ingen kandidat blir en anställd av misstag.** Ingen rad i `employee` skapas
+härifrån. Varenda RLS-policy i navet utgår från att en rad där är någon som
+arbetar här — en kandidat hade blivit synlig i personalregistret, i sökningen
+och i notisklockan samma sekund.
+
+**Stegen och scorecardvillkoret är triggrar, inte knappar.** `nastaSteg()` i
+`src/lib/rekrytering.ts` ritar knapparna; `candidate_stegbyte` i 0030 avgör.
+Listan står på två ställen med flit, och provet kör hela matrisen för att märka
+när de glider isär. Rör du den ena: kör `npm run test:rekrytering`.
+
+**Gallringsfristen finns fortfarande inte.** `purge_after_days` är NULL, så
+`gdpr_purge_at` sätts aldrig och E10.8:s nattjobb ska inte byggas än. Kolumnen
+finns däremot, så när siffran kommer räcker en rad i konfigurationen.
+
+**Behörigheten är `recruiter`, en permission.** Ledningen får den på rollen så
+att modulen fungerar direkt — till skillnad från K26/lönekostnad, som kräver
+tilldelning av alla och därför fortfarande står tom.
+
+**K27 gäller intervjuanteckningar.** Ett mobilnummer skrivet som tio siffror i
+rad nekas också — det går inte att skilja från ett samordningsnummer. Med
+bindestreck går det igenom, och numret har ett eget fält.
 
 ### X3 är färdigmätt, och sökningen är det trängsta
 
@@ -423,8 +457,10 @@ tre prestandakraven är mätta och klarade.
    inga personnummer (K27), så det utskrivna avtalet har en rad som fylls i för
    hand. Det går att ändra, men då är det K27-linjen som ska omprövas medvetet.
    Jag har byggt så att den inte går att kringgå av misstag.
-6. **E10 M7 rekrytering**, ~4 veckor, när ovanstående är gjort. **Läs punkten
-   om mejlspåret nedan först** — tre av tio delar hänger på det som är pausat.
+6. **E10 resten**, ~2 veckor. Kvar utan blockering: **E10.9 anställningsflödet**
+   (avtal, konto, onboarding, kurser i ett steg — spärren finns redan, `hired`
+   nekas utan `hired_employee_id`) och **E10.2 den publika ansökningssidan**.
+   E10.8:s nattjobb väntar på fristen, E10.1/4/7 på mejlspåret.
 
 ### Mindre saker som ligger och väntar
 
@@ -436,25 +472,17 @@ tre prestandakraven är mätta och klarade.
 - **Sökningens marginal är 96 ms** på trängt 4G. Håll ögonen på den när en ny
   källa läggs till i `/sok`.
 
-### E10: tre av tio delar hänger på det pausade mejlspåret
+### E10: tre delar väntar på mejlspåret, en på en siffra
 
-Upptäckt 2026-08-23 vid planeringen, innan något byggdes. **E10.1** (IMAP-parser
-mot jobb@clicknet.se), **E10.4** (.ics-bilaga och påminnelser via e-post) och
-**E10.7** (avslagsmail) förutsätter alla E0.8, som är pausat på din begäran.
+**E10.1** (IMAP-parser), **E10.4** (.ics och påminnelser) och **E10.7**
+(avslagsmail) förutsätter E0.8, som är pausat. De är inte byggda. Sömmen är lagd
+så att de kan läggas till utan schemaändring — säg till om mejlspåret tas upp.
 
-De sju övriga går att bygga utan mejl: E10.2 ansökningssidan, E10.3 stegflödet,
-E10.5 no_show, E10.6 scorecard, E10.8 gallringen, E10.9 anställd-flödet och
-E10.10 trattrapporten.
-
-**Rättelse till en tidigare formulering i den här filen:** gallringsfristen för
-kandidatdata är INTE skriven. ROADMAP säger bara att `gdpr_purge_at` ska sättas
-automatiskt, aldrig efter hur länge. E10.8 står därför på samma linje som E6.2:
-fristen är konfiguration utan seedat värde, och jobbet vägrar köra tills den är
-satt. Skillnaden mot E6.2 är att kolumnen finns från början, så inget behöver
-byggas om när siffran kommer.
-
-Förslaget är att bygga de sju och lämna en tydlig söm där mejlet kopplas in —
-inte att låta hela epicet vänta på ett spår du pausat. Det är ditt beslut.
+**E10.8:s nattjobb väntar inte på kod utan på en siffra.** Hur länge ska en
+kandidats uppgifter sparas efter avslutad process? Den frågan är inte besvarad
+någonstans i repot. Sätt `recruitment_policy.purge_after_days` så börjar
+`gdpr_purge_at` fyllas i av sig självt, och då — men först då — går jobbet att
+bygga.
 
 ### Villkoren som styrde E15 gäller nu E13 provision
 

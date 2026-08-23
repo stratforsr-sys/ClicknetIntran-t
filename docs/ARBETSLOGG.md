@@ -5,10 +5,11 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
-## 2026-08-23 · Testhärdning, adoptionsstatistik och X3 färdigmätt
+## 2026-08-23 · Testhärdning, adoptionsstatistik, X3 färdigmätt och E10 påbörjad
 
-Tre punkter i den ordning användaren bad om dem: radräkningarna i proven, E6.5
-och resten av X3. Migration `0029_adoption`. 957 → 998 kontroller.
+Fyra punkter i den ordning användaren bad om dem: radräkningarna i proven, E6.5,
+resten av X3 och första skivan av E10. Migrationerna `0029_adoption` och
+`0030_rekrytering`. 957 → 1 080 kontroller.
 
 Sviten var **grön** när passet började — andra gången i rad. Två av tre
 körningar dog dock på nätverket innan de kom fram (`Connection terminated`,
@@ -162,6 +163,108 @@ rader är bevis (AC-12.1) och får inte försvinna för att någon mätte en sid
 
 Två avbrutna körningar hann lämna en mätanvändare kvar innan det var på plats.
 `stad()` körs därför både före och efter, så att nästa körning självläker.
+
+### E10: tre av tio delar går inte att bygga, och det upptäcktes före kodningen
+
+Vid planeringen, innan något skrevs: **E10.1** (IMAP-parser mot jobb@clicknet.se),
+**E10.4** (.ics-bilaga och påminnelser via e-post) och **E10.7** (avslagsmail)
+förutsätter alla E0.8 transaktionell e-post, som är pausat på användarens
+begäran.
+
+Valet blev att bygga de sju övriga och lämna en söm. Alternativet — att låta
+hela epicet vänta på ett spår användaren själv pausat — hade varit att låta ett
+gammalt beslut blockera fyra veckor arbete som inte berörs av det.
+
+Sömmen är konkret: kandidaten kommer in via `source_slug` oavsett vem som skapade
+raden, och `candidate_stage_event` bär redan varje steg som ett mejlutskick skulle
+hänga på. Parsern och utskicken kan läggas till utan schemaändring.
+
+#### En kandidat får inte bli en anställd av misstag
+
+Ingen rad i `employee` skapas från rekryteringen. `candidate.hired_employee_id`
+pekar åt andra hållet och sätts först av E10.9.
+
+Skälet är inte prydlighet. Varenda RLS-policy i navet är skriven utifrån att en
+rad i `employee` är någon som **arbetar** här. En kandidat i samma tabell hade
+samma sekund blivit synlig i personalregistret, i den globala sökningen och i
+notisklockan — för folk som inte ens vet att hen sökt.
+
+#### Stegen och scorecardvillkoret ligger i databasen
+
+AC-7.3 vill ha stegflödet med varje byte loggat, AC-7.6 att ett erbjudande är
+omöjligt utan minst en ifylld scorecard. Båda är triggrar, inte if-satser i en
+knapp:
+
+- Loggen kan inte glömmas bort av en server action som skrivs om ett halvår.
+- Ett steg kan inte hoppas över av en klient som postar rakt mot API:t.
+- `hired` går bara från `offer`. Kunde man gå direkt från screening vore
+  scorecardvillkoret verkningslöst.
+
+Provet kör **hela matrisen** — varje steg mot varje annat — och det är samtidigt
+provet på att `nastaSteg()` i biblioteket stämmer med triggern. Listan står på
+två ställen med flit: gränssnittet måste veta vilka knappar det ska rita. Något
+måste märka när de glider isär.
+
+#### Gallringsfristen är inte skriven, så ingen seedas
+
+Det här är passets viktigaste fynd, och det motsäger en formulering jag själv
+hade skrivit in i NASTA_SESSION tidigare samma dag.
+
+AC-7.8 och K21 säger att `gdpr_purge_at` ska sättas automatiskt. De säger
+**inte efter hur länge**. Siffran finns inte i ROADMAP, inte i P0.6 — som inte
+är skriven — och ingen annanstans i repot. Påståendet att "fristen står i
+AC-7.8/K21" var en slutsats dragen ur AC-referensen, inte ur en text.
+
+Det är exakt läget som blockerar E6.2, och svaret är detsamma:
+`recruitment_policy.purge_after_days` är NULL, ingen frist sätts, och
+gallringsjobbet ska vägra köra tills någon bestämt. En påhittad frist raderar
+personuppgifter enligt en gissning och **ser samtidigt ut att uppfylla kravet**.
+
+Skillnaden mot E6.2 är att kolumnen finns från början. När siffran kommer räcker
+en rad i konfigurationen; ingenting byggs om. Provet kontrollerar båda hållen:
+utan frist sätts ingen, med frist sätts den, och talangpoolen undantas.
+
+#### K27 gäller intervjuanteckningen, inte bara avtalet
+
+Rekrytering har fler fritextfält än någon annan modul, och en intervjuanteckning
+är precis där ett personnummer hamnar. Villkoret ligger därför på varje sådant
+fält — `notes`, `strengths`, `concerns` — och inte bara på ett.
+
+Uttrycket är detsamma som 0028 använder, nu som en funktion så att det finns en
+definition och inte en per modul. **Följden, utskriven:** ett mobilnummer skrivet
+som tio siffror i rad faller också. Det går inte att skilja `0701234567` från ett
+samordningsnummer utan sekel. Numret har ett eget fält, så det som stängs ute är
+att skriva det i en anteckning i stället. Med bindestreck går det igenom.
+
+#### Behörigheten är en permission, inte bara en roll
+
+Q71: flera personer rekryterar, och vilka det är följer inte av rollen. En
+teamledare kan rekrytera till sitt eget team utan att därför få se löneunderlag.
+
+Ledningen får det på rollen så att modulen fungerar direkt; andra får `recruiter`
+tilldelad. **Skillnaden mot K26 är avsiktlig.** Lönekostnad kräver behörigheten
+av *alla* — och det är en av de fyra saker användaren fortfarande måste göra för
+hand innan den vyn visar något. Rekrytering ska inte kräva samma steg för att ens
+starta.
+
+#### Två fel som byggkedjan fångade, och ett tredje som proven gjorde
+
+`vercel` fällde bygget på att Supabase härleder radens typ ur select-**litteralen**.
+En sträng hopslagen med `+` går inte att läsa, så raden blev `GenericStringError`
+och varje fältåtkomst ett typfel. Produktionen påverkades inte — en trasig build
+ersätter aldrig den version som kör — men det kostade en runda.
+
+Efter det fick jag användarens ja till att köra `npm run typecheck` lokalt före
+push. Det fångade fel två direkt: `recruiter` saknades i `PERMISSIONS` i
+`roles.ts`, listan som speglar check-villkoret i databasen. Utan den går
+behörigheten inte att tilldela i gränssnittet.
+
+Det tredje hittade provet: en kandidatradering kaskaderar till stegloggen, som
+triggern nekade. Samma fälla som `file_object` löste i 0023 — och den hade dödat
+E10.8 gallringsjobbet mitt i natten, på en främmande nyckel, utan att någon såg
+det. Stegloggen släpper nu igenom en radering när kandidaten redan är borta, och
+aldrig annars. Migrationen rättades i stället för att lappas: den hade aldrig
+lämnat scratchpaden, tabellerna var tomma, så den rullades tillbaka och kördes om.
 
 ---
 

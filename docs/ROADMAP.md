@@ -130,22 +130,24 @@ säljare kan lära sig samma sak utan att du upprepar introduktionen trettio gå
 
 ---
 
-## E10 — M7 Rekrytering · ~4 veckor
+## E10 — M7 Rekrytering · PÅBÖRJAD 2026-08-23 · ~2 veckor kvar
 
-Q71 besvarades 2026-08-21: **flera personer rekryterar**, så epicet är inte akut. E15 lönekostnad (~2 v) går före E10 (~4 v).
+Q71 besvarades 2026-08-21: **flera personer rekryterar**, så epicet är inte akut. E15 lönekostnad (~2 v) gick före.
+
+Migration `0030_rekrytering`. `/rekrytering`. **Tre av tio delar (E10.1, E10.4, E10.7) förutsätter E0.8 transaktionell e-post, som är pausat** — de är inte byggda och kan inte bli det förrän mejlspåret tas upp igen. Schemat är lagt så att de går att lägga till utan att något rivs.
 
 | # | AC | Vad | Status |
 |---|---|---|---|
-| E10.1 | AC-7.1 | IMAP-parser mot jobb@clicknet.se. Misslyckad parsning skapar ärende, aldrig tyst bortfall | EJ PÅBÖRJAD |
-| E10.2 | AC-7.2 | Egen ansökningssida på clicknet.se med screeningfrågor och källattribution | EJ PÅBÖRJAD |
-| E10.3 | AC-7.3 | Stegflöde ny → screening → intervju 1 → intervju 2 → erbjudande → anställd/avslag, varje byte loggat | EJ PÅBÖRJAD |
-| E10.4 | AC-7.4 | Egen tidsluckehantering, .ics-bilaga via e-post, påminnelse 24 h och 2 h före | EJ PÅBÖRJAD |
-| E10.5 | AC-7.5 | `no_show` registreras och rapporteras per källa | EJ PÅBÖRJAD |
-| E10.6 | AC-7.6 | Scorecard per intervju. Erbjudande omöjligt utan minst en ifylld | EJ PÅBÖRJAD |
-| E10.7 | AC-7.7 | Avslagsmail med mall, enskilt eller i grupp | EJ PÅBÖRJAD |
-| E10.8 | AC-7.8, K21 | `gdpr_purge_at` sätts automatiskt, nattjobb raderar och kvitterar, talangpool undantas med förnyad förfrågan | EJ PÅBÖRJAD |
-| E10.9 | AC-7.9 | Vid "anställd": avtal, onboarding-checklista, konto och kurser i ett flöde | EJ PÅBÖRJAD |
-| E10.10 | AC-7.10 | Trattrapport per källa inklusive kvar efter 90 och 180 dagar | EJ PÅBÖRJAD |
+| E10.1 | AC-7.1 | IMAP-parser mot jobb@clicknet.se. Misslyckad parsning skapar ärende, aldrig tyst bortfall | **BLOCKERAD av E0.8** (pausat). Kandidaten kommer in via `source_slug` oavsett vem som skapade raden, så parsern kan läggas till utan schemaändring |
+| E10.2 | AC-7.2 | Egen ansökningssida på clicknet.se med screeningfrågor och källattribution | **DELVIS 2026-08-23.** Källattributionen finns och är obligatorisk — den går inte att fylla i i efterhand. Uppläggning sker än så länge för hand på `/rekrytering/ny`; den publika sidan och screeningfrågorna återstår |
+| E10.3 | AC-7.3 | Stegflöde ny → screening → intervju 1 → intervju 2 → erbjudande → anställd/avslag, varje byte loggat | **KLAR 2026-08-23.** Både ordningen och loggen ligger i triggrar, inte i knappen. `candidate_stage_event` går inte att ändra eller radera. Provet kör hela matrisen: varje steg mot varje annat |
+| E10.4 | AC-7.4 | Egen tidsluckehantering, .ics-bilaga via e-post, påminnelse 24 h och 2 h före | **BLOCKERAD av E0.8** (pausat) |
+| E10.5 | AC-7.5 | `no_show` registreras och rapporteras per källa | **KLAR 2026-08-23.** En räknare och inte en flagga — att utebli en gång är en annan uppgift än att utebli två |
+| E10.6 | AC-7.6 | Scorecard per intervju. Erbjudande omöjligt utan minst en ifylld | **KLAR 2026-08-23.** Villkoret är en trigger, så en klient som postar rakt mot API:t möter samma nej. Tre lägen och ingen skala: ett medelvärde av två intervjuer säger mindre än två omdömen som går isär |
+| E10.7 | AC-7.7 | Avslagsmail med mall, enskilt eller i grupp | **BLOCKERAD av E0.8** (pausat). Avslaget självt fungerar, med skäl |
+| E10.8 | AC-7.8, K21 | `gdpr_purge_at` sätts automatiskt, nattjobb raderar och kvitterar, talangpool undantas med förnyad förfrågan | **HALVVÄGS 2026-08-23.** Kolumnen finns, sätts vid avslut och hoppas över för talangpoolen. **Men fristen är inte skriven någonstans** — `recruitment_policy.purge_after_days` är NULL och ingen frist sätts. Samma linje som E6.2: en påhittad frist raderar personuppgifter enligt en gissning. Nattjobbet byggs när siffran finns |
+| E10.9 | AC-7.9 | Vid "anställd": avtal, onboarding-checklista, konto och kurser i ett flöde | EJ PÅBÖRJAD. Spärren finns: steget `hired` nekas utan `hired_employee_id`, så en kandidat kan inte anställas förbi flödet |
+| E10.10 | AC-7.10 | Trattrapport per källa inklusive kvar efter 90 och 180 dagar | **KLAR 2026-08-23.** Varje steg räknar dem som kommit så långt, inte dem som står där nu — annars visar `offer` noll för att alla gick vidare |
 
 ---
 
@@ -373,7 +375,7 @@ Kräver Inkios API-dokumentation, autentiseringsmodell och webhook-events.
 |---|---|---|
 | Klart | E0 delvis, E1 delvis | — |
 | Fas 1 kvar | E1 rest, E2.5, E8.5/E8.8/E8.9, E6.1 (E6.5 och X3 klara 2026-08-23; E0.6, E5.3 och E5.7 klara 2026-08-22). E6.2 och E6.3 blockerade | ~6 |
-| Fas 2 | E9.2 (blockerad av A14), E10 — E9.1 klar 2026-08-22, E7 klar 2026-08-21 | ~5 |
+| Fas 2 | E9.2 (blockerad av A14), E10 rest (E10.1/4/7 blockerade av pausat E0.8) — E10 påbörjad 2026-08-23, E9.1 klar 2026-08-22, E7 klar 2026-08-21 | ~3 |
 | Fas 3 | E11, E12, E13 (E15 klar sedan 2026-08-21 utom E15.7) | ~11 |
 | **Totalt till fullt system** | | **10–12 månader vid 15 h/vecka** |
 
