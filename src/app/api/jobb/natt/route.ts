@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { kontrolleraCron } from "@/lib/jobb/behorighet";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { hamtaLage } from "@/lib/sparrar";
 import { korTidjobbet } from "@/lib/jobb/tid";
@@ -24,10 +25,8 @@ export const maxDuration = 300;
  * att en utebliven körning går att se i efterhand.
  */
 export async function GET(request: NextRequest) {
-  const hemlighet = process.env.CRON_SECRET;
-  if (!hemlighet) return NextResponse.json({ fel: "CRON_SECRET saknas" }, { status: 503 });
-  if (request.headers.get("authorization") !== `Bearer ${hemlighet}`)
-    return NextResponse.json({ fel: "Nekad" }, { status: 401 });
+  const nekad = kontrolleraCron(request);
+  if (nekad) return nekad;
 
   const db = supabaseAdmin();
   const lage = await hamtaLage();

@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser, hasRole } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { ROLES, type Role } from "@/lib/roles";
-import { sattKvitto } from "../angra/actions";
+import { sattKvitto } from "@/lib/toast-server";
 
 export type NyhetState = { fel?: string };
 

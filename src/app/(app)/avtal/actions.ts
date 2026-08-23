@@ -14,7 +14,7 @@ import {
   tillSlug,
   trasigaKlamrar,
 } from "@/lib/avtal";
-import { sattKvitto } from "../angra/actions";
+import { sattKvitto } from "@/lib/toast-server";
 
 export type AvtalState = { fel?: string };
 

@@ -6,7 +6,7 @@ import { getCurrentUser, hasRole } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { skrivFel } from "@/lib/fel-server";
 import { MAX_BODY, type Felstatus } from "@/lib/fel";
-import { sattKvitto } from "../angra/actions";
+import { sattKvitto } from "@/lib/toast-server";
 
 export type FelState = { fel?: string };
 

@@ -1,10 +1,10 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser, hasRole } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { ANGRABARA, TOAST_KAKA, arId, tillKaka, type Angrabar } from "@/lib/toast";
+import { ANGRABARA, arId, type Angrabar } from "@/lib/toast";
+import { sattKvitto } from "@/lib/toast-server";
 
 /**
  * E5.7. Angra-knappen i kvittot.
@@ -28,6 +28,10 @@ import { ANGRABARA, TOAST_KAKA, arId, tillKaka, type Angrabar } from "@/lib/toas
  * Varje angring loggas som en EGEN rad i audit_log. Den ursprungliga atgarden
  * star kvar. Att sudda den hade gjort loggen till en berattelse om vad som
  * blev kvar, inte om vad som hande — och det ar det senare AC-12.1 vill ha.
+ *
+ * `angra` ar det ENDA som exporteras harifran, och det ska den forbli. Allt
+ * som exporteras ur en `"use server"`-fil blir en publik andpunkt — darfor
+ * ligger `sattKvitto` i src/lib/toast-server.ts.
  */
 export async function angra(form: FormData): Promise<void> {
   const handling = String(form.get("handling") ?? "");
@@ -140,21 +144,4 @@ export async function angra(form: FormData): Promise<void> {
       return;
     }
   }
-}
-
-/**
- * Skriver kvittot som visas efter nasta sidvisning.
- *
- * Ligger har och inte i toast.ts, eftersom `cookies()` bara gar att skriva
- * fran en server action eller en route handler. Kakan ar kortlivad: den
- * raderas av komponenten sa fort den ritats, och gar ut av sig sjalv efter en
- * minut om nagot gick fel pa vagen.
- */
-export async function sattKvitto(kvitto: { text: string; angra?: { handling: Angrabar; id: string } }) {
-  (await cookies()).set(TOAST_KAKA, tillKaka(kvitto), {
-    path: "/",
-    maxAge: 60,
-    sameSite: "lax",
-    httpOnly: false,
-  });
 }
