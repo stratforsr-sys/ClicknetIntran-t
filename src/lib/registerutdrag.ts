@@ -48,6 +48,12 @@ export const KALLOR: Kalla[] = [
   { tabell: "news_post", kolumn: "author_id", andamal: "Nyhetsinlägg du skrivit" },
   { tabell: "notification_seen", kolumn: "employee_id", andamal: "När du senast öppnade notisklockan" },
 
+  // E6.5. En rad per dygn du använt navet, utan klockslag och utan sidor.
+  // Raden går inte att läsa via API:t — inte ens för säljchefen, se 0029 — men
+  // den handlar om dig, och då ska den med i ditt utdrag. Statistiken som
+  // byggs av den svarar med antal och aldrig med namn.
+  { tabell: "activity_day", kolumn: "employee_id", andamal: "Dagar du använt navet" },
+
   // E7 M3. Sjukanmälan är en uppgift om hälsa och därmed en särskild kategori
   // enligt artikel 9 — vilket gör den viktigare att kunna få ut, inte mindre.
   // Raderna bär datum, omfattning och tidpunkter; ingen orsak finns lagrad

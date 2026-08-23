@@ -15,6 +15,9 @@ import { BYTESVAG, kraverByte } from "@/lib/losenordsbyte";
  */
 const PUBLIC = ["/logga-in", "/auth", "/uppstart", "/api"];
 
+/** E6.5. Kakan som haller nere dagsstamplingen. Bar ett datum, inget mer. */
+const AKTIVITETSKAKA = "nav_dag";
+
 /**
  * Kraver den har anvandaren steg tva? Rollerna lases med anvandarens egen
  * token, sa RLS avgor vad som syns — mellanvaran far inga extra rattigheter.
@@ -171,6 +174,47 @@ export async function updateSession(request: NextRequest) {
     url.pathname = "/";
     url.search = "";
     return NextResponse.redirect(url);
+  }
+
+  /**
+   * E6.5: bokfor att den inloggade anvant navet i dag.
+   *
+   * VARFOR I MELLANVARAN. Den ar det enda stallet som ser VARJE begaran. En
+   * saljare som loggar in, laser tre rutiner och gar hem passerar aldrig en
+   * server action — hade stampeln legat i en sadan hade DAU matt vilka som
+   * ANDRAR nagot, vilket ar en annan fraga an vilka som ANVANDER navet.
+   *
+   * VARFOR EN KAKA. Utan den blir det en skrivning per begaran. Kakan bar
+   * dagens datum: stammer det med i dag ar dagen redan bokford och ingenting
+   * hander. Det ger hogst ett anrop per person, enhet och dygn. Tva enheter ger
+   * tva anrop, och primarnyckeln (employee_id, day) gor det andra till
+   * ingenting.
+   *
+   * Kakan ar inte ett skydd och behover inte vara signerad — det varsta nagon
+   * astadkommer genom att radera den ar en extra `on conflict do nothing`.
+   *
+   * Kakan satts SIST, pa `response` som den star da. Ett rpc-anrop kan fa
+   * Supabase att fornya tokenen, och `setAll` ovan byter da ut hela `response`
+   * mot ett nytt objekt. En kaka satt fore anropet hade suttit pa det gamla
+   * och forsvunnit tyst — och dagen hade bokforts om vid varje sidbyte.
+   *
+   * Fel svaljs. Adoptionsstatistik far inte kunna lasa ute nagon ur navet.
+   */
+  const idag = new Date().toISOString().slice(0, 10);
+  if (user && request.cookies.get(AKTIVITETSKAKA)?.value !== idag) {
+    try {
+      await supabase.rpc("registrera_aktivitet");
+      response.cookies.set(AKTIVITETSKAKA, idag, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        // Ett dygn racker, och gor att kakan inte blir kvar over ett datumbyte.
+        maxAge: 60 * 60 * 24,
+      });
+    } catch {
+      // Tyst med flit. Se rubriken ovan.
+    }
   }
 
   return response;

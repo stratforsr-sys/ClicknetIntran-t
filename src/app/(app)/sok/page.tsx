@@ -171,6 +171,23 @@ export default async function Soksida({
 
   const antal = Object.values(traffar).reduce((s, t) => s + t.length, 0);
 
+  /**
+   * E6.5 / AC-12.5: en sokning utan traff ar det narmaste navet kommer ett
+   * onskemal. Den som letade forgaves letade efter nagot som borde finnas.
+   *
+   * Bokfors HAR och inte i sokrutan, eftersom det ar forst nu antalet traffar
+   * ar kant — och det ar noll traffar som ar uppgiften, inte sokningen.
+   *
+   * Ingen person foljer med. `registrera_sokmiss` tar bara strangen, och
+   * `search_miss` har ingen kolumn att lagga ett anvandar-id i (0029).
+   *
+   * Ett fel far aldrig falla traffsidan. Statistik ar inte ett krav pa att
+   * sokningen fungerar, och den som sokte ska se sitt svar oavsett.
+   */
+  if (antal === 0) {
+    await supabase.rpc("registrera_sokmiss", { p_q: q });
+  }
+
   return (
     <div className="flex flex-col gap-4 pt-2">
       <div>

@@ -73,6 +73,11 @@ export function navFor(user: CurrentUser | null, stamplingPa: boolean): NavItem[
   }
   if (hasRole(user, "sales_manager", "ceo", "admin")) {
     items.push({ href: "/logg", label: "Händelselogg", ikon: "logg" });
+    // E6.5. Samma krets som handelseloggen. Teamledaren star utanfor: adoption
+    // ar en fraga om navet, inte om hennes team, och en siffra per team hade
+    // varit ett steg mot den per-person-uppfoljning 0029 ar byggd for att inte
+    // gora mojlig.
+    items.push({ href: "/adoption", label: "Adoption", ikon: "kontroll" });
   }
 
   /**

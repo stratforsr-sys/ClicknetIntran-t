@@ -2221,8 +2221,82 @@ console.log("\n\x1b[1mE9.1: mallen ar bolagets, avtalet ar personens — och for
   await db.query(`delete from contract_template where slug = 'rlstest-mall'`);
 }
 
+console.log("\n\x1b[1mE6.5: adoption raknas i antal, och gar aldrig att bryta ner pa person\x1b[0m");
+{
+  const rpc = async (tok, funktion, args = {}) => {
+    const r = await fetch(`${URL}/rest/v1/rpc/${funktion}`, {
+      method: "POST", headers: som(tok), body: JSON.stringify(args),
+    });
+    const j = await r.json();
+    return { status: r.status, rader: Array.isArray(j) ? j.length : -1 };
+  };
+
+  // Provets egen dag, sa att det finns nagot att rakna oavsett hur navet
+  // anvants. Raden stads med anvandaren.
+  await db.query(
+    `insert into activity_day (employee_id, day) values ($1::uuid, current_date)
+     on conflict do nothing`,
+    [saljareA.id],
+  );
+  await db.query(`select registrera_sokmiss($1)`, ["rlstest-finns-inte"]);
+
+  // Samma krets som handelseloggen. Ingen annan.
+  const chefen = await rpc(tD, "adoption_aktivitet", { p_dagar: 7 });
+  // Sju dagar bakat ar sju rader, i dag inraknad. En serie med hal i hade
+  // gjort staplarna i vyn olika breda beroende pa om nagon var inloggad.
+  ok("saljchefen far aktivitetsserien", chefen.rader === 7, `${chefen.rader} rader, HTTP ${chefen.status}`);
+
+  for (const [namn, tok] of [["Anna", tA], ["Cecilia (teamledare)", tC], ["Eva (ekonomi)", tE]]) {
+    const svar = await rpc(tok, "adoption_aktivitet", { p_dagar: 7 });
+    ok(`${namn} far 0 rader`, svar.rader === 0, `${svar.rader} rader, HTTP ${svar.status}`);
+  }
+
+  const missarChef = await rpc(tD, "adoption_sokmissar", { p_antal: 20 });
+  ok("saljchefen ser trafflosa sokningar", missarChef.rader >= 1, `${missarChef.rader} rader`);
+  const missarAnna = await rpc(tA, "adoption_sokmissar", { p_antal: 20 });
+  ok("Anna ser inga", missarAnna.rader === 0, `${missarAnna.rader} rader`);
+
+  const glomdaAnna = await rpc(tA, "adoption_glomda_dokument", { p_dagar: 90 });
+  ok("och inte heller glomda dokument", glomdaAnna.rader === 0, `${glomdaAnna.rader} rader`);
+
+  /**
+   * Det har ar hela poangen med 0029, och det ar ett annat pastaende an det
+   * ovan: funktionerna svarar med ANTAL. Tabellerna under dem far ingen slappa
+   * in i, for da gar dagarna att lasa person for person — och det ar en
+   * narvaroregistrering utan rattelse, attest och styrning omkring sig.
+   *
+   * Ingen select-policy alls, alltsa noll rader for varje roll. Aven for den
+   * som far se statistiken.
+   */
+  for (const [namn, tok] of [["Anna", tA], ["Cecilia", tC], ["David (saljchef)", tD], ["Eva", tE]]) {
+    const dagar = await las(tok, "activity_day");
+    const missar = await las(tok, "search_miss");
+    ok(
+      `${namn} kommer inte at raderna bakom siffrorna`,
+      dagar.length === 0 && missar.length === 0,
+      `activity_day ${dagar.length}, search_miss ${missar.length}`,
+    );
+  }
+
+  // Punktfraga pa den egna raden ger inte heller nagot. En policy som doljer
+  // listan men slapper igenom en direkt fraga ar ingen policy.
+  ok(
+    "inte ens sin egen dag pa en direkt fraga",
+    (await las(tA, "activity_day", `employee_id=eq.${saljareA.id}&select=*`)).length === 0,
+  );
+
+  // Skrivvagen gar genom funktionen, inte genom tabellen.
+  const skriv = await fetch(`${URL}/rest/v1/activity_day`, {
+    method: "POST", headers: som(tD),
+    body: JSON.stringify({ employee_id: saljareB.id, day: "2026-01-01" }),
+  });
+  ok("och ingen skriver en dag at nagon annan", !skriv.ok, `HTTP ${skriv.status}`);
+
+  await db.query(`delete from search_miss where q = 'rlstest-finns-inte'`);
+}
+
 console.log("\n\x1b[1mAnonym anslutning\x1b[0m");
-for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate", "news_post", "notification_seen", "absence_type", "absence_policy", "absence_blackout", "staffing_cap", "absence_balance", "absence_request", "absence_call_order", "sick_report", "sick_deadline", "absence_reminder", "calendar_feed", "file_object", "file_access_log", "roleplay_criterion", "roleplay_submission", "roleplay_score", "cost_rate", "salary_basis", "revenue_entry", "cost_calculation", "error_report", "contract", "contract_template"]) {
+for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate", "news_post", "notification_seen", "absence_type", "absence_policy", "absence_blackout", "staffing_cap", "absence_balance", "absence_request", "absence_call_order", "sick_report", "sick_deadline", "absence_reminder", "calendar_feed", "file_object", "file_access_log", "roleplay_criterion", "roleplay_submission", "roleplay_score", "cost_rate", "salary_basis", "revenue_entry", "cost_calculation", "error_report", "contract", "contract_template", "activity_day", "search_miss"]) {
   const r = await fetch(`${URL}/rest/v1/${t}?select=*`, { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` } });
   const j = await r.json();
   ok(`${t} ger inga rader anonymt`, !Array.isArray(j) || j.length === 0, Array.isArray(j) ? `${j.length} rader` : `HTTP ${r.status}`);
