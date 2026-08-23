@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { after } from "next/server";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Ikon } from "@/components/shell/Ikon";
@@ -106,9 +107,13 @@ export default async function Soksida({
 
     // Personal. Den vanligaste sokningen i ett intranat ar ett namn, och RLS
     // avgor vilka man far se — en saljare ser inte hela registret.
+    // Rollen badd­as in i stallet for att hamtas i en foljdfraga. Namnet pa
+    // frammandenyckeln MASTE sta med: employee_role pekar tva ganger pa
+    // employee (den som har rollen, och den som delade ut den), och utan namn
+    // avvisar PostgREST hela fragan med PGRST201.
     supabase
       .from("employee")
-      .select("id, first_name, last_name, email, status")
+      .select("id, first_name, last_name, email, status, employee_role!employee_role_employee_id_fkey(role)")
       .neq("status", "offboarded")
       .or(orVillkor(["first_name", "last_name", "email"], q))
       .limit(PER_KALLA)
@@ -126,14 +131,9 @@ export default async function Soksida({
   ]);
 
   const rollnamn = new Map<string, string>();
-  if (personer.length > 0) {
-    const { data: roller } = await supabase
-      .from("employee_role")
-      .select("employee_id, role")
-      .in("employee_id", personer.map((p) => p.id));
-    for (const r of roller ?? []) {
-      rollnamn.set(r.employee_id, ROLE_LABEL[r.role as Role] ?? r.role);
-    }
+  for (const p of personer as unknown as { id: string; employee_role: { role: string }[] | null }[]) {
+    const roll = p.employee_role?.[0]?.role;
+    if (roll) rollnamn.set(p.id, ROLE_LABEL[roll as Role] ?? roll);
   }
 
   const traffar: Record<string, Traff[]> = {
@@ -185,7 +185,25 @@ export default async function Soksida({
    * sokningen fungerar, och den som sokte ska se sitt svar oavsett.
    */
   if (antal === 0) {
-    await supabase.rpc("registrera_sokmiss", { p_q: q });
+    /**
+     * `after()` och inte `await`.
+     *
+     * Skrivningen ar statistik och sidan behover inte dess svar. Awaitad lade
+     * den en hel tur till databasen FORE svaret — och den traffade just den
+     * sokning som redan varit langsammast, den som inte hittade nagot och
+     * darfor hunnit prova bade den smala och den breda fragan.
+     *
+     * `after()` kor efter att svaret gatt ivag, men innan funktionen far
+     * avslutas. Ett losryckt lofte utan await hade plattformen kunnat avbryta
+     * mitt i, och da hade statistiken tappat rader utan att nagon markt det.
+     */
+    after(async () => {
+      try {
+        await supabase.rpc("registrera_sokmiss", { p_q: q });
+      } catch {
+        // Statistik far aldrig falla traffsidan. Se rubriken ovan.
+      }
+    });
   }
 
   return (

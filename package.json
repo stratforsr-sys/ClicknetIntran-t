@@ -34,7 +34,8 @@
     "mat:startsidan": "node scripts/mat-startsidan.mjs",
     "test:adoption": "node --experimental-strip-types tests/adoption.mjs",
     "mat:sok-stampling": "node scripts/mat-sok-och-stampling.mjs",
-    "test:rekrytering": "node --experimental-strip-types tests/rekrytering.mjs"
+    "test:rekrytering": "node --experimental-strip-types tests/rekrytering.mjs",
+    "mat:inloggad": "node scripts/mat-inloggad.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.7.0",
