@@ -100,3 +100,33 @@ export async function hamtaLon(
 
   return data ? Number(data.monthly_salary) : null;
 }
+
+/**
+ * Samma fraga som `hamtaLon`, men for hela perioden i ETT anrop.
+ *
+ * `raknaPeriod` fragade tidigare en gang per anstalld inuti loopen. Det ar en
+ * tur till databasen per person, och de gick efter varandra — tjugofem
+ * anstallda blev tjugofem vantetider i rad.
+ *
+ * Regeln ar oforandrad: den senaste raden vars `valid_from` inte ligger efter
+ * periodens start galler. Raderna kommer sorterade aldst forst, sa den sista
+ * skrivningen per person vinner.
+ */
+export async function hamtaLonerFor(
+  db: SupabaseClient,
+  employeeIds: string[],
+  datum: string,
+): Promise<Map<string, number>> {
+  const per = new Map<string, number>();
+  if (employeeIds.length === 0) return per;
+
+  const { data } = await db
+    .from("salary_basis")
+    .select("employee_id, monthly_salary, valid_from")
+    .in("employee_id", employeeIds)
+    .lte("valid_from", datum)
+    .order("valid_from", { ascending: true });
+
+  for (const rad of data ?? []) per.set(rad.employee_id, Number(rad.monthly_salary));
+  return per;
+}

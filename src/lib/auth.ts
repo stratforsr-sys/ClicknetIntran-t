@@ -46,9 +46,32 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
    */
   const las = kraverByte(user.app_metadata) ? supabaseAdmin() : supabase;
 
+  /**
+   * EN fraga, inte tre.
+   *
+   * Rollerna och rattigheterna hamtas som inbaddade relationer i stallet for
+   * som tva foljdfragor efter att employee-raden kommit tillbaka. Skillnaden ar
+   * inte kosmetisk: varje sida i navet borjar med det har anropet, sa de tva
+   * sparade turerna betalas tillbaka en gang per sidvisning.
+   *
+   * RLS galler oforandrat. PostgREST tillampar policyn pa varje inbaddad tabell
+   * for sig, precis som pa en fristaende fraga — mellanvaran har last rollerna
+   * pa exakt det har sattet sedan AC-1.1 byggdes.
+   *
+   * ROR INTE `!employee_role_employee_id_fkey`. Bada tabellerna pekar TVA
+   * ganger pa employee: en gang pa den som HAR rollen (employee_id) och en
+   * gang pa den som DELADE UT den (granted_by). Utan namngiven nyckel vet
+   * PostgREST inte vilken som menas och avvisar hela fragan med PGRST201 —
+   * `employee` blir null och varje inloggad ser "vantar pa aktivering".
+   * Typecheck sager ingenting om detta; det syns forst mot databasen.
+   */
   const { data: employee } = await las
     .from("employee")
-    .select("id, first_name, last_name, email, status, team_id, employment_type, start_date")
+    .select(
+      "id, first_name, last_name, email, status, team_id, employment_type, start_date," +
+        " employee_role!employee_role_employee_id_fkey(role)," +
+        " employee_permission!employee_permission_employee_id_fkey(permission)",
+    )
     .eq("auth_user_id", user.id)
     .maybeSingle();
 
@@ -62,17 +85,26 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     };
   }
 
-  const [{ data: roleRows }, { data: permRows }] = await Promise.all([
-    las.from("employee_role").select("role").eq("employee_id", employee.id),
-    las.from("employee_permission").select("permission").eq("employee_id", employee.id),
-  ]);
+  const rad = employee as unknown as NonNullable<CurrentUser["employee"]> & {
+    employee_role: { role: string }[] | null;
+    employee_permission: { permission: string }[] | null;
+  };
 
   return {
     authUserId: user.id,
-    email: user.email ?? employee.email,
-    employee,
-    roles: (roleRows ?? []).map((r) => r.role as Role),
-    permissions: (permRows ?? []).map((p) => p.permission as Permission),
+    email: user.email ?? rad.email,
+    employee: {
+      id: rad.id,
+      first_name: rad.first_name,
+      last_name: rad.last_name,
+      email: rad.email,
+      status: rad.status,
+      team_id: rad.team_id,
+      employment_type: rad.employment_type,
+      start_date: rad.start_date,
+    },
+    roles: (rad.employee_role ?? []).map((r) => r.role as Role),
+    permissions: (rad.employee_permission ?? []).map((p) => p.permission as Permission),
   };
 });
 

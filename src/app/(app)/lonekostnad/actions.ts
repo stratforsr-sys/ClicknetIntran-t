@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { raknaLonekostnad, type Underlag } from "@/lib/lonekostnad";
-import { farSeLonekostnad, hamtaLon, hamtaSatser } from "@/lib/lonekostnad-server";
+import { farSeLonekostnad, hamtaLonerFor, hamtaSatser } from "@/lib/lonekostnad-server";
 
 export type KostnadState = { fel?: string; ok?: string };
 
@@ -244,11 +244,24 @@ export async function raknaPeriod(_prev: KostnadState, form: FormData): Promise<
 
   await db.from("cost_calculation").delete().eq("period_id", periodId);
 
-  let skrivna = 0;
+  /**
+   * Lonerna hamtas EN gang for hela perioden, och raderna skrivs i EN insert.
+   *
+   * Loopen gjorde tidigare tva turer till databasen per anstalld — en for lonen
+   * och en for raden — och de gick efter varandra. Med tjugofem anstallda var
+   * det femtio vantetider i rad for en knapptryckning.
+   *
+   * Berakningen sjalv ar oforandrad. Det som andrats ar nar databasen fragas,
+   * inte vad den svarar: `hamtaLonerFor` tillampar samma regel som `hamtaLon`,
+   * och `raknaLonekostnad` far exakt samma underlag som forut.
+   */
+  const lonPer = await hamtaLonerFor(db, rader.map((r) => r.employee_id), period.period_start);
+
+  const attSkriva: Record<string, unknown>[] = [];
   let utanLon = 0;
 
   for (const rad of rader) {
-    const lon = await hamtaLon(db, rad.employee_id, period.period_start);
+    const lon = lonPer.get(rad.employee_id) ?? null;
 
     // Utan manadslon finns ingen kostnad att rakna. Att skriva en rad pa noll
     // hade sett ut som en gratis saljare.
@@ -269,7 +282,7 @@ export async function raknaPeriod(_prev: KostnadState, form: FormData): Promise<
 
     const b = raknaLonekostnad(underlag, satser);
 
-    await db.from("cost_calculation").insert({
+    attSkriva.push({
       period_id: periodId,
       employee_id: rad.employee_id,
       monthly_salary: b.manadslon,
@@ -283,9 +296,16 @@ export async function raknaPeriod(_prev: KostnadState, form: FormData): Promise<
       rates_used: b.ratesUsed,
       calculated_by: user.employee!.id,
     });
-    skrivna += 1;
   }
 
+  if (attSkriva.length > 0) {
+    const { error: skrivfel } = await db.from("cost_calculation").insert(attSkriva);
+    // De gamla raderna ar redan borta. Gar skrivningen fel ska det synas, inte
+    // sluta med en tom period som ser ut som en berakning utan trafffar.
+    if (skrivfel) return { fel: `Beräkningen kunde inte sparas: ${skrivfel.message}` };
+  }
+
+  const skrivna = attSkriva.length;
   await logga(user.employee!.id, "cost.calculated", periodId, { rader: skrivna, utan_lon: utanLon });
   revalidatePath("/lonekostnad", "layout");
 

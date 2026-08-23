@@ -91,6 +91,21 @@ export async function updateSession(request: NextRequest) {
 
   if (!isConfigured) return response;
 
+  /**
+   * /api slipper hela sessionskontrollen.
+   *
+   * Rutterna dar autentiserar sig sjalva — nattjobbet med CRON_SECRET,
+   * kalenderflodet med sin hemliga adress, felrutten med sitt ursprung. Ingen av
+   * dem laser `user` harifran, och varje block nedan ar redan undantaget for
+   * `/api` en gang till.
+   *
+   * Det som forsvinner ar `getUser()`, och den ar inte gratis: den gar till
+   * Supabase Auth over natet vid VARJE begaran. Nattjobbet betalade den turen
+   * for att fa reda pa att det inte har nagon session.
+   */
+  const arApi = request.nextUrl.pathname === "/api" || request.nextUrl.pathname.startsWith("/api/");
+  if (arApi) return response;
+
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     cookies: {
       getAll: () => request.cookies.getAll(),

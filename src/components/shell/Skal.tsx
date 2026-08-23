@@ -6,7 +6,6 @@ import { Topbar } from "./Topbar";
 import { Bottennav } from "./Bottennav";
 import { SIDOPANEL_KAKA } from "./sidopanel";
 import type { NavItem } from "./nav-items";
-import type { Notis } from "@/lib/notiser";
 import type { Kvitto } from "@/lib/toast";
 import { Toast } from "@/components/ui/Toast";
 
@@ -16,7 +15,7 @@ export function Skal({
   roll,
   stamplingPa,
   hopfalldFranStart,
-  notiser,
+  klocka,
   kvitto,
   children,
 }: {
@@ -25,7 +24,7 @@ export function Skal({
   roll: string;
   stamplingPa: boolean;
   hopfalldFranStart: boolean;
-  notiser: Notis[];
+  klocka: ReactNode;
   kvitto: Kvitto | null;
   children: ReactNode;
 }) {
@@ -70,7 +69,7 @@ export function Skal({
             : "px-4 lg:pl-[18rem] transition-[padding] duration-base ease-brand"
         }
       >
-        <Topbar oppnaMeny={() => setOppen(true)} notiser={notiser} />
+        <Topbar oppnaMeny={() => setOppen(true)} klocka={klocka} />
         {/* Innehallsyta maximalt 1440 px, centrerad (UI-PRD §6).
             Under 768 px ligger bottenraden over sidans nederkant, sa
             innehallet behover en botten som ar hogre an raden ar. */}

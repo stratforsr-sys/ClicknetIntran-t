@@ -1,11 +1,9 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Ikon } from "./Ikon";
 import { SOK_HANDELSE } from "./Bottennav";
-import { Notisklocka } from "./Notisklocka";
-import type { Notis } from "@/lib/notiser";
 
 /**
  * UI-PRD §5.2. Sokfaltet ar understruket i vila enligt referens A — inte en
@@ -16,7 +14,11 @@ import type { Notis } from "@/lib/notiser";
  * bilagor, nyheter, kurser, personal och egna arenden. Varje fraga dar stalls
  * med anvandarens egen token, sa RLS avgor vad som syns.
  */
-export function Topbar({ oppnaMeny, notiser }: { oppnaMeny: () => void; notiser: Notis[] }) {
+/**
+ * `klocka` ar en fardigrenderad nod och inte en lista notiser. Toppraden ska
+ * kunna ritas innan klockans fragor ar besvarade — se shell/Klocka.tsx.
+ */
+export function Topbar({ oppnaMeny, klocka }: { oppnaMeny: () => void; klocka: ReactNode }) {
   const sok = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const sp = useSearchParams();
@@ -82,7 +84,7 @@ export function Topbar({ oppnaMeny, notiser }: { oppnaMeny: () => void; notiser:
         </kbd>
       </form>
 
-      <Notisklocka notiser={notiser} />
+      {klocka}
     </header>
   );
 }

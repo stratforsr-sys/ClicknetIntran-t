@@ -52,56 +52,158 @@ export default async function Startsida() {
   const serAvvikelser = canManageEmployees(user) || hasRole(user, "team_lead");
   const chef = serPersonal || hanterarArenden;
 
-  // RLS avgor vilka dokument som syns: audience_roles filtreras redan i
-  // policyn, sa listan nedan behover inte upprepa den kontrollen.
-  const [{ data: kravDok }, { data: minaAck }, { data: mittAgande }, { data: minaArenden }] =
-    await Promise.all([
-      supabase
-        .from("document")
-        .select("id, slug, title, version, review_due")
-        .eq("status", "published")
-        .eq("requires_ack", true)
-        .order("review_due"),
-      supabase
-        .from("document_ack")
-        .select("document_id, version")
-        .eq("employee_id", user.employee.id),
-      supabase
-        .from("document")
-        .select("id, slug, title, review_due")
-        .eq("owner_id", user.employee.id)
-        .eq("status", "published")
-        .lte("review_due", new Date().toISOString().slice(0, 10))
-        .order("review_due"),
-      // AC-11.1 lovar arenden i listan. `waiting` satts nar nagon ANNAN an
-      // agaren skrivit i traden — alltsa precis nar ledningen har svarat och
-      // bollen ligger hos den anstallda. Se arenden/actions.ts.
-      supabase
-        .from("hr_case")
-        .select("id, subject, status, resolved_at, due_at, sla_hours")
-        .eq("employee_id", user.employee.id)
-        .eq("status", "waiting")
-        .is("resolved_at", null)
-        .order("due_at"),
-    ]);
 
-  // AC-6.6 pa startsidan: en kurs som ligger och skraper ar lika mycket en
-  // uppgift som en okvitterad rutin.
-  const [{ data: kurser }, { data: kursModuler }, { data: minProgress }, { data: minaCert }] =
-    await Promise.all([
-      supabase
-        .from("course")
-        .select("id, slug, title, due_days")
-        .eq("status", "published")
-        .order("title"),
-      supabase.from("course_module").select("id, course_id"),
-      supabase.from("module_progress").select("module_id").eq("employee_id", user.employee.id),
-      supabase
-        .from("certification")
-        .select("course_id, issued_at, expires_at")
-        .eq("employee_id", user.employee.id)
-        .order("issued_at", { ascending: false }),
-    ]);
+  /**
+   * ===========================================================================
+   * EN VAG, INTE SEX.
+   *
+   * Startsidan stallde tidigare sina fragor i sex omgangar efter varandra. Ingen
+   * av dem behovde svaret fran den forra — de vantade bara for att de rakade
+   * sta i den ordningen i filen. Allt harnedan beror pa `user` och `sparr`, och
+   * bada ar kanda redan har.
+   *
+   * De villkorade fragorna star kvar som villkorade. En ko som inte ska visas
+   * ska inte heller hamtas, och `Promise.resolve` haller platsen i listan utan
+   * att kosta en tur.
+   *
+   * LAGGER DU TILL EN FRAGA: lagg den i den har listan. En fraga som behover
+   * svaret fran en annan hor hemma i en andra omgang langre ner — men kolla
+   * forst om den verkligen gor det. Det gjorde ingen av de fem som lag har.
+   * ===========================================================================
+   */
+  const idagFran = dygnetsStart();
+  const idagDatum = new Date().toISOString().slice(0, 10);
+
+  const [
+    { data: kravDok },
+    { data: minaAck },
+    { data: mittAgande },
+    { data: minaArenden },
+    { data: kurser },
+    { data: kursModuler },
+    { data: minProgress },
+    { data: minaCert },
+    { data: idag },
+    { data: koArenden },
+    { count: attKvittera },
+    { data: koFranvaro },
+    { data: obekraftadSjuk },
+    { data: koRollspel },
+    { count: antalAktiva },
+    { count: antalOnboarding },
+  ] = await Promise.all([
+    // RLS avgor vilka dokument som syns: audience_roles filtreras redan i
+    // policyn, sa listan nedan behover inte upprepa den kontrollen.
+    supabase
+      .from("document")
+      .select("id, slug, title, version, review_due")
+      .eq("status", "published")
+      .eq("requires_ack", true)
+      .order("review_due"),
+    supabase
+      .from("document_ack")
+      .select("document_id, version")
+      .eq("employee_id", user.employee.id),
+    supabase
+      .from("document")
+      .select("id, slug, title, review_due")
+      .eq("owner_id", user.employee.id)
+      .eq("status", "published")
+      .lte("review_due", idagDatum)
+      .order("review_due"),
+    // AC-11.1 lovar arenden i listan. `waiting` satts nar nagon ANNAN an
+    // agaren skrivit i traden — alltsa precis nar ledningen har svarat och
+    // bollen ligger hos den anstallda. Se arenden/actions.ts.
+    supabase
+      .from("hr_case")
+      .select("id, subject, status, resolved_at, due_at, sla_hours")
+      .eq("employee_id", user.employee.id)
+      .eq("status", "waiting")
+      .is("resolved_at", null)
+      .order("due_at"),
+
+    // AC-6.6 pa startsidan: en kurs som ligger och skraper ar lika mycket en
+    // uppgift som en okvitterad rutin.
+    supabase
+      .from("course")
+      .select("id, slug, title, due_days")
+      .eq("status", "published")
+      .order("title"),
+    supabase.from("course_module").select("id, course_id"),
+    supabase.from("module_progress").select("module_id").eq("employee_id", user.employee.id),
+    supabase
+      .from("certification")
+      .select("course_id, issued_at, expires_at")
+      .eq("employee_id", user.employee.id)
+      .order("issued_at", { ascending: false }),
+
+    // Stamplingen. Bara dagens handelser — resten hor hemma pa /tid.
+    sparr.stampling
+      ? supabase
+          .from("time_event")
+          .select("id, kind, occurred_at, source, supersedes_id, correction_state, note")
+          .eq("employee_id", user.employee.id)
+          .gte("occurred_at", idagFran)
+          .order("occurred_at")
+      : Promise.resolve({ data: null }),
+
+    /**
+     * Chefens ko.
+     *
+     * Avvikelserna raknas medvetet INTE. K19 kraver att varje chefsoppning av
+     * avvikelsevyn loggas, och en siffra pa startsidan hade betytt en oppning
+     * per sidladdning — bade en logg full av brus och en insyn som skett utan
+     * att nagon valde den. Posten ar darfor en lank och ingenting mer.
+     */
+    hanterarArenden
+      ? supabase
+          .from("hr_case")
+          .select("id, due_at, sla_hours, resolved_at")
+          .is("resolved_at", null)
+          .in("status", ["new", "in_progress"])
+      : Promise.resolve({ data: null }),
+    attesterar && sparr.stampling
+      ? supabase
+          .from("time_event")
+          .select("id", { count: "exact", head: true })
+          .eq("correction_state", "pending")
+      : Promise.resolve({ count: null }),
+    // E7. Bada laser med anvandarens egen token: absence_request_read och
+    // sick_report_read slapper igenom egen rad, den man leder och ledningen.
+    // Egna rader filtreras bort i koden — ingen beslutar om sin egen ledighet,
+    // och en ko med sin egen ansokan i ar en ko man inte kan tomma.
+    supabase
+      .from("absence_request")
+      .select("id, employee_id, starts_on, rules_broken")
+      .eq("status", "submitted"),
+    supabase
+      .from("sick_report")
+      .select("id, employee_id")
+      .is("confirmed_at", null)
+      .is("cancelled_at", null),
+
+    // E8.7: inlamnade rollspel som ingen bedomt. RLS ger bara egna rader plus
+    // dem man leder (0024), sa filtret nedan tar bort just de egna — resten ar
+    // per definition nagon annans, och alltsa chefens att bedoma.
+    supabase
+      .from("roleplay_submission")
+      .select("id, employee_id, submitted_at")
+      .is("graded_at", null),
+
+    serPersonal
+      ? supabase.from("employee").select("id", { count: "exact", head: true }).eq("status", "active")
+      : Promise.resolve({ count: null }),
+    serPersonal
+      ? supabase
+          .from("employee")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "onboarding")
+      : Promise.resolve({ count: null }),
+  ]);
+
+  // ---------------------------------------------------------------------------
+  // Harifran och ner rakans det bara i minnet. Ingen fraga till.
+  // ---------------------------------------------------------------------------
 
   const modulerPerKurs = new Map<string, string[]>();
   for (const m of kursModuler ?? []) {
@@ -134,16 +236,8 @@ export default async function Startsida() {
   const forfallna = mittAgande ?? [];
   const obesvarade = minaArenden ?? [];
 
-  // Stamplingen. Bara dagens handelser — resten hor hemma pa /tid.
   let stamplingslage = null;
   if (sparr.stampling) {
-    const { data: idag } = await supabase
-      .from("time_event")
-      .select("id, kind, occurred_at, source, supersedes_id, correction_state, note")
-      .eq("employee_id", user.employee.id)
-      .gte("occurred_at", dygnetsStart())
-      .order("occurred_at");
-
     const handelser: Handelse[] = idag ?? [];
     const lage = lageNu(handelser);
     stamplingslage = {
@@ -153,68 +247,13 @@ export default async function Startsida() {
     };
   }
 
-  /**
-   * Chefens ko.
-   *
-   * Avvikelserna raknas medvetet INTE. K19 kraver att varje chefsoppning av
-   * avvikelsevyn loggas, och en siffra pa startsidan hade betytt en oppning
-   * per sidladdning — bade en logg full av brus och en insyn som skett utan
-   * att nagon valde den. Posten ar darfor en lank och ingenting mer.
-   */
-  const [{ data: koArenden }, { count: attKvittera }, { data: koFranvaro }, { data: obekraftadSjuk }] =
-    await Promise.all([
-      hanterarArenden
-        ? supabase
-            .from("hr_case")
-            .select("id, due_at, sla_hours, resolved_at")
-            .is("resolved_at", null)
-            .in("status", ["new", "in_progress"])
-        : Promise.resolve({ data: null }),
-      attesterar && sparr.stampling
-        ? supabase
-            .from("time_event")
-            .select("id", { count: "exact", head: true })
-            .eq("correction_state", "pending")
-        : Promise.resolve({ count: null }),
-      // E7. Bada laser med anvandarens egen token: absence_request_read och
-      // sick_report_read slapper igenom egen rad, den man leder och ledningen.
-      // Egna rader filtreras bort i koden — ingen beslutar om sin egen ledighet,
-      // och en ko med sin egen ansokan i ar en ko man inte kan tomma.
-      supabase
-        .from("absence_request")
-        .select("id, employee_id, starts_on, rules_broken")
-        .eq("status", "submitted"),
-      supabase
-        .from("sick_report")
-        .select("id, employee_id")
-        .is("confirmed_at", null)
-        .is("cancelled_at", null),
-    ]);
-
   const attBesluta = (koFranvaro ?? []).filter((a) => a.employee_id !== user.employee!.id);
   const attBekrafta = (obekraftadSjuk ?? []).filter((s) => s.employee_id !== user.employee!.id);
-
-  // E8.7: inlamnade rollspel som ingen bedomt. RLS ger bara egna rader plus
-  // dem man leder (0024), sa filtret nedan tar bort just de egna — resten ar
-  // per definition nagon annans, och alltsa chefens att bedoma.
-  const { data: koRollspel } = await supabase
-    .from("roleplay_submission")
-    .select("id, employee_id, submitted_at")
-    .is("graded_at", null);
   const attBedoma = (koRollspel ?? []).filter((r) => r.employee_id !== user.employee!.id);
 
   const overTiden = (koArenden ?? []).filter((a) => slaLage(a) === "over").length;
   const snart = (koArenden ?? []).filter((a) => slaLage(a) === "snart").length;
 
-  const [{ count: antalAktiva }, { count: antalOnboarding }] = serPersonal
-    ? await Promise.all([
-        supabase.from("employee").select("id", { count: "exact", head: true }).eq("status", "active"),
-        supabase
-          .from("employee")
-          .select("id", { count: "exact", head: true })
-          .eq("status", "onboarding"),
-      ])
-    : [{ count: null }, { count: null }];
 
   const stampelkort = stamplingslage ? (
     <Card status="brand">
