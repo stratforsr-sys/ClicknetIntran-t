@@ -3,7 +3,7 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-08-24 (E10.9 anstallningsflodet, 0033)
+**Senast uppdaterad:** 2026-08-24 (sidopanelens scroll + installningsrutan)
 
 ---
 
@@ -77,6 +77,8 @@ i `rls.mjs`.** Samtliga 105 i den filen plus 51 i övriga sviter. Leta inte om:
 | Tvingat lösenordsbyte | Spärr i databasen sedan 2026-08-20 |
 | Startsida | **Ombyggd 2026-08-23.** Statusband, snabbval, dagens tidslinje, ärende- och provisionskort |
 | Bottennavigering | Under 768 px: Hem, Sök, Stämpla, Mer |
+| Sidopanelen | **Menyn scrollar sedan 2026-08-24.** Låst botten: profil och utloggning rullar aldrig bort |
+| **Inställningar** | **I drift sedan 2026-08-24.** Ruta över fönstret från profilbilden. Konto, Säkerhet, Utseende, Administration. `/profil` visar samma sektioner som egen sida |
 | Registerutdrag | Klart, **inklusive filer och vem som öppnat dem** |
 | Nyheter | `/nyheter`. Målgrupp per roll och team, fäst överst, utkast |
 | Notisklockan | Ärenden, nyheter, rutiner, kurser, frånvaro, rollspel |
@@ -152,6 +154,32 @@ ligga kvar.
    under `/lonekostnad/satser`. **Kontrollera också åldersgränsen för den äldre
    nedsättningen** — den är seedad till 66, följer pensionsåldern och har
    flyttats flera gånger. Den berör ingen i bolaget i dag.
+
+---
+
+## Vad som byggdes 2026-08-24 (kväll) — skalet
+
+Ingen migration. Två saker, och den första var ett verkligt fel i produktion.
+
+**Sidopanelens meny scrollar.** Panelen är `inset-y-4` och alltid exakt så hög
+som fönstret, men listan saknade egen scroll. På en 690 px hög vy föll fem av
+sjutton poster utanför — och under dem **hela bottenraden med profilen och
+utloggningen.** Bara listan scrollar nu; logotyp, hopfällning och profilrad är
+`shrink-0`.
+
+Fällan att komma ihåg: `scrollbar-width`/`scrollbar-color` slår sedan Chrome
+121 av hela `::-webkit-scrollbar`-blocket, och då ritar macOS en overlay-list
+med bredd noll. Listan scrollade men såg fortfarande avklippt ut. Det står
+utskrivet i `.nav-scroll` i `globals.css` att de två inte får läggas tillbaka.
+
+**Inställningarna är en ruta över fönstret**, öppnad från profilbilden.
+`<dialog>` + `showModal()`. Sektionerna ligger i `src/app/(app)/profil/
+Sektioner.tsx` och används av både rutan och `/profil` — rör du den ena ändras
+båda, vilket är meningen. Administration-fliken finns bara för den som ställer
+in något, och varje post har samma villkor som sidan den pekar på.
+
+Sidopanelens hopfällning delas via `shell/panellage.tsx` i stället för att
+kopieras. Lägeshållaren är `Skal`.
 
 ---
 

@@ -5,6 +5,76 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-08-24 (kväll) · Inställningarna blev en ruta ovanpå fönstret
+
+Profilbilden nere till vänster ledde till helsidan `/profil`. Nu öppnar den
+inställningarna som en ruta över fönstret, med kategorier till vänster —
+samma form som macOS Systeminställningar och Claudes inställningar.
+
+Skälet är att **inställningar sällan är ärendet.** Man kommer från något man
+höll på med, ställer om en sak och ska tillbaka. En helsida river bort det man
+hade framför sig och kräver ett steg bakåt för att komma tillbaka dit.
+
+### Elementet är ett `<dialog>`, och det är hela poängen
+
+`showModal()` ger fokusfälla, Esc, inert bakgrund och placering i webbläsarens
+topplager. Var och en av de fyra är lätt att bygga fel för hand, och en
+fokusfälla som läcker gör rutan obrukbar med tangentbord.
+
+Två saker `<dialog>` INTE ger, och som därför står i koden:
+
+- **Rullning bakom rutan.** Modalen spärrar klick men inte hjul i alla
+  webbläsare. `overflow: hidden` på `<html>` medan rutan är öppen.
+- **Klick på bakgrunden.** Ett sådant klick rapporteras med `<dialog>` som mål.
+  Rutan har därför ingen egen inre marginal — panelen fyller den helt, annars
+  hade ett klick på marginalen stängt av misstag.
+
+### Sektionerna ligger i `profil/Sektioner.tsx`, och det är inte av lathet
+
+Rutan och `/profil` visar **samma komponenter**. `/profil` finns kvar för
+djuplänkar, bokmärken och den som hellre läser allt under varandra.
+
+Två uppsättningar hade varit den glidning anställningsflödet flyttade två
+funktioner till lib för att slippa: ett fält som läggs till på ena stället och
+glöms på det andra. Filen ligger kvar i routekatalogen — Next behandlar bara
+reserverade filnamn som rutter, och actionerna som `Losenord` och `Steg2`
+anropar bor redan där.
+
+### Fyra sektioner, och Administration finns bara ibland
+
+Konto, Säkerhet, Utseende, Administration. Den sista visas för den som ställer
+in något, och **varje post har samma villkor som sidan den pekar på** — samma
+regel som avgör vad som får stå i sidopanelen. En länk som leder till en
+omdirigering är en meny som ljuger.
+
+`harAdministration()` avgörs i layouten och inte i rutan. En serverkomponent
+som returnerar `null` är fortfarande en nod, så klienten kan inte skilja "tom
+sektion" från "ingen sektion", och en flik som öppnar en tom yta är sämre än
+ingen flik.
+
+### Utseendet delar läge med panelen i stället för att kopiera det
+
+Hopfällningen gick hittills bara att nå från en knapp längst ner i panelen —
+och på en kort skärm var den knappen dessutom bortklippt (se nästa avsnitt).
+Nu finns den också som reglage i inställningarna.
+
+Läget bor kvar i `Skal` och delas nedåt genom `shell/panellage.tsx`. Reglaget
+ritas på två ställen, i rutan och på `/profil`, och ett eget tillstånd där hade
+gett tre källor som kan säga olika saker: panelen hopfälld, reglaget utfällt.
+
+### Sektionerna ritas på servern, bakom var sin Suspense
+
+Rutan ska öppnas färdig och inte börja hämta när man klickat. Samma linje som
+klockan drog: den enda fråga sektionerna kostar — teamets namn — får inte hålla
+tillbaka en sidvisning, så den ligger bakom en egen Suspense i layouten.
+
+`npm run typecheck` grön. Provkört i produktion: alla fyra sektionerna, Esc,
+reglaget och `/profil` som egen sida. Inga konsolfel. **Testsviten är inte
+körd** — passet rör varken RLS eller någon server action, och ingen svit mäter
+layout.
+
+---
+
 ## 2026-08-24 (kväll) · Sidopanelen klippte av sin egen meny
 
 Användaren kunde inte se alla sidflikar. Felet var verkligt och äldre än det
