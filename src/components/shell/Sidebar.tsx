@@ -7,6 +7,7 @@ import { Ikon } from "./Ikon";
 import { Counter } from "@/components/ui/Badge";
 import { cn } from "@/components/ui/cn";
 import type { NavItem } from "./nav-items";
+import { INSTALLNINGAR_START } from "./installningar-delade";
 
 /**
  * UI-PRD §5.1. Mork brand-900-yta, radie lg, 16 px marginal mot fonsterkanten
@@ -41,7 +42,6 @@ export function Sidebar({
   stang,
   hopfalld,
   vaxlaHopfalld,
-  oppnaInstallningar,
 }: {
   items: NavItem[];
   namn: string;
@@ -50,7 +50,6 @@ export function Sidebar({
   stang: () => void;
   hopfalld: boolean;
   vaxlaHopfalld: () => void;
-  oppnaInstallningar: () => void;
 }) {
   const path = usePathname();
 
@@ -240,15 +239,20 @@ export function Sidebar({
               Profilbilden ar vagen till installningarna. Det ar dar folk
               letar, och det ar den vana bade macOS och Claude bygger pa.
 
-              Knapp och inte lank: rutan ligger ovanpa fonstret och byter inte
-              sida, och en <a> som inte navigerar ar en <a> som ljuger for
-              mittenklick, "oppna i ny flik" och skarmlasare. Vill man ha en
-              egen sida finns lanken langst ner i rutan.
+              LANK OCH INTE KNAPP, till skillnad fran forsta versionen. Rutan
+              ar numera en rutt: klickar man har oppnas den ovanpa sidan man
+              star pa, laddar man om samma adress far man den som helsida. En
+              riktig <a> ar da inte bara arligare mot mittenklick, "oppna i ny
+              flik" och skarmlasare — den ar det som far bada lagena att
+              fungera. Se src/app/(app)/@ruta/.
+
+              `scroll={false}`: sidan under rutan ska ligga kvar dar den lag.
             */}
-            <button
-              type="button"
-              onClick={oppnaInstallningar}
-              aria-haspopup="dialog"
+            <Link
+              href={INSTALLNINGAR_START}
+              scroll={false}
+              onClick={stang}
+              aria-current={path.startsWith("/profil") ? "page" : undefined}
               title={hopfalld ? `${namn} — inställningar` : "Inställningar"}
               className={cn(
                 "flex min-w-0 flex-1 items-center gap-3 rounded-full py-1 pr-2 text-left transition-colors duration-fast hover:bg-brand-800/60",
@@ -266,7 +270,7 @@ export function Sidebar({
                 <span className="block truncate text-small font-semibold text-ink-inv">{namn}</span>
                 <span className="block truncate text-micro uppercase text-brand-200">{roll}</span>
               </span>
-            </button>
+            </Link>
             <form action="/auth/logga-ut" method="post">
               <button
                 type="submit"

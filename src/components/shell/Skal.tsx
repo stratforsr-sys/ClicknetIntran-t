@@ -4,7 +4,6 @@ import { useState, type ReactNode } from "react";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 import { Bottennav } from "./Bottennav";
-import { Installningar } from "./Installningar";
 import { PanelLageProvider } from "./panellage";
 import { SIDOPANEL_KAKA } from "./sidopanel";
 import type { NavItem } from "./nav-items";
@@ -19,9 +18,7 @@ export function Skal({
   hopfalldFranStart,
   klocka,
   kvitto,
-  installningarKonto,
-  installningarSakerhet,
-  installningarAdministration,
+  ruta,
   children,
 }: {
   items: NavItem[];
@@ -31,14 +28,15 @@ export function Skal({
   hopfalldFranStart: boolean;
   klocka: ReactNode;
   kvitto: Kvitto | null;
-  installningarKonto: ReactNode;
-  installningarSakerhet: ReactNode;
-  /** `null` nar anvandaren inte staller in nagot — da finns ingen sadan flik. */
-  installningarAdministration: ReactNode | null;
+  /**
+   * Installningsrutan, fran den parallella rutten `@ruta`. Tom pa de flesta
+   * sidvisningar. Den ritas HAR INNE och inte bredvid skalet, eftersom
+   * utseendepanelen laser sidopanelens lage ur sammanhanget nedan.
+   */
+  ruta: ReactNode;
   children: ReactNode;
 }) {
   const [oppen, setOppen] = useState(false);
-  const [installningar, setInstallningar] = useState(false);
 
   /**
    * UI-PRD §5.1: laget ska sparas.
@@ -77,12 +75,6 @@ export function Skal({
           stang={() => setOppen(false)}
           hopfalld={hopfalld}
           vaxlaHopfalld={vaxlaHopfalld}
-          // Utdragsladan stangs samtidigt: pa en telefon hade den annars legat
-          // kvar bakom rutan och mott en tillbaka nar rutan stangdes.
-          oppnaInstallningar={() => {
-            setOppen(false);
-            setInstallningar(true);
-          }}
         />
         <div
           className={
@@ -101,15 +93,7 @@ export function Skal({
         {/* Sist i trädet och `fixed`: kvittot ligger over allt annat och ska
             inte kunna hamna under bottenraden pa en telefon. */}
         <Toast kvitto={kvitto} />
-        <Installningar
-          oppen={installningar}
-          stang={() => setInstallningar(false)}
-          namn={namn}
-          roll={roll}
-          konto={installningarKonto}
-          sakerhet={installningarSakerhet}
-          administration={installningarAdministration}
-        />
+        {ruta}
       </div>
     </PanelLageProvider>
   );

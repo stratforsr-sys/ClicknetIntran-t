@@ -12,16 +12,24 @@ import { isConfigured } from "@/lib/env";
 import { kraverMfa, kvittoGiltigt, STEG2_KAKA } from "@/lib/mfa";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { TOAST_KAKA, franKaka } from "@/lib/toast";
-import {
-  KontoSektion,
-  SakerhetSektion,
-  AdministrationSektion,
-  harAdministration,
-} from "./profil/Sektioner";
 import { VantarPaAktivering } from "./VantarPaAktivering";
 import { EjKonfigurerad } from "./EjKonfigurerad";
 
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
+/**
+ * `ruta` ar en parallell rutt (`@ruta`) och inte en vanlig komponent.
+ *
+ * Den bar installningsrutan. Next fyller den bara nar adressen matchar en av
+ * panelerna OCH man kom dit genom en klick i navet — annars star `default.tsx`
+ * dar och lamnar den tom, sa att en full laddning av t.ex. /tid/sparrar ger
+ * helsidan. Se src/app/(app)/@ruta/.
+ */
+export default async function AppLayout({
+  children,
+  ruta,
+}: {
+  children: React.ReactNode;
+  ruta: React.ReactNode;
+}) {
   if (!isConfigured) return <EjKonfigurerad />;
 
   /**
@@ -77,15 +85,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
    * Nu gar skalet och sidan ivag med en gang och klockan fylls i efterat. Se
    * shell/Klocka.tsx.
    *
-   * Installningarnas sektioner foljer samma linje och av samma skal. De ritas
-   * pa servern har uppe sa att rutan oppnas fardig i stallet for att borja
-   * hamta nar man klickat — men de star bakom var sin Suspense, sa den enda
-   * fragan de kostar (teamets namn) inte haller tillbaka nagon sidvisning.
-   *
-   * `harAdministration` avgors dessutom HAR och inte i rutan. En server-
-   * komponent som returnerar null ar fortfarande en nod, sa klienten kan inte
-   * se skillnad pa "tom sektion" och "ingen sektion" — och en flik som oppnar
-   * en tom yta ar samre an ingen flik.
+   * Installningsrutan hamtas inte har heller, men av ett annat skal: den ar
+   * en egen rutt. Panelen som visas ar den adressen pekar pa, sa bara den
+   * hamtas — och en panel man aldrig oppnar kostar ingenting alls.
    */
   return (
     <Skal
@@ -100,35 +102,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </Suspense>
       }
       kvitto={kvitto}
-      installningarKonto={
-        <Suspense fallback={<SektionSkelett />}>
-          <KontoSektion />
-        </Suspense>
-      }
-      installningarSakerhet={
-        <Suspense fallback={<SektionSkelett />}>
-          <SakerhetSektion />
-        </Suspense>
-      }
-      installningarAdministration={
-        harAdministration(user) ? (
-          <Suspense fallback={<SektionSkelett />}>
-            <AdministrationSektion />
-          </Suspense>
-        ) : null
-      }
+      ruta={ruta}
     >
       {children}
     </Skal>
   );
 }
 
-/** Platshallare med samma hojd som ett kort, sa att rutan inte hoppar. */
-function SektionSkelett() {
-  return (
-    <div className="flex flex-col gap-4" aria-hidden>
-      <div className="h-40 animate-pulse rounded-md bg-surface" />
-      <div className="h-24 animate-pulse rounded-md bg-surface" />
-    </div>
-  );
-}
