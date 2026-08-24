@@ -5,6 +5,113 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-08-23 (natt) · Säkerhetsgenomgångens tre kodpunkter
+
+Genomgången samma kväll landade i fyra punkter. Tre av dem är kod och gjordes
+här. Den fjärde, `STEG2_SECRET`, är ett miljöbyte och står kvar på användaren —
+den beskrivs sist.
+
+Ingen av punkterna var en öppen dörr. Det som gör dem värda ett pass är att alla
+tre är av samma sort: en rad som är ofarlig där den står och blir farlig när
+någon kopierar mönstret till nästa ställe.
+
+### Punkt 2: en hjälpare som var en publik ändpunkt
+
+`sattKvitto` låg i `angra/actions.ts`, som bär `"use server"`. Allt som
+exporteras ur en sådan fil får ett id av Next och tar emot anrop från
+webbläsaren — oavsett om någon UI-kod anropar det eller inte. Funktionen var
+alltså en ändpunkt trots att den aldrig var tänkt som en.
+
+Följden var i sig liten: den skriver en kortlivad kaka i den anropandes egen
+webbläsare, och React escapar texten när kvittot ritas. Men det är samma brist
+som genomgången hittade, och att den var ofarlig den här gången är inte ett
+skäl att låta den ligga kvar. Nästa hjälpare som läggs bredvid kanske inte är
+det.
+
+Flyttad till `src/lib/toast-server.ts`. **`angra()` är nu det enda som
+exporteras ur `angra/actions.ts`, och det ska den förbli** — det står numera i
+filens egen rubrik. Tre anropsställen (`avtal`, `fel`, `nyheter`) importerar
+från det nya stället.
+
+Det är andra gången samma sak hittas — `skrivFel` flyttades till
+`src/lib/fel-server.ts` av samma skäl 22 augusti. Mönstret är därmed etablerat:
+en server action-fil exporterar handlingar, ingenting annat.
+
+### Punkt 3: `!==` på en hemlighet
+
+`CRON_SECRET` jämfördes med `!==` i fyra kopior, en i varje jobbrutt.
+Strängjämförelse avbryter vid första tecknet som skiljer, så tiden det tar att
+få nej berättar hur långt fram i hemligheten gissningen stämde. Den som får
+gissa fritt kan bygga hemligheten tecken för tecken i stället för att prova alla
+kombinationer.
+
+I praktiken är angreppet svårt att genomföra mot rutter bakom nätet — skillnaden
+är nanosekunder. Men en konstanttidsjämförelse kostar ingenting.
+
+Ligger nu i `src/lib/jobb/behorighet.ts`, ett ställe i stället för fyra.
+**Båda sidorna hashas före jämförelsen**, och det är inte kosmetik:
+`timingSafeEqual` kräver lika långa buffertar och kastar annars, och en
+längdkontroll före hade läckt längden. sha256 ger alltid 32 byte oavsett vad som
+kom in i headern.
+
+De två utfallen betyder fortfarande olika saker och ska göra det: **503** är att
+`CRON_SECRET` inte är satt hos oss, ett driftfel, inte ett nekat anrop. **401**
+är fel eller saknad hemlighet.
+
+### Punkt 4: `anon` tappar femton granter — och 0027:s fälla slog till igen
+
+`anon` hade `execute` på femton av navets egna funktioner. Ingen av dem läcker
+något: ingen policy i navet gäller rollen `anon` (enda träffen i `pg_policies`
+är den restriktiva `filer_ar_stangd`, som nekar hela bucketen), och ingen
+utloggad väg rör databasen med anon-nyckeln — `/uppstart` använder service role.
+Granten följde med `authenticated` på samma rad av vana.
+
+Första versionen av `0032` skrev det uppenbara, `revoke execute ... from anon`,
+och **självkontrollen längst ned fällde den: tretton av femton hade kvar sin
+execute.**
+
+Det är exakt fällan 0027 skrev upp den 22 augusti, och jag gick på den ändå.
+Tretton av funktionerna har ingen explicit anon-grant — de har PUBLIC-granten
+Postgres ger varje ny funktion, och både `anon` och `authenticated` är delar av
+PUBLIC. Ett revoke från `anon` tar bort en grant som inte finns, går igenom utan
+varning och ändrar ingenting. Två bet: `far_hantera_avtal` (0028) och
+`far_rekrytera` (0030) skrevs med `to anon, authenticated, service_role` och
+hade en riktig grant att ta bort.
+
+Rätt form är att ta PUBLIC-granten och ge tillbaka explicit — `authenticated`,
+som är den grant som får RLS-policyerna att fungera alls, plus `service_role`.
+Revoken körs före granten i samma transaktion; tvärtom hade revoken tagit bort
+den nya granten igen.
+
+**Lärdomen är inte regeln utan kontrollen.** Regeln stod redan utskriven i 0027
+och hjälpte inte. Det som fångade felet var att migrationen frågar databasen om
+resultatet och river transaktionen om något står kvar. Den kontrollen ligger
+kvar i filen och fångar nästa funktion som glider in med en PUBLIC-grant.
+
+**Triggerfunktionerna rördes inte.** Tjugotvå av dem har samma ärvda grant, men
+en funktion som returnerar `trigger` exponeras aldrig som RPC av PostgREST. Att
+revoka dem hade varit att ta risken att en trigger slutar brinna för att vinna
+ingenting.
+
+### Punkt 1 gjordes inte, och det är med flit
+
+`STEG2_SECRET` är inte satt i Vercel. Utan den signeras steg två-kvittot med
+`SUPABASE_SERVICE_ROLE_KEY` — samma hemlighet som ger full förbigång av RLS.
+Fallbacken är medveten och funktionen är inte trasig, men de två bör inte vara
+samma nyckel.
+
+Att sätta den är ett miljöbyte, inte kod, **och den har en följd i produktionen:
+alla chefer måste bekräfta sin enhet en gång till.** Det är ett litet men
+verkligt avbrott för den som använder navet, och det är användarens beslut när
+det ska ske — inte något som ska ramla ut ur ett säkerhetspass.
+
+### Verifiering
+
+`npm run typecheck` grön. Samtliga 25 sviter gröna mot den riktiga databasen.
+Migration `0032` körd i produktionen 20:48, deployen grön.
+
+---
+
 ## 2026-08-23 (sent) · Startsidan byggs om, och provisionen får sin första skiva
 
 Beställarens uppdrag: startsidan ska ge rollstyrda snabbval — stämpla in, ut,

@@ -3,7 +3,7 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-08-23 (sent: startsidan ombyggd, E13 forsta skivan)
+**Senast uppdaterad:** 2026-08-24 (natt: sakerhetspunkt 2-4 gjorda, 0032)
 
 ---
 
@@ -151,6 +151,33 @@ ligga kvar.
    under `/lonekostnad/satser`. **Kontrollera också åldersgränsen för den äldre
    nedsättningen** — den är seedad till 66, följer pensionsåldern och har
    flyttats flera gånger. Den berör ingen i bolaget i dag.
+
+---
+
+## Vad som ändrades natten till 2026-08-24 — tre säkerhetspunkter
+
+Migration `0032`. Hela resonemanget står i arbetsloggen; det här är de tre
+reglerna som är värda att ha med sig.
+
+**En `"use server"`-fil exporterar handlingar och ingenting annat.** `sattKvitto`
+låg i `angra/actions.ts` och var därmed en publik ändpunkt — allt som exporteras
+ur en sådan fil får ett id och tar emot anrop från webbläsaren. Den ligger nu i
+`src/lib/toast-server.ts`, och `angra()` är det enda som exporteras därifrån.
+Samma sak hände `skrivFel` 22 augusti. Det är alltså andra gången.
+
+**Jobbrutternas hemlighet jämförs i konstant tid**, i `src/lib/jobb/behorighet.ts`
+i stället för i fyra kopior. Båda sidorna hashas först — `timingSafeEqual` kräver
+lika längd och en längdkontroll före hade läckt längden.
+
+**`revoke ... from anon` gör oftast ingenting, och det är fortfarande den fällan
+som biter.** Tretton av femton funktioner hade ingen explicit anon-grant utan den
+PUBLIC-grant Postgres ger varje ny funktion. Rätt form är `revoke från public` +
+explicit `grant` tillbaka till `authenticated` och `service_role`. Regeln stod
+redan i 0027 och räckte inte — det som fångade felet var **självkontrollen längst
+ned i `0032`**, som frågar databasen och river transaktionen om något står kvar.
+Den ligger kvar. Skriver du en ny funktion och den syns där: det är meningen.
+
+Triggerfunktioner rörs aldrig — de exponeras inte som RPC av PostgREST.
 
 ---
 
@@ -558,22 +585,18 @@ glömt fylla i.
 
 ## Vad som står på tur
 
-### Fyra säkerhetspunkter från genomgången 2026-08-23 kväll
+### Säkerhetsgenomgången: en punkt kvar, och den är din
 
 Grunden är stark — RLS på samtliga 68 tabeller, ingen skrivrätt för klienten,
-behörighetskontroll först i varje server action. Ingen av punkterna nedan är en
-öppen dörr. Fullständig genomgång i arbetsloggen.
+behörighetskontroll först i varje server action. **Punkt 2, 3 och 4 är gjorda
+natten till 2026-08-24** (migration `0032`). Kvar:
 
 1. **Sätt `STEG2_SECRET` i Vercel.** Utan den signeras steg två-kvittot med
    `SUPABASE_SERVICE_ROLE_KEY` — samma hemlighet ger full förbigång av RLS.
    Fallbacken är medveten, men de två bör inte vara samma nyckel.
-   *Följd:* alla chefer måste bekräfta sin enhet en gång till.
-2. **`sattKvitto` är exporterad ur en `"use server"`-fil** och är därmed en
-   publik ändpunkt. Ingen XSS (React escapar), men en hjälpare ska inte
-   publiceras som handling.
-3. **`CRON_SECRET` jämförs med `!==`** — byt till konstanttidsjämförelse.
-4. **`anon` har `execute` på tretton RLS-predikat.** Avsiktligt enligt 0027/0028
-   och läcker ingenting, men granten behövs inte.
+   *Följd:* alla chefer måste bekräfta sin enhet en gång till. Det är därför den
+   inte gjordes åt dig — bytet avbryter för den som använder navet, och när det
+   sker är ditt val.
 
 ### Prestanda: det som är kvar
 
