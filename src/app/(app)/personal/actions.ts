@@ -4,25 +4,8 @@ import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { getCurrentUser, canManageEmployees, hasRole } from "@/lib/auth";
 import { ROLES, PERMISSIONS, type Role, type Permission } from "@/lib/roles";
-import { riktarSigTill } from "@/lib/dokument";
 import { nyttTillfalligtLosenord } from "@/lib/losenord";
-import { FLAGGA } from "@/lib/losenordsbyte";
-
-/**
- * Markerar att kontot maste byta losenord vid nasta inloggning.
- *
- * Las-andra-skriv i stallet for en rak skrivning: GoTrue slar visserligen
- * ihop nycklarna i `app_metadata`, men dar ligger ocksa `provider` och
- * `providers` som auth sjalv ager. Skulle beteendet nagon gang bli "ersatt"
- * i stallet for "sla ihop" vore priset ett konto som inte gar att logga in
- * pa, och det ar inte vart att spara en fraga pa.
- */
-async function kravByte(db: ReturnType<typeof supabaseAdmin>, authUserId: string) {
-  const { data } = await db.auth.admin.getUserById(authUserId);
-  await db.auth.admin.updateUserById(authUserId, {
-    app_metadata: { ...(data?.user?.app_metadata ?? {}), [FLAGGA]: true },
-  });
-}
+import { kravByte, laggUppAnstalld as laggUpp } from "@/lib/anstallning-server";
 
 export type FormState = {
   fel?: string;
@@ -63,124 +46,41 @@ async function logga(
   });
 }
 
-/** AC-1.3: en anstalld laggs upp en gang och far allt tilldelat. */
+/**
+ * AC-1.3: en anstalld laggs upp en gang och far allt tilldelat.
+ *
+ * Sjalva upplaggningen ligger i src/lib/anstallning-server.ts, eftersom
+ * rekryteringens anstallningsflode (E10.9) gar samma vag. Det har ar formularets
+ * halva: las falten, kontrollera behorigheten, visa svaret.
+ */
 export async function laggUppAnstalld(_prev: FormState, form: FormData): Promise<FormState> {
   let nyId: string;
   let namn: string;
   let losenord: string;
   try {
     const user = await kravChef();
-    const db = supabaseAdmin();
 
-    const epost = String(form.get("epost") ?? "").trim().toLowerCase();
     const fornamn = String(form.get("fornamn") ?? "").trim();
     const efternamn = String(form.get("efternamn") ?? "").trim();
-    const roll = String(form.get("roll") ?? "salesperson") as Role;
-    const anstallningsform = String(form.get("anstallningsform") ?? "permanent");
-    const startdatum = String(form.get("startdatum") ?? "") || null;
-    const anstallningsnummer = String(form.get("anstallningsnummer") ?? "").trim() || null;
-    const teamId = String(form.get("team_id") ?? "") || null;
 
-    if (!epost || !fornamn || !efternamn) return { fel: "Namn och e-post måste fyllas i." };
-    if (!ROLES.includes(roll)) return { fel: "Okänd roll." };
-
-    const { data: fanns } = await db.from("employee").select("id").eq("email", epost).maybeSingle();
-    if (fanns) return { fel: "Det finns redan en anställd med den e-postadressen." };
-
-    // Auth-konto forst. Utan katalogtjanst ar navet identitetskallan (§1.7).
-    //
-    // Kontot far ett tillfalligt losenord direkt. Sa lange navet inte mejlar
-    // finns ingen annan vag in: en magisk lank kraver ett fungerande utskick,
-    // och ett konto utan losenord ar ett konto ingen kan logga in pa.
-    losenord = nyttTillfalligtLosenord();
-
-    const { data: skapad, error: authFel } = await db.auth.admin.createUser({
-      email: epost,
-      password: losenord,
-      email_confirm: true,
-      user_metadata: { fornamn, efternamn },
-      // Ordet gar fran chef till anstalld muntligt. Det ar alltsa kant av tva
-      // fran forsta sekunden, och da ar det inte ett losenord an — det ar en
-      // nyckel till dorren dar man byter las.
-      app_metadata: { [FLAGGA]: true },
-    });
-
-    let authUserId = skapad?.user?.id ?? null;
-    if (authFel) {
-      const { data: lista } = await db.auth.admin.listUsers({ page: 1, perPage: 200 });
-      authUserId = lista?.users.find((u) => u.email?.toLowerCase() === epost)?.id ?? null;
-      if (!authUserId) return { fel: `Kontot kunde inte skapas: ${authFel.message}` };
-
-      // Kontot fanns redan i auth utan att ha en rad i personalregistret.
-      // Losenordet maste sattas anda, annars visar vi ett ord som inte gar in.
-      const { error: satFel } = await db.auth.admin.updateUserById(authUserId, {
-        password: losenord,
-      });
-      if (satFel) return { fel: `Lösenordet kunde inte sättas: ${satFel.message}` };
-      await kravByte(db, authUserId);
-    }
-
-    const { data: rad, error: dbFel } = await db
-      .from("employee")
-      .insert({
-        auth_user_id: authUserId,
-        email: epost,
-        first_name: fornamn,
-        last_name: efternamn,
-        employment_type: anstallningsform,
-        start_date: startdatum,
-        employee_number: anstallningsnummer,
-        team_id: teamId,
-        status: "onboarding",
-      })
-      .select("id")
-      .single();
-
-    if (dbFel || !rad) return { fel: `Kunde inte spara: ${dbFel?.message ?? "okänt fel"}` };
-
-    await db.from("employee_role").insert({
-      employee_id: rad.id,
-      role: roll,
-      granted_by: user.employee!.id,
-    });
-
-    await logga(user.employee!.id, "employee.created", "employee", rad.id, { epost, roll, team: teamId });
-
-    // AC-1.3: rutinerna tilldelas av malgruppen, inte av en kopia per person.
-    // Det som saknades var beviset — utan en rad i loggen gar det inte att i
-    // efterhand visa vad en nyanstalld faktiskt fick pa sig fran dag ett.
-    const { data: dokument } = await db
-      .from("document")
-      .select("id, slug, audience_roles, audience_teams")
-      .eq("status", "published")
-      .eq("requires_ack", true);
-
-    const tilldelade = (dokument ?? []).filter((d) => riktarSigTill(d, [roll], teamId));
-    if (tilldelade.length > 0) {
-      await logga(user.employee!.id, "onboarding.documents_assigned", "employee", rad.id, {
-        antal: tilldelade.length,
-        rutiner: tilldelade.map((d) => d.slug),
-      });
-    }
-
-    // AC-6.4: kurserna foljer samma modell som rutinerna — malgruppen avgor,
-    // och loggen ar beviset pa vad som gallde vid anstallningen.
-    const { data: kurser } = await db
-      .from("course")
-      .select("id, slug, audience_roles")
-      .eq("status", "published");
-
-    const kursTilldelade = (kurser ?? []).filter((k) =>
-      riktarSigTill({ audience_roles: k.audience_roles, audience_teams: [] }, [roll], teamId),
+    const svar = await laggUpp(
+      {
+        epost: String(form.get("epost") ?? "").trim().toLowerCase(),
+        fornamn,
+        efternamn,
+        roll: String(form.get("roll") ?? "salesperson") as Role,
+        anstallningsform: String(form.get("anstallningsform") ?? "permanent"),
+        startdatum: String(form.get("startdatum") ?? "") || null,
+        anstallningsnummer: String(form.get("anstallningsnummer") ?? "").trim() || null,
+        teamId: String(form.get("team_id") ?? "") || null,
+      },
+      user.employee!.id,
     );
-    if (kursTilldelade.length > 0) {
-      await logga(user.employee!.id, "onboarding.courses_assigned", "employee", rad.id, {
-        antal: kursTilldelade.length,
-        kurser: kursTilldelade.map((k) => k.slug),
-      });
-    }
 
-    nyId = rad.id;
+    if ("fel" in svar) return { fel: svar.fel };
+
+    nyId = svar.employeeId;
+    losenord = svar.losenord;
     namn = `${fornamn} ${efternamn}`;
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
@@ -609,6 +509,45 @@ export async function andraBehorighet(form: FormData): Promise<void> {
     "employee",
     employeeId,
     { behorighet },
+  );
+  revalidatePath(`/personal/${employeeId}`);
+}
+
+/**
+ * E10.9 / AC-1.7: ingen post i onboarding-checklistan kan hoppas over utan
+ * motivering. Tvillingen till `kvitteraOffboarding` ovan.
+ *
+ * Kretsen ar chefens och inte rekryterarens. Punkterna handlar om utrustning,
+ * behorigheter och introduktion — det ar personalansvar, inte rekrytering, och
+ * en `recruiter` utan ledningsroll har inget dar att gora.
+ */
+export async function kvitteraOnboarding(form: FormData): Promise<void> {
+  const user = await kravChef();
+  const db = supabaseAdmin();
+  const taskId = String(form.get("task_id"));
+  const employeeId = String(form.get("employee_id"));
+  const hoppa = String(form.get("hoppa")) === "1";
+  const motivering = String(form.get("motivering") ?? "").trim();
+
+  if (hoppa && !motivering) return;
+
+  await db
+    .from("onboarding_task")
+    .update({
+      state: hoppa ? "skipped" : "done",
+      skipped_reason: hoppa ? motivering : null,
+      handled_by: user.employee!.id,
+      handled_at: new Date().toISOString(),
+    })
+    .eq("id", taskId);
+
+  await logga(
+    user.employee!.id,
+    hoppa ? "onboarding.skipped" : "onboarding.done",
+    "onboarding_task",
+    taskId,
+    { employeeId },
+    hoppa ? motivering : undefined,
   );
   revalidatePath(`/personal/${employeeId}`);
 }

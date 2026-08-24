@@ -5,6 +5,11 @@ import { redirect } from "next/navigation";
 import { getCurrentUser, hasRole } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { BEDOMDA_STEG, nastaSteg, type Steg } from "@/lib/rekrytering";
+import { laggUppAnstalld } from "@/lib/anstallning-server";
+import { skapaAvtalsutkast } from "@/lib/avtal-server";
+import { VARIABELNYCKLAR } from "@/lib/avtal";
+import { checklista } from "@/lib/onboarding";
+import { type Role } from "@/lib/roles";
 
 export type RekryteringState = { fel?: string };
 
@@ -197,4 +202,172 @@ export async function sattTalangpool(form: FormData): Promise<void> {
   if (error) throw new Error(error.message);
 
   revalidatePath(`/rekrytering/${id}`);
+}
+
+export type AnstallState = {
+  fel?: string;
+  /** Visas EN gang och sparas ingenstans. Se laggUppAnstalld i lib. */
+  losenord?: string;
+  anstalldId?: string;
+  namn?: string;
+  avtalId?: string;
+  /** Sant nar personen ar upplagd men nagot EFTER det gick fel. */
+  halvvags?: boolean;
+};
+
+/**
+ * E10.9 / AC-7.9: kandidaten blir anstalld.
+ *
+ * ===========================================================================
+ * ORDNINGEN, OCH VAD SOM HANDER OM DET BRISTER MITT I
+ *
+ * Floden spanner over auth och databasen och har darfor ingen gemensam
+ * transaktion. Stegen ligger i den ordning dar ett avbrott lamnar nagot
+ * halvfardigt men inget motsagelsefullt:
+ *
+ *   1. konto + employee-rad   -- en anstalld utan kandidatkoppling ar giltig
+ *   2. kopplingen OCH steget  -- en enda skrivning, se nedan
+ *   3. avtalsutkast, checklista, logg -- bekvamlighet, gar att gora om
+ *
+ * Steg 2 ar det enda som inte gar att angra, och det ar darfor det ligger fore
+ * allt som bara ar bekvamlighet. Brister det star kandidaten kvar pa `offer`
+ * med en anstalld som redan finns — ett lage nagon KAN se och rata. Motsatsen,
+ * en kandidat markt som anstalld utan att personen finns, hade inte gatt att
+ * upptacka utan att leta.
+ *
+ * `hired_employee_id` och `stage` skrivs i SAMMA update med flit. Triggern
+ * `candidate_stegbyte` i 0030 nekar `hired` utan koppling, sa tva skrivningar
+ * hade krävt att kopplingen sattes forst — och en kandidat som pekar pa en
+ * anstalld utan att sta pa `hired` ar precis det motsagelsefulla lage ordningen
+ * ovan finns for att undvika.
+ * ===========================================================================
+ *
+ * INGEN REDIRECT NAR DET GAR VAGEN. Det tillfalliga losenordet visas en gang
+ * och gar inte att bara till nasta sida utan att ligga i en URL — dar det
+ * hamnar i webbhistoriken, i Vercels loggar och i varje mellanliggande proxy.
+ * Samma skal som `laggUppAnstalld` pa /personal/ny.
+ */
+export async function anstallKandidat(
+  _prev: AnstallState,
+  form: FormData,
+): Promise<AnstallState> {
+  try {
+    const user = await kravRekryterare();
+    const db = supabaseAdmin();
+
+    const kandidatId = String(form.get("kandidat_id") ?? "");
+    const { data: kandidat } = await db
+      .from("candidate")
+      .select("id, first_name, last_name, stage, hired_employee_id, role_title")
+      .eq("id", kandidatId)
+      .maybeSingle();
+
+    if (!kandidat) return { fel: "Kandidaten finns inte." };
+    if (kandidat.hired_employee_id) {
+      return { fel: "Kandidaten är redan anställd. Ett dubbelklick skapar ingen andra person." };
+    }
+    if (kandidat.stage !== "offer") {
+      return {
+        fel: "Bara en kandidat som fått ett erbjudande kan anställas. Flytta först kandidaten till erbjudande.",
+      };
+    }
+
+    // Steg 1. E-posten kommer ur formularet och inte fran kandidatraden: den
+    // adressen ar en privat ansokningsadress, och det ar arbetsadressen som
+    // blir inloggning i navet. Att forifylla den privata hade gjort den till
+    // standardvalet.
+    const uppgifter = {
+      epost: String(form.get("epost") ?? "").trim().toLowerCase(),
+      fornamn: kandidat.first_name,
+      efternamn: kandidat.last_name,
+      roll: String(form.get("roll") ?? "salesperson") as Role,
+      anstallningsform: String(form.get("anstallningsform") ?? "permanent"),
+      startdatum: String(form.get("startdatum") ?? "") || null,
+      anstallningsnummer: String(form.get("anstallningsnummer") ?? "").trim() || null,
+      teamId: String(form.get("team_id") ?? "") || null,
+    };
+
+    const namn = `${kandidat.first_name} ${kandidat.last_name}`;
+    const svar = await laggUppAnstalld(uppgifter, user.employee!.id);
+    if ("fel" in svar) return { fel: svar.fel };
+
+    // Steg 2. Den enda skrivningen som inte gar att gora om.
+    const { error: stegfel } = await db
+      .from("candidate")
+      .update({ hired_employee_id: svar.employeeId, stage: "hired" })
+      .eq("id", kandidatId);
+
+    if (stegfel) {
+      return {
+        halvvags: true,
+        anstalldId: svar.employeeId,
+        losenord: svar.losenord,
+        namn,
+        fel: `${namn} är upplagd som anställd, men kandidatraden kunde inte uppdateras: ${stegfel.message} Kandidaten står kvar på erbjudande. Lösenordet nedan gäller — skriv ner det nu, det visas inte igen.`,
+      };
+    }
+
+    // Steg 3. Avtalsutkastet, om en mall valdes.
+    //
+    // Kretsen som far skapa avtal ar SMALARE an den som far rekrytera — se
+    // rubriken i src/lib/avtal-server.ts. En rekryterare utan ledningsroll far
+    // ingen mallvaljare, och da faller punkten till checklistan i stallet.
+    let avtalId: string | undefined;
+    let avtalsfel: string | undefined;
+    const mallId = String(form.get("mall_id") ?? "");
+
+    if (mallId && hasRole(user, "sales_manager", "ceo", "admin")) {
+      const handskrivna: Record<string, string> = {};
+      for (const nyckel of VARIABELNYCKLAR) {
+        handskrivna[nyckel] = String(form.get(`var_${nyckel}`) ?? "");
+      }
+      const utkast = await skapaAvtalsutkast(svar.employeeId, mallId, handskrivna, user.employee!.id);
+      if ("fel" in utkast) avtalsfel = utkast.fel;
+      else avtalId = utkast.avtalId;
+    }
+
+    // Checklistan. Punkterna som floden redan utfort fods avbockade — se
+    // rubriken i src/lib/onboarding.ts.
+    const nu = new Date().toISOString();
+    await db.from("onboarding_task").insert(
+      checklista(Boolean(avtalId), svar.kurser.length).map((p, i) => ({
+        employee_id: svar.employeeId,
+        label: p.label,
+        sort: i,
+        state: p.automatisk ? "done" : "open",
+        handled_by: p.automatisk ? user.employee!.id : null,
+        handled_at: p.automatisk ? nu : null,
+      })),
+    );
+
+    await db.from("audit_log").insert({
+      actor_id: user.employee!.id,
+      action: "candidate.hired",
+      object_type: "candidate",
+      object_id: kandidatId,
+      meta: {
+        employee_id: svar.employeeId,
+        roll: uppgifter.roll,
+        avtal: avtalId ?? null,
+        rutiner: svar.rutiner.length,
+        kurser: svar.kurser.length,
+      },
+    });
+
+    revalidatePath("/rekrytering");
+    revalidatePath(`/rekrytering/${kandidatId}`);
+    revalidatePath("/personal");
+
+    return {
+      anstalldId: svar.employeeId,
+      losenord: svar.losenord,
+      namn,
+      avtalId,
+      // Avtalet ar det enda i steg 3 som kan falla for sig, och tystnad om det
+      // hade betytt att nagon letar efter ett utkast som aldrig skapades.
+      fel: avtalsfel ? `Allt annat gick igenom, men avtalsutkastet skapades inte: ${avtalsfel}` : undefined,
+    };
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Något gick fel." };
+  }
 }

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Notis } from "@/components/ui/Notis";
 import { supabaseServer } from "@/lib/supabase/server";
@@ -42,7 +42,7 @@ export default async function Kandidatsida({ params }: { params: Promise<{ id: s
     // EN strang, inte tva hopslagna med +. Supabase harleder radens typ ur
     // select-litteralen, och en uttryckssats gar den inte att lasa — resultatet
     // blir `GenericStringError` och varje faltatkomst ett typfel.
-    .select("id, first_name, last_name, email, phone, role_title, source_slug, stage, stage_at, applied_at, closed_at, rejected_reason, no_show_count, talent_pool, talent_pool_consent, gdpr_purge_at")
+    .select("id, first_name, last_name, email, phone, role_title, source_slug, stage, stage_at, applied_at, closed_at, rejected_reason, no_show_count, talent_pool, talent_pool_consent, gdpr_purge_at, hired_employee_id")
     .eq("id", id)
     .single();
 
@@ -178,12 +178,23 @@ export default async function Kandidatsida({ params }: { params: Promise<{ id: s
           </div>
         )}
 
+        {/* E10.9. Steget `hired` gar inte harifran utan flodet — triggern i 0030
+            nekar det utan en employee-rad att peka pa. Darfor en lank och ingen
+            knapp: det ar en sida med val pa, inte en atgard. */}
         {steg === "offer" && (
-          <div className="mt-4">
-            <Notis ton="info">
-              Att anställa kandidaten görs i anställningsflödet (E10.9), som inte är byggt än. Då
-              skapas avtal, konto, onboarding och kurser i ett steg.
-            </Notis>
+          <div className="mt-6">
+            <ButtonLink href={`/rekrytering/${k.id}/anstall`} variant="primar">
+              Anställ {k.first_name}
+            </ButtonLink>
+            <p className="mt-2 text-small text-ink-500">
+              Konto, roll, rutiner, kurser, avtalsutkast och onboarding-checklista i ett steg.
+            </p>
+          </div>
+        )}
+
+        {steg === "hired" && k.hired_employee_id && (
+          <div className="mt-6">
+            <ButtonLink href={`/personal/${k.hired_employee_id}`}>Öppna personalkortet</ButtonLink>
           </div>
         )}
       </Card>

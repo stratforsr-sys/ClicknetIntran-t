@@ -17,12 +17,14 @@ import {
 } from "@/lib/roles";
 import { supabaseServer } from "@/lib/supabase/server";
 import { riktarSigTill } from "@/lib/dokument";
+import { klart } from "@/lib/onboarding";
 import { KONTROLL } from "@/components/ui/Field";
 import {
   aktivera,
   andraBehorighet,
   andraRoll,
   kvitteraOffboarding,
+  kvitteraOnboarding,
   offboarda,
   sattOrganisation,
 } from "../actions";
@@ -72,6 +74,15 @@ export default async function AnstalldSida({ params }: { params: Promise<{ id: s
 
   const { data: checklista } = await supabase
     .from("offboarding_task")
+    .select("id, label, state, skipped_reason, sort")
+    .eq("employee_id", id)
+    .order("sort");
+
+  // E10.9. Egen tabell och inte en kolumn pa offboardingens — de har olika
+  // livslangd och olika innehall, och en delad tabell hade krävt ett filter
+  // som gick att glomma pa ett av stallena.
+  const { data: onboarding } = await supabase
+    .from("onboarding_task")
     .select("id, label, state, skipped_reason, sort")
     .eq("employee_id", id)
     .order("sort");
@@ -444,6 +455,65 @@ export default async function AnstalldSida({ params }: { params: Promise<{ id: s
             </div>
             <Button type="submit" variant="destruktiv">Avsluta anställningen</Button>
           </form>
+        </Card>
+      )}
+
+      {/* E10.9 / AC-7.9. Ligger fore offboardingens: en person hinner vara
+          nyanstalld langt innan hen slutar, och den listan ar den som ar
+          aktuell. Bada visas bara nar de finns. */}
+      {!avslutad && (onboarding?.length ?? 0) > 0 && (
+        <Card>
+          <CardHeader
+            titel="Onboarding-checklista"
+            beskrivning={(() => {
+              const { avklarade, av } = klart(onboarding ?? []);
+              return `${avklarade} av ${av} klara. Ingen post kan hoppas över utan motivering.`;
+            })()}
+          />
+          <ul className="flex flex-col">
+            {(onboarding ?? []).map((t) => (
+              <li
+                key={t.id}
+                className="flex flex-wrap items-center gap-3 border-b border-canvas py-3 last:border-0"
+              >
+                <span className="flex-1 text-body text-ink-700">{t.label}</span>
+                {t.state === "done" && <Badge ton="ok">Klar</Badge>}
+                {t.state === "skipped" && (
+                  <span className="flex items-center gap-2">
+                    <Badge ton="warn">Hoppad</Badge>
+                    <span className="text-small text-ink-500">{t.skipped_reason}</span>
+                  </span>
+                )}
+                {t.state === "open" && farHantera && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <form action={kvitteraOnboarding}>
+                      <input type="hidden" name="task_id" value={t.id} />
+                      <input type="hidden" name="employee_id" value={a.id} />
+                      <input type="hidden" name="hoppa" value="0" />
+                      <Button type="submit" size="sm" variant="sekundar">
+                        Kvittera
+                      </Button>
+                    </form>
+                    <form action={kvitteraOnboarding} className="flex items-center gap-2">
+                      <input type="hidden" name="task_id" value={t.id} />
+                      <input type="hidden" name="employee_id" value={a.id} />
+                      <input type="hidden" name="hoppa" value="1" />
+                      <input
+                        name="motivering"
+                        required
+                        placeholder="Motivering krävs"
+                        aria-label={`Motivering för att hoppa över: ${t.label}`}
+                        className="min-h-9 w-48 rounded-full bg-canvas px-4 text-small text-ink-900 placeholder:text-ink-300 focus:outline-none focus:ring-2 focus:ring-brand-600"
+                      />
+                      <Button type="submit" size="sm" variant="diskret">
+                        Hoppa över
+                      </Button>
+                    </form>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
         </Card>
       )}
 

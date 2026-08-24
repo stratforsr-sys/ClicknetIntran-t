@@ -5,6 +5,142 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-08-24 · E10.9 anställningsflödet
+
+Migration `0033`. Den sista obehindrade delen av rekryteringsmodulen: en
+kandidat som fått ett erbjudande blir anställd i ett steg, och konto, roll,
+rutiner, kurser, avtalsutkast och en onboarding-checklista faller ut ur samma
+handling.
+
+Spärren fanns sedan 0030 — `hired` nekas utan `hired_employee_id`. Det som
+saknades var flödet spärren pekade på.
+
+### Två funktioner flyttade till lib, och det är hela poängen med passet
+
+Uppläggningen av en anställd låg i `laggUppAnstalld` i `personal/actions.ts`.
+Avtalsrenderingen låg i `skapaAvtal` i `avtal/actions.ts`. Anställningsflödet
+behöver båda.
+
+Alternativen var att anropa en server action från en annan, eller att kopiera.
+Båda är fel, och det andra är värre: **två ställen som skapar inloggningar
+glider isär**, och den glidningen slutar med att det ena stället glömmer
+`byt_losenord`-flaggan.
+
+Nu ligger de i `src/lib/anstallning-server.ts` och `src/lib/avtal-server.ts`.
+Ingen av filerna bär `"use server"` — samma linje som säkerhetspasset natten
+innan drog för `sattKvitto` och som `skrivFel` fick 22 augusti. Actionerna är
+kvar som formulärets halva: läs fälten, kontrollera behörigheten, visa svaret.
+
+**Behörigheten kontrolleras aldrig i lib-funktionerna.** Anroparna har olika
+kretsar — `canManageEmployees` för chefen, `far_rekrytera()` för rekryteringen —
+och en kontroll på det djupet hade antingen varit fel för den ena eller så bred
+att den inte sagt något. Det står utskrivet i båda filerna.
+
+### Ordningen på skrivningarna är det enda som spelar roll om något brister
+
+Flödet spänner över auth och databasen och har därför ingen gemensam
+transaktion. Stegen ligger i den ordning där ett avbrott lämnar något
+halvfärdigt men **inget motsägelsefullt**:
+
+1. auth-konto och `employee`-rad — en anställd utan kandidatkoppling är giltig
+2. `hired_employee_id` **och** `stage` i EN update — det enda som inte går att
+   göra om
+3. avtalsutkast, checklista, logg — bekvämlighet, går att göra om
+
+Faller det mellan 2 och 3 står kandidaten kvar på `offer` med en anställd som
+redan finns. Det är ett läge någon **kan se och rätta**. Motsatsen — en kandidat
+märkt som anställd utan att personen finns — hade inte gått att upptäcka utan
+att leta, och det är därför ordningen är som den är.
+
+Att kopplingen och steget skrivs i samma update är inte en optimering. Triggern
+`candidate_stegbyte` nekar `hired` utan koppling, så två skrivningar hade krävt
+att kopplingen sattes först — och en kandidat som pekar på en anställd utan att
+stå på `hired` är precis det motsägelsefulla läget ordningen finns för.
+
+### 0033: två spärrar, och ett undantag som måste finnas
+
+**En anställd är resultatet av högst en rekrytering.** Partiellt unikt index på
+`hired_employee_id`. Det låter som en kantfallsfråga men är det inte: ett
+dubbelklick på Anställ är den vanligaste vägen dit, och följden är att
+trattrapporten (AC-7.10) räknar en anställning som två. Partiellt, så att de
+många kandidater som inte är anställda inte krockar med varandra på null.
+
+**Kopplingen skrivs en gång.** Vem som rekryterades till en tjänst är en
+historikuppgift; går den att peka om i efterhand är den inget värd som bevis.
+
+**Men triggern nekar bara ändring till ett annat värde, inte till null.**
+`hired_employee_id` har `on delete set null`, så en radering av personen kör en
+UPDATE på kandidatraden. En trigger som nekade all ändring hade fällt
+`delete from employee` — exakt samma fälla som `file_object` gick i 0023 och som
+E6.2 gallringsjobbet en dag hade dött på mitt i natten. Provet kör hela vändan:
+raderar personen och kontrollerar att kandidatraden står kvar som historik utan
+att peka någonstans.
+
+### Avtalsdelen är valfri, och det är inte en uppmjukning av AC-7.9
+
+Två saker är sanna i dag. Det finns **ingen publicerad avtalsmall** — modulen
+byggdes 22 augusti men ingen mall är skriven. Och kretsen som får hantera avtal
+(`sales_manager`, `ceo`, `admin`) är **smalare** än den som får rekrytera, som
+också släpper in `recruiter`.
+
+En rekryterare utan ledningsroll får därför ingen mallväljare alls. Sidan
+frågar inte ens — och att kringgå 0028:s behörighetsgräns för att flödet råkar
+ligga i rekryteringsmodulen vore att flytta en gräns av bekvämlighet.
+
+Utan mall skapas inget utkast och checklistan får punkten "Anställningsavtal
+upprättat, undertecknat och arkiverat" i stället. Åtgärden försvinner alltså
+inte, den flyttar.
+
+**Avtalsfelet tigs inte ihjäl.** Går allt annat igenom men utkastet faller,
+säger svaret det rakt ut. Tystnad hade betytt att någon letar efter ett utkast
+som aldrig skapades.
+
+### Tre punkter i checklistan föds avbockade
+
+Kontot finns, rutinerna och kurserna är tilldelade. De står kvar i listan — de
+är bevis på vad som gjordes, och en checklista som tiger om det som gick
+automatiskt låter som om det aldrig skedde.
+
+Men de står som **klara**. En lista som öppnar med tolv punkter där tre redan är
+utförda lär användaren att bocka av utan att läsa, och då är de nio som verkligen
+kräver något inte längre skyddade av listan.
+
+AC-1.7 gäller åt båda hållen: ingen punkt kan hoppas över utan motivering, och
+blanktecken räknas inte som en. Villkoret är samma check som offboardingens.
+
+### Den nyanställda ser inte sin egen checklista
+
+`onboarding_task` har samma läsbehörighet som offboardingens:
+`can_read_all_employees()`. Punkterna är arbetsgivarens att-göra — beställ
+dator, lägg upp i Inkio, boka introduktionen — och skrivna för den som ska
+utföra dem. En lista som också läses av den den handlar om skrivs annorlunda,
+och då tappar den sin funktion som chefens arbetsredskap.
+
+Det den nyanställda ska se ligger redan där det hör hemma: rutinerna på
+`/rutiner` och kurserna på `/utbildning`.
+
+**Raden står ändå i registerutdraget.** Artikel 15 frågar inte vem tabellen är
+skriven för — den frågar om uppgiften handlar om personen, och det gör den.
+
+### E-posten hämtas inte från kandidatraden
+
+Ansökningsadressen är privat och följer inte med anställningen; det är
+jobbadressen som blir inloggning i navet. Att förifylla den privata hade gjort
+den till standardvalet, och då hade halva personalregistret loggat in med
+gmail-adresser.
+
+Namnet kommer däremot från kandidatraden och går inte att ändra i flödet. Det
+ska handla om den person raden pekar på.
+
+### Verifiering
+
+`npm run typecheck` grön. **26 sviter, alla gröna mot den riktiga databasen** —
+`tests/anstallningsflodet.mjs` är ny och kör 26 kontroller, varav de fyra
+spärrarna och undantaget för `on delete set null`. Migration `0033` körd i
+produktionen.
+
+---
+
 ## 2026-08-23 (natt) · Säkerhetsgenomgångens tre kodpunkter
 
 Genomgången samma kväll landade i fyra punkter. Tre av dem är kod och gjordes

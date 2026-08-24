@@ -3,7 +3,7 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-08-24 (natt: sakerhetspunkt 2-4 gjorda, 0032)
+**Senast uppdaterad:** 2026-08-24 (E10.9 anstallningsflodet, 0033)
 
 ---
 
@@ -38,7 +38,7 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
 set -a && . $HOME/.clicknet/nav.env && set +a && npm test
 ```
 
-Tjugotvå sviter, 998 kontroller. `tests/rls.mjs` går mot den **riktiga**
+Tjugosex sviter. `tests/rls.mjs` går mot den **riktiga**
 databasen och skapar och städar sina egna användare (prefix `rlstest+`).
 
 Sviten var **grön** när passet 2026-08-23 började, och när det slutade.
@@ -90,6 +90,7 @@ i `rls.mjs`.** Samtliga 105 i den filen plus 51 i övriga sviter. Leta inte om:
 | **Kvitto med ångra** | **I drift sedan 2026-08-22.** Nere till höger, tre ångrabara åtgärder |
 | **Adoptionsstatistik** | **I drift sedan 2026-08-23.** `/adoption`. DAU/WAU, träfflösa sökningar, glömda dokument. Säljchef, VD, admin |
 | **Rekrytering** | **I drift sedan 2026-08-23.** `/rekrytering`. Steg, scorecards, tratt per källa. Behörighet `recruiter` eller ledningsroll |
+| **Anställningsflöde** | **I drift sedan 2026-08-24.** `/rekrytering/[id]/anstall`. Konto, roll, rutiner, kurser, avtalsutkast och onboarding-checklista i ett steg |
 | **Provision** | **I drift sedan 2026-08-23.** `/provision`. Manuell inmatning av ekonomi/VD. Alla ser sin egen. Inkio-sömmen lagd, inte kopplad |
 
 ### Raststämplingen: två steg kvar, och båda är dina
@@ -151,6 +152,63 @@ ligga kvar.
    under `/lonekostnad/satser`. **Kontrollera också åldersgränsen för den äldre
    nedsättningen** — den är seedad till 66, följer pensionsåldern och har
    flyttats flera gånger. Den berör ingen i bolaget i dag.
+
+---
+
+## Vad som byggdes 2026-08-24 — E10.9 anställningsflödet
+
+Migration `0033`. Hela resonemanget står i arbetsloggen; det här är vad du
+behöver veta för att inte riva något.
+
+### Kopplingen och steget skrivs i SAMMA update
+
+`hired_employee_id` och `stage = 'hired'` går i en enda skrivning.
+`candidate_stegbyte` i 0030 nekar `hired` utan koppling, så delar du upp dem
+måste kopplingen sättas först — och en kandidat som pekar på en anställd utan
+att stå på `hired` är precis det motsägelsefulla läget ordningen finns för att
+undvika.
+
+Ordningen i övrigt: **auth-konto och employee-rad först, kopplingen sedan, allt
+annat sist.** Faller det mitt i står kandidaten kvar på `offer` med en anställd
+som redan finns — ett läge någon kan se och rätta.
+
+### `revoke`-fällans motsvarighet här: undantaget för null
+
+Triggern `candidate_anstallning_star_fast` nekar att kopplingen pekas om, **men
+bara till ett annat värde.** `on delete set null` kör en UPDATE, så en trigger
+som nekade all ändring hade fällt `delete from employee`. Samma fälla som
+`file_object` gick i 0023. Rör du triggern: provet raderar en person och
+kontrollerar att kandidatraden står kvar.
+
+### Uppläggning och avtalsrendering ligger i lib, inte i actions
+
+`src/lib/anstallning-server.ts` och `skapaAvtalsutkast()` i
+`src/lib/avtal-server.ts`. Två vägar leder till båda, och ingen av filerna bär
+`"use server"`.
+
+**Behörigheten kontrolleras aldrig där** utan av anroparen — kretsarna är olika,
+och det är avsiktligt. Lägger du till en tredje väg in: kontrollera behörigheten
+i din egen kod, inte i biblioteket.
+
+### Avtalsdelen är valfri, och tre saker styr det
+
+Kretsen som får skapa avtal (`sales_manager`, `ceo`, `admin`) är **smalare** än
+rekryterarkretsen, som också släpper in `recruiter`. Det finns **ingen
+publicerad mall** än. Utan mall skapas inget utkast och checklistan får punkten
+i stället — åtgärden flyttar, den försvinner inte.
+
+Skriv den första mallen så börjar flödet skapa utkast av sig självt.
+
+### Tre av tolv checklistepunkter föds avbockade
+
+Konto, rutiner och kurser är redan gjorda av flödet. De står kvar som bevis men
+markerade `done` — en lista med utförda punkter som ser öppna ut lär användaren
+att bocka av utan att läsa. Lägger du till en punkt som flödet utför: sätt
+`automatisk: true` i `src/lib/onboarding.ts`.
+
+**Den nyanställda ser inte sin egen lista.** Samma behörighet som offboardingens.
+Punkterna är chefens arbetsredskap; det den anställda ska se ligger på `/rutiner`
+och `/utbildning`. Raden står ändå i registerutdraget (artikel 15).
 
 ---
 
@@ -626,15 +684,18 @@ tre prestandakraven är mätta och klarade.
 4. **Skriv den första avtalsmallen.** `/avtal/mallar/ny`. Modulen är byggd men
    det finns ingen mall, och utan en publicerad mall går det inte att skapa ett
    avtal. Det är den enda av de nya funktionerna som inte gör något förrän du
-   matat in innehåll.
+   matat in innehåll — och sedan 2026-08-24 hänger **anställningsflödet** på
+   den: utan mall skapar det inget avtalsutkast, utan lägger punkten i
+   onboarding-checklistan i stället.
 5. **Personnumret i anställningsavtalet — ett beslut som är ditt.** Navet lagrar
    inga personnummer (K27), så det utskrivna avtalet har en rad som fylls i för
    hand. Det går att ändra, men då är det K27-linjen som ska omprövas medvetet.
    Jag har byggt så att den inte går att kringgå av misstag.
-6. **E10 resten**, ~2 veckor. Kvar utan blockering: **E10.9 anställningsflödet**
-   (avtal, konto, onboarding, kurser i ett steg — spärren finns redan, `hired`
-   nekas utan `hired_employee_id`) och **E10.2 den publika ansökningssidan**.
-   E10.8:s nattjobb väntar på fristen, E10.1/4/7 på mejlspåret.
+6. **E10 resten**, ~1 vecka. **E10.9 anställningsflödet är klart 2026-08-24.**
+   Kvar utan blockering: **E10.2 den publika ansökningssidan** med
+   screeningfrågor — uppläggning för hand finns redan, och källattributionen är
+   obligatorisk. Den rör den utloggade ytan, så CSP och spamskydd hör till
+   arbetet. E10.8:s nattjobb väntar på fristen, E10.1/4/7 på mejlspåret.
 
 ### Mindre saker som ligger och väntar
 

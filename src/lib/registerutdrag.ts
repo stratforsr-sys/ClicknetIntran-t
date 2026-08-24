@@ -26,6 +26,9 @@ export const KALLOR: Kalla[] = [
   { tabell: "employee_role", kolumn: "employee_id", andamal: "Behörighet i navet" },
   { tabell: "employee_permission", kolumn: "employee_id", andamal: "Särskild behörighet" },
   { tabell: "offboarding_task", kolumn: "employee_id", andamal: "Avslutscheckista" },
+  // E10.9. Punkterna handlar om dig aven om listan ar chefens arbetsredskap —
+  // artikel 15 fragar inte vem tabellen ar skriven for.
+  { tabell: "onboarding_task", kolumn: "employee_id", andamal: "Introduktionschecklista" },
   { tabell: "document_ack", kolumn: "employee_id", andamal: "Kvitterade rutiner" },
   { tabell: "document_view", kolumn: "employee_id", andamal: "Lästa rutiner" },
   { tabell: "module_progress", kolumn: "employee_id", andamal: "Genomförda kursmoduler" },
@@ -131,6 +134,7 @@ export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
   { tabell: "hr_case", kolumn: "created_by", skal: "Vem som lade upp ärendet" },
   { tabell: "late_arrival", kolumn: "resolved_by", skal: "Vem som avslutade posten" },
   { tabell: "offboarding_task", kolumn: "handled_by", skal: "Vem som kvitterade punkten" },
+  { tabell: "onboarding_task", kolumn: "handled_by", skal: "Vem som kvitterade punkten" },
   { tabell: "payroll_adjustment", kolumn: "created_by", skal: "Vem som gjorde justeringen" },
   { tabell: "payroll_period", kolumn: "attested_by", skal: "Vem som attesterade perioden" },
   { tabell: "payroll_period", kolumn: "generated_by", skal: "Vem som genererade perioden" },

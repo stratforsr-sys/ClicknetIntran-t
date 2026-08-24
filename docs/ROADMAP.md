@@ -130,7 +130,7 @@ säljare kan lära sig samma sak utan att du upprepar introduktionen trettio gå
 
 ---
 
-## E10 — M7 Rekrytering · PÅBÖRJAD 2026-08-23 · ~2 veckor kvar
+## E10 — M7 Rekrytering · PÅBÖRJAD 2026-08-23 · ~1 vecka kvar
 
 Q71 besvarades 2026-08-21: **flera personer rekryterar**, så epicet är inte akut. E15 lönekostnad (~2 v) gick före.
 
@@ -146,7 +146,7 @@ Migration `0030_rekrytering`. `/rekrytering`. **Tre av tio delar (E10.1, E10.4, 
 | E10.6 | AC-7.6 | Scorecard per intervju. Erbjudande omöjligt utan minst en ifylld | **KLAR 2026-08-23.** Villkoret är en trigger, så en klient som postar rakt mot API:t möter samma nej. Tre lägen och ingen skala: ett medelvärde av två intervjuer säger mindre än två omdömen som går isär |
 | E10.7 | AC-7.7 | Avslagsmail med mall, enskilt eller i grupp | **BLOCKERAD av E0.8** (pausat). Avslaget självt fungerar, med skäl |
 | E10.8 | AC-7.8, K21 | `gdpr_purge_at` sätts automatiskt, nattjobb raderar och kvitterar, talangpool undantas med förnyad förfrågan | **HALVVÄGS 2026-08-23.** Kolumnen finns, sätts vid avslut och hoppas över för talangpoolen. **Men fristen är inte skriven någonstans** — `recruitment_policy.purge_after_days` är NULL och ingen frist sätts. Samma linje som E6.2: en påhittad frist raderar personuppgifter enligt en gissning. Nattjobbet byggs när siffran finns |
-| E10.9 | AC-7.9 | Vid "anställd": avtal, onboarding-checklista, konto och kurser i ett flöde | EJ PÅBÖRJAD. Spärren finns: steget `hired` nekas utan `hired_employee_id`, så en kandidat kan inte anställas förbi flödet |
+| E10.9 | AC-7.9 | Vid "anställd": avtal, onboarding-checklista, konto och kurser i ett flöde | **KLAR 2026-08-24.** `/rekrytering/[id]/anstall`. Migration `0033`. Konto, roll, rutiner, kurser, avtalsutkast och checklista i ett steg. Kopplingen och steget skrivs i SAMMA update — triggern nekar `hired` utan den. Avtalsdelen är valfri: kretsen som får skapa avtal är smalare än rekryterarkretsen, och utan mall faller punkten till checklistan |
 | E10.10 | AC-7.10 | Trattrapport per källa inklusive kvar efter 90 och 180 dagar | **KLAR 2026-08-23.** Varje steg räknar dem som kommit så långt, inte dem som står där nu — annars visar `offer` noll för att alla gick vidare |
 
 ---

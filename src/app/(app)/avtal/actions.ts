@@ -4,12 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getCurrentUser, hasRole } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { automatiskaVarden } from "@/lib/avtal-server";
+import { skapaAvtalsutkast } from "@/lib/avtal-server";
 import {
-  AvtalsfelError,
   VARIABELNYCKLAR,
   okandaPlatshallare,
-  rendera,
   serUtSomPersonnummer,
   tillSlug,
   trasigaKlamrar,
@@ -190,71 +188,14 @@ export async function skapaAvtal(_prev: AvtalState, form: FormData): Promise<Avt
     const mallId = String(form.get("mall_id") ?? "");
     if (!employeeId || !mallId) return { fel: "Välj både person och mall." };
 
-    const db = supabaseAdmin();
-    const { data: mall } = await db
-      .from("contract_template")
-      .select("id, slug, title, body_md, status")
-      .eq("id", mallId)
-      .maybeSingle();
-    if (!mall) return { fel: "Mallen finns inte." };
-    if (mall.status !== "published") {
-      return { fel: "Mallen är inte publicerad. Publicera den först, eller välj en annan." };
-    }
-
-    // Personens egna uppgifter hamtas har och tas INTE emot fran formularet.
-    // Ett dolt falt med namnet i hade gatt att andra i webblasaren, och
-    // avtalet ska handla om den person raden pekar pa.
-    const auto = await automatiskaVarden(employeeId);
-
-    const varden: Record<string, string> = { ...auto };
+    const handskrivna: Record<string, string> = {};
     for (const nyckel of VARIABELNYCKLAR) {
-      if (nyckel in auto) continue;
-      varden[nyckel] = String(form.get(`var_${nyckel}`) ?? "").trim();
+      handskrivna[nyckel] = String(form.get(`var_${nyckel}`) ?? "");
     }
 
-    const ifyllt = Object.values(varden).join(" ");
-    if (serUtSomPersonnummer(ifyllt)) {
-      return {
-        fel: "Något av fälten ser ut att innehålla ett personnummer. Navet lagrar inte personnummer — lämna en rad att fylla i för hand på utskriften.",
-      };
-    }
-
-    let text: string;
-    try {
-      text = rendera(mall.body_md, varden);
-    } catch (e) {
-      if (e instanceof AvtalsfelError) {
-        const saknas = e.saknade.length ? ` Fyll i: ${e.saknade.join(", ")}.` : "";
-        return { fel: `Avtalet kunde inte skapas.${saknas}` };
-      }
-      throw e;
-    }
-
-    const { data: skapat, error } = await db
-      .from("contract")
-      .insert({
-        employee_id: employeeId,
-        template_id: mall.id,
-        template_slug: mall.slug,
-        title: mall.title,
-        body_md: text,
-        variables: varden,
-        status: "draft",
-        created_by: user.employee.id,
-      })
-      .select("id")
-      .single();
-
-    if (error || !skapat) return { fel: `Avtalet kunde inte sparas: ${error?.message ?? ""}` };
-    nyttId = skapat.id;
-
-    await db.from("audit_log").insert({
-      actor_id: user.employee.id,
-      action: "contract.created",
-      object_type: "contract",
-      object_id: nyttId,
-      meta: { mall: mall.slug },
-    });
+    const svar = await skapaAvtalsutkast(employeeId, mallId, handskrivna, user.employee.id);
+    if ("fel" in svar) return { fel: svar.fel };
+    nyttId = svar.avtalId;
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
   }
