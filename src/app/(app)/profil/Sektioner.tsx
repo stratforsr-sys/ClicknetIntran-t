@@ -4,16 +4,11 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/components/ui/cn";
 import { Ikon } from "@/components/shell/Ikon";
-import {
-  getCurrentUser,
-  fullName,
-  hasRole,
-  canManageEmployees,
-  type CurrentUser,
-} from "@/lib/auth";
+import { getCurrentUser, fullName, type CurrentUser } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { kraverMfa, kvittoGiltigt, STEG2_KAKA } from "@/lib/mfa";
-import { farSeLonekostnad } from "@/lib/lonekostnad-server";
+import { installningsPoster } from "@/components/shell/installningar-poster";
+import { arAdministration } from "@/components/shell/installningar-delade";
 import {
   ROLE_LABEL,
   PERMISSION_LABEL,
@@ -39,13 +34,9 @@ import { Losenord } from "./Losenord";
  * andra halvan kvar hade gjort tva kataloger av en.
  */
 
-/** Rutinen for "finns det nagot att visa i Administration alls?". */
+/** Finns det nagon administrationspanel alls for den har anvandaren? */
 export function harAdministration(user: CurrentUser | null): boolean {
-  return (
-    canManageEmployees(user) ||
-    hasRole(user, "sales_manager", "ceo", "admin") ||
-    farSeLonekostnad(user)
-  );
+  return installningsPoster(user).some(arAdministration);
 }
 
 export async function KontoSektion() {
@@ -164,64 +155,36 @@ export async function SakerhetSektion() {
 /**
  * Genvagar till de vyer som staller in navet i stallet for att anvanda det.
  *
- * Varje post har SAMMA villkor som sidan den pekar pa. En lank som leder till
- * en omdirigering ar en meny som ljuger, och det ar samma regel som avgor
- * vilka poster som far finnas i sidopanelen (se nav-items.ts).
+ * VILKA poster listan har bestams inte har utan av `installningsPoster` —
+ * samma funktion som bygger rutans vanstermeny. Tva listor med var sin
+ * uppsattning if-satser hade varit tva stallen att lagga till en panel pa,
+ * och det andra stallet ar det som glomms.
+ *
+ * Bara prosan bor har. Den behovs bara pa den har sidan: i rutan star
+ * panelens namn i toppraden och beskrivningen vore en rad text att laesa
+ * varje gang man byter flik.
  *
  * Sidorna ligger kvar dar de ligger. Det har ar en vag in, inte en flytt:
- * fransvaroreglerna hor hemma bredvid franvaron for den som redan star dar.
+ * franvaroreglerna hor hemma bredvid franvaron for den som redan star dar.
  */
+const BESKRIVNING: Record<string, string> = {
+  "/tid/schema":
+    "Arbetstider och rastscheman. Ett schema ändras aldrig — en ny tid är en ny rad.",
+  "/tid/sparrar":
+    "Slår på och av moduler. Villkoren kontrolleras i databasen, inte i koden.",
+  "/franvaro/regler":
+    "Enda platsen reglerna kan ändras. Ändringen gäller i samma stund.",
+  "/lonekostnad/satser":
+    "Arbetsgivaravgifter, månadslöner och täckningsgrad.",
+  "/design":
+    "Levande stilguide över varje primitiv i navet.",
+};
+
 export async function AdministrationSektion() {
   const user = await getCurrentUser();
   if (!user?.employee) return null;
 
-  const poster: { href: string; titel: string; text: string; ikon: string }[] = [];
-
-  if (canManageEmployees(user)) {
-    poster.push({
-      href: "/tid/schema",
-      titel: "Scheman",
-      text: "Arbetstider och rastscheman. Ett schema ändras aldrig — en ny tid är en ny rad.",
-      ikon: "tid",
-    });
-  }
-
-  if (hasRole(user, "sales_manager", "ceo")) {
-    poster.push({
-      href: "/tid/sparrar",
-      titel: "Spärrar",
-      text: "Slår på och av moduler. Villkoren kontrolleras i databasen, inte i koden.",
-      ikon: "las",
-    });
-  }
-
-  if (hasRole(user, "sales_manager", "ceo", "admin")) {
-    poster.push({
-      href: "/franvaro/regler",
-      titel: "Frånvaroregler",
-      text: "Enda platsen reglerna kan ändras. Ändringen gäller i samma stund.",
-      ikon: "klocka",
-    });
-  }
-
-  if (farSeLonekostnad(user)) {
-    poster.push({
-      href: "/lonekostnad/satser",
-      titel: "Satser och löner",
-      text: "Arbetsgivaravgifter, månadslöner och täckningsgrad.",
-      ikon: "kontroll",
-    });
-  }
-
-  if (hasRole(user, "admin")) {
-    poster.push({
-      href: "/design",
-      titel: "Designsystem",
-      text: "Levande stilguide över varje primitiv i navet.",
-      ikon: "design",
-    });
-  }
-
+  const poster = installningsPoster(user).filter(arAdministration);
   if (!poster.length) return null;
 
   /* Egen yta i stallet for <Card>: kortet har sin egen inre marginal, och
@@ -235,6 +198,7 @@ export async function AdministrationSektion() {
           <li key={p.href}>
             <Link
               href={p.href}
+              scroll={false}
               className={cn(
                 "flex items-start gap-3 p-4 transition-colors duration-fast",
                 "hover:bg-canvas/70",
@@ -245,8 +209,10 @@ export async function AdministrationSektion() {
                 <Ikon namn={p.ikon} />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-body font-semibold text-ink-900">{p.titel}</span>
-                <span className="mt-0.5 block text-small text-ink-500">{p.text}</span>
+                <span className="block text-body font-semibold text-ink-900">{p.label}</span>
+                <span className="mt-0.5 block text-small text-ink-500">
+                  {BESKRIVNING[p.href] ?? ""}
+                </span>
               </span>
               <Ikon namn="fram" className="mt-2 size-5 shrink-0 text-ink-300" />
             </Link>

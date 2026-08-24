@@ -1,42 +1,11 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { Ikon } from "@/components/shell/Ikon";
-import { getCurrentUser, fullName, hasRole } from "@/lib/auth";
-import { supabaseAdmin } from "@/lib/supabase/server";
-import { ROLES, ROLE_LABEL } from "@/lib/roles";
-import { REGELFALT, TYPFALT } from "@/lib/franvaro-server";
-import type { Franvarotyp, Regelverk } from "@/lib/franvaro";
-import { Regelvyer } from "./Regelvyer";
+import { RegelInnehall } from "./Innehall";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Frånvaroregler — Clicknet Nav" };
 
-/**
- * E7.17 / AC-3.11: reglerna konfigureras i gränssnittet.
- *
- * Det här är den enda platsen där frånvaroreglerna kan ändras. Det finns
- * ingen konstant i koden och ingen miljövariabel — se E7.15 och rubriken i
- * migration 0019. Ändrar du något här ändras vad regelmotorn dömer efter i
- * samma stund, och den anställda ser den nya texten på ansökningssidan.
- */
-export default async function Reglersida() {
-  const user = await getCurrentUser();
-  if (!user?.employee) redirect("/");
-  if (!hasRole(user, "sales_manager", "ceo", "admin")) redirect("/franvaro");
-
-  const db = supabaseAdmin();
-
-  const [{ data: policy }, { data: typer }, { data: sparrar }, { data: tak }, { data: team }, { data: ordning }, { data: personal }] =
-    await Promise.all([
-      db.from("absence_policy").select(REGELFALT).maybeSingle(),
-      db.from("absence_type").select(TYPFALT).order("sort"),
-      db.from("absence_blackout").select("id, label, starts_on, ends_on, type_ids, team_ids").order("starts_on"),
-      db.from("staffing_cap").select("id, team_id, max_absent"),
-      db.from("team").select("id, name").order("name"),
-      db.from("absence_call_order").select("id, sort, target_kind, role, employee_id, phone, team_id").order("sort"),
-      db.from("employee").select("id, first_name, last_name").neq("status", "offboarded").order("first_name"),
-    ]);
-
+export default function Reglersida() {
   return (
     <div className="flex flex-col gap-4 pt-2">
       <Link
@@ -61,16 +30,7 @@ export default async function Reglersida() {
         </p>
       </div>
 
-      <Regelvyer
-        policy={policy as Regelverk}
-        typer={(typer ?? []) as Franvarotyp[]}
-        sparrar={sparrar ?? []}
-        tak={tak ?? []}
-        team={team ?? []}
-        ordning={ordning ?? []}
-        personal={(personal ?? []).map((p) => ({ id: p.id, namn: fullName(p) }))}
-        roller={ROLES.map((r) => ({ id: r, label: ROLE_LABEL[r] }))}
-      />
+      <RegelInnehall />
     </div>
   );
 }

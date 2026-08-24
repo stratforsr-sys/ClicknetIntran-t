@@ -7,7 +7,7 @@ import { hamtaSparrar } from "@/lib/sparrar";
 import { Sparrkort } from "./Sparrkort";
 
 /**
- * Sparrarnas innehall, utan sidhuvud.
+ * SPARRARNAS INNEHALL, UTAN SIDHUVUD.
  *
  * Ligger for sig eftersom det ritas pa TVA stallen: som helsida pa
  * /tid/sparrar och som panel i installningsrutan. Rubriken och
