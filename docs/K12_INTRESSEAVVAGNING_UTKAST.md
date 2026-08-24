@@ -30,6 +30,18 @@ efterhand utan en dokumenterad ändring.
 förda anteckningar (ATL 11 §) samt fullgörande av anställningsavtalet. Ingen
 intresseavvägning krävs för denna del.
 
+**En utebliven instämpling kan leda till en konsekvens.** Beslut 2026-08-24, se
+D-K12 i `DECISIONS.md`. Saknas instämpling en arbetsdag skapar navet ett
+**förslag** till närmaste chef. Ingenting sker av sig självt: chefen måste
+godkänna att frånvaron var ogiltig, och först då registreras händelsen. Två
+ogiltiga frånvarotillfällen inom tre månader medför att månadens bonusar
+faller — grundprovisionen berörs inte, eftersom den avser utfört arbete.
+
+Behandlingen är en följd av samma rättsliga grund som registreringen i övrigt:
+frånvaro från avtalad arbetstid är ett anställningsförhållande, inte en
+beteendemätning. Den anställda ser varje registrerad händelse i sin egen vy och
+i registerutdraget, och chefens hävning av en konsekvens loggas.
+
 ### 1.2 Sen ankomst mot schema
 
 Dagens första instämpling jämförs mot arbetsschemats starttid. Överskrids
@@ -106,7 +118,9 @@ databasen.
 | Rastlängd visas aldrig i "på plats nu" | Frågan hämtar bara in- och utstämpling (AC-2.8) |
 | Varje chefsöppning av avvikelsevyn loggas | `deviation.viewed` i händelseloggen (AC-2.12, K19) |
 | Detaljer gallras efter 90 dagar | Nattjobb; endast antal per månad står kvar i 12 månader (AC-2.31) |
-| Ingen automatisk konsekvens | Data når varken provision eller lönekostnadsvy (K13, K17) |
+| **Rast- och sen ankomst-data når aldrig provisionen** | Ingen fråga kopplar dem. Gäller 1.2 och 1.3 (K13, K17, D-K12) |
+| **Ingen konsekvens utlöses automatiskt** | Utebliven instämpling ger ett förslag; chefen måste godkänna det innan något sker (D-K12) |
+| En registrerad konsekvens kan hävas av chefen | Hävningen loggas i händelseloggen (D-K12) |
 | Utebliven rast behandlas som arbetsmiljösignal | Märks som sådan i vyn (AC-2.29, K31) |
 | Toleransen läggs till gränsen, aldrig ifrån | Den som arbetat 5 h 3 min utan rast har inte gjort fel |
 | Historiska avvikelser omvärderas aldrig | Varje avvikelse bär id på schemat den dömdes mot (AC-2.35) |
