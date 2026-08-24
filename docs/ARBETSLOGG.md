@@ -5,6 +5,60 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-08-24 (kväll) · Sidopanelen klippte av sin egen meny
+
+Användaren kunde inte se alla sidflikar. Felet var verkligt och äldre än det
+såg ut: panelen är `inset-y-4` och därmed **alltid exakt så hög som fönstret**,
+men `<nav>` inuti hade `flex-1` och ingen egen scroll. Allt som inte fick plats
+ritades utanför panelen och gick inte att nå.
+
+Uppmätt i produktion på en 1440×690-vy: `scrollHeight` 816 px i en 417 px hög
+vy. Fem av sjutton poster föll bort — **och under dem hela bottenraden med
+profilen och utloggningen.** Att inte kunna logga ut är det allvarligaste av
+det; det syntes inte i någon test eftersom ingen svit mäter höjd.
+
+Menyn har vuxit med varje modul. Felet fanns alltså latent från början och slog
+till först när sjuttonde posten lades in.
+
+### Bara listan scrollar
+
+`min-h-0 flex-1 overflow-y-auto` på listan, `shrink-0` på logotyp,
+hopfällningen, skiljelinjen och profilraden. Det man behöver oftast ska inte
+kunna rulla bort, och en utloggningsknapp man måste leta efter är ett
+säkerhetsproblem och inte ett skönhetsfel.
+
+`min-h-0` är det som gör jobbet. Utan den vägrar en flex-post krympa under sitt
+innehåll och `overflow-y-auto` får aldrig något att göra — listan hade fortsatt
+växa ur panelen precis som förut.
+
+### Första försöket scrollade men såg exakt likadant ut
+
+Och det är den lärdom som är värd att bära vidare. `.nav-scroll` fick både
+`scrollbar-width: thin` och ett `::-webkit-scrollbar`-block. **Sedan Chrome 121
+slår de standardiserade egenskaperna av hela webkit-blocket**, och då faller
+macOS tillbaka på sin overlay-scrollbar: bredd noll, osynlig tills man rullar.
+
+Mätningen som avslöjade det: `offsetWidth === clientWidth === 232`. En
+scrollbar som tar plats hade gett en skillnad. Listan scrollade alltså redan,
+men såg fortfarande avklippt ut — vilket för användaren är samma fel.
+
+De två egenskaperna är borta ur `.nav-scroll` och det står utskrivet i CSS:en
+att de inte får läggas tillbaka. Firefox får sin standardlist, som på desktop
+är synlig ändå.
+
+### Toningar, för att 6 px på en mörk platta är en svag signal
+
+Listan tonar mot över- och underkant när det finns mer att rulla till.
+Toningarna ligger **utanför** det som rullar — inuti hade de följt med och tonat
+bort en post i taget i stället för kanten. `aria-hidden`: skärmläsaren vet redan
+att posterna finns, den läser inte av en gradient.
+
+Den aktiva posten rullas in i vy vid montering, `block: "nearest"` så att
+ingenting rör sig på en skärm där hela listan får plats. Utan det öppnar
+`/design` en meny som ser ut att stå på `Hem`.
+
+---
+
 ## 2026-08-24 · E10.9 anställningsflödet
 
 Migration `0033`. Den sista obehindrade delen av rekryteringsmodulen: en
