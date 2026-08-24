@@ -176,11 +176,17 @@
 
      `stable` reserverar rannan aven nar innehallet faktiskt far plats, sa att
      posterna inte hoppar i sidled nar en modul till levereras och listan gar
-     over kanten. */
+     over kanten.
+
+     ROR INTE `scrollbar-width` ELLER `scrollbar-color` HAR. Sedan Chrome 121
+     slar de standardiserade egenskaperna av hela `::-webkit-scrollbar`-blocket
+     nedan, och da faller macOS tillbaka pa sin overlay-list — bredd noll,
+     osynlig tills man rullar. Det var precis det laget forsta forsoket
+     hamnade i: listan scrollade, men sag fortfarande avklippt ut. En explicit
+     `::-webkit-scrollbar`-bredd tvingar i stallet fram en klassisk list som
+     tar plats och syns hela tiden. */
   .nav-scroll {
     scrollbar-gutter: stable;
-    scrollbar-width: thin;
-    scrollbar-color: var(--color-brand-700) transparent;
   }
   .nav-scroll::-webkit-scrollbar {
     width: 6px;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Ikon } from "./Ikon";
@@ -65,11 +65,39 @@ export function Sidebar({
    * en djuplank eller en omladdning som behover hjalpen.
    */
   const lista = useRef<HTMLElement>(null);
-  useEffect(() => {
-    lista.current
-      ?.querySelector('[aria-current="page"]')
-      ?.scrollIntoView({ block: "nearest" });
+
+  /**
+   * Toningar i over- och underkant nar det finns mer att rulla till.
+   *
+   * Scrollisten ensam racker inte. Den ar 6 px bred pa en mork platta, och
+   * det var att INTE se att listan fortsatte som var hela felet. En post som
+   * tonar bort mot kanten sager samma sak med hela radens bredd.
+   */
+  const [mer, setMer] = useState({ upp: false, ner: false });
+
+  const matMer = useCallback(() => {
+    const el = lista.current;
+    if (!el) return;
+    // 1 px slack: delpixlar gor att scrollTop sallan nar exakt sitt maxvarde,
+    // och utan slacken blir den nedre toningen kvar for evigt.
+    setMer({
+      upp: el.scrollTop > 1,
+      ner: el.scrollTop + el.clientHeight < el.scrollHeight - 1,
+    });
   }, []);
+
+  useEffect(() => {
+    const el = lista.current;
+    if (!el) return;
+
+    el.querySelector('[aria-current="page"]')?.scrollIntoView({ block: "nearest" });
+    matMer();
+
+    // Fonstret kan andra hojd utan att listan rors — da andras svaret anda.
+    const obs = new ResizeObserver(matMer);
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [matMer]);
 
   return (
     <>
@@ -109,45 +137,72 @@ export function Sidebar({
           </span>
         </Link>
 
-        {/* `min-h-0` ar det som far scrollen att fungera: utan den vagrar en
-            flex-post krympa under sitt innehall, och `overflow-y-auto` far
-            aldrig nagot att gora. Den negativa hogermarginalen lagger
-            scrollisten i panelens kant i stallet for inne i texten. */}
-        <nav
-          ref={lista}
-          className={cn(
-            "nav-scroll -mr-2 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain pr-2 pb-1",
-            hopfalld && "lg:-mr-1 lg:pr-1",
-          )}
-          aria-label="Huvudmeny"
-        >
-          {items.map((item) => {
-            const aktiv = item.href === "/" ? path === "/" : path.startsWith(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={stang}
-                aria-current={aktiv ? "page" : undefined}
-                // Hopfalld ar ikonen allt som star kvar. Utan title blir
-                // menyn en rad symboler man far gissa sig till.
-                title={hopfalld ? item.label : undefined}
-                className={cn(
-                  "flex min-h-11 shrink-0 items-center gap-3 rounded-full px-4 text-body",
-                  "transition-colors duration-fast ease-brand",
-                  hopfalld && "lg:justify-center lg:px-0",
-                  aktiv
-                    ? "bg-brand-800 font-semibold text-ink-inv"
-                    : "text-brand-200 hover:bg-brand-800/60 hover:text-ink-inv",
-                )}
-              >
-                <Ikon namn={item.ikon} />
-                <span className={cn("flex-1 whitespace-nowrap", doljText)}>{item.label}</span>
-                {item.raknare ? <Counter antal={item.raknare} /> : null}
-              </Link>
-            );
-          })}
-        </nav>
+        {/* `min-h-0` pa BADA leden ar det som far scrollen att fungera: utan
+            den vagrar en flex-post krympa under sitt innehall, och
+            `overflow-y-auto` far aldrig nagot att gora.
+
+            Omslaget finns for toningarna. De maste ligga utanfor det som
+            rullar — inuti hade de rullat med och tonat bort en post i taget
+            i stallet for kanten. */}
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <nav
+            ref={lista}
+            onScroll={matMer}
+            className={cn(
+              // Den negativa hogermarginalen lagger scrollisten i panelens
+              // kant i stallet for inne i texten.
+              "nav-scroll -mr-2 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain pr-2 pb-1",
+              hopfalld && "lg:-mr-1 lg:pr-1",
+            )}
+            aria-label="Huvudmeny"
+          >
+            {items.map((item) => {
+              const aktiv = item.href === "/" ? path === "/" : path.startsWith(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={stang}
+                  aria-current={aktiv ? "page" : undefined}
+                  // Hopfalld ar ikonen allt som star kvar. Utan title blir
+                  // menyn en rad symboler man far gissa sig till.
+                  title={hopfalld ? item.label : undefined}
+                  className={cn(
+                    "flex min-h-11 shrink-0 items-center gap-3 rounded-full px-4 text-body",
+                    "transition-colors duration-fast ease-brand",
+                    hopfalld && "lg:justify-center lg:px-0",
+                    aktiv
+                      ? "bg-brand-800 font-semibold text-ink-inv"
+                      : "text-brand-200 hover:bg-brand-800/60 hover:text-ink-inv",
+                  )}
+                >
+                  <Ikon namn={item.ikon} />
+                  <span className={cn("flex-1 whitespace-nowrap", doljText)}>{item.label}</span>
+                  {item.raknare ? <Counter antal={item.raknare} /> : null}
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* Dekoration, darfor `aria-hidden`: en skarmlasare far redan veta
+              att listan fortsatter genom att posterna finns i tradet. */}
+          <div
+            aria-hidden
+            className={cn(
+              "pointer-events-none absolute inset-x-0 top-0 h-6 bg-gradient-to-b from-brand-900 to-transparent",
+              "transition-opacity duration-fast ease-brand",
+              mer.upp ? "opacity-100" : "opacity-0",
+            )}
+          />
+          <div
+            aria-hidden
+            className={cn(
+              "pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-brand-900 to-transparent",
+              "transition-opacity duration-fast ease-brand",
+              mer.ner ? "opacity-100" : "opacity-0",
+            )}
+          />
+        </div>
 
         {/* Vaxeln finns bara dar panelen star kvar av sig sjalv. */}
         <button
