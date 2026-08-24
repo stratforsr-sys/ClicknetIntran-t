@@ -15,6 +15,15 @@ const P: Record<string, string> = {
   tid: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7v5l3.5 2",
   utbildning: "M3 8.5 12 4l9 4.5-9 4.5zM7 11v5c0 1.4 2.2 2.5 5 2.5s5-1.1 5-2.5v-5M20 9.5V15",
   varning: "M12 9v4M12 17h.01M10.3 3.9 2.5 17.4A2 2 0 0 0 4.2 20.5h15.6a2 2 0 0 0 1.7-3.1L13.7 3.9a2 2 0 0 0-3.4 0Z",
+  // Installningarnas kategorier. `personal` ar tva personer och betyder
+  // registret — den egna raden behover en ensam figur for att inte lasas som
+  // en genvag till personalvyn.
+  konto: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4.5 20a7.5 7.5 0 0 1 15 0",
+  las: "M5 11h14v10H5zM8.5 11V7a3.5 3.5 0 0 1 7 0v4",
+  utseende: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 3v18",
+  installningar: "M4 8h9M17 8h3M4 16h3M11 16h9M15 5.5v5M9 13.5v5",
+  kryss: "M6 6l12 12M18 6 6 18",
+  fram: "M9 6l6 6-6 6",
 };
 
 export function Ikon({ namn, className = "size-5" }: { namn: string; className?: string }) {

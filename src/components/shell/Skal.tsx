@@ -4,6 +4,8 @@ import { useState, type ReactNode } from "react";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 import { Bottennav } from "./Bottennav";
+import { Installningar } from "./Installningar";
+import { PanelLageProvider } from "./panellage";
 import { SIDOPANEL_KAKA } from "./sidopanel";
 import type { NavItem } from "./nav-items";
 import type { Kvitto } from "@/lib/toast";
@@ -17,6 +19,9 @@ export function Skal({
   hopfalldFranStart,
   klocka,
   kvitto,
+  installningarKonto,
+  installningarSakerhet,
+  installningarAdministration,
   children,
 }: {
   items: NavItem[];
@@ -26,9 +31,14 @@ export function Skal({
   hopfalldFranStart: boolean;
   klocka: ReactNode;
   kvitto: Kvitto | null;
+  installningarKonto: ReactNode;
+  installningarSakerhet: ReactNode;
+  /** `null` nar anvandaren inte staller in nagot — da finns ingen sadan flik. */
+  installningarAdministration: ReactNode | null;
   children: ReactNode;
 }) {
   const [oppen, setOppen] = useState(false);
+  const [installningar, setInstallningar] = useState(false);
 
   /**
    * UI-PRD §5.1: laget ska sparas.
@@ -52,33 +62,55 @@ export function Skal({
   }
 
   return (
-    <div className="min-h-dvh">
-      <Sidebar
-        items={items}
-        namn={namn}
-        roll={roll}
-        oppen={oppen}
-        stang={() => setOppen(false)}
-        hopfalld={hopfalld}
-        vaxlaHopfalld={vaxlaHopfalld}
-      />
-      <div
-        className={
-          hopfalld
-            ? "px-4 lg:pl-[6.5rem] transition-[padding] duration-base ease-brand"
-            : "px-4 lg:pl-[18rem] transition-[padding] duration-base ease-brand"
-        }
-      >
-        <Topbar oppnaMeny={() => setOppen(true)} klocka={klocka} />
-        {/* Innehallsyta maximalt 1440 px, centrerad (UI-PRD §6).
-            Under 768 px ligger bottenraden over sidans nederkant, sa
-            innehallet behover en botten som ar hogre an raden ar. */}
-        <main className="mx-auto max-w-[1440px] pb-28 md:pb-16">{children}</main>
+    /**
+     * Laget delas nedat i stallet for att kopieras. Utseendesektionen i
+     * installningarna staller om samma sak som knappen i panelen, och den
+     * ritas bade i rutan och pa /profil — se shell/panellage.tsx.
+     */
+    <PanelLageProvider value={{ hopfalld, vaxlaHopfalld }}>
+      <div className="min-h-dvh">
+        <Sidebar
+          items={items}
+          namn={namn}
+          roll={roll}
+          oppen={oppen}
+          stang={() => setOppen(false)}
+          hopfalld={hopfalld}
+          vaxlaHopfalld={vaxlaHopfalld}
+          // Utdragsladan stangs samtidigt: pa en telefon hade den annars legat
+          // kvar bakom rutan och mott en tillbaka nar rutan stangdes.
+          oppnaInstallningar={() => {
+            setOppen(false);
+            setInstallningar(true);
+          }}
+        />
+        <div
+          className={
+            hopfalld
+              ? "px-4 lg:pl-[6.5rem] transition-[padding] duration-base ease-brand"
+              : "px-4 lg:pl-[18rem] transition-[padding] duration-base ease-brand"
+          }
+        >
+          <Topbar oppnaMeny={() => setOppen(true)} klocka={klocka} />
+          {/* Innehallsyta maximalt 1440 px, centrerad (UI-PRD §6).
+              Under 768 px ligger bottenraden over sidans nederkant, sa
+              innehallet behover en botten som ar hogre an raden ar. */}
+          <main className="mx-auto max-w-[1440px] pb-28 md:pb-16">{children}</main>
+        </div>
+        <Bottennav stamplingPa={stamplingPa} oppnaMeny={() => setOppen(true)} />
+        {/* Sist i trädet och `fixed`: kvittot ligger over allt annat och ska
+            inte kunna hamna under bottenraden pa en telefon. */}
+        <Toast kvitto={kvitto} />
+        <Installningar
+          oppen={installningar}
+          stang={() => setInstallningar(false)}
+          namn={namn}
+          roll={roll}
+          konto={installningarKonto}
+          sakerhet={installningarSakerhet}
+          administration={installningarAdministration}
+        />
       </div>
-      <Bottennav stamplingPa={stamplingPa} oppnaMeny={() => setOppen(true)} />
-      {/* Sist i trädet och `fixed`: kvittot ligger over allt annat och ska
-          inte kunna hamna under bottenraden pa en telefon. */}
-      <Toast kvitto={kvitto} />
-    </div>
+    </PanelLageProvider>
   );
 }

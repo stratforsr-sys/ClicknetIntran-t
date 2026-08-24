@@ -266,6 +266,20 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* Installningsrutan. Den kommer INIFRAN sidan och inte flygande fran en kant:
+   den ersatter ingenting, den laggs ovanpa. Rorelsen ar darfor bara atta pixlar
+   och tva procent skala. `motion-safe:` i komponenten gor att den som bett om
+   mindre rorelse far rutan direkt — inte utan ruta. */
+@keyframes dialog-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes backdrop-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
 /* =============================================================================
    Utskrift (E9.1)
    =============================================================================

@@ -1,143 +1,64 @@
-import { cookies } from "next/headers";
+import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
-import { Card, CardHeader } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
-import { getCurrentUser, fullName } from "@/lib/auth";
-import { supabaseServer } from "@/lib/supabase/server";
-import { kraverMfa, kvittoGiltigt, STEG2_KAKA } from "@/lib/mfa";
+import { getCurrentUser } from "@/lib/auth";
+import { Utseende } from "@/components/shell/Utseende";
 import {
-  ROLE_LABEL,
-  PERMISSION_LABEL,
-  EMPLOYMENT_TYPE_LABEL,
-  STATUS_LABEL,
-} from "@/lib/roles";
-import { Steg2 } from "./Steg2";
-import { Losenord } from "./Losenord";
+  KontoSektion,
+  SakerhetSektion,
+  AdministrationSektion,
+  harAdministration,
+} from "./Sektioner";
 
-export const metadata = { title: "Min profil — Clicknet Nav" };
+export const metadata = { title: "Inställningar — Clicknet Nav" };
 
-/** E1.14: var och en ser sina egna uppgifter och sköter sin egen inloggning. */
-export default async function ProfilSida() {
+/**
+ * E1.14: var och en ser sina egna uppgifter och skoter sin egen inloggning.
+ *
+ * Sidan ar samma installningar som rutan man far genom att klicka pa
+ * profilbilden i sidopanelen, fast under varandra. Rutan ar den normala vagen;
+ * den har finns for djuplankar, bokmarken och den som hellre laser allt pa en
+ * gang. Sektionerna ar SAMMA komponenter — se Sektioner.tsx.
+ */
+export default async function InstallningsSida() {
   const user = await getCurrentUser();
   if (!user?.employee) redirect("/");
 
-  const supabase = await supabaseServer();
-  const { data: team } = user.employee.team_id
-    ? await supabase.from("team").select("name").eq("id", user.employee.team_id).maybeSingle()
-    : { data: null };
-
-  const obligatorisk = kraverMfa(user);
-  const kvitto = (await cookies()).get(STEG2_KAKA)?.value;
-  const enhetenIhagkommen = await kvittoGiltigt(kvitto, user.authUserId);
-
   return (
-    <div className="flex flex-col gap-4 pt-2">
+    <div className="flex flex-col gap-8 pt-2">
       <div>
-        <h1 className="text-display text-ink-900">Min profil</h1>
-        <p className="mt-1 text-body text-ink-500">
-          Dina uppgifter och din inloggning. Behöver något i listan ändras, säg till din chef.
+        <h1 className="text-display text-ink-900">Inställningar</h1>
+        <p className="mt-1 max-w-[70ch] text-body text-ink-500">
+          Dina uppgifter, din inloggning och hur navet ser ut för dig. Samma innehåll som
+          rutan du får när du klickar på din profilbild nere till vänster.
         </p>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <div className="flex flex-col gap-4">
-          <Card>
-            <CardHeader titel="Inloggning" beskrivning="Lösenordet byter du själv, när som helst." />
-            <Losenord />
-          </Card>
+      <Avsnitt titel="Konto">
+        <KontoSektion />
+      </Avsnitt>
 
-          <Card>
-            <CardHeader
-              titel="Kod vid inloggning"
-              beskrivning={
-                obligatorisk
-                  ? "Din roll når känsliga uppgifter. Därför bekräftas nya enheter med en kod."
-                  : "Ett extra steg vid inloggning på nya enheter. Avstängt tills vidare."
-              }
-            />
-            <Steg2 obligatorisk={obligatorisk} enhetenIhagkommen={enhetenIhagkommen} />
-          </Card>
-        </div>
+      <Avsnitt titel="Säkerhet">
+        <SakerhetSektion />
+      </Avsnitt>
 
-        <Card className="h-fit">
-          <CardHeader titel="Mina uppgifter" />
-          <dl className="flex flex-col gap-3">
-            <Rad etikett="Namn" varde={fullName(user.employee)} />
-            <Rad etikett="E-post" varde={user.email} />
-            <Rad etikett="Team" varde={team?.name ?? "Inget team"} />
-            <Rad
-              etikett="Anställning"
-              varde={
-                EMPLOYMENT_TYPE_LABEL[user.employee.employment_type] ??
-                user.employee.employment_type
-              }
-            />
-            <Rad
-              etikett="Startdatum"
-              varde={user.employee.start_date ?? "Inte satt"}
-            />
-            <div>
-              <dt className="text-micro uppercase text-ink-500">Roller</dt>
-              <dd className="mt-1.5 flex flex-wrap gap-1.5">
-                {user.roles.length ? (
-                  user.roles.map((r) => (
-                    <Badge key={r} ton="brand">
-                      {ROLE_LABEL[r]}
-                    </Badge>
-                  ))
-                ) : (
-                  <Badge ton="warn">Väntar på roll</Badge>
-                )}
-                {user.permissions.map((p) => (
-                  <Badge key={p} ton="accent">
-                    {PERMISSION_LABEL[p]}
-                  </Badge>
-                ))}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-micro uppercase text-ink-500">Status</dt>
-              <dd className="mt-1.5">
-                <Badge ton={user.employee.status === "active" ? "ok" : "warn"}>
-                  {STATUS_LABEL[user.employee.status] ?? user.employee.status}
-                </Badge>
-              </dd>
-            </div>
-          </dl>
+      <Avsnitt titel="Utseende">
+        <Utseende />
+      </Avsnitt>
 
-          {/*
-            AC-12.4, K25. Rattigheten star i K14, och en rattighet man maste
-            be nagon om ar en rattighet man later bli att anvanda — darfor en
-            lank och inte ett formular till chefen.
-
-            Vanlig <a> och inte <Link>: svaret ar en fil att ladda ner, och
-            klientnavigering hade forsokt rendera JSON som en sida.
-          */}
-          <div className="mt-6 border-t border-canvas pt-5">
-            <h3 className="text-small font-semibold text-ink-900">Dina uppgifter i navet</h3>
-            <p className="mt-1 text-small text-ink-500">
-              Hämta allt navet har registrerat om dig, tabell för tabell. Filen är
-              din — hämtningen loggas, men innehållet läser ingen annan.
-            </p>
-            <a
-              href={`/personal/${user.employee.id}/registerutdrag`}
-              download
-              className="mt-3 inline-flex min-h-11 items-center rounded-full bg-canvas px-4 text-small font-semibold text-ink-900 transition-colors duration-fast hover:bg-ink-300/30"
-            >
-              Hämta registerutdrag
-            </a>
-          </div>
-        </Card>
-      </div>
+      {harAdministration(user) && (
+        <Avsnitt titel="Administration">
+          <AdministrationSektion />
+        </Avsnitt>
+      )}
     </div>
   );
 }
 
-function Rad({ etikett, varde }: { etikett: string; varde: string }) {
+function Avsnitt({ titel, children }: { titel: string; children: ReactNode }) {
   return (
-    <div>
-      <dt className="text-micro uppercase text-ink-500">{etikett}</dt>
-      <dd className="mt-0.5 text-body text-ink-900">{varde}</dd>
-    </div>
+    <section className="flex flex-col gap-4">
+      <h2 className="text-micro uppercase text-ink-500">{titel}</h2>
+      {children}
+    </section>
   );
 }

@@ -41,6 +41,7 @@ export function Sidebar({
   stang,
   hopfalld,
   vaxlaHopfalld,
+  oppnaInstallningar,
 }: {
   items: NavItem[];
   namn: string;
@@ -49,6 +50,7 @@ export function Sidebar({
   stang: () => void;
   hopfalld: boolean;
   vaxlaHopfalld: () => void;
+  oppnaInstallningar: () => void;
 }) {
   const path = usePathname();
 
@@ -234,29 +236,37 @@ export function Sidebar({
               hopfalld && "lg:flex-col lg:gap-1 lg:px-0",
             )}
           >
-            {/* Namnet ar vagen till den egna profilen. Det ar dar folk letar. */}
-            <Link
-              href="/profil"
-              onClick={stang}
-              aria-current={path.startsWith("/profil") ? "page" : undefined}
-              title={hopfalld ? namn : undefined}
+            {/*
+              Profilbilden ar vagen till installningarna. Det ar dar folk
+              letar, och det ar den vana bade macOS och Claude bygger pa.
+
+              Knapp och inte lank: rutan ligger ovanpa fonstret och byter inte
+              sida, och en <a> som inte navigerar ar en <a> som ljuger for
+              mittenklick, "oppna i ny flik" och skarmlasare. Vill man ha en
+              egen sida finns lanken langst ner i rutan.
+            */}
+            <button
+              type="button"
+              onClick={oppnaInstallningar}
+              aria-haspopup="dialog"
+              title={hopfalld ? `${namn} — inställningar` : "Inställningar"}
               className={cn(
-                "flex min-w-0 flex-1 items-center gap-3 rounded-full py-1 pr-2 transition-colors duration-fast hover:bg-brand-800/60",
+                "flex min-w-0 flex-1 items-center gap-3 rounded-full py-1 pr-2 text-left transition-colors duration-fast hover:bg-brand-800/60",
                 hopfalld && "lg:flex-none lg:pr-0",
               )}
             >
-              <div className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-800 text-small font-semibold text-brand-200">
+              <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-800 text-small font-semibold text-brand-200">
                 {namn
                   .split(" ")
                   .map((d) => d.charAt(0))
                   .slice(0, 2)
                   .join("")}
-              </div>
-              <div className={cn("min-w-0 flex-1", doljText)}>
-                <p className="truncate text-small font-semibold text-ink-inv">{namn}</p>
-                <p className="truncate text-micro uppercase text-brand-200">{roll}</p>
-              </div>
-            </Link>
+              </span>
+              <span className={cn("min-w-0 flex-1", doljText)}>
+                <span className="block truncate text-small font-semibold text-ink-inv">{namn}</span>
+                <span className="block truncate text-micro uppercase text-brand-200">{roll}</span>
+              </span>
+            </button>
             <form action="/auth/logga-ut" method="post">
               <button
                 type="submit"
