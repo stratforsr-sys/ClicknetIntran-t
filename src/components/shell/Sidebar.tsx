@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Ikon } from "./Ikon";
@@ -16,6 +17,21 @@ import type { NavItem } from "./nav-items";
  * ikoner, och bara fran 1024 px och uppat: under den breadden ar panelen en
  * utdragslada som redan ar borta nar den inte anvands, och en ihopfalld lada
  * vore en lada med samma yta men utan text.
+ *
+ * PANELEN AR ALLTID EXAKT SA HOG SOM FONSTRET (`inset-y-4`), och menyn vaxer
+ * med varje modul som levereras. Pa en 690 px hog vy var sjutton poster mer an
+ * som fick plats, och eftersom listan saknade egen scroll klipptes den bara av:
+ * de sista posterna gick inte att na, och inte heller profilen och
+ * utloggningen under dem. Darfor:
+ *
+ * - Bara LISTAN scrollar. Logotypen, hopfallningen, profilen och utloggningen
+ *   ar `shrink-0` och star kvar — det man behover oftast ska inte kunna rulla
+ *   bort, och en utloggningsknapp man maste leta efter ar ett sakerhetsproblem.
+ * - Scrollisten ar egen och alltid synlig (`.nav-scroll` i globals.css). macOS
+ *   doljer sina tills man rullar, sa en avklippt lista hade sett likadan ut som
+ *   fore fixen.
+ * - Den aktiva posten rullas in i vy nar panelen monteras. Utan det oppnar
+ *   `/design` en meny som ser ut att sta pa `Hem`.
  */
 export function Sidebar({
   items,
@@ -38,6 +54,22 @@ export function Sidebar({
 
   /** Doljs bara pa stora skarmar — utdragsladan visar alltid hela texten. */
   const doljText = hopfalld ? "lg:hidden" : "";
+
+  /**
+   * Rulla fram den aktiva posten. `nearest` och inte `center`: star posten
+   * redan i vy ska ingenting rora sig, och pa en skarm dar hela listan far
+   * plats ska panelen se ut precis som fore.
+   *
+   * Kors bara vid montering. Klickar man sig runt i navet ligger listan kvar
+   * dar man lamnade den, vilket ar vad man forvantar sig — det ar ombytet till
+   * en djuplank eller en omladdning som behover hjalpen.
+   */
+  const lista = useRef<HTMLElement>(null);
+  useEffect(() => {
+    lista.current
+      ?.querySelector('[aria-current="page"]')
+      ?.scrollIntoView({ block: "nearest" });
+  }, []);
 
   return (
     <>
@@ -65,7 +97,7 @@ export function Sidebar({
           href="/"
           aria-label="Clicknet Nav — till startsidan"
           className={cn(
-            "mb-8 flex items-center gap-2.5 rounded-sm p-2",
+            "mb-6 flex shrink-0 items-center gap-2.5 rounded-sm p-2",
             hopfalld && "lg:justify-center lg:px-0",
           )}
         >
@@ -77,7 +109,18 @@ export function Sidebar({
           </span>
         </Link>
 
-        <nav className="flex flex-1 flex-col gap-1" aria-label="Huvudmeny">
+        {/* `min-h-0` ar det som far scrollen att fungera: utan den vagrar en
+            flex-post krympa under sitt innehall, och `overflow-y-auto` far
+            aldrig nagot att gora. Den negativa hogermarginalen lagger
+            scrollisten i panelens kant i stallet for inne i texten. */}
+        <nav
+          ref={lista}
+          className={cn(
+            "nav-scroll -mr-2 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain pr-2 pb-1",
+            hopfalld && "lg:-mr-1 lg:pr-1",
+          )}
+          aria-label="Huvudmeny"
+        >
           {items.map((item) => {
             const aktiv = item.href === "/" ? path === "/" : path.startsWith(item.href);
             return (
@@ -90,7 +133,7 @@ export function Sidebar({
                 // menyn en rad symboler man far gissa sig till.
                 title={hopfalld ? item.label : undefined}
                 className={cn(
-                  "flex min-h-11 items-center gap-3 rounded-full px-4 text-body",
+                  "flex min-h-11 shrink-0 items-center gap-3 rounded-full px-4 text-body",
                   "transition-colors duration-fast ease-brand",
                   hopfalld && "lg:justify-center lg:px-0",
                   aktiv
@@ -114,7 +157,7 @@ export function Sidebar({
           aria-label={hopfalld ? "Fäll ut menyn" : "Fäll ihop menyn"}
           title={hopfalld ? "Fäll ut menyn" : "Fäll ihop menyn"}
           className={cn(
-            "mt-4 hidden min-h-11 items-center gap-3 rounded-full px-4 text-small",
+            "mt-4 hidden min-h-11 shrink-0 items-center gap-3 rounded-full px-4 text-small",
             "text-brand-200 transition-colors duration-fast hover:bg-brand-800/60 hover:text-ink-inv",
             "lg:flex",
             hopfalld && "lg:justify-center lg:px-0",
@@ -127,7 +170,9 @@ export function Sidebar({
           <span className={cn("whitespace-nowrap", doljText)}>Fäll ihop</span>
         </button>
 
-        <div className="mt-4 border-t border-brand-800 pt-4">
+        {/* Skiljelinjen sitter pa den har och inte pa listan: den ska ligga
+            still mot botten, inte folja med det som rullar forbi. */}
+        <div className="mt-4 shrink-0 border-t border-brand-800 pt-4">
           <div
             className={cn(
               "flex items-center gap-2 px-2",
