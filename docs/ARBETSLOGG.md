@@ -5,6 +5,127 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-08-25 · E13 steg 1: kundordern, och regelverket bakom hela bonusbygget
+
+Beställaren beskrev fem sammanhängande delar — manuell order- och
+provisionsregistrering, volymbonus, K&V-protokoll, konsekvenssystem och en
+progressvy för säljaren. Passet gick i tre delar: 59 frågor, en
+regelspecifikation, och den första skivan kod.
+
+**Specifikationen är `docs/PROVISION_SPEC.md`** och är den som gäller. Det här
+är varför-resonemangen.
+
+### Q78–Q80 är besvarade. E13 är inte blockerad längre
+
+Provisionen är en **engångsbetalning per order**, ur en matris med tre paket och
+tre löptider. Nio belopp, samtliga i `commission_rate` och inget av dem i koden.
+Beställaren angav dem 2026-08-24.
+
+Att de ligger i en versionerad tabell med `valid_from`/`valid_to` är inte
+prydlighet. Uppslaget sker på orderns **signeringsdatum**, inte på dagens datum,
+och det är svaret på frågan "vilken sats gällde när den här ordern skrevs" —
+precis den fråga som ställs när en utbetalning ifrågasätts. `tests/order.mjs`
+kör hela skarven: 30 september ger den gamla satsen, 1 oktober den nya, och
+`valid_to` är exklusivt så att dagen varken tillhör båda raderna eller ingen.
+
+### Order, inte avtal
+
+`/avtal` och `contract` är **anställningsavtal** (E9.1). Kundaffären heter
+**order** — beställarens eget ord — och bor i `sales_order` på `/order`. Två
+saker som båda heter avtal i samma nav blir fel för någon.
+
+### Makuleringen bokförs i makuleringsmånaden
+
+Beställarens beslut, och det är det som gör periodstängningen möjlig. En order
+från mars som makuleras i augusti **river augusti**: en negativ post och en
+minskad orderräknare där, medan mars står orört. Alternativet — att backa in i
+mars — hade krävt att en stängd och utbetald period skrivs om.
+
+Därför har makuleringen en **egen** genererad månadskolumn,
+`cancel_period_month`. Utan den hade avdraget behövt hittas via
+signeringsmånaden, alltså via just den period som inte får röras.
+
+Nettoantalet kan bli **negativt** om fler order makuleras än som tecknats. Det
+är avsiktligt: bonusnivån blir noll, men provisionsavdraget sker ändå.
+
+### Provisionen fryses på ordern vid godkännande
+
+Samma linje som `contract.body_md` i 0028: dokumentet fryser malltexten, så
+mallen går att ändra fritt efteråt. Här fryser ordern satsen, så en höjning i
+november inte tyst ändrar vad någon tjänade i augusti. Triggern
+`sales_order_stegbyte` nekar att belopp, paket, löptid, säljare eller
+signeringsdatum skrivs om efter `signerad`.
+
+### Ett handsatt belopp kräver en anteckning
+
+Faller ordern utanför paketreglerna sätter godkännaren provisionen själv. Då är
+anteckningen **obligatorisk**, via ett check-villkor och inte bara i formuläret.
+En avvikande provision utan skäl är det första någon ifrågasätter i efterhand,
+och då finns svaret ingenstans.
+
+### K27: orgnumret är ett medvetet undantag
+
+En **enskild firma har personnummer som organisationsnummer**. Ett check-villkor
+av `contract.variables`-modell hade alltså nekat en fullt laglig kund. Kolumnen
+tillåter därför tio siffror, provet kontrollerar uttryckligen att `850101-1234`
+går igenom, och undantaget står i DECISIONS.md. Följden: numret får inte in i
+den globala sökningen, och **P0.6 registerförteckningen behöver kunduppgifter
+som ny kategori**.
+
+### Fyndet: 0027 räckte inte, och självkontrollen fångade det
+
+Migrationen **föll första gången den kördes**, på sin egen sista kontroll:
+`anon har annu execute pa: far_hantera_order`.
+
+0027 la in `alter default privileges ... revoke execute on functions from
+public` och skrev att nästa funktion därmed är stängd som standard. Det är halva
+sanningen. Supabase har en **egen default-ACL på schemat**, satt av
+`supabase_admin`, som ger `anon` en **explicit** grant på varje ny funktion:
+
+```
+public | {postgres=X/…, anon=X/…, authenticated=X/…, service_role=X/…}
+```
+
+Ett revoke från PUBLIC rör den inte. Rätt form för en ny funktion är
+`revoke all ... from public, anon` — båda måste nämnas. Det förklarar också
+varför 0032 var tvungen att skriva ut `from public, anon` för alla femton
+funktioner; skälet stod inte utskrivet där, och står nu i 0034.
+
+**Kontrollen längst ned i migrationen är det som gjorde skillnaden.** Utan den
+hade `far_hantera_order()` gått i produktion anropbar för en utloggad. Skriv en
+ny security definer-funktion: ta med både `public` och `anon`, och låt
+kontrollen ligga kvar.
+
+### Det som INTE byggdes, och varför
+
+- **Bonusen räknas inte.** Volymtrappan är steg 3. `commission_entry` från 0031
+  är orörd — ordern är sanningen om vad som sålts, huvudboken om vad som
+  bokförts, och att låta dem mötas innan perioden kan stängas hade gett två
+  ställen som båda påstår sig veta månadens summa.
+- **Ingen filuppladdning.** Beställaren vill kunna bifoga avtalet som PDF, och
+  det är frivilligt. `file_object` i 0022 har ett stängt `purpose`-villkor och
+  ett "exakt en koppling"-villkor, och den tabellen bär **läkarintyg**. Att
+  vidga den förtjänar en egen migration och en egen provkörning, inte ett
+  påhäng på den här.
+- **Delade order.** Beställaren sköt på frågan. Ingen andelskolumn lades in — en
+  kolumn som alltid är 100 lär folk att den inte betyder något, och den dagen
+  den ska betyda något går den inte att lita på bakåt.
+
+### K12 är omskriven, inte kringgången
+
+Se D-K12. Konsekvenssystemet utgår från utebliven instämpling, vilket
+K12-utkastets §5 räknade upp som en byggd skyddsåtgärd att inte göra.
+Beställaren beslutade att bygga det ändå.
+
+Det visade sig vara billigare än det såg ut: **1.1 in- och utstämpling vilar
+inte på intresseavvägningen alls** utan på ATL 11 § och anställningsavtalet, och
+dokumentet är fortfarande ett **utkast utan beslutsdatum** — löftet har alltså
+aldrig lämnats till personalen. Rast (1.3) och sen ankomst (1.2) når fortfarande
+aldrig provisionen; beställaren har inte bett om det, och det är de två
+behandlingar som faktiskt kräver avvägningen.
+
+---
+
 ## 2026-08-24 (sent) · Administrationspanelerna flyttade in i rutan
 
 Rutan hade Administration som en lista med **länkar**. Klickade man Scheman

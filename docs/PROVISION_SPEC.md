@@ -59,11 +59,22 @@ ingenting med kundaffärer att göra. Nytt begrepp, ny tabell, ny sida.
 | Avtalstid | Obligatoriskt | 12, 24 eller 36 månader |
 | Säljare | Obligatoriskt | |
 | Signeringsdatum | Obligatoriskt | **Styr vilken period ordern hör till** |
-| Avtalsfil | **Frivillig** | PDF via befintlig `Filuppladdning` |
+| Avtalsfil | **Frivillig** | PDF. **Byggd inte i steg 1** — se nedan |
 | Manuell provision | Endast när ordern faller utanför paketmatrisen | Sätts av godkännaren |
 | Anteckning | Frivillig | |
 
 Inget mer. Beställaren var uttrycklig: "behövs ej mer".
+
+**Filuppladdningen är skjuten till en egen leverans.** `file_object` i `0022`
+har ett stängt `purpose`-villkor och ett "exakt en koppling"-villkor, och den
+tabellen bär **läkarintyg**. Att vidga den kräver en egen migration, egna
+RLS-policyer och en egen provkörning — inte ett påhäng på ordermigrationen.
+Uppladdningen är dessutom frivillig, så ordern fungerar utan den.
+
+Den automatiska avläsningen (Ö14: PDF med text) hör till samma leverans.
+`src/lib/pdftext.ts` finns redan och används av bilagorna. Utläsningen ska
+**förifylla formuläret, aldrig spara direkt** — ett fält som fyllts i av en
+maskin och godkänts av en människa är något annat än ett fält ingen läst.
 
 ### 3.2 K27 — orgnummer och personnummer
 
@@ -533,7 +544,7 @@ Varje steg är en egen leverans med prov på räknemotorn innan nästa börjar.
 
 | Steg | Innehåll | Beroende |
 |---|---|---|
-| 1 | `sales_order` + `commission_rate` + `/order`, grundprovision ur paketmatrisen | — |
+| 1 | **KLART 2026-08-25** (migration `0034`): `sales_order`, `commission_rate`, `/order`, grundprovision ur paketmatrisen | — |
 | 2 | Räknemotorn i `src/lib/provision-motor.ts`, ren logik, med prov | Steg 1 |
 | 3 | Volymbonus: konfiguration, trappa, retroaktivitet, periodstängning | Steg 2 |
 | 4 | Säljarens progressvy | Steg 3 |

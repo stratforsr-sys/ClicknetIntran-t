@@ -108,6 +108,12 @@ export const KALLOR: Kalla[] = [
   // lönekostnaden ser du den redan i navet — men den ska med här ändå, för
   // utdraget ska vara fullständigt och inte bara innehålla det som är dolt.
   { tabell: "commission_entry", kolumn: "employee_id", andamal: "Din intjänade provision" },
+
+  // 0034 E13 steg 1. Ordern bär kundens uppgifter, men raden handlar om
+  // SÄLJAREN: den är underlaget för vad hen tjänat och för volymbonusen.
+  // Utelämnad hade utdraget visat provisionsposterna utan att kunna svara på
+  // vad de kom ifrån.
+  { tabell: "sales_order", kolumn: "salesperson_id", andamal: "Order du sålt, och provisionen de gav" },
 ];
 
 /**
@@ -195,4 +201,12 @@ export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
 
   // 0031 E13.
   { tabell: "commission_entry", kolumn: "entered_by", skal: "Vem som bokförde provisionen" },
+
+  // 0034 E13 steg 1. Tre roller kring en order som INTE är säljarens egen:
+  // den som lade in den, den som godkände den och den som makulerade den.
+  // Säljarens egen koppling står i KALLOR ovan.
+  { tabell: "sales_order", kolumn: "created_by", skal: "Vem som lade in ordern" },
+  { tabell: "sales_order", kolumn: "approved_by", skal: "Vem som godkände ordern" },
+  { tabell: "sales_order", kolumn: "cancelled_by", skal: "Vem som makulerade ordern" },
+  { tabell: "commission_rate", kolumn: "set_by", skal: "Vem som satte provisionssatsen" },
 ];

@@ -12,17 +12,33 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
 **Läs `docs/PROVISION_SPEC.md` innan du rör provisionen.** Beställaren besvarade
 59 frågor 2026-08-24 och specifikationen bär hela regelverket: paketmatrisen,
 volymbonusens trappa, K&V-protokollet, konsekvenstrappan och byggordningen i
-åtta steg. Ingenting är byggt än — `commission_entry` är fortfarande en
-huvudbok utan motor.
+åtta steg.
 
-**Ett beslut blockerar:** konsekvenskedjan utgår från utebliven instämpling,
-alltså stämplingsdata som når provisionen. **K12-intresseavvägningen §5 lovar
-personalen motsatsen**, och D-K13 lämnade den delen uttryckligen orörd. Antingen
-skrivs K12 om och beslutas på nytt, eller så registrerar säljchefen ogiltig
-frånvaro för hand utan att navet härleder förslaget ur stämplingar. Bygg inte
-steg 6 innan det är avgjort.
+**Ingenting blockerar längre.** Q78–Q80 är besvarade (paketmatrisen), och
+K12-frågan avgjordes 2026-08-24 — se **D-K12**. Rast och sen ankomst når
+fortfarande aldrig provisionen; utebliven instämpling gör det, men bara via ett
+förslag som chefen måste godkänna.
 
-Fjorton öppna punkter till ligger i avsnitt 10 i specifikationen.
+**Steg 1 är klart 2026-08-25** (migration `0034`): `sales_order`,
+`commission_rate` och `/order`. **Steg 2–8 återstår**, och bonusen räknas inte
+än — volymtrappan är steg 3.
+
+### Tre saker att inte riva i steg 2 och framåt
+
+1. **Makuleringen bokförs i makuleringsmånaden**, via den egna genererade
+   kolumnen `cancel_period_month`. Det är det som gör att en stängd period
+   aldrig behöver skrivas om. Nettoantalet kan bli negativt, och det är avsiktligt.
+2. **Provisionen är frusen på ordern.** Satsen slås upp på signeringsdatumet och
+   kopieras in vid godkännande. Läs aldrig `commission_rate` för att räkna om en
+   gammal order.
+3. **`revoke ... from public` räcker inte för en ny funktion.** Supabase har en
+   egen default-ACL som ger `anon` en explicit grant. Skriv
+   `revoke all ... from public, anon`. Migrationen 0034 föll på sin egen
+   självkontroll första gången just där — behåll kontrollen i nya migrationer.
+
+Fem öppna punkter kvar i avsnitt 10 i specifikationen. Den som betyder något är
+**Ö4: vad 200 poäng betyder i K&V** — per område ger maxpoäng 2 400 och gör
+tröskeln 160 till 6,7 %, alltså alltid uppnådd.
 
 ---
 

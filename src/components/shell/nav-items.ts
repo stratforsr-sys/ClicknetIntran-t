@@ -47,6 +47,19 @@ export function navFor(user: CurrentUser | null, stamplingPa: boolean): NavItem[
     items.push({ href: "/provision", label: "Provision", ikon: "kontroll" });
   }
 
+  /**
+   * E13 steg 1. ORDER, inte avtal — `/avtal` ar anstallningsavtal och har
+   * ingenting med kundaffarer att gora.
+   *
+   * Kretsen ar smalare an provisionens: bestallarens besked 2026-08-24 var att
+   * provisions- och bonussystemet galler ROLLEN SALJARE. En projektledare har
+   * inga order och ska inte ha en meny som pastar motsatsen. Saljchef, VD och
+   * ekonomi ser posten for att de godkanner och makulerar.
+   */
+  if (hasRole(user, "salesperson", "sales_manager", "ceo", "finance")) {
+    items.push({ href: "/order", label: "Order", ikon: "kontroll" });
+  }
+
   // Loneunderlaget ar ledningens och ekonomins (AC-2.13). Teamledaren har
   // avvikelsevyn, inte den har. Posten foljer M2: utan stampling finns inget
   // underlag att rapportera.
