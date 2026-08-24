@@ -5,6 +5,83 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-08-24 (sent) · Administrationspanelerna flyttade in i rutan
+
+Rutan hade Administration som en lista med **länkar**. Klickade man Scheman
+byttes sidan ut och rutan försvann — man fick stänga inställningarna för att
+se det man just öppnat. Panelerna ritas nu inne i rutan.
+
+### Rutan är inte längre ett tillstånd, den är en adress
+
+Det är hela ombyggnaden. Förut höll `Skal` en boolean och sektionerna kom som
+färdiga noder från layouten. Det bär inte fem administrationspaneler: de gör
+flera databasfrågor var, och att rita alla på varje sidvisning för en ruta de
+flesta aldrig öppnar är att betala för ingenting.
+
+En serverkomponent går inte att hämta lazily utan en rutt. Alltså en rutt:
+**parallell slot `@ruta` med intercepting routes.** Klickar man sig dit inifrån
+navet fångas navigeringen och panelen ritas i rutan ovanpå sidan man står på.
+Laddar man om samma adress finns ingen interception — `default.tsx` lämnar
+sloten tom och panelen ritas som helsida.
+
+Vinsten utöver lazy-laddningen: **en panel, en adress.** Länken till
+Frånvaroregler inne på `/franvaro` pekar på samma ställe som posten i rutans
+meny, och båda öppnar rutan. Inga parallella adresser att hålla i synk.
+
+### Tre saker som var lätta att bygga fel
+
+**Ramen måste vara en layout.** Låg `<dialog>` i varje panelsida byttes
+elementet ut vid varje panelbyte — rutan stängdes och öppnades igen, med blink
+och tappat fokus. Nu ligger den i `@ruta/(dialog)/layout.tsx`, och en layout
+står kvar mellan syskonrutter.
+
+**Rutt-gruppen `(dialog)` behövs.** Utan den hade `default.tsx` fått samma
+layout, och rutan hade ritats tom på varje sida i navet.
+
+**Panelbyten använder `replace`, inte `push`.** Annars hade historiken fyllts
+med ett steg per flik man tittat på, och stängningen — som är ett enkelt
+`back()` — hade landat på förra fliken i stället för på sidan man kom ifrån.
+Nu är ett steg bakåt alltid vägen ut, även efter fem panelbyten.
+
+### Fem sidor delade i två
+
+Varje panel har nu `Innehall.tsx` bredvid sin `page.tsx`. Sidan äger sitt
+sidhuvud — tillbakalänk och rubrik — och innehållet äger resten. I rutan står
+panelens namn redan i toppraden, och en tillbakalänk inne i en modal pekar åt
+ett håll som inte finns.
+
+**Behörigheten ligger i `Innehall`**, inte hos anroparen. Båda vägarna in är
+publika adresser, och en kontroll som ligger i sidan ovanför är en kontroll
+som nästa väg in glömmer. Undantaget är `design/Innehall.tsx`, som inte har
+någon — det har sidan aldrig haft, den rör ingen data, och kommentaren säger
+det rakt ut i stället för att påstå motsatsen.
+
+### `installningar-delade.ts` finns för att server-only smittar
+
+`installningar-poster.ts` bygger listan utifrån användaren och importerar
+därför `@/lib/lonekostnad-server`, som är `server-only`. Sidopanelen och rutan
+är klientkomponenter. Importerar de ett **värde** därifrån dras hela grafen med
+till webbläsaren och bygget faller. Typen och de två konstanter båda sidor
+behöver ligger därför för sig.
+
+`AdministrationSektion` på helsidan bygger också på `installningsPoster` numera.
+Två listor med var sin uppsättning if-satser hade varit två ställen att lägga
+till en panel på, och det andra stället är det som glöms.
+
+### Provat i produktion
+
+Alla fem panelerna i rutan, hård laddning av `/tid/sparrar` och `/profil` som
+helsidor, länken från `/franvaro`, Esc efter panelbyte. `npm run typecheck`
+grön.
+
+**En hydreringsvarning (React #418, textskillnad) sågs en gång** mitt i
+klickandet och gick inte att återskapa på fem försök. Navet renderar
+minutberoende text — den sortens varning kommer av att en minut slår om mellan
+server och klient, och den fanns i så fall före det här passet. Noterad, inte
+utredd.
+
+---
+
 ## 2026-08-24 (kväll) · Inställningarna blev en ruta ovanpå fönstret
 
 Profilbilden nere till vänster ledde till helsidan `/profil`. Nu öppnar den

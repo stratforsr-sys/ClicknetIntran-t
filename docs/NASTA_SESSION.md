@@ -3,7 +3,7 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-08-24 (sidopanelens scroll + installningsrutan)
+**Senast uppdaterad:** 2026-08-24 (installningsrutan som rutt, alla paneler inne i den)
 
 ---
 
@@ -78,7 +78,7 @@ i `rls.mjs`.** Samtliga 105 i den filen plus 51 i övriga sviter. Leta inte om:
 | Startsida | **Ombyggd 2026-08-23.** Statusband, snabbval, dagens tidslinje, ärende- och provisionskort |
 | Bottennavigering | Under 768 px: Hem, Sök, Stämpla, Mer |
 | Sidopanelen | **Menyn scrollar sedan 2026-08-24.** Låst botten: profil och utloggning rullar aldrig bort |
-| **Inställningar** | **I drift sedan 2026-08-24.** Ruta över fönstret från profilbilden. Konto, Säkerhet, Utseende, Administration. `/profil` visar samma sektioner som egen sida |
+| **Inställningar** | **I drift sedan 2026-08-24.** Ruta över fönstret från profilbilden, driven av adressen. Konto, Säkerhet, Utseende + fem administrationspaneler som ritas INNE i rutan. Samma adress laddad direkt ger helsidan |
 | Registerutdrag | Klart, **inklusive filer och vem som öppnat dem** |
 | Nyheter | `/nyheter`. Målgrupp per roll och team, fäst överst, utkast |
 | Notisklockan | Ärenden, nyheter, rutiner, kurser, frånvaro, rollspel |
