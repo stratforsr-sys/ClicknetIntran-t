@@ -135,3 +135,36 @@ indexet gör importen idempotent. Ingen vy behöver röras den dagen.
 egen rad. Lönekostnaden är bolagets kalkyl *på* en person; provisionen är
 personens egen intjäning. Att dölja den för den som tjänat in den vore inte
 sekretess utan hemlighetsmakeri. Andras poster ser bara ekonomi och VD.
+
+## D-K12 · Utebliven instämpling får leda till en konsekvens i provisionen
+**2026-08-24.** Beställarbeslut efter att frågan ställts och konsekvensen
+beskrivits. K12-utkastets §5 räknade "ingen automatisk konsekvens — data når
+varken provision eller lönekostnadsvy" som en byggd skyddsåtgärd. Beställaren
+beslutade att konsekvenssystemet ska byggas ändå, och att K12 inte ska hindra
+det.
+
+**Vad beslutet gäller:** att **utebliven instämpling** (1.1) får ligga till grund
+för en ogiltig frånvaro, som i sin tur kan få månadens bonusar att falla.
+
+**Varför det är billigare än det såg ut:** 1.1 vilar inte på intresseavvägningen
+alls. Grunden är rättslig förpliktelse (ATL 11 §) och fullgörande av
+anställningsavtalet — det står i K12 1.1 sedan utkastet skrevs. Det som stod i
+vägen var alltså ett **löfte i skyddsåtgärdslistan**, inte den rättsliga grunden.
+Dokumentet är dessutom fortfarande ett **utkast utan beslutsdatum**, så löftet har
+aldrig lämnats till personalen. Att ändra en icke beslutad text är något helt
+annat än att ta tillbaka en utfästelse.
+
+**Vad som står kvar, och varför:**
+
+- **Rastavvikelser (1.3) och sen ankomst (1.2) når fortfarande aldrig
+  provisionen.** Beställaren har inte bett om det, det kostar ingenting att hålla,
+  och det är de två behandlingar som faktiskt kräver avvägningen. Vill någon
+  ändra det är det ett eget beslut.
+- **Ingen konsekvens utlöses automatiskt.** Navet skapar ett förslag; chefen
+  godkänner. Det var beställarens egen formulering och den är nu en byggregel.
+- Chefen kan häva en konsekvens, och hävningen loggas.
+
+**Konsekvens:** K12 1.1 och §5 är omskrivna 2026-08-24 så att texten beskriver
+det som byggs. **Avsnitt 6 och 7 är fortfarande tomma** — avvägningen och
+beslutet är arbetsgivarens och rör 1.2 och 1.3, som är oförändrade. Spärren för
+raststämpling hänger fortfarande på att K12 och K14 publiceras.
