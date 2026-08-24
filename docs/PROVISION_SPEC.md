@@ -7,7 +7,10 @@ Dokumentet är avsiktligt uttömmande. Skälet: beställaren clearar chatten nä
 den blir dyr, och den här specifikationen är då det enda som bär besluten.
 Läs den före `docs/ARBETSLOGG.md` när arbetet med E13 återupptas.
 
-**Status:** beslutsunderlag klart, **ett beslut blockerar bygget** (se Ö1).
+**Status:** beslutsunderlag klart. **Ingenting blockerar längre.** Ö1 avgjordes
+2026-08-24 (se D-K12 i `DECISIONS.md`) och Ö2–Ö7, Ö10 och Ö14 besvarades samma
+dag. Kvar är Ö9, Ö11, Ö12, Ö13 och Ö15, som alla har ett förslag som gäller tills
+någon säger annat.
 
 ---
 
@@ -140,8 +143,12 @@ ifrågasätter i efterhand.
 
 ### 4.3 Delad order
 
-Beställaren vill kunna dela en order men har inte bestämt hur (fråga 16).
-**Förslaget, ej beslutat — se Ö5:**
+**Byggs inte nu.** Beställaren valde 2026-08-24 att skjuta på delade order (Ö5).
+**En order har en säljare.** Ingen andelskolumn läggs in — en kolumn som alltid
+är 100 lär folk att den inte betyder något, och den dagen den ska betyda något
+går den inte att lita på bakåt.
+
+Förslaget nedan står kvar för den dagen frågan tas upp:
 
 - Varje säljare på ordern får en **andel i procent**, summan alltid 100.
 - Både provisionsbeloppet och **orderräknaren** delas efter andelen. En order
@@ -187,17 +194,18 @@ nollställs den 1:a.
 (fråga 18). Ingenting seedas — samma linje som täckningsgraden i `0025`, och av
 samma skäl: en gissad siffra ser rätt ut och blir tyst sanning.
 
-Konfigurationen ska kunna uttrycka tre former per nivå, med en `unit`-kolumn
-som `cost_rate` redan har:
+**Formen är fast belopp** (Ö2), men procent ska gå att välja i inställningarna.
+Konfigurationen bär därför en `unit`-kolumn, precis som `cost_rate`:
 
-| Enhet | Betyder |
-|---|---|
-| `amount_per_order` | Kronor per order, gäller **samtliga** order i perioden |
-| `amount_fixed` | Ett fast kronbelopp när nivån nås |
-| `percent` | Procent på månadens grundprovision |
+| Enhet | Betyder | |
+|---|---|---|
+| `amount_fixed` | Ett fast kronbelopp när nivån nås | **Används** |
+| `percent` | Procent på månadens grundprovision | Valbar |
+| `amount_per_order` | Kronor per order, gäller **samtliga** order i perioden | Valbar |
 
-Se Ö2 — beställaren bör säga vilken form som faktiskt ska användas, men motorn
-klarar alla tre och kostnaden för det är liten.
+Den tredje formen är den enda där ordet "retroaktiv" har en synlig innebörd i
+själva beloppet. Med `amount_fixed` ligger retroaktiviteten i stället i att
+nivån bestäms av **hela** periodens ordervolym — se 5.2.
 
 ### 5.2 Retroaktiviteten
 
@@ -272,12 +280,26 @@ anteckning om att den hör till augusti, eftersom en stängd period aldrig öppn
 - **Två samtal per säljare och vecka**, samtal som lett till sälj.
 - Bedöms av säljchefen på **sex områden**: intro, behovsanalys, ROI, avslut,
   kvalitet på samtalet, korrekt avtalshantering.
-- **Poängskalan per område är EJ SATT.** Beställaren sätter den i
-  inställningarna (fråga 28).
+- **Poängskalan: 200** enligt beställarens svar på Ö4. **Vilken 200 det är måste
+  bekräftas** — se rutan nedan.
 - **Tröskel: 160 poäng**, räknat som **summan av båda samtalen** (fråga 29).
   Konfigurerbar.
 - Godkänd vecka ger **1,25 %** — konfigurerbart — beräknat på **månadens
-  provision** (fråga 30).
+  provision inklusive volymbonus** (fråga 30, Ö3). Alltså hela månadens
+  intjäning före K&V-bonusen. K&V räknas aldrig på K&V.
+
+> **Vad betyder 200? Tre läsningar, mycket olika utfall.**
+>
+> | Läsning | Maxpoäng totalt | 160 poäng motsvarar |
+> |---|---|---|
+> | 200 **per område** | 6 × 200 × 2 samtal = **2 400** | 6,7 % — tröskeln nås i praktiken alltid |
+> | 200 **totalt per samtal** | 2 × 200 = **400** | 40 % |
+> | 200 **totalt för båda samtalen** | **200** | **80 %** |
+>
+> Den sista är den enda där 160 fungerar som ett godkäntbetyg. Motorn läser
+> talen ur konfigurationen och bryr sig inte, men **inställningssidan ska visa
+> vad tröskeln motsvarar i procent** medan du skriver — det är den kontrollen
+> som gör att en omöjlig eller meningslös skala inte går att spara av misstag.
 - **Tak 5 %** per månad. Alltså **högst fyra godkända veckor** räknas.
 - **Ordningen spelar ingen roll** (fråga 31). Veckorna behöver inte vara i rad.
 - **Taket är 5 % även i en månad med fem veckor** (fråga 32).
@@ -487,21 +509,21 @@ följer med lönekörningen i stället för en kronkolumn i `payroll_row`.
 
 | Nr | Fråga | Läge |
 |---|---|---|
-| **Ö1** | **K12 §5 måste beslutas om.** Konsekvenskedjan utgår från utebliven instämpling, alltså stämplingsdata som når provisionen. K12 lovar personalen motsatsen och D-K13 lämnade uttryckligen den delen orörd. **Antingen** skrivs K12 om och beslutas på nytt, **eller** registrerar säljchefen ogiltig frånvaro för hand utan att Nav härleder förslaget ur stämplingar | **BLOCKERAR** |
-| Ö2 | Vilken bonusform används i praktiken — kronor per order, fast belopp per nivå, eller procent? Motorn klarar alla tre | Öppen |
-| Ö3 | K&V:s 1,25 % — på grundprovisionen eller på grundprovision plus volymbonus? Förslag: **grundprovisionen**, för att undvika bonus på bonus | Öppen |
-| Ö4 | Maxpoäng per K&V-område. Sätts i inställningarna, men avgör om 160 är nåbart | Öppen |
-| Ö5 | Delad order: andelsmodellen i 4.3 | Förslag lagt |
-| Ö6 | Räknas ett **tilläggsavtal** i volymtrappan, eller ger det bara provision? Förslag: bara provision — trappan mäter nya kunder | Öppen |
-| Ö7 | Räknas en order med **manuellt satt provision** i volymtrappan? Förslag: ja, en order är en order | Öppen |
+| **Ö1** | K12 §5 mot konsekvenssystemet | **AVGJORD 2026-08-24.** Beställaren beslutade att K12 inte ska hindra bygget. Se D-K12. Rast och sen ankomst når fortfarande aldrig provisionen; utebliven instämpling gör det, men bara via ett förslag chefen godkänner |
+| Ö2 | Bonusform per nivå | **BESVARAD: fast belopp.** Procent ska ändå gå att välja i inställningarna |
+| Ö3 | K&V-basen | **BESVARAD: grundprovision + volymbonus.** Alltså hela månadens intjäning före K&V |
+| Ö4 | Maxpoäng per K&V-område | **Svar: 200 — men läsningen måste bekräftas, se 6.1.** 200 *per område* ger maxpoäng 2 400 och gör tröskeln 160 till 6,7 %, alltså i praktiken alltid uppnådd |
+| Ö5 | Delad order | **BESVARAD: byggs inte nu.** En order har en säljare. Andelsmodellen i 4.3 står kvar som förslag den dag det behövs |
+| Ö6 | Tilläggsavtal i volymtrappan | **BESVARAD: ja, det räknas** |
+| Ö7 | Order med manuell provision i volymtrappan | **BESVARAD: ja, det räknas** |
 | Ö8 | Faller **övrig bonus** (5.3) vid en konsekvens? Förslag: ja | Öppen |
-| Ö9 | Veckans månadstillhörighet: ISO-torsdagen (6.3) | Förslag lagt |
-| Ö10 | Lönerapporten eller separat underlag (9.3) | Öppen |
-| Ö11 | Order signerad i en period som hunnit stängas (5.6) | Förslag lagt |
-| Ö12 | Paketens namn | Öppen |
-| Ö13 | Behövs statusen `betald` alls i dag, och vem sätter den? | Öppen |
-| Ö14 | Automatisk avläsning av uppladdat avtal: är era avtal **PDF med text** eller **inskannade bilder**? Textextraktion finns (`pdftext.ts`); OCR för skannade bilder finns inte och är ett eget bygge | Öppen |
-| Ö15 | Räknas **sen ankomst** någonsin som ogiltig frånvaro, eller bara utebliven dag? Och finns halvdag? | Öppen |
+| Ö9 | Veckans månadstillhörighet: ISO-torsdagen (6.3) | Förslag gäller tills annat sägs |
+| Ö10 | Lönerapporten eller separat underlag | **BESVARAD: separat underlag.** `payroll_row` får ingen kronkolumn, K5 och AC-2.17 står kvar |
+| Ö11 | Order signerad i en period som hunnit stängas (5.6) | Förslag gäller tills annat sägs |
+| Ö12 | Paketens namn | Öppen — etiketten är en kolumn, "Paket 1/2/3" tills vidare |
+| Ö13 | Behövs statusen `betald` alls i dag, och vem sätter den? | Öppen — byggs, men påverkar ingenting |
+| Ö14 | Uppladdat avtal | **BESVARAD: PDF.** Textextraktion via `pdftext.ts` går att använda; ingen OCR behövs |
+| Ö15 | Räknas **sen ankomst** någonsin som ogiltig frånvaro, eller bara utebliven dag? Och finns halvdag? | Öppen — och efter D-K12 är svaret på den första **nej**: sen ankomst når inte provisionen |
 
 ---
 
@@ -513,11 +535,11 @@ Varje steg är en egen leverans med prov på räknemotorn innan nästa börjar.
 |---|---|---|
 | 1 | `sales_order` + `commission_rate` + `/order`, grundprovision ur paketmatrisen | — |
 | 2 | Räknemotorn i `src/lib/provision-motor.ts`, ren logik, med prov | Steg 1 |
-| 3 | Volymbonus: konfiguration, trappa, retroaktivitet, periodstängning | Steg 2, Ö2 |
+| 3 | Volymbonus: konfiguration, trappa, retroaktivitet, periodstängning | Steg 2 |
 | 4 | Säljarens progressvy | Steg 3 |
-| 5 | K&V: tabeller, rutnät, bedömningsformulär, utvecklingskurva, bonus | Steg 2, Ö3, Ö4 |
-| 6 | Konsekvenssystemet | **Ö1** |
-| 7 | Export, lönerapportsöm | Ö10 |
+| 5 | K&V: tabeller, rutnät, bedömningsformulär, utvecklingskurva, bonus | Steg 2 |
+| 6 | Konsekvenssystemet | Steg 3 |
+| 7 | Export, separat provisionsunderlag | Steg 3 |
 | 8 | Dialer-API för K&V-urvalet | A6 |
 
 **Räknemotorn ligger i ett enda bibliotek utan importer av Supabase**, precis
