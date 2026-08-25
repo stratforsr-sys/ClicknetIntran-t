@@ -271,6 +271,12 @@ sker av sig självt.
 oppen -> faststalld (attesterad) -> utbetald
 ```
 
+**Öppen är frånvaron av en rad.** `commission_period` (0035) bär bara stängda
+perioder. En månad utan rad är öppen; en månad med rad är bokförd. En rad med
+status `oppen` hade varit ett tillstånd utan innebörd som någon förr eller senare
+hade glömt att skapa — och då hade en månad utan rad blivit tvetydig i stället
+för öppen.
+
 - **Öppen:** månaden pågår eller väntar på attest. Allt räknas live.
 - **Fastställd:** säljchef, ekonomi eller VD attesterar. Kan inte ske före
   månadens sista dag. Vid attesten bokförs grundprovision, volymbonus, K&V-bonus
@@ -535,6 +541,33 @@ följer med lönekörningen i stället för en kronkolumn i `payroll_row`.
 | Ö13 | Behövs statusen `betald` alls i dag, och vem sätter den? | Öppen — byggs, men påverkar ingenting |
 | Ö14 | Uppladdat avtal | **BESVARAD: PDF.** Textextraktion via `pdftext.ts` går att använda; ingen OCR behövs |
 | Ö15 | Räknas **sen ankomst** någonsin som ogiltig frånvaro, eller bara utebliven dag? Och finns halvdag? | Öppen — och efter D-K12 är svaret på den första **nej**: sen ankomst når inte provisionen |
+| Ö16 | **Vilken volymtrappa gäller för en månad som en ändring skär igenom?** Frågan var aldrig ställd. Byggd 2026-08-25 med regeln **trappan som gällde på månadens första dag** | Förslag gäller tills annat sägs — se rutan nedan |
+
+> **Ö16: varför trappan slås upp på månadens första dag och inte på ordern.**
+>
+> Provisionssatsen är en egenskap hos **en order** och slås därför upp på den
+> orderns signeringsdatum. Volymbonusen är en egenskap hos **hela månaden** —
+> nivån bestäms av månadens samlade ordervolym — och en trappa som byter form
+> mitt i månaden går därför inte att tillämpa "per order" utan att bli
+> obegriplig: order ett till tio skulle höra till en trappa och elva till trettio
+> till en annan, medan nivån räknas på alla trettio.
+>
+> Uppslaget på månadens första dag gör dessutom de tre valen i avsnitt 8.1
+> entydiga:
+>
+> | Val | `valid_from` blir | Slår igenom |
+> |---|---|---|
+> | Gäller allt intjänat denna månad | månadens 1:a | **innevarande månad** |
+> | Gäller från och med nu | dagens datum | nästa månad |
+> | Gäller från och med nästa månad | nästa 1:a | nästa månad |
+>
+> De två sista sammanfaller mitt i en månad och skiljer sig den 1:a, vilket är
+> rätt: den som ändrar trappan på första dagen menar den månaden.
+>
+> **Vill du i stället att en ändring mitt i månaden ska slå igenom direkt** är
+> det en rad i `gallandeNivaer` i `src/lib/provision-motor.ts` — men då gäller
+> "från och med nu" och "allt intjänat denna månad" samma sak, och det ena av
+> de två valen blir överflödigt.
 
 ---
 
@@ -545,8 +578,8 @@ Varje steg är en egen leverans med prov på räknemotorn innan nästa börjar.
 | Steg | Innehåll | Beroende |
 |---|---|---|
 | 1 | **KLART 2026-08-25** (migration `0034`): `sales_order`, `commission_rate`, `/order`, grundprovision ur paketmatrisen | — |
-| 2 | Räknemotorn i `src/lib/provision-motor.ts`, ren logik, med prov | Steg 1 |
-| 3 | Volymbonus: konfiguration, trappa, retroaktivitet, periodstängning | Steg 2 |
+| 2 | **KLART 2026-08-25**: räknemotorn i `src/lib/provision-motor.ts`, ren logik, `tests/provision-motor.mjs`. Rättade samtidigt ett räknefel i steg 1 — se arbetsloggen | Steg 1 |
+| 3 | **KLART 2026-08-25** (migration `0035`): volymtrappan som konfiguration på `/provision/regler`, retroaktivitet, periodstängning med bokföring i `commission_entry` | Steg 2 |
 | 4 | Säljarens progressvy | Steg 3 |
 | 5 | K&V: tabeller, rutnät, bedömningsformulär, utvecklingskurva, bonus | Steg 2 |
 | 6 | Konsekvenssystemet | Steg 3 |

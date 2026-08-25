@@ -82,6 +82,20 @@ export type Underlag = {
   antal: { signerade: number; makulerade: number; netto: number };
 
   grundprovision: number;
+
+  /** Nivan manaden landade pa, eller null nar den lagsta troskeln inte natts. */
+  volymbonus: { niva: Bonusniva; belopp: number } | null;
+
+  /**
+   * Nasta niva och hur langt dit. Prognosen i saljarens progressvy.
+   *
+   * Star med i UNDERLAGET och inte bara i vyn for att den ska raknas ur samma
+   * trappa som bonusen. En "kvar till nasta niva" som vyn raknar fram sjalv ar
+   * en andra tolkning av trappan, och den dagen de sager olika saker ar det
+   * inte uppenbart vilken som har ratt.
+   */
+  nasta: { niva: Bonusniva; kvar: number } | null;
+
   summa: number;
 };
 
@@ -129,6 +143,117 @@ function makuleringstext(o: Order): string {
 }
 
 // -----------------------------------------------------------------------------
+// Volymtrappan — steg 3
+//
+// INGET BELOPP OCH INGEN NIVA STAR I DEN HAR FILEN. Trapporna 5/10/15/20/25/30
+// och deras belopp ar rader i `commission_bonus_level` (0035) och kommer hit som
+// argument. Ingenting seedas: en gissad bonus ser ratt ut och blir tyst sanning,
+// samma resonemang som tackningsgraden i 0025.
+// -----------------------------------------------------------------------------
+
+export const BONUSENHETER = ["amount_fixed", "percent", "amount_per_order"] as const;
+export type Bonusenhet = (typeof BONUSENHETER)[number];
+
+export type Bonusniva = {
+  id: string;
+  /** Antalet order som kravs. 5, 10, 15 ... */
+  threshold: number;
+  amount: number;
+  unit: Bonusenhet;
+  valid_from: string;
+  valid_to: string | null;
+};
+
+/**
+ * Trappan som galler for en MANAD.
+ *
+ * ===========================================================================
+ * UPPSLAGET SKER PA MANADENS FORSTA DAG, inte pa orderns signeringsdatum.
+ *
+ * Skillnaden mot `gallandeSats` i `order.ts` ar avsiktlig och foljer av vad de
+ * tva ar. Provisionssatsen ar en egenskap hos EN ORDER och slas darfor upp pa
+ * den orderns datum. Volymbonusen ar en egenskap hos HELA MANADEN — nivan
+ * bestams av manadens samlade ordervolym — och en trappa som byter form mitt i
+ * manaden gar darfor inte att tillampa "per order" utan att bli obegriplig.
+ *
+ * Det gor ocksa bestallarens tre val i avsnitt 8.1 entydiga:
+ *
+ *   "Galler allt intjanat denna manad"  -> valid_from = den 1:a  -> slar igenom nu
+ *   "Galler fran och med nu"            -> valid_from = i dag    -> slar igenom nasta manad
+ *   "Galler fran och med nasta manad"   -> valid_from = nasta 1:a -> slar igenom nasta manad
+ *
+ * De tva sista sammanfaller mitt i en manad och skiljer sig den 1:a, vilket ar
+ * ratt: den som andrar trappan pa forsta dagen menar den manaden.
+ *
+ * Regeln star inte i specifikationen — den var inte stalld. Se O16.
+ * ===========================================================================
+ */
+export function gallandeNivaer(nivaer: Bonusniva[], manad: string): Bonusniva[] {
+  return nivaer
+    .filter((n) => n.valid_from <= manad && (n.valid_to === null || n.valid_to > manad))
+    .sort((a, b) => a.threshold - b.threshold);
+}
+
+/**
+ * Nivan ett antal order nar.
+ *
+ * Den HOGSTA troskel raknaren natt eller passerat (avsnitt 5.2). Under den
+ * lagsta troskeln finns ingen niva — `null`, aldrig en niva med beloppet noll.
+ *
+ * NIVAN BLIR ALDRIG NEGATIV. Ett negativt ordersaldo — fler makuleringar an
+ * order i manaden — ger ingen niva alls. Provisionsavdraget sker anda; det ar
+ * grundprovisionen som bar det, inte bonusen.
+ *
+ * `nivaer` forvantas redan vara filtrerad genom `gallandeNivaer`.
+ */
+export function nivaFor(nivaer: Bonusniva[], antal: number): Bonusniva | null {
+  const natta = nivaer.filter((n) => antal >= n.threshold);
+  if (natta.length === 0) return null;
+  return natta.reduce((hogst, n) => (n.threshold > hogst.threshold ? n : hogst));
+}
+
+/**
+ * Nasta niva och hur langt dit. Underlaget till "3 order kvar till nasta bonus"
+ * i saljarens progressvy (avsnitt 9.1).
+ *
+ * `null` nar trappan ar slut — over 30 star den still (avsnitt 5.3), och da ar
+ * ratt svar i vyn att det inte finns nagon nasta niva, inte en nolla som ser ut
+ * som "du ar framme".
+ */
+export function kvarTillNasta(
+  nivaer: Bonusniva[],
+  antal: number,
+): { niva: Bonusniva; kvar: number } | null {
+  const kommande = nivaer.filter((n) => n.threshold > antal).sort((a, b) => a.threshold - b.threshold);
+  if (kommande.length === 0) return null;
+  return { niva: kommande[0], kvar: kommande[0].threshold - antal };
+}
+
+/**
+ * Bonusbeloppet for en niva. OAVRUNDAT — avrundningen sker en gang, pa den
+ * fardiga raden (avsnitt 5.4).
+ *
+ * RETROAKTIVITETEN LIGGER HAR (avsnitt 5.2): bonusen pa en uppnadd niva galler
+ * SAMTLIGA order i perioden, inte bara de over troskeln. Nas niva 10 far alla
+ * tio orderna niva 10:s belopp — darfor multipliceras `amount_per_order` med
+ * hela `antal` och inte med antalet over troskeln.
+ */
+export function volymbonusBelopp(
+  niva: Bonusniva,
+  antal: number,
+  grundprovision: number,
+): number {
+  switch (niva.unit) {
+    case "amount_fixed":
+      return niva.amount;
+    case "percent":
+      return (grundprovision * niva.amount) / 100;
+    case "amount_per_order":
+      return niva.amount * antal;
+  }
+}
+
+// -----------------------------------------------------------------------------
 // Motorn
 // -----------------------------------------------------------------------------
 
@@ -153,6 +278,7 @@ export function raknaUnderlag(
   employee_id: string,
   order: Order[],
   manad: string,
+  nivaer: Bonusniva[] = [],
 ): Underlag {
   const mina = forSaljare(order, employee_id);
 
@@ -179,19 +305,40 @@ export function raknaUnderlag(
     })),
   ];
 
+  const antal = {
+    signerade: signerade.length,
+    makulerade: makulerade.length,
+    netto: signerade.length - makulerade.length,
+  };
+
+  // Samma tal som orderraderna ger. Det star som eget falt for att
+  // procentbonusen raknas PA det, och for att en avvikelse mellan de tva ar ett
+  // fel som ska ga att se — provet kontrollerar att de aldrig glider isar.
+  const grund = grundprovision(mina, manad);
+
+  const trappa = gallandeNivaer(nivaer, manad);
+  const niva = nivaFor(trappa, antal.netto);
+
+  const volymbonus = niva
+    ? { niva, belopp: avrunda(volymbonusBelopp(niva, antal.netto, grund)) }
+    : null;
+
+  if (volymbonus) {
+    rader.push({
+      slag: "volymbonus",
+      text: `Volymbonus nivå ${volymbonus.niva.threshold}, ${antal.netto} order`,
+      belopp: volymbonus.belopp,
+    });
+  }
+
   return {
     employee_id,
     manad,
     rader,
-    antal: {
-      signerade: signerade.length,
-      makulerade: makulerade.length,
-      netto: signerade.length - makulerade.length,
-    },
-    // Samma tal som raderna ger. Det star som eget falt for att steg 3 raknar
-    // procentbonus PA det, och for att en avvikelse mellan de tva ar ett fel
-    // som ska ga att se — provet kontrollerar att de aldrig glider isar.
-    grundprovision: grundprovision(mina, manad),
+    antal,
+    grundprovision: grund,
+    volymbonus,
+    nasta: kvarTillNasta(trappa, antal.netto),
     summa: summaAv(rader),
   };
 }
@@ -203,11 +350,90 @@ export function raknaUnderlag(
  * personer efter vad de tjanat blir en rangordning, och det ar inte vad vyn
  * ar till for. Sortering pa namn gors av vyn, som ar den som har namnen.
  */
-export function underlagForAlla(order: Order[], manad: string): Underlag[] {
+export function underlagForAlla(
+  order: Order[],
+  manad: string,
+  nivaer: Bonusniva[] = [],
+): Underlag[] {
   const personer = new Set<string>();
   for (const o of [...orderIPeriod(order, manad), ...makuleradeIPeriod(order, manad)]) {
     personer.add(o.salesperson_id);
   }
 
-  return [...personer].sort().map((id) => raknaUnderlag(id, order, manad));
+  return [...personer].sort().map((id) => raknaUnderlag(id, order, manad, nivaer));
+}
+
+// -----------------------------------------------------------------------------
+// Bokforingen — det underlaget blir nar perioden stangs
+//
+// ===========================================================================
+// EN OPPEN PERIOD RAKNAS LIVE. EN STANGD PERIOD AR BOKFORD.
+//
+// Avsnitt 5.5 i specifikationen, och skalet ar att bada svaren behovs:
+//
+//   Oppen manad  — bonusen andrar sig hela tiden. Order elva hojer bonusen pa
+//                  order ett till tio. Vyn maste darfor rakna om varje gang
+//                  nagon tittar, annars visar den fel tal.
+//   Stangd manad — siffran maste sta stilla. Raknas den om ur konfigurationen
+//                  andrar en ny bonusniva vad nagon fick betalt i augusti.
+//
+// Bokforingen ar overgangen mellan de tva. Efter den ar `commission_entry`
+// sanningen om manaden och motorn rors aldrig mer for den.
+// ===========================================================================
+// -----------------------------------------------------------------------------
+
+export type Bokforingspost = {
+  slag: Radslag;
+  belopp: number;
+  /** `commission_entry.deals`. Null nar antalet inte betyder nagot for posten. */
+  antal: number | null;
+  text: string;
+};
+
+/**
+ * Underlaget som poster i huvudboken. En post per slag, inte en per order.
+ *
+ * Skalet ar att huvudboken ar en HUVUDBOK: den svarar pa vad som bokforts, och
+ * orderraderna finns redan i `sales_order` med sina egna id:n. Att kopiera dit
+ * dem hade gett tva stallen som bada pastar sig veta vad manaden bestod av.
+ *
+ * NOLLPOSTER HOPPAS OVER. En bokford nolla ar ingen upplysning, och i en
+ * append-only tabell gar den inte att stada bort efterat.
+ */
+export function bokforingsposter(u: Underlag): Bokforingspost[] {
+  const poster: Bokforingspost[] = [];
+
+  const av = (slag: Radslag) => u.rader.filter((r) => r.slag === slag);
+
+  const order = av("order");
+  if (order.length > 0) {
+    poster.push({
+      slag: "order",
+      belopp: summaAv(order),
+      antal: u.antal.signerade,
+      text: `Grundprovision, ${u.antal.signerade} order`,
+    });
+  }
+
+  const makulering = av("makulering");
+  if (makulering.length > 0) {
+    // `deals` ar null och inte ett negativt tal: kolumnen har `check (deals >= 0)`
+    // i 0031, och antalet makulerade order star anda i texten.
+    poster.push({
+      slag: "makulering",
+      belopp: summaAv(makulering),
+      antal: null,
+      text: `Makulering, ${u.antal.makulerade} order`,
+    });
+  }
+
+  for (const slag of ["volymbonus", "kv_bonus", "ovrig_bonus", "avdrag"] as const) {
+    const rader = av(slag);
+    if (rader.length === 0) continue;
+    const belopp = summaAv(rader);
+    if (belopp === 0) continue;
+    poster.push({ slag, belopp, antal: null, text: rader.map((r) => r.text).join("; ") });
+  }
+
+  return poster;
 }

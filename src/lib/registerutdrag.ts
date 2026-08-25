@@ -209,4 +209,11 @@ export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
   { tabell: "sales_order", kolumn: "approved_by", skal: "Vem som godkände ordern" },
   { tabell: "sales_order", kolumn: "cancelled_by", skal: "Vem som makulerade ordern" },
   { tabell: "commission_rate", kolumn: "set_by", skal: "Vem som satte provisionssatsen" },
+
+  // 0035 E13 steg 3. Tre roller kring reglerna och perioden, ingen av dem en
+  // uppgift OM den person raden pekar pa. Det den anstallda sjalv tjanat star i
+  // `commission_entry`, som ligger i KALLOR.
+  { tabell: "commission_bonus_level", kolumn: "set_by", skal: "Vem som satte bonusnivån" },
+  { tabell: "commission_period", kolumn: "closed_by", skal: "Vem som fastställde perioden" },
+  { tabell: "commission_period", kolumn: "paid_by", skal: "Vem som markerade utbetalningen" },
 ];

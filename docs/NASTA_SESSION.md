@@ -3,7 +3,7 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-08-24 (E13-specifikationen)
+**Senast uppdaterad:** 2026-08-25 (E13 steg 2 och 3)
 
 ---
 
@@ -19,26 +19,74 @@ K12-frågan avgjordes 2026-08-24 — se **D-K12**. Rast och sen ankomst når
 fortfarande aldrig provisionen; utebliven instämpling gör det, men bara via ett
 förslag som chefen måste godkänna.
 
-**Steg 1 är klart 2026-08-25** (migration `0034`): `sales_order`,
-`commission_rate` och `/order`. **Steg 2–8 återstår**, och bonusen räknas inte
-än — volymtrappan är steg 3.
+**Steg 1, 2 och 3 är klara 2026-08-25** (migrationerna `0034` och `0035`).
+Grundprovisionen, räknemotorn, volymtrappan och periodstängningen finns.
+**Steg 4–9 återstår.**
 
-### Tre saker att inte riva i steg 2 och framåt
+### Nästa steg, i den ordning de går att ta
 
-1. **Makuleringen bokförs i makuleringsmånaden**, via den egna genererade
-   kolumnen `cancel_period_month`. Det är det som gör att en stängd period
-   aldrig behöver skrivas om. Nettoantalet kan bli negativt, och det är avsiktligt.
+| Steg | Vad | Blockerat av |
+|---|---|---|
+| **4** | Säljarens progressvy: "3 order kvar till nästa bonus" | Ingenting. Motorn har redan `nasta` i underlaget |
+| **5** | K&V | **Ö4 — fråga beställaren först, se nedan** |
+| **6** | Konsekvenssystemet | Ingenting sedan D-K12. Men se **Ö8** och **Ö15** |
+| 7 | Export och separat provisionsunderlag | Ingenting |
+| 8 | Dialer-API för K&V-urvalet | A6 |
+| 9 | Orderbilagan: PDF-uppladdning | Ingenting, men egen migration som vidgar `file_object` |
+
+**Steg 4 är det som ger mest per timme.** Motorn räknar redan ut allt den
+behöver; det som saknas är vyn.
+
+### Beställaren måste svara på Ö4 innan steg 5 byggs
+
+Svaret var "200", men det finns tre läsningar och bara en av dem gör 160 poäng
+till ett godkäntbetyg:
+
+| Läsning | Maxpoäng | 160 motsvarar |
+|---|---|---|
+| 200 per område | 2 400 | 6,7 % — tröskeln nås alltid |
+| 200 per samtal | 400 | 40 % |
+| **200 totalt för båda samtalen** | **200** | **80 %** |
+
+Motorn läser talen ur konfigurationen och bryr sig inte. Det som inte går att
+bygga utan svaret är **inställningssidan**, som ska visa vad tröskeln motsvarar i
+procent medan man skriver — det är den kontrollen som gör att en omöjlig skala
+inte går att spara av misstag.
+
+**Ö8, Ö12, Ö13 och Ö15** är också obesvarade. Ö8 (faller övrig bonus vid en
+konsekvens?) blir aktuell i steg 6.
+
+### Fem saker att inte riva
+
+1. **En makulering är TVÅ händelser.** Ordern ger provision i sin
+   signeringsmånad och drar tillbaka den i sin makuleringsmånad. Använd
+   `harGodkants()` och aldrig `raknas()` när det handlar om pengar — se
+   arbetsloggen 2026-08-25 (kväll) för de två felen som uppstod när de blandades
+   ihop. Nettoantalet kan bli negativt, och det är avsiktligt.
 2. **Provisionen är frusen på ordern.** Satsen slås upp på signeringsdatumet och
    kopieras in vid godkännande. Läs aldrig `commission_rate` för att räkna om en
    gammal order.
-3. **`revoke ... from public` räcker inte för en ny funktion.** Supabase har en
+3. **Volymtrappan slås upp på MÅNADENS första dag**, inte på orderns datum. De
+   två uppslagen är olika med flit — se Ö16 i specifikationen. Blandas de ihop
+   blir "från och med nu" och "allt intjänat denna månad" samma sak.
+4. **En öppen period räknas live, en stängd är bokförd.** Och "öppen" är
+   frånvaron av en rad i `commission_period`. Attesten bokför posterna FÖRST och
+   stänger perioden SEDAN; den ordningen är det som gör ett halvfärdigt försök
+   möjligt att köra om.
+5. **`revoke ... from public` räcker inte för en ny funktion.** Supabase har en
    egen default-ACL som ger `anon` en explicit grant. Skriv
    `revoke all ... from public, anon`. Migrationen 0034 föll på sin egen
    självkontroll första gången just där — behåll kontrollen i nya migrationer.
 
-Fem öppna punkter kvar i avsnitt 10 i specifikationen. Den som betyder något är
-**Ö4: vad 200 poäng betyder i K&V** — per område ger maxpoäng 2 400 och gör
-tröskeln 160 till 6,7 %, alltså alltid uppnådd.
+### Beställaren måste fylla i volymtrappan innan bonusen gör något
+
+`/provision/regler`, säljchef och VD. **Tabellen är tom med flit** — nivåerna
+5/10/15/20/25/30 är beställarens, men beloppen är inte satta (fråga 18). Tills
+någon fyller i dem räknar motorn noll bonus, aldrig en gissad. Samma linje som
+täckningsgraden i `0025`.
+
+Det är den enda av de nya funktionerna som inte gör något förrän du matat in
+innehåll.
 
 ---
 
@@ -73,8 +121,11 @@ tröskeln 160 till 6,7 %, alltså alltid uppnådd.
 set -a && . $HOME/.clicknet/nav.env && set +a && npm test
 ```
 
-Tjugosex sviter. `tests/rls.mjs` går mot den **riktiga**
+Tjugoåtta sviter. `tests/rls.mjs` går mot den **riktiga**
 databasen och skapar och städar sina egna användare (prefix `rlstest+`).
+Även `tests/provision-period-db.mjs` går mot den riktiga databasen — den kör allt
+i en transaktion som rullas tillbaka, och kontrollerar till sist att ingenting
+blev kvar.
 
 Sviten var **grön** när passet 2026-08-23 började, och när det slutade.
 
@@ -129,6 +180,9 @@ i `rls.mjs`.** Samtliga 105 i den filen plus 51 i övriga sviter. Leta inte om:
 | **Rekrytering** | **I drift sedan 2026-08-23.** `/rekrytering`. Steg, scorecards, tratt per källa. Behörighet `recruiter` eller ledningsroll |
 | **Anställningsflöde** | **I drift sedan 2026-08-24.** `/rekrytering/[id]/anstall`. Konto, roll, rutiner, kurser, avtalsutkast och onboarding-checklista i ett steg |
 | **Provision** | **I drift sedan 2026-08-23.** `/provision`. Manuell inmatning av ekonomi/VD. Alla ser sin egen. Inkio-sömmen lagd, inte kopplad |
+| **Kundorder** | **I drift sedan 2026-08-25.** `/order`. Paketmatrisen i `commission_rate`, provisionen fryses vid godkännande |
+| **Volymtrappan** | **I drift sedan 2026-08-25.** `/provision/regler`, säljchef och VD. **Tom tills beställaren fyller i beloppen** |
+| **Periodstängning** | **I drift sedan 2026-08-25.** Kort på `/provision`. Öppen månad räknas live, fastställd är bokförd |
 
 ### Raststämplingen: två steg kvar, och båda är dina
 
@@ -787,9 +841,14 @@ bygga.
 **Byggt 2026-08-23:** `commission_entry`, `/provision`, kortet på startsidan.
 Manuell inmatning av ekonomi och VD.
 
-**Kvar och blockerat:** provisionsREGLERNA (Q78–Q80) och Inkio-importen (A5).
-Sömmen för importen finns — `source = 'inkio'` och `external_ref` — så
-integrationen kan skrivas utan schemaändring.
+**Byggt 2026-08-25:** steg 1–3. Kundordern, räknemotorn, volymtrappan och
+periodstängningen. **Q78–Q80 är besvarade och E13 är inte blockerad längre** —
+paketmatrisen ligger i `commission_rate`.
+
+**Kvar och blockerat:** bara Inkio-importen (A5). Sömmen finns —
+`source = 'inkio'` och `external_ref` — så integrationen kan skrivas utan
+schemaändring. Huvudboken har sedan `0035` en tredje källa, `motor`, som
+periodstängningen använder.
 
 **Villkoren som styrde E15 gäller fortfarande E13:**
 
@@ -827,8 +886,11 @@ att bli tillfrågad.
   (2026-08-22) och `contract` är förberedd — signeringen blir ett steg efter
   `issued`.
 - **E15:** vem äger arbetsgivaravgift, pension och försäkringssatser.
-- **Q78–Q80** provision. Blockerar E13.
-- **A5** Inkio, **A6** dialer. Blockerar E11 och E12.
+- **Ö4** vad 200 poäng betyder i K&V. **Blockerar E13 steg 5** — se ovan.
+- **Ö8, Ö12, Ö13, Ö15** i `docs/PROVISION_SPEC.md`. Ö8 blir aktuell i steg 6.
+- **Ö16** vilken volymtrappa som gäller för en månad en ändring skär igenom.
+  Byggd med ett förslag som gäller tills annat sägs.
+- **A5** Inkio, **A6** dialer. Blockerar E11, E12 och E13 steg 8.
 - **Personnumret i anställningsavtalet.** Navet lagrar inget (K27), så
   utskriften har en rad som fylls i för hand. Vill du ändra det är det
   K27-linjen som ska omprövas, inte avtalsmodulen.

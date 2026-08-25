@@ -5,6 +5,167 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-08-25 (kväll) · E13 steg 2 och 3: räknemotorn, volymtrappan och periodstängningen
+
+Två leveranser, ett räknefel i det som redan låg i produktion, och en fråga som
+aldrig var ställd. Migration `0035`.
+
+### Räknefelet i steg 1: en makulering är två händelser, inte en
+
+Det här är passets viktigaste rad, och det hittades genom att bygga motorn ovanpå
+steg 1 i stället för att lita på att steg 1 var rätt.
+
+En order ger provision i sin **signeringsmånad** och drar tillbaka den i sin
+**makuleringsmånad**. Det är hela poängen med två månadskolumner, och det är det
+som gör att en stängd period aldrig behöver skrivas om.
+
+`orderIPeriod` räknade signeringsbidraget på `raknas()`, som är falskt för
+`makulerad`. Alltså försvann den första av de två händelserna i det ögonblick
+statusen ändrades, och två fel följde:
+
+| Fall | Gav | Skulle ge |
+|---|---|---|
+| Order signerad **och** makulerad i augusti | **−1 500 kr** | 0 kr |
+| Order från mars, makulerad i augusti — vad säger **mars**? | **0 kr** | 3 000 kr |
+
+Det första bokför pengar tillbaka som aldrig betalades ut. Det andra är värre:
+det **räknar om mars**, en stängd och attesterad period, vilket är exakt det
+avsnitt 4.4 i specifikationen säger aldrig får ske. Ordern hade gett 3 000 kr i
+mars och gav plötsligt noll — bara för att någon makulerade den fem månader
+senare.
+
+Rättat med `harGodkants()`, som är sann även för `makulerad`. Statusen är ett
+giltigt bevis på att ordern en gång godkändes: både stegtriggern i `0034` och
+villkoret `sales_order_provision_satt` garanterar att `makulerad` bara nås via
+`signerad`.
+
+**Tre påståenden i `tests/order.mjs` kodade in felet** och var alltså gröna på
+fel svar. Ett av dem hette till och med "mars star oforandrat pa noll" — mars
+stod aldrig på noll, den stod på 3 000. Ett prov som beskriver felet i klartext
+och ändå passerar är den dyraste sortens prov.
+
+### Motorn returnerar ett underlag, inte ett tal
+
+`src/lib/provision-motor.ts`. Beställarens krav i avsnitt 12: både säljaren och
+chefen ska kunna se **varför** en summa blev som den blev.
+
+`summa` är radernas summa och ingenting mer. En funktion som svarar `12400` går
+inte att ifrågasätta och därmed inte att lita på — den första gången någon tycker
+att siffran är fel finns det ingenting att peka på. Provet kontrollerar på varje
+ställe att de två aldrig glider isär.
+
+Filen importerar ingenting från Supabase. Reglerna kommer in som argument, och
+provet kör motorn utan att starta Next — samma linje som `raster.ts`,
+`lonekostnad.ts` och `franvaro.ts`.
+
+### Avrundningen går bort från nollan åt båda hållen
+
+`Math.round` ensamt avrundar mot plus oändligheten: −1 500,50 blir −1 500. Följden
+hade varit att varje **avdrag** är systematiskt snällare mot bolaget än ett lika
+stort **tillägg**. Ingen hade sett det; alla belopp i paketmatrisen är jämna
+kronor. Det dyker upp först den dag någon sätter en procentsats.
+
+Avrundningen sker **en gång, på den färdiga bonusraden** (avsnitt 5.4). Trettio
+örebelopp som avrundas var för sig blir upp till trettio kronors avvikelse.
+
+### Volymtrappan: retroaktiviteten ligger i multiplikationen
+
+Nås nivå 10 får **alla tio** orderna nivå 10:s belopp, inte bara de över
+tröskeln (avsnitt 5.2). Med `amount_per_order` betyder det `belopp × hela
+antalet`, inte `belopp × antalet över tröskeln`. Det är den enda formen där
+ordet "retroaktiv" har en synlig innebörd i själva beloppet.
+
+Nivån blir **aldrig negativ**. Ett negativt ordersaldo — fler makuleringar än
+order i månaden — ger ingen nivå alls, men provisionsavdraget sker ändå.
+
+**Ingenting seedas.** `commission_bonus_level` föds tom, för beställaren har satt
+nivåerna men inte vad de är värda (fråga 18). Tills någon fyller i den ger motorn
+noll bonus. Samma linje som täckningsgraden i `0025`: en nolla i vyn syns, ett
+standardvärde ser rätt ut och blir tyst sanning.
+
+### Ö16: en fråga som aldrig ställdes
+
+Vilken trappa gäller för en månad som en ändring skär igenom? Specifikationen
+svarar inte, för frågan var inte ställd.
+
+Byggt så att **trappan slås upp på månadens första dag**, och skillnaden mot
+`commission_rate` följer av vad de två är. Provisionssatsen är en egenskap hos
+**en order** och slås upp på den orderns datum. Volymbonusen är en egenskap hos
+**hela månaden** — nivån bestäms av månadens samlade volym — och en trappa som
+byter form mitt i månaden går inte att tillämpa per order utan att bli
+obegriplig.
+
+Det gör dessutom beställarens tre val i avsnitt 8.1 entydiga. "Från och med nu"
+och "från och med nästa månad" sammanfaller mitt i en månad och skiljer sig den
+1:a, vilket är rätt: den som ändrar trappan på första dagen menar den månaden.
+
+Står som **Ö16** i specifikationen med förslaget gällande tills annat sägs, och
+med vad som ska ändras om beställaren vill ha det annorlunda.
+
+### Periodstängningen: två sätt att svara på samma fråga
+
+En **öppen** månad räknas live ur orderna. Den måste det — order elva höjer
+bonusen på order ett till tio, så varje ny order ändrar hela månadens siffra.
+
+En **stängd** månad är bokförd i `commission_entry` och räknas aldrig om. Den
+måste det — annars ändrar en bonusnivå som sätts i november vad någon fick betalt
+i augusti.
+
+**Öppen är frånvaron av en rad.** `commission_period` bär bara stängda perioder.
+En rad med status `oppen` hade varit ett tillstånd utan innebörd som någon förr
+eller senare glömt att skapa, och då hade en månad utan rad blivit tvetydig i
+stället för öppen.
+
+**Ordningen i attesten är medveten: posterna först, perioden sedan.** Faller det
+mitt i står månaden kvar som öppen med sina poster bokförda, och ett nytt försök
+går igenom — det partiella unika indexet på `(source, external_ref)` nekar en
+andra bokföring av samma sak, och den kollisionen behandlas som "redan bokfört" i
+stället för som ett fel. Omvänd ordning hade gett en stängd period utan poster,
+som varken går att räkna live eller att bokföra om.
+
+Referensen är `manad:person:slag`, alltså deterministisk. Det är den som gör
+attesten idempotent.
+
+Huvudboken fick en tredje källa, `motor`, vid sidan av `manual` och `inkio`.
+
+### Två kretsar, inte en
+
+| Funktion | Vem | Uppgift |
+|---|---|---|
+| `far_hantera_provision()` | säljchef, ekonomi, VD | **ser** andras provision, **fastställer** period |
+| `far_andra_provisionsregler()` | säljchef, VD | **ändrar** trappan |
+
+Ekonomi ser men ändrar inte (avsnitt 2). Den som betalar ut ska inte också vara
+den som bestämmer vad som ska betalas ut. Handinmatningen på `/provision` är
+kvar hos ekonomi och VD som förut.
+
+### Fällan från 0034 höll på att bita igen
+
+`revoke ... from public` räcker inte — Supabase har en egen default-ACL som ger
+`anon` en explicit grant på varje ny funktion. `0035` skriver `from public, anon`
+och avslutas med samma självkontroll som `0032` och `0034`.
+
+Självkontrollen i `0035` gör dessutom en sak till: den **provar att bokföra en
+`motor`-post och rullar tillbaka den**. Går det fel står ett gammalt
+check-villkor kvar under ett namn slingan inte hittade, och då hade
+periodstängningen fallit först i produktionen.
+
+### Prov
+
+- `tests/provision-motor.mjs` — 104 kontroller, ren logik, ingen databas.
+- `tests/provision-period-db.mjs` — 16 kontroller mot den **riktiga** databasen.
+  Triggrarna och villkoren ligger i databasen och gäller därför även service
+  role; en regel som bara finns i en server action är en regel nästa server
+  action inte känner till. Allt rullas tillbaka, och provet kontrollerar till
+  sist att ingenting blev kvar.
+
+Fällan i det andra provet är värd att minnas: `pg` ger ett `date` som en JS-Date
+på lokal midnatt, och `toISOString()` flyttar den till UTC — i svensk sommartid
+två timmar bakåt, alltså till dagen innan. Den 1 juli blev "2026-06-30" och
+villkoret föll. Datumen hämtas nu som text ur databasen.
+
+---
+
 ## 2026-08-25 · E13 steg 1: kundordern, och regelverket bakom hela bonusbygget
 
 Beställaren beskrev fem sammanhängande delar — manuell order- och
