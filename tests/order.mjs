@@ -127,14 +127,37 @@ console.log("\nMakuleringen belastar makuleringsmanaden");
     order({ id: "c", signerad: "2026-08-07", belopp: 2500 }),
   ];
 
-  ok("mars raknar inga signerade order kvar", orderIPeriod(rader, "2026-03-01").length === 0);
+  // MARS STAR KVAR PA SITT EGET TAL. Ordern signerades dar och gav provision
+  // dar; makuleringen ar ett avdrag i AUGUSTI. Att lata makuleringen rensa bort
+  // signeringsbidraget hade raknat om en stangd period — precis det avsnitt 4.4
+  // sager aldrig far ske. Provet lag fel till 2026-08-25.
+  ok("mars behaller sin signerade order", orderIPeriod(rader, "2026-03-01").length === 1);
+  ok("mars star kvar pa 3000", grundprovision(rader, "2026-03-01") === 3000);
+
   ok("augusti har tva signerade", orderIPeriod(rader, "2026-08-01").length === 2);
   ok("makuleringen ligger i augusti", makuleradeIPeriod(rader, "2026-08-01").length === 1);
   ok("mars belastas inte av makuleringen", makuleradeIPeriod(rader, "2026-03-01").length === 0);
 
   ok("augusti nettoantal blir 1", nettoAntal(rader, "2026-08-01") === 1);
   ok("augusti grundprovision blir 1000", grundprovision(rader, "2026-08-01") === 1500 + 2500 - 3000);
-  ok("mars star oforandrat pa noll", grundprovision(rader, "2026-03-01") === 0);
+}
+
+console.log("\nSignerad och makulerad i SAMMA manad tar ut varandra");
+{
+  // Bagge handelserna ligger i augusti: +1500 nar den godkandes, -1500 nar den
+  // makulerades. Netto noll. Raknas bara avdraget bokfors pengar tillbaka som
+  // aldrig betalades ut.
+  const rader = [
+    order({ id: "a", signerad: "2026-08-05", status: "makulerad", belopp: 1500, makuleradManad: "2026-08-01" }),
+    order({ id: "b", signerad: "2026-08-06", belopp: 2500 }),
+  ];
+
+  ok("nettoantalet blir 1, inte 0", nettoAntal(rader, "2026-08-01") === 1);
+  ok("grundprovisionen blir 2500, inte 1000", grundprovision(rader, "2026-08-01") === 2500);
+
+  const bara = [rader[0]];
+  ok("en ensam sadan order ger 0, inte -1500", grundprovision(bara, "2026-08-01") === 0);
+  ok("och nettoantalet 0, inte -1", nettoAntal(bara, "2026-08-01") === 0);
 }
 
 console.log("\nFler makuleringar an order ger ett negativt saldo");
@@ -246,7 +269,12 @@ console.log("\nManadslistan");
   ok("nyast forst", m[0] === "2026-08-01");
   ok("utkastets manad kommer inte med", !m.includes("2026-07-01"));
   ok("makuleringsmanaden kommer med", m.includes("2026-08-01"));
-  ok("tva manader totalt", m.length === 2, m.join(", "));
+
+  // MARS AR MED, och det ar ratt: ordern tjanades in dar. Att makuleringen
+  // ligger i augusti tar inte bort manaden ur historiken — den som tjanade
+  // 3000 kr i mars ska se mars i sin lista. Provet lag fel till 2026-08-25.
+  ok("signeringsmanaden finns kvar aven efter makulering", m.includes("2026-03-01"));
+  ok("tre manader totalt", m.length === 3, m.join(", "));
 }
 
 console.log(fel === 0 ? "\n\x1b[32mAllt gront.\x1b[0m\n" : `\n\x1b[31m${fel} fel.\x1b[0m\n`);

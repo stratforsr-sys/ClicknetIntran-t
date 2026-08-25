@@ -96,9 +96,39 @@ export function garOvergang(fran: Orderstatus, till: Orderstatus): boolean {
   return OVERGANGAR[fran].includes(till);
 }
 
-/** Raknas ordern med i provision och volymtrappa? */
+/** Ar ordern en levande affar just nu? Anvands till listor och kon, inte till pengar. */
 export function raknas(status: Orderstatus): boolean {
   return status === "signerad" || status === "betald";
+}
+
+/**
+ * Har ordern NAGON GANG godkants? Det ar det har talet pengarna raknas pa.
+ *
+ * ===========================================================================
+ * SKILLNADEN MOT `raknas` ar hela makuleringsmodellen, och den var fel i
+ * steg 1 (rattad 2026-08-25 i steg 2).
+ *
+ * En makulering ar TVA handelser, inte en: ordern gav provision i sin
+ * signeringsmanad, och drar tillbaka den i makuleringsmanaden. De tva bokfors
+ * i olika manader med flit — det ar det som gor att en stangd period aldrig
+ * behover skrivas om.
+ *
+ * Raknas signeringsbidraget pa `raknas` forsvinner det forsta av de tva i det
+ * ogonblick statusen blir `makulerad`, och da uppstar tva fel:
+ *
+ *   1. En order som signeras OCH makuleras i samma manad gav -1500 i stallet
+ *      for 0. Avdraget bokfordes mot ett tillagg som aldrig fanns.
+ *   2. En order fran mars som makuleras i augusti fick MARS att raknas om
+ *      fran 3000 till 0. Precis det avsnitt 4.4 i specifikationen sager aldrig
+ *      far ske: "Mars rors aldrig."
+ *
+ * `makulerad` naddes alltid via `signerad` — bade stegtriggern i 0034 och
+ * villkoret `sales_order_provision_satt` garanterar det — sa statusen ar ett
+ * giltigt bevis pa att ordern en gang godkandes.
+ * ===========================================================================
+ */
+export function harGodkants(status: Orderstatus): boolean {
+  return status === "signerad" || status === "betald" || status === "makulerad";
 }
 
 // -----------------------------------------------------------------------------
@@ -162,9 +192,12 @@ export function provisionFor(
  * En order hor till manaden den SIGNERADES i. Godkannandet kan komma senare och
  * flyttar ingenting — det ar hela skalet till att `period_month` ar en genererad
  * kolumn ur `signed_on` i databasen.
+ *
+ * EN MAKULERAD ORDER LIGGER KVAR HAR. Se `harGodkants`: makuleringen ar ett
+ * eget avdrag i sin egen manad, inte ett suddgummi over signeringsmanaden.
  */
 export function orderIPeriod(order: Order[], manad: string): Order[] {
-  return order.filter((o) => raknas(o.status) && o.period_month === manad);
+  return order.filter((o) => harGodkants(o.status) && o.period_month === manad);
 }
 
 /**
@@ -209,7 +242,7 @@ export function grundprovision(order: Order[], manad: string): number {
 export function manaderMedOrder(order: Order[]): string[] {
   const alla = new Set<string>();
   for (const o of order) {
-    if (raknas(o.status)) alla.add(o.period_month);
+    if (harGodkants(o.status)) alla.add(o.period_month);
     if (o.cancel_period_month) alla.add(o.cancel_period_month);
   }
   return [...alla].sort().reverse();
