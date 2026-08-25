@@ -552,6 +552,10 @@ Varje steg är en egen leverans med prov på räknemotorn innan nästa börjar.
 | 6 | Konsekvenssystemet | Steg 3 |
 | 7 | Export, separat provisionsunderlag | Steg 3 |
 | 8 | Dialer-API för K&V-urvalet | A6 |
+| 9 | **Orderbilagan:** PDF-uppladdning och förifyllning ur avtalet. Egen migration som vidgar `file_object` (0022) — den tabellen bär läkarintyg, så det stänger inte på ordermigrationen. Utläsningen ska **förifylla formuläret, aldrig spara direkt** | Steg 1 |
+
+**Steg 2 och 3 är inte blockerade av något.** Steg 5 väntar på Ö4, steg 8 på A6.
+Steg 6 kräver ingenting mer sedan D-K12.
 
 **Räknemotorn ligger i ett enda bibliotek utan importer av Supabase**, precis
 som `raster.ts`, `lonekostnad.ts` och `franvaro.ts`. Reglerna skickas in som
