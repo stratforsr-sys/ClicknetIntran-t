@@ -1,23 +1,24 @@
 # E13 — Provisions-, bonus- och konsekvensmotor
 
-**Regelspecifikation, steg 2.** Skriven 2026-08-24 efter en fullständig
-frågeomgång med beställaren. Ingenting i det här dokumentet är byggt än.
+**Regelspecifikation.** Skriven 2026-08-24 efter en fullständig frågeomgång med
+beställaren. **Steg 1–4 är byggda 2026-08-25**; byggordningen i avsnitt 11 säger
+vad som är klart och vad som återstår.
 
 Dokumentet är avsiktligt uttömmande. Skälet: beställaren clearar chatten när
 den blir dyr, och den här specifikationen är då det enda som bär besluten.
 Läs den före `docs/ARBETSLOGG.md` när arbetet med E13 återupptas.
 
-**Status:** beslutsunderlag klart. **Ingenting blockerar längre.** Ö1 avgjordes
-2026-08-24 (se D-K12 i `DECISIONS.md`) och Ö2–Ö7, Ö10 och Ö14 besvarades samma
-dag. Kvar är Ö9, Ö11, Ö12, Ö13 och Ö15, som alla har ett förslag som gäller tills
-någon säger annat.
+**Status 2026-08-25:** steg 1–4 är byggda och i produktion. Ö1 avgjordes
+2026-08-24 (se D-K12 i `DECISIONS.md`), Ö2–Ö7, Ö10 och Ö14 besvarades samma dag,
+och **Ö4, Ö8, Ö12 och Ö15 besvarades 2026-08-25**. Kvar öppna är **Ö9, Ö11, Ö13
+och Ö16**, som alla har ett förslag som gäller tills någon säger annat.
 
 ---
 
 ## 1. Vad som beslutades, och vad som fortfarande är öppet
 
 Beställaren besvarade 59 frågor 2026-08-24. Svaren står inarbetade i reglerna
-nedan. **Öppna punkter** ligger samlade i avsnitt 10 och är numrerade Ö1–Ö15.
+nedan. **Öppna punkter** ligger samlade i avsnitt 10 och är numrerade Ö1–Ö16.
 Ingen siffra i det här dokumentet är påhittad — det som inte är beslutat står
 som `EJ SATT` och ska läsas ur konfigurationen, aldrig gissas.
 
@@ -143,7 +144,9 @@ Nio rader i en konfigurationstabell, `commission_rate`, versionerad med
 `valid_from`/`valid_to` precis som `cost_rate` i `0025`. **Ingen av de nio
 siffrorna får stå i en `.ts`-fil.**
 
-Paketens namn är inte beslutade — se Ö12. Etiketten är en kolumn.
+**Paketen heter "Paket 1/2/3"** — beställarens svar på Ö12, 2026-08-25. Priset
+visas bredvid namnet vid inmatning, så säljaren ser ändå vilken rad hen valt.
+Etiketten är en kolumn och går att byta utan migration.
 
 ### 4.2 Order utanför matrisen
 
@@ -297,26 +300,32 @@ anteckning om att den hör till augusti, eftersom en stängd period aldrig öppn
 - **Två samtal per säljare och vecka**, samtal som lett till sälj.
 - Bedöms av säljchefen på **sex områden**: intro, behovsanalys, ROI, avslut,
   kvalitet på samtalet, korrekt avtalshantering.
-- **Poängskalan: 200** enligt beställarens svar på Ö4. **Vilken 200 det är måste
-  bekräftas** — se rutan nedan.
+- **Poängskalan: 200 totalt för båda samtalen.** Beställarens svar på Ö4,
+  bekräftat 2026-08-25. Tröskeln 160 är alltså **80 %** — den enda läsningen där
+  160 fungerar som ett godkäntbetyg.
 - **Tröskel: 160 poäng**, räknat som **summan av båda samtalen** (fråga 29).
   Konfigurerbar.
 - Godkänd vecka ger **1,25 %** — konfigurerbart — beräknat på **månadens
   provision inklusive volymbonus** (fråga 30, Ö3). Alltså hela månadens
   intjäning före K&V-bonusen. K&V räknas aldrig på K&V.
 
-> **Vad betyder 200? Tre läsningar, mycket olika utfall.**
+> **Ö4 är besvarad 2026-08-25: 200 är maxpoängen TOTALT för båda samtalen.**
 >
-> | Läsning | Maxpoäng totalt | 160 poäng motsvarar |
-> |---|---|---|
-> | 200 **per område** | 6 × 200 × 2 samtal = **2 400** | 6,7 % — tröskeln nås i praktiken alltid |
-> | 200 **totalt per samtal** | 2 × 200 = **400** | 40 % |
-> | 200 **totalt för båda samtalen** | **200** | **80 %** |
+> | Läsning | Maxpoäng totalt | 160 poäng motsvarar | |
+> |---|---|---|---|
+> | 200 per område | 6 × 200 × 2 samtal = 2 400 | 6,7 % — nås alltid | |
+> | 200 totalt per samtal | 2 × 200 = 400 | 40 % | |
+> | **200 totalt för båda samtalen** | **200** | **80 %** | **← gäller** |
 >
-> Den sista är den enda där 160 fungerar som ett godkäntbetyg. Motorn läser
-> talen ur konfigurationen och bryr sig inte, men **inställningssidan ska visa
-> vad tröskeln motsvarar i procent** medan du skriver — det är den kontrollen
-> som gör att en omöjlig eller meningslös skala inte går att spara av misstag.
+> **Följden: de sex områdena delar på 100 poäng per samtal.** Maxpoängen per
+> område är konfiguration (avsnitt 8.2) och behöver inte vara lika stor för alla
+> — "korrekt avtalshantering" och "behovsanalys" väger rimligen olika. Det som
+> måste stämma är summan.
+>
+> **Inställningssidan ska räkna ut och visa vad tröskeln motsvarar i procent**
+> medan man skriver, och neka en skala där tröskeln är omöjlig att nå. Med max 5
+> poäng per område blir taket 60 poäng, och 160 går då inte att uppnå — den
+> sortens tyst omöjliga konfiguration ska formuläret stoppa direkt.
 - **Tak 5 %** per månad. Alltså **högst fyra godkända veckor** räknas.
 - **Ordningen spelar ingen roll** (fråga 31). Veckorna behöver inte vara i rad.
 - **Taket är 5 % även i en månad med fem veckor** (fråga 32).
@@ -388,14 +397,24 @@ Klick öppnar bedömningsformuläret.
 ### 7.1 Hur en ogiltig frånvaro uppstår
 
 1. **Utebliven instämpling** ger ett **förslag** till säljchefen.
-2. **Säljchefen godkänner** att det faktiskt var ogiltig frånvaro.
+2. **Säljchefen godkänner** att säljaren faktiskt inte var på plats.
 3. Först då registreras händelsen.
 
-Ingenting sker automatiskt utan chefens godkännande (fråga 40).
+Ingenting sker automatiskt utan chefens godkännande (fråga 40). Ö1 är avgjord
+genom D-K12 och blockerar inte längre.
 
-**Detta blockerar bygget — se Ö1.** Steg 1 innebär att stämplingsdata ligger
-till grund för en konsekvens som når provisionen, och det är precis vad
-K12-intresseavvägningen §5 lovar personalen att inte ske.
+**Ö15 är besvarad 2026-08-25, och svaret är snävare än frågan:**
+
+- **Minst 5 minuter.** En kortare lucka ger ingen händelse.
+- **Personen ska faktiskt inte ha varit på plats.** Den som stämplar in för sent
+  men varit här räknas **aldrig** — beställarens egna ord. Det är också det som
+  håller D-K12:s linje: K12 1.2 sen ankomst når fortfarande inte provisionen,
+  och intresseavvägningen behöver därför inte omprövas.
+- **Chefen avgör.** Förslaget säger bara att stämplingen saknas; det är chefen
+  som vet om personen var inne.
+
+Att navet inte kan se skillnad på "kom sent" och "var inte här" är precis skälet
+till att steg 2 finns. Systemet får aldrig dra slutsatsen själv.
 
 ### 7.2 Det är en egen händelse, inte en frånvaroansökan
 
@@ -418,7 +437,10 @@ Ny tabell: `attendance_incident`.
 
 - **Perioden är rullande**, räknad från den första ogiltiga frånvaron (fråga 42).
 - Bonusförlusten gäller **endast innevarande månad** (fråga 43).
-- Den gäller **både volymbonus och K&V-bonus** (fråga 44).
+- Den gäller **både volymbonus och K&V-bonus** (fråga 44), men **inte övrig
+  bonus** (Ö8, besvarad 2026-08-25). Övrig bonus är chefens egen bedömning av
+  något utöver trappan — vill chefen inte ge den kan hen låta bli att bokföra
+  den, och då behöver systemet inte ta tillbaka den åt hen.
 - **Grundprovisionen är orörd.** Intjänade pengar för utfört arbete faller inte
   bort. Beställaren bekräftade.
 - **Efter bonusförlusten börjar orderräknaren om från noll** (fråga 45). Nya
@@ -529,18 +551,18 @@ följer med lönekörningen i stället för en kronkolumn i `payroll_row`.
 | **Ö1** | K12 §5 mot konsekvenssystemet | **AVGJORD 2026-08-24.** Beställaren beslutade att K12 inte ska hindra bygget. Se D-K12. Rast och sen ankomst når fortfarande aldrig provisionen; utebliven instämpling gör det, men bara via ett förslag chefen godkänner |
 | Ö2 | Bonusform per nivå | **BESVARAD: fast belopp.** Procent ska ändå gå att välja i inställningarna |
 | Ö3 | K&V-basen | **BESVARAD: grundprovision + volymbonus.** Alltså hela månadens intjäning före K&V |
-| Ö4 | Maxpoäng per K&V-område | **Svar: 200 — men läsningen måste bekräftas, se 6.1.** 200 *per område* ger maxpoäng 2 400 och gör tröskeln 160 till 6,7 %, alltså i praktiken alltid uppnådd |
+| Ö4 | Maxpoäng per K&V-område | **BESVARAD 2026-08-25: 200 är maxpoängen TOTALT för båda samtalen.** Tröskeln 160 är alltså 80 %. De sex områdena delar på 200, och maxpoängen per område är därmed konfiguration som måste summera rätt — se 6.1 |
 | Ö5 | Delad order | **BESVARAD: byggs inte nu.** En order har en säljare. Andelsmodellen i 4.3 står kvar som förslag den dag det behövs |
 | Ö6 | Tilläggsavtal i volymtrappan | **BESVARAD: ja, det räknas** |
 | Ö7 | Order med manuell provision i volymtrappan | **BESVARAD: ja, det räknas** |
-| Ö8 | Faller **övrig bonus** (5.3) vid en konsekvens? Förslag: ja | Öppen |
+| Ö8 | Faller **övrig bonus** (5.3) vid en konsekvens? | **BESVARAD 2026-08-25: nej, den står kvar.** Övrig bonus är chefens egen bedömning av något utöver trappan; vill chefen inte ge den kan hen låta bli att bokföra den. Volymbonus och K&V-bonus faller som förut |
 | Ö9 | Veckans månadstillhörighet: ISO-torsdagen (6.3) | Förslag gäller tills annat sägs |
 | Ö10 | Lönerapporten eller separat underlag | **BESVARAD: separat underlag.** `payroll_row` får ingen kronkolumn, K5 och AC-2.17 står kvar |
 | Ö11 | Order signerad i en period som hunnit stängas (5.6) | Förslag gäller tills annat sägs |
-| Ö12 | Paketens namn | Öppen — etiketten är en kolumn, "Paket 1/2/3" tills vidare |
+| Ö12 | Paketens namn | **BESVARAD 2026-08-25: behåll "Paket 1/2/3".** Priset visas bredvid vid inmatning. Etiketten är en kolumn och går att byta utan migration |
 | Ö13 | Behövs statusen `betald` alls i dag, och vem sätter den? | Öppen — byggs, men påverkar ingenting |
 | Ö14 | Uppladdat avtal | **BESVARAD: PDF.** Textextraktion via `pdftext.ts` går att använda; ingen OCR behövs |
-| Ö15 | Räknas **sen ankomst** någonsin som ogiltig frånvaro, eller bara utebliven dag? Och finns halvdag? | Öppen — och efter D-K12 är svaret på den första **nej**: sen ankomst når inte provisionen |
+| Ö15 | Vad räknas som ogiltig frånvaro? | **BESVARAD 2026-08-25: minst 5 minuter, och personen ska faktiskt inte ha varit på plats.** Den som stämplar in för sent men varit här räknas ALDRIG. Varje fall går som förslag till chefen, som godkänner att säljaren inte var inne — först då är det en ogiltig frånvaro. D-K12:s linje står därmed orörd: K12 1.2 sen ankomst når fortfarande inte provisionen |
 | Ö16 | **Vilken volymtrappa gäller för en månad som en ändring skär igenom?** Frågan var aldrig ställd. Byggd 2026-08-25 med regeln **trappan som gällde på månadens första dag** | Förslag gäller tills annat sägs — se rutan nedan |
 
 > **Ö16: varför trappan slås upp på månadens första dag och inte på ordern.**
