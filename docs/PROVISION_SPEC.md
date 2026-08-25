@@ -1,14 +1,14 @@
 # E13 — Provisions-, bonus- och konsekvensmotor
 
 **Regelspecifikation.** Skriven 2026-08-24 efter en fullständig frågeomgång med
-beställaren. **Steg 1–4 är byggda 2026-08-25**; byggordningen i avsnitt 11 säger
+beställaren. **Steg 1–5 är byggda 2026-08-25**; byggordningen i avsnitt 11 säger
 vad som är klart och vad som återstår.
 
 Dokumentet är avsiktligt uttömmande. Skälet: beställaren clearar chatten när
 den blir dyr, och den här specifikationen är då det enda som bär besluten.
 Läs den före `docs/ARBETSLOGG.md` när arbetet med E13 återupptas.
 
-**Status 2026-08-25:** steg 1–4 är byggda och i produktion. Ö1 avgjordes
+**Status 2026-08-25:** steg 1–5 är byggda och i produktion. Ö1 avgjordes
 2026-08-24 (se D-K12 i `DECISIONS.md`), Ö2–Ö7, Ö10 och Ö14 besvarades samma dag,
 och **Ö4, Ö8, Ö12 och Ö15 besvarades 2026-08-25**. Kvar öppna är **Ö9, Ö11, Ö13
 och Ö16**, som alla har ett förslag som gäller tills någon säger annat.
@@ -345,6 +345,17 @@ prestationsvy är sjukdata i en provisionsvy, vilket AC-3.26 och E7.14 förbjude
 Vyn säger **"Ej bedömd"** och ingenting mer. Frånvaro får bara hämtas via
 `payroll_row.absence_minutes`, aldrig genom att joina `sick_report`.
 
+**En HALVBEDÖMD vecka hoppas också över.** Inarbetat 2026-08-25; följer av 6.1
+och 6.2 tillsammans men stod inte utskrivet. Tröskeln är definierad som *summan
+av båda samtalen* (fråga 29), så den betyder ingenting för en vecka där bara ett
+samtal bedömts: med maxpoäng 100 per samtal är 160 omöjligt på ett samtal, och
+veckan hade blivit **underkänd av ett skäl som är chefens och inte säljarens**.
+6.2 säger redan att en vecka hoppas över "oavsett skäl — — eller att chefen inte
+hann". Att chefen hann halva vägen är samma sak.
+
+Konsekvens: en vecka räknas först när **alla** samtal veckan kräver är bedömda.
+Rutnätet i 6.6 visar `1/2` för de halva, så att de går att se.
+
 ### 6.3 Vilken månad hör veckan till
 
 En ISO-vecka kan spänna över ett månadsskifte. **Förslag, ej beslutat (Ö9):**
@@ -603,14 +614,14 @@ Varje steg är en egen leverans med prov på räknemotorn innan nästa börjar.
 | 2 | **KLART 2026-08-25**: räknemotorn i `src/lib/provision-motor.ts`, ren logik, `tests/provision-motor.mjs`. Rättade samtidigt ett räknefel i steg 1 — se arbetsloggen | Steg 1 |
 | 3 | **KLART 2026-08-25** (migration `0035`): volymtrappan som konfiguration på `/provision/regler`, retroaktivitet, periodstängning med bokföring i `commission_entry` | Steg 2 |
 | 4 | **KLART 2026-08-25**: säljarens progressvy på `/provision`. "3 order kvar till nästa bonus", prognosen med sitt antagande utskrivet, och underlaget rad för rad | Steg 3 |
-| 5 | K&V: tabeller, rutnät, bedömningsformulär, utvecklingskurva, bonus | Steg 2 |
+| 5 | **KLART 2026-08-25** (migration `0036`): K&V-tabeller, rutnät säljare × vecka på `/kv`, bedömningsformulär, utvecklingskurva, bonus och inställningar med Ö4-kontrollen | Steg 2 |
 | 6 | Konsekvenssystemet | Steg 3 |
 | 7 | Export, separat provisionsunderlag | Steg 3 |
 | 8 | Dialer-API för K&V-urvalet | A6 |
 | 9 | **Orderbilagan:** PDF-uppladdning och förifyllning ur avtalet. Egen migration som vidgar `file_object` (0022) — den tabellen bär läkarintyg, så det stänger inte på ordermigrationen. Utläsningen ska **förifylla formuläret, aldrig spara direkt** | Steg 1 |
 
-**Steg 2 och 3 är inte blockerade av något.** Steg 5 väntar på Ö4, steg 8 på A6.
-Steg 6 kräver ingenting mer sedan D-K12.
+**Kvar: steg 6, 7 och 9 är oblockerade.** Steg 8 väntar på A6.
+Steg 6 kräver ingenting mer sedan D-K12 och Ö15.
 
 **Räknemotorn ligger i ett enda bibliotek utan importer av Supabase**, precis
 som `raster.ts`, `lonekostnad.ts` och `franvaro.ts`. Reglerna skickas in som

@@ -114,6 +114,10 @@ export const KALLOR: Kalla[] = [
   // Utelämnad hade utdraget visat provisionsposterna utan att kunna svara på
   // vad de kom ifrån.
   { tabell: "sales_order", kolumn: "salesperson_id", andamal: "Order du sålt, och provisionen de gav" },
+  // E13 steg 5. En K&V-bedomning ar ett omdome OM personen och hor darfor
+  // hemma i utdraget, aven fritexten. Saljaren ser den redan i navet (fraga
+  // 38) — men artikel 15 fragar inte om nagot redan visas nagon annanstans.
+  { tabell: "kv_call", kolumn: "employee_id", andamal: "Samtal utvalda för K&V-bedömning" },
 ];
 
 /**
@@ -216,4 +220,13 @@ export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
   { tabell: "commission_bonus_level", kolumn: "set_by", skal: "Vem som satte bonusnivån" },
   { tabell: "commission_period", kolumn: "closed_by", skal: "Vem som fastställde perioden" },
   { tabell: "commission_period", kolumn: "paid_by", skal: "Vem som markerade utbetalningen" },
+
+  // 0036 E13 steg 5. Vem som valde ut och bedomde ett samtal ar inte en uppgift
+  // OM bedomaren. Sjalva bedomningen star i utdraget via `kv_call.employee_id`
+  // i KALLOR ovan.
+  { tabell: "kv_call", kolumn: "created_by", skal: "Vem som valde ut samtalet" },
+  { tabell: "kv_assessment", kolumn: "assessed_by", skal: "Vem som bedömde samtalet" },
+  { tabell: "kv_assessment", kolumn: "updated_by", skal: "Vem som ändrade bedömningen" },
+  { tabell: "kv_criterion", kolumn: "set_by", skal: "Vem som satte maxpoängen" },
+  { tabell: "kv_policy", kolumn: "set_by", skal: "Vem som satte K&V-reglerna" },
 ];

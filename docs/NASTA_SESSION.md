@@ -3,7 +3,7 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-08-25 (E13 steg 2, 3 och 4)
+**Senast uppdaterad:** 2026-08-25 (E13 steg 2–5)
 
 ---
 
@@ -19,42 +19,50 @@ K12-frågan avgjordes 2026-08-24 — se **D-K12**. Rast och sen ankomst når
 fortfarande aldrig provisionen; utebliven instämpling gör det, men bara via ett
 förslag som chefen måste godkänna.
 
-**Steg 1–4 är klara 2026-08-25** (migrationerna `0034` och `0035`).
-Grundprovisionen, räknemotorn, volymtrappan, periodstängningen och säljarens
-progressvy finns. **Steg 5–9 återstår.**
+**Steg 1–5 är klara 2026-08-25** (migrationerna `0034`, `0035` och `0036`).
+Grundprovisionen, räknemotorn, volymtrappan, periodstängningen, säljarens
+progressvy och K&V-protokollet finns. **Steg 6–9 återstår.**
 
 ### Nästa steg, i den ordning de går att ta
 
 | Steg | Vad | Blockerat av |
 |---|---|---|
-| **5** | K&V | **Ö4 — fråga beställaren först, se nedan** |
-| **6** | Konsekvenssystemet | Ingenting sedan D-K12. Men se **Ö8** och **Ö15** |
+| **6** | Konsekvenssystemet | Ingenting. D-K12, Ö8 och Ö15 är alla besvarade |
 | 7 | Export och separat provisionsunderlag | Ingenting |
 | 8 | Dialer-API för K&V-urvalet | A6 |
 | 9 | Orderbilagan: PDF-uppladdning | Ingenting, men egen migration som vidgar `file_object` |
 
-**Steg 6 är det största som inte väntar på ett svar.** Steg 7 är det minsta.
+**Steg 6 är det största som återstår.** Steg 7 är det minsta.
 
-### Beställaren måste svara på Ö4 innan steg 5 byggs
+### Vad beställaren svarade 2026-08-25, och vad steg 6 måste följa
 
-Svaret var "200", men det finns tre läsningar och bara en av dem gör 160 poäng
-till ett godkäntbetyg:
+**Ö8: övrig bonus faller INTE vid en konsekvens.** Specifikationens förslag var
+tvärtom. Volymbonus och K&V-bonus faller som förut; grundprovisionen är orörd.
 
-| Läsning | Maxpoäng | 160 motsvarar |
-|---|---|---|
-| 200 per område | 2 400 | 6,7 % — tröskeln nås alltid |
-| 200 per samtal | 400 | 40 % |
-| **200 totalt för båda samtalen** | **200** | **80 %** |
+**Ö15: ogiltig frånvaro kräver minst 5 minuter OCH att personen faktiskt inte
+var på plats.** Den som stämplar in för sent men varit här räknas **aldrig** —
+beställarens egna ord. Chefen godkänner varje fall.
 
-Motorn läser talen ur konfigurationen och bryr sig inte. Det som inte går att
-bygga utan svaret är **inställningssidan**, som ska visa vad tröskeln motsvarar i
-procent medan man skriver — det är den kontrollen som gör att en omöjlig skala
-inte går att spara av misstag.
+Det sista är viktigare än det ser ut: **det håller D-K12:s linje.** K12 1.2 sen
+ankomst når fortfarande inte provisionen, och intresseavvägningen behöver därför
+inte omprövas. En 5-minutersgräns som även gällt sen ankomst hade krävt att
+avsnitt 6 och 7 i K12 skrevs och beslutades först — av någon med
+dataskyddskompetens. Bygg inte steg 6 så att den gränsen glider.
 
-**Ö8, Ö12, Ö13 och Ö15** är också obesvarade. Ö8 (faller övrig bonus vid en
-konsekvens?) blir aktuell i steg 6.
+**Ö4 är besvarad: 200 poäng totalt för båda samtalen**, alltså tröskeln 160 =
+80 %. Steg 5 är byggt.
 
-### Fem saker att inte riva
+### Beställaren måste fylla i K&V-maxpoängen innan något går att bedöma
+
+`/kv/regler`, säljchef och VD. De sex områdena finns med beställarens egna
+namn, men **maxpoängen är NULL för samtliga** — Ö4 säger att 200 är maxpoängen
+totalt för båda samtalen, inte hur de 200 fördelas på sex områden.
+
+Migrationen `0036` har en självkontroll som **fäller sig själv om någon seedar
+ett värde där**. Sidan räknar ut vad tröskeln motsvarar i procent medan du
+skriver.
+
+### Sex saker att inte riva
 
 1. **En makulering är TVÅ händelser.** Ordern ger provision i sin
    signeringsmånad och drar tillbaka den i sin makuleringsmånad. Använd
@@ -71,7 +79,11 @@ konsekvens?) blir aktuell i steg 6.
    frånvaron av en rad i `commission_period`. Attesten bokför posterna FÖRST och
    stänger perioden SEDAN; den ordningen är det som gör ett halvfärdigt försök
    möjligt att köra om.
-5. **`revoke ... from public` räcker inte för en ny funktion.** Supabase har en
+5. **En vecka räknas först när ALLA dess samtal är bedömda.** Tröskeln är
+   summan av båda samtalen, så en halvbedömd vecka hade underkänts av ett skäl
+   som är chefens och inte säljarens. Och periodstängningen hämtar samtal en
+   vecka före och efter månaden — torsdagsregeln gör randveckorna halva annars.
+6. **`revoke ... from public` räcker inte för en ny funktion.** Supabase har en
    egen default-ACL som ger `anon` en explicit grant. Skriv
    `revoke all ... from public, anon`. Migrationen 0034 föll på sin egen
    självkontroll första gången just där — behåll kontrollen i nya migrationer.
@@ -119,7 +131,7 @@ innehåll.
 set -a && . $HOME/.clicknet/nav.env && set +a && npm test
 ```
 
-Tjugoåtta sviter. `tests/rls.mjs` går mot den **riktiga**
+Tjugonio sviter. `tests/rls.mjs` går mot den **riktiga**
 databasen och skapar och städar sina egna användare (prefix `rlstest+`).
 Även `tests/provision-period-db.mjs` går mot den riktiga databasen — den kör allt
 i en transaktion som rullas tillbaka, och kontrollerar till sist att ingenting
@@ -182,6 +194,7 @@ i `rls.mjs`.** Samtliga 105 i den filen plus 51 i övriga sviter. Leta inte om:
 | **Volymtrappan** | **I drift sedan 2026-08-25.** `/provision/regler`, säljchef och VD. **Tom tills beställaren fyller i beloppen** |
 | **Periodstängning** | **I drift sedan 2026-08-25.** Kort på `/provision`. Öppen månad räknas live, fastställd är bokförd |
 | **Progressvy** | **I drift sedan 2026-08-25.** `/provision`. "3 order kvar till nästa bonus" med prognosens antagande utskrivet |
+| **K&V** | **I drift sedan 2026-08-25.** `/kv`. Rutnät säljare × vecka, bedömning, utvecklingskurva. **Maxpoängen måste fyllas i** |
 
 ### Raststämplingen: två steg kvar, och båda är dina
 
@@ -885,8 +898,7 @@ att bli tillfrågad.
   (2026-08-22) och `contract` är förberedd — signeringen blir ett steg efter
   `issued`.
 - **E15:** vem äger arbetsgivaravgift, pension och försäkringssatser.
-- **Ö4** vad 200 poäng betyder i K&V. **Blockerar E13 steg 5** — se ovan.
-- **Ö8, Ö12, Ö13, Ö15** i `docs/PROVISION_SPEC.md`. Ö8 blir aktuell i steg 6.
+- **Ö9, Ö11, Ö13** i `docs/PROVISION_SPEC.md`. Alla har ett förslag som gäller.
 - **Ö16** vilken volymtrappa som gäller för en månad en ändring skär igenom.
   Byggd med ett förslag som gäller tills annat sägs.
 - **A5** Inkio, **A6** dialer. Blockerar E11, E12 och E13 steg 8.

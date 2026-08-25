@@ -22,6 +22,7 @@ import {
   bokforingsposter,
   forSaljare,
   gallandeNivaer,
+  kvBas,
   kvarTillNasta,
   nivaFor,
   prognosNastaNiva,
@@ -494,6 +495,91 @@ console.log("\nProcentbonusen i prognosen raknas pa den framskrivna summan");
   // 10 order x 1500 = 15 000, 10 % = 1 500. Inte 10 % av de 10 500 som finns nu.
   ok("bonusen da blir 1500", p?.bonusDa === 1500);
   ok("totalen da blir 16500", p?.totaltDa === 16500);
+}
+
+// =============================================================================
+// Steg 5 — K&V-bonusen i underlaget
+//
+// Veckologiken provas i tests/kv.mjs. Har provas bara pengarna.
+// =============================================================================
+
+console.log("\nK&V-bonusen raknas pa grundprovision PLUS volymbonus");
+{
+  // 11 order x 1500 = 16 500 grundprovision, niva 10 ger 5 500 volymbonus.
+  // Basen ar 22 000. Tva godkanda veckor = 2,5 %.
+  const u = raknaUnderlag("s1", manadensOrder(11), "2026-08-01", TRAPPA, {
+    godkanda: 2,
+    bedomda: 3,
+    procent: 2.5,
+  });
+
+  ok("basen ar 22000", kvBas(u.grundprovision, u.volymbonus.belopp) === 22000);
+  ok("bonusen blir 550", u.kv?.belopp === 550);
+  ok("och summan 22550", u.summa === 22550);
+  ok("summan ar fortfarande radernas summa", u.summa === summaAv(u.rader));
+
+  const rad = u.rader.find((r) => r.slag === "kv_bonus");
+  ok("bonusen ar en egen rad", rad !== undefined);
+  ok("raden sager vad som utloste den", rad.text === "K&V-bonus, 2 godkända veckor (2.5 %)", rad.text);
+}
+
+console.log("\nK&V raknas ALDRIG pa K&V");
+{
+  // Om K&V-bonusen laggs till basen blir 22 000 -> 22 550 -> 563 i stallet for
+  // 550, och da avgor ordningen mellan raderna vad nagon far betalt.
+  const u = raknaUnderlag("s1", manadensOrder(11), "2026-08-01", TRAPPA, {
+    godkanda: 2, bedomda: 2, procent: 2.5,
+  });
+
+  ok("bonusen ar 2,5 % av 22000, inte av 22550", u.kv?.belopp === 550);
+  ok(
+    "basen innehaller ingen K&V-rad",
+    kvBas(u.grundprovision, u.volymbonus.belopp) === u.summa - u.kv.belopp,
+  );
+}
+
+console.log("\nEn godkand vecka i singular");
+{
+  const u = raknaUnderlag("s1", manadensOrder(7), "2026-08-01", TRAPPA, {
+    godkanda: 1, bedomda: 1, procent: 1.25,
+  });
+  const rad = u.rader.find((r) => r.slag === "kv_bonus");
+  ok("texten boejs ratt", rad.text === "K&V-bonus, 1 godkänd vecka (1.25 %)", rad.text);
+}
+
+console.log("\nUtan godkanda veckor finns ingen K&V-rad");
+{
+  const utan = raknaUnderlag("s1", manadensOrder(11), "2026-08-01", TRAPPA, {
+    godkanda: 0, bedomda: 3, procent: 0,
+  });
+  ok("ingen kv-rad", utan.kv === null && !utan.rader.some((r) => r.slag === "kv_bonus"));
+  ok("summan ar grundprovision plus volymbonus", utan.summa === 16500 + 5500);
+
+  const inget = raknaUnderlag("s1", manadensOrder(11), "2026-08-01", TRAPPA);
+  ok("och utan K&V-underlag alls likasa", inget.kv === null && inget.summa === 22000);
+}
+
+console.log("\nK&V-bonus utan volymbonus raknas pa enbart grundprovisionen");
+{
+  // Tre order — under lagsta troskeln, ingen volymbonus. 4500 x 5 % = 225.
+  const u = raknaUnderlag("s1", manadensOrder(3), "2026-08-01", TRAPPA, {
+    godkanda: 4, bedomda: 4, procent: 5,
+  });
+  ok("ingen volymbonus", u.volymbonus === null);
+  ok("K&V-bonusen blir 225", u.kv?.belopp === 225);
+  ok("summan blir 4725", u.summa === 4725);
+}
+
+console.log("\nK&V-bonusen bokfors som en egen post");
+{
+  const u = raknaUnderlag("s1", manadensOrder(11), "2026-08-01", TRAPPA, {
+    godkanda: 2, bedomda: 2, procent: 2.5,
+  });
+  const poster = bokforingsposter(u);
+
+  ok("tre poster", poster.length === 3, poster.map((p) => p.slag).join(", "));
+  ok("K&V star for sig", poster.some((p) => p.slag === "kv_bonus" && p.belopp === 550));
+  ok("summan av posterna ar underlagets summa", poster.reduce((s, p) => s + p.belopp, 0) === u.summa);
 }
 
 console.log(fel === 0 ? "\n\x1b[32mAllt gront.\x1b[0m\n" : `\n\x1b[31m${fel} fel.\x1b[0m\n`);

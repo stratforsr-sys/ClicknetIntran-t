@@ -60,6 +60,18 @@ export function navFor(user: CurrentUser | null, stamplingPa: boolean): NavItem[
     items.push({ href: "/order", label: "Order", ikon: "kontroll" });
   }
 
+  /**
+   * E13 steg 5. K&V-protokollet. Samma krets som ordern, och av samma skal:
+   * bonussystemet galler rollen SALJARE.
+   *
+   * Saljaren ser sina egna bedomningar och sin utvecklingskurva; saljchefen och
+   * VD ser rutnatet och bedomer. Ekonomi ser bedomningarna eftersom de paverkar
+   * provisionen, men satter dem inte.
+   */
+  if (hasRole(user, "salesperson", "sales_manager", "ceo", "finance")) {
+    items.push({ href: "/kv", label: "K&V", ikon: "kontroll" });
+  }
+
   // Loneunderlaget ar ledningens och ekonomins (AC-2.13). Teamledaren har
   // avvikelsevyn, inte den har. Posten foljer M2: utan stampling finns inget
   // underlag att rapportera.

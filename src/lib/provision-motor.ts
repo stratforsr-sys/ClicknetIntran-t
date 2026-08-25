@@ -87,6 +87,15 @@ export type Underlag = {
   volymbonus: { niva: Bonusniva; belopp: number } | null;
 
   /**
+   * K&V-bonusen, eller null nar inga veckor godkants.
+   *
+   * VISAS INTE I SALJARENS PROGRESSVY (avsnitt 9.1) utan pa K&V-sidan. Den hor
+   * ihop med bedomningen, inte med ordervolymen. Den star anda i underlaget —
+   * det ar underlaget som bokfors nar perioden stangs.
+   */
+  kv: { godkanda: number; procent: number; belopp: number } | null;
+
+  /**
    * Nasta niva och hur langt dit. Prognosen i saljarens progressvy.
    *
    * Star med i UNDERLAGET och inte bara i vyn for att den ska raknas ur samma
@@ -279,6 +288,7 @@ export function raknaUnderlag(
   order: Order[],
   manad: string,
   nivaer: Bonusniva[] = [],
+  kv: KvIndata | null = null,
 ): Underlag {
   const mina = forSaljare(order, employee_id);
 
@@ -331,6 +341,28 @@ export function raknaUnderlag(
     });
   }
 
+  // K&V-BONUSEN LAGGS SIST, och basen ar de tva raderna ovan. Ordningen ar inte
+  // kosmetisk: basen ar grundprovision + volymbonus (O3), sa raden maste raknas
+  // efter att volymbonusen ar bestamd.
+  const kvBonus =
+    kv && kv.procent > 0
+      ? {
+          godkanda: kv.godkanda,
+          procent: kv.procent,
+          belopp: avrunda((kvBas(grund, volymbonus?.belopp ?? 0) * kv.procent) / 100),
+        }
+      : null;
+
+  if (kvBonus) {
+    rader.push({
+      slag: "kv_bonus",
+      text: `K&V-bonus, ${kvBonus.godkanda} godkänd${kvBonus.godkanda === 1 ? "" : "a"} ${
+        kvBonus.godkanda === 1 ? "vecka" : "veckor"
+      } (${kvBonus.procent} %)`,
+      belopp: kvBonus.belopp,
+    });
+  }
+
   return {
     employee_id,
     manad,
@@ -338,6 +370,7 @@ export function raknaUnderlag(
     antal,
     grundprovision: grund,
     volymbonus,
+    kv: kvBonus,
     nasta: kvarTillNasta(trappa, antal.netto),
     summa: summaAv(rader),
   };
@@ -354,13 +387,46 @@ export function underlagForAlla(
   order: Order[],
   manad: string,
   nivaer: Bonusniva[] = [],
+  kvPerPerson: Map<string, KvIndata> = new Map(),
 ): Underlag[] {
   const personer = new Set<string>();
   for (const o of [...orderIPeriod(order, manad), ...makuleradeIPeriod(order, manad)]) {
     personer.add(o.salesperson_id);
   }
 
-  return [...personer].sort().map((id) => raknaUnderlag(id, order, manad, nivaer));
+  return [...personer]
+    .sort()
+    .map((id) => raknaUnderlag(id, order, manad, nivaer, kvPerPerson.get(id) ?? null));
+}
+
+// -----------------------------------------------------------------------------
+// K&V-bonusen — steg 5
+//
+// Veckologiken ligger i `kv.ts` och pengarna har. Delningen ar avsiktlig:
+// `kv.ts` vet vad en godkand vecka ar, motorn vet vad den ar vard, och ingen av
+// dem behover kunna bada for att ga att prova.
+// -----------------------------------------------------------------------------
+
+/** Manadens K&V-utfall, redan reducerat av `kvManad()` i `kv.ts`. */
+export type KvIndata = {
+  /** Antal godkanda veckor. */
+  godkanda: number;
+  /** Veckor med fullstandig bedomning, godkanda eller ej. Visas, raknas inte. */
+  bedomda: number;
+  /** Procentsatsen de ger, redan takad. */
+  procent: number;
+};
+
+/**
+ * Basen K&V-bonusen raknas pa: grundprovision PLUS volymbonus (O3).
+ *
+ * K&V RAKNAS ALDRIG PA K&V. Bestallarens svar pa fraga 30 var "manadens
+ * provision inklusive volymbonus", alltsa hela manadens intjaning FORE
+ * K&V-bonusen. Att lagga den till basen hade gjort bonusen beroende av sig
+ * sjalv, och ordningen mellan de tva raderna hade da avgjort utfallet.
+ */
+export function kvBas(grundprovision: number, volymbonus: number): number {
+  return grundprovision + volymbonus;
 }
 
 // -----------------------------------------------------------------------------

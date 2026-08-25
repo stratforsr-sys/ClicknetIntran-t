@@ -5,6 +5,115 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-08-25 (kväll) · E13 steg 5: K&V-protokollet
+
+Migration `0036`. Beställaren besvarade Ö4, Ö8, Ö12 och Ö15 innan bygget
+började — Ö4 var det som blockerade steget.
+
+### Ö4 var inte en detalj, den var tre olika system
+
+Svaret "200 poäng" kunde betyda maxpoäng 200, 400 eller 2 400, och samma tröskel
+— 160 — blev då 80 %, 40 % eller **6,7 %**. Den sista läsningen gör tröskeln
+meningslös: varje vecka godkänns, och K&V-bonusen blir automatisk för alla.
+
+Beställarens svar 2026-08-25: **200 totalt för båda samtalen**, alltså 80 %.
+
+**Fördelningen på de sex områdena är fortfarande inte sagd, och gissas inte.**
+`kv_criterion.max_points` är NULL för samtliga sex, och migrationen har en
+självkontroll som **fäller sig själv om någon seedar ett värde där**. Utan
+maxpoäng går inget samtal att bedöma — det är avsiktligt, och det är samma linje
+som täckningsgraden i `0025` och volymtrappan i `0035`.
+
+Det som däremot **är** seedat är det beställaren faktiskt svarat: sex områden
+med sina namn, två samtal per vecka, tröskel 160, 1,25 % per godkänd vecka och
+tak 5 %.
+
+### Räknaren på inställningssidan är hela poängen med sidan
+
+`/kv/regler` visar **medan man skriver** vad tröskeln motsvarar i procent — ur
+talen i formuläret, inte ur det sparade. Den som sätter 200 på varje område ser
+direkt att tröskeln blev 6,7 %, innan det är sparat och innan någon får en bonus
+av misstag. Var maxpoängen omöjligt låg säger den i stället att tröskeln inte
+går att nå.
+
+Det var precis den kontrollen specifikationen bad om i avsnitt 6.1, och skälet
+att den behövs är att felet inte syns någon annanstans: en trasig skala ger inga
+felmeddelanden, bara fel bonus.
+
+### Torsdagsregeln, och varför randveckorna nästan blev fel
+
+En ISO-vecka som spänner över ett månadsskifte hör till den månad där dess
+**torsdag** ligger (Ö9). Det ger alltid fyra eller fem veckor per månad utan
+överlapp och utan glapp.
+
+Fällan låg i periodstängningen. Hämtas bara augustis samtal blir randveckorna
+halva — och en halv vecka är per definition inte fullständigt bedömd, alltså
+ingen bonus. `hamtaKvPerPerson` hämtar därför **en vecka före och en efter**
+månaden och låter `kvManad` filtrera. Utan det hade varje månadsrand tyst tappat
+en godkänd vecka.
+
+### En halvbedömd vecka hoppas över, och det är inte snällhet
+
+Tröskeln är definierad som summan av **båda** samtalen. En vecka med bara ett
+bedömt samtal kan därför aldrig nå 160 — maxpoängen per samtal är 100 — och
+veckan hade blivit **underkänd av ett skäl som är chefens och inte säljarens**.
+
+Avsnitt 6.2 säger redan att en vecka hoppas över "oavsett skäl — — eller att
+chefen inte hann". Att chefen hann halva vägen är samma sak. Regeln följde av
+specifikationen men stod inte utskriven; den är inarbetad i 6.2 nu.
+
+Rutnätet visar `1/2` för de halva veckorna, så att de går att se.
+
+### Rutnätets tomma rutor är det enda som avslöjar en glömd vecka
+
+En vecka utan bedömning räknas varken för eller emot, så ingen siffra någonstans
+visar att den saknas. Chefens rutnät säljare × vecka är därför inte en översikt
+utan **den enda kontrollen** — det är därför den vyn står i specifikationen.
+
+### Bedömningen får ändras, till skillnad från huvudboken
+
+En bokförd krona är en händelse som inträffat; en bedömning är en människas
+omdöme. Ett omdöme som visar sig fel ska gå att rätta, annars blir chefen
+försiktig med att skriva något alls — och då tappar protokollet det som gör det
+till ett utvecklingsprotokoll.
+
+Ändringen loggas med **både det gamla och det nya talet**. En logg som bara
+säger att något ändrades går inte att granska.
+
+Är perioden redan stängd ändras ingen utbetalning: den är bokförd i
+`commission_entry` och rättas i så fall med en negativ post.
+
+### K&V räknas aldrig på K&V
+
+Basen är grundprovision **plus volymbonus** (Ö3), alltså hela månadens intjäning
+före K&V. Läggs K&V-bonusen till basen blir den beroende av sig själv, och då
+avgör ordningen mellan raderna vad någon får betalt. Provet kontrollerar det
+explicit.
+
+### Utvecklingskurvan räknar snitt, inte summa
+
+En månad med fem bedömda samtal ger en högre summa än en med tre utan att något
+blivit bättre. En kurva som stiger när man arbetar mer är inte en
+utvecklingskurva.
+
+### Säljaren ser fritexten
+
+Fråga 38, och det är hela poängen med ett utvecklingsprotokoll. Formuläret säger
+det rakt ut till chefen: *"Säljaren läser det du skriver här."*
+
+Och skälet till att en vecka hoppats över får **aldrig** synas — "ej bedömd,
+sjukfrånvaro" i en prestationsvy är sjukdata i en provisionsvy (AC-3.26, E7.14).
+Vyn säger "Ej bedömd" och ingenting mer.
+
+### Prov
+
+`tests/kv.mjs`, 54 kontroller: torsdagsregeln inklusive årsskiftet vecka 53,
+halvbedömda veckor, taket i en femveckorsmånad, och de två Ö4-läsningar som
+*inte* valdes — för att visa att kontrollen skiljer dem åt. Plus 18 nya i
+`tests/provision-motor.mjs` för pengarna, som därmed är uppe i 137.
+
+---
+
 ## 2026-08-25 (kväll) · E13 steg 4: säljarens progressvy
 
 Kort, för motorn hade redan allt som behövdes. `nasta` låg i underlaget sedan

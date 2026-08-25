@@ -5,7 +5,13 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 import { getCurrentUser, hasRole } from "@/lib/auth";
 import { svensktDatum } from "@/lib/klocka";
 import { giltigManad, manadFore, manadsnamn } from "@/lib/provision";
-import { bokforingsposter, underlagForAlla, type Bonusniva } from "@/lib/provision-motor";
+import {
+  bokforingsposter,
+  underlagForAlla,
+  type Bonusniva,
+  type KvIndata,
+} from "@/lib/provision-motor";
+import { gallandePolicy, kvManad, type KvPolicy, type KvSamtal } from "@/lib/kv";
 import type { Order } from "@/lib/order";
 
 export type StangningState = { fel?: string; ok?: string };
@@ -93,12 +99,13 @@ export async function faststallPeriod(
     // LASES MED SERVICE ROLE, inte med attestantens token. Bokforingen maste
     // vara fullstandig; en RLS-vy som av nagot skal saknar en rad hade gett en
     // person for lite betalt utan att nagot sag fel ut.
-    const [order, nivaer] = await Promise.all([
+    const [order, nivaer, kvPerPerson] = await Promise.all([
       hamtaAllaOrder(manad),
       hamtaAllaNivaer(),
+      hamtaKvPerPerson(manad),
     ]);
 
-    const rader = underlagForAlla(order, manad, nivaer).flatMap((u) =>
+    const rader = underlagForAlla(order, manad, nivaer, kvPerPerson).flatMap((u) =>
       bokforingsposter(u).map((p) => ({
         employee_id: u.employee_id,
         period_month: manad,
@@ -228,6 +235,83 @@ async function hamtaAllaOrder(manad: string): Promise<Order[]> {
     ...o,
     commission_amount: o.commission_amount === null ? null : Number(o.commission_amount),
   })) as unknown as Order[];
+}
+
+/**
+ * Manadens K&V-utfall per person.
+ *
+ * ===========================================================================
+ * SAMTALEN HAMTAS FRAN EN VECKA FORE OCH EN VECKA EFTER MANADEN.
+ *
+ * En ISO-vecka hor till den manad dar dess TORSDAG ligger (O9), sa en vecka som
+ * raknas i augusti kan innehalla samtal fran den 31 juli — och en vecka vars
+ * samtal ligger den 31 augusti hor till september. Hamtas bara augusti blir
+ * randveckorna halva, och en halv vecka ar per definition inte fullstandigt
+ * bedomd. Foljden hade varit en tyst utebliven bonus i randen av varje manad.
+ *
+ * `kvManad` filtrerar sjalv bort de veckor som inte hor till manaden.
+ * ===========================================================================
+ */
+async function hamtaKvPerPerson(manad: string): Promise<Map<string, KvIndata>> {
+  const db = supabaseAdmin();
+
+  const fran = new Date(`${manad}T00:00:00Z`);
+  fran.setUTCDate(fran.getUTCDate() - 7);
+  const till = new Date(`${manadFore(manad, -1)}T00:00:00Z`);
+  till.setUTCDate(till.getUTCDate() + 7);
+
+  const [{ data: samtal }, { data: policyer }] = await Promise.all([
+    db
+      .from("kv_call")
+      .select("id, employee_id, call_date, customer, kv_assessment(kv_score(points))")
+      .gte("call_date", fran.toISOString().slice(0, 10))
+      .lte("call_date", till.toISOString().slice(0, 10)),
+    db
+      .from("kv_policy")
+      .select("id, calls_per_week, threshold_points, percent_per_week, cap_percent, valid_from, valid_to"),
+  ]);
+
+  const policy = gallandePolicy(
+    ((policyer ?? []) as unknown as Record<string, unknown>[]).map((p) => ({
+      ...p,
+      threshold_points: Number(p.threshold_points),
+      percent_per_week: Number(p.percent_per_week),
+      cap_percent: Number(p.cap_percent),
+    })) as unknown as KvPolicy[],
+    manad,
+  );
+
+  // Ingen policy for manaden betyder att K&V inte galler da. Ingen bonus, inget
+  // fel — samma linje som en tom volymtrappa.
+  if (!policy) return new Map();
+
+  const rader = ((samtal ?? []) as unknown as Record<string, unknown>[]).map((r) => {
+    const bedomning = (r.kv_assessment ?? null) as Record<string, unknown> | null;
+    const poang = ((bedomning?.kv_score ?? []) as Record<string, unknown>[]).reduce(
+      (s, p) => s + Number(p.points),
+      0,
+    );
+
+    return {
+      id: String(r.id),
+      employee_id: String(r.employee_id),
+      call_date: String(r.call_date),
+      customer: String(r.customer),
+      poang: bedomning ? poang : null,
+    } as KvSamtal;
+  });
+
+  const ut = new Map<string, KvIndata>();
+  for (const person of new Set(rader.map((r) => r.employee_id))) {
+    const m = kvManad(
+      rader.filter((r) => r.employee_id === person),
+      manad,
+      policy,
+    );
+    if (m.procent > 0) ut.set(person, { godkanda: m.godkanda, bedomda: m.bedomda, procent: m.procent });
+  }
+
+  return ut;
 }
 
 async function hamtaAllaNivaer(): Promise<Bonusniva[]> {
