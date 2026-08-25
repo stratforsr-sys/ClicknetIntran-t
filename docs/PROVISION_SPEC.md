@@ -580,7 +580,7 @@ Varje steg är en egen leverans med prov på räknemotorn innan nästa börjar.
 | 1 | **KLART 2026-08-25** (migration `0034`): `sales_order`, `commission_rate`, `/order`, grundprovision ur paketmatrisen | — |
 | 2 | **KLART 2026-08-25**: räknemotorn i `src/lib/provision-motor.ts`, ren logik, `tests/provision-motor.mjs`. Rättade samtidigt ett räknefel i steg 1 — se arbetsloggen | Steg 1 |
 | 3 | **KLART 2026-08-25** (migration `0035`): volymtrappan som konfiguration på `/provision/regler`, retroaktivitet, periodstängning med bokföring i `commission_entry` | Steg 2 |
-| 4 | Säljarens progressvy | Steg 3 |
+| 4 | **KLART 2026-08-25**: säljarens progressvy på `/provision`. "3 order kvar till nästa bonus", prognosen med sitt antagande utskrivet, och underlaget rad för rad | Steg 3 |
 | 5 | K&V: tabeller, rutnät, bedömningsformulär, utvecklingskurva, bonus | Steg 2 |
 | 6 | Konsekvenssystemet | Steg 3 |
 | 7 | Export, separat provisionsunderlag | Steg 3 |

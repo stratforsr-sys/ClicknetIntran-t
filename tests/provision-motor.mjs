@@ -24,6 +24,7 @@ import {
   gallandeNivaer,
   kvarTillNasta,
   nivaFor,
+  prognosNastaNiva,
   raknaUnderlag,
   summaAv,
   underlagForAlla,
@@ -436,6 +437,63 @@ console.log("\nAvrundningen sker en gang, pa den fardiga bonusraden");
   ok("bonusen avrundas till 788", u.volymbonus?.belopp === 788);
   ok("bonusraden ar ett helt kronbelopp", Number.isInteger(u.rader.find((r) => r.slag === "volymbonus").belopp));
   ok("summan blir 11288", u.summa === 10500 + 788);
+}
+
+// =============================================================================
+// Steg 4 — prognosen
+// =============================================================================
+
+console.log("\nPrognosen till nasta niva");
+{
+  const u = raknaUnderlag("s1", manadensOrder(7), "2026-08-01", TRAPPA);
+  const p = prognosNastaNiva(u);
+
+  ok("sju order pekar mot niva 10", p?.niva.threshold === 10);
+  ok("tre order kvar", p?.kvar === 3);
+  ok("snittet ar 1500 per order", p?.snittPerOrder === 1500);
+  ok("grundprovisionen da blir 15000", p?.grundprovisionDa === 10 * 1500);
+  ok("bonusen da blir 5500", p?.bonusDa === 5500);
+  ok("totalen da blir 20500", p?.totaltDa === 20500);
+}
+
+console.log("\nPrognosen sager ingenting nar den inte kan");
+{
+  // Trappan star still over 30 (avsnitt 5.3). Ingen nasta niva att peka pa.
+  ok("over trappans slut finns ingen prognos", prognosNastaNiva(raknaUnderlag("s1", manadensOrder(31), "2026-08-01", TRAPPA)) === null);
+
+  // Utan order finns inget snitt. En prognos ur noll order hade varit en
+  // gissning utkladd till en berakning.
+  ok("utan order finns ingen prognos", prognosNastaNiva(raknaUnderlag("s1", [], "2026-08-01", TRAPPA)) === null);
+
+  // Utan konfigurerad trappa finns ingen niva att sikta pa.
+  ok("utan trappa finns ingen prognos", prognosNastaNiva(raknaUnderlag("s1", manadensOrder(7), "2026-08-01", [])) === null);
+}
+
+console.log("\nPrognosen raknar pa MANADENS snitt, inte pa paketpriset");
+{
+  // Fyra order: tre sma och en stor. Snittet ar 2250, inte 1500.
+  const blandat = [
+    order({ id: "a", signerad: "2026-08-01", belopp: 1500 }),
+    order({ id: "b", signerad: "2026-08-02", belopp: 1500 }),
+    order({ id: "c", signerad: "2026-08-03", belopp: 1500 }),
+    order({ id: "d", signerad: "2026-08-04", paket: 3, loptid: 36, belopp: 4500 }),
+  ];
+
+  const p = prognosNastaNiva(raknaUnderlag("s1", blandat, "2026-08-01", TRAPPA));
+  ok("snittet ar 2250", p?.snittPerOrder === 2250);
+  ok("en order kvar till niva 5", p?.kvar === 1);
+  ok("grundprovisionen da blir 11250", p?.grundprovisionDa === 9000 + 2250);
+  ok("och totalen 13250", p?.totaltDa === 11250 + 2000);
+}
+
+console.log("\nProcentbonusen i prognosen raknas pa den framskrivna summan");
+{
+  const proc = [{ id: "p", threshold: 10, amount: 10, unit: "percent", valid_from: "2026-08-01", valid_to: null }];
+  const p = prognosNastaNiva(raknaUnderlag("s1", manadensOrder(7), "2026-08-01", proc));
+
+  // 10 order x 1500 = 15 000, 10 % = 1 500. Inte 10 % av de 10 500 som finns nu.
+  ok("bonusen da blir 1500", p?.bonusDa === 1500);
+  ok("totalen da blir 16500", p?.totaltDa === 16500);
 }
 
 console.log(fel === 0 ? "\n\x1b[32mAllt gront.\x1b[0m\n" : `\n\x1b[31m${fel} fel.\x1b[0m\n`);

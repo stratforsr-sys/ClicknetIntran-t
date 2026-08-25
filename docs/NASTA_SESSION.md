@@ -3,7 +3,7 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-08-25 (E13 steg 2 och 3)
+**Senast uppdaterad:** 2026-08-25 (E13 steg 2, 3 och 4)
 
 ---
 
@@ -12,30 +12,28 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
 **Läs `docs/PROVISION_SPEC.md` innan du rör provisionen.** Beställaren besvarade
 59 frågor 2026-08-24 och specifikationen bär hela regelverket: paketmatrisen,
 volymbonusens trappa, K&V-protokollet, konsekvenstrappan och byggordningen i
-åtta steg.
+nio steg.
 
 **Ingenting blockerar längre.** Q78–Q80 är besvarade (paketmatrisen), och
 K12-frågan avgjordes 2026-08-24 — se **D-K12**. Rast och sen ankomst når
 fortfarande aldrig provisionen; utebliven instämpling gör det, men bara via ett
 förslag som chefen måste godkänna.
 
-**Steg 1, 2 och 3 är klara 2026-08-25** (migrationerna `0034` och `0035`).
-Grundprovisionen, räknemotorn, volymtrappan och periodstängningen finns.
-**Steg 4–9 återstår.**
+**Steg 1–4 är klara 2026-08-25** (migrationerna `0034` och `0035`).
+Grundprovisionen, räknemotorn, volymtrappan, periodstängningen och säljarens
+progressvy finns. **Steg 5–9 återstår.**
 
 ### Nästa steg, i den ordning de går att ta
 
 | Steg | Vad | Blockerat av |
 |---|---|---|
-| **4** | Säljarens progressvy: "3 order kvar till nästa bonus" | Ingenting. Motorn har redan `nasta` i underlaget |
 | **5** | K&V | **Ö4 — fråga beställaren först, se nedan** |
 | **6** | Konsekvenssystemet | Ingenting sedan D-K12. Men se **Ö8** och **Ö15** |
 | 7 | Export och separat provisionsunderlag | Ingenting |
 | 8 | Dialer-API för K&V-urvalet | A6 |
 | 9 | Orderbilagan: PDF-uppladdning | Ingenting, men egen migration som vidgar `file_object` |
 
-**Steg 4 är det som ger mest per timme.** Motorn räknar redan ut allt den
-behöver; det som saknas är vyn.
+**Steg 6 är det största som inte väntar på ett svar.** Steg 7 är det minsta.
 
 ### Beställaren måste svara på Ö4 innan steg 5 byggs
 
@@ -183,6 +181,7 @@ i `rls.mjs`.** Samtliga 105 i den filen plus 51 i övriga sviter. Leta inte om:
 | **Kundorder** | **I drift sedan 2026-08-25.** `/order`. Paketmatrisen i `commission_rate`, provisionen fryses vid godkännande |
 | **Volymtrappan** | **I drift sedan 2026-08-25.** `/provision/regler`, säljchef och VD. **Tom tills beställaren fyller i beloppen** |
 | **Periodstängning** | **I drift sedan 2026-08-25.** Kort på `/provision`. Öppen månad räknas live, fastställd är bokförd |
+| **Progressvy** | **I drift sedan 2026-08-25.** `/provision`. "3 order kvar till nästa bonus" med prognosens antagande utskrivet |
 
 ### Raststämplingen: två steg kvar, och båda är dina
 

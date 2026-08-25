@@ -5,6 +5,48 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-08-25 (kväll) · E13 steg 4: säljarens progressvy
+
+Kort, för motorn hade redan allt som behövdes. `nasta` låg i underlaget sedan
+steg 3; det som saknades var prognosen och vyn.
+
+### Prognosen räknar på månadens snitt, och antagandet står utskrivet
+
+`prognosNastaNiva()` i motorn, med prov. Beställarens val på fråga 52: prognosen
+utgår från **nuvarande snittprovision per order**, inte från paketpriset.
+
+Antagandet skrivs ut i vyn — *"vid samma snitt som hittills, 1 500 kr per
+order"* — och det är inte artighet. "Du får 22 000 kr vid tio order" är fel så
+snart de tre sista orderna är mindre än de sju första, och då är det navet som
+ljög. Med villkoret utskrivet är det samma tal med något som går att
+kontrollera.
+
+**Prognosen svarar `null` i tre lägen** i stället för att gissa: över trappans
+slut finns ingen nästa nivå, utan order finns inget snitt, och utan konfigurerad
+trappa finns ingen nivå att sikta på. En prognos ur noll order är en gissning
+utklädd till en beräkning.
+
+### Sidan får aldrig addera de två sanningarna
+
+`/provision` visar nu två saker som båda handlar om samma månad: motorns live-tal
+och de handinmatade posterna i `commission_entry`. För en **öppen** månad läggs
+de ihop. För en **fastställd** gör de inte det — attesten har då redan bokfört
+motorns rader, och att addera dem igen hade dubbelräknat månaden.
+
+Det är en rad kod (`minStangd`) och den är hela skillnaden mellan rätt och
+dubbelt. Den står utskriven överst i filen.
+
+### Två saker står medvetet inte i säljarens vy
+
+**K&V-bonusen** — den ligger på K&V-sidan (steg 5). Den bedöms av en människa och
+hör ihop med bedömningen, inte med ordervolymen.
+
+**Hela beräkningskedjan** — säljaren får underlaget i en enklare version än
+chefens (fråga 54): vilka order, vilken nivå, vilka avdrag, men inte varje
+mellanled.
+
+---
+
 ## 2026-08-25 (kväll) · E13 steg 2 och 3: räknemotorn, volymtrappan och periodstängningen
 
 Två leveranser, ett räknefel i det som redan låg i produktion, och en fråga som

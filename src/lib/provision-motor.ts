@@ -364,6 +364,62 @@ export function underlagForAlla(
 }
 
 // -----------------------------------------------------------------------------
+// Prognosen — steg 4
+// -----------------------------------------------------------------------------
+
+export type Prognos = {
+  /** Nivan som nas harnast. */
+  niva: Bonusniva;
+  /** Antal order kvar dit. */
+  kvar: number;
+  /** Snittprovisionen per order hittills i manaden. Bestallarens val, fraga 52. */
+  snittPerOrder: number;
+  /** Grundprovisionen nar nivan nas, med snittet framskrivet. */
+  grundprovisionDa: number;
+  /** Bonusen nivan ger da. */
+  bonusDa: number;
+  /** Vad totalen blir. */
+  totaltDa: number;
+};
+
+/**
+ * Vad nasta niva ger, och vad totalen blir nar den nas (avsnitt 9.1).
+ *
+ * ===========================================================================
+ * PROGNOSEN RAKNAS PA NUVARANDE SNITTPROVISION PER ORDER — bestallarens val
+ * pa fraga 52 — och ANTAGANDET SKA SKRIVAS UT I VYN.
+ *
+ * Skalet ar att en prognos utan sina forutsattningar ar en siffra folk brakar
+ * om. "Du far 22 000 kr vid tio order" ar fel sa fort de tre sista orderna ar
+ * mindre an de sju forsta, och da ar det navet som ljog. "Vid samma snitt som
+ * hittills" ar samma tal med ett villkor som gar att kontrollera.
+ *
+ * `null` nar det inte gar att saga nagot: ingen nasta niva (trappan star still
+ * over 30), eller inga order an att rakna ett snitt ur. En prognos ur noll
+ * order hade varit en gissning utklaadd till en berakning.
+ * ===========================================================================
+ */
+export function prognosNastaNiva(u: Underlag): Prognos | null {
+  if (!u.nasta) return null;
+  if (u.antal.signerade === 0) return null;
+
+  const snittPerOrder = u.grundprovision / u.antal.signerade;
+  const grundprovisionDa = u.grundprovision + u.nasta.kvar * snittPerOrder;
+  const bonusDa = avrunda(
+    volymbonusBelopp(u.nasta.niva, u.nasta.niva.threshold, grundprovisionDa),
+  );
+
+  return {
+    niva: u.nasta.niva,
+    kvar: u.nasta.kvar,
+    snittPerOrder,
+    grundprovisionDa: avrunda(grundprovisionDa),
+    bonusDa,
+    totaltDa: avrunda(grundprovisionDa) + bonusDa,
+  };
+}
+
+// -----------------------------------------------------------------------------
 // Bokforingen — det underlaget blir nar perioden stangs
 //
 // ===========================================================================
