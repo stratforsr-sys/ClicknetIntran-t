@@ -14,6 +14,68 @@
 
 export type Notistyp = "arende" | "nyhet" | "rutin" | "kurs" | "franvaro" | "fel";
 
+/**
+ * De tolv sorters post klockan kan visa, som de heter i ett notis-id.
+ *
+ * Listan ar inte samma sak som `Notistyp`. Typen avgor ikon och etikett; det har
+ * avgor VILKEN RAD posten kom ur, och tva poster med samma typ kan komma ur
+ * olika hall — `franvaro-lucka` ar en pamminelse och `franvaro-beslut` ett
+ * besked, bada med typen "franvaro".
+ *
+ * Varfor den finns: `avfardaNotis()` maste kunna avgora om en strang fran
+ * klienten ar ett notis-id innan den skrivs. Alternativet — att rakna fram alla
+ * notiser igen och leta i listan — hade kostat sjutton databasfragor pa ett
+ * klick som samtidigt navigerar bort.
+ */
+export const NOTIS_KALLOR = [
+  "nyhet",
+  "rutin",
+  "kurs",
+  "arende",
+  "franvaro",
+  "franvaro-beslut",
+  "franvaro-lucka",
+  "sjuk",
+  "rollspel",
+  "rollspel-bedomt",
+  "fel",
+  "fel-svar",
+] as const;
+
+export type Notiskalla = (typeof NOTIS_KALLOR)[number];
+
+/**
+ * Bygger ett notis-id.
+ *
+ * ALLA ID:N GAR GENOM DEN HAR FUNKTIONEN, och det ar hela poangen: listan ovan
+ * och listan i `notiser-server.ts` kan da inte glida isar, for det finns bara en
+ * lista. Skrivs en ny sorts notis med ett hopskrivet `\`nagot-${id}\`` faller
+ * typkontrollen i stallet for att avfardningen tyst slutar fungera for just den.
+ *
+ * DELARNA BAR ATERUPPSTANDELSEN. `notisId("rutin", dok.id, dok.version)` ger ett
+ * nytt id nar rutinen far en ny version, sa den dyker upp igen aven for den som
+ * klickade bort forra versionen. Samma sak med meddelandets id i ett arende.
+ * Skicka darfor med det som gor posten ny — inte bara radens id.
+ */
+export function notisId(kalla: Notiskalla, ...delar: (string | number)[]): string {
+  return [kalla, ...delar].join("-");
+}
+
+/**
+ * Ar strangen formad som ett notis-id?
+ *
+ * Bara formen provas, aldrig att posten finns. Det varsta ett paitat men
+ * valformat id kan stalla till ar en rad som doljer en notis som inte finns —
+ * i den avfardandes egen tabell, som ingen annan laser.
+ */
+export function arNotisId(varde: unknown): varde is string {
+  if (typeof varde !== "string" || varde.length < 3 || varde.length > 200) return false;
+  const kalla = NOTIS_KALLOR.find((k) => varde.startsWith(k + "-"));
+  if (!kalla) return false;
+  // Delarna ar uuid:er och heltal. Allt annat ar nagon som provar.
+  return /^[0-9a-zA-Z-]+$/.test(varde.slice(kalla.length + 1));
+}
+
 export type Notis = {
   /** Stabil over sidladdningar — den bar "last"-markeringen medan panelen ar oppen. */
   id: string;

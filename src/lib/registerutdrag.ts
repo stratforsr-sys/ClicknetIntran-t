@@ -50,6 +50,18 @@ export const KALLOR: Kalla[] = [
   { tabell: "course", kolumn: "owner_id", andamal: "Kurser du äger" },
   { tabell: "news_post", kolumn: "author_id", andamal: "Nyhetsinlägg du skrivit" },
   { tabell: "notification_seen", kolumn: "employee_id", andamal: "När du senast öppnade notisklockan" },
+  // 0038. En rad per notis du klickat bort. Den säger inget om vad du gjorde
+  // efteråt — bara att posten inte ska visas igen — men den handlar om dig.
+  { tabell: "notification_dismissed", kolumn: "employee_id", andamal: "Notiser du klickat bort" },
+
+  // 0037 E13 steg 6. En registrerad ogiltig frånvaro och vad den ledde till.
+  //
+  // ÄVEN FÖRSLAGEN SKA MED, inte bara de beslutade. RLS visar med flit inte ett
+  // obeslutat förslag för den det gäller — annars vore varje automatiskt
+  // genererad rad ett besked innan en människa läst den — men artikel 15 frågar
+  // inte om vi tänkt visa uppgiften i gränssnittet. Utdraget körs med service
+  // role (se registerutdrag-server.ts), så raden kommer med.
+  { tabell: "attendance_incident", kolumn: "employee_id", andamal: "Registrerad ogiltig frånvaro och beslut om den" },
 
   // E6.5. En rad per dygn du använt navet, utan klockslag och utan sidor.
   // Raden går inte att läsa via API:t — inte ens för säljchefen, se 0029 — men
@@ -129,7 +141,11 @@ export const KALLOR: Kalla[] = [
  * hamtas separat pa `actor_id`.
  */
 export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
+  { tabell: "attendance_incident", kolumn: "created_by", skal: "Vem som la upp händelsen för hand" },
+  { tabell: "attendance_incident", kolumn: "decided_by", skal: "Vem som beslutade om någon annans händelse" },
+  { tabell: "attendance_incident", kolumn: "revoked_by", skal: "Vem som hävde någon annans händelse" },
   { tabell: "audit_log", kolumn: "actor_id", skal: "Hämtas separat, från båda hållen" },
+  { tabell: "consequence_rule", kolumn: "set_by", skal: "Vem som satte konsekvenstrappan" },
   { tabell: "break_deviation", kolumn: "resolved_by", skal: "Vem som avslutade avvikelsen" },
   { tabell: "case_message", kolumn: "author_id", skal: "Hämtas via ärendet, inte direkt" },
   { tabell: "compliance_gate", kolumn: "enabled_by", skal: "Vem som slog på en modul" },

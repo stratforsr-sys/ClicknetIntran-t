@@ -67,6 +67,11 @@ async function skapa(lokal, fornamn, roll) {
     body: JSON.stringify({ email: epost, password: LOSEN, email_confirm: true }),
   });
   const user = await r.json();
+  // Utan den har raden blir ett misslyckat kontoskapande en employee-rad med
+  // auth_user_id = null, och felet dyker upp forst vid inloggningen som
+  // "invalid_credentials" — vilket ser ut som ett losenordsfel och inte som det
+  // det ar.
+  if (!user.id) throw new Error(`Kunde inte skapa ${epost}: ${JSON.stringify(user)}`);
   const { rows } = await db.query(
     `insert into employee (auth_user_id, email, first_name, last_name, status, employment_type)
      values ($1::uuid,$2,$3,'Testsson','active','permanent') returning id`,
@@ -124,17 +129,42 @@ async function nekarSpar(sql, params = []) {
   }
 }
 
+/**
+ * Alla auth-konton med provets prefix, hamtade ur Auth i stallet for ur
+ * employee.
+ *
+ * DET HAR AR SKILLNADEN MOT ATT LASA `employee.auth_user_id`: en kraschad
+ * korning lamnar kvar bada halvorna, men stadningen kordes forr bara over
+ * employee-raderna. Forsta gangen den kombinationen uppstod var kontot borta ur
+ * employee och kvar i Auth — foraldralost, osynligt for stadningen, och omojligt
+ * att skapa om. `skapa()` fick tillbaka "email exists", la in en employee-rad
+ * utan auth_user_id, och inloggningen dog pa invalid_credentials.
+ *
+ * Foljden var att provet inte gick att kora igen ALLS utan att nagon rensade for
+ * hand. Ett prov som far ett permanent minne av sin egen krasch ar varre an
+ * inget prov: det ar rott av ett skal som inte har med koden att gora.
+ */
+async function foraldralosaKonton() {
+  const konton = [];
+  for (let sida = 1; sida <= 20; sida++) {
+    const r = await fetch(`${URL}/auth/v1/admin/users?page=${sida}&per_page=200`, { headers: ADMIN });
+    const j = await r.json();
+    const users = j.users ?? [];
+    for (const u of users) if (u.email?.startsWith(PREFIX)) konton.push(u.id);
+    if (users.length < 200) break;
+  }
+  return konton;
+}
+
 async function stad() {
-  const { rows } = await db.query(`select id, auth_user_id from employee where email like $1`, [PREFIX + "%"]);
-  for (const r of rows) {
-    if (r.auth_user_id) {
-      await fetch(`${URL}/auth/v1/admin/users/${r.auth_user_id}`, { method: "DELETE", headers: ADMIN });
-    }
+  for (const id of await foraldralosaKonton()) {
+    await fetch(`${URL}/auth/v1/admin/users/${id}`, { method: "DELETE", headers: ADMIN });
   }
   await db.query(`delete from audit_log where object_id in (select id::text from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`update team set lead_id = null where lead_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`delete from news_post where slug like 'rlstest-%'`);
   await db.query(`delete from notification_seen where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
+  await db.query(`delete from notification_dismissed where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
   // 0022/0023. Bilagorna forsvinner i kaskaden fran dokumentet, men
   // sjukintygen hanger i sjukanmalningar och behover det medvetna handgreppet.
   await db.query(`delete from document where slug like 'rlstest-%'`);
@@ -1237,6 +1267,56 @@ console.log("\n\x1b[1mKlockans tidpunkt är var och ens egen\x1b[0m");
     body: JSON.stringify({ seen_at: new Date().toISOString() }),
   });
   ok("inte ens sin egen — det gör servern", !egen.ok, `HTTP ${egen.status}`);
+}
+
+console.log("\n\x1b[1m0038: bortklickade notiser är var och ens egna\x1b[0m");
+{
+  // Listan över vad någon klickat bort säger något om henne — vad hon valt att
+  // inte ta tag i just nu. Samma krets som klockans tidpunkt: bara hon själv.
+  await db.query(
+    `insert into notification_dismissed (employee_id, notice_id) values ($1::uuid, 'kurs-rlstest'), ($2::uuid, 'kurs-rlstest')
+     on conflict do nothing`,
+    [saljareA.id, saljareB.id],
+  );
+
+  const annas = await las(tA, "notification_dismissed", "select=employee_id,notice_id");
+  ok("Anna ser sin egen rad", annas.length === 1 && annas[0].employee_id === saljareA.id,
+    `såg ${annas.length}`);
+
+  const direkt = await las(tA, "notification_dismissed", `select=notice_id&employee_id=eq.${saljareB.id}`);
+  ok("och noll rader när hon frågar på Bertils", direkt.length === 0, `såg ${direkt.length}`);
+
+  // Kunde man skriva i någon annans namn gick det att tysta deras klocka post
+  // för post — tystare och svårare att upptäcka än att flytta tidpunkten.
+  const skriv = await fetch(`${URL}/rest/v1/notification_dismissed`, {
+    method: "POST", headers: som(tA),
+    body: JSON.stringify({ employee_id: saljareB.id, notice_id: "kurs-rlstest2" }),
+  });
+  ok("ingen kan klicka bort någon annans notis", !skriv.ok, `HTTP ${skriv.status}`);
+
+  const egenSkriv = await fetch(`${URL}/rest/v1/notification_dismissed`, {
+    method: "POST", headers: som(tA),
+    body: JSON.stringify({ employee_id: saljareA.id, notice_id: "kurs-rlstest3" }),
+  });
+  ok("inte ens sin egen — det gör servern", !egenSkriv.ok, `HTTP ${egenSkriv.status}`);
+
+  // Ångra sig går inte via API:t heller. Att posten kommer tillbaka löses av
+  // att ett nytt id skapas när något faktiskt är nytt, inte av en delete.
+  const radera = await fetch(`${URL}/rest/v1/notification_dismissed?employee_id=eq.${saljareA.id}`, {
+    method: "DELETE", headers: som(tA),
+  });
+  ok("och ingen raderar rader via API:t", !radera.ok, `HTTP ${radera.status}`);
+
+  // Kolumnen tar 200 tecken, och `arNotisId()` säger nej långt före det. Att
+  // villkoret ändå finns i databasen är samma linje som resten av navet: regeln
+  // gäller även den server action som glömmer den.
+  const forLangt = await nekarSpar(
+    `insert into notification_dismissed (employee_id, notice_id) values ($1::uuid, $2)`,
+    [saljareA.id, "kurs-" + "a".repeat(400)],
+  );
+  ok("databasen nekar ett id på 400 tecken", forLangt !== null, forLangt ?? "gick igenom");
+
+  await db.query(`delete from notification_dismissed where notice_id like 'kurs-rlstest%'`);
 }
 
 // =============================================================================
@@ -2358,7 +2438,7 @@ console.log("\n\x1b[1mE6.5: adoption raknas i antal, och gar aldrig att bryta ne
 }
 
 console.log("\n\x1b[1mAnonym anslutning\x1b[0m");
-for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate", "news_post", "notification_seen", "absence_type", "absence_policy", "absence_blackout", "staffing_cap", "absence_balance", "absence_request", "absence_call_order", "sick_report", "sick_deadline", "absence_reminder", "calendar_feed", "file_object", "file_access_log", "roleplay_criterion", "roleplay_submission", "roleplay_score", "cost_rate", "salary_basis", "revenue_entry", "cost_calculation", "error_report", "contract", "contract_template", "activity_day", "search_miss", "candidate", "candidate_stage_event", "interview_scorecard", "recruitment_source", "recruitment_policy"]) {
+for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate", "news_post", "notification_seen", "notification_dismissed", "absence_type", "absence_policy", "absence_blackout", "staffing_cap", "absence_balance", "absence_request", "absence_call_order", "sick_report", "sick_deadline", "absence_reminder", "calendar_feed", "file_object", "file_access_log", "roleplay_criterion", "roleplay_submission", "roleplay_score", "cost_rate", "salary_basis", "revenue_entry", "cost_calculation", "error_report", "contract", "contract_template", "activity_day", "search_miss", "candidate", "candidate_stage_event", "interview_scorecard", "recruitment_source", "recruitment_policy"]) {
   const r = await fetch(`${URL}/rest/v1/${t}?select=*`, { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` } });
   const j = await r.json();
   ok(`${t} ger inga rader anonymt`, !Array.isArray(j) || j.length === 0, Array.isArray(j) ? `${j.length} rader` : `HTTP ${r.status}`);

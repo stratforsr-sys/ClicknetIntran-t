@@ -75,10 +75,29 @@ async function prova(namn, sql, params, vantatFel = null) {
 // sommartid tva timmar bakat, alltsa till dagen innan. Den 1 juli blev
 // "2026-06-30", och villkoret `commission_period_manad` fallde. Samma falla som
 // `svensktDatum()` i klocka.ts finns till for.
+//
+// FORRA MANADEN ar den SENASTE avslutade manad som inte redan ar faststalld.
+//
+// Provet hette forr just "forra manaden", rakt av. Det holl sa lange
+// `commission_period` var tom, och gick sonder den dag beslutsfattaren stangde
+// sin forsta riktiga period: provet forsokte lagga in en rad som redan fanns och
+// dog pa primarnyckeln. Rott utan att nagot var trasigt — samma slags fel som
+// rubriken i tests/rls.mjs varnar for, fast at skrivhallet.
+//
+// Vilken avslutad manad som helst provar samma gren i triggern (manadsslutet har
+// passerat), sa provet tappar ingenting pa att backa till den narmast
+// foregaende lediga. Randen at andra hallet — att INNEVARANDE manad nekas —
+// provas fortfarande pa den riktiga manaden nedan, och det ar den randen som
+// betyder nagot.
 const [{ forra, denna }] = (
   await c.query(
-    "select to_char(date_trunc('month', now()) - interval '1 month', 'YYYY-MM-DD') forra," +
-      " to_char(date_trunc('month', now()), 'YYYY-MM-DD') denna",
+    "select to_char(m, 'YYYY-MM-DD') forra, to_char(date_trunc('month', now()), 'YYYY-MM-DD') denna" +
+      " from generate_series(" +
+      "   date_trunc('month', now()) - interval '1 month'," +
+      "   date_trunc('month', now()) - interval '60 months'," +
+      "   interval '-1 month') m" +
+      " where not exists (select 1 from commission_period p where p.period_month = m::date)" +
+      " limit 1",
   )
 ).rows;
 
@@ -130,21 +149,33 @@ await prova(
 );
 
 console.log("\n\x1b[1mTrappan: en gallande rad per troskel\x1b[0m");
+
+// Samma skal som forraManaden ovan: trappan var tom nar provet skrevs, och
+// niva 10 var darfor ledig. Den ar det inte langre — bestallaren har fyllt i
+// 5/10/15/20. En troskel ovanfor allt som kan bli en riktig niva later provet
+// prova indexet i stallet for att krocka med det.
+const provTroskel = Number(
+  (await c.query("select coalesce(max(threshold), 0) + 1000 t from commission_bonus_level")).rows[0].t,
+);
+
 await prova(
   "en niva gar att lagga in",
-  "insert into commission_bonus_level (threshold, amount, unit, valid_from) values (10, 5500, 'amount_fixed', date '2026-08-01')",
-  [],
+  "insert into commission_bonus_level (threshold, amount, unit, valid_from) values ($1, 5500, 'amount_fixed', date '2026-08-01')",
+  [provTroskel],
 );
 await prova(
   "tva OPPNA rader for samma troskel nekas",
-  "insert into commission_bonus_level (threshold, amount, unit, valid_from) values (10, 6000, 'amount_fixed', date '2026-09-01')",
-  [],
+  "insert into commission_bonus_level (threshold, amount, unit, valid_from) values ($1, 6000, 'amount_fixed', date '2026-09-01')",
+  [provTroskel],
   "commission_bonus_level_oppen_idx",
 );
+// Tva kommandon i ett anrop, och darfor utan platshallare: `pg` vagrar skicka
+// flera satser i en forberedd fraga. `provTroskel` ar ett tal raknat ur
+// databasen och gar inte att smuggla nagot genom.
 await prova(
   "en stangd rad plus en oppen ar hela versioneringen",
-  "update commission_bonus_level set valid_to = date '2026-09-01' where threshold = 10;" +
-    " insert into commission_bonus_level (threshold, amount, unit, valid_from) values (10, 6000, 'amount_fixed', date '2026-09-01')",
+  `update commission_bonus_level set valid_to = date '2026-09-01' where threshold = ${provTroskel};` +
+    ` insert into commission_bonus_level (threshold, amount, unit, valid_from) values (${provTroskel}, 6000, 'amount_fixed', date '2026-09-01')`,
   [],
 );
 await prova(
@@ -183,11 +214,18 @@ await c.query("rollback");
 
 // Kontrollera att ingenting blev kvar. En provsvit som skriver i produktionen
 // utan att stada ar varre an ingen provsvit.
+//
+// FRAGA PA PROVETS EGNA RADER, inte pa hela tabellen. Kontrollen rakande forr
+// varenda rad i `commission_period` och krave noll — vilket bara stamde sa lange
+// ingen anvant funktionen. Andamalet ar att provets skrivningar ar borta, inte
+// att bolaget aldrig stangt en period. Samma regel som star overst i
+// tests/rls.mjs, och det ar tredje gangen den bits.
 const kvar = (
   await c.query(
-    "select (select count(*) from commission_period) p," +
-      " (select count(*) from commission_bonus_level where amount in (5500, 6000)) n," +
+    "select (select count(*) from commission_period where period_month = $1) p," +
+      " (select count(*) from commission_bonus_level where threshold = $2) n," +
       " (select count(*) from commission_entry where external_ref like 'prov-0035%') e",
+    [forraManaden, provTroskel],
   )
 ).rows[0];
 

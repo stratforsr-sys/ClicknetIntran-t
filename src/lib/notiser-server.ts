@@ -3,7 +3,7 @@ import "server-only";
 import { supabaseServer, supabaseAdmin } from "@/lib/supabase/server";
 import { fullName, type CurrentUser } from "@/lib/auth";
 import { kursLage } from "@/lib/utbildning";
-import { MAX_NOTISER, sortera, type Notis } from "@/lib/notiser";
+import { MAX_NOTISER, notisId, sortera, type Notis } from "@/lib/notiser";
 
 /**
  * Allt som ar riktat till den har personen just nu.
@@ -23,6 +23,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
 
   const [
     { data: seddRad },
+    { data: avfardade },
     { data: nyheter },
     { data: kravDok },
     { data: minaAck },
@@ -40,6 +41,10 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
     { data: felrapporter },
   ] = await Promise.all([
     supabase.from("notification_seen").select("seen_at").eq("employee_id", mig).maybeSingle(),
+    // 0038. Poster den har personen redan klickat pa. Hamtas med hennes egen
+    // token som allt annat i filen — RLS ger bara hennes egna rader, sa ett
+    // eget filter hade varit ett andra svar pa samma fraga.
+    supabase.from("notification_dismissed").select("notice_id").eq("employee_id", mig),
     supabase
       .from("news_post")
       .select("id, slug, title, published_at, pinned")
@@ -126,7 +131,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
 
   for (const n of nyheter ?? []) {
     notiser.push({
-      id: `nyhet-${n.id}`,
+      id: notisId("nyhet", n.id),
       typ: "nyhet",
       rubrik: n.title,
       detalj: n.pinned ? "Viktigt meddelande" : "Nytt inlägg",
@@ -140,7 +145,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
   for (const d of kravDok ?? []) {
     if (ackade.has(`${d.id}:${d.version}`)) continue;
     notiser.push({
-      id: `rutin-${d.id}-${d.version}`,
+      id: notisId("rutin", d.id, d.version),
       typ: "rutin",
       rubrik: d.title,
       // Version 1 ar ny; allt darover ar en andring som kraver ny kvittens.
@@ -173,7 +178,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
     if (lage === "certifierad") continue;
 
     notiser.push({
-      id: `kurs-${k.id}`,
+      id: notisId("kurs", k.id),
       typ: "kurs",
       rubrik: k.title,
       detalj: klara === 0 ? "Ny kurs för dig" : `${klara} av ${ids.length} moduler klara`,
@@ -201,7 +206,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
     const forfattare = namn.get(m.author_id);
 
     notiser.push({
-      id: `arende-${m.case_id}-${m.id}`,
+      id: notisId("arende", m.case_id, m.id),
       typ: "arende",
       rubrik: m.hr_case.subject,
       detalj: mitt
@@ -233,7 +238,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
       // Väntar på mitt beslut. Att raden syns betyder att jag leder personen
       // eller är ledning — RLS har redan avgjort det.
       notiser.push({
-        id: `franvaro-${a.id}`,
+        id: notisId("franvaro", a.id),
         typ: "franvaro",
         rubrik: `${namn.get(a.employee_id) ?? "En medarbetare"} söker ledigt`,
         detalj: `${typnamn.get(a.type_id) ?? a.type_id} · ${a.starts_on}`,
@@ -248,7 +253,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
     // ett avslag — den som inte får veta planerar inte sin semester.
     if (mitt && (a.status === "approved" || a.status === "rejected") && a.decided_at) {
       notiser.push({
-        id: `franvaro-beslut-${a.id}`,
+        id: notisId("franvaro-beslut", a.id),
         typ: "franvaro",
         rubrik: a.status === "approved" ? "Din ledighet är godkänd" : "Din ansökan avslogs",
         detalj: `${typnamn.get(a.type_id) ?? a.type_id} · ${a.starts_on}`,
@@ -262,7 +267,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
   for (const s of obekraftadSjuk ?? []) {
     if (s.employee_id === mig) continue;
     notiser.push({
-      id: `sjuk-${s.id}`,
+      id: notisId("sjuk", s.id),
       typ: "franvaro",
       rubrik: `${namn.get(s.employee_id) ?? "En medarbetare"} är sjukanmäld`,
       detalj: s.escalated_at
@@ -284,7 +289,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
 
     if (!r.graded_at && !mitt) {
       notiser.push({
-        id: `rollspel-${r.id}`,
+        id: notisId("rollspel", r.id),
         typ: "kurs",
         rubrik: `${namn.get(r.employee_id) ?? "En medarbetare"} har lämnat in ett rollspel`,
         detalj: `${kurs?.title ?? "Kurs"} · lyssna och bedöm mot rubriken`,
@@ -296,7 +301,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
 
     if (r.graded_at && mitt) {
       notiser.push({
-        id: `rollspel-bedomt-${r.id}`,
+        id: notisId("rollspel-bedomt", r.id),
         typ: "kurs",
         rubrik: "Ditt rollspel är bedömt",
         detalj: `${kurs?.title ?? "Kurs"} · återkopplingen finns i modulen`,
@@ -314,7 +319,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
   for (const p of paminnelser ?? []) {
     const mitt = p.employee_id === mig;
     notiser.push({
-      id: `franvaro-lucka-${p.id}`,
+      id: notisId("franvaro-lucka", p.id),
       typ: "franvaro",
       rubrik: mitt
         ? `Ingen frånvaro registrerad ${p.work_date}`
@@ -347,7 +352,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
     if (mitt) {
       if (f.status === "new" || !f.handled_at) continue;
       notiser.push({
-        id: `fel-svar-${f.id}`,
+        id: notisId("fel-svar", f.id),
         typ: "fel",
         rubrik:
           f.status === "closed" ? "Din felrapport är avslutad" : "Någon tittar på din felrapport",
@@ -361,7 +366,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
 
     if (f.status !== "new") continue;
     notiser.push({
-      id: `fel-${f.id}`,
+      id: notisId("fel", f.id),
       typ: "fel",
       rubrik: f.blocking ? "Ett fel stoppade någon" : "Nytt fel rapporterat",
       detalj:
@@ -374,7 +379,34 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
     });
   }
 
-  return sortera(notiser.filter((n) => n.tidpunkt)).slice(0, MAX_NOTISER);
+  /**
+   * Avfardningen filtreras FORE `slice`, inte efter.
+   *
+   * Femton platser ar hela listan. Hade de avfardade rakats bort forst efter
+   * kapningen hade de fortfarande atit upp sina platser, och den som klickade
+   * bort tre poster hade fatt en kortare lista i stallet for tre nya. Det ar
+   * precis tvartemot vad knappen lovar.
+   */
+  const bortklickade = new Set((avfardade ?? []).map((a) => a.notice_id));
+
+  return sortera(notiser.filter((n) => n.tidpunkt && !bortklickade.has(n.id))).slice(0, MAX_NOTISER);
+}
+
+/**
+ * Klickad, och darmed ur vagen.
+ *
+ * Skrivs med service role av samma skal som `markeraSedd()`: klientrollerna har
+ * ingen skrivratt sedan 0002, och skulle de fa den har kunde vem som helst tysta
+ * nagon annans klocka.
+ *
+ * `onConflict` gor den idempotent. Ett dubbelklick, en langsam uppkoppling eller
+ * en anvandare som backar tillbaka och klickar igen far inte bli ett fel som
+ * stoppar navigeringen — posten ar redan borta, vilket var hela onskemalet.
+ */
+export async function avfardaNotis(employeeId: string, noticeId: string): Promise<void> {
+  await supabaseAdmin()
+    .from("notification_dismissed")
+    .upsert({ employee_id: employeeId, notice_id: noticeId }, { onConflict: "employee_id,notice_id" });
 }
 
 /**

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Ikon } from "./Ikon";
 import { cn } from "@/components/ui/cn";
 import { narTid, TYP_ETIKETT, TYP_IKON, type Notis } from "@/lib/notiser";
-import { markeraNotiserLasta } from "./notiser-actions";
+import { avfardaNotisen, markeraNotiserLasta } from "./notiser-actions";
 
 /**
  * UI-PRD §5.7. Klockan i toppraden.
@@ -19,15 +19,42 @@ import { markeraNotiserLasta } from "./notiser-actions";
  * "senast sedd", och utan frysningen hade raderna tappat sina prickar mitt
  * framfor ogonen pa den som just oppnade — man hinner se att det fanns nagot
  * nytt, men inte vad. Prickarna star darfor kvar tills panelen stangs.
+ *
+ * EN KLICKAD NOTIS FORSVINNER. Att klicka ar att ta hand om posten, och da ska
+ * den inte ligga kvar och tranga ut nasta. Den tas bort ur listan har och
+ * bokfors i `notification_dismissed` (0038) sa att den ar borta aven efter en
+ * omladdning.
+ *
+ * Borttagningen sker DIREKT och utan att invanta servern. Klicket navigerar
+ * samtidigt, sa den som backar tillbaka gor det till en lista som redan ar
+ * uppdaterad — och gick skrivningen fel ar det varsta som hant att posten kommer
+ * tillbaka vid nasta sidladdning. Det ar ratt hall att fela at: en notis for
+ * mycket ar en irritation, en notis for lite ar nagot som aldrig blir gjort.
+ *
+ * VAD SOM INTE FORSVINNER: allt det andra. Den okvitterade rutinen star kvar pa
+ * `/rutiner`, den ogjorda kursen pa `/utbildning`, den obeslutade ansokan pa
+ * `/franvaro` och pa startsidans "Att gora". Klockan ar pafarten, inte
+ * bokforingen.
  */
 export function Notisklocka({ notiser }: { notiser: Notis[] }) {
   const [oppen, setOppen] = useState(false);
   const [frysta, setFrysta] = useState<string[] | null>(null);
+  const [avfardade, setAvfardade] = useState<Set<string>>(() => new Set());
   const [, startOvergang] = useTransition();
   const router = useRouter();
   const rutan = useRef<HTMLDivElement>(null);
 
-  const olasta = notiser.filter((n) => n.olast).length;
+  const synliga = notiser.filter((n) => !avfardade.has(n.id));
+  const olasta = synliga.filter((n) => n.olast).length;
+
+  function avfarda(n: Notis) {
+    setAvfardade((forra) => new Set(forra).add(n.id));
+    setOppen(false);
+    setFrysta(null);
+    startOvergang(async () => {
+      await avfardaNotisen(n.id);
+    });
+  }
 
   function vaxla() {
     if (oppen) {
@@ -36,7 +63,7 @@ export function Notisklocka({ notiser }: { notiser: Notis[] }) {
       return;
     }
 
-    setFrysta(notiser.filter((n) => n.olast).map((n) => n.id));
+    setFrysta(synliga.filter((n) => n.olast).map((n) => n.id));
     setOppen(true);
 
     if (olasta > 0) {
@@ -108,24 +135,21 @@ export function Notisklocka({ notiser }: { notiser: Notis[] }) {
           <div className="flex items-baseline justify-between gap-3 border-b border-canvas px-4 py-3">
             <h2 className="text-small font-semibold text-ink-900">Notiser</h2>
             <span className="text-micro uppercase text-ink-500">
-              {notiser.length === 0 ? "Inget nytt" : `${notiser.length} senaste`}
+              {synliga.length === 0 ? "Inget nytt" : `${synliga.length} senaste`}
             </span>
           </div>
 
-          {notiser.length === 0 ? (
+          {synliga.length === 0 ? (
             <p className="px-4 py-8 text-center text-small text-ink-500">
               Ingenting väntar på dig just nu.
             </p>
           ) : (
             <ul className="max-h-[60vh] overflow-y-auto">
-              {notiser.map((n) => (
+              {synliga.map((n) => (
                 <li key={n.id} className="border-b border-canvas last:border-0">
                   <Link
                     href={n.href}
-                    onClick={() => {
-                      setOppen(false);
-                      setFrysta(null);
-                    }}
+                    onClick={() => avfarda(n)}
                     className={cn(
                       "flex min-h-14 items-start gap-3 px-4 py-3 transition-colors duration-fast",
                       arOlast(n) ? "bg-accent-tint/40 hover:bg-accent-tint/70" : "hover:bg-canvas",
