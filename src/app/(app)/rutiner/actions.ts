@@ -275,26 +275,10 @@ export async function arkivera(form: FormData): Promise<void> {
   redirect("/rutiner");
 }
 
-/** AC-12.5: rakna visningar, inte logga varje oppning. */
-export async function registreraVisning(dokumentId: string, employeeId: string): Promise<void> {
-  const db = supabaseAdmin();
-  const { data } = await db
-    .from("document_view")
-    .select("views")
-    .eq("document_id", dokumentId)
-    .eq("employee_id", employeeId)
-    .maybeSingle();
-
-  if (data) {
-    await db
-      .from("document_view")
-      .update({ last_seen: new Date().toISOString(), views: data.views + 1 })
-      .eq("document_id", dokumentId)
-      .eq("employee_id", employeeId);
-  } else {
-    await db.from("document_view").insert({ document_id: dokumentId, employee_id: employeeId });
-  }
-}
+// `registreraVisning` lag har och flyttades till src/lib/rutiner-data.ts
+// 2026-08-26. Den tog ett `employeeId` som ARGUMENT och skrev med service role
+// utan att kontrollera nagot — och allt som exporteras ur den har filen ar en
+// publik andpunkt. Se rubriken i rutiner-data.ts.
 
 // =============================================================================
 // Bilagor (E2.12)

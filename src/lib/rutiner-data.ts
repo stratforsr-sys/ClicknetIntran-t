@@ -58,3 +58,54 @@ export async function agarnamn(ids: string[]): Promise<Map<string, string>> {
     .in("id", unika);
   return new Map((data ?? []).map((a) => [a.id, fullName(a)]));
 }
+
+/**
+ * AC-12.5: rakna visningar, inte logga varje oppning.
+ *
+ * ===========================================================================
+ * VARFOR DEN LIGGER HAR OCH INTE I actions.ts
+ *
+ * Den lag dar till 2026-08-26, och var darmed en PUBLIK ANDPUNKT — allt som
+ * exporteras ur en `"use server"`-fil far ett id och tar emot anrop fran
+ * webblasaren. Signaturen var `(dokumentId, employeeId)` och kroppen skrev med
+ * service role utan en enda kontroll.
+ *
+ * Foljden: vem som helst kunde skriva en rad som pastod att VILKEN anstalld som
+ * helst last VILKET dokument som helst, och rakna upp raknaren hur mycket som
+ * helst. `document_view` ar inte en likgiltig tabell — den heter "Lasta rutiner"
+ * i registerutdraget (artikel 15) och ar underlaget for `adoption_glomda_dokument`.
+ * En arbetsmiljorutin som ser last ut for att nagon skickat ett anrop ar precis
+ * det uppgiften finns for att motbevisa.
+ *
+ * Det ar tredje gangen samma fel: `skrivFel` 22 augusti, `sattKvitto` natten
+ * till 24 augusti. Mottet ar detsamma bada gangerna — flytta ut ur
+ * `"use server"`-filen — och den har filen fanns redan for just det andamalet.
+ *
+ * PERSONEN KOMMER NU UR SESSIONEN och inte ur ett argument. Aven om nagon
+ * exporterar den harifran till en actions-fil igen gar den inte att peka mot
+ * nagon annan.
+ * ===========================================================================
+ */
+export async function registreraVisning(dokumentId: string): Promise<void> {
+  const user = await getCurrentUser();
+  if (!user?.employee) return;
+  const employeeId = user.employee.id;
+
+  const db = supabaseAdmin();
+  const { data } = await db
+    .from("document_view")
+    .select("views")
+    .eq("document_id", dokumentId)
+    .eq("employee_id", employeeId)
+    .maybeSingle();
+
+  if (data) {
+    await db
+      .from("document_view")
+      .update({ last_seen: new Date().toISOString(), views: data.views + 1 })
+      .eq("document_id", dokumentId)
+      .eq("employee_id", employeeId);
+  } else {
+    await db.from("document_view").insert({ document_id: dokumentId, employee_id: employeeId });
+  }
+}

@@ -12,7 +12,8 @@ import { DOC_TYPE_LABEL, STATUS_LABEL, granskningslage, type DocType } from "@/l
 import { ROLE_LABEL, type Role } from "@/lib/roles";
 import { visningsnamn } from "@/lib/filer";
 import { Bilagor, type Bilaga } from "../Bilagor";
-import { kvittera, markeraGranskad, registreraVisning } from "../actions";
+import { kvittera, markeraGranskad } from "../actions";
+import { registreraVisning } from "@/lib/rutiner-data";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +55,7 @@ export default async function Rutindokument({ params }: { params: Promise<{ slug
       .limit(6),
   ]);
 
-  if (user?.employee) await registreraVisning(d.id, user.employee.id);
+  await registreraVisning(d.id);
 
   const g = granskningslage(d.review_due);
   const arAgare = user?.employee?.id === d.owner_id;
