@@ -108,15 +108,23 @@ dataskyddskompetens. Bygg inte steg 6 så att den gränsen glider.
 **Ö4 är besvarad: 200 poäng totalt för båda samtalen**, alltså tröskeln 160 =
 80 %. Steg 5 är byggt.
 
-### Beställaren måste fylla i K&V-maxpoängen innan något går att bedöma
+### K&V-maxpoängen ÄR ifylld (kontrollerat 2026-08-26)
 
-`/kv/regler`, säljchef och VD. De sex områdena finns med beställarens egna
-namn, men **maxpoängen är NULL för samtliga** — Ö4 säger att 200 är maxpoängen
-totalt för båda samtalen, inte hur de 200 fördelas på sex områden.
+Texten här sa länge att den var NULL för samtliga sex områden. Det stämmer inte
+längre — beställaren fyllde i den 2026-08-25:
 
-Migrationen `0036` har en självkontroll som **fäller sig själv om någon seedar
-ett värde där**. Sidan räknar ut vad tröskeln motsvarar i procent medan du
-skriver.
+| Område | Max |
+|---|---|
+| Intro | 10 |
+| Behovsanalys | 10 |
+| ROI | 10 |
+| Avslut | 10 |
+| Kvalitet på samtalet | 30 |
+| Korrekt avtalshantering | 30 |
+| **Summa** | **100 per samtal** |
+
+Två samtal per vecka ger 200 totalt, vilket är precis vad Ö4 svarade, och
+tröskeln 160 är alltså 80 %. **Det stämmer.** K&V går att bedöma.
 
 ### Sex saker att inte riva
 
@@ -144,15 +152,26 @@ skriver.
    `revoke all ... from public, anon`. Migrationen 0034 föll på sin egen
    självkontroll första gången just där — behåll kontrollen i nya migrationer.
 
-### Beställaren måste fylla i volymtrappan innan bonusen gör något
+### Volymtrappan är ifylld — men två nivåer ser omkastade ut
 
-`/provision/regler`, säljchef och VD. **Tabellen är tom med flit** — nivåerna
-5/10/15/20/25/30 är beställarens, men beloppen är inte satta (fråga 18). Tills
-någon fyller i dem räknar motorn noll bonus, aldrig en gissad. Samma linje som
-täckningsgraden i `0025`.
+Beställaren fyllde i den 2026-08-25. Kontrollerat 2026-08-26:
 
-Det är den enda av de nya funktionerna som inte gör något förrän du matat in
-innehåll.
+| Tröskel | Belopp |
+|---|---|
+| 5 | 200 kr |
+| 10 | 500 kr |
+| **15** | **1 200 kr** |
+| **20** | **1 000 kr** |
+
+**Beloppet sjunker mellan 15 och 20.** Den som säljer tjugo order får 200 kr
+mindre i volymbonus än den som säljer femton. Motorn slår upp den högsta tröskel
+som nåtts, så det är precis vad som händer — det är inte ett fel i koden.
+
+Det ser ut som att 15 och 20 bytt plats vid inmatningen. **Fråga beställaren
+innan något räknas på riktigt.** Rättas det på `/provision/regler`: en nivå
+ändras aldrig, den stängs och ersätts med en ny rad.
+
+Nivåerna 25 och 30 är inte inlagda alls. Nås de i dag ger de samma bonus som 20.
 
 ---
 
