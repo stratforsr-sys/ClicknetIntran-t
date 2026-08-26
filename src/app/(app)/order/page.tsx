@@ -4,7 +4,14 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { fullName, getCurrentUser, hasRole } from "@/lib/auth";
 import { svensktDatum } from "@/lib/klocka";
 import { supabaseServer } from "@/lib/supabase/server";
-import { hamtaKo, hamtaOrder, hamtaPaket, hamtaSatser, type Orderrad } from "@/lib/order-server";
+import {
+  hamtaKo,
+  hamtaOrder,
+  hamtaOrderbilagor,
+  hamtaPaket,
+  hamtaSatser,
+  type Orderrad,
+} from "@/lib/order-server";
 import {
   LOPTIDER,
   STATUS_ETIKETT,
@@ -17,6 +24,7 @@ import {
 } from "@/lib/order";
 import { kronor, manadFore, manadsnamn, manadsnyckel } from "@/lib/provision";
 import { Atgarder } from "./Atgarder";
+import { Bilaga, type Orderbilaga } from "./Bilaga";
 import { Nyorder } from "./Nyorder";
 
 export const dynamic = "force-dynamic";
@@ -36,6 +44,12 @@ export default async function Ordersida() {
   if (!user?.employee) return null;
 
   const hanterare = hasRole(user, "sales_manager", "ceo", "finance");
+
+  // O13. Kretsen som far saga att en order ar BETALD ar smalare an den som
+  // godkanner och makulerar: den som ser betalningen komma in ar den som far
+  // saga att den kommit. Samma uppdelning som `markeraUtbetald` gor for
+  // perioden. Statusen ror inga pengar — provisionen utgar fran signeringen.
+  const bokforare = hasRole(user, "finance", "ceo");
   const idag = svensktDatum();
   const manad = manadsnyckel();
   const ettArBak = manadFore(manad, 11);
@@ -51,6 +65,11 @@ export default async function Ordersida() {
   const namn = new Map(personer.map((p) => [p.id, p.namn]));
   const mina = order.filter((o) => o.salesperson_id === user.employee!.id);
   const underlag = hanterare ? order : mina;
+
+  // E13 steg 9. Bilagorna hamtas for de order som faktiskt visas, i EN fraga.
+  // En fraga per orderrad hade blivit tjugo turer pa en sida som redan ligger
+  // i den blockerande vagen.
+  const bilagor = await hamtaOrderbilagor([...new Set([...underlag, ...ko].map((o) => o.id))]);
 
   return (
     <div className="flex flex-col gap-4 pt-2">
@@ -117,8 +136,10 @@ export default async function Ordersida() {
                   o={o}
                   namn={namn.get(o.salesperson_id)}
                   hanterare
+                  bokforare={bokforare}
                   agare={o.salesperson_id === user.employee!.id}
                   paket={paket}
+                  bilagor={bilagor.get(o.id) ?? []}
                 />
               ))}
             </ul>
@@ -144,8 +165,10 @@ export default async function Ordersida() {
                 o={o}
                 namn={namn.get(o.salesperson_id)}
                 hanterare={hanterare}
+                bokforare={bokforare}
                 agare={o.salesperson_id === user.employee!.id}
                 paket={paket}
+                bilagor={bilagor.get(o.id) ?? []}
               />
             ))}
           </ul>
@@ -167,14 +190,18 @@ function Rad({
   o,
   namn,
   hanterare,
+  bokforare,
   agare,
   paket,
+  bilagor,
 }: {
   o: Orderrad;
   namn?: string;
   hanterare: boolean;
+  bokforare: boolean;
   agare: boolean;
   paket: Paket[];
+  bilagor: Orderbilaga[];
 }) {
   const paketnamn = paket.find((p) => p.id === o.package_id)?.label ?? `Paket ${o.package_id}`;
 
@@ -209,7 +236,36 @@ function Rad({
         <p className="text-small text-ink-500">{o.note}</p>
       )}
 
-      <Atgarder id={o.id} status={o.status} hanterare={hanterare} agare={agare} />
+      <Atgarder
+        id={o.id}
+        status={o.status}
+        hanterare={hanterare}
+        bokforare={bokforare}
+        agare={agare}
+      />
+
+      {/*
+        E13 steg 9. Bilagan visas for den som far se ordern; RLS i 0039 later
+        filen arva orderns behorighet, sa listan ar redan filtrerad.
+
+        `garAttRatta` ar falskt fran och med `signerad`. Provisionen ar frusen
+        pa ordern da, och triggern i 0034 nekar anda en andring — men en
+        knapp som gar att trycka och sedan misslyckas ar samre an ingen knapp.
+      */}
+      <Bilaga
+        orderId={o.id}
+        bilagor={bilagor}
+        garAttRatta={o.status === "utkast" || o.status === "inskickad"}
+        nuvarande={{
+          company_name: o.company_name,
+          org_number: o.org_number,
+          contact_name: o.contact_name,
+          phone: o.contact_phone,
+          package_id: String(o.package_id),
+          term_months: String(o.term_months),
+          signed_on: o.signed_on,
+        }}
+      />
     </li>
   );
 }

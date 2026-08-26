@@ -1,24 +1,33 @@
 # E13 — Provisions-, bonus- och konsekvensmotor
 
 **Regelspecifikation.** Skriven 2026-08-24 efter en fullständig frågeomgång med
-beställaren. **Steg 1–5 är byggda 2026-08-25**; byggordningen i avsnitt 11 säger
-vad som är klart och vad som återstår.
+beställaren. **Steg 1–7 och 9 är byggda 2026-08-26**; bara steg 8 återstår, och
+det väntar på A6. Byggordningen står i avsnitt 11.
 
 Dokumentet är avsiktligt uttömmande. Skälet: beställaren clearar chatten när
 den blir dyr, och den här specifikationen är då det enda som bär besluten.
 Läs den före `docs/ARBETSLOGG.md` när arbetet med E13 återupptas.
 
-**Status 2026-08-25:** steg 1–5 är byggda och i produktion. Ö1 avgjordes
-2026-08-24 (se D-K12 i `DECISIONS.md`), Ö2–Ö7, Ö10 och Ö14 besvarades samma dag,
-och **Ö4, Ö8, Ö12 och Ö15 besvarades 2026-08-25**. Kvar öppna är **Ö9, Ö11, Ö13
-och Ö16**, som alla har ett förslag som gäller tills någon säger annat.
+**Status 2026-08-26:** steg 1–7 och 9 är byggda; bara steg 8 (dialer-API) är kvar
+och det är blockerat av A6. Ö1 avgjordes 2026-08-24 (se D-K12 i
+`DECISIONS.md`), Ö2–Ö7, Ö10 och Ö14 besvarades samma dag, **Ö4, Ö8, Ö12 och Ö15
+besvarades 2026-08-25**, och **Ö13 besvarades 2026-08-26**. Kvar öppna är **Ö9,
+Ö11, Ö16, Ö17 och Ö18**, som alla har ett förslag som gäller tills någon säger
+annat.
+
+**Volymtrappans belopp för 15 och 20 är omkastade i produktionen** — 15 ger
+1 200 kr och 20 ger 1 000 kr, båda satta 2026-08-25. Beställaren bekräftade
+2026-08-26 att det är fel och ska rättas med nya belopp. Trappan är alltså den
+enda delen av E13 som väntar på indata.
 
 ---
 
 ## 1. Vad som beslutades, och vad som fortfarande är öppet
 
 Beställaren besvarade 59 frågor 2026-08-24. Svaren står inarbetade i reglerna
-nedan. **Öppna punkter** ligger samlade i avsnitt 10 och är numrerade Ö1–Ö16.
+nedan. **Öppna punkter** ligger samlade i avsnitt 10 och är numrerade Ö1–Ö18.
+Ö16, Ö17 och Ö18 var aldrig ställda — de dök upp under bygget och står där med
+sitt förslag och sitt skäl.
 Ingen siffra i det här dokumentet är påhittad — det som inte är beslutat står
 som `EJ SATT` och ska läsas ur konfigurationen, aldrig gissas.
 
@@ -117,8 +126,22 @@ utkast -> inskickad -> signerad -> (betald)
 godkännas. Beställarens svar på fråga 12.
 
 **Provisionen utgår från signering, inte från betalning** (fråga 10). Statusen
-`betald` finns för att ROADMAP AC-10.8 en dag kan komma tillbaka, men den
-påverkar ingenting i dag. Se Ö13.
+`betald` påverkar därför ingenting i beräkningen — `harGodkants()` i `order.ts`
+behandlar `signerad` och `betald` lika, och det är den funktionen pengarna
+räknas på. Statusen är **ren information**: ekonomi kan se vilka order som
+faktiskt betalats utan att en enda krona ändras.
+
+**Ö13 är besvarad 2026-08-26: behåll den, och gör den nåbar.** Fram till dess
+fanns statusen i schemat, i övergångsmatrisen och i triggern i `0034` medan
+ingen kod kunde sätta den — den var alltså **oåtkomlig**, inte bara
+verkningslös, och den sortens döda väg tolkas förr eller senare som en
+bortfallen knapp. `markeraBetald()` är vägen in, och kretsen är **ekonomi och
+VD** — smalare än `farHantera`, som också släpper in säljchefen. Den som ser
+betalningen komma in är den som får säga att den kommit; samma uppdelning som
+`markeraUtbetald` gör för perioden.
+
+En betald order går fortfarande att makulera. Det är avsiktligt: pengar kommer
+tillbaka ibland, och avdraget bokförs då i makuleringsmånaden som vanligt.
 
 ### 3.4 Perioden bestäms av signeringsdatum
 
@@ -447,6 +470,32 @@ Ny tabell: `attendance_incident`.
 | **Tredje** | **Personalärende: "Ser över anställningen"** |
 
 - **Perioden är rullande**, räknad från den första ogiltiga frånvaron (fråga 42).
+
+> **Fråga 42 och fråga 47 lät motstridiga. De är det inte.**
+>
+> 42 säger att perioden räknas *från den första*; 47 säger att varningen
+> nollställs tre månader efter *den senaste*. Ett fönster som **ankras i den
+> första** uppfyller 42 men inte 47 — efter tre månader från den första börjar
+> allt om, även om det kom en händelse till i förra veckan.
+>
+> Ett fönster som **räknas bakåt från det datum man frågar om** uppfyller båda:
+>
+> - Två händelser inom tre månader av varandra: den andra ser den första. Det är
+>   42, ordagrant, i det fall 42 handlar om.
+> - Har det inte hänt något på tre månader är fönstret tomt — ligger den
+>   *senaste* utanför ligger alla utanför. Det är 47, exakt.
+>
+> Det är alltså den regeln som är byggd (`iFonstret()` i `src/lib/konsekvens.ts`),
+> och den står utskriven där så att nästa läsare inte "rättar" den tillbaka till
+> 42:s ordalydelse. Fönstret är **halvöppet**: en händelse exakt tre månader
+> tillbaka ligger utanför, för varje gräns som går att tolka åt två håll faller
+> ut till den anställdas fördel.
+
+- **Månaden en händelse belastar är händelsens egen**, inte den månad chefen
+  råkade fatta beslutet i. Utfallet ska inte hänga på när chefen hann titta i
+  kön. En **stängd** period behöver ingen särbehandling: den läser sin siffra ur
+  `commission_entry` och frågar aldrig motorn, så bonusförlusten får ingen
+  verkan bakåt — men chefen får veta det i samma ögonblick hen godkänner.
 - Bonusförlusten gäller **endast innevarande månad** (fråga 43).
 - Den gäller **både volymbonus och K&V-bonus** (fråga 44), men **inte övrig
   bonus** (Ö8, besvarad 2026-08-25). Övrig bonus är chefens egen bedömning av
@@ -546,12 +595,46 @@ Allt nedan är data, inget av det är kod:
 
 Fullt underlag rad för rad. Attest av period. Export till CSV och PDF (fråga 59).
 
-### 9.3 Lönerapporten
+### 9.3 Lönerapporten och det separata underlaget
 
 Beställaren svarade att bonusen ska räknas där (fråga 57), vilket krockar med
 K5 och AC-2.17: **Nav räknar ingen lön**, och lönerapporten är ett underlag som
-lämnar huset. Se Ö10 — förslaget är ett **separat provisionsunderlag** som
-följer med lönekörningen i stället för en kronkolumn i `payroll_row`.
+lämnar huset. Ö10 löste det med ett **separat provisionsunderlag** i stället för
+en kronkolumn i `payroll_row`.
+
+**Byggt 2026-08-26:** `/provision/underlag/[manad]`. Två papper som följs åt till
+lönekörningen, aldrig ett.
+
+| | Lönerapporten | Provisionsunderlaget |
+|---|---|---|
+| Enhet | **Minuter och antal** | **Kronor** |
+| Varför | Navet får inte gissa vad en minut är värd (K5) | Kronorna är inte en beräkning utan en huvudbokssumma som redan är bokförd |
+| Källa | `payroll_row` | `commission_entry` |
+| Frånvaro | Ja, via `absence_minutes` | **Aldrig** |
+
+Skillnaden är inte kosmetisk. `payroll_row` beskriver **arbetad tid**, och en
+kronkolumn där hade gjort navet till ett lönesystem. Underlaget beskriver
+**pengar som redan är attesterade** — det räknar inte fram dem, det listar upp
+dem.
+
+- **En stängd månad läses ur huvudboken**, inte ur motorn. Körs motorn om kan en
+  ändrad inställning ge ett annat tal än det som faktiskt bokfördes, och då är
+  underlaget och huvudboken oense om vad som ska betalas ut.
+- **En öppen månad räknas live och stämplas `Preliminär`.** Ett papper som ser
+  likadant ut i båda fallen är ett papper någon betalar ut efter av misstag.
+- **Utbetalningsmånaden är månaden efter** (fråga 58). Avsnitt 8.2 listar den som
+  konfiguration; den är i dag en rad i `provisionsunderlag.ts`, eftersom det inte
+  finns någon tabell att lägga den i och en ny tabell för ett heltal inte bär sin
+  egen vikt. Kommer frågan upp är det en rad som byts mot ett uppslag.
+- **PDF:en är utskriften.** Fråga 59 bad om CSV och PDF. CSV:en är en egen rutt;
+  PDF:en är sidan utskriven, vilket varje webbläsare gör. Alternativet var ett
+  nytt beroende som genererar PDF på servern — stort att dra in för ett dokument
+  som redan är en tabell, och en till plats där layouten kan glida isär från vad
+  sidan visar.
+- **Filen får en snävare krets än sidan.** Sidan visar det RLS släpper fram, så en
+  säljare ser sig själv. En fil lämnar navet och går inte att ta tillbaka, och ett
+  dokument som heter "provisionsunderlag" ser ut att vara hela bolagets även när
+  det bär en rad. Uttaget loggas.
 
 ---
 
@@ -571,10 +654,61 @@ följer med lönekörningen i stället för en kronkolumn i `payroll_row`.
 | Ö10 | Lönerapporten eller separat underlag | **BESVARAD: separat underlag.** `payroll_row` får ingen kronkolumn, K5 och AC-2.17 står kvar |
 | Ö11 | Order signerad i en period som hunnit stängas (5.6) | Förslag gäller tills annat sägs |
 | Ö12 | Paketens namn | **BESVARAD 2026-08-25: behåll "Paket 1/2/3".** Priset visas bredvid vid inmatning. Etiketten är en kolumn och går att byta utan migration |
-| Ö13 | Behövs statusen `betald` alls i dag, och vem sätter den? | Öppen — byggs, men påverkar ingenting |
+| Ö13 | Behövs statusen `betald` alls i dag, och vem sätter den? | **BESVARAD 2026-08-26: behåll den, och gör den nåbar för ekonomi och VD.** Den påverkar fortfarande ingenting — provisionen utgår från signering — men den var fram till dess **oåtkomlig**, inte bara verkningslös: statusen fanns i schemat, i övergångsmatrisen och i triggern i 0034 medan ingen kod kunde sätta den. `markeraBetald()` i `order/actions.ts` är vägen in, och kretsen är smalare än `farHantera`: den som ser betalningen komma in är den som får säga att den kommit |
 | Ö14 | Uppladdat avtal | **BESVARAD: PDF.** Textextraktion via `pdftext.ts` går att använda; ingen OCR behövs |
 | Ö15 | Vad räknas som ogiltig frånvaro? | **BESVARAD 2026-08-25: minst 5 minuter, och personen ska faktiskt inte ha varit på plats.** Den som stämplar in för sent men varit här räknas ALDRIG. Varje fall går som förslag till chefen, som godkänner att säljaren inte var inne — först då är det en ogiltig frånvaro. D-K12:s linje står därmed orörd: K12 1.2 sen ankomst når fortfarande inte provisionen |
 | Ö16 | **Vilken volymtrappa gäller för en månad som en ändring skär igenom?** Frågan var aldrig ställd. Byggd 2026-08-25 med regeln **trappan som gällde på månadens första dag** | Förslag gäller tills annat sägs — se rutan nedan |
+| **Ö17** | **Faller K&V-bonusen helt vid en bonusförlust, eller börjar den om som orderräknaren?** Frågan var aldrig ställd. Byggd 2026-08-26 med regeln **K&V-bonusen faller helt för månaden** | Förslag gäller tills annat sägs — se rutan nedan |
+| **Ö18** | **Vad räknas som "utebliven instämpling"?** Ö15 svarade *hur mycket* (5 min) och *vem som avgör* (chefen), men inte *vad*. Byggd 2026-08-26 som **en dag helt utan stämpling** | Förslag gäller tills annat sägs — se rutan nedan |
+
+> **Ö17: varför K&V-bonusen faller helt och inte börjar om.**
+>
+> Beställaren svarade att **samtliga bonusar för innevarande månad faller**
+> (fråga 44) och gjorde sedan **en** uttrycklig undantagsregel: orderräknaren
+> börjar om från noll (fråga 45). Ett utskrivet undantag för det ena talar för
+> att det andra inte har något.
+>
+> Det finns också ett strukturellt skäl, och det är det starkare: **en order har
+> ett signeringsdatum och går därför att lägga före eller efter en händelse. En
+> vecka har inte det.** En vecka som spänner över konsekvensdagen hade behövt
+> delas — och avsnitt 6.2 säger redan att en halv vecka inte är något man
+> bedömer, den hoppas över. Att införa en tredje sorts halv vecka hade motsagt
+> den regeln.
+>
+> **Vill du i stället att veckor efter händelsen ska räknas** är det villkoret på
+> `kvBonus` i `src/lib/provision-motor.ts` som ändras. `KvIndata` bär redan allt
+> som behövs för att räkna om på färre veckor.
+
+> **Ö18: varför bara en HELT utebliven dag räknas.**
+>
+> Ö15 gav gränsen (5 minuter) och beslutsordningen (chefen godkänner), men inte
+> vad som mäts. Tre läsningar var möjliga, och valet föll på den snävaste:
+>
+> | Läsning | Vad som mäts | |
+> |---|---|---|
+> | Schemalagd tid utan stämpling bakom sig | luckor, sen ankomst, tidig hemgång | **avvisad** |
+> | Luckor efter dagens första instämpling | glapp och tidig hemgång | avvisad |
+> | **Ingen stämpling alls den dagen** | **hela den schemalagda dagen** | **← gäller** |
+>
+> **Den första läsningen hade av ren aritmetik fångat sen ankomst** — minuterna
+> före dagens första instämpling *är* förseningen. Då hade D-K12:s linje glidit
+> utan att någon flyttat den med avsikt, och K12 1.2 är ett löfte i en
+> intresseavvägning som är beslutad 2026-08-26 med det löftet i sig.
+>
+> Den andra läsningen undviker sen ankomst men tar med tidig hemgång och glapp.
+> Ingen av dem har gått igenom frågeomgången, och båda är något annat än
+> "utebliven instämpling" — det ord specifikationen, arbetsloggen och
+> beställaren faktiskt använder.
+>
+> **Följden är att femminutersgränsen sällan biter:** en schemalagd dag är längre
+> än så. Den står kvar ändå, både i `MINSTA_MINUTER` och som check-villkor i
+> 0037, för att den är det beställaren svarade.
+>
+> **Vill du vidga den** är det `uteblivenInstampling()` i
+> `src/lib/konsekvens.ts` som ändras — men gäller vidgningen sen ankomst kräver
+> den att K12 avsnitt 6 och 7 skrivs och beslutas på nytt, av någon med
+> dataskyddskompetens. Att vidga är en rad; att smalna av efter att data finns
+> är det inte.
 
 > **Ö16: varför trappan slås upp på månadens första dag och inte på ordern.**
 >
@@ -615,13 +749,12 @@ Varje steg är en egen leverans med prov på räknemotorn innan nästa börjar.
 | 3 | **KLART 2026-08-25** (migration `0035`): volymtrappan som konfiguration på `/provision/regler`, retroaktivitet, periodstängning med bokföring i `commission_entry` | Steg 2 |
 | 4 | **KLART 2026-08-25**: säljarens progressvy på `/provision`. "3 order kvar till nästa bonus", prognosen med sitt antagande utskrivet, och underlaget rad för rad | Steg 3 |
 | 5 | **KLART 2026-08-25** (migration `0036`): K&V-tabeller, rutnät säljare × vecka på `/kv`, bedömningsformulär, utvecklingskurva, bonus och inställningar med Ö4-kontrollen | Steg 2 |
-| 6 | Konsekvenssystemet | Steg 3 |
-| 7 | Export, separat provisionsunderlag | Steg 3 |
+| 6 | **KLART 2026-08-26**: konsekvensmotorn i `src/lib/konsekvens.ts` (ren logik, `tests/konsekvenser.mjs`), forslagsmotorn i nattjobbet, chefens ko pa `/tid/ogiltig-franvaro`, konsekvenstrappan som installning pa `/provision/regler`, notiser at bada hallen och arende vid tredje gangen. **Ingen migration** — schemat fanns i `0037` | Steg 3 |
+| 7 | **KLART 2026-08-26**: `/provision/underlag/[manad]`, CSV pa egen rutt, PDF via utskrift. `payroll_row` fick ingen kronkolumn. Ingen migration | Steg 3 |
 | 8 | Dialer-API för K&V-urvalet | A6 |
-| 9 | **Orderbilagan:** PDF-uppladdning och förifyllning ur avtalet. Egen migration som vidgar `file_object` (0022) — den tabellen bär läkarintyg, så det stänger inte på ordermigrationen. Utläsningen ska **förifylla formuläret, aldrig spara direkt** | Steg 1 |
+| 9 | **KLART 2026-08-26** (migration `0039`): PDF-uppladdning pa ordern, utlasning i `src/lib/orderbilaga.ts` (ren logik, `tests/orderbilaga.mjs`), forslaget visas mot orderns nuvarande varden och skrivs bara nar en manniska kryssat i det. En godkand order gar inte att ratta — bade actionen och triggern i 0034 nekar | Steg 1 |
 
-**Kvar: steg 6, 7 och 9 är oblockerade.** Steg 8 väntar på A6.
-Steg 6 kräver ingenting mer sedan D-K12 och Ö15.
+**Kvar: bara steg 8**, som väntar på A6 (dialer-API).
 
 **Räknemotorn ligger i ett enda bibliotek utan importer av Supabase**, precis
 som `raster.ts`, `lonekostnad.ts` och `franvaro.ts`. Reglerna skickas in som

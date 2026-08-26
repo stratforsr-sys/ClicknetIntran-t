@@ -42,6 +42,12 @@ export default async function TidSida() {
   const chef = canManageEmployees(user);
   const sparr = await hamtaLage();
 
+  // E13 steg 6. Kretsen ar INTE `chef`: en teamledare med behorigheten
+  // `attendance_approver` far besluta om sin egen grupp utan att fa se
+  // avvikelser och scheman. Fragan stalls till `far_godkanna_franvaro()` i
+  // 0037, som ar samma definition som bade sidan och RLS-policyn anvander.
+  const { data: farGodkannaFranvaro } = await supabase.rpc("far_godkanna_franvaro");
+
   const { data: mina } = await supabase
     .from("time_event")
     .select("id, kind, occurred_at, source, supersedes_id, correction_state, note")
@@ -186,6 +192,11 @@ export default async function TidSida() {
               <ButtonLink href="/tid/schema" variant="sekundar">Scheman</ButtonLink>
               <ButtonLink href="/tid/sparrar" variant="sekundar">Spärrar</ButtonLink>
             </>
+          )}
+          {farGodkannaFranvaro === true && (
+            <ButtonLink href="/tid/ogiltig-franvaro" variant="sekundar">
+              Ogiltig frånvaro
+            </ButtonLink>
           )}
           {sparr.stampling && (
             <Badge ton={lage === "inne" ? "ok" : lage === "rast" ? "warn" : "neutral"}>

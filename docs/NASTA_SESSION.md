@@ -3,7 +3,7 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-08-26 (genomgang infor pilot)
+**Senast uppdaterad:** 2026-08-26 (kväll — E13 steg 6, 7 och 9 klara)
 
 ---
 
@@ -70,25 +70,28 @@ enstaka avläsning, vilket ensamt hade sett ut som en regression.
 volymbonusens trappa, K&V-protokollet, konsekvenstrappan och byggordningen i
 nio steg.
 
-**Ingenting blockerar längre.** Q78–Q80 är besvarade (paketmatrisen), och
-K12-frågan avgjordes 2026-08-24 — se **D-K12**. Rast och sen ankomst når
-fortfarande aldrig provisionen; utebliven instämpling gör det, men bara via ett
-förslag som chefen måste godkänna.
+**Ingenting blockerar längre utom A6.** Rast och sen ankomst når fortfarande
+aldrig provisionen; utebliven instämpling gör det, men bara via ett förslag som
+chefen måste godkänna.
 
-**Steg 1–5 är klara 2026-08-25** (migrationerna `0034`, `0035` och `0036`).
-Grundprovisionen, räknemotorn, volymtrappan, periodstängningen, säljarens
-progressvy och K&V-protokollet finns. **Steg 6–9 återstår.**
+**Tre öppna punkter tillkom under bygget och har förslag som gäller:** Ö16
+(vilken volymtrappa en månad som en ändring skär igenom får), Ö17 (K&V-bonusen
+faller helt vid en konsekvens, den börjar inte om som orderräknaren) och Ö18
+(vad "utebliven instämpling" är — en dag helt utan stämpling, inte en lucka).
+Skälen står i specifikationens avsnitt 10.
 
-### Nästa steg, i den ordning de går att ta
+**Steg 1–7 och 9 är klara 2026-08-26** (migrationerna `0034`–`0037` och `0039`).
+**Bara steg 8 återstår, och det är blockerat av A6** (dialer-API för K&V-urvalet).
 
-| Steg | Vad | Blockerat av |
+### Vad som byggdes 2026-08-26 (kväll)
+
+| Steg | Vad | Migration |
 |---|---|---|
-| **6** | Konsekvenssystemet | Ingenting. D-K12, Ö8 och Ö15 är alla besvarade |
-| 7 | Export och separat provisionsunderlag | Ingenting |
-| 8 | Dialer-API för K&V-urvalet | A6 |
-| 9 | Orderbilagan: PDF-uppladdning | Ingenting, men egen migration som vidgar `file_object` |
+| **6** | Konsekvenssystemet: motor, förslag i nattjobbet, chefens kö på `/tid/ogiltig-franvaro`, trappan som inställning, notiser, ärende vid tredje | **Ingen** — schemat låg i `0037` |
+| **7** | Separat provisionsunderlag på `/provision/underlag/[manad]`, CSV och utskrift | Ingen |
+| **9** | Orderbilagan: PDF på ordern, utläsning som förifyller | `0039` |
 
-**Steg 6 är det största som återstår.** Steg 7 är det minsta.
+Ö13 är dessutom besvarad och byggd: `betald` går nu att sätta, av ekonomi och VD.
 
 ### Vad beställaren svarade 2026-08-25, och vad steg 6 måste följa
 
@@ -126,7 +129,7 @@ längre — beställaren fyllde i den 2026-08-25:
 Två samtal per vecka ger 200 totalt, vilket är precis vad Ö4 svarade, och
 tröskeln 160 är alltså 80 %. **Det stämmer.** K&V går att bedöma.
 
-### Sex saker att inte riva
+### Nio saker att inte riva
 
 1. **En makulering är TVÅ händelser.** Ordern ger provision i sin
    signeringsmånad och drar tillbaka den i sin makuleringsmånad. Använd
@@ -151,10 +154,27 @@ tröskeln 160 är alltså 80 %. **Det stämmer.** K&V går att bedöma.
    egen default-ACL som ger `anon` en explicit grant. Skriv
    `revoke all ... from public, anon`. Migrationen 0034 föll på sin egen
    självkontroll första gången just där — behåll kontrollen i nya migrationer.
+7. **Allt som exporteras ur en `"use server"`-fil är en publik ändpunkt.** Det
+   har gått fel tre gånger: `skrivFel`, `sattKvitto`, `registreraVisning`.
+   Hjälpare hör hemma i `src/lib/`, och personen ska komma ur **sessionen**,
+   aldrig ur ett argument.
+8. **`raknas()` i `konsekvens.ts` är MOTSATSEN till `harGodkants()` i
+   `order.ts`.** En makulering är två händelser — signeringen hände, så den
+   räknas fortfarande. En hävning är ett underkänt beslut, så den räknas för
+   ingenting alls, varken som konsekvens eller mot nästa steg. Blandas de ihop
+   står någon kvar på steg två efter att steg ett rivits.
+9. **`uteblivenInstampling()` räknar ALDRIG någon som stämplat in.** Inte hur
+   sent som helst, inte tidig hemgång, inte glapp mitt på dagen. En mätning av
+   "schemalagd tid utan stämpling bakom sig" hade av ren aritmetik fångat sen
+   ankomst — och då hade D-K12:s linje glidit utan att någon flyttat den. Att
+   vidga den är en rad; att smalna av den efter att data finns är det inte, och
+   det kräver att K12 avsnitt 6 och 7 beslutas om på nytt.
 
-### Volymtrappan är ifylld — men två nivåer ser omkastade ut
+### Volymtrappan är omkastad — och det är det ENDA som väntar på dig i E13
 
-Beställaren fyllde i den 2026-08-25. Kontrollerat 2026-08-26:
+**Kontrollerat mot produktionsdatabasen 2026-08-26. Bekräftat som fel samma dag;
+du sa att du ger nya belopp.** Tills de kommit står trappan orörd — en nivå
+ändras aldrig, den stängs med `valid_to` och ersätts med en ny rad.
 
 | Tröskel | Belopp |
 |---|---|
@@ -167,11 +187,13 @@ Beställaren fyllde i den 2026-08-25. Kontrollerat 2026-08-26:
 mindre i volymbonus än den som säljer femton. Motorn slår upp den högsta tröskel
 som nåtts, så det är precis vad som händer — det är inte ett fel i koden.
 
-Det ser ut som att 15 och 20 bytt plats vid inmatningen. **Fråga beställaren
-innan något räknas på riktigt.** Rättas det på `/provision/regler`: en nivå
-ändras aldrig, den stängs och ersätts med en ny rad.
+**Tidsstämplarna säger att fälten bytt plats vid inmatningen:** 5 kl 13:31:35,
+10 kl 13:31:45, **20 kl 13:32:13**, **15 kl 13:32:38**. De två sista är inmatade
+i omvänd ordning mot de andra.
 
-Nivåerna 25 och 30 är inte inlagda alls. Nås de i dag ger de samma bonus som 20.
+**Nivåerna 25 och 30 lämnas tomma tills vidare** — ditt besked 2026-08-26. Nås de
+i dag ger de samma bonus som 20, och trappan står still över 30 enligt avsnitt
+5.3.
 
 ---
 
@@ -206,7 +228,8 @@ Nivåerna 25 och 30 är inte inlagda alls. Nås de i dag ger de samma bonus som 
 set -a && . $HOME/.clicknet/nav.env && set +a && npm test
 ```
 
-Tjugonio sviter. `tests/rls.mjs` går mot den **riktiga**
+**Trettiofem sviter.** Tre kom till 2026-08-26: `konsekvenser`,
+`provisionsunderlag` och `orderbilaga` — alla ren logik utan Supabase. `tests/rls.mjs` går mot den **riktiga**
 databasen och skapar och städar sina egna användare (prefix `rlstest+`).
 Även `tests/provision-period-db.mjs` går mot den riktiga databasen — den kör allt
 i en transaktion som rullas tillbaka, och kontrollerar till sist att ingenting
@@ -266,10 +289,13 @@ i `rls.mjs`.** Samtliga 105 i den filen plus 51 i övriga sviter. Leta inte om:
 | **Anställningsflöde** | **I drift sedan 2026-08-24.** `/rekrytering/[id]/anstall`. Konto, roll, rutiner, kurser, avtalsutkast och onboarding-checklista i ett steg |
 | **Provision** | **I drift sedan 2026-08-23.** `/provision`. Manuell inmatning av ekonomi/VD. Alla ser sin egen. Inkio-sömmen lagd, inte kopplad |
 | **Kundorder** | **I drift sedan 2026-08-25.** `/order`. Paketmatrisen i `commission_rate`, provisionen fryses vid godkännande |
-| **Volymtrappan** | **I drift sedan 2026-08-25.** `/provision/regler`. **Ifylld 2026-08-25:** 5/10/15/20 → 200/500/1000/1200 kr |
+| **Volymtrappan** | **I drift sedan 2026-08-25.** `/provision/regler`. **Ifylld 2026-08-25:** 5/10/15/20 → 200/500/**1200**/**1000** kr. **Beloppen för 15 och 20 är omkastade — väntar på dina nya siffror** |
 | **Periodstängning** | **I drift sedan 2026-08-25.** Kort på `/provision`. Öppen månad räknas live, fastställd är bokförd |
 | **Progressvy** | **I drift sedan 2026-08-25.** `/provision`. "3 order kvar till nästa bonus" med prognosens antagande utskrivet |
-| **K&V** | **I drift sedan 2026-08-25.** `/kv`. Rutnät säljare × vecka, bedömning, utvecklingskurva. **Maxpoängen måste fyllas i** |
+| **K&V** | **I drift sedan 2026-08-25.** `/kv`. Rutnät säljare × vecka, bedömning, utvecklingskurva. Maxpoängen är ifylld |
+| **Ogiltig frånvaro** | **I drift sedan 2026-08-26.** `/tid/ogiltig-franvaro`. Nattjobbet föreslår, chefen beslutar. Behörighet: säljchef, VD, eller `attendance_approver` för eget team |
+| **Provisionsunderlag** | **I drift sedan 2026-08-26.** `/provision/underlag/[manad]`. Eget dokument, CSV och utskrift. `payroll_row` bär fortfarande inga kronor |
+| **Orderbilaga** | **I drift sedan 2026-08-26.** PDF på ordern (`0039`). Utläsningen förifyller, den sparar aldrig |
 
 ### Raststämplingen: två steg kvar, och båda är dina
 

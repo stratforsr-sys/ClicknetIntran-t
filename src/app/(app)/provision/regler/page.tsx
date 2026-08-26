@@ -7,7 +7,9 @@ import { getCurrentUser, hasRole } from "@/lib/auth";
 import { hamtaNivaer } from "@/lib/bonus-server";
 import { kronor, manadsnamn, manadsnyckel } from "@/lib/provision";
 import { gallandeNivaer, type Bonusniva } from "@/lib/provision-motor";
-import { NyNiva, TaBortNiva } from "./Trappa";
+import { hamtaRegler } from "@/lib/konsekvens-server";
+import { ATGARD_ETIKETT } from "@/lib/konsekvens";
+import { KonsekvensSteg, NyNiva, TaBortNiva, TaBortSteg } from "./Trappa";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +34,7 @@ export default async function Reglersida() {
   if (!user?.employee) return null;
   if (!hasRole(user, "sales_manager", "ceo")) notFound();
 
-  const alla = await hamtaNivaer();
+  const [alla, regler] = await Promise.all([hamtaNivaer(), hamtaRegler()]);
   const manad = manadsnyckel();
 
   const gallande = gallandeNivaer(alla, manad);
@@ -44,10 +46,10 @@ export default async function Reglersida() {
   return (
     <div className="flex flex-col gap-4 pt-2">
       <div>
-        <h1 className="text-display text-ink-900">Volymtrappan</h1>
-        <p className="mt-1 text-body text-ink-500">
-          Vad en månads ordervolym är värd. Reglerna är inställningar, inte kod — en ändring här
-          slår igenom utan att något behöver byggas om.
+        <h1 className="text-display text-ink-900">Provisionsregler</h1>
+        <p className="mt-1 max-w-[70ch] text-body text-ink-500">
+          Vad en månads ordervolym är värd, och vad en ogiltig frånvaro leder till. Båda är
+          inställningar och inte kod — en ändring här slår igenom utan att något byggs om.
         </p>
       </div>
 
@@ -113,6 +115,48 @@ export default async function Reglersida() {
             provisionssidan
           </Link>
           . En stängd månad påverkas aldrig av en ändring här.
+        </p>
+      </Card>
+
+      <Card status={regler.length === 0 ? "warn" : undefined}>
+        <CardHeader
+          titel="Konsekvenstrappan"
+          beskrivning="Vad en godkänd ogiltig frånvaro leder till. Trösklar, periodlängd och åtgärd är data — vad varje åtgärd gör är kod."
+        />
+        {regler.length === 0 ? (
+          <EmptyState
+            rubrik="Trappan är tom"
+            text="Ingen händelse går att godkänna förrän minst ett steg finns. Beställarens trappa är 1 händelse → varning, 2 → bonusförlust, 3 → ärende, alla inom rullande 3 månader."
+          />
+        ) : (
+          <ul className="flex flex-col">
+            {regler.map((r) => (
+              <li
+                key={r.id}
+                className="flex flex-wrap items-center gap-3 border-b border-canvas py-3 last:border-0"
+              >
+                <span className="w-20 text-body text-ink-900">Steg {r.ordning}</span>
+                <span className="flex-1 text-body text-ink-900">
+                  {r.antal_handelser} {r.antal_handelser === 1 ? "händelse" : "händelser"} inom{" "}
+                  {r.periodlangd_manader} månader → {ATGARD_ETIKETT[r.atgard]}
+                </span>
+                {!r.notifiera && <Badge ton="warn">Ingen notis</Badge>}
+                <TaBortSteg ordning={r.ordning} />
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="mt-6 border-t border-canvas pt-6">
+          <KonsekvensSteg />
+        </div>
+
+        <p className="mt-4 max-w-[70ch] text-small text-ink-500">
+          Perioden är rullande och räknas bakåt från händelsens dag: har det inte hänt något på
+          periodlängden börjar trappan om. Grundprovisionen rörs aldrig, och övrig bonus faller
+          inte (Ö8) — det är volymbonusen och K&amp;V-bonusen som faller, och orderräknaren
+          börjar om från noll. Ett steg som redan lett till ett beslut går att ändra men inte att
+          ta bort: den beslutade händelsen bär sin åtgärd på sin egen rad.
         </p>
       </Card>
 

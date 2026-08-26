@@ -12,6 +12,7 @@ import {
   type KvIndata,
 } from "@/lib/provision-motor";
 import { gallandePolicy, kvManad, type KvPolicy, type KvSamtal } from "@/lib/kv";
+import { hamtaKonsekvensPerPerson } from "@/lib/konsekvens-server";
 import type { Order } from "@/lib/order";
 
 export type StangningState = { fel?: string; ok?: string };
@@ -99,13 +100,19 @@ export async function faststallPeriod(
     // LASES MED SERVICE ROLE, inte med attestantens token. Bokforingen maste
     // vara fullstandig; en RLS-vy som av nagot skal saknar en rad hade gett en
     // person for lite betalt utan att nagot sag fel ut.
-    const [order, nivaer, kvPerPerson] = await Promise.all([
+    // KONSEKVENSERNA MASTE MED I BOKFORINGEN. En bonusforlust verkar genom att
+    // motorn raknar om manaden — utelamnas laget har bokfors en volymbonus som
+    // trappan sagt ska falla, och den posten gar sedan inte att skriva om:
+    // huvudboken ar append-only, sa rattelsen blir en negativ post nagon maste
+    // upptacka och skriva for hand.
+    const [order, nivaer, kvPerPerson, konsekvensPerPerson] = await Promise.all([
       hamtaAllaOrder(manad),
       hamtaAllaNivaer(),
       hamtaKvPerPerson(manad),
+      hamtaKonsekvensPerPerson(manad),
     ]);
 
-    const rader = underlagForAlla(order, manad, nivaer, kvPerPerson).flatMap((u) =>
+    const rader = underlagForAlla(order, manad, nivaer, kvPerPerson, konsekvensPerPerson).flatMap((u) =>
       bokforingsposter(u).map((p) => ({
         employee_id: u.employee_id,
         period_month: manad,

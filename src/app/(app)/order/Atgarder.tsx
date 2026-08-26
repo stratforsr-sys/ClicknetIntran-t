@@ -8,6 +8,7 @@ import type { Orderstatus } from "@/lib/order";
 import {
   godkannOrder,
   makuleraOrder,
+  markeraBetald,
   raderaUtkast,
   returneraOrder,
   skickaInOrder,
@@ -29,11 +30,13 @@ export function Atgarder({
   id,
   status,
   hanterare,
+  bokforare,
   agare,
 }: {
   id: string;
   status: Orderstatus;
   hanterare: boolean;
+  bokforare: boolean;
   agare: boolean;
 }) {
   const [oppen, setOppen] = useState<"retur" | "makulera" | null>(null);
@@ -73,26 +76,38 @@ export function Atgarder({
     );
   }
 
-  if ((status === "signerad" || status === "betald") && hanterare) {
+  if ((status === "signerad" || status === "betald") && (hanterare || bokforare)) {
     return (
       <div className="flex flex-col gap-2">
-        <Button
-          type="button"
-          size="sm"
-          variant="diskret"
-          onClick={() => setOppen(oppen === "makulera" ? null : "makulera")}
-        >
-          Makulera
-        </Button>
-        {oppen === "makulera" && (
-          <MedSkal
-            action={makuleraOrder}
-            id={id}
-            etikett="Makulera"
-            variant="destruktiv"
-            platshallare="Varför makuleras ordern?"
-            hjalp="Avdraget bokförs i den här månaden, inte i månaden ordern tecknades."
-          />
+        {/*
+          O13: "Markera betald" ror inga pengar. Provisionen utgar fran
+          signeringen, sa knappen ar ren information — och den syns bara for
+          ekonomi och VD, som ar de som ser betalningen komma in.
+        */}
+        {status === "signerad" && bokforare && (
+          <Enkel action={markeraBetald} id={id} etikett="Markera betald" variant="diskret" />
+        )}
+        {hanterare && (
+          <>
+            <Button
+              type="button"
+              size="sm"
+              variant="diskret"
+              onClick={() => setOppen(oppen === "makulera" ? null : "makulera")}
+            >
+              Makulera
+            </Button>
+            {oppen === "makulera" && (
+              <MedSkal
+                action={makuleraOrder}
+                id={id}
+                etikett="Makulera"
+                variant="destruktiv"
+                platshallare="Varför makuleras ordern?"
+                hjalp="Avdraget bokförs i den här månaden, inte i månaden ordern tecknades."
+              />
+            )}
+          </>
         )}
       </div>
     );

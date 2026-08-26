@@ -113,3 +113,44 @@ export async function hamtaSatser(): Promise<Sats[]> {
 
   return (data ?? []).map((s) => ({ ...s, amount: Number(s.amount) })) as Sats[];
 }
+
+/**
+ * Bilagorna per order (E13 steg 9, migration 0039).
+ *
+ * Lases med ANVANDARENS EGEN TOKEN. `file_object_read` i 0039 later bilagan
+ * arva ORDERNS behorighet — grenen ar en `exists` mot `sales_order` och inget
+ * eget rollvillkor. Skriv inget filter har: det hade varit ett andra svar pa
+ * samma fraga.
+ *
+ * `removed_at is null`: en fil vars innehall tagits bort ur bucketen har kvar
+ * sin rad och sin oppningslogg (0022), men den ska inte erbjudas att oppnas.
+ */
+export async function hamtaOrderbilagor(
+  orderIds: string[],
+): Promise<Map<string, { id: string; filename: string | null; uploaded_at: string }[]>> {
+  const ut = new Map<string, { id: string; filename: string | null; uploaded_at: string }[]>();
+  if (orderIds.length === 0) return ut;
+
+  const rls = await supabaseServer();
+  const { data } = await rls
+    .from("file_object")
+    .select("id, filename, uploaded_at, sales_order_id")
+    .eq("purpose", "sales_order")
+    .is("removed_at", null)
+    .in("sales_order_id", orderIds)
+    .order("uploaded_at", { ascending: false });
+
+  for (const f of data ?? []) {
+    const nyckel = String(f.sales_order_id);
+    ut.set(nyckel, [
+      ...(ut.get(nyckel) ?? []),
+      {
+        id: String(f.id),
+        filename: (f.filename as string | null) ?? null,
+        uploaded_at: String(f.uploaded_at),
+      },
+    ]);
+  }
+
+  return ut;
+}

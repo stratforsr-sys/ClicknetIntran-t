@@ -7,6 +7,7 @@ import { korKontojobbet } from "@/lib/jobb/konton";
 import { korArendejobbet } from "@/lib/jobb/arenden";
 import { korFranvarojobbet } from "@/lib/jobb/franvaro";
 import { korSatsjobbet } from "@/lib/jobb/satser";
+import { foreslaOgiltigFranvaro } from "@/lib/jobb/konsekvenser";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -36,6 +37,19 @@ export async function GET(request: NextRequest) {
 
   const steg: [string, () => Promise<unknown>][] = [
     ["tid", () => (lage.stampling ? korTidjobbet(db, lage.rast) : Promise.resolve({ hoppade_over: "stämplingen är av" }))],
+    // E13 steg 6: forslag om utebliven instampling. Steget FORESLAR bara — en
+    // foreslagen handelse har ingen konsekvens forran en chef godkant den.
+    //
+    // Det kor bara nar stamplingen ar pa, och det ar inte en optimering: utan
+    // stampling saknar alla instampling varje dag, och jobbet hade lagt ett
+    // forslag pa varenda anstalld och varenda arbetsdag.
+    [
+      "konsekvenser",
+      () =>
+        lage.stampling
+          ? foreslaOgiltigFranvaro(db)
+          : Promise.resolve({ hoppade_over: "stämplingen är av" }),
+    ],
     ["konton", () => korKontojobbet(db)],
     ["arenden", () => korArendejobbet(db)],
     // E7: eskalering av obekraftade sjukanmalningar, K37-frister och

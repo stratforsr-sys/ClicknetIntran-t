@@ -31,6 +31,7 @@ import {
   orderIPeriod,
   type Order,
 } from "./order.ts";
+import type { Konsekvenslage } from "./konsekvens.ts";
 
 // -----------------------------------------------------------------------------
 // Underlaget
@@ -78,8 +79,17 @@ export type Underlag = {
    * `netto` kan bli NEGATIVT och det ar avsiktligt — makuleras fler order an
    * som tecknats i manaden ar saldot minus. Volymtrappan i steg 3 ger da niva
    * noll, aldrig en negativ niva, men provisionsavdraget sker anda.
+   *
+   * `bonusgrundande` ar det tal VOLYMTRAPPAN raknar pa. Det ar samma som
+   * `netto` i en ren manad och lagre efter en bonusforlust — se
+   * `Underlagskonsekvens`.
    */
-  antal: { signerade: number; makulerade: number; netto: number };
+  antal: {
+    signerade: number;
+    makulerade: number;
+    netto: number;
+    bonusgrundande: number;
+  };
 
   grundprovision: number;
 
@@ -105,7 +115,43 @@ export type Underlag = {
    */
   nasta: { niva: Bonusniva; kvar: number } | null;
 
+  /**
+   * Manadens konsekvenslage — steg 6.
+   *
+   * `null` nar manaden ar ren, vilket ar det normala. Se `konsekvens.ts` for
+   * vad de tva talen betyder och `bonusantal` nedan for varfor de behovs bada.
+   */
+  konsekvens: Underlagskonsekvens | null;
+
   summa: number;
+};
+
+/**
+ * Konsekvensen sa som underlaget bar den.
+ *
+ * ===========================================================================
+ * TVA ANTAL, OCH DE AR OLIKA MED FLIT.
+ *
+ * `antal.netto` ar vad personen faktiskt salde i manaden. Det ar den siffran
+ * vyn ska visa nar den sager "du har 20 order", och den ar sann oavsett vad som
+ * hant med bonusen.
+ *
+ * `bonusantal` ar vad VOLYMTRAPPAN raknar pa. Efter en bonusforlust borjar
+ * orderraknaren om fran noll (fraga 45), sa den som stod pa 20 nar konsekvensen
+ * slog in och sedan saljer fem till far niva 5:s belopp pa de fem — inte niva
+ * 25 pa alla tjugofem.
+ *
+ * BLANDAS DE IHOP blir antingen vyn en logn ("du har 5 order" till nagon som
+ * salt 20) eller bonusen fel. Halls de isar sager underlaget bada sakerna, och
+ * det ar hela poangen med att motorn returnerar ett underlag och inte ett tal.
+ * ===========================================================================
+ */
+export type Underlagskonsekvens = {
+  bonusforlust: boolean;
+  /** Datumet raknaren borjar om fran, eller null. */
+  raknareFran: string | null;
+  /** Antalet handelser bakom laget. Visas, raknas inte. */
+  handelser: number;
 };
 
 // -----------------------------------------------------------------------------
@@ -289,6 +335,7 @@ export function raknaUnderlag(
   manad: string,
   nivaer: Bonusniva[] = [],
   kv: KvIndata | null = null,
+  konsekvens: Konsekvenslage | null = null,
 ): Underlag {
   const mina = forSaljare(order, employee_id);
 
@@ -315,10 +362,36 @@ export function raknaUnderlag(
     })),
   ];
 
+  // ===========================================================================
+  // ORDERRAKNAREN BORJAR OM EFTER EN BONUSFORLUST (fraga 45).
+  //
+  // Bara order signerade FRAN OCH MED handelsens dag bygger den nya trappan.
+  // Tva val i den meningen ar vardu att skriva ut:
+  //
+  //   HANDELSENS DAG, inte beslutets. Annars hade utfallet hangt pa nar chefen
+  //   hann titta i kon, och order som saljaren tecknat under tiden hade
+  //   raderats av ett dröjsmål som inte ar hens. Samma linje som `manadFor` i
+  //   `konsekvens.ts`.
+  //
+  //   FRAN OCH MED, inte efter. En order signerad samma dag hamnar i den NYA
+  //   trappan. Granhsen gar att tolka at tva hall och faller darfor ut till den
+  //   anstalldas fordel — samma princip som toleransen i `raster.ts`.
+  //
+  // MAKULERINGAR FOLJER SIN ORDER. En makulering drar bara ned den nya
+  // raknaren om ordern den galler ocksa hor dit. En order fran den 3:e som
+  // makuleras efter en konsekvens den 20:e ska inte minska en raknare den
+  // aldrig ingick i — da hade personen straffats tva ganger for samma order.
+  // ===========================================================================
+  const fran = konsekvens?.raknareFran ?? null;
+  const efterKonsekvens = <T extends { signed_on: string }>(rader: T[]) =>
+    fran === null ? rader : rader.filter((o) => o.signed_on >= fran);
+
   const antal = {
     signerade: signerade.length,
     makulerade: makulerade.length,
     netto: signerade.length - makulerade.length,
+    bonusgrundande:
+      efterKonsekvens(signerade).length - efterKonsekvens(makulerade).length,
   };
 
   // Samma tal som orderraderna ger. Det star som eget falt for att
@@ -327,16 +400,18 @@ export function raknaUnderlag(
   const grund = grundprovision(mina, manad);
 
   const trappa = gallandeNivaer(nivaer, manad);
-  const niva = nivaFor(trappa, antal.netto);
+  const niva = nivaFor(trappa, antal.bonusgrundande);
 
   const volymbonus = niva
-    ? { niva, belopp: avrunda(volymbonusBelopp(niva, antal.netto, grund)) }
+    ? { niva, belopp: avrunda(volymbonusBelopp(niva, antal.bonusgrundande, grund)) }
     : null;
 
   if (volymbonus) {
     rader.push({
       slag: "volymbonus",
-      text: `Volymbonus nivå ${volymbonus.niva.threshold}, ${antal.netto} order`,
+      text: konsekvens?.bonusforlust
+        ? `Volymbonus nivå ${volymbonus.niva.threshold}, ${antal.bonusgrundande} order efter konsekvensen`
+        : `Volymbonus nivå ${volymbonus.niva.threshold}, ${antal.netto} order`,
       belopp: volymbonus.belopp,
     });
   }
@@ -344,8 +419,28 @@ export function raknaUnderlag(
   // K&V-BONUSEN LAGGS SIST, och basen ar de tva raderna ovan. Ordningen ar inte
   // kosmetisk: basen ar grundprovision + volymbonus (O3), sa raden maste raknas
   // efter att volymbonusen ar bestamd.
+  //
+  // ===========================================================================
+  // VID EN BONUSFORLUST FALLER K&V-BONUSEN HELT — inte delvis, och den borjar
+  // inte om som orderraknaren gor. Se O17.
+  //
+  // Bestallaren sa "samtliga bonusar for innevarande manad faller" (fraga 44)
+  // och gjorde EN undantagsregel: orderraknaren borjar om (fraga 45). Ett
+  // uttryckligt undantag for det ena talar for att det andra inte har nagot.
+  //
+  // Det finns ocksa ett strukturellt skal, och det ar det starkare: en ORDER
+  // har ett signeringsdatum och gar darfor att lagga fore eller efter en
+  // handelse. En VECKA har inte det. En vecka som spanner over konsekvensdagen
+  // hade fatt delas, och avsnitt 6.2 sager redan att en halv vecka inte ar
+  // nagot man bedomer — den hoppas over. Att bygga en tredje sorts halv vecka
+  // hade motsagt den regeln.
+  //
+  // O17 ar ett FORSLAG som galler tills bestallaren sager annat. Sags det
+  // annat ar det den har raden som andras, och `KvIndata` bar redan allt som
+  // behovs for att rakna om pa fardre veckor.
+  // ===========================================================================
   const kvBonus =
-    kv && kv.procent > 0
+    kv && kv.procent > 0 && !konsekvens?.bonusforlust
       ? {
           godkanda: kv.godkanda,
           procent: kv.procent,
@@ -371,7 +466,17 @@ export function raknaUnderlag(
     grundprovision: grund,
     volymbonus,
     kv: kvBonus,
-    nasta: kvarTillNasta(trappa, antal.netto),
+    // PROGNOSEN RAKNAS PA DEN NYA TRAPPAN. Efter en konsekvens ar "3 order kvar
+    // till nasta bonus" ett pastaende om raknaren som borjade om, inte om den
+    // manaden hade utan handelsen — annars lovar vyn en niva som inte kommer.
+    nasta: kvarTillNasta(trappa, antal.bonusgrundande),
+    konsekvens: konsekvens
+      ? {
+          bonusforlust: konsekvens.bonusforlust,
+          raknareFran: konsekvens.raknareFran,
+          handelser: konsekvens.handelser.length,
+        }
+      : null,
     summa: summaAv(rader),
   };
 }
@@ -388,6 +493,7 @@ export function underlagForAlla(
   manad: string,
   nivaer: Bonusniva[] = [],
   kvPerPerson: Map<string, KvIndata> = new Map(),
+  konsekvensPerPerson: Map<string, Konsekvenslage> = new Map(),
 ): Underlag[] {
   const personer = new Set<string>();
   for (const o of [...orderIPeriod(order, manad), ...makuleradeIPeriod(order, manad)]) {
@@ -396,7 +502,16 @@ export function underlagForAlla(
 
   return [...personer]
     .sort()
-    .map((id) => raknaUnderlag(id, order, manad, nivaer, kvPerPerson.get(id) ?? null));
+    .map((id) =>
+      raknaUnderlag(
+        id,
+        order,
+        manad,
+        nivaer,
+        kvPerPerson.get(id) ?? null,
+        konsekvensPerPerson.get(id) ?? null,
+      ),
+    );
 }
 
 // -----------------------------------------------------------------------------
@@ -521,6 +636,22 @@ export type Bokforingspost = {
  *
  * NOLLPOSTER HOPPAS OVER. En bokford nolla ar ingen upplysning, och i en
  * append-only tabell gar den inte att stada bort efterat.
+ *
+ * ===========================================================================
+ * EN BONUSFORLUST BOKFORS INTE SOM EN POST. Den syns som en post SOM INTE
+ * FINNS — volymbonusraden uteblir, eller ar mindre an manaden borde ha gett.
+ *
+ * Frestelsen ar en `avdrag`-rad pa noll kronor "sa att det syns". Den vore fel
+ * pa tva satt: den ar en nollpost i en append-only tabell, och den pastar att
+ * pengar dragits nar det som hant ar att de aldrig tjanades in.
+ *
+ * SPARBARHETEN (avsnitt 12) ligger i stallet i `attendance_incident`, som ar
+ * permanent och laser sig av bade chefen och den det galler (RLS i 0037). Vyn
+ * lagger de tva bredvid varandra: manadens poster ur huvudboken, och skalet ur
+ * handelsen. Det galler ocksa en STANGD manad — handelserna finns kvar, sa
+ * fragan "varfor fick jag ingen volymbonus i augusti" gar att besvara i
+ * november lika val som i augusti.
+ * ===========================================================================
  */
 export function bokforingsposter(u: Underlag): Bokforingspost[] {
   const poster: Bokforingspost[] = [];

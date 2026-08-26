@@ -6,6 +6,7 @@ import { getCurrentUser, hasRole } from "@/lib/auth";
 import { svensktDatum } from "@/lib/klocka";
 import { kronor, manadFore, manadsnyckel } from "@/lib/provision";
 import { BONUSENHETER, type Bonusenhet } from "@/lib/provision-motor";
+import { ATGARDER, type Atgard } from "@/lib/konsekvens";
 
 export type ReglerState = { fel?: string; ok?: string };
 
@@ -212,6 +213,145 @@ export async function stangNiva(_prev: ReglerState, form: FormData): Promise<Reg
     revalidatePath("/order");
 
     return { ok: `Nivå ${troskel} gäller inte längre från ${franDatum}.` };
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Nagot gick fel." };
+  }
+}
+
+// -----------------------------------------------------------------------------
+// E13 steg 6: konsekvenstrappan
+//
+// ===========================================================================
+// DEN HAR TRAPPAN AR INTE VERSIONERAD, och det ar en avsiktlig skillnad mot
+// volymtrappan ovan.
+//
+// `commission_bonus_level` bar `valid_from`/`valid_to` for att fragan "vilken
+// trappa gallde i juni" maste ga att besvara i november — bonusen raknas om
+// varje gang nagon tittar pa en oppen manad.
+//
+// `consequence_rule` behover det inte, for FRYSNINGEN SKER PA HANDELSEN i
+// stallet. `attendance_incident` kopierar in `rule_id`, `ordningsnummer` och
+// `atgard` i det ogonblick chefen godkanner, och laser dem aldrig om (0037).
+// En handelse fran juni bar alltsa juni-trappans svar for evigt, oavsett hur
+// raderna nedan ser ut i dag.
+//
+// Foljden ar att en andring har BARA galler framat, av sig sjalv. Det behover
+// ingen kolumn och ingen kontroll — men det behover sta utskrivet, for det ser
+// ut som en slarvig tabell tills man vet varfor.
+// ===========================================================================
+// -----------------------------------------------------------------------------
+
+/**
+ * Satter ett steg i konsekvenstrappan.
+ *
+ * `ordning` ar unik i 0037, sa upsert pa den kolumnen andrar ett befintligt steg
+ * i stallet for att lagga ett andra pa samma plats. Tva regler pa samma steg
+ * hade latit sorteringsordningen avgora vad nagon drabbas av.
+ */
+export async function sparaKonsekvenssteg(
+  _prev: ReglerState,
+  form: FormData,
+): Promise<ReglerState> {
+  try {
+    const user = await kravRegelagare();
+
+    const ordning = Number(String(form.get("ordning") ?? "").trim());
+    const antal = Number(String(form.get("antal_handelser") ?? "").trim());
+    const manader = Number(String(form.get("periodlangd_manader") ?? "").trim());
+    const atgard = String(form.get("atgard") ?? "").trim();
+    const notifiera = form.get("notifiera") === "on";
+
+    if (!Number.isInteger(ordning) || ordning < 1) return { fel: "Steget maste vara 1 eller hogre." };
+    if (!Number.isInteger(antal) || antal < 1) return { fel: "Antalet handelser maste vara minst 1." };
+    if (!Number.isInteger(manader) || manader < 1) return { fel: "Periodlangden maste vara minst 1 manad." };
+    if (!ATGARDER.includes(atgard as Atgard)) return { fel: "Atgarden gick inte att tolka." };
+
+    // O8: overrig bonus faller INTE. `omfattning` kan darfor bara vara
+    // `innevarande_manad`, och bara for en bonusforlust — check-villkoret i 0037
+    // nekar allt annat. Raden nedan ar inte en gissning, den ar det enda
+    // villkoret slapper igenom.
+    const omfattning = atgard === "bonusforlust" ? "innevarande_manad" : null;
+
+    const { error } = await supabaseAdmin()
+      .from("consequence_rule")
+      .upsert(
+        {
+          ordning,
+          antal_handelser: antal,
+          periodlangd_manader: manader,
+          atgard,
+          omfattning,
+          notifiera,
+          set_by: user.employee!.id,
+          set_at: new Date().toISOString(),
+        },
+        { onConflict: "ordning" },
+      );
+
+    if (error) return { fel: `Steget sparades inte: ${error.message}` };
+
+    await supabaseAdmin().from("audit_log").insert({
+      actor_id: user.employee!.id,
+      action: "consequence_rule.set",
+      object_type: "consequence_rule",
+      object_id: String(ordning),
+      meta: { ordning, antal_handelser: antal, periodlangd_manader: manader, atgard, notifiera },
+    });
+
+    revalidatePath("/provision/regler");
+    revalidatePath("/tid/ogiltig-franvaro");
+
+    return { ok: `Steg ${ordning} gäller: ${antal} händelser inom ${manader} månader.` };
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Nagot gick fel." };
+  }
+}
+
+/**
+ * Tar bort ett steg ur trappan.
+ *
+ * REDAN BESLUTADE HANDELSER ROSS INTE. De bar sitt trappsteg pa raden, och
+ * `attendance_incident.rule_id` ar `references consequence_rule(id)` UTAN
+ * kaskad — databasen nekar darfor raderingen sa lange nagon handelse pekar pa
+ * regeln, och det ar ratt: en trappa som gar att radera bakat gor varje beslut
+ * omojligt att forklara i efterhand.
+ */
+export async function taBortKonsekvenssteg(
+  _prev: ReglerState,
+  form: FormData,
+): Promise<ReglerState> {
+  try {
+    const user = await kravRegelagare();
+    const ordning = Number(String(form.get("ordning") ?? "").trim());
+    if (!Number.isInteger(ordning)) return { fel: "Steget gick inte att tolka." };
+
+    const { error } = await supabaseAdmin()
+      .from("consequence_rule")
+      .delete()
+      .eq("ordning", ordning);
+
+    // 23503 = foreign_key_violation. Regeln bar redan ett beslut.
+    if (error?.code === "23503") {
+      return {
+        fel:
+          `Steg ${ordning} går inte att ta bort — en beslutad händelse pekar på det.` +
+          " Ändra steget i stället; redan beslutade händelser behåller ändå sin åtgärd.",
+      };
+    }
+    if (error) return { fel: `Steget togs inte bort: ${error.message}` };
+
+    await supabaseAdmin().from("audit_log").insert({
+      actor_id: user.employee!.id,
+      action: "consequence_rule.removed",
+      object_type: "consequence_rule",
+      object_id: String(ordning),
+      meta: { ordning },
+    });
+
+    revalidatePath("/provision/regler");
+    revalidatePath("/tid/ogiltig-franvaro");
+
+    return { ok: `Steg ${ordning} är borta ur trappan.` };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Nagot gick fel." };
   }

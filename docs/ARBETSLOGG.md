@@ -5,6 +5,182 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-08-26 (kväll) · E13 steg 6, 7 och 9: konsekvenserna, underlaget och orderbilagan
+
+E13 är färdigbyggt utom steg 8, som väntar på A6. En migration: `0039`.
+Konsekvenssystemet behövde ingen — schemat låg redan i `0037`, det var motorn,
+kön och vyerna som saknades.
+
+### Två frågor ställdes innan något räknades, och båda gav svar
+
+**Volymtrappan är omkastad, och databasen bekräftar det.**
+`commission_bonus_level` har 15 → 1 200 kr och 20 → 1 000 kr. Tidsstämplarna är
+talande: 5 kl 13:31:35, 10 kl 13:31:45, **20 kl 13:32:13**, **15 kl 13:32:38** —
+de två sista inmatade i omvänd ordning mot de andra, vilket är precis vad som
+händer när två fält byter plats. Beställaren bekräftade att det är fel och ger
+nya belopp. **Trappan är rättad först när de kommit; det är den enda delen av
+E13 som väntar på indata.** Raden i `NASTA_SESSION.md` som påstod
+`15/20 → 1000/1200` var fel och är rättad.
+
+**Ö13 är besvarad: behåll `betald`, men gör den nåbar.** Det som hittades under
+frågan var värre än frågan: statusen fanns i schemat, i övergångsmatrisen och i
+triggern i `0034` medan **ingen kod kunde sätta den**. Den var alltså oåtkomlig,
+inte bara verkningslös — och en död väg tolkas förr eller senare som en
+bortfallen knapp. `markeraBetald()` är vägen in, för **ekonomi och VD**, alltså
+snävare än `farHantera` som också släpper in säljchefen. Statusen rör fortfarande
+inga pengar: `harGodkants()` behandlar `signerad` och `betald` lika.
+
+### Steg 6: hela systemet vilar på att navet inte drar slutsatsen själv
+
+**`uteblivenInstampling()` mäter en HELT utebliven dag, inte en lucka.** Det är
+Ö18, en fråga som aldrig ställdes, och valet är det som håller D-K12:s linje:
+
+> En mätning av "schemalagd tid utan stämpling bakom sig" hade av ren aritmetik
+> fångat sen ankomst — minuterna före dagens första instämpling *är* förseningen.
+> Då hade gränsen glidit utan att någon flyttat den med avsikt, och K12 1.2 är ett
+> löfte i en intresseavvägning som beslutades i morse.
+
+Finns det en enda stämpling lämnar funktionen `null`, oavsett hur sent den kom,
+hur långa glapp dagen har eller hur tidigt någon gick hem. Provet skickar in en
+person som stämplat in en timme för sent och kräver noll. **Faller den
+kontrollen har någon sänkt gränsen utan att gå via K12 avsnitt 6 och 7.**
+
+Följden är att femminutersgränsen sällan biter — en schemalagd dag är längre än
+så. Den står kvar ändå, i `MINSTA_MINUTER` och som check-villkor i `0037`, för
+att den är det beställaren svarade.
+
+**Fråga 42 och 47 lät motstridiga och är det inte.** 42 säger att perioden räknas
+*från den första*, 47 att varningen nollställs tre månader efter *den senaste*.
+Ett fönster ankrat i den första uppfyller 42 men inte 47. Ett fönster som räknas
+**bakåt från det datum man frågar om** uppfyller båda — ligger den senaste utanför
+ligger alla utanför. Det står utskrivet i `iFonstret()` så att nästa läsare inte
+"rättar" tillbaka det till 42:s ordalydelse.
+
+**`raknas()` i `konsekvens.ts` är motsatsen till `harGodkants()` i `order.ts`,
+och det är med flit.** En makulering är två händelser: signeringen *hände*, så
+den räknas fortfarande. En hävning är ett underkänt beslut: chefen säger att
+händelsen aldrig borde ha registrerats, så den ska sluta räkna mot nästa också.
+Provet kräver att nästa händelse efter en hävning är steg **ett** igen.
+
+**Två antal i underlaget, och de är olika med flit.** `antal.netto` är vad
+personen sålde; `antal.bonusgrundande` är vad volymtrappan räknar på. Efter en
+bonusförlust börjar räknaren om (fråga 45), så den som stod på 20 och sedan
+säljer fem till får nivå 5 på de fem. Blandas de ihop blir antingen vyn en lögn
+eller bonusen fel.
+
+Omstarten går från **händelsens dag**, inte beslutets — annars hade utfallet
+hängt på när chefen hann titta i kön. Och **från och med**, inte efter: gränsen
+går att tolka åt två håll och faller därför ut till den anställdas fördel, samma
+princip som toleransen i `raster.ts`.
+
+**Ö17, också aldrig ställd: K&V-bonusen faller helt.** Beställaren sa "samtliga
+bonusar faller" och gjorde *en* undantagsregel — orderräknaren. Ett utskrivet
+undantag för det ena talar för att det andra inte har något. Det strukturella
+skälet är starkare: en order har ett signeringsdatum och går att lägga före eller
+efter en händelse, **en vecka har inte det**, och avsnitt 6.2 säger redan att en
+halv vecka inte är något man bedömer.
+
+**Förslagsmotorn läser sjukfrånvaro för att INTE göra något.** AC-3.26 och E7.14
+förbjuder att vyer joinar `sick_report` — men den regeln handlar om vyer, där RLS
+tyst kan ge noll rader. Nattjobbet kör med service role, `payroll_row` bär
+minuter per period och inte vilka *dagar* som var frånvaro, och riktningen är
+omvänd: uppgiften används uteslutande för att **underlåta** att föreslå en
+disciplinär händelse. Faller filtreringen bort blir varje sjukdag i bolaget ett
+förslag i chefens kö. Skälet lagras aldrig — `attendance_incident` har ingen
+kolumn för det.
+
+Jobbet **återkallar** dessutom förslag som frånvaron hunnit ikapp: den som
+sjukanmäler sig i efterhand ska inte ha ett förslag liggande. Raderingen är
+tillåten just för att statusen är `foreslagen`.
+
+**Gårdagen föreslås inte.** Två dygns karens, för att den som var sjuk igår ringer
+i dag och en rättelse har 48 timmar på sig. Ett förslag som läggs samma natt låg i
+chefens kö innan personen hunnit förklara sig.
+
+**Ärendet vid tredje gången får kategorin `other` och är konfidentiellt.**
+`development` är den kategori en anställd själv använder för ett samtal om sin
+utveckling; ett disciplinärt ärende där hade förgiftat AC-4.5-statistiken.
+`confidential` snävar chefskretsen till säljchef och VD — men `hr_case_read`
+börjar med `employee_id = current_employee_id()`, så **den det gäller ser sitt
+eget ärende**, vilket fråga 49 kräver.
+
+**`attendance_approver` fanns i databasens check-villkor sedan `0037` men inte i
+`PERMISSIONS`** — behörigheten gick alltså inte att tilldela. Den är tillagd, och
+behörighetsvyn plockar upp den av sig själv.
+
+### Steg 7: två papper som följs åt, aldrig ett
+
+`/provision/underlag/[manad]`. Skillnaden mot lönerapporten är inte kosmetisk:
+`payroll_row` bär **minuter och antal** för att navet inte får gissa vad en minut
+är värd (K5), medan kronorna i underlaget inte är en beräkning utan en
+**huvudbokssumma som redan är attesterad**. Navet räknar inte fram dem — det
+listar upp dem.
+
+En stängd månad läses ur `commission_entry`, aldrig ur motorn: körs motorn om kan
+en ändrad inställning ge ett annat tal än det som faktiskt bokfördes. En öppen
+månad räknas live och stämplas **Preliminär** — ett papper som ser likadant ut i
+båda fallen är ett papper någon betalar ut efter av misstag.
+
+**PDF:en är utskriften.** Alternativet var ett nytt beroende som genererar PDF på
+servern, vilket är stort att dra in för ett dokument som redan är en tabell — och
+en till plats där layouten kan glida isär från vad sidan visar.
+
+**Filen har snävare krets än sidan.** Sidan visar det RLS släpper fram, så en
+säljare ser sig själv. En fil lämnar navet och går inte att ta tillbaka. Provet
+låser formatet: BOM, semikolon, **komma som decimaltecken och ASCII-minus** — och
+kräver uttryckligen att `kronor()` inte används, för den skriver U+2212 och hårt
+mellanslag, vilket är rätt i en vy och obrukbart i ett kalkylblad.
+
+### Steg 9: utläsningen förifyller, den sparar aldrig
+
+Migration `0039` vidgar `file_object` med ett fjärde ändamål. Samma form som
+`0024` gav rollspelen: villkoren skrivs **om** i stället för att läggas bredvid,
+för två check-villkor som båda beskriver tillåtna kopplingar är två ställen att
+hålla lika.
+
+**`subject_employee_id` måste vara NULL för en orderbilaga.** Sätts den till
+säljaren blir kundens avtal en uppgift om den anställda och följer med ut i hens
+registerutdrag. Migrationen har en självkontroll som faller om någon rad bryter
+mot det.
+
+**Raderingstriggern fick sitt fjärde undantag** — samma fälla som `0023` och
+`0033` gick i: `on delete cascade` kör en DELETE, och ett orderutkast går att
+kasta. Utan undantaget hade en spärr mot att städa bort bevis blivit en spärr mot
+att kasta ett utkast.
+
+**Bara PDF.** Ö14 sa PDF, och en JPEG hade gett en bild som `pdftext.ts` inte kan
+läsa — då hade förifyllningen tyst uteblivit för just de orderna.
+
+Utläsningen är avsiktligt försiktig och lämnar hellre tomt än gissar:
+
+- **Två olika värden ger tomt.** Ett avtal bär både kundens och vårt eget
+  bolagsnamn; fylls kundens plats med vårt syns det aldrig.
+- **Bara ISO-datum.** "05/08/26" går inte att tolka, och datumet styr vilken
+  **månad** någon får betalt.
+- **Orgnummer kräver bindestreck.** Tio siffror i rad är lika gärna ett
+  telefonnummer.
+- **Kontaktperson kräver ledtext.** Ett avtal är fullt av egennamn.
+
+Ett verkligt fel hittades av provet: efter att blanksteg kollapsats ser
+`Telefon:` ut som ett efternamn, och namnmönstret åt upp det. Fixen behövde **två
+lookaheads** — utan den första backar motorn ett tecken och matchar "Telefo",
+som mycket riktigt inte följs av kolon. `\b` dög inte i den rollen: `\w` är ASCII
+i JavaScript, så det finns en ordgräns mitt i "Åsa".
+
+Förslaget visas **mot orderns nuvarande värden**, med utdraget ur avtalet som gav
+svaret, och bara det som kryssats i skrivs. En godkänd order går inte att rätta
+alls — både actionen och triggern i `0034` nekar det, för provisionen är frusen
+på den.
+
+### Provsviten
+
+35 sviter. Första körningen dog på `ECONNRESET` mitt i `tests/sidor.mjs` med
+**noll fallna kontroller** — precis det nätavbrott som står beskrivet här sedan
+23 augusti. Omkörning från den sviten och framåt gick igenom. Sammanlagt 1 272 +
+347 godkända kontroller plus de tre nya sviterna.
+
+---
+
 ## 2026-08-26 · Genomgång inför pilot: notisavfärdning, tre fel, och 0037 tillbaka i repot
 
 Beställaren bad om en hård genomgång: allt säljarna ser, alla roller, buggar,

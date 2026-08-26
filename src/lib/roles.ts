@@ -50,12 +50,13 @@ export const MFA_REQUIRED_ROLES: Role[] = [];
  * annars nekar databasen tilldelningen och granssnittet ser ut att ha gatt
  * sonder.
  */
-export const PERMISSIONS = ["payroll_cost_viewer", "recruiter"] as const;
+export const PERMISSIONS = ["payroll_cost_viewer", "recruiter", "attendance_approver"] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
 export const PERMISSION_LABEL: Record<Permission, string> = {
   payroll_cost_viewer: "Lönekostnad (M13)",
   recruiter: "Rekryterare (M7)",
+  attendance_approver: "Besluta om ogiltig frånvaro (E13)",
 };
 
 export const EMPLOYMENT_TYPE_LABEL: Record<string, string> = {

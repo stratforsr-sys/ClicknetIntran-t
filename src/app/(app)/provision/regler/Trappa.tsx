@@ -4,7 +4,13 @@ import { useActionState } from "react";
 import { Button } from "@/components/ui/Button";
 import { KONTROLL } from "@/components/ui/Field";
 import { Notis } from "@/components/ui/Notis";
-import { sparaNiva, stangNiva, type ReglerState } from "./actions";
+import {
+  sparaKonsekvenssteg,
+  sparaNiva,
+  stangNiva,
+  taBortKonsekvenssteg,
+  type ReglerState,
+} from "./actions";
 
 /**
  * Formularen for volymtrappan.
@@ -123,6 +129,122 @@ export function TaBortNiva({ troskel }: { troskel: number }) {
       <Button type="submit" variant="diskret" size="sm" laddar={vantar} disabled={vantar}>
         Ta bort
       </Button>
+    </form>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// E13 steg 6: konsekvenstrappan
+// -----------------------------------------------------------------------------
+
+const ATGARDSVAL = [
+  { varde: "varning", etikett: "Varning" },
+  { varde: "skriftlig_erinran", etikett: "Skriftlig erinran" },
+  { varde: "bonusforlust", etikett: "Bonusförlust innevarande månad" },
+  { varde: "arende", etikett: "Personalärende" },
+];
+
+/**
+ * Ett steg i konsekvenstrappan.
+ *
+ * INGET VERKANSVAL, till skillnad fran volymtrappan ovan. Skalet ar att
+ * frysningen sker pa handelsen och inte pa regeln: en beslutad handelse bar
+ * sitt trappsteg for evigt, sa en andring har galler framat av sig sjalv. Ett
+ * "gäller denna månad"-val hade darfor varit ett val utan innebord.
+ */
+export function KonsekvensSteg({ steg }: { steg?: Konsekvensteg }) {
+  const [state, action, vantar] = useActionState<ReglerState, FormData>(sparaKonsekvenssteg, {});
+
+  return (
+    <form action={action} className="flex flex-col gap-4">
+      {state.fel && <Notis ton="danger">{state.fel}</Notis>}
+      {state.ok && <Notis ton="ok">{state.ok}</Notis>}
+
+      <div className="grid gap-3 sm:grid-cols-4">
+        <label className="flex flex-col gap-1">
+          <span className="text-micro text-ink-500">Steg</span>
+          <input
+            name="ordning"
+            required
+            inputMode="numeric"
+            defaultValue={steg?.ordning ?? ""}
+            placeholder="1"
+            className={KONTROLL}
+          />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-micro text-ink-500">Vid antal händelser</span>
+          <input
+            name="antal_handelser"
+            required
+            inputMode="numeric"
+            defaultValue={steg?.antal_handelser ?? ""}
+            placeholder="1"
+            className={KONTROLL}
+          />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-micro text-ink-500">Inom antal månader</span>
+          <input
+            name="periodlangd_manader"
+            required
+            inputMode="numeric"
+            defaultValue={steg?.periodlangd_manader ?? 3}
+            placeholder="3"
+            className={KONTROLL}
+          />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-micro text-ink-500">Åtgärd</span>
+          <select name="atgard" defaultValue={steg?.atgard ?? "varning"} className={KONTROLL}>
+            {ATGARDSVAL.map((a) => (
+              <option key={a.varde} value={a.varde}>
+                {a.etikett}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <label className="flex items-center gap-2 text-small text-ink-700">
+        <input type="checkbox" name="notifiera" defaultChecked={steg?.notifiera ?? true} />
+        Skicka notis till den det gäller
+      </label>
+
+      <div>
+        <Button type="submit" variant="sekundar" size="sm" disabled={vantar}>
+          Spara steget
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+export type Konsekvensteg = {
+  ordning: number;
+  antal_handelser: number;
+  periodlangd_manader: number;
+  atgard: string;
+  notifiera: boolean;
+};
+
+export function TaBortSteg({ ordning }: { ordning: number }) {
+  const [state, action, vantar] = useActionState<ReglerState, FormData>(
+    taBortKonsekvenssteg,
+    {},
+  );
+
+  return (
+    <form action={action} className="flex flex-col items-end gap-1">
+      <input type="hidden" name="ordning" value={ordning} />
+      <Button type="submit" variant="diskret" size="sm" disabled={vantar}>
+        Ta bort
+      </Button>
+      {state.fel && <Notis ton="danger">{state.fel}</Notis>}
+      {state.ok && <Notis ton="ok">{state.ok}</Notis>}
     </form>
   );
 }

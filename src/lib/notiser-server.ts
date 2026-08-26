@@ -39,6 +39,8 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
     { data: franvarotyper },
     { data: rollspel },
     { data: felrapporter },
+    { data: handelser },
+    { data: konsekvensregler },
   ] = await Promise.all([
     supabase.from("notification_seen").select("seen_at").eq("employee_id", mig).maybeSingle(),
     // 0038. Poster den har personen redan klickat pa. Hamtas med hennes egen
@@ -119,6 +121,19 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
       .select("id, kind, path, body, message, digest, status, blocking, reporter_id, first_seen_at, handled_at")
       .order("last_seen_at", { ascending: false })
       .limit(MAX_NOTISER),
+    // E13 steg 6. Samma monster som rollspelen: EN fraga bar bada riktningarna.
+    // RLS i 0037 ger chefen kon och den beromda bara sina BESLUTADE rader, sa
+    // ett forslag kan aldrig na den det galler — vilket ar hela poangen med att
+    // motorn foreslar i stallet for att besluta.
+    supabase
+      .from("attendance_incident")
+      .select("id, employee_id, occurred_on, status, atgard, suggested_at, decided_at")
+      .in("status", ["foreslagen", "godkand"])
+      .order("occurred_on", { ascending: false })
+      .limit(MAX_NOTISER),
+    // Tre rader. `notifiera` ar konfiguration per trappsteg (fraga 48), sa
+    // fragan gar inte att undvika — men den ar billig och ligger i samma vag.
+    supabase.from("consequence_rule").select("id, atgard, notifiera"),
   ]);
 
   // Ingen rad = allt ar olast. Ratt hall att fela at: en nyanstalld ska se
@@ -308,6 +323,56 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
         href: kurs ? `/utbildning/${kurs.slug}` : "/utbildning",
         tidpunkt: r.graded_at,
         olast: arNy(r.graded_at),
+      });
+    }
+  }
+
+  // E13 steg 6. Två poster ur samma tabell, precis som rollspelen ovan.
+  //
+  // NOTIFIERA ÄR PER TRAPPSTEG. En trappa där första steget inte notifierar ger
+  // en varning som ingen får veta om — det är chefens val, och det ska gå att
+  // göra. Saknas åtgärden i listan (regeln borttagen) notifieras det ändå:
+  // hellre ett besked för mycket än ett beslut någon aldrig hörde talas om.
+  const notifierar = new Map(
+    (konsekvensregler ?? []).map((r) => [String(r.atgard), r.notifiera !== false]),
+  );
+
+  const ATGARDSTEXT: Record<string, string> = {
+    varning: "Varning registrerad",
+    skriftlig_erinran: "Skriftlig erinran registrerad",
+    bonusforlust: "Volymbonus och K&V-bonus faller för den här månaden",
+    arende: "Ett personalärende är upplagt — läs och svara",
+  };
+
+  for (const h of handelser ?? []) {
+    const mitt = h.employee_id === mig;
+    const dag = String(h.occurred_on).slice(0, 10);
+
+    // Chefens kö. Ett förslag når aldrig hit för den det gäller — RLS ger inte
+    // ut raden — men villkoret står ändå utskrivet, för det är en regel och
+    // inte en följd av hur frågan råkar se ut.
+    if (h.status === "foreslagen" && !mitt) {
+      notiser.push({
+        id: notisId("franvaro-forslag", h.id),
+        typ: "franvaro",
+        rubrik: `${namn.get(h.employee_id) ?? "En medarbetare"} saknar instämpling`,
+        detalj: `${dag} · var personen på plats? Ingenting registreras förrän du svarat`,
+        href: "/tid/ogiltig-franvaro",
+        tidpunkt: h.suggested_at,
+        olast: arNy(h.suggested_at),
+      });
+    }
+
+    // Beskedet till den det gäller (fråga 48).
+    if (h.status === "godkand" && mitt && notifierar.get(String(h.atgard)) !== false) {
+      notiser.push({
+        id: notisId("franvaro-konsekvens", h.id),
+        typ: "franvaro",
+        rubrik: `Ogiltig frånvaro registrerad ${dag}`,
+        detalj: ATGARDSTEXT[String(h.atgard)] ?? "Beslutad av din chef",
+        href: "/provision",
+        tidpunkt: h.decided_at ?? h.suggested_at,
+        olast: arNy(h.decided_at ?? h.suggested_at),
       });
     }
   }

@@ -168,3 +168,90 @@ annat än att ta tillbaka en utfästelse.
 det som byggs. **Avsnitt 6 och 7 är fortfarande tomma** — avvägningen och
 beslutet är arbetsgivarens och rör 1.2 och 1.3, som är oförändrade. Spärren för
 raststämpling hänger fortfarande på att K12 och K14 publiceras.
+
+---
+
+## D-E13.6 · Ogiltig frånvaro är en dag HELT utan stämpling
+
+**2026-08-26.** Ö15 svarade *hur mycket* (minst 5 minuter) och *vem som avgör*
+(chefen), men inte *vad* som mäts. Tre läsningar var möjliga; den snävaste
+gäller: **en ogiltig frånvaro är en schemalagd dag utan en enda stämpling.**
+
+Finns det en instämpling räknas dagen aldrig — hur sent den än kom. Detsamma
+gäller tidig hemgång och glapp mitt på dagen.
+
+**Varför:** en mätning av "schemalagd tid utan stämpling bakom sig" hade av ren
+aritmetik fångat **sen ankomst** — minuterna före dagens första instämpling *är*
+förseningen. K12 1.2 säger att sen ankomst inte når provisionen, och det är ett
+löfte i en intresseavvägning som beslutades 2026-08-26. Gränsen hade alltså
+glidit utan att någon flyttat den med avsikt.
+
+Tidig hemgång och glapp är något annat än "utebliven instämpling" — det ord både
+specifikationen, arbetsloggen och beställaren använder — och har inte gått igenom
+frågeomgången.
+
+**Följd:** femminutersgränsen biter sällan, eftersom en schemalagd dag är längre
+än så. Den står kvar ändå, i `MINSTA_MINUTER` och som check-villkor i `0037`, för
+att den är det beställaren svarade.
+
+**Att ändra det här** är en rad i `uteblivenInstampling()`. Men gäller vidgningen
+sen ankomst kräver den att K12 avsnitt 6 och 7 skrivs och beslutas på nytt, av
+någon med dataskyddskompetens. Att vidga är billigt; att smalna av efter att data
+finns är det inte.
+
+---
+
+## D-E13.7 · Provisionsunderlaget är ett eget dokument, inte en kolumn i lönerapporten
+
+**2026-08-26.** Beställaren svarade på fråga 57 att bonusen ska räknas i
+lönerapporten. Ö10 avgjorde att det i stället blir ett **separat underlag**, och
+det är nu byggt: `/provision/underlag/[manad]`. **`payroll_row` har fortfarande
+ingen kronkolumn.**
+
+**Varför de inte är samma papper:** `payroll_row` bär minuter och antal för att
+navet inte får gissa vad en minut är värd (K5, AC-2.17). Kronorna i
+provisionsunderlaget är inte en beräkning utan en **huvudbokssumma som redan är
+bokförd och attesterad** i `commission_entry` — navet räknar inte fram dem, det
+listar upp dem.
+
+Läggs de ihop är navet ett lönesystem. Resonemanget står redan i `0025`; det här
+beslutet är dess tillämpning på E13.
+
+**Två följdregler:**
+
+- **En stängd månad läses ur huvudboken, aldrig ur motorn.** Körs motorn om kan
+  en ändrad inställning ge ett annat tal än det som faktiskt bokfördes.
+- **En öppen månad stämplas `Preliminär`.** Ett papper som ser likadant ut i båda
+  fallen är ett papper någon betalar ut efter av misstag.
+
+**Utbetalningsmånaden** (fråga 58: månaden efter) är i dag en rad i
+`provisionsunderlag.ts` och inte konfiguration, till skillnad från vad avsnitt
+8.2 listar. Det finns ingen tabell att lägga den i, och en ny tabell för ett
+heltal bär inte sin egen vikt. Kommer frågan upp byts raden mot ett uppslag.
+
+---
+
+## D-E13.9 · Orderbilagan bär inget subjekt, och utläsningen sparar aldrig
+
+**2026-08-26**, migration `0039`.
+
+**Bilagan hör till en kundaffär, inte till en människa.**
+`file_object.subject_employee_id` är NULL för `purpose = 'sales_order'`, tvingat
+av ett check-villkor och kontrollerat av en självkontroll i migrationen. Sätts
+den till säljaren blir kundens avtal en uppgift om den anställda och följer med ut
+i hens registerutdrag (artikel 15).
+
+**Filen kan ändå bära ett personnummer** — en enskild firma har personnummer som
+organisationsnummer (K27-undantaget, se avsnitt 3.2), och en signerad PDF kan bära
+en namnteckning. Den ligger i den stängda `filer`-bucketen med åtkomstlogg, vilket
+är rätt skyddsnivå. **P0.6 registerförteckningen måste uppdateras med kunduppgifter
+som ny kategori.** Migrationen kan inte göra det åt någon: P0.6 är ett dokument.
+
+**Utläsningen förifyller ett formulär och skriver aldrig något.** Beställarens krav
+i avsnitt 3.1, och skälet är pengar: ordern bär ett provisionsbelopp som fryses vid
+godkännandet. En maskinläst löptid som ingen kontrollerat är skillnaden mellan
+1 500 och 4 500 kronor, och felet upptäcks först när någon jämför med papperet.
+
+`lasAvtalsforslag()` svarar med ett förslag och sin källa; `rattaFranAvtal()`
+skriver bara det som kryssats i, och bara på en order som ännu inte godkänts.
+Triggern `sales_order_stegbyte` i `0034` nekar det senare oberoende av koden.

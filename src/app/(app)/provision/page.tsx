@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Card, CardHeader } from "@/components/ui/Card";
+import { ButtonLink } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Notis } from "@/components/ui/Notis";
@@ -17,6 +18,8 @@ import {
 } from "@/lib/provision";
 import { hamtaOrder, hamtaOrderFor } from "@/lib/order-server";
 import { hamtaNivaer, hamtaPerioder } from "@/lib/bonus-server";
+import { hamtaGodkandaFran, hamtaMinaHandelser, hamtaRegler } from "@/lib/konsekvens-server";
+import { ATGARD_ETIKETT, konsekvenslageFor, lagenPerPerson, varningslage } from "@/lib/konsekvens";
 import {
   prognosNastaNiva,
   raknaUnderlag,
@@ -70,7 +73,22 @@ export default async function Provisionssida() {
   // kvar till nasta niva" utan att personen far se vad nivan ar vard ar en
   // sifferlek, och "manaden ar stangd" ar svaret pa "varfor andrar sig inte min
   // siffra langre".
-  const [mina, alla, personer, order, minaOrder, nivaer, perioder] = await Promise.all([
+  // K13 / D-K13: provision och tid far sta pa samma SIDA, men ingen FRAGA
+  // joinar tabellerna. Handelserna hamtas for sig och laggs bredvid — de moter
+  // aldrig en order i en och samma fraga. Rastavvikelser och sen ankomst nar
+  // fortfarande inte hit alls; det ar ett lofte i K12 avsnitt 5.
+  const [
+    mina,
+    alla,
+    personer,
+    order,
+    minaOrder,
+    nivaer,
+    perioder,
+    minaHandelser,
+    regler,
+    godkanda,
+  ] = await Promise.all([
     hamtaProvision(user.employee.id, ettArBak),
     provisionschef ? hamtaAllProvision(ettArBak) : Promise.resolve([] as Post[]),
     provisionschef ? hamtaPersoner() : Promise.resolve([] as { id: string; namn: string }[]),
@@ -78,6 +96,15 @@ export default async function Provisionssida() {
     hamtaOrderFor(user.employee.id, manadFore(idag, 2)),
     hamtaNivaer(),
     hamtaPerioder(manadFore(idag, 2)),
+    hamtaMinaHandelser(user.employee.id),
+    hamtaRegler(),
+    // I SAMMA VAG som allt annat, inte efter. De tre hamtningarna som E13 steg 6
+    // lade till beror inte pa nagot ovanfor, sa ett `await` pa egen rad hade
+    // lagt en tionde sekventiell vaga pa en sida vars vagantal ar det som
+    // vaxer nar navet vaxer. Se X3-resonemanget i arbetsloggen 2026-08-22.
+    provisionschef
+      ? hamtaGodkandaFran(manadFore(idag, 2))
+      : Promise.resolve([] as Awaited<ReturnType<typeof hamtaGodkandaFran>>),
   ]);
 
   const min = sammanfatta(mina, new Date());
@@ -92,7 +119,9 @@ export default async function Provisionssida() {
   // bokfort motorns rader, och att addera dem igen hade dubbelraknat manaden.
   // ===========================================================================
   const minStangd = perioder.some((p) => p.period_month === idag);
-  const mittUnderlag = raknaUnderlag(user.employee.id, minaOrder, idag, nivaer);
+  const mittLage = konsekvenslageFor(minaHandelser, idag);
+  const mittUnderlag = raknaUnderlag(user.employee.id, minaOrder, idag, nivaer, null, mittLage);
+  const minVarning = varningslage(minaHandelser, regler, svensktDatum(new Date()));
   const minPrognos = prognosNastaNiva(mittUnderlag);
   const minTotal = min.denna.belopp + (minStangd ? 0 : mittUnderlag.summa);
 
@@ -108,9 +137,14 @@ export default async function Provisionssida() {
   // `commission_period` ar oppen och raknas live ur orderna; en manad MED rad ar
   // bokford och raknas aldrig om. Se `stangning.ts`.
   const idagsDatum = svensktDatum(new Date());
+
+  // LIVE-SUMMAN MASTE RAKNAS SOM ATTESTEN RAKNAR. Chefen laser talet, trycker
+  // "Faststall", och far en bokforing som ska bli samma siffra. Utelamnas
+  // konsekvenserna har men inte i `stangning.ts` visar vyn ett hogre belopp an
+  // det som bokfors — och den avvikelsen upptacks forst nar nagon jamfor.
   const perioderVisas = [0, 1, 2].map((i) => {
     const manad = manadFore(idag, i);
-    const live = underlagForAlla(order, manad, nivaer);
+    const live = underlagForAlla(order, manad, nivaer, undefined, lagenPerPerson(godkanda, manad));
     return {
       manad,
       stangd: perioder.find((p) => p.period_month === manad) ?? null,
@@ -168,6 +202,35 @@ export default async function Provisionssida() {
           </p>
         </Card>
       </div>
+
+      {minVarning && (
+        <Notis ton={mittLage?.bonusforlust ? "danger" : "warn"}>
+          {mittLage?.bonusforlust ? (
+            <>
+              <strong>Volymbonusen och K&amp;V-bonusen faller för den här månaden.</strong> Din
+              grundprovision är orörd — intjänade pengar för utfört arbete faller inte bort, och
+              övrig bonus står kvar. Orderräknaren började om från noll den{" "}
+              {mittLage.raknareFran}: order efter det bygger en ny bonustrappa i samma månad.
+            </>
+          ) : (
+            <>
+              <strong>
+                {minVarning.antal === 1
+                  ? "En ogiltig frånvaro är registrerad."
+                  : `${minVarning.antal} ogiltiga frånvaron är registrerade.`}
+              </strong>{" "}
+              {minVarning.nasta?.atgard === "bonusforlust" &&
+                "Ytterligare en innebär att volymbonusen och K&V-bonusen för månaden faller. "}
+              {minVarning.nasta && minVarning.nasta.atgard !== "bonusforlust" && (
+                <>Nästa steg är {ATGARD_ETIKETT[minVarning.nasta.atgard].toLowerCase()}. </>
+              )}
+              {minVarning.manaderKvar > 0
+                ? `${minVarning.manaderKvar} ${minVarning.manaderKvar === 1 ? "månad" : "månader"} kvar av perioden (nollställs ${minVarning.nollstallsDen}).`
+                : `Perioden nollställs ${minVarning.nollstallsDen}.`}
+            </>
+          )}
+        </Notis>
+      )}
 
       {(mittUnderlag.rader.length > 0 || mittUnderlag.nasta) && (
         <Card>
@@ -239,17 +302,23 @@ export default async function Provisionssida() {
                   </span>
                 )}
 
+                <ButtonLink href={`/provision/underlag/${p.manad}`} size="sm" variant="diskret">
+                  Underlag
+                </ButtonLink>
+
                 {!p.stangd && p.garAttStanga && <Faststall manad={p.manad} />}
                 {p.stangd?.status === "faststalld" && bokforare && <Utbetald manad={p.manad} />}
               </li>
             ))}
           </ul>
-          <p className="mt-4 text-small text-ink-500">
-            En period kan fastställas tidigast på månadens sista dag. Volymtrappan sätts under{" "}
+          <p className="mt-4 max-w-[70ch] text-small text-ink-500">
+            En period kan fastställas tidigast på månadens sista dag. Reglerna sätts under{" "}
             <Link href="/provision/regler" className="underline">
-              Volymtrappan
+              Provisionsregler
             </Link>
-            .
+            . <strong>Underlaget</strong> är det separata dokument som följer med lönekörningen —
+            lönerapporten räknar fortfarande inga kronor (K5, AC-2.17), och de två papperen går
+            i väg tillsammans.
           </p>
         </Card>
       )}

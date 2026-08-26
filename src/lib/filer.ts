@@ -23,7 +23,12 @@
  * ===========================================================================
  */
 
-export type Andamal = "sick_certificate" | "document_attachment" | "roleplay";
+export type Andamal =
+  | "sick_certificate"
+  | "document_attachment"
+  | "roleplay"
+  /** E13 steg 9: den uppladdade avtals-PDF:en pa en kundorder (0039). */
+  | "sales_order";
 
 /** Vad varje andamal far bara. Samma lista som check-villkoret i 0022. */
 export const TILLATNA_TYPER: Record<Andamal, string[]> = {
@@ -32,6 +37,9 @@ export const TILLATNA_TYPER: Record<Andamal, string[]> = {
   // E8.7: ljud, inte video. Ett testsamtal ar ett samtal, och en videofil hade
   // dragit in ansikten i en bedomning som handlar om vad nagon sager.
   roleplay: ["audio/mpeg", "audio/mp4", "audio/wav", "audio/webm"],
+  // O14: BARA PDF. En bild gar inte att lasa text ur, och forifyllningen hade
+  // da tyst uteblivit for just de orderna — utan att nagot sag fel ut.
+  sales_order: ["application/pdf"],
 };
 
 /**
@@ -46,6 +54,7 @@ export const MAX_BYTE: Record<Andamal, number> = {
   sick_certificate: 10 * 1024 * 1024,
   document_attachment: 10 * 1024 * 1024,
   roleplay: 40 * 1024 * 1024,
+  sales_order: 10 * 1024 * 1024,
 };
 
 /**
@@ -61,6 +70,7 @@ export const ANDAMAL_ETIKETT: Record<Andamal, string> = {
   sick_certificate: "Läkarintyg",
   document_attachment: "Bilaga",
   roleplay: "Inspelat testsamtal",
+  sales_order: "Avtal",
 };
 
 export type Filfel =

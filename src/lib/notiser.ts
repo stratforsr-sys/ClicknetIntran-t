@@ -36,6 +36,12 @@ export const NOTIS_KALLOR = [
   "franvaro-beslut",
   "franvaro-lucka",
   "sjuk",
+  // E13 steg 6. Tva olika poster ur samma tabell, som `franvaro-lucka` och
+  // `franvaro-beslut`: forslaget ar chefens att ta stallning till, konsekvensen
+  // ar den beromdas besked. Ett forslag nar ALDRIG den det galler — RLS i 0037
+  // slapper fram raden forst nar den ar beslutad.
+  "franvaro-forslag",
+  "franvaro-konsekvens",
   "rollspel",
   "rollspel-bedomt",
   "fel",

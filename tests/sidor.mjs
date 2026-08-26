@@ -63,6 +63,9 @@ const SIDOR = [
   "/tid/schema",
   "/tid/sparrar",
   "/tid/avvikelser",
+  // E13 steg 6. Sidan omdirigerar den som inte far besluta, sa den provas som
+  // alla andra: renderar den utan serverfel, och lacker den nagon annans namn?
+  "/tid/ogiltig-franvaro",
   "/tid/lonerapport",
   "/rutiner",
   "/rutiner/ny",
@@ -82,6 +85,9 @@ const SIDOR = [
   "/franvaro/regler",
   "/provision",
   "/provision/regler",
+  // E13 steg 7. Manaden i adressen ar INTE ett id — den kraver ingen rad att
+  // peka pa, och en manad utan provision ar ett giltigt lage som ska rendera.
+  "/provision/underlag/2026-08-01",
   "/kv",
   "/kv/regler",
   "/order",

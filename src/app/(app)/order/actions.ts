@@ -5,6 +5,9 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 import { getCurrentUser, hasRole, type CurrentUser } from "@/lib/auth";
 import { svensktDatum } from "@/lib/klocka";
 import { tolkaBelopp } from "@/lib/provision";
+import { forberedUppladdning, registreraFil, taBortInnehall } from "@/lib/filer-server";
+import { pdfText } from "@/lib/pdf";
+import { tolkaAvtalstext, type Orderforslag } from "@/lib/orderbilaga";
 import {
   gallandeSats,
   giltigTelefon,
@@ -394,6 +397,70 @@ export async function makuleraOrder(_prev: Orderstate, form: FormData): Promise<
   }
 }
 
+/**
+ * Markerar en signerad order som betald. O13, besvarad 2026-08-26.
+ *
+ * ===========================================================================
+ * DEN HAR STATUSEN ROR INGA PENGAR, och det ar hela poangen med den.
+ *
+ * PROVISIONEN UTGAR FRAN SIGNERING, inte fran betalning (fraga 10). `betald`
+ * och `signerad` behandlas darfor lika overallt dar det raknas — se
+ * `harGodkants()` i `order.ts`, som har bada. Statusen ar ren INFORMATION:
+ * ekonomi kan se vilka order som faktiskt betalats utan att det andrar en enda
+ * krona i provisionen.
+ *
+ * Fram till 2026-08-26 fanns statusen i schemat, i overgangsmatrisen och i
+ * triggern i 0034 — men INGEN KOD KUNDE SATTA DEN. Den var alltsa onabar, inte
+ * bara verkningslos, och den sortens dod vag ar precis vad nagon senare tolkar
+ * som en bortfallen knapp.
+ *
+ * KRETSEN AR SMALARE AN `farHantera`: ekonomi och VD, inte saljchefen. Den som
+ * ser betalningen komma in ar den som far saga att den kommit. Samma
+ * uppdelning som `markeraUtbetald` i `provision/stangning.ts` gor for perioden.
+ *
+ * En betald order gar fortfarande att makulera (0034). Det ar avsiktligt:
+ * pengar kommer tillbaka ibland, och avdraget bokfors da i makuleringsmanaden
+ * som vanligt.
+ * ===========================================================================
+ */
+export async function markeraBetald(_prev: Orderstate, form: FormData): Promise<Orderstate> {
+  try {
+    const user = await kravInloggad();
+    if (!hasRole(user, "finance", "ceo")) {
+      return { fel: "Bara ekonomi och VD får markera en order som betald." };
+    }
+
+    const id = String(form.get("id") ?? "");
+    const rad = await hamtaRad(id);
+    if (!rad) return { fel: "Ordern finns inte." };
+    if (rad.status !== "signerad") {
+      return { fel: "Bara en signerad order går att markera som betald." };
+    }
+
+    // Villkoret pa status star ocksa i `.eq()` nedan. Lasningen och skrivningen
+    // ar tva turer, och en makulering som hinner emellan ska inte skrivas over.
+    const { error } = await supabaseAdmin()
+      .from("sales_order")
+      .update({ status: "betald" })
+      .eq("id", id)
+      .eq("status", "signerad");
+
+    if (error) return { fel: error.message };
+
+    await logga(user, "sales_order.paid", id, {
+      salesperson_id: rad.salesperson_id,
+      commission_amount: rad.commission_amount,
+    });
+
+    revalidatePath("/order");
+    return {
+      ok: "Ordern är markerad som betald. Provisionen är oförändrad — den utgår från signeringen.",
+    };
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Något gick fel." };
+  }
+}
+
 /** Raderar ett utkast. Triggern i 0034 nekar allt annat. */
 export async function raderaUtkast(_prev: Orderstate, form: FormData): Promise<Orderstate> {
   try {
@@ -425,3 +492,254 @@ export async function raderaUtkast(_prev: Orderstate, form: FormData): Promise<O
  * (`skrivFel` 22 augusti, `sattKvitto` 24 augusti). Behovs en hjalpare i vyn:
  * lagg den i `src/lib/order.ts` och anropa den fran server-komponenten.
  */
+
+// -----------------------------------------------------------------------------
+// E13 steg 9: orderbilagan (migration 0039)
+//
+// ===========================================================================
+// UTLASNINGEN FORIFYLLER ETT FORMULAR. DEN SPARAR ALDRIG NAGOT.
+//
+// Bestallarens krav, PROVISION_SPEC.md avsnitt 3.1: ett falt som fyllts i av
+// en maskin och godkants av en manniska ar nagot annat an ett falt ingen last.
+//
+// Det ar inte en artighet. Ordern bar ett provisionsbelopp som FRYSES vid
+// godkannandet och betalas ut som pengar — en maskinlast lopstid som ingen
+// kontrollerat ar skillnaden mellan 1 500 och 4 500 kronor, och felet upptacks
+// forst nar nagon jamfor med papperet.
+//
+// Darfor finns det ingen vag harifran som skriver ett utlast varde till
+// `sales_order`. `lasAvtalsforslag` returnerar ett forslag; sidan lagger det i
+// formularfalten; manniskan trycker.
+// ===========================================================================
+// -----------------------------------------------------------------------------
+
+/**
+ * Vem som far bifoga en fil till en order.
+ *
+ * SAMMA KRETS SOM FAR SE ORDERN, alltsa saljaren sin egen och hanterarkretsen
+ * allas. RLS-policyn i 0039 later bilagan arva orderns behorighet, och den har
+ * kontrollen ar dess motsvarighet at skrivhallet — skrivningen sker med
+ * service role och gar forbi RLS.
+ */
+async function kravBilageratt(orderId: string): Promise<CurrentUser> {
+  const user = await kravInloggad();
+  const rad = await hamtaRad(orderId);
+  if (!rad) throw new Error("Ordern finns inte.");
+
+  if (rad.salesperson_id !== user.employee!.id && !farHantera(user)) {
+    throw new Error("Du får inte bifoga något till någon annans order.");
+  }
+  return user;
+}
+
+export async function forberedOrderbilaga(
+  orderId: string,
+  filnamn: string,
+  mimetyp: string,
+  storlek: number,
+) {
+  try {
+    await kravBilageratt(orderId);
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Du saknar behörighet." };
+  }
+  return forberedUppladdning({ andamal: "sales_order", filnamn, mimetyp, storlek });
+}
+
+export async function registreraOrderbilaga(
+  orderId: string,
+  fileId: string,
+  filnamn: string,
+): Promise<Orderstate> {
+  try {
+    const user = await kravBilageratt(orderId);
+
+    const resultat = await registreraFil({
+      fileId,
+      andamal: "sales_order",
+      filnamn,
+      uploadedBy: user.employee!.id,
+      salesOrderId: orderId,
+      // 0039: en orderbilaga hor till en KUNDAFFAR och till ingen manniska.
+      // Check-villkoret nekar raden om subjektet sätts, och det ar meningen —
+      // annars hade kundens avtal blivit en uppgift om saljaren och foljt med
+      // ut i hens registerutdrag.
+      subjectEmployeeId: null,
+    });
+
+    if ("fel" in resultat) return { fel: resultat.fel };
+
+    await logga(user, "sales_order.attachment_added", orderId, { fil: fileId });
+    revalidatePath("/order");
+    return { ok: "Avtalet är bifogat." };
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Bilagan kunde inte läggas till." };
+  }
+}
+
+export async function taBortOrderbilaga(_prev: Orderstate, form: FormData): Promise<Orderstate> {
+  const orderId = String(form.get("id") ?? "");
+  const fileId = String(form.get("fil_id") ?? "");
+
+  try {
+    const user = await kravBilageratt(orderId);
+
+    // Innehallet tas bort ur bucketen, raden och oppningsloggen star kvar
+    // (0022). En fil som gick att radera helt hade tagit sin egen logg med sig.
+    await taBortInnehall(fileId, user.employee!.id);
+
+    await logga(user, "sales_order.attachment_removed", orderId, { fil: fileId });
+    revalidatePath("/order");
+    return { ok: "Bilagan är borttagen." };
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Bilagan kunde inte tas bort." };
+  }
+}
+
+/**
+ * Laser en uppladdad avtals-PDF och svarar med ett FORSLAG till formularet.
+ *
+ * SKRIVER INGENTING. Se rubriken ovan. Att funktionen tar emot ett `fileId`
+ * och inte en fil ar avsiktligt: filen ligger redan i den stangda bucketen med
+ * sin atkomstlogg, och en vag in dar klienten skickar godtyckliga bytes hade
+ * varit en andra, oskyddad vag.
+ *
+ * Behorigheten ar orderns egen. Textutlasningen ar en LASNING av filen, sa den
+ * kraver samma ratt som att oppna den.
+ */
+export async function lasAvtalsforslag(
+  orderId: string,
+  fileId: string,
+): Promise<{ forslag: Orderforslag } | { fel: string }> {
+  try {
+    await kravBilageratt(orderId);
+
+    const { data: fil } = await supabaseAdmin()
+      .from("file_object")
+      .select("id, path, purpose, sales_order_id, removed_at")
+      .eq("id", fileId)
+      .maybeSingle();
+
+    // Filen maste hora till DEN HAR ordern. Utan villkoret hade ett id fran
+    // webblasaren kunnat peka pa vilken fil som helst i bucketen — inklusive
+    // ett lakarintyg — och texten kommit tillbaka i svaret.
+    if (!fil || fil.purpose !== "sales_order" || fil.sales_order_id !== orderId) {
+      return { fel: "Filen hör inte till den här ordern." };
+    }
+    if (fil.removed_at) return { fel: "Filen är borttagen." };
+
+    const { data } = await supabaseAdmin().storage.from("filer").download(String(fil.path));
+    if (!data) return { fel: "Filen gick inte att läsa." };
+
+    const text = await pdfText(new Uint8Array(await data.arrayBuffer()));
+
+    // En inskannad PDF utan textlager ger ett TOMT forslag och inte ett fel.
+    // Bilagan ska ga att bifoga anda; den forifyller bara ingenting.
+    return { forslag: tolkaAvtalstext(text) };
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Avtalet kunde inte läsas." };
+  }
+}
+
+/**
+ * Skriver de falt anvandaren VALT ur avtalsforslaget till ordern.
+ *
+ * ===========================================================================
+ * DET HAR AR STEGET DAR EN MANNISKA HAR TRYCKT, och det ar hela skillnaden.
+ *
+ * `lasAvtalsforslag` laser och foreslar. Den har skriver — men bara det som
+ * kryssats i formularet, och bara pa en order som ANNU INTE ar godkand.
+ *
+ * Tva sparrar, inte en:
+ *
+ *   Har: statusen provas fore skrivningen, sa att beskedet gar att forsta.
+ *   I databasen: triggern `sales_order_stegbyte` i 0034 nekar att saljare,
+ *   paket, lopstid, signeringsdatum, bolag eller belopp andras pa en order som
+ *   ar `signerad`, `betald` eller `makulerad`.
+ *
+ * Den andra ar den som galler. Provisionen ar frusen pa ordern fran och med
+ * godkannandet, och en lopstid som gick att andra efterat hade gjort det
+ * frusna beloppet till ett pastaende om nagot annat an det som star dar.
+ * ===========================================================================
+ */
+export async function rattaFranAvtal(_prev: Orderstate, form: FormData): Promise<Orderstate> {
+  try {
+    const orderId = String(form.get("id") ?? "");
+    const user = await kravBilageratt(orderId);
+
+    const rad = await hamtaRad(orderId);
+    if (!rad) return { fel: "Ordern finns inte." };
+    if (rad.status !== "utkast" && rad.status !== "inskickad") {
+      return {
+        fel:
+          "En godkänd order skrivs inte om. Stämmer avtalet inte: makulera ordern" +
+          " och lägg en ny.",
+      };
+    }
+
+    // BARA DE FALT SOM SKICKATS MED. Ett tomt falt betyder "rör inte", inte
+    // "sätt till tomt" — annars hade en avbockad ruta raderat ett värde
+    // säljaren skrivit för hand.
+    const andring: Record<string, unknown> = {};
+
+    const bolag = String(form.get("company_name") ?? "").trim();
+    if (bolag) andring.company_name = bolag;
+
+    const orgnrText = String(form.get("org_number") ?? "").trim();
+    if (orgnrText) {
+      const orgnr = normaliseraOrgnr(orgnrText);
+      if (!orgnr) return { fel: "Organisationsnumret ur avtalet gick inte att tolka." };
+      andring.org_number = orgnr;
+    }
+
+    const kontakt = String(form.get("contact_name") ?? "").trim();
+    if (kontakt) andring.contact_name = kontakt;
+
+    const telefon = String(form.get("contact_phone") ?? "").trim();
+    if (telefon) {
+      if (!giltigTelefon(telefon)) return { fel: "Telefonnumret ur avtalet ser inte ut som ett nummer." };
+      andring.contact_phone = telefon;
+    }
+
+    const paketText = String(form.get("package_id") ?? "").trim();
+    if (paketText) {
+      const paket = Number(paketText);
+      if (![1, 2, 3].includes(paket)) return { fel: "Paketet ur avtalet finns inte." };
+      andring.package_id = paket;
+    }
+
+    const loptidText = String(form.get("term_months") ?? "").trim();
+    if (loptidText) {
+      const loptid = Number(loptidText);
+      if (![12, 24, 36].includes(loptid)) return { fel: "Avtalstiden ur avtalet finns inte." };
+      andring.term_months = loptid;
+    }
+
+    const signerad = String(form.get("signed_on") ?? "").trim();
+    if (signerad) {
+      if (!giltigtSigneringsdatum(signerad)) {
+        return { fel: "Signeringsdatumet ur avtalet är ogiltigt eller ligger i framtiden." };
+      }
+      andring.signed_on = signerad;
+    }
+
+    if (Object.keys(andring).length === 0) return { fel: "Inget fält var ikryssat." };
+
+    const { error } = await supabaseAdmin()
+      .from("sales_order")
+      .update(andring)
+      .eq("id", orderId)
+      .in("status", ["utkast", "inskickad"]);
+
+    if (error) return { fel: `Ordern rättades inte: ${error.message}` };
+
+    await logga(user, "sales_order.prefilled", orderId, { falt: Object.keys(andring) });
+
+    revalidatePath("/order");
+    return {
+      ok: `${Object.keys(andring).length} fält är hämtade ur avtalet. Kontrollera dem innan ordern godkänns.`,
+    };
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Något gick fel." };
+  }
+}

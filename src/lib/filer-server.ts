@@ -176,6 +176,7 @@ export async function registreraFil(args: {
   subjectEmployeeId?: string | null;
   sickReportId?: string | null;
   documentId?: string | null;
+  salesOrderId?: string | null;
 }): Promise<{ id: string } | { fel: string }> {
   const db = supabaseAdmin();
   const path = bygStig(args.andamal, args.fileId);
@@ -218,6 +219,11 @@ export async function registreraFil(args: {
     subject_employee_id: args.subjectEmployeeId ?? null,
     sick_report_id: args.sickReportId ?? null,
     document_id: args.documentId ?? null,
+    // 0039. En orderbilaga hor till en KUNDAFFAR och till ingen manniska —
+    // `subjectEmployeeId` ska vara null for den, och check-villkoret nekar
+    // annars raden. Satts den till saljaren blir kundens avtal en uppgift om
+    // den anstallda och foljer med ut i hens registerutdrag.
+    sales_order_id: args.salesOrderId ?? null,
     // K35: ett lakarintyg bar aldrig med sig namnet det hade pa datorn.
     filename: args.andamal === "sick_certificate" ? null : args.filnamn.slice(0, 200),
     mime_type: mime,
