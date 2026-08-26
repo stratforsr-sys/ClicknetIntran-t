@@ -1310,7 +1310,9 @@ console.log("\n\x1b[1m0038: bortklickade notiser är var och ens egna\x1b[0m");
   // Kolumnen tar 200 tecken, och `arNotisId()` säger nej långt före det. Att
   // villkoret ändå finns i databasen är samma linje som resten av navet: regeln
   // gäller även den server action som glömmer den.
-  const forLangt = await nekarSpar(
+  // `nekarSql` och inte `nekarSpar`: har uppe kors utan oppen transaktion, och
+  // en sparpunkt kraver en sadan.
+  const forLangt = await nekarSql(
     `insert into notification_dismissed (employee_id, notice_id) values ($1::uuid, $2)`,
     [saljareA.id, "kurs-" + "a".repeat(400)],
   );
