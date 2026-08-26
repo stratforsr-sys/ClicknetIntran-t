@@ -205,3 +205,52 @@ export function gallandeSchema<
 
   return [];
 }
+
+export type Schemalage = "gäller" | "kommande" | "ersatt";
+
+/**
+ * Vilken av raderna i listan som gäller nu, vilken som väntar och vilka som är
+ * historik.
+ *
+ * VARFÖR DEN BEHÖVS: ett schema ändras aldrig (AC-2.35). En ny längd är en ny
+ * rad med ett nytt `valid_from`, och de gamla raderna ligger kvar som historik
+ * — de är det enda som gör att en avvikelse från i april går att förklara i
+ * oktober. Följden är att listan på /tid/schema växer varje gång någon rättar
+ * något, och utan den här markeringen ser den som ska sätta rasterna fem rader
+ * som alla ser lika giltiga ut.
+ *
+ * GRUPPEN är (nivå, vem, veckodag, rast nummer) — alltså "samma regel". Inom
+ * gruppen gäller den senaste rad som hunnit träda i kraft.
+ *
+ * DEN SVARAR INTE på vilket schema en viss PERSON bedöms mot. Ett personschema
+ * slår ut bolagets, och den frågan är `gallandeSchema()`. Här står två rader på
+ * olika nivåer båda som "gäller", vilket är sant: de gäller var sin krets.
+ */
+export function schemalage<
+  T extends {
+    scope: string;
+    employee_id: string | null;
+    team_id: string | null;
+    weekday: number;
+    valid_from: string;
+    sort?: number;
+  },
+>(rader: T[], idag: string): Map<T, Schemalage> {
+  const nyckel = (r: T) =>
+    [r.scope, r.employee_id ?? "-", r.team_id ?? "-", r.weekday, r.sort ?? 1].join("|");
+
+  // Senaste ikraftträdda raden per grupp. Rader med framtida datum räknas inte
+  // med — annars hade en inplanerad ändring sett ut som den redan gällde.
+  const gallande = new Map<string, T>();
+  for (const r of rader) {
+    if (r.valid_from > idag) continue;
+    const fore = gallande.get(nyckel(r));
+    if (!fore || r.valid_from > fore.valid_from) gallande.set(nyckel(r), r);
+  }
+
+  const lage = new Map<T, Schemalage>();
+  for (const r of rader) {
+    lage.set(r, r.valid_from > idag ? "kommande" : gallande.get(nyckel(r)) === r ? "gäller" : "ersatt");
+  }
+  return lage;
+}

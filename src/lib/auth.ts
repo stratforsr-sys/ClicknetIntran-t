@@ -1,6 +1,8 @@
 import { cache } from "react";
+import { headers } from "next/headers";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { kraverByte } from "@/lib/losenordsbyte";
+import { lasIdentitet, type Identitet } from "@/lib/identitet";
 import type { Permission, Role } from "@/lib/roles";
 
 export type CurrentUser = {
@@ -21,14 +23,41 @@ export type CurrentUser = {
 };
 
 /**
+ * Vem som ar inloggad — utan att fraga Supabase Auth en andra gang.
+ *
+ * Mellanvaran har redan verifierat tokenen och skickat vidare svaret i en
+ * request-rubrik. Se src/lib/identitet.ts for varfor den rubriken gar att lita
+ * pa: mellanvaran RENSAR den forst, sa det som star dar kan bara komma
+ * darifran.
+ *
+ * FALLBACKEN AR INTE DOD KOD. `/api`-rutterna passerar mellanvarans tidiga
+ * retur och far ingen rubrik alls, och detsamma galler om matchningsregeln i
+ * middleware.ts nagon gang smalnas av. Da fragar vi som forr. Ett fel at det
+ * hallet kostar en tur; ett fel at andra hallet hade sluppit in nagon.
+ */
+async function verifieradIdentitet(): Promise<Identitet | null> {
+  const fran = lasIdentitet(await headers());
+  if (fran) return fran;
+
+  const supabase = await supabaseServer();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  return {
+    authUserId: user.id,
+    email: user.email ?? null,
+    kraverLosenordsbyte: kraverByte(user.app_metadata),
+  };
+}
+
+/**
  * AC-1.2: en anvandare utan employee-rad kan logga in men ser endast
  * "vantar pa aktivering". Darfor returneras employee: null i stallet for null
  * pa hela objektet.
  */
 export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
+  const identitet = await verifieradIdentitet();
+  if (!identitet) return null;
   const supabase = await supabaseServer();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
 
   /**
    * Migration 0017 stanger API:t for den som inte bytt sitt tillfalliga
@@ -44,7 +73,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
    * Service role lamnar aldrig servern, och mellanvaran har redan skickat
    * kontot till /byt-losenord fran varje annan adress.
    */
-  const las = kraverByte(user.app_metadata) ? supabaseAdmin() : supabase;
+  const las = identitet.kraverLosenordsbyte ? supabaseAdmin() : supabase;
 
   /**
    * EN fraga, inte tre.
@@ -72,13 +101,13 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
         " employee_role!employee_role_employee_id_fkey(role)," +
         " employee_permission!employee_permission_employee_id_fkey(permission)",
     )
-    .eq("auth_user_id", user.id)
+    .eq("auth_user_id", identitet.authUserId)
     .maybeSingle();
 
   if (!employee) {
     return {
-      authUserId: user.id,
-      email: user.email ?? "",
+      authUserId: identitet.authUserId,
+      email: identitet.email ?? "",
       employee: null,
       roles: [],
       permissions: [],
@@ -91,8 +120,8 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   };
 
   return {
-    authUserId: user.id,
-    email: user.email ?? rad.email,
+    authUserId: identitet.authUserId,
+    email: identitet.email ?? rad.email,
     employee: {
       id: rad.id,
       first_name: rad.first_name,

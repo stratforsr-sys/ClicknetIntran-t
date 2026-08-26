@@ -6,7 +6,7 @@
  *
  *   node --experimental-strip-types tests/raster.mjs
  */
-import { avvikelser, tagnaRaster, langstaPass, gallandeSchema, minuterFranTid } from "../src/lib/raster.ts";
+import { avvikelser, tagnaRaster, langstaPass, gallandeSchema, schemalage, minuterFranTid } from "../src/lib/raster.ts";
 
 let fel = 0;
 const ok = (namn, villkor, extra = "") => {
@@ -124,6 +124,45 @@ console.log("\n\x1b[1mVilket schema som gäller\x1b[0m");
     gallandeSchema(tvaVersioner, "e1", null, "2026-08-17")[0].valid_from === "2026-06-01");
   ok("men inte för en dag före den trädde i kraft",
     gallandeSchema(tvaVersioner, "e1", null, "2026-03-01")[0].valid_from === "2026-01-01");
+}
+
+console.log("\n\x1b[1mVilken rad som galler nu, och vilka som ar historik\x1b[0m");
+{
+  // AC-2.35: ett schema andras aldrig, det ersatts. Listan pa /tid/schema bar
+  // darfor historiken ocksa, och utan markningen ser en ersatt rad exakt ut som
+  // den som galler. Den som satter rasterna hade da lagt till en rad till.
+  const rad = (over) => ({
+    scope: "company", employee_id: null, team_id: null, weekday: 1, sort: 1, ...over,
+  });
+
+  const gammalRad = rad({ valid_from: "2026-01-01" });
+  const nyRad     = rad({ valid_from: "2026-06-01" });
+  const framtida  = rad({ valid_from: "2026-12-01" });
+  const annanDag  = rad({ weekday: 2, valid_from: "2026-01-01" });
+  const annanRast = rad({ sort: 2, valid_from: "2026-01-01" });
+  const person    = rad({ scope: "employee", employee_id: "e1", valid_from: "2026-01-01" });
+
+  const lage = schemalage([gammalRad, nyRad, framtida, annanDag, annanRast, person], "2026-08-26");
+
+  ok("senaste ikrafttradda raden galler", lage.get(nyRad) === "galler".replace("galler","gäller"));
+  ok("den den ersatte ar historik", lage.get(gammalRad) === "ersatt");
+  ok("en rad med framtida datum galler INTE an", lage.get(framtida) === "kommande",
+    "annars ser en inplanerad andring ut som om den redan gallde");
+
+  // Grupperingen ar (niva, vem, veckodag, rast nummer). Tva rader som inte ar
+  // samma regel far inte konkurrera ut varandra.
+  ok("en annan veckodag ar en egen regel", lage.get(annanDag) === "gäller");
+  ok("rast nummer 2 ar en egen regel", lage.get(annanRast) === "gäller");
+  ok("ett personschema konkurrerar inte med bolagets", lage.get(person) === "gäller",
+    "de galler var sin krets — vem som slar vem ar gallandeSchema:s fraga");
+
+  const tom = schemalage([], "2026-08-26");
+  ok("tom lista ger tom karta", tom.size === 0);
+
+  // Randen: en rad som trader i kraft I DAG galler i dag.
+  const idag = rad({ valid_from: "2026-08-26" });
+  ok("en rad som trader i kraft i dag galler i dag",
+    schemalage([idag], "2026-08-26").get(idag) === "gäller");
 }
 
 console.log("\n\x1b[1mTidsuppslag\x1b[0m");

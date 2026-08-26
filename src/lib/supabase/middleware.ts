@@ -5,6 +5,7 @@ import { bygCsp } from "@/lib/csp";
 import { kvittoGiltigt, STEG2_KAKA } from "@/lib/mfa";
 import { MFA_REQUIRED_ROLES } from "@/lib/roles";
 import { BYTESVAG, kraverByte } from "@/lib/losenordsbyte";
+import { rensaIdentitet, skrivIdentitet } from "@/lib/identitet";
 
 /**
  * Publika vagar. Allt annat kraver session.
@@ -86,10 +87,35 @@ export async function updateSession(request: NextRequest) {
   headers.set("x-nonce", nonce);
   headers.set("content-security-policy", csp);
 
-  let response = NextResponse.next({ request: { headers } });
-  response.headers.set("content-security-policy", csp);
+  /**
+   * FORST AV ALLT, och fore varje gren nedan: kasta bort identitetsrubrikerna
+   * om nagon utifran skickat dem. Se src/lib/identitet.ts — det ar den har enda
+   * raden som gor att servern kan lita pa dem.
+   */
+  rensaIdentitet(headers);
 
-  if (!isConfigured) return response;
+  /**
+   * Kakorna samlas i stallet for att sattas pa ett svar som redan byggts.
+   *
+   * VARFOR: `setAll` anropas nar Supabase fornyar tokenen, och den kan hinna
+   * hanna bade under `getUser()` och under rpc-anropet langst ned. Svaret maste
+   * dessutom byggas EFTER `getUser()`, eftersom identitetsrubriken gar in i
+   * requesten och `NextResponse.next({request})` last fast rubrikerna nar den
+   * skapas. Att samla kakorna och satta dem i `avsluta()` loser bada: svaret
+   * byggs en gang, sist, med bade de slutliga rubrikerna och alla kakor.
+   *
+   * Det rattar ocksa nagot som var trasigt forut: en omdirigering byggde ett
+   * eget svar och tappade darmed den fornyade sessionskakan tyst.
+   */
+  const kakor: { name: string; value: string; options?: Record<string, unknown> }[] = [];
+  const avsluta = <T extends NextResponse>(res: T): T => {
+    res.headers.set("content-security-policy", csp);
+    for (const { name, value, options } of kakor) res.cookies.set(name, value, options);
+    return res;
+  };
+  const fortsatt = () => avsluta(NextResponse.next({ request: { headers } }));
+
+  if (!isConfigured) return fortsatt();
 
   /**
    * /api slipper hela sessionskontrollen.
@@ -104,16 +130,14 @@ export async function updateSession(request: NextRequest) {
    * for att fa reda pa att det inte har nagon session.
    */
   const arApi = request.nextUrl.pathname === "/api" || request.nextUrl.pathname.startsWith("/api/");
-  if (arApi) return response;
+  if (arApi) return fortsatt();
 
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     cookies: {
       getAll: () => request.cookies.getAll(),
       setAll: (list) => {
         list.forEach(({ name, value }) => request.cookies.set(name, value));
-        response = NextResponse.next({ request: { headers } });
-        response.headers.set("content-security-policy", csp);
-        list.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+        kakor.push(...list);
       },
     },
   });
@@ -122,11 +146,18 @@ export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const isPublic = PUBLIC.some((p) => path === p || path.startsWith(p + "/"));
 
+  /**
+   * Identiteten ar verifierad har och ingen annanstans. Efter den har raden
+   * slipper `getCurrentUser()` fraga Supabase Auth en andra gang — se
+   * src/lib/identitet.ts.
+   */
+  if (user) skrivIdentitet(headers, user, kraverByte(user.app_metadata));
+
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = "/logga-in";
     url.searchParams.set("nasta", path);
-    return NextResponse.redirect(url);
+    return avsluta(NextResponse.redirect(url));
   }
 
   /**
@@ -152,7 +183,7 @@ export async function updateSession(request: NextRequest) {
         url.pathname = "/logga-in/verifiera";
         url.search = "";
         url.searchParams.set("nasta", path);
-        return NextResponse.redirect(url);
+        return avsluta(NextResponse.redirect(url));
       }
     }
   }
@@ -181,14 +212,14 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = BYTESVAG;
     url.search = "";
-    return NextResponse.redirect(url);
+    return avsluta(NextResponse.redirect(url));
   }
 
   if (user && path === "/logga-in") {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     url.search = "";
-    return NextResponse.redirect(url);
+    return avsluta(NextResponse.redirect(url));
   }
 
   /**
@@ -208,10 +239,11 @@ export async function updateSession(request: NextRequest) {
    * Kakan ar inte ett skydd och behover inte vara signerad — det varsta nagon
    * astadkommer genom att radera den ar en extra `on conflict do nothing`.
    *
-   * Kakan satts SIST, pa `response` som den star da. Ett rpc-anrop kan fa
-   * Supabase att fornya tokenen, och `setAll` ovan byter da ut hela `response`
-   * mot ett nytt objekt. En kaka satt fore anropet hade suttit pa det gamla
-   * och forsvunnit tyst — och dagen hade bokforts om vid varje sidbyte.
+   * Kakan laggs i `kakor` och sätts av `avsluta()` tillsammans med allt annat.
+   * Forr sattes den pa ett `response`-objekt som `setAll` kunde byta ut mitt
+   * under handen — ett rpc-anrop kan fa Supabase att fornya tokenen — och da
+   * satt kakan pa det gamla objektet och forsvann tyst, varpa dagen bokfordes
+   * om vid varje sidbyte. Med en lista finns det inget objekt att tappa.
    *
    * Fel svaljs. Adoptionsstatistik far inte kunna lasa ute nagon ur navet.
    */
@@ -219,18 +251,22 @@ export async function updateSession(request: NextRequest) {
   if (user && request.cookies.get(AKTIVITETSKAKA)?.value !== idag) {
     try {
       await supabase.rpc("registrera_aktivitet");
-      response.cookies.set(AKTIVITETSKAKA, idag, {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
-        path: "/",
-        // Ett dygn racker, och gor att kakan inte blir kvar over ett datumbyte.
-        maxAge: 60 * 60 * 24,
+      kakor.push({
+        name: AKTIVITETSKAKA,
+        value: idag,
+        options: {
+          httpOnly: true,
+          sameSite: "lax",
+          secure: process.env.NODE_ENV === "production",
+          path: "/",
+          // Ett dygn racker, och gor att kakan inte blir kvar over ett datumbyte.
+          maxAge: 60 * 60 * 24,
+        },
       });
     } catch {
       // Tyst med flit. Se rubriken ovan.
     }
   }
 
-  return response;
+  return fortsatt();
 }

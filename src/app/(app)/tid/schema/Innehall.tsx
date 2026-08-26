@@ -5,9 +5,23 @@ import { Notis } from "@/components/ui/Notis";
 import { getCurrentUser, canManageEmployees, fullName } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { hamtaLage } from "@/lib/sparrar";
+import { svensktDatum } from "@/lib/klocka";
+import { schemalage, type Schemalage } from "@/lib/raster";
 import { Schemaform } from "./Schemaform";
 
 const DAGNAMN = ["", "mån", "tis", "ons", "tor", "fre", "lör", "sön"];
+
+/**
+ * AC-2.35: ett schema ändras aldrig, det ersätts. Listorna nedan bär därför
+ * historiken också, och utan den här märkningen ser en ersatt rad exakt ut som
+ * den som faktiskt gäller. Den som ska sätta rasterna behöver se skillnaden
+ * innan hen lägger till en rad till.
+ */
+const LAGE: Record<Schemalage, { text: string; ton: "ok" | "neutral" | "info" }> = {
+  gäller: { text: "Gäller nu", ton: "ok" },
+  kommande: { text: "Träder i kraft", ton: "info" },
+  ersatt: { text: "Ersatt", ton: "neutral" },
+};
 
 /**
  * Innehallet, utan sidhuvud.
@@ -56,6 +70,28 @@ export async function SchemaInnehall() {
         ? (teamPer.get(r.team_id ?? "") ?? "Okänt team")
         : (namnPer.get(r.employee_id ?? "") ?? "Okänd person");
 
+  // Svenskt datum, inte serverns. På Vercel är serverns zon UTC, och strax
+  // efter svensk midnatt hade ett schema som träder i kraft i dag räknats som
+  // kommande — samma fälla som klocka.ts finns till för.
+  const idag = svensktDatum(new Date().toISOString());
+  const arbetsLage = schemalage(arbete ?? [], idag);
+  const rastLage = schemalage(raster ?? [], idag);
+
+  // Gällande först, sedan kommande, sist historiken. Inom varje grupp veckodag
+  // och rastnummer — den ordning man läser ett schema i.
+  const ORDNING: Record<Schemalage, number> = { gäller: 0, kommande: 1, ersatt: 2 };
+  const sorterat = <T extends { weekday: number; sort?: number; valid_from: string }>(
+    rader: T[],
+    lage: Map<T, Schemalage>,
+  ) =>
+    [...rader].sort(
+      (a, b) =>
+        ORDNING[lage.get(a) ?? "ersatt"] - ORDNING[lage.get(b) ?? "ersatt"] ||
+        a.weekday - b.weekday ||
+        (a.sort ?? 1) - (b.sort ?? 1) ||
+        b.valid_from.localeCompare(a.valid_from),
+    );
+
   return (
     <div className="flex flex-col gap-4">
       {!sparr.rast && (
@@ -85,19 +121,23 @@ export async function SchemaInnehall() {
             <p className="text-small text-ink-500">Inga än.</p>
           ) : (
             <ul className="flex flex-col">
-              {(arbete ?? []).map((r) => (
-                <li
-                  key={r.id}
-                  className="flex flex-wrap items-center gap-3 border-b border-canvas py-2 text-small last:border-0"
-                >
-                  <span className="w-12 text-ink-500">{DAGNAMN[r.weekday]}</span>
-                  <span className="tnum text-ink-900">
-                    {r.start_time.slice(0, 5)}–{r.end_time.slice(0, 5)}
-                  </span>
-                  <span className="flex-1 text-ink-700">{vem(r)}</span>
-                  <Badge ton="neutral">från {r.valid_from}</Badge>
-                </li>
-              ))}
+              {sorterat(arbete ?? [], arbetsLage).map((r) => {
+                const lage = LAGE[arbetsLage.get(r) ?? "ersatt"];
+                return (
+                  <li
+                    key={r.id}
+                    className="flex flex-wrap items-center gap-3 border-b border-canvas py-2 text-small last:border-0"
+                  >
+                    <span className="w-12 text-ink-500">{DAGNAMN[r.weekday]}</span>
+                    <span className="tnum text-ink-900">
+                      {r.start_time.slice(0, 5)}–{r.end_time.slice(0, 5)}
+                    </span>
+                    <span className="flex-1 text-ink-700">{vem(r)}</span>
+                    <span className="tnum text-ink-500">från {r.valid_from}</span>
+                    <Badge ton={lage.ton}>{lage.text}</Badge>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </Card>
@@ -108,20 +148,27 @@ export async function SchemaInnehall() {
             <p className="text-small text-ink-500">Inga än.</p>
           ) : (
             <ul className="flex flex-col">
-              {(raster ?? []).map((r) => (
-                <li
-                  key={r.id}
-                  className="flex flex-wrap items-center gap-3 border-b border-canvas py-2 text-small last:border-0"
-                >
-                  <span className="w-12 text-ink-500">{DAGNAMN[r.weekday]}</span>
-                  <span className="tnum text-ink-900">
-                    {r.window_start.slice(0, 5)}–{r.window_end.slice(0, 5)}
-                  </span>
-                  <span className="text-ink-500">{r.duration_minutes} min</span>
-                  <span className="flex-1 text-ink-700">{vem(r)}</span>
-                  <Badge ton="neutral">från {r.valid_from}</Badge>
-                </li>
-              ))}
+              {sorterat(raster ?? [], rastLage).map((r) => {
+                const lage = LAGE[rastLage.get(r) ?? "ersatt"];
+                return (
+                  <li
+                    key={r.id}
+                    className="flex flex-wrap items-center gap-3 border-b border-canvas py-2 text-small last:border-0"
+                  >
+                    <span className="w-12 text-ink-500">{DAGNAMN[r.weekday]}</span>
+                    {/* Rastnumret saknades helt. Med tre raster om dagen gick de
+                        inte att skilja åt annat än på klockslag. */}
+                    <span className="w-14 text-ink-500">rast {r.sort}</span>
+                    <span className="tnum text-ink-900">
+                      {r.window_start.slice(0, 5)}–{r.window_end.slice(0, 5)}
+                    </span>
+                    <span className="tnum text-ink-500">{r.duration_minutes} min</span>
+                    <span className="flex-1 text-ink-700">{vem(r)}</span>
+                    <span className="tnum text-ink-500">från {r.valid_from}</span>
+                    <Badge ton={lage.ton}>{lage.text}</Badge>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </Card>
