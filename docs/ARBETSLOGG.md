@@ -172,6 +172,29 @@ svaret, och bara det som kryssats i skrivs. En godkänd order går inte att rät
 alls — både actionen och triggern i `0034` nekar det, för provisionen är frusen
 på den.
 
+### Mätt efter deployen
+
+46 sidor som fyra roller mot produktionen: **184 renderingar, noll serverfel,
+noll läckage.** Säljchefens negativa kontroll gick från 91 till 95 träffar — de
+två nya sidorna visar namn för den som får se dem, vilket är meningen. Säljare,
+teamledare och ekonomi får fortfarande noll.
+
+| Sida | Median | Krav | Marginal |
+|---|---|---|---|
+| Startsidan | ~536 ms | 1 500 | ~964 ms |
+| Stämplingsvyn | ~582 ms | 2 000 | ~1 418 ms |
+| **Sökningen** | **~442 ms** | **500** | **~58 ms** |
+| Rutinerna | ~456 ms | 1 500 | ~1 044 ms |
+
+**Mätningen hittade en regression jag själv infört.** `far_godkanna_franvaro()`
+låg som ett eget `await` på `/tid` och kostade ~50 ms. Det ligger nu i samma
+`Promise.all` som dagens stämplingar. Samma sak gjordes förebyggande på
+`/provision`, där de tre nya hämtningarna hade blivit en tionde sekventiell våg.
+
+Sökningen rördes inte av bygget; skillnaden mot ~429 ms är körning-till-körning.
+Enstaka avläsningar gav 1 574 ms på startsidan och 1 392 ms på sökningen, båda på
+kalla funktioner — var och en hade ensam sett ut som en regression.
+
 ### Provsviten
 
 35 sviter. Första körningen dog på `ECONNRESET` mitt i `tests/sidor.mjs` med

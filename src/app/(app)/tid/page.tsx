@@ -42,18 +42,24 @@ export default async function TidSida() {
   const chef = canManageEmployees(user);
   const sparr = await hamtaLage();
 
-  // E13 steg 6. Kretsen ar INTE `chef`: en teamledare med behorigheten
-  // `attendance_approver` far besluta om sin egen grupp utan att fa se
-  // avvikelser och scheman. Fragan stalls till `far_godkanna_franvaro()` i
-  // 0037, som ar samma definition som bade sidan och RLS-policyn anvander.
-  const { data: farGodkannaFranvaro } = await supabase.rpc("far_godkanna_franvaro");
-
-  const { data: mina } = await supabase
-    .from("time_event")
-    .select("id, kind, occurred_at, source, supersedes_id, correction_state, note")
-    .eq("employee_id", user.employee.id)
-    .gte("occurred_at", dygnetsStart())
-    .order("occurred_at");
+  // E13 steg 6: kretsen som far besluta om ogiltig franvaro ar INTE `chef`. En
+  // teamledare med behorigheten `attendance_approver` far besluta om sin egen
+  // grupp utan att fa se avvikelser och scheman. Fragan stalls till
+  // `far_godkanna_franvaro()` i 0037, som ar samma definition som bade sidan
+  // och RLS-policyn anvander — inte till en kopia av regeln har.
+  //
+  // I SAMMA VAG som dagens stamplingar. Anropet beror inte pa dem, och ett
+  // `await` pa egen rad kostade ~50 ms i X3-matningen — pa en sida som redan
+  // har flera sekventiella turer ar det vagantalet som vaxer nar navet vaxer.
+  const [{ data: mina }, { data: farGodkannaFranvaro }] = await Promise.all([
+    supabase
+      .from("time_event")
+      .select("id, kind, occurred_at, source, supersedes_id, correction_state, note")
+      .eq("employee_id", user.employee.id)
+      .gte("occurred_at", dygnetsStart())
+      .order("occurred_at"),
+    supabase.rpc("far_godkanna_franvaro"),
+  ]);
 
   const handelser: Handelse[] = mina ?? [];
   const lage = lageNu(handelser);

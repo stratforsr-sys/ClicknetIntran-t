@@ -48,18 +48,28 @@ Sedan slås spärren på under `/tid/sparrar`. **K12 är beslutad och publicerad
 (beslutsdatum 2026-08-26, "Beslutad av: Zen, VD"). Avsnitt 6 och 7 skrevs i det
 här passet och bär ditt namn — **läs dem.**
 
-### Prestanda, mätt mot produktionen 2026-08-26
+### Prestanda, mätt mot produktionen 2026-08-26 (kväll, efter E13 steg 6–9)
 
-| Sida | Median | Krav |
-|---|---|---|
-| Startsidan | ~482 ms | 1 500 |
-| Stämplingsvyn | ~530 ms | 2 000 |
-| **Sökningen** | **~429 ms** | **500** |
-| Rutinerna | ~446 ms | 1 500 |
+Median av tre körningar, var och en själv en median av fem hämtningar:
 
-Sökningens marginal gick från 4 ms till ~71 ms. Den är fortfarande den minsta i
-navet. **Läs medianen av flera körningar** — en kall funktion gav 586 ms i en
-enstaka avläsning, vilket ensamt hade sett ut som en regression.
+| Sida | Median | Krav | Marginal |
+|---|---|---|---|
+| Startsidan | ~536 ms | 1 500 | ~964 ms |
+| Stämplingsvyn | ~582 ms | 2 000 | ~1 418 ms |
+| **Sökningen** | **~442 ms** | **500** | **~58 ms** |
+| Rutinerna | ~456 ms | 1 500 | ~1 044 ms |
+
+**Sökningen är fortfarande den minsta marginalen i navet**, och den rördes inte
+av E13-bygget — skillnaden mot ~429 ms är körning-till-körning.
+
+**Läs medianen av flera körningar.** Enstaka avläsningar i samma mätning gav
+1 574 ms på startsidan och 1 392 ms på sökningen, båda på kalla funktioner. Var
+och en hade ensam sett ut som en regression.
+
+**En lärdom ur mätningen:** RPC-anropet `far_godkanna_franvaro()` lades först som
+ett eget `await` på `/tid` och kostade ~50 ms. Det ligger nu i samma `Promise.all`
+som dagens stämplingar. Vågantalet är det som växer när navet växer — lägg nya
+hämtningar i en befintlig våg när de inte beror på något ovanför.
 
 ---
 
