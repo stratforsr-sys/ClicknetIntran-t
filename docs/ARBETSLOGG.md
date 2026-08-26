@@ -5,6 +5,209 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-08-26 · Genomgång inför pilot: notisavfärdning, tre fel, och 0037 tillbaka i repot
+
+Beställaren bad om en hård genomgång: allt säljarna ser, alla roller, buggar,
+prestanda, och en konkret önskan om att en notis ska försvinna när man klickar
+på den. Passet hittade tre verkliga fel, varav ett var att repot slutat beskriva
+databasen.
+
+### Repot beskrev inte längre produktionen
+
+`0037_konsekvenser` kördes mot produktionsdatabasen **2026-08-25 13:31** och
+bokfördes i `schema_migrations`. **Varken filen eller koden committades.** Passet
+tog slut mellan körningen och commiten.
+
+Det hittades av `tests/registerutdrag.mjs`, som faller när en kolumn pekar på
+`employee` utan att stå i vare sig `KALLOR` eller `UNDANTAG` — den hittade fem
+sådana kolumner i två tabeller (`attendance_incident`, `consequence_rule`) som
+ingen migration i repot nämnde. Utan det provet hade nästa färdiga miljö tyst
+fått ett annat schema än produktionen.
+
+**Filen är återskapad ur den körda databasen** och är idempotent. Bokföringen för
+raden togs bort och migrationen kördes om, så checksumman beskriver nu filen som
+faktiskt ligger i repot. Det är alltså inte en gissning att repot och databasen
+stämmer — det är kontrollerat genom att köra filen mot produktionen och låta
+självkontrollerna avgöra.
+
+**Schemat finns, koden gör det inte.** Ingen sida och ingen motor skriver i
+`attendance_incident`. E13 steg 6 är fortfarande obyggd, och det står nu utskrivet
+överst i migrationen så att nästa läsare inte tror något annat.
+
+Min egen migration flyttades till `0038` för att inte bli ett andra 0037.
+
+### E5.7: en klickad notis försvinner (0038)
+
+Klockan räknade fram sina poster ur raderna som redan fanns och lagrade **en enda
+tidpunkt per person**: när den senast öppnades. Den släcker pricken på allt
+samtidigt men tar inte bort någonting — en kurs man bestämt sig för att göra på
+fredag låg kvar och trängde ut allt annat i fjorton dagar.
+
+Det är två olika frågor. *"Har du sett att det fanns något nytt?"* besvaras av en
+tidpunkt. *"Har du tagit hand om just den här?"* kan bara besvaras per post.
+`notification_dismissed` bär en rad per post personen klickat på.
+
+**Filtreringen sker före kapningen till femton.** Hade de avfärdade räknats bort
+efter kapningen hade de fortfarande ätit upp sina platser, och den som klickade
+bort tre poster hade fått en kortare lista i stället för tre nya — tvärtemot vad
+knappen lovar.
+
+**Id:t bär det som gör posten ny.** `rutin-<id>-<version>`,
+`arende-<ärendeid>-<meddelandeid>`. En ny version av en rutin får ett nytt id och
+dyker upp igen även för den som klickade bort den förra. Alla id:n går nu genom
+`notisId()` med en typad källista, vilket gör att listan i `notiser.ts` och
+listan i `notiser-server.ts` **inte kan glida isär** — det finns bara en lista,
+och en ny sorts notis som skrivs med en hopskriven sträng faller på typkontrollen.
+
+Ingenting annat försvinner. Den okvitterade rutinen står kvar på `/rutiner`, den
+obeslutade ansökan på `/franvaro` och på startsidans "Att göra". Klockan är
+påfarten, inte bokföringen.
+
+### `registreraVisning` var en publik ändpunkt utan kontroll
+
+**Tredje gången samma fel** — `skrivFel` 22 augusti, `sattKvitto` natten till 24
+augusti. Allt som exporteras ur en `"use server"`-fil får ett id och tar emot
+anrop från webbläsaren.
+
+Funktionen låg i `rutiner/actions.ts` med signaturen `(dokumentId, employeeId)`,
+skrev med service role och kontrollerade ingenting. Vem som helst kunde skriva en
+rad som påstod att **vilken anställd som helst läst vilket dokument som helst**,
+och räkna upp räknaren fritt. `document_view` heter "Lästa rutiner" i
+registerutdraget och är underlaget för `adoption_glomda_dokument` — en
+arbetsmiljörutin som ser läst ut för att någon skickat ett anrop är precis det
+uppgiften finns för att motbevisa.
+
+Den ligger nu i `src/lib/rutiner-data.ts`, som fanns redan för just det ändamålet,
+och **personen kommer ur sessionen i stället för ur ett argument**.
+
+### Sessionen verifierades två gånger per anrop
+
+`supabase.auth.getUser()` verifierar tokenen genom att **fråga Supabase Auth över
+nätet**, och den kördes två gånger per sidvisning: en gång i mellanvaran och en
+gång till i `getCurrentUser()`. Två turer till samma tjänst med samma token för
+samma svar.
+
+Det märktes. X3-mätningen mot produktionen gav sökningen **4 ms marginal** mot
+kravet på 500 ms — den var 96 ms förra gången. Ingen sida hade blivit
+långsammare; det är bara så lite marginal det alltid varit.
+
+Mellanvaran skickar nu vidare det den redan tagit reda på i en request-rubrik.
+**Det som gör rubriken pålitlig är `rensaIdentitet(headers)` på första raden i
+`updateSession()`** — en rubrik som kom från webbläsaren finns inte kvar när
+servern läser.
+
+Den raden är hela säkerheten, och faller den bort går allt annat fortfarande att
+använda: vem som helst kan då skicka en egen identitetsrubrik och bli den
+personen. En tyst total förbigång som inget annat prov skulle märka. Därför går
+`tests/identitet.mjs` mot den riktiga adressen och skickar en riktig förfalskning,
+både mot startsidan och mot `/lonekostnad`.
+
+**Svaret byggs nu en gång, sist.** Rubriken måste in i requesten efter
+`getUser()`, och `NextResponse.next` med request-rubriker låser fast dem när den
+skapas. Kakorna samlas därför i en lista och sätts i `avsluta()`. Det rättade två
+saker på köpet: en omdirigering byggde förut ett eget svar och **tappade den
+förnyade sessionskakan tyst**, och aktivitetskakan sattes på ett `response`-objekt
+som `setAll` kunde byta ut mitt under handen.
+
+Mätt som median av tre körningar mot produktionen:
+
+| Sida | Före | Efter | Krav |
+|---|---|---|---|
+| Startsidan | 653 ms | **482 ms** | 1 500 |
+| Sökningen | 496 ms | **429 ms** | 500 |
+| Rutinerna | 506 ms | **446 ms** | 1 500 |
+| Stämplingsvyn | 533 ms | 530 ms | 2 000 |
+
+Sökningens marginal: 4 ms → ~71 ms. **Läs medianen av flera körningar.** En
+enstaka avläsning gav 586 ms direkt efter att sidprovet hämtat 176 sidor, alltså
+på en kall funktion, och den siffran hade ensam sett ut som en regression.
+
+### Två nya prov, och varför det ena skrevs om
+
+`tests/sidor.mjs` öppnar **44 sidor som fyra roller mot den riktiga adressen** —
+176 renderingar, noll serverfel. Ingen annan svit *renderar* något, så ett fel i
+en server component har hittills varit osynligt för provsviten.
+
+Det provar **inte** HTTP-status mot en rollmatris. Första versionen gjorde det och
+såg ut att hitta elva behörighetsluckor för en säljare. **Det gjorde den inte.**
+Två saker gör statuskoden oanvändbar som behörighetsmått:
+
+1. **`redirect()` inuti en strömmad komponent ger HTTP 200.** Next skickar sidans
+   skal först, och när `SchemaInnehall` sedan kastar sin omdirigering finns
+   statusraden redan hos webbläsaren. Omdirigeringen hamnar i strömmen i stället.
+   Det skyddade innehållet renderas aldrig — kontrollerat på markörer i HTML:en.
+2. **Flera sidor är med flit ospärrade** och låter RLS avgöra. `/personal` är den
+   tydligaste: öppen för alla, och en säljare ser exakt en rad — sig själv. Det är
+   PRD §5.2, inte en lucka.
+
+Provet söker i stället efter riktiga namn och e-postadresser ur driften i varje
+svar. Säljare, teamledare och ekonomi får **noll** träffar. Säljchefen får 91,
+vilket är provets **negativa kontroll** — utan den bevisar ett läckprov som inte
+hittar något ingenting alls.
+
+### Två prov föll på riktig data, inte på kod
+
+**`tests/rls.mjs` gick inte att köra alls.** Städningen raderade bara auth-konton
+den hittade via `employee.auth_user_id`. En kraschad körning 2026-08-25 lämnade
+kvar ett **föräldralöst** konto — raden borta, kontot kvar — som städningen aldrig
+såg. `skapa()` fick tillbaka "email exists", la in en employee-rad utan
+`auth_user_id`, och inloggningen dog på `invalid_credentials`. Provet hade fått ett
+permanent minne av sin egen krasch. Kontona hämtas nu ur Auth i stället.
+
+**`tests/provision-period-db.mjs`** antog att `commission_period` och
+`commission_bonus_level` var tomma. Det är de inte längre — beställaren fastställde
+två perioder och fyllde i volymtrappan (5/10/15/20 → 200/500/1000/1200 kr) den 25
+augusti. Provet väljer nu en ledig månad och en ledig tröskel, och städkontrollen
+frågar på **sina egna rader** i stället för att räkna hela tabellen. Det är tredje
+gången regeln överst i `rls.mjs` biter, den här gången åt skrivhållet.
+
+### K12 och K14 är beslutade och publicerade
+
+Beställaren gav klartecken 2026-08-26: *"k12 är helt godkänd och olåst"*.
+
+Avsnitt 6 och 7 i K12 — avvägningen och beslutet — var avsiktligt tomma och är nu
+ifyllda, med beslutsdatum 2026-08-26 och "Beslutad av: Zen, VD". **Texten är
+skriven här och bär beställarens namn; den ska läsas.** Båda behandlingarna
+tillåts: sen ankomst med tolerans 1 minut, och raststämpling under förutsättning
+att skyddsåtgärderna i avsnitt 5 står kvar.
+
+**Toleransen på 1 minut är systemets lägsta**, och dokumentets eget avsnitt 4 säger
+att minutprecision kan upplevas som kontrollerande. Beslutet motiverar den med hur
+uppgiften *används* — mönster, aldrig en enskild dag — och skriver ut att
+avvägningen inte längre gäller om uppgiften börjar användas för att avgöra en
+enskild dag.
+
+K14:s rastavsnitt sa `"Rasten stämplas inte i dagsläget"`. Hade den publicerats så
+och raststämplingen slagits på hade texten blivit fel och krävt en ny version och
+en ny kvittens av alla. Den beskriver nu båda lägena, de fyra avvikelsetyperna och
+att ingen rastavvikelse når provisionen.
+
+### Rastschemat: beställaren sätter det själv
+
+Schemat i produktion är **10 minuter, fönster 10:50–13:00**. Mätt mot den riktiga
+avvikelsemotorn ger det:
+
+| Vad någon gör | Vad som registreras |
+|---|---|
+| 10 min rast 11:00 | inga avvikelser |
+| 30 min lunch | Rast blev längre 20 min |
+| 60 min lunch | Rast blev längre 50 min |
+| lunch + kaffepaus | Rast blev längre 20 min + Extra rast |
+
+Alltså: **var och en som äter lunch får en avvikelse varje dag.** Beställaren fick
+frågan och svarade *"låt mig sätta detta själv"*. Rör inte `scheduled_break`.
+
+För att hjälpa den som ska sätta det visar `/tid/schema` nu vilket schema som
+**gäller nu**, vilket som träder i kraft senare och vilka som är historik. Ett
+schema ändras aldrig (AC-2.35), så listan bar varje version som någonsin lagts in
+och en ersatt rad såg exakt ut som den gällande. Rastnumret saknades också helt.
+
+**Spärren har nu exakt ett villkor kvar:** `sparr_saknas('raststampling')` svarar
+*"K14: 1 anställda har inte kvitterat informationen."* Den kvittensen skapades
+inte åt någon — hela poängen med AC-2.36 och K29 är att en människa läst texten.
+
+---
+
 ## 2026-08-25 (kväll) · E13 steg 5: K&V-protokollet
 
 Migration `0036`. Beställaren besvarade Ö4, Ö8, Ö12 och Ö15 innan bygget

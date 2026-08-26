@@ -3,7 +3,63 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-08-25 (E13 steg 2–5)
+**Senast uppdaterad:** 2026-08-26 (genomgang infor pilot)
+
+---
+
+## Läget efter genomgången 2026-08-26
+
+**Provsviten är grön: 31 sviter, ~1 700 kontroller.** Två av dem föll på riktig
+data och inte på kod, och båda är lagade — se arbetsloggen.
+
+### Tre saker som ändrades och som du behöver veta om
+
+1. **`0037_konsekvenser` var körd mot produktionen men aldrig committad.** Filen
+   är återskapad ur databasen, är idempotent, och bokföringen är omgjord så att
+   checksumman beskriver filen som ligger här. **Schemat finns, koden gör det
+   inte** — E13 steg 6 är fortfarande obyggd, och `attendance_incident` är tom.
+   Notisavfärdningen fick därför nummer **0038**.
+
+2. **En klickad notis försvinner ur klockan** (`notification_dismissed`, 0038).
+   Alla notis-id:n går genom `notisId()` — skriv aldrig ett id som en hopskriven
+   sträng, då slutar avfärdningen tyst fungera för just den sorten.
+
+3. **Sessionen verifieras en gång per anrop i stället för två.** Mellanvaran
+   skickar identiteten vidare i en request-rubrik.
+   **`rensaIdentitet(headers)` på första raden i `updateSession()` är hela
+   säkerheten** — faller den raden bort kan vem som helst skicka en egen
+   identitetsrubrik och bli den personen, utan att något annat slutar fungera.
+   `tests/identitet.mjs` skickar en riktig förfalskning mot produktionen.
+
+### Två saker du själv måste göra för att slå på rasterna
+
+Spärren har **exakt ett villkor kvar**. `sparr_saknas('raststampling')` svarar
+*"K14: 1 anställda har inte kvitterat informationen."*
+
+1. **Sätt rastschemat** under `/tid/schema`. Du sa att du vill göra det själv.
+   Det som ligger där nu — 10 minuter, fönster 10:50–13:00 — ger **var och en som
+   äter lunch en avvikelse varje dag**, mätt mot den riktiga motorn. Ett schema
+   ändras aldrig: en ny längd är en ny rad med nytt `valid_from`. Sidan visar nu
+   vilket schema som gäller nu och vilka som är historik.
+2. **Kvittera K14** på `/rutiner/k14-information-arbetstid`, och kvittera de nya
+   rastschemaraderna. Ingenting bedöms mot ett schema som inte kvitterats.
+
+Sedan slås spärren på under `/tid/sparrar`. **K12 är beslutad och publicerad**
+(beslutsdatum 2026-08-26, "Beslutad av: Zen, VD"). Avsnitt 6 och 7 skrevs i det
+här passet och bär ditt namn — **läs dem.**
+
+### Prestanda, mätt mot produktionen 2026-08-26
+
+| Sida | Median | Krav |
+|---|---|---|
+| Startsidan | ~482 ms | 1 500 |
+| Stämplingsvyn | ~530 ms | 2 000 |
+| **Sökningen** | **~429 ms** | **500** |
+| Rutinerna | ~446 ms | 1 500 |
+
+Sökningens marginal gick från 4 ms till ~71 ms. Den är fortfarande den minsta i
+navet. **Läs medianen av flera körningar** — en kall funktion gav 586 ms i en
+enstaka avläsning, vilket ensamt hade sett ut som en regression.
 
 ---
 
@@ -165,7 +221,7 @@ i `rls.mjs`.** Samtliga 105 i den filen plus 51 i övriga sviter. Leta inte om:
 | Sak | Status |
 |---|---|
 | In- och utstämpling | **Påslagen.** `compliance_gate.stampling` |
-| Raststämpling | Avstängd. **Två steg kvar, se nedan.** Rastschemat finns redan |
+| Raststämpling | Avstängd. **Ett villkor kvar: K14 okvitterad av 1 person.** K12 och K14 är publicerade |
 | Sen ankomst | Påslagen, tolerans 1 minut, larm samma dag till chef |
 | Nattjobb | Ett jobb, `/api/jobb/natt`, 02:30. Hämtar igen 14 dygn bakåt |
 | Lönerapport | Klar, med attest och oföränderlig period |
@@ -177,7 +233,7 @@ i `rls.mjs`.** Samtliga 105 i den filen plus 51 i övriga sviter. Leta inte om:
 | **Inställningar** | **I drift sedan 2026-08-24.** Ruta över fönstret från profilbilden. Konto, Säkerhet, Utseende, Administration. `/profil` visar samma sektioner som egen sida |
 | Registerutdrag | Klart, **inklusive filer och vem som öppnat dem** |
 | Nyheter | `/nyheter`. Målgrupp per roll och team, fäst överst, utkast |
-| Notisklockan | Ärenden, nyheter, rutiner, kurser, frånvaro, rollspel |
+| Notisklockan | Ärenden, nyheter, rutiner, kurser, frånvaro, rollspel. **En klickad notis försvinner (0038)** |
 | Frånvaro och ledighet | I drift sedan 2026-08-20. **E7 är helt klar sedan 2026-08-21** |
 | Kalenderflöde | `/api/ical/[token]`. Bär aldrig sjukfrånvaro och aldrig frånvarotyp |
 | **Filer** | **I drift sedan 2026-08-21.** Läkarintyg, bilagor, rollspel |
@@ -191,7 +247,7 @@ i `rls.mjs`.** Samtliga 105 i den filen plus 51 i övriga sviter. Leta inte om:
 | **Anställningsflöde** | **I drift sedan 2026-08-24.** `/rekrytering/[id]/anstall`. Konto, roll, rutiner, kurser, avtalsutkast och onboarding-checklista i ett steg |
 | **Provision** | **I drift sedan 2026-08-23.** `/provision`. Manuell inmatning av ekonomi/VD. Alla ser sin egen. Inkio-sömmen lagd, inte kopplad |
 | **Kundorder** | **I drift sedan 2026-08-25.** `/order`. Paketmatrisen i `commission_rate`, provisionen fryses vid godkännande |
-| **Volymtrappan** | **I drift sedan 2026-08-25.** `/provision/regler`, säljchef och VD. **Tom tills beställaren fyller i beloppen** |
+| **Volymtrappan** | **I drift sedan 2026-08-25.** `/provision/regler`. **Ifylld 2026-08-25:** 5/10/15/20 → 200/500/1000/1200 kr |
 | **Periodstängning** | **I drift sedan 2026-08-25.** Kort på `/provision`. Öppen månad räknas live, fastställd är bokförd |
 | **Progressvy** | **I drift sedan 2026-08-25.** `/provision`. "3 order kvar till nästa bonus" med prognosens antagande utskrivet |
 | **K&V** | **I drift sedan 2026-08-25.** `/kv`. Rutnät säljare × vecka, bedömning, utvecklingskurva. **Maxpoängen måste fyllas i** |
