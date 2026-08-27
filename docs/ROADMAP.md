@@ -277,7 +277,7 @@ uppsägningstidsberäkning i en semesteransökan hade varit fel plats för rätt
 
 | # | AC | Vad | Status |
 |---|---|---|---|
-| E6.1 | AC-12.1 | `audit_log` täcker samtliga sju händelsetyper | PÅGÅR — M1:s händelser klara |
+| E6.1 | AC-12.1 | `audit_log` täcker samtliga sju händelsetyper | **KLAR 2026-08-27.** Typerna är nu **data och inte ett påstående**: `src/lib/handelselogg.ts` klassar varje action, `tests/handelselogg.mjs` faller när en ny modul loggar utan att registreras. **Luckan som fanns var inloggningen** — varken lyckad, misslyckad eller utloggning lämnade en enda rad. Nu `auth.login`, `auth.login_failed` och `auth.logout`. `/logg` kände sju actions av 57 och ritade resten som råsträngar; den har filter per typ och svensk text. Ingen migration. **Enumerationen av de sju är härledd, inte avläst ur PRD:n — se D-E6.1** |
 | E6.2 | AC-12.2, K10 | **Nattligt gallringsjobb** som verkställer `retention_until` och skriver kvittens | BLOCKERAD av P0.6 — ingen tabell bär `retention_until`, och fristerna är inte skrivna. Ett jobb med påhittade frister raderar personaldata enligt en gissning |
 | E6.3 | AC-12.3 | Objekt i låst dossier undantas från gallring | BLOCKERAD av E11 |
 | E6.4 | AC-12.4, K25 | **Registerutdrag**: all data om en person som JSON plus filer | KLAR — filerna redovisas sedan 2026-08-21 som rader i `file_object`, plus `file_access_log`: vem som öppnat dem och när. `tests/registerutdrag.mjs` faller när en ny kolumn pekar på `employee` utan att vara redovisad |

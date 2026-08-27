@@ -3,7 +3,33 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-08-27 (kväll) — E0.7 byggd: nattjobbet larmar om sig självt
+**Senast uppdaterad:** 2026-08-27 (kväll) — E0.7 och E6.1 byggda
+
+---
+
+## E6.1 är klar sedan 2026-08-27 (kväll)
+
+Handelseloggen täcker samtliga sju händelsetyper, och **det går att
+kontrollera** — `src/lib/handelselogg.ts` klassar varje action och
+`tests/handelselogg.mjs` jämför registret mot både källkoden och produktionens
+logg.
+
+Tre saker att inte riva:
+
+1. **Typerna beskriver VAD som hände, inte vilken modul.** Första försöket
+   delade in efter modul och föll på `case.*` — en modulindelning växer med
+   navet, så "sju" hade blivit åtta vid nästa modul. Se D-E6.1.
+2. **`typFor()` är avsiktligt total:** en okänd ändelse i en känd modul blir
+   `andring` i stället för att falla ur loggvyn. Det som fångar en HELT ny
+   modul är `MODUL`-registret och provet. Rör du reglerna: kör
+   `npm run test:handelselogg`.
+3. **Inloggningen loggas nu.** `auth.login` skrivs **före** `redirect()` —
+   `redirect()` fungerar genom att kasta, så en rad efter den körs aldrig. Och
+   utloggningen slår upp personen **före** `signOut()`.
+
+**Beställaren bör stämma av enumerationen.** PRD:n ligger inte i repot, så de
+sju typerna är härledda och inte avlästa. Ändras listan är det `TYPER` och
+provet som ändras, inte loggen.
 
 ---
 
@@ -48,8 +74,9 @@ flera körningar, aldrig en enskild avläsning.
 
 ## Läget efter genomgången 2026-08-26
 
-**Provsviten är grön: exit 0, 1 721 kontroller, noll fallna** (omkörd
-2026-08-27 kväll med `test:larm` i kedjan; 1 675 + 46 nya).
+**Provsviten är grön: exit 0, 1 782 kontroller, noll fallna** (omkörd
+2026-08-27 kväll med `test:larm` och `test:handelselogg` i kedjan;
+1 675 + 46 + 61).
 
 ### Tre saker som ändrades och som du behöver veta om
 
@@ -323,8 +350,8 @@ i dag ger de samma bonus som 20, och trappan står still över 30 enligt avsnitt
 set -a && . $HOME/.clicknet/nav.env && set +a && npm test
 ```
 
-**Trettiosex sviter.** `larm` kom till 2026-08-27 (kväll) — ren logik utan
-Supabase, 46 kontroller. Tre kom till 2026-08-26: `konsekvenser`,
+**Trettiosju sviter.** `larm` (46 kontroller, ren logik) och `handelselogg`
+(61 kontroller, går mot riktiga databasen) kom till 2026-08-27 (kväll). Tre kom till 2026-08-26: `konsekvenser`,
 `provisionsunderlag` och `orderbilaga` — alla ren logik utan Supabase. `tests/rls.mjs` går mot den **riktiga**
 databasen och skapar och städar sina egna användare (prefix `rlstest+`).
 Även `tests/provision-period-db.mjs` går mot den riktiga databasen — den kör allt
@@ -377,6 +404,7 @@ i `rls.mjs`.** Samtliga 105 i den filen plus 51 i övriga sviter. Leta inte om:
 | Sidopanelen | **Menyn scrollar sedan 2026-08-24.** Låst botten: profil och utloggning rullar aldrig bort |
 | **Inställningar** | **I drift sedan 2026-08-24.** Ruta över fönstret från profilbilden. Konto, Säkerhet, Utseende, Administration. `/profil` visar samma sektioner som egen sida |
 | Registerutdrag | Klart, **inklusive filer och vem som öppnat dem** |
+| **Händelseloggen** | **Sju typer sedan 2026-08-27.** `/logg` med filter per typ. Inloggning, utloggning och misslyckade försök loggas nu |
 | Nyheter | `/nyheter`. Målgrupp per roll och team, fäst överst, utkast |
 | Notisklockan | Ärenden, nyheter, rutiner, kurser, frånvaro, rollspel. **En klickad notis försvinner (0038)** |
 | Frånvaro och ledighet | I drift sedan 2026-08-20. **E7 är helt klar sedan 2026-08-21** |

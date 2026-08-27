@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { siteUrl } from "@/lib/env";
+import { loggaInloggning, loggaMisslyckadInloggning } from "@/lib/inloggningslogg-server";
 
 export type LoginState = { fel?: string; skickat?: boolean };
 
@@ -17,7 +18,15 @@ export async function skickaMagiskLank(_prev: LoginState, form: FormData): Promi
     options: { emailRedirectTo: `${siteUrl()}/auth/bekrafta` },
   });
 
-  if (error) return { fel: oversatt(error.message) };
+  if (error) {
+    const text = oversatt(error.message);
+    await loggaMisslyckadInloggning(epost, "lank", text);
+    return { fel: text };
+  }
+
+  // Att lanken SKICKATS ar inte en inloggning. Raden om att nagon kom in
+  // skrivs nar lanken vaxlas in i /auth/bekrafta — annars hade en begard lank
+  // som aldrig oppnades sett ut som ett besok.
   return { skickat: true };
 }
 
@@ -30,7 +39,15 @@ export async function loggaInMedLosenord(_prev: LoginState, form: FormData): Pro
   const supabase = await supabaseServer();
   const { error } = await supabase.auth.signInWithPassword({ email: epost, password: losenord });
 
-  if (error) return { fel: oversatt(error.message) };
+  if (error) {
+    const text = oversatt(error.message);
+    await loggaMisslyckadInloggning(epost, "losenord", text);
+    return { fel: text };
+  }
+
+  // FORE redirect(). `redirect()` fungerar genom att kasta, sa allt som star
+  // efter den kors aldrig — en logg pa andra sidan hade varit tyst borta.
+  await loggaInloggning(epost, "losenord");
   redirect("/");
 }
 

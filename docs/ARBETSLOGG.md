@@ -5,6 +5,116 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-08-27 (kväll) · E6.1: händelseloggen täcker sju typer, och det går att kontrollera
+
+Ingen migration. Två nya lib-filer, ett nytt prov, `/logg` ombyggd, och en
+lucka som visade sig vara den mest uppenbara av alla.
+
+### Loggen var bredare än ROADMAP påstod — och sidan visste inte om det
+
+Innan något skrevs: en räkning i produktionens `audit_log`. **57 olika actions
+över 25 moduler, 171 rader.** ROADMAP-raden sa "M1:s händelser klara", vilket
+var sant den 16 augusti och inte på länge.
+
+`/logg` hade däremot inte hängt med. Kartan `HANDELSE` bar sju actions —
+`employee.created`, `role.granted` och fem till — och **de femtio andra ritades
+som sin egen råsträng:** "commission_period.closed". Ingressen påstod samtidigt
+att loggen innehåller "rollförändringar, kontoändringar och offboarding".
+
+Det är inte ett skönhetsfel. Den som läst ingressen och skrollat förbi trettio
+obegripliga strängar drar slutsatsen att resten är skräp — inte att sidan inte
+hunnit med. **En logg man inte tror på är ingen logg.**
+
+### Luckan: inloggningen lämnade inte ett enda spår
+
+`auth.step2_verified`, `auth.temp_password_set` och `auth.password_changed`
+fanns. **Själva inloggningen fanns inte** — varken lyckad, misslyckad eller
+utloggning. Nu `auth.login`, `auth.login_failed` och `auth.logout`.
+
+Att Supabase för sin egen auth-logg räcker inte: den ligger utanför navet, har
+en gallringstid navet inte styr och går inte att läsa i samma vy som allt annat.
+`employee.last_sign_in_at` är **ett värde som skrivs över** — den kan varken
+svara på "hur ofta" eller visa ett försök som misslyckades. Se D-E6.1b.
+
+**Misslyckade försök mot en okänd adress sparar inte adressen.** Den som skriver
+fel skriver ibland någon annans. Det man vill veta är att någon försökte ta sig
+in på ett konto som finns, och det svaret kräver inte adressen.
+
+Två fällor som fångades vid skrivbordet:
+
+- **`redirect()` fungerar genom att kasta.** En logg efter `redirect("/")` hade
+  aldrig körts. Raden skrivs före.
+- **Utloggningen måste slå upp vem det är FÖRE `signOut()`.** Efteråt finns
+  ingen session att fråga, och raden hade blivit en utloggning utan avsändare.
+
+### Det som var värt mest: taxonomin var fel första gången
+
+Första indelningen gick på **modul** — tid, frånvaro, lön, dokument, identitet,
+utlämnande, drift. Sju stycken, snyggt.
+
+**Provet fällde den på en gång:** `case.*`, personalärendena, var ingen av dem.
+Och felet var inte ett hål i listan utan i idén. En modulindelning växer med
+navet, så "sju" hade blivit åtta vid nästa modul och nio vid den därpå. **Ett
+krav som byter innebörd varje gång något byggs är inget krav.**
+
+Typerna beskriver därför vad som **hände**, inte var det hände: inloggning,
+behörighet, nytt registrerat, ändring, radering, utlämnande, systemhändelse.
+Den indelningen är sluten, och det är den en granskning frågar efter. Se D-E6.1.
+
+Två regler i den som är värda att inte riva:
+
+- **Utlämnande går före modulen.** `payroll.exported` hör sakligt hemma både
+  under lön och under utlämnande, och hamnar under det senare. Det är den frågan
+  loggen ska kunna besvara — vem har sett vad — och en export begravd bland
+  trettio lönehändelser går inte att svara på artikel 15 med.
+- **Behörighet går på prefixet, aldrig på ändelsen.** `attendance_incident.revoked`
+  är en tillbakadragen frånvarohändelse. En regel på ändelsen `revoked` hade lagt
+  den bland roller och behörigheter.
+
+Och en detalj som är lätt att missa: `document.reviewed` innehåller `viewed` som
+delsträng. Matchningen sker på hela ändelsen eller efter ett understreck, så en
+granskad rutin är inget utlämnande. Provet kontrollerar just det.
+
+### Reglerna är totala — kontrollen ligger någon annanstans
+
+En okänd ändelse i en **känd** modul blir `andring` i stället för att falla ur
+loggvyn. Det gör att `typFor()` aldrig kan vara den som fångar en ny modul, och
+därför ligger den kontrollen på `MODUL`-registret i stället.
+`tests/handelselogg.mjs` jämför registret mot **både** källkoden och
+produktionens logg — koden fångar det som är på väg in, databasen det som redan
+skrivits av en tidigare version eller med SQL för hand.
+
+Utan den kontrollen är "täcker samtliga sju händelsetyper" ett påstående som
+ingen kan kontrollera och som slutar stämma tyst vid nästa modul. Det är samma
+konstruktion som `KALLOR`/`UNDANTAG` i `registerutdrag.ts`, av samma skäl.
+
+### En sak beställaren bör stämma av
+
+**PRD:n ligger inte i repot**, så enumerationen av de sju typerna är **härledd
+och inte avläst**. Den håller ihop och täcker allt navet loggar, men den som har
+PRD §5.2 framför sig bör jämföra. Ändras listan är det `TYPER` i
+`handelselogg.ts` och provet som ändras — inte loggen.
+
+### Fördelningen i produktionens logg
+
+| Typ | Rader |
+|---|---|
+| Inloggning | 2 |
+| Behörighet | 12 |
+| Nytt registrerat | 49 |
+| Ändring | 82 |
+| Radering | 2 |
+| Utlämnande och insyn | 12 |
+| Systemhändelse | 12 |
+
+Samtliga sju har rader. `Inloggning` står på 2 för att `auth.login` börjar
+skrivas först nu — de två är en bekräftad enhet och ett tillfälligt lösenord.
+
+**Hela sviten omkörd oskyddad: exit 0, 1 782 kontroller, noll fallna** (1 721 +
+61). `test:handelselogg` ligger i kedjan efter `test:larm`.
+
+---
+
 ## 2026-08-27 (kväll) · E0.7: nattjobbet larmar om sig självt
 
 Ingen migration, inga nya tabeller. Två nya filer, tre rörda, ett nytt prov.

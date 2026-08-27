@@ -340,3 +340,64 @@ rollfilter: kretsen kan inte bli vidare än RLS. Skälet är att noll rader anna
 betyder två olika saker — "jobbet har aldrig kört" och "du får inte se
 händelseloggen" — och säljaren hade fått ett larm om det första när det andra
 var sant.
+
+---
+
+## D-E6.1 · De sju händelsetyperna beskriver VAD som hände, inte vilken modul
+**2026-08-27.** AC-12.1 kräver att `audit_log` täcker samtliga sju
+händelsetyper. **PRD:n ligger inte i repot**, så enumerationen är härledd här
+och inte avläst. Den som har PRD §5.2 framför sig bör stämma av listan; ändras
+den är det `TYPER` i `src/lib/handelselogg.ts` och provet som ska ändras, inte
+loggen.
+
+**Första försöket delade in loggen efter modul** — tid, frånvaro, lön,
+dokument, identitet, utlämnande, drift. Det gav sju och föll direkt: provet
+hittade `case.*`, personalärendena, som inte är någon av dem. Felet var inte
+ett hål i listan utan i idén. **En modulindelning växer med navet**, så "sju"
+hade blivit åtta vid nästa modul och nio vid den därpå. Ett krav som byter
+innebörd varje gång något byggs är inget krav.
+
+**Typerna beskriver därför vad som hände:** inloggning, behörighet, nytt
+registrerat, ändring, radering, utlämnande, systemhändelse. Den indelningen är
+sluten — en ny modul får plats utan att listan växer — och det är den en
+granskning faktiskt frågar efter.
+
+**Utlämnande går före modulen.** `payroll.exported` hör sakligt hemma både
+under lön och under utlämnande. Den hamnar under utlämnande, för det är den
+frågan loggen ska kunna besvara: vem har sett vad. En export begravd bland
+trettio andra lönehändelser går inte att svara på artikel 15 med.
+
+**Behörighet går på prefixet, inte på ändelsen.** `role.*` och `permission.*`
+är alltid behörighet; `attendance_incident.revoked` är en tillbakadragen
+frånvarohändelse och har ingenting med behörighet att göra. En regel på
+ändelsen `revoked` hade lagt den i fel hög.
+
+**Typreglerna är avsiktligt totala:** en okänd ändelse i en känd modul blir
+`andring` i stället för att falla ur loggvyn. Det som fångar en helt ny modul är
+i stället `MODUL`-registret, och `tests/handelselogg.mjs` jämför det mot både
+källkoden och produktionens logg. Utan den kontrollen är "täcker samtliga sju"
+ett påstående som slutar stämma tyst.
+
+## D-E6.1b · Inloggningen loggas i navet, inte bara hos Supabase
+**2026-08-27.** Inloggning var den enda händelsetyp som inte lämnade ett enda
+spår i `audit_log`. Supabase för sin egen auth-logg och
+`employee.last_sign_in_at` finns, men ingen av dem duger: den förra ligger
+utanför navet med en gallringstid navet inte styr och går inte att läsa i samma
+vy som allt annat, den senare är **ett värde som skrivs över** och kan varken
+svara på "hur ofta" eller visa ett misslyckat försök.
+
+**Misslyckade försök mot en okänd adress sparar inte adressen.** Den som skriver
+fel i e-postfältet skriver ibland någon annans adress. Att spara den hade lagt
+en utomstående persons uppgift i en logg som bevaras som bevis, utan nytta: det
+man vill veta är att någon försökte ta sig in på ett konto **som finns**, och
+det svaret kräver inte adressen. Är adressen känd skrivs raden på den
+anställdas id i stället — mer användbart och mindre uppgift.
+
+**Raden om inloggning med länk skrivs när länken växlas in**, i
+`/auth/bekrafta`, inte när den beställdes. En beställd länk som aldrig öppnades
+är ingen inloggning.
+
+**IP:t ligger i `meta` och inte i kolumnen `ip`.** Kolumnen är av typen `inet`,
+och en sträng som inte går att tolka som en adress fäller hela insertet — alltså
+hade en trasig proxy-rubrik tystat själva inloggningsloggen. Samma val som
+`auth.step2_verified` redan gjort.
