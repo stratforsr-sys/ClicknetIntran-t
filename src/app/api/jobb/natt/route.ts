@@ -8,7 +8,7 @@ import { korArendejobbet } from "@/lib/jobb/arenden";
 import { korFranvarojobbet } from "@/lib/jobb/franvaro";
 import { korSatsjobbet } from "@/lib/jobb/satser";
 import { foreslaOgiltigFranvaro } from "@/lib/jobb/konsekvenser";
-import { hamtaDrift } from "@/lib/jobb/drift-server";
+import { hamtaDrift, type Drift } from "@/lib/jobb/drift-server";
 import { kvittoLarmtext, larmDigest, larmSokvag } from "@/lib/jobb/larm";
 import { skrivFel } from "@/lib/fel-server";
 
@@ -55,6 +55,8 @@ export async function GET(request: NextRequest) {
   const db = supabaseAdmin();
   const lage = await hamtaLage();
   const start = Date.now();
+  const resultat: Record<string, unknown> = {};
+  const fel: Record<string, string> = {};
 
   /**
    * Det egna kvittot läses FÖRE stegen, så att "senaste" betyder den förra
@@ -62,11 +64,21 @@ export async function GET(request: NextRequest) {
    *
    * Service role, till skillnad från vyerna: jobbet har ingen inloggad
    * användare, och dess egen hälsa ska inte hänga på vem som råkar titta.
+   *
+   * EGET TRY/CATCH, av samma skäl som varje steg har ett. Kontrollen är
+   * jobbets minst viktiga uppgift och står först i filen — ett nätavbrott här
+   * hade annars fällt hela natten innan en enda stämpling stängts. Ett larm
+   * som kan släcka det den vaktar är värre än inget larm.
    */
-  const forra = await hamtaDrift(db, new Date(start));
-
-  const resultat: Record<string, unknown> = {};
-  const fel: Record<string, string> = {};
+  let forra: Drift;
+  try {
+    forra = await hamtaDrift(db, new Date(start));
+  } catch (e) {
+    fel["kvitto"] = e instanceof Error ? e.message : String(e);
+    // Okänt läge, inte "aldrig": att larma om en utebliven natt vore att dra
+    // en slutsats ur en fråga som aldrig fick något svar.
+    forra = { besked: { lage: "ok", timmar: null }, kvitto: null };
+  }
 
   const steg: [string, () => Promise<unknown>][] = [
     ["tid", () => (lage.stampling ? korTidjobbet(db, lage.rast) : Promise.resolve({ hoppade_over: "stämplingen är av" }))],

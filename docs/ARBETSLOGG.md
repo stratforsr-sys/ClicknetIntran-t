@@ -110,6 +110,18 @@ jobbet omöjligt kan rapportera om sig självt: att det inte kört alls. En rad
 som ritas för sådant som redan syns någon annanstans blir en rad man slutar
 läsa — samma skäl som göms ärendekortet.
 
+### Kontrollen har eget try/catch, och det var ett fel som nästan gick igenom
+
+Färskhetskontrollen står **först** i jobbet, före alla sex stegen. Första
+versionen läste kvittot utan skydd — och då hade ett nätavbrott i den frågan
+fällt hela natten innan en enda stämpling stängts. Ett larm som kan släcka det
+den vaktar är värre än inget larm.
+
+Kontrollen har därför samma try/catch som varje steg, och faller den skrivs
+`kvitto` i `fel` som vilket steg som helst. Läget sätts då till `ok`, inte
+`aldrig`: att larma om en utebliven natt vore att dra en slutsats ur en fråga
+som aldrig fick något svar.
+
 ### Vågantalet är oförändrat
 
 Hämtningen på startsidan lades i den **befintliga** `Promise.all`. På `/fel`
