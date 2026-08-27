@@ -13,6 +13,36 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Sök — Clicknet Nav" };
 
 /**
+ * Den snava fragan vinner nar den gav nagot, annars den breda.
+ *
+ * ===========================================================================
+ * BADA FRAGORNA STALLS ALLTID, OCH DET AR EN MEDVETEN VAXEL
+ *
+ * Forr stalldes prefixfragan FORST NAR den snava gett noll rader. Det sparade
+ * en fraga nar sokningen traffade — och kostade en hel VAG nar den inte gjorde
+ * det, alltsa i precis det fall som redan ar langsammast och som navet dessutom
+ * mater sarskilt (E6.5, sokningar utan traff).
+ *
+ * Nu gar de parallellt och svaret valjs efterat. Sidan ar darmed EN vag djup
+ * oavsett utfall.
+ *
+ * Vaxeln ar den omvanda mot den i `hamtaNotiser()`, och det ar med flit:
+ *
+ *   - HAR ar LATENSEN trang. Kravet ar 500 ms och marginalen har legat pa
+ *     22-94 ms — den minsta i navet. Kapacitet finns det gott om.
+ *   - I KLOCKAN ar det tvartom. Den ligger bakom <Suspense> och haller inte
+ *     tillbaka nagot, sa dar ar varje extra fraga ren kostnad utan vinst.
+ *
+ * Samma atgard hade alltsa varit fel dar. Mat vilket av de tva som ar trangt
+ * innan du kopierar monstret till en tredje sida.
+ * ===========================================================================
+ */
+function valj<T>(snav: T[] | null, brett: T[] | null): T[] {
+  if ((snav?.length ?? 0) > 0) return snav ?? [];
+  return brett ?? snav ?? [];
+}
+
+/**
  * ===========================================================================
  * E2.13: en sokning over hela navet.
  *
@@ -63,36 +93,42 @@ export default async function Soksida({
     // prislista som bilaga hittas pa vad som star i den.
     (async () => {
       const falt = "id, title, slug, category_path, body_md";
-      const { data } = await supabase
-        .from("document")
-        .select(falt)
-        .neq("status", "archived")
-        .textSearch("search", q, { type: "websearch", config: "swedish" })
-        .limit(PER_KALLA);
-      if ((data?.length ?? 0) > 0 || !pf) return data ?? [];
-      const { data: brett } = await supabase
-        .from("document")
-        .select(falt)
-        .neq("status", "archived")
-        .textSearch("search", pf, { config: "swedish" })
-        .limit(PER_KALLA);
-      return brett ?? [];
+      const [snav, brett] = await Promise.all([
+        supabase
+          .from("document")
+          .select(falt)
+          .neq("status", "archived")
+          .textSearch("search", q, { type: "websearch", config: "swedish" })
+          .limit(PER_KALLA),
+        pf
+          ? supabase
+              .from("document")
+              .select(falt)
+              .neq("status", "archived")
+              .textSearch("search", pf, { config: "swedish" })
+              .limit(PER_KALLA)
+          : Promise.resolve({ data: null }),
+      ]);
+      return valj(snav.data, brett.data);
     })(),
 
     (async () => {
       const falt = "id, title, slug, body_md";
-      const { data } = await supabase
-        .from("news_post")
-        .select(falt)
-        .textSearch("search", q, { type: "websearch", config: "swedish" })
-        .limit(PER_KALLA);
-      if ((data?.length ?? 0) > 0 || !pf) return data ?? [];
-      const { data: brett } = await supabase
-        .from("news_post")
-        .select(falt)
-        .textSearch("search", pf, { config: "swedish" })
-        .limit(PER_KALLA);
-      return brett ?? [];
+      const [snav, brett] = await Promise.all([
+        supabase
+          .from("news_post")
+          .select(falt)
+          .textSearch("search", q, { type: "websearch", config: "swedish" })
+          .limit(PER_KALLA),
+        pf
+          ? supabase
+              .from("news_post")
+              .select(falt)
+              .textSearch("search", pf, { config: "swedish" })
+              .limit(PER_KALLA)
+          : Promise.resolve({ data: null }),
+      ]);
+      return valj(snav.data, brett.data);
     })(),
 
     // Kurser har ingen sokkolumn. De ar fa och korta, sa ilike racker —

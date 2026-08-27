@@ -5,6 +5,86 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-08-27 (kväll) · Prestandastädningen, och varför mätningen vände på uppdraget
+
+Punkten löd: `hamtaNotiser()` ställer sexton frågor per sidvisning, två av dem
+utan filter, och de kostar kapacitet. Åtgärden såg självklar ut — filtrera de
+två. **Mätningen visade att det inte hade gett någonting alls.**
+
+### Sexton frågor, mätta var för sig som säljchef mot produktionen
+
+Median av fem hämtningar per fråga:
+
+| Fråga | Median | Rader |
+|---|---|---|
+| `notification_seen` | 59 ms | 0 |
+| `news_post` | 58 ms | 0 |
+| `document` | 56 ms | 2 |
+| `course` | 58 ms | 1 |
+| **`course_module` utan filter** | **57 ms** | 2 |
+| **`course_module` med filter** | **58 ms** | 2 |
+| `case_message` | 60 ms | 3 |
+| **`employee` utan filter** | **55 ms** | 4 |
+| `absence_reminder` | 61 ms | 19 |
+| `error_report` | 60 ms | 12 |
+| `attendance_incident` | 66 ms | 19 |
+| `consequence_rule` | 51 ms | 3 |
+
+**Varenda fråga kostar ~55 ms och ingen returnerar fler än nitton rader.** Det
+är turen till Stockholm som kostar, inte arbetet i databasen. Den filtrerade
+`course_module` mätte 58 ms mot ofiltrerade 57 — alltså ingen skillnad alls,
+inom bruset.
+
+Följden: **det finns ingen fett att skära i de enskilda frågorna.** Kostnaden är
+sexton turer à 55 ms, ungefär 900 ms anslutningstid per sidvisning, och det enda
+som biter på den är färre turer.
+
+### Vad som gjordes, och vad som inte gjordes
+
+`course_module` filtrerades ändå, till moduler i **publicerade** kurser.
+Vinsten är inte mätbar i dag utan att raden inte växer med varje kursutkast
+någon lägger upp — och de är tänkta att bli åtta (E8.9). `!inner` i
+inbäddningen är nödvändigt: utan utropstecknet filtrerar villkoret ingenting
+utan tömmer bara en kolumn.
+
+`employee` lämnades **ofiltrerad, med avsikt.** RLS ger en säljare bara den egna
+raden och en chef hela registret — som är fyra rader i dag och blir tjugofem.
+Alternativen var att bädda in namnet i sju separata frågor, eller att lägga en
+andra våg som slår upp namnen efter att id:na är kända. Det första är sju
+tillfällen att skriva fel främmandenyckel för en tabell på tjugofem rader; det
+andra byter en billig tabellläsning mot en dyr tur. **En "optimering" som gör
+saken sämre är inte en optimering.**
+
+**Det som återstår är den enda åtgärd som verkligen biter: sexton turer till
+en.** Det betyder en `security invoker`-funktion i databasen som returnerar allt
+i ett svar. RLS skulle hålla — funktionen kör som anroparen — men sexton
+delfrågor ska då skrivas om i SQL, och en enda som glider tyst ger en klocka
+som visar fel. Klockan är hur någon får veta att ett ärende väntar, att någon
+är sjukanmäld och att ett fel rapporterats. **Med tre aktiva användare är det
+en dålig affär, och den är beställarens att ta när piloten växer.**
+
+### Sökningen: samma fråga, motsatt svar
+
+`/sok` ligger på den blockerande vägen, och där är det **latensen** som är trång
+— kravet är 500 ms och marginalen har legat på 22–94 ms.
+
+Två av fem källor, rutinerna och nyheterna, ställde en **följdfråga**: först den
+snäva sökningen, och *därefter* prefixfrågan om den första gav noll rader. Det
+sparade en fråga när sökningen träffade och kostade en hel våg när den inte
+gjorde det — alltså i precis det fall som redan är långsammast, och som navet
+dessutom mäter särskilt (E6.5, sökningar utan träff).
+
+Nu går de parallellt och svaret väljs efteråt. Sidan är en våg djup oavsett
+utfall.
+
+**Växeln är den omvända mot den i klockan, och det är hela poängen.** I klockan
+är varje extra fråga ren kostnad, för den håller inte tillbaka något. På
+sökningen är en extra fråga gratis och en extra våg dyr. Samma åtgärd hade
+varit fel på det andra stället — det står utskrivet i `valj()` i `sok/page.tsx`,
+så att nästa person mäter innan mönstret kopieras vidare.
+
+---
+
 ## 2026-08-27 (kväll) · E6.1: händelseloggen täcker sju typer, och det går att kontrollera
 
 Ingen migration. Två nya lib-filer, ett nytt prov, `/logg` ombyggd, och en

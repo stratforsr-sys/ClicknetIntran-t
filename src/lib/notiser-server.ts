@@ -63,7 +63,17 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
       .from("course")
       .select("id, slug, title, due_days, published_at")
       .eq("status", "published"),
-    supabase.from("course_module").select("id, course_id"),
+    // Bara moduler i PUBLICERADE kurser. Fragan lag forut utan filter och las
+    // hela tabellen, inklusive utkast som klockan anda kastar bort.
+    //
+    // `!inner` gor inbaddningen till en inre join, sa villkoret pa kursens
+    // status filtrerar modulraderna i stallet for att bara tomma en kolumn.
+    // Utan utropstecknet kommer varje modul tillbaka med `course: null`.
+    //
+    // Vinsten ar INTE matbar i dag (57 mot 58 ms — kostnaden ar turen, inte
+    // fragan). Den ar att raden inte vaxer med varje kursutkast nagon lagger
+    // upp, och de ar tankta att bli atta (E8.9).
+    supabase.from("course_module").select("id, course_id, course!inner(status)").eq("course.status", "published"),
     supabase.from("module_progress").select("module_id").eq("employee_id", mig),
     supabase
       .from("certification")

@@ -1031,10 +1031,19 @@ natten till 2026-08-24** (migration `0032`). Kvar:
   en request-header sparar en tur (~30–50 ms). *Gjordes inte:* `setAll` byter ut
   hela `response` när tokenen förnyas, så headern måste sättas efter det, och en
   miss där tappar den förnyade sessionskakan tyst. Värt att göra, men med prov.
-- **`hamtaNotiser()` ställer fortfarande sexton frågor per sidvisning**, varav
-  två utan filter (`employee`, `course_module`). De ligger numera utanför den
-  blockerande vägen, så de syns inte i laddtiden — men de kostar kapacitet.
-- **Sökningens marginal är fortfarande den minsta i navet.**
+- **`hamtaNotiser()` ställer sexton frågor per sidvisning, och det är MÄTT
+  2026-08-27:** varje fråga kostar ~55 ms och ingen ger fler än nitton rader.
+  Kostnaden är turen, inte frågan — en filtrerad `course_module` mätte 58 ms mot
+  ofiltrerade 57. **Att filtrera de enskilda frågorna ger alltså ingenting.**
+  Det enda som biter är sexton turer till en, alltså en `security
+  invoker`-funktion som returnerar allt i ett svar. RLS skulle hålla, men sexton
+  delfrågor ska då skrivas om i SQL och en som glider tyst ger en klocka som
+  visar fel. Beställarens beslut när piloten växer. `employee` är ofiltrerad med
+  avsikt — se arbetsloggen.
+- **Sökningen är en våg djupare rättad 2026-08-27.** Rutinerna och nyheterna
+  ställde prefixfrågan FÖRST när den snäva gett noll rader — alltså två vågor i
+  precis det fall som redan är långsammast. De går parallellt nu. Marginalen är
+  ändå den minsta i navet; håll ögonen på den.
 
 
 E6.5 och X3 är gjorda 2026-08-23. **Piloten kan nu både rapportera fel och
