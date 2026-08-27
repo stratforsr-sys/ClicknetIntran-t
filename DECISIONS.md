@@ -287,3 +287,56 @@ godkännandet. En maskinläst löptid som ingen kontrollerat är skillnaden mell
 `lasAvtalsforslag()` svarar med ett förslag och sin källa; `rattaFranAvtal()`
 skriver bara det som kryssats i, och bara på en order som ännu inte godkänts.
 Triggern `sales_order_stegbyte` i `0034` nekar det senare oberoende av koden.
+
+---
+
+## D-E0.7 · Färskhetskontrollen ligger på en mänsklig väg, inte i en andra cron
+**2026-08-27.** Nattjobbet skrev redan ett kvitto i `audit_log` vid varje
+körning. Det ingen gjorde var att titta på det. E0.7 handlar därför inte om att
+producera mer information utan om att någon ska se den som redan finns.
+
+**Det uppenbara valet var en andra cron-post som vaktar den första, och det är
+fel.** Det finns en ledig slot — Hobby-planen tar två och `vercel.json`
+deklarerar en — men en cron som vaktar cron dör samma död. Det var precis det
+som hände en gång: tre cron-poster deklarerades, planen tog två, ingen av dem
+kördes, och en instämpling stod öppen i två dygn utan att någon märkte det. En
+vaktpost hade varit tyst genom hela det förloppet, eftersom den inte hade kört
+heller. **Den enda observatör som är oberoende av att cron fungerar är en
+människa som öppnar en sida.**
+
+**Kontrollen syns därför på två ställen:** ett driftkort på `/fel`, som är
+larmets naturliga hem eftersom kön redan har status, ansvar och avslut; och en
+rad på startsidan som **bara ritas när något är fel**. Startsidan är den sida
+som faktiskt öppnas. `vercel.json` är orörd — den bär dessutom
+`regions: ["arn1"]`, som aldrig får ändras.
+
+**Larmvägen är `error_report`, inte en ny tabell.** Notisklockan läser den
+redan, `/fel` är kön, och `registrera_fel` räknar upp `occurrences` på
+`(digest, path)`. Det sista är hela skälet till att `normaliseraFel()` finns:
+ett steg som faller varje natt i en månad ska bli **en** rad med siffran 30,
+inte trettio rader. Digesten byter därför ut tidsstämplar, uuid:n och
+siffergrupper mot platshållare innan den hashas.
+
+**Sökvägen är `/api/jobb/natt/<steg>`, aldrig ett fragment.** `rensaSokvag()`
+klipper bort fragment, så `#satser` hade grupperat ihop alla sex stegen till en
+rad. Ett fallet `franvaro`-steg är en annan bugg än ett fallet `satser`-steg.
+
+**Gränsen är 26 timmar** — ett dygn mellan körningarna plus två timmars slack.
+Siffran är inte gissad: de fem kvittona 2026-08-23 till 2026-08-27 skrevs 02:44,
+03:19, 02:30, 02:52 och 02:34, och största uppmätta avstånd mellan två körningar
+är 24,6 timmar. Under 24 larmar navet varje natt strax före körningen; med 26
+larmar det först vid 04:30 dagen efter en utebliven körning, alltså när man
+*vet* i stället för att misstänka.
+
+**Ett delvis fallet jobb ritar ingen rad på startsidan.** Jobbet larmar självt
+om varje fallet steg, och det larmet syns redan i notisklockan. Raden är
+reserverad för det enda fel jobbet omöjligt kan rapportera om sig självt: att
+det inte kört alls.
+
+**Kvittot läses med användarens EGEN token, aldrig service role.**
+`audit_log_read` släpper in `sales_manager`, `ceo` och `admin` — exakt kretsen
+`hanterar` på `/fel`. Att frågan ändå ställs villkorat är inget andra
+rollfilter: kretsen kan inte bli vidare än RLS. Skälet är att noll rader annars
+betyder två olika saker — "jobbet har aldrig kört" och "du får inte se
+händelseloggen" — och säljaren hade fått ett larm om det första när det andra
+var sant.

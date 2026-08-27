@@ -24,6 +24,8 @@ import {
   type Handelse,
 } from "@/lib/tid";
 import { supabaseServer } from "@/lib/supabase/server";
+import { hamtaDrift } from "@/lib/jobb/drift-server";
+import { DRIFT_ETIKETT } from "@/lib/jobb/larm";
 import { Stamplar } from "./tid/Stamplar";
 import { Statusband } from "./Statusband";
 import { Dagslinje } from "./Dagslinje";
@@ -76,6 +78,10 @@ export default async function Startsida() {
   const serAvvikelser = canManageEmployees(user) || hasRole(user, "team_lead");
   const chef = serPersonal || hanterarArenden;
 
+  // E0.7. Exakt kretsen i `audit_log_read`, alltsa samma som `hanterar` pa
+  // /fel. Se driftraden langre ner for varfor fragan stalls villkorat.
+  const serDrift = hasRole(user, "sales_manager", "ceo", "admin");
+
   /**
    * ===========================================================================
    * EN VAG, INTE SEX.
@@ -121,6 +127,7 @@ export default async function Startsida() {
     { data: koRollspel },
     { count: antalAktiva },
     { count: antalOnboarding },
+    drift,
   ] = await Promise.all([
     // RLS avgor vilka dokument som syns: audience_roles filtreras redan i
     // policyn, sa listan nedan behover inte upprepa den kontrollen.
@@ -255,6 +262,22 @@ export default async function Startsida() {
           .select("id", { count: "exact", head: true })
           .eq("status", "onboarding")
       : Promise.resolve({ count: null }),
+
+    /**
+     * E0.7. Nattjobbets senaste kvitto — i den BEFINTLIGA vagen, inte i en
+     * egen. Vagantalet ar det som vaxer nar navet vaxer, och den har fragan
+     * beror bara pa `user`, som ar kand redan har.
+     *
+     * Anvandarens EGEN token. `audit_log_read` slapper in sales_manager, ceo
+     * och admin, sa RLS har redan svarat pa fragan om vem som far se raden.
+     *
+     * Att fragan anda ar villkorad ar inte ett andra rollfilter — kretsen kan
+     * inte bli vidare an RLS. Skalet ar att noll rader annars betyder tva
+     * olika saker, "jobbet har aldrig kort" och "du far inte se
+     * handelseloggen", och saljaren hade fatt en larmrad om det forsta nar det
+     * andra var sant.
+     */
+    serDrift ? hamtaDrift(supabase, nu) : Promise.resolve(null),
   ]);
 
   // ---------------------------------------------------------------------------
@@ -352,6 +375,47 @@ export default async function Startsida() {
   const snart = (koArenden ?? []).filter((a) => slaLage(a) === "snart").length;
 
   const snabbval = snabbvalFor(user, sparr.stampling);
+
+  /**
+   * ===========================================================================
+   * E0.7 DRIFTRADEN. RITAS BARA NAR NAGOT AR FEL.
+   *
+   * Ingen notis nar allt ar gront. En rad som varje dag sager "nattjobbet
+   * kordes" ar en ruta man slutar lasa, och nar den en dag sager nagot annat
+   * har ogat redan lart sig att hoppa over den — samma skal som gomde
+   * arendekortet nedan.
+   *
+   * VARFOR DET INTE AR EN ANDRA CRON: en cron som vaktar cron dor samma dod.
+   * Tre cron-poster deklarerades en gang, planen tar tva, ingen av dem kordes,
+   * och en instampling stod oppen i tva dygn utan att nagon markte det. En
+   * vaktpost hade varit tyst genom hela det forloppet. Den enda observator som
+   * ar oberoende av att cron fungerar ar en manniska som oppnar en sida — och
+   * startsidan ar den sida som faktiskt oppnas.
+   *
+   * ETT DELVIS FALLET JOBB RITAR INGEN RAD, och det ar med flit. Jobbet larmar
+   * sjalvt om varje fallet steg, larmet hamnar i `error_report` och darmed i
+   * notisklockan. Raden ar reserverad for det enda felet jobbet omojligt kan
+   * rapportera om sig sjalvt: att det inte kort alls.
+   * ===========================================================================
+   */
+  const driftrad =
+    drift && drift.besked.lage !== "ok" ? (
+      <Card status="danger">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <div className="min-w-0">
+            <p className="text-body text-ink-900">{DRIFT_ETIKETT[drift.besked.lage]}</p>
+            <p className="mt-1 text-small text-ink-500">
+              {drift.besked.lage === "aldrig"
+                ? "Det finns inget kvitto i händelseloggen. Kontrollera cron-posten."
+                : `Senaste kvittot är ${drift.besked.timmar} timmar gammalt. Stämplingar har inte stängts och sena ankomster inte registrerats för den natten.`}
+            </p>
+          </div>
+          <ButtonLink href="/fel" size="sm">
+            Se driftläget
+          </ButtonLink>
+        </div>
+      </Card>
+    ) : null;
 
   /**
    * DAGSKORTET. Stampelknapparna, dagens linje och snabbvalen i ett.
@@ -617,6 +681,10 @@ export default async function Startsida() {
 
   return (
     <div className="flex flex-col gap-4 pt-2">
+      {/* Overst, over halsningen: raden betyder att navet varit tyst trasigt
+          sedan i natt, och den ska inte behova letas efter. */}
+      {driftrad}
+
       <Statusband
         fornamn={user.employee.first_name}
         undertext={`${roller} · ${STATUS_LABEL[user.employee.status] ?? user.employee.status}`}

@@ -3,14 +3,42 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-08-27 (volymtrappan rättad, X3 mätt om, sviten omkörd)
+**Senast uppdaterad:** 2026-08-27 (kväll) — E0.7 byggd: nattjobbet larmar om sig självt
+
+---
+
+## E0.7 är klar sedan 2026-08-27 (kväll)
+
+Nattjobbet larmar nu om sig självt, och färskhetskontrollen ligger på en
+**mänsklig väg**. Fyra saker att inte riva:
+
+1. **`vercel.json` är orörd, och den lediga cron-slotten används inte.** En
+   cron som vaktar cron dör samma död — det var precis det som hände när tre
+   poster deklarerades, planen tog två och en instämpling stod öppen i två
+   dygn. Kontrollen sitter på `/fel` (driftkort) och på startsidan (en rad som
+   bara ritas när något är fel). Se D-E0.7.
+2. **Digesten måste vara stabil över nätter.** `normaliseraFel()` i
+   `src/lib/jobb/larm.ts` byter tidsstämplar, uuid:n och siffergrupper mot
+   platshållare innan hashen. Utan det räknar `registrera_fel` aldrig upp
+   `occurrences`, och en månads haveri blir trettio rader i kön i stället för
+   en rad med siffran 30.
+3. **Sökvägen är `/api/jobb/natt/<steg>`, aldrig ett fragment.**
+   `rensaSokvag()` klipper bort fragment, så `#satser` hade grupperat ihop alla
+   sex stegen. Provet importerar den riktiga funktionen och kontrollerar det.
+4. **Frågan om kvittot är villkorad på `sales_manager`/`ceo`/`admin`, och det
+   är inte ett andra rollfilter.** `audit_log_read` ger noll rader åt alla
+   andra, och noll rader är precis vad "jobbet har aldrig kört" också ser ut
+   som. Utan gränsen hade varje säljare fått en röd larmrad på sin startsida.
+
+`MAX_TIMMAR = 26` är mätt, inte gissad: största uppmätta avstånd mellan två
+körningar över fem nätter är 24,6 timmar. Härledningen står i filen.
 
 ---
 
 ## Läget efter genomgången 2026-08-26
 
-**Provsviten är grön på `822269f`: exit 0, 1 675 kontroller, noll fallna**
-(omkörd 2026-08-27, hela sviten, inte bara `test:tid`).
+**Provsviten är grön: exit 0, 1 721 kontroller, noll fallna** (omkörd
+2026-08-27 kväll med `test:larm` i kedjan; 1 675 + 46 nya).
 
 ### Tre saker som ändrades och som du behöver veta om
 
@@ -269,7 +297,8 @@ i dag ger de samma bonus som 20, och trappan står still över 30 enligt avsnitt
 set -a && . $HOME/.clicknet/nav.env && set +a && npm test
 ```
 
-**Trettiofem sviter.** Tre kom till 2026-08-26: `konsekvenser`,
+**Trettiosex sviter.** `larm` kom till 2026-08-27 (kväll) — ren logik utan
+Supabase, 46 kontroller. Tre kom till 2026-08-26: `konsekvenser`,
 `provisionsunderlag` och `orderbilaga` — alla ren logik utan Supabase. `tests/rls.mjs` går mot den **riktiga**
 databasen och skapar och städar sina egna användare (prefix `rlstest+`).
 Även `tests/provision-period-db.mjs` går mot den riktiga databasen — den kör allt
@@ -312,7 +341,8 @@ i `rls.mjs`.** Samtliga 105 i den filen plus 51 i övriga sviter. Leta inte om:
 | In- och utstämpling | **Påslagen.** `compliance_gate.stampling` |
 | Raststämpling | Avstängd. **Ett villkor kvar: K14 okvitterad av 1 person.** K12 och K14 är publicerade |
 | Sen ankomst | Påslagen, tolerans 1 minut, larm samma dag till chef |
-| Nattjobb | Ett jobb, `/api/jobb/natt`, 02:30. Hämtar igen 14 dygn bakåt |
+| Nattjobb | Ett jobb, `/api/jobb/natt`, 02:30. Hämtar igen 14 dygn bakåt. **Larmar om sig självt sedan 2026-08-27:** fallna steg och uteblivna nätter blir rader i `error_report` |
+| **Driftläget** | **I drift sedan 2026-08-27.** Driftkort på `/fel` och en rad på startsidan som bara ritas när något är fel. Ingen andra cron — se D-E0.7 |
 | Lönerapport | Klar, med attest och oföränderlig period |
 | Personalärenden | Klara, med SLA och konfidentialitet |
 | Tvingat lösenordsbyte | Spärr i databasen sedan 2026-08-20 |
@@ -986,8 +1016,9 @@ tre prestandakraven är mätta och klarade.
 - **Inloggad TTFB från produktionen** saknas fortfarande i 4G-mätningen. Kräver
   en riktig session i en webbläsare; tills dess är 20 ms per våga uppskattat.
   Det är den enda kvarvarande uppskattningen i X3.
-- **E0.7** är delvis gjord: serverfel skrivs nu strukturerat. Nattjobben larmar
-  fortfarande inte av sig själva.
+- **E0.7 är klar sedan 2026-08-27 (kväll).** Nattjobbet larmar om sig självt
+  och färskhetskontrollen ligger på `/fel` och startsidan. Kvar när A5/A6
+  besvaras: integrationerna själva, som ännu inte finns.
 - **Sökningens marginal är 96 ms** på trängt 4G. Håll ögonen på den när en ny
   källa läggs till i `/sok`.
 

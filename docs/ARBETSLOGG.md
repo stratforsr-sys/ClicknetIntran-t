@@ -5,6 +5,127 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-08-27 (kväll) · E0.7: nattjobbet larmar om sig självt
+
+Ingen migration, inga nya tabeller. Två nya filer, tre rörda, ett nytt prov.
+E0.7 går från DELVIS till KLAR för det som finns att larma om.
+
+### Kvittot fanns redan — det ingen gjorde var att titta på det
+
+Nattjobbet har sedan länge skrivit `job.night_ok` eller `job.night_partial` i
+`audit_log` med `meta = { sekunder, resultat, fel }`. Uppdraget var alltså inte
+att producera mer information utan att någon ska se den som redan finns.
+
+De fem senaste kvittona, avlästa innan något byggdes:
+
+| Natt | Skrevs | Steg som föll | Körtid |
+|---|---|---|---|
+| 08-23 | 02:44 | inga | 8,1 s |
+| 08-24 | 03:19 | inga | 1,7 s |
+| 08-25 | 02:30 | inga | 1,6 s |
+| 08-26 | 02:52 | inga | 1,6 s |
+| 08-27 | 02:34 | inga | 5,2 s |
+
+**Det är den tabellen som satte gränsen.** Vercel startar jobbet när den har
+plats, inte på sekunden, och största uppmätta avstånd mellan två körningar är
+**24,6 timmar** (08-24 03:19 → 08-25 02:30 är 23,2; 08-25 → 08-26 är 24,4;
+08-23 02:44 → 08-24 03:19 är 24,6). `MAX_TIMMAR = 26` ligger alltså 1,4 timmar
+över det värsta normala fallet. Härledningen står utskriven i filen — 24 timmar
+mellan körningarna plus två timmars slack — och båda riktningarna är fel: under
+24 larmar navet varje natt strax före körningen, över 26 blir tystnaden lång.
+
+### Det som var värt mest att tänka igenom: vad som INTE byggdes
+
+Det fanns en ledig cron-slot. Den användes inte, och `vercel.json` är orörd.
+
+> En cron som vaktar cron dör samma död. Det var precis det som hände: tre
+> cron-poster deklarerades, planen tar två, ingen av dem kördes, och en
+> instämpling stod öppen i två dygn utan att någon märkte det. En vaktpost hade
+> varit tyst genom hela det förloppet.
+
+Den enda observatör som är oberoende av att cron fungerar är **en människa som
+öppnar en sida**. Kontrollen ligger därför på `/fel` och på startsidan. Se
+D-E0.7.
+
+### Larmvägen är `error_report`, och digesten är hela poängen
+
+Ingen ny tabell. Notisklockan läser redan `error_report`, `/fel` är kön med
+status och ansvar, och `registrera_fel` räknar upp `occurrences` på
+`(digest, path)`.
+
+Det sista är skälet till att `normaliseraFel()` finns. Ett steg som faller
+varje natt i en månad ska bli **en** rad med siffran 30, inte trettio rader —
+och ett felmeddelande som bär nattens tidsstämpel eller radens uuid ger en ny
+digest varje natt. Ordningen på utbytena är inte godtycklig: tidsstämplar
+först (de bär både datum och siffror), uuid före datum (ett rent numeriskt uuid
+kan annars klippas mitt i), siffergrupper sist.
+
+Provet kör det verkliga fallet: samma bugg två nätter, där allt som skiljer är
+tidsstämpeln, radens uuid och antalet rader den hann med. Samma digest.
+
+**Fällan som fångades av att den provades mot den riktiga funktionen:**
+`rensaSokvag()` klipper bort fragment, så `/api/jobb/natt#satser` hade blivit
+`/api/jobb/natt` och alla sex stegen grupperats ihop till en rad. Sökvägen är
+därför `/api/jobb/natt/<steg>`, och `tests/larm.mjs` importerar `rensaSokvag`
+och kontrollerar att den lämnar den orörd — inte att den *tros* göra det.
+
+### `blocking` lånades inte
+
+Ett larm om nattjobbet skrivs med `blocking: false`. Fältet svarar på om en
+människa hindrades från att jobba vidare (0026), inte på hur allvarligt felet
+är. Att sätta det till sant för att hamna högt i kön hade gjort flaggan
+obrukbar för det den finns till. Kön sorterar `new` överst ändå, och det som
+faktiskt blir sett är raden på startsidan.
+
+### `aldrig` är ett eget läge
+
+I koden ser en körning som aldrig skett ut som en oändligt gammal körning. För
+en människa är det två olika besked, och de pekar på olika saker att titta på:
+"jobbet har aldrig lämnat något kvitto" pekar på cron-posten, "har inte kört på
+över ett dygn" pekar på steget. `bedomDrift()` svarar därför `ok`, `forsenat`
+eller `aldrig`, och det tredje bär inga timmar.
+
+Ett kvitto som ligger i **framtiden** larmar inte. Det är en klocka som gått
+fel, och att larma om det hade bytt ett problem mot ett annat.
+
+### Noll rader betyder två saker, och det är därför frågan är villkorad
+
+Kvittot läses med användarens **egen token**, aldrig service role.
+`audit_log_read` släpper in `sales_manager`, `ceo` och `admin` — exakt kretsen
+`hanterar` på `/fel`, så RLS har redan svarat på frågan om vem som får se
+raden.
+
+Men RLS ger noll rader åt en säljare, och noll rader är precis vad "jobbet har
+aldrig kört" också ser ut som. Utan en gräns hade varje säljare fått en röd rad
+på sin startsida som påstod att nattjobbet aldrig lämnat något kvitto. Frågan
+ställs därför bara för den krets `audit_log_read` släpper in. Det är inget
+andra rollfilter — kretsen kan inte bli vidare än RLS — det är skillnaden
+mellan "det finns inget kvitto" och "det är inte din sak".
+
+### Ett delvis fallet jobb ritar ingen rad på startsidan
+
+Med flit. Jobbet larmar självt om varje fallet steg, larmet hamnar i
+`error_report` och därmed i notisklockan. Raden är reserverad för det enda fel
+jobbet omöjligt kan rapportera om sig självt: att det inte kört alls. En rad
+som ritas för sådant som redan syns någon annanstans blir en rad man slutar
+läsa — samma skäl som göms ärendekortet.
+
+### Vågantalet är oförändrat
+
+Hämtningen på startsidan lades i den **befintliga** `Promise.all`. På `/fel`
+blev det tvärtom en våg färre: felraderna, personerna och driftläget ställdes
+i tre led efter varandra och står nu i ett.
+
+### Prov och mätning
+
+`tests/larm.mjs`, 46 kontroller, ren logik utan Supabase. Lagd i kedjan som
+`test:larm` mellan `test:fel` och `test:avtal`.
+
+**Hela sviten omkörd oskyddad: exit 0, 1 721 godkända kontroller, noll fallna.**
+1 675 + 46 = 1 721, alltså är ingen gammal kontroll borta.
+
+---
+
 ## 2026-08-27 · Mätningen som avbröts, volymtrappan, och sviten på `822269f`
 
 Inget byggt. Tre lösa trådar knutna, och en av dem visade sig dölja något.
