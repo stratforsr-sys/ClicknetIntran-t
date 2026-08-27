@@ -3,14 +3,14 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-08-26 (kväll — E13 steg 6, 7 och 9 klara)
+**Senast uppdaterad:** 2026-08-27 (volymtrappan rättad, X3 mätt om, sviten omkörd)
 
 ---
 
 ## Läget efter genomgången 2026-08-26
 
-**Provsviten är grön: 31 sviter, ~1 700 kontroller.** Två av dem föll på riktig
-data och inte på kod, och båda är lagade — se arbetsloggen.
+**Provsviten är grön på `822269f`: exit 0, 1 675 kontroller, noll fallna**
+(omkörd 2026-08-27, hela sviten, inte bara `test:tid`).
 
 ### Tre saker som ändrades och som du behöver veta om
 
@@ -48,28 +48,33 @@ Sedan slås spärren på under `/tid/sparrar`. **K12 är beslutad och publicerad
 (beslutsdatum 2026-08-26, "Beslutad av: Zen, VD"). Avsnitt 6 och 7 skrevs i det
 här passet och bär ditt namn — **läs dem.**
 
-### Prestanda, mätt mot produktionen 2026-08-26 (kväll, efter E13 steg 6–9)
+### Prestanda, mätt mot produktionen 2026-08-27 (efter vågrättningen `822269f`)
 
 Median av tre körningar, var och en själv en median av fem hämtningar:
 
-| Sida | Median | Krav | Marginal |
-|---|---|---|---|
-| Startsidan | ~536 ms | 1 500 | ~964 ms |
-| Stämplingsvyn | ~582 ms | 2 000 | ~1 418 ms |
-| **Sökningen** | **~442 ms** | **500** | **~58 ms** |
-| Rutinerna | ~456 ms | 1 500 | ~1 044 ms |
+| Sida | Median | Krav | Marginal | Före rättningen |
+|---|---|---|---|---|
+| Startsidan | ~450 ms | 1 500 | ~1 050 ms | ~536 ms |
+| Stämplingsvyn | **~489 ms** | 2 000 | ~1 511 ms | ~582 ms |
+| **Sökningen** | **~406 ms** | **500** | **~94 ms** | ~442 ms |
+| Rutinerna | ~427 ms | 1 500 | ~1 073 ms | ~456 ms |
 
-**Sökningen är fortfarande den minsta marginalen i navet**, och den rördes inte
-av E13-bygget — skillnaden mot ~429 ms är körning-till-körning.
+**Vågrättningen är bekräftad.** `far_godkanna_franvaro()` låg som ett eget
+`await` på `/tid` och drev stämplingsvyn från ~530 till ~582 ms. Sedan den
+flyttats in i samma `Promise.all` som dagens stämplingar ligger vyn på ~489 ms —
+alltså **under** siffran före E13-bygget, inte bara tillbaka på den. De tre
+körningarna gav 489, 491 och 470 ms, så spridningen är liten.
+
+Vågantalet är det som växer när navet växer — lägg nya hämtningar i en befintlig
+våg när de inte beror på något ovanför.
+
+**Sökningen är fortfarande den minsta marginalen i navet**, ~94 ms. Den rördes
+inte av E13-bygget; hela intervallet ~385–442 ms över de senaste mätningarna är
+körning-till-körning.
 
 **Läs medianen av flera körningar.** Enstaka avläsningar i samma mätning gav
-1 574 ms på startsidan och 1 392 ms på sökningen, båda på kalla funktioner. Var
-och en hade ensam sett ut som en regression.
-
-**En lärdom ur mätningen:** RPC-anropet `far_godkanna_franvaro()` lades först som
-ett eget `await` på `/tid` och kostade ~50 ms. Det ligger nu i samma `Promise.all`
-som dagens stämplingar. Vågantalet är det som växer när navet växer — lägg nya
-hämtningar i en befintlig våg när de inte beror på något ovanför.
+1 574 ms på startsidan och 1 392 ms på sökningen på kalla funktioner. Var och en
+hade ensam sett ut som en regression.
 
 ---
 
@@ -92,6 +97,18 @@ Skälen står i specifikationens avsnitt 10.
 
 **Steg 1–7 och 9 är klara 2026-08-26** (migrationerna `0034`–`0037` och `0039`).
 **Bara steg 8 återstår, och det är blockerat av A6** (dialer-API för K&V-urvalet).
+
+**Volymtrappan är rättad 2026-08-27, så E13 väntar inte på någon indata alls.**
+Sömmen till steg 8 ligger färdig: `source` (`manual`/`dialer`) och `external_ref`
+med partiellt unikt index. Ingen vy behöver röras den dagen A6 besvaras.
+
+**Konsekvenstrappan står seedad och oanvänd, och det är avsiktligt.**
+`attendance_incident` är tom. Beställaren beslutade 2026-08-27 att **säljchef och
+VD räcker** som beslutskrets — `attendance_approver` tilldelas ingen. Skälet är
+att det inte finns någon separat teamledare att tilldela: Zen bär både
+`sales_manager` och `ceo`, och de två andra i registret står i onboarding.
+Behörigheten finns och går att ge under Personal den dag en teamledare kommer in;
+kretsen blir då **eget team**, inte alla.
 
 ### Vad som byggdes 2026-08-26 (kväll)
 
@@ -180,26 +197,40 @@ tröskeln 160 är alltså 80 %. **Det stämmer.** K&V går att bedöma.
    vidga den är en rad; att smalna av den efter att data finns är det inte, och
    det kräver att K12 avsnitt 6 och 7 beslutas om på nytt.
 
-### Volymtrappan är omkastad — och det är det ENDA som väntar på dig i E13
+### Volymtrappan är RÄTTAD 2026-08-27 — E13 väntar inte på någon indata längre
 
-**Kontrollerat mot produktionsdatabasen 2026-08-26. Bekräftat som fel samma dag;
-du sa att du ger nya belopp.** Tills de kommit står trappan orörd — en nivå
-ändras aldrig, den stängs med `valid_to` och ersätts med en ny rad.
+Omkastningen är åtgärdad enligt ditt besked: **bara 15 och 20 byter plats**, 5
+och 10 står orörda. De gamla raderna är stängda med `valid_to = 2026-09-01` och
+ersatta av nya rader från samma dag — en nivå ändras aldrig, den stängs och
+ersätts.
 
-| Tröskel | Belopp |
-|---|---|
-| 5 | 200 kr |
-| 10 | 500 kr |
-| **15** | **1 200 kr** |
-| **20** | **1 000 kr** |
+| Tröskel | Belopp | Gäller från |
+|---|---|---|
+| 5 | 200 kr | 2026-08-25 |
+| 10 | 500 kr | 2026-08-25 |
+| **15** | **1 000 kr** (var 1 200) | **2026-09-01** |
+| **20** | **1 200 kr** (var 1 000) | **2026-09-01** |
 
-**Beloppet sjunker mellan 15 och 20.** Den som säljer tjugo order får 200 kr
-mindre i volymbonus än den som säljer femton. Motorn slår upp den högsta tröskel
-som nåtts, så det är precis vad som händer — det är inte ett fel i koden.
+Trappan stiger nu hela vägen. Tidigare fick den som sålde tjugo order 200 kr
+mindre än den som sålde femton — motorn slår upp den högsta tröskel som nåtts,
+så det var precis vad som hände, och det var aldrig ett fel i koden.
+Tidsstämplarna vid inmatningen sa vad som skett: 5 kl 13:31:35, 10 kl 13:31:45,
+**20 kl 13:32:13**, **15 kl 13:32:38** — de två sista i omvänd ordning mot de
+andra, vilket är vad som händer när två fält byter plats.
 
-**Tidsstämplarna säger att fälten bytt plats vid inmatningen:** 5 kl 13:31:35,
-10 kl 13:31:45, **20 kl 13:32:13**, **15 kl 13:32:38**. De två sista är inmatade
-i omvänd ordning mot de andra.
+**Ändringen gjordes i databasen, inte via `/provision/regler`**, men med exakt
+samma två skrivningar som `sparaNiva()` med valet "gäller från och med nästa
+månad" gör: `valid_to` på den gamla raden, ny rad med nytt `valid_from`, och två
+rader i `audit_log` med Zen som `actor_id`. `note` på de nya raderna säger att de
+lagts via SQL. Rör du trappan igen: gör det på sidan.
+
+**Trappan gäller från och med september, inte augusti — och det gjorde den redan
+före rättningen.** Samtliga rader, även 5 och 10, har `valid_from` efter den
+1 augusti, och uppslaget sker på **månadens första dag**. Augusti har alltså
+ingen volymtrappa alls. Det spelar ingen roll i dag (augusti bär två testorder
+och `commission_entry` är tom), men det är inte det någon läser ur tabellen.
+**Vill du att augusti ska omfattas** är det fyra nya rader med
+`valid_from = 2026-08-01` — säg till, det är fem minuter.
 
 **Nivåerna 25 och 30 lämnas tomma tills vidare** — ditt besked 2026-08-26. Nås de
 i dag ger de samma bonus som 20, och trappan står still över 30 enligt avsnitt
@@ -246,6 +277,12 @@ i en transaktion som rullas tillbaka, och kontrollerar till sist att ingenting
 blev kvar.
 
 Sviten var **grön** när passet 2026-08-23 började, och när det slutade.
+
+**Senast omkörd i sin helhet 2026-08-27 på `822269f`: exit 0, 1 675 godkända
+kontroller, noll fallna, inget nätavbrott.** Det var den körning som saknades —
+`822269f` hade bara `typecheck` och `test:tid` bakom sig. Räkna alltid exit-koden
+från ett oskyddat kommando: `npm test | tail` ger dig `tail`:s status, inte
+svitens.
 
 **Två av tre körningar dog på nätverket** (`Connection terminated`, `ETIMEDOUT`
 mitt i en inloggning) utan en enda fallen kontroll. Läs en röd körning innan du
@@ -299,7 +336,7 @@ i `rls.mjs`.** Samtliga 105 i den filen plus 51 i övriga sviter. Leta inte om:
 | **Anställningsflöde** | **I drift sedan 2026-08-24.** `/rekrytering/[id]/anstall`. Konto, roll, rutiner, kurser, avtalsutkast och onboarding-checklista i ett steg |
 | **Provision** | **I drift sedan 2026-08-23.** `/provision`. Manuell inmatning av ekonomi/VD. Alla ser sin egen. Inkio-sömmen lagd, inte kopplad |
 | **Kundorder** | **I drift sedan 2026-08-25.** `/order`. Paketmatrisen i `commission_rate`, provisionen fryses vid godkännande |
-| **Volymtrappan** | **I drift sedan 2026-08-25.** `/provision/regler`. **Ifylld 2026-08-25:** 5/10/15/20 → 200/500/**1200**/**1000** kr. **Beloppen för 15 och 20 är omkastade — väntar på dina nya siffror** |
+| **Volymtrappan** | **I drift sedan 2026-08-25.** `/provision/regler`. **Rättad 2026-08-27:** 5/10/15/20 → 200/500/**1000**/**1200** kr. 15 och 20 gäller från 2026-09-01; hela trappan slår igenom först i september |
 | **Periodstängning** | **I drift sedan 2026-08-25.** Kort på `/provision`. Öppen månad räknas live, fastställd är bokförd |
 | **Progressvy** | **I drift sedan 2026-08-25.** `/provision`. "3 order kvar till nästa bonus" med prognosens antagande utskrivet |
 | **K&V** | **I drift sedan 2026-08-25.** `/kv`. Rutnät säljare × vecka, bedömning, utvecklingskurva. Maxpoängen är ifylld |
@@ -348,7 +385,7 @@ Ett schema ändras aldrig (AC-2.35) — en ny längd är en **ny rad med nytt
 `valid_from`**, upplagd under `/tid/schema`. Gamla rader är historik och ska
 ligga kvar.
 
-### Fyra saker användaren själv måste göra
+### Fem saker användaren själv måste göra
 
 1. **Zen står instämplad sedan måndag 2026-08-17 18:08.** Dagen lämnades
    avsiktligt öppen — schemat slutar 17:00, så en autostängning hade satt
@@ -360,7 +397,14 @@ ligga kvar.
 3. **Telefonnummer i mottagarordningen och bemanningstak** under
    `/franvaro/regler`. Utan numren är telefonlistan vid sjukanmälan namn utan
    nummer; utan tak varnar ingen ansökan för bemanning.
-4. **Lönekostnaden saknar tre saker innan den visar något:** ingen har
+4. **P0.6 registerförteckningen måste uppdateras med kunduppgifter som ny
+   kategori.** Orderbilagan kan bära en enskild firmas personnummer — hos en
+   enskild firma *är* organisationsnumret ett personnummer — och en signerad PDF
+   kan bära en namnteckning. Filen ligger rätt skyddad (stängd bucket,
+   åtkomstlogg), men förteckningen beskriver den inte. Se D-E13.9. Det är ett
+   dokument, ingen migration kan göra det åt någon. **Samma dokument blockerar
+   E6.2 gallringsjobbet**, som inte kan byggas förrän fristerna finns.
+5. **Lönekostnaden saknar tre saker innan den visar något:** ingen har
    `payroll_cost_viewer` (tilldelas per person under Personal), inga
    månadslöner är inmatade, och täckningsgraden är inte satt. Allt tre görs
    under `/lonekostnad/satser`. **Kontrollera också åldersgränsen för den äldre

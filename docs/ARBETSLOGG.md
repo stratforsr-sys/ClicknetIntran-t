@@ -5,6 +5,80 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-08-27 · Mätningen som avbröts, volymtrappan, och sviten på `822269f`
+
+Inget byggt. Tre lösa trådar knutna, och en av dem visade sig dölja något.
+
+### Vågrättningen är bekräftad — och siffran gick längre tillbaka än den skulle
+
+`822269f` flyttade in `far_godkanna_franvaro()` i samma `Promise.all` som dagens
+stämplingar, men mätningen som skulle bekräfta det blev aldrig körd. Tre
+körningar av `scripts/mat-inloggad.mjs`, median av medianerna:
+
+| Sida | Nu | Efter E13-bygget | Krav |
+|---|---|---|---|
+| Startsidan | ~450 ms | ~536 ms | 1 500 |
+| Stämplingsvyn | **~489 ms** | ~582 ms | 2 000 |
+| Sökningen | ~406 ms | ~442 ms | 500 |
+| Rutinerna | ~427 ms | ~456 ms | 1 500 |
+
+Stämplingsvyn ligger **under** de ~530 ms som gällde före E13-bygget, inte bara
+tillbaka på dem, och de tre körningarna gav 489, 491 och 470 ms — spridningen är
+för liten för att siffran ska vara en slump. Samtliga sidor rör sig nedåt, så en
+del av skillnaden är körning-till-körning; men den enda sidan som fick en
+åtgärd är också den som rör sig mest.
+
+**Sökningens marginal är ~94 ms**, fortfarande den minsta i navet.
+
+### Volymtrappan: beslutet var enkelt, det som låg under det var inte det
+
+Beställaren valde att bara byta plats på 15 och 20 — 1 000 respektive 1 200 kr —
+med verkan från nästa månadsskifte. Gjort som `sparaNiva()` gör det: `valid_to`
+på de gamla raderna, nya rader med `valid_from = 2026-09-01`, två rader i
+`audit_log`. Se D-E13.3.
+
+**Självkontrollen efter ändringen visade noll rader för augusti.** Det såg först
+ut som ett fel i frågan och var det inte: samtliga fyra rader, även de orörda 5
+och 10, har `valid_from = 2026-08-25`, och `gallandeNivaer()` slår upp trappan på
+**månadens första dag**. `2026-08-25 <= 2026-08-01` är falskt, alltså gäller
+ingen nivå i augusti. Den första månad trappan över huvud taget gäller är
+september.
+
+Det är inte en bugg — det är Ö16 som fungerar som den ska, plus att raderna
+matades in med "gäller från och med nu" mitt i en månad. Men det står ingenstans,
+och det är precis en sådan sak någon läser tabellen och drar fel slutsats om.
+Verkan i dag är noll: `commission_entry` är tom och augusti bär två testorder.
+**Ingenting gjordes åt det** — att flytta trappan bakåt till den 1 augusti är ett
+beslut om pengar och alltså beställarens.
+
+Det är också en påminnelse om vad valet mellan "nu" och "denna månad" faktiskt
+betyder: mitt i en månad ser de likadana ut i formuläret och skiljer sig med en
+hel månads bonus.
+
+### Konsekvenstrappan får ingen egen godkännare
+
+`attendance_approver` tilldelas ingen. Beställarens besked, och registret
+stödjer det: den enda aktiva personen är Zen, som redan bär `sales_manager` och
+`ceo`; Simon och Vlado står i onboarding. En permission som ger *eget team* till
+någon som redan får besluta om *alla* är inte en behörighet, den är en rad till
+att hålla reda på. Behörigheten finns kvar i `PERMISSIONS` och går att ge under
+Personal den dag en teamledare kommer in.
+
+`attendance_incident` är fortfarande tom — trappan är seedad och oanvänd.
+
+### Provsviten kördes om på `822269f`
+
+**Exit 0, 1 675 godkända kontroller, noll fallna, inget nätavbrott.** Commiten
+hade bara `typecheck` och `test:tid` bakom sig.
+
+En sak att inte upprepa: första omgången kördes som `npm test | tail -120`, och
+en pipe ger sista ledets exit-kod. `EXIT=0` betydde där att `tail` gick bra, inte
+att sviten gjorde det. Körningen var grön — den sista sviten i `&&`-kedjan
+skrevs ut som godkänd, vilket bara kan ske om alla före den också var det — men
+exit-koden bevisade det inte. Kör sviten oskyddad och läs `$?`.
+
+---
+
 ## 2026-08-26 (kväll) · E13 steg 6, 7 och 9: konsekvenserna, underlaget och orderbilagan
 
 E13 är färdigbyggt utom steg 8, som väntar på A6. En migration: `0039`.

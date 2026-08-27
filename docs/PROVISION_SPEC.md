@@ -15,10 +15,11 @@ besvarades 2026-08-25**, och **Ö13 besvarades 2026-08-26**. Kvar öppna är **�
 Ö11, Ö16, Ö17 och Ö18**, som alla har ett förslag som gäller tills någon säger
 annat.
 
-**Volymtrappans belopp för 15 och 20 är omkastade i produktionen** — 15 ger
-1 200 kr och 20 ger 1 000 kr, båda satta 2026-08-25. Beställaren bekräftade
-2026-08-26 att det är fel och ska rättas med nya belopp. Trappan är alltså den
-enda delen av E13 som väntar på indata.
+**Volymtrappan är rättad 2026-08-27.** De omkastade beloppen för 15 och 20 är
+stängda med `valid_to = 2026-09-01` och ersatta av 15 → 1 000 kr och
+20 → 1 200 kr från samma dag. Beställarens besked var att bara byta plats på de
+två; 5 och 10 står orörda. **E13 väntar därmed inte på någon indata alls** — det
+enda som återstår är steg 8, blockerat av A6.
 
 ---
 
@@ -227,9 +228,29 @@ period skrivs inte om (avsnitt 8).
 Nivåer: **5, 10, 15, 20, 25, 30 order** per **kalendermånad**. Räknaren
 nollställs den 1:a.
 
-**Beloppen är EJ SATTA.** Beställaren sätter dem själv i inställningarna
-(fråga 18). Ingenting seedas — samma linje som täckningsgraden i `0025`, och av
-samma skäl: en gissad siffra ser rätt ut och blir tyst sanning.
+**Beloppen seedas aldrig.** Beställaren sätter dem själv i inställningarna
+(fråga 18) — samma linje som täckningsgraden i `0025`, och av samma skäl: en
+gissad siffra ser rätt ut och blir tyst sanning.
+
+De är satta sedan 2026-08-25 och rättade 2026-08-27. **Tabellen nedan är en
+avskrift av konfigurationen, inte dess källa** — trappan läses alltid ur
+`commission_bonus_level`:
+
+| Tröskel | Belopp | Gäller från |
+|---|---|---|
+| 5 | 200 kr | 2026-08-25 |
+| 10 | 500 kr | 2026-08-25 |
+| 15 | 1 000 kr | 2026-09-01 |
+| 20 | 1 200 kr | 2026-09-01 |
+
+**Trappan gäller från och med september, inte augusti.** Uppslaget sker på
+månadens första dag (Ö16), och samtliga rader har `valid_from` efter den
+1 augusti. **Augusti har alltså ingen volymtrappa alls**, och en säljare som når
+en tröskel den månaden får ingen volymbonus. Det spelar ingen roll i dag —
+augusti bär två testorder — men det är inte det någon läser ur trappan.
+
+Nivåerna **25 och 30 är avsiktligt tomma** (beställarens besked 2026-08-26). Nås
+de i dag ger de samma bonus som 20, och trappan står still över 30 enligt 5.3.
 
 **Formen är fast belopp** (Ö2), men procent ska gå att välja i inställningarna.
 Konfigurationen bär därför en `unit`-kolumn, precis som `cost_rate`:

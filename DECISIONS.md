@@ -171,6 +171,38 @@ raststämpling hänger fortfarande på att K12 och K14 publiceras.
 
 ---
 
+## D-E13.3 · Volymtrappan rättad genom att stänga och ersätta, från 2026-09-01
+
+**2026-08-27.** Beloppen för 15 och 20 var omkastade sedan inmatningen
+2026-08-25 — 15 gav 1 200 kr och 20 gav 1 000 kr, alltså mindre bonus för mer
+sålt. Beställarens besked: **byt bara plats på de två**, 5 och 10 står orörda.
+Nivåerna 25 och 30 lämnas fortsatt tomma.
+
+**De gamla raderna ändrades inte.** De stängdes med `valid_to = 2026-09-01` och
+ersattes av nya rader med samma `valid_from`. Frågan "vilken trappa gällde i
+augusti" är den som ställs den dag en utbetalning ifrågasätts, och den måste gå
+att besvara i november.
+
+**Verkan valdes till nästa månadsskifte, inte innevarande månad.** Augusti räknas
+alltså inte om. Det saknar praktisk verkan i dag: `commission_entry` är tom och
+augusti bär två testorder.
+
+**Ändringen gjordes med SQL och service role, inte via `/provision/regler`** —
+skrivningarna är identiska med vad `sparaNiva()` med verkan `nasta_manad` gör,
+inklusive de två raderna i `audit_log`. `note` på de nya raderna säger att de
+lagts den vägen. Nästa ändring hör hemma på sidan; den här gjordes så för att
+beskedet kom i en session utan inloggad webbläsare.
+
+**Det som upptäcktes på köpet, och som inte är rättat:** hela trappan har
+`valid_from` efter den 1 augusti, och uppslaget sker på månadens första dag
+(Ö16). **Augusti har därför ingen volymtrappa alls** — den första månad trappan
+gäller är september. Det följer av att raderna matades in med "gäller från och
+med nu" den 25 augusti, och det var sant redan före rättningen. Ska augusti
+omfattas krävs fyra nya rader med `valid_from = 2026-08-01`. Beställaren är
+underrättad; ingenting görs förrän det efterfrågas.
+
+---
+
 ## D-E13.6 · Ogiltig frånvaro är en dag HELT utan stämpling
 
 **2026-08-26.** Ö15 svarade *hur mycket* (minst 5 minuter) och *vem som avgör*
