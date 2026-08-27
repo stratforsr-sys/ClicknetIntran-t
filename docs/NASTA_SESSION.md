@@ -3,7 +3,23 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-08-27 (kväll) — E0.7 och E6.1 byggda
+**Senast uppdaterad:** 2026-08-27 (kväll) — E0.7, E6.1, E1.5, prestandastädning, X1/X2
+
+## Passet 2026-08-27 (kväll) i korthet
+
+| Punkt | Utfall |
+|---|---|
+| **E0.7** | KLAR. Nattjobbet larmar om sig självt; färskhetskontroll på `/fel` och startsidan |
+| **E6.1** | KLAR. Sju händelsetyper som **data**, prov som håller efter dem. Inloggningen loggas nu |
+| **E1.5** | KLAR. Schemat behövde ingen kod — det som saknades var beviset i loggen |
+| **Prestanda** | Mätt. Filtrering av notisfrågorna ger **ingenting**; sökningen är en våg grundare |
+| **X3** | Uppskattningen står kvar med avsikt. Metoden att mäta den står nu i `matning.mjs` |
+| **X1/X2** | Genomgångna. Två brister rättade: hoppa-till-innehåll och `role="alert"` |
+
+**Två saker kräver en människa och står därför kvar:** en skärmläsargenomgång
+(X1) och en avläsning på riktig telefon (X2). Allt som gick att granska
+statiskt är granskat.
+
 
 ---
 

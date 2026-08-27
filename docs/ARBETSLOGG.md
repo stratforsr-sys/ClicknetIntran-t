@@ -5,6 +5,70 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-08-27 (kväll) · X1 och X2: genomgången, och de två brister den hittade
+
+Båda stod PÅGÅR. Genomgången visar att det mesta redan var gjort — och att det
+som saknades var två saker som ingen automatisk kontroll hade fångat.
+
+### Det som redan höll
+
+| Krav | Läge |
+|---|---|
+| Kontrast (1.4.3) | Mätt sedan D-U2/D-U3. `#17BAA2` får aldrig bära vit text |
+| Fokus synligt (2.4.7) | Global `:focus-visible`, 2 px brand-600 med offset, egen färg på mörk panel |
+| Formulärfel (3.3.1, 3.3.3) | `Field`/`Input`/`Select` kopplar med `aria-describedby` **och** `aria-invalid` |
+| Ikoner | `Ikon` renderar `aria-hidden` — de annonseras aldrig |
+| Språk (3.1.1) | `<html lang="sv">` |
+| Träffyta (2.5.5) | `min-h-11` på knappar, alltså 44 px |
+
+**X2 var i bättre skick än statusen antydde.** Samtliga breda tabeller ligger
+redan i `overflow-x-auto`-behållare — `/kv`, `/tid/avvikelser`,
+`/tid/ogiltig-franvaro`, `/admin/arbetstid` och lönerapportens två. Sidan i sig
+skrollar alltså aldrig i sidled vid 375 px. Inga nya brister hittades.
+
+### Brist 1: ingen hoppa-till-innehåll-länk (2.4.1, nivå A)
+
+Sidopanelen bär upp till **sjutton länkar**, och de står före innehållet i
+trädet på varje sida. Den som navigerar med tangentbord — eller skärmläsare,
+eller switch — måste tabba igenom hela menyn igen för att komma åt det hen
+faktiskt öppnade sidan för.
+
+Sjutton tryck per sidbyte är inte en olägenhet. Det är skälet att någon slutar
+använda navet.
+
+Länken ligger först i trädet och syns bara vid fokus. **Två detaljer som är
+lätta att missa och som gör länken verkningslös om de fattas:**
+
+- `focus:fixed` med `z-50`. Utan det ritas länken *bakom* sidopanelen och får
+  fokus utan att synas.
+- `tabIndex={-1}` på `<main>`. Utan det hoppar sidan dit visuellt medan
+  tangentbordsfokus står kvar i menyn, och nästa tabb fortsätter i länk arton —
+  alltså precis det länken skulle lösa.
+
+### Brist 2: felmeddelanden annonserades artigt (4.1.3, nivå AA)
+
+`Notis` gav alla toner `role="status"`, som är en **polite** live region: en
+skärmläsare läser upp den när den är klar med det den höll på med. För "Tack,
+rapporten ligger i kön" är det rätt.
+
+För ett **fel** är det fel. Den som just tryckt Spara och fått avslag måste få
+veta det innan hen börjar göra något annat — med `role="status"` kan beskedet
+komma efter att fokus flyttat vidare, eller drunkna i det som läses upp före.
+`danger` får därför `role="alert"`, som är assertive och avbryter.
+
+**Bara `danger`.** Att göra alla toner assertive vore att lära användaren att
+avbrott inte betyder något — samma skäl som gör att driftraden på startsidan
+bara ritas när något är fel.
+
+### Vad som inte går att göra härifrån
+
+Båda punkterna står kvar som *genomgångna*, inte som KLARA, och skälet är
+ärligt: **en skärmläsargenomgång och en avläsning på riktig telefon går inte att
+göra från en kommandorad.** Det som gick att granska statiskt är granskat och
+rättat. Resten kräver en människa med VoiceOver och en telefon i handen.
+
+---
+
 ## 2026-08-27 (kväll) · E1.5 stängd, och X3:s sista uppskattning som INTE gissades bort
 
 ### E1.5: två av frågorna hade redan svar, den tredje var fel ställd

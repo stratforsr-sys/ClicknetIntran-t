@@ -67,6 +67,30 @@ export function Skal({
      */
     <PanelLageProvider value={{ hopfalld, vaxlaHopfalld }}>
       <div className="min-h-dvh">
+        {/*
+          X1 / WCAG 2.4.1 Bypass Blocks (niva A).
+          =====================================================================
+          Sidopanelen bar upp till sjutton lankar, och de star fore innehallet i
+          traden pa VARJE sida. Utan den har lanken maste den som navigerar med
+          tangentbord — eller med en skarmlasare, eller med en switch — tabba
+          igenom hela menyn igen for att komma at det hen faktiskt oppnade
+          sidan for. Sjutton tryck per sidbyte ar inte en olagenhet, det ar
+          skalet att nagon slutar anvanda navet.
+
+          Lanken ar forst i traden och syns bara nar den har fokus. Den ska
+          INTE goras permanent synlig "for tydlighetens skull" — den ar riktad
+          till den som tabbar, och for alla andra ar den brus.
+
+          `sr-only` med `focus:not-sr-only` ar monstret; det som ofta gloms ar
+          `focus:absolute` med ett z-index over sidopanelen, annars ritas
+          lanken bakom den och far fokus utan att synas.
+        */}
+        <a
+          href="#innehall"
+          className="sr-only rounded-sm bg-brand-600 px-4 py-2 text-small font-semibold text-ink-inv focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50"
+        >
+          Hoppa till innehållet
+        </a>
         <Sidebar
           items={items}
           namn={namn}
@@ -87,7 +111,13 @@ export function Skal({
           {/* Innehallsyta maximalt 1440 px, centrerad (UI-PRD §6).
               Under 768 px ligger bottenraden over sidans nederkant, sa
               innehallet behover en botten som ar hogre an raden ar. */}
-          <main className="mx-auto max-w-[1440px] pb-28 md:pb-16">{children}</main>
+          {/* `tabIndex={-1}` gor att malet gar att FLYTTA FOKUS till. Utan det
+              hoppar sidan dit visuellt medan tangentbordsfokus star kvar i
+              menyn, och nasta tabb fortsatter i lank arton — alltsa exakt det
+              lanken skulle losa. */}
+          <main id="innehall" tabIndex={-1} className="mx-auto max-w-[1440px] pb-28 md:pb-16">
+            {children}
+          </main>
         </div>
         <Bottennav stamplingPa={stamplingPa} oppnaMeny={() => setOppen(true)} />
         {/* Sist i trädet och `fixed`: kvittot ligger over allt annat och ska
