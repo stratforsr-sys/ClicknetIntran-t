@@ -33,6 +33,17 @@ Nattjobbet larmar nu om sig självt, och färskhetskontrollen ligger på en
 `MAX_TIMMAR = 26` är mätt, inte gissad: största uppmätta avstånd mellan två
 körningar över fem nätter är 24,6 timmar. Härledningen står i filen.
 
+**Larmvägen är inte sedd i skarpt läge än.** Nattjobbet kördes inte i gång för
+hand — steget `tid` stänger öppna stämplingar och `konsekvenser` lägger förslag,
+och att köra det mitt på dagen är en skrivning i skarp persondata. Skrivvägen
+`registrera_fel` är däremot redan provad mot riktiga databasen i `tests/rls.mjs`.
+Titta på `/fel` efter 02:30 om du vill se kortet med färska siffror.
+
+**Sökningen svängde 375–526 ms i mätningen efter bygget** och låg över sitt krav
+på 500 ms i två av fem körningar. `/sok` rördes inte av bygget — men marginalen
+är den minsta i navet och intervallet straddlar numera kravet. Läs medianen av
+flera körningar, aldrig en enskild avläsning.
+
 ---
 
 ## Läget efter genomgången 2026-08-26
@@ -75,6 +86,21 @@ Spärren har **exakt ett villkor kvar**. `sparr_saknas('raststampling')` svarar
 Sedan slås spärren på under `/tid/sparrar`. **K12 är beslutad och publicerad**
 (beslutsdatum 2026-08-26, "Beslutad av: Zen, VD"). Avsnitt 6 och 7 skrevs i det
 här passet och bär ditt namn — **läs dem.**
+
+### Prestanda, senast mätt 2026-08-27 (kväll) på `a8668b8`
+
+Fem körningar som säljare, median av medianerna. **Mätskriptet loggar in som
+säljare**, så E0.7:s driftfråga ställs inte alls i den här mätningen; samma
+mätning som säljchef gav **~472 ms** på startsidan mot kravet 1 500.
+
+| Sida | Median | Krav | Marginal |
+|---|---|---|---|
+| Startsidan | ~442 ms | 1 500 | ~1 058 ms |
+| Stämplingsvyn | ~516 ms | 2 000 | ~1 484 ms |
+| **Sökningen** | **~478 ms** | **500** | **~22 ms** |
+| Rutinerna | ~428 ms | 1 500 | ~1 072 ms |
+
+Tabellen nedan är från mätningen dessförinnan och står kvar som jämförelse.
 
 ### Prestanda, mätt mot produktionen 2026-08-27 (efter vågrättningen `822269f`)
 

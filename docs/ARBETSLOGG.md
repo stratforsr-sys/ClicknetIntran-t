@@ -124,6 +124,43 @@ i tre led efter varandra och står nu i ett.
 **Hela sviten omkörd oskyddad: exit 0, 1 721 godkända kontroller, noll fallna.**
 1 675 + 46 = 1 721, alltså är ingen gammal kontroll borta.
 
+**Skrivvägen är redan provad, och det är därför inget nytt db-prov skrevs.**
+`tests/rls.mjs` kör `registrera_fel` mot den riktiga databasen: att två anrop
+med samma `(digest, path)` blir en rad med räknaren 2, att ett avslutat fel som
+kommer tillbaka inte tyst återgår till `new`, och att check-villkoret nekar en
+automatisk rad utan digest. Det larmet lägger ovanpå är hur digesten och
+sökvägen byggs, och det är ren logik.
+
+**Nattjobbet kördes INTE i gång för hand för att prova larmet.** Steget `tid`
+stänger öppna stämplingar och `konsekvenser` lägger förslag om ogiltig frånvaro
+— att köra det mitt på dagen är en skrivning i skarp persondata som ingen bett
+om. Larmvägen verifierar sig själv 02:30.
+
+### Mätningen efter deployen (`a8668b8`, Ready)
+
+`scripts/mat-inloggad.mjs`, fem körningar som säljare. Median av medianerna:
+
+| Sida | Nu | Före (2026-08-27) | Krav |
+|---|---|---|---|
+| Startsidan | ~442 ms | ~450 ms | 1 500 |
+| Stämplingsvyn | ~516 ms | ~489 ms | 2 000 |
+| Sökningen | **~478 ms** | ~406 ms | **500** |
+| Rutinerna | ~428 ms | ~427 ms | 1 500 |
+
+**Mätskriptet loggar in som SÄLJARE, och för en säljare ställs driftfrågan inte
+alls.** Siffran ovan mäter alltså den väg som är oförändrad. För att täcka den
+nya frågan kördes samma mätning som **säljchef** i tre varv: 566, 472 och
+469 ms, alltså **~472 ms mot kravet 1 500**. Skillnaden mot säljarens ~442 ms
+är chefens köer, inte en våg till — driftfrågan ligger i den befintliga
+`Promise.all`. (Kopian av mätskriptet var tillfällig och är borttagen;
+`mat-inloggad.mjs` står orörd.)
+
+**Sökningen svängde mellan 375 och 526 ms över fem körningar** och låg över sitt
+krav i två av dem. Den rördes inte av det här bygget — commiten delar ingen fil
+med `/sok` — men marginalen är fortfarande den minsta i navet, och intervallet
+straddlar numera kravet. Det är den siffra som ska hållas ögonen på, och en
+enskild avläsning säger ingenting om den.
+
 ---
 
 ## 2026-08-27 · Mätningen som avbröts, volymtrappan, och sviten på `822269f`
