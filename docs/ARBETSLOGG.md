@@ -60,6 +60,26 @@ komma efter att fokus flyttat vidare, eller drunkna i det som läses upp före.
 avbrott inte betyder något — samma skäl som gör att driftraden på startsidan
 bara ritas när något är fel.
 
+### Mätningen efter hela passet
+
+Tre körningar av `mat-inloggad.mjs` som säljare, median av medianerna:
+
+| Sida | Nu | Krav | Marginal |
+|---|---|---|---|
+| Startsidan | ~570 ms | 1 500 | ~930 ms |
+| Stämplingsvyn | ~571 ms | 2 000 | ~1 429 ms |
+| **Sökningen** | **~428 ms** | **500** | **~72 ms** |
+| Rutinerna | ~523 ms | 1 500 | ~977 ms |
+
+**Läs siffrorna med varmhetsvarningen i huvudet.** Mätningen kördes direkt efter
+en deploy, och de tre startsidekörningarna gav 587, 570 och **440 ms** — den
+sista när funktionen hunnit bli varm. Samma sida mätte ~442 ms tidigare i
+passet. Skillnaden är kallstart, inte en regression.
+
+Sökningen ligger på ~428 ms mot ~478 före vågrättningen, alltså åt rätt håll,
+men spridningen 402–524 är fortfarande större än vinsten. **Marginalen är
+fortfarande den minsta i navet.**
+
 ### Vad som inte går att göra härifrån
 
 Båda punkterna står kvar som *genomgångna*, inte som KLARA, och skälet är
