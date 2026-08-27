@@ -24,6 +24,20 @@ export function Formular({ team }: { team: { id: string; name: string }[] }) {
           <p className="mt-1 max-w-[70ch] text-body text-ink-500">{state.ok}</p>
         </div>
 
+        {/*
+          E1.5: rutiner, kurser och team tilldelas av malgruppen och syns i
+          loggen. Arbetstiden gor det ocksa — men bara nar det FINNS en, och
+          det ar den enda av de fyra som far loneeffekt. Utan schema bedoms
+          varken sen ankomst, utebliven instampling eller raster, och varje vy
+          ser ut som att allt ar i sin ordning.
+        */}
+        {state.utanSchema && (
+          <Notis ton="warn">
+            Ingen arbetstid gäller för den här personen. Sen ankomst, utebliven instämpling och
+            raster bedöms inte förrän ett schema finns — lägg ett under Tid → Schema.
+          </Notis>
+        )}
+
         <Card className="max-w-[46rem]">
           <div className="flex flex-col gap-5">
             <Losenordsruta losenord={state.losenord} />

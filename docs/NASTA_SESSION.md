@@ -1076,9 +1076,15 @@ tre prestandakraven är mätta och klarade.
 
 ### Mindre saker som ligger och väntar
 
-- **Inloggad TTFB från produktionen** saknas fortfarande i 4G-mätningen. Kräver
-  en riktig session i en webbläsare; tills dess är 20 ms per våga uppskattat.
-  Det är den enda kvarvarande uppskattningen i X3.
+- **`MS_PER_VAG = 20` är X3:s enda kvarvarande uppskattning, och den står kvar
+  med avsikt.** En vågas kostnad är skillnaden mellan två körningar av samma
+  sida där vågantalet skiljer med exakt en, och gamla deploy-adresser går inte
+  att mäta mot (Vercel svarar 302). Tillfället fanns 2026-08-27 när sökningen
+  gick från två vågor till en — före-mätningen missades. **Metoden står nu
+  utskriven i `scripts/lib/matning.mjs`:** nästa gång en våg försvinner, mät
+  `/sok?q=nagot-som-inte-finns` fem gånger före push och fem efter. Gissa inte
+  in en siffra — talet var en gång 20 ms under ett antagande som visade sig vara
+  fel med en faktor tjugo.
 - **E0.7 är klar sedan 2026-08-27 (kväll).** Nattjobbet larmar om sig självt
   och färskhetskontrollen ligger på `/fel` och startsidan. Kvar när A5/A6
   besvaras: integrationerna själva, som ännu inte finns.

@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { riktarSigTill } from "@/lib/dokument";
+import { gallandeSchema } from "@/lib/raster";
 import { nyttTillfalligtLosenord } from "@/lib/losenord";
 import { FLAGGA } from "@/lib/losenordsbyte";
 import { ROLES, type Role } from "@/lib/roles";
@@ -51,6 +52,13 @@ export type Anstallningsresultat =
       /** Slugarna, for loggen och for kvittot till chefen. */
       rutiner: string[];
       kurser: string[];
+      /**
+       * Vilka veckodagar personen har en arbetstid pa fran dag ett.
+       *
+       * Tom lista betyder att INGET schema galler — se `schemaFor()`. Det ar
+       * ett besked chefen behover, inte ett tomt varde att tiga om.
+       */
+      schemadagar: number[];
     };
 
 async function logga(
@@ -180,7 +188,82 @@ export async function laggUppAnstalld(
     });
   }
 
-  return { employeeId: rad.id, losenord, rutiner, kurser };
+  // E1.5 / AC-1.3: arbetstiden. Se `schemaFor()` for varfor ingen rad skrivs.
+  const schema = await schemaFor(db, rad.id, teamId, uppgifter.startdatum);
+  await logga(utfordAv, "onboarding.schedule_assigned", rad.id, schema.meta);
+
+  return { employeeId: rad.id, losenord, rutiner, kurser, schemadagar: schema.dagar };
+}
+
+/**
+ * E1.5 / AC-1.3: vilket schema som galler for en nyanstalld.
+ *
+ * ===========================================================================
+ * INGEN RAD SKRIVS, OCH DET AR SJALVA TILLDELNINGEN
+ *
+ * ROADMAP sa lange att schemadelen av E1.5 "vantar pa E4". Nar E4 val fanns
+ * visade det sig att det inte fanns nagot att bygga: `work_schedule` har
+ * scope `company`, `team` och `employee`, och `gallandeSchema()` valjer den
+ * mest specifika som finns. Bolagsschemat galler alltsa varje nyanstalld fran
+ * dag ett utan att nagon rad kopieras.
+ *
+ * Det ar samma modell som rutinerna: malgruppen avgor, inte en kopia per
+ * person. En rad per anstalld hade dessutom varit direkt skadlig — ett schema
+ * andras genom att en NY rad laggs med nytt `valid_from` (AC-2.35), och
+ * tjugofem personliga kopior hade gjort en andring till tjugofem andringar
+ * som glider isar.
+ *
+ * DET SOM SAKNADES VAR BEVISET. Rutiner och kurser skriver var sin rad i
+ * loggen med motiveringen att det annars inte gar att i efterhand visa vad en
+ * nyanstalld faktiskt fick pa sig fran dag ett. Arbetstiden — den enda av de
+ * fyra som far loneeffekt — skrev ingenting alls.
+ *
+ * OCH TOMMA LISTAN AR ETT BESKED. Finns inget bolagsschema har personen ingen
+ * arbetstid att matas mot: ingen sen ankomst, ingen utebliven instampling,
+ * inga rastavvikelser. Det ser i varje vy ut som att allt ar i sin ordning.
+ * Darfor skrivs raden aven da, med `dagar: []`, och chefen far se det pa
+ * kvittot.
+ * ===========================================================================
+ */
+async function schemaFor(
+  db: ReturnType<typeof supabaseAdmin>,
+  employeeId: string,
+  teamId: string | null,
+  startdatum: string | null,
+): Promise<{ dagar: number[]; meta: Record<string, unknown> }> {
+  // Fran startdatumet om det finns — ett schema som borjar gälla senare an
+  // personens forsta dag ar inte hennes schema. Annars i dag.
+  const datum = startdatum ?? new Date().toISOString().slice(0, 10);
+
+  const { data } = await db
+    .from("work_schedule")
+    .select("scope, employee_id, team_id, weekday, start_time, end_time, valid_from")
+    .lte("valid_from", datum);
+
+  const rader = data ?? [];
+  const dagar: number[] = [];
+  let scope: string | null = null;
+  let tider: string | null = null;
+
+  // En veckodag i taget: `gallandeSchema()` valjer mest specifika niva, och
+  // den kan skilja sig mellan dagarna.
+  for (const weekday of [1, 2, 3, 4, 5, 6, 7]) {
+    const traff = gallandeSchema(
+      rader.filter((r) => r.weekday === weekday),
+      employeeId,
+      teamId,
+      datum,
+    )[0];
+    if (!traff) continue;
+    dagar.push(weekday);
+    scope ??= traff.scope;
+    tider ??= `${String(traff.start_time).slice(0, 5)}-${String(traff.end_time).slice(0, 5)}`;
+  }
+
+  return {
+    dagar,
+    meta: { dagar, scope, tider, galler_fran: datum, antal: dagar.length },
+  };
 }
 
 /**

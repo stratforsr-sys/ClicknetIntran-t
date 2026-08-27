@@ -13,6 +13,11 @@ export type FormState = {
   /** Visas en gang for chefen och sparas ingenstans. Se laggUppAnstalld. */
   losenord?: string;
   anstalldId?: string;
+  /**
+   * E1.5: en varning nar personen INTE har nagon arbetstid att matas mot.
+   * Tyst tom betyder att allt ser rätt ut i varje vy medan ingenting bedoms.
+   */
+  utanSchema?: boolean;
 };
 
 /**
@@ -57,6 +62,7 @@ export async function laggUppAnstalld(_prev: FormState, form: FormData): Promise
   let nyId: string;
   let namn: string;
   let losenord: string;
+  let utanSchema = false;
   try {
     const user = await kravChef();
 
@@ -81,6 +87,7 @@ export async function laggUppAnstalld(_prev: FormState, form: FormData): Promise
 
     nyId = svar.employeeId;
     losenord = svar.losenord;
+    utanSchema = svar.schemadagar.length === 0;
     namn = `${fornamn} ${efternamn}`;
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
@@ -91,7 +98,7 @@ export async function laggUppAnstalld(_prev: FormState, form: FormData): Promise
   // Ingen omdirigering langre. Losenordet visas en gang, och det gar inte att
   // gora pa nasta sida utan att skicka ordet i en URL — dar det hamnar i
   // webbhistorik, i Vercels loggar och i varje mellanliggande proxy.
-  return { ok: `${namn} är upplagd.`, losenord, anstalldId: nyId };
+  return { ok: `${namn} är upplagd.`, losenord, anstalldId: nyId, utanSchema };
 }
 
 export type LosenordState = { fel?: string; losenord?: string };

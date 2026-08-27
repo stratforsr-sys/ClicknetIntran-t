@@ -32,9 +32,36 @@ export const PROD = process.env.NAV_URL ?? "https://clicknet-nav.vercel.app";
 /**
  * Uppskattad rundtur mellan Vercels funktion och Supabase, bada i eu-north-1.
  *
- * Medvetet PESSIMISTISK for tva tjanster i samma region. Talet star har for att
- * det ska ga att ifragasatta och andra pa ett stalle. En matning med riktig
- * session i en webblasare ersatter det.
+ * ===========================================================================
+ * DET HAR AR X3:s SISTA UPPSKATTNING, OCH DEN STAR KVAR SOM UPPSKATTNING.
+ *
+ * Talet ar INTE matt. `mat-inloggad.mjs` mater hela sidor pa riktigt och
+ * behover det darfor inte — det ar bara `mat-startsidan.mjs` och
+ * `mat-sok-och-stampling.mjs` som raknar vagor och lagger pa det har.
+ *
+ * SA HAR MATER DU DET, nar tillfallet kommer:
+ *
+ *   En vagas kostnad ar skillnaden mellan tva korningar av SAMMA sida dar
+ *   antalet vagor skiljer med exakt en. Det gar inte att mata mot en gammal
+ *   deploy-adress — Vercel skyddar dem och de svarar 302 (`mat-inloggad.mjs`
+ *   har en kontroll for just det). Matningen maste alltsa goras FORE och
+ *   EFTER en andring som tar bort en vag, mot produktionsdomanen.
+ *
+ *   Tillfallet fanns 2026-08-27: sokningens prefixfraga gick fran att stallas
+ *   efter den snava till att ga parallellt, alltsa tva vagor till en for en
+ *   sokning utan traff. Fore-matningen missades — andringen hann deployas
+ *   forst. Nasta gang en vag forsvinner: mat `/sok?q=nagot-som-inte-finns`
+ *   fem ganger fore push och fem ganger efter.
+ *
+ * VARFOR INGEN SIFFRA GISSADES IN I STALLET: talet var en gang 20 ms under
+ * antagandet att funktionen stod i samma region som databasen. Den stod i
+ * `iad1` och kostade i verkligheten ~460 ms per tur. Ingen uppskattning kunde
+ * ha upptackt det. Att byta en uppskattning mot en annan uppskattning som SER
+ * matt ut vore samma fel en gang till.
+ *
+ * Talet ar medvetet PESSIMISTISKT for tva tjanster i samma region, och star
+ * har for att det ska ga att ifragasatta och andra pa ett stalle.
+ * ===========================================================================
  */
 export const MS_PER_VAG = 20;
 

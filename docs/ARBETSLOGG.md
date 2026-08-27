@@ -5,6 +5,67 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-08-27 (kväll) · E1.5 stängd, och X3:s sista uppskattning som INTE gissades bort
+
+### E1.5: två av frågorna hade redan svar, den tredje var fel ställd
+
+Punkten stod DELVIS med "rutiner och team klara, kurser väntar på E8 och schema
+på E4". Genomgången gav tre besked:
+
+**`/personal/ny` och anställningsflödet är samma kod.** Båda anropar
+`laggUppAnstalld()` i `src/lib/anstallning-server.ts`. De *kan* alltså inte ha
+glidit isär, och filens egen rubrik säger varför den ligger där.
+
+**Kurserna var redan klara.** E8 är byggd, och tilldelningen ligger sedan dess i
+samma funktion, med målgruppen som avgörare och en rad i loggen.
+
+**Schemat behövde ingen kod, och det var inte en genväg.** `work_schedule` har
+scope `company`, `team` och `employee`, och `gallandeSchema()` väljer den mest
+specifika som finns. Produktionens schema är `company`, fem vardagar
+09:00–17:00 — **bolagsschemat gäller alltså varje nyanställd från dag ett utan
+att någon rad kopieras.** Samma modell som rutinerna: målgruppen avgör.
+
+En rad per anställd hade dessutom varit direkt skadlig. Ett schema ändras genom
+att en **ny** rad läggs med nytt `valid_from` (AC-2.35), och tjugofem
+personliga kopior hade gjort en ändring till tjugofem ändringar som glider isär.
+
+### Det som faktiskt saknades var beviset
+
+Rutiner och kurser skriver var sin rad i loggen, med motiveringen som står i
+filen: utan den går det inte att i efterhand visa vad en nyanställd fick på sig
+från dag ett. **Arbetstiden — den enda av de fyra som får löneeffekt — skrev
+ingenting alls.** Nu `onboarding.schedule_assigned`, med veckodagar, scope och
+tider.
+
+**Raden skrivs även när inget schema gäller**, med `dagar: []`. Det är inte en
+tom rad utan hela poängen: utan schema bedöms varken sen ankomst, utebliven
+instämpling eller raster, och **varje vy ser då ut som att allt är i sin
+ordning**. Chefen får det som en varning på kvittot när personen läggs upp.
+
+### X3: uppskattningen står kvar, och det är ett beslut
+
+`MS_PER_VAG = 20` i `scripts/lib/matning.mjs` är X3:s enda kvarvarande
+uppskattning. Uppdraget var att mata in en uppmätt siffra. **Det gick inte, och
+ingen siffra gissades in i stället.**
+
+En vågas kostnad är skillnaden mellan två körningar av samma sida där antalet
+vågor skiljer med exakt en. Gamla deploy-adresser går inte att mäta mot — Vercel
+skyddar dem och de svarar 302, vilket `mat-inloggad.mjs` har en egen kontroll
+för. Mätningen måste alltså göras **före och efter** en ändring, mot
+produktionsdomänen.
+
+Tillfället fanns i det här passet: sökningens prefixfråga gick från två vågor
+till en. **Före-mätningen missades — ändringen hann deployas först.** Metoden
+står nu utskriven i `matning.mjs`: nästa gång en våg försvinner, mät
+`/sok?q=nagot-som-inte-finns` fem gånger före push och fem efter.
+
+Skälet att inte gissa står i samma kommentar. Talet var en gång 20 ms under
+antagandet att funktionen stod i samma region som databasen. Den stod i `iad1`
+och kostade i verkligheten ~460 ms per tur. **Att byta en uppskattning mot en
+annan uppskattning som ser mätt ut vore samma fel en gång till.**
+
+---
+
 ## 2026-08-27 (kväll) · Prestandastädningen, och varför mätningen vände på uppdraget
 
 Punkten löd: `hamtaNotiser()` ställer sexton frågor per sidvisning, två av dem
