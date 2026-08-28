@@ -5,6 +5,41 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-08-28 · E0.7 verifierad i skarp drift, och gränsen fick sitt prov första natten
+
+Nattjobbet kördes 03:13:49 UTC. Kvittot bär de nya nycklarna, alltså körde den
+deployade E0.7-koden:
+
+```
+job.night_ok   sekunder: 3.2   fel: {}
+larm: 0        forra_kvittot: { lage: "ok", timmar: 24.7 }
+```
+
+**Noll larm skrevs, och det är rätt utfall:** inget steg föll, och föregående
+kvitto var 24,7 timmar gammalt — under gränsen. `error_report` har noll rader
+med sökvägen `/api/jobb/natt%`. Hela kedjan är alltså körd i produktion utan
+att någonting behövde larmas.
+
+### 24,7 timmar. Gränsen prövades på riktigt första natten.
+
+Härledningen i `larm.ts` säger att under 24 timmar larmar navet varje natt strax
+före körningen, och att slacken finns för att Vercel startar jobbet när den har
+plats. **Natten mellan 27 och 28 augusti låg avståndet på 24,7 timmar** — alltså
+över ett dygn, på en natt när ingenting var fel.
+
+Med gränsen 24 hade det första skarpa dygnet gett ett falsklarm. Med 26 finns
+1,3 timmars marginal kvar. Siffran 24,6 som mättes ur de fem tidigare kvittona
+var alltså inte ett utfall i kanten — den är normalläget.
+
+**Rör inte `MAX_TIMMAR` nedåt utan att mäta om avstånden först.**
+
+### Det som ännu inte är sett
+
+`auth.login` har inga rader — ingen har loggat in sedan deployen. Det är väntat
+och går inte att verifiera åt någon annan; raden skrivs vid nästa inloggning.
+
+---
+
 ## 2026-08-27 (kväll) · X1 och X2: genomgången, och de två brister den hittade
 
 Båda stod PÅGÅR. Genomgången visar att det mesta redan var gjort — och att det

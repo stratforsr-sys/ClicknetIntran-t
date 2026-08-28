@@ -75,11 +75,14 @@ Nattjobbet larmar nu om sig självt, och färskhetskontrollen ligger på en
 `MAX_TIMMAR = 26` är mätt, inte gissad: största uppmätta avstånd mellan två
 körningar över fem nätter är 24,6 timmar. Härledningen står i filen.
 
-**Larmvägen är inte sedd i skarpt läge än.** Nattjobbet kördes inte i gång för
-hand — steget `tid` stänger öppna stämplingar och `konsekvenser` lägger förslag,
-och att köra det mitt på dagen är en skrivning i skarp persondata. Skrivvägen
-`registrera_fel` är däremot redan provad mot riktiga databasen i `tests/rls.mjs`.
-Titta på `/fel` efter 02:30 om du vill se kortet med färska siffror.
+**Larmvägen är sedd i skarp drift 2026-08-28.** Nattjobbet körde 03:13:49 UTC
+med de nya nycklarna i kvittot: `larm: 0`, `forra_kvittot: {ok, 24.7 h}`. Noll
+larm skrevs, vilket är rätt utfall — inget steg föll och kvittot var färskt.
+
+**Gränsen prövades första natten: avståndet var 24,7 timmar.** Alltså över ett
+dygn på en natt när ingenting var fel. Med `MAX_TIMMAR = 24` hade det blivit ett
+falsklarm direkt; med 26 finns 1,3 timmars marginal. **Sänk inte talet utan att
+mäta om avstånden först.**
 
 **Sökningen svängde 375–526 ms i mätningen efter bygget** och låg över sitt krav
 på 500 ms i två av fem körningar. `/sok` rördes inte av bygget — men marginalen
