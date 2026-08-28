@@ -3,7 +3,35 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-08-27 (kväll) — E0.7, E6.1, E1.5, prestandastädning, X1/X2
+**Senast uppdaterad:** 2026-08-28 — stämpelfria roller (VD, säljchef, ekonomi, projektledare)
+
+## Passet 2026-08-28 i korthet
+
+**VD, säljchef, ekonomi och projektledare stämplar inte längre.** Regeln bor i
+`src/lib/stampelfri.ts` — ändra listan där, ingenting annat.
+
+Det som faktiskt var problemet låg i nattjobben, inte i knappen: två motorer
+letar efter dagar då ingenting hände, och för den som inte stämplar är varje
+arbetsdag en sådan. `jobb/konsekvenser.ts` hade lagt ett **förslag om ogiltig
+frånvaro** — första steget i konsekvenstrappan — per schemalagd dag, och
+`jobb/franvaro.ts` en påminnelse. Båda hoppar nu över dem, och drar tillbaka
+respektive stänger det som redan hunnit läggas.
+
+`korTidjobbet` **bedömer** inte (sen ankomst, rastavvikelser) men **bokför**
+fortfarande (auto-stängning, journalrad). Rör inte den gränsen: utan
+bokföringen blockerar en gammal öppen dag löneperioden för den som varit
+säljare innan hen blev säljchef.
+
+I gränssnittet: stämpelkortet är borta på startsidan och `/tid`, och
+bottennavets stämpelknapp följer personen. `/tid` finns kvar i menyn för
+säljchef och VD (rättelser respektive ogiltig frånvaro) men försvinner för
+ekonomi och projektledare. **Lönerapporten är en egen menypost och rördes
+inte.**
+
+Prov: `npm run test:stampelfri` — regeln plus en källkodsavläsning som vaktar
+att jobben och vyerna alls ställer frågan.
+
+---
 
 ## Passet 2026-08-27 (kväll) i korthet
 

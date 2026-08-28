@@ -19,7 +19,7 @@
     "test:arenden": "node --experimental-strip-types tests/arenden.mjs",
     "test:narvaro": "node --experimental-strip-types tests/narvaro.mjs",
     "test:klocka": "node --experimental-strip-types tests/klocka.mjs",
-    "test": "TZ=UTC npm run test:rls && npm run test:provision && npm run test:order && npm run test:provision-motor && npm run test:provision-period && npm run test:kv && npm run test:konsekvenser && npm run test:provisionsunderlag && npm run test:orderbilaga && npm run test:dagslinje && npm run test:adoption && npm run test:rekrytering && npm run test:anstallning && npm run test:fel && npm run test:larm && npm run test:handelselogg && npm run test:avtal && npm run test:toast && npm run test:filer && npm run test:pdf && npm run test:sokning && npm run test:rollspel && npm run test:lonekostnad && npm run test:klocka && npm run test:notiser && npm run test:identitet && npm run test:sidor && npm run test:tid && npm run test:franvaro && npm run test:losenord && npm run test:raster && npm run test:narvaro && npm run test:utbildning && npm run test:lonerapport && npm run test:lonerapport-db && npm run test:arenden && npm run test:registerutdrag && npm run test:offboarding",
+    "test": "TZ=UTC npm run test:rls && npm run test:provision && npm run test:order && npm run test:provision-motor && npm run test:provision-period && npm run test:kv && npm run test:konsekvenser && npm run test:provisionsunderlag && npm run test:orderbilaga && npm run test:dagslinje && npm run test:adoption && npm run test:rekrytering && npm run test:anstallning && npm run test:fel && npm run test:larm && npm run test:handelselogg && npm run test:avtal && npm run test:toast && npm run test:filer && npm run test:pdf && npm run test:sokning && npm run test:rollspel && npm run test:lonekostnad && npm run test:klocka && npm run test:notiser && npm run test:identitet && npm run test:sidor && npm run test:tid && npm run test:franvaro && npm run test:losenord && npm run test:raster && npm run test:narvaro && npm run test:stampelfri && npm run test:utbildning && npm run test:lonerapport && npm run test:lonerapport-db && npm run test:arenden && npm run test:registerutdrag && npm run test:offboarding",
     "test:registerutdrag": "node --experimental-strip-types tests/registerutdrag.mjs",
     "test:offboarding": "node tests/offboarding-db.mjs",
     "test:franvaro": "node --experimental-strip-types tests/franvaro.mjs",
@@ -50,7 +50,8 @@
     "test:orderbilaga": "node --experimental-strip-types tests/orderbilaga.mjs",
     "test:notiser": "node --experimental-strip-types tests/notiser.mjs",
     "test:identitet": "node --experimental-strip-types tests/identitet.mjs",
-    "test:sidor": "node tests/sidor.mjs"
+    "test:sidor": "node tests/sidor.mjs",
+    "test:stampelfri": "node --experimental-strip-types tests/stampelfri.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.7.0",

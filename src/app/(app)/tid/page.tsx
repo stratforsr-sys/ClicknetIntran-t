@@ -25,6 +25,7 @@ import { AVVIKELSE_ETIKETT, AVVIKELSE_FORKLARING, gallandeSchema, type Avvikelse
 import { senAnkomst, forsening } from "@/lib/narvaro";
 import { svensktDatum, svenskVeckodag } from "@/lib/klocka";
 import { hamtaLage } from "@/lib/sparrar";
+import { stampelfri, STAMPELFRI_FORKLARING } from "@/lib/stampelfri";
 import { Stamplar } from "./Stamplar";
 import { Rattelse } from "./Rattelse";
 import { beslutaRattelse, kvitteraRastschema, kommenteraAvvikelse } from "./actions";
@@ -41,6 +42,13 @@ export default async function TidSida() {
   const supabase = await supabaseServer();
   const chef = canManageEmployees(user);
   const sparr = await hamtaLage();
+
+  /**
+   * Stamplar den har personen sjalv? Sidan har tva halvor — den egna och
+   * chefens — och bara den forsta hanger pa det har. VD och saljchef kommer
+   * hit for kon, inte for knappen. Se `lib/stampelfri.ts`.
+   */
+  const stamplar = sparr.stampling && !stampelfri(user.roles);
 
   // E13 steg 6: kretsen som far besluta om ogiltig franvaro ar INTE `chef`. En
   // teamledare med behorigheten `attendance_approver` far besluta om sin egen
@@ -186,9 +194,11 @@ export default async function TidSida() {
         <div>
           <h1 className="text-display text-ink-900">Tid</h1>
           <p className="mt-1 text-body text-ink-500">
-            {sparr.stampling
-              ? `${timmarOchMinuter(minuter)} registrerat idag.`
-              : "Stämplingen är byggd men inte påslagen."}
+            {!sparr.stampling
+              ? "Stämplingen är byggd men inte påslagen."
+              : stamplar
+                ? `${timmarOchMinuter(minuter)} registrerat idag.`
+                : STAMPELFRI_FORKLARING}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -204,7 +214,7 @@ export default async function TidSida() {
               Ogiltig frånvaro
             </ButtonLink>
           )}
-          {sparr.stampling && (
+          {stamplar && (
             <Badge ton={lage === "inne" ? "ok" : lage === "rast" ? "warn" : "neutral"}>
               {lage === "inne" ? "Instämplad" : lage === "rast" ? "På rast" : "Utstämplad"}
             </Badge>
@@ -219,7 +229,7 @@ export default async function TidSida() {
         </Notis>
       )}
 
-      {sparr.stampling && !sparr.rast && (
+      {stamplar && !sparr.rast && (
         <Notis ton="info">
           Rasten stämplas inte. Tiden som registreras är från instämpling till utstämpling — dra av
           rasten när du stämplar ut, eller stämpla ut över lunchen. Vad som krävs för att slå på
@@ -249,58 +259,70 @@ export default async function TidSida() {
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="flex flex-col gap-4">
-          <Card>
-            <CardHeader
-              titel="Stämpla"
-              beskrivning={
-                sparr.rast
-                  ? "In, ut och rast. Tiden sätts när du trycker."
-                  : "In och ut. Tiden sätts när du trycker."
-              }
-            />
-            {sparr.stampling ? (
-              <Stamplar lage={lage} tillatna={tillatna(lage, sparr.rast)} />
-            ) : (
-              <p className="text-small text-ink-500">
-                Knapparna visas när modulen slås på.
-              </p>
-            )}
-          </Card>
+          {/* Stampelkortet ritas inte alls for den stampelfria rollen. En
+              avstangd knapp hade varit ett papekande om nagot man inte ska
+              gora; utan kort ar sidan bara chefens vy, vilket ar det arendet
+              hen har hit. */}
+          {(stamplar || !sparr.stampling) && (
+            <Card>
+              <CardHeader
+                titel="Stämpla"
+                beskrivning={
+                  sparr.rast
+                    ? "In, ut och rast. Tiden sätts när du trycker."
+                    : "In och ut. Tiden sätts när du trycker."
+                }
+              />
+              {stamplar ? (
+                <Stamplar lage={lage} tillatna={tillatna(lage, sparr.rast)} />
+              ) : (
+                <p className="text-small text-ink-500">
+                  Knapparna visas när modulen slås på.
+                </p>
+              )}
+            </Card>
+          )}
 
-          <Card>
-            <CardHeader
-              titel="Idag"
-              beskrivning="Ingen rad kan ändras eller tas bort. En rättelse blir en ny rad."
-            />
-            {giltiga.length === 0 ? (
-              <p className="text-small text-ink-500">Inga stämplingar idag.</p>
-            ) : (
-              <ul className="flex flex-col">
-                {giltiga.map((h) => (
-                  <li
-                    key={h.id}
-                    className="flex flex-wrap items-center gap-3 border-b border-canvas py-3 last:border-0"
-                  >
-                    <span className="tnum w-14 text-body font-semibold text-ink-900">
-                      {klockan(h.occurred_at)}
-                    </span>
-                    <span className="flex-1 text-body text-ink-700">{TYP_ETIKETT[h.kind]}</span>
-                    {h.source === "offline_queue" && <Badge ton="info">Utan nät</Badge>}
-                    {h.source === "correction" && <Badge ton="warn">Rättad</Badge>}
-                    {h.source === "system_auto_close" && <Badge ton="warn">Stängd av navet</Badge>}
-                    {sparr.stampling && <Rattelse handelse={h} />}
-                  </li>
-                ))}
-              </ul>
-            )}
+          {/* Dagens rader star kvar for den stampelfria rollen SA LANGE DET
+              FINNS RADER. Gamla stamplingar fran tiden fore rollbytet ar
+              lonegrundande och far inte forsvinna ur personens egen vy — men
+              ett tomt kort varje dag ar bara brus. */}
+          {(stamplar || giltiga.length > 0) && (
+            <Card>
+              <CardHeader
+                titel="Idag"
+                beskrivning="Ingen rad kan ändras eller tas bort. En rättelse blir en ny rad."
+              />
+              {giltiga.length === 0 ? (
+                <p className="text-small text-ink-500">Inga stämplingar idag.</p>
+              ) : (
+                <ul className="flex flex-col">
+                  {giltiga.map((h) => (
+                    <li
+                      key={h.id}
+                      className="flex flex-wrap items-center gap-3 border-b border-canvas py-3 last:border-0"
+                    >
+                      <span className="tnum w-14 text-body font-semibold text-ink-900">
+                        {klockan(h.occurred_at)}
+                      </span>
+                      <span className="flex-1 text-body text-ink-700">{TYP_ETIKETT[h.kind]}</span>
+                      {h.source === "offline_queue" && <Badge ton="info">Utan nät</Badge>}
+                      {h.source === "correction" && <Badge ton="warn">Rättad</Badge>}
+                      {h.source === "system_auto_close" && <Badge ton="warn">Stängd av navet</Badge>}
+                      {stamplar && <Rattelse handelse={h} />}
+                    </li>
+                  ))}
+                </ul>
+              )}
 
-            {handelser.some((h) => h.correction_state === "pending") && (
-              <p className="mt-4 text-small text-ink-500">
-                En rättelse väntar på din chef. Den ursprungliga tiden gäller tills den är
-                beslutad.
-              </p>
-            )}
-          </Card>
+              {handelser.some((h) => h.correction_state === "pending") && (
+                <p className="mt-4 text-small text-ink-500">
+                  En rättelse väntar på din chef. Den ursprungliga tiden gäller tills den är
+                  beslutad.
+                </p>
+              )}
+            </Card>
+          )}
         </div>
 
         <div className="flex flex-col gap-4">
@@ -477,7 +499,7 @@ export default async function TidSida() {
         </div>
       </div>
 
-      {sparr.stampling && giltiga.length === 0 && lage === "ute" && (
+      {stamplar && giltiga.length === 0 && lage === "ute" && (
         <EmptyState
           rubrik="Dagen har inte börjat"
           text="Stämpla in när du sätter dig. Ett tryck räcker."

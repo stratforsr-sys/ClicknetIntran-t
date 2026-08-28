@@ -6,6 +6,7 @@ import { Klocka, KlockaSkelett } from "@/components/shell/Klocka";
 import { navFor } from "@/components/shell/nav-items";
 import { SIDOPANEL_KAKA, arHopfalld } from "@/components/shell/sidopanel";
 import { hamtaLage } from "@/lib/sparrar";
+import { stampelfri } from "@/lib/stampelfri";
 import { getCurrentUser, fullName } from "@/lib/auth";
 import { ROLE_LABEL } from "@/lib/roles";
 import { isConfigured } from "@/lib/env";
@@ -66,6 +67,16 @@ export default async function AppLayout({
 
   const roll = user.roles.length ? ROLE_LABEL[user.roles[0]] : "Väntar på roll";
 
+  /**
+   * Bottennavets stampelknapp ar PERSONENS och inte modulens: den som inte
+   * stamplar ska inte ha en genvag till det langst ner pa telefonen.
+   *
+   * Sidopanelen far DAREMOT hela modullaget och gor sin egen bedomning — dar
+   * ar /tid ocksa chefens vy, och saljchefen och VD behaller den. Se
+   * `lib/stampelfri.ts` och `nav-items.ts`.
+   */
+  const stamplarSjalv = lage.stampling && !stampelfri(user.roles);
+
   const kakor = await cookies();
 
   // Sidopanelens lage lases har och inte i webblasaren, sa att en hopfalld
@@ -94,7 +105,7 @@ export default async function AppLayout({
       items={navFor(user, lage.stampling)}
       namn={fullName(user.employee)}
       roll={roll}
-      stamplingPa={lage.stampling}
+      stamplingPa={stamplarSjalv}
       hopfalldFranStart={hopfalld}
       klocka={
         <Suspense fallback={<KlockaSkelett />}>

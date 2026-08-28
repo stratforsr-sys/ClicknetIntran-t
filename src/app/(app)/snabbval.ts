@@ -28,7 +28,7 @@ export type Snabbval = { href: string; text: string; ikon: string };
  * skickar en server action, och den ritas separat i sidan — bland annat for
  * att den bar en ko for stamplingar gjorda utan natverk (AC-2.2).
  */
-export function snabbvalFor(user: CurrentUser | null, stamplingPa: boolean): Snabbval[] {
+export function snabbvalFor(user: CurrentUser | null, stamplar: boolean): Snabbval[] {
   if (!user?.employee) return [];
 
   const chefsposter: Snabbval[] = [];
@@ -52,7 +52,9 @@ export function snabbvalFor(user: CurrentUser | null, stamplingPa: boolean): Sna
   egna.push({ href: "/franvaro/sjuk", text: "Sjukanmälan", ikon: "varning" });
 
   // Rattelse av en stampling ar bara meningsfull nar det finns stamplingar.
-  if (stamplingPa) {
+  // `stamplar` ar personens och inte modulens: den stampelfria rollen har inga
+  // egna stamplingar att ratta, aven nar modulen ar pa. Se `lib/stampelfri.ts`.
+  if (stamplar) {
     egna.push({ href: "/tid", text: "Mina stämplingar", ikon: "tid" });
   }
 

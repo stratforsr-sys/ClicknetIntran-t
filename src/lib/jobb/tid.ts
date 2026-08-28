@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { RATTELSE_FRIST_TIMMAR, gallande, arbetadeMinuter, type Handelse } from "@/lib/tid";
 import { avvikelser, gallandeSchema, tagnaRaster, type Rastschema } from "@/lib/raster";
 import { senAnkomst } from "@/lib/narvaro";
+import { stampelfriaAnstallda } from "@/lib/stampelfri-server";
 import {
   svensktDatum,
   svenskTidpunkt,
@@ -67,7 +68,7 @@ export async function korTidjobbet(db: SupabaseClient, rastPa: boolean): Promise
     rattelser_over_frist: 0,
   };
 
-  const [{ data: personal }, { data: scheman }, { data: raster }] = await Promise.all([
+  const [{ data: personal }, { data: scheman }, { data: raster }, stampelfria] = await Promise.all([
     db.from("employee").select("id, team_id").neq("status", "offboarded"),
     db
       .from("work_schedule")
@@ -78,6 +79,28 @@ export async function korTidjobbet(db: SupabaseClient, rastPa: boolean): Promise
         `id, scope, employee_id, team_id, weekday, sort, window_start, window_end,
          duration_minutes, tol_early_start, tol_overrun, tol_missing, valid_from`,
       ),
+    /**
+     * Vilka som inte stamplar (`lib/stampelfri.ts`).
+     *
+     * ===========================================================================
+     * MANGDEN STANGER AV BEDOMNINGEN, INTE BOKFORINGEN.
+     *
+     * Jobbet gor tva olika sorters saker med en dag. Det BOKFOR vad som hant —
+     * stanger en glomd utstampling och skriver journalraden — och det BEDOMER
+     * det mot ett schema: sen ankomst och rastavvikelser.
+     *
+     * For den stampelfria rollen stangs bedomningen av. Bokforingen star kvar,
+     * och det ar med flit: den som varit saljare och blivit saljchef har riktiga
+     * stamplingar fran fore rollbytet, och de ar lonegrundande. Hoppade jobbet
+     * over personen helt skulle en sadan dag aldrig stangas, aldrig fa en
+     * journalrad — och sedan blockera loneperioden som en "dag utan utstampling"
+     * tills nagon rattade den for hand (`lib/lonerapport.ts`).
+     *
+     * Med noll stamplingar gor bokforingen anda ingenting: slingan nedan hoppar
+     * over den som saknar handelser for dagen.
+     * ===========================================================================
+     */
+    stampelfriaAnstallda(db),
   ]);
 
   // Vilka dygn ar redan avslutade? Ett dygn med journalrad rors inte igen.
@@ -186,7 +209,10 @@ export async function korTidjobbet(db: SupabaseClient, rastPa: boolean): Promise
       // 2. Sen ankomst, mot schemat som gallde DA. Bedoms fore journalen:
       //    att nagon kom sent ar kant redan innan dagen ar avslutad, och en
       //    oppen dag far darfor inte dolja forseningen.
-      if (dagensSchema) {
+      //
+      //    Den stampelfria rollen bedoms inte. En sen ankomst ar en avvikelse
+      //    fran en arbetstid som mats, och det ar just det den rollen inte har.
+      if (dagensSchema && !stampelfria.has(p.id)) {
         const sen = senAnkomst(egna, {
           start_time: dagensSchema.start_time,
           tol_late: dagensSchema.tol_late ?? 1,
@@ -235,8 +261,9 @@ export async function korTidjobbet(db: SupabaseClient, rastPa: boolean): Promise
       );
       if (!journalFel) utfall.journalrader++;
 
-      // 4. Rastavvikelser.
-      if (!rastPa) continue;
+      // 4. Rastavvikelser. Samma grans som sen ankomst: bedomningen galler den
+      //    som stamplar.
+      if (!rastPa || stampelfria.has(p.id)) continue;
 
       const mittRastschema = gallandeSchema(
         (raster ?? []).filter((r) => r.weekday === veckodag),

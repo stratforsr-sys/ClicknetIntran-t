@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { gallandeSchema } from "@/lib/raster";
 import { gallande, type Handelse } from "@/lib/tid";
 import { uteblivenInstampling } from "@/lib/konsekvens";
+import { stampelfriaAnstallda } from "@/lib/stampelfri-server";
 import {
   svensktDatum,
   svenskTidpunkt,
@@ -143,7 +144,12 @@ export async function foreslaOgiltigFranvaro(db: SupabaseClient): Promise<Konsek
   const senaste = dagarBakat(idag, KARENS_DAGAR);
   const tidigaste = dagarBakat(idag, IKAPP_DAGAR);
 
-  const [{ data: personal }, { data: scheman }, { data: befintliga }] = await Promise.all([
+  const [
+    { data: personal },
+    { data: scheman },
+    { data: befintliga },
+    stampelfria,
+  ] = await Promise.all([
     db.from("employee").select("id, team_id, start_date, end_date").neq("status", "offboarded"),
     db
       .from("work_schedule")
@@ -152,6 +158,19 @@ export async function foreslaOgiltigFranvaro(db: SupabaseClient): Promise<Konsek
       .from("attendance_incident")
       .select("id, employee_id, occurred_on, status")
       .gte("occurred_on", tidigaste),
+    /**
+     * Vilka som inte stamplar.
+     *
+     * DEN HAR MANGDEN AR DEN VIKTIGASTE FILTRERINGEN I FILEN. Motorn letar
+     * efter dagar UTAN instampling, och for VD, saljchef, ekonomi och
+     * projektledare ar varje arbetsdag en sadan dag. Utan den skulle var och
+     * en av dem fa ett forslag om ogiltig franvaro per schemalagd dag — forsta
+     * steget i konsekvenstrappan, i chefens ko, om nagot de inte gjort fel.
+     *
+     * Samma riktning som `tacktaDagar()` ovan: uppgiften lases uteslutande for
+     * att UNDERLATA att foresla nagot.
+     */
+    stampelfriaAnstallda(db),
   ]);
 
   const tackt = await tacktaDagar(db, tidigaste, senaste);
@@ -177,7 +196,14 @@ export async function foreslaOgiltigFranvaro(db: SupabaseClient): Promise<Konsek
   // -------------------------------------------------------------------------
   for (const [nyckel, rad] of harRad) {
     if (rad.status !== "foreslagen") continue;
-    if (!tackt.has(nyckel)) continue;
+
+    // Tva skal att dra tillbaka, och det andra ar nytt: en person som blivit
+    // stampelfri sedan forslaget lades ska inte ha det liggande kvar i kon.
+    // Rollbytet ar svaret pa fragan forslaget stallde, och en ko som staddar
+    // sig sjalv ar skillnaden mellan en regel som galler och en som galler
+    // framat men lamnar en hog bakom sig.
+    const stampelfriaRollen = stampelfria.has(nyckel.split("|")[0]);
+    if (!tackt.has(nyckel) && !stampelfriaRollen) continue;
 
     const { error } = await db.from("attendance_incident").delete().eq("id", rad.id);
     if (!error) {
@@ -188,7 +214,11 @@ export async function foreslaOgiltigFranvaro(db: SupabaseClient): Promise<Konsek
         action: "attendance_incident.withdrawn",
         object_type: "attendance_incident",
         object_id: rad.id,
-        meta: { orsak: "franvaron registrerades i efterhand" },
+        meta: {
+          orsak: stampelfriaRollen
+            ? "rollen stämplar inte"
+            : "franvaron registrerades i efterhand",
+        },
       });
     }
   }
@@ -216,6 +246,10 @@ export async function foreslaOgiltigFranvaro(db: SupabaseClient): Promise<Konsek
     }
 
     for (const p of personal ?? []) {
+      // Den stampelfria rollen har ingen skyldighet att stampla, och darmed
+      // ingen dag som kan vara utebliven. Se `lib/stampelfri.ts`.
+      if (stampelfria.has(p.id)) continue;
+
       const nyckel = `${p.id}|${datum}`;
       if (harRad.has(nyckel)) continue;
 

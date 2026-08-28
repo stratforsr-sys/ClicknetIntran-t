@@ -5,6 +5,90 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-08-28 · Stämpelfria roller: VD, säljchef, ekonomi och projektledare
+
+Beställarens besked: de fyra rollerna stämplar inte in och ut. Regeln ligger i
+**`src/lib/stampelfri.ts`** — en lista och en funktion, ingenting mer — och
+varje ställe som bryr sig frågar den filen.
+
+### Det verkliga problemet låg inte i knappen, utan i nattjobben
+
+Att dölja stämpelknappen är den lilla halvan. Den stora är att navet har **två
+motorer som letar efter dagar då ingenting hände**, och för den som inte
+stämplar är varje arbetsdag en sådan dag:
+
+| Motor | Vad den hade gjort | Fil |
+|---|---|---|
+| Förslag om ogiltig frånvaro | En rad i chefens kö per schemalagd dag — **första steget i konsekvenstrappan**, och den rör till slut pengar | `jobb/konsekvenser.ts` |
+| Påminnelse om oregistrerad frånvaro | En påminnelse i klockan per arbetsdag | `jobb/franvaro.ts` steg 3 |
+
+Båda hämtar nu `stampelfriaAnstallda(db)` i sin befintliga `Promise.all` och
+hoppar över dem. Ingen extra väg, en fråga för hela bolaget.
+
+**Att de fyra har ett schema i `work_schedule` är inte samma sak som att de ska
+stämpla.** Schemat står där för att kollegorna ska veta när kontoret är bemannat.
+Det var precis den sammanblandningen som hade gjort dem till frånvarofall.
+
+### Bedömningen stängs av, bokföringen står kvar
+
+`korTidjobbet` gör två sorters saker med en dag: den **bokför** (stänger en
+glömd utstämpling, skriver journalraden) och den **bedömer** (sen ankomst,
+rastavvikelser). Bara bedömningen är avstängd för de stämpelfria.
+
+Skälet är den som varit säljare och blivit säljchef. Hens gamla stämplingar är
+lönegrundande. Hade jobbet hoppat över personen helt skulle en öppen dag från
+den tiden aldrig stängas, aldrig få en journalrad — och sedan **blockera
+löneperioden** som "dag utan utstämpling" tills någon rättade den för hand. Med
+noll stämplingar gör bokföringen ändå ingenting: slingan hoppar över den som
+saknar händelser för dagen.
+
+### Köerna städar sig själva
+
+Två rader som annars hade blivit liggande efter rollbytet:
+
+- Ett **förslag om ogiltig frånvaro** för någon som hunnit bli stämpelfri dras
+  tillbaka, med `orsak: "rollen stämplar inte"` i loggen. Tillåtet just för att
+  statusen är `foreslagen` — triggern i 0037 nekar allt annat.
+- En **öppen påminnelse** om oregistrerad frånvaro stängs, precis som när
+  frånvaron registreras i efterhand.
+
+En regel som bara gäller framåt lämnar en hög bakom sig, och högen är det ingen
+som städar.
+
+### Gränssnittet
+
+- **Startsidan:** `stamplar = sparr.stampling && !stampelfri(user.roles)`. Både
+  stämpelkortet och de två frågorna efter dagens händelser och dagens schema
+  uteblir — svaret var känt i förväg. Statusbandet visar ingen prick.
+- **`/tid`:** stämpelkortet ritas inte alls. En avstängd knapp hade varit ett
+  påpekande om något man inte ska göra. Chefsvyerna står orörda.
+- **Sidopanelen:** `/tid` finns kvar för **säljchef och VD** — de beslutar om
+  rättelser respektive ogiltig frånvaro därifrån. Ekonomi och projektledare har
+  inget ärende kvar till sidan och tappar posten. **Lönerapporten är en egen
+  post och påverkas inte** — ekonomi behåller den.
+- **Bottennavet:** stämpelknappen på telefonen följer personen, inte modulen.
+
+### Varför roll och inte en kolumn per anställd
+
+Rollen är redan svaret på frågan. En `time_clock_exempt` på `employee` hade
+varit ett andra ställe att glömma uppdatera vid befordran, och det som glider
+isär är alltid det som står på två ställen. Den som blir säljchef slutar
+stämpla samma dag rollen sätts.
+
+**Teamledaren står med flit utanför listan.** Hen är chef men arbetar samma pass
+som sitt team, och är den enda chefsrollen vars arbetstid faktiskt mäts.
+
+### Provet
+
+`tests/stampelfri.mjs` (`npm run test:stampelfri`, med i `npm test`). Halva
+provet är regeln; andra halvan **läser källkoden** i de tre jobben och de tre
+vyerna och kontrollerar att frågan alls ställs. Ett bortglömt filter i
+`konsekvenser.ts` ger varken krasch eller rött prov — det ger en anklagelse i
+en kö, och den upptäcks först när någon undrar varför VD har fjorton ogiltiga
+frånvarodagar.
+
+---
+
 ## 2026-08-28 · E0.7 verifierad i skarp drift, och gränsen fick sitt prov första natten
 
 Nattjobbet kördes 03:13:49 UTC. Kvittot bär de nya nycklarna, alltså körde den

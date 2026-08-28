@@ -1,5 +1,6 @@
 import type { CurrentUser } from "@/lib/auth";
 import { canManageEmployees, hasRole } from "@/lib/auth";
+import { stampelfri } from "@/lib/stampelfri";
 
 export type NavItem = {
   href: string;
@@ -26,9 +27,21 @@ export function navFor(user: CurrentUser | null, stamplingPa: boolean): NavItem[
     items.push({ href: "/utbildning", label: "Utbildning", ikon: "utbildning" });
     // Arenden galler alla: den anstallda ser sina egna, chefen ser inkorgen.
     items.push({ href: "/arenden", label: "Ärenden", ikon: "meny" });
-    // K12: posten dyker upp forst nar modulen slas pa. En meny som pekar pa en
-    // funktion som inte far anvandas ar samre an ingen post alls.
-    if (stamplingPa) items.push({ href: "/tid", label: "Tid", ikon: "tid" });
+    /**
+     * K12: posten dyker upp forst nar modulen slas pa. En meny som pekar pa en
+     * funktion som inte far anvandas ar samre an ingen post alls.
+     *
+     * DEN STAMPELFRIA ROLLEN BEHALLER POSTEN OM DEN HAR ETT ARENDE TILL SIDAN.
+     * /tid ar tva vyer i en: den egna stamplingen och chefens. Saljchefen
+     * beslutar om rattelser och ser vilka som ar pa plats, och VD nar
+     * "Ogiltig franvaro" darifran — bada slutar stampla, men ingen av dem ska
+     * forlora vagen till sin ko. Ekonomi och projektledare har varken det ena
+     * eller det andra kvar, och for dem forsvinner posten. Loneunderlaget ar en
+     * EGEN post langre ner och paverkas inte.
+     */
+    const stamplarSjalv = stamplingPa && !stampelfri(user.roles);
+    const harKoPaTid = stamplingPa && (canManageEmployees(user) || hasRole(user, "ceo"));
+    if (stamplarSjalv || harKoPaTid) items.push({ href: "/tid", label: "Tid", ikon: "tid" });
     // E7 galler alla och kraver inte stampling: en semesteransokan hanger inte
     // pa om K12 ar avgjord. Bara paminnelserna om oregistrerad franvaro gor
     // det, och de hanteras i nattjobbet.

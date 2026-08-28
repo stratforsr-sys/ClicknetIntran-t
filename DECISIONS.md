@@ -401,3 +401,33 @@ anställdas id i stället — mer användbart och mindre uppgift.
 och en sträng som inte går att tolka som en adress fäller hela insertet — alltså
 hade en trasig proxy-rubrik tystat själva inloggningsloggen. Samma val som
 `auth.step2_verified` redan gjort.
+
+## D-STAMP · Stämpelfriheten är en rollfråga, och den stänger av bedömning men inte bokföring
+**2026-08-28.** Beställarens besked: VD, säljchef, ekonomi och projektledare
+stämplar inte in och ut. Tre val gjordes när regeln byggdes, och alla tre går
+att göra tvärtom — därför står de här.
+
+**Roll, inte kolumn.** Alternativet var en flagga `time_clock_exempt` per
+anställd. Rollen är redan svaret på frågan, och en kolumn hade varit ett andra
+ställe att glömma uppdatera vid befordran. Det som glider isär är alltid det som
+står på två ställen. Priset är att undantaget inte går att göra för en enskild
+person utan att röra rollen — och det är avsiktligt: en engångsdispens från
+arbetstidsregistrering ska inte gå att klicka fram.
+
+**Teamledaren står utanför listan.** Hen är chef, men arbetar samma pass som
+sitt team och är den enda chefsrollen vars arbetstid faktiskt mäts. `admin` står
+också utanför: det är en systemroll som ofta bärs vid sidan av en anställning,
+och den som är säljare och admin ska stämpla som säljare.
+
+**Knappen döljs, den stängs inte av.** En avstängd stämpelknapp hade varit ett
+påpekande om något man inte ska göra, varje dag. Följden är att den stämpelfria
+rollen inte kan stämpla ens frivilligt. Vill man tillbaka räcker det att ta bort
+rollen ur `STAMPELFRIA_ROLLER` — allt annat är kvar och provat.
+
+**Nattjobbet slutar BEDÖMA men fortsätter BOKFÖRA.** Sen ankomst och
+rastavvikelser gäller den som stämplar. Auto-stängning av en glömd utstämpling
+och journalraden gör det inte. Skälet är den som varit säljare och blivit
+säljchef: hens gamla stämplingar är lönegrundande, och en dag som aldrig stängs
+blockerar löneperioden som "dag utan utstämpling" tills någon rättar den för
+hand. **Vänder man på det här paret går löneunderlaget sönder för den som byter
+roll mitt i en period, och det syns först vid attesten.**

@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { svensktDatum, svenskVeckodag, svenskTidpunkt, svenskDygnsslut, dagarBakat } from "@/lib/klocka";
 import { gallandeSchema } from "@/lib/raster";
 import { boreskalera, dagarna, sjukfrister, type Regelverk, type Sjukanmalan } from "@/lib/franvaro";
+import { stampelfriaAnstallda } from "@/lib/stampelfri-server";
 
 /**
  * Nattjobbets frånvarosteg (E7.8, E7.11, AC-3.17, AC-3.19, AC-3.23).
@@ -123,9 +124,22 @@ export async function korFranvarojobbet(
     return { ...utfall, hoppade_over: "stämplingen är av, ingen frånvaro kan saknas" };
   }
 
-  const [{ data: personal }, { data: scheman }] = await Promise.all([
+  const [{ data: personal }, { data: scheman }, stampelfria] = await Promise.all([
     db.from("employee").select("id, team_id, start_date").neq("status", "offboarded"),
     db.from("work_schedule").select("id, scope, employee_id, team_id, weekday, start_time, end_time, valid_from"),
+    /**
+     * VD, säljchef, ekonomi och projektledare stämplar inte (`lib/stampelfri.ts`).
+     *
+     * Steget nedan letar efter schemalagda dagar utan stämpling, och för dem är
+     * varje sådan dag en. Utan filtret hade var och en av dem fått en påminnelse
+     * om oregistrerad frånvaro per arbetsdag — och när påminnelsen blir daglig
+     * betyder den ingenting för dem som faktiskt behöver den.
+     *
+     * Bolagsschemat rör de här rollerna också: de har ett schema i `work_schedule`
+     * för att kollegorna ska veta när kontoret är bemannat. Det är alltså inte
+     * schemat som avgör vem som ska stämpla, utan rollen.
+     */
+    stampelfriaAnstallda(db),
   ]);
 
   const fran = dagarBakat(idag, IKAPP_DAGAR);
@@ -184,6 +198,17 @@ export async function korFranvarojobbet(
     const dagensScheman = (scheman ?? []).filter((s) => s.weekday === veckodag);
 
     for (const p of personal ?? []) {
+      // Ingen påminnelse till den som inte stämplar — och en påminnelse som
+      // lades INNAN rollen sattes stängs, i stället för att bli kvar och skava
+      // i klockan. Samma hantering som när frånvaron registreras i efterhand:
+      // det som gjorde raden meningsfull finns inte längre.
+      if (stampelfria.has(p.id)) {
+        if (redanPam.get(`${p.id}:${datum}`) === null) {
+          attStanga.push({ employee_id: p.id, work_date: datum });
+        }
+        continue;
+      }
+
       // Ingen påminnelse för dagar före anställningens start.
       if (p.start_date && datum < String(p.start_date).slice(0, 10)) continue;
 

@@ -11,6 +11,7 @@ import { granskningslage } from "@/lib/dokument";
 import { kursLage, LAGE_ETIKETT, LAGE_TON } from "@/lib/utbildning";
 import { slaLage } from "@/lib/arenden";
 import { hamtaLage } from "@/lib/sparrar";
+import { stampelfri, STAMPELFRI_FORKLARING } from "@/lib/stampelfri";
 import { gallandeSchema } from "@/lib/raster";
 import { svensktDatum, svenskVeckodag } from "@/lib/klocka";
 import { hamtaProvision } from "@/lib/provision-server";
@@ -77,6 +78,20 @@ export default async function Startsida() {
   const attesterar = canManageEmployees(user);
   const serAvvikelser = canManageEmployees(user) || hasRole(user, "team_lead");
   const chef = serPersonal || hanterarArenden;
+
+  /**
+   * Stamplar DEN HAR personen? Tva villkor, och de svarar pa olika fragor.
+   *
+   * `sparr.stampling` ar modulens: ar stamplingen paslagen i bolaget alls.
+   * `stampelfri` ar personens: har rollen en arbetstid som mats in och ut. VD,
+   * saljchef, ekonomi och projektledare har inte det — se `lib/stampelfri.ts`.
+   *
+   * Skillnaden mot att bara dolja knappen ar att BADA fragorna nedan ocksa
+   * uteblir. En stamplingsfraga for nagon som inte stamplar hamtar alltid noll
+   * rader; att stalla den anda ar tva turer per sidvisning for ett svar som ar
+   * kant i forvag.
+   */
+  const stamplar = sparr.stampling && !stampelfri(user.roles);
 
   // E0.7. Exakt kretsen i `audit_log_read`, alltsa samma som `hanterar` pa
   // /fel. Se driftraden langre ner for varfor fragan stalls villkorat.
@@ -175,7 +190,7 @@ export default async function Startsida() {
       .order("issued_at", { ascending: false }),
 
     // Stamplingen. Bara dagens handelser — resten hor hemma pa /tid.
-    sparr.stampling
+    stamplar
       ? supabase
           .from("time_event")
           .select("id, kind, occurred_at, source, supersedes_id, correction_state, note")
@@ -187,7 +202,7 @@ export default async function Startsida() {
     // Dagens schema, for tidslinjens ram och for "kvar till schemats slut".
     // RLS ger bolagets, teamets och det egna — `gallandeSchema` valjer sedan
     // den mest specifika, precis som nattjobbet gor.
-    sparr.stampling
+    stamplar
       ? supabase
           .from("work_schedule")
           .select("scope, employee_id, team_id, start_time, end_time, valid_from")
@@ -198,7 +213,7 @@ export default async function Startsida() {
     // Rastschemat behovs bara till nedrakningen, och nedrakningen finns bara
     // nar rasten ar pa. Utan schemalagd langd raknas ingenting ner — en
     // nedrakning mot en gissad rastlangd vore varre an ingen alls.
-    sparr.rast
+    stamplar && sparr.rast
       ? supabase
           .from("scheduled_break")
           .select("scope, employee_id, team_id, sort, duration_minutes, valid_from")
@@ -317,7 +332,7 @@ export default async function Startsida() {
 
   const handelser: Handelse[] = idag ?? [];
   let stamplingslage = null;
-  if (sparr.stampling) {
+  if (stamplar) {
     const lage = lageNu(handelser);
     const giltiga = gallande(handelser);
     const senaste = giltiga[giltiga.length - 1] ?? null;
@@ -374,7 +389,7 @@ export default async function Startsida() {
   const overTiden = (koArenden ?? []).filter((a) => slaLage(a) === "over").length;
   const snart = (koArenden ?? []).filter((a) => slaLage(a) === "snart").length;
 
-  const snabbval = snabbvalFor(user, sparr.stampling);
+  const snabbval = snabbvalFor(user, stamplar);
 
   /**
    * ===========================================================================
@@ -440,7 +455,13 @@ export default async function Startsida() {
         </>
       ) : (
         <p className="text-small text-ink-500">
-          Stämplingen är avstängd. Snabbvalen nedan fungerar som vanligt.
+          {/* Tva olika besked, for det ar tva olika saker. "Avstangd" galler
+              hela bolaget och ar tillfalligt; den stampelfria rollen ar ett
+              varaktigt forhallande, och den som last det ska inte behova
+              undra om nagot ar trasigt. */}
+          {sparr.stampling
+            ? `${STAMPELFRI_FORKLARING} Snabbvalen nedan fungerar som vanligt.`
+            : "Stämplingen är avstängd. Snabbvalen nedan fungerar som vanligt."}
         </p>
       )}
 
