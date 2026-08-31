@@ -4,6 +4,16 @@ import { supabaseServer, supabaseAdmin } from "@/lib/supabase/server";
 import { fullName, type CurrentUser } from "@/lib/auth";
 import { kursLage } from "@/lib/utbildning";
 import { MAX_NOTISER, notisId, sortera, type Notis } from "@/lib/notiser";
+import { hamtaLage } from "@/lib/sparrar";
+import { stampelfri } from "@/lib/stampelfri";
+import { guiderForRoller } from "@/guider";
+import { dagarSedan, personlage, type Progress } from "@/lib/guider";
+
+/** G6. Sa lange far det sta stilla innan klockan sager till. */
+const TYST_DAGAR = 3;
+
+/** Och sa lange innan chefen far raden om nagon annan. */
+const CHEFENS_DAGAR = 7;
 
 /**
  * Allt som ar riktat till den har personen just nu.
@@ -20,6 +30,13 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
   if (!user.employee) return [];
   const mig = user.employee.id;
   const supabase = await supabaseServer();
+
+  /**
+   * G6. Modulspärren behövs för att veta om personen stämplar, och därmed
+   * vilka guider som alls gäller henne. Läses före de andra frågorna eftersom
+   * den är cachead per begäran — sidan under klockan har redan ställt den.
+   */
+  const lage = await hamtaLage();
 
   const [
     { data: seddRad },
@@ -41,6 +58,8 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
     { data: felrapporter },
     { data: handelser },
     { data: konsekvensregler },
+    { data: guiderader },
+    { data: knuffar },
   ] = await Promise.all([
     supabase.from("notification_seen").select("seen_at").eq("employee_id", mig).maybeSingle(),
     // 0038. Poster den har personen redan klickat pa. Hamtas med hennes egen
@@ -144,6 +163,22 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
     // Tre rader. `notifiera` ar konfiguration per trappsteg (fraga 48), sa
     // fragan gar inte att undvika — men den ar billig och ligger i samma vag.
     supabase.from("consequence_rule").select("id, atgard, notifiera"),
+    /**
+     * G6. EN fraga bar bada riktningarna, precis som rollspelen och
+     * konsekvenserna gor: RLS i 0041 ger mig mina egna rader OCH deras jag
+     * leder. Vad en rad betyder avgors nedan av vems den ar.
+     */
+    supabase
+      .from("guide_progress")
+      .select("employee_id, guide_slug, version, steg, completed_at, updated_at"),
+    // Knuffar riktade till mig. Tre racker — fyra knuffar i klockan ar inte
+    // fyra gangers pafart, det ar en chef som borde ringa i stallet.
+    supabase
+      .from("guide_nudge")
+      .select("id, nudged_by, nudged_at")
+      .eq("employee_id", mig)
+      .order("nudged_at", { ascending: false })
+      .limit(3),
   ]);
 
   // Ingen rad = allt ar olast. Ratt hall att fela at: en nyanstalld ska se
@@ -452,6 +487,118 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
       tidpunkt: f.first_seen_at,
       olast: arNy(f.first_seen_at),
     });
+  }
+
+  /**
+   * ===========================================================================
+   * G6. SYSTEMGUIDERNA — TRE POSTER UR SAMMA RADER
+   *
+   * Ingen av dem larmar direkt. En guide som startade i morse och står på steg
+   * två är inte ett problem; det är någon som håller på. Först när ingenting
+   * rört sig på tre dygn är tystnaden värd en rad, och det är samma tröskel
+   * chefens vy markerar på.
+   * ===========================================================================
+   */
+  {
+    const minaGuider = guiderForRoller(user.roles, {
+      stamplar: lage.stampling && !stampelfri(user.roles),
+      behorigheter: user.permissions,
+    });
+
+    const alla = (guiderader ?? []) as (Progress & { employee_id: string })[];
+    const minaRader = alla.filter((r) => r.employee_id === mig);
+    const mitt = personlage(minaGuider, minaRader, user.employee.start_date);
+
+    // Nasta tur som inte ar klar. Bar id:t, sa posten aterupstar av sig sjalv
+    // nar man gjort klart den man stod i och nasta tar vid.
+    const nasta = minaGuider.find(
+      (g) => !minaRader.some((r) => r.guide_slug === g.slug && r.completed_at),
+    );
+
+    /**
+     * MIN EGEN PAMINNELSE. Bara nar det faktiskt star still: den som gor en
+     * guide i dag ska inte samtidigt fa en notis om att hon inte gjort den.
+     *
+     * Tidpunkten ar senaste rorelsen, eller startdatumet for den som aldrig
+     * borjat. Utan en tidpunkt filtreras posten bort langre ner — och en
+     * paminnelse som aldrig syns ar samre an ingen.
+     */
+    if (!mitt.onboardad && nasta) {
+      const stilla =
+        mitt.stillestand === null
+          ? (dagarSedan(user.employee.start_date ?? null) ?? 0)
+          : mitt.stillestand;
+
+      if (stilla >= TYST_DAGAR) {
+        const tidpunkt =
+          mitt.senast ?? (user.employee.start_date ? `${user.employee.start_date}T08:00:00Z` : "");
+        notiser.push({
+          id: notisId("guide", nasta.slug, nasta.version),
+          typ: "guide",
+          rubrik: mitt.klara === 0 ? "Kom igång i navet" : `${mitt.av - mitt.klara} guider kvar`,
+          detalj: `${mitt.klara} av ${mitt.av} klara · ${nasta.titel} (${nasta.minuter} min)`,
+          href: "/utbildning/systemguider",
+          tidpunkt,
+          olast: arNy(tidpunkt),
+        });
+      }
+    }
+
+    /**
+     * NAGON HAR SAGT TILL. Knuffen visas aven om turen ror sig — den ar inte en
+     * paminnelse utan ett meddelande fran en manniska, och att tysta den for
+     * att personen precis borjat vore att dolja att chefen horde av sig.
+     *
+     * Men inte nar hon ar klar. Da ar knuffen overspelad, och en tillsagelse om
+     * nagot man redan gjort ar det snabbaste sattet att fa nagon att sluta lasa
+     * klockan.
+     */
+    if (!mitt.onboardad) {
+      for (const k of knuffar ?? []) {
+        notiser.push({
+          id: notisId("guide-knuff", k.id),
+          typ: "guide",
+          rubrik: "Din chef undrar hur det går",
+          detalj: `${namn.get(k.nudged_by) ?? "Din chef"} · ${mitt.av - mitt.klara} guider kvar`,
+          href: "/utbildning/systemguider",
+          tidpunkt: k.nudged_at,
+          olast: arNy(k.nudged_at),
+        });
+      }
+    }
+
+    /**
+     * CHEFENS RAD. Bygger BARA pa raderna, inte pa nagons paket: en tur som
+     * paborjats och sedan legat still i en vecka ar en tydlig signal utan att
+     * vi behover rakna fram vilka guider var och en skulle ha haft. Att gora
+     * det hade betytt en rolluppslagning per person i varje sidvisning, i en
+     * klocka som redan staller sjutton fragor.
+     *
+     * ID:T BAR ANTALET VECKOR, sa posten aterupstar en gang i veckan for den
+     * som klickat bort den och som fortfarande inte gjort nagot at saken.
+     */
+    const perPerson = new Map<string, number>();
+    for (const r of alla) {
+      if (r.employee_id === mig || r.completed_at || r.steg <= 0) continue;
+      const dagar = dagarSedan(r.updated_at ?? null);
+      if (dagar === null) continue;
+      const forra = perPerson.get(r.employee_id);
+      if (forra === undefined || dagar < forra) perPerson.set(r.employee_id, dagar);
+    }
+
+    for (const [personId, dagar] of perPerson) {
+      if (dagar < CHEFENS_DAGAR) continue;
+      const veckor = Math.floor(dagar / 7);
+      notiser.push({
+        id: notisId("guide-team", personId, veckor),
+        typ: "guide",
+        rubrik: `${namn.get(personId) ?? "En medarbetare"} har stannat av`,
+        detalj: `Ingen rörelse i systemguiderna på ${dagar} dagar`,
+        href: "/utbildning/oversikt/systemguider",
+        tidpunkt: new Date(Date.now() - dagar * 24 * 60 * 60 * 1000).toISOString(),
+        olast: true,
+      });
+    }
   }
 
   /**

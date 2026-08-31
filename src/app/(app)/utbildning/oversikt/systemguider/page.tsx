@@ -17,6 +17,7 @@ import {
   type Progress,
 } from "@/lib/guider";
 import type { Permission, Role } from "@/lib/roles";
+import { Knuffa } from "./Knuffa";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Systemguider — progress — Clicknet Nav" };
@@ -151,6 +152,7 @@ export default async function GuideOversikt() {
                   <Th>Pågår</Th>
                   <Th>Senast</Th>
                   <Th>Läge</Th>
+                  <Th>{""}</Th>
                 </tr>
               </thead>
               <tbody>
@@ -176,6 +178,15 @@ export default async function GuideOversikt() {
                     <td className="px-6 py-3">
                       <Lagesmarke lage={l} />
                     </td>
+                    <td className="px-6 py-3 text-right">
+                      {/* Bara dar det betyder nagot. En knuff till den som ar
+                          klar, eller till den som gjorde ett steg i morse, ar
+                          brus — och en knapp som alltid star framme blir en
+                          knapp man trycker pa av vana. */}
+                      {!l.onboardad && (starStilla(l) || l.forsenad) && (
+                        <Knuffa employeeId={person.id} />
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -197,6 +208,11 @@ export default async function GuideOversikt() {
                   <p className="mt-0.5 text-small text-ink-500">
                     <Senast lage={l} />
                   </p>
+                  {!l.onboardad && (starStilla(l) || l.forsenad) && (
+                    <div className="mt-3">
+                      <Knuffa employeeId={person.id} />
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
@@ -206,7 +222,7 @@ export default async function GuideOversikt() {
 
       <p className="text-small text-ink-500">
         Guiderna låser ingenting. Den här vyn är till för att kunna fråga någon hur det går —
-        inte för att räkna fel på henne.
+        inte för att räkna fel på henne. En knuff blir en post i hennes klocka med ditt namn på.
       </p>
     </div>
   );

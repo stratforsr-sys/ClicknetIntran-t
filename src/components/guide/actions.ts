@@ -1,7 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, hasRole } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase/server";
+import { skrivHandelse } from "@/lib/handelselogg-server";
 import { hamtaLage } from "@/lib/sparrar";
 import { stampelfri } from "@/lib/stampelfri";
 import {
@@ -86,4 +88,62 @@ export async function borjaOmGuide(slug: string): Promise<void> {
 
   await aterstallGuide(user.employee.id, guide.slug);
   revalidatePath("/utbildning/systemguider");
+}
+
+/**
+ * Knuffar någon som stannat av i sina systemguider.
+ *
+ * ===========================================================================
+ * DEN HÄR ÄR DEN ENDA I FILEN SOM RÖR NÅGON ANNAN ÄN DEN INLOGGADE, OCH DÄRFÖR
+ * DEN ENDA SOM BEHÖVER FRÅGA OM LOV.
+ *
+ * De andra tar `employee_id` ur sessionen och kan därför inte missbrukas. Den
+ * här får ett id utifrån — det är hela poängen med den — och måste alltså
+ * kontrollera att avsändaren har med saken att göra. Ledningen får knuffa vem
+ * som helst; en teamledare bara sina egna. Ingen annan får knuffa någon.
+ *
+ * Kontrollen görs HÄR och inte av RLS, eftersom skrivningen går via service
+ * role (0042). Det är samma uppdelning som resten av navet: läsningen skyddas
+ * av databasen, skrivningen av att det bara finns en väg in.
+ * ===========================================================================
+ *
+ * TYST VID NEJ. Funktionen säger inte om personen finns eller vem som leder
+ * henne — ett felmeddelande som skiljer på "får inte" och "finns inte" är en
+ * väg att kartlägga personalen för den som provar id:n.
+ */
+export async function knuffa(employeeId: string): Promise<void> {
+  if (typeof employeeId !== "string" || !/^[0-9a-f-]{36}$/i.test(employeeId)) return;
+
+  const user = await getCurrentUser();
+  if (!user?.employee) return;
+  if (employeeId === user.employee.id) return; // knuffa inte dig själv
+
+  const db = supabaseAdmin();
+
+  const { data: mal } = await db
+    .from("employee")
+    .select("id, manager_id, status")
+    .eq("id", employeeId)
+    .maybeSingle();
+
+  if (!mal || mal.status === "offboarded") return;
+
+  const farKnuffa =
+    hasRole(user, "sales_manager", "ceo", "admin") || mal.manager_id === user.employee.id;
+  if (!farKnuffa) return;
+
+  await db.from("guide_nudge").insert({
+    employee_id: mal.id,
+    nudged_by: user.employee.id,
+  });
+
+  await skrivHandelse({
+    actorId: user.employee.id,
+    action: "guide.nudged",
+    objectType: "employee",
+    objectId: mal.id,
+    reason: "Knuff om systemguider",
+  });
+
+  revalidatePath("/utbildning/oversikt/systemguider");
 }

@@ -7,6 +7,7 @@ import { korKontojobbet } from "@/lib/jobb/konton";
 import { korArendejobbet } from "@/lib/jobb/arenden";
 import { korFranvarojobbet } from "@/lib/jobb/franvaro";
 import { korSatsjobbet } from "@/lib/jobb/satser";
+import { korGuidejobbet } from "@/lib/jobb/guider";
 import { foreslaOgiltigFranvaro } from "@/lib/jobb/konsekvenser";
 import { hamtaDrift, type Drift } from "@/lib/jobb/drift-server";
 import { kvittoLarmtext, larmDigest, larmSokvag } from "@/lib/jobb/larm";
@@ -105,6 +106,10 @@ export async function GET(request: NextRequest) {
     // agaren. En foraldrad arbetsgivaravgift ger fel lonekostnad utan att
     // nagonstans se fel ut.
     ["satser", () => korSatsjobbet(db)],
+    // G6: den som varit anstalld over fristen utan att ga igenom sina
+    // systemguider ger ett arende till narmaste chef. Guiderna laser ingenting,
+    // sa utan det har steget finns ingen som marker att onboardingen uteblev.
+    ["guider", () => korGuidejobbet(db, lage.stampling)],
   ];
 
   for (const [namn, kor] of steg) {
