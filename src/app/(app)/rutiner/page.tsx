@@ -8,7 +8,6 @@ import { getCurrentUser, hasRole } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { agarnamn } from "@/lib/rutiner-data";
 import {
-import { GuideVard } from "@/components/guide/GuideVard";
   DOC_TYPE_LABEL,
   STATUS_LABEL,
   granskningslage,
@@ -16,6 +15,7 @@ import { GuideVard } from "@/components/guide/GuideVard";
   prefixfraga,
   type DocType,
 } from "@/lib/dokument";
+import { GuideVard } from "@/components/guide/GuideVard";
 
 export const dynamic = "force-dynamic";
 
