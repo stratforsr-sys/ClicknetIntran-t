@@ -1,4 +1,4 @@
-import type { Role } from "../lib/roles.ts";
+import type { Permission, Role } from "../lib/roles.ts";
 
 /**
  * Vad ett steg i en guidad tur är.
@@ -106,6 +106,16 @@ export type Guide = {
    * varnar för. Anroparen räknar ut svaret och skickar det vidare.
    */
   krav?: "stamplar";
+
+  /**
+   * En tilldelad behörighet, inte en roll.
+   *
+   * `payroll_cost_viewer` är den skarpa: kretsen som ser vad namngivna personer
+   * KOSTAR är mindre än den som sköter löner, och den följer inte av rollen —
+   * behörigheten delas ut per person under Personal (K26/E15.1). En guide för
+   * den vyn får inte ligga och skylta i listan för en ekonom som inte fått den.
+   */
+  behorighet?: Permission;
 
   /** Ungefärlig tid i minuter. Står i erbjudandet, så ingen börjar i blindo. */
   minuter: number;

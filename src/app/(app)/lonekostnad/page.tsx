@@ -10,6 +10,7 @@ import { supabaseServer, supabaseAdmin } from "@/lib/supabase/server";
 import { kronor } from "@/lib/lonekostnad";
 import { farSeLonekostnad } from "@/lib/lonekostnad-server";
 import { Raknaknapp } from "./Raknaknapp";
+import { GuideVard } from "@/components/guide/GuideVard";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Lönekostnad — Clicknet Nav" };
@@ -115,8 +116,9 @@ export default async function Lonekostnadssida({
 
   return (
     <div className="flex flex-col gap-4 pt-2">
+      <GuideVard slug="lonekostnad" />
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div data-guide="lonekostnad.rubrik">
           <h1 className="text-display text-ink-900">Lönekostnad</h1>
           <p className="mt-1 max-w-[70ch] text-body text-ink-500">
             Vad en säljare kostar, och hur mycket hon behöver sälja för att bära sin egen kostnad.
@@ -128,7 +130,7 @@ export default async function Lonekostnadssida({
         </ButtonLink>
       </div>
 
-      <Card>
+      <Card guide="lonekostnad.period">
         <CardHeader titel="Period" beskrivning="Frånvaron hämtas ur löneunderlaget för perioden." />
         <div className="flex flex-wrap gap-2">
           {lista.map((p) => (

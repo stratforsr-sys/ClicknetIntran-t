@@ -13,6 +13,7 @@ import {
   type Kandidat,
   type Steg,
 } from "@/lib/rekrytering";
+import { GuideVard } from "@/components/guide/GuideVard";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Rekrytering — Clicknet Nav" };
@@ -67,8 +68,9 @@ export default async function Rekrytering() {
 
   return (
     <div className="flex flex-col gap-4 pt-2">
+      <GuideVard slug="rekrytering" />
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div data-guide="rekrytering.rubrik">
           <h1 className="text-display text-ink-900">Rekrytering</h1>
           <p className="mt-1 max-w-[70ch] text-body text-ink-500">
             {oppna.length === 0
@@ -79,7 +81,7 @@ export default async function Rekrytering() {
         <ButtonLink href="/rekrytering/ny">Ny kandidat</ButtonLink>
       </div>
 
-      <Card className="p-0 md:p-0">
+      <Card className="p-0 md:p-0" guide="rekrytering.lista">
         {oppna.length === 0 ? (
           <div className="p-6">
             <EmptyState

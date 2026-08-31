@@ -45,7 +45,10 @@ export default async function Systemguider() {
   const [lage, progress] = await Promise.all([hamtaLage(), hamtaProgress(user.employee.id)]);
   const stamplar = lage.stampling && !stampelfri(user.roles);
 
-  const mina = guiderForRoller(user.roles, stamplar);
+  const mina = guiderForRoller(user.roles, {
+    stamplar,
+    behorigheter: user.permissions,
+  });
   const forSlug = new Map(progress.map((p) => [p.guide_slug, p]));
 
   const kvar = mina.filter((g) => guideLage(g, forSlug.get(g.slug)) !== "klar");

@@ -16,6 +16,7 @@ import {
 import { hamtaDrift, type Drift } from "@/lib/jobb/drift-server";
 import { DRIFT_ETIKETT, MAX_TIMMAR } from "@/lib/jobb/larm";
 import { sattStatus } from "./actions";
+import { GuideVard } from "@/components/guide/GuideVard";
 
 export const dynamic = "force-dynamic";
 
@@ -180,8 +181,9 @@ export default async function Felkon({
 
   return (
     <div className="flex flex-col gap-4 pt-2">
+      <GuideVard slug="rapportera-fel" />
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div data-guide="fel.rubrik">
           <h1 className="text-display text-ink-900">{hanterar ? "Fel och rapporter" : "Mina felrapporter"}</h1>
           <p className="mt-1 max-w-[70ch] text-body text-ink-500">
             {hanterar
@@ -189,9 +191,11 @@ export default async function Felkon({
               : "Det du rapporterat, och vad som hänt med det sedan."}
           </p>
         </div>
-        <ButtonLink href="/fel/nytt" variant="primar">
-          Rapportera fel
-        </ButtonLink>
+        <div data-guide="fel.rapportera">
+          <ButtonLink href="/fel/nytt" variant="primar">
+            Rapportera fel
+          </ButtonLink>
+        </div>
       </div>
 
       {tack && (

@@ -7,6 +7,7 @@ import { Notis } from "@/components/ui/Notis";
 import { supabaseServer } from "@/lib/supabase/server";
 import { getCurrentUser, fullName, hasRole } from "@/lib/auth";
 import { AVTALSSTATUS_ETIKETT, type Avtalsstatus } from "@/lib/avtal";
+import { GuideVard } from "@/components/guide/GuideVard";
 
 export const dynamic = "force-dynamic";
 
@@ -41,8 +42,9 @@ export default async function Avtal() {
 
   return (
     <div className="flex flex-col gap-4 pt-2">
+      <GuideVard slug="avtal" />
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div data-guide="avtal.rubrik">
           <h1 className="text-display text-ink-900">{hanterar ? "Avtal" : "Mina avtal"}</h1>
           <p className="mt-1 max-w-[70ch] text-body text-ink-500">
             {hanterar
@@ -70,7 +72,7 @@ export default async function Avtal() {
         </Notis>
       )}
 
-      <Card className="p-0 md:p-0">
+      <Card className="p-0 md:p-0" guide="avtal.lista">
         {rader.length === 0 ? (
           <div className="p-6">
             <EmptyState

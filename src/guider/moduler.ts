@@ -283,3 +283,154 @@ export const PROVISION: Guide = {
     },
   ],
 };
+
+export const AVTAL: Guide = {
+  slug: "avtal",
+  titel: "Avtal",
+  beskrivning: "Ditt anställningsavtal, och varför texten fryses.",
+  version: 1,
+  minuter: 2,
+  roller: [],
+  modul: "/avtal",
+  steg: [
+    {
+      rubrik: "Avtal",
+      text: "Två minuter. Sidan visar olika saker beroende på vem du är — dina egna avtal, eller allas.",
+      handling: "vidare",
+      vag: "/avtal",
+    },
+    {
+      ankare: "avtal.rubrik",
+      rubrik: "Ditt eget avtal utan att fråga någon",
+      text:
+        "Är du inte chef ser du dina egna utfärdade avtal och ingenting annat. Att kunna läsa sitt " +
+        "anställningsavtal utan att be någon leta upp det är hela nyttan med sidan.",
+      handling: "vidare",
+    },
+    {
+      ankare: "avtal.lista",
+      rubrik: "Texten fryses när avtalet utfärdas",
+      text:
+        "Avtalet skapas ur en mall, men blir en egen text i samma stund det utfärdas. Ändras mallen " +
+        "sedan rör det inte ditt avtal — det som står där är det som gällde när du skrev under.",
+      handling: "vidare",
+    },
+    {
+      rubrik: "Papper, fortfarande",
+      text:
+        "E-signering är inte byggd. Ett utfärdat avtal skrivs ut och skrivs under för hand, och " +
+        "personnumret fylls i på papperet: navet lagrar inga personnummer.",
+      handling: "vidare",
+    },
+  ],
+};
+
+export const NYHETER: Guide = {
+  slug: "nyheter",
+  titel: "Nyheter",
+  beskrivning: "Besked från ledningen, och varför du ser just dem du ser.",
+  version: 1,
+  minuter: 2,
+  roller: [],
+  modul: "/nyheter",
+  steg: [
+    {
+      rubrik: "Nyheter",
+      text: "Två minuter om var beskeden kommer ifrån och varför din lista inte är samma som kollegans.",
+      handling: "vidare",
+      vag: "/nyheter",
+    },
+    {
+      ankare: "nyheter.rubrik",
+      rubrik: "Riktat, inte allmänt",
+      text:
+        "Ett inlägg kan riktas till en roll eller ett team. Du ser det som gäller dig — så att " +
+        "listan är kort nog att faktiskt läsas.",
+      handling: "vidare",
+    },
+    {
+      ankare: "nyheter.lista",
+      rubrik: "Det viktiga ligger överst",
+      text:
+        "Ett inlägg märkt Viktigt fästs i toppen och stannar där tills det tas ner. Nya inlägg " +
+        "säger till i klockan.",
+      handling: "vidare",
+    },
+  ],
+};
+
+export const FEL: Guide = {
+  slug: "rapportera-fel",
+  titel: "Rapportera fel",
+  beskrivning: "Vad du gör när navet gör fel — och varför det är värt en halv minut.",
+  version: 1,
+  minuter: 2,
+  roller: [],
+  modul: "/fel",
+  steg: [
+    {
+      rubrik: "Fel",
+      text: "Två minuter. Den här sidan är den enda vägen som fungerar när något annat inte gör det.",
+      handling: "vidare",
+      vag: "/fel",
+    },
+    {
+      ankare: "fel.rapportera",
+      rubrik: "Skriv vad du gjorde, inte vad du tror",
+      text:
+        "Vilken sida, vad du tryckte på, och vad som hände i stället. Navet fyller själv i vem du " +
+        "är och var du var — du behöver inte återskapa felet för att rapportera det.",
+      handling: "vidare",
+    },
+    {
+      ankare: "fel.rubrik",
+      rubrik: "Du ser vad som hänt med den",
+      text:
+        "Din rapport ligger kvar här tills den är avgjord. Ett fel som träffat flera personer blir " +
+        "en rad med en räknare, inte en rad per gång — så rapportera även om du tror att någon " +
+        "annan hunnit före.",
+      handling: "vidare",
+    },
+  ],
+};
+
+export const KV: Guide = {
+  slug: "kv-protokollet",
+  titel: "K&V",
+  beskrivning: "Två samtal i veckan, sex områden, och vad en godkänd vecka ger.",
+  version: 1,
+  minuter: 3,
+  roller: ["salesperson", "sales_manager", "ceo", "finance"],
+  modul: "/kv",
+  steg: [
+    {
+      rubrik: "K&V",
+      text: "Tre minuter om protokollet och om vad det hänger ihop med.",
+      handling: "vidare",
+      vag: "/kv",
+    },
+    {
+      ankare: "kv.rubrik",
+      rubrik: "Två samtal i veckan, sex områden",
+      text:
+        "Din säljchef lyssnar på två samtal och bedömer dem på sex områden. En godkänd vecka ger " +
+        "bonus på månadens provision — det är därför bedömningen finns, och därför den är " +
+        "skriven och inte muntlig.",
+      handling: "vidare",
+    },
+    {
+      rubrik: "Utan regler räknas ingenting",
+      text:
+        "Reglerna sätts per månad. Är de inte satta för den månad du tittar på räknas inga " +
+        "bedömningar — då står det en gul ruta här, och den är riktad till din chef, inte till dig.",
+      handling: "vidare",
+    },
+    {
+      rubrik: "Du ser din egen kurva",
+      text:
+        "Varje bedömning ligger kvar, så du kan se vad som gått framåt över tid. Din chef ser " +
+        "rutnätet över alla — du ser dina egna.",
+      handling: "vidare",
+    },
+  ],
+};

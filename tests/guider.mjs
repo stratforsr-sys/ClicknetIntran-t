@@ -121,21 +121,45 @@ console.log("\n\x1b[1mRegistret\x1b[0m");
   for (const g of kravsguider) {
     ok(
       `${g.slug}: göms för den som inte stämplar`,
-      !guiderForRoller(["salesperson"], false).includes(g),
+      !guiderForRoller(["salesperson"], { stamplar: false }).includes(g),
     );
     ok(
       `${g.slug}: visas för den som stämplar`,
-      guiderForRoller(["salesperson"], true).includes(g),
+      guiderForRoller(["salesperson"], { stamplar: true }).includes(g),
+    );
+  }
+
+  /**
+   * Behörighetsguiderna. `payroll_cost_viewer` är den skarpa: den delas ut per
+   * person och inte med en roll, och en guide som skyltade i listan för varje
+   * ekonom hade lovat en vy de inte kommer in i.
+   */
+  const behorighetsguider = GUIDER.filter((g) => g.behorighet);
+  ok("det finns minst en behörighetsstyrd guide", behorighetsguider.length >= 1);
+  for (const g of behorighetsguider) {
+    ok(
+      `${g.slug}: göms utan behörigheten`,
+      !guiderForRoller(["finance", "ceo"], { behorigheter: [] }).includes(g),
+    );
+    ok(
+      `${g.slug}: visas med den`,
+      guiderForRoller(["finance"], { behorigheter: [g.behorighet] }).includes(g),
     );
   }
 
   // En roll som inte är säljare ska inte få säljarens guider.
-  const ekonomi = guiderForRoller(["finance"], false).map((g) => g.slug);
+  const ekonomi = guiderForRoller(["finance"]).map((g) => g.slug);
   ok("ekonomi får inte stämplingsguiden", !ekonomi.includes("stampla-in-och-ut"));
   ok("men får de som gäller alla", ekonomi.includes("rutiner-och-kvittens"));
 
-  const projektledare = guiderForRoller(["project_manager"], false).map((g) => g.slug);
+  const projektledare = guiderForRoller(["project_manager"]).map((g) => g.slug);
   ok("projektledare får inte orderguiden", !projektledare.includes("registrera-order"));
+  ok("projektledare får inte personalguiden", !projektledare.includes("personal-och-anstallning"));
+
+  // Utan villkor alls ska ingenting krascha, och de som gäller alla ska komma med.
+  const alla = guiderForRoller([]).map((g) => g.slug);
+  ok("ett konto utan roller får de öppna guiderna", alla.includes("nyheter") && alla.includes("avtal"));
+  ok("men ingen av ledningens", !alla.includes("lonerapport") && !alla.includes("avvikelser"));
 }
 
 console.log("\n\x1b[1mVarje guide går att starta\x1b[0m");

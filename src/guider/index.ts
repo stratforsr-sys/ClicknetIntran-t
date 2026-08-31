@@ -1,7 +1,19 @@
 import type { Guide } from "./typer.ts";
-import type { Role } from "../lib/roles.ts";
+import type { Permission, Role } from "../lib/roles.ts";
 import { KOM_IGANG } from "./kom-igang.ts";
-import { ARENDEN, FRANVARO, ORDER, PROVISION, RUTINER, STAMPLA } from "./moduler.ts";
+import {
+  ARENDEN,
+  AVTAL,
+  FEL,
+  FRANVARO,
+  KV,
+  NYHETER,
+  ORDER,
+  PROVISION,
+  RUTINER,
+  STAMPLA,
+} from "./moduler.ts";
+import { AVVIKELSER, LONEKOSTNAD, LONERAPPORT, PERSONAL, REKRYTERING } from "./ledning.ts";
 
 /**
  * Registret. Varje guide som finns står här, och ingenting utanför listan går
@@ -18,13 +30,24 @@ import { ARENDEN, FRANVARO, ORDER, PROVISION, RUTINER, STAMPLA } from "./moduler
  * i slumpmässig ordning ser ut som en hög.
  */
 export const GUIDER: Guide[] = [
+  // Orienteringen först, sedan i den ordning en ny anställd rimligen möter dem:
+  // det alla har, det säljaren gör, och sist det som bara ledningen ser.
   KOM_IGANG,
   RUTINER,
-  STAMPLA,
+  NYHETER,
+  ARENDEN,
   FRANVARO,
+  STAMPLA,
+  AVTAL,
+  FEL,
   ORDER,
   PROVISION,
-  ARENDEN,
+  KV,
+  PERSONAL,
+  REKRYTERING,
+  AVVIKELSER,
+  LONERAPPORT,
+  LONEKOSTNAD,
 ];
 
 export function hamtaGuide(slug: string): Guide | null {
@@ -37,18 +60,27 @@ export function hamtaGuide(slug: string): Guide | null {
  * kräva att man räknar upp varenda roll och kommer ihåg att uppdatera listan
  * när en ny roll införs.
  */
-export function guiderForRoller(
-  roller: Role[] | null | undefined,
+export type Villkor = {
   /**
    * Stämplar personen? Räknas ut av anroparen som
    * `sparr.stampling && !stampelfri(user.roles)` — se `krav` i typer.ts för
    * varför svaret inte får härledas ur en rollista här.
    */
-  stamplar = false,
+  stamplar?: boolean;
+  /** Personens tilldelade behörigheter, ur `CurrentUser.permissions`. */
+  behorigheter?: Permission[];
+};
+
+export function guiderForRoller(
+  roller: Role[] | null | undefined,
+  villkor: Villkor = {},
 ): Guide[] {
   const mina = roller ?? [];
+  const harBehorighet = villkor.behorigheter ?? [];
+
   return GUIDER.filter((g) => {
-    if (g.krav === "stamplar" && !stamplar) return false;
+    if (g.krav === "stamplar" && !villkor.stamplar) return false;
+    if (g.behorighet && !harBehorighet.includes(g.behorighet)) return false;
     return g.roller.length === 0 || g.roller.some((r) => mina.includes(r));
   });
 }

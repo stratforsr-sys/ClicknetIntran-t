@@ -8,6 +8,7 @@ import { getCurrentUser, hasRole, fullName } from "@/lib/auth";
 import { ROLE_LABEL, type Role } from "@/lib/roles";
 import { supabaseServer } from "@/lib/supabase/server";
 import { narTid } from "@/lib/notiser";
+import { GuideVard } from "@/components/guide/GuideVard";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Nyheter — Clicknet Nav" };
@@ -44,8 +45,9 @@ export default async function NyhetsSida() {
 
   return (
     <div className="flex flex-col gap-4 pt-2">
+      <GuideVard slug="nyheter" />
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div data-guide="nyheter.rubrik">
           <h1 className="text-display text-ink-900">Nyheter</h1>
           <p className="mt-1 max-w-[70ch] text-body text-ink-500">
             {farSkriva
@@ -61,7 +63,7 @@ export default async function NyhetsSida() {
       </div>
 
       {lista.length === 0 ? (
-        <Card>
+        <Card guide="nyheter.lista">
           <EmptyState
             rubrik="Inga nyheter än"
             text={
@@ -72,7 +74,7 @@ export default async function NyhetsSida() {
           />
         </Card>
       ) : (
-        <ul className="flex flex-col gap-3">
+        <ul data-guide="nyheter.lista" className="flex flex-col gap-3">
           {lista.map((n) => {
             const roller = (n.audience_roles ?? []) as Role[];
             const teams = (n.audience_teams ?? []) as string[];

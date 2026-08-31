@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { getCurrentUser, hasRole } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { NyPeriod } from "./NyPeriod";
+import { GuideVard } from "@/components/guide/GuideVard";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Lönerapport — Clicknet Nav" };
@@ -31,7 +32,8 @@ export default async function LonerapportSida() {
 
   return (
     <div className="flex flex-col gap-4 pt-2">
-      <div>
+      <GuideVard slug="lonerapport" />
+      <div data-guide="lonerapport.rubrik">
         <h1 className="text-display text-ink-900">Lönerapport</h1>
         <p className="mt-1 max-w-[70ch] text-body text-ink-500">
           Underlag per period och person: arbetad tid, justeringar och antal avvikelser. Inga
@@ -42,12 +44,14 @@ export default async function LonerapportSida() {
       {farSkapa && <NyPeriod />}
 
       {(perioder ?? []).length === 0 ? (
+        <div data-guide="lonerapport.perioder">
         <EmptyState
           rubrik="Ingen period ännu"
           text="Skapa perioden när månaden är slut och nattjobbet hunnit skriva journalen."
         />
+        </div>
       ) : (
-        <Card>
+        <Card guide="lonerapport.perioder">
           <CardHeader titel="Perioder" beskrivning="Attesterade perioder är låsta." />
           <ul className="flex flex-col">
             {(perioder ?? []).map((p) => (

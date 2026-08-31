@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { getCurrentUser, canManageEmployees, fullName } from "@/lib/auth";
 import { EMPLOYMENT_TYPE_LABEL, ROLE_LABEL, STATUS_LABEL, type Role } from "@/lib/roles";
 import { supabaseServer } from "@/lib/supabase/server";
+import { GuideVard } from "@/components/guide/GuideVard";
 
 export const dynamic = "force-dynamic";
 
@@ -36,8 +37,9 @@ export default async function Personal() {
 
   return (
     <div className="flex flex-col gap-4 pt-2">
+      <GuideVard slug="personal-och-anstallning" />
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
+        <div data-guide="personal.rubrik">
           <h1 className="text-display text-ink-900">Personal</h1>
           <p className="mt-1 text-body text-ink-500">
             {lista.length} {lista.length === 1 ? "person" : "personer"} i registret.
@@ -79,7 +81,7 @@ export default async function Personal() {
       )}
 
       {lista.length === 0 ? (
-        <Card>
+        <Card guide="personal.lista">
           <EmptyState
             rubrik="Registret är tomt"
             text="Lägg upp den första anställda så skapas konto, roll och behörighet i ett steg."
@@ -89,7 +91,7 @@ export default async function Personal() {
           />
         </Card>
       ) : (
-        <Card className="p-0 md:p-0">
+        <Card className="p-0 md:p-0" guide="personal.lista">
           {/* UI-PRD §5.6: ingen zebrarandning. Pa mobil blir varje rad ett kort. */}
           <table className="hidden w-full border-collapse md:table">
             <thead>

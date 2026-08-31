@@ -21,6 +21,7 @@ import { hamtaOrderFor } from "@/lib/order-server";
 import { raknaUnderlag } from "@/lib/provision-motor";
 import { kronor, manadFore, manadsnamn, manadsnyckel } from "@/lib/provision";
 import { Registrera } from "./Registrera";
+import { GuideVard } from "@/components/guide/GuideVard";
 
 export const dynamic = "force-dynamic";
 
@@ -61,7 +62,8 @@ export default async function KvSida() {
 
   return (
     <div className="flex flex-col gap-4 pt-2">
-      <div>
+      <GuideVard slug="kv-protokollet" />
+      <div data-guide="kv.rubrik">
         <h1 className="text-display text-ink-900">K&amp;V</h1>
         <p className="mt-1 text-body text-ink-500">
           Två samtal i veckan, bedömda på sex områden. En godkänd vecka ger bonus på månadens

@@ -12,6 +12,7 @@ import { getCurrentUser, canManageEmployees, hasRole, fullName } from "@/lib/aut
 import { supabaseServer, supabaseAdmin } from "@/lib/supabase/server";
 import { hamtaLage } from "@/lib/sparrar";
 import { AVVIKELSE_ETIKETT, AVVIKELSE_FORKLARING, type Avvikelsetyp } from "@/lib/raster";
+import { GuideVard } from "@/components/guide/GuideVard";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Avvikelser — Clicknet Nav" };
@@ -62,6 +63,7 @@ export default async function AvvikelseSida() {
 
   return (
     <div className="flex flex-col gap-4 pt-2">
+      <GuideVard slug="avvikelser" />
       <Link
         href="/tid"
         className="inline-flex items-center gap-2 text-small font-semibold text-ink-500 hover:text-ink-900"
@@ -70,7 +72,7 @@ export default async function AvvikelseSida() {
         Tillbaka till tid
       </Link>
 
-      <div>
+      <div data-guide="avvikelser.rubrik">
         <h1 className="text-display text-ink-900">Avvikelser</h1>
         <p className="mt-1 max-w-[70ch] text-body text-ink-500">
           Rasterna som inte följde schemat. Den här sidan visar inga stämplingar och ingen
@@ -78,11 +80,13 @@ export default async function AvvikelseSida() {
         </p>
       </div>
 
+      <div data-guide="avvikelser.regeln">
       <Notis ton="info">
         Utebliven rast är en arbetsmiljösignal. Följ upp den som en fråga om arbetsbelastning —
         avvikelser används inte som grund för varning, lönesättning eller uppsägning, och de når
         varken provision eller lönekostnadsvyn.
       </Notis>
+      </div>
 
       <Notis ton="info">
         Att avsluta en avvikelse är att kvittera att den är omhändertagen, ingenting annat. Ingen
