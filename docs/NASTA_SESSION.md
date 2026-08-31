@@ -3,7 +3,7 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-08-31 — systemguider G1 + G2 i produktion
+**Senast uppdaterad:** 2026-08-31 — systemguider G1, G2, G5, G6 och G7 i produktion
 
 ## Passet 2026-08-31 i korthet
 
@@ -16,10 +16,21 @@ Vad som är påslaget:
 - **Startguiden** "Kom igång i navet" — tio steg, ~4 min, startar automatiskt
   vid första inloggningen och kommer tillbaka tills den är genomgången. Går att
   pausa, inte att hoppa över.
-- **Sex modulguider** — rutiner, ärenden, frånvaro, stämpling, order, provision.
-  Var och en startar första gången modulen öppnas, monterad av sidan själv med
-  `<GuideVard slug="…" />`. Aldrig samtidigt som startguiden.
+- **Femton modulguider** — rutiner, nyheter, ärenden, frånvaro, stämpling,
+  avtal, fel, order, provision, K&V, personal, rekrytering, avvikelser,
+  lönerapport, lönekostnad. Var och en startar första gången modulen öppnas,
+  monterad av sidan själv med `<GuideVard slug="…" />`. Aldrig samtidigt som
+  startguiden.
 - **Utbildning → Systemguider** — listan, med "Gör om".
+- **Utbildning → Översikt → Systemguider** — chefsvyn. Teamledaren ser sitt
+  team, ledningen alla. Klara, pågående steg, senaste rörelse, läge och en
+  Knuffa-knapp där den betyder något.
+- **Onboardad sätts av systemet.** `employee.status` går `onboarding → active`
+  när rollens alla guider är genomgångna. Personkortet speglar läget i en egen
+  ruta som inte går att kvittera för hand.
+- **Påminnelser.** 3 dygn utan rörelse ger en post i personens klocka, 7 dygn
+  ger chefen en, en knuff ger en med chefens namn på. Passerad frist (14 dagar)
+  ger ett **ärende** till närmaste chef via nattjobbet.
 - Overlayen ligger i (app)-layouten och pekar på riktiga element via
   `data-guide`. `npm run test:guider` failar bygget om ett ankare försvinner.
 
@@ -37,10 +48,15 @@ repris. Se rubriken i `src/lib/guider.ts` och provet som vaktar den.
 riktigt lägger en riktig order. När G3 är byggd byggs momenten in i samma filer
 och versionen höjs med `omtag`.
 
-**Näst på tur:** G3 övningsläget (flagga på order/avtal/ärende — men INTE på
-stämplingen, se beslut 2 i SYSTEMGUIDER.md), sedan G5 chefsöversikten och
-speglingen i anställningschecklistan. Kvar av guidepaketet: lönerapport,
-lönekostnad, godkänna tid, konsekvenstrappan, personal, leveransflödet.
+**Näst på tur: G3, övningsläget.** Det är det enda som återstår av
+beställningen utöver textredigeringen (G7) och rutinerna i punkt 11.
+
+Flagga `ovning` på order, avtal och ärende — men **INTE** på stämplingen, se
+beslut 2 i SYSTEMGUIDER.md. Varje ställe som räknar eller listar måste fråga
+efter `ovning = false`, och ett källkodsprov ska larma om en tabell med
+övningsflagga läses någonstans utan filtret. Först när det finns kan
+modulguiderna kräva att momentet faktiskt utförs; tills dess pekar de ut och
+förklarar.
 
 ---
 

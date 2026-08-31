@@ -301,10 +301,24 @@ som kurser gör idag.
 | Stämpla in och ut | Den som stämplar | **Byggd** |
 | Order | Säljare, säljchef, VD, ekonomi | **Byggd** |
 | Din provision | Säljare, säljchef, VD, ekonomi | **Byggd** |
-| Lönerapport · Lönekostnad | Ekonomi | Kvar |
-| Godkänna tid · Konsekvenstrappan | Teamledare, säljchef, VD | Kvar |
-| Personal och anställning | Säljchef, VD, admin | Kvar |
-| Leveransflödet | Leverans, projektledare | Kvar |
+| Avtal | Alla | **Byggd** |
+| Nyheter | Alla | **Byggd** |
+| Rapportera fel | Alla | **Byggd** |
+| K&V | Säljare, säljchef, VD, ekonomi | **Byggd** |
+| Personal och anställning | Säljchef, VD, admin | **Byggd** |
+| Rekrytering | Säljchef, VD, admin | **Byggd** |
+| Avvikelser | Teamledare, säljchef, VD, admin | **Byggd** |
+| Lönerapport | Ekonomi, säljchef, VD, admin | **Byggd** |
+| Lönekostnad | Behörigheten `payroll_cost_viewer` | **Byggd** |
+
+**Sexton guider.** Varje modul med en egen vy har en. `/filer` har ingen sida
+att guida — filerna nås ur rutinerna och ärendena — och `/sok`, `/profil` och
+`/logg` är självförklarande nog att en tur hade varit i vägen.
+
+**Lönekostnadsguiden styrs av en behörighet, inte av en roll.**
+`payroll_cost_viewer` delas ut per person under Personal (K26/E15.1), och en
+guide som skyltade i listan för varje ekonom hade lovat en vy de inte kommer in
+i. Fältet heter `behorighet` och står vid sidan av `krav`.
 
 **Stämplingsguiden styrs inte av en rollista.** Vem som stämplar är
 `sparr.stampling && !stampelfri(user.roles)`, och `src/lib/stampelfri.ts` är
@@ -364,9 +378,9 @@ om det visar sig behövas.
 | **G2** | Startguiden och autostarten vid första inloggningen | **Klar** |
 | **G3** | Övningsläget: flagga på order/avtal/ärende, filter i alla frågor, städjobb, källkodsprov | Kvar |
 | ~~G4~~ | ~~Funktionsspärrar~~ | Struken 2026-08-31 |
-| **G5** | Speglingen mot kurser och anställningschecklistan, chefsöversikten, onboardad-statusen | Kvar |
-| **G6** | Nattjobbet: stillestånd, frist, knuffar | Kvar |
-| **G7** | Guidepaketet per roll, rutinerna i punkt 11, textredigeringen | **Delvis** — sju guider byggda, chefs- och ekonomiguiderna kvar |
+| **G5** | Chefsöversikten, onboardad-statusen, speglingen i personkortet | **Klar** |
+| **G6** | Påminnelser, knuff och nattjobbets fristlarm | **Klar** |
+| **G7** | Guidepaketet per roll | **Klar** — sexton guider. Rutinerna i punkt 11 och textredigeringen kvar |
 
 ### Vad G1 och G2 lämnade efter sig
 
@@ -379,6 +393,61 @@ om det visar sig behövas.
 - `src/app/(app)/utbildning/systemguider/` — listan, med "Gör om".
 - `tests/guider.mjs` — ankarprovet och reglerna. Ingår i `npm test`.
 - Ankare i Sidebar, Topbar, Bottennav, Notisklocka och startsidan.
+
+### G5 — chefen ser läget
+
+- `0041` öppnar läsningen av `guide_progress` för samma krets som redan får se
+  kursprogressen: teamledaren sitt team, ledningen alla. Skrivningen är
+  fortfarande stängd, och självkontrollen vaktar både det och att det finns
+  exakt en läspolicy.
+- `/utbildning/oversikt/systemguider` — klara, pågående steg, senaste rörelse
+  och läge. **Nämnaren räknas per person** ur roller, behörigheter och om hon
+  stämplar; "2 av 6" betyder ingenting med fel sexa.
+- **Den som inte börjat står inte still.** `stillestand` är `null` och inte
+  antalet dagar sedan anställningen, så vyn inte larmar om något ingen haft
+  chansen att göra fel på. Det är ett annat samtal, och det ska inte se ut som
+  ett larm.
+- `employee.status` går `onboarding → active` när rollens alla guider är
+  genomgångna. Aldrig åt andra hållet, och bokfört i händelseloggen.
+- Personkortet fick en egen ruta som **speglar** guidernas läge. Inga knappar:
+  utan spärrar är guidens egen bokföring det enda beviset, och en chef som kan
+  kryssa bort raden har tagit bort det.
+
+### G6 — påminnelser, knuff och fristlarm
+
+Tre poster ur samma rader, ingen av dem omedelbar:
+
+| När | Vad | Till vem |
+|---|---|---|
+| 3 dygn utan rörelse | "N guider kvar" i klockan | Personen själv |
+| Chefen trycker Knuffa | "Din chef undrar hur det går", med namn | Personen själv |
+| 7 dygn utan rörelse | "X har stannat av" | Chefen |
+| Fristen (14 dagar) passerad | **Ett ärende** till närmaste chef | Chefen |
+
+**Klockan lagrar fortfarande inga notiser** — 0018:s val står kvar. Undantaget
+är knuffen (`0042`): att en chef klickade på en knapp går inte att härleda ur
+någon annan rad, så antingen lagras handlingen eller så händer ingenting.
+Texten byggs ändå vid läsning, så en knuff från i förrgår säger rätt sak i dag
+även om personen hunnit göra en av guiderna.
+
+**Fristen larmar som ett ärende, inte som en notis.** Ett ärende har
+handläggare, frist och kvittens; en notis har inget av det och försvinner när
+någon klickar. Ett ärende per person, aldrig ett per natt — och jobbet stänger
+det inte åt någon, för då hade "det löste sig" och "ingen hann titta" sett
+likadana ut. Samma val som `satser.ts` gjorde för föråldrade satser.
+
+**Chefens rad bygger bara på raderna**, inte på någons paket: en tur som
+påbörjats och sedan legat still i en vecka är en tydlig signal utan att klockan
+behöver räkna fram vilka guider var och en skulle ha haft. Att göra det hade
+betytt en rolluppslagning per person i varje sidvisning, i en klocka som redan
+ställer sjutton frågor.
+
+**`knuffa()` är den enda server action som rör någon annan än den inloggade**,
+och därmed den enda som frågar om lov. Ledningen får knuffa vem som helst, en
+teamledare sina egna, ingen annan någon. Kontrollen ligger i koden och inte i
+RLS, eftersom skrivningen går via service role — samma uppdelning som resten av
+navet: läsningen skyddas av databasen, skrivningen av att det bara finns en väg
+in.
 
 ### Vad som lades till samma dag
 

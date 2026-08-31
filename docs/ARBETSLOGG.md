@@ -157,11 +157,98 @@ som ett erbjudande utan att vara ett), att sidan faktiskt monterar den, att en
 modul har högst en guide, och att `krav: "stamplar"` gömmer respektive visar
 guiden åt rätt håll.
 
+### Resten av paketet, G5 och G6 — samma dag
+
+Beställarens besked: bygg klart. Nio guider till (personal, rekrytering,
+avvikelser, lönerapport, lönekostnad, avtal, nyheter, fel, K&V), sedan
+chefsöversikten och påminnelserna. **Sexton guider totalt.**
+
+**Ledningens guider väger tyngre på VAD SOM GÄLLER än på var saker ligger.** En
+säljare som inte hittar orderformuläret upptäcker det direkt. En chef som inte
+vet att en attesterad löneperiod är låst, att avvikelsevyn skriver en rad i
+händelseloggen vid varje öppning, eller att avvikelser aldrig får ligga till
+grund för en varning — det upptäcker hon aldrig själv, och det är just de
+sakerna som får konsekvenser för någon annan.
+
+**`behorighet` vid sidan av `krav`.** `payroll_cost_viewer` delas ut per person
+och inte med en roll (K26/E15.1). En lönekostnadsguide som skyltade i listan för
+varje ekonom hade lovat en vy de inte kommer in i.
+
+#### G5: nämnaren är personlig
+
+Chefsöversikten räknar guidelistan **per person** ur hennes roller,
+behörigheter och om hon stämplar. "2 av 6" betyder ingenting med fel sexa — en
+säljare, en ekonom och en projektledare har olika paket, och den utan
+lönekostnadsbehörighet ska inte ha den guiden i sin nämnare.
+
+**Den som inte börjat står inte still.** `stillestand` är `null` och inte
+antalet dagar sedan anställningen. Skillnaden är hela skälet att fältet får vara
+null: ett larm om något ingen ännu haft chansen att göra fel på är brus, och
+brus i chefens vy är det som gör att raden som betyder något inte läses.
+
+**Ingen procentkolumn.** Den som står på steg tre av åtta i en tur av sex är
+inte 6 procent klar på något meningsfullt sätt, och ett tal som ser exakt ut
+inbjuder till att jämföra personer med varandra. Vyn svarar på två frågor i
+stället: hur många turer är avklarade, och rör det sig.
+
+**Speglingen i personkortet har inga knappar.** Utan spärrar är guidens egen
+bokföring det enda som säger att någon faktiskt gått igenom den, och en chef som
+kan kryssa bort raden har tagit bort det sista beviset. Rutan står FÖRE
+checklistan: guiderna är det enda i onboardingen som personen själv driver, och
+det enda som sätter statusen.
+
+`onboarding → active` sätts av `provaOnboardad()` efter sista steget i en tur,
+aldrig åt andra hållet — att göra om en guide får inte kunna återuppliva ett
+offboardat konto. `stamplar` räknas ut på samma sätt som överallt annars, annars
+hade en säljare kunnat bli onboardad utan att ha gjort stämplingsguiden.
+
+#### G6: ingen av posterna är omedelbar
+
+En tur som startade i morse och står på steg två är inte ett problem; det är
+någon som håller på. Först när ingenting rört sig på tre dygn är tystnaden värd
+en rad — samma tröskel som chefens vy markerar på.
+
+**Klockan lagrar fortfarande inga notiser.** 0018:s val står kvar: posterna
+räknas fram ur rader som redan betyder något. Undantaget är knuffen (0042), och
+undantaget har ett skäl: att en chef klickade på en knapp går inte att härleda
+ur någonting — guiderna såg likadana ut före och efter. Antingen lagras
+handlingen eller så händer ingenting. Tabellen bär därför handlingen och inget
+annat; texten byggs ändå vid läsning, så en knuff från i förrgår säger rätt sak
+i dag även om personen hunnit göra en av guiderna.
+
+**Fristen larmar som ett ärende.** Ett ärende har handläggare, frist och
+kvittens; en notis har inget av det och försvinner när någon klickar på den. Ett
+ärende per person, aldrig ett per natt, och jobbet stänger det inte åt någon —
+då hade "det löste sig" och "ingen hann titta" sett likadana ut. Ärendet går
+till chefen och inte till personen: den som inte hunnit har redan en påminnelse
+i klockan, och att dessutom få ett ärende om sig själv är en tillsägelse med
+diarienummer.
+
+**Chefens rad i klockan bygger bara på raderna.** En tur som påbörjats och sedan
+legat still i en vecka är en tydlig signal utan att vi behöver räkna fram vilka
+guider var och en skulle ha haft. Att göra det hade betytt en rolluppslagning
+per person i varje sidvisning, i en klocka som redan ställer sjutton frågor.
+Id:t bär antalet veckor, så posten återuppstår en gång i veckan för den som
+klickat bort den och fortfarande inte gjort något.
+
+**`knuffa()` är den enda action i filen som rör någon annan än den inloggade**,
+och därmed den enda som frågar om lov. De andra tar `employee_id` ur sessionen
+och kan inte missbrukas; den här får ett id utifrån. Ledningen får knuffa vem
+som helst, teamledaren sina egna, ingen annan någon — och funktionen säger inte
+om personen finns eller vem som leder henne, eftersom ett felmeddelande som
+skiljer på "får inte" och "finns inte" är en väg att kartlägga personalen.
+
+Knappen visas bara där den betyder något, och byter till "Sagt till". Inte för
+att en andra knuff vore farlig, utan för att den är meningslös och ser flitig
+ut. Fyra rader i någons klocka är inte fyra gångers påfart — det är en chef som
+borde ha ringt.
+
 ### Kvar
 
-G3 övningsläget, G5 speglingen mot kurser och checklistan plus chefsöversikten,
-G6 nattjobbet. Av guidepaketet återstår lönerapport, lönekostnad, godkänna tid,
-konsekvenstrappan, personal och leveransflödet. G4 är struken.
+**G3, övningsläget.** Flagga på order, avtal och ärende — inte på stämplingen.
+Först när det finns kan modulguiderna kräva att momentet utförs; tills dess
+pekar de ut och förklarar. Utöver det: textredigeringen och rutinerna i punkt
+11. G4 är struken.
 
 ---
 
