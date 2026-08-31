@@ -148,6 +148,46 @@ export async function autostart(employeeId: string): Promise<Autostart | null> {
   return { guide, sparat: progress?.steg ?? 0 };
 }
 
+/**
+ * Modulens egen guide, om den ska starta nu.
+ *
+ * ===========================================================================
+ * TVÅ RUTOR SAMTIDIGT ÄR DET VÄRSTA UTFALLET, OCH DET ÄR DET HÄR SOM HINDRAR DET.
+ *
+ * Orienteringen monteras av (app)-layouten och finns alltså på varje sida —
+ * även på /order. Skulle ordermodulen starta sin guide medan orienteringen
+ * fortfarande pågår hade två mörkläggningar lagts över varandra, var och en med
+ * sin egen ruta, och den som just loggat in för första gången hade mötts av
+ * det.
+ *
+ * Regeln är därför enkelriktad: en modulguide startar aldrig förrän
+ * startguiden är genomgången. Layoutens vård tystnar i samma stund som den blir
+ * klar, så exakt en av dem kan vara framme åt gången.
+ * ===========================================================================
+ *
+ * EN FRÅGA, INTE TVÅ. Båda svaren finns i samma lilla uppsättning rader, så vi
+ * hämtar personens hela progress en gång i stället för att slå upp två slugar
+ * var för sig.
+ */
+export async function modulstart(
+  employeeId: string,
+  slug: string,
+): Promise<Autostart | null> {
+  const guide = hamtaGuide(slug);
+  if (!guide) return null;
+
+  const rader = await hamtaProgress(employeeId);
+  const forSlug = new Map(rader.map((r) => [r.guide_slug, r]));
+
+  const start = startguiden();
+  if (start && !arKlar(start, forSlug.get(start.slug))) return null;
+
+  const min = forSlug.get(guide.slug) ?? null;
+  if (arKlar(guide, min)) return null;
+
+  return { guide, sparat: min?.steg ?? 0 };
+}
+
 /** Guiden bakom en slug, eller null. Enda uppslaget server actions får använda. */
 export function kandGuide(slug: string): Guide | null {
   return hamtaGuide(slug);

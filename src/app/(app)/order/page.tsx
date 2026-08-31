@@ -26,6 +26,7 @@ import { kronor, manadFore, manadsnamn, manadsnyckel } from "@/lib/provision";
 import { Atgarder } from "./Atgarder";
 import { Bilaga, type Orderbilaga } from "./Bilaga";
 import { Nyorder } from "./Nyorder";
+import { GuideVard } from "@/components/guide/GuideVard";
 
 export const dynamic = "force-dynamic";
 
@@ -73,6 +74,7 @@ export default async function Ordersida() {
 
   return (
     <div className="flex flex-col gap-4 pt-2">
+      <GuideVard slug="registrera-order" />
       <div>
         <h1 className="text-display text-ink-900">Order</h1>
         <p className="mt-1 text-body text-ink-500">
@@ -81,7 +83,7 @@ export default async function Ordersida() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card status="brand" className="lg:col-span-2">
+        <Card status="brand" className="lg:col-span-2" guide="order.manad">
           <CardHeader
             titel={`${hanterare ? "Bolaget" : "Du"} i ${manadsnamn(manad)}`}
             beskrivning="Godkända order minus det som makulerats den här månaden."
@@ -105,7 +107,7 @@ export default async function Ordersida() {
         <Matris paket={paket} satser={satser} idag={idag} />
       </div>
 
-      <Card>
+      <Card guide="order.ny">
         <CardHeader
           titel="Lägg en order"
           beskrivning={

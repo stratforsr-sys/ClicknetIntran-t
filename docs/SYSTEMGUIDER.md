@@ -292,16 +292,37 @@ ingen förstår lär bara ut att klicka igenom utan att läsa.
 Startguiden och rutinguiden gäller alla. Resten följer `audience_roles`, precis
 som kurser gör idag.
 
-| Roll | Obligatoriska guider |
-|---|---|
-| Alla | Kom igång i navet · Rutiner och kvittens |
-| Säljare | + Stämpla in/ut · Rapportera frånvaro · Registrera order · Läs din provision |
-| Teamledare | + Godkänna tid och rättelser · Ärenden |
-| Ekonomi | + Lönerapport · Lönekostnad |
-| Projektledare | + Order · Leverans · Ärenden |
-| Säljchef / VD | + Översikter · Konsekvenstrappan · Personal och anställning |
-| Leverans | + Order och leveransflödet · Ärenden |
-| Admin | + Personal och behörigheter · Fel och drift |
+| Guide | Gäller | Läge |
+|---|---|---|
+| Kom igång i navet | Alla | **Byggd** |
+| Rutiner och kvittenser | Alla | **Byggd** |
+| Ärenden | Alla | **Byggd** |
+| Frånvaro och ledighet | Alla | **Byggd** |
+| Stämpla in och ut | Den som stämplar | **Byggd** |
+| Order | Säljare, säljchef, VD, ekonomi | **Byggd** |
+| Din provision | Säljare, säljchef, VD, ekonomi | **Byggd** |
+| Lönerapport · Lönekostnad | Ekonomi | Kvar |
+| Godkänna tid · Konsekvenstrappan | Teamledare, säljchef, VD | Kvar |
+| Personal och anställning | Säljchef, VD, admin | Kvar |
+| Leveransflödet | Leverans, projektledare | Kvar |
+
+**Stämplingsguiden styrs inte av en rollista.** Vem som stämplar är
+`sparr.stampling && !stampelfri(user.roles)`, och `src/lib/stampelfri.ts` är
+enda stället där den listan får bo. Guiden bär i stället `krav: "stamplar"`, och
+anroparen räknar ut svaret — se `krav` i `src/guider/typer.ts`.
+
+**En modulguide startar första gången modulen öppnas.** Sidan monterar den själv
+(`<GuideVard slug="…" />`), och den tystnar när turen är genomgången. Aldrig
+samtidigt som orienteringen: `modulstart()` håller tillbaka modulguiderna tills
+startguiden är klar, så det står aldrig två rutor på skärmen.
+
+**Modulguiderna pekar ut och förklarar — de skapar ingenting.** Löftet i punkt 1,
+att turen ska kräva att momentet utförs, går inte att hålla förrän övningsläget
+(G3) finns: en guide som ber någon lägga en order på riktigt lägger en riktig
+order. Tills dess lär de ut det som inte syns i gränssnittet — att en makulering
+dras i makuleringsmånaden, att en rättelse blir en ny rad, att sjukanmälan rings
+in först. När G3 finns byggs momenten in i samma filer och versionen höjs med
+`omtag`.
 
 Stämpelfria roller får ingen stämplingsguide — `src/lib/stampelfri.ts` avgör,
 inte en lista till.
@@ -345,7 +366,7 @@ om det visar sig behövas.
 | ~~G4~~ | ~~Funktionsspärrar~~ | Struken 2026-08-31 |
 | **G5** | Speglingen mot kurser och anställningschecklistan, chefsöversikten, onboardad-statusen | Kvar |
 | **G6** | Nattjobbet: stillestånd, frist, knuffar | Kvar |
-| **G7** | Guidepaketet per roll, rutinerna i punkt 11, textredigeringen | Kvar |
+| **G7** | Guidepaketet per roll, rutinerna i punkt 11, textredigeringen | **Delvis** — sju guider byggda, chefs- och ekonomiguiderna kvar |
 
 ### Vad G1 och G2 lämnade efter sig
 
@@ -358,3 +379,18 @@ om det visar sig behövas.
 - `src/app/(app)/utbildning/systemguider/` — listan, med "Gör om".
 - `tests/guider.mjs` — ankarprovet och reglerna. Ingår i `npm test`.
 - Ankare i Sidebar, Topbar, Bottennav, Notisklocka och startsidan.
+
+### Vad som lades till samma dag
+
+Startguidens sista steg lovade guider som inte fanns. Sex modulguider byggdes
+därför direkt: rutiner, ärenden, frånvaro, stämpling, order och provision.
+
+- `src/guider/moduler.ts` — de sex definitionerna.
+- `modul` och `krav` i `typer.ts`; `guideForModul()` i registret.
+- `modulstart()` i `guider-server.ts` — startar modulens guide, men aldrig medan
+  orienteringen pågår.
+- `<GuideVard slug="…" />` monterad på de sex modulsidorna.
+- `Card` tar en namngiven `guide`-prop och sätter `data-guide` själv. Flera av
+  korten sitter i rutnät där ett omslag hade brutit spaltbredden.
+- Provet kontrollerar nu också att varje guide har en väg in, att sidan faktiskt
+  monterar den, och att `Card` skickar vidare propen.

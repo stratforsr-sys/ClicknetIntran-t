@@ -18,16 +18,26 @@ const KANT: Record<Status, string> = {
 export function Card({
   status,
   klickbart = false,
+  guide,
   className,
   children,
 }: {
   status?: Status;
   klickbart?: boolean;
+  /**
+   * Ankare for en guidad tur (`data-guide`). Se src/guider/.
+   *
+   * Ligger som en egen prop och inte som ett godtyckligt attribut med flit:
+   * kortet ska inte kunna ta emot vad som helst, och en namngiven prop gor att
+   * `npm run test:guider` hittar ankaret dar det star.
+   */
+  guide?: string;
   className?: string;
   children: ReactNode;
 }) {
   return (
     <div
+      data-guide={guide}
       className={cn(
         "rounded-md bg-surface shadow-elev-1 p-4 md:p-6",
         status && KANT[status],

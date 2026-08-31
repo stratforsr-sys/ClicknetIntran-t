@@ -8,6 +8,7 @@ import { getCurrentUser, hasRole } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { agarnamn } from "@/lib/rutiner-data";
 import {
+import { GuideVard } from "@/components/guide/GuideVard";
   DOC_TYPE_LABEL,
   STATUS_LABEL,
   granskningslage,
@@ -84,6 +85,7 @@ export default async function Rutiner({ searchParams }: { searchParams: Promise<
 
   return (
     <div className="flex flex-col gap-4 pt-2">
+      <GuideVard slug="rutiner-och-kvittens" />
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-display text-ink-900">Rutiner</h1>
@@ -102,7 +104,7 @@ export default async function Rutiner({ searchParams }: { searchParams: Promise<
         {farSkapa && <ButtonLink href="/rutiner/ny" variant="primar">Nytt dokument</ButtonLink>}
       </div>
 
-      <Card>
+      <Card guide="rutiner.filter">
         <form className="flex flex-col gap-4">
           <div className="flex items-center gap-3 rounded-sm border-b border-ink-300/60 px-2 py-2 focus-within:border-transparent focus-within:bg-surface-alt focus-within:px-4 focus-within:shadow-elev-1 focus-within:ring-2 focus-within:ring-brand-600">
             <Ikon namn="sok" className="size-5 shrink-0 text-ink-500" />
@@ -133,7 +135,7 @@ export default async function Rutiner({ searchParams }: { searchParams: Promise<
       </Card>
 
       {lista.length === 0 ? (
-        <Card>
+        <Card guide="rutiner.lista">
           <EmptyState
             rubrik={sp.q ? "Inga träffar" : "Inga rutiner än"}
             text={
@@ -147,7 +149,7 @@ export default async function Rutiner({ searchParams }: { searchParams: Promise<
           />
         </Card>
       ) : (
-        <ul className="flex flex-col gap-3">
+        <ul data-guide="rutiner.lista" className="flex flex-col gap-3">
           {lista.map((d) => {
             const g = granskningslage(d.review_due);
             const behoverKvittens = d.requires_ack && !kvitterat.has(`${d.id}:${d.version}`);

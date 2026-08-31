@@ -1,5 +1,5 @@
 import { getCurrentUser } from "@/lib/auth";
-import { autostart } from "@/lib/guider-server";
+import { autostart, modulstart } from "@/lib/guider-server";
 import { Guide } from "./Guide";
 
 /**
@@ -24,14 +24,25 @@ import { Guide } from "./Guide";
  * att hoppa in en halv sekund efter att sidan ritats, mitt framför någon som
  * redan börjat läsa.
  */
-export async function GuideVard() {
+export async function GuideVard({ slug }: { slug?: string } = {}) {
   const user = await getCurrentUser();
   if (!user?.employee) return null;
 
   // Den som är på väg ut ur bolaget ska inte onboardas in i det.
   if (user.employee.status === "offboarded") return null;
 
-  const start = await autostart(user.employee.id);
+  /**
+   * UTAN `slug` ÄR DET LAYOUTENS VÅRD: orienteringen, och ingenting annat.
+   *
+   * MED `slug` är det en modulsida som monterat sin egen guide. Den startar
+   * första gången modulen öppnas och tystnar när den är genomgången — se
+   * `modulstart()`, som också är det som håller isär de två så att aldrig fler
+   * än en ruta står framme.
+   */
+  const start = slug
+    ? await modulstart(user.employee.id, slug)
+    : await autostart(user.employee.id);
+
   if (!start) return null;
 
   return <Guide guide={start.guide} sparat={start.sparat} />;

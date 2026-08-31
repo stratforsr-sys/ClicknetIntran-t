@@ -31,6 +31,7 @@ import type { Orderrad } from "@/lib/order-server";
 import { svensktDatum } from "@/lib/klocka";
 import { Inmatning } from "./Inmatning";
 import { Faststall, Utbetald } from "./Period";
+import { GuideVard } from "@/components/guide/GuideVard";
 
 export const dynamic = "force-dynamic";
 
@@ -157,6 +158,7 @@ export default async function Provisionssida() {
 
   return (
     <div className="flex flex-col gap-4 pt-2">
+      <GuideVard slug="las-din-provision" />
       <div>
         <h1 className="text-display text-ink-900">Provision</h1>
         <p className="mt-1 text-body text-ink-500">
@@ -165,7 +167,7 @@ export default async function Provisionssida() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card status="brand" className="lg:col-span-2">
+        <Card status="brand" className="lg:col-span-2" guide="provision.min">
           <CardHeader
             titel={`Din provision i ${manadsnamn(min.denna.manad)}`}
             beskrivning="Dina order plus det som bokförts på dig för hand."
@@ -189,7 +191,7 @@ export default async function Provisionssida() {
           </p>
         </Card>
 
-        <Card>
+        <Card guide="provision.varifran">
           <CardHeader titel="Var siffran kommer ifrån" />
           <p className="text-small text-ink-700">
             Grundprovisionen kommer ur dina <strong>order</strong> och paketmatrisen. Volymbonusen

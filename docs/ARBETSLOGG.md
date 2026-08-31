@@ -110,10 +110,58 @@ byggs av `navAnkare()` och kan inte stå utskrivna — menyn ser olika ut för v
 roll — så provet kontrollerar i stället att Sidebar anropar funktionen och att
 adressen finns i `nav-items.ts`.
 
+### Sex modulguider, samma dag
+
+Startguidens sista steg lovade att varje modul har sin egen guide. Det var inte
+sant — det fanns en enda guide. Antingen skulle löftet strykas eller infrias, och
+det blev det senare: rutiner, ärenden, frånvaro, stämpling, order och provision.
+
+**De pekar ut och förklarar. De skapar ingenting.** Löftet i punkt 1 — att turen
+ska kräva att momentet utförs — går inte att hålla förrän övningsläget finns. En
+guide som ber någon lägga en order på riktigt lägger en riktig order, som går
+till leverans och räknas i provisionsunderlaget. Tills G3 är byggd lär de i
+stället ut det som INTE syns i gränssnittet: att en makulering dras i
+makuleringsmånaden och inte i tecknandemånaden, att en stämpelrättelse blir en ny
+rad och aldrig skriver om historiken, att sjukanmälan ringes in först. Det är det
+som annars lärs ut i förbifarten och glöms bort.
+
+**Ankarna sitter på saker som alltid ritas.** En ny anställd har inga order, inga
+ärenden och ingen ledighet — ett ankare på en listrad hade gjort guiden trasig
+för exakt den person den är till för. De pekar därför på kort, rubriker och
+knappar. Listorna pekas ut genom ett ankare som står i BÅDA grenarna av
+tomma-listan-villkoret; bara en av dem ritas åt gången, så uppslaget hittar alltid
+den som finns.
+
+**`Card` fick en namngiven `guide`-prop** i stället för att korten omslutits av
+`<div data-guide>`. Flera av dem sitter i rutnät med `lg:col-span-2`, och ett
+omslag hade brutit spaltbredden. Propen är namngiven och inte ett spread av
+godtyckliga attribut: kortet ska inte kunna ta emot vad som helst, och provet
+hittar ankaret där det står. Att `guide="x"` alls räknas som ett ankare vilar på
+att kortet skickar vidare propen — vilket provet numera kontrollerar för sig.
+
+**Stämplingsguiden har ingen rollista.** Vem som stämplar är
+`sparr.stampling && !stampelfri(user.roles)`, och den listan får bo på ett enda
+ställe. Guiden bär i stället `krav: "stamplar"` och anroparen räknar ut svaret —
+`/tid` monterar den bakom sitt redan uträknade `stamplar`, och listan över
+systemguider ställer samma fråga. En kopia av rollistan i guiden hade glidit isär
+första gången en roll flyttades, vilket är precis vad `stampelfri.ts` varnar för.
+
+**Två rutor samtidigt är det värsta utfallet.** Orienteringen monteras av
+layouten och finns alltså även på `/order`. `modulstart()` håller därför tillbaka
+varje modulguide tills startguiden är genomgången, och layoutens vård tystnar i
+samma stund som den blir klar — exakt en av dem kan vara framme.
+
+Provet växte från 48 till 162 kontroller. De nya: att varje guide har en väg in
+(`modul` eller `vidForstaInloggningen` — annars ligger den i listan och ser ut
+som ett erbjudande utan att vara ett), att sidan faktiskt monterar den, att en
+modul har högst en guide, och att `krav: "stamplar"` gömmer respektive visar
+guiden åt rätt håll.
+
 ### Kvar
 
 G3 övningsläget, G5 speglingen mot kurser och checklistan plus chefsöversikten,
-G6 nattjobbet, G7 resten av guidepaketet. G4 är struken.
+G6 nattjobbet. Av guidepaketet återstår lönerapport, lönekostnad, godkänna tid,
+konsekvenstrappan, personal och leveransflödet. G4 är struken.
 
 ---
 

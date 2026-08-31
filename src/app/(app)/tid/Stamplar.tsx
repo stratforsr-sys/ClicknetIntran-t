@@ -98,7 +98,7 @@ export function Stamplar({
         </form>
       )}
 
-      <div className="flex flex-wrap gap-3">
+      <div data-guide="tid.knappar" className="flex flex-wrap gap-3">
         {tillatna.map((typ) => (
           <form
             key={typ}

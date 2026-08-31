@@ -86,6 +86,27 @@ export type Guide = {
   /** Tvingar om alla vid versionshöjningen. Utan den gäller nya versionen bara nya. */
   omtag?: boolean;
 
+  /**
+   * Modulen guiden hör till, som adress: `/order`, `/rutiner`.
+   *
+   * Sidan för den modulen monterar guiden själv, och den startar första gången
+   * någon öppnar modulen. Utan `modul` är guiden inte knuten till någon sida —
+   * det gäller orienteringen, som handlar om navet i stort.
+   */
+  modul?: string;
+
+  /**
+   * Ett villkor utöver rollen.
+   *
+   * `stamplar` betyder att guiden bara gäller den som faktiskt stämplar in och
+   * ut. Vem det är kan INTE uttryckas som en rollista: svaret är
+   * `sparr.stampling && !stampelfri(user.roles)`, och `src/lib/stampelfri.ts`
+   * är enda stället där den listan får bo. En kopia här hade glidit isär från
+   * originalet första gången en roll flyttades — vilket är precis vad den filen
+   * varnar för. Anroparen räknar ut svaret och skickar det vidare.
+   */
+  krav?: "stamplar";
+
   /** Ungefärlig tid i minuter. Står i erbjudandet, så ingen börjar i blindo. */
   minuter: number;
 

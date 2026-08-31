@@ -29,6 +29,7 @@ import { stampelfri, STAMPELFRI_FORKLARING } from "@/lib/stampelfri";
 import { Stamplar } from "./Stamplar";
 import { Rattelse } from "./Rattelse";
 import { beslutaRattelse, kvitteraRastschema, kommenteraAvvikelse } from "./actions";
+import { GuideVard } from "@/components/guide/GuideVard";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Tid — Clicknet Nav" };
@@ -190,6 +191,7 @@ export default async function TidSida() {
 
   return (
     <div className="flex flex-col gap-4 pt-2">
+      {stamplar && <GuideVard slug="stampla-in-och-ut" />}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-display text-ink-900">Tid</h1>
@@ -288,7 +290,7 @@ export default async function TidSida() {
               lonegrundande och far inte forsvinna ur personens egen vy — men
               ett tomt kort varje dag ar bara brus. */}
           {(stamplar || giltiga.length > 0) && (
-            <Card>
+            <Card guide="tid.idag">
               <CardHeader
                 titel="Idag"
                 beskrivning="Ingen rad kan ändras eller tas bort. En rättelse blir en ny rad."

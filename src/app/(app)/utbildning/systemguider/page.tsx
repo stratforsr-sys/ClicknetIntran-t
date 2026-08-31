@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { getCurrentUser } from "@/lib/auth";
+import { hamtaLage } from "@/lib/sparrar";
+import { stampelfri } from "@/lib/stampelfri";
 import { guiderForRoller } from "@/guider";
 import { hamtaProgress } from "@/lib/guider-server";
 import { GUIDE_ETIKETT, GUIDE_TON, guideLage, procent, type GuideLage } from "@/lib/guider";
@@ -35,8 +37,15 @@ export default async function Systemguider() {
   const user = await getCurrentUser();
   if (!user?.employee) redirect("/");
 
-  const mina = guiderForRoller(user.roles);
-  const progress = await hamtaProgress(user.employee.id);
+  /**
+   * Stämplingsguiden gäller bara den som stämplar, och svaret på den frågan bor
+   * i `stampelfri.ts` plus modulens spärr — aldrig i en rollista i guiden. Se
+   * `krav` i src/guider/typer.ts.
+   */
+  const [lage, progress] = await Promise.all([hamtaLage(), hamtaProgress(user.employee.id)]);
+  const stamplar = lage.stampling && !stampelfri(user.roles);
+
+  const mina = guiderForRoller(user.roles, stamplar);
   const forSlug = new Map(progress.map((p) => [p.guide_slug, p]));
 
   const kvar = mina.filter((g) => guideLage(g, forSlug.get(g.slug)) !== "klar");

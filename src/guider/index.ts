@@ -1,6 +1,7 @@
 import type { Guide } from "./typer.ts";
 import type { Role } from "../lib/roles.ts";
 import { KOM_IGANG } from "./kom-igang.ts";
+import { ARENDEN, FRANVARO, ORDER, PROVISION, RUTINER, STAMPLA } from "./moduler.ts";
 
 /**
  * Registret. Varje guide som finns står här, och ingenting utanför listan går
@@ -16,7 +17,15 @@ import { KOM_IGANG } from "./kom-igang.ts";
  * kedja — beslutet 2026-08-31 var fri ordning efter startguiden — men en lista
  * i slumpmässig ordning ser ut som en hög.
  */
-export const GUIDER: Guide[] = [KOM_IGANG];
+export const GUIDER: Guide[] = [
+  KOM_IGANG,
+  RUTINER,
+  STAMPLA,
+  FRANVARO,
+  ORDER,
+  PROVISION,
+  ARENDEN,
+];
 
 export function hamtaGuide(slug: string): Guide | null {
   return GUIDER.find((g) => g.slug === slug) ?? null;
@@ -28,9 +37,25 @@ export function hamtaGuide(slug: string): Guide | null {
  * kräva att man räknar upp varenda roll och kommer ihåg att uppdatera listan
  * när en ny roll införs.
  */
-export function guiderForRoller(roller: Role[] | null | undefined): Guide[] {
+export function guiderForRoller(
+  roller: Role[] | null | undefined,
+  /**
+   * Stämplar personen? Räknas ut av anroparen som
+   * `sparr.stampling && !stampelfri(user.roles)` — se `krav` i typer.ts för
+   * varför svaret inte får härledas ur en rollista här.
+   */
+  stamplar = false,
+): Guide[] {
   const mina = roller ?? [];
-  return GUIDER.filter((g) => g.roller.length === 0 || g.roller.some((r) => mina.includes(r)));
+  return GUIDER.filter((g) => {
+    if (g.krav === "stamplar" && !stamplar) return false;
+    return g.roller.length === 0 || g.roller.some((r) => mina.includes(r));
+  });
+}
+
+/** Guiden som hör till en modulsida, om det finns en. */
+export function guideForModul(modul: string): Guide | null {
+  return GUIDER.find((g) => g.modul === modul) ?? null;
 }
 
 /**

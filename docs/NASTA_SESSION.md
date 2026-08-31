@@ -16,6 +16,9 @@ Vad som är påslaget:
 - **Startguiden** "Kom igång i navet" — tio steg, ~4 min, startar automatiskt
   vid första inloggningen och kommer tillbaka tills den är genomgången. Går att
   pausa, inte att hoppa över.
+- **Sex modulguider** — rutiner, ärenden, frånvaro, stämpling, order, provision.
+  Var och en startar första gången modulen öppnas, monterad av sidan själv med
+  `<GuideVard slug="…" />`. Aldrig samtidigt som startguiden.
 - **Utbildning → Systemguider** — listan, med "Gör om".
 - Overlayen ligger i (app)-layouten och pekar på riktiga element via
   `data-guide`. `npm run test:guider` failar bygget om ett ankare försvinner.
@@ -29,9 +32,15 @@ aldrig i den synliga. Den synliga är olika på telefon och dator, och en positi
 räknad i den gör att den som byter skärm hoppar över ett steg eller får ett i
 repris. Se rubriken i `src/lib/guider.ts` och provet som vaktar den.
 
+**Modulguiderna pekar ut och förklarar — de skapar ingenting.** Det är den
+ärliga halvan tills övningsläget finns; en guide som ber någon lägga en order på
+riktigt lägger en riktig order. När G3 är byggd byggs momenten in i samma filer
+och versionen höjs med `omtag`.
+
 **Näst på tur:** G3 övningsläget (flagga på order/avtal/ärende — men INTE på
 stämplingen, se beslut 2 i SYSTEMGUIDER.md), sedan G5 chefsöversikten och
-speglingen i anställningschecklistan.
+speglingen i anställningschecklistan. Kvar av guidepaketet: lönerapport,
+lönekostnad, godkänna tid, konsekvenstrappan, personal, leveransflödet.
 
 ---
 

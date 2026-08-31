@@ -143,8 +143,9 @@ export const KOM_IGANG: Guide = {
     {
       rubrik: "Du är igång",
       text:
-        "Det var allt du behöver för att hitta. Resten lär du dig där du står — " +
-        "varje modul har sin egen guide under Utbildning → Systemguider när du vill ha den.",
+        "Det var allt du behöver för att hitta. Resten lär du dig där du står: de moduler du " +
+        "har tillgång till startar sin egen guide första gången du öppnar dem, och alla " +
+        "ligger kvar under Utbildning → Systemguider.",
       handling: "vidare",
     },
   ],

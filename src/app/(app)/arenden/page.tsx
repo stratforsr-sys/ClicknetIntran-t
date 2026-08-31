@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { getCurrentUser, hasRole, fullName } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { slaLage, timmarKvar, STATUS_ETIKETT, SLA_ETIKETT, type Status, type SlaLage } from "@/lib/arenden";
+import { GuideVard } from "@/components/guide/GuideVard";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Ärenden — Clicknet Nav" };
@@ -53,6 +54,7 @@ export default async function ArendeSida() {
 
   return (
     <div className="flex flex-col gap-4 pt-2">
+      <GuideVard slug="arenden" />
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-display text-ink-900">Ärenden</h1>
@@ -62,9 +64,11 @@ export default async function ArendeSida() {
               : "Dina frågor till ledningen. Du ser hela dialogen och när svar utlovats."}
           </p>
         </div>
-        <ButtonLink href="/arenden/nytt" variant="primar">
-          Nytt ärende
-        </ButtonLink>
+        <div data-guide="arenden.nytt">
+          <ButtonLink href="/arenden/nytt" variant="primar">
+            Nytt ärende
+          </ButtonLink>
+        </div>
       </div>
 
       {hanterare && oppna.length > 0 && (
@@ -86,7 +90,7 @@ export default async function ArendeSida() {
       )}
 
       {lista.length === 0 ? (
-        <Card>
+        <Card guide="arenden.lista">
           <EmptyState
             rubrik="Inga ärenden"
             text="Här hamnar frågor om lön, utrustning, schema, arbetsmiljö och allt annat som annars försvinner i en chatt."
@@ -94,7 +98,7 @@ export default async function ArendeSida() {
           />
         </Card>
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul data-guide="arenden.lista" className="flex flex-col gap-2">
           {lista.map((a) => {
             const lage = slaLage(a);
             const kvar = timmarKvar(a.due_at);

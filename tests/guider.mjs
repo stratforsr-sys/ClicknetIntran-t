@@ -28,7 +28,13 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 
-import { GUIDER, guiderForRoller, hamtaGuide, startguiden } from "../src/guider/index.ts";
+import {
+  GUIDER,
+  guideForModul,
+  guiderForRoller,
+  hamtaGuide,
+  startguiden,
+} from "../src/guider/index.ts";
 import { NAV_PREFIX } from "../src/guider/ankare.ts";
 import {
   arKlar,
@@ -62,10 +68,21 @@ function granssnittet(katalog = join(rot, "src")) {
 
 const KALLKOD = granssnittet();
 
-/** Ankaren som faktiskt står utskrivna i gränssnittet. */
+/**
+ * Ankaren som faktiskt står utskrivna i gränssnittet.
+ *
+ * TVÅ SKRIVSÄTT, OCH BÅDA RÄKNAS. Vanliga element bär `data-guide="..."` direkt.
+ * `Card` tar i stället emot en namngiven `guide`-prop och sätter attributet
+ * själv — kortet ska inte kunna ta emot vilka attribut som helst, och flera av
+ * korten sitter i ett rutnät där ett omslag hade brutit spaltbredden.
+ *
+ * Att den andra formen räknas vilar på att `Card` verkligen skickar vidare
+ * propen. Det kontrolleras nedan, och utan den kontrollen vore `guide="x"` bara
+ * ett ord i en fil.
+ */
 const UTSKRIVNA = new Set();
 for (const fil of KALLKOD) {
-  for (const traff of fil.matchAll(/data-guide="([^"]+)"/g)) {
+  for (const traff of fil.matchAll(/(?:data-)?guide="([^"]+)"/g)) {
     // Overlayen bygger sina egna väljare — `[data-guide="${ankare}"]` — och de
     // är inte utskrivna attribut. Utan undantaget rapporteras de som ett ankare
     // vid namn "${ankare}" som ingen guide använder.
@@ -96,6 +113,67 @@ console.log("\n\x1b[1mRegistret\x1b[0m");
   );
   ok("ett konto utan roller får den också", guiderForRoller([]).length >= 1);
   ok("null som rollista kraschar inte", guiderForRoller(null).length >= 1);
+
+  // `krav: "stamplar"` kan inte uttryckas som en rollista — se typer.ts. Svaret
+  // kommer utifrån, och guiden ska försvinna helt när det är nej.
+  const kravsguider = GUIDER.filter((g) => g.krav === "stamplar");
+  ok("det finns en guide som kräver att man stämplar", kravsguider.length >= 1);
+  for (const g of kravsguider) {
+    ok(
+      `${g.slug}: göms för den som inte stämplar`,
+      !guiderForRoller(["salesperson"], false).includes(g),
+    );
+    ok(
+      `${g.slug}: visas för den som stämplar`,
+      guiderForRoller(["salesperson"], true).includes(g),
+    );
+  }
+
+  // En roll som inte är säljare ska inte få säljarens guider.
+  const ekonomi = guiderForRoller(["finance"], false).map((g) => g.slug);
+  ok("ekonomi får inte stämplingsguiden", !ekonomi.includes("stampla-in-och-ut"));
+  ok("men får de som gäller alla", ekonomi.includes("rutiner-och-kvittens"));
+
+  const projektledare = guiderForRoller(["project_manager"], false).map((g) => g.slug);
+  ok("projektledare får inte orderguiden", !projektledare.includes("registrera-order"));
+}
+
+console.log("\n\x1b[1mVarje guide går att starta\x1b[0m");
+{
+  /**
+   * En guide utan `modul` och utan `vidForstaInloggningen` kan aldrig komma
+   * fram: ingen sida monterar den, och layouten startar bara orienteringen. Den
+   * hade legat i listan och sett ut som ett erbjudande utan att vara ett.
+   */
+  for (const g of GUIDER) {
+    ok(
+      `${g.slug}: har en väg in`,
+      Boolean(g.modul) || g.vidForstaInloggningen === true,
+      g.modul ?? "startguide",
+    );
+  }
+
+  const moduler = GUIDER.filter((g) => g.modul).map((g) => g.modul);
+  ok("en modul har högst en guide", new Set(moduler).size === moduler.length, moduler.join(" "));
+  for (const m of moduler) ok(`uppslag på ${m} träffar`, guideForModul(m)?.modul === m);
+
+  /**
+   * Och sidan MONTERAR den faktiskt. Det här är samma sorts kontroll som
+   * ankarprovet: kopplingen mellan guiden och sidan är osynlig för TypeScript,
+   * och en guide som ingen sida monterar syns bara genom att aldrig starta.
+   */
+  for (const g of GUIDER) {
+    if (!g.modul) continue;
+    const sidan = `src/app/(app)${g.modul}/page.tsx`;
+    let kalla = "";
+    try {
+      kalla = las(sidan);
+    } catch {
+      ok(`${g.slug}: ${sidan} finns`, false);
+      continue;
+    }
+    ok(`${g.slug}: monteras av ${g.modul}`, kalla.includes(`slug="${g.slug}"`));
+  }
 }
 
 console.log("\n\x1b[1mVarje guide håller formen\x1b[0m");
@@ -132,6 +210,13 @@ console.log("\n\x1b[1mAnkaren finns i gränssnittet\x1b[0m");
   // Menyposternas ankare byggs av en funktion — de kan inte stå utskrivna, för
   // menyn ser olika ut för varje roll. Se src/guider/ankare.ts.
   ok("sidopanelen märker sina poster", sidebar.includes("data-guide={navAnkare(item.href)}"));
+
+  // Se rubriken över UTSKRIVNA: `guide="x"` på ett kort räknas bara som ett
+  // ankare så länge kortet faktiskt sätter attributet.
+  ok(
+    "Card skickar vidare sin guide-prop",
+    las("src/components/ui/Card.tsx").includes("data-guide={guide}"),
+  );
 
   for (const guide of GUIDER) {
     for (const [nr, steg] of guide.steg.entries()) {
