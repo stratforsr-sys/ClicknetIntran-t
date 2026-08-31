@@ -13,6 +13,7 @@ import {
   MFA_REQUIRED_ROLES,
   PERMISSIONS,
   PERMISSION_LABEL,
+  type Permission,
   type Role,
 } from "@/lib/roles";
 import { supabaseServer } from "@/lib/supabase/server";
@@ -34,6 +35,11 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 import { svensktDatum } from "@/lib/klocka";
 import { saldotArGammalt, type Regelverk } from "@/lib/franvaro";
 import { REGELFALT } from "@/lib/franvaro-server";
+import { Guidespegel } from "@/components/guide/Guidespegel";
+import { guiderForRoller } from "@/guider";
+import type { Progress } from "@/lib/guider";
+import { hamtaLage } from "@/lib/sparrar";
+import { stampelfri } from "@/lib/stampelfri";
 
 export const dynamic = "force-dynamic";
 
@@ -86,6 +92,23 @@ export default async function AnstalldSida({ params }: { params: Promise<{ id: s
     .select("id, label, state, skipped_reason, sort")
     .eq("employee_id", id)
     .order("sort");
+
+  /**
+   * E-G5. Personens systemguider. Laget speglas i en egen ruta bredvid
+   * checklistan — se components/guide/Guidespegel.tsx for varfor raderna inte
+   * gar att kvittera for hand.
+   *
+   * Laser med anvandarens EGEN token: RLS i 0041 avgor om den har chefen alls
+   * far se den har personens rader, och ett filter har hade varit ett andra
+   * svar pa samma fraga.
+   */
+  const [{ data: guiderader }, guidelage] = await Promise.all([
+    supabase
+      .from("guide_progress")
+      .select("guide_slug, version, steg, completed_at, updated_at")
+      .eq("employee_id", id),
+    hamtaLage(),
+  ]);
 
   // AC-13.13: lonekostnadsbehorigheten delas ut av saljchef och VD, inte av
   // den tekniska administratoren (PRD §1.4).
@@ -455,6 +478,25 @@ export default async function AnstalldSida({ params }: { params: Promise<{ id: s
             </div>
             <Button type="submit" variant="destruktiv">Avsluta anställningen</Button>
           </form>
+        </Card>
+      )}
+
+      {/* E-G5. Systemguiderna star FORE checklistan: de ar det enda i
+          onboardingen som personen sjalv driver, och det enda som satter
+          statusen. Utrustning och passerkort ar nagon annans att bocka av. */}
+      {!avslutad && (
+        <Card>
+          <CardHeader
+            titel="Systemguider"
+            beskrivning="Turerna i navet. Statusen foljer guiden och sätts av systemet — raderna gar inte att kvittera for hand."
+          />
+          <Guidespegel
+            guider={guiderForRoller([...roller], {
+              stamplar: guidelage.stampling && !stampelfri([...roller]),
+              behorigheter: [...behorigheter] as Permission[],
+            })}
+            rader={(guiderader ?? []) as Progress[]}
+          />
         </Card>
       )}
 

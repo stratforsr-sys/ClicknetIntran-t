@@ -112,13 +112,23 @@ export default async function OversiktSida() {
         Tillbaka till utbildning
       </Link>
 
-      <div>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
         <h1 className="text-display text-ink-900">Utbildningsprogress</h1>
         <p className="mt-1 text-body text-ink-500">
           {kraverAtgard > 0
             ? `${kraverAtgard} kräver åtgärd — försenade eller utgångna.`
             : "Inget försenat eller utgånget."}
         </p>
+        </div>
+        {/* Systemguiderna raknas for sig: de har ingen frist per kurs och inget
+            certifikat som gar ut, sa de hade forvirrat sammanstallningen ovan. */}
+        <Link
+          href="/utbildning/oversikt/systemguider"
+          className="text-small font-semibold text-brand-700 hover:text-brand-900"
+        >
+          Systemguider
+        </Link>
       </div>
 
       <div className="flex flex-wrap gap-2">

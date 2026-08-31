@@ -1,9 +1,11 @@
 import "server-only";
 
 import { supabaseAdmin } from "@/lib/supabase/server";
+import type { CurrentUser } from "@/lib/auth";
+import { skrivHandelse } from "@/lib/handelselogg-server";
 import type { Progress } from "@/lib/guider";
 import { arKlar } from "@/lib/guider";
-import { hamtaGuide, startguiden } from "@/guider";
+import { guiderForRoller, hamtaGuide, startguiden } from "@/guider";
 import type { Guide } from "@/guider";
 
 /**
@@ -191,4 +193,60 @@ export async function modulstart(
 /** Guiden bakom en slug, eller null. Enda uppslaget server actions får använda. */
 export function kandGuide(slug: string): Guide | null {
   return hamtaGuide(slug);
+}
+
+/**
+ * ===========================================================================
+ * ONBOARDAD SÄTTS AV SYSTEMET, INTE AV EN KRYSSRUTA
+ *
+ * Beslutet 2026-08-31: onboardad i systemet = varje obligatorisk guide för
+ * personens roll är genomgången. Ingenting annat. Utrustning, avtal och
+ * passerkort räknas i checklistan och håller inte tillbaka statusen — en glömd
+ * kryssruta ska inte kunna hålla kvar någon i onboarding-status i veckor när
+ * navet självt vet att hon kan navet.
+ *
+ * KÖRS EFTER SISTA STEGET I EN TUR, alltså högst en gång per avslutad guide.
+ * Den är inte gratis — den läser personens alla rader — men den är också det
+ * enda tillfället då svaret kan ha ändrats.
+ *
+ * SÄTTER BARA `onboarding` → `active`, aldrig åt andra hållet. Den som redan är
+ * aktiv rörs inte, och den som avslutats rörs definitivt inte: att göra om en
+ * guide får inte kunna återuppliva ett offboardat konto.
+ * ===========================================================================
+ */
+export async function provaOnboardad(
+  user: CurrentUser,
+  stamplar: boolean,
+): Promise<boolean> {
+  const anstalld = user.employee;
+  if (!anstalld || anstalld.status !== "onboarding") return false;
+
+  const mina = guiderForRoller(user.roles, {
+    stamplar,
+    behorigheter: user.permissions,
+  });
+  if (mina.length === 0) return false;
+
+  const rader = await hamtaProgress(anstalld.id);
+  const forSlug = new Map(rader.map((r) => [r.guide_slug, r]));
+  if (!mina.every((g) => arKlar(g, forSlug.get(g.slug)))) return false;
+
+  const { error } = await supabaseAdmin()
+    .from("employee")
+    .update({ status: "active" })
+    .eq("id", anstalld.id)
+    .eq("status", "onboarding"); // andra ledet: ingen kapplöpning mot offboarding
+
+  if (error) return false;
+
+  await skrivHandelse({
+    actorId: anstalld.id,
+    action: "employee.onboarded",
+    objectType: "employee",
+    objectId: anstalld.id,
+    reason: "Alla systemguider för rollen genomgångna",
+    meta: { guider: mina.length, slugar: mina.map((g) => g.slug) },
+  });
+
+  return true;
 }

@@ -16,6 +16,11 @@ export type Progress = {
   /** Hur många steg i guidens FULLSTÄNDIGA lista som är avklarade. Se nedan. */
   steg: number;
   completed_at: string | null;
+  /**
+   * Senaste rörelsen. Valfri: personens egen vy behöver den inte, men chefens
+   * bygger hela stillestånds­frågan på den. Hämtas därför bara där den används.
+   */
+  updated_at?: string | null;
 };
 
 /** Ett synligt steg, med sin plats i den fullständiga listan. */
@@ -139,4 +144,120 @@ export function procent(guide: Guide, progress: Progress | null | undefined): nu
   if (av === 0) return 0;
   if (arKlar(guide, progress)) return 100;
   return Math.min(100, Math.round(((progress?.steg ?? 0) / av) * 100));
+}
+
+/**
+ * ===========================================================================
+ * CHEFENS HALVA: HUR LÅNGT NÅGON KOMMIT, OCH NÄR DET ÄR VÄRT ATT SÄGA TILL
+ *
+ * Räknas fram ur samma rader som personen själv ser. Ingen egen bokföring, inga
+ * beräknade kolumner i databasen — hade läget lagrats skulle det kunna bli
+ * gammalt utan att någon märkte det, och en chefsvy som visar fel läge är
+ * värre än ingen chefsvy alls.
+ * ===========================================================================
+ */
+
+/** Så länge får en påbörjad tur stå stilla innan chefens vy markerar den. */
+export const STILLASTAENDE_DAGAR = 3;
+
+/**
+ * Så lång tid har man på sig att gå igenom hela sitt paket, räknat från
+ * startdatumet. Utan spärrar är den ingen gräns utan en signal: det är den här
+ * siffran nattjobbet larmar på. Ändras den ändras den här.
+ */
+export const FRIST_DAGAR = 14;
+
+const DYGN = 24 * 60 * 60 * 1000;
+
+/** Hela dagar sedan tidpunkten. Null in ger null ut. */
+export function dagarSedan(iso: string | null | undefined, nu: Date = new Date()): number | null {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return null;
+  return Math.floor((nu.getTime() - t) / DYGN);
+}
+
+export type Personlage = {
+  klara: number;
+  av: number;
+  /** Turen personen står mitt i, om någon. */
+  pagar: { slug: string; titel: string; steg: number; av: number } | null;
+  /** ISO för senaste rörelsen i någon guide. */
+  senast: string | null;
+  /** Dagar sedan senaste rörelsen. Null om ingenting påbörjats. */
+  stillestand: number | null;
+  /** Alla guider för personens roll är klara. */
+  onboardad: boolean;
+  /** Fristen har passerat och paketet är inte klart. */
+  forsenad: boolean;
+};
+
+/**
+ * Personens läge, räknat ur hennes rader och de guider som gäller HENNE.
+ *
+ * `guider` måste vara den lista `guiderForRoller()` gav för just den personen —
+ * en säljare och en ekonom har inte samma nämnare, och "2 av 6" betyder
+ * ingenting utan rätt sexa.
+ *
+ * STILLESTÅND RÄKNAS BARA PÅ DET SOM PÅBÖRJATS. Den som inte rört en enda
+ * guide står inte still i en tur; hon har inte börjat, och det är ett annat
+ * samtal. Därför är `stillestand` null i det fallet i stället för antalet dagar
+ * sedan anställningen — vilket hade sett ut som ett larm om något som ingen
+ * ännu haft en chans att göra fel.
+ */
+export function personlage(
+  guider: Guide[],
+  rader: Progress[],
+  startdatum: string | null,
+  nu: Date = new Date(),
+): Personlage {
+  const forSlug = new Map(rader.map((r) => [r.guide_slug, r]));
+
+  let klara = 0;
+  let pagar: Personlage["pagar"] = null;
+  let senast: string | null = null;
+
+  for (const guide of guider) {
+    const rad = forSlug.get(guide.slug) ?? null;
+    if (arKlar(guide, rad)) {
+      klara += 1;
+      continue;
+    }
+    // Den första påbörjade men oavslutade är den hon står i. Fler än en åt
+    // gången går inte att ha — turerna startar en i taget.
+    if (!pagar && rad && rad.steg > 0) {
+      pagar = { slug: guide.slug, titel: guide.titel, steg: rad.steg, av: guide.steg.length };
+    }
+  }
+
+  // Senaste rörelsen i NÅGON guide, inte bara i den som pågår: den som just
+  // blev klar med en tur står inte still även om nästa inte är påbörjad.
+  for (const rad of rader) {
+    const t = rad.updated_at ?? null;
+    if (t && (!senast || t > senast)) senast = t;
+  }
+
+  const onboardad = guider.length > 0 && klara === guider.length;
+  const paborjad = rader.some((r) => r.steg > 0);
+  const dagarKvarISysslan = dagarSedan(startdatum, nu);
+
+  return {
+    klara,
+    av: guider.length,
+    pagar,
+    senast,
+    stillestand: paborjad ? dagarSedan(senast, nu) : null,
+    onboardad,
+    forsenad:
+      !onboardad && dagarKvarISysslan !== null && dagarKvarISysslan > FRIST_DAGAR,
+  };
+}
+
+/** Markeras raden i chefens vy? */
+export function starStilla(lage: Personlage): boolean {
+  return (
+    !lage.onboardad &&
+    lage.stillestand !== null &&
+    lage.stillestand >= STILLASTAENDE_DAGAR
+  );
 }

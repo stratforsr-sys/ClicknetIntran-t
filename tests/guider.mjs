@@ -37,11 +37,16 @@ import {
 } from "../src/guider/index.ts";
 import { NAV_PREFIX } from "../src/guider/ankare.ts";
 import {
+  FRIST_DAGAR,
+  STILLASTAENDE_DAGAR,
   arKlar,
   behoverOmtag,
+  dagarSedan,
   guideLage,
+  personlage,
   procent,
   sparvarde,
+  starStilla,
   startSteg,
   synligaSteg,
 } from "../src/lib/guider.ts";
@@ -388,6 +393,102 @@ console.log("\n\x1b[1mKlar, och klar nog\x1b[0m");
   ok("procent för orörd är 0", procent(g, null) === 0);
   ok("procent för klar är 100", procent(g, rad({ steg: 11, completed_at: "x" })) === 100);
   ok("procent mitt i ligger emellan", procent(g, rad({ steg: 5 })) > 0 && procent(g, rad({ steg: 5 })) < 100);
+}
+
+console.log("\n\x1b[1mChefens vy: hur långt någon kommit\x1b[0m");
+{
+  const NU = new Date("2026-09-01T12:00:00Z");
+  const dagarSen = (d) => new Date(NU.getTime() - d * 24 * 60 * 60 * 1000).toISOString();
+  const datum = (d) => dagarSen(d).slice(0, 10);
+
+  const paket = guiderForRoller(["salesperson"], { stamplar: true });
+  ok("säljarens paket är flera guider", paket.length >= 5, `${paket.length} st`);
+
+  const klarRad = (g, nar) => ({
+    guide_slug: g.slug,
+    version: g.version,
+    steg: g.steg.length,
+    completed_at: dagarSen(nar),
+    updated_at: dagarSen(nar),
+  });
+
+  // Ingen har rört någonting.
+  {
+    const l = personlage(paket, [], datum(2), NU);
+    ok("orörd: noll klara", l.klara === 0 && l.av === paket.length);
+    ok("orörd: ingenting pågår", l.pagar === null);
+    ok("orörd: inte onboardad", l.onboardad === false);
+    ok("orörd: stillestånd är null, inte noll", l.stillestand === null);
+    ok("orörd: markeras inte som stillastående", starStilla(l) === false);
+  }
+
+  /**
+   * Den som inte börjat står inte still — hon har inte börjat. Skillnaden är
+   * hela skälet att `stillestand` är null och inte ett tal: ett larm om något
+   * ingen ännu haft chansen att göra fel på är brus, och brus i chefens vy är
+   * det som gör att raden som betyder något inte läses.
+   */
+  {
+    const l = personlage(paket, [], datum(30), NU);
+    ok("aldrig påbörjad efter 30 dagar står ändå inte still", starStilla(l) === false);
+    ok("men den är försenad", l.forsenad === true);
+  }
+
+  // Mitt i en tur.
+  {
+    const rader = [
+      klarRad(paket[0], 5),
+      { guide_slug: paket[1].slug, version: paket[1].version, steg: 2, completed_at: null, updated_at: dagarSen(4) },
+    ];
+    const l = personlage(paket, rader, datum(6), NU);
+    ok("pågående: en klar", l.klara === 1);
+    ok("pågående: rätt tur pekas ut", l.pagar?.slug === paket[1].slug, l.pagar?.titel ?? "—");
+    ok("pågående: rätt steg", l.pagar?.steg === 2 && l.pagar?.av === paket[1].steg.length);
+    ok(`pågående: stillestånd ${STILLASTAENDE_DAGAR}+ dagar markeras`, starStilla(l) === true);
+    ok("pågående: inte onboardad", l.onboardad === false);
+  }
+
+  // Rörelse i dag räknas, även i en annan guide än den som pågår.
+  {
+    const rader = [
+      klarRad(paket[0], 0),
+      { guide_slug: paket[1].slug, version: paket[1].version, steg: 1, completed_at: null, updated_at: dagarSen(9) },
+    ];
+    const l = personlage(paket, rader, datum(9), NU);
+    ok("senaste rörelsen i NÅGON guide räknas", l.stillestand === 0);
+    ok("och då står hon inte still", starStilla(l) === false);
+  }
+
+  // Allt klart.
+  {
+    const rader = paket.map((g) => klarRad(g, 1));
+    const l = personlage(paket, rader, datum(20), NU);
+    ok("allt klart: onboardad", l.onboardad === true);
+    ok("allt klart: räknas inte som försenad", l.forsenad === false);
+    ok("allt klart: markeras inte", starStilla(l) === false);
+  }
+
+  // Fristen.
+  {
+    const inom = personlage(paket, [], datum(FRIST_DAGAR - 1), NU);
+    const utanfor = personlage(paket, [], datum(FRIST_DAGAR + 1), NU);
+    ok(`inom ${FRIST_DAGAR} dagar är ingen försenad`, inom.forsenad === false);
+    ok(`efter ${FRIST_DAGAR} dagar är hon det`, utanfor.forsenad === true);
+    ok("utan startdatum går det inte att vara försenad", personlage(paket, [], null, NU).forsenad === false);
+  }
+
+  // En höjd version med omtag gör en onboardad person icke-klar igen. Det är
+  // avsiktligt: annars vore omtaget bara en text i en lista.
+  {
+    const g0 = { ...paket[0], version: 2, omtag: true };
+    const paket2 = [g0, ...paket.slice(1)];
+    const rader = paket.map((g) => klarRad(g, 1));
+    ok("omtag återöppnar paketet", personlage(paket2, rader, datum(3), NU).onboardad === false);
+  }
+
+  ok("dagarSedan på null är null", dagarSedan(null, NU) === null);
+  ok("dagarSedan på skräp är null", dagarSedan("inte ett datum", NU) === null);
+  ok("dagarSedan räknar hela dygn", dagarSedan(dagarSen(3), NU) === 3);
 }
 
 console.log(fel === 0 ? "\n\x1b[32mAlla kontroller godkända.\x1b[0m\n" : `\n\x1b[31m${fel} underkända.\x1b[0m\n`);

@@ -2,7 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
-import { bokforKlar, bokforSteg, aterstallGuide, kandGuide } from "@/lib/guider-server";
+import { hamtaLage } from "@/lib/sparrar";
+import { stampelfri } from "@/lib/stampelfri";
+import {
+  bokforKlar,
+  bokforSteg,
+  aterstallGuide,
+  kandGuide,
+  provaOnboardad,
+} from "@/lib/guider-server";
 
 /**
  * Slutpunkterna som en pågående tur skriver mot.
@@ -50,6 +58,17 @@ export async function bokforGuideKlar(slug: string): Promise<void> {
   if (!user?.employee) return;
 
   await bokforKlar(user.employee.id, guide.slug, guide.version, guide.steg.length);
+
+  /**
+   * Var det den sista? Då är personen onboardad, och statusen sätts här.
+   *
+   * `stamplar` räknas ut på samma sätt som överallt annars —
+   * `sparr.stampling && !stampelfri(roller)` — så att nämnaren blir densamma
+   * som i listan och i chefens vy. Räknade vi den annorlunda här skulle en
+   * säljare kunna bli "onboardad" utan att ha gjort stämplingsguiden.
+   */
+  const lage = await hamtaLage();
+  await provaOnboardad(user, lage.stampling && !stampelfri(user.roles));
 
   // Här revaliderar vi. Listan över systemguider visar "Klar" i stället för
   // "Pågår", och den som just avslutat turen och går dit ska inte mötas av en
