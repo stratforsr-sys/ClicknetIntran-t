@@ -105,6 +105,7 @@ export function Notisklocka({ notiser }: { notiser: Notis[] }) {
       <button
         type="button"
         onClick={vaxla}
+        data-guide="topp.notiser"
         aria-haspopup="dialog"
         aria-expanded={oppen}
         aria-label={olasta > 0 ? `Notiser, ${olasta} nya` : "Notiser"}

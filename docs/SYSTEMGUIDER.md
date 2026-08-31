@@ -1,7 +1,9 @@
 # Systemguider — interaktiv onboarding i navet
 
-Beslutat 2026-08-31. Det här dokumentet är beställningen: vad som ska byggas och
-varför just så. Bygget självt sker i etapper enligt sista avsnittet.
+Beslutat 2026-08-31, reviderat samma dag: **funktionsspärrarna ströks**, och de
+återstående öppna frågorna avgjordes. Det här dokumentet är beställningen: vad
+som ska byggas och varför just så. Bygget sker i etapper enligt sista avsnittet;
+G1 och G2 är levererade.
 
 ## Vad det handlar om
 
@@ -54,26 +56,28 @@ eller listar måste fråga efter `ovning = false`. Ett prov ska läsa källkoden
 larma om en tabell med övningsflagga läses någonstans utan filtret — samma grepp
 som `test:stampelfri` använder.
 
-### 3. Obligatoriskt via funktionsspärr, inte via låst nav
+### 3. Obligatoriskt utan spärrar
 
-Navet är öppet. En modul låser sitt **görande** tills modulens guide är klar:
-`/order` går att öppna och listan syns, men `[Ny order]` är låst med en ruta som
-förklarar varför och startar guiden.
+**Ingen knapp låser sig, ingen modul stänger.** Beställarens besked 2026-08-31:
+inga spärrar. `course.blocks_capability` lämnas orörd och används inte.
 
-Kroken finns redan: `course.blocks_capability`.
+Det enda tvingande är **startguiden**, som startar av sig själv vid första
+inloggningen och kommer tillbaka vid varje sidladdning tills den är genomgången.
+Den går att **pausa** — rutan försvinner för den sidvisningen — men inte att
+bocka bort.
 
-```
-course.blocks_capability = 'order.skapa'
-```
+Skälet att det ändå håller: guiden ligger OVANPÅ navet, inte i vägen för det. En
+ny säljare som måste stämpla in kan pausa, stämpla och fortsätta. Det som gör
+den obligatorisk är att den inte glömmer bort sig, inte att den låser något.
 
-Undantaget är **startguiden**, som måste göras direkt vid första inloggningen —
-det finns ingenting att låsa upp den med.
+Resten drivs av att guiderna är lätta att nå (Utbildning → Systemguider), att
+chefen ser läget, och att nattjobbet säger till när någon står still. Vad som
+händer med den som ändå aldrig gör dem är en fråga för en människa, inte för en
+låst knapp.
 
-*Varför inte låst nav:* en ny säljare måste kunna stämpla in dag ett, även om
-hen inte hunnit gå igenom ordermodulen.
-
-**En trasig guide låser aldrig ute någon.** Saknas ett ankare markeras guiden
-som trasig, larmet går till `/fel`, och spärren släpper. Se punkt 9.
+**En trasig guide står aldrig i vägen.** Saknas ett ankare markeras guiden som
+trasig, larmet går till `/fel`, och rutan visar en väg vidare i stället för att
+peka på tom luft. Se punkt 9.
 
 ### 4. Guiderna lagras som kurser och speglas i checklistan
 
@@ -87,6 +91,12 @@ alter table course_module add constraint course_module_kind_check
 
 Därmed ärvs allt som redan finns: progress, försök, certifikat, frister,
 giltighetstid, målgrupp per roll, och chefsöversikten.
+
+**Inte gjort ännu.** En `course`-rad kräver en `owner_id` som pekar på en
+anställd, och guiderna föds i koden innan det finns någon att peka på — en
+seedad kursrad i en migration hade krävt en gissning. Fram till G5 bor
+progressen därför i sin egen tabell (`guide_progress`, 0040) och listan står för
+sig på `/utbildning/systemguider`. Bytet ändrar ingenting av det användaren ser.
 
 Anställningschecklistan i `src/lib/onboarding.ts` får ett eget avsnitt som
 **speglar** kursläget:
@@ -104,34 +114,47 @@ Checklista, Anna K.                    4 av 14
   · Passerkort utlämnat
 ```
 
-Guiderader **går inte att bocka av för hand.** De följer kursen. En chef ska
-inte kunna kryssa bort en guide någon inte gjort — då är spärren i punkt 3
-meningslös.
+Guiderader **går inte att bocka av för hand.** De följer kursen. Utan spärrar är
+guidens egen bokföring det enda som säger att någon faktiskt gått igenom den, och
+en chef som kan kryssa bort den har tagit bort det sista beviset.
 
 Användaren har dessutom en egen ingång, **Utbildning → Systemguider**, där hen
 ser sina guider, vad som är låst, och kan göra om en guide frivilligt.
 
 ### 5. Startguiden först, resten i fri ordning
 
-Ingen konstgjord kedja. Spärrarna sköter ordningen ändå: man lär sig ordern när
-man ska ta en order. Det gör att en säljare och en ekonom kan gå helt olika
-vägar utan att något behöver konfigureras.
+Ingen konstgjord kedja. Man gör modulens guide när man ska använda modulen, och
+en säljare och en ekonom kan därför gå helt olika vägar utan att något behöver
+konfigureras.
 
 ### 6. Första inloggningen
 
-`Logga in → byt lösenord → /uppstart`. Startguiden (~4 min, 9 steg) startar och
-navet öppnas när den är klar. Ingen skipp-knapp. Avbryter man kommer man tillbaka
-till samma steg vid nästa inloggning.
+`Logga in → byt lösenord → startsidan`. Där startar orienteringen av sig själv:
+tio steg, ungefär fyra minuter. Ingen skipp-knapp, bara **Pausa** — och pausad
+kommer den tillbaka vid nästa sidladdning, på samma steg.
 
-Startguiden ska täcka: var menyn ligger, dagslinjen på startsidan, stämpling
-(för den som stämplar), notiser, sök, profilen, var rutiner finns, var guiderna
-finns, och vad som är låst just nu och varför.
+**Inte `/uppstart`.** Den adressen är upptagen av något annat: vyn som låter den
+första användaren skapa sitt konto i ett tomt register. Guiden behöver ändå ingen
+egen sida — den måste kunna peka på menyn och toppraden, och de finns bara inuti
+navet. Den bor därför i (app)-layouten och lägger sig över den sida användaren
+står på.
+
+Startguiden täcker: statusbandet, dagskortet, söket, notisklockan, menyn (på
+telefonen bakom "Mer"), rutinerna, var guiderna bor, och profilen. Tio steg i
+båda lägena — se `src/guider/kom-igang.ts`.
 
 ### 7. Handlingen är beviset — ingen kontrollfråga
 
 Eftersom turen kräver att momenten faktiskt utförs är genomförandet
-dokumentationen. Certifikat utfärdas när sista steget är gjort, och spärren
-släpper i samma stund.
+dokumentationen. Certifikat utfärdas när sista steget är gjort.
+
+**Med ett undantag som är värt att vara ärlig om:** orienteringen har inga
+moment att utföra. Den pekar ut var saker ligger, och de flesta av dess steg går
+vidare med en knapp. De tre som HAR något att göra — söket, klockan, menyn på
+telefonen — kräver att man gör det, och saknar då knappen helt. Regeln står i
+`src/guider/typer.ts`: bär steget en instruktion i imperativ ska det kräva
+handlingen; beskriver det något är det en knapp. Modulguiderna, som lär ut
+moment, är den andra sorten rakt igenom.
 
 *Konsekvens:* det som INTE syns i klicken — när man inte ska göra något, vad en
 avvikelse betyder — hör hemma i en skriven rutin med kvittens, inte i en
@@ -183,8 +206,9 @@ npm run test:guider
 
 Provet läser guidedefinitionerna och söker efter varje `data-guide`-värde i
 källkoden, i både dator- och mobilläge. Saknas ett ankare failar bygget — guiden
-kan inte tyst ruttna. Skulle något ändå slinka igenom i drift: guiden markeras
-trasig i runtime, larm till `/fel`, spärren släpper.
+kan inte tyst ruttna. Skulle något ändå slinka igenom i drift ger overlayen upp
+efter två sekunder och visar rutan mitt på skärmen med ett besked och en väg
+vidare, i stället för att peka på tom luft.
 
 ### 10. Mobil ingår
 
@@ -201,7 +225,7 @@ efterhand ska kunna visa att personen tagit del av vad som gäller:
 |---|---|
 | Stämpla in/ut | Ja — arbetstidsregler, sen ankomst, rättelser |
 | Rapportera frånvaro | Ja — sjukanmälan, läkarintyg, konsekvenstrappan |
-| Kom igång i navet | Ja — personuppgifter och loggning (K12/K14) |
+| Kom igång i navet | Ja — vad navet loggar och hur uppgifterna används |
 | Registrera order | Nej |
 | Läs provision | Nej |
 | Ärenden, lönerapport, lönekostnad | Nej |
@@ -255,10 +279,8 @@ src/guider/order-skapa.ts
 ```
 
 Textputs och flyttade ankare rör ingen. Har **momentet** ändrats höjs versionen
-med `omtag: true`: certifikat utfärdade före v2 blir utgångna, spärren återgår,
-och en banner förklarar varför.
-
-> "Order har ändrats. Gör om guiden (2 min) för att behålla åtkomsten."
+med `omtag: true`: guiden slår om till "Gör om" i listan, och den som var klar är
+det inte längre.
 
 Beslutet ligger hos den som ändrar koden. Ingen årlig utgång — omtag av skäl
 ingen förstår lär bara ut att klicka igenom utan att läsa.
@@ -290,32 +312,49 @@ om det visar sig behövas.
 
 ---
 
-## Öppna frågor inför bygget
+## De sista besluten, tagna 2026-08-31
 
-1. **Namnrymd för spärrar.** `order.skapa`, `tid.stampla`, `franvaro.anmal` … —
-   listan ska vara uttömmande och bo på ett ställe, som `roles.ts` gör.
-2. **Vilka tabeller får övningsflagga.** Order säkert. Avtal, ärende och
-   stämpling beror på hur guiderna skrivs — bestäms guide för guide, och varje
-   ny flagga kräver att provet i punkt 2 utökas.
-3. **Fristen 14 dagar** är satt som utgångspunkt, inte bekräftad mot hur en
-   introduktion faktiskt ser ut hos er.
-4. **K12/K14.** Stegprogress per person är en ny personuppgift. Chefsvyn är
-   begränsad till chefer, vilket ryms i nuvarande avvägning, men
-   `docs/K12_INTRESSEAVVAGNING_UTKAST.md` behöver en rad om att guideprogress
-   behandlas och hur länge den sparas.
-5. **Vem får redigera guidetexter.** Förslag: säljchef, VD och admin. Loggas i
-   händelseloggen.
+1. **Fristen är 14 dagar** för hela rollens paket, räknat från startdatumet.
+   Utan spärrar är den ingen gräns utan en signal: den styr när nattjobbet
+   larmar chefen (G6). Siffran bor på ett ställe och ändras där.
 
----
+2. **Övningsflaggan gäller order, avtal och ärende.** Där är en övningsrad lätt
+   att känna igen och lätt att städa.
+
+   **Stämplingen får ingen flagga, och det är ett medvetet nej.** En
+   övningsstämpling måste filtreras bort i lönerapporten, i nattjobbets
+   auto-stängning, i konsekvenstrappan och i provisionsunderlaget — fyra ställen
+   där ett bortglömt filter inte ger en krasch utan en felaktig lön eller en
+   anklagelse om ogiltig frånvaro. Det är exakt den fällan `jobb/konsekvenser.ts`
+   redan gått i en gång. Stämplingsguiden pekar därför ut knapparna och förklarar
+   reglerna utan att spara något, och första riktiga stämplingen sker skarpt.
+
+3. **Guidetexter redigeras av säljchef, VD och admin.** Ändringen bokförs i
+   händelseloggen med vem och när. Byggs i G7.
+
+4. **K12 utgår.** Beställarens besked: ingen uppdatering av
+   intresseavvägningen inom ramen för det här arbetet.
 
 ## Byggordning
 
-| Etapp | Innehåll |
-|---|---|
-| **G1** | Motorn: overlay, ankare, kravd_handling, progress per steg, mobil, `test:guider` |
-| **G2** | Startguiden + `/uppstart`-flödet. Första guiden som är i drift |
-| **G3** | Övningsläget: flagga, filter i alla frågor, städjobb, källkodsprov |
-| **G4** | Spärrarna: `blocks_capability`, låsta knappar med förklaring, trasig-guide-släpper |
-| **G5** | Chefsvyn, speglingen i checklistan, onboardad-statusen |
-| **G6** | Nattjobbet: stillestånd, frist, knuffar |
-| **G7** | Guidepaketet per roll, rutinerna i punkt 11, textredigeringen |
+| Etapp | Innehåll | Läge |
+|---|---|---|
+| **G1** | Motorn: overlay, ankare, stegprogress, mobil, `test:guider` | **Klar** |
+| **G2** | Startguiden och autostarten vid första inloggningen | **Klar** |
+| **G3** | Övningsläget: flagga på order/avtal/ärende, filter i alla frågor, städjobb, källkodsprov | Kvar |
+| ~~G4~~ | ~~Funktionsspärrar~~ | Struken 2026-08-31 |
+| **G5** | Speglingen mot kurser och anställningschecklistan, chefsöversikten, onboardad-statusen | Kvar |
+| **G6** | Nattjobbet: stillestånd, frist, knuffar | Kvar |
+| **G7** | Guidepaketet per roll, rutinerna i punkt 11, textredigeringen | Kvar |
+
+### Vad G1 och G2 lämnade efter sig
+
+- `supabase/migrations/0040_systemguider.sql` — `guide_progress`, RLS med bara
+  läsning av sina egna rader.
+- `src/guider/` — typerna, registret, ankarhjälpen och `kom-igang.ts`.
+- `src/lib/guider.ts` — reglerna, utan databas och utan React.
+- `src/lib/guider-server.ts` — läsning och bokföring via service role.
+- `src/components/guide/` — overlayen, värden i layouten, server actions.
+- `src/app/(app)/utbildning/systemguider/` — listan, med "Gör om".
+- `tests/guider.mjs` — ankarprovet och reglerna. Ingår i `npm test`.
+- Ankare i Sidebar, Topbar, Bottennav, Notisklocka och startsidan.

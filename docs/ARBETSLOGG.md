@@ -5,6 +5,118 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-08-31 · Systemguider: den interaktiva onboardingen (G1 + G2)
+
+Beställningen och alla femton beslut står i **`docs/SYSTEMGUIDER.md`**. Den här
+posten är vad som faktiskt byggdes och varför just så.
+
+### Två beslut ändrades under dagen
+
+**Funktionsspärrarna ströks.** Ursprungsbeslutet var att `[Ny order]` skulle låsa
+sig tills orderguiden var gjord, via den redan befintliga `blocks_capability`.
+Beställaren ändrade sig samma dag: inga spärrar. `blocks_capability` lämnas orörd.
+
+Det som är kvar av "obligatoriskt" är startguiden, och den är obligatorisk på ett
+annat sätt än en spärr: den startar av sig själv, går att pausa, och kommer
+tillbaka vid varje sidladdning tills den är genomgången. Den ligger **ovanpå**
+navet och aldrig i vägen för det — en ny säljare kan pausa, stämpla in och
+fortsätta. Det som gör den bindande är att den inte glömmer bort sig.
+
+**K12-uppdateringen utgår** på beställarens besked.
+
+### Guiderna bor i koden, progressen i databasen
+
+Delningen är hela konstruktionen. En guide pekar på element via `data-guide`, och
+den kopplingen hör ihop med koden som ritar elementet — den måste ändras i samma
+commit. Låg stegen i databasen kunde navet byggas om utan att guiden märkte det,
+och nästa nyanställd fått en ruta som pekar på tom luft.
+
+`guide_progress` (0040) bär därför bara det databasen är ensam om att veta: hur
+långt en viss person kommit. En rad per person och guide, inte per steg — frågan
+navet ställer är alltid "var är hon nu?".
+
+**Versionen står på raden** med flit. `omtag: true` vid en versionshöjning gör
+tidigare genomföranden ogiltiga; en textputs gör det inte. Utan kolumnen hade ett
+omtag krävt att man raderade folks historik.
+
+### Progressen räknas i den fullständiga steglistan, inte i den synliga
+
+Den enda icke-uppenbara regeln, och den som provet vaktar hårdast.
+
+Guiden har steg som bara finns i ett läge: "tryck på Mer" bara på telefonen,
+"panelen står kvar" bara på datorn. Den synliga listan är alltså inte samma lista
+på en telefon som på en dator. Sparade vi "fem synliga steg gjorda" skulle den
+som börjar på bussen och fortsätter vid skrivbordet **hoppa över ett steg eller få
+ett i repris**, beroende på åt vilket håll bytet gick.
+
+`steg` bär därför ett index i originallistan, och den synliga positionen räknas
+fram vid varje uppslag. Provet går igenom turen steg för steg i det ena läget och
+kräver att uppslaget i det andra alltid landar på första ogjorda steget — plus en
+kontroll att listorna faktiskt skiljer sig åt, annars provar det ingenting.
+
+`startSteg()` **klämmer i båda ändar**. `steg` kan inte vara en främmande nyckel
+mot något, och en guide som krympt lämnar rader som pekar förbi slutet. Ett kastat
+fel där hade blivit en anställd som inte kommer in i navet för att hennes gamla
+rad pekar på steg åtta i en tur som har sex.
+
+### Overlayen: tre val som avgör resten
+
+| Val | Varför |
+|---|---|
+| Mörkläggningen är hålets `box-shadow` med 9999 px spridning | Ger ett hål med rundade hörn utan en extra nod och utan en SVG-mask som måste ritas om vid varje scroll |
+| Hela overlayen släpper igenom klick utom textrutan | Alternativet — fyra rektangler runt målet — går sönder på ett sätt som **låser användaren ute ur sitt eget nav**, och det får en guide aldrig kunna göra |
+| Målet slås upp varje bildruta | Sidopanelen glider in, toppraden är klistrad, kort växer när data kommer. En engångsmätning sitter fel efter första animationen. Samma slinga upptäcker att ankaret saknas |
+
+Ett saknat ankare ger upp efter två sekunder och visar rutan mitt på skärmen med
+ett besked och en väg vidare. **En trasig guide står aldrig i vägen för arbetet.**
+
+Lyssnaren för `klick`/`fokus` sitter på `document` i fångstfasen, inte på noden.
+Målet byts ut mitt under steget — React ritar om, sidopanelen monteras när menyn
+öppnas — och en lyssnare fäst på noden hade följt med den gamla noden i graven.
+
+### Turen väntar aldrig på nätet
+
+Positionen hålls i klienten och speglas till servern efteråt. Går skrivningen fel
+återupptar personen en bit tidigare nästa gång, vilket är rätt håll att fela åt.
+En tur som hänger sig en halv sekund vid varje klick är däremot något man aktivt
+börjar undvika.
+
+### Var den bor
+
+`GuideVard` sitter i **(app)-layouten**, inte på startsidan. En tur som handlar om
+navet måste kunna peka på menyn, toppraden och bottenraden, och de ritas av
+layouten. Låg guiden i `/`-sidan hade den försvunnit i samma sekund som
+användaren klickade på något — vilket är precis vad turen ber henne göra.
+
+Kostnaden är ett indexuppslag per sidvisning, och bara för den som har en
+oavslutad tur.
+
+Adressen `/uppstart` var upptagen: det är vyn där den första användaren skapar sitt
+konto i ett tomt register. Guiden behövde ingen egen sida.
+
+### Att steg är `vidare` och inte `klick` är en regel, inte en genväg
+
+Orienteringen har inga moment att utföra — den pekar ut var saker ligger. Regeln
+står i `src/guider/typer.ts`: bär steget en instruktion i imperativ ska det kräva
+handlingen och saknar då knapp helt; beskriver det något är det en knapp. Tre steg
+i startguiden kräver något: söket, klockan, menyn på telefonen. Modulguiderna, som
+lär ut moment, blir den andra sorten rakt igenom.
+
+### Prov
+
+`npm run test:guider`, i `npm test`. Ankarprovet läser alla `.tsx` under `src/` och
+kräver att varje ankare en guide använder finns utskrivet. Menyposternas ankare
+byggs av `navAnkare()` och kan inte stå utskrivna — menyn ser olika ut för varje
+roll — så provet kontrollerar i stället att Sidebar anropar funktionen och att
+adressen finns i `nav-items.ts`.
+
+### Kvar
+
+G3 övningsläget, G5 speglingen mot kurser och checklistan plus chefsöversikten,
+G6 nattjobbet, G7 resten av guidepaketet. G4 är struken.
+
+---
+
 ## 2026-08-28 · Stämpelfria roller: VD, säljchef, ekonomi och projektledare
 
 Beställarens besked: de fyra rollerna stämplar inte in och ut. Regeln ligger i

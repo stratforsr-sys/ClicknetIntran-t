@@ -81,6 +81,12 @@ export default async function UtbildningSida() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {/* Systemguiderna galler alla och star darfor forst, utan villkor.
+              De ar turerna som lar ut navet sjalvt — se
+              src/guider/ och docs/SYSTEMGUIDER.md. */}
+          <ButtonLink href="/utbildning/systemguider" variant="sekundar">
+            Systemguider
+          </ButtonLink>
           {farSeAlla && (
             <ButtonLink href="/utbildning/oversikt" variant="sekundar">
               Progress

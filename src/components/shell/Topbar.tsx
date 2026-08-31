@@ -62,6 +62,7 @@ export function Topbar({ oppnaMeny, klocka }: { oppnaMeny: () => void; klocka: R
 
       <form
         role="search"
+        data-guide="topp.sok"
         onSubmit={(e) => {
           e.preventDefault();
           const q = new FormData(e.currentTarget).get("q");

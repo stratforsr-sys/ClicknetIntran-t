@@ -706,16 +706,21 @@ export default async function Startsida() {
           sedan i natt, och den ska inte behova letas efter. */}
       {driftrad}
 
-      <Statusband
-        fornamn={user.employee.first_name}
-        undertext={`${roller} · ${STATUS_LABEL[user.employee.status] ?? user.employee.status}`}
-        lage={stamplingslage?.lage ?? null}
-        minuterVidRendering={stamplingslage?.minuter ?? 0}
-        serverTid={nu.toISOString()}
-        sedan={stamplingslage?.sedan ?? null}
-      />
+      {/* Omslaget bar ankaret. `Statusband` och `Card` tar inte emot
+          godtyckliga attribut, och att oppna dem for det vore att bjuda in
+          data-guide pa stallen dar ingen guide vet om att den star. */}
+      <div data-guide="hem.statusband">
+        <Statusband
+          fornamn={user.employee.first_name}
+          undertext={`${roller} · ${STATUS_LABEL[user.employee.status] ?? user.employee.status}`}
+          lage={stamplingslage?.lage ?? null}
+          minuterVidRendering={stamplingslage?.minuter ?? 0}
+          serverTid={nu.toISOString()}
+          sedan={stamplingslage?.sedan ?? null}
+        />
+      </div>
 
-      {dagskort}
+      <div data-guide="hem.dagskort">{dagskort}</div>
 
       {/* Ordningen ar hela poangen med E5.4, och den maste halla aven pa
           375 px dar allt ligger i en enda spalt. Darfor byter korten plats i

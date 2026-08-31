@@ -7,6 +7,7 @@ import { Ikon } from "./Ikon";
 import { Counter } from "@/components/ui/Badge";
 import { cn } from "@/components/ui/cn";
 import type { NavItem } from "./nav-items";
+import { navAnkare } from "@/guider/ankare";
 import { INSTALLNINGAR_START } from "./installningar-delade";
 
 /**
@@ -113,6 +114,7 @@ export function Sidebar({
       )}
 
       <aside
+        data-guide="nav.panel"
         className={cn(
           "on-dark fixed inset-y-4 left-4 z-40 flex w-64 flex-col rounded-lg bg-brand-900 p-4",
           "transition-[transform,width] duration-base ease-brand",
@@ -164,6 +166,10 @@ export function Sidebar({
                   key={item.href}
                   href={item.href}
                   onClick={stang}
+                  // Guidade turer pekar pa menyposter via adressen, inte via
+                  // etiketten: /avtal heter "Avtal" for chefen och "Mitt avtal"
+                  // for alla andra. Se src/guider/ankare.ts.
+                  data-guide={navAnkare(item.href)}
                   aria-current={aktiv ? "page" : undefined}
                   // Hopfalld ar ikonen allt som star kvar. Utan title blir
                   // menyn en rad symboler man far gissa sig till.
@@ -250,6 +256,7 @@ export function Sidebar({
             */}
             <Link
               href={INSTALLNINGAR_START}
+              data-guide="nav.profil"
               scroll={false}
               onClick={stang}
               aria-current={path.startsWith("/profil") ? "page" : undefined}

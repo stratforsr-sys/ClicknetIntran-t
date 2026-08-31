@@ -76,7 +76,13 @@ export function Bottennav({
         </Link>
       )}
 
-      <button type="button" onClick={oppnaMeny} aria-label="Öppna menyn" className={klass(false)}>
+      <button
+        type="button"
+        onClick={oppnaMeny}
+        aria-label="Öppna menyn"
+        data-guide="botten.mer"
+        className={klass(false)}
+      >
         <Ikon namn="meny" />
         Mer
       </button>

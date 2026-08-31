@@ -3,21 +3,37 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-08-31 — beslut om systemguider (interaktiv onboarding)
+**Senast uppdaterad:** 2026-08-31 — systemguider G1 + G2 i produktion
 
-## Näst på tur: systemguider
+## Passet 2026-08-31 i korthet
 
-Beställningen är klar och ligger i `docs/SYSTEMGUIDER.md`. Läs den före bygget —
-femton beslut med motiv, guidepaketet per roll, öppna frågor och byggordning G1–G7.
+**Den interaktiva onboardingen finns och startar av sig själv.** Beställningen
+med alla beslut står i `docs/SYSTEMGUIDER.md`; hela resonemanget i
+`ARBETSLOGG.md` under 2026-08-31.
 
-Kort: interaktiv onboarding som overlay på det riktiga navet, där turen kräver att
-användaren gör momentet (ingen Nästa-knapp). Det som skapas hamnar i övningsläge.
-Obligatoriskt via funktionsspärr per modul (`course.blocks_capability`), inte via
-låst nav. Guiderna lagras som kurser med ny modultyp `guidad_tur` och speglas i
-anställningschecklistan. Definieras i kod med ankarprov i bygget; texterna går att
-skriva om i navet. Onboardad-statusen sätts automatiskt när rollens guider är klara.
+Vad som är påslaget:
 
-Ingenting av det är byggt ännu. Börja på G1.
+- **Startguiden** "Kom igång i navet" — tio steg, ~4 min, startar automatiskt
+  vid första inloggningen och kommer tillbaka tills den är genomgången. Går att
+  pausa, inte att hoppa över.
+- **Utbildning → Systemguider** — listan, med "Gör om".
+- Overlayen ligger i (app)-layouten och pekar på riktiga element via
+  `data-guide`. `npm run test:guider` failar bygget om ett ankare försvinner.
+
+**Två beslut ändrades 2026-08-31 och gäller framåt:** funktionsspärrarna är
+**strukna** (`course.blocks_capability` används inte), och K12-uppdateringen
+utgår. Bygg inga spärrar.
+
+**Rör inte den här gränsen:** progressen räknas i guidens FULLSTÄNDIGA steglista,
+aldrig i den synliga. Den synliga är olika på telefon och dator, och en position
+räknad i den gör att den som byter skärm hoppar över ett steg eller får ett i
+repris. Se rubriken i `src/lib/guider.ts` och provet som vaktar den.
+
+**Näst på tur:** G3 övningsläget (flagga på order/avtal/ärende — men INTE på
+stämplingen, se beslut 2 i SYSTEMGUIDER.md), sedan G5 chefsöversikten och
+speglingen i anställningschecklistan.
+
+---
 
 ## Passet 2026-08-28 i korthet
 

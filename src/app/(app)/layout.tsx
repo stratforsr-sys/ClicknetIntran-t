@@ -13,6 +13,7 @@ import { isConfigured } from "@/lib/env";
 import { kraverMfa, kvittoGiltigt, STEG2_KAKA } from "@/lib/mfa";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { TOAST_KAKA, franKaka } from "@/lib/toast";
+import { GuideVard } from "@/components/guide/GuideVard";
 import { VantarPaAktivering } from "./VantarPaAktivering";
 import { EjKonfigurerad } from "./EjKonfigurerad";
 
@@ -101,22 +102,31 @@ export default async function AppLayout({
    * hamtas — och en panel man aldrig oppnar kostar ingenting alls.
    */
   return (
-    <Skal
-      items={navFor(user, lage.stampling)}
-      namn={fullName(user.employee)}
-      roll={roll}
-      stamplingPa={stamplarSjalv}
-      hopfalldFranStart={hopfalld}
-      klocka={
-        <Suspense fallback={<KlockaSkelett />}>
-          <Klocka user={user} />
-        </Suspense>
-      }
-      kvitto={kvitto}
-      ruta={ruta}
-    >
-      {children}
-    </Skal>
+    <>
+      <Skal
+        items={navFor(user, lage.stampling)}
+        namn={fullName(user.employee)}
+        roll={roll}
+        stamplingPa={stamplarSjalv}
+        hopfalldFranStart={hopfalld}
+        klocka={
+          <Suspense fallback={<KlockaSkelett />}>
+            <Klocka user={user} />
+          </Suspense>
+        }
+        kvitto={kvitto}
+        ruta={ruta}
+      >
+        {children}
+      </Skal>
+      {/*
+        Ligger UTANFOR skalet med flit. Den guidade turen ar `fixed` och ritas
+        over allt annat anda, men skalet ar en klientkomponent — hade varden
+        legat inuti hade den blivit ett barn som skickas ner genom en prop till,
+        och layouten hade fatt vanta pa dess fraga innan den fick skicka nagot.
+      */}
+      <GuideVard />
+    </>
   );
 }
 
