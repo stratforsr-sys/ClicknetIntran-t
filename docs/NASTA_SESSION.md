@@ -3,7 +3,21 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-08-28 — stämpelfria roller (VD, säljchef, ekonomi, projektledare)
+**Senast uppdaterad:** 2026-08-31 — beslut om systemguider (interaktiv onboarding)
+
+## Näst på tur: systemguider
+
+Beställningen är klar och ligger i `docs/SYSTEMGUIDER.md`. Läs den före bygget —
+femton beslut med motiv, guidepaketet per roll, öppna frågor och byggordning G1–G7.
+
+Kort: interaktiv onboarding som overlay på det riktiga navet, där turen kräver att
+användaren gör momentet (ingen Nästa-knapp). Det som skapas hamnar i övningsläge.
+Obligatoriskt via funktionsspärr per modul (`course.blocks_capability`), inte via
+låst nav. Guiderna lagras som kurser med ny modultyp `guidad_tur` och speglas i
+anställningschecklistan. Definieras i kod med ankarprov i bygget; texterna går att
+skriva om i navet. Onboardad-statusen sätts automatiskt när rollens guider är klara.
+
+Ingenting av det är byggt ännu. Börja på G1.
 
 ## Passet 2026-08-28 i korthet
 
