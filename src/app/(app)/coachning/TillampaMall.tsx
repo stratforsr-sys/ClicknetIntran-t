@@ -4,7 +4,7 @@ import { useActionState } from "react";
 import { Button } from "@/components/ui/Button";
 import { KONTROLL } from "@/components/ui/Field";
 import { Notis } from "@/components/ui/Notis";
-import { tillampaMall, type MallState } from "../mallar/actions";
+import { tillampaMall, type MallState } from "./mallar/actions";
 
 /**
  * Tillamper en mall pa den har personen.
