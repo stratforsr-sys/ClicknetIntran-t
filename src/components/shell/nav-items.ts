@@ -25,6 +25,17 @@ export function navFor(user: CurrentUser | null, stamplingPa: boolean): NavItem[
     items.push({ href: "/nyheter", label: "Nyheter", ikon: "logg" });
     items.push({ href: "/rutiner", label: "Rutiner", ikon: "rutiner" });
     items.push({ href: "/utbildning", label: "Utbildning", ikon: "utbildning" });
+    /**
+     * Coachningen star bredvid utbildningen och inte under den, for att de
+     * svarar pa olika fragor: utbildningen ar INNEHALLET, coachningen ar
+     * uppfoljningen av personer.
+     *
+     * Posten galler ALLA, precis som /avtal och /fel, och visar olika saker
+     * beroende pa vem som oppnar den. Chefen far lagvyn; alla andra skickas
+     * till sitt eget kort. En saljare som inte hittar till sina egna
+     * coachningsuppgifter gor dem inte.
+     */
+    items.push({ href: "/coachning", label: "Coachning", ikon: "kontroll" });
     // Arenden galler alla: den anstallda ser sina egna, chefen ser inkorgen.
     items.push({ href: "/arenden", label: "Ärenden", ikon: "meny" });
     /**
