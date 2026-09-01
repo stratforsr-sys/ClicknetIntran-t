@@ -118,19 +118,20 @@ async function hamtaKallor(uppgifter: { kind: Uppgiftstyp; assignee_id: string; 
   const moduler = [...new Set(sjalvsanna.filter((u) => u.kind === "rollspel_inspelat" && u.module_id).map((u) => u.module_id!))];
   const dokument = [...new Set(sjalvsanna.filter((u) => u.document_id).map((u) => u.document_id!))];
 
+  /**
+   * Fragorna stalls ALLTID, aven med tomma id-listor.
+   *
+   * Forsta utkastet hoppade over dem med en ternar och `Promise.resolve` — och
+   * det gav en unionstyp dar `.data` betydde tva olika saker, vilket TypeScript
+   * inte gar med pa. Ett tomt `in.()` kostar en tur men ar ETT svar med EN typ,
+   * och funktionen har redan returnerat ovanfor nar det inte finns nagot
+   * sjalvsant alls.
+   */
   const [cert, forsok, ack, dok] = await Promise.all([
-    kurser.length
-      ? supabase.from("certification").select("employee_id, course_id, expires_at").in("employee_id", personer).in("course_id", kurser)
-      : Promise.resolve({ data: [] as { employee_id: string; course_id: string; expires_at: string | null }[] }),
-    moduler.length
-      ? supabase.from("course_attempt").select("employee_id, module_id, passed").in("employee_id", personer).in("module_id", moduler).eq("passed", true)
-      : Promise.resolve({ data: [] as { employee_id: string; module_id: string | null }[] }),
-    dokument.length
-      ? supabase.from("document_ack").select("employee_id, document_id, version").in("employee_id", personer).in("document_id", dokument)
-      : Promise.resolve({ data: [] as { employee_id: string; document_id: string; version: number }[] }),
-    dokument.length
-      ? supabase.from("document").select("id, version").in("id", dokument)
-      : Promise.resolve({ data: [] as { id: string; version: number }[] }),
+    supabase.from("certification").select("employee_id, course_id, expires_at").in("employee_id", personer).in("course_id", kurser),
+    supabase.from("course_attempt").select("employee_id, module_id, passed").in("employee_id", personer).in("module_id", moduler).eq("passed", true),
+    supabase.from("document_ack").select("employee_id, document_id, version").in("employee_id", personer).in("document_id", dokument),
+    supabase.from("document").select("id, version").in("id", dokument),
   ]);
 
   const nu = new Date();
@@ -177,6 +178,19 @@ function kallanKlar(u: { kind: Uppgiftstyp; assignee_id: string; course_id: stri
 // Uppgifterna
 // -----------------------------------------------------------------------------
 
+/**
+ * Radtypen ur `coaching_task`.
+ *
+ * KASTEN GAR VIA `unknown`, OCH DET AR INTE SLARV. `UPPGIFTSFALT` ar en
+ * hopslagen strang, och supabase-js harleder radtypen ur select-strangens
+ * LITERAL — en konkatenering vidgas till `string` och ger `GenericStringError[]`
+ * i stallet for kolumnerna. Bygget foll pa exakt det 2026-09-01.
+ *
+ * Alternativet vore en enda lang literal, men da ligger faltlistan pa fyra
+ * stallen i stallet for ett, och den dagen en kolumn tillkommer glider de isar.
+ * Formen kontrolleras i stallet av `bygg()`, som ar det enda stallet raderna
+ * lases.
+ */
 type Rad = Record<string, unknown>;
 
 async function bygg(rader: Rad[], nu: Date): Promise<Uppgiftsrad[]> {
@@ -233,14 +247,14 @@ export async function uppgifterFor(employeeId: string, nu = new Date()): Promise
     .select(UPPGIFTSFALT)
     .eq("assignee_id", employeeId)
     .order("due_date", { nullsFirst: false });
-  return bygg((data ?? []) as Rad[], nu);
+  return bygg((data ?? []) as unknown as Rad[], nu);
 }
 
 export async function uppgift(id: string, nu = new Date()): Promise<Uppgiftsrad | null> {
   const supabase = await supabaseServer();
   const { data } = await supabase.from("coaching_task").select(UPPGIFTSFALT).eq("id", id).maybeSingle();
   if (!data) return null;
-  return (await bygg([data as Rad], nu))[0] ?? null;
+  return (await bygg([data as unknown as Rad], nu))[0] ?? null;
 }
 
 // -----------------------------------------------------------------------------
@@ -283,7 +297,7 @@ export async function hamtaLag(nu = new Date()): Promise<Lagperson[]> {
     supabase.from("coaching_session").select("employee_id, held_on"),
   ]);
 
-  const byggda = await bygg((uppgifter ?? []) as Rad[], nu);
+  const byggda = await bygg((uppgifter ?? []) as unknown as Rad[], nu);
 
   const perPerson = new Map<string, Uppgiftsrad[]>();
   for (const u of byggda) {
