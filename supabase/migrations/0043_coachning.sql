@@ -603,7 +603,11 @@ declare
   villkor text;
   andamal text;
 begin
-  select pg_get_constraintdef(c.oid) into villkor
+  -- `pg_get_constraintdef` normaliserar nyckelord till VERSALER, sa
+  -- avlasningen maste ske i gemener. Utan `lower()` letar sokningen efter
+  -- "is not null" i en text som sager "IS NOT NULL", och kontrollen larmar om
+  -- ett fel som inte finns — vilket den ocksa gjorde forsta gangen den kordes.
+  select lower(pg_get_constraintdef(c.oid)) into villkor
   from pg_constraint c
   join pg_class t on t.oid = c.conrelid
   where t.relname = 'file_object' and c.conname = 'file_object_purpose_check';
@@ -616,7 +620,7 @@ begin
     end if;
   end loop;
 
-  select pg_get_constraintdef(c.oid) into villkor
+  select lower(pg_get_constraintdef(c.oid)) into villkor
   from pg_constraint c
   join pg_class t on t.oid = c.conrelid
   where t.relname = 'file_object' and c.conname = 'file_object_koppling';
