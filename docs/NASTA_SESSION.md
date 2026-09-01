@@ -3,7 +3,47 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-08-31 — systemguider G1, G2, G5, G6 och G7 i produktion
+**Senast uppdaterad:** 2026-09-01 — coachningsmodulen fas 1 ligger på branchen `coachning`
+
+## ARBETSSÄTTET ÄR ÄNDRAT — LÄS DETTA FÖRST
+
+Sedan 2026-09-01 går arbete **inte längre direkt till `main`**. Bygg på en
+branch, låt Vercel bygga previewen, och merga först när beställaren godkänt.
+
+Preview-adressen är
+`https://clicknet-nav-git-<branch>-zens-projects-6c1be12b.vercel.app`.
+
+**Previewen pekar på PRODUKTIONSDATABASEN.** Det finns ett Supabase-projekt, inte
+ett per miljö. Ett test på en branch skriver riktiga rader. Håll migrationer
+additiva så `main`-koden aldrig rör de nya tabellerna, och stäm av innan testdata
+skapas. Preview-miljön saknar `STEG2_SECRET` och `CRON_SECRET`, så
+inbjudningsmejl och `/api/jobb/*` fungerar inte där.
+
+## Coachningsmodulen (branchen `coachning`, EJ mergad)
+
+Utredningen med research, datamodell och 26 frågor: `docs/COACHNING_UTREDNING.md`.
+Besluten står i avsnitt 0 där. Hela resonemanget i `ARBETSLOGG.md` under 2026-09-01.
+
+Vad som finns: `/coachning` (lagvy för chefer, eget kort för alla andra),
+personkortet, uppgiftsvyn, mallar med textformat, GROW-protokoll vars åtaganden
+blir riktiga uppgifter, påminnelser i klockan och ett nattjobbssteg.
+
+**Migration 0043 är körd mot produktionen** (2026-09-01 16:29 UTC, checksumma
+`c81f4cb5ce3d8f71`). Den är additiv och `main` rör inte tabellerna.
+
+**Rör inte den här gränsen:** `kurs`, `rollspel_inspelat` och `lasning` hämtar sitt
+läge ur `certification`, `course_attempt` respektive `document_ack` och går
+ALDRIG att bocka för hand. Spärren finns på två ställen — triggern
+`coaching_kvittens_vakt` i 0043 och `farKvittera()` i `src/lib/coachning.ts` — och
+listan `SJALVSANNA_TYPER` måste hållas lika med triggern.
+
+**Fokusområdena ligger i `coaching_focus`, INTE i `kv_criterion`.** K&V-poängen
+kräver `max_points` på varje aktiv rad, så ett fokusområde inlagt där bryter
+bonusberäkningen tyst för hela säljkåren.
+
+**Kvar innan merge:** `tests/rls.mjs` har inga coachningsfall ännu, alltså är
+Definition of Done p. 4 inte uppfylld. `evidence = 'fil'` finns i databasen men
+erbjuds inte i formuläret — uppladdningen är inte inkopplad.
 
 ## Passet 2026-08-31 i korthet
 
