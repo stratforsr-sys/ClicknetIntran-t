@@ -8,6 +8,7 @@ import { hamtaLage } from "@/lib/sparrar";
 import { stampelfri } from "@/lib/stampelfri";
 import { guiderForRoller } from "@/guider";
 import { dagarSedan, personlage, type Progress } from "@/lib/guider";
+import { coachningsnotiser } from "@/lib/coachning-server";
 
 /** G6. Sa lange far det sta stilla innan klockan sager till. */
 const TYST_DAGAR = 3;
@@ -599,6 +600,24 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
         olast: true,
       });
     }
+  }
+
+  /**
+   * Coachningen.
+   *
+   * Grenen ligger i `coachning-server.ts` och inte har inne. Skalet ar det
+   * destrukturerade `Promise.all` ovanfor: dar betyder ordningen allt, och en
+   * ny post mitt i listan ar fyra andringar dar tre rader maste hallas i takt.
+   * Modulen far svara pa sin egen fraga i stallet.
+   *
+   * Kastar aldrig upp. En trasig coachningsfraga far inte tomma hela klockan —
+   * det ar sjutton andra poster som da forsvinner for en modul som ar den
+   * yngsta i navet.
+   */
+  try {
+    notiser.push(...(await coachningsnotiser(user)));
+  } catch {
+    // Tyst. Felet syns i `error_report` via sidans egen felgrans.
   }
 
   /**

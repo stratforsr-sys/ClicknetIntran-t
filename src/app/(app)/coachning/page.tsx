@@ -46,12 +46,17 @@ export default async function CoachningSida() {
             {forsenade > 0 && ` ${forsenade} uppgift${forsenade === 1 ? "" : "er"} är försenad${forsenade === 1 ? "" : "e"}.`}
           </p>
         </div>
-        <Link
-          href={`/coachning/${user.employee.id}`}
-          className="text-small font-semibold text-brand-700 hover:text-brand-900"
-        >
-          Min egen coachning
-        </Link>
+        <div className="flex flex-wrap gap-4">
+          <Link href="/coachning/mallar" className="text-small font-semibold text-brand-700 hover:text-brand-900">
+            Mallar
+          </Link>
+          <Link
+            href={`/coachning/${user.employee.id}`}
+            className="text-small font-semibold text-brand-700 hover:text-brand-900"
+          >
+            Min egen coachning
+          </Link>
+        </div>
       </div>
 
       {lag.length === 0 ? (

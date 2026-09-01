@@ -1,10 +1,16 @@
 import { supabaseServer } from "@/lib/supabase/server";
 import { canReadAllEmployees, fullName, type CurrentUser } from "@/lib/auth";
+import { notisId, type Notis } from "@/lib/notiser";
 import {
+  LARMGRANS_DAGAR,
+  PAMINNELSE_PERSON_DYGN,
+  TYP_ETIKETT,
   arSjalvsann,
   dagarSedanCoachning,
+  farKvittera,
   forsenad,
   lageFor,
+  larmar,
   type Handelse,
   type Uppgiftslage,
   type Uppgiftstyp,
@@ -420,4 +426,162 @@ export async function fokusomraden(): Promise<{ id: string; label: string }[]> {
     .eq("active", true)
     .order("sort");
   return data ?? [];
+}
+
+// -----------------------------------------------------------------------------
+// Klockan
+// -----------------------------------------------------------------------------
+
+/**
+ * Coachningens poster i notisklockan.
+ *
+ * LIGGER HAR OCH INTE I `notiser-server.ts`, med flit. Den filen ar redan 645
+ * rader och hamtar tjugo tabeller i ETT destrukturerat `Promise.all` — en ny
+ * gren mitt i det hade varit fyra andringar i en lista dar ordningen betyder
+ * allt. Klockan anropar i stallet den har funktionen med en rad.
+ *
+ * Posterna RAKNAS FRAM, de lagras inte. Det ar 0018:s linje: en notistabell
+ * kraver att varje producent kommer ihag att skriva sin rad, och den som
+ * glommer ger en tyst lucka.
+ *
+ * TRAPPAN AR SYSTEMGUIDERNAS, inte en egen. 3 dygn utan rorelse till personen,
+ * 7 till chefen. Tva olika trappor i samma nav hade betytt att en paminnelse
+ * inte langre sager nagot om hur bradskande saken ar.
+ */
+export async function coachningsnotiser(user: CurrentUser): Promise<Notis[]> {
+  if (!user.employee) return [];
+  const mig = user.employee.id;
+  const nu = new Date();
+
+  const supabase = await supabaseServer();
+  const [{ data: rader }, { data: samtal }] = await Promise.all([
+    supabase.from("coaching_task").select(UPPGIFTSFALT).is("cancelled_at", null),
+    supabase.from("coaching_session").select("employee_id, held_on"),
+  ]);
+
+  const uppgifter = await bygg((rader ?? []) as unknown as Rad[], nu);
+  const oppna = uppgifter.filter((u) => u.lage !== "klar" && u.lage !== "avbruten");
+  if (oppna.length === 0 && !farCoacha(user)) return [];
+
+  const notiser: Notis[] = [];
+  const namn = await namnkarta([
+    ...oppna.map((u) => u.assignee_id),
+    ...oppna.map((u) => u.created_by),
+  ]);
+
+  /**
+   * MIN EGEN PAMINNELSE. Bara nar det faktiskt star still — den som arbetar med
+   * en uppgift i dag ska inte samtidigt fa en notis om att hon inte gjort den.
+   *
+   * Tidpunkten ar senaste rorelsen, och den ar inte kosmetisk: en post utan
+   * tidpunkt filtreras bort langst ner i `hamtaNotiser`, och en paminnelse som
+   * aldrig syns ar samre an ingen.
+   *
+   * ID:T BAR ANTALET VECKOR, sa posten aterupstar en gang i veckan for den som
+   * klickat bort den och fortfarande inte gjort nagot at saken.
+   */
+  for (const u of oppna.filter((u) => u.assignee_id === mig)) {
+    const senast = senasteRorelse(u) ?? u.created_at;
+    const stilla = Math.floor((nu.getTime() - Date.parse(senast)) / 86_400_000);
+    const underkand = u.lage === "underkand";
+
+    // En underkand uppgift sager till DIREKT. Den ar inte en paminnelse om
+    // nagot ogjort utan ett besked fran en manniska, och att vanta tre dygn med
+    // det hade varit att dolja att nagon faktiskt tittat.
+    if (!underkand && stilla < PAMINNELSE_PERSON_DYGN) continue;
+
+    notiser.push({
+      id: notisId("coachning", u.id, underkand ? "u" : Math.floor(stilla / 7)),
+      typ: "coachning",
+      rubrik: underkand ? `Underkänd: ${u.title}` : u.title,
+      detalj: underkand
+        ? "Läs återkopplingen och gör om"
+        : [
+            TYP_ETIKETT[u.kind],
+            u.forsenad ? "försenad" : u.due_date ? `klar senast ${u.due_date}` : null,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+      href: `/coachning/uppgift/${u.id}`,
+      tidpunkt: senast,
+      olast: true,
+    });
+  }
+
+  /**
+   * VANTAR PA MIN BOCK. Fragan stalls med `farKvittera()` — samma funktion som
+   * sidan och som server action anvander, sa en post i klockan betyder alltid en
+   * knapp som faktiskt fungerar.
+   *
+   * `arChef` skickas som falskt har med flit. Den som kvitterar pa rollen `chef`
+   * far raden via lagvyn i stallet; att slå upp chefskapet per uppgift hade
+   * betytt en databasfraga per rad i en klocka som redan staller sjutton.
+   */
+  for (const u of oppna.filter((u) => u.lage === "inlamnad" && u.assignee_id !== mig)) {
+    if (!farKvittera(u, mig, false)) continue;
+    const senast = senasteRorelse(u) ?? u.created_at;
+    notiser.push({
+      // Inlamningens tidpunkt gor id:t nytt vid varje ny inlamning, sa en
+      // omgjord uppgift dyker upp igen aven for den som klickat bort forra.
+      id: notisId("coachning-kvittering", u.id, Date.parse(senast)),
+      typ: "coachning",
+      rubrik: `${namn.get(u.assignee_id) ?? "Någon"} väntar på din kvittering`,
+      detalj: u.title,
+      href: `/coachning/uppgift/${u.id}`,
+      tidpunkt: senast,
+      olast: true,
+    });
+  }
+
+  /**
+   * U3. CHEFENS RAD — den matning som faktiskt andrar nagot, och den andrar
+   * beteendet hos chefen och inte hos den som coachas.
+   *
+   * Raknas ur samma tidslinje som lagvyn: kvitteringar, bedomningar och hallna
+   * samtal. Att nagon LADE UPP en uppgift raknas inte, annars hade raden gatt
+   * att tysta genom att skapa uppgifter man aldrig foljer upp.
+   */
+  if (farCoacha(user)) {
+    const perPerson = new Map<string, { at: string }[]>();
+    for (const u of uppgifter) {
+      if (u.assignee_id === mig) continue;
+      const lista = perPerson.get(u.assignee_id) ?? [];
+      for (const h of u.handelser) {
+        if (RAKNAS_SOM_COACHNING.includes(h.type)) lista.push({ at: h.at });
+      }
+      perPerson.set(u.assignee_id, lista);
+    }
+    for (const s of samtal ?? []) {
+      if (s.employee_id === mig) continue;
+      const lista = perPerson.get(s.employee_id) ?? [];
+      lista.push({ at: `${s.held_on}T12:00:00Z` });
+      perPerson.set(s.employee_id, lista);
+    }
+
+    for (const [personId, rorelser] of perPerson) {
+      const dagar = dagarSedanCoachning(rorelser, nu);
+      if (!larmar(dagar)) continue;
+      const veckor = dagar === null ? 0 : Math.floor(dagar / 7);
+      notiser.push({
+        id: notisId("coachning-team", personId, veckor),
+        typ: "coachning",
+        rubrik: `${namn.get(personId) ?? "En medarbetare"} har inte coachats`,
+        detalj: dagar === null ? "Ingen coachning alls är bokförd" : `Senast för ${dagar} dagar sedan`,
+        href: `/coachning/${personId}`,
+        tidpunkt:
+          dagar === null
+            ? new Date(nu.getTime() - LARMGRANS_DAGAR * 86_400_000).toISOString()
+            : new Date(nu.getTime() - dagar * 86_400_000).toISOString(),
+        olast: true,
+      });
+    }
+  }
+
+  return notiser;
+}
+
+/** Senaste handelsen pa en uppgift, oavsett sort. Null om ingen finns. */
+function senasteRorelse(u: Uppgiftsrad): string | null {
+  if (u.handelser.length === 0) return null;
+  return u.handelser.reduce((a, b) => (a.at > b.at ? a : b)).at;
 }

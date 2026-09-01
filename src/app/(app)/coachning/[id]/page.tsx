@@ -17,6 +17,8 @@ import {
   type Uppgiftsrad,
 } from "@/lib/coachning-server";
 import { NyUppgift } from "../NyUppgift";
+import { NyttSamtal } from "../NyttSamtal";
+import { TillampaMall } from "../TillampaMall";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Coachningskort — Clicknet Nav" };
@@ -73,6 +75,14 @@ export default async function PersonkortSida({ params }: { params: Promise<{ id:
     .neq("status", "offboarded")
     .neq("id", id)
     .order("first_name");
+
+  const [{ data: mallar }, { data: mallposter }] = await Promise.all([
+    supabase.from("coaching_template").select("id, name").eq("active", true).order("name"),
+    supabase.from("coaching_template_item").select("template_id"),
+  ]);
+
+  const momentPer = new Map<string, number>();
+  for (const p of mallposter ?? []) momentPer.set(p.template_id, (momentPer.get(p.template_id) ?? 0) + 1);
 
   const [{ data: kurser }, { data: moduler }, { data: dokument }] = await Promise.all([
     supabase.from("course").select("id, title").eq("status", "published").order("title"),
@@ -158,9 +168,38 @@ export default async function PersonkortSida({ params }: { params: Promise<{ id:
         </Card>
       )}
 
+      {arChef && (mallar ?? []).length > 0 && (
+        <Card>
+          <CardHeader
+            titel="Använd en mall"
+            beskrivning="Lägger upp hela mallens moment med datum räknade från startdagen."
+            handling={
+              <Link href="/coachning/mallar" className="text-small font-semibold text-brand-700 hover:text-brand-900">
+                Hantera mallar
+              </Link>
+            }
+          />
+          <TillampaMall
+            assigneeId={id}
+            mallar={(mallar ?? []).map((m) => ({ id: m.id, name: m.name, moment: momentPer.get(m.id) ?? 0 }))}
+            forvaltDatum={person.start_date ?? new Date().toISOString().slice(0, 10)}
+          />
+        </Card>
+      )}
+
+      {arChef && !egen && (
+        <Card>
+          <CardHeader
+            titel="Coachningssamtal"
+            beskrivning="Mål, läge, alternativ och slutsats. Åtagandena blir uppgifter."
+          />
+          <NyttSamtal employeeId={id} idag={new Date().toISOString().slice(0, 10)} />
+        </Card>
+      )}
+
       {samtal.length > 0 && (
         <Card>
-          <CardHeader titel="Coachningssamtal" />
+          <CardHeader titel="Tidigare samtal" />
           <ul className="flex flex-col gap-3">
             {samtal.map((s) => (
               <li key={s.id} className="rounded-sm bg-canvas px-4 py-3">
@@ -168,7 +207,20 @@ export default async function PersonkortSida({ params }: { params: Promise<{ id:
                   <span className="text-small font-semibold text-ink-900">{s.held_on}</span>
                   <span className="text-small text-ink-500">{namn.get(s.coach_id) ?? "—"}</span>
                 </div>
-                {s.will_md && <p className="mt-1 text-small text-ink-700">{s.will_md}</p>}
+                {/* Hela protokollet, inte bara slutsatsen. Den som berors av
+                    ett samtal ska kunna lasa vad som faktiskt skrevs. */}
+                {[
+                  ["Mål", s.goal_md],
+                  ["Läge", s.reality_md],
+                  ["Alternativ", s.options_md],
+                  ["Slutsats", s.will_md],
+                ]
+                  .filter(([, v]) => v)
+                  .map(([r, v]) => (
+                    <p key={r} className="mt-1 text-small text-ink-700">
+                      <span className="font-semibold">{r}:</span> {v}
+                    </p>
+                  ))}
               </li>
             ))}
           </ul>

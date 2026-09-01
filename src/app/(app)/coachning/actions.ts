@@ -10,6 +10,7 @@ import {
   TYP_KRAVER_KALLA,
   arSjalvsann,
   bevisSaknas,
+  laggTill,
   farAvbryta,
   farKvittera,
   type Bevis,
@@ -341,6 +342,139 @@ export async function avbrytUppgift(_prev: CoachState, form: FormData): Promise<
     revalidatePath(`/coachning/uppgift/${id}`);
     revalidatePath(`/coachning/${uppgift.assignee_id}`);
     return { ok: "Uppgiften är avbruten." };
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Något gick fel." };
+  }
+}
+
+// -----------------------------------------------------------------------------
+// U4. Coachningssamtalet (GROW)
+// -----------------------------------------------------------------------------
+
+/**
+ * Sparar ett coachningssamtal och gor atagandena till riktiga uppgifter.
+ *
+ * ===========================================================================
+ * DET FJARDE FALTET AR HELA POANGEN
+ *
+ * G, R och O — mal, lage, alternativ — ar anteckningar. W, atagandet, blir
+ * UPPGIFTER med ansvarig och datum. Det ar skillnaden mellan ett protokoll och
+ * en anteckningsbok, och underlaget ar entydigt pa punkten: nar atagandena inte
+ * foljs upp lar sig den som coachas att coachningen ar frivillig.
+ *
+ * Atagandena skrivs som text, ett per rad, med valfritt antal dagar efter ett
+ * lodstreck — samma idiom som mallarna och quizfragorna.
+ *
+ *   Ring tio bolag med den nya oppningen | 7
+ *   Lyssna igenom tisdagens samtal | 3
+ * ===========================================================================
+ *
+ * SAMTALET AR LASBART FOR DEN DET GALLER. Inga privata chefsanteckningar — se
+ * laspolicyn pa `coaching_session` i 0043.
+ */
+export async function skapaSamtal(_prev: CoachState, form: FormData): Promise<CoachState> {
+  try {
+    const user = await kravCoach();
+    const db = supabaseAdmin();
+
+    const employeeId = text(form, "employee_id");
+    if (!employeeId) return { fel: "Välj vem samtalet gäller." };
+    if (employeeId === user.employee!.id) return { fel: "Ett coachningssamtal förs med någon annan." };
+    if (!(await arChefFor(user, employeeId))) {
+      return { fel: "Du kan bara föra samtal med personer du är chef för." };
+    }
+
+    const hallet = text(form, "held_on");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(hallet)) return { fel: "Datumet är inte giltigt." };
+
+    // Ett samtal som inte agt rum ar inte ett protokoll utan en plan. Samma
+    // gransdragning som K&V-samtalen gor.
+    const idag = new Date().toISOString().slice(0, 10);
+    if (hallet > idag) return { fel: "Samtalet kan inte ligga i framtiden." };
+
+    const goal = text(form, "goal_md");
+    const reality = text(form, "reality_md");
+    const options = text(form, "options_md");
+    const will = text(form, "will_md");
+
+    if (!goal && !reality && !options && !will) return { fel: "Skriv något i protokollet." };
+
+    // Atagandena tolkas FORE samtalet sparas. Ett fel i en rad ska inte lamna
+    // efter sig ett samtal utan atagandena det handlade om.
+    const atagandeText = text(form, "atagande");
+    const ataganden: { title: string; dagar: number }[] = [];
+    for (const [i, rad] of atagandeText.split("\n").map((r) => r.trim()).filter(Boolean).entries()) {
+      const [titel, dagartext] = rad.split("|").map((d) => d.trim());
+      if (!titel) return { fel: `Åtagande ${i + 1} saknar text.` };
+      let dagar = 7;
+      if (dagartext) {
+        const tal = Number(dagartext);
+        if (!Number.isInteger(tal) || tal < 0 || tal > 365) {
+          return { fel: `Åtagande ${i + 1}: dagarna ska vara ett heltal mellan 0 och 365.` };
+        }
+        dagar = tal;
+      }
+      ataganden.push({ title: titel, dagar });
+    }
+
+    const { data: samtal, error } = await db
+      .from("coaching_session")
+      .insert({
+        employee_id: employeeId,
+        coach_id: user.employee!.id,
+        created_by: user.employee!.id,
+        held_on: hallet,
+        goal_md: goal,
+        reality_md: reality,
+        options_md: options,
+        will_md: will,
+      })
+      .select("id")
+      .single();
+
+    if (error || !samtal) return { fel: `Samtalet sparades inte: ${error?.message ?? "okänt fel"}` };
+
+    if (ataganden.length > 0) {
+      const ids = ataganden.map(() => crypto.randomUUID());
+      const { error: uppgiftsfel } = await db.from("coaching_task").insert(
+        ataganden.map((a, i) => ({
+          id: ids[i],
+          title: a.title,
+          kind: "uppgift",
+          assignee_id: employeeId,
+          created_by: user.employee!.id,
+          // Atagandet ar personens eget. Att lata chefen godkanna det hon sjalv
+          // lovade att gora hade gjort atagandet till en order.
+          verify_by: "sjalv",
+          session_id: samtal.id,
+          starts_on: hallet,
+          due_date: laggTill(hallet, a.dagar),
+        })),
+      );
+
+      if (uppgiftsfel) return { fel: `Samtalet sparades men åtagandena gjorde det inte: ${uppgiftsfel.message}` };
+
+      await db
+        .from("coaching_task_event")
+        .insert(ids.map((id) => ({ task_id: id, type: "tilldelad", by_employee_id: user.employee!.id })));
+    }
+
+    await db.from("audit_log").insert({
+      actor_id: user.employee!.id,
+      action: "coaching_session.created",
+      object_type: "coaching_session",
+      object_id: samtal.id,
+      meta: { employee_id: employeeId, held_on: hallet, ataganden: ataganden.length },
+    });
+
+    revalidatePath("/coachning");
+    revalidatePath(`/coachning/${employeeId}`);
+    return {
+      ok:
+        ataganden.length > 0
+          ? `Samtalet är sparat och ${ataganden.length} åtagande${ataganden.length === 1 ? "" : "n"} lades upp som uppgifter.`
+          : "Samtalet är sparat.",
+    };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
   }

@@ -28,7 +28,9 @@ import {
   larmar,
   paminnelseFor,
   planera,
+  skrivMall,
   sorteraLag,
+  tolkaMall,
 } from "../src/lib/coachning.ts";
 
 let fel = 0;
@@ -320,6 +322,43 @@ ok(
 ok("tom mall nekas", granskaMall([]) !== null);
 ok("mall med ett fel nekas i sin helhet", granskaMall([post(), post({ kind: "kurs" })]) !== null);
 ok("hel mall gar igenom", granskaMall([post(), post({ sort: 2, kind: "kurs", course_id: "k1" })]) === null);
+
+// =============================================================================
+rubrik("Mallen skrivs som text");
+
+const enkel = tolkaMall("Läs manuset | lasning | 2 | oppningen | Intro");
+ok("rubriken tolkas", enkel.rader[0]?.title === "Läs manuset");
+ok("typen tolkas", enkel.rader[0]?.kind === "lasning");
+ok("dagarna tolkas", enkel.rader[0]?.offset_days === 2);
+ok("slugen tolkas", enkel.rader[0]?.kalla_slug === "oppningen");
+ok("fokus tolkas", enkel.rader[0]?.fokus[0] === "Intro");
+
+ok("bara rubrik racker", tolkaMall("Ring 20 bolag").rader[0]?.kind === "uppgift");
+ok("utan dagar blir noll", tolkaMall("Ring 20 bolag").rader[0]?.offset_days === 0);
+ok("flera fokus separeras med komma", tolkaMall("X | uppgift | 1 | | Intro, Avslut").rader[0]?.fokus.length === 2);
+ok("tomma rader hoppas over", tolkaMall("Ett\n\n\nTva").rader.length === 2);
+ok("tom text ger tom mall utan fel", tolkaMall("").fel === null);
+ok("sorteringen foljer radordningen", tolkaMall("Ett\nTva").rader[1]?.sort === 2);
+
+rubrik("Vad mallformatet nekar");
+ok("rad utan rubrik nekas", Boolean(tolkaMall(" | uppgift | 2").fel));
+ok("okand typ nekas", Boolean(tolkaMall("X | hittepa").fel));
+// Rollspel gar inte att lagga i en mall: modulerna har inga slugar.
+ok("rollspel_live nekas i mall", Boolean(tolkaMall("X | rollspel_live | 2").fel));
+ok("kurs utan slug nekas", Boolean(tolkaMall("X | kurs | 2").fel));
+ok("lasning utan slug nekas", Boolean(tolkaMall("X | lasning | 2").fel));
+ok("kurs med slug gar igenom", tolkaMall("X | kurs | 2 | intro-kursen").fel === null);
+ok("decimaldagar nekas", Boolean(tolkaMall("X | uppgift | 2.5").fel));
+ok("negativa dagar nekas", Boolean(tolkaMall("X | uppgift | -1").fel));
+ok("dagar over ett ar nekas", Boolean(tolkaMall("X | uppgift | 400").fel));
+ok("fler an femtio moment nekas", Boolean(tolkaMall(Array.from({length: 51}, (_, i) => `M${i}`).join("\n")).fel));
+// Ett fel ska aldrig ge halva mallen tillbaka.
+ok("ett fel ger inga rader alls", tolkaMall("Bra\nDalig | hittepa").rader.length === 0);
+
+rubrik("Mallen fram och tillbaka");
+const malltext = "Läs manuset | lasning | 2 | oppningen | Intro\nRing 20 bolag | uppgift | 10";
+ok("texten overlever en runda", skrivMall(tolkaMall(malltext).rader) === malltext);
+ok("en minimal rad tappar inte sina tomma falt", skrivMall(tolkaMall("Ring").rader) === "Ring | uppgift | 0");
 
 console.log(fel === 0 ? "\n\x1b[32mAlla prov gick igenom.\x1b[0m" : `\n\x1b[31m${fel} prov föll.\x1b[0m`);
 process.exit(fel === 0 ? 0 : 1);

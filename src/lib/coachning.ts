@@ -454,3 +454,111 @@ export function granskaMall(poster: Mallpost[]): string | null {
   }
   return null;
 }
+
+// -----------------------------------------------------------------------------
+// Mallen skrivs som text
+//
+// Samma val som quizfragorna (`tolkaFragor`) och rollspelsrubriken
+// (`tolkaKriterier`) gjorde, och av samma skal: en rampplan skrivs i ETT svep,
+// ofta genom att klistra in fran ett underlag. Ett formular med "lagg till
+// moment" tolv ganger gor samma arbete tio ganger langsammare.
+//
+//   Las manuset          | lasning     | 2  | oppningen | Intro
+//   Rollspel med Anna    | manus       | 5  |           | Intro, Behovsanalys
+//   Ring 20 bolag        | uppgift     | 10
+//
+// Rubrik | typ | dagar | kalla | fokusomraden
+//
+// Bara rubriken ar obligatorisk. Typen blir `uppgift`, dagarna noll.
+//
+// KALLAN ANGES SOM SLUG, inte som id. En mall ska ga att skriva av en manniska
+// som lasar en lista, och ett uuid gar inte att skriva av. Slugen slas upp nar
+// mallen sparas, sa ett stavfel fangas dar och inte forst nar mallen tillamps
+// pa en riktig person.
+//
+// ROLLSPEL GAR INTE ATT LAGGA I EN MALL AN. Modulerna har inga slugar — de
+// identifieras av kurs plus ordning — och en mall som pekar pa "modul 3" hade
+// gatt sonder den dagen nagon lade in en modul mellan tva andra. Det ar en
+// medveten lucka, inte ett forbiseende.
+// -----------------------------------------------------------------------------
+
+/** Typerna som gar att skriva i en mall, med det ord man skriver. */
+export const MALLTYPER: Uppgiftstyp[] = ["uppgift", "manus", "medlyssning", "kurs", "lasning"];
+
+/** Vilka av dem som kraver en slug efter dagarna. */
+export const MALLTYP_KRAVER_SLUG: Uppgiftstyp[] = ["kurs", "lasning"];
+
+export type Mallrad = {
+  sort: number;
+  title: string;
+  kind: Uppgiftstyp;
+  offset_days: number;
+  kalla_slug: string | null;
+  fokus: string[];
+};
+
+export function tolkaMall(text: string): { rader: Mallrad[]; fel: string | null } {
+  const rader = text
+    .split("\n")
+    .map((r) => r.trim())
+    .filter(Boolean);
+
+  if (rader.length === 0) return { rader: [], fel: null };
+  if (rader.length > 50) return { rader: [], fel: "Högst 50 moment i en mall." };
+
+  const ut: Mallrad[] = [];
+
+  for (const [i, rad] of rader.entries()) {
+    const d = rad.split("|").map((x) => x.trim());
+    const nr = i + 1;
+
+    const title = d[0];
+    if (!title) return { rader: [], fel: `Rad ${nr} saknar rubrik.` };
+
+    const typord = (d[1] || "uppgift") as Uppgiftstyp;
+    if (!MALLTYPER.includes(typord)) {
+      return {
+        rader: [],
+        fel: `Rad ${nr}: "${d[1]}" är ingen malltyp. Skriv en av ${MALLTYPER.join(", ")}.`,
+      };
+    }
+
+    let offset = 0;
+    if (d[2]) {
+      const tal = Number(d[2]);
+      if (!Number.isInteger(tal) || tal < 0 || tal > 365) {
+        return { rader: [], fel: `Rad ${nr}: dagarna ska vara ett heltal mellan 0 och 365.` };
+      }
+      offset = tal;
+    }
+
+    const slug = d[3] || null;
+    if (MALLTYP_KRAVER_SLUG.includes(typord) && !slug) {
+      return {
+        rader: [],
+        fel: `Rad ${nr}: ${TYP_ETIKETT[typord].toLowerCase()} behöver en slug i fjärde fältet.`,
+      };
+    }
+
+    const fokus = (d[4] ?? "")
+      .split(",")
+      .map((f) => f.trim())
+      .filter(Boolean);
+
+    ut.push({ sort: nr, title, kind: typord, offset_days: offset, kalla_slug: slug, fokus });
+  }
+
+  return { rader: ut, fel: null };
+}
+
+/** Baklanges, for redigeringsvyn. */
+export function skrivMall(rader: Mallrad[]): string {
+  return [...rader]
+    .sort((a, b) => a.sort - b.sort)
+    .map((r) =>
+      [r.title, r.kind, String(r.offset_days), r.kalla_slug ?? "", r.fokus.join(", ")]
+        .join(" | ")
+        .replace(/(\s*\|\s*)+$/, ""),
+    )
+    .join("\n");
+}
