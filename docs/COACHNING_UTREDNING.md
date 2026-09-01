@@ -1,10 +1,66 @@
 # Coachningsmodulen — utredning och förslag
 
-**Status:** UTKAST FÖR BESLUT. Ingenting är byggt. Det här dokumentet är
-underlaget till beställarens svar; frågorna i avsnitt 9 måste besvaras innan
-kod skrivs.
+**Status:** BESLUTAD OMFATTNING 2026-09-01. Se avsnitt 0. Frågorna i avsnitt 9
+står kvar som underlag; de besvarade är markerade där.
 
 **Skriven:** 2026-09-01, på branchen `coachning`.
+
+---
+
+## 0. Beställarens beslut 2026-09-01
+
+Elva frågor är besvarade, resten är antaganden som redovisas här och går att
+riva innan bygget börjar.
+
+### Besvarat
+
+| Fråga | Beslut |
+|---|---|
+| Fas 1 | Kärnan **plus** U1 (mallar/rampplan), U3 (30-dagarslarmet) och U4 (1:1 med GROW) |
+| Kvittering (9) | Per uppgift, fyra lägen, **förval `sjalv`** |
+| Vem skapar (5, 7) | Teamledare, säljchef och VD skapar. Teamledaren ser sitt team, ledningen alla. **Säljare ser aldrig varandras** |
+| Krets (2) | **Alla anställda**, inte bara säljare |
+| Manusuppgift (13) | **Teamledarens bock efter att ha hört det live.** Ingen inspelning, inget quiz i fas 1 |
+| Live-rollspel (14, 15) | Bedöms mot **samma rubriker** som de inspelade (`roleplay_criterion`). **Ingen kalenderbokning** — förfallodag räcker |
+| Försening (18) | **Samma trappa som systemguiderna**: 3 dygn till personen, 7 till chefen, 14 dagar över frist ger ett ärende |
+| Testdata (25, 26) | Testkonto i produktionsdatan, städas efteråt. **0043 körs mot produktionen före merge** — den är additiv och main-koden rör aldrig de nya tabellerna |
+
+### Följdbeslut som kretsen "alla anställda" tvingar fram
+
+**Fokusområdena får en egen tabell.** Ursprungsförslaget var att peka rakt på
+`kv_criterion`. Det går inte längre: K&V-poängen kräver `max_points` på varje
+**aktiv** rad (0036), så ett fokusområde "Projektledning" inlagt där hade tyst
+brutit bonusberäkningen för samtliga säljare.
+
+Lösningen är `coaching_focus` med en valfri `kv_criterion_id`:
+
+```sql
+coaching_focus
+  id, label, sort, active
+  kv_criterion_id  -- null för områden som inte mäts i K&V
+```
+
+Seedas med beställarens sex ord — Intro, Behovsanalys, ROI, Avslut, Kvalitet på
+samtalet, Korrekt avtalshantering — var och en länkad till sin `kv_criterion`.
+Där länken finns visar personkortet K&V-trenden för området, och slingan i
+avsnitt 4 går ihop. Där den saknas är fokusområdet bara en etikett, vilket är
+precis vad en projektledare behöver. Ett sjunde område blir en inmatning, inte
+en migration — samma linje som 0036 drog.
+
+### Antaganden (ej ställda frågor, rivbara)
+
+| # | Antagande |
+|---|---|
+| A1 | Egen menypost **Coachning**, inte en flik under Utbildning (fråga 1) |
+| A2 | Säljaren ser **alltid vem som beställt** uppgiften (fråga 8) |
+| A3 | Ingen konsekvens vid försening utöver påminnelsetrappan. **Ingen koppling till konsekvenstrappan eller provisionen** (fråga 11) |
+| A4 | Ingen manusbank i fas 1. En manusuppgift pekar på en befintlig **rutin** eller står på egen text (fråga 12). U5 väntar |
+| A5 | Uppgiftstypen `medlyssning` byggs, men utan dialerkoppling — den bockas för hand tills E12 finns (fråga 16) |
+| A6 | Bevis är **valfritt per uppgift**: ingetdera, en kommentar, eller en fil. Rollspel kräver alltid ljudfilen (0024) |
+| A7 | Allt som skrivs om en person är läsbart för personen, och följer med i **registerutdraget** (fråga 20, 22) |
+| A8 | Gallring: coachningsdata följer personaldatans allmänna regel tills annat beslutas. **Öppen fråga** (fråga 21) |
+| A9 | Ingen peer-coachning i fas 1 (fråga 6) |
+| A10 | Ingen rangordning, ingen topplista, inget sammanvägt betyg (avsnitt 7) |
 
 ---
 
