@@ -5,6 +5,37 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-01 · Dokumenttypen "Utbildning"
+
+Listan i redaktörens **Dokumenttyp** har fått `training` — "Utbildning" — mellan
+Referenscase och Intresseavvägning.
+
+Utbildningsmaterial har hittills lagts som **Rutin** för att inget bättre val
+fanns. Det gör två saker samtidigt: filtret på `/rutiner` kan inte skilja "så
+här gör vi" från "så här lär du dig", och en förfallen granskning på ett
+utbildningsmaterial ser i listan ut som en rutin som slutat gälla. Det andra är
+det som kostar — förfallomarkeringen är avsiktligt hård för ALLA läsare
+(AC-5.2), och den tappar sin skärpa om den ropar om fel saker.
+
+Typen bär **ingen spärr och inget lagkrav**. `SPARRTYPER` och `LAGKRAVDA_TYPER`
+är orörda, `standard_review_due()` likaså: granskningsdatumet blir tolv månader
+som för allt annat som inte är AFS-krävt.
+
+**Kurserna i `course` är en annan sak.** Det här är ett styrande dokument *om*
+utbildning — ett manus för introduktionspasset, en checklista för
+upplärningen — inte en kurs med moduler, quiz och kvittens. Vill man ha det
+senare ligger det kvar under `/utbildning`.
+
+Ändringen är två rader i `src/lib/dokument.ts` plus migration `0043`, och
+ingenting mer: hela gränssnittet — rullisten, etiketten i listan, etiketten på
+dokumentkortet, valideringen i `actions.ts` — läser `DOC_TYPES` och
+`DOC_TYPE_LABEL`. Nästa typ som ska in är samma två rader.
+
+Migrationen är körd mot produktion. Den vidgar bara den tillåtna mängden, så
+den kan ligga före koden utan att något går sönder.
+
+---
+
 ## 2026-08-31 · Systemguider: den interaktiva onboardingen (G1 + G2)
 
 Beställningen och alla femton beslut står i **`docs/SYSTEMGUIDER.md`**. Den här
