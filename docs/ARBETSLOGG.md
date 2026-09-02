@@ -5,6 +5,51 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-02 · Dokumenttypen "Utbildning"
+
+Listan i rutinredaktörens **Dokumenttyp** har fått `training` — "Utbildning" —
+mellan Referenscase och Intresseavvägning.
+
+Utbildningsmaterial har hittills lagts som **Rutin** för att inget bättre val
+fanns. Det gör två saker samtidigt: filtret på `/rutiner` kan inte skilja "så
+här gör vi" från "så här lär du dig", och en förfallen granskning på ett
+utbildningsmaterial ser i listan ut som en rutin som slutat gälla. Det andra är
+det som kostar — förfallomarkeringen är avsiktligt hård för ALLA läsare
+(AC-5.2), och den tappar sin skärpa om den ropar om fel saker.
+
+Typen bär **ingen spärr och inget lagkrav**. `SPARRTYPER` och `LAGKRAVDA_TYPER`
+är orörda, `standard_review_due()` likaså: granskningsdatumet blir tolv månader
+som för allt annat som inte är AFS-krävt.
+
+**Kurserna i `course` är en annan sak.** Det här är ett styrande dokument *om*
+utbildning — ett manus för introduktionspasset, en checklista för upplärningen —
+inte en kurs med moduler, quiz och kvittens. Vill man ha det senare ligger det
+kvar under `/utbildning`.
+
+Ändringen är två rader i `src/lib/dokument.ts` plus migrationen, och ingenting
+mer: hela gränssnittet — rullisten, etiketten i listan, etiketten på
+dokumentkortet, valideringen i `actions.ts` — läser `DOC_TYPES` och
+`DOC_TYPE_LABEL`. Nästa typ som ska in är samma två rader.
+
+### Migrationen bytte nummer efter att den redan körts
+
+Villkoret kördes mot produktion 2026-09-01 som `0043_dokumenttyp_utbildning`,
+från en branch som stod stilla medan main gick vidare. Under tiden tog
+coachningsmodulen 0043 och lösenordstvånget 0044 — det senare ligger fortfarande
+på en obmergad branch men **är kört mot databasen**, så numret var upptaget utan
+att synas i main.
+
+Filen heter därför `0045_dokumenttyp_utbildning.sql`, och raden i
+`schema_migrations` är omdöpt till samma namn. Satserna är omkörbara och
+migrationen bär en självkontroll som läser villkorstexten i gemener, av samma
+skäl som 0043: `pg_get_constraintdef` versaliserar.
+
+**Lärdomen är att ett migrationsnummer är taget när det körts, inte när det
+mergats.** Ligger en branch länge räcker det inte att titta i main för att veta
+vilket nummer som är ledigt — `schema_migrations` är facit.
+
+---
+
 ## 2026-09-02 · Typväljaren i nya coachningsuppgiften såg ut att kräva en kurs
 
 Beställaren rapporterade att en ny coachningsuppgift tvingade fram ett kursval,
