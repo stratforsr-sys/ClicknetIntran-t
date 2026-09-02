@@ -5,6 +5,67 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-02 · "Väntar på aktivering" efter tvingat lösenordsbyte
+
+Säljarna rapporterade att de loggade in och möttes av AC-1.2-skärmen: *"Du är
+inloggad som edvin@clicknet.se, men du är ännu inte upplagd som anställd."*
+Personalraden var hela tiden korrekt — `status = active`, rätt `auth_user_id`,
+rollen satt.
+
+### Två spärrar som läser samma flagga ur olika källor
+
+Migration 0017 la tvånget om lösenordsbyte i databasen. `kraver_losenordsbyte()`
+läser `app_metadata.byt_losenord` ur **`request.jwt.claims`**, alltså ur den
+token anropet bär med sig, och funktionen sitter i `employee_read`.
+
+`utforBytLosenord` tog bort flaggan hos Auth med service role. Den rör inte
+tokenen användaren redan har — den är signerad och lever i en timme. Under
+den timmen sa de två spärrarna olika saker om samma person:
+
+    mellanvaran   getUser() mot Auth   -> falskt   -> släpper in
+    databasen     claimen ur tokenen   -> sant     -> noll rader
+
+Följden: inloggad, men utan rätt att läsa ens sin egen `employee`-rad.
+`getCurrentUser()` fick `employee: null` och (app)-layouten tolkade det som det
+enda den kan tolka det som — inte upplagd som anställd.
+
+Det gick över av sig självt när tokenen förföll, eller när personen loggade ut
+och in igen. Därför drabbade det bara nyanställda, bara första gången, och
+därför "fungerade det när man provade igen" — vilket är precis det som gjorde
+det svårt att se.
+
+Avläst mot produktionsdatabasen med `set local role authenticated` och handskrivna
+claims, vilket ger exakt det den inloggade ser utan att någon behöver logga in:
+
+    byt_losenord = false  ->  1 rad
+    byt_losenord = true   ->  0 rader
+
+### Rättningen
+
+`utforBytLosenord` anropar `supabase.auth.refreshSession()` direkt efter att
+flaggan lyfts. GoTrue bygger claimsen ur användarraden som den ser ut då, kakorna
+skrivs av `supabaseServer()` — det går eftersom det är en server action — och
+omdirigeringen in i navet bär dem med sig.
+
+Fallbacken loggar in med det ord användaren just satt, ifall lösenordsbytet hann
+återkalla den gamla refresh-tokenen. Båda vägarna slutar i en giltig session med
+färska claims; misslyckas båda är personen ändå inloggad med gammal token, alltså
+precis lika illa som förr och inte värre.
+
+Ordningen är oförändrad i övrigt: lösenordet byts först, flaggan lyfts efteråt.
+Motsatt ordning hade släppt igenom någon vars byte misslyckades.
+
+### Att ta med sig
+
+Allt som ligger i `app_metadata` finns på två ställen med olika färskhet: hos
+Auth, som mellanvaran frågar, och i tokenen, som databasen läser. De går isär i
+upp till en timme. Ändrar man något där måste man fråga vad den gamla tokenen
+gör under tiden — åt båda hållen. Ett tvång som **sätts** har samma glapp: den
+som har en levande session behåller sin åtkomst i databasen tills tokenen
+förnyas.
+
+---
+
 ## 2026-08-31 · Systemguider: den interaktiva onboardingen (G1 + G2)
 
 Beställningen och alla femton beslut står i **`docs/SYSTEMGUIDER.md`**. Den här
