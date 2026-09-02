@@ -55,11 +55,18 @@ export const NOTIS_KALLOR = [
   "guide-knuff",
   "guide-team",
   /**
-   * Coachningen. Tre poster av samma typ men ur olika hall, precis som guidernas
-   * tre: `coachning` ar min egen uppgift som statt still, `coachning-kvittering`
-   * ar nagon annans uppgift som vantar pa MIN bock, och `coachning-team` ar
-   * chefens rad om nagon som inte coachats pa en manad.
+   * Coachningen. Fyra poster av samma typ men ur olika hall, precis som
+   * guidernas tre: `coachning-ny` ar en uppgift jag NYSS fatt, `coachning` ar
+   * min egen uppgift som statt still, `coachning-kvittering` ar nagon annans
+   * uppgift som vantar pa MIN bock, och `coachning-team` ar chefens rad om
+   * nagon som inte coachats pa en manad.
+   *
+   * `coachning-ny` och `coachning` ar avsiktligt TVA kallor och inte en.
+   * Den forsta ar ett BESKED — nagon har lagt upp nagot at dig — och den andra
+   * ar en PAMINNELSE om att det statt still. Samma id hade betytt att den som
+   * klickar bort beskedet ocksa klickar bort paminnelsen tre dygn senare.
    */
+  "coachning-ny",
   "coachning",
   "coachning-kvittering",
   "coachning-team",

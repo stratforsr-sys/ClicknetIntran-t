@@ -18,6 +18,22 @@ enda vy i modulen), **historik med sökfält, utfall och årtal** som visar vem 
 kvitterade och när, och **tidslinjen** ur utredningens avsnitt 3.2 — sex källor,
 ingen ny tabell.
 
+Efter första genomgången i previewen tillkom fyra saker:
+
+- **Varje uppgift har en egen yta** inuti personkortet. Utan den flöt rubrik,
+  märke och datum ihop och tre uppgifter lästes som ett stycke.
+- **Notis när man får en ny uppgift** — ny källa `coachning-ny`. Klockan var
+  tyst i tre dygn efter att en uppgift lagts upp, eftersom påminnelseregeln
+  mäter *stillestånd* och en ny uppgift har stått still i noll dagar.
+  Beskedet och påminnelsen är två källor med flit, så ett bortklick på det ena
+  inte tystar det andra.
+- **Startsidans "Att göra" bär coachningsuppgifterna överst.** Inlämnade står
+  inte där — bollen ligger hos den som ska kvittera. Underkända står först.
+- **Chefen får också markera "påbörjad".** Gränsen mot kvitteringen är
+  oförändrad: en anteckning om att arbetet börjat, aldrig ett påstående om att
+  det är gjort. Åtgärden avvisar en andra `paborjad`-rad, eftersom två personer
+  nu kan se knappen samtidigt.
+
 **Ingen migration.** Allt läses ur tabeller som redan finns, och de nya
 uppgifterna på lagvyn kostade noll extra databasfrågor: `hamtaLag()` hämtade dem
 redan och kastade bort dem.

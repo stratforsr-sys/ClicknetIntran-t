@@ -176,15 +176,55 @@ async function laddaFor(taskId: string) {
   return { user, db, uppgift: data, arChef: await arChefFor(user, data.assignee_id) };
 }
 
+/**
+ * Markerar uppgiften som paborjad.
+ *
+ * CHEFEN FAR OCKSA TRYCKA, sedan 2026-09-02. Fram till dess var knappen
+ * ansvarigs ensam, och det gav en kö som ljog: en teamledare som gjort ett
+ * live-rollspel med nagon vid skrivbordet kunde inte anteckna att arbetet var
+ * igang, sa uppgiften stod kvar som "Ej påbörjad" tills saljaren rakade oppna
+ * navet och trycka pa en knapp om nagot som redan hant.
+ *
+ * DET AR INTE SAMMA SAK SOM ATT KVITTERA, och gransen ar avsiktlig. "Paborjad"
+ * ar en anteckning om att nagot har borjat; en kvittering ar ett pastaende om
+ * att det ar GJORT. Chefen far det forsta och aldrig det andra at nagon annan —
+ * se `farKvittera()`, dar `verify_by = 'sjalv'` haller ute aven chefen.
+ *
+ * Loggen bar VEM som tryckte (`by_employee_id`), sa uppgiftssidan skriver ut
+ * "Påbörjad av Anna" och inte bara "Påbörjad". Utan det hade chefens anteckning
+ * sett ut som saljarens egen.
+ */
 export async function paborjaUppgift(_prev: CoachState, form: FormData): Promise<CoachState> {
   try {
     const id = text(form, "task_id");
-    const { user, db, uppgift } = await laddaFor(id);
+    const { user, db, uppgift, arChef } = await laddaFor(id);
 
-    if (user.employee!.id !== uppgift.assignee_id) {
-      return { fel: "Bara den uppgiften gäller kan markera den som påbörjad." };
+    if (user.employee!.id !== uppgift.assignee_id && !arChef) {
+      return { fel: "Bara den uppgiften gäller eller dennes chef kan markera den som påbörjad." };
     }
     if (uppgift.cancelled_at) return { fel: "Uppgiften är avbruten." };
+
+    /**
+     * En gang, inte tva.
+     *
+     * Knappen visas bara pa `ej_paborjad`, men nu kan TVA personer se den
+     * samtidigt — saljaren pa sin telefon och chefen vid sitt skrivbord. Utan
+     * den har fragan hade bada kunnat trycka och loggen fatt tva
+     * `paborjad`-rader med olika avsandare, och da svarar historiken tvetydigt
+     * pa vem som antecknade att arbetet borjade.
+     *
+     * Svaret ar `ok` och inte `fel`: den som trycker har fatt det den ville ha.
+     */
+    const { data: redanIgang } = await db
+      .from("coaching_task_event")
+      .select("id")
+      .eq("task_id", id)
+      .eq("type", "paborjad")
+      .limit(1);
+
+    if ((redanIgang ?? []).length > 0) {
+      return { ok: "Uppgiften är redan markerad som påbörjad." };
+    }
 
     await db.from("coaching_task_event").insert({
       task_id: id,

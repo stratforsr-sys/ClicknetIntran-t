@@ -29,9 +29,19 @@ export type Kortuppgift = {
 };
 
 /**
- * Kompakt rad — den form uppgifterna har inuti ett personkort i lagvyn.
+ * Kompakt kort — den form uppgifterna har INUTI ett personkort i lagvyn.
  *
- * Uppgiftstypen star INTE har. Ett personkort med fem uppgifter far fem rader,
+ * VARJE UPPGIFT FAR EN EGEN YTA, och det ar inte dekoration. Forsta utkastet
+ * lade raderna direkt pa kortets bakgrund med bara luft emellan, och da flot
+ * texten ihop: rubrik, marke, datum, nasta rubrik. Det gick inte att se var en
+ * uppgift slutade och nasta borjade, sa tre uppgifter lastes som ett stycke.
+ *
+ * Ytan ar `bg-canvas` mot personkortets `bg-surface`. Det ar samma par som
+ * resten av navet anvander for "kort inuti kort" — inga ramar, ingen skugga,
+ * bara en svagt urskiljbar platta. En andra skugga hade brutit UI-PRD §5.3,
+ * som ger elevationen till kortet och inte till dess innehall.
+ *
+ * Uppgiftstypen star INTE har. Ett personkort med fem uppgifter far fem rutor,
  * och "Utbildning" pa var och en av dem sager ingenting om vad som behover
  * goras. Typen finns pa uppgiftssidan, dar den betyder nagot.
  */
@@ -40,7 +50,18 @@ export function Uppgiftsrad({ u }: { u: Kortuppgift }) {
     <li>
       <Link
         href={`/coachning/uppgift/${u.id}`}
-        className="flex flex-col gap-1 rounded-sm px-3 py-2 hover:bg-canvas"
+        className={[
+          "flex flex-col gap-1.5 rounded-sm bg-canvas px-3 py-2.5",
+          "transition-colors duration-fast hover:bg-surface-alt",
+          // Kanten pa vanster sida svarar pa "brinner den har?" innan man last
+          // ett ord. Den ar aldrig ensam barare av beskedet — markena under
+          // sager samma sak med text (AC-U5.2).
+          u.kraverDinBock
+            ? "border-l-[3px] border-l-accent"
+            : u.forsenad || u.lage === "underkand"
+              ? "border-l-[3px] border-l-danger"
+              : "border-l-[3px] border-l-transparent",
+        ].join(" ")}
       >
         <span className="text-small font-semibold text-ink-900">{u.title}</span>
         <span className="flex flex-wrap items-center gap-1.5">

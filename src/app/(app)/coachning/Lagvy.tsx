@@ -287,7 +287,7 @@ function Personkort({
             Inga öppna uppgifter.
           </p>
         ) : (
-          <ul className="-mx-1 flex flex-col">
+          <ul className="flex flex-col gap-2">
             {person.uppgifter.map((u) => (
               <Uppgiftsrad key={u.id} u={u} />
             ))}

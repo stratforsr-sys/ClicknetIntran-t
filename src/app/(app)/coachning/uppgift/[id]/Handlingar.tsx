@@ -23,6 +23,7 @@ import {
 export function Handlingar({
   taskId,
   kanPaborja,
+  egenUppgift,
   kanLamnaIn,
   kanKvittera,
   kanAvbryta,
@@ -30,6 +31,8 @@ export function Handlingar({
 }: {
   taskId: string;
   kanPaborja: boolean;
+  /** Ar det MIN uppgift? Avgor bara ordvalet — behorigheten avgors pa servern. */
+  egenUppgift: boolean;
   kanLamnaIn: boolean;
   kanKvittera: boolean;
   kanAvbryta: boolean;
@@ -37,7 +40,7 @@ export function Handlingar({
 }) {
   return (
     <div className="flex flex-col gap-5">
-      {kanPaborja && <Paborja taskId={taskId} />}
+      {kanPaborja && <Paborja taskId={taskId} egenUppgift={egenUppgift} />}
       {kanLamnaIn && <LamnaIn taskId={taskId} kraverKommentar={kraverKommentar} />}
       {kanKvittera && <Kvittera taskId={taskId} kraverKommentar={kraverKommentar} />}
       {kanAvbryta && <Avbryt taskId={taskId} />}
@@ -45,17 +48,39 @@ export function Handlingar({
   );
 }
 
-function Paborja({ taskId }: { taskId: string }) {
+/**
+ * ORDEN SKILJER, HANDLINGEN AR DENSAMMA.
+ *
+ * "Jag har börjat" ar ett pastaende om mig sjalv. Skriver chefen under det
+ * pastar hon nagot i nagon annans namn, och det ar precis den gransen resten av
+ * modulen ar byggd kring. "Markera som påbörjad" ar i stallet en anteckning om
+ * ett arbete hon sett — vilket ar sant nar rollspelet gjordes vid hennes
+ * skrivbord.
+ *
+ * Loggen bevarar skillnaden aven efterat: `by_employee_id` skrivs pa handelsen,
+ * och uppgiftens historik radar upp "Påbörjad av <namn>".
+ */
+function Paborja({ taskId, egenUppgift }: { taskId: string; egenUppgift: boolean }) {
   const [state, action, vantar] = useActionState<CoachState, FormData>(paborjaUppgift, {});
   return (
     <form action={action} className="flex flex-col gap-2">
       {state.fel && <Notis ton="danger">{state.fel}</Notis>}
+      {state.ok && <Notis ton="ok">{state.ok}</Notis>}
       <input type="hidden" name="task_id" value={taskId} />
       <div>
         <Button type="submit" variant="sekundar" size="sm" laddar={vantar} disabled={vantar}>
-          Jag har börjat
+          {egenUppgift ? "Jag har börjat" : "Markera som påbörjad"}
         </Button>
       </div>
+      {!egenUppgift && (
+        <p className="text-small text-ink-500">
+          Antecknar att arbetet är igång. Det är inte en kvittering — den sätter
+          {" "}
+          {/* Ordet "fortfarande" ar med for att svara pa fragan innan den
+              stalls: nej, den har knappen andrar inte vem som godkanner. */}
+          fortfarande den uppgiften pekar ut.
+        </p>
+      )}
     </form>
   );
 }

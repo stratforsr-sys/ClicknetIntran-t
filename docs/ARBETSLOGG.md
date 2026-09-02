@@ -113,6 +113,71 @@ personkortet. Det räckte när lagvyn visade ett antal — antalet öppna uppgif
 även `/coachning`. Annars visar lagvyn "Ej påbörjad" bredvid en uppgift som är
 igång.
 
+### Andra vändan efter genomgång i previewen
+
+Fyra saker, i beställarens ordning.
+
+**1. Uppgifterna flöt ihop på personkortet.** Raderna låg direkt på kortets
+bakgrund med bara luft emellan, så rubrik, märke och datum lästes som ett
+stycke — tre uppgifter såg ut som en. Varje uppgift har nu en egen `bg-canvas`-yta
+mot kortets `bg-surface`, samma par som resten av navet använder för kort inuti
+kort, plus en 3 px vänsterkant som svarar på "brinner den här?" innan man läst
+ett ord. Ingen andra skugga: UI-PRD §5.3 ger elevationen till kortet, inte till
+dess innehåll.
+
+**2. Klockan var tyst i tre dygn efter att en uppgift lagts upp.** Det var en
+konsekvens ingen hade valt. Påminnelseregeln mäter *stillestånd*, och en uppgift
+som just skapats har stått still i noll dagar — alltså släpptes den igenom. Den
+som fick en uppgift fick inte veta det; hon fick veta det tre dagar senare,
+formulerat som en tillsägelse om något hon inte hunnit göra.
+
+Ny källa `coachning-ny` i `NOTIS_KALLOR`. Två källor och inte en, för det är två
+olika saker: ett **besked** om att någon lagt upp något åt dig, och en
+**påminnelse** om att det stått still. Med samma id hade den som klickade bort
+beskedet också klickat bort påminnelsen tre dygn senare. Beskedet står så länge
+uppgiften är orörd och yngre än trappans första steg, och lämnar sedan över utan
+lucka och utan överlapp. Id:t bär ingen räknare — en ny uppgift blir ny en gång.
+
+**3. Startsidan visar nu coachningsuppgifterna överst i "Att göra".** Det är ett
+val om vad sidan är till för: en okvitterad rutin är administration, en
+coachningsuppgift är det någon bett just den personen att träna på. Underlaget
+bakom modulen är entydigt om att det är uppföljningens frekvens som skiljer, och
+en uppgift längst ner i en lista följs inte upp.
+
+**Inlämnade uppgifter står inte där.** Bollen ligger hos den som ska kvittera,
+och en rad man inte kan göra något åt hör inte hemma på startsidan — samma regel
+som filens egen rubrik drar för hela kortet. Underkända står överst: någon har
+tittat och sagt att det ska göras om.
+
+Ordningen inom varje grupp är `sorteraUppgifter()`, samma funktion som lagvyn.
+Hade startsidan sorterat på egen hand hade de två vyerna kunnat säga olika om
+samma dag. `kraverDinBock` sätts till falskt för alla — fältet betyder "väntar
+på din kvittering", och det är aldrig sant om en uppgift man själv ska göra.
+
+`LAGE_ETIKETT` och `LAGE_TON` finns i både `utbildning.ts` och `coachning.ts`,
+för de svarar på samma sorts fråga om två olika saker. De döps om vid importen i
+startsidan; att låta dem dela namn hade betytt att den ena tyst vann.
+
+**4. Bara säljaren kunde markera "påbörjad".** Ett live-rollspel eller en
+medlyssning *händer* hos chefen, inte i navet. Att bara ansvarig kunde trycka
+betydde att uppgiften stod kvar som "Ej påbörjad" tills säljaren råkade öppna
+navet och bekräfta något som redan skett — och kön blev en bild av vem som
+klickat, inte av vad som gjorts.
+
+Chefen får nu också trycka. **Gränsen mot kvitteringen är oförändrad**, och den
+är hela poängen: "påbörjad" är en anteckning om att arbetet börjat, en
+kvittering är ett påstående om att det är *gjort*. `farKvittera()` håller
+fortfarande ute chefen på `verify_by = 'sjalv'`. Knappens text skiljer också —
+"Jag har börjat" mot "Markera som påbörjad" — eftersom det första är ett
+påstående om sig själv, och chefen ska inte skriva under det i någon annans namn.
+Loggen bär `by_employee_id`, så historiken skriver ut "Påbörjad av Anna".
+
+En vakt tillkom: åtgärden avvisar en andra `paborjad`-rad. Knappen visas bara på
+`ej_paborjad`, men nu kan **två** personer se den samtidigt — säljaren på sin
+telefon, chefen vid sitt skrivbord — och två rader med olika avsändare hade gjort
+historiken tvetydig om vem som antecknade att arbetet började. Svaret är `ok` och
+inte `fel`: den som tryckte har fått det den ville ha.
+
 ---
 
 ## 2026-09-02 · Dokumenttypen "Utbildning"

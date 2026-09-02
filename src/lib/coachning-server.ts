@@ -775,6 +775,45 @@ export async function coachningsnotiser(user: CurrentUser): Promise<Notis[]> {
     const stilla = Math.floor((nu.getTime() - Date.parse(senast)) / 86_400_000);
     const underkand = u.lage === "underkand";
 
+    /**
+     * NY UPPGIFT — ETT BESKED, INTE EN PAMINNELSE.
+     *
+     * Fram till 2026-09-02 var klockan TYST i tre dygn efter att en uppgift
+     * lagts upp. Det foljde av paminnelseregeln nedan, som mater stillestand:
+     * en uppgift som just skapats har statt still i noll dagar och slapptes
+     * darfor igenom. Foljden var att den som fick en uppgift inte fick veta
+     * det — hon fick veta det tre dagar senare, formulerat som en tillsagelse
+     * om nagot hon inte hunnit gora.
+     *
+     * Beskedet ar darfor en EGEN post med en egen kalla. Den star sa lange
+     * uppgiften ar orord och yngre an paminnelsetrappans forsta steg, och
+     * lamnar sedan over till paminnelsen utan lucka och utan overlapp.
+     *
+     * ID:T BAR INGEN RAKNARE. En ny uppgift blir ny en gang. Den som klickar
+     * bort beskedet har last det, och att lata det ateruppsta hade gjort en
+     * upplysning till en gnallspik — paminnelsen nedan tar over den rollen.
+     */
+    if (u.lage === "ej_paborjad" && stilla < PAMINNELSE_PERSON_DYGN) {
+      notiser.push({
+        id: notisId("coachning-ny", u.id),
+        typ: "coachning",
+        rubrik: `Ny uppgift: ${u.title}`,
+        detalj: [
+          `Upplagd av ${namn.get(u.created_by) ?? "din chef"}`,
+          u.due_date ? `klar senast ${u.due_date}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        href: `/coachning/uppgift/${u.id}`,
+        // Tidpunkten ar tilldelningen och inte "nu": posten ska hamna pa sin
+        // plats i klockans ordning, och en nyss upplagd uppgift ligger da
+        // overst av sig sjalv.
+        tidpunkt: senast,
+        olast: true,
+      });
+      continue;
+    }
+
     // En underkand uppgift sager till DIREKT. Den ar inte en paminnelse om
     // nagot ogjort utan ett besked fran en manniska, och att vanta tre dygn med
     // det hade varit att dolja att nagon faktiskt tittat.

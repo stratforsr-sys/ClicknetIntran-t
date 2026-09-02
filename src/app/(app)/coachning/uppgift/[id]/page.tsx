@@ -66,7 +66,20 @@ export default async function UppgiftSida({ params }: { params: Promise<{ id: st
 
   const kanKvittera = farKvittera(u, jag, arChef);
   const kanAvbryta = farAvbryta(u, jag, arChef);
-  const kanPaborja = egen && !u.cancelled_at && u.lage === "ej_paborjad" && !arSjalvsann(u.kind);
+  /**
+   * CHEFEN FAR OCKSA MARKERA PABORJAD, sedan 2026-09-02.
+   *
+   * Ett live-rollspel eller en medlyssning HANDER hos chefen, inte i navet. Att
+   * bara ansvarig kunde trycka betydde att uppgiften stod kvar som "Ej
+   * påbörjad" tills saljaren rakade oppna navet och bekrafta nagot som redan
+   * skett — och kon blev en bild av vem som klickat, inte av vad som gjorts.
+   *
+   * Gransen mot kvitteringen ar oforandrad: chefen far anteckna att arbetet
+   * BORJAT, aldrig pasta at nagon annan att det ar GJORT. `farKvittera()`
+   * haller ute chefen pa `verify_by = 'sjalv'` precis som forut.
+   */
+  const kanPaborja =
+    (egen || arChef) && !u.cancelled_at && u.lage === "ej_paborjad" && !arSjalvsann(u.kind);
   const kanLamnaIn = egen && !u.cancelled_at && u.verify_by !== "sjalv" && !arSjalvsann(u.kind)
     && (u.lage === "pagar" || u.lage === "ej_paborjad" || u.lage === "underkand");
 
@@ -118,6 +131,7 @@ export default async function UppgiftSida({ params }: { params: Promise<{ id: st
           <Handlingar
             taskId={u.id}
             kanPaborja={kanPaborja}
+            egenUppgift={egen}
             kanLamnaIn={kanLamnaIn}
             kanKvittera={kanKvittera}
             kanAvbryta={kanAvbryta}

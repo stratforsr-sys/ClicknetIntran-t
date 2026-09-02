@@ -9,6 +9,21 @@ import { getCurrentUser, canManageEmployees, hasRole } from "@/lib/auth";
 import { ROLE_LABEL, STATUS_LABEL } from "@/lib/roles";
 import { granskningslage } from "@/lib/dokument";
 import { kursLage, LAGE_ETIKETT, LAGE_TON } from "@/lib/utbildning";
+/**
+ * Coachningen har sina EGNA lagesetiketter, och de dops om vid importen.
+ *
+ * `utbildning.ts` och `coachning.ts` exporterar bada `LAGE_ETIKETT` och
+ * `LAGE_TON`, for de svarar pa samma sorts fraga om tva olika saker: en kurs ar
+ * certifierad eller utgangen, en coachningsuppgift ar inlamnad eller underkand.
+ * Att lata dem dela namn hade betytt att den ena tyst vann.
+ */
+import {
+  LAGE_ETIKETT as LAGE_ETIKETT_COACHNING,
+  LAGE_TON as LAGE_TON_COACHNING,
+  TYP_ETIKETT,
+  sorteraUppgifter,
+} from "@/lib/coachning";
+import { uppgifterFor } from "@/lib/coachning-server";
 import { slaLage } from "@/lib/arenden";
 import { hamtaLage } from "@/lib/sparrar";
 import { stampelfri, STAMPELFRI_FORKLARING } from "@/lib/stampelfri";
@@ -143,6 +158,7 @@ export default async function Startsida() {
     { count: antalAktiva },
     { count: antalOnboarding },
     drift,
+    coachning,
   ] = await Promise.all([
     // RLS avgor vilka dokument som syns: audience_roles filtreras redan i
     // policyn, sa listan nedan behover inte upprepa den kontrollen.
@@ -293,6 +309,21 @@ export default async function Startsida() {
      * andra var sant.
      */
     serDrift ? hamtaDrift(supabase, nu) : Promise.resolve(null),
+
+    /**
+     * MINA COACHNINGSUPPGIFTER.
+     *
+     * Fragan ar OVILLKORAD, till skillnad fran chefskoerna ovan. Coachning
+     * galler alla anstallda och inte bara saljare — det var bestallarens beslut
+     * i utredningens avsnitt 0 — sa det finns ingen roll att villkora pa.
+     * `uppgifterFor()` filtrerar pa `assignee_id` och RLS avgor resten.
+     *
+     * Funktionen staller flera fragor inuti sig, men de ar sekventiellt
+     * beroende av varandra (uppgifterna innan handelserna) och kan darfor inte
+     * plattas ut i den har listan. Som EN post i `Promise.all` loper de
+     * atminstone parallellt med startsidans ovriga arton.
+     */
+    uppgifterFor(user.employee.id, nu),
   ]);
 
   // ---------------------------------------------------------------------------
@@ -324,6 +355,31 @@ export default async function Startsida() {
       };
     })
     .filter((k) => k.antal > 0 && k.lage !== "certifierad");
+
+  /**
+   * VAD SOM AR "ATT JOBBA PA I DAG" — och vad som inte ar det.
+   *
+   * En INLAMNAD uppgift star inte har. Bollen ligger hos den som ska kvittera,
+   * och en rad man inte kan gora nagot at hor inte hemma pa startsidan — samma
+   * regel som rubriken langst upp i filen drar for hela "Att gora".
+   *
+   * En UNDERKAND star har, och den star hogt. Nagon har tittat och sagt att det
+   * ska goras om, och det ar det narmaste ett direkt tilltal modulen har.
+   *
+   * Ordningen inom varje grupp ar lagvyns egen, `sorteraUppgifter()` — hade
+   * startsidan sorterat pa egen hand hade de tva vyerna kunnat saga olika om
+   * samma dag. `kraverDinBock` ar falskt for alla: faltet betyder "vantar pa
+   * din kvittering", och det ar aldrig sant om en uppgift man sjalv ska GORA.
+   * De underkanda lyfts i stallet som en egen grupp fore de ovriga.
+   */
+  const attGoraNu = coachning
+    .filter((u) => u.lage === "ej_paborjad" || u.lage === "pagar" || u.lage === "underkand")
+    .map((u) => ({ ...u, kraverDinBock: false }));
+
+  const minaCoachning = [
+    ...sorteraUppgifter(attGoraNu.filter((u) => u.lage === "underkand")),
+    ...sorteraUppgifter(attGoraNu.filter((u) => u.lage !== "underkand")),
+  ];
 
   const ackade = new Set((minaAck ?? []).map((a) => `${a.document_id}:${a.version}`));
   const okvitterade = (kravDok ?? []).filter((d) => !ackade.has(`${d.id}:${d.version}`));
@@ -482,18 +538,49 @@ export default async function Startsida() {
     <Card>
       <CardHeader
         titel="Att göra"
-        beskrivning="Kvittenser, kurser och ärenden som väntar på dig."
+        beskrivning="Coachning, kvittenser, kurser och ärenden som väntar på dig."
       />
       {okvitterade.length === 0 &&
       forfallna.length === 0 &&
       kursUppgifter.length === 0 &&
-      obesvarade.length === 0 ? (
+      obesvarade.length === 0 &&
+      minaCoachning.length === 0 ? (
         <EmptyState
           rubrik="Ingenting väntar på dig"
-          text="Här samlas rutiner du inte kvitterat, kurser som pågår och ärenden med svar."
+          text="Här samlas coachningsuppgifter, rutiner du inte kvitterat, kurser som pågår och ärenden med svar."
         />
       ) : (
         <ul className="flex flex-col">
+          {/* COACHNINGEN LIGGER OVERST, och det ar ett val om vad sidan ar till
+              for. En okvitterad rutin ar administration; en coachningsuppgift
+              ar det nagon bett just den har personen att TRANA pa. Underlaget
+              bakom modulen ar entydigt om att det ar uppfoljningens frekvens
+              som skiljer, och en uppgift langst ner i en lista foljs inte upp. */}
+          {minaCoachning.map((u) => (
+            <Uppgift
+              key={`coachning-${u.id}`}
+              href={`/coachning/uppgift/${u.id}`}
+              titel={u.title}
+              detalj={
+                [
+                  TYP_ETIKETT[u.kind],
+                  u.due_date ? `klar senast ${u.due_date}` : null,
+                  u.lage === "pagar" ? "påbörjad" : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
+              }
+              markering={
+                u.lage === "underkand" ? (
+                  <Badge ton="danger">Gör om</Badge>
+                ) : u.forsenad ? (
+                  <Badge ton="danger">Försenad</Badge>
+                ) : (
+                  <Badge ton={LAGE_TON_COACHNING[u.lage]}>{LAGE_ETIKETT_COACHNING[u.lage]}</Badge>
+                )
+              }
+            />
+          ))}
           {okvitterade.map((d) => (
             <Uppgift
               key={d.id}
