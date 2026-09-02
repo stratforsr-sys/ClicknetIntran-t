@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { KONTROLL } from "@/components/ui/Field";
 import { Notis } from "@/components/ui/Notis";
 import {
+  FRIA_TYPER,
   KVITTERARE_ETIKETT,
   TYP_ETIKETT,
   TYP_KRAVER_KALLA,
@@ -13,6 +14,26 @@ import {
   type Uppgiftstyp,
 } from "@/lib/coachning";
 import { skapaUppgift, type CoachState } from "./actions";
+
+/** Vad den kallbundna typen ska kopplas till, i den form texten behover det. */
+const KALLA_ORD: Record<"course_id" | "module_id" | "document_id", string> = {
+  course_id: "en kurs",
+  module_id: "en rollspelsmodul",
+  document_id: "ett dokument",
+};
+
+/**
+ * "Uppgift, Manus och Medlyssning" — harledd ur FRIA_TYPER, aldrig handskriven.
+ *
+ * Egen ihopsattning och inte `Intl.ListFormat`: den senare faller tillbaka pa
+ * engelskt "and" om bygget kor med skalad ICU, och en hjalptext som sager "and"
+ * mitt i en svensk mening ar precis den sortens detalj ingen upptacker.
+ */
+const FRIA_ORD = (() => {
+  const namn = FRIA_TYPER.map((t) => TYP_ETIKETT[t]);
+  if (namn.length <= 1) return namn.join("");
+  return `${namn.slice(0, -1).join(", ")} och ${namn[namn.length - 1]}`;
+})();
 
 /**
  * Formularet for en ny coachningsuppgift.
@@ -75,6 +96,15 @@ export function NyUppgift({
               </option>
             ))}
           </select>
+          {/* Typvalet ar det som drar in kurs-, modul- eller dokumentfaltet, och
+              utan den har raden ser det ut som om VARJE coachningsuppgift kraver
+              en kurs. De fria typerna namns dar de behovs: nar man star pa en
+              kallbunden typ och undrar hur man slipper den. */}
+          <span className="text-small text-ink-500">
+            {kravs === null
+              ? "Står för sig själv — ingen kurs, modul eller dokument behövs."
+              : `Kopplas till ${KALLA_ORD[kravs]} som redan finns i navet. ${FRIA_ORD} står för sig själva.`}
+          </span>
         </label>
 
         <label htmlFor="due_date" className="flex flex-col gap-1">

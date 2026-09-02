@@ -3,7 +3,7 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-02 — coachningsmodulen fas 1 i produktion, och arbetssättet är ändrat
+**Senast uppdaterad:** 2026-09-02 — nytt lösenordskrav (8 tecken + siffra) på branch, coachningsmodulen fas 1 i produktion, och arbetssättet är ändrat
 
 ## ARBETSSÄTTET ÄR ÄNDRAT — LÄS DETTA FÖRST
 
@@ -50,6 +50,28 @@ båda kända:
 2. `evidence = 'fil'` finns i databasen och `file_object` har ändamålet
    `coaching`, men uppladdningen är inte inkopplad och alternativet erbjuds inte
    i formuläret.
+
+## Lösenordskravet är två rader sedan 2026-09-02
+
+**Minst åtta tecken och minst en siffra. Inget annat.** Beställarens beslut:
+*"låt dem skapa vilket lösenord dem vill bara att det är minst 8 tecken och
+siffror involverade."*
+
+Spärrlistan, tangentbordsraderna, upprepningsspärren, tolvteckenskravet och
+kontrollen mot namn och e-post i profilen är **borttagna med flit**. Lägg inte
+tillbaka någon av dem för att den är god praxis — det är ett beslut och inte en
+lucka. `tests/losenordskrav.mjs` prövar åtta ord som förr nekades och som nu
+ska gå igenom, just för att fånga en återinförd regel.
+
+Kvar i `granska()`: 72 byte (bcrypt klipper resten tyst) och "samma som det
+gamla" (ett tvingat byte som inte byter något). Båda är felkällor, inte
+smakregler.
+
+**Två fallgropar:** GoTrue har ett *eget* lösenordskrav i Supabase-inställningarna
+(Authentication → Policies → Password Requirements) som kan neka ett ord koden
+släppt igenom — felet visas nu ordagrant så att det syns var spärren sitter. Och
+`nyttTillfalligtLosenord()` drar om tills ordet har en siffra; utan det delar
+chefen förr eller senare ut ett tillfälligt lösenord som navet självt nekar.
 
 ## Rättat 2026-09-02: nyanställda fastnade på "Väntar på aktivering"
 

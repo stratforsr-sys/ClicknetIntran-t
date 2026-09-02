@@ -5,6 +5,175 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-02 · Dokumenttypen "Utbildning"
+
+Listan i rutinredaktörens **Dokumenttyp** har fått `training` — "Utbildning" —
+mellan Referenscase och Intresseavvägning.
+
+Utbildningsmaterial har hittills lagts som **Rutin** för att inget bättre val
+fanns. Det gör två saker samtidigt: filtret på `/rutiner` kan inte skilja "så
+här gör vi" från "så här lär du dig", och en förfallen granskning på ett
+utbildningsmaterial ser i listan ut som en rutin som slutat gälla. Det andra är
+det som kostar — förfallomarkeringen är avsiktligt hård för ALLA läsare
+(AC-5.2), och den tappar sin skärpa om den ropar om fel saker.
+
+Typen bär **ingen spärr och inget lagkrav**. `SPARRTYPER` och `LAGKRAVDA_TYPER`
+är orörda, `standard_review_due()` likaså: granskningsdatumet blir tolv månader
+som för allt annat som inte är AFS-krävt.
+
+**Kurserna i `course` är en annan sak.** Det här är ett styrande dokument *om*
+utbildning — ett manus för introduktionspasset, en checklista för upplärningen —
+inte en kurs med moduler, quiz och kvittens. Vill man ha det senare ligger det
+kvar under `/utbildning`.
+
+Ändringen är två rader i `src/lib/dokument.ts` plus migrationen, och ingenting
+mer: hela gränssnittet — rullisten, etiketten i listan, etiketten på
+dokumentkortet, valideringen i `actions.ts` — läser `DOC_TYPES` och
+`DOC_TYPE_LABEL`. Nästa typ som ska in är samma två rader.
+
+### Migrationen bytte nummer efter att den redan körts
+
+Villkoret kördes mot produktion 2026-09-01 som `0043_dokumenttyp_utbildning`,
+från en branch som stod stilla medan main gick vidare. Under tiden tog
+coachningsmodulen 0043 och lösenordstvånget 0044 — det senare ligger fortfarande
+på en obmergad branch men **är kört mot databasen**, så numret var upptaget utan
+att synas i main.
+
+Filen heter därför `0045_dokumenttyp_utbildning.sql`, och raden i
+`schema_migrations` är omdöpt till samma namn. Satserna är omkörbara och
+migrationen bär en självkontroll som läser villkorstexten i gemener, av samma
+skäl som 0043: `pg_get_constraintdef` versaliserar.
+
+**Lärdomen är att ett migrationsnummer är taget när det körts, inte när det
+mergats.** Ligger en branch länge räcker det inte att titta i main för att veta
+vilket nummer som är ledigt — `schema_migrations` är facit.
+
+---
+
+## 2026-09-02 · Typväljaren i nya coachningsuppgiften såg ut att kräva en kurs
+
+Beställaren rapporterade att en ny coachningsuppgift tvingade fram ett kursval,
+och att den enda kursen som fanns var *Introduktion säljare*. Frågan var om
+kurser måste läggas upp först, och om det gick att lägga till ett alternativ
+"utanför kurser" för en fristående uppgift.
+
+**Alternativet fanns redan.** Kurskravet hänger inte på coachningsuppgifter i
+allmänhet utan på uppgiftstypen, via `TYP_KRAVER_KALLA`. Tre av sju typer —
+`uppgift`, `manus`, `medlyssning` — kräver ingen källa alls, och `uppgift` är
+dessutom förvalt när formuläret öppnas. Det som behövdes var alltså ingen ny
+funktion utan att den befintliga gick att se.
+
+### Varför den inte gick att se
+
+Två saker samverkade. `UPPGIFTSTYPER` började med `kurs` och slutade med
+`uppgift`, så det mest låsta alternativet låg överst i listan och det vanligaste
+låg sist bland sju rader. Och ingenting i formuläret sa att **typvalet** var det
+som drog in kursfältet — kursväljaren dök bara upp, obligatorisk, utan att peka
+tillbaka på vad som orsakade den.
+
+Det är värt att notera vad felet *inte* var: datamodellen är rätt. En
+kursuppgift måste peka på en kurs, för dess läge hämtas ur `course_attempt` och
+det finns ingen bock att sätta för hand. Felet låg helt i presentationen.
+
+### Vad som ändrades
+
+- `UPPGIFTSTYPER` ordnas om: de fria typerna först, de källbundna sist.
+  Ordningen är ren presentation — `TYP_ETIKETT` och `TYP_KRAVER_KALLA` slår upp
+  på nyckel, `actions.ts` prövar medlemskap, och `tests/coachning.mjs` prövar
+  antal och nycklar. Inget beteende hänger i ordningen, och det står nu skrivet
+  i kommentaren ovanför listan så nästa läsare slipper kontrollera det igen.
+- Ny härledd export `FRIA_TYPER = UPPGIFTSTYPER.filter(… === null)`.
+- Hjälptext under typväljaren i `NyUppgift.tsx`. Är typen fri står det att den
+  står för sig själv; är den källbunden står det vad den kopplas till **och**
+  vilka typer som inte kräver något. Den senare halvan är hela poängen: den som
+  behöver upplysningen står per definition på fel typ just då.
+
+Hjälptexten räknar upp typerna ur `FRIA_TYPER` i stället för att skriva dem för
+hand, så en ny typ inte kan få texten att lova något annat än fälten gör.
+Ihopsättningen av "A, B och C" är egen och inte `Intl.ListFormat` — den senare
+faller tillbaka på engelskt "and" om bygget kör med skalad ICU, mitt i en svensk
+mening, vilket är precis den sortens detalj ingen upptäcker.
+
+Inga migrationer, ingen ändring i vad som sparas. Befintliga uppgifter påverkas
+inte.
+
+**Merge-anteckning.** Branchen `coachning-fria-typer` grenades från `d792766`
+och hann bli föråldrad medan lösenordskravet nedan landade på `main`. Enda
+krocken var den här filen — båda la en anteckning överst. Koden krockade inte.
+Löstes genom att lägga om de tre ändringarna på `main`s spets i
+`coachning-fria-typer-2` i stället för att tvinga igenom en merge.
+
+---
+
+## 2026-09-02 · Lösenordskravet är beställarens: åtta tecken och en siffra
+
+Beställaren: *"när någon ska skapa lösenord låt dem skapa vilket lösenord dem
+vill bara att det är minst 8 tecken och siffror involverade."*
+
+`src/lib/losenordskrav.ts` hade tolv tecken, en spärrlista på 24 ord, spärr mot
+korta ord som helt lösenord, tangentbordsrader åt båda håll, upprepnings-
+mönster, förbud mot enbart siffror, mellanslag i kanten och en kontroll mot
+förnamn, efternamn och e-postadress ur profilen. Allt det är borttaget.
+
+Kvar står två kontroller som **inte** är smakregler och som därför inte räknas
+som krav på användaren:
+
+- **72 byte.** Bcrypt i GoTrue läser inte längre än så och klipper resten tyst.
+  Utan spärren får användaren inte det lösenord hen skrev in — det är en
+  felkälla, inte en åsikt om ordval.
+- **Samma som det gamla.** Vid ett tvingat byte är ett "byte" till samma ord
+  inget byte alls. GoTrue nekar det ändå, men med ett sämre felmeddelande.
+
+Modulens toppkommentar säger nu rent ut att reglerna är borttagna med flit och
+inte bortglömda, och att listan inte ska fyllas på för att något är god praxis.
+Nästa session ska inte kunna läsa tomrummet som en lucka.
+
+### Det tillfälliga lösenordet måste också bära en siffra
+
+`nyttTillfalligtLosenord()` drar 20 tecken ur ett alfabet på 31, varav åtta är
+siffror. Ett ord utan siffra dyker upp ungefär en gång på 370 — sällan nog att
+aldrig märkas i en handkontroll, ofta nog att chefen förr eller senare läser upp
+ett tillfälligt lösenord som navet självt sedan vägrar ta emot när det ska
+bytas. Generatorn drar därför om tills ordet har en siffra. Dragning om och
+inte lappning: att byta ut ett tecken mot en siffra på bestämd plats skulle
+göra just den platsen förutsägbar.
+
+Testet som slumpar 500 tillfälliga lösenord och kör dem genom `granska()` hade
+annars fallit i tre körningar av fyra.
+
+### Två saker som ligger utanför koden
+
+**GoTrue har ett eget lösenordskrav** i Supabase-projektets inställningar
+(Authentication → Policies → Password Requirements). Det kravet är inte det här
+i koden, och står det på tolv tecken där nekas ett åttateckensord som
+`granska()` just släppte igenom. `utforBytLosenord` mappade allt sådant till
+"Lösenordet kunde inte bytas. Försök igen." — ett fel utan åtgärd. Den visar nu
+GoTrues egen text, så att det syns direkt var spärren sitter.
+
+**Styrkemätaren dömer fortfarande inte.** Ett godkänt åttateckensord visar
+"Svagt", och det får det göra — raden är ett råd. Hjälptexten över fältet säger
+det rent ut så att ingen tror att formuläret tänker neka ordet. Provet
+`ett 'svagt' ord släpps igenom ändå` bevakar att mätaren inte blir en regel i
+smyg.
+
+### Ändrade filer
+
+`src/lib/losenordskrav.ts` (omskriven), `src/lib/losenord.ts` (siffergaranti),
+`src/lib/losenordsbyte-server.ts` (`granska()` tar inte längre profiluppgifter,
+GoTrue-felet vidare), `src/app/byt-losenord/Formular.tsx`,
+`src/app/(app)/profil/Losenord.tsx`, `tests/losenordskrav.mjs` (omskrivet).
+
+`tests/losenordskrav.mjs`: 30 kontroller, alla godkända. Åtta av dem prövar ord
+som den gamla uppsättningen nekade — `losenord123`, `Sommar2026!`,
+`Clicknet2026`, `qwertyui1`, `aaaaaaa1`, det egna namnet, e-postadressen och ett
+ord med mellanslag i kanten — så att en borttagen regel inte kan smyga tillbaka
+utan att provet säger ifrån.
+
+Ingen migration. Migration 0017 rör tvånget att byta, aldrig vad ordet får
+innehålla.
+
+---
+
 ## 2026-09-02 · "Väntar på aktivering" efter tvingat lösenordsbyte
 
 Säljarna rapporterade att de loggade in och möttes av AC-1.2-skärmen: *"Du är

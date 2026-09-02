@@ -10,14 +10,27 @@
 // Uppgiftstyperna
 // -----------------------------------------------------------------------------
 
+/**
+ * ORDNINGEN AR VALJARENS ORDNING. Listan ritas rakt av i formularet, sa den
+ * sager vad som ar det vanliga fallet.
+ *
+ * De fria typerna forst, de kallbundna sist. Skalet ar konkret: en fristaende
+ * uppgift ar det man lagger upp oftast, medan en kallbunden typ kraver att
+ * kursen, modulen eller dokumentet redan finns. Med `kurs` overst mottes den
+ * som bara ville skriva "Ring 20 bolag" av ett obligatoriskt kursval och trodde
+ * att kurser maste laggas upp forst — vilket de inte maste.
+ *
+ * Ordningen ar bara presentation. `TYP_ETIKETT` och `TYP_KRAVER_KALLA` slar upp
+ * pa nyckel, och `actions.ts` provar medlemskap, sa inget beteende hanger i den.
+ */
 export const UPPGIFTSTYPER = [
-  "kurs",
-  "rollspel_inspelat",
-  "lasning",
-  "rollspel_live",
+  "uppgift",
   "manus",
   "medlyssning",
-  "uppgift",
+  "kurs",
+  "rollspel_inspelat",
+  "rollspel_live",
+  "lasning",
 ] as const;
 
 export type Uppgiftstyp = (typeof UPPGIFTSTYPER)[number];
@@ -59,6 +72,15 @@ export const TYP_KRAVER_KALLA: Record<Uppgiftstyp, "course_id" | "module_id" | "
   medlyssning: null,
   uppgift: null,
 };
+
+/**
+ * Typerna som star for sig sjalva — ingen kurs, ingen modul, inget dokument.
+ *
+ * HARLEDD OCH INTE HANDSKRIVEN. Hjalptexten i formularet raknar upp dem vid
+ * namn, och en handskriven lista hade blivit fel den dag en typ tillkommer:
+ * texten hade lovat nagot annat an falten gor. Nu foljer den med av sig sjalv.
+ */
+export const FRIA_TYPER: Uppgiftstyp[] = UPPGIFTSTYPER.filter((t) => TYP_KRAVER_KALLA[t] === null);
 
 // -----------------------------------------------------------------------------
 // Kvitteringen

@@ -7,6 +7,7 @@ export const DOC_TYPES = [
   "script",
   "price_list",
   "case",
+  "training",
   "interest_assessment",
   "staff_information",
 ] as const;
@@ -22,6 +23,7 @@ export const DOC_TYPE_LABEL: Record<DocType, string> = {
   script: "Manus",
   price_list: "Prislista",
   case: "Referenscase",
+  training: "Utbildning",
   interest_assessment: "Intresseavvägning",
   staff_information: "Information till personalen",
 };
