@@ -19,6 +19,10 @@ const TON: Record<string, { bredd: string; farg: string; ord: string }> = {
  * Maglinjen rakna­s i webblasaren och avgor ingenting. Den finns for att en
  * manniska ska se skillnad pa tre ord och ett ord med en trea i — servern
  * dommer om samma losenord en gang till, och det ar den domen som galler.
+ *
+ * Kravet ar atta tecken och en siffra, sa ett fullt godkant losenord kan visa
+ * "Svagt" har. Det ar meningen: raden ar ett rad och inte ett besked om att
+ * formularet kommer neka ordet. Hjalptexten over faltet sager det rent ut.
  */
 function Styrkemat({ losenord }: { losenord: string }) {
   if (losenord.length === 0) return null;
@@ -71,13 +75,14 @@ export function Formular({ tvingat }: { tvingat: boolean }) {
         <Field
           label="Nytt lösenord"
           namn="nytt"
-          hjalp={`Minst ${MIN_TECKEN} tecken. Tre ord du minns slår ett kort ord med tecken i.`}
+          hjalp={`Minst ${MIN_TECKEN} tecken och minst en siffra. I övrigt väljer du fritt — måttet nedanför är ett råd, inget krav.`}
         >
           <Input
             namn="nytt"
             type="password"
             autoComplete="new-password"
             required
+            minLength={MIN_TECKEN}
             value={nytt}
             onChange={(e) => setNytt(e.target.value)}
           />
