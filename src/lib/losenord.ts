@@ -43,9 +43,19 @@ function slumpaTecken(antal: number): string {
  *
  * 20 tecken ur 31 mojliga ar knappt 100 bitar. Grupperingen ar for manniskan
  * som ska lasa upp det, bindestrecken raknas inte som hemlighet.
+ *
+ * MINST EN SIFFRA, for att `granska()` kraver det av alla losenord. Atta av
+ * de 31 tecknen ar siffror, sa ett slumpat ord saknar siffra ungefar en gang
+ * pa 370 — sallan nog att aldrig markas i en handkontroll, ofta nog att slumpa
+ * fram ett tillfalligt losenord som navet sjalv sedan vagrar ta emot. Dragning
+ * om, inte lappning: att byta ut ett tecken mot en siffra pa en bestamd plats
+ * skulle gora just den platsen forutsagbar.
  */
 export function nyttTillfalligtLosenord(): string {
-  const rader: string[] = [];
-  for (let i = 0; i < GRUPPER; i++) rader.push(slumpaTecken(PER_GRUPP));
-  return rader.join("-");
+  for (;;) {
+    const rader: string[] = [];
+    for (let i = 0; i < GRUPPER; i++) rader.push(slumpaTecken(PER_GRUPP));
+    const ord = rader.join("-");
+    if (/\d/.test(ord)) return ord;
+  }
 }
