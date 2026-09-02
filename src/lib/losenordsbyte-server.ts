@@ -91,10 +91,49 @@ export async function utforBytLosenord(
    * misslyckades.
    */
   const { data: nu } = await db.auth.admin.getUserById(user.authUserId);
-  if (nu?.user?.app_metadata?.[FLAGGA]) {
+  const metadata = nu?.user?.app_metadata ?? {};
+  const hadeTvang = Boolean(metadata[FLAGGA]);
+
+  if (hadeTvang) {
     await db.auth.admin.updateUserById(user.authUserId, {
-      app_metadata: { ...nu.user.app_metadata, [FLAGGA]: false },
+      app_metadata: { ...metadata, [FLAGGA]: false },
     });
+
+    /**
+     * TOKENEN MASTE FORNYAS HAR. UTAN DEN HAR RADEN LANDAR VARJE NYANSTALLD
+     * PA "Vantar pa aktivering" DIREKT EFTER SITT FORSTA LOSENORDSBYTE.
+     *
+     * Raden ovan andrar `app_metadata` hos Auth. Den ror INTE den token
+     * anvandaren redan har i sin kaka — den ar signerad, lever i en timme och
+     * bar kvar `byt_losenord: true`.
+     *
+     * Da sager de tva spa­rrarna fran migration 0017 olika saker om samma
+     * person:
+     *
+     *   mellanvaran  fragar Auth med getUser() -> falskt -> slapper in
+     *   databasen    laser claimen ur TOKENEN  -> sant   -> noll rader
+     *
+     * `kraver_losenordsbyte()` ar med i `employee_read`, sa personen far inte
+     * ens ut sin EGEN rad. `getCurrentUser()` ser `employee: null`, och
+     * (app)-layouten tolkar det som AC-1.2: inte upplagd som anstalld. Det
+     * gick over av sig sjalvt nar tokenen forfoll — efter upp till en timme,
+     * eller nar personen loggade ut och in igen.
+     *
+     * Fornyelsen hamtar en NY token, och GoTrue bygger claimsen ur
+     * anvandarraden som den ser ut nu. Kakorna skrivs av `supabaseServer()`,
+     * och eftersom det har ar en server action gar det — omdirigeringen
+     * efterat bar dem med sig.
+     *
+     * Fallbacken finns for att ett losenordsbyte kan hinna aterkalla den
+     * gamla refresh-tokenen. Da loggar vi in med det ord anvandaren just satt
+     * i stallet; bada vagarna slutar med en giltig session och farska claims,
+     * och den som misslyckas med bada ar anda inloggad — bara med gammal
+     * token, alltsa exakt lika illa som forr och inte varre.
+     */
+    const { error: fornyelsefel } = await supabase.auth.refreshSession();
+    if (fornyelsefel) {
+      await supabase.auth.signInWithPassword({ email: user.email, password: nytt });
+    }
   }
 
   // Ordet star aldrig i loggen. Bara att det byttes, av vem och nar.
@@ -104,7 +143,7 @@ export async function utforBytLosenord(
       action: "auth.password_changed",
       object_type: "auth",
       object_id: user.authUserId,
-      meta: { tvingat: Boolean(nu?.user?.app_metadata?.[FLAGGA]) },
+      meta: { tvingat: hadeTvang },
     });
   }
 
