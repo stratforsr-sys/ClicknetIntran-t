@@ -24,7 +24,7 @@ export function Losenord() {
       <Field
         label="Nytt lösenord"
         namn="nytt"
-        hjalp={`Minst ${MIN_TECKEN} tecken. En mening du minns slår ett kort krångligt ord.`}
+        hjalp={`Minst ${MIN_TECKEN} tecken och minst en siffra. I övrigt väljer du fritt.`}
       >
         <Input
           namn="nytt"
