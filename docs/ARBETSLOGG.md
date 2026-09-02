@@ -138,6 +138,38 @@ beskedet också klickat bort påminnelsen tre dygn senare. Beskedet står så l�
 uppgiften är orörd och yngre än trappans första steg, och lämnar sedan över utan
 lucka och utan överlapp. Id:t bär ingen räknare — en ny uppgift blir ny en gång.
 
+**En omgång uppgifter är ETT besked.** En rampplan lägger upp tolv uppgifter på
+en knapptryckning och ett GROW-samtal fyra åtaganden. Tolv poster i klockan är
+inte tolv besked utan ett besked som skriker, och den som möter det slutar öppna
+klockan — vilket kostar de poster som faktiskt bär något brådskande.
+
+Grupperingsnyckeln är **källan plus tidpunkten**, och båda delarna behövs.
+`template_id` ensamt räcker inte: samma rampplan tillämpas på tio personer och på
+samma person igen ett halvår senare, och det är olika nyheter. `created_at`
+ensamt räcker inte heller: två uppgifter upplagda för hand inom samma sekund har
+inget med varandra att göra.
+
+Att tidpunkten är *exakt* lika är ingen slump. Både `tillampaMall()` och
+`skapaSamtal()` skriver sina rader i **en** insert, och `created_at` har
+`default now()` — som i Postgres är transaktionens tidpunkt och alltså identisk
+för varje rad i satsen. Skulle någon dela upp den insertningen i en slinga faller
+grupperingen isär till enskilda poster: fler notiser än nödvändigt, men aldrig
+fel notis. Det är rätt håll att fela åt.
+
+En omgång på **en** uppgift är ingen omgång — "Du har fått 1 ny uppgift" säger
+mindre än uppgiftens egen rubrik, så den posten ser ut precis som den handpålagda.
+
+Id:t bär omgången, inte uppgifterna. Bockar säljaren av tre av tolv krymper
+posten till nio, men det är samma post med samma id och den förblir bortklickad
+för den som redan läst den. Ett id räknat på antalet hade låtit nyheten uppstå
+igen varje gång hon gjorde något åt den.
+
+**Ett fel som fångades i granskningen:** första utkastet byggde id:t av
+grupperingsnyckeln rakt av. Nyckeln bär tidsstämpeln i sitt rätta format —
+`2026-09-02T08:18:28.12+00:00` — med kolon, punkt och plus, och `arNotisId()`
+släpper bara igenom siffror, bokstäver och bindestreck. Id:t hade sett riktigt ut
+och tyst vägrat avfärdas. Nu byggs det av källans uuid plus `Date.parse()`.
+
 **3. Startsidan visar nu coachningsuppgifterna överst i "Att göra".** Det är ett
 val om vad sidan är till för: en okvitterad rutin är administration, en
 coachningsuppgift är det någon bett just den personen att träna på. Underlaget

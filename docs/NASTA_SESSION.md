@@ -26,7 +26,11 @@ Efter första genomgången i previewen tillkom fyra saker:
   tyst i tre dygn efter att en uppgift lagts upp, eftersom påminnelseregeln
   mäter *stillestånd* och en ny uppgift har stått still i noll dagar.
   Beskedet och påminnelsen är två källor med flit, så ett bortklick på det ena
-  inte tystar det andra.
+  inte tystar det andra. **En omgång uppgifter är ett besked:** en rampplan med
+  tolv moment ger "Du har fått 12 nya uppgifter", inte tolv poster. Nyckeln är
+  `template_id`/`session_id` plus `created_at`, och den fungerar för att båda
+  ställena skriver sina rader i EN insert — delas den upp i en slinga faller
+  grupperingen isär till enskilda poster.
 - **Startsidans "Att göra" bär coachningsuppgifterna överst.** Inlämnade står
   inte där — bollen ligger hos den som ska kvittera. Underkända står först.
 - **Chefen får också markera "påbörjad".** Gränsen mot kvitteringen är

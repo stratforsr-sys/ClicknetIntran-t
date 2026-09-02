@@ -24,9 +24,11 @@ import {
   forsenad,
   granskaMall,
   granskaMallpost,
+  grupperaOmgangar,
   lageFor,
   laggTill,
   larmar,
+  omgangsnyckel,
   paminnelseFor,
   planera,
   skrivMall,
@@ -308,6 +310,57 @@ const bada = sorteraUppgifter([
   { title: "Forsenad och min bock", kraverDinBock: true, forsenad: true, due_date: "2026-08-01" },
 ]).map((u) => u.title);
 ok("bocken vager tyngre an forseningen", bada[0] === "Forsenad och min bock");
+
+// =============================================================================
+// En rampplan lagger upp tolv uppgifter i EN insert, sa alla tolv far samma
+// `created_at` — det ar transaktionens tidpunkt. Klockan ska visa ETT besked.
+rubrik("Klockan: en omgang uppgifter ar en nyhet");
+
+const T1 = "2026-09-01T09:00:00.000Z";
+const T2 = "2026-09-01T09:00:00.001Z";
+const ny = (over) => ({ created_at: T1, template_id: null, session_id: null, ...over });
+
+ok(
+  "handpalagd uppgift har ingen omgangsnyckel",
+  omgangsnyckel(ny({ id: "a" })) === null,
+);
+ok(
+  "mallens uppgifter delar nyckel",
+  omgangsnyckel(ny({ template_id: "mall" })) === omgangsnyckel(ny({ template_id: "mall" })),
+);
+// Samma mall pa samma person ett halvar senare ar en ANNAN nyhet.
+ok(
+  "samma mall vid en annan tidpunkt ar en annan omgang",
+  omgangsnyckel(ny({ template_id: "mall" })) !==
+    omgangsnyckel(ny({ template_id: "mall", created_at: T2 })),
+);
+// Tva uppgifter upplagda for hand inom samma sekund hor inte ihop.
+ok(
+  "samma tidpunkt utan kalla grupperas inte",
+  grupperaOmgangar([ny({ id: "a" }), ny({ id: "b" })]).length === 2,
+);
+
+const omgangar = grupperaOmgangar([
+  ny({ id: "1", template_id: "mall" }),
+  ny({ id: "2", template_id: "mall" }),
+  ny({ id: "3", template_id: "mall" }),
+  ny({ id: "4" }),
+  ny({ id: "5", session_id: "samtal", created_at: T2 }),
+  ny({ id: "6", session_id: "samtal", created_at: T2 }),
+]);
+ok("tre omgangar av sex uppgifter", omgangar.length === 3, String(omgangar.length));
+ok("mallens tre ligger ihop", omgangar.find((o) => o.uppgifter[0].id === "1")?.uppgifter.length === 3);
+ok("samtalets tva ligger ihop", omgangar.find((o) => o.uppgifter[0].id === "5")?.uppgifter.length === 2);
+ok("den handpalagda ligger for sig", omgangar.find((o) => o.uppgifter[0].id === "4")?.uppgifter.length === 1);
+ok("nyast forst", omgangar[0].uppgifter[0].id === "5", omgangar.map((o) => o.uppgifter[0].id).join(","));
+
+// En mall med ETT moment ska inte ge "Du har fatt 1 ny uppgift". Anroparen ser
+// det pa langden, sa den maste vara ett och inte noll eller tva.
+ok(
+  "en omgang pa ett ar en omgang pa ett",
+  grupperaOmgangar([ny({ id: "x", template_id: "mall" })])[0].uppgifter.length === 1,
+);
+ok("tom in ger tom ut", grupperaOmgangar([]).length === 0);
 
 // =============================================================================
 rubrik("Mallar: fristen ar relativ");

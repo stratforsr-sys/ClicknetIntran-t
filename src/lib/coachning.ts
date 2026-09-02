@@ -443,6 +443,85 @@ export function sorteraLag<T extends Lagrad>(rader: T[], namn: (r: T) => string)
 }
 
 // -----------------------------------------------------------------------------
+// Klockan: en omgang uppgifter ar EN nyhet
+// -----------------------------------------------------------------------------
+
+/**
+ * Vad som gor tva nya uppgifter till SAMMA nyhet.
+ *
+ * En rampplan lagger upp tolv uppgifter pa en knapptryckning, och ett
+ * GROW-samtal fyra atagandan. Som tolv separata poster i klockan ar det inte
+ * tolv besked utan ett besked som skriker — och en klocka man slutar oppna ar
+ * samre an ingen klocka alls.
+ *
+ * NYCKELN AR KALLAN PLUS TIDPUNKTEN, och bada delarna behovs:
+ *
+ * - `template_id` ensamt racker inte. Samma rampplan tillamps pa tio personer
+ *   och pa samma person igen ett halvar senare, och de omgangarna ar olika
+ *   nyheter.
+ * - `created_at` ensamt racker inte heller. Tva uppgifter upplagda for hand
+ *   inom samma sekund har inget med varandra att gora.
+ *
+ * ATT TIDPUNKTEN AR EXAKT LIKA AR INGEN SLUMP. Bade `tillampaMall()` och
+ * `skapaSamtal()` skriver sina rader i EN insert, och `created_at` har
+ * `default now()` — som i Postgres ar TRANSAKTIONENS tidpunkt och alltsa
+ * identisk for varje rad i satsen. Skulle nagon nagon gang dela upp den
+ * insertningen i en slinga faller grupperingen isar till enskilda poster: fler
+ * notiser an nodvandigt, men aldrig fel notis. Det ar ratt hall att fela at.
+ */
+export function omgangsnyckel(u: {
+  created_at: string;
+  template_id?: string | null;
+  session_id?: string | null;
+}): string | null {
+  const kalla = u.template_id ?? u.session_id ?? null;
+  return kalla ? `${kalla}:${u.created_at}` : null;
+}
+
+export type Omgang<T> = {
+  /** Null nar uppgiften kom for sig sjalv och alltsa ar sin egen nyhet. */
+  nyckel: string | null;
+  uppgifter: T[];
+};
+
+/**
+ * Slar ihop uppgifter som kom i samma omgang.
+ *
+ * EN OMGANG PA ETT AR INGEN OMGANG. En mall med ett enda moment, eller ett
+ * samtal med ett atagande, ska ge samma post som en handpalagd uppgift — "Du
+ * har fatt 1 ny uppgift" ar en samre mening an uppgiftens egen rubrik.
+ * Anroparen ser det pa att `uppgifter.length === 1`.
+ *
+ * Ordningen ar nyast forst, och inom en omgang den ordning raderna kom i.
+ */
+export function grupperaOmgangar<
+  T extends { created_at: string; template_id?: string | null; session_id?: string | null },
+>(uppgifter: T[]): Omgang<T>[] {
+  const grupper: Omgang<T>[] = [];
+  const perNyckel = new Map<string, Omgang<T>>();
+
+  for (const u of uppgifter) {
+    const nyckel = omgangsnyckel(u);
+    if (nyckel === null) {
+      grupper.push({ nyckel: null, uppgifter: [u] });
+      continue;
+    }
+    const fanns = perNyckel.get(nyckel);
+    if (fanns) {
+      fanns.uppgifter.push(u);
+    } else {
+      const ny: Omgang<T> = { nyckel, uppgifter: [u] };
+      perNyckel.set(nyckel, ny);
+      grupper.push(ny);
+    }
+  }
+
+  return grupper.sort((a, b) =>
+    a.uppgifter[0].created_at < b.uppgifter[0].created_at ? 1 : -1,
+  );
+}
+
+// -----------------------------------------------------------------------------
 // Mallarna (U1)
 // -----------------------------------------------------------------------------
 

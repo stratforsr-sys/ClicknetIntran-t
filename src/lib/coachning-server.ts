@@ -9,6 +9,7 @@ import {
   dagarSedanCoachning,
   farKvittera,
   forsenad,
+  grupperaOmgangar,
   lageFor,
   larmar,
   sorteraUppgifter,
@@ -46,6 +47,9 @@ export type Uppgiftsrad = {
   course_id: string | null;
   module_id: string | null;
   document_id: string | null;
+  /** Mallen respektive samtalet raden kom ur. Grupperar klockans nyheter. */
+  template_id: string | null;
+  session_id: string | null;
   created_at: string;
   handelser: Handelse[];
   lage: Uppgiftslage;
@@ -55,7 +59,8 @@ export type Uppgiftsrad = {
 
 const UPPGIFTSFALT =
   "id, title, description_md, kind, assignee_id, partner_id, created_by, verify_by," +
-  " evidence, due_date, starts_on, cancelled_at, course_id, module_id, document_id, created_at";
+  " evidence, due_date, starts_on, cancelled_at, course_id, module_id, document_id," +
+  " template_id, session_id, created_at";
 
 /**
  * Ar den har personen chef OVER den andra?
@@ -759,6 +764,9 @@ export async function coachningsnotiser(user: CurrentUser): Promise<Notis[]> {
     ...oppna.map((u) => u.created_by),
   ]);
 
+  /** Nyss upplagda uppgifter som ar mina. Blir poster langre ner, i omgangar. */
+  const nya: Uppgiftsrad[] = [];
+
   /**
    * MIN EGEN PAMINNELSE. Bara nar det faktiskt star still — den som arbetar med
    * en uppgift i dag ska inte samtidigt fa en notis om att hon inte gjort den.
@@ -794,23 +802,9 @@ export async function coachningsnotiser(user: CurrentUser): Promise<Notis[]> {
      * upplysning till en gnallspik — paminnelsen nedan tar over den rollen.
      */
     if (u.lage === "ej_paborjad" && stilla < PAMINNELSE_PERSON_DYGN) {
-      notiser.push({
-        id: notisId("coachning-ny", u.id),
-        typ: "coachning",
-        rubrik: `Ny uppgift: ${u.title}`,
-        detalj: [
-          `Upplagd av ${namn.get(u.created_by) ?? "din chef"}`,
-          u.due_date ? `klar senast ${u.due_date}` : null,
-        ]
-          .filter(Boolean)
-          .join(" · "),
-        href: `/coachning/uppgift/${u.id}`,
-        // Tidpunkten ar tilldelningen och inte "nu": posten ska hamna pa sin
-        // plats i klockans ordning, och en nyss upplagd uppgift ligger da
-        // overst av sig sjalv.
-        tidpunkt: senast,
-        olast: true,
-      });
+      // Samlas, skrivs inte. Vilken post de blir avgors av hur MANGA de ar,
+      // och det gar inte att veta mitt i slingan som producerar dem.
+      nya.push(u);
       continue;
     }
 
@@ -833,6 +827,90 @@ export async function coachningsnotiser(user: CurrentUser): Promise<Notis[]> {
             .join(" · "),
       href: `/coachning/uppgift/${u.id}`,
       tidpunkt: senast,
+      olast: true,
+    });
+  }
+
+  /**
+   * NYA UPPGIFTER — EN POST PER OMGANG, INTE PER UPPGIFT.
+   *
+   * En rampplan lagger upp tolv uppgifter pa en knapptryckning och ett
+   * GROW-samtal fyra atagandan. Som tolv poster i klockan ar det inte tolv
+   * besked utan ett besked som skriker, och den som moter det slutar oppna
+   * klockan — vilket kostar de poster som faktiskt bar nagot bradskande.
+   *
+   * En omgang pa EN uppgift ar ingen omgang. "Du har fatt 1 ny uppgift" sager
+   * mindre an uppgiftens egen rubrik, sa den posten ser ut precis som den
+   * handpalagda uppgiftens.
+   *
+   * ID:T BAR OMGANGEN, INTE UPPGIFTERNA. Bockar saljaren av tre av tolv krymper
+   * posten till nio — men det ar samma post, med samma id, och den forblir
+   * bortklickad for den som redan last den. Ett id raknat pa antalet hade latit
+   * nyheten ateruppsta varje gang hon gjorde nagot at den.
+   */
+  const omgangar = grupperaOmgangar(nya);
+  const flerpost = omgangar.filter((o) => o.uppgifter.length > 1);
+
+  /**
+   * Mallnamnen slas upp bara nar det FINNS en omgang att namnge.
+   *
+   * "Från Ny säljare vecka 1–4" ar hela skillnaden mot "Från en mall": det
+   * forsta sager vad som hant, det andra sager att nagot hant. Men fragan ar
+   * ovardig att stalla pa varje sidvisning for de allra flesta, som inte har
+   * nagon fardig omgang liggande.
+   */
+  const mallnamn = new Map<string, string>();
+  const mallIds = [...new Set(flerpost.map((o) => o.uppgifter[0].template_id).filter(Boolean) as string[])];
+  if (mallIds.length > 0) {
+    const { data: mallar } = await supabase.from("coaching_template").select("id, name").in("id", mallIds);
+    for (const m of mallar ?? []) mallnamn.set(m.id, m.name as string);
+  }
+
+  for (const omgang of omgangar) {
+    const forsta = omgang.uppgifter[0];
+    const enda = omgang.uppgifter.length === 1;
+
+    // Narmaste frist i omgangen. Uppgifter utan frist raknas inte med — de
+    // brinner inte, och en tom sortering hade gett dem forsta platsen.
+    const frister = omgang.uppgifter.map((u) => u.due_date).filter(Boolean) as string[];
+    const narmast = frister.length > 0 ? frister.reduce((a, b) => (a < b ? a : b)) : null;
+
+    const varifran = forsta.template_id
+      ? `Från "${mallnamn.get(forsta.template_id) ?? "en rampplan"}"`
+      : forsta.session_id
+        ? "Från ert coachningssamtal"
+        : `Upplagd av ${namn.get(forsta.created_by) ?? "din chef"}`;
+
+    notiser.push({
+      /**
+       * OMGANGENS ID BYGGS AV KALLAN OCH ETT TAL, inte av `omgang.nyckel`.
+       *
+       * Nyckeln bar tidsstampeln i sitt ratta format — `2026-09-02T08:18:28.12+00:00`
+       * — och den innehaller bade kolon, punkt och plus. `arNotisId()` slapper
+       * bara igenom siffror, bokstaver och bindestreck, sa ett id byggt pa
+       * nyckeln hade sett riktigt ut och tyst vagrat avfardas. Millisekunderna
+       * ar lika unika och bara siffror.
+       */
+      id: enda
+        ? notisId("coachning-ny", forsta.id)
+        : notisId(
+            "coachning-ny",
+            forsta.template_id ?? forsta.session_id!,
+            Date.parse(forsta.created_at),
+          ),
+      typ: "coachning",
+      rubrik: enda ? `Ny uppgift: ${forsta.title}` : `Du har fått ${omgang.uppgifter.length} nya uppgifter`,
+      detalj: [varifran, narmast ? `närmaste ${enda ? "frist" : "förfallodag"} ${narmast}` : null]
+        .filter(Boolean)
+        .join(" · "),
+      // En omgang pekar pa personkortet, dar alla tolv star. En ensam uppgift
+      // pekar pa sig sjalv — en mellanlandning for att lasa en rad ar ett klick
+      // for mycket.
+      href: enda ? `/coachning/uppgift/${forsta.id}` : `/coachning/${mig}`,
+      // Tidpunkten ar tilldelningen och inte "nu": posten ska hamna pa sin
+      // plats i klockans ordning, och en nyss upplagd uppgift ligger da
+      // overst av sig sjalv.
+      tidpunkt: forsta.created_at,
       olast: true,
     });
   }
