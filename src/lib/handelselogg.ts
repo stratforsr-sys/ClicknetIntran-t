@@ -141,6 +141,10 @@ export const MODUL: Record<string, string> = {
 
   job: "Nattjobbet",
   error: "Felrapport",
+
+  coaching_task: "Coachningsuppgift",
+  coaching_session: "Coachningssamtal",
+  coaching_template: "Coachningsmall",
 };
 
 /** Andelser som betyder att nagot lamnades ut eller lastes. */

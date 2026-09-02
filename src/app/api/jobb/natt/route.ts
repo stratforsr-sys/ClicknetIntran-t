@@ -8,6 +8,7 @@ import { korArendejobbet } from "@/lib/jobb/arenden";
 import { korFranvarojobbet } from "@/lib/jobb/franvaro";
 import { korSatsjobbet } from "@/lib/jobb/satser";
 import { korGuidejobbet } from "@/lib/jobb/guider";
+import { korCoachningsjobbet } from "@/lib/jobb/coachning";
 import { foreslaOgiltigFranvaro } from "@/lib/jobb/konsekvenser";
 import { hamtaDrift, type Drift } from "@/lib/jobb/drift-server";
 import { kvittoLarmtext, larmDigest, larmSokvag } from "@/lib/jobb/larm";
@@ -110,6 +111,11 @@ export async function GET(request: NextRequest) {
     // systemguider ger ett arende till narmaste chef. Guiderna laser ingenting,
     // sa utan det har steget finns ingen som marker att onboardingen uteblev.
     ["guider", () => korGuidejobbet(db, lage.stampling)],
+    // Coachningsuppgifter 14 dagar over fristen ger ett arende till narmaste
+    // chef. Klockan har redan sagt till om det som statt still i tre dygn; det
+    // har steget fangar det ingen tagit tag i. De sjalvsanna typerna star
+    // utanfor — en forsenad kurs har sin egen uppfoljning i M6.
+    ["coachning", () => korCoachningsjobbet(db)],
   ];
 
   for (const [namn, kor] of steg) {

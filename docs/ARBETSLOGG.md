@@ -66,6 +66,146 @@ förnyas.
 
 ---
 
+## 2026-09-01 · Coachningsmodulen, fas 1 (branchen `coachning`)
+
+Beställningen, researchen och alla 26 frågor står i
+**`docs/COACHNING_UTREDNING.md`**. Besluten står i avsnitt 0 där. Den här posten
+är vad som faktiskt byggdes och varför just så.
+
+**Arbetssättet ändrades samma dag och gäller framåt:** arbete i det här repot går
+inte längre direkt till `main`. En branch, en preview, och merge först efter
+beställarens godkännande.
+
+### Det bärande valet: modulen äger ingen sanning
+
+Navet hade redan tre fjärdedelar av en coachningsmodul — kurser med certifikat
+(0007), rollspel med rubrik och ljudfil (0024), K&V-bedömningen (0036) och
+kvittens på rutin (0003). Det som saknades var personperspektivet.
+
+Därför lagrar 0043 **inget kursinnehåll, ingen egen bedömningsrubrik och inget
+andra "klart"-begrepp**. Tre av de sju uppgiftstyperna hämtar sitt läge ur den
+tabell som redan är sanningen om samma sak:
+
+| kind | "Klar" betyder |
+|---|---|
+| `kurs` | giltigt `certification` |
+| `rollspel_inspelat` | godkänt `course_attempt` |
+| `lasning` | `document_ack` för dokumentets **aktuella version** |
+
+För dem finns ingen bock att sätta. Triggern `coaching_kvittens_vakt` vägrar ta
+emot en `kvitterad`-händelse på en sådan uppgift, och `farKvittera()` ställer
+samma fråga före behörighetsfrågan — så inte ens en chef med `verify_by = 'chef'`
+kommer förbi. Det är samma linje som onboardingstatusen drog 2026-08-31: en bock
+som säger "klar" bredvid ett certifikat som säger "utgången" är värre än ingen
+bock alls.
+
+### Tre personer på varje uppgift
+
+Beställarens ord var "tilldela en teamledare, eller att säljaren själv gör det,
+eller med den som satt upp tasken". Det beskriver inte tre uppgiftstyper — det
+beskriver **motparten**. `assignee_id` är den som ska lära sig, `partner_id` den
+som spelar kund eller bedömer, `created_by` den som beställde. Utan
+uppdelningen hade "rollspel med teamledaren" och "rollspel på egen hand" behövt
+vara två typer, och rubriken fått skrivas två gånger.
+
+### Fokusområdena fick en EGEN tabell
+
+Första utkastet pekade rakt på `kv_criterion`. Det hade varit ett fel.
+K&V-poängen kräver `max_points` på varje **aktiv** rad (0036), och beställaren
+bestämde att modulen gäller alla anställda — ett fokusområde "Projektledning"
+inlagt där hade tyst brutit bonusberäkningen för hela säljkåren.
+`coaching_focus` har därför en **valfri** `kv_criterion_id`. Där länken finns
+visar personkortet K&V-trenden och slingan går ihop; där den saknas är området
+bara en etikett.
+
+### Försening är inte ett läge
+
+`kursLage()` väger ihop allt till ett värde, och det är rätt där: en kurs kan
+inte vara både certifierad och försenad. En coachningsuppgift kan mycket väl vara
+**både underkänd och försenad**. Därför två funktioner, `lageFor()` och
+`forsenad()`, och två märken i vyn. Den som slår ihop dem får välja vilken av två
+sanna saker som ska döljas.
+
+### Vad modulen medvetet inte gör
+
+Ingen rangordning och ingen topplista — 0029 är byggd för att göra
+per-person-uppföljning omöjlig, och en lista som rankar kollegor drar åt motsatt
+håll. Ingen automatisk koppling till konsekvenstrappan eller provisionen: data
+som samlas för att någon ska bli bättre får inte utan ett uttryckligt beslut
+återanvändas till att någon ska förlora pengar. Inga privata chefsanteckningar —
+läspolicyn på `coaching_session` släpper in personen samtalet handlar om,
+undantagslöst.
+
+### Nödutgången
+
+`verify_by = 'sjalv'` är förval, och det är inte bekvämlighet: en modul där
+chefen godkänner varje bock får en kö som ligger okvitterad i tre veckor och
+blir en lögn. Men en uppgift vars ansvariga slutat går då aldrig att stänga.
+Chefen får därför alltid **avbryta**, aldrig godkänna åt någon annan. Ett
+avbrott är ärligt, en kvittering i någon annans namn är det inte.
+
+### Fyra fel som är värda att komma ihåg
+
+1. **Migrationen skriver om `file_object`s villkor i sin helhet, och 0039 hade
+   lagt till ett fjärde ändamål `sales_order`.** Första utkastet tog bort det i
+   tysthet — orderbilagan hade slutat gå att spara. Självkontrollen längst ned i
+   0043 finns för exakt det, och den fällde körningen som den skulle.
+2. **Samma kontroll larmade sedan falskt.** `pg_get_constraintdef` normaliserar
+   nyckelord till versaler, så en skiftlägeskänslig sökning efter
+   `is not null` hittar ingenting. Läs alltid villkorstexten i gemener.
+3. **Bygget föll på `GenericStringError[]`.** `UPPGIFTSFALT` är en hopslagen
+   sträng, och supabase-js härleder radtypen ur select-strängens **literal** — en
+   konkatenering vidgas till `string`. Kasten går därför via `unknown`, och
+   formen kontrolleras i `bygg()` i stället.
+4. **`tillampaMall` parade först ihop skapade uppgifter med mallens moment genom
+   returordningen efter en insert.** PostgREST lovar inte den. Id:na genereras nu
+   i förväg med `crypto.randomUUID()`, annars hade fokusområdena kunnat hamna på
+   fel uppgift — tyst.
+
+### Påminnelserna är systemguidernas trappa, inte en egen
+
+3 dygn utan rörelse till personen, 7 till chefen, 14 dagar över fristen ger ett
+**ärende** via nattjobbet. Trappan är beprövad i drift sedan 2026-08-31, och två
+olika trappor i samma nav hade betytt att en påminnelse inte längre säger något
+om hur brådskande saken är. De självsanna typerna står utanför ärendesteget — en
+försenad kurs har redan sin egen uppföljning i M6.
+
+Notiserna **räknas fram**, de lagras inte (0018:s linje). Grenen ligger i
+`coachning-server.ts` och inte i `notiser-server.ts`, som redan hämtar tjugo
+tabeller i ett destrukturerat `Promise.all` där ordningen betyder allt. Klockan
+anropar med en rad, inuti ett `try` — en trasig coachningsfråga får inte tömma
+sjutton andra poster.
+
+### Mallarna skrivs som text
+
+Samma idiom som `tolkaFragor` och `tolkaKriterier`, och av samma skäl: en
+rampplan skrivs i ett svep. `Rubrik | typ | dagar | slug | fokus`. Källan anges
+som **slug och inte som id** — en mall ska gå att skriva av en människa — och
+slugen slås upp när mallen sparas, så ett stavfel fångas där och inte ett halvår
+senare mitt i en tillämpning.
+
+**Rollspel går inte i en mall än.** Modulerna har inga slugar, och en mall som
+pekar på "modul 3" går sönder den dagen någon lägger in en modul emellan. Det är
+en medveten lucka.
+
+### Läget
+
+- Migration **0043** körd mot produktionen 2026-09-01 16:29 UTC, checksumma
+  `c81f4cb5ce3d8f71`. Additiv — `main`-koden rör aldrig de nya tabellerna.
+- `npm run test:coachning` — 104 prov, inkopplat i provkedjan efter `test:rollspel`.
+- Spärrarna provade mot skarp databas och rullade tillbaka.
+
+### Kvar
+
+- **`evidence = 'fil'` finns i databasen men erbjuds inte i formuläret.**
+  Uppladdningen är inte inkopplad, och ett alternativ som inte fungerar är sämre
+  än inget alternativ. Filändamålet `coaching` finns i `file_object` sedan 0043.
+- `tests/rls.mjs` har ännu inga coachningsfall — behörigheten är alltså inte
+  provad som RLS-provet kräver (Definition of Done p. 4).
+- U2 (återkommande uppgifter), U6–U13 enligt utredningens avsnitt 8.
+
+---
+
 ## 2026-08-31 · Systemguider: den interaktiva onboardingen (G1 + G2)
 
 Beställningen och alla femton beslut står i **`docs/SYSTEMGUIDER.md`**. Den här

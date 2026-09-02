@@ -12,7 +12,7 @@
  * brydde sig om.
  */
 
-export type Notistyp = "arende" | "nyhet" | "rutin" | "kurs" | "franvaro" | "fel" | "guide";
+export type Notistyp = "arende" | "nyhet" | "rutin" | "kurs" | "franvaro" | "fel" | "guide" | "coachning";
 
 /**
  * De tolv sorters post klockan kan visa, som de heter i ett notis-id.
@@ -54,6 +54,15 @@ export const NOTIS_KALLOR = [
   "guide",
   "guide-knuff",
   "guide-team",
+  /**
+   * Coachningen. Tre poster av samma typ men ur olika hall, precis som guidernas
+   * tre: `coachning` ar min egen uppgift som statt still, `coachning-kvittering`
+   * ar nagon annans uppgift som vantar pa MIN bock, och `coachning-team` ar
+   * chefens rad om nagon som inte coachats pa en manad.
+   */
+  "coachning",
+  "coachning-kvittering",
+  "coachning-team",
 ] as const;
 
 export type Notiskalla = (typeof NOTIS_KALLOR)[number];
@@ -103,6 +112,7 @@ export type Notis = {
 };
 
 export const TYP_ETIKETT: Record<Notistyp, string> = {
+  coachning: "Coachning",
   guide: "Guide",
   arende: "Ärende",
   nyhet: "Nyhet",
@@ -113,6 +123,7 @@ export const TYP_ETIKETT: Record<Notistyp, string> = {
 };
 
 export const TYP_IKON: Record<Notistyp, string> = {
+  coachning: "kontroll",
   guide: "utbildning",
   arende: "meny",
   nyhet: "logg",
