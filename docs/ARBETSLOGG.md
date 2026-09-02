@@ -5,6 +5,61 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-02 · Typväljaren i nya coachningsuppgiften såg ut att kräva en kurs
+
+Beställaren rapporterade att en ny coachningsuppgift tvingade fram ett kursval,
+och att den enda kursen som fanns var *Introduktion säljare*. Frågan var om
+kurser måste läggas upp först, och om det gick att lägga till ett alternativ
+"utanför kurser" för en fristående uppgift.
+
+**Alternativet fanns redan.** Kurskravet hänger inte på coachningsuppgifter i
+allmänhet utan på uppgiftstypen, via `TYP_KRAVER_KALLA`. Tre av sju typer —
+`uppgift`, `manus`, `medlyssning` — kräver ingen källa alls, och `uppgift` är
+dessutom förvalt när formuläret öppnas. Det som behövdes var alltså ingen ny
+funktion utan att den befintliga gick att se.
+
+### Varför den inte gick att se
+
+Två saker samverkade. `UPPGIFTSTYPER` började med `kurs` och slutade med
+`uppgift`, så det mest låsta alternativet låg överst i listan och det vanligaste
+låg sist bland sju rader. Och ingenting i formuläret sa att **typvalet** var det
+som drog in kursfältet — kursväljaren dök bara upp, obligatorisk, utan att peka
+tillbaka på vad som orsakade den.
+
+Det är värt att notera vad felet *inte* var: datamodellen är rätt. En
+kursuppgift måste peka på en kurs, för dess läge hämtas ur `course_attempt` och
+det finns ingen bock att sätta för hand. Felet låg helt i presentationen.
+
+### Vad som ändrades
+
+- `UPPGIFTSTYPER` ordnas om: de fria typerna först, de källbundna sist.
+  Ordningen är ren presentation — `TYP_ETIKETT` och `TYP_KRAVER_KALLA` slår upp
+  på nyckel, `actions.ts` prövar medlemskap, och `tests/coachning.mjs` prövar
+  antal och nycklar. Inget beteende hänger i ordningen, och det står nu skrivet
+  i kommentaren ovanför listan så nästa läsare slipper kontrollera det igen.
+- Ny härledd export `FRIA_TYPER = UPPGIFTSTYPER.filter(… === null)`.
+- Hjälptext under typväljaren i `NyUppgift.tsx`. Är typen fri står det att den
+  står för sig själv; är den källbunden står det vad den kopplas till **och**
+  vilka typer som inte kräver något. Den senare halvan är hela poängen: den som
+  behöver upplysningen står per definition på fel typ just då.
+
+Hjälptexten räknar upp typerna ur `FRIA_TYPER` i stället för att skriva dem för
+hand, så en ny typ inte kan få texten att lova något annat än fälten gör.
+Ihopsättningen av "A, B och C" är egen och inte `Intl.ListFormat` — den senare
+faller tillbaka på engelskt "and" om bygget kör med skalad ICU, mitt i en svensk
+mening, vilket är precis den sortens detalj ingen upptäcker.
+
+Inga migrationer, ingen ändring i vad som sparas. Befintliga uppgifter påverkas
+inte.
+
+**Merge-anteckning.** Branchen `coachning-fria-typer` grenades från `d792766`
+och hann bli föråldrad medan lösenordskravet nedan landade på `main`. Enda
+krocken var den här filen — båda la en anteckning överst. Koden krockade inte.
+Löstes genom att lägga om de tre ändringarna på `main`s spets i
+`coachning-fria-typer-2` i stället för att tvinga igenom en merge.
+
+---
+
 ## 2026-09-02 · Lösenordskravet är beställarens: åtta tecken och en siffra
 
 Beställaren: *"när någon ska skapa lösenord låt dem skapa vilket lösenord dem
