@@ -5,6 +5,75 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-02 · Lösenordskravet är beställarens: åtta tecken och en siffra
+
+Beställaren: *"när någon ska skapa lösenord låt dem skapa vilket lösenord dem
+vill bara att det är minst 8 tecken och siffror involverade."*
+
+`src/lib/losenordskrav.ts` hade tolv tecken, en spärrlista på 24 ord, spärr mot
+korta ord som helt lösenord, tangentbordsrader åt båda håll, upprepnings-
+mönster, förbud mot enbart siffror, mellanslag i kanten och en kontroll mot
+förnamn, efternamn och e-postadress ur profilen. Allt det är borttaget.
+
+Kvar står två kontroller som **inte** är smakregler och som därför inte räknas
+som krav på användaren:
+
+- **72 byte.** Bcrypt i GoTrue läser inte längre än så och klipper resten tyst.
+  Utan spärren får användaren inte det lösenord hen skrev in — det är en
+  felkälla, inte en åsikt om ordval.
+- **Samma som det gamla.** Vid ett tvingat byte är ett "byte" till samma ord
+  inget byte alls. GoTrue nekar det ändå, men med ett sämre felmeddelande.
+
+Modulens toppkommentar säger nu rent ut att reglerna är borttagna med flit och
+inte bortglömda, och att listan inte ska fyllas på för att något är god praxis.
+Nästa session ska inte kunna läsa tomrummet som en lucka.
+
+### Det tillfälliga lösenordet måste också bära en siffra
+
+`nyttTillfalligtLosenord()` drar 20 tecken ur ett alfabet på 31, varav åtta är
+siffror. Ett ord utan siffra dyker upp ungefär en gång på 370 — sällan nog att
+aldrig märkas i en handkontroll, ofta nog att chefen förr eller senare läser upp
+ett tillfälligt lösenord som navet självt sedan vägrar ta emot när det ska
+bytas. Generatorn drar därför om tills ordet har en siffra. Dragning om och
+inte lappning: att byta ut ett tecken mot en siffra på bestämd plats skulle
+göra just den platsen förutsägbar.
+
+Testet som slumpar 500 tillfälliga lösenord och kör dem genom `granska()` hade
+annars fallit i tre körningar av fyra.
+
+### Två saker som ligger utanför koden
+
+**GoTrue har ett eget lösenordskrav** i Supabase-projektets inställningar
+(Authentication → Policies → Password Requirements). Det kravet är inte det här
+i koden, och står det på tolv tecken där nekas ett åttateckensord som
+`granska()` just släppte igenom. `utforBytLosenord` mappade allt sådant till
+"Lösenordet kunde inte bytas. Försök igen." — ett fel utan åtgärd. Den visar nu
+GoTrues egen text, så att det syns direkt var spärren sitter.
+
+**Styrkemätaren dömer fortfarande inte.** Ett godkänt åttateckensord visar
+"Svagt", och det får det göra — raden är ett råd. Hjälptexten över fältet säger
+det rent ut så att ingen tror att formuläret tänker neka ordet. Provet
+`ett 'svagt' ord släpps igenom ändå` bevakar att mätaren inte blir en regel i
+smyg.
+
+### Ändrade filer
+
+`src/lib/losenordskrav.ts` (omskriven), `src/lib/losenord.ts` (siffergaranti),
+`src/lib/losenordsbyte-server.ts` (`granska()` tar inte längre profiluppgifter,
+GoTrue-felet vidare), `src/app/byt-losenord/Formular.tsx`,
+`src/app/(app)/profil/Losenord.tsx`, `tests/losenordskrav.mjs` (omskrivet).
+
+`tests/losenordskrav.mjs`: 30 kontroller, alla godkända. Åtta av dem prövar ord
+som den gamla uppsättningen nekade — `losenord123`, `Sommar2026!`,
+`Clicknet2026`, `qwertyui1`, `aaaaaaa1`, det egna namnet, e-postadressen och ett
+ord med mellanslag i kanten — så att en borttagen regel inte kan smyga tillbaka
+utan att provet säger ifrån.
+
+Ingen migration. Migration 0017 rör tvånget att byta, aldrig vad ordet får
+innehålla.
+
+---
+
 ## 2026-09-02 · "Väntar på aktivering" efter tvingat lösenordsbyte
 
 Säljarna rapporterade att de loggade in och möttes av AC-1.2-skärmen: *"Du är
