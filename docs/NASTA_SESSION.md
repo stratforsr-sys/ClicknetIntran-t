@@ -3,7 +3,23 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-08-31 — systemguider G1, G2, G5, G6 och G7 i produktion
+**Senast uppdaterad:** 2026-09-02 — inloggningen efter tvingat lösenordsbyte rättad
+
+## Rättat 2026-09-02: nyanställda fastnade på "Väntar på aktivering"
+
+Var och en som bytte sitt tillfälliga lösenord landade på AC-1.2-skärmen i
+stället för i navet, i upp till en timme. Flaggan `byt_losenord` togs bort hos
+Auth men fanns kvar i den redan utfärdade tokenen, och migration 0017:s spärr i
+databasen läser den **ur tokenen** — alltså noll rader ur `employee`, alltså
+`employee: null`. Mellanvaran, som frågar Auth direkt, tyckte samtidigt att allt
+var i sin ordning.
+
+`utforBytLosenord` förnyar nu sessionen efter att flaggan lyfts. Hela
+resonemanget i `ARBETSLOGG.md` under 2026-09-02.
+
+**Regeln att ta med sig:** allt som ligger i `app_metadata` finns på två ställen
+med olika färskhet — hos Auth och i tokenen. Ändra aldrig något där utan att
+fråga vad den gamla tokenen gör under den timme som återstår.
 
 ## Passet 2026-08-31 i korthet
 
