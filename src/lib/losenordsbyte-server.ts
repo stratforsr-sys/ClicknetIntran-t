@@ -52,15 +52,10 @@ export async function utforBytLosenord(
     return { fel: ["Det nuvarande lösenordet stämmer inte."] };
   }
 
-  const dom = granska(
-    nytt,
-    {
-      fornamn: user.employee?.first_name,
-      efternamn: user.employee?.last_name,
-      epost: user.email,
-    },
-    gammalt,
-  );
+  // Reglerna star i `losenordskrav.ts` och ar sedan 2026-09-02 tva: minst atta
+  // tecken och minst en siffra. Profilen och den tvingade sidan gar bada
+  // harigenom, sa de kan inte glida isar.
+  const dom = granska(nytt, gammalt);
   if (!dom.ok) return { fel: dom.fel };
 
   const supabase = await supabaseServer();
@@ -72,6 +67,17 @@ export async function utforBytLosenord(
     }
     if (m.includes("rate limit") || m.includes("too many")) {
       return { fel: ["För många försök. Vänta en minut och försök igen."] };
+    }
+    /**
+     * GoTrue har ETT EGET losenordskrav i projektinstallningarna, och det
+     * kravet ar inte det har i koden. Star det pa tolv tecken dar nekas ett
+     * attateckensord som `granska()` just slappte igenom, och anvandaren far
+     * ett fel som inte gar att atgarda. Sag darfor vad GoTrue sa i stallet for
+     * "forsok igen" — da syns det direkt att spa­rren sitter i Supabase
+     * (Authentication -> Policies -> Password Requirements) och inte har.
+     */
+    if (m.includes("password")) {
+      return { fel: [`Inloggningstjänsten nekade lösenordet: ${error.message}`] };
     }
     return { fel: ["Lösenordet kunde inte bytas. Försök igen."] };
   }
