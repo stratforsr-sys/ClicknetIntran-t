@@ -82,12 +82,24 @@ databasen läser den **ur tokenen** — alltså noll rader ur `employee`, allts�
 `employee: null`. Mellanvaran, som frågar Auth direkt, tyckte samtidigt att allt
 var i sin ordning.
 
-`utforBytLosenord` förnyar nu sessionen efter att flaggan lyfts. Hela
-resonemanget i `ARBETSLOGG.md` under 2026-09-02.
+`utforBytLosenord` förnyar nu sessionen efter att flaggan lyfts.
 
-**Regeln att ta med sig:** allt som ligger i `app_metadata` finns på två ställen
-med olika färskhet — hos Auth och i tokenen. Ändra aldrig något där utan att
-fråga vad den gamla tokenen gör under den timme som återstår.
+**Och glappet är stängt, inte bara lappat.** Samma dag visade sig andra hållet
+vara det farliga: när tvånget **sätts** — en chef återställer ett lösenord —
+säger mellanvaran ja medan databasen läser en token som fortfarande säger nej,
+så en levande session behåller sin åtkomst mot PostgREST i upp till en timme.
+Exakt hålet 0017 skulle stänga.
+
+**Migration 0044 är körd i produktion.** `kraver_losenordsbyte()` läser
+`auth.users` i stället för `request.jwt.claims`. En källa i stället för två,
+båda hållen stängda på en gång, ingen policy och ingen hjälpfunktion behövde
+röras. `node tests/rls.mjs` grönt efteråt. Hela resonemanget i `ARBETSLOGG.md`
+under 2026-09-02.
+
+**Regeln att ta med sig:** en uppgift som skrivs på ett ställe och läses på ett
+annat är inte en optimering, det är två sanningar. Lägger du något i en token —
+fråga inte vad uppslaget kostar, fråga vad den gamla kopian gör under timmen som
+återstår.
 
 ## Passet 2026-08-31 i korthet
 

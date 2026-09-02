@@ -224,14 +224,53 @@ precis lika illa som förr och inte värre.
 Ordningen är oförändrad i övrigt: lösenordet byts först, flaggan lyfts efteråt.
 Motsatt ordning hade släppt igenom någon vars byte misslyckades.
 
+### Andra halvan samma dag: glappet stängdes i stället för att lappas
+
+`refreshSession()` rättade det hål som syntes. Det andra hållet stod kvar och
+var det farliga: när en chef **sätter** tvånget — återställer någons lösenord —
+säger mellanvaran ja och skickar personen till `/byt-losenord`, medan databasen
+tittar i en token som fortfarande säger nej och lämnar ut data som vanligt. Den
+som redan har en session behåller alltså sin åtkomst mot PostgREST i upp till en
+timme. Det är exakt det hål 0017 byggdes för att stänga, bara tidsbegränsat.
+
+Avläst före rättningen, med handskrivna claims mot produktionsdatabasen —
+Harris, vars konto **är** flaggat, med en token som påstår motsatsen:
+
+    employee 1 rad, document 2 rader
+
+Ingen av de två riktningarna går att rätta genom att skriva bättre på den andra
+sidan. Så länge svaret hämtas ur en kopia som är upp till en timme gammal finns
+glappet kvar. Därför tar **0044** bort kopian: `kraver_losenordsbyte()` läser
+`auth.users` i stället för `request.jwt.claims`. En källa, noll glapp, åt båda
+hållen samtidigt. Efteråt, samma avläsning:
+
+    Edvin  rad=nej  token ljuger JA    employee=1 document=2 team=2
+    Harris rad=JA   token ljuger nej   employee=0 document=0 team=0
+
+Tokenen påverkar inte längre svaret alls.
+
+0017:s argument för att lägga flaggan i `app_metadata` var att svaret följde med
+i tokenen och därför inte kostade någon tabelläsning. Det argumentet höll inte
+hela vägen: frågan nämner ingen kolumn från den yttre raden, så planeraren gör
+den till en InitPlan och kör den en gång per fråga — inte en gång per rad. Det
+är samma sak som redan sker med `has_any_role()` och `current_employee_id()`,
+som gör tyngre jobb och sitter i samma policyer.
+
+Det som är kvar av 0017 är oförändrat: `= 'true'` och ingenting annat, så ett
+saknat fält aldrig kan spärra ut någon, och service role ser fortfarande false
+eftersom den inte har någon `auth.uid()`. Ingen hjälpfunktion och ingen policy
+behövde röras — de anropar funktionen och fick det nya svaret gratis.
+
+`node tests/rls.mjs` grönt efter ändringen (Definition of Done p. 4).
+
 ### Att ta med sig
 
-Allt som ligger i `app_metadata` finns på två ställen med olika färskhet: hos
-Auth, som mellanvaran frågar, och i tokenen, som databasen läser. De går isär i
-upp till en timme. Ändrar man något där måste man fråga vad den gamla tokenen
-gör under tiden — åt båda hållen. Ett tvång som **sätts** har samma glapp: den
-som har en levande session behåller sin åtkomst i databasen tills tokenen
-förnyas.
+En uppgift som skrivs på ett ställe och läses på ett annat är inte en optimering,
+det är två sanningar. `app_metadata` fanns hos Auth, där den skrivs, och i
+tokenen, där den frös fast i en timme — och varje spärr som läste kopian svarade
+på hur världen såg ut när personen senast loggade in. Frågan att ställa nästa
+gång något läggs i en token är inte "vad kostar uppslaget?" utan "vad gör den
+gamla kopian under tiden?".
 
 ---
 
