@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Card } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, fullName } from "@/lib/auth";
+import { supabaseServer } from "@/lib/supabase/server";
 import { LARMGRANS_DAGAR, larmar, sorteraLag } from "@/lib/coachning";
-import { farCoacha, hamtaLag } from "@/lib/coachning-server";
+import { farCoacha, fokusomraden, hamtaLag } from "@/lib/coachning-server";
+import { Lagvy, type Kortperson } from "./Lagvy";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Coachning — Clicknet Nav" };
@@ -21,16 +22,91 @@ export const metadata = { title: "Coachning — Clicknet Nav" };
  *
  * Den som inte coachar nagon skickas till sitt EGET kort. Coachningsvyn ar inte
  * stangd for saljaren — den ser bara annorlunda ut, precis som /avtal och /fel.
+ *
+ * SIDAN HAMTAR, KLIENTEN RITAR. Sokning och filter ar tillstand som inte hor
+ * hemma i en adress: chefen skriver tre bokstaver, ser fel person och skriver
+ * om. All data ar redan hamtad och redan behorighetsprovad av RLS, sa att lata
+ * `Lagvy` sila i webblasaren ar en vy over ett svar — inte ett andra svar.
  */
 export default async function CoachningSida() {
   const user = await getCurrentUser();
   if (!user?.employee) redirect("/");
   if (!farCoacha(user)) redirect(`/coachning/${user.employee.id}`);
 
-  const lag = sorteraLag(await hamtaLag(), (r) => r.namn);
+  const mig = user.employee.id;
+
+  const lag = sorteraLag(await hamtaLag(new Date(), mig), (r) => r.namn)
+    /**
+     * DET EGNA KORTET LIGGER INTE I RUTNATET.
+     *
+     * Chefen har egna coachningsuppgifter som alla andra, men de hor inte
+     * hemma bland dem hon ska folja upp — och "Ny uppgift" pa sig sjalv mitt i
+     * lagets rutnat ar en knapp som inte betyder nagot dar. Lanken "Min egen
+     * coachning" uppe till hoger gar till samma kort.
+     */
+    .filter((r) => r.employee_id !== mig);
 
   const utanCoachning = lag.filter((r) => larmar(r.dagarSedan)).length;
   const forsenade = lag.reduce((s, r) => s + r.forsenade, 0);
+  const vantar = lag.reduce((s, r) => s + r.vantarPaMig, 0);
+
+  const supabase = await supabaseServer();
+
+  /**
+   * Underlaget till formularen hamtas EN gang for hela rutnatet.
+   *
+   * Kurserna, modulerna och dokumenten ar desamma oavsett vem uppgiften galler,
+   * sa listorna gar ner till klienten en gang och delas av alla kort. Kollegorna
+   * kommer hela och tunnas per kort — man ar aldrig sin egen motpart.
+   */
+  const [{ data: kollegor }, { data: mallar }, { data: mallposter }, fokus] = await Promise.all([
+    supabase
+      .from("employee")
+      .select("id, first_name, last_name")
+      .neq("status", "offboarded")
+      .order("first_name"),
+    supabase.from("coaching_template").select("id, name").eq("active", true).order("name"),
+    supabase.from("coaching_template_item").select("template_id"),
+    fokusomraden(),
+  ]);
+
+  const momentPer = new Map<string, number>();
+  for (const p of mallposter ?? []) momentPer.set(p.template_id, (momentPer.get(p.template_id) ?? 0) + 1);
+
+  const [{ data: kurser }, { data: moduler }, { data: dokument }] = await Promise.all([
+    supabase.from("course").select("id, title").eq("status", "published").order("title"),
+    supabase.from("course_module").select("id, title, kind, course_id").eq("kind", "roleplay"),
+    supabase.from("document").select("id, title, doc_type").eq("status", "published").order("title"),
+  ]);
+
+  /**
+   * Raderna bantas innan de gar over till klienten.
+   *
+   * `Uppgiftsrad` bar hela handelseloggen och beskrivningen i markdown — allt
+   * det behover uppgiftssidan, ingenting av det behover ett kort i ett rutnat.
+   * Skickat rakt igenom hade det blivit hundratals kilobyte i sidans nyttolast
+   * for text som aldrig ritas.
+   */
+  const personer: Kortperson[] = lag.map((p) => ({
+    employee_id: p.employee_id,
+    namn: p.namn,
+    team: p.team,
+    start_date: p.start_date,
+    dagarSedan: p.dagarSedan,
+    forsenade: p.forsenade,
+    vantarPaMig: p.vantarPaMig,
+    fokus: p.fokus,
+    uppgifter: p.uppgifter.map((u) => ({
+      id: u.id,
+      title: u.title,
+      kind: u.kind,
+      lage: u.lage,
+      forsenad: u.forsenad,
+      due_date: u.due_date,
+      fokus: u.fokus,
+      kraverDinBock: u.kraverDinBock,
+    })),
+  }));
 
   return (
     <div className="flex flex-col gap-4 pt-2">
@@ -44,6 +120,7 @@ export default async function CoachningSida() {
               ? `${utanCoachning} har inte coachats på ${LARMGRANS_DAGAR} dagar.`
               : "Alla har coachats den senaste månaden."}
             {forsenade > 0 && ` ${forsenade} uppgift${forsenade === 1 ? "" : "er"} är försenad${forsenade === 1 ? "" : "e"}.`}
+            {vantar > 0 && ` ${vantar} väntar på din kvittering.`}
           </p>
         </div>
         <div className="flex flex-wrap gap-4">
@@ -59,7 +136,7 @@ export default async function CoachningSida() {
         </div>
       </div>
 
-      {lag.length === 0 ? (
+      {personer.length === 0 ? (
         <Card>
           <EmptyState
             rubrik="Ingen att coacha än"
@@ -72,65 +149,16 @@ export default async function CoachningSida() {
           />
         </Card>
       ) : (
-        <Card className="p-0 md:p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[42rem] border-collapse">
-              <thead>
-                <tr className="border-b border-canvas">
-                  <th scope="col" className="px-6 py-3 text-left text-micro uppercase text-ink-500">Person</th>
-                  <th scope="col" className="px-6 py-3 text-left text-micro uppercase text-ink-500">Senast coachad</th>
-                  <th scope="col" className="px-6 py-3 text-left text-micro uppercase text-ink-500">Öppna uppgifter</th>
-                  <th scope="col" className="px-6 py-3 text-left text-micro uppercase text-ink-500">Tränar på</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lag.map((r) => (
-                  <tr key={r.employee_id} className="border-b border-canvas last:border-0">
-                    <td className="px-6 py-3 align-top">
-                      <Link href={`/coachning/${r.employee_id}`} className="font-semibold text-ink-900 hover:underline">
-                        {r.namn}
-                      </Link>
-                    </td>
-                    <td className="px-6 py-3 align-top">
-                      {/* AC-U5.2: statusen sags alltid ocksa med ord, aldrig med
-                          enbart farg. */}
-                      {r.dagarSedan === null ? (
-                        <Badge ton="danger">Aldrig</Badge>
-                      ) : larmar(r.dagarSedan) ? (
-                        <Badge ton="danger">{r.dagarSedan} dagar sedan</Badge>
-                      ) : (
-                        <span className="tnum text-small text-ink-700">
-                          {r.dagarSedan === 0 ? "I dag" : `${r.dagarSedan} dagar sedan`}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-3 align-top">
-                      <span className="tnum text-small text-ink-700">{r.oppna}</span>
-                      {r.forsenade > 0 && (
-                        <span className="ml-2">
-                          <Badge ton="danger">{r.forsenade} försenad{r.forsenade === 1 ? "" : "e"}</Badge>
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-3 align-top">
-                      {r.fokus.length === 0 ? (
-                        <span className="text-small text-ink-500">—</span>
-                      ) : (
-                        <ul className="flex flex-wrap gap-1.5">
-                          {r.fokus.map((f) => (
-                            <li key={f}>
-                              <Badge ton="info">{f}</Badge>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+        <Lagvy
+          personer={personer}
+          kollegor={(kollegor ?? []).map((k) => ({ id: k.id, namn: fullName(k) }))}
+          kurser={kurser ?? []}
+          moduler={moduler ?? []}
+          dokument={dokument ?? []}
+          fokus={fokus}
+          mallar={(mallar ?? []).map((m) => ({ id: m.id, name: m.name, moment: momentPer.get(m.id) ?? 0 }))}
+          idag={new Date().toISOString().slice(0, 10)}
+        />
       )}
     </div>
   );

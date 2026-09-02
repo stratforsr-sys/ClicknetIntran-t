@@ -1,27 +1,36 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Card, CardHeader } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Ikon } from "@/components/shell/Ikon";
 import { getCurrentUser, fullName } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
-import { LAGE_ETIKETT, LAGE_TON, TYP_ETIKETT, dagarKvar } from "@/lib/coachning";
+import { type Handelsetyp } from "@/lib/coachning";
 import {
   arChefFor,
   fokusomraden,
   kvPerOmrade,
   namnkarta,
   samtalFor,
+  tidslinjeFor,
   uppgifterFor,
   type Uppgiftsrad,
 } from "@/lib/coachning-server";
 import { NyUppgift } from "../NyUppgift";
 import { NyttSamtal } from "../NyttSamtal";
 import { TillampaMall } from "../TillampaMall";
+import { Uppgiftskort } from "../Uppgiftskort";
+import { Historik, type Historikpost } from "./Historik";
+import { Tidslinje, type Tidslinjerad } from "./Tidslinje";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Coachningskort — Clicknet Nav" };
+
+/** Vad som star i historikens fotnot, beroende pa hur uppgiften faktiskt slutade. */
+const SLUT_ORD: Partial<Record<Handelsetyp, string>> = {
+  kvitterad: "Kvitterad",
+  avbruten: "Avbruten",
+};
 
 /**
  * Personkortet — den enda platsen dar hela bilden av en persons utveckling
@@ -31,6 +40,12 @@ export const metadata = { title: "Coachningskort — Clicknet Nav" };
  * RLS-policyn utan hela linjen: coachningen far inga privata chefsanteckningar,
  * av samma skal som rubriken syns fore inspelningen i 0024 och som AC-3.13 drog
  * for franvaroreglerna. Den som berors av nagot ska kunna lasa det.
+ *
+ * SIDAN AR OCKSA SALJARENS EGEN VY. Den som inte coachar nagon skickas hit av
+ * `/coachning`, och da ar det har hennes uppgifter bor. Darfor ritas de som
+ * egna kort och inte som rader i en lista: det ar den enda vy en saljare moter
+ * i modulen, och den ska ga att lasa pa en telefon utan att se ut som ett
+ * utdrag ur ett register.
  */
 export default async function PersonkortSida({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -52,20 +67,53 @@ export default async function PersonkortSida({ params }: { params: Promise<{ id:
 
   if (!person) redirect("/coachning");
 
-  const [uppgifter, kv, samtal, fokus] = await Promise.all([
+  const [uppgifter, kv, samtal, fokus, tidslinje] = await Promise.all([
     uppgifterFor(id),
     kvPerOmrade(id),
     samtalFor(id),
     fokusomraden(),
+    tidslinjeFor(id),
   ]);
 
   const oppna = uppgifter.filter((u) => u.lage !== "klar" && u.lage !== "avbruten");
   const avslutade = uppgifter.filter((u) => u.lage === "klar" || u.lage === "avbruten");
 
   const namn = await namnkarta([
-    ...uppgifter.flatMap((u) => [u.created_by, u.partner_id ?? ""]),
+    ...uppgifter.flatMap((u) => [u.created_by, u.partner_id ?? "", ...u.handelser.map((h) => h.by ?? "")]),
     ...samtal.map((s) => s.coach_id),
+    ...tidslinje.map((t) => t.av ?? ""),
   ]);
+
+  /**
+   * Historikens fotnot raknas fram ur den SISTA handelsen, inte ur den forsta
+   * som rakar heta "kvitterad". En uppgift som lamnats in, underkants och
+   * kvitterats om har tva bockar i loggen, och det ar den senare som galler.
+   */
+  const historik: Historikpost[] = avslutade.map((u) => {
+    const slut = sistaAvslut(u);
+    return {
+      id: u.id,
+      title: u.title,
+      kind: u.kind,
+      lage: u.lage,
+      forsenad: u.forsenad,
+      due_date: u.due_date,
+      fokus: u.fokus,
+      avslutatOrd: slut ? (SLUT_ORD[slut.type] ?? "Klar") : "Klar",
+      avslutatDatum: slut ? slut.at.slice(0, 10) : null,
+      avslutatAv: slut?.by ? (namn.get(slut.by) ?? null) : null,
+    };
+  });
+
+  const tidslinjerader: Tidslinjerad[] = tidslinje.map((t) => ({
+    nyckel: t.nyckel,
+    datum: t.at.slice(0, 10),
+    rubrik: t.rubrik,
+    detalj: t.detalj,
+    av: t.av ? (namn.get(t.av) ?? null) : null,
+    href: t.href,
+    ton: t.ton,
+  }));
 
   // Motparter och mottagare for formularet. Hamtas under RLS, sa listan ar redan
   // begransad till dem chefen far se.
@@ -143,9 +191,24 @@ export default async function PersonkortSida({ params }: { params: Promise<{ id:
             }
           />
         ) : (
-          <ul className="flex flex-col gap-2">
+          /* Ett kort per uppgift, inte en rad per uppgift. Det ar sa saljaren
+             moter sin egen coachning, och en lista med fyra rader ger ingen
+             kansla av vad som faktiskt ligger pa bordet. */
+          <ul className="grid gap-3 sm:grid-cols-2">
             {oppna.map((u) => (
-              <Uppgiftskort key={u.id} u={u} namn={namn} />
+              <Uppgiftskort
+                key={u.id}
+                u={{
+                  id: u.id,
+                  title: u.title,
+                  kind: u.kind,
+                  lage: u.lage,
+                  forsenad: u.forsenad,
+                  due_date: u.due_date,
+                  fokus: u.fokus,
+                }}
+                fotnot={u.partner_id ? `Med ${namn.get(u.partner_id) ?? "—"}` : null}
+              />
             ))}
           </ul>
         )}
@@ -197,6 +260,16 @@ export default async function PersonkortSida({ params }: { params: Promise<{ id:
         </Card>
       )}
 
+      {tidslinjerader.length > 0 && (
+        <Card>
+          <CardHeader
+            titel="Tidslinje"
+            beskrivning="Uppgifter, samtal, rollspel, kurser, certifikat och K&V i den ordning det hände."
+          />
+          <Tidslinje rader={tidslinjerader} />
+        </Card>
+      )}
+
       {samtal.length > 0 && (
         <Card>
           <CardHeader titel="Tidigare samtal" />
@@ -227,51 +300,32 @@ export default async function PersonkortSida({ params }: { params: Promise<{ id:
         </Card>
       )}
 
-      {avslutade.length > 0 && (
+      {historik.length > 0 && (
         <Card>
-          <CardHeader titel="Historik" beskrivning="Avslutade och avbrutna uppgifter. Ingenting skrivs över." />
-          <ul className="flex flex-col gap-2">
-            {avslutade.map((u) => (
-              <Uppgiftskort key={u.id} u={u} namn={namn} />
-            ))}
-          </ul>
+          <CardHeader
+            titel="Historik"
+            beskrivning="Avslutade och avbrutna uppgifter. Ingenting skrivs över."
+          />
+          <Historik poster={historik} />
         </Card>
       )}
     </div>
   );
 }
 
-function Uppgiftskort({ u, namn }: { u: Uppgiftsrad; namn: Map<string, string> }) {
-  const kvar = dagarKvar(u.due_date);
-  return (
-    <li>
-      <Link
-        href={`/coachning/uppgift/${u.id}`}
-        className="flex flex-col gap-1.5 rounded-sm bg-canvas px-4 py-3 hover:bg-surface-alt"
-      >
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-semibold text-ink-900">{u.title}</span>
-          <Badge ton={LAGE_TON[u.lage]}>{LAGE_ETIKETT[u.lage]}</Badge>
-          {/* Forsening ar ett EGET marke och inte ett lage — en uppgift kan
-              vara bade underkand och forsenad, och bada sakerna ar sanna. */}
-          {u.forsenad && <Badge ton="danger">Försenad</Badge>}
-        </div>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-small text-ink-500">
-          <span>{TYP_ETIKETT[u.kind]}</span>
-          {u.partner_id && <span>med {namn.get(u.partner_id) ?? "—"}</span>}
-          {u.due_date && (
-            <span className="tnum">
-              {u.due_date}
-              {kvar !== null && !u.forsenad && u.lage !== "klar" && kvar <= 7 && ` · ${kvar} dagar kvar`}
-            </span>
-          )}
-          {u.fokus.map((f) => (
-            <Badge key={f} ton="info">
-              {f}
-            </Badge>
-          ))}
-        </div>
-      </Link>
-    </li>
-  );
+/**
+ * Den handelse som faktiskt STANGDE uppgiften.
+ *
+ * Loggen kan innehalla flera bockar — inlamnad, underkand, inlamnad igen,
+ * kvitterad — och det ar den SENASTE stangande som galler. En sokning efter
+ * forsta `kvitterad` hade hittat en bock som sedan revs.
+ *
+ * De sjalvsanna typerna har ingen stangande handelse alls: laget kommer ur
+ * `certification`, `course_attempt` eller `document_ack`. Da returneras null,
+ * och vyn skriver "Klar" utan att pasta att nagon satte bocken.
+ */
+function sistaAvslut(u: Uppgiftsrad) {
+  const stangande = u.handelser.filter((h) => h.type === "kvitterad" || h.type === "avbruten");
+  if (stangande.length === 0) return null;
+  return stangande.reduce((a, b) => (a.at > b.at ? a : b));
 }

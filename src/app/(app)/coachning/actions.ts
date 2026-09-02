@@ -192,6 +192,15 @@ export async function paborjaUppgift(_prev: CoachState, form: FormData): Promise
       by_employee_id: user.employee!.id,
     });
 
+    /**
+     * LAGVYN MASTE MED, sedan 2026-09-02.
+     *
+     * Fram till dess visade `/coachning` bara ett ANTAL oppna uppgifter per
+     * person, och det antalet andras inte av att nagon paborjar en. Nu star
+     * uppgifternas lage pa personkorten, sa en sida som inte rensas visar
+     * "Ej påbörjad" bredvid en uppgift som ar igang.
+     */
+    revalidatePath("/coachning");
     revalidatePath(`/coachning/uppgift/${id}`);
     revalidatePath(`/coachning/${uppgift.assignee_id}`);
     return { ok: "Markerad som påbörjad." };
@@ -229,6 +238,9 @@ export async function lamnaIn(_prev: CoachState, form: FormData): Promise<CoachS
       note: kommentar,
     });
 
+    // Samma skal som i `paborjaUppgift`, och skarpare har: en inlamning ar
+    // just det lagvyn ska lyfta som "vantar pa din bock".
+    revalidatePath("/coachning");
     revalidatePath(`/coachning/uppgift/${id}`);
     revalidatePath(`/coachning/${uppgift.assignee_id}`);
     return { ok: "Inlämnad. Väntar på kvittering." };

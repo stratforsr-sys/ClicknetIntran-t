@@ -5,6 +5,216 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-02 · Coachningens lagvy blev ett rutnät av personkort
+
+*Branchen `coachning-lagvy`. Ingen migration — allt nedan läses ur tabeller som
+redan finns.*
+
+### Vad som var fel
+
+Lagvyn var en tabell med kolumnen **Öppna uppgifter**, och i den stod en siffra.
+Siffran gick inte att handla på. Den sa att Anna hade tre saker på sig, inte
+vilka tre, så vägen från "något behöver göras" till "jag ser vad det är" gick
+via ett klick in på personkortet — en gång per person.
+
+Det märkliga var att vyn **redan hade svaret**. `hamtaLag()` hämtade varje
+uppgift, varje händelse och varje självsann källa, räknade fram läge och
+försening för allihop, och kastade sedan bort allt utom en `.length`. Den dyra
+delen var gjord. Bara resultatet slängdes.
+
+### Vad som gjordes
+
+`hamtaLag()` returnerar uppgifterna i stället för att räkna dem, och
+`/coachning` ritar dem som **personkort i ett rutnät** — namn, team, dagar sedan
+coachning, de öppna uppgifterna med läge och förfallodag, fokusområdena, och två
+knappar: *Ny uppgift* och *Använd mall*.
+
+**Det kostade noll extra databasfrågor.** Två frågor tillkom totalt, och ingen
+av dem för uppgifterna: `team` för teamnamnet på kortet, och `start_date` som ett
+fält till i en `select` som redan ställdes.
+
+Ordningen på korten är oförändrad — `sorteraLag()` sorterade redan försenade
+först, sedan längst sedan coachad, sist alfabetiskt. Det var rätt ordning redan
+som tabell och är samma ordning nu.
+
+### Två rena funktioner styr vad som står var
+
+Filtret och ordningen inuti ett kort är regler, inte layout, och ligger därför i
+`src/lib/coachning.ts` med prov i `tests/coachning.mjs`:
+
+- **`behoverNagot()`** — tre saker räknas: en frist som gått ut, en inlämning
+  som väntar på min bock, och en person ingen rört på en månad. **Antalet öppna
+  uppgifter räknas inte.** Släpper filtret fram var och en som har något på sig
+  visar det halva laget och slutar betyda något.
+- **`sorteraUppgifter()`** — det jag kan kvittera överst, sedan det försenade,
+  sedan närmaste frist, sist det utan frist. Bocken väger tyngre än förseningen:
+  den är det enda på sidan jag kan göra något åt på tio sekunder.
+
+### Vad som medvetet INTE står på korten
+
+Utredningens avsnitt 7 gäller lika mycket i kortform som i tabellform:
+
+- **Inga K&V-poäng.** Sex tal per kort blir en topplista vare sig någon vill det
+  eller inte. De hör hemma på personkortet, där de gäller en person.
+- **Ingen "klart senaste 30 dagarna"-siffra.** Det är statistikfrågan, och den
+  är inte ställd än.
+- **Ingen kvittering direkt från lagvyn.** En bock kräver att man läst vad som
+  lämnats in. En knapp som går att trycka på utan att öppna inlämningen är
+  precis den genväg utredningen ville stänga.
+
+### Ett fel som fångades innan det byggdes klart
+
+Första utkastet lade "öppna formuläret"-läget i varje kort för sig. Då kan två
+kort vara öppna samtidigt — och `NyUppgift` sätter **fasta id-attribut** på sina
+fält (`title`, `kind`, `due_date` …) för att `<label htmlFor>` ska koppla ihop
+etikett och fält. Två öppna formulär betyder `id="title"` två gånger i samma
+dokument, och då pekar båda etiketterna på det första fältet: en skärmläsare
+läser fel rubrik, och ett klick på etiketten i det nedre kortet flyttar markören
+till det övre.
+
+Läget ligger därför i `Lagvy` och inte i `Personkort`. Bara ett kort kan vara
+öppet, och id:na är unika. Formuläret byggs dessutom först när det öppnas —
+renderat i vartenda kort hade det blivit tusentals `<option>` som ingen behöver.
+
+### Personkortet: säljarens vy, historik med filter, och tidslinjen
+
+Tre ändringar i `/coachning/[id]`:
+
+1. **Öppna uppgifter ritas som egna kort**, inte som rader. Det är den enda vy
+   en säljare möter i modulen, och den ska gå att läsa på en telefon.
+2. **Historiken visar vem som kvitterade och när**, med sökfält, utfall och
+   årtal som filter. `bygg()` hämtar därför `by_employee_id` — en avslutad
+   uppgift utan avsändare är en bock utan ansvarig. Fotnoten räknas fram ur den
+   **sista** stängande händelsen: en uppgift som lämnats in, underkänts och
+   kvitterats om har två bockar i loggen, och det är den senare som gäller. De
+   självsanna typerna får bara ordet "Klar" utan avsändare — ingen människa satte
+   någon bock där, och att hitta på en hade varit att påstå att någon godkänt
+   något hon aldrig tittat på.
+3. **Tidslinjen byggdes** — den som utredningens avsnitt 3.2 beskrev men fas 1
+   hoppade över. Sex källor, ingen ny tabell: coachningshändelser,
+   GROW-samtal, rollspelsinlämningar och bedömningar, kursförsök, certifikat och
+   K&V-samtal, allt i kronologisk ordning.
+
+**RLS avgör vad som kommer ut ur tidslinjen, och det syns.** Tydligast på
+`kv_call`, som enligt 0036 bara är läsbar för personen själv och för dem som
+hanterar provisionen — en teamledare får därför en tidslinje **utan** K&V-samtal.
+Det är rätt svar och inte ett fel. Alternativet hade varit att vidga en
+behörighet för att få en snyggare vy.
+
+`paborjad` står inte i tidslinjen. Att öppna en uppgift är ett klick, inte en
+händelse, och en tidslinje där varje öppnande står med begraver de två rader som
+betyder något.
+
+### Revalideringen behövde skärpas
+
+`paborjaUppgift()` och `lamnaIn()` rensade tidigare bara uppgiftssidan och
+personkortet. Det räckte när lagvyn visade ett antal — antalet öppna uppgifter
+ändras inte av att någon påbörjar en. Nu står lägena på korten, så båda rensar
+även `/coachning`. Annars visar lagvyn "Ej påbörjad" bredvid en uppgift som är
+igång.
+
+---
+
+## 2026-09-02 · Dokumenttypen "Utbildning"
+
+Listan i rutinredaktörens **Dokumenttyp** har fått `training` — "Utbildning" —
+mellan Referenscase och Intresseavvägning.
+
+Utbildningsmaterial har hittills lagts som **Rutin** för att inget bättre val
+fanns. Det gör två saker samtidigt: filtret på `/rutiner` kan inte skilja "så
+här gör vi" från "så här lär du dig", och en förfallen granskning på ett
+utbildningsmaterial ser i listan ut som en rutin som slutat gälla. Det andra är
+det som kostar — förfallomarkeringen är avsiktligt hård för ALLA läsare
+(AC-5.2), och den tappar sin skärpa om den ropar om fel saker.
+
+Typen bär **ingen spärr och inget lagkrav**. `SPARRTYPER` och `LAGKRAVDA_TYPER`
+är orörda, `standard_review_due()` likaså: granskningsdatumet blir tolv månader
+som för allt annat som inte är AFS-krävt.
+
+**Kurserna i `course` är en annan sak.** Det här är ett styrande dokument *om*
+utbildning — ett manus för introduktionspasset, en checklista för upplärningen —
+inte en kurs med moduler, quiz och kvittens. Vill man ha det senare ligger det
+kvar under `/utbildning`.
+
+Ändringen är två rader i `src/lib/dokument.ts` plus migrationen, och ingenting
+mer: hela gränssnittet — rullisten, etiketten i listan, etiketten på
+dokumentkortet, valideringen i `actions.ts` — läser `DOC_TYPES` och
+`DOC_TYPE_LABEL`. Nästa typ som ska in är samma två rader.
+
+### Migrationen bytte nummer efter att den redan körts
+
+Villkoret kördes mot produktion 2026-09-01 som `0043_dokumenttyp_utbildning`,
+från en branch som stod stilla medan main gick vidare. Under tiden tog
+coachningsmodulen 0043 och lösenordstvånget 0044 — det senare ligger fortfarande
+på en obmergad branch men **är kört mot databasen**, så numret var upptaget utan
+att synas i main.
+
+Filen heter därför `0045_dokumenttyp_utbildning.sql`, och raden i
+`schema_migrations` är omdöpt till samma namn. Satserna är omkörbara och
+migrationen bär en självkontroll som läser villkorstexten i gemener, av samma
+skäl som 0043: `pg_get_constraintdef` versaliserar.
+
+**Lärdomen är att ett migrationsnummer är taget när det körts, inte när det
+mergats.** Ligger en branch länge räcker det inte att titta i main för att veta
+vilket nummer som är ledigt — `schema_migrations` är facit.
+
+---
+
+## 2026-09-02 · Typväljaren i nya coachningsuppgiften såg ut att kräva en kurs
+
+Beställaren rapporterade att en ny coachningsuppgift tvingade fram ett kursval,
+och att den enda kursen som fanns var *Introduktion säljare*. Frågan var om
+kurser måste läggas upp först, och om det gick att lägga till ett alternativ
+"utanför kurser" för en fristående uppgift.
+
+**Alternativet fanns redan.** Kurskravet hänger inte på coachningsuppgifter i
+allmänhet utan på uppgiftstypen, via `TYP_KRAVER_KALLA`. Tre av sju typer —
+`uppgift`, `manus`, `medlyssning` — kräver ingen källa alls, och `uppgift` är
+dessutom förvalt när formuläret öppnas. Det som behövdes var alltså ingen ny
+funktion utan att den befintliga gick att se.
+
+### Varför den inte gick att se
+
+Två saker samverkade. `UPPGIFTSTYPER` började med `kurs` och slutade med
+`uppgift`, så det mest låsta alternativet låg överst i listan och det vanligaste
+låg sist bland sju rader. Och ingenting i formuläret sa att **typvalet** var det
+som drog in kursfältet — kursväljaren dök bara upp, obligatorisk, utan att peka
+tillbaka på vad som orsakade den.
+
+Det är värt att notera vad felet *inte* var: datamodellen är rätt. En
+kursuppgift måste peka på en kurs, för dess läge hämtas ur `course_attempt` och
+det finns ingen bock att sätta för hand. Felet låg helt i presentationen.
+
+### Vad som ändrades
+
+- `UPPGIFTSTYPER` ordnas om: de fria typerna först, de källbundna sist.
+  Ordningen är ren presentation — `TYP_ETIKETT` och `TYP_KRAVER_KALLA` slår upp
+  på nyckel, `actions.ts` prövar medlemskap, och `tests/coachning.mjs` prövar
+  antal och nycklar. Inget beteende hänger i ordningen, och det står nu skrivet
+  i kommentaren ovanför listan så nästa läsare slipper kontrollera det igen.
+- Ny härledd export `FRIA_TYPER = UPPGIFTSTYPER.filter(… === null)`.
+- Hjälptext under typväljaren i `NyUppgift.tsx`. Är typen fri står det att den
+  står för sig själv; är den källbunden står det vad den kopplas till **och**
+  vilka typer som inte kräver något. Den senare halvan är hela poängen: den som
+  behöver upplysningen står per definition på fel typ just då.
+
+Hjälptexten räknar upp typerna ur `FRIA_TYPER` i stället för att skriva dem för
+hand, så en ny typ inte kan få texten att lova något annat än fälten gör.
+Ihopsättningen av "A, B och C" är egen och inte `Intl.ListFormat` — den senare
+faller tillbaka på engelskt "and" om bygget kör med skalad ICU, mitt i en svensk
+mening, vilket är precis den sortens detalj ingen upptäcker.
+
+Inga migrationer, ingen ändring i vad som sparas. Befintliga uppgifter påverkas
+inte.
+
+**Merge-anteckning.** Branchen `coachning-fria-typer` grenades från `d792766`
+och hann bli föråldrad medan lösenordskravet nedan landade på `main`. Enda
+krocken var den här filen — båda la en anteckning överst. Koden krockade inte.
+Löstes genom att lägga om de tre ändringarna på `main`s spets i
+`coachning-fria-typer-2` i stället för att tvinga igenom en merge.
+
+---
+
 ## 2026-09-02 · Lösenordskravet är beställarens: åtta tecken och en siffra
 
 Beställaren: *"när någon ska skapa lösenord låt dem skapa vilket lösenord dem
@@ -124,14 +334,53 @@ precis lika illa som förr och inte värre.
 Ordningen är oförändrad i övrigt: lösenordet byts först, flaggan lyfts efteråt.
 Motsatt ordning hade släppt igenom någon vars byte misslyckades.
 
+### Andra halvan samma dag: glappet stängdes i stället för att lappas
+
+`refreshSession()` rättade det hål som syntes. Det andra hållet stod kvar och
+var det farliga: när en chef **sätter** tvånget — återställer någons lösenord —
+säger mellanvaran ja och skickar personen till `/byt-losenord`, medan databasen
+tittar i en token som fortfarande säger nej och lämnar ut data som vanligt. Den
+som redan har en session behåller alltså sin åtkomst mot PostgREST i upp till en
+timme. Det är exakt det hål 0017 byggdes för att stänga, bara tidsbegränsat.
+
+Avläst före rättningen, med handskrivna claims mot produktionsdatabasen —
+Harris, vars konto **är** flaggat, med en token som påstår motsatsen:
+
+    employee 1 rad, document 2 rader
+
+Ingen av de två riktningarna går att rätta genom att skriva bättre på den andra
+sidan. Så länge svaret hämtas ur en kopia som är upp till en timme gammal finns
+glappet kvar. Därför tar **0044** bort kopian: `kraver_losenordsbyte()` läser
+`auth.users` i stället för `request.jwt.claims`. En källa, noll glapp, åt båda
+hållen samtidigt. Efteråt, samma avläsning:
+
+    Edvin  rad=nej  token ljuger JA    employee=1 document=2 team=2
+    Harris rad=JA   token ljuger nej   employee=0 document=0 team=0
+
+Tokenen påverkar inte längre svaret alls.
+
+0017:s argument för att lägga flaggan i `app_metadata` var att svaret följde med
+i tokenen och därför inte kostade någon tabelläsning. Det argumentet höll inte
+hela vägen: frågan nämner ingen kolumn från den yttre raden, så planeraren gör
+den till en InitPlan och kör den en gång per fråga — inte en gång per rad. Det
+är samma sak som redan sker med `has_any_role()` och `current_employee_id()`,
+som gör tyngre jobb och sitter i samma policyer.
+
+Det som är kvar av 0017 är oförändrat: `= 'true'` och ingenting annat, så ett
+saknat fält aldrig kan spärra ut någon, och service role ser fortfarande false
+eftersom den inte har någon `auth.uid()`. Ingen hjälpfunktion och ingen policy
+behövde röras — de anropar funktionen och fick det nya svaret gratis.
+
+`node tests/rls.mjs` grönt efter ändringen (Definition of Done p. 4).
+
 ### Att ta med sig
 
-Allt som ligger i `app_metadata` finns på två ställen med olika färskhet: hos
-Auth, som mellanvaran frågar, och i tokenen, som databasen läser. De går isär i
-upp till en timme. Ändrar man något där måste man fråga vad den gamla tokenen
-gör under tiden — åt båda hållen. Ett tvång som **sätts** har samma glapp: den
-som har en levande session behåller sin åtkomst i databasen tills tokenen
-förnyas.
+En uppgift som skrivs på ett ställe och läses på ett annat är inte en optimering,
+det är två sanningar. `app_metadata` fanns hos Auth, där den skrivs, och i
+tokenen, där den frös fast i en timme — och varje spärr som läste kopian svarade
+på hur världen såg ut när personen senast loggade in. Frågan att ställa nästa
+gång något läggs i en token är inte "vad kostar uppslaget?" utan "vad gör den
+gamla kopian under tiden?".
 
 ---
 

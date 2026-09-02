@@ -165,7 +165,19 @@ export const HANDELSETYPER = [
 ] as const;
 
 export type Handelsetyp = (typeof HANDELSETYPER)[number];
-export type Handelse = { type: Handelsetyp; at: string };
+
+/**
+ * `by` ar VALFRITT, och det ar inte slarv.
+ *
+ * `lageFor()` bryr sig bara om VAD som hant och NAR — vem som gjorde det andrar
+ * aldrig laget. Falten som logiken inte anvander ska darfor inte vara
+ * obligatoriska i den typ logiken tar emot, annars maste varje prov i
+ * tests/coachning.mjs hitta pa en anvandare for att fa provet att kompilera.
+ *
+ * Vyerna som DAR skriver ut vem som kvitterade laser `by` och kraver darfor att
+ * `bygg()` hamtar kolumnen. Det gor den.
+ */
+export type Handelse = { type: Handelsetyp; at: string; by?: string | null };
 
 export type Uppgiftslage = "ej_paborjad" | "pagar" | "inlamnad" | "underkand" | "klar" | "avbruten";
 
@@ -355,6 +367,59 @@ export type Lagrad = {
   forsenade: number;
   oppna: number;
 };
+
+/**
+ * Behover den har personen nagot av mig just nu?
+ *
+ * Filtret i lagvyn stallar samma fraga som ordningen ovan besvarar, och den ska
+ * darfor inte formuleras en andra gang i React. Tre saker raknas, och bara tre:
+ * en frist som gatt ut, en inlamning som ligger och vantar pa min bock, och en
+ * person ingen rort pa en manad.
+ *
+ * ANTALET OPPNA UPPGIFTER RAKNAS INTE. Den som har sju uppgifter som alla loper
+ * pa i tid behover ingenting — och hade listan slappt fram henne hade filtret
+ * visat halva laget och slutat betyda nagot.
+ */
+export function behoverNagot(rad: {
+  dagarSedan: number | null;
+  forsenade: number;
+  vantarPaMig?: number;
+}): boolean {
+  return rad.forsenade > 0 || (rad.vantarPaMig ?? 0) > 0 || larmar(rad.dagarSedan);
+}
+
+/**
+ * Ordningen INUTI ett personkort.
+ *
+ * Overst det som kraver en handling av DEN SOM TITTAR — en inlamning som vantar
+ * pa min bock ar det enda pa hela sidan jag kan gora nagot at pa tio sekunder.
+ * Sedan det som gatt over tiden, sedan narmaste frist. Uppgifter utan frist
+ * sist: de brinner inte, och de ska inte trangas fore nagot som gor det.
+ *
+ * Datumen jamfors som strangar. `due_date` ar en `date` i databasen och kommer
+ * alltid som `YYYY-MM-DD`, ett format dar bokstavsordning ar datumordning — och
+ * en `new Date()` per jamforelse i en sortering som kors for varje kort i laget
+ * ar en kostnad utan motprestation.
+ */
+export type Uppgiftsordning = {
+  kraverDinBock: boolean;
+  forsenad: boolean;
+  due_date: string | null;
+  title: string;
+};
+
+export function sorteraUppgifter<T extends Uppgiftsordning>(rader: T[]): T[] {
+  return [...rader].sort((a, b) => {
+    if (a.kraverDinBock !== b.kraverDinBock) return a.kraverDinBock ? -1 : 1;
+    if (a.forsenad !== b.forsenad) return a.forsenad ? -1 : 1;
+    if (a.due_date !== b.due_date) {
+      if (a.due_date === null) return 1;
+      if (b.due_date === null) return -1;
+      return a.due_date < b.due_date ? -1 : 1;
+    }
+    return a.title.localeCompare(b.title, "sv");
+  });
+}
 
 /**
  * Ordningen i lagvyn ar hela vyns budskap.

@@ -15,6 +15,7 @@ import {
   UPPGIFTSTYPER,
   TYP_KRAVER_KALLA,
   arSjalvsann,
+  behoverNagot,
   bevisSaknas,
   dagarKvar,
   dagarSedanCoachning,
@@ -30,6 +31,7 @@ import {
   planera,
   skrivMall,
   sorteraLag,
+  sorteraUppgifter,
   tolkaMall,
 } from "../src/lib/coachning.ts";
 
@@ -266,6 +268,46 @@ ok("forsenade forst", sorterat[0] === "b", sorterat.join(","));
 ok("aldrig coachad narmast efter", sorterat[1] === "a");
 ok("lika lange sedan sorteras alfabetiskt pa svenska", sorterat[2] === "d" && sorterat[3] === "c");
 ok("sorteringen muterar inte in-listan", lag[0].employee_id === "c");
+
+// =============================================================================
+// Lagvyn blev ett rutnat av personkort 2026-09-02. Tva rena funktioner styr vad
+// som star var: `behoverNagot` avgor filtret, `sorteraUppgifter` ordningen inuti
+// kortet. Bada ar rent radslogik och provas darfor har och inte i React.
+rubrik("Filtret: vem behover nagot");
+
+ok("forsenad uppgift raknas", behoverNagot({ dagarSedan: 2, forsenade: 1 }));
+ok("inlamning som vantar pa min bock raknas", behoverNagot({ dagarSedan: 2, forsenade: 0, vantarPaMig: 1 }));
+ok("aldrig coachad raknas", behoverNagot({ dagarSedan: null, forsenade: 0 }));
+ok("trettio dagar raknas", behoverNagot({ dagarSedan: LARMGRANS_DAGAR, forsenade: 0 }));
+// Den viktigaste raden: antalet oppna uppgifter far INTE gora nagon "behovande".
+// Slapper filtret fram var och en som har nagot pa sig visar det halva laget och
+// slutar betyda nagot.
+ok(
+  "sju uppgifter i tid behover ingenting",
+  !behoverNagot({ dagarSedan: 3, forsenade: 0, oppna: 7, vantarPaMig: 0 }),
+);
+ok("nyss coachad utan forseningar behover ingenting", !behoverNagot({ dagarSedan: 0, forsenade: 0 }));
+
+rubrik("Ordningen inuti ett personkort");
+const kortet = sorteraUppgifter([
+  { title: "Utan frist", kraverDinBock: false, forsenad: false, due_date: null },
+  { title: "Sen frist", kraverDinBock: false, forsenad: false, due_date: "2026-12-01" },
+  { title: "Narmast", kraverDinBock: false, forsenad: false, due_date: "2026-09-05" },
+  { title: "Forsenad", kraverDinBock: false, forsenad: true, due_date: "2026-08-01" },
+  { title: "Min bock", kraverDinBock: true, forsenad: false, due_date: "2026-12-24" },
+]).map((u) => u.title);
+ok("det jag kan kvittera ligger overst", kortet[0] === "Min bock", kortet.join(","));
+ok("forsenat nast", kortet[1] === "Forsenad");
+ok("narmaste frist fore avlagsen", kortet[2] === "Narmast" && kortet[3] === "Sen frist");
+ok("uppgifter utan frist sist", kortet[4] === "Utan frist");
+
+// En forsenad uppgift som ocksa vantar pa min bock ska ligga forst: bocken ar
+// det jag kan gora nagot at pa tio sekunder, forseningen ar det inte.
+const bada = sorteraUppgifter([
+  { title: "Bara forsenad", kraverDinBock: false, forsenad: true, due_date: "2026-01-01" },
+  { title: "Forsenad och min bock", kraverDinBock: true, forsenad: true, due_date: "2026-08-01" },
+]).map((u) => u.title);
+ok("bocken vager tyngre an forseningen", bada[0] === "Forsenad och min bock");
 
 // =============================================================================
 rubrik("Mallar: fristen ar relativ");

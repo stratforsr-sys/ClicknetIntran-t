@@ -11,7 +11,9 @@ import {
   forsenad,
   lageFor,
   larmar,
+  sorteraUppgifter,
   type Handelse,
+  type Handelsetyp,
   type Uppgiftslage,
   type Uppgiftstyp,
   type Kvitterare,
@@ -205,7 +207,10 @@ async function bygg(rader: Rad[], nu: Date): Promise<Uppgiftsrad[]> {
   const ids = rader.map((r) => String(r.id));
 
   const [{ data: handelser }, { data: fokus }] = await Promise.all([
-    supabase.from("coaching_task_event").select("task_id, type, at").in("task_id", ids),
+    // `by_employee_id` hamtas har och inte i en andra fraga fran vyerna:
+    // historiken pa personkortet skriver ut VEM som kvitterade, och den som
+    // hade slagit upp det per rad hade stallt en fraga per uppgift.
+    supabase.from("coaching_task_event").select("task_id, type, at, by_employee_id").in("task_id", ids),
     supabase
       .from("coaching_task_focus")
       .select("task_id, coaching_focus(label)")
@@ -215,7 +220,7 @@ async function bygg(rader: Rad[], nu: Date): Promise<Uppgiftsrad[]> {
   const perUppgift = new Map<string, Handelse[]>();
   for (const h of handelser ?? []) {
     const lista = perUppgift.get(h.task_id) ?? [];
-    lista.push({ type: h.type as Handelse["type"], at: h.at });
+    lista.push({ type: h.type as Handelse["type"], at: h.at, by: h.by_employee_id });
     perUppgift.set(h.task_id, lista);
   }
 
@@ -267,15 +272,35 @@ export async function uppgift(id: string, nu = new Date()): Promise<Uppgiftsrad 
 // Lagvyn
 // -----------------------------------------------------------------------------
 
+/** En oppen uppgift sedd fran lagvyn: raden plus svaret pa "kan JAG kvittera den?". */
+export type Lagsuppgift = Uppgiftsrad & { kraverDinBock: boolean };
+
 export type Lagperson = {
   employee_id: string;
   namn: string;
   team_id: string | null;
+  team: string | null;
   status: string;
+  /** Forvalt startdatum nar en mall tillamps fran lagvyn. */
+  start_date: string | null;
   dagarSedan: number | null;
   forsenade: number;
   oppna: number;
   fokus: string[];
+  /**
+   * DE OPPNA UPPGIFTERNA, INTE BARA ANTALET.
+   *
+   * Fram till 2026-09-02 raknade den har funktionen fram `oppna` och slangde
+   * raderna. Det var ett underligt val: den dyra delen — att hamta varje uppgift,
+   * varje handelse och varje sjalvsann kalla och rakna fram ett lage — gjordes
+   * anda, och sedan kastades allt utom en siffra. Chefen fick klicka in pa var
+   * person for att se vad siffran bestod av.
+   *
+   * Att bara behalla listan kostar noll extra fragor.
+   */
+  uppgifter: Lagsuppgift[];
+  /** Inlamningar som vantar pa just den inloggades bock. */
+  vantarPaMig: number;
 };
 
 /**
@@ -290,18 +315,25 @@ export type Lagperson = {
  */
 const RAKNAS_SOM_COACHNING = ["kvitterad", "underkand", "inlamnad"];
 
-export async function hamtaLag(nu = new Date()): Promise<Lagperson[]> {
+/**
+ * @param betraktareId Den inloggades employee-id. Avgor vilka inlamningar som
+ *   markeras som "vantar pa din bock". Utelamnas den markeras ingen.
+ */
+export async function hamtaLag(nu = new Date(), betraktareId?: string): Promise<Lagperson[]> {
   const supabase = await supabaseServer();
 
-  const [{ data: personal }, { data: uppgifter }, { data: samtal }] = await Promise.all([
+  const [{ data: personal }, { data: uppgifter }, { data: samtal }, { data: lag }] = await Promise.all([
     supabase
       .from("employee")
-      .select("id, first_name, last_name, team_id, status")
+      .select("id, first_name, last_name, team_id, status, start_date")
       .neq("status", "offboarded")
       .order("first_name"),
     supabase.from("coaching_task").select(UPPGIFTSFALT),
     supabase.from("coaching_session").select("employee_id, held_on"),
+    supabase.from("team").select("id, name"),
   ]);
+
+  const teamnamn = new Map((lag ?? []).map((t) => [t.id, t.name as string]));
 
   const byggda = await bygg((uppgifter ?? []) as unknown as Rad[], nu);
 
@@ -324,15 +356,40 @@ export async function hamtaLag(nu = new Date()): Promise<Lagperson[]> {
       ...(samtal ?? []).filter((s) => s.employee_id === p.id).map((s) => ({ at: `${s.held_on}T12:00:00Z` })),
     ];
 
+    /**
+     * `arChef = true` skickas in med flit.
+     *
+     * Lagvyn visar bara personer RLS slappt fram, och de raderna kommer ur
+     * `leads_employee()` eller `can_read_all_employees()` — samma tva villkor
+     * som `arChefFor()` svarar ja pa. Att sla upp chefskapet en gang per person
+     * hade varit en databasfraga per kort for att fa fram ett svar vi redan har.
+     *
+     * Den inloggades EGET kort ritas inte i rutnatet (sidan lyfter ur det), sa
+     * fallet "chef over sig sjalv" uppstar aldrig har.
+     */
+    const uppgifter = sorteraUppgifter(
+      oppna.map((u) => ({
+        ...u,
+        kraverDinBock:
+          u.lage === "inlamnad" &&
+          betraktareId !== undefined &&
+          farKvittera(u, betraktareId, true),
+      })),
+    );
+
     return {
       employee_id: p.id,
       namn: fullName(p),
       team_id: p.team_id,
+      team: p.team_id ? (teamnamn.get(p.team_id) ?? null) : null,
       status: p.status,
+      start_date: p.start_date ?? null,
       dagarSedan: dagarSedanCoachning(rorelser, nu),
       forsenade: oppna.filter((u) => u.forsenad).length,
       oppna: oppna.length,
       fokus: [...new Set(oppna.flatMap((u) => u.fokus))],
+      uppgifter,
+      vantarPaMig: uppgifter.filter((u) => u.kraverDinBock).length,
     };
   });
 }
@@ -407,6 +464,239 @@ export async function samtalFor(employeeId: string): Promise<Samtalsrad[]> {
     .eq("employee_id", employeeId)
     .order("held_on", { ascending: false });
   return (data ?? []) as Samtalsrad[];
+}
+
+// -----------------------------------------------------------------------------
+// Tidslinjen
+// -----------------------------------------------------------------------------
+
+export type Tidslinjeslag = "uppgift" | "samtal" | "rollspel" | "kurs" | "certifikat" | "kv";
+
+export type Tidslinjepost = {
+  nyckel: string;
+  /** ISO-tidpunkt. Sorteringen ar fallande pa den har och ingenting annat. */
+  at: string;
+  slag: Tidslinjeslag;
+  rubrik: string;
+  detalj: string | null;
+  /** employee_id pa den som gjorde det. Namnet slas upp av vyn. */
+  av: string | null;
+  href: string | null;
+  ton: "ok" | "warn" | "danger" | "info" | "neutral";
+};
+
+/** Handelser som INTE hor hemma i tidslinjen, och varfor. */
+const TYST_HANDELSE: Handelsetyp[] = [
+  // "Paborjad" ar ett klick, inte en handelse. Den som oppnar en uppgift har
+  // inte gjort nagot an, och en tidslinje dar varje oppnande star med begraver
+  // de tva rader som faktiskt betyder nagot.
+  "paborjad",
+];
+
+const HANDELSE_RUBRIK: Record<Handelsetyp, string> = {
+  tilldelad: "Fick uppgiften",
+  paborjad: "Påbörjade",
+  inlamnad: "Lämnade in",
+  kvitterad: "Klarade",
+  underkand: "Underkänd på",
+  avbruten: "Avbruten",
+};
+
+const HANDELSE_TON: Record<Handelsetyp, Tidslinjepost["ton"]> = {
+  tilldelad: "neutral",
+  paborjad: "neutral",
+  inlamnad: "warn",
+  kvitterad: "ok",
+  underkand: "danger",
+  avbruten: "neutral",
+};
+
+/**
+ * HELA BILDEN AV EN PERSONS UTVECKLING, I KRONOLOGISK ORDNING.
+ *
+ * Utredningens avsnitt 3.2 beskrev den har vyn men fas 1 byggde den inte:
+ * uppgifterna lag i en lista, samtalen i en annan, certifikaten pa en helt
+ * annan sida. Det gick att se VAD nagon har gjort, men inte NAR — och en
+ * coachningshistorik utan tidsaxel svarar inte pa den enda fraga den finns for:
+ * hande det nagot efter forra samtalet?
+ *
+ * SEX KALLOR, INGEN NY TABELL. Varje post raknas fram ur en rad som redan
+ * finns. Det ar samma linje som resten av modulen: dar sanningen bor nagon
+ * annanstans hamtas den darifran, och en kopia sparas aldrig.
+ *
+ * RLS AVGOR VAD SOM KOMMER UT, och det syns i vyn. Tydligast pa `kv_call`, som
+ * bara ar lasbar for personen sjalv och for dem som hanterar provisionen
+ * (0036) — en teamledare far darfor en tidslinje UTAN K&V-samtal, och det ar
+ * ratt svar och inte ett fel. Alternativet hade varit att vidga
+ * behorigheten for att fa en snyggare vy.
+ */
+export async function tidslinjeFor(employeeId: string, grans = 120): Promise<Tidslinjepost[]> {
+  const supabase = await supabaseServer();
+
+  const [uppgifter, samtal] = await Promise.all([uppgifterFor(employeeId), samtalFor(employeeId)]);
+
+  const [{ data: inlamningar }, { data: forsok }, { data: certifikat }, { data: kvsamtal }] =
+    await Promise.all([
+      supabase
+        .from("roleplay_submission")
+        .select("id, module_id, submitted_at, graded_at, graded_by")
+        .eq("employee_id", employeeId),
+      supabase
+        .from("course_attempt")
+        .select("id, course_id, module_id, score, passed, created_at, graded_by")
+        .eq("employee_id", employeeId),
+      supabase
+        .from("certification")
+        .select("id, course_id, issued_at, expires_at")
+        .eq("employee_id", employeeId),
+      supabase
+        .from("kv_call")
+        .select("id, call_date, customer")
+        .eq("employee_id", employeeId),
+    ]);
+
+  // Rubrikerna slas upp i EN omgang for alla kallor tillsammans. Ett uppslag per
+  // rad hade blivit trettio fragor pa ett kort med tre ars historik.
+  const kursIds = [
+    ...new Set(
+      [...(forsok ?? []).map((f) => f.course_id), ...(certifikat ?? []).map((c) => c.course_id)].filter(
+        Boolean,
+      ) as string[],
+    ),
+  ];
+  const modulIds = [
+    ...new Set(
+      [...(inlamningar ?? []).map((i) => i.module_id), ...(forsok ?? []).map((f) => f.module_id)].filter(
+        Boolean,
+      ) as string[],
+    ),
+  ];
+
+  const [{ data: kurser }, { data: moduler }, { data: poang }] = await Promise.all([
+    supabase.from("course").select("id, title, slug").in("id", kursIds),
+    supabase.from("course_module").select("id, title").in("id", modulIds),
+    supabase
+      .from("kv_score")
+      .select("call_id, points")
+      .in("call_id", (kvsamtal ?? []).map((k) => k.id)),
+  ]);
+
+  const kurs = new Map((kurser ?? []).map((k) => [k.id, { titel: k.title as string, slug: k.slug as string }]));
+  const modul = new Map((moduler ?? []).map((m) => [m.id, m.title as string]));
+
+  const kvPoang = new Map<string, number>();
+  for (const p of poang ?? []) {
+    kvPoang.set(p.call_id, (kvPoang.get(p.call_id) ?? 0) + Number(p.points));
+  }
+
+  const poster: Tidslinjepost[] = [];
+
+  for (const u of uppgifter) {
+    for (const [i, h] of u.handelser.entries()) {
+      if (TYST_HANDELSE.includes(h.type)) continue;
+      poster.push({
+        nyckel: `uppgift:${u.id}:${i}`,
+        at: h.at,
+        slag: "uppgift",
+        rubrik: `${HANDELSE_RUBRIK[h.type]}: ${u.title}`,
+        detalj: TYP_ETIKETT[u.kind],
+        av: h.by ?? null,
+        href: `/coachning/uppgift/${u.id}`,
+        ton: HANDELSE_TON[h.type],
+      });
+    }
+  }
+
+  for (const s of samtal) {
+    poster.push({
+      nyckel: `samtal:${s.id}`,
+      // `held_on` ar ett datum utan klockslag. Middag valjs sa att samtalet
+      // hamnar mitt bland dagens ovriga poster i stallet for att alltid ligga
+      // forst (00:00) eller sist (23:59) — vilket hade sett ut som en ordning.
+      at: `${s.held_on}T12:00:00Z`,
+      slag: "samtal",
+      rubrik: "Coachningssamtal",
+      detalj: s.will_md ? `Slutsats: ${s.will_md}` : null,
+      av: s.coach_id,
+      href: null,
+      ton: "info",
+    });
+  }
+
+  for (const i of inlamningar ?? []) {
+    const titel = modul.get(i.module_id) ?? "Rollspel";
+    poster.push({
+      nyckel: `rollspel-in:${i.id}`,
+      at: i.submitted_at,
+      slag: "rollspel",
+      rubrik: `Lämnade in rollspel: ${titel}`,
+      detalj: null,
+      av: null,
+      href: null,
+      ton: "warn",
+    });
+    if (i.graded_at) {
+      poster.push({
+        nyckel: `rollspel-bed:${i.id}`,
+        at: i.graded_at,
+        slag: "rollspel",
+        rubrik: `Rollspel bedömt: ${titel}`,
+        detalj: null,
+        av: i.graded_by,
+        href: null,
+        ton: "info",
+      });
+    }
+  }
+
+  for (const f of forsok ?? []) {
+    const titel = (f.module_id && modul.get(f.module_id)) || kurs.get(f.course_id)?.titel || "Kurs";
+    poster.push({
+      nyckel: `forsok:${f.id}`,
+      at: f.created_at,
+      slag: "kurs",
+      rubrik: `${f.passed ? "Godkänd" : "Underkänd"}: ${titel}`,
+      detalj: `${f.score} %`,
+      av: f.graded_by,
+      href: kurs.get(f.course_id) ? `/utbildning/${kurs.get(f.course_id)!.slug}` : null,
+      ton: f.passed ? "ok" : "danger",
+    });
+  }
+
+  const nu = new Date();
+  for (const c of certifikat ?? []) {
+    const k = kurs.get(c.course_id);
+    const utgangen = Boolean(c.expires_at && new Date(c.expires_at) <= nu);
+    poster.push({
+      nyckel: `cert:${c.id}`,
+      at: c.issued_at,
+      slag: "certifikat",
+      rubrik: `Certifierad: ${k?.titel ?? "Kurs"}`,
+      // Ett utganget certifikat sags med ord pa den rad det galler. Att bara
+      // rita det gratt hade brutit AC-U5.2, och att utelamna det hade gjort
+      // tidslinjen till en lista over saker som en gang var sanna.
+      detalj: c.expires_at ? (utgangen ? `Gick ut ${c.expires_at.slice(0, 10)}` : `Giltigt till ${c.expires_at.slice(0, 10)}`) : null,
+      av: null,
+      href: k ? `/utbildning/${k.slug}` : null,
+      ton: utgangen ? "warn" : "ok",
+    });
+  }
+
+  for (const k of kvsamtal ?? []) {
+    const summa = kvPoang.get(k.id);
+    poster.push({
+      nyckel: `kv:${k.id}`,
+      at: `${k.call_date}T12:00:00Z`,
+      slag: "kv",
+      rubrik: `K&V-samtal: ${k.customer}`,
+      detalj: summa === undefined ? "Ej bedömt" : `${summa} poäng`,
+      av: null,
+      href: `/kv/${k.id}`,
+      ton: summa === undefined ? "neutral" : "info",
+    });
+  }
+
+  return poster.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)).slice(0, grans);
 }
 
 /** Namnen som vyerna behover for att skriva ut vem som ar vem. */

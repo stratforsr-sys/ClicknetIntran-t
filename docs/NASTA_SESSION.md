@@ -3,7 +3,31 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-02 — nytt lösenordskrav (8 tecken + siffra) på branch, coachningsmodulen fas 1 i produktion, och arbetssättet är ändrat
+**Senast uppdaterad:** 2026-09-02 — coachningens lagvy blev personkort (branch `coachning-lagvy`, väntar på godkännande), nytt lösenordskrav (8 tecken + siffra) på branch, coachningsmodulen fas 1 i produktion, och arbetssättet är ändrat
+
+## Väntar på beställarens godkännande: `coachning-lagvy`
+
+Lagvyn på `/coachning` är inte längre en tabell med en siffra per person, utan
+ett **rutnät av personkort** där varje kort bär personens öppna uppgifter med
+läge och förfallodag, plus knapparna *Ny uppgift* och *Använd mall*. Sökfält och
+tre filter (Alla / Behöver något / Väntar på din bock). Hela laget ritas — ingen
+sidindelning.
+
+Personkortet fick tre saker: öppna uppgifter som **egna kort** (det är säljarens
+enda vy i modulen), **historik med sökfält, utfall och årtal** som visar vem som
+kvitterade och när, och **tidslinjen** ur utredningens avsnitt 3.2 — sex källor,
+ingen ny tabell.
+
+**Ingen migration.** Allt läses ur tabeller som redan finns, och de nya
+uppgifterna på lagvyn kostade noll extra databasfrågor: `hamtaLag()` hämtade dem
+redan och kastade bort dem.
+
+Bakgrunden och de tre besluten om vad som medvetet INTE står på korten
+(K&V-poäng, statistik, kvittering direkt i lagvyn) står i `ARBETSLOGG.md` under
+2026-09-02.
+
+**Statistiken är en öppen fråga.** Beställaren vill ha den men har inte bestämt
+vad som ska mätas. Ingenting är byggt, och ingen platshållarsiffra står i vyn.
 
 ## ARBETSSÄTTET ÄR ÄNDRAT — LÄS DETTA FÖRST
 
@@ -82,12 +106,24 @@ databasen läser den **ur tokenen** — alltså noll rader ur `employee`, allts�
 `employee: null`. Mellanvaran, som frågar Auth direkt, tyckte samtidigt att allt
 var i sin ordning.
 
-`utforBytLosenord` förnyar nu sessionen efter att flaggan lyfts. Hela
-resonemanget i `ARBETSLOGG.md` under 2026-09-02.
+`utforBytLosenord` förnyar nu sessionen efter att flaggan lyfts.
 
-**Regeln att ta med sig:** allt som ligger i `app_metadata` finns på två ställen
-med olika färskhet — hos Auth och i tokenen. Ändra aldrig något där utan att
-fråga vad den gamla tokenen gör under den timme som återstår.
+**Och glappet är stängt, inte bara lappat.** Samma dag visade sig andra hållet
+vara det farliga: när tvånget **sätts** — en chef återställer ett lösenord —
+säger mellanvaran ja medan databasen läser en token som fortfarande säger nej,
+så en levande session behåller sin åtkomst mot PostgREST i upp till en timme.
+Exakt hålet 0017 skulle stänga.
+
+**Migration 0044 är körd i produktion.** `kraver_losenordsbyte()` läser
+`auth.users` i stället för `request.jwt.claims`. En källa i stället för två,
+båda hållen stängda på en gång, ingen policy och ingen hjälpfunktion behövde
+röras. `node tests/rls.mjs` grönt efteråt. Hela resonemanget i `ARBETSLOGG.md`
+under 2026-09-02.
+
+**Regeln att ta med sig:** en uppgift som skrivs på ett ställe och läses på ett
+annat är inte en optimering, det är två sanningar. Lägger du något i en token —
+fråga inte vad uppslaget kostar, fråga vad den gamla kopian gör under timmen som
+återstår.
 
 ## Passet 2026-08-31 i korthet
 
