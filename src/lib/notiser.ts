@@ -29,6 +29,17 @@ export type Notistyp = "arende" | "nyhet" | "rutin" | "kurs" | "franvaro" | "fel
  */
 export const NOTIS_KALLOR = [
   "nyhet",
+  /**
+   * Navets egen slapplista — se `src/navnyheter/`. Skild fran "nyhet" med flit:
+   * "nyhet" ar ett inlagg NAGON SKREV till en malgrupp, "navnyhet" ar en sak
+   * som BYGGDES och som beror den vars roll kan anvanda den. De ligger dessutom
+   * i olika hall — det ena i `news_post`, det andra i koden — och ett delat id
+   * hade kunnat kollidera den dag ett inlagg far en slug som en slapp redan har.
+   *
+   * Delen efter kallan ar postens slug och inte ett uuid, sa den maste halla sig
+   * till `[0-9a-zA-Z-]`. Provet i tests/navnyheter.mjs bevakar det.
+   */
+  "navnyhet",
   "rutin",
   "kurs",
   "arende",
@@ -116,6 +127,20 @@ export type Notis = {
   /** ISO. Nar saken dok upp, inte nar den lastes. */
   tidpunkt: string;
   olast: boolean;
+  /**
+   * Posten forsvinner INTE av att klickas — den kraver att mottagaren sager att
+   * hen last den.
+   *
+   * Regeln i klockan ar annars att ett klick ar att ta hand om posten: rutinen
+   * ligger kvar pa /rutiner anda, sa raden har gjort sitt sa fort man gatt dit.
+   * En slapplista har ingen sadan andra plats — texten ar hela saken, och den
+   * som klickar for att LASA den ska inte samtidigt ha kvitterat att hon last
+   * den. Bekraftelsen sitter i stallet under texten.
+   *
+   * Odefinierat pa allt annat, alltsa oforandrat beteende for de sjutton andra
+   * posterna.
+   */
+  bekraftas?: boolean;
 };
 
 export const TYP_ETIKETT: Record<Notistyp, string> = {

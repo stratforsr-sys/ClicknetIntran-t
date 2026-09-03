@@ -5,6 +5,126 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-03 · Nytt i navet — det som byggs berättar det själv
+
+*Ingen migration. Byggd på branch `nytt-i-navet`, pushad till `main` på beställarens
+begäran utan genomgång i preview.*
+
+### Beställningen
+
+"Allting nytt som byggs ska komma upp som nyhet i ringklockan men också i
+nyheter, sen när man trycker på att man har läst igenom den nyheten så
+försvinner den — detta ska då vara rollbaserat."
+
+### Varför registret ligger i koden och inte i databasen
+
+Det fanns en enklare väg: skriva ett vanligt `news_post` för varje släpp. Den
+valdes bort, och det är hela poängen med bygget.
+
+Ett inlägg i databasen kräver att någon loggar in och skriver det **efter** att
+funktionen är påslagen. Det är precis det steget som inte blir gjort — samma
+resonemang som 0018 förde om en `notification`-tabell: varje producent som måste
+komma ihåg att skriva sin rad ger en tyst lucka, och en funktion som släpps utan
+att någon får veta ser precis ut som en funktion ingen brydde sig om.
+
+Posterna ligger därför i `src/navnyheter/poster.ts` och följer med funktionen in
+i **samma commit**. Registret är byggt som `src/guider/` — en lista, ett uppslag,
+en filterfunktion och ett prov — eftersom den strukturen redan har visat att den
+håller: femton guider har lagts till utan att någon glömts.
+
+### Två sorters nyhet, med flit
+
+`news_post` är ledningens kanal: en människa skriver ett besked till en målgrupp,
+det går att redigera och arkivera, och det står kvar. Släpplistan är navets egen:
+den handlar om vad som byggts, och den **försvinner när mottagaren sagt att hen
+läst den**.
+
+De ritas därför i två sektioner på `/nyheter` och inte i en blandad lista. En
+post som plötsligt försvinner ur en lista där inget annat gör det läses som ett
+fel, inte som städning.
+
+Källorna i klockan är också två: `nyhet` och `navnyhet`. Skilda dels för att de
+kommer ur olika håll, dels för att ett delat id hade kunnat kollidera den dag ett
+inlägg får en slug som ett släpp redan har.
+
+### Ingen ny tabell — kvitteringen fanns redan
+
+`notification_dismissed` (0038) svarar redan på frågan "har du tagit hand om just
+den här?", per person och per post. "Jag har läst det här" skriver exakt samma
+rad som klockans avfärdning skriver, med samma id `navnyhet-<slug>`.
+
+Därför försvinner posten ur klockan **och** ur listan på `/nyheter` i samma
+ögonblick, utan att någon håller två register i takt. Ett eget `navnyhet_read`
+hade varit en andra sanning om samma sak.
+
+### Klockans klick-regel fick sitt första undantag
+
+Regeln sedan 0038 är att ett klick i klockan är att ta hand om posten: rutinen
+ligger kvar på `/rutiner` ändå, så raden har gjort sitt så fort man gått dit.
+
+En släppnyhet har ingen sådan andra plats — **texten är hela saken**. Att klicka
+på den är att gå och läsa, inte att ha läst. Posten bär därför `bekraftas: true`,
+och `Notisklocka.tsx` hoppar över avfärdningen för just den. Fältet är
+odefinierat på de sjutton andra posterna, så deras beteende är oförändrat.
+
+### Rollstyrningen ligger på ett ställe
+
+`navnyheterFor()` är den enda funktion som svarar på "gäller det här mig", och
+både klockan (`notiser-server.ts`) och `/nyheter` frågar den. Två filter hade
+varit två svar på samma fråga, och då pekar klockan förr eller senare på en sida
+där posten inte syns.
+
+Tom rollista betyder alla — samma konvention som guiderna och
+`news_post.audience_roles`, och av samma skäl: det vanliga fallet ska inte kräva
+att man räknar upp varenda roll och kommer ihåg att uppdatera listan den dag en
+nionde roll införs. `behorighet` finns också, för det som rollen inte räcker till
+(lönekostnad kräver `payroll_cost_viewer`); att berätta om en sida man inte
+kommer in på är sämre än tystnad.
+
+### Tre beslut till
+
+**Släpp före anställningen visas inte.** En nyanställd ska möta navet som det ser
+ut idag, inte en kö med besked om saker hen aldrig saknade. Det hen behöver är
+startguiden, som redan startar av sig själv. Regeln gäller bara vad som *puttas*
+ut — den som fått en länk av en kollega får läsa posten ändå, så
+`/nyheter/nav/<slug>` skickar inte med anställningsdatumet till filtret.
+
+**Högst fem släpp i klockan samtidigt.** Klockan har femton platser och de delas
+med ärenden, frånvaro och allt annat som väntar på svar. En vecka med sju släpp
+får inte tränga ut en sjukanmälan. Resten står kvar under Nyheter tills de läses.
+
+**Det lästa raderas inte.** Det flyttas till "Tidigare nytt i navet" längst ned
+på `/nyheter`. Knappen lovar att raden slutar tränga sig fram, inte att beskedet
+är borta — och utan listan hade ett felklick varit oåterkalleligt.
+
+### Registret är seedat med fem poster
+
+De fyra senaste släppen plus funktionen själv. De bär sina riktiga datum, vilket
+betyder att de står i listan **utan prick**: `olast` mäts mot
+`notification_seen.seen_at`, och den som öppnat klockan sedan 31 augusti har
+redan "sett" dem. Ingen får alltså en klocka som plötsligt visar fem nya —
+posterna ligger där att läsa, inte att larma om.
+
+### Att lägga till en post
+
+Skriv den överst i `src/navnyheter/poster.ts`, i samma commit som funktionen, och
+kör `npm run test:navnyheter`. Provet fångar de fyra sätten en post kan bli tyst
+på: en slug som avfärdningen inte släpper igenom (å, ä, ö eller versaler ger en
+knapp som inte gör någonting), två poster med samma slug, en roll som inte finns,
+och ett datum som inte går att tolka.
+
+### Ändrade filer
+
+`src/navnyheter/{typer,poster,index}.ts` (ny), `src/lib/notiser.ts` (källan
+`navnyhet` och fältet `bekraftas`), `src/lib/notiser-server.ts` (producenten),
+`src/components/shell/Notisklocka.tsx` (undantaget från klick-regeln),
+`src/app/(app)/nyheter/page.tsx` (sektionen och den hopfällda historiken),
+`src/app/(app)/nyheter/nav/[slug]/page.tsx` (ny), `src/app/(app)/nyheter/actions.ts`
+(`markeraNavnyhetLast`), `tests/navnyheter.mjs` (ny), `package.json`.
+
+
+---
+
 ## 2026-09-03 (kväll) · Chefen ser dagens läge på startsidan
 
 *Beställt samma dag: "att man ska se vilka som blir sena idag, vilka som har

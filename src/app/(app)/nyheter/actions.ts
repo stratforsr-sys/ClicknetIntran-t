@@ -6,8 +6,48 @@ import { getCurrentUser, hasRole } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { ROLES, type Role } from "@/lib/roles";
 import { sattKvitto } from "@/lib/toast-server";
+import { hamtaNavnyhet } from "@/navnyheter";
+import { notisId } from "@/lib/notiser";
+import { avfardaNotis } from "@/lib/notiser-server";
 
 export type NyhetState = { fel?: string };
+
+/**
+ * "Jag har läst det här" på en post ur navets släpplista (`src/navnyheter/`).
+ *
+ * Skriver samma rad i `notification_dismissed` som klockans avfärdning gör, med
+ * samma id — därför försvinner posten ur klockan OCH ur listan på /nyheter i
+ * samma ögonblick. Ett eget "läst"-register hade varit en andra sanning om
+ * samma sak, och de två hade förr eller senare sagt olika.
+ *
+ * DEN GÄLLER BARA DEN SOM TRYCKER. `employee_id` kommer ur sessionen och aldrig
+ * ur formuläret — allt som exporteras ur en `"use server"`-fil är en publik
+ * ändpunkt, och ett id i formuläret hade låtit vem som helst kvittera i någon
+ * annans namn.
+ *
+ * Ingen behörighetskontroll utöver att slugen finns i registret. Att kvittera
+ * ett besked som ändå inte visas för en själv är verkningslöst: raden döljer en
+ * post i personens EGEN lista, som ingen annan läser.
+ *
+ * INGENTING RADERAS. Posten flyttas till "Tidigare nytt i navet" längst ned på
+ * /nyheter, så den som klickade av misstag hittar tillbaka.
+ */
+export async function markeraNavnyhetLast(form: FormData): Promise<void> {
+  const slug = String(form.get("slug") ?? "");
+  const nyhet = hamtaNavnyhet(slug);
+
+  if (nyhet) {
+    const user = await getCurrentUser();
+    if (user?.employee) {
+      await avfardaNotis(user.employee.id, notisId("navnyhet", nyhet.slug));
+      await sattKvitto({ text: "Läst. Den ligger kvar under Tidigare nytt i navet." });
+    }
+  }
+
+  revalidatePath("/nyheter");
+  revalidatePath(`/nyheter/nav/${slug}`);
+  redirect("/nyheter");
+}
 
 /**
  * AC-11.2. Nyhetsinlagg med malgruppsstyrning.

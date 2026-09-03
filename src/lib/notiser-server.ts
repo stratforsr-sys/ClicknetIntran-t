@@ -7,6 +7,7 @@ import { MAX_NOTISER, notisId, sortera, type Notis } from "@/lib/notiser";
 import { hamtaLage } from "@/lib/sparrar";
 import { stampelfri } from "@/lib/stampelfri";
 import { guiderForRoller } from "@/guider";
+import { MAX_I_KLOCKAN, navnyheterFor, tidpunktFor } from "@/navnyheter";
 import { dagarSedan, personlage, type Progress } from "@/lib/guider";
 import { coachningsnotiser } from "@/lib/coachning-server";
 
@@ -199,6 +200,38 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
       href: `/nyheter/${n.slug}`,
       tidpunkt: n.published_at ?? "",
       olast: arNy(n.published_at),
+    });
+  }
+
+  /**
+   * Navets egen slapplista. Ingen databasfraga alls — posterna star i koden
+   * (`src/navnyheter/`) och malgruppen avgors av rollerna som redan finns i
+   * sessionen.
+   *
+   * Rollfiltret ligger i `navnyheterFor()` och inte har, sa att klockan och
+   * listan pa /nyheter far sitt svar ur samma funktion. Tva filter hade varit
+   * tva svar pa samma fraga, och da hade klockan forr eller senare pekat pa en
+   * sida dar posten inte syntes.
+   *
+   * Femton platser delas med allt annat, sa hogst fem slapp far plats. Resten
+   * star kvar under Nyheter tills de lases.
+   */
+  for (const nn of navnyheterFor({
+    roller: user.roles,
+    behorigheter: user.permissions,
+    anstalldSedan: user.employee.start_date,
+  }).slice(0, MAX_I_KLOCKAN)) {
+    const tidpunkt = tidpunktFor(nn);
+    notiser.push({
+      id: notisId("navnyhet", nn.slug),
+      typ: "nyhet",
+      rubrik: nn.rubrik,
+      detalj: "Nytt i navet",
+      href: `/nyheter/nav/${nn.slug}`,
+      tidpunkt,
+      olast: arNy(tidpunkt),
+      // Klicket tar en till texten. Kvitteringen sitter under den.
+      bekraftas: true,
     });
   }
 

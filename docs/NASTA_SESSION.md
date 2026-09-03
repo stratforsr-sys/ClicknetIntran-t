@@ -3,7 +3,45 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-03 (kväll) — startsidan bär nu chefens dagsläge (sjuka, lediga, sena), personal går att ta bort (0046), riktig logotyp i sidopanelen, coachningens lagvy är personkort i produktion, nytt lösenordskrav (8 tecken + siffra) på branch
+**Senast uppdaterad:** 2026-09-03 (kväll) — släpplistan "Nytt i navet" är påslagen i produktion, startsidan bär nu chefens dagsläge (sjuka, lediga, sena), personal går att ta bort (0046), riktig logotyp i sidopanelen, coachningens lagvy är personkort i produktion, nytt lösenordskrav (8 tecken + siffra) på branch
+
+## ALLT NYTT SOM BYGGS FÅR EN RAD I `src/navnyheter/poster.ts`
+
+*Påslaget i produktion 2026-09-03 (kväll). Beställaren bad att den skulle gå
+direkt till main utan genomgång i preview.*
+
+Beställarens regel: det som byggs ska synas i klockan och under **Nyheter**, och
+försvinna när mottagaren tryckt att hen läst det — rollbaserat.
+
+**Skriv raden i samma commit som funktionen.** Överst i `src/navnyheter/poster.ts`,
+med rubrik, en ingressmening, markdowntext skriven för den som ska använda saken,
+datumet den blir påslagen och rollerna den gäller (tom lista = alla). Kör sedan
+`npm run test:navnyheter`.
+
+Registret är byggt som `src/guider/` och av samma skäl: en rad i koden kan inte
+glömmas bort på vägen till produktion, ett inlägg någon ska skriva i efterhand
+kan det.
+
+**Ingen ny tabell.** Kvitteringen skriver samma rad i `notification_dismissed`
+(0038) som klockans avfärdning, med id `navnyhet-<slug>` — därför försvinner
+posten från båda ytorna samtidigt. Rollfiltret finns bara i `navnyheterFor()`,
+som båda ytorna frågar.
+
+**Tre saker att inte bryta:**
+
+- **Slugen får aldrig ändras när posten är ute.** Den bär både adressen och
+  kvitteringen; en ändrad slug dyker upp igen hos alla som redan läst.
+- **Bara `a–z`, `0–9` och bindestreck i slugen.** `arNotisId()` släpper inte
+  igenom något annat, så en slug med å, ä eller ö ger en knapp som tyst inte gör
+  någonting. Provet fångar det.
+- **`bekraftas: true` är släpplistans undantag från klockans klick-regel.** Allt
+  annat i klockan försvinner av att klickas; en släppnyhet gör det inte, för
+  klicket är att gå och läsa. Rör inte det i `Notisklocka.tsx`.
+
+Registret är seedat med de fyra senaste släppen plus funktionen själv. De bär
+sina riktiga datum och står därför utan prick — de ligger där att läsa, inte att
+larma om. **Dagsläget på startsidan har ännu ingen post** — lägg den när du ändå
+är i filen.
 
 ## Chefens dagsläge ligger på startsidan sedan 2026-09-03 (kväll)
 

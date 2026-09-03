@@ -35,6 +35,13 @@ import { avfardaNotisen, markeraNotiserLasta } from "./notiser-actions";
  * `/rutiner`, den ogjorda kursen pa `/utbildning`, den obeslutade ansokan pa
  * `/franvaro` och pa startsidans "Att gora". Klockan ar pafarten, inte
  * bokforingen.
+ *
+ * UNDANTAGET AR `bekraftas`. Navets slapplista (`src/navnyheter/`) har ingen
+ * andra plats dar posten ligger kvar — texten ar hela saken. Att klicka pa den
+ * ar att GA OCH LASA, inte att ha last, sa den posten star kvar i klockan tills
+ * mottagaren tryckt "Jag har last det har" under texten. Bada knapparna skriver
+ * samma rad i `notification_dismissed`, sa den forsvinner ur klockan och ur
+ * listan pa /nyheter i samma ogonblick.
  */
 export function Notisklocka({ notiser }: { notiser: Notis[] }) {
   const [oppen, setOppen] = useState(false);
@@ -48,9 +55,14 @@ export function Notisklocka({ notiser }: { notiser: Notis[] }) {
   const olasta = synliga.filter((n) => n.olast).length;
 
   function avfarda(n: Notis) {
-    setAvfardade((forra) => new Set(forra).add(n.id));
+    // Panelen stangs alltid — klicket navigerar, och en meny som star kvar over
+    // sidan man just bad om ar bara i vagen.
     setOppen(false);
     setFrysta(null);
+
+    if (n.bekraftas) return;
+
+    setAvfardade((forra) => new Set(forra).add(n.id));
     startOvergang(async () => {
       await avfardaNotisen(n.id);
     });
