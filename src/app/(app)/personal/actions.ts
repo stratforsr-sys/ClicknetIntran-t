@@ -1,7 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import type { Referens } from "@/lib/personal-radering";
 import { getCurrentUser, canManageEmployees, hasRole } from "@/lib/auth";
 import { ROLES, PERMISSIONS, type Role, type Permission } from "@/lib/roles";
 import { nyttTillfalligtLosenord } from "@/lib/losenord";
@@ -177,6 +179,16 @@ export async function aktivera(form: FormData): Promise<void> {
   const db = supabaseAdmin();
   const employeeId = String(form.get("employee_id"));
 
+  // En namnskylt efter en radering ar inte en person att vacka. Kontot,
+  // e-posten och allt annat ar borta — det som star kvar ar bara namnet pa
+  // rader som foretaget maste ha kvar. Se 0046.
+  const { data: skylt } = await db
+    .from("employee")
+    .select("removed_at")
+    .eq("id", employeeId)
+    .maybeSingle();
+  if (skylt?.removed_at) return;
+
   await db.from("employee").update({ status: "active" }).eq("id", employeeId);
   await logga(user.employee!.id, "employee.activated", "employee", employeeId);
   revalidatePath(`/personal/${employeeId}`);
@@ -330,6 +342,111 @@ export async function offboarda(form: FormData): Promise<void> {
   revalidatePath(`/personal/${employeeId}`);
   revalidatePath("/personal");
   revalidatePath("/arenden");
+}
+
+// -----------------------------------------------------------------------------
+// Radering (0046)
+//
+// Offboarding och radering ar tva olika beslut och ska forbli det.
+// Offboarding stanger dorren och behaller allt — det ar ratt for nagon som
+// slutat. Radering tar bort personen — det ar ratt for nagon som lades upp av
+// misstag eller aldrig borjade.
+//
+// Sjalva arbetet ligger i databasen, eftersom det maste ske i EN transaktion
+// och behover sla av de 29 sparrtriggrarna pa vagen. Har ligger bara
+// behorigheten, bekraftelsen och loggen.
+// -----------------------------------------------------------------------------
+
+/**
+ * Vad en radering skulle ta med sig.
+ *
+ * Hamtas nar chefen oppnar rutan, inte nar sidan renderas: svaret kostar en
+ * count-fraga per frammande nyckel mot `employee`, och det ar 132 stycken. Att
+ * betala det pa varje sidvisning for en knapp som nastan aldrig trycks vore
+ * slosaktigt.
+ */
+export async function hamtaReferenser(employeeId: string): Promise<Referens[]> {
+  await kravChef();
+  const { data, error } = await supabaseAdmin().rpc("referenser_till_anstalld", {
+    p_employee: employeeId,
+  });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as Referens[];
+}
+
+export type RaderingState = { fel?: string };
+
+/**
+ * Raderar en anstalld permanent.
+ *
+ * Bekraftelsen ar personens namn, skrivet for hand. Det ar inte en formalitet:
+ * knappen star pa samma sida som "Avsluta anstallning", den gar inte att angra,
+ * och for nagon med data bakom sig tar den med sig stamplingar och kursframsteg.
+ * En ja/nej-ruta hade klickats bort av samma reflex som oppnade den.
+ */
+export async function taBortAnstalld(
+  _prev: RaderingState,
+  form: FormData,
+): Promise<RaderingState> {
+  try {
+    const user = await kravChef();
+    const db = supabaseAdmin();
+
+    const employeeId = String(form.get("employee_id") ?? "");
+    const bekraftelse = String(form.get("bekraftelse") ?? "");
+
+    const { data: a } = await db
+      .from("employee")
+      .select("id, first_name, last_name, email, auth_user_id, removed_at")
+      .eq("id", employeeId)
+      .maybeSingle();
+
+    if (!a) return { fel: "Personen finns inte." };
+    if (a.removed_at) return { fel: "Personen är redan borttagen." };
+
+    // Den som raderar sig sjalv loggas ut mitt i sin egen atgard och kan inte
+    // sta for den i loggen. `kravChef` slapper igenom det, sa det stoppas har.
+    if (a.id === user.employee!.id) return { fel: "Du kan inte ta bort dig själv." };
+
+    const namn = `${a.first_name} ${a.last_name}`.replace(/\s+/g, " ").trim();
+    const skrivet = bekraftelse.replace(/\s+/g, " ").trim();
+    if (skrivet.toLowerCase() !== namn.toLowerCase()) {
+      return { fel: `Skriv ${namn} exakt som det står för att bekräfta.` };
+    }
+
+    const { data: svar, error } = await db.rpc("ta_bort_anstalld", { p_employee: employeeId });
+    if (error) return { fel: `Personen kunde inte tas bort: ${error.message}` };
+
+    // Kontot i auth tas bort EFTERAT. Gors det forst och raderingen sedan
+    // faller star personen kvar i navet utan inloggning och utan nagon rad som
+    // forklarar varfor.
+    if (a.auth_user_id) {
+      await db.auth.admin.deleteUser(a.auth_user_id).catch(() => null);
+    }
+
+    /**
+     * Loggas efter, och med NAMNET I `meta`.
+     *
+     * `audit_log.object_id` ar en text utan frammande nyckel och pekar efter
+     * det har pa ett id som inte langre finns i `employee`. Loggraden ar
+     * alltsa det enda stallet dar det gar att se vem som togs bort, av vem och
+     * vad som foljde med. Star namnet inte har star det ingenstans.
+     */
+    await logga(user.employee!.id, "employee.deleted", "employee", employeeId, {
+      namn,
+      epost: a.email,
+      raderades_helt: svar?.raderades_helt ?? null,
+      kvarvarande: svar?.kvarvarande ?? null,
+      fore: svar?.fore ?? null,
+    });
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Något gick fel." };
+  }
+
+  // Utanfor try: redirect fungerar genom att kasta, och ett catch runt den
+  // hade svalt omdirigeringen och visat ett fel for nagot som lyckades.
+  revalidatePath("/personal");
+  redirect("/personal");
 }
 
 /** AC-1.7: ingen post kan hoppas over utan motivering. */

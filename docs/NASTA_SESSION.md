@@ -3,7 +3,7 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-03 — coachningens lagvy är personkort i produktion, nytt lösenordskrav (8 tecken + siffra) på branch, coachningsmodulen fas 1 i produktion, och arbetssättet är ändrat
+**Senast uppdaterad:** 2026-09-03 — personal går att ta bort (0046), riktig logotyp i sidopanelen, coachningens lagvy är personkort i produktion, nytt lösenordskrav (8 tecken + siffra) på branch, och arbetssättet är ändrat
 
 ## Coachningens lagvy är personkort sedan 2026-09-03
 
@@ -49,6 +49,28 @@ korten (K&V-poäng, statistik, kvittering direkt i lagvyn) står i
 
 **Statistiken är en öppen fråga.** Beställaren vill ha den men har inte bestämt
 vad som ska mätas. Ingenting är byggt, och ingen platshållarsiffra står i vyn.
+
+## Personal går att ta bort sedan 2026-09-03
+
+`/personal/[id]` har ett kort **Ta bort ur navet** under offboardingen. Det är
+inte samma sak som att avsluta anställningen, och offboardingen är fortfarande
+det normala valet — den går att ångra, raderingen gör det inte.
+
+**Databasen avgör hur mycket som försvinner.** Pekar ingenting på personen
+raderas raden helt. Pekar något på den — en signerad kundorder hen godkände, en
+attesterad löneperiod — behålls raden men töms på allt utom namnet, som får
+tillägget `(borttagen anställd)`. Femton `CHECK`-villkor kräver att en godkännare
+finns, så alternativet hade varit att radera en hel månads lönekörning för alla
+andra.
+
+Skylten har status `offboarded` och är därför osynlig i alla 26 väljare utan att
+en rad kod rördes. `removed_at` är det maskinläsbara beskedet.
+
+Kortet är i tre steg: hämta listan, läsa den, skriva personens namn för hand.
+Bakgrunden och de fyra besluten står i `ARBETSLOGG.md` under 2026-09-03.
+
+**Harris Menduza är fortfarande kvar.** Funktionen finns men är inte använd —
+han var fallet som utlöste bygget och går att ta bort helt, utan skylt.
 
 ## ARBETSSÄTTET ÄR ÄNDRAT — LÄS DETTA FÖRST
 

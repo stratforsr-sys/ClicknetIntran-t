@@ -31,6 +31,7 @@ import {
 } from "../actions";
 import { Inloggningskort } from "./Inloggningskort";
 import { Saldon } from "./Saldon";
+import { TaBort } from "./TaBort";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { svensktDatum } from "@/lib/klocka";
 import { saldotArGammalt, type Regelverk } from "@/lib/franvaro";
@@ -52,7 +53,7 @@ export default async function AnstalldSida({ params }: { params: Promise<{ id: s
     .from("employee")
     .select(
       `id, first_name, last_name, email, status, employment_type, start_date,
-       end_date, employee_number, created_at, team_id, manager_id`,
+       end_date, employee_number, created_at, team_id, manager_id, removed_at`,
     )
     .eq("id", id)
     .maybeSingle();
@@ -145,6 +146,8 @@ export default async function AnstalldSida({ params }: { params: Promise<{ id: s
       }));
   }
   const avslutad = a.status === "offboarded";
+  /** 0046: raden ar en namnskylt efter en radering. Inget gar att gora med den. */
+  const borttagen = Boolean(a.removed_at);
 
   /**
    * E7.5: franvarosaldon. Lases med service role for att kunna visa HELA
@@ -480,6 +483,18 @@ export default async function AnstalldSida({ params }: { params: Promise<{ id: s
           </form>
         </Card>
       )}
+
+      {/*
+        0046. Star EFTER offboardingen och inte bredvid: de tva ar inte tva
+        smaker av samma sak. Offboardingen ar det normala och det som ska
+        valjas — den gar att angra, och personen gar att sla upp efterat.
+        Raderingen gar inte att angra alls.
+
+        Den visas aven for en redan avslutad person: det ar precis dar man
+        upptacker att nagon lades upp av misstag. Daremot aldrig for en
+        namnskylt — det finns ingenting kvar att ta bort.
+      */}
+      {farHantera && !borttagen && <TaBort anstalldId={a.id} namn={fullName(a)} />}
 
       {/* E-G5. Systemguiderna star FORE checklistan: de ar det enda i
           onboardingen som personen sjalv driver, och det enda som satter

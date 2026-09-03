@@ -5,6 +5,139 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-03 · Personal går att ta bort, och databasen avgör hur mycket
+
+*Migration `0046_ta_bort_anstalld`. Pushad direkt till `main` på beställarens
+begäran.*
+
+### Vad som var fel
+
+Navet hade ingen raderingsfunktion. `personal/actions.ts` hade nio åtgärder —
+lägg upp, aktivera, ändra roll, ändra behörighet, sätt organisation, offboarda,
+kvittera — och `taBortTeam`, som gäller team. Ingen av dem tog bort en person.
+
+Det var inte en glömska utan ett medvetet val: offboardingen behåller
+historiken, och personkortet säger det rakt ut. Valet är rätt för någon som
+slutat och **fel för någon som lades upp av misstag**. Harris Menduza lades upp
+2026-08-27, loggade aldrig in en enda gång, offboardades 2026-09-03 — och stod
+kvar i personallistan för alltid.
+
+### Två utfall, och det är databasen som avgör vilket
+
+**Pekar ingenting på personen när hens egna rader är borta raderas raden helt.**
+Det är Harris fall: 203 kolumn/tabell-par gicks igenom och bara tre träffade
+honom — hans egen rad, en frånvaropåminnelse och åtta checklistpunkter.
+
+**Pekar något på personen behålls raden men töms.** Kvar står bara namnet, med
+tillägget `(borttagen anställd)`.
+
+Det andra utfallet är inte en halvmesyr utan det enda möjliga, och det upptäcktes
+genom att köra raderingen skarpt mot en riktig post i en transaktion som
+rullades tillbaka. Femton `CHECK`-villkor kopplar ihop "vem gjorde det" med en
+status:
+
+```
+sales_order_provision_satt:  status signerad/betald  ⇒ approved_by IS NOT NULL
+payroll_period_attest:       status attested         ⇒ attested_by IS NOT NULL
+absence_request_beslut:      status godkänd/avslagen ⇒ decided_by IS NOT NULL
+```
+
+Pekaren går alltså inte att nollställa, och raden går inte att radera utan att
+ta med sig en hel månads lönekörning för alla andra. En namnskylt är det enda
+som låter **både** personens uppgifter försvinna **och** företagets bokföring
+stå kvar giltig.
+
+### Skylten är en vanlig `offboarded`-rad, och det sparade 99 ändringar
+
+99 ställen i koden läser ur `employee`. 26 av dem är väljare och nattjobb som
+redan filtrerar bort `offboarded`; resten filtrerar positivt på `active` eller
+`onboarding`. En skylt med status `offboarded` är därför osynlig i varenda
+väljare från dag ett **utan att en rad kod rörs**. Ett nytt statusvärde hade
+krävt att alla 26 hittades och ändrades, och att den som glömdes upptäcktes av
+en användare.
+
+**Tillägget skrivs in i `last_name`**, inte i en hjälpfunktion. Bara en bråkdel
+av de 99 ställena går via `fullName()` — resten skarvar ihop `first_name` och
+`last_name` för hand. Ett tillägg som bara syns i hjälpfunktionen hade synts på
+vissa sidor och inte på andra, vilket är värre än inget tillägg alls.
+`removed_at` finns för logiken, och det är den `aktivera` frågar för att vägra
+väcka en skylt till liv.
+
+### Vad som raderas, och varför listan inte står i koden
+
+Både förhandsvisningen och raderingen härleds ur `pg_constraint`. 132 främmande
+nycklar pekar på `employee(id)` i dag; en handskriven lista hade slutat stämma
+vid nästa migration, och den hade slutat stämma **tyst**.
+
+`on delete cascade` är schemats egen markering av "den här raden dör med
+personen" — roller, behörigheter, notiser, kursframsteg, guideframsteg,
+dokumentkvittenser, kalenderflöden, certifikat. Till den läggs `time_event` och
+`work_time_journal`: de är inte kaskader utan orubbliga med flit, men de är
+personens egna och beställaren har uttryckligen sagt att de ska med.
+
+Allt annat behålls och pekar vidare på skylten. Order, löneperioder, provision,
+lönerader, intäkter, dokument, nyheter, ärenden, coachning och rekrytering är
+företagets rader, inte personens.
+
+### 29 spärrtriggrar sa nej, och de har rätt i allt utom det här
+
+Första provkörningen dog på `Ett meddelande kan varken ändras eller tas bort`.
+`time_event_orubblig`, `payroll_row_last`, `case_message_orubblig` och 26 till
+finns för att ingen ska kunna skriva om historien i efterhand.
+
+En radering av en hel person är inte en omskrivning — det är ett medvetet,
+loggat och namnbekräftat beslut. Skillnaden är avsikten, och den kan en trigger
+inte se. Funktionen slår därför av dem inne i transaktionen och på igen efteråt.
+DDL är transaktionell i Postgres, så det finns inget läge där de blir kvar
+avslagna; provet kontrollerar det uttryckligen.
+
+**`disable trigger user` och inte `session_replication_role = replica`.** Den
+senare slår av även de främmande nycklarnas egna triggrar, och då hade
+`delete from employee` lyckats med rader kvar som pekar på personen. Det är
+precis den kontrollen hela funktionen vilar på.
+
+### Gränssnittet
+
+Kortet står **efter** offboardingen och inte bredvid: de två är inte två smaker
+av samma sak. Offboardingen är det normala och går att ångra. Raderingen går
+inte att ångra alls.
+
+Tre steg. En knapp som bara **hämtar** svaret på "vad skulle det här ta med
+sig?" — inget raderas. Sedan listan, i två högar: vad som försvinner och vad som
+står kvar med skylten. Sist personens namn skrivet för hand.
+
+Hämtningen är ett eget klick för att svaret kostar en `count`-fråga per främmande
+nyckel — 132 stycken. Billigt en gång, slösaktigt på varje sidvisning.
+
+Kortet visas även för en redan avslutad person — det är precis där man upptäcker
+att någon lades upp av misstag — men aldrig för en skylt.
+
+### Vad som inte får hända
+
+`ta_bort_anstalld` och `referenser_till_anstalld` är `security definer`, går
+förbi RLS och slår av spärrtriggrar. Den som får anropa dem får radera vem som
+helst. Granten följer därför 0027 och tar bort **PUBLIC**, inte bara `anon` och
+`authenticated` — kontrollerat i efterhand: båda rollerna nekas på alla tre
+funktionerna.
+
+Server action:en vägrar dessutom radera den inloggade själv. `kravChef` släpper
+igenom det, och den som raderar sig själv loggas ut mitt i sin egen åtgärd och
+kan inte stå för den i loggen.
+
+**Raderingen loggas efteråt, med namnet i `meta`.** `audit_log.object_id` är en
+text utan främmande nyckel och pekar efter raderingen på ett id som inte längre
+finns. Loggraden är det enda stället där det går att se vem som togs bort, av
+vem och vad som följde med — står namnet inte där står det ingenstans.
+
+### Prov
+
+`tests/radering-db.mjs`, 18 kontroller mot den riktiga databasen i en
+transaktion som rullas tillbaka. Provet kör mot skarpt schema med flit: hela
+funktionen är en fråga till `pg_constraint`, och en attrapp hade provat
+attrappens schema.
+
+---
+
 ## 2026-09-03 · Riktig logotyp i sidopanelen, och en ikon i webbläsarfliken
 
 *Branchen `logotyp`. Ingen migration, ingen ny kod som körs — fyra bildfiler och
