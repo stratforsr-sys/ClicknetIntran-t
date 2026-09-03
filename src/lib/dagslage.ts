@@ -6,7 +6,7 @@
  * ===========================================================================
  * TRE SAKER SOM INTE FAR GLIDA, FOR DE AR LOFTEN TILL PERSONALEN.
  *
- * 1. DET HAR AR EN BEMANNINGSVY, INTE EN ANKLAGELSE. Raden "Inte instampld"
+ * 1. DET HAR AR EN BEMANNINGSVY, INTE EN ANKLAGELSE. Raden "Inte instamplad"
  *    betyder att navet inte har sett nagon instampling an — ingenting mer. Den
  *    ar INTE oregistrerad franvaro (`absence_reminder`), den skapar ingen rad
  *    nagonstans, och ingen konsekvens hanger i den. Konsekvenstrappan har sin
@@ -231,7 +231,7 @@ export function dagensLage(u: {
         ton: "warn",
         detalj: `Stämplade in ${svenskKlocka(sen.ankom)} · schemat började ${sen.schemalagd}`,
         minuter: sen.minuter,
-        href: "/tid",
+        href: `/personal/${p.id}`,
       });
       continue;
     }
@@ -250,7 +250,10 @@ export function dagensLage(u: {
       ton: "accent",
       detalj: `Skulle börjat ${schema.start_time.slice(0, 5)} · ingen stämpling än`,
       minuter: minuterNu - minutOnDagen(schema.start_time),
-      href: "/tid",
+      // Personkortet, inte /tid. /tid ar den INLOGGADES egen stampelvy och
+      // sager ingenting om den som saknas; personkortet ar dar chefen hittar
+      // vem det ar och hur hen nas.
+      href: `/personal/${p.id}`,
     });
   }
 
