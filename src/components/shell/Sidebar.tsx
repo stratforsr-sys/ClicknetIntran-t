@@ -153,18 +153,22 @@ export function Sidebar({
               alt=""
               width={157}
               height={200}
-              className="hidden h-8 w-auto shrink-0 lg:block"
+              className="hidden h-9 w-auto shrink-0 lg:block"
             />
           )}
           {/* width/height ar bildens riktiga matt. De styr ingenting visuellt
-              — h-7 gor det — men de ger webblasaren proportionen i forvag, sa
-              menyn inte hoppar till nar filen har laddat. */}
+              — h-8 gor det — men de ger webblasaren proportionen i forvag, sa
+              menyn inte hoppar till nar filen har laddat.
+
+              h-8 ger ordbilden 139 px bredd. Med gap, "Nav" och lankens p-2
+              blir lockupen 203 px i en panel som har 224 px innanfor sin
+              padding — det ar sa stort den kan bli utan att bli trang. */}
           <img
             src="/clicknet.png"
             alt=""
             width={868}
             height={200}
-            className={cn("h-7 w-auto shrink-0", doljText)}
+            className={cn("h-8 w-auto shrink-0", doljText)}
           />
           <span
             className={cn(

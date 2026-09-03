@@ -50,13 +50,18 @@ logotypen byts ut.
 
 ### Vad som gjordes i panelen
 
-Rutan med `C` och texten `Clicknet Nav` är utbytta mot ordbilden i `h-7` plus
+Rutan med `C` och texten `Clicknet Nav` är utbytta mot ordbilden i `h-8` plus
 ordet **`Nav`** som text bredvid. Uppdelningen är avsiktlig: ordbilden är
 varumärket, `Nav` är produktnamnet, och produktnamnet ska gå att ändra utan att
 någon öppnar en bildredigerare.
 
-Ihopfälld panel visar bara markörsymbolen i `h-8`, på samma villkor som förut
+Ihopfälld panel visar bara markörsymbolen i `h-9`, på samma villkor som förut
 (`lg:`-brytpunkten — utdragslådan under 1024 px visar alltid hela ordbilden).
+
+**Storlekarna är provade, inte gissade.** `h-7`/`h-8` var första förslaget och
+såg blygt ut bredvid menyraderna, som är 44 px höga. `h-8` ger ordbilden 139 px
+bredd, och hela lockupen 203 px i en panel som har 224 px innanför sin padding
+— så stort den kan bli utan att bli trång.
 
 Två detaljer som lätt hade blivit fel:
 
