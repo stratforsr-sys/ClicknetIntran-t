@@ -123,7 +123,18 @@ export function Sidebar({
           hopfalld && "lg:w-[4.5rem] lg:px-2",
         )}
       >
-        {/* AC-U1.2/1.3: logotypen ar en <a> till /, fungerar med mittenklick. */}
+        {/*
+          AC-U1.2/1.3: logotypen ar en <a> till /, fungerar med mittenklick.
+
+          Ordbilden ar `clicknet-vit` fran clicknet.se — den variant som ar
+          ritad for morka ytor, och darfor den enda som fungerar mot brand-900.
+          Den ritas oforandrad. "Nav" star kvar som TEXT bredvid den: det ar
+          produktnamnet, inte varumarket, och da ska det ga att andra utan att
+          nagon oppnar en bildredigerare.
+
+          Bilderna har `alt=""` med flit. Lanken bar redan hela namnet i sitt
+          aria-label, och en alt-text hade last upp varumarket en gang till.
+        */}
         <Link
           href="/"
           aria-label="Clicknet Nav — till startsidan"
@@ -132,11 +143,36 @@ export function Sidebar({
             hopfalld && "lg:justify-center lg:px-0",
           )}
         >
-          <span className="grid size-8 shrink-0 place-items-center rounded-xs bg-brand-500 text-brand-950 font-display text-h2 leading-none">
-            C
-          </span>
-          <span className={cn("font-display text-h2 whitespace-nowrap text-ink-inv", doljText)}>
-            Clicknet <span className="text-brand-500">Nav</span>
+          {/* Hopfalld ryms bara markorsymbolen. Den ligger i en EGEN fil och
+              inte som ett utsnitt av ordbilden: ett utsnitt bygger pa exakta
+              pixelmatt i en bild vi inte ager, och gar sonder tyst nasta gang
+              logotypen byts ut. */}
+          {hopfalld && (
+            <img
+              src="/clicknet-symbol.png"
+              alt=""
+              width={157}
+              height={200}
+              className="hidden h-8 w-auto shrink-0 lg:block"
+            />
+          )}
+          {/* width/height ar bildens riktiga matt. De styr ingenting visuellt
+              — h-7 gor det — men de ger webblasaren proportionen i forvag, sa
+              menyn inte hoppar till nar filen har laddat. */}
+          <img
+            src="/clicknet.png"
+            alt=""
+            width={868}
+            height={200}
+            className={cn("h-7 w-auto shrink-0", doljText)}
+          />
+          <span
+            className={cn(
+              "font-display text-h2 leading-none whitespace-nowrap text-ink-inv",
+              doljText,
+            )}
+          >
+            Nav
           </span>
         </Link>
 

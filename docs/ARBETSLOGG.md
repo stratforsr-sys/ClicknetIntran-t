@@ -5,6 +5,78 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-03 · Riktig logotyp i sidopanelen, och en ikon i webbläsarfliken
+
+*Branchen `logotyp`. Ingen migration, ingen ny kod som körs — fyra bildfiler och
+ett utbytt block i `Sidebar.tsx`.*
+
+### Vad som var fel
+
+Två tomrum, av samma orsak: **repot hade inte en enda bildfil.** Ingen `public/`,
+ingen ikon.
+
+- **Sidopanelen** ritade en grön ruta med bokstaven `C` i. Det var en
+  platshållare från första skissen som ingen bytt ut.
+- **Webbläsarfliken** var tom. Utan `icon`-filen faller Next tillbaka på
+  `/favicon.ico`, den fanns inte heller, och Chrome ritade sin gråa jordglob —
+  i fliken, i bokmärkena och i flikväljaren. Navet såg ut som vilken
+  namnlös sida som helst bland tjugo öppna flikar.
+
+### Varifrån bilden kommer
+
+`clicknet-vit` från clicknet.se — företagets egen logotyp i den variant som är
+ritad för mörka ytor. Det är den enda som fungerar mot `brand-900`: ordbildens
+`Click` är ljusgrå `#DADADA` och `neT` är `#00A2A2`. Den ritas **oförändrad**.
+Ingen omfärgning, ingen egen tolkning av märket.
+
+Fyra filer föll ut ur originalet (1024 × 250 px), alla nedskalade till 200 px
+höjd och färgreducerade — tillsammans 26 kB:
+
+| Fil | Vad | Var |
+| --- | --- | --- |
+| `public/clicknet.png` | Hela ordbilden | Sidopanelen, utfälld |
+| `public/clicknet-symbol.png` | Bara markörsymbolen | Sidopanelen, ihopfälld |
+| `src/app/icon.png` | Symbolen, 256 × 256, genomskinlig | Fliken, bokmärken |
+| `src/app/apple-icon.png` | Symbolen på `brand-900`, 180 × 180 | Hemskärm i iOS |
+
+**Apple-ikonen har bakgrund med flit.** iOS lägger svart bakom genomskinliga
+bildpunkter, och en genomskinlig ikon hade blivit ett svart plåster på
+hemskärmen. Övriga ikoner ska vara genomskinliga — märket är läsbart mot både
+ljus och mörk flikrad.
+
+**Symbolen är en egen fil, inte ett utsnitt av ordbilden.** Ett utsnitt bygger på
+exakta pixelmått i en bild vi inte äger, och går sönder tyst nästa gång
+logotypen byts ut.
+
+### Vad som gjordes i panelen
+
+Rutan med `C` och texten `Clicknet Nav` är utbytta mot ordbilden i `h-7` plus
+ordet **`Nav`** som text bredvid. Uppdelningen är avsiktlig: ordbilden är
+varumärket, `Nav` är produktnamnet, och produktnamnet ska gå att ändra utan att
+någon öppnar en bildredigerare.
+
+Ihopfälld panel visar bara markörsymbolen i `h-8`, på samma villkor som förut
+(`lg:`-brytpunkten — utdragslådan under 1024 px visar alltid hela ordbilden).
+
+Två detaljer som lätt hade blivit fel:
+
+- Bilderna har **`alt=""`**. Länken bär redan hela namnet i sitt `aria-label`,
+  och en alt-text hade läst upp varumärket en gång till för den som lyssnar.
+- Bilderna har **`width`/`height` satta till filernas riktiga mått**. De styr
+  ingenting visuellt — `h-7` gör det — men de ger webbläsaren proportionen i
+  förväg, så menyn inte hoppar till när filen har laddat.
+
+### Vad som inte behövde röras
+
+CSP:n tillåter redan `img-src 'self'`, och `middleware.ts` undantar redan
+`.png` från sessionskontrollen. Ikonen når därför även den som inte är inloggad
+— vilket är precis vad `/logga-in` behöver.
+
+`/logga-in` har fortfarande ingen logotyp. Det är medvetet utanför den här
+omgången och står kvar som en öppen fråga.
+
+---
+
 ## 2026-09-02 · Coachningens lagvy blev ett rutnät av personkort
 
 *Branchen `coachning-lagvy`. Ingen migration — allt nedan läses ur tabeller som
