@@ -39,6 +39,8 @@ import {
   tillatna,
   type Handelse,
 } from "@/lib/tid";
+import { dagssammanfattning } from "@/lib/dagslage";
+import { hamtaDagsbild } from "@/lib/dagslage-server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { hamtaDrift } from "@/lib/jobb/drift-server";
 import { DRIFT_ETIKETT } from "@/lib/jobb/larm";
@@ -113,6 +115,17 @@ export default async function Startsida() {
   const serDrift = hasRole(user, "sales_manager", "ceo", "admin");
 
   /**
+   * DAGSBILDEN — vem som ar sjuk, ledig eller inte instamplad i dag.
+   *
+   * Kretsen ar INTE `serPersonal`, och det ar avsiktligt. `absence_request` och
+   * `sick_report` slapper inte in `admin` (0019, 0020), sa en admin hade fatt
+   * ett kort dar personalen ser fulltalig ut aven en dag halva bolaget ar
+   * sjukt. Ett kort som ljuger tyst ar varre an inget kort. Samma tre roller
+   * som slapps in pa /franvaro/planering slapps in har.
+   */
+  const serDagslage = hasRole(user, "sales_manager", "ceo", "team_lead");
+
+  /**
    * ===========================================================================
    * EN VAG, INTE SEX.
    *
@@ -159,6 +172,7 @@ export default async function Startsida() {
     { count: antalOnboarding },
     drift,
     coachning,
+    dagsbild,
   ] = await Promise.all([
     // RLS avgor vilka dokument som syns: audience_roles filtreras redan i
     // policyn, sa listan nedan behover inte upprepa den kontrollen.
@@ -324,6 +338,17 @@ export default async function Startsida() {
      * atminstone parallellt med startsidans ovriga arton.
      */
     uppgifterFor(user.employee.id, nu),
+
+    /**
+     * CHEFENS DAGSBILD. Sju fragor inuti en post, av samma skal som
+     * coachningen ovan: de hor ihop, de loper parallellt med varandra, och som
+     * EN post loper de dessutom parallellt med startsidans ovriga fragor.
+     *
+     * Villkoret ar inte ett andra rollfilter — kretsen kan inte bli vidare an
+     * RLS. Skalet ar att saljaren annars stallt sju fragor per sidvisning for
+     * ett svar som ar kant i forvag: noll rader, inget kort.
+     */
+    serDagslage ? hamtaDagsbild(supabase, nu, sparr.stampling) : Promise.resolve(null),
   ]);
 
   // ---------------------------------------------------------------------------
@@ -703,6 +728,83 @@ export default async function Startsida() {
   ) : null;
 
   /**
+   * ===========================================================================
+   * DAGENS LAGE. VEM SOM AR SJUK, LEDIG ELLER INTE INSTAMPLD — I DAG.
+   *
+   * Bestallt 2026-09-03: chefen ska se pa startsidan vilka som blir sena, vilka
+   * som lagt in franvaro och vilka som ar sjuka.
+   *
+   * KORTET RITAS AVEN NAR DET AR TOMT, till skillnad fran arendekortet nedan.
+   * Det ar ett medvetet undantag fran regeln om rutor man slutar lasa. "Alla ar
+   * pa plats" ar ett SVAR pa chefens fraga, inte franvaron av ett svar — och
+   * gomdes kortet nar listan var tom skulle en tom skarm betyda tva saker:
+   * fulltalig personal, eller nagot som slutat fungera.
+   *
+   * RADEN "INTE INSTAMPLAD" AR INGEN ANKLAGELSE, och tonen ar vald efter det.
+   * Den betyder att navet inte sett nagon instampling an — ingenting mer. Den
+   * ar inte oregistrerad franvaro (`absence_reminder`), skriver ingen rad och
+   * bar ingen konsekvens. Konsekvenstrappan gar sin egen vag genom nattjobbet,
+   * dar den anstallda far ett dygn pa sig att registrera sin egen franvaro
+   * innan chefen ser luckan (AC-3.19). Den vagen ror det har kortet inte.
+   *
+   * SJUKDOMEN STAR HAR FOR ATT DEN REDAN STAR PA /franvaro/sjuk for exakt samma
+   * krets — RLS ar densamma i bada. Kortet flyttar ingen grans, det flyttar en
+   * fraga chefen anda staller varje morgon till den sida hen anda oppnar.
+   * Diagnoser finns inte i navet alls (K35), sa det finns ingenting att lacka
+   * utover att nagon ar franvarande.
+   * ===========================================================================
+   */
+  const dagslagekort =
+    dagsbild !== null ? (
+      <Card>
+        <CardHeader
+          titel="Dagens läge"
+          beskrivning={`${idagSvenskt} · ${dagssammanfattning(dagsbild)}`}
+          handling={
+            <ButtonLink href="/franvaro" size="sm" variant="diskret">
+              Frånvaro
+            </ButtonLink>
+          }
+        />
+        {dagsbild.rader.length === 0 ? (
+          <EmptyState
+            rubrik="Alla är på plats"
+            text={
+              dagsbild.senRaknad
+                ? "Ingen sjukanmälan, ingen godkänd ledighet och ingen utebliven instämpling i dag."
+                : "Ingen sjukanmälan och ingen godkänd ledighet i dag. Stämplingen är avstängd, så sena ankomster kan inte visas."
+            }
+            handling={
+              <ButtonLink href="/franvaro/sjuk" size="sm" variant="sekundar">
+                Sjukfrånvaro
+              </ButtonLink>
+            }
+          />
+        ) : (
+          <ul className="flex flex-col">
+            {dagsbild.rader.map((r) => (
+              <Uppgift
+                key={`dagslage-${r.employee_id}`}
+                href={r.href}
+                titel={r.namn}
+                detalj={r.detalj}
+                markering={<Badge ton={r.ton}>{r.etikett}</Badge>}
+              />
+            ))}
+          </ul>
+        )}
+        {/* Star bara nar det behovs. En tom lista kan betyda "alla ar har"
+            eller "stamplingen ar av", och skillnaden far inte gissas. */}
+        {!dagsbild.senRaknad && dagsbild.rader.length > 0 && (
+          <p className="mt-4 text-small text-ink-500">
+            Stämplingen är avstängd. Sena ankomster kan inte visas — listan bär bara registrerad
+            frånvaro.
+          </p>
+        )}
+      </Card>
+    ) : null;
+
+  /**
    * ARENDEKORTET SYNS BARA NAR DET HAR NAGOT ATT SAGA.
    *
    * Bestallarens val 2026-08-23. Ett kort som varje dag sager "inga arenden"
@@ -815,6 +917,12 @@ export default async function Startsida() {
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="flex flex-col gap-4 lg:col-span-2">
           {kokort}
+          {/* Efter kon och fore "Att gora". Kon ar det som vantar pa ett
+              BESLUT av chefen; dagsbilden ar det hen behover veta for att
+              bemanna dagen, och den fragan ar farsk bara pa morgonen. Bada
+              ligger over den egna att-gora-listan, av samma skal som §12 Q9
+              lagger chefens koer forst. */}
+          {dagslagekort}
           {attGora}
         </div>
         <div className="flex flex-col gap-4">
