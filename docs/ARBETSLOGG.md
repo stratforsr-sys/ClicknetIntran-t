@@ -5,6 +5,106 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-03 (kväll) · Chefen ser dagens läge på startsidan
+
+*Beställt samma dag: "att man ska se vilka som blir sena idag, vilka som har
+lagt till frånvaro, är sjuka osv för chefer." Byggt på branch
+`dagslage-pa-startsidan` och mergat till `main` på beställarens begäran.*
+
+### Vad som saknades
+
+Uppgifterna fanns allihop, men på tre olika sidor. `/franvaro/sjuk` hade
+sjukanmälningarna, `/franvaro` ledigheterna, `/tid` stämplingarna — och sen
+ankomst fanns bara som `late_arrival`, en tabell **nattjobbet** skriver. Chefens
+fråga klockan halv nio på morgonen är en enda: *vem saknas i dag?* Svaret krävde
+tre sidladdningar, och det fjärde svaret — vem som inte kommit än — gick inte
+att få alls förrän dagen efter.
+
+### Sena ankomster räknas nu LIVE, inte ur nattjobbets tabell
+
+`late_arrival` fylls i natten efter. Den duger till uppföljning och till
+lönerapporten, men den kan per definition inte svara på "vilka blir sena i dag".
+Kortet räknar därför om samma bedömning i minnet, med `senAnkomst()` ur
+`narvaro.ts` — samma funktion nattjobbet använder, så de två kan inte säga olika
+om samma dag. Ingen ny tabell, ingen ny kolumn, ingen skrivning.
+
+Det gav en fråga till som nattjobbet inte ställer: **den som inte stämplat in
+alls.** Nattjobbet ser bara människor som kom; en tom dag har ingen instämpling
+att döma. Kortet ställer frågan mot klockan i stället — schemastart plus tolerans
+har passerat och ingen stämpling finns — och det är just den raden chefen
+behöver på morgonen.
+
+### Tre spärrar, för raden ligger nära en anklagelse
+
+`"Inte instämplad"` betyder att navet inte sett någon stämpling. Ingenting mer.
+
+1. **Den är inte oregistrerad frånvaro.** `absence_reminder` går sin egen väg
+   genom nattjobbet, där den anställda har ett dygn på sig att registrera sin
+   egen frånvaro innan chefen ser luckan (AC-3.19). Kortet skriver ingen rad,
+   rör inte påminnelserna, och ingen konsekvens hänger i det.
+2. **Sjuk eller ledig bedöms aldrig som sen.** Utan den regeln hade en godkänd
+   semesterdag också lästs som en utebliven instämpling — precis den
+   förväxling `stampelfri.ts` beskriver som "en anklagelse".
+3. **Del av dag bedöms inte alls.** En ledighet på två timmar säger ingenting om
+   *vilka* timmar, och navet gissar inte fram en starttid att döma emot. Samma
+   linje som AC-2.4 drar om sluttider.
+
+Stämpelfria roller — VD, säljchef, ekonomi, projektledare — bedöms inte heller,
+och är stämplingen avstängd i bolaget räknas ingen sen ankomst alls. Kortet
+säger då rakt ut att det inte kan svara på den delen, i stället för att visa en
+tom lista som ser ut som "alla är här".
+
+### Kretsen är tre roller, inte `serPersonal`
+
+`absence_request_read` och `sick_report_read` släpper in egen rad, den man
+leder, samt `sales_manager` och `ceo` — **inte `admin`** (0019, 0020). Hade
+kortet visats för `serPersonal`, som inkluderar admin, hade en admin fått ett
+kort där personalen såg fulltalig ut också en dag halva bolaget var sjukt. Ett
+kort som ljuger tyst är sämre än inget kort. Villkoret är därför samma tre
+roller som redan släpps in på `/franvaro/planering`:
+`sales_manager`, `ceo`, `team_lead`.
+
+Rollvillkoret är inget andra behörighetslager — kretsen kan aldrig bli vidare än
+RLS. Det finns för att säljaren annars hade ställt sju frågor per sidvisning för
+ett svar som är känt i förväg: noll rader.
+
+### Sju frågor, men en enda våg
+
+Hämtningen ligger som EN post i startsidans befintliga `Promise.all`, precis som
+`uppgifterFor()` och `hamtaDrift()`. Inuti `hamtaDagsbild()` löper de sju
+frågorna parallellt med varandra, och som en post löper de dessutom parallellt
+med sidans övriga. Vågantalet är oförändrat.
+
+Frågorna ställs med **användarens egen token**. Teamledaren får sitt team och
+ingenting mer, utan att någon rad i den nya koden upprepar den gränsen.
+
+### Kortet ritas även när det är tomt
+
+Det är ett medvetet undantag från regeln som gömmer ärendekortet. "Alla är på
+plats" är ett *svar* på chefens fråga, inte frånvaron av ett svar — och göms
+kortet när listan är tom skulle en tom skärm betyda två saker: fulltalig
+personal, eller något som slutat fungera.
+
+### Filer
+
+- `src/lib/dagslage.ts` — ren logik, inga anrop. Bedömer en färdig lista.
+- `src/lib/dagslage-server.ts` — de sju frågorna, användarens token.
+- `src/app/(app)/page.tsx` — kortet, mellan "Din kö" och "Att göra".
+- `tests/dagslage.mjs` — 39 kontroller, ingen databas. `npm run test:dagslage`.
+
+Provet ställer varje regel åt båda hållen: inte bara att den frånvarande syns,
+utan att den närvarande inte gör det. Kört grönt innan pushen.
+
+### Vad som INTE gjordes
+
+Ingen migration. Ingen ny tabell och ingen ny kolumn — allt kortet visar fanns
+redan, på tre olika sidor. Inget mejl och ingen notis: kortet är en vy, och en
+notis om att någon är tolv minuter sen hade varit den anklagelse punkt 1 ovan
+finns för att undvika.
+
+---
+
+
 ## 2026-09-03 · Personal går att ta bort, och databasen avgör hur mycket
 
 *Migration `0046_ta_bort_anstalld`. Pushad direkt till `main` på beställarens

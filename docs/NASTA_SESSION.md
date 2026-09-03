@@ -3,7 +3,41 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-03 — personal går att ta bort (0046), riktig logotyp i sidopanelen, coachningens lagvy är personkort i produktion, nytt lösenordskrav (8 tecken + siffra) på branch, och arbetssättet är ändrat
+**Senast uppdaterad:** 2026-09-03 (kväll) — startsidan bär nu chefens dagsläge (sjuka, lediga, sena), personal går att ta bort (0046), riktig logotyp i sidopanelen, coachningens lagvy är personkort i produktion, nytt lösenordskrav (8 tecken + siffra) på branch
+
+## Chefens dagsläge ligger på startsidan sedan 2026-09-03 (kväll)
+
+Säljchef, VD och teamledare ser ett kort **"Dagens läge"** mellan "Din kö" och
+"Att göra": vem som är sjuk, vem som har godkänd ledighet och vem som är sen
+eller inte stämplat in alls. Rader i den ordningen — det öppna först, det
+planerade sist.
+
+**Sena ankomster räknas live, inte ur `late_arrival`.** Den tabellen fylls av
+nattjobbet och kan därför inte svara på "vilka blir sena i dag". Kortet kör
+`senAnkomst()` ur `narvaro.ts` i minnet — samma funktion som nattjobbet, så de
+två kan inte säga olika om samma dag. Ingen ny tabell, ingen migration, ingen
+skrivning.
+
+**Raden "Inte instämplad" är ingen anklagelse och får inte bli det.** Den betyder
+att navet inte sett någon stämpling. Den är inte `absence_reminder`, den skriver
+ingenting, och ingen konsekvens hänger i den — konsekvenstrappan går sin egen väg
+genom nattjobbet, där den anställda har ett dygn på sig att registrera sin egen
+frånvaro först (AC-3.19). Rör inte den gränsen.
+
+Tre spärrar till, som alla finns av samma skäl: sjuk eller ledig bedöms **aldrig**
+som sen, del av dag bedöms inte alls (en ledighet på två timmar säger inte
+*vilka* timmar), och stämpelfria roller bedöms inte. Är stämplingen avstängd i
+bolaget säger kortet det rakt ut i stället för att visa en tom lista.
+
+**Kretsen är `sales_manager`, `ceo`, `team_lead` — inte `serPersonal`.**
+`absence_request_read` och `sick_report_read` släpper inte in `admin` (0019,
+0020), så en admin hade fått ett kort där personalen såg fulltalig ut även en dag
+halva bolaget var sjukt. Ändrar du villkoret: kolla RLS först.
+
+Filerna är `src/lib/dagslage.ts` (ren logik), `src/lib/dagslage-server.ts` (sju
+frågor i en våg, användarens egen token) och kortet i `src/app/(app)/page.tsx`.
+Provet är `npm run test:dagslage` — 39 kontroller, ingen databas, varje regel åt
+båda hållen.
 
 ## Coachningens lagvy är personkort sedan 2026-09-03
 
