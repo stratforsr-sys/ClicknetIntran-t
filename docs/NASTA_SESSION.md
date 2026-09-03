@@ -3,9 +3,9 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-02 — coachningens lagvy blev personkort (branch `coachning-lagvy`, väntar på godkännande), nytt lösenordskrav (8 tecken + siffra) på branch, coachningsmodulen fas 1 i produktion, och arbetssättet är ändrat
+**Senast uppdaterad:** 2026-09-03 — coachningens lagvy är personkort i produktion, nytt lösenordskrav (8 tecken + siffra) på branch, coachningsmodulen fas 1 i produktion, och arbetssättet är ändrat
 
-## Väntar på beställarens godkännande: `coachning-lagvy`
+## Coachningens lagvy är personkort sedan 2026-09-03
 
 Lagvyn på `/coachning` är inte längre en tabell med en siffra per person, utan
 ett **rutnät av personkort** där varje kort bär personens öppna uppgifter med
@@ -42,9 +42,10 @@ Efter första genomgången i previewen tillkom fyra saker:
 uppgifterna på lagvyn kostade noll extra databasfrågor: `hamtaLag()` hämtade dem
 redan och kastade bort dem.
 
-Bakgrunden och de tre besluten om vad som medvetet INTE står på korten
-(K&V-poäng, statistik, kvittering direkt i lagvyn) står i `ARBETSLOGG.md` under
-2026-09-02.
+Beställaren godkände i previewen och `coachning-lagvy` mergades till main
+2026-09-03. Bakgrunden och de tre besluten om vad som medvetet INTE står på
+korten (K&V-poäng, statistik, kvittering direkt i lagvyn) står i
+`ARBETSLOGG.md` under 2026-09-02.
 
 **Statistiken är en öppen fråga.** Beställaren vill ha den men har inte bestämt
 vad som ska mätas. Ingenting är byggt, och ingen platshållarsiffra står i vyn.
