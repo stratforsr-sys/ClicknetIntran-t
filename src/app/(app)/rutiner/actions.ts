@@ -7,6 +7,7 @@ import { getCurrentUser, hasRole } from "@/lib/auth";
 import { DOC_TYPES, tillSlug, type DocType } from "@/lib/dokument";
 import { forberedUppladdning, registreraFil, taBortInnehall } from "@/lib/filer-server";
 import { pdfText } from "@/lib/pdf";
+import { notifiera } from "@/lib/notishandelse-server";
 
 export type DokumentState = { fel?: string };
 
@@ -269,8 +270,42 @@ export async function markeraGranskad(form: FormData): Promise<void> {
 export async function arkivera(form: FormData): Promise<void> {
   const id = String(form.get("document_id"));
   const user = await kravRedaktor(id);
+
+  // Agaren och titeln lases fore arkiveringen. Efterat gar raden fortfarande
+  // att lasa, men da ar det tva fragor i stallet for en.
+  const { data: dok } = await supabaseAdmin()
+    .from("document")
+    .select("owner_id, title")
+    .eq("id", id)
+    .maybeSingle();
+
   await supabaseAdmin().from("document").update({ status: "archived" }).eq("id", id);
   await logga(user.employee!.id, "document.archived", id);
+
+  /**
+   * AC-5.1 lagger granskningsansvaret pa AGAREN, och en redaktor med
+   * `sales_manager` eller `admin` kan arkivera vem som helsts rutin.
+   *
+   * Agaren star alltsa ansvarig for ett dokument som nagon annan kan ta ur
+   * bruk utan att hon far veta det. Notisen ar inte en artighet — det ar den
+   * enda vagen fran arkiveringen tillbaka till den som har ansvaret.
+   *
+   * Arkiverar agaren sin egen rutin skickas ingenting; `notifiera()` haller
+   * ute aktoren.
+   */
+  if (dok?.owner_id) {
+    await notifiera({
+      till: dok.owner_id,
+      av: user.employee!.id,
+      kalla: "rutin-arkiverad",
+      typ: "rutin",
+      rubrik: `Din rutin är arkiverad: ${dok.title}`,
+      detalj: "Den visas inte längre för någon. Du står som ägare.",
+      href: "/rutiner",
+      objekt: { typ: "document", id },
+    });
+  }
+
   revalidatePath("/rutiner");
   redirect("/rutiner");
 }
