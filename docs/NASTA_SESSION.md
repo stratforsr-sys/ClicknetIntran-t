@@ -230,6 +230,31 @@ additiva så `main`-koden aldrig rör de nya tabellerna, och stäm av innan test
 skapas. Preview-miljön saknar `STEG2_SECRET` och `CRON_SECRET`, så
 inbjudningsmejl och `/api/jobb/*` fungerar inte där.
 
+### EN COMMIT PER ÄNDRING — ALDRIG EN PER FIL
+
+Vercel-projektet ligger på fria planen: **100 deployer per dygn**, och varje
+commit på en bevakad branch blir en deploy. Arbetet sker via GitHub API, och en
+`PUT` mot Contents API är en commit — så en ändring i trettiofem filer blir
+trettiofem deployer om man skriver dem en och en.
+
+Det hände 2026-09-04. Kvoten tog slut mitt i passet, och då gick det inte längre
+att verifiera någonting alls: Vercel svarar `402 api-deployments-free-per-day`
+på både git-integrationen och `vercel redeploy`, och det är en **plangräns, inte
+ett fel** — den går inte att trycka igenom med omförsök. Bygget som hann gå
+igenom täckte bara halva ändringen, och resten fick typkontrolleras för hand.
+
+**Skriv därför hela ändringen som en enda commit med Git Data API:**
+
+```
+gh api -X POST repos/.../git/blobs   -f content=<base64> -f encoding=base64   # en per fil
+gh api -X POST repos/.../git/trees   -f base_tree=<sha> ...                   # ett träd
+gh api -X POST repos/.../git/commits -f tree=<sha> -f parents[]=<sha> -f message=...
+gh api -X PATCH repos/.../git/refs/heads/<branch> -f sha=<ny-commit>
+```
+
+Ett pass blir då en deploy i stället för trettiofem — och commit-historiken
+säger vad som byggdes i stället för i vilken ordning filerna råkade skrivas.
+
 ## Coachningsmodulen är i produktion sedan 2026-09-02
 
 Utredningen med research, datamodell och 26 frågor: `docs/COACHNING_UTREDNING.md`.
