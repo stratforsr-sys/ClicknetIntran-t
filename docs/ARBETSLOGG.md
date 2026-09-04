@@ -5,6 +5,203 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-04 · Klockan får veta allt — och två knappar att göra något åt det
+
+*Migration `0047_notishandelser`. Branch `notiser-for-allt-2`, väntar på
+godkännande innan merge till main.*
+
+### Frågan som ställdes
+
+"Gå igenom exakt vad som ger notiser i klockan och vad som inte gör det. Allt
+måste ha notis så att vi kan se exakt vad som händer, annars vet man inte." Med
+ett exempel: *om jag godkänner en ledighetsansökan ska personen få en notis, och
+om någon godkänner en uppgift ska jag få en notis.*
+
+Det första exemplet fungerade redan. Det andra gjorde det inte, och skälet visade
+sig vara arkitektoniskt snarare än en glömska.
+
+### Vad genomgången gav
+
+Klockan hade **21 källor**. Den som *underkände* en coachningsuppgift gav ett
+besked; den som *godkände* gav tystnad. Samma mönster gick igen i hela navet:
+
+| Modul | Gav notis | Gav ingen notis |
+|---|---|---|
+| Coachning | ny uppgift, påminnelse, underkänt, väntar på bock | **godkänt**, avbrutet, samtal |
+| Ärenden | nytt meddelande | tilldelning, statusändring, avslut |
+| Kundorder | — | inskickad, godkänd, returnerad, **makulerad**, betald |
+| Tid | — | rättelsebegäran, rättelsebeslut, schemaändring, avvikelser |
+| Lön | — | attest, justering efter attest |
+| Frånvaro | ansökan, beslut, lucka, sjukanmälan | tillbakadragen, **inställd ledighet**, bekräftad/avslutad/inställd sjukanmälan, saldo, hävd konsekvens, K37-frister |
+| Avtal | — | utfärdat, tillbakadraget |
+| Konto | — | roll, behörighet, lösenord, aktivering, ny chef |
+| Rekrytering | — | ny kandidat, steg, no-show, anställning |
+| Utbildning | kurs, rollspel | certifiering som går ut |
+| Rutiner | kvittens | granskningsdatum passerat, arkivering |
+| K&V / Provision | — | bedömning på ditt samtal, bokförd provision |
+
+De tre feta är de dyra. En **makulerad order** river säljarens provision i
+makuleringsmånaden — alltså en annan månad än den hon tjänade in den — och
+upptäcktes först som en oförklarad siffra på lönebeskedet. En **inställd
+godkänd ledighet** upphäver ett besked någon redan planerat efter. En **godkänd
+uppgift** var den enda återkopplingen i coachningsmodulen som aldrig kom fram.
+
+### Varför halva navet var tyst, och det inte var slarv
+
+0018 valde bort en notistabell, och argumentet höll i ett år:
+
+> en notistabell kräver att varje producent kommer ihåg att skriva sin rad, och
+> den som glömmer ger en tyst lucka.
+
+Varje post räknas därför fram ur raderna som redan finns. Det fungerar
+utmärkt för **"något väntar på dig"** — en okvitterad rutin, en ogjord kurs, en
+obeslutad ansökan. Tillståndet finns kvar i raden så länge saken är ogjord, så
+ingen producent *kan* skapa en lucka: det är tillståndet självt som utlöser
+posten.
+
+Det fungerar inte alls för **"något hände dig"**, för handelsen skriver över
+tillståndet den kom ur:
+
+- en godkänd coachningsuppgift är bara `klar`, och klara uppgifter filtreras
+  bort som "inte öppna" innan notiserna räknas,
+- en returnerad order får status `utkast` igen och går sedan inte att skilja
+  från ett utkast som aldrig skickats in — det finns ingen `returned_at`,
+- ett tillbakadraget avtal är inte ens **läsbart** för den det gäller, eftersom
+  `contract_read` bara släpper igenom status `issued`.
+
+Ingen av dem går att härleda. Det var därför de var tysta.
+
+### Lösningen: två halvor, inte en ny modell
+
+`notification_event` (0047) bär punkthändelser — **en rad per mottagare**, med
+RLS på `employee_id`. De härledda källorna står kvar precis som de var. Listan i
+`src/lib/notiser.ts` är nu uttryckligen delad i två, med instruktionen att välja
+halva efter *frågan* och inte efter vad som är enklast att skriva: en
+händelserad för något som väntar ger en notis som ligger kvar sedan saken är
+gjord.
+
+**`audit_log` provades först och föll på två saker.** `audit_log_read` släpper
+in sales_manager, ceo och admin — PRD §5.2 säger uttryckligen "aldrig av
+salesperson", så en klocka byggd på loggen hade krävt att hela händelseloggen
+låstes upp för alla. Och loggen säger *vem som gjorde något*, inte *vem som
+behöver veta*: mottagaren står ibland i `meta`, ibland i objektet, ibland
+ingenstans.
+
+**Texten skrivs vid händelsen och ändras aldrig.** Det är den enda verkliga
+kostnaden, och den är betald med flit: "Din order på 12 000 kr godkändes" ska
+stå kvar oförändrad även sedan ordern makulerats, för det *var* vad som hände.
+En härledd text hade skrivit om historien varje gång objektet rördes.
+
+**En händelse går aldrig till den som utlöste den.** Regeln ligger i
+`notifiera()` och inte hos anroparna — det är trettio ställen att glömma den på.
+Chefen som godkänner tolv order på en eftermiddag ska inte möta tolv notiser om
+att hon godkänt tolv order.
+
+### Svaret på 0018:s invändning: `tests/notiser-tackning.mjs`
+
+Invändningen försvinner inte för att behovet är äkta. Provet läser varje
+`src/app/**/actions.ts` och kräver att **varje exporterad server action** står
+bokförd med ett av tre värden:
+
+- `"notifierar"` — och provet läser filen och faller om anropet inte finns på
+  riktigt,
+- `"harledd"` — posten räknas fram ur raderna handlingen skriver,
+- *en mening* — skälet till att den inte notifierar någon.
+
+En ny action som ingen tänkt på hamnar i ingen grupp och provet faller med dess
+namn. 26 moduler, 118 actions är bokförda. Samma konstruktion som
+`tests/handelselogg.mjs`, och av samma skäl: en lista som underhålls för hand
+slutar stämma tyst.
+
+Provet fångade omedelbart tio glömda actions i `utbildning` som inte fanns med i
+första utkastet till bokföringen.
+
+### Vad som nu ger notis
+
+**29 nya händelsekällor** och **6 nya härledda** — 21 blev 63.
+
+De sex härledda var alla lägen som redan *stod* i sina tabeller utan att någon
+fick veta: utfärdade avtal (`avtal`), K37-frister som förfaller (`sjuk-frist`),
+certifieringar som går ut inom 30 dagar (`certifikat-gar-ut`),
+granskningsdatum som passerat för dokumentets ägare (`rutin-granskning`),
+K&V-bedömningar på ditt eget samtal (`kv-bedomning`) och provision bokförd på
+dig (`provision-bokford`).
+
+**Regeländringar notifierar inte.** Beställarens val: frånvaropolicy,
+K&V-regler, provisionstrappa och modulspärrar står i `/logg`. Varje sådan action
+står med sitt skäl i täckningsprovet, så valet är dokumenterat och inte glömt.
+
+**Rekryteringen når aldrig kandidaten.** Hon har inget konto, och kretsen är
+`far_rekrytera()` plus ledningen — samma krets som `candidate_read` i 0030
+släpper in. En notis får aldrig nå längre än läsrätten.
+
+### Två knappar, och buggen den ena avslöjade
+
+**Krysset** per rad tar bort posten utan att navigera, och **panelen står kvar
+öppen** — den som rensar tre poster gör det i en följd. Länken och krysset är
+syskon i `<li>`, inte en `<button>` inuti en `<a>`: det är ogiltig HTML och ger
+en länk som ibland navigerar när man kryssar.
+
+**"Markera alla som lästa"** släcker prickarna men tömmer inte listan. Det som
+väntar på dig ska inte försvinna för att du läst att det finns.
+
+Knappen avslöjade att **siffran på klockan aldrig kunde bli noll**. Ett dussin
+poster satte `olast: true` rakt av — en påminnelse som stått still i en vecka är
+fortfarande obesvarad, och att kalla den läst för att någon öppnade menyn i går
+vore att ljuga om vad pricken betyder. Så länge enda sättet att bli av med en
+prick var att klicka bort posten var det en egenhet man vande sig vid. Med en
+knapp som lovar motsatsen är det ett trasigt löfte.
+
+`olast` är nu en fråga om **tidpunkten**, aldrig om vem som byggde posten: hände
+det efter att du sist öppnade klockan är det oläst, annars inte. En post kan
+fortfarande göra sig oläst igen — det är vad veckoräknaren i id:t är till för —
+men den kan inte lysa i evighet.
+
+**Följden: varje tidpunkt måste vara stabil.** En post som räknar `Date.now()`
+minus något får en ny tidpunkt vid varje rendering och blir då läst i samma
+sekund den skapas. Två rader rättades: chefens `guide-team` och `coachning-team`
+bär nu **senaste rörelsen** i stället för "nu minus dagar", och certifikatposten
+räknar bakåt från `expires_at` i stället för framåt från nu.
+
+`MAX_NOTISER` gick från 15 till 25. Femton platser var rikligt så länge bara
+halva navet notifierade; med resten inne hade en dags order, rättelser och
+kvitteringar kunnat trycka ut allt annat. Talet är fortfarande ett *tak* och
+inte ett mål — de två knapparna är det som gör en längre lista hanterbar, och
+utan dem hade höjningen varit fel.
+
+### Kostnaden
+
+Klockan ställer nu 28 frågor i stället för 21. Den ligger sedan tidigare bakom
+`<Suspense>` i layouten (se `Klocka.tsx`), så det som väntar är klockan och inte
+sidan.
+
+`notification_event` är den enda tabellen i navet som växer med **användningen**
+och inte med verksamheten: en makulerad order ger en rad, en attesterad
+löneperiod ger trettio. Nattjobbet fick därför ett elfte steg som raderar rader
+äldre än 90 dagar. Klockan visar dem i 30 — en händelse är en upplysning med
+bäst-före-datum, och "din order godkändes" säger ingenting nytt efter en månad.
+
+### Omlagd på mains spets
+
+Branchen `notiser-for-allt` skapades innan släpplistan **Nytt i navet** landade
+på main, och släpplistan rör exakt tre av de filer det här passet skriver om:
+`notiser.ts` (källan `navnyhet`), `notiser-server.ts` (posterna ur
+`src/navnyheter/`) och `Notisklocka.tsx` (`bekraftas`, undantaget från
+klick-regeln). En merge hade tagit bort funktionen igen.
+
+Arbetet lades därför om i `notiser-for-allt-2` från mains spets, och de tre
+filerna byggdes om från mains version i stället för att skrivas över. Krysset
+respekterar med flit **inte** `bekraftas`: klicket betyder "jag går och läser",
+krysset betyder "den här behöver jag inte se".
+
+### Kontrollerat mot produktionsdatabasen
+
+RLS provades skarpt i en transaktion som rullades tillbaka: en rad skrevs åt en
+anställd, och `set local role authenticated` med två olika `sub` gav 1 rad åt
+mottagaren och 0 åt någon annan.
+
+---
+
 ## 2026-09-03 · Nytt i navet — det som byggs berättar det själv
 
 *Ingen migration. Byggd på branch `nytt-i-navet`, pushad till `main` på beställarens
