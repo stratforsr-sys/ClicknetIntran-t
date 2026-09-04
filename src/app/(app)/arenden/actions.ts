@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { getCurrentUser, hasRole } from "@/lib/auth";
 import { frist, type Status } from "@/lib/arenden";
+import { notifiera } from "@/lib/notishandelse-server";
 
 export type ArendeState = { fel?: string; ok?: string };
 
@@ -138,6 +139,15 @@ export async function andraStatus(form: FormData): Promise<void> {
   const db = supabaseAdmin();
   const losning = String(form.get("losning") ?? "").trim() || null;
 
+  // Agaren och rubriken lases FORE skrivningen. Efterat gar det fortfarande,
+  // men da har raden redan andrats och en trasig fraga hade gett en notis om
+  // ett arende vi inte langre vet nagot om.
+  const { data: arende } = await db
+    .from("hr_case")
+    .select("employee_id, subject, anonymous")
+    .eq("id", id)
+    .maybeSingle();
+
   await db
     .from("hr_case")
     .update({
@@ -154,6 +164,41 @@ export async function andraStatus(form: FormData): Promise<void> {
     object_id: id,
     meta: { status },
   });
+
+  /**
+   * BESKEDET TILL DEN ARENDET GALLER.
+   *
+   * Ett svar i tråden har alltid gett en notis (`case_message`). En STATUSANDRING
+   * har aldrig gjort det, och det ar den halvan som gor skillnad: ett arende som
+   * avslutas utan ett sista meddelande avslutades i tysthet, och den som anmalde
+   * fick veta det genom att sjalv ga in och titta.
+   *
+   * `anonymous` andrar ingenting har. Anonymiteten galler mot HANTERAREN —
+   * anmalaren vet vem hon ar och har ratt att veta vad som hande med hennes
+   * anmalan. Notisen gar till `employee_id`, som ar densamma oavsett.
+   */
+  if (arende && arende.employee_id) {
+    await notifiera({
+      till: arende.employee_id,
+      av: user.employee.id,
+      kalla: "arende-status",
+      typ: "arende",
+      rubrik:
+        status === "resolved"
+          ? `Ditt ärende är avslutat: ${arende.subject}`
+          : `Ditt ärende: ${arende.subject}`,
+      detalj:
+        status === "resolved"
+          ? (losning ?? "Läs vad som beslutades")
+          : status === "in_progress"
+            ? "Någon har börjat arbeta med det"
+            : status === "waiting"
+              ? "Väntar på komplettering"
+              : "Statusen har ändrats",
+      href: `/arenden/${id}`,
+      objekt: { typ: "hr_case", id },
+    });
+  }
 
   revalidatePath(`/arenden/${id}`);
   revalidatePath("/arenden");
@@ -174,6 +219,39 @@ export async function tilldela(form: FormData): Promise<void> {
     object_id: id,
     meta: { till },
   });
+
+  /**
+   * DEN SOM FICK ARENDET FAR VETA DET.
+   *
+   * Utan raden var tilldelningen en tyst kolumn: arendet dok upp i en lista
+   * hanteraren kanske oppnade nagon gang, och fristen i `due_at` borjade ticka
+   * pa nagon som inte visste om det. Det var det enda ovanfor `case_message`
+   * som gick att gora AT en person utan att hon markte nagot.
+   *
+   * `till` ar null nar tilldelningen tas bort. Da finns ingen mottagare, och
+   * det ar ratt: en fråntagen uppgift ar inte ett besked varre — den syns i
+   * loggen for den som behover foljd den.
+   */
+  if (till) {
+    const { data: arende } = await supabaseAdmin()
+      .from("hr_case")
+      .select("subject, due_at")
+      .eq("id", id)
+      .maybeSingle();
+
+    await notifiera({
+      till,
+      av: user.employee.id,
+      kalla: "arende-tilldelad",
+      typ: "arende",
+      rubrik: `Du har tilldelats ett ärende: ${arende?.subject ?? "ärende"}`,
+      detalj: arende?.due_at
+        ? `Ska vara besvarat ${String(arende.due_at).slice(0, 10)}`
+        : "Öppna det och ta ställning",
+      href: `/arenden/${id}`,
+      objekt: { typ: "hr_case", id },
+    });
+  }
 
   revalidatePath(`/arenden/${id}`);
 }
