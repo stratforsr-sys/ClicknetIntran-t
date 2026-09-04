@@ -4,6 +4,7 @@ import { gallandeSchema } from "@/lib/raster";
 import { nyttTillfalligtLosenord } from "@/lib/losenord";
 import { FLAGGA } from "@/lib/losenordsbyte";
 import { ROLES, type Role } from "@/lib/roles";
+import { cheferFor, notifieraFlera } from "@/lib/notishandelse-server";
 
 /**
  * Att lagga upp en anstalld: konto, rad i personalregistret, roll, rutiner och
@@ -191,6 +192,28 @@ export async function laggUppAnstalld(
   // E1.5 / AC-1.3: arbetstiden. Se `schemaFor()` for varfor ingen rad skrivs.
   const schema = await schemaFor(db, rad.id, teamId, uppgifter.startdatum);
   await logga(utfordAv, "onboarding.schedule_assigned", rad.id, schema.meta);
+
+  /**
+   * NARMASTE CHEF FAR VETA ATT HON FATT NAGON.
+   *
+   * Raden ligger HAR och inte i de tva server actions som anropar funktionen,
+   * och det ar hela poangen: `/personal/ny` och `/rekrytering/[id]/anstall` ar
+   * tva vagar in till samma handelse, och en notis lagd i den ena hade tystnat
+   * for den andra. En anstalld som kom in via rekryteringen ar inte mindre ny.
+   *
+   * Onboardingen — checklistan i 0033, rutinerna, kurserna och systemguiderna
+   * ovan — ligger pa chefen. Fram till 2026-09-03 var forsta signalen om att
+   * nagon borjat att namnet dok upp i personallistan.
+   */
+  await notifieraFlera(await cheferFor(rad.id), {
+    av: utfordAv,
+    kalla: "personal-ny",
+    typ: "konto",
+    rubrik: `${fornamn} ${efternamn} är upplagd i navet`,
+    detalj: `${rutiner.length} rutiner och ${kurser.length} kurser är tilldelade · checklistan väntar på dig`,
+    href: `/personal/${rad.id}`,
+    objekt: { typ: "employee", id: rad.id },
+  });
 
   return { employeeId: rad.id, losenord, rutiner, kurser, schemadagar: schema.dagar };
 }
