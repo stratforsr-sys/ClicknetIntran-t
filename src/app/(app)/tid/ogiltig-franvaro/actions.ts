@@ -13,6 +13,7 @@ import {
   type Handelse,
   type Konsekvensregel,
 } from "@/lib/konsekvens";
+import { notifiera } from "@/lib/notishandelse-server";
 
 export type Handelsestate = { fel?: string; ok?: string; varning?: string };
 
@@ -312,6 +313,30 @@ export async function havHandelse(
       employee_id: rad.employee_id,
       datum: String(rad.occurred_on).slice(0, 10),
       skal: String(form.get("skal") ?? "").trim() || null,
+    });
+
+    /**
+     * HAVNINGEN AR DEN ENDA GODA NYHETEN I MODULEN, OCH DEN VAR TYST.
+     *
+     * `franvaro-konsekvens` — beskedet om varningen eller bonusavdraget —
+     * raknas fram ur `status = 'godkand'`. Nar beslutet havs blir statusen
+     * `havd`, harledningen slutar tracka, och posten forsvinner ur klockan utan
+     * ett ord. Den som fatt veta att hon fick en varning far alltsa inte veta
+     * att den ar borta; hon ser bara att raden inte langre ar dar.
+     *
+     * Bonusen raknas om nasta gang manaden visas, och det star i notisen —
+     * annars ar nasta fraga "men pengarna da?".
+     */
+    await notifiera({
+      till: String(rad.employee_id),
+      av: user.employee!.id,
+      kalla: "franvaro-havd",
+      typ: "franvaro",
+      rubrik: `Den ogiltiga frånvaron ${String(rad.occurred_on).slice(0, 10)} är hävd`,
+      detalj:
+        "Den räknas inte längre i trappan, och en bonus som fallit på grund av den räknas om.",
+      href: "/provision",
+      objekt: { typ: "attendance_incident", id },
     });
 
     uppdatera();
