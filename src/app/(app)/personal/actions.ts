@@ -5,9 +5,10 @@ import { redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import type { Referens } from "@/lib/personal-radering";
 import { getCurrentUser, canManageEmployees, hasRole } from "@/lib/auth";
-import { ROLES, PERMISSIONS, type Role, type Permission } from "@/lib/roles";
+import { ROLES, PERMISSIONS, ROLE_LABEL, PERMISSION_LABEL, type Role, type Permission } from "@/lib/roles";
 import { nyttTillfalligtLosenord } from "@/lib/losenord";
 import { kravByte, laggUppAnstalld as laggUpp } from "@/lib/anstallning-server";
+import { notifiera } from "@/lib/notishandelse-server";
 
 export type FormState = {
   fel?: string;
@@ -142,6 +143,25 @@ export async function aterstallLosenord(
 
     await logga(user.employee!.id, "auth.temp_password_set", "employee", a.id, { epost: a.email });
 
+    /**
+     * ETT ATERSTALLT LOSENORD SKA ALLTID SYNAS FOR KONTOTS AGARE.
+     *
+     * Sjalva ordet star inte i notisen, av samma skal som det inte star i
+     * loggen: en notis med ett losenord i ar en losenordslista med tidsstampel.
+     * Det som star ar ATT det hant och NAR — och det ar den upplysningen som
+     * gor skillnad, for den som inte bad om ett nytt losenord ska kunna reagera.
+     */
+    await notifiera({
+      till: a.id,
+      av: user.employee!.id,
+      kalla: "konto-losenord",
+      typ: "konto",
+      rubrik: "Ditt lösenord har återställts",
+      detalj: "Du får byta det vid nästa inloggning. Bad du inte om det — säg till.",
+      href: "/profil",
+      objekt: { typ: "employee", id: a.id },
+    });
+
     return { losenord };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
@@ -171,6 +191,21 @@ export async function andraRoll(form: FormData): Promise<void> {
   await logga(user.employee!.id, pa ? "role.granted" : "role.revoked", "employee", employeeId, {
     roll,
   });
+
+  // En roll avgor vad man ser och far gora i hela navet. Att den andras utan
+  // besked ar sattet att fa nagon att tro att navet gatt sonder — menyn ser
+  // annorlunda ut och ingenting forklarar varfor.
+  await notifiera({
+    till: employeeId,
+    av: user.employee!.id,
+    kalla: "konto-roll",
+    typ: "konto",
+    rubrik: pa ? `Du har fått rollen ${ROLE_LABEL[roll]}` : `Rollen ${ROLE_LABEL[roll]} är borttagen`,
+    detalj: pa ? "Nya vyer kan ha dykt upp i menyn" : "Vissa vyer kan ha försvunnit ur menyn",
+    href: `/personal/${employeeId}`,
+    objekt: { typ: "employee", id: employeeId },
+  });
+
   revalidatePath(`/personal/${employeeId}`);
 }
 
@@ -191,6 +226,18 @@ export async function aktivera(form: FormData): Promise<void> {
 
   await db.from("employee").update({ status: "active" }).eq("id", employeeId);
   await logga(user.employee!.id, "employee.activated", "employee", employeeId);
+
+  await notifiera({
+    till: employeeId,
+    av: user.employee!.id,
+    kalla: "konto-aktiverad",
+    typ: "konto",
+    rubrik: "Ditt konto är aktiverat",
+    detalj: "Onboardingen är avslutad. Hela navet är öppet för dig.",
+    href: "/",
+    objekt: { typ: "employee", id: employeeId },
+  });
+
   revalidatePath(`/personal/${employeeId}`);
 }
 
@@ -569,6 +616,38 @@ export async function sattOrganisation(form: FormData): Promise<void> {
     team: teamId,
     chef: chefId,
   });
+
+  /**
+   * EN NY CHEF ANDRAR VEM SOM BESLUTAR OM DIN LEDIGHET.
+   *
+   * `manager_id` och `team_id` ar inte etiketter pa ett personkort. De styr
+   * `leads_employee()` i 0001, alltsa vem som ser dina franvaroansokningar, dina
+   * coachningsuppgifter, dina stamplingar och dina rastavvikelser. Att flytta
+   * nagon mellan team ar att flytta hela hennes chefsled — och fram till
+   * 2026-09-04 markte hon det forst nar nagon annan svarade.
+   */
+  const [nyChef, nyttTeam] = await Promise.all([
+    chefId
+      ? db.from("employee").select("first_name, last_name").eq("id", chefId).maybeSingle()
+      : Promise.resolve({ data: null }),
+    teamId ? db.from("team").select("name").eq("id", teamId).maybeSingle() : Promise.resolve({ data: null }),
+  ]);
+
+  await notifiera({
+    till: employeeId,
+    av: user.employee!.id,
+    kalla: "konto-organisation",
+    typ: "konto",
+    rubrik: nyChef.data
+      ? `${nyChef.data.first_name} ${nyChef.data.last_name} är din nya chef`
+      : "Din organisationstillhörighet har ändrats",
+    detalj: nyttTeam.data?.name
+      ? `Team ${nyttTeam.data.name} · din chef beslutar om ledighet och coachning`
+      : "Se personkortet för vem som är din chef",
+    href: `/personal/${employeeId}`,
+    objekt: { typ: "employee", id: employeeId },
+  });
+
   revalidatePath(`/personal/${employeeId}`);
   revalidatePath("/personal/team");
 }
@@ -634,6 +713,23 @@ export async function andraBehorighet(form: FormData): Promise<void> {
     employeeId,
     { behorighet },
   );
+
+  // Samma skal som rollbytet ovan. Lonekostnadsbehorigheten oppnar en vy med
+  // andras loner i — den som far den ska veta om det, och den som blir av med
+  // den ska veta varfor vyn forsvann.
+  await notifiera({
+    till: employeeId,
+    av: user.employee.id,
+    kalla: "konto-behorighet",
+    typ: "konto",
+    rubrik: pa
+      ? `Du har fått behörigheten ${PERMISSION_LABEL[behorighet as Permission]}`
+      : `Behörigheten ${PERMISSION_LABEL[behorighet as Permission]} är borttagen`,
+    detalj: pa ? "Den öppnar en ny vy för dig" : "Vyn den öppnade är stängd igen",
+    href: `/personal/${employeeId}`,
+    objekt: { typ: "employee", id: employeeId },
+  });
+
   revalidatePath(`/personal/${employeeId}`);
 }
 
