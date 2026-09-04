@@ -14,6 +14,45 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "klockan-sager-allt",
+    rubrik: "Klockan säger till om allt som händer",
+    ingress: "Godkänd uppgift, makulerad order, ändrat schema, hävd varning — och två nya knappar.",
+    text: `Klockan sa förut till om ungefär hälften av det som hände i navet. Nu säger
+den till om resten också.
+
+**Det du får veta som du inte fick förut:**
+
+- **Coachning** — när din uppgift blir *godkänd*, inte bara underkänd. Och när
+  en uppgift avbryts eller ett samtal bokförs på dig.
+- **Order** — inskickad, godkänd, returnerad, **makulerad** och betald. En
+  makulering drar tillbaka provisionen i makuleringsmånaden, och det står i
+  notisen med belopp och skäl.
+- **Tid** — när din rättelse avgörs, när ditt schema ändras och när din
+  rastavvikelse avslutas.
+- **Lön** — när perioden attesteras och när någon lägger en justering på dina
+  minuter efteråt.
+- **Frånvaro** — när en godkänd ledighet ställs in, när din sjukanmälan
+  bekräftas eller avslutas, när ditt saldo matas in och när en ogiltig frånvaro
+  hävs. Läkarintygsfrister säger till en vecka i förväg.
+- **Ditt konto** — roll, behörighet, återställt lösenord och ny chef.
+- **Ärenden** — när ett ärende tilldelas dig och när ditt eget avslutas.
+- **Avtal, certifieringar och rutiner** — utfärdat avtal, certifiering som går
+  ut inom en månad, granskningsdatum som passerat på en rutin du äger.
+
+**Två nya knappar i klockan:**
+
+**Markera alla som lästa** släcker prickarna utan att ta bort något. Det som
+väntar på dig ligger kvar — du har bara sett att det finns.
+
+**Krysset** till höger om varje rad tar bort just den posten. Panelen stannar
+öppen så att du kan rensa flera i följd. Ingenting annat påverkas: den
+okvitterade rutinen står kvar på Rutiner, den obeslutade ansökan på Frånvaro.
+
+Klockan rymmer 25 poster i stället för 15.`,
+    datum: "2026-09-04",
+    roller: [],
+  },
+  {
     slug: "nytt-i-navet",
     rubrik: "Nytt i navet syns nu i klockan",
     ingress: "Det som byggs berättas här — och försvinner när du läst det.",
