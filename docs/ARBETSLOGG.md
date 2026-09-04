@@ -194,6 +194,13 @@ filerna byggdes om från mains version i stället för att skrivas över. Krysse
 respekterar med flit **inte** `bekraftas`: klicket betyder "jag går och läser",
 krysset betyder "den här behöver jag inte se".
 
+### Släpplistan fick sin rad
+
+`src/navnyheter/poster.ts` överst: *"Klockan säger till om allt som händer"*, med
+listan över vad man får veta som man inte fick förut och de två knapparna.
+Riktad till alla roller. Regeln från 2026-09-03 är att raden skrivs i samma
+commit som funktionen, och `npm run test:navnyheter` går igenom.
+
 ### Kontrollerat mot produktionsdatabasen
 
 RLS provades skarpt i en transaktion som rullades tillbaka: en rad skrevs åt en
