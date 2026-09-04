@@ -3,8 +3,17 @@ import "server-only";
 import { supabaseServer, supabaseAdmin } from "@/lib/supabase/server";
 import { fullName, type CurrentUser } from "@/lib/auth";
 import { kursLage } from "@/lib/utbildning";
-import { MAX_NOTISER, notisId, sortera, type Notis } from "@/lib/notiser";
+import {
+  HANDELSE_DAGAR,
+  MAX_NOTISER,
+  arNotistyp,
+  notisId,
+  sortera,
+  type Notis,
+  type Notiskalla,
+} from "@/lib/notiser";
 import { hamtaLage } from "@/lib/sparrar";
+import { svensktDatum } from "@/lib/klocka";
 import { stampelfri } from "@/lib/stampelfri";
 import { guiderForRoller } from "@/guider";
 import { MAX_I_KLOCKAN, navnyheterFor, tidpunktFor } from "@/navnyheter";
@@ -16,6 +25,24 @@ const TYST_DAGAR = 3;
 
 /** Och sa lange innan chefen far raden om nagon annan. */
 const CHEFENS_DAGAR = 7;
+
+/**
+ * Sa lang varsel far en certifiering som gar ut.
+ *
+ * Trettio dagar ar inte plockat ur luften: en kurs har en frist i `due_days`,
+ * och den langsta i navet ar trettio. Kortare varsel hade betytt att beskedet
+ * kom efter att det var for sent att hinna gora om kursen i tid.
+ */
+const CERTIFIKAT_VARSEL_DAGAR = 30;
+
+/**
+ * Och sa lang varsel far en K37-frist innan klockan sager till.
+ *
+ * Kortare an certifikatets, med flit. En lakarintygsfrist ar en dag i lagen och
+ * inte en planeringsfraga — den som far veta trettio dagar i forvag har hunnit
+ * glomma det nar dagen kommer.
+ */
+const FRIST_VARSEL_DAGAR = 7;
 
 /**
  * Allt som ar riktat till den har personen just nu.
@@ -62,6 +89,13 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
     { data: konsekvensregler },
     { data: guiderader },
     { data: knuffar },
+    { data: notishandelser },
+    { data: avtalen },
+    { data: sjukfrister },
+    { data: certifikat },
+    { data: minaDokument },
+    { data: bedomningar },
+    { data: provisionsposter },
   ] = await Promise.all([
     supabase.from("notification_seen").select("seen_at").eq("employee_id", mig).maybeSingle(),
     // 0038. Poster den har personen redan klickat pa. Hamtas med hennes egen
@@ -181,6 +215,104 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
       .eq("employee_id", mig)
       .order("nudged_at", { ascending: false })
       .limit(3),
+
+    /**
+     * 0047. Det som HANDE mig — den enda fragan i filen som laser fardiga
+     * notiser i stallet for att rakna fram dem.
+     *
+     * Fonstret ar `HANDELSE_DAGAR` och inte "allt": en handelse ar en
+     * upplysning med bast-fore-datum, och "din order godkandes" sager
+     * ingenting nytt efter en manad. Ett vantelage har daremot ingen alder —
+     * en okvitterad rutin fran i varas ar lika okvitterad i dag — och darfor
+     * har ingen av de andra fragorna nedan nagon tidsgrans.
+     *
+     * `employee_id` filtreras INTE har. RLS i 0047 ger bara mina egna rader,
+     * och ett eget filter hade varit ett andra svar pa samma fraga — se
+     * rubriken over funktionen.
+     */
+    supabase
+      .from("notification_event")
+      .select("id, kalla, typ, rubrik, detalj, href, created_at")
+      .gte("created_at", new Date(Date.now() - HANDELSE_DAGAR * 86_400_000).toISOString())
+      .order("created_at", { ascending: false })
+      .limit(MAX_NOTISER * 2),
+
+    /**
+     * Anstallningsavtal. `contract_read` i 0028 slapper igenom mitt eget avtal
+     * bara medan det ar `issued`, plus ALLA avtal for den som far hantera dem —
+     * darav filtret pa `employee_id` nedanfor. Utan det hade den som utfardar
+     * avtal fatt en notis om varje avtal i navet, som om de vore hennes egna.
+     */
+    supabase
+      .from("contract")
+      .select("id, employee_id, title, issued_at, status")
+      .eq("status", "issued")
+      .order("issued_at", { ascending: false })
+      .limit(MAX_NOTISER),
+
+    /**
+     * K37-fristerna: lakarintyg, FK-anmalan, rehabiliteringsplan. RLS i 0020
+     * ger den sjuke sina egna och chefen deras hon leder, sa EN fraga bar bada
+     * riktningarna precis som rollspelen och konsekvenserna gor.
+     */
+    supabase
+      .from("sick_deadline")
+      .select("id, report_id, kind, due_on, created_at, sick_report(employee_id, first_sick_day)")
+      .is("completed_at", null)
+      .order("due_on", { ascending: true })
+      .limit(MAX_NOTISER),
+
+    /**
+     * Certifieringar som narmar sig sitt slutdatum. Bara mina egna: RLS slapper
+     * igenom bade dem jag leder och hela navet for ledningen, och en chef som
+     * far tjugo notiser om andras certifikat slutar oppna klockan.
+     *
+     * En certifiering som REDAN gatt ut ger ingen post har — da ar kursen inte
+     * langre certifierad, och kursnotisen ovan tar over utan lucka.
+     */
+    supabase
+      .from("certification")
+      .select("id, employee_id, course_id, expires_at")
+      .eq("employee_id", mig)
+      .not("expires_at", "is", null)
+      .order("expires_at", { ascending: true })
+      .limit(MAX_NOTISER),
+
+    /**
+     * AC-5.1: varje rutin har en agare och ett granskningsdatum. Datumet fanns
+     * i schemat fran 0003 och stod pa dokumentkortet — men ingenting sa till
+     * nar det passerades, sa en rutin kunde vara ett halvar over sin granskning
+     * utan att agaren markte det.
+     */
+    supabase
+      .from("document")
+      .select("id, slug, title, review_due, owner_id, status")
+      .eq("owner_id", mig)
+      .eq("status", "published"),
+
+    /**
+     * K&V-bedomningar pa mina egna samtal. `kv_assessment_read` i 0036 ger den
+     * bedomde sina egna och provisionskretsen alla — darav `kv_call`-inbaddningen,
+     * som bar vems samtalet var.
+     */
+    supabase
+      .from("kv_assessment")
+      .select("call_id, assessed_by, assessed_at, kv_call!inner(employee_id, call_date, customer)")
+      .eq("kv_call.employee_id", mig)
+      .order("assessed_at", { ascending: false })
+      .limit(MAX_NOTISER),
+
+    /**
+     * Provision bokford pa mig. Huvudboken, inte saldot: en rattelse ar en
+     * negativ post och far darfor sin egen notis, vilket ar hela poangen —
+     * ett avdrag ar det man minst av allt vill upptacka pa lonebeskedet.
+     */
+    supabase
+      .from("commission_entry")
+      .select("id, employee_id, period_month, amount, entered_by, entered_at")
+      .eq("employee_id", mig)
+      .order("entered_at", { ascending: false })
+      .limit(MAX_NOTISER),
   ]);
 
   // Ingen rad = allt ar olast. Ratt hall att fela at: en nyanstalld ska se
@@ -611,16 +743,18 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
      * ID:T BAR ANTALET VECKOR, sa posten aterupstar en gang i veckan for den
      * som klickat bort den och som fortfarande inte gjort nagot at saken.
      */
-    const perPerson = new Map<string, number>();
+    const perPerson = new Map<string, { dagar: number; senast: string }>();
     for (const r of alla) {
       if (r.employee_id === mig || r.completed_at || r.steg <= 0) continue;
       const dagar = dagarSedan(r.updated_at ?? null);
-      if (dagar === null) continue;
+      if (dagar === null || !r.updated_at) continue;
       const forra = perPerson.get(r.employee_id);
-      if (forra === undefined || dagar < forra) perPerson.set(r.employee_id, dagar);
+      if (forra === undefined || dagar < forra.dagar) {
+        perPerson.set(r.employee_id, { dagar, senast: r.updated_at });
+      }
     }
 
-    for (const [personId, dagar] of perPerson) {
+    for (const [personId, { dagar, senast }] of perPerson) {
       if (dagar < CHEFENS_DAGAR) continue;
       const veckor = Math.floor(dagar / 7);
       notiser.push({
@@ -629,10 +763,209 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
         rubrik: `${namn.get(personId) ?? "En medarbetare"} har stannat av`,
         detalj: `Ingen rörelse i systemguiderna på ${dagar} dagar`,
         href: "/utbildning/oversikt/systemguider",
-        tidpunkt: new Date(Date.now() - dagar * 24 * 60 * 60 * 1000).toISOString(),
+        // SENASTE RORELSEN, inte "nu minus dagar". Talet ar detsamma, men
+        // tidpunkten ar stabil mellan tva sidvisningar — och det ar vad
+        // olast-regeln langst ner kraver for att posten alls ska kunna lysa.
+        tidpunkt: senast,
         olast: true,
       });
     }
+  }
+
+  /**
+   * ===========================================================================
+   * 0047. DET SOM HANDE — de enda posterna i filen som inte raknas fram.
+   *
+   * Raden ar redan en notis: rubriken skrevs av den server action som gjorde
+   * saken, och den star oforandrad efterat med flit. "Din order pa 12 000 kr
+   * godkandes" ska sta kvar aven sedan ordern makulerats, for det VAR vad som
+   * hande. En harledd text hade skrivit om historien varje gang objektet rordes.
+   *
+   * TYPEN PROVAS, for den kommer ur en textkolumn. En typ som inte finns hade
+   * gett `TYP_IKON[n.typ] === undefined` och ett tomt ikonnamn mitt i klockan.
+   * Raden kastas hellre an ritas fel.
+   * ===========================================================================
+   */
+  for (const h of notishandelser ?? []) {
+    if (!arNotistyp(h.typ)) continue;
+    notiser.push({
+      id: notisId(h.kalla as Notiskalla, String(h.id)),
+      typ: h.typ,
+      rubrik: h.rubrik,
+      detalj: h.detalj ?? "",
+      href: h.href,
+      tidpunkt: h.created_at,
+      olast: arNy(h.created_at),
+    });
+  }
+
+  /**
+   * Anstallningsavtalet. Bara mitt eget — se fragan ovan for varfor filtret
+   * behovs trots RLS.
+   *
+   * Posten star kvar sa lange avtalet ar utfardat, precis som den okvitterade
+   * rutinen gor. Ett avtal man inte last ar inte mindre outlast for att det gatt
+   * en vecka.
+   */
+  for (const a of avtalen ?? []) {
+    if (a.employee_id !== mig || !a.issued_at) continue;
+    notiser.push({
+      id: notisId("avtal", a.id),
+      typ: "avtal",
+      rubrik: "Du har fått ett avtal",
+      detalj: `${a.title} · läs och spara ner det`,
+      href: `/avtal/${a.id}`,
+      tidpunkt: a.issued_at,
+      olast: arNy(a.issued_at),
+    });
+  }
+
+  // K37-fristerna. Egna formuleras som en uppgift, andras som en tillsyn —
+  // samma uppdelning som franvarons paminnelser gor.
+  const FRISTTEXT: Record<string, string> = {
+    certificate: "Läkarintyg",
+    fk_notice: "Anmälan till Försäkringskassan",
+    return_plan: "Plan för återgång",
+  };
+
+  const idag = svensktDatum();
+  for (const f of (sjukfrister ?? []) as unknown as {
+    id: string;
+    kind: string;
+    due_on: string;
+    created_at: string;
+    sick_report: { employee_id: string; first_sick_day: string } | null;
+  }[]) {
+    if (!f.sick_report) continue;
+    const dagarKvar = Math.round(
+      (Date.parse(`${f.due_on}T12:00:00Z`) - Date.parse(`${idag}T12:00:00Z`)) / 86_400_000,
+    );
+    if (dagarKvar > FRIST_VARSEL_DAGAR) continue;
+
+    const mitt = f.sick_report.employee_id === mig;
+    const vad = FRISTTEXT[f.kind] ?? "Frist";
+    notiser.push({
+      id: notisId("sjuk-frist", f.id),
+      typ: "franvaro",
+      rubrik: mitt
+        ? dagarKvar < 0
+          ? `${vad} skulle ha lämnats ${f.due_on}`
+          : `${vad} senast ${f.due_on}`
+        : `${namn.get(f.sick_report.employee_id) ?? "En medarbetare"}: ${vad.toLowerCase()} ${f.due_on}`,
+      detalj: mitt
+        ? `Sjuk sedan ${f.sick_report.first_sick_day}`
+        : dagarKvar < 0
+          ? "Fristen har passerat"
+          : `${dagarKvar} dagar kvar`,
+      href: "/franvaro/sjuk",
+      // Tidpunkten ar nar fristen SKAPADES och inte nar den forfaller. En
+      // tidpunkt i framtiden hade lagt posten overst i klockan i flera dygn
+      // innan den blev aktuell — sorteringen ar nyast forst, inte narmast forst.
+      tidpunkt: f.created_at,
+      olast: true,
+    });
+  }
+
+  // Certifieringar som narmar sig sitt slut. Kurstiteln kommer ur `kurser`,
+  // som redan lasts ovan — en certifiering pa en avpublicerad kurs far namnlos
+  // rubrik i stallet for en extra fraga.
+  const kurstitel = new Map((kurser ?? []).map((k) => [k.id, { titel: k.title, slug: k.slug }]));
+  for (const c of certifikat ?? []) {
+    if (!c.expires_at) continue;
+    const dagarKvar = Math.round((Date.parse(c.expires_at) - Date.now()) / 86_400_000);
+    // Redan utgangen ar inte langre en varning utan en ogjord kurs, och den
+    // posten bygger `kurser`-slingan ovan. Tva poster for samma sak hade betytt
+    // att bortklicket pa den ena lamnade den andra kvar.
+    if (dagarKvar < 0 || dagarKvar > CERTIFIKAT_VARSEL_DAGAR) continue;
+
+    const k = kurstitel.get(c.course_id);
+    notiser.push({
+      // ID:T BAR ANTALET DAGAR I HELA VECKOR, sa posten ateruppstar en gang i
+      // veckan for den som klickat bort den och fortfarande inte gjort om
+      // kursen — och tystnar helt sa fort certifieringen fornyats.
+      id: notisId("certifikat-gar-ut", c.id, Math.floor(dagarKvar / 7)),
+      typ: "kurs",
+      rubrik: dagarKvar === 0 ? "Din certifiering går ut i dag" : `Certifiering går ut om ${dagarKvar} dagar`,
+      detalj: `${k?.titel ?? "En kurs"} · gör om kursen för att förnya`,
+      href: k ? `/utbildning/${k.slug}` : "/utbildning",
+      // Tidpunkten ar nar posten BLEV aktuell — trettio dagar fore utgangen —
+      // och inte "nu minus nagot". Skillnaden syns i `olast` langst ner: en
+      // stabil tidpunkt gar att jamfora med "senast oppnad", en tidpunkt som
+      // raknas om vid varje sidvisning gor det inte.
+      tidpunkt: new Date(Date.parse(c.expires_at) - CERTIFIKAT_VARSEL_DAGAR * 86_400_000).toISOString(),
+      olast: true,
+    });
+  }
+
+  /**
+   * AC-5.1. Rutiner jag AGER vars granskningsdatum passerat.
+   *
+   * Gar bara till agaren, aldrig till lasarna. En rutin som behover ses over ar
+   * fortfarande giltig — det ar agarens uppgift att titta pa den, inte hela
+   * navets sak att fa veta att den ar gammal.
+   */
+  for (const d of minaDokument ?? []) {
+    if (!d.review_due || d.review_due > idag) continue;
+    const dagarSedanGranskning = Math.round(
+      (Date.parse(`${idag}T12:00:00Z`) - Date.parse(`${d.review_due}T12:00:00Z`)) / 86_400_000,
+    );
+    notiser.push({
+      // Veckoraknaren igen: posten kommer tillbaka en gang i veckan tills
+      // granskningsdatumet flyttats fram.
+      id: notisId("rutin-granskning", d.id, Math.floor(dagarSedanGranskning / 7)),
+      typ: "rutin",
+      rubrik: `${d.title} behöver granskas`,
+      detalj:
+        dagarSedanGranskning === 0
+          ? "Granskningsdatumet är i dag · du står som ägare"
+          : `Granskningsdatumet passerade för ${dagarSedanGranskning} dagar sedan`,
+      href: `/rutiner/${d.slug}`,
+      tidpunkt: `${d.review_due}T08:00:00Z`,
+      olast: true,
+    });
+  }
+
+  // K&V-bedomningar pa mina egna samtal. Den som bedomt sitt eget samtal far
+  // ingen post — det ar samma regel som `notifiera()` haller for handelserna.
+  for (const b of (bedomningar ?? []) as unknown as {
+    call_id: string;
+    assessed_by: string;
+    assessed_at: string;
+    kv_call: { employee_id: string; call_date: string; customer: string } | null;
+  }[]) {
+    if (!b.kv_call || b.kv_call.employee_id !== mig || b.assessed_by === mig) continue;
+    notiser.push({
+      // Tidpunkten i id:t gor en OMBEDOMNING till en ny post. `kv_assessment`
+      // har `updated_at`, alltsa gar samma samtal att bedoma om — och den andra
+      // bedomningen ar ett nytt besked, inte samma.
+      id: notisId("kv-bedomning", b.call_id, Date.parse(b.assessed_at)),
+      typ: "kv",
+      rubrik: "Ditt samtal är bedömt",
+      detalj: `${b.kv_call.customer} · ${b.kv_call.call_date} · ${namn.get(b.assessed_by) ?? "en kollega"}`,
+      href: `/kv/${b.call_id}`,
+      tidpunkt: b.assessed_at,
+      olast: arNy(b.assessed_at),
+    });
+  }
+
+  // Provision bokford pa mig av nagon annan. Ett negativt belopp ar en
+  // rattelse, och den formuleras som en rattelse — inte som en intjaning.
+  for (const p of provisionsposter ?? []) {
+    if (p.employee_id !== mig || p.entered_by === mig) continue;
+    const belopp = Number(p.amount);
+    const manad = String(p.period_month).slice(0, 7);
+    notiser.push({
+      id: notisId("provision-bokford", p.id),
+      typ: "provision",
+      rubrik:
+        belopp < 0
+          ? `Rättelse på din provision: ${belopp.toLocaleString("sv-SE")} kr`
+          : `Provision bokförd: ${belopp.toLocaleString("sv-SE")} kr`,
+      detalj: `${manad} · av ${namn.get(p.entered_by) ?? "provisionsansvarig"}`,
+      href: "/provision",
+      tidpunkt: p.entered_at,
+      olast: arNy(p.entered_at),
+    });
   }
 
   /**
@@ -663,7 +996,37 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
    */
   const bortklickade = new Set((avfardade ?? []).map((a) => a.notice_id));
 
-  return sortera(notiser.filter((n) => n.tidpunkt && !bortklickade.has(n.id))).slice(0, MAX_NOTISER);
+  /**
+   * ===========================================================================
+   * "OLAST" BETYDER "HANT SEDAN DU SIST OPPNADE" — OCH NU GALLER DET ALLA.
+   *
+   * Ett dussin poster ovan satter `olast: true` rakt av. Det var ratt sa lange
+   * klockan bara SLACKTE prickarna nar den oppnades: en pamminelse som statt
+   * still i en vecka ar fortfarande obesvarad, och att kalla den last for att
+   * nagon oppnade menyn i gar hade varit att ljuga om vad prickan betyder.
+   *
+   * Men det gjorde ocksa att siffran pa klockan ALDRIG kunde bli noll. Sa lange
+   * det enda sattet att bli av med en prick var att klicka bort posten var det
+   * en egenhet man vande sig vid. Med knappen "Markera alla som lasta" (2026-09-03)
+   * ar det ett trasigt lofte: man trycker, och siffran star kvar.
+   *
+   * Regeln nedan loser bada halvorna pa en gang. `olast` blir en fraga om
+   * TIDPUNKTEN, aldrig om vem som byggde posten: hande det efter att du sist
+   * oppnade klockan ar det olast, annars inte. En post kan alltsa gora sig
+   * olast igen — det ar precis vad veckoraknaren i id:t ar till for — men den
+   * kan inte lysa i evighet.
+   *
+   * DARFOR MASTE VARJE TIDPUNKT VARA STABIL. En post som raknar `Date.now()`
+   * minus nagot far en ny tidpunkt vid varje sidvisning och blir da last i samma
+   * sekund den skapas. Det ar skalet till att certifikatposten ovan raknar
+   * bakat fran `expires_at` i stallet for framat fran nu.
+   * ===========================================================================
+   */
+  const kvar = notiser
+    .filter((n) => n.tidpunkt && !bortklickade.has(n.id))
+    .map((n) => (n.olast && !arNy(n.tidpunkt) ? { ...n, olast: false } : n));
+
+  return sortera(kvar).slice(0, MAX_NOTISER);
 }
 
 /**
