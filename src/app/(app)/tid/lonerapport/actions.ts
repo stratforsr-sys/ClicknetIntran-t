@@ -8,6 +8,7 @@ import { hamtaLage } from "@/lib/sparrar";
 import { blockeringar, type Blockering } from "@/lib/lonerapport";
 import { franvarominuter } from "@/lib/franvaro";
 import { schemaminuter } from "@/lib/franvaro-server";
+import { notifiera, notifieraFlera } from "@/lib/notishandelse-server";
 
 export type PeriodState = { fel?: string; ok?: string; blockeringar?: Blockering[] };
 
@@ -309,6 +310,39 @@ export async function attestera(_prev: PeriodState, form: FormData): Promise<Per
       period: `${period.period_start} – ${period.period_end}`,
     });
 
+    /**
+     * VAR OCH EN MED EN RAD I PERIODEN FAR VETA ATT DEN AR LAST.
+     *
+     * `payroll_period_read` i 0012 slapper bara in lonekretsen, men
+     * `payroll_row_read` slapper in DEN EGNA RADEN — "att se sin egen arbetade
+     * tid i det underlag som gar till lonen ar inte insyn i andra". Notisen gar
+     * darfor precis sa langt som lasratten redan gick.
+     *
+     * Poangen ar tidsfonstret. Efter attesten rattas ingenting; det som ar fel
+     * far laggas till bredvid i nasta period (AC-2.16). Den som upptacker en
+     * felaktig dag har alltsa en gräns att halla sig innanfor, och fram till nu
+     * fick hon inte veta nar den passerades.
+     *
+     * En rad per person, en insert. Ett trettiotal rader en gang i manaden.
+     */
+    const { data: rader } = await db
+      .from("payroll_row")
+      .select("employee_id")
+      .eq("period_id", period.id);
+
+    await notifieraFlera(
+      (rader ?? []).map((r) => r.employee_id as string),
+      {
+        av: user.employee!.id,
+        kalla: "lon-attesterad",
+        typ: "lon",
+        rubrik: `Löneunderlaget för ${period.period_start} – ${period.period_end} är attesterat`,
+        detalj: "Perioden är låst. Rättelser läggs till i nästa period.",
+        href: `/tid/lonerapport/${period.id}`,
+        objekt: { typ: "payroll_period", id: period.id },
+      },
+    );
+
     revalidatePath(`/tid/lonerapport/${period.id}`);
     return { ok: "Perioden är attesterad och låst." };
   } catch (e) {
@@ -347,6 +381,29 @@ export async function laggJustering(_prev: PeriodState, form: FormData): Promise
       minuter,
     });
 
+    /**
+     * AC-2.16: EFTER ATTEST RATTAS INGENTING — DET LAGGS TILL BREDVID.
+     *
+     * En justering andrar alltsa nagons minuter i en period som redan ar last,
+     * och den ar den enda skrivningen i modulen som gor det. Motiveringen ar
+     * obligatorisk och "blir kvar" enligt formularet — men den blev kvar for
+     * den som skrev den, inte for den det gallde.
+     *
+     * Tecknet skrivs FOR HAND. "+45 minuter" och "−45 minuter" ar tva helt
+     * olika besked, och `toLocaleString` skriver bara ut minus — plusset maste
+     * satas dit, annars ser ett tillagg ut som ett neutralt tal.
+     */
+    await notifiera({
+      till: employeeId,
+      av: user.employee!.id,
+      kalla: "lon-justering",
+      typ: "lon",
+      rubrik: `Din lönerapport är justerad: ${minuter > 0 ? "+" : "−"}${Math.abs(minuter)} minuter`,
+      detalj: motivering,
+      href: `/tid/lonerapport/${periodId}`,
+      objekt: { typ: "payroll_period", id: periodId },
+    });
+
     revalidatePath(`/tid/lonerapport/${periodId}`);
     return { ok: "Justeringen är bokförd." };
   } catch (e) {
@@ -369,6 +426,13 @@ export async function avslutaAvvikelse(form: FormData): Promise<void> {
   const id = String(form.get("avvikelse_id") ?? "");
   const anteckning = String(form.get("anteckning") ?? "").trim() || null;
 
+  // Vems avvikelsen var lases fore avslutet, sa att beskedet gar ratt.
+  const { data: avvikelse } = await db
+    .from("break_deviation")
+    .select("employee_id, work_date, kind")
+    .eq("id", id)
+    .maybeSingle();
+
   await db
     .from("break_deviation")
     .update({
@@ -386,6 +450,26 @@ export async function avslutaAvvikelse(form: FormData): Promise<void> {
     object_id: id,
     meta: anteckning ? { anteckning } : null,
   });
+
+  /**
+   * AC-2.29 / K31: att avsluta en avvikelse ar att kvittera att den ar
+   * omhandertagen, och INGEN konsekvens hanger i knappen. Just darfor ar
+   * beskedet viktigt at andra hallet: den som sett en avvikelse pa sin egen
+   * dag vet inte om den ar utagerad eller om den ligger kvar och vaxer.
+   * Anteckningen — chefens egna ord — foljer med.
+   */
+  if (avvikelse?.employee_id) {
+    await notifiera({
+      till: avvikelse.employee_id,
+      av: user.employee.id,
+      kalla: "tid-avvikelse-avslutad",
+      typ: "tid",
+      rubrik: `Din rastavvikelse ${avvikelse.work_date} är avslutad`,
+      detalj: anteckning ?? "Omhändertagen. Ingen konsekvens är kopplad till den.",
+      href: "/tid/avvikelser",
+      objekt: { typ: "break_deviation", id },
+    });
+  }
 
   revalidatePath("/tid/avvikelser");
 }

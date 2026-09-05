@@ -3,7 +3,79 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-03 (kväll) — släpplistan "Nytt i navet" är påslagen i produktion, startsidan bär nu chefens dagsläge (sjuka, lediga, sena), personal går att ta bort (0046), riktig logotyp i sidopanelen, coachningens lagvy är personkort i produktion, nytt lösenordskrav (8 tecken + siffra) på branch
+**Senast uppdaterad:** 2026-09-04 — klockan notifierar allt som rör en person (63 källor mot 21), med "Markera alla som lästa" och kryss per rad. Ligger på branch `notiser-for-allt-2` och väntar på godkännande.
+
+## Klockan notifierar allt sedan 2026-09-04 — ligger på branch
+
+*Branch `notiser-for-allt-2`, migration `0047_notishandelser` är körd mot
+produktionsdatabasen. Väntar på godkännande innan merge.*
+
+Beställarens krav: *"allt måste ha notis så att vi kan se exakt vad som händer,
+annars vet man inte."* Genomgången visade att klockan hade 21 källor och att
+ungefär halva navet var tyst — den som *underkände* en coachningsuppgift gav
+besked, den som *godkände* gav ingenting.
+
+**Klockan bär nu två sorters post, och skillnaden är arkitektonisk:**
+
+- **"Något väntar på dig"** räknas fortfarande fram ur raderna som redan finns.
+  0018:s argument står: tillståndet finns kvar så länge saken är ogjord, så
+  ingen producent *kan* skapa en tyst lucka.
+- **"Något hände dig"** läses ur `notification_event` (0047). De posterna går
+  inte att härleda, för händelsen skriver över tillståndet: en godkänd uppgift
+  är bara `klar`, en returnerad order är `utkast` igen, ett tillbakadraget avtal
+  är inte ens läsbart för den det gäller.
+
+**`audit_log` provades och föll**: `audit_log_read` släpper aldrig in en
+salesperson (PRD §5.2), och loggen säger vem som *gjorde* något — inte vem som
+behöver veta.
+
+**29 nya händelsekällor och 6 nya härledda.** 21 blev 64 (`navnyhet` inräknad).
+
+### Tre regler att inte bryta
+
+- **`notifiera()` skickar aldrig till aktören själv.** Regeln ligger i
+  hjälpfunktionen och inte hos anroparna — det är trettio ställen att glömma den
+  på. Chefen som godkänner tolv order ska inte möta tolv notiser om det.
+- **Texten skrivs vid händelsen och ändras aldrig.** "Din order på 12 000 kr
+  godkändes" ska stå kvar även sedan ordern makulerats, för det *var* vad som
+  hände.
+- **Varje tidpunkt måste vara stabil mellan två sidvisningar.** `olast` är nu en
+  fråga om tidpunkten och inget annat: hände det efter att du sist öppnade
+  klockan är det oläst. En post som räknar `Date.now()` minus något blir därför
+  läst i samma sekund den skapas. `guide-team` och `coachning-team` bär numera
+  senaste rörelsen, och certifikatposten räknar bakåt från `expires_at`.
+
+### `tests/notiser-tackning.mjs` är svaret på 0018:s invändning
+
+Provet läser varje `src/app/**/actions.ts` och kräver att **varje exporterad
+server action** står bokförd som `"notifierar"` (och läser filen för att
+kontrollera att anropet finns), `"harledd"`, eller med en mening om varför den
+inte notifierar någon. En ny action som ingen tänkt på faller provet med sitt
+namn.
+
+**Lägger du till en server action: skriv raden i `TACKNING` i samma commit.**
+
+### Två knappar i klockan
+
+**"Markera alla som lästa"** släcker prickarna men tömmer inte listan.
+**Krysset** per rad tar bort posten och lämnar panelen öppen. Krysset
+respekterar med flit **inte** `bekraftas` — klicket betyder "jag går och läser",
+krysset betyder "den här behöver jag inte se". `MAX_NOTISER` gick från 15 till 25.
+
+### Vad som medvetet INTE notifierar
+
+Regeländringar och konfiguration: frånvaropolicy, K&V-regler, provisionstrappa,
+modulspärrar. Beställarens val 2026-09-04 — de står i `/logg`. Varje sådan
+action står med sitt skäl i täckningsprovet, så valet är dokumenterat och inte
+glömt.
+
+### Kvar att göra
+
+- **Godkännande och merge.** Preview:
+  `https://clicknet-nav-git-notiser-for-allt-2-zens-projects-6c1be12b.vercel.app`
+  (öppna i webbläsare — Vercel-skyddet ger 302 på curl).
+- Migrationen är redan körd, så den nya tabellen finns i produktion. Den är
+  additiv och main-koden rör den inte.
 
 ## ALLT NYTT SOM BYGGS FÅR EN RAD I `src/navnyheter/poster.ts`
 
@@ -157,6 +229,31 @@ ett per miljö. Ett test på en branch skriver riktiga rader. Håll migrationer
 additiva så `main`-koden aldrig rör de nya tabellerna, och stäm av innan testdata
 skapas. Preview-miljön saknar `STEG2_SECRET` och `CRON_SECRET`, så
 inbjudningsmejl och `/api/jobb/*` fungerar inte där.
+
+### EN COMMIT PER ÄNDRING — ALDRIG EN PER FIL
+
+Vercel-projektet ligger på fria planen: **100 deployer per dygn**, och varje
+commit på en bevakad branch blir en deploy. Arbetet sker via GitHub API, och en
+`PUT` mot Contents API är en commit — så en ändring i trettiofem filer blir
+trettiofem deployer om man skriver dem en och en.
+
+Det hände 2026-09-04. Kvoten tog slut mitt i passet, och då gick det inte längre
+att verifiera någonting alls: Vercel svarar `402 api-deployments-free-per-day`
+på både git-integrationen och `vercel redeploy`, och det är en **plangräns, inte
+ett fel** — den går inte att trycka igenom med omförsök. Bygget som hann gå
+igenom täckte bara halva ändringen, och resten fick typkontrolleras för hand.
+
+**Skriv därför hela ändringen som en enda commit med Git Data API:**
+
+```
+gh api -X POST repos/.../git/blobs   -f content=<base64> -f encoding=base64   # en per fil
+gh api -X POST repos/.../git/trees   -f base_tree=<sha> ...                   # ett träd
+gh api -X POST repos/.../git/commits -f tree=<sha> -f parents[]=<sha> -f message=...
+gh api -X PATCH repos/.../git/refs/heads/<branch> -f sha=<ny-commit>
+```
+
+Ett pass blir då en deploy i stället för trettiofem — och commit-historiken
+säger vad som byggdes i stället för i vilken ordning filerna råkade skrivas.
 
 ## Coachningsmodulen är i produktion sedan 2026-09-02
 

@@ -23,6 +23,7 @@ import {
   TYPFALT,
 } from "@/lib/franvaro-server";
 import { forberedUppladdning, registreraFil } from "@/lib/filer-server";
+import { cheferFor, notifiera, notifieraFlera } from "@/lib/notishandelse-server";
 
 export type FranvaroState = { fel?: string; ok?: string };
 
@@ -189,7 +190,7 @@ export async function draTillbaka(_prev: FranvaroState, form: FormData): Promise
 
   const { data: ansokan } = await db
     .from("absence_request")
-    .select("id, employee_id, status")
+    .select("id, employee_id, type_id, starts_on, ends_on, status")
     .eq("id", id)
     .maybeSingle();
 
@@ -208,6 +209,25 @@ export async function draTillbaka(_prev: FranvaroState, form: FormData): Promise
     action: "absence.withdrawn",
     object_type: "absence_request",
     object_id: id,
+  });
+
+  /**
+   * ANSOKAN FORSVINNER UR CHEFENS KO, OCH DET AR HELA PROBLEMET.
+   *
+   * Klockans `franvaro`-post raknas fram ur `status = 'submitted'`. Nar den
+   * anstallda drar tillbaka sin ansokan blir statusen `withdrawn`, posten
+   * slutar finnas, och chefen som stod i begrepp att ta stallning ser bara en
+   * rad som inte langre ar dar. Utan raden nedan finns ingen skillnad mellan
+   * "hon angrade sig" och "jag mindes fel".
+   */
+  await notifieraFlera(await cheferFor(user.employee.id), {
+    av: user.employee.id,
+    kalla: "franvaro-tillbakadragen",
+    typ: "franvaro",
+    rubrik: `${user.employee.first_name} ${user.employee.last_name} drog tillbaka sin ansökan`,
+    detalj: `${ansokan.starts_on}–${ansokan.ends_on} · inget beslut behövs längre`,
+    href: "/franvaro/attest",
+    objekt: { typ: "absence_request", id },
   });
 
   revalidatePath("/franvaro");
@@ -298,7 +318,7 @@ export async function stallInLedighet(_prev: FranvaroState, form: FormData): Pro
 
   const { data: ansokan } = await db
     .from("absence_request")
-    .select("id, employee_id, type_id, status")
+    .select("id, employee_id, type_id, starts_on, ends_on, status")
     .eq("id", id)
     .maybeSingle();
 
@@ -324,6 +344,28 @@ export async function stallInLedighet(_prev: FranvaroState, form: FormData): Pro
     action: "absence.cancelled",
     object_type: "absence_request",
     object_id: id,
+  });
+
+  /**
+   * EN INSTALLD LEDIGHET AR EN AVBESTALLD SEMESTER.
+   *
+   * Ansokan var GODKAND. Personen har fatt ett besked, planerat efter det och
+   * kanske bokat nagot. Att statusen tyst gar fran `approved` till `cancelled`
+   * ar den enskilt varsta tystnaden i modulen — beskedet hon fick galler inte
+   * langre, och ingenting sager det.
+   *
+   * Den som staller in SIN EGEN ledighet far ingen rad; `notifiera()` haller
+   * ute aktoren.
+   */
+  await notifiera({
+    till: ansokan.employee_id,
+    av: user.employee.id,
+    kalla: "franvaro-installd",
+    typ: "franvaro",
+    rubrik: "Din godkända ledighet är inställd",
+    detalj: `${typ?.label ?? ansokan.type_id} · ${ansokan.starts_on}–${ansokan.ends_on}`,
+    href: `/franvaro/${id}`,
+    objekt: { typ: "absence_request", id },
   });
 
   revalidatePath("/franvaro");
@@ -439,7 +481,7 @@ export async function bekraftaSjuk(_prev: FranvaroState, form: FormData): Promis
 
   const { data: anmalan } = await db
     .from("sick_report")
-    .select("id, employee_id, confirmed_at, cancelled_at")
+    .select("id, employee_id, first_sick_day, confirmed_at, cancelled_at")
     .eq("id", id)
     .maybeSingle();
 
@@ -464,6 +506,28 @@ export async function bekraftaSjuk(_prev: FranvaroState, form: FormData): Promis
     action: "sick.confirmed",
     object_type: "sick_report",
     object_id: id,
+  });
+
+  /**
+   * DEN SJUKE FAR VETA ATT NAGON SETT ANMALAN.
+   *
+   * Bekraftelsen har alltid haft en mottagare i andra riktningen: klockans
+   * `sjuk`-post star kvar hos chefen tills nagon bekraftar. Den som ar SJUK har
+   * daremot aldrig fatt nagot — hon anmalde sig och horde sedan ingenting, och
+   * en obekraftad anmalan ser precis likadan ut som en bekraftad.
+   *
+   * K35 galler har som i hela filen: ingen orsak, ingen diagnos. Raden sager
+   * att anmalan tagits emot, och ingenting mer.
+   */
+  await notifiera({
+    till: anmalan.employee_id,
+    av: user.employee.id,
+    kalla: "sjuk-bekraftad",
+    typ: "franvaro",
+    rubrik: "Din sjukanmälan är bekräftad",
+    detalj: `Sjuk sedan ${anmalan.first_sick_day} · din chef har sett den`,
+    href: "/franvaro/sjuk",
+    objekt: { typ: "sick_report", id },
   });
 
   revalidatePath("/franvaro/sjuk");
@@ -511,6 +575,21 @@ export async function avslutaSjuk(_prev: FranvaroState, form: FormData): Promise
     meta: { sista_dag: sistaDag },
   });
 
+  // Bade chefen och den sjuke far avsluta perioden. Avslutar chefen den ar
+  // sista sjukdagen ett pastaende OM nagon annan, och den det galler ska kunna
+  // saga emot. Avslutar hon den sjalv skickas ingenting — `notifiera()` haller
+  // ute aktoren.
+  await notifiera({
+    till: anmalan.employee_id,
+    av: user.employee.id,
+    kalla: "sjuk-avslutad",
+    typ: "franvaro",
+    rubrik: "Din sjukperiod är avslutad",
+    detalj: `Sista sjukdagen är registrerad som ${sistaDag}`,
+    href: "/franvaro/sjuk",
+    objekt: { typ: "sick_report", id },
+  });
+
   revalidatePath("/franvaro");
   revalidatePath("/franvaro/sjuk");
   return { ok: "Sjukperioden är avslutad." };
@@ -526,7 +605,7 @@ export async function stallInSjuk(_prev: FranvaroState, form: FormData): Promise
 
   const { data: anmalan } = await db
     .from("sick_report")
-    .select("id, employee_id, cancelled_at")
+    .select("id, employee_id, first_sick_day, cancelled_at")
     .eq("id", id)
     .maybeSingle();
 
@@ -549,6 +628,26 @@ export async function stallInSjuk(_prev: FranvaroState, form: FormData): Promise
     action: "sick.cancelled",
     object_type: "sick_report",
     object_id: id,
+  });
+
+  /**
+   * EN INSTALLD SJUKANMALAN AR EN DAG SOM BYTER BETYDELSE.
+   *
+   * Raden tas aldrig bort — databasen vagrar — men `cancelled_at` gor att den
+   * slutar racknas som franvaro. Foljden ar att dagen blir en SCHEMALAGD DAG
+   * UTAN STAMPLING, alltsa precis det `franvaro-lucka` larmar om. Den som inte
+   * fatt veta att anmalan stalldes in moter alltsa en pamminelse om nagot hon
+   * trodde var utagerat.
+   */
+  await notifiera({
+    till: anmalan.employee_id,
+    av: user.employee.id,
+    kalla: "sjuk-installd",
+    typ: "franvaro",
+    rubrik: "Din sjukanmälan är inställd",
+    detalj: `Anmälan från ${anmalan.first_sick_day} räknas inte längre. Dagarna behöver registreras på nytt.`,
+    href: "/franvaro",
+    objekt: { typ: "sick_report", id },
   });
 
   revalidatePath("/franvaro");
@@ -661,6 +760,25 @@ export async function mataInSaldo(_prev: FranvaroState, form: FormData): Promise
     object_type: "employee",
     object_id: employeeId,
     meta: { typ: typId, dagar, as_of: asOf, intjanandear: ar },
+  });
+
+  /**
+   * SALDOT AR NAGONS PASTAENDE, och den det galler ska kunna se det.
+   *
+   * AC-2.17/K5: navet raknar ingen semesterratt. Talet kommer fran ett annat
+   * system och matas in for hand — och just darfor ar det viktigt att den vars
+   * saldo det ar far veta nar det andras. Ett fel i inmatningen upptacks bara
+   * av den som vet hur manga dagar hon har kvar.
+   */
+  await notifiera({
+    till: employeeId,
+    av: user.employee.id,
+    kalla: "franvaro-saldo",
+    typ: "franvaro",
+    rubrik: `Ditt saldo är uppdaterat: ${dagar} dagar`,
+    detalj: `${typId} · gällde ${asOf}`,
+    href: "/franvaro",
+    objekt: { typ: "employee", id: employeeId },
   });
 
   revalidatePath(`/personal/${employeeId}`);

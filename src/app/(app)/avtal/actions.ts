@@ -13,6 +13,7 @@ import {
   trasigaKlamrar,
 } from "@/lib/avtal";
 import { sattKvitto } from "@/lib/toast-server";
+import { notifiera } from "@/lib/notishandelse-server";
 
 export type AvtalState = { fel?: string };
 
@@ -252,6 +253,15 @@ export async function draTillbakaAvtal(form: FormData): Promise<void> {
   if (!skal) throw new Error("Ange varför avtalet dras tillbaka.");
 
   const db = supabaseAdmin();
+
+  // Lases FORE skrivningen: efterat ar avtalet `withdrawn`, och da behovs
+  // raden anda for att veta vem beskedet ska till.
+  const { data: avtalet } = await db
+    .from("contract")
+    .select("employee_id, title")
+    .eq("id", id)
+    .maybeSingle();
+
   await db
     .from("contract")
     .update({
@@ -269,6 +279,34 @@ export async function draTillbakaAvtal(form: FormData): Promise<void> {
     object_id: id,
     reason: skal,
   });
+
+  /**
+   * DET TILLBAKADRAGNA AVTALET FORSVINNER UR PERSONENS EGEN VY.
+   *
+   * `contract_read` i 0028 slapper igenom den anstalldas eget avtal bara medan
+   * det ar `issued`. I samma sekund statusen blir `withdrawn` ser hon inte
+   * raden alls — inte ens att den funnits. Ett avtal hon last, kanske skrivit
+   * ut, ar helt enkelt borta.
+   *
+   * Det ar precis darfor posten maste vara en HANDELSE och inte en harledning:
+   * det finns ingen rad kvar for henne att harleda den ur. Rubriken och skalet
+   * star i `notification_event`, som ar hennes egen tabell.
+   *
+   * Sokvagen pekar pa /avtal och inte pa avtalet — den sidan skulle ge en
+   * tom vy, eftersom raden inte langre gar att lasa.
+   */
+  if (avtalet?.employee_id) {
+    await notifiera({
+      till: avtalet.employee_id,
+      av: user.employee.id,
+      kalla: "avtal-tillbakadraget",
+      typ: "avtal",
+      rubrik: `Ditt avtal är tillbakadraget: ${avtalet.title}`,
+      detalj: skal,
+      href: "/avtal",
+      objekt: { typ: "contract", id },
+    });
+  }
 
   revalidatePath("/avtal");
   revalidatePath(`/avtal/${id}`);

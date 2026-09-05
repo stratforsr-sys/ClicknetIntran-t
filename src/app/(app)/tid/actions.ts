@@ -11,6 +11,8 @@ import {
   type Stamptyp,
 } from "@/lib/tid";
 import { hamtaLage } from "@/lib/sparrar";
+import { svenskKlocka } from "@/lib/klocka";
+import { medRoll, notifiera, notifieraFlera } from "@/lib/notishandelse-server";
 
 export type TidState = { fel?: string; ok?: string };
 
@@ -170,6 +172,28 @@ export async function begarRattelse(_prev: TidState, form: FormData): Promise<Ti
     till: ny.toISOString(),
   });
 
+  /**
+   * "Skickat till din chef" var en utsaga utan mottagare.
+   *
+   * En rattelsebegaran skapade en rad med `correction_state = 'pending'` och
+   * ingenting mer. Den lag i /tid tills nagon rakade titta, och tills dess var
+   * journalen fel utan att nagon visste om det.
+   *
+   * KRETSEN AR DEN SOM FAR BESLUTA, inte den som ar narmaste chef. Villkoret i
+   * `beslutaRattelse` nedan ar `canManageEmployees()` — saljchef och
+   * administrator — och en teamledare som fatt notisen hade motts av en knapp
+   * som inte fungerar. En notis ska aldrig peka pa nagot man inte far gora.
+   */
+  await notifieraFlera(await medRoll("sales_manager", "admin"), {
+    av: user.employee.id,
+    kalla: "tid-rattelse",
+    typ: "tid",
+    rubrik: `${user.employee.first_name} ${user.employee.last_name} vill rätta en stämpling`,
+    detalj: `${svenskKlocka(original.occurred_at)} → ${svenskKlocka(ny)} · ${motivering}`,
+    href: "/tid",
+    objekt: { typ: "time_event", id: rad.id },
+  });
+
   revalidatePath("/tid", "layout");
   return { ok: "Skickat till din chef." };
 }
@@ -198,6 +222,35 @@ export async function beslutaRattelse(form: FormData): Promise<void> {
   if (error) return;
 
   await logga(user.employee.id, godkann ? "time.correction_approved" : "time.correction_rejected", id);
+
+  /**
+   * BESLUTET AR SLUTGILTIGT, och darfor ar beskedet inte valfritt.
+   *
+   * Raden BAR sitt beslut — `correction_state` och `decided_at` star kvar — sa
+   * posten hade i teorin gatt att harleda. Den ligger anda har, av tva skal:
+   * raden ar en STAMPLING och inte ett arende, sa en harledning hade behovt
+   * lasa hela `time_event` for varje sidvisning i klockan; och en rattelse som
+   * avslas ar ett besked EN gang, inte ett tillstand som star kvar.
+   */
+  const { data: rattelse } = await supabaseAdmin()
+    .from("time_event")
+    .select("employee_id, occurred_at, kind")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (rattelse) {
+    await notifiera({
+      till: rattelse.employee_id,
+      av: user.employee.id,
+      kalla: "tid-rattelse-beslut",
+      typ: "tid",
+      rubrik: godkann ? "Din rättelse är godkänd" : "Din rättelse avslogs",
+      detalj: `${rattelse.kind === "in" ? "Instämpling" : "Utstämpling"} ${svenskKlocka(rattelse.occurred_at)}${godkann ? " · journalen är uppdaterad" : " · den ursprungliga tiden står kvar"}`,
+      href: "/tid",
+      objekt: { typ: "time_event", id },
+    });
+  }
+
   revalidatePath("/tid", "layout");
 }
 
@@ -226,6 +279,32 @@ function niva(form: FormData) {
     employee_id: scope === "employee" ? id : null,
     team_id: scope === "team" ? id : null,
   };
+}
+
+/**
+ * Vilka ett schema pa `scope` faktiskt galler.
+ *
+ * ETT BOLAGSSCHEMA GER TOM LISTA, med flit. Det ar en policy och inte ett
+ * besked om en person, och anvandarens beslut 2026-09-03 var att regel- och
+ * konfigurationsandringar inte ska ga ut i allas klockor — de star i /logg.
+ * Ett schema pa en PERSON eller ett TEAM ar det motsatta: det andrar exakt nar
+ * namngivna manniskor ska vara pa jobbet, och en sen ankomst mats mot det.
+ */
+async function schemamottagare(
+  scope: string,
+  employeeId: string | null,
+  teamId: string | null,
+): Promise<string[]> {
+  if (scope === "employee" && employeeId) return [employeeId];
+  if (scope === "team" && teamId) {
+    const { data } = await supabaseAdmin()
+      .from("employee")
+      .select("id")
+      .eq("team_id", teamId)
+      .neq("status", "offboarded");
+    return (data ?? []).map((e) => e.id as string);
+  }
+  return [];
 }
 
 export async function sparaArbetsschema(_prev: TidState, form: FormData): Promise<TidState> {
@@ -274,6 +353,20 @@ export async function sparaArbetsschema(_prev: TidState, form: FormData): Promis
     tolerans_sen: tolLate,
     galler_fran: galler,
   });
+
+  // Ett andrat arbetsschema flyttar bade arbetsdagen och gransen for sen
+  // ankomst. Att andra det utan besked ar att flytta malstolparna for nagon
+  // som mats mot dem.
+  await notifieraFlera(await schemamottagare(scope, employee_id, team_id), {
+    av: user.employee!.id,
+    kalla: "tid-schema",
+    typ: "tid",
+    rubrik: "Ditt arbetsschema har ändrats",
+    detalj: `${start}–${slut} · gäller från ${galler}`,
+    href: "/tid/schema",
+    objekt: { typ: "work_schedule", id: employee_id ?? team_id ?? "company" },
+  });
+
   revalidatePath("/tid", "layout");
   return { ok: `Sparat. Gäller från ${galler}.` };
 }
@@ -331,6 +424,20 @@ export async function sparaRastschema(_prev: TidState, form: FormData): Promise<
     tolerans: tol,
     galler_fran: galler,
   });
+
+  // AC-2.36: utan kvittens bedoms ingenting. Notisen ar alltsa inte bara ett
+  // besked utan sjalva vagen till kvittensen — ett rastschema som ingen
+  // kvitterar ger inga avvikelser alls.
+  await notifieraFlera(await schemamottagare(scope, employee_id, team_id), {
+    av: user.employee!.id,
+    kalla: "tid-schema",
+    typ: "tid",
+    rubrik: "Ditt rastschema har ändrats — kvittera det",
+    detalj: `${fonsterStart}–${fonsterSlut}, ${Math.round(langd)} min · gäller från ${galler}`,
+    href: "/tid/schema",
+    objekt: { typ: "scheduled_break", id: employee_id ?? team_id ?? "company" },
+  });
+
   revalidatePath("/tid", "layout");
   return { ok: `Sparat. Gäller från ${galler}. Avvikelser börjar först när berörda kvitterat.` };
 }
@@ -379,5 +486,26 @@ export async function kommenteraAvvikelse(form: FormData): Promise<void> {
     .eq("employee_id", user.employee.id);
 
   await logga(user.employee.id, "deviation.commented", id);
+
+  /**
+   * KOMMENTAREN AR ETT SVAR, OCH ETT SVAR BEHOVER EN MOTTAGARE.
+   *
+   * AC-2.28 ger den anstallda ratt att kommentera sin avvikelse. Fram till
+   * 2026-09-03 hamnade texten i en kolumn som ingen fick besked om — den syntes
+   * for den som rakade oppna /tid/avvikelser och rulla ner.
+   *
+   * Kretsen ar den som far AVSLUTA en avvikelse (se `avslutaAvvikelse` i
+   * lonerapportens actions): saljchef, VD, administrator och teamledare.
+   */
+  await notifieraFlera(await medRoll("sales_manager", "ceo", "admin", "team_lead"), {
+    av: user.employee.id,
+    kalla: "tid-avvikelse",
+    typ: "tid",
+    rubrik: `${user.employee.first_name} ${user.employee.last_name} har kommenterat en rastavvikelse`,
+    detalj: text,
+    href: "/tid/avvikelser",
+    objekt: { typ: "break_deviation", id },
+  });
+
   revalidatePath("/tid", "layout");
 }

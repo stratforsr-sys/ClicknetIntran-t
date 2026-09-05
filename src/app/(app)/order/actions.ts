@@ -8,6 +8,7 @@ import { tolkaBelopp } from "@/lib/provision";
 import { forberedUppladdning, registreraFil, taBortInnehall } from "@/lib/filer-server";
 import { pdfText } from "@/lib/pdf";
 import { tolkaAvtalstext, type Orderforslag } from "@/lib/orderbilaga";
+import { notifiera, notifieraFlera, orderkretsen } from "@/lib/notishandelse-server";
 import {
   gallandeSats,
   giltigTelefon,
@@ -51,7 +52,10 @@ async function kravHanterare(): Promise<CurrentUser> {
 async function hamtaRad(id: string) {
   const { data } = await supabaseAdmin()
     .from("sales_order")
-    .select("id, status, salesperson_id, package_id, term_months, signed_on, commission_amount")
+    // `company_name` las inte fore 2026-09-03. Den behovs i notisrubrikerna:
+    // "Din order pa Nordbygg AB godkandes" sager vilken order det galler,
+    // "Din order godkandes" gor det inte for den som har fyra inne samtidigt.
+    .select("id, status, salesperson_id, company_name, package_id, term_months, signed_on, commission_amount")
     .eq("id", id)
     .maybeSingle();
   return data;
@@ -262,6 +266,28 @@ export async function skickaInOrder(_prev: Orderstate, form: FormData): Promise<
     if (error) return { fel: error.message };
 
     await logga(user, "sales_order.submitted", id, {});
+
+    /**
+     * ORDERN LIGGER I EN KO SOM INGEN BLEV TILLSAGD OM.
+     *
+     * Fram till 2026-09-03 var `inskickad` ett tillstand utan mottagare: den
+     * som skickade in sag "Ordern ar inskickad" och den som skulle godkanna
+     * fick veta det genom att sjalv oppna /order och rakna raderna. En order
+     * som ligger ogodkand ligger ocksa oprovisionerad.
+     *
+     * Kretsen ar `far_hantera_order()`: saljchef, VD och ekonomi. Teamledaren
+     * star utanfor (bestallarbeslut 2026-08-24).
+     */
+    await notifieraFlera(await orderkretsen(), {
+      av: user.employee!.id,
+      kalla: "order-inskickad",
+      typ: "order",
+      rubrik: `Order att godkänna: ${rad.company_name}`,
+      detalj: `Tecknad ${rad.signed_on} · väntar på godkännande`,
+      href: "/order",
+      objekt: { typ: "sales_order", id },
+    });
+
     revalidatePath("/order");
     return { ok: "Ordern är inskickad." };
   } catch (e) {
@@ -312,6 +338,20 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
       commission_source: provision.satt.commission_source,
     });
 
+    // Provisionen ar fryst i samma sekund. Beloppet star i notisen med flit:
+    // det ar det tal saljaren annars far leta upp i provisionsvyn for att veta
+    // vad godkannandet var vart.
+    await notifiera({
+      till: rad.salesperson_id,
+      av: user.employee!.id,
+      kalla: "order-godkand",
+      typ: "order",
+      rubrik: `Din order är godkänd: ${rad.company_name}`,
+      detalj: `Provision ${Number(provision.satt.commission_amount).toLocaleString("sv-SE")} kr · räknas från ${rad.signed_on}`,
+      href: "/order",
+      objekt: { typ: "sales_order", id },
+    });
+
     revalidatePath("/order");
     revalidatePath("/provision");
     return { ok: "Ordern är godkänd och räknas från och med nu." };
@@ -339,6 +379,27 @@ export async function returneraOrder(_prev: Orderstate, form: FormData): Promise
     if (error) return { fel: error.message };
 
     await logga(user, "sales_order.returned", id, { reason: skal });
+
+    /**
+     * DEN HAR NOTISEN GAR INTE ATT HARLEDA, och det ar sjalva skalet till att
+     * `notification_event` finns.
+     *
+     * En returnerad order far status `utkast` igen. Efterat ar den omojlig att
+     * skilja fran ett utkast som aldrig skickats in — det finns ingen
+     * `returned_at`, ingen raknare, ingenting. Skalet star i `note`, men
+     * `note` sätts pa flera andra vagar ocksa. Klockan hade alltsa behovt gissa.
+     */
+    await notifiera({
+      till: rad.salesperson_id,
+      av: user.employee!.id,
+      kalla: "order-returnerad",
+      typ: "order",
+      rubrik: `Din order behöver rättas: ${rad.company_name}`,
+      detalj: skal,
+      href: "/order",
+      objekt: { typ: "sales_order", id },
+    });
+
     revalidatePath("/order");
     return { ok: "Ordern är tillbaka hos säljaren." };
   } catch (e) {
@@ -385,6 +446,28 @@ export async function makuleraOrder(_prev: Orderstate, form: FormData): Promise<
       commission_amount: rad.commission_amount,
       cancelled_on: idag,
       reason: skal,
+    });
+
+    /**
+     * DEN DYRASTE NOTISEN I NAVET.
+     *
+     * En makulering river saljarens provision i MAKULERINGSMANADEN, alltsa i en
+     * annan manad an den hon tjanade in den. Utan raden nedan upptacks avdraget
+     * forst pa lonebeskedet — och da som en siffra utan forklaring, i en manad
+     * dar ingenting annat hant.
+     *
+     * Skalet foljer med. Det ar chefens egen text, och den ar det enda som gor
+     * avdraget begripligt for den som tar emot det.
+     */
+    await notifiera({
+      till: rad.salesperson_id,
+      av: user.employee!.id,
+      kalla: "order-makulerad",
+      typ: "order",
+      rubrik: `Din order är makulerad: ${rad.company_name}`,
+      detalj: `${rad.commission_amount ? `Avdrag ${Number(rad.commission_amount).toLocaleString("sv-SE")} kr i ${idag.slice(0, 7)}` : "Provisionen dras tillbaka"} · ${skal}`,
+      href: "/provision",
+      objekt: { typ: "sales_order", id },
     });
 
     revalidatePath("/order");
@@ -450,6 +533,20 @@ export async function markeraBetald(_prev: Orderstate, form: FormData): Promise<
     await logga(user, "sales_order.paid", id, {
       salesperson_id: rad.salesperson_id,
       commission_amount: rad.commission_amount,
+    });
+
+    // Ren information, precis som statusen sjalv. Notisen sager uttryckligen
+    // att provisionen inte andras — annars ar "betald" ett besked som later
+    // som om nagot hant med pengarna, och sa ar det inte (fraga 10).
+    await notifiera({
+      till: rad.salesperson_id,
+      av: user.employee!.id,
+      kalla: "order-betald",
+      typ: "order",
+      rubrik: `Betald: ${rad.company_name}`,
+      detalj: "Kunden har betalat. Provisionen är oförändrad — den utgår från signeringen.",
+      href: "/order",
+      objekt: { typ: "sales_order", id },
     });
 
     revalidatePath("/order");

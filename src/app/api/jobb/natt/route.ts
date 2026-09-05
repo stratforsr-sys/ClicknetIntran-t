@@ -13,6 +13,7 @@ import { foreslaOgiltigFranvaro } from "@/lib/jobb/konsekvenser";
 import { hamtaDrift, type Drift } from "@/lib/jobb/drift-server";
 import { kvittoLarmtext, larmDigest, larmSokvag } from "@/lib/jobb/larm";
 import { skrivFel } from "@/lib/fel-server";
+import { rensaGamlaNotiser } from "@/lib/notishandelse-server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -116,6 +117,12 @@ export async function GET(request: NextRequest) {
     // har steget fangar det ingen tagit tag i. De sjalvsanna typerna star
     // utanfor — en forsenad kurs har sin egen uppfoljning i M6.
     ["coachning", () => korCoachningsjobbet(db)],
+    // 0047: notishandelser aldre an 90 dagar raderas. Tabellen ar den enda i
+    // navet som vaxer med ANVANDNINGEN och inte med verksamheten — trettio
+    // personer gånger ett tiotal handelser i veckan ar en rad per minut i
+    // langden. Klockan visar dem i trettio dagar, sa nittio ar rikligt med
+    // marginal for den som vill kunna backa och titta.
+    ["notiser", () => rensaGamlaNotiser(db)],
   ];
 
   for (const [namn, kor] of steg) {

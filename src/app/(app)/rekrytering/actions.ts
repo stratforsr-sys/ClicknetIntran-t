@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getCurrentUser, hasRole } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { BEDOMDA_STEG, nastaSteg, type Steg } from "@/lib/rekrytering";
+import { BEDOMDA_STEG, STEG_ETIKETT, nastaSteg, type Steg } from "@/lib/rekrytering";
+import { notifieraFlera, rekryteringskretsen } from "@/lib/notishandelse-server";
 import { laggUppAnstalld } from "@/lib/anstallning-server";
 import { skapaAvtalsutkast } from "@/lib/avtal-server";
 import { VARIABELNYCKLAR } from "@/lib/avtal";
@@ -76,6 +77,22 @@ export async function nyKandidat(_prev: RekryteringState, form: FormData): Promi
     };
   }
 
+  /**
+   * En kandidat som ligger i `new` ar en ansokan ingen tittat pa an.
+   *
+   * Screeningen ar forsta momentet och den ligger pa kretsen, inte pa den som
+   * knappade in raden — ofta ar det samma person, och da skickas ingenting.
+   */
+  await notifieraFlera(await rekryteringskretsen(), {
+    av: user.employee!.id,
+    kalla: "rekrytering-ny",
+    typ: "rekrytering",
+    rubrik: `Ny kandidat: ${fornamn} ${efternamn}`,
+    detalj: `${String(form.get("roll") ?? "").trim() || "Säljare"} · via ${kalla}`,
+    href: `/rekrytering/${data.id}`,
+    objekt: { typ: "candidate", id: data.id },
+  });
+
   revalidatePath("/rekrytering");
   redirect(`/rekrytering/${data.id}`);
 }
@@ -89,7 +106,7 @@ export async function nyKandidat(_prev: RekryteringState, form: FormData): Promi
  * ("Steget offer gar inte att na fran screening").
  */
 export async function flyttaSteg(form: FormData): Promise<void> {
-  await kravRekryterare();
+  const user = await kravRekryterare();
 
   const id = String(form.get("id") ?? "");
   const till = String(form.get("till") ?? "") as Steg;
@@ -104,6 +121,39 @@ export async function flyttaSteg(form: FormData): Promise<void> {
 
   const { error } = await supabaseAdmin().from("candidate").update(rad).eq("id", id);
   if (error) throw new Error(error.message);
+
+  /**
+   * REKRYTERING AR ETT LAGARBETE MED EN TYST STAFETTPINNE.
+   *
+   * `stage` byts av en person och nasta moment ligger pa nagon annan: en
+   * intervju ska bokas, en scorecard fyllas i, ett erbjudande formuleras.
+   * Fram till 2026-09-03 fanns ingen signal alls — den som skulle ta vid fick
+   * veta det genom att sjalv oppna tratten och leta efter rader som flyttat
+   * sig sedan sist.
+   *
+   * KANDIDATEN FAR ALDRIG EN NOTIS. Hon har inget konto i navet, och kretsen
+   * nedan ar `far_rekrytera()` plus ledningen — samma krets som `candidate_read`
+   * i 0030 slapper in. En notis far aldrig na langre an lasratten.
+   */
+  const { data: kandidat } = await supabaseAdmin()
+    .from("candidate")
+    .select("first_name, last_name, role_title")
+    .eq("id", id)
+    .maybeSingle();
+
+  await notifieraFlera(await rekryteringskretsen(), {
+    av: user.employee!.id,
+    kalla: "rekrytering-steg",
+    typ: "rekrytering",
+    rubrik: `${kandidat?.first_name ?? "En kandidat"} ${kandidat?.last_name ?? ""}`.trim() +
+      ` → ${STEG_ETIKETT[till] ?? till}`,
+    detalj:
+      till === "rejected"
+        ? `Tackade nej eller nekades · ${String(rad.rejected_reason ?? "inget skäl angivet")}`
+        : `${kandidat?.role_title ?? "Kandidat"} · flyttad från ${STEG_ETIKETT[fran] ?? fran}`,
+    href: `/rekrytering/${id}`,
+    objekt: { typ: "candidate", id },
+  });
 
   revalidatePath("/rekrytering");
   revalidatePath(`/rekrytering/${id}`);
@@ -163,18 +213,33 @@ export async function sparaScorecard(
  * kalla behover den skillnaden.
  */
 export async function registreraNoShow(form: FormData): Promise<void> {
-  await kravRekryterare();
+  const user = await kravRekryterare();
   const id = String(form.get("id") ?? "");
 
   const db = supabaseAdmin();
-  const { data } = await db.from("candidate").select("no_show_count").eq("id", id).single();
+  const { data } = await db
+    .from("candidate")
+    .select("no_show_count, first_name, last_name, source_slug")
+    .eq("id", id)
+    .single();
   if (!data) throw new Error("Kandidaten finns inte.");
 
-  const { error } = await db
-    .from("candidate")
-    .update({ no_show_count: (data.no_show_count ?? 0) + 1 })
-    .eq("id", id);
+  const antal = (data.no_show_count ?? 0) + 1;
+  const { error } = await db.from("candidate").update({ no_show_count: antal }).eq("id", id);
   if (error) throw new Error(error.message);
+
+  // Raknaren ar poangen, inte flaggan: en andra uteblivning ar en annan sak an
+  // en forsta, och det ar den skillnaden trattrapporten per kalla lever pa.
+  // Darfor star talet i notisen.
+  await notifieraFlera(await rekryteringskretsen(), {
+    av: user.employee!.id,
+    kalla: "rekrytering-noshow",
+    typ: "rekrytering",
+    rubrik: `${data.first_name} ${data.last_name} kom inte till intervjun`,
+    detalj: antal === 1 ? `Första gången · källa ${data.source_slug}` : `${antal} gånger · källa ${data.source_slug}`,
+    href: `/rekrytering/${id}`,
+    objekt: { typ: "candidate", id },
+  });
 
   revalidatePath(`/rekrytering/${id}`);
 }
@@ -352,6 +417,25 @@ export async function anstallKandidat(
         rutiner: svar.rutiner.length,
         kurser: svar.kurser.length,
       },
+    });
+
+    /**
+     * Tva mottagarkretsar, en handelse.
+     *
+     * REKRYTERINGSKRETSEN far veta att tratten stangdes — det ar deras matning
+     * och deras nasta kandidat som paverkas. NARMASTE CHEF far den redan via
+     * `personal-ny`, som `laggUppAnstalld()` i anstallning-server skickar for
+     * varje ny anstalld oavsett vag in. Att skicka bada till chefen hade gett
+     * tva rader om samma person i samma sekund.
+     */
+    await notifieraFlera(await rekryteringskretsen(), {
+      av: user.employee!.id,
+      kalla: "rekrytering-anstalld",
+      typ: "rekrytering",
+      rubrik: `${namn} är anställd`,
+      detalj: `${uppgifter.roll} · ${svar.rutiner.length} rutiner och ${svar.kurser.length} kurser tilldelade`,
+      href: `/personal/${svar.employeeId}`,
+      objekt: { typ: "candidate", id: kandidatId },
     });
 
     revalidatePath("/rekrytering");

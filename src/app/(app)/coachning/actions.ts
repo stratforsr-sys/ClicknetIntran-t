@@ -18,6 +18,7 @@ import {
   type Uppgiftstyp,
 } from "@/lib/coachning";
 import { arChefFor, farCoacha } from "@/lib/coachning-server";
+import { notifiera } from "@/lib/notishandelse-server";
 
 export type CoachState = { fel?: string; ok?: string };
 
@@ -168,7 +169,10 @@ async function laddaFor(taskId: string) {
   const db = supabaseAdmin();
   const { data } = await db
     .from("coaching_task")
-    .select("id, kind, assignee_id, partner_id, created_by, verify_by, evidence, due_date, cancelled_at")
+    // `title` las inte fore 2026-09-03. Den behovs nu for notisernas rubriker —
+    // "Godkänd: Ring tio bolag" sager vad som hant, "Din uppgift är godkänd"
+    // sager att nagot hant.
+    .select("id, title, kind, assignee_id, partner_id, created_by, verify_by, evidence, due_date, cancelled_at")
     .eq("id", taskId)
     .maybeSingle();
 
@@ -341,10 +345,36 @@ export async function kvittera(_prev: CoachState, form: FormData): Promise<Coach
       meta: { assignee_id: uppgift.assignee_id, kind: uppgift.kind },
     });
 
+    /**
+     * BESKEDET TILL DEN SOM GJORDE UPPGIFTEN.
+     *
+     * Underkant har alltid gett en notis — den raknas fram ur uppgiften, som
+     * stannar oppen och darmed syns i klockan. GODKANT gav ingen, och det var
+     * ingen avvagning utan en foljd av harledningen: en kvitterad uppgift ar
+     * `klar`, klara uppgifter ar inte oppna, och bara oppna uppgifter blev
+     * notiser. Den som gjorde allting ratt var alltsa den enda som inte fick
+     * veta hur det gick.
+     *
+     * Darfor en handelserad (0047). Den beror inte uppgiftens tillstand och
+     * star kvar aven sedan uppgiften ar klar — vilket ar hela vitsen.
+     */
+    if (godkanns) {
+      await notifiera({
+        till: uppgift.assignee_id,
+        av: user.employee!.id,
+        kalla: "coachning-godkand",
+        typ: "coachning",
+        rubrik: `Godkänd: ${uppgift.title}`,
+        detalj: kommentar ? `Kvitterad · ${kommentar}` : "Din uppgift är kvitterad och klar",
+        href: `/coachning/uppgift/${id}`,
+        objekt: { typ: "coaching_task", id },
+      });
+    }
+
     revalidatePath("/coachning");
     revalidatePath(`/coachning/uppgift/${id}`);
     revalidatePath(`/coachning/${uppgift.assignee_id}`);
-    return { ok: godkanns ? "Kvitterad." : "Underkänd. Personen får en notis." };
+    return { ok: godkanns ? "Kvitterad. Personen får en notis." : "Underkänd. Personen får en notis." };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
   }
@@ -388,6 +418,20 @@ export async function avbrytUppgift(_prev: CoachState, form: FormData): Promise<
       object_type: "coaching_task",
       object_id: id,
       meta: { assignee_id: uppgift.assignee_id, reason: skal },
+    });
+
+    // En avbruten uppgift FORSVINNER ur personens vy — den raknas varken som
+    // oppen eller klar. Utan raden nedan ar det enda spar hon far att nagot hon
+    // hade att gora inte langre finns dar.
+    await notifiera({
+      till: uppgift.assignee_id,
+      av: user.employee!.id,
+      kalla: "coachning-avbruten",
+      typ: "coachning",
+      rubrik: `Avbruten: ${uppgift.title}`,
+      detalj: skal,
+      href: `/coachning/uppgift/${id}`,
+      objekt: { typ: "coaching_task", id },
     });
 
     revalidatePath("/coachning");
@@ -517,6 +561,28 @@ export async function skapaSamtal(_prev: CoachState, form: FormData): Promise<Co
       object_type: "coaching_session",
       object_id: samtal.id,
       meta: { employee_id: employeeId, held_on: hallet, ataganden: ataganden.length },
+    });
+
+    /**
+     * Beskedet om att samtalet ar BOKFORT, inte om atagandena.
+     *
+     * Atagandena blir uppgifter och far sin egen post via `coachning-ny` — och
+     * de tva far inte slas ihop. Ett samtal utan atagandan ar fortfarande ett
+     * samtal som skrivits ned om en manniska, och hon ska kunna lasa det.
+     * Anteckningen ar lasbar for den det galler enligt laspolicyn i 0043.
+     */
+    await notifiera({
+      till: employeeId,
+      av: user.employee!.id,
+      kalla: "coachning-samtal",
+      typ: "coachning",
+      rubrik: "Ert coachningssamtal är bokfört",
+      detalj:
+        ataganden.length > 0
+          ? `Hållet ${hallet} · ${ataganden.length} åtagande${ataganden.length === 1 ? "" : "n"}`
+          : `Hållet ${hallet} · anteckningen finns på ditt personkort`,
+      href: `/coachning/${employeeId}`,
+      objekt: { typ: "coaching_session", id: samtal.id },
     });
 
     revalidatePath("/coachning");

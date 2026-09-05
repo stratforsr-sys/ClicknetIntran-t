@@ -2,7 +2,6 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { canReadAllEmployees, fullName, type CurrentUser } from "@/lib/auth";
 import { notisId, type Notis } from "@/lib/notiser";
 import {
-  LARMGRANS_DAGAR,
   PAMINNELSE_PERSON_DYGN,
   TYP_ETIKETT,
   arSjalvsann,
@@ -975,16 +974,33 @@ export async function coachningsnotiser(user: CurrentUser): Promise<Notis[]> {
         rubrik: `${namn.get(personId) ?? "En medarbetare"} har inte coachats`,
         detalj: dagar === null ? "Ingen coachning alls är bokförd" : `Senast för ${dagar} dagar sedan`,
         href: `/coachning/${personId}`,
+        /**
+         * SENASTE ROREISEN, inte "nu minus dagar".
+         *
+         * Talet blir detsamma, men tidpunkten maste vara STABIL mellan tva
+         * sidvisningar. `hamtaNotiser()` avgor sedan 2026-09-03 `olast` genom
+         * att jamfora tidpunkten med nar klockan senast oppnades, och en
+         * tidpunkt som raknas om ur `Date.now()` vid varje rendering ar aldrig
+         * nyare an nagot — posten hade blivit last i samma sekund den skapades.
+         *
+         * Har ingen rorelse alls bokforts finns ingen tidpunkt att peka pa.
+         * Da anvands dagens datum: posten lyser upp en gang per dygn tills
+         * nagon faktiskt coachar personen, vilket ar hela arendet med raden.
+         */
         tidpunkt:
-          dagar === null
-            ? new Date(nu.getTime() - LARMGRANS_DAGAR * 86_400_000).toISOString()
-            : new Date(nu.getTime() - dagar * 86_400_000).toISOString(),
+          senasteRorelsen(rorelser) ?? `${nu.toISOString().slice(0, 10)}T08:00:00.000Z`,
         olast: true,
       });
     }
   }
 
   return notiser;
+}
+
+/** Senaste tidpunkten i en lista rorelser. Null nar listan ar tom. */
+function senasteRorelsen(rorelser: { at: string }[]): string | null {
+  if (rorelser.length === 0) return null;
+  return rorelser.reduce((a, b) => (a.at > b.at ? a : b)).at;
 }
 
 /** Senaste handelsen pa en uppgift, oavsett sort. Null om ingen finns. */
