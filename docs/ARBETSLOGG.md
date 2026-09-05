@@ -5,10 +5,33 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-05 · Notiserna mergades till main
+
+Beställaren godkände branchen och `notiser-for-allt-2` gick till main som
+`21822ae` — 29 commits, 27 filer, en enda merge-commit och därmed en deploy.
+Produktionsbygget blev Ready på två minuter.
+
+Passet dagen innan slutade inte i ett fel utan i en plangräns: previewen byggde
+färdigt, men Vercels hundra deployer per dygn var slut och merge till main hade
+inte kunnat byggas. Deploylistan bär spåren — ett tiotal `Canceled` och `Error`
+från samma timme. Det var den smällen som gav `scripts/en-commit.mjs` och regeln
+i `CLAUDE.md`, och de följde med i just den här merge:n. Lärdomen är billigare
+att läsa än att göra om: när kvoten är slut går det inte att verifiera
+någonting, och en halvbyggd ändring blir stående över dygnsgränsen.
+
+Migration `0047_notishandelser` var redan körd mot produktionsdatabasen 09-04.
+Den är additiv och main-koden rörde inte tabellen, så produktionen stod stabil
+under dygnet emellan.
+
+Kvar att följa: `notification_event` får nu rader från ett trettiotal ställen.
+Först i riktig trafik syns om någon källa skriver oftare än beställaren tål.
+
+---
+
 ## 2026-09-04 · Klockan får veta allt — och två knappar att göra något åt det
 
-*Migration `0047_notishandelser`. Branch `notiser-for-allt-2`, väntar på
-godkännande innan merge till main.*
+*Migration `0047_notishandelser`. Byggdes på branch `notiser-for-allt-2`,
+mergad till main 2026-09-05.*
 
 ### Frågan som ställdes
 

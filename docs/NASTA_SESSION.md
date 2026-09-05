@@ -3,12 +3,13 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-04 — klockan notifierar allt som rör en person (63 källor mot 21), med "Markera alla som lästa" och kryss per rad. Ligger på branch `notiser-for-allt-2` och väntar på godkännande.
+**Senast uppdaterad:** 2026-09-05 — klockan notifierar allt som rör en person (63 källor mot 21), med "Markera alla som lästa" och kryss per rad. Godkänd och mergad till main; ligger i produktion.
 
-## Klockan notifierar allt sedan 2026-09-04 — ligger på branch
+## Klockan notifierar allt sedan 2026-09-04 — i produktion 2026-09-05
 
-*Branch `notiser-for-allt-2`, migration `0047_notishandelser` är körd mot
-produktionsdatabasen. Väntar på godkännande innan merge.*
+*Byggdes på branch `notiser-for-allt-2`, godkändes 2026-09-05 och mergades till
+main som `21822ae`. Migration `0047_notishandelser` var redan körd mot
+produktionsdatabasen dagen innan.*
 
 Beställarens krav: *"allt måste ha notis så att vi kan se exakt vad som händer,
 annars vet man inte."* Genomgången visade att klockan hade 21 källor och att
@@ -71,11 +72,10 @@ glömt.
 
 ### Kvar att göra
 
-- **Godkännande och merge.** Preview:
-  `https://clicknet-nav-git-notiser-for-allt-2-zens-projects-6c1be12b.vercel.app`
-  (öppna i webbläsare — Vercel-skyddet ger 302 på curl).
-- Migrationen är redan körd, så den nya tabellen finns i produktion. Den är
-  additiv och main-koden rör den inte.
+Ingenting — beställaren godkände 2026-09-05 och merge-commiten `21822ae` gick
+till produktion. Det som står kvar att hålla ögonen på är första dygnets riktiga
+trafik: `notification_event` får nu rader från trettio ställen, och det är först
+i produktion man ser om någon källa skriver oftare än beställaren tål.
 
 ## ALLT NYTT SOM BYGGS FÅR EN RAD I `src/navnyheter/poster.ts`
 
