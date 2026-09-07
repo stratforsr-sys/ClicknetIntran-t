@@ -36,6 +36,21 @@ ut bredvid `sick_report_id` och är det inte: utan den hittas raden inte i
 **SLUTDAGEN HAR INGET FÖRVAL.** Radioknapparna i ansökningsformuläret börjar
 tomma. Ett förval hade återinfört den tysta endagsledigheten i mildare form.
 
+### Sex tysta inbäddningar rättade i samma pass
+
+`employee!inner(...)` på `absence_request`, `employee_role` och
+`employee_permission` är TVETYDIGT — flera främmande nycklar mot samma tabell —
+och PostgREST svarar `PGRST201` i stället för att ge rader. Med `?? []` blir
+felet en tom lista och funktionen fortsätter som om ingenting fanns.
+
+**Bemanningsvarningen vid ansökan har aldrig fungerat.** Inte heller
+sjukanmälans rollbaserade ringlista, `medRoll`/`medBehorighet` eller
+lönekostnadsjobbets chefsfallback. Allt rättat genom att namnge nyckeln.
+
+`npm run test:inbaddningar` läser koden och provar varje inbäddad fråga mot
+PostgREST. **Kör det efter varje ny `.select()` med parentes i.** Det kräver
+`DATABASE_URL`-miljön: `set -a; . ~/.clicknet/nav.env; set +a`.
+
 ### Att göra i nästa pass
 
 1. **Visa previewen för beställaren och invänta godkännande.** Ingenting går

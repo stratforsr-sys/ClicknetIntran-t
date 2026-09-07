@@ -113,6 +113,54 @@ till den anställda. Alla går nu genom `periodtext`.
 detaljsidan hela meningen om samma rad. `tests/franvaro.mjs` har 26 nya prov,
 inklusive Micks verkliga fall.
 
+### Fyndet efteråt: sex inbäddade frågor som aldrig gått att besvara
+
+Beställaren öppnade previewen och såg **ingen skillnad alls** på hemvyn. Det var
+rätt iakttagelse, och orsaken var värre än den nya koden.
+
+`employee!inner(team_id)` på `absence_request` är **tvetydigt**. Tabellen har
+fyra främmande nycklar mot `employee` — `employee_id`, `created_by`,
+`decided_by`, `withdrawn_by` — och PostgREST vägrar då gissa. Den svarar
+`PGRST201`, alltså ett FEL och inte en tom lista.
+
+Det farliga är hur det ser ut i koden:
+
+```
+const { data: andras } = await db.from("absence_request").select(...);
+...andrasPerioder: (andras ?? []).map(...)
+```
+
+`data` blir `null`, `?? []` gör det till en tom lista, och funktionen fortsätter
+som om ingen vore borta. **Bemanningsvarningen i ansökningsformuläret har därför
+aldrig fungerat** — den har sagt "ingen annan är borta under perioden" varje
+gång sedan modulen byggdes, och regelbrottet `bemanning` har aldrig kunnat
+inträffa. Ingenting kraschade, ingenting loggades.
+
+Regelmotorns prov kunde inte se det: de skickar in sitt underlag för hand och
+bevisar bara att motorn räknar rätt PÅ det underlaget.
+
+**Sex ställen, varav tre låg i produktion sedan tidigare:**
+
+| Var | Vad som var tyst |
+| --- | --- |
+| `franvaro-server.ts:100` | Bemanningsvarningen vid ansökan — alltid "ingen är borta" |
+| `franvaro/sjuk/page.tsx:99` | Sjukanmälans ringlista tappade sina rollbaserade mottagare (AC-3.6) |
+| `notishandelse-server.ts:227, 241` | `medRoll` och `medBehorighet` gav tomma kretsar — notiser till säljchef, VD och admin skickades aldrig (0047) |
+| `jobb/satser.ts:43` | Lönekostnadsjobbets chefsfallback var alltid null |
+| `page.tsx:424`, `franvaro-server.ts:400` | Passets egna två, skrivna efter samma mönster |
+
+Rättningen är att namnge nyckeln: `employee!absence_request_employee_id_fkey(…)`.
+
+**`tests/inbaddningar-db.mjs` är svaret på klassen.** Provet LÄSER koden — varje
+`.from("x").select("…(…)")` under `src/` — och ställer frågan mot PostgREST med
+`limit=0`. En ny inbäddning provas den dag den skrivs, utan att någon behöver
+komma ihåg att lägga till den i en lista. 22 frågor i dag, alla gröna.
+
+Att fixen får `medRoll` att börja fungera är en **beteendeförändring**: notiser
+till roll- och behörighetskretsar som aldrig gått iväg börjar gå iväg. Det är
+0047:s avsikt, och anroparna är händelsestyrda och glesa — men det är värt att
+veta första dygnet.
+
 ### Kvar att göra
 
 Ingenting i koden. Två saker att titta efter i produktion:

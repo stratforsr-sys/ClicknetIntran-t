@@ -422,7 +422,7 @@ export default async function Startsida() {
     serDagslage
       ? supabase
           .from("absence_request")
-          .select("id, employee_id, starts_on, ends_on, absence_type!inner(label), employee!inner(first_name, last_name)")
+          .select("id, employee_id, starts_on, ends_on, absence_type!inner(label), employee!absence_request_employee_id_fkey(first_name, last_name)")
           .eq("status", "approved")
           .gt("starts_on", idagDatum)
           .lte("starts_on", framatTill)

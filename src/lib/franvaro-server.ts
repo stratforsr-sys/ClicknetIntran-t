@@ -98,7 +98,7 @@ export async function hamtaProvunderlag(
         .in("status", ["submitted", "approved"]),
       db
         .from("absence_request")
-        .select("employee_id, type_id, starts_on, ends_on, part_day_minutes, employee!inner(team_id)")
+        .select("employee_id, type_id, starts_on, ends_on, part_day_minutes, employee!absence_request_employee_id_fkey(team_id)")
         .eq("status", "approved")
         .lte("starts_on", till)
         .gte("ends_on", fran),
@@ -398,7 +398,7 @@ export async function hamtaChefsbild(
       spannFran && spannTill
         ? db
             .from("absence_request")
-            .select("employee_id, type_id, starts_on, ends_on, part_day_minutes, employee!inner(team_id)")
+            .select("employee_id, type_id, starts_on, ends_on, part_day_minutes, employee!absence_request_employee_id_fkey(team_id)")
             .eq("status", "approved")
             .lte("starts_on", spannTill)
             .gte("ends_on", spannFran)

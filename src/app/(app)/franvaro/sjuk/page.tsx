@@ -97,7 +97,7 @@ export default async function Sjuksida() {
     rollpersoner.length
       ? db
           .from("employee_role")
-          .select("role, employee!inner(id, first_name, last_name, status)")
+          .select("role, employee!employee_role_employee_id_fkey(id, first_name, last_name, status)")
           .in("role", rollpersoner)
       : Promise.resolve({ data: [] }),
   ]);
