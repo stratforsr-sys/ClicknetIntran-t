@@ -853,8 +853,21 @@ export default async function Startsida() {
             nyckel: `arende-${a.id}`,
             omrade: "arenden" as const,
             href: "/arenden",
-            titel: String(a.subject ?? "Ärende"),
-            detalj: "Personalärende",
+            /**
+             * ARENDETS RUBRIK STAR INTE HAR, och det ar inte for att kolumnen
+             * saknades i fragan — den lades medvetet inte till.
+             *
+             * Ett personalarende heter "Konflikt med kollega" eller
+             * "Lonesamtal". Ledningen far lasa det pa /arenden, dar man gatt in
+             * med avsikt. Startsidan ar den yta som star oppen pa en delad
+             * skarm nar nagon gar forbi, och en rubrik som hamnar dar har
+             * lamnat sin krets utan att nagon valde det.
+             *
+             * Raden sager alltsa VAD som bradskar och HUR mycket, och lanken
+             * leder dit rubriken hor hemma.
+             */
+            titel: "Personalärende väntar på svar",
+            detalj: "Öppna ärenden för att se vilket",
             frist: slaLage(a) === "over" ? "Svarstiden passerad" : "Snart förfallet",
             ton: (slaLage(a) === "over" ? "danger" : "warn") as "danger" | "warn",
             sortering: slaLage(a) === "over" ? -0.5 : 1,
