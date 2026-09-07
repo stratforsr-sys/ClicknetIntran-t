@@ -36,6 +36,21 @@ ut bredvid `sick_report_id` och är det inte: utan den hittas raden inte i
 **SLUTDAGEN HAR INGET FÖRVAL.** Radioknapparna i ansökningsformuläret börjar
 tomma. Ett förval hade återinfört den tysta endagsledigheten i mildare form.
 
+### Korten har flikar sedan 2026-09-07
+
+`src/components/ui/Flikar.tsx` är ny och delad: `Flikrad`, `Chiprad`,
+`Sifferrad`, `Sektionsflikar`. Använd den i stället för att stapla kort.
+
+**Tre regler att inte bryta:**
+
+- **Chipsen är färre i framtidsflikarna.** "Sen" och "Inte instämplad" finns
+  bara under *I dag*. Lägg inte till dem framåt — ett chip som alltid visar
+  noll lär ögat att inget händer där.
+- **En pågående sjukperiod projiceras aldrig framåt.** Den står som "Sjuk nu"
+  med sin första dag. Skriv aldrig ett slutdatum navet inte känner.
+- **Bara det som har en frist rangordnas i Din kö.** Rättelser och rollspel har
+  ingen och står som antal. Hitta inte på en åt dem.
+
 ### Sex tysta inbäddningar rättade i samma pass
 
 `employee!inner(...)` på `absence_request`, `employee_role` och

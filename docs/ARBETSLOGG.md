@@ -113,6 +113,64 @@ till den anställda. Alla går nu genom `periodtext`.
 detaljsidan hela meningen om samma rad. `tests/franvaro.mjs` har 26 nya prov,
 inklusive Micks verkliga fall.
 
+### Andra passet samma dag: korten fick flikar, filter och siffror
+
+Beställaren tittade på previewen: *"UI:n ser riktigt dålig ut, alldeles för
+enkel. Texten '1 ledighet börjar inom 14 dagar' står så litet och långt ner att
+det ser ut som en kommentar. Jag vill ha en tydlig filtrering, lite som
+sidebars fast på toppen."*
+
+Invändningen var riktig och svaret var inte att förstora texten. Framåtblicken
+låg som en fotnot under en lista, och det som ligger under det man redan läst
+färdigt läses inte alls.
+
+**Ny delad komponent, `src/components/ui/Flikar.tsx`:** `Flikrad`, `Chiprad`,
+`Sifferrad`, `Sektionsflikar`. Ingen fanns sedan tidigare.
+
+**Tre nivåer, tre FORMER — inte tre färger.** Ligger tre kontrollrader ovanför
+varandra måste ögat se vilken som är vilken utan att läsa dem. Sifferraden är
+platt och delad med linjer. Flikraden är en upphöjd bricka på en nedsänkt bana.
+Chipsen är ramar utan fyllning tills de väljs. `brand-100` på valda chips är
+inte ett val jag gjorde — `globals.css` beskriver redan tonen som "aktiv nav,
+valda chips". Inga hexvärden; UI-PRD §11.
+
+**Dagens läge: tid som flikar, läge som chips.** Tiden byter vilken FRÅGA
+kortet svarar på — "vem är borta i dag" bemannar dagen, "vem är borta om två
+veckor" avgör om man kan lova bort någon. Läget begränsar bara svaret. Det som
+byter fråga är en flik; det som filtrerar ett svar är ett chip.
+
+**Chipsen är FÄRRE i framtidsflikarna, och det är hela poängen.** Ingen är sen
+på tisdag ännu. Ett chip som alltid visar noll lär ögat att det aldrig händer
+något där — och den dagen det gjorde det hade ingen sett.
+
+**En pågående sjukperiod projiceras inte.** Att skriva "Mick är borta den 18:e"
+för att hen är sjukanmäld i dag vore en prognos om någons hälsa. Raden kommer
+med — chefen som bemannar behöver veta att någon är sjukskriven utan känt slut
+— men den säger vad som ÄR känt: "Sjukanmäld sedan 4 september, ingen slutdag
+registrerad". Två prov i `tests/dagslage.mjs` bevakar just det.
+
+**Din kö: bara det som HAR en frist rangordnas.** "De tre mest brådskande"
+kräver att brådskan går att jämföra mellan ett ärende och en semesteransökan.
+Det gör den bara om båda har ett datum att mäta mot — ärendets `due_at`,
+ansökans `starts_on`. En tidsrättelse och ett rollspel har ingen frist alls och
+står därför kvar som antal. Att hitta på en frist åt dem för att få dem
+sorterbara hade gjort ordningen till en gissning.
+
+**Ärendets rubrik står inte på startsidan.** Kolumnen lades medvetet inte till
+i frågan. Ett personalärende heter "Konflikt med kollega"; ledningen får läsa
+det på /arenden, dit man gått med avsikt. Startsidan är den yta som står öppen
+på en delad skärm.
+
+**`Sektionsflikar` tar `ReactNode`, inte data.** Därför kunde `/franvaro/attest`
+och `/franvaro` byta staplade kort mot flikar utan att sektionerna förlorade
+sina serverfrågor, sin RLS eller sina egna klientkomponenter. Alla sektioner
+renderas och den dolda göms med CSS — chefens halvskrivna motivering i
+attestkön ska inte försvinna för att man tittade på sjukfrånvaron under tiden.
+
+**Tre byggen föll innan det gick igenom**, alla på typfel som bara Vercel kunde
+se: `subject` fanns inte i chefsköns select, `svenskVeckodag()` ger ett tal och
+inte ett namn, och `part_day_minutes` saknades för `omfattning()`.
+
 ### Fyndet efteråt: sex inbäddade frågor som aldrig gått att besvara
 
 Beställaren öppnade previewen och såg **ingen skillnad alls** på hemvyn. Det var
