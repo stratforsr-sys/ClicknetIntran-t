@@ -226,12 +226,20 @@ export const NOTIS_KALLOR = [
    * Franvaron, de fyra overgangar som skriver over sitt eget spar.
    * `franvaro-installd` galler en REDAN GODKAND ledighet — den anstallda har
    * planerat efter ett besked som inte langre galler.
+   *
+   * `sjuk-anteckning` (0048) gar till den ANDRA chefen och aldrig till den
+   * sjuke. Skalet ar att en teamledare och en saljchef ser samma obekraftade
+   * rad, och utan raden vet ingen av dem att den andra redan hort av sig — sa
+   * bada ringer, eller ingen. Att i stallet notifiera den sjuke om att nagon
+   * antecknat nagot om hens sjukdom vore en oro utan atgard: det finns inget
+   * att gora at den, och vagen att lasa texten ar registerutdraget.
    */
   "franvaro-tillbakadragen",
   "franvaro-installd",
   "sjuk-bekraftad",
   "sjuk-avslutad",
   "sjuk-installd",
+  "sjuk-anteckning",
   "franvaro-saldo",
 
   /**
@@ -321,6 +329,7 @@ export const HANDELSEKALLOR = [
   "sjuk-bekraftad",
   "sjuk-avslutad",
   "sjuk-installd",
+  "sjuk-anteckning",
   "franvaro-saldo",
   "franvaro-havd",
   "avtal-tillbakadraget",
