@@ -680,3 +680,162 @@ export function periodtext(fran: string, till: string): string {
   if (y(fran) === y(till)) return `${d(fran)} ${m(fran)}–${d(till)} ${m(till)} ${y(till)}`;
   return `${d(fran)} ${m(fran)} ${y(fran)}–${d(till)} ${m(till)} ${y(till)}`;
 }
+
+// -----------------------------------------------------------------------------
+// Skälet på ansökan (D-E7.10, 2026-09-07)
+//
+// K35 sa i ett år att det här fältet aldrig fick finnas. Beställaren omprövade
+// det 2026-09-07 och valde skälet ändå — se rubriken i migration 0048 för vilka
+// av K35:s skyddsåtgärder som står kvar, för de gör det.
+//
+// Gränsen är densamma som i databasen. Att bara ha den där hade gett ett
+// serverfel i stället för ett fel vid fältet, och den som skrivit tvåtusen
+// tecken ska få veta det innan hen trycker.
+// -----------------------------------------------------------------------------
+
+export const SKAL_MAX = 600;
+
+/** Anteckningen på en sjukperiod. Chefen skriver, aldrig den sjuke. */
+export const ANTECKNING_MAX = 1000;
+
+/**
+ * Vilken sjukdag datumet är, räknat med första sjukdagen som dag 1.
+ *
+ * Samma räkning som `sjukfrister` gör åt andra hållet, och den ska bara finnas
+ * på ett ställe: dag 8 måste betyda samma sak i fristen som i etiketten
+ * bredvid den, annars säger navet emot sig självt på samma rad.
+ */
+export function sjukdag(forstaSjukdag: string, datum: string): number {
+  return dagarMellan(forstaSjukdag, datum) + 1;
+}
+
+/**
+ * En frist som text, med nedräkning.
+ *
+ * "om 4 dagar" och inte "2026-09-11" — chefen räknar inte kalenderdagar i
+ * huvudet klockan åtta på morgonen. Datumet står kvar bredvid, för det är det
+ * som gäller mot Försäkringskassan.
+ *
+ * Den passerade fristen får en egen ton och en egen mening. En röd siffra utan
+ * ord är inget besked (AC-U5.2).
+ */
+export function fristlage(
+  dueOn: string,
+  idag: string,
+): { dagar: number; text: string; ton: "danger" | "warn" | "neutral" } {
+  const dagar = dagarMellan(idag, dueOn);
+  if (dagar < 0)
+    return {
+      dagar,
+      text: `passerade ${periodtext(dueOn, dueOn)}`,
+      ton: "danger",
+    };
+  if (dagar === 0) return { dagar, text: "i dag", ton: "danger" };
+  return {
+    dagar,
+    text: `om ${dagar} ${dagar === 1 ? "dag" : "dagar"}`,
+    ton: dagar <= 3 ? "warn" : "neutral",
+  };
+}
+
+/**
+ * Perioden i klartext, även när den inte har något slut.
+ *
+ * En pågående sjukperiod HAR ingen slutdag, och det är inte ett fel i datan —
+ * det är vad det innebär att vara sjuk i dag. Men "sedan 4 september" och
+ * ingenting mer läses som en trasig rad, och det var precis vad beställaren
+ * såg 2026-09-07. Meningen skriver därför ut att slutdagen saknas, i stället
+ * för att låta tomrummet betyda det.
+ */
+export function periodtextOppen(fran: string, till: string | null): string {
+  if (till) return periodtext(fran, till);
+  return `Sedan ${periodtext(fran, fran)} · ingen slutdag registrerad`;
+}
+
+/**
+ * Hur många dagar det är kvar till en period börjar, som text.
+ *
+ * Delad av attestkön och av hemvyns framåtblick, så att "börjar i dag" betyder
+ * samma sak på båda ytorna.
+ */
+export function startlage(startsOn: string, idag: string): { dagar: number; text: string } {
+  const dagar = dagarMellan(idag, startsOn);
+  if (dagar < 0) return { dagar, text: "har redan börjat" };
+  if (dagar === 0) return { dagar, text: "börjar i dag" };
+  if (dagar === 1) return { dagar, text: "börjar i morgon" };
+  return { dagar, text: `börjar om ${dagar} dagar` };
+}
+
+/**
+ * Bemanningen under en ansökans period, räknad för chefens kö.
+ *
+ * `varstaBemanningsdag` svarar på samma fråga inifrån ansökningsformuläret, men
+ * kan inte återanvändas här: den tar ett helt `Provunderlag`, som hämtas per
+ * sökande med sex frågor. Kön visar tjugo ansökningar samtidigt, och hundra
+ * frågor per sidvisning är ingen kö man öppnar.
+ *
+ * SKILLNADEN MOT FORMULÄRET ÄR OCKSÅ VEM SOM FRÅGAR. Den sökande får bara ett
+ * antal — vem som är borta är inte hens ensak att veta. Chefen beslutar om
+ * bemanningen och ser därför namnen; RLS har redan avgjort att raderna får
+ * lämnas ut till just hen.
+ */
+export function bemanningUnderPeriod(
+  a: { employee_id: string; starts_on: string; ends_on: string },
+  andras: (Franvaroperiod & { team_id: string | null; namn: string })[],
+  raknasIBemanning: Set<string>,
+  tak: Bemanningstak | null,
+): { datum: string; antal: number; namn: string[]; tak: number | null; over: boolean } | null {
+  const relevanta = andras.filter(
+    (p) =>
+      p.employee_id !== a.employee_id &&
+      raknasIBemanning.has(p.type_id) &&
+      (tak?.team_id == null || p.team_id === tak.team_id),
+  );
+
+  let varst: { datum: string; antal: number; namn: string[] } | null = null;
+  for (const d of dagarna(a.starts_on, a.ends_on)) {
+    const den = relevanta.filter((p) => d >= p.starts_on && d <= p.ends_on);
+    if (!varst || den.length > varst.antal)
+      varst = {
+        datum: d,
+        antal: den.length,
+        namn: [...new Set(den.map((p) => p.namn))].sort((x, y) => x.localeCompare(y, "sv")),
+      };
+  }
+
+  if (!varst) return null;
+
+  // Taket jämförs med ansökan INRÄKNAD. Godkänns den blir de `antal + 1`, och
+  // det är den siffran chefen tar ställning till — inte hur det ser ut i dag.
+  const max = tak?.max_absent ?? null;
+  return { ...varst, tak: max, over: max !== null && varst.antal + 1 > max };
+}
+
+/**
+ * Regelbrotten i klartext.
+ *
+ * Koderna lagras i `absence_request.rules_broken`, texterna hör hemma i
+ * gränssnittet: en kod som skrevs i mars ska gå att förklara i september även
+ * om formuleringen bytts.
+ *
+ * LÅG TIDIGARE I `[id]/page.tsx` och bara där. Följden var att attestkön kunde
+ * skriva "2 regelbrott" och detaljsidan "ansökningsfristen var inte uppfylld"
+ * om samma rad — samma sanning i två upplösningar, och bara den ena gick att
+ * agera på. Kön skriver nu ut dem, och då måste texten finnas på ett ställe.
+ */
+export const BROTT_TEXT: Record<string, string> = {
+  frist: "Ansökningsfristen var inte uppfylld.",
+  huvudsemester: "Perioden ligger i huvudsemesterfönstret, som har längre frist.",
+  sparrperiod: "Perioden krockade med en spärrperiod.",
+  maxlangd: "Perioden var längre än typens maxlängd.",
+  bemanning: "Bemanningstaket var redan nått någon av dagarna.",
+  saldo: "Ansökan var längre än det inmatade saldot.",
+  overlapp: "Perioden krockade med annan frånvaro.",
+  deldag: "Typen söks för hela dagar.",
+  bakat: "Perioden registrerades bakåt i tiden.",
+};
+
+/** En kod som klartext, med koden själv som sista utväg. */
+export function brottext(kod: string): string {
+  return BROTT_TEXT[kod] ?? kod;
+}

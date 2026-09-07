@@ -225,7 +225,7 @@ export async function medRoll(...roller: Role[]): Promise<string[]> {
   try {
     const { data } = await supabaseAdmin()
       .from("employee_role")
-      .select("employee_id, employee!inner(status)")
+      .select("employee_id, employee!employee_role_employee_id_fkey(status)")
       .in("role", roller)
       .in("employee.status", AKTIV);
     return [...new Set((data ?? []).map((r) => r.employee_id as string))];
@@ -239,7 +239,7 @@ export async function medBehorighet(behorighet: Permission): Promise<string[]> {
   try {
     const { data } = await supabaseAdmin()
       .from("employee_permission")
-      .select("employee_id, employee!inner(status)")
+      .select("employee_id, employee!employee_permission_employee_id_fkey(status)")
       .eq("permission", behorighet)
       .in("employee.status", AKTIV);
     return [...new Set((data ?? []).map((r) => r.employee_id as string))];

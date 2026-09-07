@@ -12,6 +12,9 @@ import {
   femarsvarning,
   omfattning,
   periodtext,
+  periodtextOppen,
+  sjukdag,
+  startlage,
   saldoFor,
   saldotArGammalt,
   STATUS_ETIKETT,
@@ -21,6 +24,7 @@ import {
   type Saldo,
 } from "@/lib/franvaro";
 import { REGELFALT } from "@/lib/franvaro-server";
+import { Sektionsflikar } from "@/components/ui/Flikar";
 import { Kalenderflode } from "./Kalenderflode";
 import { GuideVard } from "@/components/guide/GuideVard";
 
@@ -108,7 +112,8 @@ export default async function Franvarosida() {
 
       {pagaende && (
         <Notis ton="info">
-          Du är sjukanmäld sedan {periodtext(pagaende.first_sick_day, pagaende.first_sick_day)}
+          Du är sjukanmäld — {periodtextOppen(pagaende.first_sick_day, null).toLowerCase()}, sjukdag{" "}
+          {sjukdag(pagaende.first_sick_day, idag)}
           {pagaende.extent_percent < 100 ? `, ${pagaende.extent_percent} procent` : ""}.{" "}
           {pagaende.confirmed_at ? "Din chef har bekräftat anmälan." : "Väntar på att din chef bekräftar."}{" "}
           <Link href="/franvaro/sjuk" className="font-semibold underline">
@@ -119,49 +124,100 @@ export default async function Franvarosida() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="flex flex-col gap-4 lg:col-span-2">
-          <Card guide="franvaro.vantar">
-            <CardHeader
-              titel="Väntar på beslut"
-              beskrivning="Ansökningar som ingen tagit ställning till än."
-            />
-            {vantar.length === 0 ? (
-              <EmptyState
-                rubrik="Ingenting väntar"
-                text="Ansökningar du skickat in ligger här tills chefen beslutat."
-                handling={<ButtonLink href="/franvaro/ny" size="sm">Söka ledigt</ButtonLink>}
-              />
-            ) : (
-              <ul className="flex flex-col">
-                {vantar.map((a) => (
-                  <Rad key={a.id} a={a} etikett={etikett} />
-                ))}
-              </ul>
-            )}
-          </Card>
-
-          <Card>
-            <CardHeader titel="Kommande ledighet" beskrivning="Godkänt och inbokat." />
-            {kommande.length === 0 ? (
-              <EmptyState rubrik="Ingen ledighet inbokad" text="Godkänd ledighet framåt i tiden visas här." />
-            ) : (
-              <ul className="flex flex-col">
-                {kommande.map((a) => (
-                  <Rad key={a.id} a={a} etikett={etikett} />
-                ))}
-              </ul>
-            )}
-          </Card>
-
-          {historik.length > 0 && (
-            <Card>
-              <CardHeader titel="Tidigare" />
-              <ul className="flex flex-col">
-                {historik.slice(0, 12).map((a) => (
-                  <Rad key={a.id} a={a} etikett={etikett} />
-                ))}
-              </ul>
-            </Card>
-          )}
+          {/**
+            * VANTAR / KOMMANDE / TIDIGARE SOM FLIKAR (2026-09-07).
+            *
+            * De lag som tre kort under varandra, och "Tidigare" doldes helt nar
+            * den var tom — vilket gjorde att sidan bytte hojd beroende pa hur
+            * lange man arbetat har. Som flikar star raden still, och den som
+            * vantar pa besked ser det forst.
+            *
+            * `guide="franvaro.vantar"` satt pa det forsta kortet och maste folja
+            * med: systemguiden pekar pa ankaret, och en guide som pekar pa
+            * ingenting hoppar over steget utan att saga varfor.
+            */}
+          <Sektionsflikar
+            etikett="Din frånvaro"
+            tal={[
+              { id: "vantar", varde: vantar.length, etikett: "Väntar på beslut", kraverHandling: true },
+              { id: "kommande", varde: kommande.length, etikett: "Inbokat framåt" },
+              { id: "saldo", varde: saldotyper.length > 0 ? saldon.reduce((n, x) => n + x.days, 0) : "—", etikett: "Dagar i saldo" },
+              { id: "tidigare", varde: historik.length, etikett: "Tidigare" },
+            ]}
+            sektioner={[
+              {
+                id: "vantar",
+                etikett: "Väntar på beslut",
+                antal: vantar.length,
+                innehall: (
+                  <Card guide="franvaro.vantar">
+                    <CardHeader
+                      titel="Väntar på beslut"
+                      beskrivning="Ansökningar som ingen tagit ställning till än."
+                    />
+                    {vantar.length === 0 ? (
+                      <EmptyState
+                        rubrik="Ingenting väntar"
+                        text="Ansökningar du skickat in ligger här tills chefen beslutat."
+                        handling={<ButtonLink href="/franvaro/ny" size="sm">Söka ledigt</ButtonLink>}
+                      />
+                    ) : (
+                      <ul className="flex flex-col">
+                        {vantar.map((a) => (
+                          <Rad key={a.id} a={a} etikett={etikett} idag={idag} />
+                        ))}
+                      </ul>
+                    )}
+                  </Card>
+                ),
+              },
+              {
+                id: "kommande",
+                etikett: "Kommande",
+                antal: kommande.length,
+                innehall: (
+                  <Card>
+                    <CardHeader titel="Kommande ledighet" beskrivning="Godkänt och inbokat." />
+                    {kommande.length === 0 ? (
+                      <EmptyState
+                        rubrik="Ingen ledighet inbokad"
+                        text="Godkänd ledighet framåt i tiden visas här."
+                        handling={<ButtonLink href="/franvaro/ny" size="sm">Söka ledigt</ButtonLink>}
+                      />
+                    ) : (
+                      <ul className="flex flex-col">
+                        {kommande.map((a) => (
+                          <Rad key={a.id} a={a} etikett={etikett} idag={idag} />
+                        ))}
+                      </ul>
+                    )}
+                  </Card>
+                ),
+              },
+              {
+                id: "tidigare",
+                etikett: "Tidigare",
+                antal: historik.length,
+                innehall: (
+                  <Card>
+                    <CardHeader titel="Tidigare" beskrivning="Avslutat, avslaget och tillbakadraget." />
+                    {historik.length === 0 ? (
+                      <EmptyState
+                        rubrik="Ingen historik än"
+                        text="Beslutade och avslutade ansökningar hamnar här."
+                      />
+                    ) : (
+                      <ul className="flex flex-col">
+                        {historik.slice(0, 20).map((a) => (
+                          <Rad key={a.id} a={a} etikett={etikett} idag={idag} />
+                        ))}
+                      </ul>
+                    )}
+                  </Card>
+                ),
+              },
+            ]}
+          />
         </div>
 
         <div className="flex flex-col gap-4">
@@ -217,18 +273,26 @@ export default async function Franvarosida() {
               <ul className="flex flex-col gap-2 text-small">
                 <li>
                   <Link href="/franvaro/attest" className="font-semibold text-brand-700 hover:text-brand-900">
-                    Ansökningar att besluta
+                    Frånvaro i teamet
                   </Link>
+                  <span className="block text-micro text-ink-500">
+                    Ansökningar att besluta, sjukfrånvaro och vilka som är borta de närmaste två
+                    veckorna.
+                  </span>
                 </li>
                 <li>
                   <Link href="/franvaro/planering" className="font-semibold text-brand-700 hover:text-brand-900">
                     Semesterplanering
                   </Link>
+                  <span className="block text-micro text-ink-500">Hela semesteråret, vecka för vecka.</span>
                 </li>
                 <li>
                   <Link href="/franvaro/sjuk" className="font-semibold text-brand-700 hover:text-brand-900">
                     Sjukanmälningar och frister
                   </Link>
+                  <span className="block text-micro text-ink-500">
+                    Bekräfta, kvittera frister, ta emot intyg och avsluta perioder.
+                  </span>
                 </li>
                 {hasRole(user, "sales_manager", "ceo", "admin") && (
                   <li>
@@ -249,6 +313,7 @@ export default async function Franvarosida() {
 function Rad({
   a,
   etikett,
+  idag,
 }: {
   a: {
     id: string;
@@ -259,6 +324,7 @@ function Rad({
     status: string;
   };
   etikett: Map<string, string>;
+  idag: string;
 }) {
   const status = a.status as Ansokningsstatus;
   return (
@@ -271,8 +337,11 @@ function Rad({
           <span className="block text-body text-ink-900 group-hover:text-brand-700">
             {etikett.get(a.type_id) ?? a.type_id}
           </span>
+          {/* Nedräkningen bara framåt. "Har redan börjat" på en rad under
+              Tidigare är en upplysning ingen frågade efter. */}
           <span className="block text-small text-ink-500">
             {periodtext(a.starts_on, a.ends_on)} · {omfattning(a)}
+            {a.starts_on > idag ? ` · ${startlage(a.starts_on, idag).text}` : ""}
           </span>
         </span>
         <Badge ton={STATUS_TON[status]}>{STATUS_ETIKETT[status]}</Badge>

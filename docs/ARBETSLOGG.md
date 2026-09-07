@@ -5,6 +5,233 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-07 · Frånvaron: skäl, slutdag, chefsvy och sjukdagsräkning
+
+*Migration `0048_franvaro_skal_och_anteckningar`. Byggd på branch
+`franvaro-skal-och-lage`. Beslut: D-E7.10, D-E7.11, D-E7.12.*
+
+### Frågan som ställdes
+
+"Vi har tex Mick som har ansökt om ledighet, jag ser inga kommentarer om varför
+han faktiskt är ledig samt att jag ser bara datumet han ansökte ledigheten inte
+från när till när."
+
+### Det första fyndet: premissen stämde inte, men iakttagelsen gjorde det
+
+En fråga till produktionsdatabasen före första kodraden. Mick hade inte ansökt
+om ledighet — han var **sjukanmäld**, `sick_report` med första sjukdag
+4 september och `last_sick_day = null`. Hela navet innehöll vid tillfället EN
+ledighetsansökan, Vlados två timmar den 10 september.
+
+Iakttagelsen var ändå exakt riktig, och tre olika fel låg bakom den:
+
+1. **En pågående sjukanmälan HAR ingen slutdag.** Kortet skrev
+   `Sjukdag 4, sedan 4 september 2026` och lämnade tomrummet att tolkas. Ett
+   tomrum betyder ingenting, och läses därför som ett fel.
+2. **Sjukanmälan har inget orsaksfält**, med flit sedan 0020.
+3. **Klockans notis om en ledighetsansökan bar bara `starts_on`**, rått, som
+   `Semester · 2026-09-15`. En dag och tre veckor såg identiska ut, och datumet
+   gick lika gärna att läsa som ansökningsdatum. Det var den raden beställaren
+   läste, och den gick inte att läsa rätt.
+
+Fynd 3 var en riktig bugg och hade funnits sedan modulen byggdes.
+
+### Två frågor, två olika svar
+
+Beställaren fick välja för ledighetsvägen och sjukvägen var för sig, och svarade
+olika — vilket var hela poängen med att dela frågan.
+
+**Ledighet fick ett obligatoriskt skäl** (D-E7.10). K35 hade förbjudit det i ett
+år; invändningen framfördes en gång och beslutet är noterat som vägt. Skälet
+lever inom `absence_request_read`:s krets och kommer varken in i `audit_log`
+eller i en notistext.
+
+**Sjukvägen fick INGET orsaksfält** (D-E7.11) — beställaren valde chefens
+anteckning i stället. `sick_note` bär "pratat med honom i dag, räknar med
+måndag" och avvisar den sjuke själv som skribent. Tabellen har ett
+`employee_id` enbart för registerutdraget: intern betyder "inte i
+gränssnittet", aldrig "hen får inte veta".
+
+### Slutdagen, som kom in mitt i passet
+
+"Vid alla ansökningar måste det vara en slutdag, så antingen 'bara idag' eller
+så väljer man hur många dagar." `skickaAnsokan` läste
+`String(form.get("till")) || fran` — en tom ruta blev tyst en endagsledighet.
+Se D-E7.12. Radioknapparna börjar utan förval, för ett förval hade återinfört
+felet i mildare form.
+
+### Chefsvyn: fyra sidor blev en
+
+`/franvaro/attest` hette "Att besluta" och var en lista med namn, typ, period
+och siffran "2 regelbrott". Allt annat låg bakom en klickning och beslutet bakom
+klickningen efter den.
+
+Sidan heter nu **Frånvaro i teamet** och har tre avdelningar: kön med hela
+underlaget utskrivet och knapparna i samma kort, sjukfrånvaron med sjukdag och
+frister med nedräkning, och godkänd ledighet inom två veckor.
+
+`hamtaChefsbild()` i `franvaro-server.ts` hämtar alltihop. **Två tokens, och
+skillnaden är avsiktlig:** användarens egen token läser allt som ska SYNAS, och
+RLS drar kretsen en gång. Service role räknar bara BEMANNINGEN och lämnar
+ifrån sig ett antal — ett bolagstak räknar hela bolaget, och en teamledare vars
+RLS-krets är sex personer skulle annars godkänna mot ett tak som redan var
+sprängt. Namnen kommer ur den egna token och aldrig ur service role-frågan.
+
+**Vad som medvetet inte flyttade hit:** årsvyn ligger kvar på
+`/franvaro/planering` (två veckor är bemanning, ett år är planering), och
+sjukanmälans handlingar ligger kvar på `/franvaro/sjuk` — här står läget, där
+görs saken. Att duplicera knapparna hade gett två ställen att glömma ändra.
+
+### Startsidan
+
+`Dagens läge` fick rubriker per sorts frånvaro. Sex namn i en oavbruten kolumn
+skannas, och då missas övergången mellan "ingen vet var hon är" och "hon har
+semester". Grupperingen LÄSER sorteringen i `ORDNING` och sätter den inte om —
+annars kan de två glida isär och kortet börjar säga en sak i rubriken och en
+annan i listan.
+
+Under kortet en rad om vad som börjar inom fjorton dagar. Dagsbilden svarar på
+"vem är borta i dag", vilket är rätt fråga klockan åtta; klockan tre är frågan
+"vem är borta nästa vecka".
+
+Alla får dessutom kortet **Din frånvaro** — väntande ansökningar, inbokad
+ledighet, saldo och pågående sjukanmälan. Det döljs när det är tomt, av samma
+skäl som ärendekortet: "ingen ledighet inbokad" är inte ett svar på en fråga
+någon ställer.
+
+### Fyra ställen där ett rått datum stod i en mening till en människa
+
+`notiser-server.ts` (två rader), `actions.ts` (fem notistexter), sjuksidans
+"Dina sjukperioder" och saldonotisens `${typId}` — som skrev `saved_vacation`
+till den anställda. Alla går nu genom `periodtext`.
+
+### Nya rena funktioner, alla provade
+
+`periodtextOppen`, `sjukdag`, `fristlage`, `startlage`, `bemanningUnderPeriod`,
+`brottext` och `BROTT_TEXT` i `src/lib/franvaro.ts`. `BROTT_TEXT` låg förut i
+`[id]/page.tsx` och bara där; kön kunde därför skriva "2 regelbrott" och
+detaljsidan hela meningen om samma rad. `tests/franvaro.mjs` har 26 nya prov,
+inklusive Micks verkliga fall.
+
+### Andra passet samma dag: korten fick flikar, filter och siffror
+
+Beställaren tittade på previewen: *"UI:n ser riktigt dålig ut, alldeles för
+enkel. Texten '1 ledighet börjar inom 14 dagar' står så litet och långt ner att
+det ser ut som en kommentar. Jag vill ha en tydlig filtrering, lite som
+sidebars fast på toppen."*
+
+Invändningen var riktig och svaret var inte att förstora texten. Framåtblicken
+låg som en fotnot under en lista, och det som ligger under det man redan läst
+färdigt läses inte alls.
+
+**Ny delad komponent, `src/components/ui/Flikar.tsx`:** `Flikrad`, `Chiprad`,
+`Sifferrad`, `Sektionsflikar`. Ingen fanns sedan tidigare.
+
+**Tre nivåer, tre FORMER — inte tre färger.** Ligger tre kontrollrader ovanför
+varandra måste ögat se vilken som är vilken utan att läsa dem. Sifferraden är
+platt och delad med linjer. Flikraden är en upphöjd bricka på en nedsänkt bana.
+Chipsen är ramar utan fyllning tills de väljs. `brand-100` på valda chips är
+inte ett val jag gjorde — `globals.css` beskriver redan tonen som "aktiv nav,
+valda chips". Inga hexvärden; UI-PRD §11.
+
+**Dagens läge: tid som flikar, läge som chips.** Tiden byter vilken FRÅGA
+kortet svarar på — "vem är borta i dag" bemannar dagen, "vem är borta om två
+veckor" avgör om man kan lova bort någon. Läget begränsar bara svaret. Det som
+byter fråga är en flik; det som filtrerar ett svar är ett chip.
+
+**Chipsen är FÄRRE i framtidsflikarna, och det är hela poängen.** Ingen är sen
+på tisdag ännu. Ett chip som alltid visar noll lär ögat att det aldrig händer
+något där — och den dagen det gjorde det hade ingen sett.
+
+**En pågående sjukperiod projiceras inte.** Att skriva "Mick är borta den 18:e"
+för att hen är sjukanmäld i dag vore en prognos om någons hälsa. Raden kommer
+med — chefen som bemannar behöver veta att någon är sjukskriven utan känt slut
+— men den säger vad som ÄR känt: "Sjukanmäld sedan 4 september, ingen slutdag
+registrerad". Två prov i `tests/dagslage.mjs` bevakar just det.
+
+**Din kö: bara det som HAR en frist rangordnas.** "De tre mest brådskande"
+kräver att brådskan går att jämföra mellan ett ärende och en semesteransökan.
+Det gör den bara om båda har ett datum att mäta mot — ärendets `due_at`,
+ansökans `starts_on`. En tidsrättelse och ett rollspel har ingen frist alls och
+står därför kvar som antal. Att hitta på en frist åt dem för att få dem
+sorterbara hade gjort ordningen till en gissning.
+
+**Ärendets rubrik står inte på startsidan.** Kolumnen lades medvetet inte till
+i frågan. Ett personalärende heter "Konflikt med kollega"; ledningen får läsa
+det på /arenden, dit man gått med avsikt. Startsidan är den yta som står öppen
+på en delad skärm.
+
+**`Sektionsflikar` tar `ReactNode`, inte data.** Därför kunde `/franvaro/attest`
+och `/franvaro` byta staplade kort mot flikar utan att sektionerna förlorade
+sina serverfrågor, sin RLS eller sina egna klientkomponenter. Alla sektioner
+renderas och den dolda göms med CSS — chefens halvskrivna motivering i
+attestkön ska inte försvinna för att man tittade på sjukfrånvaron under tiden.
+
+**Tre byggen föll innan det gick igenom**, alla på typfel som bara Vercel kunde
+se: `subject` fanns inte i chefsköns select, `svenskVeckodag()` ger ett tal och
+inte ett namn, och `part_day_minutes` saknades för `omfattning()`.
+
+### Fyndet efteråt: sex inbäddade frågor som aldrig gått att besvara
+
+Beställaren öppnade previewen och såg **ingen skillnad alls** på hemvyn. Det var
+rätt iakttagelse, och orsaken var värre än den nya koden.
+
+`employee!inner(team_id)` på `absence_request` är **tvetydigt**. Tabellen har
+fyra främmande nycklar mot `employee` — `employee_id`, `created_by`,
+`decided_by`, `withdrawn_by` — och PostgREST vägrar då gissa. Den svarar
+`PGRST201`, alltså ett FEL och inte en tom lista.
+
+Det farliga är hur det ser ut i koden:
+
+```
+const { data: andras } = await db.from("absence_request").select(...);
+...andrasPerioder: (andras ?? []).map(...)
+```
+
+`data` blir `null`, `?? []` gör det till en tom lista, och funktionen fortsätter
+som om ingen vore borta. **Bemanningsvarningen i ansökningsformuläret har därför
+aldrig fungerat** — den har sagt "ingen annan är borta under perioden" varje
+gång sedan modulen byggdes, och regelbrottet `bemanning` har aldrig kunnat
+inträffa. Ingenting kraschade, ingenting loggades.
+
+Regelmotorns prov kunde inte se det: de skickar in sitt underlag för hand och
+bevisar bara att motorn räknar rätt PÅ det underlaget.
+
+**Sex ställen, varav tre låg i produktion sedan tidigare:**
+
+| Var | Vad som var tyst |
+| --- | --- |
+| `franvaro-server.ts:100` | Bemanningsvarningen vid ansökan — alltid "ingen är borta" |
+| `franvaro/sjuk/page.tsx:99` | Sjukanmälans ringlista tappade sina rollbaserade mottagare (AC-3.6) |
+| `notishandelse-server.ts:227, 241` | `medRoll` och `medBehorighet` gav tomma kretsar — notiser till säljchef, VD och admin skickades aldrig (0047) |
+| `jobb/satser.ts:43` | Lönekostnadsjobbets chefsfallback var alltid null |
+| `page.tsx:424`, `franvaro-server.ts:400` | Passets egna två, skrivna efter samma mönster |
+
+Rättningen är att namnge nyckeln: `employee!absence_request_employee_id_fkey(…)`.
+
+**`tests/inbaddningar-db.mjs` är svaret på klassen.** Provet LÄSER koden — varje
+`.from("x").select("…(…)")` under `src/` — och ställer frågan mot PostgREST med
+`limit=0`. En ny inbäddning provas den dag den skrivs, utan att någon behöver
+komma ihåg att lägga till den i en lista. 22 frågor i dag, alla gröna.
+
+Att fixen får `medRoll` att börja fungera är en **beteendeförändring**: notiser
+till roll- och behörighetskretsar som aldrig gått iväg börjar gå iväg. Det är
+0047:s avsikt, och anroparna är händelsestyrda och glesa — men det är värt att
+veta första dygnet.
+
+### Kvar att göra
+
+Ingenting i koden. Två saker att titta efter i produktion:
+
+- **Vad folk faktiskt skriver i skälfältet.** Det är den risk K35 pekade ut, och
+  den syns först i riktig trafik. Dyker hälsouppgifter upp är åtgärden en
+  hårdare hjälptext — inte att ta bort fältet, för det var ett beställarbeslut.
+- **`staffing_cap` är tom.** Inget bemanningstak är satt någonstans, så
+  bemanningsraden i kön skriver "Inget bemanningstak är satt" i stället för att
+  se lugn ut. Vill beställaren ha varningar behöver ett tak läggas under Regler.
+
+---
+
 ## 2026-09-05 · Notiserna mergades till main
 
 Beställaren godkände branchen och `notiser-for-allt-2` gick till main som

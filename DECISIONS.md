@@ -431,3 +431,73 @@ säljchef: hens gamla stämplingar är lönegrundande, och en dag som aldrig st�
 blockerar löneperioden som "dag utan utstämpling" tills någon rättar den för
 hand. **Vänder man på det här paret går löneunderlaget sönder för den som byter
 roll mitt i en period, och det syns först vid attesten.**
+
+## D-E7.10 · Ledighetsansökan fick ett obligatoriskt skäl — K35 omprövad, inte glömd
+**2026-09-07.** K35 och AC-3.21 sa i ett år att frånvaromodulen aldrig fick ha
+ett skälfält. Argumentet står oemotsagt: samma ruta som bär "bröllop" i
+september bär "cellprov" i november, och då ligger en hälsouppgift i ett
+fritextfält som inte är byggt för att bära en. Förbudet stod som versal rubrik
+på tre ställen i koden.
+
+Beställaren tittade på navet, kunde inte se varför någon var borta, och valde
+skälet ändå. Invändningen framfördes och upprepades inte — det här är noterat
+som ett vägt beslut och inte som ett förbiseende.
+
+**Beslut:** `absence_request.reason`, obligatoriskt vid inskicket. Kravet ligger
+i tre lager: `required` i formuläret, en kontroll i `skickaAnsokan`, och en
+insert-trigger i 0048. Triggern gäller bara INSERT, så den enda ansökan som
+fanns när migrationen kördes — Vlados från 3 september — inte behövde ett skäl
+uppfunnet åt sig i efterhand.
+
+**Konsekvens:** K35:s skyddsåtgärder står kvar och är det som gör beslutet
+bärbart. Skälet lämnar aldrig `absence_request_read`:s krets (den sökande,
+den som leder hen, ledningen). Det står inte i `audit_log`, vars krets är vidare
+och inkluderar `admin`. Det står inte i notistexten, som är oföränderlig sedan
+0047 och läses i en panel någon kan stå bakom. Och hjälptexten vid fältet säger
+uttryckligt att hälsa inte hör hemma där — det är det enda ett fritextfält kan
+göra åt vad någon skriver i det, och det ska då göras och inte antydas.
+
+**Vad som INTE följde med:** sjukvägen. Se D-E7.11.
+
+## D-E7.11 · Sjukfrånvaron fick en chefsanteckning, inte ett orsaksfält
+**2026-09-07.** Samma fråga ställdes om sjukvägen, och svaret blev ett annat.
+
+Frågan uppstod framför en riktig rad: Mick var sjukanmäld sedan 4 september,
+pågående, och navet kunde varken säga hur länge det skulle pågå eller vad någon
+visste om läget. Den naturliga slutsatsen — "lägg till ett varför" — hade gett
+`sick_report` ett fritextfält, och ett fritextfält på en sjukanmälan är ett
+diagnosfält oavsett vad rubriken över det säger. Särskild kategori enligt
+artikel 9, skrivet av den som är sjuk för att slippa verka undanglidande.
+
+**Beslut:** ingen kolumn på `sick_report`. I stället `sick_note` — en anteckning
+som CHEFEN skriver om sitt eget arbete: *"pratat med honom i dag, räknar med
+måndag"*. Server actionen avvisar den anmälan gäller som skribent, så fältet kan
+inte bli platsen där man förklarar sig.
+
+**Konsekvens, och den viktiga:** anteckningen är intern men inte hemlig.
+`sick_note_read` släpper in chefen och ledningen, inte den anteckningen handlar
+om — men tabellen bär ett `employee_id` enbart för att raden ska följa med i
+personens registerutdrag (art. 15) och i raderingen (0046). Utan den kolumnen
+hade "intern anteckning" tyst blivit "hemlig anteckning", och det är en helt
+annan sak. `registerutdrag.ts` bär raden; tas kolumnen bort ska den raden
+granskas först.
+
+Anteckningen går inte att ändra. Samma regel som notistexterna i 0047: det som
+antecknades den 5:e ska stå kvar även sedan personen kommit tillbaka, för det
+VAR vad chefen visste då.
+
+## D-E7.12 · Slutdagen på en ansökan är ett val, inte ett tomt fält
+**2026-09-07.** `skickaAnsokan` läste slutdagen som
+`String(form.get("till")) || fran` — en tom ruta blev tyst en endagsledighet.
+Ingenting på skärmen sa emot: den som sökte en vecka och missade det andra
+datumfältet fick en dag, chefen godkände en dag, och båda trodde att de talade
+om samma sak.
+
+**Beslut:** formuläret frågar först *Bara en dag* eller *Flera dagar*, och
+datumfälten rättar sig efter svaret. I läget "flera" krävs sista dagen, och den
+går att ange antingen som datum eller som antal dagar — de två räknar fram
+varandra. Servern kräver `langd` och gissar aldrig; ett formulär som postas för
+hand utan fältet får ett fel i stället för en tolkning.
+
+**Konsekvens:** ett förvalt läge hade återinfört felet i mildare form, så
+radioknapparna börjar utan val. Priset är ett klick till på varje ansökan.

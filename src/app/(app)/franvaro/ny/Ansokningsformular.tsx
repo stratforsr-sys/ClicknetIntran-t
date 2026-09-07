@@ -4,22 +4,50 @@ import { useActionState, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Field, Input, Select } from "@/components/ui/Field";
+import { Field, Input, Select, KONTROLL } from "@/components/ui/Field";
 import { Notis } from "@/components/ui/Notis";
 import { Ikon } from "@/components/shell/Ikon";
-import { antalDagar, periodtext, type Franvarotyp, type Regelverk } from "@/lib/franvaro";
+import {
+  antalDagar,
+  datumPlus,
+  periodtext,
+  SKAL_MAX,
+  type Franvarotyp,
+  type Regelverk,
+} from "@/lib/franvaro";
 import { forhandsgranska, skickaAnsokan, type Forhandsbesked, type FranvaroState } from "../actions";
 
 /**
  * Ansökan om ledighet (E7.1, E7.2, AC-3.13).
  *
  * ===========================================================================
- * K35, AC-3.21: DET FINNS INGET SKÄLFÄLT HÄR, OCH DET SKA INTE LÄGGAS TILL.
+ * SKÄLFÄLTET FINNS SEDAN 2026-09-07, OCH DET ÄR EN OMPRÖVNING — INTE EN MISS.
  *
- * "Varför söker du ledigt" ser oskyldigt ut på ett semesterformulär. Men samma
- * fält skulle stå kvar den dag någon söker ledigt för en behandling, och då
- * bär navet en uppgift om någons hälsa i ett fritextfält. Chefen beslutar
- * utifrån period, bemanning och regler — inget av det kräver ett skäl.
+ * Här stod i ett år en versal rubrik om att fältet aldrig fick läggas till:
+ * samma ruta som bär "bröllop" i september bär "cellprov" i november, och då
+ * ligger en hälsouppgift i ett fritextfält.
+ *
+ * Beställaren vägde det mot att en chef inte kunde se varför någon var borta,
+ * och valde skälet. Beslutet står som D-E7.10. Invändningen är inte upphävd,
+ * den är besvarad med tre saker som gäller den här filen:
+ *
+ *   - HJÄLPTEXTEN STYR BORT FRÅN HÄLSA, uttryckligt och inte antytt. Det är
+ *     allt ett fritextfält kan göra, och det ska då göras ordentligt.
+ *   - SKÄLET SYNS BARA FÖR BESLUTSKRETSEN. Se rubriken i 0048.
+ *   - SJUKVÄGEN FICK INGET SÅDANT FÄLT. Den frågan ställdes separat samma dag
+ *     och besvarades med chefens anteckning i stället (D-E7.11).
+ * ===========================================================================
+ *
+ * ===========================================================================
+ * SLUTDAGEN VÄLJS, DEN UTELÄMNAS INTE.
+ *
+ * Fälten hette förut "Från och med" och "Till och med", och det andra fick
+ * lämnas tomt. Servern läste då tomt som "samma dag" — tyst. Den som sökte en
+ * vecka och missade fältet fick en dag, och ingenting på skärmen sa emot.
+ *
+ * Valet står nu först, före datumen, och har inget förvalt läge som betyder
+ * något: "Bara en dag" och "Flera dagar" är två olika ansökningar, och den
+ * som söker ska ha sagt vilken innan datumen ens visas.
  * ===========================================================================
  */
 export function Ansokningsformular({
@@ -37,20 +65,29 @@ export function Ansokningsformular({
   const [state, action, vantar] = useActionState<FranvaroState, FormData>(skickaAnsokan, {});
 
   const [typId, setTypId] = useState(typer[0]?.id ?? "");
+  const [langd, setLangd] = useState<"" | "en_dag" | "flera">("");
   const [fran, setFran] = useState("");
   const [till, setTill] = useState("");
   const [deldag, setDeldag] = useState(false);
   const [minuter, setMinuter] = useState(120);
+  const [skal, setSkal] = useState("");
   const [besked, setBesked] = useState<Forhandsbesked | null>(null);
   const [raknar, startaRakning] = useTransition();
 
   const typ = typer.find((t) => t.id === typId);
-  const slut = till || fran;
+  const enDag = langd === "en_dag";
+  const slut = enDag ? fran : till;
+
+  // Del av dag gäller per definition en enda dag. Byter man till "flera dagar"
+  // ska kryssrutan inte ligga kvar och tyst motsäga valet ovanför den.
+  useEffect(() => {
+    if (langd === "flera" && deldag) setDeldag(false);
+  }, [langd, deldag]);
 
   // Bemanningen och regelbrotten räknas på servern varje gång perioden ändras.
   // Kort fördröjning, annars går det en fråga per tangenttryck i datumfältet.
   useEffect(() => {
-    if (!fran || !typId) {
+    if (!fran || !typId || !slut) {
       setBesked(null);
       return;
     }
@@ -62,10 +99,23 @@ export function Ansokningsformular({
     return () => clearTimeout(timer);
   }, [typId, fran, slut, deldag, minuter]);
 
-  const dagar = fran && slut >= fran ? antalDagar(fran, slut) : 0;
+  const dagar = fran && slut && slut >= fran ? antalDagar(fran, slut) : 0;
   const saldo = saldon[typId] ?? null;
   const overTak =
     besked?.bemanning && besked.bemanning.tak !== null && besked.bemanning.andra >= besked.bemanning.tak;
+
+  /**
+   * Antal dagar och sista dag är samma uppgift sedd från två håll, och båda
+   * går att skriva i. Den som vet "tre veckor" räknar inte fram ett datum, och
+   * den som vet "till den sista" räknar inte fram ett antal.
+   */
+  const satsDagar = (n: number) => {
+    if (!fran || !Number.isFinite(n) || n < 1) return;
+    setTill(datumPlus(fran, Math.min(n, 366) - 1));
+  };
+
+  const kanSkicka =
+    Boolean(fran) && Boolean(slut) && slut >= fran && skal.trim().length > 0 && langd !== "";
 
   return (
     <div className="flex flex-col gap-4 pt-2">
@@ -100,38 +150,88 @@ export function Ansokningsformular({
               </Select>
             </Field>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Från och med" namn="fran">
-                <Input
-                  namn="fran"
-                  type="date"
-                  required
-                  value={fran}
-                  min="2000-01-01"
-                  onChange={(e) => {
-                    setFran(e.target.value);
-                    if (till && till < e.target.value) setTill(e.target.value);
-                  }}
-                />
-              </Field>
+            {/* Längden först. Datumfälten under den ändrar sig efter valet, och
+                det är avsiktligt: två datumfält sida vid sida är just det som
+                gjorde den tomma slutdagen möjlig att missa. */}
+            <fieldset className="flex flex-col gap-2">
+              <legend className="mb-1 text-small font-semibold text-ink-700">
+                Hur länge gäller ledigheten?
+              </legend>
+              <input type="hidden" name="langd" value={langd} />
+              {(
+                [
+                  ["en_dag", "Bara en dag", "En enda dag, eller en del av den."],
+                  ["flera", "Flera dagar", "Du anger sista dagen eller antal dagar."],
+                ] as const
+              ).map(([varde, rubrik, hjalp]) => (
+                <label key={varde} className="flex items-start gap-3">
+                  <input
+                    type="radio"
+                    name="langdval"
+                    value={varde}
+                    checked={langd === varde}
+                    onChange={() => setLangd(varde)}
+                    className="mt-1 size-5"
+                  />
+                  <span>
+                    <span className="block text-body text-ink-900">{rubrik}</span>
+                    <span className="block text-small text-ink-500">{hjalp}</span>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
 
-              <Field
-                label="Till och med"
-                namn="till"
-                hjalp={deldag ? "Del av dag gäller en enda dag." : undefined}
-              >
-                <Input
-                  namn="till"
-                  type="date"
-                  value={deldag ? fran : till}
-                  min={fran || undefined}
-                  disabled={deldag}
-                  onChange={(e) => setTill(e.target.value)}
-                />
-              </Field>
-            </div>
+            {langd !== "" && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label={enDag ? "Vilken dag?" : "Första dagen"} namn="fran">
+                  <Input
+                    namn="fran"
+                    type="date"
+                    required
+                    value={fran}
+                    min="2000-01-01"
+                    onChange={(e) => {
+                      setFran(e.target.value);
+                      if (till && till < e.target.value) setTill(e.target.value);
+                    }}
+                  />
+                </Field>
 
-            {typ?.allows_part_day && (
+                {!enDag && (
+                  <>
+                    <Field label="Sista dagen" namn="till">
+                      <Input
+                        namn="till"
+                        type="date"
+                        required
+                        value={till}
+                        min={fran || undefined}
+                        onChange={(e) => setTill(e.target.value)}
+                      />
+                    </Field>
+
+                    <Field
+                      label="…eller antal dagar"
+                      namn="antal_dagar"
+                      hjalp="Räknar fram sista dagen åt dig. Kalenderdagar, helger inräknade."
+                    >
+                      <input
+                        id="antal_dagar"
+                        type="number"
+                        min={1}
+                        max={366}
+                        value={dagar || ""}
+                        disabled={!fran}
+                        onChange={(e) => satsDagar(Number(e.target.value))}
+                        className={KONTROLL}
+                      />
+                    </Field>
+                  </>
+                )}
+              </div>
+            )}
+
+            {enDag && typ?.allows_part_day && (
               <div className="flex flex-col gap-3">
                 <label className="flex items-start gap-3">
                   <input
@@ -166,11 +266,37 @@ export function Ansokningsformular({
               </div>
             )}
 
+            {/* Perioden i klartext, alltid när båda datumen finns. Det är den
+                mening chefen kommer att läsa, och den som söker ska ha sett
+                exakt samma innan hen trycker. */}
             {dagar > 0 && !deldag && (
-              <p className="text-small text-ink-500">
-                {periodtext(fran, slut)} — {dagar} {dagar === 1 ? "dag" : "dagar"}.
-              </p>
+              <Notis ton="info">
+                Du söker ledigt <strong>{periodtext(fran, slut)}</strong> — {dagar}{" "}
+                {dagar === 1 ? "dag" : "dagar"}.
+              </Notis>
             )}
+
+            <Field
+              label="Varför söker du ledigt?"
+              namn="skal"
+              hjalp="Chefen ser texten och beslutar utifrån den. Skriv inget om hälsa, vård eller behandling — varken din egen eller någon annans."
+            >
+              <textarea
+                id="skal"
+                name="skal"
+                rows={3}
+                required
+                maxLength={SKAL_MAX}
+                value={skal}
+                onChange={(e) => setSkal(e.target.value)}
+                className={KONTROLL}
+                placeholder="Till exempel: flytt, bröllop, resa som är bokad sedan i våras."
+              />
+            </Field>
+            <p className="-mt-3 text-micro text-ink-300">
+              {skal.length} av {SKAL_MAX} tecken. Texten läses av dig, av den som beslutar och av
+              ledningen — av ingen annan.
+            </p>
 
             {/* E7.2: bemanningsvyn. Antal, aldrig namn — vem som är ledig i
                 teamet är inte den sökandes ensak att veta. */}
@@ -199,7 +325,7 @@ export function Ansokningsformular({
             )}
 
             <div className="mt-2 flex items-center gap-3">
-              <Button type="submit" laddar={vantar} disabled={!fran}>
+              <Button type="submit" laddar={vantar} disabled={!kanSkicka}>
                 Skicka ansökan
               </Button>
               <Link href="/franvaro" className="text-small font-semibold text-ink-500 hover:text-ink-900">

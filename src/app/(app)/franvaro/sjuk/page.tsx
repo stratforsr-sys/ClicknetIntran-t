@@ -14,6 +14,8 @@ import {
   FRIST_TEXT,
   dagarMellan,
   periodtext,
+  periodtextOppen,
+  sjukdag,
   upprepadKorttid,
   type Fristtyp,
   type Regelverk,
@@ -23,6 +25,7 @@ import { REGELFALT } from "@/lib/franvaro-server";
 import { Sjukregistrering } from "./Sjukregistrering";
 import { Chefshandlingar } from "./Chefshandlingar";
 import { Intyg, type Intygsfil } from "./Intyg";
+import { Sjukanteckningar, type Anteckning } from "../Sjukanteckningar";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Sjukfrånvaro — Clicknet Nav" };
@@ -94,7 +97,7 @@ export default async function Sjuksida() {
     rollpersoner.length
       ? db
           .from("employee_role")
-          .select("role, employee!inner(id, first_name, last_name, status)")
+          .select("role, employee!employee_role_employee_id_fkey(id, first_name, last_name, status)")
           .in("role", rollpersoner)
       : Promise.resolve({ data: [] }),
   ]);
@@ -195,6 +198,45 @@ export default async function Sjuksida() {
     ? await db.from("employee").select("id, first_name, last_name").in("id", oppnarIds)
     : { data: [] };
   for (const p of oppnare ?? []) namn.set(p.id, fullName(p));
+
+  /**
+   * Anteckningarna (D-E7.11).
+   *
+   * Läses med användarens EGEN token, till skillnad från chefsvyns hämtning.
+   * Skillnaden är att den här sidan visar BÅDE egna och andras anmälningar i
+   * samma lista, och `sick_note_read` är snävare än `sick_report_read`: den
+   * släpper inte in den anmälan gäller. Med service role hade den som är sjuk
+   * sett vad chefen antecknat om hen — vägen dit är registerutdraget och inte
+   * den här sidan.
+   */
+  const { data: anteckningsrader } = rapportIds.length
+    ? await supabase
+        .from("sick_note")
+        .select("id, sick_report_id, body, author_id, created_at")
+        .in("sick_report_id", rapportIds)
+        .order("created_at", { ascending: false })
+    : { data: [] as { id: string; sick_report_id: string; body: string; author_id: string | null; created_at: string }[] };
+
+  const skribentIds = [...new Set((anteckningsrader ?? []).map((n) => n.author_id).filter(Boolean) as string[])].filter(
+    (id) => !namn.has(id),
+  );
+  const { data: skribenter } = skribentIds.length
+    ? await db.from("employee").select("id, first_name, last_name").in("id", skribentIds)
+    : { data: [] as { id: string; first_name: string; last_name: string }[] };
+  for (const p of skribenter ?? []) namn.set(p.id, fullName(p));
+
+  const anteckningPerRapport = new Map<string, Anteckning[]>();
+  for (const n of anteckningsrader ?? []) {
+    anteckningPerRapport.set(n.sick_report_id, [
+      ...(anteckningPerRapport.get(n.sick_report_id) ?? []),
+      {
+        id: n.id,
+        text: n.body,
+        av: n.author_id ? (namn.get(n.author_id) ?? "Okänd") : "Okänd",
+        nar: n.created_at,
+      },
+    ]);
+  }
 
   const intygPerRapport = new Map<string, Intygsfil[]>();
   for (const f of intygsfiler ?? []) {
@@ -298,21 +340,27 @@ export default async function Sjuksida() {
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="text-body text-ink-900">{namn.get(a.employee_id) ?? "Okänd"}</p>
+                          {/* "Sedan 4 september, pågår" stod här förut. Att
+                              slutdagen SAKNAS är en uppgift och inte ett
+                              tomrum — se `periodtextOppen`. */}
                           <p className="text-small text-ink-500">
-                            {a.last_sick_day
-                              ? periodtext(a.first_sick_day, a.last_sick_day)
-                              : `Sedan ${periodtext(a.first_sick_day, a.first_sick_day)}, pågår`}
+                            {periodtextOppen(a.first_sick_day, a.last_sick_day)}
                             {a.extent_percent < 100 ? ` · ${a.extent_percent} %` : ""}
                             {a.previous_report_id ? " · återinsjuknande" : ""}
                           </p>
                         </div>
-                        {a.confirmed_at ? (
-                          <Badge ton="ok">Bekräftad</Badge>
-                        ) : a.escalated_at ? (
-                          <Badge ton="danger">Eskalerad</Badge>
-                        ) : (
-                          <Badge ton="accent">Obekräftad</Badge>
-                        )}
+                        <div className="flex flex-wrap items-center gap-2">
+                          {a.last_sick_day === null && (
+                            <Badge ton="warn">Sjukdag {sjukdag(a.first_sick_day, idag)}</Badge>
+                          )}
+                          {a.confirmed_at ? (
+                            <Badge ton="ok">Bekräftad</Badge>
+                          ) : a.escalated_at ? (
+                            <Badge ton="danger">Eskalerad</Badge>
+                          ) : (
+                            <Badge ton="accent">Obekräftad</Badge>
+                          )}
+                        </div>
                       </div>
 
                       <Frister
@@ -336,6 +384,12 @@ export default async function Sjuksida() {
                         rapportId={a.id}
                         filer={intygPerRapport.get(a.id) ?? []}
                         mottaget={a.certificate_received_on}
+                        egenAnmalan={false}
+                      />
+
+                      <Sjukanteckningar
+                        rapportId={a.id}
+                        anteckningar={anteckningPerRapport.get(a.id) ?? []}
                         egenAnmalan={false}
                       />
 
@@ -375,13 +429,18 @@ export default async function Sjuksida() {
                 {mina.map((a) => (
                   <li key={a.id} className="border-b border-canvas pb-3 last:border-0 last:pb-0">
                     <div className="flex items-baseline justify-between gap-3">
+                      {/* Här stod "2026-09-04 — pågår": ett rått datum ur
+                          databasen, på den enda yta där den sjuke själv läser
+                          sin period. */}
                       <span className="text-small text-ink-700">
-                        {a.last_sick_day
-                          ? periodtext(a.first_sick_day, a.last_sick_day)
-                          : `${a.first_sick_day} — pågår`}
+                        {periodtextOppen(a.first_sick_day, a.last_sick_day)}
                       </span>
                       <span className="shrink-0 text-micro text-ink-300">
-                        {a.extent_percent < 100 ? `${a.extent_percent} %` : "Heltid"}
+                        {a.last_sick_day === null
+                          ? `Sjukdag ${sjukdag(a.first_sick_day, idag)}`
+                          : a.extent_percent < 100
+                            ? `${a.extent_percent} %`
+                            : "Heltid"}
                       </span>
                     </div>
 

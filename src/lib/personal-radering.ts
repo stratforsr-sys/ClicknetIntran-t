@@ -81,6 +81,7 @@ const TABELL: Record<string, string> = {
   sales_order: "Kundorder",
   scheduled_break: "Schemalagda raster",
   sick_deadline: "Frister vid sjukfrånvaro",
+  sick_note: "Anteckningar vid sjukfrånvaro",
   sick_report: "Sjukanmälningar",
   staffing_cap: "Bemanningstak",
   team: "Team",

@@ -14,6 +14,101 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "flikar-pa-korten",
+    rubrik: "Korten har fått flikar, filter och siffror",
+    ingress: "Dagens läge visar nu också 7 och 14 dagar framåt. Din kö visar vad som brådskar, inte bara hur mycket.",
+    text: `Startsidan och frånvarosidorna har fått samma tre saker överst i korten:
+**siffror** som går att läsa på avstånd, **flikar** som byter vy, och **chips**
+som filtrerar.
+
+**Dagens läge**
+
+Flikarna är tidsfönster: **I dag**, **7 dagar** och **14 dagar**. Framåtblicken
+låg förut som en rad småtext längst ner och gick att missa.
+
+Chipsen under filtrerar på sorts frånvaro. De är färre i framtidsflikarna, och
+det är med flit: ingen är sen på tisdag ännu, så *Sena* och *Inte instämplad*
+finns bara under *I dag*.
+
+En pågående sjukperiod utan slutdag står som **"Sjuk nu"** framåt — navet
+påstår inte när någon är tillbaka.
+
+**Din kö**
+
+Flikarna är områden: Frånvaro, Tid, Ärenden, Utbildning. Överst ligger nu
+**det som brådskar** med namn och frist, i stället för bara ett antal.
+
+Bara det som HAR en frist rangordnas — ett ärende har sin svarstid, en ansökan
+har sin första ledighetsdag. En rättelse och ett rollspel har ingen, och står
+därför kvar som antal längre ner i stället för att sorteras på en påhittad
+brådska.
+
+**Frånvaro i teamet** och **Min frånvaro**
+
+Korten som låg staplade under varandra är nu flikar. Det som låg längst ner
+lästes minst, oavsett hur viktigt det var.`,
+    datum: "2026-09-07",
+    roller: [],
+    href: "/",
+  },
+  {
+    slug: "franvaro-skal-och-lage",
+    rubrik: "Frånvaron säger nu varför, hur länge och vem som är borta",
+    ingress:
+      "Ledighet söks med ett skäl och en uttrycklig slutdag. Chefen beslutar i listan. Sjukperioden visar sjukdag och frister.",
+    text: `Frånvaron svarade förut på **när** men sällan på **vad** och nästan aldrig
+på **varför**. Det är ändrat på fyra ställen.
+
+**När du söker ledigt**
+
+Du väljer nu *Bara en dag* eller *Flera dagar* innan du väljer datum. Väljer du
+flera anger du antingen sista dagen eller hur många dagar det gäller — de två
+räknar fram varandra. Förut kunde slutdagen lämnas tom och blev då tyst en enda
+dag, vilket ingen såg förrän beslutet var fattat.
+
+Du skriver också **varför du söker ledigt**. Chefen behöver det för att kunna
+säga ja eller nej, och det är obligatoriskt.
+
+*Skriv inget om hälsa, vård eller behandling* — varken din egen eller någon
+annans. Texten läses av dig, av den som beslutar och av ledningen. Ingen annan,
+och den står aldrig i klockan.
+
+**Om du är chef: en sida i stället för fyra**
+
+**Frånvaro i teamet** ersätter *Att besluta*. Där ligger tre saker under
+varandra:
+
+- **Att besluta** — varje ansökan med skälet, perioden, hur många andra som är
+  borta samma dagar och vilka regler den bryter mot i klartext. Du godkänner
+  eller avslår direkt i listan.
+- **Sjukfrånvaro** — vem som är sjuk, vilken sjukdag det är, och när
+  läkarintyget och FK-anmälan förfaller med nedräkning i dagar.
+- **Godkänd ledighet** — vem som är borta i dag och vem som är borta inom två
+  veckor.
+
+Du kan också **anteckna** på en sjukperiod: *"pratat med honom i dag, räknar med
+måndag"*. Det är för läget och för arbetet — aldrig för diagnos eller symtom.
+Anteckningen går inte att ändra efteråt, och den ingår i personens
+registerutdrag.
+
+**På startsidan**
+
+Är du chef har *Dagens läge* fått rubriker per sorts frånvaro och en rad om vad
+som börjar de närmaste två veckorna.
+
+Alla får ett eget kort — **Din frånvaro** — med det du väntar svar på, det som är
+inbokat framåt och ditt saldo. Kortet syns bara när du har något där.
+
+**I klockan**
+
+Raden om en ledighetsansökan bar bara ett datum och sa varken till när eller hur
+länge. Den skriver nu ut hela perioden. Sjukanmälan skriver ut vilken sjukdag
+det är.`,
+    datum: "2026-09-07",
+    roller: [],
+    href: "/franvaro",
+  },
+  {
     slug: "klockan-sager-allt",
     rubrik: "Klockan säger till om allt som händer",
     ingress: "Godkänd uppgift, makulerad order, ändrat schema, hävd varning — och två nya knappar.",

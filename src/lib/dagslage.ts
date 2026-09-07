@@ -285,3 +285,120 @@ export function dagssammanfattning(bild: Dagsbild): string {
 
   return text || "Ingen frånvaro registrerad";
 }
+
+// -----------------------------------------------------------------------------
+// FRAMÅT: vem som är borta de närmaste dagarna
+//
+// Beställarens krav 2026-09-07. Dagsbilden ovan svarar på "vem är borta I DAG",
+// vilket är rätt fråga klockan åtta. Klockan tre är frågan en annan: vem är
+// borta NÄSTA vecka, när jag lovar bort någon till en kund.
+//
+// =============================================================================
+// TVÅ SAKER SOM INTE FÅR GLIDA, OCH BÅDA HANDLAR OM VAD NAVET FÅR PÅSTÅ
+//
+// 1. SEN ANKOMST OCH UTEBLIVEN INSTÄMPLING FINNS INTE HÄR. De går inte att
+//    veta i förväg — ingen är sen på tisdag ännu. Att räkna fram dem hade varit
+//    en gissning med ett namn på, och `dagslage.ts` rubrik säger redan att det
+//    här är en bemanningsvy och inte en anklagelse. Flikarna för framåt visar
+//    därför färre chips än fliken för i dag, och skillnaden är avsiktlig.
+//
+// 2. EN PÅGÅENDE SJUKPERIOD PROJICERAS INTE. Att skriva "Mick är borta den
+//    18:e" för att hen är sjukanmäld i dag är en prognos om någons hälsa, och
+//    den får navet inte göra. Raden kommer med — chefen som bemannar behöver
+//    veta att någon är sjukskriven utan känt slut — men den säger vad som ÄR
+//    känt: "sjukanmäld sedan 4 september, ingen slutdag registrerad". Det är
+//    ett faktum. "Borta till den 21:a" hade varit ett påhitt.
+// =============================================================================
+
+export type Kommanderad = {
+  employee_id: string;
+  namn: string;
+  /** Bara två lägen framåt. Se rubriken ovan för varför de andra två saknas. */
+  lage: "sjuk" | "ledig";
+  etikett: string;
+  ton: "warn" | "neutral";
+  detalj: string;
+  /** Sorteringsnyckel. Pågående sjukdom sorteras som fönstrets första dag. */
+  fran: string;
+  href: string;
+};
+
+/**
+ * Frånvaro som rör fönstret [fran, till].
+ *
+ * Perioderna kommer redan filtrerade av den som frågade — modulen bedömer en
+ * färdig lista, precis som `dagensLage`.
+ */
+export function kommandeLage(u: {
+  personer: Person[];
+  /** Godkänd ledighet som överlappar fönstret. */
+  ledigheter: Ledighet[];
+  /** Ej avbruten sjukanmälan som rör fönstret. */
+  sjuka: Sjukrad[];
+  typnamn: Map<string, string>;
+  fran: string;
+  till: string;
+}): Kommanderad[] {
+  const namnPer = new Map(u.personer.map((p) => [p.id, `${p.first_name} ${p.last_name}`.trim()]));
+  const rader: Kommanderad[] = [];
+
+  for (const s of u.sjuka) {
+    const namn = namnPer.get(s.employee_id);
+    if (!namn) continue;
+
+    // Avslutad period: ett känt spann, som vilken frånvaro som helst.
+    if (s.last_sick_day) {
+      if (s.last_sick_day < u.fran || s.first_sick_day > u.till) continue;
+      rader.push({
+        employee_id: s.employee_id,
+        namn,
+        lage: "sjuk",
+        etikett: "Sjuk",
+        ton: "warn",
+        detalj: periodtext(s.first_sick_day, s.last_sick_day),
+        fran: s.first_sick_day > u.fran ? s.first_sick_day : u.fran,
+        href: "/franvaro/sjuk",
+      });
+      continue;
+    }
+
+    // Pågående: kommer med som ett FAKTUM om nuet, aldrig som en prognos.
+    if (s.first_sick_day > u.till) continue;
+    rader.push({
+      employee_id: s.employee_id,
+      namn,
+      lage: "sjuk",
+      etikett: "Sjuk nu",
+      ton: "warn",
+      detalj: `Sjukanmäld sedan ${periodtext(s.first_sick_day, s.first_sick_day)} · ingen slutdag registrerad`,
+      fran: u.fran,
+      href: "/franvaro/sjuk",
+    });
+  }
+
+  for (const l of u.ledigheter) {
+    const namn = namnPer.get(l.employee_id);
+    if (!namn) continue;
+    if (l.ends_on < u.fran || l.starts_on > u.till) continue;
+
+    rader.push({
+      employee_id: l.employee_id,
+      namn,
+      lage: "ledig",
+      etikett: u.typnamn.get(l.type_id) ?? "Ledig",
+      ton: "neutral",
+      detalj: `${periodtext(l.starts_on, l.ends_on)} · ${omfattning(l)}`,
+      fran: l.starts_on,
+      href: "/franvaro",
+    });
+  }
+
+  // Sjukdom före ledighet på samma dag: det ena är oplanerat och det andra
+  // inbokat, och chefen som bemannar behöver se det oplanerade först.
+  return rader.sort(
+    (a, b) =>
+      a.fran.localeCompare(b.fran) ||
+      Number(a.lage === "ledig") - Number(b.lage === "ledig") ||
+      a.namn.localeCompare(b.namn, "sv"),
+  );
+}

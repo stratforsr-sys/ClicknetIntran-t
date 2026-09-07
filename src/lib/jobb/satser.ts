@@ -41,7 +41,7 @@ export async function korSatsjobbet(
   // konfigurationen far inte bli tystnad.
   const { data: saljchefer } = await db
     .from("employee_role")
-    .select("employee_id, employee!inner(status)")
+    .select("employee_id, employee!employee_role_employee_id_fkey(status)")
     .eq("role", "sales_manager");
 
   const fallback =

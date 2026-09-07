@@ -8,13 +8,16 @@ import { getCurrentUser, fullName } from "@/lib/auth";
 import { supabaseServer, supabaseAdmin } from "@/lib/supabase/server";
 import { svensktDatum, svenskKlocka } from "@/lib/klocka";
 import {
+  antalDagar,
+  brottext,
   omfattning,
   periodtext,
+  startlage,
   STATUS_ETIKETT,
   STATUS_TON,
   type Ansokningsstatus,
 } from "@/lib/franvaro";
-import { farBesluta, lederPersonen } from "@/lib/franvaro-server";
+import { BESLUTSFALT, farBesluta, lederPersonen } from "@/lib/franvaro-server";
 import { Beslutspanel } from "./Beslutspanel";
 
 export const dynamic = "force-dynamic";
@@ -37,9 +40,7 @@ export default async function Ansokanssida({ params }: { params: Promise<{ id: s
     .from("absence_request")
     // En enda strang och inte tva hopslagna: Supabase harleder radens typ ur
     // select-strangen, och en konkatenering ar ingen strangliteral.
-    .select(
-      "id, employee_id, type_id, starts_on, ends_on, part_day_minutes, status, submitted_at, decided_by, decided_at, decision_note, rules_broken, override_reason, withdrawn_at",
-    )
+    .select(BESLUTSFALT)
     .eq("id", id)
     .maybeSingle();
 
@@ -76,6 +77,9 @@ export default async function Ansokanssida({ params }: { params: Promise<{ id: s
           <p className="mt-1 text-body text-ink-500">
             {egen ? "Din ansökan" : namn.get(a.employee_id) ?? "Okänd"} ·{" "}
             {periodtext(a.starts_on, a.ends_on)} · {omfattning(a)}
+            {status === "submitted" || status === "approved"
+              ? ` · ${startlage(a.starts_on, idag).text}`
+              : ""}
           </p>
         </div>
         <Badge ton={STATUS_TON[status]}>{STATUS_ETIKETT[status]}</Badge>
@@ -83,13 +87,40 @@ export default async function Ansokanssida({ params }: { params: Promise<{ id: s
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="flex flex-col gap-4 lg:col-span-2">
+          {/**
+           * SKÄLET STÅR FÖRST, FÖRE BESLUTET.
+           *
+           * Ordningen är hela poängen: den som ska besluta läser varför innan
+           * hen läser knapparna. Kortet syns för den sökande själv, för den som
+           * leder hen och för ledningen — RLS på `absence_request` har redan
+           * dragit den kretsen (0019), och den här sidan vidgar den inte.
+           *
+           * Den tomma varianten är inte en lucka utan en tidsuppgift: fältet
+           * fanns inte före 0048, och en ansökan från augusti ska inte se ut som
+           * om någon vägrat svara.
+           */}
+          <Card>
+            <CardHeader
+              titel={egen ? "Ditt skäl" : "Skälet"}
+              beskrivning={egen ? "Som du skrev det när du skickade in." : "Som den sökande skrev det."}
+            />
+            {a.reason ? (
+              <p className="whitespace-pre-line text-body text-ink-900">{a.reason}</p>
+            ) : (
+              <p className="text-body text-ink-500">
+                Ansökan skickades in innan navet började fråga efter ett skäl. Perioden, typen och
+                reglerna nedan är det som fanns att besluta på.
+              </p>
+            )}
+          </Card>
+
           <Card status={status === "approved" ? "ok" : status === "rejected" ? "danger" : undefined}>
             <CardHeader titel="Beslutet" />
 
             {status === "submitted" && (
               <p className="text-body text-ink-500">
                 Väntar på {typ?.approval_level === "ceo" ? "VD" : typ?.approval_level === "sales_manager" ? "säljchefen" : "din närmaste chef"}.
-                Inskickad {a.submitted_at?.slice(0, 10)}.
+                Inskickad {a.submitted_at ? periodtext(a.submitted_at.slice(0, 10), a.submitted_at.slice(0, 10)) : "—"}.
               </p>
             )}
 
@@ -97,7 +128,7 @@ export default async function Ansokanssida({ params }: { params: Promise<{ id: s
               <dl className="flex flex-col gap-3 text-body">
                 <Rad
                   etikett={status === "approved" ? "Godkänd av" : "Avslagen av"}
-                  varde={`${namn.get(a.decided_by!) ?? "Okänd"} ${a.decided_at ? `· ${a.decided_at.slice(0, 10)} ${svenskKlocka(a.decided_at)}` : ""}`}
+                  varde={`${namn.get(a.decided_by!) ?? "Okänd"}${a.decided_at ? ` · ${periodtext(a.decided_at.slice(0, 10), a.decided_at.slice(0, 10))} kl ${svenskKlocka(a.decided_at)}` : ""}`}
                 />
                 {a.decision_note && <Rad etikett="Motivering" varde={a.decision_note} />}
                 {a.override_reason && (
@@ -108,13 +139,16 @@ export default async function Ansokanssida({ params }: { params: Promise<{ id: s
 
             {status === "withdrawn" && (
               <p className="text-body text-ink-500">
-                Ansökan drogs tillbaka {a.withdrawn_at?.slice(0, 10)} innan någon beslutat om den.
+                Ansökan drogs tillbaka{" "}
+                {a.withdrawn_at ? periodtext(a.withdrawn_at.slice(0, 10), a.withdrawn_at.slice(0, 10)) : ""} innan
+                någon beslutat om den.
               </p>
             )}
 
             {status === "cancelled" && (
               <p className="text-body text-ink-500">
-                Ledigheten godkändes men ställdes in {a.withdrawn_at?.slice(0, 10)}. Beslutet står
+                Ledigheten godkändes men ställdes in{" "}
+                {a.withdrawn_at ? periodtext(a.withdrawn_at.slice(0, 10), a.withdrawn_at.slice(0, 10)) : ""}. Beslutet står
                 kvar ovan — en inställd ledighet raderar inte att den var beviljad.
               </p>
             )}
@@ -128,7 +162,7 @@ export default async function Ansokanssida({ params }: { params: Promise<{ id: s
               />
               <ul className="flex list-disc flex-col gap-2 pl-5 text-small text-ink-700">
                 {brutna.map((k) => (
-                  <li key={k}>{BROTT_TEXT[k] ?? k}</li>
+                  <li key={k}>{brottext(k)}</li>
                 ))}
               </ul>
               <p className="mt-4 text-micro text-ink-500">
@@ -139,7 +173,7 @@ export default async function Ansokanssida({ params }: { params: Promise<{ id: s
           )}
 
           {beslutare && status === "submitted" && (
-            <Beslutspanel id={a.id} brutna={brutna.map((k) => BROTT_TEXT[k] ?? k)} />
+            <Beslutspanel id={a.id} brutna={brutna.map(brottext)} />
           )}
         </div>
 
@@ -147,15 +181,28 @@ export default async function Ansokanssida({ params }: { params: Promise<{ id: s
           <Card>
             <CardHeader titel="Uppgifter" />
             <dl className="flex flex-col gap-3">
-              <Rad etikett="Period" varde={periodtext(a.starts_on, a.ends_on)} />
-              <Rad etikett="Omfattning" varde={omfattning(a)} />
-              <Rad etikett="Inskickad" varde={a.submitted_at?.slice(0, 10) ?? "—"} />
+              <Rad etikett="Första dagen" varde={periodtext(a.starts_on, a.starts_on)} />
+              <Rad
+                etikett="Sista dagen"
+                varde={
+                  a.part_day_minutes !== null
+                    ? `${periodtext(a.ends_on, a.ends_on)} (del av dagen)`
+                    : periodtext(a.ends_on, a.ends_on)
+                }
+              />
+              <Rad
+                etikett="Omfattning"
+                varde={
+                  a.part_day_minutes !== null
+                    ? omfattning(a)
+                    : `${omfattning(a)} · ${antalDagar(a.starts_on, a.ends_on) === 1 ? "en kalenderdag" : "kalenderdagar, helger inräknade"}`
+                }
+              />
+              <Rad
+                etikett="Inskickad"
+                varde={a.submitted_at ? periodtext(a.submitted_at.slice(0, 10), a.submitted_at.slice(0, 10)) : "—"}
+              />
             </dl>
-
-            {/* K35: här finns inget skäl att visa, för inget skäl har begärts. */}
-            <p className="mt-4 text-micro text-ink-300">
-              Navet registrerar aldrig varför någon söker ledigt.
-            </p>
           </Card>
 
           {(egen || beslutare) && status === "approved" && a.ends_on >= idag && (
@@ -176,22 +223,6 @@ export default async function Ansokanssida({ params }: { params: Promise<{ id: s
     </div>
   );
 }
-
-/**
- * Koderna lagras i databasen, texterna hör hemma i gränssnittet. En kod som
- * skrevs i mars ska gå att förklara i september även om formuleringen bytts.
- */
-const BROTT_TEXT: Record<string, string> = {
-  frist: "Ansökningsfristen var inte uppfylld.",
-  huvudsemester: "Perioden ligger i huvudsemesterfönstret, som har längre frist.",
-  sparrperiod: "Perioden krockade med en spärrperiod.",
-  maxlangd: "Perioden var längre än typens maxlängd.",
-  bemanning: "Bemanningstaket var redan nått någon av dagarna.",
-  saldo: "Ansökan var längre än det inmatade saldot.",
-  overlapp: "Perioden krockade med annan frånvaro.",
-  deldag: "Typen söks för hela dagar.",
-  bakat: "Perioden registrerades bakåt i tiden.",
-};
 
 function Rad({ etikett, varde }: { etikett: string; varde: string }) {
   return (
