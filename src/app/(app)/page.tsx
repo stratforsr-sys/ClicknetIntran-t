@@ -4,6 +4,7 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { ButtonLink } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Notis } from "@/components/ui/Notis";
 import { Ikon } from "@/components/shell/Ikon";
 import { getCurrentUser, canManageEmployees, hasRole } from "@/lib/auth";
 import { ROLE_LABEL, STATUS_LABEL } from "@/lib/roles";
@@ -41,6 +42,19 @@ import {
 } from "@/lib/tid";
 import { dagssammanfattning } from "@/lib/dagslage";
 import { hamtaDagsbild } from "@/lib/dagslage-server";
+import {
+  datumPlus,
+  omfattning,
+  periodtext,
+  periodtextOppen,
+  saldoFor,
+  sjukdag,
+  startlage,
+  STATUS_ETIKETT,
+  STATUS_TON,
+  type Ansokningsstatus,
+  type Saldo,
+} from "@/lib/franvaro";
 import { supabaseServer } from "@/lib/supabase/server";
 import { hamtaDrift } from "@/lib/jobb/drift-server";
 import { DRIFT_ETIKETT } from "@/lib/jobb/larm";
@@ -150,6 +164,10 @@ export default async function Startsida() {
   const veckodag = svenskVeckodag(nu);
   const dennaManad = manadsnyckel(nu);
 
+  /** Fönstret för chefens framåtblick. Två veckor: se frågan längre ner. */
+  const FRAMAT_DAGAR = 14;
+  const framatTill = datumPlus(idagDatum, FRAMAT_DAGAR);
+
   const [
     { data: kravDok },
     { data: minaAck },
@@ -173,6 +191,10 @@ export default async function Startsida() {
     drift,
     coachning,
     dagsbild,
+    { data: minaAnsokningar },
+    { data: minaSaldon },
+    { data: minSjuk },
+    { data: framatIFonstret },
   ] = await Promise.all([
     // RLS avgor vilka dokument som syns: audience_roles filtreras redan i
     // policyn, sa listan nedan behover inte upprepa den kontrollen.
@@ -349,6 +371,63 @@ export default async function Startsida() {
      * ett svar som ar kant i forvag: noll rader, inget kort.
      */
     serDagslage ? hamtaDagsbild(supabase, nu, sparr.stampling) : Promise.resolve(null),
+
+    /**
+     * =====================================================================
+     * MIN EGEN FRANVARO (bestallarens val 2026-09-07).
+     *
+     * Startsidan bar chefens dagsbild sedan 2026-09-03, men den anstallda
+     * sjalv sag ingenting alls om sin franvaro har — inte sin obeslutade
+     * ansokan, inte sin inbokade semester, inte sitt saldo. Den som ville
+     * veta om chefen svarat fick oppna /franvaro och titta efter.
+     *
+     * Fragorna ar OVILLKORADE. De galler den inloggades EGNA rader, och
+     * `absence_request_read` slapper alltid igenom dem — det finns ingen roll
+     * att villkora pa och ingen krets att skydda.
+     * =====================================================================
+     */
+    // Etiketten hamtas som inbaddad resurs och inte i en egen fraga:
+    // `absence_type_read` slapper in varje inloggad (0019), sa det finns
+    // ingenting att filtrera och ingen tur att spara pa att fraga separat.
+    supabase
+      .from("absence_request")
+      .select("id, type_id, starts_on, ends_on, part_day_minutes, status, absence_type!inner(label)")
+      .eq("employee_id", user.employee.id)
+      .in("status", ["submitted", "approved"])
+      .gte("ends_on", idagDatum)
+      .order("starts_on"),
+
+    supabase
+      .from("absence_balance")
+      .select("type_id, days, as_of, earned_year, absence_type!inner(label)")
+      .eq("employee_id", user.employee.id),
+
+    supabase
+      .from("sick_report")
+      .select("id, first_sick_day, extent_percent, confirmed_at")
+      .eq("employee_id", user.employee.id)
+      .is("last_sick_day", null)
+      .is("cancelled_at", null)
+      .order("first_sick_day", { ascending: false })
+      .limit(1),
+
+    /**
+     * CHEFENS FRAMATBLICK. Godkand ledighet som borjar inom tva veckor.
+     *
+     * Dagsbilden svarar pa "vem ar borta I DAG", och det ar ratt fraga klockan
+     * atta. Klockan tre ar fragan en annan: vem ar borta NASTA vecka, nar jag
+     * lovar bort nagon till en kund. Raden under kortet svarar pa den utan att
+     * gora kortet till tva kort.
+     */
+    serDagslage
+      ? supabase
+          .from("absence_request")
+          .select("id, employee_id, starts_on, ends_on, absence_type!inner(label), employee!inner(first_name, last_name)")
+          .eq("status", "approved")
+          .gt("starts_on", idagDatum)
+          .lte("starts_on", framatTill)
+          .order("starts_on")
+      : Promise.resolve({ data: null }),
   ]);
 
   // ---------------------------------------------------------------------------
@@ -754,6 +833,131 @@ export default async function Startsida() {
    * utover att nagon ar franvarande.
    * ===========================================================================
    */
+  /**
+   * ==========================================================================
+   * DIN FRANVARO — den anstalldas eget kort (bestallarens val 2026-09-07).
+   *
+   * Startsidan har sedan 2026-09-03 svarat pa chefens franvarofraga och inte pa
+   * den anstalldas. Foljden var att den som skickat en ansokan pa fredagen fick
+   * oppna /franvaro och leta for att se om nagon svarat.
+   *
+   * KORTET DOLJS NAR DET INTE HAR NAGOT ATT SAGA, till skillnad fran dagsbilden
+   * ovan. Skalet ar detsamma som for arendekortet: "ingen ledighet inbokad" ar
+   * inte ett svar pa en fraga nagon staller, det ar en ruta man slutar lasa.
+   * Saldot ensamt racker inte som skal att rita det — det andras nagra ganger
+   * om aret och hor hemma pa /franvaro.
+   *
+   * SJUKRADEN STAR OVERST och inte i datumordning. Ar man sjukanmald just nu ar
+   * det det enda pa kortet som galler i dag.
+   * ==========================================================================
+   */
+  const minaFranvarorader = (minaAnsokningar ?? []) as unknown as {
+    id: string;
+    type_id: string;
+    starts_on: string;
+    ends_on: string;
+    part_day_minutes: number | null;
+    status: string;
+    absence_type: { label: string } | null;
+  }[];
+
+  const minSjukrad = ((minSjuk ?? []) as { id: string; first_sick_day: string; extent_percent: number; confirmed_at: string | null }[])[0] ?? null;
+
+  const minaSaldorader: Saldo[] = ((minaSaldon ?? []) as unknown as {
+    type_id: string;
+    days: string | number;
+    as_of: string;
+    earned_year: number | null;
+    absence_type: { label: string } | null;
+  }[]).map((x) => ({ type_id: x.type_id, days: Number(x.days), as_of: x.as_of, earned_year: x.earned_year }));
+
+  const saldoetikett = new Map(
+    ((minaSaldon ?? []) as unknown as { type_id: string; absence_type: { label: string } | null }[]).map(
+      (x) => [x.type_id, x.absence_type?.label ?? x.type_id] as const,
+    ),
+  );
+  const minaSaldotyper = [...new Set(minaSaldorader.map((x) => x.type_id))];
+
+  const harEgenFranvaro = minSjukrad !== null || minaFranvarorader.length > 0;
+
+  const minFranvarokort = harEgenFranvaro ? (
+    <Card>
+      <CardHeader
+        titel="Din frånvaro"
+        beskrivning="Det du väntar svar på och det som är inbokat framåt."
+        handling={
+          <ButtonLink href="/franvaro" size="sm" variant="diskret">
+            Öppna
+          </ButtonLink>
+        }
+      />
+
+      {minSjukrad && (
+        <div className="mb-3">
+          <Notis ton="info">
+            Du är sjukanmäld — {periodtextOppen(minSjukrad.first_sick_day, null).toLowerCase()},
+            sjukdag {sjukdag(minSjukrad.first_sick_day, idagSvenskt)}
+            {minSjukrad.extent_percent < 100 ? `, ${minSjukrad.extent_percent} procent` : ""}.{" "}
+            {minSjukrad.confirmed_at
+              ? "Din chef har bekräftat anmälan."
+              : "Väntar på att din chef bekräftar."}{" "}
+            <Link href="/franvaro/sjuk" className="font-semibold underline">
+              Anmäl dig frisk
+            </Link>
+          </Notis>
+        </div>
+      )}
+
+      {minaFranvarorader.length > 0 && (
+        <ul className="flex flex-col">
+          {minaFranvarorader.map((a) => {
+            const status = a.status as Ansokningsstatus;
+            return (
+              <Uppgift
+                key={`min-franvaro-${a.id}`}
+                href={`/franvaro/${a.id}`}
+                titel={a.absence_type?.label ?? a.type_id}
+                detalj={`${periodtext(a.starts_on, a.ends_on)} · ${omfattning(a)} · ${startlage(a.starts_on, idagSvenskt).text}`}
+                markering={<Badge ton={STATUS_TON[status]}>{STATUS_ETIKETT[status]}</Badge>}
+              />
+            );
+          })}
+        </ul>
+      )}
+
+      {minaSaldotyper.length > 0 && (
+        <dl className="mt-4 flex flex-col gap-2 border-t border-canvas pt-4">
+          {minaSaldotyper.map((typId) => {
+            const s = saldoFor(minaSaldorader, typId);
+            if (!s) return null;
+            return (
+              <div key={`saldo-${typId}`} className="flex items-baseline justify-between gap-4">
+                <dt className="text-small text-ink-500">{saldoetikett.get(typId) ?? typId}</dt>
+                <dd className="tnum text-body text-ink-900">{s.days} dagar</dd>
+              </div>
+            );
+          })}
+        </dl>
+      )}
+    </Card>
+  ) : null;
+
+  /**
+   * Chefens framatblick, som en rad under dagsbilden.
+   *
+   * Bara antalet och de tre narmaste namnen. Hela listan finns pa
+   * /franvaro/attest, och ett kort som forsoker vara bade dagsbild och
+   * tvaveckorsvy blir svarlast pa 375 px — dar allt ligger i en spalt.
+   */
+  const framat = ((framatIFonstret ?? []) as unknown as {
+    id: string;
+    employee_id: string;
+    starts_on: string;
+    ends_on: string;
+    absence_type: { label: string } | null;
+    employee: { first_name: string; last_name: string } | null;
+  }[]);
+
   const dagslagekort =
     dagsbild !== null ? (
       <Card>
@@ -781,18 +985,86 @@ export default async function Startsida() {
             }
           />
         ) : (
-          <ul className="flex flex-col">
-            {dagsbild.rader.map((r) => (
-              <Uppgift
-                key={`dagslage-${r.employee_id}`}
-                href={r.href}
-                titel={r.namn}
-                detalj={r.detalj}
-                markering={<Badge ton={r.ton}>{r.etikett}</Badge>}
-              />
-            ))}
-          </ul>
+          /**
+           * GRUPPERAT PER LAGE, inte som en enda lista.
+           *
+           * Raderna var redan sorterade sa att det bradskande lag overst, men
+           * en oavbruten kolumn med sex namn och sex olika marken laser man
+           * inte — man skannar den och missar overgangen mellan "ingen vet var
+           * hon ar" och "hon har semester". Rubriken gor overgangen till nagot
+           * ogat kan hoppa till.
+           *
+           * ORDNINGEN AR `ORDNING` I `dagslage.ts` och far inte satas har.
+           * Grupperingen laser den befintliga sorteringen, den ersatter den
+           * inte — annars kan de tva glida isar och kortet borjar saga en sak i
+           * rubriken och en annan i listan.
+           */
+          <div className="flex flex-col gap-5">
+            {(
+              [
+                ["ej_instamplad", "Ingen stämpling än"],
+                ["sen", "Sena i dag"],
+                ["sjuk", "Sjukanmälda"],
+                ["ledig", "Lediga"],
+              ] as const
+            ).map(([lage, rubrik]) => {
+              const gruppen = dagsbild.rader.filter((r) => r.lage === lage);
+              if (gruppen.length === 0) return null;
+              return (
+                <div key={`grupp-${lage}`}>
+                  <h3 className="text-small font-semibold text-ink-700">
+                    {rubrik} ({gruppen.length})
+                  </h3>
+                  <ul className="mt-1 flex flex-col">
+                    {gruppen.map((r) => (
+                      <Uppgift
+                        key={`dagslage-${r.employee_id}`}
+                        href={r.href}
+                        titel={r.namn}
+                        detalj={r.detalj}
+                        markering={<Badge ton={r.ton}>{r.etikett}</Badge>}
+                      />
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
         )}
+
+        {/* FRAMATBLICKEN. Dagsbilden svarar pa "vem ar borta i dag"; raden
+            nedan pa "vem ar borta snart", vilket ar den fraga man staller nar
+            man lovar bort nagon till en kund. Doljs nar det inte finns nagot
+            att saga — en rad som varje dag sager "ingen" ar en rad man slutar
+            lasa. */}
+        {framat.length > 0 && (
+          <div className="mt-4 border-t border-canvas pt-4">
+            <p className="text-small text-ink-700">
+              <span className="font-semibold">
+                {framat.length === 1
+                  ? "1 ledighet börjar"
+                  : `${framat.length} ledigheter börjar`}
+              </span>{" "}
+              inom {FRAMAT_DAGAR} dagar.
+            </p>
+            <p className="mt-1 text-small text-ink-500">
+              {framat
+                .slice(0, 3)
+                .map(
+                  (f) =>
+                    `${f.employee?.first_name ?? "Okänd"} ${periodtext(f.starts_on, f.ends_on)}`,
+                )
+                .join(" · ")}
+              {framat.length > 3 ? ` · och ${framat.length - 3} till` : ""}
+            </p>
+            <div className="mt-3">
+              <ButtonLink href="/franvaro/attest" size="sm" variant="sekundar">
+                Frånvaro i teamet
+              </ButtonLink>
+            </div>
+          </div>
+        )}
+
         {/* Star bara nar det behovs. En tom lista kan betyda "alla ar har"
             eller "stamplingen ar av", och skillnaden far inte gissas. */}
         {!dagsbild.senRaknad && dagsbild.rader.length > 0 && (
@@ -926,6 +1198,10 @@ export default async function Startsida() {
           {attGora}
         </div>
         <div className="flex flex-col gap-4">
+          {/* Egen franvaro over arendekortet: "har chefen svarat pa min
+              ansokan" ar en fraga med ett datum i sig, och den blir inaktuell
+              om man laser den for sent. */}
+          {minFranvarokort}
           {arendekort}
           {provisionskort}
           {personalkort}

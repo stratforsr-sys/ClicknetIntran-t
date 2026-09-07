@@ -3,7 +3,48 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-05 — klockan notifierar allt som rör en person (63 källor mot 21), med "Markera alla som lästa" och kryss per rad. Godkänd och mergad till main; ligger i produktion.
+**Senast uppdaterad:** 2026-09-07 — frånvaron byggd om: obligatoriskt skäl på ledighetsansökan, uttrycklig slutdag, chefsanteckning på sjukperiod, ny chefsvy och egen frånvaro på startsidan. Ligger på branch `franvaro-skal-och-lage`, **väntar på beställarens godkännande**.
+
+## Frånvaron 2026-09-07 — PÅ BRANCH, INTE MERGAD
+
+*Branch `franvaro-skal-och-lage`. Migration `0048_franvaro_skal_och_anteckningar`
+är körd mot produktionsdatabasen — den är additiv och main-koden rör varken
+`absence_request.reason` eller `sick_note`, så produktionen står stabil under
+tiden. Beslut: D-E7.10, D-E7.11, D-E7.12. Hela resonemanget i `ARBETSLOGG.md`.*
+
+Beställaren såg en pågående sjukanmälan (Mick, sjuk sedan 4 september) och
+frågade varför den inte sa varför eller hur länge. Frågan visade sig ha tre
+olika svar, varav ett var en riktig bugg: klockans notis om en ledighetsansökan
+bar bara `starts_on` och ingen slutdag.
+
+### Fyra saker som inte får glida tillbaka
+
+**K35 ÄR OMPRÖVAD FÖR LEDIGHET OCH STÅR KVAR FÖR SJUKDOM.** Den skillnaden är
+hela beslutet. `absence_request.reason` finns; `sick_report` har fortfarande
+inget orsaksfält och ska inte få ett. Lägger någon till ett: läs rubriken i
+0020 och i 0048 först.
+
+**SKÄLET LÄMNAR ALDRIG BESLUTSKRETSEN.** Inte till `audit_log` (vidare krets,
+släpper in `admin`). Inte till en notistext (oföränderlig sedan 0047, läses i
+en öppen panel). Inte till bemannings-, planerings- eller dagsvyn. `BESLUTSFALT`
+i `franvaro-server.ts` är den enda fältlista som ber om kolumnen.
+
+**`sick_note.employee_id` FINNS FÖR REGISTERUTDRAGET.** Kolumnen ser överflödig
+ut bredvid `sick_report_id` och är det inte: utan den hittas raden inte i
+`registerutdrag.ts`, och "intern anteckning" blir tyst "hemlig anteckning".
+
+**SLUTDAGEN HAR INGET FÖRVAL.** Radioknapparna i ansökningsformuläret börjar
+tomma. Ett förval hade återinfört den tysta endagsledigheten i mildare form.
+
+### Att göra i nästa pass
+
+1. **Visa previewen för beställaren och invänta godkännande.** Ingenting går
+   till main innan dess (`CLAUDE.md`).
+2. Efter merge: håll ögonen på **vad folk skriver i skälfältet**. Det är risken
+   K35 pekade ut och den syns bara i riktig trafik.
+3. **`staffing_cap` är tom** — inget bemanningstak finns någonstans, så
+   bemanningsraden i attestkön skriver "Inget bemanningstak är satt". Vill
+   beställaren ha varningar behöver ett tak läggas under Regler.
 
 ## Klockan notifierar allt sedan 2026-09-04 — i produktion 2026-09-05
 

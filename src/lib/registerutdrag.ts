@@ -78,9 +78,18 @@ export const KALLOR: Kalla[] = [
   // enligt artikel 9 — vilket gör den viktigare att kunna få ut, inte mindre.
   // Raderna bär datum, omfattning och tidpunkter; ingen orsak finns lagrad
   // (K35), så utdraget kan inte innehålla en heller.
+  //
+  // TVÅ FRITEXTFÄLT TILLKOM 2026-09-07 och båda står med nedan.
+  // `absence_request.reason` är skälet den sökande skrev själv (D-E7.10).
+  // `sick_note` är chefens anteckning om läget, och den är den enda text i
+  // navet som är skriven OM en person utan att visas FÖR hen i gränssnittet
+  // (D-E7.11). Just därför bär tabellen ett `employee_id` — utan det hade
+  // raden inte kunnat hittas här, och "intern anteckning" hade tyst blivit
+  // "hemlig anteckning". Ändras det ska den här raden ändras med.
   { tabell: "absence_request", kolumn: "employee_id", andamal: "Dina ledighetsansökningar" },
   { tabell: "absence_balance", kolumn: "employee_id", andamal: "Inmatade frånvarosaldon" },
   { tabell: "sick_report", kolumn: "employee_id", andamal: "Dina sjukanmälningar" },
+  { tabell: "sick_note", kolumn: "employee_id", andamal: "Chefens anteckningar om din sjukfrånvaro" },
   { tabell: "absence_reminder", kolumn: "employee_id", andamal: "Påminnelser om oregistrerad frånvaro" },
   { tabell: "calendar_feed", kolumn: "employee_id", andamal: "Ditt kalenderflöde" },
 
@@ -182,6 +191,7 @@ export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
   { tabell: "absence_request", kolumn: "withdrawn_by", skal: "Vem som drog tillbaka eller ställde in" },
   { tabell: "calendar_feed", kolumn: "revoked_by", skal: "Vem som stängde flödet" },
   { tabell: "sick_deadline", kolumn: "completed_by", skal: "Vem som kvitterade fristen" },
+  { tabell: "sick_note", kolumn: "author_id", skal: "Vem som skrev anteckningen" },
   { tabell: "sick_report", kolumn: "cancelled_by", skal: "Vem som ställde in anmälan" },
   { tabell: "sick_report", kolumn: "confirmed_by", skal: "Vem som bekräftade andras anmälan" },
   { tabell: "sick_report", kolumn: "registered_by", skal: "Vem som knappade in anmälan" },

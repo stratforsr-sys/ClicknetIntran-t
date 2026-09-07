@@ -5,6 +5,127 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-07 · Frånvaron: skäl, slutdag, chefsvy och sjukdagsräkning
+
+*Migration `0048_franvaro_skal_och_anteckningar`. Byggd på branch
+`franvaro-skal-och-lage`. Beslut: D-E7.10, D-E7.11, D-E7.12.*
+
+### Frågan som ställdes
+
+"Vi har tex Mick som har ansökt om ledighet, jag ser inga kommentarer om varför
+han faktiskt är ledig samt att jag ser bara datumet han ansökte ledigheten inte
+från när till när."
+
+### Det första fyndet: premissen stämde inte, men iakttagelsen gjorde det
+
+En fråga till produktionsdatabasen före första kodraden. Mick hade inte ansökt
+om ledighet — han var **sjukanmäld**, `sick_report` med första sjukdag
+4 september och `last_sick_day = null`. Hela navet innehöll vid tillfället EN
+ledighetsansökan, Vlados två timmar den 10 september.
+
+Iakttagelsen var ändå exakt riktig, och tre olika fel låg bakom den:
+
+1. **En pågående sjukanmälan HAR ingen slutdag.** Kortet skrev
+   `Sjukdag 4, sedan 4 september 2026` och lämnade tomrummet att tolkas. Ett
+   tomrum betyder ingenting, och läses därför som ett fel.
+2. **Sjukanmälan har inget orsaksfält**, med flit sedan 0020.
+3. **Klockans notis om en ledighetsansökan bar bara `starts_on`**, rått, som
+   `Semester · 2026-09-15`. En dag och tre veckor såg identiska ut, och datumet
+   gick lika gärna att läsa som ansökningsdatum. Det var den raden beställaren
+   läste, och den gick inte att läsa rätt.
+
+Fynd 3 var en riktig bugg och hade funnits sedan modulen byggdes.
+
+### Två frågor, två olika svar
+
+Beställaren fick välja för ledighetsvägen och sjukvägen var för sig, och svarade
+olika — vilket var hela poängen med att dela frågan.
+
+**Ledighet fick ett obligatoriskt skäl** (D-E7.10). K35 hade förbjudit det i ett
+år; invändningen framfördes en gång och beslutet är noterat som vägt. Skälet
+lever inom `absence_request_read`:s krets och kommer varken in i `audit_log`
+eller i en notistext.
+
+**Sjukvägen fick INGET orsaksfält** (D-E7.11) — beställaren valde chefens
+anteckning i stället. `sick_note` bär "pratat med honom i dag, räknar med
+måndag" och avvisar den sjuke själv som skribent. Tabellen har ett
+`employee_id` enbart för registerutdraget: intern betyder "inte i
+gränssnittet", aldrig "hen får inte veta".
+
+### Slutdagen, som kom in mitt i passet
+
+"Vid alla ansökningar måste det vara en slutdag, så antingen 'bara idag' eller
+så väljer man hur många dagar." `skickaAnsokan` läste
+`String(form.get("till")) || fran` — en tom ruta blev tyst en endagsledighet.
+Se D-E7.12. Radioknapparna börjar utan förval, för ett förval hade återinfört
+felet i mildare form.
+
+### Chefsvyn: fyra sidor blev en
+
+`/franvaro/attest` hette "Att besluta" och var en lista med namn, typ, period
+och siffran "2 regelbrott". Allt annat låg bakom en klickning och beslutet bakom
+klickningen efter den.
+
+Sidan heter nu **Frånvaro i teamet** och har tre avdelningar: kön med hela
+underlaget utskrivet och knapparna i samma kort, sjukfrånvaron med sjukdag och
+frister med nedräkning, och godkänd ledighet inom två veckor.
+
+`hamtaChefsbild()` i `franvaro-server.ts` hämtar alltihop. **Två tokens, och
+skillnaden är avsiktlig:** användarens egen token läser allt som ska SYNAS, och
+RLS drar kretsen en gång. Service role räknar bara BEMANNINGEN och lämnar
+ifrån sig ett antal — ett bolagstak räknar hela bolaget, och en teamledare vars
+RLS-krets är sex personer skulle annars godkänna mot ett tak som redan var
+sprängt. Namnen kommer ur den egna token och aldrig ur service role-frågan.
+
+**Vad som medvetet inte flyttade hit:** årsvyn ligger kvar på
+`/franvaro/planering` (två veckor är bemanning, ett år är planering), och
+sjukanmälans handlingar ligger kvar på `/franvaro/sjuk` — här står läget, där
+görs saken. Att duplicera knapparna hade gett två ställen att glömma ändra.
+
+### Startsidan
+
+`Dagens läge` fick rubriker per sorts frånvaro. Sex namn i en oavbruten kolumn
+skannas, och då missas övergången mellan "ingen vet var hon är" och "hon har
+semester". Grupperingen LÄSER sorteringen i `ORDNING` och sätter den inte om —
+annars kan de två glida isär och kortet börjar säga en sak i rubriken och en
+annan i listan.
+
+Under kortet en rad om vad som börjar inom fjorton dagar. Dagsbilden svarar på
+"vem är borta i dag", vilket är rätt fråga klockan åtta; klockan tre är frågan
+"vem är borta nästa vecka".
+
+Alla får dessutom kortet **Din frånvaro** — väntande ansökningar, inbokad
+ledighet, saldo och pågående sjukanmälan. Det döljs när det är tomt, av samma
+skäl som ärendekortet: "ingen ledighet inbokad" är inte ett svar på en fråga
+någon ställer.
+
+### Fyra ställen där ett rått datum stod i en mening till en människa
+
+`notiser-server.ts` (två rader), `actions.ts` (fem notistexter), sjuksidans
+"Dina sjukperioder" och saldonotisens `${typId}` — som skrev `saved_vacation`
+till den anställda. Alla går nu genom `periodtext`.
+
+### Nya rena funktioner, alla provade
+
+`periodtextOppen`, `sjukdag`, `fristlage`, `startlage`, `bemanningUnderPeriod`,
+`brottext` och `BROTT_TEXT` i `src/lib/franvaro.ts`. `BROTT_TEXT` låg förut i
+`[id]/page.tsx` och bara där; kön kunde därför skriva "2 regelbrott" och
+detaljsidan hela meningen om samma rad. `tests/franvaro.mjs` har 26 nya prov,
+inklusive Micks verkliga fall.
+
+### Kvar att göra
+
+Ingenting i koden. Två saker att titta efter i produktion:
+
+- **Vad folk faktiskt skriver i skälfältet.** Det är den risk K35 pekade ut, och
+  den syns först i riktig trafik. Dyker hälsouppgifter upp är åtgärden en
+  hårdare hjälptext — inte att ta bort fältet, för det var ett beställarbeslut.
+- **`staffing_cap` är tom.** Inget bemanningstak är satt någonstans, så
+  bemanningsraden i kön skriver "Inget bemanningstak är satt" i stället för att
+  se lugn ut. Vill beställaren ha varningar behöver ett tak läggas under Regler.
+
+---
+
 ## 2026-09-05 · Notiserna mergades till main
 
 Beställaren godkände branchen och `notiser-for-allt-2` gick till main som

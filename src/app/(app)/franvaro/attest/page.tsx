@@ -2,75 +2,108 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { ButtonLink } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Notis } from "@/components/ui/Notis";
 import { Ikon } from "@/components/shell/Ikon";
-import { getCurrentUser, fullName, hasRole } from "@/lib/auth";
-import { supabaseServer, supabaseAdmin } from "@/lib/supabase/server";
+import { getCurrentUser, hasRole } from "@/lib/auth";
 import { svensktDatum } from "@/lib/klocka";
-import { dagarMellan, omfattning, periodtext } from "@/lib/franvaro";
-import { farBesluta } from "@/lib/franvaro-server";
+import {
+  brottext,
+  fristlage,
+  omfattning,
+  periodtext,
+  periodtextOppen,
+  sjukdag,
+  startlage,
+  FRIST_ETIKETT,
+  type Fristtyp,
+} from "@/lib/franvaro";
+import { hamtaChefsbild, hamtaRegelverk } from "@/lib/franvaro-server";
+import { Attestkort, type Attestvy } from "./Attestkort";
+import { Sjukanteckningar } from "../Sjukanteckningar";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Att besluta — Clicknet Nav" };
+export const metadata = { title: "Frånvaro i teamet — Clicknet Nav" };
 
 /**
- * Chefens kö (E7.1, AC-3.12).
+ * ============================================================================
+ * CHEFENS FRÅNVAROVY (E7.1, AC-3.12) — OMBYGGD 2026-09-07.
  *
- * Vilka rader som syns avgörs av RLS: teamledaren ser sitt folk genom
- * `leads_employee`, ledningen ser alla. Filtret nedan tar bort det som ligger
- * över den inloggades attestnivå — en teamledare ska inte se studieledighet
- * som VD ska besluta om, för den posten går hen ändå inte att göra något åt,
- * och en kö med rader man inte kan röra slutar man titta i.
+ * Hette "Att besluta" och var en lista. Beställarens invändning: den svarade
+ * bara på halva frågan. Chefen som öppnar den vill veta både vad som väntar på
+ * ett beslut OCH vem som faktiskt är borta — och de två låg på fyra sidor.
  *
- * Den egna ansökan filtreras bort. Ingen beslutar om sin egen ledighet, och
- * det är en spärr i handlingen också.
+ * TRE AVDELNINGAR, I DEN ORDNING FRÅGORNA STÄLLS:
+ *
+ *   1. ATT BESLUTA. Det som väntar på just den inloggade, med hela underlaget
+ *      utskrivet och knapparna i samma kort. Sorterat på när ledigheten
+ *      BÖRJAR och inte på när ansökan kom — den som söker för nästa vecka
+ *      behöver svar först.
+ *
+ *   2. SJUKFRÅNVARO. Pågående perioder, med sjukdagsnummer, öppna frister med
+ *      nedräkning, och chefens anteckningar. Den obekräftade ligger överst
+ *      (AC-3.17): bekräftelsen är inte administration utan hela poängen.
+ *
+ *   3. BORTA OCH PÅ VÄG. Godkänd ledighet som pågår eller börjar inom två
+ *      veckor. Ingen handling, bara vetskapen — det är den avdelning man läser
+ *      innan man lovar bort någon till en kund.
+ *
+ * VAD SOM MEDVETET INTE FLYTTADE HIT:
+ *
+ *   Årsvyn ligger kvar på /franvaro/planering. Två veckor är bemanning; ett år
+ *   är planering, och en skärm som försöker vara båda blir ingendera.
+ *
+ *   Sjukanmälans HANDLINGAR — bekräfta, kvittera frist, avsluta, intyg — ligger
+ *   kvar på /franvaro/sjuk. Här står läget och anteckningen; där görs saken.
+ *   Att duplicera knapparna hade gett två ställen att glömma ändra.
+ * ============================================================================
  */
-export default async function Attestko() {
+export default async function Chefsvy() {
   const user = await getCurrentUser();
   if (!user?.employee) redirect("/");
 
-  const supabase = await supabaseServer();
-  const db = supabaseAdmin();
+  const idag = svensktDatum();
+  const uppslag = await hamtaRegelverk();
+  const bild = await hamtaChefsbild(user, uppslag?.regler ?? null, uppslag?.typer ?? [], idag);
 
-  const [{ data: ansokningar }, { data: typer }] = await Promise.all([
-    supabase
-      .from("absence_request")
-      .select("id, employee_id, type_id, starts_on, ends_on, part_day_minutes, submitted_at, rules_broken")
-      .eq("status", "submitted")
-      .order("starts_on"),
-    supabase.from("absence_type").select("id, label, approval_level"),
-  ]);
+  const ledning = hasRole(user, "sales_manager", "ceo");
 
-  const typkarta = new Map((typer ?? []).map((t) => [t.id, t]));
-
-  // Vem den inloggade leder. Samma fråga som `leads_employee()`, men i en
-  // enda fråga i stället för en per rad.
-  const [{ data: minaTeam }, { data: minaDirekt }] = await Promise.all([
-    db.from("team").select("id").eq("lead_id", user.employee.id),
-    db.from("employee").select("id").eq("manager_id", user.employee.id),
-  ]);
-
-  const teamIds = new Set((minaTeam ?? []).map((t) => t.id));
-  const direkt = new Set((minaDirekt ?? []).map((e) => e.id));
-
-  const berorda = [...new Set((ansokningar ?? []).map((a) => a.employee_id))];
-  const { data: personer } = berorda.length
-    ? await db.from("employee").select("id, first_name, last_name, team_id").in("id", berorda)
-    : { data: [] };
-
-  const person = new Map((personer ?? []).map((p) => [p.id, p]));
-
-  const min = (ansokningar ?? []).filter((a) => {
-    if (a.employee_id === user.employee!.id) return false;
-    const typ = typkarta.get(a.type_id);
-    if (!typ) return false;
-    const p = person.get(a.employee_id);
-    const ledare = Boolean(p && (direkt.has(p.id) || (p.team_id && teamIds.has(p.team_id))));
-    return farBesluta(user, typ.approval_level as "manager" | "sales_manager" | "ceo", ledare);
+  /**
+   * Kön formas om till det kortet behöver och inget mer.
+   *
+   * `Attestkort` är en klientkomponent, och allt som skickas dit serialiseras
+   * och hamnar i sidans nyttolast. Därför färdiga meningar och inte rådata: en
+   * `Date`, en `Map` eller ett helt `Provunderlag` hade antingen fallit i
+   * serialiseringen eller följt med webbläsaren utan att behövas där.
+   */
+  const kortet: Attestvy[] = bild.ko.map((a) => {
+    const start = startlage(a.starts_on, idag);
+    return {
+      id: a.id,
+      namn: a.namn,
+      typ: a.typ,
+      period: periodtext(a.starts_on, a.ends_on),
+      omfattning: omfattning(a),
+      start: start.text,
+      brådskar: start.dagar <= 3,
+      skal: a.skal,
+      brott: a.brutna.map(brottext),
+      bemanning: a.bemanning
+        ? {
+            over: a.bemanning.over,
+            text: bemanningstext(a.bemanning),
+          }
+        : null,
+      saldo: a.saldo
+        ? `${a.saldo.dagar} dagar inmatade ${a.saldo.asOf}${a.saldo.gammalt ? " — siffran är gammal" : ""}`
+        : null,
+    };
   });
 
-  const idag = svensktDatum();
-  const ledning = hasRole(user, "sales_manager", "ceo");
+  const pagar = bild.kommande.filter((k) => k.fran <= idag);
+  const paVag = bild.kommande.filter((k) => k.fran > idag);
+  const obekraftade = bild.sjuka.filter((s) => !s.bekraftad && !s.sistaDag).length;
 
   return (
     <div className="flex flex-col gap-4 pt-2">
@@ -79,66 +112,251 @@ export default async function Attestko() {
         className="inline-flex items-center gap-2 text-small font-semibold text-ink-500 hover:text-ink-900"
       >
         <Ikon namn="tillbaka" className="size-4" />
-        Tillbaka till frånvaro
+        Tillbaka till min frånvaro
       </Link>
 
-      <div>
-        <h1 className="text-display text-ink-900">Att besluta</h1>
-        <p className="mt-1 max-w-[70ch] text-body text-ink-500">
-          {ledning
-            ? "Alla ansökningar som väntar. Sorterade efter när ledigheten börjar, inte efter när de kom in — den som söker för nästa vecka behöver svar först."
-            : "Ansökningar från dem du leder, sorterade efter när ledigheten börjar."}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-display text-ink-900">Frånvaro i teamet</h1>
+          <p className="mt-1 max-w-[70ch] text-body text-ink-500">
+            {ledning
+              ? "Hela bolaget. Det som väntar på ditt beslut ligger överst, sedan sjukfrånvaron och sist vilka som är borta de närmaste två veckorna."
+              : "De du leder. Det som väntar på ditt beslut ligger överst, sedan sjukfrånvaron och sist vilka som är borta de närmaste två veckorna."}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <ButtonLink href="/franvaro/planering" size="sm" variant="diskret">
+            Årsvy
+          </ButtonLink>
+          <ButtonLink href="/franvaro/sjuk" size="sm" variant="diskret">
+            Sjukanmälningar
+          </ButtonLink>
+        </div>
       </div>
 
-      <Card>
-        <CardHeader titel={`${min.length} ${min.length === 1 ? "ansökan" : "ansökningar"}`} />
+      {/* AC-3.17: den obekräftade anmälan är det enda på sidan som har en frist
+          mot en människa och inte mot ett datum. Den står därför över allt
+          annat, även över kön. */}
+      {obekraftade > 0 && (
+        <Notis ton="warn">
+          {obekraftade === 1
+            ? "En sjukanmälan är inte bekräftad."
+            : `${obekraftade} sjukanmälningar är inte bekräftade.`}{" "}
+          Den som anmält sig sjuk hör ingenting förrän någon kvitterar.{" "}
+          <Link href="/franvaro/sjuk" className="font-semibold underline">
+            Bekräfta dem
+          </Link>
+        </Notis>
+      )}
 
-        {min.length === 0 ? (
+      {/* ------------------------------------------------------------------ */}
+      {/* 1. ATT BESLUTA                                                      */}
+      {/* ------------------------------------------------------------------ */}
+      <Card status={kortet.length > 0 ? "brand" : undefined}>
+        <CardHeader
+          titel={`Att besluta — ${kortet.length} ${kortet.length === 1 ? "ansökan" : "ansökningar"}`}
+          beskrivning="Sorterade efter när ledigheten börjar, inte efter när ansökan kom in."
+        />
+
+        {kortet.length === 0 ? (
           <EmptyState
             rubrik="Kön är tom"
-            text="Ansökningar som väntar på ditt beslut hamnar här."
+            text="Ansökningar som väntar på ditt beslut hamnar här, med skäl, bemanning och regelbrott utskrivna."
           />
         ) : (
           <ul className="flex flex-col">
-            {min.map((a) => {
-              const p = person.get(a.employee_id);
-              const kvar = dagarMellan(idag, a.starts_on);
-              const brutna = ((a.rules_broken ?? []) as string[]).length;
-
-              return (
-                <li key={a.id} className="border-b border-canvas last:border-0">
-                  <Link
-                    href={`/franvaro/${a.id}`}
-                    className="group flex min-h-14 flex-wrap items-center gap-3 py-3"
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-body text-ink-900 group-hover:text-brand-700">
-                        {p ? fullName(p) : "Okänd"} · {typkarta.get(a.type_id)?.label ?? a.type_id}
-                      </span>
-                      <span className="block text-small text-ink-500">
-                        {periodtext(a.starts_on, a.ends_on)} · {omfattning(a)} ·{" "}
-                        {kvar < 0
-                          ? "har redan börjat"
-                          : kvar === 0
-                            ? "börjar i dag"
-                            : `om ${kvar} ${kvar === 1 ? "dag" : "dagar"}`}
-                      </span>
-                    </span>
-                    {brutna > 0 && (
-                      <Badge ton="warn">
-                        {brutna === 1 ? "1 regelbrott" : `${brutna} regelbrott`}
-                      </Badge>
-                    )}
-                    <Badge ton="accent">Besluta</Badge>
-                    <Ikon namn="tillbaka" className="size-4 rotate-180 text-ink-300" />
-                  </Link>
-                </li>
-              );
-            })}
+            {kortet.map((p) => (
+              <Attestkort key={p.id} post={p} />
+            ))}
           </ul>
         )}
       </Card>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* 2. SJUKFRÅNVARO                                                     */}
+      {/* ------------------------------------------------------------------ */}
+      <Card>
+        <CardHeader
+          titel="Sjukfrånvaro"
+          beskrivning="Datum, sjukdag och frister — aldrig något om orsak."
+          handling={
+            <ButtonLink href="/franvaro/sjuk" size="sm" variant="diskret">
+              Hantera
+            </ButtonLink>
+          }
+        />
+
+        {bild.sjuka.length === 0 ? (
+          <EmptyState
+            rubrik="Ingen är sjukanmäld"
+            text="Pågående sjukperioder hos dem du ansvarar för visas här."
+          />
+        ) : (
+          <ul className="flex flex-col gap-4">
+            {bild.sjuka
+              .slice()
+              .sort(
+                (a, b) =>
+                  Number(b.bekraftad === false && !b.sistaDag) - Number(a.bekraftad === false && !a.sistaDag) ||
+                  a.forstaDag.localeCompare(b.forstaDag),
+              )
+              .map((s) => {
+                const pagaende = s.sistaDag === null;
+                return (
+                  <li key={s.id} className="border-b border-canvas pb-4 last:border-0 last:pb-0">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-h2 text-ink-900">{s.namn}</p>
+                        {/* Här stod förut bara "sedan 4 september". Att slutdagen
+                            SAKNAS är en uppgift, inte ett tomrum — se
+                            `periodtextOppen`. */}
+                        <p className="text-small text-ink-500">
+                          {periodtextOppen(s.forstaDag, s.sistaDag)}
+                          {s.omfattning < 100 ? ` · ${s.omfattning} %` : ""}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {pagaende && (
+                          <Badge ton="warn">Sjukdag {sjukdag(s.forstaDag, idag)}</Badge>
+                        )}
+                        {s.eskalerad ? (
+                          <Badge ton="danger">Eskalerad</Badge>
+                        ) : s.bekraftad ? (
+                          <Badge ton="ok">Bekräftad</Badge>
+                        ) : (
+                          <Badge ton="danger">Obekräftad</Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    {s.frister.length > 0 && (
+                      <ul className="mt-2 flex flex-col gap-1">
+                        {s.frister.map((f) => {
+                          const lage = fristlage(f.due_on, idag);
+                          return (
+                            <li key={f.kind} className="flex flex-wrap items-baseline gap-2 text-small">
+                              <span className="text-ink-500">
+                                {FRIST_ETIKETT[f.kind as Fristtyp] ?? f.kind}
+                              </span>
+                              <span
+                                className={
+                                  lage.ton === "danger"
+                                    ? "font-semibold text-danger-ink"
+                                    : lage.ton === "warn"
+                                      ? "font-semibold text-warn-ink"
+                                      : "text-ink-900"
+                                }
+                              >
+                                {periodtext(f.due_on, f.due_on)} · {lage.text}
+                              </span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+
+                    <Sjukanteckningar
+                      rapportId={s.id}
+                      anteckningar={s.anteckningar}
+                      egenAnmalan={false}
+                    />
+                  </li>
+                );
+              })}
+          </ul>
+        )}
+      </Card>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* 3. BORTA OCH PÅ VÄG                                                 */}
+      {/* ------------------------------------------------------------------ */}
+      <Card>
+        <CardHeader
+          titel="Godkänd ledighet"
+          beskrivning={`Pågår i dag eller börjar inom ${bild.fonster} dagar.`}
+          handling={
+            <ButtonLink href="/franvaro/planering" size="sm" variant="diskret">
+              Hela året
+            </ButtonLink>
+          }
+        />
+
+        {bild.kommande.length === 0 ? (
+          <EmptyState
+            rubrik="Ingen inbokad ledighet"
+            text={`Godkänd ledighet som pågår eller börjar inom ${bild.fonster} dagar visas här.`}
+          />
+        ) : (
+          <div className="flex flex-col gap-5">
+            {pagar.length > 0 && <Bortalista rubrik="Borta i dag" rader={pagar} idag={idag} />}
+            {paVag.length > 0 && <Bortalista rubrik="På väg" rader={paVag} idag={idag} />}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+/**
+ * Bemanningen som en mening.
+ *
+ * Siffran ensam ("2") säger ingenting utan taket bredvid sig, och taket
+ * ensamt ingenting utan siffran. Saknas taket helt — vilket det gör i hela
+ * bolaget tills någon sätter ett — sägs det rakt ut i stället för att raden
+ * tyst ser lugn ut.
+ */
+function bemanningstext(b: {
+  datum: string;
+  antal: number;
+  namn: string[];
+  tak: number | null;
+  over: boolean;
+}): string {
+  const vilka = b.namn.length > 0 ? ` (${b.namn.join(", ")})` : "";
+  const grund =
+    b.antal === 0
+      ? "Ingen annan är borta under perioden."
+      : `${b.antal} ${b.antal === 1 ? "annan är" : "andra är"} borta ${periodtext(b.datum, b.datum)}${vilka}.`;
+
+  if (b.tak === null) return `${grund} Inget bemanningstak är satt.`;
+  return b.over
+    ? `${grund} Taket är ${b.tak} samtidigt — godkänner du blir de ${b.antal + 1}.`
+    : `${grund} Taket är ${b.tak} samtidigt.`;
+}
+
+function Bortalista({
+  rubrik,
+  rader,
+  idag,
+}: {
+  rubrik: string;
+  rader: { employeeId: string; namn: string; etikett: string; detalj: string; href: string; fran: string }[];
+  idag: string;
+}) {
+  return (
+    <div>
+      <h3 className="text-small font-semibold text-ink-700">{rubrik}</h3>
+      <ul className="mt-1 flex flex-col">
+        {rader.map((r) => (
+          <li key={`${r.employeeId}-${r.href}`} className="border-b border-canvas last:border-0">
+            <Link
+              href={r.href}
+              className="group flex min-h-12 items-center gap-3 py-2 transition-colors duration-fast"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block text-body text-ink-900 group-hover:text-brand-700">
+                  {r.namn}
+                </span>
+                <span className="block text-small text-ink-500">
+                  {r.etikett} · {r.detalj}
+                  {r.fran > idag ? ` · ${startlage(r.fran, idag).text}` : ""}
+                </span>
+              </span>
+              <Ikon namn="tillbaka" className="size-4 rotate-180 text-ink-300" />
+            </Link>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

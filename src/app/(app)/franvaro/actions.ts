@@ -8,9 +8,13 @@ import { getCurrentUser, hasRole } from "@/lib/auth";
 import { svensktDatum } from "@/lib/klocka";
 import {
   aterinsjuknande,
+  omfattning,
+  periodtext,
   provaRegler,
   sjukfrister,
   varstaBemanningsdag,
+  ANTECKNING_MAX,
+  SKAL_MAX,
   type Franvarotyp,
   type Regelverk,
   type Sjukanmalan,
@@ -29,15 +33,22 @@ export type FranvaroState = { fel?: string; ok?: string };
 
 /**
  * ===========================================================================
- * K35, AC-3.21: INGEN ORSAK, DIAGNOS ELLER SYMTOMBESKRIVNING.
+ * K35, AC-3.21: GRÄNSEN GÅR VID SJUKVÄGEN, OCH DEN GÅR DÄR FORTFARANDE.
  *
- * Ingen handling i den här filen läser ett fritextfält från den som ansöker
- * eller sjukanmäler sig. De två `String(form.get(...))` som hämtar text är
- * chefens motivering till ett avslag och till en överstyrning (AC-3.12,
- * AC-3.13) — båda handlar om beslutet mot regeln, aldrig om personen, och
- * ingen av dem finns på sjukvägen.
+ * Fram till 2026-09-07 läste ingen handling i den här filen ett fritextfält
+ * från den som ansöker eller sjukanmäler sig. Beställaren omprövade den regeln
+ * samma dag och delade den i två (D-E7.10, D-E7.11):
  *
- * Lägger du till ett fält här: läs rubriken i 0020 först.
+ *   LEDIGHET fick ett OBLIGATORISKT skäl. `skickaAnsokan` läser det, databasen
+ *   kräver det vid inskicket, och det lämnar aldrig beslutskretsen.
+ *
+ *   SJUKFRÅNVARO fick INGET orsaksfält, och ska inte få ett. Ett fritextfält på
+ *   `sick_report` är ett diagnosfält, oavsett vad rubriken över det säger.
+ *   Behovet som fanns — "vet vi något om läget" — bärs i stället av
+ *   `laggSjukanteckning`, som CHEFEN skriver om sitt eget arbete och aldrig den
+ *   sjuke om sin sjukdom.
+ *
+ * Lägger du till ett fält på sjukvägen: läs rubriken i 0020 och i 0048 först.
  * ===========================================================================
  */
 
@@ -109,13 +120,32 @@ export async function skickaAnsokan(_prev: FranvaroState, form: FormData): Promi
 
     const typId = String(form.get("typ") ?? "");
     const fran = String(form.get("fran") ?? "");
-    const till = String(form.get("till") ?? "") || fran;
     const deldag = form.get("deldag") === "1";
     const minuter = Number(form.get("minuter") ?? 0);
+    const skal = String(form.get("skal") ?? "").trim();
+
+    /**
+     * SLUTDAGEN ÄR ETT VAL, INTE ETT TOMT FÄLT (beställarens krav 2026-09-07).
+     *
+     * Raden hette förut `String(form.get("till")) || fran` — en tom slutdag
+     * blev tyst en endagsledighet. Det syntes ingenstans: den som sökte en
+     * vecka och missade det andra datumfältet fick en dag, chefen godkände en
+     * dag, och båda trodde att de talade om samma sak.
+     *
+     * Formuläret skickar nu `langd` som antingen `en_dag` eller `flera`, och
+     * `till` krävs i det andra fallet. Ett formulär som postas för hand utan
+     * `langd` får ett fel i stället för en gissning.
+     */
+    const langd = String(form.get("langd") ?? "");
+    if (langd !== "en_dag" && langd !== "flera")
+      return { fel: "Välj om ledigheten gäller en dag eller flera." };
+
+    const till = langd === "en_dag" ? fran : String(form.get("till") ?? "");
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fran)) return { fel: "Välj ett startdatum." };
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(till)) return { fel: "Välj ett slutdatum." };
-    if (till < fran) return { fel: "Slutdatumet ligger före startdatumet." };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(till))
+      return { fel: "Välj en sista dag, eller ange att ledigheten gäller en enda dag." };
+    if (till < fran) return { fel: "Sista dagen ligger före den första." };
 
     const { regler, typer } = await regelverk();
     const typ = typer.find((t) => t.id === typId && t.active);
@@ -129,6 +159,14 @@ export async function skickaAnsokan(_prev: FranvaroState, form: FormData): Promi
     if (deldag && fran !== till) return { fel: "Del av dag gäller en enda dag." };
     if (deldag && (!Number.isInteger(minuter) || minuter <= 0 || minuter > 1440))
       return { fel: "Ange hur många minuter ledigheten gäller." };
+
+    /**
+     * Skälet (D-E7.10). Kravet står också som en trigger i 0048, så en handling
+     * som glömmer det misslyckas i stället för att skriva en rad utan skäl —
+     * samma bältesbärande som avslagets motivering redan har.
+     */
+    if (!skal) return { fel: "Skriv varför du söker ledigt. Chefen behöver det för att kunna besluta." };
+    if (skal.length > SKAL_MAX) return { fel: `Skälet får vara högst ${SKAL_MAX} tecken.` };
 
     const underlag = await hamtaProvunderlag(user.employee.id, user.employee.team_id, typ, regler, fran, till);
     const brott = provaRegler(
@@ -152,6 +190,7 @@ export async function skickaAnsokan(_prev: FranvaroState, form: FormData): Promi
         starts_on: fran,
         ends_on: till,
         part_day_minutes: deldag ? minuter : null,
+        reason: skal,
         // AC-3.11: brotten fryses vid inskicket. Ändras en frist i morgon får
         // det inte göra gårdagens ansökan regelvidrig i efterhand.
         rules_broken: brott.map((b) => b.kod),
@@ -161,6 +200,10 @@ export async function skickaAnsokan(_prev: FranvaroState, form: FormData): Promi
 
     if (error || !rad) return { fel: `Ansökan kunde inte skickas: ${error?.message ?? "okänt fel"}` };
 
+    // SKÄLET STÅR INTE I LOGGEN, och det är inte en glömska. `audit_log_read`
+    // släpper in admin och ledningen (PRD §5.2) — en vidare krets än
+    // `absence_request_read`. Ett skäl som kopieras hit hade tyst lämnat den
+    // krets 0048 lovar att hålla det inom.
     await db.from("audit_log").insert({
       actor_id: user.employee.id,
       action: "absence.requested",
@@ -225,7 +268,7 @@ export async function draTillbaka(_prev: FranvaroState, form: FormData): Promise
     kalla: "franvaro-tillbakadragen",
     typ: "franvaro",
     rubrik: `${user.employee.first_name} ${user.employee.last_name} drog tillbaka sin ansökan`,
-    detalj: `${ansokan.starts_on}–${ansokan.ends_on} · inget beslut behövs längre`,
+    detalj: `${periodtext(ansokan.starts_on, ansokan.ends_on)} · ${omfattning(ansokan)} · inget beslut behövs längre`,
     href: "/franvaro/attest",
     objekt: { typ: "absence_request", id },
   });
@@ -363,7 +406,7 @@ export async function stallInLedighet(_prev: FranvaroState, form: FormData): Pro
     kalla: "franvaro-installd",
     typ: "franvaro",
     rubrik: "Din godkända ledighet är inställd",
-    detalj: `${typ?.label ?? ansokan.type_id} · ${ansokan.starts_on}–${ansokan.ends_on}`,
+    detalj: `${typ?.label ?? ansokan.type_id} · ${periodtext(ansokan.starts_on, ansokan.ends_on)} · ${omfattning(ansokan)}`,
     href: `/franvaro/${id}`,
     objekt: { typ: "absence_request", id },
   });
@@ -525,7 +568,7 @@ export async function bekraftaSjuk(_prev: FranvaroState, form: FormData): Promis
     kalla: "sjuk-bekraftad",
     typ: "franvaro",
     rubrik: "Din sjukanmälan är bekräftad",
-    detalj: `Sjuk sedan ${anmalan.first_sick_day} · din chef har sett den`,
+    detalj: `Sjuk sedan ${periodtext(anmalan.first_sick_day, anmalan.first_sick_day)} · din chef har sett den`,
     href: "/franvaro/sjuk",
     objekt: { typ: "sick_report", id },
   });
@@ -585,7 +628,7 @@ export async function avslutaSjuk(_prev: FranvaroState, form: FormData): Promise
     kalla: "sjuk-avslutad",
     typ: "franvaro",
     rubrik: "Din sjukperiod är avslutad",
-    detalj: `Sista sjukdagen är registrerad som ${sistaDag}`,
+    detalj: `Sista sjukdagen är registrerad som ${periodtext(sistaDag, sistaDag)}`,
     href: "/franvaro/sjuk",
     objekt: { typ: "sick_report", id },
   });
@@ -645,7 +688,7 @@ export async function stallInSjuk(_prev: FranvaroState, form: FormData): Promise
     kalla: "sjuk-installd",
     typ: "franvaro",
     rubrik: "Din sjukanmälan är inställd",
-    detalj: `Anmälan från ${anmalan.first_sick_day} räknas inte längre. Dagarna behöver registreras på nytt.`,
+    detalj: `Anmälan från ${periodtext(anmalan.first_sick_day, anmalan.first_sick_day)} räknas inte längre. Dagarna behöver registreras på nytt.`,
     href: "/franvaro",
     objekt: { typ: "sick_report", id },
   });
@@ -712,6 +755,107 @@ export async function kvitteraFrist(_prev: FranvaroState, form: FormData): Promi
   return { ok: "Fristen är kvitterad." };
 }
 
+/**
+ * ============================================================================
+ * CHEFENS ANTECKNING PÅ EN SJUKPERIOD (D-E7.11, beställarens val 2026-09-07).
+ *
+ * Frågan som ledde hit var "varför är han ledig", ställd framför en pågående
+ * sjukanmälan där navet inte kunde svara. Det rätta svaret var inte en orsak
+ * utan ett läge: någon har pratat med honom, och det vet ingen annan.
+ *
+ * TRE GRÄNSER SOM INTE FÅR GLIDA:
+ *
+ *   CHEFEN SKRIVER, ALDRIG DEN SJUKE. Vore fältet den sjukes skulle det bli
+ *   platsen där man förklarar sig, och då är det ett orsaksfält med en annan
+ *   rubrik. Villkoret nedan släpper därför inte in den anmälan gäller — inte
+ *   ens om hen råkar vara chef för sig själv i något annat sammanhang.
+ *
+ *   ANTECKNINGEN HANDLAR OM ARBETET, INTE OM HÄLSAN. Hjälptexten i
+ *   gränssnittet säger det, och det är allt navet kan göra: ett fritextfält
+ *   kan inte hindra vad någon skriver i det. Därför gränserna nedan.
+ *
+ *   DEN ANTECKNADE FÅR LÄSA DEN — genom registerutdraget (art. 15), där
+ *   `sick_note` står med `employee_id` just för att den ska följa med. Intern
+ *   betyder "inte i gränssnittet", aldrig "inte utlämnad".
+ * ============================================================================
+ */
+export async function laggSjukanteckning(_prev: FranvaroState, form: FormData): Promise<FranvaroState> {
+  const user = await getCurrentUser();
+  if (!user?.employee) return { fel: "Du måste vara inloggad." };
+
+  const id = String(form.get("id") ?? "");
+  const text = String(form.get("text") ?? "").trim();
+
+  if (!text) return { fel: "Skriv något att anteckna." };
+  if (text.length > ANTECKNING_MAX)
+    return { fel: `Anteckningen får vara högst ${ANTECKNING_MAX} tecken.` };
+
+  const db = supabaseAdmin();
+  const { data: anmalan } = await db
+    .from("sick_report")
+    .select("id, employee_id, first_sick_day, cancelled_at")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!anmalan) return { fel: "Sjukanmälan finns inte." };
+  if (anmalan.cancelled_at) return { fel: "Anmälan är inställd." };
+  if (anmalan.employee_id === user.employee.id)
+    return { fel: "Anteckningen skrivs av chefen, inte av den anmälan gäller." };
+
+  const ledare = await lederPersonen(user, anmalan.employee_id);
+  if (!ledare && !hasRole(user, "sales_manager", "ceo"))
+    return { fel: "Bara den som ansvarar för personen kan anteckna." };
+
+  // `employee_id` sätts av triggern i 0048 ur rapporten och skickas med flit
+  // inte härifrån — två ställen som kan säga emot varandra är ett för mycket.
+  const { error } = await db
+    .from("sick_note")
+    .insert({ sick_report_id: id, author_id: user.employee.id, body: text });
+
+  if (error) return { fel: error.message };
+
+  await db.from("audit_log").insert({
+    actor_id: user.employee.id,
+    action: "sick.note_added",
+    object_type: "sick_report",
+    object_id: id,
+    // Texten står INTE i loggen. `audit_log_read` har en vidare krets än
+    // `sick_note_read`, och en anteckning som kopieras hit lämnar tyst sin.
+    meta: { tecken: text.length },
+  });
+
+  /**
+   * DEN ANDRA CHEFEN SKA SLIPPA RINGA SAMMA SAMTAL.
+   *
+   * Det var hela poängen med anteckningen: en teamledare och en säljchef ser
+   * samma obekräftade rad, och utan raden nedan vet ingen av dem att den andra
+   * redan hört av sig. `notifiera()` håller ute den som skrev.
+   *
+   * DEN SJUKE FÅR INGEN NOTIS. En rad i klockan om att chefen antecknat något
+   * om ens sjukdom är en oro utan handling — det finns ingenting att göra åt
+   * den, och vägen att läsa texten är registerutdraget och inte en klocka.
+   */
+  await notifieraFlera(await cheferFor(anmalan.employee_id), {
+    av: user.employee.id,
+    kalla: "sjuk-anteckning",
+    typ: "franvaro",
+    rubrik: `Ny anteckning om ${(await namnPa(db, anmalan.employee_id)) ?? "en sjukanmäld"}`,
+    detalj: `Sjuk sedan ${periodtext(anmalan.first_sick_day, anmalan.first_sick_day)} · ${user.employee.first_name} har antecknat något om läget`,
+    href: "/franvaro/attest",
+    objekt: { typ: "sick_report", id },
+  });
+
+  revalidatePath("/franvaro/sjuk");
+  revalidatePath("/franvaro/attest");
+  return { ok: "Anteckningen är sparad." };
+}
+
+/** Namnet på en anställd, för notistexter. Null när raden inte finns. */
+async function namnPa(db: ReturnType<typeof supabaseAdmin>, id: string): Promise<string | null> {
+  const { data } = await db.from("employee").select("first_name, last_name").eq("id", id).maybeSingle();
+  return data ? `${data.first_name} ${data.last_name}`.trim() : null;
+}
+
 // =============================================================================
 // Saldon (E7.5) — matas in för hand, räknas aldrig fram
 // =============================================================================
@@ -770,13 +914,20 @@ export async function mataInSaldo(_prev: FranvaroState, form: FormData): Promise
    * saldo det ar far veta nar det andras. Ett fel i inmatningen upptacks bara
    * av den som vet hur manga dagar hon har kvar.
    */
+  // Etiketten och inte id:t: raden hette "saved_vacation · gällde 2026-09-01"
+  // och var det enda stället i klockan som talade databasens språk till den
+  // anställda. En extra fråga efter saldot är skrivet, aldrig före — misslyckas
+  // den ska inte inmatningen falla med den.
+  const { typer: saldotyper } = await regelverk();
+  const typetikett = saldotyper.find((t) => t.id === typId)?.label ?? typId;
+
   await notifiera({
     till: employeeId,
     av: user.employee.id,
     kalla: "franvaro-saldo",
     typ: "franvaro",
     rubrik: `Ditt saldo är uppdaterat: ${dagar} dagar`,
-    detalj: `${typId} · gällde ${asOf}`,
+    detalj: `${typetikett} · gällde ${periodtext(asOf, asOf)}`,
     href: "/franvaro",
     objekt: { typ: "employee", id: employeeId },
   });

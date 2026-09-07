@@ -116,6 +116,7 @@ const TACKNING = {
   "franvaro::bekraftaSjuk": "notifierar",
   "franvaro::avslutaSjuk": "notifierar",
   "franvaro::stallInSjuk": "notifierar",
+  "franvaro::laggSjukanteckning": "notifierar",
   "franvaro::kvitteraFrist":
     "Bockningen TAR BORT `sjuk-frist` ur bade den sjukes och chefens klocka. Ett besked om att en paminnelse slutat galla ar en paminnelse till.",
   "franvaro::mataInSaldo": "notifierar",

@@ -12,7 +12,13 @@
 import {
   antalDagar,
   aterinsjuknande,
+  bemanningUnderPeriod,
   boreskalera,
+  brottext,
+  fristlage,
+  periodtextOppen,
+  sjukdag,
+  startlage,
   dagarMellan,
   dagarna,
   datumPlus,
@@ -629,6 +635,108 @@ ok(
   langt.split("\r\n").every((r) => Buffer.from(r, "utf8").length <= 75),
 );
 ok("vikningen bevarar innehållet", langt.replace(/\r\n /g, "").includes("Överlångt Namnsson-Åkerström Von Bergendahl Storstrand — Ledig"));
+
+
+// =============================================================================
+// D-E7.10 / D-E7.11: skalet, den oppna perioden och chefens bemanningsbild
+//
+// Provet gar rakt pa de tre missforstand bestallaren stotte pa 2026-09-07:
+// en period som saknade sitt slut, en frist utan nedrakning, och en
+// bemanningssiffra utan tak bredvid sig.
+// =============================================================================
+rubrik("Perioden som inte har något slut");
+
+ok(
+  "en avslutad period skrivs som vanligt",
+  periodtextOppen("2026-09-04", "2026-09-08") === "4–8 september 2026",
+  periodtextOppen("2026-09-04", "2026-09-08"),
+);
+ok(
+  "en pågående period säger att slutdagen SAKNAS, i stället för att tiga",
+  periodtextOppen("2026-09-04", null).includes("ingen slutdag registrerad"),
+  periodtextOppen("2026-09-04", null),
+);
+ok(
+  "den pågående perioden bär ändå sin första dag",
+  periodtextOppen("2026-09-04", null).includes("4 september 2026"),
+);
+
+rubrik("Sjukdagsnumret");
+
+ok("första sjukdagen är dag 1, inte dag 0", sjukdag("2026-09-04", "2026-09-04") === 1);
+ok("Micks fall: sjuk sedan 4 september, den 7:e är dag 4", sjukdag("2026-09-04", "2026-09-07") === 4);
+ok(
+  "dag 8 i sjukdagsräkningen är samma dag som intygsfristen",
+  sjukdag("2026-09-04", sjukfrister("2026-09-04", REGLER).find((f) => f.kind === "certificate").due_on) === 8,
+);
+
+rubrik("Fristens nedräkning");
+
+ok("en frist fyra dagar bort räknas ned", fristlage("2026-09-11", "2026-09-07").text === "om 4 dagar");
+ok("fyra dagar bort är varken varning eller fara", fristlage("2026-09-11", "2026-09-07").ton === "neutral");
+ok("tre dagar eller närmare varnar", fristlage("2026-09-10", "2026-09-07").ton === "warn");
+ok("dagens frist är röd och heter 'i dag'", fristlage("2026-09-07", "2026-09-07").text === "i dag");
+ok("en passerad frist säger att den passerade", fristlage("2026-09-01", "2026-09-07").ton === "danger");
+ok(
+  "den passerade fristen bär sitt datum och inte ett minustal",
+  fristlage("2026-09-01", "2026-09-07").text === "passerade 1 september 2026",
+  fristlage("2026-09-01", "2026-09-07").text,
+);
+ok("entalsformen böjs", fristlage("2026-09-08", "2026-09-07").text === "om 1 dag");
+
+rubrik("Hur långt bort en ledighet börjar");
+
+ok("i dag", startlage("2026-09-07", "2026-09-07").text === "börjar i dag");
+ok("i morgon får ett eget ord", startlage("2026-09-08", "2026-09-07").text === "börjar i morgon");
+ok("längre fram räknas i dagar", startlage("2026-09-15", "2026-09-07").text === "börjar om 8 dagar");
+ok("det som redan börjat sägs rakt ut", startlage("2026-09-01", "2026-09-07").text === "har redan börjat");
+
+rubrik("Bemanningen i chefens kö");
+
+const ANDRAS = [
+  { employee_id: "b", type_id: "vacation", starts_on: "2026-09-15", ends_on: "2026-09-17", part_day_minutes: null, team_id: "t1", namn: "Bea" },
+  { employee_id: "c", type_id: "vacation", starts_on: "2026-09-16", ends_on: "2026-09-20", part_day_minutes: null, team_id: "t1", namn: "Cim" },
+  // VAB raknas inte mot taket (0019). Den far inte dyka upp i siffran.
+  { employee_id: "d", type_id: "vab", starts_on: "2026-09-16", ends_on: "2026-09-16", part_day_minutes: null, team_id: "t1", namn: "Dina" },
+];
+const RAKNAS = new Set(["vacation", "saved_vacation"]);
+const ANSOKAN = { employee_id: "a", starts_on: "2026-09-15", ends_on: "2026-09-18" };
+
+const utanTak = bemanningUnderPeriod(ANSOKAN, ANDRAS, RAKNAS, null);
+ok("värsta dagen är den då flest är borta", utanTak.antal === 2, `${utanTak.antal} den ${utanTak.datum}`);
+ok("VAB räknas inte mot bemanningen", !utanTak.namn.includes("Dina"));
+ok("chefen ser VILKA, inte bara hur många", utanTak.namn.join(",") === "Bea,Cim", utanTak.namn.join(","));
+ok("utan tak finns ingen gräns att spränga", utanTak.tak === null && utanTak.over === false);
+
+const medTak = bemanningUnderPeriod(ANSOKAN, ANDRAS, RAKNAS, { team_id: null, max_absent: 3 });
+ok("taket jämförs med ansökan INRÄKNAD: 2 + 1 = 3 är inte över 3", medTak.over === false);
+const trangtTak = bemanningUnderPeriod(ANSOKAN, ANDRAS, RAKNAS, { team_id: null, max_absent: 2 });
+ok("2 + 1 är över ett tak på 2", trangtTak.over === true);
+
+ok(
+  "den egna ansökan räknas aldrig som någon annans frånvaro",
+  bemanningUnderPeriod(
+    { employee_id: "b", starts_on: "2026-09-15", ends_on: "2026-09-17" },
+    ANDRAS,
+    RAKNAS,
+    null,
+  ).namn.join(",") === "Cim",
+);
+
+ok(
+  "ett lagtak räknar bara sitt eget lag",
+  bemanningUnderPeriod(
+    ANSOKAN,
+    [...ANDRAS, { employee_id: "e", type_id: "vacation", starts_on: "2026-09-15", ends_on: "2026-09-18", part_day_minutes: null, team_id: "t2", namn: "Ev" }],
+    RAKNAS,
+    { team_id: "t1", max_absent: 5 },
+  ).namn.includes("Ev") === false,
+);
+
+rubrik("Regelbrotten som text");
+
+ok("en känd kod blir en mening", brottext("frist").endsWith("."));
+ok("en okänd kod faller tillbaka på sig själv och försvinner inte", brottext("nagot_nytt") === "nagot_nytt");
 
 console.log(fel === 0 ? "\n\x1b[32mAlla prov gick igenom.\x1b[0m" : `\n\x1b[31m${fel} prov föll.\x1b[0m`);
 process.exit(fel === 0 ? 0 : 1);

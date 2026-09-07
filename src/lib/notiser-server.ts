@@ -12,6 +12,7 @@ import {
   type Notis,
   type Notiskalla,
 } from "@/lib/notiser";
+import { omfattning, periodtext, sjukdag } from "@/lib/franvaro";
 import { hamtaLage } from "@/lib/sparrar";
 import { svensktDatum } from "@/lib/klocka";
 import { stampelfri } from "@/lib/stampelfri";
@@ -152,7 +153,10 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
     // andra svar pa samma fraga.
     supabase
       .from("absence_request")
-      .select("id, employee_id, type_id, starts_on, ends_on, status, submitted_at, decided_at")
+      // `part_day_minutes` behovs for `omfattning()` i raderna nedan. `reason`
+      // star med FLIT inte har: notistexten ar oforanderlig sedan 0047 och
+      // lases i en panel som star oppen over en axel — se rubriken i 0048.
+      .select("id, employee_id, type_id, starts_on, ends_on, part_day_minutes, status, submitted_at, decided_at")
       .in("status", ["submitted", "approved", "rejected"])
       .order("submitted_at", { ascending: false })
       .limit(MAX_NOTISER * 2),
@@ -323,6 +327,11 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
   const namn = new Map((personer ?? []).map((p) => [p.id, fullName(p)]));
   const notiser: Notis[] = [];
 
+  // Dagens datum i svensk tid. Sjukdagsnumret rakans mot det, och det ska
+  // rakans EN gang for hela klockan: tva anrop mitt over ett dygnsskifte hade
+  // kunnat ge tva olika sjukdagar i samma panel.
+  const idagSvenskt = svensktDatum();
+
   for (const n of nyheter ?? []) {
     notiser.push({
       id: notisId("nyhet", n.id),
@@ -463,11 +472,25 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
     if (a.status === "submitted" && !mitt) {
       // Väntar på mitt beslut. Att raden syns betyder att jag leder personen
       // eller är ledning — RLS har redan avgjort det.
+      //
+      // ==================================================================
+      // PERIODEN, INTE STARTDATUMET. Raden hette "Semester · 2026-09-15" och
+      // bar därför varken slutdag eller längd: en ansökan om en dag och en om
+      // tre veckor såg exakt likadana ut i klockan, och den som läste trodde
+      // att datumet var när ansökan kom in. Beställaren läste den så
+      // 2026-09-07, och det var rätt läst — raden gick inte att läsa på något
+      // annat sätt.
+      //
+      // SKÄLET STÅR INTE HÄR, och det är inte glömt. Notistexten är
+      // oföränderlig sedan 0047 och läses i en panel som står öppen över en
+      // axel; perioden räcker för att veta om man ska gå och besluta. Skälet
+      // finns på ansökan, dit länken går. Se rubriken i 0048.
+      // ==================================================================
       notiser.push({
         id: notisId("franvaro", a.id),
         typ: "franvaro",
         rubrik: `${namn.get(a.employee_id) ?? "En medarbetare"} söker ledigt`,
-        detalj: `${typnamn.get(a.type_id) ?? a.type_id} · ${a.starts_on}`,
+        detalj: `${typnamn.get(a.type_id) ?? a.type_id} · ${periodtext(a.starts_on, a.ends_on)} · ${omfattning(a)}`,
         href: `/franvaro/${a.id}`,
         tidpunkt: a.submitted_at ?? "",
         olast: arNy(a.submitted_at),
@@ -482,7 +505,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
         id: notisId("franvaro-beslut", a.id),
         typ: "franvaro",
         rubrik: a.status === "approved" ? "Din ledighet är godkänd" : "Din ansökan avslogs",
-        detalj: `${typnamn.get(a.type_id) ?? a.type_id} · ${a.starts_on}`,
+        detalj: `${typnamn.get(a.type_id) ?? a.type_id} · ${periodtext(a.starts_on, a.ends_on)} · ${omfattning(a)}`,
         href: `/franvaro/${a.id}`,
         tidpunkt: a.decided_at,
         olast: arNy(a.decided_at),
@@ -496,9 +519,12 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
       id: notisId("sjuk", s.id),
       typ: "franvaro",
       rubrik: `${namn.get(s.employee_id) ?? "En medarbetare"} är sjukanmäld`,
+      // Samma sak som ansökningsraden ovan: datumet stod rått, och "sedan
+      // 2026-09-04" säger inte hur länge det pågått. Sjukdagsnumret gör det,
+      // och det är den siffra fristerna räknas i (K37).
       detalj: s.escalated_at
-        ? `Sedan ${s.first_sick_day} · ingen har bekräftat`
-        : `Sedan ${s.first_sick_day} · bekräfta att du sett den`,
+        ? `Sedan ${periodtext(s.first_sick_day, s.first_sick_day)} · sjukdag ${sjukdag(s.first_sick_day, idagSvenskt)} · ingen har bekräftat`
+        : `Sedan ${periodtext(s.first_sick_day, s.first_sick_day)} · sjukdag ${sjukdag(s.first_sick_day, idagSvenskt)} · bekräfta att du sett den`,
       href: "/franvaro/sjuk",
       tidpunkt: s.registered_at,
       olast: arNy(s.registered_at),

@@ -12,6 +12,9 @@ import {
   femarsvarning,
   omfattning,
   periodtext,
+  periodtextOppen,
+  sjukdag,
+  startlage,
   saldoFor,
   saldotArGammalt,
   STATUS_ETIKETT,
@@ -108,7 +111,8 @@ export default async function Franvarosida() {
 
       {pagaende && (
         <Notis ton="info">
-          Du är sjukanmäld sedan {periodtext(pagaende.first_sick_day, pagaende.first_sick_day)}
+          Du är sjukanmäld — {periodtextOppen(pagaende.first_sick_day, null).toLowerCase()}, sjukdag{" "}
+          {sjukdag(pagaende.first_sick_day, idag)}
           {pagaende.extent_percent < 100 ? `, ${pagaende.extent_percent} procent` : ""}.{" "}
           {pagaende.confirmed_at ? "Din chef har bekräftat anmälan." : "Väntar på att din chef bekräftar."}{" "}
           <Link href="/franvaro/sjuk" className="font-semibold underline">
@@ -133,7 +137,7 @@ export default async function Franvarosida() {
             ) : (
               <ul className="flex flex-col">
                 {vantar.map((a) => (
-                  <Rad key={a.id} a={a} etikett={etikett} />
+                  <Rad key={a.id} a={a} etikett={etikett} idag={idag} />
                 ))}
               </ul>
             )}
@@ -146,7 +150,7 @@ export default async function Franvarosida() {
             ) : (
               <ul className="flex flex-col">
                 {kommande.map((a) => (
-                  <Rad key={a.id} a={a} etikett={etikett} />
+                  <Rad key={a.id} a={a} etikett={etikett} idag={idag} />
                 ))}
               </ul>
             )}
@@ -157,7 +161,7 @@ export default async function Franvarosida() {
               <CardHeader titel="Tidigare" />
               <ul className="flex flex-col">
                 {historik.slice(0, 12).map((a) => (
-                  <Rad key={a.id} a={a} etikett={etikett} />
+                  <Rad key={a.id} a={a} etikett={etikett} idag={idag} />
                 ))}
               </ul>
             </Card>
@@ -217,18 +221,26 @@ export default async function Franvarosida() {
               <ul className="flex flex-col gap-2 text-small">
                 <li>
                   <Link href="/franvaro/attest" className="font-semibold text-brand-700 hover:text-brand-900">
-                    Ansökningar att besluta
+                    Frånvaro i teamet
                   </Link>
+                  <span className="block text-micro text-ink-500">
+                    Ansökningar att besluta, sjukfrånvaro och vilka som är borta de närmaste två
+                    veckorna.
+                  </span>
                 </li>
                 <li>
                   <Link href="/franvaro/planering" className="font-semibold text-brand-700 hover:text-brand-900">
                     Semesterplanering
                   </Link>
+                  <span className="block text-micro text-ink-500">Hela semesteråret, vecka för vecka.</span>
                 </li>
                 <li>
                   <Link href="/franvaro/sjuk" className="font-semibold text-brand-700 hover:text-brand-900">
                     Sjukanmälningar och frister
                   </Link>
+                  <span className="block text-micro text-ink-500">
+                    Bekräfta, kvittera frister, ta emot intyg och avsluta perioder.
+                  </span>
                 </li>
                 {hasRole(user, "sales_manager", "ceo", "admin") && (
                   <li>
@@ -249,6 +261,7 @@ export default async function Franvarosida() {
 function Rad({
   a,
   etikett,
+  idag,
 }: {
   a: {
     id: string;
@@ -259,6 +272,7 @@ function Rad({
     status: string;
   };
   etikett: Map<string, string>;
+  idag: string;
 }) {
   const status = a.status as Ansokningsstatus;
   return (
@@ -271,8 +285,11 @@ function Rad({
           <span className="block text-body text-ink-900 group-hover:text-brand-700">
             {etikett.get(a.type_id) ?? a.type_id}
           </span>
+          {/* Nedräkningen bara framåt. "Har redan börjat" på en rad under
+              Tidigare är en upplysning ingen frågade efter. */}
           <span className="block text-small text-ink-500">
             {periodtext(a.starts_on, a.ends_on)} · {omfattning(a)}
+            {a.starts_on > idag ? ` · ${startlage(a.starts_on, idag).text}` : ""}
           </span>
         </span>
         <Badge ton={STATUS_TON[status]}>{STATUS_ETIKETT[status]}</Badge>
