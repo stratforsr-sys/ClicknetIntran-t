@@ -5,6 +5,32 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-07 (kväll) · Frånvaron mergad till main
+
+Beställaren godkände och `franvaro-skal-och-lage` gick till main som `a4da83e`
+— åtta commits, 32 filer, en merge-commit och därmed EN produktionsdeploy.
+Bygget blev Ready på en minut.
+
+Migration `0048` var körd mot produktionsdatabasen tidigare samma dag. Den är
+additiv och main-koden rörde varken `absence_request.reason` eller `sick_note`,
+så produktionen stod stabil under de timmar branchen levde.
+
+**Testdatan städades efter merge.** Sex påhittade ansökningar, varav tre hunnit
+beslutas via previewen och därmed skyddades av `absence_request_ar_last()`.
+Spärren kringgicks med `set local session_replication_role = 'replica'` i en
+transaktion, och att den var på igen provades direkt efteråt. Skälet att det var
+rätt: två rader var **godkända** och Vlados löpte 241 dagar — de hade räknats
+som verklig bokad frånvaro i bemanningen och årsvyn ända till sommaren.
+
+`audit_log` rördes inte. De tre raderna om godkännande och avslag är sanna:
+någon klickade faktiskt de knapparna, och loggen står även när objektet den
+pekar på är borta.
+
+Kvar att följa: skälfältets innehåll i riktig trafik, och första dygnet med
+`medRoll`/`medBehorighet` som faktiskt skickar.
+
+---
+
 ## 2026-09-07 · Frånvaron: skäl, slutdag, chefsvy och sjukdagsräkning
 
 *Migration `0048_franvaro_skal_och_anteckningar`. Byggd på branch

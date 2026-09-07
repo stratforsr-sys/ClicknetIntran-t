@@ -3,14 +3,13 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-07 — frånvaron byggd om: obligatoriskt skäl på ledighetsansökan, uttrycklig slutdag, chefsanteckning på sjukperiod, ny chefsvy och egen frånvaro på startsidan. Ligger på branch `franvaro-skal-och-lage`, **väntar på beställarens godkännande**.
+**Senast uppdaterad:** 2026-09-07 — frånvaron ombyggd: obligatoriskt skäl, uttrycklig slutdag, chefsanteckning på sjukperiod, ny chefsvy, flikar och sifferrader på korten. Godkänd och **mergad till main som `a4da83e`**; ligger i produktion.
 
-## Frånvaron 2026-09-07 — PÅ BRANCH, INTE MERGAD
+## Frånvaron 2026-09-07 — I PRODUKTION
 
-*Branch `franvaro-skal-och-lage`. Migration `0048_franvaro_skal_och_anteckningar`
-är körd mot produktionsdatabasen — den är additiv och main-koden rör varken
-`absence_request.reason` eller `sick_note`, så produktionen står stabil under
-tiden. Beslut: D-E7.10, D-E7.11, D-E7.12. Hela resonemanget i `ARBETSLOGG.md`.*
+*Åtta commits på `franvaro-skal-och-lage`, mergade till main som `a4da83e`.
+Migration `0048_franvaro_skal_och_anteckningar` kördes mot produktionsdatabasen
+samma dag, före merge — den är additiv, så produktionen stod stabil under tiden. Beslut: D-E7.10, D-E7.11, D-E7.12. Hela resonemanget i `ARBETSLOGG.md`.*
 
 Beställaren såg en pågående sjukanmälan (Mick, sjuk sedan 4 september) och
 frågade varför den inte sa varför eller hur länge. Frågan visade sig ha tre
@@ -66,12 +65,32 @@ lönekostnadsjobbets chefsfallback. Allt rättat genom att namnge nyckeln.
 PostgREST. **Kör det efter varje ny `.select()` med parentes i.** Det kräver
 `DATABASE_URL`-miljön: `set -a; . ~/.clicknet/nav.env; set +a`.
 
-### Att göra i nästa pass
+### Testdatan är borttagen
 
-1. **Visa previewen för beställaren och invänta godkännande.** Ingenting går
-   till main innan dess (`CLAUDE.md`).
-2. Efter merge: håll ögonen på **vad folk skriver i skälfältet**. Det är risken
-   K35 pekade ut och den syns bara i riktig trafik.
+Sex påhittade ansökningar lades in 2026-09-07 för att kön skulle gå att titta
+på, och togs bort samma dag. Tre av dem hade hunnit beslutas och skyddades då av
+`absence_request_ar_last()`. Spärren kringgicks med
+`set local session_replication_role = 'replica'` i EN transaktion — ingen DDL,
+inget kvar efteråt — och att den var på igen provades direkt efter commit.
+
+Skälet: två av raderna var **godkända**, och Vlados löpte 241 dagar. De hade
+räknats som verklig bokad frånvaro i bemanningen och årsvyn till sommaren. Att
+låta en spärr mot förfalskad historia skapa förfalskad historia vore fel väg.
+
+`audit_log` rördes inte. De tre raderna om godkännande och avslag är sanna —
+någon klickade faktiskt de knapparna — och loggen står.
+
+`absence_request` innehåller nu exakt en rad, Vlados riktiga två timmar den
+10 september.
+
+### Att titta på i produktion
+
+1. **Vad folk skriver i skälfältet.** Det är risken K35 pekade ut, och den syns
+   bara i riktig trafik. Dyker hälsouppgifter upp är åtgärden en hårdare
+   hjälptext — inte att ta bort fältet, för det var ett beställarbeslut.
+2. **Notiser till roll- och behörighetskretsar börjar gå iväg** nu när `medRoll`
+   och `medBehorighet` fungerar. Anroparna är händelsestyrda och glesa, men
+   första dygnet är värt att titta på.
 3. **`staffing_cap` är tom** — inget bemanningstak finns någonstans, så
    bemanningsraden i attestkön skriver "Inget bemanningstak är satt". Vill
    beställaren ha varningar behöver ett tak läggas under Regler.
