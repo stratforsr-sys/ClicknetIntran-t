@@ -233,7 +233,7 @@ export async function draTillbaka(_prev: FranvaroState, form: FormData): Promise
 
   const { data: ansokan } = await db
     .from("absence_request")
-    .select("id, employee_id, type_id, starts_on, ends_on, status")
+    .select("id, employee_id, type_id, starts_on, ends_on, part_day_minutes, status")
     .eq("id", id)
     .maybeSingle();
 
@@ -361,7 +361,7 @@ export async function stallInLedighet(_prev: FranvaroState, form: FormData): Pro
 
   const { data: ansokan } = await db
     .from("absence_request")
-    .select("id, employee_id, type_id, starts_on, ends_on, status")
+    .select("id, employee_id, type_id, starts_on, ends_on, part_day_minutes, status")
     .eq("id", id)
     .maybeSingle();
 
