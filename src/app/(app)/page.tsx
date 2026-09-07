@@ -40,10 +40,11 @@ import {
   tillatna,
   type Handelse,
 } from "@/lib/tid";
-import { dagssammanfattning } from "@/lib/dagslage";
-import { hamtaDagsbild } from "@/lib/dagslage-server";
+import { FONSTER, hamtaDagsbild, hamtaFramat } from "@/lib/dagslage-server";
+import { Dagslagekort, type Lagesrad } from "./Dagslagekort";
+import { Kokort, type Bradskande, type Kopost } from "./Kokort";
 import {
-  datumPlus,
+
   omfattning,
   periodtext,
   periodtextOppen,
@@ -164,9 +165,6 @@ export default async function Startsida() {
   const veckodag = svenskVeckodag(nu);
   const dennaManad = manadsnyckel(nu);
 
-  /** Fönstret för chefens framåtblick. Två veckor: se frågan längre ner. */
-  const FRAMAT_DAGAR = 14;
-  const framatTill = datumPlus(idagDatum, FRAMAT_DAGAR);
 
   const [
     { data: kravDok },
@@ -194,7 +192,7 @@ export default async function Startsida() {
     { data: minaAnsokningar },
     { data: minaSaldon },
     { data: minSjuk },
-    { data: framatIFonstret },
+    framat,
   ] = await Promise.all([
     // RLS avgor vilka dokument som syns: audience_roles filtreras redan i
     // policyn, sa listan nedan behover inte upprepa den kontrollen.
@@ -302,13 +300,21 @@ export default async function Startsida() {
     // sick_report_read slapper igenom egen rad, den man leder och ledningen.
     // Egna rader filtreras bort i koden — ingen beslutar om sin egen ledighet,
     // och en ko med sin egen ansokan i ar en ko man inte kan tomma.
+    // Kon visar sedan 2026-09-07 de tre som bradskar, inte bara ett antal.
+    // Namnet och typen kommer som inbaddade resurser — och nyckeln ar NAMNGIVEN,
+    // for `absence_request` har fyra frammande nycklar mot `employee` och en
+    // otvetydig inbaddning svarar med ett fel i stallet for med rader.
     supabase
       .from("absence_request")
-      .select("id, employee_id, starts_on, rules_broken")
+      .select(
+        "id, employee_id, starts_on, ends_on, part_day_minutes, rules_broken, absence_type!inner(label), employee!absence_request_employee_id_fkey(first_name, last_name)",
+      )
       .eq("status", "submitted"),
     supabase
       .from("sick_report")
-      .select("id, employee_id")
+      .select(
+        "id, employee_id, registered_at, first_sick_day, employee!sick_report_employee_id_fkey(first_name, last_name)",
+      )
       .is("confirmed_at", null)
       .is("cancelled_at", null),
 
@@ -412,22 +418,13 @@ export default async function Startsida() {
       .limit(1),
 
     /**
-     * CHEFENS FRAMATBLICK. Godkand ledighet som borjar inom tva veckor.
+     * CHEFENS FRAMATBLICK, som en post och inte som en fraga.
      *
-     * Dagsbilden svarar pa "vem ar borta I DAG", och det ar ratt fraga klockan
-     * atta. Klockan tre ar fragan en annan: vem ar borta NASTA vecka, nar jag
-     * lovar bort nagon till en kund. Raden under kortet svarar pa den utan att
-     * gora kortet till tva kort.
+     * `hamtaFramat` staller tva fragor och far ut alla fonster pa en gang —
+     * det storsta ar ett superset av de mindre. En fraga per flik hade gett
+     * tre turer for ett svar som redan lag i den forsta.
      */
-    serDagslage
-      ? supabase
-          .from("absence_request")
-          .select("id, employee_id, starts_on, ends_on, absence_type!inner(label), employee!absence_request_employee_id_fkey(first_name, last_name)")
-          .eq("status", "approved")
-          .gt("starts_on", idagDatum)
-          .lte("starts_on", framatTill)
-          .order("starts_on")
-      : Promise.resolve({ data: null }),
+    serDagslage ? hamtaFramat(supabase, idagDatum) : Promise.resolve(null),
   ]);
 
   // ---------------------------------------------------------------------------
@@ -726,9 +723,21 @@ export default async function Startsida() {
     </Card>
   );
 
-  const koposter: { href: string; text: string; detalj: string; ton: "danger" | "warn" | "neutral" }[] = [];
+  /**
+   * ==========================================================================
+   * KON. Antal per omrade, och de tre som bradskar.
+   *
+   * Posterna ar sammanfattningar; `bradskande` ar faktiska saker MED EN FRIST.
+   * Bara sadana gar att rangordna mot varandra — se rubriken i `Kokort.tsx`
+   * for varfor en tidsrattelse och ett rollspel star utanfor topplistan.
+   * ==========================================================================
+   */
+  const koposter: Kopost[] = [];
+
   if (hanterarArenden && overTiden > 0)
     koposter.push({
+      nyckel: "arende-over",
+      omrade: "arenden",
       href: "/arenden",
       text: `${overTiden} ärende${overTiden === 1 ? "" : "n"} över tiden`,
       detalj: "Svarstiden har passerat",
@@ -736,6 +745,8 @@ export default async function Startsida() {
     });
   if (hanterarArenden && snart > 0)
     koposter.push({
+      nyckel: "arende-snart",
+      omrade: "arenden",
       href: "/arenden",
       text: `${snart} snart förfallna`,
       detalj: "Sista fjärdedelen av fristen",
@@ -743,6 +754,8 @@ export default async function Startsida() {
     });
   if (attesterar && (attKvittera ?? 0) > 0)
     koposter.push({
+      nyckel: "tid-rattelse",
+      omrade: "tid",
       href: "/tid",
       text: `${attKvittera} rättelse${attKvittera === 1 ? "" : "r"} att besluta`,
       detalj: "Både den gamla och den nya tiden visas",
@@ -753,6 +766,8 @@ export default async function Startsida() {
   // ar sjuk ska veta att nagon gjort det.
   if (attBekrafta.length > 0)
     koposter.push({
+      nyckel: "sjuk-bekrafta",
+      omrade: "franvaro",
       href: "/franvaro/sjuk",
       text: `${attBekrafta.length} ${attBekrafta.length === 1 ? "sjukanmälan" : "sjukanmälningar"} att bekräfta`,
       detalj: "Bekräfta att du sett den",
@@ -761,6 +776,8 @@ export default async function Startsida() {
 
   if (attBesluta.length > 0)
     koposter.push({
+      nyckel: "franvaro-besluta",
+      omrade: "franvaro",
       href: "/franvaro/attest",
       text: `${attBesluta.length} ${attBesluta.length === 1 ? "ledighetsansökan" : "ledighetsansökningar"} att besluta`,
       detalj: attBesluta.some((a) => ((a.rules_broken ?? []) as string[]).length > 0)
@@ -771,6 +788,8 @@ export default async function Startsida() {
 
   if (attBedoma.length > 0)
     koposter.push({
+      nyckel: "rollspel",
+      omrade: "utbildning",
       href: "/utbildning/rollspel",
       text: `${attBedoma.length} rollspel att bedöma`,
       detalj: "Lyssna först — öppningen loggas och syns för säljaren",
@@ -779,32 +798,73 @@ export default async function Startsida() {
 
   if (serAvvikelser && sparr.stampling)
     koposter.push({
+      nyckel: "rastavvikelser",
+      omrade: "tid",
       href: "/tid/avvikelser",
       text: "Rastavvikelser",
       detalj: "Din öppning av vyn loggas",
       ton: "neutral",
     });
 
-  const kokort = chef ? (
-    <Card>
-      <CardHeader titel="Din kö" beskrivning="Det som väntar på ditt beslut." />
-      {koposter.length === 0 ? (
-        <EmptyState rubrik="Kön är tom" text="Inget ärende och ingen rättelse väntar på dig." />
-      ) : (
-        <ul className="flex flex-col">
-          {koposter.map((p) => (
-            <Uppgift
-              key={p.href + p.text}
-              href={p.href}
-              titel={p.text}
-              detalj={p.detalj}
-              markering={p.ton === "neutral" ? null : <Badge ton={p.ton}>Öppna</Badge>}
-            />
-          ))}
-        </ul>
-      )}
-    </Card>
-  ) : null;
+  /**
+   * DE BRADSKANDE. Obekraftad sjukanmalan forst, sedan allt med en frist,
+   * narmast forst. Rollspel och rattelser saknar frist och star darfor inte
+   * har — bara som antal ovan.
+   */
+  const bradskande: Bradskande[] = [
+    ...attBekrafta.map((s0) => {
+      const p0 = (s0 as unknown as { employee: { first_name: string; last_name: string } | null }).employee;
+      return {
+        nyckel: `sjuk-${s0.id}`,
+        omrade: "franvaro" as const,
+        href: "/franvaro/sjuk",
+        titel: `${p0 ? `${p0.first_name} ${p0.last_name}` : "En medarbetare"} är sjukanmäld`,
+        detalj: `Sjuk sedan ${periodtext(String(s0.first_sick_day), String(s0.first_sick_day))} · ingen har bekräftat`,
+        frist: "Bekräfta",
+        ton: "danger" as const,
+        sortering: -1,
+      };
+    }),
+    ...attBesluta.map((a) => {
+      const rad = a as unknown as {
+        id: string;
+        starts_on: string;
+        ends_on: string;
+        part_day_minutes: number | null;
+        absence_type: { label: string } | null;
+        employee: { first_name: string; last_name: string } | null;
+      };
+      const lage = startlage(rad.starts_on, idagSvenskt);
+      return {
+        nyckel: `franvaro-${rad.id}`,
+        omrade: "franvaro" as const,
+        href: "/franvaro/attest",
+        titel: `${rad.employee ? `${rad.employee.first_name} ${rad.employee.last_name}` : "En medarbetare"} söker ${(rad.absence_type?.label ?? "ledigt").toLowerCase()}`,
+        detalj: `${periodtext(rad.starts_on, rad.ends_on)} · ${omfattning(rad)}`,
+        frist: lage.text,
+        ton: (lage.dagar <= 3 ? "danger" : "warn") as "danger" | "warn",
+        sortering: lage.dagar,
+      };
+    }),
+    ...(hanterarArenden
+      ? (koArenden ?? [])
+          .filter((a) => slaLage(a) === "over" || slaLage(a) === "snart")
+          .map((a) => ({
+            nyckel: `arende-${a.id}`,
+            omrade: "arenden" as const,
+            href: "/arenden",
+            titel: String(a.subject ?? "Ärende"),
+            detalj: "Personalärende",
+            frist: slaLage(a) === "over" ? "Svarstiden passerad" : "Snart förfallet",
+            ton: (slaLage(a) === "over" ? "danger" : "warn") as "danger" | "warn",
+            sortering: slaLage(a) === "over" ? -0.5 : 1,
+          }))
+      : []),
+  ]
+    .sort((a, b) => a.sortering - b.sortering)
+    .map(({ sortering: _sortering, ...rest }) => rest);
+
+  const kokort = chef ? <Kokort poster={koposter} bradskande={bradskande} /> : null;
 
   /**
    * ===========================================================================
@@ -949,131 +1009,50 @@ export default async function Startsida() {
    * /franvaro/attest, och ett kort som forsoker vara bade dagsbild och
    * tvaveckorsvy blir svarlast pa 375 px — dar allt ligger i en spalt.
    */
-  const framat = ((framatIFonstret ?? []) as unknown as {
-    id: string;
-    employee_id: string;
-    starts_on: string;
-    ends_on: string;
-    absence_type: { label: string } | null;
-    employee: { first_name: string; last_name: string } | null;
-  }[]);
-
+  /**
+   * Dagsbilden formas om till det kortet behover och inget mer.
+   *
+   * `Dagslagekort` ar en klientkomponent: allt som skickas dit serialiseras och
+   * hamnar i sidans nyttolast. Darfor fardiga meningar och inga `Map` eller
+   * `Date` — de hade antingen fallit i serialiseringen eller foljt med
+   * webblasaren utan att behovas dar.
+   *
+   * NYCKELN maste vara stabil och unik. En person kan ha bade en sjukrad och en
+   * ledigrad i samma fonster, sa `employee_id` ensamt racker inte.
+   */
   const dagslagekort =
     dagsbild !== null ? (
-      <Card>
-        <CardHeader
-          titel="Dagens läge"
-          beskrivning={`${idagSvenskt} · ${dagssammanfattning(dagsbild)}`}
-          handling={
-            <ButtonLink href="/franvaro" size="sm" variant="diskret">
-              Frånvaro
-            </ButtonLink>
-          }
-        />
-        {dagsbild.rader.length === 0 ? (
-          <EmptyState
-            rubrik="Alla är på plats"
-            text={
-              dagsbild.senRaknad
-                ? "Ingen sjukanmälan, ingen godkänd ledighet och ingen utebliven instämpling i dag."
-                : "Ingen sjukanmälan och ingen godkänd ledighet i dag. Stämplingen är avstängd, så sena ankomster kan inte visas."
-            }
-            handling={
-              <ButtonLink href="/franvaro/sjuk" size="sm" variant="sekundar">
-                Sjukfrånvaro
-              </ButtonLink>
-            }
-          />
-        ) : (
-          /**
-           * GRUPPERAT PER LAGE, inte som en enda lista.
-           *
-           * Raderna var redan sorterade sa att det bradskande lag overst, men
-           * en oavbruten kolumn med sex namn och sex olika marken laser man
-           * inte — man skannar den och missar overgangen mellan "ingen vet var
-           * hon ar" och "hon har semester". Rubriken gor overgangen till nagot
-           * ogat kan hoppa till.
-           *
-           * ORDNINGEN AR `ORDNING` I `dagslage.ts` och far inte satas har.
-           * Grupperingen laser den befintliga sorteringen, den ersatter den
-           * inte — annars kan de tva glida isar och kortet borjar saga en sak i
-           * rubriken och en annan i listan.
-           */
-          <div className="flex flex-col gap-5">
-            {(
-              [
-                ["ej_instamplad", "Ingen stämpling än"],
-                ["sen", "Sena i dag"],
-                ["sjuk", "Sjukanmälda"],
-                ["ledig", "Lediga"],
-              ] as const
-            ).map(([lage, rubrik]) => {
-              const gruppen = dagsbild.rader.filter((r) => r.lage === lage);
-              if (gruppen.length === 0) return null;
-              return (
-                <div key={`grupp-${lage}`}>
-                  <h3 className="text-small font-semibold text-ink-700">
-                    {rubrik} ({gruppen.length})
-                  </h3>
-                  <ul className="mt-1 flex flex-col">
-                    {gruppen.map((r) => (
-                      <Uppgift
-                        key={`dagslage-${r.employee_id}`}
-                        href={r.href}
-                        titel={r.namn}
-                        detalj={r.detalj}
-                        markering={<Badge ton={r.ton}>{r.etikett}</Badge>}
-                      />
-                    ))}
-                  </ul>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* FRAMATBLICKEN. Dagsbilden svarar pa "vem ar borta i dag"; raden
-            nedan pa "vem ar borta snart", vilket ar den fraga man staller nar
-            man lovar bort nagon till en kund. Doljs nar det inte finns nagot
-            att saga — en rad som varje dag sager "ingen" ar en rad man slutar
-            lasa. */}
-        {framat.length > 0 && (
-          <div className="mt-4 border-t border-canvas pt-4">
-            <p className="text-small text-ink-700">
-              <span className="font-semibold">
-                {framat.length === 1
-                  ? "1 ledighet börjar"
-                  : `${framat.length} ledigheter börjar`}
-              </span>{" "}
-              inom {FRAMAT_DAGAR} dagar.
-            </p>
-            <p className="mt-1 text-small text-ink-500">
-              {framat
-                .slice(0, 3)
-                .map(
-                  (f) =>
-                    `${f.employee?.first_name ?? "Okänd"} ${periodtext(f.starts_on, f.ends_on)}`,
-                )
-                .join(" · ")}
-              {framat.length > 3 ? ` · och ${framat.length - 3} till` : ""}
-            </p>
-            <div className="mt-3">
-              <ButtonLink href="/franvaro/attest" size="sm" variant="sekundar">
-                Frånvaro i teamet
-              </ButtonLink>
-            </div>
-          </div>
-        )}
-
-        {/* Star bara nar det behovs. En tom lista kan betyda "alla ar har"
-            eller "stamplingen ar av", och skillnaden far inte gissas. */}
-        {!dagsbild.senRaknad && dagsbild.rader.length > 0 && (
-          <p className="mt-4 text-small text-ink-500">
-            Stämplingen är avstängd. Sena ankomster kan inte visas — listan bär bara registrerad
-            frånvaro.
-          </p>
-        )}
-      </Card>
+      <Dagslagekort
+        vy={{
+          idag: dagsbild.rader.map((r) => ({
+            nyckel: `idag-${r.employee_id}-${r.lage}`,
+            namn: r.namn,
+            lage: r.lage,
+            etikett: r.etikett,
+            ton: r.ton,
+            detalj: r.detalj,
+            href: r.href,
+          })),
+          framat: Object.fromEntries(
+            FONSTER.map((d) => [
+              d,
+              (framat?.per[d] ?? []).map((r, i) => ({
+                nyckel: `f${d}-${r.employee_id}-${r.lage}-${i}`,
+                namn: r.namn,
+                lage: r.lage as Lagesrad["lage"],
+                etikett: r.etikett,
+                ton: r.ton as Lagesrad["ton"],
+                detalj: r.detalj,
+                href: r.href,
+              })),
+            ]),
+          ),
+          fonster: [...FONSTER],
+          senRaknad: dagsbild.senRaknad,
+          datum: `${veckodag.charAt(0).toUpperCase()}${veckodag.slice(1)} ${idagSvenskt}`,
+          attBesluta: attBesluta.length,
+        }}
+      />
     ) : null;
 
   /**

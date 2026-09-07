@@ -24,6 +24,7 @@ import {
   type Saldo,
 } from "@/lib/franvaro";
 import { REGELFALT } from "@/lib/franvaro-server";
+import { Sektionsflikar } from "@/components/ui/Flikar";
 import { Kalenderflode } from "./Kalenderflode";
 import { GuideVard } from "@/components/guide/GuideVard";
 
@@ -123,49 +124,100 @@ export default async function Franvarosida() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="flex flex-col gap-4 lg:col-span-2">
-          <Card guide="franvaro.vantar">
-            <CardHeader
-              titel="Väntar på beslut"
-              beskrivning="Ansökningar som ingen tagit ställning till än."
-            />
-            {vantar.length === 0 ? (
-              <EmptyState
-                rubrik="Ingenting väntar"
-                text="Ansökningar du skickat in ligger här tills chefen beslutat."
-                handling={<ButtonLink href="/franvaro/ny" size="sm">Söka ledigt</ButtonLink>}
-              />
-            ) : (
-              <ul className="flex flex-col">
-                {vantar.map((a) => (
-                  <Rad key={a.id} a={a} etikett={etikett} idag={idag} />
-                ))}
-              </ul>
-            )}
-          </Card>
-
-          <Card>
-            <CardHeader titel="Kommande ledighet" beskrivning="Godkänt och inbokat." />
-            {kommande.length === 0 ? (
-              <EmptyState rubrik="Ingen ledighet inbokad" text="Godkänd ledighet framåt i tiden visas här." />
-            ) : (
-              <ul className="flex flex-col">
-                {kommande.map((a) => (
-                  <Rad key={a.id} a={a} etikett={etikett} idag={idag} />
-                ))}
-              </ul>
-            )}
-          </Card>
-
-          {historik.length > 0 && (
-            <Card>
-              <CardHeader titel="Tidigare" />
-              <ul className="flex flex-col">
-                {historik.slice(0, 12).map((a) => (
-                  <Rad key={a.id} a={a} etikett={etikett} idag={idag} />
-                ))}
-              </ul>
-            </Card>
-          )}
+          {/**
+            * VANTAR / KOMMANDE / TIDIGARE SOM FLIKAR (2026-09-07).
+            *
+            * De lag som tre kort under varandra, och "Tidigare" doldes helt nar
+            * den var tom — vilket gjorde att sidan bytte hojd beroende pa hur
+            * lange man arbetat har. Som flikar star raden still, och den som
+            * vantar pa besked ser det forst.
+            *
+            * `guide="franvaro.vantar"` satt pa det forsta kortet och maste folja
+            * med: systemguiden pekar pa ankaret, och en guide som pekar pa
+            * ingenting hoppar over steget utan att saga varfor.
+            */}
+          <Sektionsflikar
+            etikett="Din frånvaro"
+            tal={[
+              { id: "vantar", varde: vantar.length, etikett: "Väntar på beslut", kraverHandling: true },
+              { id: "kommande", varde: kommande.length, etikett: "Inbokat framåt" },
+              { id: "saldo", varde: saldotyper.length > 0 ? saldon.reduce((n, x) => n + x.days, 0) : "—", etikett: "Dagar i saldo" },
+              { id: "tidigare", varde: historik.length, etikett: "Tidigare" },
+            ]}
+            sektioner={[
+              {
+                id: "vantar",
+                etikett: "Väntar på beslut",
+                antal: vantar.length,
+                innehall: (
+                  <Card guide="franvaro.vantar">
+                    <CardHeader
+                      titel="Väntar på beslut"
+                      beskrivning="Ansökningar som ingen tagit ställning till än."
+                    />
+                    {vantar.length === 0 ? (
+                      <EmptyState
+                        rubrik="Ingenting väntar"
+                        text="Ansökningar du skickat in ligger här tills chefen beslutat."
+                        handling={<ButtonLink href="/franvaro/ny" size="sm">Söka ledigt</ButtonLink>}
+                      />
+                    ) : (
+                      <ul className="flex flex-col">
+                        {vantar.map((a) => (
+                          <Rad key={a.id} a={a} etikett={etikett} idag={idag} />
+                        ))}
+                      </ul>
+                    )}
+                  </Card>
+                ),
+              },
+              {
+                id: "kommande",
+                etikett: "Kommande",
+                antal: kommande.length,
+                innehall: (
+                  <Card>
+                    <CardHeader titel="Kommande ledighet" beskrivning="Godkänt och inbokat." />
+                    {kommande.length === 0 ? (
+                      <EmptyState
+                        rubrik="Ingen ledighet inbokad"
+                        text="Godkänd ledighet framåt i tiden visas här."
+                        handling={<ButtonLink href="/franvaro/ny" size="sm">Söka ledigt</ButtonLink>}
+                      />
+                    ) : (
+                      <ul className="flex flex-col">
+                        {kommande.map((a) => (
+                          <Rad key={a.id} a={a} etikett={etikett} idag={idag} />
+                        ))}
+                      </ul>
+                    )}
+                  </Card>
+                ),
+              },
+              {
+                id: "tidigare",
+                etikett: "Tidigare",
+                antal: historik.length,
+                innehall: (
+                  <Card>
+                    <CardHeader titel="Tidigare" beskrivning="Avslutat, avslaget och tillbakadraget." />
+                    {historik.length === 0 ? (
+                      <EmptyState
+                        rubrik="Ingen historik än"
+                        text="Beslutade och avslutade ansökningar hamnar här."
+                      />
+                    ) : (
+                      <ul className="flex flex-col">
+                        {historik.slice(0, 20).map((a) => (
+                          <Rad key={a.id} a={a} etikett={etikett} idag={idag} />
+                        ))}
+                      </ul>
+                    )}
+                  </Card>
+                ),
+              },
+            ]}
+          />
         </div>
 
         <div className="flex flex-col gap-4">

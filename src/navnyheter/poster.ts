@@ -14,6 +14,44 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "flikar-pa-korten",
+    rubrik: "Korten har fått flikar, filter och siffror",
+    ingress: "Dagens läge visar nu också 7 och 14 dagar framåt. Din kö visar vad som brådskar, inte bara hur mycket.",
+    text: `Startsidan och frånvarosidorna har fått samma tre saker överst i korten:
+**siffror** som går att läsa på avstånd, **flikar** som byter vy, och **chips**
+som filtrerar.
+
+**Dagens läge**
+
+Flikarna är tidsfönster: **I dag**, **7 dagar** och **14 dagar**. Framåtblicken
+låg förut som en rad småtext längst ner och gick att missa.
+
+Chipsen under filtrerar på sorts frånvaro. De är färre i framtidsflikarna, och
+det är med flit: ingen är sen på tisdag ännu, så *Sena* och *Inte instämplad*
+finns bara under *I dag*.
+
+En pågående sjukperiod utan slutdag står som **"Sjuk nu"** framåt — navet
+påstår inte när någon är tillbaka.
+
+**Din kö**
+
+Flikarna är områden: Frånvaro, Tid, Ärenden, Utbildning. Överst ligger nu
+**det som brådskar** med namn och frist, i stället för bara ett antal.
+
+Bara det som HAR en frist rangordnas — ett ärende har sin svarstid, en ansökan
+har sin första ledighetsdag. En rättelse och ett rollspel har ingen, och står
+därför kvar som antal längre ner i stället för att sorteras på en påhittad
+brådska.
+
+**Frånvaro i teamet** och **Min frånvaro**
+
+Korten som låg staplade under varandra är nu flikar. Det som låg längst ner
+lästes minst, oavsett hur viktigt det var.`,
+    datum: "2026-09-07",
+    roller: [],
+    href: "/",
+  },
+  {
     slug: "franvaro-skal-och-lage",
     rubrik: "Frånvaron säger nu varför, hur länge och vem som är borta",
     ingress:

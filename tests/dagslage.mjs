@@ -9,7 +9,7 @@
  *
  *   node --experimental-strip-types tests/dagslage.mjs
  */
-import { dagensLage, dagssammanfattning } from "../src/lib/dagslage.ts";
+import { dagensLage, dagssammanfattning, kommandeLage } from "../src/lib/dagslage.ts";
 import { svenskTidpunkt } from "../src/lib/klocka.ts";
 
 let fel = 0;
@@ -221,6 +221,101 @@ console.log("\n\x1b[1mTom dag\x1b[0m");
   ok("inga rader", tom.rader.length === 0);
   ok("sammanfattningen sager det rent ut",
     dagssammanfattning(tom) === "Ingen frånvaro registrerad", dagssammanfattning(tom));
+}
+
+
+// =============================================================================
+// FRAMAT: vad navet FAR pasta om dagar som inte varit an
+//
+// Kortets flikar for 7 och 14 dagar bygger pa `kommandeLage`. Proven nedan ar
+// inte formaliteter — de bevakar tva loften till personalen som annars glider:
+// att ingen bedoms som sen i forvag, och att en pagaende sjukskrivning inte
+// projiceras framat som om navet visste nar nagon ar frisk.
+// =============================================================================
+{
+  console.log("\n\x1b[1mFramatblicken\x1b[0m");
+
+  const PERSONER = [
+    { id: "a", first_name: "Anna", last_name: "A", team_id: "t1", start_date: null },
+    { id: "b", first_name: "Bo", last_name: "B", team_id: "t1", start_date: null },
+    { id: "c", first_name: "Cim", last_name: "C", team_id: "t1", start_date: null },
+  ];
+  const TYPNAMN = new Map([["vacation", "Semester"], ["vab", "Vård av sjukt barn"]]);
+
+  const kor = (u) =>
+    kommandeLage({
+      personer: PERSONER,
+      ledigheter: [],
+      sjuka: [],
+      typnamn: TYPNAMN,
+      fran: "2026-09-07",
+      till: "2026-09-21",
+      ...u,
+    });
+
+  ok(
+    "godkand ledighet i fonstret kommer med",
+    kor({ ledigheter: [{ employee_id: "a", type_id: "vacation", starts_on: "2026-09-10", ends_on: "2026-09-12", part_day_minutes: null }] }).length === 1,
+  );
+  ok(
+    "ledighet som slutar fore fonstret kommer inte med",
+    kor({ ledigheter: [{ employee_id: "a", type_id: "vacation", starts_on: "2026-09-01", ends_on: "2026-09-06", part_day_minutes: null }] }).length === 0,
+  );
+  ok(
+    "ledighet som borjar efter fonstret kommer inte med",
+    kor({ ledigheter: [{ employee_id: "a", type_id: "vacation", starts_on: "2026-10-01", ends_on: "2026-10-05", part_day_minutes: null }] }).length === 0,
+  );
+  ok(
+    "en ledighet som spanner over hela fonstret kommer med",
+    kor({ ledigheter: [{ employee_id: "a", type_id: "vacation", starts_on: "2026-08-01", ends_on: "2026-12-01", part_day_minutes: null }] }).length === 1,
+  );
+
+  const pagaende = kor({
+    sjuka: [{ employee_id: "b", first_sick_day: "2026-09-04", last_sick_day: null, extent_percent: 100, confirmed_at: "x" }],
+  });
+  ok("en pagaende sjukperiod kommer med", pagaende.length === 1);
+  ok(
+    "…men som ETT FAKTUM om nuet, inte som en prognos",
+    pagaende[0].etikett === "Sjuk nu" && pagaende[0].detalj.includes("ingen slutdag registrerad"),
+    pagaende[0].detalj,
+  );
+  ok(
+    "…och den pastar aldrig nagot slutdatum",
+    !/till\s+\d/.test(pagaende[0].detalj) && !pagaende[0].detalj.includes("2026-09-21"),
+  );
+
+  const avslutad = kor({
+    sjuka: [{ employee_id: "b", first_sick_day: "2026-09-08", last_sick_day: "2026-09-10", extent_percent: 100, confirmed_at: "x" }],
+  });
+  ok("en avslutad sjukperiod visas som ett kant spann", avslutad[0].detalj === "8–10 september 2026", avslutad[0].detalj);
+
+  ok(
+    "en sjukperiod som slutade fore fonstret kommer inte med",
+    kor({ sjuka: [{ employee_id: "b", first_sick_day: "2026-08-01", last_sick_day: "2026-08-10", extent_percent: 100, confirmed_at: "x" }] }).length === 0,
+  );
+
+  const bara = kor({
+    ledigheter: [{ employee_id: "a", type_id: "vacation", starts_on: "2026-09-10", ends_on: "2026-09-12", part_day_minutes: null }],
+    sjuka: [{ employee_id: "b", first_sick_day: "2026-09-04", last_sick_day: null, extent_percent: 100, confirmed_at: "x" }],
+  });
+  ok(
+    "INGEN rad ar 'sen' eller 'inte instampld' — det gar inte att veta i forvag",
+    bara.every((r) => r.lage === "sjuk" || r.lage === "ledig"),
+    bara.map((r) => r.lage).join(", "),
+  );
+  ok("sjukdom sorteras fore ledighet samma dag", bara[0].lage === "sjuk");
+
+  ok(
+    "en person som inte finns i personallistan tas bort",
+    kor({ ledigheter: [{ employee_id: "okand", type_id: "vacation", starts_on: "2026-09-10", ends_on: "2026-09-12", part_day_minutes: null }] }).length === 0,
+    "annars visas en rad utan namn",
+  );
+
+  ok(
+    "typens etikett anvands, inte dess id",
+    kor({ ledigheter: [{ employee_id: "c", type_id: "vab", starts_on: "2026-09-09", ends_on: "2026-09-09", part_day_minutes: null }] })[0].etikett ===
+      "Vård av sjukt barn",
+  );
 }
 
 console.log(fel === 0 ? "\n\x1b[32mAlla kontroller gick igenom\x1b[0m\n" : `\n\x1b[31m${fel} fallna\x1b[0m\n`);

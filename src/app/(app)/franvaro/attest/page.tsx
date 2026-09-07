@@ -19,6 +19,7 @@ import {
   FRIST_ETIKETT,
   type Fristtyp,
 } from "@/lib/franvaro";
+import { Sektionsflikar } from "@/components/ui/Flikar";
 import { hamtaChefsbild, hamtaRegelverk } from "@/lib/franvaro-server";
 import { Attestkort, type Attestvy } from "./Attestkort";
 import { Sjukanteckningar } from "../Sjukanteckningar";
@@ -149,150 +150,183 @@ export default async function Chefsvy() {
         </Notis>
       )}
 
-      {/* ------------------------------------------------------------------ */}
-      {/* 1. ATT BESLUTA                                                      */}
-      {/* ------------------------------------------------------------------ */}
-      <Card status={kortet.length > 0 ? "brand" : undefined}>
-        <CardHeader
-          titel={`Att besluta — ${kortet.length} ${kortet.length === 1 ? "ansökan" : "ansökningar"}`}
-          beskrivning="Sorterade efter när ledigheten börjar, inte efter när ansökan kom in."
-        />
+      {/**
+        * TRE VYER, EN FLIKRAD (ombyggt 2026-09-07).
+        *
+        * Korten lag staplade och det nedersta lastes minst, oavsett vad det
+        * innehol. Sektionerna ar oforandrade — de renderas fortfarande pa
+        * servern med sin egen RLS — men de vaxlas nu i stallet for att
+        * scrollas forbi. Se rubriken i `Sektionsflikar`.
+        *
+        * TALEN OVERST BAR HELA SIDAN och inte den valda fliken. Chefen ska se
+        * att tva sjukanmalningar ar obekraftade aven nar hen star i
+        * ledighetsfliken — annars hade flikarna kunnat gomma det bradskande.
+        */}
+      <Sektionsflikar
+        etikett="Vy"
+        tal={[
+          { id: "besluta", varde: kortet.length, etikett: "Att besluta", kraverHandling: true },
+          { id: "obekraftade", varde: obekraftade, etikett: "Obekräftade", kraverHandling: true },
+          { id: "sjuka", varde: bild.sjuka.length, etikett: "Sjukperioder" },
+          { id: "borta", varde: bild.kommande.length, etikett: `Borta ${bild.fonster} dagar` },
+        ]}
+        sektioner={[
+          {
+            id: "besluta",
+            etikett: "Att besluta",
+            antal: kortet.length,
+            innehall: (
+            <Card status={kortet.length > 0 ? "brand" : undefined}>
+              <CardHeader
+                titel={`Att besluta — ${kortet.length} ${kortet.length === 1 ? "ansökan" : "ansökningar"}`}
+                beskrivning="Sorterade efter när ledigheten börjar, inte efter när ansökan kom in."
+              />
 
-        {kortet.length === 0 ? (
-          <EmptyState
-            rubrik="Kön är tom"
-            text="Ansökningar som väntar på ditt beslut hamnar här, med skäl, bemanning och regelbrott utskrivna."
-          />
-        ) : (
-          <ul className="flex flex-col">
-            {kortet.map((p) => (
-              <Attestkort key={p.id} post={p} />
-            ))}
-          </ul>
-        )}
-      </Card>
+              {kortet.length === 0 ? (
+                <EmptyState
+                  rubrik="Kön är tom"
+                  text="Ansökningar som väntar på ditt beslut hamnar här, med skäl, bemanning och regelbrott utskrivna."
+                />
+              ) : (
+                <ul className="flex flex-col">
+                  {kortet.map((p) => (
+                    <Attestkort key={p.id} post={p} />
+                  ))}
+                </ul>
+              )}
+            </Card>
+            ),
+          },
+          {
+            id: "sjuk",
+            etikett: "Sjukfrånvaro",
+            antal: bild.sjuka.length,
+            innehall: (
+            <Card>
+              <CardHeader
+                titel="Sjukfrånvaro"
+                beskrivning="Datum, sjukdag och frister — aldrig något om orsak."
+                handling={
+                  <ButtonLink href="/franvaro/sjuk" size="sm" variant="diskret">
+                    Hantera
+                  </ButtonLink>
+                }
+              />
 
-      {/* ------------------------------------------------------------------ */}
-      {/* 2. SJUKFRÅNVARO                                                     */}
-      {/* ------------------------------------------------------------------ */}
-      <Card>
-        <CardHeader
-          titel="Sjukfrånvaro"
-          beskrivning="Datum, sjukdag och frister — aldrig något om orsak."
-          handling={
-            <ButtonLink href="/franvaro/sjuk" size="sm" variant="diskret">
-              Hantera
-            </ButtonLink>
-          }
-        />
+              {bild.sjuka.length === 0 ? (
+                <EmptyState
+                  rubrik="Ingen är sjukanmäld"
+                  text="Pågående sjukperioder hos dem du ansvarar för visas här."
+                />
+              ) : (
+                <ul className="flex flex-col gap-4">
+                  {bild.sjuka
+                    .slice()
+                    .sort(
+                      (a, b) =>
+                        Number(b.bekraftad === false && !b.sistaDag) - Number(a.bekraftad === false && !a.sistaDag) ||
+                        a.forstaDag.localeCompare(b.forstaDag),
+                    )
+                    .map((s) => {
+                      const pagaende = s.sistaDag === null;
+                      return (
+                        <li key={s.id} className="border-b border-canvas pb-4 last:border-0 last:pb-0">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-h2 text-ink-900">{s.namn}</p>
+                              {/* Här stod förut bara "sedan 4 september". Att slutdagen
+                                  SAKNAS är en uppgift, inte ett tomrum — se
+                                  `periodtextOppen`. */}
+                              <p className="text-small text-ink-500">
+                                {periodtextOppen(s.forstaDag, s.sistaDag)}
+                                {s.omfattning < 100 ? ` · ${s.omfattning} %` : ""}
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              {pagaende && (
+                                <Badge ton="warn">Sjukdag {sjukdag(s.forstaDag, idag)}</Badge>
+                              )}
+                              {s.eskalerad ? (
+                                <Badge ton="danger">Eskalerad</Badge>
+                              ) : s.bekraftad ? (
+                                <Badge ton="ok">Bekräftad</Badge>
+                              ) : (
+                                <Badge ton="danger">Obekräftad</Badge>
+                              )}
+                            </div>
+                          </div>
 
-        {bild.sjuka.length === 0 ? (
-          <EmptyState
-            rubrik="Ingen är sjukanmäld"
-            text="Pågående sjukperioder hos dem du ansvarar för visas här."
-          />
-        ) : (
-          <ul className="flex flex-col gap-4">
-            {bild.sjuka
-              .slice()
-              .sort(
-                (a, b) =>
-                  Number(b.bekraftad === false && !b.sistaDag) - Number(a.bekraftad === false && !a.sistaDag) ||
-                  a.forstaDag.localeCompare(b.forstaDag),
-              )
-              .map((s) => {
-                const pagaende = s.sistaDag === null;
-                return (
-                  <li key={s.id} className="border-b border-canvas pb-4 last:border-0 last:pb-0">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-h2 text-ink-900">{s.namn}</p>
-                        {/* Här stod förut bara "sedan 4 september". Att slutdagen
-                            SAKNAS är en uppgift, inte ett tomrum — se
-                            `periodtextOppen`. */}
-                        <p className="text-small text-ink-500">
-                          {periodtextOppen(s.forstaDag, s.sistaDag)}
-                          {s.omfattning < 100 ? ` · ${s.omfattning} %` : ""}
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        {pagaende && (
-                          <Badge ton="warn">Sjukdag {sjukdag(s.forstaDag, idag)}</Badge>
-                        )}
-                        {s.eskalerad ? (
-                          <Badge ton="danger">Eskalerad</Badge>
-                        ) : s.bekraftad ? (
-                          <Badge ton="ok">Bekräftad</Badge>
-                        ) : (
-                          <Badge ton="danger">Obekräftad</Badge>
-                        )}
-                      </div>
-                    </div>
+                          {s.frister.length > 0 && (
+                            <ul className="mt-2 flex flex-col gap-1">
+                              {s.frister.map((f) => {
+                                const lage = fristlage(f.due_on, idag);
+                                return (
+                                  <li key={f.kind} className="flex flex-wrap items-baseline gap-2 text-small">
+                                    <span className="text-ink-500">
+                                      {FRIST_ETIKETT[f.kind as Fristtyp] ?? f.kind}
+                                    </span>
+                                    <span
+                                      className={
+                                        lage.ton === "danger"
+                                          ? "font-semibold text-danger-ink"
+                                          : lage.ton === "warn"
+                                            ? "font-semibold text-warn-ink"
+                                            : "text-ink-900"
+                                      }
+                                    >
+                                      {periodtext(f.due_on, f.due_on)} · {lage.text}
+                                    </span>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          )}
 
-                    {s.frister.length > 0 && (
-                      <ul className="mt-2 flex flex-col gap-1">
-                        {s.frister.map((f) => {
-                          const lage = fristlage(f.due_on, idag);
-                          return (
-                            <li key={f.kind} className="flex flex-wrap items-baseline gap-2 text-small">
-                              <span className="text-ink-500">
-                                {FRIST_ETIKETT[f.kind as Fristtyp] ?? f.kind}
-                              </span>
-                              <span
-                                className={
-                                  lage.ton === "danger"
-                                    ? "font-semibold text-danger-ink"
-                                    : lage.ton === "warn"
-                                      ? "font-semibold text-warn-ink"
-                                      : "text-ink-900"
-                                }
-                              >
-                                {periodtext(f.due_on, f.due_on)} · {lage.text}
-                              </span>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
+                          <Sjukanteckningar
+                            rapportId={s.id}
+                            anteckningar={s.anteckningar}
+                            egenAnmalan={false}
+                          />
+                        </li>
+                      );
+                    })}
+                </ul>
+              )}
+            </Card>
+            ),
+          },
+          {
+            id: "ledighet",
+            etikett: "Godkänd ledighet",
+            antal: bild.kommande.length,
+            innehall: (
+            <Card>
+              <CardHeader
+                titel="Godkänd ledighet"
+                beskrivning={`Pågår i dag eller börjar inom ${bild.fonster} dagar.`}
+                handling={
+                  <ButtonLink href="/franvaro/planering" size="sm" variant="diskret">
+                    Hela året
+                  </ButtonLink>
+                }
+              />
 
-                    <Sjukanteckningar
-                      rapportId={s.id}
-                      anteckningar={s.anteckningar}
-                      egenAnmalan={false}
-                    />
-                  </li>
-                );
-              })}
-          </ul>
-        )}
-      </Card>
-
-      {/* ------------------------------------------------------------------ */}
-      {/* 3. BORTA OCH PÅ VÄG                                                 */}
-      {/* ------------------------------------------------------------------ */}
-      <Card>
-        <CardHeader
-          titel="Godkänd ledighet"
-          beskrivning={`Pågår i dag eller börjar inom ${bild.fonster} dagar.`}
-          handling={
-            <ButtonLink href="/franvaro/planering" size="sm" variant="diskret">
-              Hela året
-            </ButtonLink>
-          }
-        />
-
-        {bild.kommande.length === 0 ? (
-          <EmptyState
-            rubrik="Ingen inbokad ledighet"
-            text={`Godkänd ledighet som pågår eller börjar inom ${bild.fonster} dagar visas här.`}
-          />
-        ) : (
-          <div className="flex flex-col gap-5">
-            {pagar.length > 0 && <Bortalista rubrik="Borta i dag" rader={pagar} idag={idag} />}
-            {paVag.length > 0 && <Bortalista rubrik="På väg" rader={paVag} idag={idag} />}
-          </div>
-        )}
-      </Card>
+              {bild.kommande.length === 0 ? (
+                <EmptyState
+                  rubrik="Ingen inbokad ledighet"
+                  text={`Godkänd ledighet som pågår eller börjar inom ${bild.fonster} dagar visas här.`}
+                />
+              ) : (
+                <div className="flex flex-col gap-5">
+                  {pagar.length > 0 && <Bortalista rubrik="Borta i dag" rader={pagar} idag={idag} />}
+                  {paVag.length > 0 && <Bortalista rubrik="På väg" rader={paVag} idag={idag} />}
+                </div>
+              )}
+            </Card>
+            ),
+          },
+        ]}
+      />
     </div>
   );
 }
