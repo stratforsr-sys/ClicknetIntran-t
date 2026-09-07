@@ -1062,7 +1062,7 @@ export default async function Startsida() {
           ),
           fonster: [...FONSTER],
           senRaknad: dagsbild.senRaknad,
-          datum: `${veckodag.charAt(0).toUpperCase()}${veckodag.slice(1)} ${idagSvenskt}`,
+          datum: `${VECKODAG[veckodag] ?? ""} ${idagSvenskt}`.trim(),
           attBesluta: attBesluta.length,
         }}
       />
@@ -1230,6 +1230,21 @@ function Uppgift({
     </li>
   );
 }
+
+/**
+ * Veckodagens namn. `svenskVeckodag()` ger ett TAL (1 = mandag, 7 = sondag) —
+ * det ar vad `work_schedule.weekday` lagras som, och talet ska inte bli en
+ * strang i biblioteket bara for att ett kort vill skriva ut det.
+ */
+const VECKODAG: Record<number, string> = {
+  1: "Måndag",
+  2: "Tisdag",
+  3: "Onsdag",
+  4: "Torsdag",
+  5: "Fredag",
+  6: "Lördag",
+  7: "Söndag",
+};
 
 function Rad({ etikett, varde }: { etikett: string; varde: number }) {
   return (
