@@ -5,6 +5,38 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-08 (kväll) · Provisionen mergad till main
+
+Beställaren godkände och `provision-resultattavla` gick till main som `dbb02a8`
+— fem commits, 25 filer, en merge-commit och därmed EN produktionsdeploy.
+Bygget blev Ready.
+
+Migration `0049_saljmal` var körd mot produktionsdatabasen tidigare samma dag.
+Den är additiv och main-koden rörde inte `sales_target`, så produktionen stod
+stabil under de timmar branchen levde.
+
+**Beställaren prövade båda de nya flödena i previewen innan godkännandet**, och
+båda gick igenom mot produktionsdatabasen:
+
+- **Augusti 2026 fastställdes** kl. 09:38. Motorn bokförde 1 500 kr på Vlado i
+  `commission_entry` med referensen `2026-08-01:…:order`. Det var systemets
+  första riktiga lönekörning — periodstängningen är därmed prövad i skarpt läge
+  och inte bara i prov.
+- **Fem månadsmål sattes** för september: 5, 5, 5, 6 och 8 order, alla med ett
+  kronmål bredvid. `sales_target` och `sparaMal` fungerade som byggt.
+
+En följd att veta om: augusti läses nu **ur huvudboken** i stället för ur
+motorn, precis som avsnitt 5.5 kräver. Den vägen — `delarUrHuvudboken` via
+slaget i `external_ref` — har därmed också fått riktig data att rita, vilket den
+inte hade under bygget.
+
+**Testdatan står kvar.** Fem påhittade order märkta
+`TESTDATA-PROVISION-2026-09-08` i `note`. De syns för de säljare de står på, och
+september får inte fastställas förrän de är borta — då bokförs de i huvudboken,
+som är append-only. Vägen ut står i `NASTA_SESSION.md`.
+
+---
+
 ## 2026-09-08 · Provisionspanelen blev styrbar: period och omfattning
 
 *Samma branch, `provision-resultattavla`. Ingen migration.*

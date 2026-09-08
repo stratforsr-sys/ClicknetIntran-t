@@ -3,25 +3,32 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-08 — provisionsvyn ombyggd till resultattavla, nu med period- (månad eller helår) och personväljare i panelen: månadens tal i stor stil, bonustrappan som en bana, kort för I dag / Takt / Mål, chefens lagtavla och månadsmål per säljare. **Ligger på branch `provision-resultattavla`, INTE mergad.**
+**Senast uppdaterad:** 2026-09-08 — provisionsvyn ombyggd till resultattavla med period- (månad eller helår) och personväljare i panelen, månadsmål per säljare, och tre tysta räknefel rättade. Godkänd och **mergad till main som `dbb02a8`**; ligger i produktion.
 
-## Provisionen 2026-09-07 — VÄNTAR PÅ GODKÄNNANDE I PREVIEW
+## Provisionen 2026-09-08 — I PRODUKTION
 
-*Branch `provision-resultattavla`, en commit. Migration `0049_saljmal` är
-**INTE körd** mot produktionsdatabasen än — kör den före merge, den är additiv.
-Hela resonemanget i `ARBETSLOGG.md` under 2026-09-07 (natten mot 8:e).*
+*Fem commits på `provision-resultattavla`, mergade till main som `dbb02a8`.
+Migration `0049_saljmal` kördes mot produktionsdatabasen samma dag, före merge —
+den är additiv, så produktionen stod stabil under tiden. Hela resonemanget i
+`ARBETSLOGG.md` under 2026-09-07 (natten mot 8:e) och 2026-09-08.*
 
 Beställarens dom: *"just nu känns provisions vyn helt meningslös, jag vet inte
 ens vad jag ska använda den till."* Diagnosen var att talen var rätt — motorn
 räknade korrekt sedan augusti — och att ordningen var fel: sidan var byggd som
 en huvudbok.
 
-### Innan du gör något annat
+### Att titta på i produktion
 
-**KÖR MIGRATION 0049.** `set -a; . ~/.clicknet/nav.env; set +a` och
-`node scripts/apply-sql.mjs 0049_saljmal`. Utan den svarar `sales_target` inte,
-och målkorten står tomma i previewen — vilket ser ut som en bugg och är en
-migration som inte körts.
+1. **Testdatan.** Fem påhittade order märkta `TESTDATA-PROVISION-2026-09-08` i
+   `note` ligger kvar i `sales_order`. De syns för de säljare de står på, och
+   **september får inte fastställas** medan de är kvar — då bokförs de i
+   huvudboken och blir betydligt svårare att få bort. Se avsnittet längre ned.
+2. **Augusti är fastställd sedan 2026-09-08 09:38.** Systemets första riktiga
+   lönekörning: motorn bokförde 1 500 kr på Vlado med referensen
+   `2026-08-01:…:order`. Den vägen är alltså prövad i skarpt läge.
+3. **Fem månadsmål är satta** för september. Målkortet och målbågen har riktig
+   data; följ upp om orden "före / i takt / efter" känns rimliga i verklig
+   trafik — bandet är fem procent av målet.
 
 ### Två tysta räknefel som rättades i samma pass
 
@@ -71,11 +78,27 @@ mål mot hela lagets order stiger siffran av att en chef glömde sätta ett mål
 
 ### Testdata ligger kvar i produktionen
 
-Fem order märkta `TESTDATA-PROVISION-2026-09-08` i `note`. **Fastställ inte
-september medan de ligger kvar** — då bokförs de i huvudboken och blir
-betydligt svårare att få bort. Skriptet finns i sessionens scratchpad; utan det
-är vägen `delete from sales_order where note like 'TESTDATA-PROVISION-%'` inuti
-en transaktion med `set local session_replication_role = 'replica'`.
+Fem order märkta `TESTDATA-PROVISION-2026-09-08` i `note`, inlagda för att
+tavlan skulle gå att titta på. **Fastställ inte september medan de ligger kvar.**
+
+`sales_order_ar_last()` nekar radering av allt som lämnat utkast — spärren är
+riktig och ska stå kvar, och den rätta vägen för en RIKTIG order är makulering.
+För påhittad data är makulering fel svar: en makulerad order ligger kvar som ett
+minusbelopp i sin makuleringsmånad, alltså precis den falska historia städningen
+skulle ta bort. Samma resonemang som frånvarotestdatan 2026-09-07.
+
+Vägen ut är därför, i EN transaktion:
+
+```sql
+begin;
+set local session_replication_role = 'replica';
+delete from sales_order where note like 'TESTDATA-PROVISION-%';
+commit;
+```
+
+Ingen DDL, inget kvar efteråt. **Pröva att spärren är på igen direkt efter
+commit** — en avstängning som läckt ut ur transaktionen syns inte på något
+annat sätt.
 
 ### Fem saker att inte glida tillbaka på
 
