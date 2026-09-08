@@ -15,6 +15,11 @@ besvarades 2026-08-25**, och **Ö13 besvarades 2026-08-26**. Kvar öppna är **�
 Ö11, Ö16, Ö17 och Ö18**, som alla har ett förslag som gäller tills någon säger
 annat.
 
+**Steg 10 byggt 2026-09-07** (migration `0049`): provisionsvyn ombyggd till en
+resultattavla, månadsmål per säljare, och två tysta räknefel rättade. **Avsnitt
+9.1 är omprövat i en punkt — K&V-bonusen visas nu på provisionssidan**, se
+rubriken där. Hela resonemanget i `ARBETSLOGG.md` under 2026-09-07 (natten mot 8:e).
+
 **Volymtrappan är rättad 2026-08-27.** De omkastade beloppen för 15 och 20 är
 stängda med `valid_to = 2026-09-01` och ersatta av 15 → 1 000 kr och
 20 → 1 200 kr från samma dag. Beställarens besked var att bara byta plats på de
@@ -604,7 +609,23 @@ Allt nedan är data, inget av det är kod:
 - Prognosen räknas på **nuvarande snittprovision per order** (fråga 52).
   Antagandet skrivs ut i vyn — en prognos utan sina förutsättningar är en siffra
   folk bråkar om.
-- **K&V-bonusen visas inte här.** Den ligger på K&V-sidan.
+- **K&V-bonusen VISAS HÄR sedan 2026-09-07.** Regeln var det motsatta —
+  bonusen hör ihop med bedömningen och inte med ordervolymen, så den låg bara på
+  `/kv`. Beställaren omprövade den: *"säljaren ska kunna se sin vanliga provision
+  och sin bonus och det totala"*, och en total som saknar en av bonusarna är inte
+  en total.
+
+  Omprövningen rättade samtidigt ett fel. `stangning.ts` har **alltid** bokfört
+  K&V-bonusen, medan vyn räknade utan den — chefens live-summa var alltså lägre
+  än det som bokfördes vid attest, och skillnaden gick bara att upptäcka genom
+  att jämföra. Se `hamtaKvPerPerson()` i `kv-server.ts`.
+
+  Raden visas **bara när det finns bedömda veckor**. En rad som alltid står där
+  och alltid säger noll lär ögat att ingenting händer på den platsen.
+- **Dagen, takten och målet** (2026-09-07). Vad som tecknats i dag, vad månaden
+  landar på i samma takt, och hur det står sig mot ett månadsmål. Takten räknas
+  på **arbetsdagar** och skriver inte fram K&V — den beror på veckor som ingen
+  bedömt än. Se `src/lib/saljtakt.ts`.
 - **Vid en ogiltig frånvaro:** varning om att ytterligare en innebär att alla
   bonusar för månaden faller, med **återstående tid av perioden** ("2 månader
   kvar").
@@ -775,7 +796,15 @@ Varje steg är en egen leverans med prov på räknemotorn innan nästa börjar.
 | 8 | Dialer-API för K&V-urvalet | A6 |
 | 9 | **KLART 2026-08-26** (migration `0039`): PDF-uppladdning pa ordern, utlasning i `src/lib/orderbilaga.ts` (ren logik, `tests/orderbilaga.mjs`), forslaget visas mot orderns nuvarande varden och skrivs bara nar en manniska kryssat i det. En godkand order gar inte att ratta — bade actionen och triggern i 0034 nekar | Steg 1 |
 
+| 10 | **KLART 2026-09-07** (migration `0049`): provisionsvyn som resultattavla — månadens tal i stor stil, bonustrappan som bana, korten I dag / Takt / Mål, stapelrad per arbetsdag, orderlägen, chefens lagtavla. Månadsmål per säljare i `sales_target`. Ren logik i `src/lib/saljtakt.ts` med `tests/saljtakt.mjs`. Rättade två tysta räknefel — K&V saknades i live-summan, och makuleringar av äldre order föll bort ur `hamtaOrder` | Steg 4 |
+
 **Kvar: bara steg 8**, som väntar på A6 (dialer-API).
+
+**Ångerfristen och Inkio är INTE byggda.** Beställaren beskrev 2026-09-07 att
+ånger och betalning "finns direkt från Inkio". Någon koppling finns inte, och
+ingen ångerstatus hittades på: vyn visar de lägen navet självt sätter — Godkänd,
+Betald, Makulerad. En ångerfrist byggd på gissade regler är ett system som
+påstår sig veta när en kund kan ångra sig, och det ser ut som information.
 
 **Räknemotorn ligger i ett enda bibliotek utan importer av Supabase**, precis
 som `raster.ts`, `lonekostnad.ts` och `franvaro.ts`. Reglerna skickas in som

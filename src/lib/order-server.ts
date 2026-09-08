@@ -43,13 +43,38 @@ function tolka(rader: unknown[]): Orderrad[] {
   })) as unknown as Orderrad[];
 }
 
-/** Order fran och med en manad. RLS avgor vems. */
+/**
+ * Villkoret for "ror den har manaden eller senare".
+ *
+ * ===========================================================================
+ * EN MAKULERING HAR SIN EGEN MANAD, OCH `period_month` HITTAR DEN INTE.
+ *
+ * Rattat 2026-09-07. Fram till dess filtrerade bada hamtningarna nedan pa bara
+ * `period_month >= x`, och det tappar en hel sorts rad: en order signerad i
+ * mars som makuleras i september har `period_month = 2026-03-01` och
+ * `cancel_period_month = 2026-09-01`.
+ *
+ * Foljden var att septembers avdrag inte kom med i vyn. `stangning.ts` hamtade
+ * REDAN pa bada kolumnerna, sa bokforingen var korrekt hela tiden — det var
+ * bara den siffra chefen laste FORE att hon tryckte Faststall som var for hog.
+ * Precis den avvikelse mellan live och bokfort som kommentaren i `page.tsx`
+ * sager aldrig far uppsta.
+ *
+ * Villkoret star som en funktion och inte som en strang pa tva stallen, sa att
+ * de tva hamtningarna inte kan glida isar.
+ * ===========================================================================
+ */
+function ror(franOchMed: string): string {
+  return `period_month.gte.${franOchMed},cancel_period_month.gte.${franOchMed}`;
+}
+
+/** Order som ror en manad eller senare — signerade dar eller makulerade dar. */
 export async function hamtaOrder(franOchMed: string): Promise<Orderrad[]> {
   const rls = await supabaseServer();
   const { data } = await rls
     .from("sales_order")
     .select(FALT)
-    .gte("period_month", franOchMed)
+    .or(ror(franOchMed))
     .order("signed_on", { ascending: false })
     .order("created_at", { ascending: false });
 
@@ -63,7 +88,7 @@ export async function hamtaOrderFor(employeeId: string, franOchMed: string): Pro
     .from("sales_order")
     .select(FALT)
     .eq("salesperson_id", employeeId)
-    .gte("period_month", franOchMed)
+    .or(ror(franOchMed))
     .order("signed_on", { ascending: false });
 
   return tolka(data ?? []);

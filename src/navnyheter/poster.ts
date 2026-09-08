@@ -14,6 +14,62 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "provisionsvyn-som-resultattavla",
+    rubrik: "Provisionen visar nu dagen, takten och vägen till nästa bonus",
+    ingress:
+      "Månadens siffra står överst i stor stil med bonustrappan under. Nya kort för vad du sålt i dag, vad du taktar och hur du ligger mot ditt mål.",
+    text: `**/provision** var en huvudbok — historik, perioder och ett
+bokföringsformulär. Den är nu en resultattavla, och svarar i den ordning man
+faktiskt frågar.
+
+**Överst: vad du tjänat den här månaden**
+
+Ett tal, i stor stil, på mörk platta. Bredvid står vad det består av:
+grundprovision, volymbonus, K&V-bonus och det som bokförts för hand.
+
+**K&V-bonusen räknas nu in i totalen.** Den låg förut bara på /kv, och totalen
+på provisionssidan var därför lägre än det som faktiskt betalades ut. Raden
+visas bara när det finns bedömda veckor.
+
+**Under talet: bonustrappan som en bana**
+
+Prickarna är nivåerna med sina belopp. Den fyllda delen är var du står, och
+nästa prick är nästa bonus. Nivån gäller **samtliga** order i månaden, inte
+bara de över tröskeln — når du nivå 10 får alla tio orderna nivå 10:s belopp.
+
+**Tre kort: I dag, Takt och Mål**
+
+*I dag* räknar allt du tecknat i dag, på signeringsdatum. Kronorna står i två
+delar: det chefen godkänt, och det som ligger i kön. Det väntande beloppet är
+slaget ur paketmatrisen och bokförs först vid godkännandet.
+
+*Takt* säger vad månaden landar på om det fortsätter så här — räknat på
+**arbetsdagar**, så helger och röda dagar drar inte ned den. K&V-bonusen skrivs
+inte fram; den beror på veckor ingen bedömt än.
+
+*Mål* jämför mot var du **borde** stå i dag, inte mot hela månadsmålet. "12 av
+20" den åttonde är inte ett underbetyg — det är före takten.
+
+**Sedan: dagarna, orderlägena och raderna**
+
+En stapel per arbetsdag i månaden. Dina order fördelade på Godkänd, Betald och
+Makulerad. Och hela underlaget rad för rad — varje order, varje bonus, varje
+avdrag.
+
+**Om du är chef**
+
+*Laget i laget* visar varje säljare med dagens order, månadens volym, nivån,
+takten och måluppfyllelsen — räknat live med samma motor som säljarens egen vy.
+
+*Månadsmål* under **Provision → Månadsmål** är nytt. Säljchef och VD sätter mål
+i antal order, kronor eller båda, för innevarande månad eller framåt. En passerad
+månad går inte att sätta mål för. Säljaren får en notis när målet sätts eller
+ändras, och ser bara sitt eget.`,
+    datum: "2026-09-08",
+    roller: [],
+    href: "/provision",
+  },
+  {
     slug: "flikar-pa-korten",
     rubrik: "Korten har fått flikar, filter och siffror",
     ingress: "Dagens läge visar nu också 7 och 14 dagar framåt. Din kö visar vad som brådskar, inte bara hur mycket.",

@@ -244,41 +244,70 @@ export const ORDER: Guide = {
 export const PROVISION: Guide = {
   slug: "las-din-provision",
   titel: "Din provision",
-  beskrivning: "Vad siffran betyder, var den kommer ifrån och när den låser sig.",
-  version: 1,
+  beskrivning: "Månadens siffra, dagens order, takten och vägen till nästa bonus.",
+  /**
+   * VERSION 2 SEDAN 2026-09-07. Bumpad med flit.
+   *
+   * Vyn byggdes om från grunden samma dag — hela ordningen är ny, och tre av
+   * stegen pekar på kort som inte fanns. En guide som beskriver en vy som inte
+   * längre finns är sämre än ingen guide, och den som gick version 1 har
+   * därför inte sett det här.
+   */
+  version: 2,
   minuter: 3,
   roller: ["salesperson", "sales_manager", "ceo", "finance"],
   modul: "/provision",
   steg: [
     {
       rubrik: "Provision",
-      text: "Tre minuter om vad siffran är — och vad den inte är.",
+      text: "Tre minuter om vad du tjänat, vad du taktar och vad som krävs för nästa bonus.",
       handling: "vidare",
       vag: "/provision",
     },
     {
       ankare: "provision.min",
-      rubrik: "Intjänat, inte utbetalt",
+      rubrik: "Månadens siffra",
       text:
-        "Det här är vad du arbetat ihop, inte vad som ligger på kontot. Lönen betalas som vanligt " +
-        "av lönesystemet. En öppen månad räknas live och ändras med varje ny order; en fastställd " +
+        "Det stora talet är vad du arbetat ihop den här månaden — grundprovision, volymbonus och " +
+        "K&V-bonus tillsammans. Det är intjänat, inte utbetalt: lönen betalas som vanligt av " +
+        "lönesystemet. En öppen månad räknas live och ändras med varje ny order; en fastställd " +
         "månad står stilla.",
       handling: "vidare",
     },
     {
-      ankare: "provision.varifran",
-      rubrik: "Tre källor",
+      ankare: "provision.trappa",
+      rubrik: "Banan under talet",
       text:
-        "Grundprovisionen ur dina order och paketmatrisen. Volymbonusen på hela månadens volym. " +
-        "Och poster som ekonomi eller VD bokfört för hand — en post skrivs aldrig om, en rättelse " +
-        "blir en egen negativ post.",
+        "Prickarna är bonusnivåerna. Den fyllda delen är var du står, och nästa prick är nästa " +
+        "bonus — med sitt belopp under. Nivån gäller SAMTLIGA order i månaden, inte bara de över " +
+        "tröskeln: når du nivå 10 får alla tio orderna nivå 10:s belopp.",
       handling: "vidare",
     },
     {
-      rubrik: "Om siffran inte stämmer",
+      ankare: "provision.idag",
+      rubrik: "I dag",
       text:
-        "Lägg ett ärende i stället för att fråga i förbifarten. Då finns frågan kvar, och svaret " +
-        "också — och den som räknar kan se exakt vilken månad du menar.",
+        "Allt du tecknat i dag, räknat på signeringsdatum. Kronorna står i två delar: det chefen " +
+        "godkänt, och det som ligger i kön. Det väntande beloppet är slaget ur paketmatrisen och " +
+        "bokförs först vid godkännandet.",
+      handling: "vidare",
+    },
+    {
+      ankare: "provision.takt",
+      rubrik: "Takten",
+      text:
+        "Vad månaden landar på om det fortsätter i samma takt — räknat på arbetsdagar, så helger " +
+        "och röda dagar drar inte ned den. K&V-bonusen skrivs inte fram; den beror på veckor som " +
+        "ingen bedömt än.",
+      handling: "vidare",
+    },
+    {
+      ankare: "provision.varifran",
+      rubrik: "Rad för rad",
+      text:
+        "Varje order, varje bonus och varje avdrag som bygger månadens siffra. Stämmer något inte " +
+        "är det den här listan man pekar på — lägg ett ärende i stället för att fråga i " +
+        "förbifarten, så finns frågan kvar och svaret också.",
       handling: "vidare",
     },
   ],

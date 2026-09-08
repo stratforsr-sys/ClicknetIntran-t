@@ -197,6 +197,13 @@ const TACKNING = {
   "fel::rapporteraFel": "harledd",
   "fel::sattStatus": "harledd",
   "provision::bokforProvision": "harledd",
+  // E13 steg 10. Malet ar en av de FA installningar som notifierar, och
+  // undantaget ar med flit: en regelandring (trappan, konsekvenstrappan)
+  // galler alla och star i vyn, medan ett manadsmal galler EN person och
+  // inte star nagon annanstans. Den som inte vet om sitt mal kan inte styra
+  // mot det.
+  "provision/mal::sparaMal": "notifierar",
+  "provision/mal::taBortMal": "notifierar",
   "provision/regler::sparaNiva": "Regelandring. Star i /logg (beslut 2026-09-03).",
   "provision/regler::stangNiva": "Regelandring. Star i /logg (beslut 2026-09-03).",
   "provision/regler::sparaKonsekvenssteg": "Regelandring. Star i /logg (beslut 2026-09-03).",

@@ -85,6 +85,9 @@ const SIDOR = [
   "/franvaro/regler",
   "/provision",
   "/provision/regler",
+  // Malsidan ar saljchef och VD. En saljare ska motas av 404 och INTE av en
+  // lista over kollegornas mal — provet letar efter deras namn i svaret.
+  "/provision/mal",
   // E13 steg 7. Manaden i adressen ar INTE ett id — den kraver ingen rad att
   // peka pa, och en manad utan provision ar ett giltigt lage som ska rendera.
   "/provision/underlag/2026-08-01",

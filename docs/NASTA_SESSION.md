@@ -3,7 +3,76 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-07 — frånvaron ombyggd: obligatoriskt skäl, uttrycklig slutdag, chefsanteckning på sjukperiod, ny chefsvy, flikar och sifferrader på korten. Godkänd och **mergad till main som `a4da83e`**; ligger i produktion.
+**Senast uppdaterad:** 2026-09-08 — provisionsvyn ombyggd till resultattavla: månadens tal i stor stil, bonustrappan som en bana, kort för I dag / Takt / Mål, chefens lagtavla och månadsmål per säljare. **Ligger på branch `provision-resultattavla`, INTE mergad.**
+
+## Provisionen 2026-09-07 — VÄNTAR PÅ GODKÄNNANDE I PREVIEW
+
+*Branch `provision-resultattavla`, en commit. Migration `0049_saljmal` är
+**INTE körd** mot produktionsdatabasen än — kör den före merge, den är additiv.
+Hela resonemanget i `ARBETSLOGG.md` under 2026-09-07 (natten mot 8:e).*
+
+Beställarens dom: *"just nu känns provisions vyn helt meningslös, jag vet inte
+ens vad jag ska använda den till."* Diagnosen var att talen var rätt — motorn
+räknade korrekt sedan augusti — och att ordningen var fel: sidan var byggd som
+en huvudbok.
+
+### Innan du gör något annat
+
+**KÖR MIGRATION 0049.** `set -a; . ~/.clicknet/nav.env; set +a` och
+`node scripts/apply-sql.mjs 0049_saljmal`. Utan den svarar `sales_target` inte,
+och målkorten står tomma i previewen — vilket ser ut som en bugg och är en
+migration som inte körts.
+
+### Två tysta räknefel som rättades i samma pass
+
+Båda gjorde att **chefens live-summa var LÄGRE än det som bokfördes vid
+attest**. De går åt det hållet, och upptäcks därför aldrig av någon som saknar
+sina pengar.
+
+- **K&V saknades i live-summan.** `stangning.ts` har alltid bokfört den; vyn
+  räknade utan. Kommentaren ovanför raden säger att det aldrig får hända — den
+  skrevs om konsekvenserna och K&V-fallet var förbisett.
+- **Makuleringar av äldre order föll bort helt.** `hamtaOrder` filtrerade bara
+  på `period_month`. En order från mars som makuleras i september har sitt
+  avdrag i `cancel_period_month`, och syntes inte alls. Rättat med ett `.or()`
+  i en delad hjälpfunktion i `order-server.ts`.
+
+### Fem saker att inte glida tillbaka på
+
+**TAKTEN RÄKNAS PÅ ARBETSDAGAR.** Kalenderdagar ger december 31 i nämnaren i
+stället för 20, och prognosen lovar en bonusnivå som inte kommer. Listan över
+röda dagar ligger i `saljtakt.ts` och delas med stapelraden — de två kan inte
+säga olika saker om hur många dagar månaden har.
+
+**INGEN PROGNOS FÖRE TRE ARBETSDAGAR.** En order på månadens första dag taktar
+tjugoen. Rätt svar är att det är för tidigt — inte en nolla och inte ett tal med
+brasklapp.
+
+**MÅLET JÄMFÖRS MOT TAKTEN, INTE MOT HELA MÅNADEN.** Tas den jämförelsen bort
+står kortet på "efter" varje dag utom den sista.
+
+**`text-hero` ANVÄNDS EN GÅNG PER VY.** Graden lades till i `globals.css` för
+månadens tal. Två `hero`-tal i samma vy och inget av dem är störst längre.
+
+**ETT MÅL GÅR INTE ATT SÄTTA I EFTERHAND.** `giltigMalmanad` i
+`provision/mal/actions.ts` nekar passerade månader och tillåter framtida — alltså
+spegelvänt mot `giltigManad` i `provision.ts`, och det är hela skillnaden mellan
+ett utfall och en förväntan.
+
+### Öppna frågor att ta upp med beställaren
+
+1. **Ångerfristen och Inkio.** Beställaren skrev att ånger och betalt "finns
+   direkt från Inkio". Ingen koppling finns, och ingen ångerstatus byggdes —
+   vyn visar Godkänd / Betald / Makulerad. Ska det byggas behövs Inkios API
+   eller ett besked om fristens längd.
+2. **Lönespecarna.** Beställaren: *"rapporterna ska i så fall vara mer
+   lönespecar som är 100 % lönespecar"* — och sa samtidigt att det inte behöver
+   byggas nu. Det krockar med K5 och AC-2.17 (Nav räknar ingen lön) och behöver
+   en egen frågeomgång.
+3. **Trappan har fyra nivåer, inte sex.** `commission_bonus_level` har 5, 10, 15
+   och 20. Specifikationen talar om 5/10/15/20/25/30. Banan ritar det som finns.
+
+---
 
 ## Frånvaron 2026-09-07 — I PRODUKTION
 

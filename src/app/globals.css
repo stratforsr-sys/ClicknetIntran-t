@@ -77,6 +77,24 @@
   --font-sans:    var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
   --font-mono:    var(--font-mono-data), ui-monospace, monospace;
 
+  /* RESULTATTALET. Ett enda tal per vy, och bara i en resultatyta.
+     ---------------------------------------------------------------------
+     Tillagt 2026-09-07 for provisionsvyn. Bestallarens invandning: "vi ar
+     ett saljbolag, siffrorna maste vara stora ordentliga."
+
+     `display` pa 32 px ar ratt for en SIDRUBRIK och for lite for ett tal som
+     ar hela skalet att sidan finns. Stod manadens intjaning i samma grad som
+     ordet "Provision" bredvid var de tva likvardiga, och da laste ogat
+     rubriken forst.
+
+     GRADEN AR INTE FRI ATT ANVANDA. Anvands `hero` pa tva tal i samma vy ar
+     inget av dem storst langre, och da ar man tillbaka dar man borjade.
+     Regeln ar densamma som for primarknappen i §5.4: en per vy. */
+  --text-hero: 56px;
+  --text-hero--line-height: 1.0;
+  --text-hero--font-weight: 700;
+  --text-hero--letter-spacing: -0.02em;
+
   --text-display: 32px;
   --text-display--line-height: 1.15;
   --text-display--font-weight: 600;
