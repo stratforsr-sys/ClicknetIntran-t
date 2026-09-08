@@ -3,7 +3,7 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-08 — provisionsvyn ombyggd till resultattavla med period- (månad eller helår) och personväljare i panelen, månadsmål per säljare, och tre tysta räknefel rättade. Godkänd och **mergad till main som `dbb02a8`**; ligger i produktion.
+**Senast uppdaterad:** 2026-09-08 (kväll) — testdatan borttagen; Ö11 inträffade på riktigt. Provisionsvyn ombyggd till resultattavla med period- (månad eller helår) och personväljare i panelen, månadsmål per säljare, och tre tysta räknefel rättade. Godkänd och **mergad till main som `dbb02a8`**; ligger i produktion.
 
 ## Provisionen 2026-09-08 — I PRODUKTION
 
@@ -19,10 +19,9 @@ en huvudbok.
 
 ### Att titta på i produktion
 
-1. **Testdatan.** Fem påhittade order märkta `TESTDATA-PROVISION-2026-09-08` i
-   `note` ligger kvar i `sales_order`. De syns för de säljare de står på, och
-   **september får inte fastställas** medan de är kvar — då bokförs de i
-   huvudboken och blir betydligt svårare att få bort. Se avsnittet längre ned.
+1. **Ö11 är inte längre teoretisk.** En order godkändes i en redan stängd
+   period och hade aldrig blivit bokförd. Se avsnittet längre ned — ingenting
+   är byggt, och frågan bör läggas fram för beställaren.
 2. **Augusti är fastställd sedan 2026-09-08 09:38.** Systemets första riktiga
    lönekörning: motorn bokförde 1 500 kr på Vlado med referensen
    `2026-08-01:…:order`. Den vägen är alltså prövad i skarpt läge.
@@ -76,29 +75,54 @@ femtio på en ger nivå 20.
 **Lagets mål räknas på samma krets på båda sidor** (`samlatMal`). Jämförs alla
 mål mot hela lagets order stiger siffran av att en chef glömde sätta ett mål.
 
-### Testdata ligger kvar i produktionen
+### Testdatan är borttagen 2026-09-08
 
-Fem order märkta `TESTDATA-PROVISION-2026-09-08` i `note`, inlagda för att
-tavlan skulle gå att titta på. **Fastställ inte september medan de ligger kvar.**
+Sex order raderade: mina fem märkta `TESTDATA-PROVISION-2026-09-08` plus den
+äldre `Test 2`. `sales_order` innehåller nu **en** rad, `Test AB`.
 
-`sales_order_ar_last()` nekar radering av allt som lämnat utkast — spärren är
-riktig och ska stå kvar, och den rätta vägen för en RIKTIG order är makulering.
-För påhittad data är makulering fel svar: en makulerad order ligger kvar som ett
-minusbelopp i sin makuleringsmånad, alltså precis den falska historia städningen
-skulle ta bort. Samma resonemang som frånvarotestdatan 2026-09-07.
+`sales_order_ar_last()` nekar radering av allt som lämnat utkast. Spärren är
+riktig och står kvar; för påhittad data är makulering fel svar, eftersom en
+makulerad order ligger kvar som ett minusbelopp i sin makuleringsmånad — precis
+den falska historia städningen skulle ta bort. Vägen var därför
+`session_replication_role = 'replica'` i EN transaktion, och att spärren var på
+igen provades direkt efter commit. Samma beslut som frånvarotestdatan 2026-09-07.
 
-Vägen ut är därför, i EN transaktion:
+**Notiserna följde med, loggen gjorde det inte.** En notis är ett *meddelande*
+till en person — stod den kvar sa den åt Fredrik att han fått provision för en
+order som inte finns. `audit_log` står orörd: någon klickade faktiskt de
+knapparna, och loggen gäller även när objektet den pekar på är borta.
 
-```sql
-begin;
-set local session_replication_role = 'replica';
-delete from sales_order where note like 'TESTDATA-PROVISION-%';
-commit;
-```
+**`Test AB` STÅR KVAR MED FLIT.** Den är bokförd i augusti, som är en stängd
+period, och `commission_entry` är append-only (`commission_entry_ar_last`
+nekar både update och delete). Raderas ordern påstår huvudboken 1 500 kr
+grundprovision för en order som inte finns, och underlaget som följer med
+lönekörningen får ett hål i sin verifikationskedja. Vill någon bort med den är
+det två steg: låt ordern stå, och låt ekonomi eller VD bokföra en **negativ post
+på −1 500 kr** i augusti. Det är så en rättelse görs i en append-only huvudbok.
 
-Ingen DDL, inget kvar efteråt. **Pröva att spärren är på igen direkt efter
-commit** — en avstängning som läckt ut ur transaktionen syns inte på något
-annat sätt.
+### Ö11 dök upp på riktigt 2026-09-08
+
+`Test 2` — signerad 25 augusti, **godkänd 8 september kl. 11:15**, alltså efter
+att augusti fastställts kl. 09:38 samma dag. Ordern hade därmed aldrig blivit
+bokförd: `faststallPeriod` vägrar köra om en månad som redan är stängd, och
+någon annan väg in i huvudboken finns inte. 6 500 kr intjänade, godkända, och
+osynliga för lönekörningen.
+
+Det är exakt öppen punkt **Ö11** i `PROVISION_SPEC.md` ("order signerad i en
+period som hunnit stängas"), och den har nu inträffat i produktion utan att
+någon märkte det. Ordern är borta som testdata, men **frågan står kvar**: i dag
+finns ingen spärr som hindrar att en order i en stängd period godkänns, och
+inget som säger till om att det hänt.
+
+Rimligaste åtgärderna att lägga fram för beställaren:
+
+1. **Neka godkännande** av en order vars period är stängd, med ett besked som
+   säger varför.
+2. **Eller flytta den** till innevarande period vid godkännandet — men det
+   bryter mot att perioden bestäms av signeringsdatum (avsnitt 3.4).
+3. **Eller larma** och låt ekonomi bokföra posten för hand.
+
+Alternativ 1 är det som stämmer med resten av modellen. Ingenting är byggt.
 
 ### Fem saker att inte glida tillbaka på
 

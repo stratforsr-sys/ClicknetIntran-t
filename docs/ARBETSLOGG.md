@@ -5,6 +5,56 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-08 (sent) · Testdatan städad, och Ö11 inträffade på riktigt
+
+Sex order raderade ur produktionen: de fem märkta
+`TESTDATA-PROVISION-2026-09-08` plus den äldre `Test 2`. Kvar står en rad,
+`Test AB`.
+
+Vägen var `session_replication_role = 'replica'` i EN transaktion — samma som
+frånvarotestdatan 2026-09-07, och av samma skäl: `sales_order_ar_last()` nekar
+radering av allt som lämnat utkast, spärren är riktig och ska stå kvar, och
+makulering är fel svar för påhittad data eftersom en makulerad order ligger kvar
+som ett minusbelopp i sin makuleringsmånad. Att spärren var på igen provades
+direkt efter commit.
+
+**Notiserna följde med, `audit_log` gjorde det inte.** Skillnaden är vad de två
+är: en notis är ett meddelande till en person, och stod den kvar sa den åt
+Fredrik att han fått provision för en order som inte längre finns. En loggpost
+är ett kvitto på att någon tryckte på en knapp, och det gjorde de. Samma beslut
+som 2026-09-07.
+
+**`Test AB` står kvar med flit.** Den är bokförd i augusti — stängd period,
+append-only huvudbok. Raderas ordern påstår `commission_entry` 1 500 kr
+grundprovision för en order som inte finns, och provisionsunderlaget får ett hål
+i verifikationskedjan. Rätt väg bort är en negativ post på −1 500 kr bokförd av
+ekonomi eller VD, inte en radering.
+
+### Ö11 gick från öppen fråga till inträffad händelse
+
+`Test 2` var signerad 25 augusti och **godkändes 8 september kl. 11:15** — efter
+att augusti fastställts kl. 09:38 samma dag.
+
+Ordern hade därmed aldrig blivit bokförd. `faststallPeriod` vägrar köra om en
+månad som redan är stängd ("är redan fastställd"), och någon annan väg in i
+huvudboken finns inte. 6 500 kr intjänade, godkända, och osynliga för
+lönekörningen — utan att något i gränssnittet sa ifrån.
+
+Det är öppen punkt **Ö11** i `PROVISION_SPEC.md`, som stått som "förslag gäller
+tills annat sägs" sedan 2026-08-24. Den är inte längre hypotetisk.
+
+Ordern är borta som testdata, men frågan står. Tre vägar, i fallande ordning:
+
+1. **Neka godkännande** när orderns period är stängd, med ett besked som säger
+   varför. Stämmer med resten av modellen — perioden bestäms av signeringsdatum
+   (3.4) och en stängd period skrivs aldrig om (5.5).
+2. **Flytta ordern** till innevarande period vid godkännandet. Bryter mot 3.4.
+3. **Larma** och låt ekonomi bokföra posten för hand.
+
+Ingenting är byggt. Beslutet är beställarens.
+
+---
+
 ## 2026-09-08 (kväll) · Provisionen mergad till main
 
 Beställaren godkände och `provision-resultattavla` gick till main som `dbb02a8`
