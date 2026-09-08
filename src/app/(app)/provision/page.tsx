@@ -440,7 +440,17 @@ export default async function Provisionssida({
 
       <Lagesrad
         lagen={orderlagen(tavlansOrder, manad)}
-        rubrik={`${foretagsvy ? "Företagets" : vy === "jag" ? "Dina" : `${visadNamn}s`} order i ${manadsnamn(manad)}`}
+        // GENITIV UNDVIKS MED FLIT. "Vlados order" kraver en regel for namn som
+        // slutar pa s, x eller z ("Lukas order", inte "Lukass"), och den regeln
+        // hade legat i en vy. Namnet efter tankstrecket sager samma sak utan att
+        // bojas.
+        rubrik={
+          foretagsvy
+            ? `Företagets order i ${manadsnamn(manad)}`
+            : vy === "jag"
+              ? `Dina order i ${manadsnamn(manad)}`
+              : `Order i ${manadsnamn(manad)} — ${visadNamn}`
+        }
       />
 
       <Card guide="provision.varifran">
