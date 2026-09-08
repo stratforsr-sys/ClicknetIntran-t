@@ -4,7 +4,7 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { kronor, manadsnamn } from "@/lib/provision";
 import type { Bonusniva, Underlag } from "@/lib/provision-motor";
-import type { Dagsutfall, Malutfall, Takt } from "@/lib/saljtakt";
+import type { Dagsutfall, Malutfall, Manadsfacit, Takt } from "@/lib/saljtakt";
 
 /**
  * E13 steg 10: provisionsvyns resultattavla.
@@ -73,14 +73,19 @@ import type { Dagsutfall, Malutfall, Takt } from "@/lib/saljtakt";
  * ===========================================================================
  */
 export function Manadspanel({
-  manad,
+  etikett,
+  beskrivning,
   total,
   delar,
   stangd,
   utbetald,
   trappa,
+  styrning,
 }: {
-  manad: string;
+  /** Vems siffror och vilken manad. "Foretaget · september 2026". */
+  etikett: string;
+  /** Meningen under talet. Skiftar med om manaden ar oppen och med vems den ar. */
+  beskrivning: string;
   total: number;
   /**
    * Nedbrytningen av totalen.
@@ -105,27 +110,38 @@ export function Manadspanel({
   utbetald: boolean;
   /** Bonustrappan, nar den ska ritas. Utelamnas for en stangd manad. */
   trappa?: ReactNode;
+  /**
+   * Manads- och personvaljaren.
+   *
+   * Den ligger I panelen och inte ovanfor: valjarna byter ut precis det som
+   * star har, och en kontroll utanfor den yta den styr lases som ett sidfilter
+   * som rakar paverka nagot. Se rubriken i `Vyval.tsx`.
+   */
+  styrning?: ReactNode;
 }) {
   return (
     <section
       data-guide="provision.min"
       className="on-dark overflow-hidden rounded-md bg-brand-900 shadow-elev-3"
     >
+      {styrning && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-brand-800 px-6 py-4 md:px-8">
+          {styrning}
+          <Lagesflagga stangd={stangd} utbetald={utbetald} />
+        </div>
+      )}
+
       <div className="flex flex-col gap-8 p-6 md:p-8 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-3">
-            <span className="text-micro uppercase text-brand-400">{manadsnamn(manad)}</span>
-            <Lagesflagga stangd={stangd} utbetald={utbetald} />
+            <span className="text-micro uppercase text-brand-400">{etikett}</span>
+            {!styrning && <Lagesflagga stangd={stangd} utbetald={utbetald} />}
           </div>
 
           {/* Det enda `text-hero`-talet i systemet. Se regeln i globals.css. */}
           <p className="tnum mt-4 text-hero text-ink-inv">{kronor(total)}</p>
 
-          <p className="mt-3 max-w-[52ch] text-body text-brand-200">
-            {stangd
-              ? "Fastställt och bokfört. Siffran ändras inte längre."
-              : "Intjänat hittills. Räknas live ur dina order och ändras med varje ny order."}
-          </p>
+          <p className="mt-3 max-w-[52ch] text-body text-brand-200">{beskrivning}</p>
         </div>
 
         <dl className="grid shrink-0 grid-cols-2 gap-x-10 gap-y-5 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4">
@@ -407,7 +423,7 @@ export function Dagskort({ dag, datum }: { dag: Dagsutfall; datum: string }) {
  * forutsattningar ar en siffra folk brakar om, medan samma tal med ett villkor
  * gar att kontrollera.
  */
-export function Taktkort({ takt }: { takt: Takt }) {
+export function Taktkort({ takt, samlad = false }: { takt: Takt; samlad?: boolean }) {
   return (
     <Card guide="provision.takt">
       <p className="text-micro uppercase text-ink-500">Takt</p>
@@ -438,10 +454,17 @@ export function Taktkort({ takt }: { takt: Takt }) {
             </div>
             <div className="flex items-baseline justify-between gap-4">
               <dt className="text-small text-ink-500">
-                {takt.prognos.niva ? `Volymbonus nivå ${takt.prognos.niva.threshold}` : "Volymbonus"}
+                {samlad
+                  ? "Volymbonus, summerad"
+                  : takt.prognos.niva
+                    ? `Volymbonus nivå ${takt.prognos.niva.threshold}`
+                    : "Volymbonus"}
               </dt>
+              {/* SAMLAT VISAS BELOPPET ALLTID, aven noll. En lagsumma har ingen
+                  "niva" att sakna — se `taktaFlera` — sa texten "ingen nivå nås"
+                  hade varit ett pastaende om ett tal som inte finns. */}
               <dd className="tnum text-body text-ink-900">
-                {takt.prognos.niva ? kronor(takt.prognos.bonus) : "ingen nivå nås"}
+                {samlad || takt.prognos.niva ? kronor(takt.prognos.bonus) : "ingen nivå nås"}
               </dd>
             </div>
           </dl>
@@ -706,13 +729,16 @@ function sammanfattaSerie(serie: { dag: string; antal: number }[]): string {
  */
 export function Lagesrad({
   lagen,
+  rubrik,
 }: {
   lagen: { etikett: string; antal: number; kronor: number; ton: "ok" | "info" | "danger" }[];
+  /** Vems order, och vilken manad. Foljer panelens val. */
+  rubrik: string;
 }) {
   return (
     <Card>
       <CardHeader
-        titel="Dina order den här månaden"
+        titel={rubrik}
         beskrivning="Provisionen räknas från godkännandet, inte från betalningen. En makulering drar tillbaka sitt belopp i den månad den sker."
       />
       <div className="grid gap-4 sm:grid-cols-3">
@@ -726,6 +752,114 @@ export function Lagesrad({
           </div>
         ))}
       </div>
+    </Card>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Företagets rad, och månaden i backspegeln
+// -----------------------------------------------------------------------------
+
+/**
+ * Det som ersätter bonustrappan när panelen visar HELA FÖRETAGET.
+ *
+ * ===========================================================================
+ * FÖRETAGET HAR INGEN BONUSTRAPPA, OCH DET ÄR INTE EN LUCKA.
+ *
+ * Volymbonusen är en egenskap hos EN PERSONS månad — nivån bestäms av hens
+ * ordervolym och betalas till hen. Summeras trapporna över tio säljare finns
+ * ingen tröskel kvar att rita: femtio order fördelade på tio personer ger
+ * ingen bonus alls, femtio på en person ger nivå 20, och en gemensam bana hade
+ * ritat samma bild för båda.
+ *
+ * Raden svarar i stället på de frågor företaget FAKTISKT har: hur många drar,
+ * hur många har nått en nivå, och vad en order är värd i snitt.
+ * ===========================================================================
+ */
+export function Foretagsstrip({
+  saljare,
+  medNiva,
+  order,
+  snittPerOrder,
+}: {
+  saljare: number;
+  medNiva: number;
+  order: number;
+  snittPerOrder: number;
+}) {
+  const tal = [
+    { etikett: "Säljare med order", varde: String(saljare) },
+    { etikett: "Nått en bonusnivå", varde: `${medNiva} av ${saljare}` },
+    { etikett: "Order netto", varde: String(order) },
+    { etikett: "Snitt per order", varde: kronor(snittPerOrder) },
+  ];
+
+  return (
+    <dl className="grid grid-cols-2 gap-x-10 gap-y-5 sm:grid-cols-4">
+      {tal.map((t) => (
+        <div key={t.etikett}>
+          <dt className="text-micro uppercase text-brand-400">{t.etikett}</dt>
+          <dd className="tnum mt-1 text-h1 text-ink-inv">{t.varde}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/**
+ * Månaden i backspegeln — det som står där I DAG och TAKT står för den månad
+ * som pågår.
+ *
+ * ===========================================================================
+ * ETT DAGSKORT FÖR EN MÅNAD SOM VARIT ÄR EN NOLLA SOM LJUGER.
+ *
+ * "I dag: 0 order" när man tittar på augusti ser exakt likadant ut som "0 order
+ * i dag" för någon som inte sålt något — och en takt för en avslutad månad är
+ * inte en prognos utan utfallet, med en etikett som påstår något annat.
+ *
+ * Korten byts därför ut mot frågor som HAR ett svar i efterhand. Se
+ * `manadsfacit()` i `saljtakt.ts`; räkningen ligger där, inte här.
+ * ===========================================================================
+ */
+export function Manadsfacitkort({ facit, manad }: { facit: Manadsfacit; manad: string }) {
+  return (
+    <Card guide="provision.idag">
+      <p className="text-micro uppercase text-ink-500">{manadsnamn(manad)}</p>
+      <p className="tnum mt-2 text-display text-ink-900">{facit.antal}</p>
+      <p className="text-small text-ink-500">order netto</p>
+
+      {facit.bastaDagen === null ? (
+        <p className="mt-4 border-t border-canvas pt-4 text-small text-ink-500">
+          Ingen order tecknades den här månaden.
+        </p>
+      ) : (
+        <dl className="mt-4 flex flex-col gap-2 border-t border-canvas pt-4">
+          <div className="flex items-baseline justify-between gap-4">
+            <dt className="text-small text-ink-500">Bästa dagen</dt>
+            <dd className="tnum text-body font-semibold text-ink-900">
+              {facit.bastaDagen.dag.slice(8)}/{Number(facit.bastaDagen.dag.slice(5, 7))} ·{" "}
+              {facit.bastaDagen.antal} order
+            </dd>
+          </div>
+          <div className="flex items-baseline justify-between gap-4">
+            <dt className="text-small text-ink-500">Dagar med order</dt>
+            <dd className="tnum text-body text-ink-900">
+              {facit.dagarMedOrder} av {facit.arbetsdagar}
+            </dd>
+          </div>
+          <div className="flex items-baseline justify-between gap-4">
+            <dt className="text-small text-ink-500">Snitt per arbetsdag</dt>
+            <dd className="tnum text-body text-ink-900">
+              {facit.snittPerArbetsdag.toFixed(1).replace(".", ",")}
+            </dd>
+          </div>
+        </dl>
+      )}
+
+      <p className="mt-3 text-micro text-ink-500">
+        Snittet räknas på månadens alla arbetsdagar, inte bara på dem det kom order — annars är
+        det minst ett i alla lägen och säger ingenting.
+      </p>
     </Card>
   );
 }

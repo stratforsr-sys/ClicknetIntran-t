@@ -470,3 +470,168 @@ export function malFor(mal: Saljmal[], employee_id: string, manad: string): Salj
     mal.find((m) => m.employee_id === employee_id && m.period_month === manad) ?? null
   );
 }
+
+// -----------------------------------------------------------------------------
+// Manaden i backspegeln
+// -----------------------------------------------------------------------------
+
+export type Manadsfacit = {
+  /** Order netto i manaden. Samma tal som underlaget bar. */
+  antal: number;
+  /** Dagen med flest order, eller null nar ingen dag har nagon. */
+  bastaDagen: { dag: string; antal: number } | null;
+  /** Arbetsdagar med minst en order. */
+  dagarMedOrder: number;
+  arbetsdagar: number;
+  /** Order per arbetsdag i hela manaden. */
+  snittPerArbetsdag: number;
+};
+
+/**
+ * Manaden sammanfattad — det som ersatter dagskortet och takten nar man tittar
+ * pa en manad som redan varit.
+ *
+ * ===========================================================================
+ * "I DAG" OCH "TAKT" AR MENINGSLOSA I BACKSPEGELN, OCH DET AR INTE ETT
+ * SMAKPROBLEM.
+ *
+ * Ett dagskort som star pa noll for att den valda manaden inte ar i dag ser
+ * exakt likadant ut som ett dagskort for nagon som inte salt nagot i dag. Och
+ * en "takt" for augusti ar inte en prognos utan utfallet, med en etikett som
+ * pastar nagot annat.
+ *
+ * Bada bytts darfor ut mot fragor som HAR ett svar i efterhand: hur manga
+ * dagar det faktiskt hande nagot, vilken dag som var bast, och hur jamnt
+ * manaden gick. Vyn valjer, se `page.tsx`.
+ * ===========================================================================
+ *
+ * `netto` skickas in i stallet for att raknas ur serien: serien vet inte om
+ * makuleringar (en stapel ar vad som HANDE den dagen, se `dagsserie`), medan
+ * `antal` ska vara samma tal som underlaget bar. Rakna dem pa var sitt hall och
+ * de sager olika saker om samma manad.
+ */
+export function manadsfacit(
+  serie: { dag: string; antal: number }[],
+  netto: number,
+): Manadsfacit {
+  const med = serie.filter((d) => d.antal > 0);
+
+  return {
+    antal: netto,
+    bastaDagen: med.length === 0 ? null : med.reduce((a, b) => (b.antal > a.antal ? b : a)),
+    dagarMedOrder: med.length,
+    arbetsdagar: serie.length,
+    // Snittet raknas pa ALLA arbetsdagar, inte bara pa dem med order. Delat pa
+    // dagarna med order svarar det pa "hur manga order kom det de dagar det kom
+    // order", vilket ar minst ett i alla lagen och darmed sager ingenting.
+    snittPerArbetsdag: serie.length === 0 ? 0 : netto / serie.length,
+  };
+}
+
+// -----------------------------------------------------------------------------
+// Foretaget
+// -----------------------------------------------------------------------------
+
+/**
+ * Lagets takt: summan av de enskildas.
+ *
+ * ===========================================================================
+ * `niva` AR ALLTID NULL HAR, OCH DET AR HELA POANGEN.
+ *
+ * Volymbonusen ar en egenskap hos EN PERSONS manad. Summeras trapporna over tio
+ * saljare finns ingen troskel kvar: femtio order fordelade pa tio personer ger
+ * ingen bonus alls, femtio pa en person ger niva 20. En gemensam "niva" hade
+ * ritat samma bild for bada, och det ar den sortens tal som ser ut att betyda
+ * nagot.
+ *
+ * BELOPPET summeras daremot, for varje persons bonus ar rakad var for sig
+ * innan den laggs ihop. Talet ar alltsa sant; det ar bara ETIKETTEN "niva" som
+ * inte finns pa lagniva.
+ * ===========================================================================
+ *
+ * DEN SOM SAKNAR PROGNOS BIDRAR MED SITT UTFALL, inte med noll. Annars sjunker
+ * lagets takt av att en ny saljare borjar, vilket ar tvartemot vad som hant.
+ */
+export function taktaFlera(
+  underlag: Underlag[],
+  nivaer: Bonusniva[],
+  manad: string,
+  idag: string,
+): Takt {
+  const totalt = arbetsdagarIManad(manad).length;
+  const gangna = arbetsdagarTill(manad, idag).length;
+
+  const grund = {
+    gangna,
+    totalt,
+    kvar: Math.max(0, totalt - gangna),
+    andel: totalt === 0 ? 0 : gangna / totalt,
+  };
+
+  const var_ = underlag.map((u) => ({ u, t: takta(u, nivaer, manad, idag) }));
+
+  // INGEN AV DE ENSKILDA HAR EN PROGNOS betyder att laget inte har en heller.
+  // Ett lag vars takt ar summan av fem utfall ar inte en takt, det ar ett
+  // utfall med fel rubrik.
+  if (!var_.some((x) => x.t.prognos !== null)) return { ...grund, prognos: null };
+
+  let antal = 0;
+  let grundprovision = 0;
+  let bonus = 0;
+
+  for (const { u, t } of var_) {
+    antal += t.prognos?.antal ?? u.antal.netto;
+    grundprovision += t.prognos?.grundprovision ?? u.grundprovision;
+    bonus += t.prognos?.bonus ?? (u.volymbonus?.belopp ?? 0);
+  }
+
+  return {
+    ...grund,
+    prognos: { antal, grundprovision, niva: null, bonus, totalt: grundprovision + bonus },
+  };
+}
+
+export type Samlatmal = {
+  utfall: Malutfall;
+  /** Hur manga saljare som har ett ordermal. Star i vyn, raknas inte pa. */
+  medMal: number;
+};
+
+/**
+ * Lagets mal: summan av ordermalen, mot utfallet for SAMMA personer.
+ *
+ * ===========================================================================
+ * BADA SIDOR RAKNAS PA SAMMA KRETS, och det ar den enda ariga formen.
+ *
+ * Summeras alla mal men jamfors mot HELA lagets order blir kvoten smickrande
+ * sa fort nagon saknar mal: tre satta mal om tjugo blir sextio, medan fem
+ * personers order raknas mot dem. Talet hade da stigit av att en chef GLOMDE
+ * satta ett mal.
+ *
+ * Kretsen ar darfor de som har ett ordermal, och `medMal` star i vyn sa att
+ * lasaren ser hur stor del av laget talet handlar om.
+ * ===========================================================================
+ *
+ * `null` nar ingen har ett mal — inte en nolla, som hade sett ut som ett mal
+ * ingen nadde.
+ */
+export function samlatMal(
+  underlag: Underlag[],
+  mal: Saljmal[],
+  manad: string,
+  takt: Takt,
+): Samlatmal | null {
+  let summaMal = 0;
+  let summaNu = 0;
+  let medMal = 0;
+
+  for (const m of mal) {
+    if (m.period_month !== manad || m.mal_order === null) continue;
+    summaMal += m.mal_order;
+    summaNu += underlag.find((u) => u.employee_id === m.employee_id)?.antal.netto ?? 0;
+    medMal++;
+  }
+
+  if (medMal === 0) return null;
+  return { utfall: motMal(summaMal, summaNu, takt), medMal };
+}

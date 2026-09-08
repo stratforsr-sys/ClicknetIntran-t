@@ -5,6 +5,97 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-08 · Provisionspanelen blev styrbar: period och omfattning
+
+*Samma branch, `provision-resultattavla`. Ingen migration.*
+
+Beställarens tillägg efter första genomgången: cheferna ska kunna växla mellan
+sin egen provision, företagets totala och en enskild person — och både de och
+säljarna ska kunna byta period.
+
+### Två rattar i den mörka panelen
+
+Väljarna ligger **i** panelen och inte ovanför den. De byter ut precis det som
+står där, och en kontroll utanför den yta den styr läses som ett sidfilter som
+råkar påverka något. Samma resonemang som gav korten sina flikar 2026-09-07.
+
+**Omfattningen styr HELA tavlan** — panelen, banan, de tre korten, stapelraden,
+orderlägena, rad-för-rad-listan och historiken. Den räknas fram på ETT ställe
+och läses av alla ytor. Alternativet hade varit att tolka `vy` på sju ställen,
+och den dag ett av dem glömdes hade rubriken sagt "Vlado" medan kortet under
+visade ens egna siffror. Det är den sortens fel ingen upptäcker genom att titta.
+
+### PERIODEN ÄR EN MÅNAD, INTE ETT FRITT SPANN
+
+Beställaren bad om att kunna "filtrera på datum". Det byggdes som **månad**, och
+skälet är inte bekvämlighet: volymbonusen är en egenskap hos hela månaden
+(avsnitt 5.2). Nivån bestäms av månadens samlade ordervolym och gäller sedan
+samtliga order i den. Ett spann som "1–15 september" har därför ingen bonusnivå
+att visa — halva månadens order når kanske nivå 5, men de pengarna finns inte
+förrän månaden är slut och kan gå åt båda håll efter den 15:e.
+
+Ett sådant spann hade gett ett tal som **ser ut som provision och som ingen kan
+betala ut**. Månaden är den minsta enhet som HAR ett svar, och det är också den
+enhet perioden stängs i, bonusen räknas i och lönen betalas i. Rörelsen inne i
+månaden finns i stapelraden; den är den frågan.
+
+### Tre saker som inte gick att återanvända rakt av
+
+**Företaget har ingen bonustrappa.** Summeras trapporna över tio säljare finns
+ingen tröskel kvar att rita: femtio order på tio personer ger ingen bonus alls,
+femtio på en ger nivå 20, och en gemensam bana hade ritat samma bild för båda.
+`Foretagsstrip` svarar i stället på de frågor företaget faktiskt har — hur många
+som drar, hur många som nått en nivå, order netto och snitt per order.
+`taktaFlera()` sätter av samma skäl **alltid** `niva: null` medan beloppet
+summeras: varje persons bonus är räknad var för sig innan den läggs ihop, så
+talet är sant — det är etiketten "nivå" som inte finns på lagnivå.
+
+**Lagets mål räknas på samma krets på båda sidor.** Summeras alla mål men jämförs
+mot hela lagets order blir kvoten smickrande så fort någon saknar mål — siffran
+hade stigit av att en chef *glömde* sätta ett. `samlatMal()` räknar därför bara
+de som har ett ordermål, och `medMal` står i vyn så att läsaren ser hur stor del
+av laget talet handlar om.
+
+**"I dag" och "Takt" är meningslösa i backspegeln.** Ett dagskort som står på
+noll för att man tittar på augusti ser exakt likadant ut som ett dagskort för
+någon som inte sålt något i dag, och en "takt" för en avslutad månad är utfallet
+med en etikett som påstår något annat. Båda byts mot `Manadsfacitkort`: bästa
+dagen, dagar med order, snitt per arbetsdag.
+
+### Två spärrar på vem som ser vem
+
+1. `vy` **tvingas till "jag"** för den som inte är provisionschef.
+2. **Materialet finns inte ens** — `hamtaOrder` (alla) hämtas bara för chefer,
+   och `sales_order_read` i 0034 hade gett en säljare noll rader ändå.
+
+Ett okänt id faller tillbaka på "jag" i stället för att ge 404: den som byter
+roll mitt i en session har annars en bokmärkt adress som slutar fungera, och att
+visa ens egna siffror är rätt svar då.
+
+### Väljaren fungerar utan javascript
+
+`Vyval` är ett vanligt GET-formulär mot `/provision`. Med javascript navigerar
+`onChange` direkt och Visa-knappen **mäts bort** — en knapp som inte gör något
+lär användaren att val inte gäller förrän man tryckt. Utan javascript är knappen
+enda vägen vidare, och serverns HTML bär den alltid eftersom `useEffect` bara
+körs i webbläsaren.
+
+`useSearchParams` används medvetet inte: den kräver en Suspense-gräns och gör
+komponenten beroende av renderingsläget. Sidan vet redan vilka två parametrar
+som finns och skickar in dem — två parametrar är hela adressen.
+
+### Testdata
+
+Fem påhittade order lades in i produktionsdatabasen 2026-09-08 för att tavlan
+skulle gå att titta på, märkta `TESTDATA-PROVISION-2026-09-08` i `note`.
+`sales_order_ar_last()` nekar radering av allt som lämnat utkast, så
+borttagningen går via `session_replication_role = 'replica'` i EN transaktion —
+samma väg som frånvarotestdatan 2026-09-07, och att spärren är på igen provas
+direkt efter commit. **Fastställ inte september medan de ligger kvar**, då
+bokförs de i huvudboken.
+
+---
+
 ## 2026-09-07 (natten mot 8:e) · Provisionsvyn byggd om till resultattavla
 
 *Migration `0049_saljmal`. Byggd på branch `provision-resultattavla`.

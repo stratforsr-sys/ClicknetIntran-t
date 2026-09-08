@@ -3,7 +3,7 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-08 — provisionsvyn ombyggd till resultattavla: månadens tal i stor stil, bonustrappan som en bana, kort för I dag / Takt / Mål, chefens lagtavla och månadsmål per säljare. **Ligger på branch `provision-resultattavla`, INTE mergad.**
+**Senast uppdaterad:** 2026-09-08 — provisionsvyn ombyggd till resultattavla, nu med period- och personväljare i panelen: månadens tal i stor stil, bonustrappan som en bana, kort för I dag / Takt / Mål, chefens lagtavla och månadsmål per säljare. **Ligger på branch `provision-resultattavla`, INTE mergad.**
 
 ## Provisionen 2026-09-07 — VÄNTAR PÅ GODKÄNNANDE I PREVIEW
 
@@ -36,6 +36,32 @@ sina pengar.
   på `period_month`. En order från mars som makuleras i september har sitt
   avdrag i `cancel_period_month`, och syntes inte alls. Rättat med ett `.or()`
   i en delad hjälpfunktion i `order-server.ts`.
+
+### Panelen är styrbar sedan 2026-09-08
+
+Två väljare i den mörka ytan: **period** (alla) och **vems siffror** (chefer —
+Min provision / Företaget totalt / en säljare). Omfattningen räknas fram på ETT
+ställe i `page.tsx` och läses av alla ytor; tolkas den på flera kan rubriken säga
+"Vlado" medan kortet under visar ens egna siffror.
+
+**PERIODEN ÄR EN MÅNAD OCH FÅR INTE BLI ETT FRITT SPANN.** Volymbonusen är en
+egenskap hos hela månaden — ett spann som "1–15 september" har ingen bonusnivå
+och hade gett ett tal som ser ut som provision utan att gå att betala ut.
+
+**Företaget har ingen bonustrappa.** `taktaFlera()` sätter alltid `niva: null`.
+Sätt aldrig en gemensam nivå där: femtio order på tio personer ger ingen bonus,
+femtio på en ger nivå 20.
+
+**Lagets mål räknas på samma krets på båda sidor** (`samlatMal`). Jämförs alla
+mål mot hela lagets order stiger siffran av att en chef glömde sätta ett mål.
+
+### Testdata ligger kvar i produktionen
+
+Fem order märkta `TESTDATA-PROVISION-2026-09-08` i `note`. **Fastställ inte
+september medan de ligger kvar** — då bokförs de i huvudboken och blir
+betydligt svårare att få bort. Skriptet finns i sessionens scratchpad; utan det
+är vägen `delete from sales_order where note like 'TESTDATA-PROVISION-%'` inuti
+en transaktion med `set local session_replication_role = 'replica'`.
 
 ### Fem saker att inte glida tillbaka på
 

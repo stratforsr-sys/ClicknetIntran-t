@@ -17,12 +17,32 @@ export const POSTER: Navnyhet[] = [
     slug: "provisionsvyn-som-resultattavla",
     rubrik: "Provisionen visar nu dagen, takten och vägen till nästa bonus",
     ingress:
-      "Månadens siffra står överst i stor stil med bonustrappan under. Nya kort för vad du sålt i dag, vad du taktar och hur du ligger mot ditt mål.",
+      "Månadens siffra står överst i stor stil med bonustrappan under. Nya kort för dagen, takten och målet — och en väljare för period och person.",
     text: `**/provision** var en huvudbok — historik, perioder och ett
 bokföringsformulär. Den är nu en resultattavla, och svarar i den ordning man
 faktiskt frågar.
 
-**Överst: vad du tjänat den här månaden**
+**Överst i panelen: vilken månad, och vems siffror**
+
+Alla kan byta **period** — tolv månader bakåt. Perioden är en hel månad och
+inget fritt datumspann, för volymbonusen är en egenskap hos hela månaden: ett
+spann som "1–15 september" har ingen bonusnivå att visa.
+
+Är du **säljchef, VD eller ekonomi** finns en väljare till: **Min provision**,
+**Företaget totalt**, eller en enskild säljare. Hela tavlan följer med — talet,
+banan, korten, staplarna och orderlägena. Säljare ser bara sin egen och byter
+bara period.
+
+I företagsvyn byts bonustrappan mot företagets fyra tal: hur många säljare som
+har order, hur många som nått en nivå, order netto och snitt per order. Ett
+lag har ingen gemensam bonusnivå — femtio order på tio personer ger ingen bonus
+alls, femtio på en ger nivå 20.
+
+Väljer du en månad som varit byts *I dag* och *Takt* mot **månadens facit**:
+bästa dagen, dagar med order och snitt per arbetsdag. "I dag: 0" för augusti är
+en nolla som ljuger.
+
+**Vad du tjänat den valda månaden**
 
 Ett tal, i stor stil, på mörk platta. Bredvid står vad det består av:
 grundprovision, volymbonus, K&V-bonus och det som bokförts för hand.
@@ -48,7 +68,9 @@ slaget ur paketmatrisen och bokförs först vid godkännandet.
 inte fram; den beror på veckor ingen bedömt än.
 
 *Mål* jämför mot var du **borde** stå i dag, inte mot hela månadsmålet. "12 av
-20" den åttonde är inte ett underbetyg — det är före takten.
+20" den åttonde är inte ett underbetyg — det är före takten. I företagsvyn
+summeras målen, och både målet och utfallet räknas på de säljare som HAR ett
+mål — annars hade siffran stigit av att någon glömde sätta ett.
 
 **Sedan: dagarna, orderlägena och raderna**
 

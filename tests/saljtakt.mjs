@@ -21,6 +21,9 @@
 import {
   MINSTA_DAGAR_FOR_PROGNOS,
   TAKTBAND,
+  manadsfacit,
+  samlatMal,
+  taktaFlera,
   arArbetsdag,
   arbetsdagarIManad,
   arbetsdagarTill,
@@ -361,6 +364,116 @@ console.log("\nMalet slas upp pa exakt manad");
   // ARVS ALDRIG. Oktober har inget mal, och da ar svaret null — inte septembers.
   ok("malet arvs inte framat", malFor(mal, "s1", "2026-10-01") === null);
   ok("okand person ger null", malFor(mal, "s3", "2026-09-01") === null);
+}
+
+// -----------------------------------------------------------------------------
+console.log("\nManaden i backspegeln");
+{
+  const serie = [
+    { dag: "2026-09-01", antal: 2 },
+    { dag: "2026-09-02", antal: 0 },
+    { dag: "2026-09-03", antal: 5 },
+    { dag: "2026-09-04", antal: 1 },
+  ];
+
+  const f = manadsfacit(serie, 8);
+  ok("antalet kommer utifran, inte ur serien", f.antal === 8);
+  ok("basta dagen ar den 3:e med fem", f.bastaDagen.dag === "2026-09-03" && f.bastaDagen.antal === 5);
+  ok("tre dagar av fyra hade order", f.dagarMedOrder === 3 && f.arbetsdagar === 4);
+
+  // SNITTET DELAS PA ALLA ARBETSDAGAR, inte bara pa dem med order. Delat pa
+  // dagarna med order hade det blivit minst ett i alla lagen, alltsa ett tal
+  // som inte kan saga nagot daligt.
+  ok("snittet delas pa alla arbetsdagar", f.snittPerArbetsdag === 2, String(f.snittPerArbetsdag));
+
+  const tom = manadsfacit([{ dag: "2026-09-01", antal: 0 }], 0);
+  ok("ingen order ger ingen basta dag", tom.bastaDagen === null);
+  ok("och snittet blir noll, inte NaN", tom.snittPerArbetsdag === 0);
+  ok("tom serie ger noll, inte division med noll", manadsfacit([], 0).snittPerArbetsdag === 0);
+
+  // ANTALET FAR VARA NEGATIVT. Fler makuleringar an order — serien vet inget om
+  // makuleringar, sa talet MASTE komma utifran.
+  ok("negativt netto slar igenom", manadsfacit(serie, -2).antal === -2);
+}
+
+// -----------------------------------------------------------------------------
+console.log("\nLagets takt");
+{
+  const manadensOrder = (n, saljare) =>
+    Array.from({ length: n }, (_, i) =>
+      order({ saljare, signerad: `2026-09-${String(1 + (i % 20)).padStart(2, "0")}`, belopp: 1500 }),
+    );
+
+  const a = raknaUnderlag("s1", manadensOrder(10, "s1"), "2026-09-01", TRAPPA);
+  const b = raknaUnderlag("s2", manadensOrder(6, "s2"), "2026-09-01", TRAPPA);
+
+  const t = taktaFlera([a, b], TRAPPA, "2026-09-01", "2026-09-15");
+
+  ok("kalenderdelen ar densamma som for en person", t.gangna === 11 && t.totalt === 22);
+
+  // 10 -> 20 och 6 -> 12 vid halva manaden.
+  ok("antalen summeras", t.prognos.antal === 32, String(t.prognos.antal));
+
+  // NIVAN AR ALLTID NULL PA LAGNIVA. Femtio order pa tio personer ger ingen
+  // bonus; femtio pa en ger niva 20. En gemensam niva hade ritat samma bild.
+  ok("laget har ingen niva", t.prognos.niva === null);
+
+  // Beloppet summeras daremot — var persons bonus ar rakad for sig forst.
+  const ta = takta(a, TRAPPA, "2026-09-01", "2026-09-15");
+  const tb = takta(b, TRAPPA, "2026-09-01", "2026-09-15");
+  ok("bonusen ar summan av de enskilda", t.prognos.bonus === ta.prognos.bonus + tb.prognos.bonus);
+  ok("totalen ar grund plus bonus", t.prognos.totalt === t.prognos.grundprovision + t.prognos.bonus);
+
+  // DEN SOM SAKNAR PROGNOS BIDRAR MED SITT UTFALL, inte med noll — annars
+  // sjunker lagets takt av att nagon borjar mitt i manaden.
+  const ny = raknaUnderlag("s3", manadensOrder(1, "s3"), "2026-09-01", TRAPPA);
+  const medNy = taktaFlera([a, b, ny], TRAPPA, "2026-09-01", "2026-09-15");
+  ok("en ny saljare sanker inte lagets takt", medNy.prognos.totalt >= t.prognos.totalt,
+     `${medNy.prognos.totalt} mot ${t.prognos.totalt}`);
+
+  // INGEN MED PROGNOS betyder ingen lagprognos. Ett lag vars takt ar summan av
+  // fem utfall ar inte en takt.
+  const tidigt = taktaFlera([a, b], TRAPPA, "2026-09-01", "2026-09-02");
+  ok("tva dagar in har laget ingen prognos", tidigt.prognos === null);
+  ok("tomt lag ger ingen prognos", taktaFlera([], TRAPPA, "2026-09-01", "2026-09-15").prognos === null);
+}
+
+// -----------------------------------------------------------------------------
+console.log("\nLagets mal");
+{
+  const u = (id, n) => raknaUnderlag(id,
+    Array.from({ length: n }, (_, i) =>
+      order({ saljare: id, signerad: `2026-09-${String(1 + (i % 20)).padStart(2, "0")}`, belopp: 1500 })),
+    "2026-09-01", TRAPPA);
+
+  const lag = [u("s1", 10), u("s2", 6), u("s3", 20)];
+  const t = { gangna: 11, totalt: 22, kvar: 11, andel: 0.5, prognos: null };
+
+  const mal = [
+    { employee_id: "s1", period_month: "2026-09-01", mal_order: 20, mal_kronor: null },
+    { employee_id: "s2", period_month: "2026-09-01", mal_order: 10, mal_kronor: null },
+    // s3 har INGET mal, och ar med flit den som salt mest.
+    { employee_id: "s1", period_month: "2026-08-01", mal_order: 99, mal_kronor: null },
+  ];
+
+  const m = samlatMal(lag, mal, "2026-09-01", t);
+
+  ok("tva av tre har mal", m.medMal === 2);
+  ok("malen summeras till 30", m.utfall.mal === 30, String(m.utfall.mal));
+
+  // BADA SIDOR RAKNAS PA SAMMA KRETS. s3:s tjugo order far INTE raknas mot ett
+  // mal hen inte har — annars hade kvoten stigit av att en chef glomde satta
+  // ett mal.
+  ok("utfallet ar 16, inte 36", m.utfall.nu === 16, String(m.utfall.nu));
+  ok("annan manads mal blandas inte in", m.utfall.mal === 30);
+
+  // Halva manaden gangen, 16 av 30 forvantat 15 -> inom bandet (30 x 5 % = 1,5).
+  ok("laget ligger i takt", m.utfall.lage === "i_takt", `${m.utfall.mot}`);
+
+  ok("inget mal alls ger null", samlatMal(lag, [], "2026-09-01", t) === null);
+  ok("bara kronmal raknas inte in", samlatMal(lag,
+    [{ employee_id: "s1", period_month: "2026-09-01", mal_order: null, mal_kronor: 5000 }],
+    "2026-09-01", t) === null);
 }
 
 console.log(fel === 0 ? "\n\x1b[32mAllt gront.\x1b[0m\n" : `\n\x1b[31m${fel} fel.\x1b[0m\n`);

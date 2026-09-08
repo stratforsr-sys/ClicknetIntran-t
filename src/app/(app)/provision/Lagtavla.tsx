@@ -2,7 +2,7 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ButtonLink } from "@/components/ui/Button";
-import { kronor } from "@/lib/provision";
+import { kronor, manadsnamn } from "@/lib/provision";
 import type { Dagsutfall, Malutfall, Takt } from "@/lib/saljtakt";
 import type { Underlag } from "@/lib/provision-motor";
 
@@ -48,17 +48,20 @@ export type Lagrad = {
 
 export function Lagtavla({
   rader,
+  manad,
   farSattaMal,
 }: {
   rader: Lagrad[];
+  /** Manaden tavlan galler. Foljer panelens periodval. */
+  manad: string;
   farSattaMal: boolean;
 }) {
   if (rader.length === 0) {
     return (
       <Card>
-        <CardHeader titel="Laget i laget" />
+        <CardHeader titel={`Laget i laget — ${manadsnamn(manad)}`} />
         <EmptyState
-          rubrik="Ingen order är tecknad den här månaden"
+          rubrik={`Ingen order är tecknad i ${manadsnamn(manad)}`}
           text="Tavlan fylls av ordrarna själva. Den första order någon lägger in dyker upp här samma sekund."
           handling={<ButtonLink href="/order">Till order</ButtonLink>}
         />
@@ -80,7 +83,7 @@ export function Lagtavla({
   return (
     <Card guide="provision.lag">
       <CardHeader
-        titel="Laget i laget"
+        titel={`Laget i laget — ${manadsnamn(manad)}`}
         beskrivning="Räknas live ur orderna, samma motor som varje säljares egen vy. Ordningen är månadens intjäning."
         handling={
           farSattaMal ? (
