@@ -5,6 +5,276 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-08 · Provisionspanelen blev styrbar: period och omfattning
+
+*Samma branch, `provision-resultattavla`. Ingen migration.*
+
+Beställarens tillägg efter första genomgången: cheferna ska kunna växla mellan
+sin egen provision, företagets totala och en enskild person — och både de och
+säljarna ska kunna byta period.
+
+### Två rattar i den mörka panelen
+
+Väljarna ligger **i** panelen och inte ovanför den. De byter ut precis det som
+står där, och en kontroll utanför den yta den styr läses som ett sidfilter som
+råkar påverka något. Samma resonemang som gav korten sina flikar 2026-09-07.
+
+**Omfattningen styr HELA tavlan** — panelen, banan, de tre korten, stapelraden,
+orderlägena, rad-för-rad-listan och historiken. Den räknas fram på ETT ställe
+och läses av alla ytor. Alternativet hade varit att tolka `vy` på sju ställen,
+och den dag ett av dem glömdes hade rubriken sagt "Vlado" medan kortet under
+visade ens egna siffror. Det är den sortens fel ingen upptäcker genom att titta.
+
+### PERIODEN ÄR EN MÅNAD, INTE ETT FRITT SPANN
+
+Beställaren bad om att kunna "filtrera på datum". Det byggdes som **månad**, och
+skälet är inte bekvämlighet: volymbonusen är en egenskap hos hela månaden
+(avsnitt 5.2). Nivån bestäms av månadens samlade ordervolym och gäller sedan
+samtliga order i den. Ett spann som "1–15 september" har därför ingen bonusnivå
+att visa — halva månadens order når kanske nivå 5, men de pengarna finns inte
+förrän månaden är slut och kan gå åt båda håll efter den 15:e.
+
+Ett sådant spann hade gett ett tal som **ser ut som provision och som ingen kan
+betala ut**. Månaden är den minsta enhet som HAR ett svar, och det är också den
+enhet perioden stängs i, bonusen räknas i och lönen betalas i. Rörelsen inne i
+månaden finns i stapelraden; den är den frågan.
+
+### Tre saker som inte gick att återanvända rakt av
+
+**Företaget har ingen bonustrappa.** Summeras trapporna över tio säljare finns
+ingen tröskel kvar att rita: femtio order på tio personer ger ingen bonus alls,
+femtio på en ger nivå 20, och en gemensam bana hade ritat samma bild för båda.
+`Foretagsstrip` svarar i stället på de frågor företaget faktiskt har — hur många
+som drar, hur många som nått en nivå, order netto och snitt per order.
+`taktaFlera()` sätter av samma skäl **alltid** `niva: null` medan beloppet
+summeras: varje persons bonus är räknad var för sig innan den läggs ihop, så
+talet är sant — det är etiketten "nivå" som inte finns på lagnivå.
+
+**Lagets mål räknas på samma krets på båda sidor.** Summeras alla mål men jämförs
+mot hela lagets order blir kvoten smickrande så fort någon saknar mål — siffran
+hade stigit av att en chef *glömde* sätta ett. `samlatMal()` räknar därför bara
+de som har ett ordermål, och `medMal` står i vyn så att läsaren ser hur stor del
+av laget talet handlar om.
+
+**"I dag" och "Takt" är meningslösa i backspegeln.** Ett dagskort som står på
+noll för att man tittar på augusti ser exakt likadant ut som ett dagskort för
+någon som inte sålt något i dag, och en "takt" för en avslutad månad är utfallet
+med en etikett som påstår något annat. Båda byts mot `Manadsfacitkort`: bästa
+dagen, dagar med order, snitt per arbetsdag.
+
+### Två spärrar på vem som ser vem
+
+1. `vy` **tvingas till "jag"** för den som inte är provisionschef.
+2. **Materialet finns inte ens** — `hamtaOrder` (alla) hämtas bara för chefer,
+   och `sales_order_read` i 0034 hade gett en säljare noll rader ändå.
+
+Ett okänt id faller tillbaka på "jag" i stället för att ge 404: den som byter
+roll mitt i en session har annars en bokmärkt adress som slutar fungera, och att
+visa ens egna siffror är rätt svar då.
+
+### Väljaren fungerar utan javascript
+
+`Vyval` är ett vanligt GET-formulär mot `/provision`. Med javascript navigerar
+`onChange` direkt och Visa-knappen **mäts bort** — en knapp som inte gör något
+lär användaren att val inte gäller förrän man tryckt. Utan javascript är knappen
+enda vägen vidare, och serverns HTML bär den alltid eftersom `useEffect` bara
+körs i webbläsaren.
+
+`useSearchParams` används medvetet inte: den kräver en Suspense-gräns och gör
+komponenten beroende av renderingsläget. Sidan vet redan vilka två parametrar
+som finns och skickar in dem — två parametrar är hela adressen.
+
+### Hela året kom till samma dag
+
+Beställaren ville kunna välja "hela året" i periodväljaren. Det byggdes som en
+**lista av månader**, inte som ett spann — och det är samma skäl som gjorde att
+perioden är en månad och inte ett datumspann, en gång till:
+
+**Bonusen är en månadssak.** Nivån bestäms av EN MÅNADS volym och betalas för
+den månaden. Tolv månader med fyra order var ger noll bonus tolv gånger; samma
+fyrtioåtta order i en månad ger nivå 20. Ett årstal räknat på fyrtioåtta hade
+påstått det senare om någon som gjort det förra.
+
+**Månaderna har olika sanning.** En stängd månad är bokförd och räknas aldrig
+om; en öppen räknas live. Ett år innehåller båda, så summan måste bildas månad
+för månad med var månads egen regel — och varje månad får sin egen trappa, sin
+egen K&V och sitt eget konsekvensläge. Körs året med septembers trappa får
+januari fel bonus.
+
+Både "september" och "hela 2026" är därför samma sak i koden: en lista med en
+respektive tolv månader. Allt loopar över listan, och månadsvyn är enmånadsfallet.
+
+**Två takter, och valet är inte kosmetiskt.** En persons enskilda månad får
+`takta()`, som slår upp vilken nivå prognosen landar på — "då blir bonusen
+1 200 kr" är halva varför kortet finns. Ett år eller ett helt lag får
+`taktaOverManader()`, som skriver fram beloppet utan att påstå en nivå. Taktkortet
+byter etikett med `samlad`, så talet aldrig står under ett ord det inte svarar mot.
+
+**`taktaFlera` och `samlatMal` togs bort samma dag de skrevs.** De löste
+företagsfallet en månad i taget; `taktaOverManader` och `malOverPeriod` löser
+både månad och år med samma kod. Två metoder för samma fråga hade gett olika
+tal för september beroende på om man kom dit via månadsvyn eller årsvyn.
+
+`malOverPeriod` tar emot utfallet **per person och månad**, inte färdigsummerat.
+Det är det som gör att varje mål kan paras ihop med sitt eget utfall — summeras
+tolv månaders mål men jämförs mot hela årets order stiger kvoten av att någon
+*glömde* sätta ett mål.
+
+**En K&V-fälla till, fångad innan den blev en bugg.** `hamtaKvPerManad` hämtar
+för periodens månader, men periodkortet längst ned visar alltid de tre senaste.
+Väljs ett år ligger de utanför, och `kvPerManad.get(m)` hade gett `undefined` —
+alltså `underlagForAlla` utan K&V, exakt den avvikelse mot `stangning.ts` som
+rättades dagen innan. Fönstret är nu periodens månader **plus** de tre.
+
+**Provet fångade ett riktigt kalenderfaktum.** Januari 2026 har 20 arbetsdagar,
+inte 22: nyårsdagen och trettondedag jul infaller båda på vardagar det året. Det
+var testets aritmetik som var fel, inte koden — och det är precis vad
+arbetsdagsräkningen finns för.
+
+### Testdata
+
+Fem påhittade order lades in i produktionsdatabasen 2026-09-08 för att tavlan
+skulle gå att titta på, märkta `TESTDATA-PROVISION-2026-09-08` i `note`.
+`sales_order_ar_last()` nekar radering av allt som lämnat utkast, så
+borttagningen går via `session_replication_role = 'replica'` i EN transaktion —
+samma väg som frånvarotestdatan 2026-09-07, och att spärren är på igen provas
+direkt efter commit. **Fastställ inte september medan de ligger kvar**, då
+bokförs de i huvudboken.
+
+---
+
+## 2026-09-07 (natten mot 8:e) · Provisionsvyn byggd om till resultattavla
+
+*Migration `0049_saljmal`. Byggd på branch `provision-resultattavla`.
+E13 steg 10. Två tysta räknefel rättade på vägen.*
+
+### Frågan som ställdes
+
+Beställaren: *"Vid ogiltig frånvaro ska bonusar dras av från säljare, detta ska
+ske automatiskt för provisionsräkning. Är detta fixat?"* — följt av en längre
+beskrivning av vad provisionsvyn borde vara, och av domen: *"just nu känns
+provisions vyn helt meningslös, jag vet inte ens vad jag ska använda den till."*
+
+Genomgången visade att frågan hade fyra olika svar.
+
+**Konsekvenserna var byggda sedan 2026-08-26.** Steg 6, `konsekvens.ts`, kön på
+`/tid/ogiltig-franvaro`, trappan som inställning. Med en nyans mot hur frågan
+ställdes: det är **bonusförlust**, inte avdrag från grundprovisionen —
+volymbonus och K&V-bonus faller, grundprovisionen är orörd, och orderräknaren
+börjar om. Och det är inte helt automatiskt: nattjobbet lägger ett *förslag*,
+chefen godkänner. Den gränsen är Ö15 och står orörd.
+
+**Trappan och prognosen var också byggda.** `provision-motor.ts` hade räknat
+rätt sedan augusti — retroaktivitet, avrundning en gång på färdig rad,
+makulering som två händelser i två månader, "3 order kvar till nästa nivå".
+
+**Inkio finns inte.** Ingen koppling, ingen ångerfrist, inget betalningsflöde
+in. Statusen `betald` finns men sätts för hand och påverkar ingenting.
+
+**Vad som faktiskt saknades var vyn.** Talen var rätt och ordningen var fel:
+sidan var byggd som en huvudbok — historik, perioder, bokföringsformulär, och
+månadens intjäning i samma grad som allt annat.
+
+### Fyra beslut från beställaren
+
+1. **"Sålt i dag" räknar allt som lagts in i dag**, med det godkända markerat.
+   Räknas bara godkända står siffran på noll hela förmiddagen, och kortet blir
+   en mätare på hur snabbt chefen attesterar.
+2. **Takt som framskrivning, plus månadsmål per säljare.** Båda, alltså — vilket
+   gav migration `0049`.
+3. **K&V-bonusen räknas in i totalen**, men bara när det finns bedömda veckor.
+   Det är en omprövning av avsnitt 9.1 i `PROVISION_SPEC.md`.
+4. **Ånger och Inkio väntar.** Vyn visar de lägen navet självt sätter —
+   Godkänd, Betald, Makulerad — och hittar inte på en ångerfrist.
+
+### TVÅ TYSTA RÄKNEFEL, BÅDA AV SAMMA SORT
+
+Båda gjorde att **det chefen läste före attesten var lägre än det som bokfördes
+efter den**. Ingen av dem hade upptäckts av någon som saknade sina pengar — de
+gick åt andra hållet, och den sortens fel hittas bara av den som jämför.
+
+**K&V saknades i live-summan.** `stangning.ts` har alltid hämtat
+`hamtaKvPerPerson` och bokfört K&V-bonusen. `page.tsx` anropade
+`underlagForAlla(order, manad, nivaer, undefined, ...)` — utan K&V. Kommentaren
+direkt ovanför raden säger att det aldrig får hända ("LIVE-SUMMAN MÅSTE RÄKNAS
+SOM ATTESTEN RÄKNAR"); den skrevs om konsekvenserna, och K&V-fallet var
+förbisett. Rättat genom `hamtaKvPerPerson()` i `kv-server.ts` — tvilling till
+stängningens, men med användarens egen token i stället för service role.
+
+**Makuleringar av äldre order saknades helt.** `hamtaOrder` filtrerade på
+`period_month >= x`. En order signerad i mars som makuleras i september har
+`period_month = 2026-03-01` och `cancel_period_month = 2026-09-01`, och föll
+därför utanför. Septembers avdrag syntes inte i vyn. `stangning.ts` hämtade
+redan på båda kolumnerna. Rättat med ett `.or()` i en delad hjälpfunktion, så
+de två hämtningarna inte kan glida isär igen.
+
+### Det som byggdes
+
+**`src/lib/saljtakt.ts`** — ren logik, 90 kontroller i `tests/saljtakt.mjs`.
+Svensk helgdagskalender (påskdagen via Meeus/Jones/Butcher, provad mot facit för
+åtta år), arbetsdagsräkning, dagsutfall, takt och målutfall.
+
+**Takten räknas på arbetsdagar, inte kalenderdagar.** Skillnaden syns i
+december: 31 kalenderdagar mot 20 arbetsdagar. Den som står på 10 order den
+15:e taktar 21 på kalender och 17 på riktigt, och det är de fyra som avgör om
+någon tror sig nå nivå 20. Julafton, midsommarafton och nyårsafton står med i
+listan trots att de formellt är vardagar — räknas de som arbetsdagar blir
+decembers takt systematiskt för hög för alla, varje år.
+
+**Dagen i dag räknas som passerad.** Alternativet ger en takt som är för hög
+hela dagen och faller till sanningen vid midnatt. Ett tal som sjunker varje
+kväll utan att någon gjort något fel är ett tal folk slutar tro på.
+
+**Ingen prognos före tre arbetsdagar.** En order på månadens första dag taktar
+tjugoen. Aritmetiskt riktigt, och en gissning utklädd till en beräkning.
+
+**Målet jämförs mot takten, inte mot hela månaden.** "12 av 20" den åttonde är
+före takten, inte ett underbetyg. Utan den jämförelsen står kortet på "efter"
+varje dag utom den sista, och en mätare som alltid är röd slutar man titta på.
+Bandet för "i takt" är fem procent av **målet** — av det förväntade hade gett
+ett mikroskopiskt band den 2:a och ett brett den 28:e, alltså vidast just när
+precisionen börjar betyda något.
+
+**`0049_saljmal`** — en rad per person och månad, uppdaterad **på plats** till
+skillnad från `commission_entry`. Ett mål är ett försök att styra en månad som
+pågår, och att ändra det mitt i är en normal chefshandling; en append-only
+måltabell hade tvingat fram "mål version 3" i vyn. Spåret ligger i `audit_log`
+med både före- och eftervärde, så "vem sänkte mitt mål den 28:e" går att
+besvara. Ett mål går **inte** att sätta för en passerad månad — en ribba som
+flyttas efter utfallet är ingen ribba. Framåt går det, till skillnad från
+`giltigManad`, och det är hela skillnaden mellan ett utfall och en förväntan.
+
+**Vyn.** Mörk märkespanel överst med månadens tal i en ny grad (`--text-hero`,
+56 px, den enda i systemet och bara ett tal per vy). Bonustrappan som en bana
+med hållplatser under den. Tre kort: I dag, Takt, Mål. Stapelrad per arbetsdag.
+Orderlägen. Underlaget rad för rad. Chefens lagtavla sorterad på utfall — ett
+medvetet undantag från regeln i `underlagForAlla`, som gäller lönedokumentet och
+inte en levande lagvy; ingen placeringssiffra skrivs ut, och säljaren ser aldrig
+listan eftersom `sales_order_read` ger henne noll rader ur kollegornas order.
+
+**Två saker byggdes bort:** kortet "Var siffran kommer ifrån" (texten står nu i
+panelen och i guiden) och listan "Alla, \<månad\>" (ersatt av lagtavlan).
+
+### Vad som medvetet INTE gjordes
+
+**Ingen ångerstatus.** Byggd på gissade regler blir den ett system som påstår
+sig veta när en kund kan ångra sig, och det ser ut som information.
+
+**K&V skrivs inte fram i takten.** Volymbonusen är en funktion av ordervolymen,
+och ordervolymen är det takten skattar — kedjan håller. K&V är en funktion av
+hur en människa bedömer samtal som ännu inte ringts.
+
+**Trappan ritas inte för en stängd månad.** Banan räknas ur dagens trappa, och
+en trappa som ändrats sedan dess hade ritat en annan väg än den som gav
+pengarna. En stängd månad bryts i stället ned ur huvudboken, via slaget i
+`external_ref`.
+
+**Guiden `las-din-provision` är version 2.** Tre av stegen pekade på kort som
+inte finns längre. En guide som beskriver en vy som inte finns är sämre än
+ingen guide, så versionen bumpades och den visas igen.
+
+---
+
 ## 2026-09-07 (kväll) · Frånvaron mergad till main
 
 Beställaren godkände och `franvaro-skal-och-lage` gick till main som `a4da83e`

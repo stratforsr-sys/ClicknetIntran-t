@@ -164,3 +164,49 @@ export function giltigManad(nyckel: string, nu: Date | string = new Date()): boo
   if (manad < 1 || manad > 12) return false;
   return nyckel <= manadsnyckel(nu);
 }
+
+// -----------------------------------------------------------------------------
+// Huvudbokens poster, lasta bakvant
+// -----------------------------------------------------------------------------
+
+/**
+ * Vilket SLAG en bokford post ar: `order`, `makulering`, `volymbonus`,
+ * `kv_bonus`, `ovrig_bonus` eller `avdrag`.
+ *
+ * ===========================================================================
+ * TALET LASES UR `external_ref` OCH INTE UR EN EGEN KOLUMN, och det ar med
+ * flit — men det ar en beg-om-ursakt-losning som forvaltar en radering.
+ *
+ * `stangning.ts` skriver referensen som `<manad>:<person>:<slag>`, och den ar
+ * DETERMINISTISK for att gora bokforingen idempotent: samma manad, person och
+ * slag kan aldrig bokforas tva ganger, vilket ar det som gor att ett halvvags
+ * misslyckat forsok gar att kora om. Slaget star alltsa redan dar, i en kolumn
+ * som har ett unikt index och som darfor inte kan sluta stamma.
+ *
+ * En ny `kind`-kolumn hade varit renare att lasa och hade krav en migration
+ * som fyller den bakvant ur exakt den har strangen. Kolumnen ar alltsa inte
+ * mer sann — den ar samma tal, kopierat.
+ *
+ * NAR DEN HAR FUNKTIONEN SLUTAR RACKA ar den dag nagon behover FRAGA pa slaget
+ * i SQL, for det gar inte att indexera bakvant ur en strang. Da ar kolumnen
+ * ratt, och den fylls ur den har funktionen.
+ * ===========================================================================
+ *
+ * `null` for handinmatade poster: de har ingen referens, och en handbokford
+ * rattelse ar inte ett av motorns slag.
+ */
+export function slagetFor(post: { source: string; external_ref: string | null }): string | null {
+  if (post.source !== "motor" || !post.external_ref) return null;
+  const delar = post.external_ref.split(":");
+  return delar.length === 3 ? delar[2] : null;
+}
+
+/** Svensk etikett per slag. Samma ord i vyn som i underlaget och i huvudboken. */
+export const SLAGSETIKETT: Record<string, string> = {
+  order: "Grundprovision",
+  makulering: "Makuleringar",
+  volymbonus: "Volymbonus",
+  kv_bonus: "K&V-bonus",
+  ovrig_bonus: "Övrig bonus",
+  avdrag: "Avdrag",
+};

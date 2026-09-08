@@ -281,6 +281,25 @@ export const NOTIS_KALLOR = [
   "personal-ny",
 
   /**
+   * Manadsmalet (0049).
+   *
+   * EN HANDELSE OCH INTE EN HARLEDNING, trots att ett mal STAR i sin tabell
+   * hela manaden. Skillnaden ar vad posten sager: en harledd post svarar pa
+   * "det har vantar pa dig", och ett mal vantar inte pa nagot — det finns.
+   * Vore den harledd hade den legat kvar i klockan hela manaden och tjatat om
+   * en sak som redan ar last.
+   *
+   * Posten gar till DEN MALET GALLER. Chefen som satter tolv mal ska inte mota
+   * tolv notiser om det, och det behover inte skrivas har: `notifiera()` skickar
+   * aldrig till aktoren sjalv.
+   *
+   * ANDRINGEN AR EN EGEN POST, inte en uppdatering av den forsta. Texten skrivs
+   * vid handelsen och andras aldrig — "du har fatt ett mal pa 20 order" ska sta
+   * kvar aven sedan malet sankts till tio, for det VAR vad som hande.
+   */
+  "provision-mal",
+
+  /**
    * ANGRA-KNAPPEN HAR MED FLIT INGEN KALLA HAR.
    *
    * `/angra` provades och togs bort igen. Kvittot med angra-knappen visas bara
@@ -344,6 +363,7 @@ export const HANDELSEKALLOR = [
   "rekrytering-noshow",
   "rekrytering-anstalld",
   "personal-ny",
+  "provision-mal",
 ] as const satisfies readonly Notiskalla[];
 
 export type Handelsekalla = (typeof HANDELSEKALLOR)[number];

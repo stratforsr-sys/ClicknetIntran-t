@@ -10,53 +10,119 @@ import { hamtaAllProvision, hamtaProvision, type Post } from "@/lib/provision-se
 import {
   kronor,
   manadFore,
-  manader,
   manadsnamn,
   manadsnyckel,
-  sammanfatta,
+  slagetFor,
   summera,
+  SLAGSETIKETT,
 } from "@/lib/provision";
-import { hamtaOrder, hamtaOrderFor } from "@/lib/order-server";
+import { hamtaOrder, hamtaOrderFor, hamtaSatser, type Orderrad } from "@/lib/order-server";
 import { hamtaNivaer, hamtaPerioder } from "@/lib/bonus-server";
+import { hamtaKvPerManad } from "@/lib/kv-server";
+import { hamtaMal } from "@/lib/saljmal-server";
 import { hamtaGodkandaFran, hamtaMinaHandelser, hamtaRegler } from "@/lib/konsekvens-server";
 import { ATGARD_ETIKETT, konsekvenslageFor, lagenPerPerson, varningslage } from "@/lib/konsekvens";
 import {
-  prognosNastaNiva,
+  gallandeNivaer,
   raknaUnderlag,
   underlagForAlla,
-  type Prognos,
+  type Bonusniva,
+  type KvIndata,
   type Underlag,
 } from "@/lib/provision-motor";
-import type { Orderrad } from "@/lib/order-server";
+import {
+  arbetsdagarIManad,
+  arsfacit,
+  dagsserie,
+  kronmalOverPeriod,
+  malFor,
+  malOverPeriod,
+  manaderIAr,
+  manadsfacit,
+  motMal,
+  saltEnDag,
+  takta,
+  taktaOverManader,
+  type Malutfall,
+  type Manadsrad,
+  type Saljmal,
+} from "@/lib/saljtakt";
+import type { Sats } from "@/lib/order";
 import { svensktDatum } from "@/lib/klocka";
 import { Inmatning } from "./Inmatning";
 import { Faststall, Utbetald } from "./Period";
+import {
+  Bonustrappa,
+  Dagskort,
+  Lagesrad,
+  Malkort,
+  Manadsfacitkort,
+  Manadspanel,
+  Staplar,
+  Taktkort,
+  Talstrip,
+} from "./Resultattavla";
+import { Vyval } from "./Vyval";
+import { Lagtavla, type Lagrad } from "./Lagtavla";
 import { GuideVard } from "@/components/guide/GuideVard";
 
 export const dynamic = "force-dynamic";
 
 /**
- * E13. Vyn visar INTJANAD provision — inte utbetald.
+ * E13. Provisionsvyn — resultattavla sedan 2026-09-07, styrbar sedan 2026-09-08.
  *
  * ===========================================================================
  * TVA SANNINGAR OM SAMMA MANAD, OCH DET AR AVSIKTLIGT.
  *
  * En OPPEN manad raknas LIVE ur orderna av motorn. Den maste det: order elva
  * hojer bonusen pa order ett till tio, sa varje ny order andrar hela manadens
- * siffra. En bokford summa hade visat fel tal hela manaden.
+ * siffra.
  *
  * En STANGD manad ar BOKFORD i `commission_entry` och raknas aldrig om. Den
  * maste det: annars andrar en bonusniva som satts i november vad nagon fick
  * betalt i augusti.
  *
- * Sidan far alltsa aldrig addera de tva for samma manad. Se `minStangd`.
+ * Sidan far alltsa aldrig addera de tva for samma manad. Se `manadsrader`.
  * ===========================================================================
  *
- * Handinmatningen ar kvar vid sidan av motorn. Den bar det motorn inte kan
- * rakna ut: ovrig bonus over trappans slut (avsnitt 5.3) och rattelser. Den dag
- * Inkio kopplas in (A5) kommer de posterna i samma tabell med source = 'inkio'.
+ * ---------------------------------------------------------------------------
+ * PANELEN HAR TVA RATTAR: VILKEN PERIOD, OCH VEMS SIFFROR.
+ *
+ * OMFATTNINGEN STYR HELA TAVLAN — panelen, banan, korten, staplarna,
+ * orderlagena, radlistan och lagtavlan. Den raknas fram pa ETT stalle. Tolkad
+ * pa sju hade rubriken kunnat saga "Vlado" medan kortet under visade ens egna
+ * siffror, och det ar den sortens fel ingen upptacker genom att titta.
+ *
+ * TVA SPARRAR PA VEM SOM SER VEM:
+ *
+ *   1. `vy` tvingas till "jag" for den som inte ar provisionschef.
+ *   2. Materialet finns inte ens — `hamtaOrder` (alla) hamtas bara for chefer,
+ *      och `sales_order_read` i 0034 hade gett en saljare noll rader anda.
+ * ---------------------------------------------------------------------------
+ *
+ * ===========================================================================
+ * PERIODEN AR EN LISTA AV MANADER, INTE ETT SPANN. Aret kom till 2026-09-08.
+ *
+ * Bade "september" och "hela 2026" behandlas som en lista: den forsta har en
+ * manad i sig, den andra upp till tolv. Allt harunder loopar over listan.
+ *
+ * Skalet ar att en manad ar den enda enhet som HAR ett svar. Volymbonusen ar en
+ * egenskap hos manaden (avsnitt 5.2), och en stangd manad ar bokford medan en
+ * oppen raknas live. Ett ar innehaller bada sorterna, och summan maste darfor
+ * bildas manad for manad med var manads egen regel.
+ *
+ * DET UTESLUTER OCKSA ETT FRITT DATUMSPANN. "1–15 september" har ingen
+ * bonusniva att visa: halva manadens order nar kanske niva 5, men de pengarna
+ * finns inte forran manaden ar slut och kan ga at bada hall efter den 15:e.
+ * Talet hade sett ut som provision utan att ga att betala ut. Rorelsen inne i
+ * manaden finns i stapelraden; den ar den fragan.
+ * ===========================================================================
  */
-export default async function Provisionssida() {
+export default async function Provisionssida({
+  searchParams,
+}: {
+  searchParams: Promise<{ manad?: string; vy?: string }>;
+}) {
   const user = await getCurrentUser();
   if (!user?.employee) return null;
 
@@ -66,145 +132,277 @@ export default async function Provisionssida() {
   // far fortfarande inte bokfora poster for hand. Tva kretsar, tva uppgifter.
   const provisionschef = hasRole(user, "finance", "ceo", "sales_manager");
 
+  // MALEN SATTS AV DEN SOM SATTER REGLERNA, inte av den som betalar ut. Samma
+  // grans som `far_andra_provisionsregler()` i 0035 drar, och av samma skal.
+  const malchef = hasRole(user, "sales_manager", "ceo");
+
   const idag = manadsnyckel();
-  const ettArBak = manadFore(idag, 11);
+  const idagsDatum = svensktDatum(new Date());
+  const detArAret = Number(idag.slice(0, 4));
+  const sp = await searchParams;
+
+  // ===========================================================================
+  // PERIODEN. Tolv manader bakat plus tva helar, aldrig framat — en framtida
+  // manad ar inte en intjaning utan en prognos, samma grans som `giltigManad`
+  // drar. Ett val som inte gar att gora ar battre an ett felmeddelande efterat.
+  //
+  // Aret skrivs `ar-2026` i adressen och inte `2026`, sa att en arsnyckel aldrig
+  // kan forvaxlas med en manadsnyckel av nagot som bara tittar pa formen.
+  // ===========================================================================
+  const manadsval = Array.from({ length: 12 }, (_, i) => manadFore(idag, i));
+  const arsval = [detArAret, detArAret - 1];
+
+  const onskadPeriod = sp.manad ?? idag;
+  const periodNyckel = manadsval.includes(onskadPeriod)
+    ? onskadPeriod
+    : arsval.some((a) => onskadPeriod === `ar-${a}`)
+      ? onskadPeriod
+      : idag;
+
+  const arsvy = periodNyckel.startsWith("ar-");
+  const aret = arsvy ? Number(periodNyckel.slice(3)) : null;
+
+  const manaderna = arsvy ? manaderIAr(aret!, idag) : [periodNyckel];
+  const periodtext = arsvy ? `hela ${aret}` : manadsnamn(periodNyckel);
+  // Perioden innehaller dagens datum: da ar "I dag" och "Takt" meningsfulla.
+  const inneharIdag = manaderna.includes(idag);
+
+  // Hamtningsfonstret maste tacka BADE perioden och de tre manader
+  // periodkortet visar. Perioden ar oftast senare, men inte alltid.
+  const treManader = manadFore(idag, 2);
+  const periodStart = manaderna[0] ?? idag;
+  const franOchMed = periodStart < treManader ? periodStart : treManader;
+  // Huvudboken laser minst tolv manader bakat for historiken, mer om perioden
+  // stracker sig langre.
+  const posterFran = franOchMed < manadFore(idag, 11) ? franOchMed : manadFore(idag, 11);
 
   // Trappan och perioderna hamtas for ALLA, inte bara for chefer. Bada
   // tabellerna ar oppna i RLS med flit (0035): en progressvy som sager "3 order
   // kvar till nasta niva" utan att personen far se vad nivan ar vard ar en
   // sifferlek, och "manaden ar stangd" ar svaret pa "varfor andrar sig inte min
-  // siffra langre".
+  // siffra langre". Samma sak med `sales_target` i 0049.
+  //
   // K13 / D-K13: provision och tid far sta pa samma SIDA, men ingen FRAGA
-  // joinar tabellerna. Handelserna hamtas for sig och laggs bredvid — de moter
-  // aldrig en order i en och samma fraga. Rastavvikelser och sen ankomst nar
-  // fortfarande inte hit alls; det ar ett lofte i K12 avsnitt 5.
+  // joinar tabellerna. Handelserna hamtas for sig och laggs bredvid.
+  //
+  // ALLT I EN VAG. Ett `await` pa egen rad hade lagt en sekventiell vaga till pa
+  // en sida vars vagantal ar det som vaxer nar navet vaxer. Se X3-resonemanget i
+  // arbetsloggen 2026-08-22. K&V hamtas for HELA perioden i EN fraga — tolv
+  // manadsanrop hade blivit tolv turer till databasen.
   const [
     mina,
     alla,
     personer,
-    order,
+    saljarIds,
+    allaOrder,
     minaOrder,
+    satser,
     nivaer,
     perioder,
     minaHandelser,
     regler,
     godkanda,
+    kvPerManad,
+    mal,
   ] = await Promise.all([
-    hamtaProvision(user.employee.id, ettArBak),
-    provisionschef ? hamtaAllProvision(ettArBak) : Promise.resolve([] as Post[]),
+    hamtaProvision(user.employee.id, posterFran),
+    provisionschef ? hamtaAllProvision(posterFran) : Promise.resolve([] as Post[]),
     provisionschef ? hamtaPersoner() : Promise.resolve([] as { id: string; namn: string }[]),
-    provisionschef ? hamtaOrder(manadFore(idag, 2)) : Promise.resolve([] as Orderrad[]),
-    hamtaOrderFor(user.employee.id, manadFore(idag, 2)),
+    provisionschef ? hamtaSaljarIds() : Promise.resolve(new Set<string>()),
+    provisionschef ? hamtaOrder(franOchMed) : Promise.resolve([] as Orderrad[]),
+    // Chefens `hamtaOrder` bar redan hens egna order — RLS ger den kretsen allt
+    // — sa den andra fragan vore en dubblett.
+    provisionschef ? Promise.resolve([] as Orderrad[]) : hamtaOrderFor(user.employee.id, franOchMed),
+    hamtaSatser(),
     hamtaNivaer(),
-    hamtaPerioder(manadFore(idag, 2)),
+    hamtaPerioder(franOchMed),
     hamtaMinaHandelser(user.employee.id),
     hamtaRegler(),
-    // I SAMMA VAG som allt annat, inte efter. De tre hamtningarna som E13 steg 6
-    // lade till beror inte pa nagot ovanfor, sa ett `await` pa egen rad hade
-    // lagt en tionde sekventiell vaga pa en sida vars vagantal ar det som
-    // vaxer nar navet vaxer. Se X3-resonemanget i arbetsloggen 2026-08-22.
     provisionschef
-      ? hamtaGodkandaFran(manadFore(idag, 2))
+      ? hamtaGodkandaFran(franOchMed)
       : Promise.resolve([] as Awaited<ReturnType<typeof hamtaGodkandaFran>>),
+    // LASER MED ANVANDARENS EGEN TOKEN, sa saljaren far bara sin egen rad och
+    // chefen far allas. Samma anrop tjanar bada vyerna.
+    // FONSTRET AR PERIODEN PLUS DE TRE MANADER PERIODKORTET VISAR. Utan de tre
+    // hade `kvPerManad.get(m)` gett undefined dar nere, och da raknar
+    // `underlagForAlla` utan K&V — exakt den avvikelse mot `stangning.ts` som
+    // rattades 2026-09-07. En fraga oavsett hur manga manader det blir.
+    hamtaKvPerManad([...new Set([...manaderna, idag, manadFore(idag, 1), treManader])]),
+    hamtaMal(franOchMed),
   ]);
 
-  const min = sammanfatta(mina, new Date());
-  const minaManader = manader(mina);
+  const material = provisionschef ? allaOrder : minaOrder;
+  const poster = provisionschef ? alla : mina;
 
   // ===========================================================================
-  // SALJARENS EGEN MANAD (steg 4)
+  // OMFATTNINGEN. `vy` tvingas till "jag" for den som inte far se andras — det
+  // ar spärr nummer ett, och den enda som star i kod. Spärr nummer tva ar att
+  // materialet inte finns: `allaOrder` hamtas inte alls for en saljare.
   //
-  // En OPPEN manad raknas live ur orderna, en STANGD ar bokford. Skillnaden
-  // syns har: for en oppen manad laggs motorns summa till de poster som redan
-  // finns i huvudboken, for en stangd gors det inte — da har attesten redan
-  // bokfort motorns rader, och att addera dem igen hade dubbelraknat manaden.
+  // Ett OKANT id faller ocksa tillbaka pa "jag" i stallet for att ge 404. Den
+  // som byter roll mitt i en session har annars en bokmarkt adress som slutar
+  // fungera, och en sida som visar ens egna siffror ar ratt svar da.
   // ===========================================================================
-  const minStangd = perioder.some((p) => p.period_month === idag);
-  const mittLage = konsekvenslageFor(minaHandelser, idag);
-  const mittUnderlag = raknaUnderlag(user.employee.id, minaOrder, idag, nivaer, null, mittLage);
-  const minVarning = varningslage(minaHandelser, regler, svensktDatum(new Date()));
-  const minPrognos = prognosNastaNiva(mittUnderlag);
-  const minTotal = min.denna.belopp + (minStangd ? 0 : mittUnderlag.summa);
+  const onskad = sp.vy ?? "jag";
+  const vy = !provisionschef
+    ? "jag"
+    : onskad === "foretag" || onskad === "jag" || personer.some((p) => p.id === onskad)
+      ? onskad
+      : "jag";
 
-  // Tolv manader bakat, nyast forst. Framtida manader finns inte i listan alls
-  // — de nekas ocksa av `giltigManad` i actionen, men ett val som inte gar att
-  // gora ar battre an ett felmeddelande efterat.
-  const manadsval = Array.from({ length: 12 }, (_, i) => {
-    const nyckel = manadFore(idag, i);
-    return { nyckel, etikett: manadsnamn(nyckel) };
-  });
+  const foretagsvy = vy === "foretag";
+  const visadId = vy === "jag" ? user.employee.id : vy;
+  const visadNamn =
+    vy === "jag" ? "Din provision" : (personer.find((p) => p.id === visadId)?.namn ?? "Okänd");
 
-  // Tre manader: den som pagar och de tva fore. En manad UTAN rad i
-  // `commission_period` ar oppen och raknas live ur orderna; en manad MED rad ar
-  // bokford och raknas aldrig om. Se `stangning.ts`.
-  const idagsDatum = svensktDatum(new Date());
+  const tavlansOrder = foretagsvy
+    ? material
+    : material.filter((o) => o.salesperson_id === visadId);
+  const tavlansPoster = foretagsvy ? poster : poster.filter((p) => p.employee_id === visadId);
 
-  // LIVE-SUMMAN MASTE RAKNAS SOM ATTESTEN RAKNAR. Chefen laser talet, trycker
-  // "Faststall", och far en bokforing som ska bli samma siffra. Utelamnas
-  // konsekvenserna har men inte i `stangning.ts` visar vyn ett hogre belopp an
-  // det som bokfors — och den avvikelsen upptacks forst nar nagon jamfor.
-  const perioderVisas = [0, 1, 2].map((i) => {
-    const manad = manadFore(idag, i);
-    const live = underlagForAlla(order, manad, nivaer, undefined, lagenPerPerson(godkanda, manad));
+  // ===========================================================================
+  // EN RAD PER MANAD I PERIODEN. Hela tavlan byggs ur den har listan.
+  //
+  // VARJE MANAD FAR SIN EGEN TRAPPA, SIN EGEN K&V OCH SITT EGET KONSEKVENSLAGE.
+  // Trappan versioneras (0035) och slas upp pa manadens forsta dag; kors aret
+  // med septembers trappa far januari fel bonus.
+  //
+  // OCH VARJE MANAD FAR SIN EGEN SANNING: ar den stangd ar `summa` bokford och
+  // motorns tal kastas, ar den oppen raknas den live. Ett ar som blandar de tva
+  // maste gora valet per manad — inte en gang for hela perioden.
+  // ===========================================================================
+  const manadsrader: (Manadsrad & {
+    underlag: Underlag | null;
+    lag: Underlag[];
+    grundprovision: number;
+    volymbonus: number;
+    kv: number;
+    handbokfort: number;
+  })[] = manaderna.map((m) => {
+    const kvM = kvPerManad.get(m) ?? new Map<string, KvIndata>();
+    const lagenM = lagenPerPerson(godkanda, m);
+    const stangdM = perioder.some((p) => p.period_month === m);
+
+    const lag = foretagsvy ? underlagForAlla(material, m, nivaer, kvM, lagenM) : [];
+    const u = foretagsvy
+      ? null
+      : raknaUnderlag(visadId, material, m, nivaer, kvM.get(visadId) ?? null, lagenM.get(visadId) ?? null);
+
+    const kallor = foretagsvy ? lag : [u!];
+    const bokfort = summera(tavlansPoster, m).belopp;
+    const live = kallor.reduce((s, x) => s + x.summa, 0);
+
     return {
-      manad,
-      stangd: perioder.find((p) => p.period_month === manad) ?? null,
-      antalPersoner: live.length,
-      liveSumma: live.reduce((s, u) => s + u.summa, 0),
-      bokfort: summera(alla, manad).belopp,
-      garAttStanga: sistaDagen(manad) <= idagsDatum,
+      manad: m,
+      antal: kallor.reduce((s, x) => s + x.antal.netto, 0),
+      // DEN ENDA PLATS DAR STANGD/OPPEN AVGORS. Adderas bada blir en stangd
+      // manad dubbelraknad; valjs fel blir den tom.
+      summa: bokfort + (stangdM ? 0 : live),
+      niva: u?.volymbonus?.niva.threshold ?? null,
+      stangd: stangdM,
+      underlag: u,
+      lag,
+      grundprovision: kallor.reduce((s, x) => s + x.grundprovision, 0),
+      volymbonus: kallor.reduce((s, x) => s + (x.volymbonus?.belopp ?? 0), 0),
+      kv: kallor.reduce((s, x) => s + (x.kv?.belopp ?? 0), 0),
+      handbokfort: summera(handposter(tavlansPoster), m).belopp,
     };
   });
+
+  const facit = arsfacit(manadsrader);
+  const total = facit.summa;
+
+  // EN ENDA MANAD ger de extra ytorna: bonustrappan (som kraver ett `Underlag`)
+  // och orderraderna en och en. Ett ar far manadslistan i stallet.
+  const enManad = manaderna.length === 1 ? manadsrader[0] : null;
+  const trappan = enManad ? gallandeNivaer(nivaer, enManad.manad) : [];
+
+  const dag = saltEnDag(tavlansOrder, idagsDatum, satser);
+
+  // ===========================================================================
+  // TVA TAKTER, OCH VALET AR INTE KOSMETISKT.
+  //
+  // EN PERSONS ENSKILDA MANAD far `takta()`, som slar upp VILKEN NIVA prognosen
+  // landar pa. Det ar den mest anvanda vyn, och "da blir bonusen 1 200 kr" ar
+  // halva varfor kortet finns.
+  //
+  // ALLT ANNAT — ett ar eller ett helt lag — far `taktaOverManader()`, som
+  // skriver fram beloppet utan att pasta en niva. Varken ett ar eller ett lag
+  // HAR en niva; se rubriken i `saljtakt.ts`. Taktkortet far `samlad` och byter
+  // da etikett, sa talet aldrig star under ett ord det inte svarar mot.
+  // ===========================================================================
+  const takt =
+    enManad && !foretagsvy && enManad.underlag
+      ? takta(enManad.underlag, trappan, enManad.manad, idagsDatum)
+      : taktaOverManader(manaderna, idagsDatum, {
+          antal: facit.antal,
+          grundprovision: manadsrader.reduce((s, r) => s + r.grundprovision, 0),
+          bonus: manadsrader.reduce((s, r) => s + r.volymbonus + r.kv, 0),
+        });
+
+  // MALET: ordermalet i forsta hand, av samma skal som trappan slar pa antal.
+  //
+  // UTFALLET LAMNAS PER PERSON OCH MANAD, inte fardigsummerat. Det ar det som
+  // gor att `malOverPeriod` kan para ihop varje mal med sitt eget utfall och
+  // rakna bada sidor pa samma krets — se rubriken dar.
+  const utfallsrader = manadsrader.flatMap((r) =>
+    foretagsvy
+      ? r.lag.map((u) => ({ employee_id: u.employee_id, manad: r.manad, antal: u.antal.netto }))
+      : [{ employee_id: visadId, manad: r.manad, antal: r.antal }],
+  );
+
+  const malsumma = malOverPeriod(
+    foretagsvy ? mal : mal.filter((m) => m.employee_id === visadId),
+    manaderna,
+    utfallsrader,
+  );
+  const kronmal = foretagsvy ? 0 : kronmalOverPeriod(mal, manaderna, visadId);
+
+  const malOrder: Malutfall | null =
+    malsumma.mal > 0 ? motMal(malsumma.mal, malsumma.utfall, takt) : null;
+  // Kronmalet ritar bagen bara nar det INTE finns ett ordermal. Tva bagar
+  // bredvid varandra hade tvingat fram en tolkning ("vilken raknas?") som ingen
+  // bett om — trappan slar pa antal, sa ordermalet ar det som hor ihop med
+  // bonusen och far foretradet.
+  const malKronor: Malutfall | null =
+    malsumma.mal === 0 && kronmal > 0 ? motMal(kronmal, total, takt) : null;
+
+  // VARNINGEN GALLER ALLTID MIG SJALV, och bara i en vy som ar min och nu. En
+  // chef som tittar pa nagon annans manad ska inte mota sin EGNA varning som om
+  // den vore den andres — och inte heller den andres, som ar en personalfraga
+  // och inte en siffra.
+  const mittLage = konsekvenslageFor(minaHandelser, idag);
+  const minVarning =
+    inneharIdag && vy === "jag" ? varningslage(minaHandelser, regler, idagsDatum) : null;
 
   return (
     <div className="flex flex-col gap-4 pt-2">
       <GuideVard slug="las-din-provision" />
-      <div>
-        <h1 className="text-display text-ink-900">Provision</h1>
-        <p className="mt-1 text-body text-ink-500">
-          Intjänat, inte utbetalt. Lönen betalas som vanligt av lönesystemet.
-        </p>
+
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-display text-ink-900">Provision</h1>
+          <p className="mt-1 text-body text-ink-500">
+            Intjänat, inte utbetalt. Lönen betalas som vanligt av lönesystemet.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {malchef && (
+            <ButtonLink href="/provision/mal" size="sm" variant="diskret">
+              Månadsmål
+            </ButtonLink>
+          )}
+          {provisionschef && enManad && (
+            <ButtonLink href={`/provision/underlag/${enManad.manad}`} size="sm" variant="sekundar">
+              Underlag
+            </ButtonLink>
+          )}
+        </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card status="brand" className="lg:col-span-2" guide="provision.min">
-          <CardHeader
-            titel={`Din provision i ${manadsnamn(min.denna.manad)}`}
-            beskrivning="Dina order plus det som bokförts på dig för hand."
-          />
-          <div className="flex flex-wrap items-baseline gap-x-8 gap-y-4">
-            <div>
-              <p className="tnum text-display text-ink-900">{kronor(minTotal)}</p>
-              <p className="text-small text-ink-500">
-                {mittUnderlag.antal.netto} {mittUnderlag.antal.netto === 1 ? "order" : "order"}
-                {min.denna.poster > 0 &&
-                  ` + ${min.denna.poster} ${min.denna.poster === 1 ? "bokförd post" : "bokförda poster"}`}
-              </p>
-            </div>
-            <Nyckeltal etikett={`Förra månaden`} varde={kronor(min.forra.belopp)} />
-            <Nyckeltal etikett="Hittills i år" varde={kronor(min.iAr)} />
-          </div>
-          <p className="mt-4 text-small text-ink-500">
-            {minStangd
-              ? "Månaden är fastställd. Siffran är bokförd och ändras inte längre."
-              : "Månaden är öppen och räknas live ur dina order. Siffran ändras med varje ny order tills den fastställs."}
-          </p>
-        </Card>
-
-        <Card guide="provision.varifran">
-          <CardHeader titel="Var siffran kommer ifrån" />
-          <p className="text-small text-ink-700">
-            Grundprovisionen kommer ur dina <strong>order</strong> och paketmatrisen. Volymbonusen
-            räknas på hela månadens ordervolym. Utöver det kan ekonomi och VD bokföra poster för
-            hand — en post skrivs aldrig om, en rättelse bokförs som en egen negativ post.
-          </p>
-          <p className="mt-3 text-small text-ink-500">
-            Stämmer inte siffran: lägg ett ärende i stället för att fråga i förbifarten. Då finns
-            frågan kvar, och svaret också.
-          </p>
-        </Card>
-      </div>
-
+      {/* VARNINGEN LIGGER FORE PANELEN. En bonusforlust andrar vad panelens tal
+          BETYDER — den som ser 12 000 kr utan att veta att volymbonusen fallit
+          laser talet som en normal manad. */}
       {minVarning && (
         <Notis ton={mittLage?.bonusforlust ? "danger" : "warn"}>
           {mittLage?.bonusforlust ? (
@@ -234,43 +432,292 @@ export default async function Provisionssida() {
         </Notis>
       )}
 
-      {(mittUnderlag.rader.length > 0 || mittUnderlag.nasta) && (
-        <Card>
-          <CardHeader
-            titel="Din väg till nästa bonus"
-            beskrivning="Bonusnivån bestäms av hela månadens ordervolym, och gäller samtliga order i månaden — inte bara de över tröskeln."
+      <Manadspanel
+        etikett={`${foretagsvy ? "Företaget" : visadNamn} · ${periodtext}`}
+        beskrivning={beskrivPanelen(foretagsvy, vy === "jag", manadsrader, arsvy)}
+        total={total}
+        delar={delarFor(manadsrader, tavlansPoster)}
+        stangd={manadsrader.length > 0 && manadsrader.every((r) => r.stangd)}
+        utbetald={
+          enManad !== null &&
+          perioder.find((p) => p.period_month === enManad.manad)?.status === "utbetald"
+        }
+        styrning={
+          <Vyval
+            manad={periodNyckel}
+            manader={[
+              ...manadsval.map((m) => ({ varde: m, etikett: manadsnamn(m) })),
+              ...arsval.map((a) => ({ varde: `ar-${a}`, etikett: `Hela ${a}` })),
+            ]}
+            vy={vy}
+            // TOM LISTA DOLJER VEMVALJAREN. Saljaren far bara periodvalet, och
+            // det ar inte en gomd knapp — alternativen finns inte for hen.
+            vyer={
+              provisionschef
+                ? [
+                    { varde: "jag", etikett: "Min provision" },
+                    { varde: "foretag", etikett: "Företaget totalt" },
+                    ...personer
+                      .filter((p) => saljarIds.has(p.id) && p.id !== user.employee!.id)
+                      .map((p) => ({ varde: p.id, etikett: p.namn })),
+                  ]
+                : []
+            }
           />
-          <Progress underlag={mittUnderlag} prognos={minPrognos} />
-        </Card>
+        }
+        // BANAN RITAS BARA FOR EN ENSKILD PERSONS OPPNA MANAD.
+        //
+        // En STANGD manad: banan raknas ur dagens trappa, och en trappa som
+        // andrats sedan dess hade ritat en annan vag an den som gav pengarna.
+        // FORETAGET och ARET: ingen niva finns att rita — se `Talstrip`.
+        trappa={
+          arsvy ? (
+            <Talstrip
+              tal={[
+                { etikett: "Månader med order", varde: `${facit.manaderMedOrder} av ${facit.raknade}` },
+                {
+                  etikett: "Bästa månaden",
+                  varde: facit.bastaManaden
+                    ? `${manadsnamn(facit.bastaManaden.manad).split(" ")[0]} · ${facit.bastaManaden.antal}`
+                    : "—",
+                },
+                {
+                  etikett: foretagsvy ? "Order netto" : "Månader med bonus",
+                  varde: foretagsvy ? String(facit.antal) : `${facit.manaderMedNiva} av ${facit.raknade}`,
+                },
+                {
+                  etikett: "Snitt per månad",
+                  varde: facit.snittPerManad.toFixed(1).replace(".", ","),
+                },
+              ]}
+            />
+          ) : foretagsvy ? (
+            <Talstrip
+              tal={[
+                { etikett: "Säljare med order", varde: String(enManad!.lag.length) },
+                {
+                  etikett: "Nått en bonusnivå",
+                  varde: `${enManad!.lag.filter((u) => u.volymbonus !== null).length} av ${enManad!.lag.length}`,
+                },
+                { etikett: "Order netto", varde: String(facit.antal) },
+                { etikett: "Snitt per order", varde: kronor(snittPerOrder(enManad!.lag)) },
+              ]}
+            />
+          ) : !enManad!.stangd && trappan.length > 0 ? (
+            <Bonustrappa underlag={enManad!.underlag!} nivaer={trappan} />
+          ) : undefined
+        }
+      />
+
+      {/* KORTEN FOLJER PERIODEN. "I dag: 0" for augusti ser exakt likadant ut
+          som "0 order i dag", och en "takt" for en avslutad period ar utfallet
+          med en etikett som pastar nagot annat. */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        {inneharIdag && (
+          <>
+            <Dagskort dag={dag} datum={idagsDatum} />
+            <Taktkort takt={takt} samlad={foretagsvy || arsvy} />
+          </>
+        )}
+        {!inneharIdag && enManad && (
+          <Manadsfacitkort
+            facit={manadsfacit(dagsserie(tavlansOrder, enManad.manad), enManad.antal)}
+            manad={enManad.manad}
+          />
+        )}
+        <Malkort
+          mal={malOrder ?? malKronor}
+          takt={takt}
+          enhet={malOrder ? "order" : "kronor"}
+          farSattaMal={malchef}
+        />
+      </div>
+
+      {malOrder && malsumma.antal > 1 && (
+        <Notis ton="info">
+          Målet är summerat över {malsumma.antal} satta mål i {periodtext}. Både målet och utfallet
+          räknas på samma krets — annars hade siffran stigit av att någon saknar mål.
+        </Notis>
       )}
 
-      <Card>
-        <CardHeader titel="Din historik" beskrivning="Tolv månader bakåt, senaste först." />
-        {minaManader.length === 0 ? (
-          <EmptyState
-            rubrik="Ingen provision är bokförd på dig"
-            text="När ekonomi bokför den första posten dyker den upp här och på startsidan."
-          />
-        ) : (
+      <Staplar
+        rubrik={arsvy ? `Månad för månad — ${aret}` : "Månadens dagar"}
+        beskrivning={
+          arsvy
+            ? `${facit.antal} order fördelade på ${facit.raknade} ${facit.raknade === 1 ? "månad" : "månader"}. Framtida månader räknas inte.`
+            : `${facit.antal} order fördelade på ${arbetsdagarIManad(enManad!.manad).length} arbetsdagar. Helger och röda dagar räknas inte.`
+        }
+        serie={
+          arsvy
+            ? manadsrader.map((r) => ({
+                nyckel: r.manad,
+                etikett: manadsnamn(r.manad),
+                kort: manadsnamn(r.manad).split(" ")[0],
+                antal: r.antal,
+                framtid: false,
+              }))
+            : dagsserie(tavlansOrder, enManad!.manad).map((d) => ({
+                nyckel: d.dag,
+                etikett: d.dag,
+                kort: `${Number(d.dag.slice(8))}/${Number(d.dag.slice(5, 7))}`,
+                antal: d.antal,
+                framtid: d.dag > idagsDatum,
+              }))
+        }
+        markerad={arsvy ? (inneharIdag ? idag : null) : (inneharIdag ? idagsDatum : null)}
+        sammanfattning={sammanfattaSerie(facit, arsvy)}
+      />
+
+      <Lagesrad
+        lagen={orderlagen(tavlansOrder, manaderna)}
+        rubrik={
+          foretagsvy
+            ? `Företagets order i ${periodtext}`
+            : vy === "jag"
+              ? `Dina order i ${periodtext}`
+              : `Order i ${periodtext} — ${visadNamn}`
+        }
+      />
+
+      <Card guide="provision.varifran">
+        <CardHeader
+          titel={arsvy ? "Månad för månad" : "Rad för rad"}
+          beskrivning={
+            arsvy
+              ? "Varje månad räknad för sig, med sin egen trappa och sin egen sanning — en fastställd månad är bokförd, en öppen räknas live."
+              : foretagsvy
+                ? "Företagets poster sammanslagna per säljare. Enskilda order står i varje persons egen vy."
+                : "Varje post som bygger månadens siffra. Motorn returnerar raderna, vyn räknar aldrig om något själv."
+          }
+        />
+        {arsvy ? (
           <ul className="flex flex-col">
-            {minaManader.map((m) => (
+            {manadsrader.map((r) => (
               <li
-                key={m.manad}
-                className="flex items-center gap-4 border-b border-canvas py-3 last:border-0"
+                key={r.manad}
+                className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-canvas py-3 last:border-0"
               >
-                <span className="flex-1 text-body text-ink-900">{manadsnamn(m.manad)}</span>
-                {m.affarer !== null && (
-                  <span className="text-small text-ink-500">{m.affarer} affärer</span>
+                <Link
+                  href={`/provision?manad=${r.manad}&vy=${vy}`}
+                  className="w-32 text-body text-ink-900 underline-offset-4 hover:underline"
+                >
+                  {manadsnamn(r.manad)}
+                </Link>
+                <span className="tnum w-20 text-small text-ink-500">{r.antal} order</span>
+                {r.niva !== null ? (
+                  <Badge ton="brand">Nivå {r.niva}</Badge>
+                ) : (
+                  <span className="w-[5.5rem] text-micro uppercase text-ink-300">Ingen nivå</span>
                 )}
-                {m.poster > 1 && <Badge>{m.poster} poster</Badge>}
-                <span className="tnum text-body font-semibold text-ink-900">
-                  {kronor(m.belopp)}
+                <Badge ton={r.stangd ? "ok" : "info"}>{r.stangd ? "Fastställd" : "Öppen"}</Badge>
+                <span className="tnum flex-1 text-right text-body font-semibold text-ink-900">
+                  {kronor(r.summa)}
                 </span>
               </li>
             ))}
           </ul>
+        ) : foretagsvy ? (
+          enManad!.lag.length === 0 ? (
+            <EmptyState
+              rubrik={`Ingen order i ${periodtext}`}
+              text="Raderna kommer ur orderna. Den första godkända ordern dyker upp här samma sekund."
+              handling={<ButtonLink href="/order">Till order</ButtonLink>}
+            />
+          ) : (
+            <ul className="flex flex-col">
+              {enManad!.lag
+                .map((u) => ({
+                  namn: personer.find((p) => p.id === u.employee_id)?.namn ?? "Okänd",
+                  u,
+                }))
+                .sort((a, b) => b.u.summa - a.u.summa)
+                .map(({ namn, u }) => (
+                  <li
+                    key={u.employee_id}
+                    className="flex items-center gap-4 border-b border-canvas py-2 last:border-0"
+                  >
+                    <span className="flex-1 text-small text-ink-700">
+                      {namn} — {u.antal.netto} order
+                      {u.volymbonus && `, nivå ${u.volymbonus.niva.threshold}`}
+                    </span>
+                    <span className="tnum text-small font-semibold text-ink-900">
+                      {kronor(u.summa)}
+                    </span>
+                  </li>
+                ))}
+            </ul>
+          )
+        ) : enManad!.underlag!.rader.length === 0 && enManad!.handbokfort === 0 ? (
+          <EmptyState
+            rubrik={`Ingen post i ${periodtext}`}
+            text="Raderna kommer ur orderna. Den första godkända ordern dyker upp här samma sekund."
+            handling={<ButtonLink href="/order">Lägg en order</ButtonLink>}
+          />
+        ) : (
+          <ul className="flex flex-col">
+            {enManad!.underlag!.rader.map((r, i) => (
+              <li
+                key={r.order_id ?? `${r.slag}-${i}`}
+                className="flex items-center gap-4 border-b border-canvas py-2 last:border-0"
+              >
+                <span className="flex-1 text-small text-ink-700">{r.text}</span>
+                <span
+                  className={`tnum text-small font-semibold ${r.belopp < 0 ? "text-danger-ink" : "text-ink-900"}`}
+                >
+                  {kronor(r.belopp)}
+                </span>
+              </li>
+            ))}
+            {handposter(tavlansPoster)
+              .filter((p) => p.period_month === enManad!.manad)
+              .map((p) => (
+                <li
+                  key={p.id}
+                  className="flex items-center gap-4 border-b border-canvas py-2 last:border-0"
+                >
+                  <span className="flex-1 text-small text-ink-700">{p.note ?? "Bokförd post"}</span>
+                  <Badge>Bokförd för hand</Badge>
+                  <span
+                    className={`tnum text-small font-semibold ${p.amount < 0 ? "text-danger-ink" : "text-ink-900"}`}
+                  >
+                    {kronor(p.amount)}
+                  </span>
+                </li>
+              ))}
+          </ul>
         )}
+        <p className="mt-4 max-w-[70ch] text-small text-ink-500">
+          Grundprovisionen kommer ur orderna och paketmatrisen — beloppet fryses på ordern när den
+          godkänns, så en sats som ändras i november ändrar inte vad någon tjänade i augusti.
+          Stämmer något inte:{" "}
+          <Link href="/arenden" className="underline">
+            lägg ett ärende
+          </Link>{" "}
+          i stället för att fråga i förbifarten. Då finns frågan kvar, och svaret också.
+        </p>
       </Card>
+
+      {provisionschef && (
+        <Lagtavla
+          period={periodtext}
+          visaIdag={inneharIdag}
+          rader={lagrader({
+            personer,
+            saljarIds,
+            order: material,
+            poster,
+            mal,
+            nivaer,
+            kvPerManad,
+            godkanda,
+            perioder,
+            manader: manaderna,
+            idagsDatum,
+            satser,
+          })}
+          farSattaMal={malchef}
+        />
+      )}
 
       {provisionschef && (
         <Card>
@@ -279,39 +726,67 @@ export default async function Provisionssida() {
             beskrivning="En öppen månad räknas live ur orderna och ändrar sig med varje ny order. En fastställd månad är bokförd och räknas aldrig om — inte ens om trappan ändras efteråt."
           />
           <ul className="flex flex-col">
-            {perioderVisas.map((p) => (
-              <li
-                key={p.manad}
-                className="flex flex-wrap items-center gap-3 border-b border-canvas py-3 last:border-0"
-              >
-                <span className="w-36 text-body text-ink-900">{manadsnamn(p.manad)}</span>
+            {[0, 1, 2]
+              .map((i) => {
+                const m = manadFore(idag, i);
+                // LIVE-SUMMAN MASTE RAKNAS SOM ATTESTEN RAKNAR. Chefen laser
+                // talet, trycker "Faststall", och far en bokforing som ska bli
+                // samma siffra. K&V-BONUSEN LADES TILL 2026-09-07 — den saknades
+                // har medan `stangning.ts` alltid bokfort den.
+                const live = underlagForAlla(
+                  material,
+                  m,
+                  nivaer,
+                  kvPerManad.get(m),
+                  lagenPerPerson(godkanda, m),
+                );
+                return {
+                  manad: m,
+                  stangd: perioder.find((p) => p.period_month === m) ?? null,
+                  antalPersoner: live.length,
+                  liveSumma: live.reduce((s, u) => s + u.summa, 0),
+                  bokfort: summera(poster, m).belopp,
+                  garAttStanga: sistaDagen(m) <= idagsDatum,
+                };
+              })
+              .map((p) => (
+                <li
+                  key={p.manad}
+                  className="flex flex-wrap items-center gap-3 border-b border-canvas py-3 last:border-0"
+                >
+                  <Link
+                    href={`/provision?manad=${p.manad}&vy=${vy}`}
+                    className="w-36 text-body text-ink-900 underline-offset-4 hover:underline"
+                  >
+                    {manadsnamn(p.manad)}
+                  </Link>
 
-                {p.stangd ? (
-                  <Badge ton={p.stangd.status === "utbetald" ? "ok" : "brand"}>
-                    {p.stangd.status === "utbetald" ? "Utbetald" : "Fastställd"}
-                  </Badge>
-                ) : (
-                  <Badge ton="info">Öppen</Badge>
-                )}
+                  {p.stangd ? (
+                    <Badge ton={p.stangd.status === "utbetald" ? "ok" : "brand"}>
+                      {p.stangd.status === "utbetald" ? "Utbetald" : "Fastställd"}
+                    </Badge>
+                  ) : (
+                    <Badge ton="info">Öppen</Badge>
+                  )}
 
-                <span className="tnum flex-1 text-body font-semibold text-ink-900">
-                  {kronor(p.stangd ? p.bokfort : p.liveSumma)}
-                </span>
-
-                {!p.stangd && (
-                  <span className="text-small text-ink-500">
-                    {p.antalPersoner} {p.antalPersoner === 1 ? "säljare" : "säljare"}, räknat live
+                  <span className="tnum flex-1 text-body font-semibold text-ink-900">
+                    {kronor(p.stangd ? p.bokfort : p.liveSumma)}
                   </span>
-                )}
 
-                <ButtonLink href={`/provision/underlag/${p.manad}`} size="sm" variant="diskret">
-                  Underlag
-                </ButtonLink>
+                  {!p.stangd && (
+                    <span className="text-small text-ink-500">
+                      {p.antalPersoner} säljare, räknat live
+                    </span>
+                  )}
 
-                {!p.stangd && p.garAttStanga && <Faststall manad={p.manad} />}
-                {p.stangd?.status === "faststalld" && bokforare && <Utbetald manad={p.manad} />}
-              </li>
-            ))}
+                  <ButtonLink href={`/provision/underlag/${p.manad}`} size="sm" variant="diskret">
+                    Underlag
+                  </ButtonLink>
+
+                  {!p.stangd && p.garAttStanga && <Faststall manad={p.manad} />}
+                  {p.stangd?.status === "faststalld" && bokforare && <Utbetald manad={p.manad} />}
+                </li>
+              ))}
           </ul>
           <p className="mt-4 max-w-[70ch] text-small text-ink-500">
             En period kan fastställas tidigast på månadens sista dag. Reglerna sätts under{" "}
@@ -325,27 +800,290 @@ export default async function Provisionssida() {
         </Card>
       )}
 
-      {provisionschef && (
-        <Card>
-          <CardHeader
-            titel={`Alla, ${manadsnamn(idag)}`}
-            beskrivning="Summan per person för innevarande månad."
-          />
-          <Alla poster={alla} manad={idag} personer={personer} />
-        </Card>
-      )}
-
       {bokforare && (
         <Card>
           <CardHeader
             titel="Bokför provision"
-            beskrivning="Ekonomi och VD. Varje post loggas med belopp och person."
+            beskrivning="Ekonomi och VD. Varje post loggas med belopp och person. En rättelse bokförs som en egen negativ post — en post skrivs aldrig om."
           />
-          <Inmatning personer={personer} manader={manadsval} />
+          <Inmatning
+            personer={personer}
+            manader={manadsval.map((m) => ({ nyckel: m, etikett: manadsnamn(m) }))}
+          />
         </Card>
       )}
     </div>
   );
+}
+
+// -----------------------------------------------------------------------------
+// Texterna
+// -----------------------------------------------------------------------------
+
+/** Meningen under det stora talet. Skiftar med omfattning och periodens lage. */
+function beskrivPanelen(
+  foretagsvy: boolean,
+  egen: boolean,
+  rader: { stangd: boolean }[],
+  arsvy: boolean,
+): string {
+  const allaStangda = rader.length > 0 && rader.every((r) => r.stangd);
+  const nagraOppna = rader.some((r) => !r.stangd);
+
+  if (arsvy) {
+    return allaStangda
+      ? "Alla månader är fastställda och bokförda. Siffran ändras inte längre."
+      : "Summan av årets månader. Månader som ännu inte fastställts räknas live och är preliminära.";
+  }
+  if (allaStangda) {
+    return foretagsvy
+      ? "Fastställd och bokförd. Summan av allt som betalades ut för månaden."
+      : "Fastställt och bokfört. Siffran ändras inte längre.";
+  }
+  if (!nagraOppna) return "Ingen månad att räkna.";
+  if (foretagsvy) {
+    return "Hela företagets intjäning. Räknas live ur orderna och ändras med varje ny order.";
+  }
+  return egen
+    ? "Intjänat hittills. Räknas live ur dina order och ändras med varje ny order."
+    : "Intjänat hittills. Räknas live ur orderna och ändras med varje ny order.";
+}
+
+/** Bildtexten för stapelraden. En rad utan den är ett tomt element. */
+function sammanfattaSerie(
+  facit: ReturnType<typeof arsfacit>,
+  arsvy: boolean,
+): string {
+  if (facit.bastaManaden === null) return "Inga order tecknade i perioden.";
+  return arsvy
+    ? `Order per månad. ${facit.manaderMedOrder} av ${facit.raknade} månader har minst en order. Bästa månaden är ${manadsnamn(facit.bastaManaden.manad)} med ${facit.bastaManaden.antal}.`
+    : `Order per arbetsdag. Totalt ${facit.antal} order i perioden.`;
+}
+
+/** Snittprovision per order över laget. Noll order ger noll, aldrig NaN. */
+function snittPerOrder(lag: Underlag[]): number {
+  const order = lag.reduce((s, u) => s + u.antal.netto, 0);
+  if (order <= 0) return 0;
+  return lag.reduce((s, u) => s + u.grundprovision, 0) / order;
+}
+
+// -----------------------------------------------------------------------------
+// Nedbrytningen i panelen
+// -----------------------------------------------------------------------------
+
+/** Handinmatade poster. Motorns egna kanns igen pa `source`. */
+function handposter(poster: Post[]): Post[] {
+  return poster.filter((p) => p.source !== "motor");
+}
+
+/**
+ * Nedbrytningen av totalen, manad for manad.
+ *
+ * ===========================================================================
+ * KALLAN SKIFTAR PER MANAD, OCH DET AR HELA POANGEN.
+ *
+ * En OPPEN manad bryts ned ur motorns underlag — den raknas live och maste det,
+ * for order elva hojer bonusen pa order ett till tio.
+ *
+ * En STANGD manad bryts ned ur HUVUDBOKEN. Kors motorn om pa en stangd manad
+ * kan en trappa som andrats i november ge en annan nedbrytning an den som
+ * faktiskt bokfordes i augusti, och da star vyn och utbetalningen och sager
+ * olika saker om samma manad.
+ *
+ * Ett AR innehaller bada sorterna. Valet gors darfor per manad och delarna
+ * summeras — inte en gang for hela perioden.
+ * ===========================================================================
+ */
+function delarFor(
+  rader: { manad: string; stangd: boolean; grundprovision: number; volymbonus: number; kv: number; handbokfort: number }[],
+  poster: Post[],
+): { etikett: string; varde: number }[] {
+  const per = new Map<string, number>();
+  const lagg = (etikett: string, belopp: number) =>
+    per.set(etikett, (per.get(etikett) ?? 0) + belopp);
+
+  for (const r of rader) {
+    if (r.stangd) {
+      // Slaget lases ur `external_ref` — se `slagetFor` i `provision.ts` for
+      // varfor det talet star dar och inte i en egen kolumn.
+      for (const p of poster.filter((x) => x.period_month === r.manad)) {
+        const slag = slagetFor(p);
+        lagg(slag ? (SLAGSETIKETT[slag] ?? slag) : "Bokfört för hand", p.amount);
+      }
+    } else {
+      lagg("Grundprovision", r.grundprovision);
+      lagg("Volymbonus", r.volymbonus);
+      // K&V-BONUSEN STAR MED SEDAN 2026-09-07 — omprovning av avsnitt 9.1.
+      lagg("K&V-bonus", r.kv);
+      lagg("Bokfört för hand", r.handbokfort);
+    }
+  }
+
+  // NOLLRADER FALLER BORT, utom grundprovisionen. En rad som star dar och alltid
+  // sager noll lar ogat att ingenting hander pa den platsen — samma skal som gor
+  // att chipsen ar farre i framtidsflikarna i `Flikar.tsx`.
+  const ordning = [...Object.values(SLAGSETIKETT), "Bokfört för hand"];
+  return [...per.entries()]
+    .filter(([etikett, varde]) => varde !== 0 || etikett === "Grundprovision")
+    .sort((a, b) => ordning.indexOf(a[0]) - ordning.indexOf(b[0]))
+    .map(([etikett, varde]) => ({ etikett, varde }));
+}
+
+/**
+ * Ordernas lage i perioden.
+ *
+ * MAKULERADE RAKNAS PA SIN MAKULERINGSMANAD, inte pa sin signeringsmanad. Det
+ * ar samma tvahandelsemodell som `makuleradeIPeriod` i `order.ts` bygger pa:
+ * ordern gav provision nar den tecknades och drar tillbaka den nar den
+ * makuleras, och de tva bokfors i olika manader med flit.
+ *
+ * Beloppet ar darfor NEGATIVT pa den raden. Ett positivt tal med en flagga hade
+ * krävt att lasaren gjorde subtraktionen sjalv.
+ */
+function orderlagen(order: Orderrad[], manader: string[]) {
+  const i = new Set(manader);
+  const signerade = order.filter((o) => i.has(o.period_month) && o.status === "signerad");
+  const betalda = order.filter((o) => i.has(o.period_month) && o.status === "betald");
+  const makulerade = order.filter((o) => o.cancel_period_month && i.has(o.cancel_period_month));
+
+  const summa = (rader: Orderrad[]) => rader.reduce((s, o) => s + (o.commission_amount ?? 0), 0);
+
+  return [
+    { etikett: "Godkänd", antal: signerade.length, kronor: summa(signerade), ton: "info" as const },
+    { etikett: "Betald", antal: betalda.length, kronor: summa(betalda), ton: "ok" as const },
+    {
+      etikett: "Makulerad",
+      antal: makulerade.length,
+      kronor: -summa(makulerade),
+      ton: "danger" as const,
+    },
+  ];
+}
+
+// -----------------------------------------------------------------------------
+// Lagtavlan
+// -----------------------------------------------------------------------------
+
+/**
+ * Raderna chefens lagtavla ritar, summerade over periodens manader.
+ *
+ * ===========================================================================
+ * KRETSEN AR SALJARE PLUS ALLA SOM RORT SIG I PERIODEN.
+ *
+ * Bara `employee_role = 'salesperson'` hade tappat den saljchef som sjalv
+ * tecknar order — och en tavla som inte visar en order nagon faktiskt lagt ar
+ * en tavla man slutar lita pa.
+ *
+ * Bara "de som har order" hade tappat det motsatta: saljaren som star pa noll,
+ * vilket ar precis den rad en chef behover se mitt i en manad.
+ * ===========================================================================
+ */
+function lagrader(arg: {
+  personer: { id: string; namn: string }[];
+  saljarIds: Set<string>;
+  order: Orderrad[];
+  poster: Post[];
+  mal: Saljmal[];
+  /** Hela trappans historik — motorn slar sjalv upp varje manads rader. */
+  nivaer: Bonusniva[];
+  kvPerManad: Map<string, Map<string, KvIndata>>;
+  godkanda: Awaited<ReturnType<typeof hamtaGodkandaFran>>;
+  perioder: { period_month: string }[];
+  manader: string[];
+  idagsDatum: string;
+  satser: Sats[];
+}): Lagrad[] {
+  const iPerioden = new Set(arg.manader);
+
+  const medRorelse = new Set(
+    arg.order
+      .filter(
+        (o) =>
+          iPerioden.has(o.period_month) ||
+          (o.cancel_period_month !== null && iPerioden.has(o.cancel_period_month)),
+      )
+      .map((o) => o.salesperson_id),
+  );
+
+  const ids = new Set<string>([...arg.saljarIds, ...medRorelse]);
+  const stangdaManader = new Set(arg.perioder.map((p) => p.period_month));
+
+  // Konsekvenslagena slas upp EN gang per manad och ateranvands for alla
+  // personer — `lagenPerPerson` laser hela listan varje anrop, och tolv manader
+  // gangar tio personer hade blivit hundratjugo genomlasningar.
+  const lagenPerManad = new Map(arg.manader.map((m) => [m, lagenPerPerson(arg.godkanda, m)]));
+
+  return arg.personer
+    .filter((p) => ids.has(p.id))
+    .map((p) => {
+      let antal = 0;
+      let total = 0;
+      let grundprovision = 0;
+      let bonus = 0;
+      let manaderMedNiva = 0;
+      let sistaNiva: number | null = null;
+      let malAntal = 0;
+      let malUtfall = 0;
+
+      for (const m of arg.manader) {
+        const u = raknaUnderlag(
+          p.id,
+          arg.order,
+          m,
+          arg.nivaer,
+          arg.kvPerManad.get(m)?.get(p.id) ?? null,
+          lagenPerManad.get(m)?.get(p.id) ?? null,
+        );
+
+        const bokfort = summera(
+          arg.poster.filter((x) => x.employee_id === p.id),
+          m,
+        ).belopp;
+
+        antal += u.antal.netto;
+        total += bokfort + (stangdaManader.has(m) ? 0 : u.summa);
+        grundprovision += u.grundprovision;
+        bonus += (u.volymbonus?.belopp ?? 0) + (u.kv?.belopp ?? 0);
+        if (u.volymbonus) manaderMedNiva++;
+        sistaNiva = u.volymbonus?.niva.threshold ?? null;
+
+        const detMalet = malFor(arg.mal, p.id, m);
+        if (detMalet?.mal_order != null) {
+          malAntal += detMalet.mal_order;
+          malUtfall += u.antal.netto;
+        }
+      }
+
+      const takt = taktaOverManader(arg.manader, arg.idagsDatum, {
+        antal,
+        grundprovision,
+        bonus,
+      });
+
+      return {
+        employee_id: p.id,
+        namn: p.namn,
+        idag: saltEnDag(
+          arg.order.filter((o) => o.salesperson_id === p.id),
+          arg.idagsDatum,
+          arg.satser,
+        ).antal,
+        antal,
+        // EN MANAD har en niva; ETT AR har tolv, och ingen av dem ar "arets".
+        // Texten valjs har och inte i komponenten — se rubriken i `Lagtavla.tsx`.
+        bonusetikett:
+          arg.manader.length === 1
+            ? sistaNiva === null
+              ? null
+              : `Nivå ${sistaNiva}`
+            : manaderMedNiva === 0
+              ? null
+              : `${manaderMedNiva} mån med bonus`,
+        takt,
+        mal: malAntal > 0 ? motMal(malAntal, malUtfall, takt) : null,
+        total,
+      };
+    });
 }
 
 /**
@@ -362,146 +1100,7 @@ function sistaDagen(manad: string): string {
   return dag.toISOString().slice(0, 10);
 }
 
-/**
- * Saljarens progressvy (avsnitt 9.1).
- *
- * TVA SAKER STAR MEDVETET INTE HAR.
- *
- * K&V-bonusen — den ligger pa K&V-sidan (steg 5), for att den bedoms av en
- * manniska och hor ihop med bedomningen, inte med ordervolymen.
- *
- * Och hela berakningskedjan. Saljaren far underlaget i en ENKLARE version an
- * chefens (fraga 54): vilka order, vilken niva, vilka avdrag — men inte varje
- * mellanled. Chefens fulla rad-for-rad-vy ar en annan vy.
- */
-function Progress({ underlag, prognos }: { underlag: Underlag; prognos: Prognos | null }) {
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-baseline gap-x-8 gap-y-4">
-        <div>
-          <p className="tnum text-h1 text-ink-900">{underlag.antal.netto}</p>
-          <p className="text-small text-ink-500">
-            order{underlag.antal.makulerade > 0 && `, varav ${underlag.antal.makulerade} makulerad`}
-          </p>
-        </div>
-        <div>
-          <p className="tnum text-h1 text-ink-900">
-            {underlag.volymbonus ? `Nivå ${underlag.volymbonus.niva.threshold}` : "—"}
-          </p>
-          <p className="text-small text-ink-500">
-            {underlag.volymbonus ? kronor(underlag.volymbonus.belopp) : "ingen nivå nådd än"}
-          </p>
-        </div>
-        <Nyckeltal etikett="grundprovision" varde={kronor(underlag.grundprovision)} />
-      </div>
-
-      {underlag.nasta ? (
-        <Notis ton="info">
-          Du har {underlag.antal.netto} {underlag.antal.netto === 1 ? "order" : "order"}.{" "}
-          <strong>
-            {underlag.nasta.kvar} {underlag.nasta.kvar === 1 ? "order" : "order"} kvar
-          </strong>{" "}
-          till nivå {underlag.nasta.niva.threshold}.
-          {prognos && (
-            <>
-              {" "}
-              Då blir bonusen {kronor(prognos.bonusDa)} och totalen {kronor(prognos.totaltDa)} —{" "}
-              <em>vid samma snitt som hittills, {kronor(prognos.snittPerOrder)} per order.</em>
-            </>
-          )}
-        </Notis>
-      ) : (
-        underlag.volymbonus && (
-          <Notis ton="ok">
-            Du är på trappans högsta nivå. Utöver den kan din chef bokföra en övrig bonus för hand.
-          </Notis>
-        )
-      )}
-
-      {underlag.rader.length > 0 && (
-        <ul className="flex flex-col">
-          {underlag.rader.map((r, i) => (
-            <li
-              key={r.order_id ?? `${r.slag}-${i}`}
-              className="flex items-center gap-4 border-b border-canvas py-2 last:border-0"
-            >
-              <span className="flex-1 text-small text-ink-700">{r.text}</span>
-              <span className="tnum text-small font-semibold text-ink-900">{kronor(r.belopp)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-function Nyckeltal({ etikett, varde }: { etikett: string; varde: string }) {
-  return (
-    <div>
-      <p className="tnum text-h1 text-ink-900">{varde}</p>
-      <p className="text-small text-ink-500">{etikett}</p>
-    </div>
-  );
-}
-
-function Alla({
-  poster,
-  manad,
-  personer,
-}: {
-  poster: Post[];
-  manad: string;
-  personer: { id: string; namn: string }[];
-}) {
-  const rader = personer
-    .map((p) => ({
-      namn: p.namn,
-      summa: summera(
-        poster.filter((x) => x.employee_id === p.id),
-        manad,
-      ),
-    }))
-    .filter((r) => r.summa.poster > 0)
-    .sort((a, b) => b.summa.belopp - a.summa.belopp);
-
-  if (rader.length === 0) {
-    return (
-      <EmptyState
-        rubrik="Ingen post är bokförd den här månaden"
-        text="Bokför den första posten i formuläret ovan."
-      />
-    );
-  }
-
-  const total = rader.reduce((s, r) => s + r.summa.belopp, 0);
-
-  return (
-    <>
-      <ul className="flex flex-col">
-        {rader.map((r) => (
-          <li
-            key={r.namn}
-            className="flex items-center gap-4 border-b border-canvas py-3 last:border-0"
-          >
-            <span className="flex-1 text-body text-ink-900">{r.namn}</span>
-            {r.summa.affarer !== null && (
-              <span className="text-small text-ink-500">{r.summa.affarer} affärer</span>
-            )}
-            <span className="tnum text-body font-semibold text-ink-900">
-              {kronor(r.summa.belopp)}
-            </span>
-          </li>
-        ))}
-      </ul>
-      <div className="mt-4 flex items-baseline justify-between border-t border-canvas pt-4">
-        <span className="text-small text-ink-500">Totalt</span>
-        <span className="tnum text-h1 text-ink-900">{kronor(total)}</span>
-      </div>
-    </>
-  );
-}
-
-/** Aktiva anstallda, for inmatningens lista. RLS avgor vilka som syns. */
+/** Aktiva anstallda, for inmatningens lista och lagtavlans namn. RLS avgor vilka som syns. */
 async function hamtaPersoner(): Promise<{ id: string; namn: string }[]> {
   const rls = await supabaseServer();
   const { data } = await rls
@@ -511,4 +1110,20 @@ async function hamtaPersoner(): Promise<{ id: string; namn: string }[]> {
     .order("first_name");
 
   return (data ?? []).map((e) => ({ id: e.id, namn: fullName(e) }));
+}
+
+/**
+ * De som har saljarrollen.
+ *
+ * INGEN INBADDNING. `employee_role` har flera frammande nycklar mot `employee`,
+ * sa `employee!inner(...)` ar TVETYDIGT och PostgREST svarar `PGRST201` i
+ * stallet for att ge rader — med `?? []` blir felet en tom lista och funktionen
+ * fortsatter som om ingen vore saljare. Sex sadana fall rattades 2026-09-07.
+ * Namnen kommer fran `hamtaPersoner`, och de tva satts ihop pa id.
+ */
+async function hamtaSaljarIds(): Promise<Set<string>> {
+  const rls = await supabaseServer();
+  const { data } = await rls.from("employee_role").select("employee_id").eq("role", "salesperson");
+
+  return new Set((data ?? []).map((r) => String(r.employee_id)));
 }

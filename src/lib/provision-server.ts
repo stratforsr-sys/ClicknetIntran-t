@@ -15,6 +15,8 @@ export type Post = Provisionspost & {
   id: string;
   employee_id: string;
   source: string;
+  /** `<manad>:<person>:<slag>` for motorns poster, null for handinmatade. */
+  external_ref: string | null;
   note: string | null;
   entered_at: string;
 };
@@ -25,7 +27,7 @@ export async function hamtaProvision(employeeId: string, franOchMed: string): Pr
   const rls = await supabaseServer();
   const { data } = await rls
     .from("commission_entry")
-    .select("id, employee_id, period_month, amount, deals, source, note, entered_at")
+    .select("id, employee_id, period_month, amount, deals, source, external_ref, note, entered_at")
     .eq("employee_id", employeeId)
     .gte("period_month", franOchMed)
     .order("period_month", { ascending: false })
@@ -44,7 +46,7 @@ export async function hamtaAllProvision(franOchMed: string): Promise<Post[]> {
   const rls = await supabaseServer();
   const { data } = await rls
     .from("commission_entry")
-    .select("id, employee_id, period_month, amount, deals, source, note, entered_at")
+    .select("id, employee_id, period_month, amount, deals, source, external_ref, note, entered_at")
     .gte("period_month", franOchMed)
     .order("period_month", { ascending: false })
     .order("entered_at", { ascending: false });
