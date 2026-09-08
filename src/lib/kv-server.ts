@@ -147,11 +147,40 @@ export async function hamtaPolicyer(): Promise<KvPolicy[]> {
  * `kvManad` filtrerar sjalv bort de veckor som inte hor till manaden.
  */
 export async function hamtaKvPerPerson(manad: string): Promise<Map<string, KvIndata>> {
+  return (await hamtaKvPerManad([manad])).get(manad) ?? new Map();
+}
+
+/**
+ * Samma sak for FLERA manader, i EN fraga.
+ *
+ * ===========================================================================
+ * ARSVYN VAR SKALET (2026-09-08). Den behover K&V-utfallet for tolv manader,
+ * och tolv anrop till `hamtaKvPerPerson` hade blivit tolv turer till databasen
+ * inuti en sida som redan ligger i den blockerande vagen.
+ *
+ * Samtalen hamtas darfor EN gang over hela spannet och delas upp i minnet.
+ * `kvManad()` filtrerar sjalv fram den manad den fragas om, sa uppdelningen ar
+ * ett anrop per manad mot ren logik — inte mot databasen.
+ * ===========================================================================
+ *
+ * SPANNET SPANNER EN VECKA UT AT BADA HALLEN. En ISO-vecka hor till den manad
+ * dar dess TORSDAG ligger (O9), sa en vecka som raknas i september kan innehalla
+ * samtal fran den 31 augusti. Utan marginalen blir randveckorna halva, och en
+ * halv vecka ar per definition inte fullstandigt bedomd — foljden hade varit en
+ * tyst utebliven bonus i randen av varje manad.
+ */
+export async function hamtaKvPerManad(
+  manader: string[],
+): Promise<Map<string, Map<string, KvIndata>>> {
+  const ut = new Map<string, Map<string, KvIndata>>();
+  if (manader.length === 0) return ut;
+
+  const sorterade = [...manader].sort();
   const rls = await supabaseServer();
 
-  const fran = new Date(`${manad}T00:00:00Z`);
+  const fran = new Date(`${sorterade[0]}T00:00:00Z`);
   fran.setUTCDate(fran.getUTCDate() - 7);
-  const till = new Date(`${manad}T00:00:00Z`);
+  const till = new Date(`${sorterade[sorterade.length - 1]}T00:00:00Z`);
   till.setUTCMonth(till.getUTCMonth() + 1);
   till.setUTCDate(till.getUTCDate() + 7);
 
@@ -163,11 +192,6 @@ export async function hamtaKvPerPerson(manad: string): Promise<Map<string, KvInd
       .lte("call_date", till.toISOString().slice(0, 10)),
     hamtaPolicyer(),
   ]);
-
-  // Ingen policy for manaden betyder att K&V inte gallde da. Ingen bonus, inget
-  // fel — samma linje som en tom volymtrappa ger noll volymbonus.
-  const policy = gallandePolicy(policyer, manad);
-  if (!policy) return new Map();
 
   const rader: KvSamtal[] = ((samtal ?? []) as unknown as Record<string, unknown>[]).map((r) => {
     const bedomning = (r.kv_assessment ?? null) as Record<string, unknown> | null;
@@ -188,18 +212,32 @@ export async function hamtaKvPerPerson(manad: string): Promise<Map<string, KvInd
     };
   });
 
-  const ut = new Map<string, KvIndata>();
-  for (const person of new Set(rader.map((r) => r.employee_id))) {
-    const m = kvManad(
-      rader.filter((r) => r.employee_id === person),
-      manad,
-      policy,
-    );
-    // Noll procent ar ingen post. En K&V-rad pa noll kronor i underlaget hade
-    // pastatt att bonusen raknats och blivit noll, nar den inte gallde alls.
-    if (m.procent > 0) {
-      ut.set(person, { godkanda: m.godkanda, bedomda: m.bedomda, procent: m.procent });
+  const personer = [...new Set(rader.map((r) => r.employee_id))];
+
+  for (const manad of sorterade) {
+    // POLICYN SLAS UPP PER MANAD. Andras K&V-reglerna mitt i ett ar ska varje
+    // manad bedomas efter det som gallde da — samma versionering som trappan.
+    const policy = gallandePolicy(policyer, manad);
+    const forManaden = new Map<string, KvIndata>();
+
+    // Ingen policy for manaden betyder att K&V inte gallde da. Ingen bonus,
+    // inget fel — samma linje som en tom volymtrappa ger noll volymbonus.
+    if (policy) {
+      for (const person of personer) {
+        const m = kvManad(
+          rader.filter((r) => r.employee_id === person),
+          manad,
+          policy,
+        );
+        // Noll procent ar ingen post. En K&V-rad pa noll kronor i underlaget
+        // hade pastatt att bonusen raknats och blivit noll, nar den inte gallde.
+        if (m.procent > 0) {
+          forManaden.set(person, { godkanda: m.godkanda, bedomda: m.bedomda, procent: m.procent });
+        }
+      }
     }
+
+    ut.set(manad, forManaden);
   }
 
   return ut;

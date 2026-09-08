@@ -24,9 +24,19 @@ faktiskt frågar.
 
 **Överst i panelen: vilken månad, och vems siffror**
 
-Alla kan byta **period** — tolv månader bakåt. Perioden är en hel månad och
-inget fritt datumspann, för volymbonusen är en egenskap hos hela månaden: ett
-spann som "1–15 september" har ingen bonusnivå att visa.
+Alla kan byta **period** — tolv månader bakåt, plus **Hela 2026** och
+**Hela 2025**.
+
+Perioden är alltid hela månader och aldrig ett fritt datumspann. Volymbonusen är
+en egenskap hos hela månaden: ett spann som "1–15 september" har ingen bonusnivå
+att visa, för de pengarna finns inte förrän månaden är slut.
+
+I en **årsvy** räknas varje månad för sig, med sin egen trappa och sin egen
+sanning — en fastställd månad är bokförd, en öppen räknas live — och summan
+bildas av de tolv. Staplarna blir en per månad, och panelens fyra tal blir
+årets: månader med order, bästa månaden, månader med bonus och snitt per månad.
+Ett år har ingen egen bonusnivå: tolv månader med fyra order ger noll bonus
+tolv gånger, medan samma fyrtioåtta order i EN månad ger nivå 20.
 
 Är du **säljchef, VD eller ekonomi** finns en väljare till: **Min provision**,
 **Företaget totalt**, eller en enskild säljare. Hela tavlan följer med — talet,

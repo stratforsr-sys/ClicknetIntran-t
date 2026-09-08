@@ -84,6 +84,53 @@ körs i webbläsaren.
 komponenten beroende av renderingsläget. Sidan vet redan vilka två parametrar
 som finns och skickar in dem — två parametrar är hela adressen.
 
+### Hela året kom till samma dag
+
+Beställaren ville kunna välja "hela året" i periodväljaren. Det byggdes som en
+**lista av månader**, inte som ett spann — och det är samma skäl som gjorde att
+perioden är en månad och inte ett datumspann, en gång till:
+
+**Bonusen är en månadssak.** Nivån bestäms av EN MÅNADS volym och betalas för
+den månaden. Tolv månader med fyra order var ger noll bonus tolv gånger; samma
+fyrtioåtta order i en månad ger nivå 20. Ett årstal räknat på fyrtioåtta hade
+påstått det senare om någon som gjort det förra.
+
+**Månaderna har olika sanning.** En stängd månad är bokförd och räknas aldrig
+om; en öppen räknas live. Ett år innehåller båda, så summan måste bildas månad
+för månad med var månads egen regel — och varje månad får sin egen trappa, sin
+egen K&V och sitt eget konsekvensläge. Körs året med septembers trappa får
+januari fel bonus.
+
+Både "september" och "hela 2026" är därför samma sak i koden: en lista med en
+respektive tolv månader. Allt loopar över listan, och månadsvyn är enmånadsfallet.
+
+**Två takter, och valet är inte kosmetiskt.** En persons enskilda månad får
+`takta()`, som slår upp vilken nivå prognosen landar på — "då blir bonusen
+1 200 kr" är halva varför kortet finns. Ett år eller ett helt lag får
+`taktaOverManader()`, som skriver fram beloppet utan att påstå en nivå. Taktkortet
+byter etikett med `samlad`, så talet aldrig står under ett ord det inte svarar mot.
+
+**`taktaFlera` och `samlatMal` togs bort samma dag de skrevs.** De löste
+företagsfallet en månad i taget; `taktaOverManader` och `malOverPeriod` löser
+både månad och år med samma kod. Två metoder för samma fråga hade gett olika
+tal för september beroende på om man kom dit via månadsvyn eller årsvyn.
+
+`malOverPeriod` tar emot utfallet **per person och månad**, inte färdigsummerat.
+Det är det som gör att varje mål kan paras ihop med sitt eget utfall — summeras
+tolv månaders mål men jämförs mot hela årets order stiger kvoten av att någon
+*glömde* sätta ett mål.
+
+**En K&V-fälla till, fångad innan den blev en bugg.** `hamtaKvPerManad` hämtar
+för periodens månader, men periodkortet längst ned visar alltid de tre senaste.
+Väljs ett år ligger de utanför, och `kvPerManad.get(m)` hade gett `undefined` —
+alltså `underlagForAlla` utan K&V, exakt den avvikelse mot `stangning.ts` som
+rättades dagen innan. Fönstret är nu periodens månader **plus** de tre.
+
+**Provet fångade ett riktigt kalenderfaktum.** Januari 2026 har 20 arbetsdagar,
+inte 22: nyårsdagen och trettondedag jul infaller båda på vardagar det året. Det
+var testets aritmetik som var fel, inte koden — och det är precis vad
+arbetsdagsräkningen finns för.
+
 ### Testdata
 
 Fem påhittade order lades in i produktionsdatabasen 2026-09-08 för att tavlan

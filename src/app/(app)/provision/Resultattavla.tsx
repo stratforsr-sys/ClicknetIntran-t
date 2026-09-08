@@ -461,7 +461,7 @@ export function Taktkort({ takt, samlad = false }: { takt: Takt; samlad?: boolea
                     : "Volymbonus"}
               </dt>
               {/* SAMLAT VISAS BELOPPET ALLTID, aven noll. En lagsumma har ingen
-                  "niva" att sakna — se `taktaFlera` — sa texten "ingen nivå nås"
+                  "niva" att sakna — se `taktaOverManader` — sa texten "ingen nivå nås"
                   hade varit ett pastaende om ett tal som inte finns. */}
               <dd className="tnum text-body text-ink-900">
                 {samlad || takt.prognos.niva ? kronor(takt.prognos.bonus) : "ingen nivå nås"}
@@ -621,90 +621,79 @@ function avrundaUppat(n: number): string {
 // -----------------------------------------------------------------------------
 
 /**
- * En stapel per arbetsdag.
+ * En stapel per enhet i perioden — arbetsdag i en månad, månad i ett år.
  *
  * ===========================================================================
- * BARA ARBETSDAGAR FAR EN STAPEL.
+ * BARA ARBETSDAGAR FÅR EN STAPEL I EN MÅNADSVY.
  *
- * En helg med noll order sager ingenting om nagon. Ritas de anda blir var
- * fjarde stapel tom i alla manader for alla, och ogat lar sig att raden ar full
- * av tomrum — vilket ar precis det som gor att man slutar se de dagar som
- * verkligen ar tomma.
+ * En helg med noll order säger ingenting om någon. Ritas de ändå blir var
+ * fjärde stapel tom i alla månader för alla, och ögat lär sig att raden är full
+ * av tomrum — vilket är precis det som gör att man slutar se de dagar som
+ * verkligen är tomma.
  *
- * Roda dagar ar borta av samma skal. Listan star i `saljtakt.ts` och delas med
- * takten, sa de tva kan inte saga olika saker om hur manga dagar manaden har.
+ * Röda dagar är borta av samma skäl. Listan står i `saljtakt.ts` och delas med
+ * takten, så de två kan inte säga olika saker om hur många dagar månaden har.
  * ===========================================================================
  *
- * En dag utan order far en LAG stump i stallet for ingenting. En dag som inte
- * ritas alls gar inte att skilja fran en dag som inte finns, och det ar de
- * tomma dagarna raden ar till for att visa.
+ * En enhet utan order får en LÅG stump i stället för ingenting. En stapel som
+ * inte ritas alls går inte att skilja från en enhet som inte finns, och det är
+ * de tomma dagarna raden är till för att visa.
  */
-export function Dagsstaplar({
+export function Staplar({
+  rubrik,
+  beskrivning,
   serie,
-  idag,
-  manad,
+  markerad,
+  sammanfattning,
 }: {
-  serie: { dag: string; antal: number }[];
-  idag: string;
-  manad: string;
+  rubrik: string;
+  beskrivning: string;
+  serie: { nyckel: string; etikett: string; kort: string; antal: number; framtid: boolean }[];
+  /** Nyckeln som får ringen — dagens datum, eller innevarande månad. */
+  markerad: string | null;
+  /** Bildtexten för skärmläsaren. En stapelrad utan den är ett tomt element. */
+  sammanfattning: string;
 }) {
   const hogst = Math.max(1, ...serie.map((d) => d.antal));
-  const summa = serie.reduce((s, d) => s + d.antal, 0);
 
   return (
     <Card>
-      <CardHeader
-        titel="Månadens dagar"
-        beskrivning={`${summa} order fördelade på ${serie.length} arbetsdagar. Helger och röda dagar räknas inte.`}
-      />
+      <CardHeader titel={rubrik} beskrivning={beskrivning} />
 
-      <div className="flex h-28 items-end gap-1" role="img" aria-label={sammanfattaSerie(serie)}>
-        {serie.map((d) => {
-          const framtid = d.dag > idag;
-          const arIdag = d.dag === idag;
-
-          return (
-            <div key={d.dag} className="flex h-full flex-1 flex-col justify-end gap-1">
-              <span className="tnum text-center text-micro text-ink-500">
-                {d.antal > 0 ? d.antal : ""}
-              </span>
-              <div
-                title={`${d.dag}: ${d.antal} order`}
-                className={[
-                  "w-full rounded-xs",
-                  d.antal === 0
-                    ? framtid
-                      ? "bg-canvas"
-                      : "bg-ink-300/40"
-                    : arIdag
-                      ? "bg-brand-700"
-                      : "bg-brand-500",
-                  arIdag ? "ring-2 ring-brand-600 ring-offset-1" : "",
-                ].join(" ")}
-                style={{
-                  // Noll far en stump pa fyra pixlar, inte noll. Se rubriken.
-                  height: d.antal === 0 ? "4px" : `${Math.max(8, (d.antal / hogst) * 100)}%`,
-                }}
-              />
-            </div>
-          );
-        })}
+      <div className="flex h-28 items-end gap-1" role="img" aria-label={sammanfattning}>
+        {serie.map((d) => (
+          <div key={d.nyckel} className="flex h-full flex-1 flex-col justify-end gap-1">
+            <span className="tnum text-center text-micro text-ink-500">
+              {d.antal > 0 ? d.antal : ""}
+            </span>
+            <div
+              title={`${d.etikett}: ${d.antal} order`}
+              className={[
+                "w-full rounded-xs",
+                d.antal === 0
+                  ? d.framtid
+                    ? "bg-canvas"
+                    : "bg-ink-300/40"
+                  : d.nyckel === markerad
+                    ? "bg-brand-700"
+                    : "bg-brand-500",
+                d.nyckel === markerad ? "ring-2 ring-brand-600 ring-offset-1" : "",
+              ].join(" ")}
+              style={{
+                // Noll får en stump på fyra pixlar, inte noll. Se rubriken.
+                height: d.antal === 0 ? "4px" : `${Math.max(8, (d.antal / hogst) * 100)}%`,
+              }}
+            />
+          </div>
+        ))}
       </div>
 
       <div className="mt-3 flex justify-between text-micro text-ink-500">
-        <span>{manadsnamn(manad).split(" ")[0]} {serie[0]?.dag.slice(8)}</span>
-        <span>{serie[serie.length - 1]?.dag.slice(8)}</span>
+        <span>{serie[0]?.kort}</span>
+        <span>{serie[serie.length - 1]?.kort}</span>
       </div>
     </Card>
   );
-}
-
-/** Bildtexten for skarmlasaren. En stapelrad utan den ar ett tomt element. */
-function sammanfattaSerie(serie: { dag: string; antal: number }[]): string {
-  const med = serie.filter((d) => d.antal > 0);
-  if (med.length === 0) return "Inga order tecknade i månaden än.";
-  const bast = med.reduce((a, b) => (b.antal > a.antal ? b : a));
-  return `Order per arbetsdag. ${med.length} av ${serie.length} dagar har minst en order. Bästa dagen är ${bast.dag} med ${bast.antal}.`;
 }
 
 // -----------------------------------------------------------------------------
@@ -761,39 +750,25 @@ export function Lagesrad({
 // -----------------------------------------------------------------------------
 
 /**
- * Det som ersätter bonustrappan när panelen visar HELA FÖRETAGET.
+ * Fyra tal på den mörka plattan — det som ersätter bonustrappan när banan inte
+ * går att rita.
  *
  * ===========================================================================
- * FÖRETAGET HAR INGEN BONUSTRAPPA, OCH DET ÄR INTE EN LUCKA.
+ * TVÅ FALL DÄR TRAPPAN INTE FINNS, OCH DE HAR SAMMA ORSAK.
  *
- * Volymbonusen är en egenskap hos EN PERSONS månad — nivån bestäms av hens
- * ordervolym och betalas till hen. Summeras trapporna över tio säljare finns
- * ingen tröskel kvar att rita: femtio order fördelade på tio personer ger
- * ingen bonus alls, femtio på en person ger nivå 20, och en gemensam bana hade
- * ritat samma bild för båda.
+ * FÖRETAGET har ingen bonusnivå. Volymbonusen är en egenskap hos EN PERSONS
+ * månad — femtio order fördelade på tio personer ger ingen bonus alls, femtio
+ * på en ger nivå 20, och en gemensam bana hade ritat samma bild för båda.
  *
- * Raden svarar i stället på de frågor företaget FAKTISKT har: hur många drar,
- * hur många har nått en nivå, och vad en order är värd i snitt.
+ * ETT ÅR har tolv nivåer, en per månad, och ingen av dem är "årets". Ett årstal
+ * räknat på årets samlade volym hade påstått nivå 20 om någon som gjort fyra
+ * order i månaden hela året och därmed aldrig nått en enda nivå.
+ *
+ * Båda svarar i stället på de frågor perioden FAKTISKT har. Talen räknas i
+ * `saljtakt.ts` och `page.tsx`; komponenten ritar dem.
  * ===========================================================================
  */
-export function Foretagsstrip({
-  saljare,
-  medNiva,
-  order,
-  snittPerOrder,
-}: {
-  saljare: number;
-  medNiva: number;
-  order: number;
-  snittPerOrder: number;
-}) {
-  const tal = [
-    { etikett: "Säljare med order", varde: String(saljare) },
-    { etikett: "Nått en bonusnivå", varde: `${medNiva} av ${saljare}` },
-    { etikett: "Order netto", varde: String(order) },
-    { etikett: "Snitt per order", varde: kronor(snittPerOrder) },
-  ];
-
+export function Talstrip({ tal }: { tal: { etikett: string; varde: string }[] }) {
   return (
     <dl className="grid grid-cols-2 gap-x-10 gap-y-5 sm:grid-cols-4">
       {tal.map((t) => (

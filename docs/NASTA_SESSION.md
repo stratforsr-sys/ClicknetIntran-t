@@ -3,7 +3,7 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-08 — provisionsvyn ombyggd till resultattavla, nu med period- och personväljare i panelen: månadens tal i stor stil, bonustrappan som en bana, kort för I dag / Takt / Mål, chefens lagtavla och månadsmål per säljare. **Ligger på branch `provision-resultattavla`, INTE mergad.**
+**Senast uppdaterad:** 2026-09-08 — provisionsvyn ombyggd till resultattavla, nu med period- (månad eller helår) och personväljare i panelen: månadens tal i stor stil, bonustrappan som en bana, kort för I dag / Takt / Mål, chefens lagtavla och månadsmål per säljare. **Ligger på branch `provision-resultattavla`, INTE mergad.**
 
 ## Provisionen 2026-09-07 — VÄNTAR PÅ GODKÄNNANDE I PREVIEW
 
@@ -44,7 +44,21 @@ Min provision / Företaget totalt / en säljare). Omfattningen räknas fram på 
 ställe i `page.tsx` och läses av alla ytor; tolkas den på flera kan rubriken säga
 "Vlado" medan kortet under visar ens egna siffror.
 
-**PERIODEN ÄR EN MÅNAD OCH FÅR INTE BLI ETT FRITT SPANN.** Volymbonusen är en
+**PERIODEN ÄR EN LISTA AV MÅNADER.** "september" är listan med en månad,
+"hela 2026" listan med tolv. Varje månad räknas för sig med sin egen trappa,
+sin egen K&V och sitt eget öppen/stängd-läge — kör aldrig en period med EN
+trappa över flera månader, då får januari septembers bonus.
+
+**ETT ÅR HAR INGEN BONUSNIVÅ.** `taktaOverManader` sätter alltid `niva: null`.
+Tolv månader med fyra order ger noll bonus tolv gånger; samma fyrtioåtta i en
+månad ger nivå 20.
+
+**K&V-FÖNSTRET MÅSTE TÄCKA PERIODKORTETS TRE MÅNADER OCKSÅ.** Väljs ett år
+ligger de utanför perioden, och `kvPerManad.get(m)` ger då `undefined` — alltså
+`underlagForAlla` utan K&V, samma avvikelse mot `stangning.ts` som rättades
+2026-09-07.
+
+**PERIODEN FÅR INTE BLI ETT FRITT SPANN.** Volymbonusen är en
 egenskap hos hela månaden — ett spann som "1–15 september" har ingen bonusnivå
 och hade gett ett tal som ser ut som provision utan att gå att betala ut.
 

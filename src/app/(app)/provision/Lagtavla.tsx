@@ -2,9 +2,8 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ButtonLink } from "@/components/ui/Button";
-import { kronor, manadsnamn } from "@/lib/provision";
-import type { Dagsutfall, Malutfall, Takt } from "@/lib/saljtakt";
-import type { Underlag } from "@/lib/provision-motor";
+import { kronor } from "@/lib/provision";
+import type { Malutfall, Takt } from "@/lib/saljtakt";
 
 /**
  * E13 steg 10: chefens lagtavla.
@@ -33,35 +32,56 @@ import type { Underlag } from "@/lib/provision-motor";
  *   INGEN PLACERINGSSIFFRA SKRIVS UT. Ordningen ar en ordning; en etta bredvid
  *   ett namn ar ett omdome. Skillnaden ar liten att lasa om och stor att mota.
  * ===========================================================================
+ *
+ * ---------------------------------------------------------------------------
+ * RADEN BAR FARDIGA TAL, INTE ETT `Underlag`.
+ *
+ * Andrat 2026-09-08 nar arsvyn kom till. Ett `Underlag` beskriver EN MANAD, och
+ * ett ar ar tolv. Bar raden underlaget maste tavlan sjalv veta hur tolv
+ * summeras — och da ligger samma rakning bade har och i `page.tsx`, med tva
+ * chanser att gora den olika.
+ *
+ * Nu raknas allt pa ett stalle och tavlan ritar. `bonusetikett` ar fardig text
+ * av samma skal: "Nivå 10" i en manadsvy och "3 mån med bonus" i en arsvy ar
+ * tva olika meningar om samma falt, och valet mellan dem hor inte hemma i en
+ * komponent som inte vet vilken period den visar.
+ * ---------------------------------------------------------------------------
  */
 
 export type Lagrad = {
   employee_id: string;
   namn: string;
-  dag: Dagsutfall;
-  underlag: Underlag;
+  /** Order tecknade i dag. Noll nar perioden inte innehaller dagens datum. */
+  idag: number;
+  /** Order netto i hela perioden. */
+  antal: number;
+  /** "Nivå 10", "3 mån med bonus", eller null. Fardig text — se rubriken. */
+  bonusetikett: string | null;
   takt: Takt;
   mal: Malutfall | null;
-  /** Manadens intjaning inklusive bokforda handposter. */
+  /** Periodens intjaning inklusive bokforda handposter. */
   total: number;
 };
 
 export function Lagtavla({
   rader,
-  manad,
+  period,
+  visaIdag,
   farSattaMal,
 }: {
   rader: Lagrad[];
-  /** Manaden tavlan galler. Foljer panelens periodval. */
-  manad: string;
+  /** Perioden tavlan galler, skriven: "september 2026" eller "hela 2026". */
+  period: string;
+  /** Har perioden en "i dag"? Ett ar som redan varit har det inte. */
+  visaIdag: boolean;
   farSattaMal: boolean;
 }) {
   if (rader.length === 0) {
     return (
       <Card>
-        <CardHeader titel={`Laget i laget — ${manadsnamn(manad)}`} />
+        <CardHeader titel={`Laget i laget — ${period}`} />
         <EmptyState
-          rubrik={`Ingen order är tecknad i ${manadsnamn(manad)}`}
+          rubrik={`Ingen order är tecknad i ${period}`}
           text="Tavlan fylls av ordrarna själva. Den första order någon lägger in dyker upp här samma sekund."
           handling={<ButtonLink href="/order">Till order</ButtonLink>}
         />
@@ -69,22 +89,22 @@ export function Lagtavla({
     );
   }
 
-  // Sorteringen: manadens intjaning, hogst forst. Se rubriken.
+  // Sorteringen: periodens intjaning, hogst forst. Se rubriken.
   const sorterade = [...rader].sort((a, b) => b.total - a.total);
 
-  const idag = rader.reduce((s, r) => s + r.dag.antal, 0);
-  const order = rader.reduce((s, r) => s + r.underlag.antal.netto, 0);
+  const idag = rader.reduce((s, r) => s + r.idag, 0);
+  const order = rader.reduce((s, r) => s + r.antal, 0);
   const summa = rader.reduce((s, r) => s + r.total, 0);
   // TAKTEN SUMMERAS OVER DE SOM FAKTISKT HAR EN. Den som saknar prognos bidrar
   // med sitt UTFALL och inte med noll — annars sjunker lagets takt av att en ny
   // saljare borjar, vilket ar tvartemot vad som hant.
-  const takt = rader.reduce((s, r) => s + (r.takt.prognos?.totalt ?? r.underlag.summa), 0);
+  const takt = rader.reduce((s, r) => s + (r.takt.prognos?.totalt ?? r.total), 0);
 
   return (
     <Card guide="provision.lag">
       <CardHeader
-        titel={`Laget i laget — ${manadsnamn(manad)}`}
-        beskrivning="Räknas live ur orderna, samma motor som varje säljares egen vy. Ordningen är månadens intjäning."
+        titel={`Laget i laget — ${period}`}
+        beskrivning="Räknas live ur orderna, samma motor som varje säljares egen vy. Ordningen är periodens intjäning."
         handling={
           farSattaMal ? (
             <ButtonLink href="/provision/mal" size="sm" variant="sekundar">
@@ -95,10 +115,14 @@ export function Lagtavla({
       />
 
       <dl className="mb-6 grid grid-cols-2 gap-4 rounded-sm bg-surface-alt p-4 sm:grid-cols-4">
-        <Lagtal etikett="I dag" varde={String(idag)} enhet="order" />
-        <Lagtal etikett="Månaden" varde={String(order)} enhet="order netto" />
+        {visaIdag && <Lagtal etikett="I dag" varde={String(idag)} enhet="order" />}
+        <Lagtal etikett="Perioden" varde={String(order)} enhet="order netto" />
         <Lagtal etikett="Intjänat" varde={kronor(summa)} />
-        <Lagtal etikett="Takt" varde={kronor(takt)} enhet="vid månadens slut" />
+        <Lagtal
+          etikett="Takt"
+          varde={kronor(takt)}
+          enhet={visaIdag ? "vid periodens slut" : "utfall"}
+        />
       </dl>
 
       <ul className="flex flex-col">
@@ -111,16 +135,16 @@ export function Lagtavla({
               {r.namn}
             </span>
 
-            <span className="tnum w-16 text-small text-ink-500">
-              {r.dag.antal > 0 ? `+${r.dag.antal} i dag` : "—"}
-            </span>
+            {visaIdag && (
+              <span className="tnum w-16 text-small text-ink-500">
+                {r.idag > 0 ? `+${r.idag} i dag` : "—"}
+              </span>
+            )}
 
-            <span className="tnum w-20 text-small text-ink-500">
-              {r.underlag.antal.netto} order
-            </span>
+            <span className="tnum w-20 text-small text-ink-500">{r.antal} order</span>
 
-            {r.underlag.volymbonus ? (
-              <Badge ton="brand">Nivå {r.underlag.volymbonus.niva.threshold}</Badge>
+            {r.bonusetikett ? (
+              <Badge ton="brand">{r.bonusetikett}</Badge>
             ) : (
               <span className="w-[5.5rem] text-micro uppercase text-ink-300">Ingen nivå</span>
             )}
@@ -135,9 +159,9 @@ export function Lagtavla({
       </ul>
 
       <p className="mt-4 max-w-[70ch] text-small text-ink-500">
-        Talen är preliminära så länge månaden är öppen: en order som makuleras drar tillbaka sitt
-        belopp, och volymbonusen räknas om vid varje ny order. Det som betalas ut är det som
-        bokförs när perioden fastställs.
+        Talen är preliminära så länge perioden innehåller en öppen månad: en order som makuleras
+        drar tillbaka sitt belopp, och volymbonusen räknas om vid varje ny order. Det som betalas
+        ut är det som bokförs när månaden fastställs.
       </p>
     </Card>
   );
@@ -157,8 +181,8 @@ function Lagtal({ etikett, varde, enhet }: { etikett: string; varde: string; enh
  * Malet som ett kort besked.
  *
  * PROCENTEN STAR MED ORDET. En andel ensam sager inte om 60 % ar bra — det
- * beror pa vilken dag i manaden det ar, och det ar precis vad `lage` redan
- * vagt in. Samma resonemang som i `Malkort`.
+ * beror pa var i perioden man ar, och det ar precis vad `lage` redan vagt in.
+ * Samma resonemang som i `Malkort`.
  */
 function Mallapp({ mal }: { mal: Malutfall | null }) {
   if (!mal) return <span className="w-24 text-micro uppercase text-ink-300">Inget mål</span>;

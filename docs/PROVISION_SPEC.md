@@ -622,6 +622,12 @@ Allt nedan är data, inget av det är kod:
 
   Raden visas **bara när det finns bedömda veckor**. En rad som alltid står där
   och alltid säger noll lär ögat att ingenting händer på den platsen.
+- **Perioden väljs i panelen** (2026-09-08): tolv månader bakåt eller ett helår.
+  Alltid **hela månader** — volymbonusen är en egenskap hos månaden (5.2), så ett
+  fritt datumspann har ingen nivå att visa och hade gett ett tal som ser ut som
+  provision utan att gå att betala ut. Ett år räknas som en **lista av månader**,
+  var och en med sin egen trappa och sitt eget öppen/stängd-läge, och har därför
+  ingen egen bonusnivå.
 - **Dagen, takten och målet** (2026-09-07). Vad som tecknats i dag, vad månaden
   landar på i samma takt, och hur det står sig mot ett månadsmål. Takten räknas
   på **arbetsdagar** och skriver inte fram K&V — den beror på veckor som ingen

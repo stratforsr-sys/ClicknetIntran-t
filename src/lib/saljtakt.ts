@@ -529,37 +529,75 @@ export function manadsfacit(
 }
 
 // -----------------------------------------------------------------------------
-// Foretaget
+// Aret
+//
+// ===========================================================================
+// ETT AR AR EN LISTA AV MANADER, INTE ETT LANGT SPANN.
+//
+// Frestelsen ar att behandla aret som en enda period och rakna en volymbonus pa
+// arets samlade ordervolym. Det vore fel pa tva satt samtidigt:
+//
+//   BONUSEN AR EN MANADSSAK. Nivan bestams av EN MANADS volym och betalas for
+//   den manaden (avsnitt 5.2). Tolv manader med fyra order var ger noll bonus
+//   tolv ganger; samma fyrtioatta order i EN manad ger niva 20. Ett arstal
+//   raknat pa fyrtioatta hade pastatt det senare om nagon som gjort det forra.
+//
+//   MANADERNA HAR OLIKA SANNING. En stangd manad ar bokford och raknas aldrig
+//   om; en oppen raknas live. Aret innehaller bada, och summan maste darfor
+//   bildas manad for manad med var manads egen regel — inte av en motor som
+//   kors en gang over hela spannet.
+//
+// DETSAMMA UTESLUTER ETT FRITT DATUMSPANN. "1-15 september" har ingen bonusniva
+// att visa: halva manadens order nar kanske niva 5, men de pengarna finns inte
+// forran manaden ar slut och kan ga at bada hall efter den 15:e. Talet hade
+// sett ut som provision utan att ga att betala ut.
+// ===========================================================================
 // -----------------------------------------------------------------------------
 
 /**
- * Lagets takt: summan av de enskildas.
+ * Manaderna i ett kalenderar, men aldrig framtida.
  *
- * ===========================================================================
- * `niva` AR ALLTID NULL HAR, OCH DET AR HELA POANGEN.
- *
- * Volymbonusen ar en egenskap hos EN PERSONS manad. Summeras trapporna over tio
- * saljare finns ingen troskel kvar: femtio order fordelade pa tio personer ger
- * ingen bonus alls, femtio pa en person ger niva 20. En gemensam "niva" hade
- * ritat samma bild for bada, och det ar den sortens tal som ser ut att betyda
- * nagot.
- *
- * BELOPPET summeras daremot, for varje persons bonus ar rakad var for sig
- * innan den laggs ihop. Talet ar alltsa sant; det ar bara ETIKETTEN "niva" som
- * inte finns pa lagniva.
- * ===========================================================================
- *
- * DEN SOM SAKNAR PROGNOS BIDRAR MED SITT UTFALL, inte med noll. Annars sjunker
- * lagets takt av att en ny saljare borjar, vilket ar tvartemot vad som hant.
+ * En framtida manad ar inte en intjaning utan en prognos, och den hor inte
+ * hemma i ett arstal — samma grans som `giltigManad` drar. Dessutom hade
+ * decembers noll dragit ned snittet for alla redan i mars.
  */
-export function taktaFlera(
-  underlag: Underlag[],
-  nivaer: Bonusniva[],
-  manad: string,
+export function manaderIAr(ar: number, idagsManad: string): string[] {
+  const alla = Array.from({ length: 12 }, (_, i) => `${ar}-${String(i + 1).padStart(2, "0")}-01`);
+  return alla.filter((m) => m <= idagsManad);
+}
+
+/**
+ * Takten over en godtycklig lista manader.
+ *
+ * ===========================================================================
+ * `niva` AR ALLTID NULL HAR.
+ *
+ * En niva ar en egenskap hos EN PERSONS MANAD. Ett ar har tolv, och ingen av
+ * dem ar "arets"; ett lag har en per person, och ingen av dem ar "lagets".
+ * Femtio order fordelade pa tio personer — eller pa tolv manader — ger ingen
+ * bonus alls, medan femtio i en manad hos en person ger niva 20. Ett gemensamt
+ * nivatal hade ritat samma bild for bada.
+ *
+ * BELOPPET skrivs daremot fram, och det ar arligt: bonusen som redan ar
+ * intjanad ar rakad manad for manad med varje manads egen trappa, och
+ * framskrivningen sager bara "fortsatter det sa har". Antagandet star i vyn.
+ *
+ * DEN HAR FUNKTIONEN ANVANDS INTE FOR EN ENSKILD PERSONS ENSKILDA MANAD — dar
+ * ger `takta()` ett battre svar, eftersom den kan sla upp vilken niva prognosen
+ * faktiskt landar pa. Se valet i `page.tsx`.
+ * ===========================================================================
+ */
+export function taktaOverManader(
+  manader: string[],
   idag: string,
+  utfall: { antal: number; grundprovision: number; bonus: number },
 ): Takt {
-  const totalt = arbetsdagarIManad(manad).length;
-  const gangna = arbetsdagarTill(manad, idag).length;
+  let totalt = 0;
+  let gangna = 0;
+  for (const m of manader) {
+    totalt += arbetsdagarIManad(m).length;
+    gangna += arbetsdagarTill(m, idag).length;
+  }
 
   const grund = {
     gangna,
@@ -568,70 +606,152 @@ export function taktaFlera(
     andel: totalt === 0 ? 0 : gangna / totalt,
   };
 
-  const var_ = underlag.map((u) => ({ u, t: takta(u, nivaer, manad, idag) }));
-
-  // INGEN AV DE ENSKILDA HAR EN PROGNOS betyder att laget inte har en heller.
-  // Ett lag vars takt ar summan av fem utfall ar inte en takt, det ar ett
-  // utfall med fel rubrik.
-  if (!var_.some((x) => x.t.prognos !== null)) return { ...grund, prognos: null };
-
-  let antal = 0;
-  let grundprovision = 0;
-  let bonus = 0;
-
-  for (const { u, t } of var_) {
-    antal += t.prognos?.antal ?? u.antal.netto;
-    grundprovision += t.prognos?.grundprovision ?? u.grundprovision;
-    bonus += t.prognos?.bonus ?? (u.volymbonus?.belopp ?? 0);
+  if (gangna < MINSTA_DAGAR_FOR_PROGNOS || utfall.antal <= 0) {
+    return { ...grund, prognos: null };
   }
+
+  // Perioden ar slut: takten ar utfallet, inte en gissning om det.
+  const faktor = gangna >= totalt ? 1 : totalt / gangna;
+
+  const grundprovision = avrunda(utfall.grundprovision * faktor);
+  const bonus = avrunda(utfall.bonus * faktor);
 
   return {
     ...grund,
-    prognos: { antal, grundprovision, niva: null, bonus, totalt: grundprovision + bonus },
+    prognos: {
+      // AVRUNDAT TILL HELA ORDER. Order gar inte att salja i halvor.
+      antal: Math.round(utfall.antal * faktor),
+      grundprovision,
+      niva: null,
+      bonus,
+      totalt: grundprovision + bonus,
+    },
   };
 }
 
-export type Samlatmal = {
-  utfall: Malutfall;
-  /** Hur manga saljare som har ett ordermal. Star i vyn, raknas inte pa. */
-  medMal: number;
+/** En manad sa som arsvyn bar den. Raknad av motorn, en gang, for just den manaden. */
+export type Manadsrad = {
+  manad: string;
+  antal: number;
+  summa: number;
+  /** Troskeln manaden landade pa, eller null. Ett ar har tolv — se rubriken ovan. */
+  niva: number | null;
+  /** Ar manaden faststalld? Da ar `summa` bokford och raknas aldrig om. */
+  stangd: boolean;
+};
+
+export type Arsfacit = {
+  antal: number;
+  summa: number;
+  /** Manader med minst en order. */
+  manaderMedOrder: number;
+  /** Manader i perioden. Framtida manader ar inte med — se `manaderIAr`. */
+  raknade: number;
+  bastaManaden: Manadsrad | null;
+  /** Hur manga manader som nadde en bonusniva. Det ar arets bonusfraga. */
+  manaderMedNiva: number;
+  /** Order per raknad manad. */
+  snittPerManad: number;
 };
 
 /**
- * Lagets mal: summan av ordermalen, mot utfallet for SAMMA personer.
+ * Perioden sammanfattad ur sina manader. Fungerar for en manad ocksa — da ar
+ * `raknade` ett, och talen ar den manadens.
  *
- * ===========================================================================
- * BADA SIDOR RAKNAS PA SAMMA KRETS, och det ar den enda ariga formen.
- *
- * Summeras alla mal men jamfors mot HELA lagets order blir kvoten smickrande
- * sa fort nagon saknar mal: tre satta mal om tjugo blir sextio, medan fem
- * personers order raknas mot dem. Talet hade da stigit av att en chef GLOMDE
- * satta ett mal.
- *
- * Kretsen ar darfor de som har ett ordermal, och `medMal` star i vyn sa att
- * lasaren ser hur stor del av laget talet handlar om.
- * ===========================================================================
- *
- * `null` nar ingen har ett mal — inte en nolla, som hade sett ut som ett mal
- * ingen nadde.
+ * SNITTET DELAS PA ALLA RAKNADE MANADER, inte bara pa dem med order — samma
+ * resonemang som `manadsfacit` foljer for arbetsdagar. Delat pa manaderna med
+ * order svarar det pa "hur mycket salde du de manader du salde nagot", vilket
+ * ar minst ett i alla lagen och darmed sager ingenting.
  */
-export function samlatMal(
-  underlag: Underlag[],
+export function arsfacit(rader: Manadsrad[]): Arsfacit {
+  const med = rader.filter((r) => r.antal > 0);
+  const antal = rader.reduce((s, r) => s + r.antal, 0);
+
+  return {
+    antal,
+    summa: rader.reduce((s, r) => s + r.summa, 0),
+    manaderMedOrder: med.length,
+    raknade: rader.length,
+    bastaManaden: med.length === 0 ? null : med.reduce((a, b) => (b.antal > a.antal ? b : a)),
+    manaderMedNiva: rader.filter((r) => r.niva !== null).length,
+    snittPerManad: rader.length === 0 ? 0 : antal / rader.length,
+  };
+}
+
+// -----------------------------------------------------------------------------
+// Malen over en period
+// -----------------------------------------------------------------------------
+
+export type Malsumma = {
+  /** Summan av malen. */
+  mal: number;
+  /** Utfallet for exakt de rader som HAR ett mal. */
+  utfall: number;
+  /** Antal satta mal bakom summan. Star i vyn, raknas inte pa. */
+  antal: number;
+};
+
+/**
+ * Malen summerade over en period, med utfallet raknat pa SAMMA KRETS.
+ *
+ * ===========================================================================
+ * BADA SIDOR MASTE RAKNAS PA SAMMA RADER, OCH DET AR HELA FUNKTIONEN.
+ *
+ * Summeras tolv manaders mal men jamfors mot hela arets order blir kvoten
+ * smickrande sa fort en manad saknar mal — talet hade STIGIT av att nagon
+ * GLOMDE satta ett. Samma sak i foretagsvyn: tre satta mal om tjugo blir sextio,
+ * medan fem personers order raknas mot dem.
+ *
+ * Funktionen tar darfor emot utfallet PER PERSON OCH MANAD och plockar sjalv ut
+ * de rader som har ett ordermal. Ett utfall som skickas in fardigsummerat gar
+ * inte att para ihop med sitt mal, och da ar felet tillbaka.
+ *
+ * BARA ORDERMAL RAKNAS. Kronmalet har ingen motsvarighet i `utfall` — det ar
+ * antal order som star dar — och att blanda de tva hade gett en kvot mellan tva
+ * olika enheter. Se `kronmalOverPeriod`.
+ * ===========================================================================
+ *
+ * `mal: 0` betyder att inget ordermal finns i perioden. Vyn ska da inte rita
+ * nagon bage; en nolla hade sett ut som ett mal ingen nadde.
+ */
+export function malOverPeriod(
   mal: Saljmal[],
-  manad: string,
-  takt: Takt,
-): Samlatmal | null {
+  manader: string[],
+  utfall: { employee_id: string; manad: string; antal: number }[],
+): Malsumma {
+  const iPerioden = new Set(manader);
   let summaMal = 0;
-  let summaNu = 0;
-  let medMal = 0;
+  let summaUtfall = 0;
+  let antal = 0;
 
   for (const m of mal) {
-    if (m.period_month !== manad || m.mal_order === null) continue;
+    if (!iPerioden.has(m.period_month) || m.mal_order === null) continue;
+
     summaMal += m.mal_order;
-    summaNu += underlag.find((u) => u.employee_id === m.employee_id)?.antal.netto ?? 0;
-    medMal++;
+    antal++;
+    summaUtfall += utfall
+      .filter((u) => u.employee_id === m.employee_id && u.manad === m.period_month)
+      .reduce((s, u) => s + u.antal, 0);
   }
 
-  if (medMal === 0) return null;
-  return { utfall: motMal(summaMal, summaNu, takt), medMal };
+  return { mal: summaMal, utfall: summaUtfall, antal };
+}
+
+/**
+ * Kronmalet summerat over perioden.
+ *
+ * Egen funktion for att det jamfors mot KRONOR och inte mot antal — samma skal
+ * som gor att `malOverPeriod` bara raknar ordermal. Galler en person: ett
+ * kronmal summerat over ett lag jamfort med lagets intjaning hade blandat in
+ * dem som inte har nagot mal.
+ */
+export function kronmalOverPeriod(
+  mal: Saljmal[],
+  manader: string[],
+  employee_id: string,
+): number {
+  const iPerioden = new Set(manader);
+  return mal
+    .filter((m) => iPerioden.has(m.period_month) && m.employee_id === employee_id)
+    .reduce((s, m) => s + (m.mal_kronor ?? 0), 0);
 }
