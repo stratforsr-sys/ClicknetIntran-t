@@ -35,6 +35,7 @@ import {
   arsfacit,
   dagsserie,
   kronmalOverPeriod,
+  malFor,
   malOverPeriod,
   manaderIAr,
   manadsfacit,
