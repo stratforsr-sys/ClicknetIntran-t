@@ -12,7 +12,7 @@ Läs den före `docs/ARBETSLOGG.md` när arbetet med E13 återupptas.
 och det är blockerat av A6. Ö1 avgjordes 2026-08-24 (se D-K12 i
 `DECISIONS.md`), Ö2–Ö7, Ö10 och Ö14 besvarades samma dag, **Ö4, Ö8, Ö12 och Ö15
 besvarades 2026-08-25**, och **Ö13 besvarades 2026-08-26**. Kvar öppna är **Ö9,
-Ö11, Ö16, Ö17 och Ö18**, som alla har ett förslag som gäller tills någon säger
+Ö16, Ö17 och Ö18** (Ö11 besvarades 2026-09-08), som alla har ett förslag som gäller tills någon säger
 annat.
 
 **Steg 10 byggt 2026-09-07** (migration `0049`): provisionsvyn ombyggd till en
@@ -336,9 +336,25 @@ för öppen.
 - **Utbetald:** markeras när lönekörningen är gjord. **Utbetalning sker
   månaden efter intjänandemånaden** (fråga 58).
 
-**Edge case:** en order signerad 31 augusti men godkänd efter att augusti
-stängts. Se Ö11 — förslaget är att den bokförs i den öppna perioden med en
-anteckning om att den hör till augusti, eftersom en stängd period aldrig öppnas.
+**Edge case — BYGGD 2026-09-08** (branch `order-efterslapning`)**:** en order signerad 31 augusti men godkänd
+efter att augusti stängts. Provisionen bokförs i den **öppna** perioden med en
+anteckning om vilken månad den hör till, eftersom en stängd period aldrig
+öppnas. Ordern behåller sitt signeringsdatum och sin månad; det är bara pengarna
+som flyttar.
+
+**Att neka godkännandet vore fel svar.** Ordern är en riktig affär, och en affär
+som inte går att registrera försvinner inte — den blir ett mejl till någon, och
+då är navet inte längre stället där man ser vad som sålts.
+
+Posten får `source = 'manual'` och inte `'motor'`: `motor` är reserverat för det
+periodstängningen bokför, med en deterministisk `external_ref` per månad, person
+och slag. En eftersläpande order hör inte till den månadens räkning — den är
+just en post motorn inte kunde producera. **Ingen volymbonus räknas på den**, av
+samma skäl: bonusen är en egenskap hos månadens ordervolym (5.2), och ordern hör
+till en annan månad.
+
+Chefen ser beskedet **före** knappen, säljaren får det i klockan, och
+`audit_log` bär `commission.efterslapning` med båda månaderna.
 
 ---
 
@@ -700,7 +716,7 @@ dem.
 | Ö8 | Faller **övrig bonus** (5.3) vid en konsekvens? | **BESVARAD 2026-08-25: nej, den står kvar.** Övrig bonus är chefens egen bedömning av något utöver trappan; vill chefen inte ge den kan hen låta bli att bokföra den. Volymbonus och K&V-bonus faller som förut |
 | Ö9 | Veckans månadstillhörighet: ISO-torsdagen (6.3) | Förslag gäller tills annat sägs |
 | Ö10 | Lönerapporten eller separat underlag | **BESVARAD: separat underlag.** `payroll_row` får ingen kronkolumn, K5 och AC-2.17 står kvar |
-| Ö11 | Order signerad i en period som hunnit stängas (5.6) | Förslag gäller tills annat sägs |
+| Ö11 | Order signerad i en period som hunnit stängas (5.6) | **BESVARAD OCH BYGGD 2026-09-08.** Den inträffade på riktigt: en order signerad 25 augusti godkändes 8 september, två timmar efter att augusti fastställts, och 6 500 kr kom aldrig med i någon lönekörning — tyst. Förslaget i 5.6 är nu byggt: godkännandet går igenom, provisionen bokförs i den öppna perioden med en anteckning, och alla tre parter får veta |
 | Ö12 | Paketens namn | **BESVARAD 2026-08-25: behåll "Paket 1/2/3".** Priset visas bredvid vid inmatning. Etiketten är en kolumn och går att byta utan migration |
 | Ö13 | Behövs statusen `betald` alls i dag, och vem sätter den? | **BESVARAD 2026-08-26: behåll den, och gör den nåbar för ekonomi och VD.** Den påverkar fortfarande ingenting — provisionen utgår från signering — men den var fram till dess **oåtkomlig**, inte bara verkningslös: statusen fanns i schemat, i övergångsmatrisen och i triggern i 0034 medan ingen kod kunde sätta den. `markeraBetald()` i `order/actions.ts` är vägen in, och kretsen är smalare än `farHantera`: den som ser betalningen komma in är den som får säga att den kommit |
 | Ö14 | Uppladdat avtal | **BESVARAD: PDF.** Textextraktion via `pdftext.ts` går att använda; ingen OCR behövs |

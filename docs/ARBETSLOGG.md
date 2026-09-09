@@ -256,6 +256,76 @@ råka bryta vid nästa omskrivning:
 
 ---
 
+---
+
+## 2026-09-08 (natt) · Ö11 byggd: order som godkänns i en stängd månad
+
+*Branch `order-efterslapning`. Ingen migration. Beställarens besked efter att
+felet beskrivits: "ja bygg det".*
+
+### Vad som var fel
+
+En order hör till den månad den **signerades** i (avsnitt 3.4). En fastställd
+månad räknas aldrig om (5.5). Godkändes ordern efter att månaden stängts fanns
+det därför ingenstans för provisionen att ta vägen: `faststallPeriod` vägrar
+köra om en stängd månad, och någon annan väg in i huvudboken finns inte.
+
+Ingenting sa ifrån. Chefen såg "Godkänd", säljaren fick en notis om sin
+provision, och pengarna kom aldrig med i någon lönekörning.
+
+### Lösningen är specens egen, inte min första
+
+Min första reflex var att **neka** godkännandet. Det var fel, och avsnitt 5.6
+hade redan rätt svar sedan 2026-08-24: provisionen bokförs i den **öppna**
+perioden med en anteckning om vilken månad den hör till.
+
+Skälet att inte neka: ordern är en riktig affär. En affär som inte går att
+registrera försvinner inte — den blir ett mejl till någon, och då är navet inte
+längre stället där man ser vad som sålts. Ordern behåller sitt signeringsdatum
+och sin månad; det är bara pengarna som flyttar.
+
+**Läxan är värd att skriva ned:** specen hade tänkt igenom fallet bättre än jag
+gjorde på plats. Läs Ö-listan innan du föreslår en lösning på något som står
+där.
+
+### Tre val i bygget
+
+**Posten är `manual`, inte `motor`.** `motor` är reserverat för det
+periodstängningen bokför, med en deterministisk `external_ref` per månad, person
+och slag. En eftersläpande order hör inte till den månadens räkning — den är
+just en post motorn inte kunde producera. Följden är att den syns som "Bokfört
+för hand" i provisionsvyn, vilket är sant, och anteckningen säger vilken order
+och vilken månad.
+
+**`deals` är NULL och inte 1.** Antalet beskriver månadens ordervolym, och
+ordern hör till en annan månad. En etta hade fått september att se ut att
+innehålla en order den inte har — och volymbonusen räknas inte på den av exakt
+samma skäl.
+
+**Dubbelbokföring är omöjlig utan `external_ref`**, eftersom vägen dit går genom
+en statusändring: `godkannOrder` nekar allt som inte är `inskickad` eller
+`utkast`, och efteråt är ordern `signerad`.
+
+### Beskedet står på tre ställen
+
+Chefen ser det **före** knappen — ett kvitto efteråt om att pengarna hamnade i
+en annan månad är ett ärende i vardande. Säljaren får det i klockan, i notisens
+`detalj`. Och `audit_log` bär `commission.efterslapning` med båda månaderna.
+
+`Enkel` i `Atgarder.tsx` slängde förut `state.ok`, vilket dög så länge alla
+utfall såg likadana ut. Ett eftersläpande godkännande säger något annat, så
+kvittot visas nu.
+
+### Den enda vägen som fortfarande faller
+
+Är **både** orderns månad och den öppna månaden fastställda går posten
+ingenstans. Då nekas godkännandet med ett besked om att be ekonomi bokföra
+beloppet för hand. Det kräver att någon fastställt innevarande månad på dess
+sista dag och att en gammal order godkänns samma dygn — sällsynt, men att falla
+högljutt är rätt när alternativet är samma tysta förlust igen.
+
+---
+
 ## 2026-09-08 (sent) · Testdatan städad, och Ö11 inträffade på riktigt
 
 Sex order raderade ur produktionen: de fem märkta
