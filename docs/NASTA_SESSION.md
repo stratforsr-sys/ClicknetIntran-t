@@ -3,7 +3,7 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`.
+**Senast uppdaterad:** 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
 
 ## Navigationen 2026-09-09 — I PRODUKTION
 
@@ -200,6 +200,10 @@ Rimligaste åtgärderna att lägga fram för beställaren:
 3. **Eller larma** och låt ekonomi bokföra posten för hand.
 
 Alternativ 1 är det som stämmer med resten av modellen. Ingenting är byggt.
+
+1. **Eftersläpande order.** Ö11 är byggd — se avsnittet längre ned. Håll ett
+   öga på om posten "Bokfört för hand" med en eftersläpningsanteckning dyker upp
+   i verklig trafik, och om texten går att förstå för den som får den.
 
 ### Fem saker att inte glida tillbaka på
 

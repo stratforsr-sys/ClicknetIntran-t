@@ -16,12 +16,15 @@ import {
   LOPTIDER,
   STATUS_ETIKETT,
   grundprovision,
+  harStangdPeriod,
   nettoAntal,
+  periodFor,
   provisionFor,
   type Orderstatus,
   type Paket,
   type Sats,
 } from "@/lib/order";
+import { hamtaPerioder } from "@/lib/bonus-server";
 import { kronor, manadFore, manadsnamn, manadsnyckel } from "@/lib/provision";
 import { Atgarder } from "./Atgarder";
 import { Bilaga, type Orderbilaga } from "./Bilaga";
@@ -55,13 +58,20 @@ export default async function Ordersida() {
   const manad = manadsnyckel();
   const ettArBak = manadFore(manad, 11);
 
-  const [order, ko, paket, satser, personer] = await Promise.all([
+  const [order, ko, paket, satser, personer, perioder] = await Promise.all([
     hamtaOrder(ettArBak),
     hanterare ? hamtaKo() : Promise.resolve([] as Orderrad[]),
     hamtaPaket(),
     hamtaSatser(),
     hanterare ? hamtaSaljare() : Promise.resolve([] as { id: string; namn: string }[]),
+    // Ö11 / avsnitt 5.6. En order vars månad redan är fastställd får sin
+    // provision bokförd i den ÖPPNA perioden i stället — se `godkannOrder`.
+    // Chefen ska se det INNAN hon trycker: ett besked efteråt om att pengarna
+    // hamnade i en annan månad är ett ärende i vardande.
+    hamtaPerioder(ettArBak),
   ]);
+
+  const stangda = perioder.map((p) => p.period_month);
 
   const namn = new Map(personer.map((p) => [p.id, p.namn]));
   const mina = order.filter((o) => o.salesperson_id === user.employee!.id);
@@ -142,6 +152,7 @@ export default async function Ordersida() {
                   agare={o.salesperson_id === user.employee!.id}
                   paket={paket}
                   bilagor={bilagor.get(o.id) ?? []}
+                  stangdPeriod={harStangdPeriod(o.signed_on, stangda)}
                 />
               ))}
             </ul>
@@ -171,6 +182,7 @@ export default async function Ordersida() {
                 agare={o.salesperson_id === user.employee!.id}
                 paket={paket}
                 bilagor={bilagor.get(o.id) ?? []}
+                stangdPeriod={harStangdPeriod(o.signed_on, stangda)}
               />
             ))}
           </ul>
@@ -196,6 +208,7 @@ function Rad({
   agare,
   paket,
   bilagor,
+  stangdPeriod,
 }: {
   o: Orderrad;
   namn?: string;
@@ -204,6 +217,8 @@ function Rad({
   agare: boolean;
   paket: Paket[];
   bilagor: Orderbilaga[];
+  /** Hör ordern till en månad som redan är fastställd? Se Ö11. */
+  stangdPeriod: boolean;
 }) {
   const paketnamn = paket.find((p) => p.id === o.package_id)?.label ?? `Paket ${o.package_id}`;
 
@@ -244,6 +259,8 @@ function Rad({
         hanterare={hanterare}
         bokforare={bokforare}
         agare={agare}
+        stangdPeriod={stangdPeriod}
+        manad={manadsnamn(periodFor(o.signed_on))}
       />
 
       {/*

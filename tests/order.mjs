@@ -22,6 +22,7 @@ import {
   giltigTelefon,
   giltigtSigneringsdatum,
   grundprovision,
+  harStangdPeriod,
   makuleradeIPeriod,
   manaderMedOrder,
   nettoAntal,
@@ -275,6 +276,28 @@ console.log("\nManadslistan");
   // 3000 kr i mars ska se mars i sin lista. Provet lag fel till 2026-08-25.
   ok("signeringsmanaden finns kvar aven efter makulering", m.includes("2026-03-01"));
   ok("tre manader totalt", m.length === 3, m.join(", "));
+}
+
+// -----------------------------------------------------------------------------
+console.log("\nOrder som hinner bli godkand for sent (O11)");
+{
+  const stangda = ["2026-06-01", "2026-07-01", "2026-08-01"];
+
+  // Fallet som hande pa riktigt 2026-09-08: signerad 25 augusti, godkand den
+  // 8 september, tva timmar efter att augusti faststallts.
+  ok("augustiorder nar augusti ar stangd", harStangdPeriod("2026-08-25", stangda));
+  ok("den 1:a i en stangd manad ocksa", harStangdPeriod("2026-08-01", stangda));
+  ok("den sista i en stangd manad ocksa", harStangdPeriod("2026-08-31", stangda));
+
+  // DAGEN AVGOR INGENTING, MANADEN GOR DET. Det ar `periodFor` som ar regeln,
+  // och den bygger pa signeringsdatumet — inte pa nar nagon godkande.
+  ok("septemberorder ar fri", !harStangdPeriod("2026-09-01", stangda));
+  ok("majorder ar fri, den manaden ar inte stangd", !harStangdPeriod("2026-05-20", stangda));
+
+  ok("utan stangda manader ar allt fritt", !harStangdPeriod("2026-08-25", []));
+
+  // En Set duger lika bra som en lista — anroparen ska inte behova valja form.
+  ok("tar emot en Set", harStangdPeriod("2026-07-15", new Set(stangda)));
 }
 
 console.log(fel === 0 ? "\n\x1b[32mAllt gront.\x1b[0m\n" : `\n\x1b[31m${fel} fel.\x1b[0m\n`);

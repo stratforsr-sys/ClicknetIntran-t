@@ -14,6 +14,38 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "order-i-faststalld-manad",
+    rubrik: "En order som godkänns för sent tappar inte längre sin provision",
+    ingress:
+      "Godkänner du en order vars månad redan är fastställd bokförs provisionen på den öppna månaden i stället — förut försvann den tyst.",
+    text: `En order hör till den månad den **signerades** i, och en månad som är
+fastställd räknas aldrig om. Godkändes ordern efter att månaden stängts fanns
+det alltså ingenstans för pengarna att ta vägen — och ingenting sa ifrån.
+
+Det hände på riktigt den 8 september: en order signerad 25 augusti godkändes två
+timmar efter att augusti fastställts. 6 500 kr intjänade, godkända, och osynliga
+för lönekörningen.
+
+**Nu bokförs provisionen på den öppna månaden i stället**, med en anteckning om
+vilken månad ordern hör till. Ordern behåller sitt signeringsdatum — det är bara
+pengarna som flyttar.
+
+**Om du godkänner order:** står ordern i en fastställd månad ser du det i kön
+*innan* du trycker, med besked om vad som kommer att hända.
+
+**Om du säljer:** notisen i klockan säger vilken månad beloppet hamnar på, så
+siffran inte dyker upp i fel månad utan förklaring.
+
+Att neka godkännandet vore fel svar — ordern är en riktig affär, och en affär
+som inte går att registrera försvinner inte, den blir ett mejl till någon.
+
+Ingen volymbonus räknas på posten: bonusen hör till den månad ordern tecknades,
+inte till den den bokförs i.`,
+    datum: "2026-09-08",
+    roller: [],
+    href: "/order",
+  },
+  {
     slug: "menyn-i-tva-led",
     rubrik: "Menyn följer avdelningarna, och panelen kan fällas ut när du hovrar",
     ingress:

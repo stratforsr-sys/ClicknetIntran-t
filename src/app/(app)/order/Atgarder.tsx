@@ -32,12 +32,18 @@ export function Atgarder({
   hanterare,
   bokforare,
   agare,
+  stangdPeriod,
+  manad,
 }: {
   id: string;
   status: Orderstatus;
   hanterare: boolean;
   bokforare: boolean;
   agare: boolean;
+  /** Hör ordern till en månad som redan är fastställd? Se Ö11. */
+  stangdPeriod: boolean;
+  /** Månaden ordern hör till, skriven: "augusti 2026". */
+  manad: string;
 }) {
   const [oppen, setOppen] = useState<"retur" | "makulera" | null>(null);
 
@@ -53,6 +59,25 @@ export function Atgarder({
   if (status === "inskickad" && hanterare) {
     return (
       <div className="flex flex-col gap-2">
+        {/*
+          Ö11 / avsnitt 5.6. BESKEDET STÅR FÖRE KNAPPEN, inte efter klicket.
+
+          Godkännandet går igenom — ordern är en riktig affär, och en affär som
+          inte går att registrera försvinner inte, den blir ett mejl till någon.
+          Men pengarna hamnar i en annan månad än den ordern hör till, och det
+          är precis den sortens överraskning som blir ett ärende om den kommer
+          som ett kvitto efteråt i stället för som en upplysning innan.
+
+          Fram till 2026-09-08 hände ingenting alls här: ordern godkändes, och
+          provisionen kom aldrig med i någon lönekörning. Tyst.
+        */}
+        {stangdPeriod && (
+          <Notis ton="warn">
+            <strong>{manad} är fastställd.</strong> Ordern hör dit, men en stängd månad räknas
+            aldrig om — godkänner du den bokförs provisionen på den öppna månaden i stället, med
+            en anteckning om varför. Säljaren får beskedet i klockan.
+          </Notis>
+        )}
         <div className="flex flex-wrap gap-2">
           <Enkel action={godkannOrder} id={id} etikett="Godkänn" />
           <Button
@@ -138,6 +163,13 @@ function Enkel({
         {etikett}
       </Button>
       {state.fel && <Notis ton="danger">{state.fel}</Notis>}
+      {/*
+        KVITTOT VISAS SEDAN 2026-09-08. `Enkel` slängde det förut, vilket dög så
+        länge alla utfall såg likadana ut — "Ordern är godkänd" säger raden
+        ovanför ändå. Ett EFTERSLÄPANDE godkännande säger något annat: att
+        pengarna hamnade i en annan månad. Det får inte försvinna.
+      */}
+      {state.ok && <Notis ton="ok">{state.ok}</Notis>}
     </form>
   );
 }

@@ -304,3 +304,41 @@ export function giltigtSigneringsdatum(datum: string, nu: Date | string = new Da
 export function periodFor(signeringsdatum: string): string {
   return `${signeringsdatum.slice(0, 7)}-01`;
 }
+
+// -----------------------------------------------------------------------------
+// Order som hinner bli godkand for sent
+// -----------------------------------------------------------------------------
+
+/**
+ * Hor ordern till en period som redan ar faststalld?
+ *
+ * ===========================================================================
+ * EDGE CASE 5.6, OCH DEN HANDE PA RIKTIGT 2026-09-08.
+ *
+ * En order signerad 25 augusti godkandes den 8 september, tva timmar efter att
+ * augusti faststallts. Ordern hor till augusti — perioden bestams av
+ * signeringsdatumet (3.4) — och augusti var rakad och last.
+ *
+ * Foljden var att 6 500 kr intjanade och godkanda kronor ALDRIG kom med i
+ * nagon lonekorning. `faststallPeriod` vagrar kora om en stangd manad, och
+ * nagon annan vag in i huvudboken finns inte. Ingenting sa ifran.
+ *
+ * DEN HAR FUNKTIONEN AR INTE EN SPARR. Att neka godkannandet hade varit fel
+ * svar: ordern ar en riktig affar, och en affar som inte gar att registrera
+ * forsvinner inte — den blir ett mejl till nagon i stallet. Se O11 och
+ * avsnitt 5.6: forslaget ar att provisionen bokfors i den OPPNA perioden med
+ * en anteckning om att den hor till augusti, eftersom en stangd period aldrig
+ * oppnas.
+ *
+ * Funktionen svarar alltsa pa "behover den har ordern den behandlingen", och
+ * anroparen — `godkannOrder` — gor det som ska goras.
+ * ===========================================================================
+ */
+export function harStangdPeriod(
+  signeringsdatum: string,
+  stangdaManader: Iterable<string>,
+): boolean {
+  const manad = periodFor(signeringsdatum);
+  for (const m of stangdaManader) if (m === manad) return true;
+  return false;
+}
