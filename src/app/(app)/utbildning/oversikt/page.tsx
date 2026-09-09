@@ -68,8 +68,17 @@ export default async function OversiktSida() {
 
   const rader = (personal ?? []).map((p) => {
     const personRoller = rollPer.get(p.id) ?? [];
+    // Kurser har ingen personkolumn — `course` fick aldrig motsvarigheten till
+    // `document.audience_employees` (0051), sa malgruppen dar ar fortfarande
+    // bara roller. Det tomma faltet star utskrivet i stallet for att defaultas,
+    // sa att den dag kurser far personstyrning faller raden i typkontrollen.
     const mina = (kurser ?? []).filter((k) =>
-      riktarSigTill({ audience_roles: k.audience_roles, audience_teams: [] }, personRoller, p.team_id),
+      riktarSigTill(
+        { audience_roles: k.audience_roles, audience_teams: [], audience_employees: [] },
+        personRoller,
+        p.team_id,
+        p.id,
+      ),
     );
 
     return {

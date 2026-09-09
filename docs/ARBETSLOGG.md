@@ -7,8 +7,9 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ## 2026-09-09 (kväll) · Ett manus kan riktas till en enda person
 
-*En commit på `manus-till-person`. Migration 0051 körd mot produktionsdatabasen
-innan previewen — den är additiv och ändrar ingenting för befintliga dokument.*
+*Flera commits på `manus-till-person`: bygget och två rättningar. Migration 0051
+körd mot produktionsdatabasen innan previewen — den är additiv och ändrar
+ingenting för befintliga dokument.*
 
 Beställarens beskrivning: "jag vill kunna lägga ett manus till en speciell
 person, så att bara en person kan se det manuset som jag väljer då."
@@ -140,6 +141,29 @@ att det lät fel. En enda anropare fanns.
 På dokumentsidan slås namnen **bara upp för den som får redigera**. En läsare
 som står ensam i listan behöver ingen uppslagning — hon är själv svaret — och
 står det två namn är det andra namnet inte hennes sak.
+
+### De två rättningarna
+
+**Syntaxfel i `Redaktor.tsx`.** `{/* … */}` är en JSX-kommentar bara i
+**barnposition**. Efter `&& (` står man i ett JS-uttryck, och då läses klammern
+som ett objektliteral — varpå `<input>` blev ett syntaxfel som pekade på fel
+rad. Kommentaren flyttades ut ovanför villkoret.
+
+Det hade fångats utan en deploy: **`npx esbuild <fil> --log-level=warning`**
+parsar tsx och kostar ingenting. Det ersätter inte `tsc` — typfel syns
+fortfarande först i bygget — men ett rent syntaxfel ska aldrig få kosta en av
+dygnets hundra deployer.
+
+**En glömd anropare av `riktarSigTill()`.** Fyra fanns, inte tre:
+`utbildning/oversikt/page.tsx` räknar fram vilka kurser var och en har på sig,
+och den var inte med i den första genomsökningen — grep:en gjordes på
+`audience_roles` och gav trettio filer, av vilka de flesta gällde nyheter och
+kurser med egna kolumner. **Rätt sökning var på funktionsnamnet**, och den
+skulle ha gjorts först: `grep -rn "riktarSigTill(" src/ tests/ scripts/` ger
+fyra rader och inget brus.
+
+Att argumentet gjordes obligatoriskt var alltså rätt val — det var precis det
+som fällde bygget i stället för att låta en översikt tyst räkna fel.
 
 ### Prov
 
