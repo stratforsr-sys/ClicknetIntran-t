@@ -150,13 +150,41 @@ högljutt därifrån.
 och en rubrik hade skjutit ner listan och brutit just den linje mätningen finns
 för.
 
+### Menyerna öppnar sig av att musen står på dem
+
+Beställarens sista besked: det ska räcka att hovra. Klicket står kvar — det är
+vägen in för pekskärm och tangentbord, och vägen ut för den som vill bli av med
+spalten utan att flytta på sig.
+
+**`OPPNINGSDROJNING = 120` är skillnaden mellan en meny och ett stroboskop.**
+Menyerna står under varandra, så vägen ner till den nedersta går rakt över alla
+de andra. Utan fördröjning öppnas och stängs varenda en på vägen, och den man
+siktade på hinner byta plats innan man är framme.
+
+Samma fördröjning gör det diagonala draget möjligt: på väg från en knapp snett
+ut mot dess spalt passerar man knappen under, och 120 ms är mer än en sådan
+passage tar. Står man kvar på en knapp är väntan omärklig.
+
+**Snabbposterna stänger.** `sikta(e, null)` på varje snabbpost — står musen på
+"Rutiner" ska en öppen spalt bort, annars ligger den och skymmer medan man
+siktar. Den går genom samma fördröjning, så en passage varken öppnar eller
+stänger något.
+
+**Flyouten avbryter.** `onPointerEnter` på spalten nollar en schemalagd
+stängning; annars kan den som beställdes på vägen dit falla ut när man väl är
+framme. Och `musUt` avbryter en schemalagd öppning, så att en spalt ingen
+tittar på inte hinner öppna sig efter att musen lämnat panelen.
+
+`pointerType` provas överallt: på en pekskärm skickar webbläsaren
+`pointerenter` vid tryck, och menyn hade öppnat sig av att man skrollade förbi.
+
 ### Andra spalten har en nivå
 
 Menyn ÄR avgränsningen, så spalten innehåller bara sidorna. Chipsen från första
 versionen är borta med chefsvyn.
 
-Flyouten stänger sig vid val, vid Escape, vid klick utanför, vid adressbyte och
-när musen lämnat panelen.
+Flyouten stänger sig vid val, vid Escape, vid klick utanför, vid adressbyte, när
+musen står på en snabbpost och när den lämnat panelen.
 
 **Fördröjningen på väg ut (`UTDROJNING = 180`) är inte kosmetik.** Flyouten
 ligger utanför panelens egen ruta med några pixlars glapp emellan. Utan

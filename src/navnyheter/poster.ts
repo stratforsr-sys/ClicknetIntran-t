@@ -28,8 +28,9 @@ Hem, Nyheter, Rutiner, Utbildning och Tid. Ingenting annat.
 
 **Resten ligger i avdelningarnas menyer**
 
-Under snabbposterna står menyerna. Tryck på en så fälls en spalt ut bredvid
-panelen med sidorna som hör dit.
+Under snabbposterna står menyerna. **För musen över en** så fälls en spalt ut
+bredvid panelen med sidorna som hör dit — du behöver inte klicka. Klicket
+fungerar förstås också, och är vägen in på telefon och med tangentbord.
 
 - **Försäljning** — Order, K&V och Provision.
 - **Ekonomi** — Lönerapport och Lönekostnad.
@@ -41,8 +42,11 @@ panelen med sidorna som hör dit.
 **Din egen avdelning ligger överst**, närmast snabbposterna. Du ser bara de
 menyer du har sidor i, och en meny du inte har någon sida i finns inte alls.
 
-Spalten stänger sig när du valt en sida, när du för musen därifrån, med Escape
-eller genom att klicka utanför.
+Spalten stänger sig när du valt en sida, när du för musen till en snabbpost i
+stället, när du lämnar panelen, med Escape eller genom att klicka utanför.
+
+Tillsammans med **Hovra**-läget nedan blir hela navet ett enda drag: för musen
+mot vänsterkanten, panelen fälls ut, och menyn du siktar på öppnar sig.
 
 **Menyerna följer avdelningen, inte din roll.** Order ligger under Försäljning
 oavsett om du är säljare eller säljchef — sidan visar olika saker beroende på

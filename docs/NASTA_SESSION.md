@@ -15,6 +15,9 @@ Utbildning, Tid — och resten ligger i menyer som öppnar en spalt bredvid
 panelen. **Menyerna är avdelningarna**, plus Min vy för det som bara handlar om
 en själv. Panelen kan dessutom stå i `hovra`: smal tills musen är över den.
 
+**Det räcker att hovra över en meny för att öppna den.** Klicket finns kvar för
+pekskärm och tangentbord, och som väg ut.
+
 | Meny | Innehåll |
 | --- | --- |
 | Min vy | Ärenden · Frånvaro · Rapportera fel |
@@ -33,8 +36,10 @@ en själv. Panelen kan dessutom stå i `hovra`: smal tills musen är över den.
    under Försäljning. Skälen står i arbetsloggen.
 3. **Spalten ska ligga i linje med knappen du tryckte på.** Första versionen
    satte den i listans överkant; det är rättat med en mätning.
-4. **Hovra-läget.** Fäller panelen ut sig lagom snabbt, och står innehållet
-   still medan den gör det?
+4. **Hovra-läget, och hovra-öppningen.** Fäller panelen ut sig lagom snabbt,
+   och står innehållet still medan den gör det? Öppnar rätt meny sig när du för
+   musen ner genom listan — eller blinkar de förbi? Talet att skruva på är
+   `OPPNINGSDROJNING` i `Sidebar.tsx`, i dag 120 ms.
 5. **"Leverans & support" syns inte.** Avdelningen finns i koden men ingen sida
    hör dit ännu. Ska något flyttas dit, eller ska den byggas?
 

@@ -37,9 +37,14 @@ import { PANELLAGEN, PANELLAGE_TEXT, arAktiv, type Panellage } from "./sidopanel
  * **Leden.** Snabbposterna står framme. Menyerna — Min vy och avdelningarna —
  * öppnar en spalt bredvid panelen. Se nav-items.ts för vad som hamnar var.
  *
- * Flyouten stänger sig av sig själv: när man valt en sida, när musen lämnat
- * panelen, vid Escape, vid klick utanför och vid varje adressbyte. Den enda
- * vägen till en flyout som ligger kvar och skymmer är att öppna en till.
+ * DET RÄCKER ATT FÖRA MUSEN ÖVER EN MENY. Klicket finns kvar för pekskärm och
+ * tangentbord, och som väg ut för den som vill bli av med spalten utan att
+ * flytta på sig — men med mus är hela navet ett enda drag från kanten.
+ *
+ * Flyouten stänger sig av sig själv: när man valt en sida, när musen står på en
+ * snabbpost i stället, när den lämnat panelen, vid Escape, vid klick utanför
+ * och vid varje adressbyte. Den enda vägen till en flyout som ligger kvar och
+ * skymmer är att öppna en till.
  *
  * FÖRDRÖJNINGEN PÅ VÄG UT ÄR INTE KOSMETIK. Flyouten ligger utanför panelens
  * egen ruta, med några pixlars glapp emellan. Utan fördröjning stängs den i
@@ -64,6 +69,20 @@ import { PANELLAGEN, PANELLAGE_TEXT, arAktiv, type Panellage } from "./sidopanel
 
 /** Millisekunder innan panelen fälls in efter att musen lämnat den. */
 const UTDROJNING = 180;
+
+/**
+ * Millisekunder innan en meny öppnar sig av att musen står på den.
+ *
+ * DEN HÄR SIFFRAN ÄR SKILLNADEN MELLAN EN MENY OCH ETT STROBOSKOP. Menyerna
+ * står under varandra, så vägen ner till den nedersta går rakt över alla de
+ * andra. Utan fördröjning öppnas och stängs varenda en på vägen, och den man
+ * faktiskt siktade på hinner byta plats innan man är framme.
+ *
+ * Den gör också det diagonala draget möjligt: när man går från en knapp snett
+ * ut mot dess spalt passerar man knappen under, och 120 ms är mer än en sådan
+ * passage tar. Står man däremot kvar på en knapp är väntan omärklig.
+ */
+const OPPNINGSDROJNING = 120;
 
 /**
  * Flyoutens inre luft i pixlar, `p-2` i klasserna.
@@ -117,8 +136,33 @@ export function Sidebar({
 
   const panel = useRef<HTMLElement>(null);
   const utTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const oppnaTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const stangFlyout = useCallback(() => setOppenMeny(null), []);
+  const avbrytOppning = useCallback(() => {
+    if (oppnaTimer.current) clearTimeout(oppnaTimer.current);
+  }, []);
+
+  const stangFlyout = useCallback(() => {
+    avbrytOppning();
+    setOppenMeny(null);
+  }, [avbrytOppning]);
+
+  /**
+   * Musen står på något i listan. `null` betyder "inte på en meny" — då ska en
+   * öppen spalt bort, annars ligger den kvar och skymmer medan man siktar på
+   * en snabbpost.
+   *
+   * Går genom SAMMA fördröjning som öppningen, så att en passage varken
+   * öppnar eller stänger något. Se `OPPNINGSDROJNING`.
+   */
+  const sikta = useCallback(
+    (e: React.PointerEvent, id: string | null) => {
+      if (e.pointerType !== "mouse") return;
+      avbrytOppning();
+      oppnaTimer.current = setTimeout(() => setOppenMeny(id), OPPNINGSDROJNING);
+    },
+    [avbrytOppning],
+  );
 
   /**
    * Musen in och ut. `pointerType` provas: pa en pekskarm skickar webblasaren
@@ -134,6 +178,9 @@ export function Sidebar({
   const musUt = (e: React.PointerEvent) => {
     if (e.pointerType !== "mouse") return;
     if (utTimer.current) clearTimeout(utTimer.current);
+    // En schemalagd öppning som hinner falla ut efter att musen redan lämnat
+    // panelen öppnar en spalt ingen tittar på.
+    avbrytOppning();
     utTimer.current = setTimeout(() => {
       setHovrar(false);
       setOppenMeny(null);
@@ -142,6 +189,7 @@ export function Sidebar({
 
   useEffect(() => () => {
     if (utTimer.current) clearTimeout(utTimer.current);
+    if (oppnaTimer.current) clearTimeout(oppnaTimer.current);
   }, []);
 
   /**
@@ -397,6 +445,9 @@ export function Sidebar({
                   key={item.href}
                   href={item.href}
                   onClick={stang}
+                  // En snabbpost ar inte en meny. Star musen har ska en oppen
+                  // spalt bort — man ar pa vag nagon annanstans.
+                  onPointerEnter={(e) => sikta(e, null)}
                   // Guidade turer pekar pa menyposter via adressen, inte via
                   // etiketten: /avtal heter "Avtal" for chefen och "Mitt avtal"
                   // for alla andra. Se src/guider/ankare.ts.
@@ -444,7 +495,14 @@ export function Sidebar({
                       if (el) knappar.current.set(meny.id, el);
                       else knappar.current.delete(meny.id);
                     }}
-                    onClick={() => setOppenMeny(oppenHar ? null : meny.id)}
+                    // Musen oppnar. Klicket vaxlar, och ar darmed bade vagen in
+                    // for pekskarm och tangentbord OCH vagen ut for den som
+                    // vill bli av med spalten utan att flytta pa sig.
+                    onPointerEnter={(e) => sikta(e, meny.id)}
+                    onClick={() => {
+                      avbrytOppning();
+                      setOppenMeny(oppenHar ? null : meny.id);
+                    }}
                     aria-expanded={oppenHar}
                     aria-controls={`meny-${meny.id}`}
                     title={smal ? meny.etikett : undefined}
@@ -505,6 +563,9 @@ export function Sidebar({
             <div
               ref={flyout}
               id={`meny-${aktivMeny.id}`}
+              // Nadd. En schemalagd stangning fran vagen hit far inte falla ut
+              // nar man val ar framme.
+              onPointerEnter={avbrytOppning}
               style={{ top: flyoutTopp }}
               className={cn(
                 "absolute left-full z-50 ml-2 hidden max-h-full w-[17rem] flex-col",
