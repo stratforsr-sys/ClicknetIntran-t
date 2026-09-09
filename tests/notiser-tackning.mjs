@@ -65,7 +65,12 @@ const TACKNING = {
   // ---------------------------------------------------------------------------
   // Kundorder
   // ---------------------------------------------------------------------------
-  "order::skapaOrder": "Ett utkast ar saljarens eget och har inte natt nagon.",
+  // ANDRAD 2026-09-09: raden sa "Ett utkast ar saljarens eget och har inte natt
+  // nagon." Det stammer for saljarens vag, men handlingen har alltid haft en
+  // andra: chefen som lagger in en fardig order med "Godkann direkt". Sedan
+  // overtacket kom till bokfors da en post pa SALJCHEFEN, och den ska hen fa
+  // veta om — det ar nagon annans pengar som landat pa hens rad.
+  "order::skapaOrder": "notifierar",
   "order::skickaInOrder": "notifierar",
   "order::godkannOrder": "notifierar",
   "order::returneraOrder": "notifierar",
@@ -204,6 +209,7 @@ const TACKNING = {
   // mot det.
   "provision/mal::sparaMal": "notifierar",
   "provision/mal::taBortMal": "notifierar",
+  "provision/regler::sparaChefssats": "Regelandring. Star i /logg (beslut 2026-09-03).",
   "provision/regler::sparaNiva": "Regelandring. Star i /logg (beslut 2026-09-03).",
   "provision/regler::stangNiva": "Regelandring. Star i /logg (beslut 2026-09-03).",
   "provision/regler::sparaKonsekvenssteg": "Regelandring. Star i /logg (beslut 2026-09-03).",

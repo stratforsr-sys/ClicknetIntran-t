@@ -196,6 +196,16 @@ export const NOTIS_KALLOR = [
   "order-returnerad",
   "order-makulerad",
   "order-betald",
+  /**
+   * E13 steg 11. Saljchefens overtack, bokfort nar en order godkanns.
+   *
+   * EGEN KALLA OCH INTE `order-godkand`, trots att den skrivs i samma sekund.
+   * De tva gar till OLIKA personer och sager olika saker: saljaren far veta vad
+   * hens order gav, mottagaren vad hen fick pa nagon annans. Samma kalla hade
+   * gjort de tva omojliga att avfarda var for sig — och en saljchef som ar
+   * saljare pa en annan order hade da tystat bada med ett klick.
+   */
+  "order-overtack",
 
   /** Stamplingens rattelser. Begaran till chefen, beslutet till den anstallda. */
   "tid-rattelse",
@@ -336,6 +346,7 @@ export const HANDELSEKALLOR = [
   "order-returnerad",
   "order-makulerad",
   "order-betald",
+  "order-overtack",
   "tid-rattelse",
   "tid-rattelse-beslut",
   "tid-schema",
