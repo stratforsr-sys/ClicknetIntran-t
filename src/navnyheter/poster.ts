@@ -14,6 +14,64 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "menyn-i-tva-led",
+    rubrik: "Menyn är kortare, och panelen kan fällas ut när du hovrar",
+    ingress:
+      "Bara det du gör varje dag står framme. Resten ligger under Min vy, Chefsvy och Adminvy — och panelen har fått ett tredje läge som fäller ut sig när musen är över den.",
+    text: `Sidopanelen hade vuxit till arton poster. Alla hörde hemma där, men
+arton likadana rader i en spalt är inte en meny — det är en lista man läser
+varje gång i stället för att sikta.
+
+**Framme står det du gör varje dag**
+
+Hem, Nyheter, Rutiner, Utbildning och Tid. Ingenting annat.
+
+**Resten ligger i vyer**
+
+Under snabbposterna står en till tre knappar. Tryck på en så fälls en spalt ut
+bredvid panelen med sidorna som hör dit.
+
+- **Min vy** har alla. Där ligger sidorna som handlar om dig: dina ärenden, din
+  frånvaro, din provision, ditt avtal, din coachning.
+- **Chefsvy** får du om du har sidor som handlar om andra eller om bolaget. Den
+  är grupperad **per avdelning** — Försäljning, Ekonomi, Personal — och du kan
+  välja en avdelning eller se allt på en gång med **Alla**. Din egen avdelning
+  står vald när du öppnar vyn.
+- **Adminvy** får administratörer. Där ligger navet självt: händelseloggen,
+  adoptionen, felen och designsystemet.
+
+Spalten stänger sig när du valt en sida, när du för musen därifrån, med Escape
+eller genom att klicka utanför.
+
+**Du har inte fått eller förlorat någon behörighet.** Exakt samma sidor som
+igår, på nya platser. Hittar du inte något: det du såg förut ligger i en av
+vyerna, och **Alla** visar hela innehållet i den.
+
+En sida står bara på ETT ställe. Är du säljchef ligger Order under Chefsvy och
+Försäljning; är du säljare ligger den under Min vy och Mitt arbete. Det är samma
+sida — den visar bara olika saker beroende på vem som öppnar den, precis som
+förut.
+
+**Panelen har tre lägen**
+
+Längst ner i panelen, och under Inställningar → Utseende:
+
+- **Utfälld** — som förut, panelen står kvar med ikoner och text.
+- **Hopfälld** — bara ikoner, mest plats åt innehållet.
+- **Hovra** — *ny.* Panelen ligger smal, men fäller ut sig så fort du för musen
+  över den och åker in igen när du lämnar den. Du får hopfällt lägets yta utan
+  att behöva gissa vad ikonerna betyder.
+
+I hovra-läget svävar panelen över sidan i stället för att knuffa den åt sidan.
+Texten du läser ligger alltså still även när menyn rör sig.
+
+Läget sparas i den här webbläsaren. På telefonen är panelen som förut en låda du
+drar in, och där fäller vyerna ut sig på plats i listan i stället för bredvid.`,
+    datum: "2026-09-09",
+    roller: [],
+    href: "/",
+  },
+  {
     slug: "provisionsvyn-som-resultattavla",
     rubrik: "Provisionen visar nu dagen, takten och vägen till nästa bonus",
     ingress:

@@ -5,6 +5,160 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-09 · Navigationen i två led, och ett tredje panelläge
+
+*Branch `navigering-vyer`. En commit. Ligger på preview, INTE mergad.*
+
+Beställarens beskrivning: menyn ska inte ha så många navigationer i sig.
+Istället en **Chefsvy** för chefer och en **Adminvy** för administratörer, och
+när man trycker på den kommer en till bit av navigationen bredvid — där man
+väljer *alla*, eller *försäljning*, *support*, *ekonomi*, och får sidorna som
+hör dit. Dessutom: panelen ska gå att ha ute när man hovrar över den och stängas
+annars, som ett alternativ till "fäll ihop" eller bredvid det.
+
+### Vad som gjordes
+
+Sidopanelen bar arton poster. Alla var behörighetsprövade och alla hörde hemma
+i navet — det var inte innehållet som var fel, utan att arton likadana rader i
+en spalt inte är en meny utan en innehållsförteckning.
+
+**Framme står nu fem poster:** Hem, Nyheter, Rutiner, Utbildning, Tid. Resten
+ligger i tre vyer som öppnar en andra spalt bredvid panelen:
+
+| Vy | Vem | Grupper |
+| --- | --- | --- |
+| Min vy | alla anställda | Mitt arbete · Min anställning · Navet |
+| Chefsvy | den som har chefssidor | avdelningarna |
+| Adminvy | administratörer | System |
+
+### Fyra beslut som är lätta att riva av misstag
+
+**1. EN POST HAMNAR PÅ EXAKT ETT STÄLLE.** Flera sidor är två vyer i en —
+`/order` är säljarens egna order och säljchefens godkännandekö, `/avtal` är
+mitt anställningsavtal och chefens mallar, `/fel` är en rapportknapp och en
+inkorg. Sådana poster placeras efter *vem som tittar*: den som ser sidan som
+sin egen får den i Min vy, den som ser den som chefens får den i Chefsvyn.
+Läggs den i båda står samma länk två gånger i samma meny, och då är vi tillbaka
+i listan vi just tog bort.
+
+Samma sak fick systemsidorna. `/logg`, `/adoption` och felinkorgen hamnar i
+adminvyn när personen har en, och i chefsvyns systemgrupp annars — annars står
+de dubbelt för den som är både säljchef och administratör.
+
+**2. VYERNA RITAS EFTER INNEHÅLL, INTE EFTER ROLL.** En vy som inte fick några
+poster finns inte. Det är samma regel som gällde de enskilda posterna, men den
+är viktigare här: en tom "Chefsvy" är ett löfte om en behörighet man inte har.
+
+Det är också det enda som fungerar för `recruiter`. En säljare med den
+behörigheten är ingen chef men har en chefssida, och hade vyn krävt en chefsroll
+hade länken försvunnit för precis den person modulen delades ut till.
+
+**3. MENYN DELAR INTE UT NÅGOT.** Varje villkor i `nav-items.ts` är oförändrat
+från den platta listan — samma roller, samma behörigheter, samma
+stämplingsvillkor. Filen avgör bara *var* posten hamnar. En post som flyttas
+mellan vyer får aldrig byta villkor på vägen.
+
+**4. UTBILDNINGEN STANNADE FRAMME.** Den hörde egentligen hemma i en vy, men
+"Kom igång"-turen pekar på den i menyn (`navAnkare("/utbildning")` i
+`src/guider/kom-igang.ts`). Ett guidesteg som pekar in i en stängd flyout hittar
+inget element och visar "elementet saknas" — för varenda ny anställd, i den tur
+som ska lära dem navet. Det står i en kommentar ovanför posten.
+
+### Avdelningarna finns i koden, inte i databasen
+
+`src/lib/avdelningar.ts` är ny: fem avdelningar med id, namn och ikon, och
+`avdelningFor(user)` som härleder personens hemvist ur rollen.
+
+Avdelningarna är riktiga i företaget. Det `employee`-raden bär är *roller*, och
+en roll är inte en avdelning — en teamledare och en säljare hör till samma
+avdelning med olika roller. Beställarens besked var att de ska vara både menyer
+och riktiga avdelningar, och valet blev **menyn nu, tabellen förberedd**:
+
+- `id`-strängarna är valda för att kunna bli primärnycklar.
+- `avdelningFor()` är den ENDA platsen där härledningen sker. Den dagen
+  `employee.avdelning_id` finns byts funktionens kropp — inte menyn, inte
+  grupperna, inte panelen.
+- `ROLLENS_AVDELNING` är `Record<Role, …>` med flit: en nionde roll i
+  `roles.ts` slutar kompilera tills någon svarat vilken avdelning den hör till.
+
+**Menyn frågar aldrig efter avdelningen för att avgöra vad någon får se.** Det
+gör rollerna, behörigheterna och RLS. Avdelningen avgör var en post hamnar och
+vilken grupp som står vald — ordningen på skärmen, aldrig åtkomsten.
+
+**"Leverans & support" finns i listan men syns inte.** Ingen sida hör dit ännu,
+och `bygg()` hoppar över tomma grupper. En rubrik utan innehåll under sig är
+samma tomma löfte som en dödlänk.
+
+### Andra spalten är två led, inte tre
+
+Vyn väljs i panelen, gruppen väljs som chips i spalten, sidorna står under.
+Frestelsen var en tredje kolumn — "Försäljning ›" som fäller ut ännu en — men
+tre led betyder att musen måste hålla sig innanför två smala korridorer i rad
+för att inte tappa menyn. Chips står still och tål att man missar dem.
+
+Spalten stänger sig vid val, vid Escape, vid klick utanför, vid adressbyte och
+när musen lämnat panelen.
+
+**Fördröjningen på väg ut (`UTDROJNING = 180`) är inte kosmetik.** Flyouten
+ligger utanför panelens egen ruta med några pixlars glapp emellan. Utan
+fördröjning stängs den i glappet, varje gång, och menyn går inte att nå med
+musen.
+
+**Flyouten ligger utanför det som scrollar.** `overflow-y-auto` på listan
+klipper allt som sticker ut, så en svävande spalt inuti den hade blivit avskuren
+vid panelkanten.
+
+**På telefonen fäller vyn ut sig inuti lådan** i stället för bredvid: en 19 rem
+bred spalt bredvid en 16 rem bred låda hamnar utanför fönstret. Den varianten
+sätter INTE `data-guide` — samma ankare två gånger i trädet gör att en guidad
+tur pekar på den som råkar stå först, vilket på en telefon är den dolda.
+
+### Panelen har tre lägen
+
+`utfalld` · `hopfalld` · `hovra`, i kakan `nav_sidopanel`. Panelen härleder allt
+ur en rad: `smal = hopfalld, eller hovra utan mus över panelen`.
+
+**Hovra ersätter inte hopfällt, och det var ett val.** Den som arbetar på en
+pekskärm, eller drar musen förbi kanten hela dagen, vill ha en panel som ligger
+still — ett läge som rör sig av misstag är värre än ett som står stilla.
+
+**I hovra-läget svävar panelen ÖVER innehållet.** Skalet håller kvar den smala
+marginalen. Knuffades innehållet undan hade texten hoppat i sidled varje gång
+någon råkade passera vänsterkanten, och en rad som flyttar sig går inte att läsa
+medan den gör det.
+
+`pointerType` provas i in- och ut-hanterarna: på en pekskärm skickar webbläsaren
+ett `pointerenter` vid tryck som aldrig följs av ett `pointerleave`, och panelen
+hade låst sig i utfällt läge efter första tryckningen. Fokus in i panelen fäller
+också ut den, så tangentbordet når samma meny som musen.
+
+**Kakan bär nu tre värden.** Det gamla `"oppen"` mappas till `utfalld` i
+`lasPanellage()` — annars hade uppgraderingen sett ut som att inställningen
+nollställdes för alla som någon gång fällt ut panelen.
+
+`usePanelLage()` gick från `{ hopfalld, vaxlaHopfalld }` till
+`{ lage, valjLage }`. En växel över tre lägen tvingar den som vill från
+hopfälld till utfälld att passera hovra, och en inställning man klickar sig runt
+i är en inställning man klickar fel i. Utseendesektionen i inställningarna är
+därför en lista med beskrivningar i stället för ett reglage: "Hovra" går inte
+att gissa sig till av ett ord.
+
+### Prövat
+
+`test:guider`, `test:stampelfri` och `test:navnyheter` gröna mot ändringen.
+`test:sidor` kräver `pg` och en databas och kördes inte.
+
+De två proven som läser `nav-items.ts` som text ställer krav som är lätta att
+råka bryta vid nästa omskrivning:
+
+- `guider.mjs` letar efter `href: "<adress>"` som literal för varje menyankare
+  en guide pekar på, och efter `data-guide={navAnkare(item.href)}` i
+  `Sidebar.tsx`. Snabbposterna måste alltså fortsätta heta `item` i sin `map`.
+- `stampelfri.mjs` letar efter `stampelfri(user.roles)` och
+  `canManageEmployees(user) || hasRole(user, "ceo")` som literaler.
+
+---
+
 ## 2026-09-08 (sent) · Testdatan städad, och Ö11 inträffade på riktigt
 
 Sex order raderade ur produktionen: de fem märkta

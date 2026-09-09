@@ -24,6 +24,24 @@ const P: Record<string, string> = {
   installningar: "M4 8h9M17 8h3M4 16h3M11 16h9M15 5.5v5M9 13.5v5",
   kryss: "M6 6l12 12M18 6 6 18",
   fram: "M9 6l6 6-6 6",
+
+  /**
+   * Avdelningarna (se src/lib/avdelningar.ts). De ritas smatt — i chipsen ar de
+   * 14 px — sa formerna ar avsiktligt grova: en kurva, en ram, en fyrkant.
+   * `personal` och `installningar` daremot ateranvands, eftersom en avdelning
+   * som redan har en symbol i navet inte ska fa en andra.
+   */
+  saljning: "M3 17l6-6 4 4 8-8M15 7h6v6",
+  support: "M4 13v-1a8 8 0 0 1 16 0v1M4 13h3v6H5.5A1.5 1.5 0 0 1 4 17.5zM20 13h-3v6h1.5a1.5 1.5 0 0 0 1.5-1.5z",
+  sedel: "M2.5 6.5h19v11h-19zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6",
+
+  /**
+   * Panelens tre lagen. Samma ram i alla tre, med skillnaden dar den faktiskt
+   * ar: hur brett facket till vanster ar, och om nagot ror sig.
+   */
+  "panel-ut": "M3.5 4.5h17v15h-17zM11 4.5v15M6 9h2.5M6 12h2.5",
+  "panel-ihop": "M3.5 4.5h17v15h-17zM8 4.5v15",
+  "panel-hovra": "M3.5 4.5h17v15h-17zM8 4.5v15M11.5 12h5M14.5 9.5 17 12l-2.5 2.5",
 };
 
 export function Ikon({ namn, className = "size-5" }: { namn: string; className?: string }) {
