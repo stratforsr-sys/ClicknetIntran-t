@@ -367,16 +367,28 @@ async function hamtaAllaChefsposter(manad: string): Promise<Chefspost[]> {
       referencedTable: "sales_order",
     });
 
-  return (data ?? []).flatMap((r) => {
-    const o = (r as unknown as { sales_order: Record<string, unknown> | null }).sales_order;
+  // ===========================================================================
+  // CASTEN AR INTE KOSMETISK. Supabase harleder radens typ ur select-STRANGEN,
+  // och en inbaddad tabell med `!inner` far den inte att ga ihop — resultatet
+  // blir `GenericStringError`, alltsa en typ utan nagon av kolumnerna. Bygget
+  // faller da pa `r.order_id`, inte pa nagot som ar fel i fragan.
+  //
+  // Samma cast som `hamtaAllaOrder` i `stangning.ts` redan gor, och av samma
+  // skal. Foljden ar att kolumnnamnen harunder inte langre kontrolleras av
+  // kompilatorn — de maste stamma med select-strangen ovan for hand.
+  // ===========================================================================
+  const rader = (data ?? []) as unknown as Record<string, unknown>[];
+
+  return rader.flatMap((r) => {
+    const o = r.sales_order as Record<string, unknown> | null;
     if (!o) return [];
 
     return [
       {
         order_id: String(r.order_id),
         manager_id: String(r.manager_id),
-        // numeric kommer tillbaka som STRANG ur PostgREST. Utan Number() blir
-        // summeringen en strangkonkatenering — samma falla som resten av filen.
+        // numeric kommer tillbaka som STRANG ur PostgREST — utan Number() blir
+        // summeringen en strangkonkatenering. Samma falla som resten av filen.
         amount: Number(r.amount),
         percent: Number(r.percent),
         period_month: String(o.period_month),
@@ -388,6 +400,7 @@ async function hamtaAllaChefsposter(manad: string): Promise<Chefspost[]> {
     ];
   });
 }
+
 
 async function hamtaAllaNivaer(): Promise<Bonusniva[]> {
   const { data } = await supabaseAdmin()

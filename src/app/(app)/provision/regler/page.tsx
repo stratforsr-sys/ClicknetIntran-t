@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { getCurrentUser, hasRole } from "@/lib/auth";
+import { fullName, getCurrentUser, hasRole } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { svensktDatum } from "@/lib/klocka";
 import { hamtaNivaer } from "@/lib/bonus-server";
@@ -325,19 +325,23 @@ async function hamtaSaljbara(): Promise<{ id: string; namn: string }[]> {
   const rls = await supabaseServer();
   const { data } = await rls
     .from("employee")
-    .select("id, first_name, last_name, status, employee_role!inner(role)")
+    // SAMMA FORM SOM `hamtaSaljare` i `/order/page.tsx`: den utskrivna
+    // frammande nyckeln, ingen `!inner`, och filtret i JS.
+    //
+    // Det ar inte en smaksak. Supabase harleder radens typ ur select-strangen,
+    // och `!inner` far den inte att ga ihop — raden blir `GenericStringError`
+    // och bygget faller pa forsta kolumnuppslaget. Det fallde bygget en gang i
+    // det har passet, i `hamtaChefsposter`.
+    .select("id, first_name, last_name, employee_role!employee_role_employee_id_fkey(role)")
     .eq("status", "active")
-    .in("employee_role.role", ["sales_manager", "ceo"]);
+    .order("first_name");
 
-  // En person med bade sales_manager och ceo kommer tillbaka tva ganger ur
-  // joinen. `Map` pa id ar billigare an ett `distinct` som PostgREST anda inte
-  // erbjuder over en inbaddad tabell.
-  const unika = new Map<string, string>();
-  for (const e of data ?? []) {
-    unika.set(String(e.id), `${e.first_name} ${e.last_name}`.trim());
-  }
-
-  return [...unika].map(([id, namn]) => ({ id, namn })).sort((a, b) => a.namn.localeCompare(b.namn, "sv"));
+  return (data ?? [])
+    .filter((e) => {
+      const roller = (e as unknown as { employee_role: { role: string }[] | null }).employee_role;
+      return (roller ?? []).some((r) => r.role === "sales_manager" || r.role === "ceo");
+    })
+    .map((e) => ({ id: e.id, namn: fullName(e) }));
 }
 
 /** Beloppet med sin form. Formen ar inte kosmetisk — den avgor hur mycket det blir. */

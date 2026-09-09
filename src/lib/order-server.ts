@@ -208,8 +208,20 @@ export async function hamtaChefsposter(franOchMed: string): Promise<Chefspost[]>
     )
     .or(ror(franOchMed), { referencedTable: "sales_order" });
 
-  return (data ?? []).flatMap((r) => {
-    const o = (r as unknown as { sales_order: Record<string, unknown> | null }).sales_order;
+  // ===========================================================================
+  // CASTEN AR INTE KOSMETISK. Supabase harleder radens typ ur select-STRANGEN,
+  // och en inbaddad tabell med `!inner` far den inte att ga ihop — resultatet
+  // blir `GenericStringError`, alltsa en typ utan nagon av kolumnerna. Bygget
+  // faller da pa `r.order_id`, inte pa nagot som ar fel i fragan.
+  //
+  // Samma cast som `hamtaAllaOrder` i `stangning.ts` redan gor, och av samma
+  // skal. Foljden ar att kolumnnamnen harunder inte langre kontrolleras av
+  // kompilatorn — de maste stamma med select-strangen ovan for hand.
+  // ===========================================================================
+  const rader = (data ?? []) as unknown as Record<string, unknown>[];
+
+  return rader.flatMap((r) => {
+    const o = r.sales_order as Record<string, unknown> | null;
     if (!o) return [];
 
     return [
@@ -227,6 +239,7 @@ export async function hamtaChefsposter(franOchMed: string): Promise<Chefspost[]>
     ];
   });
 }
+
 
 /**
  * Bilagorna per order (E13 steg 9, migration 0039).
