@@ -129,7 +129,7 @@ export default async function AnstalldSida({ params }: { params: Promise<{ id: s
     const [{ data: dok }, { data: ack }] = await Promise.all([
       supabase
         .from("document")
-        .select("id, slug, title, version, audience_roles, audience_teams")
+        .select("id, slug, title, version, audience_roles, audience_teams, audience_employees")
         .eq("status", "published")
         .eq("requires_ack", true)
         .order("title"),
@@ -137,7 +137,7 @@ export default async function AnstalldSida({ params }: { params: Promise<{ id: s
     ]);
     const kvitterat = new Set((ack ?? []).map((k) => `${k.document_id}:${k.version}`));
     attKvittera = (dok ?? [])
-      .filter((d) => riktarSigTill(d, [...roller], a.team_id))
+      .filter((d) => riktarSigTill(d, [...roller], a.team_id, id))
       .map((d) => ({
         id: d.id,
         slug: d.slug,

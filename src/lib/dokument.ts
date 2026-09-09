@@ -142,19 +142,36 @@ export function prefixfraga(q: string): string | null {
 /**
  * AC-1.3: vilka rutiner som ar obligatoriska for en person.
  *
- * Samma regel som RLS-funktionen `matches_audience()` i 0003, men uttryckt i
- * TypeScript sa att den gar att stalla en fraga om NAGON ANNAN an sig sjalv —
- * databasen svarar alltid utifran den som fragar. Tom lista betyder alla, i
- * bada leden.
+ * Samma regel som RLS-funktionen `matches_audience()` i 0003 och 0051, men
+ * uttryckt i TypeScript sa att den gar att stalla en fraga om NAGON ANNAN an
+ * sig sjalv — databasen svarar alltid utifran den som fragar. Tom lista betyder
+ * alla, i bada leden.
  *
  * Halls de tva i otakt blir foljden att en nyanstalld far en lista som inte
  * stammer med vad hon faktiskt ser. Andras den ena maste den andra folja med.
+ *
+ * `employeeId` ar den frågan galler och inte den som fragar. Den ar OBLIGATORISK
+ * och inte defaultad till null med flit: en ny anropare som glommer den skulle
+ * annars tyst fa "nej" pa varje personstyrt dokument, och den sortens fel syns
+ * inte — listan blir bara kortare an den ska vara.
  */
 export function riktarSigTill(
-  dok: { audience_roles: string[] | null; audience_teams: string[] | null },
+  dok: {
+    audience_roles: string[] | null;
+    audience_teams: string[] | null;
+    audience_employees: string[] | null;
+  },
   roller: string[],
   teamId: string | null,
+  employeeId: string | null,
 ): boolean {
+  // Utpekade personer ERSATTER roll- och teamkravet. Se rubriken i 0051 for
+  // varfor det ar ett ersattande och inte ett tillagg.
+  const personkrav = dok.audience_employees ?? [];
+  if (personkrav.length > 0) {
+    return employeeId !== null && personkrav.includes(employeeId);
+  }
+
   const rollkrav = dok.audience_roles ?? [];
   const teamkrav = dok.audience_teams ?? [];
 

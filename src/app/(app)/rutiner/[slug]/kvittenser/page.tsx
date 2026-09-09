@@ -23,7 +23,7 @@ export default async function Kvittenser({ params }: { params: Promise<{ slug: s
   const db = supabaseAdmin();
   const { data: d } = await db
     .from("document")
-    .select("id, slug, title, version, requires_ack, audience_roles, owner_id, status")
+    .select("id, slug, title, version, requires_ack, audience_roles, audience_employees, owner_id, status")
     .eq("slug", slug)
     .maybeSingle();
   if (!d) notFound();
@@ -32,6 +32,7 @@ export default async function Kvittenser({ params }: { params: Promise<{ slug: s
   if (!farSe) redirect(`/rutiner/${slug}`);
 
   const malroller = (d.audience_roles ?? []) as Role[];
+  const malpersoner = (d.audience_employees ?? []) as string[];
 
   const [{ data: anstallda }, { data: roller }, { data: kvittenser }] = await Promise.all([
     db.from("employee").select("id, first_name, last_name, email").eq("status", "active").order("first_name"),
@@ -46,7 +47,12 @@ export default async function Kvittenser({ params }: { params: Promise<{ slug: s
     rollerPer.set(r.employee_id, lista);
   }
 
+  // Samma tre led och samma foretrade som `matches_audience()` i 0051: ar nagon
+  // utpekad ar det DE som ska kvittera, oavsett vad rollkryssen sager. Rapporten
+  // ar det som visas upp vid en inspektion, sa den far inte rakna en annan
+  // malgrupp an den dokumentet faktiskt har.
   const imalgrupp = (anstallda ?? []).filter((a) => {
+    if (malpersoner.length > 0) return malpersoner.includes(a.id);
     if (malroller.length === 0) return true;
     return (rollerPer.get(a.id) ?? []).some((r) => malroller.includes(r));
   });

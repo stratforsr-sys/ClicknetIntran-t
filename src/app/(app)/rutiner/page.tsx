@@ -6,7 +6,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Ikon } from "@/components/shell/Ikon";
 import { getCurrentUser, hasRole } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
-import { agarnamn } from "@/lib/rutiner-data";
+import { namnFor } from "@/lib/rutiner-data";
 import {
   DOC_TYPE_LABEL,
   STATUS_LABEL,
@@ -63,7 +63,7 @@ export default async function Rutiner({ searchParams }: { searchParams: Promise<
   }
 
   const [namnPer, { data: minaKvittenser }] = await Promise.all([
-    agarnamn(lista.map((d) => d.owner_id)),
+    namnFor(lista.map((d) => d.owner_id)),
     user?.employee
       ? supabase.from("document_ack").select("document_id, version").eq("employee_id", user.employee.id)
       : Promise.resolve({ data: [] as { document_id: string; version: number }[] }),

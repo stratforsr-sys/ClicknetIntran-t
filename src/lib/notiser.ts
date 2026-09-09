@@ -263,6 +263,25 @@ export const NOTIS_KALLOR = [
   /** Rutinen som arkiverades av nagon annan an dess agare. */
   "rutin-arkiverad",
 
+  /**
+   * Dokumentet som ar riktat till DIG och ingen annan (0051).
+   *
+   * EN HANDELSE OCH INTE EN HARLEDNING, trots att `rutin` ovan harleds ur samma
+   * tabell. Skillnaden ar vilken fraga posten svarar pa: `rutin` betyder "det
+   * har vantar pa din kvittens" och ligger kvar tills du kvitterat, medan den
+   * har betyder "nagon har skrivit nagot at dig" — och det ar sant en gang.
+   *
+   * Utan den syns ett personligt manus ingenstans forran mottagaren pa eget
+   * bevag gar in under Rutiner och letar efter nagot hon inte vet finns. En
+   * rutin som galler alla motar man anda; en text skriven at en enda person gor
+   * man inte det.
+   *
+   * Kraver dokumentet ocksa kvittens far mottagaren BADA posterna. Det ar
+   * avsiktligt och foljer halvorna ovan: den ena ar beskedet, den andra ar
+   * uppgiften som star kvar tills den ar gjord.
+   */
+  "rutin-tilldelad",
+
   /** Kontot. Fyra saker om en sjalv som man har ratt att fa veta direkt. */
   "konto-roll",
   "konto-behorighet",
@@ -353,6 +372,7 @@ export const HANDELSEKALLOR = [
   "franvaro-havd",
   "avtal-tillbakadraget",
   "rutin-arkiverad",
+  "rutin-tilldelad",
   "konto-roll",
   "konto-behorighet",
   "konto-losenord",

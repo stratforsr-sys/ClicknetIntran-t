@@ -5,6 +5,154 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-09 (kväll) · Ett manus kan riktas till en enda person
+
+*En commit på `manus-till-person`. Migration 0051 körd mot produktionsdatabasen
+innan previewen — den är additiv och ändrar ingenting för befintliga dokument.*
+
+Beställarens beskrivning: "jag vill kunna lägga ett manus till en speciell
+person, så att bara en person kan se det manuset som jag väljer då."
+
+### Vad som fanns redan
+
+Nästan allt. `document` har haft `doc_type = 'script'` med etiketten **Manus**
+sedan 0003, och redaktören under Rutiner har kunnat skapa dem hela tiden. Det
+som saknades var precisionen i målgruppen: `audience_roles` och
+`audience_teams` kan säga "alla säljare" och "säljarna i team X", men inte
+"Vlado". Den minsta grupp som gick att träffa var för stor för en text som
+handlar om hur en enskild person ska ta ett samtal.
+
+### Beslutet som styrde allt annat
+
+**Utpekade personer ersätter roll- och teamvillkoret. De skärs inte ihop med
+det.**
+
+Alternativet — ett OCH mellan leden — såg först rimligare ut: målgruppen blir
+"säljarna som också är Anna". Men följden är att ett manus tilldelat Anna
+*försvinner ur hennes vy den dag hon byter roll*, utan att någon rört
+dokumentet och utan att något syns. Det är den tystaste sortens fel: ingenting
+går sönder, en person slutar bara se sin egen text.
+
+Med ett ersättande blir regeln i stället läsbar rakt av: **står det ett namn
+gäller namnet.** Rollkryssen blir verkningslösa så länge någon är utpekad, och
+redaktören säger det rakt ut medan man fyller i formuläret i stället för att
+låta kryssen se ut att göra något de inte gör.
+
+### Vad som inte ändrades, och varför
+
+**Säljchef, VD, administratör och dokumentets ägare ser fortfarande allt.**
+Frågan ställdes till beställaren innan bygget, med det andra alternativet
+uppskrivet: en RLS-regel som döljer personstyrda dokument även för ledningen.
+Svaret blev att insynen ska vara kvar.
+
+Det är också det svar som håller ihop med resten: granskningsansvaret i AC-5.1
+går inte att utöva över dokument man inte får se, kvittensrapporten (AC-5.6) är
+det som visas upp vid en arbetsmiljöinspektion, och `registerutdrag` ska kunna
+svara på vad en person har på sig. "Bara en person" betyder alltså **bara en
+person utöver dem som redan ser varje dokument i navet** — och det står i
+klartext i formuläret, i notisen på dokumentet och i navnyheten, så att ingen
+tror sig ha skrivit något ledningen inte kan läsa.
+
+### Migration 0051
+
+`audience_employees uuid[] not null default '{}'` på `document`, och en
+**överlagring** av `matches_audience()` med tre argument. Tvåargumentsversionen
+står orörd: den används också av `news_post` (0018) och `course` (0007), som
+inte har någon personkolumn.
+
+Treargumentsversionen anropar tvåargumentsversionen med två tomma listor i
+personfallet i stället för att skriva ut villkoret själv. Det ser omständligt
+ut och är det inte: **där sitter lösenordsspärren** (0017,
+`kraver_losenordsbyte()`). Skrevs villkoret ut på nytt hade spärren funnits på
+två ställen, och den ena hade förr eller senare slutat följa med den andra.
+
+`document_read` skrevs om i sin helhet i stället för att byggas på, så att hela
+villkoret går att läsa på ett ställe.
+
+### TypeScript-tvillingen
+
+`riktarSigTill()` i `src/lib/dokument.ts` är samma regel i TypeScript — den
+finns för att kunna ställa frågan om **någon annan** än den inloggade, vilket
+databasen aldrig kan svara på. Den fick ett fjärde argument, `employeeId`, och
+det är **obligatoriskt och inte defaultat till null**: en framtida anropare som
+glömmer det skulle annars tyst få "nej" på varje personstyrt dokument, och den
+sortens fel syns inte — listan blir bara kortare än den ska vara.
+
+Anroparna är två: personalkortet (`/personal/[id]`, "vad har den här personen
+på sig") och anställningsflödet (`anstallning-server.ts`, AC-1.3). Kurser fick
+`audience_employees: []` inskrivet, eftersom `course` inte har kolumnen.
+
+### Vem får peka ut vem
+
+`redaktorsunderlag()` avgör vad som **syns** i formuläret:
+
+- **Säljchef, VD, administratör** — vem som helst.
+- **Teamledare** — sina egna. Samma regel som `leads_employee()` i 0001: den
+  man är chef för, eller den som sitter i ett team man leder. Det är inte en
+  generositet utan hela poängen: manuset är det en teamledare skriver åt en
+  säljare hon coachar, och hon fick inte välja ägare i formuläret innan.
+- **Alla andra** — tom lista. En ägare utan chefsroll som redigerar sitt eget
+  dokument ska inte kunna rikta om det. Redaktören **skickar då med det som
+  redan står som dolda fält** i stället för att tömma målgruppen — annars hade
+  en rättad stavning tyst gjort ett personligt manus offentligt.
+
+Server-actionen prövar däremot bara att id:na *ser ut som* uuid. Att peka ut en
+person kan bara göra målgruppen **mindre**, aldrig släppa in någon i ett
+dokument hen inte redan kunde nå via en roll, och den som kommit dit har redan
+passerat `kravRedaktor`. Skälet står i koden så att nästa läsare inte tar det
+för ett glapp.
+
+### Notisen
+
+Ny källa `rutin-tilldelad`, en **händelse** och inte en härledning. `rutin`
+härleds redan ur samma tabell, men svarar på en annan fråga: den betyder "det
+här väntar på din kvittens" och ligger kvar tills den är gjord, medan den nya
+betyder "någon har skrivit något åt dig" — och det är sant en gång.
+
+Utan den syns ett personligt manus ingenstans förrän mottagaren på eget bevåg
+går in under Rutiner och letar efter något hon inte vet finns. En rutin som
+gäller alla möter man ändå; en text skriven åt en enda person gör man inte det.
+
+**Bara vid publicering**, och vid ändring **bara till de tillkomna** — annars
+skulle varje rättad stavning skicka om samma notis till alla som redan läst.
+Statusen räknas ur både knappen och det gamla värdet: "Spara som utkast" på ett
+redan publicerat dokument låter status stå kvar som `published`, så
+`publicera === false` betyder inte att ingenting är synligt.
+
+Källan står på de tre ställen den måste stå på: `NOTIS_KALLOR`,
+`HANDELSEKALLOR` och `TACKNING` i `tests/notiser-tackning.mjs`, där både
+`skapaDokument` och `sparaDokument` gick från sina undantagsmeningar till
+`"notifierar"`.
+
+### Kvittensrapporten
+
+`/rutiner/[slug]/kvittenser` räknade fram målgruppen ur rollerna. Den fick
+samma tre led och samma företräde som RLS — annars hade rapporten visat "0 av
+12 har kvitterat" för ett manus som bara en person någonsin kan se, och det är
+den siffra som visas upp vid en inspektion.
+
+### Övrigt
+
+`agarnamn()` heter nu `namnFor()`. Den slår upp mottagarnas namn också, och ett
+funktionsnamn som ljuger blir förr eller senare ett anrop någon undviker för
+att det lät fel. En enda anropare fanns.
+
+På dokumentsidan slås namnen **bara upp för den som får redigera**. En läsare
+som står ensam i listan behöver ingen uppslagning — hon är själv svaret — och
+står det två namn är det andra namnet inte hennes sak.
+
+### Prov
+
+- `tests/notiser-tackning.mjs`, `tests/navnyheter.mjs`, `tests/notiser.mjs` —
+  gröna i scratchpaden.
+- **RLS provad direkt mot produktionsdatabasen** med `set local role
+  authenticated`, i en transaktion som rullades tillbaka: den utpekade ser sitt
+  manus, en annan säljare ser det inte, ledningen ser det, och rollkryssen
+  släpper inte in den som inte står utpekad. Ingen testdata blev kvar — det
+  kontrollerades efteråt.
+
+---
+
 ## 2026-09-09 · Navigationen följer avdelningarna, och panelen fick ett tredje läge
 
 *Tre commits på `navigering-vyer`. Godkända efter previewgenomgång samma dag

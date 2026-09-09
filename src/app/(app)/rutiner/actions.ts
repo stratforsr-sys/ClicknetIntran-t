@@ -4,10 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { getCurrentUser, hasRole } from "@/lib/auth";
-import { DOC_TYPES, tillSlug, type DocType } from "@/lib/dokument";
+import { DOC_TYPES, DOC_TYPE_LABEL, tillSlug, type DocType } from "@/lib/dokument";
 import { forberedUppladdning, registreraFil, taBortInnehall } from "@/lib/filer-server";
 import { pdfText } from "@/lib/pdf";
-import { notifiera } from "@/lib/notishandelse-server";
+import { notifiera, notifieraFlera } from "@/lib/notishandelse-server";
 
 export type DokumentState = { fel?: string };
 
@@ -47,6 +47,8 @@ async function logga(
   });
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function lasFormular(form: FormData) {
   const titel = String(form.get("titel") ?? "").trim();
   const kategori = String(form.get("kategori") ?? "").trim().replace(/^\/+|\/+$/g, "");
@@ -56,7 +58,39 @@ function lasFormular(form: FormData) {
   const decidedOn = String(form.get("decided_on") ?? "").trim() || null;
   const kraverKvittens = form.get("kraver_kvittens") === "on";
   const malgrupp = form.getAll("malgrupp").map(String).filter(Boolean);
-  return { titel, kategori, brodtext, docType, reviewDue, decidedOn, kraverKvittens, malgrupp };
+
+  /**
+   * Den personliga malgruppen (0051).
+   *
+   * Dubbletter sallas — formularet skickar bade kryssrutan och ett dolt falt
+   * for den som filtrerats bort ur listan, och en dubblett i kolumnen hade
+   * blivit "2 utpekade personer" i vyn for en enda mottagare.
+   *
+   * Formen provas mot uuid ISTALLET for att lita pa databasen: en skrapig
+   * strang far `insert` att fella med ett pg-fel som skulle na anvandaren som
+   * "Kunde inte spara: invalid input syntax for type uuid".
+   *
+   * NAGON KONTROLL AV VILKA id:n som far anges gors medvetet inte. Att peka ut
+   * en person kan bara GORA MALGRUPPEN MINDRE — den slapper aldrig in nagon i
+   * ett dokument hen inte redan hade kunnat na via en roll — och den som kommit
+   * hit har redan passerat `kravRedaktor`. Vem som ser VALET i granssnittet
+   * styrs daremot av `redaktorsunderlag()`.
+   */
+  const malgruppPerson = [...new Set(form.getAll("malgrupp_person").map(String))].filter((v) =>
+    UUID.test(v),
+  );
+
+  return {
+    titel,
+    kategori,
+    brodtext,
+    docType,
+    reviewDue,
+    decidedOn,
+    kraverKvittens,
+    malgrupp,
+    malgruppPerson,
+  };
 }
 
 /** AC-5.1: publicering utan agare och granskningsdatum ar omojlig. */
@@ -97,6 +131,7 @@ export async function skapaDokument(_prev: DokumentState, form: FormData): Promi
         doc_type: f.docType,
         requires_ack: f.kraverKvittens,
         audience_roles: f.malgrupp,
+        audience_employees: f.malgruppPerson,
         status: publicera ? "published" : "draft",
         published_at: publicera ? new Date().toISOString() : null,
         created_by: user.employee!.id,
@@ -118,7 +153,32 @@ export async function skapaDokument(_prev: DokumentState, form: FormData): Promi
 
     await logga(user.employee!.id, publicera ? "document.published" : "document.created", rad.id, {
       titel: f.titel,
+      utpekade: f.malgruppPerson.length,
     });
+
+    /**
+     * Ett personligt dokument nar ingen av sig sjalv.
+     *
+     * En rutin som galler alla dyker upp i listan man anda oppnar varje vecka.
+     * Ett manus skrivet at EN person gor inte det — hon har ingen anledning att
+     * ga in under Rutiner och leta efter nagot hon inte vet finns. Utan den har
+     * raden ar hela funktionen en text som ligger dar.
+     *
+     * BARA VID PUBLICERING. Ett utkast har inte natt nagon, och en notis om ett
+     * dokument RLS fortfarande haller inne skulle ge en lank till en 404.
+     */
+    if (publicera && f.malgruppPerson.length > 0) {
+      await notifieraFlera(f.malgruppPerson, {
+        av: user.employee!.id,
+        kalla: "rutin-tilldelad",
+        typ: "rutin",
+        rubrik: `${DOC_TYPE_LABEL[f.docType]} till dig: ${f.titel}`,
+        detalj: "Riktad till dig personligen.",
+        href: `/rutiner/${rad.slug}`,
+        objekt: { typ: "document", id: rad.id },
+      });
+    }
+
     slug = rad.slug;
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
@@ -150,7 +210,7 @@ export async function sparaDokument(_prev: DokumentState, form: FormData): Promi
 
     const { data: fore } = await db
       .from("document")
-      .select("id, title, body_md, version, status, slug")
+      .select("id, title, body_md, version, status, slug, audience_employees")
       .eq("id", id)
       .single();
     if (!fore) return { fel: "Dokumentet finns inte." };
@@ -158,6 +218,27 @@ export async function sparaDokument(_prev: DokumentState, form: FormData): Promi
     const innehallAndrat = fore.body_md !== f.brodtext || fore.title !== f.titel;
     const nyVersion = innehallAndrat ? fore.version + 1 : fore.version;
     const publicera = form.get("publicera") === "1";
+
+    /**
+     * Vilka som ska fa beskedet om att de fatt ett personligt dokument.
+     *
+     * Statusen raknas ut ur BADA leden och inte ur knappen: "Spara som utkast"
+     * pa ett redan publicerat dokument later status sta kvar som `published`
+     * (raden nedan), sa `publicera === false` betyder inte att ingenting ar
+     * synligt. Ett besked som uteblir for att fel variabel lastes ar tyst.
+     *
+     * Blir dokumentet publicerat NU far alla utpekade beskedet. Var det redan
+     * publicerat far bara de TILLKOMNA det — annars skulle var rattad stavning
+     * skicka om samma notis till alla som redan last texten.
+     */
+    const nyStatus = publicera ? "published" : fore.status;
+    const forut = new Set(((fore.audience_employees ?? []) as string[]));
+    const mottagare =
+      nyStatus !== "published"
+        ? []
+        : fore.status === "published"
+          ? f.malgruppPerson.filter((mid) => !forut.has(mid))
+          : f.malgruppPerson;
 
     const { error } = await db
       .from("document")
@@ -171,8 +252,9 @@ export async function sparaDokument(_prev: DokumentState, form: FormData): Promi
         doc_type: f.docType,
         requires_ack: f.kraverKvittens,
         audience_roles: f.malgrupp,
+        audience_employees: f.malgruppPerson,
         version: nyVersion,
-        status: publicera ? "published" : fore.status,
+        status: nyStatus,
         published_at:
           publicera && fore.status !== "published" ? new Date().toISOString() : undefined,
         updated_at: new Date().toISOString(),
@@ -192,9 +274,22 @@ export async function sparaDokument(_prev: DokumentState, form: FormData): Promi
       });
     }
 
+    if (mottagare.length > 0) {
+      await notifieraFlera(mottagare, {
+        av: user.employee!.id,
+        kalla: "rutin-tilldelad",
+        typ: "rutin",
+        rubrik: `${DOC_TYPE_LABEL[f.docType]} till dig: ${f.titel}`,
+        detalj: "Riktad till dig personligen.",
+        href: `/rutiner/${fore.slug}`,
+        objekt: { typ: "document", id },
+      });
+    }
+
     await logga(user.employee!.id, "document.updated", id, {
       version: nyVersion,
       innehall_andrat: innehallAndrat,
+      utpekade: f.malgruppPerson.length,
     });
     slug = fore.slug;
   } catch (e) {

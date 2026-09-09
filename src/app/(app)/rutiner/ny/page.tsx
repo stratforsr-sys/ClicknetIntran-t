@@ -14,12 +14,13 @@ export default async function NyttDokument() {
   if (!user?.employee) redirect("/logga-in?nasta=/rutiner/ny");
   if (!hasRole(user, "sales_manager", "admin", "ceo", "team_lead")) redirect("/rutiner");
 
-  const { agare, kategorier } = await redaktorsunderlag();
+  const { agare, personer, kategorier } = await redaktorsunderlag();
 
   return (
     <Redaktor
       action={skapaDokument}
       agare={agare}
+      personer={personer}
       aktivAgare={user.employee.id}
       kategorier={kategorier}
       utkast={{
@@ -30,6 +31,7 @@ export default async function NyttDokument() {
         review_due: arstalDatum(12),
         requires_ack: true,
         audience_roles: [],
+        audience_employees: [],
       }}
     />
   );

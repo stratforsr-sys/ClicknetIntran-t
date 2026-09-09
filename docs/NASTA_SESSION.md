@@ -3,7 +3,48 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`.
+**Senast uppdaterad:** 2026-09-09 (kväll) — ett dokument går att rikta till utpekade personer i stället för till roller. Ligger på grenen `manus-till-person`, **väntar på previewgenomgång**; migration 0051 är körd mot produktionsdatabasen. Föregående pass samma dag: navigationen ombyggd efter avdelningarna, godkänd och mergad till main.
+
+## Manus till en person 2026-09-09 (kväll) — PÅ GREN, INTE MERGAD
+
+*En commit på `manus-till-person`. Hela resonemanget i `ARBETSLOGG.md` under
+samma datum.*
+
+Målgruppen på ett dokument kunde bara skrivas som **roller** och team. Nu finns
+`document.audience_employees` — en lista med namn. **Står det ett namn gäller
+namnet**, och rollkryssen blir verkningslösa: personer *ersätter* roll- och
+teamvillkoret, de skärs inte ihop med det.
+
+Manus har alltid funnits som dokumenttyp (`doc_type = 'script'`, etikett
+"Manus", sedan 0003). Det som byggdes är precisionen i målgruppen — inte en ny
+modul.
+
+**Var:** Rutiner → Nytt dokument → kortet **Målgrupp** → *Bara vissa personer*.
+
+**Vem ser ett personligt dokument:** de utpekade, plus säljchef, VD,
+administratör och ägaren. **Beställaren fick frågan och valde att behålla
+ledningens insyn** — alternativet, att dölja det även för dem, ligger kvar som
+ett möjligt beslut men skulle slå ut granskningsansvaret i AC-5.1.
+
+**Vem får peka ut:** ledningen vem som helst, en teamledare sina egna
+(`leads_employee()`-regeln). Alla andra ser inte valet — men det som redan står
+följer med när de sparar, så en rättad stavning inte tömmer målgruppen.
+
+**Notis:** ny händelsekälla `rutin-tilldelad`. Går vid publicering, och vid
+ändring bara till de tillkomna.
+
+### Att göra härnäst
+
+1. **Preview-genomgång med beställaren.** Skapa ett manus riktat till en
+   person, kontrollera att mottagaren ser det och att en annan säljare inte gör
+   det. Merga först efter uttryckligt godkännande.
+2. **Migration 0051 är redan körd** mot produktionsdatabasen. Den är additiv
+   (`default '{}'`) och `document_read` beter sig identiskt för varje befintligt
+   dokument, så main är opåverkad medan grenen ligger kvar. Den behöver alltså
+   *inte* köras om vid merge.
+3. **Teamledare får nu ett fält de inte hade.** Ingen behörighet är utökad —
+   de kunde redan skapa dokument — men de kan för första gången peka ut en
+   kollega i ett formulär. Värt en blick på hur det används.
 
 ## Navigationen 2026-09-09 — I PRODUKTION
 

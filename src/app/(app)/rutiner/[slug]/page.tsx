@@ -13,7 +13,7 @@ import { ROLE_LABEL, type Role } from "@/lib/roles";
 import { visningsnamn } from "@/lib/filer";
 import { Bilagor, type Bilaga } from "../Bilagor";
 import { kvittera, markeraGranskad } from "../actions";
-import { registreraVisning } from "@/lib/rutiner-data";
+import { registreraVisning, namnFor } from "@/lib/rutiner-data";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +26,8 @@ export default async function Rutindokument({ params }: { params: Promise<{ slug
     .from("document")
     .select(
       `id, title, slug, category_path, body_md, doc_type, status, review_due,
-       requires_ack, version, owner_id, audience_roles, published_at, updated_at`,
+       requires_ack, version, owner_id, audience_roles, audience_employees,
+       published_at, updated_at`,
     )
     .eq("slug", slug)
     .maybeSingle();
@@ -60,6 +61,19 @@ export default async function Rutindokument({ params }: { params: Promise<{ slug
   const g = granskningslage(d.review_due);
   const arAgare = user?.employee?.id === d.owner_id;
   const farRedigera = hasRole(user, "sales_manager", "admin") || arAgare;
+
+  /**
+   * Den personliga malgruppen (0051).
+   *
+   * NAMNEN SLAS BARA UPP FOR DEN SOM FAR REDIGERA. En laser som star ensam i
+   * listan behover ingen uppslagning — hon ar sjalv svaret — och star det tva
+   * namn ar det andra namnet inte hennes sak. Att peka ut en person for nagon
+   * annan ar en uppgift om en tredje part, och den hor hemma hos den som styr
+   * dokumentet.
+   */
+  const utpekade = (d.audience_employees ?? []) as string[];
+  const utpekadeNamn = farRedigera && utpekade.length > 0 ? await namnFor(utpekade) : null;
+  const arMin = Boolean(user?.employee && utpekade.includes(user.employee.id));
 
   // E2.12. Fragan gar med anvandarens egen token: `file_object` arver
   // dokumentets policy (0022), sa den som inte far se dokumentet ser inte
@@ -102,6 +116,12 @@ export default async function Rutindokument({ params }: { params: Promise<{ slug
       )}
       {d.status === "draft" && (
         <Notis ton="warn">Utkast. Dokumentet är inte publicerat och syns bara för dig och ledningen.</Notis>
+      )}
+      {/* Star man ensam utpekad ska det STA det. Ett manus skrivet at en enda
+          person laser man annorlunda an en rutin som galler alla, och den
+          skillnaden syns inte i texten sjalv. */}
+      {arMin && utpekade.length === 1 && (
+        <Notis ton="info">Det här är skrivet åt dig. Ingen annan än ledningen ser det.</Notis>
       )}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
@@ -158,11 +178,27 @@ export default async function Rutindokument({ params }: { params: Promise<{ slug
               <Rad etikett="Version" varde={`${d.version}`} tnum />
               <Rad etikett="Status" varde={STATUS_LABEL[d.status]} />
               <Rad etikett="Granskning" varde={g.text} />
-              {(d.audience_roles?.length ?? 0) > 0 && (
+              {/* Personerna star INSTALLET FOR rollerna och inte bredvid dem:
+                  ar nagon utpekad ar rollkryssen verkningslosa (0051), och en
+                  rad som visar dem hade beskrivit en regel som inte galler. */}
+              {utpekade.length > 0 ? (
                 <Rad
                   etikett="Målgrupp"
-                  varde={(d.audience_roles as Role[]).map((r) => ROLE_LABEL[r]).join(", ")}
+                  varde={
+                    utpekadeNamn
+                      ? [...utpekadeNamn.values()].join(", ")
+                      : arMin
+                        ? "Bara du"
+                        : `${utpekade.length} utpekade`
+                  }
                 />
+              ) : (
+                (d.audience_roles?.length ?? 0) > 0 && (
+                  <Rad
+                    etikett="Målgrupp"
+                    varde={(d.audience_roles as Role[]).map((r) => ROLE_LABEL[r]).join(", ")}
+                  />
+                )
               )}
             </dl>
 

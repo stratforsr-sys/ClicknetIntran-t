@@ -14,6 +14,49 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "manus-till-en-person",
+    rubrik: "Ett manus kan riktas till en enda person",
+    ingress:
+      "Målgruppen på ett dokument går nu att skriva som namn i stället för roller. Den som är utpekad ser det — ingen annan gör det, och hon får en notis om att det finns.",
+    text: `Målgruppen på en rutin har hittills bara kunnat uttryckas som **roller**:
+alla säljare, alla teamledare. Det räcker för en rutin som gäller alla, men inte
+för ett **manus** skrivet åt en enskild person. Den minsta grupp som gick att
+träffa var "säljarna", och den är för stor för en text som handlar om hur just
+du ska ta ett samtal.
+
+**Så gör du**
+
+Skapa dokumentet som vanligt under **Rutiner → Nytt dokument**, välj
+dokumenttypen **Manus**, och gå till kortet **Målgrupp** i högerspalten. Under
+rollerna står nu **Bara vissa personer**. Kryssa för en — eller flera.
+
+**Namn slår ut roller.** Markerar du någon där gäller rollkryssen inte längre;
+dokumentet syns bara för de markerade. Det står i formuläret medan du fyller i
+det, så du inte behöver komma ihåg det.
+
+**Personen får en notis** när du publicerar, med en länk rakt till texten. Det
+är hela poängen: ett manus som ligger under Rutiner och väntar på att bli
+upptäckt blir aldrig läst. Lägger du till någon i efterhand är det bara den
+nytillkomna som får beskedet — de som redan läst slipper samma notis igen.
+
+**Vem ser det?**
+
+Bara de utpekade — plus **säljchef, VD, administratör och dokumentets ägare**,
+som ser varje dokument i navet. Det är oförändrat och avsiktligt: den som
+ansvarar för att innehållet stämmer måste kunna läsa det. Ett personligt manus
+är alltså privat gentemot kollegorna, inte gentemot ledningen.
+
+**Vem får peka ut?**
+
+Säljchef, VD och administratör kan peka ut vem som helst. En **teamledare** kan
+peka ut sina egna — den hon är chef för, eller den som sitter i ett team hon
+leder. Kräver dokumentet kvittens visar kvittensrapporten de utpekade i stället
+för en hel roll.`,
+    datum: "2026-09-09",
+    roller: ["sales_manager", "ceo", "team_lead", "admin"],
+    href: "/rutiner/ny",
+  },
+  {
     slug: "menyn-i-tva-led",
     rubrik: "Menyn följer avdelningarna, och panelen kan fällas ut när du hovrar",
     ingress:

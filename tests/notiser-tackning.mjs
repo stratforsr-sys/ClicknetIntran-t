@@ -143,8 +143,11 @@ const TACKNING = {
   // ---------------------------------------------------------------------------
   // Rutiner
   // ---------------------------------------------------------------------------
-  "rutiner::skapaDokument": "Ett utkast ar inte publicerat och riktar sig till ingen.",
-  "rutiner::sparaDokument": "harledd",
+  // Bada notifierar sedan 0051, och bara i ETT fall: dokumentet ar publicerat
+  // och har en personlig malgrupp. Ett utkast riktar sig fortfarande till
+  // ingen, och for en malgrupp av roller ar posten harledd som forut.
+  "rutiner::skapaDokument": "notifierar",
+  "rutiner::sparaDokument": "notifierar",
   "rutiner::kvittera": "Egen kvittens. Den slacker sin egen notis.",
   "rutiner::markeraGranskad": "harledd",
   "rutiner::arkivera": "notifierar",

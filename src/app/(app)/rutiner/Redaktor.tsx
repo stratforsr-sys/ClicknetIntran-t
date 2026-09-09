@@ -5,7 +5,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Field, Input, Select } from "@/components/ui/Field";
+import { Field, Input, Select, KONTROLL } from "@/components/ui/Field";
 import { Notis } from "@/components/ui/Notis";
 import { Ikon } from "@/components/shell/Ikon";
 import { ROLES, ROLE_LABEL, type Role } from "@/lib/roles";
@@ -34,6 +34,7 @@ export type Utkast = {
   decided_on?: string | null;
   requires_ack: boolean;
   audience_roles: Role[];
+  audience_employees: string[];
   status?: string;
   version?: number;
 };
@@ -44,19 +45,33 @@ export function Redaktor({
   aktivAgare,
   action,
   kategorier,
+  personer,
 }: {
   utkast: Utkast;
   agare: { id: string; namn: string }[];
   aktivAgare: string;
   action: (prev: DokumentState, form: FormData) => Promise<DokumentState>;
   kategorier: string[];
+  /**
+   * De som gar att peka ut personligen. TOM for den som inte far peka ut nagon
+   * — se `redaktorsunderlag()`. Formularet visar da inte valet, men skickar
+   * anda med de som redan star, sa att en agare utan chefsroll inte tommer
+   * malgruppen bara genom att rätta en stavning.
+   */
+  personer: { id: string; namn: string }[];
 }) {
   const [state, formAction, vantar] = useActionState<DokumentState, FormData>(action, {});
   const [typ, setTyp] = useState<DocType>(utkast.doc_type);
   const [brodtext, setBrodtext] = useState(utkast.body_md);
   const [visaForhandsvisning, setVisaForhandsvisning] = useState(false);
   const [reviewDue, setReviewDue] = useState(utkast.review_due);
+  const [personval, setPersonval] = useState<string[]>(utkast.audience_employees);
+  const [personsok, setPersonsok] = useState("");
   const barSparr = SPARRTYPER.includes(typ);
+
+  const traffar = personsok.trim()
+    ? personer.filter((p) => p.namn.toLowerCase().includes(personsok.trim().toLowerCase()))
+    : personer;
 
   const nytt = !utkast.id;
   const lagkravd = LAGKRAVDA_TYPER.includes(typ);
@@ -260,7 +275,10 @@ export function Redaktor({
               </p>
               <div className="mt-3 flex flex-col">
                 {ROLES.map((r) => (
-                  <label key={r} className="flex min-h-11 cursor-pointer items-center gap-3">
+                  <label
+                    key={r}
+                    className={`flex min-h-11 cursor-pointer items-center gap-3 ${personval.length > 0 ? "opacity-50" : ""}`}
+                  >
                     <input
                       type="checkbox"
                       name="malgrupp"
@@ -271,6 +289,93 @@ export function Redaktor({
                     <span className="text-small text-ink-700">{ROLE_LABEL[r]}</span>
                   </label>
                 ))}
+              </div>
+
+              {/* Personvalet ligger i SAMMA kort som rollerna och inte i ett
+                  eget. De ar inte tva inställningar utan tva svar pa samma
+                  fraga, och det ena slar ut det andra — star de isar ser det ut
+                  som om de gick att kombinera. */}
+              <div className="mt-5 border-t border-canvas pt-4">
+                <h3 className="text-small font-semibold text-ink-900">Bara vissa personer</h3>
+                <p className="mt-1 text-small text-ink-500">
+                  Markerar du någon här gäller rollerna ovan inte längre —
+                  dokumentet syns då bara för de markerade. Ett manus skrivet åt
+                  en enda person är det här fältet finns för.
+                </p>
+
+                {personer.length === 0 ? (
+                  <>
+                    {/* Behorigheten att peka ut folk saknas. Valet visas inte,
+                        men det som redan star far inte tyst forsvinna. */}
+                    {personval.map((id) => (
+                      <input key={id} type="hidden" name="malgrupp_person" value={id} />
+                    ))}
+                    <p className="mt-3 text-small text-ink-500">
+                      {personval.length > 0
+                        ? `Dokumentet är riktat till ${personval.length} utpekad${personval.length === 1 ? " person" : "a personer"}. Det står kvar när du sparar. Bara säljchef, VD, administratör och teamledare kan ändra vilka.`
+                        : "Du kan inte peka ut personer. Be en säljchef, VD eller din teamledare."}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    {personer.length > 8 && (
+                      {/* Ratt och slatt <input> och inte <Input>: den senare
+                          satter `name`, och sokrutan ska inte folja med i
+                          formularet. */}
+                      <input
+                        type="search"
+                        value={personsok}
+                        onChange={(e) => setPersonsok(e.target.value)}
+                        placeholder="Sök namn"
+                        aria-label="Sök bland personer"
+                        autoComplete="off"
+                        className={`${KONTROLL} mt-3`}
+                      />
+                    )}
+
+                    <div className="mt-2 flex max-h-64 flex-col overflow-y-auto">
+                      {traffar.map((p) => (
+                        <label key={p.id} className="flex min-h-11 cursor-pointer items-center gap-3">
+                          <input
+                            type="checkbox"
+                            name="malgrupp_person"
+                            value={p.id}
+                            checked={personval.includes(p.id)}
+                            onChange={(e) =>
+                              setPersonval((f) =>
+                                e.target.checked ? [...f, p.id] : f.filter((x) => x !== p.id),
+                              )
+                            }
+                            className="size-5 accent-brand-600"
+                          />
+                          <span className="text-small text-ink-700">{p.namn}</span>
+                        </label>
+                      ))}
+                      {traffar.length === 0 && (
+                        <p className="py-2 text-small text-ink-500">Ingen träff.</p>
+                      )}
+                    </div>
+
+                    {/* En markerad person som filtrerats bort ur listan far inte
+                        falla bort ur formularet — checkboxen finns da inte i
+                        DOM:en, och webblasaren skickar bara det som star dar. */}
+                    {personval
+                      .filter((id) => !traffar.some((p) => p.id === id))
+                      .map((id) => (
+                        <input key={id} type="hidden" name="malgrupp_person" value={id} />
+                      ))}
+                  </>
+                )}
+
+                {personval.length > 0 && (
+                  <div className="mt-3">
+                    <Notis ton="info">
+                      {personval.length === 1
+                        ? "Dokumentet syns bara för den markerade personen — och för säljchef, VD, administratör och dokumentets ägare, som ser allt i navet."
+                        : `Dokumentet syns bara för de ${personval.length} markerade — och för säljchef, VD, administratör och dokumentets ägare, som ser allt i navet.`}
+                    </Notis>
+                  </div>
+                )}
               </div>
             </Card>
           </div>

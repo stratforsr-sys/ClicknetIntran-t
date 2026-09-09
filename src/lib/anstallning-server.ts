@@ -159,11 +159,16 @@ export async function laggUppAnstalld(
   // efterhand visa vad en nyanstalld faktiskt fick pa sig fran dag ett.
   const { data: dokument } = await db
     .from("document")
-    .select("id, slug, audience_roles, audience_teams")
+    .select("id, slug, audience_roles, audience_teams, audience_employees")
     .eq("status", "published")
     .eq("requires_ack", true);
 
-  const rutiner = (dokument ?? []).filter((d) => riktarSigTill(d, [roll], teamId)).map((d) => d.slug);
+  // `rad.id` ar nyss skapat, sa inget befintligt dokument kan peka ut det. Den
+  // skickas anda med och inte som null: fragan ar "vad har DEN HAR personen pa
+  // sig", och svaret ska inte bero pa hur gammal raden rakar vara.
+  const rutiner = (dokument ?? [])
+    .filter((d) => riktarSigTill(d, [roll], teamId, rad.id))
+    .map((d) => d.slug);
   if (rutiner.length > 0) {
     await logga(utfordAv, "onboarding.documents_assigned", rad.id, {
       antal: rutiner.length,
@@ -179,7 +184,15 @@ export async function laggUppAnstalld(
     .eq("status", "published");
 
   const kurser = (kurslista ?? [])
-    .filter((k) => riktarSigTill({ audience_roles: k.audience_roles, audience_teams: [] }, [roll], teamId))
+    // Kurser har ingen personkolumn — malgruppen dar ar fortfarande bara roller.
+    .filter((k) =>
+      riktarSigTill(
+        { audience_roles: k.audience_roles, audience_teams: [], audience_employees: [] },
+        [roll],
+        teamId,
+        rad.id,
+      ),
+    )
     .map((k) => k.slug);
 
   if (kurser.length > 0) {

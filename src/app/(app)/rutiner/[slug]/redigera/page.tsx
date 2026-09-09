@@ -18,7 +18,7 @@ export default async function RedigeraDokument({ params }: { params: Promise<{ s
     .from("document")
     .select(
       `id, slug, title, category_path, body_md, doc_type, review_due, decided_on, requires_ack,
-       audience_roles, owner_id, status, version`,
+       audience_roles, audience_employees, owner_id, status, version`,
     )
     .eq("slug", slug)
     .maybeSingle();
@@ -30,12 +30,13 @@ export default async function RedigeraDokument({ params }: { params: Promise<{ s
   // dokumentet, inte ett avslag som bekraftar att det finns en redigeringsvy.
   if (!farRedigera) redirect(`/rutiner/${slug}`);
 
-  const { agare, kategorier } = await redaktorsunderlag();
+  const { agare, personer, kategorier } = await redaktorsunderlag();
 
   return (
     <Redaktor
       action={sparaDokument}
       agare={agare}
+      personer={personer}
       aktivAgare={d.owner_id}
       kategorier={kategorier}
       utkast={{
@@ -49,6 +50,7 @@ export default async function RedigeraDokument({ params }: { params: Promise<{ s
         decided_on: d.decided_on,
         requires_ack: d.requires_ack,
         audience_roles: (d.audience_roles ?? []) as Role[],
+        audience_employees: (d.audience_employees ?? []) as string[],
         status: d.status,
         version: d.version,
       }}
