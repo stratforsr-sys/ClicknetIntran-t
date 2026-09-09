@@ -318,10 +318,10 @@ export function Redaktor({
                   </>
                 ) : (
                   <>
+                    {/* Sokrutan ar ett rent <input> och inte <Input>: den
+                        senare satter `name`, och sokningen ska inte folja med
+                        i formularet. */}
                     {personer.length > 8 && (
-                      {/* Ratt och slatt <input> och inte <Input>: den senare
-                          satter `name`, och sokrutan ska inte folja med i
-                          formularet. */}
                       <input
                         type="search"
                         value={personsok}
