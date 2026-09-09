@@ -7,7 +7,9 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ## 2026-09-09 · Navigationen följer avdelningarna, och panelen fick ett tredje läge
 
-*Branch `navigering-vyer`. Ligger på preview, INTE mergad.*
+*Tre commits på `navigering-vyer`. Godkända efter previewgenomgång samma dag
+och snabbspolade till main — grenen låg på main-spetsen hela tiden, så
+historiken är de tre commitarna i den ordning arbetet gjordes.*
 
 Beställarens beskrivning: menyn ska inte ha så många navigationer i sig. Man
 ska kunna få en meny på *försäljning*, *ekonomi*, *personal* — och panelen ska

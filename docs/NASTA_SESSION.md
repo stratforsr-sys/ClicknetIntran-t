@@ -3,12 +3,12 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, och panelen har fått ett tredje läge, `hovra`. Ligger på branch **`navigering-vyer`**, INTE mergad. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8` och i produktion.
+**Senast uppdaterad:** 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`.
 
-## Navigationen 2026-09-09 — PÅ BRANCH, VÄNTAR PÅ GODKÄNNANDE
+## Navigationen 2026-09-09 — I PRODUKTION
 
-*Branch `navigering-vyer`. Hela resonemanget i `ARBETSLOGG.md` under
-2026-09-09.*
+*Tre commits på `navigering-vyer`, snabbspolade till main efter godkännande.
+Hela resonemanget i `ARBETSLOGG.md` under 2026-09-09.*
 
 Sidopanelen bar arton poster. Nu står fem framme — Hem, Nyheter, Rutiner,
 Utbildning, Tid — och resten ligger i menyer som öppnar en spalt bredvid
@@ -27,15 +27,17 @@ pekskärm och tangentbord, och som väg ut.
 | Personal | Anställda · Coachning · Rekrytering · Avtal |
 | System | Händelselogg · Adoption · Designsystem |
 
-### Att titta på i previewen
+### Att följa upp i produktion
 
-1. **Hittar du dina sidor?** Ingen behörighet är ändrad — samma sidor som förut,
-   nya platser.
+1. **Hittar folk sina sidor?** Ingen behörighet är ändrad — samma sidor som
+   förut, nya platser. Det är den enda risken med passet: en post som ligger
+   rätt enligt reglerna men fel enligt vanan.
 2. **Ligger sidorna under rätt avdelning?** Tre placeringar är beslut och inte
    självklarheter: `/fel` i Min vy, `/coachning` under Personal, `/provision`
    under Försäljning. Skälen står i arbetsloggen.
-3. **Spalten ska ligga i linje med knappen du tryckte på.** Första versionen
-   satte den i listans överkant; det är rättat med en mätning.
+3. **Spalten ligger i linje med knappen.** Första versionen satte den i listans
+   överkant; det är rättat med en mätning som körs om vid scroll och
+   fönsterändring.
 4. **Hovra-läget, och hovra-öppningen.** Fäller panelen ut sig lagom snabbt,
    och står innehållet still medan den gör det? Öppnar rätt meny sig när du för
    musen ner genom listan — eller blinkar de förbi? Talet att skruva på är
