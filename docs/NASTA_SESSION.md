@@ -7,9 +7,10 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
 
 ## Ordervärdet och säljchefens ersättning 2026-09-09 — PÅ BRANCH, EJ MERGAD
 
-*E13 steg 11. En commit på `ordervarde-och-chefsprovision`. Migration `0050`
-**är inte körd** — se "Innan merge" nedan. Hela regelverket i
-`PROVISION_SPEC.md` avsnitt 4.5, resonemanget i `ARBETSLOGG.md` 2026-09-09.*
+*E13 steg 11 på `ordervarde-och-chefsprovision`. Migration `0050` **är körd mot
+produktionsdatabasen 2026-09-09** — se "Ett glapp tills merge" nedan, det är
+viktigt. Hela regelverket i `PROVISION_SPEC.md` avsnitt 4.5, resonemanget i
+`ARBETSLOGG.md` 2026-09-09.*
 
 Beställarens ingång: *"jag vill först förstå hur provisionen och ordervärde
 delas upp"*. Två hål fanns: ordervärdet existerade inte i schemat, och
@@ -28,16 +29,36 @@ sin personlista ur dem som sålt något.
   räknas på skillnaden.
 - **Restposten går aldrig under noll.** Bara möjligt på handsatta order.
 
-### Innan merge — TVÅ SAKER, I ORDNING
+### ETT GLAPP TILLS MERGE — läs detta först
 
-1. **Kör `0050` mot produktionsdatabasen.** Den är additiv och prövad i en
-   transaktion som rullades tillbaka, med tolv spärrprov. Migrationen **seedar
-   satserna** 10 % och 40 % på Zen med `valid_from = 2026-09-01`. September är
-   öppen och bar noll order när provet kördes — kontrollera att det fortfarande
-   stämmer, annars räknas de om.
-2. **Visa previewen för beställaren.** `/order` (ordervärdet i formuläret),
+**Migrationen är körd, men produktionen kör fortfarande gammal kod.** Villkoret
+`sales_order_ordervarde_kravs` kräver ett ordervärde på varje godkänd order, och
+koden på `main` sätter inget. Följden, tills branchen mergas:
+
+| I produktion | Går det? |
+|---|---|
+| Lägga in en order, skicka in den | **Ja** |
+| **Godkänna** en order | **Nej** — check-villkoret nekar |
+
+Beställaren fick valet 2026-09-09 och valde att köra hela migrationen ändå:
+`sales_order` bär en enda rad, så ordergodkännande är i praktiken oanvänt just
+nu. **Alternativet, om det drar ut på tiden:** släpp villkoret
+(`alter table sales_order drop constraint sales_order_ordervarde_kravs`) och
+lägg tillbaka det i en `0051` vid merge.
+
+**Mergen stänger glappet.** Gör den så snart previewen är godkänd.
+
+### Kvar att göra
+
+1. **Visa previewen för beställaren.** `/order` (ordervärdet i formuläret),
    `/provision` (kortet Ordervärde och raden Övertäck), `/provision/regler`
    (satserna med räkneexempel).
+2. **Merga efter godkännande** — och uppdatera den här rubriken till
+   I PRODUKTION.
+
+*Satserna är seedade:* 10 % och 40 % på Zen, `valid_from = 2026-09-01`.
+Kontrollerat efter körningen: `Test AB` orörd, `commission_entry` orörd,
+RLS prövad — Vlado ser sin order men varken satserna eller övertäcket.
 
 ### Fem saker att inte glida tillbaka på
 
