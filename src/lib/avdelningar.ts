@@ -23,8 +23,8 @@ import { ROLES, type Role } from "@/lib/roles";
  *
  * Menyn frågar aldrig efter avdelningen för att avgöra vad någon FÅR se. Det
  * gör rollerna, behörigheterna och RLS, precis som förut. Avdelningen avgör
- * bara var en post hamnar och vilken grupp som står vald när chefsvyn öppnas —
- * alltså ordningen på skärmen, aldrig åtkomsten.
+ * bara var en post hamnar och i vilken ordning menyerna står — alltså
+ * ordningen på skärmen, aldrig åtkomsten.
  * ===========================================================================
  */
 export const AVDELNINGAR = [
@@ -64,6 +64,9 @@ const ROLLENS_AVDELNING: Record<Role, AvdelningId | null> = {
  *
  * DET HÄR ÄR FUNKTIONEN SOM BYTS UT när avdelningen blir ett fält på den
  * anställda. Allt annat i navigeringen läser bara svaret.
+ *
+ * Svaret används till EN sak: att hissa upp den egna avdelningens meny närmast
+ * snabbposterna. En meny man öppnar varje dag ska ligga där handen redan är.
  *
  * Ordningen är `ROLES`, inte den ordning rollerna råkar ligga i på raden:
  * en säljchef som också är säljare hör till försäljning oavsett vilken rad

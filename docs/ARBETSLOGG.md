@@ -5,16 +5,14 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
-## 2026-09-09 · Navigationen i två led, och ett tredje panelläge
+## 2026-09-09 · Navigationen följer avdelningarna, och panelen fick ett tredje läge
 
-*Branch `navigering-vyer`. En commit. Ligger på preview, INTE mergad.*
+*Branch `navigering-vyer`. Ligger på preview, INTE mergad.*
 
-Beställarens beskrivning: menyn ska inte ha så många navigationer i sig.
-Istället en **Chefsvy** för chefer och en **Adminvy** för administratörer, och
-när man trycker på den kommer en till bit av navigationen bredvid — där man
-väljer *alla*, eller *försäljning*, *support*, *ekonomi*, och får sidorna som
-hör dit. Dessutom: panelen ska gå att ha ute när man hovrar över den och stängas
-annars, som ett alternativ till "fäll ihop" eller bredvid det.
+Beställarens beskrivning: menyn ska inte ha så många navigationer i sig. Man
+ska kunna få en meny på *försäljning*, *ekonomi*, *personal* — och panelen ska
+gå att ha ute när man hovrar över den och stängas annars, som ett alternativ
+till "fäll ihop" eller bredvid det.
 
 ### Vad som gjordes
 
@@ -23,46 +21,81 @@ i navet — det var inte innehållet som var fel, utan att arton likadana rader 
 en spalt inte är en meny utan en innehållsförteckning.
 
 **Framme står nu fem poster:** Hem, Nyheter, Rutiner, Utbildning, Tid. Resten
-ligger i tre vyer som öppnar en andra spalt bredvid panelen:
+ligger i menyer som öppnar en spalt bredvid panelen, och **menyerna är
+avdelningarna**:
 
-| Vy | Vem | Grupper |
-| --- | --- | --- |
-| Min vy | alla anställda | Mitt arbete · Min anställning · Navet |
-| Chefsvy | den som har chefssidor | avdelningarna |
-| Adminvy | administratörer | System |
+| Meny | Innehåll |
+| --- | --- |
+| Min vy | Ärenden · Frånvaro · Rapportera fel |
+| Försäljning | Order · K&V · Provision |
+| Leverans & support | *(tom — ritas inte)* |
+| Ekonomi | Lönerapport · Lönekostnad |
+| Personal | Anställda · Coachning · Rekrytering · Avtal |
+| System | Händelselogg · Adoption · Designsystem |
 
-### Fyra beslut som är lätta att riva av misstag
+Den egna avdelningens meny hissas närmast snabbposterna. Menyer utan poster
+ritas inte, så en säljare ser Min vy, Försäljning och Personal — inte fem
+rubriker varav tre är tomma.
 
-**1. EN POST HAMNAR PÅ EXAKT ETT STÄLLE.** Flera sidor är två vyer i en —
-`/order` är säljarens egna order och säljchefens godkännandekö, `/avtal` är
-mitt anställningsavtal och chefens mallar, `/fel` är en rapportknapp och en
-inkorg. Sådana poster placeras efter *vem som tittar*: den som ser sidan som
-sin egen får den i Min vy, den som ser den som chefens får den i Chefsvyn.
-Läggs den i båda står samma länk två gånger i samma meny, och då är vi tillbaka
-i listan vi just tog bort.
+### FÖRSTA FÖRSÖKET LA EN "CHEFSVY" OVANPÅ AVDELNINGARNA, OCH DET VAR FEL
 
-Samma sak fick systemsidorna. `/logg`, `/adoption` och felinkorgen hamnar i
-adminvyn när personen har en, och i chefsvyns systemgrupp annars — annars står
-de dubbelt för den som är både säljchef och administratör.
+Den första versionen hade tre vyer efter *roll* — Min vy, Chefsvy, Adminvy —
+med avdelningarna som chips **inuti** chefsvyn. Beställarens dom samma dag:
+menyerna ska följa avdelningen.
 
-**2. VYERNA RITAS EFTER INNEHÅLL, INTE EFTER ROLL.** En vy som inte fick några
-poster finns inte. Det är samma regel som gällde de enskilda posterna, men den
-är viktigare här: en tom "Chefsvy" är ett löfte om en behörighet man inte har.
+Det håller, av tre skäl som är värda att minnas nästa gång någon vill gruppera
+efter behörighet:
 
-Det är också det enda som fungerar för `recruiter`. En säljare med den
-behörigheten är ingen chef men har en chefssida, och hade vyn krävt en chefsroll
-hade länken försvunnit för precis den person modulen delades ut till.
+1. **Ett led för mycket.** Man valde avdelning för att sedan välja avdelning
+   igen. Chefsvy → Försäljning → Order är tre klick till en sida som ligger
+   under Försäljning.
+2. **Man måste veta om man räknas som chef** för att gissa var en sida ligger.
+   Det är en fråga om systemets rollmodell, inte om arbetet.
+3. **Samma avdelnings sidor hamnade i två menyer** beroende på vem som tittade.
+   `/order` låg under Chefsvy → Försäljning för säljchefen och under Min vy →
+   Mitt arbete för säljaren. "Order ligger under Försäljning" är sant för alla,
+   och en meny där det inte är sant går inte att förklara för en kollega.
+
+### Tre regler som är lätta att riva av misstag
+
+**1. PLACERINGEN BEROR ALDRIG PÅ ROLLEN.** En sida hör till en avdelning,
+punkt. Flera sidor är två vyer i en — `/order` är säljarens egna order och
+säljchefens godkännandekö, `/avtal` är mitt anställningsavtal och chefens
+mallar, `/fel` är en rapportknapp och en inkorg — men de ligger på samma ställe
+för båda. Det är ETIKETTEN som får skilja, eftersom den beskriver vad sidan
+visar. Flyttas en post beroende på vem som tittar är vi tillbaka i
+rollmenyerna.
+
+**2. EN POST HAMNAR PÅ EXAKT ETT STÄLLE.** Följer av regel 1, men värd att
+säga: står samma länk i två menyer är den långa listan tillbaka, bara utspridd.
 
 **3. MENYN DELAR INTE UT NÅGOT.** Varje villkor i `nav-items.ts` är oförändrat
 från den platta listan — samma roller, samma behörigheter, samma
-stämplingsvillkor. Filen avgör bara *var* posten hamnar. En post som flyttas
-mellan vyer får aldrig byta villkor på vägen.
+stämplingsvillkor. Filen avgör bara *var* posten hamnar.
 
-**4. UTBILDNINGEN STANNADE FRAMME.** Den hörde egentligen hemma i en vy, men
-"Kom igång"-turen pekar på den i menyn (`navAnkare("/utbildning")` i
-`src/guider/kom-igang.ts`). Ett guidesteg som pekar in i en stängd flyout hittar
-inget element och visar "elementet saknas" — för varenda ny anställd, i den tur
-som ska lära dem navet. Det står i en kommentar ovanför posten.
+### Tre placeringar som inte är självklara
+
+**`/fel` ligger i Min vy, inte under System — även för den som får inkorgen.**
+Att rapportera ett fel är något man gör själv, mitt i något annat, och en bugg
+man måste öppna en systemmeny för att anmäla blir inte anmäld. X7-piloten går
+ut på tre personer som inte är chefer.
+
+**`/coachning` ligger under Personal, inte Försäljning.** Utbildningen är
+innehållet, coachningen är uppföljningen av personer — och den gäller alla
+anställda, inte bara dem som säljer.
+
+**`/provision` ligger under Försäljning, inte i Min vy.** Provisionen är
+försäljningens mätare, och den säljare som söker sina pengar söker dem där
+order och K&V ligger.
+
+### Personalregistret heter Anställda i menyn
+
+`/personal` fick etiketten **Anställda**. Menyn den ligger i heter redan
+Personal, och "Personal → Personal" läser som ett fel även när det inte är det.
+"Anställda" säger dessutom vad sidan faktiskt är: listan över personer.
+
+**Adressen står kvar.** `/personal` är bokmärkt, står i guider och i loggen, och
+ett namnbyte i menyn är inte skäl nog att bryta länkar.
 
 ### Avdelningarna finns i koden, inte i databasen
 
@@ -77,26 +110,52 @@ och riktiga avdelningar, och valet blev **menyn nu, tabellen förberedd**:
 - `id`-strängarna är valda för att kunna bli primärnycklar.
 - `avdelningFor()` är den ENDA platsen där härledningen sker. Den dagen
   `employee.avdelning_id` finns byts funktionens kropp — inte menyn, inte
-  grupperna, inte panelen.
+  panelen.
 - `ROLLENS_AVDELNING` är `Record<Role, …>` med flit: en nionde roll i
   `roles.ts` slutar kompilera tills någon svarat vilken avdelning den hör till.
 
 **Menyn frågar aldrig efter avdelningen för att avgöra vad någon får se.** Det
 gör rollerna, behörigheterna och RLS. Avdelningen avgör var en post hamnar och
-vilken grupp som står vald — ordningen på skärmen, aldrig åtkomsten.
+i vilken ordning menyerna står — ordningen på skärmen, aldrig åtkomsten.
 
 **"Leverans & support" finns i listan men syns inte.** Ingen sida hör dit ännu,
-och `bygg()` hoppar över tomma grupper. En rubrik utan innehåll under sig är
-samma tomma löfte som en dödlänk.
+och tomma menyer ritas inte. En rubrik utan innehåll under sig är samma tomma
+löfte som en dödlänk.
 
-### Andra spalten är två led, inte tre
+### Spalten ligger i linje med knappen man tryckte på
 
-Vyn väljs i panelen, gruppen väljs som chips i spalten, sidorna står under.
-Frestelsen var en tredje kolumn — "Försäljning ›" som fäller ut ännu en — men
-tre led betyder att musen måste hålla sig innanför två smala korridorer i rad
-för att inte tappa menyn. Chips står still och tål att man missar dem.
+Första versionen satte flyouten på `top-0`, alltså i listans överkant. Man
+tryckte på "Personal" längst ner och fick en spalt uppe vid "Hem" — ögat tappar
+kopplingen direkt, och det ser ut som ett fel även när innehållet är rätt.
 
-Spalten stänger sig vid val, vid Escape, vid klick utanför, vid adressbyte och
+Läget mäts nu mot knappen: `getBoundingClientRect()` på både knappen och den
+positionerade ytan, och en subtraktion. Det är det enda som håller när listan är
+scrollad, när panelen är smal och när fönstret ändrar höjd — `offsetTop` hade
+gett listans koordinatsystem, inte ytans.
+
+Två detaljer som ser onödiga ut men inte är det:
+
+- **`FLYOUT_LUFT` dras av.** Spaltens första RAD ska ligga i linje med knappen,
+  inte lådans kant. Konstanten speglar `p-2` i klasserna; ändras den ena utan
+  den andra glider linjen isär igen.
+- **Botten klampas.** En lång meny långt ner får annars rader nedanför
+  fönsterkanten som inte går att nå. Då glider linjen, och det är rätt pris.
+
+Mätningen körs om vid scroll och vid `ResizeObserver` på listan. Hooken är
+`useLayoutEffect` på klienten och `useEffect` på servern (`useMatningsEffekt`):
+panelen ritas på servern vid varje sidvisning, och `useLayoutEffect` varnar
+högljutt därifrån.
+
+**Rubriken i spalten togs bort.** Namnet står redan på knappen man tryckte på,
+och en rubrik hade skjutit ner listan och brutit just den linje mätningen finns
+för.
+
+### Andra spalten har en nivå
+
+Menyn ÄR avgränsningen, så spalten innehåller bara sidorna. Chipsen från första
+versionen är borta med chefsvyn.
+
+Flyouten stänger sig vid val, vid Escape, vid klick utanför, vid adressbyte och
 när musen lämnat panelen.
 
 **Fördröjningen på väg ut (`UTDROJNING = 180`) är inte kosmetik.** Flyouten
@@ -108,10 +167,10 @@ musen.
 klipper allt som sticker ut, så en svävande spalt inuti den hade blivit avskuren
 vid panelkanten.
 
-**På telefonen fäller vyn ut sig inuti lådan** i stället för bredvid: en 19 rem
-bred spalt bredvid en 16 rem bred låda hamnar utanför fönstret. Den varianten
-sätter INTE `data-guide` — samma ankare två gånger i trädet gör att en guidad
-tur pekar på den som råkar stå först, vilket på en telefon är den dolda.
+**På telefonen fäller menyn ut sig inuti lådan** i stället för bredvid: en 17
+rem bred spalt bredvid en 16 rem bred låda hamnar utanför fönstret. Den
+varianten sätter INTE `data-guide` — samma ankare två gånger i trädet gör att en
+guidad tur pekar på den som råkar stå först, vilket på en telefon är den dolda.
 
 ### Panelen har tre lägen
 
@@ -142,6 +201,14 @@ hopfälld till utfälld att passera hovra, och en inställning man klickar sig r
 i är en inställning man klickar fel i. Utseendesektionen i inställningarna är
 därför en lista med beskrivningar i stället för ett reglage: "Hovra" går inte
 att gissa sig till av ett ord.
+
+### Utbildningen stannade framme
+
+Den hörde egentligen hemma i en meny, men "Kom igång"-turen pekar på den
+(`navAnkare("/utbildning")` i `src/guider/kom-igang.ts`). Ett guidesteg som
+pekar in i en stängd flyout hittar inget element och visar "elementet saknas" —
+för varenda ny anställd, i den tur som ska lära dem navet. Det står i en
+kommentar ovanför posten.
 
 ### Prövat
 

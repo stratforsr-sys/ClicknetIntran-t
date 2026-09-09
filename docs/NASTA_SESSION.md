@@ -3,52 +3,71 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-09 — navigationen ombyggd till två led (Min vy · Chefsvy · Adminvy) med avdelningsgrupper i en andra spalt, och panelen har fått ett tredje läge, `hovra`. Ligger på branch **`navigering-vyer`**, INTE mergad. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8` och i produktion.
+**Senast uppdaterad:** 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, och panelen har fått ett tredje läge, `hovra`. Ligger på branch **`navigering-vyer`**, INTE mergad. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8` och i produktion.
 
 ## Navigationen 2026-09-09 — PÅ BRANCH, VÄNTAR PÅ GODKÄNNANDE
 
-*En commit på `navigering-vyer`. Hela resonemanget i `ARBETSLOGG.md` under
+*Branch `navigering-vyer`. Hela resonemanget i `ARBETSLOGG.md` under
 2026-09-09.*
 
 Sidopanelen bar arton poster. Nu står fem framme — Hem, Nyheter, Rutiner,
-Utbildning, Tid — och resten ligger i tre vyer som öppnar en andra spalt:
-**Min vy** (alla), **Chefsvy** (grupperad per avdelning) och **Adminvy**.
-Panelen kan dessutom stå i `hovra`: smal tills musen är över den.
+Utbildning, Tid — och resten ligger i menyer som öppnar en spalt bredvid
+panelen. **Menyerna är avdelningarna**, plus Min vy för det som bara handlar om
+en själv. Panelen kan dessutom stå i `hovra`: smal tills musen är över den.
+
+| Meny | Innehåll |
+| --- | --- |
+| Min vy | Ärenden · Frånvaro · Rapportera fel |
+| Försäljning | Order · K&V · Provision |
+| Leverans & support | *(tom — ritas inte)* |
+| Ekonomi | Lönerapport · Lönekostnad |
+| Personal | Anställda · Coachning · Rekrytering · Avtal |
+| System | Händelselogg · Adoption · Designsystem |
 
 ### Att titta på i previewen
 
 1. **Hittar du dina sidor?** Ingen behörighet är ändrad — samma sidor som förut,
-   nya platser. Saknas något ligger det i en vy, och **Alla** visar hela
-   innehållet i den.
-2. **Chefsvyns grupper.** De är avdelningarna. Står rätt sidor under rätt
-   avdelning, och är den förvalda gruppen den man förväntar sig?
-3. **Hovra-läget.** Fäller panelen ut sig lagom snabbt, och står innehållet
+   nya platser.
+2. **Ligger sidorna under rätt avdelning?** Tre placeringar är beslut och inte
+   självklarheter: `/fel` i Min vy, `/coachning` under Personal, `/provision`
+   under Försäljning. Skälen står i arbetsloggen.
+3. **Spalten ska ligga i linje med knappen du tryckte på.** Första versionen
+   satte den i listans överkant; det är rättat med en mätning.
+4. **Hovra-läget.** Fäller panelen ut sig lagom snabbt, och står innehållet
    still medan den gör det?
-4. **"Leverans & support" syns inte.** Avdelningen finns i koden men ingen sida
+5. **"Leverans & support" syns inte.** Avdelningen finns i koden men ingen sida
    hör dit ännu. Ska något flyttas dit, eller ska den byggas?
 
 ### Det som INTE går att ändra utan att tänka efter
 
-**EN POST HAMNAR PÅ EXAKT ETT STÄLLE.** `/order`, `/avtal`, `/fel`, `/coachning`
-och `/provision` är två vyer i en — säljarens egna och chefens. De placeras
-efter vem som tittar. Läggs de i båda vyerna står samma länk två gånger i samma
-meny, och då är den långa listan tillbaka.
-
-**VYERNA RITAS EFTER INNEHÅLL, INTE ROLL.** En tom vy finns inte. Det är också
-det enda som fungerar för `recruiter`: en säljare med den behörigheten är ingen
-chef men har en chefssida.
+**PLACERINGEN BEROR ALDRIG PÅ ROLLEN.** Det var precis felet i första
+försöket, som la en "Chefsvy" ovanpå avdelningarna och därmed la `/order` på
+två olika ställen beroende på vem som tittade. En sida hör till en avdelning,
+punkt — bara etiketten får skilja ("Avtal" / "Mitt avtal").
 
 **MENYN DELAR INTE UT NÅGOT.** Villkoren i `nav-items.ts` är oförändrade.
 Åtkomsten avgörs av roller, behörigheter och RLS — filen avgör bara placering.
 
+**TOMMA MENYER RITAS INTE.** En tom "Ekonomi" är ett löfte om en behörighet man
+inte har. Det är också det enda som fungerar för `recruiter`: en säljare med den
+behörigheten är ingen chef men har en sida under Personal.
+
 **AVDELNINGARNA ÄR HÄRLEDDA UR ROLLEN, INTE HÄMTADE UR DATABASEN.**
 `avdelningFor()` i `src/lib/avdelningar.ts` är den enda platsen härledningen
-sker. Den dagen `employee.avdelning_id` finns byts funktionens kropp — inte
-menyn, inte grupperna, inte panelen.
+sker, och används till en sak: att hissa den egna avdelningens meny överst. Den
+dagen `employee.avdelning_id` finns byts funktionens kropp — inte menyn, inte
+panelen.
+
+**`/personal` HETER ANSTÄLLDA I MENYN, MEN ADRESSEN STÅR KVAR.** Den är
+bokmärkt, står i guider och i loggen.
 
 **UTBILDNINGEN MÅSTE STÅ FRAMME.** "Kom igång"-turen pekar på menyposten. Ett
 guidesteg som pekar in i en stängd flyout visar "elementet saknas" för varenda
 ny anställd.
+
+**FLYOUTENS PLACERING HÄNGER IHOP MED `p-2`.** `FLYOUT_LUFT` i `Sidebar.tsx`
+speglar spaltens inre luft, så att första raden hamnar i linje med knappen.
+Ändras klassen utan konstanten glider linjen isär.
 
 **TVÅ PROV LÄSER `nav-items.ts` SOM TEXT.** `guider.mjs` kräver
 `href: "<adress>"` som literal och `data-guide={navAnkare(item.href)}` i

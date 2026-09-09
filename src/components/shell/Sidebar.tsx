@@ -1,13 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Ikon } from "./Ikon";
 import { Vypanel } from "./Vypanel";
 import { Counter } from "@/components/ui/Badge";
 import { cn } from "@/components/ui/cn";
-import type { Navigering, NavVy } from "./nav-items";
+import type { Navigering } from "./nav-items";
 import { navAnkare } from "@/guider/ankare";
 import { INSTALLNINGAR_START } from "./installningar-delade";
 import { PANELLAGEN, PANELLAGE_TEXT, arAktiv, type Panellage } from "./sidopanel";
@@ -34,9 +34,8 @@ import { PANELLAGEN, PANELLAGE_TEXT, arAktiv, type Panellage } from "./sidopanel
  * Alternativet vore att sidan flyttar sig varje gång musen råkar passera
  * kanten, och en text som hoppar i sidled är oläslig medan den gör det.
  *
- * **Leden.** Snabbposterna står framme. Vyerna — Min vy, Chefsvy, Adminvy —
- * öppnar en andra spalt bredvid panelen. Se nav-items.ts för vad som hamnar
- * var, och Vypanel.tsx för hur spalten ser ut.
+ * **Leden.** Snabbposterna står framme. Menyerna — Min vy och avdelningarna —
+ * öppnar en spalt bredvid panelen. Se nav-items.ts för vad som hamnar var.
  *
  * Flyouten stänger sig av sig själv: när man valt en sida, när musen lämnat
  * panelen, vid Escape, vid klick utanför och vid varje adressbyte. Den enda
@@ -66,6 +65,27 @@ import { PANELLAGEN, PANELLAGE_TEXT, arAktiv, type Panellage } from "./sidopanel
 /** Millisekunder innan panelen fälls in efter att musen lämnat den. */
 const UTDROJNING = 180;
 
+/**
+ * Flyoutens inre luft i pixlar, `p-2` i klasserna.
+ *
+ * Den står som en konstant för att placeringen ska kunna räkna bort den. Vill
+ * man att spaltens FÖRSTA RAD ska ligga i linje med knappen man tryckte på —
+ * och det vill man, det är hela poängen — måste lådan börja lika mycket ovanför
+ * knappen som den har luft innanför sin egen kant. Ändras `p-2` här nedan utan
+ * att talet följer med glider linjen isär igen.
+ */
+const FLYOUT_LUFT = 8;
+
+/**
+ * `useLayoutEffect` pa klienten, `useEffect` pa servern.
+ *
+ * Panelen ar en klientkomponent men ritas anda pa servern vid varje
+ * sidvisning, och `useLayoutEffect` varnar hogljutt darifran — det finns ingen
+ * layout att mata. Bytet gors en gang per miljo och inte per rendering, sa
+ * antalet hook-anrop ar detsamma i bada.
+ */
+const useMatningsEffekt = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
 export function Sidebar({
   nav,
   namn,
@@ -92,26 +112,13 @@ export function Sidebar({
   /** Doljs bara pa stora skarmar — utdragsladan visar alltid hela texten. */
   const doljText = smal ? "lg:hidden" : "";
 
-  /** Öppen vy och vald grupp i den. `null` = ingen flyout. */
-  const [oppenVy, setOppenVy] = useState<string | null>(null);
-  const [valdGrupp, setValdGrupp] = useState<string | null>(null);
+  /** Öppen meny, eller `null` för ingen flyout. */
+  const [oppenMeny, setOppenMeny] = useState<string | null>(null);
 
   const panel = useRef<HTMLElement>(null);
   const utTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const stangFlyout = useCallback(() => setOppenVy(null), []);
-
-  const oppnaVy = useCallback(
-    (vy: NavVy) => {
-      if (oppenVy === vy.id) {
-        setOppenVy(null);
-        return;
-      }
-      setOppenVy(vy.id);
-      setValdGrupp(vy.start);
-    },
-    [oppenVy],
-  );
+  const stangFlyout = useCallback(() => setOppenMeny(null), []);
 
   /**
    * Musen in och ut. `pointerType` provas: pa en pekskarm skickar webblasaren
@@ -129,7 +136,7 @@ export function Sidebar({
     if (utTimer.current) clearTimeout(utTimer.current);
     utTimer.current = setTimeout(() => {
       setHovrar(false);
-      setOppenVy(null);
+      setOppenMeny(null);
     }, UTDROJNING);
   };
 
@@ -146,23 +153,23 @@ export function Sidebar({
   const fokusUt = (e: React.FocusEvent) => {
     if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
     setHovrar(false);
-    setOppenVy(null);
+    setOppenMeny(null);
   };
 
   /** Adressbyte stanger flyouten. Annars star den kvar over den nya sidan. */
   useEffect(() => {
-    setOppenVy(null);
+    setOppenMeny(null);
   }, [path]);
 
   /** Escape och klick utanfor. Samma tva vagar ut som alla andra lager i navet. */
   useEffect(() => {
-    if (!oppenVy) return;
+    if (!oppenMeny) return;
 
     const tangent = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOppenVy(null);
+      if (e.key === "Escape") setOppenMeny(null);
     };
     const utanfor = (e: PointerEvent) => {
-      if (!panel.current?.contains(e.target as Node)) setOppenVy(null);
+      if (!panel.current?.contains(e.target as Node)) setOppenMeny(null);
     };
 
     document.addEventListener("keydown", tangent);
@@ -171,18 +178,51 @@ export function Sidebar({
       document.removeEventListener("keydown", tangent);
       document.removeEventListener("pointerdown", utanfor);
     };
-  }, [oppenVy]);
+  }, [oppenMeny]);
+
+  const lista = useRef<HTMLElement>(null);
+  const yta = useRef<HTMLDivElement>(null);
+  const flyout = useRef<HTMLDivElement>(null);
+  /** Knapparna, sa att flyouten kan mata upp sig mot ratt en. */
+  const knappar = useRef(new Map<string, HTMLButtonElement>());
 
   /**
-   * Rulla fram den aktiva posten. `nearest` och inte `center`: star posten
-   * redan i vy ska ingenting rora sig, och pa en skarm dar hela listan far
-   * plats ska panelen se ut precis som fore.
+   * FLYOUTEN LIGGER I LINJE MED KNAPPEN MAN TRYCKTE PÅ.
    *
-   * Kors bara vid montering. Klickar man sig runt i navet ligger listan kvar
-   * dar man lamnade den, vilket ar vad man forvantar sig — det ar ombytet till
-   * en djuplank eller en omladdning som behover hjalpen.
+   * Första versionen satte den på `top-0`, alltså i listans överkant, och då
+   * hamnade den högt ovanför den meny den hörde till — man tryckte på
+   * "Personal" längst ner och fick en spalt uppe vid "Hem". Ögat tappar
+   * kopplingen direkt, och det ser ut som ett fel även när innehållet är rätt.
+   *
+   * Läget mäts i stället mot knappen. `getBoundingClientRect` på båda och en
+   * subtraktion: det är det enda som håller när listan är scrollad, när
+   * panelen är smal och när fönstret ändrar höjd — `offsetTop` hade gett
+   * listans koordinatsystem, inte ytans.
+   *
+   * Två gränser hålls:
+   * - `FLYOUT_LUFT` dras av, så spaltens FÖRSTA RAD ligger i linje med
+   *   knappen, inte lådans kant. Det är raderna man jämför med ögat.
+   * - Botten klampas, så en lång meny långt ner inte hänger nedanför panelen.
+   *   Då glider linjen — men en spalt som sticker ut under fönsterkanten har
+   *   rader man inte kommer åt alls, och det är värre.
    */
-  const lista = useRef<HTMLElement>(null);
+  const [flyoutTopp, setFlyoutTopp] = useState(0);
+
+  const placera = useCallback(() => {
+    if (!oppenMeny) return;
+    const knapp = knappar.current.get(oppenMeny);
+    const ram = yta.current;
+    if (!knapp || !ram) return;
+
+    const topp = knapp.getBoundingClientRect().top - ram.getBoundingClientRect().top;
+    const hojd = flyout.current?.offsetHeight ?? 0;
+    const max = Math.max(0, ram.clientHeight - hojd);
+    setFlyoutTopp(Math.min(Math.max(topp - FLYOUT_LUFT, 0), max));
+  }, [oppenMeny]);
+
+  // Layouteffekt och inte vanlig effekt: placeringen maste vara klar innan
+  // webblasaren malar, annars syns spalten en bildruta pa fel stalle.
+  useMatningsEffekt(placera, [placera]);
 
   /**
    * Toningar i over- och underkant nar det finns mer att rulla till.
@@ -204,6 +244,21 @@ export function Sidebar({
     });
   }, []);
 
+  /** Rullas listan foljer flyouten med sin knapp. */
+  const vidRullning = useCallback(() => {
+    matMer();
+    placera();
+  }, [matMer, placera]);
+
+  /**
+   * Rulla fram den aktiva posten. `nearest` och inte `center`: star posten
+   * redan i vy ska ingenting rora sig, och pa en skarm dar hela listan far
+   * plats ska panelen se ut precis som fore.
+   *
+   * Kors bara vid montering. Klickar man sig runt i navet ligger listan kvar
+   * dar man lamnade den, vilket ar vad man forvantar sig — det ar ombytet till
+   * en djuplank eller en omladdning som behover hjalpen.
+   */
   useEffect(() => {
     const el = lista.current;
     if (!el) return;
@@ -211,13 +266,17 @@ export function Sidebar({
     el.querySelector('[aria-current="page"]')?.scrollIntoView({ block: "nearest" });
     matMer();
 
-    // Fonstret kan andra hojd utan att listan rors — da andras svaret anda.
-    const obs = new ResizeObserver(matMer);
+    // Fonstret kan andra hojd utan att listan rors — da andras bade om det
+    // finns mer att rulla till OCH var flyouten far plats.
+    const obs = new ResizeObserver(() => {
+      matMer();
+      placera();
+    });
     obs.observe(el);
     return () => obs.disconnect();
-  }, [matMer]);
+  }, [matMer, placera]);
 
-  const aktivVy = nav.vyer.find((v) => v.id === oppenVy) ?? null;
+  const aktivMeny = nav.menyer.find((m) => m.id === oppenMeny) ?? null;
 
   return (
     <>
@@ -315,12 +374,14 @@ export function Sidebar({
             ligga utanfor det som rullar — inuti hade de rullat med och tonat
             bort en post i taget i stallet for kanten. Flyouten maste ligga
             utanfor av ett hardare skal: `overflow-y-auto` klipper allt som
-            sticker ut, och en svavande panel bredvid listan hade blivit
-            avskuren vid panelens kant. */}
-        <div className="relative flex min-h-0 flex-1 flex-col">
+            sticker ut, och en svavande spalt bredvid listan hade blivit
+            avskuren vid panelens kant.
+
+            Det ar ocksa den har rutan flyouten mater sitt lage MOT. */}
+        <div ref={yta} className="relative flex min-h-0 flex-1 flex-col">
           <nav
             ref={lista}
-            onScroll={matMer}
+            onScroll={vidRullning}
             className={cn(
               // Den negativa hogermarginalen lagger scrollisten i panelens
               // kant i stallet for inne i texten.
@@ -360,32 +421,33 @@ export function Sidebar({
               );
             })}
 
-            {/* Vyerna. Skiljelinjen sager att det som foljer inte ar fler
-                sidor utan fler MENYER — utan den las de tre posterna som tre
-                lankar till, och da undrar man varfor de inte oppnar nagot. */}
-            {nav.vyer.length > 0 && (
+            {/* Menyerna. Skiljelinjen sager att det som foljer inte ar fler
+                sidor utan fler MENYER — utan den las posterna som lankar till,
+                och da undrar man varfor de inte oppnar nagot. */}
+            {nav.menyer.length > 0 && (
               <div className="my-2 shrink-0 border-t border-brand-800" aria-hidden />
             )}
 
-            {nav.vyer.map((vy) => {
-              const oppenHar = oppenVy === vy.id;
-              // Star man PA en sida som ligger i vyn ska vyn se ut att bara
-              // den. Annars ser menyn ut att sta pa Hem sa fort man oppnat
+            {nav.menyer.map((meny) => {
+              const oppenHar = oppenMeny === meny.id;
+              // Star man PA en sida som ligger i menyn ska menyn se ut att bara
+              // den. Annars ser panelen ut att sta pa Hem sa fort man oppnat
               // nagot som inte ar en snabbpost.
-              const barAktiv = vy.grupper.some((g) => g.poster.some((p) => arAktiv(path, p.href)));
-              const raknare = vy.grupper.reduce(
-                (s, g) => s + g.poster.reduce((t, p) => t + (p.raknare ?? 0), 0),
-                0,
-              );
+              const barAktiv = meny.poster.some((p) => arAktiv(path, p.href));
+              const raknare = meny.poster.reduce((s, p) => s + (p.raknare ?? 0), 0);
 
               return (
-                <div key={vy.id} className="shrink-0">
+                <div key={meny.id} className="shrink-0">
                   <button
                     type="button"
-                    onClick={() => oppnaVy(vy)}
+                    ref={(el) => {
+                      if (el) knappar.current.set(meny.id, el);
+                      else knappar.current.delete(meny.id);
+                    }}
+                    onClick={() => setOppenMeny(oppenHar ? null : meny.id)}
                     aria-expanded={oppenHar}
-                    aria-controls={`vy-${vy.id}`}
-                    title={smal ? vy.etikett : undefined}
+                    aria-controls={`meny-${meny.id}`}
+                    title={smal ? meny.etikett : undefined}
                     className={cn(
                       "flex min-h-11 w-full items-center gap-3 rounded-full px-4 text-body",
                       "transition-colors duration-fast ease-brand",
@@ -396,11 +458,11 @@ export function Sidebar({
                     )}
                   >
                     <Ikon
-                      namn={vy.ikon}
+                      namn={meny.ikon}
                       className={cn("size-5 shrink-0", (oppenHar || barAktiv) && "text-brand-400")}
                     />
                     <span className={cn("flex-1 text-left whitespace-nowrap", doljText)}>
-                      {vy.etikett}
+                      {meny.etikett}
                     </span>
                     {raknare ? <Counter antal={raknare} /> : null}
                     <Ikon
@@ -413,16 +475,14 @@ export function Sidebar({
                     />
                   </button>
 
-                  {/* Telefonens variant: vyn fäller ut INUTI lådan. En
+                  {/* Telefonens variant: menyn fäller ut INUTI lådan. En
                       svävande spalt bredvid en 16 rem bred låda på en 20 rem
                       bred skärm hade hamnat utanför fönstret.
 
                       Utan `data-guide` med flit — se Vypanel.tsx. */}
                   {oppenHar && (
                     <Vypanel
-                      vy={vy}
-                      vald={valdGrupp}
-                      valj={setValdGrupp}
+                      meny={meny}
                       path={path}
                       stang={() => {
                         stangFlyout();
@@ -439,23 +499,19 @@ export function Sidebar({
 
           {/* Datorns variant: svävar bredvid panelen, ovanpå innehållet.
               `left-full` följer panelens bredd av sig själv, så den sitter rätt
-              både när panelen är smal och när den är utfälld. */}
-          {aktivVy && (
+              både när panelen är smal och när den är utfälld. Höjden sätts av
+              `placera()` ovan, så första raden ligger i linje med knappen. */}
+          {aktivMeny && (
             <div
-              id={`vy-${aktivVy.id}`}
+              ref={flyout}
+              id={`meny-${aktivMeny.id}`}
+              style={{ top: flyoutTopp }}
               className={cn(
-                "absolute top-0 left-full z-50 ml-2 hidden max-h-full w-[19rem] flex-col",
-                "rounded-lg bg-brand-950 p-3 ring-1 ring-brand-800 shadow-elev-4 lg:flex",
+                "absolute left-full z-50 ml-2 hidden max-h-full w-[17rem] flex-col",
+                "rounded-lg bg-brand-950 p-2 ring-1 ring-brand-800 shadow-elev-4 lg:flex",
               )}
             >
-              <Vypanel
-                vy={aktivVy}
-                vald={valdGrupp}
-                valj={setValdGrupp}
-                path={path}
-                stang={stangFlyout}
-                ankare
-              />
+              <Vypanel meny={aktivMeny} path={path} stang={stangFlyout} ankare />
             </div>
           )}
 

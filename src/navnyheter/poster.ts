@@ -15,9 +15,9 @@ import type { Navnyhet } from "./typer.ts";
 export const POSTER: Navnyhet[] = [
   {
     slug: "menyn-i-tva-led",
-    rubrik: "Menyn är kortare, och panelen kan fällas ut när du hovrar",
+    rubrik: "Menyn följer avdelningarna, och panelen kan fällas ut när du hovrar",
     ingress:
-      "Bara det du gör varje dag står framme. Resten ligger under Min vy, Chefsvy och Adminvy — och panelen har fått ett tredje läge som fäller ut sig när musen är över den.",
+      "Bara det du gör varje dag står framme. Resten ligger under Försäljning, Ekonomi, Personal och System — och panelen har fått ett tredje läge som fäller ut sig när musen är över den.",
     text: `Sidopanelen hade vuxit till arton poster. Alla hörde hemma där, men
 arton likadana rader i en spalt är inte en meny — det är en lista man läser
 varje gång i stället för att sikta.
@@ -26,31 +26,36 @@ varje gång i stället för att sikta.
 
 Hem, Nyheter, Rutiner, Utbildning och Tid. Ingenting annat.
 
-**Resten ligger i vyer**
+**Resten ligger i avdelningarnas menyer**
 
-Under snabbposterna står en till tre knappar. Tryck på en så fälls en spalt ut
-bredvid panelen med sidorna som hör dit.
+Under snabbposterna står menyerna. Tryck på en så fälls en spalt ut bredvid
+panelen med sidorna som hör dit.
 
-- **Min vy** har alla. Där ligger sidorna som handlar om dig: dina ärenden, din
-  frånvaro, din provision, ditt avtal, din coachning.
-- **Chefsvy** får du om du har sidor som handlar om andra eller om bolaget. Den
-  är grupperad **per avdelning** — Försäljning, Ekonomi, Personal — och du kan
-  välja en avdelning eller se allt på en gång med **Alla**. Din egen avdelning
-  står vald när du öppnar vyn.
-- **Adminvy** får administratörer. Där ligger navet självt: händelseloggen,
-  adoptionen, felen och designsystemet.
+- **Försäljning** — Order, K&V och Provision.
+- **Ekonomi** — Lönerapport och Lönekostnad.
+- **Personal** — Anställda, Coachning, Rekrytering och Avtal.
+- **System** — händelseloggen, adoptionen och designsystemet.
+- **Min vy** — det som bara handlar om dig och därför inte hör till någon
+  avdelning: dina ärenden, din frånvaro och felrapporteringen.
+
+**Din egen avdelning ligger överst**, närmast snabbposterna. Du ser bara de
+menyer du har sidor i, och en meny du inte har någon sida i finns inte alls.
 
 Spalten stänger sig när du valt en sida, när du för musen därifrån, med Escape
 eller genom att klicka utanför.
 
-**Du har inte fått eller förlorat någon behörighet.** Exakt samma sidor som
-igår, på nya platser. Hittar du inte något: det du såg förut ligger i en av
-vyerna, och **Alla** visar hela innehållet i den.
+**Menyerna följer avdelningen, inte din roll.** Order ligger under Försäljning
+oavsett om du är säljare eller säljchef — sidan visar olika saker beroende på
+vem som öppnar den, precis som förut, men den ligger på samma ställe för alla.
+Det betyder också att en kollega kan säga "det ligger under Personal" och ha
+rätt.
 
-En sida står bara på ETT ställe. Är du säljchef ligger Order under Chefsvy och
-Försäljning; är du säljare ligger den under Min vy och Mitt arbete. Det är samma
-sida — den visar bara olika saker beroende på vem som öppnar den, precis som
-förut.
+**Du har inte fått eller förlorat någon behörighet.** Exakt samma sidor som
+igår, på nya platser.
+
+**Personalregistret heter nu Anställda.** Samma sida, samma adress — men menyn
+det ligger i heter Personal, och "Personal → Personal" läser som ett fel även
+när det inte är det.
 
 **Panelen har tre lägen**
 
@@ -66,7 +71,7 @@ I hovra-läget svävar panelen över sidan i stället för att knuffa den åt si
 Texten du läser ligger alltså still även när menyn rör sig.
 
 Läget sparas i den här webbläsaren. På telefonen är panelen som förut en låda du
-drar in, och där fäller vyerna ut sig på plats i listan i stället för bredvid.`,
+drar in, och där fäller menyerna ut sig på plats i listan i stället för bredvid.`,
     datum: "2026-09-09",
     roller: [],
     href: "/",
