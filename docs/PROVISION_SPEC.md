@@ -15,6 +15,11 @@ besvarades 2026-08-25**, och **Ö13 besvarades 2026-08-26**. Kvar öppna är **�
 Ö11, Ö16, Ö17 och Ö18**, som alla har ett förslag som gäller tills någon säger
 annat.
 
+**Steg 11 byggt 2026-09-09** (migration `0050`): ordervärdet, säljchefens
+övertäck och satsen för hens egen försäljning. **Avsnitt 4.5 är nytt** och bär
+hela regelverket; Ö19 är ny och står med sitt förslag. Beställarens frågeomgång
+samma dag.
+
 **Steg 10 byggt 2026-09-07** (migration `0049`): provisionsvyn ombyggd till en
 resultattavla, månadsmål per säljare, och två tysta räknefel rättade. **Avsnitt
 9.1 är omprövat i en punkt — K&V-bonusen visas nu på provisionssidan**, se
@@ -223,6 +228,146 @@ det är rätt: pengarna ska tillbaka.
 
 **Mars rörs aldrig.** Marsperioden är stängd och attesterad, och en stängd
 period skrivs inte om (avsnitt 8).
+
+### 4.5 Ordervärdet och säljchefens ersättning
+
+**Beställarens frågeomgång 2026-09-09.** Fram till dess visste navet vad en
+order *gav i provision* men inte vad den var *värd*, och säljchefen hade ingen
+egen intjäning i systemet över huvud taget. Byggt samma dag som steg 11,
+migration `0050`.
+
+#### Ordervärdet
+
+**Ordervärde = månadspris × avtalstid.** Ett Paket 1 på tolv månader är värt
+995 × 12 = **11 940 kr**. Beställarens uttryckliga val bland tre alternativ.
+
+| Paket | Pris | 12 mån | 24 mån | 36 mån |
+|---|---|---|---|---|
+| Paket 1 | 995 kr | 11 940 kr | 23 880 kr | 35 820 kr |
+| Paket 2 | 1 495 kr | 17 940 kr | 35 880 kr | 53 820 kr |
+| Paket 3 | 1 995 kr | 23 940 kr | 47 880 kr | 71 820 kr |
+
+**Tabellen är en avskrift av vad räkningen ger, inte dess källa.** Priset ligger
+i `sales_package.list_price` och ändras det ändras kommande ordrars värde —
+men inte redan godkända, eftersom värdet **fryses på ordern** vid godkännandet
+precis som provisionen.
+
+*Anmärkning:* `0034` skrev att `list_price` "används inte till någon beräkning".
+Det stämmer inte längre. Kommentaren är rättad i `0050`.
+
+**Order utanför paketreglerna:** godkännaren skriver in ordervärdet *och*
+provisionen. Anteckningen är obligatorisk som förut (4.2). Vägen finns sedan
+`0050` både när en färdig order läggs in och vid **godkännandet av en inskickad
+order** — det senare var en halvbyggd regel: 4.2 säger att det är godkännaren
+som sätter beloppet, men knappen i kön var fältlös.
+
+**ORDERVÄRDET ÄR ALDRIG PENGAR TILL NÅGON.** Det är bolagets omsättning på
+affären, och det går aldrig in i `Underlag.summa` eller i `commission_entry`.
+Ett Paket 1 över tolv månader är värt 11 940 kr och ger 1 500 kr i provision —
+ett tal som råkar summera dem är åtta gånger fel. Vyerna håller dem i olika
+kort, olika kolumner och olika grader.
+
+**Order godkända före 2026-09-09 har inget ordervärde och får inget i
+efterhand** (beställarens beslut). `order_value` är därför nullbar, och
+villkoret som kräver den framåt är `not valid` — det gäller varje insert och
+update från och med nu, men provar aldrig raden från augusti, som ändå är
+orubblig. Allt som summerar ordervärde räknar de saknade vid sidan av summan
+(`ordervarde()` i `order.ts`) så att en total aldrig ser mer fullständig ut än
+den är.
+
+#### Säljchefens två satser
+
+**De möts aldrig på samma order.** Det är hela regeln, och den ligger i
+`affarenFor()` i `src/lib/chefsprovision.ts` — på ett enda ställe, eftersom
+"40 % eller matrisen" är lika lätt att skriva halvrätt som rätt.
+
+| Säljaren är | Provision till säljaren | Till säljchefen |
+|---|---|---|
+| Någon annan, paket | Matrisen (4.1) | **Övertäck** på restposten |
+| Någon annan, fri order | Handsatt belopp | **Övertäck** på restposten |
+| **Säljchefen själv**, paket | `own_sale_percent` × ordervärdet | **Ingenting** |
+| **Säljchefen själv**, fri order | `own_sale_percent` × ordervärdet | **Ingenting** |
+
+**Övertäcket:** `(ordervärde − säljarens provision) × override_percent`.
+
+> Paket 1, 12 mån. 11 940 − 1 500 = 10 440 kvar. 10 % = **1 044 kr**.
+> Paket 3, 36 mån. 71 820 − 6 500 = 65 320 kvar. 10 % = **6 532 kr**.
+
+**Restposten går aldrig under noll** (beställarens beslut). På en paketorder kan
+det inte inträffa — matrisens högsta belopp är 6 500 kr och det lägsta
+ordervärdet 11 940. På en **handsatt** order kan det: en provision på 3 000 kr
+mot ett ordervärde på 2 000 kr ger −1 000. Övertäcket blir då **0 kr, aldrig ett
+avdrag** — annars hade säljchefen straffats på någon annans affär, och avdraget
+dessutom vuxit i takt med att chefen förhandlade upp säljarens provision. Både
+formuläret och godkännandet säger till när det sker.
+
+**Egen försäljning ERSÄTTER matrisen, den kommer inte utöver den.** Samma order
+som ovan: 40 % av 11 940 = **4 776 kr**, inte 1 500 + 4 776. `commission_source`
+blir `manager` — ett tredje värde vid sidan av `matrix` och `manual`, eftersom
+ett framräknat belopp och ett inskrivet är olika sorters uppgift. En
+`manager`-order kräver därför **ingen anteckning**: skälet står i
+konfigurationen.
+
+**Inget övertäck på egen order.** Beställarens beslut, och det står som en
+trigger i `0050` och inte bara i koden — regeln är hela skillnaden mellan de två
+satserna.
+
+#### Vad övertäcket INTE är
+
+Tre gränser, alla byggda, alla förslag tills beställaren säger annat (**Ö19**):
+
+- **Det är inte en order.** `antal.netto` rörs aldrig, så volymtrappan gör det
+  inte heller. En chef med fem säljare hade annars nått nivå 20 utan att teckna
+  en enda affär, och trappan slutat betyda ordervolym.
+- **Det är ingen bonusbas.** K&V räknas på grundprovision + volymbonus (Ö3), och
+  bedöms på personens egna samtal. Att låta en procent på någon annans affär
+  höja den bonusen hade gjort chefens K&V-utfall till en funktion av hur mycket
+  laget sålde.
+- **En bonusförlust rör det inte.** Övertäcket är ersättning för utfört arbete,
+  i samma mening som grundprovisionen — och den är orörd vid en konsekvens
+  (7.3, beställarens uttryckliga besked).
+
+Alla tre ändras genom att flytta chefsraderna uppåt i `raknaUnderlag`. De ligger
+sist just därför: allt ovanför är redan räknat när de läggs till.
+
+#### Konfigurationen
+
+`manager_commission_rate`, versionerad med `valid_from`/`valid_to` som allt
+annat. **Exakt en öppen rad totalt** — det partiella unika indexet står på ett
+konstant uttryck och inte på `employee_id`, eftersom två öppna rader hade gett
+samma order övertäck två gånger. En order har en säljchef.
+
+**Uppslaget sker på orderns signeringsdatum**, inte på månadens första dag. Det
+är motsatsen till volymtrappan (Ö16) och följer av vad de två är: bonusen är en
+egenskap hos hela månaden, övertäcket en egenskap hos **en order**. Följden är
+att beställarens val "gäller från och med nu" här betyder något annat än
+"gäller nästa månad" — vilket det inte gör för trappan.
+
+**Satserna är seedade**, till skillnad från volymtrappan i `0035` som med flit
+föds tom. Skillnaden: där fanns inga tal från beställaren, här finns två — 10 %
+och 40 %, lämnade 2026-09-09. `valid_from` är 2026-09-01; september var öppen
+och bar noll order när migrationen kördes.
+
+**Ändras av säljchef och VD** (`far_andra_provisionsregler()`, samma krets som
+volymtrappan). Att säljchefen sätter sin egen procentsats är beställarens
+uttryckliga önskan; VD står i samma krets, så den som vill ha en andra person på
+beslutet har en.
+
+#### Insynen
+
+**Övertäcket ligger i en egen tabell, `order_manager_commission`, och det är
+inte en modelleringssmak.** `sales_order_read` i `0034` låter säljaren se hela
+sin egen orderrad. Låg beloppet där skulle Vlado se att Zen fick 1 044 kr på
+hans affär — och det är **någon annans ersättning**, vilket `0031` drar gränsen
+mot uttryckligen. RLS i Postgres gäller rader, inte kolumner, så den enda vägen
+är en egen rad med en egen policy.
+
+Kretsen är **mottagaren själv plus den som ser andras provision**. Säljaren står
+utanför båda. Samma gäller `manager_commission_rate`: villkoren för någon annans
+ersättning, och säljarens vy blir inte en siffra fattigare av att de är stängda.
+
+Raden bär hela räkningen — ordervärde, restpost, procentsats och vilken satsrad
+den kom ur — vilket är avsnitt 12:s krav på spårbarhet.
 
 ---
 
@@ -707,6 +852,7 @@ dem.
 | Ö15 | Vad räknas som ogiltig frånvaro? | **BESVARAD 2026-08-25: minst 5 minuter, och personen ska faktiskt inte ha varit på plats.** Den som stämplar in för sent men varit här räknas ALDRIG. Varje fall går som förslag till chefen, som godkänner att säljaren inte var inne — först då är det en ogiltig frånvaro. D-K12:s linje står därmed orörd: K12 1.2 sen ankomst når fortfarande inte provisionen |
 | Ö16 | **Vilken volymtrappa gäller för en månad som en ändring skär igenom?** Frågan var aldrig ställd. Byggd 2026-08-25 med regeln **trappan som gällde på månadens första dag** | Förslag gäller tills annat sägs — se rutan nedan |
 | **Ö17** | **Faller K&V-bonusen helt vid en bonusförlust, eller börjar den om som orderräknaren?** Frågan var aldrig ställd. Byggd 2026-08-26 med regeln **K&V-bonusen faller helt för månaden** | Förslag gäller tills annat sägs — se rutan nedan |
+| **Ö19** | **Ingår övertäcket i volymtrappan, i K&V-basen eller i en bonusförlust?** Frågan var aldrig ställd. Byggd 2026-09-09 med regeln **nej på alla tre** | Förslag gäller tills annat sägs — se 4.5 |
 | **Ö18** | **Vad räknas som "utebliven instämpling"?** Ö15 svarade *hur mycket* (5 min) och *vem som avgör* (chefen), men inte *vad*. Byggd 2026-08-26 som **en dag helt utan stämpling** | Förslag gäller tills annat sägs — se rutan nedan |
 
 > **Ö17: varför K&V-bonusen faller helt och inte börjar om.**
@@ -803,6 +949,8 @@ Varje steg är en egen leverans med prov på räknemotorn innan nästa börjar.
 | 9 | **KLART 2026-08-26** (migration `0039`): PDF-uppladdning pa ordern, utlasning i `src/lib/orderbilaga.ts` (ren logik, `tests/orderbilaga.mjs`), forslaget visas mot orderns nuvarande varden och skrivs bara nar en manniska kryssat i det. En godkand order gar inte att ratta — bade actionen och triggern i 0034 nekar | Steg 1 |
 
 | 10 | **KLART 2026-09-07** (migration `0049`): provisionsvyn som resultattavla — månadens tal i stor stil, bonustrappan som bana, korten I dag / Takt / Mål, stapelrad per arbetsdag, orderlägen, chefens lagtavla. Månadsmål per säljare i `sales_target`. Ren logik i `src/lib/saljtakt.ts` med `tests/saljtakt.mjs`. Rättade två tysta räknefel — K&V saknades i live-summan, och makuleringar av äldre order föll bort ur `hamtaOrder` | Steg 4 |
+
+| 11 | **KLART 2026-09-09** (migration `0050`): ordervärdet på ordern (pris × avtalstid, fryst vid godkännande), säljchefens två satser i `manager_commission_rate`, övertäcket per order i `order_manager_commission` med egen RLS, ren logik i `src/lib/chefsprovision.ts` med `tests/chefsprovision.mjs`. Ordervärde per säljare och för bolaget i vyerna. Rättade samtidigt att **godkännandeknappen i kön var fältlös** — 4.2 säger att godkännaren sätter beloppet, men vägen fanns bara när en färdig order lades in | Steg 3 |
 
 **Kvar: bara steg 8**, som väntar på A6 (dialer-API).
 

@@ -64,6 +64,10 @@ const order = (o) => ({
   status: o.status ?? "signerad",
   is_addon: o.tillagg ?? false,
   commission_amount: o.belopp ?? null,
+  // Ordervardet kom till 2026-09-09 (0050). `undefined` blir null och inte 0:
+  // en order UTAN varde ar nagot annat an en order vard noll kronor, och
+  // `ordervarde()` raknar de forsta i stallet for att summera dem.
+  order_value: o.varde === undefined ? null : o.varde,
   cancel_period_month: o.makuleradManad ?? null,
 });
 

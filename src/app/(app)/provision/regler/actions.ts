@@ -182,6 +182,128 @@ export async function sparaNiva(_prev: ReglerState, form: FormData): Promise<Reg
   }
 }
 
+/**
+ * Saljchefens tva satser.
+ *
+ * ===========================================================================
+ * BADA SATSERNA SPARAS ALLTID TILLSAMMANS, aven nar bara den ena andras.
+ *
+ * `manager_commission_rate` har EN oppen rad totalt — det partiella unika
+ * indexet i 0050 star pa ett konstant uttryck, sa tva oppna rader ar omojliga.
+ * Skalet ar att en order har en saljchef: tva oppna rader hade gett samma order
+ * overtack tva ganger.
+ *
+ * Foljden ar att en andring alltid ar en HEL ny rad. Att spara bara
+ * `override_percent` och lata den andra folja med fran den gamla ar just vad
+ * koden nedan gor — men i databasen blir det anda en ny rad med bada talen, och
+ * den gamla far ett `valid_to`. Historiken svarar darmed pa "vilka satser gallde
+ * i september", vilket ar precis den fraga som stalls nar en utbetalning
+ * ifragasatts.
+ * ===========================================================================
+ *
+ * ATT BYTA MOTTAGARE ar samma rorelse: valj en annan person, och den gamla raden
+ * stangs. Overtack som redan bokforts pa den forra star kvar — de ar frusna pa
+ * sina order i `order_manager_commission`, och en stangd period skrivs aldrig om.
+ */
+export async function sparaChefssats(_prev: ReglerState, form: FormData): Promise<ReglerState> {
+  try {
+    const user = await kravRegelagare();
+
+    const mottagare = String(form.get("employee_id") ?? "").trim();
+    if (!mottagare) return { fel: "Valj vem som far overtacket." };
+
+    const procent = (falt: string): number | null => {
+      const text = String(form.get(falt) ?? "").replace(/[\s ]/g, "").replace(",", ".");
+      if (!text) return null;
+      const n = Number(text);
+      return Number.isFinite(n) ? n : null;
+    };
+
+    const overtack = procent("override_percent");
+    const egen = procent("own_sale_percent");
+    const verkan = tolkaVerkan(form);
+
+    if (overtack === null) return { fel: "Overtacksprocenten gick inte att tolka." };
+    if (egen === null) return { fel: "Procenten for egen forsaljning gick inte att tolka." };
+    if (!verkan) return { fel: "Valj fran nar andringen ska galla." };
+
+    // En procentsats over 100 ar inte en regel utan ett skrivfel — och den
+    // skulle betala ut mer an hela affaren var vard. Check-villkoren i 0050
+    // nekar den anda, men med ett felmeddelande ur Postgres.
+    if (overtack < 0 || overtack > 100 || egen < 0 || egen > 100) {
+      return { fel: "En procentsats ligger mellan 0 och 100." };
+    }
+
+    const franDatum = galleFran(verkan);
+    const db = supabaseAdmin();
+
+    const { data: gammal } = await db
+      .from("manager_commission_rate")
+      .select("id, valid_from")
+      .is("valid_to", null)
+      .maybeSingle();
+
+    if (gammal) {
+      const rad = gammal as Oppen;
+
+      if (rad.valid_from > franDatum) {
+        return { fel: "En senare andring ligger redan inne. Ta bort den forst." };
+      }
+
+      // EN RAD SOM ALDRIG HANN GALLA AR INTE HISTORIK, DEN AR ETT SKRIVFEL.
+      // Samma resonemang som `stangEllerTaBort` for om volymtrappan, och samma
+      // tekniska skal: `valid_to = valid_from` nekas av villkoret
+      // `manager_commission_rate_period`.
+      const { error } =
+        rad.valid_from === franDatum
+          ? await db.from("manager_commission_rate").delete().eq("id", rad.id)
+          : await db
+              .from("manager_commission_rate")
+              .update({ valid_to: franDatum })
+              .eq("id", rad.id);
+
+      if (error) return { fel: `Den gamla satsen gick inte att stanga: ${error.message}` };
+    }
+
+    const { data: ny, error } = await db
+      .from("manager_commission_rate")
+      .insert({
+        employee_id: mottagare,
+        override_percent: overtack,
+        own_sale_percent: egen,
+        valid_from: franDatum,
+        set_by: user.employee!.id,
+      })
+      .select("id")
+      .single();
+
+    if (error || !ny) return { fel: `Satsen sparades inte: ${error?.message ?? "okant fel"}` };
+
+    await db.from("audit_log").insert({
+      actor_id: user.employee!.id,
+      action: "manager_commission_rate.set",
+      object_type: "manager_commission_rate",
+      object_id: ny.id,
+      meta: {
+        employee_id: mottagare,
+        override_percent: overtack,
+        own_sale_percent: egen,
+        valid_from: franDatum,
+      },
+    });
+
+    revalidatePath("/provision/regler");
+    revalidatePath("/provision");
+    revalidatePath("/order");
+
+    return {
+      ok: `${overtack} % övertäck och ${egen} % på egen försäljning från ${franDatum}. Order som redan är godkända rörs inte.`,
+    };
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Nagot gick fel." };
+  }
+}
+
 /** Tar bort en niva ur trappan fran och med ett datum. */
 export async function stangNiva(_prev: ReglerState, form: FormData): Promise<ReglerState> {
   try {

@@ -3,7 +3,83 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-08 (kväll) — testdatan borttagen; Ö11 inträffade på riktigt. Provisionsvyn ombyggd till resultattavla med period- (månad eller helår) och personväljare i panelen, månadsmål per säljare, och tre tysta räknefel rättade. Godkänd och **mergad till main som `dbb02a8`**; ligger i produktion.
+**Senast uppdaterad:** 2026-09-09 — ordervärdet och säljchefens ersättning byggda (E13 steg 11, migration `0050`). Ligger på branch `ordervarde-och-chefsprovision` och **väntar på godkännande**; se avsnittet direkt nedan. Föregående rad: 2026-09-08 (kväll) — testdatan borttagen; Ö11 inträffade på riktigt. Provisionsvyn ombyggd till resultattavla med period- (månad eller helår) och personväljare i panelen, månadsmål per säljare, och tre tysta räknefel rättade. Godkänd och **mergad till main som `dbb02a8`**; ligger i produktion.
+
+## Ordervärdet och säljchefens ersättning 2026-09-09 — PÅ BRANCH, EJ MERGAD
+
+*E13 steg 11. En commit på `ordervarde-och-chefsprovision`. Migration `0050`
+**är inte körd** — se "Innan merge" nedan. Hela regelverket i
+`PROVISION_SPEC.md` avsnitt 4.5, resonemanget i `ARBETSLOGG.md` 2026-09-09.*
+
+Beställarens ingång: *"jag vill först förstå hur provisionen och ordervärde
+delas upp"*. Två hål fanns: ordervärdet existerade inte i schemat, och
+säljchefen hade **ingen intjäning alls** i systemet — `underlagForAlla` byggde
+sin personlista ur dem som sålt något.
+
+### Reglerna, kort
+
+- **Ordervärde = månadspris × avtalstid.** Paket 1, 12 mån = 11 940 kr. Räknas
+  fram ur paketet, fryses på ordern vid godkännandet.
+- **Övertäck till säljchefen:** `(ordervärde − säljarens provision) × 10 %`.
+  11 940 − 1 500 = 10 440 → **1 044 kr**.
+- **Säljchefen säljer själv:** 40 % av hela ordervärdet, som **ersätter**
+  matrisen. Inget övertäck — det finns ingen annans affär att ersätta.
+- **Fri order:** godkännaren skriver ordervärde *och* provision; övertäcket
+  räknas på skillnaden.
+- **Restposten går aldrig under noll.** Bara möjligt på handsatta order.
+
+### Innan merge — TVÅ SAKER, I ORDNING
+
+1. **Kör `0050` mot produktionsdatabasen.** Den är additiv och prövad i en
+   transaktion som rullades tillbaka, med tolv spärrprov. Migrationen **seedar
+   satserna** 10 % och 40 % på Zen med `valid_from = 2026-09-01`. September är
+   öppen och bar noll order när provet kördes — kontrollera att det fortfarande
+   stämmer, annars räknas de om.
+2. **Visa previewen för beställaren.** `/order` (ordervärdet i formuläret),
+   `/provision` (kortet Ordervärde och raden Övertäck), `/provision/regler`
+   (satserna med räkneexempel).
+
+### Fem saker att inte glida tillbaka på
+
+**ORDERVÄRDET LIGGER ALDRIG I `summa`.** Det är bolagets omsättning, inte pengar
+till någon. Ett Paket 1 är värt 11 940 kr och ger 1 500 kr — ett tal som råkar
+summera dem är åtta gånger fel, och båda talen är rimliga var för sig. Det står
+som eget fält på `Underlag`, aldrig som en `Underlagsrad`, och
+`tests/chefsprovision.mjs` har en rad vars enda uppgift är att vakta det.
+
+**ÖVERTÄCKET LIGGER I EN EGEN TABELL AV EN ANLEDNING.** `sales_order_read` i
+`0034` låter säljaren se hela sin egen orderrad. Flyttas beloppet dit ser Vlado
+vad Zen fick på hans affär, och det är någon annans ersättning. RLS gäller
+rader, inte kolumner.
+
+**CHEFSRADERNA LIGGER SIST I `raknaUnderlag`.** Allt ovanför är redan räknat när
+de läggs till — det är det som gör Ö19:s tre gränser läsbara: övertäcket rör
+inte volymtrappan, inte K&V-basen och inte en bonusförlust.
+
+**MOTTAGAREN MÅSTE MED I `underlagForAlla` ÄVEN UTAN EGNA ORDER.** Utan de
+raderna räknas övertäcket live hela månaden och uteblir sedan tyst ur
+lönekörningen. Går åt det håll där ingen saknar sina pengar förrän det är sent.
+
+**SATSEN SLÅS UPP PÅ ORDERNS SIGNERINGSDATUM**, inte på månadens första dag —
+motsatsen till volymtrappan (Ö16). Övertäcket är en egenskap hos en order,
+bonusen hos hela månaden. Följden: "gäller från och med nu" betyder här något
+annat än "gäller nästa månad", vilket det inte gör för trappan.
+
+### Ö19 är ny och obesvarad
+
+Övertäcket rör inte volymtrappan, K&V-basen eller en bonusförlust. Byggt så,
+frågan var aldrig ställd. Värd att lägga fram för beställaren tillsammans med
+Ö11.
+
+### En halvbyggd regel som rättades på vägen
+
+Godkänn-knappen i kön var **fältlös**: `raknaFramProvision` läste
+`commission_amount` ur formuläret, men `Atgarder` skickade aldrig ett sådant
+fält. Vägen till en handsatt provision fanns bara genom "Godkänn direkt" — trots
+att avsnitt 4.2 säger att det är godkännaren som sätter beloppet. Knappen har nu
+en utfällning med ordervärde, provision och anteckning.
+
+---
 
 ## Provisionen 2026-09-08 — I PRODUKTION
 

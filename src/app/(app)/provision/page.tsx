@@ -15,8 +15,15 @@ import {
   slagetFor,
   summera,
   SLAGSETIKETT,
+  SLAGSORDNING,
 } from "@/lib/provision";
-import { hamtaOrder, hamtaOrderFor, hamtaSatser, type Orderrad } from "@/lib/order-server";
+import {
+  hamtaChefsposter,
+  hamtaOrder,
+  hamtaOrderFor,
+  hamtaSatser,
+  type Orderrad,
+} from "@/lib/order-server";
 import { hamtaNivaer, hamtaPerioder } from "@/lib/bonus-server";
 import { hamtaKvPerManad } from "@/lib/kv-server";
 import { hamtaMal } from "@/lib/saljmal-server";
@@ -27,6 +34,7 @@ import {
   raknaUnderlag,
   underlagForAlla,
   type Bonusniva,
+  type Chefspost,
   type KvIndata,
   type Underlag,
 } from "@/lib/provision-motor";
@@ -58,6 +66,7 @@ import {
   Malkort,
   Manadsfacitkort,
   Manadspanel,
+  Ordervardeskort,
   Staplar,
   Taktkort,
   Talstrip,
@@ -204,6 +213,7 @@ export default async function Provisionssida({
     godkanda,
     kvPerManad,
     mal,
+    chefsposter,
   ] = await Promise.all([
     hamtaProvision(user.employee.id, posterFran),
     provisionschef ? hamtaAllProvision(posterFran) : Promise.resolve([] as Post[]),
@@ -229,6 +239,17 @@ export default async function Provisionssida({
     // rattades 2026-09-07. En fraga oavsett hur manga manader det blir.
     hamtaKvPerManad([...new Set([...manaderna, idag, manadFore(idag, 1), treManader])]),
     hamtaMal(franOchMed),
+    // OVERTACKEN. Hamtas for ALLA, inte bara for chefer:
+    // `order_manager_commission_read` i 0050 ger mottagaren sina EGNA rader och
+    // kretsen allas, medan en saljare far noll. En if-sats har hade upprepat
+    // policyn och hunnit glida isar fran den — samma regel som resten av sidan
+    // foljer.
+    //
+    // FONSTRET AR `franOchMed`, alltsa detsamma som orderna. Posterna placeras i
+    // manad ur SIN ORDER, sa ett smalare fonster hade tappat samma sorts rad som
+    // `hamtaOrder` tappade fore 2026-09-08: overtacket pa en gammal order som
+    // makuleras i perioden.
+    hamtaChefsposter(franOchMed),
   ]);
 
   const material = provisionschef ? allaOrder : minaOrder;
@@ -260,6 +281,14 @@ export default async function Provisionssida({
     : material.filter((o) => o.salesperson_id === visadId);
   const tavlansPoster = foretagsvy ? poster : poster.filter((p) => p.employee_id === visadId);
 
+  // OVERTACKEN FOLJER OMFATTNINGEN SOM ALLT ANNAT. Ett overtack hor till den som
+  // FICK det, inte till den som salde ordern — sa filtret star pa `manager_id`.
+  // Tittar chefen pa Vlado ska Vlados vy inte innehalla chefens egna pengar, och
+  // tittar hen pa sig sjalv ska overtacken pa Vlados order vara med.
+  const tavlansChefsposter = foretagsvy
+    ? chefsposter
+    : chefsposter.filter((p) => p.manager_id === visadId);
+
   // ===========================================================================
   // EN RAD PER MANAD I PERIODEN. Hela tavlan byggs ur den har listan.
   //
@@ -277,16 +306,29 @@ export default async function Provisionssida({
     grundprovision: number;
     volymbonus: number;
     kv: number;
+    chefsprovision: number;
+    ordervarde: number;
+    utanVarde: number;
     handbokfort: number;
   })[] = manaderna.map((m) => {
     const kvM = kvPerManad.get(m) ?? new Map<string, KvIndata>();
     const lagenM = lagenPerPerson(godkanda, m);
     const stangdM = perioder.some((p) => p.period_month === m);
 
-    const lag = foretagsvy ? underlagForAlla(material, m, nivaer, kvM, lagenM) : [];
+    const lag = foretagsvy
+      ? underlagForAlla(material, m, nivaer, kvM, lagenM, chefsposter)
+      : [];
     const u = foretagsvy
       ? null
-      : raknaUnderlag(visadId, material, m, nivaer, kvM.get(visadId) ?? null, lagenM.get(visadId) ?? null);
+      : raknaUnderlag(
+          visadId,
+          material,
+          m,
+          nivaer,
+          kvM.get(visadId) ?? null,
+          lagenM.get(visadId) ?? null,
+          tavlansChefsposter,
+        );
 
     const kallor = foretagsvy ? lag : [u!];
     const bokfort = summera(tavlansPoster, m).belopp;
@@ -305,12 +347,27 @@ export default async function Provisionssida({
       grundprovision: kallor.reduce((s, x) => s + x.grundprovision, 0),
       volymbonus: kallor.reduce((s, x) => s + (x.volymbonus?.belopp ?? 0), 0),
       kv: kallor.reduce((s, x) => s + (x.kv?.belopp ?? 0), 0),
+      chefsprovision: kallor.reduce((s, x) => s + (x.chefsprovision?.belopp ?? 0), 0),
+      // ORDERVARDET SUMMERAS OVER `kallor` PRECIS SOM ALLT ANNAT — men det gar
+      // ALDRIG in i `summa` ovan. Det ar bolagets omsattning, inte pengar till
+      // nagon, och en manad dar de tva laggs ihop visar en lonekostnad atta
+      // ganger for hog. Se rubriken vid `Underlag.ordervarde`.
+      ordervarde: kallor.reduce((s, x) => s + x.ordervarde.netto, 0),
+      utanVarde: kallor.reduce((s, x) => s + x.ordervarde.utanVarde, 0),
       handbokfort: summera(handposter(tavlansPoster), m).belopp,
     };
   });
 
   const facit = arsfacit(manadsrader);
   const total = facit.summa;
+
+  // ORDERVARDET SUMMERAS OVER PERIODENS MANADER, precis som allt annat — och
+  // det gar ALDRIG in i `total`. Se rubriken vid `Underlag.ordervarde` i
+  // `provision-motor.ts`: det ar bolagets omsattning, inte pengar till nagon.
+  const ordervardeIPerioden = {
+    netto: manadsrader.reduce((s, r) => s + r.ordervarde, 0),
+    utanVarde: manadsrader.reduce((s, r) => s + r.utanVarde, 0),
+  };
 
   // EN ENDA MANAD ger de extra ytorna: bonustrappan (som kraver ett `Underlag`)
   // och orderraderna en och en. Ett ar far manadslistan i stallet.
@@ -533,6 +590,28 @@ export default async function Provisionssida({
         />
       </div>
 
+      {/*
+        ORDERVARDET LIGGER EFTER KORTEN OCH FORE ORDERLAGENA.
+
+        Efter korten, for att de svarar pa "hur gar det for mig" och det har
+        talet inte handlar om nagons pengar. Fore orderlagena, for att de tva ar
+        samma fraga stalld i olika enheter — antal och kronor — och laser man dem
+        i den ordningen forklarar den forsta den andra.
+
+        KORTET RITAS BARA NAR DET FINNS ETT VARDE ATT VISA. Alla order som lades
+        in fore 2026-09-09 saknar varde, sa for en historisk manad ar summan noll
+        — och ett kort som sager "0 kr" om en manad med tolv order ar samre an
+        inget kort. `utanVarde` bar upplysningen nar den behovs.
+      */}
+      {(ordervardeIPerioden.netto > 0 || ordervardeIPerioden.utanVarde > 0) && (
+        <Ordervardeskort
+          netto={ordervardeIPerioden.netto}
+          antal={facit.antal}
+          utanVarde={ordervardeIPerioden.utanVarde}
+          rubrik={`Ordervärde — ${foretagsvy ? "företaget" : visadNamn.toLowerCase()}, ${periodtext}`}
+        />
+      )}
+
       {malOrder && malsumma.antal > 1 && (
         <Notis ton="info">
           Målet är summerat över {malsumma.antal} satta mål i {periodtext}. Både målet och utfallet
@@ -714,6 +793,10 @@ export default async function Provisionssida({
             manader: manaderna,
             idagsDatum,
             satser,
+            // OFILTRERADE, inte `tavlansChefsposter`. Lagtavlan visar HELA
+            // laget oavsett vems siffror panelen star pa — den som tittar pa
+            // Vlado ska se samma tavla som den som tittar pa sig sjalv.
+            chefsposter,
           })}
           farSattaMal={malchef}
         />
@@ -895,7 +978,15 @@ function handposter(poster: Post[]): Post[] {
  * ===========================================================================
  */
 function delarFor(
-  rader: { manad: string; stangd: boolean; grundprovision: number; volymbonus: number; kv: number; handbokfort: number }[],
+  rader: {
+    manad: string;
+    stangd: boolean;
+    grundprovision: number;
+    volymbonus: number;
+    kv: number;
+    chefsprovision: number;
+    handbokfort: number;
+  }[],
   poster: Post[],
 ): { etikett: string; varde: number }[] {
   const per = new Map<string, number>();
@@ -915,6 +1006,11 @@ function delarFor(
       lagg("Volymbonus", r.volymbonus);
       // K&V-BONUSEN STAR MED SEDAN 2026-09-07 — omprovning av avsnitt 9.1.
       lagg("K&V-bonus", r.kv);
+      // OVERTACKET STAR SOM EGEN DEL sedan 2026-09-09, och det ar viktigt att det
+      // inte doljs i grundprovisionen: for saljchefen ar det ofta den storsta
+      // posten, och den som ser en total utan att veta att halva kom fran andras
+      // affarer laser fel pa sin egen manad. Nollraden faller bort som alla andra.
+      lagg("Övertäck", r.chefsprovision);
       lagg("Bokfört för hand", r.handbokfort);
     }
   }
@@ -922,10 +1018,9 @@ function delarFor(
   // NOLLRADER FALLER BORT, utom grundprovisionen. En rad som star dar och alltid
   // sager noll lar ogat att ingenting hander pa den platsen — samma skal som gor
   // att chipsen ar farre i framtidsflikarna i `Flikar.tsx`.
-  const ordning = [...Object.values(SLAGSETIKETT), "Bokfört för hand"];
   return [...per.entries()]
     .filter(([etikett, varde]) => varde !== 0 || etikett === "Grundprovision")
-    .sort((a, b) => ordning.indexOf(a[0]) - ordning.indexOf(b[0]))
+    .sort((a, b) => SLAGSORDNING.indexOf(a[0]) - SLAGSORDNING.indexOf(b[0]))
     .map(([etikett, varde]) => ({ etikett, varde }));
 }
 
@@ -992,6 +1087,8 @@ function lagrader(arg: {
   manader: string[];
   idagsDatum: string;
   satser: Sats[];
+  /** Overtacken. Bar in mottagaren i listan aven nar hen inte salt nagot. */
+  chefsposter: Chefspost[];
 }): Lagrad[] {
   const iPerioden = new Set(arg.manader);
 
@@ -1005,7 +1102,21 @@ function lagrader(arg: {
       .map((o) => o.salesperson_id),
   );
 
-  const ids = new Set<string>([...arg.saljarIds, ...medRorelse]);
+  // MOTTAGAREN AV OVERTACKET MASTE OCKSA MED. Samma resonemang som i
+  // `underlagForAlla`: en saljchef som inte tecknat en egen affar men fatt
+  // overtack pa fem av sina saljares hade annars saknats helt i tavlan — trots
+  // att hen ar den enda pa listan vars pengar INTE syns nagon annanstans.
+  const medOvertack = new Set(
+    arg.chefsposter
+      .filter(
+        (p) =>
+          iPerioden.has(p.period_month) ||
+          (p.makulerad && p.cancel_period_month !== null && iPerioden.has(p.cancel_period_month)),
+      )
+      .map((p) => p.manager_id),
+  );
+
+  const ids = new Set<string>([...arg.saljarIds, ...medRorelse, ...medOvertack]);
   const stangdaManader = new Set(arg.perioder.map((p) => p.period_month));
 
   // Konsekvenslagena slas upp EN gang per manad och ateranvands for alla
@@ -1024,6 +1135,8 @@ function lagrader(arg: {
       let sistaNiva: number | null = null;
       let malAntal = 0;
       let malUtfall = 0;
+      let ordervarde = 0;
+      let utanVarde = 0;
 
       for (const m of arg.manader) {
         const u = raknaUnderlag(
@@ -1033,6 +1146,7 @@ function lagrader(arg: {
           arg.nivaer,
           arg.kvPerManad.get(m)?.get(p.id) ?? null,
           lagenPerManad.get(m)?.get(p.id) ?? null,
+          arg.chefsposter,
         );
 
         const bokfort = summera(
@@ -1046,6 +1160,8 @@ function lagrader(arg: {
         bonus += (u.volymbonus?.belopp ?? 0) + (u.kv?.belopp ?? 0);
         if (u.volymbonus) manaderMedNiva++;
         sistaNiva = u.volymbonus?.niva.threshold ?? null;
+        ordervarde += u.ordervarde.netto;
+        utanVarde += u.ordervarde.utanVarde;
 
         const detMalet = malFor(arg.mal, p.id, m);
         if (detMalet?.mal_order != null) {
@@ -1082,6 +1198,8 @@ function lagrader(arg: {
         takt,
         mal: malAntal > 0 ? motMal(malAntal, malUtfall, takt) : null,
         total,
+        ordervarde,
+        utanVarde,
       };
     });
 }

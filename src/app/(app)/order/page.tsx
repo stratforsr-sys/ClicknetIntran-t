@@ -8,10 +8,12 @@ import {
   hamtaKo,
   hamtaOrder,
   hamtaOrderbilagor,
+  hamtaChefssatser,
   hamtaPaket,
   hamtaSatser,
   type Orderrad,
 } from "@/lib/order-server";
+import { gallandeChefssats } from "@/lib/chefsprovision";
 import {
   LOPTIDER,
   STATUS_ETIKETT,
@@ -55,13 +57,28 @@ export default async function Ordersida() {
   const manad = manadsnyckel();
   const ettArBak = manadFore(manad, 11);
 
-  const [order, ko, paket, satser, personer] = await Promise.all([
+  const [order, ko, paket, satser, personer, chefssatser] = await Promise.all([
     hamtaOrder(ettArBak),
     hanterare ? hamtaKo() : Promise.resolve([] as Orderrad[]),
     hamtaPaket(),
     hamtaSatser(),
     hanterare ? hamtaSaljare() : Promise.resolve([] as { id: string; namn: string }[]),
+    // TOM LISTA FOR EN SALJARE, och det ar RLS som gor det, inte en if-sats
+    // har. `manager_commission_rate_read` i 0050 slapper bara in den krets som
+    // ser provision — satserna ar villkoren for nagon annans ersattning.
+    // Foljden i formularet ar att restposten och overtacket inte ritas alls for
+    // saljaren, medan ordervardet gor det: det ar hens egen affar.
+    hamtaChefssatser(),
   ]);
+
+  // SATSEN SLAS UPP PA DAGENS DATUM I FORMULARET, inte pa orderns.
+  //
+  // Formularet ar en forhandsvisning av en order som lags NU, och signeringsdatumet
+  // gar att andra i falter efterat. Servern slar upp satsen pa det datum som
+  // faktiskt skickas in (`raknaFramProvision`), och det ar den rakningen som blir
+  // pengar. Skillnaden syns bara om nagon backdaterar over ett satsbyte, och da
+  // ar serverns tal det ratta.
+  const gallandeChef = gallandeChefssats(chefssatser, idag);
 
   const namn = new Map(personer.map((p) => [p.id, p.namn]));
   const mina = order.filter((o) => o.salesperson_id === user.employee!.id);
@@ -116,7 +133,19 @@ export default async function Ordersida() {
               : "Ordern går till säljchefen för godkännande."
           }
         />
-        <Nyorder paket={paket} personer={personer} hanterare={hanterare} idag={idag} />
+        <Nyorder
+          paket={paket}
+          personer={personer}
+          hanterare={hanterare}
+          idag={idag}
+          chef={
+            gallandeChef && {
+              employee_id: gallandeChef.employee_id,
+              override_percent: gallandeChef.override_percent,
+              own_sale_percent: gallandeChef.own_sale_percent,
+            }
+          }
+        />
       </Card>
 
       {hanterare && (
@@ -225,7 +254,26 @@ function Rad({
         {paketnamn} · {o.term_months} mån · signerad {o.signed_on}
         {namn && hanterare ? ` · ${namn}` : ""}
         {o.commission_source === "manual" ? " · provision satt för hand" : ""}
+        {o.commission_source === "manager" ? " · säljchefens egen försäljning" : ""}
       </p>
+
+      {/*
+        ORDERVARDET STAR PA EGEN RAD, MED SITT ORD.
+
+        Talet ar femsiffrigt och provisionen fyrsiffrig, sa lades de bredvid
+        varandra i raden ovan hade det storre av dem last som "vad ordern gav" —
+        och det ar precis vad det INTE ar. Ordet "ordervärde" gor skillnaden, och
+        den mindre graden sager att det inte ar radens huvudtal.
+
+        Order fran fore 0050 saknar varde. De sager ingenting alls i stallet for
+        "0 kr", som hade last som en gratisaffar.
+      */}
+      {o.order_value !== null && (
+        <p className="text-small text-ink-500">
+          Ordervärde {kronor(o.order_value)}
+          {o.order_value_source === "manual" ? " · satt för hand" : " · pris × avtalstid"}
+        </p>
+      )}
 
       {o.status === "makulerad" && o.cancelled_on && (
         <p className="text-small text-danger-ink">

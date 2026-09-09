@@ -14,6 +14,74 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "ordervarde-och-saljchefens-ersattning",
+    rubrik: "Order har ett ordervärde, och säljchefen får sin del automatiskt",
+    ingress:
+      "Välj paketet så räknas både ordervärde och provision fram. Säljchefen får sin procent på det som blir över — och en egen sats när hen säljer själv.",
+    text: `Fram till nu visste navet vad en order **gav i provision**, men inte
+vad den var **värd**. Nu vet det båda, och två nya tal följer med.
+
+**Ordervärdet räknas fram ur paketet**
+
+Välj Paket 1 och 12 månader, så står det **11 940 kr** i formuläret innan du
+sparar — månadspriset gånger avtalstiden. Du behöver inte skriva något: siffran
+kommer ur paketpriset, och den fryses på ordern när den godkänns precis som
+provisionen gör.
+
+Faller affären utanför paketreglerna kryssar du i rutan och skriver in **både
+ordervärdet och provisionen**. Rutan finns nu också på **Godkänn**-knappen i
+kön, inte bara när du lägger in en färdig order själv — en order säljaren
+skickat in gick tidigare bara att godkänna med matrisens belopp.
+
+**Säljchefen får sin del av det som blir över**
+
+På en order som någon annan tecknat räknas säljchefens ersättning på **det som
+återstår när säljarens provision dragits av**:
+
+> Paket 1, 12 månader. Ordervärde 11 940 kr, säljaren får 1 500 kr.
+> Kvar: 10 440 kr. Tio procent av det = **1 044 kr** till säljchefen.
+
+Beloppet syns i formuläret innan du sparar, och säljchefen får en notis när det
+bokförs. Det dyker upp som en egen rad, **Övertäck**, i provisionsvyn — och
+följer med i lönekörningen när månaden fastställs.
+
+Är provisionen större än ordervärdet blir övertäcket **noll**, aldrig ett
+avdrag. Det kan bara hända på en handsatt order, och rutan säger till när det
+sker.
+
+**När säljchefen säljer själv gäller en egen sats**
+
+Då används varken paketmatrisen eller övertäcket, utan en procent på **hela
+ordervärdet**. Samma order som ovan ger 40 % av 11 940 kr = **4 776 kr**. Inget
+övertäck läggs till: satsen ersätter matrisen, den kommer inte utöver den.
+
+**Båda satserna sätts på /provision/regler**
+
+Säljchef och VD väljer mottagare, övertäcksprocent och sats för egen
+försäljning — med ett räkneexempel som uppdateras medan du skriver. Satserna är
+versionerade som allt annat: en ändring gäller order som godkänns därefter, och
+rör aldrig en order som redan är godkänd eller en månad som är stängd.
+
+**Ordervärde per säljare och för hela bolaget**
+
+/provision har ett nytt kort: **Ordervärde**, netto efter makuleringar, med
+snittet per order. Det följer periodväljaren och personväljaren som resten av
+tavlan. I chefens lagtavla står det som egen kolumn bredvid intjäningen.
+
+De två talen ligger avsiktligt isär och summeras aldrig: ordervärdet är vad
+affärerna är värda för bolaget, intjäningen är pengar till personal.
+
+**Order som lades in före det här saknar ordervärde.** De visas som "—" i
+stället för 0 kr, och vyerna skriver ut hur många de är så att en summa aldrig
+ser mer fullständig ut än den är. En godkänd order skrivs aldrig om i
+efterhand.`,
+    datum: "2026-09-09",
+    // TOM LISTA = ALLA. Ordervardet syns i saljarens eget orderformular och pa
+    // hens egen orderrad, sa posten galler bredare an de tva satserna gor.
+    roller: [],
+    href: "/order",
+  },
+  {
     slug: "provisionsvyn-som-resultattavla",
     rubrik: "Provisionen visar nu dagen, takten och vägen till nästa bonus",
     ingress:

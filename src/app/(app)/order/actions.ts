@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { getCurrentUser, hasRole, type CurrentUser } from "@/lib/auth";
 import { svensktDatum } from "@/lib/klocka";
-import { tolkaBelopp } from "@/lib/provision";
+import { kronor, tolkaBelopp } from "@/lib/provision";
 import { forberedUppladdning, registreraFil, taBortInnehall } from "@/lib/filer-server";
 import { pdfText } from "@/lib/pdf";
 import { tolkaAvtalstext, type Orderforslag } from "@/lib/orderbilaga";
@@ -14,8 +14,17 @@ import {
   giltigTelefon,
   giltigtSigneringsdatum,
   normaliseraOrgnr,
+  ordervardeFor,
   type Sats,
 } from "@/lib/order";
+import {
+  affarenFor,
+  arEgenForsaljning,
+  gallandeChefssats,
+  restpostenAtNoll,
+  type Chefssats,
+  type Overtack,
+} from "@/lib/chefsprovision";
 
 export type Orderstate = { fel?: string; ok?: string };
 
@@ -140,17 +149,24 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
       created_by: user.employee!.id,
     };
 
+    let affar: Extract<Framrakning, { klar: true }> | null = null;
+
     if (godkannDirekt) {
-      const provision = await raknaFramProvision(paket, loptid, signerad, form);
+      const provision = await raknaFramProvision(paket, loptid, signerad, saljare, form);
       if (!provision.klar) return { fel: provision.fel };
 
       // Kontrollen star fore skrivningen, inte efter. Check-villkoret
       // `sales_order_manuell_kraver_skal` i 0034 hade fallt anda, men med ett
       // felmeddelande ur Postgres i stallet for ett som gar att forsta.
+      //
+      // `manager` kraver INGEN anteckning: beloppet kommer ur en versionerad
+      // procentsats och inte ur nagons bedomning, sa skalet star i
+      // konfigurationen. Se 0050.
       if (provision.satt.commission_source === "manual" && !note) {
         return { fel: "En handsatt provision kräver en anteckning om varför." };
       }
 
+      affar = provision;
       Object.assign(insats, provision.satt, {
         approved_by: user.employee!.id,
         approved_at: new Date().toISOString(),
@@ -171,12 +187,23 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
       term_months: loptid,
       signed_on: signerad,
       commission_amount: insats.commission_amount ?? null,
+      order_value: insats.order_value ?? null,
     });
 
+    // OVERTACKET SKRIVS EFTER ORDERN, aldrig fore: raden pekar pa `order_id` med
+    // en frammande nyckel, och triggern `order_manager_commission_inte_egen`
+    // laser saljaren ur `sales_order`. Fore ordern finns ingenting att lasa.
+    if (affar) await skrivOvertack(user, rad.id, bolag, affar.overtack);
+
     revalidatePath("/order");
+    revalidatePath("/provision");
     return {
       ok: godkannDirekt
-        ? `Ordern på ${bolag} är godkänd.`
+        ? `Ordern på ${bolag} är godkänd.${
+            affar?.restpostenKlipptes
+              ? " Provisionen översteg ordervärdet, så övertäcket till säljchefen blev noll."
+              : ""
+          }`
         : `Ordern på ${bolag} är inskickad och väntar på godkännande.`,
     };
   } catch (e) {
@@ -195,16 +222,118 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
  * provision i stallet for en konfiguration som inte ar ifylld.
  */
 type Framrakning =
-  | { klar: true; satt: { commission_amount: number; commission_source: string; commission_rate_id: string | null } }
+  | {
+      klar: true;
+      satt: {
+        commission_amount: number;
+        commission_source: string;
+        commission_rate_id: string | null;
+        order_value: number;
+        order_value_source: string;
+      };
+      /** Saljchefens overtack, eller null. Skrivs som EGEN rad — se `skrivOvertack`. */
+      overtack: Overtack | null;
+      /** Sant nar godkannaren skrev in ett belopp sjalv och ordervardet ar lagre. */
+      restpostenKlipptes: boolean;
+    }
   | { klar: false; fel: string };
 
+/**
+ * ===========================================================================
+ * DEN HAR FUNKTIONEN AVGOR VAD TRE OLIKA MANNISKOR FAR BETALT, och den ar det
+ * enda stallet dar valet gors. Fyra fall, och de skiljer sig i BADA leden:
+ *
+ *   SALJARE + PAKET      matrisen                    + overtack till chefen
+ *   SALJARE + FRI ORDER  handsatt belopp             + overtack till chefen
+ *   CHEFEN  + PAKET      procent pa hela ordervardet + INGET overtack
+ *   CHEFEN  + FRI ORDER  procent pa hela ordervardet + INGET overtack
+ *
+ * Sjalva valet ligger i `affarenFor()` i `chefsprovision.ts` och inte har.
+ * Skalet ar att regeln maste ga att prova utan att starta Next, och att
+ * inmatningens forhandsvisning ska kunna visa exakt samma tal som godkannandet
+ * senare skriver. Tva tolkningar av "40 % eller matrisen" hade synts forst nar
+ * nagon undrade over sin lon.
+ * ===========================================================================
+ *
+ * ORDERVARDET RAKNAS HAR OCH FRYSES PA ORDERN. For ett paket ar det priset gange
+ * loptiden; for en fri order skrivs det in. Uppslaget av bade provisionssatsen
+ * och chefssatsen sker pa SIGNERINGSDATUMET och inte pa dagens datum — det ar
+ * hela poangen med att bada tabellerna ar versionerade. En order som laggs in i
+ * efterhand far de satser som gallde nar den skrevs.
+ */
 async function raknaFramProvision(
   paket: number,
   loptid: number,
   signerad: string,
+  saljareId: string,
   form: FormData,
 ): Promise<Framrakning> {
+  const db = supabaseAdmin();
+
+  const [{ data: satsrader }, { data: paketrader }, { data: chefsrader }] = await Promise.all([
+    db.from("commission_rate").select("id, package_id, term_months, amount, valid_from, valid_to"),
+    db.from("sales_package").select("id, label, list_price, sort, active"),
+    db
+      .from("manager_commission_rate")
+      .select("id, employee_id, override_percent, own_sale_percent, valid_from, valid_to"),
+  ]);
+
+  const chefssats = gallandeChefssats(
+    (chefsrader ?? []).map((s) => ({
+      ...s,
+      override_percent: Number(s.override_percent),
+      own_sale_percent: Number(s.own_sale_percent),
+    })) as Chefssats[],
+    signerad,
+  );
+
+  const chefenSaljer = arEgenForsaljning(chefssats, saljareId);
+
+  // ---------------------------------------------------------------------------
+  // 1. Ordervardet
+  // ---------------------------------------------------------------------------
+  const vardeText = String(form.get("order_value") ?? "").trim();
   const manuellText = String(form.get("commission_amount") ?? "").trim();
+
+  // "Ordern foljer inte paketreglerna" kanns igen pa att ETT ordervarde skrivits
+  // in. Kryssrutan i formularet visar bada falten, men det ar vardet som avgor:
+  // en order utan inskrivet varde ar en paketorder, och da raknas vardet fram.
+  const friOrder = vardeText.length > 0;
+
+  let ordervarde: number;
+  let vardekalla: string;
+
+  if (friOrder) {
+    const v = tolkaBelopp(vardeText);
+    if (v === null) return { klar: false, fel: "Ordervärdet gick inte att tolka." };
+    if (v <= 0) return { klar: false, fel: "Ordervärdet måste vara större än noll." };
+    ordervarde = v;
+    vardekalla = "manual";
+  } else {
+    const paketrad = (paketrader ?? []).find((p) => p.id === paket);
+    if (!paketrad) {
+      return { klar: false, fel: "Paketet finns inte. Välj ett paket eller skriv in ett ordervärde." };
+    }
+    ordervarde = ordervardeFor(Number(paketrad.list_price), loptid);
+    vardekalla = "package";
+  }
+
+  // ---------------------------------------------------------------------------
+  // 2. Saljarens provision — den som gallt UTAN chefsregeln
+  //
+  // Raknas fram aven nar chefen ar saljaren, eftersom den da inte anvands: valet
+  // ligger i `affarenFor`. Undantaget ar en fri order som chefen tecknat, dar
+  // godkannaren inte behover skriva nagot belopp alls — 40 % av ordervardet ar
+  // hela svaret. Kravet pa ett handsatt belopp galler darfor bara ANDRAS order.
+  // ---------------------------------------------------------------------------
+  let saljarprovision: number;
+  let saljarkalla: "matrix" | "manual";
+
+  // MATRISRADEN SPARAS, inte bara dess belopp. `commission_rate_id` ar det som
+  // gor att en utbetalning gar att harleda till raden den kom ur; villkoret
+  // `sales_order_satskoppling` i 0050 kraver den for `matrix` och forbjuder den
+  // for allt annat.
+  let matrisrad: Sats | null = null;
 
   if (manuellText) {
     const belopp = tolkaBelopp(manuellText);
@@ -212,38 +341,126 @@ async function raknaFramProvision(
     if (belopp < 0) {
       return { klar: false, fel: "Provisionen kan inte vara negativ. En makulering är vägen ut." };
     }
-    return {
-      klar: true,
-      satt: {
-        commission_amount: belopp,
-        commission_source: "manual",
-        commission_rate_id: null,
-      },
-    };
-  }
-
-  const { data } = await supabaseAdmin()
-    .from("commission_rate")
-    .select("id, package_id, term_months, amount, valid_from, valid_to");
-
-  const satser: Sats[] = (data ?? []).map((s) => ({ ...s, amount: Number(s.amount) }));
-  const sats = gallandeSats(satser, paket, loptid, signerad);
-
-  if (!sats) {
+    saljarprovision = belopp;
+    saljarkalla = "manual";
+  } else if (friOrder && !chefenSaljer) {
     return {
       klar: false,
-      fel: "Ingen provisionssats gällde för den kombinationen på signeringsdagen. Sätt beloppet för hand med en anteckning.",
+      fel: "En order utanför paketreglerna behöver både ett ordervärde och en provision.",
     };
+  } else {
+    const satser: Sats[] = (satsrader ?? []).map((s) => ({ ...s, amount: Number(s.amount) }));
+    matrisrad = gallandeSats(satser, paket, loptid, signerad);
+
+    // Chefen behover ingen matrisrad: hens belopp kommer ur ordervardet. En
+    // saknad sats far darfor bara falla for de andra.
+    if (!matrisrad && !chefenSaljer) {
+      return {
+        klar: false,
+        fel: "Ingen provisionssats gällde för den kombinationen på signeringsdagen. Sätt beloppet för hand med en anteckning.",
+      };
+    }
+
+    saljarprovision = matrisrad?.amount ?? 0;
+    saljarkalla = "matrix";
   }
+
+  // ---------------------------------------------------------------------------
+  // 3. Affaren. Valet mellan de tva satserna sker HAR och ingen annanstans.
+  // ---------------------------------------------------------------------------
+  const affar = affarenFor({
+    sats: chefssats,
+    saljareId,
+    ordervarde,
+    saljarprovision,
+    saljarkalla,
+  });
 
   return {
     klar: true,
     satt: {
-      commission_amount: sats.amount,
-      commission_source: "matrix",
-      commission_rate_id: sats.id,
+      commission_amount: affar.provision,
+      commission_source: affar.kalla,
+      // Bara ett matrisbelopp pekar pa sin rad. Ett handsatt belopp och ett
+      // framraknat chefsbelopp gor det inte — `sales_order_satskoppling` i 0050
+      // nekar annars insertet.
+      commission_rate_id: affar.kalla === "matrix" ? (matrisrad?.id ?? null) : null,
+      order_value: ordervarde,
+      order_value_source: vardekalla,
     },
+    overtack: affar.overtack,
+    restpostenKlipptes: restpostenAtNoll(ordervarde, affar.provision),
   };
+}
+
+/**
+ * Skriver saljchefens overtack som en egen rad.
+ *
+ * ===========================================================================
+ * ETT MISSLYCKANDE HAR FAR INTE RIVA GODKANNANDET, och det ar ett val.
+ *
+ * Ordern ar redan godkand nar den har raden skrivs. Skulle skrivningen falla ar
+ * alternativen tva: backa godkannandet, eller lata ordern sta och sakna sitt
+ * overtack.
+ *
+ * Backa gar inte. `sales_order_stegbyte` i 0034 nekar varje andring pa en
+ * godkand order, och en makulering hade bokfort ett avdrag i makuleringsmanaden
+ * for en affar som ar fullt giltig. Boten hade varit varre an felet.
+ *
+ * Alltsa: ordern star, overtacket saknas, och det STAR I LOGGEN att det saknas.
+ * En saknad rad ar dessutom lagbar i efterhand — perioden ar oppen tills nagon
+ * stanger den — medan en felaktigt makulerad order inte gar att ta tillbaka.
+ * ===========================================================================
+ */
+async function skrivOvertack(
+  user: CurrentUser,
+  orderId: string,
+  bolag: string,
+  overtack: Overtack | null,
+): Promise<void> {
+  if (!overtack) return;
+
+  const { error } = await supabaseAdmin().from("order_manager_commission").insert({
+    order_id: orderId,
+    manager_id: overtack.manager_id,
+    order_value: overtack.order_value,
+    base: overtack.base,
+    percent: overtack.percent,
+    amount: overtack.amount,
+    rate_id: overtack.rate_id,
+  });
+
+  await logga(
+    user,
+    error ? "sales_order.override_failed" : "sales_order.override",
+    orderId,
+    error
+      ? { fel: error.message, manager_id: overtack.manager_id, amount: overtack.amount }
+      : { manager_id: overtack.manager_id, amount: overtack.amount, percent: overtack.percent },
+  );
+
+  if (error) return;
+
+  // NOTISEN GAR TILL MOTTAGAREN, INTE TILL SALJAREN.
+  //
+  // Beloppet ar chefens ersattning, och `order_manager_commission_read` i 0050
+  // slapper inte in saljaren pa den raden. En notis som sa "Zen fick 1 044 kr pa
+  // din order" hade gatt runt hela den policyn — samma sorts lacka som en notis
+  // med ett lonebelopp i.
+  //
+  // Att chefen godkanner sina EGNA notiser ar inget att undvika: hen far veta
+  // vad godkannandet var vart utan att behova oppna provisionsvyn, precis som
+  // saljaren far det beloppet i sin notis.
+  await notifiera({
+    till: overtack.manager_id,
+    av: user.employee!.id,
+    kalla: "order-overtack",
+    typ: "provision",
+    rubrik: `Övertäck ${kronor(overtack.amount)}: ${bolag}`,
+    detalj: `${overtack.percent} % på ${kronor(overtack.base)} · räknas i orderns månad`,
+    href: "/provision",
+    objekt: { typ: "sales_order", id: orderId },
+  });
 }
 
 /** Saljaren skickar in ett utkast. */
@@ -308,10 +525,15 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
       return { fel: "Ordern är redan avgjord." };
     }
 
+    // SALJAREN KOMMER UR ORDERN, inte ur formularet. Det ar hen som avgor om
+    // chefsregeln galler, och en order som saljaren skickat in bar redan sitt
+    // `salesperson_id` — godkannaren byter inte saljare, och triggern i 0034
+    // hade nekat det anda.
     const provision = await raknaFramProvision(
       rad.package_id,
       rad.term_months,
       rad.signed_on,
+      rad.salesperson_id,
       form,
     );
     if (!provision.klar) return { fel: provision.fel };
@@ -336,7 +558,10 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
       salesperson_id: rad.salesperson_id,
       commission_amount: provision.satt.commission_amount,
       commission_source: provision.satt.commission_source,
+      order_value: provision.satt.order_value,
     });
+
+    await skrivOvertack(user, id, rad.company_name, provision.overtack);
 
     // Provisionen ar fryst i samma sekund. Beloppet star i notisen med flit:
     // det ar det tal saljaren annars far leta upp i provisionsvyn for att veta
@@ -354,7 +579,13 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
 
     revalidatePath("/order");
     revalidatePath("/provision");
-    return { ok: "Ordern är godkänd och räknas från och med nu." };
+    return {
+      ok: `Ordern är godkänd och räknas från och med nu.${
+        provision.restpostenKlipptes
+          ? " Provisionen översteg ordervärdet, så övertäcket till säljchefen blev noll."
+          : ""
+      }`,
+    };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
   }

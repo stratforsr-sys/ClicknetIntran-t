@@ -838,3 +838,71 @@ export function Manadsfacitkort({ facit, manad }: { facit: Manadsfacit; manad: s
     </Card>
   );
 }
+
+/**
+ * Ordervärdet — vad affärerna var värda för BOLAGET.
+ *
+ * ===========================================================================
+ * DET HÄR KORTET STÅR MED FLIT UTANFÖR RESULTATTAVLANS ÖVRIGA TAL.
+ *
+ * Allt annat på sidan är pengar till en person: grundprovision, bonus,
+ * övertäck, mål. Det här är omsättning, och de två får aldrig läsas ihop —
+ * ett Paket 1 över tolv månader är värt 11 940 kr och ger 1 500 kr i
+ * provision, så ett tal som råkar summera dem är åtta gånger fel.
+ *
+ * Därför: eget kort, egen rubrik, och en text som säger vad talet INTE är.
+ * Beställarens fråga 2026-09-09 var uttryckligen efter "ordervärde per säljare
+ * och företagets ordervärde", alltså den här siffran — men den ska stå där man
+ * ser att den är av en annan sort.
+ * ===========================================================================
+ *
+ * SNITTET PER ORDER STÅR MED eftersom det är det enda tal som gör summan
+ * jämförbar mellan en månad och ett år. En omsättning som stiger av att
+ * perioden är längre säger ingenting.
+ */
+export function Ordervardeskort({
+  netto,
+  antal,
+  utanVarde,
+  rubrik,
+}: {
+  netto: number;
+  /** Order netto i perioden. Noll ger inget snitt — se nedan. */
+  antal: number;
+  utanVarde: number;
+  rubrik: string;
+}) {
+  return (
+    <Card>
+      <CardHeader
+        titel={rubrik}
+        beskrivning="Vad affärerna är värda för bolaget över hela avtalstiden. Inte pengar till någon — provisionen räknas ur det här talet, inte tvärtom."
+      />
+      <div className="flex flex-wrap items-baseline gap-x-10 gap-y-4">
+        <div>
+          <p className="tnum text-display text-ink-900">{kronor(netto)}</p>
+          <p className="text-small text-ink-500">netto efter makuleringar</p>
+        </div>
+        {/* SNITTET RITAS INTE UR NOLL ORDER. En division med noll blir NaN, och
+            ett snitt ur en enda order är samma tal som summan med en etikett som
+            påstår något mer. */}
+        {antal > 0 && (
+          <div>
+            <p className="tnum text-h1 text-ink-900">{kronor(Math.round(netto / antal))}</p>
+            <p className="text-small text-ink-500">per order, i snitt</p>
+          </div>
+        )}
+      </div>
+
+      {utanVarde > 0 && (
+        <p className="mt-4 max-w-[70ch] text-small text-ink-500">
+          {utanVarde === 1
+            ? "En order i perioden saknar ordervärde"
+            : `${utanVarde} order i perioden saknar ordervärde`}{" "}
+          och ingår inte i summan. De godkändes innan ordervärdet fanns i navet, och en godkänd
+          order skrivs aldrig om.
+        </p>
+      )}
+    </Card>
+  );
+}

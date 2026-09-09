@@ -72,6 +72,16 @@ export type Order = {
   status: Orderstatus;
   is_addon: boolean;
   commission_amount: number | null;
+  /**
+   * Vad affaren ar vard for bolaget. NULLBART, och det ar inte slarv.
+   *
+   * Kolumnen kom till 2026-09-09 (0050). Order som godkandes fore det har inget
+   * varde och far inget i efterhand — bestallarens beslut. Allt som summerar
+   * ordervarde maste darfor tala en nolla utan att pasta att affaren var vardelos;
+   * se `ordervarde()` nedan, som raknar antalet saknade varden vid sidan av
+   * summan just for att vyn ska kunna saga skillnaden med ord.
+   */
+  order_value: number | null;
   cancel_period_month: string | null;
 };
 
@@ -180,6 +190,85 @@ export function provisionFor(
   signeringsdatum: string,
 ): number | null {
   return gallandeSats(satser, paket, loptid, signeringsdatum)?.amount ?? null;
+}
+
+// -----------------------------------------------------------------------------
+// Ordervardet
+// -----------------------------------------------------------------------------
+
+/**
+ * Vad ett paket ar vart over sin avtalstid: manadspriset gange antalet manader.
+ *
+ * ===========================================================================
+ * BESTALLARENS DEFINITION, LAMNAD 2026-09-09. Ett Paket 1 pa tolv manader ar
+ * vart 995 x 12 = 11 940 kr, inte 995 kr.
+ *
+ * Skillnaden ar inte akademisk: ordervardet ar basen for saljchefens overtack,
+ * och med manadspriset ensamt hade restposten blivit NEGATIV pa varje paketorder
+ * — matrisens lagsta provision ar 1 500 kr och det lagsta manadspriset 995.
+ * Overtacket hade da varit noll for alltid, och ingen hade sett varfor.
+ * ===========================================================================
+ *
+ * `list_price` beskrevs i 0034 som ett falt som "anvands inte till nagon
+ * berakning". Det stammer inte langre, och kommentaren dar ar ratad i 0050.
+ * Priset ar versionerat pa samma satt som allt annat: kolumnen ligger i
+ * `sales_package` och andras den, andras kommande ordrars varde — men inte
+ * redan godkanda, eftersom vardet FRYSES pa ordern vid godkannandet precis som
+ * provisionen.
+ */
+export function ordervardeFor(manadspris: number, loptid: number): number {
+  return manadspris * loptid;
+}
+
+/** Ordervardet for ett paket ur paketlistan, eller null nar paketet saknas. */
+export function ordervardeForPaket(
+  paket: Paket[],
+  paketId: number,
+  loptid: number,
+): number | null {
+  const p = paket.find((x) => x.id === paketId);
+  return p ? ordervardeFor(p.list_price, loptid) : null;
+}
+
+/**
+ * Manadens ordervarde: det som tecknats minus det som makulerats.
+ *
+ * ===========================================================================
+ * SAKNADE VARDEN RAKNAS, DE SUMMERAS INTE.
+ *
+ * En order fran fore 0050 har `order_value = null`. Att lata den bidra med noll
+ * ar aritmetiskt riktigt och kommunikativt fel: en manad med tre order varda
+ * 40 000 kr och en utan varde ser da ut att ha fyra order varda 40 000 kr, och
+ * ingen kan se att talet ar ofullstandigt.
+ *
+ * Darfor bar svaret bade summan och `utanVarde`. Vyn skriver ut det andra talet
+ * nar det ar storre an noll, och da vet lasaren vad summan INTE innehaller.
+ * Samma resonemang som `bedomda` bredvid `godkanda` i K&V-utfallet.
+ * ===========================================================================
+ *
+ * Makuleringen dras i MAKULERINGSMANADEN, inte i signeringsmanaden — samma
+ * tvahandelsemodell som `grundprovision` foljer, och av samma skal: en stangd
+ * period skrivs aldrig om.
+ */
+export function ordervarde(
+  order: Order[],
+  manad: string,
+): { netto: number; tecknat: number; makulerat: number; utanVarde: number } {
+  const in_ = orderIPeriod(order, manad);
+  const ut = makuleradeIPeriod(order, manad);
+
+  const summa = (rader: Order[]) => rader.reduce((s, o) => s + (o.order_value ?? 0), 0);
+  const saknade = (rader: Order[]) => rader.filter((o) => o.order_value === null).length;
+
+  const tecknat = summa(in_);
+  const makulerat = summa(ut);
+
+  return {
+    netto: tecknat - makulerat,
+    tecknat,
+    makulerat,
+    utanVarde: saknade(in_) + saknade(ut),
+  };
 }
 
 // -----------------------------------------------------------------------------

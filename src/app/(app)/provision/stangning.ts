@@ -9,6 +9,7 @@ import {
   bokforingsposter,
   underlagForAlla,
   type Bonusniva,
+  type Chefspost,
   type KvIndata,
 } from "@/lib/provision-motor";
 import { gallandePolicy, kvManad, type KvPolicy, type KvSamtal } from "@/lib/kv";
@@ -105,14 +106,28 @@ export async function faststallPeriod(
     // trappan sagt ska falla, och den posten gar sedan inte att skriva om:
     // huvudboken ar append-only, sa rattelsen blir en negativ post nagon maste
     // upptacka och skriva for hand.
-    const [order, nivaer, kvPerPerson, konsekvensPerPerson] = await Promise.all([
+    //
+    // OVERTACKEN MASTE OCKSA MED. `underlagForAlla` bygger sin personlista ur
+    // dem, sa utan raden nedan skulle en saljchef utan egna order inte finnas i
+    // bokforingen alls — hens overtack hade raknats live hela manaden och sedan
+    // tyst uteblivit ur lonekorningen. Samma sorts fel som de tva som ratades
+    // 2026-09-08, och det gar at det hall dar ingen saknar sina pengar.
+    const [order, nivaer, kvPerPerson, konsekvensPerPerson, chefsposter] = await Promise.all([
       hamtaAllaOrder(manad),
       hamtaAllaNivaer(),
       hamtaKvPerPerson(manad),
       hamtaKonsekvensPerPerson(manad),
+      hamtaAllaChefsposter(manad),
     ]);
 
-    const rader = underlagForAlla(order, manad, nivaer, kvPerPerson, konsekvensPerPerson).flatMap((u) =>
+    const rader = underlagForAlla(
+      order,
+      manad,
+      nivaer,
+      kvPerPerson,
+      konsekvensPerPerson,
+      chefsposter,
+    ).flatMap((u) =>
       bokforingsposter(u).map((p) => ({
         employee_id: u.employee_id,
         period_month: manad,
@@ -231,16 +246,23 @@ async function hamtaAllaOrder(manad: string): Promise<Order[]> {
     .from("sales_order")
     .select(
       "id, salesperson_id, package_id, term_months, signed_on, period_month, status," +
-        " is_addon, commission_amount, cancel_period_month",
+        " is_addon, commission_amount, order_value, cancel_period_month",
     )
     .or(`period_month.eq.${manad},cancel_period_month.eq.${manad}`);
 
   // numeric kommer tillbaka som STRANG ur PostgREST. Utan Number() blir
   // summeringen en strangkonkatenering, och 1500 + 2500 blir "15002500". Samma
   // falla som `order-server.ts` och `provision-server.ts` redan gatt i.
+  //
+  // `order_value` bokfors ALDRIG — det ar bolagets omsattning och inte pengar
+  // till nagon, sa `bokforingsposter` ror den aldrig. Kolumnen las anda, sa att
+  // materialet motorn far har samma form har som i vyn. En `Order` utan
+  // ordervarde i den ena och med i den andra ar tva olika sanningar om samma rad.
   return ((data ?? []) as unknown as Record<string, unknown>[]).map((o) => ({
     ...o,
     commission_amount: o.commission_amount === null ? null : Number(o.commission_amount),
+    order_value:
+      o.order_value === null || o.order_value === undefined ? null : Number(o.order_value),
   })) as unknown as Order[];
 }
 
@@ -319,6 +341,52 @@ async function hamtaKvPerPerson(manad: string): Promise<Map<string, KvIndata>> {
   }
 
   return ut;
+}
+
+/**
+ * Saljchefens overtack som ror manaden — bokforda i den, eller tillbakadragna.
+ *
+ * LASES MED SERVICE ROLE, av samma skal som `hamtaAllaOrder`: bokforingen maste
+ * vara fullstandig. `order_manager_commission_read` i 0050 hade sluppit fram
+ * mottagarens egna rader oavsett vem som attesterar, men den som stanger
+ * perioden ar inte alltid den som far overtacket — ekonomi och VD star i
+ * attestkretsen utan att vara saljchef.
+ *
+ * VILLKORET AR ORDERNS BADA MANADER. Ett overtack pa en order fran mars som
+ * makuleras i september belastar SEPTEMBER, och det syns bara i orderns
+ * `cancel_period_month`. Samma `or` som `hamtaAllaOrder` ovan.
+ */
+async function hamtaAllaChefsposter(manad: string): Promise<Chefspost[]> {
+  const { data } = await supabaseAdmin()
+    .from("order_manager_commission")
+    .select(
+      "order_id, manager_id, amount, percent," +
+        " sales_order!inner(period_month, cancel_period_month, signed_on, company_name, status)",
+    )
+    .or(`period_month.eq.${manad},cancel_period_month.eq.${manad}`, {
+      referencedTable: "sales_order",
+    });
+
+  return (data ?? []).flatMap((r) => {
+    const o = (r as unknown as { sales_order: Record<string, unknown> | null }).sales_order;
+    if (!o) return [];
+
+    return [
+      {
+        order_id: String(r.order_id),
+        manager_id: String(r.manager_id),
+        // numeric kommer tillbaka som STRANG ur PostgREST. Utan Number() blir
+        // summeringen en strangkonkatenering — samma falla som resten av filen.
+        amount: Number(r.amount),
+        percent: Number(r.percent),
+        period_month: String(o.period_month),
+        cancel_period_month: o.cancel_period_month === null ? null : String(o.cancel_period_month),
+        signed_on: String(o.signed_on),
+        company_name: String(o.company_name),
+        makulerad: o.status === "makulerad",
+      } satisfies Chefspost,
+    ];
+  });
 }
 
 async function hamtaAllaNivaer(): Promise<Bonusniva[]> {

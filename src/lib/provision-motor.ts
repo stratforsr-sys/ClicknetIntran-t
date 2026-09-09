@@ -29,6 +29,7 @@ import {
   grundprovision,
   makuleradeIPeriod,
   orderIPeriod,
+  ordervarde,
   type Order,
 } from "./order.ts";
 import type { Konsekvenslage } from "./konsekvens.ts";
@@ -52,6 +53,13 @@ export const RADSLAG = [
   "kv_bonus",
   "ovrig_bonus",
   "avdrag",
+  // Saljchefens overtack pa andras order, och tillbakadraget nar en sadan order
+  // makuleras. TVA SLAG och inte ett: makuleringen sker i en ANNAN manad an
+  // tillagget, precis som for saljarens egen provision, och tva slag i samma
+  // manad ska ga att sarskilja i huvudboken. Se `chefsprovision.ts` for
+  // rakningen och 0050 for var raderna kommer ifran.
+  "chefsprovision",
+  "chefsprovision_makulering",
 ] as const;
 
 export type Radslag = (typeof RADSLAG)[number];
@@ -93,6 +101,28 @@ export type Underlag = {
 
   grundprovision: number;
 
+  /**
+   * Vad personens order var varda for BOLAGET — en helt annan sorts tal an
+   * resten av underlaget.
+   *
+   * ===========================================================================
+   * DET HAR AR INTE PENGAR TILL NAGON, OCH DET FAR ALDRIG HAMNA I `summa`.
+   *
+   * `rader` och `summa` beskriver INTJANING: kronor som ska betalas ut till
+   * personen. Ordervardet ar bolagets omsattning pa samma affarer, och de tva
+   * star i samma vy men aldrig i samma summa. Ett ordervarde som slank in i
+   * `summa` hade multiplicerat manadens lonekostnad med atta.
+   *
+   * Det ar ocksa skalet till att vardet star som ett EGET falt och inte som en
+   * `Underlagsrad`: en rad i underlaget ar per definition en post som bokfors i
+   * `commission_entry` nar perioden stangs, och det ska ordervardet inte.
+   * ===========================================================================
+   *
+   * `utanVarde` ar antalet order som saknar varde helt — se `ordervarde()` i
+   * `order.ts` for varfor de raknas i stallet for att summeras som nollor.
+   */
+  ordervarde: { netto: number; tecknat: number; makulerat: number; utanVarde: number };
+
   /** Nivan manaden landade pa, eller null nar den lagsta troskeln inte natts. */
   volymbonus: { niva: Bonusniva; belopp: number } | null;
 
@@ -104,6 +134,28 @@ export type Underlag = {
    * det ar underlaget som bokfors nar perioden stangs.
    */
   kv: { godkanda: number; procent: number; belopp: number } | null;
+
+  /**
+   * Saljchefens overtack pa andras order — null for alla utom mottagaren.
+   *
+   * ===========================================================================
+   * DET HAR RAKNAS INTE FRAM HAR. Motorn tar emot fardiga poster.
+   *
+   * Skalet ar att overtacket FRYSES PER ORDER vid godkannandet, precis som
+   * saljarens provision: procentsatsen som gallde da star pa raden i
+   * `order_manager_commission` (0050) tillsammans med basen den raknades pa.
+   * Skulle motorn rakna om det ur dagens sats hade en satsandring i november
+   * andrat vad chefen fick i september — samma fel som den frusna
+   * `commission_amount` finns for att hindra.
+   *
+   * Delningen ar densamma som for K&V: `chefsprovision.ts` vet vad ett overtack
+   * ar, motorn vet hur manga av dem en manad innehaller.
+   * ===========================================================================
+   *
+   * `antal` ar antalet ORDER bakom beloppet, inte order i trappans mening. Det
+   * hojer aldrig `antal.netto` — se rubriken vid `raknaUnderlag`.
+   */
+  chefsprovision: { antal: number; makulerade: number; belopp: number } | null;
 
   /**
    * Nasta niva och hur langt dit. Prognosen i saljarens progressvy.
@@ -196,6 +248,44 @@ function ordertext(o: Order): string {
 function makuleringstext(o: Order): string {
   return `Makulerad order, tecknad ${o.signed_on}`;
 }
+
+function chefstext(p: Chefspost): string {
+  return `Övertäck ${p.percent} % på ${p.company_name}, tecknad ${p.signed_on}`;
+}
+
+function chefsmakuleringstext(p: Chefspost): string {
+  return `Makulerat övertäck, ${p.company_name} tecknad ${p.signed_on}`;
+}
+
+// -----------------------------------------------------------------------------
+// Saljchefens overtack — steg 11
+//
+// INGEN PROCENTSATS STAR HAR HELLER. Posten kommer fardigraknad ur
+// `order_manager_commission` (0050); `percent` foljer med enbart for att kunna
+// skrivas ut i radtexten, och den multipliceras aldrig med nagonting.
+// -----------------------------------------------------------------------------
+
+/**
+ * Ett bokfort overtack, sa som huvudboken bar det.
+ *
+ * MANADSFALTEN KOMMER UR ORDERN och inte ur posten. `order_manager_commission`
+ * har med flit ingen egen manadskolumn — overtacket foljer sin order, bokfors i
+ * dess `period_month` och dras tillbaka i dess `cancel_period_month`. En egen
+ * kolumn hade varit ett andra svar pa samma fraga.
+ */
+export type Chefspost = {
+  order_id: string;
+  manager_id: string;
+  amount: number;
+  percent: number;
+
+  /** Ur ordern, for manadsplaceringen och for radtexten. */
+  period_month: string;
+  cancel_period_month: string | null;
+  signed_on: string;
+  company_name: string;
+  makulerad: boolean;
+};
 
 // -----------------------------------------------------------------------------
 // Volymtrappan — steg 3
@@ -336,6 +426,7 @@ export function raknaUnderlag(
   nivaer: Bonusniva[] = [],
   kv: KvIndata | null = null,
   konsekvens: Konsekvenslage | null = null,
+  chefsposter: Chefspost[] = [],
 ): Underlag {
   const mina = forSaljare(order, employee_id);
 
@@ -458,12 +549,76 @@ export function raknaUnderlag(
     });
   }
 
+  // ===========================================================================
+  // OVERTACKET LIGGER SIST, OCH DET AR INTE BARA EN PLACERING.
+  //
+  // Raderna kommer EFTER K&V-raden for att ingenting ovanfor far rakna pa dem.
+  // Tre saker foljer av det, och alla tre ar bestallarens regler eller foljer av
+  // dem:
+  //
+  //   VOLYMTRAPPAN ROR DEM INTE. `antal` raknas ur ORDER personen sjalv salt.
+  //   Rakhades overtacken in dar hade en saljchef med fem saljare natt niva 20
+  //   utan att teckna en enda affar, och trappan hade slutat betyda ordervolym.
+  //
+  //   K&V-BASEN ROR DEM INTE. Basen ar grundprovision plus volymbonus (O3), och
+  //   K&V bedoms pa personens EGNA samtal. Att lata en procentsats pa nagon
+  //   annans affar hoja den bonusen hade gjort chefens K&V-utfall till en
+  //   funktion av hur mycket laget salde. Se O19.
+  //
+  //   EN BONUSFORLUST ROR DEM INTE. Overtacket ar inte en bonus utan ersattning
+  //   for utfort arbete, i samma mening som grundprovisionen — och den ar orord
+  //   vid en konsekvens (avsnitt 7.3, bestallarens uttryckliga besked). Se O19.
+  //
+  // Alla tre ar FORSLAG som galler tills bestallaren sager annat, och alla tre
+  // andras genom att flytta de har raderna uppat. Att de ligger sist ar darfor
+  // det som gor dem lasbara: allt ovanfor ar redan raknat nar de laggs till.
+  // ===========================================================================
+  const minaChefsposter = chefsposter.filter((p) => p.manager_id === employee_id);
+
+  // SAMMA TVAHANDELSEMODELL SOM ORDERN SJALV. Ett overtack bidrar i sin orders
+  // SIGNERINGSMANAD och dras tillbaka i dess MAKULERINGSMANAD, och de tva ar
+  // olika manader med flit. Se `harGodkants` i `order.ts` for felet som uppstar
+  // nar de blandas ihop — det ratades dar 2026-08-25 och far inte aterinforas
+  // har.
+  const chefsIn = minaChefsposter.filter((p) => p.period_month === manad);
+  const chefsUt = minaChefsposter.filter(
+    (p) => p.makulerad && p.cancel_period_month === manad,
+  );
+
+  for (const p of chefsIn) {
+    rader.push({
+      slag: "chefsprovision",
+      text: chefstext(p),
+      belopp: p.amount,
+      order_id: p.order_id,
+    });
+  }
+
+  for (const p of chefsUt) {
+    rader.push({
+      slag: "chefsprovision_makulering",
+      text: chefsmakuleringstext(p),
+      belopp: -p.amount,
+      order_id: p.order_id,
+    });
+  }
+
+  const chefsbelopp =
+    chefsIn.reduce((s, p) => s + p.amount, 0) - chefsUt.reduce((s, p) => s + p.amount, 0);
+
+  const chefsprovision =
+    chefsIn.length > 0 || chefsUt.length > 0
+      ? { antal: chefsIn.length, makulerade: chefsUt.length, belopp: chefsbelopp }
+      : null;
+
   return {
     employee_id,
     manad,
     rader,
     antal,
     grundprovision: grund,
+    ordervarde: ordervarde(mina, manad),
+    chefsprovision,
     volymbonus,
     kv: kvBonus,
     // PROGNOSEN RAKNAS PA DEN NYA TRAPPAN. Efter en konsekvens ar "3 order kvar
@@ -494,10 +649,37 @@ export function underlagForAlla(
   nivaer: Bonusniva[] = [],
   kvPerPerson: Map<string, KvIndata> = new Map(),
   konsekvensPerPerson: Map<string, Konsekvenslage> = new Map(),
+  chefsposter: Chefspost[] = [],
 ): Underlag[] {
   const personer = new Set<string>();
   for (const o of [...orderIPeriod(order, manad), ...makuleradeIPeriod(order, manad)]) {
     personer.add(o.salesperson_id);
+  }
+
+  // ===========================================================================
+  // MOTTAGAREN MASTE MED AVEN UTAN EGNA ORDER, och det ar hela poangen med
+  // raderna nedan.
+  //
+  // Fram till 2026-09-09 var listan uteslutande "personer som salt nagot i
+  // manaden". En saljchef som inte tecknat en enda egen affar men fatt overtack
+  // pa fem av sina saljares hade darfor INTE FUNNITS i chefens vy — och,
+  // allvarligare, inte i `stangning.ts`, som bygger sin bokforing pa exakt den
+  // har funktionen. Overtacket hade raknats live hela manaden och sedan tyst
+  // uteblivit ur lonekorningen.
+  //
+  // Det ar samma sorts fel som "makuleringar av aldre order foll bort ur
+  // hamtaOrder" (rattat 2026-09-08): det gar at det halL dar ingen saknar sina
+  // pengar forran det ar for sent.
+  //
+  // MANADSFILTRET STAR HAR OCKSA. En post vars order signerades i mars far inte
+  // gora mars manadsvy till en lista med chefen i — `raknaUnderlag` hade gett
+  // hen ett tomt underlag, och en rad pa noll kronor i en lagvy ar en person som
+  // ser ut att ha misslyckats.
+  // ===========================================================================
+  for (const p of chefsposter) {
+    if (p.period_month === manad || (p.makulerad && p.cancel_period_month === manad)) {
+      personer.add(p.manager_id);
+    }
   }
 
   return [...personer]
@@ -510,6 +692,7 @@ export function underlagForAlla(
         nivaer,
         kvPerPerson.get(id) ?? null,
         konsekvensPerPerson.get(id) ?? null,
+        chefsposter,
       ),
     );
 }
@@ -686,6 +869,42 @@ export function bokforingsposter(u: Underlag): Bokforingspost[] {
     const belopp = summaAv(rader);
     if (belopp === 0) continue;
     poster.push({ slag, belopp, antal: null, text: rader.map((r) => r.text).join("; ") });
+  }
+
+  // ===========================================================================
+  // OVERTACKET BOKFORS SOM TVA POSTER, INTE SOM EN NETTOSUMMA.
+  //
+  // Frestelsen ar att slaga ihop dem: tre overtack pa 1 044 kr och ett
+  // makulerat ger 2 088 kr, och EN post pa det talet ar kortare att lasa.
+  //
+  // Den skulle vara fel av samma skal som `makulering` har en egen post och inte
+  // dras av fran `order`: en huvudbok som bara bar nettot kan inte svara pa vad
+  // som tjanades in och vad som drogs tillbaka. Och eftersom `commission_entry`
+  // ar append-only gar den upplysningen aldrig att lagga till i efterhand.
+  //
+  // Texterna slas daremot ihop per post — en post per SLAG och inte en per
+  // order, precis som ovan. Orderraderna finns redan i `sales_order` med sina
+  // egna id:n, och `order_manager_commission` bar rakningen bakom varje krona.
+  // ===========================================================================
+  for (const slag of ["chefsprovision", "chefsprovision_makulering"] as const) {
+    const rader = av(slag);
+    if (rader.length === 0) continue;
+    const belopp = summaAv(rader);
+    if (belopp === 0) continue;
+
+    poster.push({
+      slag,
+      belopp,
+      // `deals` ar antalet order bakom posten. For tillagget ar det ett aakta
+      // antal; for makuleringen ar beloppet negativt och kolumnen har
+      // `check (deals >= 0)` i 0031, sa antalet star i texten i stallet — samma
+      // losning som `makulering` ovan.
+      antal: slag === "chefsprovision" ? rader.length : null,
+      text:
+        slag === "chefsprovision"
+          ? `Övertäck på ${rader.length} ${rader.length === 1 ? "order" : "order"}`
+          : `Makulerat övertäck, ${rader.length} ${rader.length === 1 ? "order" : "order"}`,
+    });
   }
 
   return poster;

@@ -5,6 +5,127 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-09 · Ordervärdet, och säljchefen får en egen intjäning
+
+*E13 steg 11. Migration `0050`. Branch `ordervarde-och-chefsprovision`.*
+
+Beställarens ingång: *"jag vill först förstå hur provisionen och ordervärde
+delas upp"* — och sedan en beskrivning av något som inte fanns alls.
+
+### Vad som saknades, och det var mer än det såg ut som
+
+Två hål, och det andra var det större:
+
+**Ordervärdet fanns inte i schemat.** `sales_package.list_price` fanns, med en
+kommentar i `0034` som uttryckligen sa att den "används inte till någon
+beräkning". Det gick alltså inte att svara på vad en säljare omsatt, och inte
+heller vad bolaget gjort — bara vad som betalats ut i provision.
+
+**Säljchefen hade ingen intjäning i systemet.** Inte "fel belopp" utan
+*ingenting*: `underlagForAlla` byggde sin personlista ur dem som *sålt något*,
+och Zen hade inga egna order. Han fanns inte i vyn, och därmed inte i
+`stangning.ts`, som bokför ur exakt den funktionen.
+
+### Frågeomgången, och det svar jag inte hade gissat
+
+Sju frågor. Fyra var som väntat; en var det inte.
+
+**Ordervärdet är pris × avtalstid.** 995 × 12 = 11 940 kr, inte 995. Alternativet
+med bara månadspriset lades fram med sin egen konsekvens utskriven — då blir
+restposten negativ på *varje* paketorder, eftersom matrisens lägsta belopp är
+1 500 kr — och beställaren valde bort det.
+
+**Restposten går aldrig under noll.** Kan bara inträffa på en handsatt order.
+
+**Övertäcket gäller också fria order.** Godkännaren skriver båda talen, procenten
+räknas på skillnaden.
+
+**`Test AB` får inget ordervärde i efterhand.** Beställarens val. Det avgjorde
+schemat: `order_value` blev nullbar och villkoret som kräver den framåt blev
+`not valid`.
+
+**Och så det som inte var en av alternativen.** På frågan om vem som får
+övertäcket valde beställaren inget av de tre och skrev i stället: *"om Zen själv
+säljer ett paket får han 40% i provision på ordervärdet."*
+
+Det är en fjärde regel som inte hade ställts. Tre följdfrågor gjorde den
+entydig: 40 % **ersätter** matrisen (inte utöver), och på en egen order utgår
+**inget** övertäck — det finns ingen annans affär att ersätta. Regeln gäller
+också fria order som säljchefen tecknat, och då räcker ordervärdet: provisionen
+räknas ur det.
+
+Hade jag byggt på det första svaret hade Zen fått 1 500 + 4 776 + 716 kr på en
+order där beställaren menade 4 776.
+
+### Tre beslut värda att skriva ut
+
+**Övertäcket ligger i en EGEN TABELL, och det är inte en modelleringssmak.**
+Första utkastet var två kolumner på `sales_order`. `sales_order_read` i `0034`
+låter säljaren se hela sin egen rad — så Vlado hade sett att Zen fick 1 044 kr
+på hans affär. Det är någon annans ersättning, och `0031` drar den gränsen
+uttryckligen: *"kretsen som ser ANDRAS provision ar liten"*. RLS gäller rader,
+inte kolumner. Alltså `order_manager_commission` med egen policy.
+
+Bivinsten kom gratis: raden bär hela räkningen — ordervärde, restpost, procent
+och satsrad — vilket är avsnitt 12:s krav på spårbarhet, och det får inte plats
+i två kolumner.
+
+**Ordervärdet ligger utanför `summa`, och det är den farligaste raden i hela
+passet.** Ett Paket 1 över tolv månader är värt 11 940 kr och ger 1 500 kr. Ett
+ordervärde som slank in i `Underlag.summa` hade mångdubblat månadens
+lönekostnad utan att se fel ut — talen är rimliga var för sig. Det står som ett
+eget fält, aldrig som en `Underlagsrad`, och provet har en rad vars enda uppgift
+är att kontrollera det.
+
+**`not valid` på ordervärdesvillkoret är rätt verktyg, inte en genväg.** Det
+gäller varje insert och update framåt men provar aldrig `Test AB` — som ändå är
+orubblig, eftersom `sales_order_stegbyte` nekar varje skrivning på en godkänd
+order. Ett `validate constraint` senare hade krävt att augustiraden först fick
+ett värde, alltså precis det beställaren sagt nej till.
+
+### En halvbyggd regel som föll ut på vägen
+
+`raknaFramProvision` läste `commission_amount` ur formuläret, men **Atgarder
+skickade aldrig något sådant fält**. Vägen till en handsatt provision fanns
+alltså bara genom `skapaOrder` med "Godkänn direkt" — medan avsnitt 4.2 säger
+att det är *godkännaren* som sätter beloppet när affären faller utanför
+matrisen. En order som säljaren skickat in gick bara att godkänna med matrisens
+belopp.
+
+Det syntes inte förrän ordervärdet också måste kunna sättas. Godkänn-knappen
+har nu en utfällning med båda fälten och anteckningen.
+
+### Ö19: tre gränser som ingen ställt frågan om
+
+Övertäcket rör **inte** volymtrappan, **inte** K&V-basen och **inte** en
+bonusförlust. Skälen står i motorn ovanför raderna. Det starkaste är det första:
+en chef med fem säljare hade annars nått nivå 20 utan att teckna en enda affär,
+och trappan slutat betyda ordervolym.
+
+Raderna ligger **sist** i underlaget just därför — allt ovanför är redan räknat
+när de läggs till, så alla tre gränserna ändras genom att flytta dem uppåt.
+
+### Provat
+
+`tests/chefsprovision.mjs`, 60 kontroller, alla gröna. De tre viktigaste:
+ordervärdet ligger aldrig i `summa`; tjugofem övertäck ger noll egna order och
+ingen volymbonus; mottagaren finns i `underlagForAlla` även utan egna order.
+`tests/order.mjs`, `tests/provision-motor.mjs` och `tests/navnyheter.mjs` är
+oförändrat gröna.
+
+**Migrationen kördes som en torrkörning mot produktionsdatabasen i en
+transaktion som rullades tillbaka**, med tolv spärrprov i savepoints: ordervärde
+krävs från `signerad`, chefen får inget övertäck på egen order, ett bokfört
+övertäck går inte att skriva om, ordervärdet går inte att ändra på en godkänd
+order, en andra öppen chefssats nekas, `manager` med en matrisrad nekas. Alla
+tolv höll.
+
+*Första försöket räknades inte:* proven låg i samma transaktion utan savepoints,
+så det första avvisade insertet avbröt den och de följande "gick igenom" mot ett
+dött anslutningsläge. Två gröna bockar som inte betydde någonting.
+
+---
+
 ## 2026-09-08 (sent) · Testdatan städad, och Ö11 inträffade på riktigt
 
 Sex order raderade ur produktionen: de fem märkta

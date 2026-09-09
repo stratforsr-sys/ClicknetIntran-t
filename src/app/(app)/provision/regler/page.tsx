@@ -4,12 +4,18 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { getCurrentUser, hasRole } from "@/lib/auth";
+import { supabaseServer } from "@/lib/supabase/server";
+import { svensktDatum } from "@/lib/klocka";
 import { hamtaNivaer } from "@/lib/bonus-server";
+import { hamtaChefssatser, hamtaPaket, hamtaSatser } from "@/lib/order-server";
+import { gallandeChefssats } from "@/lib/chefsprovision";
+import { LOPTIDER, ordervardeFor, provisionFor } from "@/lib/order";
 import { kronor, manadsnamn, manadsnyckel } from "@/lib/provision";
 import { gallandeNivaer, type Bonusniva } from "@/lib/provision-motor";
 import { hamtaRegler } from "@/lib/konsekvens-server";
 import { ATGARD_ETIKETT } from "@/lib/konsekvens";
 import { KonsekvensSteg, NyNiva, TaBortNiva, TaBortSteg } from "./Trappa";
+import { Chefssatsformular } from "./Chefsersattning";
 
 export const dynamic = "force-dynamic";
 
@@ -34,8 +40,44 @@ export default async function Reglersida() {
   if (!user?.employee) return null;
   if (!hasRole(user, "sales_manager", "ceo")) notFound();
 
-  const [alla, regler] = await Promise.all([hamtaNivaer(), hamtaRegler()]);
+  const [alla, regler, chefssatser, paket, satser, personer] = await Promise.all([
+    hamtaNivaer(),
+    hamtaRegler(),
+    hamtaChefssatser(),
+    hamtaPaket(),
+    hamtaSatser(),
+    hamtaSaljbara(),
+  ]);
   const manad = manadsnyckel();
+  const idag = svensktDatum();
+
+  const gallandeChef = gallandeChefssats(chefssatser, idag);
+  const chefshistorik = chefssatser
+    .filter((s) => s.valid_to !== null)
+    .sort((a, b) => (a.valid_from < b.valid_from ? 1 : -1));
+
+  // RAKNEEXEMPLET BYGGS AV RIKTIG KONFIGURATION, inte av paminnda tal.
+  //
+  // Paketet med lagsta priset och kortaste loptiden — den kombination som ger
+  // det MINSTA overtacket. Ett exempel pa den storsta affaren hade fatt varje
+  // procentsats att se generosare ut an den ar.
+  //
+  // Saknas paketet eller satsen visas inget exempel alls. Ett exempel med en
+  // gissad nolla i hade varit samre an inget: det ser ut att vara raknat.
+  const minstaPaket = [...paket].sort((a, b) => a.list_price - b.list_price)[0];
+  const kortaste = LOPTIDER[0];
+  const exempelprovision = minstaPaket
+    ? provisionFor(satser, minstaPaket.id, kortaste, idag)
+    : null;
+
+  const exempel =
+    minstaPaket && exempelprovision !== null
+      ? {
+          ordervarde: ordervardeFor(minstaPaket.list_price, kortaste),
+          provision: exempelprovision,
+          text: `${minstaPaket.label} över ${kortaste} månader`,
+        }
+      : null;
 
   const gallande = gallandeNivaer(alla, manad);
   const kommande = alla.filter((n) => n.valid_to === null && n.valid_from > manad);
@@ -118,6 +160,87 @@ export default async function Reglersida() {
         </p>
       </Card>
 
+      {/*
+        SALJCHEFENS ERSATTNING STAR EFTER VOLYMTRAPPAN OCH FORE KONSEKVENSERNA.
+
+        Ordningen foljer vad talen GOR: trappan och satserna har lagger till
+        pengar, konsekvenstrappan tar bort dem. En installning som ger och en som
+        river bredvid varandra utan en grans laser som samma sorts regel.
+      */}
+      <Card status={gallandeChef === null ? "warn" : undefined}>
+        <CardHeader
+          titel="Säljchefens ersättning"
+          beskrivning="Två satser som aldrig möts på samma order: övertäcket på andras affärer, och satsen när säljchefen säljer själv."
+        />
+
+        {gallandeChef === null ? (
+          <EmptyState
+            rubrik="Ingen sats är satt"
+            text="Utan en sats bokförs inget övertäck, och paketmatrisen gäller för alla — även för säljchefen. Nav gissar aldrig en procentsats."
+          />
+        ) : (
+          <dl className="mb-6 grid grid-cols-1 gap-4 rounded-sm bg-surface-alt p-4 sm:grid-cols-3">
+            <div>
+              <dt className="text-micro uppercase text-ink-500">Mottagare</dt>
+              <dd className="mt-1 text-body font-semibold text-ink-900">
+                {personer.find((p) => p.id === gallandeChef.employee_id)?.namn ?? "Okänd"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-micro uppercase text-ink-500">Övertäck</dt>
+              <dd className="tnum mt-1 text-h1 text-ink-900">{gallandeChef.override_percent} %</dd>
+              <p className="text-micro text-ink-500">av det som blir över</p>
+            </div>
+            <div>
+              <dt className="text-micro uppercase text-ink-500">Egen försäljning</dt>
+              <dd className="tnum mt-1 text-h1 text-ink-900">{gallandeChef.own_sale_percent} %</dd>
+              <p className="text-micro text-ink-500">av hela ordervärdet</p>
+            </div>
+            <p className="text-small text-ink-500 sm:col-span-3">
+              Gäller order signerade från {gallandeChef.valid_from}. Uppslaget sker på orderns
+              signeringsdatum och inte på månadens första dag — övertäcket är en egenskap hos en
+              enskild order, till skillnad från volymbonusen som hör till hela månaden.
+            </p>
+          </dl>
+        )}
+
+        <Chefssatsformular
+          personer={personer}
+          nuvarande={
+            gallandeChef && {
+              employee_id: gallandeChef.employee_id,
+              override_percent: gallandeChef.override_percent,
+              own_sale_percent: gallandeChef.own_sale_percent,
+            }
+          }
+          exempel={exempel}
+        />
+
+        {chefshistorik.length > 0 && (
+          <div className="mt-6 border-t border-canvas pt-4">
+            <p className="text-micro uppercase text-ink-500">Satser som inte gäller längre</p>
+            <ul className="mt-2 flex flex-col">
+              {chefshistorik.map((s) => (
+                <li
+                  key={s.id}
+                  className="flex flex-wrap items-center gap-3 border-b border-canvas py-2 text-small text-ink-500 last:border-0"
+                >
+                  <span className="w-32 truncate">
+                    {personer.find((p) => p.id === s.employee_id)?.namn ?? "Okänd"}
+                  </span>
+                  <span className="tnum flex-1">
+                    {s.override_percent} % övertäck · {s.own_sale_percent} % egen
+                  </span>
+                  <span>
+                    {s.valid_from} – {s.valid_to}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </Card>
+
       <Card status={regler.length === 0 ? "warn" : undefined}>
         <CardHeader
           titel="Konsekvenstrappan"
@@ -181,6 +304,40 @@ export default async function Reglersida() {
       )}
     </div>
   );
+}
+
+/**
+ * De som gar att peka ut som mottagare av overtacket.
+ *
+ * KRETSEN AR SALJCHEF OCH VD, inte "alla anstallda". Overtacket ar en
+ * chefsersattning, och en lista med tjugo namn hade gjort det till nagot man
+ * kan ge vem som helst.
+ *
+ * SCHEMAT KONTROLLERAR INTE ROLLEN, och det ar avsiktligt (se 0050): rollerna i
+ * `employee_role` gar att andra, medan satsraden ar historik. Slutar nagon som
+ * saljchef ska den rad som gallde da fortfarande peka pa hen. Kontrollen hor
+ * darfor hemma HAR, dar valet gors.
+ *
+ * `status = 'active'`: en avslutad anstalld ska inte ga att valja, men de
+ * satsrader som redan pekar pa hen star kvar och visas i historiken.
+ */
+async function hamtaSaljbara(): Promise<{ id: string; namn: string }[]> {
+  const rls = await supabaseServer();
+  const { data } = await rls
+    .from("employee")
+    .select("id, first_name, last_name, status, employee_role!inner(role)")
+    .eq("status", "active")
+    .in("employee_role.role", ["sales_manager", "ceo"]);
+
+  // En person med bade sales_manager och ceo kommer tillbaka tva ganger ur
+  // joinen. `Map` pa id ar billigare an ett `distinct` som PostgREST anda inte
+  // erbjuder over en inbaddad tabell.
+  const unika = new Map<string, string>();
+  for (const e of data ?? []) {
+    unika.set(String(e.id), `${e.first_name} ${e.last_name}`.trim());
+  }
+
+  return [...unika].map(([id, namn]) => ({ id, namn })).sort((a, b) => a.namn.localeCompare(b.namn, "sv"));
 }
 
 /** Beloppet med sin form. Formen ar inte kosmetisk — den avgor hur mycket det blir. */

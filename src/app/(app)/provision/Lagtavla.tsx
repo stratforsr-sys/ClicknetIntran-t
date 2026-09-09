@@ -61,6 +61,27 @@ export type Lagrad = {
   mal: Malutfall | null;
   /** Periodens intjaning inklusive bokforda handposter. */
   total: number;
+
+  /**
+   * Vad personens order var varda for BOLAGET, netto efter makuleringar.
+   *
+   * ===========================================================================
+   * DEN HAR KOLUMNEN AR INTE PENGAR TILL NAGON, och det ar hela svarigheten med
+   * att visa den bredvid `total`.
+   *
+   * Talen ar av helt olika storleksordning: ett Paket 1 pa tolv manader ar vart
+   * 11 940 kr och ger 1 500 kr i provision. Staller man dem i samma kolumnform
+   * laser det storre av dem som "vad hen tjanade", och det ar atta ganger fel.
+   *
+   * Darfor: ordervardet star i en EGEN kolumn med sin egen rubrik, i mindre
+   * grad an intjaningen, och sorteringen sker fortfarande pa intjaningen. Den
+   * som vill rangordna pa omsattning far gora det med ogat.
+   * ===========================================================================
+   */
+  ordervarde: number;
+
+  /** Antal order i perioden som saknar varde helt. Se `ordervarde()` i `order.ts`. */
+  utanVarde: number;
 };
 
 export function Lagtavla({
@@ -95,6 +116,8 @@ export function Lagtavla({
   const idag = rader.reduce((s, r) => s + r.idag, 0);
   const order = rader.reduce((s, r) => s + r.antal, 0);
   const summa = rader.reduce((s, r) => s + r.total, 0);
+  const ordervarde = rader.reduce((s, r) => s + r.ordervarde, 0);
+  const utanVarde = rader.reduce((s, r) => s + r.utanVarde, 0);
   // TAKTEN SUMMERAS OVER DE SOM FAKTISKT HAR EN. Den som saknar prognos bidrar
   // med sitt UTFALL och inte med noll — annars sjunker lagets takt av att en ny
   // saljare borjar, vilket ar tvartemot vad som hant.
@@ -114,16 +137,41 @@ export function Lagtavla({
         }
       />
 
-      <dl className="mb-6 grid grid-cols-2 gap-4 rounded-sm bg-surface-alt p-4 sm:grid-cols-4">
+      {/*
+        FEM TAL, OCH DET FEMTE AR AV EN ANNAN SORT.
+
+        "Ordervärde" är bolagets omsättning; de fyra andra handlar om order och
+        om pengar till personal. Enheten står därför utskriven under talet, och
+        ordet "bolaget" står i den — utan det läses det största talet i raden som
+        en lönesumma.
+      */}
+      <dl className="mb-6 grid grid-cols-2 gap-4 rounded-sm bg-surface-alt p-4 sm:grid-cols-5">
         {visaIdag && <Lagtal etikett="I dag" varde={String(idag)} enhet="order" />}
         <Lagtal etikett="Perioden" varde={String(order)} enhet="order netto" />
-        <Lagtal etikett="Intjänat" varde={kronor(summa)} />
+        <Lagtal etikett="Ordervärde" varde={kronor(ordervarde)} enhet="bolagets, netto" />
+        <Lagtal etikett="Intjänat" varde={kronor(summa)} enhet="till säljarna" />
         <Lagtal
           etikett="Takt"
           varde={kronor(takt)}
           enhet={visaIdag ? "vid periodens slut" : "utfall"}
         />
       </dl>
+
+      {/*
+        Order fran fore 2026-09-09 saknar ordervarde. Utan den har raden ser
+        summan fullstandig ut, och en manad med tre varderade order och en
+        ovarderad laser som fyra order varda 40 000 kr. Raden syns bara nar det
+        finns nagot att saga — en text som alltid star dar lar ogat att hoppa
+        over den.
+      */}
+      {utanVarde > 0 && (
+        <p className="-mt-2 mb-6 text-small text-ink-500">
+          {utanVarde === 1
+            ? "En order saknar ordervärde och ingår inte i summan"
+            : `${utanVarde} order saknar ordervärde och ingår inte i summan`}{" "}
+          — de lades in innan värdet fanns i navet.
+        </p>
+      )}
 
       <ul className="flex flex-col">
         {sorterade.map((r) => (
@@ -151,12 +199,24 @@ export function Lagtavla({
 
             <Mallapp mal={r.mal} />
 
+            {/* Ordervardet i MINDRE grad an intjaningen, trots att talet ar
+                storre. Graden ar det som sager vilket av de tva raden handlar
+                om — se rubriken vid `Lagrad.ordervarde`. */}
+            <span className="tnum w-28 text-right text-small text-ink-500">
+              {r.ordervarde > 0 || r.utanVarde === 0 ? kronor(r.ordervarde) : "—"}
+            </span>
+
             <span className="tnum w-28 text-right text-body font-semibold text-ink-900">
               {kronor(r.total)}
             </span>
           </li>
         ))}
       </ul>
+
+      <p className="mt-3 flex flex-wrap justify-end gap-x-4 text-micro uppercase text-ink-300">
+        <span className="w-28 text-right">Ordervärde</span>
+        <span className="w-28 text-right">Intjänat</span>
+      </p>
 
       <p className="mt-4 max-w-[70ch] text-small text-ink-500">
         Talen är preliminära så länge perioden innehåller en öppen månad: en order som makuleras

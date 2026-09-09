@@ -209,4 +209,32 @@ export const SLAGSETIKETT: Record<string, string> = {
   kv_bonus: "K&V-bonus",
   ovrig_bonus: "Övrig bonus",
   avdrag: "Avdrag",
+  // Saljchefens overtack (0050). BADA slagen har SAMMA etikett med flit: en
+  // stangd manad laser sina delar ur `external_ref`, och ett tillagg pa
+  // 3 132 kr och ett avdrag pa −500 kr under samma ord blir 2 632 kr — vilket
+  // ar vad manaden gav. Skillnaden mellan de tva finns kvar i huvudboken, dar
+  // den behovs; i panelen ar den brus.
+  chefsprovision: "Övertäck",
+  chefsprovision_makulering: "Övertäck",
 };
+
+/**
+ * Ordningen delarna staller sig i. STAR HAR och inte i vyn, eftersom bade
+ * panelen och underlagssidan sorterar pa den — tva listor med samma poster i
+ * olika ordning laser som tva olika sammanstallningar.
+ *
+ * `Object.values(SLAGSETIKETT)` dugde till 2026-09-09, da overtacket kom med tva
+ * slag som delar etikett: listan fick "Övertäck" tva ganger, och `indexOf` gav
+ * da samma plats at bada — vilket rakade fungera. Den sortens tysta
+ * sammantraffande ar precis vad en egen lista finns for att slippa.
+ */
+export const SLAGSORDNING = [
+  "Grundprovision",
+  "Makuleringar",
+  "Volymbonus",
+  "K&V-bonus",
+  "Övertäck",
+  "Övrig bonus",
+  "Avdrag",
+  "Bokfört för hand",
+];
