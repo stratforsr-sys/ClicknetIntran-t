@@ -5,6 +5,82 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-10 · En godkänd order går att rätta, och bonus går att lägga
+
+*E13 steg 12. Migration `0051`, samma branch som steg 11.*
+
+Beställarens två tillägg, ställda direkt efter att steg 11 visats.
+
+### Frysningen var rätt regel på fel ställe
+
+`sales_order_stegbyte` räknade upp elva kolumner som inte fick ändras efter
+godkännandet. Skälet i `0034` var riktigt: *"att kunna byta säljare, paket eller
+belopp på den i efterhand hade gjort varje summering till en gissning."*
+
+Men skyddet var för brett. **En summering blir en gissning bara när det redan
+FINNS en bokförd summa att motsäga** — alltså i en fastställd period. I en öppen
+månad är ingenting bokfört; allt räknas live, och en rättelse ändrar ett tal som
+ändå inte betalats ut.
+
+Frysningen ersattes därför av ett **periodskydd**: en order får inte flytta ut ur
+eller in i en fastställd månad. Det är den halva databasen kan avgöra. Pengarna
+i det fallet — en order i en stängd månad som rättas — sköter `redigeraOrder`
+genom att bokföra skillnaden i innevarande månad.
+
+### Bytt person ger två poster, inte en
+
+Rättelsemodellens enda egentliga svårighet, och den är lätt att få fel. Ändras
+bara beloppet räcker en post på skillnaden. Ändras *personen* går det inte att
+bilda någon skillnad — de två talen hör till olika människor. En "skillnad" på
+1 000 kr hade lämnat 1 500 kr kvar hos någon som inte sålde ordern.
+
+Övertäcket har dessutom **fyra fall, inte två**: det kan uppstå och upphöra, inte
+bara ändras. En order som blir säljchefens egen tappar det helt.
+
+`tests/rattelse.mjs` slumpar hundra rättelser och kontrollerar att *bokfört plus
+rättelse* blir exakt det nya utfallet per person. Det är det prov som är värt
+mest i filen.
+
+### Migrationen föll på rätt trigger
+
+Första utkastet av `0051` hade ett `update commission_entry set kind =
+split_part(external_ref, ':', 3)` — en bakåtfyllning av den nya slagkolumnen.
+Det föll: `commission_entry_ar_last` från `0031` nekar varje update på
+huvudboken.
+
+Vägen förbi hade funnits (`disable trigger`, eller `session_replication_role`
+som testdatan städades med 2026-09-07). Men frågan är inte *om* det går utan om
+det *behövs* — och det gjorde det inte: `slagetFor()` läser redan slaget ur
+`external_ref` när kolumnen är tom. Fallbacken står kvar och täcker varenda post
+som fanns före migrationen.
+
+**Följden är starkare än en ifylld kolumn:** inte en enda bokförd rad rörs av
+`0051`. Självkontrollen längst ned kräver numera att `kind is null` överallt.
+
+### En upptäckt värd att komma ihåg
+
+`Test AB` — den enda ordern i produktionen — **gick inte att rätta alls** i
+torrkörningen. `sales_order_ordervarde_kravs` från `0050` gäller vid varje
+`update`, och ordern saknar ordervärde. Tre av tolv spärrprov föll på det innan
+orsaken var uppenbar.
+
+Det är rätt beteende, inte en bugg: en gammal order måste få sitt ordervärde när
+den rättas, och rättelseformuläret kräver fältet just därför. Men det är den
+sortens sak som ser ut som ett fel i loggen.
+
+### Provat
+
+511 kontroller gröna över åtta provfiler, varav 28 nya i `tests/rattelse.mjs`.
+`0051` torrkörd mot produktionsdatabasen i en transaktion som rullades tillbaka,
+med spärrprov i savepoints: periodskyddet åt båda hållen, huvudboken fortfarande
+append-only, bonus utan skäl nekad, påhittat slag nekat, övertäcket rättbart men
+aldrig på chefens egen order.
+
+Varje ändrad fil kördes genom `esbuild` före commit — ett rent syntaxfel ska
+aldrig kosta en av dygnets hundra deployer.
+
+---
+
 ## 2026-09-09 · Ordervärdet, och säljchefen får en egen intjäning
 
 *E13 steg 11. Migration `0050`. Branch `ordervarde-och-chefsprovision`.*

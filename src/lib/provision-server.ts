@@ -17,6 +17,14 @@ export type Post = Provisionspost & {
   source: string;
   /** `<manad>:<person>:<slag>` for motorns poster, null for handinmatade. */
   external_ref: string | null;
+  /**
+   * Vad posten ar, sedan 0051. NULL for varje post som bokfordes fore den —
+   * `slagetFor()` laser dem ur `external_ref` som forut. Se den funktionen for
+   * varfor kolumnen kom och varfor ingen bakatfyllning gjordes.
+   */
+  kind: string | null;
+  /** Affaren posten hor till, nar den hor till en. Null for manadsposter. */
+  sales_order_id: string | null;
   note: string | null;
   entered_at: string;
 };
@@ -27,7 +35,8 @@ export async function hamtaProvision(employeeId: string, franOchMed: string): Pr
   const rls = await supabaseServer();
   const { data } = await rls
     .from("commission_entry")
-    .select("id, employee_id, period_month, amount, deals, source, external_ref, note, entered_at")
+    .select("id, employee_id, period_month, amount, deals, source, external_ref, kind," +
+      " sales_order_id, note, entered_at")
     .eq("employee_id", employeeId)
     .gte("period_month", franOchMed)
     .order("period_month", { ascending: false })
@@ -46,7 +55,8 @@ export async function hamtaAllProvision(franOchMed: string): Promise<Post[]> {
   const rls = await supabaseServer();
   const { data } = await rls
     .from("commission_entry")
-    .select("id, employee_id, period_month, amount, deals, source, external_ref, note, entered_at")
+    .select("id, employee_id, period_month, amount, deals, source, external_ref, kind," +
+      " sales_order_id, note, entered_at")
     .gte("period_month", franOchMed)
     .order("period_month", { ascending: false })
     .order("entered_at", { ascending: false });

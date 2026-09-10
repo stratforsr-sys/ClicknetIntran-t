@@ -14,6 +14,56 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "ratta-order-och-ovrig-bonus",
+    rubrik: "En godkänd order går att rätta, och bonus går att lägga",
+    ingress:
+      "Fel paket eller fel säljare? Rätta ordern i stället för att makulera. Och lägg en bonus på en enskild affär eller på månaden.",
+    text: `Två saker som förut krävde en omväg.
+
+**Rätta en godkänd order**
+
+Knappen **Rätta ordern** finns på varje godkänd order. Allt går att ändra:
+kunduppgifter, paket, avtalstid, säljare, signeringsdatum, ordervärde och
+provision. Övertäcket till säljchefen räknas om automatiskt.
+
+Förut var svaret "makulera och lägg en ny" — vilket lämnade ett minusbelopp i
+makuleringsmånaden för en affär som är fullt giltig. Det var fel svar på "jag
+valde fel paket".
+
+**Vad som händer beror på månaden**, och rutan i formuläret säger vilket innan
+du trycker:
+
+- **Öppen månad:** ingenting är bokfört, allt räknas om live. Lika ofarligt som
+  att lägga ordern rätt från början.
+- **Fastställd månad:** den månaden står orörd. Skillnaden bokförs i stället som
+  poster i innevarande månad — byter du säljare flyttas hela beloppet, inte
+  skillnaden.
+
+Signeringsdatumet går att ändra inom en fastställd månad, men inte ut ur den.
+Varje rättelse kräver ett skäl och hamnar i loggen med före- och eftervärde.
+
+*Order som lades in före ordervärdet fanns måste få ett värde när de rättas —
+det är den enda uppgift som saknas på dem.*
+
+**Övrig bonus**
+
+Säljchef, VD och ekonomi kan nu lägga en bonus utöver trappan, på två sätt:
+
+- **På en affär** — knappen **Lägg bonus** på orderraden. Person och månad
+  hämtas ur ordern, så de kan inte bli fel.
+- **På en månad** — formuläret på /provision. Välj person, månad och belopp.
+
+Båda kräver ett skäl, båda visas som **Övrig bonus** i provisionen, och båda
+följer med i lönekörningen. Ett negativt belopp drar tillbaka en bonus som lagts
+fel.
+
+Bonusen faller inte vid en bonusförlust — den är chefens egen bedömning av något
+utöver trappan, och vill chefen inte ge den kan hen låta bli att bokföra den.`,
+    datum: "2026-09-10",
+    roller: [],
+    href: "/order",
+  },
+  {
     slug: "ordervarde-och-saljchefens-ersattning",
     rubrik: "Order har ett ordervärde, och säljchefen får sin del automatiskt",
     ingress:

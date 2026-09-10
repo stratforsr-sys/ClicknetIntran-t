@@ -206,6 +206,15 @@ export const NOTIS_KALLOR = [
    * saljare pa en annan order hade da tystat bada med ett klick.
    */
   "order-overtack",
+  /**
+   * E13 steg 12. En godkand order som rattats i efterhand.
+   *
+   * GAR UT TILL ALLA BERORDA, inte bara till saljaren: byts saljaren ska bade
+   * den som blev av med ordern och den som fick den veta om det, och andras
+   * overtacket galler samma sak for mottagaren. Notisen skrivs darfor en gang
+   * per person och inte en gang per order.
+   */
+  "order-rattad",
 
   /** Stamplingens rattelser. Begaran till chefen, beslutet till den anstallda. */
   "tid-rattelse",
@@ -307,6 +316,13 @@ export const NOTIS_KALLOR = [
    * vid handelsen och andras aldrig — "du har fatt ett mal pa 20 order" ska sta
    * kvar aven sedan malet sankts till tio, for det VAR vad som hande.
    */
+  /**
+   * E13 steg 12. Ovrig bonus, bokford av chefen pa en affar eller pa manaden.
+   *
+   * EGEN KALLA OCH INTE `provision-mal`: ett mal ar en forvantan, en bonus ar
+   * pengar som redan ar bokforda. De ska ga att avfarda var for sig.
+   */
+  "provision-bonus",
   "provision-mal",
 
   /**
@@ -347,6 +363,7 @@ export const HANDELSEKALLOR = [
   "order-makulerad",
   "order-betald",
   "order-overtack",
+  "order-rattad",
   "tid-rattelse",
   "tid-rattelse-beslut",
   "tid-schema",
@@ -375,6 +392,7 @@ export const HANDELSEKALLOR = [
   "rekrytering-anstalld",
   "personal-ny",
   "provision-mal",
+  "provision-bonus",
 ] as const satisfies readonly Notiskalla[];
 
 export type Handelsekalla = (typeof HANDELSEKALLOR)[number];

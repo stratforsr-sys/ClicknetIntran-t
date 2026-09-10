@@ -3,7 +3,44 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-09 — ordervärdet och säljchefens ersättning byggda (E13 steg 11, migration `0050`). Ligger på branch `ordervarde-och-chefsprovision` och **väntar på godkännande**; se avsnittet direkt nedan. Föregående rad: 2026-09-08 (kväll) — testdatan borttagen; Ö11 inträffade på riktigt. Provisionsvyn ombyggd till resultattavla med period- (månad eller helår) och personväljare i panelen, månadsmål per säljare, och tre tysta räknefel rättade. Godkänd och **mergad till main som `dbb02a8`**; ligger i produktion.
+**Senast uppdaterad:** 2026-09-10 — rättelse av godkänd order och övrig bonus byggda (E13 steg 12, migration `0051`). Samma branch, fortfarande **ej mergad**. Föregående rad: 2026-09-09 — ordervärdet och säljchefens ersättning byggda (E13 steg 11, migration `0050`). Ligger på branch `ordervarde-och-chefsprovision` och **väntar på godkännande**; se avsnittet direkt nedan. Föregående rad: 2026-09-08 (kväll) — testdatan borttagen; Ö11 inträffade på riktigt. Provisionsvyn ombyggd till resultattavla med period- (månad eller helår) och personväljare i panelen, månadsmål per säljare, och tre tysta räknefel rättade. Godkänd och **mergad till main som `dbb02a8`**; ligger i produktion.
+
+## Rättelse och övrig bonus 2026-09-10 — PÅ BRANCH, EJ MERGAD
+
+*E13 steg 12, samma branch. Migration `0051` — se "Innan merge". Regelverket i
+`PROVISION_SPEC.md` 4.6 och 4.7, resonemanget i `ARBETSLOGG.md` 2026-09-10.*
+
+- **Rätta en godkänd order.** Allt går att ändra. Öppen månad: räknas om live.
+  Fastställd månad: den står orörd, skillnaden bokförs i innevarande månad.
+- **Övrig bonus** på en affär (knapp på orderraden) eller på en månad
+  (formulär på `/provision`). Säljchef, VD och ekonomi. Skäl obligatoriskt.
+
+### Fyra saker att inte glida tillbaka på
+
+**BYTT PERSON GER TVÅ POSTER, INTE EN.** En "skillnad" när säljaren bytts lämnar
+det gamla beloppet kvar hos någon som inte sålde ordern. Övertäcket har fyra
+fall, inte två — det kan uppstå och upphöra.
+
+**FRYSNINGEN ÄR ERSATT AV ETT PERIODSKYDD, INTE BORTTAGEN.** En order får inte
+flytta ut ur eller in i en fastställd månad. Det är den halva databasen avgör;
+pengarna sköter `redigeraOrder`.
+
+**HUVUDBOKEN ÄR FORTFARANDE APPEND-ONLY.** `0051` rör inte en enda bokförd rad —
+självkontrollen kräver `kind is null` överallt. `slagetFor()` läser gamla poster
+ur `external_ref` som förut, och den fallbacken ska stå kvar.
+
+**EN GAMMAL ORDER UTAN ORDERVÄRDE MÅSTE FÅ ETT NÄR DEN RÄTTAS.**
+`sales_order_ordervarde_kravs` gäller vid varje update. Rättelseformuläret
+kräver fältet därför.
+
+### Innan merge
+
+1. **Kör `0051`** mot produktionsdatabasen (`0050` är redan körd 2026-09-09).
+2. **Visa previewen.** `/order` — knapparna *Rätta ordern* och *Lägg bonus* på
+   `Test AB`. `/provision` — kortet *Övrig bonus*.
+3. **Merga.** Det stänger glappet som `0050` öppnade — se nedan.
+
+---
 
 ## Ordervärdet och säljchefens ersättning 2026-09-09 — PÅ BRANCH, EJ MERGAD
 

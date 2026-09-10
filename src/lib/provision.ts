@@ -195,10 +195,32 @@ export function giltigManad(nyckel: string, nu: Date | string = new Date()): boo
  * `null` for handinmatade poster: de har ingen referens, och en handbokford
  * rattelse ar inte ett av motorns slag.
  */
-export function slagetFor(post: { source: string; external_ref: string | null }): string | null {
+export function slagetFor(post: {
+  source: string;
+  external_ref: string | null;
+  /** Sedan 0051. NULL for varje post som bokfordes fore den — se nedan. */
+  kind?: string | null;
+}): string | null {
+  // KOLUMNEN FORST, STRANGEN SEDAN. Ordningen ar hela poangen med tillagget.
+  //
+  // `kind` kom i 0051 och skrivs av all ny kod. Den behovdes for att slaget
+  // lastes ur `external_ref`, som bara MOTORNS poster har — en handinmatad post
+  // har ingen referens och blev darfor alltid "Bokfort for hand". Det dugde sa
+  // lange handinmatning var en enda sorts sak; nu ar den tva, OVRIG BONUS och
+  // RATTELSE, och de ska ga att skilja at.
+  //
+  // FALLBACKEN STAR KVAR OCH SKA GORA DET. Migrationen fyllde med flit INGA
+  // gamla rader: `commission_entry` ar append-only, och forsoket att skriva
+  // kolumnen bakvant foll pa den triggern — vilket var ratt. Varje post som
+  // fanns fore 0051 laser darfor sitt slag ur strangen precis som forut.
+  if (post.kind) return post.kind;
+
   if (post.source !== "motor" || !post.external_ref) return null;
   const delar = post.external_ref.split(":");
-  return delar.length === 3 ? delar[2] : null;
+  // TRE ELLER FLER DELAR. Rattelserna i 0051 bar `<manad>:<person>:rattelse:<order>`
+  // — fyra delar — och slaget star pa samma plats. Ett `=== 3` hade tyst gett
+  // null for dem.
+  return delar.length >= 3 ? delar[2] : null;
 }
 
 /** Svensk etikett per slag. Samma ord i vyn som i underlaget och i huvudboken. */
@@ -216,6 +238,9 @@ export const SLAGSETIKETT: Record<string, string> = {
   // den behovs; i panelen ar den brus.
   chefsprovision: "Övertäck",
   chefsprovision_makulering: "Övertäck",
+  // Sedan 0051. En rattelse av en order som hor till en FASTSTALLD manad: den
+  // manaden star orord, och skillnaden bokfors i innevarande. Se `rattelse.ts`.
+  rattelse: "Rättelser",
 };
 
 /**
@@ -235,6 +260,7 @@ export const SLAGSORDNING = [
   "K&V-bonus",
   "Övertäck",
   "Övrig bonus",
+  "Rättelser",
   "Avdrag",
   "Bokfört för hand",
 ];

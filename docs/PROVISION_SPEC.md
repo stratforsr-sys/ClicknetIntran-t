@@ -15,6 +15,10 @@ besvarades 2026-08-25**, och **Ö13 besvarades 2026-08-26**. Kvar öppna är **�
 Ö11, Ö16, Ö17 och Ö18**, som alla har ett förslag som gäller tills någon säger
 annat.
 
+**Steg 12 byggt 2026-09-10** (migration `0051`): en godkänd order går att rätta,
+och övrig bonus går att lägga på en affär eller på en månad. **Avsnitt 4.6 och
+4.7 är nya.** Frysningen i `0034` är ersatt av ett periodskydd — se 4.6.
+
 **Steg 11 byggt 2026-09-09** (migration `0050`): ordervärdet, säljchefens
 övertäck och satsen för hens egen försäljning. **Avsnitt 4.5 är nytt** och bär
 hela regelverket; Ö19 är ny och står med sitt förslag. Beställarens frågeomgång
@@ -368,6 +372,69 @@ ersättning, och säljarens vy blir inte en siffra fattigare av att de är stän
 
 Raden bär hela räkningen — ordervärde, restpost, procentsats och vilken satsrad
 den kom ur — vilket är avsnitt 12:s krav på spårbarhet.
+
+### 4.6 Rättelse av en godkänd order
+
+**Beställarens beslut 2026-09-09.** Fram till dess nekade `sales_order_stegbyte`
+varje ändring efter godkännandet, och svaret var "makulera och lägg en ny" —
+vilket lämnar ett minusbelopp i makuleringsmånaden för en affär som är fullt
+giltig. Byggt i `0051`.
+
+**Allt går att ändra:** kunduppgifter, paket, avtalstid, säljare,
+signeringsdatum, ordervärde och provision. Övertäcket räknas om. Varje rättelse
+kräver ett skäl och loggas med före- och eftervärde.
+
+| Orderns månad | Vad som händer |
+|---|---|
+| **Öppen** | Bara en `update`. Allt räknas live, ingenting bokförs |
+| **Fastställd** | Månaden står orörd. Skillnaden bokförs i **innevarande** månad |
+
+**BYTT PERSON GER TVÅ POSTER, INTE EN.** Det är rättelsemodellens enda
+egentliga svårighet. Ändras bara beloppet räcker en post på skillnaden; ändras
+*personen* går det inte att bilda någon skillnad — hela det gamla beloppet ska
+tillbaka från den förra och hela det nya ut till den nya. Samma sak för
+mottagaren av övertäcket, som dessutom kan **uppstå och upphöra**: en order som
+blir säljchefens egen tappar övertäcket helt.
+
+Räkningen ligger i `rattelseposter()` i `src/lib/rattelse.ts`, med ett prov som
+slumpar hundra rättelser och kontrollerar att *bokfört plus rättelse* blir exakt
+det nya utfallet per person.
+
+**PERIODEN SKYDDAS AV DATABASEN.** Triggern i `0051` nekar att en order flyttas
+ut ur eller in i en fastställd månad — signeringsdatumet går att ändra inom
+månaden, men inte över en månadsgräns. Koden ritar formuläret, databasen avgör.
+
+**Huvudboken är orörd i sin modell.** `commission_entry` är fortfarande
+append-only; en rättelse är en ny post, aldrig en överskrivning. Det tredje
+alternativet — att skriva om huvudboken — avvisades: lönespecen för augusti hade
+då sagt ett tal och navet ett annat, utan att någon kunde se vilket som stämde.
+
+### 4.7 Övrig bonus
+
+Avsnitt 5.3 har alltid beskrivit den. Det som fanns var `bokforProvision` — en
+fri post utan slag, utan skälkrav och utan koppling till någon order. Byggt
+ordentligt i `0051`.
+
+**Två ingångar, en funktion** (`laggOvrigBonus`). Skillnaden är
+`sales_order_id`:
+
+- **På en affär:** knappen på orderraden. Person och månad kommer ur *ordern*,
+  inte ur formuläret — en bonus på Vlados affär som bokförs på Fredrik i en
+  annan månad är inte en bonus utan ett fel.
+- **På en månad:** formuläret på `/provision`. Person, månad och belopp väljs
+  fritt.
+
+**Kretsen är säljchef, VD och ekonomi** — bredare än `bokforProvision`, som är
+kvar hos ekonomi och VD. Den som får avgöra om en affär är värd provision får
+också avgöra om den var värd något extra.
+
+**Skälet är obligatoriskt** (`commission_entry_bonus_kraver_skal` i `0051`), och
+posten blir slaget `ovrig_bonus` — vilket krävde att huvudboken fick en
+`kind`-kolumn, eftersom slaget dittills lästes ur `external_ref` som bara
+motorns poster har.
+
+**Bonusen faller inte vid en bonusförlust** (Ö8). Motorn rör aldrig de här
+posterna; de ligger i huvudboken och läggs till i vyn som bokförda poster.
 
 ---
 
@@ -951,6 +1018,8 @@ Varje steg är en egen leverans med prov på räknemotorn innan nästa börjar.
 | 10 | **KLART 2026-09-07** (migration `0049`): provisionsvyn som resultattavla — månadens tal i stor stil, bonustrappan som bana, korten I dag / Takt / Mål, stapelrad per arbetsdag, orderlägen, chefens lagtavla. Månadsmål per säljare i `sales_target`. Ren logik i `src/lib/saljtakt.ts` med `tests/saljtakt.mjs`. Rättade två tysta räknefel — K&V saknades i live-summan, och makuleringar av äldre order föll bort ur `hamtaOrder` | Steg 4 |
 
 | 11 | **KLART 2026-09-09** (migration `0050`): ordervärdet på ordern (pris × avtalstid, fryst vid godkännande), säljchefens två satser i `manager_commission_rate`, övertäcket per order i `order_manager_commission` med egen RLS, ren logik i `src/lib/chefsprovision.ts` med `tests/chefsprovision.mjs`. Ordervärde per säljare och för bolaget i vyerna. Rättade samtidigt att **godkännandeknappen i kön var fältlös** — 4.2 säger att godkännaren sätter beloppet, men vägen fanns bara när en färdig order lades in | Steg 3 |
+
+| 12 | **KLART 2026-09-10** (migration `0051`): rättelse av en godkänd order med rättelseposter i öppen månad när orderns månad är fastställd, ren logik i `src/lib/rattelse.ts` med `tests/rattelse.mjs`. Övrig bonus per affär och per månad, med `kind` och `sales_order_id` på huvudboken. Frysningen i `0034` ersatt av ett periodskydd | Steg 11 |
 
 **Kvar: bara steg 8**, som väntar på A6 (dialer-API).
 

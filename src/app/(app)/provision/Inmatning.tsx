@@ -4,7 +4,7 @@ import { useActionState } from "react";
 import { Button } from "@/components/ui/Button";
 import { KONTROLL } from "@/components/ui/Field";
 import { Notis } from "@/components/ui/Notis";
-import { bokforProvision, type ProvisionState } from "./actions";
+import { bokforProvision, laggOvrigBonus, type ProvisionState } from "./actions";
 
 type Person = { id: string; namn: string };
 
@@ -91,6 +91,106 @@ export function Inmatning({
           <span className="tnum">-2 000</span>.
         </p>
       </div>
+    </form>
+  );
+}
+
+/**
+ * Övrig bonus, fritt på en person och en månad.
+ *
+ * ===========================================================================
+ * SAMMA HANDLING SOM BONUSKNAPPEN PÅ ORDERN, bara utan `sales_order_id`.
+ *
+ * Beställarens svar 2026-09-09 var "både per affär och per månad". Det är inte
+ * två sorters bonus utan en, sedd från två håll — och att det är EN funktion är
+ * poängen: båda blir samma slag i huvudboken, båda kräver skäl, båda syns på
+ * samma rad i vyn och båda följer med i lönekörningen.
+ * ===========================================================================
+ *
+ * SKILLNADEN MOT `Inmatning` OVANFÖR är vem som får, och vad posten blir.
+ * `bokforProvision` är ekonomins och VD:s fria post på vilket belopp som helst
+ * och visas som "Bokfört för hand". Den här är säljchefens också, den kräver ett
+ * skäl, och den blir slaget **Övrig bonus** — det som avsnitt 5.3 alltid
+ * beskrivit men som ingen kod satte förrän 0051 gav huvudboken en `kind`.
+ */
+export function Bonusinmatning({
+  personer,
+  manader,
+}: {
+  personer: Person[];
+  manader: { nyckel: string; etikett: string }[];
+}) {
+  const [state, action, vantar] = useActionState<ProvisionState, FormData>(laggOvrigBonus, {});
+
+  return (
+    <form action={action} className="flex flex-col gap-4">
+      {state.fel && <Notis ton="danger">{state.fel}</Notis>}
+      {state.ok && <Notis ton="ok">{state.ok}</Notis>}
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label htmlFor="bonus_employee" className="flex flex-col gap-1">
+          <span className="text-micro text-ink-500">Person</span>
+          <select id="bonus_employee" name="employee_id" required className={KONTROLL}>
+            {personer.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.namn}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label htmlFor="bonus_manad" className="flex flex-col gap-1">
+          <span className="text-micro text-ink-500">Månad</span>
+          <select id="bonus_manad" name="period_month" required className={KONTROLL}>
+            {manader.map((m) => (
+              <option key={m.nyckel} value={m.nyckel}>
+                {m.etikett}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label htmlFor="bonus_belopp" className="flex flex-col gap-1">
+          <span className="text-micro text-ink-500">Belopp</span>
+          <input
+            id="bonus_belopp"
+            name="amount"
+            required
+            inputMode="decimal"
+            placeholder="5 000"
+            className={KONTROLL}
+          />
+          <span className="text-small text-ink-500">
+            Ett negativt belopp drar tillbaka en bonus som lagts fel.
+          </span>
+        </label>
+
+        <label htmlFor="bonus_skal" className="flex flex-col gap-1">
+          <span className="text-micro text-ink-500">Varför?</span>
+          <input
+            id="bonus_skal"
+            name="note"
+            required
+            placeholder="Bäst i laget i september"
+            className={KONTROLL}
+          />
+          <span className="text-small text-ink-500">
+            Obligatoriskt. En bonus utan skäl är det första någon ifrågasätter.
+          </span>
+        </label>
+      </div>
+
+      <div>
+        <Button type="submit" laddar={vantar}>
+          Bokför bonusen
+        </Button>
+      </div>
+
+      <p className="max-w-[70ch] text-small text-ink-500">
+        Bonusen faller inte vid en bonusförlust (Ö8) — den är chefens egen bedömning av något
+        utöver trappan. Hör den till en enskild affär är knappen på orderraden en bättre väg: då
+        hämtas person och månad ur ordern, och de kan inte bli fel.
+      </p>
     </form>
   );
 }

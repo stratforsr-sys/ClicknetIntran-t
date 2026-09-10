@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { getCurrentUser, hasRole, type CurrentUser } from "@/lib/auth";
 import { svensktDatum } from "@/lib/klocka";
-import { kronor, tolkaBelopp } from "@/lib/provision";
+import { kronor, manadsnamn, manadsnyckel, tolkaBelopp } from "@/lib/provision";
+import { rattelseposter, rorPengar } from "@/lib/rattelse";
 import { forberedUppladdning, registreraFil, taBortInnehall } from "@/lib/filer-server";
 import { pdfText } from "@/lib/pdf";
 import { tolkaAvtalstext, type Orderforslag } from "@/lib/orderbilaga";
@@ -585,6 +586,296 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
           ? " Provisionen översteg ordervärdet, så övertäcket till säljchefen blev noll."
           : ""
       }`,
+    };
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Något gick fel." };
+  }
+}
+
+/**
+ * Rattar en godkand order.
+ *
+ * ===========================================================================
+ * TVA HELT OLIKA SAKER, OCH DET AR PERIODEN SOM AVGOR VILKEN.
+ *
+ * ORDERN LIGGER I EN OPPEN MANAD — det vanliga fallet. Ingenting ar bokfort;
+ * hela manaden raknas live ur orderna varje gang nagon oppnar vyn. Rattelsen
+ * ar da bara en `update`, och talet andrar sig av sig sjalvt vid nasta lasning.
+ *
+ * ORDERN LIGGER I EN FASTSTALLD MANAD. Da finns bokforda poster som sager vad
+ * som betalades ut, de gar inte att skriva om (`commission_entry` ar
+ * append-only) och de SKA inte skrivas om — lonespecen ar redan utfardad.
+ * Skillnaden bokfors i stallet i INNEVARANDE manad. Bestallarens val
+ * 2026-09-09: augusti orord, september far mellanskillnaden.
+ *
+ * Rakningen ligger i `rattelseposter()` i `src/lib/rattelse.ts` — ren logik med
+ * eget prov, bland annat ett som slumpar hundra rattelser och kontrollerar att
+ * bokfort plus rattelse blir exakt det nya utfallet per person.
+ * ===========================================================================
+ *
+ * PERIODEN SKYDDAS AV DATABASEN, inte av den har funktionen. `sales_order_stegbyte`
+ * i 0051 nekar att en order flyttas ut ur eller in i en faststalld manad. Det ar
+ * ratt plats: koden ritar formularet, databasen avgor.
+ */
+export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<Orderstate> {
+  try {
+    const user = await kravHanterare();
+    const id = String(form.get("id") ?? "");
+
+    const db = supabaseAdmin();
+    const { data: rad } = await db
+      .from("sales_order")
+      .select(
+        "id, status, salesperson_id, company_name, org_number, contact_name, contact_phone," +
+          " package_id, term_months, signed_on, period_month, is_addon, note," +
+          " commission_amount, commission_source, order_value",
+      )
+      .eq("id", id)
+      .maybeSingle();
+
+    if (!rad) return { fel: "Ordern finns inte." };
+
+    // UTKAST OCH INSKICKADE RATTAS INTE HAR. De har inga pengar bokforda och
+    // ingen fryst provision — for dem ar vagen `rattaFranAvtal` eller att
+    // skicka tillbaka ordern till saljaren. En makulerad order nekas av
+    // triggern i 0051, med sitt eget besked.
+    if (rad.status !== "signerad" && rad.status !== "betald") {
+      return {
+        fel:
+          rad.status === "makulerad"
+            ? "En makulerad order rättas inte. Lägg en ny order i stället."
+            : "Bara en godkänd order rättas här. Skicka tillbaka den till säljaren i stället.",
+      };
+    }
+
+    // ---------------------------------------------------------------------------
+    // De nya vardena. Ett tomt falt betyder "orort", inte "tomt" — formularet
+    // skickar allt forifyllt, men en halv inskickning ska inte nolla nagot.
+    // ---------------------------------------------------------------------------
+    const text = (falt: string, gammalt: string) => {
+      const v = String(form.get(falt) ?? "").trim();
+      return v || gammalt;
+    };
+
+    const bolag = text("company_name", rad.company_name);
+    const kontakt = text("contact_name", rad.contact_name);
+    const telefon = text("contact_phone", rad.contact_phone);
+    const signerad = text("signed_on", rad.signed_on);
+    const saljare = text("salesperson_id", rad.salesperson_id);
+    const paket = Number(form.get("package_id") ?? rad.package_id);
+    const loptid = Number(form.get("term_months") ?? rad.term_months);
+
+    const orgnr = normaliseraOrgnr(String(form.get("org_number") ?? rad.org_number));
+    if (!orgnr) return { fel: "Organisationsnumret ska vara tio siffror, till exempel 556677-8899." };
+    if (!bolag) return { fel: "Bolagsnamnet saknas." };
+    if (!kontakt) return { fel: "Kontaktpersonen saknas." };
+    if (!giltigTelefon(telefon)) return { fel: "Telefonnumret ser inte ut som ett nummer." };
+    if (![1, 2, 3].includes(paket)) return { fel: "Välj ett paket." };
+    if (![12, 24, 36].includes(loptid)) return { fel: "Välj en avtalstid." };
+    if (!giltigtSigneringsdatum(signerad)) {
+      return { fel: "Signeringsdatumet är ogiltigt eller ligger i framtiden." };
+    }
+
+    const skal = String(form.get("reason") ?? "").trim();
+    if (!skal) return { fel: "En rättelse kräver ett skäl. Det är det första någon frågar efter." };
+
+    // ---------------------------------------------------------------------------
+    // Affaren raknas om FRAN GRUNDEN, med samma funktion som godkannandet
+    // anvander. Att rakna den pa ett andra satt har hade gett tva tolkningar av
+    // "40 % eller matrisen", och den dagen de sager olika ar det inte uppenbart
+    // vilken som har ratt.
+    // ---------------------------------------------------------------------------
+    const nya = await raknaFramProvision(paket, loptid, signerad, saljare, form);
+    if (!nya.klar) return { fel: nya.fel };
+
+    const note = String(form.get("note") ?? "").trim() || rad.note;
+    if (nya.satt.commission_source === "manual" && !note) {
+      return { fel: "En handsatt provision kräver en anteckning om varför." };
+    }
+
+    // Det gamla overtacket, for att kunna rakna skillnaden och for att veta om
+    // raden ska uppdateras, laggas till eller tas bort.
+    const { data: gammaltOvertack } = await db
+      .from("order_manager_commission")
+      .select("manager_id, amount")
+      .eq("order_id", id)
+      .maybeSingle();
+
+    const fore = {
+      saljare: rad.salesperson_id as string,
+      provision: Number(rad.commission_amount ?? 0),
+      chef: (gammaltOvertack?.manager_id as string | undefined) ?? null,
+      overtack: Number(gammaltOvertack?.amount ?? 0),
+    };
+    const efter = {
+      saljare,
+      provision: nya.satt.commission_amount,
+      chef: nya.overtack?.manager_id ?? null,
+      overtack: nya.overtack?.amount ?? 0,
+    };
+
+    // ---------------------------------------------------------------------------
+    // Ar orderns manad faststalld?
+    //
+    // FRAGAN STALLS PA DEN GAMLA PERIODEN. Den nya kan inte vara en annan
+    // faststalld manad — triggern i 0051 nekar bade att flytta ut ur och in i en
+    // stangd period — sa de tva ar antingen samma manad eller bada oppna.
+    // ---------------------------------------------------------------------------
+    const { data: stangd } = await db
+      .from("commission_period")
+      .select("period_month, status")
+      .eq("period_month", rad.period_month)
+      .maybeSingle();
+
+    let rattelser: { employee_id: string; belopp: number; text: string }[] = [];
+    const bokforingsmanad = manadsnyckel();
+
+    if (stangd) {
+      rattelser = rattelseposter(fore, efter, `${bolag}, tecknad ${rad.signed_on}`);
+
+      if (rattelser.length > 0) {
+        // INNEVARANDE MANAD MASTE VARA OPPEN. Ar den redan faststalld ar dess
+        // lonekorning pa vag, och en post som landar dar kan missas. Da ar ratt
+        // svar att saga till — inte att gissa en annan manad at nagon.
+        const { data: ocksaStangd } = await db
+          .from("commission_period")
+          .select("period_month")
+          .eq("period_month", bokforingsmanad)
+          .maybeSingle();
+
+        if (ocksaStangd) {
+          return {
+            fel: `${manadsnamn(bokforingsmanad)} är också fastställd, så rättelsen har ingen öppen månad att landa i. Bokför den för hand på provisionssidan.`,
+          };
+        }
+      }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Skrivningen. ORDNINGEN AR MEDVETEN — posterna forst, ordern sedan.
+    //
+    // Faller det mitt i star ordern kvar som den var, med ett par rattelseposter
+    // bokforda som inte motsvarar nagon andring. Det ar synligt och gar att
+    // rätta med en motpost. Omvand ordning hade gett en andrad order vars pengar
+    // aldrig bokfordes — alltsa en tyst felaktig utbetalning.
+    // ---------------------------------------------------------------------------
+    if (rattelser.length > 0) {
+      const { error } = await db.from("commission_entry").insert(
+        rattelser.map((r) => ({
+          employee_id: r.employee_id,
+          period_month: bokforingsmanad,
+          amount: r.belopp,
+          kind: "rattelse",
+          source: "manual",
+          note: `${r.text} · ${skal}`,
+          sales_order_id: id,
+          entered_by: user.employee!.id,
+        })),
+      );
+
+      if (error) return { fel: `Rättelseposterna bokfördes inte: ${error.message}` };
+    }
+
+    const { error: orderfel } = await db
+      .from("sales_order")
+      .update({
+        company_name: bolag,
+        org_number: orgnr,
+        contact_name: kontakt,
+        contact_phone: telefon,
+        package_id: paket,
+        term_months: loptid,
+        salesperson_id: saljare,
+        signed_on: signerad,
+        is_addon: form.get("is_addon") === "on",
+        note,
+        ...nya.satt,
+      })
+      .eq("id", id);
+
+    if (orderfel) return { fel: `Ordern rättades inte: ${orderfel.message}` };
+
+    // OVERTACKET FOLJER MED. Raden ar skrivbar sedan 0051 — den beskriver
+    // affaren som den ar, till skillnad fran huvudboken som beskriver vad som
+    // bokforts. Tre fall: den fanns och ska bort, den ska finnas, eller ingetdera.
+    if (gammaltOvertack && !nya.overtack) {
+      await db.from("order_manager_commission").delete().eq("order_id", id);
+    } else if (nya.overtack) {
+      await db.from("order_manager_commission").upsert({
+        order_id: id,
+        manager_id: nya.overtack.manager_id,
+        order_value: nya.overtack.order_value,
+        base: nya.overtack.base,
+        percent: nya.overtack.percent,
+        amount: nya.overtack.amount,
+        rate_id: nya.overtack.rate_id,
+      });
+    }
+
+    // LOGGEN BAR FORE OCH EFTER. En logg som bara sager "ordern rattades" gar
+    // inte att granska, och det ar granskningen hela rattelsevagen vilar pa.
+    await logga(user, "sales_order.corrected", id, {
+      skal,
+      fore: {
+        salesperson_id: fore.saljare,
+        commission_amount: fore.provision,
+        order_value: rad.order_value === null ? null : Number(rad.order_value),
+        package_id: rad.package_id,
+        term_months: rad.term_months,
+        signed_on: rad.signed_on,
+        overtack: fore.chef ? { manager_id: fore.chef, amount: fore.overtack } : null,
+      },
+      efter: {
+        salesperson_id: efter.saljare,
+        commission_amount: efter.provision,
+        order_value: nya.satt.order_value,
+        package_id: paket,
+        term_months: loptid,
+        signed_on: signerad,
+        overtack: nya.overtack
+          ? { manager_id: nya.overtack.manager_id, amount: nya.overtack.amount }
+          : null,
+      },
+      rattelseposter: rattelser.length,
+    });
+
+    // NOTISEN GAR BARA UT NAR PENGAR ANDRATS. Ett rattat telefonnummer ska inte
+    // saga till nagon om ett belopp — och en notis som ibland betyder pengar och
+    // ibland inte ar en notis folk slutar lasa.
+    if (rorPengar(fore, efter)) {
+      const berorda = new Set([fore.saljare, efter.saljare]);
+      if (fore.chef) berorda.add(fore.chef);
+      if (efter.chef) berorda.add(efter.chef);
+      berorda.delete(user.employee!.id);
+
+      for (const person of berorda) {
+        const min = rattelser.filter((r) => r.employee_id === person);
+        const belopp = min.reduce((s, r) => s + r.belopp, 0);
+
+        await notifiera({
+          till: person,
+          av: user.employee!.id,
+          kalla: "order-rattad",
+          typ: "order",
+          rubrik: `Ordern ${bolag} är rättad`,
+          detalj: stangd
+            ? `${manadsnamn(String(rad.period_month))} är fastställd, så ${
+                belopp === 0 ? "ingen skillnad" : kronor(belopp)
+              } bokförs i ${manadsnamn(bokforingsmanad)}. ${skal}`
+            : `${skal} · räknas om i ${manadsnamn(String(rad.period_month))}`,
+          href: "/order",
+          objekt: { typ: "sales_order", id },
+        });
+      }
+    }
+
+    revalidatePath("/order");
+    revalidatePath("/provision");
+    return {
+      ok:
+        rattelser.length > 0
+          ? `Ordern är rättad. ${manadsnamn(String(rad.period_month))} står orörd — skillnaden är bokförd i ${manadsnamn(bokforingsmanad)} som ${rattelser.length} ${rattelser.length === 1 ? "post" : "poster"}.`
+          : "Ordern är rättad.",
     };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };

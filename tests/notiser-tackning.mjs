@@ -73,6 +73,7 @@ const TACKNING = {
   "order::skapaOrder": "notifierar",
   "order::skickaInOrder": "notifierar",
   "order::godkannOrder": "notifierar",
+  "order::redigeraOrder": "notifierar",
   "order::returneraOrder": "notifierar",
   "order::makuleraOrder": "notifierar",
   "order::markeraBetald": "notifierar",
@@ -202,6 +203,7 @@ const TACKNING = {
   "fel::rapporteraFel": "harledd",
   "fel::sattStatus": "harledd",
   "provision::bokforProvision": "harledd",
+  "provision::laggOvrigBonus": "notifierar",
   // E13 steg 10. Malet ar en av de FA installningar som notifierar, och
   // undantaget ar med flit: en regelandring (trappan, konsekvenstrappan)
   // galler alla och star i vyn, medan ett manadsmal galler EN person och

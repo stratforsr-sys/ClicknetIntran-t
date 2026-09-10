@@ -57,7 +57,7 @@ import {
 } from "@/lib/saljtakt";
 import type { Sats } from "@/lib/order";
 import { svensktDatum } from "@/lib/klocka";
-import { Inmatning } from "./Inmatning";
+import { Bonusinmatning, Inmatning } from "./Inmatning";
 import { Faststall, Utbetald } from "./Period";
 import {
   Bonustrappa,
@@ -880,6 +880,28 @@ export default async function Provisionssida({
             lönerapporten räknar fortfarande inga kronor (K5, AC-2.17), och de två papperen går
             i väg tillsammans.
           </p>
+        </Card>
+      )}
+
+      {/*
+        OVRIG BONUS STAR FORE DEN FRIA INMATNINGEN, och kretsen ar bredare.
+
+        Skillnaden ar vad posterna ar. Den har ar chefens bedomning av nagot
+        utover trappan (avsnitt 5.3) — den kraver ett skal, den blir slaget
+        "Ovrig bonus" i huvudboken, och saljchefen far lagga den. Den under ar
+        ekonomins fria post pa vilket belopp som helst, och den star kvar
+        oforandrad.
+      */}
+      {provisionschef && (
+        <Card>
+          <CardHeader
+            titel="Övrig bonus"
+            beskrivning="Säljchef, ekonomi och VD. Ett fritt belopp utöver trappan, med obligatoriskt skäl. Hör bonusen till en enskild affär finns knappen på orderraden — då hämtas person och månad ur ordern."
+          />
+          <Bonusinmatning
+            personer={personer}
+            manader={manadsval.map((m) => ({ nyckel: m, etikett: manadsnamn(m) }))}
+          />
         </Card>
       )}
 

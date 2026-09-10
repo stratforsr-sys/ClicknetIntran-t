@@ -14,6 +14,7 @@ import {
   type Orderrad,
 } from "@/lib/order-server";
 import { gallandeChefssats } from "@/lib/chefsprovision";
+import { hamtaPerioder } from "@/lib/bonus-server";
 import {
   LOPTIDER,
   STATUS_ETIKETT,
@@ -57,7 +58,7 @@ export default async function Ordersida() {
   const manad = manadsnyckel();
   const ettArBak = manadFore(manad, 11);
 
-  const [order, ko, paket, satser, personer, chefssatser] = await Promise.all([
+  const [order, ko, paket, satser, personer, chefssatser, perioder] = await Promise.all([
     hamtaOrder(ettArBak),
     hanterare ? hamtaKo() : Promise.resolve([] as Orderrad[]),
     hamtaPaket(),
@@ -69,7 +70,14 @@ export default async function Ordersida() {
     // Foljden i formularet ar att restposten och overtacket inte ritas alls for
     // saljaren, medan ordervardet gor det: det ar hens egen affar.
     hamtaChefssatser(),
+    // FASTSTALLDA MANADER. Rattelseformularet maste veta om ordern hor till en
+    // stangd manad — inte for att sparra den (det gor triggern i 0051) utan for
+    // att saga VAD som kommer att handa: en oppen manad raknas om live, en
+    // stangd far rattelseposter i innevarande manad som inte gar att ta tillbaka.
+    hamtaPerioder(ettArBak),
   ]);
+
+  const stangdaManader = new Set(perioder.map((p) => p.period_month));
 
   // SATSEN SLAS UPP PA DAGENS DATUM I FORMULARET, inte pa orderns.
   //
@@ -171,6 +179,9 @@ export default async function Ordersida() {
                   agare={o.salesperson_id === user.employee!.id}
                   paket={paket}
                   bilagor={bilagor.get(o.id) ?? []}
+                  personer={personer}
+                  periodStangd={stangdaManader.has(o.period_month)}
+                  idag={idag}
                 />
               ))}
             </ul>
@@ -200,6 +211,9 @@ export default async function Ordersida() {
                 agare={o.salesperson_id === user.employee!.id}
                 paket={paket}
                 bilagor={bilagor.get(o.id) ?? []}
+                personer={personer}
+                periodStangd={stangdaManader.has(o.period_month)}
+                idag={idag}
               />
             ))}
           </ul>
@@ -225,6 +239,9 @@ function Rad({
   agare,
   paket,
   bilagor,
+  personer,
+  periodStangd,
+  idag,
 }: {
   o: Orderrad;
   namn?: string;
@@ -233,6 +250,10 @@ function Rad({
   agare: boolean;
   paket: Paket[];
   bilagor: Orderbilaga[];
+  /** Sa att rattelsen kan byta saljare. Tom for den som inte far se andra. */
+  personer: { id: string; namn: string }[];
+  periodStangd: boolean;
+  idag: string;
 }) {
   const paketnamn = paket.find((p) => p.id === o.package_id)?.label ?? `Paket ${o.package_id}`;
 
@@ -292,6 +313,25 @@ function Rad({
         hanterare={hanterare}
         bokforare={bokforare}
         agare={agare}
+        order={{
+          company_name: o.company_name,
+          org_number: o.org_number,
+          contact_name: o.contact_name,
+          contact_phone: o.contact_phone,
+          package_id: o.package_id,
+          term_months: o.term_months,
+          salesperson_id: o.salesperson_id,
+          signed_on: o.signed_on,
+          is_addon: o.is_addon,
+          order_value: o.order_value,
+          commission_amount: o.commission_amount,
+          commission_source: o.commission_source,
+          note: o.note,
+        }}
+        paket={paket}
+        personer={personer}
+        periodStangd={periodStangd}
+        idag={idag}
       />
 
       {/*
