@@ -14,8 +14,10 @@ import {
   gallandeSats,
   giltigTelefon,
   giltigtSigneringsdatum,
+  harStangdPeriod,
   normaliseraOrgnr,
   ordervardeFor,
+  periodFor,
   type Sats,
 } from "@/lib/order";
 import {
@@ -86,6 +88,109 @@ async function logga(
     object_id: id,
     meta,
   });
+}
+
+/**
+ * Manaderna som ar faststallda. En manad UTAN rad ar oppen (avsnitt 5.6).
+ *
+ * Lases med service role och inte med anvandarens token. `commission_period` ar
+ * visserligen oppen for alla inloggade i RLS, men det ar en LASNING SOM STYR EN
+ * SKRIVNING — en rad som av nagot skal inte kom med hade tyst gjort en
+ * efterslapande order till en vanlig, och da ar pengarna borta igen.
+ */
+async function stangdaManader(): Promise<string[]> {
+  const { data } = await supabaseAdmin().from("commission_period").select("period_month");
+  return (data ?? []).map((p) => String(p.period_month).slice(0, 10));
+}
+
+/**
+ * Bokfor provisionen for en order vars period redan ar faststalld.
+ *
+ * ===========================================================================
+ * AVSNITT 5.6 OCH O11: EN STANGD PERIOD OPPNAS ALDRIG.
+ *
+ * Ordern hor till augusti — perioden bestams av signeringsdatumet (3.4) och det
+ * andras inte. Men augusti ar rakad, bokford och last, sa pengarna kan inte
+ * hamna dar. Forslaget i 5.6 ar darfor att de bokfors i den OPPNA perioden med
+ * en anteckning om vilken manad de hor till, och det ar vad som sker har.
+ *
+ * ATT NEKA GODKANNANDET VORE FEL SVAR. Ordern ar en riktig affar. En affar som
+ * inte gar att registrera forsvinner inte — den blir ett mejl till nagon, och
+ * da ar navet inte langre stallet dar man ser vad som salts.
+ *
+ * ---------------------------------------------------------------------------
+ * POSTEN AR `manual` OCH INTE `motor`, och det ar ett val.
+ *
+ * `motor` ar reserverat for det periodstangningen bokfor, med en deterministisk
+ * `external_ref` per manad, person och slag. En efterslapande order hor inte
+ * till den manadens rakning — den ar just en post motorn INTE kunde producera.
+ *
+ * Foljden ar att den syns som "Bokfört för hand" i provisionsvyn, vilket ar
+ * sant: det ar en post vid sidan av motorn. Anteckningen sager vilken order och
+ * vilken manad, sa fragan "vad ar det har for post" har ett svar i raden sjalv.
+ *
+ * INGEN VOLYMBONUS RAKNAS PA DEN. Bonusen ar en egenskap hos manadens
+ * ordervolym (5.2), och den har ordern hor till en annan manad. Att lata den
+ * hoja september hade gett bonus for en order september inte innehaller.
+ * ---------------------------------------------------------------------------
+ *
+ * DUBBELBOKFORING AR OMOJLIG utan en `external_ref`, eftersom vagen hit gar
+ * genom en statusandring: `godkannOrder` nekar allt som inte ar `inskickad`
+ * eller `utkast`, och efterat ar ordern `signerad`. Samma order kan alltsa inte
+ * godkannas tva ganger.
+ */
+async function bokforEfterslapning(arg: {
+  user: CurrentUser;
+  orderId: string;
+  salesperson_id: string;
+  company_name: string;
+  signed_on: string;
+  belopp: number;
+}): Promise<{ manad: string } | { fel: string }> {
+  const oppen = manadsnyckel();
+  const ordernsManad = periodFor(arg.signed_on);
+
+  // Den oppna manaden ar sjalv stangd. Det kraver att nagon faststallt manaden
+  // pa dess sista dag OCH att en order fran en tidigare stangd manad godkanns
+  // samma dygn — sallsynt, men tyst forlust igen om den slinker igenom. Ratt
+  // svar ar att falla hogljutt och lata en manniska bokfora posten.
+  if ((await stangdaManader()).includes(oppen)) {
+    return {
+      fel:
+        `${manadsnamn(ordernsManad)} är fastställd och ${manadsnamn(oppen)} är det också. ` +
+        `Ordern går inte att godkänna förrän en period är öppen — be ekonomi bokföra ` +
+        `${kronor(arg.belopp)} för hand i stället.`,
+    };
+  }
+
+  const { error } = await supabaseAdmin()
+    .from("commission_entry")
+    .insert({
+      employee_id: arg.salesperson_id,
+      period_month: oppen,
+      amount: arg.belopp,
+      // `deals` ar NULL och inte 1. Antalet beskriver den manadens ordervolym,
+      // och den har ordern hor till en annan manad — en etta hade fatt
+      // september att se ut att innehalla en order den inte har.
+      deals: null,
+      source: "manual",
+      note:
+        `Eftersläpande order: ${arg.company_name}, signerad ${arg.signed_on}. ` +
+        `${manadsnamn(ordernsManad)} var redan fastställd när ordern godkändes, ` +
+        `så provisionen bokförs här i stället (PROVISION_SPEC 5.6, Ö11).`,
+      entered_by: arg.user.employee!.id,
+    });
+
+  if (error) return { fel: `Provisionen bokfördes inte: ${error.message}` };
+
+  await logga(arg.user, "commission.efterslapning", arg.orderId, {
+    salesperson_id: arg.salesperson_id,
+    ordernsManad,
+    bokfordManad: oppen,
+    amount: arg.belopp,
+  });
+
+  return { manad: oppen };
 }
 
 /**
@@ -174,6 +279,11 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
       });
     }
 
+    // SAMMA GRANS SOM I `godkannOrder`, och den maste sta har ocksa: chefen kan
+    // lagga in en fardig order med ett gammalt signeringsdatum och godkanna den
+    // i samma steg. Det ar den vanligaste vagen in for en order som legat kvar.
+    const forSent = godkannDirekt && harStangdPeriod(signerad, await stangdaManader());
+
     const { data: rad, error } = await supabaseAdmin()
       .from("sales_order")
       .insert(insats)
@@ -196,16 +306,35 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
     // laser saljaren ur `sales_order`. Fore ordern finns ingenting att lasa.
     if (affar) await skrivOvertack(user, rad.id, bolag, affar.overtack);
 
+    let efterslapning: string | null = null;
+    if (forSent) {
+      const utfall = await bokforEfterslapning({
+        user,
+        orderId: rad.id,
+        salesperson_id: saljare,
+        company_name: bolag,
+        signed_on: signerad,
+        belopp: Number(insats.commission_amount),
+      });
+      if ("fel" in utfall) return { fel: utfall.fel };
+      efterslapning = utfall.manad;
+    }
+
     revalidatePath("/order");
     revalidatePath("/provision");
+    // TVA OBEROENDE OMSTANDIGHETER, och kvittensen maste kunna bara bada:
+    // ordern kan ha hamnat i en stangd manad (efterslapningen, O11) OCH
+    // provisionen kan ha overstigit ordervardet sa att overtacket klipptes.
+    const klippt = affar?.restpostenKlipptes
+      ? " Provisionen översteg ordervärdet, så övertäcket till säljchefen blev noll."
+      : "";
+
     return {
-      ok: godkannDirekt
-        ? `Ordern på ${bolag} är godkänd.${
-            affar?.restpostenKlipptes
-              ? " Provisionen översteg ordervärdet, så övertäcket till säljchefen blev noll."
-              : ""
-          }`
-        : `Ordern på ${bolag} är inskickad och väntar på godkännande.`,
+      ok: efterslapning
+        ? `Ordern på ${bolag} är godkänd. ${manadsnamn(periodFor(signerad))} var fastställd, så provisionen bokfördes på ${manadsnamn(efterslapning)}.${klippt}`
+        : godkannDirekt
+          ? `Ordern på ${bolag} är godkänd.${klippt}`
+          : `Ordern på ${bolag} är inskickad och väntar på godkännande.`,
     };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
@@ -552,6 +681,13 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
     };
     if (note) andring.note = note;
 
+    // ORDNINGEN AR MEDVETEN: kontrollen fore skrivningen.
+    //
+    // Ar bade orderns manad och den oppna manaden stangda gar posten ingenstans,
+    // och da ska ordern INTE godkannas — en godkand order utan provision ar
+    // precis den tysta forlusten som rattas har. Se `bokforEfterslapning`.
+    const forSent = harStangdPeriod(rad.signed_on, await stangdaManader());
+
     const { error } = await supabaseAdmin().from("sales_order").update(andring).eq("id", id);
     if (error) return { fel: error.message };
 
@@ -564,28 +700,57 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
 
     await skrivOvertack(user, id, rad.company_name, provision.overtack);
 
+    // ===========================================================================
+    // O11 / AVSNITT 5.6. Ordern hor till en manad som redan ar faststalld, sa
+    // provisionen bokfors i den oppna perioden i stallet. En stangd period
+    // oppnas aldrig.
+    //
+    // Fram till 2026-09-08 hande ingenting har, och foljden var att en godkand
+    // order i en stangd manad aldrig kom med i nagon lonekorning. Tyst.
+    // ===========================================================================
+    let efterslapning: string | null = null;
+    if (forSent) {
+      const utfall = await bokforEfterslapning({
+        user,
+        orderId: id,
+        salesperson_id: rad.salesperson_id,
+        company_name: rad.company_name,
+        signed_on: rad.signed_on,
+        belopp: provision.satt.commission_amount,
+      });
+      if ("fel" in utfall) return { fel: utfall.fel };
+      efterslapning = utfall.manad;
+    }
+
     // Provisionen ar fryst i samma sekund. Beloppet star i notisen med flit:
     // det ar det tal saljaren annars far leta upp i provisionsvyn for att veta
-    // vad godkannandet var vart.
+    // vad godkannandet var vart. AR DEN EFTERSLAPANDE STAR DET OCKSA DAR — att
+    // pengarna dyker upp i fel manad utan forklaring ar ett arende i vardande.
     await notifiera({
       till: rad.salesperson_id,
       av: user.employee!.id,
       kalla: "order-godkand",
       typ: "order",
       rubrik: `Din order är godkänd: ${rad.company_name}`,
-      detalj: `Provision ${Number(provision.satt.commission_amount).toLocaleString("sv-SE")} kr · räknas från ${rad.signed_on}`,
+      detalj: efterslapning
+        ? `Provision ${kronor(provision.satt.commission_amount)} · ${manadsnamn(periodFor(rad.signed_on))} var redan fastställd, så beloppet bokförs på ${manadsnamn(efterslapning)}`
+        : `Provision ${Number(provision.satt.commission_amount).toLocaleString("sv-SE")} kr · räknas från ${rad.signed_on}`,
       href: "/order",
       objekt: { typ: "sales_order", id },
     });
 
     revalidatePath("/order");
     revalidatePath("/provision");
+
+    // Samma tva oberoende omstandigheter som i `skapaOrder`.
+    const klippt = provision.restpostenKlipptes
+      ? " Provisionen översteg ordervärdet, så övertäcket till säljchefen blev noll."
+      : "";
+
     return {
-      ok: `Ordern är godkänd och räknas från och med nu.${
-        provision.restpostenKlipptes
-          ? " Provisionen översteg ordervärdet, så övertäcket till säljchefen blev noll."
-          : ""
-      }`,
+      ok: efterslapning
+        ? `Ordern är godkänd. ${manadsnamn(periodFor(rad.signed_on))} var fastställd, så ${kronor(provision.satt.commission_amount)} bokfördes på ${manadsnamn(efterslapning)} med en anteckning om varför.${klippt}`
+        : `Ordern är godkänd och räknas från och med nu.${klippt}`,
     };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };

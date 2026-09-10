@@ -19,7 +19,9 @@ import {
   LOPTIDER,
   STATUS_ETIKETT,
   grundprovision,
+  harStangdPeriod,
   nettoAntal,
+  periodFor,
   provisionFor,
   type Orderstatus,
   type Paket,
@@ -70,14 +72,21 @@ export default async function Ordersida() {
     // Foljden i formularet ar att restposten och overtacket inte ritas alls for
     // saljaren, medan ordervardet gor det: det ar hens egen affar.
     hamtaChefssatser(),
-    // FASTSTALLDA MANADER. Rattelseformularet maste veta om ordern hor till en
-    // stangd manad — inte for att sparra den (det gor triggern i 0051) utan for
-    // att saga VAD som kommer att handa: en oppen manad raknas om live, en
-    // stangd far rattelseposter i innevarande manad som inte gar att ta tillbaka.
+    // FASTSTALLDA MANADER, och de bar TVA fragor pa en gang.
+    //
+    // FORE godkannandet (O11 / avsnitt 5.6): hor ordern till en manad som redan
+    // ar faststalld? Da bokfors provisionen i den OPPNA perioden i stallet, och
+    // chefen ska se det innan hon trycker — ett besked efterat om att pengarna
+    // hamnade i en annan manad ar ett arende i vardande.
+    //
+    // EFTER godkannandet (0051): samma fraga avgor vad en RATTELSE gor. En oppen
+    // manad raknas om live; en faststalld far rattelseposter i innevarande manad
+    // som inte gar att ta tillbaka. Det ar samma manad och samma svar, sa det ar
+    // ocksa samma prop hela vagen ner — se `stangdPeriod` i `Atgarder`.
     hamtaPerioder(ettArBak),
   ]);
 
-  const stangdaManader = new Set(perioder.map((p) => p.period_month));
+  const stangda = perioder.map((p) => p.period_month);
 
   // SATSEN SLAS UPP PA DAGENS DATUM I FORMULARET, inte pa orderns.
   //
@@ -181,7 +190,7 @@ export default async function Ordersida() {
                   paket={paket}
                   bilagor={bilagor.get(o.id) ?? []}
                   personer={personer}
-                  periodStangd={stangdaManader.has(o.period_month)}
+                  stangdPeriod={harStangdPeriod(o.signed_on, stangda)}
                   idag={idag}
                 />
               ))}
@@ -214,7 +223,7 @@ export default async function Ordersida() {
                 paket={paket}
                 bilagor={bilagor.get(o.id) ?? []}
                 personer={personer}
-                periodStangd={stangdaManader.has(o.period_month)}
+                stangdPeriod={harStangdPeriod(o.signed_on, stangda)}
                 idag={idag}
               />
             ))}
@@ -243,7 +252,7 @@ function Rad({
   paket,
   bilagor,
   personer,
-  periodStangd,
+  stangdPeriod,
   idag,
 }: {
   o: Orderrad;
@@ -257,7 +266,14 @@ function Rad({
   bilagor: Orderbilaga[];
   /** Sa att rattelsen kan byta saljare. Tom for den som inte far se andra. */
   personer: { id: string; namn: string }[];
-  periodStangd: boolean;
+  /**
+   * Hor ordern till en manad som redan ar faststalld?
+   *
+   * FORE godkannandet (O11): provisionen bokfors i den oppna perioden i stallet.
+   * EFTER godkannandet (0051): en rattelse ger rattelseposter i innevarande
+   * manad i stallet for att rakna om. Samma fraga, tva anvandningar.
+   */
+  stangdPeriod: boolean;
   idag: string;
 }) {
   const paketnamn = paket.find((p) => p.id === o.package_id)?.label ?? `Paket ${o.package_id}`;
@@ -336,7 +352,8 @@ function Rad({
         }}
         paket={paket}
         personer={personer}
-        periodStangd={periodStangd}
+        stangdPeriod={stangdPeriod}
+        manad={manadsnamn(periodFor(o.signed_on))}
         idag={idag}
       />
 

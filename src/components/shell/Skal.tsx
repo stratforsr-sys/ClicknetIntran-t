@@ -5,27 +5,27 @@ import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 import { Bottennav } from "./Bottennav";
 import { PanelLageProvider } from "./panellage";
-import { SIDOPANEL_KAKA } from "./sidopanel";
-import type { NavItem } from "./nav-items";
+import { SIDOPANEL_KAKA, type Panellage } from "./sidopanel";
+import type { Navigering } from "./nav-items";
 import type { Kvitto } from "@/lib/toast";
 import { Toast } from "@/components/ui/Toast";
 
 export function Skal({
-  items,
+  nav,
   namn,
   roll,
   stamplingPa,
-  hopfalldFranStart,
+  lageFranStart,
   klocka,
   kvitto,
   ruta,
   children,
 }: {
-  items: NavItem[];
+  nav: Navigering;
   namn: string;
   roll: string;
   stamplingPa: boolean;
-  hopfalldFranStart: boolean;
+  lageFranStart: Panellage;
   klocka: ReactNode;
   kvitto: Kvitto | null;
   /**
@@ -51,21 +51,31 @@ export function Skal({
    * vy-installning utan foljder, och en rundtur till servern for att fa
    * tillbaka samma sida vore att betala for ingenting.
    */
-  const [hopfalld, setHopfalld] = useState(hopfalldFranStart);
+  const [lage, setLage] = useState<Panellage>(lageFranStart);
 
-  function vaxlaHopfalld() {
-    const nytt = !hopfalld;
-    setHopfalld(nytt);
-    document.cookie = `${SIDOPANEL_KAKA}=${nytt ? "hopfalld" : "oppen"}; path=/; max-age=31536000; samesite=lax`;
+  function valjLage(nytt: Panellage) {
+    setLage(nytt);
+    document.cookie = `${SIDOPANEL_KAKA}=${nytt}; path=/; max-age=31536000; samesite=lax`;
   }
+
+  /**
+   * Hur mycket plats panelen tar av sidan.
+   *
+   * HOVRA RAKNAS SOM SMAL, aven nar panelen just da ar utfalld. Den fallningen
+   * ar tillfallig och sker medan musen ror sig — knuffades innehallet undan
+   * hade texten hoppat i sidled varje gang nagon rakade passera vansterkanten,
+   * och en rad som flyttar sig gar inte att lasa medan den gor det. Panelen
+   * svavar darfor OVER innehallet i det laget, och marginalen ligger still.
+   */
+  const bred = lage === "utfalld";
 
   return (
     /**
      * Laget delas nedat i stallet for att kopieras. Utseendesektionen i
-     * installningarna staller om samma sak som knappen i panelen, och den
+     * installningarna staller om samma sak som valjaren i panelen, och den
      * ritas bade i rutan och pa /profil — se shell/panellage.tsx.
      */
-    <PanelLageProvider value={{ hopfalld, vaxlaHopfalld }}>
+    <PanelLageProvider value={{ lage, valjLage }}>
       <div className="min-h-dvh">
         {/*
           X1 / WCAG 2.4.1 Bypass Blocks (niva A).
@@ -92,19 +102,19 @@ export function Skal({
           Hoppa till innehållet
         </a>
         <Sidebar
-          items={items}
+          nav={nav}
           namn={namn}
           roll={roll}
           oppen={oppen}
           stang={() => setOppen(false)}
-          hopfalld={hopfalld}
-          vaxlaHopfalld={vaxlaHopfalld}
+          lage={lage}
+          valjLage={valjLage}
         />
         <div
           className={
-            hopfalld
-              ? "px-4 lg:pl-[6.5rem] transition-[padding] duration-base ease-brand"
-              : "px-4 lg:pl-[18rem] transition-[padding] duration-base ease-brand"
+            bred
+              ? "px-4 lg:pl-[18rem] transition-[padding] duration-base ease-brand"
+              : "px-4 lg:pl-[6.5rem] transition-[padding] duration-base ease-brand"
           }
         >
           <Topbar oppnaMeny={() => setOppen(true)} klocka={klocka} />

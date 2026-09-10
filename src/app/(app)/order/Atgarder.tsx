@@ -38,7 +38,8 @@ export function Atgarder({
   order,
   paket,
   personer,
-  periodStangd,
+  stangdPeriod,
+  manad,
   idag,
 }: {
   id: string;
@@ -56,8 +57,17 @@ export function Atgarder({
   order?: Redigerbar;
   paket?: Paket[];
   personer?: { id: string; namn: string }[];
-  /** Ar ordens manad faststalld? Avgor VAD rattelsen gor, inte OM den gar. */
-  periodStangd?: boolean;
+  /**
+   * Hor ordern till en manad som redan ar faststalld?
+   *
+   * TVA ANVANDNINGAR AV SAMMA SVAR. Fore godkannandet (O11) varnar den for att
+   * provisionen hamnar i den oppna perioden i stallet. Efter godkannandet (0051)
+   * avgor den VAD en rattelse gor — rakna om, eller bokfora skillnaden i
+   * innevarande manad. Aldrig OM rattelsen gar; det avgor triggern.
+   */
+  stangdPeriod: boolean;
+  /** Månaden ordern hör till, skriven: "augusti 2026". */
+  manad: string;
   idag?: string;
 }) {
   const [oppen, setOppen] = useState<
@@ -76,6 +86,25 @@ export function Atgarder({
   if (status === "inskickad" && hanterare) {
     return (
       <div className="flex flex-col gap-2">
+        {/*
+          Ö11 / avsnitt 5.6. BESKEDET STÅR FÖRE KNAPPEN, inte efter klicket.
+
+          Godkännandet går igenom — ordern är en riktig affär, och en affär som
+          inte går att registrera försvinner inte, den blir ett mejl till någon.
+          Men pengarna hamnar i en annan månad än den ordern hör till, och det
+          är precis den sortens överraskning som blir ett ärende om den kommer
+          som ett kvitto efteråt i stället för som en upplysning innan.
+
+          Fram till 2026-09-08 hände ingenting alls här: ordern godkändes, och
+          provisionen kom aldrig med i någon lönekörning. Tyst.
+        */}
+        {stangdPeriod && (
+          <Notis ton="warn">
+            <strong>{manad} är fastställd.</strong> Ordern hör dit, men en stängd månad räknas
+            aldrig om — godkänner du den bokförs provisionen på den öppna månaden i stället, med
+            en anteckning om varför. Säljaren får beskedet i klockan.
+          </Notis>
+        )}
         <div className="flex flex-wrap gap-2">
           <Enkel action={godkannOrder} id={id} etikett="Godkänn" />
           {/*
@@ -163,7 +192,7 @@ export function Atgarder({
             paket={paket}
             personer={personer}
             full={hanterare}
-            periodStangd={periodStangd ?? false}
+            stangdPeriod={stangdPeriod}
             idag={idag}
           />
         )}
@@ -229,6 +258,13 @@ function Enkel({
         {etikett}
       </Button>
       {state.fel && <Notis ton="danger">{state.fel}</Notis>}
+      {/*
+        KVITTOT VISAS SEDAN 2026-09-08. `Enkel` slängde det förut, vilket dög så
+        länge alla utfall såg likadana ut — "Ordern är godkänd" säger raden
+        ovanför ändå. Ett EFTERSLÄPANDE godkännande säger något annat: att
+        pengarna hamnade i en annan månad. Det får inte försvinna.
+      */}
+      {state.ok && <Notis ton="ok">{state.ok}</Notis>}
     </form>
   );
 }
@@ -387,7 +423,7 @@ function Rattelse({
   paket,
   personer,
   full,
-  periodStangd,
+  stangdPeriod,
   idag,
 }: {
   id: string;
@@ -403,7 +439,7 @@ function Rattelse({
    * de skulle skickas.
    */
   full: boolean;
-  periodStangd: boolean;
+  stangdPeriod: boolean;
   idag: string;
 }) {
   const [state, kor, vantar] = useActionState<Orderstate, FormData>(redigeraOrder, {});
@@ -419,14 +455,14 @@ function Rattelse({
     <form action={kor} className="flex flex-col gap-3 rounded-sm bg-surface-alt p-3">
       <input type="hidden" name="id" value={id} />
 
-      <Notis ton={!full ? "info" : periodStangd ? "warn" : "info"}>
+      <Notis ton={!full ? "info" : stangdPeriod ? "warn" : "info"}>
         {!full ? (
           <>
             Du rättar <strong>kunduppgifterna</strong> — bolagsnamn, organisationsnummer,
             kontaktperson, telefon och anteckningen. Paket, avtalstid, säljare, datum, ordervärde
             och provision ändras av säljchefen. Säg till om något av dem blivit fel.
           </>
-        ) : periodStangd ? (
+        ) : stangdPeriod ? (
           <>
             <strong>Månaden ordern hör till är fastställd.</strong> Den står orörd — skillnaden i
             provision och övertäck bokförs i stället som poster i innevarande månad, och de går
@@ -508,7 +544,7 @@ function Rattelse({
                 className={KONTROLL}
               />
               <span className="text-small text-ink-500">
-                {periodStangd
+                {stangdPeriod
                   ? "Går att ändra inom månaden, men inte ut ur den."
                   : "Styr vilken månad ordern räknas i."}
               </span>

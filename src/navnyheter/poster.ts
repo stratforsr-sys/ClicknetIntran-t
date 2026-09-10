@@ -139,6 +139,105 @@ efterhand.`,
     href: "/order",
   },
   {
+    slug: "menyn-i-tva-led",
+    rubrik: "Menyn följer avdelningarna, och panelen kan fällas ut när du hovrar",
+    ingress:
+      "Bara det du gör varje dag står framme. Resten ligger under Försäljning, Ekonomi, Personal och System — och panelen har fått ett tredje läge som fäller ut sig när musen är över den.",
+    text: `Sidopanelen hade vuxit till arton poster. Alla hörde hemma där, men
+arton likadana rader i en spalt är inte en meny — det är en lista man läser
+varje gång i stället för att sikta.
+
+**Framme står det du gör varje dag**
+
+Hem, Nyheter, Rutiner, Utbildning och Tid. Ingenting annat.
+
+**Resten ligger i avdelningarnas menyer**
+
+Under snabbposterna står menyerna. **För musen över en** så fälls en spalt ut
+bredvid panelen med sidorna som hör dit — du behöver inte klicka. Klicket
+fungerar förstås också, och är vägen in på telefon och med tangentbord.
+
+- **Försäljning** — Order, K&V och Provision.
+- **Ekonomi** — Lönerapport och Lönekostnad.
+- **Personal** — Anställda, Coachning, Rekrytering och Avtal.
+- **System** — händelseloggen, adoptionen och designsystemet.
+- **Min vy** — det som bara handlar om dig och därför inte hör till någon
+  avdelning: dina ärenden, din frånvaro och felrapporteringen.
+
+**Din egen avdelning ligger överst**, närmast snabbposterna. Du ser bara de
+menyer du har sidor i, och en meny du inte har någon sida i finns inte alls.
+
+Spalten stänger sig när du valt en sida, när du för musen till en snabbpost i
+stället, när du lämnar panelen, med Escape eller genom att klicka utanför.
+
+Tillsammans med **Hovra**-läget nedan blir hela navet ett enda drag: för musen
+mot vänsterkanten, panelen fälls ut, och menyn du siktar på öppnar sig.
+
+**Menyerna följer avdelningen, inte din roll.** Order ligger under Försäljning
+oavsett om du är säljare eller säljchef — sidan visar olika saker beroende på
+vem som öppnar den, precis som förut, men den ligger på samma ställe för alla.
+Det betyder också att en kollega kan säga "det ligger under Personal" och ha
+rätt.
+
+**Du har inte fått eller förlorat någon behörighet.** Exakt samma sidor som
+igår, på nya platser.
+
+**Personalregistret heter nu Anställda.** Samma sida, samma adress — men menyn
+det ligger i heter Personal, och "Personal → Personal" läser som ett fel även
+när det inte är det.
+
+**Panelen har tre lägen**
+
+Längst ner i panelen, och under Inställningar → Utseende:
+
+- **Utfälld** — som förut, panelen står kvar med ikoner och text.
+- **Hopfälld** — bara ikoner, mest plats åt innehållet.
+- **Hovra** — *ny.* Panelen ligger smal, men fäller ut sig så fort du för musen
+  över den och åker in igen när du lämnar den. Du får hopfällt lägets yta utan
+  att behöva gissa vad ikonerna betyder.
+
+I hovra-läget svävar panelen över sidan i stället för att knuffa den åt sidan.
+Texten du läser ligger alltså still även när menyn rör sig.
+
+Läget sparas i den här webbläsaren. På telefonen är panelen som förut en låda du
+drar in, och där fäller menyerna ut sig på plats i listan i stället för bredvid.`,
+    datum: "2026-09-09",
+    roller: [],
+    href: "/",
+  },
+  {
+    slug: "order-i-faststalld-manad",
+    rubrik: "En order som godkänns för sent tappar inte längre sin provision",
+    ingress:
+      "Godkänner du en order vars månad redan är fastställd bokförs provisionen på den öppna månaden i stället — förut försvann den tyst.",
+    text: `En order hör till den månad den **signerades** i, och en månad som är
+fastställd räknas aldrig om. Godkändes ordern efter att månaden stängts fanns
+det alltså ingenstans för pengarna att ta vägen — och ingenting sa ifrån.
+
+Det hände på riktigt den 8 september: en order signerad 25 augusti godkändes två
+timmar efter att augusti fastställts. 6 500 kr intjänade, godkända, och osynliga
+för lönekörningen.
+
+**Nu bokförs provisionen på den öppna månaden i stället**, med en anteckning om
+vilken månad ordern hör till. Ordern behåller sitt signeringsdatum — det är bara
+pengarna som flyttar.
+
+**Om du godkänner order:** står ordern i en fastställd månad ser du det i kön
+*innan* du trycker, med besked om vad som kommer att hända.
+
+**Om du säljer:** notisen i klockan säger vilken månad beloppet hamnar på, så
+siffran inte dyker upp i fel månad utan förklaring.
+
+Att neka godkännandet vore fel svar — ordern är en riktig affär, och en affär
+som inte går att registrera försvinner inte, den blir ett mejl till någon.
+
+Ingen volymbonus räknas på posten: bonusen hör till den månad ordern tecknades,
+inte till den den bokförs i.`,
+    datum: "2026-09-08",
+    roller: [],
+    href: "/order",
+  },
+  {
     slug: "provisionsvyn-som-resultattavla",
     rubrik: "Provisionen visar nu dagen, takten och vägen till nästa bonus",
     ingress:

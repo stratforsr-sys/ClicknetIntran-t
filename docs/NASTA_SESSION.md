@@ -3,7 +3,7 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-10 — två kretsar rättar order med olika räckvidd (steg 12b, ingen migration); rättelse av godkänd order och övrig bonus byggda (E13 steg 12, migration `0051`). Samma branch, fortfarande **ej mergad**. Föregående rad: 2026-09-09 — ordervärdet och säljchefens ersättning byggda (E13 steg 11, migration `0050`). Ligger på branch `ordervarde-och-chefsprovision` och **väntar på godkännande**; se avsnittet direkt nedan. Föregående rad: 2026-09-08 (kväll) — testdatan borttagen; Ö11 inträffade på riktigt. Provisionsvyn ombyggd till resultattavla med period- (månad eller helår) och personväljare i panelen, månadsmål per säljare, och tre tysta räknefel rättade. Godkänd och **mergad till main som `dbb02a8`**; ligger i produktion.
+**Senast uppdaterad:** 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
 
 ## Rättelse och övrig bonus 2026-09-10 — PÅ BRANCH, EJ MERGAD
 
@@ -18,6 +18,17 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
   bolagsnamn, orgnr, kontaktperson, telefon, anteckning. Ingen annan rättar.
 - **Övrig bonus** på en affär (knapp på orderraden) eller på en månad
   (formulär på `/provision`). Säljchef, VD och ekonomi. Skäl obligatoriskt.
+
+### Öppen punkt: övertäcket i en fastställd månad
+
+Ö11 löste efterläpningen för SÄLJARENS provision — godkänns en order i en
+fastställd månad bokförs beloppet i den öppna perioden i stället. **Övertäcket
+till säljchefen har ingen motsvarighet.** `order_manager_commission` räknas live
+per orderns månad, så en order som godkänns i en stängd månad ger säljaren
+pengar men säljchefen ingenting. Samma tysta förlust som Ö11 var, en våning upp.
+
+Upptäckt vid mergen 2026-09-10, inte byggd — det hade utvidgat ett pass som
+redan var klart. Fråga beställaren.
 
 ### Fem saker att inte glida tillbaka på
 
@@ -150,6 +161,83 @@ en utfällning med ordervärde, provision och anteckning.
 
 ---
 
+## Navigationen 2026-09-09 — I PRODUKTION
+
+*Tre commits på `navigering-vyer`, snabbspolade till main efter godkännande.
+Hela resonemanget i `ARBETSLOGG.md` under 2026-09-09.*
+
+Sidopanelen bar arton poster. Nu står fem framme — Hem, Nyheter, Rutiner,
+Utbildning, Tid — och resten ligger i menyer som öppnar en spalt bredvid
+panelen. **Menyerna är avdelningarna**, plus Min vy för det som bara handlar om
+en själv. Panelen kan dessutom stå i `hovra`: smal tills musen är över den.
+
+**Det räcker att hovra över en meny för att öppna den.** Klicket finns kvar för
+pekskärm och tangentbord, och som väg ut.
+
+| Meny | Innehåll |
+| --- | --- |
+| Min vy | Ärenden · Frånvaro · Rapportera fel |
+| Försäljning | Order · K&V · Provision |
+| Leverans & support | *(tom — ritas inte)* |
+| Ekonomi | Lönerapport · Lönekostnad |
+| Personal | Anställda · Coachning · Rekrytering · Avtal |
+| System | Händelselogg · Adoption · Designsystem |
+
+### Att följa upp i produktion
+
+1. **Hittar folk sina sidor?** Ingen behörighet är ändrad — samma sidor som
+   förut, nya platser. Det är den enda risken med passet: en post som ligger
+   rätt enligt reglerna men fel enligt vanan.
+2. **Ligger sidorna under rätt avdelning?** Tre placeringar är beslut och inte
+   självklarheter: `/fel` i Min vy, `/coachning` under Personal, `/provision`
+   under Försäljning. Skälen står i arbetsloggen.
+3. **Spalten ligger i linje med knappen.** Första versionen satte den i listans
+   överkant; det är rättat med en mätning som körs om vid scroll och
+   fönsterändring.
+4. **Hovra-läget, och hovra-öppningen.** Fäller panelen ut sig lagom snabbt,
+   och står innehållet still medan den gör det? Öppnar rätt meny sig när du för
+   musen ner genom listan — eller blinkar de förbi? Talet att skruva på är
+   `OPPNINGSDROJNING` i `Sidebar.tsx`, i dag 120 ms.
+5. **"Leverans & support" syns inte.** Avdelningen finns i koden men ingen sida
+   hör dit ännu. Ska något flyttas dit, eller ska den byggas?
+
+### Det som INTE går att ändra utan att tänka efter
+
+**PLACERINGEN BEROR ALDRIG PÅ ROLLEN.** Det var precis felet i första
+försöket, som la en "Chefsvy" ovanpå avdelningarna och därmed la `/order` på
+två olika ställen beroende på vem som tittade. En sida hör till en avdelning,
+punkt — bara etiketten får skilja ("Avtal" / "Mitt avtal").
+
+**MENYN DELAR INTE UT NÅGOT.** Villkoren i `nav-items.ts` är oförändrade.
+Åtkomsten avgörs av roller, behörigheter och RLS — filen avgör bara placering.
+
+**TOMMA MENYER RITAS INTE.** En tom "Ekonomi" är ett löfte om en behörighet man
+inte har. Det är också det enda som fungerar för `recruiter`: en säljare med den
+behörigheten är ingen chef men har en sida under Personal.
+
+**AVDELNINGARNA ÄR HÄRLEDDA UR ROLLEN, INTE HÄMTADE UR DATABASEN.**
+`avdelningFor()` i `src/lib/avdelningar.ts` är den enda platsen härledningen
+sker, och används till en sak: att hissa den egna avdelningens meny överst. Den
+dagen `employee.avdelning_id` finns byts funktionens kropp — inte menyn, inte
+panelen.
+
+**`/personal` HETER ANSTÄLLDA I MENYN, MEN ADRESSEN STÅR KVAR.** Den är
+bokmärkt, står i guider och i loggen.
+
+**UTBILDNINGEN MÅSTE STÅ FRAMME.** "Kom igång"-turen pekar på menyposten. Ett
+guidesteg som pekar in i en stängd flyout visar "elementet saknas" för varenda
+ny anställd.
+
+**FLYOUTENS PLACERING HÄNGER IHOP MED `p-2`.** `FLYOUT_LUFT` i `Sidebar.tsx`
+speglar spaltens inre luft, så att första raden hamnar i linje med knappen.
+Ändras klassen utan konstanten glider linjen isär.
+
+**TVÅ PROV LÄSER `nav-items.ts` SOM TEXT.** `guider.mjs` kräver
+`href: "<adress>"` som literal och `data-guide={navAnkare(item.href)}` i
+`Sidebar.tsx`; `stampelfri.mjs` kräver `stampelfri(user.roles)` och
+`canManageEmployees(user) || hasRole(user, "ceo")`. Skriv om filen och de faller
+utan att något faktiskt gått sönder i gränssnittet.
+
 ## Provisionen 2026-09-08 — I PRODUKTION
 
 *Fem commits på `provision-resultattavla`, mergade till main som `dbb02a8`.
@@ -268,6 +356,10 @@ Rimligaste åtgärderna att lägga fram för beställaren:
 3. **Eller larma** och låt ekonomi bokföra posten för hand.
 
 Alternativ 1 är det som stämmer med resten av modellen. Ingenting är byggt.
+
+1. **Eftersläpande order.** Ö11 är byggd — se avsnittet längre ned. Håll ett
+   öga på om posten "Bokfört för hand" med en eftersläpningsanteckning dyker upp
+   i verklig trafik, och om texten går att förstå för den som får den.
 
 ### Fem saker att inte glida tillbaka på
 

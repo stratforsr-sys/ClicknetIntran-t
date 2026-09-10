@@ -132,8 +132,10 @@ export const MODUL: Record<string, string> = {
   commission: "Provision",
   commission_period: "Provisionsperiod",
   commission_bonus_level: "Volymtrappa",
+  manager_commission_rate: "Säljchefens ersättning",
   cost: "Lönekostnad",
   sales_order: "Kundorder",
+  sales_target: "Månadsmål",
   kv_call: "K&V-samtal",
   kv_criterion: "K&V-kriterium",
   kv_policy: "K&V-regel",
@@ -141,6 +143,7 @@ export const MODUL: Record<string, string> = {
 
   job: "Nattjobbet",
   error: "Felrapport",
+  guide: "Guide",
 
   coaching_task: "Coachningsuppgift",
   coaching_session: "Coachningssamtal",

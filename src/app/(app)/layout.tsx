@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { Skal } from "@/components/shell/Skal";
 import { Klocka, KlockaSkelett } from "@/components/shell/Klocka";
 import { navFor } from "@/components/shell/nav-items";
-import { SIDOPANEL_KAKA, arHopfalld } from "@/components/shell/sidopanel";
+import { SIDOPANEL_KAKA, lasPanellage } from "@/components/shell/sidopanel";
 import { hamtaLage } from "@/lib/sparrar";
 import { stampelfri } from "@/lib/stampelfri";
 import { getCurrentUser, fullName } from "@/lib/auth";
@@ -82,7 +82,8 @@ export default async function AppLayout({
 
   // Sidopanelens lage lases har och inte i webblasaren, sa att en hopfalld
   // panel ritas hopfalld pa en gang i stallet for att fallas ihop efterat.
-  const hopfalld = arHopfalld(kakor.get(SIDOPANEL_KAKA)?.value);
+  // Heter `panellage` och inte `lage`: `lage` ovan ar sparrarnas modullage.
+  const panellage = lasPanellage(kakor.get(SIDOPANEL_KAKA)?.value);
 
   // E5.7. Kvittot for den atgard som just utfordes. Ligger i en kortlivad kaka
   // eftersom atgarderna ar server actions som omdirigerar — ett tillstand satt
@@ -104,11 +105,11 @@ export default async function AppLayout({
   return (
     <>
       <Skal
-        items={navFor(user, lage.stampling)}
+        nav={navFor(user, lage.stampling)}
         namn={fullName(user.employee)}
         roll={roll}
         stamplingPa={stamplarSjalv}
-        hopfalldFranStart={hopfalld}
+        lageFranStart={panellage}
         klocka={
           <Suspense fallback={<KlockaSkelett />}>
             <Klocka user={user} />

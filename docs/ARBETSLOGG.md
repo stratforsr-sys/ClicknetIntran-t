@@ -5,6 +5,48 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-10 (kväll) · Mergen med main, och tre saker den avslöjade
+
+Branchen `ordervarde-och-chefsprovision` hade legat sedan 09-09 medan **sex
+commits gått till main**: navigationen i två led (tre commits) och Ö11 —
+provisionen för en order som godkänns i en fastställd månad. Grenarna hade
+divergerat, och `POST /repos/.../merges` svarade `409 Merge conflict`.
+
+Sex filer krockade. Tre av dem var rena tillägg i toppen (arbetsloggen,
+överlämningen, navnyheterna) och två av dem verkliga:
+
+**`order/actions.ts` — övertäcket OCH efterläpningen.** Båda sidor hade lagt en
+ny sak efter `logga()` i `skapaOrder` och `godkannOrder`, och git såg dem som
+alternativ. De är oberoende: main bokför provisionen i öppen period när ordern
+hör till en stängd månad, branchen skriver övertäcksraden. Båda står kvar, och
+**kvittensen bär båda** — den kan nu säga "provisionen bokfördes på september"
+och "övertäcket blev noll" i samma mening.
+
+**`order/page.tsx` och `Atgarder.tsx` — två namn på samma fråga.** Main hade
+`stangdPeriod={harStangdPeriod(o.signed_on, stangda)}`, branchen
+`periodStangd={stangdaManader.has(o.period_month)}`. `period_month` ÄR
+`date_trunc` av `signed_on`, så de räknade fram exakt samma boolean under olika
+namn. Ett namn kvar: `stangdPeriod`, med en doc-kommentar om att svaret används
+till två saker — varna före godkännandet (Ö11) och avgöra vad en rättelse gör
+(0051).
+
+### Två fel som proven fångade först nu
+
+**`manager_commission_rate.set` saknades i MODULREGISTRET.** `0050` införde
+action-namnet 09-09, och `tests/handelselogg.mjs` faller när ett prefix loggas
+utan att stå i `MODUL` — det är den enda kontroll som märker att en helt ny
+modul börjat logga. Provet kräver `DATABASE_URL` och kördes därför inte i steg
+11. **Lärdomen: db-proven ska köras före commit, inte bara de rena.** Samma
+körning visade `sales_target` och `guide` som också saknats sedan tidigare; alla
+tre är införda nu.
+
+**`tests/sidor.mjs` är rött, och inte av det här arbetet.** Tre kontroller säger
+att `/franvaro/sjuk` bär efternamnet Menduza — alltså någon annans uppgifter i en
+sida. Ingen fil i det här passet rör frånvaro. Felet är alltså äldre och står
+kvar; det hör hemma som en egen punkt.
+
+---
+
 ## 2026-09-10 (eftermiddag) · Två kretsar rättar, med olika räckvidd
 
 *E13 steg 12b. Ingen migration.*
@@ -252,6 +294,326 @@ tolv höll.
 *Första försöket räknades inte:* proven låg i samma transaktion utan savepoints,
 så det första avvisade insertet avbröt den och de följande "gick igenom" mot ett
 dött anslutningsläge. Två gröna bockar som inte betydde någonting.
+
+
+## 2026-09-09 · Navigationen följer avdelningarna, och panelen fick ett tredje läge
+
+*Tre commits på `navigering-vyer`. Godkända efter previewgenomgång samma dag
+och snabbspolade till main — grenen låg på main-spetsen hela tiden, så
+historiken är de tre commitarna i den ordning arbetet gjordes.*
+
+Beställarens beskrivning: menyn ska inte ha så många navigationer i sig. Man
+ska kunna få en meny på *försäljning*, *ekonomi*, *personal* — och panelen ska
+gå att ha ute när man hovrar över den och stängas annars, som ett alternativ
+till "fäll ihop" eller bredvid det.
+
+### Vad som gjordes
+
+Sidopanelen bar arton poster. Alla var behörighetsprövade och alla hörde hemma
+i navet — det var inte innehållet som var fel, utan att arton likadana rader i
+en spalt inte är en meny utan en innehållsförteckning.
+
+**Framme står nu fem poster:** Hem, Nyheter, Rutiner, Utbildning, Tid. Resten
+ligger i menyer som öppnar en spalt bredvid panelen, och **menyerna är
+avdelningarna**:
+
+| Meny | Innehåll |
+| --- | --- |
+| Min vy | Ärenden · Frånvaro · Rapportera fel |
+| Försäljning | Order · K&V · Provision |
+| Leverans & support | *(tom — ritas inte)* |
+| Ekonomi | Lönerapport · Lönekostnad |
+| Personal | Anställda · Coachning · Rekrytering · Avtal |
+| System | Händelselogg · Adoption · Designsystem |
+
+Den egna avdelningens meny hissas närmast snabbposterna. Menyer utan poster
+ritas inte, så en säljare ser Min vy, Försäljning och Personal — inte fem
+rubriker varav tre är tomma.
+
+### FÖRSTA FÖRSÖKET LA EN "CHEFSVY" OVANPÅ AVDELNINGARNA, OCH DET VAR FEL
+
+Den första versionen hade tre vyer efter *roll* — Min vy, Chefsvy, Adminvy —
+med avdelningarna som chips **inuti** chefsvyn. Beställarens dom samma dag:
+menyerna ska följa avdelningen.
+
+Det håller, av tre skäl som är värda att minnas nästa gång någon vill gruppera
+efter behörighet:
+
+1. **Ett led för mycket.** Man valde avdelning för att sedan välja avdelning
+   igen. Chefsvy → Försäljning → Order är tre klick till en sida som ligger
+   under Försäljning.
+2. **Man måste veta om man räknas som chef** för att gissa var en sida ligger.
+   Det är en fråga om systemets rollmodell, inte om arbetet.
+3. **Samma avdelnings sidor hamnade i två menyer** beroende på vem som tittade.
+   `/order` låg under Chefsvy → Försäljning för säljchefen och under Min vy →
+   Mitt arbete för säljaren. "Order ligger under Försäljning" är sant för alla,
+   och en meny där det inte är sant går inte att förklara för en kollega.
+
+### Tre regler som är lätta att riva av misstag
+
+**1. PLACERINGEN BEROR ALDRIG PÅ ROLLEN.** En sida hör till en avdelning,
+punkt. Flera sidor är två vyer i en — `/order` är säljarens egna order och
+säljchefens godkännandekö, `/avtal` är mitt anställningsavtal och chefens
+mallar, `/fel` är en rapportknapp och en inkorg — men de ligger på samma ställe
+för båda. Det är ETIKETTEN som får skilja, eftersom den beskriver vad sidan
+visar. Flyttas en post beroende på vem som tittar är vi tillbaka i
+rollmenyerna.
+
+**2. EN POST HAMNAR PÅ EXAKT ETT STÄLLE.** Följer av regel 1, men värd att
+säga: står samma länk i två menyer är den långa listan tillbaka, bara utspridd.
+
+**3. MENYN DELAR INTE UT NÅGOT.** Varje villkor i `nav-items.ts` är oförändrat
+från den platta listan — samma roller, samma behörigheter, samma
+stämplingsvillkor. Filen avgör bara *var* posten hamnar.
+
+### Tre placeringar som inte är självklara
+
+**`/fel` ligger i Min vy, inte under System — även för den som får inkorgen.**
+Att rapportera ett fel är något man gör själv, mitt i något annat, och en bugg
+man måste öppna en systemmeny för att anmäla blir inte anmäld. X7-piloten går
+ut på tre personer som inte är chefer.
+
+**`/coachning` ligger under Personal, inte Försäljning.** Utbildningen är
+innehållet, coachningen är uppföljningen av personer — och den gäller alla
+anställda, inte bara dem som säljer.
+
+**`/provision` ligger under Försäljning, inte i Min vy.** Provisionen är
+försäljningens mätare, och den säljare som söker sina pengar söker dem där
+order och K&V ligger.
+
+### Personalregistret heter Anställda i menyn
+
+`/personal` fick etiketten **Anställda**. Menyn den ligger i heter redan
+Personal, och "Personal → Personal" läser som ett fel även när det inte är det.
+"Anställda" säger dessutom vad sidan faktiskt är: listan över personer.
+
+**Adressen står kvar.** `/personal` är bokmärkt, står i guider och i loggen, och
+ett namnbyte i menyn är inte skäl nog att bryta länkar.
+
+### Avdelningarna finns i koden, inte i databasen
+
+`src/lib/avdelningar.ts` är ny: fem avdelningar med id, namn och ikon, och
+`avdelningFor(user)` som härleder personens hemvist ur rollen.
+
+Avdelningarna är riktiga i företaget. Det `employee`-raden bär är *roller*, och
+en roll är inte en avdelning — en teamledare och en säljare hör till samma
+avdelning med olika roller. Beställarens besked var att de ska vara både menyer
+och riktiga avdelningar, och valet blev **menyn nu, tabellen förberedd**:
+
+- `id`-strängarna är valda för att kunna bli primärnycklar.
+- `avdelningFor()` är den ENDA platsen där härledningen sker. Den dagen
+  `employee.avdelning_id` finns byts funktionens kropp — inte menyn, inte
+  panelen.
+- `ROLLENS_AVDELNING` är `Record<Role, …>` med flit: en nionde roll i
+  `roles.ts` slutar kompilera tills någon svarat vilken avdelning den hör till.
+
+**Menyn frågar aldrig efter avdelningen för att avgöra vad någon får se.** Det
+gör rollerna, behörigheterna och RLS. Avdelningen avgör var en post hamnar och
+i vilken ordning menyerna står — ordningen på skärmen, aldrig åtkomsten.
+
+**"Leverans & support" finns i listan men syns inte.** Ingen sida hör dit ännu,
+och tomma menyer ritas inte. En rubrik utan innehåll under sig är samma tomma
+löfte som en dödlänk.
+
+### Spalten ligger i linje med knappen man tryckte på
+
+Första versionen satte flyouten på `top-0`, alltså i listans överkant. Man
+tryckte på "Personal" längst ner och fick en spalt uppe vid "Hem" — ögat tappar
+kopplingen direkt, och det ser ut som ett fel även när innehållet är rätt.
+
+Läget mäts nu mot knappen: `getBoundingClientRect()` på både knappen och den
+positionerade ytan, och en subtraktion. Det är det enda som håller när listan är
+scrollad, när panelen är smal och när fönstret ändrar höjd — `offsetTop` hade
+gett listans koordinatsystem, inte ytans.
+
+Två detaljer som ser onödiga ut men inte är det:
+
+- **`FLYOUT_LUFT` dras av.** Spaltens första RAD ska ligga i linje med knappen,
+  inte lådans kant. Konstanten speglar `p-2` i klasserna; ändras den ena utan
+  den andra glider linjen isär igen.
+- **Botten klampas.** En lång meny långt ner får annars rader nedanför
+  fönsterkanten som inte går att nå. Då glider linjen, och det är rätt pris.
+
+Mätningen körs om vid scroll och vid `ResizeObserver` på listan. Hooken är
+`useLayoutEffect` på klienten och `useEffect` på servern (`useMatningsEffekt`):
+panelen ritas på servern vid varje sidvisning, och `useLayoutEffect` varnar
+högljutt därifrån.
+
+**Rubriken i spalten togs bort.** Namnet står redan på knappen man tryckte på,
+och en rubrik hade skjutit ner listan och brutit just den linje mätningen finns
+för.
+
+### Menyerna öppnar sig av att musen står på dem
+
+Beställarens sista besked: det ska räcka att hovra. Klicket står kvar — det är
+vägen in för pekskärm och tangentbord, och vägen ut för den som vill bli av med
+spalten utan att flytta på sig.
+
+**`OPPNINGSDROJNING = 120` är skillnaden mellan en meny och ett stroboskop.**
+Menyerna står under varandra, så vägen ner till den nedersta går rakt över alla
+de andra. Utan fördröjning öppnas och stängs varenda en på vägen, och den man
+siktade på hinner byta plats innan man är framme.
+
+Samma fördröjning gör det diagonala draget möjligt: på väg från en knapp snett
+ut mot dess spalt passerar man knappen under, och 120 ms är mer än en sådan
+passage tar. Står man kvar på en knapp är väntan omärklig.
+
+**Snabbposterna stänger.** `sikta(e, null)` på varje snabbpost — står musen på
+"Rutiner" ska en öppen spalt bort, annars ligger den och skymmer medan man
+siktar. Den går genom samma fördröjning, så en passage varken öppnar eller
+stänger något.
+
+**Flyouten avbryter.** `onPointerEnter` på spalten nollar en schemalagd
+stängning; annars kan den som beställdes på vägen dit falla ut när man väl är
+framme. Och `musUt` avbryter en schemalagd öppning, så att en spalt ingen
+tittar på inte hinner öppna sig efter att musen lämnat panelen.
+
+`pointerType` provas överallt: på en pekskärm skickar webbläsaren
+`pointerenter` vid tryck, och menyn hade öppnat sig av att man skrollade förbi.
+
+### Andra spalten har en nivå
+
+Menyn ÄR avgränsningen, så spalten innehåller bara sidorna. Chipsen från första
+versionen är borta med chefsvyn.
+
+Flyouten stänger sig vid val, vid Escape, vid klick utanför, vid adressbyte, när
+musen står på en snabbpost och när den lämnat panelen.
+
+**Fördröjningen på väg ut (`UTDROJNING = 180`) är inte kosmetik.** Flyouten
+ligger utanför panelens egen ruta med några pixlars glapp emellan. Utan
+fördröjning stängs den i glappet, varje gång, och menyn går inte att nå med
+musen.
+
+**Flyouten ligger utanför det som scrollar.** `overflow-y-auto` på listan
+klipper allt som sticker ut, så en svävande spalt inuti den hade blivit avskuren
+vid panelkanten.
+
+**På telefonen fäller menyn ut sig inuti lådan** i stället för bredvid: en 17
+rem bred spalt bredvid en 16 rem bred låda hamnar utanför fönstret. Den
+varianten sätter INTE `data-guide` — samma ankare två gånger i trädet gör att en
+guidad tur pekar på den som råkar stå först, vilket på en telefon är den dolda.
+
+### Panelen har tre lägen
+
+`utfalld` · `hopfalld` · `hovra`, i kakan `nav_sidopanel`. Panelen härleder allt
+ur en rad: `smal = hopfalld, eller hovra utan mus över panelen`.
+
+**Hovra ersätter inte hopfällt, och det var ett val.** Den som arbetar på en
+pekskärm, eller drar musen förbi kanten hela dagen, vill ha en panel som ligger
+still — ett läge som rör sig av misstag är värre än ett som står stilla.
+
+**I hovra-läget svävar panelen ÖVER innehållet.** Skalet håller kvar den smala
+marginalen. Knuffades innehållet undan hade texten hoppat i sidled varje gång
+någon råkade passera vänsterkanten, och en rad som flyttar sig går inte att läsa
+medan den gör det.
+
+`pointerType` provas i in- och ut-hanterarna: på en pekskärm skickar webbläsaren
+ett `pointerenter` vid tryck som aldrig följs av ett `pointerleave`, och panelen
+hade låst sig i utfällt läge efter första tryckningen. Fokus in i panelen fäller
+också ut den, så tangentbordet når samma meny som musen.
+
+**Kakan bär nu tre värden.** Det gamla `"oppen"` mappas till `utfalld` i
+`lasPanellage()` — annars hade uppgraderingen sett ut som att inställningen
+nollställdes för alla som någon gång fällt ut panelen.
+
+`usePanelLage()` gick från `{ hopfalld, vaxlaHopfalld }` till
+`{ lage, valjLage }`. En växel över tre lägen tvingar den som vill från
+hopfälld till utfälld att passera hovra, och en inställning man klickar sig runt
+i är en inställning man klickar fel i. Utseendesektionen i inställningarna är
+därför en lista med beskrivningar i stället för ett reglage: "Hovra" går inte
+att gissa sig till av ett ord.
+
+### Utbildningen stannade framme
+
+Den hörde egentligen hemma i en meny, men "Kom igång"-turen pekar på den
+(`navAnkare("/utbildning")` i `src/guider/kom-igang.ts`). Ett guidesteg som
+pekar in i en stängd flyout hittar inget element och visar "elementet saknas" —
+för varenda ny anställd, i den tur som ska lära dem navet. Det står i en
+kommentar ovanför posten.
+
+### Prövat
+
+`test:guider`, `test:stampelfri` och `test:navnyheter` gröna mot ändringen.
+`test:sidor` kräver `pg` och en databas och kördes inte.
+
+De två proven som läser `nav-items.ts` som text ställer krav som är lätta att
+råka bryta vid nästa omskrivning:
+
+- `guider.mjs` letar efter `href: "<adress>"` som literal för varje menyankare
+  en guide pekar på, och efter `data-guide={navAnkare(item.href)}` i
+  `Sidebar.tsx`. Snabbposterna måste alltså fortsätta heta `item` i sin `map`.
+- `stampelfri.mjs` letar efter `stampelfri(user.roles)` och
+  `canManageEmployees(user) || hasRole(user, "ceo")` som literaler.
+
+---
+
+---
+
+## 2026-09-08 (natt) · Ö11 byggd: order som godkänns i en stängd månad
+
+*Branch `order-efterslapning`. Ingen migration. Beställarens besked efter att
+felet beskrivits: "ja bygg det".*
+
+### Vad som var fel
+
+En order hör till den månad den **signerades** i (avsnitt 3.4). En fastställd
+månad räknas aldrig om (5.5). Godkändes ordern efter att månaden stängts fanns
+det därför ingenstans för provisionen att ta vägen: `faststallPeriod` vägrar
+köra om en stängd månad, och någon annan väg in i huvudboken finns inte.
+
+Ingenting sa ifrån. Chefen såg "Godkänd", säljaren fick en notis om sin
+provision, och pengarna kom aldrig med i någon lönekörning.
+
+### Lösningen är specens egen, inte min första
+
+Min första reflex var att **neka** godkännandet. Det var fel, och avsnitt 5.6
+hade redan rätt svar sedan 2026-08-24: provisionen bokförs i den **öppna**
+perioden med en anteckning om vilken månad den hör till.
+
+Skälet att inte neka: ordern är en riktig affär. En affär som inte går att
+registrera försvinner inte — den blir ett mejl till någon, och då är navet inte
+längre stället där man ser vad som sålts. Ordern behåller sitt signeringsdatum
+och sin månad; det är bara pengarna som flyttar.
+
+**Läxan är värd att skriva ned:** specen hade tänkt igenom fallet bättre än jag
+gjorde på plats. Läs Ö-listan innan du föreslår en lösning på något som står
+där.
+
+### Tre val i bygget
+
+**Posten är `manual`, inte `motor`.** `motor` är reserverat för det
+periodstängningen bokför, med en deterministisk `external_ref` per månad, person
+och slag. En eftersläpande order hör inte till den månadens räkning — den är
+just en post motorn inte kunde producera. Följden är att den syns som "Bokfört
+för hand" i provisionsvyn, vilket är sant, och anteckningen säger vilken order
+och vilken månad.
+
+**`deals` är NULL och inte 1.** Antalet beskriver månadens ordervolym, och
+ordern hör till en annan månad. En etta hade fått september att se ut att
+innehålla en order den inte har — och volymbonusen räknas inte på den av exakt
+samma skäl.
+
+**Dubbelbokföring är omöjlig utan `external_ref`**, eftersom vägen dit går genom
+en statusändring: `godkannOrder` nekar allt som inte är `inskickad` eller
+`utkast`, och efteråt är ordern `signerad`.
+
+### Beskedet står på tre ställen
+
+Chefen ser det **före** knappen — ett kvitto efteråt om att pengarna hamnade i
+en annan månad är ett ärende i vardande. Säljaren får det i klockan, i notisens
+`detalj`. Och `audit_log` bär `commission.efterslapning` med båda månaderna.
+
+`Enkel` i `Atgarder.tsx` slängde förut `state.ok`, vilket dög så länge alla
+utfall såg likadana ut. Ett eftersläpande godkännande säger något annat, så
+kvittot visas nu.
+
+### Den enda vägen som fortfarande faller
+
+Är **både** orderns månad och den öppna månaden fastställda går posten
+ingenstans. Då nekas godkännandet med ett besked om att be ekonomi bokföra
+beloppet för hand. Det kräver att någon fastställt innevarande månad på dess
+sista dag och att en gammal order godkänns samma dygn — sällsynt, men att falla
+högljutt är rätt när alternativet är samma tysta förlust igen.
 
 ---
 
