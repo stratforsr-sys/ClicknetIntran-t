@@ -22,13 +22,20 @@ export const POSTER: Navnyhet[] = [
 
 **Rätta en godkänd order**
 
-Knappen **Rätta ordern** finns på varje godkänd order. Allt går att ändra:
-kunduppgifter, paket, avtalstid, säljare, signeringsdatum, ordervärde och
-provision. Övertäcket till säljchefen räknas om automatiskt.
+Knappen **Rätta ordern** finns på varje godkänd order. För säljchef, VD och
+ekonomi går allt att ändra: kunduppgifter, paket, avtalstid, säljare,
+signeringsdatum, ordervärde och provision. Övertäcket till säljchefen räknas om
+automatiskt.
 
 Förut var svaret "makulera och lägg en ny" — vilket lämnade ett minusbelopp i
 makuleringsmånaden för en affär som är fullt giltig. Det var fel svar på "jag
 valde fel paket".
+
+**Du som la upp ordern** har knappen **Rätta kunduppgifter** på den. Där ändrar
+du bolagsnamn, organisationsnummer, kontaktperson, telefon och anteckningen —
+alltså det du själv skrev in. Paket, avtalstid, säljare, datum, ordervärde och
+provision ändras av säljchefen; har något av dem blivit fel, säg till. Ingen
+annan än de två kretsarna kan rätta en order.
 
 **Vad som händer beror på månaden**, och rutan i formuläret säger vilket innan
 du trycker:

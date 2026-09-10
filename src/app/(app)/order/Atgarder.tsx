@@ -34,6 +34,7 @@ export function Atgarder({
   hanterare,
   bokforare,
   agare,
+  upphovsperson,
   order,
   paket,
   personer,
@@ -45,6 +46,12 @@ export function Atgarder({
   hanterare: boolean;
   bokforare: boolean;
   agare: boolean;
+  /**
+   * La den har personen upp ordern? Ger ratt att ratta KUNDUPPGIFTERNA pa en
+   * godkand order — inte beloppen. Se `redigeraOrder`, som avgor saken pa
+   * riktigt; det har styr bara vad som ritas.
+   */
+  upphovsperson: boolean;
   /** Nuvarande varden, for att forifylla rattelseformularet. */
   order?: Redigerbar;
   paket?: Paket[];
@@ -115,10 +122,18 @@ export function Atgarder({
     );
   }
 
-  if ((status === "signerad" || status === "betald") && (hanterare || bokforare)) {
+  if ((status === "signerad" || status === "betald") && (hanterare || bokforare || upphovsperson)) {
+    /*
+      RATTELSEN HAR TVA RACKVIDDER, och knappen heter darfor inte samma sak.
+      "Rätta ordern" lovar att allt gar att andra; det gor det bara for chefen.
+      Den som la upp ordern far "Rätta kunduppgifter" — ordet sager exakt vad
+      formularet innehaller, sa ingen oppnar det och letar efter provisionen.
+    */
+    const farRatta = hanterare || upphovsperson;
+
     return (
       <div className="flex flex-col gap-2">
-        {hanterare && order && paket && personer && idag && (
+        {farRatta && order && paket && personer && idag && (
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
@@ -126,16 +141,18 @@ export function Atgarder({
               variant="sekundar"
               onClick={() => setOppen(oppen === "ratta" ? null : "ratta")}
             >
-              Rätta ordern
+              {hanterare ? "Rätta ordern" : "Rätta kunduppgifter"}
             </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="sekundar"
-              onClick={() => setOppen(oppen === "bonus" ? null : "bonus")}
-            >
-              Lägg bonus
-            </Button>
+            {hanterare && (
+              <Button
+                type="button"
+                size="sm"
+                variant="sekundar"
+                onClick={() => setOppen(oppen === "bonus" ? null : "bonus")}
+              >
+                Lägg bonus
+              </Button>
+            )}
           </div>
         )}
 
@@ -145,6 +162,7 @@ export function Atgarder({
             order={order}
             paket={paket}
             personer={personer}
+            full={hanterare}
             periodStangd={periodStangd ?? false}
             idag={idag}
           />
@@ -368,6 +386,7 @@ function Rattelse({
   order,
   paket,
   personer,
+  full,
   periodStangd,
   idag,
 }: {
@@ -375,6 +394,15 @@ function Rattelse({
   order: Redigerbar;
   paket: Paket[];
   personer: { id: string; namn: string }[];
+  /**
+   * Hela formularet, eller bara kunduppgifterna?
+   *
+   * `false` for den som la upp ordern. Falten som ror pengar ritas da inte alls
+   * — inte som lasta falt, for ett last falt inbjuder till att fraga varfor och
+   * ser ut som nagot man kan fa upplast. `redigeraOrder` ignorerar dem anda om
+   * de skulle skickas.
+   */
+  full: boolean;
   periodStangd: boolean;
   idag: string;
 }) {
@@ -391,8 +419,14 @@ function Rattelse({
     <form action={kor} className="flex flex-col gap-3 rounded-sm bg-surface-alt p-3">
       <input type="hidden" name="id" value={id} />
 
-      <Notis ton={periodStangd ? "warn" : "info"}>
-        {periodStangd ? (
+      <Notis ton={!full ? "info" : periodStangd ? "warn" : "info"}>
+        {!full ? (
+          <>
+            Du rättar <strong>kunduppgifterna</strong> — bolagsnamn, organisationsnummer,
+            kontaktperson, telefon och anteckningen. Paket, avtalstid, säljare, datum, ordervärde
+            och provision ändras av säljchefen. Säg till om något av dem blivit fel.
+          </>
+        ) : periodStangd ? (
           <>
             <strong>Månaden ordern hör till är fastställd.</strong> Den står orörd — skillnaden i
             provision och övertäck bokförs i stället som poster i innevarande månad, och de går
@@ -423,79 +457,91 @@ function Rattelse({
           <input name="contact_phone" defaultValue={order.contact_phone} className={KONTROLL} />
         </label>
 
-        <label className="flex flex-col gap-1">
-          <span className="text-micro text-ink-500">Paket</span>
-          <select name="package_id" defaultValue={order.package_id} className={KONTROLL}>
-            {paket.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-micro text-ink-500">Avtalstid</span>
-          <select name="term_months" defaultValue={order.term_months} className={KONTROLL}>
-            {LOPTIDER.map((m) => (
-              <option key={m} value={m}>
-                {m} månader
-              </option>
-            ))}
-          </select>
-        </label>
+        {full && (
+          <>
+            <label className="flex flex-col gap-1">
+              <span className="text-micro text-ink-500">Paket</span>
+              <select name="package_id" defaultValue={order.package_id} className={KONTROLL}>
+                {paket.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-micro text-ink-500">Avtalstid</span>
+              <select name="term_months" defaultValue={order.term_months} className={KONTROLL}>
+                {LOPTIDER.map((m) => (
+                  <option key={m} value={m}>
+                    {m} månader
+                  </option>
+                ))}
+              </select>
+            </label>
 
-        <label className="flex flex-col gap-1">
-          <span className="text-micro text-ink-500">Säljare</span>
-          <select name="salesperson_id" defaultValue={order.salesperson_id} className={KONTROLL}>
-            {personer.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.namn}
-              </option>
-            ))}
-          </select>
-          <span className="text-small text-ink-500">
-            Byter du säljare flyttas hela beloppet, inte skillnaden.
-          </span>
-        </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-micro text-ink-500">Säljare</span>
+              <select
+                name="salesperson_id"
+                defaultValue={order.salesperson_id}
+                className={KONTROLL}
+              >
+                {personer.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.namn}
+                  </option>
+                ))}
+              </select>
+              <span className="text-small text-ink-500">
+                Byter du säljare flyttas hela beloppet, inte skillnaden.
+              </span>
+            </label>
 
-        <label className="flex flex-col gap-1">
-          <span className="text-micro text-ink-500">Signeringsdatum</span>
-          <input
-            name="signed_on"
-            type="date"
-            max={idag}
-            defaultValue={order.signed_on}
-            className={KONTROLL}
-          />
-          <span className="text-small text-ink-500">
-            {periodStangd
-              ? "Går att ändra inom månaden, men inte ut ur den."
-              : "Styr vilken månad ordern räknas i."}
-          </span>
-        </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-micro text-ink-500">Signeringsdatum</span>
+              <input
+                name="signed_on"
+                type="date"
+                max={idag}
+                defaultValue={order.signed_on}
+                className={KONTROLL}
+              />
+              <span className="text-small text-ink-500">
+                {periodStangd
+                  ? "Går att ändra inom månaden, men inte ut ur den."
+                  : "Styr vilken månad ordern räknas i."}
+              </span>
+            </label>
+          </>
+        )}
       </div>
 
-      <label className="flex items-center gap-2 text-small text-ink-700">
-        <input
-          type="checkbox"
-          name="is_addon"
-          defaultChecked={order.is_addon}
-          className="size-4"
-        />
-        Tilläggsavtal på befintlig kund
-      </label>
+      {full && (
+        <label className="flex items-center gap-2 text-small text-ink-700">
+          <input
+            type="checkbox"
+            name="is_addon"
+            defaultChecked={order.is_addon}
+            className="size-4"
+          />
+          Tilläggsavtal på befintlig kund
+        </label>
+      )}
 
-      <label className="flex items-center gap-2 text-small text-ink-700">
-        <input
-          type="checkbox"
-          checked={fritt}
-          onChange={(e) => setFritt(e.target.checked)}
-          className="size-4"
-        />
-        Sätt ordervärde och provision själv
-      </label>
+      {full && (
+        <label className="flex items-center gap-2 text-small text-ink-700">
+          <input
+            type="checkbox"
+            checked={fritt}
+            onChange={(e) => setFritt(e.target.checked)}
+            className="size-4"
+          />
+          Sätt ordervärde och provision själv
+        </label>
+      )}
 
-      {fritt ? (
+      {!full ? null : fritt ? (
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-1">
             <span className="text-micro text-ink-500">Ordervärde i kronor</span>
@@ -544,11 +590,13 @@ function Rattelse({
         <input
           name="reason"
           required
-          placeholder="Fel paket valt vid inmatningen"
+          placeholder={full ? "Fel paket valt vid inmatningen" : "Fel kontaktperson vid inmatningen"}
           className={KONTROLL}
         />
         <span className="text-small text-ink-500">
-          Står i loggen med före- och eftervärde, och följer med rättelseposterna.
+          {full
+            ? "Står i loggen med före- och eftervärde, och följer med rättelseposterna."
+            : "Står i loggen med före- och eftervärde."}
         </span>
       </label>
 

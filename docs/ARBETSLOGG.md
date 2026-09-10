@@ -5,6 +5,59 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-10 (eftermiddag) · Två kretsar rättar, med olika räckvidd
+
+*E13 steg 12b. Ingen migration.*
+
+Beställaren såg previewen och sa: *"Det ska dock bara vara chefer och den som la
+upp order som kan rätta den."* Steg 12 hade lagt hela formuläret hos chefskretsen
+och ingenting hos någon annan; tillägget öppnar det för upphovspersonen.
+
+**Frågan som måste ställas först var hur mycket.** "Kan rätta den" läst rakt av
+betyder hela formuläret — och hela formuläret innehåller kryssrutan *Sätt
+ordervärde och provision själv*. En säljare hade alltså kunnat skriva vilket
+belopp som helst på sin egen redan godkända order, och för en order i en
+fastställd månad hade skillnaden bokförts som en rättelsepost i innevarande
+månad, alltså gått rakt ut i lönen. Loggen hade visat vem — efteråt.
+
+Beställarens val: **upphovspersonen rättar kunduppgifterna, chefen beloppen.**
+
+### Egen väg, inte ett villkor per fält
+
+Det hade gått att skriva som villkor i den befintliga vägen — *ta radens värde i
+stället för formulärets när personen inte är chef* — och det hade blivit fyra
+`hanterare ? … : …` i rad. Priset syns inte i dag utan den dagen ett femte fält
+läggs till och glömmer villkoret.
+
+`redigeraOrder` fick i stället en egen tidig gren som returnerar. Där **finns**
+beloppen inte: ingen `raknaFramProvision`, ingen `commission_entry`, ingen rad i
+`order_manager_commission`. Fem kolumner, en logg, en revalidate.
+
+**Gränsen dras i actionen, inte i formuläret.** Ett fält som inte ritas går ändå
+att skicka i en POST, så kontrollen står på raden efter behörighetsprövningen —
+inte i vilka `input`-element som råkade renderas.
+
+### Knappen heter inte samma sak
+
+*Rätta ordern* lovar att allt går att ändra. Det gör det bara för chefen, så
+upphovspersonen får *Rätta kunduppgifter* — och rutan överst i formuläret räknar
+upp vad som ändras av säljchefen, med uppmaningen att säga till. Ett låst fält
+hade varit sämre: det ser ut som något man kan få upplåst.
+
+**Notisen `order-rattad` går inte ut på den här vägen.** Den betyder att ett
+belopp ändrats, och ett rättat telefonnummer betyder inte det. Samma regel som
+`rorPengar` i chefsvägen, tillämpad genom att inte finnas.
+
+### `created_by`, inte `salesperson_id`
+
+Beställaren sa "den som la upp order". För en säljare är de två samma person —
+`skapaOrder` nekar en säljare att lägga order på någon annan. De skiljer sig när
+chefen lagt in en färdig order åt en säljare, och då är chefen redan i
+chefskretsen. Kolumnen är nullbar för order från före den fanns; en order utan
+upphovsperson rättas därför bara av chefskretsen, vilket är rätt väg runt.
+
+---
+
 ## 2026-09-10 · En godkänd order går att rätta, och bonus går att lägga
 
 *E13 steg 12. Migration `0051`, samma branch som steg 11.*

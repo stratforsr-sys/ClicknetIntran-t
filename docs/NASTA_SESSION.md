@@ -3,19 +3,30 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-10 — rättelse av godkänd order och övrig bonus byggda (E13 steg 12, migration `0051`). Samma branch, fortfarande **ej mergad**. Föregående rad: 2026-09-09 — ordervärdet och säljchefens ersättning byggda (E13 steg 11, migration `0050`). Ligger på branch `ordervarde-och-chefsprovision` och **väntar på godkännande**; se avsnittet direkt nedan. Föregående rad: 2026-09-08 (kväll) — testdatan borttagen; Ö11 inträffade på riktigt. Provisionsvyn ombyggd till resultattavla med period- (månad eller helår) och personväljare i panelen, månadsmål per säljare, och tre tysta räknefel rättade. Godkänd och **mergad till main som `dbb02a8`**; ligger i produktion.
+**Senast uppdaterad:** 2026-09-10 — två kretsar rättar order med olika räckvidd (steg 12b, ingen migration); rättelse av godkänd order och övrig bonus byggda (E13 steg 12, migration `0051`). Samma branch, fortfarande **ej mergad**. Föregående rad: 2026-09-09 — ordervärdet och säljchefens ersättning byggda (E13 steg 11, migration `0050`). Ligger på branch `ordervarde-och-chefsprovision` och **väntar på godkännande**; se avsnittet direkt nedan. Föregående rad: 2026-09-08 (kväll) — testdatan borttagen; Ö11 inträffade på riktigt. Provisionsvyn ombyggd till resultattavla med period- (månad eller helår) och personväljare i panelen, månadsmål per säljare, och tre tysta räknefel rättade. Godkänd och **mergad till main som `dbb02a8`**; ligger i produktion.
 
 ## Rättelse och övrig bonus 2026-09-10 — PÅ BRANCH, EJ MERGAD
 
 *E13 steg 12, samma branch. Migration `0051` — se "Innan merge". Regelverket i
 `PROVISION_SPEC.md` 4.6 och 4.7, resonemanget i `ARBETSLOGG.md` 2026-09-10.*
 
-- **Rätta en godkänd order.** Allt går att ändra. Öppen månad: räknas om live.
-  Fastställd månad: den står orörd, skillnaden bokförs i innevarande månad.
+- **Rätta en godkänd order.** Öppen månad: räknas om live. Fastställd månad: den
+  står orörd, skillnaden bokförs i innevarande månad.
+- **Två kretsar rättar, med olika räckvidd** (tillägg samma dag, se
+  `ARBETSLOGG.md` 2026-09-10 eftermiddag). Säljchef, VD och ekonomi ändrar allt.
+  **Den som la upp ordern** (`created_by`) ändrar bara kunduppgifterna —
+  bolagsnamn, orgnr, kontaktperson, telefon, anteckning. Ingen annan rättar.
 - **Övrig bonus** på en affär (knapp på orderraden) eller på en månad
   (formulär på `/provision`). Säljchef, VD och ekonomi. Skäl obligatoriskt.
 
-### Fyra saker att inte glida tillbaka på
+### Fem saker att inte glida tillbaka på
+
+**BELOPPEN LIGGER I EN EGEN GREN I `redigeraOrder`, INTE BAKOM ETT VILLKOR PER
+FÄLT.** Upphovspersonens väg returnerar tidigt och rör aldrig
+`raknaFramProvision`, `commission_entry` eller `order_manager_commission`. Skriv
+inte ihop de två vägarna igen — då måste varje nytt fält komma ihåg villkoret,
+och det som glöms blir en öppen kassa. Gränsen står i actionen; ett fält som inte
+ritas går ändå att skicka.
 
 **BYTT PERSON GER TVÅ POSTER, INTE EN.** En "skillnad" när säljaren bytts lämnar
 det gamla beloppet kvar hos någon som inte sålde ordern. Övertäcket har fyra

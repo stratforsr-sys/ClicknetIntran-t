@@ -595,6 +595,10 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
 /**
  * Rattar en godkand order.
  *
+ * TVA KRETSAR MED OLIKA RACKVIDD. Chefskretsen rattar allt; upphovspersonen —
+ * den som la upp ordern — rattar bara kunduppgifterna och far en egen, kort vag
+ * langre ner. Resten av den har texten galler chefsvagen.
+ *
  * ===========================================================================
  * TVA HELT OLIKA SAKER, OCH DET AR PERIODEN SOM AVGOR VILKEN.
  *
@@ -619,7 +623,8 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
  */
 export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<Orderstate> {
   try {
-    const user = await kravHanterare();
+    const user = await kravInloggad();
+    const hanterare = farHantera(user);
     const id = String(form.get("id") ?? "");
 
     const db = supabaseAdmin();
@@ -628,7 +633,7 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
       .select(
         "id, status, salesperson_id, company_name, org_number, contact_name, contact_phone," +
           " package_id, term_months, signed_on, period_month, is_addon, note," +
-          " commission_amount, commission_source, order_value",
+          " commission_amount, commission_source, order_value, created_by",
       )
       .eq("id", id)
       .maybeSingle();
@@ -642,6 +647,27 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
     const rad = raddata as unknown as Record<string, string | number | boolean | null> | null;
 
     if (!rad) return { fel: "Ordern finns inte." };
+
+    // ---------------------------------------------------------------------------
+    // VEM SOM FAR RATTA, OCH HUR MYCKET. Bestallarens beslut 2026-09-10.
+    //
+    // CHEFSKRETSEN rattar allt. UPPHOVSPERSONEN — den som la upp ordern — rattar
+    // bara faktauppgifterna: bolagsnamn, organisationsnummer, kontaktperson,
+    // telefon och anteckning. Ingen annan rattar nagonting.
+    //
+    // Skalet till gransen ar konkret. En saljare som far satta beloppen pa sin
+    // egen redan godkanda order kan kryssa "satt ordervarde och provision sjalv"
+    // och skriva vilken siffra som helst — och for en order i en faststalld manad
+    // hade skillnaden bokforts som en rattelsepost i innevarande manad, alltsa
+    // gatt rakt ut i lonen. Loggen hade visat vem, men forst efterat.
+    //
+    // Gransen dras HAR OCH INTE I FORMULARET. Ett falt som inte ritas gar anda
+    // att skicka; det ar den har raden som avgor, inte vilka input-element som
+    // rakade renderas.
+    // ---------------------------------------------------------------------------
+    if (!hanterare && rad.created_by !== user.employee!.id) {
+      return { fel: "Bara säljchef, VD, ekonomi och den som la upp ordern får rätta den." };
+    }
 
     // UTKAST OCH INSKICKADE RATTAS INTE HAR. De har inga pengar bokforda och
     // ingen fryst provision — for dem ar vagen `rattaFranAvtal` eller att
@@ -668,24 +694,79 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
     const bolag = text("company_name", rad.company_name);
     const kontakt = text("contact_name", rad.contact_name);
     const telefon = text("contact_phone", rad.contact_phone);
-    const signerad = text("signed_on", rad.signed_on);
-    const saljare = text("salesperson_id", rad.salesperson_id);
-    const paket = Number(form.get("package_id") ?? rad.package_id);
-    const loptid = Number(form.get("term_months") ?? rad.term_months);
 
     const orgnr = normaliseraOrgnr(String(form.get("org_number") ?? rad.org_number));
     if (!orgnr) return { fel: "Organisationsnumret ska vara tio siffror, till exempel 556677-8899." };
     if (!bolag) return { fel: "Bolagsnamnet saknas." };
     if (!kontakt) return { fel: "Kontaktpersonen saknas." };
     if (!giltigTelefon(telefon)) return { fel: "Telefonnumret ser inte ut som ett nummer." };
+
+    const skal = String(form.get("reason") ?? "").trim();
+    if (!skal) return { fel: "En rättelse kräver ett skäl. Det är det första någon frågar efter." };
+
+    const note = String(form.get("note") ?? "").trim() || (rad.note as string | null);
+
+    // ===========================================================================
+    // UPPHOVSPERSONENS RATTELSE. Egen vag, och det ar avsiktligt.
+    //
+    // Den hade gatt att skriva som villkor i vagen nedan — "ta radens varde i
+    // stallet for formularets nar personen inte ar chef" — men da hade varje
+    // framtida falt behovt komma ihag samma villkor, och det ena som glommdes
+    // hade blivit en oppen kassa. Har finns beloppen helt enkelt inte: ingen
+    // omrakning, ingen `commission_entry`, ingen rad i
+    // `order_manager_commission`. Bara fem kolumner, en logg och en revalidate.
+    //
+    // `sales_order_stegbyte` i 0051 skyddar perioden anda, sa en faststalld manad
+    // ar utom fara aven om nagon skulle lagga till ett datumfalt har.
+    // ===========================================================================
+    if (!hanterare) {
+      const { error } = await db
+        .from("sales_order")
+        .update({
+          company_name: bolag,
+          org_number: orgnr,
+          contact_name: kontakt,
+          contact_phone: telefon,
+          note,
+        })
+        .eq("id", id);
+
+      if (error) return { fel: `Ordern rättades inte: ${error.message}` };
+
+      await logga(user, "sales_order.corrected", id, {
+        skal,
+        rackvidd: "fakta",
+        fore: {
+          company_name: rad.company_name,
+          org_number: rad.org_number,
+          contact_name: rad.contact_name,
+          contact_phone: rad.contact_phone,
+          note: rad.note,
+        },
+        efter: { company_name: bolag, org_number: orgnr, contact_name: kontakt, contact_phone: telefon, note },
+        rattelseposter: 0,
+      });
+
+      // INGEN NOTIS. Notisen `order-rattad` betyder att ett belopp andrats, och
+      // ett rattat telefonnummer betyder inte det. Se villkoret `rorPengar` i
+      // chefsvagen nedan — det ar samma regel, tillampad genom att inte finnas.
+      revalidatePath("/order");
+      return { ok: "Kunduppgifterna är rättade. Beloppen ändras av säljchefen." };
+    }
+
+    // ---------------------------------------------------------------------------
+    // Harifran ar det chefskretsen som rattar, och da ligger allt pa bordet.
+    // ---------------------------------------------------------------------------
+    const signerad = text("signed_on", rad.signed_on);
+    const saljare = text("salesperson_id", rad.salesperson_id);
+    const paket = Number(form.get("package_id") ?? rad.package_id);
+    const loptid = Number(form.get("term_months") ?? rad.term_months);
+
     if (![1, 2, 3].includes(paket)) return { fel: "Välj ett paket." };
     if (![12, 24, 36].includes(loptid)) return { fel: "Välj en avtalstid." };
     if (!giltigtSigneringsdatum(signerad)) {
       return { fel: "Signeringsdatumet är ogiltigt eller ligger i framtiden." };
     }
-
-    const skal = String(form.get("reason") ?? "").trim();
-    if (!skal) return { fel: "En rättelse kräver ett skäl. Det är det första någon frågar efter." };
 
     // ---------------------------------------------------------------------------
     // Affaren raknas om FRAN GRUNDEN, med samma funktion som godkannandet
@@ -696,7 +777,6 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
     const nya = await raknaFramProvision(paket, loptid, signerad, saljare, form);
     if (!nya.klar) return { fel: nya.fel };
 
-    const note = String(form.get("note") ?? "").trim() || (rad.note as string | null);
     if (nya.satt.commission_source === "manual" && !note) {
       return { fel: "En handsatt provision kräver en anteckning om varför." };
     }

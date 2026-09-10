@@ -177,6 +177,7 @@ export default async function Ordersida() {
                   hanterare
                   bokforare={bokforare}
                   agare={o.salesperson_id === user.employee!.id}
+                  upphovsperson={o.created_by === user.employee!.id}
                   paket={paket}
                   bilagor={bilagor.get(o.id) ?? []}
                   personer={personer}
@@ -209,6 +210,7 @@ export default async function Ordersida() {
                 hanterare={hanterare}
                 bokforare={bokforare}
                 agare={o.salesperson_id === user.employee!.id}
+                upphovsperson={o.created_by === user.employee!.id}
                 paket={paket}
                 bilagor={bilagor.get(o.id) ?? []}
                 personer={personer}
@@ -237,6 +239,7 @@ function Rad({
   hanterare,
   bokforare,
   agare,
+  upphovsperson,
   paket,
   bilagor,
   personer,
@@ -248,6 +251,8 @@ function Rad({
   hanterare: boolean;
   bokforare: boolean;
   agare: boolean;
+  /** La den inloggade upp ordern? Ger ratt att ratta kunduppgifterna, inte beloppen. */
+  upphovsperson: boolean;
   paket: Paket[];
   bilagor: Orderbilaga[];
   /** Sa att rattelsen kan byta saljare. Tom for den som inte far se andra. */
@@ -313,6 +318,7 @@ function Rad({
         hanterare={hanterare}
         bokforare={bokforare}
         agare={agare}
+        upphovsperson={upphovsperson}
         order={{
           company_name: o.company_name,
           org_number: o.org_number,

@@ -22,6 +22,16 @@ export type Orderrad = Order & {
   commission_source: string | null;
   order_value_source: string | null;
   note: string | null;
+  /**
+   * Vem som la upp ordern. Avgor tillsammans med rollen VEM SOM FAR RATTA den:
+   * chefskretsen rattar allt, upphovspersonen bara faktauppgifterna. Se
+   * `redigeraOrder` i `order/actions.ts`.
+   *
+   * Nullbar for order fran fore kolumnen fanns. En order utan upphovsperson far
+   * darfor bara rattas av chefskretsen — vilket ar ratt vag runt: en tom kolumn
+   * ska inte oppna ett formular for nagon.
+   */
+  created_by: string | null;
   created_at: string;
   approved_at: string | null;
   cancelled_on: string | null;
@@ -31,8 +41,8 @@ export type Orderrad = Order & {
 const FALT =
   "id, company_name, org_number, contact_name, contact_phone, package_id, term_months," +
   " salesperson_id, signed_on, period_month, status, is_addon, commission_amount," +
-  " commission_source, order_value, order_value_source, note, created_at, approved_at," +
-  " cancelled_on, cancel_reason, cancel_period_month";
+  " commission_source, order_value, order_value_source, note, created_by, created_at," +
+  " approved_at, cancelled_on, cancel_reason, cancel_period_month";
 
 /**
  * numeric kommer tillbaka som STRANG ur PostgREST. Utan Number() blir

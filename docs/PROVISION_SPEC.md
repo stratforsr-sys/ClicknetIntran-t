@@ -380,9 +380,29 @@ varje ändring efter godkännandet, och svaret var "makulera och lägg en ny" �
 vilket lämnar ett minusbelopp i makuleringsmånaden för en affär som är fullt
 giltig. Byggt i `0051`.
 
-**Allt går att ändra:** kunduppgifter, paket, avtalstid, säljare,
-signeringsdatum, ordervärde och provision. Övertäcket räknas om. Varje rättelse
-kräver ett skäl och loggas med före- och eftervärde.
+**TVÅ KRETSAR MED OLIKA RÄCKVIDD.** Beställarens precisering 2026-09-10.
+
+| Vem | Vad hen får ändra |
+|---|---|
+| **Säljchef, VD, ekonomi** | Allt: kunduppgifter, paket, avtalstid, säljare, signeringsdatum, ordervärde och provision. Övertäcket räknas om |
+| **Den som la upp ordern** (`created_by`) | Bolagsnamn, organisationsnummer, kontaktperson, telefon, anteckning. Inget som rör pengar |
+| **Alla andra** | Ingenting |
+
+Skälet till gränsen: hela formuläret innehåller *Sätt ordervärde och provision
+själv*. En säljare med den räckvidden kan skriva vilket belopp som helst på sin
+egen redan godkända order, och i en fastställd månad går skillnaden ut som en
+rättelsepost i innevarande månad — alltså i lönen, med loggen som enda spår, och
+den läses efteråt.
+
+Gränsen dras i `redigeraOrder`, inte i formuläret: ett fält som inte ritas går
+ändå att skicka. Upphovspersonens väg är en **egen tidig gren** som aldrig rör
+`raknaFramProvision`, `commission_entry` eller `order_manager_commission` — inte
+ett villkor per fält, eftersom det femte fältet som glömmer villkoret blir en
+öppen kassa.
+
+Varje rättelse kräver ett skäl och loggas med före- och eftervärde. Notisen
+`order-rattad` går bara ut när ett belopp ändrats, alltså aldrig från
+upphovspersonens väg.
 
 | Orderns månad | Vad som händer |
 |---|---|
