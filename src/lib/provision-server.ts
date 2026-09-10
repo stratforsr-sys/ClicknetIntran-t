@@ -29,22 +29,48 @@ export type Post = Provisionspost & {
   entered_at: string;
 };
 
+/**
+ * numeric kommer tillbaka som STRANG ur PostgREST. Utan Number() blir
+ * summeringen en strangkonkatenering, och 12000 + 3000 blir "120003000".
+ *
+ * ===========================================================================
+ * CASTEN BEHOVS FOR ATT SELECT-STRANGEN INTE AR EN LITERAL.
+ *
+ * Supabase harleder radens typ ur select-strangen, och den harledningen kraver
+ * en STRANGLITERAL. Den har hamtningen listar elva kolumner; radbryts listan med
+ * `+` blir typen `GenericStringError` — en typ utan nagon av kolumnerna — och
+ * bygget faller pa `...r` med "Spread types may only be created from object
+ * types".
+ *
+ * Det ar samma rotorsak som fallde `hamtaChefsposter` 2026-09-09, dar den sags
+ * som ett problem med `!inner`. Den verkliga regeln ar enklare: EN LITERAL
+ * FUNGERAR, EN SAMMANSATT STRANG GOR DET INTE.
+ *
+ * Tva vagar: hall strangen som en enda literal (gjort ovan, aven om raden blir
+ * lang), och casta anda — for att en framtida kolumn annars frestar nagon att
+ * radbryta med `+`.
+ * ===========================================================================
+ */
+function tolka(data: unknown): Post[] {
+  return ((data ?? []) as unknown as Record<string, unknown>[]).map((r) => ({
+    ...r,
+    amount: Number(r.amount),
+  })) as unknown as Post[];
+}
+
 /** Ett kalenderar bakat. Startsidans kort behover bara innevarande manad, men
  *  jamforelsen med forra manaden och arssumman kommer ur samma svar. */
 export async function hamtaProvision(employeeId: string, franOchMed: string): Promise<Post[]> {
   const rls = await supabaseServer();
   const { data } = await rls
     .from("commission_entry")
-    .select("id, employee_id, period_month, amount, deals, source, external_ref, kind," +
-      " sales_order_id, note, entered_at")
+    .select("id, employee_id, period_month, amount, deals, source, external_ref, kind, sales_order_id, note, entered_at")
     .eq("employee_id", employeeId)
     .gte("period_month", franOchMed)
     .order("period_month", { ascending: false })
     .order("entered_at", { ascending: false });
 
-  // numeric kommer tillbaka som strang ur PostgREST. Utan Number() blir
-  // summeringen en strangkonkatenering, och 12000 + 3000 blir "120003000".
-  return (data ?? []).map((r) => ({ ...r, amount: Number(r.amount) }));
+  return tolka(data);
 }
 
 /**
@@ -55,11 +81,10 @@ export async function hamtaAllProvision(franOchMed: string): Promise<Post[]> {
   const rls = await supabaseServer();
   const { data } = await rls
     .from("commission_entry")
-    .select("id, employee_id, period_month, amount, deals, source, external_ref, kind," +
-      " sales_order_id, note, entered_at")
+    .select("id, employee_id, period_month, amount, deals, source, external_ref, kind, sales_order_id, note, entered_at")
     .gte("period_month", franOchMed)
     .order("period_month", { ascending: false })
     .order("entered_at", { ascending: false });
 
-  return (data ?? []).map((r) => ({ ...r, amount: Number(r.amount) }));
+  return tolka(data);
 }
