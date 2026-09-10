@@ -3,7 +3,108 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
+**Senast uppdaterad:** 2026-09-10 (kväll) — växelns samtal: Lynes webhook har en adress in i navet, radlogg och tolkning på plats, migration `0052` körd. På branch `lynes-samtal`, ej mergad; ingenting syns i gränssnittet än. Föregående rad: 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
+
+## Växelns samtal 2026-09-10 (kväll) — PÅ BRANCH, MIGRATION KÖRD
+
+*Branch `lynes-samtal`. Migration `0052`. Resonemanget i `ARBETSLOGG.md`
+2026-09-10 (kväll).*
+
+Lynes — molnväxeln — postar varje samtal till navet. Det här passet byggde
+**mottagningen**: adressen, hemligheten, radloggen och tolkningen. Ingenting
+syns i gränssnittet än.
+
+**Adressen och hemligheten:**
+
+```
+POST https://clicknet-nav.vercel.app/api/lynes/<LYNES_WEBHOOK_SECRET>
+```
+
+Hemligheten ligger i `LYNES_WEBHOOK_SECRET` i Vercel (Production). Rutten godtar
+den i adressen ELLER som `Authorization: Bearer <hemlighet>` — Lynes anpassade
+webhook slås på av deras support, och om deras formulär kan sätta en egen header
+visste vi inte när rutten skrevs. `CRON_SECRET` återanvändes med flit inte: den
+kan starta nattjobbet, och en hemlighet som lämnas ut ska inte kunna göra något
+annat än det den lämnades ut för.
+
+### Vad som faktiskt gjordes
+
+- **`call_ingest`** — radlogg. Varje leverans skrivs hel, med headers (utom
+  `authorization`), och ändras aldrig. Noll RLS-policyer: den läses bara med
+  service role.
+- **`phone_call`** — tolkningen av råpåsen. Sömmen är `source + external_ref`,
+  samma som `kv_call` (0036) redan använde för det som då hette dialern.
+- **`phone_identity`** — vilken anknytning som är vems. `created_by is null`
+  betyder att navet gissat själv, i regel på e-postadressen.
+- **`file_object`** fick andamålet `call_recording`, och `uploaded_by` blev
+  nullbar — en inspelning hämtas av ett jobb och har ingen uppladdare.
+- **`kv_call.source`** fick värdet `lynes`.
+- `src/lib/samtal.ts` (ren, provad i `tests/samtal.mjs`) och
+  `src/lib/samtal-server.ts`.
+
+### DET VIKTIGA ATT FÖRSTÅ INNAN NÅGON RÖR TOLKNINGEN
+
+**PAYLOADFORMATET ÄR INTE KÄNT.** Lynes dokumentation ligger inne i deras app
+under Profil → API-dokumentation. Det vi vet från deras släppnoter är att
+`callType` och `itemType` finns, och att `itemType` skiljer besvarat, missat,
+studsat, röstbrevlåda och kopplat. Resten av fältnamnen i `samtal.ts` är
+kvalificerade gissningar.
+
+**DÄRFÖR ÄR RÅPÅSEN SANNINGEN OCH `phone_call` EN TOLKNING.** Visar det sig att
+växeln kallar taltiden något vi inte gissat går tolkningen att göra om ur
+`call_ingest` utan att en enda uppgift behövt sparas två gånger. Fyll inte i
+fältnamn i `phone_call` för hand — lägg till dem i kandidatlistan i `samtal.ts`
+och kör om.
+
+**FÖRSTA ÅTGÄRDEN NÄSTA PASS ÄR ATT TITTA PÅ EN RIKTIG PÅSE:**
+
+```sql
+select payload from call_ingest order by id desc limit 5;
+select raw_call_type, raw_item_type, count(*) from phone_call group by 1,2;
+select count(*) from phone_call where employee_id is null;
+```
+
+Står `direction` på `okand` eller `employee_id` på null för allt är det
+fältnamnen som ska rättas, inte databasen.
+
+### Steg 2 — inte byggt
+
+1. **Koppla samtal till order.** Ordern har `contact_phone` och
+   `salesperson_id`; samtalet har `counterpart_e164` och `employee_id`. Sömmen
+   är nummer + säljare + ett tidsfönster runt `created_at`.
+2. **Hämta hem ordersamtalens ljud** till bucketen `filer`. **Kräver en
+   API-nyckel från Lynes** — inspelningsadressen är med all sannolikhet
+   autentiserad, och den nyckeln finns inte i `~/.clicknet/nav.env`.
+   `phone_call_inspelning` i 0052 tillåter `hamtad` bara med en order, så det
+   går inte att av misstag börja lagra allt.
+3. **Visa samtalen** i coachningskortet och på ordern.
+
+### Öppna punkter
+
+- **Den anpassade webhooken måste slås på av Lynes support.** Det går inte att
+  konfigurera i deras app. Tills det är gjort ligger `call_ingest` tom, och det
+  ser likadant ut som en trasig adress. `GET` mot samma adress med rätt
+  hemlighet svarar `{"ok":true,"redo":true}` och skiljer de två fallen åt.
+- **P0.6 registerförteckningen är INTE uppdaterad.** Inspelade kundsamtal är en
+  ny behandling och en ny kategori uppgifter. Migrationen kan inte göra det —
+  P0.6 är ett dokument.
+- **Navnyheten `samtal-fran-vaxeln` bär datumet 2026-09-10.** Släpar mergen ska
+  datumet flyttas: det ska vara dagen posten blev påslagen i produktion.
+
+### Innan merge
+
+1. **Migration `0052` är redan körd** mot produktionsdatabasen (2026-09-10).
+   Numret `0051` är taget två gånger i `schema_migrations`
+   (`0051_rattelser_och_ovrig_bonus` och `0051_personlig_malgrupp`) — fråga
+   tabellen, inte katalogen, nästa gång ett nummer ska väljas.
+2. **`LYNES_WEBHOOK_SECRET` måste finnas i Vercel Production** innan mergen,
+   annars svarar rutten `503` från första sekunden i produktion.
+3. **Kör `npm test`.** `tests/registerutdrag.mjs` jämför KALLOR mot databasens
+   främmande nycklar och faller om `phone_call` eller `phone_identity` saknas
+   där — de är tillagda, men provet kräver `DATABASE_URL`.
+4. **Merga main in i grenen först.** Grenen togs från `0780abe`.
+
+---
 
 ## Rättelse och övrig bonus 2026-09-10 — PÅ BRANCH, EJ MERGAD
 

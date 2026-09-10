@@ -14,6 +14,34 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "samtal-fran-vaxeln",
+    rubrik: "Navet tar emot samtalen från växeln",
+    ingress:
+      "Lynes skickar varje samtal hit: tidpunkt, längd, riktning och utfall. Inget syns i navet än — men insamlingen har börjat, och det ska du veta.",
+    text: `Växeln har fått en adress in i navet. Från och med nu registreras varje
+samtal du ringer eller tar emot i tjänsten: **när det skedde, hur länge det
+varade, åt vilket håll det gick och om det blev besvarat, missat eller
+kopplat vidare.** Motpartens nummer följer med.
+
+**Varför du får veta det innan det finns något att titta på.** Det här är en ny
+registrering om dig, och den ska inte upptäckas i efterhand av den som råkar
+öppna en statistiksida. Allt som samlas in står i ditt registerutdrag under
+*Personal → Ditt registerutdrag*, rad för rad, från och med idag.
+
+**Inspelningar.** Samtal som lett till en **order** hämtas hem till navet och
+sparas som bevis på det muntliga avtalet — de ligger i samma stängda arkiv som
+läkarintyg och orderbilagor, och varje gång någon lyssnar skrivs det ner och
+syns för dig. Samtal som inte lett till en order lagrar vi inget ljud av.
+
+**Vem som ser vad.** Du ser dina egna samtal, din chef ser sitt lag, och
+säljchef och VD ser huset. Ingen annan.
+
+Nästa steg är att samtalen syns i coachningen och på ordern. Tills dess är det
+här bara insamling — och en upplysning om att den pågår.`,
+    datum: "2026-09-10",
+    roller: [],
+  },
+  {
     slug: "ratta-order-och-ovrig-bonus",
     rubrik: "En godkänd order går att rätta, och bonus går att lägga",
     ingress:

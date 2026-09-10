@@ -139,6 +139,22 @@ export const KALLOR: Kalla[] = [
   // hemma i utdraget, aven fritexten. Saljaren ser den redan i navet (fraga
   // 38) — men artikel 15 fragar inte om nagot redan visas nagon annanstans.
   { tabell: "kv_call", kolumn: "employee_id", andamal: "Samtal utvalda för K&V-bedömning" },
+
+  // 0052. Växelns samtal. Raden bär tidpunkt, längd, riktning, utfall och
+  // motpartens nummer — alltså vad personen gjorde under sin arbetsdag,
+  // minut för minut. Det är den mest närgångna löpande registreringen navet
+  // har om en anställd näst efter stämplingarna, och den ska stå i utdraget
+  // av precis det skälet.
+  //
+  // Inspelningen står INTE här utan i `file_object` ovan, på
+  // `subject_employee_id` — se resonemanget i 0052 om varför en inspelning
+  // har ett subjekt när orderbilagan inte har det.
+  { tabell: "phone_call", kolumn: "employee_id", andamal: "Dina samtal i växeln" },
+
+  // 0052. Vilka anknytningar och nummer navet tror är dina. Raden avgör vilka
+  // samtal som hamnar på dig, så den som tycker att statistiken ser fel ut ska
+  // kunna se vad kopplingen bygger på — även när navet gissat den själv.
+  { tabell: "phone_identity", kolumn: "employee_id", andamal: "Dina anknytningar och nummer i växeln" },
 ];
 
 /**
@@ -255,4 +271,9 @@ export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
   { tabell: "kv_assessment", kolumn: "updated_by", skal: "Vem som ändrade bedömningen" },
   { tabell: "kv_criterion", kolumn: "set_by", skal: "Vem som satte maxpoängen" },
   { tabell: "kv_policy", kolumn: "set_by", skal: "Vem som satte K&V-reglerna" },
+
+  // 0052. Vem som pekade ut att en anknytning tillhör någon annan. Är den
+  // NULL har navet gissat själv, i regel på e-postadressen — och en gissning
+  // har ingen upphovsperson.
+  { tabell: "phone_identity", kolumn: "created_by", skal: "Vem som kopplade anknytningen till en person" },
 ];

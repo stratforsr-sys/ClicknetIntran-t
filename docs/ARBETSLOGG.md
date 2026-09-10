@@ -5,6 +5,139 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-10 (kväll) · Växeln får en adress in i navet, och en tolk som får ha fel
+
+Beställningen var kort: koppla in Lynes webhook — samtalslängd, samtal och
+inspelningar. Svaret var att den endpoint som efterfrågades inte fanns. Navet
+hade `/api/jobb/*`, `/api/fel` och `/api/ical/[token]`, ingenting för telefoni.
+Det första passet fick alltså bygga mottagningen, inte konfigurera den.
+
+### Vad efterforskningen gav, och vad den inte gav
+
+Leverantören heter **Lynes** (Lynes Technologies Sweden), inte "Lyne".
+Insights-webhooken finns och bär `callType` och `itemType` — det senare skiljer
+sedan v2 besvarat, missat, studsat, röstbrevlåda och kopplat. Inspelningar går
+att exportera via webhook.
+
+**Men payloadformatet är inte publikt.** Det ligger inne i deras app under
+Profil → API-dokumentation, och den anpassade webhooken slås dessutom på av
+deras support — den går inte att konfigurera själv. Vi vet alltså vad växeln
+kan, men inte vad den kallar det.
+
+### Det avgjorde hela formen: två tabeller, inte en
+
+Frestelsen är att skriva `payload.duration` och gå vidare. Gissningen är
+förmodligen rätt. Problemet är vad som händer när den är fel: fältet blir
+`undefined`, samtalet får ingen längd, och **ingenting ser trasigt ut**. Felet
+upptäcks först när någon undrar varför halva september saknar samtalslängd, och
+då är uppgiften borta.
+
+Alltså:
+
+- **`call_ingest`** är radlogg. Varje leverans skrivs hel — kropp och headers —
+  och ändras aldrig. Den är sanningen.
+- **`phone_call`** är tolkningen av den. Blir tolkningen fel går den att göra OM
+  ur råpåsen, utan att någon uppgift behövt sparas två gånger.
+
+Samma val som `work_time_journal` gjorde mot `time_event`: det uträknade får
+bygga om sig självt så länge det räknade ligger kvar.
+
+Tolken i `src/lib/samtal.ts` plattar därför ut påsen till en karta av gena
+nycklar (`data.call.duration`) och söker varje uppgift på en LISTA av rimliga
+namn, oavsett djup. Och ett värde den inte känner igen blir `okand` respektive
+`okant` med råvärdet kvar i `raw_call_type` / `raw_item_type` — en `group by`
+dagen efter är hur vi får veta vad växeln egentligen skickar.
+
+### Tre fällor som provet fick bevaka
+
+**`id` FINNS PÅ ALLTING.** Första utkastet lät sömsvärdet sökas på djupet, och
+`user.id` hade träffat före `callId` på en påse utan toppnyckel. Alla samtal från
+samma säljare hade då fått samma `external_ref`, och det unika indexet hade låtit
+varje nytt samtal skriva över det förra. Ett dygns samtal hade blivit en rad.
+`hamta()` fick en flagga: de distinkta namnen får sökas på djupet, `id` bara som
+egen nyckel högst upp.
+
+**MILLISEKUNDER GÅR INTE ATT SE PÅ VÄRDET.** 93000 är lika rimligt som 93 ms
+respektive ett dygn. Ingen gräns i schemat fångar det. `sekunder()` gissar
+därför inte: bara ett fältnamn som säger `ms` räknas om, resten läses som
+sekunder.
+
+**EN ANKNYTNING ÄR INTE ETT TELEFONNUMMER.** `1042` som `+461042` hade matchat
+fel kund den dag samtalen ska paras ihop med order. `normaliseraNummer()`
+svarar hellre null, och råvärdet står kvar i `counterpart_raw`.
+
+### Sömmen fanns redan, och hette dialer
+
+`kv_call` (0036) bar `source` + `external_ref` med ett partiellt unikt index och
+kommentaren att samtalen registreras för hand "tills dialer-API:t finns".
+Växeln blev Lynes i stället för dialern, men sömmen är densamma —
+`kv_call.source` fick därför bara ett tredje värde, och `phone_call` använder
+samma konstruktion.
+
+### Varför en inspelning får ett subjekt när orderbilagan inte fick det
+
+0039 satte `subject_employee_id` till NULL för `sales_order` och skrev ut skälet:
+kundens avtal är inte en uppgift om den anställda, och satte man subjektet följde
+kundens PDF med ut i säljarens registerutdrag.
+
+För en inspelning gäller motsatsen, av samma sorts skäl. Ljudet är den
+anställdas egen röst. Närmaste föregångare är `roleplay` (0024) — ett inlämnat
+rollspel — som också har `subject_employee_id NOT NULL`.
+
+Invändningen är att inspelningen också bär kundens röst. Den håller inte hela
+vägen: utdraget lämnar inte ut ljud. `registerutdrag-server.ts` redovisar
+filraden — när den kom, hur stor den är, dess checksumma — medan innehållet bara
+nås i navet genom `signeraOchLogga()`, som skriver `file_access_log` först (K36).
+Subjektet gör alltså inspelningen SYNLIG i utdraget utan att göra den utlämnad.
+
+Och `uploaded_by` blev nullbar. Den har varit NOT NULL sedan 0022, och för allt
+en människa laddat upp är det rätt. En inspelning hämtas av ett jobb; att då
+skriva säljarens id i kolumnen hade varit en osanning i just den kolumn man
+senare lutar sig mot när man vill veta vem som lade dit en fil. Villkoret är
+tvåsidigt: exakt `call_recording` saknar uppladdare, allt annat måste ha en.
+
+### Beställarens avgränsning står i schemat, inte i en rutin
+
+Svaret på frågan om inspelningar var: ordersamtal hämtas hem, resten stannar hos
+växeln med bara en adress. Det är en avgränsning av vad vi är
+personuppgiftsansvariga för — ett ordersamtal är bevis på ett muntligt avtal och
+får inte försvinna för att en länk hos tredje part slutar gälla; ett samtal som
+inte ledde någon vart har vi ingen anledning att lagra ljudet av.
+
+`phone_call_inspelning` skriver in ordningen i schemat: `recording_state =
+'hamtad'` KRÄVER en order. Det går alltså inte att av misstag börja ladda ner
+allt. En avsikt som bara står i en rutin är ingen avgränsning.
+
+### Villkoren skrevs av ur DATABASEN, inte ur 0039
+
+`file_object_purpose_check` i produktion bar `coaching` — tillagt av 0043 — och
+en omskrivning ur 0039:s text hade tyst tagit bort coachningens filer. Samma
+sorts fälla som `0051`-numret: katalogen och databasen är inte samma sak.
+Villkoren hämtades med `pg_get_constraintdef()` och byggdes på därifrån, och
+migrationens självkontroll faller nu om `coaching` försvinner ur villkoret.
+
+### Svaret till växeln betyder olika saker
+
+En webhook som får fel svar skickar om, så rutten svarar tre olika saker:
+`401` på fel hemlighet (en omleverans hjälper inte), `500` när råpåsen inte gick
+att skriva (skicka om), och `200` så fort påsen ligger i `call_ingest` — även när
+tolkningen föll, för växeln kan inte göra något åt vårt fel och raden går att
+tolka om. Kroppen säger `tolkat: false` så att det syns i deras leveranslogg.
+
+Och en `GET` mot samma adress svarar `{"ok":true,"redo":true}` med rätt
+hemlighet. Många webhookformulär gör en GET innan de sparar adressen, och en
+405 där ser ut som en trasig adress — dessutom skiljer den "vi väntar på att
+Lynes slår på webhooken" från "adressen är fel", som annars ser likadana ut:
+båda ger en tom tabell.
+
+### Kvar
+
+Kopplingen till order, nedladdningen av ljudet och vyerna. Nedladdningen kräver
+en API-nyckel från Lynes som vi inte har. Och P0.6 registerförteckningen måste
+uppdateras — inspelade kundsamtal är en ny behandling.
+
+---
+
 ## 2026-09-10 (kväll) · Mergen med main, och tre saker den avslöjade
 
 Branchen `ordervarde-och-chefsprovision` hade legat sedan 09-09 medan **sex
