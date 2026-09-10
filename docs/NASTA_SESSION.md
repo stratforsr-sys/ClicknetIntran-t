@@ -5,10 +5,11 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
 
 **Senast uppdaterad:** 2026-09-10 (kväll) — växelns samtal: Lynes webhook har en adress in i navet, radlogg och tolkning på plats, migration `0052` körd. På branch `lynes-samtal`, ej mergad; ingenting syns i gränssnittet än. Föregående rad: 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
 
-## Växelns samtal 2026-09-10 (kväll) — PÅ BRANCH, MIGRATION KÖRD
+## Växelns samtal 2026-09-10 (kväll) — I PRODUKTION
 
-*Branch `lynes-samtal`. Migration `0052`. Resonemanget i `ARBETSLOGG.md`
-2026-09-10 (kväll).*
+*Mergad till main 2026-09-10. Migrationer `0052` och `0053`. Resonemanget i
+`ARBETSLOGG.md` 2026-09-10 (kväll) — läs särskilt de två felen som först
+produktionen kunde visa.*
 
 Lynes — molnväxeln — postar varje samtal till navet. Det här passet byggde
 **mottagningen**: adressen, hemligheten, radloggen och tolkningen. Ingenting
@@ -91,18 +92,21 @@ fältnamnen som ska rättas, inte databasen.
 - **Navnyheten `samtal-fran-vaxeln` bär datumet 2026-09-10.** Släpar mergen ska
   datumet flyttas: det ska vara dagen posten blev påslagen i produktion.
 
-### Innan merge
+### Gjort vid mergen
 
-1. **Migration `0052` är redan körd** mot produktionsdatabasen (2026-09-10).
+1. **Migrationerna `0052` och `0053` är körda** mot produktionsdatabasen (2026-09-10).
    Numret `0051` är taget två gånger i `schema_migrations`
    (`0051_rattelser_och_ovrig_bonus` och `0051_personlig_malgrupp`) — fråga
    tabellen, inte katalogen, nästa gång ett nummer ska väljas.
-2. **`LYNES_WEBHOOK_SECRET` måste finnas i Vercel Production** innan mergen,
-   annars svarar rutten `503` från första sekunden i produktion.
+2. **`LYNES_WEBHOOK_SECRET` ligger i Vercel** (alla tre miljöer) och sist i
+   `~/.clicknet/nav.env`. Rutten är provad i produktion: `GET` med rätt nyckel
+   ger `{"ok":true,"redo":true}`, fel nyckel ger `401`, och samma påse två
+   gånger ger samma `phone_call`-rad.
 3. **Kör `npm test`.** `tests/registerutdrag.mjs` jämför KALLOR mot databasens
    främmande nycklar och faller om `phone_call` eller `phone_identity` saknas
    där — de är tillagda, men provet kräver `DATABASE_URL`.
-4. **Merga main in i grenen först.** Grenen togs från `0780abe`.
+4. **Provraderna är städade** ur `call_ingest` och `phone_call` — tabellerna
+   stod tomma när passet slutade, så det som ligger där är riktig trafik.
 
 ---
 

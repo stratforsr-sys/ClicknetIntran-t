@@ -291,11 +291,25 @@ export function tolkaSamtal(payload: unknown): Tolkning {
 
   const outcome = slaUpp(UTFALL, rawItemType, slaUpp(UTFALL, rawCallType, "okant"));
 
+  // Vem som ringde. TVÅ SAKER ATT VETA OM DEN HÄR LISTAN:
+  //
+  // 1. E-POSTEN FÖRST, ID:T SIST. `slaUppPerson()` matchar en e-postadress mot
+  //    `employee.email` och kopplar samtalet direkt. Ett internt id hos Lynes
+  //    kopplar ingenting förrän någon lagt en rad i `phone_identity` för hand.
+  //    Plockas id:t för att det råkade stå först blir varje samtal okopplat,
+  //    och det syns bara som att statistiken är tom.
+  //
+  // 2. NYCKLARNA ÄR PUNKTADE. `user.email` är en nyckel i den utplattade
+  //    kartan, inte två. Ett `useremail` utan punkt träffar `{"userEmail":...}`
+  //    men INTE `{"user":{"email":...}}` — och den nästlade formen är den en
+  //    växel oftast skickar. Båda står därför med.
   const agentRef = text(
     hamta(k, [
-      "agent", "agentid", "agent_id", "user", "userid", "user_id",
-      "useremail", "user_email", "agentemail", "extension", "anknytning",
-      "owner", "answeredby", "answered_by", "handledby",
+      "useremail", "user_email", "user.email", "agentemail", "agent_email",
+      "agent.email", "owner.email", "answeredby.email",
+      "extension", "anknytning", "user.extension", "agent.extension",
+      "agent", "owner", "answeredby", "answered_by", "handledby",
+      "agentid", "agent_id", "agent.id", "userid", "user_id", "user.id", "user",
     ]),
   );
 

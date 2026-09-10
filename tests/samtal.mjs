@@ -97,6 +97,32 @@ console.log("\x1b[1m\n1. Somsvardet plockas inte ur ett nastlat id\x1b[0m");
   ok("sessionId hittas ocksa", sessions.externalRef === "sess-7");
 }
 
+console.log("\x1b[1m\n1b. Den som ringde hittas aven nastlat, och e-posten gar fore id:t\x1b[0m");
+{
+  // Hittat i produktion 2026-09-10: `user.email` ar EN nyckel i den utplattade
+  // kartan, inte tva. Ett `useremail` utan punkt traffar den inte, och da blir
+  // varje samtal okopplat — vilket bara syns som att statistiken ar tom.
+  const nastlad = tolkaSamtal({ callId: "x", user: { id: "u-1", email: "anna@clicknet.se" } });
+  ok("nastlad user.email hittas", nastlad.agentRef === "anna@clicknet.se",
+    `fick ${nastlad.agentRef}`);
+
+  const platt = tolkaSamtal({ callId: "x", userEmail: "anna@clicknet.se" });
+  ok("platt userEmail hittas ocksa", platt.agentRef === "anna@clicknet.se");
+
+  const djupt = tolkaSamtal({ callId: "x", data: { user: { email: "anna@clicknet.se" } } });
+  ok("annu djupare hittas", djupt.agentRef === "anna@clicknet.se");
+
+  ok("e-posten gar fore id:t", nastlad.agentRef !== "u-1",
+    "ett internt vaxel-id kopplar ingen forran nagon lagt en phone_identity");
+
+  const baraId = tolkaSamtal({ callId: "x", user: { id: "u-1" } });
+  ok("utan e-post duger id:t", baraId.agentRef === "u-1");
+
+  const utan = tolkaSamtal({ callId: "x" });
+  ok("utan avsandare blir det null", utan.agentRef === null,
+    "samtalet sparas okopplat, det ar inte ett fel");
+}
+
 console.log("\x1b[1m\n2. Millisekunder gissas inte, de lases ur namnet\x1b[0m");
 {
   ok("tal ar sekunder", sekunder(93) === 93);

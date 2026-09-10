@@ -130,6 +130,42 @@ hemlighet. Många webhookformulär gör en GET innan de sparar adressen, och en
 Lynes slår på webhooken" från "adressen är fel", som annars ser likadana ut:
 båda ger en tom tabell.
 
+### Tva fel som forst produktionen kunde visa (samma kvall, 0053)
+
+Rutten mergades och provanropades. Bada felen ar av samma sort: de gar inte att
+se i ett rent prov, for de handlar om vad DATABASEN och VAXELN gor — inte om
+vad tolken raknar ut.
+
+**`ON CONFLICT` MOT ETT PARTIELLT INDEX.** Forsta POST:en svarade
+`tolkat: false`, och `call_ingest.normalize_error` bar hela svaret:
+`there is no unique or exclusion constraint matching the ON CONFLICT
+specification`. 0052 la sommen som ett partiellt unikt index, avskrivet fran
+`kv_call_somm_idx`. Postgres kan anvanda ett partiellt index for `on conflict`,
+men bara om inferensen bar med sig predikatet — och supabase-klientens
+`onConflict` tar en kolumnlista, inget `where`. `kv_call` marker aldrig
+skillnaden: dar skrivs raderna med ett vanligt insert fran en server action.
+
+Partialiteten gav dessutom ingenting: NULL ar redan distinkt fran NULL i ett
+unikt index, och `taEmotSamtal()` satter alltid ett varde. `0053` gor om det
+till ett vanligt `unique (source, external_ref)`, och sjalvkontrollen dar faller
+om nagon gor det partiellt igen.
+
+**`user.email` AR EN NYCKEL, INTE TVA.** Efter rattelsen tolkades pasen —
+men `agent_ref` blev null, alltsa `employee_id` null, alltsa ett samtal som inte
+hor till nagon. Kandidatlistan letade efter `useremail`; den utplattade kartan
+har `user.email` med punkt. `{"userEmail":...}` traffade, `{"user":{"email":...}}`
+gjorde det inte — och den nastlade formen ar den en vaxel oftast skickar.
+
+Det ar exakt den tysta sorten: ingenting ser trasigt ut, samtalen kommer in,
+och statistiken ar bara tom. Listan bar nu bada formerna, och den ar dessutom
+OMSORTERAD: e-posten forst, det interna id:t sist. En e-postadress matchar
+`employee.email` och kopplar samtalet direkt; ett vaxel-id kopplar ingenting
+forran nagon lagt en `phone_identity` for hand. Plockas id:t bara for att det
+rakade sta forst i listan blir varje samtal okopplat.
+
+Provet i `tests/samtal.mjs` bevakar bada nu — den nastlade formen, den platta,
+den djupare, och att e-posten gar fore id:t.
+
 ### Kvar
 
 Kopplingen till order, nedladdningen av ljudet och vyerna. Nedladdningen kräver
