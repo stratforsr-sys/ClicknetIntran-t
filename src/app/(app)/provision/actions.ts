@@ -104,11 +104,16 @@ export async function laggOvrigBonus(
     // bonus utan ett fel — och det enda sattet att garantera det ar att inte
     // fraga om dem.
     if (orderId) {
-      const { data: order } = await db
+      const { data: orderdata } = await db
         .from("sales_order")
         .select("salesperson_id, period_month, status, company_name")
         .eq("id", orderId)
         .maybeSingle();
+
+      // Casten av samma skal som i `redigeraOrder`: Supabase harleder radens
+      // typ ur select-strangen och ger `GenericStringError` nar den inte gar
+      // ihop, varpa bygget faller pa forsta kolumnuppslaget.
+      const order = orderdata as unknown as Record<string, string> | null;
 
       if (!order) return { fel: "Ordern finns inte." };
 

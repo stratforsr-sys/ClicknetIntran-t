@@ -623,7 +623,7 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
     const id = String(form.get("id") ?? "");
 
     const db = supabaseAdmin();
-    const { data: rad } = await db
+    const { data: raddata } = await db
       .from("sales_order")
       .select(
         "id, status, salesperson_id, company_name, org_number, contact_name, contact_phone," +
@@ -632,6 +632,14 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
       )
       .eq("id", id)
       .maybeSingle();
+
+    // CASTEN AR INTE KOSMETISK. Supabase harleder radens typ ur select-STRANGEN,
+    // och en lang sammansatt strang far den inte att ga ihop — resultatet blir
+    // `GenericStringError`, alltsa en typ utan nagon av kolumnerna, och bygget
+    // faller pa `rad.status`. Samma falla som `hamtaChefsposter` gick i
+    // 2026-09-09; foljden ar att kolumnnamnen harunder maste stamma med
+    // strangen ovan for hand.
+    const rad = raddata as unknown as Record<string, string | number | boolean | null> | null;
 
     if (!rad) return { fel: "Ordern finns inte." };
 
@@ -652,9 +660,9 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
     // De nya vardena. Ett tomt falt betyder "orort", inte "tomt" — formularet
     // skickar allt forifyllt, men en halv inskickning ska inte nolla nagot.
     // ---------------------------------------------------------------------------
-    const text = (falt: string, gammalt: string) => {
+    const text = (falt: string, gammalt: unknown) => {
       const v = String(form.get(falt) ?? "").trim();
-      return v || gammalt;
+      return v || String(gammalt ?? "");
     };
 
     const bolag = text("company_name", rad.company_name);
@@ -688,23 +696,27 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
     const nya = await raknaFramProvision(paket, loptid, signerad, saljare, form);
     if (!nya.klar) return { fel: nya.fel };
 
-    const note = String(form.get("note") ?? "").trim() || rad.note;
+    const note = String(form.get("note") ?? "").trim() || (rad.note as string | null);
     if (nya.satt.commission_source === "manual" && !note) {
       return { fel: "En handsatt provision kräver en anteckning om varför." };
     }
 
     // Det gamla overtacket, for att kunna rakna skillnaden och for att veta om
     // raden ska uppdateras, laggas till eller tas bort.
-    const { data: gammaltOvertack } = await db
+    const { data: overtacksdata } = await db
       .from("order_manager_commission")
       .select("manager_id, amount")
       .eq("order_id", id)
       .maybeSingle();
 
+    const gammaltOvertack = overtacksdata as unknown as
+      | { manager_id: string; amount: string | number }
+      | null;
+
     const fore = {
       saljare: rad.salesperson_id as string,
       provision: Number(rad.commission_amount ?? 0),
-      chef: (gammaltOvertack?.manager_id as string | undefined) ?? null,
+      chef: gammaltOvertack?.manager_id ?? null,
       overtack: Number(gammaltOvertack?.amount ?? 0),
     };
     const efter = {
@@ -723,8 +735,8 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
     // ---------------------------------------------------------------------------
     const { data: stangd } = await db
       .from("commission_period")
-      .select("period_month, status")
-      .eq("period_month", rad.period_month)
+      .select("period_month")
+      .eq("period_month", rad.period_month as string)
       .maybeSingle();
 
     let rattelser: { employee_id: string; belopp: number; text: string }[] = [];
