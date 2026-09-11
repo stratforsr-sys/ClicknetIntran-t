@@ -67,6 +67,36 @@ export async function hamtaRegisterutdrag(
       : { data: [] };
   data.case_message = { andamal: "Dialog i dina ärenden", rader: meddelanden ?? [] };
 
+  /**
+   * 0054. Historiken i uppgifter som handlar om dig.
+   *
+   * Samma grepp som arendedialogen ovan, och behovs av samma skal: `task_event`
+   * har ingen kolumn som pekar ut vem raden HANDLAR om — bara vem som skrev
+   * den. Utan den har hamtningen hade utdraget redovisat att det finns en dold
+   * uppgift om personen, men inte de kommentarer, returneringar och
+   * motiveringar som skrivits i den. Det ar halva svaret, och halva svaret ar
+   * det utdraget minst av allt ska ge.
+   *
+   * Bada hallen raknas: uppgifter du ar ansvarig for OCH uppgifter som pekar pa
+   * dig via `task_link`.
+   */
+  const uppgiftIds = [
+    ...new Set([
+      ...(data.task?.rader ?? []).map((r) => (r as { id: string }).id),
+      ...(data.task_link?.rader ?? []).map((r) => (r as { task_id: string }).task_id),
+    ]),
+  ].filter(Boolean);
+
+  const { data: uppgiftshandelser } =
+    uppgiftIds.length > 0
+      ? await db.from("task_event").select("*").in("task_id", uppgiftIds).order("at")
+      : { data: [] };
+
+  data.task_event = {
+    andamal: "Historik och kommentarer i uppgifter som rör dig",
+    rader: uppgiftshandelser ?? [],
+  };
+
   // K36: vem som oppnat filerna om dig. Hamtas via filen och inte pa
   // `actor_id` — den kolumnen pekar pa den som last, och pa den vagen hade
   // utdraget blivit en lista over andras lakarintyg man rakat oppna.

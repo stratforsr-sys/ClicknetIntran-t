@@ -5,6 +5,356 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-11 (tredje passet) · En riktig chatt, och den bor i projektet
+
+Beställarens ord framför skärmen: *"ändra den här delen i en uppgift till en
+riktig chatt — fast chatten ska vara i projektet när man går in i projektet."*
+Migration `0055`.
+
+### Varför chatten inte blev en rad till i `task_event`
+
+Uppgiftens kommentarer bor i historiken sedan 0054, och det är riktigt: en
+kommentar på en uppgift hör till ärendets gång, den ska stå kvar bredvid
+"Returnerad" och "Godkänd", och den följer med i registerutdraget via uppgiften.
+
+Ett **projektsamtal är något annat.** Det hör inte till ett beslut utan till en
+grupp människor, det har inget läge att flytta, och det som gör det användbart —
+vem som skrivit sedan jag var här sist — kräver att navet minns att jag VARIT
+här. Det minnet finns inte i en händelselogg och hör inte hemma i en heller:
+`task_event` är bevis, och bevis skrivs inte om för att någon råkade läsa dem.
+
+### Oläst räknas fram. Det lagras inte per meddelande.
+
+Alternativet — en rad per mottagare och replik — hade gett en tabell som växer
+med deltagare gånger repliker, **och en notis per replik i klockan.** Tio
+meddelanden i ett projekt hade blivit tio poster, och då stänger folk av klockan.
+
+`project_message_read` bär i stället EN tidpunkt per person och projekt: när du
+senast öppnade tråden. Antalet olästa blir då en räkning, och notisen blir
+*"3 nya i Mässan"* med den sista repliken i klartext under. Exakt samma val som
+`notification_seen` gjorde i 0018.
+
+Posten är **härledd** av samma skäl: oläst är ett tillstånd som står kvar tills
+någon läst tråden. En händelsepost hade legat kvar i klockan efteråt.
+
+### Vad som gör det till en chattruta och inte ett kommentarsfält
+
+Skillnaden är inte dekoration. Ett kommentarsfält är en rad man lämnar efter
+sig; en chatt är ett rum man går in i. Tre saker bär det:
+
+1. **Tråden har egen höjd och skrollar i sig själv**, med det senaste längst ned
+   och synligt direkt. En lista som växer nedåt på sidan gör att skrivfältet
+   vandrar längre bort ju mer man pratar.
+2. **Repliker grupperas per person, dag och paus.** Tidsgränsen på en kvart är
+   den minst uppenbara och den viktigaste: utan den klistras ett svar tre timmar
+   senare ihop med morgonens fråga, och samtalet ser ut att ha skett i ett svep.
+3. **Ett streck för "nytt sedan du var här"**, och egna repliker räknas aldrig
+   som olästa — annars hamnar strecket ovanför ens eget inlägg varje gång.
+
+Enter skickar, Skift+Enter radbryter. Det är vad alla andra chattar gör, och en
+chatt som gör tvärtom lär sig ingen — man skickar halva meningar i en vecka och
+slutar sedan använda den.
+
+`Chattrad.tsx` är egen fil för att projektet och uppgiften ska rita **samma**
+tråd. De skiljer sig i allt annat; bubblorna ska de inte skilja sig i.
+
+### Uppgiftens repliker flyttade ur historiken
+
+De ligger kvar i `task_event` som typen `kommentar` — lagringen är oförändrad —
+men de ritas inte längre MITT I protokollet, mellan "Påbörjad" och "Godkänd".
+
+Det var fel av ett skäl som är lätt att missa: **historiken läses uppifrån,
+samtalet nedifrån.** Att blanda dem gjorde båda sämre — man letade efter det
+senast sagda mellan systemhändelser, och beslutsgången bröts av småprat. Nu är
+det två kort: *Samtal* och *Historik*.
+
+Uppgiftens repliker notifierar fortfarande **per replik** (`uppgift-kommentar`),
+och det är avsiktligt olikt projektet: en uppgift har en liten utpekad krets, så
+en replik där är ett meddelande till namngivna personer. Ett projekt kan ha tio
+deltagare och femtio repliker.
+
+### Layouten: samtalet syns när man går in
+
+Projektsidan är två spalter från `lg`. Arbetet till vänster, chatten i en
+`sticky` högerspalt — tråden står kvar medan man betar av uppgifter bredvid. Låg
+den under listan hade den varit en bilaga till arbetet i stället för en del av
+det, vilket var precis vad beställningen gällde.
+
+### Prov
+
+Nio nya kontroller i `tests/rls.mjs`. Två av dem är de som räknas:
+*"Cecilia ser ingenting, trots att hon är teamledare"* och — den snävare —
+*"David ser INTE Annas läsmarkering, trots att han äger projektet"*. När en
+kollega senast läste en tråd är en uppgift om **henne**, inte om projektet.
+`project_message_read` är därmed det enda i modulen som är snävare än sin
+förälder.
+
+---
+
+## 2026-09-11 (eftermiddag) · Projektet blev en plats, och uppgiften gick att ändra
+
+Beställarens genomgång av previewen gav två invändningar, och den andra var den
+allvarligare av dem.
+
+### "Man ska kunna trycka på kortet och komma IN i projektet"
+
+Projektkortet pekade på `/uppgifter?projekt=<id>` och smalnade av samma sex
+vyer. Det var billigt att bygga och fel i sak: **ett filter har ingen plats att
+lägga en uppgift på.** Ingen beskrivning, inga deltagare, inget ställe att svara
+på "hur går det".
+
+Nu finns `/uppgifter/projekt/[id]` med mätare, snabbrad som lägger uppgiften i
+projektet utan `#taggen`, öppet och klart som två listor, deltagare och en
+inställningspanel. Filtret är borttaget — två vägar till samma sak börjar förr
+eller senare svara olika, och den som får rätt ska vara den som öppnas oftast.
+
+`hamtaProjektvy()` **filtrerar över samma bild** som listan i stället för att
+fråga om projektets uppgifter. En egen fråga hade behövt sin egen läsning av
+medlemmar, händelser och kopplingar — alltså en andra väg fram till samma svar.
+
+**Projektmedlemmar fanns i 0054 men hade ingen väg in.** `project_member` stod
+oanvänd; nu finns `bjudInProjekt`, `taBortProjektmedlem` och `andraProjekt`.
+Texten i panelen säger uttryckligen att en projektdeltagare **inte** ser
+projektets uppgifter automatiskt — det är den enda gissningen någon kommer att
+göra fel: *"jag bjöd in Anna till projektet, varför ser hon inget?"*
+
+### Uppgiftssidan gick inte att ändra på. Alls.
+
+Det här var ett riktigt hål, inte en designbrist. Sidan visade rubrik, ansvarig,
+frist och prioritet i en `<dl>` — och **ingenting av det gick att ändra efter
+att uppgiften skapats.** Server actions fanns redan skrivna (`andraUppgift`,
+`tilldela`, `planera`); det som saknades var en väg dit. En uppgift vars datum
+bara kan sättas en gång är inte en uppgift man kan planera om, och att planera
+om är det man gör oftast av allt.
+
+`Egenskaper.tsx` är svaret: en chipsrad som läses, och en panel som ändrar.
+
+**Tre formulär och inte ett**, för de gör tre olika saker. Att byta ANSVARIG är
+ett besked till en människa och skriver en notis. Att flytta ett DATUM är en
+planeringsändring som ingen ska störas av. Att skriva om RUBRIKEN är varken
+eller. Ett gemensamt "Spara" hade betytt att den som rättade ett stavfel
+riskerade att skicka ett meddelande — eller, värre, att omtilldelningen tystades
+för att den råkade ske i samma sparning.
+
+**Två buggar som formulären hade fått gratis, och som fångades innan de nådde
+previewen:**
+
+1. `planera()` skriver hela planeringen på en gång, så ett fält som inte kommer
+   med tolkas som "ta bort". Snabbknapparna "Idag"/"I morgon" hade därmed **tyst
+   raderat en tidsuppskattning** någon redan gjort. De bär nu klockslag och
+   minuter som dolda fält — både i panelen och i listans hovringsknappar.
+2. Låg snabbknapparna i samma formulär som datumrutan skickade webbläsaren
+   **två `due_date`**, knappens och rutans, och vilken som vinner beror på
+   ordningen i dokumentet. Egna formulär i stället.
+
+### Handlingen flyttade överst
+
+"Vad nu?" låg i ett kort i högerspalten, under fakta och inbjudna — alltså under
+vikningen på en bärbar skärm och sist på telefon. På en sida vars enda uppgift
+är att driva något framåt är det fel ordning.
+
+Toppkortet bär nu hela arbetsflödet: rubrik, bock, läge, egenskaper och knappen.
+Över knapparna står **nästa steg i en mening**, skriven till den som läser den
+och inte om uppgiften: "Anna har lämnat in den — godkänn, eller skicka tillbaka
+med ett skäl" säger vad *du* ska göra, vilket "Väntar på godkännande" inte gör.
+
+`Bock` flyttade till en egen fil: listan och deluppgifterna behöver samma bock,
+och två kopior hade betytt att samma handling ser olika ut beroende på var man
+står. Deluppgifterna kan nu bockas av **direkt i listan** — att behöva öppna
+varje steg för att kryssa av det gör checklistan till ett hinder.
+
+Bockformuläret i "Vad nu?" står numera bara när det **finns en granskare**. Utan
+granskare gör det exakt samma sak som ringen vid rubriken, och två knappar för
+samma handling på samma sida får folk att undra vad skillnaden är.
+
+### Småsaker som räknas
+
+- Brödsmula överst på båda sidorna, med projektet emellan när uppgiften hör till
+  ett. Det är vägen man kom, och den man vill tillbaka till efter avbockningen.
+- Returneringens skäl ritas mot `danger-tint` i historiken. Det är den enda rad
+  där som kräver att någon gör något.
+- Klara uppgifter i ett projekt ligger i en hopfälld `<details>`. Ett projekt
+  som rullat ett tag har fler klara än öppna, och en enda lista blir en arkivhög
+  man skrollar förbi för att hitta det som återstår.
+- Pil på projektkortet. Utan den läses kortet som en sammanställning, och då
+  klickar ingen på det.
+
+---
+
+## 2026-09-11 · Uppgifter och projekt, pass 1 av tre
+
+Beställningen: "jag vill kunna hantera alla mina personliga uppgifter som
+säljchef direkt i intranätet så slipper jag ha ett to do-program". Med
+inbjudna medarbetare, utpekade granskare, kopplingar till kund och ärende, och
+en kalender byggd runt uppgifterna. Migration `0054`, branch `uppgifter`.
+
+Passet föregicks av en genomgång av vad som faktiskt gör en uppgiftsmodul
+använd, och tre av fynden bär konstruktionen:
+
+1. **En uppgift med ett utskrivet NÄR blir gjord ungefär dubbelt så ofta.**
+   Gollwitzers metaanalys över 94 studier ger d = 0,65; 71 % mot 32 % i det
+   mest citerade försöket. Det är hela skälet att kalendern ska bära
+   uppgifterna, och det är också skälet till att listan har "Idag"- och
+   "I morgon"-knappar på varje rad som saknar datum.
+2. **Infångandet måste vara nästan gratis.** Todoists övertag är att en rad
+   blir datum, projekt, prioritet och ansvarig. Därför `tolkaSnabbrad()`.
+3. **"Waiting For"-listan är chefens mest värdefulla vy.** Det man lämnat
+   ifrån sig är det man själv slutar tänka på.
+
+### Fem beslut som beställaren tog innan en rad skrevs
+
+- **Ny modul, coachningen syns i vyerna.** `coaching_task` har redan ansvarig,
+  motpart, skapare, `verify_by` och beviskrav — halva funktionen fanns. Att
+  bygga om den som är i drift hade rört certifikat- och kvittenslogiken; i
+  stället får coachningsuppgifter synas i uppgiftsvyerna och redigeras där de
+  bor. Kopplingen `task_link.coaching_task_id` finns från dag ett.
+- **Kunden är ordern.** Navet har inget kundregister; `sales_order` bär
+  bolagsnamn och orgnr som egna kolumner, och affärsdossiern (E11/M8) är
+  blockerad. Beställaren valde att koppla till den order som finns hellre än
+  att hitta på ett register M8 sedan måste göra om. **Följden:** en uppgift om
+  ett prospekt är tills vidare en uppgift utan koppling.
+- **Först till kvarn bland granskarna.** Vem som helst av de utpekade räcker,
+  och den som godkänner stänger uppgiften för alla. Skälet är driften — en
+  granskare på semester ska inte kunna stoppa ett projekt.
+- **Dold uppgift om en person, men med i registerutdraget.** Se nedan.
+- **Alla ser ledig/upptagen som grundläge** i kalendern. Gäller pass 2.
+
+### Modulen har ingen chefskrets, och det är en behörighetsregel
+
+`can_read_all_employees()` står i nästan varje policy skriven sedan 0001. I
+`task_read` står den **inte**, och det är med flit. En uppgiftslista innehåller
+"ring tillbaka till Nordic", men också "förbered samtalet med Anna om hennes
+siffror". Den dagen listan är läsbar för ledningen slutar folk skriva den andra
+sortens rad — och då är verktyget en uppgiftslista bara till hälften.
+
+Kretsen är fyra personer per uppgift: ansvarig, skapare, inbjudna, och den
+uppgiften handlar om — den sista bara om skaparen sagt att den ska synas.
+
+`uppgift_synlig()` är `security definer`, och det är inte en genväg. Policyn på
+`task` behöver fråga om **förälderns** krets för att kunna släppa fram en
+deluppgift, alltså om en annan rad i samma tabell. En vanlig underfråga hade
+utlöst policyn på sig själv, och Postgres stoppar det som rekursion.
+
+### En dold uppgift om en anställd är fortfarande en personuppgift
+
+`task_link.visible_to_subject` är **false** som grundläge, och det valet är
+medvetet åt båda hållen. Det omvända — att personen ser raden i samma sekund
+den skrivs — hade betytt att en chef som antecknar "fundera på om Erik ska ha
+en tillsägelse" därmed har meddelat Erik en tillsägelse. En halvfärdig tanke är
+inte ett besked.
+
+Men dold i gränssnittet betyder **inte** dold i registerutdraget.
+`registerutdrag.ts` fick `task_link.employee_id` i KALLOR, och
+`registerutdrag-server.ts` hämtar dessutom `task_event` via uppgifterna — samma
+grepp som ärendedialogen, och nödvändigt av samma skäl: utan det hade utdraget
+redovisat att det finns en dold uppgift men inte kommentarerna i den. Halva
+svaret är det ett utdrag minst av allt ska ge.
+
+Exakt samma linje som `sick_note` drog 2026-09-07.
+
+### Läget räknas fram ur händelserna. Igen.
+
+Ingen `status`-kolumn, som `coaching_task` i 0043 och `course_attempt` i 0007.
+Här bär valet en till börda: **godkännandet**. En returnerad uppgift som bara
+sätts tillbaka till "pågår" raderar spåret av att någon faktiskt tittade och sa
+nej — och det är den upplysningen man behöver den tredje gången samma sak
+kommer tillbaka.
+
+`godkand` och `klar` är därför två olika händelser. Den första betyder att en
+människa tittade, den andra att ingen behövde.
+
+### Notiserna: fyra av femton källor är händelser
+
+Uppgiftsmodulen har fler `harledd` i täckningsprovet än någon annan modul, och
+det är ett resultat och inte slarv. Nästan ingenting här skriver över sitt eget
+tillstånd: en tilldelad uppgift **står** som tilldelad, en inlämnad **står** och
+väntar, en returnerad **står** som returnerad tills någon gör om arbetet.
+
+De fyra som notifierar är de fyra där spår suddas: `uppgift-godkand` (en godkänd
+uppgift är bara "klar"), `uppgift-tilldelad` (omtilldelningen skriver över förra
+ägaren), `uppgift-avbruten` och `uppgift-kommentar`.
+
+Förfallet och dagens samlas till **en post vardera** — elva försenade uppgifter
+ger en rad, inte elva. Id:t bär dagens datum, så posten återuppstår i morgon för
+den som klickat bort den utan att göra något.
+
+### Morgonbrevet, och varför det inte är en push
+
+Notisklockan säger till den som **öppnar navet**, vilket är precis fel krets för
+en påminnelse: den som har uppgifterna i huvudet öppnar navet ändå.
+
+Ett pling på klockslag går inte att skicka. Hobby-planen tar två cron-poster per
+projekt och kör var och en en gång per dygn — se rubriken i `natt/route.ts` om
+vad som hände den gång tre deklarerades. `/api/jobb/morgon` är därmed **den
+andra och sista posten**; nästa schemalagda jobb får läggas som ett steg i något
+av dem.
+
+Brevet skickas bara de dagar mottagaren har något som väntar, och aldrig på
+helger. Ett återkommande brev som oftast är tomt är ett brev man filtrerar bort
+— och då försvinner även det femte, som betydde något.
+
+Tiden `30 5 * * *` är UTC och följer inte sommartid: 07:30 på sommaren, 06:30 på
+vintern. Jobbet räknar själv fram det svenska datumet, så veckodagen blir aldrig
+fel av zonen.
+
+### Snabbinmatningen, och provet som är hela skälet att den finns
+
+`tolkaSnabbrad()` tar en rad och ger titel, datum, klockslag, tidsåtgång,
+prioritet, projekt och person. Det som **inte** känns igen blir titel — en tolk
+som gissar fel ska förlora ett ord ur rubriken, aldrig tappa raden.
+
+Tolken är den enda delen av modulen där ett fel inte syns. En trasig knapp
+märks; en tolk som läser "ring 20 bolag" som klockan 20 lägger tyst en frist
+ingen bett om, och raden ser riktig ut i listan efteråt. `tests/uppgifter.mjs`
+har därför en egen avdelning för **det som inte ska kännas igen**: ett tal i en
+rubrik är ett tal, ett klockslag utan dag är ingen tidpunkt, ordet "man" är inte
+en tidsenhet och "manus" är ingen måndag.
+
+Tolkningen visas som etiketter medan man skriver, och de är en läxa och inte en
+bekräftelse: den som ser "tis 15 sep" dyka upp när hen skrev "på tisdag" har
+lärt sig syntaxen utan att läsa någon hjälptext.
+
+**Servern tolkar om raden.** Klientens etiketter är en förhandsbild; det är
+serverns svar som sparas.
+
+### Uppgifterna bröt femtaket i sidopanelen
+
+`nav-items.ts` säger fem snabbposter och att varje ny post är en post listan
+växte tillbaka med. Regeln står kvar. Undantaget vilar på en skillnad: de andra
+posterna är ställen man går till när man **har** ett ärende dit. Uppgifterna är
+tvärtom det man öppnar för att **få veta** vilket ärende man har — och en lista
+över det man inte får glömma, placerad bakom ett klick i en meny, är en lista
+man slutar öppna.
+
+Startsidan fick ett uppgiftskort. **Stämplingen ligger kvar överst** på
+beställarens uttryckliga besked — den är dagens första handling och flyttar sig
+inte för något.
+
+### Personalregistret är stängt, och det märks i två väljare
+
+`employee_read` släpper fram dig själv, ditt lag om du leder ett, och hela
+registret för säljchef, VD och administratör. En säljare ser alltså ingen annans
+namn.
+
+`namnkarta()` är därför modulens **enda** läsning via service role: utan den
+hade den som fick en uppgift mött "Okänd la uppgiften på dig", vilket är exakt
+den anonyma tillsägelse `coaching_task.created_by` infördes för att förhindra.
+Urvalet är spärren — id:na kommer uteslutande ur rader RLS redan släppt fram.
+
+**Väljarna följer däremot `employee_read` oförändrat.** Följden är att en säljare
+inte kan delegera till en kollega hen inte redan får se. Det är ett medvetet
+val: att öppna registret är ett beslut om personalregistret, inte om
+uppgiftsmodulen. **Öppen fråga till beställaren** — se NASTA_SESSION.md.
+
+### Kvar till pass 2 och 3
+
+Pass 2: kalendern (dag/vecka), dra uppgift till tid, "planerat 4 h av 6 h",
+frånvaro och coachningssamtal inlagda automatiskt, delning i Outlooks fem
+nivåer med ledig/upptagen som grundläge, webbläsarnotis, iCal via
+`calendar_feed` som redan finns. Pass 3: upprepning, veckogenomgång, mallar.
+
+---
+
 ## 2026-09-11 (eftermiddag) · Insights slogs pa, och sa att `itemType` inte betyder det Lynes sager
 
 Andra webhooken kom igang 13:11. En enda pase hittills, och den racker for att

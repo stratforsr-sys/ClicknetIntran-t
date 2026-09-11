@@ -20,6 +20,7 @@ import { guiderForRoller } from "@/guider";
 import { MAX_I_KLOCKAN, navnyheterFor, tidpunktFor } from "@/navnyheter";
 import { dagarSedan, personlage, type Progress } from "@/lib/guider";
 import { coachningsnotiser } from "@/lib/coachning-server";
+import { projektchattnotiser, uppgiftsnotiser } from "@/lib/uppgifter-server";
 
 /** G6. Sa lange far det sta stilla innan klockan sager till. */
 const TYST_DAGAR = 3;
@@ -1010,6 +1011,29 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
     notiser.push(...(await coachningsnotiser(user)));
   } catch {
     // Tyst. Felet syns i `error_report` via sidans egen felgrans.
+  }
+
+  /**
+   * Uppgifterna (0054), av exakt samma skal och med samma tysta gren.
+   *
+   * Modulen ar den enda i navet dar INGEN roll ger insyn — kretsen ar de fyra
+   * personerna runt raden och ingen annan. Darfor far den ocksa svara sjalv:
+   * ett urval harinne hade varit ett andra svar pa den fragan, och det ar
+   * precis den sortens andra svar som en dag slapper ut nagons anteckningar.
+   */
+  try {
+    notiser.push(...(await uppgiftsnotiser(user)));
+  } catch {
+    // Tyst. Samma skal som ovan.
+  }
+
+  // Projektchatten (0055). Egen gren och inte en del av uppgiftsnotiserna: den
+  // laser andra tabeller, och ett fel i chatten ska inte tysta forfallna
+  // uppgifter.
+  try {
+    notiser.push(...(await projektchattnotiser(user)));
+  } catch {
+    // Tyst. Samma skal som ovan.
   }
 
   /**

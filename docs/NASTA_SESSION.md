@@ -3,7 +3,74 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-11 (eftermiddag) — båda Lynes-webhookarna är på. Insights visade sig bära riktningen i `itemType` och inte utfallet, och `callType` betyder inte riktning; tolken är rättad och alla 172 samtal omtolkade. **Tre öppna frågor, se nedan** — den viktigaste är om ett missat samtal någonsin levereras. Föregående rad: 2026-09-11 — Lynes webhook levererar. Formen visade sig vara en annan än gissningarna: alla sexton första samtalen tolkades fel, tolken är rättad mot riktig trafik och påsarna omtolkade ur `call_ingest`. **Ett beslut väntar om inspelningarna** — S3-adressen lever trettio minuter. Föregående rad: 2026-09-10 (kväll) — växelns samtal: Lynes webhook har en adress in i navet, radlogg och tolkning på plats, migration `0052` körd. På branch `lynes-samtal`, ej mergad; ingenting syns i gränssnittet än. Föregående rad: 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
+**Senast uppdaterad:** 2026-09-11 (kväll) — **uppgiftsmodulen pass 1 är byggd och mergad till main**: uppgifter, deluppgifter, projekt med egen sida och chatt, godkännande med granskare, kopplingar, framräknade notiser och morgonbrev. Migrationerna `0054` och `0055` körda. **Nästa steg är kalendern (pass 2).** Föregående rad: 2026-09-11 (eftermiddag) — båda Lynes-webhookarna är på. Insights visade sig bära riktningen i `itemType` och inte utfallet, och `callType` betyder inte riktning; tolken är rättad och alla 172 samtal omtolkade. **Tre öppna frågor, se nedan** — den viktigaste är om ett missat samtal någonsin levereras. Föregående rad: 2026-09-11 — Lynes webhook levererar. Formen visade sig vara en annan än gissningarna: alla sexton första samtalen tolkades fel, tolken är rättad mot riktig trafik och påsarna omtolkade ur `call_ingest`. **Ett beslut väntar om inspelningarna** — S3-adressen lever trettio minuter. Föregående rad: 2026-09-10 (kväll) — växelns samtal: Lynes webhook har en adress in i navet, radlogg och tolkning på plats, migration `0052` körd. På branch `lynes-samtal`, ej mergad; ingenting syns i gränssnittet än. Föregående rad: 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
+
+## Uppgifter och projekt — BYGGD OCH MERGAD 2026-09-11
+
+*Migrationer `0054` och `0055`, båda körda. Hela resonemanget i
+`ARBETSLOGG.md` 2026-09-11 (tre entries). Beställningen var "hantera alla mina
+personliga uppgifter som säljchef direkt i intranätet". **Det här är pass 1 av
+tre — kalendern är pass 2 och inte påbörjad.***
+
+**Vad som finns i produktion.**
+
+- **`/uppgifter`** — snabbinmatning på en rad som tolkas i sina delar
+  ("Ring Nordic AB på tisdag 14:00 30 min !1 #Mässan @Anna"), `N` öppnar fältet
+  var man än står. Sex vyer: Idag, Väntar på andra, Att granska, Alla mina,
+  Inkorg, Klara.
+- **`/uppgifter/[id]`** — bock, läge, redigerbara egenskaper och nästa steg i en
+  mening överst. Deluppgifter bockas av direkt i listan. Samtal och Historik är
+  två skilda kort.
+- **`/uppgifter/projekt/[id]`** — mätare, egen snabbrad, öppet/klart, deltagare,
+  inställningspanel och **chatt** i högerspalten.
+- **Godkännande:** utpekade granskare, först till kvarn, retur kräver skäl.
+- **Kopplingar:** order (kund), ärende, person, coachning, utbildning.
+- **Notiser:** framräknade i klockan, morgonbrev 07:30 vardagar, chattens olästa
+  som en rad per projekt.
+
+### Fem regler att inte råka bryta
+
+1. **Ingen roll ger insyn i `task_read`.** `can_read_all_employees()` står med
+   flit inte i policyn. Kretsen är ansvarig, skapare, inbjudna och — om flaggan
+   är på — den uppgiften handlar om. Läggs en chefsgren dit är modulen inte
+   längre en anteckningsbok, och då slutar folk skriva ärligt i den.
+2. **`namnkarta()` i `uppgifter-server.ts` är modulens enda läsning via service
+   role.** Urvalet är spärren: id:na kommer bara ur rader RLS redan släppt fram.
+   Kopiera inte mönstret utan att läsa rubriken vid funktionen.
+3. **`planera()` skriver HELA planeringen** — datum, klockslag och minuter — så
+   ett fält som inte kommer med tolkas som "ta bort". Varje knapp som sätter ett
+   datum måste bära med sig klockslaget och minuterna som dolda fält. Det gäller
+   listans hovringsknappar, snabbknapparna i egenskapspanelen, **och allt som
+   kalendern i pass 2 kommer att dra runt.**
+4. **Chattens olästa räknas fram** ur `project_message_read` — en tidpunkt per
+   person och projekt. Lägg aldrig till en rad per mottagare och meddelande; det
+   var hela valet, och det är skillnaden mellan "3 nya i Mässan" och tre rader i
+   klockan.
+5. **Cron-kvoten är slut.** `/api/jobb/natt` (02:30 UTC) och `/api/jobb/morgon`
+   (05:30 UTC) är de två poster Hobby-planen tillåter. Nästa schemalagda jobb
+   måste bli ett steg i ett av dem.
+
+### Två öppna frågor till beställaren
+
+**1. Ska säljare kunna delegera till varandra?** `employee_read` (0001/0002)
+släpper bara fram dig själv, ditt lag om du leder ett, och hela registret för
+säljchef, VD och administratör. Väljarna "vem ska göra det" och "bjud in" följer
+den policyn oförändrat, så en säljare ser bara sig själv där. Att ändra det är
+ett beslut om **personalregistret**, inte om uppgiftsmodulen.
+
+**2. Prospekt saknar koppling.** Kunden är ordern, eftersom navet inte har något
+kundregister (E11/M8 är blockerad). En uppgift om ett prospekt är tills vidare en
+uppgift utan koppling.
+
+### Kända skavanker
+
+- `tests/registerutdrag.mjs` är rött på **19 kolumner som saknades redan före
+  det här arbetet** (coaching, guider, notification_event, sales_target,
+  manager_commission). Inga av uppgiftsmodulens elva kolumner. Jämför med main
+  innan du skyller på din gren.
+- `tests/rls.mjs` var rött på main sedan 2026-09-07 — provet la in en
+  ledighetsansökan utan `reason`, vilket triggern från 0048 vägrar. **Rättat i
+  det här passet**, och provet går igenom i sin helhet igen.
 
 ## Båda webhookarna är på sedan 2026-09-11 — TVÅ ÖPPNA FRÅGOR
 

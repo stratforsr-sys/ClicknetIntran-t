@@ -23,6 +23,13 @@ const P: Record<string, string> = {
   utseende: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 3v18",
   installningar: "M4 8h9M17 8h3M4 16h3M11 16h9M15 5.5v5M9 13.5v5",
   kryss: "M6 6l12 12M18 6 6 18",
+
+  /**
+   * Pratbubblan (0055). Ritas med samma strecktjocklek som resten, sa svansen
+   * far inte vara en egen liten triangel — den ar en del av ramens kontur.
+   * En pafogad triangel blir en skarv i horn nar ikonen ritas i 14 px.
+   */
+  chatt: "M20 15a2 2 0 0 1-2 2H9l-4 3.5V6a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2z",
   fram: "M9 6l6 6-6 6",
 
   /**
