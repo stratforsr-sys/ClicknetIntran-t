@@ -25,6 +25,14 @@ import {
   sorteraUppgifter,
 } from "@/lib/coachning";
 import { uppgifterFor } from "@/lib/coachning-server";
+import { forsenad, fristtext } from "@/lib/uppgifter";
+import {
+  attGranska,
+  hamtaUppgiftsbild,
+  minaIdag,
+  minaOppna,
+  vantarPaAndra,
+} from "@/lib/uppgifter-server";
 import { slaLage } from "@/lib/arenden";
 import { hamtaLage } from "@/lib/sparrar";
 import { stampelfri, STAMPELFRI_FORKLARING } from "@/lib/stampelfri";
@@ -1149,6 +1157,38 @@ export default async function Startsida() {
     </Card>
   ) : null;
 
+  /**
+   * DINA UPPGIFTER — kortet som gor att listan inte behover oppnas for att
+   * man ska veta att den har nagot att saga.
+   *
+   * Bestallarens beslut 2026-09-11 var att uppgifterna ska mota en pa
+   * startsidan. Stamplingen ligger kvar overst: den ar dagens forsta handling
+   * och far inte flytta pa sig for nagot.
+   *
+   * Kortet ar en SAMMANFATTNING och inte en andra uppgiftslista. Ingen bock,
+   * inga knappar, fem rader. Skalet ar att tva stallen som gor samma sak
+   * borjar svara olika — och det stalle som far ratt ska vara modulens eget.
+   */
+  const uppgiftsbild = await hamtaUppgiftsbild(user);
+  const minaUppgifterIdag = minaIdag(uppgiftsbild, user.employee.id);
+  const uppgiftskort =
+    uppgiftsbild.uppgifter.length === 0 ? null : (
+      <Uppgiftskort
+        idag={uppgiftsbild.idag}
+        rader={minaUppgifterIdag.slice(0, 5).map((u) => ({
+          id: u.id,
+          title: u.title,
+          due_date: u.due_date,
+          due_time: u.due_time,
+          forsenad: forsenad(u, uppgiftsbild.idag),
+        }))}
+        antalIdag={minaUppgifterIdag.length}
+        antalOppna={minaOppna(uppgiftsbild, user.employee.id).length}
+        antalVantar={vantarPaAndra(uppgiftsbild, user.employee.id).length}
+        antalGranska={attGranska(uppgiftsbild, user.employee.id).length}
+      />
+    );
+
   const roller = user.roles.length
     ? user.roles.map((r) => ROLE_LABEL[r]).join(" · ")
     : "Din roll är inte satt än.";
@@ -1180,6 +1220,10 @@ export default async function Startsida() {
           traden i stallet for med CSS. */}
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="flex flex-col gap-4 lg:col-span-2">
+          {/* Uppgifterna forst i spalten, direkt under stamplingen. Det ar
+              enda kortet som svarar pa "vad skulle jag gora idag", och den
+              fragan staller man sig innan chefens koer. */}
+          {uppgiftskort}
           {kokort}
           {/* Efter kon och fore "Att gora". Kon ar det som vantar pa ett
               BESLUT av chefen; dagsbilden ar det hen behover veta for att
@@ -1245,6 +1289,91 @@ const VECKODAG: Record<number, string> = {
   6: "Lördag",
   7: "Söndag",
 };
+
+/**
+ * Uppgiftskortet.
+ *
+ * TRE TAL OCH FEM RADER. Talen svarar pa "har jag nagot att gora", raderna pa
+ * "vad da". Det som inte far plats ligger i modulen, och knappen dit star i
+ * kortets huvud och inte langst ned — den som redan sett att det finns fjorton
+ * uppgifter ska inte behova skrolla forbi fem for att komma at dem.
+ */
+function Uppgiftskort({
+  idag,
+  rader,
+  antalIdag,
+  antalOppna,
+  antalVantar,
+  antalGranska,
+}: {
+  idag: string;
+  rader: { id: string; title: string; due_date: string | null; due_time: string | null; forsenad: boolean }[];
+  antalIdag: number;
+  antalOppna: number;
+  antalVantar: number;
+  antalGranska: number;
+}) {
+  const forsenade = rader.filter((r) => r.forsenad).length;
+
+  return (
+    <Card status={forsenade > 0 ? "danger" : undefined}>
+      <CardHeader
+        titel="Dina uppgifter"
+        beskrivning={
+          antalIdag === 0
+            ? antalOppna === 0
+              ? "Ingenting öppet."
+              : `Inget med dagens datum. ${antalOppna} öppna totalt.`
+            : `${antalIdag} idag${forsenade > 0 ? `, varav ${forsenade} försenade` : ""}.`
+        }
+        handling={
+          <ButtonLink href="/uppgifter" variant="sekundar" size="sm">
+            Öppna
+          </ButtonLink>
+        }
+      />
+
+      {rader.length === 0 ? (
+        <EmptyState
+          rubrik="Inget planerat idag"
+          text="Skriv ner nästa sak du inte vill glömma, så står den här i morgon bitti."
+          handling={
+            <ButtonLink href="/uppgifter" size="sm">
+              Lägg upp en uppgift
+            </ButtonLink>
+          }
+        />
+      ) : (
+        <ul className="flex flex-col">
+          {rader.map((r) => (
+            <Uppgift
+              key={r.id}
+              href={`/uppgifter/${r.id}`}
+              titel={r.title}
+              detalj={[fristtext(r.due_date, idag), r.due_time].filter(Boolean).join(" ")}
+              markering={r.forsenad ? <Badge ton="danger">Försenad</Badge> : null}
+            />
+          ))}
+        </ul>
+      )}
+
+      {(antalVantar > 0 || antalGranska > 0) && (
+        <div className="mt-4 flex flex-wrap gap-4 border-t border-canvas pt-4">
+          {antalVantar > 0 && (
+            <Link href="/uppgifter" className="text-small text-ink-500 hover:text-brand-700">
+              <span className="tnum font-semibold text-ink-900">{antalVantar}</span> väntar på andra
+            </Link>
+          )}
+          {antalGranska > 0 && (
+            <Link href="/uppgifter" className="text-small text-ink-500 hover:text-brand-700">
+              <span className="tnum font-semibold text-ink-900">{antalGranska}</span> väntar på ditt godkännande
+            </Link>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
 
 function Rad({ etikett, varde }: { etikett: string; varde: number }) {
   return (

@@ -39,10 +39,11 @@ export type Notistyp =
   | "konto"
   | "rekrytering"
   | "provision"
-  | "kv";
+  | "kv"
+  | "uppgift";
 
 /**
- * Ar strangen en av de sexton typerna?
+ * Ar strangen en av de sjutton typerna?
  *
  * Behovs for att typen numera ocksa kan komma UR DATABASEN. En harledd post far
  * sin typ av koden som bygger den och kan inte vara fel; en rad i
@@ -326,6 +327,55 @@ export const NOTIS_KALLOR = [
   "provision-mal",
 
   /**
+   * Uppgifterna (0054). Sex harledda poster och fyra handelser, och
+   * uppdelningen foljer regeln overst i filen bokstavligt.
+   *
+   * HARLEDDA — allt som VANTAR. `uppgift` ar mina forsenade, `uppgift-idag`
+   * dagens, `uppgift-ny` nagot nagon lagt pa mig som jag inte rort,
+   * `uppgift-returnerad` min uppgift som skickats tillbaka,
+   * `uppgift-granska` nagon annans som vantar pa MIN bock, och
+   * `uppgift-vantar` det jag delegerat som statt still.
+   *
+   * De tva forsta ar SAMLADE poster: elva forsenade uppgifter ger EN rad och
+   * inte elva. Det ar samma val som `guide-team` gjorde, och det finns
+   * forskning bakom det — en klocka som pingar per handelse ar en klocka man
+   * stanger av.
+   *
+   * TVA POSTER OCH INTE EN for forsenat och dagens, med flit. Den forsta ar en
+   * tillsagelse om nagot jag missat, den andra en plan for dagen. Ett delat id
+   * hade betytt att den som klickar bort morgonens plan ocksa klickar bort
+   * beskedet om att tre saker ar forsenade.
+   */
+  "uppgift",
+  "uppgift-idag",
+  "uppgift-ny",
+  "uppgift-returnerad",
+  "uppgift-granska",
+  "uppgift-vantar",
+
+  /**
+   * HANDELSER — allt som SKREV OVER sitt eget tillstand.
+   *
+   * `uppgift-godkand` ar det tydligaste fallet i hela navet: en godkand uppgift
+   * ar bara `klar`, omojlig att skilja fran en som den ansvariga bockade av
+   * sjalv. Utan handelsen vore granskarrollen en knapp utan spar for den som
+   * vantade pa beskedet.
+   *
+   * `uppgift-tilldelad` behovs for OMTILLDELNINGEN. En nyss upplagd uppgift
+   * fangas av den harledda `uppgift-ny`, men den posten star bara nagra dygn
+   * efter att raden skapats — en uppgift som byter agare en manad senare hade
+   * annars bytt agare i tysthet.
+   *
+   * `uppgift-returnerad` star INTE har. Returen skriver inte over nagot:
+   * laget BLIR returnerad och star kvar tills nagon gor om arbetet. Den ar
+   * harledd, och ligger i halvan ovanfor.
+   */
+  "uppgift-tilldelad",
+  "uppgift-godkand",
+  "uppgift-kommentar",
+  "uppgift-avbruten",
+
+  /**
    * ANGRA-KNAPPEN HAR MED FLIT INGEN KALLA HAR.
    *
    * `/angra` provades och togs bort igen. Kvittot med angra-knappen visas bara
@@ -393,6 +443,10 @@ export const HANDELSEKALLOR = [
   "personal-ny",
   "provision-mal",
   "provision-bonus",
+  "uppgift-tilldelad",
+  "uppgift-godkand",
+  "uppgift-kommentar",
+  "uppgift-avbruten",
 ] as const satisfies readonly Notiskalla[];
 
 export type Handelsekalla = (typeof HANDELSEKALLOR)[number];
@@ -472,6 +526,7 @@ export const TYP_ETIKETT: Record<Notistyp, string> = {
   rekrytering: "Rekrytering",
   provision: "Provision",
   kv: "K&V",
+  uppgift: "Uppgift",
 };
 
 export const TYP_IKON: Record<Notistyp, string> = {
@@ -491,6 +546,7 @@ export const TYP_IKON: Record<Notistyp, string> = {
   rekrytering: "personal",
   provision: "logg",
   kv: "kontroll",
+  uppgift: "kontroll",
 };
 
 /**

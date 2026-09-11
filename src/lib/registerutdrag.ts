@@ -155,6 +155,25 @@ export const KALLOR: Kalla[] = [
   // samtal som hamnar på dig, så den som tycker att statistiken ser fel ut ska
   // kunna se vad kopplingen bygger på — även när navet gissat den själv.
   { tabell: "phone_identity", kolumn: "employee_id", andamal: "Dina anknytningar och nummer i växeln" },
+
+  // 0054. Uppgiftsmodulen, och EN av raderna nedan är hela skälet att den här
+  // listan finns.
+  //
+  // `task_link.employee_id` är en uppgift som handlar OM dig — "prata med
+  // Erik om pipelinen" — och den är som grundläge DOLD i navet för den den
+  // handlar om (`visible_to_subject` är false). Det är ett medvetet val: en
+  // halvfärdig tanke ska inte vara ett besked. Men dold i gränssnittet betyder
+  // inte dold i registerutdraget, och utan den här raden hade "intern
+  // anteckning" tyst blivit "hemlig anteckning" — exakt samma resonemang som
+  // `sick_note` för 2026-09-07.
+  //
+  // Rubriken, beskrivningen, vem som la upp den och när följer med. Ändras
+  // synlighetsflaggan någon gång ska den här raden ändras med.
+  { tabell: "task_link", kolumn: "employee_id", andamal: "Uppgifter som handlar om dig, även de du inte ser i navet" },
+  { tabell: "task", kolumn: "assignee_id", andamal: "Uppgifter du är ansvarig för" },
+  { tabell: "task_member", kolumn: "employee_id", andamal: "Uppgifter du är inbjuden i" },
+  { tabell: "project", kolumn: "owner_id", andamal: "Projekt du äger" },
+  { tabell: "project_member", kolumn: "employee_id", andamal: "Projekt du är med i" },
 ];
 
 /**
@@ -276,4 +295,21 @@ export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
   // NULL har navet gissat själv, i regel på e-postadressen — och en gissning
   // har ingen upphovsperson.
   { tabell: "phone_identity", kolumn: "created_by", skal: "Vem som kopplade anknytningen till en person" },
+
+  // 0054. Uppgiftsmodulen. Sex kolumner som alla svarar pa "vem gjorde nagot
+  // at nagon annan", och ingen pa "vad har navet registrerat om mig".
+  //
+  // `task.created_by` ar den tydligaste: att jag la upp en uppgift om Erik ar
+  // en uppgift om ERIK, och den star i KALLOR pa `task_link.employee_id`. Att
+  // ta med den har ocksa hade lagt hela min egen anteckningsbok i hans utdrag.
+  //
+  // `task_event.by_employee_id` hamtas i stallet via uppgiften — se
+  // registerutdrag-server.ts, samma grepp som `case_message`. Kolumnen sager
+  // vem som skrev, inte vem raden handlar om.
+  { tabell: "task", kolumn: "created_by", skal: "Vem som la upp uppgiften" },
+  { tabell: "task_event", kolumn: "by_employee_id", skal: "Hämtas via uppgiften, inte direkt" },
+  { tabell: "task_member", kolumn: "added_by", skal: "Vem som bjöd in någon annan" },
+  { tabell: "task_link", kolumn: "created_by", skal: "Vem som kopplade uppgiften till något" },
+  { tabell: "project", kolumn: "created_by", skal: "Vem som skapade projektet" },
+  { tabell: "project_member", kolumn: "added_by", skal: "Vem som bjöd in någon annan till projektet" },
 ];

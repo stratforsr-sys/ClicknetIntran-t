@@ -14,6 +14,62 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "uppgifter-och-projekt",
+    rubrik: "Uppgifter: din egen lista, direkt i navet",
+    ingress:
+      "Skriv en rad, få ett datum. Bjud in andra, peka ut vem som ska godkänna, och koppla uppgiften till en order, ett ärende eller en person.",
+    text: `Navet har fått en plats för det du inte får glömma.
+
+**Skriv en rad — navet tolkar den.** Fältet överst på *Uppgifter* tar hela
+uppgiften på en rad:
+
+> Ring Nordic AB på tisdag 14:00 30 min !1 #Mässan @Anna
+
+Det blir rubrik, datum, klockslag, tidsåtgång, prioritet, projekt och ansvarig.
+Du ser tolkningen som små etiketter medan du skriver, så du vet vad som fastnade
+innan du trycker. **Tryck N var du än står i navet** så hamnar du i fältet.
+
+**Fem vyer, och de svarar på olika frågor.** *Idag* är förfallet och dagens.
+*Väntar på andra* är det du lämnat ifrån dig, med hur länge det stått still —
+den listan är hela skälet att man vågar delegera. *Att granska* är det som
+väntar på din bock. Sedan *Alla mina*, *Inkorgen* och *Klara*.
+
+**Bjud in — som redigerare, visare eller granskare.** En redigerare ändrar, en
+visare läser och kommenterar, och en **granskare måste godkänna innan uppgiften
+räknas som klar**. Står flera granskare räcker det att en godkänner. Den som
+lämnar in ser att knappen heter "Lämna in för godkännande" och inte "Klar", så
+ingen tror sig ha bockat av något som ligger hos någon annan.
+
+**Koppla uppgiften till det den handlar om** — en order, ett ärende, en person,
+en coachningsuppgift eller en utbildning. Kopplingen syns i listan, och du
+kommer vidare med ett klick.
+
+**Projekt** är en hatt att hänga uppgifter på: namn, färg, deadline. Kortet
+räknar hur många som är klara och hur många som är sena.
+
+**Påminnelser.** Notisklockan samlar ihop förfallet och dagens till en rad
+vardera — inte elva rader för elva uppgifter. Har du något som väntar kommer
+dessutom ett mejl på morgonen med dagens plan. **Har du inget väntande kommer
+inget brev.**
+
+**Om att lägga en uppgift på en kollega.** En uppgift kan kopplas till en person
+utan att personen ser den i navet — "prata med Erik om pipelinen" ska inte dyka
+upp hos Erik innan samtalet skett. Men den är fortfarande en anteckning om en
+namngiven anställd, och **den följer med i personens registerutdrag** under
+*Personal → Ditt registerutdrag*, tillsammans med kommentarerna i den. Dold i
+gränssnittet är inte samma sak som hemlig.
+
+**Vem ser dina uppgifter?** Bara den som är ansvarig, den som la upp dem, de som
+bjudits in — och personen uppgiften handlar om, om du sagt att den ska synas.
+**Ingen roll ger insyn**, inte säljchef och inte VD. En uppgiftslista man inte
+vågar skriva ärligt i är en uppgiftslista man slutar använda.
+
+Härnäst kommer kalendern, där uppgifterna går att dra till en tid på dagen.`,
+    datum: "2026-09-11",
+    roller: [],
+    href: "/uppgifter",
+  },
+  {
     slug: "samtal-fran-vaxeln",
     rubrik: "Navet tar emot samtalen från växeln",
     ingress:

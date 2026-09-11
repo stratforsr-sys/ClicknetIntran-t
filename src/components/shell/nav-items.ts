@@ -104,6 +104,28 @@ export function navFor(user: CurrentUser | null, stamplingPa: boolean): Navigeri
   };
 
   if (user?.employee) {
+    /**
+     * =======================================================================
+     * UPPGIFTERNA BRYTER FEMTAKET, OCH SKALET STAR HAR
+     *
+     * Regeln ovanfor sager fem snabbposter och att varje ny post ar en post
+     * listan vaxte tillbaka med. Den star kvar och den ar riktig. Det har ar
+     * undantaget, beslutat av bestallaren 2026-09-11, och det vilar pa en
+     * skillnad som ar lattare att se an att formulera:
+     *
+     * DE ANDRA POSTERNA AR STALLEN MAN GAR TILL NAR MAN HAR ETT ARENDE DIT.
+     * Man oppnar rutinerna nar man undrar over en rutin. Uppgifterna ar
+     * tvartom det man oppnar for att FA VETA vilket arende man har — och en
+     * lista over det man inte far glomma, placerad bakom ett klick i en meny,
+     * ar en lista man slutar oppna. Da har man en to do-app vid sidan om igen,
+     * vilket ar precis det modulen byggdes for att gora onodigt.
+     *
+     * Posten star DIREKT EFTER HEM och fore nyheterna: dagens uppgifter ar en
+     * fraga man staller sig sjalv innan man laser vad andra skrivit.
+     * =======================================================================
+     */
+    snabb.push({ href: "/uppgifter", label: "Uppgifter", ikon: "kontroll" });
+
     // Nyheter fore rutiner: det ar det som andras oftast, och den som inte
     // hittar dit last aldrig beskedet.
     snabb.push({ href: "/nyheter", label: "Nyheter", ikon: "logg" });

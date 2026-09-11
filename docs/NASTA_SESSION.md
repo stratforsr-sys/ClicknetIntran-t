@@ -3,7 +3,54 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-11 — Lynes webhook levererar. Formen visade sig vara en annan än gissningarna: alla sexton första samtalen tolkades fel, tolken är rättad mot riktig trafik och påsarna omtolkade ur `call_ingest`. **Ett beslut väntar om inspelningarna** — S3-adressen lever trettio minuter. Föregående rad: 2026-09-10 (kväll) — växelns samtal: Lynes webhook har en adress in i navet, radlogg och tolkning på plats, migration `0052` körd. På branch `lynes-samtal`, ej mergad; ingenting syns i gränssnittet än. Föregående rad: 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
+**Senast uppdaterad:** 2026-09-11 (kväll) — **uppgiftsmodulen pass 1 byggd** på branch `uppgifter`, migration `0054`: uppgifter, deluppgifter, projekt, godkännande, kopplingar, notiser och morgonbrev. **Ej mergad, väntar på granskning av previewen.** Två öppna frågor står under avsnittet nedan. Föregående rad: 2026-09-11 — Lynes webhook levererar. Formen visade sig vara en annan än gissningarna: alla sexton första samtalen tolkades fel, tolken är rättad mot riktig trafik och påsarna omtolkade ur `call_ingest`. **Ett beslut väntar om inspelningarna** — S3-adressen lever trettio minuter. Föregående rad: 2026-09-10 (kväll) — växelns samtal: Lynes webhook har en adress in i navet, radlogg och tolkning på plats, migration `0052` körd. På branch `lynes-samtal`, ej mergad; ingenting syns i gränssnittet än. Föregående rad: 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
+
+## Uppgifter och projekt — PÅ BRANCH `uppgifter`, EJ MERGAD
+
+*Migration `0054`. Hela resonemanget i `ARBETSLOGG.md` 2026-09-11. Beställningen
+var "hantera alla mina personliga uppgifter som säljchef direkt i intranätet".
+Det här är pass 1 av tre — kalendern är pass 2.*
+
+**Vad som finns nu.** `/uppgifter` med snabbinmatning på en rad ("Ring Nordic AB
+på tisdag 14:00 30 min !1 #Mässan @Anna" tolkas i sina delar), sex vyer (Idag,
+Väntar på andra, Att granska, Alla mina, Inkorg, Klara), deluppgifter, projekt
+som kort, inbjudna som redigerare/visare/granskare, godkännande med retur och
+skäl, kopplingar till order, ärende, person, coachning och utbildning,
+framräknade notiser och ett morgonbrev 07:30.
+
+**Tre saker att inte råka bryta:**
+
+1. **Ingen roll ger insyn i `task_read`.** `can_read_all_employees()` står med
+   flit inte i policyn. Kretsen är ansvarig, skapare, inbjudna och — om flaggan
+   är på — den uppgiften handlar om. Lägger någon till en chefsgren där är
+   modulen inte längre en anteckningsbok.
+2. **`namnkarta()` i `uppgifter-server.ts` är modulens enda läsning via service
+   role.** Urvalet är spärren: id:na kommer bara ur rader RLS redan släppt fram.
+   Kopiera inte mönstret utan att läsa rubriken vid funktionen.
+3. **Cron-kvoten är slut.** `/api/jobb/natt` och `/api/jobb/morgon` är de två
+   poster Hobby-planen tillåter. Nästa schemalagda jobb måste bli ett steg i ett
+   av dem.
+
+### Två öppna frågor till beställaren
+
+**1. Ska säljare kunna delegera till varandra?** `employee_read` (0001/0002)
+släpper bara fram dig själv, ditt lag om du leder ett, och hela registret för
+säljchef, VD och administratör. Väljarna "vem ska göra det" och "bjud in" följer
+den policyn oförändrat, så en säljare ser bara sig själv där. Att ändra det är
+ett beslut om **personalregistret**, inte om uppgiftsmodulen — därför ligger det
+som en fråga och inte som en ändring.
+
+**2. Ska kalendern i pass 2 visa fler av navets datum än frånvaro,
+coachningssamtal, kursfrister och orderfrister?** Listan är lätt att utöka men
+svår att banta när den väl är ute.
+
+### Innan merge
+
+- `node scripts/apply-sql.mjs 0054_uppgifter` — **numret var ledigt 2026-09-11**,
+  men `0051` finns i två versioner på olika grenar. Fråga `schema_migrations`
+  igen om något annat pass hunnit emellan.
+- `npm test` (nytt: `test:uppgifter`) och `node tests/rls.mjs`.
+- Bygg previewen och stäm av mot `main` — grenen är tagen från `main` 2026-09-11.
 
 ## Växeln levererar sedan 2026-09-11 — OCH ETT BESLUT VÄNTAR
 

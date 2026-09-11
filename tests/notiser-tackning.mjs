@@ -55,6 +55,45 @@ const TACKNING = {
   "coachning/mallar::tillampaMall": "harledd",
 
   // ---------------------------------------------------------------------------
+  // Uppgifter (0054)
+  //
+  // FLER "harledd" AN I NAGON ANNAN MODUL, och det ar ett resultat och inte en
+  // slarvighet. Uppgiftsmodulen har nastan inga handelser som skriver over sitt
+  // eget tillstand: en tilldelad uppgift STAR som tilldelad, en inlamnad STAR
+  // och vantar, en returnerad STAR som returnerad tills nagon gor om arbetet.
+  // Allt det gar att rakna fram, och det som gar att rakna fram ska raknas fram
+  // — se rubriken i notiser.ts.
+  //
+  // De fyra som notifierar ar de fyra dar spar SUDDAS: godkannandet gor raden
+  // till "klar" och gar da inte att skilja fran en egen bock, omtilldelningen
+  // skriver over forra agaren, avbrottet stanger, och en kommentar lamnar inget
+  // spar alls i uppgiftens lage.
+  // ---------------------------------------------------------------------------
+  "uppgifter::skapaUppgift": "harledd",
+  "uppgifter::andraUppgift":
+    "En andrad rubrik eller frist ar inget besked. Ar den forsenad sager den harledda posten till anda.",
+  "uppgifter::tilldela": "notifierar",
+  "uppgifter::planera":
+    "Ett flyttat datum syns i listan och i morgonbrevet. En notis per omplanering hade gjort planeringen dyr.",
+  "uppgifter::paborja":
+    "En anteckning om att arbetet startat. Den som borjade vet om det, och kretsen ser det i historiken.",
+  "uppgifter::bocka": "harledd",
+  "uppgifter::godkann": "notifierar",
+  "uppgifter::returnera": "harledd",
+  "uppgifter::ateroppna":
+    "Bara den som far arbeta med uppgiften kan oppna den igen, och da ar hon redan den som skulle fatt posten.",
+  "uppgifter::avbryt": "notifierar",
+  "uppgifter::kommentera": "notifierar",
+  "uppgifter::bjudIn": "harledd",
+  "uppgifter::taBortMedlem":
+    "Den som tagits bort ur en uppgift ska inte fa en notis om en rad hon inte langre kommer at.",
+  "uppgifter::koppla":
+    "En koppling ar ett sammanhang, inte en handelse. Personkopplingen ar dessutom dold som grundlage.",
+  "uppgifter::taBortKoppling": "En borttagen koppling ar inget besked till nagon.",
+  "uppgifter::skapaProjekt": "Ett projekt ar en hatt utan mottagare. Uppgifterna i det notifierar var for sig.",
+  "uppgifter::arkiveraProjekt": "Arkiveringen ror inte uppgifterna och beror darfor ingen annan.",
+
+  // ---------------------------------------------------------------------------
   // Arenden
   // ---------------------------------------------------------------------------
   "arenden::skapaArende": "harledd",
