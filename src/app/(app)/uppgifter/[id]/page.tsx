@@ -21,7 +21,8 @@ import {
 import { hamtaUppgift } from "@/lib/uppgifter-server";
 import { Bock } from "../Bock";
 import { Egenskaper } from "./Egenskaper";
-import { Handlingar, Inbjudan, Kopplingsformular, Kommentar, Deluppgift } from "./Handlingar";
+import { Handlingar, Inbjudan, Kopplingsformular, Deluppgift } from "./Handlingar";
+import { Uppgiftschatt } from "./Uppgiftschatt";
 
 export const dynamic = "force-dynamic";
 
@@ -105,6 +106,29 @@ export default async function Uppgiftssida({ params }: { params: Promise<{ id: s
   }));
 
   const klaraDelar = u.delar.filter((d) => arStangd(d.lage)).length;
+
+  /**
+   * Samtalet och protokollet delas isär.
+   *
+   * Båda bor i `task_event` — replikerna som typen `kommentar` — och det är
+   * fortfarande rätt: de hör till uppgiftens gång och följer med i
+   * registerutdraget via den. Men de RITAS på två ställen sedan 2026-09-11.
+   * Historiken är ett protokoll som läses uppifrån; ett samtal läses nedifrån
+   * och besvaras. Blandade blev båda sämre.
+   */
+  const repliker = handelser
+    .filter((h) => h.type === "kommentar" && h.note)
+    .map((h) => ({
+      id: h.id,
+      author_id: h.by_employee_id,
+      namn: h.namn,
+      body: h.note as string,
+      created_at: h.at,
+    }))
+    // `hamtaUppgift()` ger nyast först. En tråd läses äldst först.
+    .reverse();
+
+  const protokoll = handelser.filter((h) => h.type !== "kommentar");
 
   return (
     <div className="flex flex-col gap-4 pt-2">
@@ -240,9 +264,20 @@ export default async function Uppgiftssida({ params }: { params: Promise<{ id: s
           </Card>
 
           <Card>
-            <CardHeader titel="Historik" beskrivning="Ingenting skrivs över. Raderna står kvar." />
+            <CardHeader
+              titel="Samtal"
+              beskrivning="Frågor och avstämningar om just den här uppgiften."
+            />
+            <Uppgiftschatt id={u.id} repliker={repliker} mig={mig} />
+          </Card>
+
+          <Card>
+            <CardHeader
+              titel="Historik"
+              beskrivning="Vad som hänt med uppgiften. Ingenting skrivs över."
+            />
             <ol className="flex flex-col">
-              {handelser.map((h) => (
+              {protokoll.map((h) => (
                 <li key={h.id} className="flex gap-3 border-b border-canvas py-3 last:border-0">
                   <span aria-hidden className={`mt-1.5 size-2 shrink-0 rounded-full ${PRICK[h.type] ?? "bg-ink-300"}`} />
                   <div className="min-w-0 flex-1">
@@ -267,9 +302,6 @@ export default async function Uppgiftssida({ params }: { params: Promise<{ id: s
                 </li>
               ))}
             </ol>
-            <div className="mt-4 border-t border-canvas pt-4">
-              <Kommentar id={u.id} />
-            </div>
           </Card>
         </div>
 

@@ -52,6 +52,8 @@ const TABELL: Record<string, string> = {
   employee: "Personalposten",
   project: "Projekt",
   project_member: "Deltagare i projekt",
+  project_message: "Repliker i projektchattar",
+  project_message_read: "Lästa projektchattar",
   task: "Uppgifter",
   task_event: "Händelser på uppgifter",
   task_link: "Kopplingar på uppgifter",

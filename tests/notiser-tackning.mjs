@@ -96,6 +96,9 @@ const TACKNING = {
     "Namn, farg och deadline pa hatten. Uppgifterna i projektet ar oforandrade och ingen har fatt nagot.",
   "uppgifter::bjudInProjekt":
     "Att sta med i ett projekt oppnar inga uppgifter — varje uppgift har sin egen krets. Personen ser projektet nasta gang hon oppnar listan.",
+  "uppgifter::skrivProjektmeddelande": "harledd",
+  "uppgifter::markeraProjektchattLast":
+    "En lasmarkering ar en anteckning om att JAG last nagot. Den beror ingen annan.",
   "uppgifter::taBortProjektmedlem":
     "Den som tagits bort ur ett projekt ska inte fa en notis om en sida hon inte langre kommer at.",
 

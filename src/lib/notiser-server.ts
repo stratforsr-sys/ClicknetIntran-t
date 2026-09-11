@@ -20,7 +20,7 @@ import { guiderForRoller } from "@/guider";
 import { MAX_I_KLOCKAN, navnyheterFor, tidpunktFor } from "@/navnyheter";
 import { dagarSedan, personlage, type Progress } from "@/lib/guider";
 import { coachningsnotiser } from "@/lib/coachning-server";
-import { uppgiftsnotiser } from "@/lib/uppgifter-server";
+import { projektchattnotiser, uppgiftsnotiser } from "@/lib/uppgifter-server";
 
 /** G6. Sa lange far det sta stilla innan klockan sager till. */
 const TYST_DAGAR = 3;
@@ -1023,6 +1023,15 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
    */
   try {
     notiser.push(...(await uppgiftsnotiser(user)));
+  } catch {
+    // Tyst. Samma skal som ovan.
+  }
+
+  // Projektchatten (0055). Egen gren och inte en del av uppgiftsnotiserna: den
+  // laser andra tabeller, och ett fel i chatten ska inte tysta forfallna
+  // uppgifter.
+  try {
+    notiser.push(...(await projektchattnotiser(user)));
   } catch {
     // Tyst. Samma skal som ovan.
   }

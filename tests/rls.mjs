@@ -2600,8 +2600,87 @@ console.log("\n\x1b[1mUppgifter: kretsen ar fyra personer, och ingen roll\x1b[0m
   await db.query(`delete from project where name like 'rlstest-%'`);
 }
 
+console.log("\n\x1b[1mProjektchatten: projektets krets, och ingen annan\x1b[0m");
+{
+  /**
+   * Chatten arver projektets krets och har ingen egen.
+   *
+   * `project_message_read` ar det enda i modulen som ar SNAVARE an sin
+   * forelder: nar en kollega senast last en trad ar en uppgift om HENNE och
+   * inte om projektet, sa den raden ser bara hon sjalv. Faller den kontrollen
+   * har nagon gjort chatten till en lasrapport.
+   */
+  const { rows: [projekt] } = await db.query(
+    `insert into project (name, owner_id, created_by) values ('rlstest-chatt', $1::uuid, $1::uuid) returning id`,
+    [chef.id],
+  );
+
+  const { rows: [replik] } = await db.query(
+    `insert into project_message (project_id, author_id, body) values ($1::uuid, $2::uuid, 'rlstest hej') returning id`,
+    [projekt.id, chef.id],
+  );
+
+  ok("David ser sin egen replik", (await las(tD, "project_message", `id=eq.${replik.id}&select=*`)).length === 1);
+  ok(
+    "Anna ser ingenting — hon ar inte med i projektet",
+    (await las(tA, "project_message", `id=eq.${replik.id}&select=*`)).length === 0,
+  );
+  ok(
+    "och inte heller Cecilia, trots att hon ar teamledare",
+    (await las(tC, "project_message", `id=eq.${replik.id}&select=*`)).length === 0,
+  );
+
+  await db.query(
+    `insert into project_member (project_id, employee_id, role, added_by) values ($1::uuid, $2::uuid, 'visare', $3::uuid)`,
+    [projekt.id, saljareA.id, chef.id],
+  );
+
+  ok(
+    "inbjuden som visare ser traden",
+    (await las(tA, "project_message", `id=eq.${replik.id}&select=*`)).length === 1,
+  );
+
+  // Lasmarkeringen ar din egen.
+  await db.query(
+    `insert into project_message_read (project_id, employee_id) values ($1::uuid, $2::uuid)`,
+    [projekt.id, saljareA.id],
+  );
+
+  ok(
+    "Anna ser sin egen lasmarkering",
+    (await las(tA, "project_message_read", `project_id=eq.${projekt.id}&select=*`)).length === 1,
+  );
+  ok(
+    "David ser den INTE, trots att han ager projektet",
+    (await las(tD, "project_message_read", `project_id=eq.${projekt.id}&select=*`)).length === 0,
+  );
+
+  // Skrivvagen gar via server action.
+  const smyg = await fetch(`${URL}/rest/v1/project_message`, {
+    method: "POST", headers: som(tA),
+    body: JSON.stringify({ project_id: projekt.id, author_id: saljareA.id, body: "rlstest smugen" }),
+  });
+  ok("ingen skriver en replik direkt mot API:t", !smyg.ok, `HTTP ${smyg.status}`);
+
+  // En replik i nagon annans namn ska databasen heller inte hjalpa till med:
+  // `author_id` tas ur sessionen i server action, aldrig ur ett argument.
+  const falskt = await fetch(`${URL}/rest/v1/project_message`, {
+    method: "POST", headers: som(tD),
+    body: JSON.stringify({ project_id: projekt.id, author_id: saljareA.id, body: "rlstest i annans namn" }),
+  });
+  ok("och ingen skriver i nagon annans namn", !falskt.ok, `HTTP ${falskt.status}`);
+
+  // Tom replik nekas av villkoret i 0055, inte av granssnittet.
+  const tom = await nekarSql(
+    `insert into project_message (project_id, author_id, body) values ($1::uuid, $2::uuid, '   ')`,
+    [projekt.id, chef.id],
+  );
+  ok("en tom replik nekas av databasen", Boolean(tom), tom ?? "slapptes igenom");
+
+  await db.query(`delete from project where name = 'rlstest-chatt'`);
+}
 console.log("\n\x1b[1mAnonym anslutning\x1b[0m");
-for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate", "news_post", "notification_seen", "notification_dismissed", "absence_type", "absence_policy", "absence_blackout", "staffing_cap", "absence_balance", "absence_request", "absence_call_order", "sick_report", "sick_deadline", "absence_reminder", "calendar_feed", "file_object", "file_access_log", "roleplay_criterion", "roleplay_submission", "roleplay_score", "cost_rate", "salary_basis", "revenue_entry", "cost_calculation", "error_report", "contract", "contract_template", "activity_day", "search_miss", "candidate", "candidate_stage_event", "interview_scorecard", "recruitment_source", "recruitment_policy", "task", "task_member", "task_link", "task_event", "project", "project_member"]) {
+for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate", "news_post", "notification_seen", "notification_dismissed", "absence_type", "absence_policy", "absence_blackout", "staffing_cap", "absence_balance", "absence_request", "absence_call_order", "sick_report", "sick_deadline", "absence_reminder", "calendar_feed", "file_object", "file_access_log", "roleplay_criterion", "roleplay_submission", "roleplay_score", "cost_rate", "salary_basis", "revenue_entry", "cost_calculation", "error_report", "contract", "contract_template", "activity_day", "search_miss", "candidate", "candidate_stage_event", "interview_scorecard", "recruitment_source", "recruitment_policy", "task", "task_member", "task_link", "task_event", "project", "project_member", "project_message", "project_message_read"]) {
   const r = await fetch(`${URL}/rest/v1/${t}?select=*`, { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` } });
   const j = await r.json();
   ok(`${t} ger inga rader anonymt`, !Array.isArray(j) || j.length === 0, Array.isArray(j) ? `${j.length} rader` : `HTTP ${r.status}`);

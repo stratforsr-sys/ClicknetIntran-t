@@ -40,7 +40,8 @@ export type Notistyp =
   | "rekrytering"
   | "provision"
   | "kv"
-  | "uppgift";
+  | "uppgift"
+  | "chatt";
 
 /**
  * Ar strangen en av de sjutton typerna?
@@ -354,6 +355,17 @@ export const NOTIS_KALLOR = [
   "uppgift-vantar",
 
   /**
+   * Projektchatten (0055). EN post per projekt och inte en per replik — tio
+   * repliker i samma projekt ar "10 nya i Massan" och inte tio rader.
+   *
+   * Harledd, for olast ar ett TILLSTAND som star kvar tills nagon last traden.
+   * En handelsepost hade legat kvar i klockan aven efteråt. Raknaren star i
+   * id:t, sa posten byts ut nar det kommit fler — den som klickat bort "3 nya"
+   * far se den igen nar den fjarde repliken landar.
+   */
+  "projektchatt",
+
+  /**
    * HANDELSER — allt som SKREV OVER sitt eget tillstand.
    *
    * `uppgift-godkand` ar det tydligaste fallet i hela navet: en godkand uppgift
@@ -527,6 +539,7 @@ export const TYP_ETIKETT: Record<Notistyp, string> = {
   provision: "Provision",
   kv: "K&V",
   uppgift: "Uppgift",
+  chatt: "Chatt",
 };
 
 export const TYP_IKON: Record<Notistyp, string> = {
@@ -547,6 +560,7 @@ export const TYP_IKON: Record<Notistyp, string> = {
   provision: "logg",
   kv: "kontroll",
   uppgift: "kontroll",
+  chatt: "chatt",
 };
 
 /**

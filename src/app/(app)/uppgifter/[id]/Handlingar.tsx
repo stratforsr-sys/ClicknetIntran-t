@@ -11,7 +11,6 @@ import {
   bjudIn,
   bocka,
   godkann,
-  kommentera,
   koppla,
   paborja,
   returnera,
@@ -244,26 +243,6 @@ function Avbryt({ id }: { id: string }) {
 }
 
 // -----------------------------------------------------------------------------
-
-export function Kommentar({ id }: { id: string }) {
-  const [state, kor, vantar] = useActionState<UppgiftState, FormData>(kommentera, {});
-
-  return (
-    <form action={kor} className="flex flex-col gap-2">
-      {state.fel && <Notis ton="danger">{state.fel}</Notis>}
-      <input type="hidden" name="id" value={id} />
-      <label htmlFor="kommentar-note" className="flex flex-col gap-1">
-        <span className="text-micro text-ink-500">Skriv till de andra i uppgiften</span>
-        <textarea id="kommentar-note" name="note" rows={2} required className={KONTROLL} />
-      </label>
-      <div>
-        <Button type="submit" variant="sekundar" size="sm" laddar={vantar} disabled={vantar}>
-          Skicka
-        </Button>
-      </div>
-    </form>
-  );
-}
 
 /**
  * Ny deluppgift.

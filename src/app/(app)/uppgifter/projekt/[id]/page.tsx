@@ -8,10 +8,11 @@ import { Markdown } from "@/components/Markdown";
 import { getCurrentUser } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { arStangd, forsenad, tidstext } from "@/lib/uppgifter";
-import { hamtaProjektvy, type Uppgift } from "@/lib/uppgifter-server";
+import { hamtaProjektchatt, hamtaProjektvy, type Uppgift } from "@/lib/uppgifter-server";
 import { Lista, type Listrad, type Projektkarta } from "../../Lista";
 import { Snabbrad } from "../../Snabbrad";
 import { Projektpanel } from "./Projektpanel";
+import { Projektchatt } from "./Projektchatt";
 
 export const dynamic = "force-dynamic";
 
@@ -83,11 +84,14 @@ export default async function Projektsida({ params }: { params: Promise<{ id: st
     delar: u.delar.map((d) => ({ id: d.id, title: d.title, lage: d.lage })),
   });
 
-  const { data: personer } = await (await supabaseServer())
-    .from("employee")
-    .select("id, first_name, last_name")
-    .neq("status", "offboarded")
-    .order("first_name");
+  const [{ data: personer }, chatt] = await Promise.all([
+    (await supabaseServer())
+      .from("employee")
+      .select("id, first_name, last_name")
+      .neq("status", "offboarded")
+      .order("first_name"),
+    hamtaProjektchatt(user, id),
+  ]);
 
   const valbara = (personer ?? []).map((x) => ({
     id: x.id as string,
@@ -170,77 +174,116 @@ export default async function Projektsida({ params }: { params: Promise<{ id: st
         </div>
       </Card>
 
-      {/* ===================== ARBETET ===================== */}
-      {agare && !p.archived_at && (
-        <Snabbrad
-          projektNamn={[p.name]}
-          projektId={p.id}
-          placeholder={`Vad ska göras i ${p.name}?`}
-        />
-      )}
+      {/*
+        ===================== ARBETET OCH SAMTALET =====================
 
-      <Card>
-        <CardHeader
-          titel="Att göra"
-          beskrivning={
-            oppna.length === 0
-              ? undefined
-              : `${oppna.length} öppna${forsenade.length > 0 ? `, varav ${forsenade.length} försenade` : ""}`
-          }
-        />
-        {oppna.length === 0 ? (
-          <EmptyState
-            rubrik={uppgifter.length === 0 ? "Inga uppgifter än" : "Allt är avbockat"}
-            text={
-              uppgifter.length === 0
-                ? "Skriv den första saken som måste göras i fältet ovanför. Du kan sätta datum och ansvarig direkt i raden."
-                : "Ingenting öppet i projektet just nu. Det som gjorts står kvar nedanför."
-            }
-          />
-        ) : (
-          <Lista rader={oppna.map(till)} namn={namnKarta} projekt={projektkarta} idag={idag} visaAnsvarig />
-        )}
-      </Card>
+        TVÅ SPALTER PÅ STOR SKÄRM, och chatten ligger i den smala. Skälet är
+        beställningen: samtalet ska mötas när man GÅR IN i projektet, inte
+        hittas efter att man skrollat förbi uppgiftslistan. Låg det under
+        listan hade det varit en bilaga till arbetet i stället för en del av
+        det.
 
-      {klara.length > 0 && (
-        <details className="group rounded-md bg-surface p-4 shadow-elev-1 md:p-6">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-4">
-            <h2 className="text-h2 text-ink-900">
-              Klart <span className="tnum text-ink-300">{klara.length}</span>
-            </h2>
-            <Ikon
-              namn="tillbaka"
-              className="size-4 -rotate-90 text-ink-300 transition-transform duration-fast group-open:rotate-90"
+        Spalten är `sticky` från lg och uppåt, så tråden står kvar medan man
+        betar av uppgifter bredvid. På telefon faller allt i en spalt och
+        chatten hamnar efter listan — där är ordningen rätt, för då ser man
+        en skärm i taget ändå.
+      */}
+      <div className="grid gap-4 lg:grid-cols-3 lg:items-start">
+        <div className="flex flex-col gap-4 lg:col-span-2">
+          {agare && !p.archived_at && (
+            <Snabbrad
+              projektNamn={[p.name]}
+              projektId={p.id}
+              placeholder={`Vad ska göras i ${p.name}?`}
             />
-          </summary>
-          <div className="mt-4">
-            <Lista rader={klara.map(till)} namn={namnKarta} projekt={projektkarta} idag={idag} visaAnsvarig />
-          </div>
-        </details>
-      )}
+          )}
 
-      {p.medlemmar.length > 0 && (
-        <Card>
-          <CardHeader
-            titel="Vilka är med"
-            beskrivning="Deltagarna ser projektet. Vilka uppgifter de ser avgörs av varje uppgift för sig."
-          />
-          <ul className="flex flex-col gap-2.5">
-            <li className="flex items-center justify-between gap-3">
-              <span className="truncate text-body text-ink-900">{namn.get(p.owner_id) ?? "Okänd"}</span>
-              <span className="shrink-0 rounded-full bg-brand-tint px-2 py-0.5 text-micro text-brand-ink">Ägare</span>
-            </li>
-            {p.medlemmar.map((m) => (
-              <li key={m.employee_id} className="flex items-center justify-between gap-3">
-                <span className="truncate text-body text-ink-900">{m.namn}</span>
-                <span className="shrink-0 rounded-full bg-canvas px-2 py-0.5 text-micro text-ink-500">
-                  {m.role === "redigerare" ? "Redigerare" : "Kan se"}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
+          <Card>
+            <CardHeader
+              titel="Att göra"
+              beskrivning={
+                oppna.length === 0
+                  ? undefined
+                  : `${oppna.length} öppna${forsenade.length > 0 ? `, varav ${forsenade.length} försenade` : ""}`
+              }
+            />
+            {oppna.length === 0 ? (
+              <EmptyState
+                rubrik={uppgifter.length === 0 ? "Inga uppgifter än" : "Allt är avbockat"}
+                text={
+                  uppgifter.length === 0
+                    ? "Skriv den första saken som måste göras i fältet ovanför. Du kan sätta datum och ansvarig direkt i raden."
+                    : "Ingenting öppet i projektet just nu. Det som gjorts står kvar nedanför."
+                }
+              />
+            ) : (
+              <Lista rader={oppna.map(till)} namn={namnKarta} projekt={projektkarta} idag={idag} visaAnsvarig />
+            )}
+          </Card>
+
+          {klara.length > 0 && (
+            <details className="group rounded-md bg-surface p-4 shadow-elev-1 md:p-6">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4">
+                <h2 className="text-h2 text-ink-900">
+                  Klart <span className="tnum text-ink-300">{klara.length}</span>
+                </h2>
+                <Ikon
+                  namn="tillbaka"
+                  className="size-4 -rotate-90 text-ink-300 transition-transform duration-fast group-open:rotate-90"
+                />
+              </summary>
+              <div className="mt-4">
+                <Lista rader={klara.map(till)} namn={namnKarta} projekt={projektkarta} idag={idag} visaAnsvarig />
+              </div>
+            </details>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-4 lg:sticky lg:top-4">
+          <Card>
+            <CardHeader
+              titel="Samtal"
+              beskrivning={
+                p.medlemmar.length === 0
+                  ? "Bjud in någon i inställningarna så blir det ett samtal."
+                  : "Alla i projektet ser det som skrivs här."
+              }
+            />
+            <Projektchatt
+              projektId={p.id}
+              meddelanden={chatt.meddelanden}
+              seenAt={chatt.seenAt}
+              mig={mig}
+              kanSkriva={agare}
+            />
+          </Card>
+
+          {p.medlemmar.length > 0 && (
+            <Card>
+              <CardHeader
+                titel="Vilka är med"
+                beskrivning="Deltagarna ser projektet. Vilka uppgifter de ser avgörs av varje uppgift för sig."
+              />
+              <ul className="flex flex-col gap-2.5">
+                <li className="flex items-center justify-between gap-3">
+                  <span className="truncate text-body text-ink-900">{namn.get(p.owner_id) ?? "Okänd"}</span>
+                  <span className="shrink-0 rounded-full bg-brand-tint px-2 py-0.5 text-micro text-brand-ink">
+                    Ägare
+                  </span>
+                </li>
+                {p.medlemmar.map((m) => (
+                  <li key={m.employee_id} className="flex items-center justify-between gap-3">
+                    <span className="truncate text-body text-ink-900">{m.namn}</span>
+                    <span className="shrink-0 rounded-full bg-canvas px-2 py-0.5 text-micro text-ink-500">
+                      {m.role === "redigerare" ? "Redigerare" : "Kan se"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

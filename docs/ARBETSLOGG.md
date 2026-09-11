@@ -5,6 +5,92 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-11 (tredje passet) · En riktig chatt, och den bor i projektet
+
+Beställarens ord framför skärmen: *"ändra den här delen i en uppgift till en
+riktig chatt — fast chatten ska vara i projektet när man går in i projektet."*
+Migration `0055`.
+
+### Varför chatten inte blev en rad till i `task_event`
+
+Uppgiftens kommentarer bor i historiken sedan 0054, och det är riktigt: en
+kommentar på en uppgift hör till ärendets gång, den ska stå kvar bredvid
+"Returnerad" och "Godkänd", och den följer med i registerutdraget via uppgiften.
+
+Ett **projektsamtal är något annat.** Det hör inte till ett beslut utan till en
+grupp människor, det har inget läge att flytta, och det som gör det användbart —
+vem som skrivit sedan jag var här sist — kräver att navet minns att jag VARIT
+här. Det minnet finns inte i en händelselogg och hör inte hemma i en heller:
+`task_event` är bevis, och bevis skrivs inte om för att någon råkade läsa dem.
+
+### Oläst räknas fram. Det lagras inte per meddelande.
+
+Alternativet — en rad per mottagare och replik — hade gett en tabell som växer
+med deltagare gånger repliker, **och en notis per replik i klockan.** Tio
+meddelanden i ett projekt hade blivit tio poster, och då stänger folk av klockan.
+
+`project_message_read` bär i stället EN tidpunkt per person och projekt: när du
+senast öppnade tråden. Antalet olästa blir då en räkning, och notisen blir
+*"3 nya i Mässan"* med den sista repliken i klartext under. Exakt samma val som
+`notification_seen` gjorde i 0018.
+
+Posten är **härledd** av samma skäl: oläst är ett tillstånd som står kvar tills
+någon läst tråden. En händelsepost hade legat kvar i klockan efteråt.
+
+### Vad som gör det till en chattruta och inte ett kommentarsfält
+
+Skillnaden är inte dekoration. Ett kommentarsfält är en rad man lämnar efter
+sig; en chatt är ett rum man går in i. Tre saker bär det:
+
+1. **Tråden har egen höjd och skrollar i sig själv**, med det senaste längst ned
+   och synligt direkt. En lista som växer nedåt på sidan gör att skrivfältet
+   vandrar längre bort ju mer man pratar.
+2. **Repliker grupperas per person, dag och paus.** Tidsgränsen på en kvart är
+   den minst uppenbara och den viktigaste: utan den klistras ett svar tre timmar
+   senare ihop med morgonens fråga, och samtalet ser ut att ha skett i ett svep.
+3. **Ett streck för "nytt sedan du var här"**, och egna repliker räknas aldrig
+   som olästa — annars hamnar strecket ovanför ens eget inlägg varje gång.
+
+Enter skickar, Skift+Enter radbryter. Det är vad alla andra chattar gör, och en
+chatt som gör tvärtom lär sig ingen — man skickar halva meningar i en vecka och
+slutar sedan använda den.
+
+`Chattrad.tsx` är egen fil för att projektet och uppgiften ska rita **samma**
+tråd. De skiljer sig i allt annat; bubblorna ska de inte skilja sig i.
+
+### Uppgiftens repliker flyttade ur historiken
+
+De ligger kvar i `task_event` som typen `kommentar` — lagringen är oförändrad —
+men de ritas inte längre MITT I protokollet, mellan "Påbörjad" och "Godkänd".
+
+Det var fel av ett skäl som är lätt att missa: **historiken läses uppifrån,
+samtalet nedifrån.** Att blanda dem gjorde båda sämre — man letade efter det
+senast sagda mellan systemhändelser, och beslutsgången bröts av småprat. Nu är
+det två kort: *Samtal* och *Historik*.
+
+Uppgiftens repliker notifierar fortfarande **per replik** (`uppgift-kommentar`),
+och det är avsiktligt olikt projektet: en uppgift har en liten utpekad krets, så
+en replik där är ett meddelande till namngivna personer. Ett projekt kan ha tio
+deltagare och femtio repliker.
+
+### Layouten: samtalet syns när man går in
+
+Projektsidan är två spalter från `lg`. Arbetet till vänster, chatten i en
+`sticky` högerspalt — tråden står kvar medan man betar av uppgifter bredvid. Låg
+den under listan hade den varit en bilaga till arbetet i stället för en del av
+det, vilket var precis vad beställningen gällde.
+
+### Prov
+
+Nio nya kontroller i `tests/rls.mjs`. Två av dem är de som räknas:
+*"Cecilia ser ingenting, trots att hon är teamledare"* och — den snävare —
+*"David ser INTE Annas läsmarkering, trots att han äger projektet"*. När en
+kollega senast läste en tråd är en uppgift om **henne**, inte om projektet.
+`project_message_read` är därmed det enda i modulen som är snävare än sin
+förälder.
+
+---
+
 ## 2026-09-11 (eftermiddag) · Projektet blev en plats, och uppgiften gick att ändra
 
 Beställarens genomgång av previewen gav två invändningar, och den andra var den

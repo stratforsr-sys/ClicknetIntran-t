@@ -174,6 +174,20 @@ export const KALLOR: Kalla[] = [
   { tabell: "task_member", kolumn: "employee_id", andamal: "Uppgifter du är inbjuden i" },
   { tabell: "project", kolumn: "owner_id", andamal: "Projekt du äger" },
   { tabell: "project_member", kolumn: "employee_id", andamal: "Projekt du är med i" },
+
+  // 0055. Dina egna repliker i projektchattarna. Samma linje som
+  // `error_report.reporter_id`: det är dina ord, skrivna av dig, och de står
+  // i ditt utdrag av det skälet.
+  //
+  // ANDRAS REPLIKER STÅR INTE HÄR, trots att projekten du är med i gör det.
+  // Ett utdrag som lämnade ut hela projektsamtalet hade gett dig kollegornas
+  // ord i en handling som gäller dig — och det är ett dataintrång utklätt
+  // till en rättighet, precis som `case_message` resonerade.
+  { tabell: "project_message", kolumn: "author_id", andamal: "Dina repliker i projektens chattar" },
+
+  // Och när du senast öppnade en chatt. Raden säger att du var där, vilket
+  // är en uppgift om dig även om den bara används för att räkna olästa.
+  { tabell: "project_message_read", kolumn: "employee_id", andamal: "När du senast läste ett projekts chatt" },
 ];
 
 /**

@@ -3,13 +3,18 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-11 (kväll, andra passet) — **projektet blev en egen sida** (`/uppgifter/projekt/[id]`) och uppgiftssidan gick äntligen att ändra på: ansvarig, frist, tid, prioritet och projekt. Handlingen flyttade överst. Fortfarande **ej mergad**. Föregående rad: **uppgiftsmodulen pass 1 byggd** på branch `uppgifter`, migration `0054`: uppgifter, deluppgifter, projekt, godkännande, kopplingar, notiser och morgonbrev. **Ej mergad, väntar på granskning av previewen.** Två öppna frågor står under avsnittet nedan. Föregående rad: 2026-09-11 — Lynes webhook levererar. Formen visade sig vara en annan än gissningarna: alla sexton första samtalen tolkades fel, tolken är rättad mot riktig trafik och påsarna omtolkade ur `call_ingest`. **Ett beslut väntar om inspelningarna** — S3-adressen lever trettio minuter. Föregående rad: 2026-09-10 (kväll) — växelns samtal: Lynes webhook har en adress in i navet, radlogg och tolkning på plats, migration `0052` körd. På branch `lynes-samtal`, ej mergad; ingenting syns i gränssnittet än. Föregående rad: 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
+**Senast uppdaterad:** 2026-09-11 (kväll, tredje passet) — **projektchatt** (migration `0055`): riktig tråd med bubblor, dagstreck och "nytt sedan du var här", plus uppgiftens repliker utbrutna ur historiken. Fortfarande **ej mergad**. Föregående rad: (andra passet) — **projektet blev en egen sida** (`/uppgifter/projekt/[id]`) och uppgiftssidan gick äntligen att ändra på: ansvarig, frist, tid, prioritet och projekt. Handlingen flyttade överst. Fortfarande **ej mergad**. Föregående rad: **uppgiftsmodulen pass 1 byggd** på branch `uppgifter`, migration `0054`: uppgifter, deluppgifter, projekt, godkännande, kopplingar, notiser och morgonbrev. **Ej mergad, väntar på granskning av previewen.** Två öppna frågor står under avsnittet nedan. Föregående rad: 2026-09-11 — Lynes webhook levererar. Formen visade sig vara en annan än gissningarna: alla sexton första samtalen tolkades fel, tolken är rättad mot riktig trafik och påsarna omtolkade ur `call_ingest`. **Ett beslut väntar om inspelningarna** — S3-adressen lever trettio minuter. Föregående rad: 2026-09-10 (kväll) — växelns samtal: Lynes webhook har en adress in i navet, radlogg och tolkning på plats, migration `0052` körd. På branch `lynes-samtal`, ej mergad; ingenting syns i gränssnittet än. Föregående rad: 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
 
 ## Uppgifter och projekt — PÅ BRANCH `uppgifter`, EJ MERGAD
 
 *Migration `0054`. Hela resonemanget i `ARBETSLOGG.md` 2026-09-11. Beställningen
 var "hantera alla mina personliga uppgifter som säljchef direkt i intranätet".
 Det här är pass 1 av tre — kalendern är pass 2.*
+
+**Chatten (0055).** Projektet har en tråd i högerspalten. Olästa RÄKNAS FRAM
+ur `project_message_read` — en tidpunkt per person och projekt — så notisen
+blir "3 nya i Mässan" och inte tre rader i klockan. Lägg aldrig till en rad
+per mottagare och meddelande där; det var hela valet.
 
 **Vad som finns nu.** Projektkortet leder in i projektet — egen sida med mätare,
 egen snabbrad, öppet/klart som två listor, deltagare och inställningspanel.
@@ -56,6 +61,8 @@ coachningssamtal, kursfrister och orderfrister?** Listan är lätt att utöka me
 svår att banta när den väl är ute.
 
 ### Innan merge
+
+- `node scripts/apply-sql.mjs 0055_projektchatt` — **körd 2026-09-11**.
 
 - `node scripts/apply-sql.mjs 0054_uppgifter` — **numret var ledigt 2026-09-11**,
   men `0051` finns i två versioner på olika grenar. Fråga `schema_migrations`
@@ -304,6 +311,8 @@ ur `external_ref` som förut, och den fallbacken ska stå kvar.
 kräver fältet därför.
 
 ### Innan merge
+
+- `node scripts/apply-sql.mjs 0055_projektchatt` — **körd 2026-09-11**.
 
 1. **Kör `0051`** mot produktionsdatabasen (`0050` är redan körd 2026-09-09).
 2. **Visa previewen.** `/order` — knapparna *Rätta ordern* och *Lägg bonus* på

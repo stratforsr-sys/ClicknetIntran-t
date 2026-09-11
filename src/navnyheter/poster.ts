@@ -44,8 +44,15 @@ ingen tror sig ha bockat av något som ligger hos någon annan.
 en coachningsuppgift eller en utbildning. Kopplingen syns i listan, och du
 kommer vidare med ett klick.
 
-**Projekt** är en hatt att hänga uppgifter på: namn, färg, deadline. Kortet
-räknar hur många som är klara och hur många som är sena.
+**Projekt** är en hatt att hänga uppgifter på: namn, färg, deadline. **Tryck på
+kortet så går du in i projektet** — där finns en mätare över hur långt det
+kommit, en egen rad att lägga uppgifter i, deltagare och en **chatt**.
+
+**Chatten i projektet** är till för det som inte är en egen uppgift: frågor,
+avstämningar, ett snabbt besked. Alla i projektet ser den. Klockan säger
+*"3 nya i Mässan"* — en rad per projekt, inte en per replik — och posten
+försvinner av sig själv när du läst tråden. Uppgifter har också en egen liten
+tråd, skild från historiken.
 
 **Påminnelser.** Notisklockan samlar ihop förfallet och dagens till en rad
 vardera — inte elva rader för elva uppgifter. Har du något som väntar kommer

@@ -768,3 +768,124 @@ export async function hamtaProjektvy(
     idag: bild.idag,
   };
 }
+
+// -----------------------------------------------------------------------------
+// Projektchatten (0055)
+// -----------------------------------------------------------------------------
+
+export type Chattmeddelande = {
+  id: string;
+  author_id: string;
+  namn: string;
+  body: string;
+  created_at: string;
+};
+
+/**
+ * Samtalet i ett projekt.
+ *
+ * KAPAS VID TVÅHUNDRA, nyaste sist. En chattruta som laddar hela historiken
+ * varje gång blir långsammare ju mer den används, och det är precis fel
+ * riktning för en yta vars värde ligger i att man orkar öppna den. Det som
+ * faller utanför är inte borta — det ligger kvar i tabellen — men en chatt är
+ * inte ett arkiv, och den som letar efter något från i våras letar i uppgiften
+ * och inte i samtalet.
+ */
+export async function hamtaProjektchatt(
+  user: CurrentUser,
+  projektId: string,
+): Promise<{ meddelanden: Chattmeddelande[]; seenAt: string | null }> {
+  if (!user.employee) return { meddelanden: [], seenAt: null };
+
+  const supabase = await supabaseServer();
+
+  const [{ data: rader }, { data: markering }] = await Promise.all([
+    supabase
+      .from("project_message")
+      .select("id, author_id, body, created_at")
+      .eq("project_id", projektId)
+      .order("created_at", { ascending: false })
+      .limit(200),
+    supabase
+      .from("project_message_read")
+      .select("seen_at")
+      .eq("project_id", projektId)
+      .eq("employee_id", user.employee.id)
+      .maybeSingle(),
+  ]);
+
+  const poster = ((rader ?? []) as unknown as Omit<Chattmeddelande, "namn">[]).reverse();
+  const namn = await namnkarta(supabase, [...new Set(poster.map((p) => p.author_id))]);
+
+  return {
+    meddelanden: poster.map((p) => ({ ...p, namn: namn.get(p.author_id) ?? "Okänd" })),
+    seenAt: (markering?.seen_at as string | undefined) ?? null,
+  };
+}
+
+/**
+ * Olästa repliker, ett tal per projekt.
+ *
+ * ===========================================================================
+ * EN POST PER PROJEKT OCH INTE PER MEDDELANDE
+ *
+ * Tio repliker i ett projekt ska ge "10 nya i Mässan", inte tio rader i
+ * klockan. Det är hela skälet att `project_message_read` bär en tidpunkt i
+ * stället för en rad per mottagare och meddelande — se rubriken i 0055.
+ *
+ * Härledd och inte händelse, av regeln i notiser.ts: oläst är ett TILLSTÅND
+ * som står kvar tills någon gör något åt det. En händelsepost hade legat kvar
+ * i klockan även efter att man läst tråden.
+ *
+ * EGNA REPLIKER RÄKNAS INTE. Den som just skrivit något har läst det.
+ * ===========================================================================
+ */
+export async function projektchattnotiser(user: CurrentUser): Promise<Notis[]> {
+  if (!user.employee) return [];
+  const mig = user.employee.id;
+
+  const supabase = await supabaseServer();
+
+  const [{ data: projekt }, { data: rader }, { data: markeringar }] = await Promise.all([
+    supabase.from("project").select("id, name").is("archived_at", null),
+    supabase.from("project_message").select("project_id, author_id, body, created_at"),
+    supabase.from("project_message_read").select("project_id, seen_at").eq("employee_id", mig),
+  ]);
+
+  if ((projekt ?? []).length === 0 || (rader ?? []).length === 0) return [];
+
+  const sedd = new Map<string, string>();
+  for (const m of (markeringar ?? []) as { project_id: string; seen_at: string }[]) {
+    sedd.set(m.project_id, m.seen_at);
+  }
+
+  const notiser: Notis[] = [];
+
+  for (const p of (projekt ?? []) as { id: string; name: string }[]) {
+    const nya = ((rader ?? []) as { project_id: string; author_id: string; body: string; created_at: string }[])
+      .filter((m) => m.project_id === p.id && m.author_id !== mig)
+      .filter((m) => {
+        const sedan = sedd.get(p.id);
+        return !sedan || m.created_at > sedan;
+      })
+      .sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
+
+    if (nya.length === 0) continue;
+
+    const senaste = nya[nya.length - 1];
+
+    notiser.push({
+      id: notisId("projektchatt", p.id, nya.length),
+      typ: "chatt",
+      rubrik: nya.length === 1 ? `Ny replik i ${p.name}` : `${nya.length} nya repliker i ${p.name}`,
+      // Den sista repliken i klartext. Att bara säga "3 nya" tvingar fram ett
+      // klick för att ta reda på om det angår en.
+      detalj: senaste.body.slice(0, 140),
+      href: `/uppgifter/projekt/${p.id}`,
+      tidpunkt: senaste.created_at,
+      olast: true,
+    });
+  }
+
+  return notiser;
+}

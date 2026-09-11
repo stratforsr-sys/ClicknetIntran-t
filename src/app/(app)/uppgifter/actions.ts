@@ -970,3 +970,106 @@ export async function taBortProjektmedlem(_prev: UppgiftState, form: FormData): 
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
   }
 }
+
+// =============================================================================
+// Projektchatten (0055)
+// =============================================================================
+
+/**
+ * Vem som far skriva i ett projekts chatt.
+ *
+ * AGAREN, SKAPAREN OCH REDIGERARNA. En `visare` far lasa men inte skriva —
+ * det ar samma grans som rollen betyder overallt annars i modulen, och en
+ * chatt dar alla som fatt en lank kan skriva ar inte langre projektets.
+ */
+async function kravChattkrets(projektId: string) {
+  const user = await kravInloggad();
+  const mig = user.employee!.id;
+  const db = supabaseAdmin();
+
+  const [{ data: projekt }, { data: medlemmar }] = await Promise.all([
+    db.from("project").select("id, name, owner_id, created_by").eq("id", projektId).maybeSingle(),
+    db.from("project_member").select("employee_id, role").eq("project_id", projektId),
+  ]);
+
+  if (!projekt) throw new Error("Projektet finns inte.");
+
+  const min = (medlemmar ?? []).find((m) => m.employee_id === mig);
+  const ser = projekt.owner_id === mig || projekt.created_by === mig || Boolean(min);
+
+  // Samma linje som `kravKrets()`: den som inte ser raden far inte heller veta
+  // att den finns.
+  if (!ser) throw new Error("Projektet finns inte.");
+
+  return {
+    user,
+    mig,
+    projekt: projekt as { id: string; name: string; owner_id: string; created_by: string },
+    medlemmar: (medlemmar ?? []) as { employee_id: string; role: string }[],
+    farSkriva: projekt.owner_id === mig || projekt.created_by === mig || min?.role === "redigerare",
+  };
+}
+
+export async function skrivProjektmeddelande(_prev: UppgiftState, form: FormData): Promise<UppgiftState> {
+  try {
+    const id = text(form, "id");
+    const { mig, farSkriva } = await kravChattkrets(id);
+
+    if (!farSkriva) return { fel: "Du kan läsa samtalet men inte skriva i det." };
+
+    const kropp = text(form, "body");
+    if (!kropp) return { fel: "Skriv något först." };
+    if (kropp.length > 4000) return { fel: "Repliken får vara högst 4000 tecken." };
+
+    const { error } = await supabaseAdmin()
+      .from("project_message")
+      .insert({ project_id: id, author_id: mig, body: kropp });
+
+    if (error) return { fel: `Repliken sparades inte: ${error.message}` };
+
+    /**
+     * INGEN NOTIS SKRIVS HAR.
+     *
+     * Olast raknas fram ur `project_message_read` — se `projektchattnotiser()`
+     * i uppgifter-server.ts. Tio repliker i samma projekt blir da EN post med
+     * en raknare i stallet for tio rader i klockan, och posten forsvinner av
+     * sig sjalv nar mottagaren last traden.
+     *
+     * En handelsepost per replik hade dessutom legat kvar efter lasningen, och
+     * en chatt vars notiser maste klickas bort en och en ar en chatt folk
+     * stanger av.
+     */
+    revalidatePath(`/uppgifter/projekt/${id}`);
+    return { ok: "Skickat." };
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Något gick fel." };
+  }
+}
+
+/**
+ * "Jag har last traden."
+ *
+ * Tar ett id och inte ett FormData: den anropas fran en effekt i
+ * `Projektchatt.tsx` och inte fran ett formular, och ett pahittat FormData
+ * bara for att matcha de andra hade varit ceremoni.
+ *
+ * SKRIVER ALLTID NU, aven om raden redan finns — `upsert` pa nyckeln. Att
+ * hoppa over skrivningen nar tidpunkten redan ar satt hade betytt att den
+ * forsta lasningen var den enda som raknades.
+ */
+export async function markeraProjektchattLast(projektId: string): Promise<void> {
+  try {
+    if (!projektId) return;
+    const { mig } = await kravChattkrets(projektId);
+
+    await supabaseAdmin()
+      .from("project_message_read")
+      .upsert(
+        { project_id: projektId, employee_id: mig, seen_at: new Date().toISOString() },
+        { onConflict: "project_id,employee_id" },
+      );
+  } catch {
+    // Tyst. En misslyckad lasmarkering ska inte fella en sida som redan
+    // renderats — foljden ar att notisen star kvar en stund till.
+  }
+}
