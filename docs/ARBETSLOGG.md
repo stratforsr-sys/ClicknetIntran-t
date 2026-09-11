@@ -355,6 +355,75 @@ nivåer med ledig/upptagen som grundläge, webbläsarnotis, iCal via
 
 ---
 
+## 2026-09-11 (eftermiddag) · Insights slogs pa, och sa att `itemType` inte betyder det Lynes sager
+
+Andra webhooken kom igang 13:11. En enda pase hittills, och den racker for att
+visa att Lynes egen dokumentation inte stammer pa sin egen produkt.
+
+```json
+{ "body": "Call to: +46723160111\nCall from user: mick@clicknet.se (+46102093116)\nCall type: Inbound",
+  "userId": "6a59288e-…", "callType": "Inbound", "duration": 62000,
+  "itemType": "OUTGOING_CALL", "toNumber": "+46723160111",
+  "startTime": 1789132253000, "fromNumber": "+46102093116" }
+```
+
+### Varfor det gick att avgora vad falten betyder
+
+Samma samtal fanns SAMTIDIGT i inspelningsflodet: `id 486642607`, samma
+`userId`, samma `startTime` pa millisekunden, samma tva nummer, `talkTime`
+62000 ms. Tva oberoende beskrivningar av en handelse ar ett facit, och det
+avgjorde tre saker som annars hade varit gissningar:
+
+**`itemType` BAR RIKTNINGEN, inte utfallet.** Slappnoterna sager att `itemType`
+skiljer besvarat, missat, studsat, rostbrevlada och kopplat. I pasen star det
+`OUTGOING_CALL`. Inspelningsflodet sager ocksa `OUTGOING_CALL`, och numren
+haller med: `fromNumber` var Micks eget nummer, `toNumber` kundens.
+
+**`callType` BETYDER INTE RIKTNING.** Den sa `Inbound` om precis samma utgaende
+samtal — den beskriver benet in i vaxeln, inte vad anvandaren gjorde. Tolken
+lasta den forst och spegelvande darfor samtalet: riktning `in`, och motparten
+satt till VART EGET nummer. Nu gar `itemType` fore, och `callType` far bara
+svara nar `itemType` inte kan.
+
+**`duration` AR MILLISEKUNDER.** 62000 mot ett samtal pa 62 sekunder. Och har
+fanns inget `endTime` att kontrollera mot — Insights skickar bara `startTime` —
+sa fonstret kunde inte radda oss som det gjorde for `talkTime`. Lasningen blev
+sjutton timmar. Regeln ar nu att fonstret ar facit nar det finns, och att en
+angiven langd annars ar millisekunder, med ett undantag: rundar
+ms-tolkningen till noll var det aldrig millisekunder.
+
+### Bron mellan floden, och felet i den
+
+Insights-pasen bar ingen e-postadress — bara `userId`, plus en fritext `body`
+dar adressen rakar sta. Inspelningsflodet bar BADA. Losningen ar `phone_identity`
+som den redan ar byggd: bokfor paret (e-post, uuid) en gang fran det ena flodet,
+sa hittar det andra ratt person av sig sjalvt.
+
+Forsta forsoket skrev raden bara i grenen "ny person". Den grenen nas aldrig for
+nagon vars e-postrad redan fanns — alltsa for alla utom den allra forsta pasen
+fran varje person — och Insights-pasen forblev okopplad. `bokforBron()` anropas
+nu ocksa nar personen redan ar kand.
+
+### Och kvar star en dubblett
+
+Insights-pasen har INGEN nyckel. Utan `id` far raden ett avtryck som somsvarde,
+och samma samtal ligger darfor som TVA rader: `486642607` fran inspelningen och
+`avtryck:22d3e4ae…` fran Insights.
+
+Sommen finns — `(userId, startTime)` traffade pa millisekunden — men
+hopslagningen ska INTE byggas pa ett enda prov. Hela fragan ar om Insights
+levererar for ett MISSAT samtal, och det vet vi inte an:
+
+- Gor den det ar de raderna nya samtal vi annars aldrig far se, och da ska de
+  vara egna rader. Da ar dubbletten priset for att ocksa fa de missade.
+- Gor den det inte ar Insights bara en samre kopia av inspelningsflodet, och
+  raderna ska slas ihop pa `(userId, startTime)`.
+
+Vanta pa ett missat samtal innan nagot byggs. Fragan avgor ocksa om
+samtalsstatistiken nagonsin kan bli fullstandig — se `NASTA_SESSION.md`.
+
+---
+
 ## 2026-09-11 · Vaxeln slogs pa, och varje gissning visade sig fel
 
 Lynes slog pa webhooken. Sexton samtal kom in over natten, alla tolkade, noll

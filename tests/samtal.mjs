@@ -161,6 +161,51 @@ console.log("\n\x1b[1mEN RIKTIG LYNES-PASE, avlast ur produktion 2026-09-11\x1b[
   ok("taltiden blir 55", t.talkSeconds === 55);
 }
 
+console.log("\n\x1b[1mEN RIKTIG INSIGHTS-PASE, avlast ur produktion 2026-09-11\x1b[0m");
+{
+  // Lynes andra webhook. Samma samtal fanns samtidigt i inspelningsflodet med
+  // samma userId, samma startTime pa millisekunden och samma nummer — det ar
+  // den jamforelsen som avgjorde vilket falt som betyder vad.
+  const t = tolkaSamtal({
+    body: "Call to: +46723160111\nCall from user: mick@clicknet.se (+46102093116)\nCall type: Inbound",
+    userId: "6a59288e-d5e9-40c3-aa1c-1dd828fb31ce",
+    callType: "Inbound",
+    duration: 62000,
+    itemType: "OUTGOING_CALL",
+    toNumber: "+46723160111",
+    startTime: 1789132253000,
+    fromNumber: "+46102093116",
+  });
+
+  ok("itemType avgor riktningen, inte callType", t.direction === "ut",
+    `fick ${t.direction} — callType sa "Inbound" men samtalet gick ut`);
+  ok("motparten ar kunden, inte vart eget nummer", t.counterpartE164 === "+46723160111",
+    `fick ${t.counterpartE164}`);
+  ok("duration lases som millisekunder", t.durationSeconds === 62,
+    `fick ${t.durationSeconds} — 62000 som sekunder ar sjutton timmar`);
+  ok("bada ravardena star kvar", t.rawItemType === "OUTGOING_CALL" && t.rawCallType === "Inbound");
+  ok("utfallet ar okant", t.outcome === "okant",
+    "ingen av de tva formerna har sagt besvarat eller missat om ett samtal an");
+  ok("uuid:t blir avsandare nar ingen e-post finns", t.agentRef === "6a59288e-d5e9-40c3-aa1c-1dd828fb31ce",
+    "Insights-pasen har bara e-posten inbakad i en fritext");
+  ok("och da ar agentUserId null", t.agentUserId === null,
+    "samma varde pa tva stallen ar tva stallen att halla lika — bron gar via identitetsformer()");
+  ok("ingen nyckel i pasen", t.externalRef === null,
+    "servern satter ett avtryck — se NASTA_SESSION om hopslagningen");
+}
+
+{
+  // Nar bada finns ska agentUserId inte duplicera agentRef.
+  const t = tolkaSamtal({ id: 1, recorderId: "mick@clicknet.se", userId: "6a59288e" });
+  ok("agentRef ar e-posten", t.agentRef === "mick@clicknet.se");
+  ok("agentUserId ar uuid:t", t.agentUserId === "6a59288e");
+
+  const bara = tolkaSamtal({ id: 2, userId: "6a59288e" });
+  ok("utan e-post blir uuid:t agentRef", bara.agentRef === "6a59288e");
+  ok("och da ar agentUserId null", bara.agentUserId === null,
+    "samma varde pa tva stallen ar tva stallen att halla lika");
+}
+
 console.log("\x1b[1m\n1b. Den som ringde hittas aven nastlat, och e-posten gar fore id:t\x1b[0m");
 {
   // Hittat i produktion 2026-09-10: `user.email` ar EN nyckel i den utplattade
@@ -200,9 +245,19 @@ console.log("\x1b[1m\n2. Millisekunder gissas inte, de lases ur namnet\x1b[0m");
   const t = tolkaSamtal({ durationMs: 93000, itemType: "answered" });
   ok("durationMs raknas om", t.durationSeconds === 93, `fick ${t.durationSeconds}`);
 
+  // ANDRAT 2026-09-11. Provet krade forut att `duration: 93000` star kvar som
+  // 93000 sekunder, for regeln var "rakna bara om nar namnet sager ms". Lynes
+  // Insights-pase bevisade motsatsen: den bar `duration: 62000` for ett samtal
+  // som inspelningsflodet samtidigt redovisade som 62 sekunder. Hos Lynes ar
+  // ALLA tider millisekunder, ocksa de som inte heter sa.
   const u = tolkaSamtal({ duration: 93000, itemType: "answered" });
-  ok("duration utan ms i namnet rors inte", u.durationSeconds === 93000,
-    "fel varde ar battre an ett pahittat — rapasen gor tolkningen om");
+  ok("duration utan fonster lases som millisekunder", u.durationSeconds === 93,
+    `fick ${u.durationSeconds}`);
+
+  // Men en langd som rundar till noll som ms var aldrig ms.
+  const v = tolkaSamtal({ duration: 93, itemType: "answered" });
+  ok("en liten duration star kvar som sekunder", v.durationSeconds === 93,
+    "93 ms hade blivit ett nollat samtal, och det ar en uppgift som forsvunnit");
 }
 
 console.log("\x1b[1m\n3. En anknytning blir inte ett telefonnummer\x1b[0m");

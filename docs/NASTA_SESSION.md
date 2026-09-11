@@ -3,49 +3,52 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-11 (kväll, tredje passet) — **projektchatt** (migration `0055`): riktig tråd med bubblor, dagstreck och "nytt sedan du var här", plus uppgiftens repliker utbrutna ur historiken. Fortfarande **ej mergad**. Föregående rad: (andra passet) — **projektet blev en egen sida** (`/uppgifter/projekt/[id]`) och uppgiftssidan gick äntligen att ändra på: ansvarig, frist, tid, prioritet och projekt. Handlingen flyttade överst. Fortfarande **ej mergad**. Föregående rad: **uppgiftsmodulen pass 1 byggd** på branch `uppgifter`, migration `0054`: uppgifter, deluppgifter, projekt, godkännande, kopplingar, notiser och morgonbrev. **Ej mergad, väntar på granskning av previewen.** Två öppna frågor står under avsnittet nedan. Föregående rad: 2026-09-11 — Lynes webhook levererar. Formen visade sig vara en annan än gissningarna: alla sexton första samtalen tolkades fel, tolken är rättad mot riktig trafik och påsarna omtolkade ur `call_ingest`. **Ett beslut väntar om inspelningarna** — S3-adressen lever trettio minuter. Föregående rad: 2026-09-10 (kväll) — växelns samtal: Lynes webhook har en adress in i navet, radlogg och tolkning på plats, migration `0052` körd. På branch `lynes-samtal`, ej mergad; ingenting syns i gränssnittet än. Föregående rad: 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
+**Senast uppdaterad:** 2026-09-11 (kväll) — **uppgiftsmodulen pass 1 är byggd och mergad till main**: uppgifter, deluppgifter, projekt med egen sida och chatt, godkännande med granskare, kopplingar, framräknade notiser och morgonbrev. Migrationerna `0054` och `0055` körda. **Nästa steg är kalendern (pass 2).** Föregående rad: 2026-09-11 (eftermiddag) — båda Lynes-webhookarna är på. Insights visade sig bära riktningen i `itemType` och inte utfallet, och `callType` betyder inte riktning; tolken är rättad och alla 172 samtal omtolkade. **Tre öppna frågor, se nedan** — den viktigaste är om ett missat samtal någonsin levereras. Föregående rad: 2026-09-11 — Lynes webhook levererar. Formen visade sig vara en annan än gissningarna: alla sexton första samtalen tolkades fel, tolken är rättad mot riktig trafik och påsarna omtolkade ur `call_ingest`. **Ett beslut väntar om inspelningarna** — S3-adressen lever trettio minuter. Föregående rad: 2026-09-10 (kväll) — växelns samtal: Lynes webhook har en adress in i navet, radlogg och tolkning på plats, migration `0052` körd. På branch `lynes-samtal`, ej mergad; ingenting syns i gränssnittet än. Föregående rad: 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
 
-## Uppgifter och projekt — PÅ BRANCH `uppgifter`, EJ MERGAD
+## Uppgifter och projekt — BYGGD OCH MERGAD 2026-09-11
 
-*Migration `0054`. Hela resonemanget i `ARBETSLOGG.md` 2026-09-11. Beställningen
-var "hantera alla mina personliga uppgifter som säljchef direkt i intranätet".
-Det här är pass 1 av tre — kalendern är pass 2.*
+*Migrationer `0054` och `0055`, båda körda. Hela resonemanget i
+`ARBETSLOGG.md` 2026-09-11 (tre entries). Beställningen var "hantera alla mina
+personliga uppgifter som säljchef direkt i intranätet". **Det här är pass 1 av
+tre — kalendern är pass 2 och inte påbörjad.***
 
-**Chatten (0055).** Projektet har en tråd i högerspalten. Olästa RÄKNAS FRAM
-ur `project_message_read` — en tidpunkt per person och projekt — så notisen
-blir "3 nya i Mässan" och inte tre rader i klockan. Lägg aldrig till en rad
-per mottagare och meddelande där; det var hela valet.
+**Vad som finns i produktion.**
 
-**Vad som finns nu.** Projektkortet leder in i projektet — egen sida med mätare,
-egen snabbrad, öppet/klart som två listor, deltagare och inställningspanel.
-Uppgiftssidan bär hela arbetsflödet överst: bock, läge, redigerbara egenskaper
-och nästa steg i en mening. Deluppgifter bockas av direkt i listan.
+- **`/uppgifter`** — snabbinmatning på en rad som tolkas i sina delar
+  ("Ring Nordic AB på tisdag 14:00 30 min !1 #Mässan @Anna"), `N` öppnar fältet
+  var man än står. Sex vyer: Idag, Väntar på andra, Att granska, Alla mina,
+  Inkorg, Klara.
+- **`/uppgifter/[id]`** — bock, läge, redigerbara egenskaper och nästa steg i en
+  mening överst. Deluppgifter bockas av direkt i listan. Samtal och Historik är
+  två skilda kort.
+- **`/uppgifter/projekt/[id]`** — mätare, egen snabbrad, öppet/klart, deltagare,
+  inställningspanel och **chatt** i högerspalten.
+- **Godkännande:** utpekade granskare, först till kvarn, retur kräver skäl.
+- **Kopplingar:** order (kund), ärende, person, coachning, utbildning.
+- **Notiser:** framräknade i klockan, morgonbrev 07:30 vardagar, chattens olästa
+  som en rad per projekt.
 
-`/uppgifter` med snabbinmatning på en rad ("Ring Nordic AB
-på tisdag 14:00 30 min !1 #Mässan @Anna" tolkas i sina delar), sex vyer (Idag,
-Väntar på andra, Att granska, Alla mina, Inkorg, Klara), deluppgifter, projekt
-som kort, inbjudna som redigerare/visare/granskare, godkännande med retur och
-skäl, kopplingar till order, ärende, person, coachning och utbildning,
-framräknade notiser och ett morgonbrev 07:30.
-
-**En fälla värd att känna till:** `planera()` skriver HELA planeringen — datum,
-klockslag och minuter — så ett fält som inte kommer med tolkas som "ta bort".
-Varje knapp som sätter ett datum måste därför bära med sig klockslaget och
-minuterna som dolda fält. Det gäller listans hovringsknappar, snabbknapparna i
-egenskapspanelen, och allt som kalendern i pass 2 kommer att dra runt.
-
-**Tre saker att inte råka bryta:**
+### Fem regler att inte råka bryta
 
 1. **Ingen roll ger insyn i `task_read`.** `can_read_all_employees()` står med
    flit inte i policyn. Kretsen är ansvarig, skapare, inbjudna och — om flaggan
-   är på — den uppgiften handlar om. Lägger någon till en chefsgren där är
-   modulen inte längre en anteckningsbok.
+   är på — den uppgiften handlar om. Läggs en chefsgren dit är modulen inte
+   längre en anteckningsbok, och då slutar folk skriva ärligt i den.
 2. **`namnkarta()` i `uppgifter-server.ts` är modulens enda läsning via service
    role.** Urvalet är spärren: id:na kommer bara ur rader RLS redan släppt fram.
    Kopiera inte mönstret utan att läsa rubriken vid funktionen.
-3. **Cron-kvoten är slut.** `/api/jobb/natt` och `/api/jobb/morgon` är de två
-   poster Hobby-planen tillåter. Nästa schemalagda jobb måste bli ett steg i ett
-   av dem.
+3. **`planera()` skriver HELA planeringen** — datum, klockslag och minuter — så
+   ett fält som inte kommer med tolkas som "ta bort". Varje knapp som sätter ett
+   datum måste bära med sig klockslaget och minuterna som dolda fält. Det gäller
+   listans hovringsknappar, snabbknapparna i egenskapspanelen, **och allt som
+   kalendern i pass 2 kommer att dra runt.**
+4. **Chattens olästa räknas fram** ur `project_message_read` — en tidpunkt per
+   person och projekt. Lägg aldrig till en rad per mottagare och meddelande; det
+   var hela valet, och det är skillnaden mellan "3 nya i Mässan" och tre rader i
+   klockan.
+5. **Cron-kvoten är slut.** `/api/jobb/natt` (02:30 UTC) och `/api/jobb/morgon`
+   (05:30 UTC) är de två poster Hobby-planen tillåter. Nästa schemalagda jobb
+   måste bli ett steg i ett av dem.
 
 ### Två öppna frågor till beställaren
 
@@ -53,22 +56,111 @@ egenskapspanelen, och allt som kalendern i pass 2 kommer att dra runt.
 släpper bara fram dig själv, ditt lag om du leder ett, och hela registret för
 säljchef, VD och administratör. Väljarna "vem ska göra det" och "bjud in" följer
 den policyn oförändrat, så en säljare ser bara sig själv där. Att ändra det är
-ett beslut om **personalregistret**, inte om uppgiftsmodulen — därför ligger det
-som en fråga och inte som en ändring.
+ett beslut om **personalregistret**, inte om uppgiftsmodulen.
 
-**2. Ska kalendern i pass 2 visa fler av navets datum än frånvaro,
-coachningssamtal, kursfrister och orderfrister?** Listan är lätt att utöka men
-svår att banta när den väl är ute.
+**2. Prospekt saknar koppling.** Kunden är ordern, eftersom navet inte har något
+kundregister (E11/M8 är blockerad). En uppgift om ett prospekt är tills vidare en
+uppgift utan koppling.
 
-### Innan merge
+### Kända skavanker
 
-- `node scripts/apply-sql.mjs 0055_projektchatt` — **körd 2026-09-11**.
+- `tests/registerutdrag.mjs` är rött på **19 kolumner som saknades redan före
+  det här arbetet** (coaching, guider, notification_event, sales_target,
+  manager_commission). Inga av uppgiftsmodulens elva kolumner. Jämför med main
+  innan du skyller på din gren.
+- `tests/rls.mjs` var rött på main sedan 2026-09-07 — provet la in en
+  ledighetsansökan utan `reason`, vilket triggern från 0048 vägrar. **Rättat i
+  det här passet**, och provet går igenom i sin helhet igen.
 
-- `node scripts/apply-sql.mjs 0054_uppgifter` — **numret var ledigt 2026-09-11**,
-  men `0051` finns i två versioner på olika grenar. Fråga `schema_migrations`
-  igen om något annat pass hunnit emellan.
-- `npm test` (nytt: `test:uppgifter`) och `node tests/rls.mjs`.
-- Bygg previewen och stäm av mot `main` — grenen är tagen från `main` 2026-09-11.
+## Båda webhookarna är på sedan 2026-09-11 — TVÅ ÖPPNA FRÅGOR
+
+*Resonemanget i `ARBETSLOGG.md` 2026-09-11 (eftermiddag). Tolken är rättad mot
+båda formerna och alla påsar omtolkade. 172 samtal i `phone_call`.*
+
+### 1. Får vi någonsin se ett MISSAT samtal? — avgör allt annat
+
+Inspelningswebhooken levererar **bara besvarade samtal**: 166 av 166 har en
+inspelning, ingen har taltid noll, kortaste är 1 sekund. En utgående
+svarsfrekvens på 100 % finns inte. Missade samtal, upptaget och obesvarade
+signaler når oss alltså aldrig den vägen.
+
+Insights var hoppet. Men den enda påse som kommit gällde ett BESVARAT samtal,
+och dess `itemType` bar riktningen (`OUTGOING_CALL`), inte ett utfall. **Om
+Insights aldrig levererar för ett missat samtal kan samtalsstatistiken aldrig bli
+fullständig** — "56 samtal" kommer alltid att betyda "56 besvarade samtal", och
+hur många försök det krävdes går inte att svara på.
+
+**OCH INSIGHTS HAR LEVERERAT EN ENDA GÅNG.** Klockan 13:11 kom en påse. Sedan
+dess har ett tjugotal samtal gått genom inspelningsflödet utan att Insights sagt
+något alls. Antingen fyrar den bara i vissa lägen, eller så är den inte riktigt
+påslagen. Det är värt att kontrollera FÖRE allt annat — en webhook som fyrat en
+gång och tystnat ser i tabellen ut precis som en som aldrig fyrar för missade
+samtal, och det är två helt olika problem.
+
+**FÖRSTA ÅTGÄRD NÄSTA PASS:**
+
+```sql
+select raw_item_type, raw_call_type, count(*) from phone_call group by 1,2;
+select payload from call_ingest where payload ? 'itemType' order by id desc limit 5;
+```
+
+Dyker `MISSED_CALL` eller liknande upp i `raw_item_type` är frågan besvarad åt
+rätt håll — och `slaUpp()` mappar redan `MISSED_CALL` → `missat` av sig självt,
+eftersom den skalar bort `_call`. Står det bara riktningar efter ett par dagar:
+fråga Lynes rakt ut om missade samtal går att få, annars är taket nått.
+
+### 2. Ett samtal ligger som två rader
+
+Insights-påsen har ingen nyckel — inget `id` — så den får ett avtryck som
+sömsvärde. Samma samtal ligger nu som `486642607` (inspelning) och
+`avtryck:22d3e4ae…` (Insights).
+
+Sömmen finns: `(userId, startTime)` träffade på millisekunden. Men **bygg inte
+hopslagningen förrän fråga 1 är besvarad** — svaret avgör vilken lösning som är
+rätt:
+
+- **Insights levererar missade samtal** → de raderna är samtal vi annars aldrig
+  ser. Låt dem vara egna rader, och gör i stället en `merged_into`-koppling
+  eller en vy som räknar rätt.
+- **Insights levererar bara samma samtal igen** → slå ihop på
+  `(userId, startTime)` och låt inspelningens `id` vara sömmen.
+
+### ~~3. Åtta samtal hör till ingen~~ — LÖST 2026-09-11
+
+Vlado Vladisavljevics Lynes-konto heter `vlado@clicknet.se`, medan hans rad i
+navet har `thomas@clicknet.se`. Beställaren bekräftade att **navets adress är
+den rätta** — det är Lynes-kontot som avviker.
+
+En rad i `phone_identity` pekar nu om den, med **`created_by` SATT** till
+`zen@clicknet.se`. Det är skillnaden kolumnen finns för: en gissning navet
+gjort får skrivas över, ett beslut om vems statistik åtta samtal hamnar i får
+det inte. Alla 192 samtal är kopplade, noll okopplade.
+
+Hans växel-uuid bokfördes automatiskt av bron i samma körning.
+
+### Så här hänger flödena ihop
+
+| | Inspelningswebhook | Insights |
+|---|---|---|
+| Nyckel | `id` | **saknas** |
+| Riktning | `direction` | `itemType` (INTE `callType`) |
+| Person | `recorderId` (e-post) + `userId` | bara `userId` |
+| Längd | `endTime - startTime` | `duration`, i ms, utan `endTime` |
+| Taltid | `talkTime`, i ms | — |
+| Inspelning | `fileUrls[0]`, giltig 30 min | — |
+| Utfall | — | — |
+
+`phone_identity` binder ihop dem: paret (e-post, uuid) bokförs från
+inspelningsflödet, och Insights hittar rätt person på uuid:t.
+
+### Efter varje ändring i tolken
+
+```
+node --experimental-strip-types scripts/tolka-om-samtal.mjs --torrkor
+node --experimental-strip-types scripts/tolka-om-samtal.mjs
+```
+
+---
 
 ## Växeln levererar sedan 2026-09-11 — OCH ETT BESLUT VÄNTAR
 
@@ -311,8 +403,6 @@ ur `external_ref` som förut, och den fallbacken ska stå kvar.
 kräver fältet därför.
 
 ### Innan merge
-
-- `node scripts/apply-sql.mjs 0055_projektchatt` — **körd 2026-09-11**.
 
 1. **Kör `0051`** mot produktionsdatabasen (`0050` är redan körd 2026-09-09).
 2. **Visa previewen.** `/order` — knapparna *Rätta ordern* och *Lägg bonus* på

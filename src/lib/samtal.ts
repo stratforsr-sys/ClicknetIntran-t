@@ -25,13 +25,38 @@
  *   answerGroupId / answerGroupName / referredBy / referredTo /
  *   aiAgentId / aiAgentName / aiAgentRole / agentName          ← null hittills
  *
- * NÅGON `duration` FINNS INTE. Längden är `endTime - startTime`, och den
- * räknas fram nedan.
+ * NÅGON `duration` FINNS INTE i den formen. Längden är `endTime - startTime`.
  *
- * NÅGOT UTFALL FINNS INTE HELLER. Det här är inspelningswebhooken; `callType`
- * och `itemType` hör till Lynes *Insights*-webhook, som är en annan påslagning.
- * `outcome` står därför kvar på `okant` för allt som kommer den här vägen, och
- * det är ett ärligt svar och inte ett fel.
+ * ===========================================================================
+ * DEN ANDRA FORMEN: INSIGHTS, PÅSLAGEN 2026-09-11
+ *
+ * Lynes har två webhookar och de skickar olika saker om samma samtal. Så här
+ * ser en Insights-leverans ut:
+ *
+ *   id            SAKNAS                           ← ingen nyckel alls
+ *   itemType      "OUTGOING_CALL"                  ← RIKTNINGEN, inte utfallet
+ *   callType      "Inbound"                        ← benet in i växeln
+ *   duration      62000                            ← millisekunder
+ *   startTime     1789132253000                    ← men inget endTime
+ *   fromNumber    "+46102093116"
+ *   toNumber      "+46723160111"
+ *   userId        "6a59288e-…"                     ← ingen e-post
+ *   body          "Call to: …\nCall from user: mick@clicknet.se (…)"
+ *
+ * TRE SAKER SOM KOSTADE ETT FELTOLKAT SAMTAL ATT LÄRA SIG:
+ *
+ *   1. `itemType` BÄR RIKTNINGEN, inte utfallet, tvärtemot Lynes släppnoter.
+ *      Och `callType` bär något annat än det låter som — se `riktning` nedan.
+ *   2. `duration` ÄR MILLISEKUNDER och det finns inget `endTime` att kontrollera
+ *      mot. 62000 lästes som sekunder och blev sjutton timmar.
+ *   3. PÅSEN HAR INGEN NYCKEL. Utan `id` får raden ett avtryck som sömsvärde,
+ *      och samma samtal kan då ligga som två rader — en per flöde. Se
+ *      `docs/NASTA_SESSION.md`; hopslagningen väntar på att vi sett hur
+ *      Insights beter sig för ett MISSAT samtal.
+ *
+ * NÅGOT UTFALL FINNS INTE I NÅGON AV FORMERNA ÄN. Ingen av dem har sagt
+ * besvarat/missat/röstbrevlåda om ett samtal. `outcome` står därför kvar på
+ * `okant`, och det är ett ärligt svar och inte ett fel.
  *
  * ===========================================================================
  * VARFÖR DEN HÄR FILEN ÄNDÅ LETAR I STÄLLET FÖR ATT LÄSA
@@ -71,6 +96,15 @@ export type Tolkning = {
   rawCallType: string | null;
   rawItemType: string | null;
   agentRef: string | null;
+  /**
+   * Växelns interna id för samma person, när påsen bär både och.
+   *
+   * Inspelningsflödet skickar `recorderId` (e-post) OCH `userId` (uuid).
+   * Insights-flödet skickar bara `userId`. Bokförs de tillsammans en gång —
+   * se `slaUppPerson()` i samtal-server.ts — kopplas Insights-påsarna till
+   * rätt person utan att någon behöver peka ut något för hand.
+   */
+  agentUserId: string | null;
   counterpartRaw: string | null;
   counterpartE164: string | null;
   startedAt: string | null;
@@ -234,6 +268,26 @@ function langdAvFonstret(start: string | null, slut: string | null): number | nu
 }
 
 /**
+ * En angiven längd när inget fönster finns att jämföra med.
+ *
+ * Hos Lynes är alla tider millisekunder — `startTime`, `endTime`, `talkTime`
+ * och `duration`. Insights-flödet skickar `duration` utan `endTime`, så där
+ * finns inget facit och enheten måste läsas ur vad vi vet om källan.
+ *
+ * `> 0`-kontrollen är utvägen ur det: rundar millisekundtolkningen till noll
+ * var värdet aldrig millisekunder, och då står det som står. En `duration: 93`
+ * blir 93 sekunder, inte ett nollat samtal. Priset är att en genuin
+ * halvsekund skulle läsas som 500 sekunder — men ett samtal på en halv sekund
+ * är brus, och ett nollat samtal är en uppgift som försvunnit.
+ */
+function langdUtanFonster(varde: unknown): number | null {
+  if (varde === undefined || varde === null || varde === "") return null;
+  const somMs = sekunder(varde, true);
+  if (somMs !== null && somMs > 0) return somMs;
+  return sekunder(varde);
+}
+
+/**
  * Taltiden, med samtalets längd som skiljedomare.
  *
  * ===========================================================================
@@ -385,11 +439,25 @@ export function tolkaSamtal(payload: unknown): Tolkning {
   const rawCallType = text(hamta(k, ["calltype", "call_type", "direction", "type"]));
   const rawItemType = text(hamta(k, ["itemtype", "item_type", "result", "status", "disposition", "outcome"]));
 
-  const direction = slaUpp(RIKTNING, rawCallType, "okand");
-  // `itemType` bär inte riktningen, men `callType` gjorde det före v2. Står
-  // riktningen kvar som `okand` får utfallsfältet försöka — annars tappar vi
-  // riktningen på just de äldre posterna.
-  const riktning = direction === "okand" ? slaUpp(RIKTNING, rawItemType, "okand") : direction;
+  // `itemType` FÖRE `callType`, och det är tvärtemot vad Lynes släppnoter säger.
+  //
+  // Insights-webhooken slogs på 2026-09-11 och första påsen bevisade saken. Den
+  // gällde ett samtal som också fanns i inspelningsflödet — samma userId, samma
+  // startTime på millisekunden, samma nummer — och där stod:
+  //
+  //   inspelningsflödet:  direction "OUTGOING_CALL"      ← mick ringde ut
+  //   Insights:           itemType  "OUTGOING_CALL"      ← håller med
+  //                       callType  "Inbound"            ← håller INTE med
+  //                       body      "…Call type: Inbound"
+  //
+  // Numren avgör: `fromNumber` var Micks eget nummer och `toNumber` kundens.
+  // Samtalet gick alltså ut. `callType` beskriver benet in i växeln, inte vad
+  // användaren gjorde, och den som läser det som riktning får varje utgående
+  // samtal spegelvänt — med motparten satt till vårt eget nummer på köpet.
+  const riktning =
+    slaUpp(RIKTNING, rawItemType, "okand") !== "okand"
+      ? slaUpp(RIKTNING, rawItemType, "okand")
+      : slaUpp(RIKTNING, rawCallType, "okand");
 
   const outcome = slaUpp(UTFALL, rawItemType, slaUpp(UTFALL, rawCallType, "okant"));
 
@@ -422,6 +490,12 @@ export function tolkaSamtal(payload: unknown): Tolkning {
     ]),
   );
 
+  // Växelns egna id för användaren, vid sidan av e-posten. Aldrig samma sak
+  // som `agentRef` när båda finns: den ena är det vi kan matcha på, den andra
+  // det Insights-flödet skickar i stället.
+  const uuid = text(hamta(k, ["userid", "user_id", "user.id"]));
+  const agentUserId = uuid && uuid !== agentRef ? uuid : null;
+
   // Motparten. Är riktningen känd tas den från rätt håll; annars faller vi
   // tillbaka på ett generellt namn. Ett fel här ger fel nummer, inte ett
   // saknat — därför står råvärdet alltid kvar vid sidan av.
@@ -437,17 +511,27 @@ export function tolkaSamtal(payload: unknown): Tolkning {
   const startedAt = tidpunkt(hamta(k, ["starttime", "start_time", "startedat", "started_at", "start", "calltime", "timestamp", "createdat", "created_at"]));
   const endedAt = tidpunkt(hamta(k, ["endtime", "end_time", "endedat", "ended_at", "end", "hangupat", "hangup_at", "stoptime"]));
 
-  // Millisekunder bara när fältnamnet säger det. Se `sekunder()`.
-  const langdMs = hamta(k, ["durationms", "duration_ms", "durationmillis", "calldurationms"]);
-  const angivenLangd =
-    langdMs !== undefined
-      ? sekunder(langdMs, true)
-      : sekunder(hamta(k, ["duration", "durationseconds", "duration_seconds", "callduration", "call_duration", "length", "totalduration", "samtalslangd"]));
+  // FÖNSTRET FÖRST, ANGIVEN LÄNGD SEDAN — ombytt ordning sedan 2026-09-11.
+  //
+  // Inspelningsflödet skickar ingen längd alls; den räknas fram ur klockslagen.
+  // Insights-flödet skickar `duration` men INGET `endTime`, så där finns inget
+  // fönster att räkna ur. Och `duration` är millisekunder: första Insights-påsen
+  // bar `duration: 62000` för ett samtal som inspelningsflödet samtidigt
+  // redovisade som 62 sekunder långt. Läst som sekunder blev det sjutton timmar.
+  //
+  // Är fönstret känt är det facit — det är två klockslag från växeln själv och
+  // kan inte vara i fel enhet. Saknas det används `taltid()` med fönstret satt
+  // till null, vilket betyder att den tar värdet som det står. Därför måste
+  // `duration` uttryckligen läsas som millisekunder: hos Lynes är ALLA tider
+  // millisekunder — `startTime`, `endTime`, `talkTime` och `duration`.
+  const langdAvKlockan = langdAvFonstret(startedAt, endedAt);
 
-  // LYNES SKICKAR INGEN LÄNGD ALLS. Den räknas fram ur klockslagen, som båda
-  // finns i varje påse. Ett angivet fält går före: står det där är det växelns
-  // eget svar, och vår subtraktion är bara en uppskattning av samma sak.
-  const durationSeconds = angivenLangd ?? langdAvFonstret(startedAt, endedAt);
+  const langdNamngivenMs = hamta(k, ["durationms", "duration_ms", "durationmillis", "calldurationms"]);
+  const langdVarde =
+    langdNamngivenMs ??
+    hamta(k, ["duration", "durationseconds", "duration_seconds", "callduration", "call_duration", "length", "totalduration", "samtalslangd"]);
+
+  const durationSeconds = langdAvKlockan ?? langdUtanFonster(langdVarde);
 
   // TALTIDEN ÄR MILLISEKUNDER HOS LYNES, utan att namnet säger det: `talkTime`
   // stod på 407000 i en påse där `endTime - startTime` var 407000 ms, alltså
@@ -491,6 +575,7 @@ export function tolkaSamtal(payload: unknown): Tolkning {
     rawCallType,
     rawItemType,
     agentRef,
+    agentUserId,
     counterpartRaw: motpart,
     counterpartE164: normaliseraNummer(motpart),
     startedAt,
