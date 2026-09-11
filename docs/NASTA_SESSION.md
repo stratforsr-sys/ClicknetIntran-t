@@ -5,7 +5,7 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
 
 **Senast uppdaterad:** 2026-09-11 (eftermiddag) — båda Lynes-webhookarna är på. Insights visade sig bära riktningen i `itemType` och inte utfallet, och `callType` betyder inte riktning; tolken är rättad och alla 172 samtal omtolkade. **Tre öppna frågor, se nedan** — den viktigaste är om ett missat samtal någonsin levereras. Föregående rad: 2026-09-11 — Lynes webhook levererar. Formen visade sig vara en annan än gissningarna: alla sexton första samtalen tolkades fel, tolken är rättad mot riktig trafik och påsarna omtolkade ur `call_ingest`. **Ett beslut väntar om inspelningarna** — S3-adressen lever trettio minuter. Föregående rad: 2026-09-10 (kväll) — växelns samtal: Lynes webhook har en adress in i navet, radlogg och tolkning på plats, migration `0052` körd. På branch `lynes-samtal`, ej mergad; ingenting syns i gränssnittet än. Föregående rad: 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
 
-## Båda webhookarna är på sedan 2026-09-11 — TRE ÖPPNA FRÅGOR
+## Båda webhookarna är på sedan 2026-09-11 — TVÅ ÖPPNA FRÅGOR
 
 *Resonemanget i `ARBETSLOGG.md` 2026-09-11 (eftermiddag). Tolken är rättad mot
 båda formerna och alla påsar omtolkade. 172 samtal i `phone_call`.*
@@ -22,6 +22,13 @@ och dess `itemType` bar riktningen (`OUTGOING_CALL`), inte ett utfall. **Om
 Insights aldrig levererar för ett missat samtal kan samtalsstatistiken aldrig bli
 fullständig** — "56 samtal" kommer alltid att betyda "56 besvarade samtal", och
 hur många försök det krävdes går inte att svara på.
+
+**OCH INSIGHTS HAR LEVERERAT EN ENDA GÅNG.** Klockan 13:11 kom en påse. Sedan
+dess har ett tjugotal samtal gått genom inspelningsflödet utan att Insights sagt
+något alls. Antingen fyrar den bara i vissa lägen, eller så är den inte riktigt
+påslagen. Det är värt att kontrollera FÖRE allt annat — en webhook som fyrat en
+gång och tystnat ser i tabellen ut precis som en som aldrig fyrar för missade
+samtal, och det är två helt olika problem.
 
 **FÖRSTA ÅTGÄRD NÄSTA PASS:**
 
@@ -51,19 +58,18 @@ rätt:
 - **Insights levererar bara samma samtal igen** → slå ihop på
   `(userId, startTime)` och låt inspelningens `id` vara sömmen.
 
-### 3. Åtta samtal hör till ingen
+### ~~3. Åtta samtal hör till ingen~~ — LÖST 2026-09-11
 
-De kommer från `vlado@clicknet.se`. I navet står Vlado Vladisavljevic som
-`thomas@clicknet.se`. Antingen är e-posten i personalregistret fel, eller så ska
-adressen pekas till honom med en rad i `phone_identity`:
+Vlado Vladisavljevics Lynes-konto heter `vlado@clicknet.se`, medan hans rad i
+navet har `thomas@clicknet.se`. Beställaren bekräftade att **navets adress är
+den rätta** — det är Lynes-kontot som avviker.
 
-```sql
-insert into phone_identity (employee_id, kind, value, created_by)
-values ('<vlados employee.id>', 'epost', 'vlado@clicknet.se', '<din employee.id>');
-```
+En rad i `phone_identity` pekar nu om den, med **`created_by` SATT** till
+`zen@clicknet.se`. Det är skillnaden kolumnen finns för: en gissning navet
+gjort får skrivas över, ett beslut om vems statistik åtta samtal hamnar i får
+det inte. Alla 192 samtal är kopplade, noll okopplade.
 
-`created_by` SKA sättas här — det är ett beslut om vems statistik åtta samtal
-hamnar i, inte en gissning navet gjort. Kör därefter omtolkningen.
+Hans växel-uuid bokfördes automatiskt av bron i samma körning.
 
 ### Så här hänger flödena ihop
 
