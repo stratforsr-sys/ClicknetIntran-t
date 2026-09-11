@@ -31,7 +31,22 @@ import { skapaUppgift, type UppgiftState } from "./actions";
  * ett löfte — se skapaUppgift() i actions.ts.
  * ===========================================================================
  */
-export function Snabbrad({ projektNamn }: { projektNamn: string[] }) {
+export function Snabbrad({
+  projektNamn,
+  projektId,
+  placeholder = "Vad ska göras?",
+}: {
+  projektNamn: string[];
+  /**
+   * Lägg uppgiften i det här projektet.
+   *
+   * Skickas som ett dolt fält och inte som en del av raden. `#projekt` i
+   * texten vinner ändå om någon skriver det — se `skapaUppgift()` — vilket
+   * är rätt ordning: det uttryckligen skrivna slår det underförstådda.
+   */
+  projektId?: string;
+  placeholder?: string;
+}) {
   const [state, action, vantar] = useActionState<UppgiftState, FormData>(skapaUppgift, {});
   const [rad, setRad] = useState("");
   const faltet = useRef<HTMLInputElement>(null);
@@ -80,6 +95,7 @@ export function Snabbrad({ projektNamn }: { projektNamn: string[] }) {
   return (
     <form action={action} className="flex flex-col gap-2">
       {state.fel && <Notis ton="danger">{state.fel}</Notis>}
+      {projektId && <input type="hidden" name="project_id" value={projektId} />}
 
       <div className="relative">
         <span aria-hidden className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-ink-300">
@@ -93,7 +109,7 @@ export function Snabbrad({ projektNamn }: { projektNamn: string[] }) {
           value={rad}
           onChange={(e) => setRad(e.target.value)}
           autoComplete="off"
-          placeholder="Vad ska göras?"
+          placeholder={placeholder}
           aria-label="Ny uppgift"
           aria-describedby="snabbrad-hjalp"
           className={cn(

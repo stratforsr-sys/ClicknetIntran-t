@@ -113,6 +113,8 @@ export type Uppgift = Uppgiftsrad & {
   minRoll: Medlemsroll | null;
 };
 
+export type Projektmedlem = { employee_id: string; role: "redigerare" | "visare"; namn: string };
+
 export type Projekt = {
   id: string;
   name: string;
@@ -121,6 +123,7 @@ export type Projekt = {
   color: string;
   due_date: string | null;
   archived_at: string | null;
+  medlemmar: Projektmedlem[];
   /** Räknat ur uppgifterna, inte lagrat. Se rubriken nedan. */
   antal: number;
   klara: number;
@@ -151,8 +154,14 @@ export async function hamtaUppgiftsbild(user: CurrentUser): Promise<Uppgiftsbild
   const mig = user.employee.id;
   const supabase = await supabaseServer();
 
-  const [{ data: rader }, { data: medlemsrader }, { data: handelser }, { data: projektrader }, { data: lankar }] =
-    await Promise.all([
+  const [
+    { data: rader },
+    { data: medlemsrader },
+    { data: handelser },
+    { data: projektrader },
+    { data: projektmedlemmar },
+    { data: lankar },
+  ] = await Promise.all([
       supabase.from("task").select(FALT),
       supabase.from("task_member").select("task_id, employee_id, role"),
       supabase.from("task_event").select("id, task_id, type, by_employee_id, note, at").order("at"),
@@ -160,6 +169,7 @@ export async function hamtaUppgiftsbild(user: CurrentUser): Promise<Uppgiftsbild
         .from("project")
         .select("id, name, description_md, owner_id, color, due_date, archived_at")
         .order("created_at", { ascending: false }),
+      supabase.from("project_member").select("project_id, employee_id, role"),
       supabase
         .from("task_link")
         .select(
@@ -201,6 +211,7 @@ export async function hamtaUppgiftsbild(user: CurrentUser): Promise<Uppgiftsbild
   for (const m of medlemsrader ?? []) behover.add((m as { employee_id: string }).employee_id);
   for (const h of handelser ?? []) behover.add((h as { by_employee_id: string }).by_employee_id);
   for (const p of projektrader ?? []) behover.add((p as { owner_id: string }).owner_id);
+  for (const m of projektmedlemmar ?? []) behover.add((m as { employee_id: string }).employee_id);
   for (const l of lankrader) {
     if (l.employee_id) behover.add(l.employee_id);
   }
@@ -283,17 +294,20 @@ export async function hamtaUppgiftsbild(user: CurrentUser): Promise<Uppgiftsbild
    * DELUPPGIFTER RÄKNAS INTE. De hör till sin rubrik, och ett projekt med tre
    * uppgifter och tjugo checklistepunkter ska säga tre.
    */
-  const projekt: Projekt[] = ((projektrader ?? []) as unknown as Omit<Projekt, "antal" | "klara" | "forsenade">[]).map(
-    (p) => {
-      const mina = uppgifter.filter((u) => u.project_id === p.id);
-      return {
-        ...p,
-        antal: mina.length,
-        klara: mina.filter((u) => u.lage === "klar").length,
-        forsenade: mina.filter((u) => forsenad(u, idag)).length,
-      };
-    },
-  );
+  const projekt: Projekt[] = (
+    (projektrader ?? []) as unknown as Omit<Projekt, "antal" | "klara" | "forsenade" | "medlemmar">[]
+  ).map((p) => {
+    const mina = uppgifter.filter((u) => u.project_id === p.id);
+    return {
+      ...p,
+      medlemmar: ((projektmedlemmar ?? []) as unknown as { project_id: string; employee_id: string; role: "redigerare" | "visare" }[])
+        .filter((m) => m.project_id === p.id)
+        .map((m) => ({ employee_id: m.employee_id, role: m.role, namn: namn.get(m.employee_id) ?? "Okänd" })),
+      antal: mina.length,
+      klara: mina.filter((u) => u.lage === "klar").length,
+      forsenade: mina.filter((u) => forsenad(u, idag)).length,
+    };
+  });
 
   return { uppgifter: sorteraUppgifter(uppgifter, idag), projekt, namn, idag };
 }
@@ -699,7 +713,13 @@ function tolkaKoppling(rad: Lankrad, namn: Map<string, string>): Koppling | null
 export async function hamtaUppgift(
   user: CurrentUser,
   id: string,
-): Promise<{ uppgift: Uppgift; handelser: (Handelse & { namn: string })[]; namn: Map<string, string> } | null> {
+): Promise<{
+  uppgift: Uppgift;
+  handelser: (Handelse & { namn: string })[];
+  namn: Map<string, string>;
+  /** Alla projekt den inloggade ser — brödsmulan och projektväljaren behöver dem. */
+  projekt: Projekt[];
+} | null> {
   if (!user.employee) return null;
 
   const bild = await hamtaUppgiftsbild(user);
@@ -718,5 +738,33 @@ export async function hamtaUppgift(
     namn: bild.namn.get(h.by_employee_id) ?? "Okänd",
   }));
 
-  return { uppgift, handelser, namn: bild.namn };
+  return { uppgift, handelser, namn: bild.namn, projekt: bild.projekt };
+}
+
+/**
+ * Ett projekt med sina uppgifter — projektsidans läsning.
+ *
+ * FILTRERAR ÖVER SAMMA BILD i stället för att fråga om projektets uppgifter.
+ * En egen fråga hade behövt sin egen läsning av medlemmar, händelser och
+ * kopplingar, alltså en andra väg fram till samma svar — och den dag de två
+ * vägarna räknar läget olika är det projektsidan som ljuger, eftersom den är
+ * den som öppnas mest sällan.
+ *
+ * `null` när projektet inte finns eller inte är den inloggades att se. RLS har
+ * redan avgjort det; funktionen upprepar inte frågan.
+ */
+export async function hamtaProjektvy(
+  user: CurrentUser,
+  id: string,
+): Promise<{ projekt: Projekt; uppgifter: Uppgift[]; namn: Map<string, string>; idag: string } | null> {
+  const bild = await hamtaUppgiftsbild(user);
+  const projekt = bild.projekt.find((p) => p.id === id);
+  if (!projekt) return null;
+
+  return {
+    projekt,
+    uppgifter: bild.uppgifter.filter((u) => u.project_id === id),
+    namn: bild.namn,
+    idag: bild.idag,
+  };
 }

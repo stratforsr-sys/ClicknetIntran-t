@@ -851,3 +851,122 @@ export async function arkiveraProjekt(_prev: UppgiftState, form: FormData): Prom
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
   }
 }
+
+/**
+ * Ändra projektet.
+ *
+ * ÄGAREN ELLER SKAPAREN, ingen annan — samma krets som arkiveringen. En
+ * redigerare i projektet ändrar UPPGIFTERNA i det; att låta hen byta namn,
+ * ägare och deadline på hatten hade betytt att den som bjöd in någon för att
+ * hjälpa till också gav bort projektet.
+ */
+export async function andraProjekt(_prev: UppgiftState, form: FormData): Promise<UppgiftState> {
+  try {
+    const user = await kravInloggad();
+    const mig = user.employee!.id;
+    const id = text(form, "id");
+
+    const db = supabaseAdmin();
+    const { data: projekt } = await db.from("project").select("owner_id, created_by").eq("id", id).maybeSingle();
+
+    if (!projekt) return { fel: "Projektet finns inte." };
+    if (projekt.owner_id !== mig && projekt.created_by !== mig) {
+      return { fel: "Bara ägaren kan ändra projektet." };
+    }
+
+    const namn = text(form, "name");
+    if (!namn) return { fel: "Ge projektet ett namn." };
+
+    const { error } = await db
+      .from("project")
+      .update({
+        name: namn,
+        description_md: text(form, "description_md"),
+        color: text(form, "color") || "brand",
+        due_date: valfritt(form, "due_date"),
+        owner_id: valfritt(form, "owner_id") ?? projekt.owner_id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+
+    if (error) return { fel: `Ändringen sparades inte: ${error.message}` };
+
+    revalidatePath("/uppgifter");
+    revalidatePath(`/uppgifter/projekt/${id}`);
+    return { ok: "Sparat." };
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Något gick fel." };
+  }
+}
+
+/**
+ * Bjud in till projektet.
+ *
+ * TVÅ ROLLER OCH INGEN GRANSKARE. Det är uppgifterna som godkänns, inte hatten
+ * — se `project_member` i 0054. En projektmedlem ser projektets sida; vilka
+ * UPPGIFTER hen ser avgörs fortfarande av varje uppgifts egen krets, och det är
+ * med flit: att bli inbjuden till "Mässan" ska inte öppna någons anteckningar
+ * om mässan.
+ */
+export async function bjudInProjekt(_prev: UppgiftState, form: FormData): Promise<UppgiftState> {
+  try {
+    const user = await kravInloggad();
+    const mig = user.employee!.id;
+    const id = text(form, "id");
+
+    const db = supabaseAdmin();
+    const { data: projekt } = await db.from("project").select("owner_id, created_by").eq("id", id).maybeSingle();
+
+    if (!projekt) return { fel: "Projektet finns inte." };
+    if (projekt.owner_id !== mig && projekt.created_by !== mig) {
+      return { fel: "Bara ägaren kan bjuda in till projektet." };
+    }
+
+    const person = text(form, "employee_id");
+    const roll = text(form, "role");
+
+    if (!person) return { fel: "Välj vem som ska bjudas in." };
+    if (roll !== "redigerare" && roll !== "visare") return { fel: "Okänd roll." };
+    if (person === projekt.owner_id) return { fel: "Ägaren är redan med." };
+
+    const { error } = await db
+      .from("project_member")
+      .upsert(
+        { project_id: id, employee_id: person, role: roll, added_by: mig },
+        { onConflict: "project_id,employee_id" },
+      );
+
+    if (error) return { fel: `Inbjudan sparades inte: ${error.message}` };
+
+    revalidatePath(`/uppgifter/projekt/${id}`);
+    return { ok: "Inbjuden." };
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Något gick fel." };
+  }
+}
+
+export async function taBortProjektmedlem(_prev: UppgiftState, form: FormData): Promise<UppgiftState> {
+  try {
+    const user = await kravInloggad();
+    const mig = user.employee!.id;
+    const id = text(form, "id");
+
+    const db = supabaseAdmin();
+    const { data: projekt } = await db.from("project").select("owner_id, created_by").eq("id", id).maybeSingle();
+
+    if (!projekt) return { fel: "Projektet finns inte." };
+    if (projekt.owner_id !== mig && projekt.created_by !== mig) {
+      return { fel: "Du får inte ändra vilka som är med." };
+    }
+
+    const person = text(form, "employee_id");
+    if (!person) return { fel: "Vem?" };
+
+    await db.from("project_member").delete().eq("project_id", id).eq("employee_id", person);
+
+    revalidatePath(`/uppgifter/projekt/${id}`);
+    return { ok: "Borttagen." };
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Något gick fel." };
+  }
+}

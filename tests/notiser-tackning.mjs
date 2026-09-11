@@ -92,6 +92,12 @@ const TACKNING = {
   "uppgifter::taBortKoppling": "En borttagen koppling ar inget besked till nagon.",
   "uppgifter::skapaProjekt": "Ett projekt ar en hatt utan mottagare. Uppgifterna i det notifierar var for sig.",
   "uppgifter::arkiveraProjekt": "Arkiveringen ror inte uppgifterna och beror darfor ingen annan.",
+  "uppgifter::andraProjekt":
+    "Namn, farg och deadline pa hatten. Uppgifterna i projektet ar oforandrade och ingen har fatt nagot.",
+  "uppgifter::bjudInProjekt":
+    "Att sta med i ett projekt oppnar inga uppgifter — varje uppgift har sin egen krets. Personen ser projektet nasta gang hon oppnar listan.",
+  "uppgifter::taBortProjektmedlem":
+    "Den som tagits bort ur ett projekt ska inte fa en notis om en sida hon inte langre kommer at.",
 
   // ---------------------------------------------------------------------------
   // Arenden

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
+import { Ikon } from "@/components/shell/Ikon";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Sektionsflikar, TomFlik } from "@/components/ui/Flikar";
 import { getCurrentUser } from "@/lib/auth";
@@ -38,13 +39,14 @@ export const metadata = { title: "Uppgifter" };
  *
  * SIFFERRADEN ÖVERST BÄR FYRA TAL och bara de fyra som kräver att någon gör
  * något. Klara uppgifter räknas inte där — ett tal som bara växer är en affisch.
+ *
+ * PROJEKTEN ÄR KORT OCH LEDER TILL SIN EGEN SIDA. Fram till 2026-09-11 var de
+ * ett filter över de här sex vyerna, vilket var billigt att bygga och fel i
+ * sak: ett filter har ingen plats att lägga en uppgift på, ingen beskrivning
+ * och inga deltagare. Se rubriken i projekt/[id]/page.tsx.
  * ===========================================================================
  */
-export default async function Uppgiftssidan({
-  searchParams,
-}: {
-  searchParams: Promise<{ projekt?: string }>;
-}) {
+export default async function Uppgiftssidan() {
   const user = await getCurrentUser();
   if (!user?.employee) {
     return (
@@ -59,32 +61,17 @@ export default async function Uppgiftssidan({
   const bild = await hamtaUppgiftsbild(user);
   const idag = bild.idag;
 
-  /**
-   * Projektfiltret.
-   *
-   * ETT FILTER OCH INTE EN EGEN SIDA. Projektkortet leder hit med ?projekt=,
-   * och samtliga sex vyer smalnar av samtidigt — "vad vantar pa mig i massan"
-   * och "vad har jag delegerat i massan" ar samma fragor som alltid, stallda om
-   * en mindre mangd. En egen projektsida hade behovt bygga om alla sex, och den
-   * dag de gled isar hade tva stallen svarat olika pa samma fraga.
-   */
-  const { projekt: valtProjekt } = await searchParams;
-  const valt = valtProjekt ? bild.projekt.find((p) => p.id === valtProjekt) : null;
-  const vy = valt
-    ? { ...bild, uppgifter: bild.uppgifter.filter((u) => u.project_id === valt.id) }
-    : bild;
-
   const namn: Record<string, string> = Object.fromEntries(bild.namn);
 
   const projektkarta: Projektkarta = Object.fromEntries(
     bild.projekt.map((p) => [p.id, { namn: p.name, farg: p.color }]),
   );
 
-  const idagsrader = minaIdag(vy, mig);
-  const oppna = minaOppna(vy, mig);
-  const vantande = vantarPaAndra(vy, mig);
-  const granskningar = attGranska(vy, mig);
-  const inkorg = inkorgen(vy, mig);
+  const idagsrader = minaIdag(bild, mig);
+  const oppna = minaOppna(bild, mig);
+  const vantande = vantarPaAndra(bild, mig);
+  const granskningar = attGranska(bild, mig);
+  const inkorg = inkorgen(bild, mig);
   const forsenade = idagsrader.filter((u) => forsenad(u, idag));
 
   /**
@@ -94,7 +81,7 @@ export default async function Uppgiftssidan({
    * vara ett arkiv — och ett arkiv utan sökning är en lista ingen läser till
    * slut. Trettio räcker för "vad gjorde jag den här månaden".
    */
-  const klara = vy.uppgifter.filter((u) => u.assignee_id === mig && arStangd(u.lage)).slice(0, 30);
+  const klara = bild.uppgifter.filter((u) => u.assignee_id === mig && arStangd(u.lage)).slice(0, 30);
 
   const till = (u: Uppgift): Listrad => ({
     id: u.id,
@@ -119,17 +106,12 @@ export default async function Uppgiftssidan({
   return (
     <div className="flex flex-col gap-6 pt-2">
       <header className="flex flex-col gap-1">
-        <h1 className="text-display text-ink-900">{valt ? valt.name : "Uppgifter"}</h1>
+        <h1 className="text-display text-ink-900">Uppgifter</h1>
         <p className="text-body text-ink-500">
           {oppna.length === 0
             ? "Ingenting öppet just nu."
             : `${oppna.length} öppna, varav ${idagsrader.length} idag.`}
         </p>
-        {valt && (
-          <Link href="/uppgifter" className="mt-1 self-start text-small font-semibold text-brand-700 hover:underline">
-            ← Visa alla uppgifter
-          </Link>
-        )}
       </header>
 
       <Snabbrad projektNamn={aktivaProjekt.map((p) => p.name)} />
@@ -137,7 +119,10 @@ export default async function Uppgiftssidan({
       {aktivaProjekt.length > 0 && (
         <section className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-4">
-            <h2 className="text-h2 text-ink-900">Projekt</h2>
+            <div>
+              <h2 className="text-h2 text-ink-900">Projekt</h2>
+              <p className="text-small text-ink-500">Öppna ett projekt för att arbeta i det.</p>
+            </div>
             <NyttProjekt />
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -365,19 +350,29 @@ function Projektkort({
 
   return (
     <Link
-      href={`/uppgifter?projekt=${projekt.id}`}
+      href={`/uppgifter/projekt/${projekt.id}`}
       className="lift group flex flex-col gap-3 rounded-md bg-surface p-4 shadow-elev-1 transition-shadow duration-fast"
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span aria-hidden className={`size-2.5 rounded-full ${STRECK[projekt.color] ?? "bg-brand-500"}`} />
-          <h3 className="text-h2 text-ink-900 group-hover:text-brand-700">{projekt.name}</h3>
+        <div className="flex min-w-0 items-center gap-2">
+          <span aria-hidden className={`size-2.5 shrink-0 rounded-full ${STRECK[projekt.color] ?? "bg-brand-500"}`} />
+          <h3 className="truncate text-h2 text-ink-900 transition-colors duration-fast group-hover:text-brand-700">
+            {projekt.name}
+          </h3>
         </div>
-        {projekt.forsenade > 0 && (
-          <span className="tnum shrink-0 rounded-full bg-danger-tint px-2 py-0.5 text-micro text-danger-ink">
-            {projekt.forsenade} sen
-          </span>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          {projekt.forsenade > 0 && (
+            <span className="tnum rounded-full bg-danger-tint px-2 py-0.5 text-micro text-danger-ink">
+              {projekt.forsenade} sen
+            </span>
+          )}
+          {/* Pilen säger att kortet leder någonstans. Utan den läses det
+              som en sammanställning, och då klickar ingen på det. */}
+          <Ikon
+            namn="tillbaka"
+            className="size-4 rotate-180 text-ink-300 transition-colors duration-fast group-hover:text-brand-700"
+          />
+        </div>
       </div>
 
       <div className="flex items-center gap-3">

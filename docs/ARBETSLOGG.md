@@ -5,6 +5,96 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-11 (eftermiddag) · Projektet blev en plats, och uppgiften gick att ändra
+
+Beställarens genomgång av previewen gav två invändningar, och den andra var den
+allvarligare av dem.
+
+### "Man ska kunna trycka på kortet och komma IN i projektet"
+
+Projektkortet pekade på `/uppgifter?projekt=<id>` och smalnade av samma sex
+vyer. Det var billigt att bygga och fel i sak: **ett filter har ingen plats att
+lägga en uppgift på.** Ingen beskrivning, inga deltagare, inget ställe att svara
+på "hur går det".
+
+Nu finns `/uppgifter/projekt/[id]` med mätare, snabbrad som lägger uppgiften i
+projektet utan `#taggen`, öppet och klart som två listor, deltagare och en
+inställningspanel. Filtret är borttaget — två vägar till samma sak börjar förr
+eller senare svara olika, och den som får rätt ska vara den som öppnas oftast.
+
+`hamtaProjektvy()` **filtrerar över samma bild** som listan i stället för att
+fråga om projektets uppgifter. En egen fråga hade behövt sin egen läsning av
+medlemmar, händelser och kopplingar — alltså en andra väg fram till samma svar.
+
+**Projektmedlemmar fanns i 0054 men hade ingen väg in.** `project_member` stod
+oanvänd; nu finns `bjudInProjekt`, `taBortProjektmedlem` och `andraProjekt`.
+Texten i panelen säger uttryckligen att en projektdeltagare **inte** ser
+projektets uppgifter automatiskt — det är den enda gissningen någon kommer att
+göra fel: *"jag bjöd in Anna till projektet, varför ser hon inget?"*
+
+### Uppgiftssidan gick inte att ändra på. Alls.
+
+Det här var ett riktigt hål, inte en designbrist. Sidan visade rubrik, ansvarig,
+frist och prioritet i en `<dl>` — och **ingenting av det gick att ändra efter
+att uppgiften skapats.** Server actions fanns redan skrivna (`andraUppgift`,
+`tilldela`, `planera`); det som saknades var en väg dit. En uppgift vars datum
+bara kan sättas en gång är inte en uppgift man kan planera om, och att planera
+om är det man gör oftast av allt.
+
+`Egenskaper.tsx` är svaret: en chipsrad som läses, och en panel som ändrar.
+
+**Tre formulär och inte ett**, för de gör tre olika saker. Att byta ANSVARIG är
+ett besked till en människa och skriver en notis. Att flytta ett DATUM är en
+planeringsändring som ingen ska störas av. Att skriva om RUBRIKEN är varken
+eller. Ett gemensamt "Spara" hade betytt att den som rättade ett stavfel
+riskerade att skicka ett meddelande — eller, värre, att omtilldelningen tystades
+för att den råkade ske i samma sparning.
+
+**Två buggar som formulären hade fått gratis, och som fångades innan de nådde
+previewen:**
+
+1. `planera()` skriver hela planeringen på en gång, så ett fält som inte kommer
+   med tolkas som "ta bort". Snabbknapparna "Idag"/"I morgon" hade därmed **tyst
+   raderat en tidsuppskattning** någon redan gjort. De bär nu klockslag och
+   minuter som dolda fält — både i panelen och i listans hovringsknappar.
+2. Låg snabbknapparna i samma formulär som datumrutan skickade webbläsaren
+   **två `due_date`**, knappens och rutans, och vilken som vinner beror på
+   ordningen i dokumentet. Egna formulär i stället.
+
+### Handlingen flyttade överst
+
+"Vad nu?" låg i ett kort i högerspalten, under fakta och inbjudna — alltså under
+vikningen på en bärbar skärm och sist på telefon. På en sida vars enda uppgift
+är att driva något framåt är det fel ordning.
+
+Toppkortet bär nu hela arbetsflödet: rubrik, bock, läge, egenskaper och knappen.
+Över knapparna står **nästa steg i en mening**, skriven till den som läser den
+och inte om uppgiften: "Anna har lämnat in den — godkänn, eller skicka tillbaka
+med ett skäl" säger vad *du* ska göra, vilket "Väntar på godkännande" inte gör.
+
+`Bock` flyttade till en egen fil: listan och deluppgifterna behöver samma bock,
+och två kopior hade betytt att samma handling ser olika ut beroende på var man
+står. Deluppgifterna kan nu bockas av **direkt i listan** — att behöva öppna
+varje steg för att kryssa av det gör checklistan till ett hinder.
+
+Bockformuläret i "Vad nu?" står numera bara när det **finns en granskare**. Utan
+granskare gör det exakt samma sak som ringen vid rubriken, och två knappar för
+samma handling på samma sida får folk att undra vad skillnaden är.
+
+### Småsaker som räknas
+
+- Brödsmula överst på båda sidorna, med projektet emellan när uppgiften hör till
+  ett. Det är vägen man kom, och den man vill tillbaka till efter avbockningen.
+- Returneringens skäl ritas mot `danger-tint` i historiken. Det är den enda rad
+  där som kräver att någon gör något.
+- Klara uppgifter i ett projekt ligger i en hopfälld `<details>`. Ett projekt
+  som rullat ett tag har fler klara än öppna, och en enda lista blir en arkivhög
+  man skrollar förbi för att hitta det som återstår.
+- Pil på projektkortet. Utan den läses kortet som en sammanställning, och då
+  klickar ingen på det.
+
+---
+
 ## 2026-09-11 · Uppgifter och projekt, pass 1 av tre
 
 Beställningen: "jag vill kunna hantera alla mina personliga uppgifter som

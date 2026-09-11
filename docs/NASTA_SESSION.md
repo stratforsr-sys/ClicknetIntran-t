@@ -3,7 +3,7 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-11 (kväll) — **uppgiftsmodulen pass 1 byggd** på branch `uppgifter`, migration `0054`: uppgifter, deluppgifter, projekt, godkännande, kopplingar, notiser och morgonbrev. **Ej mergad, väntar på granskning av previewen.** Två öppna frågor står under avsnittet nedan. Föregående rad: 2026-09-11 — Lynes webhook levererar. Formen visade sig vara en annan än gissningarna: alla sexton första samtalen tolkades fel, tolken är rättad mot riktig trafik och påsarna omtolkade ur `call_ingest`. **Ett beslut väntar om inspelningarna** — S3-adressen lever trettio minuter. Föregående rad: 2026-09-10 (kväll) — växelns samtal: Lynes webhook har en adress in i navet, radlogg och tolkning på plats, migration `0052` körd. På branch `lynes-samtal`, ej mergad; ingenting syns i gränssnittet än. Föregående rad: 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
+**Senast uppdaterad:** 2026-09-11 (kväll, andra passet) — **projektet blev en egen sida** (`/uppgifter/projekt/[id]`) och uppgiftssidan gick äntligen att ändra på: ansvarig, frist, tid, prioritet och projekt. Handlingen flyttade överst. Fortfarande **ej mergad**. Föregående rad: **uppgiftsmodulen pass 1 byggd** på branch `uppgifter`, migration `0054`: uppgifter, deluppgifter, projekt, godkännande, kopplingar, notiser och morgonbrev. **Ej mergad, väntar på granskning av previewen.** Två öppna frågor står under avsnittet nedan. Föregående rad: 2026-09-11 — Lynes webhook levererar. Formen visade sig vara en annan än gissningarna: alla sexton första samtalen tolkades fel, tolken är rättad mot riktig trafik och påsarna omtolkade ur `call_ingest`. **Ett beslut väntar om inspelningarna** — S3-adressen lever trettio minuter. Föregående rad: 2026-09-10 (kväll) — växelns samtal: Lynes webhook har en adress in i navet, radlogg och tolkning på plats, migration `0052` körd. På branch `lynes-samtal`, ej mergad; ingenting syns i gränssnittet än. Föregående rad: 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
 
 ## Uppgifter och projekt — PÅ BRANCH `uppgifter`, EJ MERGAD
 
@@ -11,12 +11,23 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
 var "hantera alla mina personliga uppgifter som säljchef direkt i intranätet".
 Det här är pass 1 av tre — kalendern är pass 2.*
 
-**Vad som finns nu.** `/uppgifter` med snabbinmatning på en rad ("Ring Nordic AB
+**Vad som finns nu.** Projektkortet leder in i projektet — egen sida med mätare,
+egen snabbrad, öppet/klart som två listor, deltagare och inställningspanel.
+Uppgiftssidan bär hela arbetsflödet överst: bock, läge, redigerbara egenskaper
+och nästa steg i en mening. Deluppgifter bockas av direkt i listan.
+
+`/uppgifter` med snabbinmatning på en rad ("Ring Nordic AB
 på tisdag 14:00 30 min !1 #Mässan @Anna" tolkas i sina delar), sex vyer (Idag,
 Väntar på andra, Att granska, Alla mina, Inkorg, Klara), deluppgifter, projekt
 som kort, inbjudna som redigerare/visare/granskare, godkännande med retur och
 skäl, kopplingar till order, ärende, person, coachning och utbildning,
 framräknade notiser och ett morgonbrev 07:30.
+
+**En fälla värd att känna till:** `planera()` skriver HELA planeringen — datum,
+klockslag och minuter — så ett fält som inte kommer med tolkas som "ta bort".
+Varje knapp som sätter ett datum måste därför bära med sig klockslaget och
+minuterna som dolda fält. Det gäller listans hovringsknappar, snabbknapparna i
+egenskapspanelen, och allt som kalendern i pass 2 kommer att dra runt.
 
 **Tre saker att inte råka bryta:**
 

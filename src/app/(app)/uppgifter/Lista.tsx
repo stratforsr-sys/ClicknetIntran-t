@@ -14,7 +14,8 @@ import {
   type Lage,
   type Prioritet,
 } from "@/lib/uppgifter";
-import { bocka, planera, type UppgiftState } from "./actions";
+import { planera, type UppgiftState } from "./actions";
+import { Bock } from "./Bock";
 
 /**
  * Uppgiftslistan.
@@ -222,7 +223,9 @@ function Rad({
           )}
         </div>
 
-        {!stangd && !u.due_date && <Snabbplan id={u.id} idag={idag} />}
+        {!stangd && !u.due_date && (
+          <Snabbplan id={u.id} idag={idag} minuter={u.estimate_minutes} />
+        )}
 
         <Link
           href={`/uppgifter/${u.id}`}
@@ -241,63 +244,6 @@ function Meta({ children }: { children: ReactNode }) {
 }
 
 /**
- * Bocken.
- *
- * EN CIRKEL OCH INTE EN KRYSSRUTA, och skillnaden är inte estetisk. Träffytan
- * är 44 px (AC-U5.5) medan ringen är 20 — en riktig `<input type=checkbox>`
- * hade behövt en osynlig utvidgning ändå, och på köpet gett två olika
- * fokusringar beroende på webbläsare.
- *
- * FINNS DET GRANSKARE BYTER KNAPPEN BETYDELSE. Servern avgör vad som faktiskt
- * händer (`bocka()` i actions.ts); här ändras bara ordet, så att den som
- * trycker vet att uppgiften går vidare till någon annan och inte blir klar.
- */
-function Bock({ id, lage, granskare }: { id: string; lage: Lage; granskare: number }) {
-  const [state, action, vantar] = useActionState<UppgiftState, FormData>(bocka, {});
-  const klar = lage === "klar";
-  const vantarPaGranskare = lage === "granskas";
-
-  const etikett = klar
-    ? "Klar"
-    : vantarPaGranskare
-      ? "Väntar på godkännande"
-      : granskare > 0
-        ? "Lämna in för godkännande"
-        : "Markera som klar";
-
-  return (
-    <form action={action} className="shrink-0">
-      <input type="hidden" name="id" value={id} />
-      <button
-        type="submit"
-        disabled={vantar || klar || vantarPaGranskare}
-        aria-label={etikett}
-        title={state.fel ?? etikett}
-        className={cn(
-          "flex size-11 -translate-x-2 items-center justify-center rounded-full transition-transform duration-fast",
-          !klar && !vantarPaGranskare && "active:scale-90",
-        )}
-      >
-        <span
-          className={cn(
-            "flex size-5 items-center justify-center rounded-full ring-2 transition-colors duration-fast",
-            klar
-              ? "bg-ok text-ink-inv ring-ok"
-              : vantarPaGranskare
-                ? "bg-warn-tint ring-warn"
-                : "ring-ink-300 group-hover:ring-brand-600",
-            state.fel && "ring-danger",
-          )}
-        >
-          {klar && <Ikon namn="kontroll" className="size-3" />}
-          {vantarPaGranskare && <span aria-hidden className="size-1.5 rounded-full bg-warn" />}
-        </span>
-      </button>
-    </form>
-  );
-}
-
-/**
  * "Idag" och "I morgon" direkt i listan.
  *
  * SYNS BARA PÅ RADER UTAN DATUM, och det är hela avsikten. En uppgift utan ett
@@ -309,7 +255,7 @@ function Bock({ id, lage, granskare }: { id: string; lage: Lage; granskare: numb
  * De ligger bakom `opacity-0 group-hover:opacity-100` på pekdon och står alltid
  * framme på pekskärm, där det inte finns något hovra.
  */
-function Snabbplan({ id, idag }: { id: string; idag: string }) {
+function Snabbplan({ id, idag, minuter }: { id: string; idag: string; minuter: number | null }) {
   const [, action, vantar] = useActionState<UppgiftState, FormData>(planera, {});
 
   const imorgon = new Date(Date.parse(`${idag}T12:00:00.000Z`) + 86_400_000).toISOString().slice(0, 10);
@@ -320,6 +266,10 @@ function Snabbplan({ id, idag }: { id: string; idag: string }) {
       className="mt-0.5 flex shrink-0 gap-1 opacity-100 transition-opacity duration-fast md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
     >
       <input type="hidden" name="id" value={id} />
+      {/* planera() skriver hela planeringen: ett falt som inte kommer med
+          tolkas som "ta bort". Utan den har raden hade ett klick pa "Idag"
+          tyst raderat en tidsuppskattning nagon redan gjort. */}
+      <input type="hidden" name="estimate_minutes" value={minuter ?? ""} />
       <button
         type="submit"
         name="due_date"

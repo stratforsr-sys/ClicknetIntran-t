@@ -49,18 +49,20 @@ export function Handlingar({
     <div className="flex flex-col gap-5">
       {kanArbeta && lage === "ej_paborjad" && <Enkel id={id} action={paborja} etikett="Jag sätter igång" />}
 
-      {kanArbeta && lage !== "granskas" && (
+      {/*
+        BOCKFORMULÄRET STÅR BARA NÄR DET FINNS EN GRANSKARE.
+
+        Utan granskare gör det exakt samma sak som ringen vid rubriken, och
+        två knappar för samma handling på samma sida får folk att undra vad
+        skillnaden är. Med granskare tillför det något ringen inte kan: ett
+        meddelande till den som ska ta ställning.
+      */}
+      {kanArbeta && lage !== "granskas" && granskare > 0 && (
         <Bockformular id={id} granskare={granskare} returnerad={lage === "returnerad"} />
       )}
 
       {kanGranska && lage === "granskas" && <Granskning id={id} />}
 
-      {lage === "granskas" && !kanGranska && (
-        <p className="text-small text-ink-500">
-          Inlämnad och väntar på godkännande. {granskare === 1 ? "Granskaren" : "Någon av granskarna"} tar
-          ställning härnäst.
-        </p>
-      )}
 
       {kanAteroppna && <Enkel id={id} action={ateroppna} etikett="Öppna igen" variant="sekundar" />}
 
