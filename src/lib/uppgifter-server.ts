@@ -172,6 +172,16 @@ export async function hamtaUppgiftsbild(user: CurrentUser): Promise<Uppgiftsbild
     ]);
 
   const alla = (rader ?? []) as unknown as TaskRad[];
+
+  /**
+   * Länkraderna typas om EN gång, här.
+   *
+   * Supabase-klientens typparser klarar inte den inbäddade select-strängen och
+   * ger `GenericStringError` för hela raden — frågan är riktig, men typen säger
+   * ingenting. Att casta vid varje användning blir två ställen som måste hållas
+   * lika; en omtypning är ett.
+   */
+  const lankrader = (lankar ?? []) as unknown as Lankrad[];
   if (alla.length === 0 && (projektrader ?? []).length === 0) return tom;
 
   /**
@@ -191,9 +201,8 @@ export async function hamtaUppgiftsbild(user: CurrentUser): Promise<Uppgiftsbild
   for (const m of medlemsrader ?? []) behover.add((m as { employee_id: string }).employee_id);
   for (const h of handelser ?? []) behover.add((h as { by_employee_id: string }).by_employee_id);
   for (const p of projektrader ?? []) behover.add((p as { owner_id: string }).owner_id);
-  for (const l of lankar ?? []) {
-    const e = (l as { employee_id: string | null }).employee_id;
-    if (e) behover.add(e);
+  for (const l of lankrader) {
+    if (l.employee_id) behover.add(l.employee_id);
   }
 
   const namn = await namnkarta(supabase, [...behover]);
@@ -215,8 +224,8 @@ export async function hamtaUppgiftsbild(user: CurrentUser): Promise<Uppgiftsbild
   }
 
   const kopplingar = new Map<string, Koppling[]>();
-  for (const rad of lankar ?? []) {
-    const k = tolkaKoppling(rad as unknown as Lankrad, namn);
+  for (const rad of lankrader) {
+    const k = tolkaKoppling(rad, namn);
     if (!k) continue;
     const lista = kopplingar.get(k.task_id);
     if (lista) lista.push(k);

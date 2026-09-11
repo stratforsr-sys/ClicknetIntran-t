@@ -1425,9 +1425,14 @@ console.log("\n\x1b[1mAC-3.26: sjukdata nar varken ekonomi eller fel chef\x1b[0m
 
 console.log("\n\x1b[1mLedighetsansokan: egen alltid, chefens folk, ingen annan\x1b[0m");
 {
+  // `reason` ar OBLIGATORISK sedan 0048 (D-E7.10): triggern
+  // `absence_request_kraver_skal` vagrar en ansokan om en typ som gar att soka
+  // utan ett skrivet skal. Provet la in raden utan ett och foll darfor pa
+  // insert:en — alltsa innan en enda policy hann provas, vilket gjorde att
+  // ingenting efter den har punkten kordes. Rattat 2026-09-11.
   const { rows: [ansokan] } = await db.query(
-    `insert into absence_request (employee_id, created_by, type_id, starts_on, ends_on)
-     values ($1::uuid, $1::uuid, 'vacation', current_date + 40, current_date + 44) returning id`,
+    `insert into absence_request (employee_id, created_by, type_id, starts_on, ends_on, reason)
+     values ($1::uuid, $1::uuid, 'vacation', current_date + 40, current_date + 44, 'rlstest') returning id`,
     [saljareA.id],
   );
 
@@ -2439,8 +2444,164 @@ console.log("\n\x1b[1mE6.5: adoption raknas i antal, och gar aldrig att bryta ne
   await db.query(`delete from search_miss where q = 'rlstest-finns-inte'`);
 }
 
+console.log("\n\x1b[1mUppgifter: kretsen ar fyra personer, och ingen roll\x1b[0m");
+{
+  /**
+   * DET HAR AVSNITTET PROVAR EN FRANVARO.
+   *
+   * `task_read` i 0054 saknar med flit `can_read_all_employees()` och
+   * `leads_employee()`, som star i nastan varje annan policy i navet. Cecilia
+   * ar Annas chef (`manager_id` satts hogst upp i filen) och David ar saljchef
+   * — bada ser Annas franvaro, hennes coachning och hennes order. Ingen av dem
+   * ska se hennes uppgiftslista.
+   *
+   * Faller kontrollerna nedan har nagon lagt till en chefsgren i policyn, och
+   * da har modulen slutat vara en anteckningsbok.
+   */
+  const { rows: [egen] } = await db.query(
+    `insert into task (title, assignee_id, created_by) values ('rlstest Annas egen', $1::uuid, $1::uuid) returning id`,
+    [saljareA.id],
+  );
+  const { rows: [delegerad] } = await db.query(
+    `insert into task (title, assignee_id, created_by) values ('rlstest fran David', $1::uuid, $2::uuid) returning id`,
+    [saljareA.id, chef.id],
+  );
+
+  ok("Anna ser sin egen uppgift", (await las(tA, "task", `id=eq.${egen.id}&select=*`)).length === 1);
+  ok("Anna ser den David la pa henne", (await las(tA, "task", `id=eq.${delegerad.id}&select=*`)).length === 1);
+  ok("David ser den han la upp", (await las(tD, "task", `id=eq.${delegerad.id}&select=*`)).length === 1);
+
+  // Karnan i hela modulen.
+  ok(
+    "SALJCHEFEN ser INTE Annas egen uppgift",
+    (await las(tD, "task", `id=eq.${egen.id}&select=*`)).length === 0,
+  );
+  ok(
+    "TEAMLEDAREN ser den inte heller, trots att hon ar Annas chef",
+    (await las(tC, "task", `id=eq.${egen.id}&select=*`)).length === 0,
+  );
+  ok("Bertil ser ingen av dem", (await las(tB, "task", `id=eq.${egen.id}&select=*`)).length === 0);
+
+  // --- De inbjudna -----------------------------------------------------------
+  await db.query(
+    `insert into task_member (task_id, employee_id, role, added_by) values ($1::uuid, $2::uuid, 'visare', $3::uuid)`,
+    [egen.id, saljareB.id, saljareA.id],
+  );
+  ok(
+    "en inbjuden visare ser uppgiften",
+    (await las(tB, "task", `id=eq.${egen.id}&select=*`)).length === 1,
+  );
+  ok(
+    "och medlemsraden",
+    (await las(tB, "task_member", `task_id=eq.${egen.id}&select=*`)).length === 1,
+  );
+  ok(
+    "men Cecilia ser fortfarande ingenting",
+    (await las(tC, "task_member", `task_id=eq.${egen.id}&select=*`)).length === 0,
+  );
+
+  // --- Den dolda uppgiften OM nagon ------------------------------------------
+  const { rows: [omBertil] } = await db.query(
+    `insert into task (title, assignee_id, created_by) values ('rlstest om Bertil', $1::uuid, $1::uuid) returning id`,
+    [chef.id],
+  );
+  const { rows: [lank] } = await db.query(
+    `insert into task_link (task_id, employee_id, visible_to_subject, created_by)
+     values ($1::uuid, $2::uuid, false, $3::uuid) returning id`,
+    [omBertil.id, saljareB.id, chef.id],
+  );
+
+  ok(
+    "en dold uppgift OM Bertil syns inte for Bertil",
+    (await las(tB, "task", `id=eq.${omBertil.id}&select=*`)).length === 0,
+  );
+  ok(
+    "inte heller kopplingen som pekar ut honom",
+    (await las(tB, "task_link", `id=eq.${lank.id}&select=*`)).length === 0,
+  );
+
+  await db.query(`update task_link set visible_to_subject = true where id = $1::uuid`, [lank.id]);
+  ok(
+    "sedan flaggan slagits pa ser han den",
+    (await las(tB, "task", `id=eq.${omBertil.id}&select=*`)).length === 1,
+  );
+  ok(
+    "men Cecilia ser den aldrig",
+    (await las(tC, "task", `id=eq.${omBertil.id}&select=*`)).length === 0,
+  );
+
+  // --- Deluppgiften arver foralderns krets -----------------------------------
+  const { rows: [del] } = await db.query(
+    `insert into task (title, parent_id, created_by) values ('rlstest deluppgift', $1::uuid, $2::uuid) returning id`,
+    [delegerad.id, chef.id],
+  );
+  ok(
+    "Anna ser deluppgiften under sin uppgift, utan att sta som ansvarig",
+    (await las(tA, "task", `id=eq.${del.id}&select=*`)).length === 1,
+  );
+  ok(
+    "Bertil ser den inte",
+    (await las(tB, "task", `id=eq.${del.id}&select=*`)).length === 0,
+  );
+
+  // Djupvakten: tre nivaer ska databasen vagra.
+  const djupt = await nekarSql(
+    `insert into task (title, parent_id, created_by) values ('rlstest for djupt', $1::uuid, $2::uuid)`,
+    [del.id, chef.id],
+  );
+  ok("tre nivaer deluppgifter nekas av databasen", Boolean(djupt), djupt ?? "slapptes igenom");
+
+  // --- Historiken ------------------------------------------------------------
+  await db.query(
+    `insert into task_event (task_id, type, by_employee_id, note) values ($1::uuid, 'kommentar', $2::uuid, 'rlstest')`,
+    [egen.id, saljareA.id],
+  );
+  ok(
+    "Anna ser historiken i sin uppgift",
+    (await las(tA, "task_event", `task_id=eq.${egen.id}&select=*`)).length === 1,
+  );
+  ok(
+    "David ser den inte",
+    (await las(tD, "task_event", `task_id=eq.${egen.id}&select=*`)).length === 0,
+  );
+
+  // Retur utan skal ar omojlig — villkoret star i 0054 och inte bara i koden.
+  const utanSkal = await nekarSql(
+    `insert into task_event (task_id, type, by_employee_id) values ($1::uuid, 'returnerad', $2::uuid)`,
+    [egen.id, chef.id],
+  );
+  ok("en returnering utan skal nekas av databasen", Boolean(utanSkal), utanSkal ?? "slapptes igenom");
+
+  // --- Skrivvagen gar via server action, aldrig via tabellen -----------------
+  const skrivUppgift = await fetch(`${URL}/rest/v1/task`, {
+    method: "POST", headers: som(tA),
+    body: JSON.stringify({ title: "rlstest smugen", created_by: saljareA.id }),
+  });
+  ok("ingen skriver en uppgift direkt mot API:t", !skrivUppgift.ok, `HTTP ${skrivUppgift.status}`);
+
+  const skrivHandelse = await fetch(`${URL}/rest/v1/task_event`, {
+    method: "POST", headers: som(tA),
+    body: JSON.stringify({ task_id: egen.id, type: "godkand", by_employee_id: saljareA.id }),
+  });
+  ok("och ingen godkanner sig sjalv genom att skriva en handelse", !skrivHandelse.ok, `HTTP ${skrivHandelse.status}`);
+
+  // --- Projekten -------------------------------------------------------------
+  const { rows: [projekt] } = await db.query(
+    `insert into project (name, owner_id, created_by) values ('rlstest-projekt', $1::uuid, $1::uuid) returning id`,
+    [chef.id],
+  );
+  ok("David ser sitt projekt", (await las(tD, "project", `id=eq.${projekt.id}&select=*`)).length === 1);
+  ok("Anna ser det inte", (await las(tA, "project", `id=eq.${projekt.id}&select=*`)).length === 0);
+
+  // Stadar i avsnittet: `task.created_by` har ingen kaskad, sa raderna maste bort
+  // innan `stad()` tar anvandarna — annars faller borttagningen pa en framande
+  // nyckel och provet lamnar skrap efter sig.
+  await db.query(`delete from task where title like 'rlstest%'`);
+  await db.query(`delete from project where name like 'rlstest-%'`);
+}
+
 console.log("\n\x1b[1mAnonym anslutning\x1b[0m");
-for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate", "news_post", "notification_seen", "notification_dismissed", "absence_type", "absence_policy", "absence_blackout", "staffing_cap", "absence_balance", "absence_request", "absence_call_order", "sick_report", "sick_deadline", "absence_reminder", "calendar_feed", "file_object", "file_access_log", "roleplay_criterion", "roleplay_submission", "roleplay_score", "cost_rate", "salary_basis", "revenue_entry", "cost_calculation", "error_report", "contract", "contract_template", "activity_day", "search_miss", "candidate", "candidate_stage_event", "interview_scorecard", "recruitment_source", "recruitment_policy"]) {
+for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate", "news_post", "notification_seen", "notification_dismissed", "absence_type", "absence_policy", "absence_blackout", "staffing_cap", "absence_balance", "absence_request", "absence_call_order", "sick_report", "sick_deadline", "absence_reminder", "calendar_feed", "file_object", "file_access_log", "roleplay_criterion", "roleplay_submission", "roleplay_score", "cost_rate", "salary_basis", "revenue_entry", "cost_calculation", "error_report", "contract", "contract_template", "activity_day", "search_miss", "candidate", "candidate_stage_event", "interview_scorecard", "recruitment_source", "recruitment_policy", "task", "task_member", "task_link", "task_event", "project", "project_member"]) {
   const r = await fetch(`${URL}/rest/v1/${t}?select=*`, { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` } });
   const j = await r.json();
   ok(`${t} ger inga rader anonymt`, !Array.isArray(j) || j.length === 0, Array.isArray(j) ? `${j.length} rader` : `HTTP ${r.status}`);
