@@ -110,22 +110,31 @@ function identitetsformer(agentRef: string): { kind: string; value: string }[] {
 async function slaUppPerson(
   db: ReturnType<typeof supabaseAdmin>,
   agentRef: string | null,
+  agentUserId: string | null = null,
 ): Promise<string | null> {
-  if (!agentRef) return null;
+  const forsok: { kind: string; value: string }[] = [
+    ...(agentRef ? identitetsformer(agentRef) : []),
+    ...(agentUserId ? [{ kind: "lynes_user", value: agentUserId }] : []),
+  ];
 
-  const former = identitetsformer(agentRef);
-
-  for (const form of former) {
+  for (const form of forsok) {
     const { data } = await db
       .from("phone_identity")
       .select("employee_id")
       .eq("kind", form.kind)
       .eq("value", form.value)
       .maybeSingle();
-    if (data?.employee_id) return data.employee_id as string;
+    if (data?.employee_id) {
+      // BRON BOKFÖRS ÄVEN NÄR PERSONEN REDAN ÄR KÄND, och det är inte en
+      // detalj. Låg den bara i grenen nedan skrevs den aldrig för någon vars
+      // e-postrad redan fanns — alltså för alla utom den allra första påsen
+      // från varje person — och Insights-flödet hade förblivit okopplat.
+      await bokforBron(db, data.employee_id as string, agentUserId);
+      return data.employee_id as string;
+    }
   }
 
-  if (!agentRef.includes("@")) return null;
+  if (!agentRef?.includes("@")) return null;
 
   const { data: person } = await db
     .from("employee")
@@ -138,15 +147,49 @@ async function slaUppPerson(
   // Gissningen bokförs så att den går att se och rätta. `created_by` är null —
   // se kommentaren på tabellen i 0052. Faller skrivningen (t.ex. för att någon
   // annan hann före) spelar det ingen roll: samtalet kopplas ändå.
+  //
+  // OCH VÄXELNS EGET ID BOKFÖRS MED, när påsen bar båda. Det är broen mellan
+  // de två flödena: inspelningswebhooken skickar `recorderId` (e-post) OCH
+  // `userId` (uuid), Insights-webhooken skickar bara `userId`. Utan den här
+  // raden går Insights-påsarna aldrig att koppla till en person — deras enda
+  // e-postadress ligger inbakad i en fritext.
   await db
     .from("phone_identity")
-    .insert({ employee_id: person.id, kind: "epost", value: agentRef.trim().toLowerCase() })
+    .insert({ employee_id: person.id as string, kind: "epost", value: agentRef.trim().toLowerCase() })
     .then(
       () => undefined,
       () => undefined,
     );
 
+  await bokforBron(db, person.id as string, agentUserId);
+
   return person.id as string;
+}
+
+/**
+ * Skriver `lynes_user`-raden som binder ihop de två flödena.
+ *
+ * Inspelningswebhooken skickar `recorderId` (e-post) OCH `userId` (uuid).
+ * Insights-webhooken skickar bara `userId`, och dess enda e-postadress ligger
+ * inbakad i en fritext. Bokförs paret en gång från det första flödet hittar
+ * det andra rätt person av sig självt.
+ *
+ * Faller skrivningen gör det ingenting: raden finns redan, eller så skrivs den
+ * nästa gång personen ringer.
+ */
+async function bokforBron(
+  db: ReturnType<typeof supabaseAdmin>,
+  employeeId: string,
+  agentUserId: string | null,
+): Promise<void> {
+  if (!agentUserId) return;
+  await db
+    .from("phone_identity")
+    .insert({ employee_id: employeeId, kind: "lynes_user", value: agentUserId })
+    .then(
+      () => undefined,
+      () => undefined,
+    );
 }
 
 /**
@@ -197,7 +240,7 @@ export async function taEmotSamtal(ratext: string, headers: Headers): Promise<Mo
 
   try {
     const tolkning = tolkaSamtal(payload);
-    const employeeId = await slaUppPerson(db, tolkning.agentRef);
+    const employeeId = await slaUppPerson(db, tolkning.agentRef, tolkning.agentUserId);
 
     const externalRef = somsvarde(tolkning, avtr);
 

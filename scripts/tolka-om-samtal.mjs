@@ -64,18 +64,25 @@ function identitetsformer(agentRef) {
   return former;
 }
 
-async function slaUppPerson(agentRef) {
-  if (!agentRef) return null;
+async function slaUppPerson(agentRef, agentUserId) {
+  const forsok = [
+    ...(agentRef ? identitetsformer(agentRef) : []),
+    ...(agentUserId ? [{ kind: "lynes_user", value: agentUserId }] : []),
+  ];
 
-  for (const form of identitetsformer(agentRef)) {
+  for (const form of forsok) {
     const r = await db.query("select employee_id from phone_identity where kind = $1 and value = $2", [
       form.kind,
       form.value,
     ]);
-    if (r.rows[0]) return r.rows[0].employee_id;
+    if (r.rows[0]) {
+      // Bron bokfors aven nar personen redan ar kand — se samtal-server.ts.
+      await bokforBron(r.rows[0].employee_id, agentUserId);
+      return r.rows[0].employee_id;
+    }
   }
 
-  if (!agentRef.includes("@")) return null;
+  if (!agentRef?.includes("@")) return null;
 
   const p = await db.query("select id from employee where email = $1", [agentRef.trim().toLowerCase()]);
   if (!p.rows[0]) return null;
@@ -86,7 +93,17 @@ async function slaUppPerson(agentRef) {
       [p.rows[0].id, agentRef.trim().toLowerCase()],
     );
   }
+  await bokforBron(p.rows[0].id, agentUserId);
   return p.rows[0].id;
+}
+
+/** Raden som binder ihop de tva floden. Se slaUppPerson() i samtal-server.ts. */
+async function bokforBron(employeeId, agentUserId) {
+  if (!agentUserId || torrkor) return;
+  await db.query(
+    "insert into phone_identity (employee_id, kind, value) values ($1, 'lynes_user', $2) on conflict do nothing",
+    [employeeId, agentUserId],
+  );
 }
 
 const villkor = baraOtolkade ? "where normalized_at is null" : "";
@@ -103,7 +120,7 @@ for (const rad of rader.rows) {
   try {
     const t = tolkaSamtal(rad.payload);
     const externalRef = t.externalRef ?? `avtryck:${rad.fingerprint.slice(0, 32)}`;
-    const employeeId = await slaUppPerson(t.agentRef);
+    const employeeId = await slaUppPerson(t.agentRef, t.agentUserId);
 
     const befintlig = await db.query(
       "select recording_state, sales_order_id from phone_call where source = 'lynes' and external_ref = $1",

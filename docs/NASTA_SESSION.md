@@ -3,7 +3,91 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-11 — Lynes webhook levererar. Formen visade sig vara en annan än gissningarna: alla sexton första samtalen tolkades fel, tolken är rättad mot riktig trafik och påsarna omtolkade ur `call_ingest`. **Ett beslut väntar om inspelningarna** — S3-adressen lever trettio minuter. Föregående rad: 2026-09-10 (kväll) — växelns samtal: Lynes webhook har en adress in i navet, radlogg och tolkning på plats, migration `0052` körd. På branch `lynes-samtal`, ej mergad; ingenting syns i gränssnittet än. Föregående rad: 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
+**Senast uppdaterad:** 2026-09-11 (eftermiddag) — båda Lynes-webhookarna är på. Insights visade sig bära riktningen i `itemType` och inte utfallet, och `callType` betyder inte riktning; tolken är rättad och alla 172 samtal omtolkade. **Tre öppna frågor, se nedan** — den viktigaste är om ett missat samtal någonsin levereras. Föregående rad: 2026-09-11 — Lynes webhook levererar. Formen visade sig vara en annan än gissningarna: alla sexton första samtalen tolkades fel, tolken är rättad mot riktig trafik och påsarna omtolkade ur `call_ingest`. **Ett beslut väntar om inspelningarna** — S3-adressen lever trettio minuter. Föregående rad: 2026-09-10 (kväll) — växelns samtal: Lynes webhook har en adress in i navet, radlogg och tolkning på plats, migration `0052` körd. På branch `lynes-samtal`, ej mergad; ingenting syns i gränssnittet än. Föregående rad: 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
+
+## Båda webhookarna är på sedan 2026-09-11 — TRE ÖPPNA FRÅGOR
+
+*Resonemanget i `ARBETSLOGG.md` 2026-09-11 (eftermiddag). Tolken är rättad mot
+båda formerna och alla påsar omtolkade. 172 samtal i `phone_call`.*
+
+### 1. Får vi någonsin se ett MISSAT samtal? — avgör allt annat
+
+Inspelningswebhooken levererar **bara besvarade samtal**: 166 av 166 har en
+inspelning, ingen har taltid noll, kortaste är 1 sekund. En utgående
+svarsfrekvens på 100 % finns inte. Missade samtal, upptaget och obesvarade
+signaler når oss alltså aldrig den vägen.
+
+Insights var hoppet. Men den enda påse som kommit gällde ett BESVARAT samtal,
+och dess `itemType` bar riktningen (`OUTGOING_CALL`), inte ett utfall. **Om
+Insights aldrig levererar för ett missat samtal kan samtalsstatistiken aldrig bli
+fullständig** — "56 samtal" kommer alltid att betyda "56 besvarade samtal", och
+hur många försök det krävdes går inte att svara på.
+
+**FÖRSTA ÅTGÄRD NÄSTA PASS:**
+
+```sql
+select raw_item_type, raw_call_type, count(*) from phone_call group by 1,2;
+select payload from call_ingest where payload ? 'itemType' order by id desc limit 5;
+```
+
+Dyker `MISSED_CALL` eller liknande upp i `raw_item_type` är frågan besvarad åt
+rätt håll — och `slaUpp()` mappar redan `MISSED_CALL` → `missat` av sig självt,
+eftersom den skalar bort `_call`. Står det bara riktningar efter ett par dagar:
+fråga Lynes rakt ut om missade samtal går att få, annars är taket nått.
+
+### 2. Ett samtal ligger som två rader
+
+Insights-påsen har ingen nyckel — inget `id` — så den får ett avtryck som
+sömsvärde. Samma samtal ligger nu som `486642607` (inspelning) och
+`avtryck:22d3e4ae…` (Insights).
+
+Sömmen finns: `(userId, startTime)` träffade på millisekunden. Men **bygg inte
+hopslagningen förrän fråga 1 är besvarad** — svaret avgör vilken lösning som är
+rätt:
+
+- **Insights levererar missade samtal** → de raderna är samtal vi annars aldrig
+  ser. Låt dem vara egna rader, och gör i stället en `merged_into`-koppling
+  eller en vy som räknar rätt.
+- **Insights levererar bara samma samtal igen** → slå ihop på
+  `(userId, startTime)` och låt inspelningens `id` vara sömmen.
+
+### 3. Åtta samtal hör till ingen
+
+De kommer från `vlado@clicknet.se`. I navet står Vlado Vladisavljevic som
+`thomas@clicknet.se`. Antingen är e-posten i personalregistret fel, eller så ska
+adressen pekas till honom med en rad i `phone_identity`:
+
+```sql
+insert into phone_identity (employee_id, kind, value, created_by)
+values ('<vlados employee.id>', 'epost', 'vlado@clicknet.se', '<din employee.id>');
+```
+
+`created_by` SKA sättas här — det är ett beslut om vems statistik åtta samtal
+hamnar i, inte en gissning navet gjort. Kör därefter omtolkningen.
+
+### Så här hänger flödena ihop
+
+| | Inspelningswebhook | Insights |
+|---|---|---|
+| Nyckel | `id` | **saknas** |
+| Riktning | `direction` | `itemType` (INTE `callType`) |
+| Person | `recorderId` (e-post) + `userId` | bara `userId` |
+| Längd | `endTime - startTime` | `duration`, i ms, utan `endTime` |
+| Taltid | `talkTime`, i ms | — |
+| Inspelning | `fileUrls[0]`, giltig 30 min | — |
+| Utfall | — | — |
+
+`phone_identity` binder ihop dem: paret (e-post, uuid) bokförs från
+inspelningsflödet, och Insights hittar rätt person på uuid:t.
+
+### Efter varje ändring i tolken
+
+```
+node --experimental-strip-types scripts/tolka-om-samtal.mjs --torrkor
+node --experimental-strip-types scripts/tolka-om-samtal.mjs
+```
+
+---
 
 ## Växeln levererar sedan 2026-09-11 — OCH ETT BESLUT VÄNTAR
 
