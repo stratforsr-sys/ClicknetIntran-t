@@ -97,6 +97,70 @@ console.log("\x1b[1m\n1. Somsvardet plockas inte ur ett nastlat id\x1b[0m");
   ok("sessionId hittas ocksa", sessions.externalRef === "sess-7");
 }
 
+console.log("\n\x1b[1mEN RIKTIG LYNES-PASE, avlast ur produktion 2026-09-11\x1b[0m");
+{
+  // Kopierad ur `call_ingest` efter att Lynes slog pa webhooken. Falten ar
+  // identiska i alla sexton forsta leveranserna. Adressen ar forkortad.
+  //
+  // Det har provet ar det enda som star mellan tolken och en tyst regression:
+  // de sexton forsta samtalen tolkades med noll fel och anda fel varde i
+  // nastan varje kolumn, for varje gissning gav `null` i stallet for att kasta.
+  const t = tolkaSamtal({
+    id: 486191227,
+    userId: "fb15ca20-1893-48da-9ed0-6d49180c0087",
+    agentId: null,
+    endTime: 1789109939000,
+    fileUrls: ["https://s3.eu-north-1.amazonaws.com/easyteams.recorded-calls/00742161.mp3?X-Amz-Expires=1800"],
+    talkTime: 407000,
+    waitTime: null,
+    agentName: null,
+    aiAgentId: null,
+    direction: "OUTGOING_CALL",
+    startTime: 1789109532000,
+    recorderId: "simon@clicknet.se",
+    referredBy: null,
+    referredTo: null,
+    aiAgentName: null,
+    aiAgentRole: null,
+    calleeNumber: "+46793564194",
+    callerNumber: "+46768748198",
+    answerGroupId: null,
+    answerGroupName: null,
+  });
+
+  ok("id:t blir somsvarde aven som tal", t.externalRef === "486191227", `fick ${t.externalRef}`);
+  ok("OUTGOING_CALL blir ut", t.direction === "ut", `fick ${t.direction}`);
+  ok("ravardet star kvar", t.rawCallType === "OUTGOING_CALL");
+  ok("recorderId blir avsandare, inte userId", t.agentRef === "simon@clicknet.se",
+    `fick ${t.agentRef} — en uuid har kopplar ingen person`);
+  ok("motparten ar den uppringde", t.counterpartE164 === "+46793564194",
+    `fick ${t.counterpartE164} — callerNumber ar var egen saljare`);
+  ok("langden raknas ur klockslagen", t.durationSeconds === 407,
+    `fick ${t.durationSeconds} — nagon duration finns inte i pasen`);
+  ok("taltiden lases som millisekunder", t.talkSeconds === 407,
+    `fick ${t.talkSeconds} — 407000 som sekunder ar fyra dygn`);
+  ok("starttiden lases ur epokmillisekunder", t.startedAt === new Date(1789109532000).toISOString());
+  ok("sluttiden lases", t.endedAt === new Date(1789109939000).toISOString());
+  ok("inspelningen plockas ur arrayen", t.recordingUrl?.startsWith("https://s3.eu-north-1"),
+    `fick ${t.recordingUrl} — fileUrls ar en array`);
+  ok("laget blir hos vaxeln", inspelningslage(t) === "hos_vaxeln");
+  ok("utfallet ar okant och det ar ratt", t.outcome === "okant",
+    "inspelningswebhooken bar inget itemType — det gor Insights-webhooken");
+}
+
+{
+  // Samma pase, inkommande. Da ar motparten den som RINGDE.
+  const t = tolkaSamtal({
+    id: 1, direction: "INCOMING_CALL", recorderId: "simon@clicknet.se",
+    startTime: 1789109532000, endTime: 1789109592000, talkTime: 55000,
+    callerNumber: "+46793564194", calleeNumber: "+46768748198",
+  });
+  ok("INCOMING_CALL blir in", t.direction === "in");
+  ok("motparten ar den som ringde", t.counterpartE164 === "+46793564194", `fick ${t.counterpartE164}`);
+  ok("langden blir 60", t.durationSeconds === 60);
+  ok("taltiden blir 55", t.talkSeconds === 55);
+}
+
 console.log("\x1b[1m\n1b. Den som ringde hittas aven nastlat, och e-posten gar fore id:t\x1b[0m");
 {
   // Hittat i produktion 2026-09-10: `user.email` ar EN nyckel i den utplattade

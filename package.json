@@ -60,7 +60,8 @@
     "test:coachning": "node --experimental-strip-types tests/coachning.mjs",
     "test:radering": "node tests/radering-db.mjs",
     "test:notiser-tackning": "node tests/notiser-tackning.mjs",
-    "test:samtal": "node --experimental-strip-types tests/samtal.mjs"
+    "test:samtal": "node --experimental-strip-types tests/samtal.mjs",
+    "tolka-om-samtal": "node --experimental-strip-types scripts/tolka-om-samtal.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.7.0",

@@ -3,7 +3,92 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-10 (kväll) — växelns samtal: Lynes webhook har en adress in i navet, radlogg och tolkning på plats, migration `0052` körd. På branch `lynes-samtal`, ej mergad; ingenting syns i gränssnittet än. Föregående rad: 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
+**Senast uppdaterad:** 2026-09-11 — Lynes webhook levererar. Formen visade sig vara en annan än gissningarna: alla sexton första samtalen tolkades fel, tolken är rättad mot riktig trafik och påsarna omtolkade ur `call_ingest`. **Ett beslut väntar om inspelningarna** — S3-adressen lever trettio minuter. Föregående rad: 2026-09-10 (kväll) — växelns samtal: Lynes webhook har en adress in i navet, radlogg och tolkning på plats, migration `0052` körd. På branch `lynes-samtal`, ej mergad; ingenting syns i gränssnittet än. Föregående rad: 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
+
+## Växeln levererar sedan 2026-09-11 — OCH ETT BESLUT VÄNTAR
+
+*Migrationer `0052`/`0053` körda. Tolken rättad mot riktig trafik 2026-09-11,
+se `ARBETSLOGG.md` samma dag. Ingenting syns i gränssnittet än.*
+
+Lynes webhook är påslagen och levererar. **Formen är inte längre en gissning** —
+den står avläst, fält för fält, överst i `src/lib/samtal.ts` och som ett prov i
+`tests/samtal.mjs`. De sexton första samtalen tolkades fel på nästan varje
+kolumn, tolkades om ur `call_ingest` och står nu rätt.
+
+### DET SOM MÅSTE BESLUTAS INNAN INSPELNINGARNA GÅR ATT BYGGA
+
+**`fileUrls` är en förhandssignerad S3-adress med `X-Amz-Expires=1800` — den
+lever en halvtimme.**
+
+Beslutet 2026-09-10 var: ordersamtal hämtas hem, resten stannar hos växeln med
+bara en adress. Den halvan går inte längre ihop. En adress som dog för tre
+veckor sedan är inget att stanna kvar hos — den är ett kvitto på att en
+inspelning har funnits.
+
+Och ordersamtalen är värre: ordern läggs in EFTER samtalet, ibland timmar efter.
+När vi vet att ett samtal ledde till en affär är länken sedan länge död. "Hämta
+hem bara ordersamtalen" går alltså inte att genomföra med den här webhooken
+ensam. Tre vägar, och valet är beställarens:
+
+1. **Lynes API-nyckel.** Be Lynes om API-åtkomst så att en färsk adress kan
+   begäras när ordern läggs in. Renast — avgränsningen överlever, vi hämtar bara
+   det vi bestämt oss för att spara. Kräver att Lynes lämnar ut nyckeln.
+2. **Hämta hem allt direkt, gallra sedan.** Ladda ner varje inspelning inom
+   halvtimmen, behåll den tills det står klart om samtalet blev en order, och
+   radera resten efter en bestämd frist. Fungerar utan Lynes hjälp, men vi
+   lagrar då tillfälligt ljud av samtal vi sagt att vi inte ska lagra — och P0.6
+   och gallringsrutinen måste skrivas för det innan det slås på.
+3. **Inga inspelningar i navet.** Behåll samtalsdatan, låt ljudet vara kvar i
+   Lynes eget arkiv och nöj dig med att `phone_call` vet att en inspelning finns
+   och när. Billigast, och inspelningen som bevis på muntligt avtal får då
+   hämtas ur Lynes för hand den dagen den behövs.
+
+**Tills valet är gjort står `recording_state` på `hos_vaxeln` och ingenting
+laddas ner.** Villkoret `phone_call_inspelning` i 0052 gör dessutom att inget
+ljud KAN sparas utan en order, så ingen kan råka börja.
+
+### Det här är inspelningswebhooken, inte Insights
+
+Påsen bär `direction` men varken `callType` eller `itemType`. `outcome` står
+därför på `okant` för allt som kommer den här vägen, och det är ett ärligt svar
+och inte ett fel. **Vill ni ha besvarat/missat/studsat/röstbrevlåda/kopplat är
+det Lynes Insights-webhook som ska slås på också** — samma rutt tar emot den,
+tolken känner redan igen fälten, och `tests/samtal.mjs` provar dem.
+
+### Efter varje ändring i tolken
+
+```
+node --experimental-strip-types scripts/tolka-om-samtal.mjs --torrkor
+node --experimental-strip-types scripts/tolka-om-samtal.mjs
+```
+
+En rättad tolk rättar inget som redan står i tabellen. Skriptet rör aldrig
+`recording_file_id`, `recording_state = 'hamtad'` eller `sales_order_id`.
+
+Nyttiga frågor när något ser konstigt ut:
+
+```sql
+select raw_call_type, direction, count(*) from phone_call group by 1,2;
+select count(*) from phone_call where employee_id is null;   -- okopplade
+select payload from call_ingest order by id desc limit 1;    -- senaste påsen
+```
+
+### Steg 2 — inte byggt
+
+1. **Koppla samtal till order.** `sales_order` har `contact_phone` och
+   `salesperson_id`; `phone_call` har `counterpart_e164` och `employee_id`.
+   Sömmen är nummer + säljare + ett tidsfönster runt `created_at`.
+2. **Inspelningarna** — se beslutet ovan.
+3. **Visa samtalen** i coachningskortet och på ordern.
+
+### Öppet sedan tidigare
+
+- **P0.6 registerförteckningen är inte uppdaterad.** Nu levererar växeln på
+  riktigt, så behandlingen pågår — det här är inte längre en förberedelse.
+- `tests/registerutdrag.mjs` är rött av nitton kolumner som saknades sedan
+  innan det här arbetet. Egen fråga, egen session.
+
+---
 
 ## Växelns samtal 2026-09-10 (kväll) — I PRODUKTION
 

@@ -5,6 +5,106 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-11 · Vaxeln slogs pa, och varje gissning visade sig fel
+
+Lynes slog pa webhooken. Sexton samtal kom in over natten, alla tolkade, noll
+fel i `call_ingest.normalize_error` — och nastan varje kolumn i `phone_call`
+bar fel varde.
+
+Det ar exakt det tysta felet 0052 byggdes for. Varje gissning som inte traffade
+gav `null` i stallet for att kasta, sa mottagningen sag frisk ut hela vagen.
+
+### Vad Lynes faktiskt skickar
+
+Falten ar identiska i alla sexton:
+
+```
+id             486191227                    ← number, inte strang
+direction      "OUTGOING_CALL"              ← inte "outbound"
+recorderId     "simon@clicknet.se"          ← DET ar e-postadressen
+userId         "fb15ca20-1893-…"            ← Lynes interna id
+startTime      1789109532000                ← epok i millisekunder
+endTime        1789109939000
+talkTime       407000                       ← MILLISEKUNDER, utan att namnet sager det
+waitTime       null
+callerNumber   "+46768748198"
+calleeNumber   "+46793564194"
+fileUrls       ["https://s3.eu-north-1…"]   ← en ARRAY
+agentId / agentName / aiAgentId / aiAgentName / aiAgentRole /
+answerGroupId / answerGroupName / referredBy / referredTo   ← null hittills
+```
+
+Mot det letade tolken efter `outbound`, `userEmail`, `to`, `duration` och
+`recordingUrl`. Facit:
+
+| Kolumn | Fore | Efter |
+|---|---|---|
+| `direction` | `okand` pa 16/16 | ratt pa 16/16 |
+| `employee_id` | null pa 16/16 | kopplad pa 16/16 |
+| `counterpart_e164` | null pa 16/16 | satt pa 16/16 |
+| `duration_seconds` | null pa 16/16 | satt pa 16/16 |
+| `talk_seconds` | upp till **2 662 000 s** (30 dygn) | 4–2662 s |
+| `recording_url` | null pa 16/16 | satt pa 16/16 |
+
+### Tre saker som inte var uppenbara
+
+**NAGON `duration` FINNS INTE.** Langden ar `endTime - startTime` och raknas
+fram i `langdAvFonstret()`. Ett angivet falt gar fore om det nagon gang dyker
+upp — vaxelns eget svar slar var subtraktion.
+
+**TALTIDEN AR MILLISEKUNDER, OCH DET SKA INTE HARDKODAS.** Den enkla rattelsen
+vore att lagga `talktime` bland de ms-namn `sekunder()` raknar om. Den vore fel
+pa samma tysta satt at andra hallet: den dag en pase bar sekunder blir varje
+samtal tusen ganger for kort, och en taltid pa noll ser ut som ett samtal ingen
+sa nagot pa.
+
+Men vi behover inte gissa. Taltiden kan inte vara langre an samtalet, och
+langden ar kand ur klockslagen. `taltid()` later darfor RADEN avgora: 407000 mot
+ett samtal pa 407 s ar omojligt som sekunder och exakt ratt som ms; 71 mot ett
+samtal pa 93 s ar rimligt som sekunder och ror man inte. Slutsatsen dras per rad
+ur radens egna uppgifter och haller oavsett vad vaxeln gor harnast.
+
+Villkoret `somMs > 0` ar ingen petitess: 300 mot ett samtal pa 30 s ar orimligt
+som sekunder OCH blir noll som ms. Da har vi last fel falt, och noll vore ett
+pastaende utan tackning. Null ar svaret.
+
+**`duration` OCH `talkTime` AR SAMMA TAL I ALLA SEXTON.** Det ar inte en bugg
+utan vad det ar for slags webhook: inspelningen borjar nar nagon svarar, sa
+fonstret ar taltiden. Signaltiden ligger i `waitTime`, som star pa null hittills.
+
+### `fileUrls` ar en halvtimme gammal nar den kommer
+
+Adressen ar en forhandssignerad S3-lank med `X-Amz-Expires=1800`. **Den slutar
+galla efter trettio minuter.**
+
+Det river beslutet fran 09-10 om att samtal utan order ska "stanna hos vaxeln
+med bara en adress". Adressen ar inte en adress till nagot — den ar ett kvitto
+pa att en inspelning fanns. Och for ordersamtalen ar det varre: ordern laggs in
+efter samtalet, ibland timmar efter, och da ar lanken dod sedan lange.
+Avgransningen "bara ordersamtal hamtas hem" gar alltsa inte att genomfora med
+den har webhooken ensam. Se `NASTA_SESSION.md` — det ar ett beslut for
+bestallaren, inte for koden.
+
+### Omtolkningen ar ett skript i repot, inte ett engangskommando
+
+`scripts/tolka-om-samtal.mjs`. Loftet i 0052 — att en felaktig tolkning gar att
+gora om ur rapasen — ar vardelost utan nagot som gor om den. Skriptet skriver
+over de harledda kolumnerna men ROR ALDRIG `recording_file_id`,
+`recording_state = 'hamtad'` eller `sales_order_id`: de ar inte harledda ur
+pasen utan resultatet av arbete nagon annan gjort.
+
+Kor det efter varje andring i `src/lib/samtal.ts`. En rattad tolk rattar inget
+som redan star i tabellen.
+
+### Provet bar nu en riktig pase
+
+`tests/samtal.mjs` har den verkliga leveransen inlagd, falt for falt. Det ar det
+enda som star mellan tolken och nasta tysta regression — och tva av de gamla
+proven foll nar `taltid()` kom till, for de kodade antagandet att taltiden ar
+sekunder. Att de foll var provet som gjorde sitt jobb.
+
+---
+
 ## 2026-09-10 (kväll) · Växeln får en adress in i navet, och en tolk som får ha fel
 
 Beställningen var kort: koppla in Lynes webhook — samtalslängd, samtal och

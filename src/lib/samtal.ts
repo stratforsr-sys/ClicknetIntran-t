@@ -2,24 +2,48 @@
  * Tolkningen av vad växeln skickar. Ren logik, inga importer.
  *
  * ===========================================================================
- * VARFÖR DEN HÄR FILEN LETAR I STÄLLET FÖR ATT LÄSA
+ * FORMEN ÄR INTE LÄNGRE EN GISSNING — DEN ÄR AVLÄST UR RIKTIG TRAFIK
  *
- * Lynes payloadformat är inte publikt dokumenterat — det ligger i deras app
- * under Profil → API-dokumentation, och den anpassade webhooken slås dessutom
- * på av deras support. Det vi vet från släppnoterna är att `callType` och
- * `itemType` finns, och att `itemType` skiljer besvarat, missat, studsat,
- * röstbrevlåda och kopplat.
+ * Filen skrevs 2026-09-10 mot ett odokumenterat format. 2026-09-11 slog Lynes
+ * på webhooken, sexton samtal kom in, och råpåsen visade att nästan varje
+ * gissning var fel. Så här ser en riktig leverans ut (fälten är identiska i
+ * alla sexton):
  *
- * Att skriva `payload.duration` på den grunden vore att gissa en gång och sedan
- * aldrig få veta om gissningen var fel: fältet blir bara `undefined`, samtalet
- * får ingen längd, och ingenting ser trasigt ut. Därför plattas påsen ut till
- * en karta av gena nycklar och varje uppgift söks på en LISTA av rimliga namn,
- * oavsett hur djupt den ligger. `duration`, `durationSeconds`, `callDuration`
- * och `data.call.duration` hamnar alla rätt.
+ *   id             486191227                      ← number, inte sträng
+ *   direction      "OUTGOING_CALL"                ← inte "outbound"
+ *   recorderId     "simon@clicknet.se"            ← DET är e-postadressen
+ *   userId         "fb15ca20-1893-…"              ← Lynes interna id
+ *   agentId        null                           ← alltid null hittills
+ *   startTime      1789109532000                  ← epok i millisekunder
+ *   endTime        1789109939000
+ *   talkTime       407000                         ← MILLISEKUNDER, utan att
+ *                                                   namnet säger det
+ *   waitTime       null
+ *   callerNumber   "+46768748198"
+ *   calleeNumber   "+46793564194"
+ *   fileUrls       ["https://s3.eu-north-1.amazonaws.com/…"]   ← en ARRAY
+ *   answerGroupId / answerGroupName / referredBy / referredTo /
+ *   aiAgentId / aiAgentName / aiAgentRole / agentName          ← null hittills
  *
- * Och `call_ingest` behåller råpåsen. Visar det sig att växeln kallar taltiden
- * något vi inte gissat går tolkningen att göra om — utan att någon uppgift
- * behövt vara sparad två gånger.
+ * NÅGON `duration` FINNS INTE. Längden är `endTime - startTime`, och den
+ * räknas fram nedan.
+ *
+ * NÅGOT UTFALL FINNS INTE HELLER. Det här är inspelningswebhooken; `callType`
+ * och `itemType` hör till Lynes *Insights*-webhook, som är en annan påslagning.
+ * `outcome` står därför kvar på `okant` för allt som kommer den här vägen, och
+ * det är ett ärligt svar och inte ett fel.
+ *
+ * ===========================================================================
+ * VARFÖR DEN HÄR FILEN ÄNDÅ LETAR I STÄLLET FÖR ATT LÄSA
+ *
+ * Kandidatlistorna står kvar, med de riktiga namnen först. Att byta ut dem mot
+ * `payload.recorderId` hade gjort filen kortare och spröd: Lynes har redan
+ * ändrat formatet en gång (`itemType` tillkom i v2), och nästa ändring ska ge
+ * ett fält som inte hittas — inte en TypeError mitt i mottagningen.
+ *
+ * Och `call_ingest` behåller råpåsen. Det var det som räddade de sexton första
+ * samtalen: när tolkningen visade sig fel gick de att tolka om ur påsen, utan
+ * att en enda uppgift behövt vara sparad två gånger.
  *
  * ===========================================================================
  * `okand` OCH `okant` ÄR SVAR, INTE FEL
@@ -194,6 +218,69 @@ export function tidpunkt(v: unknown): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
+/**
+ * Längden ur klockslagen, när växeln inte skickar någon.
+ *
+ * Lynes gör inte det: påsen bär `startTime` och `endTime` men inget
+ * `duration`. Subtraktionen är inte riktigt samma sak — den mäter hela
+ * uppkopplingen, inklusive signaltiden — men det är den uppgiften som finns,
+ * och `talk_seconds` bär den del då någon faktiskt talade.
+ */
+function langdAvFonstret(start: string | null, slut: string | null): number | null {
+  if (!start || !slut) return null;
+  const ms = Date.parse(slut) - Date.parse(start);
+  if (!Number.isFinite(ms) || ms < 0) return null;
+  return Math.round(ms / 1000);
+}
+
+/**
+ * Taltiden, med samtalets längd som skiljedomare.
+ *
+ * ===========================================================================
+ * VARFÖR DEN HÄR FUNKTIONEN INTE BARA DIVIDERAR MED TUSEN
+ *
+ * Lynes skickar `talkTime` i millisekunder utan att namnet säger det. Den
+ * enkla rättelsen vore att lägga `talktime` bland de ms-namn `sekunder()`
+ * räknar om — och den vore fel på ett sätt som inte syns: den dagen en påse
+ * bär sekunder blir varje samtal tusen gånger för kort, och en taltid på noll
+ * ser ut som ett samtal ingen sa något på.
+ *
+ * Men vi behöver inte gissa. Samtalets längd är känd ur klockslagen, och
+ * TALTIDEN KAN INTE VARA LÄNGRE ÄN SAMTALET. Det gör längden till ett facit:
+ *
+ *   407000 mot ett samtal på 407 s  → som sekunder omöjligt, som ms exakt rätt
+ *   71     mot ett samtal på 93 s   → som sekunder rimligt, rör det inte
+ *
+ * Slutsatsen dras alltså per rad, ur radens egna uppgifter, och håller oavsett
+ * vad växeln gör härnäst.
+ *
+ * `somMs > 0` är inte en petitess: ett värde på 300 mot ett samtal på 30 s är
+ * orimligt som sekunder OCH blir noll som millisekunder. Då har vi läst fel
+ * fält, och noll vore ett påstående vi inte har täckning för. Null är svaret.
+ */
+export function taltid(
+  varde: unknown,
+  namnetSagerMs: boolean,
+  langd: number | null,
+): number | null {
+  if (varde === undefined || varde === null || varde === "") return null;
+  if (namnetSagerMs) return sekunder(varde, true);
+
+  const somSekunder = sekunder(varde);
+  if (somSekunder === null) return null;
+
+  // Ingen längd att jämföra med — då står det som står. Lynes skickar alltid
+  // båda klockslagen, så det här är fallet "någon annan växel, någon gång".
+  if (langd === null) return somSekunder;
+
+  if (somSekunder <= langd) return somSekunder;
+
+  const somMs = sekunder(varde, true);
+  if (somMs !== null && somMs > 0 && somMs <= langd) return somMs;
+
+  return null;
+}
+
 /* ------------------------------------------------------------------------- *
  * Telefonnummer
  * ------------------------------------------------------------------------- */
@@ -232,11 +319,17 @@ const RIKTNING: Record<string, Riktning> = {
   in: "in",
   inbound: "in",
   incoming: "in",
+  // Lynes riktiga värde, avläst 2026-09-11. `slaUpp` skalar dessutom bort
+  // ändelsen `_call`, så `INCOMING_CALL` hade träffat `incoming` även utan den
+  // här raden — båda står med för att raden ska gå att hitta när någon söker
+  // på det värde som faktiskt står i `raw_call_type`.
+  incoming_call: "in",
   inkommande: "in",
   received: "in",
   ut: "ut",
   outbound: "ut",
   outgoing: "ut",
+  outgoing_call: "ut",
   utgaende: "ut",
   utgående: "ut",
   dialed: "ut",
@@ -270,7 +363,16 @@ const UTFALL: Record<string, Utfall> = {
 function slaUpp<T>(karta: Record<string, T>, raw: string | null, standard: T): T {
   if (raw === null) return standard;
   const n = raw.trim().toLowerCase().replace(/\s+/g, "");
-  return karta[n] ?? karta[n.replace(/[_-]/g, "")] ?? standard;
+  return (
+    karta[n] ??
+    karta[n.replace(/[_-]/g, "")] ??
+    // `OUTGOING_CALL` → `outgoing`. Ändelsen säger bara att det är ett samtal,
+    // vilket vi redan vet. Att skala bort den gör att en framtida variant
+    // (`MISSED_CALL`, `INTERNAL_CALL`) har en chans att träffa i stället för
+    // att bli `okand` bara för suffixets skull.
+    karta[n.replace(/_?calls?$/, "")] ??
+    standard
+  );
 }
 
 /* ------------------------------------------------------------------------- *
@@ -303,8 +405,15 @@ export function tolkaSamtal(payload: unknown): Tolkning {
   //    kartan, inte två. Ett `useremail` utan punkt träffar `{"userEmail":...}`
   //    men INTE `{"user":{"email":...}}` — och den nästlade formen är den en
   //    växel oftast skickar. Båda står därför med.
+  // `recorderId` FÖRST. Det är Lynes fält för e-postadressen, avläst ur riktig
+  // trafik 2026-09-11 — och e-posten är det enda som matchar `employee.email`
+  // och kopplar samtalet till en person på egen hand. `userId` finns i samma
+  // påse men är en uuid: den kopplar ingenting förrän någon lagt en rad i
+  // `phone_identity` för hand. Låg `userId` först blev varje samtal okopplat,
+  // vilket är exakt vad som hände med de sexton första.
   const agentRef = text(
     hamta(k, [
+      "recorderid", "recorder_id", "recorder.email",
       "useremail", "user_email", "user.email", "agentemail", "agent_email",
       "agent.email", "owner.email", "answeredby.email",
       "extension", "anknytning", "user.extension", "agent.extension",
@@ -318,32 +427,51 @@ export function tolkaSamtal(payload: unknown): Tolkning {
   // saknat — därför står råvärdet alltid kvar vid sidan av.
   const motpartRaw =
     riktning === "in"
-      ? text(hamta(k, ["from", "fromnumber", "from_number", "caller", "callernumber", "anumber", "a_number", "source"]))
+      ? text(hamta(k, ["callernumber", "caller_number", "from", "fromnumber", "from_number", "caller", "anumber", "a_number", "source"]))
       : riktning === "ut"
-        ? text(hamta(k, ["to", "tonumber", "to_number", "callee", "destination", "bnumber", "b_number", "target"]))
+        ? text(hamta(k, ["calleenumber", "callee_number", "to", "tonumber", "to_number", "callee", "destination", "bnumber", "b_number", "target"]))
         : text(hamta(k, ["counterpart", "customernumber", "customer_number", "number", "msisdn", "phone"]));
 
   const motpart = motpartRaw ?? text(hamta(k, ["counterpart", "number", "msisdn", "phone"]));
 
+  const startedAt = tidpunkt(hamta(k, ["starttime", "start_time", "startedat", "started_at", "start", "calltime", "timestamp", "createdat", "created_at"]));
+  const endedAt = tidpunkt(hamta(k, ["endtime", "end_time", "endedat", "ended_at", "end", "hangupat", "hangup_at", "stoptime"]));
+
   // Millisekunder bara när fältnamnet säger det. Se `sekunder()`.
-  const langdNyckel = ["durationms", "duration_ms", "durationmillis", "calldurationms"];
-  const langdMs = hamta(k, langdNyckel);
-  const durationSeconds =
+  const langdMs = hamta(k, ["durationms", "duration_ms", "durationmillis", "calldurationms"]);
+  const angivenLangd =
     langdMs !== undefined
       ? sekunder(langdMs, true)
       : sekunder(hamta(k, ["duration", "durationseconds", "duration_seconds", "callduration", "call_duration", "length", "totalduration", "samtalslangd"]));
 
-  const taltidMs = hamta(k, ["talktimems", "talk_time_ms", "talkdurationms"]);
-  const talkSeconds =
-    taltidMs !== undefined
-      ? sekunder(taltidMs, true)
-      : sekunder(hamta(k, ["talktime", "talk_time", "talkduration", "talk_duration", "billsec", "answeredduration", "taltid"]));
+  // LYNES SKICKAR INGEN LÄNGD ALLS. Den räknas fram ur klockslagen, som båda
+  // finns i varje påse. Ett angivet fält går före: står det där är det växelns
+  // eget svar, och vår subtraktion är bara en uppskattning av samma sak.
+  const durationSeconds = angivenLangd ?? langdAvFonstret(startedAt, endedAt);
 
-  const startedAt = tidpunkt(hamta(k, ["starttime", "start_time", "startedat", "started_at", "start", "calltime", "timestamp", "createdat", "created_at"]));
-  const endedAt = tidpunkt(hamta(k, ["endtime", "end_time", "endedat", "ended_at", "end", "hangupat", "hangup_at", "stoptime"]));
+  // TALTIDEN ÄR MILLISEKUNDER HOS LYNES, utan att namnet säger det: `talkTime`
+  // stod på 407000 i en påse där `endTime - startTime` var 407000 ms, alltså
+  // 407 sekunder. Lästes den som sekunder blev samtalet fyra dygn långt — och
+  // eftersom ingen längd fanns att jämföra med fanns inget villkor som
+  // avvisade det. Tabellen hann få en taltid på trettio dygn innan det syntes.
+  //
+  // `taltid()` avgör saken per rad med längden som facit, i stället för att
+  // hårdkoda vilken enhet det är. Se resonemanget där.
+  const taltidNamngivenMs = hamta(k, ["talktimems", "talk_time_ms", "talkdurationms"]);
+  const taltidVarde =
+    taltidNamngivenMs ??
+    hamta(k, ["talktime", "talk_time", "talkduration", "talk_duration", "billsec", "answeredduration", "taltid"]);
+  const talkSeconds = taltid(taltidVarde, taltidNamngivenMs !== undefined, durationSeconds);
 
+  // `fileUrls` är en ARRAY, alltså `fileurls.0` i den utplattade kartan.
+  //
+  // OBS ATT ADRESSEN ÄR FÄRSKVARA. Lynes lämnar en förhandssignerad S3-adress
+  // med `X-Amz-Expires=1800` — den slutar gälla efter en halvtimme. Den sparas
+  // för att den säger att en inspelning FINNS och var den låg, inte för att
+  // den går att öppna i efterhand. Se `docs/NASTA_SESSION.md`.
   const recordingUrl = text(
     hamta(k, [
+      "fileurls.0", "fileurl", "fileurls",
       "recordingurl", "recording_url", "recording", "recordinglink",
       "recordingfileurl", "audiourl", "audio_url", "mediaurl", "media_url",
       "inspelning", "inspelningsurl",
