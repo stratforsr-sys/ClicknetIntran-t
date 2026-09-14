@@ -250,10 +250,13 @@ export async function hamtaOrdersamtal(
 
   const { data } = await db
     .from("phone_call")
+    // EN LITERAL, inte en summa av strangar. Supabase-klienten harleder radens
+    // typ ur select-strangen, och den harledningen kraver att strangen ar
+    // statiskt lasbar. Skriven som `"a, b" + "c, d"` blir raden
+    // `GenericStringError` och varje faltatkomst ett typfel — samma falla som
+    // provisionsvyn gick i 2026-09-10, och den star i arbetsloggen dar.
     .select(
-      "id, sales_order_id, direction, outcome, counterpart_e164, counterpart_raw, " +
-        "started_at, duration_seconds, talk_seconds, recording_state, recording_file_id, " +
-        "recording_error, order_linked_by, employee_id",
+      "id, sales_order_id, direction, outcome, counterpart_e164, counterpart_raw, started_at, duration_seconds, talk_seconds, recording_state, recording_file_id, recording_error, order_linked_by, employee_id",
     )
     .in("sales_order_id", orderIds)
     .order("started_at", { ascending: false });
