@@ -12,17 +12,26 @@ vet, huvudvyn är planeringsvyn, delning i Outlooks fem nivåer med ledig/upptag
 som grundläge för alla, pling i webbläsaren. Ingen mötesbokning.
 Migration `0057`, branch `kalender`.
 
-### Numret blev 0057, och det är ett fynd och inte ett val
+### Numret blev 0057, och vagen dit ar vard en rad
 
-`schema_migrations` bär sedan **2026-09-14 06:22 UTC** en rad
-`0056_samtal_pa_order` som lagt fyra kolumner på `phone_call`
-(`sales_order_id`, `order_linked_at`, `order_linked_by`,
-`recording_retained_until`, noll rader använder dem). **Filen finns inte i repot
-och ingen gren bär den** — senaste commit någonstans är från 2026-09-11.
+Vid passets borjan bar `schema_migrations` en rad `0056_samtal_pa_order`, kord
+**2026-09-14 06:22 UTC**, medan repot inte hade nagon fil och ingen gren nagon
+commit for den. Numret var alltsa taget utan att det gick att lasa vad som
+kordes.
 
-Numret är alltså taget, och det utan att någon kan läsa vad som kördes. Det här
-passet rör inte den raden. Se NASTA_SESSION.md; det är den enda punkten i
-loggen som kräver en annan människas svar.
+**Det loste sig fem minuter senare:** samtalen-pa-ordern-passet pushade
+`c2b9f42` 06:27 och `3b5cb77` 06:29, och `0056_samtal_pa_order.sql` ligger i
+repot. Det var alltsa inte en forsvunnen migration utan **tva pass som korde
+samtidigt** — migrationen kordes fore commiten, som den ska.
+
+Lardomen star kvar och ar den som kostar nasta gang: **fraga
+`schema_migrations` och inte katalogen** nar numret ska valjas. Hade kalendern
+tagit 0056 for att katalogen slutade pa 0055 hade tva migrationer burit samma
+nummer, och den andra hade aldrig kort.
+
+Samma sak med grenen. `main` flyttade tva commits mitt under passet, och
+kalendergrenen flatade in dem och byggde om previewen innan den visades — samma
+ordning som 2026-09-10 kom fram till.
 
 ### Kalendern speglar ingenting. Den räknar fram sig varje gång.
 
@@ -254,6 +263,106 @@ inloggning är en egen fråga med egna svar. Kandidat för pass 3.
 
 Upprepning, veckogenomgång, mallar. Och uppgifter i iCal-flödet, om beställaren
 vill det.
+
+---
+
+## 2026-09-14 · Samtalen hittar sin affar, och ljudet hamtas hem (0056)
+
+Bestallningen: koppla samtal till order, hitta ALLA samtal aven langt bakat,
+flera samtal per order, ett granssnitt for inspelningarna, och ingenting far
+forsvinna.
+
+### Numret ar sommen, och det blev en GENERERAD kolumn
+
+`sales_order.contact_phone` ar fritext. "070-123 45 67" och "+46701234567" ar
+samma kund och gar inte att jamfora med `phone_call.counterpart_e164` utan
+tvatt.
+
+Den enkla vagen — en kolumn koden fyller i nar ordern sparas — ar ocksa den som
+gar sonder tyst. Den dag nagon lagger en order via en vag som inte kommer ihag
+kolumnen far den ordern inga samtal, och ingenting ser fel ut: bara ett tomt
+avsnitt, som ser precis ut som en kund ingen ringt.
+
+En genererad kolumn kan inte bli inaktuell. Priset ar att normaliseringen finns
+pa tva stallen — `normalisera_nummer()` i SQL och `normaliseraNummer()` i TS —
+och det priset betalas med ett prov: `tests/samtal-order.mjs` kor bada over
+tjugotva nummer och faller om de svarar olika. **Tva implementationer som inte
+gar att jamfora vore oforsvarligt; tva som provas mot varandra ar det inte.**
+
+### Regeln for vilken affar ett samtal hor till
+
+Ingen undre tidsgrans — bestallaren var uttrycklig. Ett fonster pa "sju dagar
+fore ordern" hade tyst kapat bort det forsta samtalet, som ofta ar det
+intressantaste.
+
+Den svara delen ar samma nummer pa tva affarer. Delningen blev:
+
+> Ett samtal hor till den FORSTA order som lades upp EFTER samtalet.
+
+Samtalen fore affar 1 hor till affar 1; de som kom mellan affar 1 och 2 hor till
+affar 2 — det ar de samtalen som ledde dit. Regeln ar avsiktligt enkel, for den
+ska ga att forklara for den som undrar varfor ett samtal hamnade dar det
+hamnade. En viktning pa narhet i tid hade gett battre svar i enstaka fall och
+obegripliga svar i resten.
+
+### Avgransningen om inspelningar gick inte att halla, och byttes mot en som gar
+
+0052 skrev in bestallarens avsikt i schemat: hamtat ljud KRAVDE en order. Den
+avsikten ar omojlig — Lynes adress lever en halvtimme, ordern laggs in timmar
+senare. Bestallaren valde 2026-09-11: hamta allt direkt, gallra sedan.
+
+Villkoret bytte darfor form men inte syfte:
+
+- `recording_retained_until` SATT -> tillfallig, gallras den dagen (30 dygn)
+- `recording_retained_until` NULL -> permanent, hor till en affar
+
+Och `phone_call_gallring` gor att en rad MED order inte kan bara en frist.
+Gallringen ser bara rader med frist, alltsa kan den inte rada ett bevis pa ett
+muntligt avtal. Det ar provat mot den riktiga databasen: ett forsok att satta en
+frist pa ett ordersamtal avvisas av Postgres.
+
+### Hamtningen ligger i webhooken, och det ar inte en optimering
+
+Hobby-planen ger en cron per dygn. Adressen lever en halvtimme. Ett jobb ar
+fyrtioatta ganger for sent, sa nedladdningen sker inne i mottagningen — efter
+att samtalet skrivits ner, och med alla fel svalda. Faller hamtningen forloras
+ljudet, aldrig uppgiften om att samtalet agde rum.
+
+### `preload="none"` ar en behorighetsfraga
+
+Varje hamtning av ljudet gar via `/filer/[id]`, som skriver en rad i
+`file_access_log` innan filen lamnas ut (K36). Utan `preload="none"` hade
+webblasaren hamtat borjan av varje inspelning nar ordersidan ritades — och da
+hade loggen sagt att fem personers samtal oppnades av nagon som bara rakade
+oppna sidan. En logg med pahittade rader ar samre an ingen.
+
+Samma skal fick `signeraOchLogga()` lata ANDAMALET avgora om filen laddas ned
+eller spelas inline: en flagga hade kunnat sattas fel, och ett lakarintyg som
+oppnas inline ar en uppgift om halsa i en webblasarflik.
+
+### Vad som faktiskt ar provat
+
+`tests/samtal-order.mjs` provar regeln och jamfor SQL mot TS. Utover det kordes
+hela kedjan mot RIKTIG data i en transaktion som rullades tillbaka: tva order
+lades pa ett nummer med atta riktiga samtal, och samtalen delades 3/5 pa ratt
+sida om tidpunkten. Inga samtal forsvann, och gallringsspärren holl.
+
+### Tre saker att veta
+
+**MIGRATIONSNUMRET 0054 VAR TAGET.** Ett annat pass korde `0054_uppgifter` och
+`0055_projektchatt` medan det har arbetet lag pabörjat. Fraga
+`schema_migrations`, inte katalogen — det star i minnet sedan tidigare och gallde
+igen.
+
+**DET FINNS EN ENDA ORDER I NAVET** ("Test AB"), och inga samtal gar till dess
+nummer. Bakfyllningen kopplade darfor noll rader. Det ar inte ett fel i
+kopplingen — det finns ingenting att koppla an.
+
+**ETT NUMMER MED TEXT EFTER SIG TOLKAS INTE.** "070-123 45 67 (Anna)" ger null i
+bade SQL och TS, alltsa inga samtal pa den ordern. Ingen sadan order finns i
+dag. Ratt atgard ar antagligen att plocka ut forsta nummerliknande token, men
+det ar en gissning som kan para ihop fel kund — och den ska beslutas, inte
+smygas in.
 
 ---
 

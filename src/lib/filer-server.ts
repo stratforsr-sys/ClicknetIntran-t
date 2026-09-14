@@ -2,7 +2,14 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
-import { bygStig, provaFil, visningsnamn, URL_SEKUNDER, type Andamal } from "@/lib/filer";
+import {
+  bygStig,
+  provaFil,
+  visningsnamn,
+  URL_SEKUNDER,
+  URL_SEKUNDER_LJUD,
+  type Andamal,
+} from "@/lib/filer";
 
 /**
  * ===========================================================================
@@ -86,9 +93,33 @@ export async function signeraOchLogga(
   }
 
   const namn = visningsnamn(fil);
+
+  // ===================================================================
+  // EN INSPELNING SPELAS, DE ANDRA LADDAS NED — OCH SKILLNADEN AVGORS AV
+  // ANDAMALET, INTE AV EN PARAMETER
+  //
+  // `download`-flaggan satter Content-Disposition till attachment. For ett
+  // lakarintyg ar det ratt: filen ska till hardisken. For ett samtal ar det
+  // fel — `<audio>` far da en fil webblasaren vagrar spela, och spelaren star
+  // tyst utan felmeddelande.
+  //
+  // Och livslangden maste folja med. Ett samtal pa fyrtiofyra minuter hamtas i
+  // bitar allteftersom nagon lyssnar; en adress som dog efter trettio sekunder
+  // hade gett en spelare som slutar fungera mitt i.
+  //
+  // Att andamalet avgor och inte anroparen ar med flit. En flagga hade kunnat
+  // sattas fel, och ett lakarintyg som oppnas inline i stallet for att laddas
+  // ned ar en uppgift om halsa i en webblasarflik.
+  // ===================================================================
+  const arLjud = fil.purpose === "call_recording";
+
   const { data: signerad, error } = await db.storage
     .from(fil.bucket)
-    .createSignedUrl(fil.path, URL_SEKUNDER, { download: namn });
+    .createSignedUrl(
+      fil.path,
+      arLjud ? URL_SEKUNDER_LJUD : URL_SEKUNDER,
+      arLjud ? {} : { download: namn },
+    );
 
   if (error || !signerad) throw new Error(error?.message ?? "Filen kunde inte signeras.");
 

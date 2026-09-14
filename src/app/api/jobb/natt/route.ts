@@ -14,6 +14,8 @@ import { hamtaDrift, type Drift } from "@/lib/jobb/drift-server";
 import { kvittoLarmtext, larmDigest, larmSokvag } from "@/lib/jobb/larm";
 import { skrivFel } from "@/lib/fel-server";
 import { rensaGamlaNotiser } from "@/lib/notishandelse-server";
+import { svepKoppling } from "@/lib/samtal-order-server";
+import { gallraInspelningar } from "@/lib/inspelning-server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -123,6 +125,24 @@ export async function GET(request: NextRequest) {
     // langden. Klockan visar dem i trettio dagar, sa nittio ar rikligt med
     // marginal for den som vill kunna backa och titta.
     ["notiser", () => rensaGamlaNotiser(db)],
+    // 0056. Samtalen paras ihop med sina affarer.
+    //
+    // Mottagningen kopplar redan varje NYTT samtal, sa steget finns for det
+    // omvanda fallet: en order som laggs in i dag ska hitta samtalen som
+    // ringdes i forrgar — och dem kan mottagningen omojligt ha kopplat, for da
+    // fanns ingen order att koppla till.
+    //
+    // Det ar ocksa natets enda chans att rakna om nar ett telefonnummer rattas
+    // pa en order. Svepningen skriver bara det som faktiskt skiljer sig, sa en
+    // natt utan nyheter kostar en fraga och ingen skrivning.
+    ["samtalskoppling", () => svepKoppling()],
+    // Och inspelningarna som passerat sin frist utan att bli affar.
+    //
+    // ORDNINGEN AR INTE LIKGILTIG. Kopplingen kor FORE gallringen: ett samtal
+    // som far en affar i det forsta steget tappar sin frist och overlever det
+    // andra. Bytte stegen plats hade en inspelning kunnat raderas samma natt
+    // som ordern den hor till lades in.
+    ["inspelningsgallring", () => gallraInspelningar()],
   ];
 
   for (const [namn, kor] of steg) {

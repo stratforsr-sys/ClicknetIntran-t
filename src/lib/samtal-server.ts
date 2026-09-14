@@ -3,6 +3,8 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { inspelningslage, tolkaSamtal, type Tolkning } from "@/lib/samtal";
+import { hamtaInspelning } from "@/lib/inspelning-server";
+import { svepKoppling } from "@/lib/samtal-order-server";
 
 /**
  * Mottagningen av ett samtal från växeln.
@@ -293,7 +295,33 @@ export async function taEmotSamtal(ratext: string, headers: Headers): Promise<Mo
 
     await db.from("call_ingest").update({ normalized_at: new Date().toISOString() }).eq("id", ingestId);
 
-    return { mottaget: true, tolkat: true, ingestId, callId: samtal.id as string };
+    const callId = samtal.id as string;
+
+    // ===================================================================
+    // TVÅ STEG EFTER ATT SAMTALET STÅR SKRIVET, OCH INGET AV DEM FÅR FÄLLA DET
+    //
+    // Båda ligger efter den lyckade skrivningen, och båda sväljer sina egna
+    // fel. Samtalet är redan bokfört; det som kan gå fel härifrån är att
+    // ljudet inte kommer hem eller att affären inte hittas — och ingetdera
+    // får göra att växeln får ett felsvar och skickar om.
+    //
+    // Ordningen spelar roll. Hämtningen först: adressen lever en halvtimme och
+    // kopplingen kan göras om när som helst. Kopplingen sist, så att ett
+    // ordersamtal som redan har sin affär får `sales_order_id` på filen med en
+    // gång i stället för att vänta på natten.
+    // ===================================================================
+
+    if (lage === "hos_vaxeln") {
+      await hamtaInspelning({
+        samtalId: callId,
+        employeeId,
+        url: tolkning.recordingUrl,
+      }).catch(() => undefined);
+    }
+
+    await svepKoppling({ samtalId: callId }).catch(() => undefined);
+
+    return { mottaget: true, tolkat: true, ingestId, callId };
   } catch (e) {
     const skal = e instanceof Error ? e.message : String(e);
 

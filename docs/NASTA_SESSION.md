@@ -3,33 +3,7 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-14 — **kalendern (pass 2) är byggd**: planeringsvy med dra-och-släpp, veckovy, delning i Outlooks fem nivåer, pling i webbläsaren. Migration `0057` körd. **Ligger på branch `kalender`, EJ MERGAD** — previewen ska visas först. **En sak kräver ett svar från en människa: `0056_samtal_pa_order` är kört i databasen men finns inte i repot** — se avsnittet direkt nedan. Föregående rad: 2026-09-11 (kväll) — **uppgiftsmodulen pass 1 är byggd och mergad till main**: uppgifter, deluppgifter, projekt med egen sida och chatt, godkännande med granskare, kopplingar, framräknade notiser och morgonbrev. Migrationerna `0054` och `0055` körda. **Nästa steg är kalendern (pass 2).** Föregående rad: 2026-09-11 (eftermiddag) — båda Lynes-webhookarna är på. Insights visade sig bära riktningen i `itemType` och inte utfallet, och `callType` betyder inte riktning; tolken är rättad och alla 172 samtal omtolkade. **Tre öppna frågor, se nedan** — den viktigaste är om ett missat samtal någonsin levereras. Föregående rad: 2026-09-11 — Lynes webhook levererar. Formen visade sig vara en annan än gissningarna: alla sexton första samtalen tolkades fel, tolken är rättad mot riktig trafik och påsarna omtolkade ur `call_ingest`. **Ett beslut väntar om inspelningarna** — S3-adressen lever trettio minuter. Föregående rad: 2026-09-10 (kväll) — växelns samtal: Lynes webhook har en adress in i navet, radlogg och tolkning på plats, migration `0052` körd. På branch `lynes-samtal`, ej mergad; ingenting syns i gränssnittet än. Föregående rad: 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
-
-## 0056 ÄR KÖRT MEN FINNS INTE I REPOT — läs detta först
-
-`schema_migrations` bär raden `0056_samtal_pa_order`, körd **2026-09-14 06:22
-UTC**. Den har lagt fyra kolumner på `phone_call`:
-
-```
-sales_order_id, order_linked_at, order_linked_by, recording_retained_until
-```
-
-Noll rader använder dem. **Ingen fil och ingen commit på någon gren bär
-migrationen** — senaste commit någonstans i repot är från 2026-09-11.
-
-Det betyder två saker, och den andra är den dyra:
-
-1. **Numret 0056 är taget.** Kalendern fick därför `0057`. Numret är taget när
-   migrationen KÖRTS, inte när den mergats.
-2. **Ingen kan läsa vad som faktiskt kördes.** Nästa gång någon kör
-   `apply-sql.mjs` mot en ny miljö saknas steget, och ett schema som bara finns
-   i produktionen är inte ett schema — det är en gissning.
-
-**Åtgärd:** fråga vem som körde den och be om filen. Skriv INTE en egen
-`0056_samtal_pa_order.sql` i efterhand — checksumman skulle inte stämma, och
-`apply-sql.mjs` varnar då om att filen ändrats i stället för att köra den.
-
----
+**Senast uppdaterad:** 2026-09-14 (senare) — **kalendern (pass 2) är byggd**: planeringsvy med dra-och-släpp, veckovy, delning i Outlooks fem nivåer, pling i webbläsaren. Migration `0057` körd. **Ligger på branch `kalender`, EJ MERGAD** — previewen ska visas först. Branchen bär main inflätad (`0056` ingår). Föregående rad: 2026-09-14 — samtalen ligger nu på ordern med spelbar inspelning (migration `0056`). Kopplingen sker på kundens nummer utan bortre gräns bakåt, flera samtal per affär, och gallringen kan inte radera ett ordersamtal. Föregående rad: 2026-09-11 (kväll) — **uppgiftsmodulen pass 1 är byggd och mergad till main**: uppgifter, deluppgifter, projekt med egen sida och chatt, godkännande med granskare, kopplingar, framräknade notiser och morgonbrev. Migrationerna `0054` och `0055` körda. **Nästa steg är kalendern (pass 2).** Föregående rad: 2026-09-11 (eftermiddag) — båda Lynes-webhookarna är på. Insights visade sig bära riktningen i `itemType` och inte utfallet, och `callType` betyder inte riktning; tolken är rättad och alla 172 samtal omtolkade. **Tre öppna frågor, se nedan** — den viktigaste är om ett missat samtal någonsin levereras. Föregående rad: 2026-09-11 — Lynes webhook levererar. Formen visade sig vara en annan än gissningarna: alla sexton första samtalen tolkades fel, tolken är rättad mot riktig trafik och påsarna omtolkade ur `call_ingest`. **Ett beslut väntar om inspelningarna** — S3-adressen lever trettio minuter. Föregående rad: 2026-09-10 (kväll) — växelns samtal: Lynes webhook har en adress in i navet, radlogg och tolkning på plats, migration `0052` körd. På branch `lynes-samtal`, ej mergad; ingenting syns i gränssnittet än. Föregående rad: 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
 
 ## Kalendern — BYGGD 2026-09-14, PÅ BRANCH `kalender`, EJ MERGAD
 
@@ -72,8 +46,11 @@ Det betyder två saker, och den andra är den dyra:
 
 ### Att göra innan merge
 
+- [x] `main` inflätad. Grenen bar `0056` när previewen byggdes — main flyttade
+      två commits mitt under passet (samtalen på ordern), och det upptäcktes av
+      `compare/main...kalender`. **Kolla den igen precis före merge**; ett pass
+      till kan ha landat under tiden.
 - [ ] Visa previewen för beställaren.
-- [ ] `compare/main...kalender` → kolla `behind_by` innan merge.
 - [ ] Bekräfta tolkningen av **orderfrist** (se nedan).
 
 ### En tolkning beställaren bör bekräfta
@@ -94,6 +71,81 @@ fortfarande bara beviljad ledighet. Beställaren räknade upp flödet som något
 redan finns, inte som något att bygga ut — och att lägga uppgiftsrubriker i en
 adress utan inloggning är en egen fråga med egna svar. Kandidat för pass 3.
 
+
+## Samtal på order — BYGGT 2026-09-14, migration `0056`
+
+*Resonemanget i `ARBETSLOGG.md` samma dag. Kopplingen, nedladdningen av ljud och
+spelaren på ordersidan är klara och i produktion.*
+
+Öppna en order → raden "N samtal · M taltid" fälls ut till en lista med spelare.
+Kopplingen sker på kundens telefonnummer, utan bortre gräns bakåt, och flera
+samtal per affär är normalfallet.
+
+### Så här fungerar det
+
+| Del | Var |
+|---|---|
+| Regeln (vilken affär ett samtal hör till) | `src/lib/samtal-order.ts` — ren, provad |
+| Skrivningen | `src/lib/samtal-order-server.ts` (`svepKoppling`) |
+| Nedladdning + gallring av ljud | `src/lib/inspelning-server.ts` |
+| Gränssnittet | `src/app/(app)/order/Samtal.tsx` |
+| Bakfyllning för hand | `npm run koppla-samtal` |
+
+Tre saker utlöser en koppling: ett nytt samtal kommer in (mottagningen), en
+order läggs upp (nattjobbet sveper), och `koppla-samtal.mjs` körs för hand. Alla
+tre går genom SAMMA `parIhop()` — annars hade utfallet berott på vad som råkade
+hända först.
+
+### DET SOM ÄR VÄRT ATT VETA INNAN NÅGON RÖR DET HÄR
+
+**Normaliseringen finns på TVÅ ställen** — `normalisera_nummer()` i 0056 och
+`normaliseraNummer()` i `samtal.ts`. Det är ett medvetet pris för att orderns
+nummer ska vara en GENERERAD kolumn som aldrig kan bli inaktuell.
+`tests/samtal-order.mjs` kör båda över tjugotvå nummer och faller om de glider
+isär. **Ändras den ena måste den andra ändras i samma commit.**
+
+**Gallringen kan inte radera ett bevis.** `phone_call_gallring` i 0056 gör att
+en rad med order inte kan bära en frist, och gallringen ser bara rader med
+frist. Nattjobbet kör dessutom kopplingen FÖRE gallringen, så ett samtal som får
+sin affär i natt överlever samma natt.
+
+**Fristen är 30 dygn** och står som `GALLRINGSFRIST_DYGN` i `samtal-order.ts`.
+
+### Öppna punkter
+
+- **Det finns en enda order i navet** ("Test AB") och inga samtal går till dess
+  nummer. Funktionen är provad mot riktig data i en rollback-transaktion, men
+  den har inte fått visa sig i verkligheten än. **Titta på en riktig order när
+  nästa läggs in.**
+- **Ett nummer med text efter sig tolkas inte.** `"070-123 45 67 (Anna)"` ger
+  null, alltså inga samtal på den ordern. Ingen sådan order finns i dag. Att
+  plocka ut första nummerliknande token är antagligen rätt — men det är en
+  gissning som kan para ihop fel kund, så det ska beslutas.
+- **Ingen fristående samtalslista finns.** Ett samtal utan order syns i dag bara
+  i databasen. Det är nästa naturliga bygge: en sida under Försäljning som visar
+  alla samtal med filter, så att inget är osynligt någonstans. Menyn ligger i
+  `src/components/shell/nav-items.ts` och sidan måste läggas i `tests/sidor.mjs`.
+- **Lynes har inte levererat sedan 2026-09-11 15:46.** Fredag eftermiddag till
+  måndag kan vara helg — men kontrollera att webhooken fortfarande är på innan
+  något byggs ovanpå datan.
+- **Insights levererade EN gång** (13:11 den 11:e) och har varit tyst sedan.
+  Samma kontroll.
+
+### Om något ser fel ut
+
+```sql
+select count(*) from phone_call where sales_order_id is null;   -- okopplade
+select o.company_name, count(p.id) from sales_order o
+  left join phone_call p on p.sales_order_id = o.id group by 1;
+select contact_phone, contact_phone_e164 from sales_order
+  where contact_phone_e164 is null;                              -- otolkbara nummer
+```
+
+```
+npm run koppla-samtal -- --torrkor    # visar vad en svepning skulle ändra
+```
+
+---
 
 ## Uppgifter och projekt — BYGGD OCH MERGAD 2026-09-11
 

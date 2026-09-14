@@ -28,7 +28,16 @@ export type Andamal =
   | "document_attachment"
   | "roleplay"
   /** E13 steg 9: den uppladdade avtals-PDF:en pa en kundorder (0039). */
-  | "sales_order";
+  | "sales_order"
+  /**
+   * Inspelat kundsamtal fran vaxeln (0052/0056).
+   *
+   * Skiljer sig fran de andra pa tva satt, och bada star i schemat: den har
+   * INGEN uppladdare — den hamtas av mottagningen, inte av en manniska — och
+   * den bar ett subjekt aven nar den hor till en order, eftersom ljudet ar den
+   * anstalldas egen rost.
+   */
+  | "call_recording";
 
 /** Vad varje andamal far bara. Samma lista som check-villkoret i 0022. */
 export const TILLATNA_TYPER: Record<Andamal, string[]> = {
@@ -40,6 +49,9 @@ export const TILLATNA_TYPER: Record<Andamal, string[]> = {
   // O14: BARA PDF. En bild gar inte att lasa text ur, och forifyllningen hade
   // da tyst uteblivit for just de orderna — utan att nagot sag fel ut.
   sales_order: ["application/pdf"],
+  // Lynes levererar mp3. De andra star med for att en vaxel som byter kodek
+  // inte ska gora att inspelningarna tyst slutar komma in.
+  call_recording: ["audio/mpeg", "audio/mp4", "audio/wav", "audio/webm"],
 };
 
 /**
@@ -55,6 +67,11 @@ export const MAX_BYTE: Record<Andamal, number> = {
   document_attachment: 10 * 1024 * 1024,
   roleplay: 40 * 1024 * 1024,
   sales_order: 10 * 1024 * 1024,
+  // Det langsta samtalet hittills ar 2662 sekunder, och 64 kbit/s ger da
+  // omkring 21 MB. Femtio racker for en timme och en kvart. Bucketens tak
+  // hojdes till samma siffra i 0056 — ett lagre tak dar hade avvisat just de
+  // langa samtalen, alltsa de som faktiskt ledde till affar.
+  call_recording: 50 * 1024 * 1024,
 };
 
 /**
@@ -66,11 +83,26 @@ export const MAX_BYTE: Record<Andamal, number> = {
  */
 export const URL_SEKUNDER = 30;
 
+/**
+ * Hur lange en signerad URL till en INSPELNING lever.
+ *
+ * Trettio sekunder racker for en nedladdning, som foljs direkt. Ett samtal pa
+ * fyrtiofyra minuter spelas inte pa trettio sekunder: webblasaren hamtar
+ * ljudet i bitar allteftersom nagon lyssnar och spolar, och en adress som dog
+ * efter en halv minut hade gett en spelare som slutar fungera mitt i.
+ *
+ * Fem minuter ar avvagningen. Den som vill dela adressen vidare hinner, men
+ * fonstret ar fortfarande kort — och varje gang nagon oppnar spelaren skrivs en
+ * ny rad i `file_access_log`, sa delandet syns.
+ */
+export const URL_SEKUNDER_LJUD = 300;
+
 export const ANDAMAL_ETIKETT: Record<Andamal, string> = {
   sick_certificate: "Läkarintyg",
   document_attachment: "Bilaga",
   roleplay: "Inspelat testsamtal",
   sales_order: "Avtal",
+  call_recording: "Inspelat samtal",
 };
 
 export type Filfel =
