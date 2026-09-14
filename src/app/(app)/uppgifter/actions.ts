@@ -10,6 +10,7 @@ import {
   farArbeta,
   farBjudaIn,
   farGranska,
+  farPlanera,
   farRedigera,
   lageAv,
   tolkaSnabbrad,
@@ -18,6 +19,13 @@ import {
   type Medlemsroll,
   type Prioritet,
 } from "@/lib/uppgifter";
+import {
+  arDelningsniva,
+  farArbetaSomAgaren,
+  farPlaneraOm,
+  serDetaljer,
+  type Delningsniva,
+} from "@/lib/kalender";
 import { notifiera, notifieraFlera } from "@/lib/notishandelse-server";
 
 /**
@@ -70,6 +78,8 @@ async function kravKrets(taskId: string): Promise<{
   rad: Rad;
   krets: Krets;
   granskare: string[];
+  /** 0057: nivan den ansvariga gett mig i sin kalender. Null nar ingen finns. */
+  kalenderniva: Delningsniva | null;
 }> {
   const user = await kravInloggad();
   const mig = user.employee!.id;
@@ -89,11 +99,14 @@ async function kravKrets(taskId: string): Promise<{
   const minRoll =
     ((medlemmar ?? []).find((m) => m.employee_id === mig)?.role as Medlemsroll | undefined) ?? null;
 
+  const kalenderniva = await delningsniva((rad as Rad).assignee_id, mig);
+
   const krets: Krets = {
     mig,
     assignee_id: (rad as Rad).assignee_id,
     created_by: (rad as Rad).created_by,
     minRoll,
+    somDelegat: farArbetaSomAgaren(kalenderniva),
   };
 
   /**
@@ -108,6 +121,10 @@ async function kravKrets(taskId: string): Promise<{
     krets.assignee_id === mig ||
     krets.created_by === mig ||
     minRoll !== null ||
+    // 0057. Samma gren som `uppgift_synlig()` fick: en delning pa "alla
+    // detaljer" eller mer oppnar raden. RLS och den har kontrollen maste saga
+    // samma sak, annars svarar lasningen och skrivningen olika pa vem som ser.
+    serDetaljer(kalenderniva) ||
     (await serViaForalder(db, (rad as Rad).parent_id, mig));
 
   if (!ser) throw new Error("Uppgiften finns inte.");
@@ -117,7 +134,33 @@ async function kravKrets(taskId: string): Promise<{
     rad: rad as Rad,
     krets,
     granskare: (medlemmar ?? []).filter((m) => m.role === "granskare").map((m) => m.employee_id as string),
+    kalenderniva,
   };
+}
+
+/**
+ * Nivan `agare` gett `lasare` i sin kalender, eller null.
+ *
+ * LASES MED SERVICE ROLE, och urvalet ar spärren precis som i `namnkarta()`:
+ * fragan galler exakt ett par av id:n, och det ena ar den inloggade. Funktionen
+ * kan alltsa bara svara pa "vad har den har personen gett MIG", aldrig blattra
+ * i vem som delat med vem. Med anvandarens egen token hade svaret varit samma
+ * — `calendar_share_read` i 0057 slapper fram just de tva hallen — men vagen
+ * gar anda via admin, eftersom resten av filen skriver med service role och en
+ * kontroll som byter klient mitt i ar en kontroll man laser fel.
+ */
+async function delningsniva(agare: string | null, lasare: string): Promise<Delningsniva | null> {
+  if (!agare || agare === lasare) return null;
+
+  const { data } = await supabaseAdmin()
+    .from("calendar_share")
+    .select("level")
+    .eq("owner_id", agare)
+    .eq("viewer_id", lasare)
+    .maybeSingle();
+
+  const niva = (data as { level?: string } | null)?.level;
+  return arDelningsniva(niva) ? niva : null;
 }
 
 /** En deluppgift arvs av forlderns krets — samma gren som RLS-policyn har. */
@@ -167,6 +210,11 @@ async function nuvarandeLage(taskId: string) {
 function uppdatera(id: string) {
   revalidatePath("/uppgifter");
   revalidatePath(`/uppgifter/${id}`);
+  // 0057. Kalendern ritar samma rader, sa den ska inte kunna visa gardagens
+  // plan efter en avbockning. Den star HAR och inte i varje action av samma
+  // skal som de tre ovan: en ny handling som glommer raden ar en vy som slutar
+  // stamma, och det syns forst nar nagon undrar varfor uppgiften ar kvar.
+  revalidatePath("/kalender");
   revalidatePath("/");
 }
 
@@ -395,15 +443,41 @@ export async function tilldela(_prev: UppgiftState, form: FormData): Promise<Upp
 /**
  * Datum, klockslag och tidsatgang i ett svep.
  *
- * Finns for att vara den ENDA vagen som pass 2:s kalender behover: att dra en
- * uppgift till en tid ar precis det har anropet. Den star med redan nu sa att
- * planeringen gar att gora fran listan innan kalendern finns.
+ * =============================================================================
+ * DEN HAR SKRIVER HELA PLANERINGEN. ETT FALT SOM INTE KOMMER MED AR "TA BORT".
+ *
+ * Det ar inte en bugg utan formen: planeringen ar TRE falt som hanger ihop, och
+ * ett anrop som bara satte det man skickat hade gjort det omojligt att TA BORT
+ * ett klockslag — "tomt" och "inte med" hade betytt samma sak.
+ *
+ * Priset ar att varje anropare maste bara med de andra tva. Det har kostat en
+ * bugg per yta som byggts sedan dess:
+ *
+ *   - 2026-09-11: snabbknapparna "Idag"/"I morgon" i listan och i
+ *     egenskapspanelen raderade tyst en tidsuppskattning nagon gjort.
+ *   - 2026-09-14: kalendern drar uppgifter till klockslag, och varje drag ar
+ *     ett anrop hit. `planeraTill()` i Planeringsvy.tsx bygger darfor alltid
+ *     alla tre faltan ur postens NUVARANDE varden och andrar ett av dem.
+ *
+ * LAGG TILL EN NY KNAPP SOM Ror DATUM? Skicka `due_date`, `due_time` OCH
+ * `estimate_minutes`. Alla tre, varje gang.
+ *
+ * =============================================================================
+ * BEHORIGHETEN AR SNAVARE AN `andraUppgift` OCH BREDARE AN INGEN
+ *
+ * `farPlanera()` och inte `farRedigera()`: 0057 gav kalendern fem delningsnivaer,
+ * och nivan "kan planera om" ger exakt det har anropet och inget mer. Den som
+ * far stada i en overbokad dag ska inte darmed kunna skriva om rubriken pa
+ * nagon annans anteckning.
+ * =============================================================================
  */
 export async function planera(_prev: UppgiftState, form: FormData): Promise<UppgiftState> {
   try {
     const id = text(form, "id");
-    const { krets } = await kravKrets(id);
-    if (!farRedigera(krets)) return { fel: "Du får inte ändra den här uppgiften." };
+    const { krets, kalenderniva } = await kravKrets(id);
+    if (!farPlanera(krets, farPlaneraOm(kalenderniva))) {
+      return { fel: "Du får inte planera om den här uppgiften." };
+    }
 
     const due = valfritt(form, "due_date");
     const minuter = text(form, "estimate_minutes");

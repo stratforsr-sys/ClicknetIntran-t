@@ -3,7 +3,97 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-11 (kväll) — **uppgiftsmodulen pass 1 är byggd och mergad till main**: uppgifter, deluppgifter, projekt med egen sida och chatt, godkännande med granskare, kopplingar, framräknade notiser och morgonbrev. Migrationerna `0054` och `0055` körda. **Nästa steg är kalendern (pass 2).** Föregående rad: 2026-09-11 (eftermiddag) — båda Lynes-webhookarna är på. Insights visade sig bära riktningen i `itemType` och inte utfallet, och `callType` betyder inte riktning; tolken är rättad och alla 172 samtal omtolkade. **Tre öppna frågor, se nedan** — den viktigaste är om ett missat samtal någonsin levereras. Föregående rad: 2026-09-11 — Lynes webhook levererar. Formen visade sig vara en annan än gissningarna: alla sexton första samtalen tolkades fel, tolken är rättad mot riktig trafik och påsarna omtolkade ur `call_ingest`. **Ett beslut väntar om inspelningarna** — S3-adressen lever trettio minuter. Föregående rad: 2026-09-10 (kväll) — växelns samtal: Lynes webhook har en adress in i navet, radlogg och tolkning på plats, migration `0052` körd. På branch `lynes-samtal`, ej mergad; ingenting syns i gränssnittet än. Föregående rad: 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
+**Senast uppdaterad:** 2026-09-14 — **kalendern (pass 2) är byggd**: planeringsvy med dra-och-släpp, veckovy, delning i Outlooks fem nivåer, pling i webbläsaren. Migration `0057` körd. **Ligger på branch `kalender`, EJ MERGAD** — previewen ska visas först. **En sak kräver ett svar från en människa: `0056_samtal_pa_order` är kört i databasen men finns inte i repot** — se avsnittet direkt nedan. Föregående rad: 2026-09-11 (kväll) — **uppgiftsmodulen pass 1 är byggd och mergad till main**: uppgifter, deluppgifter, projekt med egen sida och chatt, godkännande med granskare, kopplingar, framräknade notiser och morgonbrev. Migrationerna `0054` och `0055` körda. **Nästa steg är kalendern (pass 2).** Föregående rad: 2026-09-11 (eftermiddag) — båda Lynes-webhookarna är på. Insights visade sig bära riktningen i `itemType` och inte utfallet, och `callType` betyder inte riktning; tolken är rättad och alla 172 samtal omtolkade. **Tre öppna frågor, se nedan** — den viktigaste är om ett missat samtal någonsin levereras. Föregående rad: 2026-09-11 — Lynes webhook levererar. Formen visade sig vara en annan än gissningarna: alla sexton första samtalen tolkades fel, tolken är rättad mot riktig trafik och påsarna omtolkade ur `call_ingest`. **Ett beslut väntar om inspelningarna** — S3-adressen lever trettio minuter. Föregående rad: 2026-09-10 (kväll) — växelns samtal: Lynes webhook har en adress in i navet, radlogg och tolkning på plats, migration `0052` körd. På branch `lynes-samtal`, ej mergad; ingenting syns i gränssnittet än. Föregående rad: 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
+
+## 0056 ÄR KÖRT MEN FINNS INTE I REPOT — läs detta först
+
+`schema_migrations` bär raden `0056_samtal_pa_order`, körd **2026-09-14 06:22
+UTC**. Den har lagt fyra kolumner på `phone_call`:
+
+```
+sales_order_id, order_linked_at, order_linked_by, recording_retained_until
+```
+
+Noll rader använder dem. **Ingen fil och ingen commit på någon gren bär
+migrationen** — senaste commit någonstans i repot är från 2026-09-11.
+
+Det betyder två saker, och den andra är den dyra:
+
+1. **Numret 0056 är taget.** Kalendern fick därför `0057`. Numret är taget när
+   migrationen KÖRTS, inte när den mergats.
+2. **Ingen kan läsa vad som faktiskt kördes.** Nästa gång någon kör
+   `apply-sql.mjs` mot en ny miljö saknas steget, och ett schema som bara finns
+   i produktionen är inte ett schema — det är en gissning.
+
+**Åtgärd:** fråga vem som körde den och be om filen. Skriv INTE en egen
+`0056_samtal_pa_order.sql` i efterhand — checksumman skulle inte stämma, och
+`apply-sql.mjs` varnar då om att filen ändrats i stället för att köra den.
+
+---
+
+## Kalendern — BYGGD 2026-09-14, PÅ BRANCH `kalender`, EJ MERGAD
+
+*Migration `0057`, körd. Hela resonemanget i `ARBETSLOGG.md` 2026-09-14.
+**Det här är pass 2 av tre. Pass 3 är upprepning, veckogenomgång och mallar.***
+
+**Vad som finns på branchen.**
+
+- **`/kalender`** — planeringsvyn är förstavyn: uppgiftslistan till vänster,
+  dagen till höger. Dra en rad till ett klockslag, eller tryck på raden och
+  sedan på tiden (pekskärm och tangentbord). "Planerat 4 h av 6 h" under dagen.
+- **`/kalender?vy=vecka`** — sju kolumner med listor, inte ett rutnät. Se
+  rubriken i Veckovy.tsx för varför.
+- **`/kalender?person=<id>`** — kollegans dag, projicerad till min nivå.
+- **`/kalender/delning`** — fem nivåer per person.
+- **Plinget** — knapp på kalendersidan, lyssnare i skalet, `/api/kalender/kommande`.
+- **Fem källor i kalendern:** uppgifter, beviljad ledighet, coachningssamtal,
+  kursfrister, månadens orderfrist.
+
+### Sex regler att inte råka bryta
+
+1. **`planera()` skriver HELA planeringen** — datum, klockslag och minuter.
+   Regeln från 0054 gäller oförändrat, och kalendern är fyra nya anropare.
+   `planeraTill()` i Planeringsvy.tsx är den enda vägen därifrån till servern.
+   Lägg aldrig ett `planera()`-anrop bredvid den.
+2. **`kalender_poster()` är projektionen, och den ligger i SQL.** Rubriken är
+   borta redan när raden lämnar Postgres. Filtrera aldrig nivåer i TypeScript
+   — då är en if-sats i en renderingsfil det enda som står mellan en säljares
+   anteckningar och hela huset.
+3. **Funktionen bär aldrig `sick_report`.** Samma absoluta rad som `ical.ts`.
+   `tests/rls.mjs` faller om ett tredje slag dyker upp i projektionen.
+4. **Nivå fyra ger kalenderns verb, inte uppgiftens.** `farPlanera()` för att
+   flytta i tiden, `farRedigera()` för allt annat. Bara delegaten (nivå fem) får
+   den andra.
+5. **Delningen kom in GENOM `farRedigera()`**, som ett fält på `Krets`. Skriv
+   aldrig en egen nivåkontroll i kalendern — då finns två svar på vem som får
+   röra en uppgift.
+6. **Cron-kvoten är fortfarande slut.** Plinget är därför en öppen flik och
+   ingen push. Nästa schemalagda jobb måste bli ett steg i `natt` eller `morgon`.
+
+### Att göra innan merge
+
+- [ ] Visa previewen för beställaren.
+- [ ] `compare/main...kalender` → kolla `behind_by` innan merge.
+- [ ] Bekräfta tolkningen av **orderfrist** (se nedan).
+
+### En tolkning beställaren bör bekräfta
+
+**"Orderfrister" fanns inte som kolumn.** `sales_order` bär `signed_on` och
+räknar fram `period_month` ur det (0034) — ingen fristkolumn finns. Posten som
+byggts är **månadens sista arbetsdag**: den dag en order måste vara signerad för
+att räknas till månadens provision och volymtrappa. Det är den enda återkommande
+deadline i ordermodulen, och den enda som betyder något för en säljare.
+
+Var det något annat som menades är det **en post till och inte en ombyggnad** —
+`orderfrister()` i `kalender-server.ts` är tjugo rader.
+
+### Det som medvetet INTE byggdes
+
+**iCal-flödet rördes inte.** `calendar_feed` och `/api/ical/[token]` bär
+fortfarande bara beviljad ledighet. Beställaren räknade upp flödet som något som
+redan finns, inte som något att bygga ut — och att lägga uppgiftsrubriker i en
+adress utan inloggning är en egen fråga med egna svar. Kandidat för pass 3.
+
 
 ## Uppgifter och projekt — BYGGD OCH MERGAD 2026-09-11
 

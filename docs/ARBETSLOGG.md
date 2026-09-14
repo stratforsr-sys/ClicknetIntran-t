@@ -5,6 +5,258 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-14 · Kalendern, pass 2 av tre
+
+Beställningen från 2026-09-11: kalendern visar uppgifter plus det navet redan
+vet, huvudvyn är planeringsvyn, delning i Outlooks fem nivåer med ledig/upptagen
+som grundläge för alla, pling i webbläsaren. Ingen mötesbokning.
+Migration `0057`, branch `kalender`.
+
+### Numret blev 0057, och det är ett fynd och inte ett val
+
+`schema_migrations` bär sedan **2026-09-14 06:22 UTC** en rad
+`0056_samtal_pa_order` som lagt fyra kolumner på `phone_call`
+(`sales_order_id`, `order_linked_at`, `order_linked_by`,
+`recording_retained_until`, noll rader använder dem). **Filen finns inte i repot
+och ingen gren bär den** — senaste commit någonstans är från 2026-09-11.
+
+Numret är alltså taget, och det utan att någon kan läsa vad som kördes. Det här
+passet rör inte den raden. Se NASTA_SESSION.md; det är den enda punkten i
+loggen som kräver en annan människas svar.
+
+### Kalendern speglar ingenting. Den räknar fram sig varje gång.
+
+Frestelsen var en `calendar_event`-tabell som allt skrivs till — snabbare att
+läsa, enklare att sortera, och fel på det dyraste sättet: speglingen måste
+uppdateras av varje väg in och ut ur **fem** moduler, och den dag en av dem
+glöms bort visar kalendern något som inte längre är sant. Samma val som
+projektets siffror gjorde i 0054 och som `coaching_task` gjorde i 0043 när den
+vägrade en status-kolumn.
+
+`hamtaEgenKalender()` sätter därför ihop fem källor vid varje läsning:
+uppgifter, beviljad ledighet, coachningssamtal, kursfrister och månadens
+orderfrist.
+
+### "Orderfrister" fanns inte som kolumn. Tolkningen står utskriven.
+
+`sales_order` har ingen fristkolumn och har aldrig haft en — den bär `signed_on`,
+och `period_month` räknas fram ur det av databasen (0034). Det fanns alltså
+ingen rad att hämta.
+
+Men det finns en frist, och det är den enda som betyder något för en säljare:
+**en order som signeras den första i nästa månad tillhör nästa månads provision
+och nästa månads volymtrappa.** Posten är därför månadens SISTA ARBETSDAG,
+räknad med `arArbetsdag()` ur saljtakt.ts — som redan bär de svenska röda
+dagarna plus julafton, midsommarafton och nyårsafton. En frist på en söndag
+flyttas i praktiken utan att någon skrivit det, och då är den inte en frist.
+
+Posten gäller den som har order (`salesperson`, `sales_manager`, `ceo`,
+`finance`) — samma krets som ordermenyn. En projektledare ska inte ha en röd rad
+sista fredagen varje månad om något hon aldrig rör. **Beställaren bör bekräfta
+tolkningen**; är det något annat som menades är det en post till och inte en
+ombyggnad.
+
+### Delningen: projektionen ligger i databasen, inte i en if-sats
+
+Alternativet var att läsa kollegans uppgifter med service role och plocka bort
+rubrikerna i `kalender-server.ts`. Det hade fungerat, och det hade betytt att
+det enda som står mellan en säljares anteckningar och hela huset är en rad
+TypeScript i en renderingsfil.
+
+`kalender_poster()` är i stället `security definer` och lämnar ut olika mycket
+beroende på nivå: `rubrik = null` på grundläget, rubriken utan `ref` på nivå
+två, och först från "alla detaljer" ett id att bygga en länk av. **Rubriken är
+borta redan när raden lämnar Postgres**, och en glömd kolumn i vyn kan inte
+läcka något som aldrig kom med.
+
+Funktionen bär `task` och `absence_request`. **Inte `sick_report`** — samma
+absoluta rad som `src/lib/ical.ts` drog 2026-08-20, och `tests/rls.mjs` har nu
+en kontroll som faller om någon lägger till ett tredje slag. Frånvarotypen följer
+inte heller med; posterna heter "Ledig".
+
+**Coachningssamtal, kursfrister och orderfristen projiceras aldrig.** De ritas i
+den egna kalendern och ingen annans. Ett coachningssamtal är ett samtal mellan
+två personer och står i deras två kalendrar; en kursfrist är min egen läxa. Att
+lägga dem i en kollegas vy hade varit att låta kalendern berätta något
+`coaching_session`-policyn i 0043 med flit inte berättar.
+
+### Det här är den enda dörren in i någon annans uppgifter
+
+0054 skrev ut att `can_read_all_employees()` **med flit** inte står i
+`task_read`. Den regeln står kvar ord för ord. `uppgift_synlig()` har fått en
+gren till, och skillnaden mot en chefsgren är hela saken:
+
+**Grenen utlöses av en rad uppgiftens ägare själv har skrivit, om en namngiven
+person, som hon kan ta bort när som helst.** Det är samma samtycke Outlook
+bygger på. En roll kan ingen ta bort, och det är därför en roll aldrig får stå
+där.
+
+Två spärrar står kvar även för den som fått alla detaljer:
+
+1. **Nivå ett och två öppnar ingenting.** De får noll rader ur `task` och läser
+   sin kalender genom projektionen. Provat i rls.mjs.
+2. **En dold personkoppling bryter igenom delningen, inte tvärtom.** "Fundera på
+   om Erik ska ha en tillsägelse" når inte Erik för att chefen gett honom sin
+   kalender — det är precis det fall `visible_to_subject` byggdes för.
+
+### Nivå fyra ger kalenderns verb, inte uppgiftens
+
+Outlook kallar steget "Kan redigera". Här heter det **"Kan planera om"**, och
+det är inte en översättningsfråga: en kalender bestämmer bara NÄR något ska
+göras. Vad det handlar om bestäms i uppgiften, som har sin egen krets.
+
+Därför `farPlanera()` bredvid `farRedigera()` i uppgifter.ts, och därför är
+`planera()` den enda action som frågar den första. Den som får städa i en
+överbokad dag ska inte därmed kunna skriva om rubriken på någon annans
+anteckning. Delegaten — nivå fem — får `farRedigera()`, alltså allt.
+
+**Kalendernivån kom in GENOM `farRedigera()` och inte vid sidan av.** Frestelsen
+var en egen kontroll i kalendern ("om nivån är delegat, låt knappen vara
+framme"), och det hade blivit två svar på frågan om vem som får röra en uppgift.
+Nivån är i stället ett fält på `Krets`, och de rena funktionerna i uppgifter.ts
+är fortfarande de enda som svarar. Fältet är en **boolean och inte en nivå**, så
+att uppgifter.ts behåller sina noll importer och provet kan köra hela
+behörighetsmodellen utan att starta Next.
+
+### `planera()` skriver hela planeringen. Det kostade en bugg till.
+
+Regeln sedan 0054: datum, klockslag och minuter skrivs i ett svep, och ett fält
+som inte kommer med tolkas som "ta bort". Den kostade snabbknapparna i listan en
+tyst raderad tidsuppskattning 2026-09-11.
+
+Kalendern är fyra nya anropare av samma funktion: släpp i rutnätet, tryck på
+ett klockslag, dra en redan utlagd post, och krysset som tar bort klockslaget.
+`planeraTill()` i Planeringsvy.tsx är därför **den enda vägen härifrån till
+servern**, och den bygger alltid alla tre fälten ur postens nuvarande värden och
+ändrar ett av dem. Ingen av de fyra ytorna bygger ett eget anrop.
+
+`revalidatePath("/kalender")` ligger i `uppdatera()` och inte i varje action, av
+samma skäl som de tre raderna som redan stod där.
+
+### Två sätt att flytta en uppgift, och båda behövs
+
+Dra och släpp är vad beställaren bad om och det snabbaste på en dator. Det
+fungerar inte på en pekskärm — HTML5:s draggränssnitt lyssnar på musen, och ett
+finger ger `touchstart` som aldrig blir ett `dragstart`.
+
+Därför finns också **välj och placera**: ett tryck markerar, ett tryck på ett
+klockslag lägger. Samma handling i två steg, och den enda av de två som fungerar
+med tangentbord. Båda leder till samma anrop; två vägar som var för sig byggde
+sitt anrop hade varit två ställen att glömma ett fält på.
+
+### Krockar får inte döljas
+
+En kalender som ritar den andra posten ovanpå den första ser prydlig ut och
+ljuger om precis det man öppnar den för. `laggUt()` lägger därför överlappande
+poster i spalter bredvid varandra.
+
+**Spaltantalet räknas per klunga och inte per dag**, och en post som slutar där
+nästa börjar krockar inte. Provet skrevs först med fel förväntan — "tre poster i
+klungan ger tre spalter" — och hade den fått gälla vore felet omöjligt att se i
+vyn: tre smala rutor ser ut som ett designval. Nu står båda fallen som varsin
+kontroll.
+
+### "Planerat 4 h av 6 h", och varför gissningen inte räknas
+
+Sex timmar och inte åtta, samma vägg som `Dagsumma` satte upp 2026-09-11.
+
+Det nya är att **en uppgift utan tidsuppskattning räknas som noll minuter**, inte
+som de trettio den ritas i. Posten måste ha en höjd för att gå att se och träffa
+med musen, men att räkna den höjden in i summan hade gjort talet till något
+annat än vad användaren skrivit — och "planerat 6 h av 6 h" som kommer ur fyra
+gissningar är ett tal man slutar tro på utan att kunna peka på vad som är
+trasigt. Antalet oskattade står i stället utskrivet bredvid.
+
+Ledighet, coachning och frister räknas inte alls. De tar inte tid — de infaller.
+
+### Plinget: ingen push, och det är en plangräns
+
+Ett pling som når en stängd flik kräver en service worker, Web Push, en
+VAPID-nyckel, en prenumerationstabell — och något som skickar vid rätt
+klockslag. **Det sista finns inte.** Hobby-planen tar två cron-poster per
+projekt och kör var och en en gång per dygn, och båda är tagna sedan 0054. En
+påminnelse som kan komma en gång om dagen är ett morgonbrev, vilket redan finns.
+
+Plinget är därför webbläsarens egen `Notification`, utlöst av en öppen flik. Tre
+saker gör skillnaden mellan ett pling och ett gnäll: fönstret har **båda**
+ändarna (annars plingar hela förmiddagen igen när någon öppnar en flik efter
+lunch — provat), rastret står still när fliken är dold, och `sedda` minns vad
+som redan plingats eftersom ett tiominutersfönster och ett femminutersraster
+hinner mötas två gånger.
+
+**Behörigheten måste begäras av en människa som tryckt på något.** Alla tre
+webbläsarna avvisar `requestPermission()` utan användargest, och det är rätt
+tänkt: en ruta som frågar om notiser innan man gjort något är den mest
+bortklickade rutan på webben, och ett nej är permanent. Knappen står på
+kalendersidan — den som just lagt ut sin dag är den enda som vet vad ett pling
+vore till för.
+
+På eller av ligger i `localStorage` och inte i databasen: behörigheten är per
+webbläsare, och en inställning i databasen hade påstått att den gällde överallt.
+
+### En route handler och inte en server action
+
+Next kör server actions i en **seriell kö per session**. En pollning var femte
+minut hade därmed delat kö med användarens klick, och den som bockar av en
+uppgift i samma ögonblick som rastret går hade fått vänta på rastret först.
+`/api/kalender/kommande` är därför en GET utanför den kön — samma slutsats som
+`/api/jobb/*` drog.
+
+Den står bakom vanlig inloggning utan hemlighet i adressen, till skillnad från
+nattjobbet och iCal-flödet. Skälet är att **frågan inte tar emot något**: svaret
+bär uteslutande den inloggades egna uppgifter, och det finns ingen parameter att
+ändra.
+
+### Navets första `.rpc()`
+
+Ingenting i navet har tidigare anropat en databasfunktion genom PostgREST, och
+0027 stängde vägen för de två som fanns (`log_audit` och `registrera_fel`).
+Skillnaden är att de två SKREV. `kalender_poster()` läser, och den lämnar ut
+mindre än vad som ligger i tabellen. Granten står utskriven i 0057 och gäller
+bara `authenticated`.
+
+`error` från PostgREST behandlas **inte** som noll rader: en funktion som inte
+hunnit in i schemacachen ger ett fel, och att rita det som en tom dag hade
+påstått att kollegan är ledig.
+
+### Kalendern bröt inte femtaket en andra gång
+
+Uppgifterna fick undantaget 2026-09-11 med argumentet att en lista över det man
+inte får glömma, placerad bakom ett klick, är en lista man slutar öppna.
+
+Kalendern är inte det. Den är ett ställe man går till när man HAR ett ärende dit
+— när dagen ska läggas upp, eller när man undrar om en kollega är ledig på
+torsdag — vilket är precis definitionen femtaket vilar på. Posten ligger därför
+i Min vy, bredvid Frånvaro. Vägen som faktiskt används är ändå knappen på
+uppgiftssidan, där man redan står när man bestämmer sig för att planera.
+
+### Prov
+
+`tests/kalender.mjs` är nytt: 92 kontroller över nivåerna, rutnätet,
+utläggningen, dagssumman och plinget. Två av dem är de som räknas —
+*"grundläget ser INGEN rubrik"* och *"passerad tid plingar INTE"*.
+
+`tests/rls.mjs` har fått nitton kontroller i ett eget avsnitt och går igenom i
+sin helhet: **464 kontroller, noll underkända.** `tests/uppgifter.mjs`,
+`tests/notiser.mjs`, `tests/navnyheter.mjs`, `tests/notiser-tackning.mjs`,
+`tests/handelselogg.mjs` och `tests/inbaddningar-db.mjs` likaså.
+
+`/uppgifter` la sig i `tests/sidor.mjs` samtidigt — den glömdes i pass 1, och
+det är en av få sidor som renderar en annan persons namn.
+
+### Vad som medvetet INTE gjordes
+
+**iCal-flödet rördes inte.** Beställaren räknade upp det som något som redan
+finns, inte som något att bygga ut, och att lägga uppgifter i en adress utan
+inloggning är en egen fråga med egna svar. Kandidat för pass 3.
+
+### Kvar till pass 3
+
+Upprepning, veckogenomgång, mallar. Och uppgifter i iCal-flödet, om beställaren
+vill det.
+
+---
+
 ## 2026-09-11 (tredje passet) · En riktig chatt, och den bor i projektet
 
 Beställarens ord framför skärmen: *"ändra den här delen i en uppgift till en

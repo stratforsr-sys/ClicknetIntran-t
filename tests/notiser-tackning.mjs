@@ -103,6 +103,20 @@ const TACKNING = {
     "Den som tagits bort ur ett projekt ska inte fa en notis om en sida hon inte langre kommer at.",
 
   // ---------------------------------------------------------------------------
+  // Kalendern (0057)
+  //
+  // EN ENDA MUTERANDE ACTION I HELA MODULEN, och det ar inte en tillfallighet.
+  // Att dra en uppgift till ett klockslag gar genom `uppgifter::planera` — samma
+  // action som listans snabbknappar — sa uppgiftens datum satts pa ETT stalle i
+  // navet aven efter att kalendern kom till.
+  //
+  // Det som ar kalenderns eget ar delningen, och den ar ett besked till en
+  // manniska i bada riktningarna. Darav "notifierar": handlingen skriver bade
+  // `kalender-delad` och `kalender-aterkallad`.
+  // ---------------------------------------------------------------------------
+  "kalender::stallInDelning": "notifierar",
+
+  // ---------------------------------------------------------------------------
   // Arenden
   // ---------------------------------------------------------------------------
   "arenden::skapaArende": "harledd",

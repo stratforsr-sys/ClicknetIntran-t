@@ -14,6 +14,7 @@ import { kraverMfa, kvittoGiltigt, STEG2_KAKA } from "@/lib/mfa";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { TOAST_KAKA, franKaka } from "@/lib/toast";
 import { GuideVard } from "@/components/guide/GuideVard";
+import { Pling } from "@/components/shell/Pling";
 import { VantarPaAktivering } from "./VantarPaAktivering";
 import { EjKonfigurerad } from "./EjKonfigurerad";
 
@@ -127,6 +128,17 @@ export default async function AppLayout({
         och layouten hade fatt vanta pa dess fraga innan den fick skicka nagot.
       */}
       <GuideVard />
+      {/*
+        0057. Plinget ritar ingenting — det star har for att det ska leva sa
+        lange navet ar oppet, oavsett vilken sida man star pa. Det ar hela
+        villkoret bestallaren satte ("nar navet ar oppet"), och en komponent som
+        bodde pa /kalender hade slutat lyssna sa fort nagon gick vidare.
+
+        Den hamtar ingenting pa servern och haller darfor inte tillbaka
+        layouten, till skillnad fran klockan. Sa lange ingen slagit pa plinget
+        i den har webblasaren gor den heller ingenting alls.
+      */}
+      <Pling />
     </>
   );
 }

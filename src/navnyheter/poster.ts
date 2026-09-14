@@ -14,6 +14,45 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "kalendern",
+    rubrik: "Kalendern: lägg ut dagen genom att dra",
+    ingress:
+      "Uppgiftslistan till vänster, dagen till höger. Dra en uppgift till ett klockslag och se direkt hur mycket du planerat. Ledighet, coachningssamtal och frister ligger redan där.",
+    text: `Navet har fått en kalender, och den är byggd för att planeras i.
+
+**Planeringsvyn är huvudvyn.** Till vänster står allt du har öppet — det
+försenade först, sedan det som saknar dag. Till höger står dagen. **Dra en rad
+till ett klockslag**, eller tryck på raden och sedan på tiden om du sitter vid
+en pekskärm.
+
+**"Planerat 4 h av 6 h"** står under dagen. Sex timmar och inte åtta är med
+flit: två timmar av en arbetsdag går åt till avbrott och sådant som dyker upp,
+och den som fyller alla åtta planerar att misslyckas. Uppgifter utan
+tidsuppskattning räknas som noll och redovisas separat — talet ska vara det du
+faktiskt lovat dig själv, inte en gissning.
+
+**Det navet redan vet ligger där automatiskt.** Beviljad ledighet,
+coachningssamtal, dina kursfrister och den sista dagen i månaden en order
+räknas till månadens provision. Ingenting av det behöver läggas in.
+
+**Kalendern bokar inga möten.** Det finns ingen inbjudan och inga ja/nej-svar —
+möten bor kvar i Outlook. Det här är din egen dag och dina egna åtaganden.
+
+**Alla ser när alla är upptagna.** Det är grundläget och går inte att stänga av;
+det är hela poängen med en delad kalender. Vad tiden *gäller* ser bara den du
+säger till, och det finns fem nivåer att välja mellan — från "kan se rubriker"
+till "delegat", som arbetar som du. Du hittar dem under **Delning** på
+kalendersidan.
+
+**Pling i webbläsaren.** Slå på det med knappen på kalendersidan så får du en
+påminnelse tio minuter innan en uppgift ska börja — så länge du har navet öppet
+i en flik. Inställningen gäller den webbläsaren, så du får säga ja en gång per
+enhet.`,
+    datum: "2026-09-14",
+    roller: [],
+    href: "/kalender",
+  },
+  {
     slug: "uppgifter-och-projekt",
     rubrik: "Uppgifter: din egen lista, direkt i navet",
     ingress:
