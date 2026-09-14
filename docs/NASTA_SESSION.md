@@ -3,9 +3,83 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-14 — samtalen ligger nu på ordern med spelbar inspelning (migration `0056`). Kopplingen sker på kundens nummer utan bortre gräns bakåt, flera samtal per affär, och gallringen kan inte radera ett ordersamtal. Föregående rad: 2026-09-11 (kväll) — **uppgiftsmodulen pass 1 är byggd och mergad till main**: uppgifter, deluppgifter, projekt med egen sida och chatt, godkännande med granskare, kopplingar, framräknade notiser och morgonbrev. Migrationerna `0054` och `0055` körda. **Nästa steg är kalendern (pass 2).** Föregående rad: 2026-09-11 (eftermiddag) — båda Lynes-webhookarna är på. Insights visade sig bära riktningen i `itemType` och inte utfallet, och `callType` betyder inte riktning; tolken är rättad och alla 172 samtal omtolkade. **Tre öppna frågor, se nedan** — den viktigaste är om ett missat samtal någonsin levereras. Föregående rad: 2026-09-11 — Lynes webhook levererar. Formen visade sig vara en annan än gissningarna: alla sexton första samtalen tolkades fel, tolken är rättad mot riktig trafik och påsarna omtolkade ur `call_ingest`. **Ett beslut väntar om inspelningarna** — S3-adressen lever trettio minuter. Föregående rad: 2026-09-10 (kväll) — växelns samtal: Lynes webhook har en adress in i navet, radlogg och tolkning på plats, migration `0052` körd. På branch `lynes-samtal`, ej mergad; ingenting syns i gränssnittet än. Föregående rad: 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
+**Senast uppdaterad:** 2026-09-14 (kväll) — **navet mejlar** (migration `0059`). Resend-nyckeln är inkopplad som `nav@clicknet.se`, elva händelser mejlas direkt, morgonbrevet samlar sex sorters påminnelser i ETT brev, och ett nytt dagtidsjobb påminner den som inte stämplat in — schemalagt av `pg_cron` i databasen, eftersom Vercels två cron-poster är slut. **`cron_secret` måste läggas i Vault, annars gör dagtidsjobbet ingenting.** Föregående rad: 2026-09-14 — samtalen ligger nu på ordern med spelbar inspelning (migration `0056`). Kopplingen sker på kundens nummer utan bortre gräns bakåt, flera samtal per affär, och gallringen kan inte radera ett ordersamtal. Föregående rad: 2026-09-11 (kväll) — **uppgiftsmodulen pass 1 är byggd och mergad till main**: uppgifter, deluppgifter, projekt med egen sida och chatt, godkännande med granskare, kopplingar, framräknade notiser och morgonbrev. Migrationerna `0054` och `0055` körda. **Nästa steg är kalendern (pass 2).** Föregående rad: 2026-09-11 (eftermiddag) — båda Lynes-webhookarna är på. Insights visade sig bära riktningen i `itemType` och inte utfallet, och `callType` betyder inte riktning; tolken är rättad och alla 172 samtal omtolkade. **Tre öppna frågor, se nedan** — den viktigaste är om ett missat samtal någonsin levereras. Föregående rad: 2026-09-11 — Lynes webhook levererar. Formen visade sig vara en annan än gissningarna: alla sexton första samtalen tolkades fel, tolken är rättad mot riktig trafik och påsarna omtolkade ur `call_ingest`. **Ett beslut väntar om inspelningarna** — S3-adressen lever trettio minuter. Föregående rad: 2026-09-10 (kväll) — växelns samtal: Lynes webhook har en adress in i navet, radlogg och tolkning på plats, migration `0052` körd. På branch `lynes-samtal`, ej mergad; ingenting syns i gränssnittet än. Föregående rad: 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
 
 ## Samtal på order — BYGGT 2026-09-14, migration `0056`
+## Navet mejlar — BYGGT 2026-09-14 (kväll), migration `0059`
+
+*Resonemanget i `ARBETSLOGG.md` samma dag. Nyckeln är inkopplad, morgonbrevet
+utökat, dagtidsjobbet nytt.*
+
+### Så här fungerar det
+
+| Del | Var |
+|---|---|
+| Resend-anropet (fanns sedan tidigare) | `src/lib/epost.ts` |
+| Vilka händelser som mejlas | `src/lib/epost-notis.ts` — `MEJLKALLOR` |
+| Inhakningen | `notifiera()` i `src/lib/notishandelse-server.ts`, via `after()` |
+| Morgonbrevet | `src/lib/jobb/morgon.ts` — sex samlare, ett brev |
+| Stämplingspåminnelsen | `src/lib/jobb/dagtid.ts` + `/api/jobb/dagtid` |
+| Schemat var kvart | migration `0059` — `pg_cron` + `pg_net` |
+
+**Klockan är ett tillstånd, mejlet är en händelse.** Det avgör var en ny
+påminnelse hör hemma. Går den ut EN gång när något sker → `MEJLKALLOR`. Står den
+kvar tills någon gör något → en `samla*` i morgonbrevet, där den upprepas varje
+morgon tills den är åtgärdad.
+
+### DET SOM ÄR VÄRT ATT VETA INNAN NÅGON RÖR DET HÄR
+
+**`CRON_SECRET` MÅSTE LÄGGAS I VAULT — ANNARS GÖR DAGTIDSJOBBET INGENTING.**
+Migrationen skapar bara maskineriet; värdet sätts en gång för hand:
+
+```sql
+select vault.create_secret('<CRON_SECRET>', 'cron_secret',
+                           'Bearer-token för /api/jobb/*');
+```
+
+Saknas den skriver `kalla_jobb()` en varning och återvänder. Det är med flit —
+ett jobb som faller var kvart fyller loggen med brus — men det betyder också att
+**tystnad inte är samma sak som att det fungerar**. Kontrollera med
+`select * from cron.job_run_details order by start_time desc limit 5;`
+
+**LÄGG ALDRIG EN TREDJE CRON-POST I `vercel.json`.** Hobby tar två, båda är
+upptagna, och en tredje gör att INGEN av dem körs — tyst. Det hände 2026-09-08.
+Behövs ett nytt schemalagt jobb: lägg det som ett steg i natt- eller
+morgonjobbet, eller ge det ett `cron.schedule` i databasen som dagtidsjobbet.
+
+**EN NY NOTISKÄLLA SKA IN PÅ TVÅ STÄLLEN I `notiser.ts`** — `NOTIS_KALLOR` och,
+om den är en händelse, `HANDELSEKALLOR`. `tests/notiser.mjs` faller om de glider
+isär. Ska den dessutom mejlas: en rad i `MEJLKALLOR`.
+
+**MORGONBREVET ÄR ETT BREV, INTE SEX.** Läggs en sjunde sorts påminnelse till är
+rätt sätt en ny `samla*` och en rad i `AVSNITT` — inte ett nytt utskick. Sex brev
+samma morgon ger en filterregel före lunch, och då är även det sjunde osynligt.
+
+**Tabellen heter `certification`, inte `certificate`.** Supabase-klienten är
+otypad mot schemat, så ett felstavat tabellnamn faller inte i bygget — det ger
+ett tomt svar som ser ut som riktig data.
+
+### Öppna punkter
+
+- **Ingen har fått ett brev än.** Morgonbrevet går 05:30 UTC nästa vardag och
+  dagtidsjobbet var kvart — men båda kräver att `cron_secret` ligger i Vault
+  respektive att deployen gått ut. **Kontrollera första morgonen.**
+- **Coachningspåminnelse 30 min före samtalet är INTE byggd.** `coaching_session`
+  har `held_on date` — ett datum, ingen tid — och raden skapas när samtalet
+  dokumenteras i efterhand. Det finns ingen bokning att räkna från. Beslut
+  2026-09-14: väntar på kalenderns "Ny post". **Byggs den, lägg till en
+  `tid`-liknande källa och haka den i dagtidsjobbet — schemat finns redan.**
+- **Konto-källorna mejlas inte** (`konto-aktiverad`, `konto-losenord`). De stod
+  inte i beställningen, men den som just fått ett konto kan per definition inte
+  logga in för att se klockan. Värt att ta upp.
+- **DMARC.** Hamnar breven i skräpposten behöver `p=none` skärpas — se slutraden
+  i `scripts/testa-epost.mjs`.
+- **Resend-nyckeln är send-only.** `GET /domains` svarar `401 restricted_api_key`.
+  Det är behörigheten, inte ett fel. Behövs domänstatus krävs en full-access-
+  nyckel eller Resends webbgränssnitt.
+
+---
+
 
 *Resonemanget i `ARBETSLOGG.md` samma dag. Kopplingen, nedladdningen av ljud och
 spelaren på ordersidan är klara och i produktion.*

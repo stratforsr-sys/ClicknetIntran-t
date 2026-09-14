@@ -1,7 +1,9 @@
 import "server-only";
+import { after } from "next/server";
 
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { HANDELSEKALLOR, type Handelsekalla, type Notistyp } from "@/lib/notiser";
+import { kallanMejlas, mejlaHandelse } from "@/lib/epost-notis";
 import type { Role, Permission } from "@/lib/roles";
 
 /**
@@ -74,9 +76,63 @@ export async function notifiera(handelse: Handelse): Promise<boolean> {
       object_type: handelse.objekt?.typ ?? null,
       object_id: handelse.objekt?.id ?? null,
     });
-    return !error;
+
+    if (error) return false;
+
+    // Raden finns. Brevet — om kallan ar en av dem som mejlas — gar efterat.
+    kanskeMejla([handelse.till], handelse);
+    return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * BREVET, OM KALLAN FORTJANAR ETT.
+ *
+ * ===========================================================================
+ * `after()` OCH INTE ETT INVANTAT ANROP, OCH DET AR INTE EN SMAKSAK
+ *
+ * Resend tar ett par hundra millisekunder i basta fall och tio sekunder i
+ * sammsta (`epost.ts` ger tre forsok med paus). Skickades brevet inuti
+ * `notifiera()` skulle den tiden laggas PA den server action som anvandaren
+ * star och vantar pa — att makulera en order hade blivit markbart segare for
+ * att nagon annan ska fa ett mejl om det.
+ *
+ * `after()` kor efter att svaret gatt ivag. Notisraden ar da redan skriven och
+ * sidan redan uppdaterad; brevet ar det enda som fortfarande pagar.
+ *
+ * ETT OINVANTAT LOFTE HADE INTE RACKT. Vercel avslutar funktionen nar svaret
+ * ar skickat, och ett `void mejla(...)` hade darmed dott mitt i anropet till
+ * Resend ungefar sa ofta som det hann. `after()` finns for precis det har.
+ *
+ * ===========================================================================
+ * MOTTAGARLISTAN AR DEN SOM FAKTISKT FICK RADEN
+ *
+ * Inte den som skickades in. Aktoren och dubbletterna ar redan bortsallade av
+ * reglerna ovan, sa `epost-notis.ts` behover inte kunna dem for att lyda dem.
+ *
+ * Funktionen kastar aldrig — varken `after()`-anropet eller det som kors inuti.
+ * Anropas `notifiera()` utanfor en begaran (ett prov, ett skript) finns ingen
+ * `after()` att haka i, och DET FAR INTE BLI FELET SOM TYSTAR NOTISEN. Da
+ * skrivs raden anda och brevet uteblir.
+ */
+function kanskeMejla(mottagare: readonly string[], handelse: Omit<Handelse, "till">): void {
+  if (!kallanMejlas(handelse.kalla)) return;
+
+  const utskick = {
+    kalla: handelse.kalla,
+    rubrik: handelse.rubrik,
+    detalj: handelse.detalj,
+    href: handelse.href,
+  };
+
+  try {
+    after(async () => {
+      await mejlaHandelse(mottagare, utskick);
+    });
+  } catch {
+    // Ingen begaran att haka i. Notisen star kvar i klockan.
   }
 }
 
@@ -114,7 +170,11 @@ export async function notifieraFlera(
           object_id: handelse.objekt?.id ?? null,
         })),
       );
-    return error ? 0 : unika.length;
+
+    if (error) return 0;
+
+    kanskeMejla(unika, handelse);
+    return unika.length;
   } catch {
     return 0;
   }
