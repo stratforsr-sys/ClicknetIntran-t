@@ -3,7 +3,83 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-14 (senare) — **kalendern (pass 2) är byggd**: planeringsvy med dra-och-släpp, veckovy, delning i Outlooks fem nivåer, pling i webbläsaren. Migration `0057` körd. **Ligger på branch `kalender`, EJ MERGAD** — previewen ska visas först. Branchen bär main inflätad (`0056` ingår). Föregående rad: 2026-09-14 — samtalen ligger nu på ordern med spelbar inspelning (migration `0056`). Kopplingen sker på kundens nummer utan bortre gräns bakåt, flera samtal per affär, och gallringen kan inte radera ett ordersamtal. Föregående rad: 2026-09-11 (kväll) — **uppgiftsmodulen pass 1 är byggd och mergad till main**: uppgifter, deluppgifter, projekt med egen sida och chatt, godkännande med granskare, kopplingar, framräknade notiser och morgonbrev. Migrationerna `0054` och `0055` körda. **Nästa steg är kalendern (pass 2).** Föregående rad: 2026-09-11 (eftermiddag) — båda Lynes-webhookarna är på. Insights visade sig bära riktningen i `itemType` och inte utfallet, och `callType` betyder inte riktning; tolken är rättad och alla 172 samtal omtolkade. **Tre öppna frågor, se nedan** — den viktigaste är om ett missat samtal någonsin levereras. Föregående rad: 2026-09-11 — Lynes webhook levererar. Formen visade sig vara en annan än gissningarna: alla sexton första samtalen tolkades fel, tolken är rättad mot riktig trafik och påsarna omtolkade ur `call_ingest`. **Ett beslut väntar om inspelningarna** — S3-adressen lever trettio minuter. Föregående rad: 2026-09-10 (kväll) — växelns samtal: Lynes webhook har en adress in i navet, radlogg och tolkning på plats, migration `0052` körd. På branch `lynes-samtal`, ej mergad; ingenting syns i gränssnittet än. Föregående rad: 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
+**Senast uppdaterad:** 2026-09-14 (kväll) — kalendern (pass 2) är byggd och previewen är genomgången av beställaren, som sa att den ser bra ut och **beställde en sak till: "Ny post" i kalendern som blir en uppgift eller en coachningsuppgift** — se avsnittet överst, INGET av det är byggt. Grenen `kalender` är fortfarande EJ MERGAD. Föregående rad: 2026-09-14 (senare) — **kalendern (pass 2) är byggd**: planeringsvy med dra-och-släpp, veckovy, delning i Outlooks fem nivåer, pling i webbläsaren. Migration `0057` körd. **Ligger på branch `kalender`, EJ MERGAD** — previewen ska visas först. Branchen bär main inflätad (`0056` ingår). Föregående rad: 2026-09-14 — samtalen ligger nu på ordern med spelbar inspelning (migration `0056`). Kopplingen sker på kundens nummer utan bortre gräns bakåt, flera samtal per affär, och gallringen kan inte radera ett ordersamtal. Föregående rad: 2026-09-11 (kväll) — **uppgiftsmodulen pass 1 är byggd och mergad till main**: uppgifter, deluppgifter, projekt med egen sida och chatt, godkännande med granskare, kopplingar, framräknade notiser och morgonbrev. Migrationerna `0054` och `0055` körda. **Nästa steg är kalendern (pass 2).** Föregående rad: 2026-09-11 (eftermiddag) — båda Lynes-webhookarna är på. Insights visade sig bära riktningen i `itemType` och inte utfallet, och `callType` betyder inte riktning; tolken är rättad och alla 172 samtal omtolkade. **Tre öppna frågor, se nedan** — den viktigaste är om ett missat samtal någonsin levereras. Föregående rad: 2026-09-11 — Lynes webhook levererar. Formen visade sig vara en annan än gissningarna: alla sexton första samtalen tolkades fel, tolken är rättad mot riktig trafik och påsarna omtolkade ur `call_ingest`. **Ett beslut väntar om inspelningarna** — S3-adressen lever trettio minuter. Föregående rad: 2026-09-10 (kväll) — växelns samtal: Lynes webhook har en adress in i navet, radlogg och tolkning på plats, migration `0052` körd. På branch `lynes-samtal`, ej mergad; ingenting syns i gränssnittet än. Föregående rad: 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
+
+## NÄSTA UPPGIFT: "Ny post" i kalendern — BESTÄLLD 2026-09-14, EJ PÅBÖRJAD
+
+Beställarens ord efter genomgången av previewen:
+
+> *"kan du göra som Outlook, att man kan lägga till en kalenderhändelse som man
+> då antingen kan skapa till en uppgift eller en coachningsuppgift som man kan
+> välja, och så läggs den automatiskt"*
+
+**Ingenting av det är byggt.** Sessionen tog slut vid utredningen. Det som står
+nedan är vad utredningen hann fastställa, och de tre punkterna under "Vad som
+saknas" är kontrollerade mot databasen och koden — inte gissningar.
+
+### Det bryter INTE mot "ingen mötesbokning"
+
+Beställarens beslut 2026-09-11 står kvar: ingen inbjudan, inga ja/nej-svar.
+Det här är något annat — kalendern får ingen egen posttabell, den blir en **väg
+in** till två moduler som redan finns. Posten som skapas ÄR en uppgift eller en
+coachningsuppgift, och den bor i sin egen modul som alla andra.
+
+Håll fast vid det. Den dag "kalenderhändelse" blir en egen rad som varken är
+uppgift eller coachning har kalendern fått ett tredje slags innehåll som ingen
+modul äger.
+
+### Vad som saknas, och det första är en migration
+
+1. **`coaching_task` kan inte bära ett klockslag.** Tabellen har `starts_on` och
+   `due_date`, båda `date` — **ingen `due_time` och ingen `estimate_minutes`**
+   (0043; `skapaUppgift` i `coachning/actions.ts` skriver bara de två). Att
+   lägga en coachningsuppgift klockan 14 skulle alltså tyst tappa klockslaget,
+   vilket är precis den sortens tysta dataförlust `planera()`-regeln finns för.
+   **Migration `0058` behöver ge `coaching_task` `due_time time` och
+   `estimate_minutes integer`**, med samma villkor som `task` har i 0054:
+   `due_time is null or due_date is not null`.
+
+2. **Coachningsuppgifter syns inte i kalendern alls.** `hamtaEgenKalender()` i
+   `src/lib/kalender-server.ts` läser `coaching_session` (samtalen) men **inte
+   `coaching_task`**. Skapar man en från kalendern försvinner den alltså ur
+   vyn i samma sekund. En sjätte källa behövs, och `Kalenderslag` i
+   `src/lib/kalender.ts` behöver ett värde till — `KALENDERSLAG`,
+   `SLAG_ETIKETT` och `SLAG_TON` står alla i samma fil och provas av
+   `tests/kalender.mjs`.
+
+3. **Formuläret måste bära coachningens egna fält.** `src/lib/coachning.ts` har
+   `UPPGIFTSTYPER` (sju stycken), `TYP_KRAVER_KALLA` (kurs/modul/dokument),
+   `FRIA_TYPER`, `KVITTERARE` och `BEVIS`. Typen avgör vad som krävs — se
+   `NyUppgift.tsx`, som redan löst exakt det problemet en gång. **Återanvänd
+   den formen i stället för att skriva en andra.**
+
+### Så här bör det hänga ihop
+
+- En knapp **"Ny post"** på kalendersidan, och ett klick på en TOM ruta i
+  rutnätet öppnar samma formulär med dagen och klockslaget ifyllda. Rutorna är
+  redan klickbara — `klickaRuta()` i `Planeringsvy.tsx` gör i dag ingenting när
+  ingen uppgift är vald, och det är den grenen som ska öppna formuläret.
+- Väljaren står **överst** i formuläret, inte nederst: vad posten ÄR avgör
+  vilka fält som ska ritas, och ett val som kommer sist gör att man fyller i
+  fel fält först.
+- **Anropa de befintliga server actions**, inte nya skrivningar:
+  `uppgifter::skapaUppgift` respektive `coachning::skapaUppgift`. Båda gör redan
+  sin behörighetskontroll, sin händelserad och sin notis. En egen
+  `skapaKalenderpost()` som skriver direkt i tabellerna vore ett andra svar på
+  frågan vem som får skapa vad.
+- Dispatchen får gärna bo i `kalender/actions.ts` som EN action som väljer väg
+  på ett `typ`-fält — då blir det en rad i `TACKNING` och inte två.
+
+### Kom ihåg (annars kostar det en deploy var)
+
+- **`tests/notiser-tackning.mjs`** — varje ny exporterad server action i
+  `src/app/**/actions.ts` måste stå i `TACKNING`.
+- **`tests/kalender.mjs`** — nytt slag i `KALENDERSLAG` faller på
+  *"varje slag har etikett och ton"* om `SLAG_ETIKETT`/`SLAG_TON` glöms.
+- **`src/navnyheter/poster.ts`** — allt nytt får en rad, i samma commit.
+- **Migrationsnumret:** fråga `schema_migrations`, inte katalogen. `0056` och
+  `0057` är körda; nästa lediga är `0058` **om ingen annan hunnit före**.
+
 
 ## Kalendern — BYGGD 2026-09-14, PÅ BRANCH `kalender`, EJ MERGAD
 
