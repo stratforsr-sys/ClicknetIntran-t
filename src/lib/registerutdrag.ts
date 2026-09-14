@@ -331,4 +331,20 @@ export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
   { tabell: "task_link", kolumn: "created_by", skal: "Vem som kopplade uppgiften till något" },
   { tabell: "project", kolumn: "created_by", skal: "Vem som skapade projektet" },
   { tabell: "project_member", kolumn: "added_by", skal: "Vem som bjöd in någon annan till projektet" },
+
+  // 0057. Kalenderdelningen star i UNDANTAG med alla tre kolumnerna, och det
+  // ar INTE for att den skulle sakna personuppgifter — tvartom.
+  //
+  // "Anna har gett Bertil delegatbehorighet i sin kalender" ar en uppgift om
+  // BADA tva: om Anna att hon delat, och om Bertil vad han kommer at. Ingen av
+  // de tva kolumnerna svarar darfor ensam pa "vad har navet registrerat om
+  // mig", och den generella slingan i registerutdrag-server.ts nycklar sitt
+  // svar pa TABELLNAMNET — tva rader for samma tabell hade skrivit over
+  // varandra, och det andra hallet hade tyst fallit bort.
+  //
+  // Tabellen hamtas darfor sarskilt, fran bada hallen, precis som `audit_log`.
+  // Se rubriken i registerutdrag-server.ts.
+  { tabell: "calendar_share", kolumn: "owner_id", skal: "Hämtas separat, från båda hållen" },
+  { tabell: "calendar_share", kolumn: "viewer_id", skal: "Hämtas separat, från båda hållen" },
+  { tabell: "calendar_share", kolumn: "created_by", skal: "Vem som satte upp delningen" },
 ];
