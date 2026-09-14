@@ -2,10 +2,12 @@ import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Ikon } from "@/components/shell/Ikon";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { getCurrentUser } from "@/lib/auth";
+import { fullName, getCurrentUser, type CurrentUser } from "@/lib/auth";
+import { supabaseServer } from "@/lib/supabase/server";
 import { svensktDatum } from "@/lib/klocka";
 import { arStangd, forsenad } from "@/lib/uppgifter";
 import { hamtaDelningar, hamtaEgenKalender, hamtaKollegasKalender } from "@/lib/kalender-server";
+import { farCoacha, fokusomraden, personerJagCoachar } from "@/lib/coachning-server";
 import type { Uppgift } from "@/lib/uppgifter-server";
 import {
   NIVA_ETIKETT,
@@ -18,13 +20,24 @@ import {
   veckostart,
   type Kalenderpost,
 } from "@/lib/kalender";
-import { Planeringsvy, type Planerbar } from "./Planeringsvy";
+import { Planeringsvy, type Planerbar, type Postval } from "./Planeringsvy";
 import { Veckovy } from "./Veckovy";
 import { Plingknapp } from "./Plingknapp";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Kalender" };
+
+/** Formuläret utan coachningsgren. Se `hamtaPostval()` längst ned. */
+const TOMT_POSTVAL: Postval = {
+  farCoacha: false,
+  personer: [],
+  kollegor: [],
+  kurser: [],
+  moduler: [],
+  dokument: [],
+  fokus: [],
+};
 
 /**
  * Kalendern — pass 2 av uppgiftsmodulen.
@@ -84,10 +97,12 @@ export default async function Kalendersidan({
    * DEN EGNA KALENDERN HÄMTAS INTE NÄR MAN TITTAR PÅ NÅGON ANNANS. Sex frågor
    * för data som inte ritas är sex frågor användaren står och väntar på.
    */
-  const [egen, kollega, delningar] = await Promise.all([
+  const [egen, kollega, delningar, postval] = await Promise.all([
     person ? Promise.resolve(null) : hamtaEgenKalender(user, fran, till),
     person ? hamtaKollegasKalender(user, person, fran, till) : Promise.resolve(null),
     hamtaDelningar(user),
+    // Bara planeringsvyn har ett "Ny post"-formulär att fylla.
+    person || vy === "vecka" ? Promise.resolve(TOMT_POSTVAL) : hamtaPostval(user),
   ]);
 
   const poster: Kalenderpost[] = person ? (kollega?.poster ?? []) : (egen?.poster ?? []);
@@ -144,6 +159,7 @@ export default async function Kalendersidan({
             poster={poster}
             attPlanera={attPlanera(egen?.bild.uppgifter ?? [], user.employee.id, idag, dag)}
             projekt={projekt}
+            postval={postval}
           />
         )}
       </Card>
@@ -358,6 +374,59 @@ function attPlanera(uppgifter: readonly Uppgift[], mig: string, idag: string, da
       priority: u.priority,
       forsenad: forsenad(u, idag),
     }));
+}
+
+/**
+ * Listorna "Ny post" behöver för sin coachningsgren.
+ *
+ * =============================================================================
+ * FYRA FRÅGOR SOM DE FLESTA ALDRIG STÄLLER
+ *
+ * Kurser, rollspelsmoduler, dokument och fokusområden hämtas BARA för den som
+ * faktiskt kan lägga upp en coachningsuppgift — teamledare, säljchef och VD, och
+ * bara om de har någon att lägga upp åt. För alla andra är svaret `TOMT_POSTVAL`
+ * och ingen fråga har ställts, eftersom formuläret då bara har en gren att rita.
+ *
+ * Det är samma linje som `hamtaEgenKalender()` drog för kollegans dag: data som
+ * inte ritas är frågor användaren står och väntar på.
+ *
+ * SAMMA URVAL SOM PÅ PERSONKORTET. Publicerade kurser, rollspelsmoduler,
+ * publicerade dokument — ordagrant vad `coachning/[id]/page.tsx` matar
+ * `NyUppgift` med. Två olika urval hade betytt att samma val ser olika ut
+ * beroende på var man öppnade formuläret.
+ * =============================================================================
+ */
+async function hamtaPostval(user: CurrentUser): Promise<Postval> {
+  if (!farCoacha(user)) return TOMT_POSTVAL;
+
+  const personer = await personerJagCoachar(user);
+  if (personer.length === 0) return TOMT_POSTVAL;
+
+  const supabase = await supabaseServer();
+  const [{ data: kollegor }, { data: kurser }, { data: moduler }, { data: dokument }, fokus] =
+    await Promise.all([
+      supabase
+        .from("employee")
+        .select("id, first_name, last_name")
+        .neq("status", "offboarded")
+        .order("first_name"),
+      supabase.from("course").select("id, title").eq("status", "published").order("title"),
+      supabase.from("course_module").select("id, title, kind").eq("kind", "roleplay"),
+      supabase.from("document").select("id, title, doc_type").eq("status", "published").order("title"),
+      fokusomraden(),
+    ]);
+
+  return {
+    farCoacha: true,
+    personer,
+    kollegor: ((kollegor ?? []) as unknown as { id: string; first_name: string; last_name: string }[]).map(
+      (k) => ({ id: k.id, namn: fullName(k) }),
+    ),
+    kurser: (kurser ?? []) as unknown as { id: string; title: string }[],
+    moduler: (moduler ?? []) as unknown as { id: string; title: string }[],
+    dokument: (dokument ?? []) as unknown as { id: string; title: string; doc_type: string }[],
+    fokus,
+  };
 }
 
 /** "2026-09-14" eller inget. En trasig parameter ska ge idag, inte ett fel. */

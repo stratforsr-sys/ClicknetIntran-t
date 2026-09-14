@@ -5,6 +5,172 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-14 · "Ny post" i kalendern (0058)
+
+Beställarens ord efter genomgången av previewen:
+
+> *"kan du göra som Outlook, att man kan lägga till en kalenderhändelse som man
+> då antingen kan skapa till en uppgift eller en coachningsuppgift som man kan
+> välja, och så läggs den automatiskt"*
+
+Migration `0058`, samma branch `kalender`, fortfarande ej mergad.
+
+### Det bröt inte mot "ingen mötesbokning", och skälet är värt att skriva ut
+
+Beslutet från 2026-09-11 står kvar oförändrat: ingen inbjudan, inga ja/nej-svar,
+inga deltagare. Kalendern fick heller **ingen egen posttabell** — den blev en
+**väg in** till två moduler som redan finns.
+
+Posten som skapas **ÄR** en uppgift (`task`, 0054) eller en coachningsuppgift
+(`coaching_task`, 0043). Den bor i sin egen modul, med modulens krets, historik,
+notis och RLS. Kalendern är fönstret, inte lådan.
+
+Den dag "kalenderhändelse" blir en egen rad som varken är uppgift eller coachning
+har kalendern fått ett tredje slags innehåll som ingen modul äger — och då är den
+inte längre en vy utan en femte plats att leta på. Det är den gränsen som måste
+hålla, inte ordet "mötesbokning".
+
+### Migrationen är fyra rader, och det fanns ingen väg runt den
+
+`coaching_task` bar `starts_on` och `due_date`, båda `date`. Ingen `due_time`,
+ingen `estimate_minutes` — `task` fick dem i 0054 just för att pass 2 skulle
+kunna lägga en uppgift på ett klockslag, och coachningen fick aldrig
+motsvarande.
+
+En coachningsuppgift som lades klockan 14 hade alltså **tyst tappat sitt
+klockslag** på vägen till databasen och sedan ritats som en heldagspost. Det är
+exakt den sortens tysta dataförlust regeln bakom `planera()` finns för.
+
+`0058` ger tabellen de två kolumnerna med **ordagrant `task`:s villkor**: ett
+klockslag kräver ett datum, en uppskattning ligger mellan 1 och 1440 minuter. Att
+de två tabellerna säger samma sak om samma sak är inte en upprepning — det är det
+som gör att kalendern kan rita dem i samma rutnät utan två regler för vad en post
+är.
+
+### Coachningsuppgifter syntes inte i kalendern alls, och det var det dyra fyndet
+
+`hamtaEgenKalender()` läste `coaching_session` (samtalen) men **inte**
+`coaching_task`. En coachningsuppgift skapad från kalendern hade alltså
+försvunnit ur vyn i samma sekund som den sparades — en funktion som ser trasig ut
+även när den fungerar.
+
+Källa nummer sex är därför **modulens egen läsning**, `uppgifterFor()` i
+coachning-server.ts, och inte en sjätte fråga skriven i kalenderfilen. Den
+räknar fram läget ur händelserna — och för `kurs`, `rollspel_inspelat` och
+`lasning` ur certifikatet, bedömningen respektive kvittensen. Ett eget urval hade
+behövt göra om den räkningen, och **ett andra sätt att avgöra om en
+coachningsuppgift är klar** är precis det 0043 vägrade ha.
+
+Priset är att datumfiltret ligger i TypeScript i stället för i frågan. Det är
+billigt här och bara här: en person har tiotals coachningsuppgifter totalt, inte
+tusentals. Vore talet ett annat är svaret ett datumurval i `uppgifterFor()` — inte
+en kopia av dess läsning i kalendern.
+
+Slaget heter `coachningsuppgift` och **delar ton med coachningssamtalet**. Samma
+modul betyder samma sak för ögat, och en kalender med sex färger är en kalender
+där färgen slutar betyda något.
+
+### Dagssumman räknade fel i det ögonblick funktionen fanns
+
+`dagssumma()` filtrerade på `p.slag === "uppgift"`. En timmes rollspel klockan
+tio hade räknats som noll — alltså lovat dagen en timme som inte fanns, i precis
+det tal *"Planerat 4 h av 6 h"* finns för att man ska kunna lita på.
+
+Villkoret heter nu `arAtagande(p.slag)`: uppgift och coachningsuppgift, inget
+annat. Ledighet, frister och coachningssamtal **infaller** — de tar ingen tid.
+Funktionen finns i stället för en hårdkodad jämförelse för att skillnaden ska gå
+att läsa, och den provas i `tests/kalender.mjs`.
+
+### Dispatchen är EN action som väljer väg, och den skriver ingenting
+
+`kalender::skapaKalenderpost` anropar `uppgifter::skapaUppgift` respektive
+`coachning::skapaUppgift`. Den validerar bara det som är kalenderns eget — att
+typen är en av två, att dagen finns — och bygger sedan en egen `FormData` per
+väg.
+
+**Formuläret skickas inte vidare som det är**, trots att fälten heter samma sak.
+Det hade varit den korta vägen och också betytt att ett `assignee_id` avsett för
+coachningsvägen följt med in i uppgiftsvägen och lagt uppgiften på fel person.
+
+**En egen `skapaKalenderpost()` som skrev direkt i tabellerna** hade varit kortare
+och fel på det dyra sättet: att bara teamledare, säljchef och VD lägger upp
+coachningsuppgifter är beställarens beslut från 2026-09-01, och det beslutet bor i
+`kravCoach()` — inte i två filer som ska hållas lika.
+
+En action och inte två: två hade betytt två rader i `TACKNING`, två ställen som
+kan glömma en revalidering, och ett gränssnitt som måste veta vilken av dem som
+gäller innan användaren valt något.
+
+### En coachningsuppgift landar i NÅGON ANNANS kalender, och det står utskrivet
+
+Det här upptäcktes under byggandet och ändrade formuläret. `arChefFor()` svarar
+**nej** när betraktaren är samma person som den ansvariga — utom för ledningen,
+som `can_read_all_employees()` släpper fram. En teamledare kan alltså inte lägga
+en coachningsuppgift på sig själv, och det är rätt: coachning är något man får,
+inte något man ger sig själv.
+
+Följden är att valet "Coachningsuppgift" i **min** kalender skapar något i
+**hennes** dag. Att låta det ske tyst vore ett litet svek, så personväljaren står
+först i den grenen och hjälptexten säger vad som händer: *"Uppgiften hamnar i
+hennes kalender och på hennes coachningskort, inte i din."*
+
+`personerJagCoachar()` i coachning-server.ts ritar valet och står **medvetet
+bredvid `arChefFor()`** i filen. Den är en bekvämlighet och ingen behörighet —
+kontrollen ligger kvar i `coachning::skapaUppgift` och görs även om väljaren
+erbjöd någon annan. En väljare som visar namn skrivningen sedan vägrar är sämre
+än ingen väljare alls.
+
+### Klicket på en tom ruta hade en tom gren
+
+`klickaRuta()` gjorde ingenting när ingen uppgift var markerad, i en ruta
+användaren redan hade upptäckt att hon kunde trycka på. Nu betyder klicket två
+saker, och valet står i markeringen: med en uppgift markerad "lägg den här", utan
+"ny post klockan så mycket". Rutan vet redan vilket klockslag den är, så
+förifyllningen kostar ingenting.
+
+Knappen **"Ny post"** står i planeringsvyns egen högerspalt och inte i sidhuvudet
+— bredvid det den skapar, och som ett enda formulär med ett enda tillstånd.
+
+### Plinget fick coachningsuppgifterna med
+
+Ett klockslag som inte plingar bredvid ett som gör det ser ut som en bugg, och
+den som upptäckt det litar inte på plinget igen. `kommandeposter()` frågar därför
+en gång till per pollning — samma index kalendern använder, ett datum, nästan
+alltid noll rader. **Först när det finns en rad** hämtas läget via `uppgift()` i
+coachning-server.ts, alltså den dyra men korrekta vägen.
+
+### Vad som medvetet INTE gjordes
+
+**Coachningsuppgiften går inte att dra.** `flyttbar: false`. Att flytta den hade
+krävt en `planera()` för coachningsuppgifter, alltså ett andra ställe där ett
+datum sätts — precis vad kalendern avstod från i 0057. Klockslaget bestäms när
+posten läggs upp. **Öppen fråga till beställaren** om det räcker.
+
+**Kollegans kalender rördes inte.** `kalender_poster()` i 0057 projicerar
+fortfarande uppgifter och frånvaro, och ingenting annat — `tests/rls.mjs` faller
+om ett tredje slag dyker upp. Om en kollegas coachning ska synas som "upptagen"
+är en fråga om vad coachning är, inte om vad kalendern kan, och den ska
+beställaren svara på och inte koden.
+
+**iCal-flödet rördes inte**, fortfarande. Samma skäl som i pass 2.
+
+### Prov
+
+`tests/kalender.mjs` har fått sex kontroller till — det nya slaget, dess plats i
+heldagsordningen, och att coachningsuppgiften räknas i dagssumman medan samtalet
+inte gör det. `tests/rls.mjs` går igenom i sin helhet efter att `0058` körts.
+`tests/notiser-tackning.mjs`, `tests/uppgifter.mjs`, `tests/coachning.mjs`,
+`tests/navnyheter.mjs`, `tests/notiser.mjs` och `tests/handelselogg.mjs` likaså.
+
+**`tests/sidor.mjs` faller på något annat, och det är inte den här grenen.**
+Provet går mot PRODUKTION (`PROD` i scripts/lib/matning.mjs) och inte mot
+previewen, alltså mot `main` utan den här ändringen. Det rapporterar
+*"/franvaro/sjuk bär efternamnet Menduza"* för ekonomirollen. Frånvaromodulen,
+inte kalendern — **men det bör tittas på**, eftersom läckprovet är det enda som
+ser den sortens fel.
+
+---
+
 ## 2026-09-14 · Kalendern, pass 2 av tre
 
 Beställningen från 2026-09-11: kalendern visar uppgifter plus det navet redan

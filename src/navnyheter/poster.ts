@@ -14,6 +14,40 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "ny-post-i-kalendern",
+    rubrik: "Skriv in något direkt i kalendern",
+    ingress:
+      "Tryck på en tom tid i dagen, så öppnas ett formulär med dag och klockslag ifyllda. Välj om det ska bli en uppgift eller — om du coachar någon — en coachningsuppgift.",
+    text: `Kalendern har fått en väg in. Tryck på **Ny post**, eller rakt på en tom tid
+i rutnätet, så öppnas ett litet formulär med dagen och klockslaget redan
+ifyllda.
+
+**Överst väljer du vad posten ska bli.** Det avgör resten av fälten, och därför
+står valet först.
+
+**"Uppgift"** lägger upp den i din egen lista, precis som om du skrivit den på
+Uppgifter — med rubrik, prioritet, klockslag och hur lång tid du tror att den
+tar. Tiden du fyller i räknas in i "Planerat 4 h av 6 h" under dagen.
+
+**"Coachningsuppgift"** syns bara för dig som är teamledare, säljchef eller VD,
+och den lägger upp uppgiften åt någon du är chef för. Alla coachningens egna
+fält finns med: vad det är för sorts moment, vilken kurs, modul eller rutin den
+hänger på, vem som är motpart, vem som kvitterar och vad som krävs för att få
+bocka. Uppgiften hamnar i **hennes** kalender och på hennes coachningskort — inte
+i din — och det står utskrivet i formuläret.
+
+**Coachningsuppgifter syns nu i kalendern.** Tidigare stod bara
+coachnings*samtalen* där. Nu ligger uppgifterna med, på sitt klockslag om de har
+ett, och de plingar tio minuter innan precis som vanliga uppgifter.
+
+**Kalendern bokar fortfarande inga möten.** Det som skapas är ingen
+kalenderhändelse för sig — det ÄR en uppgift eller en coachningsuppgift, och den
+bor i sin egen modul med sin egen historik. Kalendern är fönstret, inte lådan.`,
+    datum: "2026-09-14",
+    roller: [],
+    href: "/kalender",
+  },
+  {
     slug: "kalendern",
     rubrik: "Kalendern: lägg ut dagen genom att dra",
     ingress:

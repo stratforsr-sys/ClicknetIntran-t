@@ -34,6 +34,7 @@ import {
   SLAG_ETIKETT,
   SLAG_TON,
   STANDARDLANGD,
+  arAtagande,
   arDelningsniva,
   arHelg,
   arTidsatt,
@@ -191,6 +192,23 @@ ok(
 
 ok("varje slag har etikett och ton", KALENDERSLAG.every((s) => SLAG_ETIKETT[s] && SLAG_TON[s]));
 
+ok("coachningsuppgiften är ett eget slag", KALENDERSLAG.includes("coachningsuppgift"));
+
+{
+  // Ordningen i KALENDERSLAG är den heldagsposter sorteras i, och en
+  // coachningsuppgift ska stå NÄRMARE uppgiften än frånvaron gör: den är ett
+  // åtagande och inte en vägg.
+  const blandat = [
+    post({ id: "u", slag: "uppgift" }),
+    post({ id: "c", slag: "coachningsuppgift" }),
+    post({ id: "f", slag: "franvaro" }),
+  ];
+  ok(
+    "coachningsuppgiften står efter ledigheten och före uppgiften",
+    heldagsposter(blandat).map((p) => p.id).join() === "f,c,u",
+  );
+}
+
 // =============================================================================
 rubrik("Utläggningen — krockar får INTE döljas");
 // =============================================================================
@@ -324,6 +342,35 @@ rubrik("Dagssumman — talet man fattar beslut på");
   ok("avbockat räknas inte", summa.antal === 1);
   ok("ledighet är inte planerat arbete", summa.minuter === 60, `blev ${summa.minuter}`);
 }
+
+{
+  /**
+   * COACHNINGSUPPGIFTEN RÄKNAS, COACHNINGSSAMTALET INTE. Villkoret hette
+   * `slag === "uppgift"` fram till 0058, och en timmes rollspel klockan tio
+   * hade då räknats som noll — alltså lovat dagen en timme som inte fanns.
+   * Samtalet har fortfarande ingen längd alls (`held_on` är en dag, 0043).
+   */
+  const summa = dagssumma([
+    post({ id: "a", tid: "09:00", minuter: 60 }),
+    post({ id: "b", slag: "coachningsuppgift", tid: "10:00", minuter: 60 }),
+    post({ id: "c", slag: "coachning" }),
+  ]);
+  ok("coachningsuppgiften räknas in i dagen", summa.minuter === 120, `blev ${summa.minuter}`);
+  ok("och räknas som ett åtagande", summa.antal === 2);
+  ok("coachningssamtalet räknas inte", summa.oskattade === 0);
+}
+
+{
+  const summa = dagssumma([
+    post({ id: "a", slag: "coachningsuppgift", tid: "09:00", minuter: 60, klar: true }),
+  ]);
+  ok("en kvitterad coachningsuppgift räknas inte", summa.antal === 0 && summa.minuter === 0);
+}
+
+ok(
+  "åtaganden är uppgift och coachningsuppgift, inget annat",
+  KALENDERSLAG.filter((s) => arAtagande(s)).join() === "coachningsuppgift,uppgift",
+);
 
 ok("tom dag ger noll och ingen ruta", dagssumma([]).antal === 0 && dagssumma([]).minuter === 0);
 

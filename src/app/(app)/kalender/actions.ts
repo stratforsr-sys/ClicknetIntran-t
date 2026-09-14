@@ -3,14 +3,24 @@
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
-import { NIVA_ETIKETT, arDelningsniva, GRUNDNIVA, type Delningsniva } from "@/lib/kalender";
+import {
+  NIVA_ETIKETT,
+  POSTTYPER,
+  arDelningsniva,
+  GRUNDNIVA,
+  type Delningsniva,
+  type Posttyp,
+} from "@/lib/kalender";
 import { notifiera } from "@/lib/notishandelse-server";
+import { skapaUppgift as skapaVanligUppgift } from "../uppgifter/actions";
+import { skapaUppgift as skapaCoachningsuppgift } from "../coachning/actions";
 
 /**
- * Kalenderns skrivningar — och det är EN sak: vem som ser mer än ledig/upptagen.
+ * Kalenderns skrivningar — och de är TVÅ saker: vem som ser mer än
+ * ledig/upptagen, och vägen in till de två moduler kalendern ritar.
  *
  * =============================================================================
- * KALENDERN SKRIVER INGA POSTER, OCH DET ÄR DÄRFÖR DEN HÄR FILEN ÄR KORT
+ * KALENDERN SKRIVER INGA EGNA POSTER, OCH DET ÄR DÄRFÖR DEN HÄR FILEN ÄR KORT
  *
  * Att dra en uppgift till ett klockslag går genom `planera()` i
  * uppgifter/actions.ts, inte genom något härinne. Det var ett val: en egen
@@ -21,6 +31,9 @@ import { notifiera } from "@/lib/notishandelse-server";
  * Uppgiftens datum ändras alltså på ett ställe i hela navet, precis som före
  * kalendern. Det som är nytt är att `planera()` numera frågar `farPlanera()`
  * i stället för `farRedigera()`, så att nivå fyra släpps in där och bara där.
+ *
+ * `skapaKalenderpost()` nedan följer exakt samma linje: den skriver ingenting
+ * själv, den VÄLJER VÄG. Se rubriken där.
  * =============================================================================
  */
 
@@ -28,6 +41,110 @@ export type KalenderState = { fel?: string; ok?: string };
 
 function text(form: FormData, namn: string): string {
   return String(form.get(namn) ?? "").trim();
+}
+
+// =============================================================================
+// Ny post
+// =============================================================================
+
+/**
+ * "Ny post" i kalendern — en uppgift eller en coachningsuppgift.
+ *
+ * =============================================================================
+ * EN ACTION SOM VÄLJER VÄG, INTE EN ACTION SOM SKRIVER
+ *
+ * Beställningen 2026-09-14 var Outlooks grepp: lägg in något i kalendern och
+ * välj vad det ska bli. Det som skapas är därför INGEN kalenderhändelse — det
+ * är en rad i `task` eller i `coaching_task`, skriven av modulens egen
+ * `skapaUppgift()`, med modulens egen behörighetskontroll, historikrad och
+ * notis.
+ *
+ * En `skapaKalenderpost()` som skrev direkt i tabellerna hade varit kortare och
+ * fel: den hade blivit ett andra svar på frågan vem som får lägga upp vad. Att
+ * bara teamledare, säljchef och VD lägger upp coachningsuppgifter är
+ * beställarens beslut från 2026-09-01, och det beslutet bor i `kravCoach()` —
+ * inte i två filer som ska hållas lika.
+ *
+ * EN ACTION OCH INTE TVÅ. Två hade betytt två rader i `TACKNING`, två ställen
+ * som kan glömma en revalidering, och ett gränssnitt som måste veta vilken av
+ * dem som gäller innan användaren valt något.
+ *
+ * FORMULÄRET SKICKAS INTE VIDARE SOM DET ÄR. Det hade varit den korta vägen —
+ * fälten heter redan samma sak — och det hade också betytt att ett `assignee_id`
+ * avsett för coachningsvägen följt med in i uppgiftsvägen och lagt uppgiften på
+ * någon annan. Varje väg bygger därför sin egen `FormData` av de fält den
+ * faktiskt använder.
+ * =============================================================================
+ */
+export async function skapaKalenderpost(
+  _prev: KalenderState,
+  form: FormData,
+): Promise<KalenderState> {
+  try {
+    const user = await getCurrentUser();
+    if (!user?.employee) return { fel: "Du måste vara inloggad." };
+
+    const typ = text(form, "typ");
+    if (!POSTTYPER.includes(typ as Posttyp)) return { fel: "Välj om posten är en uppgift eller coachning." };
+
+    const titel = text(form, "title");
+    if (!titel) return { fel: "Skriv vad som ska göras." };
+
+    /**
+     * DAGEN KRÄVS, till skillnad från i de två modulernas egna formulär.
+     *
+     * En uppgift utan datum är fullt giltig — den ligger i inkorgen och väntar
+     * på att planeras. Men en post som skapas I KALENDERN och saknar dag skulle
+     * försvinna ur den i samma sekund som den sparades, och det finns ingen
+     * rimlig läsning där det är vad användaren menade. Rutan hon klickade på
+     * fyller dessutom i fältet åt henne.
+     */
+    const dag = text(form, "due_date");
+    const tid = text(form, "due_time");
+    if (!dag) return { fel: "Välj vilken dag posten gäller." };
+
+    const vidare = new FormData();
+    vidare.set("title", titel);
+    vidare.set("description_md", text(form, "description_md"));
+    vidare.set("due_date", dag);
+    vidare.set("due_time", tid);
+    vidare.set("estimate_minutes", text(form, "estimate_minutes"));
+
+    if (typ === "uppgift") {
+      /**
+       * INGEN `assignee_id` OCH INGEN `till_inkorgen`. Utan båda lägger
+       * `uppgifter::skapaUppgift` uppgiften på den inloggade, och det är vad en
+       * post man skriver i sin egen kalender ska bli. Att delegera sker i
+       * uppgiften, där kretsen syns.
+       */
+      vidare.set("priority", text(form, "priority") || "3");
+
+      const svar = await skapaVanligUppgift({}, vidare);
+      if (svar.fel) return { fel: svar.fel };
+
+      revalidera();
+      return { ok: tid ? `Upplagd ${dag} ${tid}.` : `Upplagd ${dag}.` };
+    }
+
+    // --- Coachningsuppgiften -------------------------------------------------
+    //
+    // Fälten är coachningens egna (0043) och skickas vidare orörda.
+    // `coachning::skapaUppgift` avvisar det som inte går ihop — en typ utan sin
+    // källa, en motpart som är samma person, en kvitterare som inte finns — och
+    // de felmeddelandena är redan skrivna för en människa.
+    for (const namn of ["assignee_id", "kind", "partner_id", "verify_by", "evidence", "course_id", "module_id", "document_id"]) {
+      vidare.set(namn, text(form, namn));
+    }
+    for (const f of form.getAll("focus_id")) vidare.append("focus_id", String(f));
+
+    const svar = await skapaCoachningsuppgift({}, vidare);
+    if (svar.fel) return { fel: svar.fel };
+
+    revalidera();
+    return { ok: svar.ok ?? "Upplagd." };
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Något gick fel." };
+  }
 }
 
 /**

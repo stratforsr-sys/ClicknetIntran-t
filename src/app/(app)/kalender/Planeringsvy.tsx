@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState, useTransition, type DragEvent } from "react";
+import { useCallback, useEffect, useState, useTransition, type DragEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { cn } from "@/components/ui/cn";
+import { Button } from "@/components/ui/Button";
 import { Ikon } from "@/components/shell/Ikon";
 import { tidstext, visaPrioritet, type Prioritet } from "@/lib/uppgifter";
 import {
@@ -23,6 +24,7 @@ import {
   type Kalenderpost,
 } from "@/lib/kalender";
 import { planera } from "../uppgifter/actions";
+import { NyPost } from "./NyPost";
 
 /**
  * Planeringsvyn.
@@ -53,6 +55,18 @@ import { planera } from "../uppgifter/actions";
  * `planeraTill()` nedan är därför den ENDA vägen härifrån till servern, och den
  * bygger alltid alla tre fälten ur postens nuvarande värden och ändrar ett av
  * dem. Lägg aldrig ett `planera()`-anrop bredvid den.
+ *
+ * =============================================================================
+ * ETT KLICK PÅ EN TOM RUTA BETYDER TVÅ SAKER, OCH VALET STÅR I MARKERINGEN
+ *
+ * Har man markerat en uppgift i vänsterspalten betyder klicket "lägg den här" —
+ * det är väljandet-och-placerandet ovan. Har man INTE markerat något betydde
+ * det ingenting alls fram till 2026-09-14, och det var en tom gren i en ruta
+ * användaren redan hade upptäckt att hon kunde trycka på.
+ *
+ * Numera öppnar den `NyPost` med dagen och klockslaget ifyllda. Det är samma
+ * grepp som Outlook, och det är billigt just för att klicket redan bar rätt
+ * information: rutan VET vilket klockslag den är.
  * =============================================================================
  */
 
@@ -68,6 +82,23 @@ export type Planerbar = {
 };
 
 export type Projektkarta = Record<string, { namn: string; farg: string }>;
+
+/**
+ * Det `NyPost` behöver för att kunna rita coachningsgrenen.
+ *
+ * Hämtas av sidan och skickas hit orört. ALLT ÄR TOMT FÖR DEN SOM INTE COACHAR
+ * NÅGON — då står `farCoacha: false` och inga frågor har ställts, se
+ * kommentaren i page.tsx.
+ */
+export type Postval = {
+  farCoacha: boolean;
+  personer: { id: string; namn: string }[];
+  kollegor: { id: string; namn: string }[];
+  kurser: { id: string; title: string }[];
+  moduler: { id: string; title: string }[];
+  dokument: { id: string; title: string; doc_type: string }[];
+  fokus: { id: string; label: string }[];
+};
 
 const FARG_PRICK: Record<string, string> = {
   brand: "bg-brand-500",
@@ -95,18 +126,34 @@ export function Planeringsvy({
   poster,
   attPlanera,
   projekt,
+  postval,
 }: {
   dag: string;
   idag: string;
   poster: Kalenderpost[];
   attPlanera: Planerbar[];
   projekt: Projektkarta;
+  postval: Postval;
 }) {
   const router = useRouter();
   const [vantar, startaOvergang] = useTransition();
   const [vald, setVald] = useState<string | null>(null);
   const [over, setOver] = useState<number | null>(null);
   const [fel, setFel] = useState<string | null>(null);
+
+  /**
+   * Formuläret för en ny post. `null` = stängt; `{ tid: null }` = öppet för hela
+   * dagen, alltså knappen och inte en ruta.
+   */
+  const [nyPost, setNyPost] = useState<{ tid: string | null } | null>(null);
+
+  // Stabila mellan renderingar, så att effekten i NyPost inte tror att något
+  // ändrats bara för att kalendern ritats om.
+  const stangNyPost = useCallback(() => setNyPost(null), []);
+  const nyPostKlar = useCallback(() => {
+    setNyPost(null);
+    router.refresh();
+  }, [router]);
 
   /**
    * Den enda vägen till servern. Se rubriken överst.
@@ -141,7 +188,13 @@ export function Planeringsvy({
   };
 
   const klickaRuta = (minuter: number) => {
-    if (!vald) return;
+    // Ingen uppgift markerad? Då är klicket en beställning om en ny post på
+    // just det klockslaget. Se rubriken överst.
+    if (!vald) {
+      setFel(null);
+      setNyPost({ tid: minuterTillTid(minuter) });
+      return;
+    }
     const u = attPlanera.find((p) => p.id === vald);
     const p = poster.find((x) => x.ref === vald);
     planeraTill(vald, dag, minuterTillTid(minuter), u?.estimate_minutes ?? p?.minuter ?? null);
@@ -150,6 +203,10 @@ export function Planeringsvy({
   const heldag = heldagsposter(poster);
   const utanfor = utanforDygnet(poster);
   const utlagda = laggUt(poster);
+  // BARA UPPGIFTER, och det är inte en glömd coachningsuppgift. Raden nedan är
+  // en uppmaning att DRA ner posten i rutnätet, och en coachningsuppgift går
+  // inte att dra — den har inget `planera()`. Utan klockslag hamnar den bland
+  // heldagsposterna, vilket är sant om den: den gäller dagen och inte en timme.
   const utanKlockslag = poster.filter((p) => p.slag === "uppgift" && !p.tid);
   const summa = dagssumma(poster);
 
@@ -171,7 +228,7 @@ export function Planeringsvy({
             <p className="text-small text-ink-500">
               {vald
                 ? "Tryck på ett klockslag till höger."
-                : "Dra en rad till en tid — eller tryck på den och sedan på ett klockslag."}
+                : "Dra en rad till en tid, eller tryck på den och sedan på ett klockslag. Tryck på en tom tid för en ny post."}
             </p>
           </div>
 
@@ -249,6 +306,37 @@ export function Planeringsvy({
         {/* Höger: dagen                                                        */}
         {/* ------------------------------------------------------------------ */}
         <div className="flex flex-col gap-3">
+          {/* "Ny post" står HÄR och inte i sidhuvudet, bredvid det den skapar.
+              Klicket i rutnätet öppnar samma formulär, och två knappar för ett
+              formulär hade betytt två tillstånd att hålla i takt. */}
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              variant="sekundar"
+              size="sm"
+              onClick={() => setNyPost({ tid: null })}
+              disabled={vantar}
+            >
+              Ny post
+            </Button>
+          </div>
+
+          {nyPost && (
+            <NyPost
+              dag={dag}
+              tid={nyPost.tid}
+              farCoacha={postval.farCoacha}
+              personer={postval.personer}
+              kollegor={postval.kollegor}
+              kurser={postval.kurser}
+              moduler={postval.moduler}
+              dokument={postval.dokument}
+              fokus={postval.fokus}
+              onKlar={nyPostKlar}
+              onAvbryt={stangNyPost}
+            />
+          )}
+
           {/* Heldagsposterna. Frånvaro, coachning och frister har ingen tid och
               hör inte hemma i rutnätet — men de styr dagen mest av allt, så de
               står överst och inte längst ned. */}
@@ -328,14 +416,15 @@ export function Planeringsvy({
                   onDragLeave={() => setOver((v) => (v === m ? null : v))}
                   onDrop={slappPa(m)}
                   onClick={() => klickaRuta(m)}
-                  aria-label={`Lägg ${minuterTillTid(m)}`}
+                  aria-label={
+                    vald ? `Lägg ${minuterTillTid(m)}` : `Ny post ${minuterTillTid(m)}`
+                  }
                   disabled={vantar}
                   style={{ height: `${RUTHOJD_REM}rem` }}
                   className={cn(
-                    "block w-full border-t transition-colors duration-fast",
+                    "block w-full border-t transition-colors duration-fast hover:bg-brand-100",
                     m % 60 === 0 ? "border-canvas" : "border-canvas/50",
                     over === m && "bg-brand-100",
-                    vald && "hover:bg-brand-100",
                   )}
                 />
               ))}

@@ -7,6 +7,7 @@ import { forfallodag, kursLage } from "@/lib/utbildning";
 import { arbetsdagarIManad } from "@/lib/saljtakt";
 import { arStangd, type Lage } from "@/lib/uppgifter";
 import { hamtaUppgiftsbild, type Uppgiftsbild } from "@/lib/uppgifter-server";
+import { uppgift as coachningsuppgift, uppgifterFor } from "@/lib/coachning-server";
 import {
   arDelningsniva,
   attPlinga,
@@ -22,8 +23,8 @@ import {
  * =============================================================================
  * TVÅ VÄGAR IN, OCH DE ÄR OLIKA MED FLIT
  *
- * `hamtaEgenKalender()` läser med användarens EGEN token och sätter ihop fem
- * källor i TypeScript. Det går för att alla fem redan har en RLS-policy som
+ * `hamtaEgenKalender()` läser med användarens EGEN token och sätter ihop sex
+ * källor i TypeScript. Det går för att alla sex redan har en RLS-policy som
  * svarar på "får hon se den här raden", och den egna dagen består uteslutande
  * av rader hon får se.
  *
@@ -53,7 +54,7 @@ export type Kalenderbild = {
 /**
  * Min egen kalender mellan två datum, båda inklusive.
  *
- * FEM KÄLLOR OCH INTE EN TABELL. Det fanns en frestelse att spegla allt till en
+ * SEX KÄLLOR OCH INTE EN TABELL. Det fanns en frestelse att spegla allt till en
  * `calendar_event`-tabell och läsa den — snabbare, enklare att sortera, och fel
  * på det sätt som kostar mest: speglingen måste uppdateras av varje väg in och
  * ut ur fem moduler, och den dag en av dem glöms bort visar kalendern något som
@@ -72,48 +73,73 @@ export async function hamtaEgenKalender(
   const mig = user.employee.id;
   const supabase = await supabaseServer();
 
-  const [{ data: ledigheter }, { data: samtal }, { data: kurser }, { data: moduler }, { data: progress }, { data: certifikat }] =
-    await Promise.all([
-      /**
-       * `.eq("employee_id", mig)` är INTE ett andra svar på RLS fråga.
-       *
-       * Regeln i notiser-server.ts säger att man inte ska filtrera på det
-       * policyn redan avgjort, och den gäller. Här är filtret något annat: en
-       * teamledare FÅR läsa sitt lags ledighet, men hennes egen kalender är
-       * hennes egen dag. Att rita lagets semestrar i den hade varit att svara
-       * på en annan fråga än den sidan ställer.
-       */
-      supabase
-        .from("absence_request")
-        .select("id, starts_on, ends_on, part_day_minutes")
-        .eq("employee_id", mig)
-        .eq("status", "approved")
-        .lte("starts_on", till)
-        .gte("ends_on", fran),
+  const [
+    { data: ledigheter },
+    { data: samtal },
+    { data: kurser },
+    { data: moduler },
+    { data: progress },
+    { data: certifikat },
+    coachningsuppgifter,
+  ] = await Promise.all([
+    /**
+     * `.eq("employee_id", mig)` är INTE ett andra svar på RLS fråga.
+     *
+     * Regeln i notiser-server.ts säger att man inte ska filtrera på det
+     * policyn redan avgjort, och den gäller. Här är filtret något annat: en
+     * teamledare FÅR läsa sitt lags ledighet, men hennes egen kalender är
+     * hennes egen dag. Att rita lagets semestrar i den hade varit att svara
+     * på en annan fråga än den sidan ställer.
+     */
+    supabase
+      .from("absence_request")
+      .select("id, starts_on, ends_on, part_day_minutes")
+      .eq("employee_id", mig)
+      .eq("status", "approved")
+      .lte("starts_on", till)
+      .gte("ends_on", fran),
 
-      /**
-       * Coachningssamtalet står i BÅDAS kalendrar — den coachades och coachens.
-       * RLS i 0043 släpper fram båda hållen, så en fråga räcker; vem raden
-       * gäller avgör bara hur posten formuleras.
-       */
-      supabase
-        .from("coaching_session")
-        .select("id, employee_id, coach_id, held_on")
-        .or(`employee_id.eq.${mig},coach_id.eq.${mig}`)
-        .gte("held_on", fran)
-        .lte("held_on", till),
+    /**
+     * Coachningssamtalet står i BÅDAS kalendrar — den coachades och coachens.
+     * RLS i 0043 släpper fram båda hållen, så en fråga räcker; vem raden
+     * gäller avgör bara hur posten formuleras.
+     */
+    supabase
+      .from("coaching_session")
+      .select("id, employee_id, coach_id, held_on")
+      .or(`employee_id.eq.${mig},coach_id.eq.${mig}`)
+      .gte("held_on", fran)
+      .lte("held_on", till),
 
-      supabase.from("course").select("id, slug, title, due_days").eq("status", "published"),
-      supabase
-        .from("course_module")
-        .select("id, course_id, course!inner(status)")
-        .eq("course.status", "published"),
-      supabase.from("module_progress").select("module_id").eq("employee_id", mig),
-      supabase
-        .from("certification")
-        .select("course_id, issued_at, expires_at")
-        .eq("employee_id", mig),
-    ]);
+    supabase.from("course").select("id, slug, title, due_days").eq("status", "published"),
+    supabase
+      .from("course_module")
+      .select("id, course_id, course!inner(status)")
+      .eq("course.status", "published"),
+    supabase.from("module_progress").select("module_id").eq("employee_id", mig),
+    supabase
+      .from("certification")
+      .select("course_id, issued_at, expires_at")
+      .eq("employee_id", mig),
+
+    /**
+     * MODULENS EGEN LÄSNING, INTE EN SJÄTTE FRÅGA SKRIVEN HÄR.
+     *
+     * `uppgifterFor()` hämtar alla mina coachningsuppgifter och räknar fram
+     * läget ur händelserna — och för `kurs`, `rollspel_inspelat` och
+     * `lasning` ur certifikatet, bedömningen respektive kvittensen (0043).
+     * Ett eget urval hade behövt göra om den räkningen, och ett andra sätt
+     * att avgöra om en coachningsuppgift är klar är precis det 0043 vägrade
+     * ha: en bock som säger "klar" bredvid ett certifikat som gått ut.
+     *
+     * PRISET ÄR ATT DATUMFILTRET LIGGER I TYPESCRIPT och inte i frågan. Det
+     * är billigt här och bara här: en person har tiotals coachningsuppgifter
+     * totalt, inte tusentals, och raderna är redan hämtade för kortet på
+     * /coachning. Hade talet varit ett annat vore svaret ett datumurval i
+     * `uppgifterFor()` — inte en kopia av dess läsning i den här filen.
+     */
+    uppgifterFor(mig),
+  ]);
 
   const poster: Kalenderpost[] = [];
 
@@ -180,6 +206,38 @@ export async function hamtaEgenKalender(
       flyttbar: false,
       forsenad: false,
       klar: false,
+    });
+  }
+
+  // --- Coachningsuppgifterna -------------------------------------------------
+  //
+  // MINA, alltså de jag ska GÖRA. En uppgift jag lagt upp åt någon annan står i
+  // hennes dag — `uppgifterFor()` väljer på `assignee_id`, och motparten på ett
+  // rollspel står inte här heller. Skälet är detsamma som för uppgifterna ovan:
+  // dagssumman heter "planerat 4 h av 6 h", och den blir fel så snart kalendern
+  // ritar arbete någon annan ska utföra.
+  //
+  // INTE FLYTTBAR, till skillnad från uppgiften. Att dra den hade krävt en
+  // `planera()` för coachningsuppgifter, alltså ett andra ställe där ett datum
+  // sätts — och det var precis vad kalendern avstod från i 0057. Klockslaget
+  // bestäms när posten läggs upp. Se ARBETSLOGG 2026-09-14.
+  for (const u of coachningsuppgifter) {
+    if (!u.due_date || u.due_date < fran || u.due_date > till) continue;
+    const stangd = u.lage === "klar" || u.lage === "avbruten";
+
+    poster.push({
+      id: `coachningsuppgift-${u.id}`,
+      slag: "coachningsuppgift",
+      ref: u.id,
+      employee_id: mig,
+      dag: u.due_date,
+      tid: u.due_time ? u.due_time.slice(0, 5) : null,
+      minuter: u.estimate_minutes,
+      rubrik: u.title,
+      href: `/coachning/uppgift/${u.id}`,
+      flyttbar: false,
+      forsenad: u.forsenad,
+      klar: stangd,
     });
   }
 
@@ -415,10 +473,21 @@ export async function hamtaDelningar(user: CurrentUser): Promise<{
  * gång var femte minut så länge någon har navet öppet, och det ska därför kosta
  * så lite som möjligt: bara dagens uppgifter, bara de med ett klockslag.
  *
- * INGEN AV DE ANDRA KÄLLORNA KAN PLINGA, och det följer av vad de är. En
+ * FYRA AV DE ANDRA KÄLLORNA KAN INTE PLINGA, och det följer av vad de är. En
  * ledighetsdag, en kursfrist och en orderfrist är heldagsposter utan klockslag
  * — det finns ingen tidpunkt att plinga tio minuter före. Coachningssamtalet
  * likaså: `held_on` är en dag (0043).
+ *
+ * COACHNINGSUPPGIFTEN KAN, sedan 0058 gav den ett klockslag. Den kostar en
+ * fråga till per pollning, och den frågan är billig: samma index som kalendern
+ * använder (`coaching_task_ansvarig_idx`), ett datum, och nästan alltid noll
+ * rader. FÖRST NÄR DET FINNS EN RAD hämtas läget genom `uppgift()` i
+ * coachning-server.ts — den dyra vägen, men den enda som vet att en
+ * kurs-uppgift blir klar av ett certifikat och inte av en bock.
+ *
+ * ATT LÅTA BLI HADE VARIT SÄMRE ÄN ATT LÅTA BLI HELT. En uppgift klockan två
+ * som plingar bredvid en coachningsuppgift klockan två som inte gör det ser ut
+ * som en bugg, och den som upptäckt det litar inte på plinget igen.
  * =============================================================================
  */
 export async function kommandeposter(user: CurrentUser): Promise<Kalenderpost[]> {
@@ -429,13 +498,25 @@ export async function kommandeposter(user: CurrentUser): Promise<Kalenderpost[]>
 
   const supabase = await supabaseServer();
 
-  const { data: rader } = await supabase
-    .from("task")
-    .select("id, title, due_date, due_time, estimate_minutes, assignee_id")
-    .eq("assignee_id", mig)
-    .eq("due_date", idag)
-    .is("parent_id", null)
-    .not("due_time", "is", null);
+  const [{ data: rader }, { data: coachrader }] = await Promise.all([
+    supabase
+      .from("task")
+      .select("id, title, due_date, due_time, estimate_minutes, assignee_id")
+      .eq("assignee_id", mig)
+      .eq("due_date", idag)
+      .is("parent_id", null)
+      .not("due_time", "is", null),
+
+    // Avbrutna filtreras bort redan här: `cancelled_at` är en kolumn och inte
+    // en händelse (0043), så den kostar ingenting att fråga om.
+    supabase
+      .from("coaching_task")
+      .select("id")
+      .eq("assignee_id", mig)
+      .eq("due_date", idag)
+      .is("cancelled_at", null)
+      .not("due_time", "is", null),
+  ]);
 
   const uppgifter = (rader ?? []) as unknown as {
     id: string;
@@ -445,7 +526,12 @@ export async function kommandeposter(user: CurrentUser): Promise<Kalenderpost[]>
     estimate_minutes: number | null;
   }[];
 
-  if (uppgifter.length === 0) return [];
+  const coachposter = await coachningsposter(
+    ((coachrader ?? []) as { id: string }[]).map((r) => r.id),
+    mig,
+  );
+
+  if (uppgifter.length === 0) return attPlinga(coachposter, idag, nu);
 
   // Avbockade ska inte plinga. Läget räknas fram ur händelserna (0054), så det
   // krävs en andra fråga — men bara för de uppgifter som faktiskt står på tur.
@@ -483,7 +569,42 @@ export async function kommandeposter(user: CurrentUser): Promise<Kalenderpost[]>
     klar: stangda.has(u.id),
   }));
 
-  return attPlinga(poster, idag, nu);
+  return attPlinga([...poster, ...coachposter], idag, nu);
+}
+
+/**
+ * Dagens coachningsuppgifter med klockslag, som kalenderposter.
+ *
+ * LÄGET HÄMTAS EN RAD I TAGET, och det är billigare än det låter: listan är
+ * tom nästan varje gång funktionen anropas, och `uppgift()` är modulens egen
+ * läsning av en enda rad. Att i stället räkna läget här hade krävt en kopia av
+ * `lageFor()` plus kunskapen om vilka typer som blir klara av ett certifikat —
+ * alltså ett andra svar på "är den här coachningsuppgiften gjord".
+ */
+async function coachningsposter(ids: string[], mig: string): Promise<Kalenderpost[]> {
+  if (ids.length === 0) return [];
+
+  const rader = await Promise.all(ids.map((id) => coachningsuppgift(id)));
+
+  return rader.flatMap((u) => {
+    if (!u || !u.due_date || !u.due_time) return [];
+    return [
+      {
+        id: `coachningsuppgift-${u.id}`,
+        slag: "coachningsuppgift" as const,
+        ref: u.id,
+        employee_id: mig,
+        dag: u.due_date,
+        tid: u.due_time.slice(0, 5),
+        minuter: u.estimate_minutes,
+        rubrik: u.title,
+        href: `/coachning/uppgift/${u.id}`,
+        flyttbar: false,
+        forsenad: false,
+        klar: u.lage === "klar" || u.lage === "avbruten",
+      },
+    ];
+  });
 }
 
 // -----------------------------------------------------------------------------

@@ -198,7 +198,14 @@ export function snappa(minuter: number): number {
  * är vald efter hur mycket de styr dagen: är man ledig spelar resten mindre
  * roll, och en frist är en vägg medan en uppgift är ett åtagande.
  */
-export const KALENDERSLAG = ["franvaro", "coachning", "order", "kurs", "uppgift"] as const;
+export const KALENDERSLAG = [
+  "franvaro",
+  "coachning",
+  "order",
+  "kurs",
+  "coachningsuppgift",
+  "uppgift",
+] as const;
 export type Kalenderslag = (typeof KALENDERSLAG)[number];
 
 export const SLAG_ETIKETT: Record<Kalenderslag, string> = {
@@ -206,17 +213,59 @@ export const SLAG_ETIKETT: Record<Kalenderslag, string> = {
   coachning: "Coachningssamtal",
   order: "Orderfrist",
   kurs: "Kursfrist",
+  coachningsuppgift: "Coachningsuppgift",
   uppgift: "Uppgift",
 };
 
-/** Tonen posten ritas i. Samma namn som färgtokens i globals.css. */
+/**
+ * Tonen posten ritas i. Samma namn som färgtokens i globals.css.
+ *
+ * COACHNINGSSAMTALET OCH COACHNINGSUPPGIFTEN DELAR TON MED FLIT. De kommer ur
+ * samma modul och betyder samma sak för den som tittar — "det här är sådant jag
+ * ska träna på". En sjätte färg hade tvingat in en distinktion i ögat som inte
+ * finns i huvudet, och en kalender med sex färger är en kalender där färgen
+ * slutar betyda något.
+ */
 export const SLAG_TON: Record<Kalenderslag, "brand" | "info" | "accent" | "warn" | "ok"> = {
   franvaro: "ok",
   coachning: "info",
   order: "warn",
   kurs: "accent",
+  coachningsuppgift: "info",
   uppgift: "brand",
 };
+
+/**
+ * Är posten något NÅGON HAR LOVAT ATT GÖRA, till skillnad från något som
+ * inträffar?
+ *
+ * Skillnaden bär dagssumman nedan, och den är hela skälet att funktionen finns
+ * i stället för en hårdkodad jämförelse mot `"uppgift"`. En ledighetsdag, en
+ * kursfrist och en orderfrist TAR ingen tid — de infaller. Ett coachningssamtal
+ * har ingen längd alls (`held_on` är en dag, 0043). En uppgift och en
+ * coachningsuppgift är däremot båda åtaganden med en uppskattad längd, och den
+ * som lagt ut fyra timmars coachning på en dag har fyra timmar mindre kvar av
+ * den — vare sig talet under dagen räknar det eller inte.
+ */
+export function arAtagande(slag: Kalenderslag): boolean {
+  return slag === "uppgift" || slag === "coachningsuppgift";
+}
+
+/**
+ * Vad "Ny post" kan bli.
+ *
+ * TVÅ VÄRDEN OCH INTE SEX. De andra fyra slagen är sådant navet RÄKNAR FRAM —
+ * en beviljad ledighet kommer ur en ansökan, en kursfrist ur ett
+ * anställningsdatum, en orderfrist ur kalendariet, ett coachningssamtal ur en
+ * bokning i sin egen modul. Ingen av dem är något man skriver i en kalender,
+ * och den dag en av dem dyker upp här har kalendern börjat äga något.
+ *
+ * Listan bor i den här filen och inte i `kalender/actions.ts` av samma skäl som
+ * allt annat härinne: en "use server"-modul får bara exportera asynkrona
+ * funktioner, och provet ska kunna läsa värdena utan att dra in en server-fil.
+ */
+export const POSTTYPER = ["uppgift", "coachning"] as const;
+export type Posttyp = (typeof POSTTYPER)[number];
 
 export type Kalenderpost = {
   /** Stabil över hämtningar. Bär slaget, så två tabeller inte kan kollidera. */
@@ -355,11 +404,16 @@ export function laggUt(poster: readonly Kalenderpost[]): Utlagd[] {
 /**
  * "Planerat 4 h av 6 h" — beställarens ord, och siffran är hela poängen.
  *
- * BARA UPPGIFTER RÄKNAS, och bara de som inte är klara. En ledighetsdag är inte
+ * BARA ÅTAGANDEN RÄKNAS, och bara de som inte är klara. En ledighetsdag är inte
  * fyra timmars planerat arbete, och en kursfrist tar inte tid — den infaller.
  * Räknades de med hade talet blivit en mätare på hur full kalendern ser ut i
  * stället för på hur mycket man lovat sig själv att göra, och det är den andra
  * frågan som gör att man planerar om i tid.
+ *
+ * COACHNINGSUPPGIFTEN KOM MED 2026-09-14, i samma pass som den blev möjlig att
+ * skapa härifrån. Villkoret hette `p.slag === "uppgift"` fram till dess, och det
+ * hade räknat en timmes rollspel klockan tio som noll — alltså lovat dagen sex
+ * timmar till som inte fanns. Se `arAtagande()`.
  *
  * EN UPPGIFT UTAN UPPSKATTNING RÄKNAS SOM NOLL, inte som `STANDARDLANGD`. Den
  * ritas i trettio minuter för att gå att se, men att räkna en gissning in i
@@ -375,7 +429,7 @@ export function dagssumma(poster: readonly Kalenderpost[]): {
   tak: number;
   over: boolean;
 } {
-  const uppgifter = poster.filter((p) => p.slag === "uppgift" && !p.klar);
+  const uppgifter = poster.filter((p) => arAtagande(p.slag) && !p.klar);
   const minuter = uppgifter.reduce((s, p) => s + (p.minuter ?? 0), 0);
 
   return {
