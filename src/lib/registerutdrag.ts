@@ -310,6 +310,11 @@ export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
   // har ingen upphovsperson.
   { tabell: "phone_identity", kolumn: "created_by", skal: "Vem som kopplade anknytningen till en person" },
 
+  // 0056. Vem som pekade om ett samtal till en annan affar. Kolumnen sager vad
+  // en MANNISKA bestamt om nagon annans samtal — inte nagot om den personen.
+  // Samtalet sjalvt star i KALLOR pa `phone_call.employee_id`.
+  { tabell: "phone_call", kolumn: "order_linked_by", skal: "Vem som kopplade samtalet till en affär" },
+
   // 0054. Uppgiftsmodulen. Sex kolumner som alla svarar pa "vem gjorde nagot
   // at nagon annan", och ingen pa "vad har navet registrerat om mig".
   //

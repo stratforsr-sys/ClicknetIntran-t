@@ -30,6 +30,9 @@ import {
 import { kronor, manadFore, manadsnamn, manadsnyckel } from "@/lib/provision";
 import { Atgarder } from "./Atgarder";
 import { Bilaga, type Orderbilaga } from "./Bilaga";
+import { Samtal } from "./Samtal";
+import { hamtaOrdersamtal } from "@/lib/samtal-order-server";
+import type { Samtalsrad } from "@/lib/samtal-vy";
 import { Nyorder } from "./Nyorder";
 import { GuideVard } from "@/components/guide/GuideVard";
 
@@ -104,7 +107,13 @@ export default async function Ordersida() {
   // E13 steg 9. Bilagorna hamtas for de order som faktiskt visas, i EN fraga.
   // En fraga per orderrad hade blivit tjugo turer pa en sida som redan ligger
   // i den blockerande vagen.
-  const bilagor = await hamtaOrderbilagor([...new Set([...underlag, ...ko].map((o) => o.id))]);
+  const synligaOrder = [...new Set([...underlag, ...ko].map((o) => o.id))];
+  const bilagor = await hamtaOrderbilagor(synligaOrder);
+
+  // 0056. Samtalen for de order som visas, i EN fraga — samma form som
+  // bilagorna, och av samma skal. RLS avgor vad som syns; sidan filtrerar inte
+  // sjalv, for ett andra svar pa samma fraga hinner glida isar fran det forsta.
+  const samtal = await hamtaOrdersamtal(synligaOrder);
 
   return (
     <div className="flex flex-col gap-4 pt-2">
@@ -189,6 +198,7 @@ export default async function Ordersida() {
                   upphovsperson={o.created_by === user.employee!.id}
                   paket={paket}
                   bilagor={bilagor.get(o.id) ?? []}
+                  samtal={samtal.get(o.id) ?? []}
                   personer={personer}
                   stangdPeriod={harStangdPeriod(o.signed_on, stangda)}
                   idag={idag}
@@ -222,6 +232,7 @@ export default async function Ordersida() {
                 upphovsperson={o.created_by === user.employee!.id}
                 paket={paket}
                 bilagor={bilagor.get(o.id) ?? []}
+                samtal={samtal.get(o.id) ?? []}
                 personer={personer}
                 stangdPeriod={harStangdPeriod(o.signed_on, stangda)}
                 idag={idag}
@@ -251,6 +262,7 @@ function Rad({
   upphovsperson,
   paket,
   bilagor,
+  samtal,
   personer,
   stangdPeriod,
   idag,
@@ -264,6 +276,8 @@ function Rad({
   upphovsperson: boolean;
   paket: Paket[];
   bilagor: Orderbilaga[];
+  /** 0056. Samtalen pa kundens nummer. Tom lista ar ett giltigt svar. */
+  samtal: Samtalsrad[];
   /** Sa att rattelsen kan byta saljare. Tom for den som inte far se andra. */
   personer: { id: string; namn: string }[];
   /**
@@ -365,6 +379,13 @@ function Rad({
         pa ordern da, och triggern i 0034 nekar anda en andring — men en
         knapp som gar att trycka och sedan misslyckas ar samre an ingen knapp.
       */}
+      {/*
+        0056. Samtalen pa kundens telefonnummer, aven de som ligger langt
+        bakatt. Kopplingen ar navets gissning pa nummer och tid — utom nar
+        `order_linked_by` ar satt, och da sager raden "Kopplad for hand".
+      */}
+      <Samtal samtal={samtal} />
+
       <Bilaga
         orderId={o.id}
         bilagor={bilagor}

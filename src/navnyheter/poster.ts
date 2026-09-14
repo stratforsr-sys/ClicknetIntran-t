@@ -14,6 +14,40 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "samtal-pa-ordern",
+    rubrik: "Samtalen ligger på ordern, med inspelning",
+    ingress:
+      "Varje order visar samtalen till kundens nummer — hela historiken, inte bara det sista — och inspelningen går att spela direkt på sidan.",
+    text: `Öppna en order. Under kunduppgifterna står nu en rad som säger hur många
+samtal affären har och hur lång sammanlagd taltid. Klicka på den så fälls
+listan ut.
+
+**Alla samtal, inte bara de sista.** Navet parar ihop samtal och order på
+kundens telefonnummer, utan bortre gräns bakåt. Ringde du kunden fem gånger
+under tre veckor innan det gick i lås ligger alla fem där — också det första,
+som ofta är det intressantaste.
+
+**Köpte kunden två gånger?** Då delas samtalen mellan affärerna: de som ringdes
+innan den första ordern hör till den, och de som kom mellan affärerna hör till
+den andra. Det är de samtalen som ledde dit.
+
+**Inspelningen spelas på sidan.** Tryck på play i listan. Varje uppspelning
+skrivs i åtkomstloggen precis som när någon öppnar ett läkarintyg eller ett
+avtal — den som lyssnar syns.
+
+**Vem ser vad:** du ser dina egna samtal, din chef ser sitt lag, säljchef och VD
+ser huset. Dessutom ser den som får hantera affären samtalen som hör till just
+den — ett ordersamtal är bevis på det muntliga avtalet och hör hemma hos den
+som sköter ordern.
+
+*Inspelningar av samtal som inte leder till en order sparas i trettio dagar och
+raderas sedan automatiskt. Blir samtalet en affär sparas det så länge affären
+finns.*`,
+    datum: "2026-09-14",
+    roller: [],
+    href: "/order",
+  },
+  {
     slug: "uppgifter-och-projekt",
     rubrik: "Uppgifter: din egen lista, direkt i navet",
     ingress:
