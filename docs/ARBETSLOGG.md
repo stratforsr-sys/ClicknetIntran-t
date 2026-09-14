@@ -5,6 +5,163 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-14 (kväll) · Navet mejlar (0059)
+
+Beställningen: Resend-nyckeln för clicknet.se ska kopplas in, och navet ska
+börja skicka påminnelser. Bara det som **faktiskt är viktigt för chefen och
+säljaren** — inget mer.
+
+### Modulen fanns redan, och hade varit avstängd sedan den byggdes
+
+`src/lib/epost.ts` skrevs för länge sedan: Resend-anrop, tre försök, 550 ms
+mellan breven (deras 2/s-tak), och den kastar aldrig så att ett nattjobb inte
+dör på adress nummer fjorton. Filens egen rubrik namnger tre avsedda
+användningar — granskningspåminnelser (E2.5), certifikat som går ut (E8.8),
+notiser från nattjobben (E4.20).
+
+Ingen av dem var byggd. Det fanns **en enda anropare**: morgonbrevet.
+
+Och `vercel env ls` visade varken `RESEND_API_KEY` eller `EMAIL_FROM`. Alltså:
+`epostArKonfigurerad()` har returnerat `false` varje vardagsmorgon sedan
+morgonbrevet byggdes 2026-09-11, och jobbet har svarat `"E-post är inte
+konfigurerad"` utan att någon sett det. **Samma tysta läge som de tre
+cron-posterna.** Ett utskick som uteblir ser exakt ut som ett utskick som inte
+hade något att skicka.
+
+Nyckeln är nu satt i alla tre miljöerna, avsändaren är `nav@clicknet.se`, och
+`scripts/testa-epost.mjs` bekräftar att domänen är verifierad hos Resend.
+
+**Nyckeln är send-only.** `GET /domains` och `GET /api-keys` svarar
+`401 restricted_api_key`. Det är inte en trasig nyckel — det är dess behörighet,
+och skillnaden mot `400 validation_error` (nyckeln finns inte) är värd att
+komma ihåg nästa gång någon felsöker.
+
+### Klockan är ett tillstånd, mejlet är en händelse
+
+Det är hela arbetsdelningen, och den avgjorde var varje sorts påminnelse skulle
+ligga.
+
+Navet har 85 notiskällor. Att mejla dem alla vore att mejla ingenting: varje
+brev som inte kräver en handling gör de andra breven mindre värda. Uppdelningen
+blev därför:
+
+**HÄNDELSER** går ut i samma sekund, en gång, ur `epost-notis.ts` — hakat i
+`notifiera()`, som är den enda skrivvägen in i `notification_event`. Därmed
+ärvs tre provade regler i stället för att skrivas om elva gånger, och den
+viktigaste är att **en händelse aldrig går till den som utlöste den**. Säljchefen
+som makulerar en order ska inte få ett mejl om det.
+
+Elva källor: `arende-tilldelad`, `arende-status`, `order-returnerad`,
+`order-makulerad`, `franvaro-tillbakadragen`, `franvaro-installd`,
+`sjuk-installd`, `tid-rattelse-beslut`, `tid-schema`, `lon-justering`,
+`uppgift-tilldelad`.
+
+**TILLSTÅND** står i morgonbrevet och **upprepas varje morgon tills de är
+åtgärdade**. Upprepningen är poängen, inte en biverkning: beställarens oro var
+att chefen missar att godkänna en ledighetsansökan, och ett engångsbrev som
+kommer när man har fullt upp löser inte det.
+
+`uppgift-godkand` står med flit på ingen av listorna. Beställarens besked var
+uttryckligt, och det håller — ett godkännande är ett kvitto på något man själv
+lämnat ifrån sig.
+
+### Ett brev per person, inte ett brev per sorts påminnelse
+
+Morgonbrevet gick från en källa till sex. Sex jobb som var för sig skickar
+"du har en försenad uppgift", "du har en ansökan att besluta om", "din
+utbildning är försenad" ger sex brev samma morgon till samma person — vilket
+inte är sex påminnelser utan en filterregel före lunch, och därefter är alla sex
+osynliga.
+
+Därför samlar varje `samla*`-funktion in i samma `Samling`, och breven byggs
+först när allt är insamlat. **Läggs en sjunde sorts påminnelse till är rätt sätt
+en ny `samla*` och en rad i `AVSNITT` — inte ett nytt utskick.**
+
+Varje samlare fångar dessutom sitt eget fel. Att utbildningstabellen inte svarar
+får inte betyda att ingen får veta om sina försenade uppgifter.
+
+### `after()`, inte ett oinväntat löfte
+
+Resend tar ett par hundra millisekunder i bästa fall och tio sekunder i sämsta.
+Skickades brevet inuti `notifiera()` lades den tiden på den server action
+användaren står och väntar på.
+
+Ett `void mejla(...)` hade inte heller räckt: Vercel avslutar funktionen när
+svaret är skickat, och löftet hade dött mitt i anropet till Resend ungefär så
+ofta som det hann. `after()` från `next/server` finns för precis det här.
+
+### Databasen ringer upp navet — Vercels cron-kvot är slut
+
+Två av beställningarna måste hända **mitt på dagen**, och det gick inte.
+
+Hobby-planen tar två cron-poster per projekt, en körning per dygn var. Båda är
+upptagna (natt 02:30, morgon 05:30 UTC). Och att deklarera en tredje är värre än
+att låta bli: 2026-09-08 gjordes det, och följden var att **ingen av de tre
+kördes**, tyst.
+
+`pg_cron` och `pg_net` fanns tillgängliga i Supabase men var inte installerade.
+Migration 0059 slår på dem och lägger ett schema som ringer `/api/jobb/dagtid`
+var femtonde minut, vardagar 05–19 UTC. Det ligger utanför Vercels kvot och
+kostar ingenting.
+
+**`CRON_SECRET` står inte i migrationen.** En hemlighet som en gång committats
+är läckt även efter att den tagits bort, eftersom historiken står kvar. Den
+ligger i Supabase Vault och läses vid varje anrop; saknas den gör funktionen
+ingenting och skriver en varning, i stället för att falla var kvart.
+
+### Stämplingspåminnelsen är inte nattjobbets
+
+De två är lätta att blanda ihop:
+
+- **Dagtidsjobbet** säger till DIG, en kvart efter att ditt skift började: du
+  har inte stämplat in. Det går att rätta direkt — det är hela poängen.
+- **Nattjobbets frånvarosteg** bokför i efterhand att en schemalagd dag varken
+  fick stämpling eller registrerad frånvaro. Det är en avvikelse, inte en
+  påminnelse.
+
+Dagtidsjobbet skriver därför **inga `absence_reminder`-rader**. Den tabellen är
+nattjobbets huvudbok, och två skribenter hade gjort det omöjligt att säga vad en
+rad betyder.
+
+Spärren mot tolv mejl före lunch ligger i `notification_event`: jobbet frågar om
+personen redan fått raden idag innan det skriver. Ingen egen tabell, av två skäl
+— raden måste skrivas ändå för att synas i klockan, och en andra bokföring av
+samma sak är en andra sak som kan glida isär.
+
+Bortre gränsen är tre timmar. Utan den hade den som är sjuk utan att ha hunnit
+registrera det fått en påminnelse var femtonde minut hela dagen.
+
+### Det som INTE gick att bygga, och varför
+
+**Påminnelse 30 minuter före ett coachningssamtal.** Två hinder, och det andra
+är det verkliga: `coaching_session` har `held_on date` — ett *datum*, ingen tid —
+och raden skapas när samtalet **dokumenteras i efterhand** (GROW-fälten fylls i
+då). Det finns ingen bokning i navet att räkna trettio minuter från.
+Kalendergrenen visar bara befintliga rader och har ingen egen posttabell.
+
+Beslut: väntar på kalenderns "Ny post", där bokning av coachningssamtal redan är
+nästa beställning. Resten av coachningen (ny uppgift, förbi fristen) är byggd.
+
+### Fällor som fångades på vägen
+
+**Tabellen heter `certification`, inte `certificate`.** Supabase-klienten är
+otypad mot schemat här, så det hade inte fallit i bygget — det hade gett ett tomt
+svar, alla hade sett ut att sakna certifikat, och försenade brev hade gått till
+folk som redan var klara. Hittad genom att prova varje tabell och kolumn mot
+produktionsdatabasen innan något committades.
+
+**Migrationsnumret var 0059, inte 0057.** `0058_kalenderpost` är redan **körd**
+trots att den inte syns i main — numret är taget när det körts, inte när det
+mergats.
+
+### Prov
+
+`notiser`, `notiser-tackning`, `uppgifter`, `raster`, `tid`, `utbildning` gröna.
+`sidor` har ett fel på `/franvaro/sjuk` som står kvar oförändrat på orörd main —
+det är alltså inte den här grenens.
+
+---
+
 ## 2026-09-14 · Samtalen hittar sin affar, och ljudet hamtas hem (0056)
 
 Bestallningen: koppla samtal till order, hitta ALLA samtal aven langt bakat,
