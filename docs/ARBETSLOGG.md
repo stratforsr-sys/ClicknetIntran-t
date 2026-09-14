@@ -154,6 +154,39 @@ beställaren svara på och inte koden.
 
 **iCal-flödet rördes inte**, fortfarande. Samma skäl som i pass 2.
 
+### Efter genomgången: slutdatumen syns inte där de behövs
+
+Beställaren tittade på previewen och beställde tre saker till (se
+`NASTA_SESSION.md` överst). Två av dem gick att utreda direkt, och svaret är värt
+att stå här eftersom det inte var där man först letade:
+
+**Coachningsuppgiften syns för den ansvariga men inte för chefen.** Källa sex
+ovan väljer på `assignee_id`, så Fredrik ser sin egen uppgift. Chefen som lade
+upp den öppnar däremot `/kalender?person=Fredrik`, och den vägen går genom
+`kalender_poster()` — som projicerar `task` och `absence_request` och ingenting
+annat. Halva funktionen fanns alltså redan; halva kräver en migration.
+
+**Projektens deadline är inte en kalenderkälla alls, och det är förmodligen det
+hon menade med "uppgiften".** Frågan mot produktionsdatabasen visade tre projekt,
+alla hennes, alla med en deadline (2026-09-12, -18, -20) — medan nästan alla hennes
+`task`-rader har `due_date = null`. Det finns alltså gott om frister i navet som
+kalendern aldrig ritar, och de sitter på projekten. `project.due_date` blir en
+sjunde källa, men **inget åtagande**: uppgifterna inuti projektet räknas redan var
+för sig, och en deadline som också räknades hade dubbelräknat hela projektet i
+dagssumman.
+
+Det tredje — "min uppgifts slutdatum hamnar inte i kalendern" — gick **inte** att
+avgöra. Hon har exakt två daterade uppgifter, båda 2026-09-15 och båda med
+klockslag, och de ska synas den 15:e. Dagvyn visar en dag i taget och det finns
+ingen månadsvy, så det troliga är att hon stod på fel dag — men det ska frågas och
+inte antas.
+
+### En bugg som hittades på vägen
+
+En uppgift med datum men utan klockslag ritas **två gånger** i planeringsvyn: som
+`Heldagsrad` (`heldagsposter()` filtrerar på `!arTidsatt`, oavsett slag) och som
+chip i raden "Idag utan klockslag". Den är från pass 2 och rördes inte här.
+
 ### Prov
 
 `tests/kalender.mjs` har fått sex kontroller till — det nya slaget, dess plats i

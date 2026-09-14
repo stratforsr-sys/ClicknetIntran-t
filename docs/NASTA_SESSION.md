@@ -3,7 +3,109 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-14 (sent) — **"Ny post" i kalendern är BYGGD**, migration `0058` körd: en knapp och ett klick på en tom ruta öppnar ett formulär som blir en uppgift eller en coachningsuppgift, coachningsuppgifter syns numera i kalendern (sjätte källan) och plingar, och dagssumman räknar dem. Grenen `kalender` är fortfarande **EJ MERGAD** — previewen ska visas för beställaren. Se avsnittet överst. Föregående rad: 2026-09-14 (kväll) — kalendern (pass 2) är byggd och previewen är genomgången av beställaren, som sa att den ser bra ut och **beställde en sak till: "Ny post" i kalendern**. Föregående rad: 2026-09-14 (senare) — **kalendern (pass 2) är byggd**: planeringsvy med dra-och-släpp, veckovy, delning i Outlooks fem nivåer, pling i webbläsaren. Migration `0057` körd. **Ligger på branch `kalender`, EJ MERGAD** — previewen ska visas först. Branchen bär main inflätad (`0056` ingår). Föregående rad: 2026-09-14 — samtalen ligger nu på ordern med spelbar inspelning (migration `0056`). Kopplingen sker på kundens nummer utan bortre gräns bakåt, flera samtal per affär, och gallringen kan inte radera ett ordersamtal. Föregående rad: 2026-09-11 (kväll) — **uppgiftsmodulen pass 1 är byggd och mergad till main**: uppgifter, deluppgifter, projekt med egen sida och chatt, godkännande med granskare, kopplingar, framräknade notiser och morgonbrev. Migrationerna `0054` och `0055` körda. **Nästa steg är kalendern (pass 2).** Föregående rad: 2026-09-11 (eftermiddag) — båda Lynes-webhookarna är på. Insights visade sig bära riktningen i `itemType` och inte utfallet, och `callType` betyder inte riktning; tolken är rättad och alla 172 samtal omtolkade. **Tre öppna frågor, se nedan** — den viktigaste är om ett missat samtal någonsin levereras. Föregående rad: 2026-09-11 — Lynes webhook levererar. Formen visade sig vara en annan än gissningarna: alla sexton första samtalen tolkades fel, tolken är rättad mot riktig trafik och påsarna omtolkade ur `call_ingest`. **Ett beslut väntar om inspelningarna** — S3-adressen lever trettio minuter. Föregående rad: 2026-09-10 (kväll) — växelns samtal: Lynes webhook har en adress in i navet, radlogg och tolkning på plats, migration `0052` körd. På branch `lynes-samtal`, ej mergad; ingenting syns i gränssnittet än. Föregående rad: 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
+**Senast uppdaterad:** 2026-09-14 (sent, efter genomgång) — beställaren har sett "Ny post" och **beställt en sak till: slutdatumen ska synas i kalendern** — coachningsuppgiften i mottagarens OCH chefens vy, och projektens deadline som saknas helt. Se avsnittet överst; **inget av det är byggt**, men allt tre är utrett mot databasen. Föregående rad: 2026-09-14 (sent) — **"Ny post" i kalendern är BYGGD**, migration `0058` körd: en knapp och ett klick på en tom ruta öppnar ett formulär som blir en uppgift eller en coachningsuppgift, coachningsuppgifter syns numera i kalendern (sjätte källan) och plingar, och dagssumman räknar dem. Grenen `kalender` är fortfarande **EJ MERGAD** — previewen ska visas för beställaren. Se avsnittet överst. Föregående rad: 2026-09-14 (kväll) — kalendern (pass 2) är byggd och previewen är genomgången av beställaren, som sa att den ser bra ut och **beställde en sak till: "Ny post" i kalendern**. Föregående rad: 2026-09-14 (senare) — **kalendern (pass 2) är byggd**: planeringsvy med dra-och-släpp, veckovy, delning i Outlooks fem nivåer, pling i webbläsaren. Migration `0057` körd. **Ligger på branch `kalender`, EJ MERGAD** — previewen ska visas först. Branchen bär main inflätad (`0056` ingår). Föregående rad: 2026-09-14 — samtalen ligger nu på ordern med spelbar inspelning (migration `0056`). Kopplingen sker på kundens nummer utan bortre gräns bakåt, flera samtal per affär, och gallringen kan inte radera ett ordersamtal. Föregående rad: 2026-09-11 (kväll) — **uppgiftsmodulen pass 1 är byggd och mergad till main**: uppgifter, deluppgifter, projekt med egen sida och chatt, godkännande med granskare, kopplingar, framräknade notiser och morgonbrev. Migrationerna `0054` och `0055` körda. **Nästa steg är kalendern (pass 2).** Föregående rad: 2026-09-11 (eftermiddag) — båda Lynes-webhookarna är på. Insights visade sig bära riktningen i `itemType` och inte utfallet, och `callType` betyder inte riktning; tolken är rättad och alla 172 samtal omtolkade. **Tre öppna frågor, se nedan** — den viktigaste är om ett missat samtal någonsin levereras. Föregående rad: 2026-09-11 — Lynes webhook levererar. Formen visade sig vara en annan än gissningarna: alla sexton första samtalen tolkades fel, tolken är rättad mot riktig trafik och påsarna omtolkade ur `call_ingest`. **Ett beslut väntar om inspelningarna** — S3-adressen lever trettio minuter. Föregående rad: 2026-09-10 (kväll) — växelns samtal: Lynes webhook har en adress in i navet, radlogg och tolkning på plats, migration `0052` körd. På branch `lynes-samtal`, ej mergad; ingenting syns i gränssnittet än. Föregående rad: 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
+
+## NÄSTA UPPGIFT: slutdatumen ska synas i kalendern — BESTÄLLD 2026-09-14 (sent), EJ PÅBÖRJAD
+
+Beställarens ord, efter att "Ny post" visats:
+
+> *"när man lägger in en coachings uppgift för någon så ska det synas på den
+> personens kalender också med slutdatumet alltså, sen ifall jag har lagt in en
+> uppgift så ska det slutdatumet hamna med i kalendern, detta händer inte nu"*
+
+**Ingenting av det är byggt.** Det nedan är vad utredningen fastställde mot
+databasen 2026-09-14 — inte gissningar. Tre delar, och **de är olika stora**.
+
+### A. Coachningsuppgiften i mottagarens kalender — HALVA FINNS REDAN
+
+På grenen `kalender` ser **den ansvariga själv** sin coachningsuppgift:
+`hamtaEgenKalender()` läser `uppgifterFor(mig)`, som väljer på `assignee_id`.
+Fredrik som loggar in ser "Aktiv Lyssning:" den 2026-09-18. Det fungerar.
+
+**Det som saknas är CHEFENS vy.** Den som lade upp uppgiften öppnar
+`/kalender?person=<Fredrik>`, och den vägen går genom `kalender_poster()` i SQL
+(0057) — som projicerar **`task` och `absence_request`, ingenting annat**.
+Coachningsuppgiften finns alltså ingenstans där beställaren kan se den, vilket är
+precis vad hon beskriver.
+
+Arbetet är därför en **migration `0059`** som lägger `coaching_task` i
+`kalender_poster()`, med samma nivåprojektion som uppgifterna får:
+
+- `upptagen` → raden finns, `rubrik` är **null**. Grundläget lämnar aldrig ut vad
+  tiden gäller.
+- `rubriker` och uppåt → titeln.
+- `detaljer` och uppåt → `ref` sätts, så vyn kan bygga en länk till
+  `/coachning/uppgift/<id>`.
+
+**FÄLLOR, och de är hårda:**
+
+1. **`tests/rls.mjs` provar att projektionen bär BARA två slag.** Det provet
+   faller med flit när ett tredje dyker upp — det är vakten mot att någon råkar
+   lägga `sick_report` i funktionen. Ändra det **medvetet och med ett skäl i
+   commit-meddelandet**, aldrig för att få grönt.
+2. **`sick_report` får aldrig in i funktionen.** Absolut rad sedan `ical.ts`.
+3. **Nivåfiltreringen ligger i SQL och stannar där.** Filtrera aldrig nivåer i
+   TypeScript — se regel 2 i kalenderavsnittet nedan.
+4. **Fråga beställaren först:** ska en coachningsuppgift synas som "upptagen"
+   för en KOLLEGA som inte är chef? Grundläget gäller alla fjorton. Att Fredrik
+   har coachning 14:00 är känsligare än att han har ett möte, och det är hennes
+   beslut och inte kodens. Det enklaste svaret som håller: coachningsuppgifter
+   projiceras bara till den som är chef över personen, inte till grundläget.
+
+### B. Projektens deadline syns inte alls — BEKRÄFTAT I DATAN
+
+**Det här är med all sannolikhet det hon menar med "uppgiften".** Frågan mot
+produktionsdatabasen 2026-09-14:
+
+| Projekt | Deadline |
+|---|---|
+| Clicknet Customer Proof Engine | 2026-09-20 |
+| Clicknet Hemsida | 2026-09-18 |
+| Bygga upp supporten | 2026-09-12 |
+
+Alla tre ägs av beställaren, alla tre har en deadline — och **`project.due_date`
+är inte en av kalenderns sex källor.** Deadlinen syns på projektkortet och
+ingen annanstans. Samtidigt har de flesta av hennes `task`-rader `due_date =
+null`, så det finns nästan inga uppgiftsdatum att rita.
+
+Bygg en **sjunde källa** i `hamtaEgenKalender()`:
+
+- Nytt slag `projekt` i `KALENDERSLAG`, `SLAG_ETIKETT` och `SLAG_TON` — alla tre
+  i `src/lib/kalender.ts`, annars faller `tests/kalender.mjs` på *"varje slag har
+  etikett och ton"*.
+- **`arAtagande()` ska svara NEJ för `projekt`.** En projektdeadline är en vägg,
+  inte planerat arbete — och uppgifterna INUTI projektet räknas redan var för
+  sig. Räknades den med hade dagssumman dubbelräknat hela projektet.
+- Heldagspost, inget klockslag. `flyttbar: false`.
+- `href: /uppgifter/projekt/<id>`.
+- Vem som ser den: ägaren och medlemmarna. `project`-RLS svarar redan på det —
+  skriv inget eget filter.
+
+### C. Uppgiftens eget slutdatum — REPRODUCERA FÖRE ÄNDRING
+
+Beställaren har exakt **två** `task`-rader med `due_date`, båda **2026-09-15**
+och båda med klockslag. De **ska** synas — men bara den 15:e, och dagvyn visar
+en dag i taget.
+
+**Fråga henne därför först: vilken uppgift, vilket datum, vilken vy?** Tre
+möjliga svar, och de leder åt olika håll:
+
+1. Hon stod på fel dag. Då är felet att det **inte finns någon månadsvy eller
+   "kommande"-lista** — det finns ingenstans man ser alla sina frister på en
+   gång. Det är en riktig brist och hör ihop med pass 3.
+2. Hon menade projektet. Då är svaret **B ovan**, och den är redan utredd.
+3. Något går faktiskt sönder. Då gäller: `andraUppgift` skriver `due_date`
+   (kontrollerat), `hamtaUppgiftsbild` hämtar utan datumfilter (kontrollerat),
+   så felet ligger i så fall i vyn och inte i läsningen.
+
+### En bugg som hittades på vägen, liten men värd att ta samtidigt
+
+**En uppgift med datum men utan klockslag ritas TVÅ gånger** i planeringsvyn: en
+gång som `Heldagsrad` (`heldagsposter()` filtrerar på `!arTidsatt`, oavsett slag)
+och en gång som chip i raden *"Idag utan klockslag"*. Den ena av dem ska bort —
+troligen heldagsraden, eftersom chippen är den som går att dra.
+
+---
 
 ## "Ny post" i kalendern — BYGGD 2026-09-14, PÅ BRANCH `kalender`, EJ MERGAD
 
