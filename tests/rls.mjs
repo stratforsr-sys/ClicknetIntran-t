@@ -2842,6 +2842,53 @@ console.log("\n\x1b[1mKalenderdelningen: grundlaget, projektionen och den enda d
   );
   ok("man delar inte med sig sjalv", Boolean(sigSjalv), sigSjalv ?? "slapptes igenom");
 
+  // --- 7. Coachningsuppgiften i en annans kalender ---------------------------
+  //
+  // ===========================================================================
+  // DEN HAR GAR INTE GENOM PROJEKTIONEN, OCH DET AR HELA POANGEN
+  //
+  // Bestallarens beslut 2026-09-15: en coachningsuppgift ska synas i personens
+  // kalender for CHEFEN, och for ingen annan. Inte ens som en tom
+  // "Upptagen"-ruta — att Fredrik har coachning klockan tva ar kansligare an
+  // att han har ett mote, och priset (att en kollega kan boka den tiden) ar
+  // valt medvetet.
+  //
+  // Darfor star `coaching_task` INTE i `kalender_poster()`. Kretsen ar ett urval
+  // av VEM och inte av HUR MYCKET, och `coaching_task_read` i 0043 gor redan det
+  // urvalet. `hamtaKollegasKalender()` laser raderna med lasarens egen token
+  // bredvid projektionen, sa provet nedan ar provet pa hela funktionen: haller
+  // policyn haller kalendern.
+  //
+  // KONTROLL 4 AR VAKTEN AT ANDRA HALLET. Skulle nagon senare "forenkla" genom
+  // att lagga coaching_task i projektionen slapps raden ut till grundlaget —
+  // alltsa till alla fjorton — och da faller den raden har.
+  // ===========================================================================
+  const { rows: [annasCoachning] } = await db.query(
+    `insert into coaching_task (title, kind, assignee_id, created_by, due_date, due_time, estimate_minutes)
+     values ('rlstest Aktiv lyssning', 'uppgift', $1::uuid, $2::uuid, current_date, '14:00', 60)
+     returning id`,
+    [saljareA.id, ledare.id],
+  );
+
+  const serCoachningen = async (tok) =>
+    (await las(tok, "coaching_task", `id=eq.${annasCoachning.id}&select=id,title,due_date,due_time`)).length === 1;
+
+  ok("Anna ser sin egen coachningsuppgift", await serCoachningen(tA));
+  ok("Cecilia ser den — hon ar Annas chef", await serCoachningen(tC));
+  ok("David ser den — ledningen", await serCoachningen(tD));
+
+  // Bertil ar saljare och leder ingen. Han ar dessutom inte motpart pa raden.
+  ok("Bertil ser den INTE, och hans kalendervy far den darfor aldrig", !(await serCoachningen(tB)));
+  ok("Eva pa ekonomi ser den inte heller", !(await serCoachningen(tE)));
+
+  const annasProjektion = await projektion(tB, saljareA.id);
+  ok(
+    "och projektionen bar den inte at nagon — coaching_task star inte i funktionen",
+    !annasProjektion.some((p) => p.slag === "coachningsuppgift" || p.ref === annasCoachning.id),
+    [...new Set(annasProjektion.map((p) => p.slag))].join(", ") || "inga rader",
+  );
+
+  await db.query(`delete from coaching_task where title like 'rlstest%'`);
   await db.query(`delete from calendar_share where owner_id = $1::uuid`, [chef.id]);
   await db.query(`delete from task where title like 'rlstest%'`);
 }

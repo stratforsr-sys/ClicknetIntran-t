@@ -14,6 +14,38 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "slutdatum-i-kalendern",
+    rubrik: "Projektens deadline syns i kalendern, och chefen ser coachningen",
+    ingress:
+      "Sätter du ett slutdatum på ett projekt står det nu som en frist i din dag. Och lägger du upp en coachningsuppgift åt någon ser du den i hennes kalender, på sitt klockslag.",
+    text: `Två slutdatum som fanns i navet men inte i kalendern har hittat dit.
+
+**Projektets deadline står i dagen.** Datumet du satt på projektet syntes bara
+på projektkortet. Nu ligger det som en frist i kalendern den dagen — i din egen
+dag, och i alla projektmedlemmars. Ett arkiverat projekt står inte kvar.
+
+**Den räknas INTE in i "planerat 4 h av 6 h".** Uppgifterna inuti projektet
+räknas redan var för sig, och hade projektet räknats med hade samma arbete
+räknats två gånger. En deadline är en vägg, inte ett arbetspass — den ritas i
+samma färg som orderfristen av just det skälet.
+
+**Coachningsuppgiften syns i personens kalender.** Den som fått uppgiften har
+alltid sett den i sin egen dag. Nu ser också **du som lade upp den** den när du
+öppnar hennes kalender, med rubrik, klockslag och en väg in i uppgiften.
+
+**Bara chefen ser den.** En kollega som inte är chef ser ingenting alls — inte
+ens att tiden är tagen. Det är ett medvetet val: att någon har coachning
+klockan två är känsligare än att hon har ett möte. Priset är att en kollega kan
+råka boka den tiden.
+
+**En uppgift utan klockslag ritades två gånger** — en gång överst bland
+heldagsposterna och en gång i raden "Idag utan klockslag". Nu står den bara på
+det ena stället, det du kan dra ifrån.`,
+    datum: "2026-09-15",
+    roller: [],
+    href: "/kalender",
+  },
+  {
     slug: "ny-post-i-kalendern",
     rubrik: "Skriv in något direkt i kalendern",
     ingress:

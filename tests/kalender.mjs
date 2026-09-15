@@ -38,6 +38,7 @@ import {
   arDelningsniva,
   arHelg,
   arTidsatt,
+  attDraNer,
   attPlinga,
   dagKort,
   dagPlus,
@@ -47,6 +48,7 @@ import {
   farArbetaSomAgaren,
   farPlaneraOm,
   heldagsposter,
+  heldagsrader,
   iDygnet,
   langd,
   laggUt,
@@ -207,6 +209,87 @@ ok("coachningsuppgiften är ett eget slag", KALENDERSLAG.includes("coachningsupp
     "coachningsuppgiften står efter ledigheten och före uppgiften",
     heldagsposter(blandat).map((p) => p.id).join() === "f,c,u",
   );
+}
+
+ok("projektdeadlinen är ett eget slag", KALENDERSLAG.includes("projekt"));
+
+/**
+ * PROJEKTET FÅR INTE RÄKNAS IN I DAGSSUMMAN.
+ *
+ * Uppgifterna inuti projektet står redan var för sig i kalendern med var sin
+ * uppskattning. Svarade `arAtagande()` ja här hade varje sådan uppgift räknats
+ * två gånger — en gång som sig själv och en gång som en del av projektet — och
+ * "planerat 4 h av 6 h" hade blivit ett tal man slutar tro på utan att kunna
+ * peka på varför.
+ */
+ok("en projektdeadline är ingen planerad tid", arAtagande("projekt") === false);
+
+{
+  const blandat = [
+    post({ id: "p", slag: "projekt", minuter: null }),
+    post({ id: "u", slag: "uppgift", tid: "09:00", minuter: 120 }),
+  ];
+  const s = dagssumma(blandat);
+  ok("dagssumman ser bara uppgiften", s.minuter === 120 && s.antal === 1, `${s.minuter} min, ${s.antal} st`);
+}
+
+// =============================================================================
+rubrik("Heldagsraden och dragraden — samma post får inte stå i båda");
+// =============================================================================
+
+/**
+ * DEN HÄR DELNINGEN ÄR EN BUGGRÄTTNING, och provet är skrivet så att buggen
+ * inte kan komma tillbaka utan att falla här.
+ *
+ * Fram till 2026-09-15 byggde planeringsvyn sina två listor var för sig: den
+ * övre av `heldagsposter()` (allt utan klockslag) och den nedre av ett eget
+ * filter på uppgifter utan klockslag. En uppgift med dag men utan tid uppfyllde
+ * båda och ritades två gånger i samma dag.
+ */
+{
+  const dagens = [
+    post({ id: "u1", slag: "uppgift", tid: null }),
+    post({ id: "u2", slag: "uppgift", tid: "09:00" }),
+    post({ id: "f", slag: "franvaro", tid: null }),
+    post({ id: "c", slag: "coachningsuppgift", tid: null }),
+    post({ id: "p", slag: "projekt", tid: null }),
+  ];
+
+  const uppe = heldagsrader(dagens).map((p) => p.id);
+  const nere = attDraNer(dagens).map((p) => p.id);
+
+  ok("uppgiften utan klockslag står i dragraden", nere.join() === "u1", nere.join());
+  ok("och INTE bland heldagsraderna", !uppe.includes("u1"), uppe.join());
+  ok("den tidsatta uppgiften står i ingen av dem", !uppe.includes("u2") && !nere.includes("u2"));
+
+  // Ordningen är KALENDERSLAG:s: ledigheten först, sedan fristen, sist
+  // åtagandet. Projektdeadlinen är en vägg och står därför FÖRE
+  // coachningsuppgiften, som är arbete någon lovat att göra.
+  ok(
+    "ledighet, projektdeadline och coachningsuppgift står kvar uppe",
+    uppe.join() === "f,p,c",
+    uppe.join(),
+  );
+
+  /**
+   * DET SOM FAKTISKT MÄTS: listorna är varandras komplement. Skulle någon
+   * senare lägga till ett villkor i den ena utan att spegla det i den andra
+   * faller den här raden, oavsett vilket slag det gällde.
+   */
+  const alla = heldagsposter(dagens).map((p) => p.id).sort();
+  ok(
+    "tillsammans är de exakt heldagsposterna, utan dubbletter",
+    [...uppe, ...nere].sort().join() === alla.join(),
+    `${[...uppe, ...nere].sort().join()} mot ${alla.join()}`,
+  );
+}
+
+{
+  // En avbockad uppgift har `flyttbar: false`, och den får inte hoppa upp bland
+  // ledigheterna för det. Villkoret är SLAGET, inte flyttbarheten.
+  const dagens = [post({ id: "k", slag: "uppgift", tid: null, flyttbar: false, klar: true })];
+  ok("en avbockad uppgift står kvar i dragraden", attDraNer(dagens).map((p) => p.id).join() === "k");
+  ok("och inte bland heldagsraderna", heldagsrader(dagens).length === 0);
 }
 
 // =============================================================================

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cn } from "@/components/ui/cn";
 import { Card } from "@/components/ui/Card";
 import { Ikon } from "@/components/shell/Ikon";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -304,18 +305,8 @@ function Kollegavy({
             ) : (
               <ul className="flex flex-col gap-1">
                 {dagens.map((p) => (
-                  <li key={p.id} className="flex items-baseline gap-3 rounded-sm bg-canvas px-3 py-2">
-                    <span className="tnum w-14 shrink-0 text-small text-ink-500">
-                      {p.tid ?? "Hela dagen"}
-                    </span>
-                    {/*
-                      NULL RUBRIK ÄR GRUNDLÄGET, inte ett fel. Posten finns, och
-                      det enda som lämnats ut är att tiden är tagen — se
-                      `kalender_poster()` i 0057.
-                    */}
-                    <span className={p.rubrik ? "text-body text-ink-900" : "text-body text-ink-500 italic"}>
-                      {p.rubrik ?? "Upptagen"}
-                    </span>
+                  <li key={p.id} className="flex">
+                    <Kollegapost post={p} />
                   </li>
                 ))}
               </ul>
@@ -324,6 +315,55 @@ function Kollegavy({
         );
       })}
     </div>
+  );
+}
+
+/**
+ * En rad i kollegans dag.
+ *
+ * =============================================================================
+ * LÄNKEN FINNS NÄR OCH BARA NÄR `href` GÖR DET
+ *
+ * Komponenten fattar inget eget beslut om vem som får öppna vad. `href` sätts i
+ * `hamtaKollegasKalender()` och är null så snart läsaren inte når in i raden —
+ * för en projicerad uppgift kräver det nivån "alla detaljer" (0057), och `ref`
+ * är dessutom null under den nivån just för att den här filen inte ska KUNNA
+ * bygga en adress.
+ *
+ * Fram till 2026-09-15 kastades `href` här helt, och följden var att den som
+ * fått "alla detaljer" såg rubriken men inte kom in — en delning som inte
+ * gjorde vad den lovade. Coachningsuppgiften gjorde det synligt: chefen ser
+ * posten i personens dag och ska kunna öppna den.
+ * =============================================================================
+ */
+function Kollegapost({ post }: { post: Kalenderpost }) {
+  const innehall = (
+    <>
+      <span className="tnum w-14 shrink-0 text-small text-ink-500">{post.tid ?? "Hela dagen"}</span>
+      {/*
+        NULL RUBRIK ÄR GRUNDLÄGET, inte ett fel. Posten finns, och det enda som
+        lämnats ut är att tiden är tagen — se `kalender_poster()` i 0057.
+      */}
+      <span
+        className={cn(
+          "text-body",
+          post.rubrik ? "text-ink-900" : "text-ink-500 italic",
+          post.klar && "text-ink-300 line-through",
+        )}
+      >
+        {post.rubrik ?? "Upptagen"}
+      </span>
+    </>
+  );
+
+  const klasser = "flex min-w-0 flex-1 items-baseline gap-3 rounded-sm bg-canvas px-3 py-2";
+
+  return post.href ? (
+    <Link href={post.href} className={cn(klasser, "transition-colors duration-fast hover:bg-surface-alt")}>
+      {innehall}
+    </Link>
+  ) : (
+    <span className={klasser}>{innehall}</span>
   );
 }
 

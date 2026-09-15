@@ -203,6 +203,7 @@ export const KALENDERSLAG = [
   "coachning",
   "order",
   "kurs",
+  "projekt",
   "coachningsuppgift",
   "uppgift",
 ] as const;
@@ -213,6 +214,7 @@ export const SLAG_ETIKETT: Record<Kalenderslag, string> = {
   coachning: "Coachningssamtal",
   order: "Orderfrist",
   kurs: "Kursfrist",
+  projekt: "Projektdeadline",
   coachningsuppgift: "Coachningsuppgift",
   uppgift: "Uppgift",
 };
@@ -225,12 +227,20 @@ export const SLAG_ETIKETT: Record<Kalenderslag, string> = {
  * ska träna på". En sjätte färg hade tvingat in en distinktion i ögat som inte
  * finns i huvudet, och en kalender med sex färger är en kalender där färgen
  * slutar betyda något.
+ *
+ * PROJEKTDEADLINEN DELAR TON MED ORDERFRISTEN, av exakt samma skäl. Båda är
+ * väggar: en dag då något ska vara färdigt, inte ett arbetspass. Att projektet
+ * har en egen färg på sitt kort (`project.color`) ändrar inte det — den färgen
+ * skiljer projekt FRÅN VARANDRA, och den frågan ställer man i projektlistan.
+ * I en dag är frågan en annan: är det här arbete jag ska göra, eller en frist
+ * som kommer emot mig?
  */
 export const SLAG_TON: Record<Kalenderslag, "brand" | "info" | "accent" | "warn" | "ok"> = {
   franvaro: "ok",
   coachning: "info",
   order: "warn",
   kurs: "accent",
+  projekt: "warn",
   coachningsuppgift: "info",
   uppgift: "brand",
 };
@@ -246,6 +256,13 @@ export const SLAG_TON: Record<Kalenderslag, "brand" | "info" | "accent" | "warn"
  * coachningsuppgift är däremot båda åtaganden med en uppskattad längd, och den
  * som lagt ut fyra timmars coachning på en dag har fyra timmar mindre kvar av
  * den — vare sig talet under dagen räknar det eller inte.
+ *
+ * PROJEKTDEADLINEN SVARAR NEJ, OCH DET ÄR DEN VIKTIGASTE RADEN I FUNKTIONEN.
+ * Ett projekt är inte arbete — det är en behållare för arbete, och det arbetet
+ * ligger redan i kalendern som uppgifter med var sin uppskattning. Räknades
+ * projektet också hade varje uppgift i det räknats två gånger: en gång som sig
+ * själv och en gång som en sjundedel av "Clicknet Hemsida". Dagssumman heter
+ * "planerat 4 h av 6 h", och ett tal som dubbelräknar är värre än inget tal.
  */
 export function arAtagande(slag: Kalenderslag): boolean {
   return slag === "uppgift" || slag === "coachningsuppgift";
@@ -335,6 +352,57 @@ export function heldagsposter(poster: readonly Kalenderpost[]): Kalenderpost[] {
   return [...poster.filter((p) => !arTidsatt(p))].sort(
     (a, b) => KALENDERSLAG.indexOf(a.slag) - KALENDERSLAG.indexOf(b.slag),
   );
+}
+
+/**
+ * Heldagsposterna DELADE I TVÅ, och delningen är en buggrättning.
+ *
+ * =============================================================================
+ * EN UPPGIFT UTAN KLOCKSLAG RITADES PÅ TVÅ STÄLLEN SAMTIDIGT
+ *
+ * Planeringsvyn ritar heldagsposterna överst och dessutom en rad som heter
+ * "Idag utan klockslag". Båda listorna byggdes var för sig — den första av
+ * `heldagsposter()`, som filtrerar på `!arTidsatt` oavsett slag, den andra av
+ * ett eget filter på uppgifter utan tid. En uppgift med dag men utan klockslag
+ * uppfyllde båda, och stod alltså två gånger i samma dag.
+ *
+ * Det är precis det fel `laggUt()` har en hel rubrik om att inte begå: en vy
+ * som visar samma åtagande två gånger får den som drar det att undra vilket av
+ * dem som gäller, och svaret "båda, det är samma rad" är inte något en
+ * användare ska behöva lista ut.
+ *
+ * Rättningen är inte ett andra filter i komponenten utan de två funktionerna
+ * här, som är varandras komplement per konstruktion: tillsammans är de exakt
+ * `heldagsposter()`, och de delar aldrig en post. Provet mäter just det.
+ *
+ * VARFÖR CHIPPET OCH INTE HELDAGSRADEN VANN: chippet går att dra ner i
+ * rutnätet, heldagsraden gör det inte. Av två sätt att visa samma sak behåller
+ * man det som också går att göra något med.
+ * =============================================================================
+ */
+export function heldagsrader(poster: readonly Kalenderpost[]): Kalenderpost[] {
+  return heldagsposter(poster).filter((p) => !arDragbarUtanTid(p));
+}
+
+/** Dagens uppgifter utan klockslag — raden som säger "dra ner dem". */
+export function attDraNer(poster: readonly Kalenderpost[]): Kalenderpost[] {
+  return poster.filter((p) => !arTidsatt(p) && arDragbarUtanTid(p));
+}
+
+/**
+ * BARA SLAGET `uppgift`, och det är inte en glömd coachningsuppgift.
+ *
+ * Raden är en uppmaning att dra ner posten, och en coachningsuppgift går inte
+ * att dra — den har ingen `planera()`, eftersom klockslaget bestäms när den
+ * läggs upp (se 0058). Den hör därför hemma bland heldagsposterna, vilket
+ * dessutom är sant om den: utan klockslag gäller den dagen och inte en timme.
+ *
+ * Flyttbarheten på den enskilda posten duger INTE som villkor. En avbockad
+ * uppgift har `flyttbar: false` men ska fortfarande stå i chippraden och inte
+ * hoppa upp bland ledigheterna för att någon bockat av den.
+ */
+function arDragbarUtanTid(p: Kalenderpost): boolean {
+  return p.slag === "uppgift";
 }
 
 export type Utlagd = Kalenderpost & {

@@ -12,8 +12,9 @@ import {
   DAG_START,
   RUTA,
   SLAG_TON,
+  attDraNer,
   dagssumma,
-  heldagsposter,
+  heldagsrader,
   langd,
   laggUt,
   minuterTillTid,
@@ -200,14 +201,15 @@ export function Planeringsvy({
     planeraTill(vald, dag, minuterTillTid(minuter), u?.estimate_minutes ?? p?.minuter ?? null);
   };
 
-  const heldag = heldagsposter(poster);
+  // TVÅ LISTOR SOM INTE KAN ÖVERLAPPA, och det är en rättning: fram till
+  // 2026-09-15 byggdes de var för sig, och en uppgift med dag men utan
+  // klockslag uppfyllde båda villkoren och ritades två gånger i samma dag.
+  // `heldagsrader()` och `attDraNer()` är varandras komplement per
+  // konstruktion — se rubriken i kalender.ts.
+  const heldag = heldagsrader(poster);
+  const utanKlockslag = attDraNer(poster);
   const utanfor = utanforDygnet(poster);
   const utlagda = laggUt(poster);
-  // BARA UPPGIFTER, och det är inte en glömd coachningsuppgift. Raden nedan är
-  // en uppmaning att DRA ner posten i rutnätet, och en coachningsuppgift går
-  // inte att dra — den har inget `planera()`. Utan klockslag hamnar den bland
-  // heldagsposterna, vilket är sant om den: den gäller dagen och inte en timme.
-  const utanKlockslag = poster.filter((p) => p.slag === "uppgift" && !p.tid);
   const summa = dagssumma(poster);
 
   return (

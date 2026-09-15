@@ -23,8 +23,8 @@ import {
  * =============================================================================
  * TVÅ VÄGAR IN, OCH DE ÄR OLIKA MED FLIT
  *
- * `hamtaEgenKalender()` läser med användarens EGEN token och sätter ihop sex
- * källor i TypeScript. Det går för att alla sex redan har en RLS-policy som
+ * `hamtaEgenKalender()` läser med användarens EGEN token och sätter ihop sju
+ * källor i TypeScript. Det går för att alla sju redan har en RLS-policy som
  * svarar på "får hon se den här raden", och den egna dagen består uteslutande
  * av rader hon får se.
  *
@@ -34,6 +34,14 @@ import {
  * tiden är bokad utan att få läsa raden. Projektionen sker därför i Postgres,
  * innan raden lämnar databasen, och inte i en if-sats i en renderingsfil. Se
  * rubriken i 0057.
+ *
+ * SEDAN 2026-09-15 HAR DEN ANDRA VÄGEN EN KÄLLA TILL, OCH DEN GÅR INTE GENOM
+ * PROJEKTIONEN. Coachningsuppgifterna läses med läsarens egen token, alltså på
+ * den första vägens sätt, mitt i den andra. Skälet står i sin helhet vid
+ * `hamtaKollegasKalender()` nedan och i korthet här: beställaren valde att bara
+ * chefen ska se dem, och "är den här personen chef över den andra" är till
+ * skillnad från grundläget en fråga RLS redan svarar på — `coaching_task_read`
+ * i 0043 svarar på precis den. En projektion hade varit ett andra svar.
  *
  * DET ÄR NAVETS FÖRSTA `.rpc()`. Tidigare har ingenting anropat en funktion
  * genom PostgREST, och 0027 stängde den vägen för de två som fanns. Skillnaden
@@ -54,7 +62,7 @@ export type Kalenderbild = {
 /**
  * Min egen kalender mellan två datum, båda inklusive.
  *
- * SEX KÄLLOR OCH INTE EN TABELL. Det fanns en frestelse att spegla allt till en
+ * SJU KÄLLOR OCH INTE EN TABELL. Det fanns en frestelse att spegla allt till en
  * `calendar_event`-tabell och läsa den — snabbare, enklare att sortera, och fel
  * på det sätt som kostar mest: speglingen måste uppdateras av varje väg in och
  * ut ur fem moduler, och den dag en av dem glöms bort visar kalendern något som
@@ -296,6 +304,66 @@ export async function hamtaEgenKalender(
   // --- Orderfristen ----------------------------------------------------------
   for (const post of orderfrister(user, fran, till, idag)) poster.push(post);
 
+  // --- Projektens deadline ---------------------------------------------------
+  //
+  // ===========================================================================
+  // DEN SJUNDE KÄLLAN, OCH DEN KOSTAR INGEN FRÅGA
+  //
+  // Beställarens ord 2026-09-14: *"ifall jag har lagt in en uppgift så ska det
+  // slutdatumet hamna med i kalendern, detta händer inte nu"* — och dagen efter,
+  // när det visat sig att hennes uppgiftsdatum faktiskt ritades: *"projekten
+  // sätter jag slutdatum på, då är det bra att projekten också kommer upp på
+  // kalendern på sin slutdatum"*.
+  //
+  // Hon hade rätt i att något saknades och fel om vad. `project.due_date` har
+  // funnits sedan 0054, den syns på projektkortet, och den var inte en av
+  // kalenderns sex källor. Tre av hennes projekt har en deadline och ingen av
+  // dem stod i en dag.
+  //
+  // RADERNA ÄR REDAN HÄMTADE. `hamtaUppgiftsbild()` läser `project` för
+  // uppgiftslistans skull, och planeringsvyn får dem ändå för att kunna rita
+  // projektpricken. Källan är alltså gratis — den enda kostnaden är att den
+  // inte fanns.
+  //
+  // INGET EGET FILTER PÅ VEM SOM SER DEM. `projekt_synligt()` i 0054 är ägare,
+  // skapare och inbjudna — ingen roll, ingen chefsgren. Bilden innehåller
+  // därför redan exakt de projekt den inloggade får se, och ett filter här hade
+  // varit ett andra svar på en fråga policyn redan besvarat. Se regeln i
+  // notiser-server.ts.
+  //
+  // ARKIVERADE STÅR INTE. Ett arkiverat projekt är avslutat, och dess deadline
+  // är en uppgift om det förflutna. `archived_at` är dessutom det ENDA navet vet
+  // om att ett projekt är färdigt — siffrorna räknas fram ur uppgifterna (0054)
+  // och ett projekt utan uppgifter har noll av noll klara, vilket inte betyder
+  // någonting alls.
+  // ===========================================================================
+  for (const p of bild.projekt) {
+    if (p.archived_at) continue;
+    if (!p.due_date || p.due_date < fran || p.due_date > till) continue;
+
+    poster.push({
+      id: `projekt-${p.id}`,
+      slag: "projekt",
+      ref: p.id,
+      employee_id: mig,
+      dag: p.due_date,
+      tid: null,
+      minuter: null,
+      rubrik: `Projektdeadline: ${p.name}`,
+      href: `/uppgifter/projekt/${p.id}`,
+      // Att dra en projektdeadline vore att flytta en deadline, och det gör man
+      // i projektet där de andra ser det — inte genom att släppa den på en
+      // onsdag. Samma gräns som alla andra frister har.
+      flyttbar: false,
+      forsenad: p.due_date < idag,
+      // ETT PROJEKT BLIR ALDRIG "KLART" HÄR. Det finns ingen sådan kolumn, och
+      // att härleda den ur "alla uppgifter avbockade" hade gett fel svar för
+      // varje projekt som ännu inte fått sina uppgifter skrivna. Är projektet
+      // färdigt arkiveras det, och då är raden borta helt.
+      klar: false,
+    });
+  }
+
   return { poster, idag, bild };
 }
 
@@ -358,11 +426,53 @@ function orderfrister(user: CurrentUser, fran: string, till: string, idag: strin
 }
 
 /**
- * En kollegas kalender, projicerad till min nivå.
+ * En kollegas kalender, projicerad till min nivå — plus det jag ändå får läsa.
  *
  * Returnerar `null` när det inte går att läsa alls — offboardad person, eller
  * ett id som inte finns. Tom lista betyder något annat: personen finns och har
  * ingenting inlagt de här dagarna.
+ *
+ * =============================================================================
+ * COACHNINGSUPPGIFTEN KOMMER INTE UR PROJEKTIONEN, OCH SKÄLET ÄR BESTÄLLARENS
+ * SVAR PÅ EN FRÅGA HON FICK FÖRST
+ *
+ * Beställningen 2026-09-14: *"när man lägger in en coachings uppgift för någon
+ * så ska det synas på den personens kalender också med slutdatumet"*. Halva
+ * fanns redan — den ansvariga såg sin egen uppgift, eftersom den egna dagen
+ * läser `uppgifterFor(mig)`. Det som saknades var den här vyn: den som LADE UPP
+ * uppgiften såg den ingenstans i mottagarens dag.
+ *
+ * Frågan hon fick innan något byggdes var vem uppgiften ska synas för, och
+ * svaret 2026-09-15 var **bara chefen**. Att Fredrik har coachning klockan två
+ * är känsligare än att han har ett möte, och det priset — att en kollega kan
+ * boka den tiden utan att veta att den är tagen — valde hon medvetet.
+ *
+ * DÄRMED ÄR DET INTE LÄNGRE EN PROJEKTIONSFRÅGA. `kalender_poster()` finns för
+ * att grundläget "alla ser att alla är upptagna" är omöjligt för RLS: en rad
+ * ska lämna databasen med rubriken avskalad till någon som inte får läsa den.
+ * Men "bara chefen" är raka motsatsen — det är ett urval av VEM, inte av HUR
+ * MYCKET, och `coaching_task_read` i 0043 gör redan precis det urvalet:
+ * den ansvariga, motparten, den som skapade raden, ledningen, och den som leder
+ * personen. Att skriva om samma krets i SQL hade gett navet ett andra svar på
+ * en fråga som redan har ett, och den dagen de två säger olika vinner den som
+ * ingen läser.
+ *
+ * FÖLJDEN ÄR ATT NIVÅN INTE SKALAR AV DEN HÄR POSTEN. En chef som står på
+ * grundläget ser ändå rubriken — och det är inte en lucka, det är samma rad hon
+ * kan öppna på `/coachning/<personen>` i samma sekund. Att dölja titeln i
+ * kalendern och visa den två klick bort hade varit teater, inte sekretess.
+ * Omvänt: den som INTE får läsa raden ser ingenting alls, inte ens en tom
+ * "Upptagen"-ruta. Kalendern lämnar alltså ut exakt vad coachningsmodulen
+ * lämnar ut, varken mer eller mindre.
+ *
+ * LÄGET RÄKNAS FRAM AV MODULEN, inte här. `uppgifterFor()` vet att en
+ * kurs-uppgift blir klar av ett certifikat och inte av en bock (0043), och en
+ * avbockad uppgift ska inte stå röd i chefens vy. Samma val som
+ * `kommandeposter()` gjorde för plinget.
+ *
+ * `sick_report` ÄR OFÖRÄNDRAT UTE. Den raden går varken genom projektionen
+ * eller genom den här vägen, och ingen framtida källa får ändra på det.
+ * =============================================================================
  */
 export async function hamtaKollegasKalender(
   user: CurrentUser,
@@ -375,20 +485,57 @@ export async function hamtaKollegasKalender(
   const supabase = await supabaseServer();
   const idag = svensktDatum();
 
-  const [{ data: nivarad }, { data: rader, error }] = await Promise.all([
+  const [{ data: nivarad }, { data: rader, error }, coachningsuppgifter] = await Promise.all([
     supabase.rpc("kalender_niva", { p_owner: personId, p_viewer: user.employee.id }),
     supabase.rpc("kalender_poster", { p_owner: personId, p_fran: fran, p_till: till }),
+    /**
+     * Läses med LÄSARENS token, inte personens. Är hon inte chef svarar
+     * `coaching_task_read` med noll rader, och då finns det ingenting att
+     * filtrera bort i efterhand — vilket är hela poängen med att fråga så här.
+     */
+    uppgifterFor(personId),
   ]);
 
   const niva = arDelningsniva(nivarad) ? nivarad : null;
   if (!niva) return null;
 
+  // Chefens coachningsuppgifter för personen. Tom lista för alla andra — se
+  // rubriken. Datumurvalet ligger i TypeScript av samma skäl som i den egna
+  // kalendern: en person har tiotals rader totalt, inte tusentals.
+  const coachposter: Kalenderpost[] = coachningsuppgifter.flatMap((u) => {
+    if (!u.due_date || u.due_date < fran || u.due_date > till) return [];
+    const stangd = u.lage === "klar" || u.lage === "avbruten";
+
+    return [
+      {
+        id: `coachningsuppgift-${u.id}`,
+        slag: "coachningsuppgift" as const,
+        ref: u.id,
+        employee_id: personId,
+        dag: u.due_date,
+        tid: u.due_time ? u.due_time.slice(0, 5) : null,
+        minuter: u.estimate_minutes,
+        rubrik: u.title,
+        href: `/coachning/uppgift/${u.id}`,
+        // Ingen drar någon annans coachningsuppgift. Den egna går inte heller
+        // att dra — klockslaget bestäms när den läggs upp (0058).
+        flyttbar: false,
+        forsenad: u.forsenad,
+        klar: stangd,
+      },
+    ];
+  });
+
   /**
    * Ett fel från PostgREST är inte samma sak som noll rader, och skillnaden
    * spelar roll precis här: en funktion som inte hunnit in i schemacachen ger
    * ett fel, och att rita det som en tom dag hade påstått att kollegan är ledig.
+   *
+   * COACHNINGSUPPGIFTERNA FÖLJER ÄNDÅ MED. De kom inte ur den funktionen och
+   * har inget med dess fel att göra, och en chef som ser sin egen beställning
+   * försvinna för att en RPC hicköade skulle dra fel slutsats av det.
    */
-  if (error) return { poster: [], niva };
+  if (error) return { poster: coachposter, niva };
 
   const poster: Kalenderpost[] = ((rader ?? []) as unknown as Projektionsrad[]).map((r) => ({
     id: `${r.slag}-${r.ref ?? r.dag}-${r.tid ?? "heldag"}`,
@@ -409,7 +556,13 @@ export async function hamtaKollegasKalender(
     klar: r.klar,
   }));
 
-  return { poster, niva };
+  /**
+   * EN POST KAN INTE STÅ I BÅDA LISTORNA. Projektionen bär `task` och
+   * `absence_request` och ingenting annat — det är vad `kalender_poster()` gör,
+   * och tests/rls.mjs vaktar det. Coachningsuppgifterna kommer ur
+   * `coaching_task`, en tabell projektionen aldrig rör.
+   */
+  return { poster: [...poster, ...coachposter], niva };
 }
 
 /**
