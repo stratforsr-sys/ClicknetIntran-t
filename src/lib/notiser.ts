@@ -224,6 +224,25 @@ export const NOTIS_KALLOR = [
   "tid-rattelse-beslut",
 
   /**
+   * Du har inte stamplat in, och ditt skift har borjat (0059).
+   *
+   * EN HANDELSE OCH INTE EN HARLEDNING, trots att "saknar instampling" ar ett
+   * tillstand som star i tabellen hela dagen. Regeln overst i filen sager att
+   * man ska valja halva efter vad posten SAGER, och det gor den har:
+   * harledningen hade legat kvar i klockan till midnatt aven for den som
+   * stamplade in tre minuter efter att ha last den, eftersom `time_event` far
+   * sin rad med tidpunkten da man stamplade och inte da man borde ha gjort det.
+   *
+   * Den skrivs av dagtidsjobbet, som kors av pg_cron var kvart — inte av en
+   * server action. Aktoren ar `null`, sa `notifiera()` har ingen att salla bort.
+   *
+   * SPARREN MOT TOLV NOTISER FORE LUNCH LIGGER I JOBBET: det fragar
+   * `notification_event` om personen redan fatt raden idag innan det skriver.
+   * Se `src/lib/jobb/dagtid.ts`.
+   */
+  "tid-ostamplad",
+
+  /**
    * Schemat och rastavvikelserna.
    *
    * `tid-schema` galler ett schema pa en PERSON eller ett TEAM. Ett schema pa
@@ -448,6 +467,7 @@ export const HANDELSEKALLOR = [
   "order-rattad",
   "tid-rattelse",
   "tid-rattelse-beslut",
+  "tid-ostamplad",
   "tid-schema",
   "tid-avvikelse",
   "tid-avvikelse-avslutad",

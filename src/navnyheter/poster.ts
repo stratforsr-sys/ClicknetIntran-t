@@ -87,6 +87,47 @@ enhet.`,
     href: "/kalender",
   },
   {
+    slug: "navet-mejlar",
+    rubrik: "Navet mejlar dig när något faktiskt kräver att du gör något",
+    ingress:
+      "Ett brev på morgonen med det som väntar, och ett direkt när något brådskande händer — en makulerad order, en inställd ledighet, ett nytt schema.",
+    text: `Notisklockan har ett problem: den syns bara för den som öppnar navet. Den
+som redan har koll loggar in ändå, och den som glömt bort något gör det inte.
+Nu når navet dig även när du inte är inne.
+
+**Ett brev på morgonen, de dagar du har något som väntar.** Inte varje dag —
+ett brev som oftast är tomt är ett brev man filtrerar bort, och då försvinner
+även det som betydde något. Brevet samlar allt i ett: försenade uppgifter,
+dagens uppgifter, det som väntar på ditt godkännande, ledighetsansökningar du
+ska besluta om, coachningsuppgifter som passerat fristen, utbildning du inte
+påbörjat och rutiner du äger som ska granskas.
+
+**Och ett brev direkt när något brådskar.** De här går ut i samma sekund de
+händer:
+
+- din order har **returnerats** eller **makulerats**
+- en **godkänd ledighet har ställts in** eller dragits tillbaka
+- du har fått ett **nytt schema**
+- ett **ärende har tilldelats dig**, eller ditt ärende har fått ett beslut
+- en **rättelse av din stämpling** har beslutats
+- dina **minuter har justerats** efter att löneperioden låstes
+- du har **tilldelats en uppgift**
+
+**Glömt stämpla in?** En kvart efter att ditt skift börjat säger navet till —
+både i klockan och per mejl — så att du kan rätta det medan dagen är kvar. Är
+du ledig, sjukanmäld eller registrerad som frånvarande hör du ingenting.
+
+**Det du INTE får mejl om** är allt som gick bra: godkända order, godkända
+uppgifter, bokförd provision, nya kollegor, nyhetsinlägg. Det står kvar i
+klockan. Ett mejl ska betyda att du behöver göra något — annars slutar det
+betyda något alls.
+
+*Breven kommer från nav@clicknet.se. Svara inte på dem — allt finns i navet.*`,
+    datum: "2026-09-14",
+    roller: [],
+    href: "/uppgifter",
+  },
+  {
     slug: "samtal-pa-ordern",
     rubrik: "Samtalen ligger på ordern, med inspelning",
     ingress:
