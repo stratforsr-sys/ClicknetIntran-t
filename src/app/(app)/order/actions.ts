@@ -19,6 +19,7 @@ import {
   normaliseraOrgnr,
   ordervardeFor,
   periodFor,
+  type Orderstatus,
   type Sats,
 } from "@/lib/order";
 import {
@@ -107,8 +108,42 @@ async function kravHanterare(): Promise<CurrentUser> {
   return user;
 }
 
-/** Ordern, sa som skrivningen behover kanna den. */
-async function hamtaRad(id: string) {
+/**
+ * Ordern, sa som skrivningen behover kanna den.
+ *
+ * ===========================================================================
+ * TYPEN AR SKRIVEN FOR HAND, OCH DET ÄR INTE KOSMETIK.
+ *
+ * Supabase harleder radens typ ur select-STRANGEN. En strang over en viss langd
+ * far den inte att ga ihop, och resultatet blir `GenericStringError` — alltsa en
+ * typ UTAN nagon av kolumnerna. Bygget faller da pa `rad.salesperson_id`, inte
+ * pa nagot som ar fel i fragan.
+ *
+ * Det hande har 2026-09-15: `buyout_amount` la till tretton tecken, strangen
+ * tippade over gransen, och tre anropare som aldrig rorts slutade kompilera.
+ * Samma falla som `hamtaChefsposter` gick i 2026-09-09 och `redigeraOrder`
+ * strax darefter; de tva loste den med en cast till `Record<string, unknown>`.
+ *
+ * HAR STAR EN RIKTIG TYP I STALLET. Skillnaden mot en `Record`-cast ar att
+ * anroparna behaller sitt skydd: `rad.package_id` ar ett `number` och inte ett
+ * `unknown` som maste `Number()`:as pa varje anvandning. Priset ar att faltlistan
+ * nedan maste stamma med select-strangen FOR HAND — de kontrolleras inte mot
+ * varandra av nagot.
+ * ===========================================================================
+ */
+type Orderrad_skrivning = {
+  id: string;
+  status: Orderstatus;
+  salesperson_id: string;
+  company_name: string;
+  package_id: number;
+  term_months: number;
+  signed_on: string;
+  commission_amount: number | string | null;
+  buyout_amount: number | string | null;
+};
+
+async function hamtaRad(id: string): Promise<Orderrad_skrivning | null> {
   const { data } = await supabaseAdmin()
     .from("sales_order")
     // `company_name` las inte fore 2026-09-03. Den behovs i notisrubrikerna:
@@ -123,7 +158,7 @@ async function hamtaRad(id: string) {
     )
     .eq("id", id)
     .maybeSingle();
-  return data;
+  return (data as unknown as Orderrad_skrivning | null) ?? null;
 }
 
 async function logga(
