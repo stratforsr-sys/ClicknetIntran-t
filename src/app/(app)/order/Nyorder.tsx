@@ -12,6 +12,33 @@ import { skapaOrder, type Orderstate } from "./actions";
 type Person = { id: string; namn: string };
 
 /**
+ * Hela formularets tillstand, som en egen typ.
+ *
+ * Den star har och inte som ett `typeof`-uttryck pa startvardet, eftersom
+ * `satt()` nedan ar generisk over dess nycklar — och en harledd typ hade gjort
+ * felmeddelandet vid en felstavad nyckel obegripligt.
+ */
+type Formular = {
+  bolag: string;
+  orgnr: string;
+  kontakt: string;
+  telefon: string;
+  mejl: string;
+  paketId: number;
+  loptid: number;
+  signerat: string;
+  saljare: string;
+  tillagg: boolean;
+  harUtkop: boolean;
+  utkopstext: string;
+  manuell: boolean;
+  friVarde: string;
+  friProvision: string;
+  anteckning: string;
+  godkann: boolean;
+};
+
+/**
  * Inmatningen av en order.
  *
  * Rakt <input> och inte <Input>: sidan har flera formular och hade annars delat
@@ -99,7 +126,7 @@ export function Nyorder({
   // ---------------------------------------------------------------------------
   // Formularets tillstand. ALLT ligger har, inte i DOM:en — se rubriken ovan.
   // ---------------------------------------------------------------------------
-  const tomt = {
+  const tomt: Formular = {
     bolag: "",
     orgnr: "",
     kontakt: "",
@@ -119,9 +146,14 @@ export function Nyorder({
     godkann: true,
   };
 
-  const [f, setF] = useState(tomt);
-  const satt = <K extends keyof typeof tomt>(nyckel: K, varde: (typeof tomt)[K]) =>
-    setF((gammalt) => ({ ...gammalt, [nyckel]: varde }));
+  const [f, setF] = useState<Formular>(tomt);
+
+  // Casten behovs: med en GENERISK nyckel harleder TypeScript den berakna
+  // egenskapen som `string` och far da ett indexsignaturobjekt i stallet for
+  // `Formular`. Nyckeln ar anda begransad till `keyof Formular` av signaturen,
+  // sa castet bekraftar bara det anropet redan garanterar.
+  const satt = <K extends keyof Formular>(nyckel: K, varde: Formular[K]) =>
+    setF((gammalt) => ({ ...gammalt, [nyckel]: varde }) as Formular);
 
   // ===========================================================================
   // FORMULARET TOMS BARA NAR ORDERN FAKTISKT SPARATS.
@@ -136,11 +168,12 @@ export function Nyorder({
   // sager visserligen vilken manad som galler, men "sager" ar inte samma sak
   // som "hindrar". I dag ar det ratta svaret i de allra flesta fall.
   // ===========================================================================
+  // `tomt` byggs om vid varje rendering men innehallet ar konstant, sa den hor
+  // inte hemma i beroendelistan — den hade bara gjort effekten till en loop.
+  // Effekten lyssnar pa `state` och ingenting annat.
   useEffect(() => {
     if (state.ok) setF({ ...tomt, signerat: idag });
-    // `tomt` byggs om vid varje rendering men innehallet ar konstant, sa den hor
-    // inte hemma i beroendelistan — den hade bara gjort effekten till en loop.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [state]);
 
   const valtPaket = paket.find((p) => p.id === f.paketId);

@@ -121,7 +121,20 @@ export type Underlag = {
    * `utanVarde` ar antalet order som saknar varde helt — se `ordervarde()` i
    * `order.ts` for varfor de raknas i stallet for att summeras som nollor.
    */
-  ordervarde: { netto: number; tecknat: number; makulerat: number; utanVarde: number };
+  /**
+   * Formen ar en AVSKRIFT av vad `ordervarde()` i `order.ts` returnerar, och de
+   * tva maste hallas ihop for hand. Lade 0060 till `utkop` dar foll bygget har,
+   * i en fil som inte rorts — vilket ar ratt beteende, men vart att veta: en ny
+   * nyckel i returen kraver en ny rad nedan.
+   */
+  ordervarde: {
+    netto: number;
+    tecknat: number;
+    makulerat: number;
+    utanVarde: number;
+    /** Utkopen i manaden, redan AVDRAGNA ur `netto`. Se 0060. */
+    utkop: number;
+  };
 
   /** Nivan manaden landade pa, eller null nar den lagsta troskeln inte natts. */
   volymbonus: { niva: Bonusniva; belopp: number } | null;
