@@ -118,8 +118,8 @@ export function Atgarder({
 
             Det var alltsa en halvbyggd regel, och den syns tydligare nu nar
             ordervardet ocksa maste kunna sattas. Utfallningen nedan ar hela
-            vagen: bada talen, och anteckningen som villkoret
-            `sales_order_manuell_kraver_skal` i 0034 kraver.
+            vagen: bada talen, och en anteckning som numera ar frivillig —
+            `sales_order_manuell_kraver_skal` togs bort i 0060.
           */}
           <Button
             type="button"
@@ -272,18 +272,20 @@ function Enkel({
 /**
  * Godkannandet av en order som faller utanfor paketmatrisen.
  *
- * TRE FALT, OCH ALLA TRE KRAVS AV EN REGEL SOM STAR NAGON ANNANSTANS:
+ * TRE FALT, OCH DE HAR OLIKA TYNGD:
  *
- *   Ordervardet   — `sales_order_ordervarde_kravs` i 0050 nekar en godkand
- *                   order utan varde.
- *   Provisionen   — avsnitt 4.2: godkannaren satter beloppet.
- *   Anteckningen  — `sales_order_manuell_kraver_skal` i 0034. En avvikande
- *                   provision utan skal ar det forsta nagon ifragasatter i
- *                   efterhand, och da finns svaret ingenstans.
+ *   Ordervardet   — KRAVS. `sales_order_ordervarde_kravs` i 0050 nekar en
+ *                   godkand order utan varde.
+ *   Provisionen   — avsnitt 4.2: godkannaren satter beloppet. Tomt betyder
+ *                   "rakna fram det" — ur chefssatsen eller ur utkopssatsen.
+ *   Anteckningen  — FRIVILLIG sedan 0060. Den var ett krav i 0034, och kravet
+ *                   visade sig kosta mer an det skyddade: felmeddelandet
+ *                   aterstallde formularet och at upp signeringsdatumet. Se
+ *                   rubriken i `Nyorder.tsx` och avsnitt 3 i 0060.
  *
- * Alla tre star som `required` HAR OCKSA. Actionen kontrollerar dem anda — den
- * ar det som faktiskt hindrar skrivningen — men ett falt som gar att lamna tomt
- * och sedan far ett felmeddelande ar samre an ett som sager det direkt.
+ * Det som KRAVS star som `required` HAR OCKSA. Actionen kontrollerar det anda —
+ * den ar det som faktiskt hindrar skrivningen — men ett falt som gar att lamna
+ * tomt och sedan far ett felmeddelande ar samre an ett som sager det direkt.
  *
  * EN UNDANTAGSVAG: ar saljaren sjalv saljchefen raknas provisionen ur
  * ordervardet, och da behovs bara det ena talet. Formularet vet inte vem
@@ -320,9 +322,21 @@ function FriOrder({ id }: { id: string }) {
         </label>
       </div>
 
+      {/*
+        ANTECKNINGEN AR INTE LANGRE OBLIGATORISK (0060, bestallarens besked
+        2026-09-15). `required` ar borta har och kravet ar borta i actionen och i
+        databasen.
+
+        Faltet star kvar, och texten uppmuntrar fortfarande — for skalet 0034 gav
+        ar riktigt: en avvikande provision utan forklaring ar det forsta nagon
+        ifragasatter i efterhand. Skillnaden ar att en uppmaning inte kan kosta
+        en riktig uppgift, och det kunde sparren. Se rubriken i `Nyorder.tsx`.
+      */}
       <label className="flex flex-col gap-1">
-        <span className="text-micro text-ink-500">Varför faller ordern utanför matrisen?</span>
-        <input name="note" required placeholder="Skälet till det avvikande beloppet" className={KONTROLL} />
+        <span className="text-micro text-ink-500">
+          Varför faller ordern utanför matrisen? (valfritt, men läses av nästa person)
+        </span>
+        <input name="note" placeholder="Skälet till det avvikande beloppet" className={KONTROLL} />
       </label>
 
       <p className="text-small text-ink-500">
@@ -381,12 +395,16 @@ export type Redigerbar = {
   org_number: string;
   contact_name: string;
   contact_phone: string;
+  /** 0060. Nullbar — order fran fore 2026-09-15 har ingen adress. */
+  contact_email: string | null;
   package_id: number;
   term_months: number;
   salesperson_id: string;
   signed_on: string;
   is_addon: boolean;
   order_value: number | null;
+  /** 0060. Utkopet, eller null nar affaren inte bar nagot. */
+  buyout_amount: number | null;
   commission_amount: number | null;
   commission_source: string | null;
   note: string | null;
@@ -451,6 +469,20 @@ function Rattelse({
     order.order_value === null || order.commission_source !== "matrix",
   );
 
+  // ===========================================================================
+  // UTKOPET ÄR KONTROLLERAT, och det ar hela skalet till att `har_utkop_ritad`
+  // skickas med som ett dolt falt.
+  //
+  // En kryssruta som INTE ar ikryssad skickar ingenting alls i en FormData. Utan
+  // det dolda faltet gar "chefen tog bort krysset" alltsa inte att skilja fran
+  // "formularet ritade aldrig nagon kryssruta" — och `redigeraOrder` hade da
+  // behovt gissa. Gissningen hade blivit fel at det dyra hallet: ett borttaget
+  // utkop hade stannat kvar och fortsatt sanka provisionen.
+  // ===========================================================================
+  const [harUtkop, setHarUtkop] = useState(
+    order.buyout_amount !== null && order.buyout_amount > 0,
+  );
+
   return (
     <form action={kor} className="flex flex-col gap-3 rounded-sm bg-surface-alt p-3">
       <input type="hidden" name="id" value={id} />
@@ -491,6 +523,24 @@ function Rattelse({
         <label className="flex flex-col gap-1">
           <span className="text-micro text-ink-500">Telefon</span>
           <input name="contact_phone" defaultValue={order.contact_phone} className={KONTROLL} />
+        </label>
+
+        {/*
+          MEJLEN GAR ATT TOMMA, till skillnad fran de fyra falten ovanfor.
+          `redigeraOrder` laser ett tomt obligatoriskt falt som "orort" — annars
+          hade en halv inskickning nollat bolagsnamnet — men adressen ar
+          frivillig, och da maste tomt kunna betyda tomt. Se actionen.
+        */}
+        <label className="flex flex-col gap-1">
+          <span className="text-micro text-ink-500">Mejl (valfritt)</span>
+          <input
+            name="contact_email"
+            type="email"
+            defaultValue={order.contact_email ?? ""}
+            placeholder="kontakt@bolaget.se"
+            className={KONTROLL}
+          />
+          <span className="text-small text-ink-500">Töm fältet för att ta bort adressen.</span>
         </label>
 
         {full && (
@@ -563,6 +613,40 @@ function Rattelse({
           />
           Tilläggsavtal på befintlig kund
         </label>
+      )}
+
+      {full && (
+        <>
+          <input type="hidden" name="har_utkop_ritad" value="1" />
+          <label className="flex items-center gap-2 text-small text-ink-700">
+            <input
+              type="checkbox"
+              name="har_utkop"
+              checked={harUtkop}
+              onChange={(e) => setHarUtkop(e.target.checked)}
+              className="size-4"
+            />
+            Affären har ett utköp
+          </label>
+
+          {harUtkop && (
+            <label className="flex flex-col gap-1">
+              <span className="text-micro text-ink-500">Utköp i kronor</span>
+              <input
+                name="buyout_amount"
+                required
+                inputMode="decimal"
+                defaultValue={order.buyout_amount ?? ""}
+                placeholder="5 000"
+                className={KONTROLL}
+              />
+              <span className="text-small text-ink-500">
+                Dras från ordervärdet innan både säljarens provision och säljchefens övertäck
+                räknas. Lämnar du provisionsfältet tomt räknas utköpssatsen på det som blir kvar.
+              </span>
+            </label>
+          )}
+        </>
       )}
 
       {full && (

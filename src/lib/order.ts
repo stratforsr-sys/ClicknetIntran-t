@@ -82,6 +82,17 @@ export type Order = {
    * summan just for att vyn ska kunna saga skillnaden med ord.
    */
   order_value: number | null;
+  /**
+   * Utkopet: det som gick ur affaren till att losa kunden ur ett gammalt avtal.
+   *
+   * NULL NAR INGET UTKOP FINNS, aldrig noll. Skillnaden ar densamma som
+   * `order_value` gor mellan "vardet ar noll" och "vardet ar inte ifyllt" — en
+   * nolla hade last som "vi kopte ut kunden for ingenting".
+   *
+   * Talet dras fran ordervardet innan bade saljarens provision och saljchefens
+   * overtack raknas. Se `utkop.ts` for rakningen och 0060 for kolumnen.
+   */
+  buyout_amount?: number | null;
   cancel_period_month: string | null;
 };
 
@@ -249,25 +260,48 @@ export function ordervardeForPaket(
  * Makuleringen dras i MAKULERINGSMANADEN, inte i signeringsmanaden — samma
  * tvahandelsemodell som `grundprovision` foljer, och av samma skal: en stangd
  * period skrivs aldrig om.
+ *
+ * ===========================================================================
+ * UTKOPEN DRAS AV, OCH DE STAR OCKSA FOR SIG (0060).
+ *
+ * `tecknat` ar BRUTTO — vad kunderna tecknat — och `netto` ar vad bolaget fick
+ * behalla: tecknat minus makulerat minus utkop. Bada behovs, och det ar samma
+ * resonemang som `utanVarde` foljer: en manad dar 40 000 kr tecknats och
+ * 12 000 kr gick till att kopa ut kunder ar inte samma manad som en dar 28 000
+ * tecknats, och ett enda tal kan inte saga bada sakerna.
+ *
+ * MAKULERINGENS UTKOP DRAS OCKSA TILLBAKA. En makulerad affar tar bade sitt
+ * ordervarde och sitt utkop ur manaden — annars hade avdraget varit for stort,
+ * eftersom bruttot gick in men bara nettot kom bolaget till del.
+ * ===========================================================================
  */
 export function ordervarde(
   order: Order[],
   manad: string,
-): { netto: number; tecknat: number; makulerat: number; utanVarde: number } {
+): {
+  netto: number;
+  tecknat: number;
+  makulerat: number;
+  utanVarde: number;
+  utkop: number;
+} {
   const in_ = orderIPeriod(order, manad);
   const ut = makuleradeIPeriod(order, manad);
 
   const summa = (rader: Order[]) => rader.reduce((s, o) => s + (o.order_value ?? 0), 0);
   const saknade = (rader: Order[]) => rader.filter((o) => o.order_value === null).length;
+  const utkopen = (rader: Order[]) => rader.reduce((s, o) => s + (o.buyout_amount ?? 0), 0);
 
   const tecknat = summa(in_);
   const makulerat = summa(ut);
+  const utkop = utkopen(in_) - utkopen(ut);
 
   return {
-    netto: tecknat - makulerat,
+    netto: tecknat - makulerat - utkop,
     tecknat,
     makulerat,
     utanVarde: saknade(in_) + saknade(ut),
+    utkop,
   };
 }
 
@@ -370,6 +404,24 @@ export function giltigTelefon(text: string): boolean {
   const rensat = text.trim();
   if (!/^[+\d][\d\s\-()]*$/.test(rensat)) return false;
   return rensat.replace(/\D/g, "").length >= 7;
+}
+
+/**
+ * Kundens mejladress. Avsiktligt tillatande, av samma skal som `giltigTelefon`.
+ *
+ * Nagot fore ett @, nagot efter, en punkt i domanen och inga blanktecken. En
+ * strangare regel nekar riktiga adresser — plustecken, underdoman, nya
+ * toppdomaner — och vinner ingenting: navet skickar inga brev hit, det ar en
+ * uppgift OM kunden. Samma villkor star som `sales_order_mejlform` i 0060, sa
+ * att en klient som gar forbi formularet moter samma grans.
+ *
+ * TOMT AR GILTIGT och hanteras av anroparen. Adressen ar frivillig — order fran
+ * fore 2026-09-15 har ingen, och ett krav hade gjort varje gammal order
+ * orattbar.
+ */
+export function giltigMejl(text: string): boolean {
+  const rensat = text.trim();
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(rensat);
 }
 
 /**

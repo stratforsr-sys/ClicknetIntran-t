@@ -11,9 +11,11 @@ import {
   hamtaChefssatser,
   hamtaPaket,
   hamtaSatser,
+  hamtaUtkopssatser,
   type Orderrad,
 } from "@/lib/order-server";
 import { gallandeChefssats } from "@/lib/chefsprovision";
+import { gallandeUtkopssats } from "@/lib/utkop";
 import { hamtaPerioder } from "@/lib/bonus-server";
 import {
   LOPTIDER,
@@ -63,31 +65,42 @@ export default async function Ordersida() {
   const manad = manadsnyckel();
   const ettArBak = manadFore(manad, 11);
 
-  const [order, ko, paket, satser, personer, chefssatser, perioder] = await Promise.all([
-    hamtaOrder(ettArBak),
-    hanterare ? hamtaKo() : Promise.resolve([] as Orderrad[]),
-    hamtaPaket(),
-    hamtaSatser(),
-    hanterare ? hamtaSaljare() : Promise.resolve([] as { id: string; namn: string }[]),
-    // TOM LISTA FOR EN SALJARE, och det ar RLS som gor det, inte en if-sats
-    // har. `manager_commission_rate_read` i 0050 slapper bara in den krets som
-    // ser provision — satserna ar villkoren for nagon annans ersattning.
-    // Foljden i formularet ar att restposten och overtacket inte ritas alls for
-    // saljaren, medan ordervardet gor det: det ar hens egen affar.
-    hamtaChefssatser(),
-    // FASTSTALLDA MANADER, och de bar TVA fragor pa en gang.
-    //
-    // FORE godkannandet (O11 / avsnitt 5.6): hor ordern till en manad som redan
-    // ar faststalld? Da bokfors provisionen i den OPPNA perioden i stallet, och
-    // chefen ska se det innan hon trycker — ett besked efterat om att pengarna
-    // hamnade i en annan manad ar ett arende i vardande.
-    //
-    // EFTER godkannandet (0051): samma fraga avgor vad en RATTELSE gor. En oppen
-    // manad raknas om live; en faststalld far rattelseposter i innevarande manad
-    // som inte gar att ta tillbaka. Det ar samma manad och samma svar, sa det ar
-    // ocksa samma prop hela vagen ner — se `stangdPeriod` i `Atgarder`.
-    hamtaPerioder(ettArBak),
-  ]);
+  const [order, ko, paket, satser, personer, chefssatser, utkopssatser, perioder] =
+    await Promise.all([
+      hamtaOrder(ettArBak),
+      hanterare ? hamtaKo() : Promise.resolve([] as Orderrad[]),
+      hamtaPaket(),
+      hamtaSatser(),
+      hanterare ? hamtaSaljare() : Promise.resolve([] as { id: string; namn: string }[]),
+      // TOM LISTA FOR EN SALJARE, och det ar RLS som gor det, inte en if-sats
+      // har. `manager_commission_rate_read` i 0050 slapper bara in den krets som
+      // ser provision — satserna ar villkoren for nagon annans ersattning.
+      // Foljden i formularet ar att restposten och overtacket inte ritas alls for
+      // saljaren, medan ordervardet gor det: det ar hens egen affar.
+      hamtaChefssatser(),
+      // UTKOPSSATSEN (0060) LASES DAREMOT AV ALLA. Det ar saljarens EGEN sats,
+      // och den som lagger en order med utkop ska se vad affaren ger innan hen
+      // trycker — precis som paketmatrisen star oppen. Se
+      // `buyout_commission_rate_read`.
+      hamtaUtkopssatser(),
+      // FASTSTALLDA MANADER, och de bar TRE fragor pa en gang.
+      //
+      // FORE godkannandet (O11 / avsnitt 5.6): hor ordern till en manad som redan
+      // ar faststalld? Da bokfors provisionen i den OPPNA perioden i stallet, och
+      // chefen ska se det innan hon trycker — ett besked efterat om att pengarna
+      // hamnade i en annan manad ar ett arende i vardande.
+      //
+      // EFTER godkannandet (0051): samma fraga avgor vad en RATTELSE gor. En oppen
+      // manad raknas om live; en faststalld far rattelseposter i innevarande manad
+      // som inte gar att ta tillbaka. Det ar samma manad och samma svar, sa det ar
+      // ocksa samma prop hela vagen ner — se `stangdPeriod` i `Atgarder`.
+      //
+      // OCH SEDAN 2026-09-15: listan gar hela vagen ner i INMATNINGEN, sa att
+      // manadsstampeln under datumfaltet kan varna INNAN knappen trycks. Det var
+      // den varningen som saknades den dag en augustiorder tyst blev en
+      // septemberorder — se rubriken i `Nyorder.tsx`.
+      hamtaPerioder(ettArBak),
+    ]);
 
   const stangda = perioder.map((p) => p.period_month);
 
@@ -99,6 +112,10 @@ export default async function Ordersida() {
   // pengar. Skillnaden syns bara om nagon backdaterar over ett satsbyte, och da
   // ar serverns tal det ratta.
   const gallandeChef = gallandeChefssats(chefssatser, idag);
+
+  // Samma resonemang for utkopssatsen: formularet visar den som galler I DAG,
+  // servern slar upp den pa orderns faktiska signeringsdatum.
+  const gallandeUtkop = gallandeUtkopssats(utkopssatser, idag);
 
   const namn = new Map(personer.map((p) => [p.id, p.namn]));
   const mina = order.filter((o) => o.salesperson_id === user.employee!.id);
@@ -171,6 +188,8 @@ export default async function Ordersida() {
               own_sale_percent: gallandeChef.own_sale_percent,
             }
           }
+          utkopsprocent={gallandeUtkop?.percent ?? null}
+          stangdaManader={stangda}
         />
       </Card>
 
@@ -311,6 +330,29 @@ function Rad({
         {namn && hanterare ? ` · ${namn}` : ""}
         {o.commission_source === "manual" ? " · provision satt för hand" : ""}
         {o.commission_source === "manager" ? " · säljchefens egen försäljning" : ""}
+        {o.commission_source === "buyout" ? " · provision räknad efter utköp" : ""}
+      </p>
+
+      {/*
+        KONTAKTRADEN. Mejlen kom till 2026-09-15 och star bredvid telefonnumret,
+        inte pa en egen rad: bada ar satt att na samma person, och tva rader hade
+        last som tva olika uppgifter.
+
+        ORGANISATIONSNUMRET STAR INTE HAR. K27-undantaget i 0034 later kolumnen
+        bara ett personnummer for en enskild firma, och da hor den inte hemma i
+        en lista. Den som behover numret ser det i rattelseformularet.
+
+        Order fran fore kolumnen fanns sager ingenting i stallet for att visa en
+        tom plats — samma linje som ordervardet tog i 0050.
+      */}
+      <p className="text-small text-ink-500">
+        {o.contact_name} · {o.contact_phone}
+        {o.contact_email ? " · " : ""}
+        {o.contact_email && (
+          <a href={`mailto:${o.contact_email}`} className="underline underline-offset-2">
+            {o.contact_email}
+          </a>
+        )}
       </p>
 
       {/*
@@ -328,6 +370,24 @@ function Rad({
         <p className="text-small text-ink-500">
           Ordervärde {kronor(o.order_value)}
           {o.order_value_source === "manual" ? " · satt för hand" : " · pris × avtalstid"}
+          {/*
+            UTKOPET STAR I SAMMA RAD SOM ORDERVARDET, med minustecken och med
+            nettot utskrivet. Skalet ar att de tre talen bara betyder nagot
+            TILLSAMMANS: 11 940 kr ensamt sager fel sak om affaren, och 6 940 kr
+            ensamt gar inte att stamma av mot avtalet. Se 0060.
+          */}
+          {typeof o.buyout_amount === "number" && o.buyout_amount > 0 && (
+            <> · utköp − {kronor(o.buyout_amount)} · kvar {kronor(o.order_value - o.buyout_amount)}</>
+          )}
+        </p>
+      )}
+
+      {/* En INSKICKAD order har utkop men annu inget ordervarde — det raknas
+          fram vid godkannandet. Uppgiften far inte forsvinna dar emellan: det ar
+          den som gor att godkannaren raknar ratt. */}
+      {o.order_value === null && typeof o.buyout_amount === "number" && o.buyout_amount > 0 && (
+        <p className="text-small text-ink-500">
+          Utköp {kronor(o.buyout_amount)} · dras av när ordern godkänns
         </p>
       )}
 
@@ -354,12 +414,14 @@ function Rad({
           org_number: o.org_number,
           contact_name: o.contact_name,
           contact_phone: o.contact_phone,
+          contact_email: o.contact_email,
           package_id: o.package_id,
           term_months: o.term_months,
           salesperson_id: o.salesperson_id,
           signed_on: o.signed_on,
           is_addon: o.is_addon,
           order_value: o.order_value,
+          buyout_amount: o.buyout_amount ?? null,
           commission_amount: o.commission_amount,
           commission_source: o.commission_source,
           note: o.note,

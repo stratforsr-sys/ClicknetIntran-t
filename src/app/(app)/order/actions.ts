@@ -12,6 +12,7 @@ import { tolkaAvtalstext, type Orderforslag } from "@/lib/orderbilaga";
 import { notifiera, notifieraFlera, orderkretsen } from "@/lib/notishandelse-server";
 import {
   gallandeSats,
+  giltigMejl,
   giltigTelefon,
   giltigtSigneringsdatum,
   harStangdPeriod,
@@ -27,9 +28,55 @@ import {
   restpostenAtNoll,
   type Chefssats,
   type Overtack,
+  type Saljarkalla,
 } from "@/lib/chefsprovision";
+import {
+  gallandeUtkopssats,
+  harUtkop,
+  nettoEfterUtkop,
+  utkopsprovision,
+  type Utkopssats,
+} from "@/lib/utkop";
+
+/**
+ * Utkopet, ur ett formular. `null` nar faltet ar tomt eller kryssrutan av.
+ *
+ * ETT TOMT FALT ÄR INTE NOLL. Kryssar nagon i "affaren har ett utkop" och sedan
+ * i ur den igen star texten kvar i faltet, sa det ar KRYSSRUTAN som avgor —
+ * annars hade ett bortglomt tal bytt provisionskalla pa en vanlig paketorder.
+ *
+ * Returnerar en STRANG vid fel i stallet for att kasta. Beloppet kommer fran en
+ * manniska som skriver kronor, och "18 000" ska ga lika bra som "18000".
+ */
+function utkopUrFormular(form: FormData): { utkop: number | null } | { fel: string } {
+  if (form.get("har_utkop") !== "on") return { utkop: null };
+
+  const text = String(form.get("buyout_amount") ?? "").trim();
+  if (!text) return { fel: "Kryssrutan för utköp är i, men beloppet saknas." };
+
+  const belopp = tolkaBelopp(text);
+  if (belopp === null) return { fel: "Utköpsbeloppet gick inte att tolka." };
+  if (belopp <= 0) {
+    return { fel: "Ett utköp på noll kronor är inget utköp. Ta bort krysset i stället." };
+  }
+
+  return { utkop: belopp };
+}
 
 export type Orderstate = { fel?: string; ok?: string };
+
+/**
+ * Meningen som forklarar en utkopsaffar, eller tomt nar det inte ar en.
+ *
+ * STAR I KVITTENSEN OCH I NOTISEN, inte bara i en tabell. Den som godkant en
+ * order pa 11 940 kr och far se 1 433 kr i provision ska fa veta VARFOR i samma
+ * andetag — annars ar nasta steg ett mejl till saljchefen, och det ar precis
+ * den sortens fraga navet finns for att slippa.
+ */
+function utkopstext(u: { utkop: number; netto: number; procent: number } | null): string {
+  if (!u) return "";
+  return ` Utköpet ${kronor(u.utkop)} är avdraget, så provisionen är ${u.procent} % av ${kronor(u.netto)}.`;
+}
 
 /**
  * E13 steg 1. Vem som far gora vad med en order.
@@ -67,7 +114,13 @@ async function hamtaRad(id: string) {
     // `company_name` las inte fore 2026-09-03. Den behovs i notisrubrikerna:
     // "Din order pa Nordbygg AB godkandes" sager vilken order det galler,
     // "Din order godkandes" gor det inte for den som har fyra inne samtidigt.
-    .select("id, status, salesperson_id, company_name, package_id, term_months, signed_on, commission_amount")
+    // `buyout_amount` las in 2026-09-15. Utkopet skrivs av SALJAREN nar hen
+    // skickar in ordern, och godkannandet maste rakna pa det — annars hade
+    // affaren fatt matrisens belopp trots att en del av vardet redan gatt ut.
+    .select(
+      "id, status, salesperson_id, company_name, package_id, term_months, signed_on," +
+        " commission_amount, buyout_amount",
+    )
     .eq("id", id)
     .maybeSingle();
   return data;
@@ -224,6 +277,18 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
     const telefon = String(form.get("contact_phone") ?? "").trim();
     if (!giltigTelefon(telefon)) return { fel: "Telefonnumret ser inte ut som ett nummer." };
 
+    // MEJLEN AR FRIVILLIG (0060). Ett tomt falt ar ett giltigt svar; en ifylld
+    // adress som inte ar en adress ar det inte — da ar det ett skrivfel, och det
+    // ar battre att saga det nu an att nagon skickar avtalet till ingenstans.
+    const mejlText = String(form.get("contact_email") ?? "").trim();
+    if (mejlText && !giltigMejl(mejlText)) {
+      return { fel: "Mejladressen ser inte ut som en adress. Lämna fältet tomt om den saknas." };
+    }
+    const mejl = mejlText || null;
+
+    const utkopsval = utkopUrFormular(form);
+    if ("fel" in utkopsval) return { fel: utkopsval.fel };
+
     const paket = Number(form.get("package_id"));
     const loptid = Number(form.get("term_months"));
     if (![1, 2, 3].includes(paket)) return { fel: "Välj ett paket." };
@@ -245,11 +310,17 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
       org_number: orgnr,
       contact_name: kontakt,
       contact_phone: telefon,
+      contact_email: mejl,
       package_id: paket,
       term_months: loptid,
       salesperson_id: saljare,
       signed_on: signerad,
       is_addon: tillagg,
+      // UTKOPET SKRIVS AVEN PA EN INSKICKAD ORDER. Saljaren vet om affaren bar
+      // ett utkop; godkannaren gor det inte. Villkoret `sales_order_utkop_ryms`
+      // i 0060 slapper darfor igenom ett utkop utan ordervarde, och biter forst
+      // nar ordern godkanns och bada talen finns.
+      buyout_amount: utkopsval.utkop,
       note,
       status: godkannDirekt ? "signerad" : "inskickad",
       created_by: user.employee!.id,
@@ -258,19 +329,29 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
     let affar: Extract<Framrakning, { klar: true }> | null = null;
 
     if (godkannDirekt) {
-      const provision = await raknaFramProvision(paket, loptid, signerad, saljare, form);
+      const provision = await raknaFramProvision(
+        paket,
+        loptid,
+        signerad,
+        saljare,
+        form,
+        utkopsval.utkop,
+      );
       if (!provision.klar) return { fel: provision.fel };
 
-      // Kontrollen star fore skrivningen, inte efter. Check-villkoret
-      // `sales_order_manuell_kraver_skal` i 0034 hade fallt anda, men med ett
-      // felmeddelande ur Postgres i stallet for ett som gar att forsta.
+      // ANTECKNINGSKRAVET ÄR BORTA (0060, bestallarens besked 2026-09-15).
       //
-      // `manager` kraver INGEN anteckning: beloppet kommer ur en versionerad
-      // procentsats och inte ur nagons bedomning, sa skalet star i
-      // konfigurationen. Se 0050.
-      if (provision.satt.commission_source === "manual" && !note) {
-        return { fel: "En handsatt provision kräver en anteckning om varför." };
-      }
+      // Har stod tidigare en sparr: ett handsatt belopp krävde en anteckning.
+      // Regeln var vallovlig och kostade en dyrare uppgift an den skyddade.
+      // Kravet slog till NAR KNAPPEN TRYCKTES, svaret kom tillbaka som ett fel,
+      // React aterstallde formularet — och signeringsdatumet foll tillbaka pa
+      // dagens datum. En augustiaffar hamnade i september utan att nagon sag det
+      // ske. Hela resonemanget star i 0060 avsnitt 3.
+      //
+      // Sparbarheten bars anda: `audit_log` bar belopp och kalla pa varje
+      // godkannande, och `commission_source = 'manual'` sager rakt ut att nagon
+      // skrev in talet. Anteckningen finns kvar som falt, och vyn uppmuntrar
+      // den — men den hindrar inte langre en riktig affar fran att registreras.
 
       affar = provision;
       Object.assign(insats, provision.satt, {
@@ -299,6 +380,7 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
       signed_on: signerad,
       commission_amount: insats.commission_amount ?? null,
       order_value: insats.order_value ?? null,
+      buyout_amount: utkopsval.utkop,
     });
 
     // OVERTACKET SKRIVS EFTER ORDERN, aldrig fore: raden pekar pa `order_id` med
@@ -326,15 +408,23 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
     // ordern kan ha hamnat i en stangd manad (efterslapningen, O11) OCH
     // provisionen kan ha overstigit ordervardet sa att overtacket klipptes.
     const klippt = affar?.restpostenKlipptes
-      ? " Provisionen översteg ordervärdet, så övertäcket till säljchefen blev noll."
+      ? " Provisionen översteg det som blev kvar av affären, så övertäcket till säljchefen blev noll."
+      : "";
+    const utkopet = utkopstext(affar?.utkopet ?? null);
+
+    // EN INSKICKAD ORDER MED UTKOP SAGER DET OCKSA, men utan procentsatsen:
+    // beloppen raknas forst vid godkannandet, och ett tal i kvittensen som
+    // sedan blir ett annat ar samre an inget tal.
+    const inskickatUtkop = harUtkop(utkopsval.utkop)
+      ? ` Utköpet ${kronor(utkopsval.utkop)} följer med och dras av när ordern godkänns.`
       : "";
 
     return {
       ok: efterslapning
-        ? `Ordern på ${bolag} är godkänd. ${manadsnamn(periodFor(signerad))} var fastställd, så provisionen bokfördes på ${manadsnamn(efterslapning)}.${klippt}`
+        ? `Ordern på ${bolag} är godkänd. ${manadsnamn(periodFor(signerad))} var fastställd, så provisionen bokfördes på ${manadsnamn(efterslapning)}.${utkopet}${klippt}`
         : godkannDirekt
-          ? `Ordern på ${bolag} är godkänd.${klippt}`
-          : `Ordern på ${bolag} är inskickad och väntar på godkännande.`,
+          ? `Ordern på ${bolag} är godkänd.${utkopet}${klippt}`
+          : `Ordern på ${bolag} är inskickad och väntar på godkännande.${inskickatUtkop}`,
     };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
@@ -360,7 +450,15 @@ type Framrakning =
         commission_rate_id: string | null;
         order_value: number;
         order_value_source: string;
+        /** Utkopet, sa som det ska sta pa ordern. `null` nar affaren inte bar nagot. */
+        buyout_amount: number | null;
       };
+      /**
+       * Underlaget for en utkopsaffar, nar det ar en sadan. Bara vyn anvander
+       * det — beloppen ligger redan i `satt` — men kvittensen ska kunna saga
+       * "12 % pa 15 000 kr" i stallet for bara ett tal.
+       */
+      utkopet: { utkop: number; netto: number; procent: number } | null;
       /** Saljchefens overtack, eller null. Skrivs som EGEN rad — se `skrivOvertack`. */
       overtack: Overtack | null;
       /** Sant nar godkannaren skrev in ett belopp sjalv och ordervardet ar lagre. */
@@ -397,16 +495,28 @@ async function raknaFramProvision(
   signerad: string,
   saljareId: string,
   form: FormData,
+  /**
+   * Utkopet pa affaren, eller null. SKICKAS IN, slas inte upp har.
+   *
+   * Skalet ar att de tre anroparna vet olika saker. `skapaOrder` laser det ur
+   * formularet, `godkannOrder` ur ORDERN — saljaren skrev in det nar hen
+   * skickade in, och godkannaren ska inte behova upprepa det — och
+   * `redigeraOrder` ur formularet med ordern som fallback. Ett uppslag har hade
+   * behovt kanna till alla tre fallen.
+   */
+  utkop: number | null = null,
 ): Promise<Framrakning> {
   const db = supabaseAdmin();
 
-  const [{ data: satsrader }, { data: paketrader }, { data: chefsrader }] = await Promise.all([
-    db.from("commission_rate").select("id, package_id, term_months, amount, valid_from, valid_to"),
-    db.from("sales_package").select("id, label, list_price, sort, active"),
-    db
-      .from("manager_commission_rate")
-      .select("id, employee_id, override_percent, own_sale_percent, valid_from, valid_to"),
-  ]);
+  const [{ data: satsrader }, { data: paketrader }, { data: chefsrader }, { data: utkopsrader }] =
+    await Promise.all([
+      db.from("commission_rate").select("id, package_id, term_months, amount, valid_from, valid_to"),
+      db.from("sales_package").select("id, label, list_price, sort, active"),
+      db
+        .from("manager_commission_rate")
+        .select("id, employee_id, override_percent, own_sale_percent, valid_from, valid_to"),
+      db.from("buyout_commission_rate").select("id, percent, valid_from, valid_to"),
+    ]);
 
   const chefssats = gallandeChefssats(
     (chefsrader ?? []).map((s) => ({
@@ -418,6 +528,17 @@ async function raknaFramProvision(
   );
 
   const chefenSaljer = arEgenForsaljning(chefssats, saljareId);
+
+  const utkopssats = gallandeUtkopssats(
+    (utkopsrader ?? []).map((s) => ({ ...s, percent: Number(s.percent) })) as Utkopssats[],
+    signerad,
+  );
+
+  // EN NOLLA SILAS BORT HAR, en gang, och resten av funktionen fragar bara
+  // `utkopBelopp !== null`. Ett `harUtkop()` upprepat pa sex stallen ar sex
+  // tillfallen att skriva det ena fel — och det ena som glomdes hade latit en
+  // nolla byta provisionskalla fran matrisen till procentsatsen.
+  const utkopBelopp: number | null = harUtkop(utkop) ? utkop : null;
 
   // ---------------------------------------------------------------------------
   // 1. Ordervardet
@@ -449,6 +570,45 @@ async function raknaFramProvision(
   }
 
   // ---------------------------------------------------------------------------
+  // 1b. Utkopet, och nettot det lamnar efter sig
+  //
+  // ===========================================================================
+  // ORDERVARDET STAR KVAR BRUTTO PA ORDERN. Det ar NETTOT som gar vidare in i
+  // rakningen, och skillnaden mellan de tva ar hela poangen med kolumnen.
+  //
+  // Bestallaren 2026-09-15: *"da ska det dras minus pa affaren och sen ska det
+  // raknas pa 12 % for saljaren i provision pa det som ar over efter utkopet"*.
+  // Tva led i den meningen, och bada galler:
+  //
+  //   AFFAREN BLIR MINDRE      nettot, inte bruttot, ar vad bolaget fick behalla
+  //   SALJAREN FAR PROCENT     pa nettot, i stallet for matrisens belopp
+  //
+  // Nettot skickas in i `affarenFor` som "ordervardet", sa att BADE saljarens
+  // och saljchefens rakning utgar fran samma tal. Bestallarens val samma dag:
+  // utkopspengarna ar utbetalda till kunden och ar inte bolagets marginal, sa
+  // overtacket far inte raknas pa dem heller.
+  // ===========================================================================
+  const netto = nettoEfterUtkop(ordervarde, utkopBelopp);
+
+  if (utkopBelopp !== null) {
+    if (utkopBelopp > ordervarde) {
+      return {
+        klar: false,
+        fel: `Utköpet (${kronor(utkopBelopp)}) är större än ordervärdet (${kronor(ordervarde)}). Kontrollera talen.`,
+      };
+    }
+    // EN SAKNAD SATS BLIR INTE NOLL. En nolla hade sett ut som "utkopsaffarer ger
+    // ingen provision" i stallet for "ingen sats ar satt" — samma resonemang som
+    // `gallandeSats` for om matrisen.
+    if (!utkopssats && !chefenSaljer) {
+      return {
+        klar: false,
+        fel: "Ingen utköpssats gällde på signeringsdagen. Lägg en sats under Provision → Regler, eller sätt beloppet för hand.",
+      };
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // 2. Saljarens provision — den som gallt UTAN chefsregeln
   //
   // Raknas fram aven nar chefen ar saljaren, eftersom den da inte anvands: valet
@@ -457,7 +617,7 @@ async function raknaFramProvision(
   // hela svaret. Kravet pa ett handsatt belopp galler darfor bara ANDRAS order.
   // ---------------------------------------------------------------------------
   let saljarprovision: number;
-  let saljarkalla: "matrix" | "manual";
+  let saljarkalla: Saljarkalla;
 
   // MATRISRADEN SPARAS, inte bara dess belopp. `commission_rate_id` ar det som
   // gor att en utbetalning gar att harleda till raden den kom ur; villkoret
@@ -473,6 +633,21 @@ async function raknaFramProvision(
     }
     saljarprovision = belopp;
     saljarkalla = "manual";
+  } else if (utkopBelopp !== null && !chefenSaljer) {
+    // ===========================================================================
+    // UTKOPSSATSEN ERSATTER MATRISEN, den kommer inte utover den.
+    //
+    // Bestallarens beslut 2026-09-15, och skalet ar att de tva annars hade
+    // dubbelraknat samma pengar: matrisens 1 500 kr ar redan bolagets andel av
+    // ett FULLT ordervarde, och pa en affar dar en del av vardet gick till att
+    // kopa ut kunden finns inte den marginalen.
+    //
+    // ORDNINGEN AR MEDVETEN. Ett HANDSATT belopp star fore utkopssatsen i
+    // if-kedjan: skriver godkannaren in ett tal har hen sett bada uppgifterna
+    // och tagit ett beslut, och da ska inte en procentsats overprova det.
+    // ===========================================================================
+    saljarprovision = utkopsprovision(utkopssats!, netto);
+    saljarkalla = "buyout";
   } else if (friOrder && !chefenSaljer) {
     return {
       klar: false,
@@ -498,10 +673,13 @@ async function raknaFramProvision(
   // ---------------------------------------------------------------------------
   // 3. Affaren. Valet mellan de tva satserna sker HAR och ingen annanstans.
   // ---------------------------------------------------------------------------
+  // BASEN AR NETTOT, inte bruttot. Pa en affar utan utkop ar de tva samma tal —
+  // `nettoEfterUtkop` lamnar ordervardet orort da — sa raden nedan ar oforandrad
+  // for allt som fanns fore 0060.
   const affar = affarenFor({
     sats: chefssats,
     saljareId,
-    ordervarde,
+    ordervarde: netto,
     saljarprovision,
     saljarkalla,
   });
@@ -511,15 +689,25 @@ async function raknaFramProvision(
     satt: {
       commission_amount: affar.provision,
       commission_source: affar.kalla,
-      // Bara ett matrisbelopp pekar pa sin rad. Ett handsatt belopp och ett
-      // framraknat chefsbelopp gor det inte — `sales_order_satskoppling` i 0050
-      // nekar annars insertet.
+      // Bara ett matrisbelopp pekar pa sin rad. Ett handsatt belopp, ett
+      // framraknat chefsbelopp och en utkopsprovision gor det inte —
+      // `sales_order_satskoppling` i 0060 nekar annars insertet.
       commission_rate_id: affar.kalla === "matrix" ? (matrisrad?.id ?? null) : null,
+      // ORDERVARDET SKRIVS BRUTTO. Avtalet sager bruttot, och utkopet star i sin
+      // egen kolumn — se 0060 for varfor de inte far slas ihop till ett tal.
       order_value: ordervarde,
       order_value_source: vardekalla,
+      buyout_amount: utkopBelopp,
     },
     overtack: affar.overtack,
-    restpostenKlipptes: restpostenAtNoll(ordervarde, affar.provision),
+    // KLIPPNINGEN MATS PA NETTOT, av samma skal som overtacket raknas pa det:
+    // en provision som overstiger nettot har atit upp restposten aven om den ar
+    // mindre an bruttot.
+    restpostenKlipptes: restpostenAtNoll(netto, affar.provision),
+    utkopet:
+      utkopBelopp === null
+        ? null
+        : { utkop: utkopBelopp, netto, procent: utkopssats?.percent ?? 0 },
   };
 }
 
@@ -659,19 +847,25 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
     // chefsregeln galler, och en order som saljaren skickat in bar redan sitt
     // `salesperson_id` — godkannaren byter inte saljare, och triggern i 0034
     // hade nekat det anda.
+    // UTKOPET KOMMER UR ORDERN, inte ur godkannandeformularet. Saljaren angav
+    // det nar hen skickade in; godkannaren ska inte behova upprepa en uppgift
+    // som redan star pa raden — och en tom ruta i formularet hade tyst nollat
+    // den. Ska utkopet andras ar vagen rattelsen, dar bade talet och skalet
+    // hamnar i loggen.
+    const utkopPaOrdern = rad.buyout_amount == null ? null : Number(rad.buyout_amount);
+
     const provision = await raknaFramProvision(
       rad.package_id,
       rad.term_months,
       rad.signed_on,
       rad.salesperson_id,
       form,
+      utkopPaOrdern,
     );
     if (!provision.klar) return { fel: provision.fel };
 
+    // Anteckningskravet ar borta sedan 0060 — se `skapaOrder` for resonemanget.
     const note = String(form.get("note") ?? "").trim() || null;
-    if (provision.satt.commission_source === "manual" && !note) {
-      return { fel: "En handsatt provision kräver en anteckning om varför." };
-    }
 
     const andring: Record<string, unknown> = {
       ...provision.satt,
@@ -732,9 +926,13 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
       kalla: "order-godkand",
       typ: "order",
       rubrik: `Din order är godkänd: ${rad.company_name}`,
+      // UTKOPET STAR MED I NOTISEN. Saljaren ser annars ett belopp som inte
+      // stammer med matrisen och har ingen forklaring i handen.
       detalj: efterslapning
         ? `Provision ${kronor(provision.satt.commission_amount)} · ${manadsnamn(periodFor(rad.signed_on))} var redan fastställd, så beloppet bokförs på ${manadsnamn(efterslapning)}`
-        : `Provision ${Number(provision.satt.commission_amount).toLocaleString("sv-SE")} kr · räknas från ${rad.signed_on}`,
+        : provision.utkopet
+          ? `Provision ${kronor(provision.satt.commission_amount)} · ${provision.utkopet.procent} % av ${kronor(provision.utkopet.netto)} efter utköp ${kronor(provision.utkopet.utkop)}`
+          : `Provision ${Number(provision.satt.commission_amount).toLocaleString("sv-SE")} kr · räknas från ${rad.signed_on}`,
       href: "/order",
       objekt: { typ: "sales_order", id },
     });
@@ -742,15 +940,16 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
     revalidatePath("/order");
     revalidatePath("/provision");
 
-    // Samma tva oberoende omstandigheter som i `skapaOrder`.
+    // Samma tva oberoende omstandigheter som i `skapaOrder`, plus utkopet.
     const klippt = provision.restpostenKlipptes
-      ? " Provisionen översteg ordervärdet, så övertäcket till säljchefen blev noll."
+      ? " Provisionen översteg det som blev kvar av affären, så övertäcket till säljchefen blev noll."
       : "";
+    const utkopet = utkopstext(provision.utkopet);
 
     return {
       ok: efterslapning
-        ? `Ordern är godkänd. ${manadsnamn(periodFor(rad.signed_on))} var fastställd, så ${kronor(provision.satt.commission_amount)} bokfördes på ${manadsnamn(efterslapning)} med en anteckning om varför.${klippt}`
-        : `Ordern är godkänd och räknas från och med nu.${klippt}`,
+        ? `Ordern är godkänd. ${manadsnamn(periodFor(rad.signed_on))} var fastställd, så ${kronor(provision.satt.commission_amount)} bokfördes på ${manadsnamn(efterslapning)} med en anteckning om varför.${utkopet}${klippt}`
+        : `Ordern är godkänd och räknas från och med nu.${utkopet}${klippt}`,
     };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
@@ -797,8 +996,8 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
       .from("sales_order")
       .select(
         "id, status, salesperson_id, company_name, org_number, contact_name, contact_phone," +
-          " package_id, term_months, signed_on, period_month, is_addon, note," +
-          " commission_amount, commission_source, order_value, created_by",
+          " contact_email, package_id, term_months, signed_on, period_month, is_addon, note," +
+          " commission_amount, commission_source, order_value, buyout_amount, created_by",
       )
       .eq("id", id)
       .maybeSingle();
@@ -866,6 +1065,17 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
     if (!kontakt) return { fel: "Kontaktpersonen saknas." };
     if (!giltigTelefon(telefon)) return { fel: "Telefonnumret ser inte ut som ett nummer." };
 
+    // MEJLEN GAR ATT TA BORT, till skillnad fran de fyra ovan. `text()` ovan
+    // laser ett tomt falt som "orort", vilket ar ratt for uppgifter en order
+    // MASTE ha — men adressen ar frivillig, och da maste en tomning kunna
+    // betyda tomning. Annars gar en felskriven adress aldrig att radera, bara
+    // att skriva over.
+    const mejlText = String(form.get("contact_email") ?? "").trim();
+    if (mejlText && !giltigMejl(mejlText)) {
+      return { fel: "Mejladressen ser inte ut som en adress. Lämna fältet tomt om den saknas." };
+    }
+    const mejl = mejlText || null;
+
     const skal = String(form.get("reason") ?? "").trim();
     if (!skal) return { fel: "En rättelse kräver ett skäl. Det är det första någon frågar efter." };
 
@@ -892,6 +1102,7 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
           org_number: orgnr,
           contact_name: kontakt,
           contact_phone: telefon,
+          contact_email: mejl,
           note,
         })
         .eq("id", id);
@@ -906,9 +1117,17 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
           org_number: rad.org_number,
           contact_name: rad.contact_name,
           contact_phone: rad.contact_phone,
+          contact_email: rad.contact_email,
           note: rad.note,
         },
-        efter: { company_name: bolag, org_number: orgnr, contact_name: kontakt, contact_phone: telefon, note },
+        efter: {
+          company_name: bolag,
+          org_number: orgnr,
+          contact_name: kontakt,
+          contact_phone: telefon,
+          contact_email: mejl,
+          note,
+        },
         rattelseposter: 0,
       });
 
@@ -939,12 +1158,26 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
     // "40 % eller matrisen", och den dagen de sager olika ar det inte uppenbart
     // vilken som har ratt.
     // ---------------------------------------------------------------------------
-    const nya = await raknaFramProvision(paket, loptid, signerad, saljare, form);
+    // UTKOPET UR FORMULARET, med ordern som fallback saknas kryssrutan helt.
+    //
+    // Rattelseformularet ritar bade kryssrutan och beloppet for chefskretsen, sa
+    // ett medvetet borttaget kryss MASTE kunna betyda "affaren har inget utkop
+    // langre". Darfor ar `utkopUrFormular` sanningen nar formularet skickade med
+    // sig kryssrutefaltet, och ordern bara nar det inte gjorde det — vilket bara
+    // hander for en klient som skickar en halv inskickning.
+    const utkopsval = utkopUrFormular(form);
+    if ("fel" in utkopsval) return { fel: utkopsval.fel };
+
+    const utkopet = form.has("har_utkop_ritad")
+      ? utkopsval.utkop
+      : rad.buyout_amount == null
+        ? null
+        : Number(rad.buyout_amount);
+
+    const nya = await raknaFramProvision(paket, loptid, signerad, saljare, form, utkopet);
     if (!nya.klar) return { fel: nya.fel };
 
-    if (nya.satt.commission_source === "manual" && !note) {
-      return { fel: "En handsatt provision kräver en anteckning om varför." };
-    }
+    // Anteckningskravet ar borta sedan 0060 — se `skapaOrder` for resonemanget.
 
     // Det gamla overtacket, for att kunna rakna skillnaden och for att veta om
     // raden ska uppdateras, laggas till eller tas bort.
@@ -1040,12 +1273,16 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
         org_number: orgnr,
         contact_name: kontakt,
         contact_phone: telefon,
+        contact_email: mejl,
         package_id: paket,
         term_months: loptid,
         salesperson_id: saljare,
         signed_on: signerad,
         is_addon: form.get("is_addon") === "on",
         note,
+        // `nya.satt` bar `buyout_amount` och skrivs sist, sa det ar rakningens
+        // svar som star pa ordern och inte formularets rader — de tva ar samma
+        // tal, men bara ett av dem har gatt genom kontrollerna.
         ...nya.satt,
       })
       .eq("id", id);
@@ -1077,6 +1314,7 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
         salesperson_id: fore.saljare,
         commission_amount: fore.provision,
         order_value: rad.order_value === null ? null : Number(rad.order_value),
+        buyout_amount: rad.buyout_amount == null ? null : Number(rad.buyout_amount),
         package_id: rad.package_id,
         term_months: rad.term_months,
         signed_on: rad.signed_on,
@@ -1086,6 +1324,7 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
         salesperson_id: efter.saljare,
         commission_amount: efter.provision,
         order_value: nya.satt.order_value,
+        buyout_amount: nya.satt.buyout_amount,
         package_id: paket,
         term_months: loptid,
         signed_on: signerad,

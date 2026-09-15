@@ -246,7 +246,7 @@ async function hamtaAllaOrder(manad: string): Promise<Order[]> {
     .from("sales_order")
     .select(
       "id, salesperson_id, package_id, term_months, signed_on, period_month, status," +
-        " is_addon, commission_amount, order_value, cancel_period_month",
+        " is_addon, commission_amount, order_value, buyout_amount, cancel_period_month",
     )
     .or(`period_month.eq.${manad},cancel_period_month.eq.${manad}`);
 
@@ -263,6 +263,13 @@ async function hamtaAllaOrder(manad: string): Promise<Order[]> {
     commission_amount: o.commission_amount === null ? null : Number(o.commission_amount),
     order_value:
       o.order_value === null || o.order_value === undefined ? null : Number(o.order_value),
+    // UTKOPET LAS IN 2026-09-15 (0060). Det bokfors inte heller — provisionen ar
+    // redan raknad pa nettot och fryst pa ordern — men det gar in i `ordertext`,
+    // och den texten hamnar ordagrant i `commission_entry.note`. Utan kolumnen
+    // hade huvudboken sagt "Order 2026-09-15, paket 1, 12 man" om en affar dar
+    // halva vardet gick till ett utkop, och beloppet hade sett obegripligt ut.
+    buyout_amount:
+      o.buyout_amount === null || o.buyout_amount === undefined ? null : Number(o.buyout_amount),
   })) as unknown as Order[];
 }
 
