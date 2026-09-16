@@ -309,6 +309,7 @@ export default async function Provisionssida({
     chefsprovision: number;
     ordervarde: number;
     utanVarde: number;
+    utkop: number;
     handbokfort: number;
   })[] = manaderna.map((m) => {
     const kvM = kvPerManad.get(m) ?? new Map<string, KvIndata>();
@@ -354,6 +355,10 @@ export default async function Provisionssida({
       // ganger for hog. Se rubriken vid `Underlag.ordervarde`.
       ordervarde: kallor.reduce((s, x) => s + x.ordervarde.netto, 0),
       utanVarde: kallor.reduce((s, x) => s + x.ordervarde.utanVarde, 0),
+      // UTKOPEN ar redan avdragna ur `ordervarde` ovan. De summeras vid sidan
+      // for att kortet ska kunna SAGA det — ett avdrag som inte star utskrivet
+      // ar ett tal som ser fel ut. Se 0060.
+      utkop: kallor.reduce((s, x) => s + x.ordervarde.utkop, 0),
       handbokfort: summera(handposter(tavlansPoster), m).belopp,
     };
   });
@@ -367,6 +372,7 @@ export default async function Provisionssida({
   const ordervardeIPerioden = {
     netto: manadsrader.reduce((s, r) => s + r.ordervarde, 0),
     utanVarde: manadsrader.reduce((s, r) => s + r.utanVarde, 0),
+    utkop: manadsrader.reduce((s, r) => s + r.utkop, 0),
   };
 
   // EN ENDA MANAD ger de extra ytorna: bonustrappan (som kraver ett `Underlag`)
@@ -608,6 +614,7 @@ export default async function Provisionssida({
           netto={ordervardeIPerioden.netto}
           antal={facit.antal}
           utanVarde={ordervardeIPerioden.utanVarde}
+          utkop={ordervardeIPerioden.utkop}
           rubrik={`Ordervärde — ${foretagsvy ? "företaget" : visadNamn.toLowerCase()}, ${periodtext}`}
         />
       )}

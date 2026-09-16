@@ -244,20 +244,38 @@ export function overtackFor(
 export type Affar = {
   /** Provisionen som ska frysas pa ordern. */
   provision: number;
-  /** Varifran den kom. Speglar `commission_source` i 0034 och 0050. */
-  kalla: "matrix" | "manual" | "manager";
+  /** Varifran den kom. Speglar `commission_source` i 0034, 0050 och 0060. */
+  kalla: "matrix" | "manual" | "manager" | "buyout";
   /** Overtacket, eller null nar inget ska bokforas. */
   overtack: Overtack | null;
 };
 
+/**
+ * Kallorna en saljares provision kan ha INNAN chefsregeln provats.
+ *
+ * `manager` star inte med, och det ar hela poangen: den kallan uppstar HAR, i
+ * `affarenFor`, och aldrig hos anroparen. Skrevs den in utifran hade valet
+ * mellan de tva satserna kunnat goras pa tva stallen.
+ */
+export type Saljarkalla = "matrix" | "manual" | "buyout";
+
 export function affarenFor(arg: {
   sats: Chefssats | null;
   saljareId: string;
+  /**
+   * Basen for rakningen.
+   *
+   * PA EN UTKOPSAFFAR AR DET NETTOT, inte bruttot (0060). Anroparen drar av
+   * utkopet innan, och det ar avsiktligt att den har funktionen inte kanner
+   * till utkop alls: utkopet ar en egenskap hos AFFAREN, medan valet mellan
+   * chefens tva satser ar en egenskap hos VEM SOM SALDE. Blandades de skulle
+   * den har funktionen behova ett fjarde fall for varje nytt avdrag.
+   */
   ordervarde: number;
-  /** Provisionen ur matrisen eller handsatt. Ignoreras vid egen forsaljning. */
+  /** Provisionen ur matrisen, handsatt eller ur utkopssatsen. Ignoreras vid egen forsaljning. */
   saljarprovision: number;
   /** Kallan for `saljarprovision`. Ignoreras vid egen forsaljning. */
-  saljarkalla: "matrix" | "manual";
+  saljarkalla: Saljarkalla;
 }): Affar {
   const { sats, saljareId, ordervarde, saljarprovision, saljarkalla } = arg;
 

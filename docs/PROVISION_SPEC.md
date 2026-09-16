@@ -80,13 +80,15 @@ ingenting med kundaffärer att göra. Nytt begrepp, ny tabell, ny sida.
 | Organisationsnummer | Obligatoriskt | Se K27-varningen nedan |
 | Kontaktperson | Obligatoriskt | Namn |
 | Telefon | Obligatoriskt | |
+| Mejl | **Frivillig** | Tillkom 2026-09-15 (`0060`). Order lagda dessförinnan har ingen |
 | Paket | Obligatoriskt | 1, 2 eller 3 |
 | Avtalstid | Obligatoriskt | 12, 24 eller 36 månader |
 | Säljare | Obligatoriskt | |
 | Signeringsdatum | Obligatoriskt | **Styr vilken period ordern hör till** |
 | Avtalsfil | **Frivillig** | PDF. **Byggd inte i steg 1** — se nedan |
+| Utköp | **Frivillig** | Tillkom 2026-09-15 (`0060`). Se 4.8 |
 | Manuell provision | Endast när ordern faller utanför paketmatrisen | Sätts av godkännaren |
-| Anteckning | Frivillig | |
+| Anteckning | Frivillig | Var obligatorisk vid handsatt provision fram till `0060` — se 4.8 |
 
 Inget mer. Beställaren var uttrycklig: "behövs ej mer".
 
@@ -456,6 +458,88 @@ motorns poster har.
 **Bonusen faller inte vid en bonusförlust** (Ö8). Motorn rör aldrig de här
 posterna; de ligger i huvudboken och läggs till i vyn som bokförda poster.
 
+### 4.8 Utköp på affären
+
+*Beställarens besked 2026-09-15:* **"Ibland tar vi från ordervärdet och köper ut
+kunder med det."** Kunden sitter i ett avtal någon annanstans; för att få affären
+löser bolaget ut henne ur det, och pengarna tas ur den nya affären.
+
+**Tre tal, aldrig ett.** Ordervärdet står kvar **brutto** — det är vad kunden
+tecknat, och det är bruttot avtalet säger. Utköpet står i en egen kolumn
+(`buyout_amount`, nullbar). Nettot lagras inte alls; det räknas fram varje gång
+ur de två. Ett lagrat netto hade varit ett tredje tal som kan säga emot de två
+andra.
+
+Frestelsen är att bara skriva in ett lägre ordervärde för hand. Det avvisades av
+två skäl: avtalet säger bruttot, och utköpen går inte att räkna ihop över en
+månad om de aldrig skrivits någonstans.
+
+**Nettot är basen för båda leden.**
+
+| Led | Före `0060` | Med utköp |
+|---|---|---|
+| Säljarens provision | Paketmatrisen | **12 % av nettot** — matrisen används inte |
+| Säljchefens övertäck | 10 % av (ordervärde − provision) | 10 % av (**netto** − provision) |
+
+Räkningen, med beställarens eget exempel: ordervärde 20 000, utköp 5 000 → netto
+15 000. Säljaren får 12 % = 1 800 kr. Restposten blir 13 200 kr och övertäcket
+1 320 kr.
+
+**Övertäcket räknas på nettot, inte på bruttot.** Beställarens val samma dag:
+utköpspengarna är utbetalda till kunden och är inte bolagets marginal, så
+säljchefen får inte procent på dem heller. På bruttot hade övertäcket blivit
+1 820 kr — alltså 500 kr på pengar som redan gått ut.
+
+**Satsen ersätter matrisen, den kommer inte utöver den.** Matrisens 1 500 kr är
+redan bolagets andel av ett *fullt* ordervärde, och på en affär där en del av
+värdet gick till att köpa ut kunden finns inte den marginalen. De två hade
+dubbelräknat samma pengar.
+
+**12 % är konfiguration, inte kod** (`buyout_commission_rate` i `0060`),
+versionerad med `valid_from`/`valid_to` och slagen upp på **orderns
+signeringsdatum** — samma regel som paketmatrisen och säljchefens satser följer,
+och motsatsen till volymtrappan som slås upp på månadens första dag.
+
+**Ordningen mellan reglerna** när flera skulle kunna gälla: ett *handsatt* belopp
+går före utköpssatsen, som går före matrisen. Skriver godkännaren in ett tal har
+hen sett alla uppgifter och tagit ett beslut, och en procentsats ska inte
+överpröva det. Är ordern säljchefens egen gäller `own_sale_percent` på nettot,
+och inget övertäck — de två satserna möts aldrig på samma order.
+
+**Utköpet skrivs redan på en inskickad order.** Säljaren vet om affären bär ett
+utköp; godkännaren gör det inte. Villkoret `sales_order_utkop_ryms` släpper
+därför igenom ett utköp utan ordervärde, och biter först när ordern godkänns och
+båda talen finns.
+
+**Månadens ordervärde blir netto.** `ordervarde()` drar av utköpen ur `netto` och
+låter `tecknat` stå kvar brutto, så att en månad går att stämma av mot både
+avtalen och bokföringen. Ordervärdeskortet skriver ut avdraget — ett avdrag som
+inte står utskrivet är ett tal som ser fel ut.
+
+### 4.9 Anteckningskravet vid handsatt provision — borttaget
+
+`sales_order_manuell_kraver_skal` kom till i `0034`: en handsatt provision krävde
+en anteckning om varför. Motiveringen — *"en avvikande provision utan skäl är det
+första någon ifrågasätter i efterhand"* — är fortfarande riktig. Villkoret var
+ändå fel verktyg, och det visade sig 2026-09-15 på ett sätt ingen förutsåg.
+
+Kravet slog till **när knappen trycktes**, efter att hela formuläret fyllts i.
+Serveranropet kom tillbaka med ett fel, React återställde formuläret, och
+**signeringsdatumet föll tillbaka på dagens datum** — det hade
+`defaultValue={idag}`. En order som skulle legat i augusti hamnade i september
+utan att någon såg det ske. Kravet på en *frivillig* uppgift kostade alltså en
+*riktig*: vilken månad affären hör till.
+
+Borttaget i `0060`, på tre ställen: check-villkoret, kontrollen i tre server
+actions, och `required` i formulären. Fältet står kvar och texten uppmuntrar
+fortfarande.
+
+**Spårbarheten bärs ändå.** `audit_log` bär belopp och källa på varje
+godkännande, och `commission_source = 'manual'` säger rakt ut att någon skrev in
+talet. Den andra halvan av rättelsen är att inmatningsformuläret nu är helt
+kontrollerat och inte längre tappar något vid ett felmeddelande — se rubriken i
+`src/app/(app)/order/Nyorder.tsx`.
+
 ---
 
 ## 5. Volymbonus
@@ -473,12 +557,12 @@ De är satta sedan 2026-08-25 och rättade 2026-08-27. **Tabellen nedan är en
 avskrift av konfigurationen, inte dess källa** — trappan läses alltid ur
 `commission_bonus_level`:
 
-| Tröskel | Belopp | Gäller från |
-|---|---|---|
-| 5 | 200 kr | 2026-08-25 |
-| 10 | 500 kr | 2026-08-25 |
-| 15 | 1 000 kr | 2026-09-01 |
-| 20 | 1 200 kr | 2026-09-01 |
+| Tröskel | Belopp | Form | Gäller från |
+|---|---|---|---|
+| 5 | 200 kr **per order** | `amount_per_order` | 2026-09-01 |
+| 10 | 500 kr **per order** | `amount_per_order` | 2026-09-01 |
+| 15 | 1 000 kr **per order** | `amount_per_order` | 2026-09-01 |
+| 20 | 1 200 kr **per order** | `amount_per_order` | 2026-09-01 |
 
 **Trappan gäller från och med september, inte augusti.** Uppslaget sker på
 månadens första dag (Ö16), och samtliga rader har `valid_from` efter den
@@ -489,18 +573,37 @@ augusti bär två testorder — men det är inte det någon läser ur trappan.
 Nivåerna **25 och 30 är avsiktligt tomma** (beställarens besked 2026-08-26). Nås
 de i dag ger de samma bonus som 20, och trappan står still över 30 enligt 5.3.
 
-**Formen är fast belopp** (Ö2), men procent ska gå att välja i inställningarna.
-Konfigurationen bär därför en `unit`-kolumn, precis som `cost_rate`:
+**Formen är kronor per order** sedan 2026-09-15. Konfigurationen bär en
+`unit`-kolumn, precis som `cost_rate`:
 
 | Enhet | Betyder | |
 |---|---|---|
-| `amount_fixed` | Ett fast kronbelopp när nivån nås | **Används** |
+| `amount_fixed` | Ett fast kronbelopp när nivån nås | Valbar |
 | `percent` | Procent på månadens grundprovision | Valbar |
-| `amount_per_order` | Kronor per order, gäller **samtliga** order i perioden | Valbar |
+| `amount_per_order` | Kronor per order, gäller **samtliga** order i perioden | **Används** |
 
-Den tredje formen är den enda där ordet "retroaktiv" har en synlig innebörd i
-själva beloppet. Med `amount_fixed` ligger retroaktiviteten i stället i att
-nivån bestäms av **hela** periodens ordervolym — se 5.2.
+#### Formen stod fel, och den betalade fel
+
+Fram till `0060` stod samtliga fyra nivåer som `amount_fixed`. Det var inte ett
+beslut — formuläret i `/provision/regler` har `amount_fixed` som förvalt värde,
+och nivåerna lades in på det.
+
+Utfallet: en säljare med sex godkända order i september fick **200 kr** i bonus.
+Avsett var 200 kr per affär, alltså **1 200 kr**. Skillnaden syns inte i vyn —
+raden säger *"Volymbonus nivå 5, 6 order"* i båda fallen — och upptäcktes först
+när någon räknade efter.
+
+Rättat i `0060` som en **vanlig trappändring**, inte som ett `update`: raden som
+gällde fick ett `valid_to` och en ny rad tog vid, precis vad `sparaNiva` gör.
+Frågan *"vilken trappa gällde i augusti"* har alltså ett svar även efter
+rättelsen. `valid_from` är den 1 september — beställarens val "gäller allt
+intjänat denna månad" (8.1) — så september räknas om live. **Augusti rörs inte:**
+den är fastställd och bokförd, och trappan läser den inte längre.
+
+Med `amount_per_order` har ordet "retroaktiv" en synlig innebörd i själva
+beloppet: nås nivå 10 får alla tio orderna nivå 10:s belopp. Med `amount_fixed`
+låg retroaktiviteten i stället bara i att nivån bestäms av **hela** periodens
+ordervolym — se 5.2.
 
 ### 5.2 Retroaktiviteten
 

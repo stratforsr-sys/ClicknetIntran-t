@@ -14,6 +14,47 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "utkop-och-orderformularet",
+    rubrik: "Utköp på affären — och ett orderformulär som inte längre tappar det du skrivit",
+    ingress:
+      "Lägg in utköpet direkt på ordern så räknas provisionen på det som blir kvar. Samtidigt: kommentaren är inte längre obligatorisk, fälten står kvar när något blir fel, och datumet säger vilken månad ordern hamnar i.",
+    text: `**Har affären ett utköp?** Kryssa i rutan och skriv beloppet. Det dras
+från ordervärdet, och säljaren får **12 % av det som blir kvar** i stället för
+matrisens belopp. Rutan under formuläret visar hela räkningen medan du skriver:
+ordervärdet, avdraget, vad som är kvar, provisionen och övertäcket.
+
+Ett exempel: ordervärde 20 000 kr, utköp 5 000 kr. Kvar blir 15 000 kr, och
+säljaren får 1 800 kr. Ordervärdet står kvar på 20 000 kr på ordern — det är vad
+kunden tecknat, och det är det avtalet säger. Utköpet står bredvid, med sitt eget
+minustecken.
+
+**Kommentaren är inte längre obligatorisk.** Sätter du ordervärde och provision
+för hand går ordern igenom utan att du skriver ett skäl. Fältet står kvar, och
+det är fortfarande värt att fylla i — det är nästa person som läser det — men det
+stoppar dig inte längre.
+
+**Och det du skrivit står kvar.** Blir något fel återställs inte formuläret
+längre. Datumet, beloppen, kunduppgifterna — allt ligger kvar precis som du
+lämnade det, och du rättar bara det som var fel. Tidigare tömdes allt, och
+signeringsdatumet hoppade tillbaka till i dag utan att säga till. Det gick att
+lägga en augustiorder som tyst hamnade i september.
+
+**Datumet säger nu vilken månad ordern hamnar i.** Under signeringsdatumet står
+en rad: *"Räknas på augusti 2026."* Är den månaden redan fastställd blir raden en
+varning som säger vad som kommer att hända — att ordern hör dit, men att
+provisionen bokförs i den öppna månaden. Du ser det innan du trycker.
+
+**Mejl på ordern.** Kundens mejladress har fått en egen rad, bredvid telefonen.
+Den är frivillig, och order som lades in tidigare har ingen.
+
+**Volymbonusen räknas nu per affär.** Nivåerna stod som ett engångsbelopp när
+nivån nåddes — sex order gav 200 kr. Nu ger varje affär sin bonus: sex order på
+nivå 5 ger 1 200 kr. September räknas om; stängda månader står orörda.`,
+    datum: "2026-09-15",
+    roller: [],
+    href: "/order",
+  },
+  {
     slug: "slutdatum-i-kalendern",
     rubrik: "Projektens deadline syns i kalendern, och chefen ser coachningen",
     ingress:

@@ -54,6 +54,172 @@ innan någon skyller på en gren.
 
 ---
 
+## 2026-09-15 · Utköp, mejl, ett formulär som glömde bort allt, och en bonus på fel form (0060)
+
+Fem beställningar samma pass. Fyra av dem visade sig vara **samma fel sett från
+olika håll**, och det gör dem värda att läsa i ordning.
+
+### Beställningen, ordagrant
+
+1. *"när jag lägger en order så måste jag lägga en kommentar ifall ordern inte
+   följer paket regler, ta bort det så det inte är obligatoriskt"*
+2. *"ifall sidan uppdateras … så laddades sidan om och då försvann mina uppgifter
+   som jag skrev in, fixa det så de inte försvinner"*
+3. *"nu valde jag augusti i signeringsdatum på en order men den las ändå på
+   september"*
+4. *"lägg till ifall det finns utköp på affären … då ska det dras minus på
+   affären och sen ska det räknas på 12 % för säljaren i provision på det som är
+   över efter utköpet"*
+5. *"lägg till en kolumn för mejl"* och *"bonusen är fel inräknat … 200 kr ska
+   vara i bonus på varje affär"*
+
+### 1–3 är en enda kedja, och den kostade en riktig uppgift
+
+Frågan som avgjorde allt: **var är augustiordern?** Svaret var att den inte
+finns. `audit_log` visar tio godkännanden den 15 september, samtliga med
+`signed_on` i september, och `sales_order` har ingen enda order signerad i
+augusti utöver en testorder från den 25:e. Augustivalet nådde alltså aldrig
+databasen.
+
+Kedjan, i ordning:
+
+1. Ordern lades med signeringsdatum i augusti och provisionen satt för hand.
+2. `skapaOrder` nekade: *"En handsatt provision kräver en anteckning om varför."*
+3. **React återställde formuläret.** Ett `<form action={...}>` återställs efter
+   varje serveranrop — också det som misslyckades — och ett okontrollerat fält
+   går då tillbaka till sitt `defaultValue`. `signed_on` hade
+   `defaultValue={idag}`.
+4. Alla fält tomma, datumet tillbaka på i dag. Ny inmatning, ny knapptryckning,
+   och ordern hamnade i september.
+
+Ingenting i gränssnittet sa att månaden bytts. **Kontrollen som skulle skydda en
+frivillig uppgift åt alltså upp en riktig** — vilken månad affären hör till, som
+avgör både vad den är värd och när den betalas ut.
+
+Åtgärden är därför tredelad, och alla tre behövs:
+
+- **Anteckningskravet är borta.** Check-villkoret
+  `sales_order_manuell_kraver_skal`, kontrollen i tre server actions och
+  `required` i två formulär. Fältet står kvar och texten uppmuntrar. Spårbarheten
+  bärs ändå av `audit_log` — som bar belopp och källa hela tiden — och av
+  `commission_source = 'manual'`, som säger rakt ut att någon skrev in talet.
+- **Hela `Nyorder.tsx` är kontrollerat.** Varje fält ligger i React-state.
+  Formuläret töms av `nollstall()` och **bara** när ordern faktiskt sparats
+  (`state.ok`). Ett felmeddelande lämnar allt orört.
+- **Månadsstämpeln under datumfältet.** *"Räknas på augusti 2026."* Och är
+  månaden fastställd blir raden en varning som säger vad som kommer att hända:
+  ordern hör dit, men provisionen bokförs i den öppna perioden (5.6, Ö11). Det
+  stod tidigare bara i kvittensen, **efter** att knappen tryckts.
+
+Det sista är värt en rad för sig: **augusti är fastställd sedan 2026-09-08.**
+Även med rätt datum hade provisionen hamnat i september — och `sales_order_stegbyte`
+nekar dessutom att flytta en order *in i* en stängd månad. Den ordern går alltså
+inte att lägga rätt i efterhand utan att ekonomi öppnar frågan. Nu står det på
+skärmen innan man trycker i stället för efteråt.
+
+### Utköpet: tre tal som aldrig får bli ett
+
+Ordervärdet står kvar **brutto**, utköpet i en egen kolumn, och nettot lagras
+inte alls.
+
+Frestelsen var att bara skriva in ett lägre ordervärde för hand. Två skäl talade
+emot: **avtalet säger bruttot** — kunden har tecknat 995 kr i tolv månader, och
+skrivs 6 940 kr in stämmer ingenting den dag någon jämför — och **utköpen går
+inte att räkna ihop** om de aldrig skrivits någonstans. Ett *lagrat* netto vore i
+sin tur ett tredje tal som kan säga emot de två andra.
+
+Räkningen, med beställarens exempel: 20 000 − 5 000 = 15 000. Säljaren 12 % =
+1 800 kr. Restposten 13 200 kr, övertäcket 1 320 kr.
+
+**Övertäcket räknas på nettot.** Beställarens val: utköpspengarna är utbetalda
+till kunden och är inte bolagets marginal, så säljchefen får inte procent på dem
+heller. På bruttot hade det blivit 1 820 kr — 500 kr på pengar som redan gått ut.
+
+**Satsen ersätter matrisen.** Matrisens 1 500 kr är redan bolagets andel av ett
+*fullt* ordervärde; den marginalen finns inte här. De två hade dubbelräknat samma
+pengar.
+
+Ordningen mellan reglerna, och den står på **ett** ställe (`raknaFramProvision`):
+handsatt belopp → utköpssats → matris. Är ordern säljchefens egen gäller
+`own_sale_percent` på nettot och inget övertäck.
+
+12 % är **konfiguration**, inte kod: `buyout_commission_rate`, versionerad, slagen
+upp på orderns signeringsdatum. Samma regel som paketmatrisen och chefssatserna,
+motsatsen till volymtrappan (Ö16).
+
+**Utköpet skrivs redan på en inskickad order**, och fältet ligger därför utanför
+`hanterare`-blocket. Säljaren är den som vet — hen förhandlade det. Låg fältet
+bakom chefsbehörigheten hade uppgiften blivit ett muntligt meddelande.
+`sales_order_utkop_ryms` släpper därför igenom ett utköp utan ordervärde, och
+biter först vid godkännandet när båda talen finns.
+
+### Bonusen stod på fel form — ingen kod var fel
+
+Fredrik: sex godkända order i september, grundprovision 9 220 kr, volymbonus
+**200 kr**. Avsett: 200 kr per affär, alltså 1 200 kr.
+
+Motorn räknade rätt. `commission_bonus_level` hade `unit = 'amount_fixed'` på
+samtliga fyra nivåer — inte som ett beslut, utan för att formuläret i
+`/provision/regler` har det som förvalt värde. Och skillnaden **syns inte i vyn**:
+raden säger *"Volymbonus nivå 5, 6 order"* i båda fallen.
+
+Rättat som en **vanlig trappändring** och inte som ett `update`: den gällande
+raden fick `valid_to = 2026-09-01` och en ny rad tog vid — precis vad `sparaNiva`
+gör. Frågan *"vilken trappa gällde i augusti"* har alltså ett svar även efteråt.
+September räknas om live; **augusti rörs inte**, den är fastställd.
+
+Beställarens besked: samtliga fyra nivåer är kronor per order — 5→200, 10→500,
+15→1 000, 20→1 200.
+
+### Mejlen
+
+Nullbar. Varje order som lagts före i dag saknar adress och får ingen i
+efterhand — samma linje som `order_value` tog i `0050`. Kontrollen är avsiktligt
+tillåtande: något före ett @, något efter, ingen blank. En strängare regel nekar
+riktiga adresser och vinner ingenting — navet skickar inga brev hit, det är en
+uppgift *om* kunden.
+
+Till skillnad från de fyra obligatoriska kundfälten **går mejlen att tömma** i
+rättelsen. `text()` läser ett tomt fält som "orört", vilket är rätt för uppgifter
+en order måste ha — men en frivillig adress som bara går att skriva över och
+aldrig radera är en felskrivning man får leva med.
+
+### Filer
+
+| Vad | Var |
+|---|---|
+| Migrationen | `supabase/migrations/0060_utkop_mejl_och_bonusform.sql` |
+| Utköpslogiken (ren, provad) | `src/lib/utkop.ts`, `tests/utkop.mjs` |
+| Valet mellan reglerna | `raknaFramProvision` i `src/app/(app)/order/actions.ts` |
+| Det kontrollerade formuläret | `src/app/(app)/order/Nyorder.tsx` |
+| Månadsstämpeln | `Manadsstampel` i samma fil |
+| Utköp och mejl i rättelsen | `src/app/(app)/order/Atgarder.tsx` |
+| Månadens netto | `ordervarde()` i `src/lib/order.ts` |
+
+### Det som är värt att veta innan någon rör det här
+
+**`har_utkop_ritad` är ett dolt fält, och det behövs.** En kryssruta som inte är
+ikryssad skickar ingenting alls i en `FormData`. Utan det dolda fältet går "chefen
+tog bort krysset" inte att skilja från "formuläret ritade aldrig någon kryssruta",
+och gissningen hade blivit fel åt det dyra hållet: ett borttaget utköp hade
+stannat kvar och fortsatt sänka provisionen.
+
+**Godkännandet läser utköpet ur ORDERN, inte ur formuläret.** Säljaren skrev in
+det när hen skickade in; en tom ruta i godkännandeformuläret hade tyst nollat
+det. Ska utköpet ändras är vägen rättelsen, där både talet och skälet hamnar i
+loggen.
+
+**Noll är inte ett utköp.** `harUtkop()` finns för att en nolla som släpps igenom
+hade bytt provisionskälla från matrisen till 12 % **utan att ändra ett enda
+tal** — en vanlig paketorder hade tyst gått från 1 500 kr till 1 433 kr.
+
+**Lägg aldrig tillbaka ett `defaultValue` i `Nyorder.tsx`.** Hela poängen med de
+kontrollerade fälten är att ingenting får ha ett värde som återställningen kan
+falla tillbaka på. Ett enda okontrollerat fält räcker för att återinföra felet,
+och det syns inte förrän någon undrar varför en order hamnade i fel månad.
+
+---
+
 ## 2026-09-15 · Slutdatumen i kalendern — och migrationen som inte behövdes
 
 Beställningen, hennes ord kvällen innan:

@@ -2,6 +2,7 @@ import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
 import type { Order, Paket, Sats } from "@/lib/order";
 import type { Chefssats } from "@/lib/chefsprovision";
+import type { Utkopssats } from "@/lib/utkop";
 import type { Chefspost } from "@/lib/provision-motor";
 
 /**
@@ -19,6 +20,8 @@ export type Orderrad = Order & {
   org_number: string;
   contact_name: string;
   contact_phone: string;
+  /** 0060. Nullbar: order fran fore 2026-09-15 har ingen adress och far ingen i efterhand. */
+  contact_email: string | null;
   commission_source: string | null;
   order_value_source: string | null;
   note: string | null;
@@ -39,10 +42,10 @@ export type Orderrad = Order & {
 };
 
 const FALT =
-  "id, company_name, org_number, contact_name, contact_phone, package_id, term_months," +
-  " salesperson_id, signed_on, period_month, status, is_addon, commission_amount," +
-  " commission_source, order_value, order_value_source, note, created_by, created_at," +
-  " approved_at, cancelled_on, cancel_reason, cancel_period_month";
+  "id, company_name, org_number, contact_name, contact_phone, contact_email, package_id," +
+  " term_months, salesperson_id, signed_on, period_month, status, is_addon, commission_amount," +
+  " commission_source, order_value, order_value_source, buyout_amount, note, created_by," +
+  " created_at, approved_at, cancelled_on, cancel_reason, cancel_period_month";
 
 /**
  * numeric kommer tillbaka som STRANG ur PostgREST. Utan Number() blir
@@ -60,6 +63,13 @@ function tolka(rader: unknown[]): Orderrad[] {
     ...r,
     commission_amount: r.commission_amount === null ? null : Number(r.commission_amount),
     order_value: r.order_value === null || r.order_value === undefined ? null : Number(r.order_value),
+    // UTKOPET AR EN NUMERIC TILL (0060), och den ar lika lett att glomma som de
+    // tva ovan. En strang dar gor `order_value - buyout_amount` till NaN, och
+    // NaN i en provisionsvy ser ut som ett fel i rakningen i stallet for ett
+    // fel i tolkningen. `null` far forbli null: ingen affar utan utkop ska
+    // bara en nolla, se `buyout_amount` i `order.ts`.
+    buyout_amount:
+      r.buyout_amount === null || r.buyout_amount === undefined ? null : Number(r.buyout_amount),
   })) as unknown as Orderrad[];
 }
 
@@ -184,6 +194,27 @@ export async function hamtaChefssatser(): Promise<Chefssats[]> {
     override_percent: Number(s.override_percent),
     own_sale_percent: Number(s.own_sale_percent),
   })) as Chefssats[];
+}
+
+/**
+ * Utkopssatserna. HELA historiken, av samma skal som `hamtaSatser`.
+ *
+ * Uppslaget sker pa orderns SIGNERINGSDATUM — se `gallandeUtkopssats` i
+ * `utkop.ts` — och da maste de stangda raderna finnas med i materialet.
+ *
+ * LASBAR FOR ALLA INLOGGADE, till skillnad fran `hamtaChefssatser`.
+ * `buyout_commission_rate_read` i 0060 slapper in hela kretsen, och det ar
+ * avsiktligt: det ar SALJARENS EGEN sats. Den som lagger en order med utkop ska
+ * se vad affaren ger innan hen trycker, precis som paketmatrisen star oppen.
+ */
+export async function hamtaUtkopssatser(): Promise<Utkopssats[]> {
+  const rls = await supabaseServer();
+  const { data } = await rls
+    .from("buyout_commission_rate")
+    .select("id, percent, valid_from, valid_to")
+    .order("valid_from", { ascending: false });
+
+  return (data ?? []).map((s) => ({ ...s, percent: Number(s.percent) })) as Utkopssats[];
 }
 
 /**
