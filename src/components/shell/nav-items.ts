@@ -151,6 +151,25 @@ export function navFor(user: CurrentUser | null, stamplingPa: boolean): Navigeri
     const harKoPaTid = stamplingPa && (canManageEmployees(user) || hasRole(user, "ceo"));
     if (stamplarSjalv || harKoPaTid) snabb.push({ href: "/tid", label: "Tid", ikon: "tid" });
 
+    /**
+     * =======================================================================
+     * KALENDERN LIGGER I MIN VY OCH BRYTER INTE FEMTAKET EN ANDRA GANG
+     *
+     * Uppgifterna fick undantaget 2026-09-11 med ett argument som holl: en
+     * lista over det man inte far glomma, placerad bakom ett klick i en meny,
+     * ar en lista man slutar oppna.
+     *
+     * Kalendern ar inte det. Den ar ett STALLE MAN GAR TILL NAR MAN HAR ETT
+     * ARENDE DIT — nar dagen ska laggas upp, eller nar man undrar om en kollega
+     * ar ledig pa torsdag — och det ar precis definitionen som femtaket vilar
+     * pa. Den star darfor har, bredvid Franvaro, som den hor ihop med.
+     *
+     * Vagen som anvands oftast ar anda inte menyn: planeringsvyn nas fran
+     * uppgiftssidan, dar man redan star nar man bestammer sig for att planera.
+     * =======================================================================
+     */
+    lagg("mitt", { href: "/kalender", label: "Kalender", ikon: "kalender" });
+
     // Arenden galler alla: den anstallda ser sina egna, chefen ser inkorgen.
     // Chefens inkorg AR hens egna arenden, sa posten hor hemma i Min vy for
     // bada — den handlar om vad jag har att gora, inte om en avdelning.

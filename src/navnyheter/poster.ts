@@ -55,6 +55,111 @@ nivå 5 ger 1 200 kr. September räknas om; stängda månader står orörda.`,
     href: "/order",
   },
   {
+    slug: "slutdatum-i-kalendern",
+    rubrik: "Projektens deadline syns i kalendern, och chefen ser coachningen",
+    ingress:
+      "Sätter du ett slutdatum på ett projekt står det nu som en frist i din dag. Och lägger du upp en coachningsuppgift åt någon ser du den i hennes kalender, på sitt klockslag.",
+    text: `Två slutdatum som fanns i navet men inte i kalendern har hittat dit.
+
+**Projektets deadline står i dagen.** Datumet du satt på projektet syntes bara
+på projektkortet. Nu ligger det som en frist i kalendern den dagen — i din egen
+dag, och i alla projektmedlemmars. Ett arkiverat projekt står inte kvar.
+
+**Den räknas INTE in i "planerat 4 h av 6 h".** Uppgifterna inuti projektet
+räknas redan var för sig, och hade projektet räknats med hade samma arbete
+räknats två gånger. En deadline är en vägg, inte ett arbetspass — den ritas i
+samma färg som orderfristen av just det skälet.
+
+**Coachningsuppgiften syns i personens kalender.** Den som fått uppgiften har
+alltid sett den i sin egen dag. Nu ser också **du som lade upp den** den när du
+öppnar hennes kalender, med rubrik, klockslag och en väg in i uppgiften.
+
+**Bara chefen ser den.** En kollega som inte är chef ser ingenting alls — inte
+ens att tiden är tagen. Det är ett medvetet val: att någon har coachning
+klockan två är känsligare än att hon har ett möte. Priset är att en kollega kan
+råka boka den tiden.
+
+**En uppgift utan klockslag ritades två gånger** — en gång överst bland
+heldagsposterna och en gång i raden "Idag utan klockslag". Nu står den bara på
+det ena stället, det du kan dra ifrån.`,
+    datum: "2026-09-15",
+    roller: [],
+    href: "/kalender",
+  },
+  {
+    slug: "ny-post-i-kalendern",
+    rubrik: "Skriv in något direkt i kalendern",
+    ingress:
+      "Tryck på en tom tid i dagen, så öppnas ett formulär med dag och klockslag ifyllda. Välj om det ska bli en uppgift eller — om du coachar någon — en coachningsuppgift.",
+    text: `Kalendern har fått en väg in. Tryck på **Ny post**, eller rakt på en tom tid
+i rutnätet, så öppnas ett litet formulär med dagen och klockslaget redan
+ifyllda.
+
+**Överst väljer du vad posten ska bli.** Det avgör resten av fälten, och därför
+står valet först.
+
+**"Uppgift"** lägger upp den i din egen lista, precis som om du skrivit den på
+Uppgifter — med rubrik, prioritet, klockslag och hur lång tid du tror att den
+tar. Tiden du fyller i räknas in i "Planerat 4 h av 6 h" under dagen.
+
+**"Coachningsuppgift"** syns bara för dig som är teamledare, säljchef eller VD,
+och den lägger upp uppgiften åt någon du är chef för. Alla coachningens egna
+fält finns med: vad det är för sorts moment, vilken kurs, modul eller rutin den
+hänger på, vem som är motpart, vem som kvitterar och vad som krävs för att få
+bocka. Uppgiften hamnar i **hennes** kalender och på hennes coachningskort — inte
+i din — och det står utskrivet i formuläret.
+
+**Coachningsuppgifter syns nu i kalendern.** Tidigare stod bara
+coachnings*samtalen* där. Nu ligger uppgifterna med, på sitt klockslag om de har
+ett, och de plingar tio minuter innan precis som vanliga uppgifter.
+
+**Kalendern bokar fortfarande inga möten.** Det som skapas är ingen
+kalenderhändelse för sig — det ÄR en uppgift eller en coachningsuppgift, och den
+bor i sin egen modul med sin egen historik. Kalendern är fönstret, inte lådan.`,
+    datum: "2026-09-14",
+    roller: [],
+    href: "/kalender",
+  },
+  {
+    slug: "kalendern",
+    rubrik: "Kalendern: lägg ut dagen genom att dra",
+    ingress:
+      "Uppgiftslistan till vänster, dagen till höger. Dra en uppgift till ett klockslag och se direkt hur mycket du planerat. Ledighet, coachningssamtal och frister ligger redan där.",
+    text: `Navet har fått en kalender, och den är byggd för att planeras i.
+
+**Planeringsvyn är huvudvyn.** Till vänster står allt du har öppet — det
+försenade först, sedan det som saknar dag. Till höger står dagen. **Dra en rad
+till ett klockslag**, eller tryck på raden och sedan på tiden om du sitter vid
+en pekskärm.
+
+**"Planerat 4 h av 6 h"** står under dagen. Sex timmar och inte åtta är med
+flit: två timmar av en arbetsdag går åt till avbrott och sådant som dyker upp,
+och den som fyller alla åtta planerar att misslyckas. Uppgifter utan
+tidsuppskattning räknas som noll och redovisas separat — talet ska vara det du
+faktiskt lovat dig själv, inte en gissning.
+
+**Det navet redan vet ligger där automatiskt.** Beviljad ledighet,
+coachningssamtal, dina kursfrister och den sista dagen i månaden en order
+räknas till månadens provision. Ingenting av det behöver läggas in.
+
+**Kalendern bokar inga möten.** Det finns ingen inbjudan och inga ja/nej-svar —
+möten bor kvar i Outlook. Det här är din egen dag och dina egna åtaganden.
+
+**Alla ser när alla är upptagna.** Det är grundläget och går inte att stänga av;
+det är hela poängen med en delad kalender. Vad tiden *gäller* ser bara den du
+säger till, och det finns fem nivåer att välja mellan — från "kan se rubriker"
+till "delegat", som arbetar som du. Du hittar dem under **Delning** på
+kalendersidan.
+
+**Pling i webbläsaren.** Slå på det med knappen på kalendersidan så får du en
+påminnelse tio minuter innan en uppgift ska börja — så länge du har navet öppet
+i en flik. Inställningen gäller den webbläsaren, så du får säga ja en gång per
+enhet.`,
+    datum: "2026-09-14",
+    roller: [],
+    href: "/kalender",
+  },
+  {
     slug: "navet-mejlar",
     rubrik: "Navet mejlar dig när något faktiskt kräver att du gör något",
     ingress:

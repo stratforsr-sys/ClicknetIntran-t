@@ -67,6 +67,15 @@ const SIDOR = [
   // alla andra: renderar den utan serverfel, och lacker den nagon annans namn?
   "/tid/ogiltig-franvaro",
   "/tid/lonerapport",
+  // Uppgiftsmodulen. `/uppgifter` glomdes 2026-09-11 och star med nu — sidan ar
+  // en av fa som renderar EN ANNAN PERSONS namn ("Anna la uppgiften pa dig"),
+  // och det ar precis sadana sidor lackprovet finns for.
+  "/uppgifter",
+  // Kalendern (0057). Utan parameter ar det den egna dagen. Att prova den med
+  // `?person=` gar inte har — id:t skiljer sig mellan korningar — sa kollegans
+  // vy provas i rls.mjs i stallet, dar den hor hemma.
+  "/kalender",
+  "/kalender/delning",
   "/rutiner",
   "/rutiner/ny",
   "/utbildning",

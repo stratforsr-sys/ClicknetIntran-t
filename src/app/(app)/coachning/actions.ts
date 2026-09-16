@@ -66,8 +66,27 @@ export async function skapaUppgift(_prev: CoachState, form: FormData): Promise<C
     const partner = text(form, "partner_id") || null;
     const due = text(form, "due_date") || null;
 
+    /**
+     * KLOCKSLAGET OCH LANGDEN KOM MED 0058, och de kommer fran kalendern.
+     *
+     * Falten ar valfria och skickas inte alls av `NyUppgift.tsx` — en
+     * coachningsuppgift som laggs upp fran personkortet ar fortfarande en dag
+     * och inget mer, precis som den varit sedan 0043.
+     *
+     * ETT KLOCKSLAG UTAN DATUM AR INGEN TIDPUNKT, och det avvisas har i stallet
+     * for att tyst nollas. Databasens `coaching_task_tid_kraver_datum` sager
+     * samma sak, men ett villkorsnamn i ett felmeddelande hjalper ingen.
+     */
+    const tid = text(form, "due_time") || null;
+    const minuterText = text(form, "estimate_minutes");
+    const minuter = minuterText ? Number(minuterText) : null;
+
     if (!assignee) return { fel: "Välj vem uppgiften gäller." };
     if (!titel) return { fel: "Skriv en rubrik." };
+    if (tid && !due) return { fel: "Ett klockslag behöver en dag. Välj datum också." };
+    if (minuter !== null && (!Number.isFinite(minuter) || minuter <= 0 || minuter > 1440)) {
+      return { fel: "Tidsåtgången anges i minuter, mellan 1 och 1440." };
+    }
     if (!UPPGIFTSTYPER.includes(kind)) return { fel: "Okänd uppgiftstyp." };
     if (!KVITTERARE.includes(verifyBy)) return { fel: "Okänd kvitterare." };
     if (!BEVIS.includes(evidence)) return { fel: "Okänt beviskrav." };
@@ -121,6 +140,8 @@ export async function skapaUppgift(_prev: CoachState, form: FormData): Promise<C
         document_id: kravs === "document_id" ? dokument : null,
         starts_on: text(form, "starts_on") || null,
         due_date: due,
+        due_time: tid,
+        estimate_minutes: minuter,
       })
       .select("id")
       .single();
@@ -150,11 +171,14 @@ export async function skapaUppgift(_prev: CoachState, form: FormData): Promise<C
       action: "coaching_task.created",
       object_type: "coaching_task",
       object_id: rad.id,
-      meta: { assignee_id: assignee, kind, due_date: due },
+      meta: { assignee_id: assignee, kind, due_date: due, due_time: tid },
     });
 
     revalidatePath("/coachning");
     revalidatePath(`/coachning/${assignee}`);
+    // 0058. Raden star numera i den ansvarigas kalender, och den som just lade
+    // upp den fran kalendersidan ska se den dyka upp utan att ladda om.
+    revalidatePath("/kalender");
     return { ok: `Uppgiften "${titel}" är upplagd.` };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };

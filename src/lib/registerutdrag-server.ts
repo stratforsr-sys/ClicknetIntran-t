@@ -131,6 +131,29 @@ export async function hamtaRegisterutdrag(
     rader: [...logg.values()],
   };
 
+  /**
+   * 0057. Kalenderdelningen, fran bada hallen.
+   *
+   * "Anna har gett Bertil delegatbehorighet i sin kalender" ar en uppgift om
+   * BADA tva, och de tva svaren ar olika: Annas utdrag ska saga vem hon oppnat
+   * sin dag for, Bertils vem som oppnat sin for honom. En enda kolumn i KALLOR
+   * hade bara kunnat ge det ena — slingan ovan nycklar pa tabellnamnet, sa den
+   * andra raden hade skrivit over den forsta.
+   *
+   * Delningen ar dessutom den enda vagen in i nagon annans uppgiftslista som
+   * finns i navet (se 0057). Att den gar att lasa ut ar darfor inte en
+   * formalitet: det ar svaret pa "vem kan se vad jag skriver".
+   */
+  const [{ data: delatAvMig }, { data: delatTillMig }] = await Promise.all([
+    db.from("calendar_share").select("*").eq("owner_id", employeeId),
+    db.from("calendar_share").select("*").eq("viewer_id", employeeId),
+  ]);
+
+  data.calendar_share = {
+    andamal: "Kalenderdelning — vem du öppnat din kalender för, och vems du fått se",
+    rader: [...(delatAvMig ?? []), ...(delatTillMig ?? [])],
+  };
+
   return {
     om: {
       id: person.id,

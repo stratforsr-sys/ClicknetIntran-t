@@ -2679,8 +2679,222 @@ console.log("\n\x1b[1mProjektchatten: projektets krets, och ingen annan\x1b[0m")
 
   await db.query(`delete from project where name = 'rlstest-chatt'`);
 }
+
+console.log("\n\x1b[1mKalenderdelningen: grundlaget, projektionen och den enda dorren in\x1b[0m");
+{
+  /**
+   * ===========================================================================
+   * DET HAR AVSNITTET AR DET ENDA SOM PROVAR ATT 0054:S LOFTE HALLER EFTER 0057
+   *
+   * 0054 skrev ut att INGEN ROLL ger insyn i nagons uppgiftslista. 0057 la till
+   * en gren i `uppgift_synlig()`, och den grenen ar den enda vagen in i nagon
+   * annans uppgifter som finns i navet. Tre saker maste darfor vara sanna, och
+   * gar nagon av dem sonder ar det tyst:
+   *
+   *   1. GRUNDLAGET LAMNAR ALDRIG UT EN RUBRIK. Alla ser att tiden ar tagen —
+   *      det ar bestallarens beslut — men "Ring Nordic" ar ingens sak. Faller
+   *      den har lacker varje uppgiftsrubrik i huset utan att en enda policy
+   *      andrats.
+   *   2. DELNINGEN OPPNAR FORST FRAN "ALLA DETALJER". Nivaerna ett och tva far
+   *      NOLL rader ur `task`, och de laser sin kalender genom projektionen.
+   *   3. DEN DOLDA PERSONKOPPLINGEN BRYTER IGENOM DELNINGEN. "Fundera pa om
+   *      Erik ska ha en tillsagelse" ska inte na Erik for att chefen gett honom
+   *      sin kalender — det ar precis det fall `visible_to_subject` finns for.
+   * ===========================================================================
+   */
+
+  // David (saljchef) ager kalendern. Anna far olika nivaer pa den.
+  const { rows: [davidsUppgift] } = await db.query(
+    `insert into task (title, assignee_id, created_by, due_date, due_time, estimate_minutes)
+     values ('rlstest Davids dag', $1::uuid, $1::uuid, current_date, '09:00', 60) returning id`,
+    [chef.id],
+  );
+
+  /** `kalender_poster` som en viss anvandare. Projektionen, inte tabellen. */
+  const projektion = async (tok, agare) => {
+    const r = await fetch(`${URL}/rest/v1/rpc/kalender_poster`, {
+      method: "POST",
+      headers: { ...som(tok), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        p_owner: agare,
+        p_fran: new Date().toISOString().slice(0, 10),
+        p_till: new Date().toISOString().slice(0, 10),
+      }),
+    });
+    const j = await r.json();
+    return Array.isArray(j) ? j : [];
+  };
+
+  // --- 1. Grundlaget ---------------------------------------------------------
+  await db.query(`delete from calendar_share where owner_id = $1::uuid`, [chef.id]);
+
+  const utanDelning = await projektion(tA, chef.id);
+  const raden = utanDelning.find((p) => p.slag === "uppgift");
+
+  ok("Anna ser att Davids tid ar tagen", Boolean(raden), `${utanDelning.length} rader`);
+  ok("men INTE vad den galler", raden ? raden.rubrik === null : false, raden ? String(raden.rubrik) : "ingen rad");
+  ok("och far ingen vag in i raden", raden ? raden.ref === null : false);
+  ok(
+    "Anna far noll rader ur task — grundlaget oppnar ingenting",
+    (await las(tA, "task", `id=eq.${davidsUppgift.id}&select=*`)).length === 0,
+  );
+
+  // --- 2. "Kan se rubriker" --------------------------------------------------
+  await db.query(
+    `insert into calendar_share (owner_id, viewer_id, level, created_by)
+     values ($1::uuid, $2::uuid, 'rubriker', $1::uuid)`,
+    [chef.id, saljareA.id],
+  );
+
+  const medRubrik = (await projektion(tA, chef.id)).find((p) => p.slag === "uppgift");
+  ok("pa niva tva ser Anna rubriken", medRubrik?.rubrik === "rlstest Davids dag", String(medRubrik?.rubrik));
+  ok("men fortfarande ingen vag in", medRubrik?.ref === null);
+  ok(
+    "och fortfarande noll rader ur task",
+    (await las(tA, "task", `id=eq.${davidsUppgift.id}&select=*`)).length === 0,
+  );
+
+  // --- 3. "Kan se alla detaljer" --------------------------------------------
+  await db.query(
+    `update calendar_share set level = 'detaljer' where owner_id = $1::uuid and viewer_id = $2::uuid`,
+    [chef.id, saljareA.id],
+  );
+
+  ok(
+    "pa niva tre oppnas raden i task",
+    (await las(tA, "task", `id=eq.${davidsUppgift.id}&select=*`)).length === 1,
+  );
+  ok(
+    "och projektionen bar en lank in",
+    (await projektion(tA, chef.id)).find((p) => p.slag === "uppgift")?.ref === davidsUppgift.id,
+  );
+
+  // ATT DELNINGEN INTE SMITTAR. Cecilia har ingen rad, och en delning till
+  // Anna far inte oppna nagonting for nagon annan.
+  ok(
+    "Cecilia ser fortfarande ingenting — delningen ar till EN person",
+    (await las(tC, "task", `id=eq.${davidsUppgift.id}&select=*`)).length === 0,
+  );
+  ok(
+    "Bertil likasa",
+    (await las(tB, "task", `id=eq.${davidsUppgift.id}&select=*`)).length === 0,
+  );
+
+  // --- 4. Den dolda personkopplingen star over delningen ---------------------
+  const { rows: [omAnna] } = await db.query(
+    `insert into task (title, assignee_id, created_by, due_date)
+     values ('rlstest om Anna', $1::uuid, $1::uuid, current_date) returning id`,
+    [chef.id],
+  );
+  await db.query(
+    `insert into task_link (task_id, employee_id, visible_to_subject, created_by)
+     values ($1::uuid, $2::uuid, false, $3::uuid)`,
+    [omAnna.id, saljareA.id, chef.id],
+  );
+
+  ok(
+    "en DOLD uppgift om Anna nar henne inte, trots delegatniva",
+    (await las(tA, "task", `id=eq.${omAnna.id}&select=*`)).length === 0,
+  );
+  ok(
+    "och den star inte heller i projektionen",
+    !(await projektion(tA, chef.id)).some((p) => p.rubrik === "rlstest om Anna"),
+  );
+
+  // --- 5. Projektionen bar aldrig sjukfranvaro -------------------------------
+  //
+  // Samma absoluta rad som iCal-flodet drog 2026-08-20. `sick_report` finns
+  // inte i funktionen, och kontrollen star har for att en framtida "det vore
+  // bra om kalendern visade vem som ar sjuk" ska falla pa ett prov och inte pa
+  // en diskussion i efterhand.
+  const slagen = new Set((await projektion(tA, chef.id)).map((p) => p.slag));
+  ok("projektionen bar bara uppgifter och ledighet", [...slagen].every((s) => s === "uppgift" || s === "franvaro"), [...slagen].join(", "));
+
+  // --- 6. Tabellen sjalv -----------------------------------------------------
+  ok(
+    "Anna ser raden som galler henne",
+    (await las(tA, "calendar_share", `owner_id=eq.${chef.id}&viewer_id=eq.${saljareA.id}&select=*`)).length === 1,
+  );
+  ok(
+    "Cecilia ser den INTE, trots att hon ar teamledare",
+    (await las(tC, "calendar_share", `owner_id=eq.${chef.id}&viewer_id=eq.${saljareA.id}&select=*`)).length === 0,
+  );
+
+  const smygDelning = await fetch(`${URL}/rest/v1/calendar_share`, {
+    method: "POST", headers: som(tA),
+    body: JSON.stringify({ owner_id: chef.id, viewer_id: saljareA.id, level: "delegat", created_by: saljareA.id }),
+  });
+  ok("ingen delar nagon ANNANS kalender med sig sjalv", !smygDelning.ok, `HTTP ${smygDelning.status}`);
+
+  // Grundlaget gar inte att lagra. Star raden dar betyder en tom tabell tva
+  // olika saker beroende pa vem som fragar.
+  const grundlaget = await nekarSql(
+    `insert into calendar_share (owner_id, viewer_id, level, created_by)
+     values ($1::uuid, $2::uuid, 'upptagen', $1::uuid)`,
+    [chef.id, saljareB.id],
+  );
+  ok("nivan 'upptagen' gar inte att lagra", Boolean(grundlaget), grundlaget ?? "slapptes igenom");
+
+  const sigSjalv = await nekarSql(
+    `insert into calendar_share (owner_id, viewer_id, level, created_by)
+     values ($1::uuid, $1::uuid, 'delegat', $1::uuid)`,
+    [chef.id],
+  );
+  ok("man delar inte med sig sjalv", Boolean(sigSjalv), sigSjalv ?? "slapptes igenom");
+
+  // --- 7. Coachningsuppgiften i en annans kalender ---------------------------
+  //
+  // ===========================================================================
+  // DEN HAR GAR INTE GENOM PROJEKTIONEN, OCH DET AR HELA POANGEN
+  //
+  // Bestallarens beslut 2026-09-15: en coachningsuppgift ska synas i personens
+  // kalender for CHEFEN, och for ingen annan. Inte ens som en tom
+  // "Upptagen"-ruta — att Fredrik har coachning klockan tva ar kansligare an
+  // att han har ett mote, och priset (att en kollega kan boka den tiden) ar
+  // valt medvetet.
+  //
+  // Darfor star `coaching_task` INTE i `kalender_poster()`. Kretsen ar ett urval
+  // av VEM och inte av HUR MYCKET, och `coaching_task_read` i 0043 gor redan det
+  // urvalet. `hamtaKollegasKalender()` laser raderna med lasarens egen token
+  // bredvid projektionen, sa provet nedan ar provet pa hela funktionen: haller
+  // policyn haller kalendern.
+  //
+  // KONTROLL 4 AR VAKTEN AT ANDRA HALLET. Skulle nagon senare "forenkla" genom
+  // att lagga coaching_task i projektionen slapps raden ut till grundlaget —
+  // alltsa till alla fjorton — och da faller den raden har.
+  // ===========================================================================
+  const { rows: [annasCoachning] } = await db.query(
+    `insert into coaching_task (title, kind, assignee_id, created_by, due_date, due_time, estimate_minutes)
+     values ('rlstest Aktiv lyssning', 'uppgift', $1::uuid, $2::uuid, current_date, '14:00', 60)
+     returning id`,
+    [saljareA.id, ledare.id],
+  );
+
+  const serCoachningen = async (tok) =>
+    (await las(tok, "coaching_task", `id=eq.${annasCoachning.id}&select=id,title,due_date,due_time`)).length === 1;
+
+  ok("Anna ser sin egen coachningsuppgift", await serCoachningen(tA));
+  ok("Cecilia ser den — hon ar Annas chef", await serCoachningen(tC));
+  ok("David ser den — ledningen", await serCoachningen(tD));
+
+  // Bertil ar saljare och leder ingen. Han ar dessutom inte motpart pa raden.
+  ok("Bertil ser den INTE, och hans kalendervy far den darfor aldrig", !(await serCoachningen(tB)));
+  ok("Eva pa ekonomi ser den inte heller", !(await serCoachningen(tE)));
+
+  const annasProjektion = await projektion(tB, saljareA.id);
+  ok(
+    "och projektionen bar den inte at nagon — coaching_task star inte i funktionen",
+    !annasProjektion.some((p) => p.slag === "coachningsuppgift" || p.ref === annasCoachning.id),
+    [...new Set(annasProjektion.map((p) => p.slag))].join(", ") || "inga rader",
+  );
+
+  await db.query(`delete from coaching_task where title like 'rlstest%'`);
+  await db.query(`delete from calendar_share where owner_id = $1::uuid`, [chef.id]);
+  await db.query(`delete from task where title like 'rlstest%'`);
+}
+
 console.log("\n\x1b[1mAnonym anslutning\x1b[0m");
-for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate", "news_post", "notification_seen", "notification_dismissed", "absence_type", "absence_policy", "absence_blackout", "staffing_cap", "absence_balance", "absence_request", "absence_call_order", "sick_report", "sick_deadline", "absence_reminder", "calendar_feed", "file_object", "file_access_log", "roleplay_criterion", "roleplay_submission", "roleplay_score", "cost_rate", "salary_basis", "revenue_entry", "cost_calculation", "error_report", "contract", "contract_template", "activity_day", "search_miss", "candidate", "candidate_stage_event", "interview_scorecard", "recruitment_source", "recruitment_policy", "task", "task_member", "task_link", "task_event", "project", "project_member", "project_message", "project_message_read"]) {
+for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate", "news_post", "notification_seen", "notification_dismissed", "absence_type", "absence_policy", "absence_blackout", "staffing_cap", "absence_balance", "absence_request", "absence_call_order", "sick_report", "sick_deadline", "absence_reminder", "calendar_feed", "file_object", "file_access_log", "roleplay_criterion", "roleplay_submission", "roleplay_score", "cost_rate", "salary_basis", "revenue_entry", "cost_calculation", "error_report", "contract", "contract_template", "activity_day", "search_miss", "candidate", "candidate_stage_event", "interview_scorecard", "recruitment_source", "recruitment_policy", "task", "task_member", "task_link", "task_event", "project", "project_member", "project_message", "project_message_read", "calendar_share"]) {
   const r = await fetch(`${URL}/rest/v1/${t}?select=*`, { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` } });
   const j = await r.json();
   ok(`${t} ger inga rader anonymt`, !Array.isArray(j) || j.length === 0, Array.isArray(j) ? `${j.length} rader` : `HTTP ${r.status}`);

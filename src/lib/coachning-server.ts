@@ -41,6 +41,10 @@ export type Uppgiftsrad = {
   verify_by: Kvitterare;
   evidence: Bevis;
   due_date: string | null;
+  /** 0058. "14:30" eller null. Kravs for att raden ska kunna sta i kalendern. */
+  due_time: string | null;
+  /** 0058. Minuter. Raknas in i kalenderns dagssumma, som en uppgifts. */
+  estimate_minutes: number | null;
   starts_on: string | null;
   cancelled_at: string | null;
   course_id: string | null;
@@ -58,8 +62,8 @@ export type Uppgiftsrad = {
 
 const UPPGIFTSFALT =
   "id, title, description_md, kind, assignee_id, partner_id, created_by, verify_by," +
-  " evidence, due_date, starts_on, cancelled_at, course_id, module_id, document_id," +
-  " template_id, session_id, created_at";
+  " evidence, due_date, due_time, estimate_minutes, starts_on, cancelled_at," +
+  " course_id, module_id, document_id, template_id, session_id, created_at";
 
 /**
  * Ar den har personen chef OVER den andra?
@@ -86,6 +90,70 @@ export async function arChefFor(user: CurrentUser | null, employeeId: string): P
   if (!person) return false;
   if (person.manager_id === user.employee.id) return true;
   return Boolean(person.team_id && (team ?? []).some((t) => t.id === person.team_id));
+}
+
+/**
+ * Vilka `arChefFor()` skulle svara JA for, som en lista.
+ *
+ * =============================================================================
+ * DEN HAR LISTAN AR EN BEKVAMLIGHET, INTE EN BEHORIGHET
+ *
+ * Kontrollen ligger kvar dar den alltid legat: `coachning::skapaUppgift` fragar
+ * `arChefFor()` om assignee:n den fatt, och gor det aven om valjaren erbjod nagon
+ * annan. Funktionen harinne finns bara for att kalenderns formular ska kunna
+ * RITA ett val — och den speglar `arChefFor()` fraga for fraga just for att en
+ * valjare som visar namn skrivningen sedan vagrar ar samre an ingen valjare alls.
+ *
+ * Andras `arChefFor()` maste den har andras i samma andetag. De tva star
+ * medvetet bredvid varandra i filen av det skalet.
+ * =============================================================================
+ */
+export async function personerJagCoachar(
+  user: CurrentUser | null,
+): Promise<{ id: string; namn: string }[]> {
+  if (!user?.employee) return [];
+  if (!farCoacha(user)) return [];
+
+  const supabase = await supabaseServer();
+  const { data: personer } = await supabase
+    .from("employee")
+    .select("id, first_name, last_name, manager_id, team_id")
+    .neq("status", "offboarded");
+
+  const alla = (personer ?? []) as unknown as {
+    id: string;
+    first_name: string;
+    last_name: string;
+    manager_id: string | null;
+    team_id: string | null;
+  }[];
+
+  const mig = user.employee.id;
+
+  // Ledningen ar chef for alla, sig sjalv inraknad — samma svar som
+  // `arChefFor()` ger via `can_read_all_employees()`. Att VD kan lagga en
+  // coachningsuppgift pa sig sjalv foljer darav och ar inget undantag har.
+  if (canReadAllEmployees(user)) return somNamnlista(alla, mig, true);
+
+  const { data: team } = await supabase.from("team").select("id").eq("lead_id", mig);
+  const minaTeam = new Set(((team ?? []) as { id: string }[]).map((t) => t.id));
+
+  return somNamnlista(
+    alla.filter((p) => p.manager_id === mig || (p.team_id && minaTeam.has(p.team_id))),
+    mig,
+    false,
+  );
+}
+
+function somNamnlista(
+  personer: { id: string; first_name: string; last_name: string }[],
+  mig: string,
+  medMigSjalv: boolean,
+): { id: string; namn: string }[] {
+  return personer
+    .filter((p) => medMigSjalv || p.id !== mig)
+    .map((p) => ({ id: p.id, namn: fullName(p) }))
+    .sort((a, b) => a.namn.localeCompare(b.namn, "sv"));
 }
 
 /** Far den har personen alls oppna coachningsvyn som chef? */

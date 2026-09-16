@@ -33,6 +33,14 @@ const P: Record<string, string> = {
   fram: "M9 6l6 6-6 6",
 
   /**
+   * Kalendern (0057). Ringarna upptill ar TVA streck och inte tva cirklar: i
+   * 14 px blir en cirkel med 1,75 px streck en fylld prick, och da ser ikonen
+   * ut att ha tva ogon. Strecket over ramens ovankant ar dessutom det enda som
+   * skiljer den fran `rutiner` pa avstand.
+   */
+  kalender: "M4 6.5h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4",
+
+  /**
    * Avdelningarna (se src/lib/avdelningar.ts). De ritas smatt — i chipsen ar de
    * 14 px — sa formerna ar avsiktligt grova: en kurva, en ram, en fyrkant.
    * `personal` och `installningar` daremot ateranvands, eftersom en avdelning
