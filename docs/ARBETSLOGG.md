@@ -5,6 +5,55 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-16 · Kalendergrenen mergad — tre pass i en merge-commit
+
+Beställaren hade sett pass 1 och 2 och tyckt att de såg bra ut. Pass 3,
+slutdatumen, var byggt men ovisat. Hon gick igenom previewen och godkände.
+Merge kräver uttryckligt godkännande i det här repot, och det här passet
+bestod till största delen av att fråga först.
+
+**`behind_by` var 0.** Det är den enda anledningen till att mergen tog en minut
+i stället för en timme. Main hade flyttat tre gånger under kalenderpassen, och
+varje gång hade det krockat i samma fyra filer — `docs/ARBETSLOGG.md`,
+`docs/NASTA_SESSION.md`, `src/navnyheter/poster.ts`, `src/lib/notiser.ts` —
+alltid av samma skäl: båda sidor lägger till sitt överst i samma lista.
+Eftersom main stått still sedan inflätningen dagen innan räckte
+`POST /repos/.../merges`, som lägger en riktig merge-commit av sig själv.
+
+Resultatet är `0fc9734` med två föräldrar: `ea9e64c` (main) och `4b01ba5`
+(kalender). **Ingen squash.** En squash hade gjort main till en främling för
+grenen igen nästa gång den behövde flätas in — vilket är precis den kostnad
+som betalades i går.
+
+Vercel var grön på grenens huvud före mergen (`4b01ba5`), och
+produktionsbygget av `0fc9734` gick igenom: `success`. Kalendern ligger i
+produktion.
+
+Vad som därmed ligger i produktion, från tre pass:
+
+- **Kalendern** (`0057`) — planeringsvy med dra-och-släpp, veckovy, delning i
+  Outlooks fem nivåer, pling i webbläsaren.
+- **"Ny post"** (`0058`) — knapp och klick på tom ruta, som blir en uppgift
+  eller en coachningsuppgift. Kalendern har fortfarande ingen egen posttabell.
+- **Slutdatumen** (ingen migration) — projektens deadline som sjunde källa,
+  coachningsuppgiften i mottagarens kalender för chefen läst genom
+  `coaching_task_read`, och dubbelritningen borttagen.
+
+**Nästa nummer är `0060`** — fråga `schema_migrations` ändå. Regeln har bitit
+två pass i rad: numret är taget när migrationen körts, inte när den mergats.
+
+Kvar, i prioritetsordning: pass 3 av kalendern (upprepning, veckogenomgång,
+mallar, och uppgifter i iCal-flödet — det sista är en fråga till beställaren
+innan det är ett bygge, eftersom `calendar_feed` och `/api/ical/[token]` i dag
+bär bara beviljad ledighet och en adress utan inloggning är fel ställe att
+gissa på). Därefter **läckprovet, som är rött på main och inte har med
+kalendern att göra**: `tests/sidor.mjs` rapporterar att `/franvaro/sjuk` bär
+efternamnet Menduza för ekonomirollen. Frånvaromodulen, eget pass.
+Registerutdragsprovet är rött sedan tidigare (19 kolumner) — jämför med main
+innan någon skyller på en gren.
+
+---
+
 ## 2026-09-15 · Slutdatumen i kalendern — och migrationen som inte behövdes
 
 Beställningen, hennes ord kvällen innan:
