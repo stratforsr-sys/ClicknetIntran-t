@@ -14,6 +14,42 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "utbildning-slapp-inte-kunden",
+    rubrik: "Ny utbildning: släpp inte kunden för tidigt",
+    ingress:
+      'Tre dagars drill mot reflexen att lägga på när kunden säger "vi kör redan Bokadirekt" — fyra prov och ett inspelat testsamtal som din chef bedömer.',
+    text: `Kunden säger "vi kör Bokadirekt", och samtalet tar slut. Inte för att kunden
+sa nej — utan för att du hörde ett nej som inte fanns där.
+
+Under **Utbildning** ligger nu en kurs som tränar bort en enda reflex och lär in
+en enda i stället: **motstånd betyder en fråga till.**
+
+**Tre dagar, 20–30 minuter om dagen.**
+
+- **Dag 1** — trettio motstånd, trettio följdfrågor. Du spelar in dig själv och
+  räknar efteråt hur många som blev riktiga frågor, och hur många som blev
+  pitchar med ett frågetecken efter.
+- **Dag 2** — tre lager djupt, tillsammans med en kollega. Fråga två ska bygga
+  på svaret på fråga ett, annars är det ett förhör och inte en kedja.
+- **Dag 3** — motstånd i slumpmässig ordning, utan förberedelse. Och var
+  gränsen går: kursen tränar dig att inte släppa för tidigt, inte att aldrig
+  släppa.
+
+**Sluttestet är ett riktigt samtal.** Fem minuter med chefen eller en kollega
+som spelar kund, inspelat och uppladdat här i navet. Du bedöms mot åtta
+kriterier — som du ser innan du spelar in, inte efter. Godkänt ger ett
+certifikat som gäller i ett år.
+
+Däremellan ligger fyra kunskapsprov. Gränsen är 80 procent, och missar du den
+går provet att göra om efter en timme.
+
+**Du behöver** en telefon som spelar in, och en kollega i tjugo minuter på dag
+2. Modulerna tas i ordning.`,
+    datum: "2026-09-16",
+    roller: ["salesperson", "team_lead"],
+    href: "/utbildning/slapp-inte-kunden-for-tidigt",
+  },
+  {
     slug: "slutdatum-i-kalendern",
     rubrik: "Projektens deadline syns i kalendern, och chefen ser coachningen",
     ingress:

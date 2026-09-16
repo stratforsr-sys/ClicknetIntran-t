@@ -5,6 +5,129 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-16 (senare) · Säljdrillen blev en kurs — och två saker i utbildningsmodulen som inte stämde
+
+Beställningen var ett färdigt dokument: en tredagarsdrill mot reflexen att
+släppa kunden vid första motståndet, skriven till en enskild säljare. *"Gör om
+det så att det blir till en riktig utbildning och något ordentligt."*
+
+Resultatet är kursen **Släpp inte kunden för tidigt** i `course`: tio moduler,
+fyra kunskapsprov med 31 frågor, och ett rollspel som chefen bedömer mot en
+rubrik på trettio poäng. Migration `0061`. Kursen ligger som **UTKAST** — den
+publiceras med ett klick i redaktören, se nedan.
+
+### Varför innehållet ligger i en migration
+
+Kursen är tiotusen tecken text, 31 frågor med facit och åtta
+bedömningskriterier. Skrivet för hand i redigeringsvyn är det ett par timmars
+klistrande, och ingen gör om det den dag databasen sätts upp på nytt. Här går
+den att granska i en diff innan den ligger ute.
+
+Men **migrationen är ett utsäde, inte sanningen.** Så fort kursen ligger ute är
+det redaktören som gäller. Filen kör därför ingenting alls om slugen redan
+finns — en omkörning hade annars skrivit över chefens rättelser med
+originaltexten och nollställt frågorna mitt i en pågående kurs.
+
+Frågorna skrivs i **exakt samma textformat som redaktören** (`tolkaFragor()`:
+en fråga per stycke, ett svar per rad, stjärna för rätt svar), och rubriken i
+`tolkaKriterier()`-format. Parsern ligger som `pg_temp`-funktioner i
+migrationen och försvinner med sessionen. Det är med flit: nästa kurs ska
+skrivas i redaktören som alla andra, inte mot ett SQL-API som råkade uppstå.
+
+Hjälparen är hårdare än gränssnittet på en punkt: **exakt ett rätt svar per
+fråga.** Vyn ritar radioknappar, så två stjärnor hade gett en fråga där ett
+riktigt svar räknas som fel beroende på vilket den svarande råkade välja.
+Migrationen räknar dessutom efteråt — 10 moduler, 31 frågor, 124 alternativ, 8
+kriterier — eftersom en textparser som tolkat fel inte ger ett fel, den ger en
+halv kurs.
+
+### `due_days` KAN INTE ANVÄNDAS PÅ EN KURS FÖR BEFINTLIG PERSONAL
+
+Fristen såg ut som "fjorton dagar på dig". Den är det inte. `kursLage()` matas
+med `employee.start_date` som startdatum, inte med publiceringsdagen:
+
+```
+forfallodag = personens anställningsdatum + due_days
+```
+
+En frist på fjorton dagar hade alltså gjort kursen **försenad — röd, redan
+första dagen — för varenda säljare som varit anställd längre än två veckor**.
+Fältet hör hemma på en onboardingkurs och ingen annanstans. Kontrollerat mot
+databasen: den enda publicerade kursen som finns, introduktionen, har `due_days
+= null`. Kursen lämnar det tomt. Behövs en deadline är den en uppgift.
+
+### `course.published_at` SKREVS ALDRIG AV NÅGON
+
+Kursnotisen i klockan hämtar både sin tidpunkt och sin oläst-markering ur
+`course.published_at`. Fältet sattes inte av `sparaKurs()` — det sattes inte
+av någon kod alls. Följden: varje kurs som publicerats ur redaktören fick
+`tidpunkt: ""`, hamnade sist i klockan och lystes aldrig upp som ny. Det ser ut
+som att notisen saknas.
+
+Rättat i `sparaKurs()` med samma invariant som `news_post` (se
+`publiceraNyhet`): fältet sätts **första** gången kursen publiceras och rör sig
+aldrig mer. En kurs som avpubliceras och publiceras igen ska inte dyka upp som
+ny för alla som redan börjat på den.
+
+Introduktionskursen har ett `published_at` från 2026-08-16 och påverkas inte.
+
+### Varför kursen ligger som utkast
+
+En publicerad kurs syns i klockan hos varje säljare i samma sekund raden finns
+— och raden finns så fort migrationen körts, alltså innan grenen är godkänd och
+mergad. Kursdata bor i produktionsdatabasen oavsett vilken gren som är
+utcheckad; det finns ingen preview-databas att göra misstaget i.
+
+Utkastet syns för säljchef, VD, admin och kursens ägare (`course_read` i
+`0007`), så granskningen går att göra i gränssnittet utan att något gått ut.
+
+**Publiceringen och mergen hör ihop.** Släpplistan pekar på
+`/utbildning/slapp-inte-kunden-for-tidigt`; ligger kursen kvar som utkast när
+grenen mergas pekar den på en sida målgruppen inte ser.
+
+### Kursens form
+
+| Modul | Typ | Vad den gör |
+|---|---|---|
+| 1 | läsning | Reflexen: de fyra exiterna, och skillnaden mellan motstånd och nej |
+| 2 | läsning | Regeln, och testet på vad som räknas som en fråga |
+| 3 | prov | Fråga eller exit? 9 frågor |
+| 4 | läsning | Dag 1: de trettio motstånden, soloövningen, tre fällor |
+| 5 | prov | Välj följdfrågan. 8 frågor |
+| 6 | läsning | Dag 2: tre lager, kedjan, parövningen |
+| 7 | prov | Bygger frågan på svaret? 7 frågor |
+| 8 | läsning | Dag 3: under press — **och var gränsen går** |
+| 9 | prov | Dörr eller nej? 7 frågor |
+| 10 | rollspel | Sluttestet, bedömt mot åtta kriterier |
+
+Godkäntgräns 80 %, spärrtid **1 timme** i stället för det vanliga dygnet: ett
+dygns spärr mitt i dag 1 skjuter hela drillen en dag framåt, vilket i praktiken
+betyder att den inte blir gjord. Certifikatet går ut efter tolv månader — det
+är ett beteende och inte ett faktum, och den som inte drillat på ett år har
+reflexen tillbaka.
+
+Modul 8 är det enda som inte stod i beställningen. Originalet tränar att aldrig
+släppa; kursen skiljer på motstånd och nej och räknar upp fyra lägen där ett
+rent avslut **är** det godkända svaret — ett uttalat nej, en begäran om att
+slippa bli kontaktad, fel person utan mandat eller hänvisning, och tre
+obesvarade frågor i rad. Utan den gränsen tränar kursen fram klagomål. Ett av
+de åtta rollspelskriterierna mäter just det.
+
+### Det som är värt att veta innan någon rör det här
+
+**Chefen måste öppna inspelningen innan hon kan bedöma den.** Spärren är en
+trigger i databasen som frågar `file_access_log` (`0024`), och felmeddelandet
+"Öppna inspelningen innan du bedömer den" är alltså inte ett strul.
+
+**En ändring i kurstexten görs i `/utbildning/slapp-inte-kunden-for-tidigt/redigera`,
+inte i `0061`.** Migrationen är körd och kommer aldrig att köras igen.
+
+**Skrivs rubriken om tappar redan satta delpoäng sina rader** —
+`roleplay_criterion` kaskaderar. Betyget står kvar i `course_attempt`, som är
+historiken.
+
+---
+
 ## 2026-09-16 · Kalendergrenen mergad — tre pass i en merge-commit
 
 Beställaren hade sett pass 1 och 2 och tyckt att de såg bra ut. Pass 3,

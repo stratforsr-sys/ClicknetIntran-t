@@ -98,9 +98,27 @@ export async function sparaKurs(_prev: KursState, form: FormData): Promise<KursS
   if (!Number.isFinite(vantetid) || vantetid < 0)
     return { fel: "Spärrtiden kan inte vara negativ." };
 
-  const { data: fore } = await db.from("course").select("status").eq("id", id).maybeSingle();
+  const { data: fore } = await db
+    .from("course")
+    .select("status, published_at")
+    .eq("id", id)
+    .maybeSingle();
 
   const status = publicera === "1" ? "published" : publicera === "0" ? "draft" : fore?.status;
+
+  /**
+   * `published_at` sätts forsta gangen kursen publiceras, och ror sig aldrig
+   * mer. Samma invariant som `news_post` (se publiceraNyhet) och av samma skal:
+   * kursnotisen i klockan hamtar bade sin tidpunkt och sin olast-markering ur
+   * faltet, sa en kurs som avpubliceras och publiceras igen hade annars dykt upp
+   * som ny for alla som redan borjat pa den.
+   *
+   * Faltet skrevs INTE alls forut. Foljden var att varje kurs som publicerats ur
+   * redaktoren fick `tidpunkt: ""` i klockan — den hamnade sist i listan och
+   * lystes aldrig upp som ny. Det sag ut som att notisen saknades.
+   */
+  const publicerad =
+    status === "published" ? (fore?.published_at ?? new Date().toISOString()) : (fore?.published_at ?? null);
 
   const { error } = await db
     .from("course")
@@ -113,6 +131,7 @@ export async function sparaKurs(_prev: KursState, form: FormData): Promise<KursS
       valid_months: manader ? Math.max(1, Math.round(Number(manader))) : null,
       due_days: frist ? Math.max(1, Math.round(Number(frist))) : null,
       status,
+      published_at: publicerad,
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
