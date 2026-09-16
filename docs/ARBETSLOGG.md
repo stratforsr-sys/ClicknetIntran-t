@@ -5,6 +5,91 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-16 · Läckprovet var rött på ett namn sidan ska visa
+
+Överlämningen sa: *"`tests/sidor.mjs` går mot produktion och rapporterar
+'/franvaro/sjuk bär efternamnet Menduza' för ekonomirollen. Frånvaromodulen."*
+Det lät som en läcka i frånvaron. Det var det inte, och skillnaden är hela
+passet.
+
+### Vad som faktiskt kom ut
+
+`/franvaro/sjuk` hämtades som alla fyra rollerna med kontexten runt varje
+träff utskriven. Samma sträng, samma ställe, för **tre** roller — inte bara
+ekonomi:
+
+```
+<li>3  Simon Menduza, Zen
+       VD
+```
+
+Det är **telefonlistan**, sidans första element. `absence_call_order` plats 3
+är `target_kind = 'role', role = 'ceo'`, VD:n heter Simon Menduza, och listan
+står för alla — annars vet den som blivit sjuk inte vem hen ska ringa. Det är
+AC-3.6 och AC-3.18, och kommentaren överst i `sjuk/page.tsx` säger det rakt ut:
+sidan har med flit ingen sjukanmälningsknapp, den har en lista på människor.
+
+Tre saker visar att ingenting annat kom ut:
+
+- `sick_report_read` är
+  `employee_id = current_employee_id() OR leads_employee(employee_id) OR has_any_role('sales_manager','ceo')`.
+  Ekonomi släpps inte in, och namnuppslagningen i `page.tsx` (rad 149–153) sker
+  förvisso med service role — men bara på `employee_id` ur rader som RLS redan
+  lämnat ut. Den kan inte nämna någon vars rad inte kom med.
+- Ekonomirollens svar bar **bara** de tre Menduza-träffarna. Ingen sjukanmäld,
+  ingen e-postadress.
+- Säljchefen fick 206 träffar. Den negativa kontrollen lever, alltså letar
+  sökningen på riktigt.
+
+### Varför provet ändå var fel, och vad som gjordes åt det
+
+Provets hemligheter är *varenda* anställds efternamn ur driften. En sida som är
+byggd för att visa ett namn blir då röd för att den gör sitt jobb. Det röda var
+alltså inte ett fynd utan en falsk positiv — och en falsk positiv som får stå
+kvar är dyrare än den ser ut: nästa session lär sig att provet "brukar vara
+rött där", och då ser den inte det äkta fyndet heller.
+
+Det billiga hade varit att hoppa över `/franvaro/sjuk`. Det vore värre än det
+röda provet: det är sjukdom som står på den sidan, alltså precis det som inte
+får läcka. Undantaget är därför så smalt det går:
+
+- **Bara den vägen.** Samma namn någon annanstans är fortfarande ett läckage.
+- **Bara efternamn, och bara för dem ringlistan själv pekar ut** — läst ur
+  `absence_call_order` i provet, inte skrivet i det. Byter VD:n namn, eller får
+  listan en ny plats, följer provet med av sig självt.
+- **E-postadresser undantas aldrig.** Ringlistan visar telefon, aldrig mejl, så
+  en adress i det svaret är ett fel även för de personerna.
+- **Chefsplatsen står inte med.** Provets användare skapas utan `manager_id`
+  (`matanvandare` i `scripts/lib/matning.mjs`), så den platsen renderar aldrig
+  ett namn för dem. Skulle den någon gång göra det ska provet bli rött.
+
+Och för att undantaget inte ska kunna tysta sidan tillkom den **positiva**
+halvan: ringlistans namn SKA stå på `/franvaro/sjuk`, för varje roll. Tas
+telefonlistan bort säger provet till i stället för att bli grönt. Det är samma
+grepp som den negativa kontrollen för säljchefen, och av samma skäl — en vakt
+som slutat hitta något bevisar ingenting.
+
+### Provet efteråt
+
+Grönt för alla fyra rollerna, 50 sidor var, inga serverfel. Säljchefens
+negativa kontroll gick från 206 träffar till 203 — exakt de tre Menduza-raderna
+på den enda undantagna sidan, ingenting annat.
+
+Och en mutationskontroll, för att inte lita på grönt i sig: en extra "hemlighet"
+som står på just den sidan (`"Registrera efter samtalet"`) lades tillfälligt
+till, och provet blev rött för alla tre rollerna. Vakten bits alltså fortfarande
+där undantaget gäller. Den raden committades inte.
+
+**Ingen produktionskod ändrades, ingen migration, ingen rad i `poster.ts`** —
+ingenting av det här syns för någon som använder navet.
+
+### Kvar i samma hörn
+
+Registerutdragsprovet är fortfarande rött på main sedan tidigare (19 kolumner
+saknas). Det rördes inte här och är ett eget pass.
+
+---
+
 ## 2026-09-16 · Kalendergrenen mergad — tre pass i en merge-commit
 
 Beställaren hade sett pass 1 och 2 och tyckt att de såg bra ut. Pass 3,
