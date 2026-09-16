@@ -105,13 +105,28 @@ export default async function Uppgiftssidan() {
 
   return (
     <div className="flex flex-col gap-6 pt-2">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-display text-ink-900">Uppgifter</h1>
-        <p className="text-body text-ink-500">
-          {oppna.length === 0
-            ? "Ingenting öppet just nu."
-            : `${oppna.length} öppna, varav ${idagsrader.length} idag.`}
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-display text-ink-900">Uppgifter</h1>
+          <p className="text-body text-ink-500">
+            {oppna.length === 0
+              ? "Ingenting öppet just nu."
+              : `${oppna.length} öppna, varav ${idagsrader.length} idag.`}
+          </p>
+        </div>
+        {/*
+          VÄGEN TILL KALENDERN GÅR HÄRIFRÅN, och det är den som används.
+          Posten finns också i Min vy, men den som ska planera sin dag står
+          redan på den här sidan när hen bestämmer sig — och en genväg som
+          kräver att man först öppnar en meny är en genväg man inte tar.
+        */}
+        <Link
+          href="/kalender"
+          className="inline-flex items-center gap-2 rounded-full bg-canvas px-3 py-1.5 text-small text-ink-700 transition-colors duration-fast hover:bg-brand-100 hover:text-brand-700"
+        >
+          <Ikon namn="kalender" className="size-4" />
+          Planera dagen
+        </Link>
       </header>
 
       <Snabbrad projektNamn={aktivaProjekt.map((p) => p.name)} />

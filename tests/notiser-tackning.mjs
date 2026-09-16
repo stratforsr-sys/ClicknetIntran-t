@@ -103,6 +103,28 @@ const TACKNING = {
     "Den som tagits bort ur ett projekt ska inte fa en notis om en sida hon inte langre kommer at.",
 
   // ---------------------------------------------------------------------------
+  // Kalendern (0057, 0058)
+  //
+  // TVA MUTERANDE ACTIONS I HELA MODULEN, och ingen av dem skriver en egen post.
+  // Att dra en uppgift till ett klockslag gar genom `uppgifter::planera` — samma
+  // action som listans snabbknappar — sa uppgiftens datum satts pa ETT stalle i
+  // navet aven efter att kalendern kom till.
+  //
+  // Det som ar kalenderns eget ar delningen, och den ar ett besked till en
+  // manniska i bada riktningarna. Darav "notifierar": handlingen skriver bade
+  // `kalender-delad` och `kalender-aterkallad`.
+  // ---------------------------------------------------------------------------
+  "kalender::stallInDelning": "notifierar",
+
+  // "Ny post" VALJER VAG och skriver ingenting sjalv: den anropar
+  // `uppgifter::skapaUppgift` eller `coachning::skapaUppgift`, som bada star
+  // som "harledd" ovan. Notisen — och behorigheten, och historikraden — blir
+  // alltsa densamma som om posten lagts upp fran sin egen modul, vilket ar
+  // hela poangen med att dispatchen inte ar en tredje skrivning.
+  "kalender::skapaKalenderpost":
+    "Skriver ingenting sjalv. Bada vagarna gar till modulernas egna skapaUppgift, som ar harledda.",
+
+  // ---------------------------------------------------------------------------
   // Arenden
   // ---------------------------------------------------------------------------
   "arenden::skapaArende": "harledd",

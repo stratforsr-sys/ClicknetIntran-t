@@ -164,11 +164,57 @@ export type Krets = {
   created_by: string;
   /** Rollen den inloggade har som inbjuden, om någon. */
   minRoll: Medlemsroll | null;
+
+  /**
+   * 0057: den ANSVARIGA har gjort mig till delegat i sin kalender.
+   *
+   * ===========================================================================
+   * KALENDERDELNINGEN KOM IN GENOM DEN HÄR FUNKTIONEN OCH INTE VID SIDAN AV
+   *
+   * Frestelsen var en egen kontroll i kalendern — "om nivån är delegat, låt
+   * knappen vara framme". Det hade betytt två svar på frågan "får hon röra den
+   * här uppgiften", och den dag de två glider isär är det behörigheten som
+   * glider. Nivån kommer därför in som ett fält på kretsen, och `farRedigera()`
+   * nedan är fortfarande det enda stället där frågan besvaras.
+   *
+   * Fältet är en ren boolean och inte en nivå, med flit: `uppgifter.ts` har
+   * inga importer, och det är det som gör att tests/uppgifter.mjs kan prova
+   * hela behörighetsmodellen utan att starta Next. Översättningen från
+   * `Delningsniva` till den här flaggan sker i kalender.ts, som äger nivåerna.
+   * ===========================================================================
+   */
+  somDelegat?: boolean;
 };
 
-/** Ändra rubrik, frist, koppling, inbjudna. */
+/**
+ * Ändra rubrik, frist, koppling, inbjudna.
+ *
+ * DELEGATEN STÅR MED, men ingen annan kalendernivå gör det. "Kan planera om"
+ * ger kalenderns eget verb och inget mer — se `farPlanera()` nedan.
+ */
 export function farRedigera(k: Krets): boolean {
-  return k.created_by === k.mig || k.assignee_id === k.mig || k.minRoll === "redigerare";
+  return (
+    k.created_by === k.mig ||
+    k.assignee_id === k.mig ||
+    k.minRoll === "redigerare" ||
+    k.somDelegat === true
+  );
+}
+
+/**
+ * Flytta uppgiften i tiden — datum, klockslag, uppskattning.
+ *
+ * SNÄVARE KRAV ÄN `farRedigera`, med flit, och det är hela skälet att den finns
+ * som egen funktion. Att dra en uppgift till tisdag klockan två ändrar NÄR den
+ * ska göras och ingenting om vad den handlar om. Den som fått nivå fyra i någons
+ * kalender ska kunna städa upp i en överbokad dag utan att därmed kunna skriva
+ * om rubriken på "förbered samtalet med Anna om hennes siffror".
+ *
+ * `farPlaneraOm` är kalenderns svar på nivån och kommer in som en boolean, av
+ * samma skäl som `somDelegat` ovan.
+ */
+export function farPlanera(k: Krets, farPlaneraOm = false): boolean {
+  return farRedigera(k) || farPlaneraOm;
 }
 
 /**
@@ -177,6 +223,10 @@ export function farRedigera(k: Krets): boolean {
  * SNÄVARE ÄN REDIGERA, med flit. En redigerare som får bjuda in fler
  * redigerare kan bygga ut kretsen kring någon annans anteckning utan att
  * ägaren märker det, och kretsen är hela integritetslöftet i den här modulen.
+ *
+ * DELEGATEN STÅR INTE MED, av exakt samma skäl. En kalenderdelning är ett
+ * förtroende mellan två personer; den som kan bjuda in en tredje har gjort den
+ * till ett förtroende mellan tre, och ägaren får veta det i efterhand.
  */
 export function farBjudaIn(k: Krets): boolean {
   return k.created_by === k.mig || k.assignee_id === k.mig;

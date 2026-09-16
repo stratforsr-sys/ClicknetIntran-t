@@ -5,6 +5,650 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-15 · Slutdatumen i kalendern — och migrationen som inte behövdes
+
+Beställningen, hennes ord kvällen innan:
+
+> *"när man lägger in en coachings uppgift för någon så ska det synas på den
+> personens kalender också med slutdatumet alltså, sen ifall jag har lagt in en
+> uppgift så ska det slutdatumet hamna med i kalendern, detta händer inte nu"*
+
+Överlämningen hade delat upp den i tre och lagt en migration `0059` överst på
+listan. Två av delarna byggdes. Den tredje visade sig vara en fjärde. Och
+migrationen behövdes aldrig.
+
+### Först: numret var taget, och grenen låg tre commits efter
+
+`0059` stod i `schema_migrations` sedan 12:58 dagen innan — `0059_dagtidsjobb`,
+från mejlpasset som mergats till main under tiden kalendern byggdes. Numret är
+taget när migrationen KÖRTS, inte när den mergats, och det är andra gången i rad
+den regeln biter i det här repot.
+
+Main hade dessutom flyttat tre commits, så `behind_by` var 3. GitHubs
+merge-API svarade `409 Merge conflict`: fyra filer, alla av samma sort — båda
+sidor hade lagt till sitt överst i samma lista. `docs/ARBETSLOGG.md`,
+`docs/NASTA_SESSION.md`, `src/navnyheter/poster.ts` och `src/lib/notiser.ts`.
+
+Konflikten löstes utan klon, med `git merge-file` på de tre versionerna av varje
+fil hämtade genom contents-API:t, och lades som en riktig merge-commit med två
+föräldrar via `git/commits`. Den sista var poängen: en squash hade gjort main
+till en främling för grenen igen nästa gång.
+
+`src/lib/notiser.ts` merge:ades rent. De tre andra var rena tillägg åt båda
+håll — ingen rad stod i vägen för en annan, bara två pennor på samma sida.
+
+### A. Coachningsuppgiften i mottagarens kalender
+
+Halva fanns: den ansvariga såg sin egen uppgift, eftersom den egna dagen läser
+`uppgifterFor(mig)`. Det som saknades var den andra riktningen — chefen som lagt
+upp uppgiften såg den ingenstans i mottagarens dag, eftersom `/kalender?person=`
+går genom `kalender_poster()` i SQL, som bär `task` och `absence_request` och
+ingenting annat.
+
+Planen var en migration som lade `coaching_task` i projektionen. **Den skrevs
+aldrig, och det är den viktigaste raden i det här avsnittet.**
+
+Skälet är beställarens eget svar på frågan hon fick först: *ska en
+coachningsuppgift synas som "upptagen" för en kollega som INTE är chef?* Svaret
+blev **nej — bara chefen**. Att någon har coachning klockan två är känsligare än
+att hon har ett möte, och priset (en kollega kan boka den tiden i god tro) togs
+medvetet.
+
+Och därmed är det inte längre samma sorts fråga. `kalender_poster()` finns för
+att grundläget — alla ser att alla är upptagna — är **omöjligt för RLS**: raden
+ska lämna databasen med rubriken avskalad till någon som inte får läsa den. Men
+"bara chefen" är ett urval av VEM, inte av HUR MYCKET, och `coaching_task_read`
+i 0043 gör redan exakt det urvalet: den ansvariga, motparten, den som skapade
+raden, ledningen, och den som leder personen.
+
+`hamtaKollegasKalender()` läser därför `uppgifterFor(personId)` med **läsarens
+egen token**, bredvid projektionen. Är hon inte chef svarar policyn med noll
+rader, och det finns ingenting att filtrera bort i efterhand.
+
+Tre följder är värda att skriva ut:
+
+1. **Nivån skalar inte av den här posten.** En chef på grundläget ser ändå
+   rubriken — samma rad hon kan öppna på `/coachning/<personen>` i samma sekund.
+   Att dölja titeln i kalendern och visa den två klick bort är teater, inte
+   sekretess.
+2. **Den som inte får läsa raden ser ingenting alls**, inte ens en tom
+   "Upptagen"-ruta. Kalendern lämnar ut exakt vad coachningsmodulen lämnar ut.
+3. **Provet i `tests/rls.mjs` som säger att projektionen bär BARA två slag stod
+   kvar orört och grönt.** Överlämningen varnade för att det skulle behöva ändras
+   "medvetet och med ett skäl". Det bästa skälet visade sig vara att inte ändra
+   det: vakten mot att `sick_report` en dag halkar in i funktionen är värd mer än
+   bekvämligheten av att ha allt på ett ställe.
+
+Läget räknas fram av modulen och inte här — `uppgifterFor()` vet att en
+kurs-uppgift blir klar av ett certifikat och inte av en bock (0043), och en
+avbockad uppgift ska inte stå röd i chefens vy. Samma val som `kommandeposter()`
+gjorde för plinget.
+
+### B. Projektens deadline — den sjunde källan
+
+Tre projekt, alla beställarens, alla med en deadline (2026-09-12, -18 och -20),
+och `project.due_date` var inte en av kalenderns sex källor. Datumet syntes på
+projektkortet och ingen annanstans.
+
+Källan kostade ingen fråga: `hamtaUppgiftsbild()` läser redan `project` för
+uppgiftslistans skull, och planeringsvyn får raderna ändå för att kunna rita
+projektpricken. Det enda som saknades var att någon använde dem.
+
+- **Nytt slag `projekt`** i `KALENDERSLAG`, `SLAG_ETIKETT` och `SLAG_TON`.
+- **`arAtagande("projekt")` svarar NEJ.** Ett projekt är inte arbete utan en
+  behållare för arbete, och det arbetet ligger redan i kalendern som uppgifter
+  med var sin uppskattning. Räknades projektet också hade varje uppgift i det
+  räknats två gånger — en gång som sig själv, en gång som en sjundedel av
+  "Clicknet Hemsida" — och "planerat 4 h av 6 h" hade blivit ett tal man slutar
+  tro på utan att kunna peka på varför.
+- **Samma ton som orderfristen.** Båda är väggar. Projektets egen färg
+  (`project.color`) skiljer projekt FRÅN VARANDRA, och den frågan ställer man i
+  projektlistan — i en dag är frågan om det är arbete eller en frist.
+- **Inget eget filter på vem som ser dem.** `projekt_synligt()` i 0054 är ägare,
+  skapare och inbjudna — ingen roll, ingen chefsgren — så bilden innehåller redan
+  exakt rätt projekt.
+- **Arkiverade står inte.** `archived_at` är det enda navet vet om att ett
+  projekt är färdigt; siffrorna räknas fram ur uppgifterna, och ett projekt utan
+  uppgifter har noll av noll klara, vilket inte betyder någonting.
+
+### C. Uppgiftens eget slutdatum — frågan hade fel premiss, och hon rättade den
+
+Utredningen hade hittat exakt två `task`-rader med `due_date` hos beställaren,
+båda 2026-09-15, båda med klockslag — och båda ritades. Så frågan ställdes rakt
+ut: vilken uppgift, vilket datum, vilken vy?
+
+Svaret:
+
+> *"okej jag fattar, men projekten sätter jag slutdatum på, då är det bra att
+> projekten också kommer upp på kalendern på sin slutdatum"*
+
+Alltså: det var B hela tiden. Hon hade rätt i att något saknades och fel om vad,
+och det är precis den sortens fel som en reproduktion före ändring fångar. Ingen
+buggjakt behövdes, och ingen kod ändrades i onödan.
+
+### En bugg på vägen: samma uppgift ritad två gånger
+
+Planeringsvyn byggde två listor var för sig — heldagsposterna överst
+(`heldagsposter()`, allt utan klockslag, oavsett slag) och raden "Idag utan
+klockslag" (ett eget filter på uppgifter utan tid). En uppgift med dag men utan
+klockslag uppfyllde båda och stod två gånger i samma dag.
+
+Det är samma fel `laggUt()` har en hel rubrik om att inte begå: en vy som visar
+samma åtagande två gånger får den som drar det att undra vilket som gäller.
+
+Rättningen är inte ett andra filter i komponenten utan två funktioner i
+`kalender.ts` som är varandras komplement **per konstruktion** —
+`heldagsrader()` och `attDraNer()`. Provet mäter just det: tillsammans är de
+exakt `heldagsposter()`, och de delar aldrig en post. Skulle någon senare lägga
+ett villkor i den ena utan att spegla det i den andra faller raden, oavsett
+vilket slag det gällde.
+
+Chippet vann över heldagsraden av ett enkelt skäl: det går att dra ner i
+rutnätet, heldagsraden gör det inte. Av två sätt att visa samma sak behåller man
+det som också går att göra något med.
+
+Villkoret är **slaget** och inte flyttbarheten. En avbockad uppgift har
+`flyttbar: false` men ska stå kvar i chippraden och inte hoppa upp bland
+ledigheterna för att någon bockat av den.
+
+### Och en till: kollegavyn kastade `href`
+
+`Kollegavy` ritade varje post som en `<span>` och använde aldrig `post.href`.
+Följden var att den som fått "alla detaljer" på någons kalender såg rubriken men
+inte kom in i raden — en delning som inte gjorde vad nivån lovade, och det utan
+att något var trasigt i SQL:en. Coachningsuppgiften gjorde felet synligt:
+poängen med att chefen ser den är att hon ska kunna öppna den.
+
+Komponenten fattar fortfarande inget eget beslut om vem som får öppna vad. Den
+länkar när `href` finns, och `href` sätts i `hamtaKollegasKalender()` — null så
+snart nivån inte når in, och `ref` är null under "alla detaljer" just för att
+renderingsfilen inte ska KUNNA bygga en adress. Det är samma ordning som
+`Heldagsrad` och veckovyns `Post` redan följde.
+
+### Vad som INTE ändrades
+
+- **Ingen migration.** `schema_migrations` är orörd, och nästa nummer är `0060`.
+- **`kalender_poster()` är oförändrad.** Två slag, `sick_report` fortfarande
+  utanför, `security definer` kvar.
+- **Ingen nivåfiltrering i TypeScript.** Projektionens nivåer ligger kvar i SQL.
+- **Kollegans projekt står inte i hennes kalender.** Projektdeadlinen är en egen
+  källa i den EGNA dagen; den projiceras inte vidare, av samma skäl som
+  kursfristen och orderfristen inte gör det.
+
+### Prov
+
+`tests/rls.mjs` grön hela vägen, med sex nya kontroller: Anna ser sin egen
+coachningsuppgift, Cecilia ser den som chef, David som ledningen, medan Bertil
+och Eva inte ser den — och projektionen bär den inte åt någon. Den sista är
+vakten åt andra hållet: skulle någon senare "förenkla" genom att lägga
+`coaching_task` i funktionen släpps raden ut till grundläget, alltså till alla
+fjorton, och då faller den raden.
+
+`npm run test:kalender` grön med nio nya kontroller, `test:uppgifter`,
+`test:coachning` och `test:navnyheter` likaså.
+
+---
+
+## 2026-09-14 · "Ny post" i kalendern (0058)
+
+Beställarens ord efter genomgången av previewen:
+
+> *"kan du göra som Outlook, att man kan lägga till en kalenderhändelse som man
+> då antingen kan skapa till en uppgift eller en coachningsuppgift som man kan
+> välja, och så läggs den automatiskt"*
+
+Migration `0058`, samma branch `kalender`, fortfarande ej mergad.
+
+### Det bröt inte mot "ingen mötesbokning", och skälet är värt att skriva ut
+
+Beslutet från 2026-09-11 står kvar oförändrat: ingen inbjudan, inga ja/nej-svar,
+inga deltagare. Kalendern fick heller **ingen egen posttabell** — den blev en
+**väg in** till två moduler som redan finns.
+
+Posten som skapas **ÄR** en uppgift (`task`, 0054) eller en coachningsuppgift
+(`coaching_task`, 0043). Den bor i sin egen modul, med modulens krets, historik,
+notis och RLS. Kalendern är fönstret, inte lådan.
+
+Den dag "kalenderhändelse" blir en egen rad som varken är uppgift eller coachning
+har kalendern fått ett tredje slags innehåll som ingen modul äger — och då är den
+inte längre en vy utan en femte plats att leta på. Det är den gränsen som måste
+hålla, inte ordet "mötesbokning".
+
+### Migrationen är fyra rader, och det fanns ingen väg runt den
+
+`coaching_task` bar `starts_on` och `due_date`, båda `date`. Ingen `due_time`,
+ingen `estimate_minutes` — `task` fick dem i 0054 just för att pass 2 skulle
+kunna lägga en uppgift på ett klockslag, och coachningen fick aldrig
+motsvarande.
+
+En coachningsuppgift som lades klockan 14 hade alltså **tyst tappat sitt
+klockslag** på vägen till databasen och sedan ritats som en heldagspost. Det är
+exakt den sortens tysta dataförlust regeln bakom `planera()` finns för.
+
+`0058` ger tabellen de två kolumnerna med **ordagrant `task`:s villkor**: ett
+klockslag kräver ett datum, en uppskattning ligger mellan 1 och 1440 minuter. Att
+de två tabellerna säger samma sak om samma sak är inte en upprepning — det är det
+som gör att kalendern kan rita dem i samma rutnät utan två regler för vad en post
+är.
+
+### Coachningsuppgifter syntes inte i kalendern alls, och det var det dyra fyndet
+
+`hamtaEgenKalender()` läste `coaching_session` (samtalen) men **inte**
+`coaching_task`. En coachningsuppgift skapad från kalendern hade alltså
+försvunnit ur vyn i samma sekund som den sparades — en funktion som ser trasig ut
+även när den fungerar.
+
+Källa nummer sex är därför **modulens egen läsning**, `uppgifterFor()` i
+coachning-server.ts, och inte en sjätte fråga skriven i kalenderfilen. Den
+räknar fram läget ur händelserna — och för `kurs`, `rollspel_inspelat` och
+`lasning` ur certifikatet, bedömningen respektive kvittensen. Ett eget urval hade
+behövt göra om den räkningen, och **ett andra sätt att avgöra om en
+coachningsuppgift är klar** är precis det 0043 vägrade ha.
+
+Priset är att datumfiltret ligger i TypeScript i stället för i frågan. Det är
+billigt här och bara här: en person har tiotals coachningsuppgifter totalt, inte
+tusentals. Vore talet ett annat är svaret ett datumurval i `uppgifterFor()` — inte
+en kopia av dess läsning i kalendern.
+
+Slaget heter `coachningsuppgift` och **delar ton med coachningssamtalet**. Samma
+modul betyder samma sak för ögat, och en kalender med sex färger är en kalender
+där färgen slutar betyda något.
+
+### Dagssumman räknade fel i det ögonblick funktionen fanns
+
+`dagssumma()` filtrerade på `p.slag === "uppgift"`. En timmes rollspel klockan
+tio hade räknats som noll — alltså lovat dagen en timme som inte fanns, i precis
+det tal *"Planerat 4 h av 6 h"* finns för att man ska kunna lita på.
+
+Villkoret heter nu `arAtagande(p.slag)`: uppgift och coachningsuppgift, inget
+annat. Ledighet, frister och coachningssamtal **infaller** — de tar ingen tid.
+Funktionen finns i stället för en hårdkodad jämförelse för att skillnaden ska gå
+att läsa, och den provas i `tests/kalender.mjs`.
+
+### Dispatchen är EN action som väljer väg, och den skriver ingenting
+
+`kalender::skapaKalenderpost` anropar `uppgifter::skapaUppgift` respektive
+`coachning::skapaUppgift`. Den validerar bara det som är kalenderns eget — att
+typen är en av två, att dagen finns — och bygger sedan en egen `FormData` per
+väg.
+
+**Formuläret skickas inte vidare som det är**, trots att fälten heter samma sak.
+Det hade varit den korta vägen och också betytt att ett `assignee_id` avsett för
+coachningsvägen följt med in i uppgiftsvägen och lagt uppgiften på fel person.
+
+**En egen `skapaKalenderpost()` som skrev direkt i tabellerna** hade varit kortare
+och fel på det dyra sättet: att bara teamledare, säljchef och VD lägger upp
+coachningsuppgifter är beställarens beslut från 2026-09-01, och det beslutet bor i
+`kravCoach()` — inte i två filer som ska hållas lika.
+
+En action och inte två: två hade betytt två rader i `TACKNING`, två ställen som
+kan glömma en revalidering, och ett gränssnitt som måste veta vilken av dem som
+gäller innan användaren valt något.
+
+### En coachningsuppgift landar i NÅGON ANNANS kalender, och det står utskrivet
+
+Det här upptäcktes under byggandet och ändrade formuläret. `arChefFor()` svarar
+**nej** när betraktaren är samma person som den ansvariga — utom för ledningen,
+som `can_read_all_employees()` släpper fram. En teamledare kan alltså inte lägga
+en coachningsuppgift på sig själv, och det är rätt: coachning är något man får,
+inte något man ger sig själv.
+
+Följden är att valet "Coachningsuppgift" i **min** kalender skapar något i
+**hennes** dag. Att låta det ske tyst vore ett litet svek, så personväljaren står
+först i den grenen och hjälptexten säger vad som händer: *"Uppgiften hamnar i
+hennes kalender och på hennes coachningskort, inte i din."*
+
+`personerJagCoachar()` i coachning-server.ts ritar valet och står **medvetet
+bredvid `arChefFor()`** i filen. Den är en bekvämlighet och ingen behörighet —
+kontrollen ligger kvar i `coachning::skapaUppgift` och görs även om väljaren
+erbjöd någon annan. En väljare som visar namn skrivningen sedan vägrar är sämre
+än ingen väljare alls.
+
+### Klicket på en tom ruta hade en tom gren
+
+`klickaRuta()` gjorde ingenting när ingen uppgift var markerad, i en ruta
+användaren redan hade upptäckt att hon kunde trycka på. Nu betyder klicket två
+saker, och valet står i markeringen: med en uppgift markerad "lägg den här", utan
+"ny post klockan så mycket". Rutan vet redan vilket klockslag den är, så
+förifyllningen kostar ingenting.
+
+Knappen **"Ny post"** står i planeringsvyns egen högerspalt och inte i sidhuvudet
+— bredvid det den skapar, och som ett enda formulär med ett enda tillstånd.
+
+### Plinget fick coachningsuppgifterna med
+
+Ett klockslag som inte plingar bredvid ett som gör det ser ut som en bugg, och
+den som upptäckt det litar inte på plinget igen. `kommandeposter()` frågar därför
+en gång till per pollning — samma index kalendern använder, ett datum, nästan
+alltid noll rader. **Först när det finns en rad** hämtas läget via `uppgift()` i
+coachning-server.ts, alltså den dyra men korrekta vägen.
+
+### Vad som medvetet INTE gjordes
+
+**Coachningsuppgiften går inte att dra.** `flyttbar: false`. Att flytta den hade
+krävt en `planera()` för coachningsuppgifter, alltså ett andra ställe där ett
+datum sätts — precis vad kalendern avstod från i 0057. Klockslaget bestäms när
+posten läggs upp. **Öppen fråga till beställaren** om det räcker.
+
+**Kollegans kalender rördes inte.** `kalender_poster()` i 0057 projicerar
+fortfarande uppgifter och frånvaro, och ingenting annat — `tests/rls.mjs` faller
+om ett tredje slag dyker upp. Om en kollegas coachning ska synas som "upptagen"
+är en fråga om vad coachning är, inte om vad kalendern kan, och den ska
+beställaren svara på och inte koden.
+
+**iCal-flödet rördes inte**, fortfarande. Samma skäl som i pass 2.
+
+### Efter genomgången: slutdatumen syns inte där de behövs
+
+Beställaren tittade på previewen och beställde tre saker till (se
+`NASTA_SESSION.md` överst). Två av dem gick att utreda direkt, och svaret är värt
+att stå här eftersom det inte var där man först letade:
+
+**Coachningsuppgiften syns för den ansvariga men inte för chefen.** Källa sex
+ovan väljer på `assignee_id`, så Fredrik ser sin egen uppgift. Chefen som lade
+upp den öppnar däremot `/kalender?person=Fredrik`, och den vägen går genom
+`kalender_poster()` — som projicerar `task` och `absence_request` och ingenting
+annat. Halva funktionen fanns alltså redan; halva kräver en migration.
+
+**Projektens deadline är inte en kalenderkälla alls, och det är förmodligen det
+hon menade med "uppgiften".** Frågan mot produktionsdatabasen visade tre projekt,
+alla hennes, alla med en deadline (2026-09-12, -18, -20) — medan nästan alla hennes
+`task`-rader har `due_date = null`. Det finns alltså gott om frister i navet som
+kalendern aldrig ritar, och de sitter på projekten. `project.due_date` blir en
+sjunde källa, men **inget åtagande**: uppgifterna inuti projektet räknas redan var
+för sig, och en deadline som också räknades hade dubbelräknat hela projektet i
+dagssumman.
+
+Det tredje — "min uppgifts slutdatum hamnar inte i kalendern" — gick **inte** att
+avgöra. Hon har exakt två daterade uppgifter, båda 2026-09-15 och båda med
+klockslag, och de ska synas den 15:e. Dagvyn visar en dag i taget och det finns
+ingen månadsvy, så det troliga är att hon stod på fel dag — men det ska frågas och
+inte antas.
+
+### En bugg som hittades på vägen
+
+En uppgift med datum men utan klockslag ritas **två gånger** i planeringsvyn: som
+`Heldagsrad` (`heldagsposter()` filtrerar på `!arTidsatt`, oavsett slag) och som
+chip i raden "Idag utan klockslag". Den är från pass 2 och rördes inte här.
+
+### Prov
+
+`tests/kalender.mjs` har fått sex kontroller till — det nya slaget, dess plats i
+heldagsordningen, och att coachningsuppgiften räknas i dagssumman medan samtalet
+inte gör det. `tests/rls.mjs` går igenom i sin helhet efter att `0058` körts.
+`tests/notiser-tackning.mjs`, `tests/uppgifter.mjs`, `tests/coachning.mjs`,
+`tests/navnyheter.mjs`, `tests/notiser.mjs` och `tests/handelselogg.mjs` likaså.
+
+**`tests/sidor.mjs` faller på något annat, och det är inte den här grenen.**
+Provet går mot PRODUKTION (`PROD` i scripts/lib/matning.mjs) och inte mot
+previewen, alltså mot `main` utan den här ändringen. Det rapporterar
+*"/franvaro/sjuk bär efternamnet Menduza"* för ekonomirollen. Frånvaromodulen,
+inte kalendern — **men det bör tittas på**, eftersom läckprovet är det enda som
+ser den sortens fel.
+
+---
+
+## 2026-09-14 · Kalendern, pass 2 av tre
+
+Beställningen från 2026-09-11: kalendern visar uppgifter plus det navet redan
+vet, huvudvyn är planeringsvyn, delning i Outlooks fem nivåer med ledig/upptagen
+som grundläge för alla, pling i webbläsaren. Ingen mötesbokning.
+Migration `0057`, branch `kalender`.
+
+### Numret blev 0057, och vagen dit ar vard en rad
+
+Vid passets borjan bar `schema_migrations` en rad `0056_samtal_pa_order`, kord
+**2026-09-14 06:22 UTC**, medan repot inte hade nagon fil och ingen gren nagon
+commit for den. Numret var alltsa taget utan att det gick att lasa vad som
+kordes.
+
+**Det loste sig fem minuter senare:** samtalen-pa-ordern-passet pushade
+`c2b9f42` 06:27 och `3b5cb77` 06:29, och `0056_samtal_pa_order.sql` ligger i
+repot. Det var alltsa inte en forsvunnen migration utan **tva pass som korde
+samtidigt** — migrationen kordes fore commiten, som den ska.
+
+Lardomen star kvar och ar den som kostar nasta gang: **fraga
+`schema_migrations` och inte katalogen** nar numret ska valjas. Hade kalendern
+tagit 0056 for att katalogen slutade pa 0055 hade tva migrationer burit samma
+nummer, och den andra hade aldrig kort.
+
+Samma sak med grenen. `main` flyttade tva commits mitt under passet, och
+kalendergrenen flatade in dem och byggde om previewen innan den visades — samma
+ordning som 2026-09-10 kom fram till.
+
+### Kalendern speglar ingenting. Den räknar fram sig varje gång.
+
+Frestelsen var en `calendar_event`-tabell som allt skrivs till — snabbare att
+läsa, enklare att sortera, och fel på det dyraste sättet: speglingen måste
+uppdateras av varje väg in och ut ur **fem** moduler, och den dag en av dem
+glöms bort visar kalendern något som inte längre är sant. Samma val som
+projektets siffror gjorde i 0054 och som `coaching_task` gjorde i 0043 när den
+vägrade en status-kolumn.
+
+`hamtaEgenKalender()` sätter därför ihop fem källor vid varje läsning:
+uppgifter, beviljad ledighet, coachningssamtal, kursfrister och månadens
+orderfrist.
+
+### "Orderfrister" fanns inte som kolumn. Tolkningen står utskriven.
+
+`sales_order` har ingen fristkolumn och har aldrig haft en — den bär `signed_on`,
+och `period_month` räknas fram ur det av databasen (0034). Det fanns alltså
+ingen rad att hämta.
+
+Men det finns en frist, och det är den enda som betyder något för en säljare:
+**en order som signeras den första i nästa månad tillhör nästa månads provision
+och nästa månads volymtrappa.** Posten är därför månadens SISTA ARBETSDAG,
+räknad med `arArbetsdag()` ur saljtakt.ts — som redan bär de svenska röda
+dagarna plus julafton, midsommarafton och nyårsafton. En frist på en söndag
+flyttas i praktiken utan att någon skrivit det, och då är den inte en frist.
+
+Posten gäller den som har order (`salesperson`, `sales_manager`, `ceo`,
+`finance`) — samma krets som ordermenyn. En projektledare ska inte ha en röd rad
+sista fredagen varje månad om något hon aldrig rör. **Beställaren bör bekräfta
+tolkningen**; är det något annat som menades är det en post till och inte en
+ombyggnad.
+
+### Delningen: projektionen ligger i databasen, inte i en if-sats
+
+Alternativet var att läsa kollegans uppgifter med service role och plocka bort
+rubrikerna i `kalender-server.ts`. Det hade fungerat, och det hade betytt att
+det enda som står mellan en säljares anteckningar och hela huset är en rad
+TypeScript i en renderingsfil.
+
+`kalender_poster()` är i stället `security definer` och lämnar ut olika mycket
+beroende på nivå: `rubrik = null` på grundläget, rubriken utan `ref` på nivå
+två, och först från "alla detaljer" ett id att bygga en länk av. **Rubriken är
+borta redan när raden lämnar Postgres**, och en glömd kolumn i vyn kan inte
+läcka något som aldrig kom med.
+
+Funktionen bär `task` och `absence_request`. **Inte `sick_report`** — samma
+absoluta rad som `src/lib/ical.ts` drog 2026-08-20, och `tests/rls.mjs` har nu
+en kontroll som faller om någon lägger till ett tredje slag. Frånvarotypen följer
+inte heller med; posterna heter "Ledig".
+
+**Coachningssamtal, kursfrister och orderfristen projiceras aldrig.** De ritas i
+den egna kalendern och ingen annans. Ett coachningssamtal är ett samtal mellan
+två personer och står i deras två kalendrar; en kursfrist är min egen läxa. Att
+lägga dem i en kollegas vy hade varit att låta kalendern berätta något
+`coaching_session`-policyn i 0043 med flit inte berättar.
+
+### Det här är den enda dörren in i någon annans uppgifter
+
+0054 skrev ut att `can_read_all_employees()` **med flit** inte står i
+`task_read`. Den regeln står kvar ord för ord. `uppgift_synlig()` har fått en
+gren till, och skillnaden mot en chefsgren är hela saken:
+
+**Grenen utlöses av en rad uppgiftens ägare själv har skrivit, om en namngiven
+person, som hon kan ta bort när som helst.** Det är samma samtycke Outlook
+bygger på. En roll kan ingen ta bort, och det är därför en roll aldrig får stå
+där.
+
+Två spärrar står kvar även för den som fått alla detaljer:
+
+1. **Nivå ett och två öppnar ingenting.** De får noll rader ur `task` och läser
+   sin kalender genom projektionen. Provat i rls.mjs.
+2. **En dold personkoppling bryter igenom delningen, inte tvärtom.** "Fundera på
+   om Erik ska ha en tillsägelse" når inte Erik för att chefen gett honom sin
+   kalender — det är precis det fall `visible_to_subject` byggdes för.
+
+### Nivå fyra ger kalenderns verb, inte uppgiftens
+
+Outlook kallar steget "Kan redigera". Här heter det **"Kan planera om"**, och
+det är inte en översättningsfråga: en kalender bestämmer bara NÄR något ska
+göras. Vad det handlar om bestäms i uppgiften, som har sin egen krets.
+
+Därför `farPlanera()` bredvid `farRedigera()` i uppgifter.ts, och därför är
+`planera()` den enda action som frågar den första. Den som får städa i en
+överbokad dag ska inte därmed kunna skriva om rubriken på någon annans
+anteckning. Delegaten — nivå fem — får `farRedigera()`, alltså allt.
+
+**Kalendernivån kom in GENOM `farRedigera()` och inte vid sidan av.** Frestelsen
+var en egen kontroll i kalendern ("om nivån är delegat, låt knappen vara
+framme"), och det hade blivit två svar på frågan om vem som får röra en uppgift.
+Nivån är i stället ett fält på `Krets`, och de rena funktionerna i uppgifter.ts
+är fortfarande de enda som svarar. Fältet är en **boolean och inte en nivå**, så
+att uppgifter.ts behåller sina noll importer och provet kan köra hela
+behörighetsmodellen utan att starta Next.
+
+### `planera()` skriver hela planeringen. Det kostade en bugg till.
+
+Regeln sedan 0054: datum, klockslag och minuter skrivs i ett svep, och ett fält
+som inte kommer med tolkas som "ta bort". Den kostade snabbknapparna i listan en
+tyst raderad tidsuppskattning 2026-09-11.
+
+Kalendern är fyra nya anropare av samma funktion: släpp i rutnätet, tryck på
+ett klockslag, dra en redan utlagd post, och krysset som tar bort klockslaget.
+`planeraTill()` i Planeringsvy.tsx är därför **den enda vägen härifrån till
+servern**, och den bygger alltid alla tre fälten ur postens nuvarande värden och
+ändrar ett av dem. Ingen av de fyra ytorna bygger ett eget anrop.
+
+`revalidatePath("/kalender")` ligger i `uppdatera()` och inte i varje action, av
+samma skäl som de tre raderna som redan stod där.
+
+### Två sätt att flytta en uppgift, och båda behövs
+
+Dra och släpp är vad beställaren bad om och det snabbaste på en dator. Det
+fungerar inte på en pekskärm — HTML5:s draggränssnitt lyssnar på musen, och ett
+finger ger `touchstart` som aldrig blir ett `dragstart`.
+
+Därför finns också **välj och placera**: ett tryck markerar, ett tryck på ett
+klockslag lägger. Samma handling i två steg, och den enda av de två som fungerar
+med tangentbord. Båda leder till samma anrop; två vägar som var för sig byggde
+sitt anrop hade varit två ställen att glömma ett fält på.
+
+### Krockar får inte döljas
+
+En kalender som ritar den andra posten ovanpå den första ser prydlig ut och
+ljuger om precis det man öppnar den för. `laggUt()` lägger därför överlappande
+poster i spalter bredvid varandra.
+
+**Spaltantalet räknas per klunga och inte per dag**, och en post som slutar där
+nästa börjar krockar inte. Provet skrevs först med fel förväntan — "tre poster i
+klungan ger tre spalter" — och hade den fått gälla vore felet omöjligt att se i
+vyn: tre smala rutor ser ut som ett designval. Nu står båda fallen som varsin
+kontroll.
+
+### "Planerat 4 h av 6 h", och varför gissningen inte räknas
+
+Sex timmar och inte åtta, samma vägg som `Dagsumma` satte upp 2026-09-11.
+
+Det nya är att **en uppgift utan tidsuppskattning räknas som noll minuter**, inte
+som de trettio den ritas i. Posten måste ha en höjd för att gå att se och träffa
+med musen, men att räkna den höjden in i summan hade gjort talet till något
+annat än vad användaren skrivit — och "planerat 6 h av 6 h" som kommer ur fyra
+gissningar är ett tal man slutar tro på utan att kunna peka på vad som är
+trasigt. Antalet oskattade står i stället utskrivet bredvid.
+
+Ledighet, coachning och frister räknas inte alls. De tar inte tid — de infaller.
+
+### Plinget: ingen push, och det är en plangräns
+
+Ett pling som når en stängd flik kräver en service worker, Web Push, en
+VAPID-nyckel, en prenumerationstabell — och något som skickar vid rätt
+klockslag. **Det sista finns inte.** Hobby-planen tar två cron-poster per
+projekt och kör var och en en gång per dygn, och båda är tagna sedan 0054. En
+påminnelse som kan komma en gång om dagen är ett morgonbrev, vilket redan finns.
+
+Plinget är därför webbläsarens egen `Notification`, utlöst av en öppen flik. Tre
+saker gör skillnaden mellan ett pling och ett gnäll: fönstret har **båda**
+ändarna (annars plingar hela förmiddagen igen när någon öppnar en flik efter
+lunch — provat), rastret står still när fliken är dold, och `sedda` minns vad
+som redan plingats eftersom ett tiominutersfönster och ett femminutersraster
+hinner mötas två gånger.
+
+**Behörigheten måste begäras av en människa som tryckt på något.** Alla tre
+webbläsarna avvisar `requestPermission()` utan användargest, och det är rätt
+tänkt: en ruta som frågar om notiser innan man gjort något är den mest
+bortklickade rutan på webben, och ett nej är permanent. Knappen står på
+kalendersidan — den som just lagt ut sin dag är den enda som vet vad ett pling
+vore till för.
+
+På eller av ligger i `localStorage` och inte i databasen: behörigheten är per
+webbläsare, och en inställning i databasen hade påstått att den gällde överallt.
+
+### En route handler och inte en server action
+
+Next kör server actions i en **seriell kö per session**. En pollning var femte
+minut hade därmed delat kö med användarens klick, och den som bockar av en
+uppgift i samma ögonblick som rastret går hade fått vänta på rastret först.
+`/api/kalender/kommande` är därför en GET utanför den kön — samma slutsats som
+`/api/jobb/*` drog.
+
+Den står bakom vanlig inloggning utan hemlighet i adressen, till skillnad från
+nattjobbet och iCal-flödet. Skälet är att **frågan inte tar emot något**: svaret
+bär uteslutande den inloggades egna uppgifter, och det finns ingen parameter att
+ändra.
+
+### Navets första `.rpc()`
+
+Ingenting i navet har tidigare anropat en databasfunktion genom PostgREST, och
+0027 stängde vägen för de två som fanns (`log_audit` och `registrera_fel`).
+Skillnaden är att de två SKREV. `kalender_poster()` läser, och den lämnar ut
+mindre än vad som ligger i tabellen. Granten står utskriven i 0057 och gäller
+bara `authenticated`.
+
+`error` från PostgREST behandlas **inte** som noll rader: en funktion som inte
+hunnit in i schemacachen ger ett fel, och att rita det som en tom dag hade
+påstått att kollegan är ledig.
+
+### Kalendern bröt inte femtaket en andra gång
+
+Uppgifterna fick undantaget 2026-09-11 med argumentet att en lista över det man
+inte får glömma, placerad bakom ett klick, är en lista man slutar öppna.
+
+Kalendern är inte det. Den är ett ställe man går till när man HAR ett ärende dit
+— när dagen ska läggas upp, eller när man undrar om en kollega är ledig på
+torsdag — vilket är precis definitionen femtaket vilar på. Posten ligger därför
+i Min vy, bredvid Frånvaro. Vägen som faktiskt används är ändå knappen på
+uppgiftssidan, där man redan står när man bestämmer sig för att planera.
+
+### Prov
+
+`tests/kalender.mjs` är nytt: 92 kontroller över nivåerna, rutnätet,
+utläggningen, dagssumman och plinget. Två av dem är de som räknas —
+*"grundläget ser INGEN rubrik"* och *"passerad tid plingar INTE"*.
+
+`tests/rls.mjs` har fått nitton kontroller i ett eget avsnitt och går igenom i
+sin helhet: **464 kontroller, noll underkända.** `tests/uppgifter.mjs`,
+`tests/notiser.mjs`, `tests/navnyheter.mjs`, `tests/notiser-tackning.mjs`,
+`tests/handelselogg.mjs` och `tests/inbaddningar-db.mjs` likaså.
+
+`/uppgifter` la sig i `tests/sidor.mjs` samtidigt — den glömdes i pass 1, och
+det är en av få sidor som renderar en annan persons namn.
+
+### Vad som medvetet INTE gjordes
+
+**iCal-flödet rördes inte.** Beställaren räknade upp det som något som redan
+finns, inte som något att bygga ut, och att lägga uppgifter i en adress utan
+inloggning är en egen fråga med egna svar. Kandidat för pass 3.
+
+### Kvar till pass 3
+
+Upprepning, veckogenomgång, mallar. Och uppgifter i iCal-flödet, om beställaren
+vill det.
+
+---
+
 ## 2026-09-14 (kväll) · Navet mejlar (0059)
 
 Beställningen: Resend-nyckeln för clicknet.se ska kopplas in, och navet ska

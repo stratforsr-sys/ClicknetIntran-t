@@ -41,7 +41,8 @@ export type Notistyp =
   | "provision"
   | "kv"
   | "uppgift"
-  | "chatt";
+  | "chatt"
+  | "kalender";
 
 /**
  * Ar strangen en av de sjutton typerna?
@@ -407,6 +408,25 @@ export const NOTIS_KALLOR = [
   "uppgift-avbruten",
 
   /**
+   * Kalenderdelningen (0057). TVA KALLOR, och den andra ar den nodvandiga.
+   *
+   * Bada ar handelser och ingen av dem gar att harleda, men av olika skal.
+   * `kalender-delad` KUNDE ha harletts ur raden i `calendar_share` — den star
+   * kvar sa lange delningen galler — och det vore fel: en harledd post ligger
+   * i klockan tills nagon klickar bort den, och en delning ar inte ett
+   * vantelage. Ingenting vantar pa mottagaren; hon har FATT nagot.
+   *
+   * `kalender-aterkallad` gar inte att harleda alls: raden ar borta, och det
+   * finns ingenting kvar att rakna fram ur. Det ar samma fall som
+   * `avtal-tillbakadraget` i 0028 — och samma skal att det MASTE finnas en
+   * post, for den som statt som DELEGAT har handlat i nagon annans namn anda
+   * fram till den sekunden. Att inte saga till hade betytt att hon upptacker
+   * det genom att inte langre kunna gora nagot hon gjorde i gar.
+   */
+  "kalender-delad",
+  "kalender-aterkallad",
+
+  /**
    * ANGRA-KNAPPEN HAR MED FLIT INGEN KALLA HAR.
    *
    * `/angra` provades och togs bort igen. Kvittot med angra-knappen visas bara
@@ -479,6 +499,8 @@ export const HANDELSEKALLOR = [
   "uppgift-godkand",
   "uppgift-kommentar",
   "uppgift-avbruten",
+  "kalender-delad",
+  "kalender-aterkallad",
 ] as const satisfies readonly Notiskalla[];
 
 export type Handelsekalla = (typeof HANDELSEKALLOR)[number];
@@ -560,6 +582,7 @@ export const TYP_ETIKETT: Record<Notistyp, string> = {
   kv: "K&V",
   uppgift: "Uppgift",
   chatt: "Chatt",
+  kalender: "Kalender",
 };
 
 export const TYP_IKON: Record<Notistyp, string> = {
@@ -581,6 +604,7 @@ export const TYP_IKON: Record<Notistyp, string> = {
   kv: "kontroll",
   uppgift: "kontroll",
   chatt: "chatt",
+  kalender: "kalender",
 };
 
 /**
