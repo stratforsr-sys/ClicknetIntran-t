@@ -85,6 +85,48 @@ export type Seriutfall = {
 };
 
 /**
+ * Lägg upp en regel och föd första fönstret direkt.
+ *
+ * DEN HÄR FUNKTIONEN GÖR INGEN BEHÖRIGHETSKONTROLL, och det är inte ett
+ * förbiseende — det är samma linje som resten av `*-server.ts` i navet. Vem som
+ * får lägga upp en uppgift åt sig själv (`uppgifter/actions.ts`) och vem som
+ * får lägga upp en coachningsuppgift åt någon annan (`kravCoach()` +
+ * `arChefFor()` i `coachning/actions.ts`) är två olika frågor med två olika
+ * svar, och båda är redan besvarade på var sitt ställe. Ett tredje svar här
+ * hade blivit det som glöms bort när det första ändras.
+ *
+ * FÖDSELN SKER MED EN GÅNG. Den som lägger upp "varje måndag 09:00" ska se
+ * åtta måndagar i kalendern innan hon hunnit stänga formuläret — att vänta till
+ * natten hade betytt att en beställning som uttryckligen handlade om att SE
+ * sina upprepningar inte visade någonting första dagen.
+ */
+export async function skapaSerie(
+  db: SupabaseClient,
+  falt: Record<string, unknown>,
+  idag: string,
+): Promise<{ id: string; fodda: number }> {
+  const { data, error } = await db.from("task_series").insert(falt).select(SERIEFALT).single();
+
+  if (error || !data) {
+    throw new Error(`Rutinen sparades inte: ${error?.message ?? "okänt fel"}`);
+  }
+
+  const serie = data as unknown as Serie;
+
+  /**
+   * FÖDSELN FÅR FALLA UTAN ATT TA REGELN MED SIG.
+   *
+   * Regeln är sparad när vi kommer hit. Kastas ett fel ur födseln har
+   * användaren en rutin utan förekomster — irriterande, men självläkande:
+   * nattjobbet prövar samma serie igen om några timmar. Rullades regeln
+   * tillbaka i stället vore felet permanent, och felmeddelandet ("kunde inte
+   * skriva uppgift 3 av 8") hade handlat om något användaren inte bad om.
+   */
+  const fodda = await fodEnSerie(db, serie, idag);
+  return { id: serie.id, fodda };
+}
+
+/**
  * Nattjobbets steg: fyll på horisonten för varje levande serie.
  *
  * DE FLESTA NÄTTER SKRIVS EN RAD PER SERIE, eller ingen alls. En serie som är

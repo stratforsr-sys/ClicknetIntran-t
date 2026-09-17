@@ -124,6 +124,24 @@ villkor.** Läsningen hjälpte inte — villkoret SÅG rätt ut. Det var provet 
 riktig SQL som fann det, och det är skälet att provet kördes innan grenen
 visades.
 
+### En bränd deploy, och vad som fångar den nästa gång
+
+Första bygget föll: `Module '"@/lib/upprepning-server"' has no exported member
+'skapaSerie'`. Funktionen lades till i arbetskopian EFTER att filen kopierats in
+i trädet, så den committade versionen saknade den. Ett tomt, tråkigt fel — och
+det kostade en av dygnets hundra deployer, vilket är precis vad reglerna i
+`CLAUDE.md` finns för att undvika.
+
+`esbuild` fångade det inte, och kunde inte: den parsar en fil i taget och frågar
+aldrig om det importerade namnet finns i andra änden. Kontrollen som gör det
+skrevs i scratchpaden: den läser varje `import { … }` i `src/`, slår upp
+målfilen och jämför mot vad den faktiskt exporterar. Kräver inga
+`node_modules` och tar en halv sekund. Den är värd att lägga i `scripts/` nästa
+gång någon rör den här kedjan.
+
+**Lärdomen är inte "var noggrannare" utan att en fil får finnas på ETT ställe.**
+Arbetskopia plus träd är två sanningar, och den ena hinner alltid bli den gamla.
+
 ### Det som INTE byggdes, och varför
 
 - **Fokusområdena följer inte med** en coachningsserie. `coaching_task_focus`
