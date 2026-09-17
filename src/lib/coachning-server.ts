@@ -1,6 +1,7 @@
 import { supabaseServer } from "@/lib/supabase/server";
 import { canReadAllEmployees, fullName, type CurrentUser } from "@/lib/auth";
 import { notisId, type Notis } from "@/lib/notiser";
+import { tystadeForekomster } from "@/lib/upprepning";
 import {
   PAMINNELSE_PERSON_DYGN,
   TYP_ETIKETT,
@@ -53,6 +54,15 @@ export type Uppgiftsrad = {
   /** Mallen respektive samtalet raden kom ur. Grupperar klockans nyheter. */
   template_id: string | null;
   session_id: string | null;
+  /**
+   * 0062. Den aterkommande rutinen raden kom ur, om nagon.
+   *
+   * TREDJE URSPRUNGET, bredvid mallen och samtalet — och det enda av dem som
+   * foder rader i FRAMTIDEN. Mallen och samtalet lagger upp allt pa en gang;
+   * serien fortsatter i atta veckor, och det ar darfor den behover tystas i
+   * klockan pa ett satt de andra tva inte gor.
+   */
+  series_id: string | null;
   created_at: string;
   handelser: Handelse[];
   lage: Uppgiftslage;
@@ -63,7 +73,10 @@ export type Uppgiftsrad = {
 const UPPGIFTSFALT =
   "id, title, description_md, kind, assignee_id, partner_id, created_by, verify_by," +
   " evidence, due_date, due_time, estimate_minutes, starts_on, cancelled_at," +
-  " course_id, module_id, document_id, template_id, session_id, created_at";
+  " course_id, module_id, document_id, template_id, session_id, created_at," +
+  // 0062. Behovs for tystnadsregeln i `tystadeForekomster()` — se
+  // notisavsnittet langre ner.
+  " series_id";
 
 /**
  * Ar den har personen chef OVER den andra?
@@ -835,6 +848,36 @@ export async function coachningsnotiser(user: CurrentUser): Promise<Notis[]> {
   const nya: Uppgiftsrad[] = [];
 
   /**
+   * 0062: BARA NARMASTE FOREKOMSTEN I EN SERIE SAGER TILL.
+   *
+   * =========================================================================
+   * TYSTNADEN LIGGER FORE SLINGAN, OCH DET AR INTE EN ORDNINGSFRAGA
+   *
+   * En coachningsrutin foder atta veckors rader i samma sekund. De ar tysta de
+   * forsta tre dygnen av sig sjalva — `nya` samlar dem, och de filtreras nedan
+   * innan de blir omgangar. Men PAMINNELSEN under dem mater STILLESTAND, och
+   * pa fjarde dagen har varenda en av de atta statt still i fyra dagar.
+   *
+   * Utan den har raden ar upprepningen alltsa inte en notisfabrik pa dag ett
+   * utan pa dag fyra, vilket ar varre: da har den som byggde den redan sett att
+   * det var tyst och tror att saken ar loest.
+   *
+   * En framtida forekomst kan dessutom inte "sta still" i nagon meningsfull
+   * betydelse. Den vantar pa sin dag. Det ar inte samma sak som att nagon
+   * glomt den, och en paminnelse som inte gar att gora nagot at ar den sortens
+   * post som lar folk att klicka bort poster.
+   * =========================================================================
+   */
+  const tystade = tystadeForekomster(
+    uppgifter.map((u) => ({
+      id: u.id,
+      series_id: u.series_id,
+      due_date: u.due_date,
+      stangd: u.lage === "klar" || u.lage === "avbruten",
+    })),
+  );
+
+  /**
    * MIN EGEN PAMINNELSE. Bara nar det faktiskt star still — den som arbetar med
    * en uppgift i dag ska inte samtidigt fa en notis om att hon inte gjort den.
    *
@@ -845,7 +888,7 @@ export async function coachningsnotiser(user: CurrentUser): Promise<Notis[]> {
    * ID:T BAR ANTALET VECKOR, sa posten aterupstar en gang i veckan for den som
    * klickat bort den och fortfarande inte gjort nagot at saken.
    */
-  for (const u of oppna.filter((u) => u.assignee_id === mig)) {
+  for (const u of oppna.filter((u) => u.assignee_id === mig && !tystade.has(u.id))) {
     const senast = senasteRorelse(u) ?? u.created_at;
     const stilla = Math.floor((nu.getTime() - Date.parse(senast)) / 86_400_000);
     const underkand = u.lage === "underkand";
@@ -915,7 +958,28 @@ export async function coachningsnotiser(user: CurrentUser): Promise<Notis[]> {
    * bortklickad for den som redan last den. Ett id raknat pa antalet hade latit
    * nyheten ateruppsta varje gang hon gjorde nagot at den.
    */
-  const omgangar = grupperaOmgangar(nya);
+  /**
+   * 0062: SERIENS SENARE FOREKOMSTER STAR UTANFOR OMGANGARNA.
+   *
+   * En coachningsrutin foder atta veckors rader i samma sekund, och de delar
+   * darfor `created_at` ner till millisekunden — `grupperaOmgangar()` ser dem
+   * som EN omgang och skriver "Du har fått 8 nya uppgifter". Det ar sant i
+   * bokstavlig mening och fel i varje annan: det ar EN uppgift, atta ganger,
+   * och den andra kommer om en vecka.
+   *
+   * Tystnaden laggs darfor fore grupperingen och inte efter. Lades den efter
+   * hade omgangen redan varit skriven, och det enda som gatt att gora ar att
+   * kalla den nagot annat.
+   *
+   * Regeln star i `lib/upprepning.ts` och delas med uppgiftsmodulen. Samma
+   * fraga, samma svar — annars tystnar de olika mycket, och ingen kan saga
+   * vilket som ar det ratta.
+   *
+   * `nya` ar redan sallad: slingan ovan hoppar over de tystade innan de
+   * samlas. Filtret star kvar anda, for `nya` fylls pa ETT stalle i dag och
+   * inget hindrar ett andra i morgon.
+   */
+  const omgangar = grupperaOmgangar(nya.filter((u) => !tystade.has(u.id)));
   const flerpost = omgangar.filter((o) => o.uppgifter.length > 1);
 
   /**

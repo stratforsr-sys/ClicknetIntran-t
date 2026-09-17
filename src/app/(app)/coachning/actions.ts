@@ -19,6 +19,9 @@ import {
 } from "@/lib/coachning";
 import { arChefFor, farCoacha } from "@/lib/coachning-server";
 import { notifiera } from "@/lib/notishandelse-server";
+import { svensktDatum } from "@/lib/klocka";
+import { granskaRegel, regelUrFormular, serietext } from "@/lib/upprepning";
+import { skapaSerie } from "@/lib/upprepning-server";
 
 export type CoachState = { fel?: string; ok?: string };
 
@@ -122,6 +125,71 @@ export async function skapaUppgift(_prev: CoachState, form: FormData): Promise<C
     // triggern i 0043 aldrig slapper igenom.
     if (arSjalvsann(kind) && verifyBy !== "sjalv") {
       return { fel: "Den här uppgiftstypen kvitteras inte för hand — läget hämtas ur certifikatet, bedömningen eller kvittensen." };
+    }
+
+    /**
+     * 0062: UPPREPNINGEN GRENAR AV HAR.
+     *
+     * Allt ovanfor ar redan provat — chefskapet, typen, kallan, motparten,
+     * kvitteraren — och det ar precis de kontrollerna en serie behover, for
+     * serien foder rader med samma falt i atta veckor framat. Grenen ligger
+     * darfor sist i valideringen och inte forst.
+     *
+     * EN SERIE UTAN DATUM FINNS INTE. `due_date` ar bade seriens start och
+     * varje forekomsts frist; utan den vet regeln inte vilken dag den ska
+     * rakna fran.
+     */
+    const regel = due ? regelUrFormular(form, due) : null;
+    if (regel) {
+      const klagomal = granskaRegel(regel);
+      if (klagomal) return { fel: klagomal };
+
+      const { id: serieId, fodda } = await skapaSerie(
+        db,
+        {
+          slag: "coachningsuppgift",
+          monster: regel.monster,
+          veckodagar: regel.veckodagar,
+          starts_on: regel.starts_on,
+          ends_on: regel.ends_on,
+          title: titel,
+          description_md: text(form, "description_md"),
+          due_time: tid,
+          estimate_minutes: minuter,
+          assignee_id: assignee,
+          created_by: user.employee!.id,
+          kind,
+          verify_by: verifyBy,
+          evidence,
+          partner_id: partner,
+          course_id: kravs === "course_id" ? course : null,
+          module_id: kravs === "module_id" ? modul : null,
+          document_id: kravs === "document_id" ? dokument : null,
+        },
+        svensktDatum(),
+      );
+
+      /**
+       * REGELN LOGGAS FOR SIG, utover raden varje forekomst far i
+       * `fodCoachningsuppgifter()`. Det ar inte dubbelt: forekomsterna sager
+       * att tolv uppgifter lades pa nagon, den har raden sager att en manniska
+       * beslutade att det skulle ske varje vecka. Utan den ser tolv rader i
+       * loggen ut som tolv beslut.
+       */
+      await db.from("audit_log").insert({
+        actor_id: user.employee!.id,
+        action: "task_series.created",
+        object_type: "task_series",
+        object_id: serieId,
+        meta: { assignee_id: assignee, kind, monster: regel.monster, forekomster: fodda },
+      });
+
+      revalidatePath("/coachning");
+      revalidatePath(`/coachning/${assignee}`);
+      revalidatePath("/kalender");
+      return {
+        ok: `${serietext(regel)} · ${fodda} ${fodda === 1 ? "förekomst" : "förekomster"} upplagda.`,
+      };
     }
 
     const { data: rad, error } = await db

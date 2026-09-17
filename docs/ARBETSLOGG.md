@@ -5,88 +5,156 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
-## 2026-09-16 · Läckprovet var rött på ett namn sidan ska visa
+## 2026-09-17 · Upprepade uppgifter och coachningsuppgifter (0062)
 
-Överlämningen sa: *"`tests/sidor.mjs` går mot produktion och rapporterar
-'/franvaro/sjuk bär efternamnet Menduza' för ekonomirollen. Frånvaromodulen."*
-Det lät som en läcka i frånvaron. Det var det inte, och skillnaden är hela
-passet.
+Beställarens fråga: *"har du lagt till upprepade tasks i kalender och i
+uppgifter? Annars ställ mig frågor så att vi får till det"*. Svaret var nej —
+upprepningen stod som kvarvarande arbete sedan kalendern pass 3, och en
+kontroll i koden bekräftade det: `task` (0054) och `coaching_task` (0043) hade
+inte en enda kolumn om återkomst, och ingen träff på upprepning, recurrence
+eller rrule någonstans i `src/`.
 
-### Vad som faktiskt kom ut
+### Sju frågor, sju svar
 
-`/franvaro/sjuk` hämtades som alla fyra rollerna med kontexten runt varje
-träff utskriven. Samma sträng, samma ställe, för **tre** roller — inte bara
-ekonomi:
+Beställningen togs fram i två omgångar frågor innan en rad skrevs. Svaren:
 
-```
-<li>3  Simon Menduza, Zen
-       VD
-```
+| Fråga | Svar |
+|---|---|
+| Vad ska kunna upprepas? | Uppgifter **och** coachningsuppgifter |
+| Hur ska förekomsterna finnas? | Riktiga kopior, födda i förväg |
+| Hur rika mönster? | Dagligen, vardagar, veckovis med valda dagar |
+| Ändra en förekomst? | Fråga: bara den här, eller hela serien |
+| Hur mycket notiserar de? | Bara närmaste förekomsten |
+| Ledighet och röda dagar? | Ingen inblandning — förekomsten ligger kvar |
+| Hur länge, hur långt fram? | Valfritt slutdatum, annars vidare · 8 veckor |
 
-Det är **telefonlistan**, sidans första element. `absence_call_order` plats 3
-är `target_kind = 'role', role = 'ceo'`, VD:n heter Simon Menduza, och listan
-står för alla — annars vet den som blivit sjuk inte vem hen ska ringa. Det är
-AC-3.6 och AC-3.18, och kommentaren överst i `sjuk/page.tsx` säger det rakt ut:
-sidan har med flit ingen sjukanmälningsknapp, den har en lista på människor.
+Månadsvis och "första måndagen i månaden" föreslogs och valdes BORT. Det står
+här för att det annars ser ut som en glömska: beställarens ord var *"om man kan
+välja en dag, så tex måndag, då upprepas ju den varje måndag tex oså, så
+dagligen, vardagar, eller veckovis där man kan välja en dag"*.
 
-Tre saker visar att ingenting annat kom ut:
+### Numret var inte det main visade
 
-- `sick_report_read` är
-  `employee_id = current_employee_id() OR leads_employee(employee_id) OR has_any_role('sales_manager','ceo')`.
-  Ekonomi släpps inte in, och namnuppslagningen i `page.tsx` (rad 149–153) sker
-  förvisso med service role — men bara på `employee_id` ur rader som RLS redan
-  lämnat ut. Den kan inte nämna någon vars rad inte kom med.
-- Ekonomirollens svar bar **bara** de tre Menduza-träffarna. Ingen sjukanmäld,
-  ingen e-postadress.
-- Säljchefen fick 206 träffar. Den negativa kontrollen lever, alltså letar
-  sökningen på riktigt.
+`ls supabase/migrations` på main slutar på `0060`. `schema_migrations` sa
+`0061_kurs_slapp_inte_kunden`, körd 2026-09-16 från den omergade grenen
+`utbildning-slapp-inte-kunden`. Migrationen heter därför **`0062`**. Exakt den
+krock minnesregeln om migrationsnummer finns för.
 
-### Varför provet ändå var fel, och vad som gjordes åt det
+### Varför riktiga kopior och inte en regel som räknas fram
 
-Provets hemligheter är *varenda* anställds efternamn ur driften. En sida som är
-byggd för att visa ett namn blir då röd för att den gör sitt jobb. Det röda var
-alltså inte ett fynd utan en falsk positiv — och en falsk positiv som får stå
-kvar är dyrare än den ser ut: nästa session lär sig att provet "brukar vara
-rött där", och då ser den inte det äkta fyndet heller.
+Tre former övervägdes, och valet bär hela migrationen:
 
-Det billiga hade varit att hoppa över `/franvaro/sjuk`. Det vore värre än det
-röda provet: det är sjukdom som står på den sidan, alltså precis det som inte
-får läcka. Undantaget är därför så smalt det går:
+1. **En rad med en regel**, kalendern räknar fram resten. Billigast i
+   databasen, dyrast i allt annat: en bockad förekomst kräver en
+   undantagstabell, `task_event` får ingen rad att hänga på, `uppgift_synlig()`
+   ska svara om en uppgift som inte finns, och registerutdraget kan inte läsa
+   det som aldrig skrevs.
+2. **Nästa föds när den förra bockas av.** Minst data — men en planeringsvy som
+   inte kan säga att fredagen om tre veckor är upptagen är ingen planeringsvy.
+3. **Riktiga kopior, födda i förväg.** Valt.
 
-- **Bara den vägen.** Samma namn någon annanstans är fortfarande ett läckage.
-- **Bara efternamn, och bara för dem ringlistan själv pekar ut** — läst ur
-  `absence_call_order` i provet, inte skrivet i det. Byter VD:n namn, eller får
-  listan en ny plats, följer provet med av sig självt.
-- **E-postadresser undantas aldrig.** Ringlistan visar telefon, aldrig mejl, så
-  en adress i det svaret är ett fel även för de personerna.
-- **Chefsplatsen står inte med.** Provets användare skapas utan `manager_id`
-  (`matanvandare` i `scripts/lib/matning.mjs`), så den platsen renderar aldrig
-  ett namn för dem. Skulle den någon gång göra det ska provet bli rött.
+Följden av (3) är att **ingenting annat i navet behövde lära sig något nytt**.
+En förekomst är en rad i `task` eller `coaching_task` med sin egen krets, sin
+egen historik, sin egen plats i kalendern, i dagssumman, i morgonbrevet, i
+iCal-flödet och i registerutdraget. Kalendern fick ingen åttonde källa, och
+`hamtaEgenKalender()` rördes inte alls.
 
-Och för att undantaget inte ska kunna tysta sidan tillkom den **positiva**
-halvan: ringlistans namn SKA stå på `/franvaro/sjuk`, för varje roll. Tas
-telefonlistan bort säger provet till i stället för att bli grönt. Det är samma
-grepp som den negativa kontrollen för säljchefen, och av samma skäl — en vakt
-som slutat hitta något bevisar ingenting.
+### Det som faktiskt var svårt
 
-### Provet efteråt
+**Idempotensen.** Två skribenter föder rader: nattjobbet fyller på horisonten,
+och `skapaSerie()` föder första fönstret direkt så att den som lägger upp en
+rutin ser åtta måndagar innan hon hunnit stänga formuläret. Skyddet är
+`materialized_to` plus ett unikindex på `(series_id, series_on)`.
 
-Grönt för alla fyra rollerna, 50 sidor var, inga serverfel. Säljchefens
-negativa kontroll gick från 206 träffar till 203 — exakt de tre Menduza-raderna
-på den enda undantagna sidan, ingenting annat.
+**Indexet är HELT och inte partiellt**, vilket ser fel ut och inte är det. Ett
+partiellt index går inte att peka ut som konfliktmål från PostgREST — den kan
+bara skicka kolumnnamn, inte indexets villkor — och utan konfliktmål finns
+ingen `on conflict do nothing`. Två NULL är inte lika i ett unikindex, så
+navets uppgifter utan serie kolliderar inte med varandra ändå.
 
-Och en mutationskontroll, för att inte lita på grönt i sig: en extra "hemlighet"
-som står på just den sidan (`"Registrera efter samtalet"`) lades tillfälligt
-till, och provet blev rött för alla tre rollerna. Vakten bits alltså fortfarande
-där undantaget gäller. Den raden committades inte.
+**`series_on` är skild från `due_date`, och det är migrationens viktigaste
+kolumn.** Den som drar måndagsförekomsten till onsdagen har ändrat `due_date` —
+men raden är fortfarande måndagens förekomst. Vore `due_date` både frist och
+identitet hade varje omplanering fött en dubblett nästa natt.
 
-**Ingen produktionskod ändrades, ingen migration, ingen rad i `poster.ts`** —
-ingenting av det här syns för någon som använder navet.
+**`materialized_to` flyttas bara framåt.** Det är vad som gör att en borttagen
+förekomst stannar borttagen: unikindexet stoppar en dubblett bara så länge
+raden finns kvar, och en raderad rad har ingen som stoppar den.
 
-### Kvar i samma hörn
+**Tystnaden var inte en detalj utan halva bygget.** Utan den är upprepningen en
+notisfabrik i två steg. Först `uppgift-ny` och `coachning-ny`: åtta rader i
+`ej_paborjad` med någon annan som skapare blir åtta poster i klockan på en
+gång. Coachningens är värre — de åtta delar `created_at` ner till
+millisekunden, så `grupperaOmgangar()` skriver "Du har fått 8 nya uppgifter",
+vilket är bokstavligt sant och i varje annan mening fel. Sedan **påminnelsen**,
+som mäter stillestånd: på fjärde dagen har varenda en av de åtta stått still i
+fyra dagar. Den är den obehagligare av de två, för då har den som byggde det
+redan sett att det var tyst och tror att saken är löst. `tystadeForekomster()`
+ligger därför FÖRE påminnelseslingan i `coachning-server.ts`.
 
-Registerutdragsprovet är fortfarande rött på main sedan tidigare (19 kolumner
-saknas). Det rördes inte här och är ett eget pass.
+**Nattjobbet och inte dagtidsjobbet.** Dagtidsjobbet kör var kvart och hade gett
+snabbare påfyllning — men det vänder i dörren på helger (`veckodag >= 6`), så en
+serie som nått sin horisont på en fredag hade stått still till måndag. Steget
+står dessutom tidigt i nattjobbet, före coachningssteget som läser samma tabell.
+
+### Två villkor som såg riktiga ut och släppte igenom allt
+
+Migrationen kördes, och ett prov mot riktiga databasen (villkoren, unikindexet
+och RLS i en transaktion som rullades tillbaka) fällde två av elva kontroller.
+Båda var samma SQL-fälla, och ingen av dem syns när man läser villkoret:
+
+**`array_length('{}', 1)` är NULL, inte 0.** Villkoret
+`array_length(veckodagar, 1) between 1 and 7` blev därför NULL för en tom
+array — och ett CHECK-villkor avvisar bara FALSE. "Varje vecka, inga dagar
+valda" gick rakt in i databasen. Den regeln infaller aldrig, föder noll
+uppgifter och ser fullkomligt riktig ut i listan.
+
+**`null in ('a','b')` är NULL, inte falskt.** Samma sak i
+`task_series_coachningstyp`: en coachningsserie utan `kind` slapp förbi, och
+hade fött åtta `coaching_task`-rader som faller på 0043:s egna villkor, en efter
+en, i ett nattjobbskvitto klockan halv tre på natten.
+
+Båda är rättade med `coalesce`, och migrationen kördes om — den bär nu
+`drop constraint if exists` + `add constraint` för de två, så att den är
+omkörbar mot en databas som redan har tabellen. Raden i `schema_migrations`
+raderades och skrevs om med den nya checksumman.
+
+**Det värda att ta med sig: ett CHECK-villkor som producerar NULL är inget
+villkor.** Läsningen hjälpte inte — villkoret SÅG rätt ut. Det var provet mot
+riktig SQL som fann det, och det är skälet att provet kördes innan grenen
+visades.
+
+### Det som INTE byggdes, och varför
+
+- **Fokusområdena följer inte med** en coachningsserie. `coaching_task_focus`
+  är en bedömning av vad en särskild träning ska öva, och en rutin som stämplar
+  samma tre områden på femtiotvå veckors uppgifter gör mätningen av dem
+  meningslös. Ska det ändras är vägen en `task_series_focus`-tabell.
+- **Ingen hänsyn till ledighet eller röda dagar.** Beställarens uttryckliga val
+  bland tre alternativ. Förekomsten ligger kvar där mönstret lägger den.
+- **Snabbraden tolkar inget om upprepning.** "varje måndag" i `tolkaSnabbrad()`
+  vore naturligt att vilja ha, och det är precis den sortens tolkning som
+  rubriken i `uppgifter.ts` varnar för: en tolk som gissar fel lägger tyst upp
+  femtiotvå uppgifter.
+- **Serien går inte att ändra från en egen sida.** Mönstret sätts när rutinen
+  läggs upp. Ändras mallen via "hela serien" på en förekomst; ska mönstret
+  ändras avslutas rutinen och en ny läggs upp. Det är en känd gräns, inte ett
+  förbiseende — en mönsterändring mitt i en serie måste bestämma vad som händer
+  med de redan födda raderna, och den frågan är inte ställd till beställaren.
+
+### Läget
+
+Branch `upprepade-uppgifter`, **EJ MERGAD**. Migrationen `0062` är **KÖRD**,
+samma linje som 0060 och av samma skäl: previewen läser produktionsdatabasen, så
+utan migrationen går grenen inte att visa. Den är additiv — en ny tabell, tre
+nullbara kolumner på vardera `task` och `coaching_task`, två unikindex och en
+policy — och **main påverkas inte**, eftersom ingen kod på main nämner någon av
+dem. Nattjobbets `serier`-steg finns bara på grenen, och previewdeployer får
+ingen cron, så ingenting föds automatiskt förrän grenen är mergad.
+
+`tests/upprepning.mjs` är grönt (73 kontroller), liksom `uppgifter`, `kalender`
+och `navnyheter`. Provet är skrivet utan databas med flit: de tre saker som kan
+gå fel i en upprepning är alla räkning.
 
 ---
 

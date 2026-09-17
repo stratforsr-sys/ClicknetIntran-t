@@ -188,6 +188,19 @@ export const KALLOR: Kalla[] = [
   // Och när du senast öppnade en chatt. Raden säger att du var där, vilket
   // är en uppgift om dig även om den bara används för att räkna olästa.
   { tabell: "project_message_read", kolumn: "employee_id", andamal: "När du senast läste ett projekts chatt" },
+
+  // 0062. Den återkommande rutinen.
+  //
+  // FÖREKOMSTERNA STÅR REDAN I UTDRAGET via `task.assignee_id` ovan — men bara
+  // de som hunnit födas, och bara så länge de finns kvar. REGELN lever längre
+  // än raderna den föder: den som avslutar en rutin har tagit bort sju
+  // kommande måndagar, inte beskedet att någon bestämde att de skulle ske.
+  //
+  // "Varje fredag: gå igenom Eriks siffror" är dessutom en uppgift om Erik som
+  // säger mer än var enskild fredag gör. Samma linje som `task_link` drar i
+  // rubriken ovan: det som samlas in om någon ska gå att läsa för den det
+  // gäller, också när det är formulerat som en rutin i stället för som en rad.
+  { tabell: "task_series", kolumn: "assignee_id", andamal: "Återkommande uppgifter som läggs på dig" },
 ];
 
 /**
@@ -331,6 +344,20 @@ export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
   { tabell: "task_link", kolumn: "created_by", skal: "Vem som kopplade uppgiften till något" },
   { tabell: "project", kolumn: "created_by", skal: "Vem som skapade projektet" },
   { tabell: "project_member", kolumn: "added_by", skal: "Vem som bjöd in någon annan till projektet" },
+
+  // 0062. Samma tre frågor och samma tre svar som uppgiftsmodulens egna: vem
+  // som la upp rutinen, vem som stängde av den, och vem den coachade ska öva
+  // mot. Ingen av dem svarar på "vad har navet registrerat om mig" — det gör
+  // `task_series.assignee_id`, och den står i KALLOR.
+  //
+  // `partner_id` är den enda som är värd ett ögonblicks tvekan. Att Anna ska
+  // rollspela med Bertil varje tisdag är en uppgift om Anna, och den följer
+  // med i HENNES utdrag via regeln. För BERTIL är den en upplysning om vad
+  // någon annan ska träna på — och hans egen coachning står i hans eget
+  // utdrag, inte i kraft av att han råkar vara motpart.
+  { tabell: "task_series", kolumn: "created_by", skal: "Vem som la upp den återkommande rutinen" },
+  { tabell: "task_series", kolumn: "ended_by", skal: "Vem som avslutade rutinen" },
+  { tabell: "task_series", kolumn: "partner_id", skal: "Motpart i någon annans coachningsrutin" },
 
   // 0057. Kalenderdelningen star i UNDANTAG med alla tre kolumnerna, och det
   // ar INTE for att den skulle sakna personuppgifter — tvartom.

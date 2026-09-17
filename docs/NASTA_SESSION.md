@@ -3,7 +3,96 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-16 (senare) — **läckprovet är grönt igen, och det var ingen läcka**: `/franvaro/sjuk bär efternamnet Menduza` var VD:n i sjuksidans telefonlista (`absence_call_order`, plats 3 = rollen `ceo`), som står för alla med flit. Samma rad var röd för säljare och teamledare också. `tests/sidor.mjs` är kalibrerat — ringlistans efternamn undantas bara på den vägen, hämtade ur databasen, och en **positiv** kontroll kräver att namnen står där — plus mutationsprovat. Ingen produktionskod rörd, ingen migration. **`0060` är taget av utköpspasset — nästa nummer är `0061`, fråga `schema_migrations` ändå.** Kvar: pass 3 av kalendern (upprepning, veckogenomgång, mallar, och iCal-frågan som är en fråga till beställaren), och registerutdragsprovet som är rött sedan tidigare (19 kolumner). Föregående rad: 2026-09-16 — **utköp på affären, mejl på ordern, ett kontrollerat orderformulär och volymbonusen på rätt form** (migration `0060`, körd 2026-09-15). Byggt på branch `utkop-och-orderformular` och **mergat till main 2026-09-16 efter uttryckligt godkännande** — grenen hade divergerat (10 commits bakom sedan kalendern gick in), så main flätades in i grenen och previewen byggdes om innan main rördes. Anteckningskravet vid handsatt provision är BORTTAGET: det återställde formuläret och åt upp signeringsdatumet, vilket lade en augustiorder i september. Föregående rad: 2026-09-16 — **kalendergrenen är MERGAD TILL MAIN** som `0fc9734`, en riktig merge-commit med två föräldrar (`ea9e64c` + `4b01ba5`), inte en squash. Beställaren godkände pass 3 efter genomgång av previewen, `behind_by` var 0 och ingen inflätning behövdes. Produktionsbygget av merge-commiten är grönt, så alla tre kalenderpassen ligger nu i produktion: planeringsvyn med delning och pling (`0057`), "Ny post" (`0058`) och slutdatumen (ingen migration). **Nästa nummer är `0060`** — fråga `schema_migrations` ändå. Kvar att göra, i ordning: pass 3 av kalendern (upprepning, veckogenomgång, mallar, och uppgifter i iCal-flödet — det sista är en fråga till beställaren, inte ett bygge), och **läckprovet som är rött på main**: `tests/sidor.mjs` säger att `/franvaro/sjuk` bär efternamnet Menduza för ekonomirollen. Frånvaromodulen, eget pass. Föregående rad: 2026-09-15 — **slutdatumen i kalendern är BYGGDA**, och **ingen migration behövdes**: projektens deadline är kalenderns sjunde källa, coachningsuppgiften syns i mottagarens kalender för CHEFEN (läst genom `coaching_task_read`, inte genom projektionen), och en uppgift utan klockslag ritas inte längre två gånger. Main är inflätad, `behind_by` är 0, och `0059` visade sig vara taget av dagtidsjobbet — nästa nummer är `0060`. Grenen `kalender` bär nu **tre pass** och är fortfarande **EJ MERGAD**. Se avsnittet överst. Föregående rad: 2026-09-14 (sent, efter genomgång) — beställaren har sett "Ny post" och **beställt en sak till: slutdatumen ska synas i kalendern** — coachningsuppgiften i mottagarens OCH chefens vy, och projektens deadline som saknas helt. Se avsnittet överst; **inget av det är byggt**, men allt tre är utrett mot databasen. Föregående rad: 2026-09-14 (sent) — **"Ny post" i kalendern är BYGGD**, migration `0058` körd: en knapp och ett klick på en tom ruta öppnar ett formulär som blir en uppgift eller en coachningsuppgift, coachningsuppgifter syns numera i kalendern (sjätte källan) och plingar, och dagssumman räknar dem. Grenen `kalender` är fortfarande **EJ MERGAD** — previewen ska visas för beställaren. Se avsnittet överst. Föregående rad: 2026-09-14 (kväll) — **navet mejlar** (migration `0059`). **Mergat till main (`e92d0f3`) och TÄNT** — `cron_secret` ligger i Vault och kedjan pg_cron → pg_net → Vercel är provad skarpt (HTTP 200). Dagtidsjobbet kunde INTE läggas som en tredje cron-post i `vercel.json`: Hobby tar två, båda är upptagna, och en tredje gör att ingen av dem körs. Resend-nyckeln är inkopplad som `nav@clicknet.se`, elva händelser mejlas direkt, morgonbrevet samlar sex sorters påminnelser i ETT brev, och ett nytt dagtidsjobb påminner den som inte stämplat in — schemalagt av `pg_cron` i databasen, eftersom Vercels två cron-poster är slut. **`cron_secret` måste läggas i Vault, annars gör dagtidsjobbet ingenting.** Föregående rad: 2026-09-14 (kväll) — kalendern (pass 2) är byggd och previewen är genomgången av beställaren, som sa att den ser bra ut och **beställde en sak till: "Ny post" i kalendern**. Föregående rad: 2026-09-14 (senare) — **kalendern (pass 2) är byggd**: planeringsvy med dra-och-släpp, veckovy, delning i Outlooks fem nivåer, pling i webbläsaren. Migration `0057` körd. **Ligger på branch `kalender`, EJ MERGAD** — previewen ska visas först. Branchen bär main inflätad (`0056` ingår). Föregående rad: 2026-09-14 — samtalen ligger nu på ordern med spelbar inspelning (migration `0056`). Kopplingen sker på kundens nummer utan bortre gräns bakåt, flera samtal per affär, och gallringen kan inte radera ett ordersamtal. Föregående rad: 2026-09-11 (kväll) — **uppgiftsmodulen pass 1 är byggd och mergad till main**: uppgifter, deluppgifter, projekt med egen sida och chatt, godkännande med granskare, kopplingar, framräknade notiser och morgonbrev. Migrationerna `0054` och `0055` körda. **Nästa steg är kalendern (pass 2).** Föregående rad: 2026-09-11 (eftermiddag) — båda Lynes-webhookarna är på. Insights visade sig bära riktningen i `itemType` och inte utfallet, och `callType` betyder inte riktning; tolken är rättad och alla 172 samtal omtolkade. **Tre öppna frågor, se nedan** — den viktigaste är om ett missat samtal någonsin levereras. Föregående rad: 2026-09-11 — Lynes webhook levererar. Formen visade sig vara en annan än gissningarna: alla sexton första samtalen tolkades fel, tolken är rättad mot riktig trafik och påsarna omtolkade ur `call_ingest`. **Ett beslut väntar om inspelningarna** — S3-adressen lever trettio minuter. Föregående rad: 2026-09-10 (kväll) — växelns samtal: Lynes webhook har en adress in i navet, radlogg och tolkning på plats, migration `0052` körd. På branch `lynes-samtal`, ej mergad; ingenting syns i gränssnittet än. Föregående rad: 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
+**Senast uppdaterad:** 2026-09-17 — **upprepade uppgifter och coachningsuppgifter** (migration `0062`, körd 2026-09-17). Byggt på branch `upprepade-uppgifter`, **EJ MERGAD — previewen ska visas**. Beställningen kom som en fråga (*"har du lagt till upprepade tasks i kalender och i uppgifter?"*) och besvarades med sju frågor tillbaka innan en rad skrevs; svaren står i arbetsloggen. En serie är en REGEL som föder RIKTIGA uppgifter åtta veckor framåt — kalendern fick ingen ny källa, och `hamtaEgenKalender()` rördes inte. **Numret var inte det main visade:** `schema_migrations` sa att `0061` redan var taget av den omergade grenen `utbildning-slapp-inte-kunden`. **Nästa nummer är `0063`** — fråga `schema_migrations` ändå. Kvar av kalenderns pass 3: **veckogenomgång och mallar**, samt uppgifter i iCal-flödet (en fråga till beställaren, inte ett bygge). Kvar sedan tidigare: **läckprovet som är rött på main** — `tests/sidor.mjs` säger att `/franvaro/sjuk` bär efternamnet Menduza för ekonomirollen; frånvaromodulen, eget pass. Föregående rad: 2026-09-16 — **utköp på affären, mejl på ordern, ett kontrollerat orderformulär och volymbonusen på rätt form** (migration `0060`, körd 2026-09-15). Byggt på branch `utkop-och-orderformular` och **mergat till main 2026-09-16 efter uttryckligt godkännande** — grenen hade divergerat (10 commits bakom sedan kalendern gick in), så main flätades in i grenen och previewen byggdes om innan main rördes. Anteckningskravet vid handsatt provision är BORTTAGET: det återställde formuläret och åt upp signeringsdatumet, vilket lade en augustiorder i september. Föregående rad: 2026-09-16 — **kalendergrenen är MERGAD TILL MAIN** som `0fc9734`, en riktig merge-commit med två föräldrar (`ea9e64c` + `4b01ba5`), inte en squash. Beställaren godkände pass 3 efter genomgång av previewen, `behind_by` var 0 och ingen inflätning behövdes. Produktionsbygget av merge-commiten är grönt, så alla tre kalenderpassen ligger nu i produktion: planeringsvyn med delning och pling (`0057`), "Ny post" (`0058`) och slutdatumen (ingen migration). **Nästa nummer är `0060`** — fråga `schema_migrations` ändå. Kvar att göra, i ordning: pass 3 av kalendern (upprepning, veckogenomgång, mallar, och uppgifter i iCal-flödet — det sista är en fråga till beställaren, inte ett bygge), och **läckprovet som är rött på main**: `tests/sidor.mjs` säger att `/franvaro/sjuk` bär efternamnet Menduza för ekonomirollen. Frånvaromodulen, eget pass. Föregående rad: 2026-09-15 — **slutdatumen i kalendern är BYGGDA**, och **ingen migration behövdes**: projektens deadline är kalenderns sjunde källa, coachningsuppgiften syns i mottagarens kalender för CHEFEN (läst genom `coaching_task_read`, inte genom projektionen), och en uppgift utan klockslag ritas inte längre två gånger. Main är inflätad, `behind_by` är 0, och `0059` visade sig vara taget av dagtidsjobbet — nästa nummer är `0060`. Grenen `kalender` bär nu **tre pass** och är fortfarande **EJ MERGAD**. Se avsnittet överst. Föregående rad: 2026-09-14 (sent, efter genomgång) — beställaren har sett "Ny post" och **beställt en sak till: slutdatumen ska synas i kalendern** — coachningsuppgiften i mottagarens OCH chefens vy, och projektens deadline som saknas helt. Se avsnittet överst; **inget av det är byggt**, men allt tre är utrett mot databasen. Föregående rad: 2026-09-14 (sent) — **"Ny post" i kalendern är BYGGD**, migration `0058` körd: en knapp och ett klick på en tom ruta öppnar ett formulär som blir en uppgift eller en coachningsuppgift, coachningsuppgifter syns numera i kalendern (sjätte källan) och plingar, och dagssumman räknar dem. Grenen `kalender` är fortfarande **EJ MERGAD** — previewen ska visas för beställaren. Se avsnittet överst. Föregående rad: 2026-09-14 (kväll) — **navet mejlar** (migration `0059`). **Mergat till main (`e92d0f3`) och TÄNT** — `cron_secret` ligger i Vault och kedjan pg_cron → pg_net → Vercel är provad skarpt (HTTP 200). Dagtidsjobbet kunde INTE läggas som en tredje cron-post i `vercel.json`: Hobby tar två, båda är upptagna, och en tredje gör att ingen av dem körs. Resend-nyckeln är inkopplad som `nav@clicknet.se`, elva händelser mejlas direkt, morgonbrevet samlar sex sorters påminnelser i ETT brev, och ett nytt dagtidsjobb påminner den som inte stämplat in — schemalagt av `pg_cron` i databasen, eftersom Vercels två cron-poster är slut. **`cron_secret` måste läggas i Vault, annars gör dagtidsjobbet ingenting.** Föregående rad: 2026-09-14 (kväll) — kalendern (pass 2) är byggd och previewen är genomgången av beställaren, som sa att den ser bra ut och **beställde en sak till: "Ny post" i kalendern**. Föregående rad: 2026-09-14 (senare) — **kalendern (pass 2) är byggd**: planeringsvy med dra-och-släpp, veckovy, delning i Outlooks fem nivåer, pling i webbläsaren. Migration `0057` körd. **Ligger på branch `kalender`, EJ MERGAD** — previewen ska visas först. Branchen bär main inflätad (`0056` ingår). Föregående rad: 2026-09-14 — samtalen ligger nu på ordern med spelbar inspelning (migration `0056`). Kopplingen sker på kundens nummer utan bortre gräns bakåt, flera samtal per affär, och gallringen kan inte radera ett ordersamtal. Föregående rad: 2026-09-11 (kväll) — **uppgiftsmodulen pass 1 är byggd och mergad till main**: uppgifter, deluppgifter, projekt med egen sida och chatt, godkännande med granskare, kopplingar, framräknade notiser och morgonbrev. Migrationerna `0054` och `0055` körda. **Nästa steg är kalendern (pass 2).** Föregående rad: 2026-09-11 (eftermiddag) — båda Lynes-webhookarna är på. Insights visade sig bära riktningen i `itemType` och inte utfallet, och `callType` betyder inte riktning; tolken är rättad och alla 172 samtal omtolkade. **Tre öppna frågor, se nedan** — den viktigaste är om ett missat samtal någonsin levereras. Föregående rad: 2026-09-11 — Lynes webhook levererar. Formen visade sig vara en annan än gissningarna: alla sexton första samtalen tolkades fel, tolken är rättad mot riktig trafik och påsarna omtolkade ur `call_ingest`. **Ett beslut väntar om inspelningarna** — S3-adressen lever trettio minuter. Föregående rad: 2026-09-10 (kväll) — växelns samtal: Lynes webhook har en adress in i navet, radlogg och tolkning på plats, migration `0052` körd. På branch `lynes-samtal`, ej mergad; ingenting syns i gränssnittet än. Föregående rad: 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
+
+---
+
+## Upprepade uppgifter — BYGGT 2026-09-17, migration `0062` (KÖRD)
+
+*Hela resonemanget i `ARBETSLOGG.md` samma dag.*
+
+**Läget: branch `upprepade-uppgifter`, EJ MERGAD. Previewen ska visas.**
+
+Beställarens fråga: *"har du lagt till upprepade tasks i kalender och i
+uppgifter?"* Svaret var nej. Nu finns det, för **både uppgifter och
+coachningsuppgifter**.
+
+### Vad som finns på grenen
+
+| Del | Var |
+|---|---|
+| Migrationen | `supabase/migrations/0062_upprepning.sql` |
+| Räknandet (rent, provat) | `src/lib/upprepning.ts` + `tests/upprepning.mjs` |
+| Födseln | `src/lib/upprepning-server.ts` |
+| Nattjobbets steg | `serier` i `src/app/api/jobb/natt/route.ts` |
+| Vägen in | `NyPost.tsx` → `kalender/actions.ts` → modulens egen `skapaUppgift` |
+| "Bara den här / hela serien" | `andraUppgift` + `andraHelaSerien` i `uppgifter/actions.ts` |
+| Avsluta rutinen | `avslutaSerie` + `taBortOrordFramtid`, samma fil |
+| Gränssnittet på uppgiften | `Serien` och serieavsnittet i `[id]/Egenskaper.tsx` |
+| Tystnaden | `tystadeForekomster()`, anropad i `uppgifter-server.ts` och `coachning-server.ts` |
+
+Mönstren är **dagligen, varje vardag och veckovis med valda veckodagar**.
+Horisonten är **åtta veckor**, och nattjobbet fyller på. Slutdatum är valfritt.
+
+### DET SOM ÄR VÄRT ATT VETA INNAN NÅGON RÖR DET HÄR
+
+**`series_on` ÄR INTE `due_date`, OCH FÅR ALDRIG SLÅS IHOP MED DEN.**
+`series_on` säger VILKEN FÖREKOMST raden är; `due_date` säger när den ska vara
+gjord. Den som drar måndagsförekomsten till onsdagen ändrar den andra, inte den
+första. Vore de samma kolumn hade varje omplanering fött en dubblett nästa natt.
+
+**`materialized_to` FLYTTAS BARA FRAMÅT.** Det är det enda som gör att en
+borttagen förekomst stannar borttagen — unikindexet stoppar en dubblett bara så
+länge raden finns kvar, och en raderad rad har ingen som stoppar den. Villkoret
+står både i `fonster()` och i `flyttaFram()`:s `.or(...)`.
+
+**UNIKINDEXET ÄR HELT OCH INTE PARTIELLT, MED FLIT.** Ett `where series_id is
+not null` går inte att peka ut som konfliktmål från PostgREST, och då finns
+ingen `on conflict do nothing`. Två NULL är inte lika i ett unikindex, så
+raderna utan serie kolliderar inte ändå. Gör det inte "snyggare".
+
+**TYSTNADEN ÄR INTE KOSMETIK.** Tas `tystadeForekomster()` bort ur endera filen
+blir en veckorutin åtta poster i klockan på en gång — och i coachningen dessutom
+ett "Du har fått 8 nya uppgifter", eftersom de åtta delar `created_at` ner till
+millisekunden. I `coachning-server.ts` ligger anropet **före** påminnelseslingan,
+och det är avsiktligt: påminnelsen mäter stillestånd, så på dag fyra hade alla
+åtta nagat.
+
+**STEGET LIGGER I NATTJOBBET OCH INTE I DAGTIDSJOBBET.** Det senare kör var
+kvart men vänder i dörren på helger, så en serie som nått sin horisont på en
+fredag hade stått still till måndag.
+
+**ETT CHECK-VILLKOR SOM PRODUCERAR NULL ÄR INGET VILLKOR.** Två av villkoren i
+0062 släppte igenom allt i sin första form: `array_length('{}', 1)` är NULL och
+inte 0, och `null in ('a','b')` är NULL och inte falskt — och CHECK avvisar bara
+FALSE. Båda bär nu `coalesce`, och båda hittades av provet mot riktiga
+databasen, inte av att någon läste dem. Rör du villkoren: kör provet igen.
+
+**EN SERIE UTAN ANSVARIG FINNS INTE.** `task.assignee_id` får vara null — det är
+inkorgen — men `task_series.assignee_id` är `not null`. En serie utan ansvarig
+hade fött åtta veckors rader in i en inkorg ingen äger.
+
+**DEN SOM SLUTAT FÅR INGA NYA.** `fodSerier()` hoppar över serier vars ansvariga
+är `offboarded`. Serien avslutas INTE automatiskt — att sluta föda är en paus,
+att avsluta regeln är ett beslut.
+
+### Öppna punkter
+
+- **PREVIEWEN VÄNTAR PÅ GODKÄNNANDE.** Grenen är inte mergad. Migrationen är
+  körd, vilket är avsiktligt och samma linje som 0060 — previewen läser
+  produktionsdatabasen, och main nämner inte en enda av de nya kolumnerna.
+- **Ingen serie finns ännu i produktion.** `task_series` är tom, så ingenting av
+  det nya är prövat mot riktig data. Första rutinen är värd att titta på dagen
+  efter att den lagts upp: har nattjobbet fött exakt en ny dag?
+- **Mönstret går inte att ändra på en befintlig serie.** "Hela serien" ändrar
+  MALLEN — rubrik, klockslag, längd, prioritet, projekt — inte veckodagarna.
+  Ska mönstret ändras avslutas rutinen och en ny läggs upp. En mönsterändring
+  mitt i en serie måste bestämma vad som händer med de redan födda raderna, och
+  den frågan är inte ställd till beställaren.
+- **Fokusområdena följer inte med** en coachningsserie. Se arbetsloggen.
+- **Snabbraden tolkar inget om upprepning.** "varje måndag" i `tolkaSnabbrad()`
+  vore naturligt att vilja ha och är medvetet inte gjort.
+- **Ingen hänsyn till ledighet eller röda dagar** — beställarens uttryckliga val.
 
 ---
 
@@ -233,19 +322,12 @@ checklistan i avsnittet överst.
    `arChefFor()` svarar nej för den egna personen, utom för ledningen. Det
    följer av beslutet 2026-09-01 om vem som coachar.
 
-### En sak som föll, och som INTE var den här grenen — UTREDD 2026-09-16
+### En sak som föll, och som INTE är den här grenen
 
-`tests/sidor.mjs` rapporterade *"/franvaro/sjuk bär efternamnet Menduza"* för
-ekonomirollen. **Det var ingen läcka.** Namnet är VD:n i telefonlistan på
-sjuksidan (`absence_call_order`, plats 3 = rollen `ceo`), och listan står för
-alla med flit — AC-3.6/AC-3.18. Samma rad var röd för säljare och teamledare
-också; "ekonomirollen" var en slump i rapporteringen.
-
-Provet är kalibrerat i stället: ringlistans efternamn undantas **bara** på
-`/franvaro/sjuk`, hämtade ur `absence_call_order` och inte skrivna i provet,
-och en positiv kontroll säger att namnen SKA stå där. E-postadresser undantas
-aldrig. Hela resonemanget i `ARBETSLOGG.md` 2026-09-16. **Provet är grönt för
-alla fyra rollerna.**
+`tests/sidor.mjs` rapporterar *"/franvaro/sjuk bär efternamnet Menduza"* för
+ekonomirollen. Provet går mot **produktion** och inte mot previewen, alltså mot
+`main` utan den här ändringen. Frånvaromodulen, inte kalendern — men läckprovet
+är det enda som ser den sortens fel, så det bör tittas på.
 
 
 ## Kalendern — BYGGD 2026-09-14, MERGAD TILL MAIN 2026-09-16 (`0fc9734`)
