@@ -864,12 +864,22 @@ export function Ordervardeskort({
   netto,
   antal,
   utanVarde,
+  utkop,
   rubrik,
 }: {
   netto: number;
   /** Order netto i perioden. Noll ger inget snitt — se nedan. */
   antal: number;
   utanVarde: number;
+  /**
+   * Utkopen i perioden (0060). Redan AVDRAGNA ur `netto` — raden nedan
+   * forklarar bara vart pengarna tog vagen.
+   *
+   * ETT AVDRAG SOM INTE STAR UTSKRIVET AR ETT TAL SOM SER FEL UT. Utan raden
+   * sjunker ordervardet en manad da flera kunder kopts ut, och den enda
+   * forklaringen finns i ordervyn, order for order.
+   */
+  utkop: number;
   rubrik: string;
 }) {
   return (
@@ -881,8 +891,16 @@ export function Ordervardeskort({
       <div className="flex flex-wrap items-baseline gap-x-10 gap-y-4">
         <div>
           <p className="tnum text-display text-ink-900">{kronor(netto)}</p>
-          <p className="text-small text-ink-500">netto efter makuleringar</p>
+          <p className="text-small text-ink-500">
+            netto efter makuleringar{utkop > 0 ? " och utköp" : ""}
+          </p>
         </div>
+        {utkop > 0 && (
+          <div>
+            <p className="tnum text-h1 text-ink-900">− {kronor(utkop)}</p>
+            <p className="text-small text-ink-500">gick till utköp av kunder</p>
+          </div>
+        )}
         {/* SNITTET RITAS INTE UR NOLL ORDER. En division med noll blir NaN, och
             ett snitt ur en enda order är samma tal som summan med en etikett som
             påstår något mer. */}

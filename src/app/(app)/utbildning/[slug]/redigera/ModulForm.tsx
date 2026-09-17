@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Field, KONTROLL } from "@/components/ui/Field";
 import { Notis } from "@/components/ui/Notis";
+import { MODULTYPER, MODULTYP_ETIKETT } from "@/lib/utbildning";
 import { sparaModul, type KursState } from "../../actions";
 
 const TOM: KursState = {};
@@ -69,7 +70,7 @@ export function ModulForm({
           aria-label="Modultyp"
           className="flex gap-1 rounded-full bg-canvas p-1"
         >
-          {(["reading", "quiz", "roleplay"] as const).map((v) => (
+          {MODULTYPER.map((v) => (
             <button
               key={v}
               type="button"
@@ -80,21 +81,29 @@ export function ModulForm({
                 kind === v ? "bg-surface text-ink-900 shadow-elev-1" : "text-ink-500 hover:text-ink-900"
               }`}
             >
-              {v === "reading" ? "Läsning" : v === "quiz" ? "Prov" : "Rollspel"}
+              {MODULTYP_ETIKETT[v]}
             </button>
           ))}
         </div>
       </div>
 
       <Field
-        label={kind === "quiz" ? "Text före provet" : kind === "roleplay" ? "Instruktion till säljaren" : "Innehåll"}
+        label={
+          kind === "quiz"
+            ? "Text före provet"
+            : kind === "roleplay"
+              ? "Instruktion till säljaren"
+              : kind === "ovning"
+                ? "Uppgiften"
+                : "Innehåll"
+        }
         namn={namn("innehall")}
         hjalp="Markdown. Rubriker, listor och tabeller fungerar."
       >
         <textarea
           id={namn("innehall")}
           name="innehall"
-          rows={kind === "reading" ? 12 : 6}
+          rows={kind === "reading" ? 12 : kind === "ovning" ? 10 : 6}
           defaultValue={modul?.body_md ?? ""}
           className={`${KONTROLL} resize-y font-mono text-small`}
         />

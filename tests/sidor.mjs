@@ -193,8 +193,66 @@ for (const r of driften) {
   if (r.last_name && r.last_name.length >= 4) hemligheter.push([`efternamnet ${r.last_name}`, r.last_name]);
 }
 
+/**
+ * ===========================================================================
+ * NAMN SOM EN SIDA AR BYGGD FOR ATT VISA — OCH VARFOR UNDANTAGET AR SMALT
+ *
+ * `/franvaro/sjuk` borjar med telefonlistan: vem man ringer nar man blir sjuk.
+ * Den ar sidans forsta krav (AC-3.6, AC-3.18) och star for ALLA roller, for
+ * annars vet den sjuka inte vem hen ska ringa. VD:ns efternamn i den listan ar
+ * alltsa inte ett lackage — men provet las det som ett, eftersom hemligheterna
+ * ovan ar varenda anstalld i driften.
+ *
+ * Provet var rott av det skalet 2026-09-14/15 for saljare, teamledare OCH
+ * ekonomi — samma rad, samma sida. Kontrollerat 2026-09-16: ekonomirollens
+ * svar bar INGENTING annat, och `sick_report_read` slapper inte in den
+ * rollen alls.
+ *
+ * Undantaget ar darfor sa smalt det gar att gora det:
+ *
+ *   - Bara pa `/franvaro/sjuk`. Samma namn pa nagon annan sida ar fortfarande
+ *     ett lackage.
+ *   - Bara EFTERNAMN, och bara for dem ringlistan sjalv pekar ut. Listan
+ *     hamtas ur `absence_call_order` och inte skriven har: byter VD:n namn,
+ *     eller far listan en ny plats, foljer provet med av sig sjalvt.
+ *   - E-postadresser undantas ALDRIG. Ringlistan visar telefon, aldrig mejl,
+ *     sa en adress i det svaret ar ett fel aven for de har personerna.
+ *   - Chefsplatsen (`target_kind = 'manager'`) star inte med: provets
+ *     anvandare skapas utan `manager_id`, sa den platsen renderar aldrig ett
+ *     namn for dem. Skulle den nagon gang gora det ska provet bli rott och
+ *     kalibreras om — inte tiga.
+ *
+ * Och for att undantaget inte ska kunna tysta sidan helt provas ringlistan
+ * POSITIVT nedan: namnen SKA sta dar. Det ar samma grepp som den negativa
+ * kontrollen for saljchefen — en vakt som slutar hitta nagot bevisar inget.
+ * ===========================================================================
+ */
+const { rows: ringlistan } = await db.query(
+  `select distinct e.last_name
+     from absence_call_order o
+     join employee_role er on er.role = o.role
+     join employee e on e.id = er.employee_id
+    where o.active and o.target_kind = 'role'
+      and e.status <> 'offboarded' and e.last_name is not null
+   union
+   select distinct e.last_name
+     from absence_call_order o
+     join employee e on e.id = o.employee_id
+    where o.active and o.target_kind = 'person' and e.last_name is not null`,
+);
+const ringlistansNamn = ringlistan.map((r) => r.last_name).filter((n) => n.length >= 4);
+
+/** Vag -> varden som ar avsiktligt publika just dar. */
+const UNDANTAG = new Map([["/franvaro/sjuk", new Set(ringlistansNamn)]]);
+const TOMT = new Set();
+
 console.log(`\n\x1b[1mVarje sida som varje roll mot ${PROD}\x1b[0m`);
 console.log(`${SIDOR.length} sidor, ${hemligheter.length} uppgifter ur driften som inte far synas.`);
+console.log(
+  ringlistansNamn.length
+    ? `Ringlistan pa /franvaro/sjuk pekar ut ${ringlistansNamn.length} efternamn som SKA synas dar.`
+    : `\x1b[33mRinglistan pekar inte ut nagon med efternamn — den positiva kontrollen hoppas over.\x1b[0m`,
+);
 
 const stadare = [];
 try {
@@ -224,6 +282,8 @@ try {
 
     const kraschar = [];
     const lackage = [];
+    /** null = sidan hanns aldrig las; true/false = ringlistan syntes eller inte. */
+    let ringlistanSyntes = null;
 
     for (const vag of SIDOR) {
       const svar = await fetch(PROD + vag, {
@@ -245,13 +305,30 @@ try {
         continue;
       }
 
+      // Sidan ska visa ringlistan. Kontrolleras efter loopen — se rubriken ovan.
+      if (vag === "/franvaro/sjuk") {
+        ringlistanSyntes = ringlistansNamn.some((n) => kropp.includes(n));
+      }
+
       // DET SOM FAKTISKT BETYDER NAGOT. Kom nagon annans uppgifter ut?
+      const undantagna = UNDANTAG.get(vag) ?? TOMT;
       for (const [vad, varde] of hemligheter) {
+        if (undantagna.has(varde)) continue;
         if (kropp.includes(varde)) lackage.push(`${vag} bar ${vad}`);
       }
     }
 
     ok(`${SIDOR.length} sidor utan serverfel`, kraschar.length === 0, kraschar.join(", "));
+
+    // Den positiva halvan av undantaget: tas telefonlistan bort ska provet saga
+    // till, inte bli tyst. AC-3.6 — sidans forsta element ar vem man ringer.
+    if (ringlistansNamn.length > 0) {
+      ok(
+        "ringlistan star kvar pa /franvaro/sjuk",
+        ringlistanSyntes === true,
+        ringlistanSyntes === null ? "sidan lastes aldrig" : ringlistanSyntes ? "" : "inget av ringlistans namn i svaret",
+      );
+    }
 
     if (serAlla) {
       ok("ser personalen — provets negativa kontroll", lackage.length > 0,

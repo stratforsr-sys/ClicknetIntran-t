@@ -17,37 +17,85 @@ export const POSTER: Navnyhet[] = [
     slug: "utbildning-slapp-inte-kunden",
     rubrik: "Ny utbildning: släpp inte kunden för tidigt",
     ingress:
-      'Tre dagars drill mot reflexen att lägga på när kunden säger "vi kör redan Bokadirekt" — fyra prov och ett inspelat testsamtal som din chef bedömer.',
+      'Tre dagars drill mot reflexen att lägga på när kunden säger "vi kör redan Bokadirekt" — fem övningar du gör på plats, fyra prov och ett inspelat testsamtal.',
     text: `Kunden säger "vi kör Bokadirekt", och samtalet tar slut. Inte för att kunden
 sa nej — utan för att du hörde ett nej som inte fanns där.
 
 Under **Utbildning** ligger nu en kurs som tränar bort en enda reflex och lär in
 en enda i stället: **motstånd betyder en fråga till.**
 
+**Kursen går inte att läsa igenom.** Efter varje läsmodul ligger en övning du
+gör på plats, på fem minuter, och nästa modul öppnar sig inte förrän den är
+avbockad. Femton moduler: läsa, göra, prövas — tre varv.
+
 **Tre dagar, 20–30 minuter om dagen.**
 
-- **Dag 1** — trettio motstånd, trettio följdfrågor. Du spelar in dig själv och
-  räknar efteråt hur många som blev riktiga frågor, och hur många som blev
-  pitchar med ett frågetecken efter.
-- **Dag 2** — tre lager djupt, tillsammans med en kollega. Fråga två ska bygga
-  på svaret på fråga ett, annars är det ett förhör och inte en kedja.
-- **Dag 3** — motstånd i slumpmässig ordning, utan förberedelse. Och var
+- **Dag 1** — trettio motstånd, trettio följdfrågor. Du spelar in tio av dem,
+  lyssnar på dig själv och räknar hur många som blev riktiga frågor och hur
+  många som blev pitchar med ett frågetecken efter.
+- **Dag 2** — tre lager djupt. Du skriver två kedjor på papper och stryker under
+  varje ord du lånat ur kundens svar. Går inget att stryka under är det ett
+  förhör och inte en kedja.
+- **Dag 3** — motstånd i slumpmässig ordning, tre sekunders betänketid. Och var
   gränsen går: kursen tränar dig att inte släppa för tidigt, inte att aldrig
-  släppa.
+  släppa. Tre av de tio du får är riktiga nej, och dem ska du höra.
 
 **Sluttestet är ett riktigt samtal.** Fem minuter med chefen eller en kollega
 som spelar kund, inspelat och uppladdat här i navet. Du bedöms mot åtta
 kriterier — som du ser innan du spelar in, inte efter. Godkänt ger ett
 certifikat som gäller i ett år.
 
-Däremellan ligger fyra kunskapsprov. Gränsen är 80 procent, och missar du den
-går provet att göra om efter en timme.
+Däremellan ligger fyra prov på sammanlagt 46 frågor. **De går inte att gissa
+sig igenom:** i de flesta frågorna är tre av fyra svar riktiga följdfrågor, och
+i några är rätt svar att avsluta samtalet. Gränsen är 80 procent, och missar du
+den går provet att göra om efter en timme.
 
-**Du behöver** en telefon som spelar in, och en kollega i tjugo minuter på dag
-2. Modulerna tas i ordning.`,
-    datum: "2026-09-16",
+**Du behöver** en telefon som spelar in, något att skriva på, och en kollega i
+tjugo minuter på dag 2.`,
+    datum: "2026-09-17",
     roller: ["salesperson", "team_lead"],
     href: "/utbildning/slapp-inte-kunden-for-tidigt",
+  },
+  {
+    slug: "utkop-och-orderformularet",
+    rubrik: "Utköp på affären — och ett orderformulär som inte längre tappar det du skrivit",
+    ingress:
+      "Lägg in utköpet direkt på ordern så räknas provisionen på det som blir kvar. Samtidigt: kommentaren är inte längre obligatorisk, fälten står kvar när något blir fel, och datumet säger vilken månad ordern hamnar i.",
+    text: `**Har affären ett utköp?** Kryssa i rutan och skriv beloppet. Det dras
+från ordervärdet, och säljaren får **12 % av det som blir kvar** i stället för
+matrisens belopp. Rutan under formuläret visar hela räkningen medan du skriver:
+ordervärdet, avdraget, vad som är kvar, provisionen och övertäcket.
+
+Ett exempel: ordervärde 20 000 kr, utköp 5 000 kr. Kvar blir 15 000 kr, och
+säljaren får 1 800 kr. Ordervärdet står kvar på 20 000 kr på ordern — det är vad
+kunden tecknat, och det är det avtalet säger. Utköpet står bredvid, med sitt eget
+minustecken.
+
+**Kommentaren är inte längre obligatorisk.** Sätter du ordervärde och provision
+för hand går ordern igenom utan att du skriver ett skäl. Fältet står kvar, och
+det är fortfarande värt att fylla i — det är nästa person som läser det — men det
+stoppar dig inte längre.
+
+**Och det du skrivit står kvar.** Blir något fel återställs inte formuläret
+längre. Datumet, beloppen, kunduppgifterna — allt ligger kvar precis som du
+lämnade det, och du rättar bara det som var fel. Tidigare tömdes allt, och
+signeringsdatumet hoppade tillbaka till i dag utan att säga till. Det gick att
+lägga en augustiorder som tyst hamnade i september.
+
+**Datumet säger nu vilken månad ordern hamnar i.** Under signeringsdatumet står
+en rad: *"Räknas på augusti 2026."* Är den månaden redan fastställd blir raden en
+varning som säger vad som kommer att hända — att ordern hör dit, men att
+provisionen bokförs i den öppna månaden. Du ser det innan du trycker.
+
+**Mejl på ordern.** Kundens mejladress har fått en egen rad, bredvid telefonen.
+Den är frivillig, och order som lades in tidigare har ingen.
+
+**Volymbonusen räknas nu per affär.** Nivåerna stod som ett engångsbelopp när
+nivån nåddes — sex order gav 200 kr. Nu ger varje affär sin bonus: sex order på
+nivå 5 ger 1 200 kr. September räknas om; stängda månader står orörda.`,
+    datum: "2026-09-15",
+    roller: [],
+    href: "/order",
   },
   {
     slug: "slutdatum-i-kalendern",

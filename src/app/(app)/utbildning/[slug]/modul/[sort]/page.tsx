@@ -8,7 +8,7 @@ import { Ikon } from "@/components/shell/Ikon";
 import { Markdown } from "@/components/Markdown";
 import { getCurrentUser } from "@/lib/auth";
 import { supabaseServer, supabaseAdmin } from "@/lib/supabase/server";
-import { sparrTill, tidkvar } from "@/lib/utbildning";
+import { sparrTill, tidkvar, MODULTYP_ETIKETT, type Modultyp } from "@/lib/utbildning";
 import { klarModul } from "../../../actions";
 import { Quiz } from "./Quiz";
 import { Rollspel, type Inlamning } from "./Rollspel";
@@ -160,7 +160,8 @@ export default async function ModulSida({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="text-micro uppercase text-ink-500">
-            Modul {index + 1} av {lista.length}
+            Modul {index + 1} av {lista.length} ·{" "}
+            {MODULTYP_ETIKETT[modul.kind as Modultyp] ?? modul.kind}
           </p>
           <h1 className="mt-1 text-display text-ink-900">{modul.title}</h1>
         </div>
@@ -221,7 +222,11 @@ export default async function ModulSida({
             <form action={klarModul}>
               <input type="hidden" name="kurs_id" value={kurs.id} />
               <input type="hidden" name="modul_id" value={modul.id} />
-              <Button type="submit">Jag har läst — markera som klar</Button>
+              <Button type="submit">
+                {modul.kind === "ovning"
+                  ? "Jag har gjort övningen"
+                  : "Jag har läst — markera som klar"}
+              </Button>
             </form>
           )}
         </div>

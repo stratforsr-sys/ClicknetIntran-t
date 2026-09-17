@@ -5,6 +5,131 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-17 · Övningar mellan modulerna, och prov som inte går att gissa sig igenom
+
+Beställaren hade sett kursen från dagen innan och kom med två saker:
+
+> *"efter varje modul, ska de ha en uppgift de ska göra på plats. Som tar 5
+> minuter max. Och sen när de har gjort uppgiften så går de vidare till nästa
+> modul. Och sen provet, vill jag ha mer svår, lite mer omfattande för alla kan
+> förstå vilka svar man ska använda där"*
+
+Bägge är riktiga. Kursen var en läsupplevelse med fyra prov, och proven gick att
+klara utan att ha läst något. Migration `0063`, och ett nytt slag av modul.
+
+### `ovning` — en fjärde modultyp
+
+`course_module.kind` har varit läsning, prov eller rollspel. En uppgift som görs
+på plats är ingen av dem: den lämnas inte in, den rättas inte, och den tar fem
+minuter.
+
+Alternativet var att skriva "GÖR DET HÄR NU" sist i en läsmodul. Skillnaden är
+att en egen modul **syns i listan som ett steg** och måste bockas av för att
+nästa ska öppna sig — AC-6.1:s ordningskrav gör hela jobbet beställningen bad
+om. En rubrik i en löptext skummas förbi.
+
+Maskineriet är läsmodulens: `klarModul()` bockar av, knappen säger "Jag har
+gjort övningen" i stället för "Jag har läst". Tillägget kostade en utökad
+check-constraint och fem rader i gränssnittet.
+
+**Etiketterna ligger nu på ett ställe.** `MODULTYPER` och `MODULTYP_ETIKETT` i
+`src/lib/utbildning.ts` — listan speglar check-villkoret på `kind`, och tre
+kopior av `v === "reading" ? "Läsning" : …` är borta. `avbockningsbar()` säger
+vilka typer som blir klara av ett klick, så att `klarModul()` inte behöver räkna
+upp dem själv. Ett prov eller ett rollspel kan fortfarande inte bockas av för
+hand; det hade gjort godkäntgränsen till en formsak.
+
+### Fem övningar, en efter varje läsmodul
+
+| Efter | Övningen | Vad den mäter |
+|---|---|---|
+| Reflexen | Tre egna samtal, skriv ner vilken exit du använde | Att du känner igen dig |
+| Regeln | Skriv om fem exiter till frågor, säg dem högt | Om du kan höra ett smygpåstående i din egen mun |
+| Dag 1 | Tio motstånd, inspelade, en fråga på var | Nio av tio ska vara riktiga frågor |
+| Dag 2 | Två kedjor på papper — **stryk under lånade ord** | Kedja eller förhör |
+| Dag 3 | Tio slumpade, tre sekunders betänketid, tre riktiga nej inblandade | Att du hör nejet också |
+
+Understrykningen i dag 2-övningen är den enda av dem som är ny som idé: kan du
+inte stryka under ett enda ord ur kundens förra svar i fråga två och tre, då är
+det ett förhör. Det är kursens abstrakta regel gjord till något man kan se på ett
+papper.
+
+Att övningarna INTE lämnas in är ett val. `module_progress` bär bara
+(person, modul, tidpunkt), och en inlämningsruta hade krävt en kolumn till och
+en chef som läser dem. Sluttestets inspelning är den riktiga kontrollen;
+övningarna är till för den som gör dem.
+
+### Varför proven gick att klara utan att ha läst något
+
+Tre fel, alla tre mina från `0061`:
+
+**RÄTT SVAR LÅG FÖRST I VARENDA FRÅGA.** `quiz_option.sort` är ritordningen och
+vyn blandar inte. Trettioen frågor, stjärnan på första raden i alla. Det ensamt
+räckte för hundra procent utan att läsa en rad.
+
+**TRE AV FYRA ALTERNATIV VAR UPPENBARA EXITER.** Den som bara visste att "man
+ska ställa en fråga" kunde stryka dem utan att förstå varför.
+
+**"VÄLJ ALLTID FRÅGAN" FUNGERADE PÅ ALLA FRÅGOR** — precis den vanan modul 12
+finns för att bryta.
+
+De nya proven: 46 frågor i stället för 31, elva till tolv per prov, rätt svar
+utspritt (8/9/16/13 över de fyra platserna), och i de flesta frågorna är tre av
+fyra alternativ riktiga följdfrågor där skillnaden är vilken som hämtar det man
+saknar. Flera frågor kräver att man läst vad kunden sa två repliker tidigare —
+en återkommande distraktor är en fråga kunden **redan har besvarat**. Och i fyra
+frågor är rätt svar att avsluta samtalet.
+
+**Ett villkor i migrationen räknar efteråt att rätt svar inte ligger på samma
+plats i mer än 45 % av frågorna.** Det fångade min första omgång: lager-frågorna
+i prov 3 hamnade naturligt på tredje raden, och sjutton av fyrtiosex svar låg på
+plats tre. Trubbigt villkor med flit — det hittar inte ett snett mönster, men
+det hittar det mönster som faktiskt uppstår när en människa skriver fyrtiosex
+frågor i rad.
+
+### Hela kursen skrevs om, inte bara delarna som ändrades
+
+Övningarna skjuts in mellan de gamla modulerna, så varje `sort` efter den första
+flyttar sig. Att flytta femton rader med ett unikt index på (course_id, sort) är
+en dans i flera steg; att skriva om är en `delete` och femton `insert`, och
+kaskaden tar frågor, alternativ, kriterier och progress med sig.
+
+Spärren är hård: kursen måste vara ett **utkast** utan ett enda rättat försök
+och utan en enda inlämnad inspelning, annars **kastar** migrationen. Finns det
+försök är någon mitt i kursen, och då är det inte innehåll som skrivs om utan
+någons historik. Att i stället avstå tyst hade lämnat en databas man tror är
+uppdaterad.
+
+Avbockade moduler får däremot försvinna — de två som fanns var granskarens egna
+klick, och modulerna de pekade på finns inte längre.
+
+### NUMRET 0062 VAR TAGET AV ETT ANNAT PASS
+
+Migrationen kördes som `0062`, och `schema_migrations` hade redan
+`0062_upprepning` — kalenderns pass 3, kört tidigare samma dag i en gren som
+inte är mergad. Raden döptes om till `0063` och checksumman räknades om efter
+att filnamnet ändrats i huvudkommentaren.
+
+**Regeln har nu bitit tre pass i rad.** Fråga `schema_migrations` i ett eget
+anrop **innan** filen skrivs, inte i samma svep som den körs. Numret är taget
+när migrationen körts, inte när den mergats — och två sessioner samma dag ser
+inte varandras grenar.
+
+### Läget
+
+Kursen är fortfarande ett **utkast**, av samma skäl som igår: raden finns i
+produktionsdatabasen så fort migrationen körts, och en publicerad kurs syns i
+klockan hos varje säljare i samma sekund.
+
+Grenen låg sex commitar efter main när passet var klart (utköpsarbetet hann
+före). `POST /merges` gav 409 på de tre vanliga filerna — arbetsloggen,
+`NASTA_SESSION.md` och `poster.ts`, alla tre för att båda sidor lägger sitt
+överst i samma lista. Mergen är därför gjord för hand: en commit med två
+föräldrar, där trädet är mains med passets filer ovanpå och de tre listorna
+sammanfogade i datumordning.
+
+---
+
 ## 2026-09-16 (senare) · Säljdrillen blev en kurs — och två saker i utbildningsmodulen som inte stämde
 
 Beställningen var ett färdigt dokument: en tredagarsdrill mot reflexen att
@@ -128,6 +253,91 @@ historiken.
 
 ---
 
+## 2026-09-16 · Läckprovet var rött på ett namn sidan ska visa
+
+Överlämningen sa: *"`tests/sidor.mjs` går mot produktion och rapporterar
+'/franvaro/sjuk bär efternamnet Menduza' för ekonomirollen. Frånvaromodulen."*
+Det lät som en läcka i frånvaron. Det var det inte, och skillnaden är hela
+passet.
+
+### Vad som faktiskt kom ut
+
+`/franvaro/sjuk` hämtades som alla fyra rollerna med kontexten runt varje
+träff utskriven. Samma sträng, samma ställe, för **tre** roller — inte bara
+ekonomi:
+
+```
+<li>3  Simon Menduza, Zen
+       VD
+```
+
+Det är **telefonlistan**, sidans första element. `absence_call_order` plats 3
+är `target_kind = 'role', role = 'ceo'`, VD:n heter Simon Menduza, och listan
+står för alla — annars vet den som blivit sjuk inte vem hen ska ringa. Det är
+AC-3.6 och AC-3.18, och kommentaren överst i `sjuk/page.tsx` säger det rakt ut:
+sidan har med flit ingen sjukanmälningsknapp, den har en lista på människor.
+
+Tre saker visar att ingenting annat kom ut:
+
+- `sick_report_read` är
+  `employee_id = current_employee_id() OR leads_employee(employee_id) OR has_any_role('sales_manager','ceo')`.
+  Ekonomi släpps inte in, och namnuppslagningen i `page.tsx` (rad 149–153) sker
+  förvisso med service role — men bara på `employee_id` ur rader som RLS redan
+  lämnat ut. Den kan inte nämna någon vars rad inte kom med.
+- Ekonomirollens svar bar **bara** de tre Menduza-träffarna. Ingen sjukanmäld,
+  ingen e-postadress.
+- Säljchefen fick 206 träffar. Den negativa kontrollen lever, alltså letar
+  sökningen på riktigt.
+
+### Varför provet ändå var fel, och vad som gjordes åt det
+
+Provets hemligheter är *varenda* anställds efternamn ur driften. En sida som är
+byggd för att visa ett namn blir då röd för att den gör sitt jobb. Det röda var
+alltså inte ett fynd utan en falsk positiv — och en falsk positiv som får stå
+kvar är dyrare än den ser ut: nästa session lär sig att provet "brukar vara
+rött där", och då ser den inte det äkta fyndet heller.
+
+Det billiga hade varit att hoppa över `/franvaro/sjuk`. Det vore värre än det
+röda provet: det är sjukdom som står på den sidan, alltså precis det som inte
+får läcka. Undantaget är därför så smalt det går:
+
+- **Bara den vägen.** Samma namn någon annanstans är fortfarande ett läckage.
+- **Bara efternamn, och bara för dem ringlistan själv pekar ut** — läst ur
+  `absence_call_order` i provet, inte skrivet i det. Byter VD:n namn, eller får
+  listan en ny plats, följer provet med av sig självt.
+- **E-postadresser undantas aldrig.** Ringlistan visar telefon, aldrig mejl, så
+  en adress i det svaret är ett fel även för de personerna.
+- **Chefsplatsen står inte med.** Provets användare skapas utan `manager_id`
+  (`matanvandare` i `scripts/lib/matning.mjs`), så den platsen renderar aldrig
+  ett namn för dem. Skulle den någon gång göra det ska provet bli rött.
+
+Och för att undantaget inte ska kunna tysta sidan tillkom den **positiva**
+halvan: ringlistans namn SKA stå på `/franvaro/sjuk`, för varje roll. Tas
+telefonlistan bort säger provet till i stället för att bli grönt. Det är samma
+grepp som den negativa kontrollen för säljchefen, och av samma skäl — en vakt
+som slutat hitta något bevisar ingenting.
+
+### Provet efteråt
+
+Grönt för alla fyra rollerna, 50 sidor var, inga serverfel. Säljchefens
+negativa kontroll gick från 206 träffar till 203 — exakt de tre Menduza-raderna
+på den enda undantagna sidan, ingenting annat.
+
+Och en mutationskontroll, för att inte lita på grönt i sig: en extra "hemlighet"
+som står på just den sidan (`"Registrera efter samtalet"`) lades tillfälligt
+till, och provet blev rött för alla tre rollerna. Vakten bits alltså fortfarande
+där undantaget gäller. Den raden committades inte.
+
+**Ingen produktionskod ändrades, ingen migration, ingen rad i `poster.ts`** —
+ingenting av det här syns för någon som använder navet.
+
+### Kvar i samma hörn
+
+Registerutdragsprovet är fortfarande rött på main sedan tidigare (19 kolumner
+saknas). Det rördes inte här och är ett eget pass.
+
+---
+
 ## 2026-09-16 · Kalendergrenen mergad — tre pass i en merge-commit
 
 Beställaren hade sett pass 1 och 2 och tyckt att de såg bra ut. Pass 3,
@@ -174,6 +384,172 @@ kalendern att göra**: `tests/sidor.mjs` rapporterar att `/franvaro/sjuk` bär
 efternamnet Menduza för ekonomirollen. Frånvaromodulen, eget pass.
 Registerutdragsprovet är rött sedan tidigare (19 kolumner) — jämför med main
 innan någon skyller på en gren.
+
+---
+
+## 2026-09-15 · Utköp, mejl, ett formulär som glömde bort allt, och en bonus på fel form (0060)
+
+Fem beställningar samma pass. Fyra av dem visade sig vara **samma fel sett från
+olika håll**, och det gör dem värda att läsa i ordning.
+
+### Beställningen, ordagrant
+
+1. *"när jag lägger en order så måste jag lägga en kommentar ifall ordern inte
+   följer paket regler, ta bort det så det inte är obligatoriskt"*
+2. *"ifall sidan uppdateras … så laddades sidan om och då försvann mina uppgifter
+   som jag skrev in, fixa det så de inte försvinner"*
+3. *"nu valde jag augusti i signeringsdatum på en order men den las ändå på
+   september"*
+4. *"lägg till ifall det finns utköp på affären … då ska det dras minus på
+   affären och sen ska det räknas på 12 % för säljaren i provision på det som är
+   över efter utköpet"*
+5. *"lägg till en kolumn för mejl"* och *"bonusen är fel inräknat … 200 kr ska
+   vara i bonus på varje affär"*
+
+### 1–3 är en enda kedja, och den kostade en riktig uppgift
+
+Frågan som avgjorde allt: **var är augustiordern?** Svaret var att den inte
+finns. `audit_log` visar tio godkännanden den 15 september, samtliga med
+`signed_on` i september, och `sales_order` har ingen enda order signerad i
+augusti utöver en testorder från den 25:e. Augustivalet nådde alltså aldrig
+databasen.
+
+Kedjan, i ordning:
+
+1. Ordern lades med signeringsdatum i augusti och provisionen satt för hand.
+2. `skapaOrder` nekade: *"En handsatt provision kräver en anteckning om varför."*
+3. **React återställde formuläret.** Ett `<form action={...}>` återställs efter
+   varje serveranrop — också det som misslyckades — och ett okontrollerat fält
+   går då tillbaka till sitt `defaultValue`. `signed_on` hade
+   `defaultValue={idag}`.
+4. Alla fält tomma, datumet tillbaka på i dag. Ny inmatning, ny knapptryckning,
+   och ordern hamnade i september.
+
+Ingenting i gränssnittet sa att månaden bytts. **Kontrollen som skulle skydda en
+frivillig uppgift åt alltså upp en riktig** — vilken månad affären hör till, som
+avgör både vad den är värd och när den betalas ut.
+
+Åtgärden är därför tredelad, och alla tre behövs:
+
+- **Anteckningskravet är borta.** Check-villkoret
+  `sales_order_manuell_kraver_skal`, kontrollen i tre server actions och
+  `required` i två formulär. Fältet står kvar och texten uppmuntrar. Spårbarheten
+  bärs ändå av `audit_log` — som bar belopp och källa hela tiden — och av
+  `commission_source = 'manual'`, som säger rakt ut att någon skrev in talet.
+- **Hela `Nyorder.tsx` är kontrollerat.** Varje fält ligger i React-state.
+  Formuläret töms av `nollstall()` och **bara** när ordern faktiskt sparats
+  (`state.ok`). Ett felmeddelande lämnar allt orört.
+- **Månadsstämpeln under datumfältet.** *"Räknas på augusti 2026."* Och är
+  månaden fastställd blir raden en varning som säger vad som kommer att hända:
+  ordern hör dit, men provisionen bokförs i den öppna perioden (5.6, Ö11). Det
+  stod tidigare bara i kvittensen, **efter** att knappen tryckts.
+
+Det sista är värt en rad för sig: **augusti är fastställd sedan 2026-09-08.**
+Även med rätt datum hade provisionen hamnat i september — och `sales_order_stegbyte`
+nekar dessutom att flytta en order *in i* en stängd månad. Den ordern går alltså
+inte att lägga rätt i efterhand utan att ekonomi öppnar frågan. Nu står det på
+skärmen innan man trycker i stället för efteråt.
+
+### Utköpet: tre tal som aldrig får bli ett
+
+Ordervärdet står kvar **brutto**, utköpet i en egen kolumn, och nettot lagras
+inte alls.
+
+Frestelsen var att bara skriva in ett lägre ordervärde för hand. Två skäl talade
+emot: **avtalet säger bruttot** — kunden har tecknat 995 kr i tolv månader, och
+skrivs 6 940 kr in stämmer ingenting den dag någon jämför — och **utköpen går
+inte att räkna ihop** om de aldrig skrivits någonstans. Ett *lagrat* netto vore i
+sin tur ett tredje tal som kan säga emot de två andra.
+
+Räkningen, med beställarens exempel: 20 000 − 5 000 = 15 000. Säljaren 12 % =
+1 800 kr. Restposten 13 200 kr, övertäcket 1 320 kr.
+
+**Övertäcket räknas på nettot.** Beställarens val: utköpspengarna är utbetalda
+till kunden och är inte bolagets marginal, så säljchefen får inte procent på dem
+heller. På bruttot hade det blivit 1 820 kr — 500 kr på pengar som redan gått ut.
+
+**Satsen ersätter matrisen.** Matrisens 1 500 kr är redan bolagets andel av ett
+*fullt* ordervärde; den marginalen finns inte här. De två hade dubbelräknat samma
+pengar.
+
+Ordningen mellan reglerna, och den står på **ett** ställe (`raknaFramProvision`):
+handsatt belopp → utköpssats → matris. Är ordern säljchefens egen gäller
+`own_sale_percent` på nettot och inget övertäck.
+
+12 % är **konfiguration**, inte kod: `buyout_commission_rate`, versionerad, slagen
+upp på orderns signeringsdatum. Samma regel som paketmatrisen och chefssatserna,
+motsatsen till volymtrappan (Ö16).
+
+**Utköpet skrivs redan på en inskickad order**, och fältet ligger därför utanför
+`hanterare`-blocket. Säljaren är den som vet — hen förhandlade det. Låg fältet
+bakom chefsbehörigheten hade uppgiften blivit ett muntligt meddelande.
+`sales_order_utkop_ryms` släpper därför igenom ett utköp utan ordervärde, och
+biter först vid godkännandet när båda talen finns.
+
+### Bonusen stod på fel form — ingen kod var fel
+
+Fredrik: sex godkända order i september, grundprovision 9 220 kr, volymbonus
+**200 kr**. Avsett: 200 kr per affär, alltså 1 200 kr.
+
+Motorn räknade rätt. `commission_bonus_level` hade `unit = 'amount_fixed'` på
+samtliga fyra nivåer — inte som ett beslut, utan för att formuläret i
+`/provision/regler` har det som förvalt värde. Och skillnaden **syns inte i vyn**:
+raden säger *"Volymbonus nivå 5, 6 order"* i båda fallen.
+
+Rättat som en **vanlig trappändring** och inte som ett `update`: den gällande
+raden fick `valid_to = 2026-09-01` och en ny rad tog vid — precis vad `sparaNiva`
+gör. Frågan *"vilken trappa gällde i augusti"* har alltså ett svar även efteråt.
+September räknas om live; **augusti rörs inte**, den är fastställd.
+
+Beställarens besked: samtliga fyra nivåer är kronor per order — 5→200, 10→500,
+15→1 000, 20→1 200.
+
+### Mejlen
+
+Nullbar. Varje order som lagts före i dag saknar adress och får ingen i
+efterhand — samma linje som `order_value` tog i `0050`. Kontrollen är avsiktligt
+tillåtande: något före ett @, något efter, ingen blank. En strängare regel nekar
+riktiga adresser och vinner ingenting — navet skickar inga brev hit, det är en
+uppgift *om* kunden.
+
+Till skillnad från de fyra obligatoriska kundfälten **går mejlen att tömma** i
+rättelsen. `text()` läser ett tomt fält som "orört", vilket är rätt för uppgifter
+en order måste ha — men en frivillig adress som bara går att skriva över och
+aldrig radera är en felskrivning man får leva med.
+
+### Filer
+
+| Vad | Var |
+|---|---|
+| Migrationen | `supabase/migrations/0060_utkop_mejl_och_bonusform.sql` |
+| Utköpslogiken (ren, provad) | `src/lib/utkop.ts`, `tests/utkop.mjs` |
+| Valet mellan reglerna | `raknaFramProvision` i `src/app/(app)/order/actions.ts` |
+| Det kontrollerade formuläret | `src/app/(app)/order/Nyorder.tsx` |
+| Månadsstämpeln | `Manadsstampel` i samma fil |
+| Utköp och mejl i rättelsen | `src/app/(app)/order/Atgarder.tsx` |
+| Månadens netto | `ordervarde()` i `src/lib/order.ts` |
+
+### Det som är värt att veta innan någon rör det här
+
+**`har_utkop_ritad` är ett dolt fält, och det behövs.** En kryssruta som inte är
+ikryssad skickar ingenting alls i en `FormData`. Utan det dolda fältet går "chefen
+tog bort krysset" inte att skilja från "formuläret ritade aldrig någon kryssruta",
+och gissningen hade blivit fel åt det dyra hållet: ett borttaget utköp hade
+stannat kvar och fortsatt sänka provisionen.
+
+**Godkännandet läser utköpet ur ORDERN, inte ur formuläret.** Säljaren skrev in
+det när hen skickade in; en tom ruta i godkännandeformuläret hade tyst nollat
+det. Ska utköpet ändras är vägen rättelsen, där både talet och skälet hamnar i
+loggen.
+
+**Noll är inte ett utköp.** `harUtkop()` finns för att en nolla som släpps igenom
+hade bytt provisionskälla från matrisen till 12 % **utan att ändra ett enda
+tal** — en vanlig paketorder hade tyst gått från 1 500 kr till 1 433 kr.
+
+**Lägg aldrig tillbaka ett `defaultValue` i `Nyorder.tsx`.** Hela poängen med de
+kontrollerade fälten är att ingenting får ha ett värde som återställningen kan
+falla tillbaka på. Ett enda okontrollerat fält räcker för att återinföra felet,
+och det syns inte förrän någon undrar varför en order hamnade i fel månad.
 
 ---
 

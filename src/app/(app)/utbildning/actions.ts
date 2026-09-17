@@ -6,7 +6,7 @@ import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { getCurrentUser, hasRole, type CurrentUser } from "@/lib/auth";
 import { ROLES, type Role } from "@/lib/roles";
 import { tillSlug } from "@/lib/dokument";
-import { tolkaFragor, utgangsdatum, sparrTill } from "@/lib/utbildning";
+import { tolkaFragor, utgangsdatum, sparrTill, MODULTYPER, avbockningsbar } from "@/lib/utbildning";
 import { procent, tolkaKriterier } from "@/lib/rollspel";
 import { forberedUppladdning, registreraFil } from "@/lib/filer-server";
 
@@ -162,7 +162,7 @@ export async function sparaModul(_prev: KursState, form: FormData): Promise<Kurs
   const rubriktext = String(form.get("kriterier") ?? "");
 
   if (!kursId || !titel) return { fel: "Modulen behöver en rubrik." };
-  if (!["reading", "quiz", "roleplay"].includes(kind)) return { fel: "Okänd modultyp." };
+  if (!(MODULTYPER as readonly string[]).includes(kind)) return { fel: "Okänd modultyp." };
 
   const { fragor, fel } = kind === "quiz" ? tolkaFragor(text) : { fragor: [], fel: null };
   if (fel) return { fel };
@@ -402,7 +402,11 @@ export async function klarModul(form: FormData): Promise<void> {
     .select("id, kind")
     .eq("id", modulId)
     .maybeSingle();
-  if (!modul || modul.kind !== "reading") return;
+
+  // Lasning och ovning bockas av med ett klick. Ett prov och ett rollspel gor
+  // det INTE — de blir klara av att ratta respektive bedomas, och en knapp som
+  // kringgick det hade gjort godkantgransen till en formsak.
+  if (!modul || !avbockningsbar(modul.kind)) return;
 
   await supabaseAdmin()
     .from("module_progress")
