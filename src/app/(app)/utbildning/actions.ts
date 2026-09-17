@@ -10,7 +10,32 @@ import { tolkaFragor, utgangsdatum, sparrTill, MODULTYPER, avbockningsbar } from
 import { procent, tolkaKriterier } from "@/lib/rollspel";
 import { forberedUppladdning, registreraFil } from "@/lib/filer-server";
 
-export type KursState = { fel?: string; ok?: string };
+/**
+ * Utfallet for EN fraga i ett rattat prov.
+ *
+ * `facitId` ar null sa lange provet inte ar klarat. Det ar inte en forsiktighet
+ * utan hela poangen: facit far inte lamna servern efter ett underkant forsok,
+ * annars ar omtaget att klicka i de svar som nyss lystes roda. Se `lamnaQuiz`.
+ */
+export type Fragesvar = {
+  id: string;
+  ratt: boolean;
+  valtId: string;
+  facitId: string | null;
+};
+
+export type Quizresultat = {
+  poang: number;
+  ratt: number;
+  antal: number;
+  grans: number;
+  godkant: boolean;
+  /** Kursen ar ett utkast och provet rattades utan att sparas. */
+  granskning: boolean;
+  fragor: Fragesvar[];
+};
+
+export type KursState = { fel?: string; ok?: string; resultat?: Quizresultat };
 
 async function logga(
   actorId: string,
@@ -423,6 +448,28 @@ export async function klarModul(form: FormData): Promise<void> {
  * AC-6.2. Rattningen sker har och bara har. Ratt svar lamnar aldrig servern —
  * `quiz_option` ar stangd for varje inloggad roll, sa facit gar inte att lasa
  * ur webblasaren ens av den som letar.
+ *
+ * VAD SOM SKICKAS TILLBAKA, OCH VARFOR INTE MER
+ *
+ * Svaret bar antal ratt och ETT ratt/fel per fraga. Vilket alternativ som var
+ * det ratta foljer med FORST NAR PROVET AR KLARAT — aldrig efter ett underkant
+ * forsok.
+ *
+ * Skalet ar att omtaget annars slutar mata nagot. Fragorna ar skrivna sa att
+ * tre av fyra alternativ ofta ar riktiga foljdfragor, och skillnaden kraver att
+ * man last modulen. Lyser facit rott efter forsta forsoket ar andra forsoket
+ * att klicka i de svar som nyss pekades ut, och 80-procentsgransen betyder
+ * ingenting fran och med da. Att se VILKA fragor som blev fel racker for att
+ * veta vad man ska lasa om — det ar det resultatet ar till for.
+ *
+ * GRANSKNINGSLAGE. En kurs som ar utkast gick forut inte att prova alls: den
+ * som skrev den fick "Kursen ar inte oppen" nar hon tryckte Lamna in, vilket ar
+ * sant men obegripligt for den som just skapat kursen och ser varenda modul.
+ * Nu rattas provet aven i ett utkast, for den som far redigera kursen. Det som
+ * INTE sker ar att ett `course_attempt` skrivs eller ett certifikat delas ut —
+ * en chefs provkorning ar inte ett bevis om nagon, och `course_attempt` ar
+ * beviskedjan (0007). Modulen bockas daremot av, annars gar det inte att
+ * granska modulerna efter provet.
  */
 export async function lamnaQuiz(_prev: KursState, form: FormData): Promise<KursState> {
   const user = await getCurrentUser();
@@ -440,7 +487,13 @@ export async function lamnaQuiz(_prev: KursState, form: FormData): Promise<KursS
     .select("id, pass_threshold, retry_wait_hours, status")
     .eq("id", kursId)
     .maybeSingle();
-  if (!kurs || kurs.status !== "published") return { fel: "Kursen är inte öppen." };
+
+  if (!kurs) return { fel: "Kursen finns inte, eller är inte öppen för dig." };
+
+  const granskning = kurs.status !== "published";
+  if (granskning && !farRedigera(user)) {
+    return { fel: "Kursen är inte publicerad än. Provet går att göra när den öppnats." };
+  }
 
   const { data: senaste } = await rls
     .from("course_attempt")
@@ -467,38 +520,63 @@ export async function lamnaQuiz(_prev: KursState, form: FormData): Promise<KursS
   if (lista.length === 0) return { fel: "Modulen har inga frågor." };
 
   const svar: Record<string, string> = {};
+  const utfall: Fragesvar[] = [];
   let ratt = 0;
+
   for (const f of lista) {
     const valt = String(form.get(`fraga_${f.id}`) ?? "");
     svar[f.id] = valt;
-    if (f.quiz_option.some((o) => o.id === valt && o.is_correct)) ratt++;
+    const facit = f.quiz_option.find((o) => o.is_correct);
+    const rattSvar = Boolean(facit && facit.id === valt);
+    if (rattSvar) ratt++;
+    utfall.push({ id: f.id, ratt: rattSvar, valtId: valt, facitId: null });
   }
 
   const poang = Math.round((ratt / lista.length) * 100);
   const godkant = poang >= kurs.pass_threshold;
 
-  const { data: forsok } = await db
-    .from("course_attempt")
-    .insert({
-      course_id: kursId,
-      module_id: modulId,
-      employee_id: user.employee.id,
-      score: poang,
-      passed: godkant,
-      answers: svar,
-    })
-    .select("id")
-    .single();
+  // Facit foljer med forst nar provet ar klarat. Se resonemanget ovanfor.
+  const resultat: Quizresultat = {
+    poang,
+    ratt,
+    antal: lista.length,
+    grans: kurs.pass_threshold,
+    godkant,
+    granskning,
+    fragor: godkant
+      ? utfall.map((u, i) => ({
+          ...u,
+          facitId: lista[i].quiz_option.find((o) => o.is_correct)?.id ?? null,
+        }))
+      : utfall,
+  };
+
+  const { data: forsok } = granskning
+    ? { data: null }
+    : await db
+        .from("course_attempt")
+        .insert({
+          course_id: kursId,
+          module_id: modulId,
+          employee_id: user.employee.id,
+          score: poang,
+          passed: godkant,
+          answers: svar,
+        })
+        .select("id")
+        .single();
 
   await logga(user.employee.id, godkant ? "course.quiz_passed" : "course.quiz_failed", kursId, {
     modul: modulId,
     poang,
     grans: kurs.pass_threshold,
+    granskning,
   });
 
   if (!godkant) {
     return {
-      fel: `${poang} % rätt. Gränsen är ${kurs.pass_threshold} %. Läs igenom modulen igen och gör ett nytt försök.`,
+      fel: `${ratt} av ${lista.length} rätt — ${poang} %. Gränsen är ${kurs.pass_threshold} %.`,
+      resultat,
     };
   }
 
@@ -509,6 +587,9 @@ export async function lamnaQuiz(_prev: KursState, form: FormData): Promise<KursS
       { onConflict: "employee_id,module_id" },
     );
 
+  // `forsok` ar null i granskningslage, och da certifieras ingen. Det ar med
+  // flit: ett certifikat pa en kurs som annu ar ett utkast ar ett papper pa
+  // ingenting.
   if (forsok) {
     const klar = await certifieraOmKlar(user, kursId);
     if (klar) {
@@ -522,7 +603,7 @@ export async function lamnaQuiz(_prev: KursState, form: FormData): Promise<KursS
   }
 
   revalidatePath("/utbildning", "layout");
-  return { ok: `${poang} % rätt. Godkänt.` };
+  return { ok: `${ratt} av ${lista.length} rätt — ${poang} %. Godkänt.`, resultat };
 }
 
 // =============================================================================

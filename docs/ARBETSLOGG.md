@@ -5,6 +5,96 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-17 (senare) · "Kursen är inte öppen" — provet gick inte att göra, och rättningen sa ingenting
+
+Beställaren försökte göra prov 2 i sin egen kurs:
+
+> *"när jag tryckte på lämna in hände inget och istället stod det bara Kursen är
+> inte öppen. Jag förstår inte vad det ska betyda. Man ska få antalet rätt och
+> vilka som är rätt svar och så ska man göra om provet och sen gå vidare"*
+
+Två fel i ett. Spärren var begriplig för koden och obegriplig för människan, och
+rättningen bakom den gav ett tal utan innehåll.
+
+### Varför "Kursen är inte öppen"
+
+`lamnaQuiz()` hade `if (kurs.status !== "published") return { fel: "Kursen är
+inte öppen." }`. Kursen är ett utkast — med flit, den ska granskas innan den går
+ut — och den som skrev den ser varenda modul, kan klicka sig igenom läsning och
+övningar, men fick stopp på första provet.
+
+Meddelandet var sant och värdelöst. "Inte öppen" är kursens tillstånd, inte
+läsarens problem, och den som just lagt upp kursen har ingen anledning att
+gissa att det handlar om `status`.
+
+**GRANSKNINGSLÄGE.** Den som får redigera kursen kan nu göra proven även när den
+är utkast. Provet rättas på riktigt och resultatet visas — men **inget
+`course_attempt` skrivs och ingen certifiering delas ut**. `course_attempt` är
+beviskedjan (0007), och en chefs provkörning i ett utkast är inte ett bevis om
+någon. Modulen bockas däremot av, annars går det inte att granska modulerna
+efter provet, och den avbockningen är samma sorts rad som redan fanns för
+läsmodulerna.
+
+För den som INTE får redigera säger meddelandet numera vad som faktiskt gäller:
+*"Kursen är inte publicerad än. Provet går att göra när den öppnats."*
+
+### Rättningen visar nu fråga för fråga
+
+Förut kom ett tal tillbaka: *"58 % rätt. Gränsen är 80 %. Läs igenom modulen
+igen."* Vilka frågor som var fel stod ingenstans, så "läs igenom modulen igen"
+betydde i praktiken "läs om alltihop".
+
+Nu returnerar `lamnaQuiz()` ett `Quizresultat`: antal rätt, procent, gränsen,
+och ett rätt/fel **per fråga** tillsammans med vad du svarade. Vyn ritar listan
+med grön bock eller rött kryss, och en knapp: **Gör om provet** när du fallit,
+**Fortsätt** när du klarat.
+
+### FACIT SLÄPPS FÖRST NÄR PROVET ÄR KLARAT
+
+Beställningen var "vilka som är rätt svar". Avvägningen togs upp innan bygget
+och beslutet blev: **rätt/fel per fråga alltid, facit först när man klarat.**
+
+Skälet är att proven skärptes samma dag för att de gick att gissa sig igenom. I
+de flesta frågorna är tre av fyra alternativ riktiga följdfrågor, och skillnaden
+kräver att man läst modulen. Lyser facit rött direkt efter ett underkänt försök
+är omtaget att klicka i de fyra svar som nyss pekades ut — och
+80-procentsgränsen mäter ingenting från och med då.
+
+**Regeln sitter i server actionen, inte i vyn.** `facitId` är `null` i svaret så
+länge provet inte är klarat, så gränssnittet kan inte visa facit för tidigt ens
+om någon skulle vilja. Det är samma linje som `quiz_option` drog i 0007: rätt
+svar lämnar aldrig servern i onödan.
+
+### Spärrtiden togs bort (0064)
+
+En timme efter ett underkänt prov. Beställarens ord var "så ska man göra om
+provet och sen gå vidare", och en timme mitt i ett tjugominuterspass betyder
+inte "läs om modulen" utan "kom tillbaka i morgon" — och morgondagen har redan
+ett eget pass i den här kursen.
+
+`retry_wait_hours = 0` på kursraden. **AC-6.2 och `sparrTill()` står orörda** och
+gäller varje annan kurs; det här är en rad i `course`, inte en ändrad regel.
+
+Det som ersätter spärren är facitregeln ovan: omtaget kräver fortfarande att man
+vet svaret, det enda man fått gratis är vilka frågor man ska läsa om.
+
+De fyra provens ingresser skrevs om i samma migration — en av dem lovade en
+timmes väntan i klartext, och en kurs som säger en sak medan knappen gör en
+annan är värre än båda alternativen. Migrationen har en självkontroll som kastar
+om ordet står kvar någonstans i kursens texter.
+
+### Det som är värt att veta
+
+**En kurs som är utkast går nu att provköra, men bara av den som får redigera
+den.** Ser du "Kursen är inte publicerad än" är du inte i den kretsen — det är
+inte ett fel.
+
+**Ett prov i granskningsläge syns inte i progressvyn som ett försök**, bara som
+en avbockad modul. Den som letar efter sitt eget testresultat i historiken
+kommer inte att hitta det.
+
+---
+
 ## 2026-09-17 · Övningar mellan modulerna, och prov som inte går att gissa sig igenom
 
 Beställaren hade sett kursen från dagen innan och kom med två saker:

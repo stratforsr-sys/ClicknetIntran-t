@@ -47,8 +47,11 @@ certifikat som gäller i ett år.
 
 Däremellan ligger fyra prov på sammanlagt 46 frågor. **De går inte att gissa
 sig igenom:** i de flesta frågorna är tre av fyra svar riktiga följdfrågor, och
-i några är rätt svar att avsluta samtalet. Gränsen är 80 procent, och missar du
-den går provet att göra om efter en timme.
+i några är rätt svar att avsluta samtalet.
+
+Gränsen är 80 procent. **Missar du får du se exakt vilka frågor som blev fel**
+och kan göra om provet direkt — men vilket svar som var det rätta visas först
+när du klarat provet. Annars hade omtaget bara varit att skriva av.
 
 **Du behöver** en telefon som spelar in, något att skriva på, och en kollega i
 tjugo minuter på dag 2.`,
