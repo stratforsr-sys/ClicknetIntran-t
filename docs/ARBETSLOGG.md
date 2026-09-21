@@ -108,12 +108,23 @@ och beskedet är osant den dagen det visas.
 
 ### Öppna punkter
 
-- **`scripts/prova-r2.mjs` är inte körd.** Den kräver nycklarna, och de finns
-  ännu inte. Den provar hela kedjan skarpt — lägg upp, signera, hämta hem,
-  jämför sha256, Range-begäran, ta bort — och **ska köras innan grenen mergas**.
-  Range-provet är det som säkrar att spelaren klarar ett långt samtal.
-- **Ingen inspelning ligger ännu i R2.** Första samtalet efter påslaget är värt
-  att spela upp för hand.
+- **R2 sattes upp samma dag, och provet är grönt.** Bucketen `intranet` i
+  EU-jurisdiktion, fyra variabler i Vercel (Production + Preview) och i
+  `~/.clicknet/nav.env`, och `scripts/prova-r2.mjs` gick hela vägen: uppladdning,
+  signerad länk, nedladdning med matchande sha256, `Range` → **206**,
+  borttagning, 404. Migration `0065` är körd och verifierad — villkoret avvisar
+  `azure`, tom sträng och versal-`R2`, och alla 1 844 befintliga filer står som
+  `supabase`.
+- **S3-nycklarna härleds ur Cloudflare-tokenen.** `R2_ACCESS_KEY_ID` är tokenens
+  id, `R2_SECRET_ACCESS_KEY` är sha256 av tokenvärdet. Skapas tokenen på
+  API-vägen visas de aldrig som ett nyckelpar, och det ser då ut som att man
+  fått fel sorts token.
+- **MERGEN ÅTERSTÅR och är hela påslaget.** Produktionen är orörd så länge
+  grenen står utanför main.
+- **Ingen inspelning ligger ännu i R2.** Läsvägen för en R2-fil har aldrig gått
+  genom `signeraOchLogga` mot riktig data — bara genom samma SDK-anrop i
+  `prova-r2.mjs`. Första riktiga samtalet efter mergen är värt att spela upp för
+  hand.
 - **Arbetsloggen hoppar över 0061–0064.** De kördes 16–17 september
   (`kurs_slapp_inte_kunden`, `upprepning`, `kursovningar_och_skarpta_prov`,
   `prov_utan_sparrtid`) men har ingen rad här. `NASTA_SESSION.md` påstod att
