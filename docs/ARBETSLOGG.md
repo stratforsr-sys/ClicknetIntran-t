@@ -119,12 +119,21 @@ och beskedet är osant den dagen det visas.
   id, `R2_SECRET_ACCESS_KEY` är sha256 av tokenvärdet. Skapas tokenen på
   API-vägen visas de aldrig som ett nyckelpar, och det ser då ut som att man
   fått fel sorts token.
-- **MERGEN ÅTERSTÅR och är hela påslaget.** Produktionen är orörd så länge
-  grenen står utanför main.
-- **Ingen inspelning ligger ännu i R2.** Läsvägen för en R2-fil har aldrig gått
-  genom `signeraOchLogga` mot riktig data — bara genom samma SDK-anrop i
-  `prova-r2.mjs`. Första riktiga samtalet efter mergen är värt att spela upp för
-  hand.
+- **MERGAD TILL MAIN SAMMA DAG** som `0102da7`, riktig merge-commit med två
+  föräldrar (`23775b2` + `e77f3e8`), efter uttryckligt godkännande. `behind_by`
+  var 0. Produktionsbygget grönt, och växlingen blev ren: allt till och med
+  12:55:27 gick till Supabase med den gamla koden, allt från 12:57:06 går till
+  R2. **Reservvägen slog aldrig till.**
+- **Första R2-inspelningen är verifierad mot riktig data:** 2 075 616 byte,
+  261 sekunder, hämtad genom en signerad länk — HTTP 200, exakt samma antal byte
+  som raden påstår, **sha256 matchar `file_object.checksum`**, giltig mp3, och
+  `Range` svarar 206.
+- **Det som ÄNNU inte provats är `signeraOchLogga` självt mot en R2-fil** — RLS-
+  läsningen och `file_access_log`-skrivningen runt signeringen. Koden är
+  oförändrad så när som på signeringsanropet, men första gången en inloggad
+  människa trycker play på ett samtal från efter 12:57 är värd att bekräfta.
+- **Supabase-lagringen ska nu sjunka av sig själv.** 1 658 MB vid påslaget,
+  ingenting fyller på, och gallringen börjar ta de gamla filerna 13 oktober.
 - **Arbetsloggen hoppar över 0061–0064.** De kördes 16–17 september
   (`kurs_slapp_inte_kunden`, `upprepning`, `kursovningar_och_skarpta_prov`,
   `prov_utan_sparrtid`) men har ingen rad här. `NASTA_SESSION.md` påstod att
