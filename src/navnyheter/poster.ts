@@ -14,6 +14,38 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "inspelningarna-har-flyttat",
+    rubrik: "Samtalsinspelningarna har flyttat — spelaren fungerar som förut",
+    ingress:
+      "Ljudet ligger inte längre kvar i samma lagring som resten av navets filer. Du märker ingen skillnad: samma spelare på ordern, samma samtal, samma 30-dagarsregel. Säg till om något inte spelas upp.",
+    text: `**Det här är en flytt under golvet, inte en ny funktion.** Samtalen
+ligger kvar på ordern, spelaren ser likadan ut, och du gör ingenting
+annorlunda. Att det ändå står här är för att du ska veta vad som hänt om något
+strular — och vem du ska säga det till.
+
+**Varför:** lagringen navet använde för ljudet är full. Ungefär 350 samtal om
+dagen spelas in, och de tar drygt 200 MB per arbetsdag. Nya inspelningar
+skrivs nu till en egen lagring inom EU, byggd för just det här. Inget annat i
+navet har flyttat — läkarintyg, orderbilagor och dokument ligger kvar där de
+låg.
+
+**Inspelningar sparas i 30 dagar.** Det är samma regel som förut, men den är
+värd att upprepa: ett samtal som **inte** hör till en order får sitt ljud
+raderat efter 30 dagar. Samtalet självt står kvar — tid, längd, motpart och
+vem som ringde — men det går inte längre att lyssna på.
+
+**Hör samtalet till en order raderas ljudet aldrig.** Så fort ett samtal
+kopplats till en affär tas fristen bort, och inspelningen ligger kvar. Är det
+ett samtal du vet att du kommer att behöva: se till att det sitter på ordern.
+
+**Om ett samtal inte spelas upp** — knappen gör ingenting, spelaren står tyst,
+eller ljudet tar slut mitt i — rapportera det via Fel och förbättringar. Det är
+värt att veta snabbt just nu, medan flytten är ny.`,
+    datum: "2026-09-21",
+    roller: ["salesperson", "team_lead", "sales_manager", "ceo", "finance"],
+    href: "/order",
+  },
+  {
     slug: "utkop-och-orderformularet",
     rubrik: "Utköp på affären — och ett orderformulär som inte längre tappar det du skrivit",
     ingress:
