@@ -5,6 +5,96 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-21 (senare) · Allt annat följer efter — och en databas följer inte med
+
+Beställaren, efter frågan om allt nu går till Cloudflare: *"jag vill att du
+lägger upp så att allting lagras in cloudflare, inte bara inspelningar, så att
+det 100% blir primära databasen."*
+
+Två saker i samma mening, och de fick olika svar.
+
+### Filerna: ja. Tabellerna: nej.
+
+**R2 är objektlagring, inte en databas.** Den lagrar filer. Cloudflares databas
+heter D1 och är SQLite. Att flytta Navs Postgres dit hade betytt att bygga om
+applikationen, inte att flytta den:
+
+- **RLS är hela säkerhetsmodellen.** `tests/rls.mjs` loggar in som fyra roller
+  och mäter vad de faktiskt får ut. SQLite har ingen radnivåsäkerhet — varje
+  policy hade blivit ett villkor i koden, alltså exakt den sortens andra svar
+  på samma fråga som glider isär.
+- **`pg_cron` kör dagtidsjobbet** eftersom Vercels två cron-poster är slut
+  (0059). **`pg_net`** ringer ut. **Vault** håller `cron_secret`.
+- **Supabase Auth** sköter inloggning och sessioner.
+- 65 migrationer Postgres-SQL, en genererad kolumn i 0056, triggrar.
+
+Och framför allt: **databasen är 41 MB av 500.** Det finns inget problem där.
+
+Därför flyttade filerna, alla sex ändamålen, och tabellerna står kvar.
+
+### Vad som var kvar att göra
+
+Efter första passet gick bara inspelningarna till R2. De fem andra ändamålen —
+läkarintyg, dokumentbilagor, rollspel, orderbilagor, coachning — gick
+fortfarande till Supabase, och de gör det på en **helt annan väg**:
+webbläsaren laddar upp direkt till lagringen, eftersom Vercel bara tar emot
+4,5 MB i kroppen till en serverfunktion och ett rollspel får vara 40 MB.
+
+| Del | Var |
+|---|---|
+| `lagerForNyInspelning` → `lagerForNyFil` | `src/lib/lagring.ts` |
+| Signerad PUT, HeadObject, GetObject | `signeraUppladdning`, `huvudUppgifter`, `las` i `lagring-server.ts` |
+| Steg 1 och steg 3 | `forberedUppladdning`, `registreraFil` i `filer-server.ts` |
+| Webbläsarens två vägar | `src/components/Filuppladdning.tsx` |
+| Fyra server actions + fyra komponenter | `order`, `rutiner`, `franvaro`, `utbildning` |
+| PDF-textutvinningen | `order/actions.ts`, `rutiner/actions.ts` |
+
+### DET SOM ÄR VÄRT ATT VETA INNAN NÅGON RÖR DET HÄR
+
+**CORS PÅ BUCKETEN ÄR INTE VALFRITT, OCH FELET ÄR ELAKT.** Webbläsaren skickar
+en preflight före sin PUT. Svarar bucketen inte att avsändaren får skriva
+vägrar webbläsaren **tyst** — servern svarar fint, adressen ser riktig ut, och
+det enda spåret är ett CORS-fel i konsolen som aldrig når användaren. Reglerna
+sattes 2026-09-21 och släpper in `https://clicknet-nav.vercel.app` och
+`https://*.vercel.app`, metoderna GET, PUT och HEAD. **En ny bucket behöver
+samma sak.**
+
+**BUCKETNAMNET TAS INTE EMOT FRÅN WEBBLÄSAREN.** `registreraFil` tar bara
+`store`, och räknar fram bucketen ur den. Ett fritt bucketnamn från klienten
+hade låtit vem som helst peka registreringen mot vilken bucket som helst i
+kontot. `tolkaLager()` släpper bara igenom två värden.
+
+**`store` FÖLJER MED FRÅN STEG 1 TILL STEG 3, och läses inte ur miljön där.**
+Mellan de två stegen kan en deploy ha bytt inställning. Filen ligger då där den
+lades, inte där en ny fil hade hamnat.
+
+**UPPLADDNINGSLÄNKEN LEVER FEM MINUTER, INTE TRETTIO SEKUNDER.** En 40 MB stor
+rollspelsfil på ett dåligt kontorsnät tar längre tid än så att skicka, och
+signaturen måste leva hela vägen genom uppladdningen — inte bara fram till dess
+början.
+
+**GLÖM INTE DE TVÅ SOM LADDAR NER PDF:ER.** `order/actions.ts` och
+`rutiner/actions.ts` hämtade hem bilagor direkt ur Supabase för att läsa ut
+texten. Lämnade de stå hade varje ny bilaga tappat sin sökbara text — och ett
+dokument utan text ser ut som en tom PDF, inte som ett fel.
+
+### Öppna punkter
+
+- **Ingen människa har laddat upp en fil genom gränssnittet än.** Lagringsledet
+  är bevisat: preflight 204, PUT 200, innehållet identiskt, content-type
+  bevarad. Men själva knappen i Nav är inte tryckt. Första riktiga
+  uppladdningen av varje sort är värd att göra för hand.
+- **Navnyheten `inspelningarna-har-flyttat` är omskriven, inte ersatt.**
+  Sluggen är orörd — den bär avfärdningen — men texten sa "inget annat har
+  flyttat", vilket blev osant samma dag. Den som redan avfärdat posten ser inte
+  rättelsen.
+- **`coaching` har ännu ingen uppladdningsväg.** Ändamålet finns i
+  check-villkoret men ingen `forberedUppladdning` anropar det. Byggs den går
+  den samma väg som de andra utan extra arbete.
+- **Databasen står kvar i Supabase, och det är rätt.** 41 MB av 500.
+
+---
+
 ## 2026-09-21 · Lagringen tog slut, och det var inte databasen
 
 Beställaren: *"vi har nått gränsen för supabase och vi behöver mer gb, men jag

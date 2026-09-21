@@ -7,6 +7,8 @@ import { svensktDatum } from "@/lib/klocka";
 import { kronor, manadsnamn, manadsnyckel, tolkaBelopp } from "@/lib/provision";
 import { rattelseposter, rorPengar } from "@/lib/rattelse";
 import { forberedUppladdning, registreraFil, taBortInnehall } from "@/lib/filer-server";
+import { las } from "@/lib/lagring-server";
+import { tolkaLager } from "@/lib/lagring";
 import { pdfText } from "@/lib/pdf";
 import { tolkaAvtalstext, type Orderforslag } from "@/lib/orderbilaga";
 import { notifiera, notifieraFlera, orderkretsen } from "@/lib/notishandelse-server";
@@ -1700,6 +1702,7 @@ export async function registreraOrderbilaga(
   orderId: string,
   fileId: string,
   filnamn: string,
+  store: string,
 ): Promise<Orderstate> {
   try {
     const user = await kravBilageratt(orderId);
@@ -1708,6 +1711,7 @@ export async function registreraOrderbilaga(
       fileId,
       andamal: "sales_order",
       filnamn,
+      store,
       uploadedBy: user.employee!.id,
       salesOrderId: orderId,
       // 0039: en orderbilaga hor till en KUNDAFFAR och till ingen manniska.
@@ -1766,7 +1770,7 @@ export async function lasAvtalsforslag(
 
     const { data: fil } = await supabaseAdmin()
       .from("file_object")
-      .select("id, path, purpose, sales_order_id, removed_at")
+      .select("id, store, bucket, path, purpose, sales_order_id, removed_at")
       .eq("id", fileId)
       .maybeSingle();
 
@@ -1778,10 +1782,17 @@ export async function lasAvtalsforslag(
     }
     if (fil.removed_at) return { fel: "Filen är borttagen." };
 
-    const { data } = await supabaseAdmin().storage.from("filer").download(String(fil.path));
+    // Genom lagringsmodulen, inte rakt pa Supabase. En orderbilaga laddad upp
+    // efter omlaggningen ligger i R2, och en hardkodad bucket hade gett
+    // "Filen gick inte att lasa" pa varenda ny bilaga.
+    const data = await las({
+      lager: tolkaLager(fil.store),
+      bucket: String(fil.bucket),
+      path: String(fil.path),
+    });
     if (!data) return { fel: "Filen gick inte att läsa." };
 
-    const text = await pdfText(new Uint8Array(await data.arrayBuffer()));
+    const text = await pdfText(new Uint8Array(data));
 
     // En inskannad PDF utan textlager ger ett TOMT forslag och inte ett fel.
     // Bilagan ska ga att bifoga anda; den forifyller bara ingenting.

@@ -14,20 +14,26 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    // SLUGGEN ÄR ORÖRD MED FLIT. Den bär avfärdningen i
+    // `notification_dismissed`, så en ändring hade väckt posten till liv igen
+    // för alla som redan läst den. Texten är däremot vidgad samma dag den kom
+    // ut: den sa "inget annat har flyttat", och en timme senare flyttade allt
+    // annat också. Ett felaktigt besked som står kvar är värre än ett som
+    // rättas.
     slug: "inspelningarna-har-flyttat",
-    rubrik: "Samtalsinspelningarna har flyttat — spelaren fungerar som förut",
+    rubrik: "Navets filer har flyttat — allt fungerar som förut",
     ingress:
-      "Ljudet ligger inte längre kvar i samma lagring som resten av navets filer. Du märker ingen skillnad: samma spelare på ordern, samma samtal, samma 30-dagarsregel. Säg till om något inte spelas upp.",
+      "Inspelningar, läkarintyg, orderbilagor, dokumentbilagor och rollspel ligger inte längre i samma lagring som förut. Du märker ingen skillnad: samma spelare, samma uppladdning, samma regler. Säg till om något inte går att öppna eller ladda upp.",
     text: `**Det här är en flytt under golvet, inte en ny funktion.** Samtalen
-ligger kvar på ordern, spelaren ser likadan ut, och du gör ingenting
-annorlunda. Att det ändå står här är för att du ska veta vad som hänt om något
-strular — och vem du ska säga det till.
+ligger kvar på ordern, spelaren ser likadan ut, uppladdningsknapparna sitter
+där de satt, och du gör ingenting annorlunda. Att det ändå står här är för att
+du ska veta vad som hänt om något strular — och vem du ska säga det till.
 
-**Varför:** lagringen navet använde för ljudet är full. Ungefär 350 samtal om
-dagen spelas in, och de tar drygt 200 MB per arbetsdag. Nya inspelningar
-skrivs nu till en egen lagring inom EU, byggd för just det här. Inget annat i
-navet har flyttat — läkarintyg, orderbilagor och dokument ligger kvar där de
-låg.
+**Varför:** lagringen navet använde är full. Ungefär 350 samtal om dagen
+spelas in, och bara de tar drygt 200 MB per arbetsdag. Allt navet lagrar —
+inspelningar, läkarintyg, orderbilagor, dokumentbilagor och rollspel — skrivs
+nu till en egen lagring inom EU, byggd för just det här. Filer som redan
+fanns ligger kvar där de låg och fungerar precis som förut.
 
 **Inspelningar sparas i 30 dagar.** Det är samma regel som förut, men den är
 värd att upprepa: ett samtal som **inte** hör till en order får sitt ljud
@@ -38,9 +44,10 @@ vem som ringde — men det går inte längre att lyssna på.
 kopplats till en affär tas fristen bort, och inspelningen ligger kvar. Är det
 ett samtal du vet att du kommer att behöva: se till att det sitter på ordern.
 
-**Om ett samtal inte spelas upp** — knappen gör ingenting, spelaren står tyst,
-eller ljudet tar slut mitt i — rapportera det via Fel och förbättringar. Det är
-värt att veta snabbt just nu, medan flytten är ny.`,
+**Om något inte fungerar** — ett samtal som inte spelas upp, en spelare som
+står tyst eller tar slut mitt i, en fil som inte går att ladda upp eller öppna
+— rapportera det via Fel och förbättringar. Det är värt att veta snabbt just
+nu, medan flytten är ny.`,
     datum: "2026-09-21",
     roller: ["salesperson", "team_lead", "sales_manager", "ceo", "finance"],
     href: "/order",

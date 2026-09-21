@@ -6,6 +6,8 @@ import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { getCurrentUser, hasRole } from "@/lib/auth";
 import { DOC_TYPES, tillSlug, type DocType } from "@/lib/dokument";
 import { forberedUppladdning, registreraFil, taBortInnehall } from "@/lib/filer-server";
+import { las } from "@/lib/lagring-server";
+import { tolkaLager } from "@/lib/lagring";
 import { pdfText } from "@/lib/pdf";
 import { notifiera } from "@/lib/notishandelse-server";
 
@@ -332,7 +334,7 @@ async function raknaOmBilagetext(dokumentId: string) {
   const db = supabaseAdmin();
   const { data: filer } = await db
     .from("file_object")
-    .select("id, bucket, path, mime_type")
+    .select("id, store, bucket, path, mime_type")
     .eq("purpose", "document_attachment")
     .eq("document_id", dokumentId)
     .is("removed_at", null);
@@ -340,9 +342,12 @@ async function raknaOmBilagetext(dokumentId: string) {
   const delar: string[] = [];
   for (const f of filer ?? []) {
     if (f.mime_type !== "application/pdf") continue;
-    const { data } = await db.storage.from(f.bucket).download(f.path);
+    // Lagret ur raden. Bilagor lagda efter omlaggningen ligger i R2, och en
+    // bilaga som inte gar att lasa blir ett dokument utan sokbar text — vilket
+    // ser ut som en tom PDF i stallet for ett fel.
+    const data = await las({ lager: tolkaLager(f.store), bucket: f.bucket, path: f.path });
     if (!data) continue;
-    const text = await pdfText(new Uint8Array(await data.arrayBuffer()));
+    const text = await pdfText(new Uint8Array(data));
     if (text) delar.push(text);
   }
 
@@ -370,6 +375,7 @@ export async function registreraBilaga(
   dokumentId: string,
   fileId: string,
   filnamn: string,
+  store: string,
 ): Promise<DokumentState> {
   try {
     const user = await kravRedaktor(dokumentId);
@@ -378,6 +384,7 @@ export async function registreraBilaga(
       fileId,
       andamal: "document_attachment",
       filnamn,
+      store,
       uploadedBy: user.employee!.id,
       documentId: dokumentId,
     });

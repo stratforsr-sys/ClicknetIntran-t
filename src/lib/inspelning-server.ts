@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { bygStig, MAX_BYTE } from "@/lib/filer";
 import { gallringsfrist } from "@/lib/samtal-order";
-import { bucketen, lagerForInspelning, laggUpp, taBort } from "@/lib/lagring-server";
+import { bucketen, lagerForNyaFiler, laggUpp, taBort } from "@/lib/lagring-server";
 import { tolkaLager } from "@/lib/lagring";
 
 /**
@@ -143,7 +143,7 @@ export async function hamtaInspelning(args: {
   // Att det hänt syns utan att vi behöver ett eget fält för det: en inspelning
   // från efter omläggningen som bär `store = 'supabase'` ÄR händelsen.
   // =====================================================================
-  let lager = lagerForInspelning();
+  let lager = lagerForNyaFiler();
   let bucket = bucketen(lager);
 
   let lagt = await laggUpp({ lager, bucket, path, data: buffert, mime: typ });
