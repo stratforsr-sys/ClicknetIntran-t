@@ -10,6 +10,8 @@ import {
   URL_SEKUNDER_LJUD,
   type Andamal,
 } from "@/lib/filer";
+import { tolkaLager } from "@/lib/lagring";
+import { signeraLank, taBort } from "@/lib/lagring-server";
 
 /**
  * ===========================================================================
@@ -39,6 +41,8 @@ import {
 
 export type Fil = {
   id: string;
+  /** Vilken lagring `bucket`/`path` ska slas upp i. Se 0065 och `lagring.ts`. */
+  store: string;
   bucket: string;
   path: string;
   purpose: Andamal;
@@ -50,8 +54,17 @@ export type Fil = {
   removed_at: string | null;
 };
 
+/**
+ * `store` star FORST och i samma lista som resten, inte i en egen lasning.
+ *
+ * Bade signeringen och borttagningen nedan behover veta var filen ligger, och
+ * bada laser genom FILFALT. En kolumn som glommdes i listan hade gett
+ * `undefined` — alltsa `tolkaLager()`:s Supabase-svar — och en R2-fil hade
+ * letats efter i Supabase utan att nagot sag trasigt ut forran nagon tryckte
+ * play.
+ */
 export const FILFALT =
-  "id, bucket, path, purpose, filename, mime_type, size_bytes, uploaded_at, uploaded_by, removed_at";
+  "id, store, bucket, path, purpose, filename, mime_type, size_bytes, uploaded_at, uploaded_by, removed_at";
 
 /**
  * Ger en kortlivad URL till filen, och skriver oppningen.
@@ -113,17 +126,17 @@ export async function signeraOchLogga(
   // ===================================================================
   const arLjud = fil.purpose === "call_recording";
 
-  const { data: signerad, error } = await db.storage
-    .from(fil.bucket)
-    .createSignedUrl(
-      fil.path,
-      arLjud ? URL_SEKUNDER_LJUD : URL_SEKUNDER,
-      arLjud ? {} : { download: namn },
-    );
+  const signerad = await signeraLank({
+    lager: tolkaLager(fil.store),
+    bucket: fil.bucket,
+    path: fil.path,
+    sekunder: arLjud ? URL_SEKUNDER_LJUD : URL_SEKUNDER,
+    laddaNedSom: arLjud ? null : namn,
+  });
 
-  if (error || !signerad) throw new Error(error?.message ?? "Filen kunde inte signeras.");
+  if ("fel" in signerad) throw new Error(signerad.fel);
 
-  return { url: signerad.signedUrl, namn };
+  return { url: signerad.url, namn };
 }
 
 /**
@@ -296,7 +309,7 @@ export async function taBortInnehall(fileId: string, actorEmployeeId: string): P
 
   if (!fil || fil.removed_at) return;
 
-  await db.storage.from(fil.bucket).remove([fil.path]);
+  await taBort({ lager: tolkaLager(fil.store), bucket: fil.bucket, path: fil.path });
   await db
     .from("file_object")
     .update({ removed_at: new Date().toISOString(), removed_by: actorEmployeeId })

@@ -5,6 +5,136 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-21 · Lagringen tog slut, och det var inte databasen
+
+Beställaren: *"vi har nått gränsen för supabase och vi behöver mer gb, men jag
+vill inte betala än för databas, kan vi också använda 1 till databas för all
+lagring utanför det som redan finns i supabase."*
+
+Frågan förutsatte att databasen var full. Det var den inte, och passet blev ett
+annat än det beställda.
+
+### Vad mätningen sa
+
+| | Använt | Fri gräns | |
+|---|---|---|---|
+| Databas | **39 MB** | 500 MB | 8 % |
+| Fillagring | **1 529 MB** | 1 024 MB | **149 %** |
+
+Hela `public` är 21 MB, och de största tabellerna är `phone_call` (6,5 MB) och
+`call_ingest` (6,2 MB). Med nuvarande takt räcker 500 MB i flera år.
+
+Fillagringen däremot: **1 693 filer, varenda en `audio/mpeg`, varenda en i
+`call_recording/`.** Inga läkarintyg, inga orderbilagor, inga dokumentbilagor —
+de tillsammans är noll byte. Snittet är 925 kB per samtal och takten 218 MB per
+arbetsdag.
+
+Gallringen på 30 dygn (0056) är byggd och körs i nattjobbet, så det planar ut.
+Men första gallringen är 13 oktober, och den planar ut vid ungefär **5 GB** —
+alltså på fel sida om gränsen. Att vänta löser ingenting.
+
+### Varför det INTE blev en databas till
+
+Att dela tabellerna över två databaser hade kostat RLS, främmande nycklar och
+joins, och löst noll — databasen har 461 MB ledigt. Det som behövde flytta var
+ljudet, och bara ljudet.
+
+Valet blev **Cloudflare R2**: 10 GB fritt mot 5 GB i jämvikt, och ingen
+avgift för uttrafik. Det sista är inte en detalj — ett samtal på fyrtiofyra
+minuter hämtas i sin helhet varje gång någon lyssnar, och Supabases fria plan
+ger 5 GB uttrafik i månaden. Ett andra Supabase-projekt (fria planen tillåter
+två) hade gett 1 GB till, alltså **fem arbetsdagar**, och två projekt att hålla
+reda på i stället för ett.
+
+Bucketen skapas med **EU-jurisdiktion**. Inspelningar är personuppgifter, och
+`eu-north-1` valdes för Supabase med K23 som skäl; en ny lagring får inte bli
+vägen runt det kravet. Jurisdiktionen går inte att ändra i efterhand.
+
+### Ändringen är en kolumn, inte en ombyggnad
+
+`file_object` var redan enda vägen till innehållet i en fil: raden bär `bucket`
+och `path`, och både signeringen och gallringen går genom den. Det enda som
+saknades var svaret på **vilken lagring** bucketen ska slås upp i.
+
+`store text not null default 'supabase'` (0065), och därmed:
+
+| Vad | Var |
+|---|---|
+| Migrationen | `supabase/migrations/0065_lagring_utanfor_supabase.sql` |
+| Valet mellan lagringarna (rent, provat) | `src/lib/lagring.ts` + `tests/lagring.mjs` |
+| De tre verben mot en lagring | `src/lib/lagring-server.ts` |
+| Uppladdning, återställningar, gallring | `src/lib/inspelning-server.ts` |
+| Signerad länk och borttagning | `src/lib/filer-server.ts` |
+| Skarpt prov mot R2 | `scripts/prova-r2.mjs` |
+
+**De 1 529 MB som redan ligger i Supabase flyttas inte.** Gallringen läser
+lagret ur raden och raderar i rätt lagring för var och en — alltså tömmer
+fristen Supabase åt oss: under 1 GB inom ett par veckor, nära noll den
+13 oktober. En flytt av 1 693 filer hade gjort samma sak, långsammare och med
+risk att tappa något på vägen.
+
+### DET SOM ÄR VÄRT ATT VETA INNAN NÅGON RÖR DET HÄR
+
+**RADEN AVGÖR VAR EN FIL LIGGER — ALDRIG MILJÖN.** Frestelsen är att låta
+"R2 är påslaget" betyda "filerna ligger i R2". Det är sant för de nya och
+falskt för de 1 693 gamla, och den dagen någon stänger av R2 pekar varenda ny
+rad fel. Miljön avgör exakt en sak: vart NÄSTA fil skrivs.
+
+**`store` MÅSTE STÅ I `FILFALT`.** Både signeringen och borttagningen läser
+genom den listan. Glöms kolumnen där blir `store` `undefined`, `tolkaLager()`
+svarar `supabase` — och en R2-fil letas i Supabase utan att något ser trasigt
+ut förrän någon trycker play.
+
+**HALVT UPPSATT R2 ÄR AVSTÄNGT.** Tre av fyra miljövärden ger inte en halv
+uppladdning utan ett fel per samtal, och ljudet finns inte kvar att hämta igen.
+`r2Konfigurerad()` kräver alla fyra.
+
+**FALLER R2 SKRIVS LJUDET TILL SUPABASE ÄNDÅ.** Med flit, och av samma skäl som
+resten av filen: växelns adress lever en halvtimme, sedan är inspelningen borta
+för alltid. En fil i en trång lagring går att flytta i morgon; en fil som aldrig
+hämtades gör det inte. Att det hänt syns utan eget fält — en inspelning från
+efter omläggningen som bär `store = 'supabase'` **är** händelsen.
+
+**INTEGRITETSHUVUDENA ÄR AVSTÄNGDA MED FLIT.** Nyare AWS-klienter lägger på
+`x-amz-checksum-*` på varje `PutObject`; S3-kompatibla lagringar har upprepade
+gånger svarat "not implemented" på dem, och då faller varje uppladdning — inte
+vid bygget, utan första gången ett samtal ringer. `WHEN_REQUIRED` ger beteendet
+klienten hade innan. Kontrollen vi lutar oss mot är ändå sha256 i
+`file_object.checksum`.
+
+**SÄTT MILJÖVARIABLERNA FÖRE MERGEN.** Navnyheten säger att inspelningarna har
+flyttat. Mergas grenen innan R2 är uppsatt faller allt tillbaka på Supabase,
+och beskedet är osant den dagen det visas.
+
+### Öppna punkter
+
+- **R2 sattes upp samma dag, och provet är grönt.** Bucketen `intranet` i
+  EU-jurisdiktion, fyra variabler i Vercel (Production + Preview) och i
+  `~/.clicknet/nav.env`, och `scripts/prova-r2.mjs` gick hela vägen: uppladdning,
+  signerad länk, nedladdning med matchande sha256, `Range` → **206**,
+  borttagning, 404. Migration `0065` är körd och verifierad — villkoret avvisar
+  `azure`, tom sträng och versal-`R2`, och alla 1 844 befintliga filer står som
+  `supabase`.
+- **S3-nycklarna härleds ur Cloudflare-tokenen.** `R2_ACCESS_KEY_ID` är tokenens
+  id, `R2_SECRET_ACCESS_KEY` är sha256 av tokenvärdet. Skapas tokenen på
+  API-vägen visas de aldrig som ett nyckelpar, och det ser då ut som att man
+  fått fel sorts token.
+- **MERGEN ÅTERSTÅR och är hela påslaget.** Produktionen är orörd så länge
+  grenen står utanför main.
+- **Ingen inspelning ligger ännu i R2.** Läsvägen för en R2-fil har aldrig gått
+  genom `signeraOchLogga` mot riktig data — bara genom samma SDK-anrop i
+  `prova-r2.mjs`. Första riktiga samtalet efter mergen är värt att spela upp för
+  hand.
+- **Arbetsloggen hoppar över 0061–0064.** De kördes 16–17 september
+  (`kurs_slapp_inte_kunden`, `upprepning`, `kursovningar_och_skarpta_prov`,
+  `prov_utan_sparrtid`) men har ingen rad här. `NASTA_SESSION.md` påstod att
+  nästa lediga nummer var `0061`; databasen sa `0065`, och det här passet tog
+  det. **Nästa lediga är `0066` — fråga `schema_migrations` ändå.**
+- **234 samtal står i `hos_vaxeln`** och har alltså aldrig fått sitt ljud
+  hämtat. De är inte utredda i det här passet.
+
+---
+
 ## 2026-09-16 · Läckprovet var rött på ett namn sidan ska visa
 
 Överlämningen sa: *"`tests/sidor.mjs` går mot produktion och rapporterar
