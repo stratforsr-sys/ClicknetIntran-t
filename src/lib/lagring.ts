@@ -65,15 +65,20 @@ export function r2Konfigurerad(miljo: R2Miljo): boolean {
 }
 
 /**
- * Vart nästa inspelning ska skrivas.
+ * Vart nästa fil ska skrivas — vilken sort det än är.
  *
- * Bara inspelningar. Läkarintyg, orderbilagor och dokumentbilagor fortsätter
- * till Supabase oavsett vad som står här — de laddas upp direkt från
- * webbläsaren med en signerad uppladdningslänk (se `forberedUppladdning`), de
- * är tillsammans noll byte i dag, och att flytta dem hade betytt att bygga om
- * en uppladdningsväg som fungerar för att lösa ett problem den inte orsakar.
+ * ALLA SEX ÄNDAMÅLEN GÅR SAMMA VÄG sedan 2026-09-21 (andra passet):
+ * inspelningar, läkarintyg, dokumentbilagor, rollspel, orderbilagor och
+ * coachning. Först flyttade bara inspelningarna, eftersom de var hela
+ * problemet — de andra var tillsammans noll byte. Beställaren ville sedan ha
+ * allt på samma ställe, och då är EN väg bättre än två: två vägar betyder två
+ * ställen att göra fel på, och den som sällan används är den som hinner ruttna
+ * utan att någon märker det.
+ *
+ * Gamla filer rörs fortfarande inte. `tolkaLager()` läser raden, och en fil som
+ * ligger i Supabase hittas i Supabase hur länge den än blir kvar.
  */
-export function lagerForNyInspelning(miljo: R2Miljo): Lager {
+export function lagerForNyFil(miljo: R2Miljo): Lager {
   return r2Konfigurerad(miljo) ? "r2" : "supabase";
 }
 

@@ -23,7 +23,7 @@
  */
 import {
   bucketFor,
-  lagerForNyInspelning,
+  lagerForNyFil,
   nedladdningshuvud,
   r2Konfigurerad,
   tolkaLager,
@@ -63,12 +63,19 @@ for (const saknas of ["endpoint", "bucket", "nyckelId", "hemlighet"]) {
 }
 ok("tomt objekt ar avstangt", r2Konfigurerad({}) === false);
 
-console.log("\n3. Vart nasta inspelning skrivs — lagerForNyInspelning()");
-ok("uppsatt R2 ger r2", lagerForNyInspelning(full) === "r2");
-ok("avstangt ger supabase", lagerForNyInspelning({}) === "supabase");
+console.log("\n3. Vart nasta fil skrivs — lagerForNyFil()");
+ok("uppsatt R2 ger r2", lagerForNyFil(full) === "r2");
+ok("avstangt ger supabase", lagerForNyFil({}) === "supabase");
 ok(
   "halvt uppsatt ger supabase och inte ett fel",
-  lagerForNyInspelning({ ...full, hemlighet: undefined }) === "supabase",
+  lagerForNyFil({ ...full, hemlighet: undefined }) === "supabase",
+);
+// ALLA sex andamalen gar samma vag sedan andra passet. Fanns det en gren per
+// andamal hade den som sallan anvands — rollspelet — kunnat ruttna osedd.
+ok(
+  "svaret beror INTE pa andamalet",
+  ["sick_certificate", "document_attachment", "roleplay", "sales_order", "coaching", "call_recording"]
+    .every(() => lagerForNyFil(full) === "r2"),
 );
 
 console.log("\n4. Bucketen — bucketFor()");

@@ -158,7 +158,7 @@ export function Bilaga({
         hjalp="PDF. Texten i avtalet går att läsa ut och förifylla orderns fält med — ingenting sparas förrän du godkänner varje fält."
         knapp="Ladda upp"
         forbered={(namn, mime, byte) => forberedOrderbilaga(orderId, namn, mime, byte)}
-        registrera={(fileId, namn) => registreraOrderbilaga(orderId, fileId, namn)}
+        registrera={(fileId, namn, store) => registreraOrderbilaga(orderId, fileId, namn, store)}
       />
     </div>
   );

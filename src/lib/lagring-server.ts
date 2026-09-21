@@ -3,6 +3,7 @@ import "server-only";
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -10,7 +11,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import {
   bucketFor,
-  lagerForNyInspelning,
+  lagerForNyFil,
   nedladdningshuvud,
   r2Konfigurerad,
   type Lager,
@@ -55,9 +56,9 @@ function miljo(): R2Miljo {
   };
 }
 
-/** Vart nästa inspelning skrivs. Se `lagerForNyInspelning`. */
-export function lagerForInspelning(): Lager {
-  return lagerForNyInspelning(miljo());
+/** Vart nästa fil skrivs, oavsett ändamål. Se `lagerForNyFil`. */
+export function lagerForNyaFiler(): Lager {
+  return lagerForNyFil(miljo());
 }
 
 /** Bucketen i ett givet lager, med R2-namnet hämtat ur miljön. */
@@ -169,6 +170,129 @@ export async function taBort(args: {
     return { ok: true };
   } catch (e) {
     return { ok: false, fel: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
+ * En kortlivad väg IN i lagringen, som webbläsaren får följa.
+ *
+ * ===========================================================================
+ * VARFÖR UPPLADDNINGEN INTE GÅR GENOM SERVERN — OFÖRÄNDRAT SKÄL
+ *
+ * Vercel tar emot högst 4,5 MB i kroppen till en serverlös funktion. Ett
+ * rollspel får vara 40 MB och ett läkarintyg fotograferat med telefon är ofta
+ * över taket. Därför lämnar servern ifrån sig en signerad adress och kliver ur
+ * vägen — precis som förut, bara mot en annan lagring.
+ *
+ * De två lagringarna svarar med olika saker, och det är inget att dölja:
+ * Supabase ger en TOKEN som dess egen klient förstår, R2 ger en färdig
+ * PUT-ADRESS som vilken `fetch` som helst kan följa. Anroparen får båda
+ * fälten och ser på `lager` vilket som gäller.
+ *
+ * ===========================================================================
+ * R2 SLÄPPER INTE IN NÅGON UTAN CORS
+ *
+ * Adressen räcker inte. Webbläsaren skickar en preflight före sin PUT, och
+ * bucketen måste svara att just den här avsändaren får skriva. Reglerna sattes
+ * 2026-09-21 och släpper in `https://clicknet-nav.vercel.app` samt
+ * `https://*.vercel.app` för previewerna, med metoderna GET, PUT och HEAD.
+ *
+ * Glöms det steget vid en ny bucket är felet ELAKT: servern svarar fint,
+ * adressen ser riktig ut, och webbläsaren vägrar tyst med ett CORS-fel i
+ * konsolen som aldrig når användaren.
+ */
+export async function signeraUppladdning(args: {
+  lager: Lager;
+  bucket: string;
+  path: string;
+  mime: string;
+  sekunder: number;
+}): Promise<{ token?: string; url?: string } | { fel: string }> {
+  if (args.lager === "supabase") {
+    const { data, error } = await supabaseAdmin()
+      .storage.from(args.bucket)
+      .createSignedUploadUrl(args.path);
+    if (error || !data) return { fel: error?.message ?? "Uppladdningen kunde inte förberedas." };
+    return { token: data.token };
+  }
+
+  try {
+    const url = await getSignedUrl(
+      r2(),
+      new PutObjectCommand({ Bucket: args.bucket, Key: args.path, ContentType: args.mime }),
+      { expiresIn: args.sekunder },
+    );
+    return { url };
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
+ * Vad som FAKTISKT ligger där — storlek och typ enligt lagringen själv.
+ *
+ * Det här är steg 3:s hela poäng. I steg 1 är det klienten som beskriver sin
+ * egen fil, och ett påstående om storlek och typ är inte en kontroll. Svaret
+ * härifrån är lagringens eget, och det är det som provas mot reglerna.
+ *
+ * `null` betyder att ingenting kom fram.
+ */
+export async function huvudUppgifter(args: {
+  lager: Lager;
+  bucket: string;
+  path: string;
+  /** Supabase listar en mapp och söker; R2 slår upp nyckeln direkt. */
+  mapp: string;
+  fileId: string;
+}): Promise<{ storlek: number; mime: string } | null> {
+  if (args.lager === "supabase") {
+    const { data } = await supabaseAdmin()
+      .storage.from(args.bucket)
+      .list(args.mapp, { search: args.fileId, limit: 1 });
+    const post = data?.[0];
+    if (!post) return null;
+    return {
+      storlek: Number(post.metadata?.size ?? 0),
+      mime: String(post.metadata?.mimetype ?? "").split(";")[0].trim().toLowerCase(),
+    };
+  }
+
+  try {
+    const svar = await r2().send(
+      new HeadObjectCommand({ Bucket: args.bucket, Key: args.path }),
+    );
+    return {
+      storlek: Number(svar.ContentLength ?? 0),
+      mime: String(svar.ContentType ?? "").split(";")[0].trim().toLowerCase(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Läser tillbaka innehållet som en buffert.
+ *
+ * Används för att räkna checksumman vid registreringen — ett intyg som byts ut
+ * mot ett annat ska gå att upptäcka (0022). `null` när filen inte går att läsa.
+ */
+export async function las(args: {
+  lager: Lager;
+  bucket: string;
+  path: string;
+}): Promise<Buffer | null> {
+  if (args.lager === "supabase") {
+    const { data } = await supabaseAdmin().storage.from(args.bucket).download(args.path);
+    if (!data) return null;
+    return Buffer.from(await data.arrayBuffer());
+  }
+
+  try {
+    const svar = await r2().send(new GetObjectCommand({ Bucket: args.bucket, Key: args.path }));
+    const byte = await svar.Body?.transformToByteArray();
+    return byte ? Buffer.from(byte) : null;
+  } catch {
+    return null;
   }
 }
 

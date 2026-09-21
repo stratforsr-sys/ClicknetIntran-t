@@ -1088,6 +1088,7 @@ export async function registreraIntyg(
   rapportId: string,
   fileId: string,
   filnamn: string,
+  store: string,
 ): Promise<FranvaroState> {
   const kontroll = await kravIntygsbehorighet(rapportId);
   if (!kontroll.ok) return { fel: kontroll.fel };
@@ -1097,6 +1098,7 @@ export async function registreraIntyg(
     fileId,
     andamal: "sick_certificate",
     filnamn,
+    store,
     uploadedBy: employeeId,
     subjectEmployeeId: anmalan.employee_id,
     sickReportId: anmalan.id,

@@ -97,7 +97,7 @@ export function Bilagor({
           etikett="Lägg till en bilaga"
           hjalp="PDF, JPG eller PNG. Texten i en PDF blir sökbar i navet. En bilaga skapar ingen ny version och kräver därför ingen ny kvittens."
           forbered={(namn, mime, byte) => forberedBilaga(dokumentId, namn, mime, byte)}
-          registrera={(fileId, namn) => registreraBilaga(dokumentId, fileId, namn)}
+          registrera={(fileId, namn, store) => registreraBilaga(dokumentId, fileId, namn, store)}
         />
       )}
 
