@@ -7,6 +7,7 @@ import { svensktDatum } from "@/lib/klocka";
 import {
   MEDLEMSROLLER,
   PRIORITETER,
+  arStangd,
   farArbeta,
   farBjudaIn,
   farGranska,
@@ -19,6 +20,8 @@ import {
   type Medlemsroll,
   type Prioritet,
 } from "@/lib/uppgifter";
+import { granskaRegel, regelUrFormular, serietext } from "@/lib/upprepning";
+import { skapaSerie } from "@/lib/upprepning-server";
 import {
   arDelningsniva,
   farArbetaSomAgaren,
@@ -293,6 +296,35 @@ export async function skapaUppgift(_prev: UppgiftState, form: FormData): Promise
       if (!farRedigera(krets)) return { fel: "Du får inte lägga till i den uppgiften." };
     }
 
+    /**
+     * 0062: UPPREPNINGEN GRENAR AV HAR, OCH DEN SKRIVER INGEN `task` SJALV.
+     *
+     * Vagen ar `task_series` → `fodEnSerie()` → riktiga rader, alltsa samma
+     * vag som nattjobbet gar. Ett specialfall som skrivit forsta forekomsten
+     * for hand och overlatit resten till jobbet hade varit tva satt att fodas,
+     * och skillnaden mellan dem hade synts forst i forekomst nummer tva.
+     */
+    const regel = due ? regelUrFormular(form, due) : null;
+    if (regel) {
+      if (foralder) return { fel: "En deluppgift kan inte återkomma. Lägg upp rutinen som en egen uppgift." };
+
+      const klagomal = granskaRegel(regel);
+      if (klagomal) return { fel: klagomal };
+
+      return skapaSerieinternt(db, {
+        regel,
+        slag: "uppgift",
+        mig,
+        assignee_id: ansvarig ?? mig,
+        title: titel,
+        description_md: text(form, "description_md"),
+        due_time: tid,
+        estimate_minutes: minuter ? Number(minuter) : null,
+        priority: prioritet,
+        project_id: projektId,
+      });
+    }
+
     const { data: skapad, error } = await db
       .from("task")
       .insert({
@@ -322,6 +354,67 @@ export async function skapaUppgift(_prev: UppgiftState, form: FormData): Promise
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
   }
+}
+
+/**
+ * Regeln in, ett svar en manniska kan lasa ut.
+ *
+ * SVARET NAMNER ANTALET, och det ar inte statistik. Den som kryssat i "varje
+ * mandag" och far "Upplagd." vet inte om navet forstod att det skulle handa mer
+ * an en gang. "Varje måndag · 8 förekomster upplagda" ar kvittot pa att regeln
+ * blev en regel, och det ar det enda stallet dar skillnaden syns direkt.
+ */
+async function skapaSerieinternt(
+  db: ReturnType<typeof supabaseAdmin>,
+  falt: {
+    regel: Parameters<typeof granskaRegel>[0];
+    slag: "uppgift" | "coachningsuppgift";
+    mig: string;
+    assignee_id: string;
+    title: string;
+    description_md: string;
+    due_time: string | null;
+    estimate_minutes: number | null;
+    priority: number;
+    project_id: string | null;
+  },
+): Promise<UppgiftState> {
+  const { regel, mig, ...mall } = falt;
+
+  const { id, fodda } = await skapaSerie(
+    db,
+    {
+      slag: mall.slag,
+      monster: regel.monster,
+      veckodagar: regel.veckodagar,
+      starts_on: regel.starts_on,
+      ends_on: regel.ends_on,
+      title: mall.title,
+      description_md: mall.description_md,
+      due_time: mall.due_time,
+      estimate_minutes: mall.estimate_minutes,
+      assignee_id: mall.assignee_id,
+      created_by: mig,
+      priority: mall.priority,
+      project_id: mall.project_id,
+    },
+    svensktDatum(),
+  );
+
+  /**
+   * `uppdatera()` ANVANDS INTE HAR. Den revaliderar `/uppgifter/<id>`, och id:t
+   * harinne ar SERIENS och inte en uppgifts — vagen finns inte. Listorna ar
+   * anda det som andrats: en serie foder mellan noll och femtiosju rader, och
+   * ingen av dem har en sida som redan var oppen.
+   */
+  revalidatePath("/uppgifter");
+  revalidatePath("/kalender");
+  revalidatePath("/");
+
+  return {
+    id,
+    ok: `${serietext(regel)} · ${fodda} ${fodda === 1 ? "förekomst" : "förekomster"} upplagda.`,
+  };
 }
 
 /**
@@ -356,6 +449,13 @@ async function slaUppPerson(namn: string): Promise<string | null> {
 // Ändra
 // =============================================================================
 
+/**
+ * 0062: `serie_omfattning` avgor vem andringen galler.
+ *
+ * "bara" ar grundlaget och det enda svaret for en uppgift utan serie. "serie"
+ * skriver om mallen och alla ofodda och framtida forekomster med — se
+ * `andraHelaSerien()` langre ner.
+ */
 export async function andraUppgift(_prev: UppgiftState, form: FormData): Promise<UppgiftState> {
   try {
     const id = text(form, "id");
@@ -368,7 +468,25 @@ export async function andraUppgift(_prev: UppgiftState, form: FormData): Promise
     const due = valfritt(form, "due_date");
     const prioritet = Number(text(form, "priority") || "3");
 
-    const { error } = await supabaseAdmin()
+    const db = supabaseAdmin();
+
+    /**
+     * SERIETILLHORIGHETEN LASES UR RADEN, ALDRIG UR FORMULARET.
+     *
+     * Samma linje som utkopet pa ordern (0060): ett `series_id` i ett formular
+     * ar en plats att skriva om NAGON ANNANS serie ifran. Kretsen provades mot
+     * uppgiften, inte mot regeln.
+     */
+    const { data: serierad } = await db
+      .from("task")
+      .select("series_id, series_on")
+      .eq("id", id)
+      .maybeSingle();
+
+    const serieId = (serierad as { series_id: string | null } | null)?.series_id ?? null;
+    const helaSerien = serieId !== null && text(form, "serie_omfattning") === "serie";
+
+    const { error } = await db
       .from("task")
       .update({
         title: titel,
@@ -381,17 +499,288 @@ export async function andraUppgift(_prev: UppgiftState, form: FormData): Promise
         estimate_minutes: text(form, "estimate_minutes") ? Number(text(form, "estimate_minutes")) : null,
         priority: PRIORITETER.includes(prioritet as Prioritet) ? prioritet : 3,
         project_id: valfritt(form, "project_id"),
+        /**
+         * "BARA DEN HAR" LOSGOR FOREKOMSTEN.
+         *
+         * Utan raden hade nasta serieandring skrivit tillbaka det anvandaren
+         * just andrade, och hon hade inte fatt veta det — raden bara ser ut som
+         * den gjorde forut nasta gang hon tittar. Flaggan ar alltsa inte
+         * bokforing utan hela skillnaden mellan de tva svaren pa fragan.
+         *
+         * Den satts BARA i den har grenen. En serieandring ska inte losgora
+         * raderna den skriver; da hade nasta serieandring inte natt nagon.
+         */
+        ...(serieId && !helaSerien ? { series_losgjord: true } : {}),
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);
 
     if (error) return { fel: `Ändringen sparades inte: ${error.message}` };
 
+    if (helaSerien) {
+      const svar = await andraHelaSerien(serieId!, form, {
+        title: titel,
+        description_md: text(form, "description_md"),
+        due_time: due ? valfritt(form, "due_time") : null,
+        estimate_minutes: text(form, "estimate_minutes") ? Number(text(form, "estimate_minutes")) : null,
+        priority: PRIORITETER.includes(prioritet as Prioritet) ? prioritet : 3,
+        project_id: valfritt(form, "project_id"),
+      });
+      if (svar.fel) return svar;
+
+      uppdatera(id);
+      return { ok: svar.ok };
+    }
+
     uppdatera(id);
-    return { ok: "Sparat." };
+    return { ok: serieId ? "Sparat — bara den här förekomsten." : "Sparat." };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
   }
+}
+
+/**
+ * "HELA SERIEN": mallen skrivs om, och de framtida forekomsterna med den.
+ *
+ * =============================================================================
+ * TRE URVAL, OCH VART OCH ETT HALLER NAGOT UTANFOR MED FLIT
+ *
+ *   FRAMTIDEN, INTE DET SOM VARIT. En rutin som byter rubrik i oktober har inte
+ *   alltid hetat sa. Skrevs historiken om skulle septembers bockade rader saga
+ *   att man gjort nagot man aldrig gjorde, och det ar en forfalskning aven nar
+ *   den ar valmenande. Granen gar vid `due_date >= idag`.
+ *
+ *   INTE DE LOSGJORDA. Den som flyttat EN mandag till klockan tio har fattat
+ *   ett beslut om just den, och ett serieklick ska inte tysta det.
+ *
+ *   INTE DE STANGDA. En bockad forekomst ar ett kvitto pa nagot som ar gjort.
+ *   Urvalet gors i SQL pa `due_date` och i koden pa laget — `lageAv()` raknas
+ *   fram ur handelserna och gar inte att fraga om i en `update`.
+ *
+ * DATUMET FOLJER INTE MED, och det ar den viktigaste raden i hela funktionen.
+ * `due_date` ar VILKEN FOREKOMST raden ar; skrevs den over hade alla femtiotva
+ * mandagar hamnat pa samma dag. Mallen bar klockslaget, inte dagen.
+ * =============================================================================
+ */
+async function andraHelaSerien(
+  serieId: string,
+  form: FormData,
+  mall: {
+    title: string;
+    description_md: string;
+    due_time: string | null;
+    estimate_minutes: number | null;
+    priority: number;
+    project_id: string | null;
+  },
+): Promise<UppgiftState> {
+  const db = supabaseAdmin();
+  const idag = svensktDatum();
+
+  const { data: serie } = await db
+    .from("task_series")
+    .select("id, assignee_id, created_by, ended_at")
+    .eq("id", serieId)
+    .maybeSingle();
+
+  if (!serie) return { fel: "Serien finns inte." };
+
+  const { user } = await kravKrets(text(form, "id"));
+  const mig = user.employee!.id;
+
+  /**
+   * REGELN AGS AV TVA PERSONER, precis som `task_series_read` i 0062 sager. Den
+   * som bjudits in i EN forekomst far redigera den forekomsten — hon har
+   * ingenting att gora med att andra alla framtida mandagar.
+   */
+  const s = serie as { assignee_id: string; created_by: string; ended_at: string | null };
+  if (s.assignee_id !== mig && s.created_by !== mig) {
+    return { fel: "Bara den som äger rutinen kan ändra hela serien." };
+  }
+  if (s.ended_at) return { fel: "Serien är avslutad. Ändringen gäller bara den här förekomsten." };
+
+  const { error: serieFel } = await db
+    .from("task_series")
+    .update({ ...mall, updated_at: new Date().toISOString() })
+    .eq("id", serieId);
+
+  if (serieFel) return { fel: `Serien sparades inte: ${serieFel.message}` };
+
+  // Kandidaterna: framtida, inte losgjorda. Laget sallas efter, i koden.
+  const { data: kandidater } = await db
+    .from("task")
+    .select("id")
+    .eq("series_id", serieId)
+    .eq("series_losgjord", false)
+    .gte("due_date", idag);
+
+  const ids = ((kandidater ?? []) as { id: string }[]).map((r) => r.id);
+  if (ids.length === 0) return { ok: "Serien är ändrad." };
+
+  const { data: handelser } = await db
+    .from("task_event")
+    .select("task_id, type")
+    .in("task_id", ids)
+    .order("at");
+
+  const per = new Map<string, { type: Handelsetyp }[]>();
+  for (const h of (handelser ?? []) as { task_id: string; type: Handelsetyp }[]) {
+    const lista = per.get(h.task_id);
+    if (lista) lista.push(h);
+    else per.set(h.task_id, [h]);
+  }
+
+  const oppna = ids.filter((id) => !arStangd(lageAv(per.get(id) ?? [])));
+  if (oppna.length === 0) return { ok: "Serien är ändrad." };
+
+  const { error: radFel } = await db
+    .from("task")
+    .update({ ...mall, updated_at: new Date().toISOString() })
+    .in("id", oppna);
+
+  if (radFel) return { fel: `Förekomsterna sparades inte: ${radFel.message}` };
+
+  return {
+    ok:
+      oppna.length === 1
+        ? "Serien och den kommande förekomsten är ändrade."
+        : `Serien och ${oppna.length} kommande förekomster är ändrade.`,
+  };
+}
+
+/**
+ * Avsluta en rutin.
+ *
+ * =============================================================================
+ * DET SOM VARIT STAR KVAR. DET SOM ALDRIG HANDE FORSVINNER.
+ *
+ * Serien slutar foda, och de framtida forekomster som ANNU INTE RORTS tas bort.
+ * Bada halvorna av den meningen ar val:
+ *
+ *   ATT LATA DEM STA hade varit det forsiktiga valet och fel. Den som avslutar
+ *   en rutin i september har sju veckors mandagar liggande i kalendern, och de
+ *   ar inte langre nagot hon tanker gora. En kalender som visar sju mandagar
+ *   ingen ska gora ar en kalender man slutar lita pa.
+ *
+ *   ATT RADERA ALLT hade varit varre. Gjorda forekomster ar historik —
+ *   bockade, godkanda, kommenterade av manniskor — och de raderas aldrig av att
+ *   nagon stanger av framtiden.
+ *
+ * Gransen gar vid `due_date > idag` OCH att ingenting hant utover `skapad`.
+ * DAGENS FOREKOMST STAR ALLTSA KVAR, aven om den ar orord: den som stanger av
+ * mandagsrutinen pa en mandag har antagligen redan planerat dagen efter den.
+ *
+ * REGELRADEN RADERAS INTE. `ended_at` satts i stallet, sa att de gjorda
+ * raderna fortfarande kan svara pa varfor de lades upp. Se 0062.
+ * =============================================================================
+ */
+export async function avslutaSerie(_prev: UppgiftState, form: FormData): Promise<UppgiftState> {
+  try {
+    const user = await kravInloggad();
+    const mig = user.employee!.id;
+    const db = supabaseAdmin();
+
+    // Id:t tas ur UPPGIFTEN och inte ur formularet, av samma skal som
+    // `andraUppgift` ovan: kretsen provas mot en rad, och raden bar serien.
+    const uppgiftId = text(form, "id");
+    const { krets } = await kravKrets(uppgiftId);
+    if (!farRedigera(krets)) return { fel: "Du får inte ändra den här uppgiften." };
+
+    const { data: rad } = await db
+      .from("task")
+      .select("series_id")
+      .eq("id", uppgiftId)
+      .maybeSingle();
+
+    const serieId = (rad as { series_id: string | null } | null)?.series_id ?? null;
+    if (!serieId) return { fel: "Uppgiften hör inte till någon serie." };
+
+    const { data: serie } = await db
+      .from("task_series")
+      .select("id, assignee_id, created_by, ended_at")
+      .eq("id", serieId)
+      .maybeSingle();
+
+    const s = serie as { assignee_id: string; created_by: string; ended_at: string | null } | null;
+    if (!s) return { fel: "Serien finns inte." };
+    if (s.assignee_id !== mig && s.created_by !== mig) {
+      return { fel: "Bara den som äger rutinen kan avsluta den." };
+    }
+    if (s.ended_at) return { ok: "Serien är redan avslutad." };
+
+    const { error } = await db
+      .from("task_series")
+      .update({ ended_at: new Date().toISOString(), ended_by: mig, updated_at: new Date().toISOString() })
+      .eq("id", serieId);
+
+    if (error) return { fel: `Serien avslutades inte: ${error.message}` };
+
+    const bortplockade = await taBortOrordFramtid(serieId);
+
+    uppdatera(uppgiftId);
+    return {
+      ok:
+        bortplockade === 0
+          ? "Rutinen är avslutad. Inga kommande förekomster fanns."
+          : `Rutinen är avslutad och ${bortplockade} orörda förekomster är borttagna.`,
+    };
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Något gick fel." };
+  }
+}
+
+/**
+ * Framtida forekomster som ingen rort. Returnerar antalet borttagna.
+ *
+ * "ORORD" BETYDER EXAKT EN HANDELSE, OCH DEN SKA VARA `skapad`. En uppgift som
+ * nagon paborjat, kommenterat, bockat eller tilldelat nagon annan ar inte
+ * langre en rad ett jobb skrev — da finns det en manniska i historiken, och det
+ * som en manniska rort raderas inte av att en regel stangs av.
+ */
+async function taBortOrordFramtid(serieId: string): Promise<number> {
+  const db = supabaseAdmin();
+  const idag = svensktDatum();
+
+  const { data: kandidater } = await db
+    .from("task")
+    .select("id")
+    .eq("series_id", serieId)
+    .eq("series_losgjord", false)
+    .gt("due_date", idag);
+
+  const ids = ((kandidater ?? []) as { id: string }[]).map((r) => r.id);
+  if (ids.length === 0) return 0;
+
+  const { data: handelser } = await db
+    .from("task_event")
+    .select("task_id, type")
+    .in("task_id", ids);
+
+  const antal = new Map<string, { flera: boolean; annat: boolean }>();
+  for (const h of (handelser ?? []) as { task_id: string; type: string }[]) {
+    const f = antal.get(h.task_id) ?? { flera: false, annat: false };
+    if (antal.has(h.task_id)) f.flera = true;
+    if (h.type !== "skapad") f.annat = true;
+    antal.set(h.task_id, f);
+  }
+
+  const ororda = ids.filter((id) => {
+    const f = antal.get(id);
+    return !f || (!f.flera && !f.annat);
+  });
+
+  if (ororda.length === 0) return 0;
+
+  /**
+   * HANDELSERNA FORST. `task_event.task_id` har `on delete cascade` i 0054, sa
+   * ordningen spelar ingen roll for databasen — men den gor det for den som
+   * laser: raderingen ska se ut som den ar, alltsa att bada forsvinner.
+   */
+  await db.from("task_event").delete().in("task_id", ororda);
+  const { error } = await db.from("task").delete().in("id", ororda);
+  if (error) throw new Error(`förekomsterna kunde inte tas bort: ${error.message}`);
+
+  return ororda.length;
 }
 
 /**

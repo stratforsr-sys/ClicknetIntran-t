@@ -110,6 +110,25 @@ export async function skapaKalenderpost(
     vidare.set("due_time", tid);
     vidare.set("estimate_minutes", text(form, "estimate_minutes"));
 
+    /**
+     * 0062: UPPREPNINGSFALTEN FOLJER MED BADA VAGARNA, ORORDA.
+     *
+     * De tolkas av `regelUrFormular()` i den modul som far beslutet, inte har.
+     * Det ar samma val som resten av funktionen gor och av samma skal: den har
+     * filen VALJER VAG, den granskar ingenting. En kontroll harinne hade blivit
+     * ett andra svar pa fragan vad en giltig regel ar, och det andra svaret ar
+     * alltid det som glomms bort.
+     *
+     * `veckodag` ar FLERA VARDEN — kryssrutorna bar en var — och maste darfor
+     * kopieras med `getAll`/`append`. Ett `set` hade tystat alla utom den
+     * forsta, och en regel som skulle infalla mandag och torsdag hade blivit en
+     * regel om bara mandagar. Samma grepp som `focus_id` nedan, av samma skal.
+     */
+    for (const namn of ["upprepas", "monster", "serie_starts_on", "serie_ends_on"]) {
+      vidare.set(namn, text(form, namn));
+    }
+    for (const d of form.getAll("veckodag")) vidare.append("veckodag", String(d));
+
     if (typ === "uppgift") {
       /**
        * INGEN `assignee_id` OCH INGEN `till_inkorgen`. Utan båda lägger
@@ -123,6 +142,13 @@ export async function skapaKalenderpost(
       if (svar.fel) return { fel: svar.fel };
 
       revalidera();
+      /**
+       * EN SERIE FAR SITT EGET KVITTO. "Upplagd 2026-09-21." om en rutin som
+       * gav atta mandagar sager fel sak om det som hande — och det ar precis den
+       * skillnaden anvandaren behover se bekraftad. Uppgiftsmodulen har redan
+       * formulerat den (`skapaSerieinternt`), sa den skickas vidare orord.
+       */
+      if (svar.ok && text(form, "upprepas") === "ja") return { ok: svar.ok };
       return { ok: tid ? `Upplagd ${dag} ${tid}.` : `Upplagd ${dag}.` };
     }
 
