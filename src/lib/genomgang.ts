@@ -99,6 +99,32 @@ export const STEG_LEDTEXT: Record<Stegid, string> = {
     "Sex timmar är vad en arbetsdag rymmer när möten och avbrott räknats bort. En dag som redan är full på måndag blir inte tommare av att du lägger dit en sak till.",
 };
 
+/**
+ * Stegets namn när det står EFTER ETT TAL.
+ *
+ * "6 inkorgen" och "1 nästa vecka" är inte svenska. Rubrikerna ovan är
+ * substantiv som namnger en vy; de här är räkneord som beskriver rader, och det
+ * är två olika texter även när de handlar om samma sak.
+ *
+ * Används av kortet på `/uppgifter` och av posten i klockan — alltså av de två
+ * ställen där talen står utan sin rubrik och ändå måste gå att läsa i en
+ * mening. `antalstext()` nedan böjer efter ental och flertal.
+ */
+export const STEG_RAKNAT: Record<Stegid, [ental: string, flertal: string]> = {
+  forfallet: ["förfallen", "förfallna"],
+  utanDag: ["utan dag", "utan dag"],
+  vantar: ["väntar på svar", "väntar på svar"],
+  projekt: ["stannat projekt", "stannade projekt"],
+  nastaVecka: ["överbokad dag", "överbokade dagar"],
+};
+
+/** "3 förfallna · 6 utan dag · 1 stannat projekt". Tomma steg står inte med. */
+export function antalstext(antal: Stegantal): string {
+  return STEG.filter((id) => antal[id] > 0)
+    .map((id) => `${antal[id]} ${STEG_RAKNAT[id][antal[id] === 1 ? 0 : 1]}`)
+    .join(" · ");
+}
+
 /** Tomtexten när ett steg inte har något att visa. Beröm, inte tystnad. */
 export const STEG_TOMTEXT: Record<Stegid, string> = {
   forfallet: "Ingenting har förfallit. Det är ovanligt nog att vara värt att notera.",
@@ -291,6 +317,65 @@ export function nastaVeckansRader(
   return rader
     .filter((u) => u.assignee_id === mig && !arStangd(u.lage) && u.due_date && inom.has(u.due_date))
     .sort((a, b) => (a.due_date ?? "").localeCompare(b.due_date ?? "") || a.priority - b.priority);
+}
+
+export type Dagsblock = Dagslast & { rader: Genomgangsrad[] };
+
+/**
+ * Lasten och raderna PARADE PER DAG.
+ *
+ * =============================================================================
+ * EN DAG ÄR EN RAD, INTE EN STAPEL I ETT DIAGRAM
+ *
+ * Steget ritades först som sju lodräta staplar med uppgifterna i en platt lista
+ * under. Två saker var fel med det, och båda syntes först när det fanns riktig
+ * data i vyn:
+ *
+ *   1. STAPLARNA SVARADE PÅ FRÅGAN, LISTAN LÖSTE PROBLEMET, OCH DE STOD LÅNGT
+ *      IFRÅN VARANDRA. Man ser att torsdagen är överbokad, och måste sedan leta
+ *      i en lista på fjorton rader efter vad som ligger på torsdagen.
+ *
+ *   2. SJU KOLUMNER RYMS INTE I EN TELEFON. Etiketterna blev tre tecken breda
+ *      och talen under dem oläsliga — alltså precis den information steget
+ *      finns för.
+ *
+ * Med dagen som rad står lasten och sakerna som orsakar den på samma ställe,
+ * och man kan flytta en uppgift från den fulla dagen utan att först lista ut
+ * vilken den var. Funktionen finns här och inte i komponenten för att paret
+ * ska gå att prova utan en webbläsare.
+ * =============================================================================
+ */
+export function veckansDagsblock(
+  rader: readonly Genomgangsrad[],
+  mig: string,
+  dagar: readonly string[],
+): Dagsblock[] {
+  const per = new Map<string, Genomgangsrad[]>();
+  for (const u of nastaVeckansRader(rader, mig, dagar)) {
+    const lista = per.get(u.due_date as string);
+    if (lista) lista.push(u);
+    else per.set(u.due_date as string, [u]);
+  }
+
+  return veckolast(rader, mig, dagar).map((d) => ({ ...d, rader: per.get(d.dag) ?? [] }));
+}
+
+/**
+ * Hur hög stapeln ska ritas, i procent av dagstaket.
+ *
+ * KLIPPS VID 100 OCH INTE VID DEN FULLASTE DAGEN. En relativ skala hade gjort
+ * veckans värsta dag fullhög varje vecka — också en vecka med fyrtio minuter om
+ * dagen — och då säger bilden bara vilken dag som är värst, aldrig om någon dag
+ * är för full. Det är den andra frågan steget finns för.
+ *
+ * EN DAG MED NÅGOT PÅ SIG FÅR ALLTID MINST TVÅ PROCENT. Utan golvet ritas en
+ * tjugominutersdag som exakt ingenting, alltså likadant som en tom dag, och
+ * skillnaden mellan "inget planerat" och "något litet planerat" är hela poängen
+ * med att titta.
+ */
+export function stapelandel(last: Dagslast): number {
+  if (last.minuter <= 0) return 0;
+  return Math.max(2, Math.min(100, Math.round((last.minuter / last.tak) * 100)));
 }
 
 // -----------------------------------------------------------------------------

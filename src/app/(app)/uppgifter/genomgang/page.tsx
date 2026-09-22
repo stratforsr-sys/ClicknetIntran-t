@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Ikon } from "@/components/shell/Ikon";
 import { getCurrentUser } from "@/lib/auth";
 import { veckonummer } from "@/lib/kalender";
 import {
@@ -8,6 +9,7 @@ import {
   nastaVeckansNummer,
   senasttext,
   stegantal,
+  totaltAttGaIgenom,
   type Genomgangsprojekt,
   type Genomgangsrad,
 } from "@/lib/genomgang";
@@ -87,25 +89,37 @@ export default async function Genomgangssidan() {
   const lage = genomgangslage(idag, senaste);
   const antal = stegantal(rader, projekt, mig, idag);
 
+  const kvar = totaltAttGaIgenom(antal);
+
   return (
-    <div className="flex flex-col gap-6 pt-2">
+    <div className="flex flex-col gap-5 pt-2">
       <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1">
           <h1 className="text-display text-ink-900">Veckogenomgång</h1>
+          {/*
+            EN RAD SOM SÄGER TRE SAKER I ORDNING: vilken vecka, hur mycket som
+            väntar, och när den gjordes sist. Den mittersta är den man kom hit
+            för — därför står den i bläck och de andra i grått.
+          */}
           <p className="text-body text-ink-500">
-            Vecka {veckonummer(idag)} · {senasttext(lage)}
+            Vecka {veckonummer(idag)} ·{" "}
+            <span className={kvar === 0 ? "text-ok-ink" : "font-semibold text-ink-900"}>
+              {kvar === 0 ? "ingenting väntar" : `${kvar} att gå igenom`}
+            </span>{" "}
+            · {senasttext(lage).toLowerCase()}
             {kvitton[0] && lage.gjord
               ? kvitton[0].remaining === 0
-                ? " · allt avbetat"
-                : ` · ${kvitton[0].remaining} kvar`
+                ? " (allt avbetat)"
+                : ` (${kvitton[0].remaining} kvar)`
               : ""}
           </p>
         </div>
         <Link
           href="/uppgifter"
-          className="inline-flex items-center gap-2 rounded-full bg-canvas px-3 py-1.5 text-small text-ink-700 transition-colors duration-fast hover:bg-brand-100 hover:text-brand-700"
+          className="inline-flex shrink-0 items-center gap-2 rounded-full bg-canvas px-3 py-1.5 text-small text-ink-700 transition-colors duration-fast hover:bg-brand-100 hover:text-brand-700"
         >
-          Tillbaka till uppgifterna
+          <Ikon namn="tillbaka" className="size-4" />
+          Uppgifterna
         </Link>
       </header>
 

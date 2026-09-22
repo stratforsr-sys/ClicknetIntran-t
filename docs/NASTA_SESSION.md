@@ -76,6 +76,33 @@ meningen utskriven** — ett förval som delar utan att synas får man inte ha.
 Släpps den igenom är en privat mall hemlig till namnet och läsbar till
 innehållet, vilket är sämre än ingen spärr alls.
 
+### Formen är omritad en gång, och de fyra felen ska inte tillbaka
+
+Beställaren såg första previewen och sa att den fungerade men var svår att jobba
+i. Fyra saker rättades, och alla fyra är lätta att bygga in igen:
+
+1. **Stegen är en numrerad spalt, inte fem chips.** Fem likadana piller läses som
+   filterknappar, inte som en väg med ett slut. Siffran blir en bock när steget
+   är tomt — den enda återkopplingen i vyn som säger att man kommit någonstans.
+2. **Raden har ETT val, inte sju kontroller.** Dagvalen sitter i en gemensam
+   pilleryta med datumfältet som fjärde läge; "stryk" är ett grått kryss längst
+   ut. Fyrtiotvå träffytor i samma storlek är inte en genomgång, det är ett
+   kontrollrum.
+3. **Nästa vecka är sju RADER, inte sju staplar.** Lasten och uppgifterna som
+   orsakar den står på samma ställe, och sju kolumner ryms inte i en telefon.
+4. **Mallsidan ritar moment på ETT ställe.** Listan är hela gränssnittet;
+   "Använd" byter ut "dag 3" mot "fre 26 sep" i samma tidslinje man just läste.
+
+**Datumfältet ska vara SYNLIGT.** Ett utkast gömde det bakom en kalenderikon med
+`text-transparent`. Vilken yta som öppnar väljaren i ett `input[type=date]`
+skiljer sig mellan Chrome, Firefox och Safari — kontrollen hade fungerat på
+maskinen den ritades på och varit en oklickbar ikon någon annanstans.
+
+**`Ikon` tar bara `namn` och `className`.** Ett `aria-hidden` på anropet är ett
+typfel som fäller bygget; komponenten sätter det själv. Och bocken är
+`namn="kontroll"`, inte tecknet `✓` — ett skrivtecken renderas i systemets
+fallback-typsnitt.
+
 ### Öppet, och medvetet olöst
 
 - **En mall kan inte ändra det den redan fött.** Rättar du ett stavfel gäller

@@ -298,6 +298,21 @@
   to   { opacity: 1; }
 }
 
+/* 0066. Veckogenomgangens steg.
+
+   SEX PIXLAR OCH INGEN SKALA. Rorelsen finns for att ogat ska hitta tillbaka
+   till borjan av panelen nar innehallet byts under en rubrik som star still —
+   utan den ser ett stegbyte ut som att sidan hoppade. Den ska DARFOR vara
+   nastan omarklig: en genomgang klickas igenom fem ganger i rad, och en
+   animation man hinner se ar en animation man hinner trottna pa.
+
+   `motion-safe:` i komponenten gor att den som bett om mindre rorelse far
+   steget direkt — inte utan steg. */
+@keyframes steg-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* =============================================================================
    Utskrift (E9.1)
    =============================================================================

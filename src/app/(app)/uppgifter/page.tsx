@@ -16,8 +16,7 @@ import {
   type Uppgift,
 } from "@/lib/uppgifter-server";
 import {
-  STEG,
-  STEG_RUBRIK,
+  antalstext,
   genomgangslage,
   senasttext,
   stegantal,
@@ -331,30 +330,44 @@ function Genomgangskort({ lage, antal }: { lage: Genomgangslage; antal: Steganta
 
   if (!lage.dagsFor && !forstaGangen) return null;
 
-  const delar = STEG.filter((id) => antal[id] > 0).map(
-    (id) => `${antal[id]} ${STEG_RUBRIK[id].toLowerCase()}`,
-  );
+  const rader = antalstext(antal);
 
   return (
     <Link
       href="/uppgifter/genomgang"
-      className="lift group flex flex-wrap items-center justify-between gap-3 rounded-md bg-surface p-4 shadow-elev-1 transition-shadow duration-fast"
+      className="lift group flex flex-wrap items-center justify-between gap-x-4 gap-y-3 rounded-md bg-surface p-4 shadow-elev-1 transition-shadow duration-fast"
     >
-      <div className="min-w-0">
-        <h2 className="text-h2 text-ink-900 transition-colors duration-fast group-hover:text-brand-700">
-          Dags för veckogenomgång
-        </h2>
-        <p className="text-small text-ink-500">
-          {delar.length === 0
-            ? "Ingenting har glidit den här veckan — gå igenom och bokför den ändå, det tar en minut."
-            : delar.join(" · ")}
-        </p>
+      <div className="flex min-w-0 items-center gap-3">
+        {/*
+          TALET STÅR FÖRST OCH ÄR STORT. Kortet konkurrerar med sex flikar och
+          tre projektkort om uppmärksamheten en fredag eftermiddag, och det enda
+          som avgör om man klickar är hur mycket som väntar — inte rubriken.
+        */}
+        <span
+          aria-hidden
+          className={
+            "tnum grid size-11 shrink-0 place-items-center rounded-full text-h2 " +
+            (kvar === 0 ? "bg-ok-tint text-ok-ink" : "bg-brand-100 text-brand-700")
+          }
+        >
+          {kvar}
+        </span>
+        <div className="min-w-0">
+          <h2 className="text-h2 text-ink-900 transition-colors duration-fast group-hover:text-brand-700">
+            Dags för veckogenomgång
+          </h2>
+          <p className="text-small text-ink-500">
+            {rader === ""
+              ? "Ingenting har glidit den här veckan — bokför den ändå, det tar en minut."
+              : rader}
+          </p>
+        </div>
       </div>
       <div className="flex shrink-0 items-center gap-3">
         <span className="text-small text-ink-500">{senasttext(lage)}</span>
         <Ikon
-          namn="tillbaka"
-          className="size-4 rotate-180 text-ink-300 transition-colors duration-fast group-hover:text-brand-700"
+          namn="fram"
+          className="size-4 text-ink-300 transition-colors duration-fast group-hover:text-brand-700"
         />
       </div>
     </Link>

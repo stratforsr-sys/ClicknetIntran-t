@@ -19,8 +19,7 @@ import {
 } from "@/lib/uppgifter";
 import { tystadeForekomster } from "@/lib/upprepning";
 import {
-  STEG,
-  STEG_RUBRIK,
+  antalstext,
   genomgangslage,
   stegantal,
   totaltAttGaIgenom,
@@ -716,9 +715,7 @@ export async function uppgiftsnotiser(user: CurrentUser): Promise<Notis[]> {
         detalj:
           kvar === 0
             ? "Ingenting har glidit. Bokför veckan, det tar en minut."
-            : STEG.filter((id) => antal[id] > 0)
-                .map((id) => `${antal[id]} ${STEG_RUBRIK[id].toLowerCase()}`)
-                .join(" · "),
+            : antalstext(antal),
         href: "/uppgifter/genomgang",
         tidpunkt: nu,
         olast: true,

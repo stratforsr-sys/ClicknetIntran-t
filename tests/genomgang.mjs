@@ -21,10 +21,12 @@
 import {
   PAMINN_FRAN_VECKODAG,
   STEG,
+  STEG_RAKNAT,
   STEG_LEDTEXT,
   STEG_RUBRIK,
   STEG_TOMTEXT,
   STILLA_DAGAR,
+  antalstext,
   arSteg,
   foregaendeSteg,
   forfallet,
@@ -35,10 +37,12 @@ import {
   nastaVeckansRader,
   senasttext,
   stannadeProjekt,
+  stapelandel,
   stegantal,
   totaltAttGaIgenom,
   utanDag,
   vantar,
+  veckansDagsblock,
   veckolast,
 } from "../src/lib/genomgang.ts";
 import { veckodag } from "../src/lib/uppgifter.ts";
@@ -268,6 +272,34 @@ rubrik("Steg 5 — nasta vecka");
   const lista = nastaVeckansRader(rader, JAG, dagar);
   ok("raderna under stapeln ar bara mina och bara oppna", lista.length === 4, `fick ${lista.length}`);
   ok("sorterade pa dag", lista[0].due_date === dagar[0]);
+
+  // --- Dagen som rad, inte som stapel i ett diagram -------------------------
+  const block = veckansDagsblock(rader, JAG, dagar);
+
+  ok("ett block per dag", block.length === 7);
+  ok("mandagens rader hanger med mandagens last", block[0].rader.length === 2 && block[0].minuter === 420);
+  ok("tisdagen har tva rader", block[1].rader.length === 2);
+  ok("en tom dag har ett tomt block och forsvinner inte", block[2].rader.length === 0 && block[2].antal === 0);
+  /**
+   * SUMMAN AV BLOCKENS RADER ==. PLATTA LISTAN. Paret far inte tappa en rad,
+   * och det ar precis vad en gruppering pa fel nyckel gor — tyst, och bara for
+   * den dag som rakade sta utanfor.
+   */
+  ok(
+    "ingen rad forsvinner i grupperingen",
+    block.reduce((s, d) => s + d.rader.length, 0) === lista.length,
+  );
+
+  // --- Stapelns hojd --------------------------------------------------------
+  ok("en tom dag ritas som noll", stapelandel(block[2]) === 0);
+  ok("en overbokad dag klipps vid hundra", stapelandel(block[0]) === 100);
+  ok("en halv dag ar femtio procent", stapelandel({ minuter: 180, tak: DAGSTAK }) === 50);
+  /**
+   * GOLVET PA TVA PROCENT. Utan det ritas en tjugominutersdag som exakt
+   * ingenting — alltsa likadant som en tom dag — och skillnaden mellan "inget
+   * planerat" och "nagot litet planerat" ar hela poangen med att titta.
+   */
+  ok("en kort dag syns anda", stapelandel({ minuter: 5, tak: DAGSTAK }) === 2);
 }
 
 // -----------------------------------------------------------------------------
@@ -297,6 +329,27 @@ rubrik("Rakningen som bar kortet och klockan");
    */
   ok("nasta vecka: 1 overbokad DAG, inte 1 rad", antal.nastaVecka === 1);
   ok("summan ar fem", totaltAttGaIgenom(antal) === 5);
+
+  /**
+   * TEXTEN SOM STAR EFTER TALEN ar en egen strang och inte rubriken i gemener.
+   * "6 inkorgen" och "1 nasta vecka" ar inte svenska, och bada raderna gick ut
+   * i kortet pa /uppgifter OCH i klockan innan den har kontrollen fanns.
+   */
+  const text = antalstext(antal);
+  ok("raknetexten boejer ental", text.includes("1 förfallen"), text);
+  ok("och namner inte rubriken rakt av", !text.includes("Inkorgen") && !text.includes("Nästa vecka"), text);
+  ok("stannat projekt i ental", text.includes("1 stannat projekt"), text);
+  ok("overbokad dag i ental", text.includes("1 överbokad dag"), text);
+  ok("tomma steg star inte med", antalstext({ ...antal, vantar: 0 }).includes("väntar") === false);
+  ok("allt tomt ger tom strang", antalstext({ forfallet: 0, utanDag: 0, vantar: 0, projekt: 0, nastaVecka: 0 }) === "");
+
+  const flera = antalstext({ forfallet: 3, utanDag: 0, vantar: 0, projekt: 2, nastaVecka: 2 });
+  ok("flertal boejs", flera === "3 förfallna · 2 stannade projekt · 2 överbokade dagar", flera);
+
+  ok(
+    "varje steg har bade ental och flertal",
+    STEG.every((s) => STEG_RAKNAT[s].length === 2 && STEG_RAKNAT[s].every((x) => x.length > 0)),
+  );
 }
 
 // -----------------------------------------------------------------------------

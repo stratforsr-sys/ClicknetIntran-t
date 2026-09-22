@@ -196,11 +196,73 @@ order kan argumenteras behöva höra samtalet som ledde till den. Men provet och
 policyn säger emot varandra, och en av dem har fel. Provet rörs inte förrän
 frågan är ställd; samma regel som gäller läckprovets undantag i `sidor.mjs`.
 
+### Designen gjordes om efter genomgången, och det var rätt
+
+Beställaren såg previewen och sa att den fungerade men var svår att jobba i.
+Hon hade rätt på fyra punkter, och de är värda att skriva ut eftersom de är lätta
+att bygga in igen:
+
+**1. FEM CHIPS ÄR INTE EN VÄG.** Stegen låg som en rad piller ovanför
+innehållet. Fem likadana piller läses som filterknappar, inte som något med en
+början och ett slut — och en genomgång som inte ser ut att ta slut är en
+genomgång man överger. Nu är de en numrerad spalt till vänster, och **siffran
+blir en bock när steget är tomt.** Det är den enda återkopplingen i hela vyn som
+säger att man kommit någonstans, och den kostade ett tecken.
+
+**2. VARJE RAD BAR SJU KONTROLLER.** Tre dagknappar, ett datumfält, en
+flyttaknapp, "ta den själv" och "stryk" — gånger sex rader blev fyrtiotvå
+träffytor i samma storlek och färg. Nu sitter dagvalen i **en gemensam pilleryta
+med datumfältet som fjärde läge**, så ögat läser dem som ETT val med fyra
+alternativ. "Stryk" är ett grått kryss längst ut som färgas först vid hovring:
+att stryka är det ovanliga svaret och ska inte ha samma vikt som dagvalet.
+
+**3. SJU LODRÄTA STAPLAR SVARADE PÅ FRÅGAN LÅNGT FRÅN DÄR MAN LÖSTE DEN.** Man
+såg att torsdagen var överbokad och fick sedan leta i fjorton rader efter vad som
+låg på torsdagen. Och sju kolumner ryms inte i en telefon — etiketterna blev tre
+tecken breda och talen oläsliga, alltså precis den information steget finns för.
+Nu är **dagen en rad**: namn, stapel, timmar, och uppgifterna indragna under sin
+egen dag med samma dagväljare. Man kan flytta något bort från den fulla dagen
+utan att först räkna ut vilket det var.
+
+**4. MALLSIDAN RITADE SAMMA MOMENT TVÅ GÅNGER.** Ett kort överst med en
+rullgardin, och en lista med samma mallar under. Man valde alltså mall på NAMNET
+medan innehållet stod någon annanstans. Nu är listan hela gränssnittet: "Använd"
+fäller ut startdagen under just den mallen, och **samma tidslinje man just läste
+byter ut "dag 3" mot "fre 26 sep"**. Förhandsbilden är inte en andra vy utan
+samma vy, upplyst — och det finns bara ett ställe i modulen som ritar moment.
+
+Mallformuläret fick dessutom **tolkning medan man skriver**, som snabbraden på
+`/uppgifter`. Fem fält skilda med lodstreck säger ingenting förrän man provat;
+nu står raderna tolkade bredvid rutan, felet pekar ut sin rad, och spara-knappen
+är låst tills texten går att läsa.
+
+**Ett utkast ströks under omritningen och är värt en rad.** Datumfältet gömdes
+först bakom en kalenderikon med `text-transparent` och en bortgömd
+`::-webkit-calendar-picker-indicator`. Det såg prydligare ut och var fel: vilken
+yta som faktiskt öppnar väljaren i ett `input[type=date]` skiljer sig mellan
+Chrome, Firefox och Safari, så kontrollen hade fungerat på maskinen den ritades
+på och varit en oklickbar ikon någon annanstans. **En fjärde dag man inte kan
+välja är värre än ingen fjärde dag.**
+
+Bocken i stegspalten är `Ikon namn="kontroll"` och inte tecknet `✓`, av samma
+sort skäl: ett skrivtecken renderas i systemets fallback-typsnitt och ser ut som
+ett annat märke i varje webbläsare.
+
+`Ikon` tar förresten **bara `namn` och `className`** — ett `aria-hidden` på
+anropet är ett typfel som fäller bygget, och komponenten sätter det själv.
+
 ### Proven
 
 `tests/genomgang.mjs` och `tests/mallar.mjs` är nya, båda utan databas. De två
 kontroller som bär dem: *"en genomgång gjord på måndagen gäller den vecka den
 gällde"* och *"momenten överlever rundturen oförändrade"*.
+
+Omritningen la till kontroller för `veckansDagsblock()` (ingen rad får försvinna
+i grupperingen per dag), `stapelandel()` (golvet på två procent, så att en
+tjugominutersdag inte ritas som en tom dag) och `antalstext()` — den sista för
+att "6 inkorgen" och "1 nästa vecka" gick ut i både kortet och klockan innan
+någon läste dem högt. Rubriken namnger en vy; texten efter ett tal är ett annat
+ord, och nu finns båda.
 
 `tests/rls.mjs` fick ett avsnitt på nio kontroller över de tre nya tabellerna.
 `tests/notiser-tackning.mjs` fick fem rader, och mutationsprovades — en
