@@ -14,6 +14,71 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "veckogenomgang-och-uppgiftsmallar",
+    rubrik: "Veckogenomgång på fredagar — och mallar för det du gör om igen",
+    ingress:
+      "Två saker i uppgifterna: en genomgång i fem steg som tar en kvart på fredagen, och checklistor som blir riktiga uppgifter med rätt datum.",
+    text: `Två saker som hör ihop. Den ena städar veckan som var, den andra gör att
+nästa vecka inte behöver byggas från början.
+
+## Veckogenomgång
+
+**På fredagen dyker det upp ett kort på uppgiftssidan** och en rad i klockan.
+Den leder till en genomgång i fem steg, och hela poängen är att den tar slut.
+
+1. **Förfallet** — det vars frist gått ut. Flytta till en dag eller stryk, på
+   raden.
+2. **Inkorgen** — allt du skrivit ner utan att ge det en dag. En uppgift med ett
+   utskrivet NÄR blir gjord ungefär dubbelt så ofta som en utan; det här steget
+   finns bara för att göra det.
+3. **Väntar på andra** — det du lämnat ifrån dig som stått still i tre dygn
+   eller mer. Du kan skriva en påminnelse direkt i listan; den hamnar i
+   uppgiftens tråd så att både du och mottagaren ser den efteråt.
+4. **Projekt som stannat** — projekt utan en enda öppen uppgift. Antingen
+   färdiga eller glömda, och båda kräver att någon säger det.
+5. **Nästa vecka** — hur många timmar som redan ligger på varje dag. Sex timmar
+   är taket; en dag över det ritas i varningsfärg.
+
+**Du kan bokföra genomgången även om något står kvar.** Kvittot säger hur
+mycket — "3 kvar" är ett val, och något helt annat än att inte ha gjort den.
+Kortet slocknar så fort veckan är bokförd och kommer tillbaka nästa fredag.
+
+**Ingen annan ser din genomgång.** Inte din chef heller. En lista över vilka i
+laget som betat av sin vecka hade gjort det här till något man gör för att det
+mäts, och då slutar det fungera.
+
+## Mallar
+
+Under **Uppgifter → Mallar** skriver du en checklista en gång och använder den
+hur många gånger som helst. En mall är rader med dagar:
+
+    Välkomstsamtal | 0 | 30 | 09:00 | 2
+    Skicka avtalet | 1 | 15
+    Stäm av att avtalet kom fram | 3
+    Uppföljning efter första veckan | 7 | 30
+
+Rubrik, dagar efter start, minuter, klockslag, prioritet. **Bara rubriken
+krävs** — "Ring kunden" är en fullt giltig rad.
+
+**Du väljer mall och en startdag, och får riktiga uppgifter** — inte en
+påminnelse om att göra dem. Datumen räknas från startdagen, så samma mall
+fungerar för kunden som börjar i mars och för den som lades upp i efterhand.
+Innan du trycker står varje datum utskrivet, så en rad som råkat hamna på dag
+365 syns innan den hamnar i någons lista.
+
+Uppgifterna som skapas är vanliga uppgifter: de går att ändra, flytta, bocka av
+och koppla som alla andra. Ändrar du mallen efteråt rör det inte det som redan
+skapats.
+
+**Mallar är delade som förval** — kryssrutan står framme när du sparar, och du
+kan kryssa ur den om checklistan bara är din.
+
+**Lägger du en mall på en kollega får hen ett besked**, men ett och inte sex.`,
+    datum: "2026-09-22",
+    roller: [],
+    href: "/uppgifter/genomgang",
+  },
+  {
     slug: "utbildning-slapp-inte-kunden",
     rubrik: "Ny utbildning: släpp inte kunden för tidigt",
     ingress:

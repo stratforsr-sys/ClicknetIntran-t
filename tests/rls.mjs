@@ -2680,6 +2680,104 @@ console.log("\n\x1b[1mProjektchatten: projektets krets, och ingen annan\x1b[0m")
   await db.query(`delete from project where name = 'rlstest-chatt'`);
 }
 
+console.log("\n\x1b[1mMallar och veckogenomgang: en delad plan och ett privat kvitto\x1b[0m");
+{
+  /**
+   * ===========================================================================
+   * TVA TABELLER MED MOTSATTA REGLER, OCH DET AR HELA AVSNITTET
+   *
+   * `task_template` ar det ENDA i uppgiftsmodulen som ar avsiktligt synligt for
+   * andra an kretsen. Motiveringen star i 0066: en mall ar en
+   * arbetsbeskrivning, inte en anteckning. Kryssrutan `shared` ar darfor den
+   * enda sparren, och gar den sonder lacker ingens uppgifter — men val nagons
+   * privata checklista, och den kan heta "Sluta pa Clicknet".
+   *
+   * `weekly_review` ar tvartom det SNAVASTE i hela modulen: bara jag sjalv, och
+   * uttryckligen inte min chef. En lista over vilka i laget som betat av sin
+   * vecka hade gjort genomgangen till en narvarolista i stallet for ett
+   * verktyg. Faller den kontrollen har nagon lagt till `leads_employee()` i
+   * policyn, och da ar funktionen inte langre vard att anvanda.
+   * ===========================================================================
+   */
+  const { rows: [delad] } = await db.query(
+    `insert into task_template (name, created_by, shared) values ('rlstest-delad', $1::uuid, true) returning id`,
+    [chef.id],
+  );
+  const { rows: [privat] } = await db.query(
+    `insert into task_template (name, created_by, shared) values ('rlstest-privat', $1::uuid, false) returning id`,
+    [chef.id],
+  );
+  await db.query(
+    `insert into task_template_item (template_id, sort, title) values ($1::uuid, 1, 'rlstest moment')`,
+    [privat.id],
+  );
+
+  ok("Anna ser den delade mallen", (await las(tA, "task_template", `id=eq.${delad.id}&select=*`)).length === 1);
+  ok(
+    "Anna ser INTE Davids privata mall",
+    (await las(tA, "task_template", `id=eq.${privat.id}&select=*`)).length === 0,
+  );
+  ok(
+    "inte heller Cecilia, trots att hon ar teamledare",
+    (await las(tC, "task_template", `id=eq.${privat.id}&select=*`)).length === 0,
+  );
+  ok("David ser sin egen privata mall", (await las(tD, "task_template", `id=eq.${privat.id}&select=*`)).length === 1);
+
+  /**
+   * MOMENTET ARVER MALLENS KRETS, och det ar den kontroll som ar vard mest.
+   * Policyn pa `task_template_item` ar en `exists` mot `task_template`, alltsa
+   * ett arv och ingen egen regel. Slapptes den igenom hade en privat mall varit
+   * hemlig till namnet och lasbar till innehallet — vilket ar samre an ingen
+   * sparr alls, eftersom den ser ut att finnas.
+   */
+  ok(
+    "och momenten i den privata mallen foljer med in i morkret",
+    (await las(tA, "task_template_item", `template_id=eq.${privat.id}&select=*`)).length === 0,
+  );
+  ok(
+    "medan agaren ser sina moment",
+    (await las(tD, "task_template_item", `template_id=eq.${privat.id}&select=*`)).length === 1,
+  );
+
+  // Skrivvagen gar via server action, som allt annat i modulen.
+  const smyg = await fetch(`${URL}/rest/v1/task_template`, {
+    method: "POST", headers: som(tA),
+    body: JSON.stringify({ name: "rlstest smugen", created_by: saljareA.id }),
+  });
+  ok("ingen skriver en mall direkt mot API:t", !smyg.ok, `HTTP ${smyg.status}`);
+
+  // --- Genomgangen -----------------------------------------------------------
+
+  await db.query(
+    `insert into weekly_review (employee_id, week_start, remaining) values ($1::uuid, '2026-09-21', 0)`,
+    [saljareA.id],
+  );
+
+  ok(
+    "Anna ser sitt eget kvitto",
+    (await las(tA, "weekly_review", `employee_id=eq.${saljareA.id}&select=*`)).length === 1,
+  );
+  ok(
+    "Cecilia ser det INTE, trots att hon ar Annas chef",
+    (await las(tC, "weekly_review", `employee_id=eq.${saljareA.id}&select=*`)).length === 0,
+  );
+  ok(
+    "och inte saljchefen heller",
+    (await las(tD, "weekly_review", `employee_id=eq.${saljareA.id}&select=*`)).length === 0,
+  );
+  ok("en oberord kollega ser ingenting", (await las(tB, "weekly_review")).length === 0);
+
+  // En genomgang per person och vecka. Databasen sager nej, inte granssnittet.
+  const tva = await nekarSql(
+    `insert into weekly_review (employee_id, week_start) values ($1::uuid, '2026-09-21')`,
+    [saljareA.id],
+  );
+  ok("tva kvitton for samma vecka nekas av databasen", Boolean(tva), tva ?? "slapptes igenom");
+
+  await db.query(`delete from weekly_review where employee_id = $1::uuid`, [saljareA.id]);
+  await db.query(`delete from task_template where name like 'rlstest-%'`);
+}
+
 console.log("\n\x1b[1mKalenderdelningen: grundlaget, projektionen och den enda dorren in\x1b[0m");
 {
   /**

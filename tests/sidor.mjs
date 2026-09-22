@@ -71,6 +71,13 @@ const SIDOR = [
   // en av fa som renderar EN ANNAN PERSONS namn ("Anna la uppgiften pa dig"),
   // och det ar precis sadana sidor lackprovet finns for.
   "/uppgifter",
+  // 0066. Genomgangen renderar samma rader som `/uppgifter` men OCKSA
+  // kollegornas namn i steg tre ("Hos Anna sedan 6 dagar"), vilket gor den till
+  // precis en sadan sida provet finns for. Mallsidan star med av ett annat
+  // skal: dess personvaljare listar alla man far se, och en valjare som rymmer
+  // for manga ar den vanligaste formen av lackage.
+  "/uppgifter/genomgang",
+  "/uppgifter/mallar",
   // Kalendern (0057). Utan parameter ar det den egna dagen. Att prova den med
   // `?person=` gar inte har — id:t skiljer sig mellan korningar — sa kollegans
   // vy provas i rls.mjs i stallet, dar den hor hemma.

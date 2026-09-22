@@ -109,6 +109,32 @@ const TACKNING = {
     "Den som tagits bort ur ett projekt ska inte fa en notis om en sida hon inte langre kommer at.",
 
   // ---------------------------------------------------------------------------
+  // Veckogenomgangen och mallarna (0066)
+  //
+  // FEM NYA ACTIONS, OCH BARA EN AV DEM ROR EN ANNAN MANNISKA.
+  //
+  // Genomgangen sjalv lanar alla sina handlingar av modulen ovan — `planera`,
+  // `tilldela`, `avbryt` och `kommentera` — sa den enda egna skrivningen ar
+  // kvittot pa att veckan ar betad. Mallarna ar arbetsbeskrivningar, och ingen
+  // far nagot av att en sadan skrivs eller andras.
+  //
+  // `anvandUppgiftsmall` ar undantaget: den KAN lagga sex uppgifter pa nagon
+  // annan, och da ska den personen fa veta det. Posten ar harledd, som all
+  // tilldelning i modulen, och slas ihop till EN rad per mall — se
+  // `uppgiftsnotiser()`. Sex rader i klockan for ett klick ar en notisfabrik,
+  // och det ar samma fella som upprepningen fick tysta i 0062.
+  // ---------------------------------------------------------------------------
+  "uppgifter/genomgang::slutforGenomgang":
+    "Ett kvitto pa att JAG betat av min vecka. Ingen annan ser raden — policyn i 0066 slapper bara fram den egna — och en notis till mig sjalv om nagot jag nyss gjorde ar brus.",
+  "uppgifter/mallar::skapaUppgiftsmall":
+    "En mall ar en arbetsbeskrivning, inte en handelse om en person. Ingen har fatt nagot.",
+  "uppgifter/mallar::andraUppgiftsmall":
+    "Andringen ror inte de uppgifter mallen redan fott. Den som har en rad ur en gammal version marker ingen skillnad, och ska inte heller gora det.",
+  "uppgifter/mallar::arkiveraUppgiftsmall":
+    "En undanlagd mall gar inte att anvanda. Den beror ingen forran nagon letar efter den, och da star den i listan over arkiverade.",
+  "uppgifter/mallar::anvandUppgiftsmall": "harledd",
+
+  // ---------------------------------------------------------------------------
   // Kalendern (0057, 0058)
   //
   // TVA MUTERANDE ACTIONS I HELA MODULEN, och ingen av dem skriver en egen post.
