@@ -90,7 +90,7 @@ export function Intyg({
         andamal="sick_certificate"
         etikett={filer.length === 0 ? "Lämna in intyget" : "Lämna in ett till"}
         forbered={(namn, mime, byte) => forberedIntyg(rapportId, namn, mime, byte)}
-        registrera={(fileId, namn) => registreraIntyg(rapportId, fileId, namn)}
+        registrera={(fileId, namn, store) => registreraIntyg(rapportId, fileId, namn, store)}
       />
 
       <p className="mt-2 text-micro text-ink-500">

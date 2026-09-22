@@ -19,6 +19,7 @@ import {
   type Lage,
 } from "@/lib/uppgifter";
 import { hamtaUppgift } from "@/lib/uppgifter-server";
+import { serietext, type Monster } from "@/lib/upprepning";
 import { Bock } from "../Bock";
 import { Egenskaper } from "./Egenskaper";
 import { Handlingar, Inbjudan, Kopplingsformular, Deluppgift } from "./Handlingar";
@@ -83,6 +84,47 @@ export default async function Uppgiftssida({ params }: { params: Promise<{ id: s
 
   const idag = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm" }).format(new Date());
   const mittProjekt = projekt.find((p) => p.id === u.project_id) ?? null;
+
+  /**
+   * 0062. Rutinen bakom raden.
+   *
+   * EN EXTRA FRÅGA, OCH BARA FÖR DEN SOM FAKTISKT HÖR TILL EN SERIE. De allra
+   * flesta uppgifter är engångshändelser och `u.series_id` är null för dem —
+   * då ställs frågan aldrig, och sidan kostar exakt vad den kostade förut.
+   *
+   * LÄSES MED ANVÄNDARENS EGEN TOKEN. `task_series_read` i 0062 släpper fram
+   * den ansvariga och den som la upp regeln. Den som bjudits in i EN förekomst
+   * får alltså null tillbaka och ser ingen serietext — vilket är rätt: hon har
+   * fått se fredagens genomgång, inte beskedet att den återkommer till jul.
+   */
+  let serie: { text: string; losgjord: boolean; avslutad: boolean } | null = null;
+  if (u.series_id) {
+    const { data: regel } = await (await supabaseServer())
+      .from("task_series")
+      .select("monster, veckodagar, starts_on, ends_on, ended_at")
+      .eq("id", u.series_id)
+      .maybeSingle();
+
+    if (regel) {
+      const r = regel as {
+        monster: Monster;
+        veckodagar: number[] | null;
+        starts_on: string;
+        ends_on: string | null;
+        ended_at: string | null;
+      };
+      serie = {
+        text: serietext({
+          monster: r.monster,
+          veckodagar: r.veckodagar ?? [],
+          starts_on: r.starts_on,
+          ends_on: r.ends_on,
+        }),
+        losgjord: u.series_losgjord,
+        avslutad: r.ended_at !== null,
+      };
+    }
+  }
 
   // Väljarna läser med ANVÄNDARENS EGEN TOKEN och följer alltså
   // `employee_read` — se rubriken vid `namnkarta()` i uppgifter-server.ts.
@@ -180,6 +222,7 @@ export default async function Uppgiftssida({ params }: { params: Promise<{ id: s
             projekt={projekt.filter((p) => !p.archived_at).map((p) => ({ id: p.id, namn: p.name }))}
             idag={idag}
             kanAndra={redigerar}
+            serie={serie}
           />
 
           {/* NÄSTA STEG I EN MENING, före knapparna. Den som landar här mitt i

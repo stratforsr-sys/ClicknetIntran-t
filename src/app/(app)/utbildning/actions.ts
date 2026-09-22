@@ -660,6 +660,7 @@ export async function registreraRollspel(
   modulId: string,
   fileId: string,
   filnamn: string,
+  store: string,
 ): Promise<KursState> {
   const user = await getCurrentUser();
   if (!user?.employee) return { fel: "Du måste vara inloggad." };
@@ -678,6 +679,7 @@ export async function registreraRollspel(
     fileId,
     andamal: "roleplay",
     filnamn,
+    store,
     uploadedBy: user.employee.id,
     subjectEmployeeId: user.employee.id,
   });

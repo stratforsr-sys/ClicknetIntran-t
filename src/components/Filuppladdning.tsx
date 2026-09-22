@@ -48,9 +48,17 @@ export function Filuppladdning({
     filnamn: string,
     mimetyp: string,
     storlek: number,
-  ) => Promise<{ fileId: string; path: string; token: string } | { fel: string }>;
-  /** Server action. Skriver raden efter att filen kommit fram. */
-  registrera: (fileId: string, filnamn: string) => Promise<{ fel?: string }>;
+  ) => Promise<
+    | { fileId: string; store: string; bucket: string; path: string; token: string; url: string }
+    | { fel: string }
+  >;
+  /**
+   * Server action. Skriver raden efter att filen kommit fram.
+   *
+   * `store` foljer med tillbaka for att steg 3 ska leta dar steg 1 faktiskt
+   * lade filen — inte dar en ny fil hade hamnat om en deploy hunnit emellan.
+   */
+  registrera: (fileId: string, filnamn: string, store: string) => Promise<{ fel?: string }>;
   knapp?: string;
 }) {
   const falt = useRef<HTMLInputElement>(null);
@@ -86,16 +94,42 @@ export function Filuppladdning({
         return;
       }
 
-      const { error } = await supabaseBrowser()
-        .storage.from("filer")
-        .uploadToSignedUrl(lank.path, lank.token, fil, { contentType: fil.type });
+      // =================================================================
+      // TVÅ LAGRINGAR, TVÅ SÄTT ATT LÄGGA IN EN FIL
+      //
+      // R2 ger en färdig PUT-adress: en vanlig `fetch` räcker, och det är
+      // webbläsaren själv som skickar bytena till Cloudflare. Supabase ger en
+      // token som bara dess egen klient förstår.
+      //
+      // Vilket det blir säger `lank.store`, och det kommer från servern — inte
+      // från en inställning här. Servern vet vilken väg den faktiskt öppnade,
+      // och det är den vägen filen måste gå.
+      //
+      // Gamla filer berörs inte: det här handlar bara om vart NÄSTA fil läggs.
+      // =================================================================
+      if (lank.store === "r2") {
+        const svar = await fetch(lank.url, {
+          method: "PUT",
+          body: fil,
+          headers: { "content-type": fil.type },
+        });
 
-      if (error) {
-        setFel(`Filen kom inte fram: ${error.message}`);
-        return;
+        if (!svar.ok) {
+          setFel(`Filen kom inte fram: lagringen svarade ${svar.status}.`);
+          return;
+        }
+      } else {
+        const { error } = await supabaseBrowser()
+          .storage.from(lank.bucket)
+          .uploadToSignedUrl(lank.path, lank.token, fil, { contentType: fil.type });
+
+        if (error) {
+          setFel(`Filen kom inte fram: ${error.message}`);
+          return;
+        }
       }
 
-      const svar = await registrera(lank.fileId, fil.name);
+      const svar = await registrera(lank.fileId, fil.name, lank.store);
       if (svar.fel) {
         setFel(svar.fel);
         return;

@@ -73,6 +73,12 @@ const TACKNING = {
   "uppgifter::andraUppgift":
     "En andrad rubrik eller frist ar inget besked. Ar den forsenad sager den harledda posten till anda.",
   "uppgifter::tilldela": "notifierar",
+  // 0062. Att stanga av en rutin beror bara den som ager den, och hon star
+  // framfor knappen nar hon gor det. De ororda framtida forekomsterna som tas
+  // bort har ingen hunnit se — de fodde sig sjalva i natt. Hade de varit
+  // paborjade hade de statt kvar, och DA hade det varit ett besked.
+  "uppgifter::avslutaSerie":
+    "Den som avslutar rutinen ager den och star framfor knappen. De borttagna forekomsterna var oroerda.",
   "uppgifter::planera":
     "Ett flyttat datum syns i listan och i morgonbrevet. En notis per omplanering hade gjort planeringen dyr.",
   "uppgifter::paborja":

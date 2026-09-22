@@ -5,6 +5,235 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-21 (senare) · Allt annat följer efter — och en databas följer inte med
+
+Beställaren, efter frågan om allt nu går till Cloudflare: *"jag vill att du
+lägger upp så att allting lagras in cloudflare, inte bara inspelningar, så att
+det 100% blir primära databasen."*
+
+Två saker i samma mening, och de fick olika svar.
+
+### Filerna: ja. Tabellerna: nej.
+
+**R2 är objektlagring, inte en databas.** Den lagrar filer. Cloudflares databas
+heter D1 och är SQLite. Att flytta Navs Postgres dit hade betytt att bygga om
+applikationen, inte att flytta den:
+
+- **RLS är hela säkerhetsmodellen.** `tests/rls.mjs` loggar in som fyra roller
+  och mäter vad de faktiskt får ut. SQLite har ingen radnivåsäkerhet — varje
+  policy hade blivit ett villkor i koden, alltså exakt den sortens andra svar
+  på samma fråga som glider isär.
+- **`pg_cron` kör dagtidsjobbet** eftersom Vercels två cron-poster är slut
+  (0059). **`pg_net`** ringer ut. **Vault** håller `cron_secret`.
+- **Supabase Auth** sköter inloggning och sessioner.
+- 65 migrationer Postgres-SQL, en genererad kolumn i 0056, triggrar.
+
+Och framför allt: **databasen är 41 MB av 500.** Det finns inget problem där.
+
+Därför flyttade filerna, alla sex ändamålen, och tabellerna står kvar.
+
+### Vad som var kvar att göra
+
+Efter första passet gick bara inspelningarna till R2. De fem andra ändamålen —
+läkarintyg, dokumentbilagor, rollspel, orderbilagor, coachning — gick
+fortfarande till Supabase, och de gör det på en **helt annan väg**:
+webbläsaren laddar upp direkt till lagringen, eftersom Vercel bara tar emot
+4,5 MB i kroppen till en serverfunktion och ett rollspel får vara 40 MB.
+
+| Del | Var |
+|---|---|
+| `lagerForNyInspelning` → `lagerForNyFil` | `src/lib/lagring.ts` |
+| Signerad PUT, HeadObject, GetObject | `signeraUppladdning`, `huvudUppgifter`, `las` i `lagring-server.ts` |
+| Steg 1 och steg 3 | `forberedUppladdning`, `registreraFil` i `filer-server.ts` |
+| Webbläsarens två vägar | `src/components/Filuppladdning.tsx` |
+| Fyra server actions + fyra komponenter | `order`, `rutiner`, `franvaro`, `utbildning` |
+| PDF-textutvinningen | `order/actions.ts`, `rutiner/actions.ts` |
+
+### DET SOM ÄR VÄRT ATT VETA INNAN NÅGON RÖR DET HÄR
+
+**CORS PÅ BUCKETEN ÄR INTE VALFRITT, OCH FELET ÄR ELAKT.** Webbläsaren skickar
+en preflight före sin PUT. Svarar bucketen inte att avsändaren får skriva
+vägrar webbläsaren **tyst** — servern svarar fint, adressen ser riktig ut, och
+det enda spåret är ett CORS-fel i konsolen som aldrig når användaren. Reglerna
+sattes 2026-09-21 och släpper in `https://clicknet-nav.vercel.app` och
+`https://*.vercel.app`, metoderna GET, PUT och HEAD. **En ny bucket behöver
+samma sak.**
+
+**BUCKETNAMNET TAS INTE EMOT FRÅN WEBBLÄSAREN.** `registreraFil` tar bara
+`store`, och räknar fram bucketen ur den. Ett fritt bucketnamn från klienten
+hade låtit vem som helst peka registreringen mot vilken bucket som helst i
+kontot. `tolkaLager()` släpper bara igenom två värden.
+
+**`store` FÖLJER MED FRÅN STEG 1 TILL STEG 3, och läses inte ur miljön där.**
+Mellan de två stegen kan en deploy ha bytt inställning. Filen ligger då där den
+lades, inte där en ny fil hade hamnat.
+
+**UPPLADDNINGSLÄNKEN LEVER FEM MINUTER, INTE TRETTIO SEKUNDER.** En 40 MB stor
+rollspelsfil på ett dåligt kontorsnät tar längre tid än så att skicka, och
+signaturen måste leva hela vägen genom uppladdningen — inte bara fram till dess
+början.
+
+**GLÖM INTE DE TVÅ SOM LADDAR NER PDF:ER.** `order/actions.ts` och
+`rutiner/actions.ts` hämtade hem bilagor direkt ur Supabase för att läsa ut
+texten. Lämnade de stå hade varje ny bilaga tappat sin sökbara text — och ett
+dokument utan text ser ut som en tom PDF, inte som ett fel.
+
+### Öppna punkter
+
+- **Ingen människa har laddat upp en fil genom gränssnittet än.** Lagringsledet
+  är bevisat: preflight 204, PUT 200, innehållet identiskt, content-type
+  bevarad. Men själva knappen i Nav är inte tryckt. Första riktiga
+  uppladdningen av varje sort är värd att göra för hand.
+- **Navnyheten `inspelningarna-har-flyttat` är omskriven, inte ersatt.**
+  Sluggen är orörd — den bär avfärdningen — men texten sa "inget annat har
+  flyttat", vilket blev osant samma dag. Den som redan avfärdat posten ser inte
+  rättelsen.
+- **`coaching` har ännu ingen uppladdningsväg.** Ändamålet finns i
+  check-villkoret men ingen `forberedUppladdning` anropar det. Byggs den går
+  den samma väg som de andra utan extra arbete.
+- **Databasen står kvar i Supabase, och det är rätt.** 41 MB av 500.
+
+---
+
+## 2026-09-21 · Lagringen tog slut, och det var inte databasen
+
+Beställaren: *"vi har nått gränsen för supabase och vi behöver mer gb, men jag
+vill inte betala än för databas, kan vi också använda 1 till databas för all
+lagring utanför det som redan finns i supabase."*
+
+Frågan förutsatte att databasen var full. Det var den inte, och passet blev ett
+annat än det beställda.
+
+### Vad mätningen sa
+
+| | Använt | Fri gräns | |
+|---|---|---|---|
+| Databas | **39 MB** | 500 MB | 8 % |
+| Fillagring | **1 529 MB** | 1 024 MB | **149 %** |
+
+Hela `public` är 21 MB, och de största tabellerna är `phone_call` (6,5 MB) och
+`call_ingest` (6,2 MB). Med nuvarande takt räcker 500 MB i flera år.
+
+Fillagringen däremot: **1 693 filer, varenda en `audio/mpeg`, varenda en i
+`call_recording/`.** Inga läkarintyg, inga orderbilagor, inga dokumentbilagor —
+de tillsammans är noll byte. Snittet är 925 kB per samtal och takten 218 MB per
+arbetsdag.
+
+Gallringen på 30 dygn (0056) är byggd och körs i nattjobbet, så det planar ut.
+Men första gallringen är 13 oktober, och den planar ut vid ungefär **5 GB** —
+alltså på fel sida om gränsen. Att vänta löser ingenting.
+
+### Varför det INTE blev en databas till
+
+Att dela tabellerna över två databaser hade kostat RLS, främmande nycklar och
+joins, och löst noll — databasen har 461 MB ledigt. Det som behövde flytta var
+ljudet, och bara ljudet.
+
+Valet blev **Cloudflare R2**: 10 GB fritt mot 5 GB i jämvikt, och ingen
+avgift för uttrafik. Det sista är inte en detalj — ett samtal på fyrtiofyra
+minuter hämtas i sin helhet varje gång någon lyssnar, och Supabases fria plan
+ger 5 GB uttrafik i månaden. Ett andra Supabase-projekt (fria planen tillåter
+två) hade gett 1 GB till, alltså **fem arbetsdagar**, och två projekt att hålla
+reda på i stället för ett.
+
+Bucketen skapas med **EU-jurisdiktion**. Inspelningar är personuppgifter, och
+`eu-north-1` valdes för Supabase med K23 som skäl; en ny lagring får inte bli
+vägen runt det kravet. Jurisdiktionen går inte att ändra i efterhand.
+
+### Ändringen är en kolumn, inte en ombyggnad
+
+`file_object` var redan enda vägen till innehållet i en fil: raden bär `bucket`
+och `path`, och både signeringen och gallringen går genom den. Det enda som
+saknades var svaret på **vilken lagring** bucketen ska slås upp i.
+
+`store text not null default 'supabase'` (0065), och därmed:
+
+| Vad | Var |
+|---|---|
+| Migrationen | `supabase/migrations/0065_lagring_utanfor_supabase.sql` |
+| Valet mellan lagringarna (rent, provat) | `src/lib/lagring.ts` + `tests/lagring.mjs` |
+| De tre verben mot en lagring | `src/lib/lagring-server.ts` |
+| Uppladdning, återställningar, gallring | `src/lib/inspelning-server.ts` |
+| Signerad länk och borttagning | `src/lib/filer-server.ts` |
+| Skarpt prov mot R2 | `scripts/prova-r2.mjs` |
+
+**De 1 529 MB som redan ligger i Supabase flyttas inte.** Gallringen läser
+lagret ur raden och raderar i rätt lagring för var och en — alltså tömmer
+fristen Supabase åt oss: under 1 GB inom ett par veckor, nära noll den
+13 oktober. En flytt av 1 693 filer hade gjort samma sak, långsammare och med
+risk att tappa något på vägen.
+
+### DET SOM ÄR VÄRT ATT VETA INNAN NÅGON RÖR DET HÄR
+
+**RADEN AVGÖR VAR EN FIL LIGGER — ALDRIG MILJÖN.** Frestelsen är att låta
+"R2 är påslaget" betyda "filerna ligger i R2". Det är sant för de nya och
+falskt för de 1 693 gamla, och den dagen någon stänger av R2 pekar varenda ny
+rad fel. Miljön avgör exakt en sak: vart NÄSTA fil skrivs.
+
+**`store` MÅSTE STÅ I `FILFALT`.** Både signeringen och borttagningen läser
+genom den listan. Glöms kolumnen där blir `store` `undefined`, `tolkaLager()`
+svarar `supabase` — och en R2-fil letas i Supabase utan att något ser trasigt
+ut förrän någon trycker play.
+
+**HALVT UPPSATT R2 ÄR AVSTÄNGT.** Tre av fyra miljövärden ger inte en halv
+uppladdning utan ett fel per samtal, och ljudet finns inte kvar att hämta igen.
+`r2Konfigurerad()` kräver alla fyra.
+
+**FALLER R2 SKRIVS LJUDET TILL SUPABASE ÄNDÅ.** Med flit, och av samma skäl som
+resten av filen: växelns adress lever en halvtimme, sedan är inspelningen borta
+för alltid. En fil i en trång lagring går att flytta i morgon; en fil som aldrig
+hämtades gör det inte. Att det hänt syns utan eget fält — en inspelning från
+efter omläggningen som bär `store = 'supabase'` **är** händelsen.
+
+**INTEGRITETSHUVUDENA ÄR AVSTÄNGDA MED FLIT.** Nyare AWS-klienter lägger på
+`x-amz-checksum-*` på varje `PutObject`; S3-kompatibla lagringar har upprepade
+gånger svarat "not implemented" på dem, och då faller varje uppladdning — inte
+vid bygget, utan första gången ett samtal ringer. `WHEN_REQUIRED` ger beteendet
+klienten hade innan. Kontrollen vi lutar oss mot är ändå sha256 i
+`file_object.checksum`.
+
+**SÄTT MILJÖVARIABLERNA FÖRE MERGEN.** Navnyheten säger att inspelningarna har
+flyttat. Mergas grenen innan R2 är uppsatt faller allt tillbaka på Supabase,
+och beskedet är osant den dagen det visas.
+
+### Öppna punkter
+
+- **R2 sattes upp samma dag, och provet är grönt.** Bucketen `intranet` i
+  EU-jurisdiktion, fyra variabler i Vercel (Production + Preview) och i
+  `~/.clicknet/nav.env`, och `scripts/prova-r2.mjs` gick hela vägen: uppladdning,
+  signerad länk, nedladdning med matchande sha256, `Range` → **206**,
+  borttagning, 404. Migration `0065` är körd och verifierad — villkoret avvisar
+  `azure`, tom sträng och versal-`R2`, och alla 1 844 befintliga filer står som
+  `supabase`.
+- **S3-nycklarna härleds ur Cloudflare-tokenen.** `R2_ACCESS_KEY_ID` är tokenens
+  id, `R2_SECRET_ACCESS_KEY` är sha256 av tokenvärdet. Skapas tokenen på
+  API-vägen visas de aldrig som ett nyckelpar, och det ser då ut som att man
+  fått fel sorts token.
+- **MERGAD TILL MAIN SAMMA DAG** som `0102da7`, riktig merge-commit med två
+  föräldrar (`23775b2` + `e77f3e8`), efter uttryckligt godkännande. `behind_by`
+  var 0. Produktionsbygget grönt, och växlingen blev ren: allt till och med
+  12:55:27 gick till Supabase med den gamla koden, allt från 12:57:06 går till
+  R2. **Reservvägen slog aldrig till.**
+- **Första R2-inspelningen är verifierad mot riktig data:** 2 075 616 byte,
+  261 sekunder, hämtad genom en signerad länk — HTTP 200, exakt samma antal byte
+  som raden påstår, **sha256 matchar `file_object.checksum`**, giltig mp3, och
+  `Range` svarar 206.
+- **Det som ÄNNU inte provats är `signeraOchLogga` självt mot en R2-fil** — RLS-
+  läsningen och `file_access_log`-skrivningen runt signeringen. Koden är
+  oförändrad så när som på signeringsanropet, men första gången en inloggad
+  människa trycker play på ett samtal från efter 12:57 är värd att bekräfta.
+- **Supabase-lagringen ska nu sjunka av sig själv.** 1 658 MB vid påslaget,
+  ingenting fyller på, och gallringen börjar ta de gamla filerna 13 oktober.
+- **Arbetsloggen hoppar över 0061–0064.** De kördes 16–17 september
+  (`kurs_slapp_inte_kunden`, `upprepning`, `kursovningar_och_skarpta_prov`,
+  `prov_utan_sparrtid`) men har ingen rad här. `NASTA_SESSION.md` påstod att
+  nästa lediga nummer var `0061`; databasen sa `0065`, och det här passet tog
+  det. **Nästa lediga är `0066` — fråga `schema_migrations` ändå.**
+- **234 samtal står i `hos_vaxeln`** och har alltså aldrig fått sitt ljud
+  hämtat. De är inte utredda i det här passet.
+
+---
+
 ## 2026-09-17 (senare) · "Kursen är inte öppen" — provet gick inte att göra, och rättningen sa ingenting
 
 Beställaren försökte göra prov 2 i sin egen kurs:
@@ -217,6 +446,191 @@ före). `POST /merges` gav 409 på de tre vanliga filerna — arbetsloggen,
 överst i samma lista. Mergen är därför gjord för hand: en commit med två
 föräldrar, där trädet är mains med passets filer ovanpå och de tre listorna
 sammanfogade i datumordning.
+
+---
+
+## 2026-09-17 · Upprepade uppgifter och coachningsuppgifter (0062)
+
+Beställarens fråga: *"har du lagt till upprepade tasks i kalender och i
+uppgifter? Annars ställ mig frågor så att vi får till det"*. Svaret var nej —
+upprepningen stod som kvarvarande arbete sedan kalendern pass 3, och en
+kontroll i koden bekräftade det: `task` (0054) och `coaching_task` (0043) hade
+inte en enda kolumn om återkomst, och ingen träff på upprepning, recurrence
+eller rrule någonstans i `src/`.
+
+### Sju frågor, sju svar
+
+Beställningen togs fram i två omgångar frågor innan en rad skrevs. Svaren:
+
+| Fråga | Svar |
+|---|---|
+| Vad ska kunna upprepas? | Uppgifter **och** coachningsuppgifter |
+| Hur ska förekomsterna finnas? | Riktiga kopior, födda i förväg |
+| Hur rika mönster? | Dagligen, vardagar, veckovis med valda dagar |
+| Ändra en förekomst? | Fråga: bara den här, eller hela serien |
+| Hur mycket notiserar de? | Bara närmaste förekomsten |
+| Ledighet och röda dagar? | Ingen inblandning — förekomsten ligger kvar |
+| Hur länge, hur långt fram? | Valfritt slutdatum, annars vidare · 8 veckor |
+
+Månadsvis och "första måndagen i månaden" föreslogs och valdes BORT. Det står
+här för att det annars ser ut som en glömska: beställarens ord var *"om man kan
+välja en dag, så tex måndag, då upprepas ju den varje måndag tex oså, så
+dagligen, vardagar, eller veckovis där man kan välja en dag"*.
+
+### Numret var inte det main visade
+
+`ls supabase/migrations` på main slutar på `0060`. `schema_migrations` sa
+`0061_kurs_slapp_inte_kunden`, körd 2026-09-16 från den omergade grenen
+`utbildning-slapp-inte-kunden`. Migrationen heter därför **`0062`**. Exakt den
+krock minnesregeln om migrationsnummer finns för.
+
+### Varför riktiga kopior och inte en regel som räknas fram
+
+Tre former övervägdes, och valet bär hela migrationen:
+
+1. **En rad med en regel**, kalendern räknar fram resten. Billigast i
+   databasen, dyrast i allt annat: en bockad förekomst kräver en
+   undantagstabell, `task_event` får ingen rad att hänga på, `uppgift_synlig()`
+   ska svara om en uppgift som inte finns, och registerutdraget kan inte läsa
+   det som aldrig skrevs.
+2. **Nästa föds när den förra bockas av.** Minst data — men en planeringsvy som
+   inte kan säga att fredagen om tre veckor är upptagen är ingen planeringsvy.
+3. **Riktiga kopior, födda i förväg.** Valt.
+
+Följden av (3) är att **ingenting annat i navet behövde lära sig något nytt**.
+En förekomst är en rad i `task` eller `coaching_task` med sin egen krets, sin
+egen historik, sin egen plats i kalendern, i dagssumman, i morgonbrevet, i
+iCal-flödet och i registerutdraget. Kalendern fick ingen åttonde källa, och
+`hamtaEgenKalender()` rördes inte alls.
+
+### Det som faktiskt var svårt
+
+**Idempotensen.** Två skribenter föder rader: nattjobbet fyller på horisonten,
+och `skapaSerie()` föder första fönstret direkt så att den som lägger upp en
+rutin ser åtta måndagar innan hon hunnit stänga formuläret. Skyddet är
+`materialized_to` plus ett unikindex på `(series_id, series_on)`.
+
+**Indexet är HELT och inte partiellt**, vilket ser fel ut och inte är det. Ett
+partiellt index går inte att peka ut som konfliktmål från PostgREST — den kan
+bara skicka kolumnnamn, inte indexets villkor — och utan konfliktmål finns
+ingen `on conflict do nothing`. Två NULL är inte lika i ett unikindex, så
+navets uppgifter utan serie kolliderar inte med varandra ändå.
+
+**`series_on` är skild från `due_date`, och det är migrationens viktigaste
+kolumn.** Den som drar måndagsförekomsten till onsdagen har ändrat `due_date` —
+men raden är fortfarande måndagens förekomst. Vore `due_date` både frist och
+identitet hade varje omplanering fött en dubblett nästa natt.
+
+**`materialized_to` flyttas bara framåt.** Det är vad som gör att en borttagen
+förekomst stannar borttagen: unikindexet stoppar en dubblett bara så länge
+raden finns kvar, och en raderad rad har ingen som stoppar den.
+
+**Tystnaden var inte en detalj utan halva bygget.** Utan den är upprepningen en
+notisfabrik i två steg. Först `uppgift-ny` och `coachning-ny`: åtta rader i
+`ej_paborjad` med någon annan som skapare blir åtta poster i klockan på en
+gång. Coachningens är värre — de åtta delar `created_at` ner till
+millisekunden, så `grupperaOmgangar()` skriver "Du har fått 8 nya uppgifter",
+vilket är bokstavligt sant och i varje annan mening fel. Sedan **påminnelsen**,
+som mäter stillestånd: på fjärde dagen har varenda en av de åtta stått still i
+fyra dagar. Den är den obehagligare av de två, för då har den som byggde det
+redan sett att det var tyst och tror att saken är löst. `tystadeForekomster()`
+ligger därför FÖRE påminnelseslingan i `coachning-server.ts`.
+
+**Nattjobbet och inte dagtidsjobbet.** Dagtidsjobbet kör var kvart och hade gett
+snabbare påfyllning — men det vänder i dörren på helger (`veckodag >= 6`), så en
+serie som nått sin horisont på en fredag hade stått still till måndag. Steget
+står dessutom tidigt i nattjobbet, före coachningssteget som läser samma tabell.
+
+### Två villkor som såg riktiga ut och släppte igenom allt
+
+Migrationen kördes, och ett prov mot riktiga databasen (villkoren, unikindexet
+och RLS i en transaktion som rullades tillbaka) fällde två av elva kontroller.
+Båda var samma SQL-fälla, och ingen av dem syns när man läser villkoret:
+
+**`array_length('{}', 1)` är NULL, inte 0.** Villkoret
+`array_length(veckodagar, 1) between 1 and 7` blev därför NULL för en tom
+array — och ett CHECK-villkor avvisar bara FALSE. "Varje vecka, inga dagar
+valda" gick rakt in i databasen. Den regeln infaller aldrig, föder noll
+uppgifter och ser fullkomligt riktig ut i listan.
+
+**`null in ('a','b')` är NULL, inte falskt.** Samma sak i
+`task_series_coachningstyp`: en coachningsserie utan `kind` slapp förbi, och
+hade fött åtta `coaching_task`-rader som faller på 0043:s egna villkor, en efter
+en, i ett nattjobbskvitto klockan halv tre på natten.
+
+Båda är rättade med `coalesce`, och migrationen kördes om — den bär nu
+`drop constraint if exists` + `add constraint` för de två, så att den är
+omkörbar mot en databas som redan har tabellen. Raden i `schema_migrations`
+raderades och skrevs om med den nya checksumman.
+
+**Det värda att ta med sig: ett CHECK-villkor som producerar NULL är inget
+villkor.** Läsningen hjälpte inte — villkoret SÅG rätt ut. Det var provet mot
+riktig SQL som fann det, och det är skälet att provet kördes innan grenen
+visades.
+
+### En bränd deploy, och vad som fångar den nästa gång
+
+Första bygget föll: `Module '"@/lib/upprepning-server"' has no exported member
+'skapaSerie'`. Funktionen lades till i arbetskopian EFTER att filen kopierats in
+i trädet, så den committade versionen saknade den. Ett tomt, tråkigt fel — och
+det kostade en av dygnets hundra deployer, vilket är precis vad reglerna i
+`CLAUDE.md` finns för att undvika.
+
+`esbuild` fångade det inte, och kunde inte: den parsar en fil i taget och frågar
+aldrig om det importerade namnet finns i andra änden. Kontrollen som gör det
+skrevs i scratchpaden: den läser varje `import { … }` i `src/`, slår upp
+målfilen och jämför mot vad den faktiskt exporterar. Kräver inga
+`node_modules` och tar en halv sekund. Den är värd att lägga i `scripts/` nästa
+gång någon rör den här kedjan.
+
+**Lärdomen är inte "var noggrannare" utan att en fil får finnas på ETT ställe.**
+Arbetskopia plus träd är två sanningar, och den ena hinner alltid bli den gamla.
+
+### Och ett prov som aldrig kördes
+
+Vid mergen till main 2026-09-22 föll `tests/notiser-tackning.mjs`:
+`uppgifter::avslutaSerie` saknades i `TACKNING`. Det var **inte** ett
+mergeartefakt — provet var rött på grenen från första commiten, det kördes
+bara aldrig. Registret finns just för att en ny server action ska tvingas svara
+på om den notifierar; `avslutaSerie` gör det inte, och skälet står nu i raden:
+den som avslutar rutinen äger den och står framför knappen, och de borttagna
+förekomsterna var orörda.
+
+**Kör hela `npm test`-kedjan, inte bara provet man själv skrev.** De två prov
+som fångar något ingen annan gör — `notiser-tackning` och `navnyheter` — är
+just de man inte kommer att tänka på.
+
+### Det som INTE byggdes, och varför
+
+- **Fokusområdena följer inte med** en coachningsserie. `coaching_task_focus`
+  är en bedömning av vad en särskild träning ska öva, och en rutin som stämplar
+  samma tre områden på femtiotvå veckors uppgifter gör mätningen av dem
+  meningslös. Ska det ändras är vägen en `task_series_focus`-tabell.
+- **Ingen hänsyn till ledighet eller röda dagar.** Beställarens uttryckliga val
+  bland tre alternativ. Förekomsten ligger kvar där mönstret lägger den.
+- **Snabbraden tolkar inget om upprepning.** "varje måndag" i `tolkaSnabbrad()`
+  vore naturligt att vilja ha, och det är precis den sortens tolkning som
+  rubriken i `uppgifter.ts` varnar för: en tolk som gissar fel lägger tyst upp
+  femtiotvå uppgifter.
+- **Serien går inte att ändra från en egen sida.** Mönstret sätts när rutinen
+  läggs upp. Ändras mallen via "hela serien" på en förekomst; ska mönstret
+  ändras avslutas rutinen och en ny läggs upp. Det är en känd gräns, inte ett
+  förbiseende — en mönsterändring mitt i en serie måste bestämma vad som händer
+  med de redan födda raderna, och den frågan är inte ställd till beställaren.
+
+### Läget
+
+Branch `upprepade-uppgifter`, **EJ MERGAD**. Migrationen `0062` är **KÖRD**,
+samma linje som 0060 och av samma skäl: previewen läser produktionsdatabasen, så
+utan migrationen går grenen inte att visa. Den är additiv — en ny tabell, tre
+nullbara kolumner på vardera `task` och `coaching_task`, två unikindex och en
+policy — och **main påverkas inte**, eftersom ingen kod på main nämner någon av
+dem. Nattjobbets `serier`-steg finns bara på grenen, och previewdeployer får
+ingen cron, så ingenting föds automatiskt förrän grenen är mergad.
+
+`tests/upprepning.mjs` är grönt (73 kontroller), liksom `uppgifter`, `kalender`
+och `navnyheter`. Provet är skrivet utan databas med flit: de tre saker som kan
+gå fel i en upprepning är alla räkning.
 
 ---
 

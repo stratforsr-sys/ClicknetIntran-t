@@ -3,7 +3,7 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
-**Senast uppdaterad:** 2026-09-17 (senare) — **proven går att göra, och rättningen säger något**. Beställaren fick "Kursen är inte öppen" när hon tryckte Lämna in: `lamnaQuiz()` vägrade rätta ett prov i en opublicerad kurs, och kursen ligger som utkast med flit. Nu finns ett **granskningsläge** — den som får redigera kursen kan göra proven i ett utkast, provet rättas på riktigt, men **inget `course_attempt` skrivs och ingen certifiering delas ut**. Rättningen visar numera **antal rätt och ett rätt/fel per fråga** med en knapp "Gör om provet"; **facit släpps först när provet är klarat** (`facitId` är null i svaret dessförinnan, så vyn kan inte läcka det). Spärrtiden på en timme är borttagen — `retry_wait_hours = 0`, migration `0064`, som också skriver om de fyra provtexterna. **Nästa lediga nummer är `0065`.** Grenen `utbildning-slapp-inte-kunden`, **EJ MERGAD**, kursen fortfarande **UTKAST**. Föregående rad: 2026-09-17 — **säljkursen är ombyggd efter genomgång**: varje läsmodul följs nu av en **övning som görs på plats på fem minuter**, och nästa modul öppnar sig först när den är avbockad. Femton moduler, fem övningar, fyra prov med **46 frågor** (var 31). Proven var för lätta av tre skäl — rätt svar låg först i varenda fråga, tre av fyra alternativ var uppenbara exiter, och "välj alltid frågan" fungerade överallt. Alla tre rättade; `0063` har ett villkor som kastar om rätt svar ligger på samma plats i mer än 45 % av frågorna. Ny modultyp `ovning` i `course_module.kind`, speglad i `MODULTYPER`. **Kursen ligger fortfarande som UTKAST och måste publiceras i redaktören samma dag som grenen mergas.** Migrationen kördes först som `0062` — numret var taget av kalenderns pass 3 — och är omdöpt till `0063`; **nästa lediga är `0064`**. Grenen `utbildning-slapp-inte-kunden` bär main inflätad för hand (409 på de tre vanliga listfilerna), **EJ MERGAD**. Föregående rad: 2026-09-16 (senare) — **läckprovet är grönt igen, och det var ingen läcka**: `/franvaro/sjuk bär efternamnet Menduza` var VD:n i sjuksidans telefonlista (`absence_call_order`, plats 3 = rollen `ceo`), som står för alla med flit. Samma rad var röd för säljare och teamledare också. `tests/sidor.mjs` är kalibrerat — ringlistans efternamn undantas bara på den vägen, hämtade ur databasen, och en **positiv** kontroll kräver att namnen står där — plus mutationsprovat. Ingen produktionskod rörd, ingen migration. **`0060` är taget av utköpspasset — nästa nummer är `0061`, fråga `schema_migrations` ändå.** Kvar: pass 3 av kalendern (upprepning, veckogenomgång, mallar, och iCal-frågan som är en fråga till beställaren), och registerutdragsprovet som är rött sedan tidigare (19 kolumner). Föregående rad: 2026-09-16 — **utköp på affären, mejl på ordern, ett kontrollerat orderformulär och volymbonusen på rätt form** (migration `0060`, körd 2026-09-15). Byggt på branch `utkop-och-orderformular` och **mergat till main 2026-09-16 efter uttryckligt godkännande** — grenen hade divergerat (10 commits bakom sedan kalendern gick in), så main flätades in i grenen och previewen byggdes om innan main rördes. Anteckningskravet vid handsatt provision är BORTTAGET: det återställde formuläret och åt upp signeringsdatumet, vilket lade en augustiorder i september. Föregående rad: 2026-09-16 — **kalendergrenen är MERGAD TILL MAIN** som `0fc9734`, en riktig merge-commit med två föräldrar (`ea9e64c` + `4b01ba5`), inte en squash. Beställaren godkände pass 3 efter genomgång av previewen, `behind_by` var 0 och ingen inflätning behövdes. Produktionsbygget av merge-commiten är grönt, så alla tre kalenderpassen ligger nu i produktion: planeringsvyn med delning och pling (`0057`), "Ny post" (`0058`) och slutdatumen (ingen migration). **Nästa nummer är `0060`** — fråga `schema_migrations` ändå. Kvar att göra, i ordning: pass 3 av kalendern (upprepning, veckogenomgång, mallar, och uppgifter i iCal-flödet — det sista är en fråga till beställaren, inte ett bygge), och **läckprovet som är rött på main**: `tests/sidor.mjs` säger att `/franvaro/sjuk` bär efternamnet Menduza för ekonomirollen. Frånvaromodulen, eget pass. Föregående rad: 2026-09-15 — **slutdatumen i kalendern är BYGGDA**, och **ingen migration behövdes**: projektens deadline är kalenderns sjunde källa, coachningsuppgiften syns i mottagarens kalender för CHEFEN (läst genom `coaching_task_read`, inte genom projektionen), och en uppgift utan klockslag ritas inte längre två gånger. Main är inflätad, `behind_by` är 0, och `0059` visade sig vara taget av dagtidsjobbet — nästa nummer är `0060`. Grenen `kalender` bär nu **tre pass** och är fortfarande **EJ MERGAD**. Se avsnittet överst. Föregående rad: 2026-09-14 (sent, efter genomgång) — beställaren har sett "Ny post" och **beställt en sak till: slutdatumen ska synas i kalendern** — coachningsuppgiften i mottagarens OCH chefens vy, och projektens deadline som saknas helt. Se avsnittet överst; **inget av det är byggt**, men allt tre är utrett mot databasen. Föregående rad: 2026-09-14 (sent) — **"Ny post" i kalendern är BYGGD**, migration `0058` körd: en knapp och ett klick på en tom ruta öppnar ett formulär som blir en uppgift eller en coachningsuppgift, coachningsuppgifter syns numera i kalendern (sjätte källan) och plingar, och dagssumman räknar dem. Grenen `kalender` är fortfarande **EJ MERGAD** — previewen ska visas för beställaren. Se avsnittet överst. Föregående rad: 2026-09-14 (kväll) — **navet mejlar** (migration `0059`). **Mergat till main (`e92d0f3`) och TÄNT** — `cron_secret` ligger i Vault och kedjan pg_cron → pg_net → Vercel är provad skarpt (HTTP 200). Dagtidsjobbet kunde INTE läggas som en tredje cron-post i `vercel.json`: Hobby tar två, båda är upptagna, och en tredje gör att ingen av dem körs. Resend-nyckeln är inkopplad som `nav@clicknet.se`, elva händelser mejlas direkt, morgonbrevet samlar sex sorters påminnelser i ETT brev, och ett nytt dagtidsjobb påminner den som inte stämplat in — schemalagt av `pg_cron` i databasen, eftersom Vercels två cron-poster är slut. **`cron_secret` måste läggas i Vault, annars gör dagtidsjobbet ingenting.** Föregående rad: 2026-09-14 (kväll) — kalendern (pass 2) är byggd och previewen är genomgången av beställaren, som sa att den ser bra ut och **beställde en sak till: "Ny post" i kalendern**. Föregående rad: 2026-09-14 (senare) — **kalendern (pass 2) är byggd**: planeringsvy med dra-och-släpp, veckovy, delning i Outlooks fem nivåer, pling i webbläsaren. Migration `0057` körd. **Ligger på branch `kalender`, EJ MERGAD** — previewen ska visas först. Branchen bär main inflätad (`0056` ingår). Föregående rad: 2026-09-14 — samtalen ligger nu på ordern med spelbar inspelning (migration `0056`). Kopplingen sker på kundens nummer utan bortre gräns bakåt, flera samtal per affär, och gallringen kan inte radera ett ordersamtal. Föregående rad: 2026-09-11 (kväll) — **uppgiftsmodulen pass 1 är byggd och mergad till main**: uppgifter, deluppgifter, projekt med egen sida och chatt, godkännande med granskare, kopplingar, framräknade notiser och morgonbrev. Migrationerna `0054` och `0055` körda. **Nästa steg är kalendern (pass 2).** Föregående rad: 2026-09-11 (eftermiddag) — båda Lynes-webhookarna är på. Insights visade sig bära riktningen i `itemType` och inte utfallet, och `callType` betyder inte riktning; tolken är rättad och alla 172 samtal omtolkade. **Tre öppna frågor, se nedan** — den viktigaste är om ett missat samtal någonsin levereras. Föregående rad: 2026-09-11 — Lynes webhook levererar. Formen visade sig vara en annan än gissningarna: alla sexton första samtalen tolkades fel, tolken är rättad mot riktig trafik och påsarna omtolkade ur `call_ingest`. **Ett beslut väntar om inspelningarna** — S3-adressen lever trettio minuter. Föregående rad: 2026-09-10 (kväll) — växelns samtal: Lynes webhook har en adress in i navet, radlogg och tolkning på plats, migration `0052` körd. På branch `lynes-samtal`, ej mergad; ingenting syns i gränssnittet än. Föregående rad: 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
+**Senast uppdaterad:** 2026-09-22 (senare) — **säljkursen "Släpp inte kunden för tidigt" är MERGAD TILL MAIN och PUBLICERAD.** Femton moduler: fem läsmoduler, fem övningar som görs på plats, fyra prov med 46 frågor och ett rollspel som chefen bedömer mot åtta kriterier. Migrationerna `0061`, `0063` och `0064` var körda sedan tidigare. Grenen låg elva commitar efter main och flätades in för hand — `POST /merges` gav 409 på `actions.ts` plus de tre vanliga listfilerna, och `actions.ts` gick att treväga-merga rent (mains ändring låg i `registreraRollspel`, min i `sparaKurs` och `lamnaQuiz`). **Nästa lediga migrationsnummer är `0066`.** Föregående rad: 2026-09-22 — **upprepade uppgifter och coachningsuppgifter är MERGADE TILL MAIN** (migration `0062`, körd 2026-09-17). Beställaren godkände previewen och bad om merge. Grenen hade hunnit divergera — 2 före, 6 efter, sedan hela R2-flytten gick in — så main flätades in i grenen och previewen byggdes om innan main rördes; de fyra filer som alltid krockar (ARBETSLOGG, NASTA_SESSION, package.json, poster.ts) löstes för hand med `git merge-file`, och BÅDA sidornas tillägg behölls i var och en. En serie är en REGEL (`task_series`) som föder RIKTIGA rader i `task`/`coaching_task` åtta veckor framåt — kalendern fick ingen ny källa. Mönstren är dagligen, varje vardag och veckovis med valda veckodagar; en ändring frågar om den gäller bara förekomsten eller hela serien; bara närmaste förekomsten notiserar. **Nästa lediga migrationsnummer är `0066`** — fråga `schema_migrations` ändå. Kvar av kalenderns pass 3: **veckogenomgång och mallar**, samt uppgifter i iCal-flödet (en fråga till beställaren). **Och en öppen fråga från det här passet:** mönstret går inte att ändra på en befintlig serie — "hela serien" ändrar mallen, inte veckodagarna, och vad som ska hända med redan födda rader är inte besvarat. Föregående rad: 2026-09-21 (senare) — **nu ligger ALLA filer i R2, inte bara inspelningarna.** Beställaren ville ha allt på samma ställe, så läkarintyg, dokumentbilagor, rollspel och orderbilagor följde efter. De går en **helt annan väg** än inspelningarna — webbläsaren laddar upp direkt till lagringen, eftersom Vercel bara tar emot 4,5 MB i kroppen och ett rollspel får vara 40 MB — så det krävdes en signerad PUT-adress, `HeadObject`, `GetObject` och **CORS på bucketen**. CORS är satt och hela vägen är provad skarpt: preflight 204, PUT 200, innehållet identiskt. **DATABASEN FLYTTADE INTE, och ska inte flytta**: R2 är objektlagring, inte en databas, Cloudflares databas är SQLite (D1), och Navs RLS, `pg_cron`, `pg_net`, Vault och Auth finns inte där — dessutom är databasen 41 MB av 500. **Ligger på branch `all-lagring-i-r2`, EJ MERGAD.** Ingen människa har tryckt på uppladdningsknappen än; lagringsledet är bevisat men inte knappen. **Nästa lediga migrationsnummer är `0066`** (passet krävde ingen migration). Föregående rad: 2026-09-21 — **fillagringen tog slut, och det var INTE databasen.** Databasen är 39 MB av 500 (8 %); fillagringen är 1 529 MB av 1 024 (149 %), och **varenda fil i den är en samtalsinspelning** — 1 693 st, alla `audio/mpeg`, alla i `call_recording/`. Läkarintyg, orderbilagor och dokumentbilagor är tillsammans noll byte. Takten är 218 MB per arbetsdag, och gallringen på 30 dygn planar ut vid ~5 GB — alltså på fel sida om gränsen. **Ingen andra databas kopplades in**, för databasen har 461 MB ledigt: `file_object` fick kolumnen `store`, nya inspelningar skrivs till **Cloudflare R2** (EU-jurisdiktion), och allt gammalt ligger kvar i Supabase tills gallringen tar det inom 30 dygn. **MERGAD TILL MAIN OCH TÄND** som `0102da7` (riktig merge-commit, två föräldrar). Första riktiga inspelningen landade i R2 12:57:06 och är verifierad byte för byte mot `file_object.checksum`; reservvägen till Supabase slog aldrig till. Bucketen heter `intranet` och ligger i EU-jurisdiktion; `scripts/prova-r2.mjs` är grön hela vägen (lägg upp, signera, hämta hem med rätt sha256, Range 206, ta bort, 404). De fyra R2-variablerna ligger i Vercel (Production + Preview) och i `~/.clicknet/nav.env`. **Produktionen är orörd så länge grenen inte mergats** — main känner inte till kolumnen, och inspelningarna går fortfarande till Supabase. **Nästa lediga migrationsnummer är `0066`** — fråga `schema_migrations` ändå; överlämningen sa `0061` och databasen sa `0065`. Föregående rad: 2026-09-17 — **säljkursen är ombyggd efter genomgång**: varje läsmodul följs nu av en **övning som görs på plats på fem minuter**, och nästa modul öppnar sig först när den är avbockad. Femton moduler, fem övningar, fyra prov med **46 frågor** (var 31). Proven var för lätta av tre skäl — rätt svar låg först i varenda fråga, tre av fyra alternativ var uppenbara exiter, och "välj alltid frågan" fungerade överallt. Alla tre rättade; `0063` har ett villkor som kastar om rätt svar ligger på samma plats i mer än 45 % av frågorna. Ny modultyp `ovning` i `course_module.kind`, speglad i `MODULTYPER`. **Kursen ligger fortfarande som UTKAST och måste publiceras i redaktören samma dag som grenen mergas.** Migrationen kördes först som `0062` — numret var taget av kalenderns pass 3 — och är omdöpt till `0063`; **nästa lediga är `0064`**. Grenen `utbildning-slapp-inte-kunden` bär main inflätad för hand (409 på de tre vanliga listfilerna), **EJ MERGAD**. Föregående rad: 2026-09-16 (senare) — **läckprovet är grönt igen, och det var ingen läcka**: `/franvaro/sjuk bär efternamnet Menduza` var VD:n i sjuksidans telefonlista (`absence_call_order`, plats 3 = rollen `ceo`), som står för alla med flit. Samma rad var röd för säljare och teamledare också. `tests/sidor.mjs` är kalibrerat — ringlistans efternamn undantas bara på den vägen, hämtade ur databasen, och en **positiv** kontroll kräver att namnen står där — plus mutationsprovat. Ingen produktionskod rörd, ingen migration. **`0060` är taget av utköpspasset — nästa nummer är `0061`, fråga `schema_migrations` ändå.** Kvar: pass 3 av kalendern (upprepning, veckogenomgång, mallar, och iCal-frågan som är en fråga till beställaren), och registerutdragsprovet som är rött sedan tidigare (19 kolumner). Föregående rad: 2026-09-16 (senare) — **läckprovet är grönt igen, och det var ingen läcka**: `/franvaro/sjuk bär efternamnet Menduza` var VD:n i sjuksidans telefonlista (`absence_call_order`, plats 3 = rollen `ceo`), som står för alla med flit. Samma rad var röd för säljare och teamledare också. `tests/sidor.mjs` är kalibrerat — ringlistans efternamn undantas bara på den vägen, hämtade ur databasen, och en **positiv** kontroll kräver att namnen står där — plus mutationsprovat. Ingen produktionskod rörd, ingen migration. **`0060` är taget av utköpspasset — nästa nummer är `0061`, fråga `schema_migrations` ändå.** Kvar: pass 3 av kalendern (upprepning, veckogenomgång, mallar, och iCal-frågan som är en fråga till beställaren), och registerutdragsprovet som är rött sedan tidigare (19 kolumner). Föregående rad: 2026-09-16 — **utköp på affären, mejl på ordern, ett kontrollerat orderformulär och volymbonusen på rätt form** (migration `0060`, körd 2026-09-15). Byggt på branch `utkop-och-orderformular` och **mergat till main 2026-09-16 efter uttryckligt godkännande** — grenen hade divergerat (10 commits bakom sedan kalendern gick in), så main flätades in i grenen och previewen byggdes om innan main rördes. Anteckningskravet vid handsatt provision är BORTTAGET: det återställde formuläret och åt upp signeringsdatumet, vilket lade en augustiorder i september. Föregående rad: 2026-09-16 — **kalendergrenen är MERGAD TILL MAIN** som `0fc9734`, en riktig merge-commit med två föräldrar (`ea9e64c` + `4b01ba5`), inte en squash. Beställaren godkände pass 3 efter genomgång av previewen, `behind_by` var 0 och ingen inflätning behövdes. Produktionsbygget av merge-commiten är grönt, så alla tre kalenderpassen ligger nu i produktion: planeringsvyn med delning och pling (`0057`), "Ny post" (`0058`) och slutdatumen (ingen migration). **Nästa nummer är `0060`** — fråga `schema_migrations` ändå. Kvar att göra, i ordning: pass 3 av kalendern (upprepning, veckogenomgång, mallar, och uppgifter i iCal-flödet — det sista är en fråga till beställaren, inte ett bygge), och **läckprovet som är rött på main**: `tests/sidor.mjs` säger att `/franvaro/sjuk` bär efternamnet Menduza för ekonomirollen. Frånvaromodulen, eget pass. Föregående rad: 2026-09-15 — **slutdatumen i kalendern är BYGGDA**, och **ingen migration behövdes**: projektens deadline är kalenderns sjunde källa, coachningsuppgiften syns i mottagarens kalender för CHEFEN (läst genom `coaching_task_read`, inte genom projektionen), och en uppgift utan klockslag ritas inte längre två gånger. Main är inflätad, `behind_by` är 0, och `0059` visade sig vara taget av dagtidsjobbet — nästa nummer är `0060`. Grenen `kalender` bär nu **tre pass** och är fortfarande **EJ MERGAD**. Se avsnittet överst. Föregående rad: 2026-09-14 (sent, efter genomgång) — beställaren har sett "Ny post" och **beställt en sak till: slutdatumen ska synas i kalendern** — coachningsuppgiften i mottagarens OCH chefens vy, och projektens deadline som saknas helt. Se avsnittet överst; **inget av det är byggt**, men allt tre är utrett mot databasen. Föregående rad: 2026-09-14 (sent) — **"Ny post" i kalendern är BYGGD**, migration `0058` körd: en knapp och ett klick på en tom ruta öppnar ett formulär som blir en uppgift eller en coachningsuppgift, coachningsuppgifter syns numera i kalendern (sjätte källan) och plingar, och dagssumman räknar dem. Grenen `kalender` är fortfarande **EJ MERGAD** — previewen ska visas för beställaren. Se avsnittet överst. Föregående rad: 2026-09-14 (kväll) — **navet mejlar** (migration `0059`). **Mergat till main (`e92d0f3`) och TÄNT** — `cron_secret` ligger i Vault och kedjan pg_cron → pg_net → Vercel är provad skarpt (HTTP 200). Dagtidsjobbet kunde INTE läggas som en tredje cron-post i `vercel.json`: Hobby tar två, båda är upptagna, och en tredje gör att ingen av dem körs. Resend-nyckeln är inkopplad som `nav@clicknet.se`, elva händelser mejlas direkt, morgonbrevet samlar sex sorters påminnelser i ETT brev, och ett nytt dagtidsjobb påminner den som inte stämplat in — schemalagt av `pg_cron` i databasen, eftersom Vercels två cron-poster är slut. **`cron_secret` måste läggas i Vault, annars gör dagtidsjobbet ingenting.** Föregående rad: 2026-09-14 (kväll) — kalendern (pass 2) är byggd och previewen är genomgången av beställaren, som sa att den ser bra ut och **beställde en sak till: "Ny post" i kalendern**. Föregående rad: 2026-09-14 (senare) — **kalendern (pass 2) är byggd**: planeringsvy med dra-och-släpp, veckovy, delning i Outlooks fem nivåer, pling i webbläsaren. Migration `0057` körd. **Ligger på branch `kalender`, EJ MERGAD** — previewen ska visas först. Branchen bär main inflätad (`0056` ingår). Föregående rad: 2026-09-14 — samtalen ligger nu på ordern med spelbar inspelning (migration `0056`). Kopplingen sker på kundens nummer utan bortre gräns bakåt, flera samtal per affär, och gallringen kan inte radera ett ordersamtal. Föregående rad: 2026-09-11 (kväll) — **uppgiftsmodulen pass 1 är byggd och mergad till main**: uppgifter, deluppgifter, projekt med egen sida och chatt, godkännande med granskare, kopplingar, framräknade notiser och morgonbrev. Migrationerna `0054` och `0055` körda. **Nästa steg är kalendern (pass 2).** Föregående rad: 2026-09-11 (eftermiddag) — båda Lynes-webhookarna är på. Insights visade sig bära riktningen i `itemType` och inte utfallet, och `callType` betyder inte riktning; tolken är rättad och alla 172 samtal omtolkade. **Tre öppna frågor, se nedan** — den viktigaste är om ett missat samtal någonsin levereras. Föregående rad: 2026-09-11 — Lynes webhook levererar. Formen visade sig vara en annan än gissningarna: alla sexton första samtalen tolkades fel, tolken är rättad mot riktig trafik och påsarna omtolkade ur `call_ingest`. **Ett beslut väntar om inspelningarna** — S3-adressen lever trettio minuter. Föregående rad: 2026-09-10 (kväll) — växelns samtal: Lynes webhook har en adress in i navet, radlogg och tolkning på plats, migration `0052` körd. På branch `lynes-samtal`, ej mergad; ingenting syns i gränssnittet än. Föregående rad: 2026-09-10 — två kretsar rättar en order med olika räckvidd (E13 steg 12b, ingen migration): chefskretsen ändrar allt, den som la upp ordern bara kunduppgifterna. Samma dag: rättelse av godkänd order och övrig bonus (steg 12, migration `0051`) och ordervärdet med säljchefens ersättning (steg 11, migration `0050`) — allt på branch `ordervarde-och-chefsprovision`, mergad med main 2026-09-10. Föregående rad: 2026-09-09 — navigationen ombyggd: menyerna följer avdelningarna (Försäljning, Ekonomi, Personal, System) plus Min vy, menyerna öppnar sig av hovring, och panelen har fått ett tredje läge, `hovra`. Godkänd och **mergad till main**; ligger i produktion. Föregående pass (2026-09-08): testdatan borttagen, Ö11 inträffade på riktigt, provisionsvyn ombyggd till resultattavla — mergad som `dbb02a8`. **Ö11 är byggd och mergad 2026-09-09** — se avsnittet nedan.
 
 ---
 
@@ -101,6 +101,292 @@ inspelningen innan du bedömer den" är inte ett strul.
 anrop innan du skriver filen. `0062` var taget av kalenderns pass 3 i en gren
 som inte var mergad, vilket upptäcktes först efter att den här kördes som
 `0062`. Regeln har bitit tre pass i rad.
+
+---
+
+## Alla filer i R2 — BYGGT 2026-09-21 (senare), ingen migration
+
+*Resonemanget i `ARBETSLOGG.md` samma dag, andra posten.*
+
+**Läget: branch `all-lagring-i-r2`, EJ MERGAD.** Ingen migration behövdes —
+`file_object.store` från `0065` räckte.
+
+### Vad som ändrades
+
+Efter första passet gick bara inspelningarna till R2. Nu går **alla sex
+ändamålen** samma väg: inspelningar, läkarintyg, dokumentbilagor, rollspel,
+orderbilagor och coachning.
+
+De fem sistnämnda går en **annan väg** än inspelningarna, och det är hela
+arbetet: webbläsaren laddar upp direkt till lagringen. Supabase gav en token
+som bara dess egen klient förstår; R2 ger en färdig PUT-adress som vilken
+`fetch` som helst kan följa. Båda fälten finns på `Uppladdningslank`, och
+`store` säger vilket som gäller.
+
+### VAD SOM MÅSTE VARA SANT FÖR ATT DET SKA FUNGERA
+
+**CORS PÅ BUCKETEN.** Satt 2026-09-21 på `intranet`:
+`https://clicknet-nav.vercel.app` och `https://*.vercel.app`, metoderna GET,
+PUT och HEAD, huvudet `content-type`. **Utan det vägrar webbläsaren tyst** —
+servern svarar fint, adressen ser riktig ut, och det enda spåret är ett
+CORS-fel i konsolen som aldrig når användaren. Läses och sätts med
+`/accounts/<konto>/r2/buckets/intranet/cors` plus huvudet
+`cf-r2-jurisdiction: eu`.
+
+**BUCKETNAMNET KOMMER ALDRIG FRÅN WEBBLÄSAREN.** `registreraFil` tar bara
+`store` och räknar fram bucketen. Lägg inte tillbaka ett bucketfält i den
+signaturen.
+
+**UPPLADDNINGSLÄNKEN LEVER FEM MINUTER.** Ett rollspel får vara 40 MB och
+signaturen måste leva genom hela uppladdningen, inte bara fram till dess
+början.
+
+**DE TVÅ SOM LÄSER PDF:ER GÅR OCKSÅ GENOM LAGRINGSMODULEN.**
+`las()` i `order/actions.ts` och `rutiner/actions.ts`. Skrivs de om till ett
+direkt Supabase-anrop tappar varje ny bilaga sin sökbara text, och det ser ut
+som en tom PDF i stället för ett fel.
+
+### Databasen flyttade INTE, och frågan är avgjord
+
+R2 är objektlagring. Cloudflares databas är D1 (SQLite). Navs RLS — hela
+säkerhetsmodellen, provad av `tests/rls.mjs` — finns inte där, och inte heller
+`pg_cron` (dagtidsjobbet, eftersom Vercels cron-kvot är slut), `pg_net`, Vault
+eller Supabase Auth. Det vore en ombyggnad av applikationen.
+
+Och det finns inget skäl: **databasen är 41 MB av 500.**
+
+### Öppna punkter
+
+- **INGEN HAR TRYCKT PÅ UPPLADDNINGSKNAPPEN.** Lagringsledet är bevisat
+  (preflight 204, PUT 200, sha256 matchar, content-type bevarad), men inte
+  knappen i Nav. Ladda upp en av varje sort för hand efter mergen: ett intyg,
+  en orderbilaga, en dokumentbilaga, ett rollspel.
+- **Navnyheten är omskriven, inte ersatt.** Sluggen `inspelningarna-har-flyttat`
+  är orörd — den bär avfärdningen i `notification_dismissed` — men texten sa
+  "inget annat har flyttat", vilket blev osant. Den som redan avfärdat posten
+  ser inte rättelsen.
+- **`coaching` har ingen uppladdningsväg än.** Ändamålet finns i
+  check-villkoret men ingen anropar `forberedUppladdning` med det.
+
+---
+
+## Lagringen utanför Supabase — MERGAD OCH TÄND 2026-09-21, migration `0065`
+
+*Resonemanget i `ARBETSLOGG.md` samma dag.*
+
+**Läget: MERGAD TILL MAIN** som `0102da7`, en riktig merge-commit med två
+föräldrar (`23775b2` + `e77f3e8`), inte en squash. Beställaren godkände efter
+genomgång; `behind_by` var 0 och ingen inflätning behövdes. Produktionsbygget är
+grönt och **nya inspelningar går till R2 sedan 12:57**.
+
+### Växlingen, minut för minut
+
+```
+12:50–12:55  → supabase   (gamla koden)
+12:57:06     → r2         (första riktiga inspelningen, 2,0 MB, 261 sek)
+12:58:06     → r2
+```
+
+Ren växling, och **reservvägen slog aldrig till** — ingen rad efter 12:57 bär
+`store = 'supabase'`.
+
+### Vad som är verifierat mot riktig data
+
+Första R2-inspelningen hämtades genom en signerad länk: HTTP 200, **exakt samma
+antal byte som raden påstår**, **sha256 matchar `file_object.checksum`**, formen
+är en giltig mp3, och `Range` svarar 206. Alltså håller hela vägen från växeln
+till spelaren.
+
+### Problemet, mätt och inte gissat
+
+| | Använt | Fri gräns | |
+|---|---|---|---|
+| Databas | 39 MB | 500 MB | 8 % — inte problemet |
+| Fillagring | 1 529 MB | 1 024 MB | **149 %** |
+
+Varenda fil i lagringen är en samtalsinspelning: 1 693 st, alla `audio/mpeg`,
+alla i `call_recording/`. Läkarintyg, orderbilagor och dokumentbilagor är
+tillsammans noll byte. Takten är 218 MB per arbetsdag, och gallringen på
+30 dygn planar ut vid ungefär 5 GB.
+
+### Vad som är byggt
+
+`file_object` fick `store` (`supabase` | `r2`). Nya inspelningar går till
+Cloudflare R2; allt som redan ligger i Supabase ligger kvar och **tas av
+gallringen inom 30 dygn** — ingen fil flyttas för hand.
+
+| Del | Var |
+|---|---|
+| Migrationen | `supabase/migrations/0065_lagring_utanfor_supabase.sql` |
+| Valet mellan lagringarna (rent, provat) | `src/lib/lagring.ts` + `tests/lagring.mjs` |
+| De tre verben mot en lagring | `src/lib/lagring-server.ts` |
+| Uppladdning, återställningar, gallring | `src/lib/inspelning-server.ts` |
+| Signerad länk och borttagning | `src/lib/filer-server.ts` |
+| Skarpt prov mot R2 | `scripts/prova-r2.mjs` |
+
+### UPPSÄTTNINGEN — GJORD 2026-09-21
+
+| Steg | Läge |
+|---|---|
+| Bucket i R2, **EU-jurisdiktion** | `intranet`, skapad 12:33 |
+| API-token med läs- och skrivrätt | på plats, avgränsad (kan inte läsa sin egen definition) |
+| Fyra variabler i Vercel (Production + Preview) | på plats, provade utan radbrytning |
+| Samma fyra i `~/.clicknet/nav.env` | på plats |
+| `node scripts/prova-r2.mjs` | **grön hela vägen** |
+| Migration `0065` | **körd** |
+| Merge till main | **ÅTERSTÅR — kräver godkännande** |
+
+Kontot är `e4893e320347cc5c40c7034ccbc1e31e`, och endpointen bär `.eu.` mitt i
+just för att bucketen ligger i EU-jurisdiktion. Tappas den delen svarar R2 att
+bucketen inte finns.
+
+**S3-nycklarna härleds ur Cloudflare-tokenen och står ingenstans i panelen om
+man skapat tokenen på API-vägen:** `R2_ACCESS_KEY_ID` är tokenens **id**, och
+`R2_SECRET_ACCESS_KEY` är **sha256 av tokenvärdet**. Det är värt att veta nästa
+gång en nyckel ska bytas — annars ser det ut som att tokenen är fel sort.
+
+Vad provet faktiskt bevisade: uppladdning, signerad länk, nedladdning med
+matchande sha256, `Range`-begäran som svarar **206** (det spelaren gör i ett
+långt samtal), borttagning, och 404 efteråt.
+
+Utan miljövariablerna gör grenen ingenting: `lagerForNyInspelning()` svarar
+`supabase` och navet beter sig precis som i dag. Det är avsiktligt — men det
+betyder också att en halvfärdig uppsättning ser ut som att allt fungerar.
+
+### DET SOM ÄR VÄRT ATT VETA INNAN NÅGON RÖR DET HÄR
+
+**RADEN AVGÖR VAR EN FIL LIGGER — ALDRIG MILJÖN.** Båda lagringarna är i bruk
+samtidigt. "R2 är påslaget" är inte samma sak som "filen ligger i R2", och att
+blanda ihop dem gör varje gammal fil oöppningsbar.
+
+**`store` MÅSTE STÅ I `FILFALT`** i `filer-server.ts`. Signeringen och
+borttagningen läser genom den listan. Glöms kolumnen blir svaret `supabase`
+för allt, och en R2-fil letas i fel lagring utan att något ser trasigt ut
+förrän någon trycker play.
+
+**FALLER R2 SKRIVS LJUDET TILL SUPABASE ÄNDÅ.** Med flit: växelns adress lever
+en halvtimme, sedan är inspelningen borta för alltid. En inspelning från efter
+påslaget som bär `store = 'supabase'` är händelsen — det finns inget eget fält
+för den.
+
+**RÖR INTE `requestChecksumCalculation`.** `WHEN_REQUIRED` står där för att
+nyare AWS-klienter annars skickar `x-amz-checksum-*`, som S3-kompatibla
+lagringar upprepade gånger svarat "not implemented" på. Felet syns inte vid
+bygget utan första gången ett samtal ringer.
+
+### Öppna punkter
+
+- **FÖLJ SUPABASE-LAGRINGEN NEDÅT DE NÄRMASTE VECKORNA.** Den stod på 1 658 MB
+  vid påslaget och ska nu sjunka av sig själv: gallringen tar de gamla filerna
+  allteftersom deras 30 dygn går ut, med start **13 oktober**, och inget nytt
+  fyller på. Sjunker den inte då är gallringen värd att titta på — se
+  `gallraInspelningar` i `inspelning-server.ts`.
+- **En rad med `store = 'supabase'` efter 12:57 betyder att R2 föll** och
+  Supabase tog emot i stället. Ljudet finns, men något är fel med nycklarna.
+  Hittills har det inte hänt.
+- **Läsvägen är provad på lagringsnivå, inte genom `signeraOchLogga`.** Bytena
+  stämmer mot `file_object.checksum` och `Range` svarar 206, men själva
+  server-funktionen — RLS-läsningen och `file_access_log`-skrivningen runt
+  signeringen — har inte körts mot en R2-fil av en inloggad människa. Den koden
+  är oförändrad så när som på signeringsanropet, men första gången någon
+  faktiskt trycker play på ett samtal från efter 12:57 är värd att bekräfta.
+- **Tokenen låg i ett chattranskript.** Fungerar, men värd att rotera om
+  transkriptet delas. Bara två miljövariabler behöver bytas; bucket och kod
+  påverkas inte.
+- **234 samtal står i `hos_vaxeln`** och har aldrig fått sitt ljud hämtat. Inte
+  utrett i det här passet.
+- **Vägen tillbaka är samma kolumn.** När Supabase uppgraderats: läs ur R2,
+  lägg upp i Supabase, byt `store` — en fil i taget, utan att röra appen.
+
+---
+
+## Upprepade uppgifter — BYGGT 2026-09-17, MERGAT TILL MAIN 2026-09-22
+
+*Hela resonemanget i `ARBETSLOGG.md` samma dag.*
+
+**Läget: MERGAT TILL MAIN 2026-09-22 efter beställarens godkännande.**
+Migration `0062` kördes redan 2026-09-17.
+
+Beställarens fråga: *"har du lagt till upprepade tasks i kalender och i
+uppgifter?"* Svaret var nej. Nu finns det, för **både uppgifter och
+coachningsuppgifter**.
+
+### Vad som finns på grenen
+
+| Del | Var |
+|---|---|
+| Migrationen | `supabase/migrations/0062_upprepning.sql` |
+| Räknandet (rent, provat) | `src/lib/upprepning.ts` + `tests/upprepning.mjs` |
+| Födseln | `src/lib/upprepning-server.ts` |
+| Nattjobbets steg | `serier` i `src/app/api/jobb/natt/route.ts` |
+| Vägen in | `NyPost.tsx` → `kalender/actions.ts` → modulens egen `skapaUppgift` |
+| "Bara den här / hela serien" | `andraUppgift` + `andraHelaSerien` i `uppgifter/actions.ts` |
+| Avsluta rutinen | `avslutaSerie` + `taBortOrordFramtid`, samma fil |
+| Gränssnittet på uppgiften | `Serien` och serieavsnittet i `[id]/Egenskaper.tsx` |
+| Tystnaden | `tystadeForekomster()`, anropad i `uppgifter-server.ts` och `coachning-server.ts` |
+
+Mönstren är **dagligen, varje vardag och veckovis med valda veckodagar**.
+Horisonten är **åtta veckor**, och nattjobbet fyller på. Slutdatum är valfritt.
+
+### DET SOM ÄR VÄRT ATT VETA INNAN NÅGON RÖR DET HÄR
+
+**`series_on` ÄR INTE `due_date`, OCH FÅR ALDRIG SLÅS IHOP MED DEN.**
+`series_on` säger VILKEN FÖREKOMST raden är; `due_date` säger när den ska vara
+gjord. Den som drar måndagsförekomsten till onsdagen ändrar den andra, inte den
+första. Vore de samma kolumn hade varje omplanering fött en dubblett nästa natt.
+
+**`materialized_to` FLYTTAS BARA FRAMÅT.** Det är det enda som gör att en
+borttagen förekomst stannar borttagen — unikindexet stoppar en dubblett bara så
+länge raden finns kvar, och en raderad rad har ingen som stoppar den. Villkoret
+står både i `fonster()` och i `flyttaFram()`:s `.or(...)`.
+
+**UNIKINDEXET ÄR HELT OCH INTE PARTIELLT, MED FLIT.** Ett `where series_id is
+not null` går inte att peka ut som konfliktmål från PostgREST, och då finns
+ingen `on conflict do nothing`. Två NULL är inte lika i ett unikindex, så
+raderna utan serie kolliderar inte ändå. Gör det inte "snyggare".
+
+**TYSTNADEN ÄR INTE KOSMETIK.** Tas `tystadeForekomster()` bort ur endera filen
+blir en veckorutin åtta poster i klockan på en gång — och i coachningen dessutom
+ett "Du har fått 8 nya uppgifter", eftersom de åtta delar `created_at` ner till
+millisekunden. I `coachning-server.ts` ligger anropet **före** påminnelseslingan,
+och det är avsiktligt: påminnelsen mäter stillestånd, så på dag fyra hade alla
+åtta nagat.
+
+**STEGET LIGGER I NATTJOBBET OCH INTE I DAGTIDSJOBBET.** Det senare kör var
+kvart men vänder i dörren på helger, så en serie som nått sin horisont på en
+fredag hade stått still till måndag.
+
+**ETT CHECK-VILLKOR SOM PRODUCERAR NULL ÄR INGET VILLKOR.** Två av villkoren i
+0062 släppte igenom allt i sin första form: `array_length('{}', 1)` är NULL och
+inte 0, och `null in ('a','b')` är NULL och inte falskt — och CHECK avvisar bara
+FALSE. Båda bär nu `coalesce`, och båda hittades av provet mot riktiga
+databasen, inte av att någon läste dem. Rör du villkoren: kör provet igen.
+
+**EN SERIE UTAN ANSVARIG FINNS INTE.** `task.assignee_id` får vara null — det är
+inkorgen — men `task_series.assignee_id` är `not null`. En serie utan ansvarig
+hade fött åtta veckors rader in i en inkorg ingen äger.
+
+**DEN SOM SLUTAT FÅR INGA NYA.** `fodSerier()` hoppar över serier vars ansvariga
+är `offboarded`. Serien avslutas INTE automatiskt — att sluta föda är en paus,
+att avsluta regeln är ett beslut.
+
+### Öppna punkter
+
+- **MERGAD OCH TÄND.** Nattjobbets `serier`-steg kör från och med nästa natt
+  mot produktion. Titta i kvittot: `serier` ska stå med `provade`, `fodda`
+  och `vilande`. Är `task_series` tom gör steget ingenting, vilket är rätt.
+- **Ingen serie finns ännu i produktion.** `task_series` är tom, så ingenting av
+  det nya är prövat mot riktig data. Första rutinen är värd att titta på dagen
+  efter att den lagts upp: har nattjobbet fött exakt en ny dag?
+- **Mönstret går inte att ändra på en befintlig serie.** "Hela serien" ändrar
+  MALLEN — rubrik, klockslag, längd, prioritet, projekt — inte veckodagarna.
+  Ska mönstret ändras avslutas rutinen och en ny läggs upp. En mönsterändring
+  mitt i en serie måste bestämma vad som händer med de redan födda raderna, och
+  den frågan är inte ställd till beställaren.
+- **Fokusområdena följer inte med** en coachningsserie. Se arbetsloggen.
+- **Snabbraden tolkar inget om upprepning.** "varje måndag" i `tolkaSnabbrad()`
+  vore naturligt att vilja ha och är medvetet inte gjort.
+- **Ingen hänsyn till ledighet eller röda dagar** — beställarens uttryckliga val.
 
 ---
 

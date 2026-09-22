@@ -14,7 +14,14 @@ import {
   arSjalvsann,
   type Uppgiftstyp,
 } from "@/lib/coachning";
-import { PRIORITETER, PRIORITET_ETIKETT } from "@/lib/uppgifter";
+import { PRIORITETER, PRIORITET_ETIKETT, veckodag } from "@/lib/uppgifter";
+import {
+  MONSTER,
+  MONSTER_ETIKETT,
+  VECKODAG_NAMN,
+  monstertext,
+  type Monster,
+} from "@/lib/upprepning";
 import type { Posttyp } from "@/lib/kalender";
 import { skapaKalenderpost, type KalenderState } from "./actions";
 
@@ -103,6 +110,44 @@ export function NyPost({
   const [typ, setTyp] = useState<Posttyp>("uppgift");
   const [kind, setKind] = useState<Uppgiftstyp>("uppgift");
 
+  /**
+   * 0062. Upprepningen.
+   *
+   * ===========================================================================
+   * DAGEN MAN KLICKADE PÅ ÄR FÖRVALD SOM VECKODAG, OCH DET ÄR BESTÄLLNINGEN
+   *
+   * Beställarens ord: *"om man kan välja en dag, så tex måndag, då upprepas ju
+   * den varje måndag"*. Den som klickar i måndagens ruta och kryssar i
+   * "Återkommer" ska alltså få en måndagsrutin utan att välja måndag en gång
+   * till — dagen är redan vald, det var så formuläret öppnades.
+   *
+   * Tillståndet läses därför ur `dag` och inte ur ett tomt förval. Det är också
+   * skälet att mönstret börjar på `veckovis` i stället för `dagligen`: det
+   * senare hade varit det "enklaste" förvalet och hade tyst gjort en
+   * måndagsplan till femtiosju uppgifter.
+   * ===========================================================================
+   */
+  const [upprepas, setUpprepas] = useState(false);
+  const [monster, setMonster] = useState<Monster>("veckovis");
+  const [dagar, setDagar] = useState<number[]>(() => [veckodag(dag)]);
+  const [slut, setSlut] = useState("");
+
+  /**
+   * DAGEN ÄR KONTROLLERAD SEDAN UPPREPNINGEN KOM IN.
+   *
+   * Fältet klarade sig med ett `defaultValue` så länge posten gällde en enda
+   * dag — servern läste `due_date` ur formuläret och ingen annan text i rutan
+   * påstod något om det. Nu skriver förhandsraden nedan ut vad regeln betyder,
+   * och den måste utgå från den dag som FAKTISKT står i fältet. Läste den
+   * `dag`-propen i stället skulle den som flyttat datumet en vecka fram få läsa
+   * ett löfte om den gamla dagen och se en annan i kalendern.
+   *
+   * Veckodagskryssen följer INTE med när datumet ändras. De är ett eget val så
+   * snart rutan är ikryssad, och att skriva om någons kryss för att hon rättade
+   * ett datum är den sortens hjälpsamhet som tar bort det hon nyss valde.
+   */
+  const [dagVald, setDagVald] = useState(dag);
+
   useEffect(() => {
     if (state.ok) onKlar();
   }, [state.ok, onKlar]);
@@ -189,7 +234,15 @@ export function NyPost({
 
         <label htmlFor="due_date" className="flex flex-col gap-1">
           <span className="text-micro text-ink-500">Dag</span>
-          <input id="due_date" name="due_date" type="date" required defaultValue={dag} className={KONTROLL} />
+          <input
+            id="due_date"
+            name="due_date"
+            type="date"
+            required
+            value={dagVald}
+            onChange={(e) => setDagVald(e.target.value)}
+            className={KONTROLL}
+          />
         </label>
 
         <label htmlFor="due_time" className="flex flex-col gap-1">
@@ -359,6 +412,110 @@ export function NyPost({
           <textarea id="description_md" name="description_md" rows={2} className={KONTROLL} />
         </label>
       </div>
+
+      {/* ---------------------------------------------------------------------
+          Upprepningen.
+
+          EN KRYSSRUTA SOM FÄLLER UT, och inte tre fält som alltid står där. De
+          allra flesta poster är engångshändelser, och ett mönsterval som
+          alltid syns är ett val man måste avfärda varje gång man skriver ner
+          något litet. Det är precis den friktion `tolkaSnabbrad()` finns för
+          att slippa.
+
+          FÄLTEN RITAS INTE ALLS NÄR RUTAN ÄR OKRYSSAD, i stället för att gömmas
+          med CSS. En dold kryssruta skickar ingenting i en `FormData` — men ett
+          dolt `monster` med ett värde skickar sitt värde, och det hade betytt
+          att en avbockad upprepning ändå bar en regel in i handlingen.
+          --------------------------------------------------------------------- */}
+      <fieldset className="flex flex-col gap-3 rounded-md bg-canvas p-3">
+        <label className="inline-flex items-center gap-2 text-small text-ink-700">
+          <input
+            type="checkbox"
+            name="upprepas"
+            value="ja"
+            checked={upprepas}
+            onChange={(e) => setUpprepas(e.target.checked)}
+            className="size-4 accent-brand-600"
+          />
+          <span className="font-semibold text-ink-900">Återkommer</span>
+        </label>
+
+        {!upprepas ? (
+          <p className="text-small text-ink-500">Posten läggs upp en gång.</p>
+        ) : (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label htmlFor="monster" className="flex flex-col gap-1">
+                <span className="text-micro text-ink-500">Hur ofta</span>
+                <select
+                  id="monster"
+                  name="monster"
+                  className={KONTROLL}
+                  value={monster}
+                  onChange={(e) => setMonster(e.target.value as Monster)}
+                >
+                  {MONSTER.map((m) => (
+                    <option key={m} value={m}>
+                      {MONSTER_ETIKETT[m]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label htmlFor="serie_ends_on" className="flex flex-col gap-1">
+                <span className="text-micro text-ink-500">Slutar (valfritt)</span>
+                <input
+                  id="serie_ends_on"
+                  name="serie_ends_on"
+                  type="date"
+                  min={dagVald}
+                  value={slut}
+                  onChange={(e) => setSlut(e.target.value)}
+                  className={KONTROLL}
+                />
+                <span className="text-small text-ink-500">Tomt betyder att den löper vidare.</span>
+              </label>
+            </div>
+
+            {monster === "veckovis" && (
+              <fieldset className="flex flex-col gap-2">
+                <legend className="text-micro text-ink-500">Vilka dagar</legend>
+                <div className="flex flex-wrap gap-3">
+                  {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+                    <label key={d} className="inline-flex items-center gap-2 text-small text-ink-700">
+                      <input
+                        type="checkbox"
+                        name="veckodag"
+                        value={d}
+                        checked={dagar.includes(d)}
+                        onChange={(e) =>
+                          setDagar((forra) =>
+                            e.target.checked ? [...forra, d] : forra.filter((x) => x !== d),
+                          )
+                        }
+                        className="size-4 accent-brand-600"
+                      />
+                      {VECKODAG_NAMN[d]}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            )}
+
+            {/* Regeln utskriven, av samma funktion som servern sparar den med.
+                Den som kryssar i tre rutor ska kunna läsa vad de tillsammans
+                betyder INNAN hon trycker — åtta veckors uppgifter är en sak man
+                vill ha rätt första gången. */}
+            <p className="text-small text-ink-500">
+              {monster === "veckovis" && dagar.length === 0
+                ? "Kryssa i minst en veckodag."
+                : `${monstertext({ monster, veckodagar: dagar, starts_on: dagVald, ends_on: slut || null })} från ${dagVald}${
+                    slut ? ` till ${slut}` : ""
+                  }. Åtta veckor läggs upp nu, resten fylls på efter hand.`}
+            </p>
+          </>
+        )}
+      </fieldset>
 
       {typ === "coachning" && fokus.length > 0 && (
         <fieldset className="flex flex-col gap-2">

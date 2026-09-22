@@ -55,9 +55,92 @@ när du klarat provet. Annars hade omtaget bara varit att skriva av.
 
 **Du behöver** en telefon som spelar in, något att skriva på, och en kollega i
 tjugo minuter på dag 2.`,
-    datum: "2026-09-17",
+    datum: "2026-09-22",
     roller: ["salesperson", "team_lead"],
     href: "/utbildning/slapp-inte-kunden-for-tidigt",
+  },
+  {
+    // SLUGGEN ÄR ORÖRD MED FLIT. Den bär avfärdningen i
+    // `notification_dismissed`, så en ändring hade väckt posten till liv igen
+    // för alla som redan läst den. Texten är däremot vidgad samma dag den kom
+    // ut: den sa "inget annat har flyttat", och en timme senare flyttade allt
+    // annat också. Ett felaktigt besked som står kvar är värre än ett som
+    // rättas.
+    slug: "inspelningarna-har-flyttat",
+    rubrik: "Navets filer har flyttat — allt fungerar som förut",
+    ingress:
+      "Inspelningar, läkarintyg, orderbilagor, dokumentbilagor och rollspel ligger inte längre i samma lagring som förut. Du märker ingen skillnad: samma spelare, samma uppladdning, samma regler. Säg till om något inte går att öppna eller ladda upp.",
+    text: `**Det här är en flytt under golvet, inte en ny funktion.** Samtalen
+ligger kvar på ordern, spelaren ser likadan ut, uppladdningsknapparna sitter
+där de satt, och du gör ingenting annorlunda. Att det ändå står här är för att
+du ska veta vad som hänt om något strular — och vem du ska säga det till.
+
+**Varför:** lagringen navet använde är full. Ungefär 350 samtal om dagen
+spelas in, och bara de tar drygt 200 MB per arbetsdag. Allt navet lagrar —
+inspelningar, läkarintyg, orderbilagor, dokumentbilagor och rollspel — skrivs
+nu till en egen lagring inom EU, byggd för just det här. Filer som redan
+fanns ligger kvar där de låg och fungerar precis som förut.
+
+**Inspelningar sparas i 30 dagar.** Det är samma regel som förut, men den är
+värd att upprepa: ett samtal som **inte** hör till en order får sitt ljud
+raderat efter 30 dagar. Samtalet självt står kvar — tid, längd, motpart och
+vem som ringde — men det går inte längre att lyssna på.
+
+**Hör samtalet till en order raderas ljudet aldrig.** Så fort ett samtal
+kopplats till en affär tas fristen bort, och inspelningen ligger kvar. Är det
+ett samtal du vet att du kommer att behöva: se till att det sitter på ordern.
+
+**Om något inte fungerar** — ett samtal som inte spelas upp, en spelare som
+står tyst eller tar slut mitt i, en fil som inte går att ladda upp eller öppna
+— rapportera det via Fel och förbättringar. Det är värt att veta snabbt just
+nu, medan flytten är ny.`,
+    datum: "2026-09-21",
+    roller: ["salesperson", "team_lead", "sales_manager", "ceo", "finance"],
+    href: "/order",
+  },
+  {
+    slug: "upprepade-uppgifter",
+    rubrik: "Uppgifter som återkommer — varje dag, varje vardag eller vissa veckodagar",
+    ingress:
+      "Kryssa i ”Återkommer” när du lägger in något i kalendern, så läggs det upp åtta veckor framåt. Ändrar du en av dem frågar navet om det gäller bara den dagen eller hela rutinen.",
+    text: `**Rutiner behövde skrivas in en gång i veckan.** Nu skriver du dem en gång.
+
+Tryck på en tom tid i kalendern som vanligt och kryssa i **Återkommer**. Dagen du
+klickade på är redan förvald som veckodag — klickar du i måndagens ruta blir det
+en måndagsrutin utan att du väljer måndag en gång till.
+
+**Tre mönster.** Varje dag, varje vardag, eller vissa veckodagar — du kryssar i
+dem du vill ha, en eller flera. Ett slutdatum går att sätta men behövs inte;
+utan det löper rutinen vidare.
+
+**Det som läggs upp är riktiga uppgifter.** Åtta veckor framåt står de i
+kalendern direkt, och navet fyller på efter hand. Var och en går att flytta,
+bocka av, kommentera och koppla precis som vilken uppgift som helst — de är
+uppgifter, inte en regel som ritas ut.
+
+**Ändrar du en av dem frågar navet vad du menar.** ”Bara den här förekomsten”
+flyttar måndagen den 5:e till klockan tio och lämnar resten i fred. ”Hela
+serien” skriver om alla kommande. Den förekomst du en gång ändrat för sig står
+kvar som du lämnade den, även när du senare ändrar hela serien.
+
+**Bara den närmaste säger till.** Åtta veckors uppgifter skulle annars ha blivit
+åtta rader i klockan på en gång. Det som står på tur plingar; resten är tysta
+tills det blir deras tur.
+
+**Coachningsuppgifter kan också återkomma.** Lägger du upp en veckorutin åt en
+säljare ser hon den i sin kalender och på sitt coachningskort — en i taget, inte
+alla åtta på måndagsmorgonen.
+
+**Vill du sluta?** Öppna en av uppgifterna och tryck **Avsluta rutinen**.
+Kommande förekomster som ingen rört tas bort; dagens, tidigare och allt någon
+börjat på eller bockat av står kvar. Historiken skrivs aldrig om.
+
+En sak den INTE gör: den tar ingen hänsyn till ledighet eller röda dagar.
+Landar en förekomst på en dag du är ledig ligger den kvar där — det är ditt val
+om den ska flyttas eller bockas bort.`,
+    datum: "2026-09-17",
+    roller: [],
+    href: "/kalender",
   },
   {
     slug: "utkop-och-orderformularet",

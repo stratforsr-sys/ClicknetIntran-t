@@ -136,7 +136,7 @@ export function Rollspel({
           knapp="Lämna in"
           hjalp="Ljudfil: MP3, M4A, WAV eller WEBM. Bara du, din chef och ledningen kan lyssna, och varje öppning loggas."
           forbered={(namn, mime, byte) => forberedRollspel(modulId, namn, mime, byte)}
-          registrera={(fileId, namn) => registreraRollspel(modulId, fileId, namn)}
+          registrera={(fileId, namn, store) => registreraRollspel(modulId, fileId, namn, store)}
         />
       )}
     </div>

@@ -16,6 +16,7 @@ import { skrivFel } from "@/lib/fel-server";
 import { rensaGamlaNotiser } from "@/lib/notishandelse-server";
 import { svepKoppling } from "@/lib/samtal-order-server";
 import { gallraInspelningar } from "@/lib/inspelning-server";
+import { fodSerier } from "@/lib/upprepning-server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -100,6 +101,22 @@ export async function GET(request: NextRequest) {
           ? foreslaOgiltigFranvaro(db)
           : Promise.resolve({ hoppade_over: "stämplingen är av" }),
     ],
+    /**
+     * 0062: de aterkommande uppgifterna fyller pa sin horisont.
+     *
+     * STEGET STAR TIDIGT, fore allt som LASER uppgifter. Morgonbrevet gar
+     * visserligen i ett eget jobb tre timmar senare, men coachningssteget
+     * langre ner raknar pa `coaching_task` — och en forekomst som fods efter
+     * att det steget last ar en forekomst det missar ett dygn. Ordningen ar
+     * gratis; att komma pa varfor en mandag saknades ar det inte.
+     *
+     * HAR OCH INTE I DAGTIDSJOBBET, trots att det senare kor var kvart och
+     * skulle ge snabbare pafyllning. Dagtidsjobbet vander i dorren pa helger
+     * (`veckodag >= 6`), sa en serie som natt sin horisont pa en fredag hade
+     * statt still till mandag. En rutin som slutar foda over helgen ar precis
+     * den sortens fel som ser ut som slump.
+     */
+    ["serier", () => fodSerier(db)],
     ["konton", () => korKontojobbet(db)],
     ["arenden", () => korArendejobbet(db)],
     // E7: eskalering av obekraftade sjukanmalningar, K37-frister och

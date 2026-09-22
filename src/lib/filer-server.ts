@@ -10,6 +10,16 @@ import {
   URL_SEKUNDER_LJUD,
   type Andamal,
 } from "@/lib/filer";
+import { tolkaLager } from "@/lib/lagring";
+import {
+  bucketen,
+  huvudUppgifter,
+  lagerForNyaFiler,
+  las,
+  signeraLank,
+  signeraUppladdning,
+  taBort,
+} from "@/lib/lagring-server";
 
 /**
  * ===========================================================================
@@ -39,6 +49,8 @@ import {
 
 export type Fil = {
   id: string;
+  /** Vilken lagring `bucket`/`path` ska slas upp i. Se 0065 och `lagring.ts`. */
+  store: string;
   bucket: string;
   path: string;
   purpose: Andamal;
@@ -50,8 +62,17 @@ export type Fil = {
   removed_at: string | null;
 };
 
+/**
+ * `store` star FORST och i samma lista som resten, inte i en egen lasning.
+ *
+ * Bade signeringen och borttagningen nedan behover veta var filen ligger, och
+ * bada laser genom FILFALT. En kolumn som glommdes i listan hade gett
+ * `undefined` — alltsa `tolkaLager()`:s Supabase-svar — och en R2-fil hade
+ * letats efter i Supabase utan att nagot sag trasigt ut forran nagon tryckte
+ * play.
+ */
 export const FILFALT =
-  "id, bucket, path, purpose, filename, mime_type, size_bytes, uploaded_at, uploaded_by, removed_at";
+  "id, store, bucket, path, purpose, filename, mime_type, size_bytes, uploaded_at, uploaded_by, removed_at";
 
 /**
  * Ger en kortlivad URL till filen, och skriver oppningen.
@@ -113,17 +134,17 @@ export async function signeraOchLogga(
   // ===================================================================
   const arLjud = fil.purpose === "call_recording";
 
-  const { data: signerad, error } = await db.storage
-    .from(fil.bucket)
-    .createSignedUrl(
-      fil.path,
-      arLjud ? URL_SEKUNDER_LJUD : URL_SEKUNDER,
-      arLjud ? {} : { download: namn },
-    );
+  const signerad = await signeraLank({
+    lager: tolkaLager(fil.store),
+    bucket: fil.bucket,
+    path: fil.path,
+    sekunder: arLjud ? URL_SEKUNDER_LJUD : URL_SEKUNDER,
+    laddaNedSom: arLjud ? null : namn,
+  });
 
-  if (error || !signerad) throw new Error(error?.message ?? "Filen kunde inte signeras.");
+  if ("fel" in signerad) throw new Error(signerad.fel);
 
-  return { url: signerad.signedUrl, namn };
+  return { url: signerad.url, namn };
 }
 
 /**
@@ -160,9 +181,14 @@ export async function signeraOchLogga(
 
 export type Uppladdningslank = {
   fileId: string;
+  /** Vilken lagring webblasaren ska lagga filen i. Avgor vilket falt nedan som bar. */
+  store: string;
   bucket: string;
   path: string;
+  /** Supabase: en token som dess egen klient forstar. Tom for R2. */
   token: string;
+  /** R2: en fardig PUT-adress vilken `fetch` som helst kan folja. Tom for Supabase. */
+  url: string;
 };
 
 /**
@@ -183,13 +209,18 @@ export async function forberedUppladdning(args: {
   const fileId = crypto.randomUUID();
   const path = bygStig(args.andamal, fileId);
 
-  const { data, error } = await supabaseAdmin()
-    .storage.from("filer")
-    .createSignedUploadUrl(path);
+  const lager = lagerForNyaFiler();
+  const bucket = bucketen(lager);
 
-  if (error || !data) return { fel: error?.message ?? "Uppladdningen kunde inte förberedas." };
+  // Fem minuter, inte trettio sekunder. Adressen foljs visserligen direkt —
+  // men en 40 MB stor rollspelsfil pa ett daligt kontorsnat tar langre tid an
+  // sa att SKICKA, och signaturen maste leva hela vagen genom uppladdningen och
+  // inte bara fram till dess borjan.
+  const vag = await signeraUppladdning({ lager, bucket, path, mime: args.mimetyp, sekunder: 300 });
 
-  return { fileId, bucket: "filer", path, token: data.token };
+  if ("fel" in vag) return { fel: vag.fel };
+
+  return { fileId, store: lager, bucket, path, token: vag.token ?? "", url: vag.url ?? "" };
 }
 
 /**
@@ -204,6 +235,16 @@ export async function registreraFil(args: {
   andamal: Andamal;
   filnamn: string;
   uploadedBy: string;
+  /**
+   * Lagret som steg 1 oppnade vagen till. Utelamnat betyder Supabase — en
+   * anropare fran fore omlaggningen menade alltid det.
+   *
+   * BUCKETEN TAS INTE EMOT HAR, och det ar med flit. Varden kommer fran
+   * webblasaren, och ett fritt bucketnamn hade latit en klient peka
+   * registreringen mot vilken bucket som helst i kontot. `tolkaLager()`
+   * slapper bara igenom tva varden, och bucketen raknas fram ur dem.
+   */
+  store?: string | null;
   subjectEmployeeId?: string | null;
   sickReportId?: string | null;
   documentId?: string | null;
@@ -212,39 +253,45 @@ export async function registreraFil(args: {
   const db = supabaseAdmin();
   const path = bygStig(args.andamal, args.fileId);
 
-  // Vad ligger dar egentligen? `list` med sokning pa filnamnet ger storlek och
-  // mime-typ som Storage sjalvt registrerade, inte som klienten pastod.
-  const { data: poster } = await db.storage
-    .from("filer")
-    .list(args.andamal, { search: args.fileId, limit: 1 });
+  // Lagret las INTE ur miljon utan ur den vag som faktiskt oppnades i steg 1.
+  // Mellan de tva stegen kan en deploy ha bytt installning, och filen ligger da
+  // dar den lades — inte dar en ny fil hade hamnat.
+  const lager = tolkaLager(args.store);
+  const bucket = bucketen(lager);
 
-  const post = poster?.[0];
-  if (!post) return { fel: "Filen kom aldrig fram. Försök igen." };
+  // Vad ligger dar egentligen? Lagringens eget svar, inte klientens pastaende.
+  const huvud = await huvudUppgifter({
+    lager,
+    bucket,
+    path,
+    mapp: args.andamal,
+    fileId: args.fileId,
+  });
 
-  const storlek = Number(post.metadata?.size ?? 0);
-  const mime = String(post.metadata?.mimetype ?? "").split(";")[0].trim().toLowerCase();
+  if (!huvud) return { fel: "Filen kom aldrig fram. Försök igen." };
+
+  const { storlek, mime } = huvud;
 
   const fel = provaFil(args.andamal, { type: mime, size: storlek });
   if (fel) {
-    await db.storage.from("filer").remove([path]);
+    await taBort({ lager, bucket, path });
     return { fel: fel.text };
   }
 
   // Laddas ned en gang for att kunna sagas att den ar densamma i efterhand.
   // Ett intyg som byts ut mot ett annat ska ga att upptacka.
-  const { data: innehall } = await db.storage.from("filer").download(path);
-  const checksum = innehall
-    ? createHash("sha256").update(Buffer.from(await innehall.arrayBuffer())).digest("hex")
-    : null;
+  const innehall = await las({ lager, bucket, path });
+  const checksum = innehall ? createHash("sha256").update(innehall).digest("hex") : null;
 
   if (!checksum) {
-    await db.storage.from("filer").remove([path]);
+    await taBort({ lager, bucket, path });
     return { fel: "Filen gick inte att läsa tillbaka. Försök igen." };
   }
 
   const { error: radfel } = await db.from("file_object").insert({
     id: args.fileId,
-    bucket: "filer",
+    store: lager,
+    bucket,
     path,
     purpose: args.andamal,
     subject_employee_id: args.subjectEmployeeId ?? null,
@@ -264,7 +311,7 @@ export async function registreraFil(args: {
   });
 
   if (radfel) {
-    await db.storage.from("filer").remove([path]);
+    await taBort({ lager, bucket, path });
     return { fel: radfel.message };
   }
 
@@ -296,7 +343,7 @@ export async function taBortInnehall(fileId: string, actorEmployeeId: string): P
 
   if (!fil || fil.removed_at) return;
 
-  await db.storage.from(fil.bucket).remove([fil.path]);
+  await taBort({ lager: tolkaLager(fil.store), bucket: fil.bucket, path: fil.path });
   await db
     .from("file_object")
     .update({ removed_at: new Date().toISOString(), removed_by: actorEmployeeId })

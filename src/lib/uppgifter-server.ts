@@ -17,6 +17,7 @@ import {
   type Prioritet,
   type Uppgiftsrad,
 } from "@/lib/uppgifter";
+import { tystadeForekomster } from "@/lib/upprepning";
 
 /**
  * Läsningen i uppgiftsmodulen.
@@ -36,7 +37,11 @@ import {
 
 const FALT =
   "id, title, description_md, project_id, parent_id, assignee_id, created_by," +
-  " starts_on, due_date, due_time, estimate_minutes, priority, created_at, updated_at";
+  " starts_on, due_date, due_time, estimate_minutes, priority, created_at, updated_at," +
+  // 0062. Serien läses med raden och inte i en egen fråga: tystnadsregeln i
+  // `tystadeForekomster()` behöver ALLA förekomster för att kunna säga vilken
+  // som är närmast, och en uppslagning per rad hade blivit en fråga per notis.
+  " series_id, series_on, series_losgjord";
 
 type TaskRad = {
   id: string;
@@ -53,6 +58,9 @@ type TaskRad = {
   priority: number;
   created_at: string;
   updated_at: string;
+  series_id: string | null;
+  series_on: string | null;
+  series_losgjord: boolean;
 };
 
 export type Medlem = { task_id: string; employee_id: string; role: Medlemsroll; namn: string };
@@ -111,6 +119,19 @@ export type Uppgift = Uppgiftsrad & {
   delar: Uppgiftsrad[];
   /** Den inloggades roll bland de inbjudna, om någon. */
   minRoll: Medlemsroll | null;
+
+  /**
+   * 0062. Serien raden kom ur, om någon.
+   *
+   * STÅR PÅ `Uppgift` OCH INTE PÅ `Uppgiftsrad`, med flit. `Uppgiftsrad` bärs
+   * också av deluppgifterna, och en deluppgift kan aldrig höra till en serie —
+   * `skapaUppgift` avvisar den kombinationen. Ett fält som alltid är null i
+   * hälften av sina användningar är ett fält som inbjuder till fel fråga.
+   */
+  series_id: string | null;
+  series_on: string | null;
+  /** Ändrad för sig, alltså inte längre ett avtryck av seriens mall. */
+  series_losgjord: boolean;
 };
 
 export type Projektmedlem = { employee_id: string; role: "redigerare" | "visare"; namn: string };
@@ -281,6 +302,9 @@ export async function hamtaUppgiftsbild(user: CurrentUser): Promise<Uppgiftsbild
       kopplingar: kopplingar.get(r.id) ?? [],
       delar: sorteraUppgifter(delarAv.get(r.id) ?? [], idag),
       minRoll: (medlemmar.get(r.id) ?? []).find((m) => m.employee_id === mig)?.role ?? null,
+      series_id: r.series_id,
+      series_on: r.series_on,
+      series_losgjord: r.series_losgjord ?? false,
     }));
 
   /**
@@ -467,9 +491,31 @@ export async function uppgiftsnotiser(user: CurrentUser): Promise<Notis[]> {
    * Bara uppgifter någon ANNAN lagt på mig. Mina egna anteckningar behöver
    * ingen som berättar att jag skrev dem.
    */
+  /**
+   * 0062: BARA NÄRMASTE FÖREKOMSTEN I EN SERIE SÄGER TILL.
+   *
+   * Utan den här raden är upprepningen en notisfabrik: en coachningsrutin som
+   * läggs på en säljare föder åtta veckors rader i samma sekund, alla i
+   * `ej_paborjad` med någon annan som skapare — alltså åtta "Ny uppgift" i
+   * klockan på en gång, för något som ska ske en gång i veckan.
+   *
+   * URVALET GÖRS ÖVER HELA BILDEN och inte över mina rader. Närmast i serien är
+   * närmast i serien; att räkna det per mottagare hade gett samma svar dyrare.
+   * Regeln själv står i `lib/upprepning.ts`, provad utan databas.
+   */
+  const tystade = tystadeForekomster(
+    bild.uppgifter.map((u) => ({
+      id: u.id,
+      series_id: u.series_id,
+      due_date: u.due_date,
+      stangd: arStangd(u.lage),
+    })),
+  );
+
   for (const u of bild.uppgifter) {
     if (u.assignee_id !== mig || u.created_by === mig) continue;
     if (u.lage !== "ej_paborjad") continue;
+    if (tystade.has(u.id)) continue;
 
     notiser.push({
       id: notisId("uppgift-ny", u.id),

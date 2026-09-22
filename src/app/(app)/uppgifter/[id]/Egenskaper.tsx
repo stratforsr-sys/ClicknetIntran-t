@@ -14,7 +14,7 @@ import {
   visaPrioritet,
   type Prioritet,
 } from "@/lib/uppgifter";
-import { andraUppgift, planera, tilldela, type UppgiftState } from "../actions";
+import { andraUppgift, avslutaSerie, planera, tilldela, type UppgiftState } from "../actions";
 
 type Val = { id: string; namn: string };
 
@@ -60,6 +60,7 @@ export function Egenskaper({
   projekt,
   idag,
   kanAndra,
+  serie,
 }: {
   id: string;
   title: string;
@@ -77,6 +78,16 @@ export function Egenskaper({
   projekt: Val[];
   idag: string;
   kanAndra: boolean;
+  /**
+   * 0062. Rutinen raden kom ur, redan formulerad av sidan. Null for de allra
+   * flesta uppgifter, som ar engangshandelser.
+   *
+   * TEXTEN KOMMER FARDIG OCH BYGGS INTE HAR. `serietext()` ar samma funktion
+   * som servern bekraftar med nar rutinen laggs upp, och den ar en serverdel av
+   * ett skal: mönstret bor i databasen, och en klientkopia av formuleringen
+   * hade kunnat saga "varje mandag" om en regel som sedan andrats.
+   */
+  serie: { text: string; losgjord: boolean; avslutad: boolean } | null;
 }) {
   const [oppet, setOppet] = useState(false);
 
@@ -99,6 +110,11 @@ export function Egenskaper({
         )}
 
         {projektNamn && <Chip ikon="rutiner">{projektNamn}</Chip>}
+
+        {/* Att raden aterkommer ar det forsta man vill veta om den, INNAN man
+            andrar nagot. Chippen star darfor i det stangda laget och inte bara
+            inne i panelen. */}
+        {serie && <Chip ikon="kalender">{serie.avslutad ? `${serie.text} (avslutad)` : serie.text}</Chip>}
 
         {kanAndra && (
           <button
@@ -136,7 +152,10 @@ export function Egenskaper({
         priority={priority}
         projectId={projectId}
         projekt={projekt}
+        serie={serie}
       />
+
+      {serie && <Serien id={id} serie={serie} />}
 
       <div className="border-t border-canvas pt-3">
         <Button type="button" variant="diskret" size="sm" onClick={() => setOppet(false)}>
@@ -300,6 +319,7 @@ function Detaljer({
   priority,
   projectId,
   projekt,
+  serie,
 }: {
   id: string;
   title: string;
@@ -311,6 +331,7 @@ function Detaljer({
   priority: Prioritet;
   projectId: string | null;
   projekt: Val[];
+  serie: { text: string; losgjord: boolean; avslutad: boolean } | null;
 }) {
   const [state, kor, vantar] = useActionState<UppgiftState, FormData>(andraUppgift, {});
 
@@ -362,11 +383,114 @@ function Detaljer({
         </label>
       </div>
 
+      {/* ---------------------------------------------------------------------
+          0062. Outlooks fråga, och den ställs INNAN man sparar.
+
+          BÅDA ALTERNATIVEN ÄR SYNLIGA SAMTIDIGT, i stället för en dialogruta
+          efter klicket. Skälet är att svaret ändrar VAD man håller på att göra:
+          den som skriver om rubriken på en rutin ska veta redan medan hon
+          skriver om det blir en ändring eller femtiotvå. En ruta som kommer
+          efteråt kommer när beslutet redan är fattat, och då klickar man bort
+          den.
+
+          "Bara den här" ÄR FÖRVALT, och det är det försiktiga av de två: en
+          felaktig enskild ändring rör en rad, en felaktig serieändring rör allt
+          som återstår av året.
+          --------------------------------------------------------------------- */}
+      {serie && !serie.avslutad && (
+        <fieldset className="flex flex-col gap-2 rounded-md bg-canvas p-3">
+          <legend className="text-micro text-ink-500">Ändringen gäller</legend>
+          {(
+            [
+              ["bara", "Bara den här förekomsten", "Serien fortsätter oförändrad"],
+              ["serie", "Hela serien", `${serie.text} — kommande förekomster skrivs om`],
+            ] as const
+          ).map(([varde, etikett, hjalp]) => (
+            <label key={varde} className="flex items-start gap-2 text-small text-ink-700">
+              <input
+                type="radio"
+                name="serie_omfattning"
+                value={varde}
+                defaultChecked={varde === "bara"}
+                className="mt-0.5 size-4 accent-brand-600"
+              />
+              <span>
+                <span className="font-semibold text-ink-900">{etikett}</span>
+                <span className="block text-ink-500">{hjalp}</span>
+              </span>
+            </label>
+          ))}
+          {serie.losgjord && (
+            <p className="text-small text-ink-500">
+              Den här förekomsten är redan ändrad för sig. Serieändringar rör den inte längre.
+            </p>
+          )}
+        </fieldset>
+      )}
+
       <div>
         <Button type="submit" size="sm" laddar={vantar} disabled={vantar}>
           Spara
         </Button>
       </div>
+    </form>
+  );
+}
+
+/**
+ * Rutinen bakom raden — vad den är, och vägen att stänga av den.
+ *
+ * ===========================================================================
+ * EGET FORMULÄR OCH INTE EN KNAPP I `Detaljer`
+ *
+ * Samma skäl som `Ansvarig` och `Planering` står för sig: att avsluta en rutin
+ * är inte en sparning utan ett beslut med en annan räckvidd än allt annat på
+ * sidan. Låg den i samma `<form>` hade dessutom en `Enter` i rubrikfältet
+ * kunnat utlösa den — den första submit-knappen i ett formulär är dess
+ * förvalda, och det är inte en knapp man vill trycka på av misstag.
+ *
+ * VAD SOM HÄNDER STÅR UTSKRIVET FÖRE KLICKET. "Avsluta rutinen" säger inte om
+ * de sju måndagar som redan står i kalendern försvinner eller blir kvar, och
+ * det är precis det man vill veta. Svaret — orörda framtida tas bort, gjorda
+ * står kvar — är inte gissningsbart, så det får inte vara outsagt.
+ * ===========================================================================
+ */
+function Serien({
+  id,
+  serie,
+}: {
+  id: string;
+  serie: { text: string; losgjord: boolean; avslutad: boolean };
+}) {
+  const [state, kor, vantar] = useActionState<UppgiftState, FormData>(avslutaSerie, {});
+
+  return (
+    <form action={kor} className="flex flex-col gap-2 border-t border-canvas pt-4">
+      {state.fel && <Notis ton="danger">{state.fel}</Notis>}
+      {state.ok && <Notis ton="ok">{state.ok}</Notis>}
+
+      <input type="hidden" name="id" value={id} />
+
+      <Rubrik>Återkommer</Rubrik>
+      <p className="text-small text-ink-700">{serie.text}</p>
+
+      {serie.avslutad ? (
+        <p className="text-small text-ink-500">
+          Rutinen är avslutad. Den här förekomsten står kvar, men inga nya läggs upp.
+        </p>
+      ) : (
+        <>
+          <p className="text-small text-ink-500">
+            Avslutas rutinen tas kommande förekomster som ingen rört bort. Dagens och tidigare står
+            kvar, liksom allt någon börjat på eller bockat av.
+          </p>
+          <div>
+            <Button type="submit" variant="sekundar" size="sm" laddar={vantar} disabled={vantar}>
+              Avsluta rutinen
+            </Button>
+          </div>
+        </>
+      )}
     </form>
   );
 }
