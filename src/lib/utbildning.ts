@@ -3,6 +3,32 @@
  * en "use server"-modul exponerar varje export som en anropbar slutpunkt.
  */
 
+/**
+ * Modultyperna. Listan SPEGLAR check-villkoret pa `course_module.kind` (0007,
+ * utokat i 0062) — laggs en typ till har maste den laggas till dar ocksa,
+ * annars nekar databasen och gransstnittet ser ut att ha gatt sonder.
+ *
+ * `ovning` ar en uppgift som gors pa plats: fem minuter, ingen inlamning, och
+ * ett klick nar den ar gjord. Den delar allt maskineri med `reading` — det
+ * enda som skiljer ar vad knappen och etiketterna sager. Att ge den en egen
+ * typ i stallet for att skriva "OBS! GOR DET HAR" i en lasmodul ar skillnaden
+ * mellan ett steg man ser i listan och en rubrik man skummar forbi.
+ */
+export const MODULTYPER = ["reading", "ovning", "quiz", "roleplay"] as const;
+export type Modultyp = (typeof MODULTYPER)[number];
+
+export const MODULTYP_ETIKETT: Record<Modultyp, string> = {
+  reading: "Läsning",
+  ovning: "Övning",
+  quiz: "Prov",
+  roleplay: "Rollspel",
+};
+
+/** Typer som blir klara av ett klick, utan prov och utan inlamning. */
+export function avbockningsbar(kind: string): boolean {
+  return kind === "reading" || kind === "ovning";
+}
+
 export type KursLage = "certifierad" | "pagar" | "ej_paborjad" | "forsenad" | "utgangen";
 
 export const LAGE_ETIKETT: Record<KursLage, string> = {

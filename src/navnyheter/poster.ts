@@ -14,6 +14,52 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "utbildning-slapp-inte-kunden",
+    rubrik: "Ny utbildning: släpp inte kunden för tidigt",
+    ingress:
+      'Tre dagars drill mot reflexen att lägga på när kunden säger "vi kör redan Bokadirekt" — fem övningar du gör på plats, fyra prov och ett inspelat testsamtal.',
+    text: `Kunden säger "vi kör Bokadirekt", och samtalet tar slut. Inte för att kunden
+sa nej — utan för att du hörde ett nej som inte fanns där.
+
+Under **Utbildning** ligger nu en kurs som tränar bort en enda reflex och lär in
+en enda i stället: **motstånd betyder en fråga till.**
+
+**Kursen går inte att läsa igenom.** Efter varje läsmodul ligger en övning du
+gör på plats, på fem minuter, och nästa modul öppnar sig inte förrän den är
+avbockad. Femton moduler: läsa, göra, prövas — tre varv.
+
+**Tre dagar, 20–30 minuter om dagen.**
+
+- **Dag 1** — trettio motstånd, trettio följdfrågor. Du spelar in tio av dem,
+  lyssnar på dig själv och räknar hur många som blev riktiga frågor och hur
+  många som blev pitchar med ett frågetecken efter.
+- **Dag 2** — tre lager djupt. Du skriver två kedjor på papper och stryker under
+  varje ord du lånat ur kundens svar. Går inget att stryka under är det ett
+  förhör och inte en kedja.
+- **Dag 3** — motstånd i slumpmässig ordning, tre sekunders betänketid. Och var
+  gränsen går: kursen tränar dig att inte släppa för tidigt, inte att aldrig
+  släppa. Tre av de tio du får är riktiga nej, och dem ska du höra.
+
+**Sluttestet är ett riktigt samtal.** Fem minuter med chefen eller en kollega
+som spelar kund, inspelat och uppladdat här i navet. Du bedöms mot åtta
+kriterier — som du ser innan du spelar in, inte efter. Godkänt ger ett
+certifikat som gäller i ett år.
+
+Däremellan ligger fyra prov på sammanlagt 46 frågor. **De går inte att gissa
+sig igenom:** i de flesta frågorna är tre av fyra svar riktiga följdfrågor, och
+i några är rätt svar att avsluta samtalet.
+
+Gränsen är 80 procent. **Missar du får du se exakt vilka frågor som blev fel**
+och kan göra om provet direkt — men vilket svar som var det rätta visas först
+när du klarat provet. Annars hade omtaget bara varit att skriva av.
+
+**Du behöver** en telefon som spelar in, något att skriva på, och en kollega i
+tjugo minuter på dag 2.`,
+    datum: "2026-09-22",
+    roller: ["salesperson", "team_lead"],
+    href: "/utbildning/slapp-inte-kunden-for-tidigt",
+  },
+  {
     // SLUGGEN ÄR ORÖRD MED FLIT. Den bär avfärdningen i
     // `notification_dismissed`, så en ändring hade väckt posten till liv igen
     // för alla som redan läst den. Texten är däremot vidgad samma dag den kom

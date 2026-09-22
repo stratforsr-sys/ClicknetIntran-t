@@ -9,7 +9,14 @@ import { Markdown } from "@/components/Markdown";
 import { getCurrentUser, hasRole } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { ROLE_LABEL, type Role } from "@/lib/roles";
-import { kursLage, LAGE_ETIKETT, LAGE_TON, forfallodag } from "@/lib/utbildning";
+import {
+  kursLage,
+  LAGE_ETIKETT,
+  LAGE_TON,
+  forfallodag,
+  MODULTYP_ETIKETT,
+  type Modultyp,
+} from "@/lib/utbildning";
 
 export const dynamic = "force-dynamic";
 
@@ -154,8 +161,10 @@ export default async function KursSida({ params }: { params: Promise<{ slug: str
                         {klar ? <Ikon namn="kontroll" className="size-3.5" /> : i + 1}
                       </span>
                       <span className="flex-1">{m.title}</span>
-                      {m.kind === "quiz" && (
-                        <span className="text-micro uppercase text-ink-500">Quiz</span>
+                      {m.kind !== "reading" && (
+                        <span className="text-micro uppercase text-ink-500">
+                          {MODULTYP_ETIKETT[m.kind as Modultyp] ?? m.kind}
+                        </span>
                       )}
                       {bastaForsok.has(m.id) && (
                         <span className="text-small text-ink-500">{bastaForsok.get(m.id)} %</span>

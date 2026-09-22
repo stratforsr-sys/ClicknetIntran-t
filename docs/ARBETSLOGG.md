@@ -234,6 +234,221 @@ och beskedet är osant den dagen det visas.
 
 ---
 
+## 2026-09-17 (senare) · "Kursen är inte öppen" — provet gick inte att göra, och rättningen sa ingenting
+
+Beställaren försökte göra prov 2 i sin egen kurs:
+
+> *"när jag tryckte på lämna in hände inget och istället stod det bara Kursen är
+> inte öppen. Jag förstår inte vad det ska betyda. Man ska få antalet rätt och
+> vilka som är rätt svar och så ska man göra om provet och sen gå vidare"*
+
+Två fel i ett. Spärren var begriplig för koden och obegriplig för människan, och
+rättningen bakom den gav ett tal utan innehåll.
+
+### Varför "Kursen är inte öppen"
+
+`lamnaQuiz()` hade `if (kurs.status !== "published") return { fel: "Kursen är
+inte öppen." }`. Kursen är ett utkast — med flit, den ska granskas innan den går
+ut — och den som skrev den ser varenda modul, kan klicka sig igenom läsning och
+övningar, men fick stopp på första provet.
+
+Meddelandet var sant och värdelöst. "Inte öppen" är kursens tillstånd, inte
+läsarens problem, och den som just lagt upp kursen har ingen anledning att
+gissa att det handlar om `status`.
+
+**GRANSKNINGSLÄGE.** Den som får redigera kursen kan nu göra proven även när den
+är utkast. Provet rättas på riktigt och resultatet visas — men **inget
+`course_attempt` skrivs och ingen certifiering delas ut**. `course_attempt` är
+beviskedjan (0007), och en chefs provkörning i ett utkast är inte ett bevis om
+någon. Modulen bockas däremot av, annars går det inte att granska modulerna
+efter provet, och den avbockningen är samma sorts rad som redan fanns för
+läsmodulerna.
+
+För den som INTE får redigera säger meddelandet numera vad som faktiskt gäller:
+*"Kursen är inte publicerad än. Provet går att göra när den öppnats."*
+
+### Rättningen visar nu fråga för fråga
+
+Förut kom ett tal tillbaka: *"58 % rätt. Gränsen är 80 %. Läs igenom modulen
+igen."* Vilka frågor som var fel stod ingenstans, så "läs igenom modulen igen"
+betydde i praktiken "läs om alltihop".
+
+Nu returnerar `lamnaQuiz()` ett `Quizresultat`: antal rätt, procent, gränsen,
+och ett rätt/fel **per fråga** tillsammans med vad du svarade. Vyn ritar listan
+med grön bock eller rött kryss, och en knapp: **Gör om provet** när du fallit,
+**Fortsätt** när du klarat.
+
+### FACIT SLÄPPS FÖRST NÄR PROVET ÄR KLARAT
+
+Beställningen var "vilka som är rätt svar". Avvägningen togs upp innan bygget
+och beslutet blev: **rätt/fel per fråga alltid, facit först när man klarat.**
+
+Skälet är att proven skärptes samma dag för att de gick att gissa sig igenom. I
+de flesta frågorna är tre av fyra alternativ riktiga följdfrågor, och skillnaden
+kräver att man läst modulen. Lyser facit rött direkt efter ett underkänt försök
+är omtaget att klicka i de fyra svar som nyss pekades ut — och
+80-procentsgränsen mäter ingenting från och med då.
+
+**Regeln sitter i server actionen, inte i vyn.** `facitId` är `null` i svaret så
+länge provet inte är klarat, så gränssnittet kan inte visa facit för tidigt ens
+om någon skulle vilja. Det är samma linje som `quiz_option` drog i 0007: rätt
+svar lämnar aldrig servern i onödan.
+
+### Spärrtiden togs bort (0064)
+
+En timme efter ett underkänt prov. Beställarens ord var "så ska man göra om
+provet och sen gå vidare", och en timme mitt i ett tjugominuterspass betyder
+inte "läs om modulen" utan "kom tillbaka i morgon" — och morgondagen har redan
+ett eget pass i den här kursen.
+
+`retry_wait_hours = 0` på kursraden. **AC-6.2 och `sparrTill()` står orörda** och
+gäller varje annan kurs; det här är en rad i `course`, inte en ändrad regel.
+
+Det som ersätter spärren är facitregeln ovan: omtaget kräver fortfarande att man
+vet svaret, det enda man fått gratis är vilka frågor man ska läsa om.
+
+De fyra provens ingresser skrevs om i samma migration — en av dem lovade en
+timmes väntan i klartext, och en kurs som säger en sak medan knappen gör en
+annan är värre än båda alternativen. Migrationen har en självkontroll som kastar
+om ordet står kvar någonstans i kursens texter.
+
+### Det som är värt att veta
+
+**En kurs som är utkast går nu att provköra, men bara av den som får redigera
+den.** Ser du "Kursen är inte publicerad än" är du inte i den kretsen — det är
+inte ett fel.
+
+**Ett prov i granskningsläge syns inte i progressvyn som ett försök**, bara som
+en avbockad modul. Den som letar efter sitt eget testresultat i historiken
+kommer inte att hitta det.
+
+---
+
+## 2026-09-17 · Övningar mellan modulerna, och prov som inte går att gissa sig igenom
+
+Beställaren hade sett kursen från dagen innan och kom med två saker:
+
+> *"efter varje modul, ska de ha en uppgift de ska göra på plats. Som tar 5
+> minuter max. Och sen när de har gjort uppgiften så går de vidare till nästa
+> modul. Och sen provet, vill jag ha mer svår, lite mer omfattande för alla kan
+> förstå vilka svar man ska använda där"*
+
+Bägge är riktiga. Kursen var en läsupplevelse med fyra prov, och proven gick att
+klara utan att ha läst något. Migration `0063`, och ett nytt slag av modul.
+
+### `ovning` — en fjärde modultyp
+
+`course_module.kind` har varit läsning, prov eller rollspel. En uppgift som görs
+på plats är ingen av dem: den lämnas inte in, den rättas inte, och den tar fem
+minuter.
+
+Alternativet var att skriva "GÖR DET HÄR NU" sist i en läsmodul. Skillnaden är
+att en egen modul **syns i listan som ett steg** och måste bockas av för att
+nästa ska öppna sig — AC-6.1:s ordningskrav gör hela jobbet beställningen bad
+om. En rubrik i en löptext skummas förbi.
+
+Maskineriet är läsmodulens: `klarModul()` bockar av, knappen säger "Jag har
+gjort övningen" i stället för "Jag har läst". Tillägget kostade en utökad
+check-constraint och fem rader i gränssnittet.
+
+**Etiketterna ligger nu på ett ställe.** `MODULTYPER` och `MODULTYP_ETIKETT` i
+`src/lib/utbildning.ts` — listan speglar check-villkoret på `kind`, och tre
+kopior av `v === "reading" ? "Läsning" : …` är borta. `avbockningsbar()` säger
+vilka typer som blir klara av ett klick, så att `klarModul()` inte behöver räkna
+upp dem själv. Ett prov eller ett rollspel kan fortfarande inte bockas av för
+hand; det hade gjort godkäntgränsen till en formsak.
+
+### Fem övningar, en efter varje läsmodul
+
+| Efter | Övningen | Vad den mäter |
+|---|---|---|
+| Reflexen | Tre egna samtal, skriv ner vilken exit du använde | Att du känner igen dig |
+| Regeln | Skriv om fem exiter till frågor, säg dem högt | Om du kan höra ett smygpåstående i din egen mun |
+| Dag 1 | Tio motstånd, inspelade, en fråga på var | Nio av tio ska vara riktiga frågor |
+| Dag 2 | Två kedjor på papper — **stryk under lånade ord** | Kedja eller förhör |
+| Dag 3 | Tio slumpade, tre sekunders betänketid, tre riktiga nej inblandade | Att du hör nejet också |
+
+Understrykningen i dag 2-övningen är den enda av dem som är ny som idé: kan du
+inte stryka under ett enda ord ur kundens förra svar i fråga två och tre, då är
+det ett förhör. Det är kursens abstrakta regel gjord till något man kan se på ett
+papper.
+
+Att övningarna INTE lämnas in är ett val. `module_progress` bär bara
+(person, modul, tidpunkt), och en inlämningsruta hade krävt en kolumn till och
+en chef som läser dem. Sluttestets inspelning är den riktiga kontrollen;
+övningarna är till för den som gör dem.
+
+### Varför proven gick att klara utan att ha läst något
+
+Tre fel, alla tre mina från `0061`:
+
+**RÄTT SVAR LÅG FÖRST I VARENDA FRÅGA.** `quiz_option.sort` är ritordningen och
+vyn blandar inte. Trettioen frågor, stjärnan på första raden i alla. Det ensamt
+räckte för hundra procent utan att läsa en rad.
+
+**TRE AV FYRA ALTERNATIV VAR UPPENBARA EXITER.** Den som bara visste att "man
+ska ställa en fråga" kunde stryka dem utan att förstå varför.
+
+**"VÄLJ ALLTID FRÅGAN" FUNGERADE PÅ ALLA FRÅGOR** — precis den vanan modul 12
+finns för att bryta.
+
+De nya proven: 46 frågor i stället för 31, elva till tolv per prov, rätt svar
+utspritt (8/9/16/13 över de fyra platserna), och i de flesta frågorna är tre av
+fyra alternativ riktiga följdfrågor där skillnaden är vilken som hämtar det man
+saknar. Flera frågor kräver att man läst vad kunden sa två repliker tidigare —
+en återkommande distraktor är en fråga kunden **redan har besvarat**. Och i fyra
+frågor är rätt svar att avsluta samtalet.
+
+**Ett villkor i migrationen räknar efteråt att rätt svar inte ligger på samma
+plats i mer än 45 % av frågorna.** Det fångade min första omgång: lager-frågorna
+i prov 3 hamnade naturligt på tredje raden, och sjutton av fyrtiosex svar låg på
+plats tre. Trubbigt villkor med flit — det hittar inte ett snett mönster, men
+det hittar det mönster som faktiskt uppstår när en människa skriver fyrtiosex
+frågor i rad.
+
+### Hela kursen skrevs om, inte bara delarna som ändrades
+
+Övningarna skjuts in mellan de gamla modulerna, så varje `sort` efter den första
+flyttar sig. Att flytta femton rader med ett unikt index på (course_id, sort) är
+en dans i flera steg; att skriva om är en `delete` och femton `insert`, och
+kaskaden tar frågor, alternativ, kriterier och progress med sig.
+
+Spärren är hård: kursen måste vara ett **utkast** utan ett enda rättat försök
+och utan en enda inlämnad inspelning, annars **kastar** migrationen. Finns det
+försök är någon mitt i kursen, och då är det inte innehåll som skrivs om utan
+någons historik. Att i stället avstå tyst hade lämnat en databas man tror är
+uppdaterad.
+
+Avbockade moduler får däremot försvinna — de två som fanns var granskarens egna
+klick, och modulerna de pekade på finns inte längre.
+
+### NUMRET 0062 VAR TAGET AV ETT ANNAT PASS
+
+Migrationen kördes som `0062`, och `schema_migrations` hade redan
+`0062_upprepning` — kalenderns pass 3, kört tidigare samma dag i en gren som
+inte är mergad. Raden döptes om till `0063` och checksumman räknades om efter
+att filnamnet ändrats i huvudkommentaren.
+
+**Regeln har nu bitit tre pass i rad.** Fråga `schema_migrations` i ett eget
+anrop **innan** filen skrivs, inte i samma svep som den körs. Numret är taget
+när migrationen körts, inte när den mergats — och två sessioner samma dag ser
+inte varandras grenar.
+
+### Läget
+
+Kursen är fortfarande ett **utkast**, av samma skäl som igår: raden finns i
+produktionsdatabasen så fort migrationen körts, och en publicerad kurs syns i
+klockan hos varje säljare i samma sekund.
+
+Grenen låg sex commitar efter main när passet var klart (utköpsarbetet hann
+före). `POST /merges` gav 409 på de tre vanliga filerna — arbetsloggen,
+`NASTA_SESSION.md` och `poster.ts`, alla tre för att båda sidor lägger sitt
+överst i samma lista. Mergen är därför gjord för hand: en commit med två
+föräldrar, där trädet är mains med passets filer ovanpå och de tre listorna
+sammanfogade i datumordning.
+
+---
+
 ## 2026-09-17 · Upprepade uppgifter och coachningsuppgifter (0062)
 
 Beställarens fråga: *"har du lagt till upprepade tasks i kalender och i
@@ -416,6 +631,129 @@ ingen cron, så ingenting föds automatiskt förrän grenen är mergad.
 `tests/upprepning.mjs` är grönt (73 kontroller), liksom `uppgifter`, `kalender`
 och `navnyheter`. Provet är skrivet utan databas med flit: de tre saker som kan
 gå fel i en upprepning är alla räkning.
+
+---
+
+## 2026-09-16 (senare) · Säljdrillen blev en kurs — och två saker i utbildningsmodulen som inte stämde
+
+Beställningen var ett färdigt dokument: en tredagarsdrill mot reflexen att
+släppa kunden vid första motståndet, skriven till en enskild säljare. *"Gör om
+det så att det blir till en riktig utbildning och något ordentligt."*
+
+Resultatet är kursen **Släpp inte kunden för tidigt** i `course`: tio moduler,
+fyra kunskapsprov med 31 frågor, och ett rollspel som chefen bedömer mot en
+rubrik på trettio poäng. Migration `0061`. Kursen ligger som **UTKAST** — den
+publiceras med ett klick i redaktören, se nedan.
+
+### Varför innehållet ligger i en migration
+
+Kursen är tiotusen tecken text, 31 frågor med facit och åtta
+bedömningskriterier. Skrivet för hand i redigeringsvyn är det ett par timmars
+klistrande, och ingen gör om det den dag databasen sätts upp på nytt. Här går
+den att granska i en diff innan den ligger ute.
+
+Men **migrationen är ett utsäde, inte sanningen.** Så fort kursen ligger ute är
+det redaktören som gäller. Filen kör därför ingenting alls om slugen redan
+finns — en omkörning hade annars skrivit över chefens rättelser med
+originaltexten och nollställt frågorna mitt i en pågående kurs.
+
+Frågorna skrivs i **exakt samma textformat som redaktören** (`tolkaFragor()`:
+en fråga per stycke, ett svar per rad, stjärna för rätt svar), och rubriken i
+`tolkaKriterier()`-format. Parsern ligger som `pg_temp`-funktioner i
+migrationen och försvinner med sessionen. Det är med flit: nästa kurs ska
+skrivas i redaktören som alla andra, inte mot ett SQL-API som råkade uppstå.
+
+Hjälparen är hårdare än gränssnittet på en punkt: **exakt ett rätt svar per
+fråga.** Vyn ritar radioknappar, så två stjärnor hade gett en fråga där ett
+riktigt svar räknas som fel beroende på vilket den svarande råkade välja.
+Migrationen räknar dessutom efteråt — 10 moduler, 31 frågor, 124 alternativ, 8
+kriterier — eftersom en textparser som tolkat fel inte ger ett fel, den ger en
+halv kurs.
+
+### `due_days` KAN INTE ANVÄNDAS PÅ EN KURS FÖR BEFINTLIG PERSONAL
+
+Fristen såg ut som "fjorton dagar på dig". Den är det inte. `kursLage()` matas
+med `employee.start_date` som startdatum, inte med publiceringsdagen:
+
+```
+forfallodag = personens anställningsdatum + due_days
+```
+
+En frist på fjorton dagar hade alltså gjort kursen **försenad — röd, redan
+första dagen — för varenda säljare som varit anställd längre än två veckor**.
+Fältet hör hemma på en onboardingkurs och ingen annanstans. Kontrollerat mot
+databasen: den enda publicerade kursen som finns, introduktionen, har `due_days
+= null`. Kursen lämnar det tomt. Behövs en deadline är den en uppgift.
+
+### `course.published_at` SKREVS ALDRIG AV NÅGON
+
+Kursnotisen i klockan hämtar både sin tidpunkt och sin oläst-markering ur
+`course.published_at`. Fältet sattes inte av `sparaKurs()` — det sattes inte
+av någon kod alls. Följden: varje kurs som publicerats ur redaktören fick
+`tidpunkt: ""`, hamnade sist i klockan och lystes aldrig upp som ny. Det ser ut
+som att notisen saknas.
+
+Rättat i `sparaKurs()` med samma invariant som `news_post` (se
+`publiceraNyhet`): fältet sätts **första** gången kursen publiceras och rör sig
+aldrig mer. En kurs som avpubliceras och publiceras igen ska inte dyka upp som
+ny för alla som redan börjat på den.
+
+Introduktionskursen har ett `published_at` från 2026-08-16 och påverkas inte.
+
+### Varför kursen ligger som utkast
+
+En publicerad kurs syns i klockan hos varje säljare i samma sekund raden finns
+— och raden finns så fort migrationen körts, alltså innan grenen är godkänd och
+mergad. Kursdata bor i produktionsdatabasen oavsett vilken gren som är
+utcheckad; det finns ingen preview-databas att göra misstaget i.
+
+Utkastet syns för säljchef, VD, admin och kursens ägare (`course_read` i
+`0007`), så granskningen går att göra i gränssnittet utan att något gått ut.
+
+**Publiceringen och mergen hör ihop.** Släpplistan pekar på
+`/utbildning/slapp-inte-kunden-for-tidigt`; ligger kursen kvar som utkast när
+grenen mergas pekar den på en sida målgruppen inte ser.
+
+### Kursens form
+
+| Modul | Typ | Vad den gör |
+|---|---|---|
+| 1 | läsning | Reflexen: de fyra exiterna, och skillnaden mellan motstånd och nej |
+| 2 | läsning | Regeln, och testet på vad som räknas som en fråga |
+| 3 | prov | Fråga eller exit? 9 frågor |
+| 4 | läsning | Dag 1: de trettio motstånden, soloövningen, tre fällor |
+| 5 | prov | Välj följdfrågan. 8 frågor |
+| 6 | läsning | Dag 2: tre lager, kedjan, parövningen |
+| 7 | prov | Bygger frågan på svaret? 7 frågor |
+| 8 | läsning | Dag 3: under press — **och var gränsen går** |
+| 9 | prov | Dörr eller nej? 7 frågor |
+| 10 | rollspel | Sluttestet, bedömt mot åtta kriterier |
+
+Godkäntgräns 80 %, spärrtid **1 timme** i stället för det vanliga dygnet: ett
+dygns spärr mitt i dag 1 skjuter hela drillen en dag framåt, vilket i praktiken
+betyder att den inte blir gjord. Certifikatet går ut efter tolv månader — det
+är ett beteende och inte ett faktum, och den som inte drillat på ett år har
+reflexen tillbaka.
+
+Modul 8 är det enda som inte stod i beställningen. Originalet tränar att aldrig
+släppa; kursen skiljer på motstånd och nej och räknar upp fyra lägen där ett
+rent avslut **är** det godkända svaret — ett uttalat nej, en begäran om att
+slippa bli kontaktad, fel person utan mandat eller hänvisning, och tre
+obesvarade frågor i rad. Utan den gränsen tränar kursen fram klagomål. Ett av
+de åtta rollspelskriterierna mäter just det.
+
+### Det som är värt att veta innan någon rör det här
+
+**Chefen måste öppna inspelningen innan hon kan bedöma den.** Spärren är en
+trigger i databasen som frågar `file_access_log` (`0024`), och felmeddelandet
+"Öppna inspelningen innan du bedömer den" är alltså inte ett strul.
+
+**En ändring i kurstexten görs i `/utbildning/slapp-inte-kunden-for-tidigt/redigera`,
+inte i `0061`.** Migrationen är körd och kommer aldrig att köras igen.
+
+**Skrivs rubriken om tappar redan satta delpoäng sina rader** —
+`roleplay_criterion` kaskaderar. Betyget står kvar i `course_attempt`, som är
+historiken.
 
 ---
 
