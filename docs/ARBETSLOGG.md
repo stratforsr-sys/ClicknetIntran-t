@@ -5,6 +5,235 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-21 (senare) · Allt annat följer efter — och en databas följer inte med
+
+Beställaren, efter frågan om allt nu går till Cloudflare: *"jag vill att du
+lägger upp så att allting lagras in cloudflare, inte bara inspelningar, så att
+det 100% blir primära databasen."*
+
+Två saker i samma mening, och de fick olika svar.
+
+### Filerna: ja. Tabellerna: nej.
+
+**R2 är objektlagring, inte en databas.** Den lagrar filer. Cloudflares databas
+heter D1 och är SQLite. Att flytta Navs Postgres dit hade betytt att bygga om
+applikationen, inte att flytta den:
+
+- **RLS är hela säkerhetsmodellen.** `tests/rls.mjs` loggar in som fyra roller
+  och mäter vad de faktiskt får ut. SQLite har ingen radnivåsäkerhet — varje
+  policy hade blivit ett villkor i koden, alltså exakt den sortens andra svar
+  på samma fråga som glider isär.
+- **`pg_cron` kör dagtidsjobbet** eftersom Vercels två cron-poster är slut
+  (0059). **`pg_net`** ringer ut. **Vault** håller `cron_secret`.
+- **Supabase Auth** sköter inloggning och sessioner.
+- 65 migrationer Postgres-SQL, en genererad kolumn i 0056, triggrar.
+
+Och framför allt: **databasen är 41 MB av 500.** Det finns inget problem där.
+
+Därför flyttade filerna, alla sex ändamålen, och tabellerna står kvar.
+
+### Vad som var kvar att göra
+
+Efter första passet gick bara inspelningarna till R2. De fem andra ändamålen —
+läkarintyg, dokumentbilagor, rollspel, orderbilagor, coachning — gick
+fortfarande till Supabase, och de gör det på en **helt annan väg**:
+webbläsaren laddar upp direkt till lagringen, eftersom Vercel bara tar emot
+4,5 MB i kroppen till en serverfunktion och ett rollspel får vara 40 MB.
+
+| Del | Var |
+|---|---|
+| `lagerForNyInspelning` → `lagerForNyFil` | `src/lib/lagring.ts` |
+| Signerad PUT, HeadObject, GetObject | `signeraUppladdning`, `huvudUppgifter`, `las` i `lagring-server.ts` |
+| Steg 1 och steg 3 | `forberedUppladdning`, `registreraFil` i `filer-server.ts` |
+| Webbläsarens två vägar | `src/components/Filuppladdning.tsx` |
+| Fyra server actions + fyra komponenter | `order`, `rutiner`, `franvaro`, `utbildning` |
+| PDF-textutvinningen | `order/actions.ts`, `rutiner/actions.ts` |
+
+### DET SOM ÄR VÄRT ATT VETA INNAN NÅGON RÖR DET HÄR
+
+**CORS PÅ BUCKETEN ÄR INTE VALFRITT, OCH FELET ÄR ELAKT.** Webbläsaren skickar
+en preflight före sin PUT. Svarar bucketen inte att avsändaren får skriva
+vägrar webbläsaren **tyst** — servern svarar fint, adressen ser riktig ut, och
+det enda spåret är ett CORS-fel i konsolen som aldrig når användaren. Reglerna
+sattes 2026-09-21 och släpper in `https://clicknet-nav.vercel.app` och
+`https://*.vercel.app`, metoderna GET, PUT och HEAD. **En ny bucket behöver
+samma sak.**
+
+**BUCKETNAMNET TAS INTE EMOT FRÅN WEBBLÄSAREN.** `registreraFil` tar bara
+`store`, och räknar fram bucketen ur den. Ett fritt bucketnamn från klienten
+hade låtit vem som helst peka registreringen mot vilken bucket som helst i
+kontot. `tolkaLager()` släpper bara igenom två värden.
+
+**`store` FÖLJER MED FRÅN STEG 1 TILL STEG 3, och läses inte ur miljön där.**
+Mellan de två stegen kan en deploy ha bytt inställning. Filen ligger då där den
+lades, inte där en ny fil hade hamnat.
+
+**UPPLADDNINGSLÄNKEN LEVER FEM MINUTER, INTE TRETTIO SEKUNDER.** En 40 MB stor
+rollspelsfil på ett dåligt kontorsnät tar längre tid än så att skicka, och
+signaturen måste leva hela vägen genom uppladdningen — inte bara fram till dess
+början.
+
+**GLÖM INTE DE TVÅ SOM LADDAR NER PDF:ER.** `order/actions.ts` och
+`rutiner/actions.ts` hämtade hem bilagor direkt ur Supabase för att läsa ut
+texten. Lämnade de stå hade varje ny bilaga tappat sin sökbara text — och ett
+dokument utan text ser ut som en tom PDF, inte som ett fel.
+
+### Öppna punkter
+
+- **Ingen människa har laddat upp en fil genom gränssnittet än.** Lagringsledet
+  är bevisat: preflight 204, PUT 200, innehållet identiskt, content-type
+  bevarad. Men själva knappen i Nav är inte tryckt. Första riktiga
+  uppladdningen av varje sort är värd att göra för hand.
+- **Navnyheten `inspelningarna-har-flyttat` är omskriven, inte ersatt.**
+  Sluggen är orörd — den bär avfärdningen — men texten sa "inget annat har
+  flyttat", vilket blev osant samma dag. Den som redan avfärdat posten ser inte
+  rättelsen.
+- **`coaching` har ännu ingen uppladdningsväg.** Ändamålet finns i
+  check-villkoret men ingen `forberedUppladdning` anropar det. Byggs den går
+  den samma väg som de andra utan extra arbete.
+- **Databasen står kvar i Supabase, och det är rätt.** 41 MB av 500.
+
+---
+
+## 2026-09-21 · Lagringen tog slut, och det var inte databasen
+
+Beställaren: *"vi har nått gränsen för supabase och vi behöver mer gb, men jag
+vill inte betala än för databas, kan vi också använda 1 till databas för all
+lagring utanför det som redan finns i supabase."*
+
+Frågan förutsatte att databasen var full. Det var den inte, och passet blev ett
+annat än det beställda.
+
+### Vad mätningen sa
+
+| | Använt | Fri gräns | |
+|---|---|---|---|
+| Databas | **39 MB** | 500 MB | 8 % |
+| Fillagring | **1 529 MB** | 1 024 MB | **149 %** |
+
+Hela `public` är 21 MB, och de största tabellerna är `phone_call` (6,5 MB) och
+`call_ingest` (6,2 MB). Med nuvarande takt räcker 500 MB i flera år.
+
+Fillagringen däremot: **1 693 filer, varenda en `audio/mpeg`, varenda en i
+`call_recording/`.** Inga läkarintyg, inga orderbilagor, inga dokumentbilagor —
+de tillsammans är noll byte. Snittet är 925 kB per samtal och takten 218 MB per
+arbetsdag.
+
+Gallringen på 30 dygn (0056) är byggd och körs i nattjobbet, så det planar ut.
+Men första gallringen är 13 oktober, och den planar ut vid ungefär **5 GB** —
+alltså på fel sida om gränsen. Att vänta löser ingenting.
+
+### Varför det INTE blev en databas till
+
+Att dela tabellerna över två databaser hade kostat RLS, främmande nycklar och
+joins, och löst noll — databasen har 461 MB ledigt. Det som behövde flytta var
+ljudet, och bara ljudet.
+
+Valet blev **Cloudflare R2**: 10 GB fritt mot 5 GB i jämvikt, och ingen
+avgift för uttrafik. Det sista är inte en detalj — ett samtal på fyrtiofyra
+minuter hämtas i sin helhet varje gång någon lyssnar, och Supabases fria plan
+ger 5 GB uttrafik i månaden. Ett andra Supabase-projekt (fria planen tillåter
+två) hade gett 1 GB till, alltså **fem arbetsdagar**, och två projekt att hålla
+reda på i stället för ett.
+
+Bucketen skapas med **EU-jurisdiktion**. Inspelningar är personuppgifter, och
+`eu-north-1` valdes för Supabase med K23 som skäl; en ny lagring får inte bli
+vägen runt det kravet. Jurisdiktionen går inte att ändra i efterhand.
+
+### Ändringen är en kolumn, inte en ombyggnad
+
+`file_object` var redan enda vägen till innehållet i en fil: raden bär `bucket`
+och `path`, och både signeringen och gallringen går genom den. Det enda som
+saknades var svaret på **vilken lagring** bucketen ska slås upp i.
+
+`store text not null default 'supabase'` (0065), och därmed:
+
+| Vad | Var |
+|---|---|
+| Migrationen | `supabase/migrations/0065_lagring_utanfor_supabase.sql` |
+| Valet mellan lagringarna (rent, provat) | `src/lib/lagring.ts` + `tests/lagring.mjs` |
+| De tre verben mot en lagring | `src/lib/lagring-server.ts` |
+| Uppladdning, återställningar, gallring | `src/lib/inspelning-server.ts` |
+| Signerad länk och borttagning | `src/lib/filer-server.ts` |
+| Skarpt prov mot R2 | `scripts/prova-r2.mjs` |
+
+**De 1 529 MB som redan ligger i Supabase flyttas inte.** Gallringen läser
+lagret ur raden och raderar i rätt lagring för var och en — alltså tömmer
+fristen Supabase åt oss: under 1 GB inom ett par veckor, nära noll den
+13 oktober. En flytt av 1 693 filer hade gjort samma sak, långsammare och med
+risk att tappa något på vägen.
+
+### DET SOM ÄR VÄRT ATT VETA INNAN NÅGON RÖR DET HÄR
+
+**RADEN AVGÖR VAR EN FIL LIGGER — ALDRIG MILJÖN.** Frestelsen är att låta
+"R2 är påslaget" betyda "filerna ligger i R2". Det är sant för de nya och
+falskt för de 1 693 gamla, och den dagen någon stänger av R2 pekar varenda ny
+rad fel. Miljön avgör exakt en sak: vart NÄSTA fil skrivs.
+
+**`store` MÅSTE STÅ I `FILFALT`.** Både signeringen och borttagningen läser
+genom den listan. Glöms kolumnen där blir `store` `undefined`, `tolkaLager()`
+svarar `supabase` — och en R2-fil letas i Supabase utan att något ser trasigt
+ut förrän någon trycker play.
+
+**HALVT UPPSATT R2 ÄR AVSTÄNGT.** Tre av fyra miljövärden ger inte en halv
+uppladdning utan ett fel per samtal, och ljudet finns inte kvar att hämta igen.
+`r2Konfigurerad()` kräver alla fyra.
+
+**FALLER R2 SKRIVS LJUDET TILL SUPABASE ÄNDÅ.** Med flit, och av samma skäl som
+resten av filen: växelns adress lever en halvtimme, sedan är inspelningen borta
+för alltid. En fil i en trång lagring går att flytta i morgon; en fil som aldrig
+hämtades gör det inte. Att det hänt syns utan eget fält — en inspelning från
+efter omläggningen som bär `store = 'supabase'` **är** händelsen.
+
+**INTEGRITETSHUVUDENA ÄR AVSTÄNGDA MED FLIT.** Nyare AWS-klienter lägger på
+`x-amz-checksum-*` på varje `PutObject`; S3-kompatibla lagringar har upprepade
+gånger svarat "not implemented" på dem, och då faller varje uppladdning — inte
+vid bygget, utan första gången ett samtal ringer. `WHEN_REQUIRED` ger beteendet
+klienten hade innan. Kontrollen vi lutar oss mot är ändå sha256 i
+`file_object.checksum`.
+
+**SÄTT MILJÖVARIABLERNA FÖRE MERGEN.** Navnyheten säger att inspelningarna har
+flyttat. Mergas grenen innan R2 är uppsatt faller allt tillbaka på Supabase,
+och beskedet är osant den dagen det visas.
+
+### Öppna punkter
+
+- **R2 sattes upp samma dag, och provet är grönt.** Bucketen `intranet` i
+  EU-jurisdiktion, fyra variabler i Vercel (Production + Preview) och i
+  `~/.clicknet/nav.env`, och `scripts/prova-r2.mjs` gick hela vägen: uppladdning,
+  signerad länk, nedladdning med matchande sha256, `Range` → **206**,
+  borttagning, 404. Migration `0065` är körd och verifierad — villkoret avvisar
+  `azure`, tom sträng och versal-`R2`, och alla 1 844 befintliga filer står som
+  `supabase`.
+- **S3-nycklarna härleds ur Cloudflare-tokenen.** `R2_ACCESS_KEY_ID` är tokenens
+  id, `R2_SECRET_ACCESS_KEY` är sha256 av tokenvärdet. Skapas tokenen på
+  API-vägen visas de aldrig som ett nyckelpar, och det ser då ut som att man
+  fått fel sorts token.
+- **MERGAD TILL MAIN SAMMA DAG** som `0102da7`, riktig merge-commit med två
+  föräldrar (`23775b2` + `e77f3e8`), efter uttryckligt godkännande. `behind_by`
+  var 0. Produktionsbygget grönt, och växlingen blev ren: allt till och med
+  12:55:27 gick till Supabase med den gamla koden, allt från 12:57:06 går till
+  R2. **Reservvägen slog aldrig till.**
+- **Första R2-inspelningen är verifierad mot riktig data:** 2 075 616 byte,
+  261 sekunder, hämtad genom en signerad länk — HTTP 200, exakt samma antal byte
+  som raden påstår, **sha256 matchar `file_object.checksum`**, giltig mp3, och
+  `Range` svarar 206.
+- **Det som ÄNNU inte provats är `signeraOchLogga` självt mot en R2-fil** — RLS-
+  läsningen och `file_access_log`-skrivningen runt signeringen. Koden är
+  oförändrad så när som på signeringsanropet, men första gången en inloggad
+  människa trycker play på ett samtal från efter 12:57 är värd att bekräfta.
+- **Supabase-lagringen ska nu sjunka av sig själv.** 1 658 MB vid påslaget,
+  ingenting fyller på, och gallringen börjar ta de gamla filerna 13 oktober.
+- **Arbetsloggen hoppar över 0061–0064.** De kördes 16–17 september
+  (`kurs_slapp_inte_kunden`, `upprepning`, `kursovningar_och_skarpta_prov`,
+  `prov_utan_sparrtid`) men har ingen rad här. `NASTA_SESSION.md` påstod att
+  nästa lediga nummer var `0061`; databasen sa `0065`, och det här passet tog
+  det. **Nästa lediga är `0066` — fråga `schema_migrations` ändå.**
+- **234 samtal står i `hos_vaxeln`** och har alltså aldrig fått sitt ljud
+  hämtat. De är inte utredda i det här passet.
+
+---
+
 ## 2026-09-17 · Upprepade uppgifter och coachningsuppgifter (0062)
 
 Beställarens fråga: *"har du lagt till upprepade tasks i kalender och i
@@ -173,6 +402,91 @@ ingen cron, så ingenting föds automatiskt förrän grenen är mergad.
 `tests/upprepning.mjs` är grönt (73 kontroller), liksom `uppgifter`, `kalender`
 och `navnyheter`. Provet är skrivet utan databas med flit: de tre saker som kan
 gå fel i en upprepning är alla räkning.
+
+---
+
+## 2026-09-16 · Läckprovet var rött på ett namn sidan ska visa
+
+Överlämningen sa: *"`tests/sidor.mjs` går mot produktion och rapporterar
+'/franvaro/sjuk bär efternamnet Menduza' för ekonomirollen. Frånvaromodulen."*
+Det lät som en läcka i frånvaron. Det var det inte, och skillnaden är hela
+passet.
+
+### Vad som faktiskt kom ut
+
+`/franvaro/sjuk` hämtades som alla fyra rollerna med kontexten runt varje
+träff utskriven. Samma sträng, samma ställe, för **tre** roller — inte bara
+ekonomi:
+
+```
+<li>3  Simon Menduza, Zen
+       VD
+```
+
+Det är **telefonlistan**, sidans första element. `absence_call_order` plats 3
+är `target_kind = 'role', role = 'ceo'`, VD:n heter Simon Menduza, och listan
+står för alla — annars vet den som blivit sjuk inte vem hen ska ringa. Det är
+AC-3.6 och AC-3.18, och kommentaren överst i `sjuk/page.tsx` säger det rakt ut:
+sidan har med flit ingen sjukanmälningsknapp, den har en lista på människor.
+
+Tre saker visar att ingenting annat kom ut:
+
+- `sick_report_read` är
+  `employee_id = current_employee_id() OR leads_employee(employee_id) OR has_any_role('sales_manager','ceo')`.
+  Ekonomi släpps inte in, och namnuppslagningen i `page.tsx` (rad 149–153) sker
+  förvisso med service role — men bara på `employee_id` ur rader som RLS redan
+  lämnat ut. Den kan inte nämna någon vars rad inte kom med.
+- Ekonomirollens svar bar **bara** de tre Menduza-träffarna. Ingen sjukanmäld,
+  ingen e-postadress.
+- Säljchefen fick 206 träffar. Den negativa kontrollen lever, alltså letar
+  sökningen på riktigt.
+
+### Varför provet ändå var fel, och vad som gjordes åt det
+
+Provets hemligheter är *varenda* anställds efternamn ur driften. En sida som är
+byggd för att visa ett namn blir då röd för att den gör sitt jobb. Det röda var
+alltså inte ett fynd utan en falsk positiv — och en falsk positiv som får stå
+kvar är dyrare än den ser ut: nästa session lär sig att provet "brukar vara
+rött där", och då ser den inte det äkta fyndet heller.
+
+Det billiga hade varit att hoppa över `/franvaro/sjuk`. Det vore värre än det
+röda provet: det är sjukdom som står på den sidan, alltså precis det som inte
+får läcka. Undantaget är därför så smalt det går:
+
+- **Bara den vägen.** Samma namn någon annanstans är fortfarande ett läckage.
+- **Bara efternamn, och bara för dem ringlistan själv pekar ut** — läst ur
+  `absence_call_order` i provet, inte skrivet i det. Byter VD:n namn, eller får
+  listan en ny plats, följer provet med av sig självt.
+- **E-postadresser undantas aldrig.** Ringlistan visar telefon, aldrig mejl, så
+  en adress i det svaret är ett fel även för de personerna.
+- **Chefsplatsen står inte med.** Provets användare skapas utan `manager_id`
+  (`matanvandare` i `scripts/lib/matning.mjs`), så den platsen renderar aldrig
+  ett namn för dem. Skulle den någon gång göra det ska provet bli rött.
+
+Och för att undantaget inte ska kunna tysta sidan tillkom den **positiva**
+halvan: ringlistans namn SKA stå på `/franvaro/sjuk`, för varje roll. Tas
+telefonlistan bort säger provet till i stället för att bli grönt. Det är samma
+grepp som den negativa kontrollen för säljchefen, och av samma skäl — en vakt
+som slutat hitta något bevisar ingenting.
+
+### Provet efteråt
+
+Grönt för alla fyra rollerna, 50 sidor var, inga serverfel. Säljchefens
+negativa kontroll gick från 206 träffar till 203 — exakt de tre Menduza-raderna
+på den enda undantagna sidan, ingenting annat.
+
+Och en mutationskontroll, för att inte lita på grönt i sig: en extra "hemlighet"
+som står på just den sidan (`"Registrera efter samtalet"`) lades tillfälligt
+till, och provet blev rött för alla tre rollerna. Vakten bits alltså fortfarande
+där undantaget gäller. Den raden committades inte.
+
+**Ingen produktionskod ändrades, ingen migration, ingen rad i `poster.ts`** —
+ingenting av det här syns för någon som använder navet.
+
+### Kvar i samma hörn
+
+Registerutdragsprovet är fortfarande rött på main sedan tidigare (19 kolumner
+saknas). Det rördes inte här och är ett eget pass.
 
 ---
 

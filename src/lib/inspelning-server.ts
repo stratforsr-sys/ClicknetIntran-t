@@ -4,6 +4,8 @@ import { createHash } from "node:crypto";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { bygStig, MAX_BYTE } from "@/lib/filer";
 import { gallringsfrist } from "@/lib/samtal-order";
+import { bucketen, lagerForNyaFiler, laggUpp, taBort } from "@/lib/lagring-server";
+import { tolkaLager } from "@/lib/lagring";
 
 /**
  * Hämtar hem inspelningen medan adressen fortfarande lever.
@@ -126,20 +128,46 @@ export async function hamtaInspelning(args: {
   const fileId = crypto.randomUUID();
   const path = bygStig("call_recording", fileId);
 
-  const { error: lagringsfel } = await db.storage
-    .from("filer")
-    .upload(path, buffert, { contentType: typ, upsert: false });
+  // =====================================================================
+  // LJUDET FÅR LANDA I FEL LAGRING, MEN INTE FÖRSVINNA
+  //
+  // Nya inspelningar går till R2 (0065). Faller den skrivningen — nycklar som
+  // gått ut, Cloudflare som strular, en bucket någon döpt om — provas Supabase
+  // i stället, trots att det är Supabase som är trångt.
+  //
+  // Det är med flit, och skälet är samma som hela den här filen bygger på:
+  // adressen hos växeln lever en halvtimme och sedan är ljudet borta för
+  // alltid. En fil i en full lagring går att flytta i morgon. En fil som aldrig
+  // hämtades gör det inte.
+  //
+  // Att det hänt syns utan att vi behöver ett eget fält för det: en inspelning
+  // från efter omläggningen som bär `store = 'supabase'` ÄR händelsen.
+  // =====================================================================
+  let lager = lagerForNyaFiler();
+  let bucket = bucketen(lager);
 
-  if (lagringsfel) {
-    await skrivFel(db, args.samtalId, `Lagringen nekade: ${lagringsfel.message}`);
-    return { lage: "misslyckad", skal: lagringsfel.message };
+  let lagt = await laggUpp({ lager, bucket, path, data: buffert, mime: typ });
+
+  if (!lagt.ok && lager === "r2") {
+    lager = "supabase";
+    bucket = bucketen(lager);
+    lagt = await laggUpp({ lager, bucket, path, data: buffert, mime: typ });
+  }
+
+  if (!lagt.ok) {
+    await skrivFel(db, args.samtalId, `Lagringen nekade: ${lagt.fel}`);
+    return { lage: "misslyckad", skal: lagt.fel };
   }
 
   const checksum = createHash("sha256").update(buffert).digest("hex");
 
   const { error: radfel } = await db.from("file_object").insert({
     id: fileId,
-    bucket: "filer",
+    // Lagret och bucketen skrivs SOM DE BLEV, inte som de var tänkta. Föll R2
+    // och Supabase tog emot ligger filen i Supabase, och raden ska säga det —
+    // annars pekar den på en bucket där ingenting finns.
+    store: lager,
+    bucket,
     path,
     purpose: "call_recording",
     // Den anställdas egen röst. Se 0052 om varför en inspelning har ett subjekt
@@ -161,7 +189,7 @@ export async function hamtaInspelning(args: {
     // Raden är sanningen om vad som finns. Blev det ingen rad ska det inte
     // ligga en fil kvar i bucketen som ingen kan nå — hela vägen till innehållet
     // går genom `file_object`.
-    await db.storage.from("filer").remove([path]);
+    await taBort({ lager, bucket, path });
     await skrivFel(db, args.samtalId, radfel.message);
     return { lage: "misslyckad", skal: radfel.message };
   }
@@ -179,7 +207,7 @@ export async function hamtaInspelning(args: {
     .eq("id", args.samtalId);
 
   if (samtalsfel) {
-    await db.storage.from("filer").remove([path]);
+    await taBort({ lager, bucket, path });
     await db.from("file_object").delete().eq("id", fileId);
     await skrivFel(db, args.samtalId, samtalsfel.message);
     return { lage: "misslyckad", skal: samtalsfel.message };
@@ -251,14 +279,22 @@ export async function gallraInspelningar(): Promise<{
 
     const { data: fil } = await db
       .from("file_object")
-      .select("id, bucket, path")
+      .select("id, store, bucket, path")
       .eq("id", rad.recording_file_id)
       .maybeSingle();
 
     if (fil) {
-      const { error: bortfel } = await db.storage.from(fil.bucket).remove([fil.path]);
-      if (bortfel) {
-        fel.push(`${rad.id}: ${bortfel.message}`);
+      // Lagret läses ur RADEN och inte ur miljön. Gallringen möter under en
+      // lång tid framåt båda sorterna: de 1 693 som ligger kvar i Supabase och
+      // de nya i R2. Det är också precis så de gamla filerna försvinner —
+      // ingen flytt behövs, fristen tömmer Supabase åt oss inom 30 dygn.
+      const borttaget = await taBort({
+        lager: tolkaLager(fil.store),
+        bucket: fil.bucket,
+        path: fil.path,
+      });
+      if (!borttaget.ok) {
+        fel.push(`${rad.id}: ${borttaget.fel}`);
         continue;
       }
 
