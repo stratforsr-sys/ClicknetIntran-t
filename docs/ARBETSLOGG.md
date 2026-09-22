@@ -53,6 +53,12 @@ uppgiftsrubriker** (adressen kräver ingen inloggning och går att
 vidarebefordra), och **`manus-till-person` släpps** — grenen hade legat still i
 två veckor och låg 54 commitar efter main.
 
+Grenen **taggades innan den raderades**, som `slappt/manus-till-person` →
+`b72ee10`. Beskedet var "arbetet finns i historiken", och det är sant bara så
+länge något pekar på commiten: en ref som ingen refererar är onåbar, och GitHub
+städar bort onåbara objekt utan förvarning. En tagg kostar ingenting, syns inte
+i grenlistan och utlöser ingen deploy.
+
 ### Genomgången äger nästan ingenting, och det är konstruktionen
 
 Fem steg: förfallet, inkorgen, det som ligger hos andra, projekt som stannat,
