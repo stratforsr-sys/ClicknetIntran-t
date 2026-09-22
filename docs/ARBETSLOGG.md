@@ -5,6 +5,48 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-22 · Säljkursen mergad till main och publicerad
+
+Beställaren: *"pusha bara till main"*. Det var godkännandet kursen väntat på
+sedan 2026-09-17.
+
+**Grenen låg elva commitar efter main.** `POST /merges` gav 409, och den här
+gången inte bara på de tre listfilerna: `src/app/(app)/utbildning/actions.ts`
+hade rörts på båda hållen. Den gick ändå att treväga-merga rent med `git
+merge-file` — mains ändring är `store`-parametern i `registreraRollspel` från
+R2-flytten (`0065`), min ligger i `sparaKurs` och `lamnaQuiz`, och de delar
+ingen rad. Listfilerna sammanfogades för hand i datumordning som förra gången.
+
+Inflätningen blev en commit med två föräldrar på grenen (`96f1f97`), som också
+bar släpplistans datum till 2026-09-22 — datumet är dagen posten går ut i
+produktion, inte dagen raden skrevs. Vercel grönt på grenens huvud, `behind_by`
+0, och först därefter `POST /merges` åt andra hållet: **`28a9bba`**, en riktig
+merge-commit. Produktionsbygget grönt.
+
+**Kursen publicerades i samma steg.** Det var inte en extra beställning utan
+andra halvan av samma släpp: släpplistan pekar på
+`/utbildning/slapp-inte-kunden-for-tidigt`, och en kurs som ligger kvar som
+utkast är osynlig för hela målgruppen. Posten hade alltså gått ut till en tom
+sida.
+
+Publiceringen gjordes med SQL och inte med knappen i redaktören — `status`,
+`published_at` och en rad i `audit_log` med `reason` och `via:
+merge-till-main`, så att historiken säger vad som faktiskt hände i stället för
+att se ut som ett klick någon aldrig gjorde.
+
+**Kontrollerat som vanlig säljare** (`set local role authenticated` med Vlados
+`sub`): kursen syns med alla femton moduler, och `quiz_option` svarar
+`permission denied for table quiz_option`. Facit är fortfarande stängt för varje
+inloggad roll — precis som 0007 tänkte sig, och det är värt att kontrollera just
+när en kurs går live, eftersom det är den enda gången någon utanför
+redaktörskretsen läser tabellerna.
+
+Kvar att se: **morgonbrevet i morgon bitti** tar med "utbildning du inte
+påbörjat" för dem som inte börjat. Det är första gången den samlaren har något
+att säga.
+
+---
+
 ## 2026-09-21 (senare) · Allt annat följer efter — och en databas följer inte med
 
 Beställaren, efter frågan om allt nu går till Cloudflare: *"jag vill att du
