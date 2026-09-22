@@ -15,6 +15,18 @@ import {
   vantarPaAndra,
   type Uppgift,
 } from "@/lib/uppgifter-server";
+import {
+  STEG,
+  STEG_RUBRIK,
+  genomgangslage,
+  senasttext,
+  stegantal,
+  totaltAttGaIgenom,
+  type Genomgangslage,
+  type Genomgangsrad,
+  type Stegantal,
+} from "@/lib/genomgang";
+import { senasteGenomgang } from "@/lib/genomgang-server";
 import { Lista, type Listrad, type Projektkarta } from "./Lista";
 import { Snabbrad } from "./Snabbrad";
 import { NyttProjekt } from "./NyttProjekt";
@@ -58,7 +70,7 @@ export default async function Uppgiftssidan() {
   }
 
   const mig = user.employee.id;
-  const bild = await hamtaUppgiftsbild(user);
+  const [bild, senasteVecka] = await Promise.all([hamtaUppgiftsbild(user), senasteGenomgang(user)]);
   const idag = bild.idag;
 
   const namn: Record<string, string> = Object.fromEntries(bild.namn);
@@ -103,6 +115,16 @@ export default async function Uppgiftssidan() {
 
   const aktivaProjekt = bild.projekt.filter((p) => !p.archived_at);
 
+  /**
+   * 0066. Veckogenomgången räknas fram ur samma bild som allt annat på sidan.
+   *
+   * `stilla` kommer ur `updated_at` och kräver en tidszon, så den räknas här
+   * och inte i `lib/genomgang.ts` — se rubriken i den filen.
+   */
+  const genomgangsrader: Genomgangsrad[] = bild.uppgifter.map((u) => ({ ...u, stilla: stilla(u, idag) }));
+  const genomgang = genomgangslage(idag, senasteVecka);
+  const genomgangsantal = stegantal(genomgangsrader, bild.projekt, mig, idag);
+
   return (
     <div className="flex flex-col gap-6 pt-2">
       <header className="flex flex-wrap items-start justify-between gap-4">
@@ -120,14 +142,30 @@ export default async function Uppgiftssidan() {
           redan på den här sidan när hen bestämmer sig — och en genväg som
           kräver att man först öppnar en meny är en genväg man inte tar.
         */}
-        <Link
-          href="/kalender"
-          className="inline-flex items-center gap-2 rounded-full bg-canvas px-3 py-1.5 text-small text-ink-700 transition-colors duration-fast hover:bg-brand-100 hover:text-brand-700"
-        >
-          <Ikon namn="kalender" className="size-4" />
-          Planera dagen
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          {/*
+            0066. Mallarna står som en diskret genväg och inte som ett kort:
+            man går dit när man vet att man ska göra samma sak igen, inte för
+            att få veta vad man ska göra. Genomgången har däremot ett kort
+            nedan, men bara den vecka den är aktuell.
+          */}
+          <Link
+            href="/uppgifter/mallar"
+            className="inline-flex items-center gap-2 rounded-full bg-canvas px-3 py-1.5 text-small text-ink-700 transition-colors duration-fast hover:bg-brand-100 hover:text-brand-700"
+          >
+            Mallar
+          </Link>
+          <Link
+            href="/kalender"
+            className="inline-flex items-center gap-2 rounded-full bg-canvas px-3 py-1.5 text-small text-ink-700 transition-colors duration-fast hover:bg-brand-100 hover:text-brand-700"
+          >
+            <Ikon namn="kalender" className="size-4" />
+            Planera dagen
+          </Link>
+        </div>
       </header>
+
+      <Genomgangskort lage={genomgang} antal={genomgangsantal} />
 
       <Snabbrad projektNamn={aktivaProjekt.map((p) => p.name)} />
 
@@ -261,6 +299,65 @@ export default async function Uppgiftssidan() {
         />
       )}
     </div>
+  );
+}
+
+/**
+ * Kortet som leder till veckogenomgången.
+ *
+ * ===========================================================================
+ * SYNS BARA FRÅN FREDAG, OCH BARA TILLS VECKAN ÄR AVBETAD
+ *
+ * Ett kort som står framme varje dag är ett kort man slutar se — samma sak som
+ * hänt varje permanent påminnelse i navet. `genomgangslage()` tänder det på
+ * fredagen (GTD:s veckogenomgång, och skälet håller: det som beslutas då gäller
+ * en vecka man ännu inte börjat) och släcker det i samma sekund som kvittot
+ * skrivs.
+ *
+ * KORTET RÄKNAR UPP STEGEN MED SINA TAL. "Dags för veckogenomgång" ensamt är en
+ * uppmaning utan innehåll; "3 förfallna, 6 utan dag, 1 projekt har stannat" är
+ * ett skäl. Steg utan rader står inte med — en uppräkning där fyra av fem säger
+ * noll får det att se ut som mer arbete än det är.
+ *
+ * ETT UNDANTAG FRÅN FREDAGSREGELN: har genomgången aldrig gjorts står kortet
+ * framme vilken dag som helst, men bara om det faktiskt finns något att gå
+ * igenom. Den som aldrig sett funktionen ska få veta att den finns, och inte på
+ * en fredag i en vecka då allt råkar vara tomt.
+ * ===========================================================================
+ */
+function Genomgangskort({ lage, antal }: { lage: Genomgangslage; antal: Stegantal }) {
+  const kvar = totaltAttGaIgenom(antal);
+  const forstaGangen = lage.veckorSedan === null && kvar > 0;
+
+  if (!lage.dagsFor && !forstaGangen) return null;
+
+  const delar = STEG.filter((id) => antal[id] > 0).map(
+    (id) => `${antal[id]} ${STEG_RUBRIK[id].toLowerCase()}`,
+  );
+
+  return (
+    <Link
+      href="/uppgifter/genomgang"
+      className="lift group flex flex-wrap items-center justify-between gap-3 rounded-md bg-surface p-4 shadow-elev-1 transition-shadow duration-fast"
+    >
+      <div className="min-w-0">
+        <h2 className="text-h2 text-ink-900 transition-colors duration-fast group-hover:text-brand-700">
+          Dags för veckogenomgång
+        </h2>
+        <p className="text-small text-ink-500">
+          {delar.length === 0
+            ? "Ingenting har glidit den här veckan — gå igenom och bokför den ändå, det tar en minut."
+            : delar.join(" · ")}
+        </p>
+      </div>
+      <div className="flex shrink-0 items-center gap-3">
+        <span className="text-small text-ink-500">{senasttext(lage)}</span>
+        <Ikon
+          namn="tillbaka"
+          className="size-4 rotate-180 text-ink-300 transition-colors duration-fast group-hover:text-brand-700"
+        />
+      </div>
+    </Link>
   );
 }
 

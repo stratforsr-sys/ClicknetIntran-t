@@ -201,6 +201,19 @@ export const KALLOR: Kalla[] = [
   // rubriken ovan: det som samlas in om någon ska gå att läsa för den det
   // gäller, också när det är formulerat som en rutin i stället för som en rad.
   { tabell: "task_series", kolumn: "assignee_id", andamal: "Återkommande uppgifter som läggs på dig" },
+
+  // 0066. Veckogenomgången.
+  //
+  // EN TIDSSTÄMPLAD UPPGIFT OM ATT DU ARBETADE PÅ ETT VISST SÄTT EN VISS VECKA,
+  // och det räcker för att den ska höra hemma i utdraget. Raden säger ingenting
+  // om innehållet — vad som stod i listan lagras inte — men den säger att du
+  // gick igenom din vecka den 19 september klockan 16:12, och att du lämnade
+  // tre rader kvar.
+  //
+  // Att ingen annan kan LÄSA raden (policyn i 0066 släpper bara fram den egna)
+  // ändrar ingenting här. Utdraget svarar på vad navet har registrerat om dig,
+  // inte på vem som råkar komma åt det.
+  { tabell: "weekly_review", kolumn: "employee_id", andamal: "När du gjort din veckogenomgång" },
 ];
 
 /**
@@ -358,6 +371,16 @@ export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
   { tabell: "task_series", kolumn: "created_by", skal: "Vem som la upp den återkommande rutinen" },
   { tabell: "task_series", kolumn: "ended_by", skal: "Vem som avslutade rutinen" },
   { tabell: "task_series", kolumn: "partner_id", skal: "Motpart i någon annans coachningsrutin" },
+
+  // 0066. Uppgiftsmallen är en ARBETSBESKRIVNING och inte en uppgift om en
+  // person — "så här startar vi upp en ny kund" säger ingenting om någon. De
+  // två kolumnerna säger vem som skrev respektive lade undan beskrivningen,
+  // alltså vem som gjorde något, och det man själv gjort står i händelseloggen.
+  //
+  // Uppgifterna mallen FÖDER är en helt annan sak, och de står redan i utdraget
+  // via `task.assignee_id`.
+  { tabell: "task_template", kolumn: "created_by", skal: "Vem som skrev uppgiftsmallen" },
+  { tabell: "task_template", kolumn: "archived_by", skal: "Vem som arkiverade uppgiftsmallen" },
 
   // 0057. Kalenderdelningen star i UNDANTAG med alla tre kolumnerna, och det
   // ar INTE for att den skulle sakna personuppgifter — tvartom.

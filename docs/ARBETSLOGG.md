@@ -5,6 +5,205 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-22 (kväll) · Kalenderns pass 3 — veckogenomgång och mallar (0066)
+
+Det som återstod av kalenderns pass 3 sedan 2026-09-11: **veckogenomgång** och
+**mallar**. Båda byggda i ett pass, en migration, en commit.
+
+### Passet började med att upptäcka att någon annan höll på
+
+Överlämningen sa att tre grenar var omergade och att main stod på `3236de8`.
+Den var **en timme gammal och redan fel**: `upprepade-uppgifter` hade mergats
+07:02, `utbildning-slapp-inte-kunden` 07:56, och main stod på `49e419e`. Två
+sessioner arbetade i samma repo samtidigt.
+
+Det upptäcktes av en slump. Första `compare/main...utbildning` svarade
+*ahead 3, behind 11*; ett anrop senare svarade samma fråga *ahead 0, behind 1*.
+Skillnaden mellan två läsningar med trettio sekunders mellanrum är inte
+nätverksstrul — den är en push.
+
+**Läxan är att fråga repot, inte överlämningen, om vad som är mergat.** En
+överlämning är sann när den skrivs. Den säger ingenting om vad som hänt sedan,
+och i det här repot kan det ha hänt fyra saker på en timme.
+
+Beställaren fick välja lane, och valde att jag tog pass 3 på en ny gren medan
+den andra sessionen fick behålla main.
+
+### Två frågor ställdes innan en rad skrevs, och båda hade tre svar
+
+"Veckogenomgång" och "mallar" var **mina egna ord** ur pass 1:s research, inte
+beställarens. De stod i kvarvarande arbete i tre överlämningar i rad utan att
+någon definierat dem, och det hade varit fullt möjligt att bygga fel sak i en
+vecka utan att märka det.
+
+**Veckogenomgången blev en guidad genomgång i fem steg.** Bortvalt: ett kort på
+uppgiftssidan som räknar upp vad som glidit, och en framåtblickande
+veckoplanering. Skälet som avgjorde: *ett kort läser man, en genomgång gör man
+klart.*
+
+**Mallen blev en namngiven checklista med dagsförskjutning.** Bortvalt: en
+standardvecka att lägga ut i kalendern, och en färdig text att återanvända.
+Standardveckan hade legat på tvären med upprepningen i `0062` — en serie ÄR
+redan "varje måndag 09:00, tills vidare" — och två sätt att göra samma sak
+räknar en dag olika. Den färdiga texten löser inte det checklistor löser: att
+ingen glömmer steg fyra.
+
+Samtidigt avgjordes två frågor som legat öppna: **iCal-flödet får INTE
+uppgiftsrubriker** (adressen kräver ingen inloggning och går att
+vidarebefordra), och **`manus-till-person` släpps** — grenen hade legat still i
+två veckor och låg 54 commitar efter main.
+
+### Genomgången äger nästan ingenting, och det är konstruktionen
+
+Fem steg: förfallet, inkorgen, det som ligger hos andra, projekt som stannat,
+nästa vecka. Handlingarna sitter på raden — flytta, stryk, ta själv, påminn.
+
+**Alla fyra handlingarna är lånade av uppgiftsmodulen.** `planera()`,
+`tilldela()`, `avbryt()` och `kommentera()` finns sedan `0054` och gör redan
+sina behörighetskontroller. Att skriva egna hade betytt en andra kontroll per
+handling, och två svar på samma fråga glider isär — det som glider isär i den
+här modulen är vem som får läsa någons anteckningar.
+
+Kvar blev **en enda egen server action**: `slutforGenomgang()`. Hela resten av
+sidan är filter över `hamtaUppgiftsbild()`, alltså samma fem frågor som
+`/uppgifter` och kalendern redan ställer.
+
+**Ingenting lagras om var man är i flödet.** Det övervägdes, och ströks av ett
+skäl som är värt att stå kvar: raderna ändras MEDAN man går igenom dem,
+eftersom det är precis det man gör. Ett lagrat "två kvar" hade blivit fel i
+samma sekund som någon gav en rad ett datum i en annan flik.
+
+Det som inte går att räkna fram är **om jag har gjort veckans genomgång** — en
+vecka utan förfallna uppgifter och en vecka man betat av ser likadana ut i
+datan. Därav `weekly_review`, med exakt en rad per person och vecka.
+
+### `remaining` bytte betydelse under passet, och det är den intressantaste raden
+
+Kolumnen hette först `handled`: hur många rader genomgången uträttade något med.
+Det talet finns bara i webbläsaren — det är en klickräknare — och **ett tal som
+klienten skickar in och servern inte kan kontrollera är ett tal som ser ut som
+en mätning utan att vara det.**
+
+Det som går att räkna på servern i samma ögonblick knappen trycks är hur många
+rader de fem stegen fortfarande har. Noll betyder en vecka man betat av; tre
+betyder tre man medvetet lät ligga — vilket är ett fullt giltigt slut på en
+genomgång, och något helt annat än att inte ha gjort den.
+
+Samma funktion som ritade stegen räknar kvittot. Ett andra räknesätt hade gett
+ett kvitto som motsäger sidan det kvitterar.
+
+### Genomgången är privat, och det är en funktionell egenskap
+
+`weekly_review_read` har **ingen chefsgren**. Inte `leads_employee()`, inte
+`can_read_all_employees()`.
+
+Det är inte försiktighet. En lista över vilka i laget som betat av sin vecka gör
+genomgången till något man gör FÖR ATT DEN MÄTS, och i samma stund slutar den
+vara ett verktyg och blir en närvarolista. Hela konstruktionen bygger på att man
+är ärlig mot sin egen lista — steg 1 handlar om att erkänna att sex frister
+passerat.
+
+`tests/rls.mjs` fick fyra kontroller på just det, inklusive att teamledaren och
+säljchefen ser noll.
+
+### Mallen är det enda i modulen som är avsiktligt synligt för andra
+
+`0054` drog en hård linje: en uppgiftslista är en anteckningsbok, ingen roll ger
+insyn, kretsen är fyra personer per rad. Den linjen gäller **raden**, inte
+regeln om hur man brukar göra.
+
+En mall skrivs inte i förbifarten. Vägen dit går via en egen sida där man
+medvetet skriver ner hur ett återkommande arbete ser ut, och poängen med att
+skriva ner det är att någon annan ska slippa göra om det. Snabbraden på
+`/uppgifter` är fortfarande platsen för den privata anteckningen.
+
+**Men förvalet får inte kunna överraska.** Kryssrutan står ikryssad med hela
+meningen utskriven — "Alla i navet kan använda mallen" — så att den som vill ha
+sin checklista för sig själv ser valet innan hon sparar. Ett förval som läcker
+utan att synas är ett förval man inte får ha.
+
+Momenten ärver mallens krets genom en `exists` mot `task_template` i stället för
+att upprepa villkoret. Släpps den igenom är en privat mall hemlig till namnet
+och läsbar till innehållet, vilket är sämre än ingen spärr alls — den ser ut att
+finnas.
+
+### Sex uppgifter ur ett klick får inte bli sex rader i klockan
+
+En mall som läggs på en kollega föder sex `task`-rader med någon annan som
+skapare, alla i `ej_paborjad`. Den härledda `uppgift-ny` hade gett sex poster i
+klockan på en gång.
+
+Det är samma notisfabrik som upprepningen fick tysta i `0062`, men **av motsatt
+skäl och med ett annat svar.** Serien föder åtta förekomster av SAMMA sak, och
+då är sju av dem för tidigt att säga till om — därför tystas de. Mallen föder
+sex OLIKA uppgifter, och alla sex är värda att känna till; det som inte är värt
+sex rader är att de kom samtidigt.
+
+Posterna slås därför ihop till en samlad rad per mall, med samma form som
+"3 uppgifter är försenade". Antalet står i id:t, så posten byts ut när fler
+kommer. **En ensam rad ur en mall får sin vanliga post** — att skriva "1 uppgift
+ur en mall" i stället för rubriken hade gjort beskedet sämre för att raden råkar
+ha ett ursprung.
+
+### Rundturen genom ändringsformuläret är det prov som räknas
+
+`momentTillText(tolkaMoment(x))` ska tolkas till samma moment igen. Utan den
+kontrollen går en mall sönder av att någon öppnar ändringsformuläret och sparar
+utan att röra något — **det värsta felet en redigerare kan ha, eftersom ingen
+misstänker den handlingen.**
+
+Fällan sitter i de tomma fälten: tomma fält på slutet ska klippas bort så att
+"Ring kunden" kommer tillbaka som "Ring kunden", men ett tomt fält i MITTEN
+måste stå kvar, annars flyttar allt efter det ett steg åt vänster och
+prioriteten blir ett klockslag.
+
+Tolken fick också en egen avdelning för **det som inte ska tolkas** — samma
+grepp som `tolkaSnabbrad()` har, och av samma skäl: en mall som läser "30" som
+dagar i stället för minuter ser fullkomligt riktig ut i listan och avslöjar sig
+först när någon får en uppgift en månad bort.
+
+### Villkoren provades mot riktiga databasen innan migrationen kördes
+
+`0066` kördes först i en transaktion som rullades tillbaka, med ett
+insert-försök per CHECK-villkor. Alla sex avvisades med rätt villkorsnamn, de
+positiva kontrollerna gick in, och unikindexet på `(employee_id, week_start)`
+nekade den andra genomgången samma vecka.
+
+Det är rutin sedan `0062`, där `array_length('{}',1)` visade sig vara NULL och
+ett CHECK-villkor som producerar NULL avvisar ingenting. Inget av villkoren här
+kan ge NULL — alla sitter på `not null`-kolumner — men det gick inte att veta
+utan att prova.
+
+### Ett fynd som inte är passets: `tests/rls.mjs` är röd på main
+
+Provet föll på två kontroller. **Samma två föll när mains orörda `tests/rls.mjs`
+kördes bredvid**, så det är inte grenens fel.
+
+`file_object_read` har en gren som säger att en `call_recording` syns för alla
+som får läsa ordern den sitter på, och `sales_order_read` släpper fram
+ekonomirollen via `far_hantera_order()`. Av 1 999 inspelningar i produktion
+sitter 13 på en order, så provets ekonomianvändare ser 13 rader där provet
+kräver noll.
+
+**Om det är en läcka eller meningen är inte avgjort** — den som hanterar en
+order kan argumenteras behöva höra samtalet som ledde till den. Men provet och
+policyn säger emot varandra, och en av dem har fel. Provet rörs inte förrän
+frågan är ställd; samma regel som gäller läckprovets undantag i `sidor.mjs`.
+
+### Proven
+
+`tests/genomgang.mjs` och `tests/mallar.mjs` är nya, båda utan databas. De två
+kontroller som bär dem: *"en genomgång gjord på måndagen gäller den vecka den
+gällde"* och *"momenten överlever rundturen oförändrade"*.
+
+`tests/rls.mjs` fick ett avsnitt på nio kontroller över de tre nya tabellerna.
+`tests/notiser-tackning.mjs` fick fem rader, och mutationsprovades — en
+borttagen rad faller med actionens namn. `tests/sidor.mjs` fick de två nya
+sidorna. `kalender`, `uppgifter`, `upprepning`, `notiser` och `navnyheter` kördes
+oförändrade och är gröna.
+
+---
+
 ## 2026-09-22 · Säljkursen mergad till main och publicerad
 
 Beställaren: *"pusha bara till main"*. Det var godkännandet kursen väntat på

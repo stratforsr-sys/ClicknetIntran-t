@@ -375,6 +375,23 @@ export const NOTIS_KALLOR = [
   "uppgift-vantar",
 
   /**
+   * Veckogenomgangen (0066). HARLEDD, och det ar det tydligaste fallet sedan
+   * `uppgift-granska`.
+   *
+   * "Jag har inte betat av den har veckan" ar ett TILLSTAND: det star kvar
+   * tills jag gor nagot at det, och det upphor av sig sjalvt nar veckan tar
+   * slut. En handelsepost hade krävt att nagon SKREV den pa fredagsmorgonen —
+   * alltsa en producent till som kan glomma — och den hade legat kvar i klockan
+   * aven sedan genomgangen var gjord.
+   *
+   * ID:T BAR VECKANS MANDAG, sa posten ateruppstar nasta vecka for den som
+   * klickat bort den. Ett stabilt id hade tystat pamminelsen for alltid efter
+   * en enda bortklickning — samma fälla som `uppgift-forsenade` undviker genom
+   * att bara dagens datum.
+   */
+  "veckogenomgang",
+
+  /**
    * Projektchatten (0055). EN post per projekt och inte en per replik — tio
    * repliker i samma projekt ar "10 nya i Massan" och inte tio rader.
    *

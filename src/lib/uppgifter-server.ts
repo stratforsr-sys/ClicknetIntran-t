@@ -18,6 +18,15 @@ import {
   type Uppgiftsrad,
 } from "@/lib/uppgifter";
 import { tystadeForekomster } from "@/lib/upprepning";
+import {
+  STEG,
+  STEG_RUBRIK,
+  genomgangslage,
+  stegantal,
+  totaltAttGaIgenom,
+  type Genomgangsrad,
+} from "@/lib/genomgang";
+import { senasteGenomgang } from "@/lib/genomgang-server";
 
 /**
  * Läsningen i uppgiftsmodulen.
@@ -41,7 +50,12 @@ const FALT =
   // 0062. Serien läses med raden och inte i en egen fråga: tystnadsregeln i
   // `tystadeForekomster()` behöver ALLA förekomster för att kunna säga vilken
   // som är närmast, och en uppslagning per rad hade blivit en fråga per notis.
-  " series_id, series_on, series_losgjord";
+  " series_id, series_on, series_losgjord," +
+  // 0066. Mallen raden fodddes ur, om nagon. Las MED raden av samma skal som
+  // serien: den samlade "ny uppgift"-posten nedan behover veta vilka rader som
+  // kom ur samma tillampning, och en uppslagning per rad hade blivit en fraga
+  // per notis.
+  " template_id";
 
 type TaskRad = {
   id: string;
@@ -61,9 +75,10 @@ type TaskRad = {
   series_id: string | null;
   series_on: string | null;
   series_losgjord: boolean;
+  template_id: string | null;
 };
 
-export type Medlem = { task_id: string; employee_id: string; role: Medlemsroll; namn: string };
+export type Medlem ={ task_id: string; employee_id: string; role: Medlemsroll; namn: string };
 
 export type Handelse = {
   id: string;
@@ -132,6 +147,16 @@ export type Uppgift = Uppgiftsrad & {
   series_on: string | null;
   /** Ändrad för sig, alltså inte längre ett avtryck av seriens mall. */
   series_losgjord: boolean;
+
+  /**
+   * 0066. Mallen raden föddes ur, om någon.
+   *
+   * SÄGER BARA VARIFRÅN DEN KOM. Till skillnad från serien bestämmer mallen
+   * ingenting över raden efteråt — en mall föder en gång och släpper taget, och
+   * därför finns här varken ett `template_on` eller ett `losgjord`. Fältet bär
+   * ett enda syfte: att "varför står det här i min lista" ska gå att svara på.
+   */
+  template_id: string | null;
 };
 
 export type Projektmedlem = { employee_id: string; role: "redigerare" | "visare"; namn: string };
@@ -305,6 +330,7 @@ export async function hamtaUppgiftsbild(user: CurrentUser): Promise<Uppgiftsbild
       series_id: r.series_id,
       series_on: r.series_on,
       series_losgjord: r.series_losgjord ?? false,
+      template_id: r.template_id ?? null,
     }));
 
   /**
@@ -512,10 +538,38 @@ export async function uppgiftsnotiser(user: CurrentUser): Promise<Notis[]> {
     })),
   );
 
+  /**
+   * 0066: EN MALL SOM TILLÄMPAS PÅ NÅGON ANNAN ÄR EN HÄNDELSE, INTE SEX.
+   *
+   * Samma fabriksproblem som serien löste ovan, men av ett annat skäl och med
+   * ett annat svar. Serien föder åtta förekomster av SAMMA sak, och då är sju
+   * av dem för tidigt att säga till om — därför tystas de. En mall föder sex
+   * OLIKA uppgifter, och alla sex är värda att känna till; det som inte är värt
+   * sex rader i klockan är att de kom samtidigt, ur samma klick.
+   *
+   * Posten blir därför en samlad rad som leder till uppgiftslistan, med samma
+   * form som "3 uppgifter är försenade". Raderna själva står kvar var för sig i
+   * listan och i kalendern, där man faktiskt arbetar med dem.
+   *
+   * GRUPPEN ÄR MALLEN OCH INTE TILLÄMPNINGEN. Två tillämpningar av samma mall
+   * på samma person, med olika startdagar, blir alltså en post. Att skilja dem
+   * åt hade krävt ett tillämpnings-id på varje rad — en kolumn till, för ett
+   * fall som är sällsynt och vars sammanslagning dessutom är begriplig: det
+   * står "9 uppgifter ur Uppstart ny kund", och det är sant.
+   */
+  const perMall = new Map<string, Uppgift[]>();
+
   for (const u of bild.uppgifter) {
     if (u.assignee_id !== mig || u.created_by === mig) continue;
     if (u.lage !== "ej_paborjad") continue;
     if (tystade.has(u.id)) continue;
+
+    if (u.template_id) {
+      const lista = perMall.get(u.template_id);
+      if (lista) lista.push(u);
+      else perMall.set(u.template_id, [u]);
+      continue;
+    }
 
     notiser.push({
       id: notisId("uppgift-ny", u.id),
@@ -526,6 +580,50 @@ export async function uppgiftsnotiser(user: CurrentUser): Promise<Notis[]> {
         .join(" · "),
       href: `/uppgifter/${u.id}`,
       tidpunkt: u.created_at,
+      olast: true,
+    });
+  }
+
+  for (const [mallId, rader] of perMall) {
+    /**
+     * EN ENSAM RAD UR EN MALL FÅR SIN VANLIGA POST. Att skriva "1 uppgift ur en
+     * mall" i stället för uppgiftens rubrik hade gjort beskedet sämre för att
+     * raden råkar ha ett ursprung.
+     */
+    if (rader.length === 1) {
+      const u = rader[0];
+      notiser.push({
+        id: notisId("uppgift-ny", u.id),
+        typ: "uppgift",
+        rubrik: u.title,
+        detalj: [`Från ${bild.namn.get(u.created_by) ?? "en kollega"}`, fristtext(u.due_date, bild.idag)]
+          .filter(Boolean)
+          .join(" · "),
+        href: `/uppgifter/${u.id}`,
+        tidpunkt: u.created_at,
+        olast: true,
+      });
+      continue;
+    }
+
+    // ANTALET STÅR I ID:T, så posten byts ut när fler rader kommer ur samma
+    // mall. Samma trappa som projektchattens olästa räknare.
+    const aldst = rader.reduce((a, b) => (a.created_at <= b.created_at ? a : b));
+    notiser.push({
+      id: notisId("uppgift-ny", mallId, rader.length),
+      typ: "uppgift",
+      rubrik: `${rader.length} nya uppgifter`,
+      detalj: [
+        `Från ${bild.namn.get(aldst.created_by) ?? "en kollega"}`,
+        rader
+          .slice(0, 3)
+          .map((u) => u.title)
+          .join(" · "),
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      href: "/uppgifter",
+      tidpunkt: aldst.created_at,
       olast: true,
     });
   }
@@ -578,6 +676,56 @@ export async function uppgiftsnotiser(user: CurrentUser): Promise<Notis[]> {
       tidpunkt: u.updated_at,
       olast: true,
     });
+  }
+
+  /**
+   * 0066. VECKOGENOMGÅNGEN, från fredag och tills den är bokförd.
+   *
+   * ==========================================================================
+   * POSTEN LIGGER SIST, OCH DEN LIGGER I DEN HÄR FILEN
+   *
+   * Sist, för att den är den enda posten i modulen som inte handlar om en
+   * enskild rad. Den som har tre förfallna uppgifter ska se dem först; att det
+   * dessutom är fredag är ett svagare besked än att något är sent.
+   *
+   * I den här filen, för att `hamtaUppgiftsbild()` redan är hämtad här. En egen
+   * `genomgangsnotiser()` hade betytt ytterligare fem databasfrågor per
+   * klockläsning för att räkna fram tal som redan ligger i minnet — och
+   * klockan läses på varje sidladdning.
+   *
+   * DEN TYSTA GRENEN: läsningen av `weekly_review` kan falla, och då ska
+   * resten av uppgiftsnotiserna stå kvar. En påminnelse om en genomgång får
+   * inte kunna släcka beskedet om att fyra saker är försenade.
+   * ==========================================================================
+   */
+  try {
+    const senasteVecka = await senasteGenomgang(user);
+    const lage = genomgangslage(bild.idag, senasteVecka);
+
+    if (lage.dagsFor) {
+      const rader: Genomgangsrad[] = bild.uppgifter.map((u) => ({ ...u, stilla: stilla(u, bild.idag) }));
+      const antal = stegantal(rader, bild.projekt, mig, bild.idag);
+      const kvar = totaltAttGaIgenom(antal);
+
+      notiser.push({
+        // Veckans måndag i id:t — posten återuppstår nästa vecka för den som
+        // klickat bort den, och bara då.
+        id: notisId("veckogenomgang", lage.vecka),
+        typ: "uppgift",
+        rubrik: "Dags för veckogenomgång",
+        detalj:
+          kvar === 0
+            ? "Ingenting har glidit. Bokför veckan, det tar en minut."
+            : STEG.filter((id) => antal[id] > 0)
+                .map((id) => `${antal[id]} ${STEG_RUBRIK[id].toLowerCase()}`)
+                .join(" · "),
+        href: "/uppgifter/genomgang",
+        tidpunkt: nu,
+        olast: true,
+      });
+    }
+  } catch {
+    // Tyst. Se rubriken ovan.
   }
 
   return notiser;
