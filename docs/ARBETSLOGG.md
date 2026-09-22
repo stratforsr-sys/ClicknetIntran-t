@@ -371,6 +371,20 @@ gång någon rör den här kedjan.
 **Lärdomen är inte "var noggrannare" utan att en fil får finnas på ETT ställe.**
 Arbetskopia plus träd är två sanningar, och den ena hinner alltid bli den gamla.
 
+### Och ett prov som aldrig kördes
+
+Vid mergen till main 2026-09-22 föll `tests/notiser-tackning.mjs`:
+`uppgifter::avslutaSerie` saknades i `TACKNING`. Det var **inte** ett
+mergeartefakt — provet var rött på grenen från första commiten, det kördes
+bara aldrig. Registret finns just för att en ny server action ska tvingas svara
+på om den notifierar; `avslutaSerie` gör det inte, och skälet står nu i raden:
+den som avslutar rutinen äger den och står framför knappen, och de borttagna
+förekomsterna var orörda.
+
+**Kör hela `npm test`-kedjan, inte bara provet man själv skrev.** De två prov
+som fångar något ingen annan gör — `notiser-tackning` och `navnyheter` — är
+just de man inte kommer att tänka på.
+
 ### Det som INTE byggdes, och varför
 
 - **Fokusområdena följer inte med** en coachningsserie. `coaching_task_focus`
