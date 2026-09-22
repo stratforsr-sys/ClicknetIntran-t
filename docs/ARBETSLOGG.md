@@ -5,6 +5,38 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-22 (natt) · Pass 3 mergad — kalendern är färdig
+
+Beställaren: *"merga till main"*, efter genomgång av den omritade previewen.
+
+**`behind_by` var 0**, så `POST /repos/.../merges` räckte och lade merge-commiten
+själv: **`06036a2`** med föräldrarna `49e419e` (main) och `b68fcf3` (grenen).
+Ingen squash. Att inflätningen kunde hoppas över är enda skälet att mergen tog
+en minut i stället för en timme — main stod still hela dagen efter att den andra
+sessionen tystnat 07:59.
+
+Produktionsbygget grönt. `/uppgifter/genomgang` och `/uppgifter/mallar` svarar
+med 307 mot inloggningen, alltså finns rutterna; en saknad rutt hade gett 404.
+
+**Läckprovet kördes mot produktion EFTER mergen, och det är först nu det betyder
+något.** Före mergen fanns sidorna bara på previewen, och previewen ligger bakom
+Vercels SSO — en körning där svarar 302 på varje sida och mäter ingenting alls,
+vilket den gjorde tidigare under dagen och såg grön ut på "inga serverfel". Nu:
+52 sidor, fyra roller, inga främmande namn.
+
+Säljchefens negativa kontroll gick från 284 till **305 träffar**, och det är
+väntat och rätt: mallsidans personväljare listar registret för den roll som får
+se det, precis som uppgiftens egen väljare gör sedan `0054`. Hade talet stått
+still efter att en sida med en personväljare lagts till vore det kontrollen som
+var trasig.
+
+Kvar i repot, oförändrat av det här passet: `tests/rls.mjs` är röd på main med
+två kontroller i `file_object` (eget pass — se posten nedan), registerutdrags-
+provet är rött sedan längre tillbaka, och ingen människa har ännu tryckt på R2:s
+uppladdningsknapp.
+
+---
+
 ## 2026-09-22 (kväll) · Kalenderns pass 3 — veckogenomgång och mallar (0066)
 
 Det som återstod av kalenderns pass 3 sedan 2026-09-11: **veckogenomgång** och
