@@ -5,6 +5,33 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-23 (senare) · Mergad till main
+
+Beställaren, på frågan om Simon bara skulle ha insyn: *"Nej det ska vara som det
+är så kör och merga"*.
+
+**`behind_by` var 0**, så `POST /merges` räckte och lade merge-commiten själv:
+**`cb04be3`** med föräldrarna `352f892` (main) och `5dd0d7d` (grenen). Ingen
+squash. Produktionsbygget grönt; `/uppgifter`, `/uppgifter/genomgang` och
+`/nyheter` svarar 307 mot inloggningen, alltså finns rutterna.
+
+**Simon står kvar som redigerare**, och det är ett beslut och inte en
+kvarleva. Han får därmed sju uppgifter i sina egna listor i samma stund som
+bygget gick ut — de fem coachningsraderna plus *Vi testar oss fram* och *Bygg en
+integration mot CRM*, som han varit inbjuden i sedan 2026-09-11 utan att kunna
+se dem. Räknat i produktionsdatan efter mergen: Edvin fem rader som ansvarig,
+Simon sju som redigerare, ingen av dem i `Delat med mig` — vilket är rätt, för
+ingen av de fjorton är en ren visar- eller granskarrad.
+
+Grenen är raderad. Ingen tagg behövs: commitarna är nåbara från main, till
+skillnad från `slappt/manus-till-person` som bevarade arbete som ALDRIG mergades.
+
+**Ingen människa har sett den nya fliken.** Previewen visades aldrig — mergen
+gjordes på beställarens besked. `Delat med mig` är renderad av bygget men inte
+av en inloggad, och den är dessutom tom för båda de berörda.
+
+---
+
 ## 2026-09-23 · Delade uppgifter syntes inte för någon — hålet mellan behörigheten och listan
 
 Beställaren: *"Jag har skapat uppgifter i intranätet och delat dem till Edvin,
