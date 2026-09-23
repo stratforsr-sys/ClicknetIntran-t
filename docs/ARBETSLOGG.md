@@ -103,8 +103,8 @@ Skrivningen gjordes med samma tre steg som `tilldela()` gör vid ett riktigt
 klick — `assignee_id` + `updated_at`, en `tilldelad`-rad i `task_event`, och en
 `uppgift-tilldelad` i `notification_event`. **Brevet gick inte ut**: `notifiera()`
 hänger mejlet på `after()` i en begäran, och en skrivning med SQL har ingen
-sådan. Klockan bär dem, och morgonbrevet tar dem som tillstånd — två av de fem
-har frist som passerat eller infaller idag.
+sådan. Klockan bär dem, och morgonbrevet tar dem som tillstånd — en av de fem
+(*Ta bort manus*) har frist idag, tre imorgon eller senare, en ingen alls.
 
 Edvins `visare`-rader på de fem togs bort i samma svep. Ansvarig ger redan både
 läsning och `farRedigera()`, och raden hade dessutom lagt uppgiften i hans
