@@ -37,6 +37,7 @@ import {
   forsenad,
   mittAttGora,
   veckodag,
+  type Medlemsroll,
   type Uppgiftsrad,
 } from "./uppgifter.ts";
 import { DAGSTAK, arHelg, veckansDagar, veckonummer, veckostart } from "./kalender.ts";
@@ -53,8 +54,15 @@ import { DAGSTAK, arHelg, veckansDagar, veckonummer, veckostart } from "./kalend
  * till en svensk dag kräver `svensktDatum()`, som läser en tidszon. Serverns
  * `stilla()` i uppgifter-server.ts gör det redan för delegeringslistan, och ett
  * andra räknesätt här hade varit ett andra svar på samma fråga.
+ *
+ * `minRoll` FÖLJER MED SEDAN 2026-09-23, och det är inte pynt på typen.
+ * Stegen frågar `mittAttGora()` vems raden är, och den frågan går inte att
+ * besvara på en rad som tappat sin roll på vägen hit. Utan fältet hade
+ * genomgången tyst räknat som om ingen någonsin blivit inbjuden — alltså exakt
+ * det hål den här ändringen stänger, återuppstått ett lager ned. Alla fyra
+ * ställen som bygger `Genomgangsrad` sprider `bild.uppgifter`, som bär fältet.
  */
-export type Genomgangsrad = Uppgiftsrad & { stilla: number };
+export type Genomgangsrad = Uppgiftsrad & { stilla: number; minRoll: Medlemsroll | null };
 
 export type Genomgangsprojekt = {
   id: string;

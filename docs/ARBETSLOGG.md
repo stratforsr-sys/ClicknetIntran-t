@@ -110,6 +110,16 @@ Edvins `visare`-rader på de fem togs bort i samma svep. Ansvarig ger redan båd
 läsning och `farRedigera()`, och raden hade dessutom lagt uppgiften i hans
 `Delat med mig` parallellt med hans egen lista.
 
+### Ett typfel som var värt att få
+
+Första bygget föll på `genomgang.ts:170`: `Genomgangsrad` är `Uppgiftsrad &
+{ stilla }`, och `Uppgiftsrad` bär inte `minRoll`. Felet är värt att notera för
+att det pekade på rätt sak — hade typen varit slapp nog att släppa igenom det
+hade genomgången tyst räknat som om ingen någonsin blivit inbjuden, alltså exakt
+det hål passet stänger, återuppstått ett lager ned. `minRoll` följer nu med på
+raden; alla fyra ställen som bygger en `Genomgangsrad` sprider `bild.uppgifter`,
+som redan bär fältet.
+
 ### Ingen migration
 
 Schemat räckte. `task_member` har burit rollerna sedan `0054`, och RLS-grenen
