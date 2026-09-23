@@ -4,9 +4,10 @@ import { Ikon } from "@/components/shell/Ikon";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Sektionsflikar, TomFlik } from "@/components/ui/Flikar";
 import { getCurrentUser } from "@/lib/auth";
-import { arStangd, forsenad, tidstext } from "@/lib/uppgifter";
+import { arStangd, forsenad, mittAttGora, tidstext } from "@/lib/uppgifter";
 import {
   attGranska,
+  delatMedMig,
   hamtaUppgiftsbild,
   inkorgen,
   minaIdag,
@@ -38,7 +39,7 @@ export const metadata = { title: "Uppgifter" };
  * Uppgiftsmodulens huvudsida.
  *
  * ===========================================================================
- * SEX VYER ÖVER SAMMA DATA, OCH ORDNINGEN ÄR ETT PÅSTÅENDE
+ * SJU VYER ÖVER SAMMA DATA, OCH ORDNINGEN ÄR ETT PÅSTÅENDE
  *
  * "Idag" står först för att det är den enda vyn som svarar på frågan man
  * faktiskt har på morgonen. "Väntar på andra" står före "Att granska" för att
@@ -47,6 +48,13 @@ export const metadata = { title: "Uppgifter" };
  *
  * "Alla" står i mitten och inte först, med flit. En lista med allt är en lista
  * man skrollar i stället för att beta av.
+ *
+ * "DELAT MED MIG" KOM TILL 2026-09-23 och står näst sist, för den är den enda
+ * vyn där man inte ska göra någonting — bara veta. Fram till dess fanns den
+ * inte, och det var ett hål och inte ett val: en uppgift man bjudits in i
+ * syntes i ingen av de sex andra vyerna, eftersom alla sex frågade efter
+ * `assignee_id` eller `created_by` och ingen efter medlemskap. Se rubriken
+ * över `mittAttGora()` i `lib/uppgifter.ts`.
  *
  * SIFFERRADEN ÖVERST BÄR FYRA TAL och bara de fyra som kräver att någon gör
  * något. Klara uppgifter räknas inte där — ett tal som bara växer är en affisch.
@@ -83,6 +91,7 @@ export default async function Uppgiftssidan() {
   const vantande = vantarPaAndra(bild, mig);
   const granskningar = attGranska(bild, mig);
   const inkorg = inkorgen(bild, mig);
+  const delat = delatMedMig(bild, mig);
   const forsenade = idagsrader.filter((u) => forsenad(u, idag));
 
   /**
@@ -92,7 +101,7 @@ export default async function Uppgiftssidan() {
    * vara ett arkiv — och ett arkiv utan sökning är en lista ingen läser till
    * slut. Trettio räcker för "vad gjorde jag den här månaden".
    */
-  const klara = bild.uppgifter.filter((u) => u.assignee_id === mig && arStangd(u.lage)).slice(0, 30);
+  const klara = bild.uppgifter.filter((u) => mittAttGora(u, mig) && arStangd(u.lage)).slice(0, 30);
 
   const till = (u: Uppgift): Listrad => ({
     id: u.id,
@@ -273,6 +282,42 @@ export default async function Uppgiftssidan() {
                   <TomFlik text="Inkorgen är tom. Hit hamnar det du skrivit ner utan att peka ut vem som ska göra det." />
                 ) : (
                   <Lista rader={inkorg.map(till)} namn={namn} projekt={projektkarta} idag={idag} />
+                ),
+            },
+            {
+              /*
+                DELAT MED MIG — vyn som saknades fram till 2026-09-23.
+
+                Hit hamnar det man bjudits in i utan att det är ens eget att
+                göra: visaren alltid, granskaren fram till inlämningen.
+                Redigeraren står INTE här utan i "Idag" och "Alla mina" — hon
+                förväntas arbeta i raden, och det man ska göra hör hemma i
+                listan man betar av.
+
+                `visaAnsvarig` är inte pynt. Varenda rad här är någon annans,
+                och en lista över andras uppgifter utan namn är en lista man
+                måste öppna en rad i taget för att förstå.
+              */
+              id: "delat",
+              etikett: "Delat med mig",
+              antal: delat.length,
+              innehall:
+                delat.length === 0 ? (
+                  <TomFlik text="Ingen har bjudit in dig i något just nu. Hit hamnar uppgifter du fått se eller ska granska, men som någon annan ansvarar för." />
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    <p className="text-small text-ink-500">
+                      Uppgifter du är med i men inte ansvarar för. Är du redigerare ligger de i stället bland
+                      dina egna, under Idag och Alla mina.
+                    </p>
+                    <Lista
+                      rader={delat.map(till)}
+                      namn={namn}
+                      projekt={projektkarta}
+                      idag={idag}
+                      visaAnsvarig
+                    />
+                  </div>
                 ),
             },
             {

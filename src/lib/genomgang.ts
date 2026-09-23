@@ -35,6 +35,7 @@ import {
   dagarMellan,
   datumPlusDagar,
   forsenad,
+  mittAttGora,
   veckodag,
   type Uppgiftsrad,
 } from "./uppgifter.ts";
@@ -166,7 +167,7 @@ export function arSteg(varde: unknown): varde is Stegid {
  */
 export function forfallet(rader: readonly Genomgangsrad[], mig: string, idag: string): Genomgangsrad[] {
   return rader
-    .filter((u) => u.assignee_id === mig && forsenad(u, idag))
+    .filter((u) => mittAttGora(u, mig) && forsenad(u, idag))
     .sort((a, b) => (a.due_date ?? "").localeCompare(b.due_date ?? ""));
 }
 
@@ -188,7 +189,7 @@ export function utanDag(rader: readonly Genomgangsrad[], mig: string): Genomgang
       (u) =>
         !arStangd(u.lage) &&
         u.due_date === null &&
-        (u.assignee_id === mig || (u.assignee_id === null && u.created_by === mig)),
+        (mittAttGora(u, mig) || (u.assignee_id === null && u.created_by === mig)),
     )
     .sort((a, b) => a.priority - b.priority || b.stilla - a.stilla);
 }
@@ -285,6 +286,12 @@ export function nastaVeckansNummer(idag: string): number {
  *
  * BARA MINA EGNA RADER. Steget svarar på om MIN vecka är överbokad; kollegans
  * kalender har en egen sida och en egen delningsnivå.
+ *
+ * "Mina egna" avgörs av `mittAttGora()` sedan 2026-09-23 — alltså den jag
+ * ansvarar för ELLER är inbjuden i som redigerare. Lasten måste räkna samma
+ * rader som "Idag" visar, annars säger genomgången att veckan rymmer det
+ * uppgiftssidan redan sagt att den inte gör. En visares rader står utanför:
+ * de är inte hennes arbete och ska inte fylla hennes vecka.
  */
 export function veckolast(
   rader: readonly Genomgangsrad[],
@@ -292,7 +299,7 @@ export function veckolast(
   dagar: readonly string[],
 ): Dagslast[] {
   return dagar.map((dag) => {
-    const pa = rader.filter((u) => u.assignee_id === mig && !arStangd(u.lage) && u.due_date === dag);
+    const pa = rader.filter((u) => mittAttGora(u, mig) && !arStangd(u.lage) && u.due_date === dag);
     const minuter = pa.reduce((s, u) => s + (u.estimate_minutes ?? 0), 0);
 
     return {
@@ -315,7 +322,7 @@ export function nastaVeckansRader(
 ): Genomgangsrad[] {
   const inom = new Set(dagar);
   return rader
-    .filter((u) => u.assignee_id === mig && !arStangd(u.lage) && u.due_date && inom.has(u.due_date))
+    .filter((u) => mittAttGora(u, mig) && !arStangd(u.lage) && u.due_date && inom.has(u.due_date))
     .sort((a, b) => (a.due_date ?? "").localeCompare(b.due_date ?? "") || a.priority - b.priority);
 }
 
