@@ -5,6 +5,129 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-23 · Delade uppgifter syntes inte för någon — hålet mellan behörigheten och listan
+
+Beställaren: *"Jag har skapat uppgifter i intranätet och delat dem till Edvin,
+dock ser han inte dem, varken i navet eller i mejl eller någon annan stans."*
+
+### Felet var inte där det brukar vara
+
+Första reflexen i den här modulen är RLS, och den var oskyldig. Frågan ställd
+som Edvin mot produktionsdatabasen gav **exakt de fem uppgifterna och inga
+andra** — `uppgift_synlig()` har haft en `task_member`-gren sedan `0054`, och den
+fungerade. Öppnade han `/uppgifter/<id>` i klartext laddade sidan.
+
+Felet låg ett lager upp: **ingen vy frågade någonsin efter medlemskap.** Alla sex
+listorna på `/uppgifter` filtrerade på `assignee_id === mig` eller
+`created_by === mig`. `task_member` lästes på ETT ställe i hela modulen —
+`attGranska()`, och bara för rollen `granskare` på en redan inlämnad uppgift.
+Samma sak i notiserna: alla sju grenarna i `uppgiftsnotiser()` krävde
+`assignee_id === mig`, och morgonbrevets `samlaUppgifter()` likaså. Därav att det
+inte syntes "i navet eller i mejl eller någon annan stans" — det var samma hål
+tre gånger.
+
+Nettot: en uppgift man bjudits in i **fanns, gick att läsa, och gick för en
+redigerare att ändra och bocka av — utan att det fanns någon väg fram till
+den.** `farRedigera()` hade hela tiden släppt in redigeraren. Behörigheten och
+listan sa olika saker om samma rad, och det var listan som tog fel.
+
+### Kommentaren som gjorde felet osynligt
+
+I `bjudIn()` stod, som motivering till att inbjudan inte skriver någon notis:
+
+> *"uppgiften dyker upp i personens lista i samma sekund"*
+
+Resonemanget var riktigt — en händelsepost hade legat kvar i klockan en vecka
+efter att hon redan arbetat i uppgiften. **Premissen fanns bara inte.** Det är
+den sortens fel som överlever längst: skälet att inte säga till var att hon
+redan ser det, och ingenting gjorde att någon märkte att hon inte gjorde det.
+
+Stycket står kvar i koden, nu med vad som faktiskt gällde och varför slutsatsen
+får bära först nu.
+
+### Var gränsen går, och vem som valde den
+
+Beställaren valde form innan en rad skrevs, av tre alternativ:
+**redigeraren går in i de vanliga listorna, visaren får en egen vy.**
+
+- **Redigeraren förväntas arbeta i uppgiften**, och det man ska göra hör hemma i
+  listan man betar av — `Idag`, `Alla mina`, startsidan, veckogenomgången,
+  morgonbrevet. Hon får dessutom den **härledda** `uppgift-ny`-posten i klockan,
+  alltså en som faller bort av sig själv när arbetet börjat.
+- **Visaren har inget att göra**, och en Idag-lista som fylls av annans arbete
+  slutar svara på frågan man ställer den på morgonen. Dessutom hade dagssumman
+  börjat räkna minuter som inte är ens egna.
+
+Bortvalt: *allt delat rakt in i mina listor* (enklast att skriva, och det är den
+enda egenskapen den har), och *en egen vy för allt inbjudet* — den hade lagt
+redigerarens arbete i en sidolista man går och tittar i.
+
+**Granskaren stod med i samma hål och tätas på samma ställe.** Hon syns i
+`Delat med mig` fram till inlämningen; efter den har hon `Att granska`. Ett
+prov går igenom alla fyra rollerna gånger alla sex lägena och kräver att ingen
+rad kan hamna på båda ställena.
+
+### Två funktioner, i `uppgifter.ts` och inte i vyerna
+
+`mittAttGora()` och `delatTillMig()` ligger i den importfria filen tillsammans
+med `farRedigera()` och de andra. Skälet är detsamma som gäller hela filen:
+*"vems rad är det här"* är samma fråga som *"vad får hon göra med den"*, och två
+svar på den frågan glider isär — det var precis vad som hänt här. Som bonus
+provas de av `tests/uppgifter.mjs` utan att Next startas.
+
+Anropas från: `minaIdag`, `minaOppna`, `delatMedMig` (ny), `uppgiftsnotiser` (tre
+grenar), `klara`-listan, `jobb/morgon.ts` och genomgångens `forfallet`,
+`utanDag`, `veckolast` och `nastaVeckansRader`.
+
+**Genomgången ändrades med, och det var inte självklart.** Den räknade på
+`assignee_id` rakt igenom. Lämnad orörd hade `Idag` sagt sex och veckogenomgången
+fyra om samma vecka — en lastberäkning som säger att veckan rymmer det
+uppgiftssidan just sagt att den inte gör. `vantar()` (steg 3, det delegerade) är
+däremot orört: det bygger på `created_by` och har inget med medlemskap att göra.
+
+### Kalendern rördes INTE, och det är ett beslut
+
+`kalender-server.ts` väljer fortfarande på `assignee_id`. En uppgift har **en**
+`due_time`, och två personer som drar samma rad till olika klockslag skriver över
+varandra — kalendern svarar på *när ska JAG göra det*, och den frågan har en
+ägare. Redigeraren ser raden i `Idag` och kan planera om den från uppgiftssidan;
+hon får den bara inte i sitt eget dygn.
+
+### De fem uppgifterna
+
+Zen hade satt **sig själv** som ansvarig på alla fem och bjudit in Edvin som
+*visare* och Simon som *redigerare*. På beställarens besked är **Edvin nu
+ansvarig** på alla fem; Simon står kvar som redigerare.
+
+Skrivningen gjordes med samma tre steg som `tilldela()` gör vid ett riktigt
+klick — `assignee_id` + `updated_at`, en `tilldelad`-rad i `task_event`, och en
+`uppgift-tilldelad` i `notification_event`. **Brevet gick inte ut**: `notifiera()`
+hänger mejlet på `after()` i en begäran, och en skrivning med SQL har ingen
+sådan. Klockan bär dem, och morgonbrevet tar dem som tillstånd — en av de fem
+(*Ta bort manus*) har frist idag, tre imorgon eller senare, en ingen alls.
+
+Edvins `visare`-rader på de fem togs bort i samma svep. Ansvarig ger redan både
+läsning och `farRedigera()`, och raden hade dessutom lagt uppgiften i hans
+`Delat med mig` parallellt med hans egen lista.
+
+### Ett typfel som var värt att få
+
+Första bygget föll på `genomgang.ts:170`: `Genomgangsrad` är `Uppgiftsrad &
+{ stilla }`, och `Uppgiftsrad` bär inte `minRoll`. Felet är värt att notera för
+att det pekade på rätt sak — hade typen varit slapp nog att släppa igenom det
+hade genomgången tyst räknat som om ingen någonsin blivit inbjuden, alltså exakt
+det hål passet stänger, återuppstått ett lager ned. `minRoll` följer nu med på
+raden; alla fyra ställen som bygger en `Genomgangsrad` sprider `bild.uppgifter`,
+som redan bär fältet.
+
+### Ingen migration
+
+Schemat räckte. `task_member` har burit rollerna sedan `0054`, och RLS-grenen
+fanns. **Nästa lediga migrationsnummer är fortfarande `0067`** — fråga
+`schema_migrations` ändå.
+
+---
+
 ## 2026-09-22 (natt) · Pass 3 mergad — kalendern är färdig
 
 Beställaren: *"merga till main"*, efter genomgång av den omritade previewen.

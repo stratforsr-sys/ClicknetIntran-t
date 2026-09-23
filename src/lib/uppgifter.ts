@@ -255,6 +255,78 @@ export function farGranska(k: Krets): boolean {
 }
 
 // -----------------------------------------------------------------------------
+// Vems lista raden hamnar i
+//
+// =============================================================================
+// DE HÄR TVÅ FUNKTIONERNA RÄTTAR ETT HÅL SOM STOD ÖPPET FRÅN 0054 TILL 2026-09-23
+//
+// `farRedigera()` ovan har hela tiden släppt in en redigerare att ändra, bocka
+// av och lägga deluppgifter. Men ingen av vyerna på /uppgifter frågade efter
+// medlemskap — alla sex filtrerade på `assignee_id` eller `created_by`, och
+// `attGranska()` var det enda stället där `task_member` ens lästes. En uppgift
+// man bjudits in i fanns därmed, gick att läsa, gick att arbeta i — och syntes
+// ingenstans. Enda vägen fram till den var adressen i klartext.
+//
+// Det stod uttryckligen i `bjudIn()` att någon notis inte behövdes eftersom
+// "uppgiften dyker upp i personens lista i samma sekund". Det påståendet var
+// aldrig sant. Resonemanget var riktigt; premissen fanns inte. Funktionerna
+// här gör premissen sann, och först då får den slutsatsen bära.
+//
+// DE LIGGER I `uppgifter.ts` OCH INTE I VYERNA, av samma skäl som resten av
+// filen: "vems rad är det här" är samma fråga som "vad får hon göra med den",
+// och två svar på den frågan glider isär. Här har de inga importer och provas
+// av tests/uppgifter.mjs utan att Next startas.
+// =============================================================================
+// -----------------------------------------------------------------------------
+
+/** Radens ställning i förhållande till den inloggade. En krets utan `mig`. */
+export type Stallning = {
+  assignee_id: string | null;
+  created_by: string;
+  minRoll: Medlemsroll | null;
+  lage: Lage;
+};
+
+/**
+ * Ligger raden på MIG att göra?
+ *
+ * Ansvarig, eller inbjuden som REDIGERARE — beställarens val 2026-09-23. En
+ * redigerare förväntas arbeta i uppgiften, och det man förväntas göra hör
+ * hemma i "Idag" och i "Alla mina", inte i en sidolista man går och tittar i.
+ *
+ * VISAREN STÅR INTE MED, och det är hela skälet att gränsen går just här. Den
+ * som bara får läsa har inget att göra, och en Idag-lista som fylls av annans
+ * arbete slutar svara på frågan man ställer den på morgonen — dessutom skulle
+ * dagssumman börja räkna minuter som inte är ens egna.
+ *
+ * SKAPAREN STÅR INTE HELLER MED. Den som lagt upp en uppgift åt någon annan
+ * har den i "Väntar på andra", där den hör hemma; att lägga den i Idag hade
+ * gjort delegering till något man får tillbaka i knät.
+ */
+export function mittAttGora(u: Stallning, mig: string): boolean {
+  return u.assignee_id === mig || (u.assignee_id !== mig && u.minRoll === "redigerare");
+}
+
+/**
+ * Hamnar raden i "Delat med mig"?
+ *
+ * Det som bjudits in mig i men som inte är mitt att göra. Vyn är alltså inte
+ * en sjunde lista över uppgifter utan ÅTERSTODEN — allt medlemskap som inte
+ * redan har ett hem i någon av de andra vyerna.
+ *
+ * GRANSKAREN STÅR MED, men bara fram till inlämningen. Efter den har hon
+ * "Att granska", och en rad som stod på båda ställena hade fått en att se ut
+ * som två. Före den var hennes uppgift precis lika osynlig som visarens — det
+ * är samma hål, och det tätas på samma ställe.
+ */
+export function delatTillMig(u: Stallning, mig: string): boolean {
+  if (u.assignee_id === mig || u.created_by === mig) return false;
+  if (arStangd(u.lage)) return false;
+  if (u.minRoll === "visare") return true;
+  return u.minRoll === "granskare" && u.lage !== "granskas";
+}
+
+// -----------------------------------------------------------------------------
 // Frister
 // -----------------------------------------------------------------------------
 

@@ -7,9 +7,11 @@ import { svensktDatum } from "@/lib/klocka";
 import {
   arStangd,
   dagarMellan,
+  delatTillMig,
   forsenad,
   fristtext,
   lageAv,
+  mittAttGora,
   sorteraUppgifter,
   type Handelsetyp,
   type Lage,
@@ -370,11 +372,17 @@ export async function hamtaUppgiftsbild(user: CurrentUser): Promise<Uppgiftsbild
 // som granskare.
 // -----------------------------------------------------------------------------
 
-/** Mitt att göra idag: förfallet och dagens, det jag själv ansvarar för. */
+/**
+ * Mitt att göra idag: förfallet och dagens.
+ *
+ * "Mitt" avgörs av `mittAttGora()` och inte av `assignee_id` — se rubriken över
+ * den i `uppgifter.ts`. Den som bjudits in som redigerare står med; en visare
+ * gör det inte.
+ */
 export function minaIdag(bild: Uppgiftsbild, mig: string): Uppgift[] {
   return bild.uppgifter.filter(
     (u) =>
-      u.assignee_id === mig &&
+      mittAttGora(u, mig) &&
       !arStangd(u.lage) &&
       (forsenad(u, bild.idag) || u.due_date === bild.idag),
   );
@@ -382,7 +390,21 @@ export function minaIdag(bild: Uppgiftsbild, mig: string): Uppgift[] {
 
 /** Allt öppet som är mitt, oavsett datum. Inkorgen är den utan ansvarig. */
 export function minaOppna(bild: Uppgiftsbild, mig: string): Uppgift[] {
-  return bild.uppgifter.filter((u) => u.assignee_id === mig && !arStangd(u.lage));
+  return bild.uppgifter.filter((u) => mittAttGora(u, mig) && !arStangd(u.lage));
+}
+
+/**
+ * DELAT MED MIG — det jag bjudits in i utan att det är mitt att göra.
+ *
+ * Vyn är återstoden och inte en sjunde lista: allt medlemskap som inte redan
+ * har ett hem i någon av de andra vyerna. Se `delatTillMig()` i `uppgifter.ts`.
+ *
+ * DEN STÅR INTE I SIFFERRADEN ÖVERST, med flit. Den raden bär fyra tal och
+ * bara de fyra som kräver att någon gör något — och en uppgift man fått läsa
+ * kräver per definition ingenting. Flikens eget antal räcker.
+ */
+export function delatMedMig(bild: Uppgiftsbild, mig: string): Uppgift[] {
+  return bild.uppgifter.filter((u) => delatTillMig(u, mig));
 }
 
 /**
@@ -461,9 +483,9 @@ export async function uppgiftsnotiser(user: CurrentUser): Promise<Notis[]> {
    * bort den och fortfarande inte gjort något. Ett stabilt id hade betytt att
    * en enda bortklickning tystade förseningarna för alltid.
    */
-  const forsenade = bild.uppgifter.filter((u) => u.assignee_id === mig && forsenad(u, bild.idag));
+  const forsenade = bild.uppgifter.filter((u) => mittAttGora(u, mig) && forsenad(u, bild.idag));
   const idagsrader = bild.uppgifter.filter(
-    (u) => u.assignee_id === mig && !arStangd(u.lage) && u.due_date === bild.idag,
+    (u) => mittAttGora(u, mig) && !arStangd(u.lage) && u.due_date === bild.idag,
   );
 
   if (forsenade.length > 0) {
@@ -559,7 +581,17 @@ export async function uppgiftsnotiser(user: CurrentUser): Promise<Notis[]> {
   const perMall = new Map<string, Uppgift[]>();
 
   for (const u of bild.uppgifter) {
-    if (u.assignee_id !== mig || u.created_by === mig) continue;
+    /**
+     * `mittAttGora` och inte `assignee_id`: den som bjudits in som redigerare
+     * har fått något att göra av någon annan, precis som den som tilldelats.
+     *
+     * DEN HÄR POSTEN ÄR HÄRLEDD OCH INTE SKRIVEN, och det är svaret på varför
+     * `bjudIn()` fortfarande inte skriver en notisrad. En härledd post FALLER
+     * BORT av sig själv i samma stund uppgiften lämnar `ej_paborjad` — en
+     * skriven hade legat kvar i klockan en vecka efter att hon redan arbetat
+     * i den. Visaren står inte med: hon har inte fått något att göra.
+     */
+    if (!mittAttGora(u, mig) || u.created_by === mig) continue;
     if (u.lage !== "ej_paborjad") continue;
     if (tystade.has(u.id)) continue;
 
@@ -629,7 +661,7 @@ export async function uppgiftsnotiser(user: CurrentUser): Promise<Notis[]> {
 
   /** Returnerad av en granskare. Ett besked från en människa — säger till direkt. */
   for (const u of bild.uppgifter) {
-    if (u.assignee_id !== mig || u.lage !== "returnerad") continue;
+    if (!mittAttGora(u, mig) || u.lage !== "returnerad") continue;
     notiser.push({
       id: notisId("uppgift-returnerad", u.id),
       typ: "uppgift",

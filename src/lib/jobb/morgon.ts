@@ -282,6 +282,26 @@ async function samlaUppgifter(db: SupabaseClient, idag: string, lagg: Lagg): Pro
     lagen.set(u.id, lageAv(perUppgift.get(u.id) ?? []));
   }
 
+  /**
+   * Redigerarna per uppgift.
+   *
+   * 2026-09-23: brevet räknade fram till då bara på `assignee_id`, precis som
+   * vyerna på /uppgifter gjorde — och en redigerare som fått en frist på sig
+   * fick därmed varken lista eller brev. `mittAttGora()` i `lib/uppgifter.ts`
+   * äger gränsen; den här kartan är samma fråga ställd på ett dataurval som
+   * inte har `minRoll` på raden.
+   *
+   * VISAREN STÅR INTE MED. Ett brev om något man bara får titta på är precis
+   * den sortens rad som får folk att sluta öppna morgonbrevet.
+   */
+  const redigerarePer = new Map<string, string[]>();
+  for (const m of (medlemmar ?? []) as { task_id: string; employee_id: string; role: string }[]) {
+    if (m.role !== "redigerare") continue;
+    const lista = redigerarePer.get(m.task_id);
+    if (lista) lista.push(m.employee_id);
+    else redigerarePer.set(m.task_id, [m.employee_id]);
+  }
+
   for (const u of (uppgifter ?? []) as Uppgiftsrad[]) {
     const lage = lagen.get(u.id) ?? "ej_paborjad";
     if (arStangd(lage)) continue;
@@ -289,9 +309,14 @@ async function samlaUppgifter(db: SupabaseClient, idag: string, lagg: Lagg): Pro
     const nar = [fristtext(u.due_date, idag), u.due_time?.slice(0, 5)].filter(Boolean).join(" ");
     const rad = `${u.title}${nar ? ` (${nar})` : ""}`;
 
-    if (u.assignee_id && u.due_date) {
-      if (u.due_date < idag) lagg(u.assignee_id, "FÖRSENAT", rad);
-      else if (u.due_date === idag) lagg(u.assignee_id, "IDAG", rad);
+    if (u.due_date) {
+      const avsnitt = u.due_date < idag ? "FÖRSENAT" : u.due_date === idag ? "IDAG" : null;
+      if (avsnitt) {
+        if (u.assignee_id) lagg(u.assignee_id, avsnitt, rad);
+        for (const e of redigerarePer.get(u.id) ?? []) {
+          if (e !== u.assignee_id) lagg(e, avsnitt, rad);
+        }
+      }
     }
 
     // Det som väntar på någons bock. Först till kvarn — alla granskare får

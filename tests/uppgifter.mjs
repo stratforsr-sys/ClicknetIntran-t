@@ -23,6 +23,7 @@ import {
   arStangd,
   dagarMellan,
   datumPlusDagar,
+  delatTillMig,
   farArbeta,
   farBjudaIn,
   farGranska,
@@ -30,6 +31,7 @@ import {
   forsenad,
   fristtext,
   lageAv,
+  mittAttGora,
   sorteraUppgifter,
   tidstext,
   tolkaSnabbrad,
@@ -183,6 +185,72 @@ ok("bara granskaren granskar", farGranska(krets({ minRoll: "granskare" })));
 ok("skaparen granskar inte av att vara skapare", !farGranska(krets()));
 ok("en redigerare granskar inte", !farGranska(krets({ minRoll: "redigerare" })));
 ok("den som far redigera far arbeta", farArbeta(krets()));
+
+// =============================================================================
+// Vems lista raden hamnar i.
+//
+// PROVEN FINNS FOR ATT HALET INTE SKA OPPNA SIG IGEN. Fran 0054 till
+// 2026-09-23 fragade ingen vy efter medlemskap, sa en inbjuden uppgift syntes
+// ingenstans trots att `farRedigera()` slappte in henne att arbeta i den.
+// Behorigheten och listan sa alltsa olika saker om samma rad, och det var
+// listan som tog fel.
+// =============================================================================
+rubrik("Vems lista raden hamnar i");
+
+const st = (over = {}) => ({
+  assignee_id: "jag",
+  created_by: "jag",
+  minRoll: null,
+  lage: "ej_paborjad",
+  ...over,
+});
+
+const annans = { assignee_id: "annan", created_by: "annan" };
+
+ok("den ansvarigas egen rad ar hennes att gora", mittAttGora(st(), "jag"));
+ok("en redigerare far raden i sina listor", mittAttGora(st({ ...annans, minRoll: "redigerare" }), "jag"));
+ok("en visare far den INTE i sina listor", !mittAttGora(st({ ...annans, minRoll: "visare" }), "jag"));
+ok("en granskare far den inte heller", !mittAttGora(st({ ...annans, minRoll: "granskare" }), "jag"));
+ok("en utomstaende far ingenting", !mittAttGora(st(annans), "jag"));
+
+// Delegeringen ska inte komma tillbaka i knat: det man lamnat ifran sig star
+// i "Vantar pa andra" och ingen annanstans.
+ok(
+  "skaparen far inte tillbaka det hon lagt pa nagon annan",
+  !mittAttGora(st({ assignee_id: "annan", created_by: "jag" }), "jag"),
+);
+
+ok("visaren hamnar i Delat med mig", delatTillMig(st({ ...annans, minRoll: "visare" }), "jag"));
+ok(
+  "granskaren star dar fram till inlamningen",
+  delatTillMig(st({ ...annans, minRoll: "granskare" }), "jag"),
+);
+ok(
+  "men INTE nar den lamnats in — da har hon Att granska",
+  !delatTillMig(st({ ...annans, minRoll: "granskare", lage: "granskas" }), "jag"),
+);
+ok(
+  "redigeraren star inte i Delat med mig",
+  !delatTillMig(st({ ...annans, minRoll: "redigerare" }), "jag"),
+);
+ok("en utomstaende star inte dar", !delatTillMig(st(annans), "jag"));
+ok(
+  "en stangd delad uppgift faller bort",
+  !delatTillMig(st({ ...annans, minRoll: "visare", lage: "klar" }), "jag"),
+);
+
+// Ingen rad far sta pa tva stallen. Det ar hela skalet att "Delat med mig" ar
+// aterstoden och inte en sjunde lista over uppgifter.
+for (const roll of [null, "redigerare", "visare", "granskare"]) {
+  for (const lage of LAGEN) {
+    for (const rad of [st({ ...annans, minRoll: roll, lage }), st({ minRoll: roll, lage })]) {
+      ok(
+        `ingen dubblering: ${roll ?? "ingen roll"} / ${lage}`,
+        !(mittAttGora(rad, "jag") && delatTillMig(rad, "jag")),
+      );
+    }
+  }
+}
 
 // =============================================================================
 rubrik("Datumrakning");

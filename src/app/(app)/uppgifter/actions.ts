@@ -1147,6 +1147,25 @@ export async function bjudIn(_prev: UppgiftState, form: FormData): Promise<Uppgi
      * en granskare far dessutom sin harledda post nar det finns nagot att
      * granska. En handelsepost hade legat kvar i klockan efter att hen redan
      * arbetat i uppgiften i en vecka.
+     *
+     * =======================================================================
+     * DET STYCKET OVAN VAR RIKTIGT OCH PREMISSEN VAR FALSK, 0054 → 2026-09-23
+     *
+     * Uppgiften dok INTE upp i personens lista. Ingen av vyerna pa /uppgifter
+     * fragade efter medlemskap — alla sex filtrerade pa `assignee_id` eller
+     * `created_by` — sa den inbjudna fick varken rad, notis eller brev, och
+     * enda vagen fram till uppgiften var adressen i klartext. Beskedet "hon
+     * ser den direkt" var alltsa skalet till att hon inte fick veta nagot,
+     * och ingenting gjorde att det markes.
+     *
+     * Hallet ar tatat pa ratt stalle: `mittAttGora()` och `delatTillMig()` i
+     * `lib/uppgifter.ts` styr numera vyerna, och redigeraren far dessutom sin
+     * HARLEDDA `uppgift-ny`-post i `uppgiftsnotiser()`. Darmed star
+     * slutsatsen har kvar — men nu pa en premiss som finns.
+     *
+     * SKRIV INTE EN NOTISRAD HAR. Den skulle bli den enda i modulen som inte
+     * kan falla bort av sig sjalv nar arbetet borjat.
+     * =======================================================================
      */
     uppdatera(id);
     return { ok: "Inbjuden." };

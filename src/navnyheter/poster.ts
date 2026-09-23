@@ -14,6 +14,51 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "delade-uppgifter-syns-nu",
+    rubrik: "Uppgifter du bjudits in i syns nu — förut gjorde de inte det",
+    ingress:
+      "Är du redigerare hamnar uppgiften bland dina egna, under Idag och Alla mina. Är du visare eller granskare ligger den i den nya fliken Delat med mig.",
+    text: `Det här är en rättelse och inte en nyhet, så den börjar med vad som var fel.
+
+## Vad som inte fungerade
+
+När någon bjöd in dig i en uppgift fick du **ingenting**. Ingen rad i någon
+lista, ingen post i klockan, inget i morgonbrevet. Uppgiften fanns, du hade
+behörighet att öppna den, och om du var redigerare fick du dessutom ändra och
+bocka av den — men det fanns ingen väg fram till den i navet. Enda sättet att
+komma dit var att någon skickade dig adressen.
+
+Det gällde alla tre rollerna, och det hade gällt sedan uppgiftsmodulen byggdes.
+Har du undrat varför en kollega inte hörde av sig om något du delade: det var
+därför, och det var inte hen som missade det.
+
+## Vad som gäller nu
+
+**Är du redigerare ligger uppgiften bland dina egna.** Den står under **Idag**
+när fristen är inne, i **Alla mina**, på startsidan, i veckogenomgången och i
+morgonbrevet — precis som en uppgift du tilldelats. Du får också ett besked i
+klockan när den läggs på dig, och det försvinner av sig självt så fort du börjat
+arbeta i den.
+
+**Är du visare eller granskare finns en ny flik: Delat med mig.** Där står det
+du bjudits in i men inte ansvarar för, med namnet på den som gör jobbet. En
+granskare ser uppgiften där fram till att den lämnas in — sedan flyttar den till
+**Att granska**, där den hör hemma.
+
+**Ingen rad står på två ställen**, och inget av det här ändrar vem som får se
+vad. Behörigheterna är desamma som förut; det är listorna som nu visar det du
+alltid haft rätt att se.
+
+## Om du vill att någon ska GÖRA en uppgift
+
+Sätt hen som **ansvarig** — det är fortfarande skillnaden som betyder något. Att
+bjuda in ger insyn och, för en redigerare, rätten att arbeta i den; att tilldela
+säger vems den är. Bara en person kan vara ansvarig, och det är med flit.`,
+    datum: "2026-09-23",
+    roller: [],
+    href: "/uppgifter",
+  },
+  {
     slug: "veckogenomgang-och-uppgiftsmallar",
     rubrik: "Veckogenomgång på fredagar — och mallar för det du gör om igen",
     ingress:
