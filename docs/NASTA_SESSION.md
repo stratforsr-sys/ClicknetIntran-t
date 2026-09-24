@@ -45,6 +45,18 @@ modul.
 `certifieraPerson()`, `farTaModul()` och `loggaKurs()` bor i
 `src/lib/utbildning-server.ts` och är enda stället de frågorna besvaras.
 
+### Texterna ligger i databasen, inte i migrationen
+
+Beställaren bad efter genomgången om två rättelser: stycket om att svaren sparas
+medan man skriver bort ur kursbeskrivningen, och **"hon" → "han" inne i provet**.
+Båda gjordes med `update` mot `course` och `course_module` — regeln från 0061:
+migrationen är ett utsäde, redaktören är sanningen, och en körd migration ändras
+inte (checksumman).
+
+**`0067` bär alltså fortfarande originaltexten.** Sås databasen om från
+migrationerna kommer både stycket och "hon" tillbaka. Funktionen är orörd —
+utkastet sparas fortfarande medan man skriver, det var bara texten som togs bort.
+
 ### Öppet
 
 **Ingen människa har skrivit provet än.** Vägen är byggd och provad i logiken,

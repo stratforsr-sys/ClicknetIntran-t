@@ -166,7 +166,7 @@ export default async function Rattasida({ params }: { params: Promise<{ id: stri
       ) : inlamning.status === "retur" ? (
         <Card>
           <Notis ton="info">
-            Provet ligger hos säljaren för komplettering. Det kommer tillbaka till kön när hon
+            Provet ligger hos säljaren för komplettering. Det kommer tillbaka till kön när han
             lämnat in det igen — dina kommentarer står kvar vid varje fråga så länge.
           </Notis>
           <div className="mt-4">

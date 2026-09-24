@@ -147,7 +147,7 @@ export function Prov({
           </span>
           <span className="mt-1 block whitespace-pre-line">{retur.note}</span>
           <span className="mt-1 block">
-            Dina svar ligger kvar. Frågorna hon kommenterat är markerade nedan.
+            Dina svar ligger kvar. Frågorna han kommenterat är markerade nedan.
           </span>
         </Notis>
       )}

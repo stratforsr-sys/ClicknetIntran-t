@@ -111,6 +111,29 @@ på klienten och servern. Den som sätter tjugo betyg utan att se vart de bär v
 inte om provet ligger på 69 eller 71 procent förrän hon tryckt — och gränsen går
 mitt emellan.
 
+### Två texträttelser efter genomgången, och var de gjordes
+
+Beställaren läste previewen och bad om två saker: att stycket *"Svaren sparas
+medan du skriver..."* skulle bort ur kursbeskrivningen, och att **"hon" skulle
+bli "han" inne i provet**.
+
+**Båda är gjorda i DATABASEN och inte i migrationen.** Det är regeln från 0061
+tillämpad: migrationen är ett utsäde, och så fort kursen ligger i `course` är
+det redaktören som gäller. Att ändra en körd migration ger dessutom en
+checksummevarning vid varje framtida körning — `apply-sql.mjs` säger uttryckligen
+"skapa en ny migration i stället", och en ny migration för två meningar är fel
+pris.
+
+**Följden att komma ihåg:** `0067` innehåller fortfarande originaltexten. Sås
+kursen om från migrationerna i en tom databas kommer stycket och "hon" tillbaka.
+Det är priset för att seed och innehåll är två olika saker, och det är samma
+pris `slapp-inte-kunden-for-tidigt` betalar sedan `0064`.
+
+Gränssnittstexterna i koden bytte däremot pronomen på riktigt, på tre ställen:
+returrutan i `Prov.tsx`, kölappen i rättningsvyn och släpplistans post.
+Funktionen som beskrevs — att utkastet sparas medan man skriver — är **orörd**.
+Det var texten som togs bort, inte sparandet.
+
 ### Kursen är ett UTKAST
 
 `saljstruktur` ligger som `draft` och måste publiceras i redaktören samma dag

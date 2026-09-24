@@ -52,7 +52,7 @@ ger ett certifikat som gäller i tolv månader.
 
 **Det skickas tillbaka.** Säger ett par svar för lite för att gå att bedöma får
 du provet åter med besked om vad som ska fyllas på. **Dina svar ligger kvar** —
-du kompletterar där hon bett om det, i stället för att skriva om alltihop.
+du kompletterar där han bett om det, i stället för att skriva om alltihop.
 
 Blir provet underkänt gör du om det. Ett nytt försök börjar med tomma rutor, och
 det förra ligger kvar i historiken — underkänt är lika mycket ett resultat som
