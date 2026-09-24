@@ -705,7 +705,7 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
 
     const { error: stegfel } = await supabaseAdmin()
       .from("sales_order")
-      .update({ ...slutligProvision, status: slutligStatus })
+      .update({ ...slutligt, status: slutligStatus })
       .eq("id", rad.id);
 
     if (stegfel) {
