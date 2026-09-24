@@ -4,7 +4,13 @@ import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { KONTROLL } from "@/components/ui/Field";
 import { Notis } from "@/components/ui/Notis";
-import { LOPTIDER, type Orderstatus, type Paket } from "@/lib/order";
+import {
+  BINDNINGSTID_MAX,
+  BINDNINGSTID_MIN,
+  LOPTIDER,
+  type Orderstatus,
+  type Paket,
+} from "@/lib/order";
 import {
   godkannOrder,
   makuleraOrder,
@@ -401,8 +407,14 @@ export type Redigerbar = {
   term_months: number;
   salesperson_id: string;
   signed_on: string;
+  /** 0068. Nar avtalet borjar galla. Slutdatumet raknas harifran. */
+  starts_on: string;
   is_addon: boolean;
   order_value: number | null;
+  /** 0068. Vad kunden betalar per manad. Nullbar pa order fran fore. */
+  monthly_amount: number | null;
+  /** 0068. Vardet kom ur paketet eller ur ett handskrivet manadsbelopp. */
+  order_value_source: string | null;
   /** 0060. Utkopet, eller null nar affaren inte bar nagot. */
   buyout_amount: number | null;
   commission_amount: number | null;
@@ -462,11 +474,19 @@ function Rattelse({
 }) {
   const [state, kor, vantar] = useActionState<Orderstate, FormData>(redigeraOrder, {});
 
-  // Ordervärdet skrivs bara in när det redan är handsatt, eller när det saknas
-  // helt. En paketorder får sitt värde räknat ur paketet i actionen, precis som
-  // vid godkännandet — att spegla den räkningen här hade varit en andra kopia.
+  // Månadsbeloppet skrivs bara in när ordern redan står utanför paketreglerna,
+  // eller när värdet saknas helt. En paketorder får sitt månadspris ur paketet i
+  // actionen, precis som vid godkännandet — att spegla den räkningen här hade
+  // varit en andra kopia.
+  //
+  // `order_value_source` AVGOR, inte `commission_source`. Fore 0068 fragade
+  // raden efter provisionens kalla, och de tva ar inte samma sak: en paketorder
+  // med handsatt provision har `commission_source = 'manual'` men foljer anda
+  // paketets prislista. Nu nar bindningstiden ocksa hanger pa svaret — fri eller
+  // matrisens tre — hade den forvaxlingen oppnat ett fritt manadsfalt pa en
+  // vanlig paketorder.
   const [fritt, setFritt] = useState(
-    order.order_value === null || order.commission_source !== "matrix",
+    order.order_value === null || order.order_value_source === "manual",
   );
 
   // ===========================================================================
@@ -555,15 +575,32 @@ function Rattelse({
                 ))}
               </select>
             </label>
+            {/* BINDNINGSTIDEN HAR TVA FORMER SEDAN 0068, och valet foljer
+                `fritt` ovan: en paketorder maste halla sig till matrisens tre,
+                en fri order far skriva sitt eget tal. Samma regel som i
+                `redigeraOrder`, och den star pa bada stallena med flit —
+                formularet ritar, actionen avgor. */}
             <label className="flex flex-col gap-1">
-              <span className="text-micro text-ink-500">Avtalstid</span>
-              <select name="term_months" defaultValue={order.term_months} className={KONTROLL}>
-                {LOPTIDER.map((m) => (
-                  <option key={m} value={m}>
-                    {m} månader
-                  </option>
-                ))}
-              </select>
+              <span className="text-micro text-ink-500">Bindningstid</span>
+              {fritt ? (
+                <input
+                  name="term_months"
+                  type="number"
+                  min={BINDNINGSTID_MIN}
+                  max={BINDNINGSTID_MAX}
+                  step={1}
+                  defaultValue={order.term_months}
+                  className={KONTROLL}
+                />
+              ) : (
+                <select name="term_months" defaultValue={order.term_months} className={KONTROLL}>
+                  {LOPTIDER.map((m) => (
+                    <option key={m} value={m}>
+                      {m} månader
+                    </option>
+                  ))}
+                </select>
+              )}
             </label>
 
             <label className="flex flex-col gap-1">
@@ -597,6 +634,23 @@ function Rattelse({
                 {stangdPeriod
                   ? "Går att ändra inom månaden, men inte ut ur den."
                   : "Styr vilken månad ordern räknas i."}
+              </span>
+            </label>
+
+            {/* STARTDATUMET RATTAS HAR OCH INTE NAGON ANNANSTANS (0068). Det ar
+                det enda faltet som flyttar SLUTDATUMET, och darmed nar navet
+                ringer om forlangning. Ett avtal som bokforts med fel start
+                bevakas fel ett helt ar. */}
+            <label className="flex flex-col gap-1">
+              <span className="text-micro text-ink-500">Avtalet börjar gälla</span>
+              <input
+                name="starts_on"
+                type="date"
+                defaultValue={order.starts_on}
+                className={KONTROLL}
+              />
+              <span className="text-small text-ink-500">
+                Slutdatumet räknas härifrån, inte från signeringen.
               </span>
             </label>
           </>
@@ -657,28 +711,36 @@ function Rattelse({
             onChange={(e) => setFritt(e.target.checked)}
             className="size-4"
           />
-          Sätt ordervärde och provision själv
+          Ordern följer inte paketreglerna — månadsbelopp och provision sätts för hand
         </label>
       )}
 
       {!full ? null : fritt ? (
         <div className="grid gap-3 sm:grid-cols-2">
+          {/* ===========================================================
+              FALTET VAR "ORDERVARDE I KRONOR" FRAM TILL 0068.
+
+              Ett inskrivet ordervarde ar ETT tal som inte gar att ta isar: det
+              sager varken vad kunden betalar eller hur lange, och alltsa inte
+              heller nar avtalet tar slut. Med manadsbeloppet och bindningstiden
+              i stallet raknas bada fram — och det ar `affarensVarde()` som gor
+              det, pa bada sidor.
+              =========================================================== */}
           <label className="flex flex-col gap-1">
-            <span className="text-micro text-ink-500">Ordervärde i kronor</span>
+            <span className="text-micro text-ink-500">Kunden betalar per månad</span>
             <input
-              name="order_value"
+              name="monthly_amount"
               required
               inputMode="decimal"
-              defaultValue={order.order_value ?? ""}
-              placeholder="11 940"
+              defaultValue={order.monthly_amount ?? ""}
+              placeholder="1 495"
               className={KONTROLL}
             />
-            {order.order_value === null && (
-              <span className="text-small text-ink-500">
-                Ordern lades in innan ordervärdet fanns i navet. Det måste fyllas i för att den
-                ska gå att rätta.
-              </span>
-            )}
+            <span className="text-small text-ink-500">
+              {order.order_value === null
+                ? "Ordern lades in innan ordervärdet fanns i navet. Månadsbeloppet måste fyllas i för att den ska gå att rätta."
+                : "Ordervärdet räknas som månadsbeloppet gånger bindningstiden, plus tjänsterna på ordern."}
+            </span>
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-micro text-ink-500">Provision i kronor</span>

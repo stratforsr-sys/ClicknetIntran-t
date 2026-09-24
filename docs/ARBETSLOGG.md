@@ -5,6 +5,193 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-24 (senare) · Avtalsslut, tilläggstjänster och inga förval
+
+Beställningen kom i fyra omgångar under samma pass, och den tredje förklarar de
+andra tre:
+
+1. *"när jag lägger till en order och trycker på 'ordern följer inte
+   paketregler' så måste jag kunna välja hur mycket kunden betalar i månaden,
+   hur många månader bindningstid."*
+2. *"Detta är super viktigt för att vi måste få notifikation på varje kunds
+   avtal som löper ut så att vi kan ringa dem och förlänga dem."*
+3. *"i order måste vi kunna lägga till fler tjänster … ifall det är en
+   engångsavgift eller månadsavgift, hur mycket i ordervärde och man ska kunna
+   bocka i ifall den följer samma regler som huvudordern eller egen bindningstid
+   … Sen måste vi också kunna ladda upp avtalet i ordern."*
+4. *"när jag lägger in order kan jag ibland glömma att välja rätt person
+   eftersom att personen alltid är förvald. Ta bort alla förval i ordervyn."*
+
+**Migration `0068`, körd 2026-09-24 14:04.** Byggt på branch
+`avtalsslut-och-tjanster`, **EJ MERGAD** — previewen ska visas först.
+
+### Det andra kravet är hela skälet till det första och tredje
+
+Månadsbeloppet och bindningstiden är inte två fält till i ett formulär. De är de
+två tal som tillsammans säger **när avtalet tar slut** — och den frågan kunde
+navet inte besvara alls. `sales_order` har burit `signed_on` och `term_months`
+sedan 0034, men ingen vy, ingen notis och ingen fråga har någonsin räknat ut vad
+de betyder ihop. En kund vars avtal gick ut gjorde det tyst.
+
+Det gamla fältet "Ordervärde i kronor" var precis det som gjorde frågan omöjlig:
+**ett** tal som inte går att ta isär. 18 000 kr säger varken vad kunden betalar
+eller hur länge, och alltså inte heller när det tar slut.
+
+### Sex val som beställaren gjorde innan en rad skrevs
+
+Varje fråga hade tre alternativ. De bortvalda står här eftersom de kommer att
+föreslås igen:
+
+- **Alla order bevakas**, inte bara de manuella och inte bara nya. De tjugotre
+  som redan låg i databasen fick slutdatum bakåt.
+- **Eget startdatum med signeringsdatumet som förval på knapp**, inte
+  signeringsdatumet rakt av och inte ett handskrivet slutdatum. Ett avtal
+  signeras ofta innan det börjar löpa; räknades slutet från signeringen hade
+  påminnelsen kommit för tidigt på just de avtal där den spelar störst roll.
+- **Säljaren + säljledningen, 90 dagar före**, inte bara säljaren och inte i tre
+  steg. Nittio dagar är en förhandlingstid, inte en påminnelsetid.
+- **Fri bindningstid 1–60 för en fri order**, inte fortsatt 12/24/36. Matrisens
+  tre gäller fortfarande en paketorder — provisionen slås upp på kombinationen
+  paket + löptid, och en löptid utanför matrisen har ingen sats.
+- **Förlängning = en ny order**, inte ett nytt slutdatum på den gamla och inte
+  en ren kvittering. En förlängning är en affär: den ger provision, syns i
+  månadens summering och har ett eget slutdatum att bevaka i sin tur.
+- **Avslut med orsak i fritext**, inte en knapp utan orsak. Utan den går det att
+  räkna hur många kunder som lämnat men aldrig se varför.
+
+Och för tjänsterna: värdet **räknas in i ordervärdet och därmed i provisionen**,
+månadstjänsten skrivs som ett **månadsbelopp** (värdet räknas), och en tjänst med
+**egen bindningstid får en egen påminnelse**.
+
+### Två fynd som inte var mina, och som båda hade kostat
+
+**`sales_order_ordervarde_kravs` är `NOT VALID`, och den bet på backfyllningen.**
+0050 lade villkoret "en godkänd order måste ha ett ordervärde" och lät det stå
+ovaliderat med flit: ordern från 2026-08-25 godkändes innan kolumnen fanns, och
+beställarens beslut var att den *inte* skulle få ett värde i efterhand. Men ett
+ovaliderat villkor prövas ändå vid varje `UPDATE` av raden — och den här
+migrationen måste röra varenda order två gånger. Första körningen föll på exakt
+det. Villkoret tas nu ner över backfyllningen och sätts tillbaka **i samma
+skick**, `not valid` igen. Ett `validate constraint` hade sett ut som en
+uppstädning och i själva verket rivit beställarens beslut.
+
+**`sales_order_stegbyte` i migrationsfilen är INTE den som körs.** Avsnitt 8 i
+0068 skrevs först utifrån 0034, som fryser en godkänd order helt. Den regeln
+finns inte längre: **0051 skrev om funktionen** och ersatte frysningen med ett
+periodskydd, just för att en godkänd order *ska* gå att rätta. En
+`create or replace function` är en total ersättning — hade 0068 utgått från
+migrationsfilen i stället för från `pg_proc` hade frysningen kommit tillbaka och
+`redigeraOrder`, hela rättelsevägen, slutat fungera utan att ett enda bygge
+klagat.
+
+Funktionen i 0068 är därför **hämtad ur databasen**, ord för ord, med en rad
+tillagd (`monthly_amount` i makuleringsskyddet). Bevisat med en diff: migrationen
+kördes i en transaktion, `prosrc` dumpades, transaktionen rullades tillbaka, och
+skillnaden mot den levande funktionen var exakt de två raderna.
+
+**Regeln härefter: fråga `pg_proc` innan du skriver om en triggerfunktion.**
+Migrationsfilen säger vad som en gång gällde, inte vad som gäller.
+
+### Vad som måste vara sant härefter
+
+**`ends_on` ÄR GENERERAD OCH SKRIVS ALDRIG.** Den är en ren följd av `starts_on`
+och `term_months`. En skriven kolumn hade kunnat säga något annat än de två —
+den sortens motsägelse ingen upptäcker förrän en kund ringts för sent.
+
+**JS OCH POSTGRES MÅSTE SÄGA SAMMA SAK OM SLUTDATUMET.** `avtalsslut()` i
+`lib/order.ts` klipper månadsskiftet som `make_interval` gör: 31 januari plus en
+månad är 28 februari. JavaScripts `setMonth` spiller över till 3 mars. Skillnaden
+är tre dagar på ett fält som styr när någon ringer en kund. **Korsprovat mot
+databasen på 469 datum, noll skillnader** — och provet i `tests/order.mjs` står
+kvar som spärr.
+
+**POSTEN SLOCKNAR INTE AV ATT DATUMET PASSERAT.** `certifikat-gar-ut` gör
+tvärtom, och det är rätt där. Här finns ingen andra post som tar vid, och ett
+utgånget kundavtal är inte mindre angeläget — det är mer. Det som släcker posten
+är ett **utfall**, aldrig tiden.
+
+**TJÄNSTERNA LÅSER SIG VID MAKULERINGEN, INTE VID GODKÄNNANDET.** Samma gräns som
+ordern själv har sedan 0051. Första utkastet låste dem vid `signerad` och hade
+gjort tjänsterna till det enda på ordern som inte gick att rätta.
+
+**`affarensVarde()` ÄR ENDA STÄLLET AFFÄREN SUMMERAS.** Klientens förhandsvisning
+och serverns framräkning anropar båda den. En engångsavgift multipliceras aldrig
+med löptiden — skrevs de två likadant blev en installationsavgift på 4 000 kr
+värd 96 000 kr i provisionsunderlaget.
+
+### Förvalen, och varför de var dyrare än de såg ut
+
+Felet var inte att förvalet var fel person. Det är att **ett förvalt fält ser
+likadant ut som ett ifyllt** — den som skummar formuläret ser ett namn i rutan
+och går vidare. Säljaren avgör vems provision affären blir, paketet och
+bindningstiden avgör beloppet, signeringsdatumet avgör vilken månad pengarna
+betalas ut i.
+
+Alla står nu tomma med `required`, och det gäller också "Godkänn direkt",
+signeringsdatumet och varje ny tjänsterad — båda de två sista på beställarens
+uttryckliga svar. Priset är några klick till per order. Vinsten är att ingen
+order längre kan bli fel av att någon **inte** gjorde något.
+
+Kvar som enda hjälp är knappen vid startdatumet som fyller i signeringsdatumet.
+Den är ett **tryck**, inte ett förval, och det är hela skillnaden. Samma
+resonemang gäller förlängningen: kunduppgifterna förifylls eftersom du klickade
+"Förläng" på just den kunden, medan paket, bindningstid, säljare och datum står
+tomma — det är en ny förhandling.
+
+### Uppladdningen fanns redan, och sitter nu också i formuläret
+
+Avtals-PDF:en har kunnat laddas upp per order sedan 0039, med utläsning som
+föreslår bolagsnamn, orgnr, paket och avtalstid. Den satt bara på orderkortet,
+efter att ordern skapats.
+
+Den kan **inte** ske före sparandet: både den signerade adressen och
+registreringen hänger på orderns id. Ett eget uppladdningsspår som lade filen
+någonstans och kopplade den efteråt hade varit en andra väg in i bucketen vid
+sidan av den som är provad. Lösningen är att `skapaOrder` nu returnerar
+`orderId`, och rutan ritas under kvittensen — samma komponent, samma två server
+actions, men den som just lagt ordern slipper leta upp den i listan.
+
+### Tre skrivningar i en bestämd ordning
+
+Tjänsterna ligger i en egen tabell och behöver orderns id, som inte finns förrän
+raden är gjord — samtidigt som deras värde räknas in i `order_value`, som fryses
+i samma sekund ordern blir `signerad`. Skrevs ordern direkt som godkänd och
+tjänsterna efteråt hade ett fel i andra steget lämnat en godkänd order vars
+frusna provision byggde på tjänster som inte finns.
+
+Därför: ordern som **utkast**, tjänsterna, och först då statusen och beloppen.
+Faller något på vägen står ett utkast kvar — synligt, rättbart, och utan en enda
+krona bokförd.
+
+### Prov
+
+`tests/order.mjs` utökad med fyrtio kontroller: månadsskiftet åt båda håll,
+skottåret, sommartidsomställningen i dygnsräkningen, att ett utgånget avtal står
+kvar i bevakningen, att en engångsavgift inte multipliceras, och att arton
+månader går igenom (det gjorde det inte före 0068). `tests/notiser-tackning.mjs`
+grön med de två nya actionerna. `tests/notiser.mjs` och `tests/navnyheter.mjs`
+gröna. Migrationen är **mutationsprovad**: tas raden som släpper den gamla
+löptidsspärren bort faller självkontrollen.
+
+### Öppet
+
+**Ingen påminnelse kommer att tändas på länge.** Alla tjugotvå levande avtal
+löper ut mellan augusti 2027 och september 2028 — det närmaste är **335 dagar**
+bort. Bevakningen är alltså byggd och provad i logiken men kommer inte att visa
+en enda rad förrän i juni 2027, om inte någon lägger in ett avtal med kortare
+bindningstid eller ett startdatum bakåt i tiden.
+
+**Tjänsterna går inte att ändra i rättelseformuläret.** Databasen tillåter det
+(gränsen går vid makuleringen), och `redigeraOrder` räknar in dem korrekt i
+omräkningen — men formuläret ritar dem inte. Ska en tjänst läggas till på en
+godkänd order är vägen i dag att makulera och lägga en ny.
+
+**Ingen människa har lagt en order i det nya formuläret.** Räkningen är provad på
+båda sidor och mot databasen, men de tomma fälten, tjänsteraderna och
+uppladdningen har bara sett varandra i kod.
+
+---
+
 ## 2026-09-24 · Skriftligt prov med fritextsvar, rättat för hand
 
 Beställningen: *"Jag vill göra ett prov på intranätet under vyn utbildningar.

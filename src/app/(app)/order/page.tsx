@@ -5,26 +5,33 @@ import { fullName, getCurrentUser, hasRole } from "@/lib/auth";
 import { svensktDatum } from "@/lib/klocka";
 import { supabaseServer } from "@/lib/supabase/server";
 import {
+  hamtaAvtalsslut,
   hamtaKo,
   hamtaOrder,
   hamtaOrderbilagor,
   hamtaChefssatser,
   hamtaPaket,
   hamtaSatser,
+  hamtaTjanster,
   hamtaUtkopssatser,
   type Orderrad,
+  type Tjansterad,
 } from "@/lib/order-server";
 import { gallandeChefssats } from "@/lib/chefsprovision";
 import { gallandeUtkopssats } from "@/lib/utkop";
 import { hamtaPerioder } from "@/lib/bonus-server";
 import {
+  AVTALSSLUT_VARSEL_DAGAR,
+  FAKTURERING_ETIKETT,
   LOPTIDER,
   STATUS_ETIKETT,
+  dagarTill,
   grundprovision,
   harStangdPeriod,
   nettoAntal,
   periodFor,
   provisionFor,
+  tjanstensVarde,
   type Orderstatus,
   type Paket,
   type Sats,
@@ -36,6 +43,7 @@ import { Samtal } from "./Samtal";
 import { hamtaOrdersamtal } from "@/lib/samtal-order-server";
 import type { Samtalsrad } from "@/lib/samtal-vy";
 import { Nyorder } from "./Nyorder";
+import { Fornyelse } from "./Fornyelse";
 import { GuideVard } from "@/components/guide/GuideVard";
 
 export const dynamic = "force-dynamic";
@@ -50,7 +58,16 @@ export const dynamic = "force-dynamic";
  * grunden den star pa: hur manga order manaden bar, och vad de ar varda enligt
  * den sats som gallde nar de signerades.
  */
-export default async function Ordersida() {
+export default async function Ordersida({
+  searchParams,
+}: {
+  /**
+   * `?forlang=<orderid>` — satt av knappen "Forlang" pa ett avtal som narmar
+   * sig sitt slut. Den oppnar inmatningen med kundens uppgifter ifyllda och
+   * skriver kopplingen mellan den gamla och den nya ordern nar ordern lags.
+   */
+  searchParams: Promise<{ forlang?: string }>;
+}) {
   const user = await getCurrentUser();
   if (!user?.employee) return null;
 
@@ -117,7 +134,10 @@ export default async function Ordersida() {
   // servern slar upp den pa orderns faktiska signeringsdatum.
   const gallandeUtkop = gallandeUtkopssats(utkopssatser, idag);
 
-  const namn = new Map(personer.map((p) => [p.id, p.namn]));
+  // Typargumenten star ut med flit: kartan skickas numera ner i
+  // `Avtalsbevakning`, och utan dem harleds den som `Map<unknown, unknown>` sa
+  // fort nagot i `Promise.all` ovan inte gar att sla upp.
+  const namn = new Map<string, string>(personer.map((p) => [p.id, p.namn]));
   const mina = order.filter((o) => o.salesperson_id === user.employee!.id);
   const underlag = hanterare ? order : mina;
 
@@ -131,6 +151,24 @@ export default async function Ordersida() {
   // bilagorna, och av samma skal. RLS avgor vad som syns; sidan filtrerar inte
   // sjalv, for ett andra svar pa samma fraga hinner glida isar fran det forsta.
   const samtal = await hamtaOrdersamtal(synligaOrder);
+
+  // 0068. Tjansteraderna, i EN fraga — samma form och samma skal som de tva ovan.
+  const tjanster = await hamtaTjanster(synligaOrder);
+
+  // ===========================================================================
+  // 0068. AVTALEN SOM NARMAR SIG SITT SLUT, i en EGEN fraga.
+  //
+  // Den kan inte plockas ur `order` ovan: den listan ar tolv manader bakat, och
+  // ett trearsavtal tecknat 2024 loeper ut 2027 utan att synas dar. Bevakningen
+  // fragar pa SLUTDATUMET, inte pa signeringsmanaden.
+  // ===========================================================================
+  const loperUt = await hamtaAvtalsslut(idag);
+
+  // Ordern som forlangs, nar sidan oppnats med knappen. Hamtas ur bevakningen
+  // sjalv — det ar RLS som redan avgjort att den far visas, och en egen fraga
+  // hade varit en andra vag in i tabellen med ett id fran webblasaren.
+  const { forlang } = await searchParams;
+  const forlangsOrder = forlang ? (loperUt.find((o) => o.id === forlang) ?? null) : null;
 
   return (
     <div className="flex flex-col gap-4 pt-2">
@@ -167,6 +205,14 @@ export default async function Ordersida() {
         <Matris paket={paket} satser={satser} idag={idag} />
       </div>
 
+      <Avtalsbevakning
+        order={loperUt}
+        namn={namn}
+        hanterare={hanterare}
+        mig={user.employee.id}
+        idag={idag}
+      />
+
       <Card guide="order.ny">
         <CardHeader
           titel="Lägg en order"
@@ -190,6 +236,17 @@ export default async function Ordersida() {
           }
           utkopsprocent={gallandeUtkop?.percent ?? null}
           stangdaManader={stangda}
+          forlanger={
+            forlangsOrder && {
+              id: forlangsOrder.id,
+              company_name: forlangsOrder.company_name,
+              org_number: forlangsOrder.org_number,
+              contact_name: forlangsOrder.contact_name,
+              contact_phone: forlangsOrder.contact_phone,
+              contact_email: forlangsOrder.contact_email,
+              ends_on: forlangsOrder.ends_on,
+            }
+          }
         />
       </Card>
 
@@ -218,6 +275,7 @@ export default async function Ordersida() {
                   paket={paket}
                   bilagor={bilagor.get(o.id) ?? []}
                   samtal={samtal.get(o.id) ?? []}
+                  tjanster={tjanster.get(o.id) ?? []}
                   personer={personer}
                   stangdPeriod={harStangdPeriod(o.signed_on, stangda)}
                   idag={idag}
@@ -252,6 +310,7 @@ export default async function Ordersida() {
                 paket={paket}
                 bilagor={bilagor.get(o.id) ?? []}
                 samtal={samtal.get(o.id) ?? []}
+                tjanster={tjanster.get(o.id) ?? []}
                 personer={personer}
                 stangdPeriod={harStangdPeriod(o.signed_on, stangda)}
                 idag={idag}
@@ -282,6 +341,7 @@ function Rad({
   paket,
   bilagor,
   samtal,
+  tjanster,
   personer,
   stangdPeriod,
   idag,
@@ -297,6 +357,8 @@ function Rad({
   bilagor: Orderbilaga[];
   /** 0056. Samtalen pa kundens nummer. Tom lista ar ett giltigt svar. */
   samtal: Samtalsrad[];
+  /** 0068. Tillaggstjansterna pa ordern. Tom lista ar ett giltigt svar. */
+  tjanster: Tjansterad[];
   /** Sa att rattelsen kan byta saljare. Tom for den som inte far se andra. */
   personer: { id: string; namn: string }[];
   /**
@@ -391,6 +453,30 @@ function Rad({
         </p>
       )}
 
+      {/*
+        ===========================================================================
+        AVTALSRADEN. Tva tal som inte fanns i navet fore 0068 — nar avtalet borjar
+        och nar det tar slut — plus vad kunden faktiskt betalar i manaden.
+
+        RADEN RITAS FOR VARJE LEVANDE ORDER, inte bara for dem som narmar sig
+        slutet. Skalet ar att fragan "hur lange har vi kvar pa den har kunden?"
+        stalls langt innan paminnelsen tands, och svaret ska da inte krava att
+        nagon rakar veta att tolv manader fran signeringen ar nasta september.
+        ===========================================================================
+      */}
+      {o.status !== "makulerad" && o.ends_on && (
+        <p className="text-small text-ink-500">
+          Avtalet löper {o.starts_on} – <strong>{o.ends_on}</strong>
+          {o.monthly_amount !== null ? ` · ${kronor(o.monthly_amount)}/mån` : ""}
+          {o.renewal_outcome === "forlangd" ? " · förlängd" : ""}
+          {o.renewal_outcome === "avslutad"
+            ? ` · avslutad${o.renewal_reason ? `: ${o.renewal_reason}` : ""}`
+            : ""}
+        </p>
+      )}
+
+      <Tjanstelista tjanster={tjanster} loptid={o.term_months} />
+
       {o.status === "makulerad" && o.cancelled_on && (
         <p className="text-small text-danger-ink">
           Makulerad {o.cancelled_on}. Avdraget belastar {o.cancelled_on.slice(0, 7)}.
@@ -419,8 +505,11 @@ function Rad({
           term_months: o.term_months,
           salesperson_id: o.salesperson_id,
           signed_on: o.signed_on,
+          starts_on: o.starts_on,
           is_addon: o.is_addon,
           order_value: o.order_value,
+          order_value_source: o.order_value_source,
+          monthly_amount: o.monthly_amount,
           buyout_amount: o.buyout_amount ?? null,
           commission_amount: o.commission_amount,
           commission_source: o.commission_source,
@@ -535,4 +624,135 @@ async function hamtaSaljare(): Promise<{ id: string; namn: string }[]> {
       return (roller ?? []).some((r) => r.role === "salesperson");
     })
     .map((e) => ({ id: e.id, namn: fullName(e) }));
+}
+
+/**
+ * Avtalen som narmar sig sitt slut.
+ *
+ * =============================================================================
+ * DET HAR KORTET ÄR HELA SKALET TILL 0068.
+ *
+ * Bestallaren 2026-09-24: *"vi maste fa notifikation pa varje kunds avtal som
+ * loeper ut sa att vi kan ringa dem och forlanga dem"*. Klockan och morgonbrevet
+ * bar paminnelsen; det har ar stallet man faktiskt GOR nagot at den.
+ * =============================================================================
+ *
+ * ===========================================================================
+ * KORTET STAR OVERST PA SIDAN, FORE INMATNINGEN.
+ *
+ * Ordersidans ordning var tidigare "manadens siffror, lagg en order, kon, alla
+ * order" — allt sorterat efter hur ofta man gor det. Bevakningen bryter den
+ * ordningen med flit: en kund vars avtal gar ut om tre veckor ar bradare an
+ * nasta order, och den som scrollar forbi ser den inte.
+ *
+ * NAR INGET LOPER UT RITAS KORTET INTE ALLS. En rad som alltid star dar och
+ * alltid sager noll lar ogat att ingenting hander pa den platsen — samma
+ * resonemang som K&V-raden i provisionsvyn foljer. Tystnaden ar besked nog:
+ * finns det inget kort finns det inget att ringa om.
+ * ===========================================================================
+ */
+function Avtalsbevakning({
+  order,
+  namn,
+  hanterare,
+  mig,
+  idag,
+}: {
+  order: Orderrad[];
+  namn: Map<string, string>;
+  hanterare: boolean;
+  mig: string;
+  idag: string;
+}) {
+  if (order.length === 0) return null;
+
+  // Det som redan gatt ut star forst och far kortet att lysa rott. Ett avtal som
+  // loepte ut i forra veckan ar inte mindre angelaget for att datumet passerat —
+  // det ar mer. Se `bevakas()` i lib/order.ts.
+  const utgangna = order.filter((o) => dagarTill(o.ends_on, idag) < 0);
+
+  return (
+    <Card status={utgangna.length > 0 ? "danger" : "warn"}>
+      <CardHeader
+        titel="Avtal som löper ut"
+        beskrivning={`Inom ${AVTALSSLUT_VARSEL_DAGAR} dagar. Ring kunden och förläng — eller bokför varför hon inte förlänger.`}
+      />
+      <ul className="flex flex-col gap-3">
+        {order.map((o) => {
+          const kvar = dagarTill(o.ends_on, idag);
+          const min = o.salesperson_id === mig;
+
+          return (
+            <li
+              key={o.id}
+              className="flex flex-col gap-2 border-b border-canvas pb-3 last:border-0 last:pb-0"
+            >
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <span className="text-body font-semibold text-ink-900">{o.company_name}</span>
+                <Badge ton={kvar < 0 ? "danger" : kvar <= 30 ? "warn" : "neutral"}>
+                  {kvar < 0
+                    ? `Gick ut för ${Math.abs(kvar)} dagar sedan`
+                    : kvar === 0
+                      ? "Går ut i dag"
+                      : `${kvar} dagar kvar`}
+                </Badge>
+                <span className="flex-1" />
+                <span className="tnum text-small text-ink-500">{o.ends_on}</span>
+              </div>
+
+              <p className="text-small text-ink-500">
+                {o.term_months} mån
+                {o.monthly_amount !== null ? ` · ${kronor(o.monthly_amount)}/mån` : ""}
+                {o.order_value !== null ? ` · ordervärde ${kronor(o.order_value)}` : ""}
+                {hanterare && namn.get(o.salesperson_id) ? ` · ${namn.get(o.salesperson_id)}` : ""}
+              </p>
+
+              <p className="text-small text-ink-500">
+                {o.contact_name} · {o.contact_phone}
+                {o.contact_email ? " · " : ""}
+                {o.contact_email && (
+                  <a href={`mailto:${o.contact_email}`} className="underline underline-offset-2">
+                    {o.contact_email}
+                  </a>
+                )}
+              </p>
+
+              {/* `min` styr bara ORDEN, inte om knapparna finns: RLS har redan
+                  avgjort att raden far visas, och den som ser ett avtal ga ut ska
+                  kunna gora nagot at det aven om kunden ar en kollegas. */}
+              <Fornyelse id={o.id} bolag={o.company_name} min={min} />
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
+  );
+}
+
+/**
+ * Tjansteraderna pa ett orderkort.
+ *
+ * TJANSTER MED EGET SLUT SAGER DET MED DATUM. Den som lagt en vaxel pa 36
+ * manader under ett tvaarsavtal ska se att den lever langre an avtalet — det ar
+ * just den skillnaden som gor att tjansten far en egen paminnelse i stallet for
+ * att foljas med ordern.
+ */
+function Tjanstelista({ tjanster, loptid }: { tjanster: Tjansterad[]; loptid: number }) {
+  if (tjanster.length === 0) return null;
+
+  return (
+    <ul className="flex flex-col gap-0.5">
+      {tjanster.map((t) => (
+        <li key={t.id} className="text-small text-ink-500">
+          {t.name} · {FAKTURERING_ETIKETT[t.billing]} {kronor(t.amount)}
+          {t.billing === "manad" ? "/mån" : ""} · {kronor(tjanstensVarde(t, loptid))} i ordervärde
+          {t.ends_on ? ` · egen bindningstid till ${t.ends_on}` : ""}
+          {t.renewal_outcome === "forlangd" ? " · förlängd" : ""}
+          {t.renewal_outcome === "avslutad"
+            ? ` · avslutad${t.renewal_reason ? `: ${t.renewal_reason}` : ""}`
+            : ""}
+        </li>
+      ))}
+    </ul>
+  );
 }

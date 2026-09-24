@@ -68,6 +68,31 @@ export type Order = {
   package_id: number;
   term_months: number;
   signed_on: string;
+  /**
+   * Nar avtalet BORJAR galla (0068).
+   *
+   * Skild fran `signed_on` med flit, och skillnaden ar inte kosmetisk: ett avtal
+   * signeras ofta innan det borjar loepa — driftstarten ligger nagra veckor
+   * fram, eller forlangningen tecknas medan det gamla avtalet an galler.
+   *
+   * `signed_on` avgor vilken MANAD affaren hor till och nar provisionen betalas.
+   * `starts_on` avgor nar avtalet TAR SLUT. Tva olika fragor som fram till 0068
+   * delade pa ett datum eftersom ingen stallt den andra.
+   */
+  starts_on: string;
+  /** Genererad i databasen ur `starts_on + term_months`. Aldrig skriven. */
+  ends_on: string;
+  /** Vad kunden betalar per manad, fryst pa ordern vid godkannandet (0068). */
+  monthly_amount: number | null;
+  /**
+   * Vad som hande nar avtalet narmade sig sitt slut, eller null om ingen tagit
+   * stallning an. Det ar NULL som halls bevakningen tand — se `bevakas()`.
+   */
+  renewal_outcome: "forlangd" | "avslutad" | null;
+  /** Ordern som forlangningen blev. Bara satt nar utfallet ar `forlangd`. */
+  renewal_order_id?: string | null;
+  /** Varfor kunden inte forlangde. Kravs av databasen nar utfallet ar `avslutad`. */
+  renewal_reason?: string | null;
   period_month: string;
   status: Orderstatus;
   is_addon: boolean;
@@ -482,4 +507,204 @@ export function harStangdPeriod(
   const manad = periodFor(signeringsdatum);
   for (const m of stangdaManader) if (m === manad) return true;
   return false;
+}
+
+// -----------------------------------------------------------------------------
+// Avtalsslutet
+//
+// =============================================================================
+// DE TVA TALEN HAR ALLTID FUNNITS. INGEN HAR RAKNAT MED DEM.
+//
+// `signed_on` och `term_months` har statt i `sales_order` sedan 0034, och
+// tillsammans sager de nar kundens avtal tar slut. Ingen vy, ingen notis och
+// ingen fraga har stallt den fragan — sa en kund vars avtal loepte ut gjorde det
+// tyst, och samtalet som hade kunnat forlanga det ringdes aldrig.
+//
+// Bestallaren 2026-09-24: *"vi maste fa notifikation pa varje kunds avtal som
+// loeper ut sa att vi kan ringa dem och forlanga dem"*. Funktionerna harunder ar
+// den meningen, och de bor har — i den importfria filen — av samma skal som
+// resten: rakningen ska ga att prova utan att starta Next, och klienten,
+// servern och notisen ska tala samma tal.
+// =============================================================================
+// -----------------------------------------------------------------------------
+
+/** Ramen for en bindningstid. Speglar `sales_order_bindningstid` i 0068. */
+export const BINDNINGSTID_MIN = 1;
+export const BINDNINGSTID_MAX = 60;
+
+/**
+ * Sa lange innan avtalet tar slut som navet borjar saga till.
+ *
+ * Nittio dagar ar bestallarens val 2026-09-24, och det ar en forhandlingstid
+ * och inte en paminnelsetid: kunden ska hinna fa ett samtal, tanka efter och
+ * skriva pa innan det gamla avtalet loper ut. En kortare frist hade gjort varje
+ * forlangning till en bradska.
+ */
+export const AVTALSSLUT_VARSEL_DAGAR = 90;
+
+/** Ar bindningstiden inom ramen? Samma grans som databasen drar. */
+export function giltigBindningstid(manader: number): boolean {
+  return Number.isInteger(manader) && manader >= BINDNINGSTID_MIN && manader <= BINDNINGSTID_MAX;
+}
+
+/**
+ * Datumet ett avtal tar slut: startdatumet plus antalet manader.
+ *
+ * ===========================================================================
+ * MANADSSKIFTET KLIPPS, DET SPILLER INTE OVER.
+ *
+ * Ett avtal som borjar 31 januari och loper en manad tar slut 28 februari, inte
+ * 3 mars. Det ar vad Postgres `make_interval` gor i den genererade kolumnen
+ * `ends_on` (0068), och JavaScripts `setMonth` gor tvartom: den spiller over
+ * till nasta manad.
+ *
+ * Skillnaden ar tre dagar, en gang om aret, pa ett falt som styr nar nagon
+ * ringer en kund — och den hade synts som att klienten och databasen sa olika
+ * saker om samma avtal. Klippningen nedan ar darfor inte en detalj utan hela
+ * skalet till att funktionen inte ar en rad.
+ * ===========================================================================
+ */
+export function avtalsslut(startdatum: string, manader: number): string {
+  const [ar, manad, dag] = startdatum.split("-").map(Number);
+
+  // Manadsraekningen gors pa tal och inte pa ett Date, sa att ingen tidszon far
+  // rora resultatet. `klocka.ts` beskriver samma fallgrop for dygnen.
+  const totalt = (ar * 12 + (manad - 1)) + manader;
+  const nyttAr = Math.floor(totalt / 12);
+  const nyManad = (totalt % 12) + 1;
+
+  // Sista dagen i malmanaden. Dag 0 i nasta manad ar sista dagen i den har —
+  // och `Date.UTC` med manad 12 rullar over aret av sig sjalvt.
+  const sistaDagen = new Date(Date.UTC(nyttAr, nyManad, 0)).getUTCDate();
+  const nyDag = Math.min(dag, sistaDagen);
+
+  return `${String(nyttAr).padStart(4, "0")}-${String(nyManad).padStart(2, "0")}-${String(nyDag).padStart(2, "0")}`;
+}
+
+/**
+ * Antalet dygn fran i dag till ett datum. Negativt nar datumet passerat.
+ *
+ * Bada datumen tolkas mitt pa dagen i UTC, av samma skal som `sjuk-frist`
+ * raknar likadant: klockan tolv ar tolv timmar fran bada dygnsgranserna, sa
+ * sommartid kan inte gora ett dygn till noll eller tva.
+ */
+export function dagarTill(datum: string, idag: string): number {
+  const till = Date.parse(`${datum}T12:00:00Z`);
+  const fran = Date.parse(`${idag}T12:00:00Z`);
+  return Math.round((till - fran) / 86_400_000);
+}
+
+/**
+ * Ska avtalet synas i bevakningen i dag?
+ *
+ * ===========================================================================
+ * ETT AVTAL SOM REDAN LOPT UT STAR KVAR I LISTAN, och det ar ett val.
+ *
+ * Frestelsen ar att sluta tjata nar datumet passerat — posten har ju "gatt ut".
+ * Men det ar tvartom da den betyder mest: kunden ar fortfarande kund, och det
+ * enda som hant ar att ingen ringde i tid. Slocknade posten pa slutdatumet hade
+ * bevakningen varit tystast precis nar den behovdes.
+ *
+ * Det som slacker posten ar ett UTFALL — nagon har ringt, och kunden har
+ * antingen skrivit pa igen eller sagt nej. Se `renewal_outcome` i 0068.
+ * ===========================================================================
+ */
+export function bevakas(slutdatum: string | null, hanterad: boolean, idag: string): boolean {
+  if (!slutdatum || hanterad) return false;
+  return dagarTill(slutdatum, idag) <= AVTALSSLUT_VARSEL_DAGAR;
+}
+
+// -----------------------------------------------------------------------------
+// Tillaggstjansterna
+// -----------------------------------------------------------------------------
+
+/** Engangsavgift eller manadsavgift. Speglar `billing` i 0068. */
+export const FAKTURERING = ["engang", "manad"] as const;
+export type Fakturering = (typeof FAKTURERING)[number];
+
+export const FAKTURERING_ETIKETT: Record<Fakturering, string> = {
+  engang: "Engångsavgift",
+  manad: "Månadsavgift",
+};
+
+/**
+ * En tillaggstjanst pa en order.
+ *
+ * `follows_order` ar sant nar tjansten loper precis som huvudavtalet. Da star
+ * `term_months` och `starts_on` tomma — se villkoren i 0068 for varfor de inte
+ * far vara ifyllda samtidigt.
+ */
+export type Tjanst = {
+  name: string;
+  billing: Fakturering;
+  amount: number;
+  follows_order: boolean;
+  term_months: number | null;
+  starts_on: string | null;
+};
+
+/**
+ * Vad en tjanst ar vard over sin avtalstid.
+ *
+ * ===========================================================================
+ * EN ENGANGSAVGIFT GANGES INTE MED NAGOT.
+ *
+ * Bestallarens form 2026-09-24: manadstjansten skrivs som ett MANADSBELOPP och
+ * vardet raknas — samma form som huvudordern. Engangsavgiften ar daremot redan
+ * hela summan.
+ *
+ * Skrivs de tva likadant blir en installationsavgift pa 4 000 kr vard 96 000 kr
+ * pa ett tvaarsavtal, och det talet gar rakt in i provisionsunderlaget. Det ar
+ * darfor `billing` ar ett krav pa raden och inte en etikett i vyn.
+ * ===========================================================================
+ *
+ * `orderLoptid` anvands bara av en manadstjanst som FOLJER huvudordern. En
+ * tjanst med egen bindningstid raknar pa sin egen.
+ */
+export function tjanstensVarde(tjanst: Tjanst, orderLoptid: number): number {
+  if (tjanst.billing === "engang") return tjanst.amount;
+  const manader = tjanst.follows_order ? orderLoptid : (tjanst.term_months ?? 0);
+  return tjanst.amount * manader;
+}
+
+/**
+ * Nar tjansten tar slut, eller null nar den inte kan ta slut.
+ *
+ * En engangsavgift har inget slut — den ar betald och over. En tjanst som
+ * foljer huvudordern tar slut nar ORDERN gor det, och far darfor inte en egen
+ * post i bevakningen; det ar huvudordern som bevakas. Bara en manadstjanst med
+ * EGEN bindningstid svarar med ett eget datum har.
+ */
+export function tjanstensSlut(tjanst: Tjanst): string | null {
+  if (tjanst.billing !== "manad") return null;
+  if (tjanst.follows_order) return null;
+  if (!tjanst.starts_on || !tjanst.term_months) return null;
+  return avtalsslut(tjanst.starts_on, tjanst.term_months);
+}
+
+/**
+ * Hela affarens varde: huvudavtalet plus tjansterna.
+ *
+ * ===========================================================================
+ * TJANSTERNA RAKNAS IN, OCH DET AR ETT BESTALLARBESLUT 2026-09-24.
+ *
+ * Fragan stalldes uttryckligen — raknas tillaggstjansternas varde in i orderns
+ * varde och provision? — och svaret var ja: *"en saljare som saljer en tjanst
+ * till ska fa betalt for den"*.
+ *
+ * Foljden ar att den har funktionen ar en PENGAFUNKTION. Talet den svarar med
+ * gar in i `order_value`, som ar basen for bade saljarens provision och
+ * saljchefens overtack, och som fryses pa ordern vid godkannandet. Den ar
+ * darfor enda stallet summeringen gors — klientens forhandsvisning och serverns
+ * framrakning anropar bada den, precis som `ordervardeFor` och `nettoEfterUtkop`
+ * redan delas.
+ * ===========================================================================
+ */
+export function affarensVarde(
+  manadsbelopp: number,
+  loptid: number,
+  tjanster: Tjanst[] = [],
+): number {
+  const grund = ordervardeFor(manadsbelopp, loptid);
+  return tjanster.reduce((summa, t) => summa + tjanstensVarde(t, loptid), grund);
 }

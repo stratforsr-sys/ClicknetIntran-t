@@ -16,6 +16,7 @@ import { omfattning, periodtext, sjukdag } from "@/lib/franvaro";
 import { hamtaLage } from "@/lib/sparrar";
 import { svensktDatum } from "@/lib/klocka";
 import { stampelfri } from "@/lib/stampelfri";
+import { AVTALSSLUT_VARSEL_DAGAR, dagarTill } from "@/lib/order";
 import { guiderForRoller } from "@/guider";
 import { MAX_I_KLOCKAN, navnyheterFor, tidpunktFor } from "@/navnyheter";
 import { dagarSedan, personlage, type Progress } from "@/lib/guider";
@@ -36,6 +37,19 @@ const CHEFENS_DAGAR = 7;
  * kom efter att det var for sent att hinna gora om kursen i tid.
  */
 const CERTIFIKAT_VARSEL_DAGAR = 30;
+
+/**
+ * Datumet ett visst antal dygn fram, i svensk tid.
+ *
+ * Star har och inte inne i fragorna eftersom BADA avtalsfragorna maste anvanda
+ * samma grans. Tva uttryck for samma sak hade kunnat ge en tjanst som bevakas en
+ * dag langre an sin order, och den skillnaden gar inte att se i en vy.
+ */
+function omDagar(dagar: number): string {
+  return new Date(Date.parse(`${svensktDatum()}T12:00:00Z`) + dagar * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+}
 
 /**
  * Och sa lang varsel far en K37-frist innan klockan sager till.
@@ -99,6 +113,8 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
     { data: bedomningar },
     { data: provisionsposter },
     { data: skriftligaProv },
+    { data: avtalsslutRader },
+    { data: tjanstslutRader },
   ] = await Promise.all([
     supabase.from("notification_seen").select("seen_at").eq("employee_id", mig).maybeSingle(),
     // 0038. Poster den har personen redan klickat pa. Hamtas med hennes egen
@@ -331,6 +347,49 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
       .select("id, employee_id, status, submitted_at, updated_at, course(title, slug)")
       .in("status", ["inlamnad", "retur"])
       .order("submitted_at", { ascending: false })
+      .limit(MAX_NOTISER),
+
+    /**
+     * 0068. Kundavtal som narmar sig sitt slut.
+     *
+     * ===========================================================================
+     * INGET ROLLFILTER, OCH DET AR AVSIKTLIGT — RLS avgor.
+     *
+     * `sales_order_read` i 0034 ger saljaren hennes egna order och kretsen
+     * (saljchef, VD, ekonomi) alla. Ett filter har hade upprepat den policyn och
+     * hunnit glida isar fran den, och da ar det koden man tror pa medan
+     * databasen sager nagot annat. Samma regel som `order-server.ts` foljer.
+     *
+     * DEN SOM RINGER ar alltsa saljaren for sina egna kunder och kretsen for
+     * allas — precis den krets bestallaren valde 2026-09-24.
+     *
+     * Fragan gar pa SLUTDATUMET och inte pa signeringsmanaden. Ett trearsavtal
+     * tecknat 2024 loeper ut 2027 och syns inte i nagon tolvmanaderslista — men
+     * det ar precis det avtal nagon borde ringa om.
+     */
+    supabase
+      .from("sales_order")
+      .select("id, company_name, salesperson_id, ends_on, monthly_amount, term_months")
+      .in("status", ["signerad", "betald"])
+      .is("renewal_outcome", null)
+      .lte("ends_on", omDagar(AVTALSSLUT_VARSEL_DAGAR))
+      .order("ends_on", { ascending: true })
+      .limit(MAX_NOTISER),
+
+    /**
+     * 0068. Tillaggstjanster med EGEN bindningstid som narmar sig sitt slut.
+     *
+     * Bara de med eget slut: `ends_on` ar null for en tjanst som foljer
+     * huvudavtalet, och den bevakas genom ordern. Tva poster om samma datum hade
+     * gjort att bortklicket pa den ena lamnade den andra kvar.
+     */
+    supabase
+      .from("sales_order_service")
+      .select("id, order_id, name, ends_on, sales_order!inner(company_name, salesperson_id, status)")
+      .not("ends_on", "is", null)
+      .is("renewal_outcome", null)
+      .lte("ends_on", omDagar(AVTALSSLUT_VARSEL_DAGAR))
+      .order("ends_on", { ascending: true })
       .limit(MAX_NOTISER),
   ]);
 
@@ -976,6 +1035,100 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
       // stabil tidpunkt gar att jamfora med "senast oppnad", en tidpunkt som
       // raknas om vid varje sidvisning gor det inte.
       tidpunkt: new Date(Date.parse(c.expires_at) - CERTIFIKAT_VARSEL_DAGAR * 86_400_000).toISOString(),
+      olast: true,
+    });
+  }
+
+  // ===========================================================================
+  // 0068. KUNDAVTAL SOM NARMAR SIG SITT SLUT.
+  //
+  // Bestallaren 2026-09-24: *"vi maste fa notifikation pa varje kunds avtal som
+  // loeper ut sa att vi kan ringa dem och forlanga dem"*.
+  //
+  // ---------------------------------------------------------------------------
+  // POSTEN SLOCKNAR INTE AV ATT DATUMET PASSERAT.
+  //
+  // `certifikat-gar-ut` hogre upp gor tvartom: en utgangen certifiering hoppas
+  // over, eftersom kursnotisen tar vid och tva poster om samma sak hade betytt
+  // att bortklicket pa den ena lamnade den andra kvar.
+  //
+  // Har finns ingen sadan andra post, och ett utgangret kundavtal ar inte mindre
+  // angelaget — det ar MER. Kunden ar fortfarande kund, det enda som hant ar att
+  // ingen ringde i tid, och en bevakning som ar tystast precis da vore
+  // meningslos. Posten star alltsa kvar tills nagon bokfort ett UTFALL.
+  // ---------------------------------------------------------------------------
+  //
+  // ID:T BAR ANTALET DAGAR I HELA VECKOR, som certifikatens. Den som klickar
+  // bort posten far den tillbaka en gang i veckan sa lange avtalet ar ohanterat
+  // — men slipper se den varje gang hon oppnar klockan samma dag.
+  // ===========================================================================
+  for (const o of avtalsslutRader ?? []) {
+    if (!o.ends_on) continue;
+    const kvar = dagarTill(String(o.ends_on).slice(0, 10), idag);
+
+    // En egen kund eller nagon annans? Skillnaden ar vad raden SAGER, inte om
+    // den visas — RLS har redan avgjort det andra.
+    const min = o.salesperson_id === mig;
+    const saljaren = namn.get(String(o.salesperson_id));
+
+    notiser.push({
+      id: notisId("order-avtalsslut", String(o.id), Math.floor(Math.abs(kvar) / 7)),
+      typ: "order",
+      rubrik:
+        kvar < 0
+          ? `${o.company_name}: avtalet gick ut för ${Math.abs(kvar)} dagar sedan`
+          : kvar === 0
+            ? `${o.company_name}: avtalet går ut i dag`
+            : `${o.company_name}: avtalet går ut om ${kvar} dagar`,
+      detalj: min
+        ? `Ring och förläng · ${o.term_months} månader, löper till ${String(o.ends_on).slice(0, 10)}`
+        : `${saljaren ?? "En säljare"}s kund · löper till ${String(o.ends_on).slice(0, 10)}`,
+      href: "/order",
+      // TIDPUNKTEN AR NAR POSTEN BLEV AKTUELL — nittio dagar fore slutet — och
+      // inte "nu minus nagot". En stabil tidpunkt gar att jamfora med "senast
+      // oppnad"; en som raknas om vid varje sidvisning gor det inte.
+      tidpunkt: new Date(
+        Date.parse(`${String(o.ends_on).slice(0, 10)}T12:00:00Z`) -
+          AVTALSSLUT_VARSEL_DAGAR * 86_400_000,
+      ).toISOString(),
+      olast: true,
+    });
+  }
+
+  // Tjansterna med EGET slut. Samma post, en niva ner — och skalet till att den
+  // finns star i fragan ovan: en vaxel pa 36 manader under ett tvaarsavtal tar
+  // slut ett ar efter huvudavtalet, och utan en egen rad hade den loept ut tyst.
+  for (const t of tjanstslutRader ?? []) {
+    if (!t.ends_on) continue;
+
+    // `!inner` ger ett OBJEKT, inte en lista, hur typen an ser ut. Samma falla
+    // som `hamtaTjanstslut` i order-server.ts beskriver.
+    const order = t.sales_order as unknown as {
+      company_name: string;
+      salesperson_id: string;
+      status: string;
+    } | null;
+    if (!order) continue;
+    if (order.status !== "signerad" && order.status !== "betald") continue;
+
+    const slut = String(t.ends_on).slice(0, 10);
+    const kvar = dagarTill(slut, idag);
+    const min = order.salesperson_id === mig;
+
+    notiser.push({
+      id: notisId("tjanst-avtalsslut", String(t.id), Math.floor(Math.abs(kvar) / 7)),
+      typ: "order",
+      rubrik:
+        kvar < 0
+          ? `${order.company_name}: ${t.name} gick ut för ${Math.abs(kvar)} dagar sedan`
+          : `${order.company_name}: ${t.name} går ut om ${kvar} dagar`,
+      detalj: min
+        ? `Tjänsten har egen bindningstid och löper till ${slut}`
+        : `${namn.get(order.salesperson_id) ?? "En säljare"}s kund · egen bindningstid till ${slut}`,
+      href: "/order",
+      tidpunkt: new Date(
+        Date.parse(`${slut}T12:00:00Z`) - AVTALSSLUT_VARSEL_DAGAR * 86_400_000,
+      ).toISOString(),
       olast: true,
     });
   }
