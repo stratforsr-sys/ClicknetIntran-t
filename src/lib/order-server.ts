@@ -360,7 +360,35 @@ export async function hamtaTjanster(orderIds: string[]): Promise<Map<string, Tja
     .in("order_id", orderIds)
     .order("sort");
 
-  for (const r of data ?? []) {
+  // ===========================================================================
+  // CASTEN AR INTE KOSMETISK, och den fallde bygget 2026-09-24.
+  //
+  // Supabase harleder radens typ ur select-STRANGEN. En strang over en viss
+  // langd far den inte att ga ihop, och resultatet blir `GenericStringError` —
+  // en typ UTAN nagon av kolumnerna. Bygget faller da pa `r.order_id`, inte pa
+  // nagot som ar fel i fragan.
+  //
+  // Samma falla som `hamtaChefsposter` gick i 2026-09-09, `redigeraOrder` strax
+  // darefter och `hamtaRad` i actions.ts. Foljden ar att faltlistan harunder
+  // maste stamma med strangen ovan FOR HAND — de kontrolleras inte mot varandra
+  // av nagot.
+  // ===========================================================================
+  const rader = (data ?? []) as unknown as {
+    id: string;
+    order_id: string;
+    name: string;
+    billing: string;
+    amount: number | string;
+    follows_order: boolean;
+    term_months: number | string | null;
+    starts_on: string | null;
+    ends_on: string | null;
+    renewal_outcome: string | null;
+    renewal_reason: string | null;
+    sort: number;
+  }[];
+
+  for (const r of rader) {
     const nyckel = String(r.order_id);
     ut.set(nyckel, [
       ...(ut.get(nyckel) ?? []),
@@ -470,15 +498,22 @@ export async function hamtaTjanstslut(
     .lte("ends_on", senast)
     .order("ends_on", { ascending: true });
 
-  return (data ?? [])
+  // Samma cast och samma skal som i `hamtaTjanster` ovan — den har strangen bar
+  // dessutom en inbaddad tabell, vilket gor den annu langre.
+  const rader = (data ?? []) as unknown as {
+    id: string;
+    order_id: string;
+    name: string;
+    amount: number | string;
+    ends_on: string;
+    sales_order: { company_name: string; salesperson_id: string; status: string };
+  }[];
+
+  return rader
     .map((r) => {
       // `!inner` ger ett OBJEKT och inte en lista, men typen Supabase harleder
-      // sager lista. Samma falla som `nav-typfel-vercel-fangar` beskriver.
-      const order = r.sales_order as unknown as {
-        company_name: string;
-        salesperson_id: string;
-        status: string;
-      };
+      // sager lista. Den ar redan skriven ratt i casten ovan.
+      const order = r.sales_order;
       return {
         id: String(r.id),
         order_id: String(r.order_id),

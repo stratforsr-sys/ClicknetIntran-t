@@ -1062,7 +1062,18 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
   // bort posten far den tillbaka en gang i veckan sa lange avtalet ar ohanterat
   // — men slipper se den varje gang hon oppnar klockan samma dag.
   // ===========================================================================
-  for (const o of avtalsslutRader ?? []) {
+  // CASTEN: Supabase harleder radtypen ur select-strangen, och en lang strang
+  // ger `GenericStringError` — en typ utan kolumner. Se `hamtaTjanster` i
+  // order-server.ts for hela resonemanget; det fallde bygget en gang.
+  const avtalsslut = (avtalsslutRader ?? []) as unknown as {
+    id: string;
+    company_name: string;
+    salesperson_id: string;
+    ends_on: string | null;
+    term_months: number;
+  }[];
+
+  for (const o of avtalsslut) {
     if (!o.ends_on) continue;
     const kvar = dagarTill(String(o.ends_on).slice(0, 10), idag);
 
@@ -1098,16 +1109,20 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
   // Tjansterna med EGET slut. Samma post, en niva ner — och skalet till att den
   // finns star i fragan ovan: en vaxel pa 36 manader under ett tvaarsavtal tar
   // slut ett ar efter huvudavtalet, och utan en egen rad hade den loept ut tyst.
-  for (const t of tjanstslutRader ?? []) {
+  const tjanstslut = (tjanstslutRader ?? []) as unknown as {
+    id: string;
+    name: string;
+    ends_on: string | null;
+    sales_order: { company_name: string; salesperson_id: string; status: string } | null;
+  }[];
+
+  for (const t of tjanstslut) {
     if (!t.ends_on) continue;
 
-    // `!inner` ger ett OBJEKT, inte en lista, hur typen an ser ut. Samma falla
-    // som `hamtaTjanstslut` i order-server.ts beskriver.
-    const order = t.sales_order as unknown as {
-      company_name: string;
-      salesperson_id: string;
-      status: string;
-    } | null;
+    // `!inner` ger ett OBJEKT och inte en lista, hur typen an ser ut. Samma
+    // falla som `hamtaTjanstslut` i order-server.ts beskriver, och den ar redan
+    // skriven i typen ovan.
+    const order = t.sales_order;
     if (!order) continue;
     if (order.status !== "signerad" && order.status !== "betald") continue;
 

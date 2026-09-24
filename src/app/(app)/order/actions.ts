@@ -220,7 +220,13 @@ async function tjansterPaOrder(orderId: string): Promise<Tjanst[]> {
     .eq("order_id", orderId)
     .order("sort");
 
-  return (data ?? []).map((t) => ({
+  // Casten av samma skal som `hamtaRad` ovan: en select-strang over en viss
+  // langd ger `GenericStringError` i stallet for en radtyp. Strangen har ar
+  // kortare an den som fallde bygget 2026-09-24, men gransen ar inte skriven
+  // nagonstans — och en cast kostar ingenting.
+  const rader = (data ?? []) as unknown as Record<string, unknown>[];
+
+  return rader.map((t) => ({
     name: String(t.name),
     billing: t.billing as Tjanst["billing"],
     amount: Number(t.amount),
