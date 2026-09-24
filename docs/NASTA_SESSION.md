@@ -57,15 +57,19 @@ inte (checksumman).
 migrationerna kommer både stycket och "hon" tillbaka. Funktionen är orörd —
 utkastet sparas fortfarande medan man skriver, det var bara texten som togs bort.
 
-### Det egna provet GÅR att rätta, och det är ett val
+### INGEN RÄTTAR SITT EGET PROV — och vyn ska säga det, inte gråa ut
 
-Först fanns samma spärr som rollspelet har — *du bedömer inte ditt eget*. Den
-gjorde modulen omöjlig att prova: den som skriver kursen skriver provet själv,
-och mötte då ett helt utgråat formulär. Spärren är borttagen eftersom den
-skyddade mot något som inte finns (bara en chefsroll kan rätta, och certifikatet
-öppnar ingenting — `blocks_capability` är oanvänd sedan 0007). **Sätt inte
-tillbaka den utan att först ge den som testar en annan väg in.** Spåret finns
-kvar: `graded_by`, `audit_log.eget`, märkningen i kön och en ruta i vyn.
+Beställarens besked, ordagrant: *"man ska inte kunna rätta sina egna prov"*.
+Spärren sitter i `rattaProv` OCH `returneraProv`.
+
+**Den var borta ett tag, och skälet hör hit.** Den gjorde modulen omöjlig att
+prova — den som bygger kursen skriver provet själv och mötte ett helt utgråat
+formulär. Rätt lösning var inte att ta bort regeln utan att sluta rita ett dött
+formulär: ett eget prov visas i **läsläge** med beskedet om vem som rättar, och
+kön har en egen sektion *Ditt eget prov*.
+
+**Vägen framåt när någon i säljledningen skrivit provet är en annan chef**, inte
+ett undantag i koden. Kretsen är hela säljledningen.
 
 ### Öppet
 

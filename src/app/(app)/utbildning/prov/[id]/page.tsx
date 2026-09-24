@@ -138,9 +138,9 @@ export default async function Rattasida({ params }: { params: Promise<{ id: stri
       </div>
 
       {egetProv && !rattad && (
-        <Notis ton="warn">
-          Det här är ditt eget prov. Du kan rätta det — men att du gjorde det står i loggen, och
-          ett prov man satt betyg på själv säger inget om någon annan än en själv.
+        <Notis ton="info">
+          Det här är ditt eget prov. Du kan läsa det, men någon annan i säljledningen sätter
+          betyget — ett prov man rättat själv säger ingenting om någon annan än en själv.
         </Notis>
       )}
 
@@ -183,6 +183,13 @@ export default async function Rattasida({ params }: { params: Promise<{ id: stri
             <Fardigrattat rader={rader} aterkoppling={null} grans={kurs?.pass_threshold ?? 80} />
           </div>
         </Card>
+      ) : egetProv ? (
+        /* EGET PROV = LASLAGE, inte ett utgraat formular.
+           Forsta versionen renderade rattningsvyn med varenda knapp och varje
+           kommentarfalt `disabled`. Det ar det samsta av tva varldar: sidan ser
+           ut att vara till for en, och svarar inte. Ett formular som inte gar
+           att anvanda ska inte ritas — beskedet ovanfor ar hela svaret. */
+        <Fardigrattat rader={rader} aterkoppling={null} grans={kurs?.pass_threshold ?? 80} />
       ) : (
         <Rattning id={inlamning.id} fragor={rader} grans={kurs?.pass_threshold ?? 80} />
       )}

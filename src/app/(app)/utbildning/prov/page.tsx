@@ -63,8 +63,17 @@ export default async function Provko() {
     : { data: [] };
   const perForsok = new Map((forsok ?? []).map((f) => [f.id, f]));
 
-  const attRatta = lista.filter((r) => r.status === "inlamnad");
-  const returnerade = lista.filter((r) => r.status === "retur");
+  /**
+   * DET EGNA PROVET STAR FOR SIG. Samma uppdelning som rollspelskon gor, och av
+   * samma skal: ingen rattar sitt eget, och en rad under rubriken "Att ratta"
+   * som inte gar att ratta ar en rad som ser ut att vanta pa en handling man
+   * inte kan utfora.
+   */
+  const mitt = (r: (typeof lista)[number]) => r.employee_id === user.employee!.id;
+
+  const attRatta = lista.filter((r) => r.status === "inlamnad" && !mitt(r));
+  const egna = lista.filter((r) => mitt(r) && r.status !== "rattad");
+  const returnerade = lista.filter((r) => r.status === "retur" && !mitt(r));
   const rattade = lista
     .filter((r) => r.status === "rattad")
     .sort((a, b) => (a.graded_at ?? "").localeCompare(b.graded_at ?? ""))
@@ -127,11 +136,6 @@ export default async function Provko() {
                   <span className="tnum text-small text-ink-500">
                     inlämnat {r.submitted_at?.slice(0, 10) ?? "—"}
                   </span>
-                  {/* Det egna provet star kvar i kon och ar markerat, inte
-                      bortsorterat. Forsta versionen slapte in det i listan och
-                      last sedan rattningsvyn — en rad som ser ut att ga att
-                      handla pa och inte gor det ar samre an bada alternativen. */}
-                  {r.employee_id === user.employee!.id && <Badge ton="neutral">Ditt eget</Badge>}
                   <Badge ton="warn">Rätta</Badge>
                 </Link>
               </li>
@@ -158,6 +162,33 @@ export default async function Provko() {
                 <span className="min-w-0 flex-1 truncate text-small text-ink-500">{titel(r)}</span>
                 <span className="tnum text-small text-ink-500">{r.updated_at.slice(0, 10)}</span>
                 <Badge ton="neutral">Kompletteras</Badge>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      {egna.length > 0 && (
+        <Card>
+          <CardHeader
+            titel="Ditt eget prov"
+            beskrivning="Du rättar inte det själv. Det ligger hos de andra i säljledningen."
+          />
+          <ul className="flex flex-col">
+            {egna.map((r) => (
+              <li key={r.id}>
+                <Link
+                  href={`/utbildning/prov/${r.id}`}
+                  className="flex min-h-11 flex-wrap items-baseline gap-x-3 gap-y-1 rounded-sm border-b border-canvas px-3 py-2.5 transition-colors duration-fast last:border-0 hover:bg-surface-alt"
+                >
+                  <span className="min-w-0 flex-1 truncate text-body text-ink-900">{titel(r)}</span>
+                  <span className="tnum text-small text-ink-500">
+                    {r.submitted_at?.slice(0, 10) ?? r.updated_at.slice(0, 10)}
+                  </span>
+                  <Badge ton={r.status === "retur" ? "danger" : "warn"}>
+                    {r.status === "retur" ? "Komplettera" : "Väntar"}
+                  </Badge>
+                </Link>
               </li>
             ))}
           </ul>

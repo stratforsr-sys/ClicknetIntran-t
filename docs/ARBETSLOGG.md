@@ -146,14 +146,22 @@ lånad rakt av från rollspelets `farBedoma()`, plus `lastFast={egetProv}` som
 slog av hela formuläret i vyn. Det enda inlämnade provet i databasen var hans
 eget, alltså var modulen i praktiken omöjlig att prova.
 
-**Spärren är borttagen, och det är ett ändrat beslut och inte en nödlösning.**
-Den skyddade mot något som inte finns: bara en chefsroll kan alls rätta
-(`farRatta`), och certifikatet öppnar ingenting — `course.blocks_capability`
-står oanvänd sedan 0007. En säljare kan därför aldrig rätta sig själv, och det
-en chef kan ge sig själv är ett papper utan lås bakom. Kvar står **spåret**:
-`graded_by` bär vem som satte betyget, `audit_log` får `eget: true`, kön
-märker raden *Ditt eget*, och vyn säger rakt ut att en självrättning inte säger
-något om någon annan än en själv.
+**Spärren togs först bort och sattes sedan tillbaka på beställarens besked:**
+*"Nej man ska inte kunna rätta sina egna prov"*. Båda leden hör till historien,
+för annars tas den bort igen av samma skäl som första gången.
+
+**Det som faktiskt var fel var inte spärren utan hur den visade sig.** Ett
+formulär där varje knapp och varje fält är `disabled` är det sämsta av två
+världar: sidan ser ut att vara till för en, och svarar inte. Nu renderas
+rättningsformuläret inte alls för ett eget prov — vyn visar provet i **läsläge**
+med ett rakt besked om att någon annan i säljledningen sätter betyget, och kön
+har en egen sektion *Ditt eget prov* i stället för att blanda in det under "Att
+rätta".
+
+**Vägen runt är en kollega, inte ett kryphål.** Kretsen som får rätta är hela
+säljledningen, så ett prov som en chef skrivit rättas av en annan chef. Den enda
+som står utan rättare är den som är ensam i kretsen — och då är självrättning
+inte svaret på frågan.
 
 Tre fel till hittades i samma genomgång:
 

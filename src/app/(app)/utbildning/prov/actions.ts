@@ -282,27 +282,23 @@ export async function rattaProv(_prev: KursState, form: FormData): Promise<KursS
   if (inlamning.status === "utkast") return { fel: "Provet är inte inlämnat än." };
 
   /**
-   * DET EGNA PROVET GAR ATT RATTA, och det ar ett andrat beslut.
+   * INGEN RATTAR SITT EGET PROV. Bestallarens besked, ordagrant: "man ska inte
+   * kunna ratta sina egna prov".
    *
-   * Forst stod har samma sparr som rollspelet har: "du rattar inte ditt eget".
-   * Den var fel av tva skal.
+   * REGELN HAR VARIT BORTA EN GANG, och historien hor hit sa att den inte tas
+   * bort igen av samma skal. Den togs bort darfor att den gjorde modulen
+   * omojlig att PROVA — den som bygger kursen skriver provet sjalv, och motte da
+   * en rattningsvy dar varenda knapp var utgraat. Bestallaren valde anda
+   * sparren, och det som lostes i stallet var symtomet: vyn visar numera provet i
+   * LASLAGE med ett besked om vem som rattar, i stallet for ett dott formular.
    *
-   * DET FORSTA ar att den gjorde modulen omojlig att prova. Den som bygger en
-   * kurs skriver provet sjalv for att se hur det ar att gora det — och motte da
-   * en rattningsvy dar varenda knapp och varje kommentarfalt var utgraat, utan
-   * annan vag framat an att be en kollega skriva tjugo svar.
-   *
-   * DET ANDRA ar att sparren skyddade mot nagot som inte finns. Bara en
-   * chefsroll kan alls ratta (se `farRatta`), och certifikatet oppnar ingenting
-   * — `course.blocks_capability` star oanvand sedan 0007. En saljare kan alltsa
-   * aldrig ratta sig sjalv, och det en chef kan ge sig sjalv ar ett papper utan
-   * lås bakom.
-   *
-   * Det som star kvar ar SPARET: `graded_by` bar vem som satte betyget, och
-   * `audit_log` far `eget: true` nar det ar samma person. En sjalvrattning gar
-   * att se, och det ar vad den behover.
+   * VAGEN RUNT ar inte ett kryphal utan en kollega. Kretsen som far ratta ar
+   * hela saljledningen (se `farRatta`), sa ett prov som en chef skrivit rattas
+   * av en annan chef. Den enda som star utan rattare ar den som ar ensam i
+   * kretsen, och da ar sjalvrattning inte svaret pa fragan.
    */
-  const eget = inlamning.employee_id === user.employee.id;
+  if (inlamning.employee_id === user.employee.id)
+    return { fel: "Du rättar inte ditt eget prov. Någon annan i säljledningen sätter betyget." };
 
   // AC-6.7:s regel, ordagrant lanad fran rollspelet: ett betyg utan ord larde
   // ingen sig nagot av, och det ar hela skalet att provet skrivs med egna ord.
@@ -404,7 +400,6 @@ export async function rattaProv(_prev: KursState, form: FormData): Promise<KursS
     modul: inlamning.module_id,
     poang: resultat,
     godkant,
-    eget,
   });
 
   // HANDELSE OCH INTE HARLEDNING: rattningen SKRIVER OVER det tillstand den kom
@@ -424,12 +419,6 @@ export async function rattaProv(_prev: KursState, form: FormData): Promise<KursS
 
   revalidatePath("/utbildning", "layout");
   revalidatePath("/");
-  if (eget) {
-    return {
-      ok: `${resultat} % — ${godkant ? "godkänt" : `under gränsen på ${kurs?.pass_threshold ?? 80} %`}. Du rättade ditt eget prov, och det står i loggen.`,
-    };
-  }
-
   return {
     ok: godkant
       ? `Godkänt med ${resultat} %. Återkopplingen syns för säljaren.`
@@ -470,6 +459,11 @@ export async function returneraProv(_prev: KursState, form: FormData): Promise<K
 
   if (!inlamning) return { fel: "Inlämningen finns inte." };
   if (inlamning.status !== "inlamnad") return { fel: "Bara ett inlämnat prov går att skicka tillbaka." };
+
+  // Samma regel som i `rattaProv`, och av samma skal. Att skicka tillbaka sitt
+  // eget prov till sig sjalv ar dessutom ett varv utan mottagare.
+  if (inlamning.employee_id === user.employee.id)
+    return { fel: "Du hanterar inte ditt eget prov. Någon annan i säljledningen tar det." };
 
   const { data: fragor } = await db
     .from("essay_question")
