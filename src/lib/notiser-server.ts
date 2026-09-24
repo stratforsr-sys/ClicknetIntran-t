@@ -98,6 +98,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
     { data: minaDokument },
     { data: bedomningar },
     { data: provisionsposter },
+    { data: skriftligaProv },
   ] = await Promise.all([
     supabase.from("notification_seen").select("seen_at").eq("employee_id", mig).maybeSingle(),
     // 0038. Poster den har personen redan klickat pa. Hamtas med hennes egen
@@ -317,6 +318,19 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
       .select("id, employee_id, period_month, amount, entered_by, entered_at")
       .eq("employee_id", mig)
       .order("entered_at", { ascending: false })
+      .limit(MAX_NOTISER),
+
+    /**
+     * 0067. Skriftliga prov. EN fraga bar bada riktningarna, som rollspelens —
+     * men RLS ger har en VIDARE krets: policyn `essay_submission_read` slapper
+     * fram alla prov till varje chefsroll, inte bara dem man leder. Vad raden
+     * BETYDER avgors nedan av vem som laser och vilken status den har.
+     */
+    supabase
+      .from("essay_submission")
+      .select("id, employee_id, status, submitted_at, updated_at, course(title, slug)")
+      .in("status", ["inlamnad", "retur"])
+      .order("submitted_at", { ascending: false })
       .limit(MAX_NOTISER),
   ]);
 
@@ -561,6 +575,48 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
         href: kurs ? `/utbildning/${kurs.slug}` : "/utbildning",
         tidpunkt: r.graded_at,
         olast: arNy(r.graded_at),
+      });
+    }
+  }
+
+  /**
+   * 0067. Det skriftliga provet, två poster ur samma tabell.
+   *
+   * INLÄMNAT VÄNTAR PÅ CHEFEN. Raden går till varje chefsroll och inte bara
+   * till den som leder säljaren — det är beställarens val och det som gör kön
+   * på /utbildning/prov meningsfull. Den som inte berörs får inga rader ur
+   * databasen, så filtret här skiljer bara på vems provet är.
+   *
+   * RETURNERAT VÄNTAR PÅ SÄLJAREN. Den posten är hennes och bara hennes: ett
+   * prov som ligger hos henne för komplettering är inget chefen kan göra något
+   * åt, och en rad om det i hennes chefs klocka hade varit en påminnelse utan
+   * åtgärd.
+   */
+  for (const p of skriftligaProv ?? []) {
+    const mitt = p.employee_id === mig;
+    const kurs = p.course as unknown as { title: string; slug: string } | null;
+
+    if (p.status === "inlamnad" && !mitt) {
+      notiser.push({
+        id: notisId("prov-ratta", p.id),
+        typ: "kurs",
+        rubrik: `${namn.get(p.employee_id) ?? "En medarbetare"} har lämnat in ett skriftligt prov`,
+        detalj: `${kurs?.title ?? "Kurs"} · läs svaren och sätt poäng`,
+        href: `/utbildning/prov/${p.id}`,
+        tidpunkt: p.submitted_at ?? p.updated_at,
+        olast: arNy(p.submitted_at ?? p.updated_at),
+      });
+    }
+
+    if (p.status === "retur" && mitt) {
+      notiser.push({
+        id: notisId("prov-retur", p.id),
+        typ: "kurs",
+        rubrik: "Ditt prov är tillbaka för komplettering",
+        detalj: `${kurs?.title ?? "Kurs"} · din chef har skrivit vad som behöver fyllas på`,
+        href: kurs ? `/utbildning/${kurs.slug}` : "/utbildning",
+        tidpunkt: p.updated_at,
+        olast: arNy(p.updated_at),
       });
     }
   }

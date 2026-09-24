@@ -9,9 +9,11 @@ import { Markdown } from "@/components/Markdown";
 import { getCurrentUser } from "@/lib/auth";
 import { supabaseServer, supabaseAdmin } from "@/lib/supabase/server";
 import { sparrTill, tidkvar, MODULTYP_ETIKETT, type Modultyp } from "@/lib/utbildning";
+import { provlage, type Provlage } from "@/lib/prov";
 import { klarModul } from "../../../actions";
 import { Quiz } from "./Quiz";
 import { Rollspel, type Inlamning } from "./Rollspel";
+import { Prov, type Provfragarad, type Provresultat, type Provsvar } from "./Prov";
 
 export const dynamic = "force-dynamic";
 
@@ -147,6 +149,98 @@ export default async function ModulSida({
     });
   }
 
+  /**
+   * 0067. Det skriftliga provet.
+   *
+   * FRAGORNA LASES MED SERVICE ROLE av samma skal som quizets alternativ:
+   * `essay_question` bar kolumnen `guidance`, som sager vad ett fullpoangssvar
+   * innehaller. Den ar facit, och den far inte lamna servern at den som ska
+   * skriva provet — darfor plockas bara `prompt` och `max_points` med harifran.
+   *
+   * ALLT ANNAT LASES MED HENNES EGEN TOKEN. `essay_submission` ger henne sina
+   * egna rader (och en chef allas), sa vyn behover inte veta nagot om vem som
+   * leder vem.
+   */
+  let provfragor: Provfragarad[] = [];
+  let provsvar: Provsvar[] = [];
+  let provlaget: Provlage = "ej_paborjat";
+  let provretur: { note: string; datum: string } | null = null;
+  let provresultat: Provresultat | null = null;
+
+  if (modul.kind === "fritext") {
+    const admin = supabaseAdmin();
+
+    const [{ data: rader }, { data: forsoken }] = await Promise.all([
+      admin
+        .from("essay_question")
+        .select("id, sort, prompt, max_points")
+        .eq("module_id", modul.id)
+        .order("sort"),
+      supabase
+        .from("essay_submission")
+        .select("id, status, created_at, graded_at, attempt_id")
+        .eq("module_id", modul.id)
+        .eq("employee_id", user.employee.id)
+        .order("created_at", { ascending: false }),
+    ]);
+
+    provfragor = (rader ?? []).map((f) => ({
+      id: f.id,
+      sort: f.sort,
+      prompt: f.prompt,
+      max_points: f.max_points,
+    }));
+
+    const senaste = (forsoken ?? [])[0];
+
+    if (senaste) {
+      const { data: attempt } = senaste.attempt_id
+        ? await supabase
+            .from("course_attempt")
+            .select("score, passed, note, created_at")
+            .eq("id", senaste.attempt_id)
+            .maybeSingle()
+        : { data: null };
+
+      provlaget = provlage([
+        { status: senaste.status, passed: attempt?.passed ?? null, created_at: senaste.created_at },
+      ]);
+
+      const [{ data: svaren }, { data: returer }] = await Promise.all([
+        supabase
+          .from("essay_answer")
+          .select("question_id, body, points, comment")
+          .eq("submission_id", senaste.id),
+        supabase
+          .from("essay_return")
+          .select("note, returned_at")
+          .eq("submission_id", senaste.id)
+          .order("returned_at", { ascending: false })
+          .limit(1),
+      ]);
+
+      provsvar = (svaren ?? []).map((s) => ({
+        fragaId: s.question_id,
+        text: s.body,
+        poang: s.points,
+        kommentar: s.comment,
+      }));
+
+      const retur = (returer ?? [])[0];
+      if (retur) provretur = { note: retur.note, datum: retur.returned_at.slice(0, 10) };
+
+      if (attempt) {
+        provresultat = {
+          poang: attempt.score,
+          grans: kurs.pass_threshold,
+          godkant: attempt.passed,
+          aterkoppling: attempt.note,
+          rattad: (senaste.graded_at ?? attempt.created_at).slice(0, 10),
+        };
+      }
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4 pt-2">
       <Link
@@ -201,6 +295,29 @@ export default async function ModulSida({
             />
           )}
         </Card>
+      ) : modul.kind === "fritext" ? (
+        /* Provet star utanfor <Card> och i full bredd, till skillnad fran
+           quizet. Tjugo fritextsvar ar ett arbetspass och inte ett stycke att
+           lasa — en spalt pa 70 tecken hade gett textrutor sa smala att man
+           inte ser sitt eget svar. */
+        <div className="max-w-[56rem]">
+          {provfragor.length === 0 ? (
+            <Card>
+              <p className="text-small text-ink-500">Provet har inga frågor än.</p>
+            </Card>
+          ) : (
+            <Prov
+              modulId={modul.id}
+              lage={provlaget}
+              fragor={provfragor}
+              svar={provsvar}
+              retur={provretur}
+              resultat={provresultat}
+              nastaHref={nastaHref}
+              grans={kurs.pass_threshold}
+            />
+          )}
+        </div>
       ) : modul.kind === "roleplay" ? (
         <Card className="max-w-[70ch]">
           <Rollspel modulId={modul.id} kriterier={kriterier} inlamningar={inlamningar} />

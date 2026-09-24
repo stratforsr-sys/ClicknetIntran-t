@@ -5,6 +5,7 @@ import { getCurrentUser, hasRole } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { skrivFragor } from "@/lib/utbildning";
 import { skrivKriterier } from "@/lib/rollspel";
+import { skrivProvfragor } from "@/lib/prov";
 import { Redaktor } from "./Redaktor";
 import type { Modul } from "./ModulForm";
 
@@ -38,7 +39,8 @@ export default async function RedigeraKurs({ params }: { params: Promise<{ slug:
     .select(
       `id, sort, title, body_md, kind,
        quiz_question(sort, prompt, quiz_option(sort, label, is_correct)),
-       roleplay_criterion(sort, label, guidance, max_points)`,
+       roleplay_criterion(sort, label, guidance, max_points),
+       essay_question(sort, prompt, guidance, max_points)`,
     )
     .eq("course_id", kurs.id)
     .order("sort");
@@ -64,6 +66,14 @@ export default async function RedigeraKurs({ params }: { params: Promise<{ slug:
         .sort((a, b) => a.sort - b.sort)
         .map((k) => ({ label: k.label, guidance: k.guidance, max_points: k.max_points })),
     ),
+    // 0067. Rattarstodet foljer med hit och ingen annanstans: sidan ar redan
+    // last for alla utom kursens agare och saljchefen, och det ar precis den
+    // kretsen som ska kunna skriva det.
+    provfragor: skrivProvfragor(
+      [...m.essay_question]
+        .sort((a, b) => a.sort - b.sort)
+        .map((f) => ({ prompt: f.prompt, guidance: f.guidance, max_points: f.max_points })),
+    ),
   }));
 
   return (
@@ -79,8 +89,8 @@ export default async function RedigeraKurs({ params }: { params: Promise<{ slug:
       <div>
         <h1 className="text-display text-ink-900">Redigera kurs</h1>
         <p className="mt-1 max-w-[70ch] text-body text-ink-500">
-          Deltagaren tar modulerna i ordning. Ett prov rättas på servern — rätt svar lämnar
-          aldrig databasen.
+          Deltagaren tar modulerna i ordning. Ett prov med svarsalternativ rättas på servern —
+          rätt svar lämnar aldrig databasen. Ett skriftligt prov rättas av en människa.
         </p>
       </div>
 

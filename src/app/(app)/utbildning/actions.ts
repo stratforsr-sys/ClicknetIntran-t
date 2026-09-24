@@ -6,8 +6,10 @@ import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { getCurrentUser, hasRole, type CurrentUser } from "@/lib/auth";
 import { ROLES, type Role } from "@/lib/roles";
 import { tillSlug } from "@/lib/dokument";
-import { tolkaFragor, utgangsdatum, sparrTill, MODULTYPER, avbockningsbar } from "@/lib/utbildning";
+import { tolkaFragor, sparrTill, MODULTYPER, avbockningsbar } from "@/lib/utbildning";
 import { procent, tolkaKriterier } from "@/lib/rollspel";
+import { tolkaProvfragor } from "@/lib/prov";
+import { certifieraPerson, farTaModul, loggaKurs } from "@/lib/utbildning-server";
 import { forberedUppladdning, registreraFil } from "@/lib/filer-server";
 
 /**
@@ -36,21 +38,6 @@ export type Quizresultat = {
 };
 
 export type KursState = { fel?: string; ok?: string; resultat?: Quizresultat };
-
-async function logga(
-  actorId: string,
-  action: string,
-  objectId: string,
-  meta?: Record<string, unknown>,
-) {
-  await supabaseAdmin().from("audit_log").insert({
-    actor_id: actorId,
-    action,
-    object_type: "course",
-    object_id: objectId,
-    meta: meta ?? null,
-  });
-}
 
 /** Far skriva kurser. Samma krets som far skriva rutiner (PRD §5.2). */
 function farRedigera(user: CurrentUser | null): boolean {
@@ -94,7 +81,7 @@ export async function skapaKurs(_prev: KursState, form: FormData): Promise<KursS
       .single();
 
     if (error || !rad) return { fel: "Kursen kunde inte skapas." };
-    await logga(user.employee!.id, "course.created", rad.id, { titel });
+    await loggaKurs(user.employee!.id, "course.created", rad.id, { titel });
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
   }
@@ -163,7 +150,7 @@ export async function sparaKurs(_prev: KursState, form: FormData): Promise<KursS
 
   if (error) return { fel: "Kursen kunde inte sparas." };
 
-  await logga(user.employee!.id, fore?.status !== status ? "course.status_changed" : "course.updated", id, {
+  await loggaKurs(user.employee!.id, fore?.status !== status ? "course.status_changed" : "course.updated", id, {
     status,
   });
   revalidatePath("/utbildning", "layout");
@@ -185,6 +172,7 @@ export async function sparaModul(_prev: KursState, form: FormData): Promise<Kurs
   const kind = String(form.get("kind") ?? "reading");
   const text = String(form.get("fragor") ?? "");
   const rubriktext = String(form.get("kriterier") ?? "");
+  const provtext = String(form.get("provfragor") ?? "");
 
   if (!kursId || !titel) return { fel: "Modulen behöver en rubrik." };
   if (!(MODULTYPER as readonly string[]).includes(kind)) return { fel: "Okänd modultyp." };
@@ -202,6 +190,15 @@ export async function sparaModul(_prev: KursState, form: FormData): Promise<Kurs
   if (rubrikfel) return { fel: rubrikfel };
   if (kind === "roleplay" && kriterier.length === 0)
     return { fel: "Ett rollspel behöver minst ett kriterium att bedömas mot." };
+
+  // 0067. Samma resonemang som for rollspelets rubrik: ett prov utan fragor gar
+  // inte att skriva, och felet ska upptackas av den som skriver kursen — inte av
+  // den som star framfor en tom sida och ska prova.
+  const { fragor: provfragor, fel: provfel } =
+    kind === "fritext" ? tolkaProvfragor(provtext) : { fragor: [], fel: null };
+  if (provfel) return { fel: provfel };
+  if (kind === "fritext" && provfragor.length === 0)
+    return { fel: "Ett skriftligt prov behöver minst en fråga." };
 
   let id = modulId;
   if (id) {
@@ -254,6 +251,31 @@ export async function sparaModul(_prev: KursState, form: FormData): Promise<Kurs
     }
   }
 
+  if (kind === "fritext") {
+    /**
+     * Fragorna skrivs om fran grunden, som quizets och rollspelets.
+     *
+     * VAD SOM FOLJER MED I FALLET: `essay_answer` kaskaderar pa `question_id`,
+     * sa ett REDAN INLAMNAT svar pa en fraga som skrivs om forsvinner. Det ar
+     * samma pris som `roleplay_score` betalar, och samma motvikt galler —
+     * betyget star i `course_attempt`, som ar historiken.
+     *
+     * Priset ar dock storre har, for svaret ar sjalva arbetet och inte en
+     * delpoang. Den som vill ANDRA ett prov som redan skrivits av nagon bor
+     * darfor lagga en ny modul i stallet. Det star i redaktoren.
+     */
+    await db.from("essay_question").delete().eq("module_id", id);
+    await db.from("essay_question").insert(
+      provfragor.map((f, i) => ({
+        module_id: id,
+        sort: i + 1,
+        prompt: f.prompt,
+        guidance: f.guidance,
+        max_points: f.max_points,
+      })),
+    );
+  }
+
   if (kind === "roleplay") {
     // Kriterierna skrivs om i sin helhet. Poang som redan satts pekar pa den
     // GAMLA raden, och `roleplay_score` kaskaderar — en bedomning som redan ar
@@ -272,7 +294,7 @@ export async function sparaModul(_prev: KursState, form: FormData): Promise<Kurs
     );
   }
 
-  await logga(user.employee!.id, modulId ? "course.module_updated" : "course.module_added", kursId, {
+  await loggaKurs(user.employee!.id, modulId ? "course.module_updated" : "course.module_added", kursId, {
     modul: titel,
     kind,
   });
@@ -288,7 +310,7 @@ export async function taBortModul(form: FormData): Promise<void> {
   if (!modulId) return;
 
   await db.from("course_module").delete().eq("id", modulId);
-  await logga(user.employee!.id, "course.module_removed", kursId, { modul: modulId });
+  await loggaKurs(user.employee!.id, "course.module_removed", kursId, { modul: modulId });
   revalidatePath("/utbildning", "layout");
 }
 
@@ -318,7 +340,7 @@ export async function flyttaModul(form: FormData): Promise<void> {
   await db.from("course_module").update({ sort: lista[i].sort }).eq("id", lista[j].id);
   await db.from("course_module").update({ sort: lista[j].sort }).eq("id", lista[i].id);
 
-  await logga(user.employee!.id, "course.modules_reordered", kursId);
+  await loggaKurs(user.employee!.id, "course.modules_reordered", kursId);
   revalidatePath("/utbildning", "layout");
 }
 
@@ -327,88 +349,14 @@ export async function flyttaModul(form: FormData): Promise<void> {
 // -----------------------------------------------------------------------------
 
 /**
- * Kursen ar klar nar varje modul ar det. Certifikatet skrivs har och ingen
- * annanstans, sa att det bara kan uppsta som foljd av faktiskt genomford kurs.
+ * Kursen ar klar nar varje modul ar det.
+ *
+ * Sjalva skrivningen bor i `certifieraPerson()` i src/lib/utbildning-server.ts —
+ * dit flyttades den nar det skriftliga provet (0067) fick en egen actions-fil
+ * och behovde samma regel. Den har ar bara den inloggades genvag till den.
  */
 async function certifieraOmKlar(user: CurrentUser, kursId: string): Promise<boolean> {
   return certifieraPerson(user.employee!.id, kursId);
-}
-
-/**
- * Samma sak, men for en utpekad person.
- *
- * Behovs sedan E8.7: ett rollspel bedoms av CHEFEN, och det ar saljaren som
- * ska certifieras nar bedomningen gor kursen klar. Att lata certifieringen
- * utga fran den inloggade hade gett chefen ett certifikat pa en kurs hon inte
- * gatt.
- */
-async function certifieraPerson(employeeId: string, kursId: string): Promise<boolean> {
-  const db = supabaseAdmin();
-
-  const [{ data: moduler }, { data: klara }, { data: kurs }] = await Promise.all([
-    db.from("course_module").select("id").eq("course_id", kursId),
-    db.from("module_progress").select("module_id").eq("employee_id", employeeId),
-    db.from("course").select("valid_months").eq("id", kursId).maybeSingle(),
-  ]);
-
-  const alla = (moduler ?? []).map((m) => m.id);
-  if (alla.length === 0) return false;
-
-  const klaraSet = new Set((klara ?? []).map((k) => k.module_id));
-  if (!alla.every((id) => klaraSet.has(id))) return false;
-
-  const { data: redan } = await db
-    .from("certification")
-    .select("id, expires_at")
-    .eq("employee_id", employeeId)
-    .eq("course_id", kursId)
-    .order("issued_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  // Ett giltigt certifikat racker. Ett utganget ersatts av ett nytt.
-  if (redan && (!redan.expires_at || new Date(redan.expires_at) > new Date())) return false;
-
-  await db.from("certification").insert({
-    employee_id: employeeId,
-    course_id: kursId,
-    expires_at: utgangsdatum(kurs?.valid_months ?? null),
-  });
-
-  await logga(employeeId, "course.certified", kursId, {
-    giltig_manader: kurs?.valid_months ?? null,
-  });
-  return true;
-}
-
-/** AC-6.1: modulerna tas i ordning. Att hoppa over ar inte ett alternativ. */
-async function farTaModul(user: CurrentUser, modulId: string): Promise<boolean> {
-  const rls = await supabaseServer();
-  const { data: modul } = await rls
-    .from("course_module")
-    .select("id, course_id, sort")
-    .eq("id", modulId)
-    .maybeSingle();
-  if (!modul) return false;
-
-  const { data: tidigare } = await rls
-    .from("course_module")
-    .select("id")
-    .eq("course_id", modul.course_id)
-    .lt("sort", modul.sort);
-
-  if ((tidigare ?? []).length === 0) return true;
-
-  const { data: klara } = await rls
-    .from("module_progress")
-    .select("module_id")
-    .eq("employee_id", user.employee!.id)
-    .in(
-      "module_id",
-      (tidigare ?? []).map((t) => t.id),
-    );
-
-  return (klara ?? []).length === (tidigare ?? []).length;
 }
 
 export async function klarModul(form: FormData): Promise<void> {
@@ -566,7 +514,7 @@ export async function lamnaQuiz(_prev: KursState, form: FormData): Promise<KursS
         .select("id")
         .single();
 
-  await logga(user.employee.id, godkant ? "course.quiz_passed" : "course.quiz_failed", kursId, {
+  await loggaKurs(user.employee.id, godkant ? "course.quiz_passed" : "course.quiz_failed", kursId, {
     modul: modulId,
     poang,
     grans: kurs.pass_threshold,
@@ -693,7 +641,7 @@ export async function registreraRollspel(
   });
   if (error) return { fel: error.message };
 
-  await logga(user.employee.id, "roleplay.submitted", modul.course_id, { modul: modulId });
+  await loggaKurs(user.employee.id, "roleplay.submitted", modul.course_id, { modul: modulId });
   revalidatePath("/utbildning", "layout");
   revalidatePath("/");
   return { ok: "Inspelningen är inlämnad. Din chef bedömer den mot rubriken." };
@@ -813,7 +761,7 @@ export async function bedomRollspel(_prev: KursState, form: FormData): Promise<K
     }
   }
 
-  await logga(user.employee.id, "roleplay.graded", inlamning.course_id, {
+  await loggaKurs(user.employee.id, "roleplay.graded", inlamning.course_id, {
     modul: inlamning.module_id,
     poang: resultat,
     godkant,

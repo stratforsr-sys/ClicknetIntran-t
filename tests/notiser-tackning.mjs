@@ -346,6 +346,19 @@ const TACKNING = {
   "utbildning::registreraRollspel": "harledd",
   "utbildning::bedomRollspel": "harledd",
 
+  /**
+   * Det skriftliga provet (0067). Tre av fyra ar HARLEDDA eller tysta, och det
+   * ar inte lattja: bade "ett prov vantar pa rattning" och "ditt prov ligger
+   * hos dig for komplettering" ar TILLSTAND som star kvar tills nagon gor
+   * nagot at dem. Bara rattningen skriver over sitt eget spar, och den
+   * notifierar.
+   */
+  "utbildning/prov::sparaUtkast":
+    "Ett utkast ar hennes eget arbete, halvfardigt och riktat till ingen. Ingen har fatt nagot.",
+  "utbildning/prov::lamnaProv": "harledd",
+  "utbildning/prov::rattaProv": "notifierar",
+  "utbildning/prov::returneraProv": "harledd",
+
   // ---------------------------------------------------------------------------
   // Eget konto och angra
   // ---------------------------------------------------------------------------
