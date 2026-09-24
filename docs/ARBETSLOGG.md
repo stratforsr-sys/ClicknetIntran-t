@@ -11,8 +11,12 @@ Beställningen: *"Jag vill göra ett prov på intranätet under vyn utbildningar
 Chefer ska kunna se alla prover och kunna rätta dem manuellt. Svaren på frågorna
 ska endast vara i fritext."* Tjugo frågor följde med, om säljstrukturen.
 
-**Migration `0067`, körd 2026-09-24. Ligger på branch `skriftligt-prov`, EJ
-MERGAD.** Nästa lediga nummer är `0068`.
+**Migration `0067`, körd 2026-09-24. MERGAD TILL MAIN** samma dag som
+`d59a8f1` — en riktig merge-commit med två föräldrar (`a2a1034` + `6f4e3de`),
+ingen squash. `behind_by` var 0. Produktionsbygget grönt, och `/utbildning`,
+`/utbildning/prov` och `/utbildning/saljstruktur` svarar. **Kursen är kvar som
+UTKAST** och syns alltså inte för säljarna än. Nästa lediga migrationsnummer är
+`0068`.
 
 ### Fyra val som beställaren gjorde innan en rad skrevs
 
