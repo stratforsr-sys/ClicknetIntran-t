@@ -47,12 +47,10 @@ export function Rattning({
   id,
   fragor,
   grans,
-  lastFast,
 }: {
   id: string;
   fragor: Rattningsfraga[];
   grans: number;
-  lastFast: boolean;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [state, rattaAction, rattar] = useActionState(rattaProv, TOM);
@@ -108,9 +106,8 @@ export function Rattning({
                   type="button"
                   role="radio"
                   aria-checked={poang[f.id] === p}
-                  disabled={lastFast}
                   onClick={() => setPoang((tidigare) => ({ ...tidigare, [f.id]: p }))}
-                  className={`min-h-9 min-w-11 rounded-full px-3 text-small font-semibold transition-colors duration-fast disabled:opacity-45 ${
+                  className={`min-h-9 min-w-11 rounded-full px-3 text-small font-semibold transition-colors duration-fast ${
                     poang[f.id] === p
                       ? p === 0
                         ? "bg-danger-tint text-danger-ink shadow-elev-1"
@@ -138,7 +135,6 @@ export function Rattning({
               name={`kommentar_${f.id}`}
               rows={2}
               defaultValue={f.kommentar ?? ""}
-              disabled={lastFast}
               className={`${KONTROLL} mt-1.5 resize-y text-small`}
             />
           </label>
@@ -156,50 +152,57 @@ export function Rattning({
             id="note"
             name="note"
             rows={5}
-            disabled={lastFast}
             required
             className={`${KONTROLL} mt-2 resize-y text-body`}
           />
         </label>
       </section>
 
-      {!lastFast && (
-        <div className="sticky bottom-3 z-10 flex flex-wrap items-center gap-3 rounded-full bg-surface px-4 py-3 shadow-elev-2">
-          <Button type="submit" laddar={rattar} disabled={!lage.klar || returnerar}>
-            Sätt betyg
-          </Button>
-          <Button
-            type="button"
-            variant="sekundar"
-            size="sm"
-            laddar={returnerar}
-            disabled={rattar}
-            onClick={() => {
-              if (formRef.current) returAction(new FormData(formRef.current));
-            }}
-          >
-            Skicka tillbaka för komplettering
-          </Button>
+      {/* Handlingarna foljer med nedat. Tjugo fragor ar fyra skarmhojder, och en
+          knapprad langst ner ar en knapprad man scrollar forbi utan att veta om
+          det — vilket ar precis vad som hande forsta gangen provet skulle
+          rattas. */}
+      <div className="sticky bottom-3 z-10 flex flex-wrap items-center gap-3 rounded-full bg-surface px-4 py-3 shadow-elev-2">
+        <Button type="submit" laddar={rattar} disabled={!lage.klar || returnerar}>
+          Sätt betyg
+        </Button>
+        <Button
+          type="button"
+          variant="sekundar"
+          size="sm"
+          laddar={returnerar}
+          disabled={rattar}
+          onClick={() => {
+            if (formRef.current) returAction(new FormData(formRef.current));
+          }}
+        >
+          Skicka tillbaka för komplettering
+        </Button>
 
-          <div className="flex flex-wrap items-baseline gap-x-3 text-small text-ink-500">
-            <span className="tnum">
-              {lage.satta} av {lage.antal} bedömda
+        <div className="flex flex-wrap items-baseline gap-x-3 text-small text-ink-500">
+          <span className="tnum">
+            {lage.satta} av {lage.antal} bedömda
+          </span>
+          {lage.klar ? (
+            <>
+              <span className="tnum font-semibold text-ink-900">
+                {lage.summa} av {lage.tak} p · {andel} %
+              </span>
+              <Badge ton={andel >= grans ? "ok" : "danger"}>
+                {andel >= grans ? "Godkänt" : "Under gränsen"}
+              </Badge>
+            </>
+          ) : (
+            /* Varfor knappen ar slack star UTSKRIVET. En slack knapp utan skal
+               ar en trasig knapp for den som tittar pa den. */
+            <span>
+              Sätt poäng på {lage.antal - lage.satta}{" "}
+              {lage.antal - lage.satta === 1 ? "fråga till" : "frågor till"} för att kunna sätta
+              betyg — eller skicka tillbaka provet utan poäng.
             </span>
-            {lage.klar ? (
-              <>
-                <span className="tnum font-semibold text-ink-900">
-                  {lage.summa} av {lage.tak} p · {andel} %
-                </span>
-                <Badge ton={andel >= grans ? "ok" : "danger"}>
-                  {andel >= grans ? "Godkänt" : "Under gränsen"}
-                </Badge>
-              </>
-            ) : (
-              <span className="tnum">{lage.summa} p hittills</span>
-            )}
-          </div>
+          )}
         </div>
-      )}
+      </div>
     </form>
   );
 }

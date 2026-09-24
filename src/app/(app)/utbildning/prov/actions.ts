@@ -280,8 +280,29 @@ export async function rattaProv(_prev: KursState, form: FormData): Promise<KursS
   if (!inlamning) return { fel: "Inlämningen finns inte." };
   if (inlamning.status === "rattad") return { fel: "Provet är redan rättat." };
   if (inlamning.status === "utkast") return { fel: "Provet är inte inlämnat än." };
-  if (inlamning.employee_id === user.employee.id)
-    return { fel: "Du rättar inte ditt eget prov." };
+
+  /**
+   * DET EGNA PROVET GAR ATT RATTA, och det ar ett andrat beslut.
+   *
+   * Forst stod har samma sparr som rollspelet har: "du rattar inte ditt eget".
+   * Den var fel av tva skal.
+   *
+   * DET FORSTA ar att den gjorde modulen omojlig att prova. Den som bygger en
+   * kurs skriver provet sjalv for att se hur det ar att gora det — och motte da
+   * en rattningsvy dar varenda knapp och varje kommentarfalt var utgraat, utan
+   * annan vag framat an att be en kollega skriva tjugo svar.
+   *
+   * DET ANDRA ar att sparren skyddade mot nagot som inte finns. Bara en
+   * chefsroll kan alls ratta (se `farRatta`), och certifikatet oppnar ingenting
+   * — `course.blocks_capability` star oanvand sedan 0007. En saljare kan alltsa
+   * aldrig ratta sig sjalv, och det en chef kan ge sig sjalv ar ett papper utan
+   * lås bakom.
+   *
+   * Det som star kvar ar SPARET: `graded_by` bar vem som satte betyget, och
+   * `audit_log` far `eget: true` nar det ar samma person. En sjalvrattning gar
+   * att se, och det ar vad den behover.
+   */
+  const eget = inlamning.employee_id === user.employee.id;
 
   // AC-6.7:s regel, ordagrant lanad fran rollspelet: ett betyg utan ord larde
   // ingen sig nagot av, och det ar hela skalet att provet skrivs med egna ord.
@@ -323,16 +344,23 @@ export async function rattaProv(_prev: KursState, form: FormData): Promise<KursS
 
   if (forsoksfel || !forsok) return { fel: "Betyget kunde inte bokföras." };
 
+  /**
+   * UPSERT och inte update. En `update` traffar noll rader om svaret saknas —
+   * och det gor det for en fraga som LAGTS TILL i modulen efter inlamningen.
+   * Poangen fanns da i summan men inte i historiken, alltsa ett betyg som inte
+   * gick att harleda ur sina delar.
+   */
   for (const f of lista) {
-    await db
-      .from("essay_answer")
-      .update({
+    await db.from("essay_answer").upsert(
+      {
+        submission_id: inlamning.id,
+        question_id: f.id,
         points: poang[f.id],
         comment: String(form.get(`kommentar_${f.id}`) ?? "").trim() || null,
         updated_at: new Date().toISOString(),
-      })
-      .eq("submission_id", inlamning.id)
-      .eq("question_id", f.id);
+      },
+      { onConflict: "submission_id,question_id" },
+    );
   }
 
   const { error: statusfel } = await db
@@ -376,6 +404,7 @@ export async function rattaProv(_prev: KursState, form: FormData): Promise<KursS
     modul: inlamning.module_id,
     poang: resultat,
     godkant,
+    eget,
   });
 
   // HANDELSE OCH INTE HARLEDNING: rattningen SKRIVER OVER det tillstand den kom
@@ -395,6 +424,12 @@ export async function rattaProv(_prev: KursState, form: FormData): Promise<KursS
 
   revalidatePath("/utbildning", "layout");
   revalidatePath("/");
+  if (eget) {
+    return {
+      ok: `${resultat} % — ${godkant ? "godkänt" : `under gränsen på ${kurs?.pass_threshold ?? 80} %`}. Du rättade ditt eget prov, och det står i loggen.`,
+    };
+  }
+
   return {
     ok: godkant
       ? `Godkänt med ${resultat} %. Återkopplingen syns för säljaren.`
@@ -435,8 +470,6 @@ export async function returneraProv(_prev: KursState, form: FormData): Promise<K
 
   if (!inlamning) return { fel: "Inlämningen finns inte." };
   if (inlamning.status !== "inlamnad") return { fel: "Bara ett inlämnat prov går att skicka tillbaka." };
-  if (inlamning.employee_id === user.employee.id)
-    return { fel: "Du skickar inte tillbaka ditt eget prov." };
 
   const { data: fragor } = await db
     .from("essay_question")

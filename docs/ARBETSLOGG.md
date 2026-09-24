@@ -134,6 +134,44 @@ returrutan i `Prov.tsx`, kölappen i rättningsvyn och släpplistans post.
 Funktionen som beskrevs — att utkastet sparas medan man skriver — är **orörd**.
 Det var texten som togs bort, inte sparandet.
 
+### Rättningen gick inte att göra alls, och felet var en spärr jag skrivit
+
+Beställaren skrev provet själv för att se hur det kändes, lämnade in det, gick
+till kön — och mötte en rättningsvy där **varenda knapp och varje kommentarfält
+var utgråat**. Ingen väg framåt. Hans ord: *"jag kan ju inte ens rätta provet
+... eller skriva kommentarer någonstans"*.
+
+Orsaken var `if (inlamning.employee_id === user.employee.id)` i `rattaProv`,
+lånad rakt av från rollspelets `farBedoma()`, plus `lastFast={egetProv}` som
+slog av hela formuläret i vyn. Det enda inlämnade provet i databasen var hans
+eget, alltså var modulen i praktiken omöjlig att prova.
+
+**Spärren är borttagen, och det är ett ändrat beslut och inte en nödlösning.**
+Den skyddade mot något som inte finns: bara en chefsroll kan alls rätta
+(`farRatta`), och certifikatet öppnar ingenting — `course.blocks_capability`
+står oanvänd sedan 0007. En säljare kan därför aldrig rätta sig själv, och det
+en chef kan ge sig själv är ett papper utan lås bakom. Kvar står **spåret**:
+`graded_by` bär vem som satte betyget, `audit_log` får `eget: true`, kön
+märker raden *Ditt eget*, och vyn säger rakt ut att en självrättning inte säger
+något om någon annan än en själv.
+
+Tre fel till hittades i samma genomgång:
+
+- **Kön visade det egna provet under "Att rätta"** trots att det inte gick att
+  rätta. En rad som ser ut att gå att handla på och inte gör det är sämre än
+  båda alternativen — nu står den kvar men märkt.
+- **Poängen skrevs med `update` och inte `upsert`.** En fråga som lagts till i
+  modulen efter inlämningen har ingen `essay_answer`-rad, så dess poäng träffade
+  noll rader och försvann — samtidigt som den räknades in i summan. Betyget gick
+  alltså inte att härleda ur sina delar.
+- **En rättad rad utan `course_attempt` föll tillbaka till rättningsformuläret.**
+  `attempt_id` är `on delete set null`, så ett rensat försök hade bjudit in till
+  att sätta betyg en gång till på något redan bokfört.
+
+Och en sak som inte var ett fel men såg ut som ett: knappen **Sätt betyg** är
+släckt tills alla frågor har poäng. Nu står skälet utskrivet bredvid den —
+*"Sätt poäng på 8 frågor till..."* — i stället för att bara vara grå.
+
 ### Kursen är ett UTKAST
 
 `saljstruktur` ligger som `draft` och måste publiceras i redaktören samma dag

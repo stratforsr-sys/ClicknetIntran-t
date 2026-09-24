@@ -127,6 +127,11 @@ export default async function Provko() {
                   <span className="tnum text-small text-ink-500">
                     inlämnat {r.submitted_at?.slice(0, 10) ?? "—"}
                   </span>
+                  {/* Det egna provet star kvar i kon och ar markerat, inte
+                      bortsorterat. Forsta versionen slapte in det i listan och
+                      last sedan rattningsvyn — en rad som ser ut att ga att
+                      handla pa och inte gor det ar samre an bada alternativen. */}
+                  {r.employee_id === user.employee!.id && <Badge ton="neutral">Ditt eget</Badge>}
                   <Badge ton="warn">Rätta</Badge>
                 </Link>
               </li>

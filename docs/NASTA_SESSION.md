@@ -57,6 +57,16 @@ inte (checksumman).
 migrationerna kommer både stycket och "hon" tillbaka. Funktionen är orörd —
 utkastet sparas fortfarande medan man skriver, det var bara texten som togs bort.
 
+### Det egna provet GÅR att rätta, och det är ett val
+
+Först fanns samma spärr som rollspelet har — *du bedömer inte ditt eget*. Den
+gjorde modulen omöjlig att prova: den som skriver kursen skriver provet själv,
+och mötte då ett helt utgråat formulär. Spärren är borttagen eftersom den
+skyddade mot något som inte finns (bara en chefsroll kan rätta, och certifikatet
+öppnar ingenting — `blocks_capability` är oanvänd sedan 0007). **Sätt inte
+tillbaka den utan att först ge den som testar en annan väg in.** Spåret finns
+kvar: `graded_by`, `audit_log.eget`, märkningen i kön och en ruta i vyn.
+
 ### Öppet
 
 **Ingen människa har skrivit provet än.** Vägen är byggd och provad i logiken,

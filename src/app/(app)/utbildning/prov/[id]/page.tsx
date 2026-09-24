@@ -137,9 +137,10 @@ export default async function Rattasida({ params }: { params: Promise<{ id: stri
         )}
       </div>
 
-      {egetProv && (
+      {egetProv && !rattad && (
         <Notis ton="warn">
-          Det här är ditt eget prov. Du kan läsa det, men inte sätta betyg på det.
+          Det här är ditt eget prov. Du kan rätta det — men att du gjorde det står i loggen, och
+          ett prov man satt betyg på själv säger inget om någon annan än en själv.
         </Notis>
       )}
 
@@ -161,8 +162,17 @@ export default async function Rattasida({ params }: { params: Promise<{ id: stri
         </Card>
       )}
 
-      {rattad && attempt ? (
-        <Fardigrattat rader={rader} aterkoppling={attempt.note} grans={kurs?.pass_threshold ?? 80} />
+      {rattad ? (
+        /* `attempt` KAN vara null pa en rattad rad: `course_attempt` far
+           `on delete set null`, sa ett rensat forsok lamnar inlamningen kvar.
+           Vyn ska da visa svaren och poangen anda — inte falla tillbaka till
+           rattningsformularet, som hade bjudit in till att satta betyg en gang
+           till pa nagot som redan ar bokfort. */
+        <Fardigrattat
+          rader={rader}
+          aterkoppling={attempt?.note ?? null}
+          grans={kurs?.pass_threshold ?? 80}
+        />
       ) : inlamning.status === "retur" ? (
         <Card>
           <Notis ton="info">
@@ -174,12 +184,7 @@ export default async function Rattasida({ params }: { params: Promise<{ id: stri
           </div>
         </Card>
       ) : (
-        <Rattning
-          id={inlamning.id}
-          fragor={rader}
-          grans={kurs?.pass_threshold ?? 80}
-          lastFast={egetProv}
-        />
+        <Rattning id={inlamning.id} fragor={rader} grans={kurs?.pass_threshold ?? 80} />
       )}
     </div>
   );
