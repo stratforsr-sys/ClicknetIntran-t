@@ -108,6 +108,23 @@ export const NOTIS_KALLOR = [
   "franvaro-konsekvens",
   "rollspel",
   "rollspel-bedomt",
+  /**
+   * Det skriftliga provet (0067). Tva harledda poster ur samma tabell, precis
+   * som rollspelens tva — men riktningarna ar INTE desamma.
+   *
+   * `prov-ratta` ar chefens: ett inlamnat prov ligger och vantar pa att nagon
+   * lasar det. `prov-retur` ar saljarens: chefen har skickat tillbaka provet
+   * och vill ha en komplettering.
+   *
+   * BADA AR TILLSTAND OCH INTE HANDELSER, och det ar darfor de star har och
+   * inte bland raderna i `notification_event`. Ett inlamnat prov VANTAR tills
+   * nagon rattat det, och ett returnerat vantar tills hon lamnat in igen — en
+   * skriven rad hade legat kvar i klockan efterat och tjatat om nagot som redan
+   * var gjort. Beskedet om BETYGET ar tvartom en handelse; se `prov-rattat`
+   * langre ned.
+   */
+  "prov-ratta",
+  "prov-retur",
   "fel",
   "fel-svar",
   /**
@@ -444,6 +461,17 @@ export const NOTIS_KALLOR = [
   "kalender-aterkallad",
 
   /**
+   * Betyget pa det skriftliga provet (0067).
+   *
+   * EN HANDELSE, till skillnad fran sina tva syskon `prov-ratta` och
+   * `prov-retur` hogre upp. Skalet ar det som star overst i filen: rattningen
+   * SKRIVER OVER tillstandet den kom ur. Ett rattat prov ar bara `rattad`, och
+   * omojligt att skilja fran ett som rattades i varas — den som faktiskt fick
+   * sitt resultat skulle alltsa vara den enda som inte fick veta.
+   */
+  "prov-rattat",
+
+  /**
    * ANGRA-KNAPPEN HAR MED FLIT INGEN KALLA HAR.
    *
    * `/angra` provades och togs bort igen. Kvittot med angra-knappen visas bara
@@ -518,6 +546,7 @@ export const HANDELSEKALLOR = [
   "uppgift-avbruten",
   "kalender-delad",
   "kalender-aterkallad",
+  "prov-rattat",
 ] as const satisfies readonly Notiskalla[];
 
 export type Handelsekalla = (typeof HANDELSEKALLOR)[number];

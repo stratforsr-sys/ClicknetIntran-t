@@ -100,6 +100,15 @@ export default async function UtbildningSida() {
               Rollspel
             </ButtonLink>
           )}
+          {/* 0067. Till skillnad fran rollspelskon visar den har sidan ALLA
+              inlamnade prov och inte bara dem man leder — beställarens val, se
+              rubriken i migrationen. Knappen har darfor samma villkor men en
+              vidare vy bakom sig. */}
+          {farSeAlla && (
+            <ButtonLink href="/utbildning/prov" variant="sekundar">
+              Skriftliga prov
+            </ButtonLink>
+          )}
           {farRedigera && (
             <ButtonLink href="/utbildning/ny" variant="primar">
               Ny kurs
@@ -112,7 +121,7 @@ export default async function UtbildningSida() {
         <Card>
           <EmptyState
             rubrik="Inga kurser än"
-            text="En kurs består av moduler i ordning och avslutas med ett quiz. Godkänt ger ett certifikat."
+            text="En kurs består av moduler i ordning och avslutas med ett prov — med svarsalternativ eller i fritext. Godkänt ger ett certifikat."
             handling={
               farRedigera ? (
                 <ButtonLink href="/utbildning/ny" variant="primar">

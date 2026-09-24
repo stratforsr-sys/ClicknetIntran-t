@@ -5,6 +5,131 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-24 · Skriftligt prov med fritextsvar, rättat för hand
+
+Beställningen: *"Jag vill göra ett prov på intranätet under vyn utbildningar.
+Chefer ska kunna se alla prover och kunna rätta dem manuellt. Svaren på frågorna
+ska endast vara i fritext."* Tjugo frågor följde med, om säljstrukturen.
+
+**Migration `0067`, körd 2026-09-24. Ligger på branch `skriftligt-prov`, EJ
+MERGAD.** Nästa lediga nummer är `0068`.
+
+### Fyra val som beställaren gjorde innan en rad skrevs
+
+Alla fyra hade tre alternativ, och de bortvalda är värda att minnas eftersom de
+kommer att föreslås igen:
+
+- **En egen kurs**, inte en sextonde modul i *Släpp inte kunden för tidigt* och
+  inte en fristående sida vid sidan av kurssystemet. Som modul hade provet krävt
+  att man tagit femton moduler först; som egen sida hade det stått utanför
+  progress, certifikat och chefens översikt.
+- **Poäng 0–2 per fråga**, inte godkänt/underkänt per fråga och inte ett enda
+  omdöme för hela provet. Ett fritextsvar är sällan antingen eller, och en skala
+  som tvingar rättaren att kalla ett halvbra svar antingen rätt eller fel gör
+  betyget till en slump beroende på vem som rättar.
+- **Alla chefer ser alla prov.** Ordagrant vad som beställdes, och det skiljer
+  modulen från rollspelet (0024), där man bara ser dem man leder.
+- **Utkast som sparas, plus retur för komplettering.** Inte "skrivs i ett svep".
+
+### Varför det INTE blev ett quiz med långa alternativ
+
+Quizet (0007) har ett facit i `quiz_option` och rättas av servern i samma sekund
+knappen trycks. Det fungerar för frågor som HAR ett rätt svar. *"Vad vill du
+uppnå med intresseväckaren?"* har det inte — svaret går inte att känna igen, det
+går bara att formulera. Fyra alternativ hade mätt igenkänning i stället för
+förståelse, vilket är precis det provet inte ska mäta.
+
+Följden är att `fritext` blev en femte modultyp och inte en flagga på quizet.
+Skillnaden är inte kosmetisk: en `quiz`-modul blir klar av ett knapptryck, en
+`fritext`-modul blir klar av **någon annans arbete**.
+
+### Fyra tabeller, och varför den fjärde finns
+
+`essay_question` (frågorna), `essay_submission` (ett försök), `essay_answer`
+(svaret OCH rättningen, en rad per fråga) — och `essay_return`.
+
+Den fjärde är den som inte är självklar. Returen är **det enda stället i modulen
+där ett inlämnat svar skrivs över**: säljaren öppnar provet igen och ändrar i
+texten. `essay_return.answers` är en ögonblicksbild av svaren, poängen och
+kommentarerna i den sekund chefen skickade tillbaka provet. Utan den försvinner
+det hon först skrev, och modulens bärande regel sedan 0007 — *ett försök får
+aldrig raderas eller skrivas över* — hade haft ett hål på ett ställe.
+
+**Retur och underkänt är inte samma sak, och det är hela poängen med att ha
+båda.** Ett underkänt prov är ett BEDÖMT prov: försöket är slut, betyget står i
+`course_attempt`, och ett omtag är en ny rad med tomma rutor. En retur är
+tvärtom ett prov som inte gick att bedöma.
+
+### Frågorna är stängda för klienten, precis som quizets facit
+
+`essay_question` bär kolumnen `guidance` — rättarstöd, alltså vad ett
+fullpoängssvar innehåller. Det ÄR facit. Tabellen är därför `revoke select`:ad
+för `authenticated`, som `quiz_option` är sedan 0007, och sidorna läser den med
+service role och skickar vidare bara det mottagaren ska se: prompten till den
+som skriver, prompten plus stödet till den som rättar.
+
+**Rättarstödet är seedat TOMT på arton av tjugo frågor**, och det är ett val.
+Frågorna är beställarens säljmetodik; ett facit skrivet av den som byggde
+modulen hade blivit den norm alla rättar mot utan att någon valt den. De två
+undantagen är självskattningsfrågorna 12 och 13, där stödet handlar om FORMEN
+("går det att göra i morgon?") och inte om innehållet.
+
+### Certifieringen flyttade, och det var inte städning
+
+`certifieraPerson()` och `farTaModul()` låg som privata funktioner i
+`utbildning/actions.ts`. Provet rättas i en annan vy, av en annan person, i en
+annan fil — och då fanns två vägar: kopiera reglerna eller flytta dem. De ligger
+nu i `src/lib/utbildning-server.ts`, som INTE bär `"use server"` (allt som
+exporteras ur en sådan fil blir en publik slutpunkt, och `certifieraPerson()`
+tar en anställd och en kurs som argument — den hade låtit vem som helst dela ut
+vilket certifikat som helst till vem som helst).
+
+"Får jag ta modulen?" och "är kursen klar nu?" är precis de två frågor som blir
+farliga när de besvaras på två ställen: den ena kopian får en rättelse, den
+andra inte, och skillnaden syns först som ett certifikat någon inte borde ha.
+
+### Notiserna: två härledda, en händelse
+
+`prov-ratta` (chefens kö) och `prov-retur` (säljarens komplettering) är
+**tillstånd** och räknas fram ur `essay_submission.status` — de faller bort av
+sig själva när saken är gjord. `prov-rattat` är en **händelse** i
+`notification_event`, eftersom rättningen skriver över tillståndet den kom ur:
+ett rättat prov är bara `rattad`, omöjligt att skilja från ett som rättades i
+våras. Samma uppdelning som står överst i `src/lib/notiser.ts`.
+
+Ingen av dem mejlas. Morgonbrevets regel gäller: mejla aldrig det som gick bra.
+
+### Två saker i gränssnittet som är avsiktliga
+
+**Texten kan inte försvinna.** Tjugo fritextsvar är fyrtio minuters arbete.
+Utkastet skrivs ner 2,5 sekunder efter sista tangenttrycket, och vyn SÄGER när
+det skedde — en tyst sparning är ingen trygghet, för den som inte ser den litar
+inte på den. `beforeunload` täcker de två sekunderna däremellan.
+
+**Rättningen visar summan medan den pågår.** `rattningslage()` är samma funktion
+på klienten och servern. Den som sätter tjugo betyg utan att se vart de bär vet
+inte om provet ligger på 69 eller 71 procent förrän hon tryckt — och gränsen går
+mitt emellan.
+
+### Kursen är ett UTKAST
+
+`saljstruktur` ligger som `draft` och måste publiceras i redaktören samma dag
+grenen mergas. En publicerad kurs syns i klockan hos varje säljare i samma
+sekund raden finns, och raden finns så fort migrationen körts — alltså innan
+grenen är godkänd. Godkänt är 70 %, spärrtiden noll, certifikatet tolv månader,
+`due_days` tom (fristen räknas från anställningsdatum och hade gjort kursen röd
+första dagen för varenda säljare som varit anställd längre än så).
+
+`npm run test:prov` är grön: 49 kontroller på tolkning, procent, lägen och
+saknade svar — inklusive att 28 av 40 poäng blir exakt 70 % och 27 blir 68.
+
+Behörigheten är dessutom provad **skarpt mot databasen**, i en transaktion som
+rullades tillbaka: en inlämning från Sandra, läst som fyra olika roller. Hon ser
+sin egen, Edvin ser den inte, säljchefen och admin ser den — och alla tre nekas
+läsa `essay_question`. Sista kontrollen räknar att provdatan är borta igen.
+
+---
+
 ## 2026-09-23 (senare) · Mergad till main
 
 Beställaren, på frågan om Simon bara skulle ha insyn: *"Nej det ska vara som det

@@ -14,6 +14,61 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "skriftligt-prov-saljstruktur",
+    rubrik: "Skriftligt prov: Säljstruktur — tjugo frågor du svarar på med egna ord",
+    ingress:
+      "Ingen kryssruta och ingen maskin som rättar. Du skriver svaren själv, din chef läser varje ett, sätter poäng och skriver tillbaka.",
+    text: `Under **Utbildning** ligger en ny kurs: **Säljstruktur**. Den består av ett
+enda moment — ett skriftligt prov med tjugo frågor om intro, intresseväckare,
+behovsanalys, ROI, presentation och avslut.
+
+## Det som är nytt är formen
+
+Proven i navet har hittills haft svarsalternativ, och servern har rättat dem i
+samma sekund du tryckt. **Det här provet har inga alternativ.** Frågorna är
+sådana att svaret inte går att känna igen — det går bara att formulera. "Vad
+vill du uppnå med intresseväckaren?" har inte fyra svar där ett är rätt.
+
+Därför rättas det av en människa. Varje svar ger **noll, en eller två poäng**:
+två för ett svar som håller, en för ett halvt, noll för ett som inte svarar på
+frågan. Godkänt är 70 procent, alltså 28 av 40 poäng.
+
+## Du kan gå ifrån provet
+
+Tjugo fritextsvar tar sin tid. **Svaren sparas medan du skriver** — du ser i
+överkanten när det senast skedde — och provet lämnas in först när du själv
+säger till. Fram till dess går allt att ändra.
+
+Räknaren överst visar hur många frågor som är besvarade. Inlämningsknappen
+öppnar sig när alla tjugo har ett svar.
+
+## Efter inlämningen
+
+Provet går till säljledningen. Två saker kan hända:
+
+**Det rättas.** Du får ett besked i navet med poängen, en återkoppling på hela
+provet och — där chefen skrivit något — en kommentar vid enskilda svar. Godkänt
+ger ett certifikat som gäller i tolv månader.
+
+**Det skickas tillbaka.** Säger ett par svar för lite för att gå att bedöma får
+du provet åter med besked om vad som ska fyllas på. **Dina svar ligger kvar** —
+du kompletterar där hon bett om det, i stället för att skriva om alltihop.
+
+Blir provet underkänt gör du om det. Ett nytt försök börjar med tomma rutor, och
+det förra ligger kvar i historiken — underkänt är lika mycket ett resultat som
+godkänt.
+
+## För dig som är chef
+
+Knappen **Skriftliga prov** på utbildningssidan öppnar kön. **Alla chefer ser
+alla prov**, inte bara sitt eget lag: du sätter poäng fråga för fråga, ser
+summan och procenten växa fram medan du rättar, och skriver återkopplingen
+längst ned. Den är obligatorisk — ett betyg utan ord lär ingen sig något av.`,
+    datum: "2026-09-24",
+    roller: [],
+    href: "/utbildning",
+  },
+  {
     slug: "delade-uppgifter-syns-nu",
     rubrik: "Uppgifter du bjudits in i syns nu — förut gjorde de inte det",
     ingress:

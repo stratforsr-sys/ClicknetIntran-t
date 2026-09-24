@@ -13,8 +13,14 @@
  * enda som skiljer ar vad knappen och etiketterna sager. Att ge den en egen
  * typ i stallet for att skriva "OBS! GOR DET HAR" i en lasmodul ar skillnaden
  * mellan ett steg man ser i listan och en rubrik man skummar forbi.
+ *
+ * `fritext` ar ett prov som en MANNISKA rattar (0067). Det delar ingenting med
+ * `quiz` utom ordet prov: quizet har ett facit i databasen och rattas i samma
+ * sekund, det har har svar som ar mer eller mindre genomtankta och en chef som
+ * satter poang pa dem. Skillnaden ar inte kosmetisk — den avgor om modulen blir
+ * klar av ett knapptryck eller av nagon annans arbete.
  */
-export const MODULTYPER = ["reading", "ovning", "quiz", "roleplay"] as const;
+export const MODULTYPER = ["reading", "ovning", "quiz", "roleplay", "fritext"] as const;
 export type Modultyp = (typeof MODULTYPER)[number];
 
 export const MODULTYP_ETIKETT: Record<Modultyp, string> = {
@@ -22,6 +28,7 @@ export const MODULTYP_ETIKETT: Record<Modultyp, string> = {
   ovning: "Övning",
   quiz: "Prov",
   roleplay: "Rollspel",
+  fritext: "Skriftligt prov",
 };
 
 /** Typer som blir klara av ett klick, utan prov och utan inlamning. */

@@ -17,6 +17,7 @@ export type Modul = {
   kind: string;
   fragor: string;
   kriterier: string;
+  provfragor: string;
 };
 
 export function ModulForm({
@@ -89,7 +90,7 @@ export function ModulForm({
 
       <Field
         label={
-          kind === "quiz"
+          kind === "quiz" || kind === "fritext"
             ? "Text före provet"
             : kind === "roleplay"
               ? "Instruktion till säljaren"
@@ -124,6 +125,31 @@ export function ModulForm({
             className={`${KONTROLL} resize-y font-mono text-small`}
           />
         </Field>
+      )}
+
+      {kind === "fritext" && (
+        <Field
+          label="Frågor"
+          namn={namn("provfragor")}
+          hjalp="En fråga per rad: fråga | poängtak | rättarstöd. Poängtaket är 2 om du utelämnar det — 0 fel, 1 delvis, 2 rätt. Rättarstödet syns BARA för den som rättar, aldrig för den som skriver provet."
+        >
+          <textarea
+            id={namn("provfragor")}
+            name="provfragor"
+            rows={12}
+            defaultValue={modul?.provfragor ?? ""}
+            placeholder={"Vad är en säljstruktur? | 2 | Nämner ordningen OCH att varje del har ett syfte\nVad vill du uppnå med introt?\nGe mig tre intresseväckare. | 3"}
+            className={`${KONTROLL} resize-y font-mono text-small`}
+          />
+        </Field>
+      )}
+
+      {kind === "fritext" && modul && (
+        <p className="text-small text-warn-ink">
+          Ändrar du en fråga skrivs den om från grunden. Har någon redan svarat på den försvinner
+          svaret — betyget står kvar i historiken, men texten gör det inte. Lägg hellre till en ny
+          modul än att skriva om ett prov som är i bruk.
+        </p>
       )}
 
       {kind === "roleplay" && (
