@@ -163,6 +163,29 @@ Därför: ordern som **utkast**, tjänsterna, och först då statusen och belopp
 Faller något på vägen står ett utkast kvar — synligt, rättbart, och utan en enda
 krona bokförd.
 
+### Rättelse samma dygn: bindningsvalet på en tjänst syntes inte
+
+Beställaren 2026-09-25: *"I 'Lägg till en tjänst' finns inte ifall ordern har
+samma bindningstid eller egen bindningstid."* Den fanns. Det var två fel i ett,
+och **båda kom ur passets egen ändring**.
+
+Det **första**: valet ritades bara när avgiftsrutan redan stod på
+"Månadsavgift". Eftersom den rutan numera börjar tom — hela poängen med att
+förvalen togs bort samma dag — syntes bindningsvalet aldrig när man lade till
+raden. **En kontroll som dyker upp först när man gissat rätt i en annan ruta
+finns i praktiken inte.** Det är den sortens följdfel som uppstår när ett förval
+tas bort utan att det som hängde på förvalet ses över.
+
+Det **andra**: en kryssruta är ett förval i sig. Omarkerad betydde tyst "följer
+huvudavtalet" — precis det tysta standardval som togs bort överallt annars, och
+här ett som flyttar ett slutdatum och därmed när navet ringer kunden.
+
+Nu en rullgardin med tre lägen — ovalt, *Samma som huvudordern*, *Egen
+bindningstid* — ritad så fort raden finns och obligatorisk. Enda undantaget är en
+**explicit vald** engångsavgift: den kan inte löpa ut, och då står en mening i
+stället för en utgråad kontroll. En månadstjänst utan bindningsval räknas inte in
+i ordervärdet förrän valet är gjort.
+
 ### Prov
 
 `tests/order.mjs` utökad med fyrtio kontroller: månadsskiftet åt båda håll,
