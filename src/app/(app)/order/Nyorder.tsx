@@ -42,7 +42,29 @@ type Tjansterad = {
   namn: string;
   fakturering: Fakturering;
   belopp: string;
-  egenBindning: boolean;
+  /**
+   * ===========================================================================
+   * TRE LAGEN OCH INTE EN KRYSSRUTA, och det ar en RATTELSE — 2026-09-25.
+   *
+   * Bestallaren: *"I 'Lagg till en tjanst' finns inte ifall ordern har samma
+   * bindningstid eller egen bindningstid."* Den fanns, och det var tva fel i ett.
+   *
+   * Det FORSTA var att valet bara ritades nar avgiftsrutan redan stod pa
+   * "Manadsavgift". Eftersom den rutan numera borjar tom — hela poangen med att
+   * forvalen togs bort dagen innan — syntes bindningsvalet aldrig nar man lade
+   * till raden. En kontroll som dyker upp forst nar man gissat ratt i en annan
+   * ruta finns i praktiken inte.
+   *
+   * Det ANDRA var att en kryssruta ar ett forval i sig: omarkerad betydde tyst
+   * "foljer huvudavtalet". Det ar precis den sortens tysta standardval som
+   * passet innan togs bort overallt annars — och har var det dessutom ett val
+   * som flyttar ett slutdatum och darmed nar navet ringer kunden.
+   *
+   * Tom strang = ingen har valt annu, och raden raknas inte in i affaren forran
+   * nagon gjort det.
+   * ===========================================================================
+   */
+  bindning: "" | "foljer" | "egen";
   bindningstid: string;
   startdatum: string;
 };
@@ -82,7 +104,7 @@ function tomTjanst(): Tjansterad {
     // skillnaden mellan de tva ar 4 000 kr och 96 000 kr i ordervarde.
     fakturering: "" as Fakturering,
     belopp: "",
-    egenBindning: false,
+    bindning: "",
     bindningstid: "",
     startdatum: "",
   };
@@ -306,14 +328,26 @@ export function Nyorder({
   const tjanster: Tjanst[] = f.tjanster.flatMap((t) => {
     const belopp = tolka(t.belopp);
     if (!t.namn.trim() || !t.fakturering || belopp === null || belopp <= 0) return [];
+
+    // EN MANADSTJANST UTAN BINDNINGSVAL RAKNAS INTE MED. Utan raden hade en
+    // halvskriven tjanst tyst behandlats som "foljer huvudavtalet" — alltsa
+    // exakt det forval kryssrutan gjorde, fast osynligt.
+    if (t.fakturering === "manad" && !t.bindning) return [];
+
+    const egen = t.fakturering === "manad" && t.bindning === "egen";
+
+    // Och en egen bindningstid utan bada sina tal gar inte att vardera: den vet
+    // varken hur lange den loeper eller nar den slutar.
+    if (egen && (!t.bindningstid || !t.startdatum)) return [];
+
     return [
       {
         name: t.namn.trim(),
         billing: t.fakturering,
         amount: belopp,
-        follows_order: t.fakturering === "manad" ? !t.egenBindning : false,
-        term_months: t.egenBindning && t.bindningstid ? Number(t.bindningstid) : null,
-        starts_on: t.egenBindning && t.startdatum ? t.startdatum : null,
+        follows_order: t.fakturering === "manad" && !egen,
+        term_months: egen ? Number(t.bindningstid) : null,
+        starts_on: egen ? t.startdatum : null,
       },
     ];
   });
@@ -923,7 +957,10 @@ function Tjanster({
 
       {rader.map((t, i) => {
         const egetSlut =
-          t.egenBindning && t.startdatum && t.bindningstid && giltigBindningstid(Number(t.bindningstid))
+          t.bindning === "egen" &&
+          t.startdatum &&
+          t.bindningstid &&
+          giltigBindningstid(Number(t.bindningstid))
             ? avtalsslut(t.startdatum, Number(t.bindningstid))
             : null;
 
@@ -944,12 +981,25 @@ function Tjanster({
 
               <label htmlFor={`tjanst_avgift_${i}`} className="flex flex-col gap-1">
                 <span className="text-micro text-ink-500">Avgift</span>
+                {/* BYTER MAN TILL ENGANGSAVGIFT NOLLSTALLS BINDNINGSVALET.
+                    En engangsavgift kan inte loepa ut, och villkoret
+                    `tjanst_engang_utan_bindning` i 0068 nekar raden — men ett
+                    kvarglomt "egen bindningstid" hade legat i tillstandet och
+                    kommit tillbaka i samma sekund man bytte tillbaka. */}
                 <select
                   id={`tjanst_avgift_${i}`}
                   required
                   className={KONTROLL}
                   value={t.fakturering}
-                  onChange={(e) => satt(t.nyckel, "fakturering", e.target.value as Fakturering)}
+                  onChange={(e) => {
+                    const val = e.target.value as Fakturering;
+                    satt(t.nyckel, "fakturering", val);
+                    if (val !== "manad") {
+                      satt(t.nyckel, "bindning", "");
+                      satt(t.nyckel, "bindningstid", "");
+                      satt(t.nyckel, "startdatum", "");
+                    }
+                  }}
                 >
                   <option value="">Välj …</option>
                   <option value="manad">Månadsavgift</option>
@@ -973,25 +1023,52 @@ function Tjanster({
               </label>
             </div>
 
-            {/* EN ENGANGSAVGIFT FAR INGEN BINDNINGSTIDSFRAGA. Den kan inte loepa
-                ut, sa kryssrutan hade varit ett val utan foljd — och villkoret
-                `tjanst_engang_utan_bindning` i 0068 nekar den anda. */}
-            {t.fakturering === "manad" && (
+            {/*
+              ===========================================================
+              BINDNINGSVALET RITAS SA FORT RADEN FINNS.
+
+              Det var gatt bakom "Manadsavgift" fram till 2026-09-25, och
+              eftersom avgiftsrutan borjar tom syntes valet aldrig nar man lade
+              till tjansten. Bestallaren sokte det och hittade det inte.
+
+              Enda undantaget ar en EXPLICIT vald engangsavgift: den kan inte
+              loepa ut, och da star en mening i stallet for en kontroll. En
+              utgraad rullgardin hade inbjudit till att fraga varfor.
+              ===========================================================
+            */}
+            {t.fakturering === "engang" ? (
+              <p className="text-small text-ink-500">
+                En engångsavgift har ingen bindningstid — den är betald och över, och bevakas
+                därför inte.
+              </p>
+            ) : (
               <div className="flex flex-col gap-2">
-                <label className="flex items-center gap-2 text-small text-ink-700">
-                  <input
-                    type="checkbox"
-                    className="size-4"
-                    checked={t.egenBindning}
-                    onChange={(e) => satt(t.nyckel, "egenBindning", e.target.checked)}
-                  />
-                  Egen bindningstid — tjänsten följer inte huvudavtalet
+                <label htmlFor={`tjanst_bindning_${i}`} className="flex flex-col gap-1">
+                  <span className="text-micro text-ink-500">Bindningstid på tjänsten</span>
+                  <select
+                    id={`tjanst_bindning_${i}`}
+                    required
+                    className={KONTROLL}
+                    value={t.bindning}
+                    onChange={(e) => {
+                      const val = e.target.value as Tjansterad["bindning"];
+                      satt(t.nyckel, "bindning", val);
+                      if (val !== "egen") {
+                        satt(t.nyckel, "bindningstid", "");
+                        satt(t.nyckel, "startdatum", "");
+                      }
+                    }}
+                  >
+                    <option value="">Välj …</option>
+                    <option value="foljer">Samma som huvudordern</option>
+                    <option value="egen">Egen bindningstid</option>
+                  </select>
                 </label>
 
-                {t.egenBindning ? (
+                {t.bindning === "egen" ? (
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label htmlFor={`tjanst_manader_${i}`} className="flex flex-col gap-1">
-                      <span className="text-micro text-ink-500">Bindningstid</span>
+                      <span className="text-micro text-ink-500">Antal månader</span>
                       <input
                         id={`tjanst_manader_${i}`}
                         type="number"
@@ -1019,11 +1096,16 @@ function Tjanster({
                       />
                     </label>
                   </div>
-                ) : (
+                ) : t.bindning === "foljer" ? (
                   <span className="text-small text-ink-500">
                     {loptid
                       ? `Löper ${loptid} månader som huvudavtalet, och bevakas tillsammans med det.`
-                      : "Löper som huvudavtalet, och bevakas tillsammans med det."}
+                      : "Löper lika länge som huvudavtalet, och bevakas tillsammans med det."}
+                  </span>
+                ) : (
+                  <span className="text-small text-ink-500">
+                    Följer tjänsten huvudavtalet tar de slut samtidigt. Har den en egen
+                    bindningstid får den ett eget slutdatum och en egen påminnelse.
                   </span>
                 )}
 
