@@ -4,6 +4,12 @@ import { AVTALSSLUT_VARSEL_DAGAR, type Order, type Paket, type Sats, type Tjanst
 import type { Chefssats } from "@/lib/chefsprovision";
 import type { Utkopssats } from "@/lib/utkop";
 import type { Chefspost } from "@/lib/provision-motor";
+import {
+  ORDERTAK,
+  sammaKund,
+  statusarnaI,
+  type Orderfilter,
+} from "@/lib/ordervy";
 
 /**
  * Hamtningarna for kundordern. Laser med ANVANDARENS EGEN TOKEN — RLS i 0034
@@ -530,4 +536,234 @@ export async function hamtaTjanstslut(
     // tillsammans med `!inner` utan att tappa raderna helt.
     .filter((r) => r.status === "signerad" || r.status === "betald")
     .map(({ status: _status, ...rad }) => rad);
+}
+
+// -----------------------------------------------------------------------------
+// Ordervyns egna hamtningar (2026-09-25)
+// -----------------------------------------------------------------------------
+
+/**
+ * Listan, filtrerad i DATABASEN.
+ *
+ * =============================================================================
+ * VARFOR FILTRET GAR TILL SERVERN OCH INTE TILL WEBBLASAREN.
+ *
+ * Fram till nu hamtade sidan tolv manader bakat och ritade allt. "Alla order"
+ * fanns alltsa inte som lage — ett trearsavtal tecknat 2024 syntes inte, och
+ * filtrerade man i webblasaren hade "alla" betytt "alla av de tolv manaderna",
+ * vilket ar ett ord som lovar mer an det haller.
+ *
+ * Nu avgor `tid` hur langt bak fragan gar. `alla` satter ingen nedre grans alls,
+ * och da behovs ett TAK i stallet: `ORDERTAK + 1` rader hamtas, och den extra
+ * raden ar hela mekanismen — finns den vet vi att det fanns mer, utan att en
+ * andra rakningsfraga behovs. Vyn sager det med ord i stallet for att tysta
+ * klippa listan.
+ * =============================================================================
+ *
+ * INGET ROLLFILTER. RLS i 0034 avgor vad som syns, precis som i resten av filen.
+ * `vem` ar ett ANVANDARVAL i en lista — inte en behorighetskontroll — och den
+ * som valjer en kollega hen inte far se far noll rader av databasen.
+ */
+export async function hamtaOrderUrval(
+  f: Orderfilter,
+): Promise<{ order: Orderrad[]; kapad: boolean }> {
+  const rls = await supabaseServer();
+
+  let q = rls.from("sales_order").select(FALT);
+
+  if (f.vem !== "alla") q = q.eq("salesperson_id", f.vem);
+
+  // MANADEN TAR BADE SIGNERINGS- OCH MAKULERINGSMANADEN, samma villkor som
+  // `ror()` ovan och av samma skal: en order fran mars som makulerats i
+  // september HOR TILL september lika mycket som en order som signerades dar.
+  // Utan andra halvan visade septemberfiltret en summa som inte gick att stamma
+  // av mot nyckeltalen hogst upp pa sidan.
+  if (f.tid.slag === "manad") {
+    q = q.or(`period_month.eq.${f.tid.manad},cancel_period_month.eq.${f.tid.manad}`);
+  }
+
+  // EN DAG ar signeringsdagen. Makuleringsdagen har ingen plats har: fragan
+  // "vad skrevs den 24:e" ar en annan fraga an "vad hande den 24:e", och det ar
+  // den forsta man staller i en orderlista.
+  if (f.tid.slag === "dag") q = q.eq("signed_on", f.tid.datum);
+
+  const statusar = statusarnaI(f.status);
+  if (statusar.length > 0) q = q.in("status", statusar);
+
+  // ===========================================================================
+  // SOKNINGEN GAR MOT BOLAGSNAMNET OCH INGET ANNAT.
+  //
+  // Tva skal, och bada ar avsiktliga val snarare an forenklingar:
+  //
+  //   1. ORGANISATIONSNUMRET FAR INTE SOKAS PA. K27-undantaget later kolumnen
+  //      bara ett personnummer for en enskild firma, och DECISIONS.md sager att
+  //      numret aldrig far hamna i en sokning. En traff pa tio siffror hade
+  //      betytt att personnummer gick att fiska fram ur listan.
+  //
+  //   2. `.ilike()` OCH INTE `.or()`. Ett andra `or=`-villkor pa samma fraga ar
+  //      inte sakert dokumenterat i PostgREST, och en fraga vars form beror pa
+  //      vilka filter som rakar vara satta ar en fraga ingen kan granska.
+  //      Manadsvillkoret ovan ar redan ett `or`, och det far vara det enda.
+  //
+  // Texten ar dessutom rensad av `rensaSok()` fore den kommer hit — `%` och `_`
+  // ar jokertecken i `ilike`, och en sokning pa `%` hade traffat allt.
+  // ===========================================================================
+  if (f.sok) q = q.ilike("company_name", `%${f.sok}%`);
+
+  const { data } = await q
+    .order("signed_on", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(ORDERTAK + 1);
+
+  const rader = tolka(data ?? []);
+  return { order: rader.slice(0, ORDERTAK), kapad: rader.length > ORDERTAK };
+}
+
+/**
+ * Antalet order som vantar pa godkannande.
+ *
+ * EN RAKNING OCH INTE EN HAMTNING. Kon ar ett lage i filterraden nu, inte ett
+ * eget kort — det enda sidan behover veta utan att nagon valt laget ar HUR
+ * MANGA, sa att chipet kan bara en siffra. `head: true` later PostgREST svara
+ * med bara antalet.
+ *
+ * RLS ger noll at den som inte far se andras order, och noll ar ratt svar da:
+ * chipet ritas inte, och saljaren far en filterrad utan ett lage hen inte kan
+ * anvanda.
+ */
+export async function raknaKo(): Promise<number> {
+  const rls = await supabaseServer();
+  const { count } = await rls
+    .from("sales_order")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "inskickad");
+
+  return count ?? 0;
+}
+
+/**
+ * Hur manga tillaggstjanster varje order har.
+ *
+ * SKILD FRAN `hamtaTjanster` MED FLIT. Orderkortet i listan visar en RAKNARE —
+ * "2 tjänster" — och for den behovs bara `order_id`. Att hamta namn, belopp,
+ * bindningstider och fornyelseutfall for tvahundra order nar vyn ska rita en
+ * siffra ar precis den sortens fraga som gor en lista trog utan att nagon ser
+ * varfor. Hela raderna hamtas nar kundkortet oppnas, for de fa order som star
+ * dar.
+ */
+export async function hamtaTjansteantal(orderIds: string[]): Promise<Map<string, number>> {
+  const ut = new Map<string, number>();
+  if (orderIds.length === 0) return ut;
+
+  const rls = await supabaseServer();
+  const { data } = await rls.from("sales_order_service").select("order_id").in("order_id", orderIds);
+
+  for (const r of data ?? []) {
+    const nyckel = String((r as { order_id: unknown }).order_id);
+    ut.set(nyckel, (ut.get(nyckel) ?? 0) + 1);
+  }
+
+  return ut;
+}
+
+/**
+ * Taket pa en kunds orderlista.
+ *
+ * Femtio ar inte en prestandagrans — det ar ett tak pa en fraga som annars ar
+ * obegransad. En kund med fler an femtio order finns inte, och skulle hen finnas
+ * ar det inte kundkortet som ska upptacka det.
+ */
+const KUNDTAK = 50;
+
+/**
+ * Kunden bakom en order: ordern man klickade pa, och allt annat samma kund har.
+ *
+ * =============================================================================
+ * KORTET OPPNAS MED EN ORDERS ID, ALDRIG MED ETT ORGANISATIONSNUMMER.
+ *
+ * Det ar det enskilt viktigaste i den har funktionen. Kundkortet ligger i
+ * adressen som `?kund=<orderid>`, och adressen hamnar i webblasarhistoriken, i
+ * Vercels loggar och i en Referer-rubrik. K27-undantaget later `org_number`
+ * bara ett PERSONNUMMER for en enskild firma — och ett personnummer far inte
+ * ligga pa nagot av de stallena. Ett order-id ar ett uuid: det sager ingenting
+ * om nagon, och RLS avgor om den som bar det far se raden.
+ *
+ * Uppslaget gar darfor i tva steg. Forst ordern, med anvandarens egen token —
+ * far hen inte se den finns den inte, och kortet oppnas inte. Sedan syskonen.
+ * =============================================================================
+ *
+ * =============================================================================
+ * SYSKONEN HAMTAS I TVA FRAGOR, EN PA NUMMER OCH EN PA NAMN.
+ *
+ * Skalet ar att ingen av de tva ensam hittar kunden:
+ *
+ *   - NUMMERFRAGAN missar samma bolag inskrivet olika. `556677-8899` och
+ *     `5566778899` ar samma kund for en manniska och tva strangar for en
+ *     likhetsjamforelse.
+ *   - NAMNFRAGAN missar ett bolag som bytt namn mitt i en avtalsperiod, och
+ *     traffar for mycket nar tva olika bolag heter likadant.
+ *
+ * Bada fragas, svaren slas ihop, och `sammaKund()` — som normaliserar bort
+ * bindestreck och versaler — far avgora vad som verkligen hor till kunden. Den
+ * funktionen ar ren och provas i `tests/ordervy.mjs`; det ar dar regeln bor.
+ *
+ * `.eq()` OCH INTE ETT `or=`-UTTRYCK, och det ar inte en stilfraga: ett
+ * bolagsnamn kan innehalla komma och parentes, och de tecknen ar SYNTAX i ett
+ * `or=`. "Bygg & Co, AB" hade da inte blivit en sokning pa ett namn utan tva
+ * villkor. `.eq()` gar genom URLSearchParams och kodas.
+ * =============================================================================
+ */
+export async function hamtaKundensOrder(
+  orderId: string,
+): Promise<{ ankare: Orderrad; order: Orderrad[] } | null> {
+  // Ett id som inte ar ett uuid gar aldrig till databasen. PostgREST svarar med
+  // 400 pa en trasig uuid-jamforelse, och ett 400 i en serverkomponent ar ett
+  // kastat undantag — alltsa en femhundrasida for nagon som skrivit fel i
+  // adressfaltet. Tomt svar ar ratt: kortet ritas inte.
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderId)) return null;
+
+  const rls = await supabaseServer();
+
+  const { data: rad } = await rls.from("sales_order").select(FALT).eq("id", orderId).maybeSingle();
+  if (!rad) return null;
+
+  const ankare = tolka([rad])[0];
+
+  // FRAGORNA LAGGS I EN LISTA i stallet for i en ternar i ett `Promise.all`.
+  //
+  // Skalet ar typerna: en gren som ar en PostgREST-byggare och en gren som ar
+  // `Promise.resolve({ data: [] })` ger en UNION av tva svarsformer, och da
+  // maste varje atkomst harunder ga igenom bada. En lista dar alla element har
+  // samma typ slipper hela den frågan — och lasningen blir dessutom rakare: det
+  // ar en fraga, plus en till OM det finns ett nummer att fraga pa.
+  const fragor = [
+    rls
+      .from("sales_order")
+      .select(FALT)
+      .eq("company_name", ankare.company_name)
+      .order("signed_on", { ascending: false })
+      .limit(KUNDTAK),
+  ];
+
+  if (ankare.org_number) {
+    fragor.push(
+      rls
+        .from("sales_order")
+        .select(FALT)
+        .eq("org_number", ankare.org_number)
+        .order("signed_on", { ascending: false })
+        .limit(KUNDTAK),
+    );
+  }
+
+  const svar = await Promise.all(fragor);
+
+  const alla = new Map<string, Orderrad>([[ankare.id, ankare]]);
+  for (const r of tolka(svar.flatMap((s) => s.data ?? []))) {
+    // `sammaKund` far sista ordet. Namnfragan kan ha dragit in ett annat bolag
+    // med samma namn men eget organisationsnummer, och da hor det inte hit.
+    if (sammaKund(ankare, r)) alla.set(r.id, r);
+  }
+
+  return { ankare, order: [...alla.values()] };
 }

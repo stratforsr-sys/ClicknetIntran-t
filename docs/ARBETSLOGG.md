@@ -5,6 +5,209 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-25 · Ordervyn byggd om: kundkort, filter och en svävande nyorderruta
+
+Beställningen: *"Ordervyn ser riktigt dålig ut. Det är helt och hållet huller om
+buller och riktigt katastrof att läsa. Jag vill ordervyn ska vara byggd med
+frontend design skillen, inget AI slop, jag vill att alla ordrar ska kunna
+filtreras per person, per datum, månad eller alla ordrar. Sen vill jag att
+ordrarna ska ligga i elemtcards, och när man går in på dem ska det öppnas upp ett
+kundkort med all infromation, precis som ett riktigt crm, gör en undersökning på
+hur ett sånt kundkord ska se ut. Sen vill jag att det ska finnas en knapp, 'lägg
+till order' i högra hörnet högs upp och då ska det dyka upp en svävande lista
+precis som inställningar."*
+
+**BYGGT, ligger på branch `ordervyn-kundkort`. EJ MERGAD** — previewen ska visas
+för beställaren först. Ingen migration: allt som ritas fanns redan i databasen.
+
+### Diagnosen var inte att någon uppgift var fel
+
+Det är värt att skriva ut, för det avgjorde vad som gjordes. Ingen kolumn var
+felaktig och ingen siffra räknades fel. Felet var att **sidan hade sex likvärdiga
+kort i en spalt** — månadens siffror, provisionsmatrisen, avtalsbevakningen,
+inmatningsformuläret, kön och orderlistan — och att **varje orderrad ritade nio
+textstycken i samma grad och samma gråa ton**: paket, kontakt, ordervärde, utköp,
+avtalstid, tjänster, anteckning, plus `Atgarder`, `Samtal` och `Bilaga` inline.
+
+Tjugo order blev alltså omkring tvåhundra rader `text-small text-ink-500`, och
+formuläret låg mitt i den högen. Ingenting stod ut eftersom allt stod ut lika
+mycket.
+
+**Det är en lärdom som inte är specifik för ordervyn:** varje uppgift som lades
+till på orderraden var rimlig när den lades till. Kontaktraden 2026-09-15,
+ordervärdet i 0050, utköpet i 0060, avtalsraden och tjänstelistan i 0068 — fem
+tillägg, fem goda skäl, och ingen av dem tog bort något. Vyn hade inget tak, och
+en vy utan tak blir en vägg av sig själv. **Nästa gång en uppgift ska in i en
+lista: fråga vad som går ut.**
+
+### Undersökningen av hur ett kundkort ser ut
+
+Beställaren bad uttryckligen om den, och de två största CRM-systemen löser samma
+sida på nästan samma sätt. Det är den överlappningen som blev svaret:
+
+- **Salesforce Lightning** bygger posten av en *highlights panel* högst upp —
+  fyra till sex fält som avgör vad man gör härnäst, plus handlingsknapparna — och
+  under den en **flikrad** (Details / Activity / Related) i stället för en lång
+  spalt.
+- **HubSpot** delar posten i tre: **egenskaperna** till vänster, **tidslinjen** i
+  mitten, **de kopplade posterna** till höger.
+
+Tre saker är gemensamma, och kundkortet gör alla tre: beslutsfälten överst och
+få, resten i flikar, och en tidslinje som svarar på "vad har hänt" utan att man
+läser datum och räknar själv.
+
+**Det som medvetet INTE anammades** är den tomma fältmatrisen. Båda systemen
+ritar varje fält även när det är tomt, och en spalt med åtta streck i ser ut som
+ett trasigt kort i stället för en kund vi inte hunnit fylla i allt om. `Uppgift`
+i `Kundkort.tsx` ritar därför inte raden alls när värdet saknas — samma linje som
+ordervärdet i 0050 tog: tystnad framför en nolla.
+
+### Kortet är kunden, inte ordern
+
+Det är den enda riktiga skillnaden mot att bara göra orderraden större, och det
+bestämdes uttryckligen med beställaren: man går in på Nordbygg AB, inte på order
+#4712. `hamtaKundensOrder` slår därför upp **alla** order samma kund har, och
+`slaSammanKund` räknar kundens hela historik — antal order, ordervärde,
+provision, månadsintäkt, kund sedan, och det avtal som räcker längst.
+
+Följden är att "3 order · 71 640 kr" kan stå över ett kort man öppnade från en
+order på 11 940 kr. Det är hela poängen: den uppgiften finns ingen annanstans i
+navet.
+
+**Kunden slås samman på två frågor, inte en.** Numret missar samma bolag
+inskrivet olika (`556677-8899` mot `5566778899`); namnet missar ett bolag som
+bytt namn mitt i en avtalsperiod och träffar för mycket när två bolag heter
+likadant. Båda frågas, svaren slås ihop, och den rena `sammaKund()` — som
+normaliserar bort bindestreck och versaler — får avgöra.
+
+### `?kund=` bär ett ORDER-ID, aldrig ett organisationsnummer
+
+Det är det enskilt viktigaste beslutet i passet, och det är ett K27-beslut.
+
+Kundkortet ligger i adressen så att det går att länka — det var ett uttryckligt
+val av beställaren. Men adressen hamnar i webbläsarhistoriken, i Vercels loggar
+och i en `Referer`-rubrik. **K27-undantaget låter `org_number` bära ett
+personnummer** för en enskild firma, och DECISIONS.md säger redan att numret
+aldrig får hamna i den globala sökningen. Ett organisationsnummer i en
+frågesträng hade varit samma fel med en annan dörr.
+
+Adressen bär därför ordens uuid, och servern slår upp kunden bakom den. Samma
+skäl gör att **sökfältet söker på bolagsnamn och ingenting annat**: en träff på
+tio siffror hade betytt att personnummer gick att fiska fram ur listan.
+
+### Filtret går till databasen, och det måste det
+
+*"alla ordrar"* går inte att hålla i webbläsaren. Sidan hämtade tolv månader
+bakåt, och ett filter över den bunten hade gjort "alla" till "alla av de tolv
+månaderna" — ett ord som lovar mer än det håller, alltså den värsta sortens fel:
+ett som ser ut som ett svar. Ett treårsavtal tecknat 2024 fanns inte i listan.
+
+`hamtaOrderUrval` filtrerar i `sales_order` med RLS kvar, och `tid=alla` sätter
+ingen nedre gräns. Då behövs ett **tak** i stället: `ORDERTAK + 1` rader hämtas,
+och den extra raden är hela mekanismen — finns den vet vi att det fanns mer, utan
+en andra räkningsfråga. Vyn skriver ut det. **Ett tak som säger att det skär av
+är ärligt; ett förval som tiger är det inte** — och det är också skälet till att
+förvalet är `alla` och inte `innevarande månad`.
+
+Filtret ligger i adressen, vilket ger två saker gratis: det går att **dela** som
+länk, och det **överlever** att man öppnar ett kundkort och stänger det.
+
+### Nyckeltalen har egen hämtning, och det är hela poängen med dem
+
+Bandet överst säger vad **månaden** bär. Räknades det på den filtrerade listan
+hade "12 order · 48 200 kr" ändrats till "3 order · 9 000 kr" så fort någon valde
+en säljare i rullgardinen — och ett tal som betyder olika saker beroende på vad
+man råkar ha filtrerat på är varken månadens eller urvalets.
+
+Det var den enklare vägen att räkna på listan som redan hämtats. Det är därför
+det står utskrivet i `page.tsx`: **frågan är billig, felet är dyrt.**
+
+Bandet står av samma skäl **ovanför** filterraden. Ordningen på sidan säger vad
+som hänger ihop med vad.
+
+### En prestandavinst som inte syns
+
+Fram till nu hämtade sidan `hamtaOrderbilagor`, `hamtaOrdersamtal` **och**
+`hamtaTjanster` för varje synlig order vid varje laddning, eftersom varje orderrad
+ritade dem. Tre frågor över tjugo order, för uppgifter nästan ingen läste.
+
+Nu går de tre frågorna på de handfull order **en enda kund** har, och bara när
+någon öppnat kundkortet. Listan behöver bara en räknare på tjänsterna, och
+`hamtaTjansteantal` hämtar `order_id` och inget annat.
+
+### Provet hittade två riktiga fel
+
+`tests/ordervy.mjs` provar det rena lagret — sökrensningen, adresstolkningen,
+rundgången filter → adress → filter, kundnyckeln, summeringen, avtalsförloppet och
+händelserna. Det var värt att skriva:
+
+1. **`slaSammanKund` drog av en makulerad order två gånger.** Första försöket
+   summerade över de *godkända* och drog av de makulerade — men en makulerad
+   order har alltid varit signerad och låg alltså redan i summan. Nu summeras de
+   *levande*, vilket är samma tal men det enda som går att läsa.
+2. **`avtalsforlopp` gav en TOM stapel på en löptid på noll dagar.** Namnaren
+   golvades till ett och `0 / 1` blev noll procent — alltså en stapel som såg
+   nystartad ut över texten "0 dagar kvar". Nu blir den full: finns ingen tid
+   kvar är avtalet slut. Samma gren fångar bakvänt satta datum, som annars hade
+   gett en stapel med negativ bredd.
+
+Ett tredje fel, funnet av provet men aldrig nått i produktion: `sammaKund`
+svarade **ja** på två rader som saknade både organisationsnummer och bolagsnamn.
+`company_name` är `not null` sedan 0034 så läget ska inte kunna uppstå — men en
+likhetsjämförelse som svarar ja på två tomma värden är fel oavsett om den nås.
+
+### Avtalsstapeln i kortets nederkant
+
+Den är kortets enda utsmyckning, och den bär en uppgift. Kommentaren i den gamla
+vyn sa det redan: *"frågan 'hur länge har vi kvar på den här kunden?' ställs långt
+innan påminnelsen tänds"*. Svaret stod där som två datum — och två datum kräver
+att man räknar.
+
+En fylld list kräver ingenting, och eftersom den ligger på samma ställe på varje
+kort går **hela rutnätet** att läsa i en blick. Färgen byter vid nittio dagar,
+samma gräns som `AVTALSSLUT_VARSEL_DAGAR` och bevakningskortet — tre ställen som
+säger samma sak måste komma från samma funktion, och `dagarTill` är den.
+
+### Vad som flyttade var, i sin helhet
+
+| Fanns | Ligger nu |
+| --- | --- |
+| Månadskort + ordervärdeskort | Fyra nyckeltalsrutor överst, alltid månaden |
+| Provisionsmatrisen, näst högst upp | `<details>`-panel längst ner |
+| "Väntar på godkännande" som eget kort | Filterläge med räknare |
+| Inmatningsformuläret mitt på sidan | `?ny=1` i en `Svavruta`, knapp uppe till höger |
+| Avtalsbevakningen | Kvar ovanför filtret, men raderna länkar in i kundkortet |
+| Nio textstycken per orderrad | Fyra uppgifter på ett kort + kundkortet |
+| `Atgarder` / `Samtal` / `Bilaga` inline i listan | Kundkortets flikar |
+
+`Avtalsbevakning` är det enda som är kvar som eget kort, av samma skäl som den en
+gång fick bryta sidans ordning 2026-09-24: en kund vars avtal går ut om tre veckor
+är brådare än nästa order, och den som scrollar förbi ser den inte. **Ett
+filterläge hade gjort den till något man väljer att titta på.**
+
+### `renewal_at` deklarerades i typen
+
+Kolumnen har legat i `FALT` sedan 0068 och kommit med i varje svar, men inte stått
+i `Order`-typen. Följden var att kundkortets tidslinje inte kunde rita posten
+"avtalet förlängdes": uppgiften **fanns** i objektet, men kompilatorn kände den
+inte. **En kolumn som bara finns i minnet på den som skrev frågan är en kolumn som
+inte finns.**
+
+### Nya filer
+
+- `src/lib/ordervy.ts` — filtret, kundnyckeln, summeringen, avtalsförloppet,
+  händelserna. Rent, provat i `tests/ordervy.mjs`.
+- `src/app/(app)/order/Svavruta.tsx` — den svävande rutan. Samma `<dialog>` och
+  samma rörelse som `shell/Ruta.tsx`, men stänger till en **adress** i stället för
+  `router.back()`: ett kundkort kan öppnas från en länk, och då finns inget steg
+  bakåt på sidan att gå till.
+- `src/app/(app)/order/Orderkort.tsx` — element-kortet.
+- `src/app/(app)/order/Filterrad.tsx` — chips, väljare och sökfält.
+- `src/app/(app)/order/Kundkort.tsx` — CRM-kortet med fem flikar.
+- `tests/ordervy.mjs`
+
+---
+
 ## 2026-09-24 (senare) · Avtalsslut, tilläggstjänster och inga förval
 
 Beställningen kom i fyra omgångar under samma pass, och den tredje förklarar de
