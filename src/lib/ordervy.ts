@@ -88,6 +88,91 @@ export const STATUSVAL_KORT: Record<Statusval, string> = {
   utkast: "Utkast",
 };
 
+/**
+ * Statusens TON — semantiken, inte fargen.
+ *
+ * =============================================================================
+ * VARFOR DEN LIGGER HAR OCH INTE I KOMPONENTERNA
+ *
+ * Kartan stod 2026-09-25 i BADA filerna som ritar en order: `Orderkort.tsx` och
+ * `Kundkort.tsx` hade var sin identiska `TON`-konstant. Tva kopior av samma
+ * uppslag ar en kopia for mycket — den dag en status byter ton byter den ton pa
+ * ett av de tva stallena, och da betyder gront olika saker beroende pa var man
+ * tittar. Ett kort med gron list som oppnar en order med gul rubrik ar varre an
+ * ett system utan fargkodning.
+ *
+ * TONEN ÄR SEMANTIK, INTE CSS. Inga klassnamn och inga hexvarden star har —
+ * `ok`, `warn` och `danger` ar samma ord som `Badge` och `Card` redan talar, och
+ * varje komponent oversatter dem till sina egna klasser (en 3 px list pa kortet,
+ * en tonad platta i pillret). Det ar den uppdelningen som gor att den har filen
+ * fortfarande gar att prova i node utan att kanna Tailwind.
+ * =============================================================================
+ */
+export type Statuston = "neutral" | "warn" | "ok" | "brand" | "danger";
+
+export const STATUSTON: Record<Orderstatus, Statuston> = {
+  utkast: "neutral",
+  inskickad: "warn",
+  signerad: "ok",
+  betald: "brand",
+  makulerad: "danger",
+};
+
+/**
+ * Vem som har nagon atgard att gora pa en order, och i vilket lage.
+ *
+ * =============================================================================
+ * FUNKTIONEN FINNS FOR ATT KUNDKORTET SKA KUNNA LATA BLI ATT RITA EN RUBRIK.
+ *
+ * `Atgarder.tsx` returnerar `null` for varje kombination av status och roll som inte
+ * har nagot att gora — en makulerad order, ett utkast man inte ager, en signerad
+ * order sedd av en saljare som inte lade upp den. Det ar ratt: en tom rad knappar
+ * ar samre an inga knappar.
+ *
+ * Men kundkortet ritar rubriken "Åtgärder" over komponenten (2026-09-25), och en
+ * rubrik over ingenting ar varre an bada. Kortet maste alltsa kunna FRAGA innan
+ * det ritar.
+ *
+ * SVARET FAR INTE VARA EN ANDRA KOPIA AV VILLKOREN. Darfor ar den har funktionen
+ * inte en spegling av komponentens if-kedja — den ar komponentens EGEN grind. Se
+ * det forsta som hander i `Atgarder`. Glider de isar gar det inte, for det finns
+ * bara en av dem.
+ *
+ * DEN BOR HAR OCH INTE I KOMPONENTEN eftersom den ar en REGEL OM VEM SOM FAR GORA
+ * VAD, och sadana ska ga att prova utan att starta React. `tests/ordervy.mjs` kor
+ * hela matrisen av fem statusar mot fyra roller — trettiotva kombinationer som
+ * ingen orkar klicka igenom for hand, och dar den dyra riktningen ar att en knapp
+ * DYKER UPP for nagon som inte ska ha den.
+ *
+ * VAD DEN INTE SVARAR PA: om de props komponenten behover for att rita
+ * rattelseformularet (`order`, `paket`, `personer`, `idag`) faktiskt skickats.
+ * En anropare som utelamnar dem far en rubrik over tomhet anda. Skicka dem.
+ * =============================================================================
+ */
+export function harAtgarder({
+  status,
+  hanterare,
+  bokforare,
+  agare,
+  upphovsperson,
+}: {
+  status: Orderstatus;
+  hanterare: boolean;
+  bokforare: boolean;
+  agare: boolean;
+  upphovsperson: boolean;
+}): boolean {
+  if (status === "utkast") return agare;
+  if (status === "inskickad") return hanterare;
+  if (status === "signerad" || status === "betald") {
+    return hanterare || bokforare || upphovsperson;
+  }
+  // MAKULERAD. Ingenting gar att gora, for ingen vag leder ut ur den — se
+  // `OVERGANGAR` i lib/order.ts. En makulering rattas genom att en ny order
+  // laggs, inte genom att den gamla oppnas igen.
+  return false;
+}
+
 export type Orderfilter = {
   /** Anstallnings-id, eller `alla`. `jag` loeses upp mot den inloggade. */
   vem: string;

@@ -5,6 +5,155 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-25 (senare) · Orderfliken i kundkortet, byggd om
+
+Beställaren efter att ha sett previewen: *"när jag öppnar upp kundkortet och
+trycker på order så tycker jag inte att det kundkortet är så fint, kan du fixa
+till det så att det också ser bra ut."*
+
+**BYGGT, på samma branch `ordervyn-kundkort`. EJ MERGAD.** Ingen migration.
+
+### Felet var att jag återanvände `Uppgift` i ett rutnät
+
+Diagnosen är värd att skriva ut i detalj, eftersom den är generell och jag gjorde
+den på egen kod dagen den skrevs.
+
+`Uppgift` är byggd som en **rad**: etikett vänster, värde höger, hairline under,
+`last:border-0`. I en enspaltig lista är den bra — högerkanten blir en egen linje
+att följa nedåt, och det är precis vad "Om kunden" i översikten behöver.
+
+Jag la den i ett `sm:grid-cols-2`. Fyra saker gick sönder samtidigt:
+
+1. **Hairlines linjerade inte mellan spalterna.** Vissa rader har en underrad
+   (*"satt för hand"*, *"pris × avtalstid"*) och är därför högre. Vänster spalts
+   streck hamnade alltså på andra höjder än högers. Raggigt hela vägen ner.
+2. **`last:border-0` träffar bara DOM-sista barnet.** En spalt slutade med ett
+   streck, den andra utan.
+3. **Fyra lodräta textkanter** — etikett-vänster, värde-höger, etikett-vänster,
+   värde-höger. Ögat hade ingenting att följa.
+4. **Rutnätet flyttade sig mellan order.** `Uppgift` returnerar `null` när värdet
+   saknas, så en order utan månadsavgift sköt allt efter den ett steg — och
+   Ordervärde hamnade i vänster spalt på en order och i höger på nästa.
+
+**Lärdomen, skriven i komponenternas dokumentation:** *rad i en spalt, cell i ett
+rutnät.* Det nya `Faktum` är cellen — etikett **under** värdet, allt vänsterställt
+— och då har varje uppgift EN kant, alla värden börjar på samma pixel, och `tnum`
+gör att siffrorna linjerar tecken för tecken.
+
+### Ordervärde − Utköp = Kvar står nu som en räkning
+
+Filens egen kommentar sa redan att *"de tre talen betyder bara något
+TILLSAMMANS"*. Ändå låg de i tre celler i ett rutnät där tomma celler föll bort,
+så utköpet kunde hamna i en annan spalt än ordervärdet, på en annan rad, på vissa
+order. Räkningen gick att **läsa** men inte att **följa**.
+
+Nu står de i rad med `−` och `=` mellan, i ljusare ton — de är bindeord, inte
+tal. Och bara när det **finns** ett utköp: en rad som säger "23 880 − 0 = 23 880"
+på varje vanlig order lär ögat att hoppa över hela strecket.
+
+Nettot räknas bara när båda talen finns. En inskickad order har utköp men ännu
+inget ordervärde, och `null − 5 000` hade blivit ett påhittat tal.
+
+Ett lodrätt streck skiljer **vad affären är värd för bolaget** (ordervärde, utköp,
+netto) från **vad den ger en person** (provision) och vad kunden betalar. Utan det
+låg fem tal i en rad och provisionen såg ut att vara en term i ordervärdet.
+
+### Varje order var utfälld — samma vägg, en nivå in
+
+Tre avtal gav tre fulla uppsättningar belopp, datum, tjänsterader, åtgärdsknappar
+och en bilageuppladdning. Alltså exakt det som hela omläggningen skulle bort från,
+inuti en modal som är lägre än sidan.
+
+Nu är posten ett `<details>`: huvudet alltid synligt — status, datum, paket,
+ordervärde, provision — och ordern man kom från utfälld, de andra ihopfällda.
+
+**`<details>` och inte `useState`,** och tre saker följer gratis: tangentbord och
+Esc fungerar, webbläsarens sidsökning hittar text i en ihopfälld post och fäller
+ut den, och läget överlever att React ritar om listan.
+
+**Datumet är postens namn, inte paketet.** En kund har ofta samma paket på alla
+sina order — "Företagspaket" tre gånger säger ingenting om vilken som är vilken.
+
+### Tjänsterna blev en tabell
+
+Förut: *"Växel · Månadsavgift 495 kr/mån · 11 880 kr i ordervärde · egen
+bindningstid till 2029-03-01"* — en mening per rad, med beloppen på olika ställen
+i varje. Tre tjänster gav sex tal som **inte gick att jämföra**, trots att det är
+den enda frågan man ställer om en tjänstelista: vilken kostar mest, och vad drar
+mest ordervärde?
+
+Nu en tabell med `tnum` och högerställda belopp, och en summerad fot när det finns
+mer än en rad. Samma tabell används i översiktens "Tjänster i kraft" — förut var
+det en löpande lista där och en annan löpande lista här, och två sätt att visa
+samma sex uppgifter läser som två olika saker. Värdet räknas per order och skickas
+in färdigräknat, eftersom en tjänst på ett tvåårsavtal och en på ett treårsavtal
+drar olika mycket ordervärde av samma månadsavgift.
+
+### Ett fel jag hann göra och rätta i samma pass
+
+Jag la rubriker — `Sektion` — över `Åtgärder` och `Avtal och bilagor`, eftersom
+posten förut slutade i ett godtyckligt antal lösa knappar och en
+bilageuppladdning som såg ut att höra till beloppen.
+
+**Men `Atgarder` returnerar `null`** för varje status/roll-kombination som inte
+har något att göra: en makulerad order, ett utkast man inte äger, en signerad
+order sedd av en säljare som inte lade upp den. Rubriken hade alltså ritats över
+tom luft.
+
+Fixen är inte en kopia av villkoren i kundkortet — det hade blivit två svar på
+samma fråga. `harAtgarder` är **komponentens egen grind**: det första som händer i
+`Atgarder` är `if (!harAtgarder(...)) return null`, och rollvillkoren togs
+samtidigt bort ur if-kedjan därunder, som nu bara väljer *vilka* knappar. De kan
+inte glida isär, för det finns bara en av dem.
+
+Funktionen ligger i **`lib/ordervy.ts` och inte i komponenten**, eftersom en regel
+om vem som får göra vad ska gå att pröva utan att starta React. `tests/ordervy.mjs`
+kör hela matrisen: fem statusar mot fyra roller, plus sexton rollkombinationer mot
+en makulerad order. Den dyra riktningen är att en knapp **dyker upp** för någon som
+inte ska ha den, och det är inget man klickar sig igenom för hand.
+
+`Bilaga` behövde ingen sådan kontroll och har ingen: den ritar alltid minst
+uppladdningsrutan.
+
+### Statusens ton låg i två filer
+
+`Orderkort.tsx` och `Kundkort.tsx` hade var sin identisk `TON`-konstant. Den dag
+en status byter ton byter den ton på **ett** av de två ställena, och då betyder
+grönt olika saker beroende på var man tittar — ett kort med grön list som öppnar
+en order med gul rubrik är sämre än ingen färgkodning alls.
+
+`STATUSTON` ligger nu i `lib/ordervy.ts`, och den bär **semantik, inte CSS**:
+`ok`, `warn`, `danger` är samma ord som `Badge` och `Card` redan talar. Varje
+komponent översätter tonen till sina egna klasser — en 3 px list på kortet, en
+tonad platta i pillret — och så länge båda översätter TON och inte STATUS kan de
+inte säga emot varandra. Det är också den uppdelningen som gör att `ordervy.ts`
+fortfarande går att pröva i node utan att känna Tailwind.
+
+### Banden i en utfälld post, i ordning
+
+1. **Affären** — beloppen på tonad platta. Enda bandet utan rubrik: plattan är
+   dess avgränsning, och en rubrik hade skjutit ner talen en rad.
+2. **Avtalet** — tidslinjen (bara för ett avtal som gäller; en makulerad eller
+   inskickad order får sina datum i klartext, eftersom en stapel där hade
+   påstått att klockan tickar på något som inte är avgjort) och fyra fakta.
+3. **Tjänster på ordern** — tabellen. Eget band: "hur länge gäller avtalet" och
+   "vad består affären av" är två frågor, och ett band ska ha en rubrik.
+4. **Anteckning** — när det finns en.
+5. **Åtgärder** — när `harAtgarder` säger att det finns några.
+6. **Avtal och bilagor**.
+
+### Ändrade filer
+
+- `src/app/(app)/order/Kundkort.tsx` — orderfliken omskriven; `Orderpost`,
+  `Affaren`, `Belopp`, `Tecken`, `Avtalet`, `Tjanstetabell`, `Sektion`, `Faktum`.
+- `src/app/(app)/order/Atgarder.tsx` — grinden först, rollvillkoren ut ur
+  if-kedjan.
+- `src/app/(app)/order/Orderkort.tsx` — `TON` borta, `RAIL` går på ton.
+- `src/lib/ordervy.ts` — `STATUSTON`, `Statuston`, `harAtgarder`.
+- `tests/ordervy.mjs` — behörighetsmatrisen och tonkartan.
+
+---
+
 ## 2026-09-25 · Ordervyn byggd om: kundkort, filter och en svävande nyorderruta
 
 Beställningen: *"Ordervyn ser riktigt dålig ut. Det är helt och hållet huller om

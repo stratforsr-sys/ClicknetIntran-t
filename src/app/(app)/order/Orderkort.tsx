@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/components/ui/cn";
-import { STATUS_ETIKETT, dagarTill, raknas, type Orderstatus } from "@/lib/order";
-import { avtalsforlopp } from "@/lib/ordervy";
+import { STATUS_ETIKETT, dagarTill, raknas } from "@/lib/order";
+import { STATUSTON, avtalsforlopp, type Statuston } from "@/lib/ordervy";
 import { kronor } from "@/lib/provision";
 import type { Orderrad } from "@/lib/order-server";
 
@@ -29,14 +29,6 @@ import type { Orderrad } from "@/lib/order-server";
  * =============================================================================
  */
 
-const TON: Record<Orderstatus, "neutral" | "warn" | "ok" | "brand" | "danger"> = {
-  utkast: "neutral",
-  inskickad: "warn",
-  signerad: "ok",
-  betald: "brand",
-  makulerad: "danger",
-};
-
 /**
  * Statusfargen som en 3 px list till vanster.
  *
@@ -44,13 +36,19 @@ const TON: Record<Orderstatus, "neutral" | "warn" | "ok" | "brand" | "danger"> =
  * statusen da gar att lasa nedat langs rutnatets vanstra kant utan att nagot ord
  * behover lasas — och ordet star kvar i pillret anda, eftersom AC-U5.2 sager att
  * status aldrig kommuniceras med enbart farg.
+ *
+ * KARTAN GAR PA TON OCH INTE PA STATUS, sa att `STATUSTON` i `lib/ordervy.ts` ar
+ * enda stallet som avgor vilken status som ar gron. `Kundkort.tsx` har en egen
+ * sadan karta for samma ton — den ritar en tonad platta i stallet for en list —
+ * och sa lange bada oversatter TON och inte STATUS kan de inte saga emot
+ * varandra.
  */
-const RAIL: Record<Orderstatus, string> = {
-  utkast: "border-l-ink-300",
-  inskickad: "border-l-warn",
-  signerad: "border-l-ok",
-  betald: "border-l-brand-500",
-  makulerad: "border-l-danger",
+const RAIL: Record<Statuston, string> = {
+  neutral: "border-l-ink-300",
+  warn: "border-l-warn",
+  ok: "border-l-ok",
+  brand: "border-l-brand-500",
+  danger: "border-l-danger",
 };
 
 export function Orderkort({
@@ -82,7 +80,7 @@ export function Orderkort({
       className={cn(
         "lift group flex flex-1 flex-col overflow-hidden rounded-md border-l-[3px] bg-surface shadow-elev-1",
         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600",
-        RAIL[o.status],
+        RAIL[STATUSTON[o.status]],
       )}
     >
       <div className="flex min-w-0 flex-col gap-3 p-4">
@@ -92,7 +90,7 @@ export function Orderkort({
           <h3 className="min-w-0 flex-1 truncate text-h2 text-ink-900 group-hover:text-brand-700">
             {o.company_name}
           </h3>
-          <Badge ton={TON[o.status]}>{STATUS_ETIKETT[o.status]}</Badge>
+          <Badge ton={STATUSTON[o.status]}>{STATUS_ETIKETT[o.status]}</Badge>
         </div>
 
         {/* En enda metadatarad, och den ar avsiktligt kort. Paketet och

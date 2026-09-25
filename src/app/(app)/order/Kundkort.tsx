@@ -12,10 +12,16 @@ import {
   harStangdPeriod,
   raknas,
   tjanstensVarde,
-  type Orderstatus,
   type Paket,
 } from "@/lib/order";
-import { avtalsforlopp, orderhandelser, type Kund } from "@/lib/ordervy";
+import {
+  STATUSTON,
+  avtalsforlopp,
+  harAtgarder,
+  orderhandelser,
+  type Kund,
+  type Statuston,
+} from "@/lib/ordervy";
 import { kronor, manadsnamn } from "@/lib/provision";
 import { langd, summering, type Samtalsrad } from "@/lib/samtal-vy";
 // TYPIMPORT, och det ar vad som gor den tillaten i en klientkomponent:
@@ -182,7 +188,7 @@ export function Kundkort({
           {flik === "order" && (
             <div className="flex flex-col gap-4">
               {kund.order.map((o) => (
-                <Orderdetalj
+                <Orderpost
                   key={o.id}
                   o={o}
                   ankare={o.id === ankareId}
@@ -494,26 +500,23 @@ function Oversikt({
       {/* -------------------------------------------------------------------- */}
       {levandeTjanster.length > 0 && (
         <Fack titel="Tjänster i kraft" className="lg:col-span-2">
-          <ul className="flex flex-col divide-y divide-canvas">
-            {levandeTjanster.map(({ t, loptid }) => (
-              <li key={t.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 py-2 first:pt-0 last:pb-0">
-                <span className="text-body text-ink-900">{t.name}</span>
-                <span className="text-small text-ink-500">
-                  {FAKTURERING_ETIKETT[t.billing]} {kronor(t.amount)}
-                  {t.billing === "manad" ? "/mån" : ""}
-                </span>
-                <span className="flex-1" />
-                {t.ends_on && (
-                  <span className="tnum text-small text-ink-500">egen bindning till {t.ends_on}</span>
-                )}
-                <span className="tnum text-small text-ink-900">
-                  {kronor(tjanstensVarde(t, loptid))}
-                </span>
-                {t.renewal_outcome === "avslutad" && <Badge ton="danger">Avslutad</Badge>}
-                {t.renewal_outcome === "forlangd" && <Badge ton="brand">Förlängd</Badge>}
-              </li>
-            ))}
-          </ul>
+          {/*
+            SAMMA TABELL SOM I ORDERFLIKEN. Forut var det en loepande lista har
+            och en annan loepande lista dar, och tva olika satt att visa samma sex
+            uppgifter later som tva olika saker.
+
+            VARDET RAKNAS PER ORDER och inte en gang for alla: en tjanst pa ett
+            tvaarsavtal och en pa ett trearsavtal drar olika mycket ordervarde av
+            samma manadsavgift. Darfor bar `levandeTjanster` sin egen `loptid`
+            hela vagen hit, och tabellen tar fardigraknade rader i stallet for att
+            rakna sjalv.
+          */}
+          <Tjanstetabell
+            rader={levandeTjanster.map(({ t, loptid }) => ({
+              t,
+              varde: tjanstensVarde(t, loptid),
+            }))}
+          />
         </Fack>
       )}
     </div>
@@ -569,24 +572,44 @@ function Tidslinje({ o, idag }: { o: Orderrad; idag: string }) {
 // Fliken Order
 // -----------------------------------------------------------------------------
 
-const TON: Record<Orderstatus, "neutral" | "warn" | "ok" | "brand" | "danger"> = {
-  utkast: "neutral",
-  inskickad: "warn",
-  signerad: "ok",
-  betald: "brand",
-  makulerad: "danger",
+/**
+ * Statusens ton som en 3 px list till vanster.
+ *
+ * SAMMA TON SOM LISTKORTET, OCH DET AR HELA SKALET till att `STATUSTON` bor i
+ * `lib/ordervy.ts`. Ett gront kort i rutnatet ska oppna en gron orderpost — kunde
+ * de sarga sig fran varandra hade fargkodningen blivit varre an ingen.
+ */
+const RAIL: Record<Statuston, string> = {
+  neutral: "border-l-ink-300",
+  warn: "border-l-warn",
+  ok: "border-l-ok",
+  brand: "border-l-brand-500",
+  danger: "border-l-danger",
 };
 
 /**
- * En order i sin helhet.
+ * En order i orderfliken: huvudet alltid synligt, resten utfallbar.
  *
- * ALLT SOM PLOCKADES BORT FRAN LISTKORTET STAR HAR, och det ar hela affaren:
- * utkopet, provisionskallan, anteckningen, makuleringsskalet, tjansteraderna,
- * bilagan och atgarderna. Skillnaden mot forut ar inte vilka uppgifter som finns
- * utan VAR de star — i en vy man oppnat med avsikt, i stallet for i en lista man
- * skummar.
+ * =============================================================================
+ * ORDERN MAN KOM FRAN AR UTFALLD. DE ANDRA AR IHOPFALLDA.
+ *
+ * Forsta versionen av den har fliken ritade varje order helt utfalld, och for en
+ * kund med tre avtal blev det tre fulla uppsattningar belopp, datum,
+ * tjansterader, atgardsknappar och en bilageuppladdning — alltsa exakt den vagg
+ * som hela omlaggningen skulle bort fran, en niva langre in. Att den lag i en
+ * modal gjorde den varre: fonstret ar lagre an sidan.
+ *
+ * Nu ar huvudet alltid synligt — status, datum, paket, ordervarde, provision —
+ * och det racker for att valja. Ordern man klickade pa star oppen; de andra
+ * oppnas med ett tryck.
+ *
+ * `<details>` OCH INTE `useState`. Tre saker foljer gratis: Esc och tangentbord
+ * fungerar, webblasarens sidsokning (Ctrl+F) hittar text i en ihopfalld post och
+ * fäller ut den, och laget overlever att React ritar om listan. Ett eget
+ * tillstand hade kravt kod for var och en av dem.
+ * =============================================================================
  */
-function Orderdetalj({
+function Orderpost({
   o,
   ankare,
   paketnamn,
@@ -615,155 +638,469 @@ function Orderdetalj({
   stangda: string[];
   idag: string;
 }) {
-  // `harStangdPeriod` och inte en egen jamforelse: den slar upp manaden ur
-  // signeringsdatumet med `periodFor`, och det ar samma funktion databasen
-  // genererar `period_month` med. Tva svar pa samma fraga hinner glida isar.
-  const stangdPeriod = harStangdPeriod(o.signed_on, stangda);
+  const ton = STATUSTON[o.status];
+
+  // FRAGAS INNAN RUBRIKEN RITAS. `Atgarder` returnerar null for varje
+  // status/roll-kombination som inte har nagot att gora — en makulerad order, ett
+  // utkast man inte ager — och en rubrik "Åtgärder" over ingenting ar varre an
+  // ingen rubrik. Predikatet ar komponentens EGEN grind, inte en kopia av den:
+  // se `harAtgarder` i lib/ordervy.ts.
+  const atgarder = harAtgarder({
+    status: o.status,
+    hanterare,
+    bokforare,
+    agare: o.salesperson_id === mig,
+    upphovsperson: o.created_by === mig,
+  });
 
   return (
-    <section
+    <details
+      open={ankare}
       className={cn(
-        "flex flex-col gap-4 rounded-md bg-surface p-4 shadow-elev-1",
-        // Ordern man kom fran far en ram. Har kunden tre order ar det annars inte
-        // sagt vilken av dem man just klickade pa, och den fragan stalls direkt.
-        ankare && "ring-1 ring-brand-200",
+        "group overflow-hidden rounded-md border-l-[3px] bg-surface shadow-elev-1",
+        RAIL[ton],
+        // Ordern man kom fran far en ring OCH ett pillret nedan. Bara en ring ar
+        // for tyst — den forsvinner mot skuggan — och bara ett piller kraver att
+        // man laser. Tillsammans syns den i forbifarten.
+        ankare && "ring-1 ring-brand-500",
       )}
     >
-      <header className="flex flex-wrap items-baseline gap-x-3 gap-y-2">
-        <h3 className="text-h2 text-ink-900">
-          {paketnamn} · {o.term_months} mån
-        </h3>
-        <Badge ton={TON[o.status]}>{STATUS_ETIKETT[o.status]}</Badge>
-        {o.is_addon && <Badge>Tillägg</Badge>}
-        {ankare && <Badge ton="brand">Den du kom från</Badge>}
-        <span className="flex-1" />
-        <span className="tnum text-small text-ink-500">signerad {o.signed_on}</span>
-      </header>
+      {/*
+        SUMMARY AR HUVUDET, inte en extra rad ovanfor det.
+        ---------------------------------------------------------------------
+        Uppgifterna star EN gang. Hade huvudet ritats bade i summary och i
+        kroppen hade en utfalld post visat status och datum tva ganger, och den
+        som fallde ut den hade undrat vad skillnaden var.
 
-      <dl className="grid gap-x-6 sm:grid-cols-2">
-        <Uppgift
-          etikett="Ordervärde"
-          varde={o.order_value === null ? null : kronor(o.order_value)}
-          under={
-            o.order_value === null
-              ? undefined
-              : o.order_value_source === "manual"
-                ? "satt för hand"
-                : "pris × avtalstid"
-          }
-          tnum
-        />
-        <Uppgift
-          etikett="Provision"
-          varde={o.commission_amount === null ? null : kronor(o.commission_amount)}
-          under={
-            o.commission_source === "manual"
-              ? "satt för hand"
-              : o.commission_source === "manager"
-                ? "säljchefens egen försäljning"
-                : o.commission_source === "buyout"
-                  ? "räknad efter utköp"
-                  : undefined
-          }
-          tnum
-        />
-        <Uppgift
-          etikett="Månadsavgift"
-          varde={o.monthly_amount === null ? null : `${kronor(o.monthly_amount)}/mån`}
-          tnum
-        />
+        `list-none` tar bort triangeln i Firefox och moderna Chrome;
+        `::-webkit-details-marker` behovs for aldre WebKit, dar `list-style`
+        ignoreras pa <summary> och triangeln annars ligger kvar mitt i raden.
+      */}
+      <summary className="flex cursor-pointer list-none items-start gap-3 p-4 [&::-webkit-details-marker]:hidden">
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            {/*
+              DATUMET AR POSTENS NAMN, och det ar ett val mot paketnamnet.
+              En kund har ofta samma paket pa alla sina order — "Företagspaket"
+              tre ganger sager ingenting om vilken som ar vilken. Datumet ar det
+              som skiljer dem, och i tabellsiffror linjerar det nedat i listan.
+            */}
+            <h3 className="tnum text-h2 text-ink-900">{o.signed_on}</h3>
+            <Badge ton={ton}>{STATUS_ETIKETT[o.status]}</Badge>
+            {o.is_addon && <Badge>Tillägg</Badge>}
+            {ankare && <Badge ton="brand">Den du kom från</Badge>}
+          </div>
+
+          <p className="text-small text-ink-500">
+            {paketnamn} · {o.term_months} mån
+            {saljare ? ` · ${saljare}` : ""}
+          </p>
+        </div>
+
         {/*
-          UTKOPET MED NETTOT UTSKRIVET. De tre talen betyder bara nagot
-          TILLSAMMANS: 11 940 kr ensamt sager fel sak om affaren, och 6 940 kr
-          ensamt gar inte att stamma av mot avtalet. Se 0060.
+          TVA TAL I HUVUDET, hogerstallda i tabellsiffror sa att de linjerar
+          mellan posterna. Det ar de tva man jamfor nar man valjer vilken order
+          man vill oppna; allt annat kraver att posten fälls ut.
         */}
-        <Uppgift
-          etikett="Utköp"
-          varde={
-            typeof o.buyout_amount === "number" && o.buyout_amount > 0
-              ? `− ${kronor(o.buyout_amount)}`
-              : null
-          }
-          under={
-            typeof o.buyout_amount === "number" && o.buyout_amount > 0 && o.order_value !== null
-              ? `kvar ${kronor(o.order_value - o.buyout_amount)}`
-              : typeof o.buyout_amount === "number" && o.buyout_amount > 0
-                ? "dras av när ordern godkänns"
-                : undefined
-          }
-          tnum
-        />
-        <Uppgift etikett="Avtalet börjar" varde={o.starts_on} tnum />
-        <Uppgift etikett="Avtalet slutar" varde={o.ends_on} tnum />
-        <Uppgift etikett="Räknas i" varde={manadsnamn(o.period_month)} />
-        {saljare && <Uppgift etikett="Säljare" varde={saljare} />}
-      </dl>
+        <div className="hidden shrink-0 items-baseline gap-6 sm:flex">
+          <span className="text-right">
+            <span className="block tnum text-body font-semibold text-ink-900">
+              {o.order_value === null ? "—" : kronor(o.order_value)}
+            </span>
+            <span className="block text-micro uppercase text-ink-500">Ordervärde</span>
+          </span>
+          <span className="text-right">
+            <span className="block tnum text-body font-semibold text-brand-700">
+              {o.commission_amount === null ? "—" : kronor(o.commission_amount)}
+            </span>
+            <span className="block text-micro uppercase text-ink-500">Provision</span>
+          </span>
+        </div>
 
-      {tjanster.length > 0 && (
-        <ul className="flex flex-col gap-1 rounded-sm bg-canvas p-3">
-          {tjanster.map((t) => (
-            <li key={t.id} className="text-small text-ink-700">
-              {t.name} · {FAKTURERING_ETIKETT[t.billing]} {kronor(t.amount)}
-              {t.billing === "manad" ? "/mån" : ""} · {kronor(tjanstensVarde(t, o.term_months))} i
-              ordervärde
-              {t.ends_on ? ` · egen bindningstid till ${t.ends_on}` : ""}
-            </li>
-          ))}
-        </ul>
+        <Ikon
+          namn="fram"
+          className="mt-1.5 size-5 shrink-0 text-ink-300 transition-transform duration-fast ease-brand group-open:rotate-90"
+        />
+      </summary>
+
+      <div className="flex flex-col gap-5 border-t border-canvas p-4">
+        <Affaren o={o} />
+        <Avtalet o={o} idag={idag} />
+
+        {/* TJANSTERNA AR ETT EGET BAND, inte en tabell inuti "Avtalet".
+            En rubrik per band, och ett band per fraga: "hur lange galler
+            avtalet" och "vad bestar affaren av" ar tva fragor. Forst lag
+            tabellen under avtalsrubriken, och da hade det bandet tva. */}
+        {tjanster.length > 0 && (
+          <div>
+            <Sektion titel="Tjänster på ordern" />
+            <Tjanstetabell
+              rader={tjanster.map((t) => ({ t, varde: tjanstensVarde(t, o.term_months) }))}
+            />
+          </div>
+        )}
+
+        {o.status === "makulerad" && o.cancelled_on && (
+          <p className="rounded-sm bg-danger-tint p-3 text-small text-danger-ink">
+            <strong>Makulerad {o.cancelled_on}.</strong> Avdraget belastar{" "}
+            {manadsnamn(`${o.cancelled_on.slice(0, 7)}-01`)}, inte månaden ordern tecknades.
+            {o.cancel_reason ? ` ${o.cancel_reason}` : ""}
+          </p>
+        )}
+
+        {o.note && o.status !== "makulerad" && (
+          <div>
+            <Sektion titel="Anteckning" />
+            <p className="text-small text-ink-700">{o.note}</p>
+          </div>
+        )}
+
+        {/*
+          ATGARDERNA FAR EN RUBRIK, och det ar inte pynt: utan den slutade posten
+          i ett godtyckligt antal loesa knappar, och bilageuppladdningen darunder
+          sag ut att hora till beloppen.
+
+          MEN RUBRIKEN RITAS BARA NAR DET FINNS NAGOT UNDER DEN — se `atgarder`
+          ovan. Att lagga till rubriken utan den kontrollen var ett fel jag hann
+          gora samma dag: for en makulerad order, eller ett utkast man inte ager,
+          hade posten da slutat i orden "ÅTGÄRDER" och en hairline over tom luft.
+        */}
+        {atgarder && (
+          <div>
+            <Sektion titel="Åtgärder" />
+            <Atgarder
+              id={o.id}
+              status={o.status}
+              hanterare={hanterare}
+              bokforare={bokforare}
+              agare={o.salesperson_id === mig}
+              upphovsperson={o.created_by === mig}
+              order={{
+                company_name: o.company_name,
+                org_number: o.org_number,
+                contact_name: o.contact_name,
+                contact_phone: o.contact_phone,
+                contact_email: o.contact_email,
+                package_id: o.package_id,
+                term_months: o.term_months,
+                salesperson_id: o.salesperson_id,
+                signed_on: o.signed_on,
+                starts_on: o.starts_on,
+                is_addon: o.is_addon,
+                order_value: o.order_value,
+                order_value_source: o.order_value_source,
+                monthly_amount: o.monthly_amount,
+                buyout_amount: o.buyout_amount ?? null,
+                commission_amount: o.commission_amount,
+                commission_source: o.commission_source,
+                note: o.note,
+              }}
+              paket={paket}
+              personer={personer}
+              // `harStangdPeriod` och inte en egen jamforelse mot `period_month`:
+              // den slar upp manaden ur signeringsdatumet med `periodFor`, alltsa
+              // samma funktion databasen genererar kolumnen med. Tva svar pa samma
+              // fraga hinner glida isar.
+              stangdPeriod={harStangdPeriod(o.signed_on, stangda)}
+              manad={manadsnamn(o.period_month)}
+              idag={idag}
+            />
+          </div>
+        )}
+
+        {/* Bilagan har ingen sadan kontroll, och behover ingen: `Bilaga` ritar
+            ALLTID minst uppladdningsrutan, aven for en order utan filer. */}
+        <div>
+          <Sektion titel="Avtal och bilagor" />
+          <Bilaga
+            orderId={o.id}
+            bilagor={bilagor}
+            garAttRatta={o.status === "utkast" || o.status === "inskickad"}
+            nuvarande={nuvarandeFor(o)}
+          />
+        </div>
+      </div>
+    </details>
+  );
+}
+
+/**
+ * Affarens belopp, som en rakning.
+ *
+ * =============================================================================
+ * ORDERVARDE − UTKOP = KVAR STAR SOM EN RAD MED RAKNETECKEN I.
+ *
+ * Kommentaren i den gamla vyn sa redan varfor: *"de tre talen betyder bara nagot
+ * TILLSAMMANS: 11 940 kr ensamt sager fel sak om affaren, och 6 940 kr ensamt gar
+ * inte att stamma av mot avtalet"*.
+ *
+ * Forsta versionen av kundkortet la dem anda i tre celler i ett rutnat — och
+ * eftersom tomma celler foll bort kunde utkopet hamna i en annan spalt an
+ * ordervardet, pa en annan rad, pa vissa order. Rakningen gick alltsa att LASA
+ * men inte att FOLJA.
+ *
+ * Nu star de i rad med `−` och `=` mellan. Raknetecknen ar i ljusare ton: de ar
+ * bindeord, inte tal. Och de star bara dar nar det FINNS ett utkop — en rad som
+ * sager "23 880 − 0 = 23 880" pa varje vanlig order lar ogat att hoppa over
+ * hela strecket.
+ * =============================================================================
+ */
+function Affaren({ o }: { o: Orderrad }) {
+  const utkop = typeof o.buyout_amount === "number" && o.buyout_amount > 0 ? o.buyout_amount : null;
+
+  const vardekalla =
+    o.order_value === null
+      ? undefined
+      : o.order_value_source === "manual"
+        ? "satt för hand"
+        : "pris × avtalstid";
+
+  const provisionskalla =
+    o.commission_source === "manual"
+      ? "satt för hand"
+      : o.commission_source === "manager"
+        ? "säljchefens egen försäljning"
+        : o.commission_source === "buyout"
+          ? "räknad efter utköp"
+          : undefined;
+
+  return (
+    <div
+      role="group"
+      aria-label="Affärens belopp"
+      className="flex flex-wrap items-start gap-x-5 gap-y-4 rounded-sm bg-canvas p-4"
+    >
+      <Belopp etikett="Ordervärde" varde={o.order_value} under={vardekalla} stark />
+
+      {utkop !== null && (
+        <>
+          <Tecken>−</Tecken>
+          <Belopp
+            etikett="Utköp"
+            varde={utkop}
+            under={o.order_value === null ? "dras av vid godkännandet" : undefined}
+          />
+          {/* NETTOT RAKNAS BARA NAR BADA TALEN FINNS. En inskickad order har
+              utkop men annu inget ordervarde — det raknas fram vid
+              godkannandet — och `null − 5 000` hade blivit ett pahittat tal. */}
+          {o.order_value !== null && (
+            <>
+              <Tecken>=</Tecken>
+              <Belopp etikett="Kvar" varde={o.order_value - utkop} stark />
+            </>
+          )}
+        </>
       )}
 
-      {o.status === "makulerad" && o.cancelled_on && (
-        <p className="rounded-sm bg-danger-tint p-3 text-small text-danger-ink">
-          Makulerad {o.cancelled_on}. Avdraget belastar {o.cancelled_on.slice(0, 7)}.
-          {o.cancel_reason ? ` ${o.cancel_reason}` : ""}
+      {/*
+        AVDELAREN SKILJER TVA SLAGS PENGAR.
+        Till vanster star vad affaren ar vard for BOLAGET — ordervardet, utkopet
+        och nettot. Till hoger star vad den ger en PERSON, och vad kunden betalar.
+        Utan strecket lag alla fem talen i en rad och laste som en enda rakning,
+        och da ser provisionen ut att vara en term i ordervardet.
+
+        DOLD UNDER 640 px. Da har raden redan brutits, och ett lodratt streck mitt
+        i en ny rad pekar pa ingenting.
+      */}
+      <span aria-hidden className="hidden w-px self-stretch bg-ink-300/40 sm:block" />
+
+      <Belopp
+        etikett="Provision"
+        varde={o.commission_amount}
+        under={provisionskalla}
+        ton="brand"
+      />
+
+      {o.monthly_amount !== null && (
+        <Belopp etikett="Per månad" varde={o.monthly_amount} suffix="/mån" />
+      )}
+    </div>
+  );
+}
+
+/** Raknetecknet mellan tva belopp. Ljusare ton: det ar ett bindeord, inte ett tal. */
+function Tecken({ children }: { children: string }) {
+  return (
+    // Ingen `aria-hidden`: en skarmlasare ska lasa "minus" och "lika med"
+    // mellan talen, annars blir rakningen tre loesa belopp.
+    <span className="self-start pt-1 text-h2 leading-none text-ink-300">{children}</span>
+  );
+}
+
+/**
+ * Ett belopp med sin etikett UNDER sig.
+ *
+ * =============================================================================
+ * ETIKETTEN STAR UNDER TALET, INTE TILL VANSTER OM DET.
+ *
+ * Det ar den enskilda andringen som gor mest for hur fliken laser, och skalet ar
+ * geometriskt: med etiketten till vanster och vardet till hoger far varje rad TVA
+ * lodrata kanter, och fyra av dem i ett tvakolumnsrutnat. Ogat har da ingen linje
+ * att folja nedat.
+ *
+ * Med etiketten under talet har varje uppgift EN vansterkant, alla belopp borjar
+ * pa samma pixel, och `tnum` gor att siffrorna dessutom linjerar tecken for
+ * tecken. Det ar sa en kvittorad ser ut, och en affar ÄR en kvittorad.
+ *
+ * SAKNAS TALET SKRIVS ETT STRECK OCH INTE EN NOLLA. Order fran fore 0050 har
+ * inget ordervarde och far inget i efterhand; "0 kr" hade last som en
+ * gratisaffar. Skillnaden mot `Uppgift`, som utesluter hela raden, ar att
+ * beloppen HAR en fast plats i rakningen — ett hal i "− =" hade varit varre an
+ * ett streck.
+ * =============================================================================
+ */
+function Belopp({
+  etikett,
+  varde,
+  under,
+  suffix = "",
+  ton,
+  stark,
+}: {
+  etikett: string;
+  varde: number | null;
+  under?: string;
+  suffix?: string;
+  ton?: "brand";
+  /** Affarens huvudtal: ordervardet och nettot. En grad storre. */
+  stark?: boolean;
+}) {
+  return (
+    <div className="min-w-0">
+      <p
+        className={cn(
+          "tnum whitespace-nowrap",
+          stark ? "text-h1" : "text-h2",
+          ton === "brand" ? "text-brand-700" : "text-ink-900",
+        )}
+      >
+        {varde === null ? "—" : `${kronor(varde)}${suffix}`}
+      </p>
+      <p className="text-micro uppercase text-ink-500">{etikett}</p>
+      {under && <p className="text-small text-ink-500">{under}</p>}
+    </div>
+  );
+}
+
+/**
+ * Avtalet: loptiden, de tre datumen och tjansterna.
+ *
+ * TIDSLINJEN RITAS BARA FOR ETT AVTAL SOM GALLER. En makulerad order har ingen
+ * loptid att visa, och en inskickad order har ett genererat `ends_on` for ett
+ * avtal som annu inte borjat gälla — en stapel dar hade pastatt att klockan
+ * tickar pa nagot som inte ar avgjort. De far sina datum i klartext i stallet.
+ */
+function Avtalet({ o, idag }: { o: Orderrad; idag: string }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <Sektion titel="Avtalet" />
+
+      {raknas(o.status) && o.ends_on && o.starts_on ? (
+        <Tidslinje o={o} idag={idag} />
+      ) : (
+        <p className="text-small text-ink-500">
+          <span className="tnum">{o.starts_on}</span> – <span className="tnum">{o.ends_on}</span> ·{" "}
+          {o.status === "makulerad" ? "avtalet gäller inte" : "börjar gälla när ordern godkänts"}
         </p>
       )}
 
-      {o.note && o.status !== "makulerad" && (
-        <p className="rounded-sm bg-canvas p-3 text-small text-ink-700">{o.note}</p>
-      )}
+      {/*
+        FAKTARUTNATET, och har ar `Faktum` ratt val — inte `Uppgift`.
+        Tre eller fyra korta uppgifter med etiketten UNDER vardet ger linjerade
+        vansterkanter hela vagen. `Uppgift` hade gett atta lodrata kanter och
+        hairlines som inte moter varandra mellan spalterna, eftersom raderna har
+        olika hojd; det var precis det felet den forsta versionen av den har
+        fliken hade.
+      */}
+      <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <Faktum etikett="Bindningstid" varde={`${o.term_months} mån`} />
+        <Faktum etikett="Räknas i" varde={manadsnamn(o.period_month)} />
+        <Faktum etikett="Ordern lades upp" varde={o.created_at.slice(0, 10)} tnum />
+        {o.approved_at && <Faktum etikett="Godkänd" varde={o.approved_at.slice(0, 10)} tnum />}
+      </dl>
+    </div>
+  );
+}
 
-      <Atgarder
-        id={o.id}
-        status={o.status}
-        hanterare={hanterare}
-        bokforare={bokforare}
-        agare={o.salesperson_id === mig}
-        upphovsperson={o.created_by === mig}
-        order={{
-          company_name: o.company_name,
-          org_number: o.org_number,
-          contact_name: o.contact_name,
-          contact_phone: o.contact_phone,
-          contact_email: o.contact_email,
-          package_id: o.package_id,
-          term_months: o.term_months,
-          salesperson_id: o.salesperson_id,
-          signed_on: o.signed_on,
-          starts_on: o.starts_on,
-          is_addon: o.is_addon,
-          order_value: o.order_value,
-          order_value_source: o.order_value_source,
-          monthly_amount: o.monthly_amount,
-          buyout_amount: o.buyout_amount ?? null,
-          commission_amount: o.commission_amount,
-          commission_source: o.commission_source,
-          note: o.note,
-        }}
-        paket={paket}
-        personer={personer}
-        stangdPeriod={stangdPeriod}
-        manad={manadsnamn(o.period_month)}
-        idag={idag}
-      />
+/**
+ * Tjansterna som en tabell med hogerstallda belopp.
+ *
+ * =============================================================================
+ * EN TABELL OCH INTE EN LOPANDE MENING.
+ *
+ * Forut stod varje tjanst som *"Växel · Månadsavgift 495 kr/mån · 11 880 kr i
+ * ordervärde · egen bindningstid till 2029-03-01"* — en mening per rad, med
+ * belopp pa olika stallen i varje. Tre tjanster gav alltsa sex tal som INTE gick
+ * att jamfora, trots att det ar den enda fragan man staller om en tjanstelista:
+ * vilken kostar mest, och vad drar mest ordervarde?
+ *
+ * En tabell med `tnum` och `text-right` svarar pa det utan att nagon raknar.
+ * =============================================================================
+ *
+ * ORDERVARDESKOLUMNEN SUMMERAS I FOTEN. Summan star i orderns ordervarde ovan
+ * ocksa, men den gar inte att se DAR — och "vad av de 23 880 kronorna ar
+ * tjanster?" ar en fraga nagon staller varje gang en order ifragasatts.
+ */
+function Tjanstetabell({ rader }: { rader: { t: Tjansterad; varde: number }[] }) {
+  const summa = rader.reduce((s, r) => s + r.varde, 0);
 
-      <Bilaga
-        orderId={o.id}
-        bilagor={bilagor}
-        garAttRatta={o.status === "utkast" || o.status === "inskickad"}
-        nuvarande={nuvarandeFor(o)}
-      />
-    </section>
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[28rem] text-small">
+        <caption className="sr-only">Tilläggstjänster på ordern</caption>
+        <thead>
+          <tr className="text-left text-micro uppercase text-ink-500">
+            <th className="pb-2 font-normal">Tjänst</th>
+            <th className="pb-2 font-normal">Fakturering</th>
+            <th className="pb-2 text-right font-normal">Avgift</th>
+            <th className="pb-2 text-right font-normal">I ordervärde</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rader.map(({ t, varde }) => (
+            <tr key={t.id} className="border-t border-canvas align-baseline">
+              <td className="py-2 text-ink-900">
+                {t.name}
+                {/* Ett EGET slutdatum ar hela skalet till att tjansten kan fa en
+                    egen paminnelse i stallet for att folja ordern. Det star
+                    darfor pa raden — men bara nar det finns. */}
+                {t.ends_on && (
+                  <span className="block text-micro text-ink-500">
+                    egen bindningstid till <span className="tnum">{t.ends_on}</span>
+                  </span>
+                )}
+                {t.renewal_outcome === "avslutad" && (
+                  <span className="block text-micro text-danger-ink">
+                    avslutad{t.renewal_reason ? `: ${t.renewal_reason}` : ""}
+                  </span>
+                )}
+                {t.renewal_outcome === "forlangd" && (
+                  <span className="block text-micro text-brand-700">förlängd</span>
+                )}
+              </td>
+              <td className="py-2 text-ink-500">{FAKTURERING_ETIKETT[t.billing]}</td>
+              <td className="tnum py-2 text-right text-ink-700">
+                {kronor(t.amount)}
+                {t.billing === "manad" ? "/mån" : ""}
+              </td>
+              <td className="tnum py-2 text-right text-ink-900">{kronor(varde)}</td>
+            </tr>
+          ))}
+        </tbody>
+        {/* Foten ritas bara nar det finns mer an en rad att summera. En summa
+            under ett enda tal upprepar bara talet. */}
+        {rader.length > 1 && (
+          <tfoot>
+            <tr className="border-t border-ink-300/40">
+              <td className="py-2 text-micro uppercase text-ink-500" colSpan={3}>
+                Tjänsterna sammanlagt
+              </td>
+              <td className="tnum py-2 text-right font-semibold text-ink-900">{kronor(summa)}</td>
+            </tr>
+          </tfoot>
+        )}
+      </table>
+    </div>
   );
 }
 
@@ -889,7 +1226,77 @@ function Fack({
 }
 
 /**
+ * En rubrik som delar en panel i band.
+ *
+ * =============================================================================
+ * BANDEN AR VAD SOM GOR EN LANG PANEL LASBAR.
+ *
+ * En utfalld orderpost bar fem olika saker: beloppen, avtalet, en eventuell
+ * anteckning, atgarderna och bilagorna. Utan rubriker ar det en spalt dar allt
+ * ser lika viktigt ut — och sarskilt `Atgarder` och `Bilaga` blev oforklarliga,
+ * eftersom bada ritar interaktiva ytor som utan en rubrik ser ut att hora till
+ * talen ovanfor.
+ *
+ * RUBRIKEN AR MICRO OCH VERSAL, INTE EN <h4>. Den ar en avdelare i ett kort och
+ * inte en niva i sidans rubrikträd; en fjarde rubriknivå inuti en modal hade
+ * gjort dokumentets disposition svarare att folja for en skarmlasare an den
+ * hairline den ersatter. Ordet racker.
+ * =============================================================================
+ */
+function Sektion({ titel }: { titel: string }) {
+  return (
+    <div className="mb-2 flex items-center gap-3">
+      <span className="text-micro uppercase text-ink-500">{titel}</span>
+      <span aria-hidden className="h-px flex-1 bg-canvas" />
+    </div>
+  );
+}
+
+/**
+ * En kort uppgift i ett rutnat: etiketten UNDER vardet.
+ *
+ * =============================================================================
+ * SKILLNADEN MOT `Uppgift` ÄR VILKEN FORM DEN TAL, och de finns bada med flit.
+ *
+ * `Uppgift` ar en RAD: etikett vanster, varde hoger, hairline under. Den ar ratt
+ * i en enspaltig lista dar uppgifterna har olika langd — "Om kunden" i
+ * oversikten — eftersom hogerkanten da blir en egen linje att folja.
+ *
+ * `Faktum` ar en CELL: etikett under varde, allt vansterstallt. Den ar ratt i ett
+ * RUTNAT, och det ar just dar `Uppgift` gar sonder: tva spalter av rader ger fyra
+ * lodrata textkanter, hairlines som inte moter varandra eftersom raderna har
+ * olika hojd, och ett `last:border-0` som bara traffar den DOM-sista cellen —
+ * alltsa en spalt som slutar med en linje och en som inte gor det.
+ *
+ * Det var exakt sa forsta versionen av orderfliken sag ut, och det var det som
+ * gjorde den ful.
+ *
+ * REGELN: rad i en spalt, cell i ett rutnat. Anvand inte den ena dar den andra
+ * hor hemma.
+ * =============================================================================
+ */
+function Faktum({
+  etikett,
+  varde,
+  tnum,
+}: {
+  etikett: string;
+  varde: string;
+  tnum?: boolean;
+}) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-micro uppercase text-ink-500">{etikett}</dt>
+      <dd className={cn("truncate text-body text-ink-900", tnum && "tnum")}>{varde}</dd>
+    </div>
+  );
+}
+
+/**
  * En uppgift i en definitionslista.
+ *
+ * ENSPALTIG LISTA ENDAST — se `Faktum` ovan for varfor, och for vad som gar
+ * sonder i ett rutnat.
  *
  * SAKNAS VARDET RITAS RADEN INTE ALLS. Det ar skillnaden mot bade Salesforce och
  * HubSpot, som ritar varje falt i layouten aven tomt — och en spalt med atta

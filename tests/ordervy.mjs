@@ -3,7 +3,7 @@
  * Ordervyn: filtret i adressen, och kunden bakom ordern.
  *
  * ===========================================================================
- * FEM SAKER STAR PA SPEL, OCH TVA AV DEM AR SAKERHET.
+ * SJU SAKER STAR PA SPEL, OCH TRE AV DEM AR SAKERHET.
  *
  *   1. SOKRENSNINGEN. Texten gar in i ett PostgREST-filter. Slipper `%` igenom
  *      traffar en sokning pa ett tecken varje rad RLS slapper fram; slipper
@@ -20,15 +20,25 @@
  *   5. SUMMERINGEN. En makulerad order ska rakna som NOLL pa kundkortet, inte
  *      som ett avdrag. Forsta forsoket drog av den fran en summa den redan lag
  *      i och blev darfor dubbelt avdragen.
+ *   6. BEHORIGHETEN TILL ATGARDERNA. `harAtgarder` avgor vilka knappar som ritas
+ *      pa en order, och den dyra riktningen ar att en knapp DYKER UPP for nagon
+ *      som inte ska ha den. Hela matrisen kors: fem statusar mot fyra roller,
+ *      plus sexton rollkombinationer mot en makulerad order.
+ *   7. STATUSENS TON. Kartan lag i tva komponenter och kunde saga emot sig sjalv.
+ *      Provet kraver att varje status i `ORDERSTATUSAR` — listan triggern i 0034
+ *      speglar — har exakt en ton.
  *
  *   node --experimental-strip-types tests/ordervy.mjs
  */
+import { ORDERSTATUSAR } from "../src/lib/order.ts";
 import {
   MANADSVAL_ANTAL,
   ORDERTAK,
+  STATUSTON,
   STATUSVAL,
   avtalsforlopp,
   filtretSomFraga,
+  harAtgarder,
   harFilter,
   kundnyckel,
   manadsval,
@@ -161,6 +171,94 @@ ok("vantar ar `inskickad`", statusarnaI("vantar").join() === "inskickad");
 ok("betald ar sig sjalv", statusarnaI("betald").join() === "betald");
 ok("varje lage utom alla ger minst en status", STATUSVAL.filter((s) => s !== "alla").every((s) => statusarnaI(s).length > 0));
 ok("taket ar ett positivt tal", ORDERTAK > 0);
+
+// -----------------------------------------------------------------------------
+console.log("\nStatusens ton — en karta, inte tva");
+// -----------------------------------------------------------------------------
+
+// KARTAN LAG I BADA KOMPONENTERNA fram till 2026-09-25. Record<Orderstatus, ...>
+// gor en saknad status till ett kompileringsfel, men provet stalls mot
+// `ORDERSTATUSAR` — som ar listan triggern i 0034 speglar — sa att en status som
+// laggs till i databasen och i typen inte kan glömmas har.
+ok(
+  "varje status i ORDERSTATUSAR har en ton",
+  ORDERSTATUSAR.every((s) => STATUSTON[s] !== undefined),
+  ORDERSTATUSAR.filter((s) => STATUSTON[s] === undefined).join() || "alla",
+);
+ok("inga toner utan status", Object.keys(STATUSTON).every((s) => ORDERSTATUSAR.includes(s)));
+ok("makulerad ar rod", STATUSTON.makulerad === "danger");
+ok("inskickad ar gul — den kraver nagot av nagon", STATUSTON.inskickad === "warn");
+ok("betald och signerad har OLIKA ton", STATUSTON.betald !== STATUSTON.signerad);
+
+// -----------------------------------------------------------------------------
+console.log("\nharAtgarder — hela matrisen, fem statusar mot fyra roller");
+// -----------------------------------------------------------------------------
+
+/**
+ * Den dyra riktningen ar att en knapp DYKER UPP for nagon som inte ska ha den.
+ * Matrisen kors darfor i sin helhet, och varje rad star utskriven med sitt
+ * forvantade svar — en tabell man kan lasa mot specifikationen i stallet for ett
+ * uttryck man maste tolka.
+ */
+const ROLLER = {
+  saljare: { hanterare: false, bokforare: false, agare: true, upphovsperson: true },
+  "annan saljare": { hanterare: false, bokforare: false, agare: false, upphovsperson: false },
+  saljchef: { hanterare: true, bokforare: false, agare: false, upphovsperson: false },
+  ekonomi: { hanterare: true, bokforare: true, agare: false, upphovsperson: false },
+};
+
+const VANTAT = {
+  //                 saljare  annan  saljchef  ekonomi
+  utkast: [true, false, false, false],
+  inskickad: [false, false, true, true],
+  signerad: [true, false, true, true],
+  betald: [true, false, true, true],
+  makulerad: [false, false, false, false],
+};
+
+for (const status of ORDERSTATUSAR) {
+  const rader = Object.entries(ROLLER);
+  for (const [i, [namn, roll]] of rader.entries()) {
+    const svar = harAtgarder({ status, ...roll });
+    ok(`${status} / ${namn} → ${VANTAT[status][i] ? "åtgärder" : "inget"}`, svar === VANTAT[status][i], `fick ${svar}`);
+  }
+}
+
+// EN MAKULERAD ORDER HAR INGENTING FOR NAGON, och det ar inte en detalj: ingen
+// vag leder ut ur `makulerad` i `OVERGANGAR`, sa en knapp dar hade varit en knapp
+// som alltid misslyckas. Provas separat over ALLA rollkombinationer, inte bara de
+// fyra realistiska ovan.
+let makuleradOppen = 0;
+for (const hanterare of [false, true])
+  for (const bokforare of [false, true])
+    for (const agare of [false, true])
+      for (const upphovsperson of [false, true])
+        if (harAtgarder({ status: "makulerad", hanterare, bokforare, agare, upphovsperson })) {
+          makuleradOppen++;
+        }
+ok("ingen av sexton rollkombinationer far atgarder pa en makulerad order", makuleradOppen === 0, `${makuleradOppen} slapptes igenom`);
+
+// ETT UTKAST TILLHOR SIN AGARE OCH INGEN ANNAN. Sarskilt inte chefen: ett utkast
+// ar inte inskickat, och specifikationen later inte nagon annan skicka in det.
+ok(
+  "saljchefen ser inget pa nagon annans utkast",
+  harAtgarder({ status: "utkast", hanterare: true, bokforare: true, agare: false, upphovsperson: true }) === false,
+);
+ok(
+  "agaren ser sitt eget utkast aven utan att ha lagt upp det",
+  harAtgarder({ status: "utkast", hanterare: false, bokforare: false, agare: true, upphovsperson: false }) === true,
+);
+
+// UPPHOVSPERSONEN FAR RATTA KUNDUPPGIFTER pa en godkand order aven utan rollen.
+// Det ar hela skalet till att `upphovsperson` finns som begrepp.
+ok(
+  "den som la upp ordern kommer at den nar den ar signerad",
+  harAtgarder({ status: "signerad", hanterare: false, bokforare: false, agare: false, upphovsperson: true }) === true,
+);
+ok(
+  "men en utomstaende saljare gor det inte",
+  harAtgarder({ status: "betald", hanterare: false, bokforare: false, agare: false, upphovsperson: false }) === false,
+);
 
 // -----------------------------------------------------------------------------
 console.log("\nManadsvaljaren");
