@@ -46,9 +46,42 @@ export type Tidsval =
 export const STATUSVAL = ["alla", "vantar", "signerad", "betald", "makulerad", "utkast"] as const;
 export type Statusval = (typeof STATUSVAL)[number];
 
+/**
+ * Lagena UTSKRIVNA, for raden under rutnatet och for det tomma laget.
+ *
+ * "Ingen order svarar mot väntar på godkännande · september 2026" ar en mening
+ * nagon kan lasa. Det ar den har listan som anvands dar.
+ */
 export const STATUSVAL_ETIKETT: Record<Statusval, string> = {
   alla: "Alla",
   vantar: "Väntar på godkännande",
+  signerad: "Signerade",
+  betald: "Betalda",
+  makulerad: "Makulerade",
+  utkast: "Utkast",
+};
+
+/**
+ * Lagena pa CHIPSEN, korta.
+ *
+ * =============================================================================
+ * TVA UPPSATTNINGAR ORD FOR SAMMA SEX LAGEN, OCH DET AR INTE DUBBLERING.
+ *
+ * Ett chip ar en knapp i en rad av sex. "Väntar på godkännande" ar tjugoen
+ * tecken, och sex sadana chips blir en rad som maste rullas i sidled pa en
+ * dator — alltsa ett filter dar halva valen ligger utanfor skarmen.
+ *
+ * I en MENING ar det tvartom: "väntar" ensamt svarar inte pa vad ordern vantar
+ * pa. Chipset har sitt sammanhang av att sta i en statusrad; meningen har det
+ * inte.
+ *
+ * Bada listorna ar `Record<Statusval, string>`, sa ett nytt lage kan inte
+ * laggas till i den ena utan att kompilatorn kraver det i den andra.
+ * =============================================================================
+ */
+export const STATUSVAL_KORT: Record<Statusval, string> = {
+  alla: "Alla",
+  vantar: "Väntar",
   signerad: "Signerade",
   betald: "Betalda",
   makulerad: "Makulerade",

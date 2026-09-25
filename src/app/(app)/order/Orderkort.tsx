@@ -80,7 +80,7 @@ export function Orderkort({
       href={href}
       scroll={false}
       className={cn(
-        "lift group flex flex-col overflow-hidden rounded-md border-l-[3px] bg-surface shadow-elev-1",
+        "lift group flex flex-1 flex-col overflow-hidden rounded-md border-l-[3px] bg-surface shadow-elev-1",
         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600",
         RAIL[o.status],
       )}
@@ -105,19 +105,28 @@ export function Orderkort({
         </p>
 
         {/*
-          TALEN, OCH BARA TVA AV DEM.
+          TALEN. TRE, I TRE OLIKA GRADER.
           -------------------------------------------------------------------
-          Ordervardet ar affarens storlek och provisionen ar vad den gav. De
-          star i OLIKA GRAD och olika farg med flit: fram till nu stod de
-          bredvid varandra i samma grad, och det storre av dem — femsiffrigt
-          mot fyrsiffrigt — laste da som "vad ordern gav", vilket ar precis vad
-          det inte ar.
+          Ordervardet ar affarens storlek, provisionen ar vad den gav, och
+          manadsavgiften ar vad kunden betalar. Tre olika fragor, och just
+          darfor tre olika grader:
 
-          Ett saknat varde sager ingenting i stallet for "0 kr". Order fran fore
-          0050 har inget ordervarde och far inget i efterhand; en nolla hade
-          last som en gratisaffar.
+            ordervarde     h1, ink-900   affarens huvudtal
+            provision      h2, brand-700 pengar till en person
+            per manad      h2, ink-700   en uppgift om avtalet
+
+          GRADERNA AR INTE DEKORATION. Fram till nu stod ordervardet och
+          provisionen bredvid varandra i SAMMA grad, och det storre av dem —
+          femsiffrigt mot fyrsiffrigt — laste da som "vad ordern gav", vilket
+          ar precis vad det inte ar. Skillnaden i grad ar det som gor att
+          23 880 kr inte kan misstas for nagons ersattning.
+
+          MANADSAVGIFTEN RITAS BARA NAR DEN FINNS, och de tva andra sager
+          ingenting i stallet for "0 kr" nar de saknas: order fran fore 0050 har
+          inget ordervarde och far inget i efterhand, och en nolla hade last som
+          en gratisaffar.
         */}
-        <div className="flex flex-wrap items-end gap-x-8 gap-y-2">
+        <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
           <div className="min-w-0">
             <p className="tnum text-h1 text-ink-900">
               {o.order_value === null ? "—" : kronor(o.order_value)}
@@ -172,7 +181,7 @@ export function Orderkort({
 }
 
 /**
- * Avtalstiden som en tva pixlar hog list langst ner pa kortet.
+ * Avtalstiden som en fyra pixlar hog list langst ner pa kortet.
  *
  * =============================================================================
  * DEN HAR LISTEN AR KORTETS ENDA UTSMYCKNING, OCH DEN BAR EN UPPGIFT.

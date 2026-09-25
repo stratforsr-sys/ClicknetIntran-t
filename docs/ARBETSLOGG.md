@@ -206,6 +206,29 @@ inte finns.**
 - `src/app/(app)/order/Kundkort.tsx` — CRM-kortet med fem flikar.
 - `tests/ordervy.mjs`
 
+### Ändrat i befintliga filer
+
+- `src/app/(app)/order/page.tsx` — skriven om.
+- `src/lib/order-server.ts` — `hamtaOrderUrval`, `hamtaKundensOrder`,
+  `hamtaTjansteantal` och `raknaKo` till. **`hamtaKo` är borttagen.** Kön är ett
+  läge i filterraden nu och går genom `hamtaOrderUrval` som alla andra lägen;
+  antalet svarar `raknaKo` på med `head: true`, alltså utan att en rad lämnar
+  databasen. En grep över hela trädet visade att ordersidan var enda anroparen —
+  kvar hade den blivit en andra väg till samma svar, och två vägar till samma
+  svar hinner glida isär.
+- `src/lib/order.ts` — `renewal_at` deklarerad i `Order`.
+- `src/app/(app)/order/Samtal.tsx` — ny prop `forvaltOppet`. Hopfälld är rätt i
+  en lista man skummar och fel i kundkortets samtalsflik, där klicket på fliken
+  redan *är* valet att se samtalen.
+- `package.json` — `test:ordervy`, även i `npm test`.
+- `src/navnyheter/poster.ts` — släppnotisen.
+
+`Atgarder.tsx`, `Bilaga.tsx`, `Fornyelse.tsx` och `Nyorder.tsx` är **orörda**.
+Alla fyra flyttade bara dit de ritas, och det är värt att notera: de var redan
+skrivna så att de inte antog något om sin omgivning. `Atgarder` tar `hanterare`,
+`bokforare`, `agare` och `upphovsperson` som props i stället för att fråga
+själv, och därför gick den att lyfta in i en modal utan en rad ändring.
+
 ---
 
 ## 2026-09-24 (senare) · Avtalsslut, tilläggstjänster och inga förval

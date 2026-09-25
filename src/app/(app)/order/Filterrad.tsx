@@ -7,7 +7,7 @@ import { cn } from "@/components/ui/cn";
 import { manadsnamn } from "@/lib/provision";
 import {
   STATUSVAL,
-  STATUSVAL_ETIKETT,
+  STATUSVAL_KORT,
   TOMT_FILTER,
   filtretSomFraga,
   harFilter,
@@ -158,7 +158,7 @@ export function Filterrad({
             onClick={() => satt("status", s as Statusval)}
             raknare={s === "vantar" ? ko : 0}
           >
-            {STATUSVAL_ETIKETT[s]}
+            {STATUSVAL_KORT[s]}
           </Chip>
         ))}
       </div>

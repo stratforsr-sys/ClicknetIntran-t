@@ -145,22 +145,19 @@ export async function hamtaOrderFor(employeeId: string, franOchMed: string): Pro
   return tolka(data ?? []);
 }
 
-/**
- * Kon: det som vantar pa godkannande.
+/*
+ * `hamtaKo` TOGS BORT 2026-09-25, och det ar varför-raden som ar vard att spara.
  *
- * Ingen rollkontroll har heller. RLS ger noll rader at den som inte far se
- * andras order, och en tom ko ar ratt svar da.
+ * Funktionen hamtade hela kon som orderrader, och ordersidan ritade dem i ett
+ * eget kort. Nu ar kon ett LAGE i filterraden — `status=vantar` gar genom
+ * `hamtaOrderUrval` som alla andra lagen — och det enda sidan behover veta utan
+ * att nagon valt laget ar hur manga. Det svarar `raknaKo` pa med `head: true`,
+ * alltsa utan att en enda rad lamnar databasen.
+ *
+ * En grep over hela tradet visade att ordersidan var ENDA anroparen. Kvar hade
+ * den darfor blivit en andra vag till samma svar, och tva vagar till samma svar
+ * hinner glida isar — det ar samma skal som star over `ror()` harovan.
  */
-export async function hamtaKo(): Promise<Orderrad[]> {
-  const rls = await supabaseServer();
-  const { data } = await rls
-    .from("sales_order")
-    .select(FALT)
-    .eq("status", "inskickad")
-    .order("created_at", { ascending: true });
-
-  return tolka(data ?? []);
-}
 
 export async function hamtaPaket(): Promise<Paket[]> {
   const rls = await supabaseServer();

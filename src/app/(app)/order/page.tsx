@@ -325,23 +325,37 @@ export default async function Ordersida({
         />
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {/* <ul> OCH INTE EN <div>. Rutnatet ar en lista, och en skармlasare
+              ska fa hora "lista med 12 poster" innan den borjar lasa dem — det
+              ar skillnaden mellan att veta hur mycket som finns och att upptacka
+              slutet. `list-none` finns inte: Tailwinds reset tar redan bort
+              punkterna. */}
+          <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {urval.order.map((o) => (
-              <Orderkort
-                key={o.id}
-                o={o}
-                paketnamn={paket.find((p) => p.id === o.package_id)?.label ?? `Paket ${o.package_id}`}
-                saljare={hanterare ? namn.get(o.salesperson_id) : undefined}
-                tjanster={tjansteantal.get(o.id) ?? 0}
-                href={`/order${filtretSomFraga(filter, { kund: o.id })}`}
-                idag={idag}
-              />
+              <li key={o.id} className="flex">
+                {/* `flex` pa <li> och `flex-1` pa kortet: utan dem blir korten
+                    olika hoga i samma rad sa fort ett saknar manadsavgift, och
+                    avtalsstaplarna i nederkanten hamnar da pa olika hojd — vilket
+                    ar precis den jamforelse stapeln finns for. */}
+                <Orderkort
+                  o={o}
+                  paketnamn={
+                    paket.find((p) => p.id === o.package_id)?.label ?? `Paket ${o.package_id}`
+                  }
+                  saljare={hanterare ? namn.get(o.salesperson_id) : undefined}
+                  tjanster={tjansteantal.get(o.id) ?? 0}
+                  href={`/order${filtretSomFraga(filter, { kund: o.id })}`}
+                  idag={idag}
+                />
+              </li>
             ))}
-          </div>
+          </ul>
 
           <p className="text-small text-ink-500">
-            {urval.order.length} {urval.order.length === 1 ? "order" : "order"} ·{" "}
-            {beskrivFilter(filter, namn)}
+            {/* "order" boejs inte i plural pa svenska — ingen raknare behover
+                valja ord har, och ett `=== 1`-val med samma ord i bada grenarna
+                ar bara brus for nasta lasare. */}
+            {urval.order.length} order · {beskrivFilter(filter, namn)}
             {/*
               TAKET SAGER IFRAN NAR DET SLAR TILL. En lista som tyst klipps vid
               tvahundra rader ser ut som en fullstandig lista, och den som
@@ -506,7 +520,7 @@ function Nyckeltal({
       <Ruta
         etikett={`${hanterare ? "Bolaget" : "Du"} i ${manadsnamn(manad)}`}
         tal={String(antal)}
-        under={antal === 1 ? "order" : "order"}
+        under="order"
         stark
       />
       <Ruta
@@ -521,14 +535,28 @@ function Nyckeltal({
       />
 
       {/*
-        FJARDE RUTAN BYTER INNEHALL EFTER VAD SOM ÄR, och det ar med flit:
-        kon och avtalsbevakningen ar de tva sakerna pa sidan som KRAVER en
-        handling, och bada ar oftast noll. Tva rutor som nastan alltid visar
-        noll lar ogat att ingenting hander pa de platserna; en ruta som bara
-        finns nar den har nagot att saga blir last nar den dyker upp.
+        FJARDE RUTAN HAR EN FAST PLATS MEN BYTANDE INNEHALL.
+        -------------------------------------------------------------------
+        Kon och avtalsbevakningen ar de tva sakerna pa sidan som KRAVER en
+        handling, och bada ar oftast noll. Tva EGNA rutor hade darfor statt och
+        sagt noll nastan varje dag, och en plats som alltid sager samma sak
+        slutar bli last.
 
-        Star bada ut samtidigt vinner kon: den ar dagens arbete, bevakningen ar
-        manadens. Bevakningen har dessutom ett eget kort direkt under.
+        Losningen ar en plats och tre innehall, inte tre platser. Rutan finns
+        alltid — rutnatet ska inte flytta sig, och ogat ska lara sig var det
+        brådskande star — men vad den sager avgors av vad som ar:
+
+          kon > 0            "Väntar på godkännande", gul eller rod
+          annars avtalsslut  "Avtal som löper ut"
+          annars             "Att göra: 0", i vanlig ton
+
+        Det sista laget ar inte en tom ruta utan ett BESKED: ingenting vantar
+        och ingenting loper ut. Skillnaden mot en ruta som alltid sager noll ar
+        att den har rutan bytt utseende de dagar det fanns nagot.
+
+        Star bade kon och ett avtalsslut ute vinner kon: den ar dagens arbete,
+        bevakningen ar manadens — och bevakningen har dessutom ett eget kort
+        direkt under, med varje kund utskriven.
       */}
       {ko > 0 ? (
         <Ruta

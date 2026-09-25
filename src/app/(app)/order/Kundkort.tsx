@@ -211,11 +211,13 @@ export function Kundkort({
                   : undefined
               }
             >
-              {/* `Samtal` bar redan hela listan, spelaren och de fyra skalen till
-                  att en inspelning saknas. Den ritas oppen har: fliken ÄR valet
-                  att se samtalen, och en hopfalld lista bakom ett andra klick
-                  hade varit ett klick for mycket. */}
-              <Samtal samtal={allaSamtal} />
+              {/* `Samtal` bar redan hela listan, spelaren och de fyra skalen
+                  till att en inspelning saknas — inget av det ritas om har.
+                  `forvaltOppet` lades till i komponenten samma dag som den har
+                  fliken: att klicka pa fliken ÄR valet att se samtalen, och en
+                  hopfalld lista bakom ett andra klick hade varit ett klick for
+                  mycket pa en fraga som redan ar besvarad. */}
+              <Samtal samtal={allaSamtal} forvaltOppet />
             </Fack>
           )}
 
