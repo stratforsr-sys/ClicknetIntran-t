@@ -22,8 +22,11 @@ andra tre:
 4. *"när jag lägger in order kan jag ibland glömma att välja rätt person
    eftersom att personen alltid är förvald. Ta bort alla förval i ordervyn."*
 
-**Migration `0068`, körd 2026-09-24 14:04.** Byggt på branch
-`avtalsslut-och-tjanster`, **EJ MERGAD** — previewen ska visas först.
+**Migration `0068`, körd 2026-09-24 14:04. MERGAD TILL MAIN OCH I PRODUKTION
+2026-09-25** som `0b624b7` — en riktig merge-commit med två föräldrar (`d953308`
+main + `a0790e3` grenen), ingen squash. `behind_by` var 0. Produktionsbygget
+grönt och `/order` svarar. Byggt på branch `avtalsslut-och-tjanster`, som ligger
+kvar; commitarna är nåbara från main.
 
 ### Det andra kravet är hela skälet till det första och tredje
 
