@@ -31,6 +31,16 @@ import {
   periodFor,
   provisionFor,
   raknas,
+  AVTALSSLUT_VARSEL_DAGAR,
+  BINDNINGSTID_MAX,
+  BINDNINGSTID_MIN,
+  affarensVarde,
+  avtalsslut,
+  bevakas,
+  dagarTill,
+  giltigBindningstid,
+  tjanstensSlut,
+  tjanstensVarde,
 } from "../src/lib/order.ts";
 
 let fel = 0;
@@ -302,6 +312,135 @@ console.log("\nOrder som hinner bli godkand for sent (O11)");
 
   // En Set duger lika bra som en lista — anroparen ska inte behova valja form.
   ok("tar emot en Set", harStangdPeriod("2026-07-15", new Set(stangda)));
+}
+
+// -----------------------------------------------------------------------------
+console.log("\nAvtalsslutet (0068)");
+{
+  // Det vanliga fallet.
+  ok("tolv manader fran 24 september", avtalsslut("2026-09-24", 12) === "2027-09-24");
+  ok("tjugofyra manader", avtalsslut("2026-09-24", 24) === "2028-09-24");
+  ok("arsskiftet gar over", avtalsslut("2026-11-30", 3) === "2027-02-28");
+
+  // ===========================================================================
+  // MANADSSKIFTET KLIPPS. Provat mot Postgres `make_interval` innan raden
+  // skrevs: 31 januari plus en manad ar 28 februari, inte 3 mars.
+  //
+  // Det ar precis det JavaScripts `setMonth` gor fel, och skulle nagon skriva
+  // om funktionen till en rad faller den har.
+  // ===========================================================================
+  ok("31 januari + 1 manad blir 28 februari", avtalsslut("2026-01-31", 1) === "2026-02-28");
+  ok("31 mars + 1 manad blir 30 april", avtalsslut("2026-03-31", 1) === "2026-04-30");
+  ok("31 augusti + 6 manader blir 28 februari", avtalsslut("2026-08-31", 6) === "2027-02-28");
+
+  // Skottaret: 2028 ar ett, sa den 29:e finns.
+  ok("31 januari 2028 + 1 manad blir 29 februari", avtalsslut("2028-01-31", 1) === "2028-02-29");
+
+  // En dag som finns i bada manaderna ror sig inte.
+  ok("den 15:e klipps aldrig", avtalsslut("2026-01-15", 1) === "2026-02-15");
+
+  ok("en manad ar minsta bindningstid", giltigBindningstid(BINDNINGSTID_MIN));
+  ok("sextio ar storsta", giltigBindningstid(BINDNINGSTID_MAX));
+  ok("noll manader ar inget avtal", !giltigBindningstid(0));
+  ok("sextioen nekas", !giltigBindningstid(61));
+  ok("halva manader nekas", !giltigBindningstid(18.5));
+  ok("arton manader gar bra nu", giltigBindningstid(18), "det gjorde det inte fore 0068");
+}
+
+// -----------------------------------------------------------------------------
+console.log("\nBevakningen: nar navet sager till");
+{
+  const idag = "2026-09-24";
+
+  ok("nittio dagars varsel", AVTALSSLUT_VARSEL_DAGAR === 90);
+  ok("dagar till i morgon ar ett", dagarTill("2026-09-25", idag) === 1);
+  ok("dagar till i gar ar minus ett", dagarTill("2026-09-23", idag) === -1);
+  ok("dagar till i dag ar noll", dagarTill(idag, idag) === 0);
+
+  // Sommartidsomstallningen 25 oktober ligger inne i spannet. Raknas dygnen
+  // fran midnatt i stallet for mitt pa dagen blir ett av dem 23 eller 25 timmar,
+  // och svaret hamnar en dag fel.
+  ok("over sommartidsomstallningen", dagarTill("2026-11-01", "2026-10-01") === 31);
+
+  ok("slutet ligger langt bort", !bevakas("2027-06-01", false, idag));
+  ok("nittioen dagar kvar ar for tidigt", !bevakas("2026-12-24", false, idag));
+  ok("nittio dagar kvar tander posten", bevakas("2026-12-23", false, idag));
+  ok("en vecka kvar", bevakas("2026-10-01", false, idag));
+
+  // ===========================================================================
+  // ETT AVTAL SOM REDAN LOPT UT STAR KVAR I LISTAN.
+  //
+  // Frestelsen ar att slacka posten pa slutdatumet. Men det ar da den betyder
+  // mest: kunden ar fortfarande kund, och det enda som hant ar att ingen ringde
+  // i tid.
+  // ===========================================================================
+  ok("utgangna avtal star kvar", bevakas("2026-08-01", false, idag));
+  ok("ett ar for sent star ocksa kvar", bevakas("2025-09-24", false, idag));
+
+  // Det som slacker posten ar ett UTFALL, inte att tiden gatt.
+  ok("hanterad slacker posten", !bevakas("2026-10-01", true, idag));
+  ok("hanterad slacker aven ett utgangret avtal", !bevakas("2025-09-24", true, idag));
+  ok("utan slutdatum ingen post", !bevakas(null, false, idag));
+}
+
+// -----------------------------------------------------------------------------
+console.log("\nTillaggstjanster (0068)");
+{
+  const manadstjanst = {
+    name: "Extra nummer",
+    billing: "manad",
+    amount: 199,
+    follows_order: true,
+    term_months: null,
+    starts_on: null,
+  };
+
+  const engangstjanst = {
+    name: "Installation",
+    billing: "engang",
+    amount: 4000,
+    follows_order: false,
+    term_months: null,
+    starts_on: null,
+  };
+
+  const egenBindning = {
+    name: "Växel",
+    billing: "manad",
+    amount: 500,
+    follows_order: false,
+    term_months: 36,
+    starts_on: "2026-10-01",
+  };
+
+  // ===========================================================================
+  // EN ENGANGSAVGIFT GANGES INTE MED NAGOT.
+  //
+  // Skrevs de tva likadant blev installationen pa 4 000 kr vard 96 000 kr pa
+  // ett tvaarsavtal — och det talet gar rakt in i provisionsunderlaget.
+  // ===========================================================================
+  ok("engangsavgiften ar hela summan", tjanstensVarde(engangstjanst, 24) === 4000);
+  ok("engangsavgiften ror sig inte med loptiden", tjanstensVarde(engangstjanst, 36) === 4000);
+
+  ok("manadstjanst som foljer ordern", tjanstensVarde(manadstjanst, 24) === 199 * 24);
+  ok("samma tjanst pa ett kortare avtal", tjanstensVarde(manadstjanst, 12) === 199 * 12);
+  ok("egen bindningstid raknar pa sin egen", tjanstensVarde(egenBindning, 12) === 500 * 36);
+
+  // Slutdatumet: bara en manadstjanst med EGEN bindningstid har ett eget.
+  ok("engangsavgiften tar aldrig slut", tjanstensSlut(engangstjanst) === null);
+  ok("den som foljer ordern har inget eget slut", tjanstensSlut(manadstjanst) === null);
+  ok("egen bindningstid ger eget slut", tjanstensSlut(egenBindning) === "2029-10-01");
+
+  // ---------------------------------------------------------------------------
+  // Hela affaren. Talet gar in i `order_value` och darmed i provisionen.
+  // ---------------------------------------------------------------------------
+  ok("utan tjanster ar det bara avtalet", affarensVarde(995, 12) === 11940);
+  ok(
+    "med tre tjanster",
+    affarensVarde(995, 24, [manadstjanst, engangstjanst, egenBindning]) ===
+      995 * 24 + 199 * 24 + 4000 + 500 * 36,
+  );
+  ok("en tom lista andrar ingenting", affarensVarde(995, 12, []) === 11940);
 }
 
 console.log(fel === 0 ? "\n\x1b[32mAllt gront.\x1b[0m\n" : `\n\x1b[31m${fel} fel.\x1b[0m\n`);

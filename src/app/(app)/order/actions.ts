@@ -13,16 +13,20 @@ import { pdfText } from "@/lib/pdf";
 import { tolkaAvtalstext, type Orderforslag } from "@/lib/orderbilaga";
 import { notifiera, notifieraFlera, orderkretsen } from "@/lib/notishandelse-server";
 import {
+  LOPTIDER,
+  affarensVarde,
+  avtalsslut,
   gallandeSats,
+  giltigBindningstid,
   giltigMejl,
   giltigTelefon,
   giltigtSigneringsdatum,
   harStangdPeriod,
   normaliseraOrgnr,
-  ordervardeFor,
   periodFor,
   type Orderstatus,
   type Sats,
+  type Tjanst,
 } from "@/lib/order";
 import {
   affarenFor,
@@ -66,7 +70,171 @@ function utkopUrFormular(form: FormData): { utkop: number | null } | { fel: stri
   return { utkop: belopp };
 }
 
-export type Orderstate = { fel?: string; ok?: string };
+/**
+ * Svaret ett orderformular far tillbaka.
+ *
+ * `orderId` satts BARA av `skapaOrder`, och bara nar raden faktiskt skrevs.
+ * Den finns for att avtalet ska ga att ladda upp utan att lamna formularet:
+ * bade den signerade adressen och registreringen haenger pa orderns id (0039),
+ * sa uppladdningsrutan kan inte ritas forran id:t finns. Se `Nyorder.tsx`.
+ */
+export type Orderstate = { fel?: string; ok?: string; orderId?: string };
+
+/**
+ * Tillaggstjansterna, ur formularet.
+ *
+ * ===========================================================================
+ * LISTAN KOMMER SOM JSON I ETT FALT, och det ar ett val.
+ *
+ * Antalet tjanster ar obestamt — det ar hela poangen med raderna — och
+ * indexerade faltnamn (`tjanst_namn_0`, `tjanst_namn_1`) tvingar servern att
+ * gissa var listan tar slut genom att rakna uppat tills ett falt saknas. En
+ * bortglomd rad mitt i hade da tyst kapat resten.
+ *
+ * DEN HAR FUNKTIONEN AR ENDA STALLET JSON:EN TOLKAS, och den litar inte pa
+ * nagot i den: talen ar pengar som gar rakt in i provisionsunderlaget genom
+ * `affarensVarde`. Varje falt provas, och ett fel blir en mening till
+ * anvandaren i stallet for en rad i databasen.
+ * ===========================================================================
+ */
+function tjansterUrFormular(form: FormData): { tjanster: Tjanst[] } | { fel: string } {
+  const text = String(form.get("tjanster") ?? "").trim();
+  if (!text) return { tjanster: [] };
+
+  let ratt: unknown;
+  try {
+    ratt = JSON.parse(text);
+  } catch {
+    return { fel: "Tjänsterna på ordern gick inte att läsa. Ladda om sidan och försök igen." };
+  }
+  if (!Array.isArray(ratt)) {
+    return { fel: "Tjänsterna på ordern gick inte att läsa. Ladda om sidan och försök igen." };
+  }
+
+  // Tjugo ar ingen asikt om hur manga tjanster en affar kan ha, utan en
+  // yttre grans: en klient som skickar tusen rader ska motas av en mening och
+  // inte av tusen inserts.
+  if (ratt.length > 20) return { fel: "Högst tjugo tjänster per order." };
+
+  const tjanster: Tjanst[] = [];
+
+  for (const rad of ratt as Record<string, unknown>[]) {
+    const namn = String(rad.name ?? "").trim();
+    if (!namn) return { fel: "En tjänst saknar namn." };
+
+    const fakturering = String(rad.billing ?? "");
+    if (fakturering !== "engang" && fakturering !== "manad") {
+      return { fel: `Välj engångsavgift eller månadsavgift för "${namn}".` };
+    }
+
+    const belopp =
+      typeof rad.amount === "number" ? rad.amount : tolkaBelopp(String(rad.amount ?? ""));
+    if (belopp === null || belopp <= 0) {
+      return { fel: `Beloppet för "${namn}" gick inte att tolka.` };
+    }
+
+    // EN ENGANGSAVGIFT HAR ALDRIG EGEN BINDNINGSTID. Den kan inte loepa ut, och
+    // `tjanst_engang_utan_bindning` i 0068 nekar raden — men beskedet ska komma
+    // harifran som en mening, inte som ett villkorsnamn ur databasen.
+    const egenBindning = fakturering === "manad" && rad.follows_order === false;
+
+    let manader: number | null = null;
+    let start: string | null = null;
+
+    if (egenBindning) {
+      manader = Number(rad.term_months);
+      start = String(rad.starts_on ?? "");
+      if (!giltigBindningstid(manader)) {
+        return { fel: `Bindningstiden för "${namn}" ska vara 1–60 hela månader.` };
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) {
+        return { fel: `Startdatumet för "${namn}" saknas.` };
+      }
+    }
+
+    tjanster.push({
+      name: namn,
+      billing: fakturering,
+      amount: belopp,
+      follows_order: fakturering === "manad" && !egenBindning,
+      term_months: manader,
+      starts_on: start,
+    });
+  }
+
+  return { tjanster };
+}
+
+/**
+ * Skriver om orderns tjansterader till precis den lista som skickades in.
+ *
+ * ===========================================================================
+ * ALLT BORT OCH ALLT IN IGEN, inte en jamforelse rad for rad.
+ *
+ * Raderna har ingen identitet i formularet — klientens `nyckel` ar Reacts och
+ * nar aldrig hit — sa det finns inget satt att veta om rad tva ar samma rad som
+ * forra gangen eller en ny pa samma plats. En "smart" jamforelse hade darfor
+ * gissat, och gissningen syns forst nar ett belopp hamnat pa fel tjanst.
+ *
+ * Tjansteraderna bar ingenting eget som gar forlorat av en omskrivning — inget
+ * id utat, ingen logg, ingen notis pekar pa dem. UNDANTAGET ar fornyelsen:
+ * `renewal_outcome` pa en tjanst ar nagot nagon TRYCKT PA, och den far inte
+ * suddas av en rattelse langre fram. Darfor lamnas rader som redan ar hanterade
+ * i fred, och bara de ohanterade skrivs om.
+ * ===========================================================================
+ */
+async function skrivTjanster(orderId: string, tjanster: Tjanst[]): Promise<string | null> {
+  const db = supabaseAdmin();
+
+  const { error: raderafel } = await db
+    .from("sales_order_service")
+    .delete()
+    .eq("order_id", orderId)
+    .is("renewal_outcome", null);
+
+  if (raderafel) return `Tjänsterna kunde inte skrivas: ${raderafel.message}`;
+
+  if (tjanster.length === 0) return null;
+
+  const { error } = await db.from("sales_order_service").insert(
+    tjanster.map((t, i) => ({
+      order_id: orderId,
+      name: t.name,
+      billing: t.billing,
+      amount: t.amount,
+      follows_order: t.follows_order,
+      term_months: t.term_months,
+      starts_on: t.starts_on,
+      sort: i,
+    })),
+  );
+
+  return error ? `Tjänsterna kunde inte skrivas: ${error.message}` : null;
+}
+
+/** Tjansterna som ALREDAN star pa en order, i den form rakningen vill ha dem. */
+async function tjansterPaOrder(orderId: string): Promise<Tjanst[]> {
+  const { data } = await supabaseAdmin()
+    .from("sales_order_service")
+    .select("name, billing, amount, follows_order, term_months, starts_on")
+    .eq("order_id", orderId)
+    .order("sort");
+
+  // Casten av samma skal som `hamtaRad` ovan: en select-strang over en viss
+  // langd ger `GenericStringError` i stallet for en radtyp. Strangen har ar
+  // kortare an den som fallde bygget 2026-09-24, men gransen ar inte skriven
+  // nagonstans — och en cast kostar ingenting.
+  const rader = (data ?? []) as unknown as Record<string, unknown>[];
+
+  return rader.map((t) => ({
+    name: String(t.name),
+    billing: t.billing as Tjanst["billing"],
+    amount: Number(t.amount),
+    follows_order: Boolean(t.follows_order),
+    term_months: t.term_months === null ? null : Number(t.term_months),
+    starts_on: t.starts_on === null ? null : String(t.starts_on).slice(0, 10),
+  }));
+}
 
 /**
  * Meningen som forklarar en utkopsaffar, eller tomt nar det inte ar en.
@@ -141,6 +309,8 @@ type Orderrad_skrivning = {
   package_id: number;
   term_months: number;
   signed_on: string;
+  /** 0068. Behovs av godkannandet: en fri order har sitt eget manadsbelopp. */
+  monthly_amount: number | string | null;
   commission_amount: number | string | null;
   buyout_amount: number | string | null;
 };
@@ -156,7 +326,7 @@ async function hamtaRad(id: string): Promise<Orderrad_skrivning | null> {
     // affaren fatt matrisens belopp trots att en del av vardet redan gatt ut.
     .select(
       "id, status, salesperson_id, company_name, package_id, term_months, signed_on," +
-        " commission_amount, buyout_amount",
+        " monthly_amount, commission_amount, buyout_amount",
     )
     .eq("id", id)
     .maybeSingle();
@@ -302,6 +472,17 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
       return { fel: "Du kan bara lägga order på dig själv." };
     }
 
+    // ===========================================================================
+    // SALJAREN MASTE VARA VALD, och det ar bestallarens besked 2026-09-24:
+    // *"personen ar alltid forvald"*.
+    //
+    // Formularet har inget forval langre, men ett tomt falt far inte tyst falla
+    // tillbaka pa den inloggade — da hade borttagandet av forvalet bytt ett
+    // synligt fel mot ett osynligt. For SALJAREN sjalv finns ingen valjare alls,
+    // och da ar hen sjalvklar; kravet galler bara den som far valja.
+    // ===========================================================================
+    if (hanterare && !valdSaljare) return { fel: "Välj vilken säljare ordern gäller." };
+
     const bolag = String(form.get("company_name") ?? "").trim();
     if (!bolag) return { fel: "Bolagsnamnet saknas." };
 
@@ -329,12 +510,61 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
     const paket = Number(form.get("package_id"));
     const loptid = Number(form.get("term_months"));
     if (![1, 2, 3].includes(paket)) return { fel: "Välj ett paket." };
-    if (![12, 24, 36].includes(loptid)) return { fel: "Välj en avtalstid." };
+
+    // ===========================================================================
+    // "FOLJER INTE PAKETREGLERNA" AVGOR VILKEN BINDNINGSTID SOM AR GILTIG.
+    //
+    // En paketorder maste halla sig till matrisens tre: provisionen slas upp pa
+    // kombinationen paket + lopstid i `commission_rate`, och en lopstid utanfor
+    // matrisen har ingen sats att sla upp — ordern hade fallit senare, pa ett
+    // meddelande om saknad sats som inte sager vad som ar fel.
+    //
+    // En FRI order far vilket tal som helst inom databasens ram, for dess belopp
+    // satts anda for hand. Bestallarens val 2026-09-24.
+    // ===========================================================================
+    const friOrder = hanterare && form.get("fri_order") === "on";
+
+    if (friOrder) {
+      if (!giltigBindningstid(loptid)) {
+        return { fel: "Bindningstiden ska vara mellan 1 och 60 hela månader." };
+      }
+    } else if (!(LOPTIDER as readonly number[]).includes(loptid)) {
+      return { fel: "Välj en bindningstid." };
+    }
+
+    const manadsbelopp = friOrder ? tolkaBelopp(String(form.get("monthly_amount") ?? "")) : null;
+    if (friOrder && (manadsbelopp === null || manadsbelopp <= 0)) {
+      return { fel: "Skriv vad kunden betalar per månad." };
+    }
 
     const signerad = String(form.get("signed_on") ?? "").trim();
     if (!giltigtSigneringsdatum(signerad)) {
       return { fel: "Signeringsdatumet är ogiltigt eller ligger i framtiden." };
     }
+
+    // ===========================================================================
+    // STARTDATUMET, OCH VARFOR DET INTE FAR VARA SIGNERINGSDATUMET TYST.
+    //
+    // Ett avtal signeras ofta innan det borjar galla. Slutdatumet — och darmed
+    // hela bevakningen — raknas fran STARTEN, sa ett falt som fyllde i sig sjalvt
+    // hade last som ett svar nagon gett. Formularet har en knapp for den som vill
+    // ha samma datum, och den kraver ett tryck.
+    //
+    // Framtiden ar TILLATEN har, till skillnad fran for signeringen: en
+    // forlangning tecknas medan det gamla avtalet fortfarande loper, och da
+    // borjar det nya nagon gang fram i tiden. Det ar inte en prognos utan ett
+    // datum i avtalet.
+    // ===========================================================================
+    const startdatum = String(form.get("starts_on") ?? "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startdatum)) {
+      return { fel: "Skriv när avtalet börjar gälla." };
+    }
+    if (startdatum < signerad) {
+      return { fel: "Avtalet kan inte börja gälla innan det signerades." };
+    }
+
+    const tjansteval = tjansterUrFormular(form);
+    if ("fel" in tjansteval) return { fel: tjansteval.fel };
 
     const note = String(form.get("note") ?? "").trim() || null;
     const tillagg = form.get("is_addon") === "on";
@@ -352,7 +582,13 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
       term_months: loptid,
       salesperson_id: saljare,
       signed_on: signerad,
+      starts_on: startdatum,
       is_addon: tillagg,
+      // MANADSBELOPPET SKRIVS REDAN PA EN INSKICKAD ORDER, av samma skal som
+      // utkopet gor det: saljaren vet vad kunden betalar, godkannaren gor det
+      // inte. `null` pa en paketorder — da star priset i `sales_package` tills
+      // godkannandet fryser det pa raden.
+      monthly_amount: manadsbelopp,
       // UTKOPET SKRIVS AVEN PA EN INSKICKAD ORDER. Saljaren vet om affaren bar
       // ett utkop; godkannaren gor det inte. Villkoret `sales_order_utkop_ryms`
       // i 0060 slapper darfor igenom ett utkop utan ordervarde, och biter forst
@@ -373,6 +609,7 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
         saljare,
         form,
         utkopsval.utkop,
+        { manadsbelopp, tjanster: tjansteval.tjanster },
       );
       if (!provision.klar) return { fel: provision.fel };
 
@@ -402,6 +639,60 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
     // i samma steg. Det ar den vanligaste vagen in for en order som legat kvar.
     const forSent = godkannDirekt && harStangdPeriod(signerad, await stangdaManader());
 
+    // ===========================================================================
+    // TRE SKRIVNINGAR I EN BESTAMD ORDNING, OCH ORDNINGEN AR HELA POANGEN.
+    //
+    // Tjansterna ligger i en EGEN TABELL och kan darfor inte skrivas i samma
+    // insert som ordern — de behover orderns id, som inte finns forran raden ar
+    // gjord. Samtidigt raknas deras varde IN i `order_value`, som fryses i samma
+    // sekund ordern blir `signerad`.
+    //
+    // Skrevs ordern direkt som godkand och tjansterna efterat, skulle ett fel i
+    // andra steget lamna en godkand order vars frusna ordervarde — och darmed
+    // provision och overtack — bygger pa tjanster som inte finns. En tyst
+    // felaktig utbetalning, alltsa, och just den sortens fel som 0051 och 5.6
+    // handlar om.
+    //
+    // Darfor: ordern som UTKAST, tjansterna, och forst da statusen och beloppen.
+    // Faller nagot pa vagen star ett utkast kvar — synligt, rattbart, och utan
+    // en enda krona bokford. `utkast -> inskickad` och `utkast -> signerad` ar
+    // bada tillatna steg i triggern (0034), sa vagen ar densamma som forut.
+    // ===========================================================================
+    // De falt som bara far finnas fran och med `signerad`. Villkoret
+    // `sales_order_provision_satt` i 0034 nekar dem pa ett utkast — ett belopp
+    // pa ett utkast ser ut som ett loste — sa de lyfts ur och skrivs i steg tre.
+    const FRYSTA = [
+      "commission_amount",
+      "commission_source",
+      "commission_rate_id",
+      "order_value",
+      "order_value_source",
+      "monthly_amount",
+      "approved_by",
+      "approved_at",
+    ] as const;
+
+    const slutligStatus = insats.status;
+    const slutligt: Record<string, unknown> = {};
+
+    for (const nyckel of FRYSTA) {
+      // BARA DE FALT SOM FAKTISKT SATTES. En inskickad order har ingen
+      // provision, och att skriva `undefined` over `monthly_amount` hade nollat
+      // det saljaren just skrev in.
+      if (nyckel in insats) {
+        slutligt[nyckel] = insats[nyckel];
+        delete insats[nyckel];
+      }
+    }
+
+    // Manadsbeloppet hor inte till provisionen och ska sta kvar pa utkastet.
+    // Det ar en uppgift OM AVTALET, inte om pengar till nagon.
+    if ("monthly_amount" in slutligt) {
+      insats.monthly_amount = slutligt.monthly_amount;
+    }
+
+    insats.status = "utkast";
+
     const { data: rad, error } = await supabaseAdmin()
       .from("sales_order")
       .insert(insats)
@@ -410,11 +701,35 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
 
     if (error || !rad) return { fel: `Ordern sparades inte: ${error?.message ?? "okänt fel"}` };
 
+    const tjanstfel = await skrivTjanster(rad.id, tjansteval.tjanster);
+    if (tjanstfel) {
+      return {
+        fel: `${tjanstfel} Ordern ligger kvar som utkast på ${bolag} — komplettera den där.`,
+        orderId: rad.id,
+      };
+    }
+
+    const { error: stegfel } = await supabaseAdmin()
+      .from("sales_order")
+      .update({ ...slutligt, status: slutligStatus })
+      .eq("id", rad.id);
+
+    if (stegfel) {
+      return {
+        fel: `Ordern sparades men kunde inte ${godkannDirekt ? "godkännas" : "skickas in"}: ${stegfel.message}. Den ligger kvar som utkast på ${bolag}.`,
+        orderId: rad.id,
+      };
+    }
+
     await logga(user, godkannDirekt ? "sales_order.approved" : "sales_order.submitted", rad.id, {
       salesperson_id: saljare,
       package_id: paket,
       term_months: loptid,
       signed_on: signerad,
+      starts_on: startdatum,
+      ends_on: avtalsslut(startdatum, loptid),
+      monthly_amount: manadsbelopp,
+      tjanster: tjansteval.tjanster.length,
       commission_amount: insats.commission_amount ?? null,
       order_value: insats.order_value ?? null,
       buyout_amount: utkopsval.utkop,
@@ -456,12 +771,47 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
       ? ` Utköpet ${kronor(utkopsval.utkop)} följer med och dras av när ordern godkänns.`
       : "";
 
+    // ===========================================================================
+    // FORLANGNINGEN KOPPLAS IHOP HAR, sist av allt.
+    //
+    // `forlanger_id` foljer med fran knappen "Forlang" pa den gamla orderns kort.
+    // Kopplingen skrivs EFTER att den nya affaren ar klar — bokford, notifierad
+    // och allt — eftersom den gamla orderns bevakning inte ska slackas forran det
+    // faktiskt finns nagot som ersatter den.
+    //
+    // Behorigheten provas anda: en klient kan skicka vilket id som helst, och
+    // utan kontrollen hade vem som helst kunnat slacka bevakningen pa nagon
+    // annans kund.
+    // ===========================================================================
+    let forlangningsbesked = "";
+    const forlangerId = String(form.get("forlanger_id") ?? "").trim();
+
+    if (forlangerId && forlangerId !== rad.id) {
+      try {
+        const { rad: gammal } = await kravFornyelseratt(forlangerId);
+        const kopplingsfel = await markeraForlangd(user, forlangerId, rad.id);
+        forlangningsbesked = kopplingsfel
+          ? ` Det gamla avtalet på ${gammal.company_name} kunde inte markeras som förlängt (${kopplingsfel}) — det ligger kvar i bevakningen.`
+          : ` Det gamla avtalet på ${gammal.company_name} är markerat som förlängt och bevakas inte längre.`;
+      } catch (e) {
+        forlangningsbesked = ` Den nya ordern är lagd, men det gamla avtalet kunde inte markeras som förlängt: ${e instanceof Error ? e.message : "okänt fel"}`;
+      }
+    }
+
+    // SLUTDATUMET STAR I KVITTENSEN. Det ar den uppgift hela passet handlar om,
+    // och den som just skrivit ordern ska se den innan hen gar vidare — inte
+    // leta reda pa den i listan tre manader senare.
+    const loper = ` Avtalet löper till ${avtalsslut(startdatum, loptid)}; påminnelsen tänds 90 dagar innan.${forlangningsbesked}`;
+
     return {
+      // `orderId` gor att avtalet gar att ladda upp direkt i formularet. Se
+      // `Orderstate` och rubriken i `Nyorder.tsx`.
+      orderId: rad.id,
       ok: efterslapning
-        ? `Ordern på ${bolag} är godkänd. ${manadsnamn(periodFor(signerad))} var fastställd, så provisionen bokfördes på ${manadsnamn(efterslapning)}.${utkopet}${klippt}`
+        ? `Ordern på ${bolag} är godkänd. ${manadsnamn(periodFor(signerad))} var fastställd, så provisionen bokfördes på ${manadsnamn(efterslapning)}.${utkopet}${klippt}${loper}`
         : godkannDirekt
-          ? `Ordern på ${bolag} är godkänd.${utkopet}${klippt}`
-          : `Ordern på ${bolag} är inskickad och väntar på godkännande.${inskickatUtkop}`,
+          ? `Ordern på ${bolag} är godkänd.${utkopet}${klippt}${loper}`
+          : `Ordern på ${bolag} är inskickad och väntar på godkännande.${inskickatUtkop}${loper}`,
     };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
@@ -487,6 +837,8 @@ type Framrakning =
         commission_rate_id: string | null;
         order_value: number;
         order_value_source: string;
+        /** Vad kunden betalar per manad, fryst pa ordern. Se 0068. */
+        monthly_amount: number;
         /** Utkopet, sa som det ska sta pa ordern. `null` nar affaren inte bar nagot. */
         buyout_amount: number | null;
       };
@@ -542,6 +894,22 @@ async function raknaFramProvision(
    * behovt kanna till alla tre fallen.
    */
   utkop: number | null = null,
+  /**
+   * Affarens tva egna tal, nar de INTE kommer ur paketet.
+   *
+   * `manadsbelopp` ar `null` for en paketorder — da hamtas manadspriset ur
+   * `sales_package.list_price`, precis som fore 0068. Ar det satt ar det en fri
+   * order, och da ar talet sanningen.
+   *
+   * SKICKAS IN AV SAMMA SKAL SOM `utkop` GOR DET: de tre anroparna vet olika
+   * saker. `skapaOrder` laser bada ur formularet, `godkannOrder` ur ORDERN —
+   * saljaren skrev in dem nar hen skickade in — och `redigeraOrder` ur
+   * formularet med ordern som fallback.
+   */
+  affaren: { manadsbelopp: number | null; tjanster: Tjanst[] } = {
+    manadsbelopp: null,
+    tjanster: [],
+  },
 ): Promise<Framrakning> {
   const db = supabaseAdmin();
 
@@ -580,31 +948,45 @@ async function raknaFramProvision(
   // ---------------------------------------------------------------------------
   // 1. Ordervardet
   // ---------------------------------------------------------------------------
-  const vardeText = String(form.get("order_value") ?? "").trim();
   const manuellText = String(form.get("commission_amount") ?? "").trim();
 
-  // "Ordern foljer inte paketreglerna" kanns igen pa att ETT ordervarde skrivits
-  // in. Kryssrutan i formularet visar bada falten, men det ar vardet som avgor:
-  // en order utan inskrivet varde ar en paketorder, och da raknas vardet fram.
-  const friOrder = vardeText.length > 0;
+  // ===========================================================================
+  // EN FRI ORDER KANNS IGEN PA MANADSBELOPPET, inte pa ett inskrivet ordervarde.
+  //
+  // Fram till 0068 var regeln "ETT ordervarde har skrivits in", och den var ett
+  // uttryck for hur formularet sag ut snarare an for vad ordern ar. Nu skrivs
+  // inget ordervarde alls — bestallaren skriver vad kunden betalar i manaden och
+  // hur lange, och vardet RAKNAS. De tva talen behovs anda, eftersom det ar de
+  // som sager nar avtalet tar slut.
+  // ===========================================================================
+  const friOrder = affaren.manadsbelopp !== null;
 
-  let ordervarde: number;
+  let manadsbelopp: number;
   let vardekalla: string;
 
   if (friOrder) {
-    const v = tolkaBelopp(vardeText);
-    if (v === null) return { klar: false, fel: "Ordervärdet gick inte att tolka." };
-    if (v <= 0) return { klar: false, fel: "Ordervärdet måste vara större än noll." };
-    ordervarde = v;
+    if (affaren.manadsbelopp! <= 0) {
+      return { klar: false, fel: "Månadsbeloppet måste vara större än noll." };
+    }
+    manadsbelopp = affaren.manadsbelopp!;
     vardekalla = "manual";
   } else {
     const paketrad = (paketrader ?? []).find((p) => p.id === paket);
     if (!paketrad) {
-      return { klar: false, fel: "Paketet finns inte. Välj ett paket eller skriv in ett ordervärde." };
+      return {
+        klar: false,
+        fel: "Paketet finns inte. Välj ett paket eller kryssa i att ordern inte följer paketreglerna.",
+      };
     }
-    ordervarde = ordervardeFor(Number(paketrad.list_price), loptid);
+    manadsbelopp = Number(paketrad.list_price);
     vardekalla = "package";
   }
+
+  // ORDERVARDET RAKNAS PA ETT STALLE, och det ar `affarensVarde` i lib/order.ts
+  // — samma funktion som formularets forhandsvisning anropar. Tjansterna ingar
+  // (bestallarbeslut 2026-09-24), och en engangsavgift ganges inte med
+  // loptiden; se `tjanstensVarde` for varfor den skillnaden ar en pengafraga.
+  const ordervarde = affarensVarde(manadsbelopp, loptid, affaren.tjanster);
 
   // ---------------------------------------------------------------------------
   // 1b. Utkopet, och nettot det lamnar efter sig
@@ -734,6 +1116,10 @@ async function raknaFramProvision(
       // egen kolumn — se 0060 for varfor de inte far slas ihop till ett tal.
       order_value: ordervarde,
       order_value_source: vardekalla,
+      // MANADSBELOPPET FRYSES MED RESTEN (0068). For en paketorder ar det
+      // paketets pris den dagen; andras prislistan i november sager ordern
+      // fortfarande vad kunden faktiskt betalar.
+      monthly_amount: manadsbelopp,
       buyout_amount: utkopBelopp,
     },
     overtack: affar.overtack,
@@ -891,6 +1277,18 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
     // hamnar i loggen.
     const utkopPaOrdern = rad.buyout_amount == null ? null : Number(rad.buyout_amount);
 
+    // ===========================================================================
+    // MANADSBELOPPET OCH TJANSTERNA KOMMER UR ORDERN, inte ur godkannandets
+    // formular — exakt samma skal som utkopet ovan.
+    //
+    // Saljaren skrev dem nar hen skickade in. En tom ruta i godkannarens
+    // formular hade tyst nollat bada, och for en FRI order betyder det att
+    // `raknaFramProvision` skulle falla tillbaka pa paketets prislista — alltsa
+    // rakna en affar som uttryckligen inte foljer paketreglerna som om den gjorde
+    // det.
+    // ===========================================================================
+    const manadsbeloppPaOrdern = rad.monthly_amount == null ? null : Number(rad.monthly_amount);
+
     const provision = await raknaFramProvision(
       rad.package_id,
       rad.term_months,
@@ -898,6 +1296,7 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
       rad.salesperson_id,
       form,
       utkopPaOrdern,
+      { manadsbelopp: manadsbeloppPaOrdern, tjanster: await tjansterPaOrder(id) },
     );
     if (!provision.klar) return { fel: provision.fel };
 
@@ -1033,8 +1432,9 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
       .from("sales_order")
       .select(
         "id, status, salesperson_id, company_name, org_number, contact_name, contact_phone," +
-          " contact_email, package_id, term_months, signed_on, period_month, is_addon, note," +
-          " commission_amount, commission_source, order_value, buyout_amount, created_by",
+          " contact_email, package_id, term_months, signed_on, starts_on, period_month," +
+          " is_addon, note, monthly_amount, commission_amount, commission_source," +
+          " order_value, order_value_source, buyout_amount, created_by",
       )
       .eq("id", id)
       .maybeSingle();
@@ -1184,9 +1584,55 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
     const loptid = Number(form.get("term_months") ?? rad.term_months);
 
     if (![1, 2, 3].includes(paket)) return { fel: "Välj ett paket." };
-    if (![12, 24, 36].includes(loptid)) return { fel: "Välj en avtalstid." };
+
+    // ===========================================================================
+    // MANADSBELOPPET AR DET SOM AVGOR OM ORDERN AR FRI — HAR OCKSA (0068).
+    //
+    // Rattelseformularet ritade fore 0068 ett falt "Ordervarde i kronor", och
+    // `raknaFramProvision` kande igen en fri order pa att det faltet var ifyllt.
+    // Bada ar borta nu: formularet skriver manadsbelopp och bindningstid, och
+    // vardet raknas.
+    //
+    // ORDERN ar fallbacken, inte paketet. En fri order som rattas utan att
+    // faltet skickades med — en klient som skickar en halv inskickning — ska
+    // behalla sitt manadsbelopp; annars hade rattelsen tyst raknat om affaren
+    // som om den foljde paketreglerna, och skillnaden hade bokforts som en
+    // rattelsepost rakt ut i lonen.
+    // ===========================================================================
+    const manadstext = String(form.get("monthly_amount") ?? "").trim();
+    const manadsbelopp = manadstext
+      ? tolkaBelopp(manadstext)
+      : rad.monthly_amount == null
+        ? null
+        : Number(rad.monthly_amount);
+
+    // En order ar fri om den HAR ett eget manadsbelopp och det inte bara ar
+    // paketets pris som frostes pa raden vid godkannandet. Kallan pa ordern ar
+    // det som vet skillnaden.
+    const friOrder = manadsbelopp !== null && rad.order_value_source !== "package";
+
+    if (manadstext && (manadsbelopp === null || manadsbelopp <= 0)) {
+      return { fel: "Månadsbeloppet gick inte att tolka." };
+    }
+
+    if (friOrder) {
+      if (!giltigBindningstid(loptid)) {
+        return { fel: "Bindningstiden ska vara mellan 1 och 60 hela månader." };
+      }
+    } else if (!(LOPTIDER as readonly number[]).includes(loptid)) {
+      return { fel: "Välj en bindningstid." };
+    }
+
     if (!giltigtSigneringsdatum(signerad)) {
       return { fel: "Signeringsdatumet är ogiltigt eller ligger i framtiden." };
+    }
+
+    const startdatum = text("starts_on", rad.starts_on);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startdatum)) {
+      return { fel: "Skriv när avtalet börjar gälla." };
+    }
+    if (startdatum < signerad) {
+      return { fel: "Avtalet kan inte börja gälla innan det signerades." };
     }
 
     // ---------------------------------------------------------------------------
@@ -1211,7 +1657,14 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
         ? null
         : Number(rad.buyout_amount);
 
-    const nya = await raknaFramProvision(paket, loptid, signerad, saljare, form, utkopet);
+    // TJANSTERNA KOMMER UR ORDERN och inte ur rattelseformularet, som inte ritar
+    // dem. De ingar i ordervardet (0068), sa de MASTE med i omrakningen — utan
+    // dem hade varje rattelse av en order med tjanster tyst dragit bort deras
+    // varde ur affaren och bokfort skillnaden som en rattelsepost.
+    const nya = await raknaFramProvision(paket, loptid, signerad, saljare, form, utkopet, {
+      manadsbelopp: friOrder ? manadsbelopp : null,
+      tjanster: await tjansterPaOrder(id),
+    });
     if (!nya.klar) return { fel: nya.fel };
 
     // Anteckningskravet ar borta sedan 0060 — se `skapaOrder` for resonemanget.
@@ -1315,6 +1768,7 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
         term_months: loptid,
         salesperson_id: saljare,
         signed_on: signerad,
+        starts_on: startdatum,
         is_addon: form.get("is_addon") === "on",
         note,
         // `nya.satt` bar `buyout_amount` och skrivs sist, sa det ar rakningens
@@ -1352,9 +1806,11 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
         commission_amount: fore.provision,
         order_value: rad.order_value === null ? null : Number(rad.order_value),
         buyout_amount: rad.buyout_amount == null ? null : Number(rad.buyout_amount),
+        monthly_amount: rad.monthly_amount == null ? null : Number(rad.monthly_amount),
         package_id: rad.package_id,
         term_months: rad.term_months,
         signed_on: rad.signed_on,
+        starts_on: rad.starts_on,
         overtack: fore.chef ? { manager_id: fore.chef, amount: fore.overtack } : null,
       },
       efter: {
@@ -1362,9 +1818,11 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
         commission_amount: efter.provision,
         order_value: nya.satt.order_value,
         buyout_amount: nya.satt.buyout_amount,
+        monthly_amount: nya.satt.monthly_amount,
         package_id: paket,
         term_months: loptid,
         signed_on: signerad,
+        starts_on: startdatum,
         overtack: nya.overtack
           ? { manager_id: nya.overtack.manager_id, amount: nya.overtack.amount }
           : null,
@@ -1683,6 +2141,191 @@ async function kravBilageratt(orderId: string): Promise<CurrentUser> {
   }
   return user;
 }
+
+// -----------------------------------------------------------------------------
+// Fornyelsen
+//
+// =============================================================================
+// DET HAR AR HALVAN SOM SLACKER BEVAKNINGEN, och utan den tjatar den vidare
+// efter att samtalet ar ringt.
+//
+// Notisen om ett avtal som narmar sig sitt slut ar HARLEDD: den raknas fram ur
+// `sales_order` vid varje lasning, sa lange slutdatumet ligger inom nittio
+// dagar. Det ar ratt halva — en paminnelse om nagot ogjort ska inte ga att
+// glomma bort genom att klicka bort den — men det betyder ocksa att nagot
+// maste kunna gora saken GJORD.
+//
+// Tva utfall, och bestallaren valde bada uttryckligen 2026-09-24:
+//
+//   FORLANGD   kunden skrev pa igen, och en NY ORDER bar den nya affaren med
+//              eget startdatum, egen bindningstid och egen provision. Den gamla
+//              pekar pa den nya. Skalet till att det inte racker med en
+//              kvittering: en forlangning ar en affar, och en affar som inte
+//              finns i ordertabellen ger ingen provision, syns inte i nagon
+//              summering och gar inte att bevaka nasta gang.
+//
+//   AVSLUTAD   kunden ville inte. ORSAKEN KRAVS — villkoret
+//              `sales_order_fornyelse_skal` i 0068 haller den — och det ar hela
+//              skillnaden mot en tyst knapp: en lista over varfor kunder lamnar
+//              ar det enda stallet ett monster kan visa sig.
+// =============================================================================
+
+/**
+ * Vem som far bokfora ett fornyelseutfall.
+ *
+ * SAMMA KRETS SOM SER BEVAKNINGEN, och det ar med flit: saljaren ringer sina
+ * egna kunder, kretsen ser alla. En vy som visar en rad med en knapp som sedan
+ * nekar ar samre an ingen knapp — samma regel som `farRatta()` i provmodulen
+ * fick av samma skal.
+ */
+async function kravFornyelseratt(orderId: string): Promise<{ user: CurrentUser; rad: Orderrad_skrivning }> {
+  const user = await kravInloggad();
+  const rad = await hamtaRad(orderId);
+  if (!rad) throw new Error("Ordern finns inte.");
+  if (rad.salesperson_id !== user.employee!.id && !farHantera(user)) {
+    throw new Error("Du får bara hantera förnyelsen på dina egna order.");
+  }
+  return { user, rad };
+}
+
+/**
+ * Bokfor att kunden forlangt: den gamla ordern pekar pa den nya.
+ *
+ * ===========================================================================
+ * DEN HAR AR INGEN EGEN KNAPP, OCH DET AR HELA POANGEN MED BESTALLARENS VAL.
+ *
+ * Fragan stalldes 2026-09-24 — vad hander nar kunden forlanger? — och svaret
+ * var "en ny order pa kunden", inte "en kvittering". En forlangning ar en
+ * AFFAR: den ger provision, den syns i manadens summering, och den har ett eget
+ * slutdatum som ska bevakas i sin tur. Allt det finns redan i `skapaOrder`.
+ *
+ * Darfor ar vagen: knappen "Forlang" pa den gamla ordern oppnar det vanliga
+ * inmatningsformularet med kundens uppgifter ifyllda, och NAR DEN NYA ORDERN AR
+ * LAGD skriver `skapaOrder` kopplingen genom den har funktionen. Utfallet och
+ * affaren blir da samma handelse, och det gar inte att fa det ena utan det
+ * andra.
+ *
+ * Ett misslyckande HAR river inte ordern. Den nya affaren ar riktig och redan
+ * bokford; det som saknas ar en pekare, och foljden av att den saknas ar att
+ * den gamla ordern star kvar i bevakningen — alltsa att nagon far fragan en
+ * gang till. Samma avvagning som `skrivOvertack` gor, och at samma hall: hellre
+ * en paminnelse for mycket an en affar som backas.
+ * ===========================================================================
+ */
+async function markeraForlangd(
+  user: CurrentUser,
+  gammalId: string,
+  nyId: string,
+): Promise<string | null> {
+  const { error } = await supabaseAdmin()
+    .from("sales_order")
+    .update({
+      renewal_outcome: "forlangd",
+      renewal_at: new Date().toISOString(),
+      renewal_by: user.employee!.id,
+      renewal_order_id: nyId,
+    })
+    .eq("id", gammalId)
+    // BARA EN OHANTERAD ORDER. Utan filtret skriver ett andra klick over ett
+    // utfall nagon annan redan bokfort — och `renewal_by` hade da pekat pa fel
+    // person utan att nagot syntes.
+    .is("renewal_outcome", null);
+
+  if (error) return error.message;
+
+  await logga(user, "sales_order.renewed", gammalId, { ny_order_id: nyId });
+  return null;
+}
+
+/**
+ * Bokfor att kunden INTE forlangde, med orsaken.
+ *
+ * ORSAKEN AR INTE EN ARTIGHET. Bestallarens val 2026-09-24 var uttryckligen
+ * utfall MED orsak framfor en ren kvittering, och skalet star i valet: utan den
+ * gar det att rakna hur manga kunder som lamnat men aldrig se varfor.
+ */
+export async function avslutaAvtal(_prev: Orderstate, form: FormData): Promise<Orderstate> {
+  try {
+    const id = String(form.get("id") ?? "");
+    const orsak = String(form.get("renewal_reason") ?? "").trim();
+
+    const { user, rad } = await kravFornyelseratt(id);
+
+    if (!orsak) {
+      return {
+        fel: "Skriv varför kunden inte förlänger. Utan orsak går raden inte att lära sig något av.",
+      };
+    }
+
+    const { error } = await supabaseAdmin()
+      .from("sales_order")
+      .update({
+        renewal_outcome: "avslutad",
+        renewal_at: new Date().toISOString(),
+        renewal_by: user.employee!.id,
+        renewal_reason: orsak,
+      })
+      .eq("id", id)
+      .is("renewal_outcome", null);
+
+    if (error) return { fel: `Avslutet bokfördes inte: ${error.message}` };
+
+    await logga(user, "sales_order.not_renewed", id, {
+      company_name: rad.company_name,
+      renewal_reason: orsak,
+    });
+
+    revalidatePath("/order");
+    return { ok: `${rad.company_name} är markerad som avslutad. Påminnelsen är släckt.` };
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Något gick fel." };
+  }
+}
+
+/**
+ * Tar tillbaka ett fornyelseutfall som blev fel.
+ *
+ * ===========================================================================
+ * DEN HAR FINNS FOR ATT UTFALLET SLACKER EN PAMINNELSE, och en slackt
+ * paminnelse om en kund ingen ringt ar tyst pa precis det satt hela passet
+ * finns for att sluta med.
+ *
+ * Kretsen ar SMALARE an den som bokfor: bara den som far hantera order. Att
+ * bokfora ett utfall ar att beratta vad som hande; att ta tillbaka det ar att
+ * saga att nagon annan berattade fel.
+ * ===========================================================================
+ */
+export async function aterupptaBevakning(_prev: Orderstate, form: FormData): Promise<Orderstate> {
+  try {
+    const user = await kravHanterare();
+    const id = String(form.get("id") ?? "");
+
+    const rad = await hamtaRad(id);
+    if (!rad) return { fel: "Ordern finns inte." };
+
+    const { error } = await supabaseAdmin()
+      .from("sales_order")
+      .update({
+        renewal_outcome: null,
+        renewal_at: null,
+        renewal_by: null,
+        renewal_reason: null,
+        renewal_order_id: null,
+      })
+      .eq("id", id);
+
+    if (error) return { fel: `Bevakningen togs inte tillbaka: ${error.message}` };
+
+    await logga(user, "sales_order.renewal_reopened", id, { company_name: rad.company_name });
+
+    revalidatePath("/order");
+    return { ok: `${rad.company_name} bevakas igen.` };
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Något gick fel." };
+  }
+}
+
+// -----------------------------------------------------------------------------
 
 export async function forberedOrderbilaga(
   orderId: string,

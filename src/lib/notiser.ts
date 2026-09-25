@@ -182,6 +182,39 @@ export const NOTIS_KALLOR = [
   "kv-bedomning",
   "provision-bokford",
 
+  /**
+   * Kundavtal som narmar sig sitt slut (0068).
+   *
+   * ===========================================================================
+   * HARLEDD, OCH DET ÄR HELA POANGEN MED DEN.
+   *
+   * Bestallaren 2026-09-24: *"vi maste fa notifikation pa varje kunds avtal som
+   * loeper ut sa att vi kan ringa dem och forlanga dem"*. "Varje" ar ordet som
+   * avgor halvan: en skriven handelserad kraver att nagon — en cron, en action,
+   * en manniska — kommer ihag att skriva den, och den dag nagot fallerar
+   * forsvinner kunden tyst ur bevakningen. Precis det som hande fore 0068, fast
+   * med ett steg till.
+   *
+   * En harledd post kan inte glommas bort: den raknas fram ur `ends_on` vid
+   * varje lasning, och `ends_on` ar en GENERERAD kolumn som inte gar att skriva
+   * fel. Sa lange avtalet finns och ingen tagit stallning star posten dar.
+   *
+   * `tjanst-avtalsslut` ar dess tvilling for en tillaggstjanst med EGEN
+   * bindningstid — en vaxel pa 36 manader under ett tvaarsavtal tar slut ett ar
+   * senare an huvudavtalet, och den skillnaden ar just varfor tjansten far en
+   * egen post i stallet for att raknas in i orderns. Tjanster som FOLJER
+   * huvudavtalet far ingen egen post; de bevakas genom ordern, och tva poster om
+   * samma datum hade gjort att bortklicket pa den ena lamnade den andra kvar.
+   *
+   * DET SOM SLACKER POSTEN AR ETT UTFALL, inte att tiden gatt: `renewal_outcome`
+   * satt till `forlangd` eller `avslutad`. Ett avtal som redan loept ut star
+   * alltsa KVAR i klockan — det ar da det betyder mest, for kunden ar
+   * fortfarande kund och det enda som hant ar att ingen ringde i tid.
+   * ===========================================================================
+   */
+  "order-avtalsslut",
+  "tjanst-avtalsslut",
+
   // ---------------------------------------------------------------------------
   // HANDELSER — rader i `notification_event` (0047).
   //

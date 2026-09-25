@@ -1,6 +1,6 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
-import type { Order, Paket, Sats } from "@/lib/order";
+import { AVTALSSLUT_VARSEL_DAGAR, type Order, type Paket, type Sats, type Tjanst } from "@/lib/order";
 import type { Chefssats } from "@/lib/chefsprovision";
 import type { Utkopssats } from "@/lib/utkop";
 import type { Chefspost } from "@/lib/provision-motor";
@@ -43,9 +43,11 @@ export type Orderrad = Order & {
 
 const FALT =
   "id, company_name, org_number, contact_name, contact_phone, contact_email, package_id," +
-  " term_months, salesperson_id, signed_on, period_month, status, is_addon, commission_amount," +
-  " commission_source, order_value, order_value_source, buyout_amount, note, created_by," +
-  " created_at, approved_at, cancelled_on, cancel_reason, cancel_period_month";
+  " term_months, salesperson_id, signed_on, starts_on, ends_on, period_month, status, is_addon," +
+  " monthly_amount, commission_amount, commission_source, order_value, order_value_source," +
+  " buyout_amount, note, created_by, created_at, approved_at, cancelled_on, cancel_reason," +
+  " cancel_period_month, renewal_outcome, renewal_at, renewal_by, renewal_reason," +
+  " renewal_order_id";
 
 /**
  * numeric kommer tillbaka som STRANG ur PostgREST. Utan Number() blir
@@ -70,6 +72,19 @@ function tolka(rader: unknown[]): Orderrad[] {
     // bara en nolla, se `buyout_amount` i `order.ts`.
     buyout_amount:
       r.buyout_amount === null || r.buyout_amount === undefined ? null : Number(r.buyout_amount),
+    // MANADSBELOPPET AR EN NUMERIC TILL (0068). Samma falla, och den bits pa ett
+    // eget satt: `monthly_amount * term_months` med en strang i forsta ledet ger
+    // NaN, alltsa ett ordervarde som ser ut som ett rakenfel.
+    monthly_amount:
+      r.monthly_amount === null || r.monthly_amount === undefined
+        ? null
+        : Number(r.monthly_amount),
+    // DATUMEN KAPAS TILL TIO TECKEN. PostgREST svarar med `2026-09-24` for en
+    // date-kolumn, men den genererade `ends_on` har visat sig komma tillbaka med
+    // tidsdel i vissa svar — och `dagarTill()` parsar `${datum}T12:00:00Z`, som
+    // blir ett ogiltigt datum om datumet redan bar ett T.
+    starts_on: r.starts_on === null || r.starts_on === undefined ? null : String(r.starts_on).slice(0, 10),
+    ends_on: r.ends_on === null || r.ends_on === undefined ? null : String(r.ends_on).slice(0, 10),
   })) as unknown as Orderrad[];
 }
 
@@ -321,4 +336,198 @@ export async function hamtaOrderbilagor(
   }
 
   return ut;
+}
+
+/**
+ * Tjansteraderna for en bunt order, i EN fraga.
+ *
+ * Samma form som `hamtaOrderbilagor` och av samma skal: en fraga per orderkort
+ * hade blivit tjugo fragor pa en sida som redan gor sex. RLS i 0068 avgor vad
+ * som syns — policyn fragar `sales_order`, sa en tjanst kan aldrig synas pa en
+ * order som inte gor det.
+ */
+export async function hamtaTjanster(orderIds: string[]): Promise<Map<string, Tjansterad[]>> {
+  const ut = new Map<string, Tjansterad[]>();
+  if (orderIds.length === 0) return ut;
+
+  const rls = await supabaseServer();
+  const { data } = await rls
+    .from("sales_order_service")
+    .select(
+      "id, order_id, name, billing, amount, follows_order, term_months, starts_on, ends_on," +
+        " renewal_outcome, renewal_reason, sort",
+    )
+    .in("order_id", orderIds)
+    .order("sort");
+
+  // ===========================================================================
+  // CASTEN AR INTE KOSMETISK, och den fallde bygget 2026-09-24.
+  //
+  // Supabase harleder radens typ ur select-STRANGEN. En strang over en viss
+  // langd far den inte att ga ihop, och resultatet blir `GenericStringError` —
+  // en typ UTAN nagon av kolumnerna. Bygget faller da pa `r.order_id`, inte pa
+  // nagot som ar fel i fragan.
+  //
+  // Samma falla som `hamtaChefsposter` gick i 2026-09-09, `redigeraOrder` strax
+  // darefter och `hamtaRad` i actions.ts. Foljden ar att faltlistan harunder
+  // maste stamma med strangen ovan FOR HAND — de kontrolleras inte mot varandra
+  // av nagot.
+  // ===========================================================================
+  const rader = (data ?? []) as unknown as {
+    id: string;
+    order_id: string;
+    name: string;
+    billing: string;
+    amount: number | string;
+    follows_order: boolean;
+    term_months: number | string | null;
+    starts_on: string | null;
+    ends_on: string | null;
+    renewal_outcome: string | null;
+    renewal_reason: string | null;
+    sort: number;
+  }[];
+
+  for (const r of rader) {
+    const nyckel = String(r.order_id);
+    ut.set(nyckel, [
+      ...(ut.get(nyckel) ?? []),
+      {
+        id: String(r.id),
+        name: String(r.name),
+        billing: r.billing as Tjansterad["billing"],
+        // numeric ur PostgREST ar en STRANG. Se `tolka()` ovan.
+        amount: Number(r.amount),
+        follows_order: Boolean(r.follows_order),
+        term_months: r.term_months === null ? null : Number(r.term_months),
+        starts_on: r.starts_on === null ? null : String(r.starts_on).slice(0, 10),
+        ends_on: r.ends_on === null ? null : String(r.ends_on).slice(0, 10),
+        renewal_outcome: (r.renewal_outcome as Tjansterad["renewal_outcome"]) ?? null,
+        renewal_reason: (r.renewal_reason as string | null) ?? null,
+      },
+    ]);
+  }
+
+  return ut;
+}
+
+/** En tjansterad sa som vyn behover kanna den. Bar `Tjanst` plus radens eget. */
+export type Tjansterad = Tjanst & {
+  id: string;
+  ends_on: string | null;
+  renewal_outcome: "forlangd" | "avslutad" | null;
+  renewal_reason: string | null;
+};
+
+/**
+ * Avtalen som narmar sig sitt slut och annu ingen tagit stallning till.
+ *
+ * ===========================================================================
+ * FRAGAN GAR UTANFOR TOLVMANADERSFONSTRET, och det ar hela skalet till att den
+ * ar en egen hamtning.
+ *
+ * `hamtaOrder` visar tolv manader bakat. Ett trearsavtal tecknat 2024 loeper ut
+ * 2027 — och syns alltsa inte i den listan alls, trots att det ar precis det
+ * avtal nagon borde ringa om. Bevakningen fragar darfor pa SLUTDATUMET och inte
+ * pa signeringsmanaden.
+ *
+ * Villkoren speglar `bevakas()` i `lib/order.ts`, och det ar med flit att de
+ * star pa tva stallen: databasen far svara pa vilka RADER som ar aktuella —
+ * indexet `sales_order_avtalsslut_idx` ar byggt for exakt det predikatet — och
+ * den rena funktionen far svara pa vad som galler EN rad, dar den gar att prova
+ * utan databas. Provet i tests/order.mjs bevakar den andra halvan.
+ * ===========================================================================
+ *
+ * RLS AVGOR VEM SOM SER VAD. Saljaren far sina egna, kretsen alla — precis som
+ * pa ordersidan i ovrigt. Inget rollfilter skrivs har.
+ */
+export async function hamtaAvtalsslut(idag: string): Promise<Orderrad[]> {
+  const rls = await supabaseServer();
+
+  // Yttre gransen: slutdatum fram till och med nittio dagar bort. Ordern med ett
+  // slutdatum som REDAN PASSERAT kommer med av sig sjalv — det finns ingen nedre
+  // grans, och det ar avsiktligt. Se `bevakas()` for varfor ett utgangret avtal
+  // star kvar i listan i stallet for att slockna.
+  const senast = new Date(Date.parse(`${idag}T12:00:00Z`) + AVTALSSLUT_VARSEL_DAGAR * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+
+  const { data } = await rls
+    .from("sales_order")
+    .select(FALT)
+    .in("status", ["signerad", "betald"])
+    .is("renewal_outcome", null)
+    .lte("ends_on", senast)
+    .order("ends_on", { ascending: true });
+
+  return tolka(data ?? []);
+}
+
+/**
+ * Tjansterna med EGET slutdatum som narmar sig, och orderns bolagsnamn.
+ *
+ * En tjanst som foljer huvudavtalet star inte har — den bevakas genom ordern,
+ * och tva poster for samma slutdatum hade betytt att bortklicket pa den ena
+ * lamnade den andra kvar. `ends_on` ar null for just de raderna (0068), sa
+ * villkoret `not.is.null` ar hela filtret som behovs.
+ */
+export async function hamtaTjanstslut(
+  idag: string,
+): Promise<
+  {
+    id: string;
+    order_id: string;
+    name: string;
+    amount: number;
+    ends_on: string;
+    company_name: string;
+    salesperson_id: string;
+  }[]
+> {
+  const rls = await supabaseServer();
+
+  const senast = new Date(Date.parse(`${idag}T12:00:00Z`) + AVTALSSLUT_VARSEL_DAGAR * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+
+  const { data } = await rls
+    .from("sales_order_service")
+    .select("id, order_id, name, amount, ends_on, sales_order!inner(company_name, salesperson_id, status)")
+    .not("ends_on", "is", null)
+    .is("renewal_outcome", null)
+    .lte("ends_on", senast)
+    .order("ends_on", { ascending: true });
+
+  // Samma cast och samma skal som i `hamtaTjanster` ovan — den har strangen bar
+  // dessutom en inbaddad tabell, vilket gor den annu langre.
+  const rader = (data ?? []) as unknown as {
+    id: string;
+    order_id: string;
+    name: string;
+    amount: number | string;
+    ends_on: string;
+    sales_order: { company_name: string; salesperson_id: string; status: string };
+  }[];
+
+  return rader
+    .map((r) => {
+      // `!inner` ger ett OBJEKT och inte en lista, men typen Supabase harleder
+      // sager lista. Den ar redan skriven ratt i casten ovan.
+      const order = r.sales_order;
+      return {
+        id: String(r.id),
+        order_id: String(r.order_id),
+        name: String(r.name),
+        amount: Number(r.amount),
+        ends_on: String(r.ends_on).slice(0, 10),
+        company_name: order.company_name,
+        salesperson_id: order.salesperson_id,
+        status: order.status,
+      };
+    })
+    // EN MAKULERAD ORDERS TJANSTER BEVAKAS INTE. Filtret star har och inte i
+    // fragan eftersom PostgREST inte tar ett `in`-villkor pa en inbaddad tabell
+    // tillsammans med `!inner` utan att tappa raderna helt.
+    .filter((r) => r.status === "signerad" || r.status === "betald")
+    .map(({ status: _status, ...rad }) => rad);
 }

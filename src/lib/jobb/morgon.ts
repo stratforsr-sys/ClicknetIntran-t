@@ -5,6 +5,7 @@ import { epostArKonfigurerad, skickaKo, type Brev } from "@/lib/epost";
 import { svensktDatum } from "@/lib/klocka";
 import { lageAv, arStangd, fristtext, type Handelsetyp, type Lage } from "@/lib/uppgifter";
 import { kursLage } from "@/lib/utbildning";
+import { AVTALSSLUT_VARSEL_DAGAR } from "@/lib/order";
 
 /**
  * Morgonbrevet: dagens plan, en gång per arbetsdag.
@@ -95,6 +96,7 @@ const AVSNITT = [
   "COACHNING",
   "UTBILDNING",
   "RUTINER ATT GRANSKA",
+  "AVTAL SOM LÖPER UT",
 ] as const;
 
 type Avsnitt = (typeof AVSNITT)[number];
@@ -169,6 +171,7 @@ export async function korMorgonjobbet(db: SupabaseClient, nu = new Date()): Prom
     ["coachning", () => samlaCoachning(db, idag, nu, lagg)],
     ["utbildning", () => samlaUtbildning(db, nu, lagg)],
     ["rutiner", () => samlaRutiner(db, idag, lagg)],
+    ["avtalsslut", () => samlaAvtalsslut(db, idag, lagg)],
   ];
 
   for (const [namn, kor] of samlare) {
@@ -572,6 +575,89 @@ async function samlaUtbildning(db: SupabaseClient, nu: Date, lagg: Lagg): Promis
  * Rutiner vars granskningsdatum passerat. Gäller dokumentets ÄGARE och ingen
  * annan — samma krets som den härledda `rutin-granskning` i klockan.
  */
+/**
+ * 0068. Kundavtal som narmar sig sitt slut.
+ *
+ * ===========================================================================
+ * BREVET GAR TILL DEN SOM SKA RINGA, INTE TILL ALLA SOM FAR SE RADEN.
+ *
+ * I klockan avgor RLS: `sales_order_read` (0034) ger saljaren hennes egna order
+ * och kretsen — saljchef, VD OCH EKONOMI — alla. Det ar ratt dar, for klockan
+ * visar vad man har tillgang till.
+ *
+ * Brevet ar nagot annat: en uppmaning att lyfta luren. Ekonomirollen ringer inte
+ * kunder, och en daglig lista over samtal nagon annan ska ta ar precis den sorts
+ * brev folk slutar oppna. Kretsen har ar darfor SALJCHEF OCH VD — bestallarens
+ * "saljledningen" — plus saljaren sjalv for sina egna kunder.
+ *
+ * Skillnaden ar avsiktlig och inte en glomska. Ekonomi ser raderna i navet nar
+ * de soker dar; de far dem bara inte hemskickade varje morgon.
+ * ===========================================================================
+ *
+ * TVA AVSNITT HADE VARIT ETT FOR MYCKET. Bade huvudavtal och tjanster med egen
+ * bindningstid laggs i samma avsnitt: for den som laser ar det samma arende —
+ * ring kunden — och radens text sager vilket av de tva det galler.
+ */
+async function samlaAvtalsslut(db: SupabaseClient, idag: string, lagg: Lagg): Promise<void> {
+  const senast = new Date(Date.parse(`${idag}T12:00:00Z`) + AVTALSSLUT_VARSEL_DAGAR * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+
+  const [{ data: order }, { data: tjanster }, { data: roller }] = await Promise.all([
+    db
+      .from("sales_order")
+      .select("id, company_name, salesperson_id, ends_on")
+      .in("status", ["signerad", "betald"])
+      .is("renewal_outcome", null)
+      .lte("ends_on", senast)
+      .order("ends_on", { ascending: true }),
+    db
+      .from("sales_order_service")
+      .select("id, name, ends_on, sales_order!inner(company_name, salesperson_id, status)")
+      .not("ends_on", "is", null)
+      .is("renewal_outcome", null)
+      .lte("ends_on", senast)
+      .order("ends_on", { ascending: true }),
+    db.from("employee_role").select("employee_id, role").in("role", ["sales_manager", "ceo"]),
+  ]);
+
+  const ledningen = new Set<string>((roller ?? []).map((r) => String(r.employee_id)));
+
+  /** Lagger raden hos saljaren OCH hos ledningen, utan att nagon far den tva ganger. */
+  const till = (saljare: string, rad: string) => {
+    for (const person of new Set<string>([saljare, ...ledningen])) {
+      lagg(person, "AVTAL SOM LÖPER UT", rad);
+    }
+  };
+
+  for (const o of (order ?? []) as {
+    company_name: string;
+    salesperson_id: string;
+    ends_on: string;
+  }[]) {
+    const slut = String(o.ends_on).slice(0, 10);
+    till(o.salesperson_id, `${o.company_name} (${fristtext(slut, idag)})`);
+  }
+
+  for (const t of tjanster ?? []) {
+    // `!inner` ger ett OBJEKT och inte en lista, hur typen an ser ut.
+    const order = t.sales_order as unknown as {
+      company_name: string;
+      salesperson_id: string;
+      status: string;
+    } | null;
+    if (!order) continue;
+    if (order.status !== "signerad" && order.status !== "betald") continue;
+
+    const slut = String(t.ends_on ?? "").slice(0, 10);
+    if (!slut) continue;
+    till(
+      order.salesperson_id,
+      `${order.company_name}: ${t.name} — egen bindningstid (${fristtext(slut, idag)})`,
+    );
+  }
+}
+
 async function samlaRutiner(db: SupabaseClient, idag: string, lagg: Lagg): Promise<void> {
   const { data: dokument } = await db
     .from("document")
@@ -629,6 +715,7 @@ const ETIKETT: Record<Avsnitt, string> = {
   COACHNING: "coachning",
   UTBILDNING: "utbildning",
   "RUTINER ATT GRANSKA": "att granska",
+  "AVTAL SOM LÖPER UT": "avtal att förlänga",
 };
 
 /** Vart varje avsnitt leder. Ett brev utan väg in i navet är en återvändsgränd. */
@@ -640,6 +727,7 @@ const LANK: Record<Avsnitt, string> = {
   COACHNING: "/coachning",
   UTBILDNING: "/utbildning",
   "RUTINER ATT GRANSKA": "/rutiner",
+  "AVTAL SOM LÖPER UT": "/order",
 };
 
 function navadress(): string {

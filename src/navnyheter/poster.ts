@@ -14,6 +14,72 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "avtalsslut-och-tjanster",
+    rubrik: "Navet säger till när en kunds avtal löper ut",
+    ingress:
+      "Nittio dagar innan bindningstiden tar slut hör klockan av sig — så att någon hinner ringa och förlänga innan kunden hinner tänka om.",
+    text: `Varje order bär nu ett **slutdatum**. Det räknas ur när avtalet börjar gälla
+plus bindningstiden, och det står på orderkortet från den dag ordern läggs.
+
+## Påminnelsen
+
+Nittio dagar innan avtalet tar slut dyker kunden upp i klockan och i
+morgonbrevet, med telefonnumret framme. Du ser dina egna kunder; säljledningen
+ser allas.
+
+**Posten slocknar inte av att datumet passerar.** Ett avtal som gick ut förra
+veckan ligger kvar överst — kunden är fortfarande kund, och det enda som hänt är
+att ingen hann ringa. Det som släcker påminnelsen är att du bokför vad som
+hände:
+
+**Förläng.** Knappen öppnar orderformuläret med kundens uppgifter ifyllda. Paket,
+bindningstid, säljare och datum står tomma — det är en ny förhandling. När den
+nya ordern är lagd kopplas den ihop med den gamla, som slutar påminna. Och
+eftersom förlängningen är en riktig order ger den provision som vilken affär som
+helst.
+
+**Kunden förlänger inte.** Då skriver du varför, med egna ord. Orsaken är
+obligatorisk, och skälet till det är att en lista över varför kunder lämnar är
+det enda ställe ett mönster kan visa sig.
+
+## Ordern börja gälla-datum
+
+Ett avtal signeras ofta innan det börjar löpa. Därför finns ett eget fält —
+**Avtalet börjar gälla** — och det är därifrån slutdatumet räknas. Vill du ha
+samma datum som signeringen finns en knapp för det.
+
+## Tjänster på ordern
+
+Du kan lägga till hur många tjänster du vill på en order: namn, om det är en
+**engångsavgift eller månadsavgift**, och beloppet. Värdet räknas in i
+ordervärdet, alltså också i provisionen.
+
+En tjänst följer normalt huvudavtalets bindningstid. Har den en **egen** — en
+växel på 36 månader under ett tvåårsavtal — får den ett eget slutdatum och en
+egen påminnelse. Annars hade den löpt ut tyst.
+
+## Order som inte följer paketreglerna
+
+Kryssrutan öppnar nu **månadsbelopp** och **fri bindningstid** i stället för ett
+ordervärde du räknar ut själv. Skriv vad kunden betalar i månaden och hur många
+månader — resten räknas fram, och avtalet får ett slutdatum som går att bevaka.
+Bindningstiden får vara 1–60 månader; en paketorder håller sig till 12, 24
+eller 36, eftersom provisionsmatrisen bara känner de tre.
+
+## Inga förvalda fält
+
+Inget i orderformuläret är ifyllt i förväg längre — inte säljaren, inte paketet,
+inte datumet, inte "godkänn direkt". Ett förvalt fält ser likadant ut som ett du
+fyllt i, och säljaren avgör vems provision affären blir. Det kostar några klick
+till per order, och ingen order kan längre bli fel av att du inte gjorde något.
+
+Avtalet går dessutom att ladda upp direkt i formuläret, så fort ordern är
+sparad.`,
+    datum: "2026-09-24",
+    roller: ["salesperson", "sales_manager", "ceo", "finance"],
+    href: "/order",
+  },
+  {
     slug: "skriftligt-prov-saljstruktur",
     rubrik: "Skriftligt prov: Säljstruktur — tjugo frågor du svarar på med egna ord",
     ingress:
