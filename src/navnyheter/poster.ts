@@ -14,6 +14,90 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "ordervyn-kundkort-och-filter",
+    rubrik: "Ordervyn är omgjord: kundkort, filter och en ruta för nya order",
+    ingress:
+      "Varje order är ett kort du klickar på, och då öppnas kunden — alla hennes avtal, samtal och bilagor på ett ställe. Listan går att filtrera på person, månad eller dag.",
+    text: `Ordersidan var en vägg. Varje order ritade nio rader text i samma storlek och
+samma gråa ton, med knappar, samtalslistor och filuppladdningar inuti — och
+inmatningsformuläret låg mitt i högen. Nu är den byggd om från grunden.
+
+## Ordern är ett kort
+
+Varje order är ett kort med fyra uppgifter: kunden, vad affären är värd, vad den
+gav i provision, och i vilket skick den är. Statusen syns som en färgad list i
+kortets vänsterkant, så du ser nedåt i rutnätet utan att läsa ett ord.
+
+**Längst ner på kortet ligger en tunn stapel.** Den visar hur långt in i
+bindningstiden avtalet har kommit. Är den nästan full är det den kunden du ska
+ringa — och du ser det på hela rutnätet samtidigt utan att jämföra datum.
+Stapeln blir gul nittio dagar före slutet och röd när avtalet gått ut.
+
+## Klicka på kortet och du får kunden
+
+Allt som försvann från listan ligger här, och mer därtill: **kundkortet visar
+kundens hela historik**, inte bara den order du klickade på. Har Nordbygg AB tre
+avtal ser du alla tre, vad de sammanlagt är värda, vad kunden betalar i månaden
+och när det sista avtalet löper ut.
+
+Kortet har fem flikar:
+
+**Översikt** — kontaktuppgifter, kund sedan när, och avtalet som en tidslinje med
+start, slut och hur många dagar som är kvar. Närmar sig slutet står knapparna
+"Förläng" och "Kunden förlänger inte" här, med kundens siffror framför dig.
+
+**Order** — en rad per order med datum, status, ordervärde och provision. Den du
+klickade dig in från står utfälld, de andra öppnar du med ett tryck.
+
+I en utfälld order står affären som en **räkning**: ordervärde minus utköp är lika
+med det som blir kvar, med provisionen och månadsavgiften bredvid. Under den
+ligger avtalets löptid som en stapel, tjänsterna i en tabell där du kan jämföra
+beloppen rakt nedåt, och åtgärderna — godkänn, rätta, makulera, markera betald —
+på just den ordern.
+
+**Samtal** — alla samtal på kundens nummer, oavsett vilken order de kopplats
+till. Du behöver inte längre veta vilket av tre avtal samtalet hamnade på.
+
+**Bilagor** — avtalen, per order.
+
+**Historik** — kundens tidslinje från första ordern till i dag: vad som lades
+upp, godkändes, förlängdes eller makulerades, och när.
+
+## Filtret
+
+Över listan ligger en rad:
+
+- **Status** — alla, väntar på godkännande, signerade, betalda, makulerade,
+  utkast. Godkännandekön är ett läge här i stället för ett eget kort, med en
+  räknare på knappen.
+- **Säljare** — alla, dina egna, eller en namngiven person. Du ser bara dem du
+  får se, precis som förut.
+- **Tid** — alla, en månad, eller en enskild dag.
+- **Sök** — på bolagsnamn.
+
+**"Alla" betyder verkligen alla nu.** Förut visade sidan tolv månader bakåt, så
+ett treårsavtal tecknat 2024 fanns inte i listan. Filtret går till databasen, och
+"alla" hämtar allt du får se. Blir det fler än 300 rader säger sidan det i
+stället för att tysta klippa listan.
+
+Filtret ligger i adressen. Det betyder att du kan **skicka länken** — "titta på
+Annas september" — och att det står kvar när du öppnar ett kundkort och stänger
+det igen.
+
+## Lägg till order
+
+Knappen sitter uppe till höger och öppnar en svävande ruta, precis som
+inställningarna. Formuläret är detsamma som förut — ingenting är förvalt, och
+ordervärdet räknas fram medan du skriver. Escape eller ett klick utanför stänger
+rutan.
+
+Provisionsmatrisen har flyttat längst ner på sidan, som en utfällbar panel. Den
+ligger kvar, men den tar inte längre plats från siffrorna som ändras varje dag.`,
+    datum: "2026-09-26",
+    roller: ["salesperson", "sales_manager", "ceo", "finance"],
+    href: "/order",
+  },
+  {
     slug: "avtalsslut-och-tjanster",
     rubrik: "Navet säger till när en kunds avtal löper ut",
     ingress:

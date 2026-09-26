@@ -5,6 +5,381 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-25 (senare) · Orderfliken i kundkortet, byggd om
+
+Beställaren efter att ha sett previewen: *"när jag öppnar upp kundkortet och
+trycker på order så tycker jag inte att det kundkortet är så fint, kan du fixa
+till det så att det också ser bra ut."*
+
+**BYGGT, på samma branch `ordervyn-kundkort`. EJ MERGAD.** Ingen migration.
+
+### Felet var att jag återanvände `Uppgift` i ett rutnät
+
+Diagnosen är värd att skriva ut i detalj, eftersom den är generell och jag gjorde
+den på egen kod dagen den skrevs.
+
+`Uppgift` är byggd som en **rad**: etikett vänster, värde höger, hairline under,
+`last:border-0`. I en enspaltig lista är den bra — högerkanten blir en egen linje
+att följa nedåt, och det är precis vad "Om kunden" i översikten behöver.
+
+Jag la den i ett `sm:grid-cols-2`. Fyra saker gick sönder samtidigt:
+
+1. **Hairlines linjerade inte mellan spalterna.** Vissa rader har en underrad
+   (*"satt för hand"*, *"pris × avtalstid"*) och är därför högre. Vänster spalts
+   streck hamnade alltså på andra höjder än högers. Raggigt hela vägen ner.
+2. **`last:border-0` träffar bara DOM-sista barnet.** En spalt slutade med ett
+   streck, den andra utan.
+3. **Fyra lodräta textkanter** — etikett-vänster, värde-höger, etikett-vänster,
+   värde-höger. Ögat hade ingenting att följa.
+4. **Rutnätet flyttade sig mellan order.** `Uppgift` returnerar `null` när värdet
+   saknas, så en order utan månadsavgift sköt allt efter den ett steg — och
+   Ordervärde hamnade i vänster spalt på en order och i höger på nästa.
+
+**Lärdomen, skriven i komponenternas dokumentation:** *rad i en spalt, cell i ett
+rutnät.* Det nya `Faktum` är cellen — etikett **under** värdet, allt vänsterställt
+— och då har varje uppgift EN kant, alla värden börjar på samma pixel, och `tnum`
+gör att siffrorna linjerar tecken för tecken.
+
+### Ordervärde − Utköp = Kvar står nu som en räkning
+
+Filens egen kommentar sa redan att *"de tre talen betyder bara något
+TILLSAMMANS"*. Ändå låg de i tre celler i ett rutnät där tomma celler föll bort,
+så utköpet kunde hamna i en annan spalt än ordervärdet, på en annan rad, på vissa
+order. Räkningen gick att **läsa** men inte att **följa**.
+
+Nu står de i rad med `−` och `=` mellan, i ljusare ton — de är bindeord, inte
+tal. Och bara när det **finns** ett utköp: en rad som säger "23 880 − 0 = 23 880"
+på varje vanlig order lär ögat att hoppa över hela strecket.
+
+Nettot räknas bara när båda talen finns. En inskickad order har utköp men ännu
+inget ordervärde, och `null − 5 000` hade blivit ett påhittat tal.
+
+Ett lodrätt streck skiljer **vad affären är värd för bolaget** (ordervärde, utköp,
+netto) från **vad den ger en person** (provision) och vad kunden betalar. Utan det
+låg fem tal i en rad och provisionen såg ut att vara en term i ordervärdet.
+
+### Varje order var utfälld — samma vägg, en nivå in
+
+Tre avtal gav tre fulla uppsättningar belopp, datum, tjänsterader, åtgärdsknappar
+och en bilageuppladdning. Alltså exakt det som hela omläggningen skulle bort från,
+inuti en modal som är lägre än sidan.
+
+Nu är posten ett `<details>`: huvudet alltid synligt — status, datum, paket,
+ordervärde, provision — och ordern man kom från utfälld, de andra ihopfällda.
+
+**`<details>` och inte `useState`,** och tre saker följer gratis: tangentbord och
+Esc fungerar, webbläsarens sidsökning hittar text i en ihopfälld post och fäller
+ut den, och läget överlever att React ritar om listan.
+
+**Datumet är postens namn, inte paketet.** En kund har ofta samma paket på alla
+sina order — "Företagspaket" tre gånger säger ingenting om vilken som är vilken.
+
+### Tjänsterna blev en tabell
+
+Förut: *"Växel · Månadsavgift 495 kr/mån · 11 880 kr i ordervärde · egen
+bindningstid till 2029-03-01"* — en mening per rad, med beloppen på olika ställen
+i varje. Tre tjänster gav sex tal som **inte gick att jämföra**, trots att det är
+den enda frågan man ställer om en tjänstelista: vilken kostar mest, och vad drar
+mest ordervärde?
+
+Nu en tabell med `tnum` och högerställda belopp, och en summerad fot när det finns
+mer än en rad. Samma tabell används i översiktens "Tjänster i kraft" — förut var
+det en löpande lista där och en annan löpande lista här, och två sätt att visa
+samma sex uppgifter läser som två olika saker. Värdet räknas per order och skickas
+in färdigräknat, eftersom en tjänst på ett tvåårsavtal och en på ett treårsavtal
+drar olika mycket ordervärde av samma månadsavgift.
+
+### Ett fel jag hann göra och rätta i samma pass
+
+Jag la rubriker — `Sektion` — över `Åtgärder` och `Avtal och bilagor`, eftersom
+posten förut slutade i ett godtyckligt antal lösa knappar och en
+bilageuppladdning som såg ut att höra till beloppen.
+
+**Men `Atgarder` returnerar `null`** för varje status/roll-kombination som inte
+har något att göra: en makulerad order, ett utkast man inte äger, en signerad
+order sedd av en säljare som inte lade upp den. Rubriken hade alltså ritats över
+tom luft.
+
+Fixen är inte en kopia av villkoren i kundkortet — det hade blivit två svar på
+samma fråga. `harAtgarder` är **komponentens egen grind**: det första som händer i
+`Atgarder` är `if (!harAtgarder(...)) return null`, och rollvillkoren togs
+samtidigt bort ur if-kedjan därunder, som nu bara väljer *vilka* knappar. De kan
+inte glida isär, för det finns bara en av dem.
+
+Funktionen ligger i **`lib/ordervy.ts` och inte i komponenten**, eftersom en regel
+om vem som får göra vad ska gå att pröva utan att starta React. `tests/ordervy.mjs`
+kör hela matrisen: fem statusar mot fyra roller, plus sexton rollkombinationer mot
+en makulerad order. Den dyra riktningen är att en knapp **dyker upp** för någon som
+inte ska ha den, och det är inget man klickar sig igenom för hand.
+
+`Bilaga` behövde ingen sådan kontroll och har ingen: den ritar alltid minst
+uppladdningsrutan.
+
+### Statusens ton låg i två filer
+
+`Orderkort.tsx` och `Kundkort.tsx` hade var sin identisk `TON`-konstant. Den dag
+en status byter ton byter den ton på **ett** av de två ställena, och då betyder
+grönt olika saker beroende på var man tittar — ett kort med grön list som öppnar
+en order med gul rubrik är sämre än ingen färgkodning alls.
+
+`STATUSTON` ligger nu i `lib/ordervy.ts`, och den bär **semantik, inte CSS**:
+`ok`, `warn`, `danger` är samma ord som `Badge` och `Card` redan talar. Varje
+komponent översätter tonen till sina egna klasser — en 3 px list på kortet, en
+tonad platta i pillret — och så länge båda översätter TON och inte STATUS kan de
+inte säga emot varandra. Det är också den uppdelningen som gör att `ordervy.ts`
+fortfarande går att pröva i node utan att känna Tailwind.
+
+### Banden i en utfälld post, i ordning
+
+1. **Affären** — beloppen på tonad platta. Enda bandet utan rubrik: plattan är
+   dess avgränsning, och en rubrik hade skjutit ner talen en rad.
+2. **Avtalet** — tidslinjen (bara för ett avtal som gäller; en makulerad eller
+   inskickad order får sina datum i klartext, eftersom en stapel där hade
+   påstått att klockan tickar på något som inte är avgjort) och fyra fakta.
+3. **Tjänster på ordern** — tabellen. Eget band: "hur länge gäller avtalet" och
+   "vad består affären av" är två frågor, och ett band ska ha en rubrik.
+4. **Anteckning** — när det finns en.
+5. **Åtgärder** — när `harAtgarder` säger att det finns några.
+6. **Avtal och bilagor**.
+
+### Ändrade filer
+
+- `src/app/(app)/order/Kundkort.tsx` — orderfliken omskriven; `Orderpost`,
+  `Affaren`, `Belopp`, `Tecken`, `Avtalet`, `Tjanstetabell`, `Sektion`, `Faktum`.
+- `src/app/(app)/order/Atgarder.tsx` — grinden först, rollvillkoren ut ur
+  if-kedjan.
+- `src/app/(app)/order/Orderkort.tsx` — `TON` borta, `RAIL` går på ton.
+- `src/lib/ordervy.ts` — `STATUSTON`, `Statuston`, `harAtgarder`.
+- `tests/ordervy.mjs` — behörighetsmatrisen och tonkartan.
+
+---
+
+## 2026-09-25 · Ordervyn byggd om: kundkort, filter och en svävande nyorderruta
+
+Beställningen: *"Ordervyn ser riktigt dålig ut. Det är helt och hållet huller om
+buller och riktigt katastrof att läsa. Jag vill ordervyn ska vara byggd med
+frontend design skillen, inget AI slop, jag vill att alla ordrar ska kunna
+filtreras per person, per datum, månad eller alla ordrar. Sen vill jag att
+ordrarna ska ligga i elemtcards, och när man går in på dem ska det öppnas upp ett
+kundkort med all infromation, precis som ett riktigt crm, gör en undersökning på
+hur ett sånt kundkord ska se ut. Sen vill jag att det ska finnas en knapp, 'lägg
+till order' i högra hörnet högs upp och då ska det dyka upp en svävande lista
+precis som inställningar."*
+
+**BYGGT, ligger på branch `ordervyn-kundkort`. EJ MERGAD** — previewen ska visas
+för beställaren först. Ingen migration: allt som ritas fanns redan i databasen.
+
+### Diagnosen var inte att någon uppgift var fel
+
+Det är värt att skriva ut, för det avgjorde vad som gjordes. Ingen kolumn var
+felaktig och ingen siffra räknades fel. Felet var att **sidan hade sex likvärdiga
+kort i en spalt** — månadens siffror, provisionsmatrisen, avtalsbevakningen,
+inmatningsformuläret, kön och orderlistan — och att **varje orderrad ritade nio
+textstycken i samma grad och samma gråa ton**: paket, kontakt, ordervärde, utköp,
+avtalstid, tjänster, anteckning, plus `Atgarder`, `Samtal` och `Bilaga` inline.
+
+Tjugo order blev alltså omkring tvåhundra rader `text-small text-ink-500`, och
+formuläret låg mitt i den högen. Ingenting stod ut eftersom allt stod ut lika
+mycket.
+
+**Det är en lärdom som inte är specifik för ordervyn:** varje uppgift som lades
+till på orderraden var rimlig när den lades till. Kontaktraden 2026-09-15,
+ordervärdet i 0050, utköpet i 0060, avtalsraden och tjänstelistan i 0068 — fem
+tillägg, fem goda skäl, och ingen av dem tog bort något. Vyn hade inget tak, och
+en vy utan tak blir en vägg av sig själv. **Nästa gång en uppgift ska in i en
+lista: fråga vad som går ut.**
+
+### Undersökningen av hur ett kundkort ser ut
+
+Beställaren bad uttryckligen om den, och de två största CRM-systemen löser samma
+sida på nästan samma sätt. Det är den överlappningen som blev svaret:
+
+- **Salesforce Lightning** bygger posten av en *highlights panel* högst upp —
+  fyra till sex fält som avgör vad man gör härnäst, plus handlingsknapparna — och
+  under den en **flikrad** (Details / Activity / Related) i stället för en lång
+  spalt.
+- **HubSpot** delar posten i tre: **egenskaperna** till vänster, **tidslinjen** i
+  mitten, **de kopplade posterna** till höger.
+
+Tre saker är gemensamma, och kundkortet gör alla tre: beslutsfälten överst och
+få, resten i flikar, och en tidslinje som svarar på "vad har hänt" utan att man
+läser datum och räknar själv.
+
+**Det som medvetet INTE anammades** är den tomma fältmatrisen. Båda systemen
+ritar varje fält även när det är tomt, och en spalt med åtta streck i ser ut som
+ett trasigt kort i stället för en kund vi inte hunnit fylla i allt om. `Uppgift`
+i `Kundkort.tsx` ritar därför inte raden alls när värdet saknas — samma linje som
+ordervärdet i 0050 tog: tystnad framför en nolla.
+
+### Kortet är kunden, inte ordern
+
+Det är den enda riktiga skillnaden mot att bara göra orderraden större, och det
+bestämdes uttryckligen med beställaren: man går in på Nordbygg AB, inte på order
+#4712. `hamtaKundensOrder` slår därför upp **alla** order samma kund har, och
+`slaSammanKund` räknar kundens hela historik — antal order, ordervärde,
+provision, månadsintäkt, kund sedan, och det avtal som räcker längst.
+
+Följden är att "3 order · 71 640 kr" kan stå över ett kort man öppnade från en
+order på 11 940 kr. Det är hela poängen: den uppgiften finns ingen annanstans i
+navet.
+
+**Kunden slås samman på två frågor, inte en.** Numret missar samma bolag
+inskrivet olika (`556677-8899` mot `5566778899`); namnet missar ett bolag som
+bytt namn mitt i en avtalsperiod och träffar för mycket när två bolag heter
+likadant. Båda frågas, svaren slås ihop, och den rena `sammaKund()` — som
+normaliserar bort bindestreck och versaler — får avgöra.
+
+### `?kund=` bär ett ORDER-ID, aldrig ett organisationsnummer
+
+Det är det enskilt viktigaste beslutet i passet, och det är ett K27-beslut.
+
+Kundkortet ligger i adressen så att det går att länka — det var ett uttryckligt
+val av beställaren. Men adressen hamnar i webbläsarhistoriken, i Vercels loggar
+och i en `Referer`-rubrik. **K27-undantaget låter `org_number` bära ett
+personnummer** för en enskild firma, och DECISIONS.md säger redan att numret
+aldrig får hamna i den globala sökningen. Ett organisationsnummer i en
+frågesträng hade varit samma fel med en annan dörr.
+
+Adressen bär därför ordens uuid, och servern slår upp kunden bakom den. Samma
+skäl gör att **sökfältet söker på bolagsnamn och ingenting annat**: en träff på
+tio siffror hade betytt att personnummer gick att fiska fram ur listan.
+
+### Filtret går till databasen, och det måste det
+
+*"alla ordrar"* går inte att hålla i webbläsaren. Sidan hämtade tolv månader
+bakåt, och ett filter över den bunten hade gjort "alla" till "alla av de tolv
+månaderna" — ett ord som lovar mer än det håller, alltså den värsta sortens fel:
+ett som ser ut som ett svar. Ett treårsavtal tecknat 2024 fanns inte i listan.
+
+`hamtaOrderUrval` filtrerar i `sales_order` med RLS kvar, och `tid=alla` sätter
+ingen nedre gräns. Då behövs ett **tak** i stället: `ORDERTAK + 1` rader hämtas,
+och den extra raden är hela mekanismen — finns den vet vi att det fanns mer, utan
+en andra räkningsfråga. Vyn skriver ut det. **Ett tak som säger att det skär av
+är ärligt; ett förval som tiger är det inte** — och det är också skälet till att
+förvalet är `alla` och inte `innevarande månad`.
+
+Filtret ligger i adressen, vilket ger två saker gratis: det går att **dela** som
+länk, och det **överlever** att man öppnar ett kundkort och stänger det.
+
+### Nyckeltalen har egen hämtning, och det är hela poängen med dem
+
+Bandet överst säger vad **månaden** bär. Räknades det på den filtrerade listan
+hade "12 order · 48 200 kr" ändrats till "3 order · 9 000 kr" så fort någon valde
+en säljare i rullgardinen — och ett tal som betyder olika saker beroende på vad
+man råkar ha filtrerat på är varken månadens eller urvalets.
+
+Det var den enklare vägen att räkna på listan som redan hämtats. Det är därför
+det står utskrivet i `page.tsx`: **frågan är billig, felet är dyrt.**
+
+Bandet står av samma skäl **ovanför** filterraden. Ordningen på sidan säger vad
+som hänger ihop med vad.
+
+### En prestandavinst som inte syns
+
+Fram till nu hämtade sidan `hamtaOrderbilagor`, `hamtaOrdersamtal` **och**
+`hamtaTjanster` för varje synlig order vid varje laddning, eftersom varje orderrad
+ritade dem. Tre frågor över tjugo order, för uppgifter nästan ingen läste.
+
+Nu går de tre frågorna på de handfull order **en enda kund** har, och bara när
+någon öppnat kundkortet. Listan behöver bara en räknare på tjänsterna, och
+`hamtaTjansteantal` hämtar `order_id` och inget annat.
+
+### Provet hittade två riktiga fel
+
+`tests/ordervy.mjs` provar det rena lagret — sökrensningen, adresstolkningen,
+rundgången filter → adress → filter, kundnyckeln, summeringen, avtalsförloppet och
+händelserna. Det var värt att skriva:
+
+1. **`slaSammanKund` drog av en makulerad order två gånger.** Första försöket
+   summerade över de *godkända* och drog av de makulerade — men en makulerad
+   order har alltid varit signerad och låg alltså redan i summan. Nu summeras de
+   *levande*, vilket är samma tal men det enda som går att läsa.
+2. **`avtalsforlopp` gav en TOM stapel på en löptid på noll dagar.** Namnaren
+   golvades till ett och `0 / 1` blev noll procent — alltså en stapel som såg
+   nystartad ut över texten "0 dagar kvar". Nu blir den full: finns ingen tid
+   kvar är avtalet slut. Samma gren fångar bakvänt satta datum, som annars hade
+   gett en stapel med negativ bredd.
+
+Ett tredje fel, funnet av provet men aldrig nått i produktion: `sammaKund`
+svarade **ja** på två rader som saknade både organisationsnummer och bolagsnamn.
+`company_name` är `not null` sedan 0034 så läget ska inte kunna uppstå — men en
+likhetsjämförelse som svarar ja på två tomma värden är fel oavsett om den nås.
+
+### Avtalsstapeln i kortets nederkant
+
+Den är kortets enda utsmyckning, och den bär en uppgift. Kommentaren i den gamla
+vyn sa det redan: *"frågan 'hur länge har vi kvar på den här kunden?' ställs långt
+innan påminnelsen tänds"*. Svaret stod där som två datum — och två datum kräver
+att man räknar.
+
+En fylld list kräver ingenting, och eftersom den ligger på samma ställe på varje
+kort går **hela rutnätet** att läsa i en blick. Färgen byter vid nittio dagar,
+samma gräns som `AVTALSSLUT_VARSEL_DAGAR` och bevakningskortet — tre ställen som
+säger samma sak måste komma från samma funktion, och `dagarTill` är den.
+
+### Vad som flyttade var, i sin helhet
+
+| Fanns | Ligger nu |
+| --- | --- |
+| Månadskort + ordervärdeskort | Fyra nyckeltalsrutor överst, alltid månaden |
+| Provisionsmatrisen, näst högst upp | `<details>`-panel längst ner |
+| "Väntar på godkännande" som eget kort | Filterläge med räknare |
+| Inmatningsformuläret mitt på sidan | `?ny=1` i en `Svavruta`, knapp uppe till höger |
+| Avtalsbevakningen | Kvar ovanför filtret, men raderna länkar in i kundkortet |
+| Nio textstycken per orderrad | Fyra uppgifter på ett kort + kundkortet |
+| `Atgarder` / `Samtal` / `Bilaga` inline i listan | Kundkortets flikar |
+
+`Avtalsbevakning` är det enda som är kvar som eget kort, av samma skäl som den en
+gång fick bryta sidans ordning 2026-09-24: en kund vars avtal går ut om tre veckor
+är brådare än nästa order, och den som scrollar förbi ser den inte. **Ett
+filterläge hade gjort den till något man väljer att titta på.**
+
+### `renewal_at` deklarerades i typen
+
+Kolumnen har legat i `FALT` sedan 0068 och kommit med i varje svar, men inte stått
+i `Order`-typen. Följden var att kundkortets tidslinje inte kunde rita posten
+"avtalet förlängdes": uppgiften **fanns** i objektet, men kompilatorn kände den
+inte. **En kolumn som bara finns i minnet på den som skrev frågan är en kolumn som
+inte finns.**
+
+### Nya filer
+
+- `src/lib/ordervy.ts` — filtret, kundnyckeln, summeringen, avtalsförloppet,
+  händelserna. Rent, provat i `tests/ordervy.mjs`.
+- `src/app/(app)/order/Svavruta.tsx` — den svävande rutan. Samma `<dialog>` och
+  samma rörelse som `shell/Ruta.tsx`, men stänger till en **adress** i stället för
+  `router.back()`: ett kundkort kan öppnas från en länk, och då finns inget steg
+  bakåt på sidan att gå till.
+- `src/app/(app)/order/Orderkort.tsx` — element-kortet.
+- `src/app/(app)/order/Filterrad.tsx` — chips, väljare och sökfält.
+- `src/app/(app)/order/Kundkort.tsx` — CRM-kortet med fem flikar.
+- `tests/ordervy.mjs`
+
+### Ändrat i befintliga filer
+
+- `src/app/(app)/order/page.tsx` — skriven om.
+- `src/lib/order-server.ts` — `hamtaOrderUrval`, `hamtaKundensOrder`,
+  `hamtaTjansteantal` och `raknaKo` till. **`hamtaKo` är borttagen.** Kön är ett
+  läge i filterraden nu och går genom `hamtaOrderUrval` som alla andra lägen;
+  antalet svarar `raknaKo` på med `head: true`, alltså utan att en rad lämnar
+  databasen. En grep över hela trädet visade att ordersidan var enda anroparen —
+  kvar hade den blivit en andra väg till samma svar, och två vägar till samma
+  svar hinner glida isär.
+- `src/lib/order.ts` — `renewal_at` deklarerad i `Order`.
+- `src/app/(app)/order/Samtal.tsx` — ny prop `forvaltOppet`. Hopfälld är rätt i
+  en lista man skummar och fel i kundkortets samtalsflik, där klicket på fliken
+  redan *är* valet att se samtalen.
+- `package.json` — `test:ordervy`, även i `npm test`.
+- `src/navnyheter/poster.ts` — släppnotisen.
+
+`Atgarder.tsx`, `Bilaga.tsx`, `Fornyelse.tsx` och `Nyorder.tsx` är **orörda**.
+Alla fyra flyttade bara dit de ritas, och det är värt att notera: de var redan
+skrivna så att de inte antog något om sin omgivning. `Atgarder` tar `hanterare`,
+`bokforare`, `agare` och `upphovsperson` som props i stället för att fråga
+själv, och därför gick den att lyfta in i en modal utan en rad ändring.
+
+---
+
 ## 2026-09-24 (senare) · Avtalsslut, tilläggstjänster och inga förval
 
 Beställningen kom i fyra omgångar under samma pass, och den tredje förklarar de

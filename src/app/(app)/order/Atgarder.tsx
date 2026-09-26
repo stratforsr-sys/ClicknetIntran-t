@@ -11,6 +11,11 @@ import {
   type Orderstatus,
   type Paket,
 } from "@/lib/order";
+// GRINDEN LIGGER I DET RENA LAGRET. Den avgor bade om komponenten ritar nagot
+// alls och om kundkortet ritar rubriken "Åtgärder" over den — och en regel om
+// vem som far gora vad ska ga att prova utan att starta React. Se
+// `tests/ordervy.mjs`.
+import { harAtgarder } from "@/lib/ordervy";
 import {
   godkannOrder,
   makuleraOrder,
@@ -80,7 +85,12 @@ export function Atgarder({
     "retur" | "makulera" | "fri" | "ratta" | "bonus" | null
   >(null);
 
-  if (status === "utkast" && agare) {
+  // GRINDEN, och den ar samma funktion kundkortet fragar for att veta om
+  // rubriken "Åtgärder" ska ritas alls. Villkoren star darfor EN gang: kedjan
+  // harunder valjer bara VILKA knappar, aldrig OM det blir nagra.
+  if (!harAtgarder({ status, hanterare, bokforare, agare, upphovsperson })) return null;
+
+  if (status === "utkast") {
     return (
       <div className="flex flex-wrap gap-2">
         <Enkel action={skickaInOrder} id={id} etikett="Skicka in" />
@@ -89,7 +99,7 @@ export function Atgarder({
     );
   }
 
-  if (status === "inskickad" && hanterare) {
+  if (status === "inskickad") {
     return (
       <div className="flex flex-col gap-2">
         {/*
@@ -157,7 +167,7 @@ export function Atgarder({
     );
   }
 
-  if ((status === "signerad" || status === "betald") && (hanterare || bokforare || upphovsperson)) {
+  if (status === "signerad" || status === "betald") {
     /*
       RATTELSEN HAR TVA RACKVIDDER, och knappen heter darfor inte samma sak.
       "Rätta ordern" lovar att allt gar att andra; det gor det bara for chefen.

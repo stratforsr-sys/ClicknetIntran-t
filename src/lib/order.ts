@@ -89,6 +89,21 @@ export type Order = {
    * stallning an. Det ar NULL som halls bevakningen tand — se `bevakas()`.
    */
   renewal_outcome: "forlangd" | "avslutad" | null;
+  /**
+   * Nar stallningen togs, som tidsstampel. Satt samtidigt som `renewal_outcome`.
+   *
+   * DEKLARERAD 2026-09-25, och kolumnen ar aldre an det: den har legat i
+   * `FALT`-listan i `order-server.ts` sedan 0068 och kommit med i varje svar,
+   * men utan att sta i typen. Foljden var att kundkortets tidslinje inte kunde
+   * rita posten "avtalet forlangdes" — uppgiften FANNS i objektet, men
+   * kompilatorn kande den inte, och en kolumn som bara finns i minnet pa den som
+   * skrev fragan ar en kolumn som inte finns.
+   *
+   * Frivillig i typen eftersom order fran fore 0068 aldrig fatt nagon stallning
+   * och darfor har null.
+   */
+  renewal_at?: string | null;
+
   /** Ordern som forlangningen blev. Bara satt nar utfallet ar `forlangd`. */
   renewal_order_id?: string | null;
   /** Varfor kunden inte forlangde. Kravs av databasen nar utfallet ar `avslutad`. */

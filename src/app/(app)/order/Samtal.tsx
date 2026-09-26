@@ -34,9 +34,26 @@ import {
  * Rubriken säger alltid hur många samtal och hur lång sammanlagd taltid affären
  * har, också när listan är ihopfälld. Det är den uppgift man vill åt i
  * förbifarten, och den ska inte kräva ett klick.
+ *
+ * ===========================================================================
+ * `forvaltOppet` FINNS FÖR KUNDKORTETS SAMTALSFLIK (2026-09-25)
+ *
+ * Hopfälld är rätt i en LISTA man skummar: samtalen är en av nio uppgifter på
+ * ordern, och nio utfällda listor är ingen lista alls.
+ *
+ * I kundkortets samtalsflik är hopfälld fel. Att klicka på fliken *är* valet att
+ * se samtalen — en hopfälld lista bakom ett andra klick hade varit ett klick för
+ * mycket på en fråga användaren redan besvarat. Knappen står kvar så att listan
+ * går att fälla ihop igen.
  */
-export function Samtal({ samtal }: { samtal: Samtalsrad[] }) {
-  const [oppen, setOppen] = useState(false);
+export function Samtal({
+  samtal,
+  forvaltOppet = false,
+}: {
+  samtal: Samtalsrad[];
+  forvaltOppet?: boolean;
+}) {
+  const [oppen, setOppen] = useState(forvaltOppet);
 
   if (samtal.length === 0) {
     return (
