@@ -11,7 +11,7 @@ Beställaren efter att ha sett previewen: *"när jag öppnar upp kundkortet och
 trycker på order så tycker jag inte att det kundkortet är så fint, kan du fixa
 till det så att det också ser bra ut."*
 
-**BYGGT, på samma branch `ordervyn-kundkort`. EJ MERGAD.** Ingen migration.
+**MERGAD TILL MAIN OCH I PRODUKTION 2026-09-26** som `d63bac1`, tillsammans med passet nedan. Ingen migration.
 
 ### Felet var att jag återanvände `Uppgift` i ett rutnät
 
@@ -166,8 +166,14 @@ hur ett sånt kundkord ska se ut. Sen vill jag att det ska finnas en knapp, 'lä
 till order' i högra hörnet högs upp och då ska det dyka upp en svävande lista
 precis som inställningar."*
 
-**BYGGT, ligger på branch `ordervyn-kundkort`. EJ MERGAD** — previewen ska visas
-för beställaren först. Ingen migration: allt som ritas fanns redan i databasen.
+**MERGAD TILL MAIN OCH I PRODUKTION 2026-09-26** som `d63bac1` — en riktig
+merge-commit med två föräldrar (`0558644` main + `32092a1` grenen), ingen squash.
+`behind_by` var 0, så `POST /merges` räckte. Produktionsbygget grönt, och `/order`
+svarar 307 till inloggningen som den ska. Ingen migration: allt som ritas fanns
+redan i databasen. Grenen `ordervyn-kundkort` ligger kvar; commitarna är nåbara
+från main, så den går att radera.
+
+Beställaren såg previewen mellan de två passen och godkände efter det andra.
 
 ### Diagnosen var inte att någon uppgift var fel
 
