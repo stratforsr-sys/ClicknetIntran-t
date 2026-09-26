@@ -46,9 +46,14 @@ Kortet har fem flikar:
 start, slut och hur många dagar som är kvar. Närmar sig slutet står knapparna
 "Förläng" och "Kunden förlänger inte" här, med kundens siffror framför dig.
 
-**Order** — varje order i sin helhet: ordervärde, utköp, månadsavgift,
-bindningstid, tjänster, anteckning. Och åtgärderna — godkänn, rätta, makulera,
-markera betald — på den order de gäller.
+**Order** — en rad per order med datum, status, ordervärde och provision. Den du
+klickade dig in från står utfälld, de andra öppnar du med ett tryck.
+
+I en utfälld order står affären som en **räkning**: ordervärde minus utköp är lika
+med det som blir kvar, med provisionen och månadsavgiften bredvid. Under den
+ligger avtalets löptid som en stapel, tjänsterna i en tabell där du kan jämföra
+beloppen rakt nedåt, och åtgärderna — godkänn, rätta, makulera, markera betald —
+på just den ordern.
 
 **Samtal** — alla samtal på kundens nummer, oavsett vilken order de kopplats
 till. Du behöver inte längre veta vilket av tre avtal samtalet hamnade på.
@@ -88,7 +93,7 @@ rutan.
 
 Provisionsmatrisen har flyttat längst ner på sidan, som en utfällbar panel. Den
 ligger kvar, men den tar inte längre plats från siffrorna som ändras varje dag.`,
-    datum: "2026-09-25",
+    datum: "2026-09-26",
     roller: ["salesperson", "sales_manager", "ceo", "finance"],
     href: "/order",
   },
