@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import {
+  FORINSTALLNINGAR,
   KVITTO_INGEN_TID_14,
+  STEG,
   UPPREPA,
   UPPREPA_ETIKETT,
   WORK_S,
@@ -10,15 +12,17 @@ import {
   dayLabel,
   hm,
   isWeekend,
+  paminnelsetext,
   plus,
+  type Steg,
   type Upprepa,
 } from "@/lib/leveranskalender";
-import { hamtaUpptaget, skapaMote, skapaSerie } from "../moten/actions";
+import { hamtaUpptaget, skapaLeverans, skapaMote, skapaSerie } from "../moten/actions";
 import { skapaUppgift } from "@/app/(app)/uppgifter/actions";
 import { Av, type Lk } from "./gemensamt";
 import { Assistent, Datumfalt, Krockruta, Stang, Tidsval, upptagnaI, useUpptaget } from "./Tidsdelar";
 
-type Typ = "mote" | "enskilt" | "uppgift";
+type Typ = "mote" | "enskilt" | "uppgift" | "lev";
 
 /**
  * `renderForm()`: Ny händelse.
@@ -43,7 +47,12 @@ export function Formular({
   stang: () => void;
 }) {
   const mig = lk.data.mig;
-  const [typ, setTyp] = useState<Typ>("mote");
+  // Leveransen öppnar formuläret på förinställningen Kickoff (`newForm()`).
+  const [typ, setTyp] = useState<Typ>(lk.data.lev.arLev && lk.data.lev.kunder.length ? "lev" : "mote");
+  const [steg, setSteg] = useState<Steg>("kickoff");
+  const [orderId, setOrderId] = useState(lk.data.lev.kunder[0]?.orderId ?? "");
+  const [remMig, setRemMig] = useState(true);
+  const [remKund, setRemKund] = useState(FORINSTALLNINGAR.kickoff.kund);
   const forstaSaljare = lk.data.personer.find((p) => p.grupp === "salj" && p.id !== mig) ?? lk.data.personer.find((p) => p.id !== mig);
   const [med, setMed] = useState<string>(forstaSaljare?.id ?? "");
   const [upprepa, setUpprepa] = useState<Upprepa>("aldrig");
@@ -52,7 +61,9 @@ export function Formular({
   const [ansvarig, setAnsvarig] = useState(mig);
   const [dag, setDag] = useState(forval.dag ?? lk.data.hem);
   const [start, setStart] = useState(forval.start ?? 9 * 60);
-  const [minuter, setMinuter] = useState(forval.minuter ?? 30);
+  const [minuter, setMinuter] = useState(
+    forval.minuter ?? (lk.data.lev.arLev && lk.data.lev.kunder.length ? FORINSTALLNINGAR.kickoff.minuter : 30),
+  );
   const [paminnelse, setPaminnelse] = useState(10);
   const [visaSom, setVisaSom] = useState("upptagen");
   const [plats, setPlats] = useState("Kontoret");
@@ -62,7 +73,17 @@ export function Formular({
   const rubrikRef = useRef<HTMLInputElement>(null);
 
   const personer = typ === "uppgift" ? [ansvarig] : typ === "enskilt" ? [mig, med].filter(Boolean) : [mig, ...deltagare];
-  const inbjudna = typ === "enskilt" ? [med].filter(Boolean) : typ === "mote" ? deltagare : [];
+  const inbjudna = typ === "enskilt" ? [med].filter(Boolean) : typ === "mote" || typ === "lev" ? deltagare : [];
+  const kund = lk.data.lev.kunder.find((k) => k.orderId === orderId) ?? null;
+
+  /** `applyPreset()`: förinställningen sätter längden och om kunden påminns. */
+  function forinstallning(id: Steg) {
+    setTyp("lev");
+    setSteg(id);
+    setMinuter(FORINSTALLNINGAR[id].minuter);
+    setRemKund(FORINSTALLNINGAR[id].kund);
+    setKrock(null);
+  }
   const upp = useUpptaget(personer, dag);
 
   // Utan vald tid: första lediga tiden för alla (AC 6). "+" i dagrubriken
@@ -101,6 +122,21 @@ export function Formular({
   }
 
   function spara(tvinga: boolean) {
+    if (typ === "lev") {
+      if (!orderId) {
+        lk.visaKvitto("Välj en kund.");
+        return;
+      }
+      const upptagna = upptagnaI(upp.data, personer, dag, start, minuter, null);
+      if (!tvinga && upptagna.length) {
+        setKrock(upptagna);
+        return;
+      }
+      startOvergang(async () => {
+        lk.efter(await skapaLeverans({ orderId, steg, dag, start, minuter, deltagare, remMig, remKund }));
+      });
+      return;
+    }
     if (typ !== "enskilt" && !rubrik.trim()) {
       lk.visaKvitto("Skriv en rubrik först.");
       rubrikRef.current?.focus();
@@ -181,6 +217,29 @@ export function Formular({
             </button>
           ))}
         </div>
+        {lk.data.lev.farSe && (
+          <>
+            <span className="grouplab">
+              <i aria-hidden="true" />
+              Leverans
+            </span>
+            <div className="presets" role="group" aria-label="Leveransförinställningar">
+              {STEG.map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  className="preset"
+                  data-preset={id}
+                  aria-pressed={typ === "lev" && steg === id}
+                  onClick={() => forinstallning(id)}
+                >
+                  <span aria-hidden="true">{FORINSTALLNINGAR[id].ico}</span>
+                  {FORINSTALLNINGAR[id].lab}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </div>
       <div className="dbody" id="dbody">
         <form
@@ -192,7 +251,19 @@ export function Formular({
             spara(false);
           }}
         >
-          {typ === "enskilt" ? (
+          {typ === "lev" ? (
+            <label className="field" htmlFor="fCust">
+              Kund
+              <select id="fCust" value={orderId} onChange={(e) => setOrderId(e.target.value)}>
+                {lk.data.lev.kunder.length === 0 && <option value="">Inga kunder med ansvarig än</option>}
+                {lk.data.lev.kunder.map((k) => (
+                  <option key={k.orderId} value={k.orderId}>
+                    {k.kund}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : typ === "enskilt" ? (
             <label className="field" htmlFor="fWith">
               1:1 med
               <select
@@ -226,7 +297,7 @@ export function Formular({
             </label>
           )}
 
-          {typ === "enskilt" ? null : typ === "mote" ? (
+          {typ === "enskilt" ? null : typ === "mote" || typ === "lev" ? (
             <div className="field">
               <span>Deltagare från Nav</span>
               <div className="people">
@@ -307,6 +378,33 @@ export function Formular({
                 }}
                 foresla={foreslaGemensam}
               />
+              {typ === "lev" && (
+                <div className="remind" role="group" aria-label="Mejlpåminnelse">
+                  <b>Mejlpåminnelse 30 min före · Resend</b>
+                  <label htmlFor="fRemMe">
+                    <input type="checkbox" id="fRemMe" checked={remMig} onChange={(e) => setRemMig(e.target.checked)} />
+                    Till mig, {lk.personer.get(mig)?.namn}
+                  </label>
+                  <label htmlFor="fRemCust">
+                    <input
+                      type="checkbox"
+                      id="fRemCust"
+                      checked={remKund && !!kund?.epost}
+                      disabled={!kund?.epost}
+                      onChange={(e) => setRemKund(e.target.checked)}
+                    />
+                    Till kunden, {kund?.kontakt ?? "kontakten"}
+                    {kund && !kund.epost ? " (e-post saknas på ordern)" : ""}
+                  </label>
+                  <span className="hint">
+                    {remMig || (remKund && kund?.epost)
+                      ? `Skickas ${paminnelsetext(dag, start)}. Flyttas posten flyttas mejlet. Ställs den in avbokas det.`
+                      : "Ingen mejlpåminnelse. Navs pling 10 min före gäller ändå."}
+                  </span>
+                </div>
+              )}
+              {typ !== "lev" && (
+              <>
               <div className="grid2">
                 <label className="field" htmlFor="fRep">
                   Upprepa
@@ -364,6 +462,8 @@ export function Formular({
                   onChange={(e) => setAgenda(e.target.value)}
                 />
               </label>
+              </>
+              )}
             </>
           )}
 
@@ -379,7 +479,9 @@ export function Formular({
           <p className="hint">
             {inbjudna.length
               ? `${inbjudna.map((id) => lk.personer.get(id)?.fornamn).join(", ")} får en notis i klockan och ett mejl. Svaren kommer tillbaka till din klocka.`
-              : typ === "uppgift"
+              : typ === "lev"
+                ? "Syns i kalendern i leveransfärgen, så att den inte blandas ihop med annat."
+                : typ === "uppgift"
                 ? ansvarig === mig
                   ? "Skapas i uppgiftsmodulen och ritas här med klockslag. Bara du ser den."
                   : `Skapas i uppgiftsmodulen och läggs på ${lk.personer.get(ansvarig)?.fornamn}, som ser den som ny i sin klocka.`

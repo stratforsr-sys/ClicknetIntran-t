@@ -25,6 +25,11 @@ export type Brev = {
   text: string;
   html?: string;
   svaraTill?: string;
+  /**
+   * Leveranskalendern (0071): skicka vid en viss tidpunkt (ISO 8601). Resend
+   * håller brevet och skickar det själv — navet behöver inte vara vaket då.
+   */
+  schemalagtVid?: string;
 };
 
 export type Utfall =
@@ -62,6 +67,7 @@ export async function skickaEpost(brev: Brev): Promise<Utfall> {
     text: brev.text,
     ...(brev.html ? { html: brev.html } : {}),
     ...(brev.svaraTill ? { reply_to: brev.svaraTill } : {}),
+    ...(brev.schemalagtVid ? { scheduled_at: brev.schemalagtVid } : {}),
   });
 
   let sista = "okant fel";
@@ -120,4 +126,34 @@ export async function skickaKo(brevlada: Brev[]): Promise<KoUtfall[]> {
   }
 
   return utfall;
+}
+
+/**
+ * Ett schemalagt brev hos Resend: flytta det (`PATCH /emails/{id}`) eller
+ * avboka det (`POST /emails/{id}/cancel`). Ett avbokat brev går inte att
+ * schemalägga igen — en senare ombokning skickar ett nytt.
+ */
+export async function andraSchemalagt(id: string, schemalagtVid: string): Promise<Utfall> {
+  return resendAnrop(`${RESEND_URL}/${encodeURIComponent(id)}`, "PATCH", { scheduled_at: schemalagtVid }, id);
+}
+
+export async function avbrytSchemalagt(id: string): Promise<Utfall> {
+  return resendAnrop(`${RESEND_URL}/${encodeURIComponent(id)}/cancel`, "POST", undefined, id);
+}
+
+async function resendAnrop(url: string, metod: string, kropp: unknown, id: string): Promise<Utfall> {
+  const nyckel = process.env.RESEND_API_KEY?.trim();
+  if (!nyckel) return { skickat: false, orsak: "RESEND_API_KEY saknas" };
+  try {
+    const svar = await fetch(url, {
+      method: metod,
+      headers: { Authorization: `Bearer ${nyckel}`, "Content-Type": "application/json" },
+      body: kropp === undefined ? undefined : JSON.stringify(kropp),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (svar.ok) return { skickat: true, id };
+    return { skickat: false, orsak: `Resend ${svar.status}: ${(await svar.text()).slice(0, 300)}` };
+  } catch (fel) {
+    return { skickat: false, orsak: fel instanceof Error ? fel.message : String(fel) };
+  }
 }

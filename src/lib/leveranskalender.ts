@@ -285,6 +285,12 @@ export type Post = {
   serie: boolean;
   /** Serien posten är en förekomst i, när läsaren får veta det. */
   serieId: string | null;
+  /** Leveranspostens steg (pass 3). */
+  steg: Steg | null;
+  /** Utfallet: genomförd eller ej svar. Bara leveransposter. */
+  utfall: "genomford" | "ej_svar" | null;
+  /** Försök nummer, för välkomstsamtalet. */
+  forsok: number;
   /** Påminnelse i minuter före, för plinget. */
   paminnelse: number;
 };
@@ -438,6 +444,7 @@ export const LK_FEL: Record<string, string> = {
   for_sent: "För sent att ångra. Beskedet har redan gått ut.",
   oforandrad: "Tiden är densamma som förut.",
   ogiltig: "Något i formuläret stämmer inte. Kontrollera tid och deltagare.",
+  tagen: "Någon annan tog kunden precis. Välj nästa i kön.",
 };
 
 /** "lk:vardag" någonstans i ett felmeddelande → texten. Annat → null. */
@@ -502,6 +509,77 @@ export function kvittoSerieInbjudan(deltagare: readonly string[], regel: string)
 }
 
 // -----------------------------------------------------------------------------
+// Leverans (pass 3)
+// -----------------------------------------------------------------------------
+
+export const STEG = ["valkomstsamtal", "tillgangar", "kickoff", "leveransstart", "avstamning_30", "avstamning_90"] as const;
+export type Steg = (typeof STEG)[number];
+
+/** Förinställningarna (SPEC AC 34): etikett, längd, glyf och om kunden bjuds in. */
+export const FORINSTALLNINGAR: Record<Steg, { lab: string; minuter: number; ico: string; kund: boolean }> = {
+  valkomstsamtal: { lab: "Välkomstsamtal", minuter: 30, ico: "☎", kund: false },
+  tillgangar: { lab: "Tillgångar", minuter: 30, ico: "⚿", kund: false },
+  kickoff: { lab: "Kickoff", minuter: 60, ico: "▶", kund: true },
+  leveransstart: { lab: "Leveransstart", minuter: 90, ico: "◆", kund: false },
+  avstamning_30: { lab: "30-dagarsavstämning", minuter: 30, ico: "✓", kund: false },
+  avstamning_90: { lab: "90-dagarsgenomgång", minuter: 60, ico: "✓", kund: false },
+};
+
+export function arSteg(v: unknown): v is Steg {
+  return typeof v === "string" && (STEG as readonly string[]).includes(v);
+}
+
+/** `slaInfo()`: nedräkningen i kön. Grön över 8 h, gul under, röd när försenad. */
+export function slaInfo(dueIso: string, nuMs: number): { cls: "ok" | "warn" | "bad"; txt: string; pct: number } {
+  const ms = Date.parse(dueIso) - nuMs;
+  const h = ms / 36e5;
+  const cls = h < 0 ? "bad" : h < 8 ? "warn" : "ok";
+  const a = Math.abs(Math.round(ms / 6e4));
+  const t = `${Math.floor(a / 60)} h ${pad(a % 60)} min`;
+  return { cls, txt: h < 0 ? `Försenad ${t}` : `${t} kvar`, pct: Math.max(0, Math.min(100, (h / 24) * 100)) };
+}
+
+/** Överlämningens sex fält, i prototypens ordning. */
+export const OVERLAMNING = [
+  ["kontakt", "Kontaktperson"],
+  ["telefon", "Telefon"],
+  ["mal", "Kundens mål"],
+  ["lovat", "Vad som lovades"],
+  ["basta_tid", "Bästa tid att ringa"],
+  ["risker", "Risker"],
+] as const;
+
+/** `handoff()`: hur många av sex, och vilka som saknas. */
+export function overlamning(k: Partial<Record<(typeof OVERLAMNING)[number][0], string | null>>): {
+  har: number;
+  av: number;
+  saknas: string[];
+} {
+  const saknas = OVERLAMNING.filter(([f]) => !String(k[f] ?? "").trim()).map(([, l]) => l);
+  return { har: OVERLAMNING.length - saknas.length, av: OVERLAMNING.length, saknas };
+}
+
+/** "ons 7 okt kl 09:30" — påminnelsen 30 min före (`reminderText()`). */
+export function paminnelsetext(dag: string, start: number): string {
+  return `${WDK[wd(dag)]} ${dd(dag)} ${MK[mm(dag)]} kl ${hm(Math.max(0, start - 30))}`;
+}
+
+export function kvittoValkomst(kund: string, dag: string, tid: number, person: string, saljare: string): string {
+  return `Välkomstsamtal med ${kund} bokat ${dayLabel(dag)} ${hm(tid)} hos ${person}.${saljare ? ` ${saljare} får en notis.` : ""}`;
+}
+
+export function kvittoForsok(n: number, dag: string, tid: number): string {
+  return `Försök ${n} bokat ${dayLabel(dag)} ${hm(tid)}, på en annan tid på dagen.`;
+}
+
+export const KVITTO_TREDJE_FORSOKET = "Tredje försöket utan svar. Skicka sms och mejl med en bokningslänk.";
+export const KVITTO_INGEN_TID_5 = "Ingen ledig tid de närmaste fem dagarna.";
+
+export function kvittoKickoff(dag: string, tid: number, kontakt: string | null): string {
+  return `Kickoff ${dayLabel(dag)} ${hm(tid)}.${kontakt ? ` ${kontakt} får inbjudan via mejl.` : ""}`;
+}
+
+// -----------------------------------------------------------------------------
 // Kvitton. SPEC avsnitt 9, ordagrant. Förnamn i kvitton.
 // -----------------------------------------------------------------------------
 
@@ -555,6 +633,7 @@ export type Notisrad = {
   av: string | null;
   event_id?: string | null;
   task_id?: string | null;
+  order_id?: string | null;
   data: Record<string, unknown>;
 };
 
@@ -646,11 +725,35 @@ export function notistext(
       return { rubrik: `${av} vill att du förbereder er 1:1`, detalj: `${nar} · lägg till det du vill ta upp`, href };
     case "forberedelse":
       return { rubrik: "Inför er 1:1: lägg till det du vill ta upp", detalj: nar, href };
+    case "leverans-ny":
+      return { rubrik: `Ny kund i kön: ${u.rubrik}`, detalj: "välkomstsamtal inom 24 timmar", href: "/kalender?ko=1" };
+    case "leverans-frist":
+      return { rubrik: `${u.rubrik} har snart väntat 24 h`, detalj: "välkomstsamtal saknas · 4 h kvar", href: "/kalender?ko=1" };
+    case "leverans-makulerad":
+      return { rubrik: `${u.rubrik} är makulerad`, detalj: "välkomstsamtalet är bokat — ställ in det om det inte ska hållas", href: "/kalender" };
+    case "leverans-bokad-agare":
+      return { rubrik: `Välkomstsamtal med ${kundUr(u.rubrik)} bokat åt dig`, detalj: nar, href };
+    case "leverans-bokad-saljare":
+      return { rubrik: `${kundUr(u.rubrik)} välkomnas ${nar}`, detalj: `av ${d.ansvarigNamn ?? "leveransen"}`, href };
+    case "leverans-komplettera":
+      return {
+        rubrik: `Komplettera överlämningen för ${u.rubrik}`,
+        detalj: typeof d.saknas === "string" && d.saknas ? `Saknas: ${d.saknas}` : "Leveransen behöver mer",
+        href: `/kalender/overlamning/${String(d.order_id ?? rad.order_id ?? "")}`,
+      };
+    case "leverans-studs":
+      return { rubrik: `Påminnelsen till ${d.mottagare === "kund" ? "kunden" : "dig"} kom inte fram`, detalj: `${u.rubrik} · ${nar}`, href };
     case "uppgift-paminnelse":
       return { rubrik: u.rubrik, detalj: `Om tio minuter, kl ${nyTid ?? ""}`.trim(), href };
     default:
       return null;
   }
+}
+
+/** "Välkomstsamtal · Kvarnens Bageri" → "Kvarnens Bageri". */
+function kundUr(rubrik: string): string {
+  const i = rubrik.lastIndexOf(" · ");
+  return i >= 0 ? rubrik.slice(i + 3) : rubrik;
 }
 
 /** Källorna som ger svarsknappar i klockan: den som bjudits in eller fått en ny tid. */

@@ -13,6 +13,8 @@ import {
   daySum,
   dayLabel,
   hm,
+  isWeekend,
+  slaInfo,
   len,
   mm,
   periodtext,
@@ -22,7 +24,7 @@ import {
   type Vy,
 } from "@/lib/leveranskalender";
 import { angra } from "@/app/(app)/angra/actions";
-import { angringsLage, flytta, flyttaSerie, type Resultat } from "../moten/actions";
+import { angringsLage, flytta, flyttaSerie, taKund, type Resultat } from "../moten/actions";
 import { Sidolista } from "./Sidolista";
 import { Rutnat } from "./Rutnat";
 import { Agenda, Manad } from "./Vyer";
@@ -68,6 +70,7 @@ export function Leveranskalender({
   const [mmManad, setMmManad] = useState(data.anchor.slice(0, 7));
   const [smove, setSmove] = useState<{ eventId: string; rubrik: string; dag: string; start: number } | null>(null);
   const smOne = useRef<HTMLButtonElement>(null);
+  const [valjTid, setValjTid] = useState<string | null>(null);
   const senastFokus = useRef<HTMLElement | null>(null);
   const protoRef = useRef<HTMLDivElement>(null);
 
@@ -180,6 +183,10 @@ export function Leveranskalender({
           setSmove(null);
           return;
         }
+        if (valjTid) {
+          setValjTid(null);
+          return;
+        }
         if (panel) stangPanel();
         return;
       }
@@ -209,11 +216,27 @@ export function Leveranskalender({
     }
     document.addEventListener("keydown", vidTangent);
     return () => document.removeEventListener("keydown", vidTangent);
-  }, [panel, smove, stangPanel, ga, data.vy, data.anchor, nyHandelse]);
+  }, [panel, smove, valjTid, stangPanel, ga, data.vy, data.anchor, nyHandelse]);
 
   useEffect(() => {
     if (smove) smOne.current?.focus();
   }, [smove]);
+
+  /**
+   * `bookWelcome()`: en kund ur kön till en tid. Hamnar hos mig om jag är
+   * leverans eller projektledare, annars hos första personen i leveransen.
+   */
+  function bokaValkomst(orderId: string, dag: string, start: number, agare?: string) {
+    setValjTid(null);
+    if (isWeekend(dag)) {
+      visaKvitto("Välj en vardag.");
+      return;
+    }
+    const vem = agare ?? (data.lev.arLev ? data.mig : (data.personer.find((p) => p.lev)?.id ?? data.mig));
+    startOvergang(async () => {
+      efter(await taKund(orderId, vem, dag, start, 30));
+    });
+  }
 
   /** Seriebannern (`renderSel()`): bara den här gången, hela serien, eller avbryt. */
   function flyttaForekomst(hela: boolean) {
@@ -272,6 +295,9 @@ export function Leveranskalender({
     visaKvitto,
     ga,
     serieflytt: setSmove,
+    valjTid,
+    setValjTid,
+    bokaValkomst,
   };
 
   const period = periodtext(data.vy, data.anchor);
@@ -345,8 +371,25 @@ export function Leveranskalender({
                 {data.vantar === 1 ? "inbjudan väntar" : "inbjudningar väntar"} på ditt svar
               </span>
             )}
+            {data.lev.arLev && (
+              <span className={data.lev.ko.some((q) => slaInfo(q.due, Date.now()).cls === "bad") ? "over" : ""}>
+                <b>{data.lev.ko.length}</b>kunder i kön
+              </span>
+            )}
           </div>
-          <div className={`selbanner${smove ? " on" : ""}`} id="selbanner">
+          <div className={`selbanner${smove || valjTid ? " on" : ""}`} id="selbanner">
+            {valjTid && !smove && (
+              <>
+                <span>
+                  Välj en tid för välkomstsamtalet med <b>{data.lev.ko.find((q) => q.orderId === valjTid)?.kund ?? "kunden"}</b>.
+                </span>
+                <span className="acts">
+                  <button className="btn sm" id="selCancel" type="button" onClick={() => setValjTid(null)}>
+                    Avbryt
+                  </button>
+                </span>
+              </>
+            )}
             {smove && (
               <>
                 <span>

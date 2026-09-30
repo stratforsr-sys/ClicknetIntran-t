@@ -3098,13 +3098,31 @@ console.log("\n\x1b[1mLeveranskalendern: möten, 1:1-innehåll och utkorgen (006
   ok("den som håller samtalet ser den", (await punkter(tC)) === 1);
   ok("säljare B ser INTE säljare A:s 1:1-innehåll", (await punkter(tB)) === 0);
 
+  // --- Leveransen (0071): kön och kunderna syns för kretsen, inte för säljare -
+  const kunder = async (tok) => {
+    const r = await fetch(`${URL}/rest/v1/rpc/leverans_kunder`, { method: "POST", headers: som(tok), body: JSON.stringify({ p_order: null }) });
+    const j = await r.json();
+    return Array.isArray(j) ? j : [];
+  };
+  const { rows: [{ n: iKon }] } = await db.query(`select count(*)::int n from delivery`);
+  ok("säljchefen ser leveranskön", (await kunder(tD)).length === iKon, `${(await kunder(tD)).length} av ${iKon}`);
+  ok("en säljare ser inte andras kunder i leveransen", (await kunder(tB)).every((k) => k.saljare === saljareB.id));
+  ok("ekonomi ser inte leveranskön", (await kunder(tE)).length === 0);
+  ok("delivery går inte att läsa för en säljare", (await las(tA, "delivery", "select=order_id")).every(() => false));
+  const taKund = await fetch(`${URL}/rest/v1/rpc/lk_ta_kund`, {
+    method: "POST",
+    headers: som(tD),
+    body: JSON.stringify({ p_aktor: chef.id, p_order: mote.event_id, p_owner: chef.id, p_dag: d, p_tid: "09:00", p_minuter: 30 }),
+  });
+  ok("kön går inte att ta från klienten", !taKund.ok, `HTTP ${taKund.status}`);
+
   await db.query(`delete from outbox where event_id = $1::uuid or payload->>'till' in (select id::text from employee where email like $2)`, [mote.event_id, PREFIX + "%"]);
   await db.query(`delete from calendar_event where organizer_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`delete from calendar_series where organizer_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
 }
 
 console.log("\n\x1b[1mAnonym anslutning\x1b[0m");
-for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate", "news_post", "notification_seen", "notification_dismissed", "absence_type", "absence_policy", "absence_blackout", "staffing_cap", "absence_balance", "absence_request", "absence_call_order", "sick_report", "sick_deadline", "absence_reminder", "calendar_feed", "file_object", "file_access_log", "roleplay_criterion", "roleplay_submission", "roleplay_score", "cost_rate", "salary_basis", "revenue_entry", "cost_calculation", "error_report", "contract", "contract_template", "activity_day", "search_miss", "candidate", "candidate_stage_event", "interview_scorecard", "recruitment_source", "recruitment_policy", "task", "task_member", "task_link", "task_event", "project", "project_member", "project_message", "project_message_read", "calendar_share", "calendar_event", "calendar_attendee", "calendar_series", "one_on_one_item", "calendar_reminder", "outbox", "calendar_undo", "integration_log"]) {
+for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate", "news_post", "notification_seen", "notification_dismissed", "absence_type", "absence_policy", "absence_blackout", "staffing_cap", "absence_balance", "absence_request", "absence_call_order", "sick_report", "sick_deadline", "absence_reminder", "calendar_feed", "file_object", "file_access_log", "roleplay_criterion", "roleplay_submission", "roleplay_score", "cost_rate", "salary_basis", "revenue_entry", "cost_calculation", "error_report", "contract", "contract_template", "activity_day", "search_miss", "candidate", "candidate_stage_event", "interview_scorecard", "recruitment_source", "recruitment_policy", "task", "task_member", "task_link", "task_event", "project", "project_member", "project_message", "project_message_read", "calendar_share", "calendar_event", "calendar_attendee", "calendar_series", "one_on_one_item", "calendar_reminder", "outbox", "calendar_undo", "integration_log", "delivery", "delivery_handoff"]) {
   const r = await fetch(`${URL}/rest/v1/${t}?select=*`, { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` } });
   const j = await r.json();
   ok(`${t} ger inga rader anonymt`, !Array.isArray(j) || j.length === 0, Array.isArray(j) ? `${j.length} rader` : `HTTP ${r.status}`);

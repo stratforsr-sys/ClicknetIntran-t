@@ -182,6 +182,9 @@ export const KALLOR: Kalla[] = [
   { tabell: "calendar_attendee", kolumn: "employee_id", andamal: "Möten du är inbjuden till, med dina svar och förslag" },
   { tabell: "calendar_series", kolumn: "organizer_id", andamal: "Återkommande möten och 1:1:or du håller" },
   { tabell: "one_on_one_item", kolumn: "author_id", andamal: "Punkter du skrivit på en 1:1" },
+  // 0071. Leveransen.
+  { tabell: "delivery", kolumn: "owner_id", andamal: "Kunder du är ansvarig för i leveransen" },
+  { tabell: "delivery_handoff", kolumn: "written_by", andamal: "Överlämningar du skrivit till leveransen" },
 
   // 0055. Dina egna repliker i projektchattarna. Samma linje som
   // `error_report.reporter_id`: det är dina ord, skrivna av dig, och de står

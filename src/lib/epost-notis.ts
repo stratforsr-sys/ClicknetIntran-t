@@ -154,6 +154,14 @@ export const MEJLKALLOR = [
   "kalender-flyttad",
   "kalender-installd",
   "kalender-forslag",
+
+  /**
+   * Leveransen (0071). Två av kön: fristen på 24 timmar håller på att gå ut —
+   * det enda mejlet kön skickar — och en begäran till säljaren att komplettera
+   * överlämningen, som leveransen väntar på innan de kan ringa kunden.
+   */
+  "leverans-frist",
+  "leverans-komplettera",
 ] as const satisfies readonly Handelsekalla[];
 
 export type Mejlkalla = (typeof MEJLKALLOR)[number];

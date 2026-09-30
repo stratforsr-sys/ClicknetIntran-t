@@ -23,7 +23,18 @@ export type Lk = {
   ga: (andring: { vy?: Vy; dag?: string; visa?: string[] }) => void;
   /** En förekomst i en serie har dragits: fråga om den här gången eller hela serien. */
   serieflytt: (flytt: { eventId: string; rubrik: string; dag: string; start: number } | null) => void;
+  /** "Välj tid i kalendern" för en kund i kön (pass 3). */
+  valjTid: string | null;
+  setValjTid: (orderId: string | null) => void;
+  /** Boka välkomstsamtalet på en tid, för kunden i kön. */
+  bokaValkomst: (orderId: string, dag: string, start: number, agare?: string) => void;
 };
+
+/** Vem ett välkomstsamtal hamnar hos när det dras hit (`welcomeOwner()`). */
+export function valkomstAgare(lk: Lk): string {
+  if (lk.data.lev.arLev) return lk.data.mig;
+  return lk.data.personer.find((p) => p.lev)?.id ?? lk.data.mig;
+}
 
 /**
  * Klockan i Stockholm, dag och minut, uppdaterad varje halvminut. Nu-linjen
@@ -91,6 +102,7 @@ export function postklasser(p: Post, lk: Lk, compact: boolean): string {
     t === null ? "busyonly" : SLAG_KLASS[p.slag],
     compact ? "compact" : "",
     p.klar ? "done" : "",
+    p.utfall === "ej_svar" ? "missed" : "",
     r === "vantar" ? "pending" : r === "kanske" ? "maybe" : r === "nej" ? "declined" : "",
     lk.q && !lk.traffar(p) ? "dim" : "",
     lk.vald && (lk.vald === p.ref || lk.vald === p.id) ? "selected" : "",
@@ -103,15 +115,15 @@ export function postklasser(p: Post, lk: Lk, compact: boolean): string {
 export function postetikett(p: Post, lk: Lk): string {
   const t = titel(p, lk) ?? "Upptagen";
   const r = mittSvar(p, lk.data.mig);
-  const sub = p.klar ? "klar" : r === "vantar" ? "ej besvarad" : r === "kanske" ? "kanske" : r === "nej" ? "avböjt" : "";
+  const sub = p.utfall === "ej_svar" ? "ej svar" : p.klar ? "klar" : r === "vantar" ? "ej besvarad" : r === "kanske" ? "kanske" : r === "nej" ? "avböjt" : "";
   const tid = p.start !== null ? `, ${hm(p.start)}–${hm(endOf(p))}` : "";
   return `${t}${tid}${sub ? ", " + sub : ""}${p.serie ? ", återkommande" : ""}`;
 }
 
 /** Får jag dra och ändra längd på posten? Egna möten och egna uppgifter. */
 export function farDra(p: Post, lk: Lk): boolean {
-  if (!p.ref || p.rubrik === null || p.klar) return false;
-  if (p.slag === "mote" || p.slag === "enskilt") return p.organisator === lk.data.mig;
+  if (!p.ref || p.rubrik === null || p.klar || p.utfall) return false;
+  if (p.slag === "mote" || p.slag === "enskilt" || p.slag === "leverans") return p.organisator === lk.data.mig;
   if (p.slag === "uppgift") return p.agare === lk.data.mig;
   return false;
 }
@@ -123,7 +135,7 @@ export function oppnaPost(p: Post, lk: Lk, router: { push: (href: string) => voi
     lk.oppnaPanel({ typ: "upptagen", post: p });
     return;
   }
-  if ((p.slag === "mote" || p.slag === "enskilt") && p.ref) {
+  if ((p.slag === "mote" || p.slag === "enskilt" || p.slag === "leverans") && p.ref) {
     lk.oppnaPanel({ typ: "handelse", id: p.ref });
     return;
   }

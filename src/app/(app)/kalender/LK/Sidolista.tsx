@@ -13,6 +13,8 @@ import {
   monday,
   plus,
   wd,
+  overlamning,
+  slaInfo,
   type Post,
 } from "@/lib/leveranskalender";
 import { Av, oppnaPost, titel, type Lk } from "./gemensamt";
@@ -163,6 +165,8 @@ export function Sidolista({
         </div>
       </div>
 
+      {data.lev.farSe && <Leveransko lk={lk} />}
+
       <div>
         <h4>
           Kalendrar{" "}
@@ -225,5 +229,72 @@ export function Sidolista({
         </div>
       </div>
     </aside>
+  );
+}
+
+/**
+ * `#qwrap`: leveranskön (pass 3). Kunder vars order godkänts och som saknar
+ * välkomstsamtal, äldst frist först. Dra ett kort till en tid, eller klicka för
+ * kökortet.
+ */
+function Leveransko({ lk }: { lk: Lk }) {
+  const nu = Date.now();
+  const ko = lk.data.lev.ko;
+  const sla = ko.map((q) => slaInfo(q.due, nu));
+  const vart = sla.some((x) => x.cls === "bad") ? "bad" : sla.some((x) => x.cls === "warn") ? "warn" : "ok";
+  return (
+    <div id="qwrap">
+      <h4>
+        Leveranskö{" "}
+        <span className={`sla ${vart}`} id="qCount">
+          {ko.length}
+        </span>
+      </h4>
+      <div className="queue" id="queue">
+        {ko.length === 0 ? (
+          <div className="qempty">Kön är tom. Alla nya kunder har ett välkomstsamtal bokat.</div>
+        ) : (
+          ko.map((q, i) => {
+            const s = sla[i];
+            const h = overlamning({ kontakt: q.kontakt, telefon: q.telefon, mal: q.mal, lovat: q.lovat, basta_tid: q.bastaTid, risker: q.risker });
+            return (
+              <button
+                key={q.orderId}
+                type="button"
+                className={`qitem${lk.valjTid === q.orderId ? " sel" : ""}`}
+                draggable
+                data-q={q.orderId}
+                onDragStart={(ev) => ev.dataTransfer.setData("text/plain", `q:${q.orderId}`)}
+                onClick={() => lk.oppnaPanel({ typ: "ko", orderId: q.orderId })}
+              >
+                <span className="row">
+                  <b>{q.kund}</b>
+                  <span className={`sla ${s.cls}`}>{s.txt}</span>
+                </span>
+                <span className="sub">
+                  {[q.paket, q.loptid ? `${q.loptid} mån` : null, q.saljare ? `såld av ${lk.personer.get(q.saljare)?.fornamn ?? ""}` : null]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
+                <span className={`hs ${h.saknas.length ? "part" : "full"}`}>
+                  Överlämning {h.har}/{h.av}
+                </span>
+                <span className="slabar">
+                  <i
+                    style={{
+                      width: `${s.pct}%`,
+                      background: `var(--color-${s.cls === "ok" ? "ok" : s.cls === "warn" ? "warn" : "danger"})`,
+                    }}
+                  />
+                </span>
+              </button>
+            );
+          })
+        )}
+      </div>
+      <p className="hint" style={{ marginTop: 8 }}>
+        24 timmar från godkänd order till välkomstsamtal. Lägg in kunden i leverans-CRM:et och klistra in kund-ID:t i kortet.
+      </p>
+    </div>
   );
 }

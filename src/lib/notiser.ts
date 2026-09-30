@@ -524,6 +524,12 @@ export const NOTIS_KALLOR = [
    * 1:1, EN notis per dag hur många punkter det än blir — och
    * `kalender-forberedelse`, vardagen före kl 15 eller när den andra ber om det.
    * Ingen av dem mejlas: båda gäller något man gör nästa gång man är inne.
+   *
+   * Pass 3 (0071), leveransen: en ny kund i kön, ett bokat välkomstsamtal, en
+   * makulerad kund med bokat samtal, en begäran om komplettering till
+   * säljaren, fyra timmar kvar av 24-timmarsfristen, och en påminnelse som
+   * studsade hos Resend. Alla är händelser — de skriver över ett läge som inte
+   * går att räkna fram i efterhand.
    */
   "kalender-inbjudan",
   "kalender-flyttad",
@@ -536,6 +542,12 @@ export const NOTIS_KALLOR = [
   "utkorg-fel",
   "kalender-punkt",
   "kalender-forberedelse",
+  "leverans-ny",
+  "leverans-bokad",
+  "leverans-makulerad",
+  "leverans-komplettera",
+  "leverans-frist",
+  "leverans-studs",
 
   /**
    * ANGRA-KNAPPEN HAR MED FLIT INGEN KALLA HAR.
@@ -624,6 +636,12 @@ export const HANDELSEKALLOR = [
   "utkorg-fel",
   "kalender-punkt",
   "kalender-forberedelse",
+  "leverans-ny",
+  "leverans-bokad",
+  "leverans-makulerad",
+  "leverans-komplettera",
+  "leverans-frist",
+  "leverans-studs",
 ] as const satisfies readonly Notiskalla[];
 
 export type Handelsekalla = (typeof HANDELSEKALLOR)[number];

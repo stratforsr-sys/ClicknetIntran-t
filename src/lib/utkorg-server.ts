@@ -3,7 +3,9 @@ import "server-only";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { medRoll, notifiera, notifieraFranUtkorgen } from "@/lib/notishandelse-server";
 import { HANDELSEKALLOR, type Handelsekalla } from "@/lib/notiser";
-import { ANGER_SEKUNDER, notistext, type Notisrad } from "@/lib/leveranskalender";
+import { ANGER_SEKUNDER, dayLabel, hm, minuter, notistext, type Notisrad } from "@/lib/leveranskalender";
+import { andraSchemalagt, avbrytSchemalagt, skickaEpost } from "@/lib/epost";
+import { adapter, type Crmstatus } from "@/lib/crm/adapter";
 
 /**
  * Utkorgen (0069): allt som lämnar en kalenderändring.
@@ -83,9 +85,13 @@ export async function tomEfterFonstret(): Promise<void> {
 
 /** En rad. `true` = skickad, `false` = sållad av reglerna (inget att skicka). */
 async function skicka(rad: Utkorgsrad): Promise<boolean> {
+  if (rad.kind === "resend_schedule" || rad.kind === "resend_patch" || rad.kind === "resend_cancel") {
+    return resend(rad);
+  }
+  if (rad.kind === "crm") return crm(rad);
   if (rad.kind !== "notis") {
-    // Resend, .ics och CRM byggs i pass 3 och 4. En sådan rad i pass 1 är ett
-    // fel i databasen, inte något att tyst markera som skickat.
+    // .ics byggs i pass 4. En sådan rad nu är ett fel, inte något att tyst
+    // markera som skickat.
     throw new Error(`Okänd sort i utkorgen: ${rad.kind}`);
   }
 
@@ -95,6 +101,10 @@ async function skicka(rad: Utkorgsrad): Promise<boolean> {
   const underlag = await hamtaUnderlag(n);
   if (!underlag) return false;
 
+  if (n.mall === "leverans-bokad-saljare" && typeof n.data?.ansvarig === "string") {
+    const { data: a } = await supabaseAdmin().from("employee").select("first_name, last_name").eq("id", n.data.ansvarig).maybeSingle();
+    if (a) n.data = { ...n.data, ansvarigNamn: `${a.first_name} ${a.last_name}` };
+  }
   const text = notistext(n, underlag);
   if (!text) throw new Error(`Okänd mall: ${n.mall}`);
 
@@ -102,7 +112,7 @@ async function skicka(rad: Utkorgsrad): Promise<boolean> {
     till: n.till,
     av: n.av,
     kalla: n.kalla as Handelsekalla,
-    typ: n.task_id ? "uppgift" : "kalender",
+    typ: n.task_id ? "uppgift" : n.order_id || (n.data as { order_id?: string })?.order_id ? "order" : "kalender",
     rubrik: text.rubrik,
     detalj: text.detalj,
     href: text.href,
@@ -110,7 +120,9 @@ async function skicka(rad: Utkorgsrad): Promise<boolean> {
       ? { typ: "calendar_event", id: n.event_id }
       : n.task_id
         ? { typ: "task", id: n.task_id }
-        : undefined,
+        : n.order_id
+          ? { typ: "sales_order", id: n.order_id }
+          : undefined,
   });
 }
 
@@ -141,6 +153,14 @@ async function hamtaUnderlag(n: Notisrad) {
       dag: e.dag as string,
       tid: e.tid ? String(e.tid).slice(0, 5) : null,
     };
+  }
+
+  // Leveransens rader bär ordern i stället för en händelse (0071).
+  const orderId = n.order_id ?? ((n.data as { order_id?: string })?.order_id ?? null);
+  if (!n.event_id && !n.task_id && orderId) {
+    const { data: o } = await db.from("sales_order").select("company_name").eq("id", orderId).maybeSingle();
+    if (!o) return null;
+    return { avNamn, rubrik: o.company_name as string, dag: svensktIdag(), tid: null };
   }
 
   if (n.task_id) {
@@ -175,4 +195,151 @@ async function sagTillAdmin(rad: Utkorgsrad, fel: string): Promise<void> {
       href: "/fel",
     });
   }
+}
+
+function svensktIdag(): string {
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm" }).format(new Date());
+}
+
+// -----------------------------------------------------------------------------
+// Resend: mejlpåminnelserna (0071)
+// -----------------------------------------------------------------------------
+
+type Paminnelse = {
+  id: string;
+  event_id: string;
+  recipient: "ansvarig" | "kund" | "deltagare";
+  send_at: string;
+  resend_id: string | null;
+  status: string;
+};
+
+/**
+ * PREVIEWEN MEJLAR ALDRIG EN KUND. Den pekar på produktionsdatabasen, och en
+ * provbokning på en riktig order hade annars skickat en påminnelse till en
+ * riktig kund. Påminnelsen markeras med felet i stället, så att den syns.
+ */
+const kundmejlTillatet = () => process.env.VERCEL_ENV === "production";
+
+async function resend(rad: Utkorgsrad): Promise<boolean> {
+  const db = supabaseAdmin();
+  const id = String(rad.payload.reminder_id ?? "");
+  const { data: r } = await db.from("calendar_reminder").select("*").eq("id", id).maybeSingle();
+  if (!r) return false;
+  const p = r as unknown as Paminnelse;
+
+  if (rad.kind === "resend_cancel") {
+    if (!p.resend_id) return false;
+    const u = await avbrytSchemalagt(p.resend_id);
+    await logga("ut", { handling: "cancel", reminder: p.id, resend_id: p.resend_id, ok: u.skickat });
+    if (!u.skickat) throw new Error(u.orsak);
+    await db.rpc("lk_resend_satt", { p_reminder: p.id, p_resend_id: null, p_status: "avbokad", p_fel: null });
+    return true;
+  }
+
+  if (rad.kind === "resend_patch") {
+    if (!p.resend_id || p.status !== "schemalagd") return false;
+    if (Date.parse(p.send_at) <= Date.now()) return false;
+    const u = await andraSchemalagt(p.resend_id, new Date(p.send_at).toISOString());
+    await logga("ut", { handling: "patch", reminder: p.id, resend_id: p.resend_id, scheduled_at: p.send_at, ok: u.skickat });
+    if (!u.skickat) throw new Error(u.orsak);
+    return true;
+  }
+
+  // resend_schedule
+  if (p.status !== "vantar" || p.resend_id) return false;
+  if (Date.parse(p.send_at) <= Date.now() + 60_000) {
+    await db.rpc("lk_resend_satt", { p_reminder: p.id, p_resend_id: null, p_status: "fel", p_fel: "Tiden hade redan passerat" });
+    return false;
+  }
+
+  const { data: e } = await db
+    .from("calendar_event")
+    .select("id, title, dag, tid, cancelled_at, outcome, organizer_id, order_id")
+    .eq("id", p.event_id)
+    .maybeSingle();
+  if (!e || e.cancelled_at || e.outcome) return false;
+
+  const [{ data: org }, { data: o }] = await Promise.all([
+    db.from("employee").select("first_name, email").eq("id", e.organizer_id).maybeSingle(),
+    e.order_id
+      ? db.from("sales_order").select("company_name, contact_name, contact_phone, contact_email").eq("id", e.order_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+
+  const tid = hm(minuter(e.tid as string) ?? 0);
+  let till: string | null = null;
+  let amne = "";
+  let text = "";
+  if (p.recipient === "kund") {
+    if (!kundmejlTillatet()) {
+      await db.rpc("lk_resend_satt", { p_reminder: p.id, p_resend_id: null, p_status: "fel", p_fel: "Förhandsvisningen skickar inte till kunder" });
+      return false;
+    }
+    till = (o?.contact_email as string | null) ?? null;
+    amne = `Påminnelse: vi hörs i dag kl ${tid}`;
+    text = [
+      o?.contact_name ? `Hej ${String(o.contact_name).split(" ")[0]},` : "Hej,",
+      "",
+      `En påminnelse om vårt samtal i dag, ${dayLabel(e.dag as string)} kl ${tid}.`,
+      "",
+      `Hälsningar,`,
+      `${(org?.first_name as string | undefined) ?? ""}, Clicknet`,
+    ].join("\n");
+  } else {
+    till = (org?.email as string | null) ?? null;
+    amne = `Påminnelse: ${e.title} kl ${tid}`;
+    text = [
+      org?.first_name ? `Hej ${org.first_name},` : "Hej,",
+      "",
+      `${e.title} börjar kl ${tid} i dag.`,
+      o?.contact_name ? `Kontakt: ${o.contact_name}${o.contact_phone ? `, ${o.contact_phone}` : ""}` : "",
+      "",
+      `Öppna i navet: ${navadress()}/kalender?dag=${e.dag}&handelse=${e.id}`,
+    ]
+      .filter((x, i, a) => x !== "" || a[i - 1] !== "")
+      .join("\n");
+  }
+  if (!till) {
+    await db.rpc("lk_resend_satt", { p_reminder: p.id, p_resend_id: null, p_status: "fel", p_fel: "Ingen e-postadress" });
+    return false;
+  }
+
+  const u = await skickaEpost({ till, amne, text, schemalagtVid: new Date(p.send_at).toISOString() });
+  await logga("ut", { handling: "schedule", reminder: p.id, mottagare: p.recipient, scheduled_at: p.send_at, ok: u.skickat, id: u.skickat ? u.id : null });
+  if (!u.skickat) throw new Error(u.orsak);
+  await db.rpc("lk_resend_satt", { p_reminder: p.id, p_resend_id: u.id, p_status: "schemalagd", p_fel: null });
+  return true;
+}
+
+// -----------------------------------------------------------------------------
+// CRM (0071)
+// -----------------------------------------------------------------------------
+
+async function crm(rad: Utkorgsrad): Promise<boolean> {
+  const db = supabaseAdmin();
+  const orderId = String(rad.payload.order_id ?? "");
+  const status = String(rad.payload.status ?? "") as Crmstatus;
+  const { data: d } = await db.from("delivery").select("crm_external_id").eq("order_id", orderId).maybeSingle();
+  if (!d) return false;
+  const a = adapter();
+  await logga("ut", { system: a.namn, handling: "status", order_id: orderId, status, externt_id: d.crm_external_id }, "crm");
+  try {
+    if (!d.crm_external_id) throw new Error("Kunden saknar kund-ID i leverans-CRM:et. Klistra in det i Nav.");
+    await a.sattStatus(d.crm_external_id as string, status);
+    await db.rpc("lk_crm_klar", { p_order: orderId, p_fel: null });
+    return true;
+  } catch (e) {
+    const fel = e instanceof Error ? e.message : String(e);
+    await db.rpc("lk_crm_klar", { p_order: orderId, p_fel: fel });
+    throw new Error(fel);
+  }
+}
+
+async function logga(riktning: "ut" | "in", body: Record<string, unknown>, system: "resend" | "crm" = "resend") {
+  await supabaseAdmin().from("integration_log").insert({ system, direction: riktning, body });
+}
+
+function navadress(): string {
+  return (process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://clicknet-nav.vercel.app").replace(/\/+$/, "");
 }

@@ -47,6 +47,12 @@ import {
   kvittoSerieInbjudan,
   regeltext,
   serieregel,
+  kvittoForsok,
+  kvittoKickoff,
+  kvittoValkomst,
+  overlamning,
+  paminnelsetext,
+  slaInfo,
 } from "../src/lib/leveranskalender.ts";
 
 let fel = 0;
@@ -72,6 +78,9 @@ const post = (id, start, minuter, extra = {}) => ({
   deltagare: [],
   serie: false,
   serieId: null,
+  steg: null,
+  utfall: null,
+  forsok: 1,
   paminnelse: 10,
   ...extra,
 });
@@ -197,6 +206,27 @@ console.log("\n\x1b[1mSerier och 1:1 (pass 2)\x1b[0m");
   lika("ny punkt", notistext(rad("punkt", { text: "Invändningar" }), u).detalj, "“Invändningar”");
   lika("förberedelsen", notistext({ ...rad("forberedelse"), av: null }, { ...u, avNamn: null }).rubrik, "Inför er 1:1: lägg till det du vill ta upp");
   lika("be om förberedelse", notistext(rad("forbered-be"), u).rubrik, "Zen vill att du förbereder er 1:1");
+}
+
+console.log("\n\x1b[1mLeveransen (pass 3)\x1b[0m");
+{
+  const nu = Date.parse("2026-10-01T10:00:00Z");
+  lika("grön över 8 h", slaInfo("2026-10-01T20:30:00Z", nu).cls, "ok");
+  lika("gul under 8 h", slaInfo("2026-10-01T13:12:00Z", nu), { cls: "warn", txt: "3 h 12 min kvar", pct: (3.2 / 24) * 100 });
+  lika("röd när försenad", slaInfo("2026-10-01T08:55:00Z", nu).txt, "Försenad 1 h 05 min");
+  lika("överlämningen räknar sex fält", overlamning({ kontakt: "Mira", telefon: "070", mal: "Fler kunder", lovat: "", basta_tid: " ", risker: null }), { har: 3, av: 6, saknas: ["Vad som lovades", "Bästa tid att ringa", "Risker"] });
+  lika("påminnelsen 30 min före", paminnelsetext("2026-10-07", 540), "ons 7 okt kl 08:30");
+  lika("välkomstsamtal bokat", kvittoValkomst("Kvarnens Bageri", "2026-10-07", 540, "Sara", "Elin"), "Välkomstsamtal med Kvarnens Bageri bokat ons 7 okt 09:00 hos Sara. Elin får en notis.");
+  lika("nästa försök", kvittoForsok(2, "2026-10-07", 780), "Försök 2 bokat ons 7 okt 13:00, på en annan tid på dagen.");
+  lika("kickoff", kvittoKickoff("2026-10-08", 540, "Mira Kvarnström"), "Kickoff tors 8 okt 09:00. Mira Kvarnström får inbjudan via mejl.");
+  const u = { avNamn: "Zen", rubrik: "Kvarnens Bageri", dag: "2026-10-01", tid: null };
+  const rad = (mall, data = {}) => ({ kalla: "x", mall, till: "s", av: "z", event_id: null, order_id: "o1", data });
+  lika("ny kund i kön", notistext(rad("leverans-ny"), u).rubrik, "Ny kund i kön: Kvarnens Bageri");
+  lika("komplettera leder till överlämningen", notistext(rad("leverans-komplettera", { saknas: "Risker" }), u).href, "/kalender/overlamning/o1");
+  lika("fristen", notistext(rad("leverans-frist"), u).rubrik, "Kvarnens Bageri har snart väntat 24 h");
+  const bokad = notistext({ ...rad("leverans-bokad-saljare", { ansvarigNamn: "Sara Lind" }), event_id: "e1" }, { ...u, rubrik: "Välkomstsamtal · Kvarnens Bageri", dag: "2026-10-07", tid: "09:00" });
+  lika("säljaren får veta när kunden välkomnas", [bokad.rubrik, bokad.detalj], ["Kvarnens Bageri välkomnas ons 7 okt 09:00", "av Sara Lind"]);
+  ok("felkoden tagen har en text", !!LK_FEL.tagen);
 }
 
 console.log("\n\x1b[1mAvatarerna\x1b[0m");

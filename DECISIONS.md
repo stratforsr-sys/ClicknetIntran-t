@@ -564,3 +564,21 @@ Planeringsvyn står kvar oförändrad under `/kalender?vy=planera`.
 - (Pass 2) **Plats och Visa som** på en serie sätts på de förekomster som föds
   när serien skapas. Förekomster som föds senare av dagtidsjobbet får
   standardvärdena; serien har inga egna kolumner för dem.
+- (Pass 3) **Kön fylls av en trigger på `sales_order`, inte av `godkannOrder`.**
+  Samma transaktion som godkännandet, men den gäller också order som godkänns
+  av main-koden före merge — annars hade kön saknat dem. Triggern kan aldrig
+  fälla en order: allt i den ligger i ett block med undantagshanterare.
+  Tilläggsorder ger ingen leverans.
+- (Pass 3) **Previewen mejlar aldrig en kund.** Den pekar på
+  produktionsdatabasen; en provbokning på en riktig order hade annars påmint en
+  riktig kund. Påminnelsen till kunden markeras med felet i stället. Bara
+  produktionen (`VERCEL_ENV=production`) skickar till kunder.
+- (Pass 3) **Kökortets "Vem"** visar antal leveransposter i veckan per person i
+  stället för prototypens timmar den dagen — det är det "Jämn fördelning"
+  räknar på.
+- (Pass 3) **Leverans-CRM:et är okänt** (beställaren 2026-09-30): den manuella
+  adaptern gäller, och statusen "välkomnad" loggas i `integration_log` för den
+  som för över den för hand. Saknas kund-ID:t försöker utkorgen tre gånger och
+  säger sedan till admin.
+- (Pass 3) **Överlämningen fylls i på en egen sida**, `/kalender/overlamning/[order]`,
+  som prototypen saknar. Notisen "Komplettera överlämningen" leder dit.

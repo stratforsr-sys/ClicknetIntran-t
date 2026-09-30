@@ -185,6 +185,18 @@ const TACKNING = {
   "kalender/moten::beOmForberedelse": "notifierar via utkorgen (lib/utkorg-server.ts)",
   "kalender/moten::sparaSomSamtal": "notifierar via coachning::skapaSamtal",
   "kalender/moten::hamtaEnskiltInnehall": "Läser bara 1:1-panelens innehåll med läsarens egen token.",
+  // Pass 3 (0071): leveransen.
+  "kalender/moten::taKund": "notifierar via utkorgen (lib/utkorg-server.ts)",
+  "kalender/moten::skapaLeverans": "notifierar via utkorgen (lib/utkorg-server.ts)",
+  "kalender/moten::bokaKickoff": "notifierar via utkorgen (lib/utkorg-server.ts), genom skapaLeverans",
+  "kalender/moten::sattUtfall":
+    "Utfallet syns i kalendern och på kunden; CRM-statusen går genom utkorgen. SPEC avsnitt 6: notifierar inte.",
+  "kalender/moten::begarKomplettering": "notifierar via utkorgen (lib/utkorg-server.ts)",
+  "kalender/moten::kopplaCrm": "Bara den som klistrar in kund-ID:t berörs. SPEC avsnitt 6: notifierar inte.",
+  "kalender/moten::sparaOverlamning":
+    "Säljarens egen text till leveransen. Leveransen ser den i kön och kortet; en notis per sparning hade varit brus.",
+  "kalender/moten::hamtaLeverans": "Läser bara leveranspanelens innehåll.",
+  "kalender/moten::hamtaKokund": "Läser bara kökortet, genom leverans_kunder().",
   "kalender/moten::hamtaUpptaget":
     "Läser bara: upptagen tid för assistenten, genom projektionerna. Skriver ingenting.",
   "kalender/moten::hamtaHandelse": "Läser bara panelens innehåll med läsarens egen token.",

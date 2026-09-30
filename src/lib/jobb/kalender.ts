@@ -15,13 +15,18 @@ import { tomUtkorgen, type Tomning } from "@/lib/utkorg-server";
  *    föder bara det som saknas. En förekomst som flyttats för sig rörs inte.
  * 2. FÖRBEREDELSEN vardagen före kl 15 (`lk_forberedelser`). Nyckeln per
  *    förekomst och person gör att steget tål att köras var kvart.
- * 3. UTKORGEN töms, så att förberedelsen når klockan direkt och inte först
- *    när reservjobbet `nav-utkorg` kört.
+ * 3. LEVERANSEN (0071): fyra timmar kvar av 24-timmarsfristen ger en notis
+ *    och ett mejl till leveransen och säljchefen, en gång per kund; och
+ *    mejlpåminnelser som kommit inom 29 dagar schemaläggs hos Resend.
+ * 4. UTKORGEN töms, så att allt det når fram direkt och inte först när
+ *    reservjobbet `nav-utkorg` kört.
  */
 export type Kalendersteg = {
   serier: number;
   fodda: number;
   forberedelser: number | string;
+  frister: number | string;
+  resend: number | string;
   utkorg: Tomning;
 };
 
@@ -58,12 +63,16 @@ export async function korKalendersteget(db: SupabaseClient, nu = new Date()): Pr
   }
 
   const { data: forb, error } = await db.rpc("lk_forberedelser");
+  const { data: frist, error: fristfel } = await db.rpc("lk_leverans_frister");
+  const { data: res, error: resfel } = await db.rpc("lk_resend_att_schemalagga");
   const utkorg = await tomUtkorgen(200);
 
   return {
     serier: rader.length,
     fodda,
     forberedelser: error ? `fel: ${error.message}` : Number(forb ?? 0),
+    frister: fristfel ? `fel: ${fristfel.message}` : Number(frist ?? 0),
+    resend: resfel ? `fel: ${resfel.message}` : Number(res ?? 0),
     utkorg,
   };
 }

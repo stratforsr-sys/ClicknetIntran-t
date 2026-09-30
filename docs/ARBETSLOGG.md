@@ -5,6 +5,32 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-30 (kväll) · Leveranskalendern, pass 3: leverans
+
+Samma gren, **EJ MERGAD**. Migration **`0071_leveranskalender_leverans`** körd
+2026-09-30 14:33. **Triggern `sales_order_till_leverans` är live i produktionen**:
+varje order som godkänns från och med då får en rad i `delivery` och en notis i
+utkorgen till leveransen — även när den godkänns av main-koden.
+
+**Leveransen läser inte ordern.** `sales_order_read` släpper inte fram
+leveransrollerna, så kön får kund, paket, kontakt och överlämning genom den
+nya `leverans_kunder()`, som bara lämnar ut det till projektledare, leverans och
+säljchef — och till säljaren om hennes egna kunder.
+
+**Mejlpåminnelserna följer posten** genom utkorgen: `lk_ny_tid` och
+`lk_stall_in` är omskrivna med påminnelserna, och `lk_lage`/`lk_angra` tar med
+dem i ögonblicksbilden, så att Ångra lägger tillbaka även påminnelsen.
+**Previewen skickar aldrig till en kund** (`VERCEL_ENV`).
+
+**Resends webhook** (`/api/resend`) kräver `RESEND_WEBHOOK_SECRET` och
+signaturen; utan hemligheten svarar den 503. **Webhooken är inte uppsatt i
+Resend än** — det görs i Resends gränssnitt (nyckeln är send-only).
+
+**Provat mot databasen** i en transaktion som rullades tillbaka: 45 kontroller
+(24 vardagstimmar över helgen, trigger, tilläggsorder, kretsen, `skip locked`,
+påminnelser vid flytt och inställt med Ångra, utfall och försök, CRM, frist,
+makulering).
+
 ## 2026-09-30 (senare) · Leveranskalendern, pass 2: 1:1
 
 Samma gren, `leveranskalender`, **EJ MERGAD**. Beställaren såg pass 1 och sa

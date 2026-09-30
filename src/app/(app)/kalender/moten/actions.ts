@@ -8,10 +8,14 @@ import {
   fornamn,
   hamtaEnskilt,
   hamtaHandelsedetalj,
+  hamtaKund,
+  hamtaLeveransdetalj,
   lk,
   upptagetFor,
   type Enskilt,
   type Handelsedetalj,
+  type Kokund,
+  type Leveransdetalj,
 } from "@/lib/leveranskalender-server";
 import { HORISONT_DAGAR, forekomster } from "@/lib/upprepning";
 import { svensktDatum } from "@/lib/klocka";
@@ -28,6 +32,13 @@ import {
   kvittoInstallt,
   kvittoKopierad,
   kvittoLangd,
+  FORINSTALLNINGAR,
+  KVITTO_TREDJE_FORSOKET,
+  arSteg,
+  kvittoForsok,
+  kvittoKickoff,
+  kvittoValkomst,
+  paminnelsetext,
   kvittoSerieFlyttad,
   kvittoSerieInbjudan,
   kvittoSvar,
@@ -324,10 +335,18 @@ export async function flytta(eventId: string, dag: string, start: number): Promi
     if (!r.ok) return { fel: r.fel };
 
     const namn = await fornamn(r.data.svara_igen);
+    const { count: pam } = await supabaseAdmin()
+      .from("calendar_reminder")
+      .select("id", { count: "exact", head: true })
+      .eq("event_id", eventId)
+      .eq("channel", "mejl")
+      .in("status", ["vantar", "schemalagd"]);
     efterat();
     return {
       ok: true,
-      kvitto: kvittoFlyttad(dag, start, r.data.svara_igen.map((id) => namn.get(id) ?? "")),
+      kvitto:
+        kvittoFlyttad(dag, start, r.data.svara_igen.map((id) => namn.get(id) ?? "")) +
+        ((pam ?? 0) > 0 ? ` Mejlpåminnelsen flyttas till kl ${hm(Math.max(0, start - 30))}.` : ""),
       angra: r.data.undo_id,
       eventId,
       dag,
@@ -374,7 +393,7 @@ export async function stallIn(eventId: string): Promise<Resultat> {
     const user = await aktor();
     if (!arUuid(eventId)) return { fel: "Händelsen finns inte längre." };
 
-    const r = await lk<{ undo_id: string; mottagare: string[] }>("lk_stall_in", {
+    const r = await lk<{ undo_id: string; mottagare: string[]; paminnelse: boolean }>("lk_stall_in", {
       p_aktor: user.employee!.id,
       p_event: eventId,
     });
@@ -384,7 +403,9 @@ export async function stallIn(eventId: string): Promise<Resultat> {
     efterat();
     return {
       ok: true,
-      kvitto: kvittoInstallt(r.data.mottagare.map((id) => namn.get(id) ?? "")),
+      kvitto:
+        kvittoInstallt(r.data.mottagare.map((id) => namn.get(id) ?? "")) +
+        (r.data.paminnelse ? " Mejlpåminnelsen avbokas hos Resend." : ""),
       angra: r.data.undo_id,
       eventId,
     };
@@ -710,6 +731,220 @@ export async function sparaSomSamtal(
 }
 
 // -----------------------------------------------------------------------------
+// Leverans (pass 3)
+// -----------------------------------------------------------------------------
+
+/**
+ * En kund ur kön till en tid (`bookWelcome()`). Två kan aldrig ta samma kund:
+ * `lk_ta_kund` läser raden med `for update skip locked`.
+ */
+export async function taKund(orderId: string, agare: string, dag: string, start: number, langd: number): Promise<Resultat> {
+  try {
+    const user = await aktor();
+    if (!arUuid(orderId) || !arUuid(agare)) return { fel: "Kunden finns inte längre i kön." };
+    if (!arDatum(dag)) return { fel: "Välj ett datum." };
+    if (!arMinut(start, 0, 1439) || start % 5 !== 0) return { fel: "Välj en starttid." };
+    if (!arMinut(langd, 15, 120)) return { fel: "Välj en längd." };
+
+    const r = await lk<{ event_id: string; saljare: string; undo_id: string }>("lk_ta_kund", {
+      p_aktor: user.employee!.id,
+      p_order: orderId,
+      p_owner: agare,
+      p_dag: dag,
+      p_tid: tid(start),
+      p_minuter: langd,
+    });
+    if (!r.ok) return { fel: r.fel.includes("tagen") ? "Någon annan tog kunden precis. Välj nästa i kön." : r.fel };
+
+    const [namn, kund] = await Promise.all([fornamn([agare, r.data.saljare]), supabaseAdmin().from("sales_order").select("company_name").eq("id", orderId).maybeSingle()]);
+    efterat();
+    return {
+      ok: true,
+      kvitto: kvittoValkomst(
+        (kund.data?.company_name as string) ?? "kunden",
+        dag,
+        start,
+        namn.get(agare) ?? "",
+        r.data.saljare !== user.employee!.id ? (namn.get(r.data.saljare) ?? "") : "",
+      ),
+      angra: r.data.undo_id,
+      eventId: r.data.event_id,
+      dag,
+    };
+  } catch (e) {
+    return fel(e);
+  }
+}
+
+/** En av de sex förinställningarna, på en kund som redan har en ansvarig. */
+export async function skapaLeverans(indata: {
+  orderId: string;
+  steg: string;
+  dag: string;
+  start: number;
+  minuter: number;
+  deltagare: string[];
+  remMig: boolean;
+  remKund: boolean;
+}): Promise<Resultat> {
+  try {
+    const user = await aktor();
+    const mig = user.employee!.id;
+    if (!arUuid(indata.orderId)) return { fel: "Välj en kund." };
+    if (!arSteg(indata.steg)) return { fel: "Välj en förinställning." };
+    if (!arDatum(indata.dag)) return { fel: "Välj ett datum." };
+    if (!arMinut(indata.start, 0, 1439) || indata.start % 5 !== 0) return { fel: "Välj en starttid." };
+    if (!arMinut(indata.minuter, 15, 480)) return { fel: "Välj en längd." };
+    if (!Array.isArray(indata.deltagare) || !indata.deltagare.every(arUuid)) return { fel: "Deltagarlistan stämmer inte." };
+
+    const r = await lk<{ event_id: string; undo_id: string }>("lk_skapa_leverans", {
+      p_aktor: mig,
+      p_organizer: mig,
+      p_order: indata.orderId,
+      p_step: indata.steg,
+      p_dag: indata.dag,
+      p_tid: tid(indata.start),
+      p_minuter: indata.minuter,
+      p_deltagare: indata.deltagare,
+      p_rem_mig: !!indata.remMig,
+      p_rem_kund: !!indata.remKund,
+    });
+    if (!r.ok) return { fel: r.fel };
+
+    const { data: o } = await supabaseAdmin().from("sales_order").select("company_name, contact_name").eq("id", indata.orderId).maybeSingle();
+    const p = FORINSTALLNINGAR[indata.steg];
+    const till = [indata.remMig ? "dig" : null, indata.remKund && o?.contact_name ? (o.contact_name as string) : null].filter(Boolean);
+    efterat();
+    return {
+      ok: true,
+      kvitto:
+        `${p.lab} med ${(o?.company_name as string) ?? "kunden"} bokad${p.kund && o?.contact_name ? `, inbjudan till ${o.contact_name}` : ""}.` +
+        (till.length ? ` Mejlpåminnelse till ${till.join(" och ")} ${paminnelsetext(indata.dag, indata.start)}.` : ""),
+      angra: r.data.undo_id,
+      eventId: r.data.event_id,
+      dag: indata.dag,
+    };
+  } catch (e) {
+    return fel(e);
+  }
+}
+
+/**
+ * Utfallet: Nådd eller Ej svar. BARA en människa sätter det, med knapparna i
+ * panelen — ingenting i navet markerar ett samtal som genomfört av sig självt.
+ *
+ * Ej svar tar emot nästa försöks tid, som klienten räknat fram med samma
+ * `autopick()` som allt annat (minst 3 h senare, inom 5 dagar).
+ */
+export async function sattUtfall(
+  eventId: string,
+  utfall: "genomford" | "ej_svar",
+  nasta: { dag: string; start: number } | null,
+): Promise<Resultat> {
+  try {
+    const user = await aktor();
+    if (!arUuid(eventId)) return { fel: "Händelsen finns inte längre." };
+    if (utfall !== "genomford" && utfall !== "ej_svar") return { fel: "Välj Nådd eller Ej svar." };
+    if (nasta && (!arDatum(nasta.dag) || !arMinut(nasta.start, 0, 1439))) return { fel: "Nästa försök har en ogiltig tid." };
+
+    const r = await lk<{ undo_id?: string; nasta?: string | null; forsok?: number }>("lk_satt_utfall", {
+      p_aktor: user.employee!.id,
+      p_event: eventId,
+      p_utfall: utfall,
+      p_nasta_dag: nasta?.dag ?? null,
+      p_nasta_tid: nasta ? tid(nasta.start) : null,
+    });
+    if (!r.ok) return { fel: r.fel };
+    efterat();
+
+    if (utfall === "genomford") {
+      const { data: e } = await supabaseAdmin().from("calendar_event").select("step").eq("id", eventId).maybeSingle();
+      return {
+        ok: true,
+        kvitto: e?.step === "valkomstsamtal" ? "Genomfört. Boka kickoff härnäst." : "Markerad som klar.",
+        angra: r.data.undo_id,
+        eventId,
+      };
+    }
+    if (!r.data.nasta || !nasta) {
+      return { ok: true, kvitto: (r.data.forsok ?? 1) > 3 ? KVITTO_TREDJE_FORSOKET : "Ej svar. Ingen ledig tid för nästa försök — boka det för hand." };
+    }
+    return { ok: true, kvitto: kvittoForsok(r.data.forsok ?? 2, nasta.dag, nasta.start), eventId: r.data.nasta, dag: nasta.dag };
+  } catch (e) {
+    return fel(e);
+  }
+}
+
+/** Kickoff inom fem arbetsdagar, med kunden inbjuden och påminnelse till båda. */
+export async function bokaKickoff(orderId: string, dag: string, start: number): Promise<Resultat> {
+  const r = await skapaLeverans({ orderId, steg: "kickoff", dag, start, minuter: 60, deltagare: [], remMig: true, remKund: true });
+  if (!r.ok) return r;
+  const { data: o } = await supabaseAdmin().from("sales_order").select("contact_name").eq("id", orderId).maybeSingle();
+  return { ...r, kvitto: kvittoKickoff(dag, start, (o?.contact_name as string | null) ?? null) };
+}
+
+/** Be säljaren komplettera överlämningen. Notis och mejl till säljaren. */
+export async function begarKomplettering(orderId: string, saknas: string[]): Promise<Resultat> {
+  try {
+    const user = await aktor();
+    if (!arUuid(orderId)) return { fel: "Kunden finns inte längre." };
+    const r = await lk<{ saljare: string }>("lk_begar_komplettering", {
+      p_aktor: user.employee!.id,
+      p_order: orderId,
+      p_saknas: (Array.isArray(saknas) ? saknas : []).map(String).join(", ").slice(0, 200),
+    });
+    if (!r.ok) return { fel: r.fel };
+    const namn = await fornamn([r.data.saljare]);
+    efterat();
+    return { ok: true, kvitto: `${namn.get(r.data.saljare) ?? "Säljaren"} får en notis och ett mejl om vad som saknas.` };
+  } catch (e) {
+    return fel(e);
+  }
+}
+
+/** Den manuella CRM-adaptern: kund-ID:t klistras in. */
+export async function kopplaCrm(orderId: string, externtId: string): Promise<Resultat> {
+  try {
+    const user = await aktor();
+    if (!arUuid(orderId)) return { fel: "Kunden finns inte längre." };
+    const id = String(externtId ?? "").trim();
+    if (!id) return { fel: "Klistra in kund-ID:t först." };
+    const r = await lk<{ undo_id: string }>("lk_koppla_crm", { p_aktor: user.employee!.id, p_order: orderId, p_externt: id });
+    if (!r.ok) return { fel: r.fel };
+    const { data: o } = await supabaseAdmin().from("sales_order").select("company_name").eq("id", orderId).maybeSingle();
+    efterat();
+    return { ok: true, kvitto: `${(o?.company_name as string) ?? "Kunden"} är kopplad till ${id} i leverans-CRM:et.`, angra: r.data.undo_id };
+  } catch (e) {
+    return fel(e);
+  }
+}
+
+/** Säljarens överlämning: mål, löfte, bästa tid och risker. */
+export async function sparaOverlamning(
+  orderId: string,
+  falt: { mal: string; lovat: string; bastaTid: string; risker: string },
+): Promise<Resultat> {
+  try {
+    const user = await aktor();
+    if (!arUuid(orderId)) return { fel: "Ordern finns inte." };
+    const r = await lk<null>("lk_spara_overlamning", {
+      p_aktor: user.employee!.id,
+      p_order: orderId,
+      p_mal: String(falt.mal ?? "").slice(0, 600),
+      p_lovat: String(falt.lovat ?? "").slice(0, 600),
+      p_basta: String(falt.bastaTid ?? "").slice(0, 120),
+      p_risker: String(falt.risker ?? "").slice(0, 600),
+    });
+    if (!r.ok) return { fel: r.fel };
+    revalidatePath(`/kalender/overlamning/${orderId}`);
+    revalidatePath("/kalender");
+    return { ok: true, kvitto: "Överlämningen är sparad. Leveransen ser den direkt." };
+  } catch (e) {
+    return fel(e);
+  }
+}
+
+// -----------------------------------------------------------------------------
 // Läsningar för klienten. Skriver ingenting.
 // -----------------------------------------------------------------------------
 
@@ -728,6 +963,21 @@ export async function hamtaEnskiltInnehall(eventId: string): Promise<Enskilt | n
   if (!user?.employee || !arUuid(eventId)) return null;
   const e = await hamtaHandelsedetalj(user, eventId);
   return e ? hamtaEnskilt(user, e) : null;
+}
+
+/** Leveranspostens panel: kunden, påminnelserna och planen. */
+export async function hamtaLeverans(eventId: string): Promise<Leveransdetalj | null> {
+  const user = await getCurrentUser();
+  if (!user?.employee || !arUuid(eventId)) return null;
+  const e = await hamtaHandelsedetalj(user, eventId);
+  return e ? hamtaLeveransdetalj(user, e) : null;
+}
+
+/** En kund i kön, för kökortet. `leverans_kunder()` avgör vem som får se. */
+export async function hamtaKokund(orderId: string): Promise<Kokund | null> {
+  const user = await getCurrentUser();
+  if (!user?.employee || !arUuid(orderId)) return null;
+  return hamtaKund(orderId);
 }
 
 /** Panelens innehåll. Med läsarens egen token — RLS avgör. */

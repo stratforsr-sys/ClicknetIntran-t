@@ -14,6 +14,45 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "leveranskon-i-kalendern",
+    rubrik: "Leveransen i kalendern: kön, överlämningen och välkomstsamtalet",
+    ingress:
+      "En godkänd order hamnar direkt i leveransens kö med 24 timmar till välkomstsamtalet. Leveransen tar kunden till en tid, ser säljarens överlämning och får en mejlpåminnelse innan de ringer.",
+    text: `Från och med nu tar en godkänd order vägen via kalendern till leveransen.
+
+## Kön
+
+När en order godkänns hamnar kunden i **Leveranskö** i kalenderns sidolista. Varje
+kort visar hur lång tid som är kvar av de 24 timmarna — grönt, gult och till sist
+rött — och hur mycket av överlämningen säljaren fyllt i. Leveransen får en notis
+när en ny kund kommer in, och ett mejl om det bara är fyra timmar kvar.
+
+Dra ett kort till en tid, eller öppna det och tryck **Föreslå tid och boka**. Två
+kan aldrig ta samma kund.
+
+## Överlämningen
+
+Säljaren fyller i kundens mål, vad som lovades, bästa tid att ringa och riskerna.
+Saknas något kan leveransen trycka **Be säljaren komplettera**, och säljaren får en
+notis och ett mejl med en länk dit.
+
+## Välkomstsamtalet och det som följer
+
+Efter samtalet trycker den som ringde **Nådd** eller **Ej svar**. Inget markeras
+av sig självt. Ej svar bokar nästa försök på en annan tid på dagen, och efter
+tredje försöket föreslår kalendern sms och mejl i stället. Därefter finns sex
+förinställningar i leveransfärg: välkomstsamtal, tillgångar, kickoff,
+leveransstart och avstämningarna efter 30 och 90 dagar.
+
+## Påminnelser
+
+Varje leveranspost kan få en mejlpåminnelse 30 minuter före — till dig och, om du
+vill, till kunden. Flyttas posten flyttas mejlet, ställs den in avbokas det.`,
+    datum: "2026-09-30",
+    roller: ["delivery", "project_manager", "sales_manager", "salesperson"],
+    href: "/kalender",
+  },
+  {
     slug: "kalendern-1-1-med-saljarna",
     rubrik: "1:1 med säljarna: en gemensam agenda, åtgärder som följer med och siffrorna bredvid",
     ingress:

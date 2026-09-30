@@ -40,6 +40,7 @@ import { planera } from "@/app/(app)/uppgifter/actions";
 import { Av, type Lk } from "./gemensamt";
 import { Formular } from "./Formular";
 import { Enskildinnehall } from "./Enskilt";
+import { Kokort, Leveranspanel } from "./Leverans";
 import { Assistent, Datumfalt, Krockruta, Stang, Tidsval, useUpptaget, upptagnaI } from "./Tidsdelar";
 
 export type Panellage =
@@ -47,7 +48,8 @@ export type Panellage =
   | { typ: "ny"; dag?: string; start?: number; minuter?: number; nr?: number }
   | { typ: "forslag"; detalj: Handelsedetalj }
   | { typ: "uppgift"; post: Post }
-  | { typ: "upptagen"; post: Post };
+  | { typ: "upptagen"; post: Post }
+  | { typ: "ko"; orderId: string };
 
 /** `aside.drawer`: `.dhd` och `.dbody`, med innehåll efter läget. */
 export function Panel({ lk, lage, stang }: { lk: Lk; lage: Panellage; stang: () => void }) {
@@ -64,6 +66,8 @@ export function Panel({ lk, lage, stang }: { lk: Lk; lage: Panellage; stang: () 
       return <Uppgiftspanel lk={lk} post={lage.post} stang={stang} />;
     case "upptagen":
       return <Upptagenpanel lk={lk} post={lage.post} stang={stang} />;
+    case "ko":
+      return <Kokort key={lage.orderId} lk={lk} orderId={lage.orderId} stang={stang} />;
   }
 }
 
@@ -135,6 +139,8 @@ function Motespanel({ lk, id, stang }: { lk: Lk; id: string; stang: () => void }
       </>
     );
   }
+
+  if (e.slag === "leverans") return <Leveranspanel lk={lk} e={e} stang={stang} />;
 
   const org = lk.personer.get(e.organisator);
   const gor = (p: Promise<Parameters<Lk["efter"]>[0]>, oppna = true) =>

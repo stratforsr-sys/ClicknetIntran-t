@@ -28,6 +28,7 @@ import {
   wd,
   daySum,
   SLAG_KLASS,
+  FORINSTALLNINGAR,
   type Post,
 } from "@/lib/leveranskalender";
 import { andraLangd, flytta } from "../moten/actions";
@@ -70,7 +71,7 @@ export function Rutnat({ lk, synliga }: { lk: Lk; synliga: Post[] }) {
   // ---------------------------------------------------------------------------
 
   function nedHit(ev: React.PointerEvent, d: string, m: number) {
-    if (ev.button !== 0) return;
+    if (ev.button !== 0 || lk.valjTid) return;
     dsel.current = { d, m0: m, m1: m, moved: false };
     const avsluta = () => {
       window.removeEventListener("pointerup", avsluta);
@@ -280,6 +281,10 @@ export function Rutnat({ lk, synliga }: { lk: Lk; synliga: Post[] }) {
                 onPointerDown={(ev) => nedHit(ev, d, m)}
                 onClick={() => {
                   if (tysta.current) return;
+                  if (lk.valjTid) {
+                    lk.bokaValkomst(lk.valjTid, d, m);
+                    return;
+                  }
                   lk.nyHandelse(d, m);
                 }}
                 onDragOver={(ev) => {
@@ -292,6 +297,7 @@ export function Rutnat({ lk, synliga }: { lk: Lk; synliga: Post[] }) {
                   setSlapp(null);
                   const v = ev.dataTransfer.getData("text/plain");
                   if (v.startsWith("e:")) slapptPa(d, m, v.slice(2));
+                  if (v.startsWith("q:")) lk.bokaValkomst(v.slice(2), d, m);
                 }}
               />
             ))}
@@ -426,7 +432,12 @@ export function Postruta({
   const slut = langdNu ? (post.start ?? 0) + langdNu : endOf(post);
   const tid = `${hm(post.start ?? 0)}–${hm(slut)}`;
   const r = post.agare === lk.data.mig ? post.svar : null;
-  const sub = post.klar ? "klar" : r === "vantar" ? "ej besvarad" : r === "kanske" ? "kanske" : r === "nej" ? "avböjt" : "";
+  const ico = !busy && post.steg ? (
+    <span className="ico" aria-hidden="true">
+      {FORINSTALLNINGAR[post.steg].ico}
+    </span>
+  ) : null;
+  const sub = post.utfall === "ej_svar" ? "ej svar" : post.klar ? "klar" : r === "vantar" ? "ej besvarad" : r === "kanske" ? "kanske" : r === "nej" ? "avböjt" : "";
   const etikett = postetikett(post, lk);
   const rep = post.serie ? (
     <span className="rep" aria-hidden="true">
@@ -457,6 +468,7 @@ export function Postruta({
       <button className={kl} style={style} {...gemensamt}>
         <span className="badge">{hm(post.start ?? 0)}</span>
         <span className="t">
+          {ico}
           {rubrik}
           {rep}
         </span>
@@ -473,6 +485,7 @@ export function Postruta({
       {...gemensamt}
     >
       <span className="t">
+        {ico}
         {rubrik}
         {rep}
       </span>

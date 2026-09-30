@@ -14,12 +14,15 @@ import {
   LK_FEL,
   avatarfarg,
   felkod,
+  arSteg,
   hemdag,
   intervallForVy,
+  monday,
   minuter,
   plus,
   type Post,
   type Slag,
+  type Steg,
   type Svar,
   type Upptaget,
   type Vy,
@@ -49,6 +52,8 @@ export type Person = {
   /** 1–6, `--color-av-N`. */
   farg: number;
   grupp: "salj" | "lev" | "ovr";
+  /** Har rollen leverans eller projektledare — kan ta kunder ur kön. */
+  lev: boolean;
   roll: string;
   /** Min nivå i personens kalender. `delegat` för mig själv. */
   niva: Delningsniva;
@@ -69,6 +74,44 @@ export type Lkdata = {
   hem: string;
   /** Mina poster den dagen, även när vyn visar en annan vecka. */
   hemPoster: Post[];
+  /** Leveransen (pass 3). Tom för den som inte är i kretsen. */
+  lev: Leveransdata;
+};
+
+export type Kokund = {
+  orderId: string;
+  kund: string;
+  paket: string | null;
+  pris: number | null;
+  loptid: number | null;
+  saljare: string | null;
+  kontakt: string | null;
+  telefon: string | null;
+  epost: string | null;
+  godkand: string | null;
+  due: string;
+  agare: string | null;
+  crmSystem: string | null;
+  crmId: string | null;
+  crmSynkad: string | null;
+  crmFel: string | null;
+  mal: string | null;
+  lovat: string | null;
+  bastaTid: string | null;
+  risker: string | null;
+  makulerad: boolean;
+};
+
+export type Leveransdata = {
+  /** Projektledare, leverans eller säljchef: ser kön. */
+  farSe: boolean;
+  /** Själv leverans eller projektledare: kunden hamnar hos mig. */
+  arLev: boolean;
+  ko: Kokund[];
+  /** Kunder med en ansvarig, för formulärets kundval. */
+  kunder: { orderId: string; kund: string; kontakt: string | null; epost: string | null }[];
+  /** Leveransposter per person den här veckan — för "jämn fördelning". */
+  veckolast: Record<string, number>;
 };
 
 const SALJ: Role[] = ["salesperson", "sales_manager", "team_lead"];
@@ -106,6 +149,7 @@ export async function hamtaPersoner(user: CurrentUser): Promise<Person[]> {
       kort: initials(e),
       farg: avatarfarg(e.id),
       grupp,
+      lev: r.some((x) => LEV.includes(x)),
       roll: huvudroll ? ROLE_LABEL[huvudroll] : "",
       niva: e.id === mig ? "delegat" : (niva.get(e.id) ?? "upptagen"),
     } satisfies Person;
@@ -142,6 +186,9 @@ function franKalenderpost(p: Kalenderpost, agare: string): Post {
     deltagare: [],
     serie: false,
     serieId: null,
+    steg: null,
+    utfall: null,
+    forsok: 1,
     paminnelse: 10,
   };
 }
@@ -184,6 +231,9 @@ async function handelserFor(agare: string, fran: string, till: string): Promise<
     deltagare: [],
     serie: r.series_id !== null,
     serieId: r.series_id,
+    steg: arSteg(r.step) ? r.step : null,
+    utfall: r.outcome === "genomford" || r.outcome === "ej_svar" ? r.outcome : null,
+    forsok: r.attempt ?? 1,
     paminnelse: r.reminder_min ?? 10,
   }));
 }
@@ -247,7 +297,176 @@ export async function hamtaLeveranskalender(
           ...(await handelserFor(mig, hem, hem)),
         ];
 
-  return { mig, idag, vy, anchor, personer, visa: andra, poster, vantar, hem, hemPoster };
+  const lev = await hamtaLeveransdata(user, hem);
+
+  return { mig, idag, vy, anchor, personer, visa: andra, poster, vantar, hem, hemPoster, lev };
+}
+
+// -----------------------------------------------------------------------------
+// Leveransen (pass 3)
+// -----------------------------------------------------------------------------
+
+type Kundrad = {
+  order_id: string;
+  kund: string;
+  paket: string | null;
+  pris: number | string | null;
+  loptid: number | null;
+  saljare: string | null;
+  kontakt: string | null;
+  telefon: string | null;
+  epost: string | null;
+  godkand: string | null;
+  welcome_due_at: string;
+  owner_id: string | null;
+  crm_system: string | null;
+  crm_external_id: string | null;
+  crm_synced_at: string | null;
+  crm_error: string | null;
+  mal: string | null;
+  lovat: string | null;
+  basta_tid: string | null;
+  risker: string | null;
+  makulerad: boolean;
+};
+
+const tillKokund = (r: Kundrad): Kokund => ({
+  orderId: r.order_id,
+  kund: r.kund,
+  paket: r.paket,
+  pris: r.pris === null ? null : Number(r.pris),
+  loptid: r.loptid,
+  saljare: r.saljare,
+  kontakt: r.kontakt,
+  telefon: r.telefon,
+  epost: r.epost,
+  godkand: r.godkand,
+  due: r.welcome_due_at,
+  agare: r.owner_id,
+  crmSystem: r.crm_system,
+  crmId: r.crm_external_id,
+  crmSynkad: r.crm_synced_at,
+  crmFel: r.crm_error,
+  mal: r.mal,
+  lovat: r.lovat,
+  bastaTid: r.basta_tid,
+  risker: r.risker,
+  makulerad: r.makulerad,
+});
+
+/** En kund i leveransen, som läsaren får se den (`leverans_kunder`, 0071). */
+export async function hamtaKund(orderId: string): Promise<Kokund | null> {
+  const supabase = await supabaseServer();
+  const { data } = await supabase.rpc("leverans_kunder", { p_order: orderId });
+  const rad = ((data ?? []) as unknown as Kundrad[])[0];
+  return rad ? tillKokund(rad) : null;
+}
+
+/**
+ * Kön, kunderna och veckolasten. Bara för kretsen: projektledare, leverans och
+ * säljchef. Läses med läsarens egen token — `leverans_kunder()` svarar tomt för
+ * den som står utanför.
+ */
+async function hamtaLeveransdata(user: CurrentUser, hem: string): Promise<Leveransdata> {
+  const farSe = user.roles.some((r) => r === "delivery" || r === "project_manager" || r === "sales_manager");
+  const arLev = user.roles.some((r) => r === "delivery" || r === "project_manager");
+  const tom: Leveransdata = { farSe, arLev, ko: [], kunder: [], veckolast: {} };
+  if (!farSe) return tom;
+
+  const supabase = await supabaseServer();
+  const mandag = monday(hem);
+  const [{ data }, { data: last }] = await Promise.all([
+    supabase.rpc("leverans_kunder", { p_order: null }),
+    supabase
+      .from("calendar_event")
+      .select("organizer_id")
+      .eq("kind", "leverans")
+      .is("cancelled_at", null)
+      .gte("dag", mandag)
+      .lte("dag", plus(mandag, 4)),
+  ]);
+  const alla = ((data ?? []) as unknown as Kundrad[]).map(tillKokund).filter((k) => !k.makulerad);
+  const veckolast: Record<string, number> = {};
+  for (const r of (last ?? []) as { organizer_id: string }[]) veckolast[r.organizer_id] = (veckolast[r.organizer_id] ?? 0) + 1;
+
+  return {
+    farSe,
+    arLev,
+    ko: alla.filter((k) => !k.agare).sort((a, b) => (a.due < b.due ? -1 : 1)),
+    kunder: alla
+      .filter((k) => k.agare)
+      .sort((a, b) => a.kund.localeCompare(b.kund, "sv"))
+      .map((k) => ({ orderId: k.orderId, kund: k.kund, kontakt: k.kontakt, epost: k.epost })),
+    veckolast,
+  };
+}
+
+export type Leveransdetalj = {
+  kund: Kokund | null;
+  steg: Steg | null;
+  utfall: "genomford" | "ej_svar" | null;
+  forsok: number;
+  kundInbjuden: boolean;
+  paminnelser: { mottagare: string; skickas: string; status: string; resendId: string | null; fel: string | null }[];
+  plan: { id: string; rubrik: string; steg: Steg | null; dag: string; start: number | null; utfall: string | null; forsok: number }[];
+};
+
+/**
+ * Leveranspostens panel: kunden, påminnelserna och allt som är bokat på
+ * kunden. Händelsen själv har redan lästs med läsarens token — påminnelserna
+ * är stängda för klienterna (0069) och läses därför med service role, men
+ * bara efter att RLS släppt fram händelsen.
+ */
+export async function hamtaLeveransdetalj(user: CurrentUser, e: Handelsedetalj): Promise<Leveransdetalj | null> {
+  if (!user.employee || e.slag !== "leverans") return null;
+  const supabase = await supabaseServer();
+  const { data: rad } = await supabase
+    .from("calendar_event")
+    .select("order_id, step, outcome, attempt")
+    .eq("id", e.id)
+    .maybeSingle();
+  if (!rad?.order_id) return null;
+
+  const [kund, { data: plan }, { data: pam }, { count: inbjuden }] = await Promise.all([
+    hamtaKund(rad.order_id as string),
+    supabase
+      .from("calendar_event")
+      .select("id, title, step, dag, tid, outcome, attempt")
+      .eq("order_id", rad.order_id)
+      .is("cancelled_at", null)
+      .order("dag")
+      .order("tid"),
+    supabaseAdmin().from("calendar_reminder").select("recipient, send_at, status, resend_id, error").eq("event_id", e.id),
+    supabaseAdmin()
+      .from("calendar_attendee")
+      .select("id", { count: "exact", head: true })
+      .eq("event_id", e.id)
+      .not("external_email", "is", null),
+  ]);
+
+  return {
+    kund,
+    steg: arSteg(rad.step) ? (rad.step as Steg) : null,
+    utfall: rad.outcome === "genomford" || rad.outcome === "ej_svar" ? rad.outcome : null,
+    forsok: (rad.attempt as number) ?? 1,
+    kundInbjuden: (inbjuden ?? 0) > 0,
+    paminnelser: ((pam ?? []) as { recipient: string; send_at: string; status: string; resend_id: string | null; error: string | null }[]).map((p) => ({
+      mottagare: p.recipient,
+      skickas: p.send_at,
+      status: p.status,
+      resendId: p.resend_id,
+      fel: p.error,
+    })),
+    plan: ((plan ?? []) as { id: string; title: string; step: string; dag: string; tid: string | null; outcome: string | null; attempt: number }[]).map((x) => ({
+      id: x.id,
+      rubrik: x.title,
+      steg: arSteg(x.step) ? (x.step as Steg) : null,
+      dag: x.dag,
+      start: minuter(x.tid),
+      utfall: x.outcome,
+      forsok: x.attempt,
+    })),
+  };
 }
 
 /**
