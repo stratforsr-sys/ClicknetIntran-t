@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { kontrolleraCron } from "@/lib/jobb/behorighet";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { korDagtidsjobbet } from "@/lib/jobb/dagtid";
+import { korKalendersteget } from "@/lib/jobb/kalender";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -27,7 +28,17 @@ async function kor(request: NextRequest) {
   const nekad = kontrolleraCron(request);
   if (nekad) return nekad;
 
-  return NextResponse.json(await korDagtidsjobbet(supabaseAdmin()));
+  const db = supabaseAdmin();
+  const stampling = await korDagtidsjobbet(db);
+  // 0070: Leveranskalenderns serier, förberedelser och utkorg. Eget steg med
+  // eget kvitto, så att ett fel i det ena inte döljer det andra.
+  let kalender: unknown;
+  try {
+    kalender = await korKalendersteget(db);
+  } catch (e) {
+    kalender = { fel: e instanceof Error ? e.message : String(e) };
+  }
+  return NextResponse.json({ ...stampling, kalender });
 }
 
 export async function POST(request: NextRequest) {

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Lkdata, Person } from "@/lib/leveranskalender-server";
-import { SLAG_KLASS, endOf, hm, type Post, type Svar, type Vy } from "@/lib/leveranskalender";
+import { SLAG_KLASS, endOf, enskildTitel, hm, type Post, type Svar, type Vy } from "@/lib/leveranskalender";
 import type { Resultat } from "../moten/actions";
 import type { Panellage } from "./Panel";
 
@@ -21,6 +21,8 @@ export type Lk = {
   efter: (r: Resultat, oppnaEfter?: boolean) => boolean;
   visaKvitto: (text: string, angra?: string) => void;
   ga: (andring: { vy?: Vy; dag?: string; visa?: string[] }) => void;
+  /** En förekomst i en serie har dragits: fråga om den här gången eller hela serien. */
+  serieflytt: (flytt: { eventId: string; rubrik: string; dag: string; start: number } | null) => void;
 };
 
 /**
@@ -71,6 +73,12 @@ export function mittSvar(p: Post, mig: string): Svar | null {
 export function titel(p: Post, lk: Lk): string | null {
   if (p.rubrik === null) return null;
   if (p.slag === "ledig" && p.agare !== lk.data.mig) return `${lk.personer.get(p.agare)?.fornamn ?? ""} ledig`.trim();
+  // `baseTitle()`: en 1:1 heter efter den andra — "1:1 Elin" för Zen, "1:1 Zen"
+  // för Elin, och "1:1 Zen · Elin" för någon som ser in.
+  if (p.slag === "enskilt" && p.organisator) {
+    const andra = p.deltagare.find((id) => id !== p.organisator) ?? null;
+    return enskildTitel(p.organisator, andra, lk.data.mig, (id) => lk.personer.get(id)?.fornamn ?? "");
+  }
   return p.rubrik;
 }
 
@@ -103,7 +111,7 @@ export function postetikett(p: Post, lk: Lk): string {
 /** Får jag dra och ändra längd på posten? Egna möten och egna uppgifter. */
 export function farDra(p: Post, lk: Lk): boolean {
   if (!p.ref || p.rubrik === null || p.klar) return false;
-  if (p.slag === "mote") return p.organisator === lk.data.mig;
+  if (p.slag === "mote" || p.slag === "enskilt") return p.organisator === lk.data.mig;
   if (p.slag === "uppgift") return p.agare === lk.data.mig;
   return false;
 }

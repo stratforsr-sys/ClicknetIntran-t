@@ -5,6 +5,11 @@ import { initials, type CurrentUser } from "@/lib/auth";
 import { ROLE_LABEL, type Role } from "@/lib/roles";
 import { hamtaDelningar, hamtaEgenKalender, hamtaKollegasKalender } from "@/lib/kalender-server";
 import { arDelningsniva, type Delningsniva, type Kalenderpost } from "@/lib/kalender";
+import { svensktDatum } from "@/lib/klocka";
+import { hamtaMal } from "@/lib/saljmal-server";
+import { malFor } from "@/lib/saljtakt";
+import { kvPerOmrade, arChefFor } from "@/lib/coachning-server";
+import { hamtaProvision } from "@/lib/provision-server";
 import {
   LK_FEL,
   avatarfarg,
@@ -136,6 +141,7 @@ function franKalenderpost(p: Kalenderpost, agare: string): Post {
     organisator: agare,
     deltagare: [],
     serie: false,
+    serieId: null,
     paminnelse: 10,
   };
 }
@@ -177,6 +183,7 @@ async function handelserFor(agare: string, fran: string, till: string): Promise<
     organisator: r.organizer_id,
     deltagare: [],
     serie: r.series_id !== null,
+    serieId: r.series_id,
     paminnelse: r.reminder_min ?? 10,
   }));
 }
@@ -243,23 +250,30 @@ export async function hamtaLeveranskalender(
   return { mig, idag, vy, anchor, personer, visa: andra, poster, vantar, hem, hemPoster };
 }
 
-/** Deltagarna på de möten läsaren får öppna — för avatarerna och sökningen. */
+/**
+ * Deltagarna på de möten läsaren får öppna — för avatarerna, 1:1-rubriken och
+ * sökningen. En förekomst i en serie har seriens deltagare plus sina egna rader.
+ */
 async function fyllDeltagare(poster: Post[]): Promise<void> {
-  const refs = [...new Set(poster.filter((p) => p.ref && (p.slag === "mote" || p.slag === "enskilt")).map((p) => p.ref!))];
+  const moten = poster.filter((p) => p.ref && (p.slag === "mote" || p.slag === "enskilt"));
+  const refs = [...new Set(moten.map((p) => p.ref!))];
+  const serier = [...new Set(moten.map((p) => p.serieId).filter((x): x is string => !!x))];
   if (refs.length === 0) return;
   const supabase = await supabaseServer();
-  const { data } = await supabase
-    .from("calendar_attendee")
-    .select("event_id, employee_id")
-    .in("event_id", refs)
-    .not("employee_id", "is", null);
-  const per = new Map<string, string[]>();
-  for (const r of (data ?? []) as { event_id: string; employee_id: string }[]) {
-    per.set(r.event_id, [...(per.get(r.event_id) ?? []), r.employee_id]);
-  }
-  for (const p of poster) {
-    if (!p.ref || !per.has(p.ref)) continue;
-    p.deltagare = [...(p.organisator ? [p.organisator] : []), ...per.get(p.ref)!];
+  const [{ data: egna }, { data: seriens }] = await Promise.all([
+    supabase.from("calendar_attendee").select("event_id, employee_id").in("event_id", refs).not("employee_id", "is", null),
+    serier.length
+      ? supabase.from("calendar_attendee").select("series_id, employee_id").in("series_id", serier).not("employee_id", "is", null)
+      : Promise.resolve({ data: [] as { series_id: string; employee_id: string }[] }),
+  ]);
+  const per = new Map<string, Set<string>>();
+  const lagg = (nyckel: string, id: string) => per.set(nyckel, (per.get(nyckel) ?? new Set()).add(id));
+  for (const r of (egna ?? []) as { event_id: string; employee_id: string }[]) lagg(`e:${r.event_id}`, r.employee_id);
+  for (const r of (seriens ?? []) as { series_id: string; employee_id: string }[]) lagg(`s:${r.series_id}`, r.employee_id);
+  for (const p of moten) {
+    const alla = new Set([...(per.get(`e:${p.ref}`) ?? []), ...(p.serieId ? per.get(`s:${p.serieId}`) ?? [] : [])]);
+    if (alla.size === 0) continue;
+    p.deltagare = [...(p.organisator ? [p.organisator] : []), ...[...alla].filter((id) => id !== p.organisator)];
   }
 }
 
@@ -331,6 +345,17 @@ export type Deltagarrad = {
   svar: Exclude<Svar, "org">;
   forslag: { dag: string; start: number; minuter: number; note: string | null } | null;
   note: string | null;
+  /** Raden hör till just den här förekomsten, inte till serien. */
+  egenRad: boolean;
+};
+
+export type Serieinfo = {
+  id: string;
+  monster: "vardagar" | "veckovis";
+  intervall: number;
+  veckodag: number | null;
+  starts_on: string;
+  ends_on: string | null;
 };
 
 export type Handelsedetalj = {
@@ -346,27 +371,45 @@ export type Handelsedetalj = {
   agenda: string;
   paminnelse: number;
   installd: boolean;
-  serie: boolean;
+  serie: Serieinfo | null;
+  /** Förekomsten är flyttad för sig och har egna svar. */
+  avviker: boolean;
+  coachningssamtal: string | null;
   deltagare: Deltagarrad[];
   /** Mitt svar, eller `org`, eller null om jag inte är med. */
   mittSvar: Svar | null;
+  /** Mitt svar gäller hela serien (ingen egen rad på förekomsten). */
+  svarGallerSerien: boolean;
   /** Organisatören, eller den som har "kan planera om" hos henne. */
   farAndra: boolean;
+};
+
+type Attendeerad = {
+  employee_id: string;
+  response: Deltagarrad["svar"];
+  response_note: string | null;
+  proposed_dag: string | null;
+  proposed_tid: string | null;
+  proposed_minuter: number | null;
+  proposal_note: string | null;
 };
 
 /**
  * En händelse i sin helhet, för panelen. Med läsarens egen token: RLS i 0069
  * släpper fram raden bara till den som får se den med detaljer.
+ *
+ * En förekomst i en serie har seriens deltagare, och förekomstens egna rader
+ * går före — samma regel som `lk_narvaro()` i databasen.
  */
 export async function hamtaHandelsedetalj(user: CurrentUser, id: string): Promise<Handelsedetalj | null> {
   if (!user.employee || !/^[0-9a-f-]{36}$/.test(id)) return null;
   const mig = user.employee.id;
   const supabase = await supabaseServer();
 
-  const [{ data: e }, { data: rader }] = await Promise.all([
+  const [{ data: e }, { data: egna }] = await Promise.all([
     supabase
       .from("calendar_event")
-      .select("id, kind, title, dag, tid, minuter, organizer_id, plats, online_url, agenda_md, reminder_min, cancelled_at, series_id")
+      .select("id, kind, title, dag, tid, minuter, organizer_id, plats, online_url, agenda_md, reminder_min, cancelled_at, series_id, avviker, coaching_session_id")
       .eq("id", id)
       .maybeSingle(),
     supabase
@@ -377,23 +420,34 @@ export async function hamtaHandelsedetalj(user: CurrentUser, id: string): Promis
   ]);
   if (!e) return null;
 
-  const deltagare: Deltagarrad[] = ((rader ?? []) as {
-    employee_id: string;
-    response: Deltagarrad["svar"];
-    response_note: string | null;
-    proposed_dag: string | null;
-    proposed_tid: string | null;
-    proposed_minuter: number | null;
-    proposal_note: string | null;
-  }[]).map((r) => ({
+  const serieId = (e.series_id as string | null) ?? null;
+  const [{ data: s }, { data: seriens }] = serieId
+    ? await Promise.all([
+        supabase.from("calendar_series").select("id, monster, intervall, veckodag, starts_on, ends_on").eq("id", serieId).maybeSingle(),
+        supabase
+          .from("calendar_attendee")
+          .select("employee_id, response, response_note, proposed_dag, proposed_tid, proposed_minuter, proposal_note")
+          .eq("series_id", serieId)
+          .not("employee_id", "is", null),
+      ])
+    : [{ data: null }, { data: [] }];
+
+  const tillRad = (r: Attendeerad, egenRad: boolean): Deltagarrad => ({
     id: r.employee_id,
     svar: r.response,
     note: r.response_note,
+    egenRad,
     forslag:
       r.proposed_dag && r.proposed_tid && r.proposed_minuter
         ? { dag: r.proposed_dag, start: minuter(r.proposed_tid)!, minuter: r.proposed_minuter, note: r.proposal_note }
         : null,
-  }));
+  });
+  const egnaRader = ((egna ?? []) as unknown as Attendeerad[]).map((r) => tillRad(r, true));
+  const harEgen = new Set(egnaRader.map((d) => d.id));
+  const deltagare = [
+    ...egnaRader,
+    ...((seriens ?? []) as unknown as Attendeerad[]).filter((r) => !harEgen.has(r.employee_id)).map((r) => tillRad(r, false)),
+  ];
 
   const organisator = e.organizer_id as string;
   let farAndra = organisator === mig;
@@ -401,6 +455,7 @@ export async function hamtaHandelsedetalj(user: CurrentUser, id: string): Promis
     const { data: niva } = await supabase.rpc("kalender_niva", { p_owner: organisator, p_viewer: mig });
     farAndra = arDelningsniva(niva) && (niva === "redigera" || niva === "delegat");
   }
+  const min = deltagare.find((d) => d.id === mig);
 
   return {
     id: e.id as string,
@@ -415,10 +470,112 @@ export async function hamtaHandelsedetalj(user: CurrentUser, id: string): Promis
     agenda: (e.agenda_md as string) ?? "",
     paminnelse: e.reminder_min as number,
     installd: e.cancelled_at !== null,
-    serie: e.series_id !== null,
+    serie: s ? (s as unknown as Serieinfo) : null,
+    avviker: Boolean(e.avviker),
+    coachningssamtal: (e.coaching_session_id as string | null) ?? null,
     deltagare,
-    mittSvar: organisator === mig ? "org" : (deltagare.find((d) => d.id === mig)?.svar ?? null),
+    mittSvar: organisator === mig ? "org" : (min?.svar ?? null),
+    svarGallerSerien: !!serieId && !!min && !min.egenRad,
     farAndra,
+  };
+}
+
+// -----------------------------------------------------------------------------
+// 1:1-innehållet (pass 2)
+// -----------------------------------------------------------------------------
+
+export type Punkt = {
+  id: string;
+  kind: "agenda" | "atgard";
+  text: string;
+  author: string;
+  owner: string | null;
+  klar: boolean;
+  uppgift: string | null;
+};
+
+export type Enskilt = {
+  seriesId: string;
+  saljare: string;
+  /** Punkterna, om läsaren är i kretsen (RLS). Null = utanför. */
+  punkter: Punkt[] | null;
+  /** Säljaren eller den som håller samtalet: får skriva. */
+  farSkriva: boolean;
+  /** Håller samtalet och är säljarens chef: får spara som coachningssamtal. */
+  farCoacha: boolean;
+  siffror: { order: number | null; mal: number | null; kv: string | null; provision: number | null };
+};
+
+/**
+ * En 1:1:s innehåll. Punkterna läses med läsarens token: policyn i 0069 är
+ * coachningskretsen, och den som står utanför får noll rader — då är
+ * `punkter` null och panelen säger det rakt ut.
+ *
+ * Säljarens siffror läses också med läsarens egen token, genom modulernas egna
+ * läsningar. Får läsaren inte se dem står "–" — ingen siffra läses förbi RLS.
+ */
+export async function hamtaEnskilt(user: CurrentUser, e: Handelsedetalj): Promise<Enskilt | null> {
+  if (!user.employee || e.slag !== "enskilt" || !e.serie) return null;
+  const mig = user.employee.id;
+  const saljare = e.deltagare[0]?.id ?? null;
+  if (!saljare) return null;
+  const supabase = await supabaseServer();
+  const manad = `${svensktDatum().slice(0, 7)}-01`;
+
+  const [{ data: punkter, error }, { count: order }, mal, kv, provision, chef] = await Promise.all([
+    supabase
+      .from("one_on_one_item")
+      .select("id, kind, text, author_id, owner_id, done_at, task_id, created_at")
+      .eq("series_id", e.serie.id)
+      .order("created_at"),
+    supabase
+      .from("sales_order")
+      .select("id", { count: "exact", head: true })
+      .eq("salesperson_id", saljare)
+      .eq("period_month", manad)
+      .in("status", ["signerad", "betald"]),
+    hamtaMal(manad).then((m) => malFor(m, saljare, manad)?.mal_order ?? null).catch(() => null),
+    kvPerOmrade(saljare)
+      .then((omr) => {
+        const v = omr.map((o) => o.senaste).filter((x): x is number => typeof x === "number");
+        return v.length ? (v.reduce((a, b) => a + b, 0) / v.length).toFixed(1).replace(".", ",") : null;
+      })
+      .catch(() => null),
+    hamtaProvision(saljare, manad)
+      .then((p) => {
+        const denna = p.filter((x) => String(x.period_month).slice(0, 10) === manad);
+        return denna.length ? denna.reduce((a, x) => a + Number(x.amount), 0) : null;
+      })
+      .catch(() => null),
+    e.organisator === mig ? arChefFor(user, saljare).catch(() => false) : Promise.resolve(false),
+  ]);
+
+  const rader = ((punkter ?? []) as unknown as {
+    id: string;
+    kind: "agenda" | "atgard";
+    text: string;
+    author_id: string;
+    owner_id: string | null;
+    done_at: string | null;
+    task_id: string | null;
+  }[]).map((r) => ({
+    id: r.id,
+    kind: r.kind,
+    text: r.text,
+    author: r.author_id,
+    owner: r.owner_id,
+    klar: r.done_at !== null,
+    uppgift: r.task_id,
+  }));
+
+  const iParet = mig === e.organisator || mig === saljare;
+  return {
+    seriesId: e.serie.id,
+    saljare,
+    punkter: error || (!iParet && rader.length === 0) ? (iParet ? [] : null) : rader,
+    farSkriva: iParet,
+    farCoacha: Boolean(chef),
+    siffror: { order: order ?? null, mal, kv, provision },
   };
 }
 

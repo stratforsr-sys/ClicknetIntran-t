@@ -102,6 +102,14 @@ export type Serieregel = {
   starts_on: string;
   /** Null = serien löper vidare. */
   ends_on: string | null;
+  /**
+   * Varannan vecka (Leveranskalenderns 1:1:or, 0069). Bara för `veckovis`.
+   *
+   * VALFRITT OCH 1 NÄR DET SAKNAS, så att uppgiftsserierna — som aldrig sätter
+   * det — beter sig exakt som förut. Veckan räknas från måndagen i
+   * `starts_on`s vecka: startveckan är alltid en "på"-vecka.
+   */
+  intervall?: 1 | 2;
 };
 
 export function arMonster(v: unknown): v is Monster {
@@ -199,7 +207,9 @@ export function traffar(regel: Serieregel, datum: string): boolean {
     case "vardagar":
       return VARDAGAR.includes(dag);
     case "veckovis":
-      return regel.veckodagar.includes(dag);
+      if (!regel.veckodagar.includes(dag)) return false;
+      if ((regel.intervall ?? 1) === 1) return true;
+      return veckorMellan(regel.starts_on, datum) % (regel.intervall ?? 1) === 0;
     default:
       return false;
   }
@@ -235,7 +245,8 @@ export function nastaForekomst(regel: Serieregel, fran: string): string | null {
    * måste ändras den dag ett månadsmönster läggs till — och då fäller provet
    * "nästa hittas för varje mönster" i tests/upprepning.mjs.
    */
-  for (let i = 0; i < 8; i++) {
+  // Varannan vecka: två veckor plus en dag räcker på samma sätt.
+  for (let i = 0; i < 8 + 7 * ((regel.intervall ?? 1) - 1); i++) {
     const dag = datumPlusDagar(start, i);
     if (regel.ends_on && dag > regel.ends_on) return null;
     if (traffar(regel, dag)) return dag;
@@ -256,9 +267,10 @@ export function monstertext(regel: Serieregel): string {
   if (regel.monster === "vardagar") return "Varje vardag";
 
   const namn = normaliseraVeckodagar(regel.veckodagar).map((d) => VECKODAG_NAMN[d]);
-  if (namn.length === 0) return "Varje vecka";
-  if (namn.length === 1) return `Varje ${namn[0]}`;
-  return `Varje ${namn.slice(0, -1).join(", ")} och ${namn[namn.length - 1]}`;
+  const ord = (regel.intervall ?? 1) === 2 ? "Varannan" : "Varje";
+  if (namn.length === 0) return `${ord} vecka`;
+  if (namn.length === 1) return `${ord} ${namn[0]}`;
+  return `${ord} ${namn.slice(0, -1).join(", ")} och ${namn[namn.length - 1]}`;
 }
 
 /** Hela regeln i en rad: "Varje måndag · till 2026-12-31". */
@@ -389,4 +401,11 @@ export function tystadeForekomster(rader: readonly Forekomstrad[]): Set<string> 
   }
 
   return tystade;
+}
+
+/** Hela veckor mellan måndagarna i två datums veckor. Negativt före `fran`. */
+function veckorMellan(fran: string, till: string): number {
+  const mandag = (d: string) => datumPlusDagar(d, 1 - veckodag(d));
+  const ms = (d: string) => Date.parse(`${d}T12:00:00Z`);
+  return Math.round((ms(mandag(till)) - ms(mandag(fran))) / (7 * 86_400_000));
 }

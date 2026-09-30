@@ -283,6 +283,8 @@ export type Post = {
   /** Övriga deltagare (id), när läsaren får se dem. */
   deltagare: string[];
   serie: boolean;
+  /** Serien posten är en förekomst i, när läsaren får veta det. */
+  serieId: string | null;
   /** Påminnelse i minuter före, för plinget. */
   paminnelse: number;
 };
@@ -445,6 +447,61 @@ export function felkod(meddelande: string | null | undefined): string | null {
 }
 
 // -----------------------------------------------------------------------------
+// Serier (pass 2)
+// -----------------------------------------------------------------------------
+
+/** Formulärets "Upprepa". */
+export const UPPREPA = ["aldrig", "vardagar", "vecka", "varannan"] as const;
+export type Upprepa = (typeof UPPREPA)[number];
+export const UPPREPA_ETIKETT: Record<Upprepa, string> = {
+  aldrig: "Upprepas inte",
+  vardagar: "Varje vardag",
+  vecka: "Varje vecka",
+  varannan: "Varannan vecka",
+};
+
+/** Seriens regel ur formulärets val. "Upprepas inte" är en serie med en enda gång. */
+export function serieregel(upprepa: Upprepa, dag: string): {
+  monster: "vardagar" | "veckovis";
+  intervall: 1 | 2;
+  veckodag: number;
+  starts_on: string;
+  ends_on: string | null;
+} {
+  return {
+    monster: upprepa === "vardagar" ? "vardagar" : "veckovis",
+    intervall: upprepa === "varannan" ? 2 : 1,
+    veckodag: wd(dag),
+    starts_on: dag,
+    ends_on: upprepa === "aldrig" ? dag : null,
+  };
+}
+
+/** "varje vecka", "varannan vecka", "varje vardag", "en gång" — gemener, för en mening. */
+export function regeltext(r: { monster: string; intervall: number; ends_on?: string | null; starts_on?: string }): string {
+  if (r.ends_on && r.starts_on && r.ends_on === r.starts_on) return "en gång";
+  if (r.monster === "vardagar") return "varje vardag";
+  return r.intervall === 2 ? "varannan vecka" : "varje vecka";
+}
+
+/** "1:1 Elin" för de två, "1:1 Zen · Elin" för en tredje. `whenText()` i prototypen. */
+export function enskildTitel(organisator: string, andra: string | null, mig: string, fornamn: (id: string) => string): string {
+  if (!andra) return "1:1";
+  if (mig === organisator) return `1:1 ${fornamn(andra)}`;
+  if (mig === andra) return `1:1 ${fornamn(organisator)}`;
+  return `1:1 ${fornamn(organisator)} · ${fornamn(andra)}`;
+}
+
+export function kvittoSerieFlyttad(dag: string, tid: number, vardagar: boolean, bekrafta: readonly string[]): string {
+  const nar = vardagar ? "vardagar" : `${WDL[wd(dag)].toLowerCase()}ar`;
+  return `Hela serien flyttad till ${nar} ${hm(tid)}.${bekrafta.length ? ` ${lista(bekrafta)} behöver bekräfta den nya tiden.` : ""}`;
+}
+
+export function kvittoSerieInbjudan(deltagare: readonly string[], regel: string): string {
+  return `Inbjudan skickad till ${lista(deltagare) || "ingen"}${regel && regel !== "en gång" ? `. Serie ${regel}` : ""}.`;
+}
+
+// -----------------------------------------------------------------------------
 // Kvitton. SPEC avsnitt 9, ordagrant. Förnamn i kvitton.
 // -----------------------------------------------------------------------------
 
@@ -515,7 +572,8 @@ export function notistext(
   u: Notisunderlag,
 ): { rubrik: string; detalj: string; href: string } | null {
   const av = u.avNamn ?? "Någon";
-  const t = `“${u.rubrik}”`;
+  // En 1:1 heter "1:1" och står utan citattecken: "bjöd in dig till 1:1".
+  const t = u.rubrik === "1:1" ? "1:1" : `“${u.rubrik}”`;
   const d = rad.data as Record<string, string | number | boolean | null | undefined>;
   const nyDag = typeof d.dag === "string" ? d.dag : u.dag;
   const nyTid = typeof d.tid === "string" ? d.tid : u.tid;
@@ -564,6 +622,30 @@ export function notistext(
       return { rubrik: `${av} godkände din föreslagna tid`, detalj: `${t} · ${nar}`, href };
     case "forslag-behallen":
       return { rubrik: `${av} behåller tiden för ${t}`, detalj: `${dayLabel(u.dag)}${u.tid ? " " + u.tid : ""}`, href };
+    case "inbjudan-serie": {
+      const regel = typeof d.regel === "string" && d.regel && d.regel !== "en gång" ? `, ${d.regel}` : "";
+      return { rubrik: `${av} bjöd in dig till ${t}${regel}`, detalj: `${regel ? "första gången " : ""}${nar}`, href };
+    }
+    case "flyttad-serie": {
+      const regel = typeof d.regel === "string" && d.regel ? d.regel : "ny tid";
+      return d.svara_igen
+        ? {
+            rubrik: `${av} flyttade hela serien ${t}. Svara igen`,
+            detalj: `nu ${regel} ${d.tid ?? ""} · ditt tidigare svar gäller inte längre`.replace("  ", " "),
+            href,
+          }
+        : { rubrik: `${av} flyttade hela serien ${t}`, detalj: `nu ${regel} ${d.tid ?? ""}`.trim(), href };
+    }
+    case "punkt":
+      return {
+        rubrik: `${av} lade till en punkt på er 1:1`,
+        detalj: typeof d.text === "string" ? `“${d.text}”` : "",
+        href,
+      };
+    case "forbered-be":
+      return { rubrik: `${av} vill att du förbereder er 1:1`, detalj: `${nar} · lägg till det du vill ta upp`, href };
+    case "forberedelse":
+      return { rubrik: "Inför er 1:1: lägg till det du vill ta upp", detalj: nar, href };
     case "uppgift-paminnelse":
       return { rubrik: u.rubrik, detalj: `Om tio minuter, kl ${nyTid ?? ""}`.trim(), href };
     default:

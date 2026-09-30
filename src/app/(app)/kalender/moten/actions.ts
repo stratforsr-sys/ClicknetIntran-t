@@ -6,15 +6,21 @@ import { getCurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import {
   fornamn,
+  hamtaEnskilt,
   hamtaHandelsedetalj,
   lk,
   upptagetFor,
+  type Enskilt,
   type Handelsedetalj,
 } from "@/lib/leveranskalender-server";
+import { HORISONT_DAGAR, forekomster } from "@/lib/upprepning";
+import { svensktDatum } from "@/lib/klocka";
+import { skapaSamtal } from "../../coachning/actions";
 import { tomEfterFonstret } from "@/lib/utkorg-server";
 import {
   arDatum,
   dagarMellan,
+  dayLabel,
   hm,
   kvittoFlyttad,
   kvittoForslag,
@@ -22,8 +28,17 @@ import {
   kvittoInstallt,
   kvittoKopierad,
   kvittoLangd,
+  kvittoSerieFlyttad,
+  kvittoSerieInbjudan,
   kvittoSvar,
   minuter,
+  plus,
+  regeltext,
+  serieregel,
+  UPPREPA,
+  WDL,
+  wd,
+  type Upprepa,
   type Upptaget,
 } from "@/lib/leveranskalender";
 
@@ -84,6 +99,9 @@ function efterat() {
 function fel(e: unknown): Resultat {
   return { fel: e instanceof Error ? e.message : "Något gick fel." };
 }
+
+/** "ons 30 sep". */
+const dayLabelKort = (d: string) => dayLabel(d);
 
 /** Tidssträngen databasen tar emot. */
 const tid = (m: number) => `${hm(m)}:00`;
@@ -170,18 +188,27 @@ export async function svara(eventId: string, svar: "ja" | "kanske" | "nej", note
     if (!["ja", "kanske", "nej"].includes(svar)) return { fel: "Välj Ja, Kanske eller Nej." };
     if (note && note.length > 300) return { fel: "Meddelandet får vara högst 300 tecken." };
 
-    const r = await lk<{ organizer_id: string; undo_id: string }>("lk_svara", {
+    // En förekomst i en serie svarar för hela serien — utom när förekomsten
+    // flyttats för sig och har egna svar. Det avgör databasen (0070).
+    const r = await lk<{ organizer_id: string; undo_id: string; hela_serien: boolean }>("lk_svara", {
       p_aktor: user.employee!.id,
       p_event: eventId,
       p_svar: svar,
       p_note: note ?? null,
-      p_hela_serien: false,
+      p_hela_serien: true,
     });
     if (!r.ok) return { fel: r.fel };
 
     const namn = await fornamn([r.data.organizer_id]);
+    const { data: e } = await supabaseAdmin().from("calendar_event").select("dag, series_id").eq("id", eventId).maybeSingle();
+    const forekomst = e?.series_id && !r.data.hela_serien ? (e.dag as string) : null;
     efterat();
-    return { ok: true, kvitto: kvittoSvar(svar, namn.get(r.data.organizer_id) ?? ""), angra: r.data.undo_id, eventId };
+    return {
+      ok: true,
+      kvitto: kvittoSvar(svar, namn.get(r.data.organizer_id) ?? "", forekomst),
+      angra: r.data.undo_id,
+      eventId,
+    };
   } catch (e) {
     return fel(e);
   }
@@ -396,6 +423,293 @@ export async function kopiera(eventId: string): Promise<Resultat> {
 }
 
 // -----------------------------------------------------------------------------
+// Serier och 1:1 (pass 2)
+// -----------------------------------------------------------------------------
+
+/**
+ * 1:1 eller återkommande möte. Datumen räknas här, av `forekomster()` i
+ * `upprepning.ts`, och föds i samma transaktion som serien (0070).
+ */
+export async function skapaSerie(indata: {
+  typ: "mote" | "enskilt";
+  rubrik: string;
+  med: string[];
+  dag: string;
+  start: number;
+  minuter: number;
+  upprepa: Upprepa;
+  agenda?: string | null;
+  plats?: string | null;
+  visaSom?: string;
+  paminnelse?: number;
+}): Promise<Resultat> {
+  try {
+    const user = await aktor();
+    const mig = user.employee!.id;
+    if (indata.typ !== "mote" && indata.typ !== "enskilt") return { fel: "Välj Möte eller 1:1." };
+    if (indata.typ === "mote" && !indata.rubrik?.trim()) return { fel: "Skriv en rubrik först." };
+    if (!arDatum(indata.dag)) return { fel: "Välj ett datum." };
+    if (!arMinut(indata.start, 0, 1439) || indata.start % 5 !== 0) return { fel: "Välj en starttid." };
+    if (!arMinut(indata.minuter, 15, 480)) return { fel: "Ett möte är mellan 15 minuter och 8 timmar." };
+    if (!(UPPREPA as readonly string[]).includes(indata.upprepa)) return { fel: "Välj hur det ska upprepas." };
+    if (!Array.isArray(indata.med) || !indata.med.every(arUuid)) return { fel: "Deltagarlistan stämmer inte." };
+    if (indata.typ === "enskilt" && indata.med.length !== 1) return { fel: "Välj vem 1:1:an är med." };
+    const paminnelse = indata.paminnelse ?? 10;
+    if (!arMinut(paminnelse, 0, 1440)) return { fel: "Påminnelsen stämmer inte." };
+    const visaSom = indata.visaSom ?? "upptagen";
+    if (!["upptagen", "preliminar", "ledig", "borta"].includes(visaSom)) return { fel: "Välj hur tiden ska visas." };
+
+    const regel = serieregel(indata.upprepa, indata.dag);
+    const dagar = forekomster(
+      { monster: regel.monster, veckodagar: regel.monster === "veckovis" ? [regel.veckodag] : [], starts_on: regel.starts_on, ends_on: regel.ends_on, intervall: regel.intervall },
+      indata.dag,
+      plus(svensktDatum(), HORISONT_DAGAR),
+    );
+    const text = regeltext(regel);
+
+    const r = await lk<{ series_id: string; event_id: string; undo_id: string; deltagare: string[] }>("lk_skapa_serie", {
+      p_aktor: mig,
+      p_kind: indata.typ,
+      p_organizer: mig,
+      p_title: indata.typ === "enskilt" ? "1:1" : indata.rubrik.trim().slice(0, 200),
+      p_tid: tid(indata.start),
+      p_minuter: indata.minuter,
+      p_monster: regel.monster,
+      p_intervall: regel.intervall,
+      p_veckodag: regel.veckodag,
+      p_starts_on: regel.starts_on,
+      p_ends_on: regel.ends_on,
+      p_deltagare: indata.med,
+      p_dagar: dagar,
+      p_agenda: (indata.agenda ?? "").slice(0, 600),
+      p_reminder_min: paminnelse,
+      p_regeltext: text,
+    });
+    if (!r.ok) return { fel: r.fel };
+
+    // Plats och "visa som" gäller förekomsterna och lämnar ingenting i
+    // utkorgen. De förekomster som föds senare får seriens standard.
+    if (visaSom !== "upptagen" || indata.plats) {
+      await supabaseAdmin()
+        .from("calendar_event")
+        .update({ show_as: visaSom, plats: indata.plats?.slice(0, 200) ?? null })
+        .eq("series_id", r.data.series_id);
+    }
+
+    const namn = await fornamn(r.data.deltagare);
+    efterat();
+    return {
+      ok: true,
+      kvitto: kvittoSerieInbjudan(r.data.deltagare.map((id) => namn.get(id) ?? ""), text),
+      angra: r.data.undo_id,
+      eventId: r.data.event_id,
+      dag: indata.dag,
+    };
+  } catch (e) {
+    return fel(e);
+  }
+}
+
+/** Hela serien till en ny veckodag och tid. Förekomsterna räknas om. */
+export async function flyttaSerie(eventId: string, dag: string, start: number): Promise<Resultat> {
+  try {
+    const user = await aktor();
+    if (!arUuid(eventId)) return { fel: "Händelsen finns inte längre." };
+    if (!arDatum(dag)) return { fel: "Välj ett datum." };
+    if (!arMinut(start, 0, 1439) || start % 5 !== 0) return { fel: "Välj en starttid." };
+
+    const db = supabaseAdmin();
+    const { data: e } = await db.from("calendar_event").select("dag, series_id").eq("id", eventId).maybeSingle();
+    if (!e?.series_id) return { fel: "Händelsen är inte en del av en serie." };
+    const { data: s } = await db
+      .from("calendar_series")
+      .select("monster, intervall, starts_on, ends_on")
+      .eq("id", e.series_id)
+      .maybeSingle();
+    if (!s) return { fel: "Serien finns inte längre." };
+
+    const fran = [e.dag as string, dag].sort()[0] < svensktDatum() ? svensktDatum() : [e.dag as string, dag].sort()[0];
+    const dagar = forekomster(
+      {
+        monster: s.monster as "vardagar" | "veckovis",
+        veckodagar: s.monster === "veckovis" ? [wd(dag)] : [],
+        starts_on: s.starts_on as string,
+        ends_on: s.ends_on as string | null,
+        intervall: s.intervall === 2 ? 2 : 1,
+      },
+      fran,
+      plus(svensktDatum(), HORISONT_DAGAR),
+    );
+    const vardagar = s.monster === "vardagar";
+    const text = vardagar ? "varje vardag" : `${s.intervall === 2 ? "varannan " : ""}${WDL[wd(dag)].toLowerCase()}${s.intervall === 2 ? "" : "ar"}`;
+
+    const r = await lk<{ undo_id: string; svara_igen: string[]; event_id: string }>("lk_flytta_serie", {
+      p_aktor: user.employee!.id,
+      p_event: eventId,
+      p_dag: dag,
+      p_tid: tid(start),
+      p_dagar: dagar,
+      p_regeltext: text,
+    });
+    if (!r.ok) return { fel: r.fel };
+
+    const namn = await fornamn(r.data.svara_igen);
+    efterat();
+    return {
+      ok: true,
+      kvitto: kvittoSerieFlyttad(dag, start, vardagar, r.data.svara_igen.map((id) => namn.get(id) ?? "")),
+      angra: r.data.undo_id,
+      eventId: r.data.event_id,
+      dag,
+    };
+  } catch (e) {
+    return fel(e);
+  }
+}
+
+/** En punkt på 1:1-agendan, eller en åtgärd. Den andra får en notis — en per dag. */
+export async function laggTillPunkt(
+  seriesId: string,
+  kind: "agenda" | "atgard",
+  text: string,
+  forDag: string | null,
+  agare: string | null,
+): Promise<Resultat> {
+  try {
+    const user = await aktor();
+    if (!arUuid(seriesId)) return { fel: "Serien finns inte längre." };
+    if (kind !== "agenda" && kind !== "atgard") return { fel: "Välj agenda eller åtgärd." };
+    const t = String(text ?? "").trim();
+    if (!t) return { fel: "Skriv något först." };
+    if (t.length > 300) return { fel: "En punkt får vara högst 300 tecken." };
+    if (forDag !== null && !arDatum(forDag)) return { fel: "Datumet stämmer inte." };
+    if (agare !== null && !arUuid(agare)) return { fel: "Välj vem som ska göra det." };
+
+    const r = await lk<{ item_id: string; undo_id: string }>("lk_ny_punkt", {
+      p_aktor: user.employee!.id,
+      p_series: seriesId,
+      p_kind: kind,
+      p_text: t,
+      p_for_dag: forDag,
+      p_owner: agare,
+    });
+    if (!r.ok) return { fel: r.fel };
+    efterat();
+    return { ok: true, kvitto: kind === "agenda" ? "Punkten är tillagd. Den andra ser den." : "Åtgärden är tillagd.", angra: r.data.undo_id };
+  } catch (e) {
+    return fel(e);
+  }
+}
+
+export async function bockaAv(itemId: string, klar: boolean): Promise<Resultat> {
+  try {
+    const user = await aktor();
+    if (!arUuid(itemId)) return { fel: "Punkten finns inte längre." };
+    const r = await lk<{ undo_id: string }>("lk_bocka", { p_aktor: user.employee!.id, p_item: itemId, p_klar: !!klar });
+    if (!r.ok) return { fel: r.fel };
+    efterat();
+    return { ok: true, kvitto: klar ? "Avbockad." : "Öppen igen.", angra: r.data.undo_id };
+  } catch (e) {
+    return fel(e);
+  }
+}
+
+/**
+ * En åtgärd blir en uppgift på den som äger den, på dagen och tiden
+ * klienten föreslår (första lediga tiden, som prototypen). Utan tid blir det
+ * en uppgift utan klockslag.
+ */
+export async function punktTillUppgift(itemId: string, dag: string | null, start: number | null): Promise<Resultat> {
+  try {
+    const user = await aktor();
+    if (!arUuid(itemId)) return { fel: "Punkten finns inte längre." };
+    if (dag !== null && !arDatum(dag)) return { fel: "Datumet stämmer inte." };
+    if (start !== null && !arMinut(start, 0, 1439)) return { fel: "Tiden stämmer inte." };
+    const r = await lk<{ task_id: string; agare: string; undo_id: string }>("lk_punkt_till_uppgift", {
+      p_aktor: user.employee!.id,
+      p_item: itemId,
+      p_dag: dag,
+      p_tid: dag && start !== null ? tid(start) : null,
+    });
+    if (!r.ok) return { fel: r.fel };
+    const namn = await fornamn([r.data.agare]);
+    revalidatePath("/uppgifter");
+    efterat();
+    return {
+      ok: true,
+      kvitto: `Uppgift skapad åt ${namn.get(r.data.agare) ?? ""}${dag && start !== null ? `, ${dayLabelKort(dag)} ${hm(start)}` : ""}.`,
+      angra: r.data.undo_id,
+    };
+  } catch (e) {
+    return fel(e);
+  }
+}
+
+export async function beOmForberedelse(eventId: string): Promise<Resultat> {
+  try {
+    const user = await aktor();
+    if (!arUuid(eventId)) return { fel: "Händelsen finns inte längre." };
+    const r = await lk<{ till: string }>("lk_be_om_forberedelse", { p_aktor: user.employee!.id, p_event: eventId });
+    if (!r.ok) return { fel: r.fel };
+    const namn = await fornamn([r.data.till]);
+    efterat();
+    return { ok: true, kvitto: `${namn.get(r.data.till) ?? ""} får en notis att fylla på agendan.` };
+  } catch (e) {
+    return fel(e);
+  }
+}
+
+/**
+ * Anteckningarna som coachningssamtal (0043). Samtalet skrivs av
+ * coachningsmodulens egen `skapaSamtal` — samma behörighet (chefen för
+ * säljaren), samma notis och samma läskrets — och kopplas sedan till
+ * förekomsten.
+ */
+export async function sparaSomSamtal(
+  eventId: string,
+  falt: { goal: string; reality: string; options: string; will: string },
+): Promise<Resultat> {
+  try {
+    const user = await aktor();
+    if (!arUuid(eventId)) return { fel: "Händelsen finns inte längre." };
+    const e = await hamtaHandelsedetalj(user, eventId);
+    if (!e || e.slag !== "enskilt") return { fel: "Händelsen är inte en 1:1." };
+    if (e.organisator !== user.employee!.id) return { fel: "Den som håller samtalet sparar det." };
+    if (e.coachningssamtal) return { fel: "Samtalet är redan sparat." };
+    const saljare = e.deltagare[0]?.id;
+    if (!saljare) return { fel: "1:1:an saknar säljare." };
+
+    const f = new FormData();
+    f.set("employee_id", saljare);
+    f.set("held_on", e.dag);
+    f.set("goal_md", String(falt.goal ?? "").slice(0, 4000));
+    f.set("reality_md", String(falt.reality ?? "").slice(0, 4000));
+    f.set("options_md", String(falt.options ?? "").slice(0, 4000));
+    f.set("will_md", String(falt.will ?? "").slice(0, 4000));
+    const svar = await skapaSamtal({}, f);
+    if (svar.fel) return { fel: svar.fel };
+
+    const { data: sess } = await supabaseAdmin()
+      .from("coaching_session")
+      .select("id")
+      .eq("employee_id", saljare)
+      .eq("coach_id", user.employee!.id)
+      .eq("held_on", e.dag)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!sess) return { fel: "Samtalet sparades men gick inte att koppla." };
+
+    const k = await lk<null>("lk_koppla_samtal", { p_aktor: user.employee!.id, p_event: eventId, p_session: sess.id });
+    if (!k.ok) return { fel: k.fel };
+    efterat();
+    return { ok: true, kvitto: "Sparat som coachningssamtal.", eventId };
+  } catch (e) {
+    return fel(e);
+  }
+}
+
+// -----------------------------------------------------------------------------
 // Läsningar för klienten. Skriver ingenting.
 // -----------------------------------------------------------------------------
 
@@ -406,6 +720,14 @@ export async function hamtaUpptaget(personer: string[], fran: string, till: stri
   if (!Array.isArray(personer) || !personer.every(arUuid) || !arDatum(fran) || !arDatum(till)) return {};
   if (dagarMellan(fran, till) < 0 || dagarMellan(fran, till) > 15) return {};
   return upptagetFor(user, personer, fran, till);
+}
+
+/** 1:1-panelens innehåll: punkterna, säljarens siffror och vad läsaren får göra. */
+export async function hamtaEnskiltInnehall(eventId: string): Promise<Enskilt | null> {
+  const user = await getCurrentUser();
+  if (!user?.employee || !arUuid(eventId)) return null;
+  const e = await hamtaHandelsedetalj(user, eventId);
+  return e ? hamtaEnskilt(user, e) : null;
 }
 
 /** Panelens innehåll. Med läsarens egen token — RLS avgör. */

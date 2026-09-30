@@ -20,6 +20,7 @@ import {
   len,
   mm,
   plus,
+  regeltext,
   wd,
   type Post,
   type Upptaget,
@@ -38,6 +39,7 @@ import {
 import { planera } from "@/app/(app)/uppgifter/actions";
 import { Av, type Lk } from "./gemensamt";
 import { Formular } from "./Formular";
+import { Enskildinnehall } from "./Enskilt";
 import { Assistent, Datumfalt, Krockruta, Stang, Tidsval, useUpptaget, upptagnaI } from "./Tidsdelar";
 
 export type Panellage =
@@ -155,14 +157,23 @@ function Motespanel({ lk, id, stang }: { lk: Lk; id: string; stang: () => void }
   const forslag = e.farAndra ? e.deltagare.filter((d) => d.forslag) : [];
   const mitt = e.deltagare.find((d) => d.id === mig);
   const r = e.mittSvar;
+  const enskilt = e.slag === "enskilt";
+  const saljare = enskilt ? lk.personer.get(e.deltagare[0]?.id ?? "") : undefined;
+  // `whenText()`: tiden, och för en serie regeln.
+  const nar2 = nar(e) + (e.serie ? ` · ↻ ${regeltext(e.serie)}` : "");
+  const svarRubrik = e.serie ? (e.svarGallerSerien ? " · gäller hela serien" : " · gäller den flyttade tiden") : "";
 
   return (
     <>
-      <Huvud stang={stang} chip="k-mote" chipText="Möte" rubrik={e.rubrik} sub={nar(e)} />
+      {enskilt ? (
+        <Huvud stang={stang} chip="k-enskilt" chipText="1:1" rubrik={`1:1 ${org?.fornamn ?? ""} och ${saljare?.fornamn ?? ""}`} sub={nar2} />
+      ) : (
+        <Huvud stang={stang} chip="k-mote" chipText="Möte" rubrik={e.rubrik} sub={nar2} />
+      )}
       <div className="dbody" id="dbody" aria-busy={upptagen}>
         {forslag.length > 0 && (
           <div className="dsec">
-            <h5>Förslag på ny tid</h5>
+            <h5>Förslag på ny tid{e.serie ? " · bara den här gången" : ""}</h5>
             {forslag.map((a) => (
               <div key={a.id} className="box" style={{ gap: 6 }}>
                 <span>
@@ -187,7 +198,7 @@ function Motespanel({ lk, id, stang }: { lk: Lk; id: string; stang: () => void }
 
         {r && r !== "org" && (
           <div className="dsec">
-            <h5>Ditt svar</h5>
+            <h5>Ditt svar{svarRubrik}</h5>
             <div className="acts">
               {(["ja", "kanske", "nej"] as const).map((v) => (
                 <button
@@ -202,17 +213,19 @@ function Motespanel({ lk, id, stang }: { lk: Lk; id: string; stang: () => void }
                 </button>
               ))}
               <button className="btn ghost" type="button" data-rsvp="ny" onClick={() => lk.oppnaPanel({ typ: "forslag", detalj: e })}>
-                Föreslå ny tid
+                {e.serie ? "Föreslå ny tid för den här gången" : "Föreslå ny tid"}
               </button>
             </div>
             {mitt?.forslag && (
               <p className="hint" style={{ marginTop: 6 }}>
-                Du har föreslagit {dayLabel(mitt.forslag.dag)} {hm(mitt.forslag.start)}–{hm(mitt.forslag.start + mitt.forslag.minuter)}. Väntar på{" "}
-                {org?.fornamn}.
+                Du har föreslagit {dayLabel(mitt.forslag.dag)} {hm(mitt.forslag.start)}–{hm(mitt.forslag.start + mitt.forslag.minuter)}
+                {e.serie ? " för den här gången" : ""}. Väntar på {org?.fornamn}.
               </p>
             )}
           </div>
         )}
+
+        {enskilt && <Enskildinnehall lk={lk} e={e} />}
 
         <div className="dsec">
           <h5>Deltagare</h5>
@@ -242,7 +255,7 @@ function Motespanel({ lk, id, stang }: { lk: Lk; id: string; stang: () => void }
             ))}
         </div>
 
-        {(e.agenda || e.plats) && (
+        {!enskilt && (e.agenda || e.plats) && (
           <div className="dsec">
             <h5>Agenda</h5>
             <div className="box">
@@ -252,6 +265,7 @@ function Motespanel({ lk, id, stang }: { lk: Lk; id: string; stang: () => void }
           </div>
         )}
 
+        {!enskilt && (
         <div className="dsec">
           <h5>Påminnelse</h5>
           <p style={{ fontSize: "13.5px" }}>
@@ -260,6 +274,7 @@ function Motespanel({ lk, id, stang }: { lk: Lk; id: string; stang: () => void }
               : "Ingen påminnelse. Inbjudan gick ut som notis och mejl."}
           </p>
         </div>
+        )}
 
         {e.farAndra && (
           <div className="dsec">
@@ -284,9 +299,14 @@ function Motespanel({ lk, id, stang }: { lk: Lk; id: string; stang: () => void }
                   })
                 }
               >
-                Ställ in
+                Ställ in{e.serie ? " den här gången" : ""}
               </button>
             </div>
+            {e.serie && (
+              <p className="hint" style={{ marginTop: 6 }}>
+                Dra förekomsten i kalendern för att flytta bara den här gången, eller hela serien.
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -386,15 +406,19 @@ function Forslag({ lk, e, stang }: { lk: Lk; e: Handelsedetalj; stang: () => voi
             setStart={setStart}
             foresla={foreslaGemensam}
           />
-          <div className="grid2">
-            <label className="field" htmlFor="fSvar">
-              Ditt svar tills vidare
-              <select id="fSvar" value={svar} onChange={(ev) => setSvar(ev.target.value as "kanske" | "nej")}>
-                <option value="kanske">Kanske</option>
-                <option value="nej">Nej, inte den tiden</option>
-              </select>
-            </label>
-          </div>
+          {e.serie ? (
+            <p className="hint">Förslaget gäller bara {dayLabel(e.dag)}. Resten av serien ligger kvar som den är.</p>
+          ) : (
+            <div className="grid2">
+              <label className="field" htmlFor="fSvar">
+                Ditt svar tills vidare
+                <select id="fSvar" value={svar} onChange={(ev) => setSvar(ev.target.value as "kanske" | "nej")}>
+                  <option value="kanske">Kanske</option>
+                  <option value="nej">Nej, inte den tiden</option>
+                </select>
+              </label>
+            </div>
+          )}
           <label className="field" htmlFor="fNote">
             Meddelande till {org?.fornamn} (valfritt)
             <textarea

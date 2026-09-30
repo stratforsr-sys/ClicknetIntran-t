@@ -5,6 +5,37 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-30 (senare) · Leveranskalendern, pass 2: 1:1
+
+Samma gren, `leveranskalender`, **EJ MERGAD**. Beställaren såg pass 1 och sa
+"ser bra ut, fortsätt bygget". Migration **`0070_leveranskalender_enskilt`**
+körd 2026-09-30 14:06 — bara funktioner, inga nya tabeller (0069 skapade dem
+för att 0070 inte skulle behöva ändra en körd fil).
+
+**Seriernas datum räknas i TypeScript.** `forekomster()` i `upprepning.ts`, nu
+med `intervall` (varannan vecka), räknar datumen; `lk_skapa_serie`,
+`lk_flytta_serie` och `lk_fyll_serie` tar dem som `date[]` och föder raderna i
+samma transaktion. Uppgiftsserierna sätter aldrig `intervall` och beter sig som
+förut — provat i `tests/upprepning.mjs`.
+
+**Flytta hela serien** tar bort de icke-avvikande förekomsterna från och med den
+flyttade (aldrig bakåt), föder om dem på den nya veckodagen och nollställer
+seriens svar. En förekomst som flyttats för sig står kvar med sina egna svar.
+Ångra lägger tillbaka serien, förekomsterna och svaren ur ögonblicksbilden.
+
+**`lk_svara` ändrades:** svar för hela serien skriver inte längre över
+förekomsternas egna rader. En förekomst har en egen rad bara när den flyttats
+för sig, och då gäller svaret den flyttade tiden.
+
+**Provat mot databasen** i en transaktion som rullades tillbaka: 36 kontroller
+(födsel, svar på serie och förekomst, flytt en gång och hela serien, ångra,
+punkter med en notis per dag, bock, åtgärd till uppgift och tillbaka,
+förberedelse, koppling till coachningssamtal, påfyllning).
+
+**Dagtidsjobbet** fyller på serierna och skickar förberedelserna
+(`lib/jobb/kalender.ts`). Det körs i produktion först efter merge — main har
+inte steget.
+
 ## 2026-09-30 · Leveranskalendern, pass 1: möten
 
 Byggt efter `docs/leveranskalender/BYGGPROMPT.md` med prototypen som facit.

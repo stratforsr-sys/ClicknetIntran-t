@@ -174,6 +174,17 @@ const TACKNING = {
   "kalender/moten::andraLangd": "notifierar via utkorgen (lib/utkorg-server.ts)",
   "kalender/moten::stallIn": "notifierar via utkorgen (lib/utkorg-server.ts)",
   "kalender/moten::kopiera": "notifierar via utkorgen (lib/utkorg-server.ts)",
+  // Pass 2 (0070): serier och 1:1.
+  "kalender/moten::skapaSerie": "notifierar via utkorgen (lib/utkorg-server.ts)",
+  "kalender/moten::flyttaSerie": "notifierar via utkorgen (lib/utkorg-server.ts)",
+  "kalender/moten::laggTillPunkt":
+    "notifierar via utkorgen (lib/utkorg-server.ts), en notis per dag och mottagare",
+  "kalender/moten::bockaAv":
+    "En bock på en punkt i er gemensamma agenda. Den andra ser den i panelen; en notis per bock hade varit brus.",
+  "kalender/moten::punktTillUppgift": "harledd",
+  "kalender/moten::beOmForberedelse": "notifierar via utkorgen (lib/utkorg-server.ts)",
+  "kalender/moten::sparaSomSamtal": "notifierar via coachning::skapaSamtal",
+  "kalender/moten::hamtaEnskiltInnehall": "Läser bara 1:1-panelens innehåll med läsarens egen token.",
   "kalender/moten::hamtaUpptaget":
     "Läser bara: upptagen tid för assistenten, genom projektionerna. Skriver ingenting.",
   "kalender/moten::hamtaHandelse": "Läser bara panelens innehåll med läsarens egen token.",

@@ -519,6 +519,11 @@ export const NOTIS_KALLOR = [
    * tillstånd: efter klockslaget har den gjort sitt.
    *
    * `utkorg-fel` går till admin när en rad i utkorgen misslyckats tre gånger.
+   *
+   * Pass 2 (0070): `kalender-punkt` — den andra har lagt till en punkt på er
+   * 1:1, EN notis per dag hur många punkter det än blir — och
+   * `kalender-forberedelse`, vardagen före kl 15 eller när den andra ber om det.
+   * Ingen av dem mejlas: båda gäller något man gör nästa gång man är inne.
    */
   "kalender-inbjudan",
   "kalender-flyttad",
@@ -529,6 +534,8 @@ export const NOTIS_KALLOR = [
   "kalender-forslag-beslut",
   "uppgift-paminnelse",
   "utkorg-fel",
+  "kalender-punkt",
+  "kalender-forberedelse",
 
   /**
    * ANGRA-KNAPPEN HAR MED FLIT INGEN KALLA HAR.
@@ -615,6 +622,8 @@ export const HANDELSEKALLOR = [
   "kalender-forslag-beslut",
   "uppgift-paminnelse",
   "utkorg-fel",
+  "kalender-punkt",
+  "kalender-forberedelse",
 ] as const satisfies readonly Notiskalla[];
 
 export type Handelsekalla = (typeof HANDELSEKALLOR)[number];

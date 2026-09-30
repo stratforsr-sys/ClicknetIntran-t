@@ -173,6 +173,7 @@ export function Rutnat({ lk, synliga }: { lk: Lk; synliga: Post[] }) {
       lk.visaKvitto("Välj en vardag.");
       return;
     }
+    if (slapptForekomst(d, m, post)) return;
     startOvergang(async () => {
       if (post.slag === "uppgift") {
         const f = new FormData();
@@ -186,6 +187,13 @@ export function Rutnat({ lk, synliga }: { lk: Lk; synliga: Post[] }) {
       }
       lk.efter(await flytta(post.ref!, d, m), false);
     });
+  }
+
+  /** En förekomst i en serie frågar först: bara den här gången, eller hela serien? */
+  function slapptForekomst(d: string, m: number, post: Post): boolean {
+    if (!post.serie || post.slag === "uppgift") return false;
+    lk.serieflytt({ eventId: post.ref!, rubrik: titel(post, lk) ?? "", dag: d, start: m });
+    return true;
   }
 
   // ---------------------------------------------------------------------------

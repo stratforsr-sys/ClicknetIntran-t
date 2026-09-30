@@ -14,6 +14,45 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "kalendern-1-1-med-saljarna",
+    rubrik: "1:1 med säljarna: en gemensam agenda, åtgärder som följer med och siffrorna bredvid",
+    ingress:
+      "Boka en 1:1 som återkommer varje vecka eller varannan. Båda fyller på agendan under veckan, åtgärderna följer med tills de är klara, och säljarens siffror står i samma panel.",
+    text: `En 1:1 är mer än en tid i kalendern. Nu finns resten också.
+
+## Boka
+
+Tryck **+ Ny händelse**, välj fliken **1:1** och vem den är med. Välj **Varje
+vecka** eller **Varannan vecka** under Upprepa. Kalendern lägger ut två månader
+framåt och fyller på av sig själv.
+
+Vanliga möten kan också upprepas nu — varje vardag, varje vecka eller varannan.
+
+## Agendan och åtgärderna
+
+Öppna 1:1:an. Båda kan lägga till punkter på agendan, och den andra får en
+notis — en om dagen, inte en per punkt. Åtgärder som inte är klara följer med
+till nästa gång. **Till uppgift** gör en åtgärd till en vanlig uppgift på den
+som ska göra den.
+
+Dagen före kl 15 får ni båda en påminnelse om att fylla på agendan. En 1:1 på
+måndag påminns på fredagen.
+
+## Flytta
+
+Dra 1:1:an till en annan tid. Kalendern frågar om det gäller **bara den här
+gången** eller **hela serien**.
+
+## Anteckningarna
+
+Den som håller samtalet och är säljarens chef kan spara anteckningarna som ett
+coachningssamtal — mål, nuläge, alternativ och vilja — och de hamnar där
+coachningssamtalen alltid legat.`,
+    datum: "2026-09-30",
+    roller: ["salesperson", "team_lead", "sales_manager", "ceo"],
+    href: "/kalender",
+  },
+  {
     slug: "kalendern-bokar-moten",
     rubrik: "Kalendern bokar möten: bjud in, svara och föreslå en ny tid",
     ingress:

@@ -42,6 +42,11 @@ import {
   upptagnaAv,
   weekno,
   LK_FEL,
+  enskildTitel,
+  kvittoSerieFlyttad,
+  kvittoSerieInbjudan,
+  regeltext,
+  serieregel,
 } from "../src/lib/leveranskalender.ts";
 
 let fel = 0;
@@ -66,6 +71,7 @@ const post = (id, start, minuter, extra = {}) => ({
   organisator: "a",
   deltagare: [],
   serie: false,
+  serieId: null,
   paminnelse: 10,
   ...extra,
 });
@@ -168,6 +174,29 @@ console.log("\n\x1b[1mNotiserna säger vem som gjorde vad\x1b[0m");
   ok("en okänd mall skickas inte", notistext(rad("påhittad"), u) === null);
   const p = notistext({ kalla: "uppgift-paminnelse", mall: "uppgift-paminnelse", till: "b", av: null, task_id: "t1", data: { dag: "2026-10-02", tid: "14:00" } }, { avNamn: null, rubrik: "Ring tillbaka", dag: "2026-10-02", tid: "14:00" });
   lika("uppgiftens påminnelse", [p.rubrik, p.detalj, p.href], ["Ring tillbaka", "Om tio minuter, kl 14:00", "/uppgifter/t1"]);
+}
+
+console.log("\n\x1b[1mSerier och 1:1 (pass 2)\x1b[0m");
+{
+  lika("varje vecka blir veckovis på dagens veckodag", serieregel("vecka", "2026-09-30"), { monster: "veckovis", intervall: 1, veckodag: 3, starts_on: "2026-09-30", ends_on: null });
+  lika("varannan vecka", serieregel("varannan", "2026-09-30").intervall, 2);
+  lika("upprepas inte är en serie med en enda gång", serieregel("aldrig", "2026-09-30").ends_on, "2026-09-30");
+  lika("regeltexten", [regeltext(serieregel("vecka", "2026-09-30")), regeltext(serieregel("varannan", "2026-09-30")), regeltext(serieregel("vardagar", "2026-09-30")), regeltext(serieregel("aldrig", "2026-09-30"))], ["varje vecka", "varannan vecka", "varje vardag", "en gång"]);
+  const namn = (id) => ({ z: "Zen", e: "Elin" })[id];
+  lika("1:1 heter efter den andra, för organisatören", enskildTitel("z", "e", "z", namn), "1:1 Elin");
+  lika("och för säljaren", enskildTitel("z", "e", "e", namn), "1:1 Zen");
+  lika("och för någon som ser in", enskildTitel("z", "e", "x", namn), "1:1 Zen · Elin");
+  lika("hela serien flyttad", kvittoSerieFlyttad("2026-10-01", 600, false, ["Elin"]), "Hela serien flyttad till torsdagar 10:00. Elin behöver bekräfta den nya tiden.");
+  lika("hela serien, vardagar", kvittoSerieFlyttad("2026-10-01", 495, true, []), "Hela serien flyttad till vardagar 08:15.");
+  lika("inbjudan till en serie", kvittoSerieInbjudan(["Elin"], "varje vecka"), "Inbjudan skickad till Elin. Serie varje vecka.");
+  const u = { avNamn: "Zen", rubrik: "1:1", dag: "2026-10-07", tid: "10:00" };
+  const rad = (mall, data = {}) => ({ kalla: "x", mall, till: "e", av: "z", event_id: "e1", data });
+  lika("en 1:1 står utan citattecken", notistext(rad("inbjudan-serie", { regel: "varje vecka", dag: "2026-10-07", tid: "10:00" }), u).rubrik, "Zen bjöd in dig till 1:1, varje vecka");
+  lika("och säger när första gången är", notistext(rad("inbjudan-serie", { regel: "varje vecka", dag: "2026-10-07", tid: "10:00" }), u).detalj, "första gången ons 7 okt 10:00");
+  lika("hela serien flyttad, notisen", notistext(rad("flyttad-serie", { regel: "torsdagar", tid: "10:00", svara_igen: true }), u).rubrik, "Zen flyttade hela serien 1:1. Svara igen");
+  lika("ny punkt", notistext(rad("punkt", { text: "Invändningar" }), u).detalj, "“Invändningar”");
+  lika("förberedelsen", notistext({ ...rad("forberedelse"), av: null }, { ...u, avNamn: null }).rubrik, "Inför er 1:1: lägg till det du vill ta upp");
+  lika("be om förberedelse", notistext(rad("forbered-be"), u).rubrik, "Zen vill att du förbereder er 1:1");
 }
 
 console.log("\n\x1b[1mAvatarerna\x1b[0m");

@@ -550,3 +550,17 @@ Planeringsvyn står kvar oförändrad under `/kalender?vy=planera`.
   tu man hand. Kursfrister och projektens deadline ritas som orderfristen.
 - Sökningen och minikalenderns prickar gäller det som är hämtat för vyn, inte
   fyra veckor framåt.
+- (Pass 2) 1:1-panelen har en rad för att lägga till en **åtgärd**; prototypen
+  kan bara lägga till agendapunkter, men spec:en säger "gemensam agenda och
+  åtgärder" och en åtgärd utan väg in finns inte.
+- (Pass 2) **K&V-snitt** är medelvärdet av säljarens senaste poäng per
+  bedömningsområde (`kvPerOmrade`). Order mot mål räknar godkända order
+  (signerad eller betald) i innevarande månad. Siffror läses med läsarens token;
+  får hon inte se dem står "–".
+- (Pass 2) **Anteckningarna** sparas genom coachningsmodulens egen
+  `skapaSamtal`, med dess regler: bara säljarens chef, och tidigast samma dag.
+  Prototypens knapp "Öppna samtalet" blir därför "Anteckna som
+  coachningssamtal" tills samtalet finns, sedan "Öppna samtalet".
+- (Pass 2) **Plats och Visa som** på en serie sätts på de förekomster som föds
+  när serien skapas. Förekomster som föds senare av dagtidsjobbet får
+  standardvärdena; serien har inga egna kolumner för dem.

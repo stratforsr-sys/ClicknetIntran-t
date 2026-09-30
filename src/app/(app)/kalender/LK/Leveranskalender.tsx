@@ -12,6 +12,7 @@ import {
   VY_TANGENT,
   daySum,
   dayLabel,
+  hm,
   len,
   mm,
   periodtext,
@@ -21,7 +22,7 @@ import {
   type Vy,
 } from "@/lib/leveranskalender";
 import { angra } from "@/app/(app)/angra/actions";
-import { angringsLage, type Resultat } from "../moten/actions";
+import { angringsLage, flytta, flyttaSerie, type Resultat } from "../moten/actions";
 import { Sidolista } from "./Sidolista";
 import { Rutnat } from "./Rutnat";
 import { Agenda, Manad } from "./Vyer";
@@ -65,6 +66,8 @@ export function Leveranskalender({
   const [panel, setPanel] = useState<Panellage | null>(oppna ? { typ: "handelse", id: oppna } : null);
   const [kvitto, setKvitto] = useState<{ text: string; angra?: string; nr: number } | null>(null);
   const [mmManad, setMmManad] = useState(data.anchor.slice(0, 7));
+  const [smove, setSmove] = useState<{ eventId: string; rubrik: string; dag: string; start: number } | null>(null);
+  const smOne = useRef<HTMLButtonElement>(null);
   const senastFokus = useRef<HTMLElement | null>(null);
   const protoRef = useRef<HTMLDivElement>(null);
 
@@ -173,6 +176,10 @@ export function Leveranskalender({
       const tag = (document.activeElement as HTMLElement | null)?.tagName ?? "";
       const skriver = /INPUT|TEXTAREA|SELECT/.test(tag);
       if (ev.key === "Escape") {
+        if (smove) {
+          setSmove(null);
+          return;
+        }
         if (panel) stangPanel();
         return;
       }
@@ -202,7 +209,21 @@ export function Leveranskalender({
     }
     document.addEventListener("keydown", vidTangent);
     return () => document.removeEventListener("keydown", vidTangent);
-  }, [panel, stangPanel, ga, data.vy, data.anchor, nyHandelse]);
+  }, [panel, smove, stangPanel, ga, data.vy, data.anchor, nyHandelse]);
+
+  useEffect(() => {
+    if (smove) smOne.current?.focus();
+  }, [smove]);
+
+  /** Seriebannern (`renderSel()`): bara den här gången, hela serien, eller avbryt. */
+  function flyttaForekomst(hela: boolean) {
+    const f = smove;
+    setSmove(null);
+    if (!f) return;
+    startOvergang(async () => {
+      efter(hela ? await flyttaSerie(f.eventId, f.dag, f.start) : await flytta(f.eventId, f.dag, f.start), false);
+    });
+  }
 
   // ---------------------------------------------------------------------------
   // Vad som visas
@@ -250,6 +271,7 @@ export function Leveranskalender({
     efter,
     visaKvitto,
     ga,
+    serieflytt: setSmove,
   };
 
   const period = periodtext(data.vy, data.anchor);
@@ -324,7 +346,26 @@ export function Leveranskalender({
               </span>
             )}
           </div>
-          <div className="selbanner" id="selbanner" />
+          <div className={`selbanner${smove ? " on" : ""}`} id="selbanner">
+            {smove && (
+              <>
+                <span>
+                  Flytta <b>{smove.rubrik}</b> till {dayLabel(smove.dag)} {hm(smove.start)}:
+                </span>
+                <span className="acts">
+                  <button ref={smOne} className="btn sm primary" id="smOne" type="button" onClick={() => flyttaForekomst(false)}>
+                    Bara den här gången
+                  </button>
+                  <button className="btn sm" id="smAll" type="button" onClick={() => flyttaForekomst(true)}>
+                    Hela serien
+                  </button>
+                  <button className="btn sm ghost" id="smNo" type="button" onClick={() => setSmove(null)}>
+                    Avbryt
+                  </button>
+                </span>
+              </>
+            )}
+          </div>
           <Scen lk={lk} synliga={synliga} />
         </div>
 

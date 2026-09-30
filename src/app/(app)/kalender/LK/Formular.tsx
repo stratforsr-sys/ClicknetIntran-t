@@ -1,19 +1,31 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { KVITTO_INGEN_TID_14, WORK_S, autopick, dayLabel, hm, isWeekend, plus } from "@/lib/leveranskalender";
-import { hamtaUpptaget, skapaMote } from "../moten/actions";
+import {
+  KVITTO_INGEN_TID_14,
+  UPPREPA,
+  UPPREPA_ETIKETT,
+  WORK_S,
+  autopick,
+  dayLabel,
+  hm,
+  isWeekend,
+  plus,
+  type Upprepa,
+} from "@/lib/leveranskalender";
+import { hamtaUpptaget, skapaMote, skapaSerie } from "../moten/actions";
 import { skapaUppgift } from "@/app/(app)/uppgifter/actions";
 import { Av, type Lk } from "./gemensamt";
 import { Assistent, Datumfalt, Krockruta, Stang, Tidsval, upptagnaI, useUpptaget } from "./Tidsdelar";
 
-type Typ = "mote" | "uppgift";
+type Typ = "mote" | "enskilt" | "uppgift";
 
 /**
  * `renderForm()`: Ny händelse.
  *
- * Pass 1 har två flikar, Möte och Uppgift. 1:1 kommer i pass 2 och
- * leveransens förinställningar i pass 3; flikarna ritas när de går att spara.
+ * Tre flikar: Möte, 1:1 och Uppgift. Leveransens förinställningar kommer i
+ * pass 3. Ett möte som upprepas och varje 1:1 blir en serie (0070); ett möte
+ * som inte upprepas blir en enda händelse.
  *
  * UPPGIFTEN SKAPAS I UPPGIFTSMODULEN, genom dess egen `skapaUppgift`. Den får
  * en ansvarig (beställarens beslut 2026-09-30: man ska kunna lägga upp
@@ -32,6 +44,9 @@ export function Formular({
 }) {
   const mig = lk.data.mig;
   const [typ, setTyp] = useState<Typ>("mote");
+  const forstaSaljare = lk.data.personer.find((p) => p.grupp === "salj" && p.id !== mig) ?? lk.data.personer.find((p) => p.id !== mig);
+  const [med, setMed] = useState<string>(forstaSaljare?.id ?? "");
+  const [upprepa, setUpprepa] = useState<Upprepa>("aldrig");
   const [rubrik, setRubrik] = useState("");
   const [deltagare, setDeltagare] = useState<string[]>([]);
   const [ansvarig, setAnsvarig] = useState(mig);
@@ -46,7 +61,8 @@ export function Formular({
   const [vantar, startOvergang] = useTransition();
   const rubrikRef = useRef<HTMLInputElement>(null);
 
-  const personer = typ === "uppgift" ? [ansvarig] : [mig, ...deltagare];
+  const personer = typ === "uppgift" ? [ansvarig] : typ === "enskilt" ? [mig, med].filter(Boolean) : [mig, ...deltagare];
+  const inbjudna = typ === "enskilt" ? [med].filter(Boolean) : typ === "mote" ? deltagare : [];
   const upp = useUpptaget(personer, dag);
 
   // Utan vald tid: första lediga tiden för alla (AC 6). "+" i dagrubriken
@@ -67,7 +83,7 @@ export function Formular({
   }, []);
 
   useEffect(() => {
-    rubrikRef.current?.focus({ preventScroll: true });
+    document.getElementById(typ === "enskilt" ? "fWith" : "fTitle")?.focus({ preventScroll: true });
   }, [typ]);
 
   async function foreslaGemensam() {
@@ -85,18 +101,24 @@ export function Formular({
   }
 
   function spara(tvinga: boolean) {
-    if (!rubrik.trim()) {
+    if (typ !== "enskilt" && !rubrik.trim()) {
       lk.visaKvitto("Skriv en rubrik först.");
       rubrikRef.current?.focus();
       return;
     }
-    if (typ === "mote") {
+    if (typ !== "uppgift") {
       const upptagna = upptagnaI(upp.data, personer, dag, start, minuter, null);
       if (!tvinga && upptagna.length) {
         setKrock(upptagna);
         return;
       }
       startOvergang(async () => {
+        if (typ === "enskilt" || upprepa !== "aldrig") {
+          lk.efter(
+            await skapaSerie({ typ, rubrik, med: inbjudna, dag, start, minuter, upprepa, agenda, plats, visaSom, paminnelse }),
+          );
+          return;
+        }
         lk.efter(
           await skapaMote({ rubrik, dag, start, minuter, deltagare, plats, agenda, paminnelse, visaSom }),
         );
@@ -139,6 +161,7 @@ export function Formular({
           {(
             [
               ["mote", "Möte"],
+              ["enskilt", "1:1"],
               ["uppgift", "Uppgift"],
             ] as const
           ).map(([k, l]) => (
@@ -149,6 +172,8 @@ export function Formular({
               aria-pressed={typ === k}
               onClick={() => {
                 setTyp(k);
+                if (k === "enskilt" && upprepa === "aldrig") setUpprepa("vecka");
+                if (k === "enskilt" && !med && deltagare[0]) setMed(deltagare[0]);
                 setKrock(null);
               }}
             >
@@ -167,20 +192,41 @@ export function Formular({
             spara(false);
           }}
         >
-          <label className="field" htmlFor="fTitle">
-            {typ === "uppgift" ? "Vad ska göras" : "Rubrik"}
-            <input
-              ref={rubrikRef}
-              id="fTitle"
-              type="text"
-              value={rubrik}
-              maxLength={200}
-              placeholder={typ === "uppgift" ? "Till exempel: Förbered månadsmöte" : "Till exempel: Genomgång av veckans överlämningar"}
-              onChange={(e) => setRubrik(e.target.value)}
-            />
-          </label>
+          {typ === "enskilt" ? (
+            <label className="field" htmlFor="fWith">
+              1:1 med
+              <select
+                id="fWith"
+                value={med}
+                onChange={(e) => {
+                  setMed(e.target.value);
+                  setKrock(null);
+                }}
+              >
+                {andra.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.namn}
+                    {p.roll ? ` · ${p.roll}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <label className="field" htmlFor="fTitle">
+              {typ === "uppgift" ? "Vad ska göras" : "Rubrik"}
+              <input
+                ref={rubrikRef}
+                id="fTitle"
+                type="text"
+                value={rubrik}
+                maxLength={200}
+                placeholder={typ === "uppgift" ? "Till exempel: Förbered månadsmöte" : "Till exempel: Genomgång av veckans överlämningar"}
+                onChange={(e) => setRubrik(e.target.value)}
+              />
+            </label>
+          )}
 
-          {typ === "mote" ? (
+          {typ === "enskilt" ? null : typ === "mote" ? (
             <div className="field">
               <span>Deltagare från Nav</span>
               <div className="people">
@@ -245,7 +291,7 @@ export function Formular({
             }}
           />
 
-          {typ === "mote" && (
+          {typ !== "uppgift" && (
             <>
               <Assistent
                 lk={lk}
@@ -262,6 +308,16 @@ export function Formular({
                 foresla={foreslaGemensam}
               />
               <div className="grid2">
+                <label className="field" htmlFor="fRep">
+                  Upprepa
+                  <select id="fRep" value={upprepa} onChange={(e) => setUpprepa(e.target.value as Upprepa)}>
+                    {UPPREPA.map((k) => (
+                      <option key={k} value={k}>
+                        {UPPREPA_ETIKETT[k]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <label className="field" htmlFor="fRem">
                   Påminnelse
                   <select id="fRem" value={paminnelse} onChange={(e) => setPaminnelse(Number(e.target.value))}>
@@ -272,6 +328,8 @@ export function Formular({
                     ))}
                   </select>
                 </label>
+              </div>
+              <div className="grid2">
                 <label className="field" htmlFor="fShow">
                   Visa som
                   <select id="fShow" value={visaSom} onChange={(e) => setVisaSom(e.target.value)}>
@@ -287,8 +345,6 @@ export function Formular({
                     ))}
                   </select>
                 </label>
-              </div>
-              <div className="grid2">
                 <label className="field" htmlFor="fPlats">
                   Plats
                   <select id="fPlats" value={plats} onChange={(e) => setPlats(e.target.value)}>
@@ -299,8 +355,14 @@ export function Formular({
                 </label>
               </div>
               <label className="field" htmlFor="fAgenda">
-                Agenda
-                <textarea id="fAgenda" maxLength={600} placeholder="Vad ska mötet leda till?" value={agenda} onChange={(e) => setAgenda(e.target.value)} />
+                {typ === "enskilt" ? "Första agendapunkt" : "Agenda"}
+                <textarea
+                  id="fAgenda"
+                  maxLength={600}
+                  placeholder={typ === "enskilt" ? "Den andra ser punkten och kan lägga till egna" : "Vad ska mötet leda till?"}
+                  value={agenda}
+                  onChange={(e) => setAgenda(e.target.value)}
+                />
               </label>
             </>
           )}
@@ -308,20 +370,20 @@ export function Formular({
           <Krockruta lk={lk} krock={krock} dag={dag} start={start} minuter={minuter} tvinga={() => spara(true)} hitta={foreslaGemensam} />
           <div className="acts">
             <button className="btn primary" type="submit" disabled={vantar}>
-              {typ === "mote" && deltagare.length ? "Skicka inbjudan" : "Spara"}
+              {inbjudna.length ? "Skicka inbjudan" : "Spara"}
             </button>
             <button className="btn ghost" type="button" id="fCancel" onClick={stang}>
               Avbryt
             </button>
           </div>
           <p className="hint">
-            {typ === "mote"
-              ? deltagare.length
-                ? `${deltagare.map((id) => lk.personer.get(id)?.fornamn).join(", ")} får en notis i klockan och ett mejl. Svaren kommer tillbaka till din klocka.`
-                : ""
-              : ansvarig === mig
-                ? "Skapas i uppgiftsmodulen och ritas här med klockslag. Bara du ser den."
-                : `Skapas i uppgiftsmodulen och läggs på ${lk.personer.get(ansvarig)?.fornamn}, som ser den som ny i sin klocka.`}
+            {inbjudna.length
+              ? `${inbjudna.map((id) => lk.personer.get(id)?.fornamn).join(", ")} får en notis i klockan och ett mejl. Svaren kommer tillbaka till din klocka.`
+              : typ === "uppgift"
+                ? ansvarig === mig
+                  ? "Skapas i uppgiftsmodulen och ritas här med klockslag. Bara du ser den."
+                  : `Skapas i uppgiftsmodulen och läggs på ${lk.personer.get(ansvarig)?.fornamn}, som ser den som ny i sin klocka.`
+                : ""}
           </p>
         </form>
       </div>
