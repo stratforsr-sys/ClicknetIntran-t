@@ -1,0 +1,1889 @@
+<title>Leveranskalendern</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* =============================================================================
+   LEVERANSKALENDERN · PROTOTYP OCH VISUELL SANNING
+   För Claude Code: allt inuti #proto ska se ut exakt så här i Nav.
+   - Färgtokens nedan heter som Navs (--ink-900 = --color-ink-900 i globals.css).
+     NYA tokens som måste läggas till i Nav: --lev, --lev-ink, --lev-soft, --lev-line,
+     --slate-ink, --slate-tint, --plum-ink, --plum-tint, --pend, --hatch, --now.
+   - Mörkt läge (@media prefers-color-scheme och [data-theme]) byggs INTE: Nav har
+     inget mörkt läge. Använd bara ljusa värden.
+   - Mått i px är exakta. Se docs/leveranskalender/referens/stilmatt.json.
+   - Öppna filen med #bara-kalender för att bara se kalendern.
+   ============================================================================= */
+:root{
+  --canvas:#F4F6F7; --surface:#FFFFFF; --surface-alt:#FAFBFB; --line:#E3E8E8; --line-strong:#CBD4D3;
+  --ink-900:#0E1A19; --ink-700:#354443; --ink-500:#6B7A79; --ink-300:#A9B4B3;
+  --brand-700:#0A5F53; --brand-600:#0B7F6E; --brand-500:#17BAA2; --brand-100:#DCF5F0; --brand-50:#F0FAF8;
+  --on-brand:#FFFFFF;
+  --ok:#1E9E7A; --warn:#E8B93B; --danger:#D2544B; --info:#3E86C9;
+  --ok-ink:#0B5F48; --ok-tint:#E3F5EE; --warn-ink:#7A5606; --warn-tint:#FBF0D2;
+  --danger-ink:#8E2F28; --danger-tint:#FBE7E5; --info-ink:#1B4F7E; --info-tint:#E4EFF9;
+  --brand-ink:#0A5F53; --brand-tint:#DCF5F0; --accent-ink:#7A4708; --accent-tint:#FDEBD4;
+  --plum-ink:#5B2E6E; --plum-tint:#F1E6F5; --slate-ink:#2F3F5C; --slate-tint:#E6EAF3;
+  --shadow-1:0 1px 2px rgba(14,26,25,.04),0 8px 24px -8px rgba(14,26,25,.08);
+  --shadow-3:0 4px 8px rgba(14,26,25,.06),0 24px 48px -16px rgba(14,26,25,.16);
+  --hatch:rgba(30,158,122,.14); --pend:rgba(14,26,25,.06);
+  --now:#D2544B;
+  --lev:#9A3412; --lev-ink:#FFFFFF; --lev-soft:#FFF4EB; --lev-line:#F3C9A8;
+  --sans:"Plus Jakarta Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --canvas:#0B1413; --surface:#111D1C; --surface-alt:#0E1918; --line:#22302F; --line-strong:#33423F;
+    --ink-900:#E8F0EF; --ink-700:#C3CFCE; --ink-500:#8A9998; --ink-300:#4E5C5B;
+    --brand-700:#7FE0CF; --brand-600:#17BAA2; --brand-500:#4FD3BE; --brand-100:#0D3A33; --brand-50:#0C2521;
+    --on-brand:#04211C;
+    --ok-ink:#7FD9B8; --ok-tint:#0F2E25; --warn-ink:#EBCB6E; --warn-tint:#33290C;
+    --danger-ink:#F09A93; --danger-tint:#3A1715; --info-ink:#9CC6EE; --info-tint:#13283B;
+    --brand-ink:#7FE0CF; --brand-tint:#0D3A33; --accent-ink:#F6C27E; --accent-tint:#3A2710;
+    --plum-ink:#D9B3EA; --plum-tint:#2C1A35; --slate-ink:#B9C6E4; --slate-tint:#1B2233;
+    --shadow-1:0 1px 2px rgba(0,0,0,.3),0 8px 24px -8px rgba(0,0,0,.4);
+    --shadow-3:0 4px 8px rgba(0,0,0,.35),0 24px 48px -16px rgba(0,0,0,.6);
+    --hatch:rgba(127,217,184,.10); --pend:rgba(255,255,255,.05);
+    --lev:#FB923C; --lev-ink:#1C0A02; --lev-soft:#2A160A; --lev-line:#6B3514;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --canvas:#0B1413; --surface:#111D1C; --surface-alt:#0E1918; --line:#22302F; --line-strong:#33423F;
+  --ink-900:#E8F0EF; --ink-700:#C3CFCE; --ink-500:#8A9998; --ink-300:#4E5C5B;
+  --brand-700:#7FE0CF; --brand-600:#17BAA2; --brand-500:#4FD3BE; --brand-100:#0D3A33; --brand-50:#0C2521;
+  --on-brand:#04211C;
+  --ok-ink:#7FD9B8; --ok-tint:#0F2E25; --warn-ink:#EBCB6E; --warn-tint:#33290C;
+  --danger-ink:#F09A93; --danger-tint:#3A1715; --info-ink:#9CC6EE; --info-tint:#13283B;
+  --brand-ink:#7FE0CF; --brand-tint:#0D3A33; --accent-ink:#F6C27E; --accent-tint:#3A2710;
+  --plum-ink:#D9B3EA; --plum-tint:#2C1A35; --slate-ink:#B9C6E4; --slate-tint:#1B2233;
+  --shadow-1:0 1px 2px rgba(0,0,0,.3),0 8px 24px -8px rgba(0,0,0,.4);
+  --shadow-3:0 4px 8px rgba(0,0,0,.35),0 24px 48px -16px rgba(0,0,0,.6);
+  --hatch:rgba(127,217,184,.10); --pend:rgba(255,255,255,.05);
+  --lev:#FB923C; --lev-ink:#1C0A02; --lev-soft:#2A160A; --lev-line:#6B3514;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+.bara-kalender header.top,.bara-kalender .toc,.bara-kalender section:not(#prototyp),.bara-kalender #prototyp > .head,.bara-kalender .tour,.bara-kalender .proto-note{display:none!important}
+.bara-kalender section#prototyp{padding-block:16px}
+html{scroll-behavior:smooth}
+body{background:var(--canvas);color:var(--ink-700);font-family:var(--sans);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased;padding-inline:16px;padding-block:0 64px}
+.wrap{max-width:1200px;margin:0 auto}
+.prose{max-width:70ch}
+h1,h2,h3{color:var(--ink-900);text-wrap:balance;margin:0}
+h1{font-size:clamp(32px,5vw,48px);line-height:1.05;letter-spacing:-.02em;font-weight:800}
+h2{font-size:24px;line-height:1.2;font-weight:700;letter-spacing:-.01em}
+h3{font-size:16px;line-height:1.3;font-weight:700}
+p{margin:0}
+a{color:var(--brand-600)}
+code{font-family:var(--mono);font-size:.84em;background:var(--surface-alt);border:1px solid var(--line);border-radius:6px;padding:1px 5px;color:var(--ink-900)}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--brand-600)}
+.muted{color:var(--ink-500)}
+.mono{font-family:var(--mono)}
+section{padding-block:52px 0;scroll-margin-top:64px}
+section > .head{display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
+.lede{font-size:18px;line-height:1.55;color:var(--ink-700)}
+header.top{padding-block:36px 4px;display:flex;flex-direction:column;gap:14px}
+.meta{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:13px;color:var(--ink-500);align-items:center}
+.vtag{font-family:var(--mono);font-size:11px;font-weight:500;background:var(--brand-600);color:var(--on-brand);border-radius:999px;padding:2px 9px}
+.toc{position:sticky;top:env(safe-area-inset-top,0px);z-index:40;background:color-mix(in srgb,var(--canvas) 92%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--line);margin-inline:-16px;padding:8px 16px;overflow-x:auto;margin-top:18px}
+.toc .in{max-width:1200px;margin:0 auto;display:flex;gap:4px;white-space:nowrap}
+.toc a{font-size:13px;font-weight:600;color:var(--ink-500);text-decoration:none;padding:5px 10px;border-radius:8px}
+.toc a:hover{background:var(--surface);color:var(--ink-900)}
+.changes{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:12px}
+.chg{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.chg .lab{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-500)}
+.chg .ba{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:13.5px}
+.chg .ba span:nth-child(odd){font-family:var(--mono);font-size:11px;color:var(--ink-500);padding-top:2px}
+.chg .ba .after{color:var(--ink-900);font-weight:600}
+.keys{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.key{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:6px}
+.key b{color:var(--ink-900);font-size:15px}
+.key p{font-size:14px}
+
+.proto{background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow-1);overflow:hidden;position:relative}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.btn{font:inherit;font-size:13px;font-weight:600;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink-900);border-radius:10px;padding:6px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;line-height:1.3}
+.btn:hover{background:var(--surface-alt)}
+:is(.btn,.seg button,.ev,.qitem,.mm button,.nitem,.chipbtn,.tabs button):focus-visible{outline:2px solid var(--brand-600);outline-offset:2px}
+.btn.primary{background:var(--brand-600);border-color:var(--brand-600);color:var(--on-brand)}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.sm{padding:4px 9px;font-size:12px;border-radius:8px}
+.btn.on{background:var(--brand-100);border-color:var(--brand-600);color:var(--brand-ink)}
+.btn.danger{background:var(--danger-tint);border-color:var(--danger-tint);color:var(--danger-ink)}
+.icon{width:30px;height:30px;padding:0;justify-content:center}
+.range{font-weight:700;color:var(--ink-900);font-size:15px;margin-inline:4px;white-space:nowrap}
+.range small{font-weight:500;color:var(--ink-500);font-size:12px;margin-left:6px;font-family:var(--mono)}
+.seg{display:inline-flex;background:var(--canvas);border-radius:10px;padding:3px;gap:2px;flex-wrap:wrap}
+.seg button{font:inherit;font-size:12.5px;font-weight:600;border:0;background:transparent;color:var(--ink-500);padding:5px 10px;border-radius:8px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink-900);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.seg button kbd{display:none}
+.spacer{flex:1}
+.viewas{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-500);font-weight:600}
+.viewas select{font:inherit;font-size:13px;font-weight:600;color:var(--ink-900);background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;padding:5px 8px;max-width:180px}
+.bell{position:relative}
+.bell .n{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;border-radius:999px;background:var(--danger);color:#fff;font-size:10.5px;font-weight:800;display:grid;place-items:center;padding:0 5px;border:2px solid var(--surface)}
+.npanel{position:absolute;right:12px;top:58px;width:min(380px,calc(100% - 24px));background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-3);z-index:30;display:flex;flex-direction:column;max-height:460px}
+.npanel h4{margin:0;padding:12px 14px;border-bottom:1px solid var(--line);font-size:13px;color:var(--ink-900);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.nlist{overflow:auto;display:flex;flex-direction:column}
+.nitem{display:grid;grid-template-columns:28px 1fr;gap:10px;padding:10px 14px;border:0;border-bottom:1px solid var(--line);background:transparent;text-align:left;font:inherit;color:inherit;cursor:pointer}
+.nitem:hover{background:var(--surface-alt)}
+.nitem.unread{background:var(--brand-50)}
+.nitem b{display:block;color:var(--ink-900);font-size:13.5px;line-height:1.35}
+.nitem span.d{font-size:12px;color:var(--ink-500)}
+.nitem .ch{display:flex;gap:4px;margin-top:4px}
+.nitem .ch i{font-style:normal;font-family:var(--mono);font-size:10px;padding:1px 6px;border-radius:999px;background:var(--canvas);color:var(--ink-500)}
+.nic{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font-size:13px;background:var(--canvas)}
+
+.body{display:grid;grid-template-columns:272px minmax(0,1fr);min-height:660px;position:relative}
+.rail{border-right:1px solid var(--line);background:var(--surface-alt);padding:14px;display:flex;flex-direction:column;gap:18px;min-width:0}
+.rail h4{margin:0 0 8px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-500);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.mm{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center}
+.mm .wd{font-size:10px;color:var(--ink-300);font-weight:700}
+.mm button{font:inherit;font-size:12px;border:0;background:transparent;color:var(--ink-700);border-radius:7px;padding:4px 0;cursor:pointer;font-variant-numeric:tabular-nums}
+.mm button.out{color:var(--ink-300)}
+.mm button.inr{background:var(--brand-50)}
+.mm button.today{background:var(--brand-600);color:var(--on-brand);font-weight:700}
+.mmhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-weight:700;color:var(--ink-900);font-size:13px}
+.cals label{display:flex;align-items:center;gap:8px;font-size:13px;padding:3px 0;cursor:pointer}
+.cals input{accent-color:var(--brand-600);width:15px;height:15px;margin:0}
+.cals .lvl{margin-left:auto;font-size:10.5px;color:var(--ink-500);font-family:var(--mono)}
+.cals .grp{font-size:11px;color:var(--ink-500);font-weight:700;margin-top:6px}
+.av{width:22px;height:22px;border-radius:50%;display:inline-grid;place-items:center;font-size:9.5px;font-weight:800;color:#fff;flex:none}
+.av.z{background:#0E1A19}.av.s1{background:#C2410C}.av.s2{background:#3E86C9}.av.s3{background:#8E54A8}.av.d1{background:#0B7F6E}.av.d2{background:#6B7A79}
+:root[data-theme="dark"] .av.z{background:#E8F0EF;color:#0E1A19}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .av.z{background:#E8F0EF;color:#0E1A19}}
+.queue{display:flex;flex-direction:column;gap:8px}
+.qitem{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 11px;cursor:grab;display:flex;flex-direction:column;gap:4px;text-align:left;font:inherit;color:inherit;width:100%}
+.qitem:hover{border-color:var(--line-strong)}
+.qitem.sel{outline:2px solid var(--brand-600);outline-offset:1px}
+.qitem .row{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.qitem b{font-size:13.5px;color:var(--ink-900)}
+.qitem .sub{font-size:12px;color:var(--ink-500)}
+.sla{font-family:var(--mono);font-size:11px;font-weight:500;padding:2px 7px;border-radius:999px;white-space:nowrap;letter-spacing:0;text-transform:none}
+.sla.ok{background:var(--ok-tint);color:var(--ok-ink)}.sla.warn{background:var(--warn-tint);color:var(--warn-ink)}.sla.bad{background:var(--danger-tint);color:var(--danger-ink)}
+.slabar{height:4px;background:var(--line);border-radius:4px;overflow:hidden}
+.slabar i{display:block;height:100%}
+.qempty{font-size:13px;color:var(--ink-500);padding:10px;border:1px dashed var(--line-strong);border-radius:12px;text-align:center}
+.hint{font-size:12px;color:var(--ink-500);line-height:1.45;font-weight:500}
+.main{display:flex;flex-direction:column;min-width:0}
+.strip{display:flex;flex-wrap:wrap;gap:6px 22px;padding:10px 16px;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--ink-500)}
+.strip b{color:var(--ink-900);font-variant-numeric:tabular-nums;font-size:14px;margin-right:4px}
+.strip .over b{color:var(--danger-ink)}
+.strip .att b{color:var(--brand-600)}
+.stage{flex:1;overflow:auto;max-height:660px;position:relative}
+.selbanner{display:none;align-items:center;gap:10px;padding:8px 16px;background:var(--brand-50);border-bottom:1px solid var(--brand-100);font-size:13px;color:var(--brand-ink)}
+.selbanner.on{display:flex}
+.tg{display:grid;min-width:640px}
+.tg .corner,.tg .dh{position:sticky;top:0;z-index:6;background:var(--surface);border-bottom:1px solid var(--line)}
+.dh{padding:8px 10px 6px;border-left:1px solid var(--line);display:flex;flex-direction:column}
+.dh .wdn{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-500)}
+.dh .dn{font-size:22px;font-weight:700;color:var(--ink-900);line-height:1.1;font-variant-numeric:tabular-nums}
+.dh.is-today .dn,.dh.is-today .wdn{color:var(--brand-600)}
+.dh .sum{font-family:var(--mono);font-size:10.5px;color:var(--ink-500);margin-top:2px;white-space:nowrap}
+.dh .sum.over{color:var(--danger-ink)}
+.dh .adc{display:flex;flex-direction:column;gap:3px;margin-top:5px;min-height:20px}
+.chip{font-size:11.5px;font-weight:600;border-radius:6px;padding:2px 7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.gut{position:relative}
+.gut span{position:absolute;right:8px;transform:translateY(-50%);font-family:var(--mono);font-size:10.5px;color:var(--ink-300)}
+.col{position:relative;border-left:1px solid var(--line)}
+.col.weekend{background:var(--surface-alt)}
+.slot{position:absolute;left:0;right:0;border-top:1px solid var(--line)}
+.slot.half{border-top-style:dashed;opacity:.6}
+.col .off{position:absolute;left:0;right:0;background:var(--surface-alt);pointer-events:none}
+.hit{position:absolute;left:0;right:0;cursor:pointer;z-index:1}
+.hit:hover{background:color-mix(in srgb,var(--brand-100) 55%,transparent)}
+.hit.drop{background:var(--brand-100);outline:2px dashed var(--brand-600);outline-offset:-2px}
+.nowline{position:absolute;left:0;right:0;height:2px;background:var(--now);z-index:5;pointer-events:none}
+.nowline::before{content:"";position:absolute;left:-4px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--now)}
+.ledig{position:absolute;inset:0;background:repeating-linear-gradient(135deg,var(--hatch) 0 8px,transparent 8px 16px);pointer-events:none}
+.ev{position:absolute;z-index:3;border-radius:8px;padding:4px 7px 4px 9px;font-size:12px;line-height:1.3;overflow:hidden;cursor:pointer;border:1px solid transparent;text-align:left;font-family:inherit;display:flex;flex-direction:column;gap:1px}
+.ev::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:currentColor;opacity:.75}
+.ev .t{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ev .s{opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}
+.ev .badge{font-family:var(--mono);font-size:10px;font-weight:500;opacity:.9}
+.ev.compact{flex-direction:row;align-items:center;gap:6px;padding:0 6px 0 8px;white-space:nowrap}
+.ev.compact .t,.ev.compact .s{flex:0 1 auto;min-width:0}
+.ev .avs{position:absolute;right:4px;top:4px;display:flex}
+.ev.hasav{container-type:inline-size}.ev.hasav .t{padding-right:calc(var(--avn)*12px + 6px)}
+@container (max-width:120px){.ev.hasav .avs{display:none}.ev.hasav .t{padding-right:0}}
+.ev .avs .av{width:16px;height:16px;font-size:7.5px;margin-left:-4px;border:1.5px solid var(--surface)}
+.ev.done{opacity:.55}.ev.done .t{text-decoration:line-through}
+.ev.missed{border-style:dashed}
+.ev.pending{background-image:repeating-linear-gradient(135deg,var(--pend) 0 6px,transparent 6px 12px);border-color:currentColor;border-style:dashed}
+.ev.selected{outline:2px solid var(--ink-900);outline-offset:1px}
+.ev.busyonly{background:var(--canvas)!important;color:var(--ink-500)!important;border-color:var(--line-strong)!important}
+.ev .rep{font-size:10px;margin-left:4px;opacity:.8}
+.k-mote{background:var(--slate-tint);color:var(--slate-ink)}
+.k-enskilt{background:var(--info-tint);color:var(--info-ink)}
+.k-uppgift{background:var(--surface-alt);color:var(--ink-700);border-color:var(--line-strong)!important;border-style:solid}
+.k-valkomst{background:var(--brand-tint);color:var(--brand-ink)}
+.k-kickoff{background:var(--accent-tint);color:var(--accent-ink)}
+.k-leverans{background:var(--ok-tint);color:var(--ok-ink)}
+.k-avst{background:var(--plum-tint);color:var(--plum-ink)}
+.k-ledig{background:var(--ok-tint);color:var(--ok-ink)}
+.k-order{background:var(--warn-tint);color:var(--warn-ink)}
+.tl{min-width:1000px}
+.tl .hrow{display:grid;position:sticky;top:0;z-index:6;background:var(--surface);border-bottom:1px solid var(--line)}
+.tl .hrow > div{font-family:var(--mono);font-size:10.5px;color:var(--ink-500);padding:8px 0 6px 4px;border-left:1px solid var(--line)}
+.tl .prow{display:grid;border-bottom:1px solid var(--line)}
+.tl .who{padding:10px 12px;display:flex;flex-direction:column;gap:6px;border-right:1px solid var(--line);background:var(--surface-alt)}
+.tl .who .nm{display:flex;align-items:center;gap:8px;font-weight:700;color:var(--ink-900);font-size:13px}
+.tl .who .rl{font-size:11.5px;color:var(--ink-500)}
+.capbar{height:6px;border-radius:4px;background:var(--line);overflow:hidden}
+.capbar i{display:block;height:100%;background:var(--brand-600)}
+.capbar.over i{background:var(--danger)}
+.captext{font-family:var(--mono);font-size:10.5px;color:var(--ink-500)}
+.tl .lane{position:relative;min-height:84px;background-image:linear-gradient(to right,var(--line) 1px,transparent 1px)}
+.tl .lane .hit{top:0;bottom:0}
+.mg{display:grid;grid-template-columns:repeat(7,minmax(96px,1fr));min-width:700px}
+.mg .mh{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-500);padding:8px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface);z-index:2}
+.mg .md{min-height:108px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:6px;display:flex;flex-direction:column;gap:3px;cursor:pointer;min-width:0}
+.mg .md:hover{background:var(--surface-alt)}
+.mg .md .n{font-size:12px;font-weight:700;color:var(--ink-700)}
+.mg .md.out .n{color:var(--ink-300)}
+.mg .md.today .n{color:var(--on-brand);background:var(--brand-600);border-radius:999px;padding:0 7px;align-self:flex-start}
+.mg .more{font-size:11px;color:var(--ink-500);font-weight:600}
+.drawer{position:absolute;top:0;right:0;bottom:0;width:min(430px,100%);background:var(--surface);border-left:1px solid var(--line);box-shadow:var(--shadow-3);z-index:20;display:flex;flex-direction:column;transform:translateX(105%);transition:transform .28s cubic-bezier(.32,.72,0,1),visibility 0s .28s;visibility:hidden}
+.drawer.open{transform:none;visibility:visible;transition:transform .28s cubic-bezier(.32,.72,0,1)}
+.dhd{padding:16px 18px 12px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:8px;position:relative}
+.dhd .x{position:absolute;right:12px;top:12px}
+.dhd h3{font-size:19px;padding-right:40px}
+.dbody{overflow:auto;padding:14px 18px 22px;display:flex;flex-direction:column;gap:18px}
+.dsec h5{margin:0 0 8px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-500);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13px;margin:0}
+.kv dt{color:var(--ink-500)} .kv dd{margin:0;color:var(--ink-900);font-weight:500}
+.box{background:var(--surface-alt);border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;font-size:13.5px}
+.box .q{font-size:11px;font-weight:700;color:var(--ink-500);text-transform:uppercase;letter-spacing:.06em}
+.acts{display:flex;flex-wrap:wrap;gap:8px}
+.rsvp{display:flex;flex-direction:column;gap:6px}
+.rsvp .r{display:flex;align-items:center;gap:8px;font-size:13px}
+.rsvp .st{margin-left:auto;font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:999px}
+.st.ja{background:var(--ok-tint);color:var(--ok-ink)}.st.kanske{background:var(--warn-tint);color:var(--warn-ink)}.st.nej{background:var(--danger-tint);color:var(--danger-ink)}.st.vantar{background:var(--canvas);color:var(--ink-500)}.st.org{background:var(--slate-tint);color:var(--slate-ink)}
+.alist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.alist li{display:flex;gap:8px;align-items:flex-start;font-size:13.5px}
+.alist li .av{width:18px;height:18px;font-size:8px;margin-top:1px}
+.alist li.done span.tx{text-decoration:line-through;color:var(--ink-500)}
+.alist input[type=checkbox]{accent-color:var(--brand-600);margin-top:3px}
+.addrow{display:flex;gap:6px}
+.addrow input{flex:1;min-width:0;font:inherit;font-size:13px;border:1px solid var(--line-strong);border-radius:9px;padding:6px 9px;background:var(--surface);color:var(--ink-900)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{background:var(--surface-alt);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.stat b{display:block;font-size:18px;color:var(--ink-900);font-variant-numeric:tabular-nums}
+.stat span{font-size:11px;color:var(--ink-500)}
+.plan{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.plan li{display:grid;grid-template-columns:14px 1fr auto;gap:10px;padding:6px 0;font-size:13px;position:relative}
+.plan li::before{content:"";position:absolute;left:6px;top:20px;bottom:-6px;width:2px;background:var(--line)}
+.plan li:last-child::before{display:none}
+.plan .pt{width:14px;height:14px;border-radius:50%;border:2px solid var(--line-strong);background:var(--surface);margin-top:3px;position:relative;z-index:1}
+.plan .pt.done{background:var(--ok);border-color:var(--ok)}.plan .pt.now{border-color:var(--brand-600);box-shadow:0 0 0 3px var(--brand-100)}.plan .pt.miss{border-color:var(--danger)}
+.plan .when{font-family:var(--mono);font-size:11px;color:var(--ink-500);white-space:nowrap}
+.crm{display:flex;gap:10px;align-items:flex-start;background:var(--info-tint);color:var(--info-ink);border-radius:12px;padding:10px 12px;font-size:13px}
+.crm b{display:block}
+.field{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--ink-500);font-weight:600;min-width:0}
+.field select,.field input,.field textarea{font:inherit;font-size:13.5px;font-weight:500;color:var(--ink-900);background:var(--surface);border:1px solid var(--line-strong);border-radius:9px;padding:7px 9px;width:100%}
+.field textarea{min-height:64px;resize:vertical}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:10px}
+.tabs{display:flex;gap:4px;background:var(--canvas);padding:3px;border-radius:10px;flex-wrap:wrap;margin-right:40px}
+.tabs button{flex:1;font:inherit;font-size:12.5px;font-weight:700;border:0;background:transparent;color:var(--ink-500);padding:6px 8px;border-radius:8px;cursor:pointer;white-space:nowrap}
+.tabs button[aria-pressed="true"]{background:var(--surface);color:var(--ink-900);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.people{display:flex;flex-wrap:wrap;gap:6px}
+.chipbtn{display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:12.5px;font-weight:600;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink-700);border-radius:999px;padding:3px 10px 3px 3px;cursor:pointer}
+.chipbtn[aria-pressed="true"]{background:var(--brand-100);border-color:var(--brand-600);color:var(--brand-ink)}
+.chipbtn .av{width:20px;height:20px;font-size:8.5px}
+.sa{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.sa .sah{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--line);background:var(--surface-alt);font-size:12px;font-weight:700;color:var(--ink-700)}
+.sa .sar{display:grid;grid-template-columns:84px 1fr;align-items:center;border-bottom:1px solid var(--line);min-height:28px}
+.sa .sar:last-child{border-bottom:0}
+.sa .san{font-size:11.5px;font-weight:600;padding:0 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:5px;color:var(--ink-700)}
+.sa .sat{position:relative;height:28px;background-image:linear-gradient(to right,var(--line) 1px,transparent 1px);background-size:calc(100%/9) 100%;cursor:pointer}
+.sa .blk{position:absolute;top:6px;bottom:6px;background:var(--ink-300);border-radius:3px;opacity:.75}
+.sa .blk.ooo{background:var(--plum-ink);opacity:.4}
+.sa .band{position:absolute;top:0;bottom:0;background:color-mix(in srgb,var(--brand-500) 22%,transparent);border-left:2px solid var(--brand-600);border-right:2px solid var(--brand-600);pointer-events:none}
+.sa .band.clash{background:color-mix(in srgb,var(--danger) 18%,transparent);border-color:var(--danger)}
+.sa .axis{display:grid;grid-template-columns:84px repeat(9,1fr);font-family:var(--mono);font-size:9.5px;color:var(--ink-500);padding:3px 0;border-bottom:1px solid var(--line)}
+.toast{position:absolute;left:50%;bottom:16px;transform:translate(-50%,20px);opacity:0;background:var(--ink-900);color:var(--canvas);padding:9px 14px;border-radius:10px;font-size:13px;font-weight:600;transition:all .25s;z-index:50;pointer-events:none;max-width:90%;text-align:center}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.legend{display:flex;flex-wrap:wrap;gap:6px}
+.legend .chip{font-size:11px;display:inline-block}
+.proto-note{font-size:13px;color:var(--ink-500);margin-top:10px}
+.tour{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:14px}
+.tour div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:13px}
+.tour b{color:var(--ink-900);display:block;font-size:13.5px}
+.tour .n{font-family:var(--mono);font-size:11px;color:var(--brand-600)}
+
+.flow{display:grid;grid-template-columns:repeat(4,minmax(200px,1fr));gap:12px}
+.sys{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.sys.nav{border-color:var(--brand-600);box-shadow:0 0 0 3px var(--brand-100)}
+.sys .own{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-500)}
+.sys ul{margin:0;padding-left:18px;font-size:13.5px;display:flex;flex-direction:column;gap:4px}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13.5px;background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+th,td{text-align:left;vertical-align:top;padding:10px 12px;border-bottom:1px solid var(--line)}
+th{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-500);background:var(--surface-alt);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td b{color:var(--ink-900)}
+td.take{color:var(--brand-ink);font-weight:600}
+td.c{text-align:center;font-weight:700}
+.y{color:var(--ok-ink)} .no{color:var(--ink-300)}
+.decision{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--warn);border-radius:14px;padding:20px 22px;display:flex;flex-direction:column;gap:12px}
+.decision blockquote{margin:0;padding:10px 14px;border-left:3px solid var(--line-strong);color:var(--ink-700);font-style:italic;background:var(--surface-alt);border-radius:0 10px 10px 0}
+.opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.opt{border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:6px;font-size:14px}
+.opt.rec{border-color:var(--brand-600);background:var(--brand-50)}
+.tag{display:inline-block;align-self:flex-start;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:999px}
+.tag.rec{background:var(--brand-600);color:var(--on-brand)}
+.tag.s{background:var(--ok-tint);color:var(--ok-ink)}.tag.m{background:var(--warn-tint);color:var(--warn-ink)}
+pre{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;overflow-x:auto;font-family:var(--mono);font-size:12.5px;line-height:1.6;color:var(--ink-900);margin:0}
+pre .c{color:var(--ink-500)} pre .k{color:var(--brand-600);font-weight:500}
+.feat{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+.fcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:8px}
+.fcard .top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.fcard p{font-size:14px}
+.fcard .why{font-size:12.5px;color:var(--ink-500);border-top:1px solid var(--line);padding-top:8px}
+.passes{display:flex;flex-direction:column;gap:10px}
+.pass{display:grid;grid-template-columns:90px 1fr;gap:16px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+.pass .n{font-family:var(--mono);font-size:12px;color:var(--brand-600)}
+.pass .n b{display:block;font-family:var(--sans);font-size:20px;color:var(--ink-900)}
+.pass ul{margin:6px 0 0;padding-left:18px;font-size:14px;display:flex;flex-direction:column;gap:4px}
+.journey{display:grid;grid-template-columns:repeat(7,minmax(150px,1fr));overflow-x:auto;padding-bottom:6px}
+.jstep{position:relative;padding:34px 14px 0 0;display:flex;flex-direction:column;gap:6px}
+.jstep::before{content:"";position:absolute;left:0;right:0;top:12px;height:2px;background:var(--line-strong)}
+.jstep::after{content:"";position:absolute;left:0;top:6px;width:14px;height:14px;border-radius:50%;background:var(--surface);border:3px solid var(--brand-600)}
+.jstep .d{font-family:var(--mono);font-size:12px;color:var(--brand-600)}
+.jstep b{color:var(--ink-900);font-size:14px}
+.jstep p{font-size:13px}
+.jstep .src{font-size:11.5px;color:var(--ink-500)}
+.qs{display:flex;flex-direction:column;gap:10px}
+.qq{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;font-size:14px}
+.qq b{color:var(--ink-900)}
+.sources{columns:2 320px;column-gap:28px;font-size:13px;padding-left:18px}
+.sources li{margin-bottom:6px;break-inside:avoid}
+
+/* Leverans: en egen, fylld färg som inget annat i kalendern har */
+.k-lev{background:var(--lev);color:var(--lev-ink)}
+.ev.k-lev{border-color:var(--lev)}
+.ev.k-lev::before{background:var(--lev-ink);opacity:.55;width:4px}
+.ev.k-lev.pending{background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.14) 0 6px,transparent 6px 12px);border-style:solid}
+.ev .ico{margin-right:5px;font-weight:400}
+.chip.k-lev{background:var(--lev);color:var(--lev-ink)}
+.grouplab{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-500);display:flex;align-items:center;gap:6px}
+.grouplab i{width:10px;height:10px;border-radius:3px;background:var(--lev);display:inline-block}
+.presets{display:flex;flex-wrap:wrap;gap:6px;margin-right:36px}
+.preset{font:inherit;font-size:12.5px;font-weight:700;border:1.5px solid var(--lev);background:transparent;color:var(--lev);border-radius:999px;padding:4px 11px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.preset:hover{background:var(--lev-soft)}
+.preset[aria-pressed="true"]{background:var(--lev);color:var(--lev-ink)}
+.preset:focus-visible{outline:2px solid var(--lev);outline-offset:2px}
+.remind{border:1px solid var(--lev-line);border-left:4px solid var(--lev);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;font-size:13px;background:var(--lev-soft);color:var(--ink-900)}
+.remind label{display:flex;gap:8px;align-items:center;font-weight:500}
+.remind input{accent-color:var(--lev);width:15px;height:15px;margin:0}
+.remind b{font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--lev)}
+/* Datumväljaren */
+.dpwrap{position:relative}
+.dfield{display:flex;align-items:center;gap:10px;width:100%;font:inherit;text-align:left;background:var(--surface);border:1px solid var(--line-strong);border-radius:9px;padding:8px 10px;cursor:pointer;color:var(--ink-900)}
+.dfield:hover{border-color:var(--ink-300)}
+.dfield[aria-expanded="true"]{border-color:var(--brand-600);box-shadow:0 0 0 3px var(--brand-100)}
+.dfield:focus-visible{outline:2px solid var(--brand-600);outline-offset:2px}
+.dfield .dmain{font-size:14px;font-weight:600}
+.dfield .wk{margin-left:auto;font-family:var(--mono);font-size:11px;font-weight:500;color:var(--ink-500);background:var(--canvas);padding:2px 8px;border-radius:999px}
+.dp{position:absolute;top:calc(100% + 6px);left:0;z-index:40;width:300px;max-width:100%;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-3);padding:10px 10px 8px}
+.dp .dph{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;font-weight:700;color:var(--ink-900);font-size:13.5px}
+.dp .dpg{display:grid;grid-template-columns:30px repeat(7,1fr);gap:2px;text-align:center}
+.dp .h{font-size:10px;font-weight:700;color:var(--ink-500);padding:4px 0}
+.dp .w{font-family:var(--mono);font-size:10px;color:var(--ink-500);display:grid;place-items:center;border-right:1px solid var(--line);margin-right:2px}
+.dp button.d{font:inherit;font-size:12.5px;border:0;background:transparent;color:var(--ink-900);border-radius:8px;height:32px;cursor:pointer;font-variant-numeric:tabular-nums}
+.dp button.d:hover{background:var(--surface-alt)}
+.dp button.d.out{color:var(--ink-300)}
+.dp button.d.we{color:var(--ink-500)}
+.dp button.d.today{box-shadow:inset 0 0 0 1.5px var(--brand-600);font-weight:700}
+.dp button.d[aria-selected="true"]{background:var(--brand-600);color:var(--on-brand);font-weight:700}
+.dp button.d:focus-visible{outline:2px solid var(--brand-600);outline-offset:1px}
+.dp .dpf{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px;padding-top:6px;border-top:1px solid var(--line);font-size:11.5px;color:var(--ink-500)}
+.durs{display:flex;gap:4px;background:var(--canvas);padding:3px;border-radius:10px}
+.durs button{flex:1;font:inherit;font-size:12.5px;font-weight:700;border:0;background:transparent;color:var(--ink-500);padding:6px 4px;border-radius:8px;cursor:pointer;white-space:nowrap}
+.durs button[aria-pressed="true"]{background:var(--surface);color:var(--ink-900);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.durs button:focus-visible{outline:2px solid var(--brand-600);outline-offset:1px}
+.durlab{font-size:12px;color:var(--ink-500);font-weight:600;margin-bottom:-8px}
+
+/* ---- Varv 1 ---- */
+.newbtn{width:100%;justify-content:center;padding:9px 12px;font-size:14px}
+.newbtn kbd{font-family:var(--mono);font-size:10.5px;opacity:.75;margin-left:4px;border:1px solid currentColor;border-radius:4px;padding:0 4px}
+.col{user-select:none;-webkit-user-select:none}
+.col.today{background:color-mix(in srgb,var(--brand-50) 70%,transparent)}
+.gut .nowtag{right:4px;transform:translateY(-50%);background:var(--now);color:#fff;font-weight:600;border-radius:4px;padding:1px 4px;z-index:2}
+.ev.maybe{border-style:dotted;border-width:2px;border-color:currentColor}
+.ev .rz{position:absolute;left:0;right:0;bottom:0;height:8px;cursor:ns-resize}
+.ev:hover .rz,.ev.resizing .rz{background:linear-gradient(transparent,color-mix(in srgb,currentColor 25%,transparent))}
+.ev.resizing{z-index:6;box-shadow:var(--shadow-3)}
+.selrange{position:absolute;left:3px;right:3px;background:color-mix(in srgb,var(--brand-500) 22%,transparent);border:2px solid var(--brand-600);border-radius:8px;z-index:4;font:600 11px var(--mono);color:var(--brand-ink);padding:3px 6px;pointer-events:none}
+.toast.act{pointer-events:auto;display:flex;align-items:center;gap:12px}
+.toast button{font:inherit;font-weight:800;background:transparent;border:1px solid color-mix(in srgb,var(--canvas) 50%,transparent);color:var(--canvas);border-radius:8px;padding:3px 10px;cursor:pointer}
+.toast button:focus-visible{outline:2px solid var(--brand-500);outline-offset:2px}
+.clashbox{border:1px solid var(--danger);background:var(--danger-tint);color:var(--danger-ink);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;font-size:13px}
+.clashbox:focus{outline:2px solid var(--danger);outline-offset:2px}
+.hs{font-family:var(--mono);font-size:10.5px;font-weight:500;border-radius:999px;padding:1px 7px;align-self:flex-start}
+.hs.full{background:var(--ok-tint);color:var(--ok-ink)}.hs.part{background:var(--warn-tint);color:var(--warn-ink)}
+.missing{color:var(--danger-ink);font-weight:600}
+.selbanner .acts{margin-left:auto}
+.xpanel{border-top:1px solid var(--line);background:var(--surface-alt)}
+.xpanel h4{margin:0;padding:10px 14px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-500);display:flex;justify-content:space-between;gap:10px;align-items:center}
+.xpanel ol{list-style:none;margin:0;padding:0 14px 12px;max-height:210px;overflow:auto;display:flex;flex-direction:column;gap:4px}
+.xpanel li{display:grid;grid-template-columns:78px 1fr auto;gap:10px;font-size:12.5px;align-items:baseline;padding:4px 0;border-bottom:1px dashed var(--line)}
+.xpanel time{font-family:var(--mono);font-size:10.5px;color:var(--ink-500)}
+.xk{font-family:var(--mono);font-size:10px;font-weight:500;border-radius:999px;padding:1px 7px;text-align:center}
+.xk.db{background:var(--slate-tint);color:var(--slate-ink)}.xk.notis{background:var(--info-tint);color:var(--info-ink)}.xk.utkorg{background:var(--warn-tint);color:var(--warn-ink)}.xk.resend{background:var(--lev-soft);color:var(--lev)}.xk.crm{background:var(--plum-tint);color:var(--plum-ink)}.xk.ångrat{background:var(--danger-tint);color:var(--danger-ink)}
+.btn[aria-pressed="true"]{background:var(--brand-100);border-color:var(--brand-600);color:var(--brand-ink)}
+/* Två minuter */
+.brief{display:grid;grid-template-columns:1.1fr 1.3fr 1fr;gap:14px}
+.brief > div{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:8px}
+.brief h3{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-500)}
+.brief ol,.brief ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:14px}
+.brief .dec{border-color:var(--warn);box-shadow:0 0 0 3px var(--warn-tint)}
+.brief b{color:var(--ink-900)}
+details.more{background:var(--surface);border:1px solid var(--line);border-radius:14px}
+details.more > summary{cursor:pointer;list-style:none;padding:14px 18px;font-weight:700;color:var(--ink-900);display:flex;justify-content:space-between;align-items:center;gap:12px}
+details.more > summary::-webkit-details-marker{display:none}
+details.more > summary::after{content:"Visa";font-size:12px;font-weight:700;color:var(--brand-600);border:1px solid var(--line-strong);border-radius:999px;padding:3px 10px;flex:none}
+details.more[open] > summary::after{content:"Dölj"}
+details.more > summary:focus-visible{outline:2px solid var(--brand-600);outline-offset:2px;border-radius:14px}
+details.more > .in{padding:0 18px 18px;display:flex;flex-direction:column;gap:14px}
+details.more .sub{font-weight:500;color:var(--ink-500);font-size:13px}
+.tmap{display:grid;grid-template-columns:repeat(4,minmax(170px,1fr));gap:10px}
+.tbl{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:12.5px;display:flex;flex-direction:column;gap:4px}
+.tbl b{font-family:var(--mono);font-size:12.5px;color:var(--ink-900)}
+.tbl .own{font-size:11px;color:var(--ink-500)}
+.tbl .ref{font-family:var(--mono);font-size:11px;color:var(--brand-600)}
+.tbl.new{border-color:var(--brand-600)}
+.tbl.side{border-style:dashed}
+.principles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:14px}
+.principles .panel{min-width:0}
+.principles .panel h3{font-size:15px}
+.principles code{overflow-wrap:anywhere}
+.principles .panel p{font-size:14px;margin-top:6px}
+.clog{width:100%}
+/* ---- Varv 2 ---- */
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.evmore{position:absolute;z-index:3;border:1px dashed var(--line-strong);background:var(--surface);color:var(--ink-700);border-radius:8px;font:700 11.5px var(--sans);cursor:pointer;padding:0 6px;white-space:nowrap;overflow:hidden}
+.evmore:hover{background:var(--surface-alt);color:var(--ink-900)}
+.evmore:focus-visible,.dhadd:focus-visible,.agitem:focus-visible{outline:2px solid var(--brand-600);outline-offset:2px}
+.mm button{position:relative}
+.mm button.has::after{content:"";position:absolute;left:50%;bottom:1px;width:4px;height:4px;border-radius:50%;background:var(--ink-300);transform:translateX(-50%)}
+.mm button.has.lev::after{background:var(--lev)}
+.mm button.today.has::after{background:var(--on-brand)}
+.legend .chip.pending{background-image:repeating-linear-gradient(135deg,var(--pend) 0 6px,transparent 6px 12px);border:1px dashed currentColor}
+.legend .chip.maybe{border:2px dotted currentColor}
+.legend .chip.done{opacity:.55;text-decoration:line-through}
+.legend .chip.busyonly{background:var(--canvas);color:var(--ink-500);border:1px solid var(--line-strong)}
+.legend .chip.declined{opacity:.5;text-decoration:line-through;border:1px dashed currentColor}
+.legend .sep{flex-basis:100%;height:0}
+.ev.declined{opacity:.5;border-style:dashed}.ev.declined .t{text-decoration:line-through}
+.ev.dim,.agitem.dim{opacity:.18}
+.cals .decl{margin-top:8px;padding-top:8px;border-top:1px solid var(--line);font-size:12.5px}
+.search{display:flex;flex-direction:column;gap:6px}
+.search input{font:inherit;font-size:13.5px;width:100%;border:1px solid var(--line-strong);border-radius:10px;padding:7px 10px;background:var(--surface);color:var(--ink-900)}
+.search input:focus{outline:2px solid var(--brand-600);outline-offset:1px}
+.qhits{display:flex;flex-direction:column;gap:2px}
+.qhits button{font:inherit;font-size:12.5px;text-align:left;border:0;background:transparent;color:var(--ink-700);padding:5px 6px;border-radius:8px;cursor:pointer;display:flex;gap:8px}
+.qhits button:hover,.qhits button:focus-visible{background:var(--surface);outline:none;color:var(--ink-900)}
+.qhits .mono{font-size:11px;color:var(--ink-500);white-space:nowrap}
+.dh{position:sticky}
+.dhadd{position:absolute;right:6px;top:6px;width:24px;height:24px;border-radius:7px;border:1px solid transparent;background:transparent;color:var(--ink-500);font:700 15px var(--sans);cursor:pointer;display:grid;place-items:center;line-height:1}
+.dh:hover .dhadd,.dhadd:focus-visible{border-color:var(--line-strong);color:var(--brand-600);background:var(--surface)}
+.agenda{padding:4px 16px 20px}
+.agday h3{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-500);display:flex;gap:8px;align-items:baseline;position:sticky;top:0;background:var(--surface);padding:12px 0 6px;z-index:2;margin:0}
+.agday h3.today{color:var(--brand-600)}
+.agday h3 .mono{font-size:11px;letter-spacing:0;text-transform:none}
+.agitem{display:grid;grid-template-columns:52px 4px 1fr;gap:12px;width:100%;text-align:left;font:inherit;color:inherit;background:transparent;border:0;border-bottom:1px solid var(--line);padding:10px 4px;cursor:pointer;border-radius:8px}
+.agitem:hover{background:var(--surface-alt)}
+.agitem .tm{font-family:var(--mono);font-size:11.5px;color:var(--ink-700);line-height:1.5}
+.agitem .agbar{border-radius:3px;min-height:34px}
+.agitem b{display:block;color:var(--ink-900);font-size:14px;line-height:1.3}
+.agitem .sub{font-size:12.5px;color:var(--ink-500)}
+.agitem.done b{text-decoration:line-through;color:var(--ink-500)}
+.agempty{font-size:13px;color:var(--ink-500);padding:6px 4px 10px;margin:0}
+.nrow{border-bottom:1px solid var(--line)}
+.nrow.unread{background:var(--brand-50)}
+.nitem{border-bottom:0!important;background:transparent!important;width:100%}
+.nq{display:flex;gap:6px;padding:0 14px 10px 52px;flex-wrap:wrap}
+.tour .btn{margin-top:8px}
+tr.grp th{background:var(--canvas);color:var(--ink-700);font-size:11px;letter-spacing:.08em;padding:7px 12px}
+.gloss{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px 18px;margin:0}
+.gloss div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.gloss dt{font-weight:700;color:var(--ink-900);font-size:14px}
+.gloss dd{margin:4px 0 0;font-size:13.5px;color:var(--ink-700)}
+.codebox{background:var(--surface-alt);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-family:var(--mono);font-size:11.5px;line-height:1.55;overflow-x:auto;white-space:pre;color:var(--ink-900);margin-top:8px}
+
+.mnew{display:none}
+@media (max-width:900px){.main{order:1}.rail{order:2}.mnew{display:inline-flex}.brief{grid-template-columns:1fr}.tmap{grid-template-columns:1fr 1fr}.principles{grid-template-columns:1fr}}
+
+@media (max-width:900px){
+  .body{grid-template-columns:1fr}
+  .rail{border-right:0;border-bottom:1px solid var(--line)}
+  .flow{grid-template-columns:1fr 1fr}
+  .pass{grid-template-columns:1fr;gap:6px}
+  .drawer{position:fixed;top:auto;left:0;right:0;bottom:0;width:100%;height:86vh;border-left:0;border-top:1px solid var(--line);border-radius:18px 18px 0 0;transform:translateY(105%);padding-bottom:env(safe-area-inset-bottom,0px)}
+  .npanel{position:fixed;top:auto;bottom:0;right:0;left:0;width:100%;border-radius:18px 18px 0 0;max-height:70vh}
+  .toast{position:fixed}
+}
+@media (max-width:560px){.flow{grid-template-columns:1fr}.grid3{grid-template-columns:1fr 1fr}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
+</style>
+
+<div class="wrap">
+<header class="top">
+  <span class="eyebrow">Clicknet Nav · förstudie · kalender för sälj och leverans</span>
+  <h1>Leveranskalendern</h1>
+  <p class="lede prose">En kalender i Nav som fungerar som Outlook: möten med inbjudan och svar, 1:1:or med säljarna varje vecka, uppgifter och påminnelser. Leveransavdelningen får dessutom en kö för nya kunder och en överlämning som går vidare till deras eget CRM.</p>
+  <div class="meta"><span class="vtag">Version 8</span><span>30 september 2026</span><span>Kod: <code>ClicknetIntran-t</code> @ <code>38b1099</code></span><span>Research: 10 system och byråernas checklistor</span></div>
+</header>
+</div>
+
+<nav class="toc" aria-label="Innehåll"><div class="in">
+  <a href="#snabbt">Två minuter</a><a href="#prototyp">Prototyp</a><a href="#arkitektur">Arkitektur</a><a href="#beslut">Beslutet</a><a href="#notiser">Notiser</a><a href="#modell">Datamodell</a><a href="#funktioner">Funktioner</a><a href="#bygg">Byggordning</a><a href="#research">Research</a><a href="#fragor">Frågor</a><a href="#ordlista">Ordlista</a><a href="#logg">Ändringslogg</a><a href="#kallor">Källor</a>
+</div></nav>
+
+<div class="wrap">
+<section id="snabbt">
+  <div class="head"><span class="eyebrow">Läs på två minuter</span><h2>Det här behöver du veta</h2></div>
+  <div class="brief">
+    <div><h3>Vad det är</h3><p style="font-size:14.5px">En kalender i Nav som fungerar som Outlook, för både sälj och leverans. Möten med svar och notiser, 1:1:or som serier, uppgifter, och leveransposter i egen färg med mejlpåminnelse via Resend.</p><p class="muted" style="font-size:13px">Leveransens produktion bor kvar i deras eget CRM. Nav äger överlämningen och tiden.</p></div>
+    <div class="dec"><h3>Tre beslut du behöver ta</h3><ol><li><b>Får Nav boka möten?</b> Beslutet från 11 september säger nej. Allt här kräver ja. <a href="#beslut">Läs mer</a></li><li><b>Vilket CRM har leveransen?</b> Avgör om kunden kan skickas dit automatiskt.</li><li><b>Använder säljarna Outlook?</b> Avgör om inbjudan ska ha en .ics-fil.</li></ol></div>
+    <div><h3>Vad som händer sen</h3><ul><li>Pass 1: möten med deltagare och notiser</li><li>Pass 2: 1:1:or</li><li>Pass 3: kön, överlämningen och CRM</li><li>Pass 4: teamvy, kundinbjudan, Outlook</li></ul><a href="#bygg" style="font-size:13px">Byggordningen i detalj</a></div>
+  </div>
+</section>
+
+<section id="kort">
+  <div class="head"><h2>Kort version</h2></div>
+  <div class="keys">
+    <div class="key"><b>Möten måste in i Nav</b><p>Beslutet från 11 september byggde på att motparten i ett möte sitter i Outlook. I en 1:1 med en säljare sitter båda i Nav. Då finns skälet inte längre för interna möten.</p></div>
+    <div class="key"><b>Allt bokat är en händelse, allt att göra är en uppgift</b><p>Som Outlook och To Do. Möten, 1:1:or och leveransposter delar en tabell med deltagare. Uppgifter stannar i uppgiftsmodulen och ritas i samma rutnät.</p></div>
+    <div class="key"><b>Notiser utan brus</b><p>Inbjudan och ändringar går till klockan och mejlet. Svar går bara till klockan. Påminnelsen är Navs pling tio minuter före. Ingen får en notis om något hen själv gjort.</p></div>
+    <div class="key"><b>CRM:et får kunden, Nav behåller överlämningen</b><p>Överlämningen och välkomstsamtalet är säljens sista steg och leveransens första. De görs i Nav och skickas sedan vidare, så att inget skrivs två gånger.</p></div>
+    <div class="key"><b>1:1:an blir mer än en tid</b><p>Agendan byggs av båda under veckan, förra veckans åtgärder följer med och säljarens siffror står bredvid. Anteckningarna sparas som coachningssamtal, som Nav redan har.</p></div>
+  </div>
+</section>
+
+<section id="prototyp">
+  <div class="head">
+    <span class="eyebrow">Klickbar prototyp · exempeldata</span>
+    <h2>Prova den</h2>
+    <p class="prose muted">Datumen följer innevarande vecka. Personer, kunder och siffror är påhittade. Inget sparas och inga mejl skickas.</p>
+  </div>
+  <div class="tour">
+    <div><span class="n">Prova 1</span><b>Boka en 1:1</b>Tryck <code>N</code> eller "+ Ny händelse", välj 1:1 och en säljare. Assistenten visar när ni båda är lediga.<br><button class="btn sm" type="button" data-demo="1">Visa mig</button></div>
+    <div><span class="n">Prova 2</span><b>Svara som säljaren</b>Byt "Som" till Elin. Klockan visar inbjudan. Svara och byt tillbaka till Zen.<br><button class="btn sm" type="button" data-demo="2">Visa mig</button></div>
+    <div><span class="n">Prova 3</span><b>Öppna en 1:1</b>Klicka på en 1:1. Lägg till en agendapunkt, gör en åtgärd till uppgift.<br><button class="btn sm" type="button" data-demo="3">Visa mig</button></div>
+    <div><span class="n">Prova 4</span><b>Ta emot en ny kund</b>Visa som Sara. Dra en kund från kön till en tid, eller låt Nav föreslå tid.<br><button class="btn sm" type="button" data-demo="4">Visa mig</button></div>
+    <div><span class="n">Prova 5</span><b>Boka en kickoff</b>Som Sara: "+ Ny händelse", välj Kickoff under Leverans, öppna datumet och välj tid med snabbvalen.<br><button class="btn sm" type="button" data-demo="5">Visa mig</button></div>
+    <div><span class="n">Prova 6</span><b>Dra och ångra</b>Dra i ett tomt fält för att välja start och slut. Dra i nederkanten av en post för att ändra längd. Tryck Ångra i rutan som dyker upp.<br><button class="btn sm" type="button" data-demo="6">Visa mig</button></div>
+    <div><span class="n">Prova 7</span><b>Se vad servern gör</b>Tryck ⚙ i verktygsraden. Varje notis, mejl och Resend-anrop visas i den ordning Nav skulle göra dem.<br><button class="btn sm" type="button" data-demo="7">Visa mig</button></div>
+  </div>
+
+  <div class="proto" id="proto">
+    <div class="bar">
+      <button class="btn" id="bToday" type="button">Idag</button>
+      <button class="btn icon ghost" id="bPrev" type="button" aria-label="Föregående period">‹</button>
+      <button class="btn icon ghost" id="bNext" type="button" aria-label="Nästa period">›</button>
+      <span class="range" id="range" aria-live="polite"></span>
+      <span class="spacer"></span>
+      <div class="seg" role="group" aria-label="Vy">
+        <button type="button" data-v="dag" title="Ctrl+Alt+1">Dag<kbd>1</kbd></button>
+        <button type="button" data-v="arbetsvecka" title="Ctrl+Alt+2">Arbetsvecka<kbd>2</kbd></button>
+        <button type="button" data-v="vecka" title="Ctrl+Alt+3">Vecka<kbd>3</kbd></button>
+        <button type="button" data-v="manad" title="Ctrl+Alt+4">Månad<kbd>4</kbd></button>
+        <button type="button" data-v="team" title="Ctrl+Alt+5">Teamet<kbd>5</kbd></button>
+        <button type="button" data-v="agenda" title="Ctrl+Alt+6">Agenda<kbd>6</kbd></button>
+      </div>
+      <label class="viewas" for="viewas">Som <select id="viewas"></select></label>
+      <button class="btn icon bell" id="bBell" type="button" aria-label="Notiser" aria-expanded="false">🔔<span class="n" id="bellN" hidden>0</span></button>
+      <button class="btn primary icon mnew" id="bNew2" type="button" aria-label="Ny händelse">+</button>
+      <button class="btn icon" id="bLog" type="button" aria-pressed="false" aria-controls="xpanel" title="Bakom kulisserna: vad servern gör">⚙</button>
+    </div>
+    <div class="body">
+      <aside class="rail" aria-label="Kalenderlista">
+        <button class="btn primary newbtn" id="bNew" type="button">+ Ny händelse <kbd>N</kbd></button>
+        <div class="search" role="search"><label class="sr" for="q">Sök i kalendern</label><input type="search" id="q" placeholder="Sök person, kund eller rubrik" autocomplete="off"><div class="qhits" id="qhits" aria-live="polite"></div></div>
+        <div>
+          <div class="mmhead"><span id="mmTitle"></span><span><button class="btn icon ghost sm" id="mmPrev" type="button" aria-label="Föregående månad">‹</button><button class="btn icon ghost sm" id="mmNext" type="button" aria-label="Nästa månad">›</button></span></div>
+          <div class="mm" id="mm"></div>
+        </div>
+        <div id="qwrap">
+          <h4>Leveranskö <span class="sla ok" id="qCount">0</span></h4>
+          <div class="queue" id="queue"></div>
+          <p class="hint" style="margin-top:8px">24 timmar från godkänd order till välkomstsamtal. Kunden finns redan i leverans-CRM:et.</p>
+        </div>
+        <div>
+          <h4>Kalendrar <span class="hint" style="text-transform:none;letter-spacing:0">du ser</span></h4>
+          <div class="cals" id="cals"></div>
+        </div>
+        <div><h4>Typer och lägen</h4><div class="legend" id="legend"></div></div>
+      </aside>
+      <div class="main">
+        <div class="strip" id="strip"></div>
+        <div class="selbanner" id="selbanner"><span id="seltext"></span><button class="btn sm" id="selCancel" type="button">Avbryt</button></div>
+        <div class="stage" id="stage"></div>
+      </div>
+      <aside class="drawer" id="drawer" aria-label="Detaljer">
+        <div class="dhd" id="dhd"></div>
+        <div class="dbody" id="dbody"></div>
+      </aside>
+    </div>
+    <section class="xpanel" id="xpanel" hidden aria-label="Bakom kulisserna"><h4><span>Bakom kulisserna · det servern skulle göra</span><button class="btn sm ghost" id="xClear" type="button">Töm</button></h4><ol id="xlist"></ol></section>
+    <div class="npanel" id="npanel" hidden><h4><span id="nTitle">Notiser</span><button class="btn sm ghost" id="nRead" type="button">Markera alla som lästa</button></h4><div class="nlist" id="nlist"></div></div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </div>
+  <p class="proto-note">Kortkommandon som i Outlook: <code>Ctrl</code>+<code>Alt</code>+<code>1</code>–<code>5</code> byter vy, <code>Ctrl</code>+<code>Alt</code>+pil byter period, <code>N</code> ny händelse, <code>Ctrl</code>+<code>Alt</code>+<code>6</code> agenda, <code>Esc</code> stänger. Dra i rutnätet för att välja tid, dra i nederkanten av en post för att ändra längd.</p>
+</section>
+
+<section id="arkitektur">
+  <div class="head"><span class="eyebrow">Arkitektur</span><h2>Vem äger vad</h2><p class="prose muted">Varje sak har en ägare. Det som korsar gränserna är några få, namngivna flöden.</p></div>
+  <div class="flow">
+    <div class="sys nav"><span class="own">Äger tid och överlämning</span><h3>Nav</h3><ul><li>Order och godkännande</li><li>Kalender: möten, 1:1:or, leveransposter</li><li>Uppgifter och coachning</li><li>Överlämning och leveranskö</li><li>Notiser, mejl och pling</li></ul></div>
+    <div class="sys"><span class="own">Äger produktionen</span><h3>Leverans-CRM</h3><ul><li>Kundens projekt och leveranser</li><li>Produktionsuppgifter</li><li>Rapporter till kunden</li><li>Tar emot kunden från Nav</li></ul></div>
+    <div class="sys"><span class="own">Tar emot inbjudningar</span><h3>Kunden</h3><ul><li>Får kickoff som mejl med <code>.ics</code></li><li>Loggar aldrig in någonstans</li><li>Rings upp via Lynes</li></ul></div>
+    <div class="sys"><span class="own">Valfritt, senare</span><h3>Outlook</h3><ul><li>Prenumererar på Nav-kalendern via iCal</li><li>Eller tvåvägssynk via Microsoft Graph</li><li>Bara om ni kör Microsoft 365</li></ul></div>
+  </div>
+  <div class="scroll" style="margin-top:14px">
+  <table>
+    <thead><tr><th>När</th><th>Nav</th><th>Leverans-CRM</th><th>Kund och Outlook</th></tr></thead>
+    <tbody>
+      <tr><td><b>Order godkänns</b></td><td>Skapar leverans, lägger kunden i kön, notis till leverans</td><td>Tar emot kund, paket, kontakt och överlämning. Nav sparar CRM:ets kund-ID.</td><td>–</td></tr>
+      <tr><td><b>Välkomstsamtal bokas</b></td><td>Leveranspost i kalendern, pling 10 min före. Projektledaren markerar själv utfallet.</td><td>Får status "välkomnad" när projektledaren markerat samtalet genomfört</td><td>–</td></tr>
+      <tr><td><b>Kickoff bokas</b></td><td>Leveranspost med kunden som extern deltagare</td><td>Får kickoffdatum</td><td>Mejl med <code>.ics</code>. Ombokning skickar ny version.</td></tr>
+      <tr><td><b>1:1 bokas</b></td><td>Serie med deltagare, notis och mejl till säljaren</td><td>–</td><td>Säljaren kan prenumerera i Outlook via iCal</td></tr>
+      <tr><td><b>Synken misslyckas</b></td><td>Försöker igen, sedan notis till admin. Kunden stannar i kön tills den gått fram.</td><td>–</td><td>–</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="principles">
+    <div class="panel"><span class="eyebrow">Princip 1</span><h3>Allt som lämnar Nav går via en utkorg</h3><p>Server action skriver händelsen och en rad i <code>outbox</code> i samma transaktion. Ett jobb skickar notiser, Resend-anrop och CRM-anrop efter 10 sekunder och försöker igen vid fel. Går databasen igenom men Resend är nere, tappas ingenting. Och fördröjningen gör att Ångra fungerar på riktigt.</p></div>
+    <div class="panel"><span class="eyebrow">Princip 2</span><h3>En tid att räkna på</h3><p>Dag och klockslag sparas som svensk väggtid, precis som <code>task</code>. En trigger fyller <code>starts_at timestamptz</code> via Europe/Stockholm, så påminnelser, krockar och sortering räknar på en kolumn och sommartiden hanteras på ett ställe. Serier läggs ut som egna rader 56 dagar fram, samma horisont som <code>upprepning.ts</code>.</p></div>
+    <div class="panel"><span class="eyebrow">Princip 3</span><h3>Kön tål att två tar samtidigt</h3><p>Tilldelning läser kunden med <code>select … for update skip locked</code>. Klickar Sara och Omar på samma kund samma sekund får bara en den, och den andra ser nästa kund. Utan det blir det två välkomstsamtal till samma kund.</p></div>
+    <div class="panel"><span class="eyebrow">Princip 4</span><h3>CRM:et bakom ett gränssnitt</h3><p>Nav vet inte vilket CRM leveransen har. Därför pratar Nav bara med ett adaptergränssnitt. Tills API:t är känt används den manuella adaptern: kunden läggs in för hand och kund-ID:t klistras in i Nav. Byts CRM:et byts en fil.</p>
+<div class="codebox">// lib/crm/adapter.ts
+export interface CrmAdapter {
+  namn: string;
+  skapaKund(order: Order, overlamning: Overlamning): Promise&lt;{ externtId: string | null }&gt;;
+  sattStatus(externtId: string, status: "valkomnad" | "kickoff_bokad" | "i_produktion"): Promise&lt;void&gt;;
+}</div></div>
+    <div class="panel"><span class="eyebrow">Princip 5</span><h3>Resend svarar tillbaka</h3><p>Resend skickar webhooks, bland annat <code>email.scheduled</code>, <code>email.delivered</code>, <code>email.bounced</code> och <code>email.failed</code>. Nav uppdaterar <code>calendar_reminder.status</code> och ger den ansvariga en notis om påminnelsen till kunden studsade. Då vet man att kunden inte blev påmind.</p></div>
+    <div class="panel"><span class="eyebrow">Princip 6</span><h3>Rådata sparas först</h3><p>Allt som går ut till eller kommer in från Resend och CRM:et skrivs oförändrat till <code>integration_log</code> innan det tolkas. Samma mönster som <code>call_ingest</code> för växeln: blir tolkningen fel går den att göra om utan att något skickas igen.</p></div>
+  </div>
+</section>
+
+<section id="beslut">
+  <div class="head"><span class="eyebrow">Måste avgöras först</span><h2>Beslutet från 11 september</h2></div>
+  <div class="decision">
+    <p class="prose">Överst i <code>lib/kalender.ts</code> står:</p>
+    <blockquote>KALENDERN VISAR DET NAVET REDAN VET. DEN BOKAR INGA MÖTEN. [...] och den mottagaren sitter i Outlook, inte i navet.</blockquote>
+    <p class="prose">Du ber nu om 1:1:or med notis till säljaren och om en kalender som fungerar som Outlook. Det går inte att bygga inom beslutet. Skälet bakom beslutet gäller dessutom inte interna möten, eftersom båda parter finns i Nav. Jag föreslår att beslutet ersätts och att det nya skrivs in i <code>DECISIONS.md</code> med dagens datum.</p>
+    <div class="opts">
+      <div class="opt rec"><span class="tag rec">Rekommenderas</span><b>En händelsetabell med deltagare</b><p>All bokad tid i <code>calendar_event</code> med deltagare och svar. Uppgifter och coachningsuppgifter stannar i sina moduler, som i dag. Externa deltagare får <code>.ics</code> via mejl.</p></div>
+      <div class="opt"><b>Behåll beslutet, lägg 1:1 i coachningen</b><p>Ge <code>coaching_session</code> ett klockslag och en notis. Löser 1:1:or men inte teammöten, leveransposter eller svar, och blir en andra sådan lösning inom kort.</p></div>
+      <div class="opt"><b>Låt Outlook äga mötena</b><p>Nav läser och bokar i Outlook via Graph. Kräver Microsoft 365 för alla, en Azure-app och synk åt båda håll. Möjligt som tillägg senare, inte som grund.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="notiser">
+  <div class="head"><span class="eyebrow">Backend</span><h2>Vem får vad, och hur</h2><p class="prose muted">Allt går genom Navs befintliga <code>notifiera()</code>, som redan stoppar notiser till den som själv utlöste händelsen. Mejl bara när mottagaren behöver agera före nästa inloggning, enligt regeln i <code>epost-notis.ts</code>.</p></div>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Händelse</th><th>Till</th><th>Klocka</th><th>Mejl</th><th>Pling</th><th>Kommentar</th></tr></thead>
+    <tbody>
+      <tr class="grp"><th colspan="6" scope="colgroup">Till deltagarna</th></tr>
+      <tr><td><b>Inbjudan</b></td><td>Deltagarna</td><td class="c y">✓</td><td class="c y">✓</td><td class="c no">–</td><td>Mejlet bär en <code>.ics</code>, så den som använder Outlook får in den där också. Svara direkt från klockan.</td></tr>
+      <tr><td><b>Flyttad eller ändrad längd</b></td><td>Deltagarna</td><td class="c y">✓</td><td class="c y">✓</td><td class="c no">–</td><td>Som i Outlook: tidigare svar nollställs och alla svarar igen, direkt från klockan. Den som föreslog tiden räknas som ja. Mejl bara om det gäller de närmaste 7 dagarna.</td></tr>
+      <tr><td><b>Inställd</b></td><td>Deltagarna</td><td class="c y">✓</td><td class="c y">✓</td><td class="c no">–</td><td>Kunden får en avbokning i .ics-form om den var inbjuden.</td></tr>
+      <tr><td><b>Påminnelse</b></td><td>Alla som tackat ja</td><td class="c no">–</td><td class="c no">–</td><td class="c y">✓</td><td>10 min före, Navs <code>PLING_VARSEL_MINUTER</code>. Går att ändra per händelse.</td></tr>
+      <tr><td><b>Dagens möten</b></td><td>Alla med möten</td><td class="c no">–</td><td class="c y">✓</td><td class="c no">–</td><td>Rader i morgonbrevet (<code>jobb/morgon.ts</code>), inget eget mejl.</td></tr>
+      <tr class="grp"><th colspan="6" scope="colgroup">1:1</th></tr>
+      <tr><td><b>Förberedelse</b></td><td>Båda</td><td class="c y">✓</td><td class="c no">–</td><td class="c no">–</td><td>Dagen före kl 15: lägg till det du vill ta upp.</td></tr>
+      <tr><td><b>Ny punkt på agendan</b></td><td>Den andra</td><td class="c y">✓</td><td class="c no">–</td><td class="c no">–</td><td>Samlas till en notis per dag.</td></tr>
+      <tr class="grp"><th colspan="6" scope="colgroup">Till organisatören</th></tr>
+      <tr><td><b>Svar: ja, kanske, nej</b></td><td>Organisatören</td><td class="c y">✓</td><td class="c no">–</td><td class="c no">–</td><td>Nej med meddelande visas i klartext.</td></tr>
+      <tr><td><b>Förslag på ny tid</b></td><td>Organisatören</td><td class="c y">✓</td><td class="c y">✓</td><td class="c no">–</td><td>Deltagaren väljer själv tid och kan skriva ett meddelande. I en serie gäller förslaget bara den gången, vilket Outlook inte klarar.</td></tr>
+      <tr class="grp"><th colspan="6" scope="colgroup">Leverans och sälj</th></tr>
+      <tr><td><b>Leveranspåminnelse</b></td><td>Ansvarig, och kunden om det är valt</td><td class="c no">–</td><td class="c y">✓</td><td class="c y">✓</td><td>Mejl via Resend 30 min före. Studsar mejlet får den ansvariga en notis.</td></tr>
+      <tr><td><b>Ny kund i kön</b></td><td>Leverans</td><td class="c y">✓</td><td class="c no">–</td><td class="c no">–</td><td></td></tr>
+      <tr><td><b>4 h kvar till 24 h</b></td><td>Leverans och säljchef</td><td class="c y">✓</td><td class="c y">✓</td><td class="c no">–</td><td>Det enda mejlet från kön.</td></tr>
+      <tr><td><b>Komplettera överlämningen</b></td><td>Säljaren</td><td class="c y">✓</td><td class="c y">✓</td><td class="c no">–</td><td>När leveransen trycker på knappen i kön.</td></tr>
+      <tr class="grp"><th colspan="6" scope="colgroup">Admin</th></tr>
+      <tr><td><b>CRM-synk misslyckades</b></td><td>Admin</td><td class="c y">✓</td><td class="c no">–</td><td class="c no">–</td><td>Efter tre försök.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="panel" style="margin-top:14px"><h3>Mejlpåminnelsen via Resend</h3><p class="muted" style="font-size:14px;margin-top:6px">Nav skickar redan mejl via Resend i <code>lib/epost.ts</code>. Resend kan schemalägga ett mejl upp till 30 dagar fram, flytta det och avboka det. Det räcker för att påminnelsen alltid följer posten.</p>
+    <ul>
+      <li><b>Posten sparas:</b> <code>POST /emails</code> med <code>scheduledAt</code> = start minus 30 min, räknat från svensk tid i <code>klocka.ts</code>. Resends id sparas på posten.</li>
+      <li><b>Posten flyttas:</b> <code>PATCH /emails/{id}</code> med ny tid. Mottagaren får aldrig två mejl.</li>
+      <li><b>Posten ställs in eller blir klar i förväg:</b> <code>POST /emails/{id}/cancel</code>. Ett avbokat mejl kan inte schemaläggas igen, så en senare ombokning skapar ett nytt.</li>
+      <li><b>Mer än 30 dagar bort:</b> nattjobbet (<code>api/jobb/natt</code>) schemalägger mejlet när posten kommer inom fönstret.</li>
+      <li><b>I koden:</b> <code>Brev</code> får fältet <code>scheduledAt</code>, källan <code>leverans-paminnelse</code> läggs i <code>MEJLKALLOR</code> och varje action som flyttar eller ställer in bokförs i <code>tests/notiser-tackning.mjs</code>.</li>
+    </ul></div>
+</section>
+
+<section id="modell">
+  <div class="head"><span class="eyebrow">Skiss, inte färdig migration</span><h2>Datamodell</h2><p class="prose muted">Nio nya tabeller, alla additiva. Kartan visar vad som pekar på vad. SQL:en ligger under, i repots stil.</p></div>
+  <div class="tmap" role="list" aria-label="Tabellkarta">
+    <div class="tbl new" role="listitem"><b>calendar_event</b><span class="own">All bokad tid: möte, 1:1, leveranspost</span><span class="ref">→ sales_order, coaching_session, calendar_series</span></div>
+    <div class="tbl new" role="listitem"><b>calendar_series</b><span class="own">Upprepning: vardagar, varje eller varannan vecka</span><span class="ref">→ förekomster i calendar_event</span></div>
+    <div class="tbl new" role="listitem"><b>calendar_attendee</b><span class="own">Deltagare, svar och förslag på ny tid</span><span class="ref">→ calendar_event eller serien</span></div>
+    <div class="tbl new" role="listitem"><b>one_on_one_item</b><span class="own">1:1-agenda och åtgärder</span><span class="ref">→ calendar_series, task</span></div>
+    <div class="tbl new" role="listitem"><b>calendar_reminder</b><span class="own">Mejlpåminnelser via Resend</span><span class="ref">→ calendar_event</span></div>
+    <div class="tbl new side" role="listitem"><b>outbox</b><span class="own">Allt som ska lämna Nav</span><span class="ref">→ vilken rad som helst</span></div>
+    <div class="tbl new" role="listitem"><b>delivery</b><span class="own">Kunden i kön och i CRM:et</span><span class="ref">→ sales_order</span></div>
+    <div class="tbl new" role="listitem"><b>delivery_handoff</b><span class="own">Säljarens överlämning</span><span class="ref">→ sales_order</span></div>
+  </div>
+  <details class="more" style="margin-top:14px"><summary>SQL-skissen <span class="sub">för den som ska bygga</span></summary><div class="in">
+<pre><span class="c">-- NNNN_moten.sql — bokad tid med deltagare. Ersätter beslutet i 0057 för möten.</span>
+<span class="k">create table if not exists</span> calendar_series (
+  id         uuid primary key default gen_random_uuid(),
+  kind       text not null check (kind in ('mote','enskilt')),   <span class="c">-- mallen som förekomsterna skapas från</span>
+  title      text not null check (length(btrim(title)) between 1 and 200),
+  organizer_id uuid not null references employee(id),
+  tid        time not null,
+  minuter    integer not null check (minuter between 5 and 480),
+  monster    text not null check (monster in ('vardagar','veckovis')),
+  intervall  smallint not null default 1 check (intervall in (1,2)),  <span class="c">-- varannan vecka för 1:1</span>
+  veckodag   smallint check (veckodag between 1 and 7),
+  starts_on  date not null,
+  ends_on    date,
+  created_by uuid not null references employee(id)
+);
+
+<span class="k">create table if not exists</span> calendar_event (
+  id           uuid primary key default gen_random_uuid(),
+  kind         text not null check (kind in ('mote','enskilt','leverans')),  <span class="c">-- enskilt = 1:1</span>
+  title        text not null check (length(btrim(title)) between 1 and 200),
+  organizer_id uuid not null references employee(id),
+  dag          date not null,
+  tid          time,                                 <span class="c">-- null = heldag</span>
+  minuter      integer check (minuter between 5 and 1440),
+  show_as      text not null default 'upptagen' check (show_as in ('ledig','preliminar','upptagen','borta')),
+  reminder_min smallint not null default 10,
+  plats        text,
+  online_url   text,
+  agenda_md    text not null default '',
+  series_id    uuid references calendar_series(id) on delete cascade,
+  occurrence_of date,                                <span class="c">-- vilken förekomst i serien raden är</span>
+  avviker      boolean not null default false,         <span class="c">-- förekomst ändrad för sig, skrivs inte över när serien räknas om</span>
+  starts_at    timestamptz not null,                 <span class="c">-- sätts av triggern nedan, räkna aldrig själv</span>
+  cancelled_at timestamptz,
+  <span class="c">-- leveranspost</span>
+  order_id     uuid references sales_order(id),
+  step         text check (step in ('valkomstsamtal','tillgangar','kickoff','leveransstart','avstamning_30','avstamning_90')),  <span class="c">-- en per förinställning</span>
+  outcome      text check (outcome in ('genomford','ej_svar')),  <span class="c">-- sätts bara av en människa</span>
+  outcome_by   uuid references employee(id),
+  attempt      smallint not null default 1,
+  <span class="c">-- 1:1</span>
+  coaching_session_id uuid references coaching_session(id),
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now(),
+  constraint leverans_har_kund check (kind &lt;&gt; 'leverans' or order_id is not null)
+);
+
+<span class="c">-- En tid att räkna på. Sommartid hanteras här och ingen annanstans.</span>
+<span class="k">create or replace function</span> calendar_event_starts_at() returns trigger language plpgsql as $$
+begin
+  new.starts_at := (new.dag + coalesce(new.tid, time '00:00')) at time zone 'Europe/Stockholm';
+  return new;
+end $$;
+<span class="k">drop trigger if exists</span> calendar_event_starts_at on calendar_event;
+<span class="k">create trigger</span> calendar_event_starts_at before insert or update of dag, tid on calendar_event
+  for each row execute function calendar_event_starts_at();
+
+<span class="k">create table if not exists</span> calendar_attendee (
+  id             uuid primary key default gen_random_uuid(),
+  event_id       uuid references calendar_event(id) on delete cascade,
+  series_id      uuid references calendar_series(id) on delete cascade,
+  employee_id    uuid references employee(id) on delete cascade,
+  external_email text,                               <span class="c">-- kunden på kickoff</span>
+  response       text not null default 'vantar' check (response in ('vantar','ja','kanske','nej')),
+  response_note  text,
+  occurrence_of  date,                               <span class="c">-- svar eller förslag för bara en förekomst</span>
+  proposed_dag   date,
+  proposed_tid   time,
+  proposed_minuter integer,
+  proposal_note  text check (length(proposal_note) &lt;= 300),
+  responded_at   timestamptz,
+  constraint en_foralder check ((event_id is null) &lt;&gt; (series_id is null)),
+  constraint en_person   check ((employee_id is null) &lt;&gt; (external_email is null))
+);
+
+<span class="k">create table if not exists</span> one_on_one_item (    <span class="c">-- agenda och åtgärder, lever över förekomsterna</span>
+  id        uuid primary key default gen_random_uuid(),
+  series_id uuid not null references calendar_series(id) on delete cascade,
+  kind      text not null check (kind in ('agenda','atgard')),
+  text      text not null check (length(btrim(text)) between 1 and 300),
+  author_id uuid not null references employee(id),
+  owner_id  uuid references employee(id),            <span class="c">-- vem som ska göra åtgärden</span>
+  for_dag   date,                                    <span class="c">-- vilken förekomst punkten togs upp</span>
+  done_at   timestamptz,
+  task_id   uuid references task(id)                 <span class="c">-- åtgärd som blivit uppgift</span>
+);
+
+<span class="k">create table if not exists</span> calendar_reminder (          <span class="c">-- alla påminnelser: pling, mejl via Resend, 1:1-förberedelse</span>
+  id           uuid primary key default gen_random_uuid(),
+  event_id     uuid not null references calendar_event(id) on delete cascade,
+  channel      text not null check (channel in ('pling','mejl','forberedelse')),  <span class="c">-- en tabell, ett jobb, alla påminnelser</span>
+  recipient    text not null check (recipient in ('ansvarig','kund','deltagare')),
+  send_at      timestamptz not null,                 <span class="c">-- start minus 30 min</span>
+  resend_id    text,                                 <span class="c">-- null tills mejlet schemalagts</span>
+  status       text not null default 'vantar' check (status in ('vantar','schemalagd','skickad','avbokad','fel')),
+  error        text,
+  unique (event_id, channel, recipient)
+);
+
+<span class="k">create table if not exists</span> integration_log (              <span class="c">-- rådata från Resend och CRM, som call_ingest i 0052</span>
+  id          bigserial primary key,
+  system      text not null check (system in ('resend','crm')),
+  direction   text not null check (direction in ('ut','in')),
+  body        jsonb not null,                      <span class="c">-- skrivs hel, ändras aldrig</span>
+  received_at timestamptz not null default now()
+);
+
+<span class="k">create table if not exists</span> outbox (                     <span class="c">-- skrivs i samma transaktion som ändringen</span>
+  id           bigserial primary key,
+  kind         text not null check (kind in ('notis','ics','resend_schedule','resend_patch','resend_cancel','crm')),  <span class="c">-- notis töms genom notifiera()</span>
+  payload      jsonb not null,
+  idempotency_key text not null unique,              <span class="c">-- samma händelse skickas aldrig två gånger</span>
+  not_before   timestamptz not null default now() + interval '10 seconds',  <span class="c">-- fönstret för Ångra</span>
+  attempts     smallint not null default 0,
+  sent_at      timestamptz,
+  error        text
+);
+
+<span class="k">create table if not exists</span> calendar_undo (              <span class="c">-- det Ångra behöver: läget före ändringen</span>
+  id          uuid primary key default gen_random_uuid(),
+  event_id    uuid references calendar_event(id) on delete cascade,
+  series_id   uuid references calendar_series(id) on delete cascade,
+  handling    text not null,                         <span class="c">-- flytta, svara, andraLangd, stallIn …</span>
+  before      jsonb not null,                        <span class="c">-- dag, tid, minuter, svar, cancelled_at</span>
+  outbox_ids  bigint[] not null default '{}',        <span class="c">-- raderas vid Ångra om de inte skickats</span>
+  created_by  uuid not null references employee(id),
+  created_at  timestamptz not null default now()
+);
+
+<span class="c">-- NNNN_leverans.sql — tunn, eftersom produktionen bor i CRM:et</span>
+<span class="k">create table if not exists</span> delivery (
+  order_id        uuid primary key references sales_order(id) on delete cascade,
+  owner_id        uuid references employee(id),      <span class="c">-- null = i kön</span>
+  welcome_due_at  timestamptz not null,
+  crm_system      text,
+  crm_external_id text,
+  crm_synced_at   timestamptz,
+  crm_attempts    smallint not null default 0,
+  crm_error       text
+);
+
+<span class="k">create table if not exists</span> delivery_handoff (
+  order_id      uuid primary key references sales_order(id) on delete cascade,
+  customer_goal text not null,
+  promised      text not null default '',
+  best_time     text,
+  risks         text not null default '',
+  written_by    uuid not null references employee(id),
+  written_at    timestamptz not null default now()
+);
+
+<span class="c">-- RLS: kalender_poster() får en tredje källa. Deltagare ser allt. Andra ser det
+-- calendar_share ger: upptagen (grundläge), rubriker eller detaljer. Innehållet i en 1:1
+-- ses bara av de två, samma krets som coaching_session i 0043.</span></pre>
+  </div></details>
+</section>
+
+<section id="funktioner">
+  <div class="head"><span class="eyebrow">Innovation</span><h2>Det som gör den bättre än Outlook</h2><p class="prose muted">Ordnat efter nytta. Etiketten är ungefärlig byggstorlek.</p></div>
+  <div class="feat">
+    <div class="fcard"><div class="top"><h3>1:1 med minne</h3><span class="tag m">Mellan</span></div><p>Båda lägger punkter på agendan under veckan. Ogjorda åtgärder följer med till nästa gång. En åtgärd kan bli en uppgift med ett klick.</p><p class="why">Samma kärna som Lattice och Fellow: gemensam agenda, åtgärder och historik.</p></div>
+    <div class="fcard"><div class="top"><h3>Siffrorna i 1:1:an</h3><span class="tag s">Liten</span></div><p>Säljarens order mot mål, K&amp;V-snitt och provision står bredvid agendan.</p><p class="why">Allt finns redan i Nav. Fristående 1:1-verktyg saknar säljdatan.</p></div>
+    <div class="fcard"><div class="top"><h3>Schemaläggningsassistent</h3><span class="tag m">Mellan</span></div><p>Rader per deltagare med upptagen tid, och "Föreslå tid" som hittar första gemensamma lucka utanför lunch.</p><p class="why">Outlooks AutoPick, byggd på Navs egen kalender.</p></div>
+    <div class="fcard"><div class="top"><h3>Leverans i egen färg</h3><span class="tag s">Liten</span></div><p>Sex förinställningar med rätt längd, fylld kopparfärg i kalendern och mejlpåminnelse till dig och kunden 30 min före.</p><p class="why">Ingen blandar ihop en leveranspost med ett internt möte, och ingen kund glöms bort för att ett pling missades.</p></div>
+    <div class="fcard"><div class="top"><h3>Kön med nedräkning</h3><span class="tag s">Liten</span></div><p>Nya kunder med tid kvar till välkomstsamtal. Dra till en tid eller låt Nav välja person och tid.</p><p class="why">Kunder som väntar länge på första kontakten blir missnöjda innan SEO hunnit ge resultat.</p></div>
+    <div class="fcard"><div class="top"><h3>Försöksstege</h3><span class="tag s">Liten</span></div><p>"Ej svar" bokar nästa försök på en annan tid på dagen. Efter tredje försöket föreslås sms och mejl.</p><p class="why">Ingen ny kund ska tappas för att ett samtal inte gick fram.</p></div>
+    <div class="fcard"><div class="top"><h3>Teamets tidslinje</h3><span class="tag m">Mellan</span></div><p>Personer som rader, kapacitet per dag, och vad du ser styrs av deras delningsnivå.</p><p class="why">Vyn som enligt Microsoft saknas i nya Outlook.</p></div>
+    <div class="fcard"><div class="top"><h3>iCal ut till Outlook</h3><span class="tag s">Liten</span></div><p>Var och en kan prenumerera på sin Nav-kalender i Outlook eller mobilen.</p><p class="why"><code>calendar_feed</code> och <code>lib/ical.ts</code> finns sedan 0021, i dag bara för ledighet.</p></div>
+  </div>
+</section>
+
+<section id="bygg">
+  <div class="head"><span class="eyebrow">Byggordning</span><h2>Fyra pass, en commit per pass</h2><p class="prose muted">Enligt <code>CLAUDE.md</code>: gren först, <code>scripts/en-commit.mjs</code>, additiva migrationer eftersom previewen pekar på produktionsdatabasen, en rad i <code>navnyheter/poster.ts</code> och varje ny server action bokförd i <code>tests/notiser-tackning.mjs</code>.</p></div>
+  <div class="passes">
+    <div class="pass"><div class="n">Pass<b>1</b></div><div><b>Möten med deltagare</b><ul><li><code>calendar_event</code>, <code>calendar_attendee</code>, <code>outbox</code> med jobbet som tömmer den, RLS och kvitton. Det nya beslutet i <code>DECISIONS.md</code>.</li><li>Formuläret: rubrik, deltagare, tid, påminnelse, visa som, plats.</li><li>Inbjudan, svar, flytt och inställt genom <code>notifiera()</code> och mejlbryggan.</li><li>Schemaläggningsassistenten.</li></ul></div></div>
+    <div class="pass"><div class="n">Pass<b>2</b></div><div><b>1:1:or</b><ul><li>Serier (veckovis och varannan vecka) byggda på <code>upprepning.ts</code>. Ändra "den här" eller "hela serien".</li><li>Agenda och åtgärder, åtgärd till uppgift, anteckningar som coachningssamtal.</li><li>Säljarens siffror i panelen.</li></ul></div></div>
+    <div class="pass"><div class="n">Pass<b>3</b></div><div><b>Leveranskön och CRM-bryggan</b><ul><li><code>delivery</code> och <code>delivery_handoff</code>. Överlämningen krävs när ordern skickas in.</li><li>Kön, välkomstsamtal med utfall som projektledaren sätter själv, och försöksstegen.</li><li>Kunden skickas till leverans-CRM:et med omförsök och felnotis.</li><li>Leveransförinställningarna i egen färg och mejlpåminnelsen via Resend.</li></ul></div></div>
+    <div class="pass"><div class="n">Pass<b>4</b></div><div><b>Team och omvärld</b><ul><li>Teamets tidslinje med kapacitet.</li><li>Kickoffinbjudan till kunden med <code>.ics</code>.</li><li>iCal-prenumeration för alla. Graph-synk om ni kör Microsoft 365.</li></ul></div></div>
+  </div>
+</section>
+
+<section id="research">
+  <div class="head"><span class="eyebrow">Research</span><h2>Hur andra gör</h2><p class="prose muted">Kort: allt vi bygger finns någonstans redan. Det nya är att det sitter ihop med säljdatan i Nav.</p></div>
+  <details class="more"><summary>Tio system och vad vi tar från vart och ett <span class="sub">tabell</span></summary><div class="in">
+  <div class="scroll">
+  <table>
+    <thead><tr><th>System</th><th>Vad de gör</th><th>Det vi tar</th></tr></thead>
+    <tbody>
+      <tr><td><b>Outlook: möten</b></td><td>Deltagare svarar ja, kanske eller nej och kan föreslå ny tid. Organisatören kan stänga av förslag, och förslag går inte på serier. Visa som: Ledig, Arbetar någon annanstans, Preliminär, Upptagen, Borta. Påminnelse 15 min som standard.</td><td class="take">Svarsmodellen rakt av. Navs påminnelse stannar på 10 min, som redan är beslutat.</td></tr>
+      <tr><td><b>Outlook: vyer</b></td><td>Dag, Arbetsvecka, Vecka, Månad. Schedule view finns inte i nya Outlook. Scheduling Assistant med AutoPick.</td><td class="take">Vyer, kortkommandon, assistenten och teamvyn.</td></tr>
+      <tr><td><b>Lattice, Fellow</b></td><td>Gemensam agenda, åtgärder som följs upp, historik, mallar och valfri frekvens.</td><td class="take">1:1-panelen.</td></tr>
+      <tr><td><b>HubSpot</b></td><td>"Affär vunnen" skapar ett ärende i en onboarding-pipeline och tilldelar en ägare, fast eller roterande.</td><td class="take">Kön och tilldelningen.</td></tr>
+      <tr><td><b>Pipedrive Projects</b></td><td>Vunnen affär skapar projekt från mall med datum relativt startdagen och beroenden.</td><td class="take">Relativa datum, som Navs <code>offset_days</code>.</td></tr>
+      <tr><td><b>Rocketlane</b></td><td>Överlämning i sex delar. Intern kickoff inom 48 h, kundkickoff inom 5 arbetsdagar.</td><td class="take">Överlämningsformuläret och SLA-tiderna.</td></tr>
+      <tr><td><b>GUIDEcx</b></td><td>Välkomstmejl automatiskt, kunden ser vad som väntar på dem.</td><td class="take">Kunden får inbjudan och en lista över vad vi behöver.</td></tr>
+      <tr><td><b>Float, Teamwork</b></td><td>Rader per person, utnyttjande, övertid, ledighet, dra för att omfördela.</td><td class="take">Teamets tidslinje.</td></tr>
+      <tr><td><b>Calendly</b></td><td>Round robin som "först lediga" eller "jämn fördelning".</td><td class="take">"Föreslå tid" i kön.</td></tr>
+      <tr><td><b>Byråchecklistor</b></td><td>Välkomst inom 24 h, åtkomst till GA4, Search Console, Företagsprofil och CMS, avstämning dag 30, 60 och 90.</td><td class="take">Leveransens stegmall.</td></tr>
+    </tbody>
+  </table>
+  </div></div></details>
+  <div class="head" style="margin-top:24px"><h3>Leveransens första 90 dagar</h3></div>
+  <div class="journey">
+    <div class="jstep"><span class="d">Dag 0</span><b>Order godkänd</b><p>Kunden i kön och i CRM:et.</p><span class="src">HubSpot, Pipedrive</span></div>
+    <div class="jstep"><span class="d">Inom 24 h</span><b>Välkomstsamtal</b><p>Bekräfta köpet, boka kickoff, be om åtkomst.</p><span class="src">ALM Corp, SEJ</span></div>
+    <div class="jstep"><span class="d">Dag 1–2</span><b>Välkomstmejl</b><p>Frågeformulär och åtkomstlista.</p><span class="src">ALM Corp</span></div>
+    <div class="jstep"><span class="d">Inom 5 arbetsdagar</span><b>Kickoff</b><p>Bekräfta det säljaren vet, fråga inte om.</p><span class="src">Rocketlane</span></div>
+    <div class="jstep"><span class="d">Dag 5–14</span><b>Första leverans</b><p>Nulägesrapport och snabba vinster.</p><span class="src">ALM Corp, SEJ</span></div>
+    <div class="jstep"><span class="d">Dag 30 · 60</span><b>Avstämningar</b><p>Koppla arbetet till samtal och förfrågningar.</p><span class="src">SEJ</span></div>
+    <div class="jstep"><span class="d">Dag 90</span><b>Kvartalsgenomgång</b><p>Perioden då byråer tappar flest kunder.</p><span class="src">SEJ (Focus Digital)</span></div>
+  </div>
+</section>
+
+<section id="fragor">
+  <div class="head"><span class="eyebrow">Innan pass 1</span><h2>Tre frågor</h2></div>
+  <div class="qs">
+    <div class="qq"><b>1. Får beslutet från 11 september ersättas?</b> Det är förutsättningen för möten, 1:1:or och svar.</div>
+    <div class="qq"><b>2. Vilket CRM använder leveransen, och har det ett API?</b> Avgör om kunden kan skickas automatiskt eller om det blir en länk och ett kund-ID som klistras in.</div>
+    <div class="qq"><b>3. Använder säljarna Outlook?</b> Då bifogas <code>.ics</code> i inbjudan och iCal-prenumerationen blir viktigare. Annars räcker klockan och mejlet.</div>
+  </div>
+</section>
+
+<section id="ordlista">
+  <div class="head"><h2>Ordlista</h2><p class="prose muted">Ord som används på sidan, i den betydelse de har här.</p></div>
+  <dl class="gloss">
+    <div><dt>Leveranspost</dt><dd>Allt i kalendern som gäller en kund i leverans: välkomstsamtal, tillgångar, kickoff, leveransstart och avstämningar. Alltid kopparfärgad.</dd></div>
+    <div><dt>Serie och förekomst</dt><dd>En serie är något som upprepas, som en 1:1 varje tisdag. En förekomst är ett enskilt tillfälle i serien.</dd></div>
+    <div><dt>Organisatör och deltagare</dt><dd>Organisatören bokade och kan flytta. Deltagare svarar ja, kanske eller nej och kan föreslå ny tid.</dd></div>
+    <div><dt>Delningsnivå</dt><dd>Hur mycket en kollega ser av din kalender: upptagen, rubriker eller detaljer. Finns redan i Nav sedan 0057.</dd></div>
+    <div><dt>Utkorg</dt><dd>Kön av sådant som ska lämna Nav: notiser, mejl och anrop till CRM:et. Väntar 10 sekunder så att Ångra hinner.</dd></div>
+    <div><dt>Resend</dt><dd>Tjänsten Nav redan skickar mejl med. Kan schemalägga, flytta och avboka mejl upp till 30 dagar fram.</dd></div>
+    <div><dt>.ics</dt><dd>Kalenderfilen som följer med en inbjudan. Outlook och mobilen lägger in den automatiskt.</dd></div>
+    <div><dt>RLS</dt><dd>Regler i databasen för vem som får läsa vilken rad. Gör att ingen ser mer än den ska, även om koden har fel.</dd></div>
+    <div><dt>SLA</dt><dd>Den tid vi lovar oss själva: välkomstsamtal inom 24 timmar, kickoff inom fem arbetsdagar.</dd></div>
+  </dl>
+</section>
+
+<section id="logg">
+  <div class="head"><h2>Ändringslogg</h2></div>
+  <details class="more"><summary>Åtta versioner, vad som ändrades i varje <span class="sub">tabell</span></summary><div class="in"><div class="scroll"><table class="clog">
+    <thead><tr><th>Version</th><th>Vad som ändrades</th></tr></thead><tbody>
+      <tr><td><b>v8</b></td><td>Byggpaket för Claude Code: kommentarer om vad som är produkt och vad som är demo, läget <code>#bara-kalender</code>, referensbilder och uppmätta stilmått. Deltagarnas initialer täcker inte längre rubriken på smala poster, och välkomstsamtalet visar bara en påminnelseruta.</td></tr>
+      <tr><td><b>v7</b></td><td>Ny tid betyder svara igen: flyttas eller förlängs ett möte, en 1:1 eller en leveranspost nollställs deltagarnas svar. För en enskild gång i en serie gäller det bara den gången.</td></tr>
+      <tr><td><b>v6 · varv 2</b></td><td>CRM bakom adaptergränssnitt med manuell adapter, Resend-webhooks, rådatalogg, en påminnelsetabell för alla kanaler, rättad stegmodell. "+N fler" i stället för smala poster, prickar i minikalendern, lägen i förklaringen. Ordlista, en term (leveranspost), grupperad notistabell. Agendavy, sök, svara från klockan, Visa mig-knappar, plus i dagrubriken. Visa avböjda, 1:1-förberedelse, kopiera till nästa vecka.</td></tr>
+      <tr><td><b>v5 · varv 1</b></td><td>Utkorg för allt som lämnar Nav, en tid att räkna på, kö som tål samtidighet. Två minuter överst, tabellkarta, research och SQL bakom Visa. Dra för att välja tid och ändra längd, Ångra, serieval vid flytt. Krockvarning, jämn fördelning i kön, komplett överlämning.</td></tr>
+      <tr><td><b>v4</b></td><td>Föreslå ny tid med eget tidsval, även för en enskild gång i en serie. Nav bockar aldrig av välkomstsamtal utifrån växeln.</td></tr>
+      <tr><td><b>v3</b></td><td>Datumväljare med veckonummer, start och slut med snabbval. Leveransförinställningar i egen färg och mejlpåminnelse via Resend.</td></tr>
+      <tr><td><b>v2</b></td><td>Leveransen har eget CRM. Möten med deltagare, svar och notiser. 1:1:or som serier med agenda och åtgärder.</td></tr>
+      <tr><td><b>v1</b></td><td>Research, genomläsning av kalenderkoden och första prototypen.</td></tr>
+    </tbody></table></div></div></details>
+</section>
+
+<section id="kallor">
+  <div class="head"><h2>Källor</h2><p class="prose muted">Flera siffror kommer från leverantörer som säljer onboardingverktyg och är riktmärken, inte forskning.</p></div>
+  <details class="more"><summary>21 källor <span class="sub">Microsoft, Resend, Rocketlane med flera</span></summary><div class="in">
+  <ol class="sources">
+    <li><a href="https://support.microsoft.com/en-us/outlook/calendar/propose-a-new-meeting-time-in-outlook" target="_blank" rel="noopener">Microsoft: Propose a new meeting time in Outlook</a></li>
+    <li><a href="https://support.microsoft.com/en-us/office/create-or-schedule-an-appointment-be84396a-0903-4e25-b31c-1c99ce0dacf2" target="_blank" rel="noopener">Microsoft: Create or schedule an appointment</a></li>
+    <li><a href="https://support.microsoft.com/en-us/office/change-how-you-view-your-outlook-calendar-a4e0dfd2-89a1-4770-9197-a3e786f4cd8f" target="_blank" rel="noopener">Microsoft: Change how you view your Outlook calendar</a></li>
+    <li><a href="https://support.microsoft.com/en-us/office/use-the-scheduling-assistant-and-room-finder-for-meetings-in-outlook-2e00ac07-cef1-47c8-9b99-77372434d3fa" target="_blank" rel="noopener">Microsoft: Scheduling Assistant and Room Finder</a></li>
+    <li><a href="https://support.microsoft.com/en-us/accessibility/outlook/keyboard-shortcuts-for-outlook" target="_blank" rel="noopener">Microsoft: Keyboard shortcuts for Outlook</a></li>
+    <li><a href="https://learn.microsoft.com/en-us/graph/outlook-get-free-busy-schedule" target="_blank" rel="noopener">Microsoft Graph: Get free/busy schedule</a></li>
+    <li><a href="https://learn.microsoft.com/en-us/graph/outlook-change-notifications-overview" target="_blank" rel="noopener">Microsoft Graph: Change notifications for Outlook</a></li>
+    <li><a href="https://lattice.com/platform/performance/one-on-ones" target="_blank" rel="noopener">Lattice: One-on-ones</a></li>
+    <li><a href="https://fellow.ai/use-cases/one-on-one-meetings" target="_blank" rel="noopener">Fellow: One-on-one meetings</a></li>
+    <li><a href="https://www.rocketlane.com/blogs/sales-to-customer-success-handoff" target="_blank" rel="noopener">Rocketlane: Sales to Customer Success Handoff</a></li>
+    <li><a href="https://www.askelephant.ai/blog/sales-to-customer-success-handoff-process" target="_blank" rel="noopener">AskElephant: Closed-Won to First Value</a></li>
+    <li><a href="https://www.guidecx.com/blog/how-to-perfect-the-sales-to-customer-onboarding-handoff/" target="_blank" rel="noopener">GUIDEcx: Sales-to-onboarding handoff</a></li>
+    <li><a href="https://almcorp.com/blog/client-onboarding-checklist-digital-agencies/" target="_blank" rel="noopener">ALM Corp: Client onboarding checklist</a></li>
+    <li><a href="https://www.searchenginejournal.com/why-agencies-lose-clients-in-the-first-90-days-and-how-to-stop-it/582895/" target="_blank" rel="noopener">Search Engine Journal: The first 90 days</a></li>
+    <li><a href="https://www.weidert.com/blog/hubspot-tutorial-onboarding-automation" target="_blank" rel="noopener">Weidert: HubSpot onboarding automation</a></li>
+    <li><a href="https://support.pipedrive.com/en/article/projects-templates" target="_blank" rel="noopener">Pipedrive: Projects templates</a></li>
+    <li><a href="https://support.float.com/en/articles/13847946-capacity-planning-and-resource-scheduling" target="_blank" rel="noopener">Float: Capacity planning</a></li>
+    <li><a href="https://www.teamwork.com/product/resource-management/capacity-planning/" target="_blank" rel="noopener">Teamwork.com: Capacity planning</a></li>
+    <li><a href="https://calendly.com/help/round-robin-distribution-overview" target="_blank" rel="noopener">Calendly: Round robin</a></li>
+    <li><a href="https://resend.com/docs/dashboard/emails/schedule-email" target="_blank" rel="noopener">Resend: Schedule email</a></li>
+    <li><a href="https://resend.com/changelog/extended-email-scheduling" target="_blank" rel="noopener">Resend: Extended email scheduling (30 dagar)</a></li>
+    <li>Kodbas: <code>stratforsr-sys/ClicknetIntran-t</code> @ <code>38b1099</code></li>
+  </ol></div></details>
+</section>
+</div>
+
+<script>
+/* =============================================================================
+   PROTOTYPENS LOGIK. Vanilla JS med data i minnet. Ingenting sparas.
+   För Claude Code:
+   - PRODUKT (byggs i Nav med riktig data): vyer, rutnät, formulär, datumväljare,
+     tider, förinställningar, svar och förslag, serier, 1:1-panel, kön, överlämning,
+     krockvarning, dra för att skapa och ändra längd, Ångra, sök, agenda, notisknappar.
+   - DEMO (byggs INTE): "Som"-väljaren (#viewas), Bakom kulisserna (⚙, effect/LOG),
+     Visa mig-knappar (demo()), exempeldata (PEOPLE, CUST, EV, SERIES, NOTES),
+     prototypens egen notisklocka (#bBell, #npanel) — i Nav används Notisklocka i
+     topbaren, som får svarsknapparna. effect() visar vad servern ska göra i rätt ordning.
+   - Regler som motsvaras av befintlig Nav-kod: layout() = laggUt(), daySum() =
+     dagssumma(), weekno() = veckonummer(), notify() = notifiera() (aldrig till den
+     som utlöste), lvl() = kalender_niva() och calendar_share.
+   ============================================================================= */
+(function(){
+if(location.hash==="#bara-kalender"){document.documentElement.classList.add("bara-kalender")}
+"use strict";
+/* ================= Tid ================= */
+const pad=n=>String(n).padStart(2,"0");
+const real=new Date();
+const TODAY=real.getFullYear()+"-"+pad(real.getMonth()+1)+"-"+pad(real.getDate());
+const NOWMIN=real.getHours()*60+real.getMinutes();
+const D=s=>{const[a,m,d]=s.split("-").map(Number);return Date.UTC(a,m-1,d)};
+const F=ms=>{const d=new Date(ms);return d.getUTCFullYear()+"-"+pad(d.getUTCMonth()+1)+"-"+pad(d.getUTCDate())};
+const plus=(s,n)=>F(D(s)+n*864e5);
+const wd=s=>((new Date(D(s)).getUTCDay()+6)%7)+1;
+const monday=s=>plus(s,1-wd(s));
+const weekno=s=>{const th=plus(s,4-wd(s));const y=+th.slice(0,4);return Math.floor((D(th)-D(y+"-01-01"))/864e5/7)+1};
+const WDK=["","mån","tis","ons","tors","fre","lör","sön"],WDL=["","Måndag","Tisdag","Onsdag","Torsdag","Fredag","Lördag","Söndag"];
+const MK=["","jan","feb","mar","apr","maj","jun","jul","aug","sep","okt","nov","dec"],ML=["","januari","februari","mars","april","maj","juni","juli","augusti","september","oktober","november","december"];
+const dd=s=>+s.slice(8,10),mm=s=>+s.slice(5,7);
+const hm=m=>pad(Math.floor(m/60))+":"+pad(m%60);
+const len=m=>{const h=Math.floor(m/60),r=m%60;return h?(r?h+" h "+r+" min":h+" h"):r+" min"};
+const isWeekend=s=>wd(s)>=6;
+const dayLabel=s=>WDK[wd(s)]+" "+dd(s)+" "+MK[mm(s)];
+const DAY_START=6*60,DAY_END=20*60,SLOT=30,SH=26,WORK_S=8*60,WORK_E=17*60,DAGSTAK=6*60;
+const W0=isWeekend(TODAY)?plus(monday(TODAY),7):monday(TODAY);
+const day=i=>plus(W0,i);
+const NOW_ABS=D(TODAY)+NOWMIN*6e4;
+const HOME=isWeekend(TODAY)?W0:TODAY;
+
+/* ================= Exempeldata · DEMO, ersätts av Supabase ================= */
+const PEOPLE=[
+  {id:"z",namn:"Zen",kort:"Z",roll:"Säljchef",grp:"salj"},
+  {id:"s1",namn:"Elin Ström",kort:"ES",roll:"Säljare",grp:"salj"},
+  {id:"s2",namn:"Adam Wik",kort:"AW",roll:"Säljare",grp:"salj"},
+  {id:"s3",namn:"Nora Eld",kort:"NE",roll:"Säljare",grp:"salj"},
+  {id:"d1",namn:"Sara Lind",kort:"SL",roll:"Projektledare",grp:"lev"},
+  {id:"d2",namn:"Omar Haddad",kort:"OH",roll:"Leverans",grp:"lev"}
+];
+const P=Object.fromEntries(PEOPLE.map(p=>[p.id,p]));
+const first=id=>P[id]?P[id].namn.split(" ")[0]:"";
+const SHARE={d1:{d2:"detaljer",z:"detaljer"},d2:{d1:"detaljer",z:"detaljer"},s1:{z:"rubriker"},s2:{z:"rubriker"},s3:{z:"rubriker"},z:{d1:"rubriker",d2:"rubriker"}};
+const lvl=(owner,viewer)=>owner===viewer?"agare":(SHARE[owner]&&SHARE[owner][viewer])||"upptagen";
+const LVL_W={agare:4,detaljer:3,rubriker:2,upptagen:1};
+const KIND={
+  mote:{lab:"Möte",cls:"k-mote"},enskilt:{lab:"1:1",cls:"k-enskilt"},uppgift:{lab:"Uppgift",cls:"k-uppgift"},
+  valkomst:{lab:"Välkomstsamtal",cls:"k-lev",ico:"☎"},tillgangar:{lab:"Tillgångar",cls:"k-lev",ico:"⚿"},kickoff:{lab:"Kickoff",cls:"k-lev",ico:"▶"},leverans:{lab:"Leveransstart",cls:"k-lev",ico:"◆"},avst:{lab:"Avstämning",cls:"k-lev",ico:"✓"},
+  ledig:{lab:"Ledig",cls:"k-ledig"},order:{lab:"Orderfrist",cls:"k-order"}
+};
+const LEV_KINDS=["valkomst","tillgangar","kickoff","leverans","avst"];
+const CUST={
+  c1:{namn:"Kvarnens Bageri",paket:"Paket 2",pris:1495,loptid:24,saljare:"s1",kontakt:"Mira Kvarnström",roll:"ägare",tel:"070-000 11 22",mal:"Fler tårtbeställningar via Google inför helger.",lovat:"Företagsprofilen uppdaterad inom två veckor.",tid:"Efter 14",risk:"Har haft en byrå som inte hörde av sig.",crm:"LC-10471"},
+  c2:{namn:"Nordvik Rör & Värme",paket:"Paket 3",pris:1995,loptid:36,saljare:"s2",kontakt:"Per Nordvik",roll:"VD",tel:"070-000 33 44",mal:"Synas på “rörmokare Borås”.",lovat:"Lokala sidor för tre orter.",tid:"Lunch 12–13",risk:"Hemsidan ligger hos en släkting.",crm:"LC-10466"},
+  c3:{namn:"Tandvård Söder",paket:"Paket 2",pris:1495,loptid:24,saljare:"s1",kontakt:"Lena Ahl",roll:"klinikchef",tel:"070-000 55 66",mal:"Fler nya patienter för implantat.",lovat:"Recensionsflöde i Google-profilen.",tid:"12:30–13:00",risk:"Be om Lena direkt i receptionen.",crm:"LC-10479"},
+  c4:{namn:"Björkviks Städ",paket:"Paket 1",pris:995,loptid:12,saljare:"s2",kontakt:"Samir Björk",roll:"ägare",tel:"070-000 77 88",mal:"Fler RUT-kunder inom 2 mil.",lovat:"Start inom en vecka.",tid:"Kvällar",risk:"Svarade inte första gången.",crm:"LC-10475"},
+  c8:{namn:"Hårsalong Nova",paket:"Paket 2",pris:1495,loptid:24,saljare:"s1",kontakt:"Nova Persson",roll:"ägare",tel:"070-000 21 43",mal:"Fyllda luckor tisdag–torsdag.",lovat:"Bokningsknapp i Google-profilen.",tid:"Efter 18",risk:"–",crm:"LC-10483"},
+  c9:{namn:"Borås Däckcenter",paket:"Paket 3",pris:1995,loptid:36,saljare:"s2",kontakt:"Ali Rahimi",roll:"delägare",tel:"070-000 65 87",mal:"Toppa däckbytessäsongen.",lovat:"Kampanjsida inom två veckor.",tid:"Före 09",risk:"Tidskritiskt, säsongen börjar nu.",crm:"LC-10482"},
+  c10:{namn:"Villa Vy Konferens",paket:"Paket 1",pris:995,loptid:12,saljare:"s3",kontakt:"Maja Vy",roll:"marknad",tel:"070-000 43 21",mal:"Fler konferensförfrågningar.",lovat:"",tid:"",risk:"–",crm:null}
+};
+let queue=[{id:"q1",c:"c9",due:NOW_ABS-65*6e4},{id:"q2",c:"c8",due:NOW_ABS+20.5*36e5},{id:"q3",c:"c10",due:NOW_ABS+3.2*36e5}];
+let nid=100;const uid=()=>"e"+(nid++);
+const A=(p,svar)=>({p,svar:svar||"ja"});
+let SERIES=[
+  {id:"sr1",k:"enskilt",title:"1:1",org:"z",att:[A("s1")],wd:1,s:10*60,m:30,every:1,start:plus(W0,-28),ex:{},
+   agenda:[{by:"s1",tx:"Invändningen “vi har redan en byrå”",done:false},{by:"z",tx:"Veckans K&V-samtal",done:false}],
+   atgard:[{by:"s1",tx:"Ring tillbaka tre varma leads från fredagen",done:true},{by:"s1",tx:"Lyssna på två av Adams avslut",done:false}],
+   stats:{order:7,mal:10,kv:"3,8",prov:"8 400"}},
+  {id:"sr2",k:"enskilt",title:"1:1",org:"z",att:[A("s2")],wd:2,s:9*60,m:30,every:1,start:plus(W0,-21),ex:{},
+   agenda:[{by:"z",tx:"Avslutsfrekvens senaste två veckorna",done:false}],atgard:[{by:"s2",tx:"Testa nya öppningen i 20 samtal",done:false}],
+   stats:{order:11,mal:10,kv:"4,1",prov:"12 900"}},
+  {id:"sr3",k:"enskilt",title:"1:1",org:"z",att:[A("s3")],wd:3,s:14*60,m:30,every:2,start:plus(W0,-14),ex:{},agenda:[],atgard:[],stats:{order:4,mal:8,kv:"3,5",prov:"4 800"}},
+  {id:"sr4",k:"mote",title:"Uppstartsmöte sälj",org:"z",att:[A("s1"),A("s2"),A("s3")],wd:0,s:8*60+15,m:15,every:1,start:plus(W0,-60),ex:{},weekdays:true},
+  {id:"sr5",k:"mote",title:"Leveransavstämning",org:"d1",att:[A("d2"),A("z","kanske")],wd:0,s:15*60,m:30,every:1,start:plus(W0,-30),ex:{}}
+];
+let EV=[
+  {id:uid(),k:"valkomst",org:"d1",c:"c1",d:day(0),s:9*60,m:30,status:"genomford"},
+  {id:uid(),k:"kickoff",org:"d1",c:"c2",d:day(0),s:10*60+30,m:60,status:"genomford"},
+  {id:uid(),k:"valkomst",org:"d1",c:"c3",d:day(0),s:12*60+30,m:30,rem:{me:true,cust:false,id:"re_2hd8w1pa"}},
+  {id:uid(),k:"avst",org:"d1",c:"c4",d:day(0),s:13*60+30,m:30,title:"30-dagarsavstämning"},
+  {id:uid(),k:"uppgift",org:"d2",d:day(0),s:13*60,m:120,title:"Landningssidor, utkast"},
+  {id:uid(),k:"valkomst",org:"d2",c:"c4",d:day(0),s:9*60,m:30,status:"ej_svar"},
+  {id:uid(),k:"valkomst",org:"d2",c:"c4",d:day(0),s:16*60,m:30,attempt:2},
+  {id:uid(),k:"kickoff",org:"d1",c:"c1",d:day(1),s:9*60,m:60,ext:true,rem:{me:true,cust:true,id:"re_9vb3s0nq"}},
+  {id:uid(),k:"mote",org:"z",att:[A("d1"),A("s1","vantar")],d:day(1),s:13*60,m:45,title:"Överlämning: vad lovar säljarna?",agendaTx:"Genomgång av tre överlämningar från förra veckan."},
+  {id:uid(),k:"ledig",org:"d2",d:day(1)},
+  {id:uid(),k:"uppgift",org:"z",d:day(0),s:14*60,m:60,title:"Förbered månadsmöte"},
+  {id:uid(),k:"uppgift",org:"z",d:day(2),s:13*60,m:90,title:"Provisionsunderlag"},
+  {id:uid(),k:"uppgift",org:"s1",d:day(0),s:13*60,m:120,title:"Ringpass: tandvård Göteborg"},
+  {id:uid(),k:"uppgift",org:"s2",d:day(1),s:10*60,m:120,title:"Ringpass: däck och verkstad"},
+  {id:uid(),k:"leverans",org:"d1",c:"c2",d:day(2),s:10*60,m:90,rem:{me:true,cust:false,id:"re_5tz1c8re"}},
+  {id:uid(),k:"kickoff",org:"d2",c:"c4",d:day(2),s:15*60+30,m:60,ext:true},
+  {id:uid(),k:"tillgangar",org:"d1",c:"c1",d:day(3),s:9*60,m:30,rem:{me:true,cust:true,id:"re_7kq2m9x4"}},
+  {id:uid(),k:"leverans",org:"d1",c:"c1",d:day(4),s:9*60,m:90},
+  {id:uid(),k:"mote",org:"z",att:[A("s1"),A("s2"),A("s3"),A("d1","kanske")],d:day(4),s:15*60,m:60,title:"Veckoavslut och topplista"},
+  {id:uid(),k:"kickoff",org:"d1",c:"c3",d:day(8),s:12*60+30,m:60,ext:true},
+  {id:"e_dec",k:"mote",org:"d2",att:[A("z","nej"),A("d1")],d:day(2),s:12*60,m:45,title:"Lunch och lär: Search Console"},
+  {id:"e_inv_z",k:"mote",org:"d1",att:[A("z","vantar"),A("d2")],d:day(3),s:14*60,m:45,title:"Kvarnens Bageri: första veckan",agendaTx:"Hur gick kickoffen, vad lovade säljaren och vad behöver leveransen från sälj framöver?"}
+];
+(()=>{const y=+day(2).slice(0,4),m=+day(2).slice(5,7);EV.push({id:uid(),k:"order",org:"*",d:F(Date.UTC(y,m,0))})})();
+const invite=EV.find(e=>e.title==="Överlämning: vad lovar säljarna?");
+let NOTES=[
+  {id:"n1",to:"s1",ico:"📅",tx:"Zen bjöd in dig till “Överlämning: vad lovar säljarna?”",d:dayLabel(day(1))+" 13:00",ch:["klocka","mejl"],unread:true,ref:invite.id},
+  {id:"n2",to:"d1",ico:"🟢",tx:"Ny kund i kön: Hårsalong Nova",d:"godkänd i morse",ch:["klocka"],unread:true,q:"q2"},
+  {id:"n3",to:"d1",ico:"⏰",tx:"Borås Däckcenter har väntat mer än 24 h",d:"välkomstsamtal saknas",ch:["klocka","mejl"],unread:true,q:"q1"},
+  {id:"n4",to:"z",ico:"❔",tx:"Sara svarade kanske på “Veckoavslut och topplista”",d:"i går",ch:["klocka"],unread:false},
+  {id:"n7",to:"s1",ico:"🗒️",tx:"Inför er 1:1: lägg till det du vill ta upp",d:"1:1-förberedelse, skickas dagen före kl 15",ch:["klocka"],unread:true,sr:"sr1"},
+  {id:"n6",to:"z",ico:"📅",tx:"Sara bjöd in dig till “Kvarnens Bageri: första veckan”",d:"tors "+dd(day(3))+" "+MK[mm(day(3))]+" 14:00",ch:["klocka","mejl"],unread:true,ref:"e_inv_z"},
+  {id:"n5",to:"z",ico:"📝",tx:"Elin lade till en punkt på er 1:1",d:"“Invändningen ‘vi har redan en byrå’”",ch:["klocka"],unread:true,sr:"sr1"}
+];
+
+/* ================= Tillstånd ================= */
+const narrow=window.matchMedia("(max-width:700px)").matches;
+const S={view:narrow?"agenda":"arbetsvecka",showDec:false,q:"",anchor:HOME,mmMonth:HOME.slice(0,7),viewer:"z",show:{},sel:null,pick:null,drawer:null,form:null};
+PEOPLE.forEach(p=>S.show[p.id]=false);
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+/* Ångra: en ögonblicksbild före varje ändring. I Nav motsvaras det av att utkorgen väntar 10 s innan något skickas. */
+let UNDO=null;
+const snap=()=>JSON.stringify({EV,SERIES,queue,NOTES});
+function toast(t,undo){const e=$("toast");e.innerHTML=`<span>${esc(t)}</span>`+(undo?`<button type="button" id="tUndo">Ångra</button>`:"");e.classList.toggle("act",!!undo);UNDO=undo||null;e.classList.add("on");clearTimeout(toast.t);toast.t=setTimeout(()=>{e.classList.remove("on","act");UNDO=null},undo?8000:3400)}
+function restore(js){const o=JSON.parse(js);EV=o.EV;SERIES=o.SERIES;queue=o.queue;NOTES=o.NOTES;S.drawer=null;S.form=null;$("drawer").classList.remove("open");effect("ångrat","utkorgens väntande rader tas bort innan något skickas");render();toast("Ångrat. Inget skickades.")}
+/* DEMO i UI:t, men ordningen är PRODUKT: varje sidoeffekt går genom effect(), som i Nav blir en rad i utkorgen. */
+let LOG=[];
+const clockNow=()=>{const n=new Date();return pad(n.getHours())+":"+pad(n.getMinutes())+":"+pad(n.getSeconds())};
+function effect(kind,tx){LOG.unshift({t:clockNow(),kind,tx});if(LOG.length>80)LOG.pop();if(!$("xpanel").hidden)renderLog()}
+function renderLog(){$("xlist").innerHTML=LOG.length?LOG.map(l=>`<li><span class="xk ${l.kind}">${l.kind}</span><span>${esc(l.tx)}</span><time>${l.t}</time></li>`).join(""):`<li class="muted">Inget har hänt än. Boka, flytta eller svara på något i kalendern.</li>`}
+// Regeln från notifiera(): aldrig till den som utlöste händelsen.
+function notify(to,ico,tx,d,ch,extra){if(!to||to===S.viewer||to==="*")return;NOTES.unshift(Object.assign({id:"n"+(nid++),to,ico,tx,d:d||"nyss",ch,unread:true},extra||{}));
+  effect("notis",`notification_event → ${P[to].namn}: ${tx}`);
+  if(ch.includes("mejl"))effect("utkorg",`mejl till ${P[to].namn} via Resend, skickas efter 10 s om det inte ångras`)}
+
+/* ================= Förekomster ================= */
+function seriesHits(sr,d){
+  if(D(d)<D(sr.start))return false;
+  if(sr.onlyOnce)return d===sr.onlyOnce;
+  if(sr.weekdays)return!isWeekend(d);
+  if(wd(d)!==sr.wd+1)return false;
+  const w=Math.round((D(monday(d))-D(monday(sr.start)))/(7*864e5));return w%sr.every===0;
+}
+function occurrences(from,to){
+  const out=[];
+  for(const sr of SERIES){
+    // förekomster som flyttats in i intervallet
+    for(const[orig,x]of Object.entries(sr.ex)){if(x.d&&D(x.d)>=D(from)&&D(x.d)<=D(to))out.push(occ(sr,orig,x))}
+    for(let d=from;D(d)<=D(to);d=plus(d,1)){
+      if(!seriesHits(sr,d))continue;const x=sr.ex[d];if(x&&(x.cancel||x.d))continue;out.push(occ(sr,d,x||{}));
+    }
+  }
+  return out;
+}
+function occ(sr,orig,x){return{id:sr.id+"@"+orig,sr:sr.id,k:sr.k,title:sr.title,org:sr.org,att:x.resp?sr.att.map(a=>x.resp[a.p]?Object.assign({},a,{svar:x.resp[a.p]}):a):sr.att,d:x.d||orig,s:x.s!=null?x.s:sr.s,m:x.m||sr.m,occ:orig}}
+// Förslag på ny tid: per möte, eller per förekomst i en serie.
+const getProp=(a,e)=>e.sr?((a.props||{})[e.occ]||null):(a.prop||null);
+function setProp(a,e,v){if(e.sr){a.props=a.props||{};if(v)a.props[e.occ]=v;else delete a.props[e.occ]}else a.prop=v}
+function allEvents(from,to){return EV.filter(e=>D(e.d)>=D(from)&&D(e.d)<=D(to)).concat(occurrences(from,to))}
+function findEv(id){
+  if(!id)return null;
+  if(id.includes("@")){const[sid,orig]=id.split("@");const sr=SERIES.find(s=>s.id===sid);if(!sr)return null;const x=sr.ex[orig]||{};if(x.cancel)return null;return occ(sr,orig,x)}
+  return EV.find(e=>e.id===id)||null;
+}
+const participants=e=>e.org==="*"?[]:[e.org].concat((e.att||[]).map(a=>a.p));
+const myResp=(e,p)=>{if(e.org===p)return"org";const a=(e.att||[]).find(x=>x.p===p);return a?a.svar:null};
+const involves=(e,p)=>e.org===p||(e.att||[]).some(a=>a.p===p&&a.svar!=="nej");
+const endOf=e=>e.s+Math.max(15,e.m||30);
+const isTask=e=>e.k==="uppgift";
+// Vad läsaren får se: deltagare ser allt, andra ser efter bästa delningsnivå hos någon inblandad.
+function levelFor(e,viewer){if(e.org==="*"||involves(e,viewer)||myResp(e,viewer))return 4;return Math.max(1,...participants(e).map(p=>LVL_W[lvl(p,viewer)]||1))}
+function titleFor(e,viewer){return levelFor(e,viewer)<2?null:baseTitle(e,viewer)}
+function baseTitle(e,viewer){
+  if(e.k==="ledig")return first(e.org)+" ledig";
+  if(e.k==="order")return"Orderfrist";
+  if(e.k==="enskilt"){const o=e.org,a=e.att[0].p;return viewer===o?"1:1 "+first(a):viewer===a?"1:1 "+first(o):"1:1 "+first(o)+" · "+first(a)}
+  if(isTask(e))return e.title;
+  if(LEV_KINDS.includes(e.k))return(e.title||KIND[e.k].lab+((e.attempt||1)>1?" "+e.attempt:""))+" · "+CUST[e.c].namn;
+  return e.title;
+}
+function layout(list){
+  const t=[...list].sort((a,b)=>a.s-b.s||endOf(b)-endOf(a)||(a.id<b.id?-1:1));
+  const out=[];let cl=[],clEnd=-1;
+  let ci=0;const close=()=>{const n=Math.max(1,...cl.map(k=>k.col+1));cl.forEach(k=>{k.cols=n;k.cl=ci});ci++;out.push(...cl);cl=[];clEnd=-1};
+  for(const e of t){if(cl.length&&e.s>=clEnd)close();const used=new Set(cl.filter(k=>endOf(k.e)>e.s).map(k=>k.col));let c=0;while(used.has(c))c++;cl.push({e,col:c,cols:1});clEnd=Math.max(clEnd,endOf(e))}
+  if(cl.length)close();return out;
+}
+function busyOf(p,d){return allEvents(d,d).filter(e=>e.s!=null&&involves(e,p)&&e.status!=="ej_svar")}
+const isLedig=(d,p)=>EV.some(e=>e.k==="ledig"&&e.d===d&&e.org===p);
+function daySum(d,p){return busyOf(p,d).filter(e=>e.status!=="genomford").reduce((s,e)=>s+(e.m||0),0)}
+function isFree(ps,d,s,m,skip){if(isWeekend(d))return false;return ps.every(p=>!isLedig(d,p)&&!busyOf(p,d).some(e=>e.id!==skip&&e.s<s+m&&endOf(e)>s))}
+function autopick(ps,fromD,fromMin,m,maxDays,skip){
+  let d=fromD;
+  for(let i=0;i<=maxDays;i++,d=plus(d,1)){
+    for(let s=WORK_S;s+m<=WORK_E;s+=15){
+      if(D(d)<D(TODAY)||(d===TODAY&&s<NOWMIN+15))continue;
+      if(d===fromD&&s<fromMin)continue;
+      if(s<13*60&&s+m>12*60)continue;
+      if(isFree(ps,d,s,m,skip))return{d,s};
+    }
+  }return null;
+}
+function slaInfo(q){const ms=q.due-NOW_ABS,h=ms/36e5,cls=h<0?"bad":h<8?"warn":"ok",a=Math.abs(Math.round(ms/6e4));const t=Math.floor(a/60)+" h "+pad(a%60)+" min";return{cls,txt:h<0?"Försenad "+t:t+" kvar",pct:Math.max(0,Math.min(100,h/24*100))}}
+const isLev=p=>P[p]&&P[p].grp==="lev";
+
+/* ================= Sök ================= */
+function matchEv(e){if(!S.q)return true;const t=[titleFor(e,S.viewer)||"",...participants(e).map(p=>P[p]?P[p].namn:""),e.c?CUST[e.c].namn:""].join(" ").toLowerCase();return t.includes(S.q)}
+function renderQHits(){
+  const box=$("qhits");if(!S.q){box.innerHTML="";return}
+  const hits=allEvents(HOME,plus(HOME,28)).filter(e=>e.s!=null&&e.k!=="order"&&(involves(e,S.viewer)||(isTask(e)&&e.org===S.viewer))&&matchEv(e)).sort((a,b)=>D(a.d)-D(b.d)||a.s-b.s).slice(0,6);
+  box.innerHTML=hits.length?hits.map(e=>`<button type="button" data-jump="${e.id}"><span class="mono">${WDK[wd(e.d)]} ${dd(e.d)}/${mm(e.d)} ${hm(e.s)}</span><span>${esc(titleFor(e,S.viewer)||"Upptagen")}</span></button>`).join(""):`<span class="hint">Inget de kommande fyra veckorna.</span>`;
+}
+/* ================= Agenda ================= */
+const barColor=e=>LEV_KINDS.includes(e.k)?"var(--lev)":e.k==="enskilt"?"var(--info)":e.k==="mote"?"var(--slate-ink)":e.k==="ledig"?"var(--ok)":e.k==="order"?"var(--warn)":"var(--ink-300)";
+function renderAgenda(){
+  const ds=[0,1,2,3,4,5,6].map(i=>plus(S.anchor,i));let h=`<div class="agenda">`;
+  for(const d of ds){
+    const list=visibleOn(d).sort((a,b)=>(a.s??-1)-(b.s??-1));if(isWeekend(d)&&!list.length)continue;
+    h+=`<section class="agday" aria-label="${WDL[wd(d)]} ${dd(d)} ${ML[mm(d)]}"><h3 class="${d===TODAY?"today":""}">${d===TODAY?"Idag":WDL[wd(d)]} <span class="mono">${dd(d)} ${MK[mm(d)]} · v. ${weekno(d)}</span></h3>`;
+    if(!list.length)h+=`<p class="agempty">Inget inbokat.</p>`;
+    for(const e of list){
+      const t=titleFor(e,S.viewer),r=myResp(e,S.viewer),others=participants(e).filter(p=>p!==S.viewer);
+      const sub=[t!==KIND[e.k].lab?KIND[e.k].lab:"",e.c&&t!==null?CUST[e.c].namn:"",others.length&&t!==null?"med "+others.map(first).join(", "):"",r==="vantar"?"inte svarat":r==="kanske"?"kanske":r==="nej"?"avböjt":"",e.status==="genomford"?"klar":""].filter(Boolean).join(" · ");
+      const click=e.k!=="order"&&e.k!=="ledig";
+      h+=`<${click?"button type=\"button\"":"div"} class="agitem${e.status==="genomford"?" done":""}${S.q&&!matchEv(e)?" dim":""}"${click?` data-e="${e.id}"`:""}><span class="tm">${e.s!=null?hm(e.s)+"<br>"+hm(endOf(e)):"Heldag"}</span><span class="agbar" style="background:${barColor(e)}"></span><span><b>${esc(t===null?"Upptagen":t)}</b><span class="sub">${esc(sub)}</span></span></${click?"button":"div"}>`;
+    }
+    h+=`</section>`;
+  }
+  return h+`</div>`;
+}
+/* ================= Rendering ================= */
+function daysForView(){if(S.view==="dag"||S.view==="team")return[S.anchor];if(S.view==="agenda")return[0,1,2,3,4,5,6].map(i=>plus(S.anchor,i));const m=monday(S.anchor);return(S.view==="vecka"?[0,1,2,3,4,5,6]:[0,1,2,3,4]).map(i=>plus(m,i))}
+function shownPeople(){const v=[S.viewer];PEOPLE.forEach(p=>{if(p.id!==S.viewer&&S.show[p.id])v.push(p.id)});return v}
+function visibleOn(d){const ps=shownPeople();return allEvents(d,d).filter(e=>e.k==="order"||(isTask(e)?ps.includes(e.org):ps.some(p=>involves(e,p)))||(S.showDec&&myResp(e,S.viewer)==="nej"))}
+function renderTop(){
+  const r=$("range"),ds=daysForView();
+  if(S.view==="manad")r.innerHTML=esc(ML[mm(S.anchor)]+" "+S.anchor.slice(0,4));
+  else if(S.view==="agenda"){const a=ds[0],b=ds[6];r.innerHTML=esc(dd(a)+" "+(mm(a)!==mm(b)?MK[mm(a)]+" ":"")+"– "+dd(b)+" "+MK[mm(b)])+"<small>7 dagar</small>"}
+  else if(ds.length===1)r.innerHTML=esc(WDL[wd(S.anchor)]+" "+dd(S.anchor)+" "+ML[mm(S.anchor)])+"<small>v. "+weekno(S.anchor)+"</small>";
+  else{const a=ds[0],b=ds[ds.length-1];r.innerHTML=esc(dd(a)+" "+(mm(a)!==mm(b)?MK[mm(a)]+" ":"")+"– "+dd(b)+" "+MK[mm(b)]+" "+b.slice(0,4))+"<small>v. "+weekno(a)+"</small>"}
+  document.querySelectorAll(".seg button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.v===S.view)));
+  const n=NOTES.filter(x=>x.to===S.viewer&&x.unread).length;$("bellN").hidden=!n;$("bellN").textContent=n;$("bBell").setAttribute("aria-label",n?`Notiser, ${n} olästa`:"Notiser");
+  $("viewas").value=S.viewer;
+}
+function renderMini(){
+  const[y,m]=S.mmMonth.split("-").map(Number);$("mmTitle").textContent=ML[m]+" "+y;
+  const start=monday(S.mmMonth+"-01"),vis=new Set(S.view==="manad"?[]:daysForView());
+  let h=["M","T","O","T","F","L","S"].map(x=>`<span class="wd" aria-hidden="true">${x}</span>`).join("");
+  for(let i=0;i<42;i++){const d=plus(start,i),evs=visibleOn(d).filter(e=>e.k!=="order"&&e.k!=="ledig"&&!(e.sr&&(SERIES.find(x=>x.id===e.sr)||{}).weekdays)),lev=evs.some(e=>LEV_KINDS.includes(e.k));h+=`<button type="button" class="${mm(d)!==m?"out":""} ${d===TODAY?"today":""} ${vis.has(d)?"inr":""} ${evs.length?"has":""} ${lev?"lev":""}" data-d="${d}" aria-label="${dd(d)} ${ML[mm(d)]}${evs.length?", "+evs.length+(evs.length===1?" händelse":" händelser"):""}">${dd(d)}</button>`}
+  $("mm").innerHTML=h;
+}
+const HANDOFF=[["kontakt","Kontaktperson"],["tel","Telefon"],["mal","Kundens mål"],["lovat","Vad som lovades"],["tid","Bästa tid att ringa"],["risk","Risker"]];
+function handoff(C){const miss=HANDOFF.filter(([k])=>!String(C[k]||"").trim()).map(([,l])=>l);return{have:HANDOFF.length-miss.length,of:HANDOFF.length,miss}}
+function renderQueue(){
+  const show=isLev(S.viewer)||S.viewer==="z";$("qwrap").hidden=!show;if(!show)return;
+  const late=queue.some(q=>slaInfo(q).cls==="bad"),warn=queue.some(q=>slaInfo(q).cls==="warn");
+  $("qCount").textContent=queue.length;$("qCount").className="sla "+(late?"bad":warn?"warn":"ok");
+  if(!queue.length){$("queue").innerHTML=`<div class="qempty">Kön är tom. Alla nya kunder har ett välkomstsamtal bokat.</div>`;return}
+  $("queue").innerHTML=[...queue].sort((a,b)=>a.due-b.due).map(q=>{const c=CUST[q.c],s=slaInfo(q);return`<button type="button" class="qitem${S.pick===q.id?" sel":""}" draggable="true" data-q="${q.id}"><span class="row"><b>${esc(c.namn)}</b><span class="sla ${s.cls}">${s.txt}</span></span><span class="sub">${esc(c.paket)} · ${c.loptid} mån · såld av ${esc(first(c.saljare))}</span>${(h=>`<span class="hs ${h.miss.length?"part":"full"}">Överlämning ${h.have}/${h.of}</span>`)(handoff(c))}<span class="slabar"><i style="width:${s.pct}%;background:var(--${s.cls==="ok"?"ok":s.cls==="warn"?"warn":"danger"})"></i></span></button>`}).join("");
+}
+function renderCals(){
+  let h="",g="";
+  for(const p of PEOPLE){
+    if(p.grp!==g){g=p.grp;h+=`<div class="grp">${g==="salj"?"Säljteamet":"Leverans"}</div>`}
+    const me=p.id===S.viewer,l=lvl(p.id,S.viewer);
+    h+=`<label for="cal-${p.id}"><input type="checkbox" id="cal-${p.id}" data-p="${p.id}" ${me||S.show[p.id]||S.view==="team"?"checked":""} ${me||S.view==="team"?"disabled":""}><span class="av ${p.id}">${p.kort}</span>${esc(p.namn)}${me?" (du)":""}<span class="lvl">${me?"":l}</span></label>`;
+  }
+  h+=`<label class="decl" for="showDec"><input type="checkbox" id="showDec" ${S.showDec?"checked":""}>Visa möten jag avböjt</label>`;
+  $("cals").innerHTML=h;
+  $("legend").innerHTML=["mote","enskilt","uppgift"].map(k=>`<span class="chip ${KIND[k].cls}">${KIND[k].lab}</span>`).join("")+`<span class="chip k-lev">Leverans</span><span class="sep"></span><span class="chip k-mote pending">Inte svarat</span><span class="chip k-mote maybe">Kanske</span><span class="chip k-lev done">Klar</span><span class="chip busyonly">Upptagen</span>`+(S.showDec?`<span class="chip k-mote declined">Avböjt</span>`:"");
+}
+function pendingFor(p){return EV.filter(e=>D(e.d)>=D(TODAY)&&(e.att||[]).some(a=>a.p===p&&a.svar==="vantar")).length+SERIES.filter(s=>s.att.some(a=>a.p===p&&a.svar==="vantar")).length+SERIES.reduce((n,s)=>n+Object.entries(s.ex).filter(([o,x])=>x.resp&&x.resp[p]==="vantar"&&D(x.d||o)>=D(TODAY)).length,0)}
+function renderStrip(){
+  const t=busyOf(S.viewer,HOME),mt=t.filter(e=>!isTask(e)).length,tk=t.filter(isTask).length,sum=daySum(HOME,S.viewer),pend=pendingFor(S.viewer);
+  const lab=HOME===TODAY?"idag":dayLabel(HOME);
+  let h=`<span><b>${mt}</b>möten ${lab}</span><span><b>${tk}</b>uppgifter</span><span class="${sum>DAGSTAK?"over":""}"><b>${len(sum)}</b>av 6 h planerat</span>`;
+  if(pend)h+=`<span class="att"><b>${pend}</b>${pend===1?"inbjudan väntar":"inbjudningar väntar"} på ditt svar</span>`;
+  if(isLev(S.viewer))h+=`<span class="${queue.some(q=>slaInfo(q).cls==="bad")?"over":""}"><b>${queue.length}</b>kunder i kön</span>`;
+  $("strip").innerHTML=h;
+}
+function evHTML(e,style,compact,grid){
+  const k=KIND[e.k],viewer=S.viewer,t=titleFor(e,viewer),r=myResp(e,viewer),busy=t===null,title=busy?"Upptagen":t;
+  const cls=["ev",busy?"busyonly":k.cls,compact?"compact":"",e.status==="genomford"?"done":"",e.status==="ej_svar"?"missed":"",r==="vantar"?"pending":r==="kanske"?"maybe":r==="nej"?"declined":"",S.q&&!matchEv(e)?"dim":"",S.sel===e.id?"selected":""].join(" ");
+  const others=participants(e).filter(p=>p!==viewer).slice(0,3);
+  const avs=!compact&&!isTask(e)&&others.length&&!busy?`<span class="avs" aria-hidden="true">${others.map(p=>`<span class="av ${p}">${P[p].kort}</span>`).join("")}</span>`:"";
+  const rep=e.sr?`<span class="rep" aria-hidden="true">↻</span>`:"";
+  const time=hm(e.s)+"–"+hm(endOf(e));
+  const sub=e.status==="ej_svar"?"ej svar":e.status==="genomford"?"klar":r==="vantar"?"ej besvarad":r==="kanske"?"kanske":r==="nej"?"avböjt":"";
+  const lab=`${title}, ${time}${sub?", "+sub:""}${e.sr?", återkommande":""}`;
+  const drag=!busy&&!e.status&&(e.org===viewer);
+  const ico=!busy&&k.ico?`<span class="ico" aria-hidden="true">${k.ico}</span>`:"";
+  const rz=grid&&drag?`<span class="rz" aria-hidden="true"></span>`:"";
+  if(compact)return`<button type="button" class="${cls}" style="${style}" data-e="${e.id}" draggable="${drag}" aria-label="${esc(lab)}" title="${esc(lab)}"><span class="badge">${hm(e.s)}</span><span class="t">${ico}${esc(title)}${rep}</span>${sub?`<span class="s">${sub}</span>`:""}${rz}</button>`;
+  return`<button type="button" class="${cls}${avs?" hasav":""}" style="${style}${avs?";--avn:"+others.length:""}" data-e="${e.id}" draggable="${drag}" aria-label="${esc(lab)}" title="${esc(lab)}"><span class="t">${ico}${esc(title)}${rep}</span><span class="s badge">${time}${sub?" · "+sub:""}</span>${avs}${rz}</button>`;
+}
+function renderGrid(){
+  const days=daysForView(),H=(DAY_END-DAY_START)/SLOT*SH;
+  const cols=`52px repeat(${days.length},minmax(${days.length>1?118:260}px,1fr))`;
+  let h=`<div class="tg" style="grid-template-columns:${cols}"><div class="corner"></div>`;
+  for(const d of days){
+    const sum=daySum(d,S.viewer),ad=visibleOn(d).filter(e=>e.s==null);
+    h+=`<div class="dh${d===TODAY?" is-today":""}"><button type="button" class="dhadd" data-add="${d}" aria-label="Ny händelse ${WDL[wd(d)]} ${dd(d)} ${ML[mm(d)]}">+</button><span class="wdn">${d===TODAY?"Idag":WDK[wd(d)]}</span><span class="dn">${dd(d)}</span><span class="sum${sum>DAGSTAK?" over":""}">${len(sum)} av 6 h</span><span class="adc">${ad.map(e=>`<span class="chip ${KIND[e.k].cls}">${esc(baseTitle(e,S.viewer))}</span>`).join("")}</span></div>`;
+  }
+  h+=`<div class="gut" style="height:${H}px">`;
+  for(let m=DAY_START+60;m<DAY_END;m+=60)if(!(days.includes(TODAY)&&Math.abs(m-NOWMIN)<15))h+=`<span style="top:${(m-DAY_START)/SLOT*SH}px">${hm(m)}</span>`;
+  if(days.includes(TODAY)&&NOWMIN>=DAY_START&&NOWMIN<DAY_END)h+=`<span class="nowtag" style="top:${(NOWMIN-DAY_START)/SLOT*SH}px" aria-label="Klockan är ${hm(NOWMIN)}">${hm(NOWMIN)}</span>`;
+  h+=`</div>`;
+  for(const d of days){
+    h+=`<div class="col${isWeekend(d)?" weekend":""}${d===TODAY?" today":""}" style="height:${H}px"><div class="off" style="top:0;height:${(WORK_S-DAY_START)/SLOT*SH}px"></div><div class="off" style="top:${(WORK_E-DAY_START)/SLOT*SH}px;bottom:0"></div>`;
+    if(isLedig(d,S.viewer))h+=`<div class="ledig"></div>`;
+    for(let m=DAY_START;m<DAY_END;m+=SLOT)h+=`<div class="slot${m%60?" half":""}" style="top:${(m-DAY_START)/SLOT*SH}px"></div><div class="hit" data-d="${d}" data-m="${m}" style="top:${(m-DAY_START)/SLOT*SH}px;height:${SH}px"></div>`;
+    /* Fler än två samtidiga i veckovyn blir "+N fler" i stället för oläsbart smala poster. Dagvyn rymmer sex. */
+    const maxC=days.length===1?6:2,over={};
+    for(const L of layout(visibleOn(d).filter(e=>e.s!=null))){
+      const e=L.e,top=(e.s-DAY_START)/SLOT*SH,ht=Math.max(15,e.m||30)/SLOT*SH-2;
+      if(L.cols>maxC&&L.col>=maxC-1){const o=over[L.cl]=over[L.cl]||{list:[],top:1e9};o.list.push(e);o.top=Math.min(o.top,e.s);continue}
+      const cols=Math.min(L.cols,maxC),w=100/cols;
+      h+=evHTML(e,`top:${top}px;height:${ht}px;left:calc(${L.col*w}% + 2px);width:calc(${w}% - 4px)`,(e.m||30)<=30,true);
+    }
+    for(const o of Object.values(over)){const w=100/maxC;h+=`<button type="button" class="evmore" data-more="${d}" style="top:${(o.top-DAY_START)/SLOT*SH}px;height:${SH-2}px;left:calc(${(maxC-1)*w}% + 2px);width:calc(${w}% - 4px)" title="${esc(o.list.map(x=>hm(x.s)+" "+(titleFor(x,S.viewer)||"Upptagen")).join(", "))}">+${o.list.length} fler</button>`}
+    if(d===TODAY&&NOWMIN>=DAY_START&&NOWMIN<DAY_END)h+=`<div class="nowline" style="top:${(NOWMIN-DAY_START)/SLOT*SH}px"></div>`;
+    h+=`</div>`;
+  }
+  return h+`</div>`;
+}
+let teamGrp=null;
+function renderTeam(){
+  const d=S.anchor,S0=8*60,S1=18*60,W=46,n=(S1-S0)/SLOT,grp=teamGrp||(isLev(S.viewer)?"lev":"salj");
+  let h=`<div class="tl"><div class="hrow" style="grid-template-columns:200px repeat(${n/2},${W*2}px)"><div style="border-left:0;padding-left:12px;display:flex;gap:4px;align-items:center"><button class="btn sm ${grp==="salj"?"on":""}" data-grp="salj" type="button">Sälj</button><button class="btn sm ${grp==="lev"?"on":""}" data-grp="lev" type="button">Leverans</button></div>`;
+  for(let m=S0;m<S1;m+=60)h+=`<div>${hm(m)}</div>`;
+  h+=`</div>`;
+  for(const p of PEOPLE.filter(x=>x.grp===grp)){
+    const sum=daySum(d,p.id),led=isLedig(d,p.id);
+    h+=`<div class="prow" style="grid-template-columns:200px ${n*W}px"><div class="who"><span class="nm"><span class="av ${p.id}">${p.kort}</span>${esc(p.namn)}${p.id===S.viewer?" (du)":""}</span><span class="rl">${esc(p.roll)} · du ser ${p.id===S.viewer?"allt":lvl(p.id,S.viewer)}</span><span class="capbar${sum>DAGSTAK?" over":""}"><i style="width:${led?0:Math.min(100,sum/DAGSTAK*100)}%"></i></span><span class="captext">${led?"Ledig hela dagen":len(sum)+" av 6 h"}</span></div><div class="lane" style="background-size:${W*2}px 100%">`;
+    if(led)h+=`<div class="ledig"></div>`;
+    for(let m=S0;m<S1;m+=SLOT)h+=`<div class="hit" data-d="${d}" data-m="${m}" data-p="${p.id}" style="left:${(m-S0)/SLOT*W}px;width:${W}px"></div>`;
+    for(const L of layout(busyOf(p.id,d).filter(e=>endOf(e)>S0&&e.s<S1))){
+      const e=L.e,l=(Math.max(e.s,S0)-S0)/SLOT*W,w=(Math.min(endOf(e),S1)-Math.max(e.s,S0))/SLOT*W-3,rh=68/L.cols;
+      h+=evHTML(e,`left:${l}px;width:${w}px;top:${8+L.col*rh}px;height:${rh-2}px`,L.cols>1||w<90);
+    }
+    if(d===TODAY&&NOWMIN>=S0&&NOWMIN<S1)h+=`<div class="nowline" style="top:0;bottom:0;height:auto;width:2px;left:${(NOWMIN-S0)/SLOT*W}px;right:auto"></div>`;
+    h+=`</div></div>`;
+  }
+  return h+`</div>`;
+}
+function renderMonth(){
+  const start=monday(S.anchor.slice(0,7)+"-01"),m=mm(S.anchor);
+  let h=`<div class="mg">`+["Måndag","Tisdag","Onsdag","Torsdag","Fredag","Lördag","Söndag"].map(x=>`<div class="mh">${x}</div>`).join("");
+  for(let i=0;i<42;i++){const d=plus(start,i);if(i===35&&mm(d)!==m)break;
+    const list=visibleOn(d).sort((a,b)=>(a.s??-1)-(b.s??-1));
+    h+=`<div class="md${mm(d)!==m?" out":""}${d===TODAY?" today":""}" data-day="${d}"><span class="n">${dd(d)}</span>`+list.slice(0,3).map(e=>{const t=titleFor(e,S.viewer);return`<span class="chip ${t===null?"k-uppgift":KIND[e.k].cls}">${e.s!=null?hm(e.s)+" ":""}${esc(t===null?"Upptagen":t)}</span>`}).join("")+(list.length>3?`<span class="more">+${list.length-3} till</span>`:"")+`</div>`}
+  return h+`</div>`;
+}
+function renderStage(){
+  const st=$("stage"),keep=st.scrollTop;
+  st.innerHTML=S.view==="team"?renderTeam():S.view==="manad"?renderMonth():S.view==="agenda"?renderAgenda():renderGrid();
+  if(S.view==="agenda"){st.scrollTop=0;return}
+  if(!renderStage.did&&S.view!=="manad"&&S.view!=="team"){st.scrollTop=(8*60-DAY_START)/SLOT*SH-6;renderStage.did=true}else st.scrollTop=keep;
+}
+function renderSel(){const b=$("selbanner");
+  if(S.smove){const e=findEv(S.smove.id);b.classList.add("on");b.innerHTML=`<span>Flytta <b>${esc(baseTitle(e,S.viewer))}</b> till ${dayLabel(S.smove.d)} ${hm(S.smove.m)}:</span><span class="acts"><button class="btn sm primary" id="smOne" type="button">Bara den här gången</button><button class="btn sm" id="smAll" type="button">Hela serien</button><button class="btn sm ghost" id="smNo" type="button">Avbryt</button></span>`;return}
+  if(S.pick){const q=queue.find(x=>x.id===S.pick);b.classList.add("on");b.innerHTML=`<span>Välj en tid för välkomstsamtalet med <b>${esc(CUST[q.c].namn)}</b>.</span><span class="acts"><button class="btn sm" id="selCancel" type="button">Avbryt</button></span>`}else b.classList.remove("on")}
+function renderNotes(){
+  const list=NOTES.filter(n=>n.to===S.viewer);$("nTitle").textContent="Notiser till "+first(S.viewer);
+  $("nlist").innerHTML=list.length?list.map(n=>{const e=n.ref&&findEv(n.ref),r=e&&myResp(e,S.viewer);
+    const quick=e&&(r==="vantar"||r==="kanske")?`<div class="nq" role="group" aria-label="Svara direkt">${["ja","kanske","nej"].map(v=>`<button type="button" class="btn sm${r===v?" on":""}" data-nq="${v}" data-nref="${n.ref}" data-nid="${n.id}">${{ja:"✓ Ja",kanske:"? Kanske",nej:"✕ Nej"}[v]}</button>`).join("")}</div>`:"";
+    return`<div class="nrow${n.unread?" unread":""}"><button type="button" class="nitem" data-n="${n.id}"><span class="nic" aria-hidden="true">${n.ico}</span><span><b>${esc(n.tx)}</b><span class="d">${esc(n.d)}</span><span class="ch">${n.ch.map(c=>`<i>${c}</i>`).join("")}</span></span></button>${quick}</div>`}).join(""):`<p class="hint" style="padding:14px">Inga notiser.</p>`;
+}
+function render(){renderTop();renderMini();renderQueue();renderCals();renderStrip();renderStage();renderSel();if(!$("npanel").hidden)renderNotes();if(S.drawer)openDrawer(S.drawer,true)}
+
+/* ================= Panel ================= */
+let lastFocus=null;
+function closeDrawer(){S.drawer=null;S.form=null;$("drawer").classList.remove("open");if(lastFocus&&document.body.contains(lastFocus))lastFocus.focus({preventScroll:true})}
+function head(chipCls,chipTx,title,sub){return`<button class="btn icon ghost x" type="button" id="dClose" aria-label="Stäng">✕</button><span class="chip ${chipCls}" style="align-self:flex-start">${esc(chipTx)}</span><h3>${esc(title)}</h3>${sub?`<span class="muted mono" style="font-size:12px">${sub}</span>`:""}`}
+function openDrawer(ref,silent){
+  if(!silent)lastFocus=document.activeElement;
+  S.drawer=ref;const dr=$("drawer");
+  if(ref.form)renderForm();
+  else if(ref.q){if(!renderQueueCard(ref.q))return}
+  else{
+    const e=findEv(ref.e);if(!e){closeDrawer();return}
+    const t=titleFor(e,S.viewer);
+    if(t===null){$("dhd").innerHTML=head("k-uppgift","Upptagen","Upptagen",dayLabel(e.d)+" · "+hm(e.s)+"–"+hm(endOf(e)));$("dbody").innerHTML=`<p class="muted">${esc(first(e.org))} har inte delat mer än ledig/upptagen med dig. Det är grundläget i Nav och kan inte stängas av, bara utökas av den som äger kalendern.</p>`}
+    else if(e.k==="enskilt")renderOneOnOne(e);
+    else if(LEV_KINDS.includes(e.k))renderCustomerEvent(e);
+    else renderMeeting(e);
+  }
+  dr.classList.add("open");
+  if(!silent)setTimeout(()=>{const f=$("fTitle")||$("fWith")||$("fCust")||$("dClose");f&&f.focus({preventScroll:true})},60);
+}
+function rsvpList(e){
+  const rows=[{p:e.org,svar:"org"}].concat(e.att||[]);
+  return`<div class="rsvp">`+rows.map(a=>`<div class="r"><span class="av ${a.p}">${P[a.p].kort}</span>${esc(P[a.p].namn)}<span class="st ${a.svar}">${{org:"Organisatör",ja:"Ja",kanske:"Kanske",nej:"Nej",vantar:"Inte svarat"}[a.svar]}</span></div>`).join("")+(e.ext&&e.c?`<div class="r"><span class="av" style="background:var(--ink-300)">K</span>${esc(CUST[e.c].kontakt)} (kund)<span class="st vantar">Via .ics</span></div>`:"")+`</div>`;
+}
+function proposalsBlock(e){
+  if(e.org!==S.viewer)return"";
+  const props=(e.att||[]).filter(a=>getProp(a,e)).map(a=>({p:a.p,prop:getProp(a,e)}));if(!props.length)return"";
+  return`<div class="dsec"><h5>Förslag på ny tid${e.sr?" · bara den här gången":""}</h5>${props.map(a=>`<div class="box" style="gap:6px"><span><b style="color:var(--ink-900)">${esc(first(a.p))}</b> föreslår <b style="color:var(--ink-900)">${dayLabel(a.prop.d)} ${hm(a.prop.s)}–${hm(a.prop.s+a.prop.m)}</b></span>${a.prop.note?`<span class="muted">“${esc(a.prop.note)}”</span>`:""}<div class="acts"><button class="btn primary sm" type="button" data-prop-ok="${a.p}">Godkänn ny tid</button><button class="btn sm" type="button" data-prop-no="${a.p}">Behåll nuvarande tid</button></div></div>`).join("")}</div>`;
+}
+function respondBlock(e){
+  const r=myResp(e,S.viewer);if(!r||r==="org")return"";
+  const mine=(e.att||[]).find(a=>a.p===S.viewer);
+  const mp=mine&&getProp(mine,e);
+  const sent=mp?`<p class="hint" style="margin-top:6px">Du har föreslagit ${dayLabel(mp.d)} ${hm(mp.s)}–${hm(mp.s+mp.m)}${e.sr?" för den här gången":""}. Väntar på ${esc(first(e.org))}.</p>`:"";
+  return`<div class="dsec"><h5>Ditt svar${e.sr?((SERIES.find(x=>x.id===e.sr).ex[e.occ]||{}).resp?" · gäller den flyttade tiden":" · gäller hela serien"):""}</h5><div class="acts"><button class="btn ${r==="ja"?"on":""}" type="button" data-rsvp="ja" aria-pressed="${r==="ja"}">✓ Ja</button><button class="btn ${r==="kanske"?"on":""}" type="button" data-rsvp="kanske" aria-pressed="${r==="kanske"}">? Kanske</button><button class="btn ${r==="nej"?"on":""}" type="button" data-rsvp="nej" aria-pressed="${r==="nej"}">✕ Nej</button><button class="btn ghost" type="button" data-rsvp="ny">${e.sr?"Föreslå ny tid för den här gången":"Föreslå ny tid"}</button></div>${sent}</div>`;
+}
+function editBlock(e){
+  if(e.org!==S.viewer)return"";
+  return`<div class="dsec"><h5>Du är organisatör</h5><div class="acts"><button class="btn" type="button" data-act="flytta">Flytta till nästa gemensamma lediga tid</button>${e.sr?"":`<button class="btn" type="button" data-act="kopiera">Kopiera till nästa vecka</button>`}<button class="btn danger" type="button" data-act="stall">Ställ in${e.sr?" den här gången":""}</button></div>${e.sr?`<p class="hint" style="margin-top:6px">Dra förekomsten i kalendern för att flytta bara den här gången.</p>`:""}</div>`;
+}
+function whenText(e){let t=dayLabel(e.d)+" · "+hm(e.s)+"–"+hm(endOf(e));if(e.sr){const sr=SERIES.find(s=>s.id===e.sr);t+=" · ↻ "+(sr.onlyOnce?"en gång":sr.weekdays?"varje vardag":sr.every===2?"varannan vecka":"varje vecka")}return t}
+function renderMeeting(e){
+  $("dhd").innerHTML=head(KIND[e.k].cls,isTask(e)?"Uppgift":"Möte",e.title,whenText(e));
+  let b="";
+  if(isTask(e)){b=`<p class="muted" style="font-size:14px">Uppgiften bor i uppgiftsmodulen och ritas här med sitt klockslag.</p>${e.org===S.viewer?`<div class="acts"><button class="btn primary" type="button" data-act="klar">Markera klar</button><button class="btn" type="button" data-act="flytta">Flytta till nästa lediga tid</button></div>`:`<p class="hint">${esc(first(e.org))} har delat detaljer med dig.</p>`}`}
+  else{
+    b+=proposalsBlock(e)+respondBlock(e)+`<div class="dsec"><h5>Deltagare</h5>${rsvpList(e)}</div>`;
+    if(e.agendaTx)b+=`<div class="dsec"><h5>Agenda</h5><div class="box">${esc(e.agendaTx)}</div></div>`;
+    b+=`<div class="dsec"><h5>Påminnelse</h5><p style="font-size:13.5px">Pling 10 min före till alla som tackat ja. Inbjudan gick ut som notis och mejl med <code>.ics</code>.</p></div>`+editBlock(e);
+  }
+  $("dbody").innerHTML=b;
+}
+function renderOneOnOne(e){
+  const sr=SERIES.find(s=>s.id===e.sr),other=sr.att[0].p,iAmIn=S.viewer===sr.org||S.viewer===other;
+  $("dhd").innerHTML=head("k-enskilt","1:1","1:1 "+first(sr.org)+" och "+first(other),whenText(e));
+  if(!iAmIn){$("dbody").innerHTML=`<p class="muted">Innehållet i en 1:1 ses bara av de två, samma krets som coachningssamtal i Nav.</p>`;return}
+  const st=sr.stats||{order:0,mal:0,kv:"–",prov:"–"};
+  let b=respondBlock(e);
+  b+=`<div class="dsec"><h5>${esc(first(other))}s siffror denna månad</h5><div class="stats"><div class="stat"><b>${st.order}/${st.mal}</b><span>order mot mål</span></div><div class="stat"><b>${st.kv}</b><span>K&amp;V-snitt</span></div><div class="stat"><b>${st.prov}</b><span>provision, kr</span></div></div></div>`;
+  b+=`<div class="dsec"><h5>Agenda <span class="hint" style="text-transform:none;letter-spacing:0">båda kan lägga till · påminnelse dagen före kl 15</span></h5><ul class="alist">${sr.agenda.map((a,i)=>`<li class="${a.done?"done":""}"><input type="checkbox" id="ag-${sr.id}-${i}" data-ag="${i}" ${a.done?"checked":""} aria-label="Avklarad: ${esc(a.tx)}"><span class="av ${a.by}" aria-hidden="true">${P[a.by].kort}</span><span class="tx">${esc(a.tx)}</span></li>`).join("")||`<li class="muted">Tom än. Punkter som läggs till syns för er båda.</li>`}</ul>
+    <form class="addrow" id="agForm" style="margin-top:8px"><input id="agInput" type="text" placeholder="Lägg till en punkt" aria-label="Ny agendapunkt" maxlength="300"><button class="btn sm" type="submit">Lägg till</button></form></div>`;
+  const open=sr.atgard.filter(a=>!a.done).length;
+  b+=`<div class="dsec"><h5>Åtgärder <span class="hint" style="text-transform:none;letter-spacing:0">${open} öppna, följer med tills de är klara</span></h5><ul class="alist">${sr.atgard.map((a,i)=>`<li class="${a.done?"done":""}"><input type="checkbox" id="at-${sr.id}-${i}" data-at="${i}" ${a.done?"checked":""} aria-label="Klar: ${esc(a.tx)}"><span class="av ${a.by}" aria-hidden="true">${P[a.by].kort}</span><span class="tx">${esc(a.tx)}</span>${a.done?"":`<button class="btn sm ghost" type="button" data-totask="${i}" style="margin-left:auto;white-space:nowrap">Till uppgift</button>`}</li>`).join("")||`<li class="muted">Inga åtgärder än.</li>`}</ul></div>`;
+  b+=`<div class="dsec"><h5>Anteckningar</h5><div class="box">Sparas som coachningssamtal i Nav (mål, nuläge, alternativ, vilja) och syns bara för er två.</div><div class="acts" style="margin-top:8px"><button class="btn" type="button" data-act="coach">Öppna samtalet</button>${S.viewer===sr.org?`<button class="btn" type="button" data-act="prep">Be ${esc(first(other))} förbereda nu</button>`:""}</div></div>`;
+  b+=`<div class="dsec"><h5>Deltagare</h5>${rsvpList(e)}</div>`+editBlock(e);
+  $("dbody").innerHTML=b;
+}
+const val=v=>String(v||"").trim()?esc(v):`<span class="missing">Saknas</span>`;
+function custBox(C){return`<div class="dsec"><h5>Överlämning från ${esc(first(C.saljare))}</h5><div class="box"><div><div class="q">Kundens mål</div>${val(C.mal)}</div><div><div class="q">Lovat i säljsamtalet</div>${val(C.lovat)}</div><div><div class="q">Bästa tid att ringa</div>${val(C.tid)}</div><div><div class="q">Risker</div>${val(C.risk)}</div></div></div><div class="dsec"><h5>Kund</h5><dl class="kv"><dt>Kontakt</dt><dd>${esc(C.kontakt)}, ${esc(C.roll)}</dd><dt>Telefon</dt><dd class="mono">${esc(C.tel)}</dd><dt>Avtal</dt><dd>${esc(C.paket)} · ${C.pris.toLocaleString("sv-SE")} kr/mån · ${C.loptid} mån</dd></dl></div>`}
+function remBox(e){return e.rem&&!e.status?`<div class="remind"><b>Mejlpåminnelse schemalagd · Resend</b><span>${[e.rem.me?esc(P[e.org].namn):null,e.rem.cust?esc(CUST[e.c].kontakt):null].filter(Boolean).join(" och ")} får ett mejl ${reminderText(e.d,e.s)}.</span><span class="hint mono">${e.rem.id}</span></div>`:""}
+function crmBox(C,cid){if(!C.crm&&cid)return`<div class="crm"><span aria-hidden="true">↗</span><span style="flex:1"><b>Inte i leverans-CRM:et än</b>Manuell adapter tills CRM:ets API är känt: lägg in kunden där och klistra in kund-ID:t här.<form class="addrow" data-crmform="${cid}" style="margin-top:8px"><input id="crmId" type="text" placeholder="Kund-ID, till exempel LC-10490" aria-label="Kund-ID från leverans-CRM:et" maxlength="40"><button class="btn sm" type="submit">Spara</button></form></span></div>`;
+  return`<div class="crm"><span aria-hidden="true">↗</span><span><b>${C.crm?"Finns i leverans-CRM:et · "+C.crm:"Väntar på synk till leverans-CRM:et"}</b>${C.crm?"Produktionen och rapporterna hanteras där.":"Nav försöker igen. Admin får en notis efter tre misslyckade försök."}</span></div>`}
+function renderCustomerEvent(e){
+  const C=CUST[e.c],k=KIND[e.k],mine=e.org===S.viewer||lvl(e.org,S.viewer)==="detaljer"||S.viewer==="z";
+  $("dhd").innerHTML=head(k.cls,k.lab+((e.attempt||1)>1?" · försök "+e.attempt:""),C.namn,dayLabel(e.d)+" · "+hm(e.s)+"–"+hm(endOf(e))+" · "+esc(P[e.org].namn));
+  let b="";
+  if(mine){
+    if(e.k==="valkomst"&&!e.status)b+=`<div class="dsec"><h5>Utfall</h5><div class="acts"><button class="btn primary" type="button" data-act="nadd">Nådd, markera genomfört</button><button class="btn" type="button" data-act="ejsvar">Ej svar</button><button class="btn ghost" type="button" data-act="flytta">Flytta</button><button class="btn danger" type="button" data-act="stall">Ställ in</button></div><p class="hint" style="margin-top:6px">Ej svar bokar nästa försök på en annan tid på dagen. Efter tre försök föreslås sms och mejl.</p></div>`+remBox(e);
+    else if(e.k==="valkomst"&&e.status==="genomford")b+=`<div class="dsec"><h5>Utfall</h5><p>✓ Markerat genomfört av ${esc(P[e.org].namn)}.</p>${EV.some(x=>x.c===e.c&&x.k==="kickoff")?"":`<div class="acts" style="margin-top:8px"><button class="btn primary" type="button" data-act="kickoff">Boka kickoff inom 5 arbetsdagar</button></div>`}</div>`;
+    else if(e.status==="ej_svar")b+=`<div class="dsec"><h5>Utfall</h5><p>Ej svar på försök ${e.attempt||1}.</p></div>`;
+    else if(e.status==="genomford")b+=`<div class="dsec"><h5>Utfall</h5><p>✓ Genomfört.</p></div>`;
+    else b+=`<div class="acts"><button class="btn primary" type="button" data-act="klar">Markera genomfört</button><button class="btn" type="button" data-act="flytta">Flytta till nästa lediga tid</button>${e.k==="kickoff"?`<button class="btn" type="button" data-act="ics">Skicka inbjudan igen</button>`:""}<button class="btn" type="button" data-act="kopiera">Kopiera till nästa vecka</button><button class="btn danger" type="button" data-act="stall">Ställ in</button></div>`;
+    if(e.rem&&!e.status&&e.k!=="valkomst")b+=remBox(e);
+  }
+  b+=proposalsBlock(e)+respondBlock(e);
+  if(e.ext||(e.att&&e.att.length))b+=`<div class="dsec"><h5>Deltagare</h5>${rsvpList(e)}</div>`;
+  b+=crmBox(C,e.c)+custBox(C);
+  const plan=EV.filter(x=>x.c===e.c&&LEV_KINDS.includes(x.k)).sort((a,b)=>D(a.d)-D(b.d)||a.s-b.s);
+  b+=`<div class="dsec"><h5>Bokat i Nav</h5><ul class="plan">${plan.map(x=>`<li><span class="pt ${x.status==="genomford"?"done":x.status==="ej_svar"?"miss":D(x.d)>=D(TODAY)?"now":""}"></span><span>${esc(x.title||KIND[x.k].lab)}${(x.attempt||1)>1?" "+x.attempt:""}${x.status==="ej_svar"?" · ej svar":""}</span><span class="when">${dayLabel(x.d)} ${hm(x.s)}</span></li>`).join("")}</ul></div>`;
+  $("dbody").innerHTML=b;
+}
+function renderQueueCard(qid){
+  const q=queue.find(x=>x.id===qid);if(!q){closeDrawer();return false}
+  const C=CUST[q.c],s=slaInfo(q);
+  $("dhd").innerHTML=head("k-valkomst","I kön · "+s.txt,C.namn,esc(C.paket)+" · såld av "+esc(P[C.saljare].namn));
+  $("dbody").innerHTML=`<div class="dsec"><h5>Boka välkomstsamtal</h5><div class="grid2"><label class="field" for="qp">Vem<select id="qp"><option value="auto">Först lediga i leverans</option><option value="jamn">Jämn fördelning i leverans</option>${PEOPLE.filter(p=>p.grp==="lev").map(p=>`<option value="${p.id}">${esc(p.namn)} · ${len(daySum(HOME,p.id))}</option>`).join("")}</select></label><label class="field" for="qm">Längd<select id="qm"><option value="30">30 min</option><option value="15">15 min</option><option value="45">45 min</option></select></label></div>
+    <div class="acts" style="margin-top:10px"><button class="btn primary" type="button" id="qBook">Föreslå tid och boka</button><button class="btn" type="button" id="qPick">Välj tid i kalendern</button></div><p class="hint" style="margin-top:6px">Bästa tid enligt säljaren: ${C.tid?esc(C.tid):"saknas"}. "Jämn fördelning" ger kunden till den som har minst leveransposter den här veckan.</p></div>`+(h=>h.miss.length?`<div class="clashbox" role="note"><b>Överlämningen är inte komplett: ${h.have} av ${h.of}</b><span>Saknas: ${h.miss.join(", ")}.</span><div class="acts"><button class="btn sm" type="button" data-ask="${q.c}">Be ${esc(first(C.saljare))} komplettera</button></div></div>`:"")(handoff(C))+crmBox(C,q.c)+custBox(C);
+  return true;
+}
+
+/* ---------- Formulär ---------- */
+const PRESETS=[
+  {id:"valkomst",k:"valkomst",lab:"Välkomstsamtal",m:30},
+  {id:"tillgangar",k:"tillgangar",lab:"Tillgångar",m:30},
+  {id:"kickoff",k:"kickoff",lab:"Kickoff",m:60,ext:true},
+  {id:"leverans",k:"leverans",lab:"Leveransstart",m:90},
+  {id:"avst30",k:"avst",lab:"30-dagarsavstämning",m:30,title:"30-dagarsavstämning"},
+  {id:"avst90",k:"avst",lab:"90-dagarsgenomgång",m:60,title:"90-dagarsgenomgång"}
+];
+const presetOf=id=>PRESETS.find(p=>p.id===id);
+const canLev=()=>isLev(S.viewer)||S.viewer==="z";
+function applyPreset(f,id){const p=presetOf(id);f.preset=id;f.m=p.m;f.remCust=!!p.ext}
+function newForm(d,s,type,withP){
+  const f={type:type||(isLev(S.viewer)?"lev":"mote"),preset:"kickoff",title:"",att:[],with:null,d:d||HOME,s:s!=null?s:9*60,m:30,rep:"aldrig",rem:10,show:"upptagen",plats:"Kontoret",agenda:"",c:"c3",remMe:true,remCust:false,dp:false,dpMonth:null,dpFocus:null};
+  if(f.type==="enskilt"){f.rep="vecka";f.with=withP||PEOPLE.find(p=>p.grp==="salj"&&p.id!==S.viewer).id}
+  else if(withP)f.att=[withP];
+  if(f.type==="lev")applyPreset(f,f.preset);
+  if(d==null){const pk=autopick(formPeople(f),HOME,WORK_S,f.m,5);if(pk){f.d=pk.d;f.s=pk.s}}
+  S.form=f;openDrawer({form:true});
+}
+function formPeople(f){if(f.type==="forslag"){const e=findEv(f.ev);return e?[S.viewer].concat(participants(e).filter(x=>x!==S.viewer)):[S.viewer]}return f.type==="enskilt"?[S.viewer,f.with].filter(Boolean):f.type==="uppgift"?[S.viewer]:[S.viewer].concat(f.att)}
+function reminderText(d,s){return`${WDK[wd(d)]} ${dd(d)} ${MK[mm(d)]} kl ${hm(Math.max(0,s-30))}`}
+function assistantHTML(f){
+  const ps=formPeople(f),S0=8*60,S1=17*60,span=S1-S0,clash=!isFree(ps,f.d,f.s,f.m,f.skip);
+  const pct=m=>((Math.max(S0,Math.min(S1,m))-S0)/span*100);
+  let h=`<div class="sa"><div class="sah"><span>Schemaläggningsassistent · ${dayLabel(f.d)}</span><button class="btn sm" type="button" id="fPick">Föreslå tid</button></div><div class="axis" aria-hidden="true"><span></span>${[8,9,10,11,12,13,14,15,16].map(x=>`<span>${x}</span>`).join("")}</div>`;
+  for(const p of ps){
+    h+=`<div class="sar"><span class="san"><span class="av ${p}" style="width:16px;height:16px;font-size:7px" aria-hidden="true">${P[p].kort}</span>${esc(first(p))}</span><div class="sat" data-sat="1" title="Klicka för att välja tid">${isLedig(f.d,p)?`<div class="blk ooo" style="left:0;width:100%"></div>`:""}${busyOf(p,f.d).filter(e=>e.id!==f.skip).map(e=>`<div class="blk" style="left:${pct(e.s)}%;width:${Math.max(0,pct(endOf(e))-pct(e.s))}%"></div>`).join("")}<div class="band${clash?" clash":""}" style="left:${pct(f.s)}%;width:${pct(f.s+f.m)-pct(f.s)}%"></div></div></div>`;
+  }
+  h+=`</div><p class="hint" style="margin-top:6px" aria-live="polite">${isWeekend(f.d)?"Det är helg. Tryck Föreslå tid för nästa vardag.":clash?`<b style="color:var(--danger-ink)">Krockar</b> med någons kalender. Klicka i en rad eller tryck Föreslå tid.`:"Alla är lediga. Klicka i en rad för att välja en annan tid."}</p>`;
+  return h;
+}
+function dateFieldHTML(f){
+  return`<div class="field dpwrap"><span id="fDayLab">Datum</span><button type="button" class="dfield" id="fDayBtn" aria-haspopup="dialog" aria-expanded="${f.dp}" aria-labelledby="fDayLab fDayBtn"><span aria-hidden="true">📅</span><span class="dmain">${WDL[wd(f.d)]} ${dd(f.d)} ${ML[mm(f.d)]} ${f.d.slice(0,4)}</span><span class="wk">v. ${weekno(f.d)}</span></button>${f.dp?pickerHTML(f):""}</div>`;
+}
+function pickerHTML(f){
+  const month=f.dpMonth||f.d.slice(0,7),[y,m]=month.split("-").map(Number),start=monday(month+"-01"),foc=f.dpFocus||f.d;
+  let h=`<div class="dp" role="dialog" aria-label="Välj datum"><div class="dph"><button type="button" class="btn icon ghost sm" data-dpnav="-1" aria-label="Föregående månad">‹</button><span aria-live="polite">${ML[m].charAt(0).toUpperCase()+ML[m].slice(1)} ${y}</span><button type="button" class="btn icon ghost sm" data-dpnav="1" aria-label="Nästa månad">›</button></div><div class="dpg"><span class="h" title="Veckonummer">v.</span>${["M","T","O","T","F","L","S"].map(x=>`<span class="h" aria-hidden="true">${x}</span>`).join("")}`;
+  for(let r=0;r<6;r++){
+    const w0=plus(start,r*7);if(r>=4&&mm(w0)!==m&&D(w0)>D(month+"-01"))break;
+    h+=`<span class="w" aria-hidden="true">${weekno(w0)}</span>`;
+    for(let i=0;i<7;i++){const d=plus(w0,i);h+=`<button type="button" class="d${mm(d)!==m?" out":""}${isWeekend(d)?" we":""}${d===TODAY?" today":""}" data-dpd="${d}" aria-selected="${d===f.d}" tabindex="${d===foc?0:-1}" aria-label="${WDL[wd(d)]} ${dd(d)} ${ML[mm(d)]}, vecka ${weekno(d)}">${dd(d)}</button>`}
+  }
+  return h+`</div><div class="dpf"><button type="button" class="btn sm ghost" data-dpd="${HOME}">Idag</button><span>Pilar flyttar · Enter väljer · Esc stänger</span></div></div>`;
+}
+function timeHTML(f){
+  const st=[],en=[];
+  for(let m=6*60;m<=20*60-15;m+=15)st.push(`<option value="${m}" ${m===f.s?"selected":""}>${hm(m)}</option>`);
+  for(let m=f.s+15;m<=Math.min(23*60+45,f.s+8*60);m+=15)en.push(`<option value="${m}" ${m===f.s+f.m?"selected":""}>${hm(m)}  (${len(m-f.s)})</option>`);
+  return`<div class="grid2"><label class="field" for="fStart">Start<select id="fStart">${st.join("")}</select></label><label class="field" for="fEnd">Slut<select id="fEnd">${en.join("")}</select></label></div><span class="durlab" id="durLab">Snabbval</span><div class="durs" role="group" aria-labelledby="durLab">${[15,30,60].map(m=>`<button type="button" data-dur="${m}" aria-pressed="${f.m===m}">${m===60?"1 timme":m+" min"}</button>`).join("")}</div>`;
+}
+function startProposal(e){
+  const pk=autopick(participants(e),e.d,endOf(e),e.m,7,e.id)||{d:e.d,s:e.s};
+  S.form={type:"forslag",ev:e.id,skip:e.id,d:pk.d,s:pk.s,m:e.m||30,svar:"kanske",note:"",dp:false,dpMonth:null,dpFocus:null};
+  openDrawer({form:true});
+}
+function renderProposal(f){
+  const e=findEv(f.ev);if(!e){closeDrawer();return}
+  $("dhd").innerHTML=`<button class="btn icon ghost x" type="button" id="dClose" aria-label="Stäng">✕</button><span class="eyebrow">Föreslå ny tid</span><h3>${esc(baseTitle(e,S.viewer))}</h3><span class="muted mono" style="font-size:12px">Nu: ${dayLabel(e.d)} · ${hm(e.s)}–${hm(endOf(e))} · organisatör ${esc(P[e.org].namn)}</span>`;
+  $("dbody").innerHTML=`<form id="fForm" style="display:flex;flex-direction:column;gap:14px" novalidate>
+    <p style="font-size:14px">Välj den tid du vill föreslå. Nav har förvalt första tiden då alla deltagare är lediga.</p>
+    ${dateFieldHTML(f)}${timeHTML(f)}${assistantHTML(f)}
+    ${e.sr?`<p class="hint">Förslaget gäller bara ${dayLabel(e.d)}. Resten av serien ligger kvar som den är.</p>`:`<div class="grid2"><label class="field" for="fSvar">Ditt svar tills vidare<select id="fSvar"><option value="kanske" ${f.svar==="kanske"?"selected":""}>Kanske</option><option value="nej" ${f.svar==="nej"?"selected":""}>Nej, inte den tiden</option></select></label></div>`}
+    <label class="field" for="fNote">Meddelande till ${esc(first(e.org))} (valfritt)<textarea id="fNote" maxlength="300" placeholder="Till exempel: Jag har ett kundsamtal då, går det en timme senare?">${esc(f.note)}</textarea></label>
+    ${clashHTML(f)}<div class="acts"><button class="btn primary" type="submit">Skicka förslag: ${WDK[wd(f.d)]} ${dd(f.d)} ${MK[mm(f.d)]} ${hm(f.s)}–${hm(f.s+f.m)}</button><button class="btn ghost" type="button" id="fCancel">Avbryt</button></div>
+    <p class="hint">${esc(first(e.org))} får förslaget i klockan och via mejl och kan godkänna det med ett klick. Mötet ligger kvar på nuvarande tid tills dess.</p></form>`;
+}
+function clashHTML(f){
+  if(!f.clash||!f.clash.length)return"";
+  const still=formPeople(f).filter(p=>!isFree([p],f.d,f.s,f.m,f.skip));if(!still.length){f.clash=null;return""}
+  return`<div class="clashbox" id="fClash" tabindex="-1" role="alert"><b>${isWeekend(f.d)?"Det är helg":"Krockar för "+still.map(first).join(", ")}</b><span>${dayLabel(f.d)} ${hm(f.s)}–${hm(f.s+f.m)} är redan upptagen. Boka ändå, eller låt Nav hitta en tid där alla är lediga.</span><div class="acts"><button class="btn sm danger" type="button" id="fForce">Boka ändå</button><button class="btn sm" type="button" id="fPick2">Hitta ledig tid</button></div></div>`;
+}
+function renderForm(){
+  const f=S.form;if(!f)return;
+  if(f.type==="forslag"){renderProposal(f);return}
+  const types=[["mote","Möte"],["enskilt","1:1"],["uppgift","Uppgift"]];
+  let hd=`<button class="btn icon ghost x" type="button" id="dClose" aria-label="Stäng">✕</button><span class="eyebrow">Ny händelse</span><div class="tabs" role="group" aria-label="Typ">${types.map(([k,l])=>`<button type="button" data-ftype="${k}" aria-pressed="${f.type===k}">${l}</button>`).join("")}</div>`;
+  if(canLev())hd+=`<span class="grouplab"><i aria-hidden="true"></i>Leverans</span><div class="presets" role="group" aria-label="Leveransförinställningar">${PRESETS.map(p=>`<button type="button" class="preset" data-preset="${p.id}" aria-pressed="${f.type==="lev"&&f.preset===p.id}"><span aria-hidden="true">${KIND[p.k].ico}</span>${p.lab}</button>`).join("")}</div>`;
+  $("dhd").innerHTML=hd;
+  let b=`<form id="fForm" style="display:flex;flex-direction:column;gap:14px" novalidate>`;
+  if(f.type==="enskilt")b+=`<label class="field" for="fWith">1:1 med<select id="fWith">${PEOPLE.filter(p=>p.id!==S.viewer).map(p=>`<option value="${p.id}" ${p.id===f.with?"selected":""}>${esc(p.namn)} · ${esc(p.roll)}</option>`).join("")}</select></label>`;
+  else if(f.type==="lev")b+=`<label class="field" for="fCust">Kund<select id="fCust">${Object.entries(CUST).filter(([id])=>!queue.some(q=>q.c===id)).map(([id,c])=>`<option value="${id}" ${f.c===id?"selected":""}>${esc(c.namn)}</option>`).join("")}</select></label>`;
+  else b+=`<label class="field" for="fTitle">${f.type==="uppgift"?"Vad ska göras":"Rubrik"}<input id="fTitle" type="text" value="${esc(f.title)}" maxlength="200" placeholder="${f.type==="uppgift"?"Till exempel: Förbered månadsmöte":"Till exempel: Genomgång av veckans överlämningar"}"></label>`;
+  if(f.type==="mote"||f.type==="lev")b+=`<div class="field"><span>Deltagare från Nav</span><div class="people">${PEOPLE.filter(p=>p.id!==S.viewer).map(p=>`<button type="button" class="chipbtn" data-att="${p.id}" aria-pressed="${f.att.includes(p.id)}"><span class="av ${p.id}" aria-hidden="true">${p.kort}</span>${esc(first(p.id))}</button>`).join("")}</div>${f.type==="lev"&&presetOf(f.preset).ext?`<span class="hint">${esc(CUST[f.c].kontakt)} bjuds in via mejl med .ics.</span>`:""}</div>`;
+  b+=dateFieldHTML(f)+timeHTML(f);
+  if(f.type!=="uppgift")b+=assistantHTML(f);
+  if(f.type==="lev"){const C=CUST[f.c];b+=`<div class="remind" role="group" aria-label="Mejlpåminnelse"><b>Mejlpåminnelse 30 min före · Resend</b><label for="fRemMe"><input type="checkbox" id="fRemMe" ${f.remMe?"checked":""}>Till mig, ${esc(P[S.viewer].namn)}</label><label for="fRemCust"><input type="checkbox" id="fRemCust" ${f.remCust?"checked":""}>Till kunden, ${esc(C.kontakt)}</label><span class="hint">${f.remMe||f.remCust?"Skickas "+reminderText(f.d,f.s)+". Flyttas posten flyttas mejlet. Ställs den in avbokas det.":"Ingen mejlpåminnelse. Navs pling 10 min före gäller ändå."}</span></div>`}
+  if(f.type==="mote"||f.type==="enskilt")b+=`<div class="grid2"><label class="field" for="fRep">Upprepa<select id="fRep">${[["aldrig","Upprepas inte"],["vardagar","Varje vardag"],["vecka","Varje vecka"],["varannan","Varannan vecka"]].map(([k,l])=>`<option value="${k}" ${f.rep===k?"selected":""}>${l}</option>`).join("")}</select></label><label class="field" for="fRem">Påminnelse<select id="fRem">${[0,5,10,15,30,60].map(m=>`<option value="${m}" ${m===f.rem?"selected":""}>${m?m+" min före":"Ingen"}</option>`).join("")}</select></label></div>
+    <div class="grid2"><label class="field" for="fShow">Visa som<select id="fShow">${[["upptagen","Upptagen"],["preliminar","Preliminär"],["ledig","Ledig"],["borta","Borta"]].map(([k,l])=>`<option value="${k}" ${f.show===k?"selected":""}>${l}</option>`).join("")}</select></label><label class="field" for="fPlats">Plats<select id="fPlats">${["Kontoret","Teams","Telefon"].map(x=>`<option ${f.plats===x?"selected":""}>${x}</option>`).join("")}</select></label></div>
+    <label class="field" for="fAgenda">${f.type==="enskilt"?"Första agendapunkt":"Agenda"}<textarea id="fAgenda" maxlength="600" placeholder="${f.type==="enskilt"?"Den andra ser punkten och kan lägga till egna":"Vad ska mötet leda till?"}">${esc(f.agenda)}</textarea></label>`;
+  const who=f.type==="enskilt"?[f.with]:f.type==="uppgift"?[]:f.att;
+  b+=clashHTML(f)+`<div class="acts"><button class="btn primary" type="submit">${who.length?"Skicka inbjudan":"Spara"}</button><button class="btn ghost" type="button" id="fCancel">Avbryt</button></div>`;
+  b+=`<p class="hint">${who.length?`${who.map(first).join(", ")} får en notis i klockan och ett mejl med .ics. Svaren kommer tillbaka till din klocka.`:f.type==="uppgift"?"Skapas i uppgiftsmodulen och ritas här med klockslag. Bara du ser den.":f.type==="lev"?"Syns i kalendern i leveransfärgen, så att den inte blandas ihop med annat.":""}</p></form>`;
+  $("dbody").innerHTML=b;
+}
+function readForm(){
+  const f=S.form;if(!f)return;const v=id=>$(id)?$(id).value:null;
+  if($("fTitle"))f.title=v("fTitle");if($("fWith"))f.with=v("fWith");if($("fCust"))f.c=v("fCust");
+  if($("fStart"))f.s=+v("fStart");if($("fEnd"))f.m=Math.max(15,+v("fEnd")-f.s);
+  if($("fRep"))f.rep=v("fRep");if($("fRem"))f.rem=+v("fRem");if($("fShow"))f.show=v("fShow");if($("fPlats"))f.plats=v("fPlats");if($("fAgenda"))f.agenda=v("fAgenda");
+  if($("fSvar"))f.svar=v("fSvar");if($("fNote"))f.note=v("fNote");
+  if($("fRemMe"))f.remMe=$("fRemMe").checked;if($("fRemCust"))f.remCust=$("fRemCust").checked;
+}
+function saveForm(){
+  readForm();const f=S.form,me=S.viewer;
+  if(f.type!=="uppgift"&&!f.force&&!(f.type!=="forslag"&&(f.type==="mote"&&!f.title.trim()))){const who=formPeople(f).filter(p=>!isFree([p],f.d,f.s,f.m,f.skip));if(who.length){f.clash=who;renderForm();const w=$("fClash");w&&w.focus();return}}
+  const U=snap();
+  if(f.type==="forslag"){
+    const e=findEv(f.ev),holder=e&&(e.sr?SERIES.find(x=>x.id===e.sr):EV.find(x=>x.id===e.id));if(!holder)return;
+    const a=holder.att.find(x=>x.p===me);if(!e.sr)a.svar=f.svar;setProp(a,e,{d:f.d,s:f.s,m:f.m,note:f.note.trim()});
+    const when=`${dayLabel(f.d)} ${hm(f.s)}–${hm(f.s+f.m)}`;
+    notify(holder.org,"🕑",`${first(me)} föreslår ny tid för “${baseTitle(e,holder.org)}”`,when+(f.note.trim()?" · “"+f.note.trim()+"”":""),["klocka","mejl"],{ref:e.id});
+    effect("db",`calendar_attendee: förslag ${when}${e.sr?" (bara förekomsten "+e.occ+")":""}`);
+    S.form=null;S.drawer=null;render();openDrawer({e:e.id},true);toast(`Förslaget skickat till ${first(holder.org)}: ${when}.`,U);return;
+  }
+  if((f.type==="mote"||f.type==="uppgift")&&!f.title.trim()){toast("Skriv en rubrik först.");$("fTitle").focus();return}
+  const whenTx=dayLabel(f.d)+" "+hm(f.s);let id,label;
+  if(f.type==="uppgift"){id=uid();EV.push({id,k:"uppgift",org:me,d:f.d,s:f.s,m:f.m,title:f.title.trim()});label="Uppgiften är sparad i uppgiftsmodulen."}
+  else if(f.type==="lev"){
+    const p=presetOf(f.preset),C=CUST[f.c];id=uid();
+    const rem=(f.remMe||f.remCust)?{me:f.remMe,cust:f.remCust,id:"re_"+Math.random().toString(36).slice(2,10)}:null;
+    EV.push({id,k:p.k,title:p.title||null,org:me,att:f.att.map(x=>A(x,"vantar")),c:f.c,d:f.d,s:f.s,m:f.m,ext:!!p.ext,rem});
+    f.att.forEach(x=>notify(x,"📅",`${first(me)} bjöd in dig till ${p.lab.toLowerCase()} med ${C.namn}`,whenTx,["klocka","mejl"],{ref:id}));
+    const to=[f.remMe?"dig":null,f.remCust?C.kontakt:null].filter(Boolean);
+    label=`${p.lab} med ${C.namn} bokad${p.ext?", inbjudan till "+C.kontakt:""}.${to.length?" Mejlpåminnelse till "+to.join(" och ")+" "+reminderText(f.d,f.s)+".":""}`;
+  }
+  else if(f.type==="enskilt"||f.rep!=="aldrig"){
+    const sid="sr"+(nid++),att=(f.type==="enskilt"?[f.with]:f.att).map(p=>A(p,"vantar"));
+    SERIES.push({id:sid,k:f.type,title:f.type==="enskilt"?"1:1":f.title.trim(),org:me,att,wd:wd(f.d)-1,s:f.s,m:f.m,every:f.rep==="varannan"?2:1,weekdays:f.rep==="vardagar",onlyOnce:f.rep==="aldrig"?f.d:null,start:f.d,ex:{},
+      agenda:f.agenda.trim()?[{by:me,tx:f.agenda.trim(),done:false}]:[],atgard:[],stats:{order:6,mal:10,kv:"3,6",prov:"7 200"}});
+    id=sid+"@"+f.d;
+    const rt=f.rep==="aldrig"?"":f.rep==="varannan"?"varannan vecka":f.rep==="vardagar"?"varje vardag":"varje vecka";
+    const nm=f.type==="enskilt"?"1:1":"“"+f.title.trim()+"”";
+    att.forEach(a=>notify(a.p,"📅",`${first(me)} bjöd in dig till ${nm}${rt?", "+rt:""}`,(rt?"första gången ":"")+whenTx,["klocka","mejl"],{ref:id}));
+    label=`Inbjudan skickad till ${att.map(a=>first(a.p)).join(", ")||"ingen"}${rt?". Serie "+rt:""}.`;
+  }else{
+    id=uid();EV.push({id,k:"mote",org:me,att:f.att.map(p=>A(p,"vantar")),d:f.d,s:f.s,m:f.m,title:f.title.trim(),agendaTx:f.agenda.trim()});
+    f.att.forEach(p=>notify(p,"📅",`${first(me)} bjöd in dig till “${f.title.trim()}”`,whenTx,["klocka","mejl"],{ref:id}));
+    label=f.att.length?`Inbjudan skickad till ${f.att.map(first).join(", ")}.`:"Mötet är sparat.";
+  }
+  const ev0=findEv(id);effect("db",`insert ${f.type==="uppgift"?"task":f.rep&&f.rep!=="aldrig"||f.type==="enskilt"?"calendar_series (förekomster 56 dagar framåt)":"calendar_event"}: ${dayLabel(f.d)} ${hm(f.s)}–${hm(f.s+f.m)}`);
+  if(ev0&&ev0.rem){const iso=`${f.d} ${hm(Math.max(0,f.s-30))} Europe/Stockholm`;if(ev0.rem.me)effect("resend",`POST /emails scheduledAt="${iso}" till ${P[me].namn}`);if(ev0.rem.cust)effect("resend",`POST /emails scheduledAt="${iso}" till ${CUST[ev0.c].kontakt}`)}
+  S.form=null;S.drawer=null;S.anchor=f.d;S.sel=id;render();openDrawer({e:id},true);toast(label,U);
+}
+
+/* ================= Handlingar ================= */
+function bookWelcome(qid,p,d,s,m){
+  const q=queue.find(x=>x.id===qid);if(!q)return;
+  if(isWeekend(d)){toast("Välj en vardag.");return}
+  const U=snap();effect("db",`delivery: select … for update skip locked, owner_id = ${P[p].namn}`);
+  const id=uid(),C=CUST[q.c];
+  EV.push({id,k:"valkomst",org:p,c:q.c,d,s,m:m||30});queue=queue.filter(x=>x.id!==qid);S.pick=null;
+  if(p!==S.viewer)S.show[p]=true;
+  S.anchor=d;S.sel=id;
+  notify(p,"📞",`Välkomstsamtal med ${C.namn} bokat åt dig`,dayLabel(d)+" "+hm(s),["klocka"],{ref:id});
+  notify(C.saljare,"🤝",`${C.namn} välkomnas ${dayLabel(d)} ${hm(s)}`,"av "+P[p].namn,["klocka"],{ref:id});
+  render();openDrawer({e:id},true);toast(`Välkomstsamtal med ${C.namn} bokat ${dayLabel(d)} ${hm(s)} hos ${first(p)}. ${first(C.saljare)} får en notis.`,U);
+}
+function respond(e,svar){
+  const holder=e.sr?SERIES.find(s=>s.id===e.sr):EV.find(x=>x.id===e.id);if(!holder)return;
+  const a=holder.att.find(x=>x.p===S.viewer);if(!a)return;
+  const nm="“"+baseTitle(e,holder.org)+"”";
+  if(svar==="ny"){startProposal(e);return}
+  const one=e.sr&&holder.ex[e.occ]&&holder.ex[e.occ].resp&&holder.ex[e.occ].resp[S.viewer];
+  if(one){const U=snap();holder.ex[e.occ].resp[S.viewer]=svar;effect("db",`calendar_attendee.response = '${svar}' (bara förekomsten ${e.occ})`);
+    notify(holder.org,svar==="ja"?"✅":svar==="kanske"?"❔":"⛔",`${first(S.viewer)} svarade ${svar} på ${nm}`,"den flyttade tiden "+dayLabel(e.d)+" "+hm(e.s),["klocka"],{ref:e.id});
+    render();toast(`Svar skickat för ${dayLabel(e.d)}: ${svar}. ${first(holder.org)} ser det i sin klocka.`,U);return}
+  const U=snap();a.svar=svar;effect("db",`calendar_attendee.response = '${svar}'${e.sr?" (hela serien)":""}`);
+  notify(holder.org,svar==="ja"?"✅":svar==="kanske"?"❔":"⛔",`${first(S.viewer)} svarade ${svar} på ${nm}`,e.sr?"gäller hela serien":dayLabel(e.d)+" "+hm(e.s),["klocka"],{ref:e.id});
+  render();toast(`Svar skickat: ${svar}. ${first(holder.org)} ser det i sin klocka.`,U);
+}
+function act(a){
+  const e=S.drawer&&findEv(S.drawer.e);if(!e)return;
+  const recips=participants(e).filter(p=>p!==S.viewer);
+  const x=EV.find(y=>y.id===e.id);
+  const remOff=x&&x.rem?" Mejlpåminnelsen avbokas hos Resend.":"";const U=snap();
+  const cancelRem=()=>{if(x&&x.rem)effect("resend",`POST /emails/${x.rem.id}/cancel`)};
+  if(a==="nadd"||a==="klar"){if(x){x.status="genomford";effect("db",`calendar_event.outcome = 'genomford', outcome_by = ${P[S.viewer].namn}`);if(D(x.d)>=D(TODAY))cancelRem();if(a==="nadd")effect("crm",`${CUST[x.c].namn}: status "välkomnad" via CRM-adaptern`);toast((a==="nadd"?"Genomfört. Boka kickoff härnäst.":"Markerad som klar.")+(D(x.d)>=D(TODAY)?remOff:""),U)}}
+  if(a==="ejsvar"&&x){x.status="ej_svar";const att=(x.attempt||1)+1;
+    if(att>3)toast("Tredje försöket utan svar. Skicka sms och mejl med en bokningslänk.");
+    else{const pk=autopick([x.org],x.d,x.s+180,30,5)||autopick([x.org],plus(x.d,1),x.s<12*60?13*60:WORK_S,30,5);if(pk){EV.push({id:uid(),k:"valkomst",org:x.org,c:x.c,d:pk.d,s:pk.s,m:30,attempt:att});toast(`Försök ${att} bokat ${dayLabel(pk.d)} ${hm(pk.s)}, på en annan tid på dagen.`)}}}
+  if(a==="kickoff"){const pk=autopick([e.org],plus(e.d,1),9*60,60,7);if(pk){const id=uid(),C=CUST[e.c];EV.push({id,k:"kickoff",org:e.org,c:e.c,d:pk.d,s:pk.s,m:60,ext:true});S.anchor=pk.d;S.sel=id;render();openDrawer({e:id},true);toast(`Kickoff ${dayLabel(pk.d)} ${hm(pk.s)}. ${C.kontakt} får inbjudan via mejl.`);return}}
+  if(a==="flytta"){const pk=autopick(participants(e),e.d,Math.max(endOf(e),WORK_S),e.m||30,7,e.id);if(pk){moveTo(e,pk.d,pk.s);return}toast("Ingen gemensam tid de närmaste 7 dagarna.");return}
+  if(a==="stall"){if(e.sr)SERIES.find(s=>s.id===e.sr).ex[e.occ]={cancel:true};else EV=EV.filter(y=>y.id!==e.id);effect("db",`calendar_event.cancelled_at = now()`);cancelRem();recips.forEach(p=>notify(p,"🚫",`${first(S.viewer)} ställde in “${baseTitle(e,p)}”`,dayLabel(e.d)+" "+hm(e.s),["klocka","mejl"]));closeDrawer();S.sel=null;render();toast(`Inställt.${recips.length?" "+recips.map(first).join(", ")+" får en notis och ett mejl.":""}${remOff}`,U);return}
+  if(a==="ics"){toast(`En ny .ics går till ${CUST[e.c].kontakt}. I prototypen skickas inget.`);return}
+  if(a==="prep"){const sr=SERIES.find(y=>y.id===e.sr),o=sr.att[0].p;notify(o,"🗒️",`${first(S.viewer)} vill att du förbereder er 1:1`,`${dayLabel(e.d)} ${hm(e.s)} · lägg till det du vill ta upp`,["klocka"],{sr:sr.id});toast(`${first(o)} får en notis att fylla på agendan.`);return}
+  if(a==="kopiera"){const src=EV.find(y=>y.id===e.id);if(!src)return;const id=uid(),cp=JSON.parse(JSON.stringify(src));cp.id=id;cp.d=plus(src.d,7);delete cp.status;(cp.att||[]).forEach(x=>{x.svar="vantar";delete x.prop});if(cp.rem)cp.rem.id="re_"+Math.random().toString(36).slice(2,10);EV.push(cp);
+    effect("db",`insert calendar_event (kopia av ${src.id}) ${dayLabel(cp.d)} ${hm(cp.s)}`);(cp.att||[]).forEach(x=>notify(x.p,"📅",`${first(S.viewer)} bjöd in dig till “${baseTitle(cp,x.p)}”`,dayLabel(cp.d)+" "+hm(cp.s),["klocka","mejl"],{ref:id}));
+    S.anchor=cp.d;S.sel=id;render();openDrawer({e:id},true);toast(`Kopierad till ${dayLabel(cp.d)} ${hm(cp.s)}.${(cp.att||[]).length?" Inbjudan skickad igen.":""}`,U);return}
+  if(a==="coach"){toast("Öppnar coachningssamtalet i Nav med dagens datum. I prototypen finns bara knappen.");return}
+  render();
+}
+function moveTo(e,d,s,U,keep){
+  if(isWeekend(d)){toast("Välj en vardag.");return}
+  U=U||snap();effect("db",`update calendar_event set dag='${d}', tid='${hm(s)}'${e.sr?" (bara förekomsten)":""}`);
+  if(e.rem&&!e.status)effect("resend",`PATCH /emails/${e.rem.id} scheduledAt="${d} ${hm(Math.max(0,s-30))} Europe/Stockholm"`);
+  const recips=participants(e).filter(p=>p!==S.viewer);
+  let newId=e.id;
+  if(e.sr){const sr=SERIES.find(y=>y.id===e.sr);sr.ex[e.occ]=Object.assign({},sr.ex[e.occ]||{},{d,s})}else{const y=EV.find(z=>z.id===e.id);y.d=d;y.s=s}
+  const again=reconfirm(e,keep);
+  recips.forEach(p=>notify(p,"🕑",`${first(S.viewer)} flyttade “${baseTitle(e,p)}”${again.includes(p)?". Svara igen":""}`,"ny tid "+dayLabel(d)+" "+hm(s)+(again.includes(p)?" · ditt tidigare svar gäller inte längre":""),["klocka","mejl"],{ref:newId}));
+  if(e.ext&&e.c)effect("utkorg",`uppdaterad .ics till ${CUST[e.c].kontakt}`);
+  S.anchor=d;S.sel=newId;render();
+  toast(`Flyttad till ${dayLabel(d)} ${hm(s)}${e.sr?", bara den här gången":""}.${again.length?" "+again.map(first).join(", ")+" behöver bekräfta den nya tiden.":""}${e.ext&&e.c?" Kunden får en uppdaterad inbjudan.":""}${e.rem&&!e.status?" Mejlpåminnelsen flyttas till kl "+hm(Math.max(0,s-30))+".":""}`,U);
+}
+/* Ny tid = svara igen, som i Outlook. Alla deltagare utom de i keep får "Inte svarat". Returnerar vilka som ska bekräfta. */
+function reconfirm(e,keep,whole){
+  keep=keep||[];const sr=e.sr&&SERIES.find(x=>x.id===e.sr);
+  if(sr&&!whole){const x=sr.ex[e.occ]=sr.ex[e.occ]||{};x.resp={};sr.att.forEach(a=>{x.resp[a.p]=keep.includes(a.p)?"ja":"vantar"})}
+  else{(sr?sr.att:(EV.find(y=>y.id===e.id)||{}).att||[]).forEach(a=>{a.svar=keep.includes(a.p)?"ja":"vantar";delete a.prop});if(sr)Object.values(sr.ex).forEach(x=>delete x.resp)}
+  const again=(sr?sr.att:(EV.find(y=>y.id===e.id)||{}).att||[]).map(a=>a.p).filter(p=>!keep.includes(p)&&p!==S.viewer);
+  if(again.length)effect("db",`calendar_attendee.response = 'vantar' för ${again.map(first).join(", ")}${sr&&!whole?" (bara förekomsten)":""}`);
+  return again;
+}
+/* Hela serien flyttas: veckodag och klockslag på serien, förekomsterna räknas om. */
+function moveSeries(e,d,s){
+  const U=snap(),sr=SERIES.find(x=>x.id===e.sr);if(!sr)return;
+  if(!sr.weekdays)sr.wd=wd(d)-1;sr.s=s;delete sr.ex[e.occ];
+  effect("db",`update calendar_series set veckodag=${wd(d)}, tid='${hm(s)}'; framtida förekomster räknas om`);
+  const again=reconfirm(e,[],true),recips=participants(e).filter(p=>p!==S.viewer);
+  const first1=occurrences(d,plus(d,14)).find(o=>o.sr===sr.id);
+  recips.forEach(p=>notify(p,"🕑",`${first(S.viewer)} flyttade hela serien “${baseTitle(e,p)}”. Svara igen`,`nu ${sr.weekdays?"varje vardag":WDL[wd(d)].toLowerCase()+"ar"} ${hm(s)} · ditt tidigare svar gäller inte längre`,["klocka","mejl"],first1?{ref:first1.id}:{sr:sr.id}));
+  S.anchor=d;render();toast(`Hela serien flyttad till ${sr.weekdays?"vardagar":WDL[wd(d)].toLowerCase()+"ar"} ${hm(s)}.${again.length?" "+again.map(first).join(", ")+" behöver bekräfta den nya tiden.":""}`,U);
+}
+
+/* ================= Händelser ================= */
+$("viewas").innerHTML=PEOPLE.map(p=>`<option value="${p.id}">${esc(p.namn)} · ${esc(p.roll)}</option>`).join("");
+$("viewas").addEventListener("change",ev=>{S.viewer=ev.target.value;PEOPLE.forEach(p=>S.show[p.id]=false);S.pick=null;closeDrawer();S.sel=null;teamGrp=null;$("npanel").hidden=true;render();const n=NOTES.filter(x=>x.to===S.viewer&&x.unread).length;toast(`Du ser nu Nav som ${first(S.viewer)}.${n?" "+n+" olästa i klockan.":""}`)});
+document.querySelectorAll(".seg button").forEach(b=>b.addEventListener("click",()=>{S.view=b.dataset.v;renderStage.did=false;render()}));
+function step(dir){
+  if(S.view==="manad"){const[y,m]=S.anchor.split("-").map(Number);S.anchor=F(Date.UTC(y,m-1+dir,1))}
+  else if(S.view==="agenda")S.anchor=plus(S.anchor,7*dir);
+  else if(S.view==="dag"||S.view==="team"){let d=plus(S.anchor,dir);while(isWeekend(d))d=plus(d,dir);S.anchor=d}
+  else S.anchor=plus(S.anchor,7*dir);
+  S.mmMonth=S.anchor.slice(0,7);render();
+}
+$("bPrev").addEventListener("click",()=>step(-1));$("bNext").addEventListener("click",()=>step(1));
+$("bToday").addEventListener("click",()=>{S.anchor=HOME;S.mmMonth=HOME.slice(0,7);render()});
+$("bNew").addEventListener("click",()=>newForm());$("bNew2").addEventListener("click",()=>newForm());
+$("bBell").addEventListener("click",()=>{const p=$("npanel");p.hidden=!p.hidden;$("bBell").setAttribute("aria-expanded",String(!p.hidden));if(!p.hidden)renderNotes()});
+$("nRead").addEventListener("click",()=>{NOTES.forEach(n=>{if(n.to===S.viewer)n.unread=false});renderNotes();renderTop()});
+$("nlist").addEventListener("click",ev=>{const nq=ev.target.closest("[data-nq]");if(nq){const n=NOTES.find(x=>x.id===nq.dataset.nid);if(n)n.unread=false;const e=findEv(nq.dataset.nref);if(e)respond(e,nq.dataset.nq);renderNotes();renderTop();return}
+  const b=ev.target.closest("[data-n]");if(!b)return;const n=NOTES.find(x=>x.id===b.dataset.n);n.unread=false;$("npanel").hidden=true;$("bBell").setAttribute("aria-expanded","false");
+  if(n.q&&queue.some(q=>q.id===n.q)){render();openDrawer({q:n.q});return}
+  if(n.sr){const o=occurrences(HOME,plus(HOME,14)).find(x=>x.sr===n.sr);if(o){S.anchor=o.d;S.sel=o.id;render();openDrawer({e:o.id});return}}
+  if(n.ref){const e=findEv(n.ref);if(e){S.anchor=e.d;S.sel=e.id;render();openDrawer({e:e.id});return}}
+  render();});
+$("mmPrev").addEventListener("click",()=>{const[y,m]=S.mmMonth.split("-").map(Number);S.mmMonth=F(Date.UTC(y,m-2,1)).slice(0,7);renderMini()});
+$("mmNext").addEventListener("click",()=>{const[y,m]=S.mmMonth.split("-").map(Number);S.mmMonth=F(Date.UTC(y,m,1)).slice(0,7);renderMini()});
+$("mm").addEventListener("click",ev=>{const b=ev.target.closest("button[data-d]");if(!b)return;S.anchor=b.dataset.d;if(S.view==="manad")S.view="dag";render()});
+$("cals").addEventListener("change",ev=>{if(ev.target.id==="showDec"){S.showDec=ev.target.checked;render();return}const i=ev.target.closest("input[data-p]");if(!i)return;S.show[i.dataset.p]=i.checked;render()});
+$("selbanner").addEventListener("click",ev=>{const id=ev.target.id;
+  if(id==="selCancel"){S.pick=null;render();return}
+  if(!S.smove)return;const sm=S.smove,e=findEv(sm.id);S.smove=null;
+  if(id==="smOne"&&e)moveTo(e,sm.d,sm.m);else if(id==="smAll"&&e)moveSeries(e,sm.d,sm.m);else render()});
+/* DEMO: Visa mig-knapparna. Byggs inte. */
+function demo(n){
+  PEOPLE.forEach(p=>S.show[p.id]=false);closeDrawer();S.pick=null;S.smove=null;$("npanel").hidden=true;teamGrp=null;
+  const as=v=>{S.viewer=v};
+  if(n==="1"){as("z");render();newForm(null,null,"enskilt")}
+  if(n==="2"){as("s1");render();$("npanel").hidden=false;$("bBell").setAttribute("aria-expanded","true");renderNotes()}
+  if(n==="3"){as("z");const o=occurrences(HOME,plus(HOME,14)).find(x=>x.sr==="sr1");if(o){S.anchor=o.d;S.sel=o.id;if(S.view==="manad"||S.view==="team")S.view=narrow?"agenda":"arbetsvecka";render();openDrawer({e:o.id})}}
+  if(n==="4"){as("d1");render();const q=[...queue].sort((a,b)=>a.due-b.due)[0];if(q)openDrawer({q:q.id});else toast("Kön är tom.")}
+  if(n==="5"){as("d1");render();newForm(null,null,"lev")}
+  if(n==="6"){as("z");if(S.view!=="dag"&&S.view!=="arbetsvecka"&&S.view!=="vecka")S.view="arbetsvecka";render();toast("Dra nedåt i ett tomt fält för att välja tid. Dra i nederkanten av en egen post för att ändra längd.")}
+  if(n==="7"){as("z");render();$("xpanel").hidden=false;$("bLog").setAttribute("aria-pressed","true");renderLog()}
+  $("proto").scrollIntoView({behavior:matchMedia("(prefers-reduced-motion:reduce)").matches?"auto":"smooth",block:"start"});
+}
+document.querySelectorAll("[data-demo]").forEach(b=>b.addEventListener("click",()=>demo(b.dataset.demo)));
+$("q").addEventListener("input",ev=>{S.q=ev.target.value.trim().toLowerCase();renderStage();renderQHits()});
+$("qhits").addEventListener("click",ev=>{const b=ev.target.closest("[data-jump]");if(!b)return;const e=findEv(b.dataset.jump);if(!e)return;S.anchor=e.d;S.sel=e.id;if(S.view==="manad"||S.view==="team")S.view="arbetsvecka";render();openDrawer({e:e.id})});
+$("toast").addEventListener("click",ev=>{if(ev.target.id==="tUndo"&&UNDO)restore(UNDO)});
+$("bLog").addEventListener("click",()=>{const x=$("xpanel");x.hidden=!x.hidden;$("bLog").setAttribute("aria-pressed",String(!x.hidden));if(!x.hidden)renderLog()});
+$("xClear").addEventListener("click",()=>{LOG=[];renderLog()});
+$("queue").addEventListener("click",ev=>{const b=ev.target.closest("[data-q]");if(!b)return;S.sel=null;openDrawer({q:b.dataset.q})});
+$("queue").addEventListener("dragstart",ev=>{const b=ev.target.closest("[data-q]");if(b)ev.dataTransfer.setData("text/plain","q:"+b.dataset.q)});
+const stage=$("stage");
+const welcomeOwner=p=>p&&isLev(p)?p:(isLev(S.viewer)?S.viewer:"d1");
+stage.addEventListener("dragstart",ev=>{if(rsz||dsel){ev.preventDefault();return}const b=ev.target.closest("[data-e]");if(b)ev.dataTransfer.setData("text/plain","e:"+b.dataset.e)});
+/* Dra i tomma rutnätet för att välja start och slut, som i Outlook. Dra i nederkanten av en egen post för att ändra längd. */
+let dsel=null,rsz=null,suppressClick=false;
+const hush=()=>{suppressClick=true;setTimeout(()=>suppressClick=false,0)};
+stage.addEventListener("pointerdown",ev=>{
+  if(ev.button!==0||S.pick||S.view==="team"||S.view==="manad"||S.view==="agenda")return;
+  const r=ev.target.closest(".rz");
+  if(r){const b=r.closest("[data-e]"),e=findEv(b.dataset.e);if(!e||e.org!==S.viewer)return;ev.preventDefault();ev.stopPropagation();rsz={e,el:b,y0:ev.clientY,m0:e.m||30,m:e.m||30,U:snap()};b.classList.add("resizing");return}
+  const h=ev.target.closest(".col .hit");if(!h)return;
+  dsel={d:h.dataset.d,m0:+h.dataset.m,m1:+h.dataset.m,col:h.parentElement,moved:false};
+});
+stage.addEventListener("pointermove",ev=>{
+  if(rsz){const dm=(ev.clientY-rsz.y0)/SH*SLOT;rsz.m=Math.max(15,Math.min(8*60,Math.round((rsz.m0+dm)/15)*15));rsz.el.style.height=(rsz.m/SLOT*SH-2)+"px";const bd=rsz.el.querySelector(".badge");if(bd&&!rsz.el.classList.contains("compact"))bd.textContent=hm(rsz.e.s)+"–"+hm(rsz.e.s+rsz.m);return}
+  if(!dsel)return;const el=document.elementFromPoint(ev.clientX,ev.clientY),h=el&&el.closest(".col .hit");if(!h||h.dataset.d!==dsel.d)return;
+  const m=+h.dataset.m;if(m!==dsel.m1){dsel.m1=m;dsel.moved=true;let box=dsel.col.querySelector(".selrange");if(!box){box=document.createElement("div");box.className="selrange";dsel.col.appendChild(box)}const a=Math.min(dsel.m0,dsel.m1),b=Math.max(dsel.m0,dsel.m1)+SLOT;box.style.top=((a-DAY_START)/SLOT*SH)+"px";box.style.height=((b-a)/SLOT*SH-2)+"px";box.textContent=hm(a)+"–"+hm(b)}
+});
+function endPointer(cancel){
+  if(rsz){const{e,m,m0,U}=rsz;rsz.el.classList.remove("resizing");rsz=null;hush();if(cancel||m===m0){render();return}
+    if(e.sr){const sr=SERIES.find(x=>x.id===e.sr);sr.ex[e.occ]=Object.assign({},sr.ex[e.occ]||{},{m})}else EV.find(x=>x.id===e.id).m=m;
+    effect("db",`update calendar_event set minuter=${m}${e.sr?" (bara förekomsten)":""}`);
+    const again=reconfirm(e,[]),recips=participants(e).filter(p=>p!==S.viewer);recips.forEach(p=>notify(p,"🕑",`${first(S.viewer)} ändrade längden på “${baseTitle(e,p)}”${again.includes(p)?". Svara igen":""}`,`${dayLabel(e.d)} ${hm(e.s)}–${hm(e.s+m)}`,["klocka","mejl"],{ref:e.id}));
+    render();toast(`Nu ${hm(e.s)}–${hm(e.s+m)}.${again.length?" "+again.map(first).join(", ")+" behöver bekräfta den nya tiden.":""}`,U);return}
+  if(!dsel)return;const{d,m0,m1,moved,col}=dsel;dsel=null;const box=col.querySelector(".selrange");box&&box.remove();
+  if(cancel||!moved)return;hush();const a=Math.min(m0,m1),b=Math.max(m0,m1)+SLOT;newForm(d,a,null,null);S.form.m=b-a;renderForm();
+}
+window.addEventListener("pointerup",()=>endPointer(false));window.addEventListener("pointercancel",()=>endPointer(true));
+stage.addEventListener("dragover",ev=>{const h=ev.target.closest(".hit");if(!h)return;ev.preventDefault();stage.querySelectorAll(".hit.drop").forEach(x=>x.classList.remove("drop"));h.classList.add("drop")});
+stage.addEventListener("dragleave",ev=>{const h=ev.target.closest(".hit");if(h)h.classList.remove("drop")});
+stage.addEventListener("drop",ev=>{const h=ev.target.closest(".hit");if(!h)return;ev.preventDefault();h.classList.remove("drop");
+  const v=ev.dataTransfer.getData("text/plain"),d=h.dataset.d,m=+h.dataset.m,p=h.dataset.p;
+  if(v.startsWith("q:"))bookWelcome(v.slice(2),welcomeOwner(p),d,m,30);
+  if(v.startsWith("e:")){const e=findEv(v.slice(2));if(!e)return;if(e.org!==S.viewer){toast("Bara organisatören kan flytta. Du kan föreslå en ny tid.");return}if(e.sr){S.smove={id:e.id,d,m};renderSel();$("smOne").focus();return}moveTo(e,d,m)}
+});
+stage.addEventListener("click",ev=>{
+  if(suppressClick)return;
+  const mo=ev.target.closest("[data-more]");if(mo){S.anchor=mo.dataset.more;S.view="dag";renderStage.did=false;render();toast("Dagvyn visar alla samtidiga poster.");return}
+  const ad=ev.target.closest("[data-add]");if(ad){const d=ad.dataset.add,pk=autopick([S.viewer],d,WORK_S,30,0);newForm(pk?pk.d:d,pk?pk.s:9*60);return}
+  const g=ev.target.closest("[data-grp]");if(g){teamGrp=g.dataset.grp;renderStage();return}
+  const e=ev.target.closest("[data-e]");if(e){S.sel=e.dataset.e;S.pick=null;renderStage();renderSel();openDrawer({e:e.dataset.e});return}
+  const md=ev.target.closest("[data-day]");if(md){S.anchor=md.dataset.day;S.view="dag";renderStage.did=false;render();return}
+  const h=ev.target.closest(".hit");if(!h)return;
+  const d=h.dataset.d,m=+h.dataset.m,p=h.dataset.p;
+  if(S.pick){bookWelcome(S.pick,welcomeOwner(p),d,m,30);return}
+  const other=p&&p!==S.viewer?p:null;
+  newForm(d,m,other&&P[other].grp==="salj"&&S.viewer==="z"?"enskilt":null,other);
+});
+const drawer=$("drawer");
+const focusSel=sel=>{const el=drawer.querySelector(sel);el&&el.focus({preventScroll:true})};
+drawer.addEventListener("click",ev=>{
+  const t=ev.target;
+  if(S.form&&S.form.dp&&!t.closest(".dp")&&!t.closest("#fDayBtn")){readForm();S.form.dp=false;renderForm();if(!t.closest("button,select,input,textarea"))return}
+  if(t.closest("#fCancel")&&S.form&&S.form.type==="forslag"){const id=S.form.ev;S.form=null;openDrawer({e:id},true);return}
+  if(t.closest("#dClose")||t.closest("#fCancel")){closeDrawer();S.sel=null;renderStage();return}
+  const pok=t.closest("[data-prop-ok]"),pno=t.closest("[data-prop-no]");
+  if(pok||pno){const U0=snap(),e=findEv(S.drawer.e),holder=e.sr?SERIES.find(y=>y.id===e.sr):EV.find(y=>y.id===e.id),a=holder.att.find(y=>y.p===(pok||pno).dataset[pok?"propOk":"propNo"]),pr=getProp(a,e);setProp(a,e,null);
+    if(pok){if(!e.sr)holder.m=pr.m;notify(a.p,"✅",`${first(S.viewer)} godkände din föreslagna tid`,`“${baseTitle(e,a.p)}” · ${dayLabel(pr.d)} ${hm(pr.s)}`,["klocka"],{ref:e.id});moveTo(e,pr.d,pr.s,U0,[a.p]);if(e.sr){holder.ex[e.occ].m=pr.m;render()}}
+    else{notify(a.p,"↩️",`${first(S.viewer)} behåller tiden för “${baseTitle(e,a.p)}”`,dayLabel(e.d)+" "+hm(e.s),["klocka"],{ref:e.id});render();toast(`${first(a.p)} får veta att tiden ligger kvar.`)}
+    return}
+  const pr=t.closest("[data-preset]");if(pr){readForm();const f=S.form;f.type="lev";applyPreset(f,pr.dataset.preset);renderForm();focusSel(`[data-preset="${pr.dataset.preset}"]`);return}
+  if(t.closest("#fDayBtn")){readForm();const f=S.form;f.dp=!f.dp;f.dpMonth=f.d.slice(0,7);f.dpFocus=f.d;renderForm();focusSel(f.dp?'.dp button.d[tabindex="0"]':"#fDayBtn");return}
+  const nav=t.closest("[data-dpnav]");if(nav){const f=S.form,[y,m]=(f.dpMonth||f.d.slice(0,7)).split("-").map(Number);f.dpMonth=F(Date.UTC(y,m-1+(+nav.dataset.dpnav),1)).slice(0,7);f.dpFocus=f.dpMonth+"-01";renderForm();focusSel(`[data-dpnav="${nav.dataset.dpnav}"]`);return}
+  const dpd=t.closest("[data-dpd]");if(dpd){readForm();const f=S.form;f.d=dpd.dataset.dpd;f.dp=false;renderForm();focusSel("#fDayBtn");return}
+  const du=t.closest("[data-dur]");if(du){readForm();S.form.m=+du.dataset.dur;renderForm();focusSel(`[data-dur="${du.dataset.dur}"]`);return}
+  const ft=t.closest("[data-ftype]");if(ft){readForm();const f=S.form;f.type=ft.dataset.ftype;if(f.type==="enskilt"){f.rep=f.rep==="aldrig"?"vecka":f.rep;f.with=f.with||f.att[0]||PEOPLE.find(p=>p.grp==="salj"&&p.id!==S.viewer).id}renderForm();const nb=drawer.querySelector(`[data-ftype="${f.type}"]`);nb&&nb.focus();return}
+  const at=t.closest("[data-att]");if(at){readForm();const p=at.dataset.att,i=S.form.att.indexOf(p);if(i<0)S.form.att.push(p);else S.form.att.splice(i,1);renderForm();const nb=drawer.querySelector(`[data-att="${p}"]`);nb&&nb.focus();return}
+  if(t.closest("#fForce")){S.form.force=true;saveForm();return}
+  if(t.closest("#fPick2")){readForm();const f=S.form;f.clash=null;const pk=autopick(formPeople(f),isWeekend(f.d)?HOME:f.d,WORK_S,f.m,10,f.skip);if(pk){f.d=pk.d;f.s=pk.s;renderForm();toast(`Ledig för alla: ${dayLabel(pk.d)} ${hm(pk.s)}.`)}return}
+  if(t.closest("#fPick")){readForm();const f=S.form;const pk=autopick(formPeople(f),isWeekend(f.d)?HOME:f.d,WORK_S,f.m,10,f.skip);if(pk){f.d=pk.d;f.s=pk.s;renderForm();toast(`Första gemensamma lediga tid: ${dayLabel(pk.d)} ${hm(pk.s)}.`);$("fPick").focus()}else toast("Ingen gemensam tid de närmaste två veckorna.");return}
+  const sat=t.closest("[data-sat]");if(sat){readForm();const r=sat.getBoundingClientRect(),x=Math.max(0,Math.min(1,(ev.clientX-r.left)/r.width));S.form.s=Math.min(17*60-15,Math.round((8*60+x*9*60)/15)*15);renderForm();return}
+  const rv=t.closest("[data-rsvp]");if(rv){const e=findEv(S.drawer.e);if(e)respond(e,rv.dataset.rsvp);return}
+  const a=t.closest("[data-act]");if(a){act(a.dataset.act);return}
+  const tt=t.closest("[data-totask]");if(tt){const e=findEv(S.drawer.e),sr=SERIES.find(s=>s.id===e.sr),item=sr.atgard[+tt.dataset.totask];const pk=autopick([item.by],HOME,WORK_S,30,5);if(pk)EV.push({id:uid(),k:"uppgift",org:item.by,d:pk.d,s:pk.s,m:30,title:item.tx});item.done=true;notify(item.by,"☑️",`Ny uppgift från er 1:1: ${item.tx}`,pk?dayLabel(pk.d)+" "+hm(pk.s):"",["klocka"]);render();toast(`Uppgift skapad åt ${first(item.by)}${pk?", "+dayLabel(pk.d)+" "+hm(pk.s):""}.`);return}
+  const ask=t.closest("[data-ask]");if(ask){const C=CUST[ask.dataset.ask],h=handoff(C);notify(C.saljare,"📝",`Komplettera överlämningen för ${C.namn}`,"Saknas: "+h.miss.join(", "),["klocka","mejl"]);ask.disabled=true;ask.textContent="Skickat till "+first(C.saljare);toast(`${first(C.saljare)} får en notis och ett mejl om vad som saknas.`);return}
+  if(t.closest("#qBook")){const qid=S.drawer.q,who=$("qp").value,m=+$("qm").value;let best=null;
+    let pool=who==="auto"||who==="jamn"?PEOPLE.filter(x=>x.grp==="lev").map(x=>x.id):[who];
+    if(who==="jamn"){const load=p=>EV.filter(e=>e.org===p&&LEV_KINDS.includes(e.k)&&D(e.d)>=D(W0)&&D(e.d)<=D(plus(W0,4))).length;const min=Math.min(...pool.map(load));const least=pool.filter(p=>load(p)===min);effect("db",`jämn fördelning: ${pool.map(p=>first(p)+" "+load(p)).join(", ")} leveransposter i veckan`);pool=least}
+    for(const p of pool){const pk=autopick([p],HOME,WORK_S,m,5);if(pk&&(!best||D(pk.d)<D(best.d)||(pk.d===best.d&&pk.s<best.s)))best={...pk,p}}if(best)bookWelcome(qid,best.p,best.d,best.s,m);else toast("Ingen ledig tid de närmaste fem dagarna.");return}
+  if(t.closest("#qPick")){S.pick=S.drawer.q;closeDrawer();if(S.view==="manad")S.view="arbetsvecka";render();toast("Klicka på en tid i kalendern.");return}
+});
+drawer.addEventListener("change",ev=>{
+  const t=ev.target;
+  if(S.form&&t.id==="fStart"){const m=S.form.m;readForm();S.form.s=+t.value;S.form.m=m;renderForm();focusSel("#fStart");return}
+  if(S.form&&["fEnd","fWith","fCust","fRemMe","fRemCust"].includes(t.id)){readForm();renderForm();focusSel("#"+t.id);return}
+  const ag=t.closest("[data-ag]"),at=t.closest("[data-at]");
+  if(ag||at){const e=findEv(S.drawer.e),sr=SERIES.find(s=>s.id===e.sr);(ag?sr.agenda:sr.atgard)[+(ag?ag.dataset.ag:at.dataset.at)].done=t.checked;openDrawer(S.drawer,true);const el=$(t.id);el&&el.focus()}
+});
+drawer.addEventListener("keydown",ev=>{
+  const b=ev.target.closest&&ev.target.closest(".dp button.d");
+  if(ev.key==="Escape"&&S.form&&S.form.dp){ev.preventDefault();ev.stopPropagation();S.form.dp=false;renderForm();focusSel("#fDayBtn");return}
+  if(!b)return;const step={ArrowLeft:-1,ArrowRight:1,ArrowUp:-7,ArrowDown:7}[ev.key];
+  if(step!=null){ev.preventDefault();const f=S.form,nd=plus(b.dataset.dpd,step);f.dpFocus=nd;f.dpMonth=nd.slice(0,7);renderForm();focusSel(`.dp [data-dpd="${nd}"].d`)}
+});
+drawer.addEventListener("submit",ev=>{
+  ev.preventDefault();
+  if(ev.target.dataset.crmform){const C=CUST[ev.target.dataset.crmform],v=$("crmId").value.trim();if(!v){toast("Klistra in kund-ID:t först.");$("crmId").focus();return}C.crm=v;effect("crm",`manuell adapter: ${C.namn} → ${v}`);effect("db","delivery.crm_external_id och crm_synced_at sparade");openDrawer(S.drawer,true);toast(`${C.namn} är kopplad till ${v} i leverans-CRM:et.`);return}
+  if(ev.target.id==="fForm"){saveForm();return}
+  if(ev.target.id==="agForm"){const v=$("agInput").value.trim();if(!v)return;const e=findEv(S.drawer.e),sr=SERIES.find(s=>s.id===e.sr);sr.agenda.push({by:S.viewer,tx:v,done:false});const other=S.viewer===sr.org?sr.att[0].p:sr.org;notify(other,"📝",`${first(S.viewer)} lade till en punkt på er 1:1`,"“"+v+"”",["klocka"],{sr:sr.id});openDrawer(S.drawer,true);$("agInput").focus();toast(`${first(other)} ser punkten och får en notis.`)}
+});
+document.addEventListener("keydown",ev=>{
+  const tag=document.activeElement&&document.activeElement.tagName,typing=/INPUT|TEXTAREA|SELECT/.test(tag);
+  if(ev.key==="Escape"){if(!$("npanel").hidden){$("npanel").hidden=true;$("bBell").focus();return}if(S.smove){S.smove=null;render();return}if(S.pick){S.pick=null;render();return}if(S.drawer){closeDrawer();S.sel=null;renderStage()}return}
+  if(ev.ctrlKey&&ev.altKey){const map={"1":"dag","2":"arbetsvecka","3":"vecka","4":"manad","5":"team","6":"agenda"};
+    if(map[ev.key]){ev.preventDefault();S.view=map[ev.key];renderStage.did=false;render()}
+    if(ev.key==="ArrowRight"){ev.preventDefault();step(1)}if(ev.key==="ArrowLeft"){ev.preventDefault();step(-1)}return}
+  if(!typing&&!ev.metaKey&&!ev.ctrlKey&&!ev.altKey&&(ev.key==="n"||ev.key==="N")){const r=$("proto").getBoundingClientRect();if(r.bottom>0&&r.top<innerHeight){ev.preventDefault();newForm()}}
+});
+render();
+})();
+</script>
