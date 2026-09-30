@@ -81,7 +81,7 @@ export default async function Delningssidan() {
                   className="flex flex-wrap items-baseline justify-between gap-2 rounded-sm bg-canvas px-3 py-2"
                 >
                   <Link
-                    href={`/kalender?person=${d.employee_id}`}
+                    href={`/kalender?visa=${d.employee_id}`}
                     className="text-body text-ink-900 transition-colors duration-fast hover:text-brand-700"
                   >
                     {d.namn}

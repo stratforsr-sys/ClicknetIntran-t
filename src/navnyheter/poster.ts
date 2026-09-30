@@ -14,6 +14,53 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "kalendern-bokar-moten",
+    rubrik: "Kalendern bokar möten: bjud in, svara och föreslå en ny tid",
+    ingress:
+      "Kalendern ser ut och fungerar som Outlook. Du bjuder in kollegor till ett möte, de svarar Ja, Kanske eller Nej direkt i klockan, och den som inte kan föreslår en ny tid.",
+    text: `Hittills visade kalendern bara det navet redan visste — uppgifter, ledighet och
+frister — och den bokade inga möten. Nu gör den det.
+
+## Boka ett möte
+
+Tryck **+ Ny händelse**, tangenten **N**, eller dra nedåt i en tom del av
+kalendern så att tiden du vill ha markeras. Skriv en rubrik och välj vilka som
+ska vara med. Assistenten under tiderna visar när var och en är upptagen, och
+**Föreslå tid** hittar första tiden då alla är lediga. Krockar tiden ändå säger
+kalendern till innan du skickar.
+
+De du bjuder in får en notis i klockan och ett mejl.
+
+## Svara, eller föreslå en annan tid
+
+En inbjudan har knapparna **Ja**, **Kanske** och **Nej** direkt i klockan, så du
+behöver inte öppna kalendern för att svara. Passar inte tiden trycker du
+**Föreslå ny tid** i mötet och väljer en annan. Den som bjöd in godkänner
+förslaget med ett klick, och då flyttas mötet.
+
+## Flytta och ändra
+
+Dra ditt möte till en annan tid, eller dra i nederkanten för att göra det
+längre eller kortare. Alla som redan svarat får svara igen, precis som i
+Outlook. Ångrar du dig har du några sekunder på dig: tryck **Ångra** i rutan
+nere i mitten, så skickas ingenting.
+
+## Uppgifter åt dig själv och åt andra
+
+Under fliken **Uppgift** lägger du in något du ska göra, med klockslag. Välj
+dig själv eller en kollega som ansvarig. Uppgiften hamnar i uppgiftsmodulen som
+vanligt, och tio minuter innan klockslaget får den ansvariga en påminnelse i
+klockan.
+
+## Planeringsvyn finns kvar
+
+Listan till vänster och dagen till höger ligger under **Planeringsvyn** i
+kalenderns sidolista. Ingenting där har ändrats.`,
+    datum: "2026-09-30",
+    roller: ["salesperson", "team_lead", "sales_manager", "ceo", "finance", "project_manager", "admin", "delivery"],
+    href: "/kalender",
+  },
+  {
     slug: "ordervyn-kundkort-och-filter",
     rubrik: "Ordervyn är omgjord: kundkort, filter och en ruta för nya order",
     ingress:

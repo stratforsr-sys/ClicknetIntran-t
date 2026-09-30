@@ -7,6 +7,7 @@ import { Ikon } from "./Ikon";
 import { cn } from "@/components/ui/cn";
 import { narTid, TYP_ETIKETT, TYP_IKON, type Notis } from "@/lib/notiser";
 import { avfardaNotisen, markeraNotiserLasta } from "./notiser-actions";
+import { svara } from "@/app/(app)/kalender/moten/actions";
 
 /**
  * UI-PRD §5.7. Klockan i toppraden.
@@ -121,6 +122,23 @@ export function Notisklocka({ notiser }: { notiser: Notis[] }) {
    * for gott ar `olast`-regeln i `hamtaNotiser()`: en post ar olast bara om den
    * ar nyare an "senast oppnad", och efter det har anropet ar ingen det.
    */
+  /**
+   * Leveranskalendern (0069). Ja, Kanske eller Nej direkt i klockan, som
+   * prototypens `[data-nq]`. Svaret går genom samma action som panelen, alltså
+   * genom utkorgen, och organisatören får det i sin klocka.
+   */
+  const [svarade, setSvarade] = useState<Record<string, string>>({});
+  function snabbsvara(n: Notis, v: "ja" | "kanske" | "nej") {
+    if (!n.svara) return;
+    const eventId = n.svara.eventId;
+    setSvarade((f) => ({ ...f, [n.id]: v }));
+    startOvergang(async () => {
+      const r = await svara(eventId, v);
+      if (r.fel) setSvarade((f) => ({ ...f, [n.id]: `fel:${r.fel}` }));
+      router.refresh();
+    });
+  }
+
   function markeraAllaLasta() {
     setAllaLasta(true);
     startOvergang(async () => {
@@ -231,10 +249,11 @@ export function Notisklocka({ notiser }: { notiser: Notis[] }) {
                 <li
                   key={n.id}
                   className={cn(
-                    "flex items-stretch border-b border-canvas last:border-0",
+                    "border-b border-canvas last:border-0",
                     arOlast(n) ? "bg-accent-tint/40" : "",
                   )}
                 >
+                  <div className="flex items-stretch">
                   {/*
                     Lanken och krysset ar SYSKON, inte inbaddade i varandra.
                     En <button> inuti en <a> ar ogiltig HTML och ger olika
@@ -285,12 +304,57 @@ export function Notisklocka({ notiser }: { notiser: Notis[] }) {
                   >
                     <Ikon namn="kryss" className="size-4" />
                   </button>
+                  </div>
+                  {n.svara && <Snabbsvar notis={n} svarat={svarade[n.id] ?? null} vidSvar={(v) => snabbsvara(n, v)} />}
                 </li>
               ))}
             </ul>
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+const SNABBSVAR = [
+  { v: "ja", text: "✓ Ja" },
+  { v: "kanske", text: "? Kanske" },
+  { v: "nej", text: "✕ Nej" },
+] as const;
+
+/** Svarsknapparna under en inbjudan. */
+function Snabbsvar({
+  notis,
+  svarat,
+  vidSvar,
+}: {
+  notis: Notis;
+  svarat: string | null;
+  vidSvar: (v: "ja" | "kanske" | "nej") => void;
+}) {
+  if (svarat?.startsWith("fel:")) {
+    return <p className="px-4 pb-3 pl-11 text-small text-danger-ink">{svarat.slice(4)}</p>;
+  }
+  const nu = svarat ?? notis.svara?.nu ?? null;
+  return (
+    <div role="group" aria-label="Svara direkt" className="flex flex-wrap gap-1.5 px-4 pb-3 pl-11">
+      {SNABBSVAR.map((s) => (
+        <button
+          key={s.v}
+          type="button"
+          onClick={() => vidSvar(s.v)}
+          aria-pressed={nu === s.v}
+          disabled={svarat !== null}
+          className={cn(
+            "rounded-xs border px-2.5 py-1 text-small font-semibold transition-colors duration-fast",
+            nu === s.v
+              ? "border-brand-600 bg-brand-100 text-brand-700"
+              : "border-ink-300/60 bg-surface text-ink-900 hover:bg-surface-alt",
+          )}
+        >
+          {s.text}
+        </button>
+      ))}
     </div>
   );
 }

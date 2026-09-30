@@ -139,6 +139,21 @@ export const MEJLKALLOR = [
    * tillstånd och ligger i morgonbrevet, som byggdes för just det.
    */
   "uppgift-tilldelad",
+
+  /**
+   * Leveranskalendern (0069). Det som ändrar NÄR man ska vara någonstans:
+   * en inbjudan, en flytt inom sju dagar, ett inställt möte — och förslaget
+   * på ny tid, som organisatören måste ta ställning till innan mötet.
+   *
+   * Svaret mejlas INTE. Det är organisatörens kvitto på att någon läst, och
+   * det kan vänta till nästa gång hon öppnar navet. Inte heller en flytt långt
+   * fram (`kalender-flyttad-tyst`): den som får veta på måndag att ett möte om
+   * tre veckor flyttats har gott om tid att se det i klockan.
+   */
+  "kalender-inbjudan",
+  "kalender-flyttad",
+  "kalender-installd",
+  "kalender-forslag",
 ] as const satisfies readonly Handelsekalla[];
 
 export type Mejlkalla = (typeof MEJLKALLOR)[number];

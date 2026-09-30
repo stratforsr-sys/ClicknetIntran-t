@@ -501,3 +501,52 @@ hand utan fältet får ett fel i stället för en tolkning.
 
 **Konsekvens:** ett förvalt läge hade återinfört felet i mildare form, så
 radioknapparna börjar utan val. Priset är ett klick till på varje ansökan.
+
+---
+
+## D-K1 · Nav bokar möten — beslutet från 11 september ersätts
+**2026-09-30.** Den 11 september beslutade beställaren att kalendern bara visar
+det navet redan vet och inte bokar några möten (0057, `lib/kalender.ts`).
+Skälet var att motparten i ett möte sitter i Outlook. För de möten som nu ska
+in — interna möten, 1:1:or med säljarna och leveransens kundsamtal — sitter
+båda parter i Nav, och skälet gäller inte längre.
+
+**Beslut:** Nav bokar möten med deltagare, svar (Ja, Kanske, Nej), förslag på
+ny tid, flytt och inställt. En bokad tid är en rad i `calendar_event` (0069).
+Uppgifter stannar i uppgiftsmodulen och coachningen i sin: kalendern ritar dem
+som förut, och fliken Uppgift i kalenderns formulär skapar en vanlig uppgift
+genom uppgiftsmodulens egen `skapaUppgift`. Uppgifter kan läggas på en
+kollega från kalendern, och den ansvariga får en påminnelse i klockan tio
+minuter före klockslaget.
+
+**Konsekvens:** Varje ändring av ett möte skriver ändringen, svaren, utkorgens
+notiser och läget för Ångra i en transaktion (`lk_*` i 0069), och ingenting
+lämnar navet förrän tio sekunder efteråt. Varje kalender visas för sig, med
+ägarens delningsnivå — som i Outlook, inte med den bästa nivån hos någon av
+deltagarna som prototypen gjorde. 0057 står kvar oförändrad som historik.
+
+## D-K2 · Kalendern följer prototypen, inte kortreglerna
+**2026-09-30.** Inuti `/kalender` har rutnätet och formuläret 1 px linjer
+(`--color-line`), knapparna radie 10 px i stället för Navs rundade `Button`,
+veckan är ett timrutnät som i Outlook och kvittot med Ångra ligger nere i
+mitten. Allt det bryter mot UI-PRD — "ingen ram", runda knappar,
+`Veckovy.tsx`:s listvecka och kakkvittot i `Toast.tsx`.
+
+**Beslut:** Avstegen är medvetna. Kalendern ska kännas som Outlook, och
+prototypen `docs/leveranskalender/prototyp.html` är godkänd som facit. Dess CSS
+är portad ordagrant till `kalender/leveranskalender.css` under rotklassen
+`.lk`, med Navs tokens i stället för hexvärden. Navs skal, sidopanel och klocka
+är oförändrade. Ersätter valet av listvecka i `Veckovy.tsx` för huvudvyn;
+Planeringsvyn står kvar oförändrad under `/kalender?vy=planera`.
+
+**Kända avsteg från prototypen, med skäl:**
+- Fliken Uppgift har ett fält *Ansvarig* (chip, en person). Prototypen saknar
+  det; beställaren vill kunna lägga upp uppgifter åt andra.
+- Synligheten är per kalender (D-K1), inte den bästa nivån hos någon deltagare.
+- Kvittot efter en uppgift som dragits har ingen Ångra-knapp: uppgiftsmodulens
+  `planera` har ingen ångring, och en knapp som inte kan hålla vad den lovar
+  är värre än ingen.
+- Coachningssamtal och coachningsuppgifter ritas i 1:1-färgen; de är samtal på
+  tu man hand. Kursfrister och projektens deadline ritas som orderfristen.
+- Sökningen och minikalenderns prickar gäller det som är hämtat för vyn, inte
+  fyra veckor framåt.

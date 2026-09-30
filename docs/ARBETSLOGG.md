@@ -5,6 +5,68 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-09-30 · Leveranskalendern, pass 1: möten
+
+Byggt efter `docs/leveranskalender/BYGGPROMPT.md` med prototypen som facit.
+Gren `leveranskalender`, **EJ MERGAD** — previewen ska jämföras mot
+`referens/*.png` först. Migration **`0069_leveranskalender_moten`** körd
+2026-09-30 12:33.
+
+### Beställarens beslut före passet
+
+1. **Beslutet från 11 september ersätts** (D-K1): Nav bokar möten. Uppgifter
+   stannar i uppgiftsmodulen men ska kunna läggas upp **åt andra** från
+   kalendern, med en **påminnelse i klockan** tio minuter före. Coachningen
+   **syns** i kalendern men skapas inte där.
+2. **CRM:et är okänt** — pass 3 bygger den manuella adaptern.
+3. **Planeringsvyn står kvar oförändrad** under `/kalender?vy=planera`.
+4. **Synlighet per kalender, som Outlook** — inte prototypens "bästa nivån hos
+   någon deltagare". En persons delning kan då aldrig avslöja något i en annans
+   kalender.
+
+### Den viktigaste konstruktionen: en ändring är en transaktion
+
+Navet skriver genom supabase-js, och en följd av PostgREST-anrop är ingen
+transaktion. En flytt är fyra saker — ny tid, nollställda svar, utkorgens
+notiser, läget för Ångra — och blev hälften skriven fick någon en notis om en
+flytt som inte skett. Därför är varje handling en `security definer`-funktion
+(`lk_skapa_mote`, `lk_svara`, `lk_foresla`, `lk_besluta_forslag`, `lk_flytta`,
+`lk_stall_in`, `lk_kopiera`, `lk_angra`) som **bara service role** får anropa;
+aktören sätts av servern och kommer aldrig från klienten. Behörigheten prövas i
+funktionen, på den låsta raden.
+
+**Utkorgen bär händelser, inte texter.** En notisrad säger `mall`, mottagare,
+aktör och tid; rubriken skrivs när raden töms, i `lib/leveranskalender.ts`, där
+prototypens texter provas. Töms av `after()` i actionen efter ångerfönstret
+(10 s) och, som reserv, av `/api/jobb/utkorg` via `pg_cron`. `lk_utkorg_ta()` tar
+raderna med `for update skip locked`, samma nyckel kan aldrig skrivas två gånger,
+och **`lk_angra` vägrar om en rad redan tagits för att skickas** — att tyst
+återställa något någon redan fått besked om hade gjort beskedet till en lögn.
+
+**`notifieraFranUtkorgen()`** i `notishandelse-server.ts` är `notifiera()` med
+två skillnader: den kastar när raden inte skrevs (så att utkorgen försöker igen)
+och skickar brevet direkt i stället för i ett `after()` inuti ett `after()`.
+
+### Provat mot databasen
+
+Migrationen provades i en transaktion som rullades tillbaka innan den kördes:
+54 kontroller (sommartid/vintertid, behörighet, svar, förslag, flytt, mejl bara
+inom 7 dagar, Ångra, utkorgens tömning och tre försök, uppgiftspåminnelsen,
+1:1-kretsen). `tests/rls.mjs` har 17 nya kontroller plus åtta tabeller i den
+anonyma: **505 gröna, 2 röda — de två kända i `file_object` som är röda på main
+sedan 2026-09-22.** `tests/leveranskalender.mjs` (ny) grön. Hela `npm test`: fyra
+prov röda, **exakt samma fyra och samma fel på main** (provision-period,
+handelselogg, inbaddningar, registerutdrag).
+
+### Fynd på vägen
+
+- `registerutdrag` saknade de nya främmande nycklarna — redovisade i `KALLOR`
+  och `UNDANTAG` i samma commit, så grenen gör inte det röda provet rödare.
+- `calendar` i händelseloggens `MODUL` hette "Kalenderflöde"; `lk_angra` loggar
+  `calendar.undone`, så namnet är nu "Kalender".
+- `kommandeposter()` (plinget) tar nu med dagens möten jag organiserar eller
+  tackat ja till.
+
 ## 2026-09-25 (senare) · Orderfliken i kundkortet, byggd om
 
 Beställaren efter att ha sett previewen: *"när jag öppnar upp kundkortet och

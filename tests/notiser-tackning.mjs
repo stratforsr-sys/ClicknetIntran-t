@@ -157,6 +157,30 @@ const TACKNING = {
     "Skriver ingenting sjalv. Bada vagarna gar till modulernas egna skapaUppgift, som ar harledda.",
 
   // ---------------------------------------------------------------------------
+  // Leveranskalendern, möten (0069)
+  //
+  // INGEN AV DEM ANROPAR `notifiera()` SJÄLV, och det är hela konstruktionen:
+  // varje ändring skriver sina notiser i UTKORGEN i samma transaktion som
+  // ändringen (`lk_*` i 0069), och utkorgen töms tio sekunder senare genom
+  // `notifieraFranUtkorgen()` i `lib/utkorg-server.ts`. Hade actionen också
+  // notifierat direkt hade Ångra inte kunnat ta tillbaka något.
+  // ---------------------------------------------------------------------------
+  "kalender/moten::skapaMote": "notifierar via utkorgen (lib/utkorg-server.ts)",
+  "kalender/moten::svara": "notifierar via utkorgen (lib/utkorg-server.ts)",
+  "kalender/moten::foreslaTid": "notifierar via utkorgen (lib/utkorg-server.ts)",
+  "kalender/moten::godkannForslag": "notifierar via utkorgen (lib/utkorg-server.ts)",
+  "kalender/moten::behallTid": "notifierar via utkorgen (lib/utkorg-server.ts)",
+  "kalender/moten::flytta": "notifierar via utkorgen (lib/utkorg-server.ts)",
+  "kalender/moten::andraLangd": "notifierar via utkorgen (lib/utkorg-server.ts)",
+  "kalender/moten::stallIn": "notifierar via utkorgen (lib/utkorg-server.ts)",
+  "kalender/moten::kopiera": "notifierar via utkorgen (lib/utkorg-server.ts)",
+  "kalender/moten::hamtaUpptaget":
+    "Läser bara: upptagen tid för assistenten, genom projektionerna. Skriver ingenting.",
+  "kalender/moten::hamtaHandelse": "Läser bara panelens innehåll med läsarens egen token.",
+  "kalender/moten::angringsLage":
+    "Läser bara om den egna ångringen gick igenom. Ångringen själv går genom angra::angra.",
+
+  // ---------------------------------------------------------------------------
   // Arenden
   // ---------------------------------------------------------------------------
   "arenden::skapaArende": "harledd",

@@ -17,6 +17,11 @@
  *
  * Följden är att ingen post i den här filen har en "deltagare" eller ett
  * "svar". En post har en dag, ibland ett klockslag, och en längd.
+ *
+ * ERSATT 2026-09-30 FÖR MÖTEN (DECISIONS.md D-K1). Nav bokar numera möten med
+ * deltagare och svar — de bor i `calendar_event` (0069) och i
+ * `lib/leveranskalender.ts`, inte här. Den här filen gäller fortfarande det
+ * den alltid gällt: uppgifterna, delningen och Planeringsvyn.
  * =============================================================================
  */
 
