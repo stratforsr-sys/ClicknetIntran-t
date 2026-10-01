@@ -1,7 +1,7 @@
 import "server-only";
 
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { epostArKonfigurerad, skickaKo, type Brev } from "@/lib/epost";
+import { epostArKonfigurerad, skickaKo, type Bilaga, type Brev } from "@/lib/epost";
 import type { Handelsekalla } from "@/lib/notiser";
 
 /**
@@ -139,6 +139,29 @@ export const MEJLKALLOR = [
    * tillstånd och ligger i morgonbrevet, som byggdes för just det.
    */
   "uppgift-tilldelad",
+
+  /**
+   * Leveranskalendern (0069). Det som ändrar NÄR man ska vara någonstans:
+   * en inbjudan, en flytt inom sju dagar, ett inställt möte — och förslaget
+   * på ny tid, som organisatören måste ta ställning till innan mötet.
+   *
+   * Svaret mejlas INTE. Det är organisatörens kvitto på att någon läst, och
+   * det kan vänta till nästa gång hon öppnar navet. Inte heller en flytt långt
+   * fram (`kalender-flyttad-tyst`): den som får veta på måndag att ett möte om
+   * tre veckor flyttats har gott om tid att se det i klockan.
+   */
+  "kalender-inbjudan",
+  "kalender-flyttad",
+  "kalender-installd",
+  "kalender-forslag",
+
+  /**
+   * Leveransen (0071). Två av kön: fristen på 24 timmar håller på att gå ut —
+   * det enda mejlet kön skickar — och en begäran till säljaren att komplettera
+   * överlämningen, som leveransen väntar på innan de kan ringa kunden.
+   */
+  "leverans-frist",
+  "leverans-komplettera",
 ] as const satisfies readonly Handelsekalla[];
 
 export type Mejlkalla = (typeof MEJLKALLOR)[number];
@@ -176,6 +199,8 @@ type Utskick = {
   rubrik: string;
   detalj?: string;
   href: string;
+  /** Leveranskalendern (pass 4): inbjudans `.ics`. Följer med bara när källan mejlas. */
+  bilagor?: Bilaga[];
 };
 
 /**
@@ -218,6 +243,7 @@ export async function mejlaHandelse(
         till: p.email,
         amne: `Clicknet Nav: ${utskick.rubrik}`,
         text: brevtext(p.first_name ?? "", utskick),
+        ...(utskick.bilagor?.length ? { bilagor: utskick.bilagor } : {}),
       });
     }
 

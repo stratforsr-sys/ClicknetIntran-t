@@ -58,6 +58,30 @@
   --color-accent-ink:  #7A4708;
   --color-accent-tint: #FDEBD4;
 
+  /* --- Leveranskalendern (DECISIONS: D-K2) ----------------------------- */
+  /* Bara inuti /kalender. Prototypens ljusa läge, docs/leveranskalender/SPEC.md §3. */
+  --color-line:        #E3E8E8; /* 1 px linjer i rutnät och formulär */
+  --color-line-strong: #CBD4D3;
+  --color-lev:         #9A3412; /* leveranspost, fylld. Ingen annan post har den */
+  --color-lev-ink:     #FFFFFF;
+  --color-lev-soft:    #FFF4EB;
+  --color-lev-line:    #F3C9A8;
+  --color-slate-ink:   #2F3F5C; /* möte */
+  --color-slate-tint:  #E6EAF3;
+  --color-plum-ink:    #5B2E6E;
+  --color-plum-tint:   #F1E6F5;
+  --color-now:         #D2544B; /* nu-linjen */
+  --color-hatch:       rgba(30, 158, 122, .14);
+  --color-pend:        rgba(14, 26, 25, .06);
+  --color-hatch-on-lev: rgba(255, 255, 255, .14);
+  --color-av-1: #0E1A19;
+  --color-av-2: #C2410C;
+  --color-av-3: #3E86C9;
+  --color-av-4: #8E54A8;
+  --color-av-5: #0B7F6E;
+  --color-av-6: #6B7A79;
+  --shadow-seg: 0 1px 2px rgba(0, 0, 0, .08);
+
   /* --- Radie (UI-PRD §4.3) --------------------------------------------- */
   --radius-xs:   8px;
   --radius-sm:   12px;

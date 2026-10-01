@@ -5,6 +5,184 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-01 · Leveranskalendern, pass 4: Teamet, .ics och iCal
+
+Samma gren, **EJ MERGAD**. Migration **`0072_leveranskalender_omvarld`** körd
+2026-10-01 09:31. Beställaren sa "kör och gör klart allting" efter pass 3; provet
+av pass 1–3 i previewen har inte gjorts än (inga kalenderhändelser i databasen).
+
+**Teamet (`Ctrl+Alt+5`)** är en dag, 08–18, en rad per person i Säljteamet eller
+Leverans (knapparna Sälj/Leverans). Servern hämtar alla i de två grupperna för
+den dagen — inte bara de ikryssade — och ett gemensamt möte står på varje
+deltagares rad, eftersom kapaciteten räknas per person. Innehållet är redan
+projicerat av `kalender_handelser()`/`kalender_poster()`: den man bara ser som
+upptagen står med "Upptagen". Klick på en kollegas tomma tid öppnar formuläret
+med henne som deltagare, eller en 1:1 om man är säljchef/teamledare och hon
+säljer. Med en kund vald ur kön bokas välkomstsamtalet hos den personen.
+
+**Kundens .ics skrivs av triggrar, inte av lk_*-funktionerna.** Sex vägar ändrar
+tid eller ställer in, två skapar händelser med en extern deltagare. Alla räknar
+upp `ics_sequence` eller skapar händelse och deltagare i samma transaktion, så
+triggrarna sitter där (`calendar_event_ics`, `calendar_attendee_ics`). Raderna
+följer med i Ångra genom en transaktionslokal inställning (`lk.ics`) som den
+ersatta `lk_undo()` läser och tömmer. Ångra själv skriver ingen ny rad: den
+sätter tillbaka en LÄGRE sekvens, och deltagarna den lägger tillbaka hör till en
+händelse som skapades tidigare.
+
+**Tömningen kontrollerar att raden fortfarande gäller** — sekvensen ska vara den
+aktuella, och ett inställt möte får bara CANCEL. Kundbrevet säger
+"Kickoff med Clicknet", aldrig navets rubrik med kundens namn. Svarsadress är
+organisatören.
+
+**Kollegornas inbjudningsmejl bär .ics** för inbjudan, flytt, godkänt förslag
+och inställt — utan svarsknappar (RSVP=FALSE): svaret hör hemma i navet. En
+förekomst i en serie får ingen fil, se D-K2.
+
+**Previewen mejlar kunder bara på `@resend.dev`.** Regeln från pass 3 är
+utvidgad så att provordern (`delivered+nav-kund@resend.dev`) går att prova; en
+riktig kund nås fortfarande bara från produktionen. Samma regel gäller nu
+kundens mejlpåminnelse.
+
+**Mötesflödet** är en tredje sort i `calendar_feed` (`handelser`), med egen
+adress på /franvaro bredvid ledighetsflödet. `lk_ical_handelser()` (bara
+service role) lämnar rubrik, tid, plats och länk — inte agenda, anteckningar
+eller andra deltagare. 60 dagar bakåt, ett år framåt. Ett databasfel ger 503 och
+inte en tom kalender, som annars hade tömt prenumerationen.
+
+**Provat:** 0072 i en transaktion som rullades tillbaka, 16 kontroller (kickoff
+ger REQUEST sekvens 0 till kunden, flytt ger sekvens 1, båda bär sin rad i
+ångern, Ångra tar bort raden utan att skriva en ny, inställt ger CANCEL, flödet
+ser kickoffen men inte det inställda, möte utan extern ger ingen rad, grants,
+scope). `tests/leveranskalender.mjs` +27 (Teamets vyhjälpare, .ics-filerna,
+kundbrevet). `tests/rls.mjs` +2 (ingen inloggad når `lk_ical_handelser` eller
+`lk_ics_ko`).
+
+**Röda prov, inga nya:** handelselogg, inbaddningar, registerutdrag och 2
+`file_object`-kontroller i rls.mjs är röda även på main. **`sidor` är röd av
+provdatan**: provkontot heter *Test Säljare*, och efternamnet "Säljare" är samma
+ord som rolletiketten på varje sida. Försvinner när provkontona städas.
+
+---
+
+## 2026-09-30 (kväll) · Leveranskalendern, pass 3: leverans
+
+Samma gren, **EJ MERGAD**. Migration **`0071_leveranskalender_leverans`** körd
+2026-09-30 14:33. **Triggern `sales_order_till_leverans` är live i produktionen**:
+varje order som godkänns från och med då får en rad i `delivery` och en notis i
+utkorgen till leveransen — även när den godkänns av main-koden.
+
+**Leveransen läser inte ordern.** `sales_order_read` släpper inte fram
+leveransrollerna, så kön får kund, paket, kontakt och överlämning genom den
+nya `leverans_kunder()`, som bara lämnar ut det till projektledare, leverans och
+säljchef — och till säljaren om hennes egna kunder.
+
+**Mejlpåminnelserna följer posten** genom utkorgen: `lk_ny_tid` och
+`lk_stall_in` är omskrivna med påminnelserna, och `lk_lage`/`lk_angra` tar med
+dem i ögonblicksbilden, så att Ångra lägger tillbaka även påminnelsen.
+**Previewen skickar aldrig till en kund** (`VERCEL_ENV`).
+
+**Resends webhook** (`/api/resend`) kräver `RESEND_WEBHOOK_SECRET` och
+signaturen; utan hemligheten svarar den 503. **Webhooken är inte uppsatt i
+Resend än** — det görs i Resends gränssnitt (nyckeln är send-only).
+
+**Provat mot databasen** i en transaktion som rullades tillbaka: 45 kontroller
+(24 vardagstimmar över helgen, trigger, tilläggsorder, kretsen, `skip locked`,
+påminnelser vid flytt och inställt med Ångra, utfall och försök, CRM, frist,
+makulering).
+
+## 2026-09-30 (senare) · Leveranskalendern, pass 2: 1:1
+
+Samma gren, `leveranskalender`, **EJ MERGAD**. Beställaren såg pass 1 och sa
+"ser bra ut, fortsätt bygget". Migration **`0070_leveranskalender_enskilt`**
+körd 2026-09-30 14:06 — bara funktioner, inga nya tabeller (0069 skapade dem
+för att 0070 inte skulle behöva ändra en körd fil).
+
+**Seriernas datum räknas i TypeScript.** `forekomster()` i `upprepning.ts`, nu
+med `intervall` (varannan vecka), räknar datumen; `lk_skapa_serie`,
+`lk_flytta_serie` och `lk_fyll_serie` tar dem som `date[]` och föder raderna i
+samma transaktion. Uppgiftsserierna sätter aldrig `intervall` och beter sig som
+förut — provat i `tests/upprepning.mjs`.
+
+**Flytta hela serien** tar bort de icke-avvikande förekomsterna från och med den
+flyttade (aldrig bakåt), föder om dem på den nya veckodagen och nollställer
+seriens svar. En förekomst som flyttats för sig står kvar med sina egna svar.
+Ångra lägger tillbaka serien, förekomsterna och svaren ur ögonblicksbilden.
+
+**`lk_svara` ändrades:** svar för hela serien skriver inte längre över
+förekomsternas egna rader. En förekomst har en egen rad bara när den flyttats
+för sig, och då gäller svaret den flyttade tiden.
+
+**Provat mot databasen** i en transaktion som rullades tillbaka: 36 kontroller
+(födsel, svar på serie och förekomst, flytt en gång och hela serien, ångra,
+punkter med en notis per dag, bock, åtgärd till uppgift och tillbaka,
+förberedelse, koppling till coachningssamtal, påfyllning).
+
+**Dagtidsjobbet** fyller på serierna och skickar förberedelserna
+(`lib/jobb/kalender.ts`). Det körs i produktion först efter merge — main har
+inte steget.
+
+## 2026-09-30 · Leveranskalendern, pass 1: möten
+
+Byggt efter `docs/leveranskalender/BYGGPROMPT.md` med prototypen som facit.
+Gren `leveranskalender`, **EJ MERGAD** — previewen ska jämföras mot
+`referens/*.png` först. Migration **`0069_leveranskalender_moten`** körd
+2026-09-30 12:33.
+
+### Beställarens beslut före passet
+
+1. **Beslutet från 11 september ersätts** (D-K1): Nav bokar möten. Uppgifter
+   stannar i uppgiftsmodulen men ska kunna läggas upp **åt andra** från
+   kalendern, med en **påminnelse i klockan** tio minuter före. Coachningen
+   **syns** i kalendern men skapas inte där.
+2. **CRM:et är okänt** — pass 3 bygger den manuella adaptern.
+3. **Planeringsvyn står kvar oförändrad** under `/kalender?vy=planera`.
+4. **Synlighet per kalender, som Outlook** — inte prototypens "bästa nivån hos
+   någon deltagare". En persons delning kan då aldrig avslöja något i en annans
+   kalender.
+
+### Den viktigaste konstruktionen: en ändring är en transaktion
+
+Navet skriver genom supabase-js, och en följd av PostgREST-anrop är ingen
+transaktion. En flytt är fyra saker — ny tid, nollställda svar, utkorgens
+notiser, läget för Ångra — och blev hälften skriven fick någon en notis om en
+flytt som inte skett. Därför är varje handling en `security definer`-funktion
+(`lk_skapa_mote`, `lk_svara`, `lk_foresla`, `lk_besluta_forslag`, `lk_flytta`,
+`lk_stall_in`, `lk_kopiera`, `lk_angra`) som **bara service role** får anropa;
+aktören sätts av servern och kommer aldrig från klienten. Behörigheten prövas i
+funktionen, på den låsta raden.
+
+**Utkorgen bär händelser, inte texter.** En notisrad säger `mall`, mottagare,
+aktör och tid; rubriken skrivs när raden töms, i `lib/leveranskalender.ts`, där
+prototypens texter provas. Töms av `after()` i actionen efter ångerfönstret
+(10 s) och, som reserv, av `/api/jobb/utkorg` via `pg_cron`. `lk_utkorg_ta()` tar
+raderna med `for update skip locked`, samma nyckel kan aldrig skrivas två gånger,
+och **`lk_angra` vägrar om en rad redan tagits för att skickas** — att tyst
+återställa något någon redan fått besked om hade gjort beskedet till en lögn.
+
+**`notifieraFranUtkorgen()`** i `notishandelse-server.ts` är `notifiera()` med
+två skillnader: den kastar när raden inte skrevs (så att utkorgen försöker igen)
+och skickar brevet direkt i stället för i ett `after()` inuti ett `after()`.
+
+### Provat mot databasen
+
+Migrationen provades i en transaktion som rullades tillbaka innan den kördes:
+54 kontroller (sommartid/vintertid, behörighet, svar, förslag, flytt, mejl bara
+inom 7 dagar, Ångra, utkorgens tömning och tre försök, uppgiftspåminnelsen,
+1:1-kretsen). `tests/rls.mjs` har 17 nya kontroller plus åtta tabeller i den
+anonyma: **505 gröna, 2 röda — de två kända i `file_object` som är röda på main
+sedan 2026-09-22.** `tests/leveranskalender.mjs` (ny) grön. Hela `npm test`: fyra
+prov röda, **exakt samma fyra och samma fel på main** (provision-period,
+handelselogg, inbaddningar, registerutdrag).
+
+### Fynd på vägen
+
+- `registerutdrag` saknade de nya främmande nycklarna — redovisade i `KALLOR`
+  och `UNDANTAG` i samma commit, så grenen gör inte det röda provet rödare.
+- `calendar` i händelseloggens `MODUL` hette "Kalenderflöde"; `lk_angra` loggar
+  `calendar.undone`, så namnet är nu "Kalender".
+- `kommandeposter()` (plinget) tar nu med dagens möten jag organiserar eller
+  tackat ja till.
+
 ## 2026-09-25 (senare) · Orderfliken i kundkortet, byggd om
 
 Beställaren efter att ha sett previewen: *"när jag öppnar upp kundkortet och

@@ -950,7 +950,8 @@ export async function skapaFlode(_prev: FranvaroState, form: FormData): Promise<
   if (!user?.employee) return { fel: "Du måste vara inloggad." };
 
   const scope = String(form.get("scope") ?? "mine");
-  if (scope !== "mine" && scope !== "team") return { fel: "Okänd sorts flöde." };
+  // `handelser` (0072): ens egna möten ur leveranskalendern, bredvid ledigheten.
+  if (scope !== "mine" && scope !== "team" && scope !== "handelser") return { fel: "Okänd sorts flöde." };
 
   const db = supabaseAdmin();
 
@@ -992,6 +993,7 @@ export async function rotaFlode(_prev: FranvaroState, form: FormData): Promise<F
   if (!user?.employee) return { fel: "Du måste vara inloggad." };
 
   const scope = String(form.get("scope") ?? "mine");
+  if (scope !== "mine" && scope !== "team" && scope !== "handelser") return { fel: "Okänd sorts flöde." };
   const stang = form.get("stang") === "1";
   const db = supabaseAdmin();
 

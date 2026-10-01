@@ -175,6 +175,17 @@ export const KALLOR: Kalla[] = [
   { tabell: "project", kolumn: "owner_id", andamal: "Projekt du äger" },
   { tabell: "project_member", kolumn: "employee_id", andamal: "Projekt du är med i" },
 
+  // 0069. Leveranskalendern. En rad per tabell — slingan i
+  // registerutdrag-server.ts nycklar på tabellnamnet — och övriga kolumner mot
+  // employee står i UNDANTAG med sitt skäl.
+  { tabell: "calendar_event", kolumn: "organizer_id", andamal: "Möten du har bokat" },
+  { tabell: "calendar_attendee", kolumn: "employee_id", andamal: "Möten du är inbjuden till, med dina svar och förslag" },
+  { tabell: "calendar_series", kolumn: "organizer_id", andamal: "Återkommande möten och 1:1:or du håller" },
+  { tabell: "one_on_one_item", kolumn: "author_id", andamal: "Punkter du skrivit på en 1:1" },
+  // 0071. Leveransen.
+  { tabell: "delivery", kolumn: "owner_id", andamal: "Kunder du är ansvarig för i leveransen" },
+  { tabell: "delivery_handoff", kolumn: "written_by", andamal: "Överlämningar du skrivit till leveransen" },
+
   // 0055. Dina egna repliker i projektchattarna. Samma linje som
   // `error_report.reporter_id`: det är dina ord, skrivna av dig, och de står
   // i ditt utdrag av det skälet.
@@ -397,4 +408,10 @@ export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
   { tabell: "calendar_share", kolumn: "owner_id", skal: "Hämtas separat, från båda hållen" },
   { tabell: "calendar_share", kolumn: "viewer_id", skal: "Hämtas separat, från båda hållen" },
   { tabell: "calendar_share", kolumn: "created_by", skal: "Vem som satte upp delningen" },
+  // 0069
+  { tabell: "calendar_event", kolumn: "created_by", skal: "Vem som skrev raden — samma som organisatören utom när en delegat bokar" },
+  { tabell: "calendar_event", kolumn: "outcome_by", skal: "Vem som satte utfallet på en leveranspost (pass 3)" },
+  { tabell: "calendar_series", kolumn: "created_by", skal: "Vem som skrev serien — samma som organisatören utom för en delegat" },
+  { tabell: "calendar_undo", kolumn: "created_by", skal: "Ångerfönstret: läget före en ändring, använt i högst fem minuter" },
+  { tabell: "one_on_one_item", kolumn: "owner_id", skal: "Vem som ska göra en åtgärd; punkten följer med under författaren" },
 ];

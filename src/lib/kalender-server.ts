@@ -679,12 +679,15 @@ export async function kommandeposter(user: CurrentUser): Promise<Kalenderpost[]>
     estimate_minutes: number | null;
   }[];
 
-  const coachposter = await coachningsposter(
-    ((coachrader ?? []) as { id: string }[]).map((r) => r.id),
-    mig,
-  );
+  const [coachposter, moten] = await Promise.all([
+    coachningsposter(
+      ((coachrader ?? []) as { id: string }[]).map((r) => r.id),
+      mig,
+    ),
+    motesposter(mig, idag),
+  ]);
 
-  if (uppgifter.length === 0) return attPlinga(coachposter, idag, nu);
+  if (uppgifter.length === 0) return attPlinga([...coachposter, ...moten], idag, nu);
 
   // Avbockade ska inte plinga. Läget räknas fram ur händelserna (0054), så det
   // krävs en andra fråga — men bara för de uppgifter som faktiskt står på tur.
@@ -722,7 +725,55 @@ export async function kommandeposter(user: CurrentUser): Promise<Kalenderpost[]>
     klar: stangda.has(u.id),
   }));
 
-  return attPlinga([...poster, ...coachposter], idag, nu);
+  return attPlinga([...poster, ...coachposter, ...moten], idag, nu);
+}
+
+/**
+ * Dagens möten som ska plinga (0069): de jag organiserar och de jag tackat ja
+ * till — notismatrisen säger "alla som tackat ja", och ett kanske eller ett
+ * obesvarat möte ska inte avbryta någon.
+ *
+ * Läses med min egen token; RLS i 0069 släpper bara fram möten jag är med på
+ * eller får se. Posterna bär `slag: "uppgift"` bara för att `attPlinga()` och
+ * plingets rutt ska kunna ta dem — slaget läses inte av någon av dem.
+ */
+async function motesposter(mig: string, idag: string): Promise<Kalenderpost[]> {
+  const supabase = await supabaseServer();
+  const { data } = await supabase
+    .from("calendar_event")
+    .select("id, title, dag, tid, minuter, organizer_id, calendar_attendee(employee_id, response)")
+    .eq("dag", idag)
+    .is("cancelled_at", null)
+    .not("tid", "is", null);
+
+  return ((data ?? []) as unknown as {
+    id: string;
+    title: string;
+    dag: string;
+    tid: string;
+    minuter: number | null;
+    organizer_id: string;
+    calendar_attendee: { employee_id: string | null; response: string }[];
+  }[])
+    .filter(
+      (e) =>
+        e.organizer_id === mig ||
+        e.calendar_attendee.some((a) => a.employee_id === mig && a.response === "ja"),
+    )
+    .map((e) => ({
+      id: `mote-${e.id}`,
+      slag: "uppgift" as const,
+      ref: e.id,
+      employee_id: mig,
+      dag: e.dag,
+      tid: e.tid.slice(0, 5),
+      minuter: e.minuter,
+      rubrik: e.title,
+      href: `/kalender?dag=${e.dag}&handelse=${e.id}`,
+      flyttbar: false,
+      forsenad: false,
+      klar: false,
+    }));
 }
 
 /**

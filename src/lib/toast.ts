@@ -37,6 +37,9 @@ export const ANGRABARA = [
   "nyhet.arkiverad",
   "fel.avslutad",
   "mall.arkiverad",
+  // Leveranskalendern (0069). `id` är raden i `calendar_undo`, inte händelsen.
+  // Kalendern har ett eget kvitto och använder inte kakan — se angra/actions.ts.
+  "kalender.handelse",
 ] as const;
 
 export type Angrabar = (typeof ANGRABARA)[number];

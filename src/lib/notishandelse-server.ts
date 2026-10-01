@@ -4,6 +4,7 @@ import { after } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { HANDELSEKALLOR, type Handelsekalla, type Notistyp } from "@/lib/notiser";
 import { kallanMejlas, mejlaHandelse } from "@/lib/epost-notis";
+import type { Bilaga } from "@/lib/epost";
 import type { Role, Permission } from "@/lib/roles";
 
 /**
@@ -40,6 +41,11 @@ export type Handelse = {
   detalj?: string;
   href: string;
   objekt?: { typ: string; id: string };
+  /**
+   * Bilagor till mejlet, när källan mejlas. Bara utkorgens väg bär dem
+   * (`notifieraFranUtkorgen`): kalenderns inbjudningar får sin `.ics` där.
+   */
+  bilagor?: Bilaga[];
 };
 
 const KALLOR = new Set<string>(HANDELSEKALLOR);
@@ -178,6 +184,57 @@ export async function notifieraFlera(
   } catch {
     return 0;
   }
+}
+
+/**
+ * Samma sak som `notifiera()`, för utkorgen (0069).
+ *
+ * ===========================================================================
+ * TVÅ SKILLNADER, OCH BÅDA FÖLJER AV ATT UTKORGEN FÖRSÖKER IGEN
+ *
+ * 1. FUNKTIONEN KASTAR när raden inte gick att skriva. `notifiera()` sväljer
+ *    felet, eftersom den körs mitt i någon annans handling och aldrig får
+ *    avbryta den. Utkorgen har ingen sådan handling att skydda — och ett
+ *    svalt fel där hade markerat raden som skickad fast ingen fått något.
+ *
+ * 2. BREVET SKICKAS HÄR OCH NU, inte i `after()`. Utkorgen töms redan i en
+ *    `after()` (i den action som skrev raden) eller i ett jobb, och ett
+ *    `after()` inifrån ett `after()` är inte något att bygga på: kastar det
+ *    fångas felet tyst och brevet uteblir utan att någon ser det.
+ *
+ * Reglerna är desamma: aldrig till aktören, bara kända källor, bara interna
+ * adresser. Returnerar `false` när regeln sållade bort mottagaren.
+ * ===========================================================================
+ */
+export async function notifieraFranUtkorgen(handelse: Handelse): Promise<boolean> {
+  if (!handelse.till) return false;
+  if (handelse.av && handelse.av === handelse.till) return false;
+  if (!KALLOR.has(handelse.kalla)) return false;
+  if (!handelse.href.startsWith("/") || /\s/.test(handelse.href)) return false;
+
+  const { error } = await supabaseAdmin().from("notification_event").insert({
+    employee_id: handelse.till,
+    actor_id: handelse.av,
+    kalla: handelse.kalla,
+    typ: handelse.typ,
+    rubrik: klipp(handelse.rubrik, 200),
+    detalj: klipp(handelse.detalj ?? "", 300),
+    href: handelse.href,
+    object_type: handelse.objekt?.typ ?? null,
+    object_id: handelse.objekt?.id ?? null,
+  });
+  if (error) throw new Error(`notification_event: ${error.message}`);
+
+  // Raden står. Ett brev som inte går fram försöks inte igen — då hade
+  // klockan fått raden två gånger. `mejlaHandelse` kastar aldrig.
+  await mejlaHandelse([handelse.till], {
+    kalla: handelse.kalla,
+    rubrik: handelse.rubrik,
+    detalj: handelse.detalj,
+    href: handelse.href,
+    bilagor: handelse.bilagor,
+  });
+  return true;
 }
 
 /**

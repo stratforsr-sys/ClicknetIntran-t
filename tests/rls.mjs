@@ -157,6 +157,13 @@ async function foraldralosaKonton() {
 }
 
 async function stad() {
+  // 0069. Möten och serier hänger i employee och måste bort före kontona.
+  // Tabellerna finns inte på en databas som ligger före 0069 — då hoppas det över.
+  if ((await db.query(`select to_regclass('public.calendar_event') as t`)).rows[0].t) {
+    await db.query(`delete from outbox where payload->>'till' in (select id::text from employee where email like $1)`, [PREFIX + "%"]);
+    await db.query(`delete from calendar_event where organizer_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
+    await db.query(`delete from calendar_series where organizer_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
+  }
   for (const id of await foraldralosaKonton()) {
     await fetch(`${URL}/auth/v1/admin/users/${id}`, { method: "DELETE", headers: ADMIN });
   }
@@ -2991,8 +2998,148 @@ console.log("\n\x1b[1mKalenderdelningen: grundlaget, projektionen och den enda d
   await db.query(`delete from task where title like 'rlstest%'`);
 }
 
+console.log("\n\x1b[1mLeveranskalendern: möten, 1:1-innehåll och utkorgen (0069)\x1b[0m");
+{
+  /**
+   * ===========================================================================
+   * SPEC AVSNITT 8, PROVAT MOT DATABASEN
+   *
+   *   1. DELTAGARE SER ALLT, ANDRA SER NIVÅN I DEN PERSONENS KALENDER. En
+   *      kollega utan delning ser att tiden är tagen och ingenting mer — varken
+   *      rubriken, raden eller vilken sorts möte det är.
+   *   2. SÄLJARE A SER INTE SÄLJARE B:S 1:1-INNEHÅLL. Agendan och åtgärderna
+   *      ses av exakt samma krets som coachningssamtalet i 0043.
+   *   3. INGEN KLIENT SKRIVER. `lk_*` går bara att anropa med service role, och
+   *      utkorgen, ångerraderna och integrationsloggen går inte att läsa.
+   *   4. EN EXTERN MOTTAGARE (kunden) KAN ALDRIG LÄSA NÅGOT — se den anonyma
+   *      anslutningen längst ned, där tabellerna står med.
+   * ===========================================================================
+   */
+  const dag = new Date(Date.now() + 7 * 86_400_000);
+  while ([0, 6].includes(dag.getUTCDay())) dag.setUTCDate(dag.getUTCDate() + 1);
+  const d = dag.toISOString().slice(0, 10);
+
+  const { rows: [{ lk_skapa_mote: mote }] } = await db.query(
+    `select lk_skapa_mote($1::uuid, $1::uuid, 'rlstest Annas möte', $2::date, '09:00', 30, array[$3::uuid], null, null, '', 10)`,
+    [saljareA.id, d, saljareB.id],
+  );
+
+  const handelser = async (tok, agare) => {
+    const r = await fetch(`${URL}/rest/v1/rpc/kalender_handelser`, {
+      method: "POST",
+      headers: som(tok),
+      body: JSON.stringify({ p_owner: agare, p_fran: d, p_till: d }),
+    });
+    const j = await r.json();
+    return Array.isArray(j) ? j : [];
+  };
+
+  const hosBertil = await handelser(tB, saljareA.id);
+  ok("deltagaren ser mötet med rubrik", hosBertil.length === 1 && hosBertil[0].rubrik === "rlstest Annas möte");
+  ok("deltagaren läser raden", (await las(tB, "calendar_event", `id=eq.${mote.event_id}&select=id`)).length === 1);
+
+  const hosCecilia = await handelser(tC, saljareA.id);
+  ok(
+    "kollega på nivå upptagen ser bara 'Upptagen'",
+    hosCecilia.length === 1 && hosCecilia[0].rubrik === null && hosCecilia[0].ref === null && hosCecilia[0].slag === null,
+    JSON.stringify(hosCecilia[0] ?? null),
+  );
+  ok("och läser noll rader ur calendar_event", (await las(tC, "calendar_event", `id=eq.${mote.event_id}&select=id`)).length === 0);
+  ok("och noll deltagarrader", (await las(tC, "calendar_attendee", `event_id=eq.${mote.event_id}&select=id`)).length === 0);
+
+  await db.query(
+    `insert into calendar_share (owner_id, viewer_id, level, created_by) values ($1::uuid, $2::uuid, 'rubriker', $1::uuid)`,
+    [saljareA.id, ledare.id],
+  );
+  const medRubriker = await handelser(tC, saljareA.id);
+  ok("på nivå rubriker syns rubriken men ingen ref", medRubriker[0]?.rubrik === "rlstest Annas möte" && medRubriker[0]?.ref === null);
+  ok("och raden går fortfarande inte att läsa", (await las(tC, "calendar_event", `id=eq.${mote.event_id}&select=id`)).length === 0);
+  await db.query(`delete from calendar_share where owner_id = $1::uuid`, [saljareA.id]);
+
+  const flytt = await fetch(`${URL}/rest/v1/rpc/lk_flytta`, {
+    method: "POST",
+    headers: som(tA),
+    body: JSON.stringify({ p_aktor: saljareA.id, p_event: mote.event_id, p_dag: d, p_tid: "10:00", p_minuter: 30 }),
+  });
+  ok("organisatören själv kan inte anropa skrivfunktionen från klienten", !flytt.ok, `HTTP ${flytt.status}`);
+  const smyg = await fetch(`${URL}/rest/v1/rpc/lk_skapa_mote`, {
+    method: "POST",
+    headers: som(tB),
+    body: JSON.stringify({
+      p_aktor: saljareA.id, p_organizer: saljareA.id, p_title: "smyg", p_dag: d, p_tid: "11:00", p_minuter: 30,
+      p_deltagare: [], p_plats: null, p_online_url: null, p_agenda: "", p_reminder_min: 10,
+    }),
+  });
+  ok("ingen kan boka i någon annans namn genom att skicka ett annat aktörs-id", !smyg.ok, `HTTP ${smyg.status}`);
+
+  for (const t of ["outbox", "calendar_undo", "integration_log", "calendar_reminder"]) {
+    ok(`${t} går inte att läsa för en inloggad`, (await las(tA, t, "select=*")).length === 0);
+  }
+  const skriv = await fetch(`${URL}/rest/v1/calendar_event`, {
+    method: "POST",
+    headers: som(tA),
+    body: JSON.stringify({ kind: "mote", title: "smyg", organizer_id: saljareA.id, dag: d, created_by: saljareA.id }),
+  });
+  ok("ingen skriver direkt i calendar_event", !skriv.ok, `HTTP ${skriv.status}`);
+
+  // --- 1:1-innehållet: samma krets som coaching_session --------------------
+  const { rows: [serie] } = await db.query(
+    `insert into calendar_series (kind, title, organizer_id, tid, minuter, monster, veckodag, starts_on, created_by)
+     values ('enskilt', '1:1', $1::uuid, '09:00', 30, 'veckovis', 3, $2::date, $1::uuid) returning id`,
+    [ledare.id, d],
+  );
+  await db.query(`insert into calendar_attendee (series_id, employee_id) values ($1::uuid, $2::uuid)`, [serie.id, saljareA.id]);
+  await db.query(
+    `insert into one_on_one_item (series_id, kind, text, author_id) values ($1::uuid, 'agenda', 'rlstest invändningar', $2::uuid)`,
+    [serie.id, saljareA.id],
+  );
+  const punkter = async (tok) => (await las(tok, "one_on_one_item", `series_id=eq.${serie.id}&select=text`)).length;
+  ok("säljaren ser sin 1:1-agenda", (await punkter(tA)) === 1);
+  ok("den som håller samtalet ser den", (await punkter(tC)) === 1);
+  ok("säljare B ser INTE säljare A:s 1:1-innehåll", (await punkter(tB)) === 0);
+
+  // --- Leveransen (0071): kön och kunderna syns för kretsen, inte för säljare -
+  const kunder = async (tok) => {
+    const r = await fetch(`${URL}/rest/v1/rpc/leverans_kunder`, { method: "POST", headers: som(tok), body: JSON.stringify({ p_order: null }) });
+    const j = await r.json();
+    return Array.isArray(j) ? j : [];
+  };
+  const { rows: [{ n: iKon }] } = await db.query(`select count(*)::int n from delivery`);
+  ok("säljchefen ser leveranskön", (await kunder(tD)).length === iKon, `${(await kunder(tD)).length} av ${iKon}`);
+  ok("en säljare ser inte andras kunder i leveransen", (await kunder(tB)).every((k) => k.saljare === saljareB.id));
+  ok("ekonomi ser inte leveranskön", (await kunder(tE)).length === 0);
+  ok("delivery går inte att läsa för en säljare", (await las(tA, "delivery", "select=order_id")).every(() => false));
+  const taKund = await fetch(`${URL}/rest/v1/rpc/lk_ta_kund`, {
+    method: "POST",
+    headers: som(tD),
+    body: JSON.stringify({ p_aktor: chef.id, p_order: mote.event_id, p_owner: chef.id, p_dag: d, p_tid: "09:00", p_minuter: 30 }),
+  });
+  ok("kön går inte att ta från klienten", !taKund.ok, `HTTP ${taKund.status}`);
+
+  // Pass 4 (0072): iCal-läsningen och kundens .ics-kö är bara serverns.
+  // Mötesflödet läses med en hemlig adress, inte med en inloggning — en
+  // inloggad som kunde anropa läsningen med ett annat id hade läst någon
+  // annans möten.
+  const icalAnnan = await fetch(`${URL}/rest/v1/rpc/lk_ical_handelser`, {
+    method: "POST",
+    headers: som(tB),
+    body: JSON.stringify({ p_employee: chef.id, p_fran: d, p_till: d }),
+  });
+  ok("ingen inloggad läser någon annans mötesflöde genom funktionen", !icalAnnan.ok, `HTTP ${icalAnnan.status}`);
+  const icsKo = await fetch(`${URL}/rest/v1/rpc/lk_ics_ko`, {
+    method: "POST",
+    headers: som(tD),
+    body: JSON.stringify({ p_event: mote.event_id, p_epost: "nagon@exempel.se", p_metod: "REQUEST" }),
+  });
+  ok("ingen inloggad lägger en kundinbjudan i utkorgen", !icsKo.ok, `HTTP ${icsKo.status}`);
+
+  await db.query(`delete from outbox where event_id = $1::uuid or payload->>'till' in (select id::text from employee where email like $2)`, [mote.event_id, PREFIX + "%"]);
+  await db.query(`delete from calendar_event where organizer_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
+  await db.query(`delete from calendar_series where organizer_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
+}
+
 console.log("\n\x1b[1mAnonym anslutning\x1b[0m");
-for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate", "news_post", "notification_seen", "notification_dismissed", "absence_type", "absence_policy", "absence_blackout", "staffing_cap", "absence_balance", "absence_request", "absence_call_order", "sick_report", "sick_deadline", "absence_reminder", "calendar_feed", "file_object", "file_access_log", "roleplay_criterion", "roleplay_submission", "roleplay_score", "cost_rate", "salary_basis", "revenue_entry", "cost_calculation", "error_report", "contract", "contract_template", "activity_day", "search_miss", "candidate", "candidate_stage_event", "interview_scorecard", "recruitment_source", "recruitment_policy", "task", "task_member", "task_link", "task_event", "project", "project_member", "project_message", "project_message_read", "calendar_share"]) {
+for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate", "news_post", "notification_seen", "notification_dismissed", "absence_type", "absence_policy", "absence_blackout", "staffing_cap", "absence_balance", "absence_request", "absence_call_order", "sick_report", "sick_deadline", "absence_reminder", "calendar_feed", "file_object", "file_access_log", "roleplay_criterion", "roleplay_submission", "roleplay_score", "cost_rate", "salary_basis", "revenue_entry", "cost_calculation", "error_report", "contract", "contract_template", "activity_day", "search_miss", "candidate", "candidate_stage_event", "interview_scorecard", "recruitment_source", "recruitment_policy", "task", "task_member", "task_link", "task_event", "project", "project_member", "project_message", "project_message_read", "calendar_share", "calendar_event", "calendar_attendee", "calendar_series", "one_on_one_item", "calendar_reminder", "outbox", "calendar_undo", "integration_log", "delivery", "delivery_handoff"]) {
   const r = await fetch(`${URL}/rest/v1/${t}?select=*`, { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` } });
   const j = await r.json();
   ok(`${t} ger inga rader anonymt`, !Array.isArray(j) || j.length === 0, Array.isArray(j) ? `${j.length} rader` : `HTTP ${r.status}`);

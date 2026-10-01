@@ -14,6 +14,168 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "kalendern-teamet-och-outlook",
+    rubrik: "Kalendern: Teamet, inbjudningar till Outlook och dina möten i din egen kalender",
+    ingress:
+      "Se hela teamets dag på en gång, med hur fullbokad var och en är. Inbjudningar kommer med en fil som lägger mötet i Outlook, kunden får en riktig inbjudan till kickoffen, och dina möten går att prenumerera på.",
+    text: `Kalendern pratar nu med resten av världen.
+
+## Teamet
+
+Välj **Teamet** i kalenderns vyrad (eller tryck Ctrl+Alt+5). Varje person står på
+en egen rad med dagens bokningar och en stapel som visar hur mycket av de sex
+timmarna som är planerat. Växla mellan **Sälj** och **Leverans** överst. Vad du ser
+hos en kollega styrs av vad hon delar med dig — för många står det bara Upptagen.
+
+Klicka på en tom tid i någons rad för att boka ett möte med henne.
+
+## Inbjudningar i Outlook
+
+När du blir inbjuden, när ett möte flyttas eller ställs in kommer mejlet med en
+bifogad fil. Öppna den så hamnar mötet i Outlook eller Google. Svara fortfarande
+i Nav — det är där organisatören ser ditt svar.
+
+## Kunden får en inbjudan till kickoffen
+
+En kickoff skickar en riktig kalenderinbjudan till kundens kontakt. Flyttar du
+mötet får kunden den nya tiden, och ställer du in det försvinner det ur kundens
+kalender.
+
+## Dina möten i din egen kalender
+
+Under **Frånvaro**, i rutan Kalenderflöde, finns nu **Dina möten** bredvid din
+ledighet. Skapa adressen och lägg in den i Outlook eller Google, så syns dina
+möten där. Rubrik, tid och plats följer med — aldrig agenda eller anteckningar.`,
+    datum: "2026-10-01",
+    roller: ["delivery", "project_manager", "sales_manager", "team_lead", "salesperson"],
+    href: "/kalender?vy=team",
+  },
+  {
+    slug: "leveranskon-i-kalendern",
+    rubrik: "Leveransen i kalendern: kön, överlämningen och välkomstsamtalet",
+    ingress:
+      "En godkänd order hamnar direkt i leveransens kö med 24 timmar till välkomstsamtalet. Leveransen tar kunden till en tid, ser säljarens överlämning och får en mejlpåminnelse innan de ringer.",
+    text: `Från och med nu tar en godkänd order vägen via kalendern till leveransen.
+
+## Kön
+
+När en order godkänns hamnar kunden i **Leveranskö** i kalenderns sidolista. Varje
+kort visar hur lång tid som är kvar av de 24 timmarna — grönt, gult och till sist
+rött — och hur mycket av överlämningen säljaren fyllt i. Leveransen får en notis
+när en ny kund kommer in, och ett mejl om det bara är fyra timmar kvar.
+
+Dra ett kort till en tid, eller öppna det och tryck **Föreslå tid och boka**. Två
+kan aldrig ta samma kund.
+
+## Överlämningen
+
+Säljaren fyller i kundens mål, vad som lovades, bästa tid att ringa och riskerna.
+Saknas något kan leveransen trycka **Be säljaren komplettera**, och säljaren får en
+notis och ett mejl med en länk dit.
+
+## Välkomstsamtalet och det som följer
+
+Efter samtalet trycker den som ringde **Nådd** eller **Ej svar**. Inget markeras
+av sig självt. Ej svar bokar nästa försök på en annan tid på dagen, och efter
+tredje försöket föreslår kalendern sms och mejl i stället. Därefter finns sex
+förinställningar i leveransfärg: välkomstsamtal, tillgångar, kickoff,
+leveransstart och avstämningarna efter 30 och 90 dagar.
+
+## Påminnelser
+
+Varje leveranspost kan få en mejlpåminnelse 30 minuter före — till dig och, om du
+vill, till kunden. Flyttas posten flyttas mejlet, ställs den in avbokas det.`,
+    datum: "2026-10-01",
+    roller: ["delivery", "project_manager", "sales_manager", "salesperson"],
+    href: "/kalender",
+  },
+  {
+    slug: "kalendern-1-1-med-saljarna",
+    rubrik: "1:1 med säljarna: en gemensam agenda, åtgärder som följer med och siffrorna bredvid",
+    ingress:
+      "Boka en 1:1 som återkommer varje vecka eller varannan. Båda fyller på agendan under veckan, åtgärderna följer med tills de är klara, och säljarens siffror står i samma panel.",
+    text: `En 1:1 är mer än en tid i kalendern. Nu finns resten också.
+
+## Boka
+
+Tryck **+ Ny händelse**, välj fliken **1:1** och vem den är med. Välj **Varje
+vecka** eller **Varannan vecka** under Upprepa. Kalendern lägger ut två månader
+framåt och fyller på av sig själv.
+
+Vanliga möten kan också upprepas nu — varje vardag, varje vecka eller varannan.
+
+## Agendan och åtgärderna
+
+Öppna 1:1:an. Båda kan lägga till punkter på agendan, och den andra får en
+notis — en om dagen, inte en per punkt. Åtgärder som inte är klara följer med
+till nästa gång. **Till uppgift** gör en åtgärd till en vanlig uppgift på den
+som ska göra den.
+
+Dagen före kl 15 får ni båda en påminnelse om att fylla på agendan. En 1:1 på
+måndag påminns på fredagen.
+
+## Flytta
+
+Dra 1:1:an till en annan tid. Kalendern frågar om det gäller **bara den här
+gången** eller **hela serien**.
+
+## Anteckningarna
+
+Den som håller samtalet och är säljarens chef kan spara anteckningarna som ett
+coachningssamtal — mål, nuläge, alternativ och vilja — och de hamnar där
+coachningssamtalen alltid legat.`,
+    datum: "2026-10-01",
+    roller: ["salesperson", "team_lead", "sales_manager", "ceo"],
+    href: "/kalender",
+  },
+  {
+    slug: "kalendern-bokar-moten",
+    rubrik: "Kalendern bokar möten: bjud in, svara och föreslå en ny tid",
+    ingress:
+      "Kalendern ser ut och fungerar som Outlook. Du bjuder in kollegor till ett möte, de svarar Ja, Kanske eller Nej direkt i klockan, och den som inte kan föreslår en ny tid.",
+    text: `Hittills visade kalendern bara det navet redan visste — uppgifter, ledighet och
+frister — och den bokade inga möten. Nu gör den det.
+
+## Boka ett möte
+
+Tryck **+ Ny händelse**, tangenten **N**, eller dra nedåt i en tom del av
+kalendern så att tiden du vill ha markeras. Skriv en rubrik och välj vilka som
+ska vara med. Assistenten under tiderna visar när var och en är upptagen, och
+**Föreslå tid** hittar första tiden då alla är lediga. Krockar tiden ändå säger
+kalendern till innan du skickar.
+
+De du bjuder in får en notis i klockan och ett mejl.
+
+## Svara, eller föreslå en annan tid
+
+En inbjudan har knapparna **Ja**, **Kanske** och **Nej** direkt i klockan, så du
+behöver inte öppna kalendern för att svara. Passar inte tiden trycker du
+**Föreslå ny tid** i mötet och väljer en annan. Den som bjöd in godkänner
+förslaget med ett klick, och då flyttas mötet.
+
+## Flytta och ändra
+
+Dra ditt möte till en annan tid, eller dra i nederkanten för att göra det
+längre eller kortare. Alla som redan svarat får svara igen, precis som i
+Outlook. Ångrar du dig har du några sekunder på dig: tryck **Ångra** i rutan
+nere i mitten, så skickas ingenting.
+
+## Uppgifter åt dig själv och åt andra
+
+Under fliken **Uppgift** lägger du in något du ska göra, med klockslag. Välj
+dig själv eller en kollega som ansvarig. Uppgiften hamnar i uppgiftsmodulen som
+vanligt, och tio minuter innan klockslaget får den ansvariga en påminnelse i
+klockan.
+
+## Planeringsvyn finns kvar
+
+Listan till vänster och dagen till höger ligger under **Planeringsvyn** i
+kalenderns sidolista. Ingenting där har ändrats.`,
+    datum: "2026-10-01",
+    roller: ["salesperson", "team_lead", "sales_manager", "ceo", "finance", "project_manager", "admin", "delivery"],
+    href: "/kalender",
+  },
+  {
     slug: "ordervyn-kundkort-och-filter",
     rubrik: "Ordervyn är omgjord: kundkort, filter och en ruta för nya order",
     ingress:

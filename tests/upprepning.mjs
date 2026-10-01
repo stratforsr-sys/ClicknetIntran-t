@@ -340,5 +340,21 @@ ok("okryssad ruta ger null", regelUrFormular(formular([["monster", "veckovis"]])
 }
 
 // -----------------------------------------------------------------------------
+rubrik("Varannan vecka (0069): 1:1:or, och ingenting annat ändras");
+{
+  const bas = { monster: "veckovis", veckodagar: [3], starts_on: "2026-09-30", ends_on: null };
+  const varannan = { ...bas, intervall: 2 };
+  const utan = forekomster(bas, "2026-09-28", "2026-10-31");
+  const med = forekomster(varannan, "2026-09-28", "2026-10-31");
+  ok("utan intervall: varje onsdag, som förut", utan.join() === "2026-09-30,2026-10-07,2026-10-14,2026-10-21,2026-10-28");
+  ok("intervall 1 är samma sak som inget intervall", forekomster({ ...bas, intervall: 1 }, "2026-09-28", "2026-10-31").join() === utan.join());
+  ok("varannan onsdag från startveckan", med.join() === "2026-09-30,2026-10-14,2026-10-28", med.join());
+  ok("startveckan räknas från måndagen, inte från startdagen", forekomster({ ...varannan, starts_on: "2026-10-01", veckodagar: [1] }, "2026-09-28", "2026-10-20").join() === "2026-10-12");
+  ok("nästa hittas även när den ligger två veckor bort", nastaForekomst(varannan, "2026-10-01") === "2026-10-14");
+  ok("texten säger varannan", monstertext(varannan) === `Varannan ${VECKODAG_NAMN[3]}`);
+  ok("vardagar bryr sig inte om intervallet", forekomster({ monster: "vardagar", veckodagar: [], starts_on: "2026-09-28", ends_on: null, intervall: 2 }, "2026-10-05", "2026-10-09").length === 5);
+}
+
+// -----------------------------------------------------------------------------
 console.log(fel === 0 ? "\n\x1b[32mAlla prov gick igenom.\x1b[0m\n" : `\n\x1b[31m${fel} prov foll.\x1b[0m\n`);
 process.exit(fel === 0 ? 0 : 1);

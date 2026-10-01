@@ -15,6 +15,7 @@ import {
 import { omfattning, periodtext, sjukdag } from "@/lib/franvaro";
 import { hamtaLage } from "@/lib/sparrar";
 import { svensktDatum } from "@/lib/klocka";
+import { SVARSKALLOR } from "@/lib/leveranskalender";
 import { stampelfri } from "@/lib/stampelfri";
 import { AVTALSSLUT_VARSEL_DAGAR, dagarTill } from "@/lib/order";
 import { guiderForRoller } from "@/guider";
@@ -254,7 +255,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
      */
     supabase
       .from("notification_event")
-      .select("id, kalla, typ, rubrik, detalj, href, created_at")
+      .select("id, kalla, typ, rubrik, detalj, href, created_at, object_type, object_id")
       .gte("created_at", new Date(Date.now() - HANDELSE_DAGAR * 86_400_000).toISOString())
       .order("created_at", { ascending: false })
       .limit(MAX_NOTISER * 2),
@@ -928,8 +929,43 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
    * Raden kastas hellre an ritas fel.
    * ===========================================================================
    */
+  /**
+   * Leveranskalendern (0069): en inbjudan eller en ny tid får SVARSKNAPPAR i
+   * klockan, som i Outlook. De visas bara så länge mitt svar är "inte svarat"
+   * eller "kanske" — ett svar jag redan gett ska inte fråga igen.
+   *
+   * Svaret läses med min egen token, så knapparna finns bara på möten jag
+   * faktiskt är med på.
+   */
+  const svarsbara = (notishandelser ?? []).filter(
+    (h) => h.object_type === "calendar_event" && h.object_id && (SVARSKALLOR as readonly string[]).includes(h.kalla),
+  );
+  const mittSvar = new Map<string, string>();
+  if (svarsbara.length > 0) {
+    const { data: svarsrader } = await supabase
+      .from("calendar_attendee")
+      .select("event_id, response, calendar_event!inner(cancelled_at)")
+      .eq("employee_id", mig)
+      .in("event_id", [...new Set(svarsbara.map((h) => h.object_id as string))])
+      .is("calendar_event.cancelled_at", null);
+    for (const r of (svarsrader ?? []) as unknown as { event_id: string; response: string }[]) {
+      mittSvar.set(r.event_id, r.response);
+    }
+  }
+  const sistaPerHandelse = new Set<string>();
+
   for (const h of notishandelser ?? []) {
     if (!arNotistyp(h.typ)) continue;
+    const eventId = h.object_type === "calendar_event" ? (h.object_id as string | null) : null;
+    const svar = eventId ? mittSvar.get(eventId) : undefined;
+    // Knapparna på den nyaste notisen om mötet, inte på varje.
+    const medKnappar =
+      !!eventId &&
+      (svar === "vantar" || svar === "kanske") &&
+      (SVARSKALLOR as readonly string[]).includes(h.kalla) &&
+      !sistaPerHandelse.has(eventId);
+    if (medKnappar) sistaPerHandelse.add(eventId);
+
     notiser.push({
       id: notisId(h.kalla as Notiskalla, String(h.id)),
       typ: h.typ,
@@ -938,6 +974,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
       href: h.href,
       tidpunkt: h.created_at,
       olast: arNy(h.created_at),
+      ...(medKnappar ? { svara: { eventId: eventId!, nu: svar as "vantar" | "kanske" } } : {}),
     });
   }
 

@@ -111,6 +111,23 @@ export async function angra(form: FormData): Promise<void> {
       return;
     }
 
+    /**
+     * Leveranskalendern (0069). Allt görs av `lk_angra()` i EN transaktion:
+     * den gör om kontrollen (bara den som gjorde ändringen, bara en gång,
+     * bara inom fem minuter), vägrar om utkorgen redan börjat skicka, tar bort
+     * de oskickade raderna, återställer läget och loggar ångringen som en
+     * egen rad i audit_log.
+     *
+     * INGET KAKKVITTO. Kalendern visar sitt eget kvitto, nere i mitten som i
+     * prototypen, och frågar efteråt om ångringen gick igenom
+     * (`angringsLage`). Satte grenen också kakan hade det blivit två kvitton.
+     */
+    case "kalender.handelse": {
+      await db.rpc("lk_angra", { p_aktor: user.employee.id, p_undo: id });
+      revalidatePath("/kalender");
+      return;
+    }
+
     case "mall.arkiverad": {
       if (!hasRole(user, "sales_manager", "ceo", "admin")) return;
 

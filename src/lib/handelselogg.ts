@@ -117,7 +117,9 @@ export const MODUL: Record<string, string> = {
 
   absence: "Frånvaro",
   sick: "Sjukanmälan",
-  calendar: "Kalenderflöde",
+  // Kalenderflödet (iCal) och, sedan 0069, ångrade kalenderhändelser
+  // (`calendar.undone`, skrivet av `lk_angra`).
+  calendar: "Kalender",
 
   case: "Personalärende",
 

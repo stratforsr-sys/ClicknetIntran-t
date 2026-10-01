@@ -501,3 +501,105 @@ hand utan fältet får ett fel i stället för en tolkning.
 
 **Konsekvens:** ett förvalt läge hade återinfört felet i mildare form, så
 radioknapparna börjar utan val. Priset är ett klick till på varje ansökan.
+
+---
+
+## D-K1 · Nav bokar möten — beslutet från 11 september ersätts
+**2026-09-30.** Den 11 september beslutade beställaren att kalendern bara visar
+det navet redan vet och inte bokar några möten (0057, `lib/kalender.ts`).
+Skälet var att motparten i ett möte sitter i Outlook. För de möten som nu ska
+in — interna möten, 1:1:or med säljarna och leveransens kundsamtal — sitter
+båda parter i Nav, och skälet gäller inte längre.
+
+**Beslut:** Nav bokar möten med deltagare, svar (Ja, Kanske, Nej), förslag på
+ny tid, flytt och inställt. En bokad tid är en rad i `calendar_event` (0069).
+Uppgifter stannar i uppgiftsmodulen och coachningen i sin: kalendern ritar dem
+som förut, och fliken Uppgift i kalenderns formulär skapar en vanlig uppgift
+genom uppgiftsmodulens egen `skapaUppgift`. Uppgifter kan läggas på en
+kollega från kalendern, och den ansvariga får en påminnelse i klockan tio
+minuter före klockslaget.
+
+**Konsekvens:** Varje ändring av ett möte skriver ändringen, svaren, utkorgens
+notiser och läget för Ångra i en transaktion (`lk_*` i 0069), och ingenting
+lämnar navet förrän tio sekunder efteråt. Varje kalender visas för sig, med
+ägarens delningsnivå — som i Outlook, inte med den bästa nivån hos någon av
+deltagarna som prototypen gjorde. 0057 står kvar oförändrad som historik.
+
+## D-K2 · Kalendern följer prototypen, inte kortreglerna
+**2026-09-30.** Inuti `/kalender` har rutnätet och formuläret 1 px linjer
+(`--color-line`), knapparna radie 10 px i stället för Navs rundade `Button`,
+veckan är ett timrutnät som i Outlook och kvittot med Ångra ligger nere i
+mitten. Allt det bryter mot UI-PRD — "ingen ram", runda knappar,
+`Veckovy.tsx`:s listvecka och kakkvittot i `Toast.tsx`.
+
+**Beslut:** Avstegen är medvetna. Kalendern ska kännas som Outlook, och
+prototypen `docs/leveranskalender/prototyp.html` är godkänd som facit. Dess CSS
+är portad ordagrant till `kalender/leveranskalender.css` under rotklassen
+`.lk`, med Navs tokens i stället för hexvärden. Navs skal, sidopanel och klocka
+är oförändrade. Ersätter valet av listvecka i `Veckovy.tsx` för huvudvyn;
+Planeringsvyn står kvar oförändrad under `/kalender?vy=planera`.
+
+**Kända avsteg från prototypen, med skäl:**
+- Fliken Uppgift har ett fält *Ansvarig* (chip, en person). Prototypen saknar
+  det; beställaren vill kunna lägga upp uppgifter åt andra.
+- Synligheten är per kalender (D-K1), inte den bästa nivån hos någon deltagare.
+- Kvittot efter en uppgift som dragits har ingen Ångra-knapp: uppgiftsmodulens
+  `planera` har ingen ångring, och en knapp som inte kan hålla vad den lovar
+  är värre än ingen.
+- Coachningssamtal och coachningsuppgifter ritas i 1:1-färgen; de är samtal på
+  tu man hand. Kursfrister och projektens deadline ritas som orderfristen.
+- Sökningen och minikalenderns prickar gäller det som är hämtat för vyn, inte
+  fyra veckor framåt.
+- (Pass 2) 1:1-panelen har en rad för att lägga till en **åtgärd**; prototypen
+  kan bara lägga till agendapunkter, men spec:en säger "gemensam agenda och
+  åtgärder" och en åtgärd utan väg in finns inte.
+- (Pass 2) **K&V-snitt** är medelvärdet av säljarens senaste poäng per
+  bedömningsområde (`kvPerOmrade`). Order mot mål räknar godkända order
+  (signerad eller betald) i innevarande månad. Siffror läses med läsarens token;
+  får hon inte se dem står "–".
+- (Pass 2) **Anteckningarna** sparas genom coachningsmodulens egen
+  `skapaSamtal`, med dess regler: bara säljarens chef, och tidigast samma dag.
+  Prototypens knapp "Öppna samtalet" blir därför "Anteckna som
+  coachningssamtal" tills samtalet finns, sedan "Öppna samtalet".
+- (Pass 2) **Plats och Visa som** på en serie sätts på de förekomster som föds
+  när serien skapas. Förekomster som föds senare av dagtidsjobbet får
+  standardvärdena; serien har inga egna kolumner för dem.
+- (Pass 3) **Kön fylls av en trigger på `sales_order`, inte av `godkannOrder`.**
+  Samma transaktion som godkännandet, men den gäller också order som godkänns
+  av main-koden före merge — annars hade kön saknat dem. Triggern kan aldrig
+  fälla en order: allt i den ligger i ett block med undantagshanterare.
+  Tilläggsorder ger ingen leverans.
+- (Pass 3) **Previewen mejlar aldrig en kund.** Den pekar på
+  produktionsdatabasen; en provbokning på en riktig order hade annars påmint en
+  riktig kund. Påminnelsen till kunden markeras med felet i stället. Bara
+  produktionen (`VERCEL_ENV=production`) skickar till kunder.
+- (Pass 3) **Kökortets "Vem"** visar antal leveransposter i veckan per person i
+  stället för prototypens timmar den dagen — det är det "Jämn fördelning"
+  räknar på.
+- (Pass 3) **Leverans-CRM:et är okänt** (beställaren 2026-09-30): den manuella
+  adaptern gäller, och statusen "välkomnad" loggas i `integration_log` för den
+  som för över den för hand. Saknas kund-ID:t försöker utkorgen tre gånger och
+  säger sedan till admin.
+- (Pass 3) **Överlämningen fylls i på en egen sida**, `/kalender/overlamning/[order]`,
+  som prototypen saknar. Notisen "Komplettera överlämningen" leder dit.
+- (Pass 4) **Teamet hämtar alla i Säljteamet och Leverans** för dagen, oavsett
+  vilka kalendrar som är ikryssade; listan står ikryssad och låst så länge, som i
+  prototypen. Ett gemensamt möte står på varje deltagares rad. Upp till 40
+  personer.
+- (Pass 4) **Klick i en kollegas rad** ger en 1:1 bara för säljchef och
+  teamledare (prototypen: bara "Zen"), annars ett möte med henne som deltagare.
+- (Pass 4) **En förekomst i en serie får ingen `.ics` i kollegans mejl.** Den
+  är en egen rad i navet men en del av en regel i Outlook; en fil per gång hade
+  lagt fristående möten i mottagarens kalender. Serien syns i navet och i
+  mötesflödet.
+- (Pass 4) **Kollegans `.ics` har inga svarsknappar** (RSVP=FALSE). Svaret hör
+  hemma i navet; ett Ja i Outlook hade blivit ett mejl som ingen läser. Kunden
+  har knapparna, och hennes svar går till organisatörens inkorg.
+- (Pass 4) **Kundens brev säger "Kickoff med Clicknet"**, inte navets rubrik
+  ("Kickoff · Kundnamn"). Datum skrivs ut ("torsdag 8 oktober 2026 kl 09:00–10:00").
+- (Pass 4) **Previewen mejlar kunder på `@resend.dev`** — annars går kickoffens
+  inbjudan inte att prova alls. En riktig kundadress nås bara från produktionen.
+- (Pass 4) **Mötesflödet ligger på /franvaro** bredvid ledighetsflödet, med egen
+  adress. Kalendern själv har ingen knapp för det; prototypen har ingen.
+  Rubriken följer med, och på en leveranspost står kundens namn i den — det står
+  i texten vid adressen.

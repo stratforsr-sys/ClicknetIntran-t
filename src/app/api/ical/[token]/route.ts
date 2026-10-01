@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { ical, type Ledighet } from "@/lib/ical";
+import { ical, motesflode, type Ledighet, type Mote } from "@/lib/ical";
 import { fullName } from "@/lib/auth";
 import { datumPlus } from "@/lib/franvaro";
 import { svensktDatum } from "@/lib/klocka";
@@ -46,6 +46,11 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
   // E1.7. En avslutad anställd har inget flöde, oavsett vem som har adressen.
   if (!agare || agare.status === "offboarded") return nekad();
+
+  // Leveranskalendern (0072): ägarens egna händelser, inte ledigheten.
+  if (flode.scope === "handelser") {
+    return handelseflode(db, flode.id, flode.read_count ?? 0, agare);
+  }
 
   // Vilka personer flödet får bära.
   let personIds: string[] = [flode.employee_id];
@@ -121,6 +126,72 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       "Content-Type": "text/calendar; charset=utf-8",
       "Content-Disposition": 'inline; filename="clicknet.ics"',
       // Adressen är hemlig. Den ska inte ligga i någon mellanliggande cache.
+      "Cache-Control": "no-store, private",
+      "X-Robots-Tag": "noindex, nofollow",
+    },
+  });
+}
+
+/**
+ * Mötesflödet (0072): de händelser ägaren organiserar eller är med på, 60 dagar
+ * bakåt och ett år framåt.
+ *
+ * Bara rubrik, tid, plats och länk — `lk_ical_handelser()` lämnar inte ut mer.
+ * Inte agendan, inte anteckningarna och inte vilka andra som är med: det är
+ * navets uppgifter om kollegor, och flödet hamnar hos Google eller Microsoft.
+ */
+async function handelseflode(
+  db: ReturnType<typeof supabaseAdmin>,
+  flodeId: string,
+  lasningar: number,
+  agare: { id: string; first_name: string; last_name: string },
+): Promise<NextResponse> {
+  const idag = svensktDatum();
+  const { data, error } = await db.rpc("lk_ical_handelser", {
+    p_employee: agare.id,
+    p_fran: datumPlus(idag, -60),
+    p_till: datumPlus(idag, 365),
+  });
+  // Ett fel ska inte se ut som en tom kalender — då tar prenumerationen bort
+  // allt. 503 och mottagaren behåller det hon hade.
+  if (error) return new NextResponse(null, { status: 503, headers: { "Cache-Control": "no-store" } });
+
+  const bas = (process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://clicknet-nav.vercel.app").replace(/\/+$/, "");
+  const poster: Mote[] = ((data ?? []) as {
+    id: string;
+    title: string;
+    dag: string;
+    tid: string | null;
+    minuter: number | null;
+    starts_at: string;
+    plats: string | null;
+    online_url: string | null;
+    ics_sequence: number;
+    updated_at: string;
+  }[])
+    // Heldagsposter har ingen tid att visa som upptagen; de står i navet.
+    .filter((h) => h.tid !== null)
+    .map((h) => ({
+      id: h.id,
+      sekvens: h.ics_sequence,
+      rubrik: h.title,
+      start: new Date(h.starts_at),
+      minuter: h.minuter ?? 30,
+      plats: h.plats,
+      url: h.online_url,
+      beskrivning: `Öppna i navet: ${bas}/kalender?dag=${h.dag}&handelse=${h.id}`,
+      andrad: new Date(h.updated_at),
+    }));
+
+  await db
+    .from("calendar_feed")
+    .update({ last_read_at: new Date().toISOString(), read_count: lasningar + 1 })
+    .eq("id", flodeId);
+
+  return new NextResponse(motesflode(poster, `Möten — ${fullName(agare)}`), {
+    headers: {
+      "Content-Type": "text/calendar; charset=utf-8",
+      "Content-Disposition": 'inline; filename="clicknet-moten.ics"',
       "Cache-Control": "no-store, private",
       "X-Robots-Tag": "noindex, nofollow",
     },

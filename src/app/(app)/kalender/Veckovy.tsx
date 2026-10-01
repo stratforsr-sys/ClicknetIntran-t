@@ -54,7 +54,7 @@ export function Veckovy({
               d === idag ? "bg-brand-100" : arHelg(d) ? "bg-canvas/60" : "bg-canvas",
             )}
           >
-            <Link href={`/kalender?dag=${d}&vy=dag`} className="group flex items-baseline justify-between gap-2">
+            <Link href={`/kalender?dag=${d}&vy=planera`} className="group flex items-baseline justify-between gap-2">
               <span
                 className={cn(
                   "text-small font-semibold transition-colors duration-fast group-hover:text-brand-700",

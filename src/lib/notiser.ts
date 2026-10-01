@@ -505,6 +505,51 @@ export const NOTIS_KALLOR = [
   "prov-rattat",
 
   /**
+   * Leveranskalendern (0069). ALLA ÄR HÄNDELSER, och de skrivs aldrig direkt:
+   * de går genom utkorgen och töms av `notifiera()` tio sekunder senare, så
+   * att Ångra hinner ta bort dem innan någon fått dem.
+   *
+   * Flytten är TVÅ källor och inte en, och det är inte en slarvig dubblett:
+   * mejl bestäms per källa (`MEJLKALLOR`), och en flytt ska bara mejlas när
+   * den gamla eller nya tiden ligger inom sju dagar. `kalender-flyttad` mejlas,
+   * `kalender-flyttad-tyst` står bara i klockan.
+   *
+   * `uppgift-paminnelse` är uppgiftens påminnelse tio minuter före, skriven av
+   * utkorgsjobbet. Den är en händelse — "nu är det dags" — och inte ett
+   * tillstånd: efter klockslaget har den gjort sitt.
+   *
+   * `utkorg-fel` går till admin när en rad i utkorgen misslyckats tre gånger.
+   *
+   * Pass 2 (0070): `kalender-punkt` — den andra har lagt till en punkt på er
+   * 1:1, EN notis per dag hur många punkter det än blir — och
+   * `kalender-forberedelse`, vardagen före kl 15 eller när den andra ber om det.
+   * Ingen av dem mejlas: båda gäller något man gör nästa gång man är inne.
+   *
+   * Pass 3 (0071), leveransen: en ny kund i kön, ett bokat välkomstsamtal, en
+   * makulerad kund med bokat samtal, en begäran om komplettering till
+   * säljaren, fyra timmar kvar av 24-timmarsfristen, och en påminnelse som
+   * studsade hos Resend. Alla är händelser — de skriver över ett läge som inte
+   * går att räkna fram i efterhand.
+   */
+  "kalender-inbjudan",
+  "kalender-flyttad",
+  "kalender-flyttad-tyst",
+  "kalender-installd",
+  "kalender-svar",
+  "kalender-forslag",
+  "kalender-forslag-beslut",
+  "uppgift-paminnelse",
+  "utkorg-fel",
+  "kalender-punkt",
+  "kalender-forberedelse",
+  "leverans-ny",
+  "leverans-bokad",
+  "leverans-makulerad",
+  "leverans-komplettera",
+  "leverans-frist",
+  "leverans-studs",
+
+  /**
    * ANGRA-KNAPPEN HAR MED FLIT INGEN KALLA HAR.
    *
    * `/angra` provades och togs bort igen. Kvittot med angra-knappen visas bara
@@ -580,6 +625,23 @@ export const HANDELSEKALLOR = [
   "kalender-delad",
   "kalender-aterkallad",
   "prov-rattat",
+  "kalender-inbjudan",
+  "kalender-flyttad",
+  "kalender-flyttad-tyst",
+  "kalender-installd",
+  "kalender-svar",
+  "kalender-forslag",
+  "kalender-forslag-beslut",
+  "uppgift-paminnelse",
+  "utkorg-fel",
+  "kalender-punkt",
+  "kalender-forberedelse",
+  "leverans-ny",
+  "leverans-bokad",
+  "leverans-makulerad",
+  "leverans-komplettera",
+  "leverans-frist",
+  "leverans-studs",
 ] as const satisfies readonly Notiskalla[];
 
 export type Handelsekalla = (typeof HANDELSEKALLOR)[number];
@@ -640,6 +702,11 @@ export type Notis = {
    * posterna.
    */
   bekraftas?: boolean;
+  /**
+   * Leveranskalendern (0069): klockan visar Ja, Kanske och Nej under posten.
+   * Bara på en inbjudan eller en ny tid som jag inte svarat ja eller nej på.
+   */
+  svara?: { eventId: string; nu: "vantar" | "kanske" };
 };
 
 export const TYP_ETIKETT: Record<Notistyp, string> = {
