@@ -5,6 +5,24 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-01 (senare) · Leveranskalendern mergad till main
+
+**Mergad som `89336dc`**, en riktig merge-commit med två föräldrar (`38b1099`
+main + `2e62cc0` grenen). `behind_by` var 0, så `POST /merges` räckte.
+Beställaren sa "Merga" utan att ha provat previewen — pass 1–4 möter alltså
+människor först i produktionen.
+
+Samma dag, i ordning: släppnotiserna daterade till 2026-10-01 på grenen
+(`2e62cc0`, grönt bygge) → merge → `nav-utkorg` påslaget 09:45 → produktionsbygget
+grönt. `/api/jobb/utkorg` svarar 200 varje minut (`net._http_response`), och
+dagtidsjobbet kör kalendersteget. `/kalender?vy=team` svarar 307 till
+inloggningen, alltså finns rutten.
+
+**Kvar:** Resends webhook och `RESEND_WEBHOOK_SECRET` (beställaren), städning av
+provdatan när provet är klart, och det första riktiga provet av allt.
+
+---
+
 ## 2026-10-01 · Leveranskalendern, pass 4: Teamet, .ics och iCal
 
 Samma gren, **EJ MERGAD**. Migration **`0072_leveranskalender_omvarld`** körd
