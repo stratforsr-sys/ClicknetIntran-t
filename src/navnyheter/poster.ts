@@ -85,7 +85,7 @@ leveransstart och avstämningarna efter 30 och 90 dagar.
 
 Varje leveranspost kan få en mejlpåminnelse 30 minuter före — till dig och, om du
 vill, till kunden. Flyttas posten flyttas mejlet, ställs den in avbokas det.`,
-    datum: "2026-09-30",
+    datum: "2026-10-01",
     roller: ["delivery", "project_manager", "sales_manager", "salesperson"],
     href: "/kalender",
   },
@@ -124,7 +124,7 @@ gången** eller **hela serien**.
 Den som håller samtalet och är säljarens chef kan spara anteckningarna som ett
 coachningssamtal — mål, nuläge, alternativ och vilja — och de hamnar där
 coachningssamtalen alltid legat.`,
-    datum: "2026-09-30",
+    datum: "2026-10-01",
     roller: ["salesperson", "team_lead", "sales_manager", "ceo"],
     href: "/kalender",
   },
@@ -171,7 +171,7 @@ klockan.
 
 Listan till vänster och dagen till höger ligger under **Planeringsvyn** i
 kalenderns sidolista. Ingenting där har ändrats.`,
-    datum: "2026-09-30",
+    datum: "2026-10-01",
     roller: ["salesperson", "team_lead", "sales_manager", "ceo", "finance", "project_manager", "admin", "delivery"],
     href: "/kalender",
   },
