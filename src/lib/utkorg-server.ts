@@ -3,8 +3,9 @@ import "server-only";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { medRoll, notifiera, notifieraFranUtkorgen } from "@/lib/notishandelse-server";
 import { HANDELSEKALLOR, type Handelsekalla } from "@/lib/notiser";
-import { ANGER_SEKUNDER, dayLabel, hm, minuter, notistext, type Notisrad } from "@/lib/leveranskalender";
-import { andraSchemalagt, avbrytSchemalagt, skickaEpost } from "@/lib/epost";
+import { ANGER_SEKUNDER, FORINSTALLNINGAR, arSteg, datumLang, dayLabel, hm, kundbrev, minuter, notistext, type Notisrad } from "@/lib/leveranskalender";
+import { andraSchemalagt, avbrytSchemalagt, skickaEpost, type Bilaga } from "@/lib/epost";
+import { inbjudan, type Mote } from "@/lib/ical";
 import { adapter, type Crmstatus } from "@/lib/crm/adapter";
 
 /**
@@ -89,9 +90,9 @@ async function skicka(rad: Utkorgsrad): Promise<boolean> {
     return resend(rad);
   }
   if (rad.kind === "crm") return crm(rad);
+  if (rad.kind === "ics") return ics(rad);
   if (rad.kind !== "notis") {
-    // .ics byggs i pass 4. En sådan rad nu är ett fel, inte något att tyst
-    // markera som skickat.
+    // En okänd sort är ett fel, inte något att tyst markera som skickat.
     throw new Error(`Okänd sort i utkorgen: ${rad.kind}`);
   }
 
@@ -108,6 +109,8 @@ async function skicka(rad: Utkorgsrad): Promise<boolean> {
   const text = notistext(n, underlag);
   if (!text) throw new Error(`Okänd mall: ${n.mall}`);
 
+  const bilagor = n.event_id && ICS_MALLAR[n.mall] ? await kollegansIcs(n.event_id, n.till, ICS_MALLAR[n.mall]) : null;
+
   return notifieraFranUtkorgen({
     till: n.till,
     av: n.av,
@@ -123,6 +126,7 @@ async function skicka(rad: Utkorgsrad): Promise<boolean> {
         : n.order_id
           ? { typ: "sales_order", id: n.order_id }
           : undefined,
+    ...(bilagor ? { bilagor } : {}),
   });
 }
 
@@ -219,7 +223,8 @@ type Paminnelse = {
  * provbokning på en riktig order hade annars skickat en påminnelse till en
  * riktig kund. Påminnelsen markeras med felet i stället, så att den syns.
  */
-const kundmejlTillatet = () => process.env.VERCEL_ENV === "production";
+const kundmejlTillatet = (adress?: string | null) =>
+  process.env.VERCEL_ENV === "production" || /@resend\.dev$/i.test(adress?.trim() ?? "");
 
 async function resend(rad: Utkorgsrad): Promise<boolean> {
   const db = supabaseAdmin();
@@ -272,7 +277,7 @@ async function resend(rad: Utkorgsrad): Promise<boolean> {
   let amne = "";
   let text = "";
   if (p.recipient === "kund") {
-    if (!kundmejlTillatet()) {
+    if (!kundmejlTillatet(o?.contact_email as string | null | undefined)) {
       await db.rpc("lk_resend_satt", { p_reminder: p.id, p_resend_id: null, p_status: "fel", p_fel: "Förhandsvisningen skickar inte till kunder" });
       return false;
     }
@@ -309,6 +314,170 @@ async function resend(rad: Utkorgsrad): Promise<boolean> {
   await logga("ut", { handling: "schedule", reminder: p.id, mottagare: p.recipient, scheduled_at: p.send_at, ok: u.skickat, id: u.skickat ? u.id : null });
   if (!u.skickat) throw new Error(u.orsak);
   await db.rpc("lk_resend_satt", { p_reminder: p.id, p_resend_id: u.id, p_status: "schemalagd", p_fel: null });
+  return true;
+}
+
+// -----------------------------------------------------------------------------
+// .ics (0072): kollegornas bilaga och kundens inbjudan
+// -----------------------------------------------------------------------------
+
+/**
+ * Mallarna vars mejl får en `.ics`. Det som ändrar NÄR mötet är: inbjudan,
+ * flytten, det godkända förslaget och det inställda mötet. Svar och förslag
+ * ändrar ingenting i mottagarens kalender och får ingen fil.
+ */
+const ICS_MALLAR: Record<string, "REQUEST" | "CANCEL"> = {
+  inbjudan: "REQUEST",
+  "bokat-at-dig": "REQUEST",
+  flyttad: "REQUEST",
+  "forslag-godkant": "REQUEST",
+  installd: "CANCEL",
+};
+
+type Icshandelse = {
+  id: string;
+  kind: string;
+  title: string;
+  dag: string;
+  tid: string | null;
+  minuter: number | null;
+  starts_at: string;
+  plats: string | null;
+  online_url: string | null;
+  ics_sequence: number;
+  cancelled_at: string | null;
+  organizer_id: string;
+  order_id: string | null;
+  step: string | null;
+  series_id: string | null;
+  updated_at: string;
+};
+
+const ICS_KOLUMNER =
+  "id, kind, title, dag, tid, minuter, starts_at, plats, online_url, ics_sequence, cancelled_at, organizer_id, order_id, step, series_id, updated_at";
+
+function somMote(e: Icshandelse, rubrik: string, beskrivning: string | null): Mote {
+  return {
+    id: e.id,
+    sekvens: e.ics_sequence,
+    rubrik,
+    start: new Date(e.starts_at),
+    minuter: e.minuter ?? 30,
+    plats: e.plats,
+    url: e.online_url,
+    beskrivning,
+    andrad: new Date(e.updated_at),
+  };
+}
+
+const liten = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+
+const icsBilaga = (innehall: string, metod: "REQUEST" | "CANCEL"): Bilaga => ({
+  filnamn: metod === "CANCEL" ? "installt.ics" : "inbjudan.ics",
+  innehall,
+  typ: `text/calendar; charset=utf-8; method=${metod}`,
+});
+
+/**
+ * Kollegans `.ics`, byggd när raden töms ur händelsens läge just då.
+ *
+ * NULL FÖR EN FÖREKOMST I EN SERIE. Den är en egen rad i navet men en del av
+ * en regel i Outlook, och en fil per förekomst hade lagt sju fristående möten i
+ * mottagarens kalender i stället för en serie. Serien syns i navet och i
+ * iCal-flödet; mejlet bär ingen fil.
+ */
+async function kollegansIcs(eventId: string, till: string, metod: "REQUEST" | "CANCEL"): Promise<Bilaga[] | null> {
+  try {
+    const db = supabaseAdmin();
+    const { data } = await db.from("calendar_event").select(ICS_KOLUMNER).eq("id", eventId).maybeSingle();
+    const e = data as unknown as Icshandelse | null;
+    if (!e || !e.tid || e.series_id) return null;
+    if ((metod === "CANCEL") !== Boolean(e.cancelled_at)) return null;
+
+    const { data: folk } = await db.from("employee").select("id, first_name, last_name, email").in("id", [e.organizer_id, till]);
+    const p = new Map(((folk ?? []) as { id: string; first_name: string; last_name: string; email: string | null }[]).map((x) => [x.id, x]));
+    const org = p.get(e.organizer_id);
+    const mig = p.get(till);
+    if (!org?.email || !mig?.email) return null;
+
+    const ics = inbjudan(
+      somMote(e, e.title, `Svara i navet: ${navadress()}/kalender?dag=${e.dag}&handelse=${e.id}`),
+      metod,
+      { namn: `${org.first_name} ${org.last_name}`, epost: org.email },
+      { namn: `${mig.first_name} ${mig.last_name}`, epost: mig.email, svara: false },
+    );
+    return [icsBilaga(ics, metod)];
+  } catch {
+    // En fil som inte gick att bygga får aldrig fälla notisen. Mejlet går
+    // fram utan den.
+    return null;
+  }
+}
+
+/**
+ * Kundens inbjudan: ett eget mejl med `.ics`, från navets avsändare och med
+ * organisatören som svarsadress.
+ *
+ * TVÅ SPÄRRAR innan något går ut, eftersom det här är navets enda brev till
+ * någon utanför Clicknet som skickas på en kollegas klick:
+ *   1. Raden ska fortfarande gälla. Har tiden ändrats igen (högre sekvens) är
+ *      en nyare rad på väg; har mötet ställts in ska bara CANCEL gå.
+ *   2. Previewen mejlar aldrig en riktig kund (`kundmejlTillatet`).
+ */
+async function ics(rad: Utkorgsrad): Promise<boolean> {
+  const db = supabaseAdmin();
+  const eventId = String(rad.payload.event_id ?? "");
+  const epost = String(rad.payload.epost ?? "").trim().toLowerCase();
+  const sekvens = Number(rad.payload.sekvens ?? -1);
+  const metod = rad.payload.metod === "CANCEL" ? "CANCEL" : "REQUEST";
+
+  const { data } = await db.from("calendar_event").select(ICS_KOLUMNER).eq("id", eventId).maybeSingle();
+  const e = data as unknown as Icshandelse | null;
+  if (!e || !e.tid || !epost) return false;
+  if (e.ics_sequence !== sekvens) return false;
+  if ((metod === "CANCEL") !== Boolean(e.cancelled_at)) return false;
+  if (metod === "REQUEST") {
+    const { data: kvar } = await db
+      .from("calendar_attendee")
+      .select("id")
+      .eq("event_id", e.id)
+      // ilike för versalerna; `_` och `%` i adressen är tecken, inte jokrar.
+      .ilike("external_email", epost.replace(/[\\%_]/g, (t) => `\\${t}`))
+      .limit(1);
+    if (!kvar?.length) return false;
+  }
+
+  if (!kundmejlTillatet(epost)) {
+    await logga("ut", { handling: "ics", event: e.id, metod, sekvens, ok: false, orsak: "Förhandsvisningen skickar inte till kunder" });
+    return false;
+  }
+
+  const [{ data: org }, { data: o }] = await Promise.all([
+    db.from("employee").select("first_name, last_name, email").eq("id", e.organizer_id).maybeSingle(),
+    e.order_id
+      ? db.from("sales_order").select("company_name, contact_name").eq("id", e.order_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  if (!org?.email) throw new Error("Organisatören saknar e-postadress");
+
+  const orgNamn = `${org.first_name} ${org.last_name}`.trim();
+  const vad = arSteg(e.step) ? FORINSTALLNINGAR[e.step].lab : e.title;
+  const rubrik = `${vad} med Clicknet`;
+  const start = minuter(e.tid) ?? 0;
+  const nar = `${liten(datumLang(e.dag))} kl ${hm(start)}–${hm(start + (e.minuter ?? 30))}`;
+  const kontakt = (o?.contact_name as string | null | undefined)?.split(" ")[0] ?? null;
+
+  const ics = inbjudan(
+    somMote(e, rubrik, null),
+    metod,
+    { namn: `${orgNamn}, Clicknet`, epost: org.email as string },
+    { namn: (o?.contact_name as string | null | undefined) ?? null, epost, svara: true },
+  );
+
+  const { amne, text } = kundbrev({ metod, sekvens, rubrik, nar, kontakt, plats: e.plats, url: e.online_url, avsandare: org.first_name as string });
+  const u = await skickaEpost({ till: epost, amne, text, svaraTill: org.email as string, bilagor: [icsBilaga(ics, metod)] });
+  await logga("ut", { handling: "ics", event: e.id, metod, sekvens, ok: u.skickat, id: u.skickat ? u.id : null });
+  if (!u.skickat) throw new Error(u.orsak);
   return true;
 }
 

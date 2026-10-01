@@ -43,26 +43,30 @@ export function Formular({
   stang,
 }: {
   lk: Lk;
-  start: { dag?: string; start?: number; minuter?: number };
+  start: { dag?: string; start?: number; minuter?: number; med?: string; enskilt?: boolean };
   stang: () => void;
 }) {
   const mig = lk.data.mig;
   // Leveransen öppnar formuläret på förinställningen Kickoff (`newForm()`).
-  const [typ, setTyp] = useState<Typ>(lk.data.lev.arLev && lk.data.lev.kunder.length ? "lev" : "mote");
+  // Från Teamet: en kollegas rad ger ett möte med henne, eller en 1:1.
+  const [typ, setTyp] = useState<Typ>(
+    forval.enskilt ? "enskilt" : forval.med ? "mote" : lk.data.lev.arLev && lk.data.lev.kunder.length ? "lev" : "mote",
+  );
   const [steg, setSteg] = useState<Steg>("kickoff");
   const [orderId, setOrderId] = useState(lk.data.lev.kunder[0]?.orderId ?? "");
   const [remMig, setRemMig] = useState(true);
   const [remKund, setRemKund] = useState(FORINSTALLNINGAR.kickoff.kund);
   const forstaSaljare = lk.data.personer.find((p) => p.grupp === "salj" && p.id !== mig) ?? lk.data.personer.find((p) => p.id !== mig);
-  const [med, setMed] = useState<string>(forstaSaljare?.id ?? "");
-  const [upprepa, setUpprepa] = useState<Upprepa>("aldrig");
+  const [med, setMed] = useState<string>(forval.enskilt && forval.med ? forval.med : (forstaSaljare?.id ?? ""));
+  const [upprepa, setUpprepa] = useState<Upprepa>(forval.enskilt ? "vecka" : "aldrig");
   const [rubrik, setRubrik] = useState("");
-  const [deltagare, setDeltagare] = useState<string[]>([]);
+  const [deltagare, setDeltagare] = useState<string[]>(forval.med && !forval.enskilt ? [forval.med] : []);
   const [ansvarig, setAnsvarig] = useState(mig);
   const [dag, setDag] = useState(forval.dag ?? lk.data.hem);
   const [start, setStart] = useState(forval.start ?? 9 * 60);
   const [minuter, setMinuter] = useState(
-    forval.minuter ?? (lk.data.lev.arLev && lk.data.lev.kunder.length ? FORINSTALLNINGAR.kickoff.minuter : 30),
+    forval.minuter ??
+      (!forval.med && lk.data.lev.arLev && lk.data.lev.kunder.length ? FORINSTALLNINGAR.kickoff.minuter : 30),
   );
   const [paminnelse, setPaminnelse] = useState(10);
   const [visaSom, setVisaSom] = useState("upptagen");

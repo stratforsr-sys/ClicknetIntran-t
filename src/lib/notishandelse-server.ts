@@ -4,6 +4,7 @@ import { after } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { HANDELSEKALLOR, type Handelsekalla, type Notistyp } from "@/lib/notiser";
 import { kallanMejlas, mejlaHandelse } from "@/lib/epost-notis";
+import type { Bilaga } from "@/lib/epost";
 import type { Role, Permission } from "@/lib/roles";
 
 /**
@@ -40,6 +41,11 @@ export type Handelse = {
   detalj?: string;
   href: string;
   objekt?: { typ: string; id: string };
+  /**
+   * Bilagor till mejlet, när källan mejlas. Bara utkorgens väg bär dem
+   * (`notifieraFranUtkorgen`): kalenderns inbjudningar får sin `.ics` där.
+   */
+  bilagor?: Bilaga[];
 };
 
 const KALLOR = new Set<string>(HANDELSEKALLOR);
@@ -226,6 +232,7 @@ export async function notifieraFranUtkorgen(handelse: Handelse): Promise<boolean
     rubrik: handelse.rubrik,
     detalj: handelse.detalj,
     href: handelse.href,
+    bilagor: handelse.bilagor,
   });
   return true;
 }

@@ -104,26 +104,31 @@ export function arDatum(v: unknown): v is string {
 // Vyer
 // -----------------------------------------------------------------------------
 
-export const VYER = ["dag", "arbetsvecka", "vecka", "manad", "agenda"] as const;
+export const VYER = ["dag", "arbetsvecka", "vecka", "manad", "team", "agenda"] as const;
 export type Vy = (typeof VYER)[number];
 export const VY_ETIKETT: Record<Vy, string> = {
   dag: "Dag",
   arbetsvecka: "Arbetsvecka",
   vecka: "Vecka",
   manad: "Månad",
+  team: "Teamet",
   agenda: "Agenda",
 };
-/** `Ctrl+Alt+<siffra>` → vy. Teamet (5) kommer i pass 4. Läses från `event.code`. */
+/** Siffran i vyknappen och kortkommandot. */
+export const VY_SIFFRA: Record<Vy, number> = { dag: 1, arbetsvecka: 2, vecka: 3, manad: 4, team: 5, agenda: 6 };
+/** `Ctrl+Alt+<siffra>` → vy. Läses från `event.code`. */
 export const VY_TANGENT: Record<string, Vy> = {
   Digit1: "dag",
   Digit2: "arbetsvecka",
   Digit3: "vecka",
   Digit4: "manad",
+  Digit5: "team",
   Digit6: "agenda",
   Numpad1: "dag",
   Numpad2: "arbetsvecka",
   Numpad3: "vecka",
   Numpad4: "manad",
+  Numpad5: "team",
   Numpad6: "agenda",
 };
 
@@ -147,7 +152,7 @@ export function hemdag(idag: string): string {
 
 /** `daysForView()`. */
 export function dagarForVy(vy: Vy, anchor: string): string[] {
-  if (vy === "dag") return [anchor];
+  if (vy === "dag" || vy === "team") return [anchor];
   if (vy === "agenda") return [0, 1, 2, 3, 4, 5, 6].map((i) => plus(anchor, i));
   if (vy === "manad") return manadsrutor(anchor);
   const m = monday(anchor);
@@ -169,6 +174,8 @@ export function manadsrutor(anchor: string): string[] {
 
 /** Datumen servern ska hämta för en vy, båda inklusive. Veckovyerna tar hela veckan. */
 export function intervallForVy(vy: Vy, anchor: string): { fran: string; till: string } {
+  // Teamet visar en dag för många, och hämtar bara den.
+  if (vy === "team") return { fran: anchor, till: anchor };
   if (vy === "dag" || vy === "arbetsvecka" || vy === "vecka") {
     const m = monday(anchor);
     return { fran: m, till: plus(m, 6) };
@@ -184,7 +191,7 @@ export function steg(vy: Vy, anchor: string, dir: 1 | -1): string {
     return F(Date.UTC(y, m - 1 + dir, 1));
   }
   if (vy === "agenda") return plus(anchor, 7 * dir);
-  if (vy === "dag") {
+  if (vy === "dag" || vy === "team") {
     let d = plus(anchor, dir);
     while (isWeekend(d)) d = plus(d, dir);
     return d;
@@ -758,3 +765,46 @@ function kundUr(rubrik: string): string {
 
 /** Källorna som ger svarsknappar i klockan: den som bjudits in eller fått en ny tid. */
 export const SVARSKALLOR = ["kalender-inbjudan", "kalender-flyttad", "kalender-flyttad-tyst"] as const;
+
+// -----------------------------------------------------------------------------
+// Kundens inbjudan (0072)
+// -----------------------------------------------------------------------------
+
+const liten = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+
+/**
+ * Kundens brev med kickoffens `.ics` (pass 4). Kort, på svenska, och utan något
+ * internt: rubriken är förinställningens namn och "med Clicknet", aldrig navets
+ * egen rubrik med kundens namn i.
+ */
+export function kundbrev(a: {
+  metod: "REQUEST" | "CANCEL";
+  sekvens: number;
+  rubrik: string;
+  nar: string;
+  kontakt: string | null;
+  plats: string | null;
+  url: string | null;
+  avsandare: string;
+}): { amne: string; text: string } {
+  const halsning = a.kontakt ? `Hej ${a.kontakt},` : "Hej,";
+  const var_ = [a.plats?.trim() ? `Plats: ${a.plats.trim()}` : "", a.url?.trim() ? `Länk: ${a.url.trim()}` : ""].filter(Boolean);
+  const slut = ["", "Hälsningar,", `${a.avsandare}, Clicknet`];
+
+  if (a.metod === "CANCEL") {
+    return {
+      amne: `Inställt: ${a.rubrik} ${a.nar}`,
+      text: [halsning, "", `Vi har ställt in ${liten(a.rubrik)} ${a.nar}.`, "Den bifogade filen tar bort mötet ur din kalender. Vi hör av oss med en ny tid.", ...slut].join("\n"),
+    };
+  }
+  if (a.sekvens > 0) {
+    return {
+      amne: `Ny tid: ${a.rubrik} ${a.nar}`,
+      text: [halsning, "", `Vi har flyttat ${liten(a.rubrik)} till ${a.nar}.`, "Den bifogade inbjudan uppdaterar mötet i din kalender.", ...var_, ...slut].join("\n"),
+    };
+  }
+  return {
+    amne: `Inbjudan: ${a.rubrik} ${a.nar}`,
+    text: [halsning, "", `Välkommen till ${liten(a.rubrik)} ${a.nar}.`, "Inbjudan ligger bifogad. Öppna den för att lägga in mötet i din kalender.", ...var_, ...slut].join("\n"),
+  };
+}

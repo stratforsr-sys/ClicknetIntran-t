@@ -14,6 +14,43 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "kalendern-teamet-och-outlook",
+    rubrik: "Kalendern: Teamet, inbjudningar till Outlook och dina möten i din egen kalender",
+    ingress:
+      "Se hela teamets dag på en gång, med hur fullbokad var och en är. Inbjudningar kommer med en fil som lägger mötet i Outlook, kunden får en riktig inbjudan till kickoffen, och dina möten går att prenumerera på.",
+    text: `Kalendern pratar nu med resten av världen.
+
+## Teamet
+
+Välj **Teamet** i kalenderns vyrad (eller tryck Ctrl+Alt+5). Varje person står på
+en egen rad med dagens bokningar och en stapel som visar hur mycket av de sex
+timmarna som är planerat. Växla mellan **Sälj** och **Leverans** överst. Vad du ser
+hos en kollega styrs av vad hon delar med dig — för många står det bara Upptagen.
+
+Klicka på en tom tid i någons rad för att boka ett möte med henne.
+
+## Inbjudningar i Outlook
+
+När du blir inbjuden, när ett möte flyttas eller ställs in kommer mejlet med en
+bifogad fil. Öppna den så hamnar mötet i Outlook eller Google. Svara fortfarande
+i Nav — det är där organisatören ser ditt svar.
+
+## Kunden får en inbjudan till kickoffen
+
+En kickoff skickar en riktig kalenderinbjudan till kundens kontakt. Flyttar du
+mötet får kunden den nya tiden, och ställer du in det försvinner det ur kundens
+kalender.
+
+## Dina möten i din egen kalender
+
+Under **Frånvaro**, i rutan Kalenderflöde, finns nu **Dina möten** bredvid din
+ledighet. Skapa adressen och lägg in den i Outlook eller Google, så syns dina
+möten där. Rubrik, tid och plats följer med — aldrig agenda eller anteckningar.`,
+    datum: "2026-10-01",
+    roller: ["delivery", "project_manager", "sales_manager", "team_lead", "salesperson"],
+    href: "/kalender?vy=team",
+  },
+  {
     slug: "leveranskon-i-kalendern",
     rubrik: "Leveransen i kalendern: kön, överlämningen och välkomstsamtalet",
     ingress:

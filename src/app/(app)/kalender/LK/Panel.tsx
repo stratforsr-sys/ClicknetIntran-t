@@ -45,7 +45,17 @@ import { Assistent, Datumfalt, Krockruta, Stang, Tidsval, useUpptaget, upptagnaI
 
 export type Panellage =
   | { typ: "handelse"; id: string }
-  | { typ: "ny"; dag?: string; start?: number; minuter?: number; nr?: number }
+  | {
+      typ: "ny";
+      dag?: string;
+      start?: number;
+      minuter?: number;
+      nr?: number;
+      /** Teamet (pass 4): en kollegas rad. Hon blir deltagare. */
+      med?: string;
+      /** …och en 1:1 när chefen klickar på en säljares rad (`newForm(d, m, "enskilt", p)`). */
+      enskilt?: boolean;
+    }
   | { typ: "forslag"; detalj: Handelsedetalj }
   | { typ: "uppgift"; post: Post }
   | { typ: "upptagen"; post: Post }

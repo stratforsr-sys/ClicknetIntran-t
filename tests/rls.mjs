@@ -3116,6 +3116,23 @@ console.log("\n\x1b[1mLeveranskalendern: möten, 1:1-innehåll och utkorgen (006
   });
   ok("kön går inte att ta från klienten", !taKund.ok, `HTTP ${taKund.status}`);
 
+  // Pass 4 (0072): iCal-läsningen och kundens .ics-kö är bara serverns.
+  // Mötesflödet läses med en hemlig adress, inte med en inloggning — en
+  // inloggad som kunde anropa läsningen med ett annat id hade läst någon
+  // annans möten.
+  const icalAnnan = await fetch(`${URL}/rest/v1/rpc/lk_ical_handelser`, {
+    method: "POST",
+    headers: som(tB),
+    body: JSON.stringify({ p_employee: chef.id, p_fran: d, p_till: d }),
+  });
+  ok("ingen inloggad läser någon annans mötesflöde genom funktionen", !icalAnnan.ok, `HTTP ${icalAnnan.status}`);
+  const icsKo = await fetch(`${URL}/rest/v1/rpc/lk_ics_ko`, {
+    method: "POST",
+    headers: som(tD),
+    body: JSON.stringify({ p_event: mote.event_id, p_epost: "nagon@exempel.se", p_metod: "REQUEST" }),
+  });
+  ok("ingen inloggad lägger en kundinbjudan i utkorgen", !icsKo.ok, `HTTP ${icsKo.status}`);
+
   await db.query(`delete from outbox where event_id = $1::uuid or payload->>'till' in (select id::text from employee where email like $2)`, [mote.event_id, PREFIX + "%"]);
   await db.query(`delete from calendar_event where organizer_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`delete from calendar_series where organizer_id in (select id from employee where email like $1)`, [PREFIX + "%"]);

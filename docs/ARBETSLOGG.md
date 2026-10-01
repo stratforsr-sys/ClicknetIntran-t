@@ -5,6 +5,65 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-01 · Leveranskalendern, pass 4: Teamet, .ics och iCal
+
+Samma gren, **EJ MERGAD**. Migration **`0072_leveranskalender_omvarld`** körd
+2026-10-01 09:31. Beställaren sa "kör och gör klart allting" efter pass 3; provet
+av pass 1–3 i previewen har inte gjorts än (inga kalenderhändelser i databasen).
+
+**Teamet (`Ctrl+Alt+5`)** är en dag, 08–18, en rad per person i Säljteamet eller
+Leverans (knapparna Sälj/Leverans). Servern hämtar alla i de två grupperna för
+den dagen — inte bara de ikryssade — och ett gemensamt möte står på varje
+deltagares rad, eftersom kapaciteten räknas per person. Innehållet är redan
+projicerat av `kalender_handelser()`/`kalender_poster()`: den man bara ser som
+upptagen står med "Upptagen". Klick på en kollegas tomma tid öppnar formuläret
+med henne som deltagare, eller en 1:1 om man är säljchef/teamledare och hon
+säljer. Med en kund vald ur kön bokas välkomstsamtalet hos den personen.
+
+**Kundens .ics skrivs av triggrar, inte av lk_*-funktionerna.** Sex vägar ändrar
+tid eller ställer in, två skapar händelser med en extern deltagare. Alla räknar
+upp `ics_sequence` eller skapar händelse och deltagare i samma transaktion, så
+triggrarna sitter där (`calendar_event_ics`, `calendar_attendee_ics`). Raderna
+följer med i Ångra genom en transaktionslokal inställning (`lk.ics`) som den
+ersatta `lk_undo()` läser och tömmer. Ångra själv skriver ingen ny rad: den
+sätter tillbaka en LÄGRE sekvens, och deltagarna den lägger tillbaka hör till en
+händelse som skapades tidigare.
+
+**Tömningen kontrollerar att raden fortfarande gäller** — sekvensen ska vara den
+aktuella, och ett inställt möte får bara CANCEL. Kundbrevet säger
+"Kickoff med Clicknet", aldrig navets rubrik med kundens namn. Svarsadress är
+organisatören.
+
+**Kollegornas inbjudningsmejl bär .ics** för inbjudan, flytt, godkänt förslag
+och inställt — utan svarsknappar (RSVP=FALSE): svaret hör hemma i navet. En
+förekomst i en serie får ingen fil, se D-K2.
+
+**Previewen mejlar kunder bara på `@resend.dev`.** Regeln från pass 3 är
+utvidgad så att provordern (`delivered+nav-kund@resend.dev`) går att prova; en
+riktig kund nås fortfarande bara från produktionen. Samma regel gäller nu
+kundens mejlpåminnelse.
+
+**Mötesflödet** är en tredje sort i `calendar_feed` (`handelser`), med egen
+adress på /franvaro bredvid ledighetsflödet. `lk_ical_handelser()` (bara
+service role) lämnar rubrik, tid, plats och länk — inte agenda, anteckningar
+eller andra deltagare. 60 dagar bakåt, ett år framåt. Ett databasfel ger 503 och
+inte en tom kalender, som annars hade tömt prenumerationen.
+
+**Provat:** 0072 i en transaktion som rullades tillbaka, 16 kontroller (kickoff
+ger REQUEST sekvens 0 till kunden, flytt ger sekvens 1, båda bär sin rad i
+ångern, Ångra tar bort raden utan att skriva en ny, inställt ger CANCEL, flödet
+ser kickoffen men inte det inställda, möte utan extern ger ingen rad, grants,
+scope). `tests/leveranskalender.mjs` +27 (Teamets vyhjälpare, .ics-filerna,
+kundbrevet). `tests/rls.mjs` +2 (ingen inloggad når `lk_ical_handelser` eller
+`lk_ics_ko`).
+
+**Röda prov, inga nya:** handelselogg, inbaddningar, registerutdrag och 2
+`file_object`-kontroller i rls.mjs är röda även på main. **`sidor` är röd av
+provdatan**: provkontot heter *Test Säljare*, och efternamnet "Säljare" är samma
+ord som rolletiketten på varje sida. Försvinner när provkontona städas.
+
+---
+
 ## 2026-09-30 (kväll) · Leveranskalendern, pass 3: leverans
 
 Samma gren, **EJ MERGAD**. Migration **`0071_leveranskalender_leverans`** körd

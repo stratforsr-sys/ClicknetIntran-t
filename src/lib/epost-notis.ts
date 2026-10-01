@@ -1,7 +1,7 @@
 import "server-only";
 
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { epostArKonfigurerad, skickaKo, type Brev } from "@/lib/epost";
+import { epostArKonfigurerad, skickaKo, type Bilaga, type Brev } from "@/lib/epost";
 import type { Handelsekalla } from "@/lib/notiser";
 
 /**
@@ -199,6 +199,8 @@ type Utskick = {
   rubrik: string;
   detalj?: string;
   href: string;
+  /** Leveranskalendern (pass 4): inbjudans `.ics`. Följer med bara när källan mejlas. */
+  bilagor?: Bilaga[];
 };
 
 /**
@@ -241,6 +243,7 @@ export async function mejlaHandelse(
         till: p.email,
         amne: `Clicknet Nav: ${utskick.rubrik}`,
         text: brevtext(p.first_name ?? "", utskick),
+        ...(utskick.bilagor?.length ? { bilagor: utskick.bilagor } : {}),
       });
     }
 

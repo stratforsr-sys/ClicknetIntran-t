@@ -9,6 +9,7 @@ import {
   KVITTO_MS,
   LK_FEL,
   VY_ETIKETT,
+  VY_SIFFRA,
   VY_TANGENT,
   daySum,
   dayLabel,
@@ -28,6 +29,7 @@ import { angringsLage, flytta, flyttaSerie, taKund, type Resultat } from "../mot
 import { Sidolista } from "./Sidolista";
 import { Rutnat } from "./Rutnat";
 import { Agenda, Manad } from "./Vyer";
+import { Teamet } from "./Teamet";
 import { Panel, type Panellage } from "./Panel";
 import { useNu, type Lk } from "./gemensamt";
 
@@ -323,17 +325,17 @@ export function Leveranskalender({
         </span>
         <span className="spacer" />
         <div className="seg" role="group" aria-label="Vy">
-          {(["dag", "arbetsvecka", "vecka", "manad", "agenda"] as const).map((v, i) => (
+          {(["dag", "arbetsvecka", "vecka", "manad", "team", "agenda"] as const).map((v) => (
             <button
               key={v}
               type="button"
               data-v={v}
-              title={`Ctrl+Alt+${v === "agenda" ? 6 : i + 1}`}
+              title={`Ctrl+Alt+${VY_SIFFRA[v]}`}
               aria-pressed={data.vy === v}
               onClick={() => ga({ vy: v })}
             >
               {VY_ETIKETT[v]}
-              <kbd>{v === "agenda" ? 6 : i + 1}</kbd>
+              <kbd>{VY_SIFFRA[v]}</kbd>
             </button>
           ))}
         </div>
@@ -444,7 +446,7 @@ function dagarIVyn(vy: Vy, anchor: string): string[] {
   return [0, 1, 2, 3, 4, 5, 6].map((i) => plus(m, i));
 }
 
-/** `renderStage()`: rutnät, månad eller agenda. Skrollar till 08:00 första gången. */
+/** `renderStage()`: rutnät, månad, Teamet eller agenda. Skrollar till 08:00 första gången. */
 function Scen({ lk, synliga }: { lk: Lk; synliga: Post[] }) {
   const ref = useRef<HTMLDivElement>(null);
   const skrollad = useRef<string | null>(null);
@@ -454,6 +456,11 @@ function Scen({ lk, synliga }: { lk: Lk; synliga: Post[] }) {
     const st = ref.current;
     if (!st) return;
     if (vy === "agenda") {
+      st.scrollTop = 0;
+      return;
+    }
+    if (vy === "team") {
+      // Teamet börjar redan 08:00 och skrollar inte.
       st.scrollTop = 0;
       return;
     }
@@ -467,6 +474,8 @@ function Scen({ lk, synliga }: { lk: Lk; synliga: Post[] }) {
     <div className="stage" id="stage" ref={ref}>
       {vy === "manad" ? (
         <Manad lk={lk} synliga={synliga} />
+      ) : vy === "team" ? (
+        <Teamet lk={lk} />
       ) : vy === "agenda" ? (
         <Agenda lk={lk} synliga={synliga} />
       ) : (

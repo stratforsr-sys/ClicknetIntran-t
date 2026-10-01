@@ -76,6 +76,13 @@ export type Lkdata = {
   hemPoster: Post[];
   /** Leveransen (pass 3). Tom för den som inte är i kretsen. */
   lev: Leveransdata;
+  /**
+   * Teamet (pass 4): personerna vars kalender hämtats för dagen, i Säljteamet
+   * och Leverans. Tom i alla andra vyer.
+   */
+  team: string[];
+  /** Säljchef eller teamledare: ett klick på en säljares rad i Teamet föreslår en 1:1. */
+  arChef: boolean;
 };
 
 export type Kokund = {
@@ -258,7 +265,16 @@ export async function hamtaLeveranskalender(
 
   const personer = await hamtaPersoner(user);
   const kanda = new Set(personer.map((p) => p.id));
-  const andra = [...new Set(visa)].filter((id) => id !== mig && kanda.has(id)).slice(0, 12);
+  const valda = [...new Set(visa)].filter((id) => id !== mig && kanda.has(id)).slice(0, 12);
+
+  // Teamet: alla i Säljteamet och Leverans, en dag. Vad var och en visar avgörs
+  // som i alla vyer av min nivå i deras kalender — `kalender_handelser()` och
+  // `kalender_poster()` projicerar innan raderna lämnar databasen.
+  const team =
+    vy === "team"
+      ? personer.filter((p) => p.grupp === "salj" || p.grupp === "lev").map((p) => p.id).slice(0, 40)
+      : [];
+  const andra = vy === "team" ? team.filter((id) => id !== mig) : valda;
 
   const [egen, egnaMoten, kollegor, vantar] = await Promise.all([
     hamtaEgenKalender(user, fran, till),
@@ -274,8 +290,11 @@ export async function hamtaLeveranskalender(
 
   const alla: Post[] = [...egen.poster.map((p) => franKalenderpost(p, mig)), ...egnaMoten, ...kollegor.flat()];
 
+  // I Teamet står ett gemensamt möte på varje deltagares rad — det är tid hos
+  // var och en, och kapaciteten räknas per person.
   const sedda = new Set<string>();
   const poster = alla.filter((p) => {
+    if (vy === "team") return true;
     if (p.slag !== "mote" && p.slag !== "enskilt" && p.slag !== "leverans") return true;
     if (!p.ref) return true;
     if (sedda.has(p.ref)) return false;
@@ -299,7 +318,9 @@ export async function hamtaLeveranskalender(
 
   const lev = await hamtaLeveransdata(user, hem);
 
-  return { mig, idag, vy, anchor, personer, visa: andra, poster, vantar, hem, hemPoster, lev };
+  const arChef = user.roles.some((r) => r === "sales_manager" || r === "team_lead");
+
+  return { mig, idag, vy, anchor, personer, visa: valda, poster, vantar, hem, hemPoster, lev, team, arChef };
 }
 
 // -----------------------------------------------------------------------------

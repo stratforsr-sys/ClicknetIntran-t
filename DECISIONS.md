@@ -582,3 +582,24 @@ Planeringsvyn står kvar oförändrad under `/kalender?vy=planera`.
   säger sedan till admin.
 - (Pass 3) **Överlämningen fylls i på en egen sida**, `/kalender/overlamning/[order]`,
   som prototypen saknar. Notisen "Komplettera överlämningen" leder dit.
+- (Pass 4) **Teamet hämtar alla i Säljteamet och Leverans** för dagen, oavsett
+  vilka kalendrar som är ikryssade; listan står ikryssad och låst så länge, som i
+  prototypen. Ett gemensamt möte står på varje deltagares rad. Upp till 40
+  personer.
+- (Pass 4) **Klick i en kollegas rad** ger en 1:1 bara för säljchef och
+  teamledare (prototypen: bara "Zen"), annars ett möte med henne som deltagare.
+- (Pass 4) **En förekomst i en serie får ingen `.ics` i kollegans mejl.** Den
+  är en egen rad i navet men en del av en regel i Outlook; en fil per gång hade
+  lagt fristående möten i mottagarens kalender. Serien syns i navet och i
+  mötesflödet.
+- (Pass 4) **Kollegans `.ics` har inga svarsknappar** (RSVP=FALSE). Svaret hör
+  hemma i navet; ett Ja i Outlook hade blivit ett mejl som ingen läser. Kunden
+  har knapparna, och hennes svar går till organisatörens inkorg.
+- (Pass 4) **Kundens brev säger "Kickoff med Clicknet"**, inte navets rubrik
+  ("Kickoff · Kundnamn"). Datum skrivs ut ("torsdag 8 oktober 2026 kl 09:00–10:00").
+- (Pass 4) **Previewen mejlar kunder på `@resend.dev`** — annars går kickoffens
+  inbjudan inte att prova alls. En riktig kundadress nås bara från produktionen.
+- (Pass 4) **Mötesflödet ligger på /franvaro** bredvid ledighetsflödet, med egen
+  adress. Kalendern själv har ingen knapp för det; prototypen har ingen.
+  Rubriken följer med, och på en leveranspost står kundens namn i den — det står
+  i texten vid adressen.

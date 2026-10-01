@@ -53,7 +53,12 @@ import {
   overlamning,
   paminnelsetext,
   slaInfo,
+  kundbrev,
+  VY_SIFFRA,
+  VY_TANGENT,
+  arVy,
 } from "../src/lib/leveranskalender.ts";
+import { inbjudan, motesflode } from "../src/lib/ical.ts";
 
 let fel = 0;
 const ok = (namn, villkor, extra = "") => {
@@ -227,6 +232,61 @@ console.log("\n\x1b[1mLeveransen (pass 3)\x1b[0m");
   const bokad = notistext({ ...rad("leverans-bokad-saljare", { ansvarigNamn: "Sara Lind" }), event_id: "e1" }, { ...u, rubrik: "Välkomstsamtal · Kvarnens Bageri", dag: "2026-10-07", tid: "09:00" });
   lika("säljaren får veta när kunden välkomnas", [bokad.rubrik, bokad.detalj], ["Kvarnens Bageri välkomnas ons 7 okt 09:00", "av Sara Lind"]);
   ok("felkoden tagen har en text", !!LK_FEL.tagen);
+}
+
+console.log("\n\x1b[1mPass 4: Teamet\x1b[0m");
+{
+  ok("team är en vy", arVy("team"));
+  lika("Ctrl+Alt+5 är Teamet", VY_TANGENT.Digit5, "team");
+  lika("siffrorna i vyknapparna", VY_SIFFRA, { dag: 1, arbetsvecka: 2, vecka: 3, manad: 4, team: 5, agenda: 6 });
+  lika("Teamet visar en dag", dagarForVy("team", "2026-10-07"), ["2026-10-07"]);
+  lika("Teamet hämtar bara dagen", intervallForVy("team", "2026-10-07"), { fran: "2026-10-07", till: "2026-10-07" });
+  lika("Teamet hoppar över helgen framåt", steg("team", "2026-10-09", 1), "2026-10-12");
+  lika("Teamet hoppar över helgen bakåt", steg("team", "2026-10-12", -1), "2026-10-09");
+  lika("rubriken som dagvyn", periodtext("team", "2026-09-30"), periodtext("dag", "2026-09-30"));
+}
+
+console.log("\n\x1b[1mPass 4: .ics och kundens brev\x1b[0m");
+{
+  const m = {
+    id: "e1",
+    sekvens: 2,
+    rubrik: "Kickoff med Clicknet",
+    start: new Date("2026-10-08T07:00:00Z"),
+    minuter: 60,
+    plats: "Teams; rum 2",
+    url: null,
+    beskrivning: null,
+    andrad: new Date("2026-10-01T10:00:00Z"),
+  };
+  const nu = new Date("2026-10-01T12:00:00Z");
+  const req = inbjudan(m, "REQUEST", { namn: "Zen Saab", epost: "zen@clicknet.se" }, { namn: "Mira", epost: "mira@kund.se", svara: true }, nu);
+  // Vik ut raderna först: en lång ATTENDEE viks vid 75 oktetter (RFC 5545).
+  const rader = req.replace(/\r\n /g, "").split("\r\n");
+  ok("REQUEST har METHOD:REQUEST", rader.includes("METHOD:REQUEST"));
+  ok("UID är händelsens, och stabil", rader.includes("UID:e1@nav.clicknet.se"));
+  ok("SEQUENCE är händelsens", rader.includes("SEQUENCE:2"));
+  ok("start i UTC", rader.includes("DTSTART:20261008T070000Z") && rader.includes("DTEND:20261008T080000Z"));
+  ok("semikolon i platsen escapas", rader.includes("LOCATION:Teams\\; rum 2"));
+  ok("kunden får svara", rader.some((r) => r.startsWith("ATTENDEE") && r.includes("RSVP=TRUE") && r.endsWith("mailto:mira@kund.se")));
+  ok("organisatören står med", rader.some((r) => r.startsWith('ORGANIZER;CN="Zen Saab":mailto:zen@clicknet.se')));
+  ok("raderna slutar med CRLF", req.endsWith("END:VCALENDAR\r\n"));
+  const can = inbjudan(m, "CANCEL", { epost: "zen@clicknet.se" }, { epost: "k@x.se", svara: false }, nu).replace(/\r\n /g, "").split("\r\n");
+  ok("CANCEL har METHOD och STATUS", can.includes("METHOD:CANCEL") && can.includes("STATUS:CANCELLED"));
+  ok("kollegan får inga svarsknappar", can.some((r) => r.startsWith("ATTENDEE") && r.includes("RSVP=FALSE")));
+  const pub = motesflode([m, { ...m, id: "e2", sekvens: 0 }], "Möten — Zen", nu).split("\r\n");
+  ok("flödet är PUBLISH utan deltagare", pub.includes("METHOD:PUBLISH") && !pub.some((r) => r.startsWith("ATTENDEE") || r.startsWith("ORGANIZER")));
+  lika("två händelser i flödet", pub.filter((r) => r === "BEGIN:VEVENT").length, 2);
+  ok("långa rader viks vid 75 oktetter", motesflode([{ ...m, rubrik: "Å".repeat(80) }], "x", nu).split("\r\n").every((r) => Buffer.byteLength(r) <= 75));
+
+  const a = { sekvens: 0, rubrik: "Kickoff med Clicknet", nar: "torsdag 8 oktober 2026 kl 09:00–10:00", kontakt: "Mira", plats: null, url: null, avsandare: "Sara" };
+  const ny = kundbrev({ ...a, metod: "REQUEST" });
+  lika("inbjudans ämne", ny.amne, "Inbjudan: Kickoff med Clicknet torsdag 8 oktober 2026 kl 09:00–10:00");
+  ok("inbjudan hälsar och säger Clicknet med versal", ny.text.startsWith("Hej Mira,") && ny.text.includes("kickoff med Clicknet"));
+  lika("ombokningens ämne", kundbrev({ ...a, metod: "REQUEST", sekvens: 1 }).amne, "Ny tid: Kickoff med Clicknet torsdag 8 oktober 2026 kl 09:00–10:00");
+  lika("det inställdas ämne", kundbrev({ ...a, metod: "CANCEL", sekvens: 2 }).amne, "Inställt: Kickoff med Clicknet torsdag 8 oktober 2026 kl 09:00–10:00");
+  ok("utan kontakt: bara Hej", kundbrev({ ...a, metod: "REQUEST", kontakt: null }).text.startsWith("Hej,"));
+  ok("plats och länk följer med", kundbrev({ ...a, metod: "REQUEST", plats: "Kontoret", url: "https://x.se" }).text.includes("Plats: Kontoret\nLänk: https://x.se"));
 }
 
 console.log("\n\x1b[1mAvatarerna\x1b[0m");

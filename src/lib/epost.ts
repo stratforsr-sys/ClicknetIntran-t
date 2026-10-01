@@ -19,6 +19,17 @@ const PAUS_MS = 550;
 
 const FORSOK = 3;
 
+/**
+ * En bilaga (pass 4): i dag bara inbjudningarnas `.ics`. Innehållet är text och
+ * kodas till base64 här, som Resend vill ha det.
+ */
+export type Bilaga = {
+  filnamn: string;
+  innehall: string;
+  /** `text/calendar; method=REQUEST` får Outlook att visa en inbjudan och inte en fil. */
+  typ?: string;
+};
+
 export type Brev = {
   till: string | string[];
   amne: string;
@@ -30,6 +41,7 @@ export type Brev = {
    * håller brevet och skickar det själv — navet behöver inte vara vaket då.
    */
   schemalagtVid?: string;
+  bilagor?: Bilaga[];
 };
 
 export type Utfall =
@@ -68,6 +80,15 @@ export async function skickaEpost(brev: Brev): Promise<Utfall> {
     ...(brev.html ? { html: brev.html } : {}),
     ...(brev.svaraTill ? { reply_to: brev.svaraTill } : {}),
     ...(brev.schemalagtVid ? { scheduled_at: brev.schemalagtVid } : {}),
+    ...(brev.bilagor?.length
+      ? {
+          attachments: brev.bilagor.map((b) => ({
+            filename: b.filnamn,
+            content: Buffer.from(b.innehall, "utf8").toString("base64"),
+            ...(b.typ ? { content_type: b.typ } : {}),
+          })),
+        }
+      : {}),
   });
 
   let sista = "okant fel";

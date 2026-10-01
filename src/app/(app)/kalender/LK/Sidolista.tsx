@@ -180,13 +180,15 @@ export function Sidolista({
               <div className="grp">{GRUPP_RUBRIK[g]}</div>
               {personer.map((p) => {
                 const jag = p.id === data.mig;
+                // Teamet visar alla i grupperna; listan står ikryssad och låst så länge.
+                const iTeamet = data.vy === "team" && data.team.includes(p.id);
                 return (
                   <label key={p.id} htmlFor={`cal-${p.id}`}>
                     <input
                       type="checkbox"
                       id={`cal-${p.id}`}
-                      checked={jag || data.visa.includes(p.id)}
-                      disabled={jag}
+                      checked={jag || iTeamet || data.visa.includes(p.id)}
+                      disabled={jag || iTeamet}
                       onChange={(e) => vaxlaKalender(p.id, e.target.checked)}
                     />
                     <Av person={p} />
