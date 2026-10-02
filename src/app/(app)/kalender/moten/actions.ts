@@ -405,7 +405,7 @@ export async function stallIn(eventId: string): Promise<Resultat> {
       ok: true,
       kvitto:
         kvittoInstallt(r.data.mottagare.map((id) => namn.get(id) ?? "")) +
-        (r.data.paminnelse ? " Mejlpåminnelsen avbokas hos Resend." : ""),
+        (r.data.paminnelse ? " Den som skulle få mejlpåminnelsen får ett mejl om att mötet är avbokat." : ""),
       angra: r.data.undo_id,
       eventId,
     };

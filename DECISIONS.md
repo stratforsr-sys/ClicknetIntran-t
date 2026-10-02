@@ -603,3 +603,9 @@ Planeringsvyn står kvar oförändrad under `/kalender?vy=planera`.
   adress. Kalendern själv har ingen knapp för det; prototypen har ingen.
   Rubriken följer med, och på en leveranspost står kundens namn i den — det står
   i texten vid adressen.
+- (2026-10-02) **Resend-nyckeln förblir send-only** (beställarens val). Den får
+  schemalägga en påminnelse men inte flytta eller avboka den. Ett inställt möte
+  ger därför ett eget mejl till påminnelsens mottagare: "Det här mötet har
+  avbokats." Påminnelsen går ändå ut på sin tid. En **flyttad** post behåller
+  sin påminnelse på den gamla tiden; utkorgen försöker flytta den tre gånger och
+  säger sedan till admin.

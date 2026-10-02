@@ -5,6 +5,28 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-02 · Avbokat möte: ett mejl i stället för en avbokning hos Resend
+
+Resend-nyckeln i produktionen är **send-only**. Provat 2026-10-01: den
+schemalägger (`POST /emails` med `scheduled_at`) och skickar bilagor, men
+`PATCH /emails/{id}` och `POST /emails/{id}/cancel` svarar
+`401 restricted_api_key`. Det finns ingen nivå mellan send-only och full åtkomst,
+och beställaren valde att behålla send-only.
+
+**Följden, och vad som gjordes:** ett inställt möte kan inte avboka sin
+mejlpåminnelse. När avbokningen nekas av det skälet skickar utkorgen genast ett
+kort mejl till samma mottagare — "Det här mötet har avbokats." — och markerar
+påminnelsen `fel` med skälet, så att panelen inte påstår att den är avbokad.
+Ingen felnotis till admin för det fallet. Kunden får mejlet bara där kundmejl är
+tillåtna (produktionen, eller `@resend.dev` i previewen). Ett välkomstsamtal som
+markerats genomfört i förväg får inget sådant mejl.
+
+**Inte löst:** en flyttad post behåller påminnelsen på den gamla tiden, och
+utkorgen säger till admin efter tre försök. Inga mejlpåminnelser fanns i
+databasen när det här skrevs.
+
+---
+
 ## 2026-10-01 (senare) · Leveranskalendern mergad till main
 
 **Mergad som `89336dc`**, en riktig merge-commit med två föräldrar (`38b1099`

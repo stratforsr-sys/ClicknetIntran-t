@@ -237,6 +237,7 @@ async function resend(rad: Utkorgsrad): Promise<boolean> {
     if (!p.resend_id) return false;
     const u = await avbrytSchemalagt(p.resend_id);
     await logga("ut", { handling: "cancel", reminder: p.id, resend_id: p.resend_id, ok: u.skickat });
+    if (!u.skickat && arSendOnly(u.orsak)) return avbokningsmejl(p);
     if (!u.skickat) throw new Error(u.orsak);
     await db.rpc("lk_resend_satt", { p_reminder: p.id, p_resend_id: null, p_status: "avbokad", p_fel: null });
     return true;
@@ -314,6 +315,73 @@ async function resend(rad: Utkorgsrad): Promise<boolean> {
   await logga("ut", { handling: "schedule", reminder: p.id, mottagare: p.recipient, scheduled_at: p.send_at, ok: u.skickat, id: u.skickat ? u.id : null });
   if (!u.skickat) throw new Error(u.orsak);
   await db.rpc("lk_resend_satt", { p_reminder: p.id, p_resend_id: u.id, p_status: "schemalagd", p_fel: null });
+  return true;
+}
+
+/**
+ * Resend-nyckeln är send-only (beställarens val 2026-10-02): den får skicka och
+ * schemalägga, men inte avboka ett schemalagt brev (`401 restricted_api_key`).
+ */
+const arSendOnly = (orsak: string) => /restricted_api_key|only send emails/i.test(orsak);
+
+/**
+ * PÅMINNELSEN KOMMER ÄNDÅ — SÄG DÄRFÖR ATT MÖTET ÄR AVBOKAT.
+ *
+ * När Resend inte låter navet avboka påminnelsen går den ut på sin tid. I stället
+ * för tre misslyckade försök och en felnotis till admin får mottagaren genast ett
+ * kort brev: "Det här mötet har avbokats." Påminnelsen markeras `fel` med skälet,
+ * så att panelen inte påstår att den är avbokad.
+ *
+ * Bara för ett INSTÄLLT möte. Ett välkomstsamtal som markerats genomfört i förväg
+ * får ingen sådan rad — mötet är inte avbokat, det är redan gjort.
+ */
+async function avbokningsmejl(p: Paminnelse): Promise<boolean> {
+  const db = supabaseAdmin();
+  const fel = "Resend kunde inte avboka påminnelsen (nyckeln får bara skicka)";
+  const { data: e } = await db
+    .from("calendar_event")
+    .select("id, title, dag, tid, cancelled_at, organizer_id, order_id, step")
+    .eq("id", p.event_id)
+    .maybeSingle();
+  if (!e || !e.cancelled_at || Date.parse(p.send_at) <= Date.now()) {
+    await db.rpc("lk_resend_satt", { p_reminder: p.id, p_resend_id: null, p_status: "fel", p_fel: fel });
+    return false;
+  }
+
+  const [{ data: org }, { data: o }] = await Promise.all([
+    db.from("employee").select("first_name, email").eq("id", e.organizer_id).maybeSingle(),
+    e.order_id
+      ? db.from("sales_order").select("contact_name, contact_email").eq("id", e.order_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+
+  const kund = p.recipient === "kund";
+  const till = kund ? ((o?.contact_email as string | null) ?? null) : ((org?.email as string | null) ?? null);
+  if (!till || (kund && !kundmejlTillatet(till))) {
+    await db.rpc("lk_resend_satt", { p_reminder: p.id, p_resend_id: null, p_status: "fel", p_fel: fel });
+    return false;
+  }
+
+  const tid = hm(minuter(e.tid as string) ?? 0);
+  const vad = kund ? (arSteg(e.step) ? `${FORINSTALLNINGAR[e.step].lab} med Clicknet` : "Mötet") : (e.title as string);
+  const namn = kund ? (o?.contact_name as string | null | undefined)?.split(" ")[0] : (org?.first_name as string | undefined);
+  const u = await skickaEpost({
+    till,
+    amne: `Avbokat: ${vad} ${dayLabel(e.dag as string)} kl ${tid}`,
+    text: [
+      namn ? `Hej ${namn},` : "Hej,",
+      "",
+      "Det här mötet har avbokats.",
+      "",
+      `${vad}, ${dayLabel(e.dag as string)} kl ${tid}.`,
+      "Du kan bortse från påminnelsen om mötet.",
+      ...(kund ? ["", "Hälsningar,", "Clicknet"] : []),
+    ].join("\n"),
+    ...(kund && org?.email ? { svaraTill: org.email as string } : {}),
+  });
+  await logga("ut", { handling: "avbokningsmejl", reminder: p.id, mottagare: p.recipient, ok: u.skickat, id: u.skickat ? u.id : null });
+  if (!u.skickat) throw new Error(u.orsak);
+  await db.rpc("lk_resend_satt", { p_reminder: p.id, p_resend_id: null, p_status: "fel", p_fel: `${fel}. Avbokningsmejl skickat.` });
   return true;
 }
 
