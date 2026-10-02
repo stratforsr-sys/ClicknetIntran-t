@@ -27,13 +27,13 @@ påslaget (09:45) och svarar 200; släppnotiserna är daterade 2026-10-01.
    kickoff på den skickar kundens .ics även från previewen (bara `@resend.dev`
    släpps igenom där).
 3. ~~Vid merge~~ — gjort 2026-10-01: `nav-utkorg` på, notiserna daterade, `behind_by` var 0.
-4. **Resends webhook** mot `/api/resend` och `RESEND_WEBHOOK_SECRET` i Vercel
+4. **Resend-nyckeln är send-only, och så får det vara** (beställaren 2026-10-02).
+   Inställt möte → mejlet "Det här mötet har avbokats" i stället för en avbokning
+   hos Resend. **Flyttad post behåller påminnelsen på gamla tiden** — olöst.
+5. **Resends webhook** mot `/api/resend` och `RESEND_WEBHOOK_SECRET` i Vercel
    (Production + Preview) — beställaren gör det i Resends gränssnitt. Utan den
    kommer inga leveransstatusar in.
-5. **Städa provdatan** när provet är klart: se minnet
-   `nav-leveranskalender-testdata` (ordern har en raderingsspärr; auth-kontona
-   raderas med auth-id, inte employee-id). `tests/sidor.mjs` är röd tills dess —
-   provkontot heter *Test Säljare*, och "Säljare" är också rolletiketten.
+6. ~~Städa provdatan~~ — gjort 2026-10-02 på beställarens besked: provordern, dess leveransrad och välkomstsamtal, fem utkorgsrader, sex notiser, båda provkontona (även inloggningen) och de 42 påminnelse- och närvarorader jobben skrivit åt dem. `tests/sidor.mjs` ska vara grön igen.
 
 ### Vad som måste vara sant härefter
 

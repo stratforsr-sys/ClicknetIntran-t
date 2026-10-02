@@ -5,6 +5,44 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-02 (senare) · Provdatan för leveranskalendern borttagen
+
+På beställarens besked ("provdatan funkar, du kan ta bort den"). En transaktion,
+torrkörd först: provorderns välkomstsamtal, 5 utkorgsrader, 6 notiser, leveransraden,
+ordern (med `session_replication_role = replica` bara över den raden — den har en
+raderingsspärr), 22 frånvaropåminnelser och 20 närvarorader som jobben skrivit åt
+provkontona, rollerna och de två anställda. Kontona raderades med alla främmande
+nycklar påslagna, så inget annat pekade på dem. Inloggningarna togs bort via
+admin-API:t (auth-id, inte employee-id). Spärren på `sales_order` provad efteråt:
+på igen.
+
+Zens serie "K&V Protokoll" (nio förekomster, skapad samma morgon) är inte provdata
+och rördes inte.
+
+---
+
+## 2026-10-02 · Avbokat möte: ett mejl i stället för en avbokning hos Resend
+
+Resend-nyckeln i produktionen är **send-only**. Provat 2026-10-01: den
+schemalägger (`POST /emails` med `scheduled_at`) och skickar bilagor, men
+`PATCH /emails/{id}` och `POST /emails/{id}/cancel` svarar
+`401 restricted_api_key`. Det finns ingen nivå mellan send-only och full åtkomst,
+och beställaren valde att behålla send-only.
+
+**Följden, och vad som gjordes:** ett inställt möte kan inte avboka sin
+mejlpåminnelse. När avbokningen nekas av det skälet skickar utkorgen genast ett
+kort mejl till samma mottagare — "Det här mötet har avbokats." — och markerar
+påminnelsen `fel` med skälet, så att panelen inte påstår att den är avbokad.
+Ingen felnotis till admin för det fallet. Kunden får mejlet bara där kundmejl är
+tillåtna (produktionen, eller `@resend.dev` i previewen). Ett välkomstsamtal som
+markerats genomfört i förväg får inget sådant mejl.
+
+**Inte löst:** en flyttad post behåller påminnelsen på den gamla tiden, och
+utkorgen säger till admin efter tre försök. Inga mejlpåminnelser fanns i
+databasen när det här skrevs.
+
+---
+
 ## 2026-10-01 (senare) · Leveranskalendern mergad till main
 
 **Mergad som `89336dc`**, en riktig merge-commit med två föräldrar (`38b1099`

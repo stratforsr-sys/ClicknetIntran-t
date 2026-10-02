@@ -84,7 +84,7 @@ leveransstart och avstämningarna efter 30 och 90 dagar.
 ## Påminnelser
 
 Varje leveranspost kan få en mejlpåminnelse 30 minuter före — till dig och, om du
-vill, till kunden. Flyttas posten flyttas mejlet, ställs den in avbokas det.`,
+vill, till kunden. Ställs posten in får mottagaren ett mejl om att mötet är avbokat.`,
     datum: "2026-10-01",
     roller: ["delivery", "project_manager", "sales_manager", "salesperson"],
     href: "/kalender",
