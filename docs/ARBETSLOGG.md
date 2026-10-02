@@ -5,6 +5,22 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-02 (senare) · Provdatan för leveranskalendern borttagen
+
+På beställarens besked ("provdatan funkar, du kan ta bort den"). En transaktion,
+torrkörd först: provorderns välkomstsamtal, 5 utkorgsrader, 6 notiser, leveransraden,
+ordern (med `session_replication_role = replica` bara över den raden — den har en
+raderingsspärr), 22 frånvaropåminnelser och 20 närvarorader som jobben skrivit åt
+provkontona, rollerna och de två anställda. Kontona raderades med alla främmande
+nycklar påslagna, så inget annat pekade på dem. Inloggningarna togs bort via
+admin-API:t (auth-id, inte employee-id). Spärren på `sales_order` provad efteråt:
+på igen.
+
+Zens serie "K&V Protokoll" (nio förekomster, skapad samma morgon) är inte provdata
+och rördes inte.
+
+---
+
 ## 2026-10-02 · Avbokat möte: ett mejl i stället för en avbokning hos Resend
 
 Resend-nyckeln i produktionen är **send-only**. Provat 2026-10-01: den

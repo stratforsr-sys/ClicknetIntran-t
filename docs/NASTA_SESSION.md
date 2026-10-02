@@ -33,10 +33,7 @@ påslaget (09:45) och svarar 200; släppnotiserna är daterade 2026-10-01.
 5. **Resends webhook** mot `/api/resend` och `RESEND_WEBHOOK_SECRET` i Vercel
    (Production + Preview) — beställaren gör det i Resends gränssnitt. Utan den
    kommer inga leveransstatusar in.
-6. **Städa provdatan** när provet är klart: se minnet
-   `nav-leveranskalender-testdata` (ordern har en raderingsspärr; auth-kontona
-   raderas med auth-id, inte employee-id). `tests/sidor.mjs` är röd tills dess —
-   provkontot heter *Test Säljare*, och "Säljare" är också rolletiketten.
+6. ~~Städa provdatan~~ — gjort 2026-10-02 på beställarens besked: provordern, dess leveransrad och välkomstsamtal, fem utkorgsrader, sex notiser, båda provkontona (även inloggningen) och de 42 påminnelse- och närvarorader jobben skrivit åt dem. `tests/sidor.mjs` ska vara grön igen.
 
 ### Vad som måste vara sant härefter
 
