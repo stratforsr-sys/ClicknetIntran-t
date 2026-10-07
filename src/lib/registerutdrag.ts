@@ -253,6 +253,7 @@ export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
   { tabell: "employee_role", kolumn: "granted_by", skal: "Vem som gav rollen" },
   { tabell: "hr_case", kolumn: "assigned_to", skal: "Vem som handlägger andras ärenden" },
   { tabell: "hr_case", kolumn: "created_by", skal: "Vem som lade upp ärendet" },
+  { tabell: "lead", kolumn: "assigned_to", skal: "Vilken säljare som fått ett lead — uppgifterna handlar om kunden, inte om säljaren" },
   { tabell: "late_arrival", kolumn: "resolved_by", skal: "Vem som avslutade posten" },
   { tabell: "offboarding_task", kolumn: "handled_by", skal: "Vem som kvitterade punkten" },
   { tabell: "onboarding_task", kolumn: "handled_by", skal: "Vem som kvitterade punkten" },

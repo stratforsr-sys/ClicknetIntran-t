@@ -340,6 +340,15 @@ const TACKNING = {
   "personal::andraBehorighet": "notifierar",
 
   // ---------------------------------------------------------------------------
+  // Leads (0076). Det NYA leadet notifierar från mottagaren i
+  // `src/lib/leads-server.ts`, inte från en server action — det skrivs av
+  // hemsidan och inte av någon i navet.
+  // ---------------------------------------------------------------------------
+  "leads::tilldelaLead": "notifierar",
+  "leads::uppdateraLead":
+    "Status och anteckning är säljarens eget arbetsminne. Fördelarna ser läget i listan, och ingen behöver avbrytas för att ett lead blev uppringt.",
+
+  // ---------------------------------------------------------------------------
   // Rekrytering
   // ---------------------------------------------------------------------------
   "rekrytering::nyKandidat": "notifierar",

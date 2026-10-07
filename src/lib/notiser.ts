@@ -42,7 +42,8 @@ export type Notistyp =
   | "kv"
   | "uppgift"
   | "chatt"
-  | "kalender";
+  | "kalender"
+  | "lead";
 
 /**
  * Ar strangen en av de sjutton typerna?
@@ -550,6 +551,15 @@ export const NOTIS_KALLOR = [
   "leverans-studs",
 
   /**
+   * Leads från hemsidan (0076). Båda är HÄNDELSER: ett nytt lead är kallt om
+   * en timme, och den som ska ringa det behöver veta NU — inte nästa gång
+   * klockan råkar öppnas. Att leadet fortfarande väntar syns i /leads, där
+   * det står överst tills någon tagit det.
+   */
+  "lead-ny",
+  "lead-tilldelad",
+
+  /**
    * ANGRA-KNAPPEN HAR MED FLIT INGEN KALLA HAR.
    *
    * `/angra` provades och togs bort igen. Kvittot med angra-knappen visas bara
@@ -642,6 +652,8 @@ export const HANDELSEKALLOR = [
   "leverans-komplettera",
   "leverans-frist",
   "leverans-studs",
+  "lead-ny",
+  "lead-tilldelad",
 ] as const satisfies readonly Notiskalla[];
 
 export type Handelsekalla = (typeof HANDELSEKALLOR)[number];
@@ -729,6 +741,7 @@ export const TYP_ETIKETT: Record<Notistyp, string> = {
   uppgift: "Uppgift",
   chatt: "Chatt",
   kalender: "Kalender",
+  lead: "Lead",
 };
 
 export const TYP_IKON: Record<Notistyp, string> = {
@@ -751,6 +764,7 @@ export const TYP_IKON: Record<Notistyp, string> = {
   uppgift: "kontroll",
   chatt: "chatt",
   kalender: "kalender",
+  lead: "saljning",
 };
 
 /**
