@@ -55,6 +55,17 @@ export async function tomUtkorgen(antal = 50): Promise<Tomning> {
   if (error || !data) return utfall;
 
   for (const rad of data as unknown as Utkorgsrad[]) {
+    // CRM-RADERNA ÄR PRODUKTIONENS (0076). En preview delar databas med
+    // produktionen och kan tömma utkorgen efter en egen åtgärd — med den
+    // manuella adaptern hade den markerat en riktig Inkio-rad som skickad och
+    // den hade aldrig nått Inkio. Raden lämnas tillbaka, och försöket räknas
+    // inte; produktionens tömning tar den inom en minut.
+    if (rad.kind === "crm" && process.env.VERCEL_ENV !== "production") {
+      await db.from("outbox").update({ claimed_at: null, attempts: rad.attempts - 1 }).eq("id", rad.id);
+      utfall.hoppade++;
+      continue;
+    }
+
     let fel: string | null = null;
     try {
       const gick = await skicka(rad);

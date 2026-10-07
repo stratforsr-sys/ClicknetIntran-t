@@ -1,6 +1,6 @@
 import "server-only";
 
-import { inkio, inkioKonfigurerad } from "./inkio";
+import { inkio, inkioFarSkriva } from "./inkio";
 import type { Inkioadress, Orderunderlag } from "./inkio-mappning";
 
 /**
@@ -19,8 +19,8 @@ import type { Inkioadress, Orderunderlag } from "./inkio-mappning";
  *   - Leveransens steg skrivs på kundens tidslinje (`tidslinje`, 0075): bokat,
  *     genomfört, ej svar, flyttat och inställt, för alla sex stegen.
  *
- * Utan nycklarna i miljön faller `adapter()` tillbaka på den manuella — så
- * att en preview eller en lokal körning aldrig skriver i Inkio av misstag.
+ * Utanför produktionen — eller utan nycklar — faller `adapter()` tillbaka på
+ * den manuella, så att en preview aldrig skriver i Inkio (`inkioFarSkriva`).
  *
  * Allt som går ut loggas rått i `integration_log` av anroparen, innan det
  * tolkas, som `call_ingest` för växeln.
@@ -94,5 +94,5 @@ export const manuell: CrmAdapter = {
 };
 
 export function adapter(): CrmAdapter {
-  return inkioKonfigurerad() ? inkio : manuell;
+  return inkioFarSkriva() ? inkio : manuell;
 }

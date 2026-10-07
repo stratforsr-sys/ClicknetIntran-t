@@ -32,6 +32,7 @@ import type { Crmkopplingsrad, Orderrad, Tjansterad } from "@/lib/order-server";
 import { Atgarder } from "./Atgarder";
 import { Bilaga, type Orderbilaga } from "./Bilaga";
 import { Fornyelse } from "./Fornyelse";
+import { Inkioaktivitet } from "./Inkioaktivitet";
 import { Inkioruta } from "./Inkioruta";
 import { Samtal } from "./Samtal";
 
@@ -131,6 +132,9 @@ export function Kundkort({
 
   const flikar: { id: Flik; ikon: string; etikett: string; raknare?: number }[] = [
     { id: "oversikt", ikon: "konto", etikett: "Översikt" },
+    // 0076: allt som hänt med kunden i Inkio. Andra plats — det är dit man går
+    // för att förstå kunden innan man ringer.
+    { id: "aktivitet", ikon: "tid", etikett: "Aktivitet" },
     { id: "order", ikon: "sedel", etikett: "Order", raknare: kund.antal },
     { id: "samtal", ikon: "chatt", etikett: "Samtal", raknare: allaSamtal.length },
     { id: "bilagor", ikon: "rutiner", etikett: "Bilagor", raknare: bilageantal },
@@ -255,6 +259,8 @@ export function Kundkort({
             </div>
           )}
 
+          {flik === "aktivitet" && <Inkioaktivitet orderId={ankareId} />}
+
           {flik === "historik" && <Historik kund={kund} namn={namn} hanterare={hanterare} />}
         </div>
       </div>
@@ -262,7 +268,7 @@ export function Kundkort({
   );
 }
 
-type Flik = "oversikt" | "order" | "samtal" | "bilagor" | "historik";
+type Flik = "oversikt" | "aktivitet" | "order" | "samtal" | "bilagor" | "historik";
 
 // -----------------------------------------------------------------------------
 // Highlights-panelen

@@ -2,9 +2,9 @@
 
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
-import { supabaseAdmin } from "@/lib/supabase/server";
+import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { tomUtkorgen } from "@/lib/utkorg-server";
-import { bolagsuppslag } from "@/lib/crm/inkio";
+import { bolagsuppslag, inkioKonfigurerad, kundaktivitet, type Kundaktivitet } from "@/lib/crm/inkio";
 import { getCurrentUser, hasRole, type CurrentUser } from "@/lib/auth";
 import { svensktDatum } from "@/lib/klocka";
 import { kronor, manadsnamn, manadsnyckel, tolkaBelopp } from "@/lib/provision";
@@ -2698,6 +2698,32 @@ export async function slaUppBolag(orgnr: string) {
     return await bolagsuppslag(orgnr);
   } catch {
     return null;
+  }
+}
+
+/**
+ * Kundkortets flik "Aktivitet" (0076): allt som hänt med kunden i Inkio.
+ *
+ * VEM SOM SER DEN avgörs av `sales_order`s RLS — ordern läses med
+ * ANVÄNDARENS token. Säljaren ser aktiviteten för sina egna kunder, säljchef,
+ * VD och ekonomi för alla. Det är samma krets som ser kundkortet, och Inkio
+ * läses först när den frågan är besvarad.
+ */
+export async function hamtaInkioAktivitet(
+  orderId: string,
+): Promise<{ fel: string } | { ejKopplat: true } | Kundaktivitet> {
+  try {
+    await kravInloggad();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderId)) {
+      return { fel: "Ordern finns inte." };
+    }
+    const rls = await supabaseServer();
+    const { data } = await rls.from("sales_order").select("org_number").eq("id", orderId).maybeSingle();
+    if (!data) return { fel: "Ordern finns inte, eller så får du inte se den." };
+    if (!inkioKonfigurerad()) return { ejKopplat: true };
+    return await kundaktivitet(String(data.org_number ?? ""));
+  } catch (e) {
+    return { fel: e instanceof Error ? `Inkio svarade inte: ${e.message}` : "Inkio svarade inte." };
   }
 }
 

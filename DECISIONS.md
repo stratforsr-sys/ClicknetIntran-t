@@ -601,6 +601,15 @@ Planeringsvyn står kvar oförändrad under `/kalender?vy=planera`.
   enskild firma skriver säljaren den. (6) Alla leveranssteg skrivs på kundens
   tidslinje i Inkio — bokat, genomfört, ej svar, flyttat, inställt.
   Leveranstavla i Inkio med synk åt båda hållen: föreslagen, väntar på ja.
+- (0076, 2026-10-07) **Kundkortets "Aktivitet" läser Inkio när fliken öppnas**,
+  ingen kopia i Nav. Beställaren ville ha "exakt allting" — Inkios egen lista
+  över trådar per kund (`get-thread-sources`) tar med nya posttyper av sig
+  själv, och en spegel hade alltid varit en synk efter. 0,3–0,5 s per kund.
+  Behörigheten är kundkortets: ordern läses med användarens token först.
+  **Läsa får alla miljöer, skriva bara produktionen** (`inkioFarSkriva`,
+  `VERCEL_ENV`): nycklarna ligger nu också i previewen för grenen `inkio`, och
+  utkorgen lämnar tillbaka CRM-rader utanför produktionen i stället för att
+  markera dem skickade.
 - (Pass 3) **Överlämningen fylls i på en egen sida**, `/kalender/overlamning/[order]`,
   som prototypen saknar. Notisen "Komplettera överlämningen" leder dit.
 - (Pass 4) **Teamet hämtar alla i Säljteamet och Leverans** för dagen, oavsett

@@ -5,6 +5,31 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-07 (sen kväll) · Kundkortets "Aktivitet" — allt från Inkio (0076)
+
+Beställaren: "allt som händer med kunden i inkio ska in där, så alla
+anteckningar och exakt allt annat … säljaren som har kunden ska kunna se all
+aktivitet".
+
+**Läst live, inte speglat.** Inkio ger en lista över varje tråd som hänger på
+en kund (`get-thread-sources`: kunden, order, och avtal/fakturor/ärenden när de
+finns) och varje tråds tidslinje (`get-comments`). Att läsa dem när fliken
+öppnas tar 0,3–0,5 s och tar med en ny posttyp utan att Nav ändras. En spegel
+hade varit snabbare att visa men aldrig "exakt allting".
+
+**Det som fanns:** 103 anteckningar över 78 kunder — uppsägningar,
+kreditfakturor, samtal med finansiären — och sex händelsemallar på engelska.
+
+**Previewen fick nycklarna, och därmed behövdes en ny spärr.** Förut var
+"inga nycklar i previewen" det som hindrade previewen att skriva i Inkio. Men
+previewen delar databas med produktionen, och en åtgärd där kan tömma
+utkorgen: med den manuella adaptern hade den markerat riktiga Inkio-rader som
+skickade. Nu: `inkioFarSkriva()` kräver `VERCEL_ENV=production`, och
+`tomUtkorgen` lämnar tillbaka CRM-rader (claimed_at = null, försöket räknas
+inte) utanför produktionen. Nycklarna i Preview är begränsade till grenen `inkio`.
+
+---
+
 ## 2026-10-07 (kväll) · Inkio, andra varvet: kön vid inskick, avtal krävs, leveranssteg till Inkio (0075)
 
 Beställaren läste första varvet och svarade på fyra frågor samma dag.

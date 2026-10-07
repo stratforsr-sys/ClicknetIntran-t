@@ -2,6 +2,8 @@ import "server-only";
 
 import type { CrmAdapter, Crmkoppling, Crmorder, Crmstatus } from "./adapter";
 import {
+  KALLETIKETT,
+  aktivitetstext,
   INKIO_MAX_BYTE,
   INKIO_STANDARD_URL,
   arJuridiskPerson,
@@ -39,6 +41,19 @@ import {
 
 export function inkioKonfigurerad(): boolean {
   return Boolean(process.env.INKIO_API_KEY?.trim() && process.env.INKIO_API_SECRET?.trim());
+}
+
+/**
+ * LÄSA FÅR ALLA MILJÖER, SKRIVA BARA PRODUKTIONEN (0076).
+ *
+ * Previewen pekar på produktionens databas och har samma nycklar — så att
+ * kundkortets aktivitet och adressuppslaget går att granska där. Men en order,
+ * en makulering eller en rad på en tidslinje i Inkio skrivs bara av
+ * produktionen: `adapter()` ger den manuella överallt annars, och
+ * `tomUtkorgen()` lämnar tillbaka CRM-raderna orörda.
+ */
+export function inkioFarSkriva(): boolean {
+  return inkioKonfigurerad() && process.env.VERCEL_ENV === "production";
 }
 
 export function inkioUrl(): string {
@@ -362,3 +377,111 @@ export const inkio: CrmAdapter = {
     }
   },
 };
+
+// -----------------------------------------------------------------------------
+// Kundens aktivitet (0076) — kundkortets flik "Aktivitet"
+// -----------------------------------------------------------------------------
+
+export type Aktivitetsrad = {
+  id: string;
+  nar: string;
+  vem: string;
+  anteckning: boolean;
+  text: string;
+  kalla: { etikett: string; lank: string | null };
+};
+
+export type Kundaktivitet =
+  | { kund: null }
+  | { kund: { id: string; nummer: string; namn: string; lank: string }; rader: Aktivitetsrad[]; avkortad: boolean };
+
+type Tradkalla = {
+  key: string;
+  doctype: string;
+  label: string;
+  route: string | null;
+  docs: { id: string; title: string; comment_count: number }[];
+};
+
+type Inkiorad = {
+  id: string;
+  content: string;
+  created_by_full_name: string | null;
+  created_by_is_service_account: boolean;
+  import_unattributed: boolean;
+  created_at: string;
+  comment_type: string;
+  activity_template: string | null;
+  activity_args: string | null;
+};
+
+/** Högst så här många poster läses per kund. En kund med fler visar de senaste. */
+const MAX_POSTER = 60;
+
+/**
+ * ALLT SOM HÄNT MED KUNDEN I INKIO: kundens egen tidslinje och tidslinjen för
+ * varje post som hänger på den — order, avtal, fakturor, ärenden. Inkio säger
+ * själv vilka (`get-thread-sources`), så en ny sorts post följer med utan att
+ * koden ändras. Läses när fliken öppnas, aldrig i förväg: kundkortet ska inte
+ * vänta på Inkio, och det som visas ska vara det som står där nu.
+ *
+ * Kunden hittas på organisationsnumret — också för order lagda innan Nav
+ * började skriva till Inkio.
+ */
+export async function kundaktivitet(orgnr: string): Promise<Kundaktivitet> {
+  const kund = await kundMedOrgnr(orgnr);
+  if (!kund) return { kund: null };
+
+  const kallor = await anrop<Tradkalla[]>("GET", "/api/comments/get-thread-sources", {
+    query: { reference_doctype: "Customer", reference_id: kund.id },
+  });
+
+  const poster = kallor.flatMap((k) =>
+    k.docs.map((d) => ({
+      doctype: k.doctype,
+      id: d.id,
+      etikett: k.key === "self" ? KALLETIKETT.self : `${KALLETIKETT[k.key] ?? k.label} ${d.title}`,
+      lank:
+        k.key === "self"
+          ? inkioLank("kund", d.id)
+          : k.route
+            ? `${inkioUrl()}${k.route.replace("{id}", encodeURIComponent(d.id))}`
+            : null,
+    })),
+  );
+  const lasta = poster.slice(0, MAX_POSTER);
+
+  const svar = await Promise.all(
+    lasta.map((p) =>
+      anrop<Inkiorad[]>("GET", "/api/comments/get-comments", {
+        query: { reference_doctype: p.doctype, reference_id: p.id },
+      }).then((rader) => rader.map((r) => ({ r, p }))),
+    ),
+  );
+
+  const sedda = new Set<string>();
+  const rader: Aktivitetsrad[] = [];
+  for (const { r, p } of svar.flat()) {
+    if (sedda.has(r.id)) continue;
+    sedda.add(r.id);
+    rader.push({
+      id: r.id,
+      nar: r.created_at,
+      vem: r.created_by_is_service_account
+        ? "Clicknet Nav"
+        : r.import_unattributed
+          ? `${r.created_by_full_name ?? "Inkio"} (import)`
+          : (r.created_by_full_name ?? "Inkio"),
+      anteckning: r.comment_type === "Comment",
+      text: aktivitetstext(r.content, r.activity_template, r.activity_args),
+      kalla: { etikett: p.etikett, lank: p.lank },
+    });
+  }
+  rader.sort((a, b) => (a.nar < b.nar ? 1 : a.nar > b.nar ? -1 : 0));
+
+  return {
+    kund: { id: kund.id, nummer: kund.number, namn: kund.customer_name, lank: inkioLank("kund", kund.id) },
+    rader,
+    avkortad: poster.length > lasta.length,
+  };
+}

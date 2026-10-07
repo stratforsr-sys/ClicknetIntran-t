@@ -293,3 +293,77 @@ export function leveransrad(a: {
   return `Leverans · ${text[a.handelse]} — Clicknet Nav`;
 }
 
+
+// -----------------------------------------------------------------------------
+// Kundens aktivitet i Inkio, för kundkortet i Nav (0076)
+// -----------------------------------------------------------------------------
+
+/**
+ * Inkios händelser är skrivna på engelska efter en mall ("{0} submitted order
+ * {1} ({2})"). De som fanns 2026-10-07 — sex stycken, över alla 78 kunder —
+ * står här på svenska. En mall som tillkommer (fakturor när Fortnox kopplas,
+ * ärenden) visas som Inkio skrev den tills den läggs till här: hellre engelska
+ * än en rad som saknas.
+ */
+export const AKTIVITETSMALLAR: Record<string, string> = {
+  "{0} submitted order {1} ({2})": "{0} skickade in order {1} ({2})",
+  "{0} created order {1} ({2})": "{0} skapade order {1} ({2})",
+  "{0} created customer {1}": "{0} lade upp kunden {1}",
+  "Customer {0} was created": "Kunden {0} lades upp",
+  "Order {0} was submitted ({1})": "Order {0} skickades in ({1})",
+  "Order {0} was created ({1})": "Order {0} skapades ({1})",
+};
+
+/** Raden på svenska när mallen är känd, annars som Inkio skrev den. */
+export function aktivitetstext(innehall: string, mall: string | null, argJson: string | null): string {
+  const sv = mall ? AKTIVITETSMALLAR[mall] : undefined;
+  if (!sv) return innehall;
+  let arg: unknown;
+  try {
+    arg = JSON.parse(argJson ?? "[]");
+  } catch {
+    return innehall;
+  }
+  if (!Array.isArray(arg)) return innehall;
+  return sv.replace(/\{(\d+)\}/g, (_, i) => String(arg[Number(i)] ?? ""));
+}
+
+/** Inkios sidor per posttyp — för länkarna inne i texten. */
+const RUTT: Record<string, string> = {
+  Customer: "customers",
+  "Sales Order": "sales-orders",
+  Contract: "contracts",
+  Invoice: "invoices",
+  Ticket: "tickets",
+};
+
+export type Aktivitetsdel = { text: string; lank?: string };
+
+/**
+ * Texten i delar: vanlig text, och Inkios hänvisningar `#[SO-2026-00071](ref:Sales Order/<id>)`
+ * som länkar dit. En hänvisning till en posttyp utan känd sida blir bara sin etikett.
+ */
+export function aktivitetsdelar(text: string, bas: string): Aktivitetsdel[] {
+  const delar: Aktivitetsdel[] = [];
+  const re = /[#@]?\[([^\]]*)\]\((ref|user|mention):([^/)]+)\/?([^)]*)\)/g;
+  let sist = 0;
+  for (const m of text.matchAll(re)) {
+    const i = m.index ?? 0;
+    if (i > sist) delar.push({ text: text.slice(sist, i) });
+    const [, etikett, sort, typ, id] = m;
+    const rutt = sort === "ref" ? RUTT[typ] : undefined;
+    delar.push(rutt && id ? { text: etikett, lank: `${bas}/${rutt}/${encodeURIComponent(id)}` } : { text: etikett });
+    sist = i + m[0].length;
+  }
+  if (sist < text.length) delar.push({ text: text.slice(sist) });
+  return delar;
+}
+
+/** Varifrån raden kom: kunden själv eller en kopplad post. */
+export const KALLETIKETT: Record<string, string> = {
+  self: "Kunden",
+  orders: "Order",
+  contracts: "Avtal",
+  invoices: "Faktura",
+  tickets: "Ärende",
+};

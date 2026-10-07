@@ -14,6 +14,38 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "kundkortet-aktivitet-fran-inkio",
+    rubrik: "Kundkortet visar allt som hänt med kunden i Inkio",
+    ingress:
+      "Under Aktivitet på kundkortet står varje anteckning och varje händelse från Inkio — på kunden, dess order, avtal, fakturor och ärenden — nyast först.",
+    text: `Innan du ringer en kund: öppna kundkortet och tryck **Aktivitet**.
+
+## Vad som står där
+
+Allt som hänt med kunden i Inkio, i en lista per dag:
+
+- **Anteckningar** — det kollegorna skrivit om kunden, till exempel att den vill
+  säga upp eller att en kreditfaktura är på väg. De står markerade så att de syns.
+- **Händelser** — order som skapats och skickats in, och leveransens steg.
+
+Raderna kommer från kunden själv och från allt som hänger på den: order, avtal,
+fakturor och ärenden. Varje rad säger vem, när och varifrån, och länkarna går
+direkt till rätt sida i Inkio.
+
+## Filtrera
+
+Tryck **Anteckningar** för att bara se det som skrivits, eller **Händelser** för
+resten. **Uppdatera** hämtar det senaste.
+
+## Vem ser vad
+
+Du ser aktiviteten för kunderna du ser i Nav — dina egna, eller alla om du är
+säljchef, VD eller ekonomi.`,
+    datum: "2026-10-07",
+    roller: [],
+    href: "/order",
+  },
+  {
     slug: "avtal-och-leveranskon",
     rubrik: "Avtalet laddas upp i ordern — och leveransen ser den direkt",
     ingress:

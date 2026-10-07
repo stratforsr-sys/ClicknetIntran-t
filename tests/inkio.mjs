@@ -18,6 +18,8 @@
  *   node --experimental-strip-types tests/inkio.mjs
  */
 import {
+  aktivitetsdelar,
+  aktivitetstext,
   arJuridiskPerson,
   delaNamn,
   inkioBolagsform,
@@ -112,6 +114,21 @@ ok("genomfört kickoff", leveransrad({ steg: "kickoff", handelse: "genomford", s
 ok("inställt", leveransrad({ steg: "avstamning_30", handelse: "installd", startar: "2026-11-14T09:00:00Z", vem: null, forsok: 1 }).includes("Avstämning efter 30 dagar"));
 ok("okänt steg blir Leveransmöte", leveransrad({ steg: null, handelse: "flyttad", startar: "2026-10-14T08:00:00Z", vem: null, forsok: 1 }).includes("Leveransmöte flyttat"));
 ok("raden säger varifrån den kom", bokad.startsWith("Leverans · ") && bokad.endsWith("Clicknet Nav"));
+
+console.log("\nKundens aktivitet (0076)");
+const svensk = aktivitetstext(
+  "Dennis D submitted order #[SO-2026-00006](ref:Sales Order/01a1) (1 000,00 kr)",
+  "{0} submitted order {1} ({2})",
+  '["Dennis D", "#[SO-2026-00006](ref:Sales Order/01a1)", "1 000,00 kr"]',
+);
+ok("känd mall blir svenska", svensk === "Dennis D skickade in order #[SO-2026-00006](ref:Sales Order/01a1) (1 000,00 kr)", svensk);
+ok("okänd mall visas som Inkio skrev den", aktivitetstext("Invoice 12 was paid", "Invoice {0} was paid", '["12"]') === "Invoice 12 was paid");
+ok("trasiga argument ger originaltexten", aktivitetstext("x", "{0} created customer {1}", "inte json") === "x");
+const delar = aktivitetsdelar(svensk, "https://crm.inkio.se");
+ok("hänvisningen blir en länk till Inkio", delar[1]?.lank === "https://crm.inkio.se/sales-orders/01a1" && delar[1]?.text === "SO-2026-00006");
+ok("texten runt omkring står kvar", delar[0].text === "Dennis D skickade in order " && delar[2].text === " (1 000,00 kr)");
+ok("okänd posttyp blir bara etiketten", aktivitetsdelar("se #[X-1](ref:Okand/9)", "b")[1]?.lank === undefined);
+ok("anteckning med radbrytning orörd", aktivitetsdelar("rad ett\nrad två", "b")[0].text === "rad ett\nrad två");
 
 console.log("\nInklistrat id");
 ok("ur adressen", inkioIdUr("https://crm.inkio.se/customers/01a10ffe-dbea-733f-a228-65b245b7448b") === "01a10ffe-dbea-733f-a228-65b245b7448b");
