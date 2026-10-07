@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
+import { inkioLank } from "@/lib/crm/inkio";
 import { AVTALSSLUT_VARSEL_DAGAR, type Order, type Paket, type Sats, type Tjanst } from "@/lib/order";
 import type { Chefssats } from "@/lib/chefsprovision";
 import type { Utkopssats } from "@/lib/utkop";
@@ -338,6 +339,46 @@ export async function hamtaOrderbilagor(
     ]);
   }
 
+  return ut;
+}
+
+/**
+ * Vad orderna blev i Inkio (0074), i EN fraga — samma form som
+ * `hamtaOrderbilagor`. RLS pa `crm_order` fragar `sales_order`, sa en koppling
+ * syns bara pa en order som gor det. Lankarna raknas har, pa servern, eftersom
+ * Inkios adress ar en miljovariabel.
+ */
+export type Crmkopplingsrad = {
+  state: "utkast" | "inskickad" | "makulerad" | "fel";
+  error: string | null;
+  kundnummer: string | null;
+  ordernummer: string | null;
+  kundLank: string | null;
+  orderLank: string | null;
+  synkad: string;
+};
+
+export async function hamtaCrmkopplingar(orderIds: string[]): Promise<Map<string, Crmkopplingsrad>> {
+  const ut = new Map<string, Crmkopplingsrad>();
+  if (orderIds.length === 0) return ut;
+
+  const rls = await supabaseServer();
+  const { data } = await rls
+    .from("crm_order")
+    .select("order_id, state, error, customer_id, customer_number, crm_order_id, crm_order_number, synced_at")
+    .in("order_id", orderIds);
+
+  for (const r of data ?? []) {
+    ut.set(String(r.order_id), {
+      state: r.state as Crmkopplingsrad["state"],
+      error: (r.error as string | null) ?? null,
+      kundnummer: (r.customer_number as string | null) ?? null,
+      ordernummer: (r.crm_order_number as string | null) ?? null,
+      kundLank: r.customer_id ? inkioLank("kund", String(r.customer_id)) : null,
+      orderLank: r.crm_order_id ? inkioLank("order", String(r.crm_order_id)) : null,
+      synkad: String(r.synced_at),
+    });
+  }
   return ut;
 }
 

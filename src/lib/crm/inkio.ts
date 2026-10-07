@@ -1,0 +1,331 @@
+import "server-only";
+
+import type { CrmAdapter, Crmkoppling, Crmorder, Crmstatus } from "./adapter";
+import {
+  INKIO_MAX_BYTE,
+  INKIO_STANDARD_URL,
+  arJuridiskPerson,
+  inkioOrgnr,
+  nyKund,
+  nyOrder,
+  orderrader,
+  orgnrSiffror,
+  overenskommet,
+  type Inkioadress,
+} from "./inkio-mappning";
+
+/**
+ * Inkio — Clicknets egna CRM, crm.inkio.se.
+ *
+ * =============================================================================
+ * NYCKELN ÄR ETT TJÄNSTEKONTOS, OCH DEN ÄR ADMIN I BOLAGET CLICKNET
+ *
+ * `Authorization: token <nyckel>:<hemlighet>` (specens `token`-schema). Kontot
+ * har full läs- och skrivrätt i Inkio-bolaget Clicknet — allt Nav gör syns där
+ * som gjort av tjänstekontot. Nycklarna ligger i Vercel som `INKIO_API_KEY`
+ * och `INKIO_API_SECRET`; lokalt i `~/.clicknet/crm.env`.
+ * =============================================================================
+ *
+ * =============================================================================
+ * ETT ANDRA FÖRSÖK FÅR INTE SKAPA EN ANDRA ORDER
+ *
+ * Utkorgen försöker igen när något kastar, och ett anrop kan ha gått igenom i
+ * Inkio fast svaret aldrig kom fram. Därför börjar `skapa` alltid med att
+ * fråga: kunden slås upp på organisationsnumret, ordern på
+ * `external_order_id` = Nav-orderns id. Finns de används de.
+ * =============================================================================
+ */
+
+export function inkioKonfigurerad(): boolean {
+  return Boolean(process.env.INKIO_API_KEY?.trim() && process.env.INKIO_API_SECRET?.trim());
+}
+
+export function inkioUrl(): string {
+  return (process.env.INKIO_URL?.trim() || INKIO_STANDARD_URL).replace(/\/+$/, "");
+}
+
+/** Sidan i Inkio för en kund eller en order — för länkarna i Nav. */
+export function inkioLank(typ: "kund" | "order", id: string): string {
+  return `${inkioUrl()}/${typ === "kund" ? "customers" : "sales-orders"}/${encodeURIComponent(id)}`;
+}
+
+export class Inkiofel extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly kod: string,
+  ) {
+    super(message);
+  }
+}
+
+type Anrop = {
+  query?: Record<string, unknown>;
+  json?: unknown;
+  form?: FormData;
+};
+
+async function anrop<T>(metod: "GET" | "POST" | "PUT" | "DELETE", sokvag: string, a: Anrop = {}): Promise<T> {
+  const url = new URL(sokvag, inkioUrl());
+  for (const [k, v] of Object.entries(a.query ?? {})) {
+    if (v !== undefined && v !== null) url.searchParams.set(k, typeof v === "string" ? v : JSON.stringify(v));
+  }
+
+  const headers: Record<string, string> = {
+    Authorization: `token ${process.env.INKIO_API_KEY?.trim()}:${process.env.INKIO_API_SECRET?.trim()}`,
+    Accept: "application/json",
+  };
+  let body: BodyInit | undefined;
+  if (a.json !== undefined) {
+    headers["Content-Type"] = "application/json; charset=utf-8";
+    body = JSON.stringify(a.json);
+  } else if (a.form) {
+    body = a.form;
+  }
+
+  const svar = await fetch(url, { method: metod, headers, body, cache: "no-store", signal: AbortSignal.timeout(20_000) });
+  if (svar.status === 204) return undefined as T;
+
+  const text = await svar.text();
+  let data: unknown = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = text;
+  }
+
+  if (!svar.ok) {
+    const fel = (data as { error?: { code?: string; message?: string } } | null)?.error;
+    throw new Inkiofel(
+      `Inkio svarade ${svar.status} på ${metod} ${url.pathname}: ${fel?.message ?? String(text).slice(0, 200)}`,
+      svar.status,
+      fel?.code ?? "error",
+    );
+  }
+  return data as T;
+}
+
+// -----------------------------------------------------------------------------
+// Uppslag
+// -----------------------------------------------------------------------------
+
+type Kundrad = { id: string; number: string; customer_name: string; status: string | null };
+
+async function kundMedOrgnr(orgnr: string): Promise<Kundrad | null> {
+  const siffror = orgnrSiffror(orgnr);
+  if (!siffror) return null;
+  // `tax_id_key` är numret utan bindestreck — samma nyckel Inkio själv
+  // använder för att neka en dubblett.
+  const rader = await anrop<Kundrad[]>("GET", "/api/records/customer", {
+    query: {
+      filters: [["tax_id_key", "=", siffror]],
+      fields: ["id", "number", "customer_name", "status"],
+      limit: 2,
+    },
+  });
+  return rader[0] ?? null;
+}
+
+type Orderhuvud = { id: string; number: string; state: string; customer: string };
+
+async function orderMedNavId(navId: string): Promise<Orderhuvud | null> {
+  const rader = await anrop<Orderhuvud[]>("GET", "/api/records/sales-order", {
+    query: {
+      filters: [["external_order_id", "=", navId]],
+      fields: ["id", "number", "state", "customer"],
+      limit: 2,
+    },
+  });
+  return rader[0] ?? null;
+}
+
+/** Tjänsterna, en gång per tömning. */
+async function tjanster(): Promise<{ kampanjsida: string; ovrigt: string; efterNamn: (n: string) => string | null }> {
+  const rader = await anrop<{ id: string; service_name: string; is_active: boolean }[]>("GET", "/api/records/service", {
+    query: { fields: ["id", "service_name", "is_active"], limit: 200 },
+  });
+  const aktiva = rader.filter((r) => r.is_active !== false);
+  const efterNamn = (n: string) =>
+    aktiva.find((r) => r.service_name.trim().toLowerCase() === n.trim().toLowerCase())?.id ?? null;
+
+  const kampanjsida = process.env.INKIO_TJANST_PAKET?.trim() || efterNamn("Optimerad Kampanjsida");
+  const ovrigt = efterNamn("Övrigt / se beskrivning") ?? kampanjsida;
+  if (!kampanjsida || !ovrigt) {
+    throw new Error("Inkio har ingen tjänst som heter \"Optimerad Kampanjsida\". Sätt INKIO_TJANST_PAKET till rätt tjänst-id.");
+  }
+  return { kampanjsida, ovrigt, efterNamn };
+}
+
+/** Inkio-användaren som får affären: samma e-postadress som säljaren i Nav. */
+async function saljareMedEpost(epost: string | null): Promise<string | null> {
+  if (!epost) return null;
+  const rader = await anrop<{ id: string; email: string }[]>("GET", "/api/sales/get-sellers");
+  return rader.find((r) => r.email.trim().toLowerCase() === epost.trim().toLowerCase())?.id ?? null;
+}
+
+type Bolagsverket = {
+  found: boolean;
+  company_name: string | null;
+  legal_form: string | null;
+  address: Inkioadress | null;
+  error: string | null;
+};
+
+// -----------------------------------------------------------------------------
+// Kunden
+// -----------------------------------------------------------------------------
+
+async function hittaEllerSkapaKund(o: Crmorder): Promise<Kundrad> {
+  const finns = await kundMedOrgnr(o.orgnr);
+  if (finns) return finns;
+
+  const orgnr = inkioOrgnr(o.orgnr);
+  if (!orgnr) throw new Error(`Organisationsnumret "${o.orgnr}" går inte att läsa. Rätta det på ordern i Nav.`);
+
+  // Adressen är obligatorisk i Inkio, och Nav har ingen. Bolagsverket har den —
+  // för en juridisk person. En enskild firmas nummer är ägarens personnummer
+  // och går inte att slå upp.
+  const forHand = `Lägg upp kunden i Inkio för hand (org.nr ${orgnr}) och tryck "Försök igen" på ordern i Nav.`;
+  if (!arJuridiskPerson(orgnr)) {
+    throw new Error(`${o.bolag} är en enskild firma, och Bolagsverket ger ingen adress för den. ${forHand}`);
+  }
+  const bv = await anrop<Bolagsverket>("GET", "/api/bolagsverket/api/lookup-organisation", { query: { org_number: orgnr } });
+  if (!bv.found || !bv.address) {
+    throw new Error(`Bolagsverket hittar inte ${orgnr}${bv.error ? ` (${bv.error})` : ""}. ${forHand}`);
+  }
+  // Ingen påhittad gatuadress: den hamnar på fakturan.
+  if (!bv.address.address_line_1.trim()) {
+    throw new Error(`Bolagsverket har ingen gatuadress för ${orgnr}. ${forHand}`);
+  }
+
+  const ny = await anrop<Kundrad>("POST", "/api/customers/create-customer", {
+    json: nyKund(
+      { bolag: o.bolag, orgnr, kontakt: o.kontakt, telefon: o.telefon, epost: o.epost },
+      bv.address,
+      bv.legal_form,
+    ),
+  });
+  return ny;
+}
+
+// -----------------------------------------------------------------------------
+// Adaptern
+// -----------------------------------------------------------------------------
+
+export const inkio: CrmAdapter = {
+  namn: "inkio",
+
+  async skapa(o: Crmorder): Promise<Crmkoppling> {
+    const kund = await hittaEllerSkapaKund(o);
+
+    const finns = await orderMedNavId(o.underlag.navId);
+    if (finns) {
+      return {
+        kundId: kund.id,
+        kundnummer: kund.number,
+        orderId: finns.id,
+        ordernummer: finns.number,
+        lage: finns.state === "draft" ? "utkast" : "inskickad",
+      };
+    }
+
+    const [tj, saljare] = await Promise.all([tjanster(), saljareMedEpost(o.saljarEpost)]);
+    const rader = orderrader(o.underlag, tj);
+    if (rader.length === 0) throw new Error("Ordern har varken månadsbelopp eller tjänster — det finns inget att lägga in.");
+
+    // Inkio skickar bara in en order med bevis. Finns det inget — eller är det
+    // för stort — läggs den som utkast, och den som skickar in den i Inkio
+    // bifogar beviset där.
+    const bevis = o.bevis && o.bevis.data.byteLength <= INKIO_MAX_BYTE ? o.bevis : null;
+
+    const form = new FormData();
+    form.append("doc", JSON.stringify(nyOrder(o.underlag, kund.id, saljare, rader)));
+    form.append("submit", bevis ? "1" : "0");
+    if (bevis) {
+      form.append("agreed", overenskommet(o.underlag, o.godkandAv, o.godkandDag));
+      form.append("files", new Blob([new Uint8Array(bevis.data)], { type: bevis.typ }), bevis.filnamn);
+    }
+
+    const ny = await anrop<{ id: string; number: string; state: string }>("POST", "/api/salesorder/create-sales-order", {
+      form,
+    });
+
+    if (!bevis) {
+      await anrop("POST", "/api/activity/log-activity", {
+        json: {
+          doctype: "Sales Order",
+          record_id: ny.id,
+          content: o.bevis
+            ? `Från Clicknet Nav. Beviset (${o.bevis.filnamn}) är större än 10 MB och kom inte med — bifoga det och skicka in ordern här.`
+            : "Från Clicknet Nav, utan avtal eller samtalsinspelning att skicka med — bifoga beviset och skicka in ordern här.",
+        },
+      }).catch(() => {});
+    }
+
+    return {
+      kundId: kund.id,
+      kundnummer: kund.number,
+      orderId: ny.id,
+      ordernummer: ny.number,
+      lage: ny.state === "draft" ? "utkast" : "inskickad",
+    };
+  },
+
+  async makulera(orderId: string, orsak: string | null): Promise<"makulerad" | "borta"> {
+    let order: Orderhuvud;
+    try {
+      order = await anrop<Orderhuvud>("GET", `/api/records/sales-order/${encodeURIComponent(orderId)}`);
+    } catch (e) {
+      if (e instanceof Inkiofel && e.status === 404) return "borta";
+      throw e;
+    }
+
+    if (order.state === "cancelled") return "makulerad";
+
+    if (order.state === "draft") {
+      // Ett utkast går inte att makulera, bara att radera — och inte så länge
+      // en fil hänger på det.
+      const innehall = await anrop<{ documents: { id: string }[] }>("GET", "/api/filehandler/get-record-contents", {
+        query: { doctype: "Sales Order", record_id: order.id },
+      });
+      for (const d of innehall.documents ?? []) {
+        await anrop("DELETE", `/api/records/document/${encodeURIComponent(d.id)}`);
+      }
+      await anrop("DELETE", `/api/records/sales-order/${encodeURIComponent(order.id)}`);
+      return "borta";
+    }
+
+    await anrop("POST", `/api/records/sales-order/${encodeURIComponent(order.id)}/cancel`);
+    await anrop("POST", "/api/activity/log-activity", {
+      json: {
+        doctype: "Sales Order",
+        record_id: order.id,
+        content: `Makulerad i Clicknet Nav${orsak?.trim() ? `: ${orsak.trim()}` : "."}`,
+      },
+    }).catch(() => {});
+    return "makulerad";
+  },
+
+  async sattStatus(kundId: string, status: Crmstatus): Promise<void> {
+    // Inkio har ingen leveransstatus på kunden. Det som hänt skrivs på kundens
+    // tidslinje, där den som arbetar i Inkio ser det.
+    const text: Record<Crmstatus, string> = {
+      valkomnad: "Leverans: välkomstsamtalet är genomfört (Clicknet Nav).",
+      kickoff_bokad: "Leverans: kickoff är bokad (Clicknet Nav).",
+      i_produktion: "Leverans: kunden är i produktion (Clicknet Nav).",
+    };
+    await anrop("POST", "/api/activity/log-activity", {
+      json: { doctype: "Customer", record_id: kundId, content: text[status] ?? `Leverans: ${status} (Clicknet Nav).` },
+    });
+  },
+
+  async hamta(kundId: string) {
+    try {
+      const k = await anrop<Kundrad>("GET", `/api/records/customer/${encodeURIComponent(kundId)}`);
+      return { externtId: k.id, status: k.status };
+    } catch (e) {
+      if (e instanceof Inkiofel && e.status === 404) return null;
+      throw e;
+    }
+  },
+};

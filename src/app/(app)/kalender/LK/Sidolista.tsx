@@ -295,7 +295,7 @@ function Leveransko({ lk }: { lk: Lk }) {
         )}
       </div>
       <p className="hint" style={{ marginTop: 8 }}>
-        24 timmar från godkänd order till välkomstsamtal. Lägg in kunden i leverans-CRM:et och klistra in kund-ID:t i kortet.
+        24 timmar från godkänd order till välkomstsamtal. Kunden läggs in i Inkio automatiskt när ordern godkänns.
       </p>
     </div>
   );

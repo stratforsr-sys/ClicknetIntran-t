@@ -13,6 +13,7 @@ import {
   hamtaOrder,
   hamtaOrderUrval,
   hamtaOrderbilagor,
+  hamtaCrmkopplingar,
   hamtaChefssatser,
   hamtaPaket,
   hamtaSatser,
@@ -212,10 +213,11 @@ export default async function Ordersida({
   // ---------------------------------------------------------------------------
   const kunden = kundId ? await hamtaKundensOrder(kundId) : null;
   const kundOrderIds = kunden?.order.map((o) => o.id) ?? [];
-  const [kundTjanster, kundBilagor, kundSamtal] = await Promise.all([
+  const [kundTjanster, kundBilagor, kundSamtal, kundCrm] = await Promise.all([
     hamtaTjanster(kundOrderIds),
     hamtaOrderbilagor(kundOrderIds),
     hamtaOrdersamtal(kundOrderIds),
+    hamtaCrmkopplingar(kundOrderIds),
   ]);
 
   // Ordern som forlangs. Hamtas ur bevakningen sjalv — det ar RLS som redan
@@ -442,6 +444,7 @@ export default async function Ordersida({
             tjanster={kundTjanster}
             bilagor={kundBilagor}
             samtal={kundSamtal}
+            crm={kundCrm}
             idag={idag}
           />
         </Svavruta>

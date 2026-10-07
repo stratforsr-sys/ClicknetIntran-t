@@ -1,16 +1,24 @@
 import "server-only";
 
+import { inkio, inkioKonfigurerad } from "./inkio";
+import type { Orderunderlag } from "./inkio-mappning";
+
 /**
  * Leveransens CRM bakom ett gränssnitt (0071, SPEC avsnitt 7).
  *
  * =============================================================================
- * NAV VET INTE VILKET CRM LEVERANSEN HAR
+ * CRM:ET ÄR INKIO SEDAN 0074
  *
- * Beställaren 2026-09-30: okänt än. Nav pratar därför bara med `CrmAdapter`,
- * och den som gäller i dag är den MANUELLA: kunden läggs in för hand i
- * leverans-CRM:et, kund-ID:t klistras in i Nav (`lk_koppla_crm`), och en
- * statusändring är något människan gör där. När API:t är känt skrivs en
- * adapter till och byts in i `adapter()` — ingenting annat i navet ändras.
+ * Beställaren 2026-09-30: okänt än — och därför fanns det här gränssnittet med
+ * en MANUELL adapter, där kund-ID:t klistrades in för hand. 2026-10-07 blev det
+ * känt: Inkio, Clicknets egna CRM. Nu gäller:
+ *
+ *   - En godkänd order läggs in i Inkio (`skapa`), kunden skapas om den saknas.
+ *   - En makulerad order makuleras där (`makulera`).
+ *   - Leveransens steg skrivs på kundens tidslinje (`sattStatus`).
+ *
+ * Utan nycklarna i miljön faller `adapter()` tillbaka på den manuella — så
+ * att en preview eller en lokal körning aldrig skriver i Inkio av misstag.
  *
  * Allt som går ut loggas rått i `integration_log` av anroparen, innan det
  * tolkas, som `call_ingest` för växeln.
@@ -19,26 +27,36 @@ import "server-only";
 
 export type Crmstatus = "valkomnad" | "kickoff_bokad" | "i_produktion";
 
+/** Det Nav vet om en godkänd order, i den form ett CRM behöver. */
 export type Crmorder = {
-  order_id: string;
-  kund: string;
+  bolag: string;
+  orgnr: string;
   kontakt: string | null;
   telefon: string | null;
   epost: string | null;
-  paket: string | null;
+  saljarEpost: string | null;
+  godkandAv: string | null;
+  godkandDag: string | null;
+  underlag: Orderunderlag;
+  /** Avtalet eller samtalsinspelningen — det kunden sa ja i. */
+  bevis: { filnamn: string; typ: string; data: Buffer } | null;
 };
 
-export type Crmoverlamning = {
-  mal: string | null;
-  lovat: string | null;
-  basta_tid: string | null;
-  risker: string | null;
+/** Vad ordern blev i CRM:et. */
+export type Crmkoppling = {
+  kundId: string;
+  kundnummer: string | null;
+  orderId: string;
+  ordernummer: string | null;
+  lage: "utkast" | "inskickad";
 };
 
 export interface CrmAdapter {
   namn: string;
-  /** Skapa kunden. Den manuella adaptern kan inte — `externtId` null. */
-  skapaKund(order: Crmorder, overlamning: Crmoverlamning): Promise<{ externtId: string | null }>;
+  /** Lägg in ordern, och kunden om den saknas. Null när adaptern inte kan. */
+  skapa(order: Crmorder): Promise<Crmkoppling | null>;
+  /** Makulera ordern. "borta" = den fanns inte (längre) — utkast raderas. */
+  makulera(crmOrderId: string, orsak: string | null): Promise<"makulerad" | "borta">;
   /** Sätt status. Kastar vid fel, så att utkorgen försöker igen. */
   sattStatus(externtId: string, status: Crmstatus): Promise<void>;
   /** Hämta kunden. Null när adaptern inte kan läsa. */
@@ -52,8 +70,11 @@ export interface CrmAdapter {
  */
 export const manuell: CrmAdapter = {
   namn: "manuell",
-  async skapaKund() {
-    return { externtId: null };
+  async skapa() {
+    return null;
+  },
+  async makulera() {
+    return "borta";
   },
   async sattStatus() {
     // Ingenting att anropa. Anroparen har redan loggat vad som skulle ut.
@@ -64,5 +85,5 @@ export const manuell: CrmAdapter = {
 };
 
 export function adapter(): CrmAdapter {
-  return manuell;
+  return inkioKonfigurerad() ? inkio : manuell;
 }

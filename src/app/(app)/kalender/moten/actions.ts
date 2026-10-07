@@ -913,7 +913,7 @@ export async function kopplaCrm(orderId: string, externtId: string): Promise<Res
     if (!r.ok) return { fel: r.fel };
     const { data: o } = await supabaseAdmin().from("sales_order").select("company_name").eq("id", orderId).maybeSingle();
     efterat();
-    return { ok: true, kvitto: `${(o?.company_name as string) ?? "Kunden"} är kopplad till ${id} i leverans-CRM:et.`, angra: r.data.undo_id };
+    return { ok: true, kvitto: `${(o?.company_name as string) ?? "Kunden"} är kopplad till ${id} i Inkio.`, angra: r.data.undo_id };
   } catch (e) {
     return fel(e);
   }

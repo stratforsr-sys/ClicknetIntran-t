@@ -7,6 +7,7 @@ import { ANGER_SEKUNDER, FORINSTALLNINGAR, arSteg, datumLang, dayLabel, hm, kund
 import { andraSchemalagt, avbrytSchemalagt, skickaEpost, type Bilaga } from "@/lib/epost";
 import { inbjudan, type Mote } from "@/lib/ical";
 import { adapter, type Crmstatus } from "@/lib/crm/adapter";
+import { crmKundId, makuleraICrm, skapaICrm } from "@/lib/crm/synk-server";
 
 /**
  * Utkorgen (0069): allt som lämnar en kalenderändring.
@@ -550,20 +551,32 @@ async function ics(rad: Utkorgsrad): Promise<boolean> {
 }
 
 // -----------------------------------------------------------------------------
-// CRM (0071)
+// CRM (0071, Inkio sedan 0074)
 // -----------------------------------------------------------------------------
 
+/**
+ * Tre sorters CRM-rader, skilda åt av `payload.handling`:
+ *
+ *   skapa    (0074) — ordern godkändes: in i Inkio, kunden också om den saknas
+ *   makulera (0074) — ordern makulerades: makulera den i Inkio
+ *   (ingen)  (0071) — leveransens steg: `payload.status` på kundens tidslinje
+ */
 async function crm(rad: Utkorgsrad): Promise<boolean> {
-  const db = supabaseAdmin();
   const orderId = String(rad.payload.order_id ?? "");
+  const handling = String(rad.payload.handling ?? "status");
+  if (handling === "skapa") return skapaICrm(orderId);
+  if (handling === "makulera") return makuleraICrm(orderId);
+
+  const db = supabaseAdmin();
   const status = String(rad.payload.status ?? "") as Crmstatus;
-  const { data: d } = await db.from("delivery").select("crm_external_id").eq("order_id", orderId).maybeSingle();
+  const { data: d } = await db.from("delivery").select("order_id").eq("order_id", orderId).maybeSingle();
   if (!d) return false;
+  const externtId = await crmKundId(orderId);
   const a = adapter();
-  await logga("ut", { system: a.namn, handling: "status", order_id: orderId, status, externt_id: d.crm_external_id }, "crm");
+  await logga("ut", { system: a.namn, handling: "status", order_id: orderId, status, externt_id: externtId }, "crm");
   try {
-    if (!d.crm_external_id) throw new Error("Kunden saknar kund-ID i leverans-CRM:et. Klistra in det i Nav.");
-    await a.sattStatus(d.crm_external_id as string, status);
+    if (!externtId) throw new Error("Kunden finns inte i Inkio än. Se ordern i Nav — står det ett fel där, tryck Försök igen.");
+    await a.sattStatus(externtId, status);
     await db.rpc("lk_crm_klar", { p_order: orderId, p_fel: null });
     return true;
   } catch (e) {

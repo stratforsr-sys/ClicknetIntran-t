@@ -14,6 +14,40 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "order-till-inkio",
+    rubrik: "Godkända order läggs in i Inkio av sig själva",
+    ingress:
+      "Ingen dubbelregistrering längre. När en order godkänns i Nav hamnar den i Inkio — och kunden också, om den inte redan finns där.",
+    text: `Nav och Inkio pratar nu med varandra.
+
+## Vad som händer när du godkänner en order
+
+Inom någon minut finns ordern i Inkio, på rätt kund och med rätt säljare. Finns
+kunden inte där än läggs den upp med adressen från Bolagsverket. Ordern skickas
+in med avtalet eller samtalsinspelningen som bevis.
+
+**Lägg alltså inte in ordern i Inkio för hand** — då blir den dubbel.
+
+## Var du ser det
+
+Öppna kunden under **Order**. Under varje order står **Inkio** med ordernumret och
+en länk till kunden där.
+
+Saknade ordern bevis ligger den som **utkast** i Inkio: bifoga avtalet eller
+samtalet där och skicka in den.
+
+## När det inte går
+
+En enskild firma har ingen adress hos Bolagsverket, och då kan Nav inte skapa
+kunden. Felet står på ordern och admin får en notis. Lägg upp kunden i Inkio för
+hand och tryck **Försök igen** på ordern — då hamnar ordern på den.
+
+Makulerar du en order i Nav makuleras den i Inkio också.`,
+    datum: "2026-10-07",
+    roller: ["sales_manager", "ceo", "finance", "admin"],
+    href: "/order",
+  },
+  {
     slug: "bifoga-anstallningsavtal",
     rubrik: "Bifoga anställningsavtalet — och låt var och en ladda ner sitt eget",
     ingress:

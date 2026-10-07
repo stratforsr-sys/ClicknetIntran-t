@@ -1,7 +1,9 @@
 "use server";
 
+import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { tomUtkorgen } from "@/lib/utkorg-server";
 import { getCurrentUser, hasRole, type CurrentUser } from "@/lib/auth";
 import { svensktDatum } from "@/lib/klocka";
 import { kronor, manadsnamn, manadsnyckel, tolkaBelopp } from "@/lib/provision";
@@ -2543,6 +2545,48 @@ export async function rattaFranAvtal(_prev: Orderstate, form: FormData): Promise
     return {
       ok: `${Object.keys(andring).length} fält är hämtade ur avtalet. Kontrollera dem innan ordern godkänns.`,
     };
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Något gick fel." };
+  }
+}
+
+/**
+ * "Försök igen" på en order vars Inkio-synk misslyckats (0074).
+ *
+ * Lägger en NY rad i utkorgen — den gamla står kvar med sitt fel, så att
+ * historiken säger att det misslyckades — och tömmer den efter svaret.
+ * Samma handling som raden som föll: en makulerad order makuleras, annars
+ * läggs den in.
+ *
+ * Bara för den som får hantera order. Ett försök som skapar en kund i CRM:et
+ * är en skrivning i ett annat system, inte något en säljare ska kunna trycka
+ * fram på någon annans order.
+ */
+export async function synkaTillInkio(_prev: Orderstate, form: FormData): Promise<Orderstate> {
+  try {
+    await kravHanterare();
+    const id = String(form.get("id") ?? "");
+    const db = supabaseAdmin();
+
+    const { data: o } = await db.from("sales_order").select("status").eq("id", id).maybeSingle();
+    if (!o) return { fel: "Ordern finns inte." };
+    const { data: k } = await db.from("crm_order").select("state").eq("order_id", id).maybeSingle();
+    if (k?.state !== "fel") return { fel: "Ordern har inget misslyckat försök att göra om." };
+
+    const handling = o.status === "makulerad" ? "makulera" : "skapa";
+    const { error } = await db.from("outbox").insert({
+      kind: "crm",
+      payload: { handling, order_id: id },
+      idempotency_key: `crm-${handling}:${id}:${Date.now()}`,
+      not_before: new Date().toISOString(),
+    });
+    if (error) return { fel: error.message };
+
+    after(async () => {
+      await tomUtkorgen();
+    });
+    revalidatePath("/order");
+    return { ok: "Försöker igen nu. Ladda om sidan om en stund för att se utfallet." };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
   }

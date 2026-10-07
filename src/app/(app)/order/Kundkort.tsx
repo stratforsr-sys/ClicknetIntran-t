@@ -28,10 +28,11 @@ import { langd, summering, type Samtalsrad } from "@/lib/samtal-vy";
 // `order-server.ts` borjar med `import "server-only"`, som kastar om modulen
 // hamnar i webblasarpaketet. `import type` raderas av kompilatorn och lamnar
 // ingen import kvar att kora.
-import type { Orderrad, Tjansterad } from "@/lib/order-server";
+import type { Crmkopplingsrad, Orderrad, Tjansterad } from "@/lib/order-server";
 import { Atgarder } from "./Atgarder";
 import { Bilaga, type Orderbilaga } from "./Bilaga";
 import { Fornyelse } from "./Fornyelse";
+import { Inkioruta } from "./Inkioruta";
 import { Samtal } from "./Samtal";
 
 /**
@@ -99,6 +100,7 @@ export function Kundkort({
   tjanster,
   bilagor,
   samtal,
+  crm,
   idag,
 }: {
   kund: Kund<Orderrad>;
@@ -113,6 +115,8 @@ export function Kundkort({
   tjanster: Map<string, Tjansterad[]>;
   bilagor: Map<string, Orderbilaga[]>;
   samtal: Map<string, Samtalsrad[]>;
+  /** Vad orderna blev i Inkio (0074). Saknas en order har den inte lagts in. */
+  crm: Map<string, Crmkopplingsrad>;
   idag: string;
 }) {
   const [flik, setFlik] = useState<Flik>("oversikt");
@@ -196,6 +200,7 @@ export function Kundkort({
                   saljare={hanterare ? namn.get(o.salesperson_id) : undefined}
                   tjanster={tjanster.get(o.id) ?? []}
                   bilagor={bilagor.get(o.id) ?? []}
+                  crm={crm.get(o.id) ?? null}
                   paket={paket}
                   personer={personer}
                   hanterare={hanterare}
@@ -616,6 +621,7 @@ function Orderpost({
   saljare,
   tjanster,
   bilagor,
+  crm,
   paket,
   personer,
   hanterare,
@@ -630,6 +636,7 @@ function Orderpost({
   saljare?: string;
   tjanster: Tjansterad[];
   bilagor: Orderbilaga[];
+  crm: Crmkopplingsrad | null;
   paket: Paket[];
   personer: { id: string; namn: string }[];
   hanterare: boolean;
@@ -819,6 +826,15 @@ function Orderpost({
             nuvarande={nuvarandeFor(o)}
           />
         </div>
+
+        {/* Bara nar ordern har en koppling: en order godkand innan Inkio
+            kopplades in (0074) har ingen, och dar ar tystnad ratt. */}
+        {crm && (
+          <div>
+            <Sektion titel="Inkio" />
+            <Inkioruta orderId={o.id} crm={crm} hanterare={hanterare} />
+          </div>
+        )}
       </div>
     </details>
   );

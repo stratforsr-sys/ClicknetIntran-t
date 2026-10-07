@@ -580,6 +580,16 @@ Planeringsvyn står kvar oförändrad under `/kalender?vy=planera`.
   adaptern gäller, och statusen "välkomnad" loggas i `integration_log` för den
   som för över den för hand. Saknas kund-ID:t försöker utkorgen tre gånger och
   säger sedan till admin.
+- (0074, 2026-10-07) **CRM:et är Inkio, och Nav skriver dit.** Beställaren valde
+  riktningen "Nav skriver till Inkio" av tre (läsa / skriva / Inkio som källa).
+  En godkänd order läggs in i Inkio via utkorgen — kunden slås upp på
+  organisationsnumret och skapas med Bolagsverkets adress om den saknas — och
+  skickas in med avtalsbilagan eller samtalsinspelningen som bevis. Utan bevis
+  (eller över 10 MB) blir den ett utkast. Makulering speglas: inskickad →
+  makulerad, utkast → raderat. Leveransens steg skrivs på kundens tidslinje i
+  Inkio; Inkio har ingen leveransstatus att sätta. Order godkända före 0074
+  kopplas inte i efterhand — 9 av 22 gick inte att para ihop på datum och belopp,
+  och en gissad koppling är värre än ingen.
 - (Pass 3) **Överlämningen fylls i på en egen sida**, `/kalender/overlamning/[order]`,
   som prototypen saknar. Notisen "Komplettera överlämningen" leder dit.
 - (Pass 4) **Teamet hämtar alla i Säljteamet och Leverans** för dagen, oavsett

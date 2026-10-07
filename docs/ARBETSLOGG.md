@@ -5,6 +5,55 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-07 (eftermiddag) · Inkio: godkända order skrivs till CRM:et (0074)
+
+Beställaren: "integrera vårt nuvarande CRM som vi har utvecklat själva till
+intranätet", med API-nyckel och hemlighet till ett tjänstekonto, och sedan
+OpenAPI-beskrivningen (`inkio-openapi.json`).
+
+**Vad Inkio är.** Ett eget CRM på `crm.inkio.se`: kunder, order, avtal,
+fakturor (Fortnox-spegel), provisioner, ärenden, projekt. Tjänstekontot är admin
+i Inkio-bolaget Clicknet. Autentisering: `Authorization: token <nyckel>:<hemlighet>`.
+
+**Varför Nav skriver och inte läser.** Alla 22 signerade order i Nav hade redan
+sin kund i Inkio — affären registrerades två gånger. Beställaren fick tre
+riktningar (läsa / skriva / Inkio som källa) och valde att Nav skriver. Inkios
+85 order är importerade i klump 2026-10-01 från ett tidigare system
+(`external_order_id` är Firestore-id:n) och har inga bevisfiler.
+
+**Formen är Inkios formulärs, inte specens.** Specen säger `customer: {}` och
+`doc: {}`. Kropparna lästes ur Inkios klientpaket (kundformuläret,
+orderformuläret) och provades sedan mot riktiga Inkio med en märkt testkund som
+raderades. Två saker lärde provet: Bolagsverket kan ge en tom gatuadress (då
+nekar Inkio kunden — vi stannar hellre med ett fel än hittar på en
+fakturaadress), och ett utkast med en fil går bara att radera när dokumentet
+raderats först.
+
+**Paketen.** Nav:s Paket 1–3 är alla tjänsten "Optimerad Kampanjsida" i Inkio,
+med månadsbeloppet som pris och bindningstiden som löptid — så ser 33 av Inkios
+40 senaste order ut. Tilläggstjänster matchas på namn, annars "Övrigt / se
+beskrivning" med namnet som text.
+
+**En egen tabell, `crm_order`.** Kolumner på `sales_order` gick inte: en godkänd
+order är låst av sina triggrar och kopplingen skrivs efteråt. `delivery` gick
+inte heller: tilläggsorder får ingen leverans men är affärer i Inkio.
+`delivery.crm_*` skrivs ändå, så att leveranskalenderns CRM-ruta visar
+kopplingen utan att någon klistrar in något.
+
+**Avstängd tills merge.** `crm_installning.aktiv` är falsk. Produktionens gamla
+`crm()` hade tagit en `skapa`-rad, inte hittat någon leverans och markerat den
+som skickad — samma skäl som `nav-utkorg` skapades avstängt.
+
+**Nycklarna bara i Production.** Utan dem faller `adapter()` tillbaka på den
+manuella. Previewen pekar på produktionsdatabasen; den ska aldrig skriva i ett
+annat produktionssystem.
+
+**Inte kopplat i efterhand.** De 22 befintliga ordrarna gick att para med en
+Inkio-kund på org.nr, men bara 13 med en Inkio-order på datum eller belopp.
+En gissad koppling som pekar på fel order är värre än ingen.
+
+---
+
 ## 2026-10-07 (senare) · CSP:n stoppade varje uppladdning till R2
 
 Första riktiga uppladdningen av ett anställningsavtal gav "Failed to fetch".

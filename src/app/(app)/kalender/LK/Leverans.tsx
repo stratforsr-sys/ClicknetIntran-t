@@ -29,6 +29,7 @@ import {
   stallIn,
   taKund,
 } from "../moten/actions";
+import { INKIO_STANDARD_URL, inkioIdUr } from "@/lib/crm/inkio-mappning";
 import type { Lk } from "./gemensamt";
 import { Stang } from "./Tidsdelar";
 
@@ -90,17 +91,33 @@ function Kundruta({ lk, k }: { lk: Lk; k: Kokund }) {
   );
 }
 
-/** `crmBox()`: kopplingen till leverans-CRM:et, med den manuella adaptern. */
+/**
+ * `crmBox()`: kopplingen till CRM:et — Inkio sedan 0074.
+ *
+ * Kunden kopplas av sig själv när ordern godkänns (`skapaICrm`). Rutan med
+ * inklistringen står kvar som reserv för den order som inte gick att lägga in
+ * — en enskild firma utan adress hos Bolagsverket — där kunden läggs upp i
+ * Inkio för hand. Den tar både id:t och adressen till kundens sida.
+ */
 function Crmruta({ lk, k }: { lk: Lk; k: Kokund }) {
   const [id, setId] = useState("");
   const [, startOvergang] = useTransition();
   if (k.crmId) {
+    const inkio = k.crmSystem === "inkio" || inkioIdUr(k.crmId) === k.crmId;
     return (
       <div className="crm">
         <span aria-hidden="true">↗</span>
         <span>
-          <b>Finns i leverans-CRM:et · {k.crmId}</b>
-          {k.crmFel ? `Senaste synken misslyckades: ${k.crmFel}` : "Produktionen och rapporterna hanteras där."}
+          <b>
+            {inkio ? (
+              <a href={`${INKIO_STANDARD_URL}/customers/${encodeURIComponent(k.crmId)}`} target="_blank" rel="noreferrer">
+                Finns i Inkio
+              </a>
+            ) : (
+              <>Finns i CRM:et · {k.crmId}</>
+            )}
+          </b>
+          {k.crmFel ? `Senaste synken misslyckades: ${k.crmFel}` : "Välkomstsamtal, kickoff och produktion skrivs på kundens tidslinje där."}
         </span>
       </div>
     );
@@ -109,8 +126,9 @@ function Crmruta({ lk, k }: { lk: Lk; k: Kokund }) {
     <div className="crm">
       <span aria-hidden="true">↗</span>
       <span style={{ flex: 1 }}>
-        <b>Inte i leverans-CRM:et än</b>
-        Manuell adapter tills CRM:ets API är känt: lägg in kunden där och klistra in kund-ID:t här.
+        <b>Inte i Inkio än</b>
+        Nav lägger in kunden när ordern godkänns. Gick det inte står felet på ordern — lägg då upp kunden i Inkio och
+        klistra in adressen till kundens sida här.
         {k.crmFel && <span style={{ display: "block", marginTop: 4 }}>{k.crmFel}</span>}
         {lk.data.lev.farSe && (
           <form
@@ -118,21 +136,22 @@ function Crmruta({ lk, k }: { lk: Lk; k: Kokund }) {
             style={{ marginTop: 8 }}
             onSubmit={(ev) => {
               ev.preventDefault();
-              if (!id.trim()) {
-                lk.visaKvitto("Klistra in kund-ID:t först.");
+              const varde = inkioIdUr(id) ?? id.trim();
+              if (!varde) {
+                lk.visaKvitto("Klistra in kundens adress eller ID från Inkio först.");
                 return;
               }
               startOvergang(async () => {
-                lk.efter(await kopplaCrm(k.orderId, id), false);
+                lk.efter(await kopplaCrm(k.orderId, varde), false);
               });
             }}
           >
             <input
               id="crmId"
               type="text"
-              placeholder="Kund-ID, till exempel LC-10490"
-              aria-label="Kund-ID från leverans-CRM:et"
-              maxLength={40}
+              placeholder="https://crm.inkio.se/customers/…"
+              aria-label="Kundens adress eller ID i Inkio"
+              maxLength={200}
               value={id}
               onChange={(ev) => setId(ev.target.value)}
             />

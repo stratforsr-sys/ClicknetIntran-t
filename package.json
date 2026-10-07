@@ -60,6 +60,7 @@
     "test:konsekvenser": "node --experimental-strip-types tests/konsekvenser.mjs",
     "test:provisionsunderlag": "node --experimental-strip-types tests/provisionsunderlag.mjs",
     "test:orderbilaga": "node --experimental-strip-types tests/orderbilaga.mjs",
+    "test:inkio": "node --experimental-strip-types tests/inkio.mjs",
     "test:notiser": "node --experimental-strip-types tests/notiser.mjs",
     "test:navnyheter": "node --experimental-strip-types tests/navnyheter.mjs",
     "test:identitet": "node --experimental-strip-types tests/identitet.mjs",
