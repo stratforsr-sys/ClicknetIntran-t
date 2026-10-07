@@ -5,6 +5,41 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-07 (kväll) · Inkio, andra varvet: kön vid inskick, avtal krävs, leveranssteg till Inkio (0075)
+
+Beställaren läste första varvet och svarade på fyra frågor samma dag.
+
+**Varför kön var tom.** Den fylls vid godkännande, och ingen order hade godkänts
+sedan leveranskalendern gick live 2026-09-30 — de två senaste stod som
+`inskickad`. Ingenting var trasigt; beställaren ville ha den tidigare. Nu står
+ordern i kön från `inskickad`, utan frist. Produktionens kod räknar med en frist
+på varje rad (`slaInfo` → NaN), så det ligger bakom `leverans_installning`.
+
+**Bokningsspärren i databasen, inte i knapparna.** `lk_ta_kund`,
+`lk_skapa_leverans` och dra-och-släpp skapar alla en `calendar_event` — en
+BEFORE INSERT-trigger täcker alla tre. Knapparna döljs också, men det är
+triggern som gäller.
+
+**Leveransstegen via en trigger på kalenderhändelsen.** Att lägga en rad i var
+och en av fem `lk_*`-funktioner hade krävt att de skrevs om ur `pg_proc`. En
+trigger ser allt — med en fälla: `starts_at` räknas av triggern
+`calendar_event_starts_at`, och `UPDATE OF starts_at` skjuter bara när
+kolumnen står i satsen. En flytt via `dag` hade missats; triggern lyssnar
+därför på alla uppdateringar och jämför. Provat: flytt via `dag` ger raden.
+Ångra-säkerheten: raden väntar 15 s (ångra har 10) och `leveransICrm` läser
+händelsen igen innan den skickar.
+
+**Avtalet i formuläret, inte efter.** Uppladdningen gjordes efter sparandet
+eftersom filens rad pekar på ordern. Men `forberedUppladdning` behöver inget
+order-id — stigen är ändamål + fil-id — så filen kan laddas upp först och
+kopplas av `skapaOrder` efter tjänsterna och före statusbytet. En fil som aldrig
+kopplas blir aldrig en rad. `skickaTillLagring` bröts ut ur `Filuppladdning`.
+
+**Avtal, inte samtal.** Beställaren valde "alltid avtals-PDF" fast ingen av de
+24 ordrarna hade ett och 12 hade en samtalsinspelning — det blev sagt.
+
+---
+
 ## 2026-10-07 (eftermiddag) · Inkio: godkända order skrivs till CRM:et (0074)
 
 Beställaren: "integrera vårt nuvarande CRM som vi har utvecklat själva till

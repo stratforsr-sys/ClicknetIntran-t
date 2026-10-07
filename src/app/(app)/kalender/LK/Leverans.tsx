@@ -245,7 +245,7 @@ export function Kokort({ lk, orderId, stang }: { lk: Lk; orderId: string; stang:
       <div className="dhd" id="dhd">
         <Stang stang={stang} />
         <span className="chip k-valkomst" style={{ alignSelf: "flex-start" }}>
-          I kön · {s.txt}
+          {k.due === null ? s.txt : `I kön · ${s.txt}`}
         </span>
         <h3>{k.kund}</h3>
         <span className="muted mono" style={{ fontSize: 12 }}>
@@ -253,6 +253,17 @@ export function Kokort({ lk, orderId, stang }: { lk: Lk; orderId: string; stang:
         </span>
       </div>
       <div className="dbody" id="dbody">
+        {/* 0075: ordern står i kön från det att den läggs upp, men bokas först
+            när den är godkänd. Databasen nekar bokningen ändå (`lk:ej_godkand`). */}
+        {k.due === null ? (
+          <div className="dsec">
+            <h5>Väntar på godkännande</h5>
+            <p className="muted">
+              Ordern är upplagd men inte godkänd än. Välkomstsamtalet går att boka när säljchefen godkänt den — då startar
+              24-timmarsfristen och du får en notis. Läs överlämningen och förbered dig så länge.
+            </p>
+          </div>
+        ) : (
         <div className="dsec">
           <h5>Boka välkomstsamtal</h5>
           <div className="grid2">
@@ -300,6 +311,7 @@ export function Kokort({ lk, orderId, stang }: { lk: Lk; orderId: string; stang:
             leveransposter den här veckan.
           </p>
         </div>
+        )}
         {h.saknas.length > 0 && (
           <div className="clashbox" role="note">
             <b>

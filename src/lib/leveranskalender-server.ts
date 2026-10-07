@@ -96,7 +96,8 @@ export type Kokund = {
   telefon: string | null;
   epost: string | null;
   godkand: string | null;
-  due: string;
+  /** Null medan ordern väntar på godkännande (0075) — fristen startar då. */
+  due: string | null;
   agare: string | null;
   crmSystem: string | null;
   crmId: string | null;
@@ -338,7 +339,7 @@ type Kundrad = {
   telefon: string | null;
   epost: string | null;
   godkand: string | null;
-  welcome_due_at: string;
+  welcome_due_at: string | null;
   owner_id: string | null;
   crm_system: string | null;
   crm_external_id: string | null;
@@ -413,7 +414,11 @@ async function hamtaLeveransdata(user: CurrentUser, hem: string): Promise<Levera
   return {
     farSe,
     arLev,
-    ko: alla.filter((k) => !k.agare).sort((a, b) => (a.due < b.due ? -1 : 1)),
+    // Godkända först, äldst frist först; de som väntar på godkännande sist
+    // (0075) — de går inte att boka än.
+    ko: alla
+      .filter((k) => !k.agare)
+      .sort((a, b) => (a.due === b.due ? 0 : a.due === null ? 1 : b.due === null ? -1 : a.due < b.due ? -1 : 1)),
     kunder: alla
       .filter((k) => k.agare)
       .sort((a, b) => a.kund.localeCompare(b.kund, "sv"))

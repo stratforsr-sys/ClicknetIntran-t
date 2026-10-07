@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
 import { KONTROLL } from "@/components/ui/Field";
 import { Notis } from "@/components/ui/Notis";
@@ -52,9 +52,12 @@ export function Atgarder({
   stangdPeriod,
   manad,
   idag,
+  iInkio = false,
 }: {
   id: string;
   status: Orderstatus;
+  /** 0075. Finns ordern i Inkio? Da far makuleringen bocken "Makulera även i Inkio". */
+  iInkio?: boolean;
   hanterare: boolean;
   bokforare: boolean;
   agare: boolean;
@@ -241,6 +244,14 @@ export function Atgarder({
                 variant="destruktiv"
                 platshallare="Varför makuleras ordern?"
                 hjalp="Avdraget bokförs i den här månaden, inte i månaden ordern tecknades."
+                extra={
+                  iInkio ? (
+                    <label className="flex items-center gap-2 text-small text-ink-700">
+                      <input type="checkbox" name="makulera_i_inkio" defaultChecked className="size-4" />
+                      Makulera även i Inkio
+                    </label>
+                  ) : undefined
+                }
               />
             )}
           </>
@@ -379,6 +390,7 @@ function MedSkal({
   platshallare,
   hjalp,
   variant = "sekundar",
+  extra,
 }: {
   action: Handling;
   id: string;
@@ -386,6 +398,8 @@ function MedSkal({
   platshallare: string;
   hjalp?: string;
   variant?: "primar" | "sekundar" | "diskret" | "destruktiv";
+  /** Ytterligare falt i formularet — 0075: bocken "Makulera även i Inkio". */
+  extra?: ReactNode;
 }) {
   const [state, kor, vantar] = useActionState<Orderstate, FormData>(action, {});
 
@@ -394,6 +408,7 @@ function MedSkal({
       <input type="hidden" name="id" value={id} />
       <input name="reason" required placeholder={platshallare} className={KONTROLL} />
       {hjalp && <p className="text-small text-ink-500">{hjalp}</p>}
+      {extra}
       <div>
         <Button type="submit" size="sm" variant={variant} laddar={vantar}>
           {etikett}

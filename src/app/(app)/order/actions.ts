@@ -4,6 +4,7 @@ import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { tomUtkorgen } from "@/lib/utkorg-server";
+import { bolagsuppslag } from "@/lib/crm/inkio";
 import { getCurrentUser, hasRole, type CurrentUser } from "@/lib/auth";
 import { svensktDatum } from "@/lib/klocka";
 import { kronor, manadsnamn, manadsnyckel, tolkaBelopp } from "@/lib/provision";
@@ -506,6 +507,22 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
     }
     const mejl = mejlText || null;
 
+    // KUNDENS ADRESS (0075). Inkio vägrar en kund utan, och Bolagsverket har
+    // ingen för en enskild firma. Formuläret förifyller den för ett aktiebolag
+    // (`slaUppBolag`); säljaren skriver den för en enskild firma.
+    const gata = String(form.get("customer_street") ?? "").trim();
+    const postnummer = String(form.get("customer_postal_code") ?? "").trim();
+    const ort = String(form.get("customer_city") ?? "").trim();
+    if (!gata || !postnummer || !ort) return { fel: "Skriv kundens adress: gata, postnummer och ort." };
+
+    // AVTALET (0075, beställarens besked 2026-10-07): ingen order läggs upp utan
+    // det påskrivna avtalet. Filen är redan uppladdad (`forberedNyttAvtal`) —
+    // här kopplas den till ordern, innan ordern lämnar utkastet.
+    const avtalFil = String(form.get("avtal_fil_id") ?? "").trim();
+    const avtalStore = String(form.get("avtal_store") ?? "").trim();
+    const avtalNamn = String(form.get("avtal_filnamn") ?? "").trim() || "avtal.pdf";
+    if (!avtalFil) return { fel: "Ladda upp det påskrivna avtalet (PDF) innan ordern läggs upp." };
+
     const utkopsval = utkopUrFormular(form);
     if ("fel" in utkopsval) return { fel: utkopsval.fel };
 
@@ -580,6 +597,9 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
       contact_name: kontakt,
       contact_phone: telefon,
       contact_email: mejl,
+      customer_street: gata,
+      customer_postal_code: postnummer,
+      customer_city: ort,
       package_id: paket,
       term_months: loptid,
       salesperson_id: saljare,
@@ -707,6 +727,24 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
     if (tjanstfel) {
       return {
         fel: `${tjanstfel} Ordern ligger kvar som utkast på ${bolag} — komplettera den där.`,
+        orderId: rad.id,
+      };
+    }
+
+    // Avtalet pa ordern INNAN den lamnar utkastet — samma skal som tjansterna:
+    // faller det star ett utkast kvar, och `skickaInOrder` kraver avtalet.
+    const avtalet = await registreraFil({
+      fileId: avtalFil,
+      andamal: "sales_order",
+      filnamn: avtalNamn,
+      store: avtalStore,
+      uploadedBy: user.employee!.id,
+      salesOrderId: rad.id,
+      subjectEmployeeId: null,
+    });
+    if ("fel" in avtalet) {
+      return {
+        fel: `Avtalet kunde inte kopplas till ordern: ${avtalet.fel} Ordern ligger kvar som utkast på ${bolag} — ladda upp avtalet där och skicka in den.`,
         orderId: rad.id,
       };
     }
@@ -1218,6 +1256,9 @@ export async function skickaInOrder(_prev: Orderstate, form: FormData): Promise<
       return { fel: "Det är inte din order." };
     }
     if (rad.status !== "utkast") return { fel: "Bara ett utkast går att skicka in." };
+    if (!(await harAvtal(id))) {
+      return { fel: "Ladda upp det påskrivna avtalet (PDF) på ordern innan den skickas in." };
+    }
 
     const { error } = await supabaseAdmin()
       .from("sales_order")
@@ -1985,10 +2026,38 @@ export async function makuleraOrder(_prev: Orderstate, form: FormData): Promise<
       objekt: { typ: "sales_order", id },
     });
 
+    // INKIO (0075): bara nar bocken ar kvar. En order kan makuleras for att den
+    // lagts dubbelt i Nav, for att den ska laggas om — eller efter att Inkio
+    // redan borjat fakturera. Den som makulerar avgor.
+    const { data: iInkio } = await supabaseAdmin()
+      .from("crm_order")
+      .select("crm_order_id")
+      .eq("order_id", id)
+      .maybeSingle();
+    let inkiotext = "";
+    if (iInkio?.crm_order_id) {
+      if (form.get("makulera_i_inkio") === "on") {
+        await supabaseAdmin().from("outbox").insert({
+          kind: "crm",
+          payload: { handling: "makulera", order_id: id },
+          idempotency_key: `crm-makulera:${id}`,
+          not_before: new Date(Date.now() + 10_000).toISOString(),
+        });
+        after(async () => {
+          await new Promise((r) => setTimeout(r, 11_000));
+          await tomUtkorgen();
+        });
+        inkiotext = " Den makuleras också i Inkio.";
+      } else {
+        await logga(user, "sales_order.cancelled_kept_in_crm", id, { crm_order_id: iInkio.crm_order_id });
+        inkiotext = " Den ligger kvar orörd i Inkio.";
+      }
+    }
+
     revalidatePath("/order");
     revalidatePath("/provision");
     return {
-      ok: `Ordern är makulerad. Avdraget belastar ${idag.slice(0, 7)}, inte månaden den tecknades.`,
+      ok: `Ordern är makulerad. Avdraget belastar ${idag.slice(0, 7)}, inte månaden den tecknades.${inkiotext}`,
     };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
@@ -2591,3 +2660,44 @@ export async function synkaTillInkio(_prev: Orderstate, form: FormData): Promise
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
   }
 }
+
+/** Har ordern ett uppladdat avtal? (0075 — kravet for att lagga upp den.) */
+async function harAvtal(orderId: string): Promise<boolean> {
+  const { count } = await supabaseAdmin()
+    .from("file_object")
+    .select("id", { count: "exact", head: true })
+    .eq("sales_order_id", orderId)
+    .eq("purpose", "sales_order")
+    .is("removed_at", null);
+  return (count ?? 0) > 0;
+}
+
+/**
+ * Avtalet i orderformularet (0075). Laddas upp INNAN ordern finns — samma
+ * vag in i lagringen som orderkortets bilaga (`forberedUppladdning`, samma
+ * andamal och samma stig), och `skapaOrder` kopplar den till ordern.
+ * En fil som aldrig kopplas blir aldrig en rad i `file_object`.
+ */
+export async function forberedNyttAvtal(filnamn: string, mimetyp: string, storlek: number) {
+  try {
+    await kravInloggad();
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Du måste vara inloggad." };
+  }
+  return forberedUppladdning({ andamal: "sales_order", filnamn, mimetyp, storlek });
+}
+
+/**
+ * Orderformularets uppslag pa organisationsnumret (0075): namn och adress fran
+ * Bolagsverket via Inkio. Null nar Inkio inte ar kopplat (previewen) eller
+ * numret inte gar att sla upp — da fylls adressen i for hand.
+ */
+export async function slaUppBolag(orgnr: string) {
+  try {
+    await kravInloggad();
+    return await bolagsuppslag(orgnr);
+  } catch {
+    return null;
+  }
+}
+

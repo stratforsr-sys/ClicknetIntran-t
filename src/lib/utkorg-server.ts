@@ -7,7 +7,7 @@ import { ANGER_SEKUNDER, FORINSTALLNINGAR, arSteg, datumLang, dayLabel, hm, kund
 import { andraSchemalagt, avbrytSchemalagt, skickaEpost, type Bilaga } from "@/lib/epost";
 import { inbjudan, type Mote } from "@/lib/ical";
 import { adapter, type Crmstatus } from "@/lib/crm/adapter";
-import { crmKundId, makuleraICrm, skapaICrm } from "@/lib/crm/synk-server";
+import { crmKundId, leveransICrm, makuleraICrm, skapaICrm } from "@/lib/crm/synk-server";
 
 /**
  * Utkorgen (0069): allt som lämnar en kalenderändring.
@@ -558,19 +558,27 @@ async function ics(rad: Utkorgsrad): Promise<boolean> {
  * Tre sorters CRM-rader, skilda åt av `payload.handling`:
  *
  *   skapa    (0074) — ordern godkändes: in i Inkio, kunden också om den saknas
- *   makulera (0074) — ordern makulerades: makulera den i Inkio
- *   (ingen)  (0071) — leveransens steg: `payload.status` på kundens tidslinje
+ *   makulera (0074) — ordern makulerades och bocken var kvar: makulera i Inkio
+ *   leverans (0075) — ett leveranssteg bokades, genomfördes, flyttades …
+ *   (ingen)  (0071) — "välkomnad". Ersatt av `leverans` för Inkio-order: den
+ *                     raden säger samma sak och mer, och två hade blivit dubbelt.
  */
 async function crm(rad: Utkorgsrad): Promise<boolean> {
   const orderId = String(rad.payload.order_id ?? "");
   const handling = String(rad.payload.handling ?? "status");
   if (handling === "skapa") return skapaICrm(orderId);
   if (handling === "makulera") return makuleraICrm(orderId);
+  if (handling === "leverans") return leveransICrm(rad.payload);
 
   const db = supabaseAdmin();
   const status = String(rad.payload.status ?? "") as Crmstatus;
   const { data: d } = await db.from("delivery").select("order_id").eq("order_id", orderId).maybeSingle();
   if (!d) return false;
+  const { data: iInkio } = await db.from("crm_order").select("order_id").eq("order_id", orderId).maybeSingle();
+  if (iInkio) {
+    await db.rpc("lk_crm_klar", { p_order: orderId, p_fel: null });
+    return false;
+  }
   const externtId = await crmKundId(orderId);
   const a = adapter();
   await logga("ut", { system: a.namn, handling: "status", order_id: orderId, status, externt_id: externtId }, "crm");

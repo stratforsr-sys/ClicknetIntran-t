@@ -14,6 +14,32 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "avtal-och-leveranskon",
+    rubrik: "Avtalet laddas upp i ordern — och leveransen ser den direkt",
+    ingress:
+      "En order läggs upp med det påskrivna avtalet och kundens adress. Den hamnar i leveranskön samma sekund, så leveransen kan förbereda sig medan den väntar på godkännande.",
+    text: `Två ändringar i hur en order läggs upp.
+
+## Avtalet först
+
+Överst i **Ny order** laddar du upp det påskrivna avtalet (PDF). Utan det går
+ordern inte att lägga upp. Under kontaktuppgifterna står nu kundens **adress**:
+skriver du ett bolags organisationsnummer hämtas den från Bolagsverket, och för
+en enskild firma skriver du den som kunden uppger.
+
+## Leveranskön fylls direkt
+
+Ordern står i leveranskön i kalendern så fort den är upplagd, märkt **Väntar på
+godkännande**. Leveransen kan läsa överlämningen och förbereda sig, men
+välkomstsamtalet går att boka först när ordern är godkänd — då startar
+24-timmarsfristen och leveransen får en notis.
+
+Skickas ordern tillbaka till säljaren försvinner den ur kön tills den skickas in igen.`,
+    datum: "2026-10-07",
+    roller: [],
+    href: "/order",
+  },
+  {
     slug: "order-till-inkio",
     rubrik: "Godkända order läggs in i Inkio av sig själva",
     ingress:
@@ -23,7 +49,7 @@ export const POSTER: Navnyhet[] = [
 ## Vad som händer när du godkänner en order
 
 Inom någon minut finns ordern i Inkio, på rätt kund och med rätt säljare. Finns
-kunden inte där än läggs den upp med adressen från Bolagsverket. Ordern skickas
+kunden inte där än läggs den upp med adressen från ordern. Ordern skickas
 in med avtalet eller samtalsinspelningen som bevis.
 
 **Lägg alltså inte in ordern i Inkio för hand** — då blir den dubbel.
@@ -38,11 +64,21 @@ samtalet där och skicka in den.
 
 ## När det inte går
 
-En enskild firma har ingen adress hos Bolagsverket, och då kan Nav inte skapa
-kunden. Felet står på ordern och admin får en notis. Lägg upp kunden i Inkio för
-hand och tryck **Försök igen** på ordern — då hamnar ordern på den.
+Ligger Inkio nere försöker Nav igen av sig själv. Går det ändå inte står felet på
+ordern och admin får en notis. Rätta det felet säger och tryck **Försök igen** på
+ordern.
 
-Makulerar du en order i Nav makuleras den i Inkio också.`,
+## Makulering
+
+När du makulerar en order som finns i Inkio står bocken **Makulera även i Inkio**
+ikryssad. Låt den vara, eller bocka ur den om ordern ska ligga kvar i Inkio — till
+exempel om den bara låg dubbelt i Nav.
+
+## Leveransen syns i Inkio
+
+Varje steg i leveransen — välkomstsamtal, tillgångar, kickoff, leveransstart och
+avstämningarna — skrivs på kundens tidslinje i Inkio när det bokas, genomförs,
+flyttas eller ställs in.`,
     datum: "2026-10-07",
     roller: ["sales_manager", "ceo", "finance", "admin"],
     href: "/order",

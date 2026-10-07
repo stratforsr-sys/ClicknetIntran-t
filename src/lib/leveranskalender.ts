@@ -452,6 +452,7 @@ export const LK_FEL: Record<string, string> = {
   oforandrad: "Tiden är densamma som förut.",
   ogiltig: "Något i formuläret stämmer inte. Kontrollera tid och deltagare.",
   tagen: "Någon annan tog kunden precis. Välj nästa i kön.",
+  ej_godkand: "Ordern väntar på godkännande. Välkomstsamtalet går att boka när den är godkänd.",
 };
 
 /** "lk:vardag" någonstans i ett felmeddelande → texten. Annat → null. */
@@ -537,7 +538,9 @@ export function arSteg(v: unknown): v is Steg {
 }
 
 /** `slaInfo()`: nedräkningen i kön. Grön över 8 h, gul under, röd när försenad. */
-export function slaInfo(dueIso: string, nuMs: number): { cls: "ok" | "warn" | "bad"; txt: string; pct: number } {
+export function slaInfo(dueIso: string | null, nuMs: number): { cls: "ok" | "warn" | "bad"; txt: string; pct: number } {
+  // Ingen frist = ordern väntar på godkännande (0075). Klockan går inte än.
+  if (dueIso === null) return { cls: "ok", txt: "Väntar på godkännande", pct: 0 };
   const ms = Date.parse(dueIso) - nuMs;
   const h = ms / 36e5;
   const cls = h < 0 ? "bad" : h < 8 ? "warn" : "ok";

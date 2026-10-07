@@ -811,6 +811,7 @@ function Orderpost({
               stangdPeriod={harStangdPeriod(o.signed_on, stangda)}
               manad={manadsnamn(o.period_month)}
               idag={idag}
+              iInkio={!!crm?.orderLank && crm.state !== "makulerad"}
             />
           </div>
         )}

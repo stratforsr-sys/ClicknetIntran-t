@@ -5,6 +5,7 @@ import { las } from "@/lib/lagring-server";
 import { tolkaLager } from "@/lib/lagring";
 import { siteUrl } from "@/lib/env";
 import { adapter, type Crmorder, type Crmstatus } from "./adapter";
+import { leveransrad, orderadress, type Leveranshandelse } from "./inkio-mappning";
 
 /**
  * Nav-sidan av CRM-synken: läser ordern, anropar adaptern och skriver vad den
@@ -36,12 +37,15 @@ type Orderrad = {
   approved_by: string | null;
   salesperson_id: string;
   cancel_reason: string | null;
+  customer_street: string | null;
+  customer_postal_code: string | null;
+  customer_city: string | null;
 };
 
 const FALT =
   "id, company_name, org_number, contact_name, contact_phone, contact_phone_e164, contact_email, package_id, " +
   "term_months, signed_on, starts_on, monthly_amount, buyout_amount, note, status, approved_at, approved_by, " +
-  "salesperson_id, cancel_reason";
+  "salesperson_id, cancel_reason, customer_street, customer_postal_code, customer_city";
 
 function tal(v: number | string | null): number | null {
   if (v === null || v === undefined || v === "") return null;
@@ -107,6 +111,7 @@ async function underlag(o: Orderrad): Promise<Crmorder> {
     saljarEpost: (saljare?.email as string | undefined) ?? null,
     godkandAv: godkannare ? `${godkannare.first_name} ${godkannare.last_name}`.trim() : null,
     godkandDag: o.approved_at ? o.approved_at.slice(0, 10) : null,
+    adress: orderadress(o.customer_street, o.customer_postal_code, o.customer_city),
     underlag: {
       navId: o.id,
       signerad: o.signed_on,
@@ -201,6 +206,59 @@ export async function makuleraICrm(orderId: string): Promise<boolean> {
     await sparaFel(orderId, fel);
     throw new Error(fel);
   }
+}
+
+/**
+ * Ett leveranssteg → en rad på kundens tidslinje (0075).
+ *
+ * Raden skrevs av triggern `calendar_event_till_crm` 15 sekunder bakåt i tiden.
+ * Händelsen läses OM här: ångrades handlingen under tiden stämmer den inte
+ * längre med raden, och då går ingenting ut.
+ */
+export async function leveransICrm(p: Record<string, unknown>): Promise<boolean> {
+  const db = supabaseAdmin();
+  const orderId = String(p.order_id ?? "");
+  const handelse = String(p.handelse ?? "") as Leveranshandelse;
+
+  const { data: e } = await db
+    .from("calendar_event")
+    .select("id, step, outcome, outcome_by, cancelled_at, starts_at, organizer_id, attempt")
+    .eq("id", String(p.event_id ?? ""))
+    .maybeSingle();
+  if (!e) return false;
+
+  const stammer =
+    handelse === "bokad"
+      ? !e.cancelled_at
+      : handelse === "installd"
+        ? !!e.cancelled_at
+        : handelse === "flyttad"
+          ? !e.cancelled_at && Date.parse(String(e.starts_at)) === Date.parse(String(p.starts_at))
+          : e.outcome === handelse;
+  if (!stammer) return false;
+
+  const { data: k } = await db.from("crm_order").select("customer_id, state").eq("order_id", orderId).maybeSingle();
+  // Ingen koppling: ordern gick aldrig till Inkio (lagd före 0074 eller för
+  // en preview). Inget att skriva.
+  if (!k) return false;
+  if (!k.customer_id) {
+    throw new Error("Kunden finns inte i Inkio än — ordern gick inte att lägga in. Se ordern i Nav och tryck Försök igen.");
+  }
+
+  const vemId = handelse === "genomford" ? (e.outcome_by as string | null) ?? (e.organizer_id as string) : (e.organizer_id as string);
+  const { data: vem } = await db.from("employee").select("first_name, last_name").eq("id", vemId).maybeSingle();
+  const text = leveransrad({
+    steg: (e.step as string | null) ?? null,
+    handelse,
+    startar: String(e.starts_at),
+    vem: vem ? `${vem.first_name} ${vem.last_name}`.trim() : null,
+    forsok: Number(e.attempt ?? 1),
+  });
+
+  const a = adapter();
+  await logga({ system: a.namn, handling: "leverans", order_id: orderId, event_id: e.id, handelse, text });
+  await a.tidslinje(String(k.customer_id), text);
+  return true;
 }
 
 /** Leveransens kund-ID: den manuella kopplingen, annars den Inkio-synken skrev. */

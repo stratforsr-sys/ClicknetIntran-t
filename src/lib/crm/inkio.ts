@@ -6,6 +6,7 @@ import {
   INKIO_STANDARD_URL,
   arJuridiskPerson,
   inkioOrgnr,
+  inkioBolagsform,
   nyKund,
   nyOrder,
   orderrader,
@@ -182,30 +183,56 @@ async function hittaEllerSkapaKund(o: Crmorder): Promise<Kundrad> {
   const orgnr = inkioOrgnr(o.orgnr);
   if (!orgnr) throw new Error(`Organisationsnumret "${o.orgnr}" går inte att läsa. Rätta det på ordern i Nav.`);
 
-  // Adressen är obligatorisk i Inkio, och Nav har ingen. Bolagsverket har den —
-  // för en juridisk person. En enskild firmas nummer är ägarens personnummer
-  // och går inte att slå upp.
+  // Adressen är obligatorisk i Inkio. Sedan 0075 skriver säljaren den på
+  // ordern (förifylld från Bolagsverket) — den gäller först. Bolagsverket
+  // direkt är reserven för order lagda innan dess.
   const forHand = `Lägg upp kunden i Inkio för hand (org.nr ${orgnr}) och tryck "Försök igen" på ordern i Nav.`;
-  if (!arJuridiskPerson(orgnr)) {
-    throw new Error(`${o.bolag} är en enskild firma, och Bolagsverket ger ingen adress för den. ${forHand}`);
+  let adress = o.adress;
+  let bolagsform: string | null = null;
+  if (arJuridiskPerson(orgnr)) {
+    const bv = await bolagsverket(orgnr).catch(() => null);
+    bolagsform = bv?.legal_form ?? null;
+    if (!adress && bv?.found && bv.address?.address_line_1.trim()) adress = bv.address;
   }
-  const bv = await anrop<Bolagsverket>("GET", "/api/bolagsverket/api/lookup-organisation", { query: { org_number: orgnr } });
-  if (!bv.found || !bv.address) {
-    throw new Error(`Bolagsverket hittar inte ${orgnr}${bv.error ? ` (${bv.error})` : ""}. ${forHand}`);
-  }
-  // Ingen påhittad gatuadress: den hamnar på fakturan.
-  if (!bv.address.address_line_1.trim()) {
-    throw new Error(`Bolagsverket har ingen gatuadress för ${orgnr}. ${forHand}`);
+  if (!adress) {
+    throw new Error(
+      arJuridiskPerson(orgnr)
+        ? `Bolagsverket har ingen gatuadress för ${orgnr}, och ordern saknar adress. ${forHand}`
+        : `${o.bolag} är en enskild firma och ordern saknar adress — Bolagsverket har ingen för den. ${forHand}`,
+    );
   }
 
-  const ny = await anrop<Kundrad>("POST", "/api/customers/create-customer", {
+  return anrop<Kundrad>("POST", "/api/customers/create-customer", {
     json: nyKund(
       { bolag: o.bolag, orgnr, kontakt: o.kontakt, telefon: o.telefon, epost: o.epost },
-      bv.address,
-      bv.legal_form,
+      adress,
+      inkioBolagsform(orgnr, bolagsform),
     ),
   });
-  return ny;
+}
+
+function bolagsverket(orgnr: string): Promise<Bolagsverket> {
+  return anrop<Bolagsverket>("GET", "/api/bolagsverket/api/lookup-organisation", { query: { org_number: orgnr } });
+}
+
+/**
+ * Orderformulärets uppslag (0075): namn och adress från Bolagsverket, och om
+ * kunden redan finns i Inkio. Null när Inkio inte är kopplat eller numret inte
+ * går att slå upp — formuläret fylls då i för hand.
+ */
+export async function bolagsuppslag(
+  orgnrIn: string,
+): Promise<{ namn: string | null; adress: Inkioadress | null; enskildFirma: boolean; iInkio: string | null } | null> {
+  if (!inkioKonfigurerad()) return null;
+  const orgnr = inkioOrgnr(orgnrIn);
+  if (!orgnr) return null;
+  const enskildFirma = !arJuridiskPerson(orgnr);
+  const [kund, bv] = await Promise.all([
+    kundMedOrgnr(orgnr).catch(() => null),
+    enskildFirma ? Promise.resolve(null) : bolagsverket(orgnr).catch(() => null),
+  ]);
+  const adress = bv?.found && bv.address?.address_line_1.trim() ? bv.address : null;
+  return { namn: bv?.found ? bv.company_name : null, adress, enskildFirma, iInkio: kund?.customer_name ?? null };
 }
 
 // -----------------------------------------------------------------------------
@@ -316,6 +343,12 @@ export const inkio: CrmAdapter = {
     };
     await anrop("POST", "/api/activity/log-activity", {
       json: { doctype: "Customer", record_id: kundId, content: text[status] ?? `Leverans: ${status} (Clicknet Nav).` },
+    });
+  },
+
+  async tidslinje(kundId: string, text: string): Promise<void> {
+    await anrop("POST", "/api/activity/log-activity", {
+      json: { doctype: "Customer", record_id: kundId, content: text },
     });
   },
 

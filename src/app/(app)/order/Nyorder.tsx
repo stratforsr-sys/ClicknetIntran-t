@@ -4,7 +4,8 @@ import { useActionState, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { KONTROLL } from "@/components/ui/Field";
 import { Notis } from "@/components/ui/Notis";
-import { Filuppladdning } from "@/components/Filuppladdning";
+import { skickaTillLagring } from "@/components/Filuppladdning";
+import { accept, provaFil } from "@/lib/filer";
 import {
   BINDNINGSTID_MAX,
   BINDNINGSTID_MIN,
@@ -22,7 +23,7 @@ import {
 } from "@/lib/order";
 import { kronor, manadsnamn } from "@/lib/provision";
 import { nettoEfterUtkop } from "@/lib/utkop";
-import { forberedOrderbilaga, registreraOrderbilaga, skapaOrder, type Orderstate } from "./actions";
+import { forberedNyttAvtal, skapaOrder, slaUppBolag, type Orderstate } from "./actions";
 
 type Person = { id: string; namn: string };
 
@@ -75,6 +76,12 @@ type Formular = {
   kontakt: string;
   telefon: string;
   mejl: string;
+  /** 0075. Kundens adress — Inkio vagrar en kund utan. */
+  gata: string;
+  postnummer: string;
+  ort: string;
+  /** 0075. Det paskrivna avtalet, uppladdat men inte kopplat forran ordern sparas. */
+  avtal: { fileId: string; store: string; namn: string } | null;
   /** TOM STRANG = inget valt. Se rubriken om forvalen nedan. */
   paketId: string;
   loptid: string;
@@ -249,6 +256,10 @@ export function Nyorder({
     kontakt: forlanger?.contact_name ?? "",
     telefon: forlanger?.contact_phone ?? "",
     mejl: forlanger?.contact_email ?? "",
+    gata: "",
+    postnummer: "",
+    ort: "",
+    avtal: null,
     paketId: "",
     loptid: "",
     signerat: "",
@@ -267,12 +278,46 @@ export function Nyorder({
 
   const [f, setF] = useState<Formular>(tomt);
 
+  // 0075: vad uppslaget pa organisationsnumret sa, i en rad under adressen.
+  const [uppslag, setUppslag] = useState<string | null>(null);
+
   // Casten behovs: med en GENERISK nyckel harleder TypeScript den berakna
   // egenskapen som `string` och far da ett indexsignaturobjekt i stallet for
   // `Formular`. Nyckeln ar anda begransad till `keyof Formular` av signaturen,
   // sa castet bekraftar bara det anropet redan garanterar.
   const satt = <K extends keyof Formular>(nyckel: K, varde: Formular[K]) =>
     setF((gammalt) => ({ ...gammalt, [nyckel]: varde }) as Formular);
+
+  /**
+   * Uppslaget pa organisationsnumret (0075). Fyller i det som ar TOMT —
+   * skriver aldrig over nagot saljaren redan skrivit. Utan Inkio (previewen)
+   * eller for en enskild firma fylls adressen i for hand.
+   */
+  async function slaUpp(orgnr: string) {
+    if (orgnr.replace(/\D/g, "").length < 10) return;
+    const svar = await slaUppBolag(orgnr);
+    if (!svar) {
+      setUppslag(null);
+      return;
+    }
+    if (svar.enskildFirma) {
+      setUppslag("Enskild firma — Bolagsverket har ingen adress. Skriv den som kunden uppger.");
+      return;
+    }
+    if (!svar.adress) {
+      setUppslag("Bolagsverket hade ingen gatuadress. Skriv den som kunden uppger.");
+      return;
+    }
+    const a = svar.adress;
+    setF((g) => ({
+      ...g,
+      bolag: g.bolag || svar.namn || "",
+      gata: g.gata || a.address_line_1,
+      postnummer: g.postnummer || a.postal_code,
+      ort: g.ort || a.city,
+    }));
+    setUppslag("Adressen är hämtad från Bolagsverket.");
+  }
 
   const sattTjanst = <K extends keyof Tjansterad>(
     nyckel: string,
@@ -300,7 +345,10 @@ export function Nyorder({
   // inte hemma i beroendelistan — den hade bara gjort effekten till en loop.
   // Effekten lyssnar pa `state` och ingenting annat.
   useEffect(() => {
-    if (state.ok) setF(tomt);
+    if (state.ok) {
+      setF(tomt);
+      setUppslag(null);
+    }
 
   }, [state]);
 
@@ -431,32 +479,15 @@ export function Nyorder({
       )}
 
       {/*
-        AVTALET LADDAS UPP HAR, DIREKT EFTER ATT ORDERN SPARATS.
+        AVTALET FORE ALLT ANNAT (0075). Bestallaren 2026-10-07: "man maste ladda
+        upp avtalet i ordern for att fa lagga upp ordern". Fram till dess laddades
+        det upp EFTER sparandet, och ingen av de 24 ordrarna hade nagot.
 
-        Bestallaren bad om uppladdningen i sjalva inmatningen. Den kan inte ske
-        FORE sparandet: bade den signerade adressen och registreringen haenger pa
-        orderns id (0039), och ett id finns forst nar raden gjorts. Ett eget
-        uppladdningsspar som lade filen nagonstans och kopplade den efterat hade
-        varit en andra vag in i bucketen vid sidan av den som ar provad.
-
-        Rutan star darfor kvar under kvittensen tills nasta order borjar skrivas,
-        och det ar samma komponent och samma tva server actions som orderkortet
-        anvander. Den som just lagt ordern behover inte leta upp den i listan.
+        Filen laddas upp nar den valjs — samma vag in i lagringen som
+        orderkortets bilaga — och kopplas till ordern av `skapaOrder`, innan
+        ordern lamnar utkastet.
       */}
-      {state.ok && state.orderId && (
-        <div className="rounded-sm border border-canvas bg-surface-alt p-4">
-          <Filuppladdning
-            andamal="sales_order"
-            etikett="Bifoga avtalet"
-            hjalp="PDF. Ordern är redan sparad — avtalet läggs på den. Texten går att läsa ut och förifylla fälten med från orderkortet."
-            knapp="Ladda upp"
-            forbered={(namn, mime, byte) => forberedOrderbilaga(state.orderId!, namn, mime, byte)}
-            registrera={(fileId, namn, store) =>
-              registreraOrderbilaga(state.orderId!, fileId, namn, store)
-            }
-          />
-        </div>
-      )}
+      <Avtalsfalt avtal={f.avtal} satt={(a) => satt("avtal", a)} />
 
       <div className="grid gap-3 sm:grid-cols-2">
         <label htmlFor="company_name" className="flex flex-col gap-1">
@@ -482,6 +513,7 @@ export function Nyorder({
             className={KONTROLL}
             value={f.orgnr}
             onChange={(e) => satt("orgnr", e.target.value)}
+            onBlur={(e) => void slaUpp(e.target.value)}
           />
         </label>
 
@@ -533,6 +565,49 @@ export function Nyorder({
             className={KONTROLL}
             value={f.mejl}
             onChange={(e) => satt("mejl", e.target.value)}
+          />
+        </label>
+
+        {/* KUNDENS ADRESS (0075). Forifylld fran Bolagsverket nar
+            organisationsnumret ar ett bolags; for en enskild firma skriver
+            saljaren den. Inkio lagger inte upp en kund utan. */}
+        <label htmlFor="customer_street" className="flex flex-col gap-1 sm:col-span-2">
+          <span className="text-micro text-ink-500">Gatuadress</span>
+          <input
+            id="customer_street"
+            name="customer_street"
+            required
+            autoComplete="off"
+            className={KONTROLL}
+            value={f.gata}
+            onChange={(e) => satt("gata", e.target.value)}
+          />
+          {uppslag && <span className="text-micro text-ink-500">{uppslag}</span>}
+        </label>
+
+        <label htmlFor="customer_postal_code" className="flex flex-col gap-1">
+          <span className="text-micro text-ink-500">Postnummer</span>
+          <input
+            id="customer_postal_code"
+            name="customer_postal_code"
+            required
+            inputMode="numeric"
+            placeholder="123 45"
+            className={KONTROLL}
+            value={f.postnummer}
+            onChange={(e) => satt("postnummer", e.target.value)}
+          />
+        </label>
+
+        <label htmlFor="customer_city" className="flex flex-col gap-1">
+          <span className="text-micro text-ink-500">Ort</span>
+          <input
+            id="customer_city"
+            name="customer_city"
+            required
+            className={KONTROLL}
+            value={f.ort}
+            onChange={(e) => satt("ort", e.target.value)}
           />
         </label>
 
@@ -1387,3 +1462,89 @@ function Tal({ etikett, varde, under }: { etikett: string; varde: string; under:
     </div>
   );
 }
+
+/**
+ * Avtalsfaltet (0075). Filen laddas upp NAR DEN VALJS och lamnar tre dolda
+ * falt efter sig; `skapaOrder` kopplar den till ordern. Sjalva filfaltet har
+ * inget `name` — annars hade webblasaren skickat hela PDF:en en gang till
+ * genom serveranropet.
+ */
+function Avtalsfalt({
+  avtal,
+  satt,
+}: {
+  avtal: { fileId: string; store: string; namn: string } | null;
+  satt: (a: { fileId: string; store: string; namn: string } | null) => void;
+}) {
+  const [fel, setFel] = useState<string | null>(null);
+  const [laddar, setLaddar] = useState(false);
+
+  async function valj(fil: File | undefined) {
+    if (!fil) return;
+    const tidigt = provaFil("sales_order", { type: fil.type, size: fil.size });
+    if (tidigt) {
+      setFel(tidigt.text);
+      return;
+    }
+    setFel(null);
+    setLaddar(true);
+    try {
+      const lank = await forberedNyttAvtal(fil.name, fil.type, fil.size);
+      if ("fel" in lank) {
+        setFel(lank.fel);
+        return;
+      }
+      const lagringsfel = await skickaTillLagring(lank, fil);
+      if (lagringsfel) {
+        setFel(lagringsfel);
+        return;
+      }
+      satt({ fileId: lank.fileId, store: lank.store, namn: fil.name });
+    } catch (e) {
+      setFel(e instanceof Error ? e.message : "Uppladdningen misslyckades.");
+    } finally {
+      setLaddar(false);
+    }
+  }
+
+  return (
+    <div className="rounded-sm border border-canvas bg-surface-alt p-4">
+      {avtal && (
+        <>
+          <input type="hidden" name="avtal_fil_id" value={avtal.fileId} />
+          <input type="hidden" name="avtal_store" value={avtal.store} />
+          <input type="hidden" name="avtal_filnamn" value={avtal.namn} />
+        </>
+      )}
+      <label htmlFor="avtal_fil" className="flex flex-col gap-1">
+        <span className="text-micro text-ink-500">Påskrivet avtal (krävs)</span>
+        {avtal ? (
+          <span className="flex flex-wrap items-center gap-3 text-body text-ink-900">
+            ✓ {avtal.namn}
+            <button type="button" className="text-small text-ink-500 underline" onClick={() => satt(null)}>
+              Byt fil
+            </button>
+          </span>
+        ) : (
+          <input
+            id="avtal_fil"
+            type="file"
+            accept={accept("sales_order")}
+            disabled={laddar}
+            className={`${KONTROLL} max-w-96 py-1.5 text-small`}
+            onChange={(e) => void valj(e.target.files?.[0])}
+          />
+        )}
+      </label>
+      <p className="mt-1 text-micro text-ink-500">
+        {laddar ? "Laddar upp …" : "PDF. Ordern går inte att lägga upp utan det påskrivna avtalet."}
+      </p>
+      {fel && (
+        <div className="mt-2">
+          <Notis ton="danger">{fel}</Notis>
+        </div>
+      )}
+    </div>
+  );
+}
+

@@ -235,9 +235,12 @@ export function Sidolista({
 }
 
 /**
- * `#qwrap`: leveranskön (pass 3). Kunder vars order godkänts och som saknar
- * välkomstsamtal, äldst frist först. Dra ett kort till en tid, eller klicka för
- * kökortet.
+ * `#qwrap`: leveranskön (pass 3). Kunder som saknar välkomstsamtal, äldst
+ * frist först. Dra ett kort till en tid, eller klicka för kökortet.
+ *
+ * Sedan 0075 står ordern här redan när den läggs upp, med "Väntar på
+ * godkännande" och utan frist. Den går inte att dra till kalendern förrän den
+ * är godkänd — databasen nekar bokningen ändå (`lk:ej_godkand`).
  */
 function Leveransko({ lk }: { lk: Lk }) {
   const nu = Date.now();
@@ -259,14 +262,19 @@ function Leveransko({ lk }: { lk: Lk }) {
           ko.map((q, i) => {
             const s = sla[i];
             const h = overlamning({ kontakt: q.kontakt, telefon: q.telefon, mal: q.mal, lovat: q.lovat, basta_tid: q.bastaTid, risker: q.risker });
+            const vantar = q.due === null;
             return (
               <button
                 key={q.orderId}
                 type="button"
                 className={`qitem${lk.valjTid === q.orderId ? " sel" : ""}`}
-                draggable
+                style={vantar ? { opacity: 0.7 } : undefined}
+                draggable={!vantar}
                 data-q={q.orderId}
-                onDragStart={(ev) => ev.dataTransfer.setData("text/plain", `q:${q.orderId}`)}
+                onDragStart={(ev) => {
+                  if (vantar) ev.preventDefault();
+                  else ev.dataTransfer.setData("text/plain", `q:${q.orderId}`);
+                }}
                 onClick={() => lk.oppnaPanel({ typ: "ko", orderId: q.orderId })}
               >
                 <span className="row">
@@ -295,7 +303,7 @@ function Leveransko({ lk }: { lk: Lk }) {
         )}
       </div>
       <p className="hint" style={{ marginTop: 8 }}>
-        24 timmar från godkänd order till välkomstsamtal. Kunden läggs in i Inkio automatiskt när ordern godkänns.
+        Ordern står här så fort den läggs upp. 24 timmar från godkännandet till välkomstsamtal; kunden läggs in i Inkio när ordern godkänns.
       </p>
     </div>
   );

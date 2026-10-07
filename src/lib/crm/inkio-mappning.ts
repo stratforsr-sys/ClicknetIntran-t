@@ -60,6 +60,29 @@ export type Kundunderlag = {
   epost: string | null;
 };
 
+/**
+ * Inkios två bolagsformer. En enskild firma är en "Company" i Inkio med
+ * ägarens nummer och formen "Sole Proprietorship" — Inkios eget formulär
+ * erbjuder bara de två.
+ */
+export function inkioBolagsform(orgnr: string | null | undefined, franBolagsverket: string | null): string {
+  if (!arJuridiskPerson(orgnr)) return "Sole Proprietorship";
+  return franBolagsverket || "Limited Company";
+}
+
+/** Adressen från ordern, när alla tre fälten finns. */
+export function orderadress(
+  gata: string | null | undefined,
+  postnummer: string | null | undefined,
+  ort: string | null | undefined,
+): Inkioadress | null {
+  const g = gata?.trim();
+  const p = postnummer?.trim();
+  const o = ort?.trim();
+  if (!g || !p || !o) return null;
+  return { address_line_1: g, address_line_2: "", postal_code: p, city: o, country: "Sweden" };
+}
+
 /** Kroppen till `POST /api/customers/create-customer`. */
 export function nyKund(k: Kundunderlag, adress: Inkioadress, juridiskForm: string | null) {
   const kontakt = delaNamn(k.kontakt);
@@ -69,7 +92,7 @@ export function nyKund(k: Kundunderlag, adress: Inkioadress, juridiskForm: strin
       first_name: "",
       last_name: "",
       company_name: k.bolag.trim(),
-      legal_form: juridiskForm || "Limited Company",
+      legal_form: inkioBolagsform(k.orgnr, juridiskForm),
       tax_id: inkioOrgnr(k.orgnr) ?? k.orgnr,
       website: "",
       default_currency: "SEK",
@@ -222,3 +245,51 @@ export function inkioIdUr(text: string): string | null {
   const m = text.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
   return m ? m[0].toLowerCase() : null;
 }
+
+// -----------------------------------------------------------------------------
+// Leveransens steg på kundens tidslinje i Inkio (0075)
+// -----------------------------------------------------------------------------
+
+export const LEVERANSSTEG: Record<string, string> = {
+  valkomstsamtal: "Välkomstsamtal",
+  tillgangar: "Tillgångar",
+  kickoff: "Kickoff",
+  leveransstart: "Leveransstart",
+  avstamning_30: "Avstämning efter 30 dagar",
+  avstamning_90: "Avstämning efter 90 dagar",
+};
+
+export type Leveranshandelse = "bokad" | "genomford" | "ej_svar" | "installd" | "flyttad";
+
+/** "tis 14 okt kl. 10:00", i svensk tid oavsett serverns zon. */
+export function nar(iso: string): string {
+  const d = new Date(iso);
+  const dag = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", weekday: "short", day: "numeric", month: "short" }).format(d);
+  const tid = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", hour: "2-digit", minute: "2-digit" }).format(d);
+  return `${dag} kl. ${tid}`;
+}
+
+/**
+ * Raden på kundens tidslinje. Den står som skriven i Inkio, så den ska gå att
+ * läsa utan att känna Nav: vilket steg, vad som hände, när och med vem.
+ */
+export function leveransrad(a: {
+  steg: string | null;
+  handelse: Leveranshandelse;
+  startar: string;
+  vem: string | null;
+  forsok: number;
+}): string {
+  const steg = (a.steg && LEVERANSSTEG[a.steg]) || "Leveransmöte";
+  const forsok = a.forsok > 1 ? ` (försök ${a.forsok})` : "";
+  const med = a.vem ? ` med ${a.vem}` : "";
+  const text: Record<Leveranshandelse, string> = {
+    bokad: `${steg}${forsok} bokat ${nar(a.startar)}${med}.`,
+    genomford: `${steg} genomfört${a.vem ? ` (${a.vem})` : ""}.`,
+    ej_svar: `${steg}${forsok}: kunden svarade inte.`,
+    installd: `${steg} ${nar(a.startar)} är inställt.`,
+    flyttad: `${steg} flyttat till ${nar(a.startar)}${med}.`,
+  };
+  return `Leverans · ${text[a.handelse]} — Clicknet Nav`;
+}
+

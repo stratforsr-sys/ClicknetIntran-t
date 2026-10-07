@@ -1,7 +1,7 @@
 import "server-only";
 
 import { inkio, inkioKonfigurerad } from "./inkio";
-import type { Orderunderlag } from "./inkio-mappning";
+import type { Inkioadress, Orderunderlag } from "./inkio-mappning";
 
 /**
  * Leveransens CRM bakom ett gränssnitt (0071, SPEC avsnitt 7).
@@ -14,8 +14,10 @@ import type { Orderunderlag } from "./inkio-mappning";
  * känt: Inkio, Clicknets egna CRM. Nu gäller:
  *
  *   - En godkänd order läggs in i Inkio (`skapa`), kunden skapas om den saknas.
- *   - En makulerad order makuleras där (`makulera`).
- *   - Leveransens steg skrivs på kundens tidslinje (`sattStatus`).
+ *   - En makulerad order makuleras där (`makulera`) — när den som makulerar
+ *     lämnat bocken "Makulera även i Inkio" kvar (0075).
+ *   - Leveransens steg skrivs på kundens tidslinje (`tidslinje`, 0075): bokat,
+ *     genomfört, ej svar, flyttat och inställt, för alla sex stegen.
  *
  * Utan nycklarna i miljön faller `adapter()` tillbaka på den manuella — så
  * att en preview eller en lokal körning aldrig skriver i Inkio av misstag.
@@ -37,6 +39,8 @@ export type Crmorder = {
   saljarEpost: string | null;
   godkandAv: string | null;
   godkandDag: string | null;
+  /** Kundens adress som säljaren skrev den (0075). Null på äldre order. */
+  adress: Inkioadress | null;
   underlag: Orderunderlag;
   /** Avtalet eller samtalsinspelningen — det kunden sa ja i. */
   bevis: { filnamn: string; typ: string; data: Buffer } | null;
@@ -59,6 +63,8 @@ export interface CrmAdapter {
   makulera(crmOrderId: string, orsak: string | null): Promise<"makulerad" | "borta">;
   /** Sätt status. Kastar vid fel, så att utkorgen försöker igen. */
   sattStatus(externtId: string, status: Crmstatus): Promise<void>;
+  /** En rad på kundens tidslinje (0075: leveransens steg). Kastar vid fel. */
+  tidslinje(externtId: string, text: string): Promise<void>;
   /** Hämta kunden. Null när adaptern inte kan läsa. */
   hamta(externtId: string): Promise<{ externtId: string; status: string | null } | null>;
 }
@@ -78,6 +84,9 @@ export const manuell: CrmAdapter = {
   },
   async sattStatus() {
     // Ingenting att anropa. Anroparen har redan loggat vad som skulle ut.
+  },
+  async tidslinje() {
+    // Samma sak.
   },
   async hamta() {
     return null;

@@ -94,39 +94,11 @@ export function Filuppladdning({
         return;
       }
 
-      // =================================================================
-      // TVÅ LAGRINGAR, TVÅ SÄTT ATT LÄGGA IN EN FIL
-      //
-      // R2 ger en färdig PUT-adress: en vanlig `fetch` räcker, och det är
-      // webbläsaren själv som skickar bytena till Cloudflare. Supabase ger en
-      // token som bara dess egen klient förstår.
-      //
-      // Vilket det blir säger `lank.store`, och det kommer från servern — inte
-      // från en inställning här. Servern vet vilken väg den faktiskt öppnade,
-      // och det är den vägen filen måste gå.
-      //
-      // Gamla filer berörs inte: det här handlar bara om vart NÄSTA fil läggs.
-      // =================================================================
-      if (lank.store === "r2") {
-        const svar = await fetch(lank.url, {
-          method: "PUT",
-          body: fil,
-          headers: { "content-type": fil.type },
-        });
-
-        if (!svar.ok) {
-          setFel(`Filen kom inte fram: lagringen svarade ${svar.status}.`);
-          return;
-        }
-      } else {
-        const { error } = await supabaseBrowser()
-          .storage.from(lank.bucket)
-          .uploadToSignedUrl(lank.path, lank.token, fil, { contentType: fil.type });
-
-        if (error) {
-          setFel(`Filen kom inte fram: ${error.message}`);
-          return;
-        }
+      // Två lagringar, två sätt att lägga in en fil — se `skickaTillLagring`.
+      const lagringsfel = await skickaTillLagring(lank, fil);
+      if (lagringsfel) {
+        setFel(lagringsfel);
+        return;
       }
 
       const svar = await registrera(lank.fileId, fil.name, lank.store);
@@ -175,3 +147,28 @@ export function Filuppladdning({
     </form>
   );
 }
+
+/**
+ * Bytena till lagringen, efter att servern oppnat vagen (`forbered`). Delad
+ * med orderformularets avtalsfalt (0075), som laddar upp innan ordern finns.
+ * Returnerar ett felmeddelande, eller null nar filen kom fram.
+ *
+ * TVA LAGRINGAR, TVA SATT ATT LAGGA IN EN FIL. R2 ger en fardig PUT-adress;
+ * Supabase ger en token som bara dess egen klient forstar. Vilket det blir
+ * sager `lank.store`, och det kommer fran servern — den vet vilken vag den
+ * faktiskt oppnade.
+ */
+export async function skickaTillLagring(
+  lank: { store: string; bucket: string; path: string; token: string; url: string },
+  fil: File,
+): Promise<string | null> {
+  if (lank.store === "r2") {
+    const svar = await fetch(lank.url, { method: "PUT", body: fil, headers: { "content-type": fil.type } });
+    return svar.ok ? null : `Filen kom inte fram: lagringen svarade ${svar.status}.`;
+  }
+  const { error } = await supabaseBrowser()
+    .storage.from(lank.bucket)
+    .uploadToSignedUrl(lank.path, lank.token, fil, { contentType: fil.type });
+  return error ? `Filen kom inte fram: ${error.message}` : null;
+}
+

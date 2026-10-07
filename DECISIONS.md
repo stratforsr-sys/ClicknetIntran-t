@@ -590,6 +590,17 @@ Planeringsvyn står kvar oförändrad under `/kalender?vy=planera`.
   Inkio; Inkio har ingen leveransstatus att sätta. Order godkända före 0074
   kopplas inte i efterhand — 9 av 22 gick inte att para ihop på datum och belopp,
   och en gissad koppling är värre än ingen.
+- (0075, 2026-10-07) **Beställarens svar på Inkio-passet.** (1) Ordern står i
+  leveranskön när den läggs upp, märkt "Väntar på godkännande"; bokningen
+  spärras i databasen (`lk:ej_godkand`) och 24-timmarsfristen startar vid
+  godkännandet. (2) Påskrivet avtal (PDF) krävs för att lägga upp en order —
+  valt framför "avtal eller samtal", fast ingen av de 24 ordrarna hade ett.
+  (3) Bara order lagda efter påslaget går till Inkio (`aktiv_fran`).
+  (4) Makulering i Inkio är en bock, förvald, som går att bocka ur.
+  (5) Kundens adress står på ordern, förifylld från Bolagsverket; för en
+  enskild firma skriver säljaren den. (6) Alla leveranssteg skrivs på kundens
+  tidslinje i Inkio — bokat, genomfört, ej svar, flyttat, inställt.
+  Leveranstavla i Inkio med synk åt båda hållen: föreslagen, väntar på ja.
 - (Pass 3) **Överlämningen fylls i på en egen sida**, `/kalender/overlamning/[order]`,
   som prototypen saknar. Notisen "Komplettera överlämningen" leder dit.
 - (Pass 4) **Teamet hämtar alla i Säljteamet och Leverans** för dagen, oavsett

@@ -11,13 +11,19 @@
  *   4. NAV-ORDERNS ID står i `external_order_id`. Det är det som gör ett andra
  *      försök ofarligt.
  *   5. KONTAKTEN får alltid ett förnamn — Inkio nekar annars hela kunden.
+ *   6. (0075) EN ENSKILD FIRMA blir "Sole Proprietorship", och adressen från
+ *      ordern används bara när alla tre fälten finns.
+ *   7. (0075) LEVERANSRADEN säger steg, vad som hände, när (svensk tid) och vem.
  *
  *   node --experimental-strip-types tests/inkio.mjs
  */
 import {
   arJuridiskPerson,
   delaNamn,
+  inkioBolagsform,
   inkioIdUr,
+  leveransrad,
+  orderadress,
   inkioOrgnr,
   nyKund,
   nyOrder,
@@ -89,6 +95,23 @@ ok("länken och utköpet i anteckningen", doc.notes.includes(underlag.navlank) &
 
 const avtalat = overenskommet(underlag, "Mick Corneliusson", "2026-10-07");
 ok("överenskommet säger paket, belopp, bindning och godkännare", avtalat.includes("Paket 2") && avtalat.includes("/mån") && avtalat.includes("12 mån") && avtalat.includes("Mick Corneliusson"), avtalat);
+
+console.log("\nEnskild firma och adress (0075)");
+ok("enskild firma → Sole Proprietorship", inkioBolagsform("740627-8882", null) === "Sole Proprietorship");
+ok("aktiebolag → Bolagsverkets form, annars Limited Company", inkioBolagsform("559467-3682", null) === "Limited Company");
+ok("enskild firmas kund får rätt form", nyKund({ bolag: "IE Cleaning", orgnr: "740627-8882", kontakt: "Ida E", telefon: "070", epost: null }, adress, null).customer.legal_form === "Sole Proprietorship");
+ok("adress med alla tre fälten", orderadress("Storgatan 1", "123 45", "Ort")?.city === "Ort");
+ok("adress utan ort blir null", orderadress("Storgatan 1", "123 45", " ") === null);
+
+console.log("\nLeveransens rader i Inkio (0075)");
+const bokad = leveransrad({ steg: "valkomstsamtal", handelse: "bokad", startar: "2026-10-14T08:00:00Z", vem: "Zen Ali", forsok: 1 });
+ok("bokad: steg, svensk tid och vem", bokad.includes("Välkomstsamtal bokat") && bokad.includes("10:00") && bokad.includes("Zen Ali"), bokad);
+const ejsvar = leveransrad({ steg: "valkomstsamtal", handelse: "ej_svar", startar: "2026-10-14T08:00:00Z", vem: null, forsok: 2 });
+ok("ej svar: försöket står med", ejsvar.includes("försök 2") && ejsvar.includes("svarade inte"), ejsvar);
+ok("genomfört kickoff", leveransrad({ steg: "kickoff", handelse: "genomford", startar: "2026-10-14T08:00:00Z", vem: "Zen", forsok: 1 }).includes("Kickoff genomfört (Zen)"));
+ok("inställt", leveransrad({ steg: "avstamning_30", handelse: "installd", startar: "2026-11-14T09:00:00Z", vem: null, forsok: 1 }).includes("Avstämning efter 30 dagar"));
+ok("okänt steg blir Leveransmöte", leveransrad({ steg: null, handelse: "flyttad", startar: "2026-10-14T08:00:00Z", vem: null, forsok: 1 }).includes("Leveransmöte flyttat"));
+ok("raden säger varifrån den kom", bokad.startsWith("Leverans · ") && bokad.endsWith("Clicknet Nav"));
 
 console.log("\nInklistrat id");
 ok("ur adressen", inkioIdUr("https://crm.inkio.se/customers/01a10ffe-dbea-733f-a228-65b245b7448b") === "01a10ffe-dbea-733f-a228-65b245b7448b");
