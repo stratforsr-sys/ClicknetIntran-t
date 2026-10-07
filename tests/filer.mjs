@@ -121,5 +121,15 @@ ok("rollspelet slapper bara in ljud", TILLATNA_TYPER.roleplay.every((t) => t.sta
 ok("och aldrig video", TILLATNA_TYPER.roleplay.every((t) => !t.startsWith("video/")));
 ok("varje andamal har en etikett pa svenska", Object.keys(TILLATNA_TYPER).every((a) => Boolean(ANDAMAL_ETIKETT[a])));
 
+// 0073. Ett paskrivet avtal kommer som skannad PDF eller som telefonfoto, och
+// en skanning pa flera sidor ar storre an ett intyg.
+ok("anstallningsavtalet tar PDF, JPG och PNG", TILLATNA_TYPER.employment_contract.join() === TILLATNA_TYPER.sick_certificate.join());
+ok("anstallningsavtalet far vara storre an ett intyg", MAX_BYTE.employment_contract > MAX_BYTE.sick_certificate);
+ok("ett word-dokument nekas som avtal", provaFil("employment_contract", { type: "application/msword", size: 1000 })?.kod === "typ");
+ok(
+  "avtalet behaller sitt filnamn",
+  visningsnamn({ purpose: "employment_contract", filename: "Avtal Anna.pdf", mime_type: "application/pdf" }) === "Avtal Anna.pdf",
+);
+
 console.log(fel === 0 ? "\n\x1b[32mAlla prov gick igenom.\x1b[0m" : `\n\x1b[31m${fel} prov föll.\x1b[0m`);
 process.exit(fel === 0 ? 0 : 1);

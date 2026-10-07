@@ -5,6 +5,51 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-07 · Bifogade anställningsavtal (0073)
+
+Beställaren ville kunna bifoga varje persons anställningsavtal, och att var och
+en ska kunna öppna sitt under *Mitt avtal* och ladda ner det.
+
+**Varför en rad i `contract` och inte en lös fil.** Avtalsmodulen (0028) hade
+redan allt runt omkring: listan, RLS-regeln att den anställda ser sitt eget först
+när det är utfärdat, tillbakadragandet, notisen och raden i registerutdraget.
+Det som saknades var en annan sorts kropp — en fil i stället för en fryst text.
+En egen tabell hade gett en andra lista och en andra policy som glider isär från
+den första. `contract.source` (`template` | `upload`) säger vilket det är, och
+`contract_kropp` tvingar att ett uppladdat avtal saknar text och mall och att
+ett mallavtal har båda. Därför är `body_md` och `template_slug` nu nullbara.
+
+**Filen ärver avtalets behörighet.** Grenen i `file_object_read` är en `exists`
+mot `contract` och inget eget rollvillkor — samma mönster som orderbilagan. De
+sex befintliga grenarna skrevs av ur `pg_policy`, inte ur migrationsfilerna,
+eftersom 0043 och 0052/0056 lagt till grenar efter 0039. Subjekttriggern nekar
+en fil vars `subject_employee_id` inte är avtalets person.
+
+**Utkast → fil → utfärdat.** Filens rad pekar på avtalet, så avtalet måste
+finnas först. Ett utfärdat avtal går inte att radera, så om registreringen
+fallit hade det stått kvar utan fil — därför skrivs det som utkast, filen
+registreras, och först sedan utfärdas det. Faller registreringen raderas
+utkastet och kaskaden tar filens rad (undantaget i `file_object_ar_last`).
+Uppladdningen publicerar direkt: avtalet är redan påskrivet, det finns ingen
+text att granska.
+
+**Torrkört före körning:** migrationen plus nitton kontroller i en transaktion
+som rullades tillbaka — fel subjekt nekas, Word nekas, andra filen på samma
+avtal nekas, mallavtal fungerar som förut, utkast osynligt för den anställda,
+utfärdat synligt för henne och inte för en kollega, tillbakadraget osynligt
+igen, utkast med fil går att radera, inspelningarna syns som förut. Körd
+11:28.
+
+**Prov:** `tests/filer.mjs` (fyra nya), `notiser-tackning` (två nya actions
+bokförda), `navnyheter` gröna i scratchpaden. `/avtal/bifoga` ligger i
+`tests/sidor.mjs`. Typkontrollen sker i Vercels bygge.
+
+**K27.** Ett inskannat avtal har nästan alltid personnumret ifyllt för hand.
+Tabellerna lagrar fortfarande inget; filen ligger i den stängda lagringen med
+åtkomstlogg, samma nivå som orderbilagan. P0.6 bör uppdateras.
+
+---
+
 ## 2026-10-02 (senare) · Provdatan för leveranskalendern borttagen
 
 På beställarens besked ("provdatan funkar, du kan ta bort den"). En transaktion,

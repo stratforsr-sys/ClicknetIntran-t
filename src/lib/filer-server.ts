@@ -249,6 +249,8 @@ export async function registreraFil(args: {
   sickReportId?: string | null;
   documentId?: string | null;
   salesOrderId?: string | null;
+  /** 0073. Det uppladdade anstallningsavtalets rad i `contract`. */
+  contractId?: string | null;
 }): Promise<{ id: string } | { fel: string }> {
   const db = supabaseAdmin();
   const path = bygStig(args.andamal, args.fileId);
@@ -302,6 +304,9 @@ export async function registreraFil(args: {
     // annars raden. Satts den till saljaren blir kundens avtal en uppgift om
     // den anstallda och foljer med ut i hens registerutdrag.
     sales_order_id: args.salesOrderId ?? null,
+    // 0073. Ett avtal handlar om en manniska — subjektet satts av anroparen,
+    // och triggern i 0073 nekar raden om det inte ar avtalets person.
+    contract_id: args.contractId ?? null,
     // K35: ett lakarintyg bar aldrig med sig namnet det hade pa datorn.
     filename: args.andamal === "sick_certificate" ? null : args.filnamn.slice(0, 200),
     mime_type: mime,

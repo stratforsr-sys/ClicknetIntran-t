@@ -37,7 +37,13 @@ export type Andamal =
    * den bar ett subjekt aven nar den hor till en order, eftersom ljudet ar den
    * anstalldas egen rost.
    */
-  | "call_recording";
+  | "call_recording"
+  /**
+   * 0073: ett paskrivet anstallningsavtal, uppladdat som fil. Hor till en rad
+   * i `contract` och arver dess behorighet — den anstallda ser det nar avtalet
+   * ar utfardat, och det foljer med i hens registerutdrag.
+   */
+  | "employment_contract";
 
 /** Vad varje andamal far bara. Samma lista som check-villkoret i 0022. */
 export const TILLATNA_TYPER: Record<Andamal, string[]> = {
@@ -52,6 +58,8 @@ export const TILLATNA_TYPER: Record<Andamal, string[]> = {
   // Lynes levererar mp3. De andra star med for att en vaxel som byter kodek
   // inte ska gora att inspelningarna tyst slutar komma in.
   call_recording: ["audio/mpeg", "audio/mp4", "audio/wav", "audio/webm"],
+  // Ett paskrivet avtal ar en inskannad PDF eller ett telefonfoto av papperet.
+  employment_contract: ["application/pdf", "image/jpeg", "image/png"],
 };
 
 /**
@@ -72,6 +80,8 @@ export const MAX_BYTE: Record<Andamal, number> = {
   // hojdes till samma siffra i 0056 — ett lagre tak dar hade avvisat just de
   // langa samtalen, alltsa de som faktiskt ledde till affar.
   call_recording: 50 * 1024 * 1024,
+  // Ett inskannat avtal pa sex sidor i fargskanning passerar latt tio MB.
+  employment_contract: 20 * 1024 * 1024,
 };
 
 /**
@@ -103,6 +113,7 @@ export const ANDAMAL_ETIKETT: Record<Andamal, string> = {
   roleplay: "Inspelat testsamtal",
   sales_order: "Avtal",
   call_recording: "Inspelat samtal",
+  employment_contract: "Anställningsavtal",
 };
 
 export type Filfel =

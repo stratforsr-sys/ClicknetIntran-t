@@ -7,6 +7,7 @@ import { Markdown } from "@/components/Markdown";
 import { supabaseServer } from "@/lib/supabase/server";
 import { getCurrentUser, fullName, hasRole } from "@/lib/auth";
 import { AVTALSSTATUS_ETIKETT, type Avtalsstatus } from "@/lib/avtal";
+import { storlek } from "@/lib/filer";
 import { draTillbakaAvtal, raderaUtkast, utfardaAvtal } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +38,7 @@ export default async function Avtalet({ params }: { params: Promise<{ id: string
   const { data: avtal } = await supabase
     .from("contract")
     .select(
-      "id, employee_id, title, template_slug, body_md, status, created_at, issued_at, issued_by, withdrawn_reason, withdrawn_at",
+      "id, employee_id, title, template_slug, source, body_md, status, created_at, issued_at, issued_by, withdrawn_reason, withdrawn_at",
     )
     .eq("id", id)
     .maybeSingle();
@@ -48,6 +49,23 @@ export default async function Avtalet({ params }: { params: Promise<{ id: string
 
   const hanterar = hasRole(user, "sales_manager", "ceo", "admin");
   const status = avtal.status as Avtalsstatus;
+  const arFil = avtal.source === "upload";
+
+  /**
+   * 0073. Ett uppladdat avtal har ingen text — innehallet ar filen.
+   *
+   * Lases med anvandarens EGEN token: filen arver avtalets behorighet i RLS,
+   * sa den som ser avtalet ser filen, och ingen annan. Lanken nedan gar till
+   * `/filer/[id]`, som skriver oppningen innan filen lamnas ut (K36).
+   */
+  const { data: fil } = arFil
+    ? await supabase
+        .from("file_object")
+        .select("id, filename, mime_type, size_bytes, uploaded_at")
+        .eq("contract_id", avtal.id)
+        .is("removed_at", null)
+        .maybeSingle()
+    : { data: null };
 
   const { data: person } = await supabase
     .from("employee")
@@ -61,7 +79,8 @@ export default async function Avtalet({ params }: { params: Promise<{ id: string
         <div>
           <h1 className="text-display text-ink-900">{avtal.title}</h1>
           <p className="mt-1 text-body text-ink-500">
-            {person ? fullName(person) : "okänd"} · mall {avtal.template_slug}
+            {person ? fullName(person) : "okänd"} ·{" "}
+            {arFil ? "påskrivet avtal, uppladdat som fil" : `mall ${avtal.template_slug}`}
           </p>
         </div>
         <Badge ton={TON[status]}>{AVTALSSTATUS_ETIKETT[status]}</Badge>
@@ -81,42 +100,75 @@ export default async function Avtalet({ params }: { params: Promise<{ id: string
         </Notis>
       )}
 
+      {arFil && (
+        <Card>
+          {fil ? (
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-body font-semibold text-ink-900">
+                  {fil.filename ?? avtal.title}
+                </p>
+                <p className="mt-1 text-small text-ink-500">
+                  {storlek(Number(fil.size_bytes))} · uppladdat{" "}
+                  {new Date(fil.uploaded_at).toLocaleDateString("sv-SE")}
+                </p>
+              </div>
+              {/*
+                Vanlig <a> och aldrig <Link> eller ButtonLink: Next forladdar
+                lankar nar musen nuddar dem, och varje forladdning hade blivit
+                en LOGGAD OPPNING som aldrig skedde. Regeln star i 0022.
+              */}
+              <a
+                href={`/filer/${fil.id}`}
+                className="inline-flex min-h-11 items-center justify-center rounded-full bg-brand-600 px-6 text-body font-semibold text-ink-inv shadow-elev-brand hover:bg-brand-700 active:scale-[0.98]"
+              >
+                Ladda ner avtalet
+              </a>
+            </div>
+          ) : (
+            <p className="text-body text-ink-500">Filen finns inte längre i navet.</p>
+          )}
+        </Card>
+      )}
+
       {/* Sjalva dokumentet. Vit yta, ingen ram i utskriften. */}
-      <Card className="print:p-0 print:shadow-none">
-        <article className="prosa mx-auto max-w-[75ch]">
-          <Markdown text={avtal.body_md} />
-
-          {/*
-            Underskriftsraderna hor till DOKUMENTET och inte till mallen.
-            Ligger de i mallen glommer nagon dem i en av dem, och ett avtal
-            utan rad att skriva pa ar inte ett avtal.
-
-            Personnumret star har for att det ar enda stallet det far finnas:
-            pa papperet. Se rubriken i 0028.
-          */}
-          <div className="mt-16 grid gap-12 sm:grid-cols-2">
-            <div>
-              <p className="text-small text-ink-500">Personnummer</p>
-              <div className="mt-8 border-t border-ink-900" />
-              <p className="mt-1 text-small text-ink-500">Fylls i för hand</p>
+      {!arFil && (
+        <Card className="print:p-0 print:shadow-none">
+          <article className="prosa mx-auto max-w-[75ch]">
+            <Markdown text={avtal.body_md} />
+  
+            {/*
+              Underskriftsraderna hor till DOKUMENTET och inte till mallen.
+              Ligger de i mallen glommer nagon dem i en av dem, och ett avtal
+              utan rad att skriva pa ar inte ett avtal.
+  
+              Personnumret star har for att det ar enda stallet det far finnas:
+              pa papperet. Se rubriken i 0028.
+            */}
+            <div className="mt-16 grid gap-12 sm:grid-cols-2">
+              <div>
+                <p className="text-small text-ink-500">Personnummer</p>
+                <div className="mt-8 border-t border-ink-900" />
+                <p className="mt-1 text-small text-ink-500">Fylls i för hand</p>
+              </div>
+              <div />
+              <div>
+                <div className="mt-8 border-t border-ink-900" />
+                <p className="mt-1 text-small text-ink-500">
+                  Arbetstagare · {person ? fullName(person) : ""}
+                </p>
+              </div>
+              <div>
+                <div className="mt-8 border-t border-ink-900" />
+                <p className="mt-1 text-small text-ink-500">För arbetsgivaren</p>
+              </div>
             </div>
-            <div />
-            <div>
-              <div className="mt-8 border-t border-ink-900" />
-              <p className="mt-1 text-small text-ink-500">
-                Arbetstagare · {person ? fullName(person) : ""}
-              </p>
-            </div>
-            <div>
-              <div className="mt-8 border-t border-ink-900" />
-              <p className="mt-1 text-small text-ink-500">För arbetsgivaren</p>
-            </div>
-          </div>
-        </article>
-      </Card>
+          </article>
+        </Card>
+      )}
 
       <div className="flex flex-wrap gap-2 print:hidden">
-        {status === "issued" && (
+        {status === "issued" && !arFil && (
           <p className="w-full text-small text-ink-500">
             Utfärdat {avtal.issued_at ? new Date(avtal.issued_at).toLocaleDateString("sv-SE") : ""}.
             Skriv ut sidan för att skriva under. E-signering är inte byggd (E9.2, blockerad av A14).

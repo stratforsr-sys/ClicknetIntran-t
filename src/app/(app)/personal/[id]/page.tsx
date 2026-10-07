@@ -41,6 +41,7 @@ import { guiderForRoller } from "@/guider";
 import type { Progress } from "@/lib/guider";
 import { hamtaLage } from "@/lib/sparrar";
 import { stampelfri } from "@/lib/stampelfri";
+import { AVTALSSTATUS_ETIKETT, type Avtalsstatus } from "@/lib/avtal";
 
 export const dynamic = "force-dynamic";
 
@@ -145,6 +146,19 @@ export default async function AnstalldSida({ params }: { params: Promise<{ id: s
         klar: kvitterat.has(`${d.id}:${d.version}`),
       }));
   }
+  /**
+   * 0073. Personens avtal, mallavtal som uppladdade. Lases med anvandarens
+   * egen token — `contract_read` slapper bara igenom alla avtal for den som
+   * far hantera dem, och for alla andra blir listan tom.
+   */
+  const { data: avtalen } = farHantera
+    ? await supabase
+        .from("contract")
+        .select("id, title, status, source, issued_at, created_at")
+        .eq("employee_id", id)
+        .order("created_at", { ascending: false })
+    : { data: null };
+
   const avslutad = a.status === "offboarded";
   /** 0046: raden ar en namnskylt efter en radering. Inget gar att gora med den. */
   const borttagen = Boolean(a.removed_at);
@@ -252,13 +266,46 @@ export default async function AnstalldSida({ params }: { params: Promise<{ id: s
 
           {/* E9.1. Vagen till avtalet gar via personen, for det ar har man ar
               nar man lagger upp nagon. Listan over alla avtal ligger pa /avtal. */}
+          {farHantera && (avtalen?.length ?? 0) > 0 && (
+            <div className="mt-6">
+              <p className="text-micro uppercase text-ink-500">Avtal</p>
+              <ul className="mt-1 flex flex-col gap-1">
+                {(avtalen ?? []).map((k) => (
+                  <li key={k.id} className="text-small text-ink-700">
+                    <Link
+                      href={`/avtal/${k.id}`}
+                      className="text-brand-700 underline underline-offset-2"
+                    >
+                      {k.title}
+                    </Link>
+                    <span className="text-ink-500">
+                      {" "}
+                      · {AVTALSSTATUS_ETIKETT[k.status as Avtalsstatus] ?? k.status}
+                      {k.source === "upload" ? " · fil" : ""}
+                      {" · "}
+                      {new Date(k.issued_at ?? k.created_at).toLocaleDateString("sv-SE")}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {farHantera && !avslutad && (
-            <p className="mt-6 text-small text-ink-500">
+            <p className="mt-6 flex flex-wrap gap-x-4 gap-y-1 text-small text-ink-500">
+              {/* 0073. Det påskrivna avtalet som fil — det vanliga fallet så
+                  länge ingen mall är skriven. */}
+              <Link
+                href={`/avtal/bifoga?person=${a.id}`}
+                className="text-brand-700 underline underline-offset-2"
+              >
+                Bifoga påskrivet avtal
+              </Link>
               <Link
                 href={`/avtal/nytt?person=${a.id}`}
                 className="text-brand-700 underline underline-offset-2"
               >
-                Skapa anställningsavtal
+                Skapa anställningsavtal ur mall
               </Link>
             </p>
           )}

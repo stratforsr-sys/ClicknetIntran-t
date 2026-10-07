@@ -14,6 +14,36 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "bifoga-anstallningsavtal",
+    rubrik: "Bifoga anställningsavtalet — och låt var och en ladda ner sitt eget",
+    ingress:
+      "Ladda upp det påskrivna avtalet som PDF eller bild på personen. Den anställda ser det direkt under Mitt avtal och kan ladda ner det därifrån.",
+    text: `Anställningsavtalen behöver inte längre ligga i en pärm eller en mejltråd.
+
+## Så bifogar du ett avtal
+
+Gå till **Avtal** och tryck **Bifoga avtal**, eller öppna personen under
+**Anställda** och välj **Bifoga påskrivet avtal**. Välj vem det gäller, ge det
+en rubrik och ladda upp filen — PDF, JPG eller PNG, högst 20 MB.
+
+Avtalet publiceras direkt. Personen får en notis i klockan och hittar det under
+**Mitt avtal**, där hen kan ladda ner det.
+
+## Blev det fel fil?
+
+Öppna avtalet och tryck **Dra tillbaka**. Då försvinner det ur personens vy, och
+du laddar upp rätt fil som ett nytt avtal. Ett avtal skrivs aldrig över — det
+som en gång lämnats ut går att spåra.
+
+## Vem ser vad
+
+Den anställda ser bara sina egna avtal. Varje nedladdning loggas, och avtalet
+följer med i personens registerutdrag.`,
+    datum: "2026-10-07",
+    roller: ["sales_manager", "ceo", "admin"],
+    href: "/avtal/bifoga",
+  },
+  {
     slug: "kalendern-teamet-och-outlook",
     rubrik: "Kalendern: Teamet, inbjudningar till Outlook och dina möten i din egen kalender",
     ingress:

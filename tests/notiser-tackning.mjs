@@ -300,6 +300,10 @@ const TACKNING = {
   "avtal::utfardaAvtal": "harledd",
   "avtal::draTillbakaAvtal": "notifierar",
   "avtal::raderaUtkast": "Ett utkast som aldrig utfardades.",
+  "avtal::forberedAvtalsfil": "Skriver ingenting — oppnar bara vagen in i lagringen.",
+  // 0073. Avtalet utfardas i samma handling, och notisen "Du har fatt ett
+  // avtal" raknas fram ur den utfardade raden precis som for ett mallavtal.
+  "avtal::registreraAvtalsfil": "harledd",
 
   // ---------------------------------------------------------------------------
   // Rutiner

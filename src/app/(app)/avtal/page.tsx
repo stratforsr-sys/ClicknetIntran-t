@@ -31,7 +31,7 @@ export default async function Avtal() {
   const supabase = await supabaseServer();
   const { data: avtal } = await supabase
     .from("contract")
-    .select("id, employee_id, title, template_slug, status, created_at, issued_at, withdrawn_reason")
+    .select("id, employee_id, title, template_slug, source, status, created_at, issued_at, withdrawn_reason")
     .order("created_at", { ascending: false })
     .limit(200);
 
@@ -48,8 +48,8 @@ export default async function Avtal() {
           <h1 className="text-display text-ink-900">{hanterar ? "Avtal" : "Mina avtal"}</h1>
           <p className="mt-1 max-w-[70ch] text-body text-ink-500">
             {hanterar
-              ? "Anställningsavtal skapade ur en mall. Texten fryses när avtalet utfärdas — en mall som ändras sedan rör inte det som redan är utfärdat."
-              : "Avtal som gäller dig. Ett avtal syns här när det är utfärdat."}
+              ? "Anställningsavtal — skapade ur en mall eller bifogade som påskriven fil. Ett utfärdat avtal ändras inte; blir något fel dras det tillbaka och ersätts."
+              : "Avtal som gäller dig. Öppna ett avtal för att läsa det eller ladda ner det."}
           </p>
         </div>
         {hanterar && (
@@ -57,8 +57,11 @@ export default async function Avtal() {
             <ButtonLink href="/avtal/mallar" variant="sekundar">
               Mallar
             </ButtonLink>
-            <ButtonLink href="/avtal/nytt" variant="primar">
-              Nytt avtal
+            <ButtonLink href="/avtal/nytt" variant="sekundar">
+              Nytt avtal ur mall
+            </ButtonLink>
+            <ButtonLink href="/avtal/bifoga" variant="primar">
+              Bifoga avtal
             </ButtonLink>
           </div>
         )}
@@ -79,10 +82,10 @@ export default async function Avtal() {
               rubrik={hanterar ? "Inga avtal än" : "Du har inga avtal här"}
               text={
                 hanterar
-                  ? "Skriv en mall först, publicera den, och skapa sedan avtalet från personens sida eller härifrån."
-                  : "Ett anställningsavtal dyker upp här när det är utfärdat."
+                  ? "Bifoga ett påskrivet avtal som PDF eller bild, eller skriv en mall och skapa avtalet ur den."
+                  : "Ditt anställningsavtal dyker upp här när det är upplagt."
               }
-              handling={hanterar ? <ButtonLink href="/avtal/mallar/ny">Skriv en mall</ButtonLink> : undefined}
+              handling={hanterar ? <ButtonLink href="/avtal/bifoga">Bifoga avtal</ButtonLink> : undefined}
             />
           </div>
         ) : (
@@ -99,6 +102,7 @@ export default async function Avtal() {
                   <span className="min-w-0 flex-1 text-body text-ink-900">
                     {namnPer.get(a.employee_id) ?? "okänd"}
                     <span className="text-ink-500"> · {a.title}</span>
+                    {a.source === "upload" && <span className="text-ink-500"> · fil</span>}
                   </span>
                   <time className="tnum text-small text-ink-500">
                     {new Date(a.issued_at ?? a.created_at).toLocaleDateString("sv-SE")}

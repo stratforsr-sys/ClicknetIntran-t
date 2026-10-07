@@ -123,6 +123,8 @@ const SIDOR = [
   "/rekrytering/ny",
   "/avtal",
   "/avtal/mallar",
+  // 0073. Sparrad till avtalskretsen; en saljare ska motas av 404.
+  "/avtal/bifoga",
   "/logg",
   "/lonekostnad",
   "/lonekostnad/satser",

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser, hasRole } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { skapaAvtalsutkast } from "@/lib/avtal-server";
+import { forberedUppladdning, registreraFil } from "@/lib/filer-server";
 import {
   VARIABELNYCKLAR,
   okandaPlatshallare,
@@ -334,4 +335,129 @@ export async function raderaUtkast(form: FormData): Promise<void> {
 
   revalidatePath("/avtal");
   redirect("/avtal");
+}
+
+// -----------------------------------------------------------------------------
+// 0073. Ett påskrivet avtal som fil.
+//
+// Filen går direkt från webbläsaren till lagringen — se
+// src/components/Filuppladdning.tsx — och de två handlingarna nedan är steg 1
+// och steg 3 runt den.
+// -----------------------------------------------------------------------------
+
+/** Finns personen, och är hen inte en namnskylt efter en radering (0046)? */
+async function personFinns(employeeId: string): Promise<boolean> {
+  if (!employeeId) return false;
+  const { data } = await supabaseAdmin()
+    .from("employee")
+    .select("id, removed_at")
+    .eq("id", employeeId)
+    .maybeSingle();
+  return Boolean(data && !data.removed_at);
+}
+
+/** Steg 1. Behörigheten och en väg in i lagringen. Ingen rad skrivs. */
+export async function forberedAvtalsfil(
+  employeeId: string,
+  filnamn: string,
+  mimetyp: string,
+  storlek: number,
+) {
+  const user = await getCurrentUser();
+  if (!user?.employee || !farHantera(user)) return { fel: "Du saknar behörighet." };
+  if (!(await personFinns(employeeId))) return { fel: "Välj vem avtalet gäller först." };
+
+  return forberedUppladdning({ andamal: "employment_contract", filnamn, mimetyp, storlek });
+}
+
+/**
+ * Steg 3. Skriver avtalet och filen, och utfärdar det.
+ *
+ * ORDNINGEN ÄR UTKAST → FIL → UTFÄRDAT, och den är inte godtycklig. Filens rad
+ * pekar på avtalet, så avtalet måste finnas först. Men ett avtal som var
+ * utfärdat innan filen kommit in hade under några ögonblick synts för den
+ * anställda utan något att ladda ner — och faller registreringen hade det stått
+ * kvar så, för ett utfärdat avtal går inte att radera. Ett utkast går att
+ * städa bort, och då tar kaskaden filens rad med sig.
+ *
+ * Utfärdas direkt, utan ett eget steg. Ett uppladdat avtal är redan påskrivet
+ * på papper — det finns ingen text att granska i navet innan den anställda får
+ * se det. Blev det fel fil drar man tillbaka avtalet och laddar upp ett nytt,
+ * precis som för ett mallavtal.
+ */
+export async function registreraAvtalsfil(
+  employeeId: string,
+  titel: string,
+  fileId: string,
+  filnamn: string,
+  store: string,
+): Promise<{ fel?: string; avtalId?: string }> {
+  try {
+    const user = await getCurrentUser();
+    if (!user?.employee || !farHantera(user)) return { fel: "Du saknar behörighet." };
+    if (!(await personFinns(employeeId))) return { fel: "Välj vem avtalet gäller först." };
+
+    const rubrik = titel.trim().slice(0, 200) || "Anställningsavtal";
+    const db = supabaseAdmin();
+
+    const { data: avtal, error: avtalsfel } = await db
+      .from("contract")
+      .insert({
+        employee_id: employeeId,
+        title: rubrik,
+        source: "upload",
+        status: "draft",
+        created_by: user.employee.id,
+      })
+      .select("id")
+      .single();
+    if (avtalsfel || !avtal) return { fel: `Avtalet kunde inte sparas: ${avtalsfel?.message ?? "okänt fel"}` };
+
+    const fil = await registreraFil({
+      fileId,
+      andamal: "employment_contract",
+      filnamn,
+      store,
+      uploadedBy: user.employee.id,
+      // Avtalet handlar om den anställda och följer med i hens registerutdrag.
+      subjectEmployeeId: employeeId,
+      contractId: avtal.id,
+    });
+
+    if ("fel" in fil) {
+      await db.from("contract").delete().eq("id", avtal.id);
+      return { fel: fil.fel };
+    }
+
+    const { error: utfardafel } = await db
+      .from("contract")
+      .update({
+        status: "issued",
+        issued_at: new Date().toISOString(),
+        issued_by: user.employee.id,
+      })
+      .eq("id", avtal.id);
+    if (utfardafel) return { fel: `Filen är sparad men avtalet kunde inte utfärdas: ${utfardafel.message}` };
+
+    await db.from("audit_log").insert([
+      {
+        actor_id: user.employee.id,
+        action: "contract.file_added",
+        object_type: "contract",
+        object_id: avtal.id,
+      },
+      {
+        actor_id: user.employee.id,
+        action: "contract.issued",
+        object_type: "contract",
+        object_id: avtal.id,
+      },
+    ]);
+
+    revalidatePath("/avtal");
+    revalidatePath(`/personal/${employeeId}`);
+    return { avtalId: avtal.id };
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Avtalet kunde inte laddas upp." };
+  }
 }

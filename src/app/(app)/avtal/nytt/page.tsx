@@ -13,7 +13,7 @@ export default async function NyttAvtal({
 }: {
   searchParams: Promise<{ person?: string }>;
 }) {
-  await searchParams;
+  const { person } = await searchParams;
   const user = await getCurrentUser();
   if (!hasRole(user, "sales_manager", "ceo", "admin")) notFound();
 
@@ -39,8 +39,18 @@ export default async function NyttAvtal({
         <Card>
           <EmptyState
             rubrik="Ingen publicerad mall"
-            text="Ett avtal skapas ur en mall. Skriv en och publicera den först — en mall som är utkast går inte att skapa avtal ur."
-            handling={<ButtonLink href="/avtal/mallar/ny">Skriv en mall</ButtonLink>}
+            text="Ett avtal skapas ur en mall. Skriv en och publicera den först — en mall som är utkast går inte att skapa avtal ur. Har du redan ett påskrivet avtal kan du bifoga det som fil i stället."
+            handling={
+              <div className="flex flex-wrap justify-center gap-2">
+                <ButtonLink
+                  href={person ? `/avtal/bifoga?person=${encodeURIComponent(person)}` : "/avtal/bifoga"}
+                  variant="primar"
+                >
+                  Bifoga påskrivet avtal
+                </ButtonLink>
+                <ButtonLink href="/avtal/mallar/ny">Skriv en mall</ButtonLink>
+              </div>
+            }
           />
         </Card>
       </div>
