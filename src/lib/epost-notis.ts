@@ -162,6 +162,18 @@ export const MEJLKALLOR = [
    */
   "leverans-frist",
   "leverans-komplettera",
+
+  /**
+   * Leads från hemsidan (0076). Det tydligaste fallet på hela listan: ett lead
+   * som ringas inom en kvart blir en affär betydligt oftare än ett som ringas
+   * i morgon, och den som ska fördela det har per definition inte /leads öppet
+   * när det kommer in. Tilldelningen mejlas av samma skäl — säljaren är ute i
+   * ett samtal, inte i navet.
+   *
+   * Dubbletter och spam skrivs aldrig som notis och når alltså inte hit.
+   */
+  "lead-ny",
+  "lead-tilldelad",
 ] as const satisfies readonly Handelsekalla[];
 
 export type Mejlkalla = (typeof MEJLKALLOR)[number];

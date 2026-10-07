@@ -11,7 +11,7 @@ import type { Aktivitetsrad } from "@/lib/crm/inkio";
 import { hamtaInkioAktivitet } from "./actions";
 
 /**
- * Kundkortets flik "Aktivitet" (0076).
+ * Kundkortets flik "Aktivitet" (Inkio, varv 3).
  *
  * =============================================================================
  * ALLT SOM HÄNT MED KUNDEN I INKIO, PÅ ETT STÄLLE

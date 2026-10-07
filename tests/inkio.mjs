@@ -115,7 +115,7 @@ ok("inställt", leveransrad({ steg: "avstamning_30", handelse: "installd", start
 ok("okänt steg blir Leveransmöte", leveransrad({ steg: null, handelse: "flyttad", startar: "2026-10-14T08:00:00Z", vem: null, forsok: 1 }).includes("Leveransmöte flyttat"));
 ok("raden säger varifrån den kom", bokad.startsWith("Leverans · ") && bokad.endsWith("Clicknet Nav"));
 
-console.log("\nKundens aktivitet (0076)");
+console.log("\nKundens aktivitet (Inkio, varv 3)");
 const svensk = aktivitetstext(
   "Dennis D submitted order #[SO-2026-00006](ref:Sales Order/01a1) (1 000,00 kr)",
   "{0} submitted order {1} ({2})",

@@ -390,3 +390,14 @@ export async function rekryteringskretsen(): Promise<string[]> {
 export async function arendekretsen(): Promise<string[]> {
   return medRoll("sales_manager", "ceo");
 }
+
+/**
+ * Den som far veta att ett nytt lead kommit in (0076): saljchef och VD.
+ *
+ * Teamledaren SER alla leads (`lead_read`) men far inte notisen. Kretsen som
+ * fordelar ar den som behover avbrytas; tre personer som far samma mejl om
+ * samma lead ar tre personer som tror att nagon annan tog det.
+ */
+export async function leadkretsen(): Promise<string[]> {
+  return medRoll("sales_manager", "ceo");
+}

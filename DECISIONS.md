@@ -601,7 +601,7 @@ Planeringsvyn står kvar oförändrad under `/kalender?vy=planera`.
   enskild firma skriver säljaren den. (6) Alla leveranssteg skrivs på kundens
   tidslinje i Inkio — bokat, genomfört, ej svar, flyttat, inställt.
   Leveranstavla i Inkio med synk åt båda hållen: föreslagen, väntar på ja.
-- (0076, 2026-10-07) **Kundkortets "Aktivitet" läser Inkio när fliken öppnas**,
+- (Inkio varv 3, ingen migration, 2026-10-07) **Kundkortets "Aktivitet" läser Inkio när fliken öppnas**,
   ingen kopia i Nav. Beställaren ville ha "exakt allting" — Inkios egen lista
   över trådar per kund (`get-thread-sources`) tar med nya posttyper av sig
   själv, och en spegel hade alltid varit en synk efter. 0,3–0,5 s per kund.

@@ -5,7 +5,7 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
-## 2026-10-07 (sen kväll) · Kundkortets "Aktivitet" — allt från Inkio (0076)
+## 2026-10-07 (sen kväll) · Kundkortets "Aktivitet" — allt från Inkio (ingen migration)
 
 Beställaren: "allt som händer med kunden i inkio ska in där, så alla
 anteckningar och exakt allt annat … säljaren som har kunden ska kunna se all
@@ -111,6 +111,52 @@ annat produktionssystem.
 **Inte kopplat i efterhand.** De 22 befintliga ordrarna gick att para med en
 Inkio-kund på org.nr, men bara 13 med en Inkio-order på datum eller belopp.
 En gissad koppling som pekar på fel order är värre än ingen.
+
+---
+
+## 2026-10-07 (kväll) · Leads från hemsidan (0076), gren `leads-fran-hemsidan`
+
+Beställaren ville koppla hemsidans formulär till navet så att alla inkommande
+leads hamnar här. Frågan kom först som "kan jag få API-nyckeln till
+intranätet" — och svaret var nej: navets enda nyckel med skrivrätt är service
+role, som läser och skriver HELA databasen. En hemsida är det mest exponerade
+bolaget äger, och den nyckeln hade gjort varje plugin på den till en väg in i
+lönerna.
+
+**En egen hemlighet som bara kan lämna ett lead.** `LEADS_WEBHOOK_SECRET`,
+samma mönster som `LYNES_WEBHOOK_SECRET`: i adressen (`/api/leads/<hemlighet>`)
+eller som `Authorization: Bearer` mot `/api/leads`. Inga CORS-rubriker — anropet
+ska gå från hemsidans server (Webflows/WordPress-pluginens webhook), aldrig från
+besökarens webbläsare, där hemligheten hade stått i källkoden.
+
+**Tolkningen är generös med formen.** Vi vet inte vilket formulärverktyg
+hemsidan kör. `tolkaInskick()` i `src/lib/leads.ts` tar svenska och engelska
+fältnamn, platt JSON, formulärkodning, Webflows `data`/`payload.data` och
+Elementors `fields.x.value`. Allt okänt sparas under Övriga fält. Det enda krav
+som nekar är att varken e-post eller telefon gick att läsa ut (422).
+
+**K27: maskeras, nekas inte.** En enskild firmas orgnummer ÄR ett personnummer,
+och att tappa ett lead för det hade varit att tappa en affär på en teknikalitet.
+Mottagaren maskerar med samma uttryck som `ser_ut_som_personnummer()`, och
+`lead_inget_personnummer` är andra ledet. Prov mot riktiga databasen fångade ett
+fel här innan commit: taket för Övriga fält räknades i tecken medan
+`pg_column_size` räknar byte — å, ä och ö är två. Nu räknas det i byte.
+
+**Spam:** honungsfälla (`_honeypot`; roboten får 200 och ingenting sparas),
+fler än två länkar i meddelandet → status `spam` utan notis, och ett tak på 60
+leads per timme (429). `website` är MED FLIT inte en fälla — B2B-formulär frågar
+efter kundens hemsida på riktigt. **Dubbletter:** samma e-post eller telefon
+inom 24 h pekar på originalet och notifierar ingen.
+
+**Vem ser vad (`lead_read`):** säljchef, VD och teamledare ser alla och
+fördelar. Säljaren ser bara sina tilldelade. **Notiser:** `lead-ny` till
+säljchef och VD, `lead-tilldelad` till säljaren — båda HÄNDELSER och båda
+mejlas, eftersom ett lead svalnar på minuter och mottagaren per definition inte
+har navet öppet.
+
+Valen ovan (krets, notismottagare, statusarna) är gjorda utan att beställaren
+tillfrågats — de är förval, och beställaren ska bekräfta dem vid genomgången
+av previewen.
 
 ---
 

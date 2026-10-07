@@ -137,6 +137,7 @@ export const MODUL: Record<string, string> = {
   manager_commission_rate: "Säljchefens ersättning",
   cost: "Lönekostnad",
   sales_order: "Kundorder",
+  lead: "Lead",
   sales_target: "Månadsmål",
   kv_call: "K&V-samtal",
   kv_criterion: "K&V-kriterium",

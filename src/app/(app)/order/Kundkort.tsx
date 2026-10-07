@@ -132,7 +132,7 @@ export function Kundkort({
 
   const flikar: { id: Flik; ikon: string; etikett: string; raknare?: number }[] = [
     { id: "oversikt", ikon: "konto", etikett: "Översikt" },
-    // 0076: allt som hänt med kunden i Inkio. Andra plats — det är dit man går
+    // Inkio-varv 3: allt som hänt med kunden i Inkio. Andra plats — det är dit man går
     // för att förstå kunden innan man ringer.
     { id: "aktivitet", ikon: "tid", etikett: "Aktivitet" },
     { id: "order", ikon: "sedel", etikett: "Order", raknare: kund.antal },

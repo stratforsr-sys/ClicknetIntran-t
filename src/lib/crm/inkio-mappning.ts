@@ -295,7 +295,7 @@ export function leveransrad(a: {
 
 
 // -----------------------------------------------------------------------------
-// Kundens aktivitet i Inkio, för kundkortet i Nav (0076)
+// Kundens aktivitet i Inkio, för kundkortet i Nav (Inkio, varv 3)
 // -----------------------------------------------------------------------------
 
 /**

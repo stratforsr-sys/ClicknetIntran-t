@@ -116,6 +116,42 @@ flyttas eller ställs in.`,
     href: "/order",
   },
   {
+    slug: "leads-fran-hemsidan",
+    rubrik: "Leads från hemsidan landar i navet",
+    ingress:
+      "Varje förfrågan från hemsidans formulär hamnar under Leads. Säljchefen och VD får ett mejl direkt, ger leadet till en säljare, och säljaren får ett mejl i sin tur.",
+    text: `Förfrågningarna från hemsidan behöver inte längre letas fram i en inkorg.
+
+## Så fungerar det
+
+När någon fyller i formuläret på hemsidan hamnar förfrågan under
+**Försäljning → Leads**. Säljchefen och VD får en notis i klockan och ett mejl
+med en gång, för ett lead som ringas inom en kvart blir oftare en affär.
+
+Öppna leadet och välj en säljare under **Ge till**. Säljaren får ett mejl och
+hittar leadet under **Leads → Mina**.
+
+## När du har ringt
+
+Sätt status: **Kontaktad**, **Möte bokat**, **Blev kund** eller **Ej aktuell**.
+Skriv gärna en anteckning om vad som sades — den syns för dig och för dem som
+fördelar leads.
+
+## Dubbletter och spam
+
+Skriver samma person in igen inom ett dygn märks det nya som **Dubblett** och
+pekar på det första. Det skickar inga nya notiser. Uppenbar spam sorteras bort
+innan den når listan.
+
+## Vem ser vad
+
+Säljchef, VD och teamledare ser alla leads. En säljare ser bara de leads hen
+fått.`,
+    datum: "2026-10-07",
+    roller: ["salesperson", "sales_manager", "ceo", "team_lead"],
+    href: "/leads",
+  },
+  {
     slug: "bifoga-anstallningsavtal",
     rubrik: "Bifoga anställningsavtalet — och låt var och en ladda ner sitt eget",
     ingress:

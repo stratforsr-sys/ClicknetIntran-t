@@ -253,6 +253,18 @@ export function navFor(user: CurrentUser | null, stamplingPa: boolean): Navigeri
     lagg("forsaljning", { href: "/kv", label: "K&V", ikon: "kontroll" });
   }
 
+  /**
+   * 0076. Leads från hemsidan. Fördelarna (säljchef, VD, teamledare) ser alla
+   * och ger dem vidare; säljaren ser de leads hen fått. RLS i `lead_read`
+   * avgör skillnaden — menyn avgör bara att posten finns.
+   *
+   * Ekonomi står utanför: ett lead är en förfrågan, inte en affär, och det
+   * finns ingenting i det för den som bokför.
+   */
+  if (hasRole(user, "salesperson", "sales_manager", "ceo", "team_lead")) {
+    lagg("forsaljning", { href: "/leads", label: "Leads", ikon: "saljning" });
+  }
+
   // Loneunderlaget ar ledningens och ekonomins (AC-2.13). Teamledaren har
   // avvikelsevyn, inte den har. Posten foljer M2: utan stampling finns inget
   // underlag att rapportera.

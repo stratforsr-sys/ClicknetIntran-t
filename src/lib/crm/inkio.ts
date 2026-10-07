@@ -44,7 +44,7 @@ export function inkioKonfigurerad(): boolean {
 }
 
 /**
- * LÄSA FÅR ALLA MILJÖER, SKRIVA BARA PRODUKTIONEN (0076).
+ * LÄSA FÅR ALLA MILJÖER, SKRIVA BARA PRODUKTIONEN (Inkio, varv 3).
  *
  * Previewen pekar på produktionens databas och har samma nycklar — så att
  * kundkortets aktivitet och adressuppslaget går att granska där. Men en order,
@@ -379,7 +379,7 @@ export const inkio: CrmAdapter = {
 };
 
 // -----------------------------------------------------------------------------
-// Kundens aktivitet (0076) — kundkortets flik "Aktivitet"
+// Kundens aktivitet (Inkio, varv 3) — kundkortets flik "Aktivitet"
 // -----------------------------------------------------------------------------
 
 export type Aktivitetsrad = {

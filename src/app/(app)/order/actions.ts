@@ -2702,7 +2702,7 @@ export async function slaUppBolag(orgnr: string) {
 }
 
 /**
- * Kundkortets flik "Aktivitet" (0076): allt som hänt med kunden i Inkio.
+ * Kundkortets flik "Aktivitet" (Inkio, varv 3): allt som hänt med kunden i Inkio.
  *
  * VEM SOM SER DEN avgörs av `sales_order`s RLS — ordern läses med
  * ANVÄNDARENS token. Säljaren ser aktiviteten för sina egna kunder, säljchef,
