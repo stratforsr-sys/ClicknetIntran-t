@@ -5,6 +5,25 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-07 (senare) · CSP:n stoppade varje uppladdning till R2
+
+Första riktiga uppladdningen av ett anställningsavtal gav "Failed to fetch".
+Bucketens CORS var rätt (preflight 204, `clicknet-nav.vercel.app` insläppt), men
+`connect-src` i `src/lib/csp.ts` tillät bara Supabase — och den signerade
+adressen går till `intranet.<konto>.eu.r2.cloudflarestorage.com`. Webbläsaren
+stoppade PUT:en innan den lämnade datorn.
+
+Felet har funnits sedan R2-flytten 2026-09-21 och gällde ALLA uppladdningar från
+webbläsaren — intyg, bilagor, rollspel — men ingen hade laddat upp något sedan
+dess (inspelningarna skrivs av servern och berördes inte). Rättat genom att
+räkna fram R2-adressen ur `R2_ENDPOINT` + `R2_BUCKET`, samma värden som servern
+signerar med.
+
+**Lärdom:** en ny väg ut från webbläsaren kräver både CORS hos mottagaren och
+`connect-src` hos oss. Provet av CORS med curl säger ingenting om CSP:n.
+
+---
+
 ## 2026-10-07 · Bifogade anställningsavtal (0073)
 
 Beställaren ville kunna bifoga varje persons anställningsavtal, och att var och
