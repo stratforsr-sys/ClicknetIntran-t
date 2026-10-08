@@ -22,7 +22,14 @@
  * utan att nagot ser fel ut: ett tomt avsnitt pa ordersidan ser precis ut som
  * en kund ingen ringt.
  */
-import { parIhop, valjOrder, gallringsfrist, GALLRINGSFRIST_DYGN } from "../src/lib/samtal-order.ts";
+import {
+  parIhop,
+  valjOrder,
+  gallringsfrist,
+  GALLRINGSFRIST_DYGN,
+  bedomSaljsamtal,
+  MIN_SALJSAMTAL_SEKUNDER,
+} from "../src/lib/samtal-order.ts";
 import { normaliseraNummer } from "../src/lib/samtal.ts";
 
 let fel = 0;
@@ -39,7 +46,7 @@ const samtal = (id, nummer, tid, extra = {}) => ({
   orderLinkedBy: null,
   ...extra,
 });
-const order = (id, nummer, skapad) => ({ id, contactPhoneE164: nummer, createdAt: skapad });
+const order = (id, nummer, skapad, status) => ({ id, contactPhoneE164: nummer, createdAt: skapad, status });
 
 const KUND = "+46701234567";
 const ANNAN = "+46709999999";
@@ -173,6 +180,92 @@ console.log("\n\x1b[1mINGA SAMTAL FORSVINNER\x1b[0m");
     "de star redan pa null och ska inte skrivas i onodan");
   ok("ingen koppling pekar pa ett samtal som inte skickades in",
     k.every((x) => s.some((y) => y.id === x.samtalId)));
+}
+
+console.log("\n\x1b[1mMAKULERADE OCH UTKAST tar inte samtalen fran den levande affaren (2026-10-08)\x1b[0m");
+{
+  // Wallgrens: den makulerade lades 11:55, den betalda dagen efter. Samtalet
+  // ringdes fore bada och hamnade pa den makulerade.
+  const o = [
+    order("MAK", KUND, "2026-09-15T09:55:00Z", "makulerad"),
+    order("BET", KUND, "2026-09-16T06:46:00Z", "betald"),
+  ];
+  ok("samtalet fore bada gar till den betalda, inte den makulerade",
+    valjOrder(samtal("S1", KUND, "2026-09-11T13:05:00Z"), o) === "BET");
+
+  // IE Cleaning: ett kvarglomt utkast och en inskickad pa samma nummer.
+  const u = [
+    order("UTK", KUND, "2026-09-28T10:13:00Z", "utkast"),
+    order("INS", KUND, "2026-10-01T06:21:00Z", "inskickad"),
+  ];
+  ok("ett kvarglomt utkast tar inte samtalet fran den inskickade",
+    valjOrder(samtal("S2", KUND, "2026-09-25T13:54:00Z"), u) === "INS");
+
+  ok("finns bara en makulerad order far den samtalet — det ska synas nagonstans",
+    valjOrder(samtal("S3", KUND, "2026-09-11T13:05:00Z"), [order("M", KUND, "2026-09-15T09:55:00Z", "makulerad")]) === "M");
+
+  ok("utkast gar fore makulerad nar ingen levande finns",
+    valjOrder(samtal("S4", KUND, "2026-09-11T13:05:00Z"), [
+      order("M", KUND, "2026-09-12T09:55:00Z", "makulerad"),
+      order("U", KUND, "2026-09-20T09:55:00Z", "utkast"),
+    ]) === "U");
+
+  ok("utan status (aldre anropare) raknas ordern som levande",
+    valjOrder(samtal("S5", KUND, "2026-09-11T13:05:00Z"), [
+      order("M", KUND, "2026-09-12T09:55:00Z", "makulerad"),
+      order("X", KUND, "2026-09-20T09:55:00Z"),
+    ]) === "X");
+}
+
+console.log("\n\x1b[1mSALJSAMTALET — sparren for att en order ska ga vidare\x1b[0m");
+{
+  const SALJ = "E-salj";
+  const ANNAN_PERSON = "E-annan";
+  const SKAPAD = "2026-09-24T13:31:00Z";
+  const s = (id, vem, sek, tid, lage = "hamtad") =>
+    ({ id, employeeId: vem, talkSeconds: sek, startedAt: tid, recordingState: lage });
+
+  ok("golvet ar fem minuter", MIN_SALJSAMTAL_SEKUNDER === 300);
+
+  const inga = bedomSaljsamtal({ samtal: [], saljareId: SALJ, orderSkapad: SKAPAD });
+  ok("inga samtal alls ger nej, och fragar om numret", !inga.ok && /numret/.test(inga.skal));
+
+  const kort = bedomSaljsamtal({ samtal: [s("K", SALJ, 90, "2026-09-24T10:00:00Z")], saljareId: SALJ, orderSkapad: SKAPAD });
+  ok("ett samtal pa 90 s ar inget saljsamtal", !kort.ok && /1 min 30 s/.test(kort.skal), kort.ok ? "" : kort.skal);
+
+  const precis = bedomSaljsamtal({ samtal: [s("P", SALJ, 300, "2026-09-24T10:00:00Z")], saljareId: SALJ, orderSkapad: SKAPAD });
+  ok("exakt fem minuter racker", precis.ok);
+
+  const annans = bedomSaljsamtal({ samtal: [s("A", ANNAN_PERSON, 2217, "2026-09-24T10:00:00Z")], saljareId: SALJ, orderSkapad: SKAPAD });
+  ok("nagon annans samtal ar inte saljarens saljsamtal (Wallgrens)", !annans.ok && /inget fran saljaren|inget från säljaren/.test(annans.skal), annans.ok ? "" : annans.skal);
+
+  const efter = bedomSaljsamtal({ samtal: [s("E", SALJ, 1800, "2026-09-29T10:00:00Z")], saljareId: SALJ, orderSkapad: SKAPAD });
+  ok("ett langt samtal dagar efter ordern ar uppfoljning, inte saljsamtalet", !efter.ok);
+
+  const strax = bedomSaljsamtal({ samtal: [s("S", SALJ, 900, "2026-09-24T13:40:00Z")], saljareId: SALJ, orderSkapad: SKAPAD });
+  ok("ett samtal som borjade nagra minuter efter att ordern lades raknas", strax.ok);
+
+  const basta = bedomSaljsamtal({
+    samtal: [s("1", SALJ, 73, "2026-09-24T11:36:00Z"), s("2", SALJ, 633, "2026-09-24T11:37:00Z"), s("3", SALJ, 671, "2026-09-24T11:49:00Z", "hos_vaxeln")],
+    saljareId: SALJ, orderSkapad: SKAPAD,
+  });
+  ok("det langsta samtalet ar saljsamtalet (TSL Motors)", basta.ok && basta.samtalId === "3" && basta.sekunder === 671);
+  ok("och det sags om inspelningen saknas", basta.ok && basta.harLjud === false);
+
+  const aros = bedomSaljsamtal({
+    samtal: [s("A1", SALJ, 860, "2026-09-11T11:32:00Z"), s("A2", SALJ, 1567, "2026-09-14T08:33:00Z")],
+    saljareId: SALJ, orderSkapad: "2026-09-15T09:45:00Z", signerad: "2026-09-01",
+  });
+  ok("samtal efter signeringsdagen ar uppfoljning (Aros Las: signerad 1/9, ringd 11/9)", !aros.ok);
+
+  const sammaDag = bedomSaljsamtal({
+    samtal: [s("D", SALJ, 1269, "2026-09-15T19:30:00Z")],
+    saljareId: SALJ, orderSkapad: "2026-09-16T10:00:00Z", signerad: "2026-09-15",
+  });
+  ok("ett samtal sent pa signeringsdagen (21:30 svensk tid) raknas", sammaDag.ok);
+
+  const utanTid = bedomSaljsamtal({ samtal: [s("T", SALJ, 1800, null)], saljareId: SALJ, orderSkapad: SKAPAD });
+  ok("ett samtal utan tidpunkt kan inte styrkas som fore ordern", !utanTid.ok);
 }
 
 console.log("\n\x1b[1mGallringsfristen\x1b[0m");

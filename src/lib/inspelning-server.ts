@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { bygStig, MAX_BYTE } from "@/lib/filer";
 import { gallringsfrist } from "@/lib/samtal-order";
+import { sidvis } from "@/lib/samtal-order-server";
 import { bucketen, lagerForNyaFiler, laggUpp, taBort } from "@/lib/lagring-server";
 import { tolkaLager } from "@/lib/lagring";
 
@@ -252,6 +253,8 @@ async function skrivFel(
  */
 export async function gallraInspelningar(): Promise<{
   gallrade: number;
+  /** Mogna men sparade, för att numret står på en order. Se hängslena nedan. */
+  skyddade: number;
   fel: string[];
 }> {
   const db = supabaseAdmin();
@@ -259,17 +262,46 @@ export async function gallraInspelningar(): Promise<{
 
   const { data: mogna, error } = await db
     .from("phone_call")
-    .select("id, recording_file_id, sales_order_id")
+    .select("id, recording_file_id, sales_order_id, counterpart_e164")
     .eq("recording_state", "hamtad")
     .not("recording_retained_until", "is", null)
     .lt("recording_retained_until", new Date().toISOString())
     .limit(500);
 
-  if (error) return { gallrade: 0, fel: [error.message] };
+  if (error) return { gallrade: 0, skyddade: 0, fel: [error.message] };
+
+  // ===================================================================
+  // HÄNGSLENA: ETT NUMMER SOM FINNS PÅ EN ORDER GALLRAS ALDRIG
+  //
+  // Villkoret ovan litar på att kopplingen hunnit göras. Fram till 2026-10-08
+  // gjorde den inte det — svepningen såg bara de 1 000 första samtalen — och
+  // säljsamtal på upp till 72 minuter stod okopplade med en frist. Den här
+  // kontrollen frågar inte kopplingen utan numret: ringdes samtalet till ett
+  // nummer som står på någon order, sparas ljudet tills en människa eller
+  // svepningen bestämt vart det hör. Ordrarna är några dussin; frågan är billig.
+  // ===================================================================
+  const { data: ordernummer, error: nummerfel } = await sidvis<{ contact_phone_e164: string }>((fran, till) =>
+    db
+      .from("sales_order")
+      .select("contact_phone_e164")
+      .not("contact_phone_e164", "is", null)
+      .order("id")
+      .range(fran, till),
+  );
+  // Utan facit gallras ingenting. Ett ljud som sparas en natt för länge kostar
+  // ingenting; ett bevis som raderas går inte att få tillbaka.
+  if (nummerfel) return { gallrade: 0, skyddade: 0, fel: [`ordernumren gick inte att läsa: ${nummerfel}`] };
+  const pavOrder = new Set(ordernummer.map((o) => o.contact_phone_e164));
 
   let gallrade = 0;
+  let skyddade = 0;
 
   for (const rad of mogna ?? []) {
+    if (rad.counterpart_e164 && pavOrder.has(rad.counterpart_e164 as string)) {
+      skyddade++;
+      continue;
+    }
+
     // Bältet och hängslena. Villkoret i databasen säger redan att det här inte
     // kan hända, och just därför ska koden säga ifrån om det ändå gör det.
     if (rad.sales_order_id) {
@@ -316,5 +348,5 @@ export async function gallraInspelningar(): Promise<{
     gallrade++;
   }
 
-  return { gallrade, fel };
+  return { gallrade, skyddade, fel };
 }

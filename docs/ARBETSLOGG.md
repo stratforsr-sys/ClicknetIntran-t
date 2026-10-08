@@ -5,6 +5,58 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-08 · Säljsamtalet på varje order — granskning, fyra fel och en spärr (ingen migration)
+
+Beställaren: gå igenom hur avtal och samtal kommer in på varje order, felsök,
+kontrollera att varje order har sitt säljsamtal (inte ett kort tvåminuterssamtal)
+och säkerställ att ingen order någonsin saknar ett samtal från Lynes.
+
+### Vad granskningen mot produktionen visade (2026-10-08)
+
+- **Nattens svepning såg 1 000 av 5 432 samtal.** `svepKoppling()` läste
+  `phone_call` i en fråga, och Supabase-API:t kapar vid 1 000 rader utan att
+  säga det (`content-range: 0-999/5432`). Mottagningen kopplar bara samtal vars
+  order redan finns — så varje order som lades upp EFTER säljsamtalet (nästan
+  alla) väntade på natten, som aldrig såg samtalet. 23 samtal på ordernummer stod
+  okopplade, bl.a. Adlaon 45 min, Sweden City Service 49 min, VästRent 73 min,
+  G.M.W 40 min, Plåt & Mek 42 min, IE Cleaning 70 min. De hade fått gallringsfrist
+  (första 2026-10-16) och raderats.
+- **Kommentaren lovade tre anropare, koden hade två.** "En ny order läggs upp"
+  utlöste aldrig någon koppling.
+- **Makulerade order tog samtalen.** Wallgrens: säljsamtalet hamnade på den
+  makulerade ordern (lagd 11:55), den betalda (lagd dagen efter) stod tom.
+- **Ett databasfel tappade ett samtal för gott.** `call_ingest` 3763
+  (2026-09-29, thomas@): Supabase svarade `Gateway Timeout` på skrivningen,
+  mottagningen svarade 200 som för ett tolkfel, Lynes skickade aldrig om.
+- `kopplaForHand()` fanns men hade ingen anropare — ett samtal från ett annat
+  nummer gick inte att koppla alls.
+
+### Vad som byggdes
+
+- `sidvis()` i `samtal-order-server.ts` — läser alla rader, sida för sida.
+- `valjOrder()` rangordnar: levande order före utkast före makulerade.
+- `provaSaljsamtal(orderId)` = svepning för ordern + `bedomSaljsamtal()`.
+  Spärr i `skapaOrder` (innan utkastet lämnas), `skickaInOrder`, `godkannOrder`.
+  Kravet: säljarens EGET samtal på kundens nummer, ≥ 5 min
+  (`MIN_SALJSAMTAL_SEKUNDER`), startat senast på signeringsdagen och senast
+  15 min efter att ordern lades upp.
+- "Koppla säljsamtal" (`Saljsamtalsval.tsx`) på utkast och inskickade:
+  säljarens okopplade samtal ≥ 5 min, 30 dygn bakåt, samma tidsgräns som spärren.
+- Mottagningen: `Tolkfel` → 200, allt annat → 500 så att Lynes skickar om.
+  Nattsteget `samtalsomtag` tolkar om rårader som aldrig blev samtal (14 dygn).
+- Gallringen hoppar över samtal vars nummer står på någon order (`skyddade`).
+- Kopplingen körs direkt när numret rättas (`redigeraOrder`, `rattaFranAvtal`).
+- Prov: `tests/samtal-order.mjs` +17.
+
+### Torrkörning mot riktiga datan
+
+Den rättade svepningen skriver 24 ändringar (2 flyttas från makulerad till betald
+Wallgrens, 22 kopplas för första gången). Spärren på dagens order: 13 klarar sig,
+11 skulle inte — men spärren gäller bara steg som tas FRAMÅT, så redan godkända
+order rörs inte. Se NASTA_SESSION för listan.
+
+---
+
 ## 2026-10-08 · Landningssidan på kundkortet (Inkio, fjärde varvet, ingen migration)
 
 Beställaren: visa "Landningssida aktiv" eller "Landningssida inte aktiv" och en

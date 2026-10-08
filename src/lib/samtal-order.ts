@@ -56,7 +56,31 @@ export type OrderForKoppling = {
   contactPhoneE164: string | null;
   /** ISO. När ordern lades upp — inte när den signerades. */
   createdAt: string;
+  /**
+   * Orderns status. Utelämnad räknas som en levande order. Se `rang()` — en
+   * makulerad order eller ett kvarglömt utkast ska inte ta samtalen från den
+   * affär som faktiskt gäller.
+   */
+  status?: string;
 };
+
+/**
+ * Vilka order på ett nummer som får samtalen, bäst först.
+ *
+ * Fram till 2026-10-08 räknades alla order lika, och då vann den som råkade
+ * läggas upp först efter samtalet. Wallgrens visade vad det kostar: säljsamtalet
+ * hamnade på den MAKULERADE ordern (lagd 11:55) och den betalda (lagd dagen
+ * efter) stod utan samtal. IE Cleaning likadant med ett kvarglömt utkast.
+ *
+ * Makulerade och utkast får därför samtal bara när numret inte har någon
+ * levande order — då är de ändå det enda svaret, och samtalet ska synas
+ * någonstans.
+ */
+function rang(o: OrderForKoppling): number {
+  if (o.status === "makulerad") return 2;
+  if (o.status === "utkast") return 1;
+  return 0;
+}
 
 /** Vad en svepning vill skriva. `orderId: null` betyder "lös upp kopplingen". */
 export type Koppling = {
@@ -76,8 +100,12 @@ export function valjOrder(
 ): string | null {
   if (!samtal.counterpartE164) return null;
 
-  const kandidater = ordrar.filter((o) => o.contactPhoneE164 === samtal.counterpartE164);
-  if (kandidater.length === 0) return null;
+  const allaPaNumret = ordrar.filter((o) => o.contactPhoneE164 === samtal.counterpartE164);
+  if (allaPaNumret.length === 0) return null;
+
+  // Bara den bästa rangen tävlar. Se `rang()`.
+  const basta = Math.min(...allaPaNumret.map(rang));
+  const kandidater = allaPaNumret.filter((o) => rang(o) === basta);
   if (kandidater.length === 1) return kandidater[0].id;
 
   // Flera affärer på samma nummer. Utan tidpunkt på samtalet går de inte att
@@ -130,6 +158,118 @@ export function parIhop(
  * i en fil är inte synlig. `docs/NASTA_SESSION.md` pekar hit.
  */
 export const GALLRINGSFRIST_DYGN = 30;
+
+/* ------------------------------------------------------------------------- *
+ * Säljsamtalet — kravet för att en order ska gå vidare
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Hur långt ett säljsamtal minst är. Beställaren 2026-10-08: samtalet på ordern
+ * ska vara säljsamtalet, "inte ett kort 2 minuter samtal".
+ *
+ * Fem minuter är golvet, inte ett mått på ett bra samtal. Septembers säljsamtal
+ * låg mellan elva och sjuttiotvå minuter; det kortaste som ändå var ett
+ * säljsamtal (Mbix, TSL Motors) var drygt elva.
+ */
+export const MIN_SALJSAMTAL_SEKUNDER = 300;
+
+/**
+ * Hur långt efter att ordern lades upp ett samtal fortfarande räknas som
+ * säljsamtalet. Webhooken kommer när inspelningen är klar — ofta en minut efter
+ * att luren lagts på — och säljaren kan ha börjat fylla i ordern under samtalet.
+ * Allt senare än så är uppföljning, inte affären.
+ */
+export const SALJSAMTAL_EFTER_MINUTER = 15;
+
+/**
+ * Senaste tidpunkt (ISO) ett samtal kan ha startat och ändå vara säljsamtalet:
+ * det tidigaste av "ordern lades upp + 15 min" och "signeringsdagens slut".
+ * Delas av spärren och av listan "Koppla säljsamtal", så att ingen kan koppla
+ * ett samtal som spärren sedan underkänner.
+ */
+export function saljsamtalsgrans(orderSkapad: string, signerad?: string | null): string {
+  let grans = new Date(new Date(orderSkapad).getTime() + SALJSAMTAL_EFTER_MINUTER * 60_000).toISOString();
+
+  // Dygnets slut i svensk tid är som senast 23:59 UTC+2 — midnatt UTC dagen
+  // efter ger alltså ett par timmars marginal och aldrig för lite.
+  if (signerad && /^\d{4}-\d{2}-\d{2}$/.test(signerad)) {
+    const dagenEfter = new Date(`${signerad}T00:00:00Z`);
+    dagenEfter.setUTCDate(dagenEfter.getUTCDate() + 1);
+    const slut = dagenEfter.toISOString();
+    if (slut < grans) grans = slut;
+  }
+
+  return grans;
+}
+
+export type SamtalForBedomning = {
+  id: string;
+  employeeId: string | null;
+  talkSeconds: number | null;
+  /** ISO. */
+  startedAt: string | null;
+  recordingState: string;
+};
+
+export type Saljsamtalsbedomning =
+  | { ok: true; samtalId: string; sekunder: number; harLjud: boolean }
+  | { ok: false; skal: string };
+
+function minuter(sekunder: number): string {
+  const m = Math.floor(sekunder / 60);
+  const s = sekunder % 60;
+  return m > 0 ? `${m} min ${s} s` : `${s} s`;
+}
+
+/**
+ * Har ordern ett säljsamtal från Lynes? Ren logik — anroparen läser samtalen.
+ *
+ * Säljsamtalet är SÄLJARENS EGET samtal på kundens nummer, ringt innan ordern
+ * lades upp OCH senast på signeringsdagen, och minst `MIN_SALJSAMTAL_SEKUNDER`
+ * långt. Det längsta sådana räknas.
+ *
+ * Signeringsdagen är med för att en order kan läggas in i efterhand. Aros Lås
+ * signerades 1 september och lades in den 15:e; samtalen den 11:e och 14:e är
+ * uppföljning, och utan den gränsen hade de godkänts som säljsamtalet. Någon annans samtal på numret är uppföljning eller förarbete, och
+ * provisionen följer säljaren — så det är hens röst som ska finnas på ordern.
+ */
+export function bedomSaljsamtal(args: {
+  samtal: SamtalForBedomning[];
+  saljareId: string;
+  /** ISO. När ordern lades upp. */
+  orderSkapad: string;
+  /** `YYYY-MM-DD`. Signeringsdagen — samtalet ligger senast den dagen. */
+  signerad?: string | null;
+}): Saljsamtalsbedomning {
+  const grans = saljsamtalsgrans(args.orderSkapad, args.signerad);
+
+  const saljarens = args.samtal.filter((s) => s.employeeId === args.saljareId);
+  const fore = saljarens.filter((s) => s.startedAt !== null && s.startedAt <= grans);
+
+  if (fore.length === 0) {
+    return {
+      ok: false,
+      skal:
+        saljarens.length > 0
+          ? "Säljarens samtal på kundens nummer ringdes alla efter signeringen eller efter att ordern lades upp. Säljsamtalet saknas."
+          : args.samtal.length > 0
+            ? "Ordern har samtal på kundens nummer, men inget från säljaren själv. Säljsamtalet saknas."
+            : "Det finns inget samtal från Lynes på kundens nummer. Stämmer numret på ordern?",
+    };
+  }
+
+  const langsta = fore.reduce((a, b) => ((b.talkSeconds ?? 0) > (a.talkSeconds ?? 0) ? b : a));
+  const sekunder = langsta.talkSeconds ?? 0;
+
+  if (sekunder < MIN_SALJSAMTAL_SEKUNDER) {
+    return {
+      ok: false,
+      skal: `Säljarens längsta samtal på kundens nummer är ${minuter(sekunder)}. Ett säljsamtal är minst ${MIN_SALJSAMTAL_SEKUNDER / 60} minuter.`,
+    };
+  }
+
+  return { ok: true, samtalId: langsta.id, sekunder, harLjud: langsta.recordingState === "hamtad" };
+}
 
 /** När en inspelning som hämtas nu ska gallras, om den inte fått en affär. */
 export function gallringsfrist(nu: Date = new Date()): string {

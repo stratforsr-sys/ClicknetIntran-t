@@ -27,6 +27,7 @@ import {
   type Orderstate,
 } from "./actions";
 import { laggOvrigBonus } from "../provision/actions";
+import { Saljsamtalsval } from "./Saljsamtalsval";
 
 /**
  * Atgarderna pa en enskild order.
@@ -98,6 +99,7 @@ export function Atgarder({
       <div className="flex flex-wrap gap-2">
         <Enkel action={skickaInOrder} id={id} etikett="Skicka in" />
         <Enkel action={raderaUtkast} id={id} etikett="Radera" variant="diskret" />
+        <Saljsamtalsval id={id} />
       </div>
     );
   }
@@ -157,6 +159,7 @@ export function Atgarder({
             Skicka tillbaka
           </Button>
         </div>
+        <Saljsamtalsval id={id} />
         {oppen === "fri" && <FriOrder id={id} />}
         {oppen === "retur" && (
           <MedSkal

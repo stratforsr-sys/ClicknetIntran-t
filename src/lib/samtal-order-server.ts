@@ -3,10 +3,15 @@ import "server-only";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import type { Samtalsrad } from "@/lib/samtal-vy";
 import {
+  bedomSaljsamtal,
   gallringsfrist,
+  MIN_SALJSAMTAL_SEKUNDER,
   parIhop,
+  saljsamtalsgrans,
   type OrderForKoppling,
+  type SamtalForBedomning,
   type SamtalForKoppling,
+  type Saljsamtalsbedomning,
 } from "@/lib/samtal-order";
 
 /**
@@ -53,6 +58,35 @@ export type Svepning = {
 };
 
 /**
+ * ALLA rader, inte de första tusen.
+ *
+ * Supabase-API:t svarar med högst 1 000 rader per fråga och säger inget om att
+ * resten saknas — svaret ser komplett ut. Fram till 2026-10-08 läste svepningen
+ * `phone_call` i en enda fråga, och med 5 400 samtal såg nattjobbet bara de
+ * 1 000 första. Varje order som lades upp EFTER sitt säljsamtal (alltså nästan
+ * alla) fick därför aldrig sina samtal: mottagningen kunde inte koppla dem, för
+ * ordern fanns inte än, och natten såg dem inte. Adlaon, Sweden City Service,
+ * VästRent, G.M.W, Plåt & Mek — säljsamtal på 25–72 minuter som stod okopplade
+ * och skulle ha gallrats efter 30 dygn.
+ *
+ * `bygg` måste ge en NY fråga varje varv — en Supabase-fråga går bara att köra
+ * en gång — och sortera på något unikt, annars kan sidorna överlappa.
+ */
+export async function sidvis<T>(
+  bygg: (fran: number, till: number) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>,
+): Promise<{ data: T[]; error: string | null }> {
+  const SIDA = 1000;
+  const ut: T[] = [];
+  for (let fran = 0; ; fran += SIDA) {
+    const { data, error } = await bygg(fran, fran + SIDA - 1);
+    if (error) return { data: ut, error: error.message };
+    const rader = (data ?? []) as T[];
+    ut.push(...rader);
+    if (rader.length < SIDA) return { data: ut, error: null };
+  }
+}
+
+/**
  * Räknar om kopplingen för alla samtal.
  *
  * `bara` begränsar vilka samtal som räknas om — en enskild order eller ett
@@ -67,39 +101,46 @@ export async function svepKoppling(bara?: {
   const db = supabaseAdmin();
   const fel: string[] = [];
 
-  const { data: ordrarRa, error: orderfel } = await db
-    .from("sales_order")
-    .select("id, contact_phone_e164, created_at")
-    .not("contact_phone_e164", "is", null);
+  const { data: ordrarRa, error: orderfel } = await sidvis<Record<string, unknown>>((fran, till) =>
+    db
+      .from("sales_order")
+      .select("id, contact_phone_e164, created_at, status")
+      .not("contact_phone_e164", "is", null)
+      .order("id")
+      .range(fran, till),
+  );
 
-  if (orderfel) return { kopplade: 0, upplosta: 0, samtal: 0, ordrar: 0, fel: [orderfel.message] };
+  if (orderfel) return { kopplade: 0, upplosta: 0, samtal: 0, ordrar: 0, fel: [orderfel] };
 
-  const ordrar: OrderForKoppling[] = (ordrarRa ?? []).map((o) => ({
+  const ordrar: OrderForKoppling[] = ordrarRa.map((o) => ({
     id: o.id as string,
     contactPhoneE164: o.contact_phone_e164 as string | null,
     createdAt: o.created_at as string,
+    status: o.status as string,
   }));
-
-  let fraga = db
-    .from("phone_call")
-    .select("id, counterpart_e164, started_at, sales_order_id, order_linked_by, recording_file_id")
-    .not("counterpart_e164", "is", null);
-
-  if (bara?.samtalId) fraga = fraga.eq("id", bara.samtalId);
 
   // En enskild order: räkna om samtalen på DESS nummer. Inte bara de som redan
   // pekar på ordern — hela poängen är att hitta dem som ännu inte gör det,
   // också de som ligger långt bakåt.
+  let nummer: string | null = null;
   if (bara?.orderId) {
-    const nummer = ordrar.find((o) => o.id === bara.orderId)?.contactPhoneE164;
+    nummer = ordrar.find((o) => o.id === bara.orderId)?.contactPhoneE164 ?? null;
     if (!nummer) return { kopplade: 0, upplosta: 0, samtal: 0, ordrar: ordrar.length, fel };
-    fraga = fraga.eq("counterpart_e164", nummer);
   }
 
-  const { data: samtalRa, error: samtalsfel } = await fraga;
-  if (samtalsfel) return { kopplade: 0, upplosta: 0, samtal: 0, ordrar: ordrar.length, fel: [samtalsfel.message] };
+  const { data: samtalRa, error: samtalsfel } = await sidvis<Record<string, unknown>>((fran, till) => {
+    let fraga = db
+      .from("phone_call")
+      .select("id, counterpart_e164, started_at, sales_order_id, order_linked_by, recording_file_id")
+      .not("counterpart_e164", "is", null);
+    if (bara?.samtalId) fraga = fraga.eq("id", bara.samtalId);
+    if (nummer) fraga = fraga.eq("counterpart_e164", nummer);
+    return fraga.order("id").range(fran, till);
+  });
 
-  const samtal: SamtalForKoppling[] = (samtalRa ?? []).map((s) => ({
+  if (samtalsfel) return { kopplade: 0, upplosta: 0, samtal: 0, ordrar: ordrar.length, fel: [samtalsfel] };
+
+  const samtal: SamtalForKoppling[] = samtalRa.map((s) => ({
     id: s.id as string,
     counterpartE164: s.counterpart_e164 as string | null,
     startedAt: s.started_at as string | null,
@@ -108,10 +149,10 @@ export async function svepKoppling(bara?: {
   }));
 
   const harInspelning = new Map(
-    (samtalRa ?? []).map((s) => [s.id as string, Boolean(s.recording_file_id)]),
+    samtalRa.map((s) => [s.id as string, Boolean(s.recording_file_id)]),
   );
   const filId = new Map(
-    (samtalRa ?? []).map((s) => [s.id as string, s.recording_file_id as string | null]),
+    samtalRa.map((s) => [s.id as string, s.recording_file_id as string | null]),
   );
 
   const andringar = parIhop(samtal, ordrar);
@@ -282,4 +323,107 @@ export async function hamtaOrdersamtal(
   }
 
   return ut;
+}
+
+/**
+ * Har ordern sitt säljsamtal från Lynes? Kopplar först, bedömer sedan.
+ *
+ * ===========================================================================
+ * KRAVET FÖR ATT EN ORDER SKA GÅ VIDARE (beställaren 2026-10-08)
+ *
+ * "Ingen order någonsin utan ett samtal direkt från Lynes." Den här funktionen
+ * är spärren, och den anropas på de tre ställen där en order tar ett steg:
+ * `skapaOrder` (innan den lämnar utkastet), `skickaInOrder` och `godkannOrder`.
+ *
+ * Svepningen körs FÖRST, för den enda ordern. Säljsamtalet ringdes nästan
+ * alltid innan ordern fanns, och mottagningen kunde då inte koppla det — det
+ * är just det här ögonblicket som gör kopplingen möjlig. Svepningen läser bara
+ * samtalen på orderns nummer, så den kostar en fråga och några skrivningar.
+ *
+ * Felar läsningen blir svaret NEJ, aldrig ja. En spärr som släpper igenom när
+ * den inte vet är ingen spärr.
+ * ===========================================================================
+ */
+export async function provaSaljsamtal(orderId: string): Promise<Saljsamtalsbedomning> {
+  await svepKoppling({ orderId }).catch(() => undefined);
+
+  const db = supabaseAdmin();
+  const { data: order } = await db
+    .from("sales_order")
+    .select("salesperson_id, created_at, signed_on")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!order) return { ok: false, skal: "Ordern finns inte." };
+
+  const { data, error } = await db
+    .from("phone_call")
+    .select("id, employee_id, talk_seconds, started_at, recording_state")
+    .eq("sales_order_id", orderId);
+  if (error) return { ok: false, skal: `Samtalen gick inte att läsa: ${error.message}` };
+
+  const samtal: SamtalForBedomning[] = (data ?? []).map((s) => ({
+    id: s.id as string,
+    employeeId: s.employee_id as string | null,
+    talkSeconds: s.talk_seconds as number | null,
+    startedAt: s.started_at as string | null,
+    recordingState: s.recording_state as string,
+  }));
+
+  return bedomSaljsamtal({
+    samtal,
+    saljareId: order.salesperson_id as string,
+    orderSkapad: order.created_at as string,
+    signerad: order.signed_on as string | null,
+  });
+}
+
+/** Hur långt före ordern en kandidat till säljsamtalet får ligga. */
+const KANDIDATFONSTER_DYGN = 30;
+
+export type Samtalskandidat = {
+  id: string;
+  startedAt: string | null;
+  talkSeconds: number | null;
+  counterpartE164: string | null;
+  harLjud: boolean;
+};
+
+/**
+ * Säljarens samtal som KAN vara säljsamtalet när numret på ordern inte träffar:
+ * kunden ringde från en annan telefon, eller numret skrevs fel.
+ *
+ * Bara säljarens egna, minst fem minuter, de 30 dygnen före ordern, och inga
+ * som redan hör till en annan affär — att flytta ett samtal från någon annans
+ * order är ett annat beslut än att hitta ett som saknar ägare.
+ */
+export async function samtalskandidater(orderId: string): Promise<Samtalskandidat[]> {
+  const db = supabaseAdmin();
+  const { data: order } = await db
+    .from("sales_order")
+    .select("salesperson_id, created_at, signed_on")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!order) return [];
+
+  const till = saljsamtalsgrans(order.created_at as string, order.signed_on as string | null);
+  const fran = new Date(new Date(till).getTime() - KANDIDATFONSTER_DYGN * 86_400_000).toISOString();
+
+  const { data } = await db
+    .from("phone_call")
+    .select("id, started_at, talk_seconds, counterpart_e164, recording_state")
+    .eq("employee_id", order.salesperson_id as string)
+    .is("sales_order_id", null)
+    .gte("talk_seconds", MIN_SALJSAMTAL_SEKUNDER)
+    .gte("started_at", fran)
+    .lte("started_at", till)
+    .order("started_at", { ascending: false })
+    .limit(30);
+
+  return (data ?? []).map((s) => ({
+    id: s.id as string,
+    startedAt: s.started_at as string | null,
+    talkSeconds: s.talk_seconds as number | null,
+    counterpartE164: s.counterpart_e164 as string | null,
+    harLjud: s.recording_state === "hamtad",
+  }));
 }

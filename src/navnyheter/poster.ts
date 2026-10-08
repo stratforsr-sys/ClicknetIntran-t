@@ -14,6 +14,36 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "saljsamtalet-kravs",
+    rubrik: "En order går inte vidare utan säljsamtalet",
+    ingress:
+      "Varje order ska ha ditt eget samtal från växeln med kunden, minst fem minuter. Nav hittar det själv på kundens nummer — och ringde kunden från ett annat nummer kopplar du det med en knapp.",
+    text: `När du lägger upp, skickar in eller godkänner en order letar Nav efter
+**säljsamtalet**: säljarens eget samtal från växeln på kundens nummer, minst
+**fem minuter**, ringt senast på signeringsdagen.
+
+## Om det inte hittas
+
+Ordern stannar som **utkast** och du får veta varför — till exempel att
+det längsta samtalet bara var två minuter, eller att det inte finns något samtal
+på numret alls.
+
+- **Kunden ringde från ett annat nummer?** Tryck **Koppla säljsamtal** på
+  ordern. Du ser dina samtal på minst fem minuter från de senaste 30 dygnen som
+  inte hör till någon annan order. Välj det där kunden sa ja och tryck **Koppla**.
+- **Fel nummer på ordern?** Rätta numret, så hittar Nav samtalen direkt.
+
+Sedan skickar du in ordern som vanligt.
+
+## Varför
+
+Samtalet är beviset på vad kunden sa ja till. Utan det finns bara avtalet — och
+inspelningen är det som avgör om något ifrågasätts.`,
+    datum: "2026-10-08",
+    roller: [],
+    href: "/order",
+  },
+  {
     slug: "kundkortet-landningssida",
     rubrik: "Kundkortet säger om kundens landningssida är uppe",
     ingress:

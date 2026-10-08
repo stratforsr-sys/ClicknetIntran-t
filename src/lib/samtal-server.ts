@@ -208,6 +208,126 @@ function somsvarde(t: Tolkning, avtr: string): string {
   return t.externalRef ?? `avtryck:${avtr.slice(0, 32)}`;
 }
 
+/**
+ * Ett fel i TOLKNINGEN, till skillnad från ett fel på vägen till databasen.
+ *
+ * Skillnaden avgör svaret till växeln. En påse vi inte förstår blir inte
+ * begripligare av att skickas om — 200, och raden väntar på en rättad tolk. Ett
+ * databasfel däremot är nästan alltid tillfälligt: 2026-09-29 svarade Supabase
+ * `Gateway Timeout` på en enda skrivning, mottagningen svarade 200 som för ett
+ * tolkfel, Lynes skickade aldrig om, och samtalet blev aldrig ett samtal.
+ */
+class Tolkfel extends Error {}
+
+/**
+ * Råraden blir ett samtal. Delas av mottagningen och nattens omtag.
+ *
+ * Kastar `Tolkfel` när påsen inte går att förstå, och vad som helst annat när
+ * skrivningen inte gick fram.
+ */
+async function behandla(
+  db: ReturnType<typeof supabaseAdmin>,
+  ingestId: number,
+  payload: unknown,
+  avtr: string,
+): Promise<string> {
+  let tolkning: Tolkning;
+  try {
+    tolkning = tolkaSamtal(payload);
+  } catch (e) {
+    throw new Tolkfel(e instanceof Error ? e.message : String(e));
+  }
+
+  const employeeId = await slaUppPerson(db, tolkning.agentRef, tolkning.agentUserId);
+
+  const externalRef = somsvarde(tolkning, avtr);
+
+  // `onConflict` på sömmen. En växel skickar ofta två gånger om samma samtal
+  // — en gång när det kopplas upp och en gång när det lagts på — och den
+  // andra leveransen ska UPPDATERA den första, inte lägga en rad bredvid.
+  //
+  // Läget läses därför FÖRE upserten: har steg 2 redan hämtat hem ljudet får
+  // en sen omleverans från växeln inte slå tillbaka `hamtad` till
+  // `hos_vaxeln`. Då hade nedladdningen gjorts om i all evighet — och
+  // villkoret `phone_call_inspelning` i 0052 hade dessutom avvisat raden,
+  // eftersom `recording_file_id` fortfarande pekade på filen.
+  const { data: befintlig, error: lasfel } = await db
+    .from("phone_call")
+    .select("id, recording_state")
+    .eq("source", "lynes")
+    .eq("external_ref", externalRef)
+    .maybeSingle();
+
+  // Ett läsfel här får inte tolkas som "finns inte": då hade en hämtad
+  // inspelning slagits tillbaka till `hos_vaxeln`. Kasta, så att växeln
+  // skickar om.
+  if (lasfel) throw new Error(lasfel.message);
+
+  const lage: "ingen" | "hos_vaxeln" | "hamtad" =
+    befintlig?.recording_state === "hamtad" ? "hamtad" : inspelningslage(tolkning);
+
+  const rad = {
+    ingest_id: ingestId,
+    source: "lynes",
+    external_ref: externalRef,
+    direction: tolkning.direction,
+    outcome: tolkning.outcome,
+    raw_call_type: tolkning.rawCallType,
+    raw_item_type: tolkning.rawItemType,
+    agent_ref: tolkning.agentRef,
+    employee_id: employeeId,
+    counterpart_e164: tolkning.counterpartE164,
+    counterpart_raw: tolkning.counterpartRaw,
+    started_at: tolkning.startedAt,
+    ended_at: tolkning.endedAt,
+    duration_seconds: tolkning.durationSeconds,
+    talk_seconds: tolkning.talkSeconds,
+    recording_url: tolkning.recordingUrl,
+    recording_state: lage,
+  };
+
+  const { data: samtal, error: samtalFel } = await db
+    .from("phone_call")
+    .upsert(rad, { onConflict: "source,external_ref" })
+    .select("id")
+    .single();
+
+  if (samtalFel || !samtal) throw new Error(samtalFel?.message ?? "Samtalet kunde inte skrivas");
+
+  await db
+    .from("call_ingest")
+    .update({ normalized_at: new Date().toISOString(), normalize_error: null })
+    .eq("id", ingestId);
+
+  const callId = samtal.id as string;
+
+  // ===================================================================
+  // TVÅ STEG EFTER ATT SAMTALET STÅR SKRIVET, OCH INGET AV DEM FÅR FÄLLA DET
+  //
+  // Båda ligger efter den lyckade skrivningen, och båda sväljer sina egna
+  // fel. Samtalet är redan bokfört; det som kan gå fel härifrån är att
+  // ljudet inte kommer hem eller att affären inte hittas — och ingetdera
+  // får göra att växeln får ett felsvar och skickar om.
+  //
+  // Ordningen spelar roll. Hämtningen först: adressen lever en halvtimme och
+  // kopplingen kan göras om när som helst. Kopplingen sist, så att ett
+  // ordersamtal som redan har sin affär får `sales_order_id` på filen med en
+  // gång i stället för att vänta på natten.
+  // ===================================================================
+
+  if (lage === "hos_vaxeln") {
+    await hamtaInspelning({
+      samtalId: callId,
+      employeeId,
+      url: tolkning.recordingUrl,
+    }).catch(() => undefined);
+  }
+
+  await svepKoppling({ samtalId: callId }).catch(() => undefined);
+
+  return callId;
+}
+
 export async function taEmotSamtal(ratext: string, headers: Headers): Promise<Mottagning> {
   const db = supabaseAdmin();
   const avtr = avtryck(ratext);
@@ -241,86 +361,7 @@ export async function taEmotSamtal(ratext: string, headers: Headers): Promise<Mo
   const ingestId = ingest.id as number;
 
   try {
-    const tolkning = tolkaSamtal(payload);
-    const employeeId = await slaUppPerson(db, tolkning.agentRef, tolkning.agentUserId);
-
-    const externalRef = somsvarde(tolkning, avtr);
-
-    // `onConflict` på sömmen. En växel skickar ofta två gånger om samma samtal
-    // — en gång när det kopplas upp och en gång när det lagts på — och den
-    // andra leveransen ska UPPDATERA den första, inte lägga en rad bredvid.
-    //
-    // Läget läses därför FÖRE upserten: har steg 2 redan hämtat hem ljudet får
-    // en sen omleverans från växeln inte slå tillbaka `hamtad` till
-    // `hos_vaxeln`. Då hade nedladdningen gjorts om i all evighet — och
-    // villkoret `phone_call_inspelning` i 0052 hade dessutom avvisat raden,
-    // eftersom `recording_file_id` fortfarande pekade på filen.
-    const { data: befintlig } = await db
-      .from("phone_call")
-      .select("id, recording_state")
-      .eq("source", "lynes")
-      .eq("external_ref", externalRef)
-      .maybeSingle();
-
-    const lage: "ingen" | "hos_vaxeln" | "hamtad" =
-      befintlig?.recording_state === "hamtad" ? "hamtad" : inspelningslage(tolkning);
-
-    const rad = {
-      ingest_id: ingestId,
-      source: "lynes",
-      external_ref: externalRef,
-      direction: tolkning.direction,
-      outcome: tolkning.outcome,
-      raw_call_type: tolkning.rawCallType,
-      raw_item_type: tolkning.rawItemType,
-      agent_ref: tolkning.agentRef,
-      employee_id: employeeId,
-      counterpart_e164: tolkning.counterpartE164,
-      counterpart_raw: tolkning.counterpartRaw,
-      started_at: tolkning.startedAt,
-      ended_at: tolkning.endedAt,
-      duration_seconds: tolkning.durationSeconds,
-      talk_seconds: tolkning.talkSeconds,
-      recording_url: tolkning.recordingUrl,
-      recording_state: lage,
-    };
-
-    const { data: samtal, error: samtalFel } = await db
-      .from("phone_call")
-      .upsert(rad, { onConflict: "source,external_ref" })
-      .select("id")
-      .single();
-
-    if (samtalFel || !samtal) throw new Error(samtalFel?.message ?? "Samtalet kunde inte skrivas");
-
-    await db.from("call_ingest").update({ normalized_at: new Date().toISOString() }).eq("id", ingestId);
-
-    const callId = samtal.id as string;
-
-    // ===================================================================
-    // TVÅ STEG EFTER ATT SAMTALET STÅR SKRIVET, OCH INGET AV DEM FÅR FÄLLA DET
-    //
-    // Båda ligger efter den lyckade skrivningen, och båda sväljer sina egna
-    // fel. Samtalet är redan bokfört; det som kan gå fel härifrån är att
-    // ljudet inte kommer hem eller att affären inte hittas — och ingetdera
-    // får göra att växeln får ett felsvar och skickar om.
-    //
-    // Ordningen spelar roll. Hämtningen först: adressen lever en halvtimme och
-    // kopplingen kan göras om när som helst. Kopplingen sist, så att ett
-    // ordersamtal som redan har sin affär får `sales_order_id` på filen med en
-    // gång i stället för att vänta på natten.
-    // ===================================================================
-
-    if (lage === "hos_vaxeln") {
-      await hamtaInspelning({
-        samtalId: callId,
-        employeeId,
-        url: tolkning.recordingUrl,
-      }).catch(() => undefined);
-    }
-
-    await svepKoppling({ samtalId: callId }).catch(() => undefined);
-
+    const callId = await behandla(db, ingestId, payload, avtr);
     return { mottaget: true, tolkat: true, ingestId, callId };
   } catch (e) {
     const skal = e instanceof Error ? e.message : String(e);
@@ -331,8 +372,57 @@ export async function taEmotSamtal(ratext: string, headers: Headers): Promise<Mo
     await db
       .from("call_ingest")
       .update({ normalize_error: skal.slice(0, 1000) })
-      .eq("id", ingestId);
+      .eq("id", ingestId)
+      .then(
+        () => undefined,
+        () => undefined,
+      );
 
-    return { mottaget: true, tolkat: false, ingestId, callId: null, skal };
+    // Tolkfel: 200, raden väntar på en rättad tolk. Allt annat: 500, så att
+    // växeln skickar om medan inspelningsadressen fortfarande lever. Se
+    // `Tolkfel`. Omleveransen blir en ny rårad och samma samtal — sömmen är
+    // växelns eget id.
+    if (e instanceof Tolkfel) return { mottaget: true, tolkat: false, ingestId, callId: null, skal };
+    return { mottaget: false, tolkat: false, ingestId, callId: null, skal };
   }
+}
+
+/**
+ * Nattens omtag: rårader som aldrig blev samtal, de senaste fjorton dygnen.
+ *
+ * Bältet till hängslena ovan. Skickar växeln inte om — eller faller även
+ * omleveransen — står råpåsen ändå kvar i `call_ingest`, och här blir den ett
+ * samtal i efterhand. Inspelningsadressen har då dött, så ljudet kommer inte
+ * hem, men SAMTALET finns: tid, längd, motpart och säljare. Det är vad
+ * kopplingen till ordern och spärren för säljsamtalet läser.
+ */
+export async function tolkaOmOtolkade(): Promise<{ tolkade: number; fel: string[] }> {
+  const db = supabaseAdmin();
+  const fran = new Date(Date.now() - 14 * 86_400_000).toISOString();
+
+  const { data, error } = await db
+    .from("call_ingest")
+    .select("id, payload, fingerprint")
+    .is("normalized_at", null)
+    .gte("received_at", fran)
+    .order("id")
+    .limit(200);
+
+  if (error) return { tolkade: 0, fel: [error.message] };
+
+  let tolkade = 0;
+  const fel: string[] = [];
+
+  for (const r of data ?? []) {
+    try {
+      await behandla(db, r.id as number, r.payload, r.fingerprint as string);
+      tolkade++;
+    } catch (e) {
+      const skal = e instanceof Error ? e.message : String(e);
+      fel.push(`${r.id}: ${skal}`);
+      await db.from("call_ingest").update({ normalize_error: skal.slice(0, 1000) }).eq("id", r.id);
+    }
+  }
+
+  return { tolkade, fel };
 }

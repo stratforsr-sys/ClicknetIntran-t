@@ -15,6 +15,7 @@ import { kvittoLarmtext, larmDigest, larmSokvag } from "@/lib/jobb/larm";
 import { skrivFel } from "@/lib/fel-server";
 import { rensaGamlaNotiser } from "@/lib/notishandelse-server";
 import { svepKoppling } from "@/lib/samtal-order-server";
+import { tolkaOmOtolkade } from "@/lib/samtal-server";
 import { gallraInspelningar } from "@/lib/inspelning-server";
 import { fodSerier } from "@/lib/upprepning-server";
 
@@ -152,6 +153,9 @@ export async function GET(request: NextRequest) {
     // Det ar ocksa natets enda chans att rakna om nar ett telefonnummer rattas
     // pa en order. Svepningen skriver bara det som faktiskt skiljer sig, sa en
     // natt utan nyheter kostar en fraga och ingen skrivning.
+    // Råpåsar som aldrig blev samtal — ett databasfel mitt i mottagningen.
+    // Före kopplingen, så att samtalet hinner hitta sin order samma natt.
+    ["samtalsomtag", () => tolkaOmOtolkade()],
     ["samtalskoppling", () => svepKoppling()],
     // Och inspelningarna som passerat sin frist utan att bli affar.
     //

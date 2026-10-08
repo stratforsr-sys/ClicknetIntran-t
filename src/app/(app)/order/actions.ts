@@ -21,6 +21,13 @@ import { las } from "@/lib/lagring-server";
 import { tolkaLager } from "@/lib/lagring";
 import { pdfText } from "@/lib/pdf";
 import { tolkaAvtalstext, type Orderforslag } from "@/lib/orderbilaga";
+import {
+  kopplaForHand,
+  provaSaljsamtal,
+  samtalskandidater,
+  svepKoppling,
+  type Samtalskandidat,
+} from "@/lib/samtal-order-server";
 import { notifiera, notifieraFlera, orderkretsen } from "@/lib/notishandelse-server";
 import {
   LOPTIDER,
@@ -756,6 +763,18 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
       };
     }
 
+    // SÄLJSAMTALET (beställaren 2026-10-08): ingen order lämnar utkastet utan
+    // säljarens eget samtal från Lynes på kundens nummer. Samma skäl som
+    // avtalet ovan — faller det står ett utkast kvar, och på det finns
+    // "Koppla säljsamtal" för fallet att kunden ringde från ett annat nummer.
+    const saljsamtal = await provaSaljsamtal(rad.id);
+    if (!saljsamtal.ok) {
+      return {
+        fel: `${saljsamtal.skal} Ordern ligger kvar som utkast på ${bolag} — koppla säljsamtalet där och skicka in den.`,
+        orderId: rad.id,
+      };
+    }
+
     const { error: stegfel } = await supabaseAdmin()
       .from("sales_order")
       .update({ ...slutligt, status: slutligStatus })
@@ -1266,6 +1285,8 @@ export async function skickaInOrder(_prev: Orderstate, form: FormData): Promise<
     if (!(await harAvtal(id))) {
       return { fel: "Ladda upp det påskrivna avtalet (PDF) på ordern innan den skickas in." };
     }
+    const saljsamtal = await provaSaljsamtal(id);
+    if (!saljsamtal.ok) return { fel: `${saljsamtal.skal} Koppla säljsamtalet innan ordern skickas in.` };
 
     const { error } = await supabaseAdmin()
       .from("sales_order")
@@ -1315,6 +1336,12 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
     if (rad.status !== "inskickad" && rad.status !== "utkast") {
       return { fel: "Ordern är redan avgjord." };
     }
+
+    // Spärren en gång till, här också: en order som skickades in före
+    // 2026-10-08 har aldrig passerat den, och ett godkännande är sista steget
+    // innan provisionen fryses och ordern går till Inkio.
+    const saljsamtal = await provaSaljsamtal(id);
+    if (!saljsamtal.ok) return { fel: `${saljsamtal.skal} Ordern kan inte godkännas utan säljsamtalet.` };
 
     // SALJAREN KOMMER UR ORDERN, inte ur formularet. Det ar hen som avgor om
     // chefsregeln galler, och en order som saljaren skickat in bar redan sitt
@@ -1595,6 +1622,9 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
         .eq("id", id);
 
       if (error) return { fel: `Ordern rättades inte: ${error.message}` };
+
+      // Ett rättat nummer ska hitta sina samtal nu, inte i natt.
+      if (telefon !== rad.contact_phone) await svepKoppling({ orderId: id }).catch(() => undefined);
 
       await logga(user, "sales_order.corrected", id, {
         skal,
@@ -2615,6 +2645,8 @@ export async function rattaFranAvtal(_prev: Orderstate, form: FormData): Promise
 
     if (error) return { fel: `Ordern rättades inte: ${error.message}` };
 
+    if ("contact_phone" in andring) await svepKoppling({ orderId }).catch(() => undefined);
+
     await logga(user, "sales_order.prefilled", orderId, { falt: Object.keys(andring) });
 
     revalidatePath("/order");
@@ -2677,6 +2709,59 @@ async function harAvtal(orderId: string): Promise<boolean> {
     .eq("purpose", "sales_order")
     .is("removed_at", null);
   return (count ?? 0) > 0;
+}
+
+/**
+ * Kandidaterna till säljsamtalet, för "Koppla säljsamtal" på ett utkast eller
+ * en inskickad order. Samma behörighet som bilagorna: säljaren på sin egen
+ * order, säljchef/VD/ekonomi på alla.
+ */
+export async function hamtaSamtalskandidater(
+  orderId: string,
+): Promise<{ kandidater: Samtalskandidat[] } | { fel: string }> {
+  try {
+    await kravBilageratt(orderId);
+    return { kandidater: await samtalskandidater(orderId) };
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Samtalen gick inte att hämta." };
+  }
+}
+
+/**
+ * Kopplar ett av säljarens samtal till ordern för hand — när kunden ringde
+ * från ett annat nummer än det på ordern.
+ *
+ * Kopplingen bär `order_linked_by`, så nattens svepning rör den aldrig. Samtalet
+ * måste vara en av kandidaterna: säljarens eget, utan annan affär, inom
+ * fönstret. Ett id från webbläsaren prövas alltså mot samma urval som listan
+ * visade, och kan inte peka på någon annans samtal.
+ */
+export async function kopplaSaljsamtal(_prev: Orderstate, form: FormData): Promise<Orderstate> {
+  try {
+    const orderId = String(form.get("id") ?? "");
+    const samtalId = String(form.get("samtal_id") ?? "");
+    const user = await kravBilageratt(orderId);
+
+    const rad = await hamtaRad(orderId);
+    if (!rad) return { fel: "Ordern finns inte." };
+    if (rad.status !== "utkast" && rad.status !== "inskickad") {
+      return { fel: "Säljsamtalet kopplas innan ordern godkänns." };
+    }
+
+    const kandidater = await samtalskandidater(orderId);
+    if (!kandidater.some((k) => k.id === samtalId)) {
+      return { fel: "Samtalet går inte att koppla till den här ordern." };
+    }
+
+    const svar = await kopplaForHand({ samtalId, orderId, beslutadAv: user.employee!.id });
+    if (svar.fel) return { fel: svar.fel };
+
+    await logga(user, "sales_order.call_linked", orderId, { samtal: samtalId });
+    revalidatePath("/order");
+    return { ok: "Säljsamtalet är kopplat till ordern." };
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Samtalet kunde inte kopplas." };
+  }
 }
 
 /**
