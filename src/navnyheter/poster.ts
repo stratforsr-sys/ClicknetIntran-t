@@ -14,6 +14,39 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "redigera-och-radera-order",
+    rubrik: "Redigera och radera order",
+    ingress:
+      "Utkast och inskickade order går att redigera, och felregistrerade order går att radera. En ej godkänd order visar sitt beräknade ordervärde.",
+    text: `## Redigera
+
+Öppna ordern i kundkortet och tryck **Redigera**. Det finns på:
+
+- **ditt eget utkast** — till exempel för att rätta telefonnumret när ordern
+  stannat för att säljsamtalet inte hittades;
+- **alla utkast och inskickade order** för säljchef, VD och ekonomi — där går
+  också paket, bindningstid, säljare, datum och månadsbelopp att ändra.
+
+En godkänd order rättas som förut med **Rätta ordern**.
+
+## Radera
+
+**Radera** tar bort en order helt — för testorder, dubbletter och
+felregistreringar. Säljchef, VD och ekonomi kan radera inskickade och godkända
+order; ett utkast raderar du själv. Samtalen på ordern finns kvar.
+
+En godkänd order går bara att radera så länge månaden är öppen och ordern inte
+finns i Inkio. Annars är **Makulera** rätt väg, och Nav säger det.
+
+## Ordervärdet
+
+En order som inte är godkänd visar nu **≈ beräknat ordervärde** i stället för ett
+streck. Det riktiga sätts när ordern godkänns.`,
+    datum: "2026-10-08",
+    roller: [],
+    href: "/order",
+  },
+  {
     slug: "telefon-med-saljsamtalet",
     rubrik: "Skriv numret du sålde på",
     ingress:

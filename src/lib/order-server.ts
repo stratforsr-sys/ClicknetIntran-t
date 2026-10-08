@@ -46,6 +46,10 @@ export type Orderrad = Order & {
   approved_at: string | null;
   cancelled_on: string | null;
   cancel_reason: string | null;
+  /** 0075. Kundens adress — nullbar på order från före kolumnerna. Förifyller redigeringen. */
+  customer_street: string | null;
+  customer_postal_code: string | null;
+  customer_city: string | null;
 };
 
 const FALT =
@@ -54,7 +58,7 @@ const FALT =
   " monthly_amount, commission_amount, commission_source, order_value, order_value_source," +
   " buyout_amount, note, created_by, created_at, approved_at, cancelled_on, cancel_reason," +
   " cancel_period_month, renewal_outcome, renewal_at, renewal_by, renewal_reason," +
-  " renewal_order_id";
+  " renewal_order_id, customer_street, customer_postal_code, customer_city";
 
 /**
  * numeric kommer tillbaka som STRANG ur PostgREST. Utan Number() blir

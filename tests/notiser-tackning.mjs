@@ -227,6 +227,8 @@ const TACKNING = {
   "order::makuleraOrder": "notifierar",
   "order::markeraBetald": "notifierar",
   "order::raderaUtkast": "Ett utkast som aldrig skickades in.",
+  "order::raderaOrder": "notifierar",
+  "order::redigeraOgodkand": "Ordern ar inte godkand och bar inga pengar; andringen star i loggen med fore och efter.",
   "order::forberedOrderbilaga": "Forbereder en uppladdning pa den egna ordern.",
   "order::registreraOrderbilaga": "Bilaga pa den egna ordern.",
   "order::taBortOrderbilaga": "Bilaga pa den egna ordern.",

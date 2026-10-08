@@ -17,7 +17,7 @@ import { svensktDatum } from "@/lib/klocka";
 import { kronor, manadsnamn, manadsnyckel, tolkaBelopp } from "@/lib/provision";
 import { rattelseposter, rorPengar } from "@/lib/rattelse";
 import { forberedUppladdning, registreraFil, taBortInnehall } from "@/lib/filer-server";
-import { las } from "@/lib/lagring-server";
+import { las, taBort } from "@/lib/lagring-server";
 import { tolkaLager } from "@/lib/lagring";
 import { pdfText } from "@/lib/pdf";
 import { tolkaAvtalstext, type Orderforslag } from "@/lib/orderbilaga";
@@ -2191,12 +2191,292 @@ export async function raderaUtkast(_prev: Orderstate, form: FormData): Promise<O
     }
     if (rad.status !== "utkast") return { fel: "Bara ett utkast går att radera." };
 
-    const { error } = await supabaseAdmin().from("sales_order").delete().eq("id", id);
-    if (error) return { fel: error.message };
+    // Genom `radera_order` (0077) och inte en DELETE rakt på tabellen: ett
+    // utkast kan bära samtal sedan säljsamtalsspärren, och en vanlig DELETE tog
+    // inspelningarnas registerrader med sig i kaskaden — och föll sedan på
+    // `phone_call_inspelning`, utan ett begripligt besked.
+    return await raderaGenomDatabasen(user, rad, null);
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Något gick fel." };
+  }
+}
 
-    await logga(user, "sales_order.deleted", id, {});
+/**
+ * Raderar en order helt — beställarens besked 2026-10-08: "jag ska kunna ta
+ * bort ordrar".
+ *
+ * ===========================================================================
+ * RADERA ÄR INTE MAKULERA
+ *
+ * En makulering är en händelse: affären fanns, kunden hoppade av, provisionen
+ * dras i makuleringsmånaden. En radering säger att ordern ALDRIG skulle ha
+ * funnits — en testorder, en dubblett, en felregistrering. Den går därför bara
+ * så länge ingenting har byggt vidare på ordern. Reglerna står i databasen
+ * (`radera_order` i 0077), inte här, och felmeddelandet därifrån säger när
+ * makulering är vägen i stället.
+ *
+ * Skälet krävs för allt utom ett utkast. Det står i loggen, eftersom ordern inte
+ * längre finns att titta på.
+ * ===========================================================================
+ */
+export async function raderaOrder(_prev: Orderstate, form: FormData): Promise<Orderstate> {
+  try {
+    const user = await kravInloggad();
+    const id = String(form.get("id") ?? "");
+    const skal = String(form.get("reason") ?? "").trim();
+    const rad = await hamtaRad(id);
+    if (!rad) return { fel: "Ordern finns inte." };
+
+    if (rad.status === "utkast") {
+      if (rad.salesperson_id !== user.employee!.id && !farHantera(user)) {
+        return { fel: "Det är inte din order." };
+      }
+    } else {
+      if (!farHantera(user)) {
+        return { fel: "Bara säljchef, VD och ekonomi får radera en order som lämnat utkastet." };
+      }
+      if (!skal) return { fel: "Skriv varför ordern raderas — det står i loggen." };
+    }
+
+    return await raderaGenomDatabasen(user, rad, skal || null);
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Något gick fel." };
+  }
+}
+
+/**
+ * Den gemensamma vägen för båda raderingarna. Databasen prövar, lossar samtalen
+ * och raderar i en transaktion; härifrån töms avtalsfilerna ur lagringen.
+ *
+ * LAGRINGEN TÖMS EFTERÅT, aldrig före. Föll raderingen i databasen ska avtalet
+ * finnas kvar — och registerraderna är redan borta när svaret kommer, så det är
+ * svaret som bär var filerna låg. Misslyckas en borttagning ligger filen kvar
+ * oåtkomlig i lagringen, och sökvägen står i loggen.
+ */
+async function raderaGenomDatabasen(
+  user: CurrentUser,
+  rad: Orderrad_skrivning,
+  skal: string | null,
+): Promise<Orderstate> {
+  const { data, error } = await supabaseAdmin().rpc("radera_order", { p_order: rad.id });
+  if (error) return { fel: error.message };
+
+  const svar = (data ?? {}) as {
+    status?: string;
+    samtal?: number;
+    filer?: { id: string; store: string; bucket: string; path: string; filename: string | null }[];
+  };
+  const filer = svar.filer ?? [];
+
+  const kvarILagringen: string[] = [];
+  for (const f of filer) {
+    const borta = await taBort({ lager: tolkaLager(f.store), bucket: f.bucket, path: f.path });
+    if (!borta.ok) kvarILagringen.push(f.path);
+  }
+
+  await logga(user, "sales_order.deleted", rad.id, {
+    skal,
+    status: rad.status,
+    company_name: rad.company_name,
+    salesperson_id: rad.salesperson_id,
+    signed_on: rad.signed_on,
+    commission_amount: rad.commission_amount == null ? null : Number(rad.commission_amount),
+    samtal_lossade: svar.samtal ?? 0,
+    avtal: filer.map((f) => f.filename ?? f.id),
+    kvar_i_lagringen: kvarILagringen,
+  });
+
+  // SÄLJAREN FÅR VETA NÄR EN GODKÄND ORDER FÖRSVINNER — då försvinner också
+  // provisionen, och det är samma sorts besked som en makulering. Ett utkast
+  // eller en inskickad order bar inga pengar.
+  if ((rad.status === "signerad" || rad.status === "betald") && rad.salesperson_id !== user.employee!.id) {
+    await notifiera({
+      till: rad.salesperson_id,
+      av: user.employee!.id,
+      kalla: "order-makulerad",
+      typ: "order",
+      rubrik: `Din order är borttagen: ${rad.company_name}`,
+      detalj: skal ? `${skal} · provisionen räknas inte längre` : "Provisionen räknas inte längre",
+      href: "/order",
+      objekt: { typ: "sales_order", id: rad.id },
+    });
+  }
+
+  revalidatePath("/order");
+  revalidatePath("/provision");
+
+  const samtal = svar.samtal ?? 0;
+  return {
+    ok:
+      `${rad.company_name} är borttagen.` +
+      (samtal > 0 ? ` ${samtal} samtal lossades och finns kvar med sina inspelningar.` : "") +
+      (kvarILagringen.length > 0 ? " Avtalsfilen gick inte att ta bort ur lagringen — det står i loggen." : ""),
+  };
+}
+
+/**
+ * Redigerar en order som ÄNNU INTE ÄR GODKÄND — utkast eller inskickad.
+ * Beställaren 2026-10-08: "du måste lägga in så att jag kan redigera ordrarna".
+ *
+ * ===========================================================================
+ * VARFÖR EN EGEN VÄG OCH INTE `redigeraOrder`
+ *
+ * `redigeraOrder` rättar en GODKÄND order: provisionen är fryst, och varje
+ * ändring räknas om och bokförs som rättelseposter om månaden är stängd. Inget
+ * av det gäller här. En ej godkänd order bär inga pengar — ordervärde och
+ * provision sätts först i `godkannOrder` — så redigeringen är bara en
+ * uppdatering med samma kontroller som `skapaOrder`.
+ *
+ * VEM: säljaren sitt eget UTKAST (det är där spärren lämnar en order som
+ * saknar säljsamtalet, och numret måste gå att rätta), chefskretsen alla
+ * utkast och inskickade. Säljare och "följer inte paketreglerna" ändras bara
+ * av chefskretsen, samma gräns som i `skapaOrder`.
+ * ===========================================================================
+ */
+export async function redigeraOgodkand(_prev: Orderstate, form: FormData): Promise<Orderstate> {
+  try {
+    const user = await kravInloggad();
+    const hanterare = farHantera(user);
+    const id = String(form.get("id") ?? "");
+
+    const db = supabaseAdmin();
+    const { data: raddata } = await db
+      .from("sales_order")
+      .select(
+        "id, status, salesperson_id, company_name, org_number, contact_name, contact_phone, contact_email, customer_street, customer_postal_code, customer_city, package_id, term_months, signed_on, starts_on, is_addon, monthly_amount, buyout_amount, note",
+      )
+      .eq("id", id)
+      .maybeSingle();
+    // Samma cast som i `redigeraOrder` — se kommentaren där.
+    const rad = raddata as unknown as Record<string, string | number | boolean | null> | null;
+    if (!rad) return { fel: "Ordern finns inte." };
+
+    const egen = rad.salesperson_id === user.employee!.id;
+    if (rad.status === "utkast") {
+      if (!egen && !hanterare) return { fel: "Det är inte din order." };
+    } else if (rad.status === "inskickad") {
+      if (!hanterare) return { fel: "En inskickad order redigeras av säljchef, VD eller ekonomi." };
+    } else {
+      return {
+        fel:
+          rad.status === "makulerad"
+            ? "En makulerad order redigeras inte."
+            : "En godkänd order rättas med Rätta ordern.",
+      };
+    }
+
+    const bolag = String(form.get("company_name") ?? "").trim();
+    if (!bolag) return { fel: "Bolagsnamnet saknas." };
+
+    const orgnr = normaliseraOrgnr(String(form.get("org_number") ?? ""));
+    if (!orgnr) return { fel: "Organisationsnumret ska vara tio siffror, till exempel 556677-8899." };
+
+    const kontakt = String(form.get("contact_name") ?? "").trim();
+    if (!kontakt) return { fel: "Kontaktpersonen saknas." };
+
+    const telefon = String(form.get("contact_phone") ?? "").trim();
+    if (!giltigTelefon(telefon)) return { fel: "Telefonnumret ser inte ut som ett nummer." };
+
+    const mejlText = String(form.get("contact_email") ?? "").trim();
+    if (mejlText && !giltigMejl(mejlText)) {
+      return { fel: "Mejladressen ser inte ut som en adress. Lämna fältet tomt om den saknas." };
+    }
+
+    // ADRESSEN: alla tre eller ingen. Order från före 0075 saknar den, och en
+    // redigering ska inte tvinga fram en — men en halv adress är ett skrivfel.
+    const gata = String(form.get("customer_street") ?? "").trim();
+    const postnummer = String(form.get("customer_postal_code") ?? "").trim();
+    const ort = String(form.get("customer_city") ?? "").trim();
+    const adressdelar = [gata, postnummer, ort].filter(Boolean).length;
+    if (adressdelar > 0 && adressdelar < 3) return { fel: "Skriv kundens hela adress: gata, postnummer och ort." };
+
+    const paket = Number(form.get("package_id"));
+    if (![1, 2, 3].includes(paket)) return { fel: "Välj ett paket." };
+    const loptid = Number(form.get("term_months"));
+
+    // FRI ORDER: chefskretsen väljer med kryssrutan; säljaren behåller det
+    // ordern redan är. Ett månadsbelopp på ordern ÄR det som gör den fri —
+    // se `raknaFramProvision` och `godkannOrder`.
+    const friOrder = hanterare ? form.get("fri_order") === "on" : rad.monthly_amount != null;
+    let manadsbelopp: number | null = null;
+    if (friOrder) {
+      manadsbelopp = hanterare
+        ? tolkaBelopp(String(form.get("monthly_amount") ?? ""))
+        : Number(rad.monthly_amount);
+      if (manadsbelopp === null || !(manadsbelopp > 0)) return { fel: "Skriv vad kunden betalar per månad." };
+      if (!giltigBindningstid(loptid)) return { fel: "Bindningstiden ska vara mellan 1 och 60 hela månader." };
+    } else if (!(LOPTIDER as readonly number[]).includes(loptid)) {
+      return { fel: "Välj en bindningstid." };
+    }
+
+    const signerad = String(form.get("signed_on") ?? "").trim();
+    if (!giltigtSigneringsdatum(signerad)) {
+      return { fel: "Signeringsdatumet är ogiltigt eller ligger i framtiden." };
+    }
+    const startdatum = String(form.get("starts_on") ?? "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startdatum)) return { fel: "Skriv när avtalet börjar gälla." };
+    if (startdatum < signerad) return { fel: "Avtalet kan inte börja gälla innan det signerades." };
+
+    const valdSaljare = String(form.get("salesperson_id") ?? "").trim();
+    const saljare = hanterare && valdSaljare ? valdSaljare : (rad.salesperson_id as string);
+
+    // Utköpet med samma dolda fält som rättelsen — se `Rattelse` i Atgarder.tsx.
+    const utkopsval = utkopUrFormular(form);
+    if ("fel" in utkopsval) return { fel: utkopsval.fel };
+    const utkop = form.has("har_utkop_ritad")
+      ? utkopsval.utkop
+      : rad.buyout_amount == null
+        ? null
+        : Number(rad.buyout_amount);
+
+    const efter = {
+      company_name: bolag,
+      org_number: orgnr,
+      contact_name: kontakt,
+      contact_phone: telefon,
+      contact_email: mejlText || null,
+      customer_street: gata || null,
+      customer_postal_code: postnummer || null,
+      customer_city: ort || null,
+      package_id: paket,
+      term_months: loptid,
+      monthly_amount: manadsbelopp,
+      signed_on: signerad,
+      starts_on: startdatum,
+      salesperson_id: saljare,
+      is_addon: form.get("is_addon") === "on",
+      buyout_amount: utkop,
+      note: String(form.get("note") ?? "").trim() || null,
+    };
+
+    // STATUSEN I VILLKORET: hann ordern godkännas medan formuläret stod öppet
+    // ska redigeringen inte skriva över en fryst order.
+    const { data: skrivet, error } = await db
+      .from("sales_order")
+      .update(efter)
+      .eq("id", id)
+      .eq("status", rad.status as string)
+      .select("id");
+    if (error) return { fel: `Ordern sparades inte: ${error.message}` };
+    if (!skrivet || skrivet.length === 0) return { fel: "Ordern hann ändra status. Ladda om sidan." };
+
+    // Numret är sömmen till säljsamtalet. Rättas det ska samtalen hittas nu.
+    await svepKoppling({ orderId: id }).catch(() => undefined);
+
+    // numeric kommer som sträng ur PostgREST ("1495.00"), så belopp jämförs
+    // som tal — annars hade varje sparning loggat ett oförändrat belopp.
+    const TAL = new Set(["package_id", "term_months", "monthly_amount", "buyout_amount"]);
+    const lika = (k: string, a: unknown, b: unknown) =>
+      TAL.has(k) && a != null && b != null ? Number(a) === Number(b) : String(a ?? "") === String(b ?? "");
+    const andrat = Object.fromEntries(Object.entries(efter).filter(([k, v]) => !lika(k, v, rad[k])));
+    await logga(user, "sales_order.edited", id, {
+      status: rad.status,
+      fore: Object.fromEntries(Object.keys(andrat).map((k) => [k, rad[k] ?? null])),
+      efter: andrat,
+    });
+
     revalidatePath("/order");
-    return { ok: "Utkastet är borta." };
+    return { ok: Object.keys(andrat).length === 0 ? "Inget var ändrat." : "Ordern är sparad." };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
   }

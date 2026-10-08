@@ -20,6 +20,7 @@ import {
   godkannOrder,
   makuleraOrder,
   markeraBetald,
+  raderaOrder,
   raderaUtkast,
   redigeraOrder,
   returneraOrder,
@@ -28,6 +29,7 @@ import {
 } from "./actions";
 import { laggOvrigBonus } from "../provision/actions";
 import { Saljsamtalsval } from "./Saljsamtalsval";
+import { Redigering } from "./Redigering";
 
 /**
  * Atgarderna pa en enskild order.
@@ -86,8 +88,38 @@ export function Atgarder({
   idag?: string;
 }) {
   const [oppen, setOppen] = useState<
-    "retur" | "makulera" | "fri" | "ratta" | "bonus" | null
+    "retur" | "makulera" | "fri" | "ratta" | "bonus" | "redigera" | "radera" | null
   >(null);
+
+  // ===========================================================================
+  // REDIGERA OCH RADERA (beställaren 2026-10-08): "jag ska kunna redigera
+  // ordrarna eller ta bort ordrar". Redigera finns för utkast och inskickade —
+  // en godkänd order har "Rätta ordern". Radera finns för chefskretsen på allt
+  // som inte är makulerat; databasen (`radera_order`, 0077) säger nej när
+  // makulering är rätt väg, och beskedet säger det.
+  // ===========================================================================
+  const kanRedigera =
+    !!order &&
+    !!paket &&
+    !!personer &&
+    !!idag &&
+    ((status === "utkast" && (agare || hanterare)) || (status === "inskickad" && hanterare));
+
+  const redigering =
+    kanRedigera && order && paket && personer && idag ? (
+      <Redigering id={id} order={order} paket={paket} personer={personer} full={hanterare} idag={idag} />
+    ) : null;
+
+  const radering = (
+    <MedSkal
+      action={raderaOrder}
+      id={id}
+      etikett="Radera ordern"
+      variant="destruktiv"
+      platshallare="Varför raderas ordern? (testorder, dubblett, felregistrerad)"
+      hjalp="Ordern tas bort helt och kan inte tas tillbaka. Samtalen finns kvar. En godkänd order går bara att radera så länge månaden är öppen och den inte finns i Inkio — annars är Makulera vägen."
+    />
+  );
 
   // GRINDEN, och den ar samma funktion kundkortet fragar for att veta om
   // rubriken "Åtgärder" ska ritas alls. Villkoren star darfor EN gang: kedjan
@@ -96,9 +128,24 @@ export function Atgarder({
 
   if (status === "utkast") {
     return (
-      <div className="flex flex-wrap gap-2">
-        <Enkel action={skickaInOrder} id={id} etikett="Skicka in" />
-        <Enkel action={raderaUtkast} id={id} etikett="Radera" variant="diskret" />
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap gap-2">
+          {/* SKICKA IN ÄR SÄLJARENS. Chefskretsen ser utkastet sedan 2026-10-08
+              för att kunna rätta och radera det, inte för att skicka in åt någon. */}
+          {agare && <Enkel action={skickaInOrder} id={id} etikett="Skicka in" />}
+          {kanRedigera && (
+            <Button
+              type="button"
+              size="sm"
+              variant="sekundar"
+              onClick={() => setOppen(oppen === "redigera" ? null : "redigera")}
+            >
+              Redigera
+            </Button>
+          )}
+          <Enkel action={raderaUtkast} id={id} etikett="Radera" variant="diskret" />
+        </div>
+        {oppen === "redigera" && redigering}
         <Saljsamtalsval id={id} />
       </div>
     );
@@ -158,8 +205,28 @@ export function Atgarder({
           >
             Skicka tillbaka
           </Button>
+          {kanRedigera && (
+            <Button
+              type="button"
+              size="sm"
+              variant="sekundar"
+              onClick={() => setOppen(oppen === "redigera" ? null : "redigera")}
+            >
+              Redigera
+            </Button>
+          )}
+          <Button
+            type="button"
+            size="sm"
+            variant="diskret"
+            onClick={() => setOppen(oppen === "radera" ? null : "radera")}
+          >
+            Radera
+          </Button>
         </div>
         <Saljsamtalsval id={id} />
+        {oppen === "redigera" && redigering}
+        {oppen === "radera" && radering}
         {oppen === "fri" && <FriOrder id={id} />}
         {oppen === "retur" && (
           <MedSkal
@@ -239,6 +306,15 @@ export function Atgarder({
             >
               Makulera
             </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="diskret"
+              onClick={() => setOppen(oppen === "radera" ? null : "radera")}
+            >
+              Radera
+            </Button>
+            {oppen === "radera" && radering}
             {oppen === "makulera" && (
               <MedSkal
                 action={makuleraOrder}
@@ -445,6 +521,10 @@ export type Redigerbar = {
   order_value_source: string | null;
   /** 0060. Utkopet, eller null nar affaren inte bar nagot. */
   buyout_amount: number | null;
+  /** 0075. Kundens adress — förifyller redigeringen av en ej godkänd order. */
+  customer_street?: string | null;
+  customer_postal_code?: string | null;
+  customer_city?: string | null;
   commission_amount: number | null;
   commission_source: string | null;
   note: string | null;

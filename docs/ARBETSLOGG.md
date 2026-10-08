@@ -5,6 +5,34 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-08 (kväll) · Redigera och radera order (0077)
+
+Beställaren: "du måste lägga in så att jag kan redigera ordrarna eller ta bort
+ordrar. Vissa har inte ens ordervärde".
+
+**Ordervärdet saknades inte av misstag.** Det fryses i `godkannOrder`; alla fem
+order utan värde var utkast eller inskickade. De visar nu ett beräknat värde
+(samma räkning som godkännandet: månadsbelopp eller listpris × bindningstid +
+tjänster), märkt ≈.
+
+**Raderingen var farligare än den såg ut.** `file_object.sales_order_id` har
+ON DELETE CASCADE, och sedan 0056 ligger inspelningar på ordern. En vanlig
+DELETE tog alltså inspelningarnas registerrader med sig — och föll sedan på
+`phone_call_inspelning`, eftersom `phone_call.recording_file_id` sätts till null
+medan läget står kvar på `hamtad`. Med säljsamtalsspärren kopplas samtal till
+utkast, så "Radera utkast" hade börjat falla obegripligt.
+
+`radera_order()` gör det i en transaktion: prövar, lossar samtalen (ny frist),
+tar väntande Inkio-rader ur utkorgen och raderar. Triggern släpper en icke-utkast
+bara när `nav.radera_order` (transaktionslokal) pekar på just den ordern — en
+DELETE utanför funktionen nekas som förut. Avtalsfilernas innehåll töms ur
+lagringen av servern EFTER att databasen svarat, med sökvägarna ur svaret.
+
+Gränsen mot makulering: radering för det som aldrig skulle ha funnits (test,
+dubblett, felregistrering) och bara så länge inget byggt vidare på ordern.
+
+---
+
 ## 2026-10-08 (eftermiddag) · Säljsamtalet mergat, datumen rättade mot Inkio, augusti öppnad
 
 `f45b112` fast-forwardad till main 14:58 på beställarens besked; bygget grönt.

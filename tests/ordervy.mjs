@@ -209,7 +209,7 @@ const ROLLER = {
 
 const VANTAT = {
   //                 saljare  annan  saljchef  ekonomi
-  utkast: [true, false, false, false],
+  utkast: [true, false, true, true],
   inskickad: [false, false, true, true],
   signerad: [true, false, true, true],
   betald: [true, false, true, true],
@@ -238,11 +238,16 @@ for (const hanterare of [false, true])
         }
 ok("ingen av sexton rollkombinationer far atgarder pa en makulerad order", makuleradOppen === 0, `${makuleradOppen} slapptes igenom`);
 
-// ETT UTKAST TILLHOR SIN AGARE OCH INGEN ANNAN. Sarskilt inte chefen: ett utkast
-// ar inte inskickat, och specifikationen later inte nagon annan skicka in det.
+// ETT UTKAST TILLHOR SIN AGARE — men sedan 2026-10-08 far chefskretsen redigera
+// och radera det (bestallarens besked). "Skicka in" ritas fortfarande bara for
+// agaren; det avgors i `Atgarder`, inte har. En annan SALJARE ser ingenting.
 ok(
-  "saljchefen ser inget pa nagon annans utkast",
-  harAtgarder({ status: "utkast", hanterare: true, bokforare: true, agare: false, upphovsperson: true }) === false,
+  "saljchefen far atgarder pa nagon annans utkast (redigera, radera)",
+  harAtgarder({ status: "utkast", hanterare: true, bokforare: true, agare: false, upphovsperson: true }) === true,
+);
+ok(
+  "en annan saljare ser inget pa nagon annans utkast",
+  harAtgarder({ status: "utkast", hanterare: false, bokforare: false, agare: false, upphovsperson: true }) === false,
 );
 ok(
   "agaren ser sitt eget utkast aven utan att ha lagt upp det",

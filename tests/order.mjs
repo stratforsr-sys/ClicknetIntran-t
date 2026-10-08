@@ -41,6 +41,7 @@ import {
   giltigBindningstid,
   tjanstensSlut,
   tjanstensVarde,
+  beraknatOrdervarde,
 } from "../src/lib/order.ts";
 
 let fel = 0;
@@ -441,6 +442,23 @@ console.log("\nTillaggstjanster (0068)");
       995 * 24 + 199 * 24 + 4000 + 500 * 36,
   );
   ok("en tom lista andrar ingenting", affarensVarde(995, 12, []) === 11940);
+}
+
+console.log("\n\x1b[1mBERAKNAT ORDERVARDE pa en ej godkand order (2026-10-08)\x1b[0m");
+{
+  const PAKET = [{ id: 1, list_price: 995 }, { id: 2, list_price: 1495 }, { id: 3, list_price: 1995 }];
+  ok("paketorder: listpris x bindningstid (Masouds, paket 2, 12 man)",
+    beraknatOrdervarde({ monthly_amount: null, package_id: 2, term_months: 12 }, PAKET) === 17940);
+  ok("fri order: manadsbeloppet pa ordern gar fore paketets pris",
+    beraknatOrdervarde({ monthly_amount: 1000, package_id: 2, term_months: 6 }, PAKET) === 6000);
+  ok("tjansterna raknas med, precis som vid godkannandet",
+    beraknatOrdervarde({ monthly_amount: null, package_id: 1, term_months: 12 }, PAKET,
+      [{ name: "Annons", billing: "engang", amount: 500, follows_order: false, term_months: null, starts_on: null }])
+      === affarensVarde(995, 12, [{ name: "Annons", billing: "engang", amount: 500, follows_order: false, term_months: null, starts_on: null }]));
+  ok("okant paket ger null, inte ett pahittat tal",
+    beraknatOrdervarde({ monthly_amount: null, package_id: 9, term_months: 12 }, PAKET) === null);
+  ok("numeric som strang fran PostgREST tolkas som tal",
+    beraknatOrdervarde({ monthly_amount: "1495.00", package_id: 2, term_months: 6 }, PAKET) === 8970);
 }
 
 console.log(fel === 0 ? "\n\x1b[32mAllt gront.\x1b[0m\n" : `\n\x1b[31m${fel} fel.\x1b[0m\n`);

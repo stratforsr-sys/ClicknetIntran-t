@@ -162,7 +162,12 @@ export function harAtgarder({
   agare: boolean;
   upphovsperson: boolean;
 }): boolean {
-  if (status === "utkast") return agare;
+  // UTKASTET: agaren, och sedan 2026-10-08 aven chefskretsen. Bestallaren:
+  // "jag ska kunna redigera ordrarna eller ta bort ordrar". En chef som lagt en
+  // order at en saljare far ett utkast som spärren stoppat — utan atgarder hade
+  // det inte gatt att ratta eller radera. "Skicka in" ritas anda bara for
+  // agaren; det ar komponentens val, inte grindens.
+  if (status === "utkast") return agare || hanterare;
   if (status === "inskickad") return hanterare;
   if (status === "signerad" || status === "betald") {
     return hanterare || bokforare || upphovsperson;

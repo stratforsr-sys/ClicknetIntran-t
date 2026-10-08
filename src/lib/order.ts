@@ -698,6 +698,27 @@ export function tjanstensSlut(tjanst: Tjanst): string | null {
 }
 
 /**
+ * Ordervärdet en EJ GODKÄND order kommer att få, eller null.
+ *
+ * Beställaren 2026-10-08: "vissa har inte ens ordervärde". Värdet fryses först
+ * vid godkännandet (`raknaFramProvision`), så ett utkast eller en inskickad
+ * order visar "—". Det här är samma räkning som godkännandet gör — månadsbeloppet
+ * på ordern om det finns (fri order), annars paketets listpris, gånger
+ * bindningstiden, plus tjänsterna — och vyn märker det "beräknat".
+ *
+ * Null när paketet inte finns i listan: hellre inget tal än ett påhittat.
+ */
+export function beraknatOrdervarde(
+  o: { monthly_amount: number | null; package_id: number; term_months: number },
+  paket: Pick<Paket, "id" | "list_price">[],
+  tjanster: Tjanst[] = [],
+): number | null {
+  const manad = o.monthly_amount ?? paket.find((p) => p.id === o.package_id)?.list_price ?? null;
+  if (manad === null || !(manad > 0)) return null;
+  return affarensVarde(Number(manad), o.term_months, tjanster);
+}
+
+/**
  * Hela affarens varde: huvudavtalet plus tjansterna.
  *
  * ===========================================================================

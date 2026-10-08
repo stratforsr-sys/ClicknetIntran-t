@@ -8,6 +8,7 @@ import { cn } from "@/components/ui/cn";
 import {
   FAKTURERING_ETIKETT,
   STATUS_ETIKETT,
+  beraknatOrdervarde,
   dagarTill,
   harStangdPeriod,
   raknas,
@@ -659,6 +660,14 @@ function Orderpost({
 }) {
   const ton = STATUSTON[o.status];
 
+  // BERÄKNAT ORDERVÄRDE på en ej godkänd order (2026-10-08). Det riktiga
+  // fryses vid godkännandet; tills dess visas samma räkning märkt "≈", i stället
+  // för ett streck som såg ut som en order utan värde.
+  const beraknat =
+    o.order_value === null && (o.status === "utkast" || o.status === "inskickad")
+      ? beraknatOrdervarde(o, paket, tjanster)
+      : null;
+
   // FRAGAS INNAN RUBRIKEN RITAS. `Atgarder` returnerar null for varje
   // status/roll-kombination som inte har nagot att gora — en makulerad order, ett
   // utkast man inte ager — och en rubrik "Åtgärder" over ingenting ar varre an
@@ -724,7 +733,11 @@ function Orderpost({
         <div className="hidden shrink-0 items-baseline gap-6 sm:flex">
           <span className="text-right">
             <span className="block tnum text-body font-semibold text-ink-900">
-              {o.order_value === null ? "—" : kronor(o.order_value)}
+              {o.order_value !== null
+                ? kronor(o.order_value)
+                : beraknat !== null
+                  ? `≈ ${kronor(beraknat)}`
+                  : "—"}
             </span>
             <span className="block text-micro uppercase text-ink-500">Ordervärde</span>
           </span>
@@ -743,7 +756,7 @@ function Orderpost({
       </summary>
 
       <div className="flex flex-col gap-5 border-t border-canvas p-4">
-        <Affaren o={o} />
+        <Affaren o={o} beraknat={beraknat} />
         <Avtalet o={o} idag={idag} />
 
         {/* TJANSTERNA AR ETT EGET BAND, inte en tabell inuti "Avtalet".
@@ -810,6 +823,9 @@ function Orderpost({
                 order_value_source: o.order_value_source,
                 monthly_amount: o.monthly_amount,
                 buyout_amount: o.buyout_amount ?? null,
+                customer_street: o.customer_street ?? null,
+                customer_postal_code: o.customer_postal_code ?? null,
+                customer_city: o.customer_city ?? null,
                 commission_amount: o.commission_amount,
                 commission_source: o.commission_source,
                 note: o.note,
@@ -874,12 +890,14 @@ function Orderpost({
  * hela strecket.
  * =============================================================================
  */
-function Affaren({ o }: { o: Orderrad }) {
+function Affaren({ o, beraknat = null }: { o: Orderrad; beraknat?: number | null }) {
   const utkop = typeof o.buyout_amount === "number" && o.buyout_amount > 0 ? o.buyout_amount : null;
 
   const vardekalla =
     o.order_value === null
-      ? undefined
+      ? beraknat !== null
+        ? "beräknat — sätts när ordern godkänns"
+        : undefined
       : o.order_value_source === "manual"
         ? "satt för hand"
         : "pris × avtalstid";
@@ -899,7 +917,7 @@ function Affaren({ o }: { o: Orderrad }) {
       aria-label="Affärens belopp"
       className="flex flex-wrap items-start gap-x-5 gap-y-4 rounded-sm bg-canvas p-4"
     >
-      <Belopp etikett="Ordervärde" varde={o.order_value} under={vardekalla} stark />
+      <Belopp etikett="Ordervärde" varde={o.order_value ?? beraknat} under={vardekalla} stark />
 
       {utkop !== null && (
         <>
