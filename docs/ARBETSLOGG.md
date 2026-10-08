@@ -5,6 +5,30 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-08 (eftermiddag) · Säljsamtalet mergat, datumen rättade mot Inkio, augusti öppnad
+
+`f45b112` fast-forwardad till main 14:58 på beställarens besked; bygget grönt.
+
+**Datumen.** Nav hade registreringsdagen som signeringsdatum på flera
+efterregistrerade order (SPM Väst, Strajv, BA El: Nav 15 sep, Inkio 26–28 aug;
+Larsson Betong: Nav 1 sep, Inkio 24 sep). Beställaren: Inkios datum stämmer.
+16 order rättades i en transaktion, startdatumet med (det var satt lika med
+signeringen, och `sales_order_start_efter_signering` kräver start ≥ signering).
+
+**Augusti.** Fastställd 2026-09-08 med en post: Vlado 1 500 kr från order
+`790fa37c` (signerad 25 aug) som inte finns kvar. Triggern
+`sales_order_stegbyte` nekar en order in i en fastställd månad, och
+`commission_period_stangs` nekar att perioden raderas — båda med rätta. På
+beställarens uttryckliga "Öppna augusti det är okej" raderades periodraden med
+`session_replication_role = replica` i samma transaktion som de tre ordrarna
+flyttades (med triggrarna PÅ igen), och spärren provades efteråt. Vlados post
+är orörd: bokförd historia, och frågan om den är en egen.
+
+Utskriftsfälla värd att minnas: `pg` skriver `date`-kolumner som midnatt lokal
+tid i UTC — `2026-07-31T22:00:00.000Z` ÄR 1 augusti. Läs perioder med `::text`.
+
+---
+
 ## 2026-10-08 · Säljsamtalet på varje order — granskning, fyra fel och en spärr (ingen migration)
 
 Beställaren: gå igenom hur avtal och samtal kommer in på varje order, felsök,
