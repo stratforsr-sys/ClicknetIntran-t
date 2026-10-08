@@ -537,10 +537,18 @@ export function Nyorder({
             required
             inputMode="tel"
             placeholder="070-123 45 67"
+            aria-describedby="contact_phone-hjalp"
             className={KONTROLL}
             value={f.telefon}
             onChange={(e) => satt("telefon", e.target.value)}
           />
+          {/* NUMRET ÄR SÖMMEN TILL SÄLJSAMTALET (2026-10-08). Nav hittar
+              inspelningen på just det här numret, och ordern går inte vidare
+              utan den. Kunden kan ha hänvisat till ett annat nummer än det
+              som står i dialern — då är det numret som ringdes som ska stå här. */}
+          <p id="contact_phone-hjalp" className="text-micro text-ink-500">
+            Säkerställ att du lägger in det numret som har en samtalsinspelning av säljsamtalet
+          </p>
         </label>
 
         {/*

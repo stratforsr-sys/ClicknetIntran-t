@@ -14,6 +14,20 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "telefon-med-saljsamtalet",
+    rubrik: "Skriv numret du sålde på",
+    ingress:
+      "Telefonnumret på ordern ska vara numret där säljsamtalet spelades in — inte numret i dialern, om kunden hänvisade dig vidare.",
+    text: `När du lägger en order: skriv det nummer du **ringde och sålde på**.
+
+Nav hittar säljsamtalets inspelning på just det numret, och ordern går inte
+vidare utan den. Har kunden hänvisat dig till ett annat nummer än det som står
+i dialern är det numret du ringde som gäller.`,
+    datum: "2026-10-08",
+    roller: [],
+    href: "/order",
+  },
+  {
     slug: "saljsamtalet-kravs",
     rubrik: "En order går inte vidare utan säljsamtalet",
     ingress:
