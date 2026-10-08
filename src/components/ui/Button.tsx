@@ -59,15 +59,25 @@ export function ButtonLink({
   href,
   variant = "sekundar",
   size = "md",
+  extern = false,
   className,
   children,
 }: {
   href: string;
   variant?: Variant;
   size?: Size;
+  /** En adress utanför Nav: öppnas i en ny flik, utan Next-routern. */
+  extern?: boolean;
   className?: string;
   children: ReactNode;
 }) {
+  if (extern) {
+    return (
+      <a href={href} target="_blank" rel="noreferrer" className={cn(BASE, VARIANT[variant], SIZE[size], className)}>
+        {children}
+      </a>
+    );
+  }
   return (
     <Link href={href} className={cn(BASE, VARIANT[variant], SIZE[size], className)}>
       {children}

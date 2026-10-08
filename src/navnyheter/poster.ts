@@ -14,6 +14,32 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "kundkortet-landningssida",
+    rubrik: "Kundkortet säger om kundens landningssida är uppe",
+    ingress:
+      "Överst under Aktivitet på kundkortet står Landningssida aktiv eller Landningssida inte aktiv — och en knapp som tar dig till sidan.",
+    text: `Öppna kundkortet och tryck **Aktivitet**. Överst står kundens landningssida.
+
+## Vad det betyder
+
+- **Landningssida aktiv** — Nav har just besökt sidan och den svarar.
+- **Landningssida inte aktiv** — sidan svarar inte, finns inte eller ger fel.
+  Raden under säger vad som hände.
+- **Landningssida saknas** — kunden har ingen webbplats i Inkio. Länken tar dig
+  till kunden i Inkio, där du fyller i **Webbplats**.
+
+**Gå till landningssida** öppnar sidan i en ny flik, och **Kolla igen** besöker
+den en gång till.
+
+## Var adressen kommer ifrån
+
+Från fältet **Webbplats** på kunden i Inkio. Ändrar du det där syns det i Nav
+nästa gång kundkortet öppnas.`,
+    datum: "2026-10-08",
+    roller: [],
+    href: "/order",
+  },
+  {
     slug: "kundkortet-aktivitet-fran-inkio",
     rubrik: "Kundkortet visar allt som hänt med kunden i Inkio",
     ingress:

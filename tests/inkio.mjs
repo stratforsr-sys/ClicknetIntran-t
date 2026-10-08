@@ -14,6 +14,9 @@
  *   6. (0075) EN ENSKILD FIRMA blir "Sole Proprietorship", och adressen från
  *      ordern används bara när alla tre fälten finns.
  *   7. (0075) LEVERANSRADEN säger steg, vad som hände, när (svensk tid) och vem.
+ *   8. (varv 4) LANDNINGSSIDAN: kundens webbplats blir en adress Nav kan
+ *      anropa — men aldrig en IP-adress eller ett internt namn — och svaret
+ *      blir aktiv eller inte aktiv med ett ord om varför.
  *
  *   node --experimental-strip-types tests/inkio.mjs
  */
@@ -27,10 +30,13 @@ import {
   leveransrad,
   orderadress,
   inkioOrgnr,
+  landningsadress,
   nyKund,
   nyOrder,
   orderrader,
   overenskommet,
+  sakerAdress,
+  sidlage,
 } from "../src/lib/crm/inkio-mappning.ts";
 
 let fel = 0;
@@ -133,6 +139,28 @@ ok("anteckning med radbrytning orörd", aktivitetsdelar("rad ett\nrad två", "b"
 console.log("\nInklistrat id");
 ok("ur adressen", inkioIdUr("https://crm.inkio.se/customers/01a10ffe-dbea-733f-a228-65b245b7448b") === "01a10ffe-dbea-733f-a228-65b245b7448b");
 ok("skräp ger null", inkioIdUr("LC-10490") === null);
+
+console.log("\nLandningssidan (varv 4)");
+ok("domän utan schema får https", landningsadress("mmgrav.se") === "https://mmgrav.se/");
+ok("full adress med sökväg står kvar", landningsadress(" https://www.mmgrav.se/kampanj ") === "https://www.mmgrav.se/kampanj");
+ok("http står kvar", landningsadress("http://exempel.se") === "http://exempel.se/");
+ok("tomt och null ger null", landningsadress("") === null && landningsadress(null) === null);
+ok("skräp ger null", landningsadress(".") === null && landningsadress("ingen sida") === null && landningsadress("se") === null);
+ok("IP-adress nekas", landningsadress("127.0.0.1") === null && landningsadress("http://10.0.0.5/x") === null);
+ok("IP som tal nekas", landningsadress("http://2130706433") === null);
+ok("IPv6 nekas", landningsadress("http://[::1]/") === null);
+ok("localhost och interna namn nekas", landningsadress("localhost") === null && landningsadress("db.internal") === null && landningsadress("server.local") === null);
+ok("annan port nekas", landningsadress("exempel.se:8080") === null);
+ok("inloggning i adressen nekas", landningsadress("https://a:b@exempel.se") === null);
+ok("annat schema nekas", landningsadress("ftp://exempel.se") === null && landningsadress("javascript://exempel.se") === null);
+ok("svensk domän blir punycode", /^https:\/\/xn--[a-z0-9-]+\.se\/$/.test(String(landningsadress("grävtjänst.se"))), String(landningsadress("grävtjänst.se")));
+ok("vidarekoppling till intern adress nekas", !sakerAdress(new URL("http://169.254.169.254/latest")));
+ok("200 är aktiv", sidlage(200).aktiv);
+ok("403 bakom skydd är aktiv", sidlage(403).aktiv && sidlage(403).text.includes("403"));
+ok("404 är inte aktiv", !sidlage(404).aktiv && sidlage(404).text.includes("finns inte"));
+ok("500 är inte aktiv", !sidlage(503).aktiv && sidlage(503).text.includes("503"));
+ok("slinga är inte aktiv", !sidlage(310).aktiv);
+ok("inget svar är inte aktiv, med orsaken", !sidlage(null, "X").aktiv && sidlage(null, "X").text === "X");
 
 console.log(fel ? `\n\x1b[31m${fel} fel\x1b[0m\n` : "\n\x1b[32mAlla prov gick igenom\x1b[0m\n");
 process.exit(fel ? 1 : 0);

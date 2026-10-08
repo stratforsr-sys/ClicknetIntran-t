@@ -367,3 +367,65 @@ export const KALLETIKETT: Record<string, string> = {
   invoices: "Faktura",
   tickets: "Ärende",
 };
+
+// -----------------------------------------------------------------------------
+// Kundens landningssida (Inkio, varv 4)
+// -----------------------------------------------------------------------------
+
+/**
+ * Bara vanliga webbplatser: http(s), ett riktigt domännamn, standardport och
+ * inga inloggningsuppgifter i adressen.
+ *
+ * Nav anropar adressen FRÅN SERVERN, och den kommer från ett fritextfält i
+ * Inkio. En IP-adress, `localhost` eller ett internt namn hade gjort Nav till
+ * ett ombud in i nätet det står i — därför nekas de, också när en
+ * vidarekoppling pekar dit.
+ */
+export function sakerAdress(url: URL): boolean {
+  if (url.protocol !== "https:" && url.protocol !== "http:") return false;
+  if (url.username || url.password || url.port) return false;
+  const vard = url.hostname.toLowerCase();
+  // Minst två led, och toppdomänen innehåller en bokstav — så faller både
+  // 127.0.0.1 och [::1] bort. `URL` har redan gjort ett IDN till xn--.
+  if (!/^([a-z0-9-]+\.)+(?=[a-z0-9-]*[a-z])[a-z0-9-]{2,}$/.test(vard)) return false;
+  if (/(^|\.)(localhost|local|internal|intranet|lan|home|arpa)$/.test(vard)) return false;
+  return true;
+}
+
+/**
+ * Kundens webbplats i Inkio som en adress Nav kan anropa och länka till —
+ * eller null. Fältet är fritext: "mmgrav.se" blir https://mmgrav.se/, och
+ * skräp som "." blir null i stället för en trasig knapp.
+ */
+export function landningsadress(webbplats: string | null | undefined): string | null {
+  const t = (webbplats ?? "").trim();
+  if (!t || /\s/.test(t)) return null;
+  let url: URL;
+  try {
+    url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(t) ? t : `https://${t}`);
+  } catch {
+    return null;
+  }
+  return sakerAdress(url) ? url.toString() : null;
+}
+
+export type Sidlage = { aktiv: boolean; text: string };
+
+/**
+ * Vad svaret betyder. `status` är null när inget svar kom alls.
+ *
+ * 401, 403 och 429 räknas som AKTIV: sidan är uppe, men skyddet framför den
+ * (oftast Cloudflare) släpper inte in ett automatiskt besök. En besökare i en
+ * webbläsare kommer in.
+ */
+export function sidlage(status: number | null, orsak?: string): Sidlage {
+  if (status === null) return { aktiv: false, text: orsak ?? "Sidan svarar inte." };
+  if (status >= 200 && status < 300) return { aktiv: true, text: "Sidan svarar." };
+  if (status === 401 || status === 403 || status === 429) {
+    return { aktiv: true, text: `Sidan är uppe men släpper inte in automatiska besök (${status}).` };
+  }
+  if (status >= 300 && status < 400) return { aktiv: false, text: "Sidan skickar vidare i en slinga." };
+  if (status === 404 || status === 410) return { aktiv: false, text: `Sidan finns inte (${status}).` };
+  if (status >= 500) return { aktiv: false, text: `Servern svarar med fel (${status}).` };
+  return { aktiv: false, text: `Sidan svarar med fel (${status}).` };
+}

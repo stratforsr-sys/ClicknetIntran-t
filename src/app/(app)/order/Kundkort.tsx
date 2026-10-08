@@ -34,6 +34,7 @@ import { Bilaga, type Orderbilaga } from "./Bilaga";
 import { Fornyelse } from "./Fornyelse";
 import { Inkioaktivitet } from "./Inkioaktivitet";
 import { Inkioruta } from "./Inkioruta";
+import { Landningssida } from "./Landningssida";
 import { Samtal } from "./Samtal";
 
 /**
@@ -259,7 +260,12 @@ export function Kundkort({
             </div>
           )}
 
-          {flik === "aktivitet" && <Inkioaktivitet orderId={ankareId} />}
+          {flik === "aktivitet" && (
+            <div className="flex flex-col gap-6">
+              <Landningssida orderId={ankareId} />
+              <Inkioaktivitet orderId={ankareId} />
+            </div>
+          )}
 
           {flik === "historik" && <Historik kund={kund} namn={namn} hanterare={hanterare} />}
         </div>

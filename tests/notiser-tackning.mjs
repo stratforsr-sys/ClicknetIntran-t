@@ -236,6 +236,7 @@ const TACKNING = {
   "order::forberedNyttAvtal": "Forbereder en uppladdning innan ordern finns.",
   "order::slaUppBolag": "Laser Bolagsverket via Inkio och skriver ingenting.",
   "order::hamtaInkioAktivitet": "Laser kundens aktivitet i Inkio och skriver ingenting.",
+  "order::hamtaLandningssida": "Laser kundens webbplats i Inkio, anropar den och skriver ingenting.",
   // 0068. Bada slacker en HARLEDD post i stallet for att skriva en ny: utfallet
   // pa ordern ar det som gor att `order-avtalsslut` slutar raknas fram. En notis
   // om att man nyss tryckt pa en knapp man sjalv tryckte pa hade gatt till

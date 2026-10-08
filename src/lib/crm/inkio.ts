@@ -14,7 +14,11 @@ import {
   orderrader,
   orgnrSiffror,
   overenskommet,
+  sakerAdress,
+  sidlage,
+  landningsadress,
   type Inkioadress,
+  type Sidlage,
 } from "./inkio-mappning";
 
 /**
@@ -125,7 +129,7 @@ async function anrop<T>(metod: "GET" | "POST" | "PUT" | "DELETE", sokvag: string
 // Uppslag
 // -----------------------------------------------------------------------------
 
-type Kundrad = { id: string; number: string; customer_name: string; status: string | null };
+type Kundrad = { id: string; number: string; customer_name: string; status: string | null; website?: string | null };
 
 async function kundMedOrgnr(orgnr: string): Promise<Kundrad | null> {
   const siffror = orgnrSiffror(orgnr);
@@ -135,7 +139,7 @@ async function kundMedOrgnr(orgnr: string): Promise<Kundrad | null> {
   const rader = await anrop<Kundrad[]>("GET", "/api/records/customer", {
     query: {
       filters: [["tax_id_key", "=", siffror]],
-      fields: ["id", "number", "customer_name", "status"],
+      fields: ["id", "number", "customer_name", "status", "website"],
       limit: 2,
     },
   });
@@ -484,4 +488,76 @@ export async function kundaktivitet(orgnr: string): Promise<Kundaktivitet> {
     rader,
     avkortad: poster.length > lasta.length,
   };
+}
+
+// -----------------------------------------------------------------------------
+// Kundens landningssida (Inkio, varv 4) — överst i fliken "Aktivitet"
+// -----------------------------------------------------------------------------
+
+export type Landningssida =
+  | { kund: null }
+  | {
+      kund: { nummer: string; lank: string };
+      /** Null när kundens "Webbplats" i Inkio är tom eller inte går att läsa. */
+      adress: string | null;
+      lage: Sidlage | null;
+    };
+
+/** Så många vidarekopplingar följs (http → https → www → /kampanj räcker gott). */
+const MAX_HOPP = 5;
+
+/**
+ * ÄR KAMPANJSIDAN UPPE? Beställaren 2026-10-08: "se ifall kampanjsidan är
+ * aktiv eller inte". Adressen är kundens "Webbplats" i Inkio — Inkio har ingen
+ * egen uppgift om kampanjsidan, och Leadsportalen är inte kopplad — och "aktiv"
+ * betyder att sidan svarar när Nav anropar den, nu.
+ *
+ * Vidarekopplingarna följs för hand, så att varje hopp prövas mot
+ * `sakerAdress` innan Nav går dit. Kroppen läses aldrig.
+ */
+export async function landningssida(orgnr: string): Promise<Landningssida> {
+  const kund = await kundMedOrgnr(orgnr);
+  if (!kund) return { kund: null };
+  const adress = landningsadress(kund.website);
+  return {
+    kund: { nummer: kund.number, lank: inkioLank("kund", kund.id) },
+    adress,
+    lage: adress ? await provaSidan(adress) : null,
+  };
+}
+
+async function provaSidan(adress: string): Promise<Sidlage> {
+  let url = new URL(adress);
+  for (let hopp = 0; hopp <= MAX_HOPP; hopp++) {
+    let svar: Response;
+    try {
+      svar = await fetch(url, {
+        method: "GET",
+        redirect: "manual",
+        cache: "no-store",
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; ClicknetNav/1.0)", Accept: "text/html,*/*" },
+        signal: AbortSignal.timeout(8_000),
+      });
+    } catch (e) {
+      return sidlage(
+        null,
+        e instanceof Error && e.name === "TimeoutError"
+          ? "Sidan svarade inte inom åtta sekunder."
+          : "Sidan går inte att nå — domänen pekar ingenstans, eller certifikatet är fel.",
+      );
+    }
+    await svar.body?.cancel().catch(() => {});
+
+    const till = svar.status >= 300 && svar.status < 400 ? svar.headers.get("location") : null;
+    if (!till) return sidlage(svar.status);
+    let nasta: URL;
+    try {
+      nasta = new URL(till, url);
+    } catch {
+      return sidlage(svar.status);
+    }
+    if (!sakerAdress(nasta)) return { aktiv: false, text: "Sidan skickar vidare till en adress Nav inte följer." };
+    url = nasta;
+  }
+  return sidlage(310);
 }

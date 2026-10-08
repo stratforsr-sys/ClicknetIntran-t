@@ -5,6 +5,30 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-08 · Landningssidan på kundkortet (Inkio, fjärde varvet, ingen migration)
+
+Beställaren: visa "Landningssida aktiv" eller "Landningssida inte aktiv" och en
+knapp "Gå till landningssida", med informationen från Inkio.
+
+**Inkio vet inte var sidorna ligger.** Kundens `website` är ifyllt på 2 av 78
+(båda skräp), Leadsportalen — Inkios del för kundsajter — är okopplad, och
+`get-customer` har ingen annan adress. Det Inkio vet är avtalen: 72 av 83
+aktiva, nästan alla "Optimerad Kampanjsida". Beställaren fick välja och tog
+**sidan svarar** som betydelsen av aktiv och **Webbplats i Inkio** som adress.
+Följden: rutan säger "saknas" för nästan alla kunder tills fältet fylls i, och
+länkar dit.
+
+**Nav anropar en adress ur ett fritextfält — från servern.** Därför
+`sakerAdress`: inga IP-adresser, interna namn, portar eller inloggningar, och
+vidarekopplingarna följs för hand så att varje hopp prövas. Provat live mot
+`httpbin.org/redirect-to?url=http://127.0.0.1/`.
+
+**403 räknas som aktiv.** Cloudflare framför en levande sida stänger ute
+automatiska besök; att kalla den "inte aktiv" hade varit fel för den som
+klickar på knappen och kommer in.
+
+---
+
 ## 2026-10-07 (sen kväll) · Kundkortets "Aktivitet" — allt från Inkio (ingen migration)
 
 Beställaren: "allt som händer med kunden i inkio ska in där, så alla
