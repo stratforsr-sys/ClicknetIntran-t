@@ -67,7 +67,7 @@ resten. **Uppdatera** hämtar det senaste.
 
 Du ser aktiviteten för kunderna du ser i Nav — dina egna, eller alla om du är
 säljchef, VD eller ekonomi.`,
-    datum: "2026-10-07",
+    datum: "2026-10-08",
     roller: [],
     href: "/order",
   },
@@ -93,7 +93,7 @@ välkomstsamtalet går att boka först när ordern är godkänd — då startar
 24-timmarsfristen och leveransen får en notis.
 
 Skickas ordern tillbaka till säljaren försvinner den ur kön tills den skickas in igen.`,
-    datum: "2026-10-07",
+    datum: "2026-10-08",
     roller: [],
     href: "/order",
   },
@@ -137,7 +137,7 @@ exempel om den bara låg dubbelt i Nav.
 Varje steg i leveransen — välkomstsamtal, tillgångar, kickoff, leveransstart och
 avstämningarna — skrivs på kundens tidslinje i Inkio när det bokas, genomförs,
 flyttas eller ställs in.`,
-    datum: "2026-10-07",
+    datum: "2026-10-08",
     roller: ["sales_manager", "ceo", "finance", "admin"],
     href: "/order",
   },
