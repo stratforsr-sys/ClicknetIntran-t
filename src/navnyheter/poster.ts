@@ -14,6 +14,24 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "angiven-provision-foljer-med",
+    rubrik: "Provisionen du skriver på en fri order följer med till godkännandet",
+    ingress:
+      "Skriver du provision på en order som inte följer paketreglerna och skickar in den i stället för att godkänna direkt, gäller den när ordern godkänns.",
+    text: `Förut kastades provisionen i det läget, och godkännandet räknade fram en
+egen — för en säljchefs egen order alltså satsen för egen försäljning.
+
+Nu sparas det du skriver, i kronor eller procent, på ordern:
+
+- **Kundkortet** visar den under **Provision**, märkt *gäller när ordern godkänns*.
+- **Godkänn** använder den.
+- **Godkänn utanför paketreglerna** och **Redigera** är förifyllda med den.
+  Töm fältet så räknas provisionen fram som förut.`,
+    datum: "2026-10-09",
+    roller: ["sales_manager", "ceo", "finance"],
+    href: "/order",
+  },
+  {
     slug: "redigera-och-radera-order",
     rubrik: "Redigera och radera order",
     ingress:
