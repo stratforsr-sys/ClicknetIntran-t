@@ -4,6 +4,7 @@ import { inkioLank } from "@/lib/crm/inkio";
 import { AVTALSSLUT_VARSEL_DAGAR, type Order, type Paket, type Sats, type Tjanst } from "@/lib/order";
 import type { Chefssats } from "@/lib/chefsprovision";
 import type { Utkopssats } from "@/lib/utkop";
+import type { Finanssats } from "@/lib/finans";
 import type { Chefspost } from "@/lib/provision-motor";
 import {
   ORDERTAK,
@@ -56,7 +57,7 @@ const FALT =
   "id, company_name, org_number, contact_name, contact_phone, contact_email, package_id," +
   " term_months, salesperson_id, signed_on, starts_on, ends_on, period_month, status, is_addon," +
   " monthly_amount, commission_amount, commission_source, order_value, order_value_source," +
-  " buyout_amount, note, created_by, created_at, approved_at, cancelled_on, cancel_reason," +
+  " buyout_amount, financed, finance_amount, note, created_by, created_at, approved_at, cancelled_on, cancel_reason," +
   " cancel_period_month, renewal_outcome, renewal_at, renewal_by, renewal_reason," +
   " renewal_order_id, customer_street, customer_postal_code, customer_city";
 
@@ -83,6 +84,10 @@ function tolka(rader: unknown[]): Orderrad[] {
     // bara en nolla, se `buyout_amount` i `order.ts`.
     buyout_amount:
       r.buyout_amount === null || r.buyout_amount === undefined ? null : Number(r.buyout_amount),
+    // FINANSAVGIFTEN AR EN NUMERIC TILL (0079), med samma falla som utkopet.
+    financed: r.financed === true,
+    finance_amount:
+      r.finance_amount === null || r.finance_amount === undefined ? null : Number(r.finance_amount),
     // MANADSBELOPPET AR EN NUMERIC TILL (0068). Samma falla, och den bits pa ett
     // eget satt: `monthly_amount * term_months` med en strang i forsta ledet ger
     // NaN, alltsa ett ordervarde som ser ut som ett rakenfel.
@@ -238,6 +243,26 @@ export async function hamtaUtkopssatser(): Promise<Utkopssats[]> {
     .order("valid_from", { ascending: false });
 
   return (data ?? []).map((s) => ({ ...s, percent: Number(s.percent) })) as Utkopssats[];
+}
+
+/**
+ * Finanssatserna (0079). HELA historiken, av samma skal som `hamtaUtkopssatser`:
+ * uppslaget sker pa orderns signeringsdatum.
+ *
+ * LASBAR FOR ALLA INLOGGADE (`finance_rate_read`). Saljaren ska se vad en
+ * finansaffar kostar innan hen trycker.
+ */
+export async function hamtaFinanssatser(): Promise<Finanssats[]> {
+  const rls = await supabaseServer();
+  const { data } = await rls
+    .from("finance_rate")
+    .select("id, percent_per_year, valid_from, valid_to")
+    .order("valid_from", { ascending: false });
+
+  return (data ?? []).map((s) => ({
+    ...s,
+    percent_per_year: Number(s.percent_per_year),
+  })) as Finanssats[];
 }
 
 /**

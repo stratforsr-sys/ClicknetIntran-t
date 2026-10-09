@@ -20,11 +20,13 @@ import {
   hamtaTjanster,
   hamtaTjansteantal,
   hamtaUtkopssatser,
+  hamtaFinanssatser,
   raknaKo,
   type Orderrad,
 } from "@/lib/order-server";
 import { gallandeChefssats } from "@/lib/chefsprovision";
 import { gallandeUtkopssats } from "@/lib/utkop";
+import { gallandeFinanssats } from "@/lib/finans";
 import { hamtaPerioder } from "@/lib/bonus-server";
 import {
   AVTALSSLUT_VARSEL_DAGAR,
@@ -150,6 +152,7 @@ export default async function Ordersida({
     personer,
     chefssatser,
     utkopssatser,
+    finanssatser,
     perioder,
     loperUt,
   ] = await Promise.all([
@@ -177,6 +180,8 @@ export default async function Ordersida({
     // UTKOPSSATSEN (0060) LASES DAREMOT AV ALLA. Det ar saljarens EGEN sats, och
     // den som lagger en order med utkop ska se vad affaren ger innan hen trycker.
     hamtaUtkopssatser(),
+    // FINANSSATSEN (0079) likasa: saljaren valjer finans och ska se avgiften.
+    hamtaFinanssatser(),
     // FASTSTALLDA MANADER. Fore godkannandet (O11): hor ordern till en manad som
     // redan ar faststalld? Efter godkannandet (0051): avgor vad en RATTELSE gor.
     // Samma fraga, tva anvandningar — och sedan 2026-09-15 gar listan hela vagen
@@ -191,6 +196,7 @@ export default async function Ordersida({
   const stangda = perioder.map((p) => p.period_month);
   const gallandeChef = gallandeChefssats(chefssatser, idag);
   const gallandeUtkop = gallandeUtkopssats(utkopssatser, idag);
+  const gallandeFinans = gallandeFinanssats(finanssatser, idag);
 
   // Typargumenten star ut med flit: utan dem harleds kartan som
   // `Map<unknown, unknown>` sa fort nagot i `Promise.all` ovan inte gar att sla
@@ -408,6 +414,7 @@ export default async function Ordersida({
                 }
               }
               utkopsprocent={gallandeUtkop?.percent ?? null}
+              finansPerAr={gallandeFinans?.percent_per_year ?? null}
               stangdaManader={stangda}
               forlanger={
                 forlangsOrder && {

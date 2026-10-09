@@ -823,6 +823,7 @@ function Orderpost({
                 order_value_source: o.order_value_source,
                 monthly_amount: o.monthly_amount,
                 buyout_amount: o.buyout_amount ?? null,
+                financed: o.financed === true,
                 customer_street: o.customer_street ?? null,
                 customer_postal_code: o.customer_postal_code ?? null,
                 customer_city: o.customer_city ?? null,
@@ -892,6 +893,11 @@ function Orderpost({
  */
 function Affaren({ o, beraknat = null }: { o: Orderrad; beraknat?: number | null }) {
   const utkop = typeof o.buyout_amount === "number" && o.buyout_amount > 0 ? o.buyout_amount : null;
+  // FINANSEN (0079) star i samma rakning, efter utkopet. En ej godkand
+  // finansorder har valet men annu ingen avgift — den sager det med ord.
+  const finans = typeof o.finance_amount === "number" && o.finance_amount > 0 ? o.finance_amount : null;
+  const finansVantar = o.financed === true && finans === null;
+  const harAvdrag = utkop !== null || finans !== null;
 
   const vardekalla =
     o.order_value === null
@@ -927,15 +933,30 @@ function Affaren({ o, beraknat = null }: { o: Orderrad; beraknat?: number | null
             varde={utkop}
             under={o.order_value === null ? "dras av vid godkännandet" : undefined}
           />
-          {/* NETTOT RAKNAS BARA NAR BADA TALEN FINNS. En inskickad order har
-              utkop men annu inget ordervarde — det raknas fram vid
-              godkannandet — och `null − 5 000` hade blivit ett pahittat tal. */}
-          {o.order_value !== null && (
-            <>
-              <Tecken>=</Tecken>
-              <Belopp etikett="Kvar" varde={o.order_value - utkop} stark />
-            </>
-          )}
+        </>
+      )}
+
+      {finans !== null && (
+        <>
+          <Tecken>−</Tecken>
+          <Belopp etikett="Finans" varde={finans} under="till finanspartnern" />
+        </>
+      )}
+
+      {finansVantar && (
+        <>
+          <Tecken>−</Tecken>
+          <Belopp etikett="Finans" varde={null} under="räknas och dras av vid godkännandet" />
+        </>
+      )}
+
+      {/* NETTOT RAKNAS BARA NAR ORDERVARDET FINNS. En inskickad order har
+          utkop men annu inget ordervarde — det raknas fram vid
+          godkannandet — och `null − 5 000` hade blivit ett pahittat tal. */}
+      {harAvdrag && o.order_value !== null && (
+        <>
+          <Tecken>=</Tecken>
+          <Belopp etikett="Kvar" varde={o.order_value - (utkop ?? 0) - (finans ?? 0)} stark />
         </>
       )}
 

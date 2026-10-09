@@ -46,6 +46,7 @@ export function Redigering({
   // `raknaFramProvision`. Kryssrutan speglar det, och bara chefskretsen ser den.
   const [fritt, setFritt] = useState(order.monthly_amount !== null);
   const [harUtkop, setHarUtkop] = useState(order.buyout_amount !== null && order.buyout_amount > 0);
+  const [finans, setFinans] = useState(order.financed);
 
   return (
     <form action={kor} className="flex flex-col gap-3 rounded-sm bg-surface-alt p-3">
@@ -210,6 +211,20 @@ export function Redigering({
           />
         </label>
       )}
+
+      {/* FINANSEN (0079), med samma dolda falt som utkopet. Bara valet —
+          avgiften raknas nar ordern godkanns. */}
+      <input type="hidden" name="finans_ritad" value="1" />
+      <label className="flex items-center gap-2 text-small text-ink-700">
+        <input
+          type="checkbox"
+          name="finans"
+          checked={finans}
+          onChange={(e) => setFinans(e.target.checked)}
+          className="size-4"
+        />
+        Finans — kunden betalar via vår finanspartner
+      </label>
 
       {full && (
         <label className="flex items-center gap-2 text-small text-ink-700">

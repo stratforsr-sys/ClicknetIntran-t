@@ -512,6 +512,8 @@ export type Redigerbar = {
   order_value_source: string | null;
   /** 0060. Utkopet, eller null nar affaren inte bar nagot. */
   buyout_amount: number | null;
+  /** 0079. Affaren gar via finanspartnern. */
+  financed: boolean;
   /** 0075. Kundens adress — förifyller redigeringen av en ej godkänd order. */
   customer_street?: string | null;
   customer_postal_code?: string | null;
@@ -601,6 +603,8 @@ function Rattelse({
   const [harUtkop, setHarUtkop] = useState(
     order.buyout_amount !== null && order.buyout_amount > 0,
   );
+  // Finansen (0079), kontrollerad av samma skal och med samma dolda falt.
+  const [finans, setFinans] = useState(order.financed);
 
   return (
     <form action={kor} className="flex flex-col gap-3 rounded-sm bg-surface-alt p-3">
@@ -799,6 +803,18 @@ function Rattelse({
               </span>
             </label>
           )}
+
+          <input type="hidden" name="finans_ritad" value="1" />
+          <label className="flex items-center gap-2 text-small text-ink-700">
+            <input
+              type="checkbox"
+              name="finans"
+              checked={finans}
+              onChange={(e) => setFinans(e.target.checked)}
+              className="size-4"
+            />
+            Finans — kunden betalar via vår finanspartner
+          </label>
         </>
       )}
 

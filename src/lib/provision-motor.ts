@@ -134,6 +134,8 @@ export type Underlag = {
     utanVarde: number;
     /** Utkopen i manaden, redan AVDRAGNA ur `netto`. Se 0060. */
     utkop: number;
+    /** Finansavgifterna i manaden, redan AVDRAGNA ur `netto`. Se 0079. */
+    finans: number;
   };
 
   /** Nivan manaden landade pa, eller null nar den lagsta troskeln inte natts. */
@@ -268,7 +270,13 @@ function ordertext(o: Order): string {
     typeof o.buyout_amount === "number" && o.buyout_amount > 0
       ? `, utköp ${Math.round(o.buyout_amount).toLocaleString("sv-SE")} kr`
       : "";
-  return `Order ${o.signed_on}, paket ${o.package_id}, ${o.term_months} mån${tillagg}${utkop}`;
+  // FINANSEN STAR I TEXTEN AV SAMMA SKAL SOM UTKOPET (0079): den sanker nettot,
+  // och ett chefsbelopp pa en finansaffar ser annars fel ut i huvudboken.
+  const finans =
+    typeof o.finance_amount === "number" && o.finance_amount > 0
+      ? `, finans ${Math.round(o.finance_amount).toLocaleString("sv-SE")} kr`
+      : "";
+  return `Order ${o.signed_on}, paket ${o.package_id}, ${o.term_months} mån${tillagg}${utkop}${finans}`;
 }
 
 function makuleringstext(o: Order): string {

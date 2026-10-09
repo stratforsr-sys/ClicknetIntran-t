@@ -310,6 +310,7 @@ export default async function Provisionssida({
     ordervarde: number;
     utanVarde: number;
     utkop: number;
+    finans: number;
     handbokfort: number;
   })[] = manaderna.map((m) => {
     const kvM = kvPerManad.get(m) ?? new Map<string, KvIndata>();
@@ -359,6 +360,8 @@ export default async function Provisionssida({
       // for att kortet ska kunna SAGA det — ett avdrag som inte star utskrivet
       // ar ett tal som ser fel ut. Se 0060.
       utkop: kallor.reduce((s, x) => s + x.ordervarde.utkop, 0),
+      // FINANSAVGIFTERNA (0079), samma sak: redan avdragna, utskrivna for sig.
+      finans: kallor.reduce((s, x) => s + x.ordervarde.finans, 0),
       handbokfort: summera(handposter(tavlansPoster), m).belopp,
     };
   });
@@ -373,6 +376,7 @@ export default async function Provisionssida({
     netto: manadsrader.reduce((s, r) => s + r.ordervarde, 0),
     utanVarde: manadsrader.reduce((s, r) => s + r.utanVarde, 0),
     utkop: manadsrader.reduce((s, r) => s + r.utkop, 0),
+    finans: manadsrader.reduce((s, r) => s + r.finans, 0),
   };
 
   // EN ENDA MANAD ger de extra ytorna: bonustrappan (som kraver ett `Underlag`)
@@ -615,6 +619,7 @@ export default async function Provisionssida({
           antal={facit.antal}
           utanVarde={ordervardeIPerioden.utanVarde}
           utkop={ordervardeIPerioden.utkop}
+          finans={ordervardeIPerioden.finans}
           rubrik={`Ordervärde — ${foretagsvy ? "företaget" : visadNamn.toLowerCase()}, ${periodtext}`}
         />
       )}

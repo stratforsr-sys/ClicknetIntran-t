@@ -14,6 +14,38 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "finans-pa-order",
+    rubrik: "Finans på order",
+    ingress:
+      "Kryssa i Finans när kunden betalar via vår finanspartner. Finansavgiften dras från ordervärdet och ordern räknas rätt.",
+    text: `När du lägger en order finns kryssrutan **Finans — kunden betalar via vår
+finanspartner**, under utköpet.
+
+## Vad som räknas
+
+Finanspartnern tar **11 % av ordervärdet per år** av bindningstiden:
+
+- 12 månader — 11 %
+- 24 månader — 22 %
+- 36 månader — 33 %
+
+Avgiften räknas på hela ordervärdet, med tjänsterna, och dras av när ordern
+godkänns. Rutan under formuläret visar avgiften och vad som blir kvar innan du
+trycker.
+
+## Vad det gör med provisionen
+
+Paketmatrisens provision till säljaren är **densamma** som utan finans. Det som
+räknas i procent räknas på det som är kvar efter avgiften: säljchefens övertäck,
+säljchefens egen försäljning, utköpssatsen och en provision du skriver i procent.
+
+Finansen går att ändra med **Redigera** innan ordern är godkänd, och med
+**Rätta ordern** efteråt.`,
+    datum: "2026-10-09",
+    roller: [],
+    href: "/order",
+  },
+  {
     slug: "redigera-och-radera-order",
     rubrik: "Redigera och radera order",
     ingress:

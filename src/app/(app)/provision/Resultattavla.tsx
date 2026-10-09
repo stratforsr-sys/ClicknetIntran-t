@@ -865,6 +865,7 @@ export function Ordervardeskort({
   antal,
   utanVarde,
   utkop,
+  finans,
   rubrik,
 }: {
   netto: number;
@@ -880,6 +881,8 @@ export function Ordervardeskort({
    * forklaringen finns i ordervyn, order for order.
    */
   utkop: number;
+  /** Finansavgifterna i perioden (0079). Redan AVDRAGNA ur `netto`, av samma skal som utkopen. */
+  finans: number;
   rubrik: string;
 }) {
   return (
@@ -892,13 +895,20 @@ export function Ordervardeskort({
         <div>
           <p className="tnum text-display text-ink-900">{kronor(netto)}</p>
           <p className="text-small text-ink-500">
-            netto efter makuleringar{utkop > 0 ? " och utköp" : ""}
+            netto efter makuleringar
+            {utkop > 0 && finans > 0 ? ", utköp och finans" : utkop > 0 ? " och utköp" : finans > 0 ? " och finans" : ""}
           </p>
         </div>
         {utkop > 0 && (
           <div>
             <p className="tnum text-h1 text-ink-900">− {kronor(utkop)}</p>
             <p className="text-small text-ink-500">gick till utköp av kunder</p>
+          </div>
+        )}
+        {finans > 0 && (
+          <div>
+            <p className="tnum text-h1 text-ink-900">− {kronor(finans)}</p>
+            <p className="text-small text-ink-500">gick till finanspartnern</p>
           </div>
         )}
         {/* SNITTET RITAS INTE UR NOLL ORDER. En division med noll blir NaN, och

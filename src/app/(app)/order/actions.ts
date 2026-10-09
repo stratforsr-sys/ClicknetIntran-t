@@ -62,6 +62,37 @@ import {
   utkopsprovision,
   type Utkopssats,
 } from "@/lib/utkop";
+import {
+  finansavgift,
+  finansprocent,
+  gallandeFinanssats,
+  nettoEfterFinans,
+  procenttext,
+  type Finanssats,
+} from "@/lib/finans";
+
+/**
+ * Finansvalet, ur ett formular (0079).
+ *
+ * `null` betyder att formularet INTE RITADE kryssrutan — da galler det ordern
+ * redan bar. Samma dolda falt som utkopet anvander, och av samma skal: en
+ * kryssruta som inte ar ikryssad skickar ingenting alls, sa "nagon tog bort
+ * krysset" gar annars inte att skilja fran "rutan fanns inte".
+ */
+function finansUrFormular(form: FormData): boolean | null {
+  if (!form.has("finans_ritad")) return null;
+  return form.get("finans") === "on";
+}
+
+/**
+ * Meningen som forklarar finansavdraget, eller tomt nar affaren inte bar nagot.
+ * Star i kvittensen av samma skal som `utkopstext`: ett lagre belopp an vantat
+ * ska forklaras i samma andetag som det visas.
+ */
+function finanstext(f: { avgift: number; procent: number; procentPerAr: number; loptid: number } | null): string {
+  if (!f) return "";
+  return ` Finansavgiften ${kronor(f.avgift)} (${procenttext(f.procent)} — ${procenttext(f.procentPerAr)} per år i ${f.loptid} mån) är avdragen från ordervärdet.`;
+}
 
 /**
  * Utkopet, ur ett formular. `null` nar faltet ar tomt eller kryssrutan av.
@@ -331,6 +362,8 @@ type Orderrad_skrivning = {
   monthly_amount: number | string | null;
   commission_amount: number | string | null;
   buyout_amount: number | string | null;
+  /** 0079. Saljaren valde finans; godkannandet raknar avgiften. */
+  financed: boolean;
 };
 
 async function hamtaRad(id: string): Promise<Orderrad_skrivning | null> {
@@ -344,7 +377,7 @@ async function hamtaRad(id: string): Promise<Orderrad_skrivning | null> {
     // affaren fatt matrisens belopp trots att en del av vardet redan gatt ut.
     .select(
       "id, status, salesperson_id, company_name, package_id, term_months, signed_on," +
-        " monthly_amount, commission_amount, buyout_amount",
+        " monthly_amount, commission_amount, buyout_amount, financed",
     )
     .eq("id", id)
     .maybeSingle();
@@ -541,6 +574,9 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
     const utkopsval = utkopUrFormular(form);
     if ("fel" in utkopsval) return { fel: utkopsval.fel };
 
+    // FINANSEN (0079). Ny order: ingen ritad ruta betyder ingen finans.
+    const finans = finansUrFormular(form) ?? false;
+
     const paket = Number(form.get("package_id"));
     const loptid = Number(form.get("term_months"));
     if (![1, 2, 3].includes(paket)) return { fel: "Välj ett paket." };
@@ -631,6 +667,9 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
       // i 0060 slapper darfor igenom ett utkop utan ordervarde, och biter forst
       // nar ordern godkanns och bada talen finns.
       buyout_amount: utkopsval.utkop,
+      // FINANSVALET SKRIVS OCKSA PA EN INSKICKAD ORDER, av samma skal som
+      // utkopet. Avgiften i kronor raknas och fryses forst vid godkannandet.
+      financed: finans,
       note,
       status: godkannDirekt ? "signerad" : "inskickad",
       created_by: user.employee!.id,
@@ -646,7 +685,7 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
         saljare,
         form,
         utkopsval.utkop,
-        { manadsbelopp, tjanster: tjansteval.tjanster },
+        { manadsbelopp, tjanster: tjansteval.tjanster, finans },
       );
       if (!provision.klar) return { fel: provision.fel };
 
@@ -705,6 +744,10 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
       "order_value",
       "order_value_source",
       "monthly_amount",
+      // Finansavgiften fryses med provisionen (0079). Den ar en del av
+      // rakningen, inte av avtalet — valet `financed` star kvar pa utkastet.
+      "finance_amount",
+      "finance_rate_id",
       "approved_by",
       "approved_at",
     ] as const;
@@ -801,6 +844,8 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
       commission_percent: affar?.handsattProcent ?? null,
       order_value: insats.order_value ?? null,
       buyout_amount: utkopsval.utkop,
+      financed: finans,
+      finance_amount: slutligt.finance_amount ?? null,
     });
 
     // OVERTACKET SKRIVS EFTER ORDERN, aldrig fore: raden pekar pa `order_id` med
@@ -830,14 +875,18 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
     const klippt = affar?.restpostenKlipptes
       ? " Provisionen översteg det som blev kvar av affären, så övertäcket till säljchefen blev noll."
       : "";
-    const utkopet = utkopstext(affar?.utkopet ?? null);
+    // Finansen fore utkopet: utkopstexten namner nettot, och det nettot ar
+    // redan efter finansavgiften.
+    const utkopet = finanstext(affar?.finansen ?? null) + utkopstext(affar?.utkopet ?? null);
 
     // EN INSKICKAD ORDER MED UTKOP SAGER DET OCKSA, men utan procentsatsen:
     // beloppen raknas forst vid godkannandet, och ett tal i kvittensen som
     // sedan blir ett annat ar samre an inget tal.
-    const inskickatUtkop = harUtkop(utkopsval.utkop)
-      ? ` Utköpet ${kronor(utkopsval.utkop)} följer med och dras av när ordern godkänns.`
-      : "";
+    const inskickatUtkop =
+      (harUtkop(utkopsval.utkop)
+        ? ` Utköpet ${kronor(utkopsval.utkop)} följer med och dras av när ordern godkänns.`
+        : "") +
+      (finans ? " Ordern går via finans — avgiften dras av när ordern godkänns." : "");
 
     // ===========================================================================
     // FORLANGNINGEN KOPPLAS IHOP HAR, sist av allt.
@@ -909,7 +958,18 @@ type Framrakning =
         monthly_amount: number;
         /** Utkopet, sa som det ska sta pa ordern. `null` nar affaren inte bar nagot. */
         buyout_amount: number | null;
+        /** 0079. Valet, sa som rakningen forstod det. Skrivs med resten av `satt`. */
+        financed: boolean;
+        /** 0079. Finansavgiften i kronor, eller null nar affaren inte ar finansierad. */
+        finance_amount: number | null;
+        /** 0079. Satsen avgiften kom ur. Spar en utbetalning till sin rad, som `commission_rate_id`. */
+        finance_rate_id: string | null;
       };
+      /**
+       * Underlaget for finansavdraget, nar affaren bar ett. Bara kvittensen och
+       * notisen anvander det — beloppet ligger redan i `satt`.
+       */
+      finansen: { avgift: number; procent: number; procentPerAr: number; loptid: number } | null;
       /**
        * Underlaget for en utkopsaffar, nar det ar en sadan. Bara vyn anvander
        * det — beloppen ligger redan i `satt` — men kvittensen ska kunna saga
@@ -980,22 +1040,31 @@ async function raknaFramProvision(
    * saljaren skrev in dem nar hen skickade in — och `redigeraOrder` ur
    * formularet med ordern som fallback.
    */
-  affaren: { manadsbelopp: number | null; tjanster: Tjanst[] } = {
-    manadsbelopp: null,
-    tjanster: [],
-  },
+  /*
+   * `finans` (0079) ar OBLIGATORISK, inte defaultad. De tre anroparna vet olika
+   * saker om den — formularet, ordern, eller formularet med ordern som
+   * fallback — och en glomd anropare ska falla i bygget, inte tyst rakna en
+   * finansaffar som om finanspartnern inte tog nagot.
+   */
+  affaren: { manadsbelopp: number | null; tjanster: Tjanst[]; finans: boolean },
 ): Promise<Framrakning> {
   const db = supabaseAdmin();
 
-  const [{ data: satsrader }, { data: paketrader }, { data: chefsrader }, { data: utkopsrader }] =
-    await Promise.all([
-      db.from("commission_rate").select("id, package_id, term_months, amount, valid_from, valid_to"),
-      db.from("sales_package").select("id, label, list_price, sort, active"),
-      db
-        .from("manager_commission_rate")
-        .select("id, employee_id, override_percent, own_sale_percent, valid_from, valid_to"),
-      db.from("buyout_commission_rate").select("id, percent, valid_from, valid_to"),
-    ]);
+  const [
+    { data: satsrader },
+    { data: paketrader },
+    { data: chefsrader },
+    { data: utkopsrader },
+    { data: finansrader },
+  ] = await Promise.all([
+    db.from("commission_rate").select("id, package_id, term_months, amount, valid_from, valid_to"),
+    db.from("sales_package").select("id, label, list_price, sort, active"),
+    db
+      .from("manager_commission_rate")
+      .select("id, employee_id, override_percent, own_sale_percent, valid_from, valid_to"),
+    db.from("buyout_commission_rate").select("id, percent, valid_from, valid_to"),
+    db.from("finance_rate").select("id, percent_per_year, valid_from, valid_to"),
+  ]);
 
   const chefssats = gallandeChefssats(
     (chefsrader ?? []).map((s) => ({
@@ -1099,7 +1168,62 @@ async function raknaFramProvision(
   // utkopspengarna ar utbetalda till kunden och ar inte bolagets marginal, sa
   // overtacket far inte raknas pa dem heller.
   // ===========================================================================
-  const netto = nettoEfterUtkop(ordervarde, utkopBelopp);
+  // ---------------------------------------------------------------------------
+  // 1c. Finansen (0079)
+  //
+  // ===========================================================================
+  // AVGIFTEN RAKNAS PA BRUTTOT OCH DRAS FRAN NETTOT.
+  //
+  // Bestallaren 2026-10-09: finanspartnern tar 11 % av ordervardet per ar, och
+  // ordervardet ar HELA vardet — tjansterna inraknade, fore utkopet. Avgiften
+  // ar sedan pengar bolaget aldrig far, precis som utkopet, sa den dras fran
+  // samma netto: chefens sats, overtacket, utkopssatsen och en handsatt procent
+  // raknas alla pa det som blir kvar. Paketmatrisens FASTA belopp rors inte —
+  // det ar ocksa bestallarens svar, och det foljer av att matrisgrenen nedan
+  // aldrig laser nettot.
+  // ===========================================================================
+  let finansen: { avgift: number; procent: number; procentPerAr: number; loptid: number } | null =
+    null;
+  let finanssatsId: string | null = null;
+
+  if (affaren.finans) {
+    const finanssats = gallandeFinanssats(
+      (finansrader ?? []).map((s) => ({
+        ...s,
+        percent_per_year: Number(s.percent_per_year),
+      })) as Finanssats[],
+      signerad,
+    );
+
+    // EN SAKNAD SATS BLIR INTE NOLL — en nolla hade raknat finansaffaren som
+    // gratis. Samma resonemang som for utkopssatsen nedan.
+    if (!finanssats) {
+      return {
+        klar: false,
+        fel: "Ingen finanssats gällde på signeringsdagen. Ordern kan inte räknas som finans förrän en sats är satt.",
+      };
+    }
+
+    finanssatsId = finanssats.id;
+    finansen = {
+      avgift: finansavgift(ordervarde, loptid, finanssats.percent_per_year),
+      procent: finansprocent(finanssats.percent_per_year, loptid),
+      procentPerAr: finanssats.percent_per_year,
+      loptid,
+    };
+  }
+
+  const netto = nettoEfterFinans(nettoEfterUtkop(ordervarde, utkopBelopp), finansen?.avgift ?? null);
+
+  // UTKOP OCH FINANS MASTE RYMMAS TILLSAMMANS. Var for sig kan de vara rimliga
+  // och anda ata upp mer an hela affaren — `sales_order_finans_ryms` i 0079
+  // nekar det i databasen, men beskedet ska komma har, med talen i.
+  if (finansen && finansen.avgift + (utkopBelopp ?? 0) > ordervarde) {
+    return {
+      klar: false,
+      fel: `Utköpet (${kronor(utkopBelopp ?? 0)}) och finansavgiften (${kronor(finansen.avgift)}) är tillsammans större än ordervärdet (${kronor(ordervarde)}). Kontrollera talen.`,
+    };
+  }
 
   if (utkopBelopp !== null) {
     if (utkopBelopp > ordervarde) {
@@ -1228,7 +1352,13 @@ async function raknaFramProvision(
       // fortfarande vad kunden faktiskt betalar.
       monthly_amount: manadsbelopp,
       buyout_amount: utkopBelopp,
+      // FINANSEN SKRIVS SOM TRE KOLUMNER (0079): valet, avgiften och satsen.
+      // Villkoren i 0079 kraver att de tva sista ar tomma nar valet ar nej.
+      financed: affaren.finans,
+      finance_amount: finansen?.avgift ?? null,
+      finance_rate_id: finanssatsId,
     },
+    finansen,
     overtack: affar.overtack,
     // KLIPPNINGEN MATS PA NETTOT, av samma skal som overtacket raknas pa det:
     // en provision som overstiger nettot har atit upp restposten aven om den ar
@@ -1415,7 +1545,12 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
       rad.salesperson_id,
       form,
       utkopPaOrdern,
-      { manadsbelopp: manadsbeloppPaOrdern, tjanster: await tjansterPaOrder(id) },
+      {
+        manadsbelopp: manadsbeloppPaOrdern,
+        tjanster: await tjansterPaOrder(id),
+        // FINANSVALET KOMMER UR ORDERN, av samma skal som utkopet ovan.
+        finans: rad.financed === true,
+      },
     );
     if (!provision.klar) return { fel: provision.fel };
 
@@ -1446,6 +1581,7 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
       commission_source: provision.satt.commission_source,
       commission_percent: provision.handsattProcent,
       order_value: provision.satt.order_value,
+      finance_amount: provision.satt.finance_amount,
     });
 
     await skrivOvertack(user, id, rad.company_name, provision.overtack);
@@ -1487,8 +1623,10 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
       detalj: efterslapning
         ? `Provision ${kronor(provision.satt.commission_amount)} · ${manadsnamn(periodFor(rad.signed_on))} var redan fastställd, så beloppet bokförs på ${manadsnamn(efterslapning)}`
         : provision.utkopet
-          ? `Provision ${kronor(provision.satt.commission_amount)} · ${provision.utkopet.procent} % av ${kronor(provision.utkopet.netto)} efter utköp ${kronor(provision.utkopet.utkop)}`
-          : `Provision ${Number(provision.satt.commission_amount).toLocaleString("sv-SE")} kr · räknas från ${rad.signed_on}`,
+          ? `Provision ${kronor(provision.satt.commission_amount)} · ${provision.utkopet.procent} % av ${kronor(provision.utkopet.netto)} efter utköp ${kronor(provision.utkopet.utkop)}${provision.finansen ? ` och finans ${kronor(provision.finansen.avgift)}` : ""}`
+          : provision.finansen
+            ? `Provision ${kronor(provision.satt.commission_amount)} · finans ${kronor(provision.finansen.avgift)} avdragen från ordervärdet`
+            : `Provision ${Number(provision.satt.commission_amount).toLocaleString("sv-SE")} kr · räknas från ${rad.signed_on}`,
       href: "/order",
       objekt: { typ: "sales_order", id },
     });
@@ -1500,7 +1638,7 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
     const klippt = provision.restpostenKlipptes
       ? " Provisionen översteg det som blev kvar av affären, så övertäcket till säljchefen blev noll."
       : "";
-    const utkopet = utkopstext(provision.utkopet);
+    const utkopet = finanstext(provision.finansen) + utkopstext(provision.utkopet);
 
     return {
       ok: efterslapning
@@ -1554,7 +1692,7 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
         "id, status, salesperson_id, company_name, org_number, contact_name, contact_phone," +
           " contact_email, package_id, term_months, signed_on, starts_on, period_month," +
           " is_addon, note, monthly_amount, commission_amount, commission_source," +
-          " order_value, order_value_source, buyout_amount, created_by",
+          " order_value, order_value_source, buyout_amount, financed, finance_amount, created_by",
       )
       .eq("id", id)
       .maybeSingle();
@@ -1784,9 +1922,14 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
     // dem. De ingar i ordervardet (0068), sa de MASTE med i omrakningen — utan
     // dem hade varje rattelse av en order med tjanster tyst dragit bort deras
     // varde ur affaren och bokfort skillnaden som en rattelsepost.
+    // FINANSEN UR FORMULARET, med ordern som fallback — samma regel som utkopet
+    // ovan, med samma dolda falt (`finans_ritad`).
+    const finans = finansUrFormular(form) ?? rad.financed === true;
+
     const nya = await raknaFramProvision(paket, loptid, signerad, saljare, form, utkopet, {
       manadsbelopp: friOrder ? manadsbelopp : null,
       tjanster: await tjansterPaOrder(id),
+      finans,
     });
     if (!nya.klar) return { fel: nya.fel };
 
@@ -1929,6 +2072,8 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
         commission_amount: fore.provision,
         order_value: rad.order_value === null ? null : Number(rad.order_value),
         buyout_amount: rad.buyout_amount == null ? null : Number(rad.buyout_amount),
+        financed: rad.financed === true,
+        finance_amount: rad.finance_amount == null ? null : Number(rad.finance_amount),
         monthly_amount: rad.monthly_amount == null ? null : Number(rad.monthly_amount),
         package_id: rad.package_id,
         term_months: rad.term_months,
@@ -1941,6 +2086,8 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
         commission_amount: efter.provision,
         order_value: nya.satt.order_value,
         buyout_amount: nya.satt.buyout_amount,
+        financed: nya.satt.financed,
+        finance_amount: nya.satt.finance_amount,
         monthly_amount: nya.satt.monthly_amount,
         package_id: paket,
         term_months: loptid,
@@ -2386,7 +2533,7 @@ export async function redigeraOgodkand(_prev: Orderstate, form: FormData): Promi
     const { data: raddata } = await db
       .from("sales_order")
       .select(
-        "id, status, salesperson_id, company_name, org_number, contact_name, contact_phone, contact_email, customer_street, customer_postal_code, customer_city, package_id, term_months, signed_on, starts_on, is_addon, monthly_amount, buyout_amount, note",
+        "id, status, salesperson_id, company_name, org_number, contact_name, contact_phone, contact_email, customer_street, customer_postal_code, customer_city, package_id, term_months, signed_on, starts_on, is_addon, monthly_amount, buyout_amount, financed, note",
       )
       .eq("id", id)
       .maybeSingle();
@@ -2472,6 +2619,10 @@ export async function redigeraOgodkand(_prev: Orderstate, form: FormData): Promi
         ? null
         : Number(rad.buyout_amount);
 
+    // Finansen med samma dolda fält som utköpet (0079). Bara valet — avgiften
+    // räknas först vid godkännandet.
+    const finans = finansUrFormular(form) ?? rad.financed === true;
+
     const efter = {
       company_name: bolag,
       org_number: orgnr,
@@ -2489,6 +2640,7 @@ export async function redigeraOgodkand(_prev: Orderstate, form: FormData): Promi
       salesperson_id: saljare,
       is_addon: form.get("is_addon") === "on",
       buyout_amount: utkop,
+      financed: finans,
       note: String(form.get("note") ?? "").trim() || null,
     };
 

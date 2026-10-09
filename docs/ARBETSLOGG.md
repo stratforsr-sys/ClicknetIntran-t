@@ -5,6 +5,49 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-09 · Finans på order (0079)
+
+Gren `finans-pa-order`, ej mergad. Beställaren: *"När vi lägger upp ordrar i
+intranätet måste vi också kunna välja finans. Finans betyder att vår
+finanspartner tar 11% av ordervärdet per år, alltså om det är 12 månader så tar
+dem 11%, om det är 24, 22% osv."*
+
+**Två frågor ställdes innan något byggdes, och svaren är beslut:**
+
+1. *Hur påverkar avgiften provisionen?* — **Den dras från nettot**, som
+   utköpet. Allt som räknas i procent på nettot sjunker (chefens egen sats,
+   övertäcket, utköpssatsen, handsatt procent). **Matrisens fasta belopp
+   ändras inte.** Alternativen var att låta finansen ersätta matrisen (som
+   utköpet gör) eller att inte röra provisionen alls.
+2. *Vad räknas 11 % på?* — **Hela ordervärdet**: månadsbelopp × löptid plus
+   tjänsterna, före ett eventuellt utköp.
+
+**Löptider som inte är hela år räknas proportionellt** (18 mån = 16,5 %). Det
+frågades inte; det är enda läsningen av "per år" som ger ett svar för fria
+order på 1–60 månader. Står i `finans.ts`.
+
+**Valet och beloppet är två kolumner.** `financed` skrivs av säljaren redan på
+en inskickad order (säljaren vet, godkännaren gör det inte — samma skäl som
+utköpet). `finance_amount` fryses vid godkännandet med provisionen, så en
+ändrad sats i framtiden rör inte en godkänd affär. `finance_rate_id` spårar
+avgiften till sin rad, som `commission_rate_id`.
+
+**`raknaFramProvision` tar `finans` som OBLIGATORISKT fält** i `affaren`, inte
+defaultat. Tre anropare (skapa, godkänn, rätta) vet olika saker om det, och en
+glömd anropare ska falla i bygget hellre än att tyst räkna en finansaffär som
+gratis. Formulären skickar `finans_ritad` som dolt fält av samma skäl som
+`har_utkop_ritad`: en okryssad ruta skickar ingenting.
+
+**Triggern `sales_order_stegbyte` är omskriven ur `pg_get_functiondef`**, inte
+ur 0060-filen, med `financed`/`finance_amount` i makuleringsspärren.
+
+**Prov:** `tests/finans.mjs` (34 kontroller, i `npm test`), plus de befintliga
+order-, utköps-, provisions-, chefs- och Inkio-proven gröna. `tsc --noEmit` i
+scratchpaden rent för allt som rörts (de två felen om `Pling`/`pling` är
+macOS skiftlägesokänsliga filsystem och finns på main).
+
+---
+
 ## 2026-10-09 · Säljchef och VD i säljarlistan — Simon kan lägga order på sig själv
 
 Direkt till main, utan gren, på beställarens besked *"merga direkt bara"*.

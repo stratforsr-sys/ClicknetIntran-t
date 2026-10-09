@@ -133,6 +133,17 @@ export type Order = {
    * overtack raknas. Se `utkop.ts` for rakningen och 0060 for kolumnen.
    */
   buyout_amount?: number | null;
+  /**
+   * Affaren gar via finanspartnern (0079). Satts av saljaren, aven pa en
+   * inskickad order. Frivillig i typen: order fran fore 0079 har `false`.
+   */
+  financed?: boolean;
+  /**
+   * Finanspartnerns avgift i kronor, FRYST vid godkannandet. NULL nar ordern
+   * inte ar finansierad eller annu inte godkand. Dras fran nettot precis som
+   * utkopet — se `finans.ts`.
+   */
+  finance_amount?: number | null;
   cancel_period_month: string | null;
 };
 
@@ -314,6 +325,9 @@ export function ordervardeForPaket(
  * ordervarde och sitt utkop ur manaden — annars hade avdraget varit for stort,
  * eftersom bruttot gick in men bara nettot kom bolaget till del.
  * ===========================================================================
+ *
+ * FINANSAVGIFTERNA (0079) FOLJER UTKOPEN RAD FOR RAD: de dras ur `netto`, star
+ * for sig i `finans`, och en makulering tar tillbaka sin avgift.
  */
 export function ordervarde(
   order: Order[],
@@ -324,6 +338,7 @@ export function ordervarde(
   makulerat: number;
   utanVarde: number;
   utkop: number;
+  finans: number;
 } {
   const in_ = orderIPeriod(order, manad);
   const ut = makuleradeIPeriod(order, manad);
@@ -331,17 +346,20 @@ export function ordervarde(
   const summa = (rader: Order[]) => rader.reduce((s, o) => s + (o.order_value ?? 0), 0);
   const saknade = (rader: Order[]) => rader.filter((o) => o.order_value === null).length;
   const utkopen = (rader: Order[]) => rader.reduce((s, o) => s + (o.buyout_amount ?? 0), 0);
+  const avgifterna = (rader: Order[]) => rader.reduce((s, o) => s + (o.finance_amount ?? 0), 0);
 
   const tecknat = summa(in_);
   const makulerat = summa(ut);
   const utkop = utkopen(in_) - utkopen(ut);
+  const finans = avgifterna(in_) - avgifterna(ut);
 
   return {
-    netto: tecknat - makulerat - utkop,
+    netto: tecknat - makulerat - utkop - finans,
     tecknat,
     makulerat,
     utanVarde: saknade(in_) + saknade(ut),
     utkop,
+    finans,
   };
 }
 

@@ -119,6 +119,8 @@ export type Orderunderlag = {
   bindningManader: number;
   paketnamn: string;
   utkop: number | null;
+  /** 0079. Finansavgiften i kronor. Frivillig: underlag byggda fore 0079 saknar den. */
+  finans?: number | null;
   anteckning: string | null;
   navlank: string;
   tjanster: {
@@ -194,6 +196,7 @@ export function nyOrder(o: Orderunderlag, kundId: string, saljareId: string | nu
   const anteckning = [
     `Från Clicknet Nav: ${o.navlank}`,
     o.utkop ? `Utköp: ${o.utkop} kr.` : null,
+    o.finans ? `Finans: ${o.finans} kr till finanspartnern.` : null,
     o.anteckning?.trim() || null,
   ]
     .filter(Boolean)

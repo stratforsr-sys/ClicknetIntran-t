@@ -23,6 +23,7 @@ import {
 } from "@/lib/order";
 import { kronor, manadsnamn } from "@/lib/provision";
 import { nettoEfterUtkop } from "@/lib/utkop";
+import { finansavgift, finansprocent, nettoEfterFinans, procenttext } from "@/lib/finans";
 import { forberedNyttAvtal, skapaOrder, slaUppBolag, type Orderstate } from "./actions";
 import { Provisionsval, type Provisionsform } from "./Provisionsval";
 
@@ -92,6 +93,8 @@ type Formular = {
   tillagg: boolean;
   harUtkop: boolean;
   utkopstext: string;
+  /** 0079. Affaren gar via finanspartnern. */
+  finans: boolean;
   manuell: boolean;
   manadsbelopp: string;
   friProvision: string;
@@ -204,6 +207,12 @@ export function Nyorder({
    */
   utkopsprocent,
   /**
+   * Finanspartnerns avgift i procent PER AR (0079), eller `null` nar ingen sats
+   * ar satt. Bara forhandsvisningen anvander den — servern slar upp satsen pa
+   * signeringsdatumet.
+   */
+  finansPerAr,
+  /**
    * Manaderna som redan ar faststallda, som `2026-08-01`.
    *
    * Behovs for VARNINGEN under datumfaltet. Listan bar inga personuppgifter och
@@ -237,6 +246,7 @@ export function Nyorder({
   idag: string;
   chef: { employee_id: string; override_percent: number; own_sale_percent: number } | null;
   utkopsprocent: number | null;
+  finansPerAr: number | null;
   stangdaManader: string[];
   forlanger: {
     id: string;
@@ -271,6 +281,7 @@ export function Nyorder({
     tillagg: false,
     harUtkop: false,
     utkopstext: "",
+    finans: false,
     manuell: false,
     manadsbelopp: "",
     friProvision: "",
@@ -418,7 +429,17 @@ export function Nyorder({
   const utkop = f.harUtkop ? tolka(f.utkopstext) : null;
   const utkopForStort = brutto !== null && utkop !== null && utkop > brutto;
 
-  const netto = brutto === null ? null : nettoEfterUtkop(brutto, utkop);
+  // FINANSEN (0079) raknas pa BRUTTOT och dras efter utkopet — samma ordning
+  // som `raknaFramProvision`.
+  const finansAvgift =
+    f.finans && brutto !== null && loptid !== null && finansPerAr !== null
+      ? finansavgift(brutto, loptid, finansPerAr)
+      : null;
+  const avdragForStora =
+    finansAvgift !== null && brutto !== null && finansAvgift + (utkop ?? 0) > brutto;
+
+  const netto =
+    brutto === null ? null : nettoEfterFinans(nettoEfterUtkop(brutto, utkop), finansAvgift);
 
   // CHEFSREGELN GALLER DEN VALDA SALJAREN, inte den inloggade. En saljchef som
   // lagger in en order at Vlado ska se Vlados villkor, inte sina egna.
@@ -816,7 +837,14 @@ export function Nyorder({
               setF((g) => ({ ...g, friProvisionsform: form, friProvision: varde }))
             }
             hjalp={(form) => {
-              const bas = f.harUtkop ? "det som är kvar efter utköpet" : "ordervärdet";
+              const bas =
+                f.harUtkop && f.finans
+                  ? "det som är kvar efter utköp och finans"
+                  : f.harUtkop
+                    ? "det som är kvar efter utköpet"
+                    : f.finans
+                      ? "det som är kvar efter finansavgiften"
+                      : "ordervärdet";
               if (forChefen) {
                 return `Lämna tomt så räknas din sats för egen försäljning, ${chef!.own_sale_percent} % av ${bas}.`;
               }
@@ -919,6 +947,43 @@ export function Nyorder({
         )}
       </div>
 
+      {/*
+        FINANSEN STAR OCKSA UTANFOR `hanterare`-blocket (0079), av samma skal
+        som utkopet: saljaren vet om kunden betalar via finanspartnern.
+        `finans_ritad` sager till servern att rutan fanns — en okryssad ruta
+        skickar annars ingenting alls.
+      */}
+      <div className="flex flex-col gap-2">
+        <input type="hidden" name="finans_ritad" value="1" />
+        <label className="flex items-center gap-2 text-small text-ink-700">
+          <input
+            type="checkbox"
+            name="finans"
+            className="size-4"
+            checked={f.finans}
+            onChange={(e) => satt("finans", e.target.checked)}
+          />
+          Finans — kunden betalar via vår finanspartner
+        </label>
+
+        {f.finans && (
+          <span className="text-small text-ink-500">
+            {finansPerAr === null
+              ? "Ingen finanssats är satt ännu, så ordern kan inte räknas som finans."
+              : loptid !== null
+                ? `Finanspartnern tar ${procenttext(finansPerAr)} av ordervärdet per år — ${procenttext(finansprocent(finansPerAr, loptid))} på ${loptid} månader. Avgiften dras från ordervärdet innan provision och övertäck räknas.`
+                : `Finanspartnern tar ${procenttext(finansPerAr)} av ordervärdet per år av bindningstiden. Avgiften dras från ordervärdet innan provision och övertäck räknas.`}
+          </span>
+        )}
+
+        {avdragForStora && (
+          <Notis ton="danger">
+            Utköp och finansavgift är tillsammans större än ordervärdet {kronor(brutto!)}. Kontrollera
+            talen — ordern går inte att spara så.
+          </Notis>
+        )}
+      </div>
+
       {hanterare && (
         <>
           {/*
@@ -962,6 +1027,8 @@ export function Nyorder({
       <Affaren
         brutto={brutto}
         utkop={utkop}
+        finans={finansAvgift}
+        finansProcent={finansPerAr !== null && loptid !== null ? finansprocent(finansPerAr, loptid) : null}
         netto={netto}
         provision={provision}
         restpost={restpost}
@@ -1310,6 +1377,8 @@ function Manadsstampel({
 function Affaren({
   brutto,
   utkop,
+  finans,
+  finansProcent,
   netto,
   provision,
   restpost,
@@ -1327,6 +1396,10 @@ function Affaren({
 }: {
   brutto: number | null;
   utkop: number | null;
+  /** 0079. Finansavgiften i kronor, eller null nar affaren inte ar finans. */
+  finans: number | null;
+  /** 0079. Hela avtalets procent, t.ex. 22 for 11 % i 24 manader. */
+  finansProcent: number | null;
   netto: number | null;
   provision: number | null;
   restpost: number | null;
@@ -1347,6 +1420,10 @@ function Affaren({
   if (brutto === null || netto === null) return null;
 
   const harUtkop = utkop !== null && utkop > 0;
+  const harFinans = finans !== null && finans > 0;
+  // NAGOT AVDRAG ALLS gor att procenten raknas pa "det som ar kvar" och inte
+  // pa ordervardet — och att raden Kvar av affaren behovs.
+  const harAvdrag = harUtkop || harFinans;
   const tjansternasVarde = tjanster.reduce((s, t) => s + tjanstensVarde(t, loptid ?? 0), 0);
 
   return (
@@ -1374,18 +1451,31 @@ function Affaren({
       )}
 
       {harUtkop && (
-        <>
-          <Tal
-            etikett="Utköp"
-            varde={`− ${kronor(utkop!)}`}
-            under="Går till att lösa kunden ur det gamla avtalet"
-          />
-          <Tal
-            etikett="Kvar av affären"
-            varde={kronor(netto)}
-            under="Basen för både provision och övertäck"
-          />
-        </>
+        <Tal
+          etikett="Utköp"
+          varde={`− ${kronor(utkop!)}`}
+          under="Går till att lösa kunden ur det gamla avtalet"
+        />
+      )}
+
+      {harFinans && (
+        <Tal
+          etikett="Finans"
+          varde={`− ${kronor(finans!)}`}
+          under={
+            finansProcent !== null
+              ? `${procenttext(finansProcent)} av ordervärdet till finanspartnern`
+              : "Till finanspartnern"
+          }
+        />
+      )}
+
+      {harAvdrag && (
+        <Tal
+          etikett="Kvar av affären"
+          varde={kronor(netto)}
+          under="Basen för både provision och övertäck"
+        />
       )}
 
       {provision !== null ? (
@@ -1395,12 +1485,12 @@ function Affaren({
           under={
             handsatt
               ? handsattProcent !== null
-                ? `${handsattProcent} % av ${harUtkop ? "det som är kvar" : "ordervärdet"} — inskriven för hand`
+                ? `${handsattProcent} % av ${harAvdrag ? "det som är kvar" : "ordervärdet"} — inskriven för hand`
                 : "Inskriven för hand"
               : forChefen
-                ? `${chef!.own_sale_percent} % av ${harUtkop ? "det som är kvar" : "ordervärdet"} — säljchefens egen försäljning`
+                ? `${chef!.own_sale_percent} % av ${harAvdrag ? "det som är kvar" : "ordervärdet"} — säljchefens egen försäljning`
                 : harUtkop && utkopsprocent !== null && !manuell
-                  ? `${utkopsprocent} % av det som är kvar efter utköpet`
+                  ? `${utkopsprocent} % av det som är kvar efter ${harFinans ? "utköp och finans" : "utköpet"}`
                   : "Inskriven för hand"
           }
         />
@@ -1426,8 +1516,8 @@ function Affaren({
             under={
               restpost === 0 && netto < (provision ?? 0)
                 ? "Provisionen överstiger det som blev kvar — övertäcket blir noll"
-                : harUtkop
-                  ? "Det som är kvar efter utköpet, minus säljarens provision"
+                : harAvdrag
+                  ? `Det som är kvar efter ${harUtkop && harFinans ? "utköp och finans" : harUtkop ? "utköpet" : "finansavgiften"}, minus säljarens provision`
                   : "Ordervärdet minus säljarens provision"
             }
           />
@@ -1478,7 +1568,16 @@ function Affaren({
         </p>
       )}
 
-      {!manuell && !forChefen && !harUtkop && hanterare && (
+      {/* FINANSEN ROR INTE MATRISEN (bestallaren 2026-10-09). Sagt med ord,
+          eftersom ett lagre netto annars ser ut att ge en lagre provision. */}
+      {harFinans && !harUtkop && !forChefen && !manuell && (
+        <p className="text-small text-ink-500 sm:col-span-2">
+          Finansen ändrar inte paketmatrisens provision till säljaren. Säljchefens övertäck räknas
+          på det som är kvar efter finansavgiften.
+        </p>
+      )}
+
+      {!manuell && !forChefen && !harAvdrag && hanterare && (
         <p className="text-small text-ink-500 sm:col-span-2">
           Ordervärdet är inte pengar till någon — det är vad affären är värd för bolaget. Provision
           och övertäck räknas ur det när ordern godkänns.

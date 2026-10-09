@@ -246,7 +246,7 @@ async function hamtaAllaOrder(manad: string): Promise<Order[]> {
     .from("sales_order")
     .select(
       "id, salesperson_id, package_id, term_months, signed_on, period_month, status," +
-        " is_addon, commission_amount, order_value, buyout_amount, cancel_period_month",
+        " is_addon, commission_amount, order_value, buyout_amount, finance_amount, cancel_period_month",
     )
     .or(`period_month.eq.${manad},cancel_period_month.eq.${manad}`);
 
@@ -270,6 +270,9 @@ async function hamtaAllaOrder(manad: string): Promise<Order[]> {
     // halva vardet gick till ett utkop, och beloppet hade sett obegripligt ut.
     buyout_amount:
       o.buyout_amount === null || o.buyout_amount === undefined ? null : Number(o.buyout_amount),
+    // FINANSEN (0079), av samma skal som utkopet: den star i `ordertext`.
+    finance_amount:
+      o.finance_amount === null || o.finance_amount === undefined ? null : Number(o.finance_amount),
   })) as unknown as Order[];
 }
 
