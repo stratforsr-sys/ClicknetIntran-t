@@ -836,6 +836,18 @@ function beskrivFilter(filter: Orderfilter, namn: Map<string, string>): string {
   return delar.length === 0 ? "alla order" : delar.join(" · ");
 }
 
+/**
+ * Roller som kan sta som saljare pa en order.
+ *
+ * SALJCHEF OCH VD SALJER OCKSA. Bestallarens besked 2026-10-09: Simon (VD och
+ * saljchef, men inte `salesperson`) ska kunna lagga order pa sig sjalv. Med
+ * bara `salesperson` saknades han i listan — och eftersom faltet ar `required`
+ * fanns det ingen vag runt det. Servern och databasen har aldrig nekat; det
+ * var bara den har listan. `finance` ar med flit inte med: den rollen
+ * hanterar order, den tecknar dem inte.
+ */
+const SALJANDE_ROLLER = new Set(["salesperson", "sales_manager", "ceo"]);
+
 /** Aktiva saljare, for chefens val av saljare. RLS avgor vilka som syns. */
 async function hamtaSaljare(): Promise<{ id: string; namn: string }[]> {
   const rls = await supabaseServer();
@@ -848,7 +860,7 @@ async function hamtaSaljare(): Promise<{ id: string; namn: string }[]> {
   return (data ?? [])
     .filter((e) => {
       const roller = (e as unknown as { employee_role: { role: string }[] | null }).employee_role;
-      return (roller ?? []).some((r) => r.role === "salesperson");
+      return (roller ?? []).some((r) => SALJANDE_ROLLER.has(r.role));
     })
     .map((e) => ({ id: e.id, namn: fullName(e) }));
 }

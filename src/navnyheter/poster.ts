@@ -42,8 +42,44 @@ finns i Inkio. Annars är **Makulera** rätt väg, och Nav säger det.
 
 En order som inte är godkänd visar nu **≈ beräknat ordervärde** i stället för ett
 streck. Det riktiga sätts när ordern godkänns.`,
-    datum: "2026-10-08",
+    datum: "2026-10-09",
     roller: [],
+    href: "/order",
+  },
+  {
+    slug: "chefen-som-saljare",
+    rubrik: "Säljchef och VD kan lägga order på sig själva",
+    ingress:
+      "I säljarlistan på en ny order står nu även säljchefer och VD — inte bara de med rollen säljare.",
+    text: `När du lägger en order och väljer **Säljare** finns du själv med i listan,
+även om du är säljchef eller VD och inte har rollen säljare.
+
+Ordern går sedan som vilken order som helst: säljsamtalet ska vara **ditt eget**
+samtal från växeln med kunden, och provisionen räknas som för en säljare.`,
+    datum: "2026-10-09",
+    roller: ["sales_manager", "ceo"],
+    href: "/order",
+  },
+  {
+    slug: "fri-order-provision-procent-eller-kronor",
+    rubrik: "Provision i kronor eller procent på en fri order",
+    ingress:
+      "När en order inte följer paketreglerna väljer du om provisionen skrivs som ett fast belopp eller en procentsats — även på din egen order.",
+    text: `Kryssa i **Ordern följer inte paketreglerna** när du lägger en order. Vid
+provisionsfältet väljer du **kr** eller **%**.
+
+- **kr** — ett fast belopp, till exempel 3 200.
+- **%** — en procentsats av ordervärdet (efter ett eventuellt utköp). Nav räknar
+  om den till kronor, och det är kronorna som sparas på ordern.
+
+**Står ordern på dig själv som säljchef** gäller det du skriver i stället för
+din vanliga sats för egen försäljning. Lämnar du fältet tomt räknas din vanliga
+sats som förut.
+
+Samma val finns när du godkänner en order utanför paketreglerna och när du
+rättar en godkänd order.`,
+    datum: "2026-10-09",
+    roller: ["sales_manager", "ceo", "finance"],
     href: "/order",
   },
   {

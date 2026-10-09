@@ -30,6 +30,7 @@ import {
   egenProvision,
   gallandeChefssats,
   overtackFor,
+  procentProvision,
   restpost,
   restpostenAtNoll,
 } from "../src/lib/chefsprovision.ts";
@@ -189,6 +190,49 @@ console.log("\nDe tva satserna mots aldrig pa samma order");
   });
   ok("Fri order, saljare: handsatt provision star", friAndras.provision === 2200);
   ok("...och overtacket raknas pa skillnaden", friAndras.overtack?.amount === 1580, `${friAndras.overtack?.amount}`);
+
+  // 2026-10-09: pa en fri order ska chefen kunna satta sin egen provision, i
+  // kronor eller procent. Ett UTTRYCKLIGT handsatt belopp gar fore 40 %; ett
+  // belopp utan valjaren (`handsatt` saknas) gor det inte — det ar fallet ovan.
+  const friEgenHandsatt = affarenFor({
+    sats: sats(),
+    saljareId: CHEF,
+    ordervarde: 18000,
+    saljarprovision: 2200,
+    saljarkalla: "manual",
+    handsatt: true,
+  });
+  ok("Fri order, chefen sjalv, handsatt: beloppet star", friEgenHandsatt.provision === 2200, `${friEgenHandsatt.provision}`);
+  ok("...kallan ar manual, inte manager", friEgenHandsatt.kalla === "manual");
+  ok("...och fortfarande inget overtack pa egen order", friEgenHandsatt.overtack === null);
+
+  const egenProcent = affarenFor({
+    sats: sats(),
+    saljareId: CHEF,
+    ordervarde: 13140,
+    saljarprovision: procentProvision(13140, 25),
+    saljarkalla: "manual",
+    handsatt: true,
+  });
+  ok("Fri order, chefen sjalv, 25 %: 3 285 kr", egenProcent.provision === 3285, `${egenProcent.provision}`);
+
+  const andrasHandsatt = affarenFor({
+    sats: sats(),
+    saljareId: SALJARE,
+    ordervarde: 18000,
+    saljarprovision: 2200,
+    saljarkalla: "manual",
+    handsatt: true,
+  });
+  ok(
+    "Handsatt pa andras order: samma som utan flaggan",
+    andrasHandsatt.provision === friAndras.provision &&
+      andrasHandsatt.kalla === friAndras.kalla &&
+      andrasHandsatt.overtack?.amount === friAndras.overtack?.amount,
+  );
+
+  ok("Procent avrundas till hela kronor", procentProvision(1095, 33.33) === 365, `${procentProvision(1095, 33.33)}`);
+  ok("Noll procent ar noll kronor", procentProvision(13140, 0) === 0);
 
   // Utan sats ska matrisen galla aven for den som SKULLE varit mottagare.
   const utanSats = affarenFor({

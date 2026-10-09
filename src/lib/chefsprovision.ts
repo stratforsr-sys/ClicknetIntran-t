@@ -180,6 +180,21 @@ export function egenProvision(sats: Chefssats, ordervarde: number): number {
 }
 
 /**
+ * En handskriven procentsats pa en fri order, omraknad till kronor.
+ *
+ * Bestallaren 2026-10-09: *"antingen procent sats eller fast belopp"*. Procenten
+ * ar bara ett satt att SKRIVA beloppet — det ar kronorna som fryses pa ordern,
+ * med `commission_source = 'manual'`, precis som om de skrivits in direkt.
+ *
+ * BASEN AR DENSAMMA SOM CHEFSSATSENS: nettot efter utkop. Anroparen skickar in
+ * det, av samma skal som i `affarenFor` — utkopet ar en egenskap hos affaren.
+ * Avrundas till hela kronor har och bara har, som `egenProvision`.
+ */
+export function procentProvision(ordervarde: number, procent: number): number {
+  return avrunda((ordervarde * procent) / 100);
+}
+
+/**
  * Overtacket pa en order nagon ANNAN tecknat.
  *
  * `null` i tre fall, och de betyder olika saker:
@@ -239,7 +254,8 @@ export function overtackFor(
  *
  * `saljarprovision` ar den provision som gallt UTAN chefsregeln — ur matrisen
  * eller handsatt. Den anvands bara nar ordern inte ar chefens egen; ar den det
- * ersatts den av `egenProvision`.
+ * ersatts den av `egenProvision` — utom nar provisionen uttryckligen satts for
+ * hand (`handsatt`), se faltet.
  */
 export type Affar = {
   /** Provisionen som ska frysas pa ordern. */
@@ -276,10 +292,30 @@ export function affarenFor(arg: {
   saljarprovision: number;
   /** Kallan for `saljarprovision`. Ignoreras vid egen forsaljning. */
   saljarkalla: Saljarkalla;
+  /**
+   * Skrev nagon UTTRYCKLIGEN in provisionen pa den har ordern — i kronor eller
+   * procent — med valjaren `provision_form`?
+   *
+   * DA GALLER DEN AVEN PA CHEFENS EGEN ORDER (bestallaren 2026-10-09). Fram
+   * till dess ersatte 40 % allt, och provisionsfaltet doljdes for chefen. En
+   * fri order ar per definition en affar utanfor reglerna, och den som satter
+   * dess villkor ska kunna satta provisionen ocksa.
+   *
+   * ETT BELOPP I FALTET RACKER INTE, det maste vara valt. Rattelseformularet
+   * forifyllde fram till 2026-10-09 provisionsfaltet med orderns nuvarande
+   * belopp — aven de 40 % som chefsregeln raknat fram. Hade ett ifyllt falt
+   * ensamt fatt overprova regeln hade varje rattelse av chefens order fryst
+   * forra ganges belopp som "handsatt", och en andrad bindningstid hade inte
+   * langre flyttat provisionen.
+   *
+   * Overtacket blir fortfarande inget: det finns ingen annans affar att ersatta.
+   */
+  handsatt?: boolean;
 }): Affar {
-  const { sats, saljareId, ordervarde, saljarprovision, saljarkalla } = arg;
+  const { sats, saljareId, ordervarde, saljarprovision, saljarkalla, handsatt = false } = arg;
 
   if (arEgenForsaljning(sats, saljareId)) {
+    if (handsatt) return { provision: saljarprovision, kalla: "manual", overtack: null };
     return {
       provision: egenProvision(sats!, ordervarde),
       kalla: "manager",

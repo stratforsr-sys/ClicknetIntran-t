@@ -30,6 +30,7 @@ import {
 import { laggOvrigBonus } from "../provision/actions";
 import { Saljsamtalsval } from "./Saljsamtalsval";
 import { Redigering } from "./Redigering";
+import { Provisionsval } from "./Provisionsval";
 
 /**
  * Atgarderna pa en enskild order.
@@ -378,12 +379,12 @@ function Enkel({
 /**
  * Godkannandet av en order som faller utanfor paketmatrisen.
  *
- * TRE FALT, OCH DE HAR OLIKA TYNGD:
+ * TVA FALT, OCH DE HAR OLIKA TYNGD:
  *
- *   Ordervardet   — KRAVS. `sales_order_ordervarde_kravs` i 0050 nekar en
- *                   godkand order utan varde.
- *   Provisionen   — avsnitt 4.2: godkannaren satter beloppet. Tomt betyder
- *                   "rakna fram det" — ur chefssatsen eller ur utkopssatsen.
+ *   Provisionen   — avsnitt 4.2: godkannaren satter beloppet, i kronor eller
+ *                   procent (2026-10-09). Tomt betyder "rakna fram det" — ur
+ *                   chefssatsen eller ur utkopssatsen. Ifyllt galler det aven
+ *                   pa chefens egen order.
  *   Anteckningen  — FRIVILLIG sedan 0060. Den var ett krav i 0034, och kravet
  *                   visade sig kosta mer an det skyddade: felmeddelandet
  *                   aterstallde formularet och at upp signeringsdatumet. Se
@@ -393,11 +394,15 @@ function Enkel({
  * den ar det som faktiskt hindrar skrivningen — men ett falt som gar att lamna
  * tomt och sedan far ett felmeddelande ar samre an ett som sager det direkt.
  *
- * EN UNDANTAGSVAG: ar saljaren sjalv saljchefen raknas provisionen ur
- * ordervardet, och da behovs bara det ena talet. Formularet vet inte vem
- * saljaren ar — den kunskapen ligger i `raknaFramProvision` pa servern — sa
- * hjalptexten sager det i stallet for att dolja faltet. Ett dolt falt som ibland
- * borde synas ar varre an ett falt med en forklaring.
+ * ORDERVARDET SKRIVS INTE HAR LANGRE. Faltet "Ordervärde i kronor" stod kvar
+ * efter 0068 och var obligatoriskt, men `godkannOrder` laste det aldrig: vardet
+ * raknas ur orderns manadsbelopp och bindningstid. Ett obligatoriskt falt som
+ * ignoreras ar varre an inget — den som fyller i det tror att talet betyder
+ * nagot. Borttaget 2026-10-09.
+ *
+ * Formularet vet inte vem saljaren ar — den kunskapen ligger i
+ * `raknaFramProvision` pa servern — sa hjalptexten sager vad ett tomt falt
+ * betyder i stallet for att dolja det.
  */
 function FriOrder({ id }: { id: string }) {
   const [state, kor, vantar] = useActionState<Orderstate, FormData>(godkannOrder, {});
@@ -406,26 +411,12 @@ function FriOrder({ id }: { id: string }) {
     <form action={kor} className="flex flex-col gap-2 rounded-sm bg-surface-alt p-3">
       <input type="hidden" name="id" value={id} />
 
-      <div className="grid gap-2 sm:grid-cols-2">
-        <label className="flex flex-col gap-1">
-          <span className="text-micro text-ink-500">Ordervärde i kronor</span>
-          <input
-            name="order_value"
-            required
-            inputMode="decimal"
-            placeholder="18 000"
-            className={KONTROLL}
-          />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-micro text-ink-500">Provision i kronor</span>
-          <input
-            name="commission_amount"
-            inputMode="decimal"
-            placeholder="3 200"
-            className={KONTROLL}
-          />
-        </label>
+      <div className="sm:max-w-sm">
+        <Provisionsval
+          hjalp={() =>
+            "Ordervärdet räknas ur månadsbeloppet och bindningstiden på ordern. Lämna provisionen tom så räknas den ur säljchefens sats om ordern är hens egen, eller ur utköpssatsen."
+          }
+        />
       </div>
 
       {/*
@@ -446,8 +437,8 @@ function FriOrder({ id }: { id: string }) {
       </label>
 
       <p className="text-small text-ink-500">
-        Säljchefens övertäck räknas på skillnaden mellan de två talen. Står ordern på säljchefen
-        själv räknas provisionen ur ordervärdet, och provisionsfältet lämnas tomt.
+        Säljchefens övertäck räknas på det som blir kvar av ordervärdet efter provisionen. Står
+        ordern på säljchefen själv bokförs inget övertäck.
       </p>
 
       <div>
@@ -850,18 +841,22 @@ function Rattelse({
                 : "Ordervärdet räknas som månadsbeloppet gånger bindningstiden, plus tjänsterna på ordern."}
             </span>
           </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-micro text-ink-500">Provision i kronor</span>
-            <input
-              name="commission_amount"
-              inputMode="decimal"
-              defaultValue={order.commission_amount ?? ""}
-              className={KONTROLL}
-            />
-            <span className="text-small text-ink-500">
-              Lämna tomt om säljchefen är säljaren — då räknas den ur ordervärdet.
-            </span>
-          </label>
+          {/* FORIFYLLT MED ORDERNS BELOPP — UTOM NAR CHEFSREGELN RAKNADE FRAM DET.
+              Ett framraknat belopp i faltet hade blivit "handsatt" vid nasta
+              sparning och slutat folja ordervardet. Tomt betyder att regeln
+              raknar igen; se `handsatt` i `affarenFor`. */}
+          <Provisionsval
+            forval={{
+              form: "belopp",
+              varde:
+                order.commission_source === "manager" || order.commission_amount === null
+                  ? ""
+                  : String(order.commission_amount),
+            }}
+            hjalp={() =>
+              "Lämna tomt om säljchefen är säljaren och satsen för egen försäljning ska gälla — då räknas den ur ordervärdet."
+            }
+          />
         </div>
       ) : (
         <p className="text-small text-ink-500">

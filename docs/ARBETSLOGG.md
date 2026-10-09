@@ -5,6 +5,75 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-09 · Säljchef och VD i säljarlistan — Simon kan lägga order på sig själv
+
+Direkt till main, utan gren, på beställarens besked *"merga direkt bara"*.
+Beställaren: *"lägg in så att simon också kan lägga in ordrar på sig själv"*.
+
+**Orsaken var bara listan.** Simon Menduza har rollerna `ceo` + `sales_manager`
+men inte `salesperson`. `hamtaSaljare()` i `order/page.tsx` filtrerade på
+`salesperson`, och säljarfältet är `required` för den som får hantera order —
+så han kunde inte välja sig själv, och ett tomt fält nekas ("Välj vilken
+säljare ordern gäller."). `skapaOrder` och databasen har aldrig krävt rollen;
+ingen trigger eller policy på `sales_order.salesperson_id` tittar på den.
+
+**Nu:** listan tar `salesperson`, `sales_manager` och `ceo`
+(`SALJANDE_ROLLER`). `finance` är med flit utanför. Samma lista bär
+namnkartan, så Simons order får hans namn på korten även för Zen.
+
+**Varför inte bara ge Simon rollen `salesperson` i databasen:** den rollen styr
+mer än orderlistan — kursmål och skriftliga prov (0061, 0067), säljmålen och
+provisionstavlans säljarkrets. En VD hade fått säljarnas obligatoriska kurser.
+
+**Provet mot RLS** (`set local role authenticated` som Simon): han ser sig själv
+med `ceo,sales_manager`, så filtret hittar honom. Inkio har
+`simon@clicknet.se` bland säljarna, så synken sätter rätt säljare.
+
+**Provision:** `manager_commission_rate` har bara Zen. Simons egna order räknas
+därför på matrisen som en säljares, och Zens övertäck räknas på dem som på
+andras. Vill beställaren ha en chefssats för Simon är det en rad i
+`manager_commission_rate`, ingen kod.
+
+---
+
+## 2026-10-09 · Provision i kronor eller procent på en fri order
+
+Gren `fri-order-provision-procent`. Beställaren: *"när jag lägger in mina
+ordrar som jag själv har signat och jag trycker på följer inte paket regler
+måste jag kunna välja provision också antingen procent sats eller fast belopp"*.
+
+**Före:** på chefens egen order ersatte `own_sale_percent` (40 %) allt —
+formuläret dolde provisionsfältet och `affarenFor` bortsåg från ett inskrivet
+belopp. Andras fria order tog bara kronor.
+
+**Nu:** `Provisionsval.tsx` (kr | %) på de tre ställen en fri order får sin
+provision: inmatningen, "Godkänn utanför paketreglerna" och "Rätta ordern".
+Formuläret skickar `provision_form` och antingen `commission_amount` eller
+`commission_percent`. Procenten räknas på nettot (efter utköp) med
+`procentProvision()`; kronorna fryses med `commission_source = 'manual'`, och
+procenten hamnar i `audit_log.meta.commission_percent`.
+
+**Varför `handsatt` och inte bara "fältet är ifyllt":** rättelseformuläret
+förifyllde provisionsfältet med orderns belopp, också de 40 % som chefsregeln
+räknat. Hade ett ifyllt fält ensamt gått före regeln hade varje rättelse av
+chefens order fryst gamla beloppet som handsatt. Nu krävs väljaren, och
+rättelsen förifyller inte när `commission_source = 'manager'`. En klient utan
+väljaren beter sig exakt som förut (provet "Fri order, chefen sjalv" står kvar).
+
+**Två småfel i samma väg:** "Godkänn utanför paketreglerna" hade ett
+obligatoriskt fält "Ordervärde i kronor" som `godkannOrder` aldrig läst sedan
+0068 — borttaget. Och en utköpsaffär utan utköpssats nekades även när beloppet
+satts för hand, trots att felmeddelandet bad om just det — släppt.
+
+**SweAuto AB** (Vlado, som slutat): inlagd som utkast via SQL, order
+`b2a18b34`, fri order 1 095 × 12, signerad 2026-09-25. Säljarlistan visar bara
+aktiva säljare; servern och databasen nekar inte en avslutad.
+
+Prov: `tests/chefsprovision.mjs` har fem nya fall; `utkop`, `order`, `ordervy`
+och `navnyheter` gröna. Ingen migration.
+
+---
+
 ## 2026-10-08 (kväll) · Redigera och radera order (0077)
 
 Beställaren: "du måste lägga in så att jag kan redigera ordrarna eller ta bort
