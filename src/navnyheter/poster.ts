@@ -14,6 +14,20 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "chefen-som-saljare",
+    rubrik: "Säljchef och VD kan lägga order på sig själva",
+    ingress:
+      "I säljarlistan på en ny order står nu även säljchefer och VD — inte bara de med rollen säljare.",
+    text: `När du lägger en order och väljer **Säljare** finns du själv med i listan,
+även om du är säljchef eller VD och inte har rollen säljare.
+
+Ordern går sedan som vilken order som helst: säljsamtalet ska vara **ditt eget**
+samtal från växeln med kunden, och provisionen räknas som för en säljare.`,
+    datum: "2026-10-09",
+    roller: ["sales_manager", "ceo"],
+    href: "/order",
+  },
+  {
     slug: "fri-order-provision-procent-eller-kronor",
     rubrik: "Provision i kronor eller procent på en fri order",
     ingress:

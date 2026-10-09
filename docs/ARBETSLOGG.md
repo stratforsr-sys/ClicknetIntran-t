@@ -5,6 +5,37 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-09 · Säljchef och VD i säljarlistan — Simon kan lägga order på sig själv
+
+Direkt till main, utan gren, på beställarens besked *"merga direkt bara"*.
+Beställaren: *"lägg in så att simon också kan lägga in ordrar på sig själv"*.
+
+**Orsaken var bara listan.** Simon Menduza har rollerna `ceo` + `sales_manager`
+men inte `salesperson`. `hamtaSaljare()` i `order/page.tsx` filtrerade på
+`salesperson`, och säljarfältet är `required` för den som får hantera order —
+så han kunde inte välja sig själv, och ett tomt fält nekas ("Välj vilken
+säljare ordern gäller."). `skapaOrder` och databasen har aldrig krävt rollen;
+ingen trigger eller policy på `sales_order.salesperson_id` tittar på den.
+
+**Nu:** listan tar `salesperson`, `sales_manager` och `ceo`
+(`SALJANDE_ROLLER`). `finance` är med flit utanför. Samma lista bär
+namnkartan, så Simons order får hans namn på korten även för Zen.
+
+**Varför inte bara ge Simon rollen `salesperson` i databasen:** den rollen styr
+mer än orderlistan — kursmål och skriftliga prov (0061, 0067), säljmålen och
+provisionstavlans säljarkrets. En VD hade fått säljarnas obligatoriska kurser.
+
+**Provet mot RLS** (`set local role authenticated` som Simon): han ser sig själv
+med `ceo,sales_manager`, så filtret hittar honom. Inkio har
+`simon@clicknet.se` bland säljarna, så synken sätter rätt säljare.
+
+**Provision:** `manager_commission_rate` har bara Zen. Simons egna order räknas
+därför på matrisen som en säljares, och Zens övertäck räknas på dem som på
+andras. Vill beställaren ha en chefssats för Simon är det en rad i
+`manager_commission_rate`, ingen kod.
+
+---
+
 ## 2026-10-09 · Provision i kronor eller procent på en fri order
 
 Gren `fri-order-provision-procent`. Beställaren: *"när jag lägger in mina
