@@ -14,6 +14,19 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "anteckning-flera-rader",
+    rubrik: "Anteckningen på en order kan ha flera rader",
+    ingress:
+      "Tryck Enter i anteckningsfältet för att byta rad — ordern skickas inte längre in av misstag.",
+    text: `Anteckningsfältet på **ny order** och i **Rätta ordern** är nu en textruta.
+Enter ger en ny rad, och raderna står kvar när anteckningen visas på kundkortet.
+
+Ordern skickar du som förut med knappen under formuläret.`,
+    datum: "2026-10-09",
+    roller: ["salesperson", "team_lead", "sales_manager", "ceo"],
+    href: "/order",
+  },
+  {
     slug: "chefen-som-saljare",
     rubrik: "Säljchef och VD kan lägga order på sig själva",
     ingress:

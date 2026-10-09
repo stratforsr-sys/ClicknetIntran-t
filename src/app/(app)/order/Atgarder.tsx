@@ -787,7 +787,7 @@ function Rattelse({
 
       <label className="flex flex-col gap-1">
         <span className="text-micro text-ink-500">Anteckning på ordern (valfri)</span>
-        <input name="note" defaultValue={order.note ?? ""} className={KONTROLL} />
+        <textarea name="note" rows={3} defaultValue={order.note ?? ""} className={KONTROLL} />
       </label>
 
       <label className="flex flex-col gap-1">

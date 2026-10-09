@@ -5,6 +5,22 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-09 · Anteckningen på en order kan ha flera rader
+
+Gren `anteckning-flera-rader`. Beställaren: *"när man lägger till en order och
+skriver i anteckningarna så kan man inte hoppa ner"*.
+
+**Orsaken:** fältet var en enradig `<input>`. Enter i en input skickar
+formuläret — så ett radbyte blev en inskickad order i stället. Nu är det en
+`<textarea rows={3}>` på två ställen: ny order (`Nyorder.tsx`) och "Rätta
+ordern" (`Atgarder.tsx`). Kundkortet visar anteckningen med
+`whitespace-pre-line`, annars hade raderna klistrats ihop till en igen.
+
+Servern behövde ingenting: `form.get("note").trim()` behåller radbrytningarna
+inuti texten, och kolumnen är `text`.
+
+---
+
 ## 2026-10-09 · Säljchef och VD i säljarlistan — Simon kan lägga order på sig själv
 
 Direkt till main, utan gren, på beställarens besked *"merga direkt bara"*.

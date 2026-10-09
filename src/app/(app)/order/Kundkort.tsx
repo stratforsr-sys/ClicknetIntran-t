@@ -770,7 +770,7 @@ function Orderpost({
         {o.note && o.status !== "makulerad" && (
           <div>
             <Sektion titel="Anteckning" />
-            <p className="text-small text-ink-700">{o.note}</p>
+            <p className="whitespace-pre-line text-small text-ink-700">{o.note}</p>
           </div>
         )}
 

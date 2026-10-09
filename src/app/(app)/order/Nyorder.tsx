@@ -980,9 +980,10 @@ export function Nyorder({
 
       <label htmlFor="note" className="flex flex-col gap-1">
         <span className="text-micro text-ink-500">Anteckning (valfritt)</span>
-        <input
+        <textarea
           id="note"
           name="note"
+          rows={3}
           placeholder="Något att veta om affären"
           className={KONTROLL}
           value={f.anteckning}
