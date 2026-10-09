@@ -49,6 +49,7 @@ import {
   affarenFor,
   arEgenForsaljning,
   gallandeChefssats,
+  procentProvision,
   restpostenAtNoll,
   type Chefssats,
   type Overtack,
@@ -797,6 +798,7 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
       monthly_amount: manadsbelopp,
       tjanster: tjansteval.tjanster.length,
       commission_amount: insats.commission_amount ?? null,
+      commission_percent: affar?.handsattProcent ?? null,
       order_value: insats.order_value ?? null,
       buyout_amount: utkopsval.utkop,
     });
@@ -916,6 +918,12 @@ type Framrakning =
       utkopet: { utkop: number; netto: number; procent: number } | null;
       /** Saljchefens overtack, eller null. Skrivs som EGEN rad — se `skrivOvertack`. */
       overtack: Overtack | null;
+      /**
+       * Procentsatsen nar provisionen skrevs in som procent, annars null. Bara
+       * loggen anvander den: pa ordern star kronorna, och utan den har raden
+       * hade "4 380 kr" i loggen inte sagt att nagon menade 33 1/3 %.
+       */
+      handsattProcent: number | null;
       /** Sant nar godkannaren skrev in ett belopp sjalv och ordervardet ar lagre. */
       restpostenKlipptes: boolean;
     }
@@ -1014,7 +1022,25 @@ async function raknaFramProvision(
   // ---------------------------------------------------------------------------
   // 1. Ordervardet
   // ---------------------------------------------------------------------------
-  const manuellText = String(form.get("commission_amount") ?? "").trim();
+  // ===========================================================================
+  // KRONOR ELLER PROCENT, OCH VALJAREN AR DET SOM GOR BELOPPET HANDSATT.
+  //
+  // Bestallaren 2026-10-09: pa en fri order ska provisionen kunna skrivas
+  // "antingen procent sats eller fast belopp" — aven pa chefens egen order.
+  // Formularen skickar darfor `provision_form` (`belopp` | `procent`) och det
+  // ena av tva falt.
+  //
+  // UTAN VALJAREN ar allt som fore: `commission_amount` lases, och chefsregeln
+  // overprovar det pa chefens order. En klient som inte ritar valjaren — eller
+  // en halv inskickning — kan alltsa inte rubba 40 %-regeln av misstag. Se
+  // `handsatt` i `affarenFor`.
+  // ===========================================================================
+  const provisionsform = String(form.get("provision_form") ?? "").trim();
+  const procentText =
+    provisionsform === "procent" ? String(form.get("commission_percent") ?? "").trim() : "";
+  const manuellText =
+    provisionsform === "procent" ? "" : String(form.get("commission_amount") ?? "").trim();
+  const handsatt = provisionsform !== "" && (procentText !== "" || manuellText !== "");
 
   // ===========================================================================
   // EN FRI ORDER KANNS IGEN PA MANADSBELOPPET, inte pa ett inskrivet ordervarde.
@@ -1085,7 +1111,9 @@ async function raknaFramProvision(
     // EN SAKNAD SATS BLIR INTE NOLL. En nolla hade sett ut som "utkopsaffarer ger
     // ingen provision" i stallet for "ingen sats ar satt" — samma resonemang som
     // `gallandeSats` for om matrisen.
-    if (!utkopssats && !chefenSaljer) {
+    // Ett handsatt belopp behover ingen sats — det ar ju det felmeddelandet
+    // nedan foreslar. Fram till 2026-10-09 nekades det anda.
+    if (!utkopssats && !chefenSaljer && !manuellText && !procentText) {
       return {
         klar: false,
         fel: "Ingen utköpssats gällde på signeringsdagen. Lägg en sats under Provision → Regler, eller sätt beloppet för hand.",
@@ -1109,8 +1137,20 @@ async function raknaFramProvision(
   // `sales_order_satskoppling` i 0050 kraver den for `matrix` och forbjuder den
   // for allt annat.
   let matrisrad: Sats | null = null;
+  let handsattProcent: number | null = null;
 
-  if (manuellText) {
+  if (procentText) {
+    // PROCENTEN RAKNAS PA NETTOT, samma bas som chefssatsen och utkopssatsen.
+    // Det som fryses ar kronorna; procenten ar bara hur de skrevs.
+    const procent = tolkaBelopp(procentText.replace(/%$/, ""));
+    if (procent === null) return { klar: false, fel: "Procentsatsen gick inte att tolka." };
+    if (procent < 0 || procent > 100) {
+      return { klar: false, fel: "Procentsatsen ska vara mellan 0 och 100." };
+    }
+    saljarprovision = procentProvision(netto, procent);
+    saljarkalla = "manual";
+    handsattProcent = procent;
+  } else if (manuellText) {
     const belopp = tolkaBelopp(manuellText);
     if (belopp === null) return { klar: false, fel: "Provisionsbeloppet gick inte att tolka." };
     if (belopp < 0) {
@@ -1167,6 +1207,7 @@ async function raknaFramProvision(
     ordervarde: netto,
     saljarprovision,
     saljarkalla,
+    handsatt,
   });
 
   return {
@@ -1193,6 +1234,7 @@ async function raknaFramProvision(
     // en provision som overstiger nettot har atit upp restposten aven om den ar
     // mindre an bruttot.
     restpostenKlipptes: restpostenAtNoll(netto, affar.provision),
+    handsattProcent,
     utkopet:
       utkopBelopp === null
         ? null
@@ -1402,6 +1444,7 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
       salesperson_id: rad.salesperson_id,
       commission_amount: provision.satt.commission_amount,
       commission_source: provision.satt.commission_source,
+      commission_percent: provision.handsattProcent,
       order_value: provision.satt.order_value,
     });
 

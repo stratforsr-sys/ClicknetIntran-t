@@ -14,6 +14,28 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "fri-order-provision-procent-eller-kronor",
+    rubrik: "Provision i kronor eller procent på en fri order",
+    ingress:
+      "När en order inte följer paketreglerna väljer du om provisionen skrivs som ett fast belopp eller en procentsats — även på din egen order.",
+    text: `Kryssa i **Ordern följer inte paketreglerna** när du lägger en order. Vid
+provisionsfältet väljer du **kr** eller **%**.
+
+- **kr** — ett fast belopp, till exempel 3 200.
+- **%** — en procentsats av ordervärdet (efter ett eventuellt utköp). Nav räknar
+  om den till kronor, och det är kronorna som sparas på ordern.
+
+**Står ordern på dig själv som säljchef** gäller det du skriver i stället för
+din vanliga sats för egen försäljning. Lämnar du fältet tomt räknas din vanliga
+sats som förut.
+
+Samma val finns när du godkänner en order utanför paketreglerna och när du
+rättar en godkänd order.`,
+    datum: "2026-10-09",
+    roller: ["sales_manager", "ceo", "finance"],
+    href: "/order",
+  },
+  {
     slug: "telefon-med-saljsamtalet",
     rubrik: "Skriv numret du sålde på",
     ingress:

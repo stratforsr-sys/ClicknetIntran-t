@@ -24,6 +24,7 @@ import {
 import { kronor, manadsnamn } from "@/lib/provision";
 import { nettoEfterUtkop } from "@/lib/utkop";
 import { forberedNyttAvtal, skapaOrder, slaUppBolag, type Orderstate } from "./actions";
+import { Provisionsval, type Provisionsform } from "./Provisionsval";
 
 type Person = { id: string; namn: string };
 
@@ -94,6 +95,8 @@ type Formular = {
   manuell: boolean;
   manadsbelopp: string;
   friProvision: string;
+  /** Kronor eller procent. Se `Provisionsval`. */
+  friProvisionsform: Provisionsform;
   anteckning: string;
   godkann: boolean;
   tjanster: Tjansterad[];
@@ -271,6 +274,7 @@ export function Nyorder({
     manuell: false,
     manadsbelopp: "",
     friProvision: "",
+    friProvisionsform: "belopp",
     anteckning: "",
     godkann: false,
     tjanster: [],
@@ -420,17 +424,25 @@ export function Nyorder({
   // lagger in en order at Vlado ska se Vlados villkor, inte sina egna.
   const forChefen = chef !== null && f.saljare === chef.employee_id;
 
-  // ORDNINGEN AR DENSAMMA SOM I `raknaFramProvision`, och det ar med flit: ett
-  // handsatt belopp gar fore utkopssatsen, som gar fore matrisen. Sager de tva
+  // DET HANDSATTA, i kronor eller procent. Bara pa en fri order — det ar dar
+  // faltet ritas — och procenten raknas pa nettot, som pa servern.
+  const handsattTal = f.manuell ? tolka(f.friProvision) : null;
+  const handsattProcent = handsattTal !== null && f.friProvisionsform === "procent" ? handsattTal : null;
+
+  // ORDNINGEN AR DENSAMMA SOM I `raknaFramProvision` och `affarenFor`, och det
+  // ar med flit: ett handsatt belopp gar fore allt — aven chefens sats sedan
+  // 2026-10-09 — sedan chefssatsen, utkopssatsen och sist matrisen. Sager de tva
   // sidorna olika saker om vilken regel som vann ar forhandsvisningen varre an
   // ingen forhandsvisning alls.
   const provision =
     netto === null
       ? null
-      : forChefen
-        ? Math.round((netto * chef!.own_sale_percent) / 100)
-        : f.manuell && tolka(f.friProvision) !== null
-          ? tolka(f.friProvision)
+      : handsattTal !== null
+        ? handsattProcent !== null
+          ? Math.round((netto * handsattProcent) / 100)
+          : handsattTal
+        : forChefen
+          ? Math.round((netto * chef!.own_sale_percent) / 100)
           : f.harUtkop && utkop !== null && utkopsprocent !== null
             ? Math.round((netto * utkopsprocent) / 100)
             : null; // Matrisens belopp finns inte i klienten — servern slar upp det.
@@ -794,28 +806,28 @@ export function Nyorder({
             </span>
           </label>
 
-          {/* CHEFENS EGNA ORDER BEHOVER INGEN PROVISION SKRIVEN. Den raknas
-              ur ordervardet, och ett falt som ignoreras ar varre an inget
-              falt: den som fyller i det tror att talet betyder nagot. */}
-          {!forChefen && (
-            <label htmlFor="commission_amount" className="flex flex-col gap-1">
-              <span className="text-micro text-ink-500">Provision i kronor</span>
-              <input
-                id="commission_amount"
-                name="commission_amount"
-                inputMode="decimal"
-                placeholder="3 200"
-                className={KONTROLL}
-                value={f.friProvision}
-                onChange={(e) => satt("friProvision", e.target.value)}
-              />
-              <span className="text-small text-ink-500">
-                {f.harUtkop && utkopsprocent !== null
-                  ? `Lämna tomt så räknas ${utkopsprocent} % på det som är kvar efter utköpet.`
-                  : "Skriv gärna en anteckning om varför beloppet avviker. Den följer med i loggen."}
-              </span>
-            </label>
-          )}
+          {/* PROVISIONEN SKRIVS I KRONOR ELLER PROCENT (2026-10-09), och faltet
+              star dar aven pa chefens egen order. Fram till dess doljdes det
+              for chefen och 40 % gallde alltid; nu betyder ett tomt falt den
+              satsen, och ett ifyllt falt det som star i det. */}
+          <Provisionsval
+            styrd={{ form: f.friProvisionsform, varde: f.friProvision }}
+            onAndring={(form, varde) =>
+              setF((g) => ({ ...g, friProvisionsform: form, friProvision: varde }))
+            }
+            hjalp={(form) => {
+              const bas = f.harUtkop ? "det som är kvar efter utköpet" : "ordervärdet";
+              if (forChefen) {
+                return `Lämna tomt så räknas din sats för egen försäljning, ${chef!.own_sale_percent} % av ${bas}.`;
+              }
+              if (f.harUtkop && utkopsprocent !== null) {
+                return `Lämna tomt så räknas ${utkopsprocent} % på ${bas}.`;
+              }
+              return form === "procent"
+                ? `Procent av ${bas}. Det är kronorna som sparas på ordern.`
+                : "Skriv gärna en anteckning om varför beloppet avviker. Den följer med i loggen.";
+            }}
+          />
         </div>
       )}
 
@@ -956,6 +968,8 @@ export function Nyorder({
         overtack={overtack}
         chef={chef}
         forChefen={forChefen}
+        handsatt={handsattTal !== null}
+        handsattProcent={handsattProcent}
         manuell={f.manuell}
         hanterare={hanterare}
         utkopsprocent={utkopsprocent}
@@ -1302,6 +1316,8 @@ function Affaren({
   overtack,
   chef,
   forChefen,
+  handsatt,
+  handsattProcent,
   manuell,
   hanterare,
   utkopsprocent,
@@ -1317,6 +1333,10 @@ function Affaren({
   overtack: number | null;
   chef: { override_percent: number; own_sale_percent: number } | null;
   forChefen: boolean;
+  /** Skrevs provisionen in for hand pa den fria ordern? Da galler den, aven for chefen. */
+  handsatt: boolean;
+  /** Procentsatsen, nar den skrevs som procent. */
+  handsattProcent: number | null;
   manuell: boolean;
   hanterare: boolean;
   utkopsprocent: number | null;
@@ -1373,11 +1393,15 @@ function Affaren({
           etikett="Provision till säljaren"
           varde={kronor(provision)}
           under={
-            forChefen
-              ? `${chef!.own_sale_percent} % av ${harUtkop ? "det som är kvar" : "ordervärdet"} — säljchefens egen försäljning`
-              : harUtkop && utkopsprocent !== null && !manuell
-                ? `${utkopsprocent} % av det som är kvar efter utköpet`
+            handsatt
+              ? handsattProcent !== null
+                ? `${handsattProcent} % av ${harUtkop ? "det som är kvar" : "ordervärdet"} — inskriven för hand`
                 : "Inskriven för hand"
+              : forChefen
+                ? `${chef!.own_sale_percent} % av ${harUtkop ? "det som är kvar" : "ordervärdet"} — säljchefens egen försäljning`
+                : harUtkop && utkopsprocent !== null && !manuell
+                  ? `${utkopsprocent} % av det som är kvar efter utköpet`
+                  : "Inskriven för hand"
           }
         />
       ) : (
@@ -1438,8 +1462,11 @@ function Affaren({
 
       {forChefen && (
         <p className="text-small text-ink-500 sm:col-span-2">
-          Ordern står på säljchefen själv. Då gäller satsen för egen försäljning i stället för
-          paketmatrisen, och inget övertäck bokförs — det finns ingen annans affär att ersätta.
+          Ordern står på säljchefen själv.{" "}
+          {handsatt
+            ? "Provisionen du skrev in gäller i stället för satsen för egen försäljning,"
+            : "Då gäller satsen för egen försäljning i stället för paketmatrisen,"}{" "}
+          och inget övertäck bokförs — det finns ingen annans affär att ersätta.
         </p>
       )}
 

@@ -5,6 +5,44 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-09 · Provision i kronor eller procent på en fri order
+
+Gren `fri-order-provision-procent`. Beställaren: *"när jag lägger in mina
+ordrar som jag själv har signat och jag trycker på följer inte paket regler
+måste jag kunna välja provision också antingen procent sats eller fast belopp"*.
+
+**Före:** på chefens egen order ersatte `own_sale_percent` (40 %) allt —
+formuläret dolde provisionsfältet och `affarenFor` bortsåg från ett inskrivet
+belopp. Andras fria order tog bara kronor.
+
+**Nu:** `Provisionsval.tsx` (kr | %) på de tre ställen en fri order får sin
+provision: inmatningen, "Godkänn utanför paketreglerna" och "Rätta ordern".
+Formuläret skickar `provision_form` och antingen `commission_amount` eller
+`commission_percent`. Procenten räknas på nettot (efter utköp) med
+`procentProvision()`; kronorna fryses med `commission_source = 'manual'`, och
+procenten hamnar i `audit_log.meta.commission_percent`.
+
+**Varför `handsatt` och inte bara "fältet är ifyllt":** rättelseformuläret
+förifyllde provisionsfältet med orderns belopp, också de 40 % som chefsregeln
+räknat. Hade ett ifyllt fält ensamt gått före regeln hade varje rättelse av
+chefens order fryst gamla beloppet som handsatt. Nu krävs väljaren, och
+rättelsen förifyller inte när `commission_source = 'manager'`. En klient utan
+väljaren beter sig exakt som förut (provet "Fri order, chefen sjalv" står kvar).
+
+**Två småfel i samma väg:** "Godkänn utanför paketreglerna" hade ett
+obligatoriskt fält "Ordervärde i kronor" som `godkannOrder` aldrig läst sedan
+0068 — borttaget. Och en utköpsaffär utan utköpssats nekades även när beloppet
+satts för hand, trots att felmeddelandet bad om just det — släppt.
+
+**SweAuto AB** (Vlado, som slutat): inlagd som utkast via SQL, order
+`b2a18b34`, fri order 1 095 × 12, signerad 2026-09-25. Säljarlistan visar bara
+aktiva säljare; servern och databasen nekar inte en avslutad.
+
+Prov: `tests/chefsprovision.mjs` har fem nya fall; `utkop`, `order`, `ordervy`
+och `navnyheter` gröna. Ingen migration.
+
+---
+
 ## 2026-10-08 (eftermiddag) · Säljsamtalet mergat, datumen rättade mot Inkio, augusti öppnad
 
 `f45b112` fast-forwardad till main 14:58 på beställarens besked; bygget grönt.
