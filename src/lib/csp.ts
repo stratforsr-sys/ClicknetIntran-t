@@ -44,9 +44,24 @@ function r2Kallor(): string[] {
   }
 }
 
+/**
+ * ===========================================================================
+ * UTAN media-src STAR VARJE SAMTALSSPELARE TYST.
+ *
+ * `<audio src="/filer/<id>">` ar var egen adress, men routen svarar med en
+ * omdirigering till en signerad lank i Supabase eller R2 — och webblasaren
+ * provar MALET mot CSP:n. Utan egen media-src galler default-src 'self', sa
+ * ljudet stoppas efter omdirigeringen. Spelaren visar 0:00 och sager ingenting.
+ *
+ * Saknades fran 2026-08-16 (headern infordes) till 2026-10-10: ingen
+ * inspelning pa en order gick att spela upp, varken i Supabase eller i R2.
+ * connect-src racker inte — den galler fetch, inte <audio>.
+ * ===========================================================================
+ */
 export function bygCsp(nonce: string): string {
   const supabase = SUPABASE_URL || "https://*.supabase.co";
   const utveckling = process.env.NODE_ENV !== "production";
+  const r2 = r2Kallor().map((k) => ` ${k}`).join("");
 
   return [
     `default-src 'self'`,
@@ -54,7 +69,8 @@ export function bygCsp(nonce: string): string {
     `style-src 'self' 'unsafe-inline'`,
     `img-src 'self' data: blob:`,
     `font-src 'self' data:`,
-    `connect-src 'self' ${supabase} ${supabase.replace("https://", "wss://")}${r2Kallor().map((k) => ` ${k}`).join("")}`,
+    `media-src 'self' ${supabase}${r2}`,
+    `connect-src 'self' ${supabase} ${supabase.replace("https://", "wss://")}${r2}`,
     `frame-src 'none'`,
     `object-src 'none'`,
     `base-uri 'self'`,
