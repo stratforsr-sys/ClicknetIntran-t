@@ -51,6 +51,12 @@ export type Orderrad = Order & {
   customer_street: string | null;
   customer_postal_code: string | null;
   customer_city: string | null;
+  /**
+   * 0078. Provisionen som skrevs in nar en fri order skickades in — belopp ELLER
+   * procent. Godkannandet anvander den; `commission_amount` ar det som fryses.
+   */
+  proposed_commission_amount: number | null;
+  proposed_commission_percent: number | null;
 };
 
 const FALT =
@@ -59,7 +65,8 @@ const FALT =
   " monthly_amount, commission_amount, commission_source, order_value, order_value_source," +
   " buyout_amount, financed, finance_amount, note, created_by, created_at, approved_at, cancelled_on, cancel_reason," +
   " cancel_period_month, renewal_outcome, renewal_at, renewal_by, renewal_reason," +
-  " renewal_order_id, customer_street, customer_postal_code, customer_city";
+  " renewal_order_id, customer_street, customer_postal_code, customer_city," +
+  " proposed_commission_amount, proposed_commission_percent";
 
 /**
  * numeric kommer tillbaka som STRANG ur PostgREST. Utan Number() blir
@@ -99,6 +106,11 @@ function tolka(rader: unknown[]): Orderrad[] {
     // date-kolumn, men den genererade `ends_on` har visat sig komma tillbaka med
     // tidsdel i vissa svar — och `dagarTill()` parsar `${datum}T12:00:00Z`, som
     // blir ett ogiltigt datum om datumet redan bar ett T.
+    // 0078. Tva numeric till — samma falla som ovan.
+    proposed_commission_amount:
+      r.proposed_commission_amount == null ? null : Number(r.proposed_commission_amount),
+    proposed_commission_percent:
+      r.proposed_commission_percent == null ? null : Number(r.proposed_commission_percent),
     starts_on: r.starts_on === null || r.starts_on === undefined ? null : String(r.starts_on).slice(0, 10),
     ends_on: r.ends_on === null || r.ends_on === undefined ? null : String(r.ends_on).slice(0, 10),
   })) as unknown as Orderrad[];

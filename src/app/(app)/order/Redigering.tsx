@@ -7,6 +7,7 @@ import { Notis } from "@/components/ui/Notis";
 import { BINDNINGSTID_MAX, BINDNINGSTID_MIN, LOPTIDER, type Paket } from "@/lib/order";
 import type { Redigerbar } from "./Atgarder";
 import { redigeraOgodkand, type Orderstate } from "./actions";
+import { angivetForval, Provisionsval } from "./Provisionsval";
 
 /**
  * Redigeringen av en order som ännu inte är godkänd — utkast eller inskickad
@@ -15,9 +16,11 @@ import { redigeraOgodkand, type Orderstate } from "./actions";
  * ===========================================================================
  * INGA PENGAR I FORMULÄRET
  *
- * Ordervärde och provision sätts när ordern godkänns, inte här. Formuläret
+ * Ordervärde och provision fryses när ordern godkänns, inte här. Formuläret
  * ändrar det godkännandet räknar PÅ: paket, bindningstid, månadsbelopp för en
- * fri order, signeringsdatum, säljare och utköp. Därför ingen ruta om fastställda
+ * fri order, signeringsdatum, säljare och utköp — och sedan 0078 den angivna
+ * provisionen på en fri order, som inte fryses utan är vad godkännandet ska
+ * räkna med. Därför ingen ruta om fastställda
  * månader och inget skälfält — det hör till `Rattelse`, som ändrar frysta belopp.
  *
  * `full` är chefskretsen. Säljaren som rättar sitt eget utkast ser inte
@@ -249,10 +252,20 @@ export function Redigering({
             placeholder="1 495"
             className={KONTROLL}
           />
-          <span className="text-small text-ink-500">
-            Provisionen sätts när du godkänner, med Godkänn utanför paketreglerna.
-          </span>
         </label>
+      )}
+      {/* 0078. Provisionen som ska gälla vid godkännandet. Fram till
+          2026-10-09 sa texten här att den sattes först vid godkännandet — och
+          det som skrevs i ny order kastades. */}
+      {full && fritt && (
+        <div className="sm:max-w-sm">
+          <Provisionsval
+            forval={angivetForval(order) ?? undefined}
+            hjalp={() =>
+              "Gäller när ordern godkänns. Lämna tomt så räknas den ur säljchefens sats om ordern är hens egen, eller ur utköpssatsen."
+            }
+          />
+        </div>
       )}
 
       <label className="flex flex-col gap-1">

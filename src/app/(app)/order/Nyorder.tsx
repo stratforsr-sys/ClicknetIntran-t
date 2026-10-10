@@ -845,6 +845,11 @@ export function Nyorder({
                     : f.finans
                       ? "det som är kvar efter finansavgiften"
                       : "ordervärdet";
+              // 0078. Utan "Godkänn direkt" sparas talet på ordern och gäller
+              // vid godkännandet. Före 2026-10-09 kastades det tyst.
+              if (!f.godkann && f.friProvision.trim() !== "") {
+                return "Sparas på ordern och gäller när den godkänns.";
+              }
               if (forChefen) {
                 return `Lämna tomt så räknas din sats för egen försäljning, ${chef!.own_sale_percent} % av ${bas}.`;
               }

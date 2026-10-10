@@ -45,6 +45,38 @@ ur 0060-filen, med `financed`/`finance_amount` i makuleringsspärren.
 order-, utköps-, provisions-, chefs- och Inkio-proven gröna. `tsc --noEmit` i
 scratchpaden rent för allt som rörts (de två felen om `Pling`/`pling` är
 macOS skiftlägesokänsliga filsystem och finns på main).
+## 2026-10-09 · Provisionen på en inskickad fri order kastades (0078)
+
+Beställaren: *"Jag la upp TLS värmepumpar på mig och la in att den inte följer
+paketregler och där la jag 20% men när jag ser i ordern så ser jag att den las
+in som 40% provision."*
+
+**Orsaken.** `skapaOrder` räknade provisionen bara när "Godkänn direkt" var
+kryssat. Utan krysset skickades ordern in, och provisionsfältet — som ritas så
+fort "följer inte paketreglerna" är kryssat — lästes aldrig. Det fanns heller
+ingenstans att lägga talet: `commission_amount` får inte finnas före `signerad`
+(`sales_order_provision_satt`). Vid godkännandet skickade knappen ingen
+provision, `raknaFramProvision` tolkade det som "räkna fram det", och chefens
+sats för egen försäljning (40 %) vann. Auditloggen visar det: `submitted` bar
+`commission_percent: null`.
+
+**Rättelsen.** Migration `0078_foreslagen_provision` (körd 2026-10-09 13:45):
+`proposed_commission_amount` och `proposed_commission_percent`, högst en av dem,
+procent 0–100. `skapaOrder` sparar det som skrevs på en fri order som skickas
+in; `godkannOrder` lägger in det i formuläret när knappen inte bär någon egen
+provision (`medAngivenProvision`) — samma tolkning och kontroller som om det
+skrivits vid godkännandet. "Godkänn utanför paketreglerna" och redigeringen
+förifylls; ett tömt fält betyder fortfarande "räkna fram". Kundkortet och
+åtgärdsraden visar den angivna provisionen på en inskickad order.
+
+**Bifynd:** `skapaOrder` loggade `commission_amount` och `order_value` ur
+`insats` efter att de lyfts över till `slutligt` — loggen bar null för båda även
+på ett direktgodkännande. Läses nu ur `slutligt`.
+
+**Datan:** TLS Värmepumpar AB (`56146dde`) rättad i SQL till 3 588 kr (20 % av
+17 940), `commission_source = 'manual'`, med en `sales_order.corrected` i
+loggen. September är öppen, så inga rättelseposter behövdes; ordern är chefens
+egen, så inget övertäck.
 
 ---
 

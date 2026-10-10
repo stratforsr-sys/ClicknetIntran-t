@@ -30,7 +30,7 @@ import {
 import { laggOvrigBonus } from "../provision/actions";
 import { Saljsamtalsval } from "./Saljsamtalsval";
 import { Redigering } from "./Redigering";
-import { Provisionsval } from "./Provisionsval";
+import { angivetForval, Provisionsval } from "./Provisionsval";
 
 /**
  * Atgarderna pa en enskild order.
@@ -153,6 +153,10 @@ export function Atgarder({
   }
 
   if (status === "inskickad") {
+    // 0078. Provisionen som skrevs när ordern lades in. Den enkla knappen
+    // Godkänn använder den, och "Godkänn utanför paketreglerna" förifylls med
+    // den — därför står den utskriven före knapparna och inte först i loggen.
+    const angivet = order ? angivetForval(order) : null;
     return (
       <div className="flex flex-col gap-2">
         {/*
@@ -225,10 +229,19 @@ export function Atgarder({
             Radera
           </Button>
         </div>
+        {angivet && (
+          <p className="text-small text-ink-500">
+            Provision angiven när ordern lades in:{" "}
+            <strong className="text-ink-700">
+              {angivet.varde} {angivet.form === "procent" ? "%" : "kr"}
+            </strong>
+            . Den gäller när du godkänner.
+          </p>
+        )}
         <Saljsamtalsval id={id} />
         {oppen === "redigera" && redigering}
         {oppen === "radera" && radering}
-        {oppen === "fri" && <FriOrder id={id} />}
+        {oppen === "fri" && <FriOrder id={id} forval={angivet} />}
         {oppen === "retur" && (
           <MedSkal
             action={returneraOrder}
@@ -404,7 +417,14 @@ function Enkel({
  * `raknaFramProvision` pa servern — sa hjalptexten sager vad ett tomt falt
  * betyder i stallet for att dolja det.
  */
-function FriOrder({ id }: { id: string }) {
+function FriOrder({
+  id,
+  forval,
+}: {
+  id: string;
+  /** 0078. Det som angavs när ordern lades in. Tomt fält betyder fortfarande "räkna fram". */
+  forval?: { form: "belopp" | "procent"; varde: string } | null;
+}) {
   const [state, kor, vantar] = useActionState<Orderstate, FormData>(godkannOrder, {});
 
   return (
@@ -413,8 +433,11 @@ function FriOrder({ id }: { id: string }) {
 
       <div className="sm:max-w-sm">
         <Provisionsval
+          forval={forval ?? undefined}
           hjalp={() =>
-            "Ordervärdet räknas ur månadsbeloppet och bindningstiden på ordern. Lämna provisionen tom så räknas den ur säljchefens sats om ordern är hens egen, eller ur utköpssatsen."
+            forval
+              ? "Förifyllt med provisionen som angavs när ordern lades in. Töm fältet så räknas den ur säljchefens sats om ordern är hens egen, eller ur utköpssatsen."
+              : "Ordervärdet räknas ur månadsbeloppet och bindningstiden på ordern. Lämna provisionen tom så räknas den ur säljchefens sats om ordern är hens egen, eller ur utköpssatsen."
           }
         />
       </div>
@@ -521,6 +544,9 @@ export type Redigerbar = {
   commission_amount: number | null;
   commission_source: string | null;
   note: string | null;
+  /** 0078. Provisionen som skrevs när ordern lades in. Förifyller godkännandet. */
+  proposed_commission_amount?: number | null;
+  proposed_commission_percent?: number | null;
 };
 
 /**

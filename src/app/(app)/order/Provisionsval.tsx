@@ -6,6 +6,24 @@ import { KONTROLL } from "@/components/ui/Field";
 export type Provisionsform = "belopp" | "procent";
 
 /**
+ * 0078. Provisionen som skrevs nar en fri order lades in, som valjarens
+ * startlage — eller `null` nar ingen angavs. Godkannandet och redigeringen
+ * forifylls med den, sa att det som skrevs ar det som star i faltet.
+ */
+export function angivetForval(order: {
+  proposed_commission_amount?: number | null;
+  proposed_commission_percent?: number | null;
+}): { form: Provisionsform; varde: string } | null {
+  if (order.proposed_commission_percent != null) {
+    return { form: "procent", varde: String(order.proposed_commission_percent).replace(".", ",") };
+  }
+  if (order.proposed_commission_amount != null) {
+    return { form: "belopp", varde: String(order.proposed_commission_amount).replace(".", ",") };
+  }
+  return null;
+}
+
+/**
  * Provisionen pa en fri order: i kronor ELLER i procent.
  *
  * Bestallaren 2026-10-09: *"maste jag kunna valja provision ocksa antingen

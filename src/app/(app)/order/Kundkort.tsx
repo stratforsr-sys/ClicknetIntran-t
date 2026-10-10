@@ -830,6 +830,8 @@ function Orderpost({
                 commission_amount: o.commission_amount,
                 commission_source: o.commission_source,
                 note: o.note,
+                proposed_commission_amount: o.proposed_commission_amount,
+                proposed_commission_percent: o.proposed_commission_percent,
               }}
               paket={paket}
               personer={personer}
@@ -908,6 +910,24 @@ function Affaren({ o, beraknat = null }: { o: Orderrad; beraknat?: number | null
         ? "satt för hand"
         : "pris × avtalstid";
 
+  // 0078. PROVISIONEN SOM ANGAVS på en fri order som inte är godkänd ännu.
+  // Procenten räknas på samma bas som godkännandet räknar på — det beräknade
+  // ordervärdet minus utköpet — och märks som ett tal som gäller först då.
+  const angivenProvision =
+    o.commission_amount !== null
+      ? null
+      : o.proposed_commission_amount !== null
+        ? o.proposed_commission_amount
+        : o.proposed_commission_percent !== null && beraknat !== null
+          ? Math.round(((beraknat - (utkop ?? 0)) * o.proposed_commission_percent) / 100)
+          : null;
+  const angivenKalla =
+    o.proposed_commission_percent !== null
+      ? `${String(o.proposed_commission_percent).replace(".", ",")} % — gäller när ordern godkänns`
+      : o.proposed_commission_amount !== null
+        ? "angiven — gäller när ordern godkänns"
+        : undefined;
+
   const provisionskalla =
     o.commission_source === "manual"
       ? "satt för hand"
@@ -974,8 +994,8 @@ function Affaren({ o, beraknat = null }: { o: Orderrad; beraknat?: number | null
 
       <Belopp
         etikett="Provision"
-        varde={o.commission_amount}
-        under={provisionskalla}
+        varde={o.commission_amount ?? angivenProvision}
+        under={o.commission_amount === null ? angivenKalla : provisionskalla}
         ton="brand"
       />
 

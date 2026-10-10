@@ -364,6 +364,9 @@ type Orderrad_skrivning = {
   buyout_amount: number | string | null;
   /** 0079. Saljaren valde finans; godkannandet raknar avgiften. */
   financed: boolean;
+  /** 0078. Provisionen som skrevs in nar en fri order skickades in. */
+  proposed_commission_amount: number | string | null;
+  proposed_commission_percent: number | string | null;
 };
 
 async function hamtaRad(id: string): Promise<Orderrad_skrivning | null> {
@@ -377,11 +380,74 @@ async function hamtaRad(id: string): Promise<Orderrad_skrivning | null> {
     // affaren fatt matrisens belopp trots att en del av vardet redan gatt ut.
     .select(
       "id, status, salesperson_id, company_name, package_id, term_months, signed_on," +
-        " monthly_amount, commission_amount, buyout_amount, financed",
+        " monthly_amount, commission_amount, buyout_amount, financed," +
+        // 0078. Godkannandet laser dem nar dess eget formular inte bar nagon
+        // provision — se `medAngivenProvision`.
+        " proposed_commission_amount, proposed_commission_percent",
     )
     .eq("id", id)
     .maybeSingle();
   return (data as unknown as Orderrad_skrivning | null) ?? null;
+}
+
+// =============================================================================
+// PROVISIONEN SOM SKREVS IN PA EN FRI ORDER SOM SKICKAS IN (0078).
+//
+// Beställaren 2026-10-09: en fri order pa chefen sjalv, 20 % i faltet, "Godkänn
+// direkt" inte kryssat — och vid godkannandet blev det 40 %. `skapaOrder` raknade
+// bara provisionen nar ordern godkandes i samma steg, sa talet i faltet kastades,
+// och godkannandet tolkade det tomma som "rakna fram det".
+//
+// Nu sparas det som skrevs i `proposed_commission_*`, och godkannandet lagger
+// tillbaka det i formularet nar formularet inte sjalvt bar nagon provision. Det
+// ar samma tolkning som `raknaFramProvision` gor — talet gar alltsa genom
+// precis samma kontroller som om det skrivits vid godkannandet.
+// =============================================================================
+function angivenProvision(
+  form: FormData,
+): { belopp: number | null; procent: number | null } | { fel: string } {
+  const formen = String(form.get("provision_form") ?? "").trim();
+  if (formen === "procent") {
+    const text = String(form.get("commission_percent") ?? "").trim();
+    if (!text) return { belopp: null, procent: null };
+    const procent = tolkaBelopp(text.replace(/%$/, ""));
+    if (procent === null) return { fel: "Procentsatsen gick inte att tolka." };
+    if (procent < 0 || procent > 100) return { fel: "Procentsatsen ska vara mellan 0 och 100." };
+    return { belopp: null, procent };
+  }
+  // Utan valjaren raknas ingenting som handsatt — samma regel som i
+  // `raknaFramProvision`.
+  if (formen === "") return { belopp: null, procent: null };
+  const text = String(form.get("commission_amount") ?? "").trim();
+  if (!text) return { belopp: null, procent: null };
+  const belopp = tolkaBelopp(text);
+  if (belopp === null) return { fel: "Provisionsbeloppet gick inte att tolka." };
+  if (belopp < 0) return { fel: "Provisionen kan inte vara negativ." };
+  return { belopp, procent: null };
+}
+
+/**
+ * Formularet godkannandet raknar pa. Bar det en egen provision (valjaren i
+ * "Godkänn utanför paketreglerna") galler den — den ar ju forifylld med det
+ * angivna, sa ett tomt falt dar ar ett medvetet "rakna fram det". Annars, alltsa
+ * den enkla knappen Godkänn, laggs det angivna in.
+ */
+function medAngivenProvision(form: FormData, rad: Orderrad_skrivning): FormData {
+  if (form.has("provision_form")) return form;
+  const procent = rad.proposed_commission_percent;
+  const belopp = rad.proposed_commission_amount;
+  if (procent == null && belopp == null) return form;
+
+  const kopia = new FormData();
+  for (const [k, v] of form.entries()) kopia.append(k, v);
+  if (procent != null) {
+    kopia.set("provision_form", "procent");
+    kopia.set("commission_percent", String(Number(procent)));
+  } else {
+    kopia.set("provision_form", "belopp");
+    kopia.set("commission_amount", String(Number(belopp)));
+  }
+  return kopia;
 }
 
 async function logga(
@@ -642,6 +708,11 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
     // Chefen kan godkanna i samma steg. Saljaren skickar in.
     const godkannDirekt = hanterare && form.get("godkann") === "on";
 
+    // 0078. En fri order som SKICKAS IN bar provisionen som skrevs till
+    // godkannandet. Fore 2026-10-09 kastades den har — se `angivenProvision`.
+    const angiven = friOrder && !godkannDirekt ? angivenProvision(form) : null;
+    if (angiven && "fel" in angiven) return { fel: angiven.fel };
+
     const insats: Record<string, unknown> = {
       company_name: bolag,
       org_number: orgnr,
@@ -670,6 +741,8 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
       // FINANSVALET SKRIVS OCKSA PA EN INSKICKAD ORDER, av samma skal som
       // utkopet. Avgiften i kronor raknas och fryses forst vid godkannandet.
       financed: finans,
+      proposed_commission_amount: angiven?.belopp ?? null,
+      proposed_commission_percent: angiven?.procent ?? null,
       note,
       status: godkannDirekt ? "signerad" : "inskickad",
       created_by: user.employee!.id,
@@ -840,9 +913,11 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
       ends_on: avtalsslut(startdatum, loptid),
       monthly_amount: manadsbelopp,
       tjanster: tjansteval.tjanster.length,
-      commission_amount: insats.commission_amount ?? null,
-      commission_percent: affar?.handsattProcent ?? null,
-      order_value: insats.order_value ?? null,
+      // UR `slutligt`, inte `insats`: de frysta falten lyfts ur `insats` ovan,
+      // sa loggen bar fram till 2026-10-09 null for bada aven pa ett godkannande.
+      commission_amount: slutligt.commission_amount ?? angiven?.belopp ?? null,
+      commission_percent: affar?.handsattProcent ?? angiven?.procent ?? null,
+      order_value: slutligt.order_value ?? null,
       buyout_amount: utkopsval.utkop,
       financed: finans,
       finance_amount: slutligt.finance_amount ?? null,
@@ -1543,7 +1618,10 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
       rad.term_months,
       rad.signed_on,
       rad.salesperson_id,
-      form,
+      // 0078. Provisionen som skrevs nar ordern lades in, om knappen inte bar
+      // nagon egen. Utan den blev en fri order pa chefen 40 % i stallet for de
+      // 20 som stod i faltet.
+      medAngivenProvision(form, rad),
       utkopPaOrdern,
       {
         manadsbelopp: manadsbeloppPaOrdern,
@@ -2533,7 +2611,7 @@ export async function redigeraOgodkand(_prev: Orderstate, form: FormData): Promi
     const { data: raddata } = await db
       .from("sales_order")
       .select(
-        "id, status, salesperson_id, company_name, org_number, contact_name, contact_phone, contact_email, customer_street, customer_postal_code, customer_city, package_id, term_months, signed_on, starts_on, is_addon, monthly_amount, buyout_amount, financed, note",
+        "id, status, salesperson_id, company_name, org_number, contact_name, contact_phone, contact_email, customer_street, customer_postal_code, customer_city, package_id, term_months, signed_on, starts_on, is_addon, monthly_amount, buyout_amount, financed, note, proposed_commission_amount, proposed_commission_percent",
       )
       .eq("id", id)
       .maybeSingle();
@@ -2622,6 +2700,20 @@ export async function redigeraOgodkand(_prev: Orderstate, form: FormData): Promi
     // Finansen med samma dolda fält som utköpet (0079). Bara valet — avgiften
     // räknas först vid godkännandet.
     const finans = finansUrFormular(form) ?? rad.financed === true;
+    // 0078. DEN ANGIVNA PROVISIONEN ror bara chefskretsen, och bara en fri
+    // order bar den. Kryssas "följer inte paketreglerna" ur forsvinner den med
+    // manadsbeloppet. Saljaren som redigerar sitt utkast ror den inte alls —
+    // nycklarna skrivs da inte.
+    let angiven: { belopp: number | null; procent: number | null } | null = null;
+    if (hanterare) {
+      if (!friOrder) {
+        angiven = { belopp: null, procent: null };
+      } else if (form.has("provision_form")) {
+        const tolkad = angivenProvision(form);
+        if ("fel" in tolkad) return { fel: tolkad.fel };
+        angiven = tolkad;
+      }
+    }
 
     const efter = {
       company_name: bolag,
@@ -2642,6 +2734,12 @@ export async function redigeraOgodkand(_prev: Orderstate, form: FormData): Promi
       buyout_amount: utkop,
       financed: finans,
       note: String(form.get("note") ?? "").trim() || null,
+      ...(angiven
+        ? {
+            proposed_commission_amount: angiven.belopp,
+            proposed_commission_percent: angiven.procent,
+          }
+        : {}),
     };
 
     // STATUSEN I VILLKORET: hann ordern godkännas medan formuläret stod öppet
@@ -2660,7 +2758,14 @@ export async function redigeraOgodkand(_prev: Orderstate, form: FormData): Promi
 
     // numeric kommer som sträng ur PostgREST ("1495.00"), så belopp jämförs
     // som tal — annars hade varje sparning loggat ett oförändrat belopp.
-    const TAL = new Set(["package_id", "term_months", "monthly_amount", "buyout_amount"]);
+    const TAL = new Set([
+      "package_id",
+      "term_months",
+      "monthly_amount",
+      "buyout_amount",
+      "proposed_commission_amount",
+      "proposed_commission_percent",
+    ]);
     const lika = (k: string, a: unknown, b: unknown) =>
       TAL.has(k) && a != null && b != null ? Number(a) === Number(b) : String(a ?? "") === String(b ?? "");
     const andrat = Object.fromEntries(Object.entries(efter).filter(([k, v]) => !lika(k, v, rad[k])));
