@@ -14,6 +14,20 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "samtal-gar-att-spela-upp",
+    rubrik: "Samtalen på en order går att spela upp",
+    ingress:
+      "Inspelningarna under en order eller i kundkortets samtalsflik spelas nu upp när du trycker play. Förut stod spelaren tyst.",
+    text: `Webbläsaren stoppade ljudet på vägen från lagringen, utan att säga varför —
+så ingen inspelning har gått att lyssna på i navet.
+
+Öppna en order, fäll ut **samtal** och tryck play. Varje uppspelning loggas
+som förut i vem som öppnat vilket samtal.`,
+    datum: "2026-10-10",
+    roller: ["salesperson", "team_lead", "sales_manager", "ceo", "finance"],
+    href: "/order",
+  },
+  {
     slug: "angiven-provision-foljer-med",
     rubrik: "Provisionen du skriver på en fri order följer med till godkännandet",
     ingress:

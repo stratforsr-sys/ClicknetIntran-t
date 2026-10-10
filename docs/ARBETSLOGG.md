@@ -5,6 +5,28 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-10 · Samtalsinspelningarna gick inte att spela upp (CSP media-src)
+
+Beställaren: *"I intranätet så läggs samtalen in i ordrar, men jag kan inte
+spela upp dem så vad är ens meningen med att ha dem där?"*
+
+**Orsaken.** `<audio src="/filer/<id>">` är navets egen adress, men routen
+svarar med en omdirigering till en signerad länk i Supabase eller R2, och
+webbläsaren prövar målet mot CSP:n. CSP:n saknade `media-src`, så
+`default-src 'self'` gällde och ljudet stoppades tyst. Headern infördes
+2026-08-16 (`28d6968`); sedan dess har ingen inspelning gått att spela upp,
+varken i Supabase eller i R2. `afd00f5` (2026-10-07) släppte in R2 i
+`connect-src`, men den gäller fetch, inte `<audio>`.
+
+**Rättelsen.** `media-src 'self'` + Supabase + R2-adresserna ur `r2Kallor()` i
+`src/lib/csp.ts`. Behörigheten och `file_access_log` är orörda — de ligger i
+`/filer/[id]` före omdirigeringen. Ingen migration. Committad direkt till
+main på beställarens besked "lös det direkt till main".
+
+**Lärdom.** En ny sorts resurs från en annan adress (ljud, video, iframe,
+bild) behöver sin egen rad i CSP:n. Saknas den gäller `default-src 'self'`,
+och felet syns bara i webbläsarens konsol.
+
 ## 2026-10-09 · Provisionen på en inskickad fri order kastades (0078)
 
 Beställaren: *"Jag la upp TLS värmepumpar på mig och la in att den inte följer
