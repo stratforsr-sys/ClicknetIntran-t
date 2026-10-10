@@ -5,6 +5,17 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-10 · Backlog: kvällsnotis och söndagsnotis för ledare (E5.8)
+
+Ingen kod, ingen migration. Beställaren gick igenom ett utkast till en ny
+startsida och bad att det skulle stå i repot att mobilversionen ska få en
+notis när dagen slutar, med morgondagens schema för säljchefer och ledare, och
+en söndagsnotis med nästa vecka. Det står nu som **E5.8 i `docs/ROADMAP.md`**,
+med vem, när, innehåll och var den hör hemma. Det viktigaste för den som
+bygger: säljchefen och VD stämplar inte, så utlösaren kan inte vara
+utstämplingen. Notisen är ett läge och inte en händelse, och hör därför till
+morgonbrevets `samla*`-funktioner och inte till `MEJLKALLOR`.
+
 ## 2026-10-09 · Finans på order (0079)
 
 Gren `finans-pa-order`, ej mergad. Beställaren: *"När vi lägger upp ordrar i

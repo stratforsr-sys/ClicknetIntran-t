@@ -270,6 +270,45 @@ uppsägningstidsberäkning i en semesteransökan hade varit fel plats för rätt
 | E5.5 | §6 | **Bottennavigering under 768 px**: Hem, Sök, Stämpla, Mer | KLAR — stämpelposten bara när modulen är på |
 | E5.6 | §5.1 | Hopfällbar sidopanel med sparat läge per användare | KLAR — läget i en kaka, så servern vet det före första ritningen |
 | E5.7 | §5.7 | Notissystem nere till höger med ångra-möjlighet | KLAR 2026-08-22 — klockan i toppraden plus kvitto nere till höger. **Ångra är en verklig invers åtgärd, inte en fördröjd skrivning**, så bara åtgärder med äkta invers får knappen: arkivera nyhet, avsluta felrapport, arkivera avtalsmall. Dispatchern gör om behörighetskontrollen |
+| E5.8 | — | **Kvällsnotis med morgondagen, söndagsnotis med nästa vecka — i mobilversionen.** Säljchefer och ledare får en notis när dagen slutar med morgondagens schema. På söndagen samma sak för hela nästa vecka, så att man ser vad som ska bli klart | EJ PÅBÖRJAD — byggs när mobilversionen byggs. Beställd 2026-10-10, se avsnittet nedan |
+
+### E5.8 — kvällsnotisen och söndagsnotisen
+
+Beställd 2026-10-10 i samband med utkastet till en ny startsida (Nav 2.0).
+Beställarens ord: *"när en mobilversion ska byggas, så får man en notis när man
+slutar dagen, speciellt för säljchefer och ledare, att se morgondagens schema.
+Samma sak med en söndag, så att man kan se nästa veckas grejer att få klart."*
+
+**Vem.** Först ledarrollerna: `sales_manager`, `ceo` och `team_lead`. Om
+säljarna ska få en egen version är en senare fråga.
+
+**När — och varför det inte kan vara utstämplingen.** Säljchef och VD är
+stämpelfria (`src/lib/stampelfri.ts`), så "när dagen slutar" kan inte betyda
+utstämplingen för dem. Rimligast är schemats slut (`work_schedule`) eller en tid
+personen själv väljer. Teamledaren, som stämplar, kan få den vid utstämplingen.
+Söndagsnotisen går på en fast tid (förslag 18:00). **Öppen fråga till
+beställaren:** vilken tid, och om den ska gå även när mottagaren själv är ledig
+nästa dag.
+
+**Innehåll, kvällen före en arbetsdag:**
+- kalendern: möten, 1:1 och leveranser
+- teamets frånvaro i morgon: ledig, sjuk, VAB (samma krets och samma regler
+  som dagsbilden på startsidan, aldrig någon diagnos)
+- beslut med frist i morgon: ledighetsansökningar som börjar, ärenden som
+  passerar svarstiden (aldrig ärendets rubrik, samma skäl som på startsidan)
+- uppgifter med morgondagens datum
+
+**Innehåll, söndag:** samma sak för måndag till fredag, plus det som ska vara
+klart under veckan: uppgifter med frist, och ansökningar som måste beslutas
+innan de börjar.
+
+**Var den hör hemma.** Notisen sammanfattar ett läge, den rapporterar ingen
+händelse. Den ska alltså byggas på samma `samla*`-funktioner som morgonbrevet
+(`src/lib/jobb/morgon.ts`), inte som en ny post i `MEJLKALLOR`. Det är **en
+notis per person och kväll**, ingen notis per sak. Den är en push-notis i
+mobilversionen och inget nytt mejl vid sidan av morgonbrevet. Samma
+sammanställning bör visas på webben (startsidans "I morgon" för ledarna), så att
+notisen och sidan alltid säger samma sak.
 
 ---
 
