@@ -9435,7 +9435,7 @@ function allaVy(){
 function klaraVy(){
   const idag = mine().filter(isDone);
   const grupper = [['I dag', idag.map(t => t.t)], ...KLARA_FORR[role()]];
-  const veckan = grupper.reduce((s, g) => s + g[1].length, 0) + 9;
+  const veckan = ND ? ndVeckanKlara() : grupper.reduce((s, g) => s + g[1].length, 0) + 9;
   return `<p class="vhelp">${veckan} avbockade den här veckan. ${note(41)}</p>` + grupper.map(([d, r]) => `<div class="sect"><h3>${d}</h3><span>${r.length} klara</span></div><ul class="tlist">${r.map(x => `<li class="trow done"><span class="tick on">${I('check')}</span><div class="tm"><div class="tt">${esc(x)}</div></div></li>`).join('')}</ul>`).join('');
 }
 function delatVy(){
@@ -9452,12 +9452,12 @@ function sidokolumn(){
   const nasta = n => mine().find(t => t.proj === n && t.lage === 'oppen' && !isDone(t) && t.vy === 'egen');
   return `
     ${sondag ? `<section class="card fresh">${note(46)}<h2>Ny vecka i morgon</h2><p>Välj måndagens tre redan nu, så börjar veckan med en plan i stället för en inkorg.</p><button class="btn btn-p btn-sm" data-tab="kommande">Planera måndagen</button></section>` : ''}
-    ${fredag ? wrKort() : ''}
+    ${(ND ? !!(ND.uppgifter && ND.uppgifter.genomgang.lage.dagsFor) : fredag) ? wrKort() : ''}
     <section class="card"><div class="chead"><h2>Projekt</h2>${note(42)}<span class="end"><button class="tlink" data-act="toast" data-msg="Nytt projekt öppnas.">Nytt projekt</button></span></div>
       <div class="projs">${proj.map(([n, c, k, a, dl, tidAndel]) => { const andel = a ? k / a : 0, efter = ND ? ndProjEfter(n, andel, tidAndel) : andel + .1 < tidAndel, x = nasta(n);
         return `<div class="proj ${S.projFilter === n ? 'on' : ''}"><button class="pn" data-pfilter="${esc(n)}" title="Visa bara det här projektets uppgifter"><i style="background:${c}"></i>${esc(n)}<span class="pill ${efter ? 't-danger' : 't-ok'}">${efter ? 'Efter' : 'I fas'}</span></button>
           <span class="pb"><span><i style="width:${andel * 100}%;background:${c}"></i>${tidAndel === null ? '' : `<em style="left:${Math.min(100, tidAndel * 100)}%"></em>`}</span><span class="num">${k}/${a}</span></span>
-          <span class="pd ${efter ? 'late' : ''}">Deadline ${dl}${efter ? ` · ${Math.round(andel * 100)} % klart, ${Math.round(tidAndel * 100)} % av tiden gått` : ''}</span>
+          <span class="pd ${efter ? 'late' : ''}">${dl ? `Deadline ${dl}` : 'Ingen deadline'}${efter ? (tidAndel === null ? ' · har försenade uppgifter' : ` · ${Math.round(andel * 100)} % klart, ${Math.round(tidAndel * 100)} % av tiden gått`) : ''}</span>
           ${x ? `<span class="pnext"><button class="tick" data-tick="${x.id}" aria-label="Klar: ${esc(x.t)}">${I('check')}</button><span>Nästa: ${esc(x.t)}</span></span>` : ''}</div>`; }).join('')}</div></section>
     ${S.hideKeys ? '' : keysCard()}
     <div class="tlinks"><button class="tlink" data-umallar>Mallar</button><button class="tlink" data-uplanera>${I('kal')} Planera i kalendern</button></div>`;
@@ -22106,7 +22106,7 @@ allaVy = function(){
 klaraVy = function(){
   const idag = mine().filter(isDone);
   const grupper = [['I dag', idag.map(t => t.t)], ...KLARA_FORR[role()]];
-  const veckan = grupper.reduce((s, g) => s + g[1].length, 0) + 9;
+  const veckan = ND ? ndVeckanKlara() : grupper.reduce((s, g) => s + g[1].length, 0) + 9;
   return `<div class="upg-vhead"><p class="upg-sm"><b class="num">${veckan}</b> avbockade den här veckan. ${note(41)}</p></div>` + grupper.map(([d, r]) => `<div class="sect upg-sect"><h3>${d}</h3><span class="upg-sm num">${r.length}</span></div><ul class="tlist">${r.map(x => `<li class="trow done upg-r"><span class="tick on">${I('check')}</span><div class="tm"><div class="tt">${esc(x)}</div></div></li>`).join('')}</ul>`).join('');
 };
 delatVy = function(){
@@ -22120,12 +22120,12 @@ sidokolumn = function(){
   const nasta = n => mine().find(t => t.proj === n && t.lage === 'oppen' && !isDone(t) && t.vy === 'egen');
   return `
     ${sondag ? `<section class="upg-kort">${note(46)}<div class="upg-kh"><div><h2>Ny vecka i morgon</h2><p>Välj måndagens tre redan nu, så börjar veckan med en plan i stället för en inkorg.</p></div></div><div class="upg-kf upg-kfv"><button type="button" class="btn btn-s btn-sm" data-tab="kommande">Planera måndagen</button></div></section>` : ''}
-    ${fredag ? wrKort() : ''}
+    ${(ND ? !!(ND.uppgifter && ND.uppgifter.genomgang.lage.dagsFor) : fredag) ? wrKort() : ''}
     <section class="upg-kort"><div class="upg-kh"><div><h2>Projekt</h2></div>${note(42)}<button type="button" class="tlink" data-act="toast" data-msg="Ett nytt projekt får namn, färg och deadline. Det läggs till i listan.">Nytt projekt</button></div>
       <div class="upg-projs">${proj.map(([n, c, k, a, dl, tidAndel]) => { const andel = a ? k / a : 0, efter = ND ? ndProjEfter(n, andel, tidAndel) : andel + .1 < tidAndel, x = nasta(n), oppna = mine().filter(t => t.proj === n && t.lage === 'oppen' && !isDone(t)).length;
         return `<div class="upg-proj ${S.projFilter === n ? 'on' : ''}"><button type="button" class="upg-pn" data-pfilter="${esc(n)}" aria-pressed="${S.projFilter === n}" title="${S.projFilter === n ? 'Visa allt' : 'Visa bara det här projektets uppgifter'}"><i style="background:${c}"></i><b>${esc(n)}</b><span class="${efter ? 'upg-sen' : 'upg-ok'}">${efter ? 'Efter' : 'I fas'}</span></button>
           <span class="upg-pb" title="${Math.round(andel * 100)} % klart, ${tidAndel === null ? 'ingen deadline' : Math.round(tidAndel * 100) + ' % av tiden har gått'}"><span><i style="width:${andel * 100}%;background:${c}"></i>${tidAndel === null ? '' : `<em style="left:${Math.min(100, tidAndel * 100)}%"></em>`}</span><span class="num">${k}/${a}</span></span>
-          <span class="upg-sm">Deadline ${dl}${efter ? ` · ${Math.round(andel * 100)} % klart, ${Math.round(tidAndel * 100)} % av tiden gått` : ''}${oppna ? ` · ${oppna} hos dig` : ''}</span>
+          <span class="upg-sm">${dl ? `Deadline ${dl}` : 'Ingen deadline'}${efter ? (tidAndel === null ? ' · har försenade uppgifter' : ` · ${Math.round(andel * 100)} % klart, ${Math.round(tidAndel * 100)} % av tiden gått`) : ''}${oppna ? ` · ${oppna} hos dig` : ''}</span>
           ${x ? `<span class="upg-pnext"><button type="button" class="tick" data-tick="${x.id}" aria-label="Klar: ${esc(x.t)}">${I('check')}</button><span>Nästa: ${esc(x.t)}</span></span>` : ''}</div>`; }).join('')}</div></section>
     ${S.hideKeys ? '' : keysCard()}
     <div class="upg-lankar"><button type="button" class="tlink" data-umallar>Mallar</button><button type="button" class="tlink" data-uplanera>${I('kal')}Planera i kalendern</button>${S.hideKeys ? `<button type="button" class="tlink" data-upgtangent>Kortkommandon</button>` : ''}</div>`;
@@ -25431,6 +25431,8 @@ upgRutaHtml = function(t){
   // Historiken: navets händelser i ordning.
   const hist = (t.ndHist || []).map(e => `<li><span class="num">${frKort(ndDagAv(e.at))} ${ndKl(e.at)}</span>${esc(NDUPGH[e.typ] || e.typ)}${e.av ? ` av ${esc(e.av.split(' ')[0])}` : ''}${e.note && e.typ !== 'kommentar' ? `: ${esc(e.note)}` : ''}</li>`).join('');
   h = h.replace(/<ul class="upg-hist">[\s\S]*?<\/ul>/, `<ul class="upg-hist">${hist || '<li>Ingen historik.</li>'}</ul>`);
+  // Navets klockslag finns inte alltid bland utkastets fasta val.
+  if (t.nar && !NAR_VAL.includes(t.nar)) h = h.replace(/(<select[^>]*data-upgnar="[^"]*"[^>]*>)/, `$1<option value="${esc(t.nar)}" selected>${esc(t.nar)}</option>`).replace(/<option value="" selected>/, '<option value="">');
   // Läsläge: fälten går inte att ändra här, formulären leder till uppgiften i Nav.
   h = h.replace(/<(input|textarea)([^>]*data-(?:ptitle|upgbesk)=)/g, '<$1 readonly$2').replace(/<select([^>]*data-(?:upgnar|upgproj)=)/g, '<select disabled$1');
   h = h.replace(/<form class="subadd" data-(?:subadd|chat)="[^"]*">[\s\S]*?<\/form>/g, '');
@@ -25439,8 +25441,8 @@ upgRutaHtml = function(t){
 
 /* ---------- Läsläge i hela vyn ---------- */
 // Det som finns i navet leder till uppgiften där; det som bara finns i utkastet säger det.
-const NDUPGNAV = ['tick', 'approve', 'return', 'reason', 'over', 'overto', 'strike', 'setday', 'upgdag', 'today', 'snooze', 'take', 'triage', 'tri', 'setprio', 'est', 'upgest',
-  'setwhen', 'when', 'reopen', 'reclaim', 'unfollow', 'share', 'sharex', 'sub', 'upgdelbort', 'carry', 'decide', 'batch'];
+const NDUPGNAV = ['wrgo', 'wract', 'tick', 'approve', 'return', 'reason', 'over', 'overto', 'strike', 'setday', 'upgdag', 'today', 'snooze', 'take', 'triage', 'tri', 'setprio', 'est', 'upgest',
+  'setwhen', 'when', 'reopen', 'reclaim', 'unfollow', 'sub', 'upgdelbort', 'carry', 'decide', 'batch'];
 const NDUPGBARA = ['focus', 'split', 'sug', 'suggest', 'nudge', 'nudgeall', 'book', 'startday', 'closeday', 'shutdown'];
 const ndUpgId = v => { const id = String(v || '').split('|')[0]; return ndUp() && ndUp().uppgifter.some(x => x.id === id) ? id : null; };
 const ndIUpg = el => S.view === 'uppgifter' || !!(el.closest && el.closest('#todoPanel, #upgRuta'));
@@ -25449,7 +25451,7 @@ document.addEventListener('click', e => {
   if (!ndUp()) return;
   const b = e.target.closest && e.target.closest('button, a, [data-tick]'); if (!b || !b.dataset || !ndIUpg(b)) return;
   const nav = NDUPGNAV.find(k => b.dataset[k] !== undefined), bara = NDUPGBARA.find(k => b.dataset[k] !== undefined);
-  if (nav){ e.preventDefault(); e.stopImmediatePropagation(); const id = ndUpgId(b.dataset[nav]); location.href = id ? `/uppgifter/${id}` : '/uppgifter'; return; }
+  if (nav){ e.preventDefault(); e.stopImmediatePropagation(); const id = ndUpgId(b.dataset[nav]); location.href = nav === 'wrgo' || nav === 'wract' ? '/uppgifter/genomgang' : id ? `/uppgifter/${id}` : '/uppgifter'; return; }
   if (bara){ e.preventDefault(); e.stopImmediatePropagation(); ndUpgBara(); return; }
   if (b.dataset.act === 'toast'){ e.preventDefault(); e.stopImmediatePropagation(); location.href = /projekt/i.test(b.textContent) ? '/uppgifter/projekt' : '/uppgifter'; }
 }, true);
@@ -25471,6 +25473,22 @@ document.addEventListener('keydown', e => {
 }, true);
 document.addEventListener('dragstart', e => { if (ndUp() && e.target.closest && e.target.closest('.trow[draggable]')){ e.preventDefault(); e.stopImmediatePropagation(); } }, true);
 document.addEventListener('dblclick', e => { if (ndUp() && ndIUpg(e.target) && e.target.closest && e.target.closest('.trow')){ e.preventDefault(); e.stopImmediatePropagation(); } }, true);
+
+/* ---------- Veckogenomgången: navets läge och "Senast gjord" ---------- */
+const _ndWrKort = wrKort;
+wrKort = function(){
+  const h = _ndWrKort(); if (!ndUp()) return h;
+  const g = ndUp().genomgang;
+  return h.replace('Cirka 8 minuter · förra: fre 2 okt, 9 min', esc(g.senast)).replace(/Nästa genomgång [^.<]*\. Förra tog \d+ minuter\./, 'Gjord den här veckan.');
+};
+// Antal avbockade måndag till i dag.
+const ndVeckanKlara = () => HIST[role()].reduce((a, b) => a + b, 0) + mine().filter(isDone).length;
+// Snabbradens exempel med en riktig kollega i stället för exemplets.
+const _ndQuickAdd = quickAdd;
+quickAdd = function(compact){
+  const h = _ndQuickAdd(compact); if (!ndUp() || !KOLLEGOR.length) return h;
+  return h.replace(/ring Elin i morgon/g, `ring ${esc(KOLLEGOR[0].split(' ')[0])} i morgon`);
+};
 
 /* ---------- Vyn: ingen "Planerad N dagar i rad", och rutan i läsläge ---------- */
 const _ndRenderTasksView = renderTasksView;

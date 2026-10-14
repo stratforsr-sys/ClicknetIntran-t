@@ -15,6 +15,8 @@ import {
   vantarPaAndra,
 } from "@/lib/uppgifter-server";
 import { serietext, type Serieregel } from "@/lib/upprepning";
+import { genomgangslage, senasttext, type Genomgangslage } from "@/lib/genomgang";
+import { senasteGenomgang, senasteKvitton } from "@/lib/genomgang-server";
 
 /**
  * Nav 2.0: Uppgifter, med samma funktioner som /uppgifter: hamtaUppgiftsbild
@@ -59,12 +61,15 @@ export type NdUppgifter = {
   klara: { at: string; t: string }[];
   kollegor: string[];
   mallar: { namn: string; moment: string[] }[];
+  /** Veckogenomgången som på /uppgifter/genomgang: läget, raden "Senast gjord" och kvittona. */
+  genomgang: { lage: Genomgangslage; senast: string; kvitton: { week_start: string; completed_at: string; remaining: number }[] };
 };
 
 export async function byggUppgifter(supabase: SupabaseClient, user: CurrentUser): Promise<NdUppgifter> {
   const mig = user.employee!.id;
   const idag = svensktDatum();
-  const bild = await hamtaUppgiftsbild(user);
+  const [bild, senaste, kvitton] = await Promise.all([hamtaUppgiftsbild(user), senasteGenomgang(user), senasteKvitton(user, 4)]);
+  const lage = genomgangslage(idag, senaste);
   const namn = (id: string | null) => (id ? bild.namn.get(id) ?? "Okänd" : null);
 
   const [{ data: handelser }, { data: serier }, { data: personer }, { data: mallar }, { data: moment }, { data: projektdag }] = await Promise.all([
@@ -149,5 +154,6 @@ export async function byggUppgifter(supabase: SupabaseClient, user: CurrentUser)
     klara,
     kollegor: (personer ?? []).filter((p) => p.id !== mig).map((p) => fullName(p)).sort((a, b) => a.localeCompare(b, "sv")),
     mallar: synliga.map((m) => ({ namn: m.name, moment: (moment ?? []).filter((x) => x.template_id === m.id).map((x) => x.title) })),
+    genomgang: { lage, senast: senasttext(lage), kvitton },
   };
 }
