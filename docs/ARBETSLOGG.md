@@ -5,6 +5,33 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-14 · Nav 2.0 på /nav2, pass 6: Provision (gren `nav2-utkast`, `4720bc5`)
+
+Utkastets egen provisionsmotor (`pvUnderlag`, `pvTakt`, `pvVarning`) räknar
+inte längre i riktigt läge. `src/lib/nav2/provision.ts` hämtar som
+`/provision` (`hamtaAllProvision`/`hamtaProvision`, `hamtaOrder`/`hamtaOrderFor`,
+`hamtaNivaer`, `hamtaPerioder`, `hamtaKvPerManad`, `hamtaMal`,
+`hamtaChefsposter`, konsekvenshändelserna), och den rena
+`provisionforma.ts` räknar tolv månader per person med `raknaUnderlag` och
+`underlagForAlla`. En stängd månad är huvudboken; en öppen är motorn plus det
+som bokförts för hand, som på sidan. Takten är `takta`, varningen
+`varningslage`, K&V-veckorna `kvManad`.
+
+- Startsidans provisionskort räknas ur samma underlag. Utan kronmål säger det
+  "inget mål" i stället för en procent av ingenting, utan prognos säger det
+  varför, och "samma läge förra månaden" är grundprovisionen på samma
+  arbetsdag ur förra månadens rader, inte en framskrivning.
+- Månader före augusti 2026 är inte längre "före motorn" med summor ur
+  lönesystemet: de är tomma, som i navet.
+- Golvet och chefens lagkort på startsidan var byggda på exempelvärden och
+  väntar på startsidans pass.
+
+Provat lokalt som Zen och Fredrik (`ndprov/pv.mjs`, samma rena kod) och i
+previewen som Zen: Fredrik i september 13 order, nivå 10, 6 500 kr i
+volymbonus, mål 8 → 13; Zens övertäck 51 071 kr per säljare. Efter previewen
+rättat (följer med nästa commit): laget räknade bara aktiva säljare och
+tappade Vlados 2 500 kr i september.
+
 ## 2026-10-14 · Nav 2.0 på /nav2, pass 5: Order och kundkortet (gren `nav2-utkast`, `04a0b83`)
 
 `src/lib/nav2/order.ts` (`byggOrder`) läser som `/order`: `hamtaOrderUrval`

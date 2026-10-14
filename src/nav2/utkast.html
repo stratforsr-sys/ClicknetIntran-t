@@ -8182,7 +8182,7 @@ function renderAgenda(){
   if (!sondag && !lagd && ev.length) out += `<li class="nowline" aria-label="Nu">${hm(n)}</li><li class="muted agslut">Inget mer i kalendern i dag.</li>`;
   if (tidigare.length) out = `<li class="agfold"><button data-agtid aria-expanded="${!!S.agTid}">${I('chev')}Tidigare i dag <span class="num">${tidigare.length}</span></button></li>` + out;
   return `<section class="card" aria-label="I dag">
-    <div class="chead"><h2>I dag</h2><span class="meta">${sondag ? 'sön 11 okt' : 'fre 9 okt'} · ${ev.length} i kalendern</span><span class="end">${note(7)}${note(184)}${note(269)}<a class="tlink" href="#" data-go="/kalender">Kalendern</a></span></div>
+    <div class="chead"><h2>I dag</h2><span class="meta">${ND ? kKort(idag) : sondag ? 'sön 11 okt' : 'fre 9 okt'} · ${ev.length} i kalendern</span><span class="end">${note(7)}${note(184)}${note(269)}<a class="tlink" href="#" data-go="/kalender">Kalendern</a></span></div>
     <ul class="agenda">${out || '<li class="muted" style="padding:8px 0">Inget i kalendern i dag.</li>'}</ul>
   </section>`;
 }
@@ -11902,7 +11902,7 @@ function kKommando(){
   return `<div class="olcmd" role="toolbar" aria-label="Kalender">
     <button class="olib olham" data-kpane aria-label="Visa eller dölj vänsterfältet" title="Vänsterfältet">${KI('meny')}</button>
     <span class="olsplit">${note(151)}<button class="olnew" data-kny title="Ny händelse (N)">${I('plus')}Ny händelse</button><button class="olnewdd" data-kmenu="ny" aria-label="Fler sorters händelser">${KI('pil')}</button></span>
-    ${S.kMenu === 'ny' ? `<div class="olpop olnymeny">${[['mote','Möte','Med deltagare och svar'],['enskilt','1:1','Återkommande samtal med en säljare'],['uppgift','Uppgift','Blir en uppgift i Uppgifter'],...(chef ? [['leverans','Leveranspost','Välkomstsamtal, kickoff och de andra'],['ledig','Ledighet','Ansökan går till attest']] : [['ledig','Ledighet','Ansökan går till Johanna']])].map(([k, l, s]) => `<button data-knytyp="${k}"><i style="background:${KKAT[k].c}"></i><span><b>${l}</b><small>${s}</small></span></button>`).join('')}</div>` : ''}
+    ${S.kMenu === 'ny' ? `<div class="olpop olnymeny">${[['mote','Möte','Med deltagare och svar'],['enskilt','1:1','Återkommande samtal med en säljare'],['uppgift','Uppgift','Blir en uppgift i Uppgifter'],...(chef ? [['leverans','Leveranspost','Välkomstsamtal, kickoff och de andra'],['ledig','Ledighet','Ansökan går till attest']] : [['ledig','Ledighet', ND ? 'Ansökan går till attest' : 'Ansökan går till Johanna']])].map(([k, l, s]) => `<button data-knytyp="${k}"><i style="background:${KKAT[k].c}"></i><span><b>${l}</b><small>${s}</small></span></button>`).join('')}</div>` : ''}
     <span class="olsep"></span>
     ${KVYER.map(([k, l, n]) => `<button class="olvy ${S.kVy === k ? 'on' : ''}" data-kvy="${k}" title="${l} (Ctrl+Alt+${n})">${KI(k)}<span>${l}</span></button>`).join('')}
     <span class="olsep"></span>
@@ -11929,14 +11929,14 @@ function kFalt(){
   const chef = S.role === 'chef', pers = kPers(), grupper = [...new Set(pers.map(p => p.grupp))];
   return `<aside class="olfalt" aria-label="Kalendrar">${note(153)}
     ${kMiniManad(S.kVy === 'manad' ? S.kDag : S.kDag)}
-    ${chef ? kKoHtml() : ''}
+    ${chef && (!ND || (ND.kalender && ND.kalender.lev.farSe)) ? kKoHtml() : ''}
     <div class="olgrp ${S.kGrpSt.has('mina') ? 'stangd' : ''}"><button class="olgrph" data-kgrp="mina" aria-expanded="${!S.kGrpSt.has('mina')}">${KI('pil')}Mina kalendrar</button>
       <label class="olcal"><span class="olchk on" style="--c:var(--brand)">${I('check')}</span><span>Kalender</span></label>
       <label class="olcal"><span class="olchk on" style="--c:#0E7A5F">${I('check')}</span><span>Uppgifter</span><small>från Uppgifter</small></label>
       <label class="olcal"><span class="olchk on" style="--c:#8764B8">${I('check')}</span><span>Frånvaro</span><small>beviljad</small></label>
       <label class="olcal"><span class="olchk" style="--c:#B7860F"></span><span>Helgdagar i Sverige</span></label></div>
     ${grupper.map(g => `<div class="olgrp ${S.kGrpSt.has(g) ? 'stangd' : ''}"><button class="olgrph" data-kgrp="${g}" aria-expanded="${!S.kGrpSt.has(g)}">${KI('pil')}${g}</button>${pers.filter(p => p.grupp === g).map(p => `<div class="olcal olcalp"><button class="olcalv" data-kvisa="${esc(p.n)}" aria-pressed="${S.kVisa.has(p.n)}"><span class="olchk ${S.kVisa.has(p.n) ? 'on' : ''}" style="--c:${p.c}">${I('check')}</span><span>${esc(p.n)}</span><small title="${KNIVA[p.niva]}">${KNIVA_KORT[p.niva]}</small></button><button class="olendast" data-kendast="${esc(p.n)}" title="Visa bara din och ${esc(fornamn(p.n))}s kalender">endast</button></div>`).join('')}</div>`).join('')}
-    ${chef ? `<div class="olgrp ${S.kGrpSt.has('franv') ? 'stangd' : ''}"><button class="olgrph" data-kgrp="franv" aria-expanded="${!S.kGrpSt.has('franv')}">${KI('pil')}Frånvaro i teamet</button><button class="olcal" data-kvisa="Ali Rahimi"><span class="olchk ${S.kVisa.has('Ali Rahimi') ? 'on' : ''}" style="--c:#7FB0E6">${I('check')}</span><span>Ali Rahimi</span><small>semester</small></button></div>` : ''}
+    ${chef && !ND ? `<div class="olgrp ${S.kGrpSt.has('franv') ? 'stangd' : ''}"><button class="olgrph" data-kgrp="franv" aria-expanded="${!S.kGrpSt.has('franv')}">${KI('pil')}Frånvaro i teamet</button><button class="olcal" data-kvisa="Ali Rahimi"><span class="olchk ${S.kVisa.has('Ali Rahimi') ? 'on' : ''}" style="--c:#7FB0E6">${I('check')}</span><span>Ali Rahimi</span><small>semester</small></button></div>` : ''}
     <button class="ollank" data-kdela>${I('plus')}Dela din kalender</button>
   </aside>`;
 }
@@ -12051,7 +12051,7 @@ function kPeekKort(){
     <div class="olpkh ${fylld ? 'fylld' : ''}"><span class="olpkat">${KKAT[e.kat].l}${kal ? ` · ${esc(kal.n)}s kalender` : ''}</span><button class="olib s" data-kstang aria-label="Stäng">${I('x')}</button></div>
     <div class="olpkb"><h3>${esc(kRubrik(x))}</h3>
       <p class="olpkr">${KI('klocka')}<span>${kLang(e.d)}${e.allday ? ' · heldag' : `<br><b class="num">${hm(e.s)}–${hm(e.e)}</b> <span class="olmut">(${kLen(e.e - e.s)})</span>`}</span></p>
-      ${e.rep ? `<p class="olpkr">${KI('upprepa')}<span>${e.kat === 'enskilt' ? (e.t.includes('Amira') ? 'Varannan fredag' : 'Varje fredag') : 'Varje vardag'}</span></p>` : ''}
+      ${e.rep ? `<p class="olpkr">${KI('upprepa')}<span>${ND ? esc(e.serieText || 'Återkommande') : e.kat === 'enskilt' ? (e.t.includes('Amira') ? 'Varannan fredag' : 'Varje fredag') : 'Varje vardag'}</span></p>` : ''}
       ${e.plats && !dolj ? `<p class="olpkr">${KI(e.plats === 'Videolänk' ? 'video' : 'plats')}<span>${esc(e.plats)}${e.plats === 'Videolänk' ? ` <button class="tlink inl" data-act="toast" data-msg="Videolänken öppnas.">Anslut</button>` : /,/.test(e.plats) ? ` <a class="tlink inl" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(e.plats)}" target="_blank" rel="noreferrer">Vägbeskrivning ↗</a>` : ''}</span></p>` : ''}
       ${!dolj ? `<p class="olpkr">${KI('pers')}<span>${org ? 'Du är organisatör' : `${esc(e.org)} är organisatör`}${e.delt.length ? `<br><span class="olmut">${svaren.map(([k, n]) => `${n} ${SV[k]}`).join(' · ')}</span>` : ''}</span></p>` : `<p class="olmut">${esc(kal.n)} delar bara när ${kal.n.split(' ')[0]} är upptagen.</p>`}
       ${e.agenda && !dolj && niva !== 'rubriker' ? `<p class="olpkr">${KI('text')}<span>${esc(e.agenda)}</span></p>` : ''}
@@ -12084,7 +12084,7 @@ function kSnabb(){
     </div>
     <div class="olpkf"><button class="olbtn primar" data-knyspara>Spara</button><button class="olbtn" data-knymer>Fler alternativ</button><button class="olbtn" data-knystang>Ignorera</button></div></div>`;
 }
-const kForslagPers = (valda, attr) => (S.role === 'chef' ? ['Elin Berg','Amira Haddad','Mohammed Aziz','Sara Lind'] : ['Johanna Ek','Elin Berg','Mohammed Aziz']).filter(p => !valda.includes(p)).slice(0, 3).map(p => `<button class="olpchip lagg" data-${attr}="${esc(p)}">+ ${esc(fornamn(p))}</button>`).join('');
+let kForslagPers = (valda, attr) => (S.role === 'chef' ? ['Elin Berg','Amira Haddad','Mohammed Aziz','Sara Lind'] : ['Johanna Ek','Elin Berg','Mohammed Aziz']).filter(p => !valda.includes(p)).slice(0, 3).map(p => `<button class="olpchip lagg" data-${attr}="${esc(p)}">+ ${esc(fornamn(p))}</button>`).join('');
 function kKrock(n, ignorera){
   return KEV.find(e => e.id !== ignorera && e.d === n.d && !e.allday && !e.inst && kMin(e) && kSvar(e) !== 'nej' && e.visa !== 'ledig' && e.s < n.e && e.e > n.s);
 }
@@ -25878,7 +25878,9 @@ function ndPvStart(){
   const forsta = Object.keys(P.trappor).filter(m => P.trappor[m].length).sort()[0];
   PVSATSFRAN = forsta ? forsta + '-01' : PVMAN + '-01';
   PVSALJARE.length = 0;
-  P.personer.filter(p => p.saljare && p.id !== ND.jag.id).forEach(p => PVSALJARE.push(p.namn));
+  // Laget är som underlagForAlla: alla med underlag någon av månaderna, och de aktiva säljarna.
+  const medUnderlag = new Set(Object.values(P.underlag).flatMap(m => Object.entries(m).filter(([, u]) => u.summa || u.antal.netto || u.rader.length).map(([id]) => id)));
+  P.personer.filter(p => (p.saljare || medUnderlag.has(p.id)) && p.id !== ND.jag.id).forEach(p => PVSALJARE.push(p.namn));
   if (!P.chefsvy){ PVSALJARE.length = 0; PVSALJARE.push(ND.jag.namn); }
   Object.keys(PVANST).forEach(k => delete PVANST[k]);
   P.personer.forEach(p => { if (p.anst) PVANST[p.namn] = p.anst; });
@@ -26011,6 +26013,164 @@ const ndPvRoll = fn => function(...a){
 renderPvView = ndPvRoll(renderPvView);
 
 if (ndP()){ ndPvStart(); NDKOPPLAD.add('provision'); }
+
+/* =====================================================================
+   NAV 2.0 I RIKTIGT LÄGE: KALENDERN (prefix nd), v47
+
+   ND.kalender (src/lib/nav2/kalender.ts) är repots hamtaLeveranskalender för
+   den inloggades månad: möten, 1:1, leveranser, uppgifter, coachning,
+   ledighet och frister, med delningsnivåerna. Andra månader, kollegornas
+   kalendrar och Teamet hämtas när vyn behöver dem (/nav2/kalender, samma
+   funktion), och förhandsvisningens plats, agenda och svar ur
+   hamtaHandelsedetalj.
+
+   KEV fylls i utkastets form. Röda dagar och frånvaro lägger frKalSync till
+   ur den kopplade Frånvaron, som förut. Läsläge: skapa, flytta, svara,
+   ställa in och dela görs i Nav.
+   ===================================================================== */
+
+const ndK = () => ND && ND.kalender;
+const NDKFARG = ['#6B7A79', '#C2410C', '#0B7F6E', '#3E86C9', '#8E54A8', '#B7860F', '#2F6FB5'];
+const NDKGRUPP = {salj:'Säljteamet', lev:'Leverans', ovr:'Övriga'};
+const NDKSLAG = {mote:'mote', enskilt:'enskilt', coachning:'coachning', leverans:'leverans', uppgift:'uppgift', ledig:'ledig', order:'frist', frist:'frist'};
+const NDKPAM = {5:'5 min före', 15:'15 min före', 30:'30 min före', 60:'1 timme före', 1440:'1 dag före'};
+const NDKAL = {laddat:new Map(), hamtar:new Set(), detalj:new Map()};
+function ndKNamn(id){ if (!id) return null; if (id === ND.jag.id) return ND.jag.namn; const p = ndK().personer.find(x => x.id === id); return p ? p.namn : null; }
+function ndKId(namn){ if (namn === ND.jag.namn) return ND.jag.id; const p = ndK().personer.find(x => x.namn === namn); return p ? p.id : null; }
+
+/* ---------- En post i utkastets form ---------- */
+function ndKEv(p){
+  const allday = p.start === null, s = allday ? 0 : p.start, e = allday ? 0 : s + Math.max(15, p.minuter ?? 30);
+  const agare = ndKNamn(p.agare) || 'Okänd', org = (p.organisator && ndKNamn(p.organisator)) || agare, delt = [];
+  const add = (n, sv) => { if (n && n !== org && !delt.some(x => x[0] === n)) delt.push([n, sv]); };
+  if (agare !== org) add(agare, p.agare === ND.jag.id && p.svar && p.svar !== 'org' ? p.svar : null);
+  (p.deltagare || []).forEach(id => add(ndKNamn(id), null));
+  return {id:p.id, ref:p.ref, href:p.href, d:p.dag, s, e, allday, t:p.rubrik ?? (allday ? 'Borta' : 'Upptagen'), kat:NDKSLAG[p.slag] || 'mote', org, delt,
+    plats:'', agenda:'', visa:p.slag === 'ledig' ? 'borta' : 'upptagen', rep:!!p.serie, priv:false, klar:!!p.klar, pamin:NDKPAM[p.paminnelse] || 'Ingen', nd:true, agareId:p.agare};
+}
+// Samma möte i två kalendrar ritas en gång (som repots filter på ref); kollegan blir deltagare.
+function ndKLagg(poster){
+  poster.map(ndKEv).forEach(ev => {
+    const i = KEV.findIndex(x => x.id === ev.id); if (i >= 0){ KEV[i] = ev; return; }
+    if (ev.ref && ['mote', 'enskilt', 'leverans'].includes(ev.kat)){
+      const finns = KEV.find(x => x.nd && x.ref === ev.ref && x.d === ev.d);
+      if (finns){ const n = ndKNamn(ev.agareId); if (n && n !== finns.org && !finns.delt.some(x => x[0] === n)) finns.delt.push([n, null]); return; }
+    }
+    KEV.push(ev);
+  });
+}
+function ndKMarkera(id, fran, till){ const l = NDKAL.laddat.get(id) || []; l.push([fran, till]); NDKAL.laddat.set(id, l); }
+const ndKHar = (id, fran, till) => (NDKAL.laddat.get(id) || []).some(([a, b]) => a <= fran && b >= till);
+
+function ndKalStart(){
+  const k = ndK();
+  KEV.length = 0;
+  ndKLagg(k.poster); ndKMarkera(ND.jag.id, k.fran, k.till);
+  const pers = k.personer.map(p => ({n:p.namn, id:p.id, grupp:NDKGRUPP[p.grupp] || 'Övriga', c:NDKFARG[p.farg] || NDKFARG[0], niva:p.niva}));
+  KPERS.chef = pers; KPERS.saljare = pers;
+  KDELNING.chef = k.delning.map(d => [d.namn, d.niva]); KDELNING.saljare = KDELNING.chef;
+  KKO.length = 0;
+  if (k.lev.farSe) k.lev.ko.forEach(q => KKO.push({id:q.orderId, kund:q.kund, paket:q.paket || 'Paket saknas', saljare:q.saljare ? fornamn(q.saljare) : '–', kvar:q.due ? Math.round((Date.parse(q.due) - Date.now()) / 6e4) : 1e6, over:q.over, utanFrist:!q.due}));
+  ndKMoten();
+}
+// Uppgifternas planering räknar med dagens möten ur kalendern.
+function ndKMoten(){
+  const idag = kIdag(), m = KEV.filter(e => e.d === idag && !e.allday && kMin(e) && kSvar(e) !== 'nej' && e.visa !== 'ledig').sort((a, b) => a.s - b.s).map(e => [hm(e.s), hm(e.e), e.t]);
+  MOTEN.saljare = m; MOTEN.chef = m;
+}
+
+/* ---------- Hämta det vyn behöver ---------- */
+function ndKIntervall(){
+  const d = S.kDag || kIdag(), vy = S.kVy;
+  if (vy === 'manad'){ const a = kMon(d.slice(0, 8) + '01'); return ['manad', a, kPlus(a, 41)]; }
+  if (vy === 'lista') return ['manad', d, kPlus(d, 6)];
+  if (vy === 'team') return ['team', d, d];
+  const m = kMon(d); return ['vecka', m, kPlus(m, 6)];
+}
+function ndKBehov(){
+  if (!ndK()) return;
+  const [vy, fran, till] = ndKIntervall(), d = S.kDag || kIdag();
+  if (vy === 'team'){ if (!ndKHar('team', fran, till)) ndKHamta('team', d, [], ['team']); return; }
+  const ids = [ND.jag.id, ...kPers().filter(p => S.kVisa.has(p.n)).map(p => p.id)].filter(id => id && !ndKHar(id, fran, till));
+  if (ids.length) ndKHamta(vy === 'vecka' ? 'vecka' : 'manad', vy === 'manad' ? fran : d, ids.filter(id => id !== ND.jag.id), ids);
+}
+function ndKHamta(vy, dag, visa, markera){
+  const nyckel = `${vy}|${dag}|${visa.join(',')}`; if (NDKAL.hamtar.has(nyckel)) return; NDKAL.hamtar.add(nyckel);
+  fetch(`/nav2/kalender?vy=${vy}&dag=${dag}${visa.length ? `&visa=${visa.join(',')}` : ''}`, {credentials:'same-origin'}).then(r => r.json()).then(s => {
+    NDKAL.hamtar.delete(nyckel); if (!s || !s.poster) return;
+    ndKLagg(s.poster); markera.forEach(id => ndKMarkera(id, s.fran, s.till)); ndKMoten();
+    if (S.view === 'kalender' || S.view === 'hem') render();
+  }).catch(() => { NDKAL.hamtar.delete(nyckel); });
+}
+const _ndRenderKal = renderKalView;
+renderKalView = function(){ if (ndK()) ndKBehov(); return _ndRenderKal(); };
+
+/* ---------- Förhandsvisningen: plats, agenda och svaren ur navet ---------- */
+function ndKDetalj(e){
+  if (!e || !e.nd || !e.ref || NDKAL.detalj.has(e.ref) || !['mote', 'enskilt', 'leverans', 'coachning'].includes(e.kat)) return;
+  NDKAL.detalj.set(e.ref, 'hamtar');
+  fetch(`/nav2/kalender?detalj=${e.ref}`, {credentials:'same-origin'}).then(r => r.ok ? r.json() : null).then(x => {
+    NDKAL.detalj.set(e.ref, x || 'saknas'); if (!x) return;
+    KEV.filter(y => y.ref === e.ref).forEach(y => {
+      y.plats = x.plats || (x.online ? 'Videolänk' : ''); y.online = x.online; y.agenda = x.agenda || ''; y.serieText = x.serieText || '';
+      const org = ndKNamn(x.organisator); if (org) y.org = org;
+      y.delt = x.deltagare.map(d => [ndKNamn(d.id) || 'Okänd', d.svar]).filter(d => d[0] !== y.org);
+    });
+    if (S.view === 'kalender' && S.kPeek) render();
+  }).catch(() => NDKAL.detalj.set(e.ref, 'saknas'));
+}
+const _ndKPeek = kPeekKort;
+kPeekKort = function(){ if (ndK() && S.kPeek) ndKDetalj(KEV.find(x => x.id === S.kPeek.id)); return _ndKPeek(); };
+// 1:1-kortet: säljarens månad ur provisionen, när läsaren får se den. Inget annat påhittat.
+const _ndKEnskild = kEnskild;
+kEnskild = function(e){
+  if (!ndK()) return _ndKEnskild(e);
+  const vem = e.delt[0] && e.delt[0][0];
+  if (!vem || !ndP() || !ndP().chefsvy || !ndP().personer.some(p => p.namn === vem)) return '';
+  const u = pvUnderlag(vem, PVMAN), mal = pvMalFor(vem, PVMAN);
+  return `<div class="olenskild"><div><small>Provision i ${pvManNamn(PVMAN)}</small><b class="num">${kr(u.summa)}${mal && mal.k ? ` av ${kr(mal.k)}` : ''}</b></div><div><small>K&amp;V senast</small><b class="num">–</b></div><div><small>Svagast</small><b>–</b></div></div>`;
+};
+// Leveranskön: en order som väntar på godkännande har ingen frist än.
+const _ndKKo = kKoHtml;
+kKoHtml = function(){ const h = _ndKKo(); return ndK() ? h.split(`${kLen(1e6)} kvar`).join('Väntar på godkännande') : h; };
+kForslagPers = (valda, attr) => (ndK() ? kPers().map(p => p.n) : S.role === 'chef' ? ['Elin Berg','Amira Haddad','Mohammed Aziz','Sara Lind'] : ['Johanna Ek','Elin Berg','Mohammed Aziz']).filter(p => !valda.includes(p)).slice(0, 3).map(p => `<button class="olpchip lagg" data-${attr}="${esc(p)}">+ ${esc(fornamn(p))}</button>`).join('');
+
+/* ---------- Läsläge: det som ändrar kalendern görs i Nav ---------- */
+const ndKLank = e => e && e.href ? e.href : `/kalender?dag=${e ? e.d : kIdag()}${e && e.ref && e.nd && ['mote', 'enskilt', 'leverans', 'coachning'].includes(e.kat) ? `&handelse=${e.ref}` : ''}`;
+const NDKNAV = ['knyspara', 'kfspara', 'krsvp', 'kforslagskicka', 'kstalljs', 'kkopiera', 'kklar', 'kflytta', 'kqboka', 'kfforesla', 'kfbehall'];
+document.addEventListener('click', e => {
+  if (!ndK() || S.view !== 'kalender') return;
+  const b = e.target.closest && e.target.closest('button, a, label'); if (!b || !b.dataset) return;
+  const ds = b.dataset, stopp = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+  const ev = S.kPeek ? KEV.find(x => x.id === S.kPeek.id) : null;
+  if (NDKNAV.some(k => ds[k] !== undefined)){ stopp(); location.href = ds.kqboka !== undefined ? '/kalender' : ev ? ndKLank(ev) : `/kalender?dag=${S.kDag || kIdag()}`; return; }
+  if (ds.kdspara !== undefined || ds.kdelabort !== undefined){ stopp(); location.href = '/kalender/delning'; return; }
+  if (ds.kuppgklar !== undefined){ stopp(); location.href = `/uppgifter/${encodeURIComponent(ds.kuppgklar)}`; return; }
+  if (ds.act === 'toast'){
+    stopp(); const msg = ds.msg || '';
+    if (/Utskriften/.test(msg)) { window.print(); return; }
+    if (/Planeringsvyn/.test(msg)) { location.href = '/kalender?vy=planera'; return; }
+    if (/Videolänken/.test(msg) && ev && ev.online) { window.open(ev.online, '_blank', 'noopener'); return; }
+    location.href = ndKLank(ev);
+  }
+}, true);
+document.addEventListener('change', e => { if (ndK() && S.view === 'kalender' && e.target.dataset && (e.target.dataset.kpeekpamin !== undefined || e.target.dataset.kdniva !== undefined)){ e.stopImmediatePropagation(); toast('Läsläge: påminnelser och delning ändras i Nav.'); render(); } }, true);
+// Flytta och ändra längd görs i Nav. Ett klick på en post öppnar förhandsvisningen som vanligt.
+let ndKKlick = null;
+document.addEventListener('pointerdown', e => {
+  if (!ndK() || S.view !== 'kalender' || e.button !== 0) return;
+  const ev = e.target.closest && e.target.closest('.olev'); if (!ev || e.target.closest('.olanslut')) return;
+  e.stopImmediatePropagation(); ndKKlick = ev;
+}, true);
+document.addEventListener('pointerup', e => {
+  if (!ndKKlick) return; const el = ndKKlick; ndKKlick = null;
+  if (el.isConnected && el.contains(e.target)) kPeekOppna(el.dataset.kev, el);
+}, true);
+kFlytta = function(){ location.href = `/kalender?dag=${S.kDag || kIdag()}`; };
+const _ndKSlapp = kSlapp;
+kSlapp = function(nyckel, d, s){ if (!ndK()) return _ndKSlapp(nyckel, d, s); toast('Läsläge: tiden bokas i Nav.'); };
+
+if (ndK()){ ndKalStart(); NDKOPPLAD.add('kalender'); }
 
 /* Start */
 try { const th = localStorage.getItem('nav2-theme'); if (th && th !== 'auto'){ document.documentElement.setAttribute('data-theme', th); S.theme = th; document.querySelectorAll('#themeSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.themeSet === th))); } } catch(_){}

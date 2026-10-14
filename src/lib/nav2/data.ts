@@ -11,6 +11,7 @@ import { byggFranvaro, type NdFranvaro } from "./franvaro";
 import { byggUppgifter, type NdUppgifter } from "./uppgifter";
 import { byggOrder, type NdOrderdata } from "./order";
 import { byggProvision, type NdProvision } from "./provision";
+import { byggKalender, type NdKalender } from "./kalender";
 import {
   formaLon,
   formaPerson,
@@ -61,6 +62,8 @@ export type Nav2Data = {
   uppgifter: NdUppgifter;
   order: NdOrderdata;
   provision: NdProvision;
+  /** Null nar kontot saknar anstalld (hamtaLeveranskalender ger inget). */
+  kalender: NdKalender | null;
 };
 
 const PERSONKOLUMNER =
@@ -71,7 +74,7 @@ export async function byggNav2Data(user: CurrentUser): Promise<Nav2Data | null> 
   if (!user.employee) return null;
   const supabase = await supabaseServer();
 
-  const [{ data: personRader }, { data: teamRader }, { data: satsRader, error: satsFel }, { data: lonRader, error: lonFel }, notiser, tid, franvaro, uppgifter, order, provision] =
+  const [{ data: personRader }, { data: teamRader }, { data: satsRader, error: satsFel }, { data: lonRader, error: lonFel }, notiser, tid, franvaro, uppgifter, order, provision, kalender] =
     await Promise.all([
       supabase.from("employee").select(PERSONKOLUMNER).order("first_name"),
       supabase.from("team").select("id, name"),
@@ -90,6 +93,7 @@ export async function byggNav2Data(user: CurrentUser): Promise<Nav2Data | null> 
       byggUppgifter(supabase, user),
       byggOrder(supabase, user),
       byggProvision(supabase, user),
+      byggKalender(user),
     ]);
 
   const ra: RaPerson[] = ((personRader ?? []) as unknown as (Omit<RaPerson, "roller"> & {
@@ -165,5 +169,6 @@ export async function byggNav2Data(user: CurrentUser): Promise<Nav2Data | null> 
     uppgifter,
     order,
     provision,
+    kalender,
   };
 }
