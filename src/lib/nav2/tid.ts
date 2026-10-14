@@ -152,7 +152,7 @@ export async function byggTid(supabase: SupabaseClient, user: CurrentUser): Prom
   const [dagsbild, { data: personal }, { data: idagAlla }, { data: vantande }, { data: ogiltig }, { data: sena30 }, { data: perioder }, { data: trappa }, { data: manaden }, { data: teamRader }] =
     await Promise.all([
       hamtaDagsbild(supabase, nu, sparr.stampling),
-      supabase.from("employee").select("id, first_name, last_name, team_id, employee_number").neq("status", "offboarded"),
+      supabase.from("employee").select("id, first_name, last_name, team_id, employee_number, status"),
       supabase.from("time_event").select(STAMPELKOLUMNER + ", employee_id").gte("occurred_at", svenskDygnsstart(nu)).in("kind", ["in", "out"]).order("occurred_at"),
       supabase.from("time_event").select(STAMPELKOLUMNER + ", employee_id").eq("correction_state", "pending").order("created_at"),
       supabase.from("attendance_incident").select("id, employee_id, occurred_on, minutes, status, ordningsnummer, atgard, decided_at, decision_note").or(`status.eq.foreslagen,decided_at.gte.${dagarBakat(idag, 60)}`).order("occurred_on", { ascending: false }),
@@ -163,8 +163,10 @@ export async function byggTid(supabase: SupabaseClient, user: CurrentUser): Prom
       supabase.from("team").select("id, name"),
     ]);
 
-  const pers = (personal ?? []) as { id: string; first_name: string; last_name: string; team_id: string | null; employee_number: string | number | null }[];
-  const namn = new Map(pers.map((p) => [p.id, fullName(p)]));
+  // Namnen ur hela registret, ocksa for den som slutat: en gammal rad ska saga vem, inte "Okand".
+  const alla = (personal ?? []) as { id: string; first_name: string; last_name: string; team_id: string | null; employee_number: string | number | null; status: string }[];
+  const namn = new Map(alla.map((p) => [p.id, fullName(p)]));
+  const pers = alla.filter((p) => p.status !== "offboarded");
   const teamNamn = new Map(((teamRader ?? []) as { id: string; name: string }[]).map((t) => [t.id, t.name]));
 
   // Pa plats: senaste gallande stampling ar "in". Samma regel som /tid.
@@ -208,7 +210,7 @@ export async function byggTid(supabase: SupabaseClient, user: CurrentUser): Prom
         .map((r) => ({
           pid: r.employee_id,
           namn: namn.get(r.employee_id) ?? "Okänd",
-          nr: String(pers.find((p) => p.id === r.employee_id)?.employee_number ?? ""),
+          nr: String(alla.find((p) => p.id === r.employee_id)?.employee_number ?? ""),
           arbetad: r.worked_minutes,
           justering: j.get(r.employee_id) ?? 0,
           stangda: r.auto_closed_days,

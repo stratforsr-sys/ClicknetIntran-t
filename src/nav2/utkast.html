@@ -12988,7 +12988,7 @@ function frProva(typId, fran, till, vem, delOn, egetId, inDag){
   if (delOn && !t.del) brott.push({kod:'deldag', ton:'warn', text:`${t.l} söks för hela dagar.`});
   const egen = FRPER.find(p => p.vem === vem && p.id !== egetId && p.st !== 'rejected' && fran <= (p.till || '9999') && p.fran <= till) || S.frMina.find(p => fran <= p.till && p.fran <= till);
   if (egen) brott.push({kod:'overlapp', ton:'warn', text:`Du har redan frånvaro ${frPeriod(egen.fran, egen.till)}.`});
-  if (t.saldo){ const ad = frArbetsdagar(fran, till), s = typId === 'saved_vacation' ? FRSALDO.saved.d : FRSALDO.vacation.d; if (ad > s) brott.push({kod:'saldo', ton:'warn', text:`Det är ${ad} semesterdagar, och saldot säger ${s} kvar.`}); }
+  if (t.saldo){ const ad = frArbetsdagar(fran, till), s = typId === 'saved_vacation' ? FRSALDO.saved.d : FRSALDO.vacation.d; if (s !== null && ad > s) brott.push({kod:'saldo', ton:'warn', text:`Det är ${ad} semesterdagar, och saldot säger ${s} kvar.`}); }
   if (t.bem){ let varst = null; frDagar(fran, till).filter(frArbetsdag).forEach(d => { const n = frAndraBorta(d, vem).length; if (!varst || n > varst.n) varst = {d, n}; });
     if (varst && varst.n >= S.frTak) brott.push({kod:'bemanning', ton:'warn', text:`${frKort(varst.d)} är redan ${varst.n} i teamet borta. Taket är ${S.frTak}, så Johanna får väga det.`}); }
   return brott;
@@ -13025,8 +13025,8 @@ function frGa(vad, typ){
 function frValj(typ){
   S.frVal = typ; S.frAnnat = FRANNAT.includes(typ); S.frDelOn = false; S.frSkal = {vacation:'Semester', saved_vacation:'Sparad semester', vab:'Vård av barn', parental:'Föräldraledig'}[typ] || '';
   const forsta = typ === 'vab' ? frIdag() : null; S.frFran = forsta; S.frTill = forsta;
-  if (typ === 'vacation' || typ === 'saved_vacation') S.frMan = '2026-11';
-  else S.frMan = '2026-10';
+  if (typ === 'vacation' || typ === 'saved_vacation') S.frMan = ND ? frPlus(kIdag(), 30).slice(0, 7) : '2026-11';
+  else S.frMan = ND ? kIdag().slice(0, 7) : '2026-10';
 }
 
 /* ---------- Säljarens vy ---------- */
@@ -13071,7 +13071,7 @@ function frManad(ym){
     const n = helg ? 0 : frAndraBorta(d, ME.saljare.namn).length, forbi = d < idag && t.frist > 0;
     const vald = S.frFran && d >= S.frFran && d <= (S.frTill || S.frFran), kant = d === S.frFran || d === S.frTill;
     const cls = ['frd', helg ? 'helg' : '', FRROD[d] ? 'rod' : '', sparr ? 'sparr' : '', egen ? 'egen' : '', vald ? 'vald' : '', kant ? 'kant' : '', d === idag ? 'idag' : '', forbi ? 'forbi' : ''].join(' ');
-    const tit = [frKort(d), FRROD[d] || '', sparr ? 'Kampanjvecka' : '', egen ? 'Du är redan borta' : '', n ? `${n} i teamet borta` : ''].filter(Boolean).join(' · ');
+    const tit = [frKort(d), FRROD[d] || '', sparr ? (ND ? (FRSPARR.find(s => d >= s.fran && d <= s.till) || {l:''}).l : 'Kampanjvecka') : '', egen ? 'Du är redan borta' : '', n ? `${n} i teamet borta` : ''].filter(Boolean).join(' · ');
     h += `<button class="${cls}" data-frdag="${d}" ${forbi ? 'disabled' : ''} title="${tit}"><span>${+d.slice(8)}</span>${n ? `<i class="frn ${n >= S.frTak ? 'full' : ''}">${n}</i>` : ''}</button>`;
   });
   return h + '</div></div>';
@@ -13081,18 +13081,18 @@ function frForm(){
   const ym2 = S.frMan.slice(5) === '12' ? `${+S.frMan.slice(0, 4) + 1}-01` : `${S.frMan.slice(0, 4)}-${String(+S.frMan.slice(5) + 1).padStart(2, '0')}`;
   const brott = fran ? frProva(k, fran, till, ME.saljare.namn, S.frDelOn) : [];
   const ad = fran ? frArbetsdagar(fran, till) : 0, kd = fran ? frMellan(fran, till) + 1 : 0;
-  const saldo = t.saldo ? (k === 'saved_vacation' ? FRSALDO.saved.d : FRSALDO.vacation.d - frVantarSem()) : null;
+  const saldo = t.saldo && !(k === 'saved_vacation' ? FRSALDO.saved : FRSALDO.vacation).saknas ? (k === 'saved_vacation' ? FRSALDO.saved.d : FRSALDO.vacation.d - frVantarSem()) : null;
   const en = fran && fran === till;
   const sammanfatt = !fran ? `<span class="muted">Tryck på första dagen, och sedan på den sista. En dag: tryck två gånger.</span>`
     : `<b>${frPeriod(fran, till)}</b><span>${S.frDelOn && en ? `${S.frDelFran}–${S.frDelTill}` : t.saldo ? `${ad} ${ad === 1 ? 'semesterdag' : 'semesterdagar'}${kd !== ad ? ` · ${kd} kalenderdagar` : ''}` : `${ad} ${ad === 1 ? 'arbetsdag' : 'arbetsdagar'}`}</span>${saldo !== null ? `<span class="muted">Kvar efteråt: <b class="num">${Math.max(0, saldo - ad)}</b>${k === 'vacation' && frVantarSem() ? ` (räknat med de ${frVantarSem()} som väntar)` : ''}</span>` : ''}`;
-  const snabb = k === 'vab' ? [['I dag', frIdag(), frIdag()], ['I går', frPlus(frIdag(), -1), frPlus(frIdag(), -1)], ['Måndag', '2026-10-12', '2026-10-12']]
+  const snabb = ND && ND.franvaro ? ndFrSnabb(k) : k === 'vab' ? [['I dag', frIdag(), frIdag()], ['I går', frPlus(frIdag(), -1), frPlus(frIdag(), -1)], ['Måndag', '2026-10-12', '2026-10-12']]
     : k === 'vacation' ? [['Vecka 46', '2026-11-09', '2026-11-13'], ['Mellandagarna', '2026-12-28', '2026-12-30'], ['Jul och nyår', '2026-12-21', '2027-01-06']] : [];
   return `<section class="card frform" id="frForm" style="--c:${t.c}">${note(200)}
     <div class="chead"><span class="fri sm" style="--c:${t.c}">${I(t.ikon)}</span><h2>${t.l}</h2>${k === 'vab' ? note(199) : ''}<span class="end"><button class="tlink" data-frregler aria-expanded="${!!S.frVisaRegler}">${S.frVisaRegler ? 'Dölj reglerna' : 'Reglerna'}</button></span></div>
     ${S.frVisaRegler ? `<ul class="frregl">${frRegler(k).map(r => `<li>${esc(r)}</li>`).join('')}</ul>` : ''}
     ${snabb.length ? `<div class="qchips frsnabb"><span class="muted">Snabbval</span>${snabb.map(([l, a, b]) => `<button class="chip ${fran === a && till === b ? 'on' : ''}" data-frsnabb="${a}|${b}">${l}</button>`).join('')}</div>` : ''}
     <div class="frkal"><button class="ibtn" data-frman="-1" aria-label="Föregående månad" ${S.frMan <= '2026-09' ? 'disabled' : ''}>‹</button>${frManad(S.frMan)}${frManad(ym2)}<button class="ibtn" data-frman="1" aria-label="Nästa månad">›</button></div>
-    <div class="frleg"><span><i class="l-egen"></i>Du är borta</span><span><i class="l-sparr"></i>Kampanjvecka</span><span><i class="l-n">2</i>så många i teamet är borta</span><span><i class="l-rod">31</i>röd dag</span></div>
+    <div class="frleg"><span><i class="l-egen"></i>Du är borta</span>${ND ? (FRSPARR.length ? '<span><i class="l-sparr"></i>Spärrperiod</span>' : '') : '<span><i class="l-sparr"></i>Kampanjvecka</span>'}<span><i class="l-n">2</i>så många i teamet är borta</span><span><i class="l-rod">31</i>röd dag</span></div>
     <div class="frsum">${sammanfatt}</div>
     ${t.del && en ? `<div class="frdel"><button class="tiswitch" data-frdel aria-pressed="${S.frDelOn}"><span><b>Bara en del av dagen</b></span><i></i></button>${S.frDelOn ? `<span class="qchips frdelsnabb">${[['08:00', '12:00', 'Förmiddag'], ['13:00', '17:00', 'Eftermiddag']].map(([a, b, l]) => `<button class="chip ${S.frDelFran === a && S.frDelTill === b ? 'on' : ''}" data-frdelset="${a}|${b}">${l}</button>`).join('')}</span><span class="frtid"><input class="uin num" data-frdelfran value="${S.frDelFran}" aria-label="Från"> – <input class="uin num" data-frdeltill value="${S.frDelTill}" aria-label="Till"></span>` : ''}</div>` : ''}
     ${fran ? `<div class="frbrott">${note(201)}${brott.length ? brott.map(b => `<div class="frb ${b.ton}">${I(b.ton === 'info' ? 'ai' : 'fel')}<span>${esc(b.text)}${b.kod === 'frist' && b.fix ? ` <button class="tlink" data-frflytta="${b.fix}">Flytta fram till första dagen som går</button>` : ''}</span></div>`).join('') + '<p class="muted frbnot">Det här är varningar, inte stopp. Du kan skicka ändå, och Johanna ser varningen när hon beslutar.</p>'
@@ -13207,9 +13207,9 @@ const FRTKORT = {sick:'Sjuk', vab:'VAB', vacation:'Semester', saved_vacation:'Sp
 const frVk = d => { const t = new Date(FRD(d)); t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7)); const y = new Date(Date.UTC(t.getUTCFullYear(), 0, 1)); return Math.ceil(((t - y) / 864e5 + 1) / 7); };
 function frTavla(){
   const vk = frVk;
-  const fran = frPlus('2026-10-05', 7 * (S.frVecka || 0)); const dagar = frDagar(fran, frPlus(fran, 25)).filter(frArbetsdag);
+  const fran = frPlus(ND ? ndMandag(kIdag()) : '2026-10-05', 7 * (S.frVecka || 0)); const dagar = frDagar(fran, frPlus(fran, 25)).filter(frArbetsdag);
   const idag = frIdag();
-  const namn = TEAM.map(x => x[0]);
+  const namn = ND && ND.franvaro && ND.franvaro.chef ? ND.franvaro.chef.personer : TEAM.map(x => x[0]);
   const harNagot = n => FRPER.some(p => p.vem === n && S.frBeslut[p.id] !== 'nej' && dagar.some(d => d >= p.fran && d <= (p.till || (d <= idag ? '9999' : '0'))));
   const rader = (S.frVisaAlla ? namn : namn.filter(harNagot));
   const cell = (n, d) => { const p = FRPER.find(x => x.vem === n && S.frBeslut[x.id] !== 'nej' && d >= x.fran && d <= (x.till || (d <= idag ? '9999' : '0'))); const mon = frDow(d) === 1 ? ' mon' : ''; if (!p) return `<td class="${d === idag ? 'idag' : ''}${mon}"><button class="frtom" data-frreg="${esc(n)}|${d}" aria-label="Registrera frånvaro för ${esc(n)} ${frKort(d)}" title="Registrera frånvaro för ${esc(fornamn(n))} ${frKort(d)}"></button></td>`;
@@ -13290,12 +13290,12 @@ function frSjukVy(){
   </div></div>`;
 }
 function frPlanVy(){
-  const veckor = []; for (let d = '2026-10-05'; d <= '2027-08-30'; d = frPlus(d, 7)) veckor.push(d);
+  const veckor = []; for (let d = ND ? ndMandag(kIdag()) : '2026-10-05', s = ND ? frPlus(kIdag(), 330) : '2027-08-30'; d <= s; d = frPlus(d, 7)) veckor.push(d);
   const vk = d => { const t = new Date(FRD(d)); t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7)); const y = new Date(Date.UTC(t.getUTCFullYear(), 0, 1)); return Math.ceil(((t - y) / 864e5 + 1) / 7); };
   const iVecka = d => { const s = frPlus(d, 4); return new Set(FRPER.filter(p => S.frBeslut[p.id] !== 'nej' && (FTYP[p.typ].bem) && p.fran <= s && d <= (p.till || p.fran)).map(p => p.vem)); };
   const over = veckor.map(d => ({d, ppl: [...iVecka(d)]})).filter(x => x.ppl.length >= 2);
   return `<div class="tgrid"><div class="col">
-    <section class="card">${note(210)}<div class="chead"><h2>Året i veckor</h2><span class="meta">okt 2026 – aug 2027</span></div>
+    <section class="card">${note(210)}<div class="chead"><h2>Året i veckor</h2><span class="meta">${ND ? ndFrSpann(veckor) : 'okt 2026 – aug 2027'}</span></div>
       <div class="frar">${(() => { const man = {}; veckor.forEach(d => (man[d.slice(0, 7)] = man[d.slice(0, 7)] || []).push(d)); return Object.entries(man).map(([ym, ws]) => `<div class="frarrad"><b>${FRMK[+ym.slice(5)]}${ym.slice(5) === '01' ? ' ' + ym.slice(2, 4) : ''}</b>${ws.map(d => { const n = iVecka(d).size; return `<button class="frv ${n >= S.frTak ? 'full' : n >= 2 ? 'hog' : n ? 'lag' : ''} ${frHuvud(d) ? 'som' : ''} ${S.frPlanV === d ? 'vald' : ''}" data-frplanv="${d}" title="v.${vk(d)} (${frPeriod(d, frPlus(d, 4))}): ${n} borta"><small>v${vk(d)}</small><i>${n || ''}</i></button>`; }).join('')}</div>`).join(''); })()}</div>
       ${S.frPlanV ? (() => { const d = S.frPlanV, ppl = [...iVecka(d)]; return `<div class="frplandet"><b>v.${vk(d)} · ${frPeriod(d, frPlus(d, 4))}</b><span>${ppl.length ? ppl.map(n => { const p = FRPER.find(x => x.vem === n && x.fran <= frPlus(d, 4) && d <= (x.till || x.fran)); return `${esc(n)} <small class="muted">${FTYP[p.typ].kort || FTYP[p.typ].l.toLowerCase()}${p.st === 'submitted' ? ', väntar' : ''}</small>`; }).join(' · ') : 'Ingen är borta.'}</span><button class="ibtn" data-frplanv="" aria-label="Stäng">${I('x')}</button></div>`; })() : ''}
       <div class="frleg"><span><i class="l-v lag"></i>1 borta</span><span><i class="l-v hog"></i>2</span><span><i class="l-v full"></i>${S.frTak} eller fler</span><span><i class="l-v som"></i>huvudsemestern juni–augusti</span></div>
@@ -24952,7 +24952,7 @@ function ndTidSenaVy(){
       ${open ? `<ul class="tilist">${a.dagar.map(d => `<li><span class="num">${frKort(d.dag)} · ${d.min} min</span></li>`).join('')}</ul>${a.kommentar ? `<p class="tiq">${esc(a.namn.split(' ')[0])} skrev: ”${esc(a.kommentar)}”</p>` : '<p class="muted tismall">Ingen förklaring än.</p>'}` : `<button class="tlink" data-tisenaperson="${esc(a.namn)}">Visa dagarna</button>`}</div></div>`; }).join('') : '<p class="muted tismall">Ingen har varit sen de senaste 30 dagarna.</p>'}
     <div class="sect"><h3>Ogiltig frånvaro</h3><span>${forslag.length} förslag väntar</span></div>
     ${forslag.length ? `<div class="tistopp"><b>${forslag.length} förslag väntar på ditt beslut</b><span>Ingenting registreras förrän du intygar.</span><a class="tlink" href="/tid/ogiltig-franvaro" style="align-self:flex-start">Besluta i Nav</a></div>` : ''}
-    ${beslutade.length ? `<table class="titab"><thead><tr><th>Person</th><th>Dag</th><th>Beslut</th><th>Steg</th><th>Åtgärd</th></tr></thead><tbody>${beslutade.map(o => `<tr><td>${esc(o.namn)}</td><td class="num">${frKort(o.dag)}</td><td><span class="pill t-neutral">${o.status === 'godkand' ? 'Godkänd' : o.status === 'avvisad' ? 'Avvisad' : 'Hävd'}</span></td><td>${o.ordning ? `Gång ${o.ordning}` : '–'}</td><td>${esc(ATG[o.atgard] || o.atgard || '–')}</td></tr>`).join('')}</tbody></table>` : ''}
+    ${beslutade.length ? `<div class="sect"><h3>Beslutade, 60 dagar</h3><span>${beslutade.length}${beslutade.length > 20 ? ' · de 20 senaste' : ''}</span></div><table class="titab"><thead><tr><th>Person</th><th>Dag</th><th>Beslut</th><th>Steg</th><th>Åtgärd</th></tr></thead><tbody>${beslutade.slice(0, 20).map(o => `<tr><td>${esc(o.namn)}</td><td class="num">${frKort(o.dag)}</td><td><span class="pill t-neutral">${o.status === 'godkand' ? 'Godkänd' : o.status === 'avvisad' ? 'Avvisad' : 'Hävd'}</span></td><td>${o.ordning ? `Gång ${o.ordning}` : '–'}</td><td>${esc(ATG[o.atgard] || o.atgard || '–')}</td></tr>`).join('')}</tbody></table>${beslutade.length > 20 ? '<a class="tlink" href="/tid/ogiltig-franvaro">Alla i Nav</a>' : ''}` : ''}
     <p class="muted tismall" style="margin:10px 0 6px">Sen ankomst räknas aldrig som ogiltig frånvaro. Den som stämplat in, hur sent som helst, blir aldrig ett förslag.</p>`;
 }
 function ndTidLonMini(){
@@ -25071,6 +25071,281 @@ document.addEventListener('click', e => {
 const _ndStampTid = stamp;
 stamp = function(k){ if (ND){ location.href = '/tid'; return; } return _ndStampTid(k); };
 if (ND && ND.tid){ ndTidStart(); NDKOPPLAD.add('tid'); }
+
+/* =====================================================================
+   NAV 2.0 I RIKTIGT LÄGE: FRÅNVARO (prefix nd), v47
+
+   ND.franvaro (src/lib/nav2/franvaro.ts) i utkastets egna former: typerna i
+   FTYP, reglerna i FRPOL, spärrarna i FRSPARR, saldot i FRSALDO och
+   perioderna i FRPER. Vyerna ritar då som förut, med navets data och
+   repots regelverk (hamtaRegelverk, hamtaChefsbild, sjukfrister,
+   upprepadKorttid).
+
+   Det som var byggt runt exempelpersonerna (översiktens sjukkort, fliken
+   Sjukfrånvaro, ringlistan, snabbdatumen, regelvyns fasta texter) är
+   omskrivet för riktig data. Läsläge: varje handling som sparar leder till
+   samma sida i Nav. Önskemålsrundan finns inte i repot och visas som det.
+   ===================================================================== */
+
+const ndFr = () => ND && ND.franvaro;
+const ndFrChef = () => !!(ndFr() && ndFr().chef);
+const NDMAN = ['', 'januari', 'februari', 'mars', 'april', 'maj', 'juni', 'juli', 'augusti', 'september', 'oktober', 'november', 'december'];
+const NDFRNIVA = {manager:'Närmaste chef', sales_manager:'Säljchef', ceo:'VD'};
+const NDFRFL = {certificate:['Läkarintyg', 'Lämnas om sjukdomen fortsätter.'], fk_notice:['Försäkringskassan', 'Sjukfallet anmäls till Försäkringskassan.'], return_plan:['Plan för återgång', 'Om sjukskrivningen väntas pågå över 60 dagar (30 kap. 6 § socialförsäkringsbalken).']};
+// Beskrivningen av sorten. Reglerna i meningen efter kommer från navet.
+const NDFRSUB = {vab:'Går bra samma dag, eller i efterhand.', saved_vacation:'Dagar du sparat från tidigare år.', comp_leave:'Kompledigt för övertid.', other:'Flytt, bröllop, begravning eller annat.'};
+
+// Vem som är "Johanna" i texterna: den som beslutar om den inloggades frånvaro.
+function ndChefNamn(){ const r = ndFr() && ndFr().ring.find(x => x.roll === 'Din chef'); return r ? r.vem : ME.chef.namn; }
+const ndChefFornamn = () => ndChefNamn().split(' ')[0] || 'din chef';
+const ndTeamText = () => ND.jag.team || 'teamet';
+// Texterna i vyn: den riktiga chefen och det riktiga teamet i stället för exemplens.
+function ndText(h){
+  return h.replace(/Johanna Ek/g, ndChefNamn()).replace(/Johanna/g, ndChefFornamn()).replace(/Team Nord/g, ndTeamText())
+    .replace(/ när hon /g, ' när hen ').replace(/ tills hon /g, ' tills hen ');
+}
+const ndDatumText = d => `${+d.slice(8)} ${NDMAN[+d.slice(5, 7)]}`;
+
+/* ---------- Röda dagar: repots rodaDagar (src/lib/saljtakt.ts), med namn ---------- */
+function ndPaskdagen(ar){
+  const a = ar % 19, b = Math.floor(ar / 100), c = ar % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  return `${ar}-${String(Math.floor((h + l - 7 * m + 114) / 31)).padStart(2, '0')}-${String(((h + l - 7 * m + 114) % 31) + 1).padStart(2, '0')}`;
+}
+function ndRodaDagar(ar){
+  const p = ndPaskdagen(ar); let mid = `${ar}-06-19`; while (frDow(mid) !== 5) mid = frPlus(mid, 1);
+  return [[`${ar}-01-01`, 'Nyårsdagen'], [`${ar}-01-06`, 'Trettondedag jul'], [frPlus(p, -2), 'Långfredagen'], [p, 'Påskdagen'], [frPlus(p, 1), 'Annandag påsk'], [`${ar}-05-01`, 'Första maj'],
+    [frPlus(p, 39), 'Kristi himmelsfärds dag'], [frPlus(p, 49), 'Pingstdagen'], [`${ar}-06-06`, 'Nationaldagen'], [mid, 'Midsommarafton'], [`${ar}-12-24`, 'Julafton'], [`${ar}-12-25`, 'Juldagen'], [`${ar}-12-26`, 'Annandag jul'], [`${ar}-12-31`, 'Nyårsafton']];
+}
+
+/* ---------- Datan in i utkastets former ---------- */
+function ndFrStart(){
+  const f = ndFr();
+  Object.keys(FRROD).forEach(k => delete FRROD[k]);
+  const ar = +kIdag().slice(0, 4); [ar - 1, ar, ar + 1, ar + 2].forEach(a => ndRodaDagar(a).forEach(([d, n]) => { FRROD[d] = n; }));
+  // Typerna: exakt navets, i navets ordning. Utkastets färger och ikoner står kvar.
+  const ny = {};
+  f.typer.forEach(t => {
+    const x = FTYP[t.id] || {fr:t.label, ikon:'franv', c:'#8A9992'};
+    const regel = t.notice_days ? `Sök minst ${t.notice_days} dagar innan${t.max_consecutive_days ? `, högst ${t.max_consecutive_days} dagar` : ''}.` : t.max_consecutive_days ? `Högst ${t.max_consecutive_days} dagar.` : '';
+    ny[t.id] = {...x, l:t.label, frist:t.notice_days, max:t.max_consecutive_days, karens:t.waiting_days, niva:t.approval_level, saldo:t.uses_balance, bem:t.counts_in_staffing, del:t.allows_part_day, sok:t.requestable && t.active,
+      sub:t.id === 'sick' ? x.sub : t.id === 'vacation' ? '' : [NDFRSUB[t.id], regel, t.approval_level === 'ceo' ? 'Beslutas av VD.' : ''].filter(Boolean).join(' ')};
+  });
+  // En period av en sort som inte längre finns ritas ändå, grått.
+  [...f.poster, ...(f.chef ? f.chef.poster : [])].forEach(p => { if (!ny[p.typ]) ny[p.typ] = {l:p.typ, fr:p.typ, sub:'', ikon:'franv', c:'#8A9992', frist:0, max:null, karens:0, niva:'manager', saldo:false, bem:false, del:false, sok:false}; });
+  Object.keys(FTYP).forEach(k => delete FTYP[k]); Object.assign(FTYP, ny);
+  [FRHUVUD, FRANNAT].forEach(l => { const k = l.filter(id => FTYP[id] && FTYP[id].sok); l.length = 0; l.push(...k); });
+  // En sort navet har men utkastet inte känner till hamnar under Något annat.
+  Object.keys(FTYP).forEach(id => { if (id !== 'sick' && FTYP[id].sok && !FRHUVUD.includes(id) && !FRANNAT.includes(id)) FRANNAT.push(id); });
+  const forsta = f.ring[0];
+  if (FTYP.sick) FTYP.sick.sub = `Ring ${forsta ? forsta.vem.split(' ')[0] : 'din chef'} först. Du behöver inte säga varför.`;
+  if (f.regler){
+    const r = f.regler, mmdd = (m, d) => `${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    Object.assign(FRPOL, {huvudFran:mmdd(r.main_vacation_start_month, r.main_vacation_start_day), huvudTill:mmdd(r.main_vacation_end_month, r.main_vacation_end_day), huvudFrist:r.main_vacation_notice_days,
+      intyg:r.sick_certificate_day, fk:r.sick_fk_day, plan:r.sick_return_plan_day, bekrH:r.sick_confirm_hours, aterDagar:r.relapse_days, rehabAntal:r.repeat_sick_count, rehabMan:r.repeat_sick_months});
+  }
+  FRSPARR.length = 0; f.sparrar.forEach(s => FRSPARR.push({l:s.l, fran:s.fran, till:s.till, typer:s.typer}));
+  // Saldot: navets inmatade. Saknas det står det så, och ingen regel räknar mot en nolla.
+  FRSALDO.vacation = f.saldo.vacation ? {d:f.saldo.vacation.d, asof:f.saldo.vacation.asof} : {d:null, asof:null, saknas:true};
+  FRSALDO.saved = f.saldo.saved ? {d:f.saldo.saved.d, asof:f.saldo.saved.asof, ar:'', senast:''} : {d:null, saknas:true, ar:'', senast:''};
+  // Chefen ser teamet (kön, godkänd ledighet, sjukperioder); säljaren sin egen frånvaro.
+  FRPER.length = 0; (f.chef ? f.chef.poster : f.poster).forEach(p => FRPER.push({...p}));
+  FRHIST.length = 0;
+  f.poster.filter(p => p.typ !== 'sick' && (p.till || p.fran) < kIdag() && p.fran >= `${kIdag().slice(0, 4)}-01-01`)
+    .forEach(p => FRHIST.push([p.typ, p.fran, p.till || p.fran, {approved:'Godkänd', rejected:'Avslagen', withdrawn:'Tillbakadragen', cancelled:'Inställd', submitted:'Väntade på beslut'}[p.st] || p.st]));
+  f.poster.filter(p => p.typ === 'sick' && p.till && p.till < kIdag() && p.fran >= `${kIdag().slice(0, 4)}-01-01`).forEach(p => FRHIST.push(['sick', p.fran, p.till, p.bekr ? 'Bekräftad' : 'Registrerad']));
+  FRHIST.sort((a, b) => b[1].localeCompare(a[1]));
+  Object.keys(FRREHAB).forEach(k => delete FRREHAB[k]);
+  if (f.chef) f.chef.rehab.forEach(r => { FRREHAB[r.namn] = r.antal; });
+  const chef = f.ring.find(x => x.roll === 'Din chef'), sc = f.ring.find(x => x.roll === 'Säljchef');
+  FRNIVA.manager = chef ? chef.vem : 'din chef'; FRNIVA.sales_manager = sc ? sc.vem : 'säljchefen'; FRNIVA.ceo = 'VD';
+}
+// Utkastets startläge, med dagens månad, navets tak och den egna sjukanmälan som pågår.
+const _ndFrSt = frSt;
+frSt = function(){
+  const forst = !S.frInit; _ndFrSt();
+  if (!ndFr() || !forst) return;
+  S.frMan = kIdag().slice(0, 7);
+  S.frTak = ndFr().tak ?? 99;
+  const s = ndFr().poster.find(p => p.typ === 'sick' && (!p.till || p.till >= kIdag()));
+  S.frSjuk = s ? {forsta:s.fran, omf:s.omf || 100, bekr:s.bekr || null, sista:s.till || null} : null;
+  S.frMina = [];
+};
+// Hur många andra som är borta en dag. Säljaren får bara antalet, som i repots hamtaProvunderlag.
+const _ndFrAndraBorta = frAndraBorta;
+frAndraBorta = function(d, vem){
+  if (!ndFr() || ndFrChef()) return _ndFrAndraBorta(d, vem);
+  return Array.from({length:ndFr().bemanning[d] || 0}, () => ({vem:'', typ:'other'}));
+};
+// Hela vyn får den riktiga chefens namn och det riktiga teamet.
+const _ndRenderFrView = renderFrView;
+renderFrView = () => ndFr() ? ndText(_ndRenderFrView()) : _ndRenderFrView();
+
+/* ---------- Snabbdatum i formuläret och tavlans spann, räknat från i dag ---------- */
+function ndFrSnabb(k){
+  const idag = frIdag(), ar = idag.slice(0, 4);
+  if (k === 'vab'){ let m = frPlus(idag, 1); while (frDow(m) !== 1) m = frPlus(m, 1); return [['I dag', idag, idag], ['I går', frPlus(idag, -1), frPlus(idag, -1)], ['Måndag', m, m]]; }
+  if (k === 'vacation'){
+    const n = frPlus(ndMandag(idag), 21);
+    const ut = [[`Vecka ${frVk(n)}`, n, frPlus(n, 4)]];
+    if (`${ar}-12-28` > idag) ut.push(['Mellandagarna', `${ar}-12-28`, `${ar}-12-30`]);
+    if (`${ar}-12-21` > idag) ut.push(['Jul och nyår', `${ar}-12-21`, `${+ar + 1}-01-06`]);
+    return ut;
+  }
+  return [];
+}
+const ndFrSpann = v => v.length ? `${FRMK[+v[0].slice(5, 7)]} ${v[0].slice(0, 4)} – ${FRMK[+v[v.length - 1].slice(5, 7)]} ${v[v.length - 1].slice(0, 4)}` : '';
+
+/* ---------- Säljaren: saldot som det är inmatat ---------- */
+const _ndFrSaljare = frSaljare;
+frSaljare = function(){
+  let h = _ndFrSaljare(); if (!ndFr()) return h;
+  const v = FRSALDO.vacation, s = FRSALDO.saved;
+  const ny = v.saknas ? '<span>Inget saldo inmatat</span>' : `<span><b class="num">${v.d}</b> semesterdagar${frVantarSem() ? ` <small>(${frVantarSem()} väntar)</small>` : ''}</span>${s.saknas ? '' : `<span><b class="num">${s.d}</b> sparade</span>`}`;
+  return h.replace(/<div class="tools"><span class="frsaldo">[\s\S]*?<\/div><\/header>/, `<div class="tools"><span class="frsaldo">${ny}</span></div></header>`);
+};
+const _ndFrValjare = frValjare;
+frValjare = function(){
+  let h = _ndFrValjare(); if (!ndFr() || !FTYP.vacation) return h;
+  const fr = `sök ${FTYP.vacation.frist} dagar innan`;
+  return h.replace(/(null|-?\d+) dagar kvar · sök 14 dagar innan/, FRSALDO.vacation.saknas ? fr.charAt(0).toUpperCase() + fr.slice(1) : `${FRSALDO.vacation.d} dagar kvar · ${fr}`);
+};
+const _ndFrSaldoKort = frSaldoKort;
+frSaldoKort = function(){
+  if (!ndFr()) return _ndFrSaldoKort();
+  const v = FRSALDO.vacation, s = FRSALDO.saved, gammal = ndFr().regler ? ndFr().regler.balance_stale_days : null;
+  if (v.saknas && s.saknas) return `<section class="card"><div class="chead"><h2>Saldo</h2></div><p class="muted">Inget semestersaldo är inmatat för dig i Nav. Det matas in av den som sköter lönen, och då syns det här.</p></section>`;
+  const asof = v.asof || s.asof, alder = asof ? frMellan(asof, frIdag()) : 0;
+  return `<section class="card"><div class="chead"><h2>Saldo</h2>${asof ? `<span class="end muted" style="font-size:12px">inmatat ${frKort(asof)}</span>` : ''}</div>
+    <div class="frsaldon">${v.saknas ? '' : `<div><b class="num">${v.d}</b><span>semesterdagar${frVantarSem() ? `, varav ${frVantarSem()} i en ansökan som väntar` : ''}</span></div>`}${s.saknas ? '' : `<div><b class="num">${s.d}</b><span>sparade dagar</span></div>`}</div>
+    ${gammal !== null && alder > gammal ? `<div class="frb warn" style="margin-top:12px">${I('tid')}<span>Siffran är ${alder} dagar gammal. Fråga den som sköter lönen om den stämmer.</span></div>` : ''}
+    <p class="muted frhint">Lönesystemet räknar semesterrätten. Nav visar det som matats in, och säger till om siffran blir gammal.</p></section>`;
+};
+const _ndFrTeamKort = frTeamKort;
+frTeamKort = function(){
+  let h = _ndFrTeamKort(); if (!ndFr()) return h;
+  return ndFr().tak === null ? h.replace(/ Fyllt streck: taket på \d+ är nått\./, ' Inget tak för hur många som får vara borta samtidigt är satt.') : h;
+};
+
+/* ---------- Den egna sjukanmälan: navet spärrar inte instämplingen, och intyget lämnas på /franvaro/sjuk ---------- */
+const _ndFrSjukStatus = frSjukStatus;
+frSjukStatus = function(){
+  const h = _ndFrSjukStatus(); if (!ndFr()) return h;
+  return h.replace(/<p class="frsjukspar">[\s\S]*?<\/p>/, '')
+    .replace(/<button class="btn btn-s" data-act="toast" data-msg="Välj filen[^"]*">Lämna in läkarintyg<\/button>/, '<a class="btn btn-s" href="/franvaro/sjuk">Lämna in läkarintyg i Nav</a>');
+};
+
+/* ---------- Sjukanmälan: navets ringordning, utan påhittade nummer ---------- */
+const _ndFrSjukForm = frSjukForm;
+frSjukForm = function(){
+  const h = _ndFrSjukForm(); if (!ndFr()) return h;
+  const ring = ndFr().ring.length ? ndFr().ring.map((r, i) => `<span class="btn btn-s btn-sm" aria-disabled="true">${I('phone')}${i ? 'Annars ' : ''}${esc(r.vem)}${r.roll ? ` · ${esc(r.roll.toLowerCase())}` : ''}</span>`).join('') : '<span class="muted">Ringordningen är inte satt i Nav.</span>';
+  return h.replace(/<div class="frring">[\s\S]*?<\/div>/, `<div class="frring">${ring}</div><p class="muted frhint">Nav har inga telefonnummer. Ring som du brukar.</p>`);
+};
+
+/* ---------- Chefen ---------- */
+const _ndFrChef = frChef;
+frChef = function(){
+  const h = _ndFrChef(); if (!ndFrChef()) return h;
+  return h.replace(/Team Nord · 14 personer\./, `${ND.jag.team ? `${esc(ND.jag.team)} · ` : ''}${ndFr().chef.team} personer.`);
+};
+const _ndFrOversikt = frOversikt;
+frOversikt = function(){
+  if (!ndFrChef()) return _ndFrOversikt();
+  const c = ndFr().chef, borta = frBortaIdag(), bes = frBesluta(), idag = frIdag();
+  const ej = teamNow().filter(x => x[1] === 'ej' && !borta.some(p => p.vem === x[0])).map(x => x[0]);
+  const obekr = c.sjuka.filter(s => !s.bekraftad);
+  const frister = c.sjuka.flatMap(s => s.frister.map(f => ({namn:s.namn, ...f}))).sort((a, b) => a.due_on.localeCompare(b.due_on)).slice(0, 4);
+  return `<section class="card fridag"><div class="fridagn"><b class="num">${borta.length}</b><span>borta i dag<br><small class="muted">av ${c.team}</small></span></div>
+    <div class="fridagl">${borta.map(p => { const t = FTYP[p.typ], sjukObekr = p.typ === 'sick' && !p.bekr;
+      return `<div class="frperson">${avatar(p.vem, 32)}<div><b>${esc(p.vem)}</b><small><span class="frdot" style="--c:${t.c}"></span>${t.kort || t.l}${p.typ === 'sick' ? ` sedan ${frKort(p.fran)}` : (p.till === idag ? ' · sista dagen' : ` t.o.m. ${frKort(p.till)}`)}${p.del ? ` · ${p.del}` : ''}</small></div>${sjukObekr ? `<a class="btn btn-p btn-sm" href="/franvaro/sjuk">${I('check')}Bekräfta i Nav</a>` : p.typ === 'sick' ? '<span class="pill t-ok">Bekräftad</span>' : ''}</div>`; }).join('') || '<p class="muted">Ingen är borta i dag.</p>'}
+    ${ej.length ? `<div class="frperson ej">${avatar(ej[0], 32)}<div><b>${esc(ej.length === 1 ? ej[0] : `${ej[0]} och ${ej.length - 1} till`)}</b><small>Har inte stämplat in. Det är inte frånvaro förrän något är registrerat.</small></div><button class="btn btn-s btn-sm" data-view="tid">Se i Tid</button></div>` : ''}</div></section>
+    <div class="tgrid"><div class="col">${frTavla()}</div><div class="col">
+    <section class="card"><div class="chead"><h2>Att besluta</h2>${bes.length ? `<span class="pill t-signal">${bes.length}</span>` : ''}<span class="end"><button class="tlink" data-frtab="besluta">Öppna</button></span></div>
+    ${bes.length ? bes.map(p => { const br = frProva(p.typ, p.fran, p.till, p.vem, false, p.id, p.inDag); return `<button class="frmini" data-frtab="besluta" data-fropen="${p.id}">${avatar(p.vem, 28)}<span><b>${esc(fornamn(p.vem))}: ${FTYP[p.typ].l.toLowerCase()} ${frPeriod(p.fran, p.till)}</b><small>${frStart(p.fran)}${br.length ? ` · <span class="frwarn">${br.length} ${br.length === 1 ? 'varning' : 'varningar'}</span>` : ''}</small></span></button>`; }).join('') : `<p class="muted">${I('check')} Inget väntar på dig.</p>`}</section>
+    <section class="card"><div class="chead"><h2>Sjukfrånvaro</h2><span class="end"><button class="tlink" data-frtab="sjuk">Öppna</button></span></div>
+    ${obekr.length ? `<div class="frb danger">${I('sjuk')}<span><b>${obekr.length === 1 ? `${esc(obekr[0].namn.split(' ')[0])} väntar på att du bekräftar.` : `${obekr.length} väntar på att du bekräftar.`}</b> Efter ${FRPOL.bekrH} timmar går det vidare till VD.</span></div>` : ''}
+    ${frister.map(f => `<div class="frfristl"><span>${esc(f.namn.split(' ')[0])} · ${(NDFRFL[f.kind] || [f.kind])[0].toLowerCase()}</span><b class="num">${frKort(f.due_on)}</b></div>`).join('') || (obekr.length ? '' : '<p class="muted">Ingen är sjukanmäld.</p>')}
+    ${c.rehab.length && !S.frRehabOk ? `<div class="frfristl tyst"><span>${c.rehab.length === 1 ? 'En signal' : `${c.rehab.length} signaler`} om rehabiliteringsansvaret</span><button class="tlink" data-frtab="sjuk">Visa</button></div>` : ''}</section>
+    </div></div>`;
+};
+// Fliken Sjukfrånvaro: varje pågående sjukperiod ur repots chefsbild, med frister och anteckningar.
+const _ndFrSjukVy = frSjukVy;
+frSjukVy = function(){
+  if (!ndFrChef()) return _ndFrSjukVy();
+  const c = ndFr().chef, idag = frIdag(), sc = FTYP.sick ? FTYP.sick.c : '#E07A6F';
+  const avslutade = FRPER.filter(p => p.typ === 'sick' && p.till && p.till < idag).sort((a, b) => b.fran.localeCompare(a.fran));
+  const kort = s => { const dag = frMellan(s.forstaDag, idag) + 1, p = FRPER.find(x => x.id === s.id);
+    return `<section class="card frsjukkort"><div class="frah">${avatar(s.namn, 40)}<div><h2>${esc(s.namn)}</h2><p><span class="frdot" style="--c:${sc}"></span><b>Sjuk</b> sedan ${frKort(s.forstaDag)} · ${s.omfattning < 100 ? `${s.omfattning} %` : 'hela dagen'} · dag ${dag}${p && p.reg ? ` · registrerad ${esc(p.reg)}` : ''}</p></div>
+      <span class="pacts">${s.bekraftad ? `<span class="pill t-ok">${I('check')}Bekräftad</span>` : `<a class="btn btn-p" href="/franvaro/sjuk">${I('check')}Bekräfta i Nav</a>`}</span></div>
+      ${s.bekraftad ? '' : `<div class="frb danger">${I('tid')}<span>Inte bekräftad. ${esc(s.namn.split(' ')[0])} ser att ingen sett den. ${s.eskalerad ? 'Den har gått vidare till VD.' : `Efter ${FRPOL.bekrH} timmar går den vidare till VD.`}</span></div>`}
+      <ol class="frfrister"><li class="${dag === 1 ? 'nu' : ''}"><i>1</i><div><b>Karensdag <span class="muted num">dag 1 · ${frKort(s.forstaDag)}</span></b><small>Märks i löneunderlaget. Nav räknar inga kronor.</small></div><span class="muted">${dag > 1 ? 'passerad' : 'i dag'}</span></li>
+      ${s.frister.map(f => { const [l, txt] = NDFRFL[f.kind] || [f.kind, '']; const n = frMellan(idag, f.due_on), nr = frMellan(s.forstaDag, f.due_on) + 1; return `<li class="${n <= 0 ? 'nu' : ''}"><i>${nr}</i><div><b>${l} <span class="muted num">dag ${nr} · ${frKort(f.due_on)}</span></b><small>${txt}</small></div><span class="${n <= 3 && n > 0 ? 'frwarn' : 'muted'}">${n < 0 ? 'passerad' : n === 0 ? 'i dag' : `om ${n} dagar`}</span></li>`; }).join('')}</ol>
+      <div class="frnot"><b>Anteckningar</b><small class="muted">Bara chefen och VD ser dem. De följer med i registerutdraget, och de går inte att ändra i efterhand.</small>
+      ${s.anteckningar.map(a => `<div class="frnotrad"><span class="num muted">${esc(a.nar)}</span><p>${esc(a.text)} <span class="muted">· ${esc(a.av)}</span></p></div>`).join('') || '<p class="muted">Inga anteckningar.</p>'}</div>
+      <div class="pacts" style="margin-top:12px">${s.sistaDag ? `<span class="pill t-ok">${I('check')}Sista sjukdag ${frKort(s.sistaDag)}</span>` : ''}<a class="btn btn-s btn-sm" href="/franvaro/sjuk">Anteckna eller avsluta i Nav</a></div></section>`; };
+  return `<div class="tgrid"><div class="col">${c.sjuka.length ? c.sjuka.map(kort).join('') : `<section class="card frklar">${I('check')}<div><h2>Ingen är sjukanmäld</h2><p class="muted">En sjukanmälan hamnar här direkt, med fristerna räknade från första sjukdagen.</p></div></section>`}
+    ${avslutade.length ? `<section class="card"><div class="chead"><h2>Avslutade de senaste 60 dagarna</h2></div>${avslutade.map(p => `<div class="frmrad" style="--c:${sc}"><i></i><div><b>${esc(p.vem)} · ${frPeriod(p.fran, p.till)}</b><small>${frMellan(p.fran, p.till) + 1} ${frMellan(p.fran, p.till) ? 'dagar' : 'dag'} · ${p.omf < 100 ? `${p.omf} %` : 'hela dagen'}${p.bekr ? ` · bekräftad ${esc(p.bekr)}` : ''}</small></div></div>`).join('')}</section>` : ''}
+  </div><div class="col">
+    ${c.rehab.length && !S.frRehabOk ? `<section class="card frrehab"><div class="chead"><h2>Rehabiliteringsansvaret</h2></div>${c.rehab.map(r => `<p><b>${esc(r.namn)}</b> har sjukanmält sig ${r.antal} gånger på ${FRPOL.rehabMan} månader.</p>`).join('')}
+      <p class="muted">Det här är en påminnelse om arbetsgivarens skyldighet att utreda behovet av anpassning (30 kap. 6 § socialförsäkringsbalken), inte ett underlag för ett samtal om prestation. Personen får ingen notis. Nav vet ingenting om orsakerna, och ska inte göra det.</p>
+      <div class="pacts"><button class="btn btn-s btn-sm" data-frrut>Läs rutinen</button><button class="tlink" data-frrehabok>Dölj tills vidare</button></div></section>`
+      : `<section class="card"><div class="chead"><h2>Rehabiliteringsansvaret</h2></div><p class="muted">Ingen har sjukanmält sig ${FRPOL.rehabAntal} gånger eller fler på ${FRPOL.rehabMan} månader.</p></section>`}
+    <section class="card"><div class="chead"><h2>Så fungerar sjukanmälan</h2></div><ul class="frregl">
+      <li>Den som är sjuk ringer, och registrerar sedan i Nav. Ingen orsak, bara datum och omfattning.</li>
+      <li>Fristerna räknas från första sjukdagen, aldrig från registreringen.</li>
+      <li>Sjuk igen inom ${FRPOL.aterDagar} dagar räknas som samma sjukperiod, utan ny karensdag.</li>
+      <li>Ekonomi och lönekostnad ser aldrig sjukfrånvaron, bara minuterna i lönerapporten.</li></ul></section>
+  </div></div>`;
+};
+// Planeringen: önskemålsrundan finns inte i repot. Lagens frist räknas från navets regler.
+const _ndFrPlanVy = frPlanVy;
+frPlanVy = function(){
+  const h = _ndFrPlanVy(); if (!ndFr()) return h;
+  const idag = frIdag(), ar = idag.slice(5) <= FRPOL.huvudTill ? +idag.slice(0, 4) : +idag.slice(0, 4) + 1;
+  let start = `${ar}-${FRPOL.huvudFran}`; while (frDow(start) !== 1) start = frPlus(start, 1);
+  const senast = frPlus(start, -FRPOL.huvudFrist);
+  const kort = `<section class="card frrunda"><div class="chead"><h2>Sommaren ${ar}</h2></div>
+    <p>Huvudsemestern ligger ${ndDatumText(`${ar}-${FRPOL.huvudFran}`)}–${ndDatumText(`${ar}-${FRPOL.huvudTill}`)} (12 § semesterlagen), och beskedet ska komma minst ${FRPOL.huvudFrist} dagar innan (11 §). För en semester som börjar ${ndDatumText(start)} betyder det senast <b>${ndDatumText(senast)}</b>.</p>
+    <p class="muted">Önskemålsrundan finns inte i Nav än. Den byggs när Frånvaro får spara.</p></section>`;
+  return h.replace(/<section class="card frrunda">[\s\S]*?<\/section>/, kort);
+};
+// Regler: navets regelverk, läst. Ändringar görs i Nav.
+const _ndFrReglerVy = frReglerVy;
+frReglerVy = function(){
+  if (!ndFr()) return _ndFrReglerVy();
+  const f = ndFr(), r = f.regler;
+  const rad = t => { const x = FTYP[t.id]; return `<tr><td><span class="frdot" style="--c:${x.c}"></span>${esc(t.label)}${t.active ? '' : ' <small class="muted">inaktiv</small>'}</td><td class="num">${t.notice_days ? t.notice_days + ' d' : '–'}</td><td class="num">${t.max_consecutive_days ? t.max_consecutive_days + ' d' : '–'}</td><td class="num">${t.waiting_days || '–'}</td><td>${t.allows_part_day ? 'Ja' : 'Nej'}</td><td>${t.counts_in_staffing ? 'Ja' : 'Nej'}</td><td>${NDFRNIVA[t.approval_level] || t.approval_level}</td></tr>`; };
+  const sorter = s => s.typer.length ? s.typer.map(id => FTYP[id] ? FTYP[id].l : id).join(', ') : 'Alla sorter';
+  let gemensamt = '<p class="muted">Inget regelverk är inläst.</p>';
+  if (r){
+    const ys = `2026-${String(r.vacation_year_start_month).padStart(2, '0')}-${String(r.vacation_year_start_day).padStart(2, '0')}`, ye = frPlus(ys, -1);
+    gemensamt = `<dl class="tidl"><div><dt>Semesteråret</dt><dd>${ndDatumText(ys)}–${ndDatumText(ye)}</dd></div><div><dt>Huvudsemestern</dt><dd>${ndDatumText('2026-' + FRPOL.huvudFran)}–${ndDatumText('2026-' + FRPOL.huvudTill)}, ${FRPOL.huvudFrist} dagars besked</dd></div><div><dt>Sparade dagar</dt><dd>tas ut inom ${r.saved_days_max_years} år</dd></div><div><dt>Saldot</dt><dd>räknas som gammalt efter ${r.balance_stale_days} dagar</dd></div><div><dt>Sjukfallet</dt><dd>intyg dag ${FRPOL.intyg}, FK dag ${FRPOL.fk}, plan dag ${FRPOL.plan}</dd></div><div><dt>Bekräfta sjukanmälan</dt><dd>inom ${FRPOL.bekrH} timmar</dd></div><div><dt>Samma sjukperiod</dt><dd>sjuk igen inom ${FRPOL.aterDagar} dagar</dd></div><div><dt>Rehabsignal</dt><dd>${FRPOL.rehabAntal} gånger på ${FRPOL.rehabMan} månader</dd></div></dl>`;
+  }
+  return `<div class="tgrid"><div class="col"><section class="card"><div class="chead"><h2>Regler per sort</h2></div><div class="frtwrap"><table class="titab frregtab"><thead><tr><th>Sort</th><th>Frist</th><th>Längst</th><th>Karens</th><th>Del av dag</th><th>Bemanning</th><th>Beslutar</th></tr></thead><tbody>${f.typer.map(rad).join('')}</tbody></table></div>
+      <p class="muted frhint">Det här är exakt de regler säljaren ser innan hen skickar, och samma regler som varningarna bygger på.</p>
+      <div class="pacts"><a class="btn btn-s btn-sm" href="/franvaro/regler">Ändra reglerna i Nav</a></div></section></div>
+    <div class="col"><section class="card"><div class="chead"><h2>Bemanningstak</h2></div>
+      ${f.tak === null ? '<p class="muted">Inget tak är satt. Då varnar ingen ansökan för bemanningen.</p>' : `<div class="frtak"><b class="num">${f.tak}</b><span>borta samtidigt${ND.jag.team ? ` i ${esc(ND.jag.team)}` : ''}</span></div>
+      <p class="muted frhint">Med ${f.tak} som tak varnar ${FRPER.filter(p => p.st === 'submitted' && frProva(p.typ, p.fran, p.till, p.vem, false, p.id, p.inDag).some(b => b.kod === 'bemanning')).length} av ansökningarna som väntar. Taket varnar, det stoppar aldrig.</p>`}</section>
+      <section class="card"><div class="chead"><h2>Spärrperioder</h2></div>${FRSPARR.map(s => `<div class="frmrad"><i style="background:var(--warn)"></i><div><b>${esc(s.l)} · ${frPeriod(s.fran, s.till)}</b><small>${esc(sorter(s))}</small></div></div>`).join('') || '<p class="muted">Inga spärrperioder framåt.</p>'}</section>
+      <section class="card"><div class="chead"><h2>Gemensamt</h2></div>${gemensamt}</section></div></div>`;
+};
+
+/* ---------- Läsläge: det som sparar görs i Nav ---------- */
+const NDFRVAG = {frskicka:'/franvaro/ny', frdra:'/franvaro', frsjukreg:'/franvaro/sjuk', frfrisk:'/franvaro/sjuk', frbekr:'/franvaro/sjuk', frregtyp:'/franvaro',
+  frja:'/franvaro/attest', frnej:'/franvaro/attest', fravslag:'/franvaro/attest', frforslag:'/franvaro/attest', frnotspara:'/franvaro/sjuk', frsista:'/franvaro/sjuk',
+  frrut:'/rutiner', frrunda:'/franvaro/planering', frtak:'/franvaro/regler'};
+document.addEventListener('click', e => {
+  if (!ndFr() || S.view !== 'franvaro') return;
+  const b = e.target.closest && e.target.closest('button, a'); if (!b || !b.dataset) return;
+  const k = Object.keys(NDFRVAG).find(x => b.dataset[x] !== undefined);
+  // Ingen påhittad bekräftelse: data-act="toast" leder till samma sida i Nav.
+  const vag = k ? NDFRVAG[k] : b.dataset.act === 'toast' ? '/franvaro' : null;
+  if (vag){ e.preventDefault(); e.stopImmediatePropagation(); location.href = vag; }
+}, true);
+
+if (ndFr()){ ndFrStart(); NDKOPPLAD.add('franvaro'); }
 
 /* Start */
 try { const th = localStorage.getItem('nav2-theme'); if (th && th !== 'auto'){ document.documentElement.setAttribute('data-theme', th); S.theme = th; document.querySelectorAll('#themeSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.themeSet === th))); } } catch(_){}

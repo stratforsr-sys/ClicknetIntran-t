@@ -5,6 +5,50 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-14 · Nav 2.0 på /nav2, pass 3: Frånvaro (gren `nav2-utkast`)
+
+`src/lib/nav2/franvaro.ts` (`byggFranvaro`) bygger vyn med repots egna
+funktioner: `hamtaRegelverk` (typerna och reglerna, exakt de i
+`absence_type` och `absence_policy`), `hamtaChefsbild` (kön filtrerad på
+attestnivå, sjukperioderna med frister och anteckningar), `sjukfrister` och
+`upprepadKorttid` (rehabsignalen). Den egna frånvaron läses med den inloggades
+token.
+
+- **Säljarens bemanning** är ett antal per dag och aldrig namn, räknat som
+  `hamtaProvunderlag`: godkänd ledighet av sorter som räknas i bemanningen,
+  inom takets team, eller hela bolaget om taket är bolagets.
+- **Chefens tavla** har teamets perioder: kön ur chefsbilden, godkänd ledighet
+  60 dagar bakåt till elva månader framåt, och sjukperioderna. Raderna är de
+  personer chefen ser i registret.
+- **Ringordningen** (`absence_call_order`) slås upp i namn med service role:
+  säljaren ser vem hen ska ringa men får inte läsa registret. Navet har inga
+  telefonnummer, så utkastets nummer är borta.
+- **Spärrperioder** med team gäller bara de teamen, som i `hamtaProvunderlag`.
+- **Röda dagar** räknas med repots `rodaDagar` i stället för utkastets fasta
+  lista, som slutade i juni 2027 och hade med Alla helgons dag.
+- **Saknat saldo** står som saknat. Ingen regel räknar mot en nolla, som i
+  `provaRegler` (en sort utan saldorad varnar inte).
+- Utkastets påstående att instämplingen spärras under en öppen sjukanmälan är
+  borttaget: repot gör inte det. Läkarintyget lämnas på `/franvaro/sjuk`.
+- **Önskemålsrundan** i Planering finns bara i utkastet. Den visas som inte
+  byggd tills Frånvaro får skriva.
+
+**Provat lokalt mot produktionsdatabasen** som säljare (`set local role
+authenticated`): Fredrik har ingen frånvaro, ringer Zen och sedan Simon, inget
+tak, inget saldo. Mick är sjukanmäld i dag och obekräftad, med en bekräftad
+sjukperiod 7–13 okt, ett avslag och en VAB i historiken, precis som i
+tabellerna. Chefens halva provad i previewen (se nedan).
+
+## 2026-10-14 · Nav 2.0 på /nav2, pass 2: Tid (gren `nav2-utkast`, `fc59c17`)
+
+`src/lib/nav2/tid.ts` (`byggTid`): den egna stämplingen 35 dagar bakåt,
+schemat per veckodag med `gallandeSchema`, sena ankomster 90 dagar, beviljad
+ledighet. För chefen dessutom `hamtaDagsbild`, vem som är på plats, rättelser
+som väntar, `attendance_incident` (förslag och beslut 60 dagar), `oppnaDagar`,
+löneperioderna med senaste underlaget och konsekvenstrappan. Namnen slås upp
+bland alla anställda, även de som slutat, så att en gammal rad inte blir
+"Okänd". Provat i previewen som Zen och lokalt som Fredrik.
+
 ## 2026-10-14 · Nav 2.0 på /nav2, pass 1: grunden (gren `nav2-utkast`)
 
 Beställaren: utkastet till nytt Nav (ett klickbart HTML-utkast, byggt i 46
