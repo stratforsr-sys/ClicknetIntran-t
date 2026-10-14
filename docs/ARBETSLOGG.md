@@ -5,6 +5,50 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-14 · Nav 2.0 på /nav2, pass 1: grunden (gren `nav2-utkast`)
+
+Beställaren: utkastet till nytt Nav (ett klickbart HTML-utkast, byggt i 46
+versioner utanför repot) är målet. *"Jag vill inte ändra utkastet mot vad som
+redan finns i repot."* Repots backend kopplas in i utkastet i stället för att
+gränssnittet byggs om i React. Två beslut samma dag, ställda som frågor:
+
+1. **Var körs det med riktig data?** I navet, på en egen gren, bakom
+   inloggningen — inte som en ögonblicksbild i en artifact hos claude.ai.
+   Sjukfrånvaro, löner och personalärenden lämnar aldrig miljön, och RLS
+   gäller som överallt annars.
+2. **Får det skriva?** Nej, läsläge tills beställaren säger ja, vy för vy.
+   Previewen pekar på produktionsdatabasen, så ett klick i utkastet hade varit
+   ett riktigt klick.
+
+**Varför en route handler och inte en sida:** utkastet är en färdig HTML-fil
+på 2,6 MB med ett enda skript. Routen läser den, sätter svarets nonce på
+skriptet (CSP: `'strict-dynamic'`, inget `'unsafe-inline'` för skript), byter
+Google Fonts mot egna filer (CSP: `font-src 'self' data:`; `<link onload>` är
+dessutom en inline-hanterare) och bäddar in datan som JSON före skriptet, så
+att första ritningen redan är den riktiga. De två `onsubmit="return false"` i
+utkastet är bytta mot en delegerad lyssnare av samma skäl.
+
+**Ingenting påhittat syns.** Utkastet har 1 135 namn på exempelpersoner och 560
+fasta datum. En vy som inte är kopplad ritar därför inte sin exempeldata utan
+säger att den inte är kopplad, med en knapp till samma sak i nuvarande Nav.
+Rälsens antal, att göra-knappen, påminnelsefönstret och palettens färdiga
+frågor följer samma regel.
+
+**Kopplat i pass 1:** vem man är (rollen räknas ur befattningen: VD och
+administratör blir superadmin; säljchef, teamledare, ekonomi, projektledare och
+leverans blir admin; säljare blir säljare), klockan (repots `hamtaNotiser`,
+alltså exakt samma poster som här), Inställningar (konto, säkerhet med länk
+till `/profil/sakerhet`, utseende, notiser) och Satser och löner (med
+`payroll_cost_viewer`, K26).
+
+**Provat lokalt mot produktionsdatabasen** med `set local role authenticated`
+och den inloggades `sub`: en säljare får sin egen rad och varken satser eller
+löner; superadmin får 13 personer, 6 satser och 3 löner. Sidan ritad i headless
+Chrome som båda, utan fel. Klockan provades lokalt med `notification_event`;
+i navet är det `hamtaNotiser`, som också räknar härledda poster.
+
+---
+
 ## 2026-10-09 · Finans på order (0079)
 
 Gren `finans-pa-order`, ej mergad. Beställaren: *"När vi lägger upp ordrar i

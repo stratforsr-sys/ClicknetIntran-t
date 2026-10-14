@@ -12,6 +12,15 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
 
   /**
+   * Nav 2.0-utkastet (/nav2) laser sin sida fran disk. Utan den har raden
+   * kommer filen inte med i Vercels serverlosa funktion, och rutten svarar
+   * ENOENT forst i produktion — lokalt finns ju filen.
+   */
+  outputFileTracingIncludes: {
+    "/nav2": ["./src/nav2/utkast.html"],
+  },
+
+  /**
    * Ingen hojd `serverActions.bodySizeLimit` har, och det ar ett medvetet val.
    *
    * Uppladdade filer gar INTE genom navet. De gar direkt fran webblasaren till

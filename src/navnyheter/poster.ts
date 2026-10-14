@@ -14,6 +14,30 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "nav-2-med-riktig-data",
+    rubrik: "Nav 2.0 med riktig data, i läsläge",
+    ingress:
+      "Nya Nav går att öppna på /nav2 med din riktiga data. Ingenting du gör där sparas än, och vyerna kopplas en i taget.",
+    text: `Öppna **/nav2**. Det är det nya Nav, med samma inloggning och samma
+behörigheter som här: du ser bara det du får se.
+
+## Kopplat nu
+
+- **Klockan**, med samma notiser som här.
+- **Inställningar**: ditt konto, säkerheten och utseendet.
+- **Satser och löner**, för den som har behörigheten för lönekostnad.
+
+Vyerna som inte är kopplade säger det, och har en knapp till samma sak här.
+Ingenting påhittat visas.
+
+## Läsläge
+
+Ingenting sparas från /nav2 förrän det slås på, vy för vy.`,
+    datum: "2026-10-14",
+    roller: ["ceo", "admin"],
+    href: "/nav2",
+  },
+  {
     slug: "finans-pa-order",
     rubrik: "Finans på order",
     ingress:
