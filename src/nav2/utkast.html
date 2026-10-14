@@ -25096,7 +25096,7 @@ const NDFRFL = {certificate:['Läkarintyg', 'Lämnas om sjukdomen fortsätter.']
 const NDFRSUB = {vab:'Går bra samma dag, eller i efterhand.', saved_vacation:'Dagar du sparat från tidigare år.', comp_leave:'Kompledigt för övertid.', other:'Flytt, bröllop, begravning eller annat.'};
 
 // Vem som är "Johanna" i texterna: den som beslutar om den inloggades frånvaro.
-function ndChefNamn(){ const r = ndFr() && ndFr().ring.find(x => x.roll === 'Din chef'); return r ? r.vem : ME.chef.namn; }
+function ndChefNamn(){ const r = ndFr() && ndFr().ring.find(x => x.roll === 'Din närmaste chef'); return r ? r.vem : ME.chef.namn; }
 const ndChefFornamn = () => ndChefNamn().split(' ')[0] || 'din chef';
 const ndTeamText = () => ND.jag.team || 'teamet';
 // Texterna i vyn: den riktiga chefen och det riktiga teamet i stället för exemplens.
@@ -25104,6 +25104,8 @@ function ndText(h){
   return h.replace(/Johanna Ek/g, ndChefNamn()).replace(/Johanna/g, ndChefFornamn()).replace(/Team Nord/g, ndTeamText())
     .replace(/ när hon /g, ' när hen ').replace(/ tills hon /g, ' tills hen ');
 }
+// En roll i löptext: "säljchef", men "VD".
+const ndRollText = r => r === r.toUpperCase() ? r : r.toLowerCase();
 const ndDatumText = d => `${+d.slice(8)} ${NDMAN[+d.slice(5, 7)]}`;
 
 /* ---------- Röda dagar: repots rodaDagar (src/lib/saljtakt.ts), med namn ---------- */
@@ -25138,7 +25140,7 @@ function ndFrStart(){
   // En sort navet har men utkastet inte känner till hamnar under Något annat.
   Object.keys(FTYP).forEach(id => { if (id !== 'sick' && FTYP[id].sok && !FRHUVUD.includes(id) && !FRANNAT.includes(id)) FRANNAT.push(id); });
   const forsta = f.ring[0];
-  if (FTYP.sick) FTYP.sick.sub = `Ring ${forsta ? forsta.vem.split(' ')[0] : 'din chef'} först. Du behöver inte säga varför.`;
+  if (FTYP.sick) FTYP.sick.sub = `Ring ${!forsta ? 'din chef' : forsta.antal === 1 ? forsta.vem.split(' ')[0] : ndRollText(forsta.roll)} först. Du behöver inte säga varför.`;
   if (f.regler){
     const r = f.regler, mmdd = (m, d) => `${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     Object.assign(FRPOL, {huvudFran:mmdd(r.main_vacation_start_month, r.main_vacation_start_day), huvudTill:mmdd(r.main_vacation_end_month, r.main_vacation_end_day), huvudFrist:r.main_vacation_notice_days,
@@ -25157,8 +25159,8 @@ function ndFrStart(){
   FRHIST.sort((a, b) => b[1].localeCompare(a[1]));
   Object.keys(FRREHAB).forEach(k => delete FRREHAB[k]);
   if (f.chef) f.chef.rehab.forEach(r => { FRREHAB[r.namn] = r.antal; });
-  const chef = f.ring.find(x => x.roll === 'Din chef'), sc = f.ring.find(x => x.roll === 'Säljchef');
-  FRNIVA.manager = chef ? chef.vem : 'din chef'; FRNIVA.sales_manager = sc ? sc.vem : 'säljchefen'; FRNIVA.ceo = 'VD';
+  const chef = f.ring.find(x => x.roll === 'Din närmaste chef'), sc = f.ring.find(x => x.roll === 'Säljchef');
+  FRNIVA.manager = chef ? chef.vem : 'din chef'; FRNIVA.sales_manager = sc && sc.antal === 1 ? sc.vem : 'säljchefen'; FRNIVA.ceo = 'VD';
 }
 // Utkastets startläge, med dagens månad, navets tak och den egna sjukanmälan som pågår.
 const _ndFrSt = frSt;
@@ -25235,12 +25237,16 @@ frSjukStatus = function(){
     .replace(/<button class="btn btn-s" data-act="toast" data-msg="Välj filen[^"]*">Lämna in läkarintyg<\/button>/, '<a class="btn btn-s" href="/franvaro/sjuk">Lämna in läkarintyg i Nav</a>');
 };
 
-/* ---------- Sjukanmälan: navets ringordning, utan påhittade nummer ---------- */
+/* ---------- Sjukanmälan: ringordningen som på /franvaro/sjuk, med numret när det finns ---------- */
 const _ndFrSjukForm = frSjukForm;
 frSjukForm = function(){
   const h = _ndFrSjukForm(); if (!ndFr()) return h;
-  const ring = ndFr().ring.length ? ndFr().ring.map((r, i) => `<span class="btn btn-s btn-sm" aria-disabled="true">${I('phone')}${i ? 'Annars ' : ''}${esc(r.vem)}${r.roll ? ` · ${esc(r.roll.toLowerCase())}` : ''}</span>`).join('') : '<span class="muted">Ringordningen är inte satt i Nav.</span>';
-  return h.replace(/<div class="frring">[\s\S]*?<\/div>/, `<div class="frring">${ring}</div><p class="muted frhint">Nav har inga telefonnummer. Ring som du brukar.</p>`);
+  const rl = ndFr().ring;
+  const ring = rl.length ? rl.map((r, i) => { const txt = `${I('phone')}${i ? 'Annars ' : ''}${esc(r.vem)} · ${esc(ndRollText(r.roll))}${r.tel ? ` · ${esc(r.tel)}` : ''}`;
+    return r.tel ? `<a class="btn btn-s btn-sm" href="tel:${esc(r.tel.replace(/\s/g, ''))}">${txt}</a>` : `<span class="btn btn-s btn-sm" aria-disabled="true">${txt}</span>`; }).join('')
+    : '<span class="muted">Ingen ringordning är uppsatt. Ring din närmaste chef.</span>';
+  const tips = rl.length && !rl.some(r => r.tel) ? '<p class="muted frhint">Inget telefonnummer är inlagt i ringordningen. Ring som du brukar.</p>' : '';
+  return h.replace(/<div class="frring">[\s\S]*?<\/div>/, `<div class="frring">${ring}</div>${tips}`);
 };
 
 /* ---------- Chefen ---------- */

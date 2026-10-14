@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fullName, hasRole, type CurrentUser } from "@/lib/auth";
+import { ROLE_LABEL, type Role } from "@/lib/roles";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { hamtaChefsbild, hamtaRegelverk, type Chefsbild } from "@/lib/franvaro-server";
 import { datumPlus, sjukfrister, upprepadKorttid, type Franvarotyp, type Regelverk, type Sjukanmalan } from "@/lib/franvaro";
@@ -14,8 +15,7 @@ import { dagarBakat, svensktDatum, svenskKlocka } from "@/lib/klocka";
  *
  * Den egna frånvaron läses med den inloggades token. Chefsbilden är repots
  * egen och avgör själv vem som syns och vad som går att besluta. Ringordningen
- * är navets: närmaste chef, sedan rollerna. Navet har inga telefonnummer, så
- * inga skickas.
+ * byggs som på /franvaro/sjuk.
  *
  * Säljaren får teamets bemanning som ett antal per dag och aldrig namnen,
  * räknat som hamtaProvunderlag räknar: godkänd ledighet som räknas i
@@ -49,7 +49,8 @@ export type NdFranvaro = {
   bemanning: Record<string, number>;
   saldo: { vacation: { d: number; asof: string } | null; saved: { d: number; asof: string } | null };
   poster: NdFranvaroPost[];
-  ring: { vem: string; roll: string }[];
+  /** Som på /franvaro/sjuk: en rad per plats i ordningen, med numret om det finns. */
+  ring: { vem: string; roll: string; antal: number; tel: string | null }[];
   frister: { kind: string; due_on: string }[];
   chef: null | {
     ko: Chefsbild["ko"];
@@ -75,29 +76,40 @@ export async function byggFranvaro(supabase: SupabaseClient, user: CurrentUser):
     supabase.from("absence_balance").select("type_id, days, as_of").eq("employee_id", mig).order("as_of", { ascending: false }),
     supabase.from("absence_blackout").select("label, starts_on, ends_on, type_ids, team_ids").gte("ends_on", idag).order("starts_on"),
     supabase.from("staffing_cap").select("team_id, max_absent"),
-    supabase.from("absence_call_order").select("sort, target_kind, role, employee_id, team_id").eq("active", true).order("sort"),
+    supabase.from("absence_call_order").select("sort, target_kind, role, employee_id, phone, team_id").eq("active", true).order("sort"),
     supabase.from("employee").select("manager_id, team_id").eq("id", mig).maybeSingle(),
   ]);
 
-  // Ringordningen i namn. Chefen och rollerna slås upp med service role: en
+  // Ringordningen, byggd som på /franvaro/sjuk: teamets rader och bolagets,
+  // chefen slås upp per person, en roll blir en rad med alla som har den, och
+  // telefonnumret står på raden i ordningen. Namnen med service role: en
   // säljare får inte läsa registret, men navet visar redan vem hen ska ringa.
   const db = supabaseAdmin();
-  const ring: NdFranvaro["ring"] = [];
-  const ROLL: Record<string, string> = { sales_manager: "Säljchef", ceo: "VD", team_lead: "Teamledare" };
-  for (const o of ordning ?? []) {
-    if (o.target_kind === "manager" && jag?.manager_id) {
-      const { data: c } = await db.from("employee").select("first_name, last_name").eq("id", jag.manager_id).maybeSingle();
-      if (c) ring.push({ vem: fullName(c), roll: "Din chef" });
-    } else if (o.target_kind === "role" && o.role) {
-      const { data: r } = await db.from("employee_role").select("employee!employee_role_employee_id_fkey(first_name, last_name, status)").eq("role", o.role);
-      for (const x of (r ?? []) as unknown as { employee: { first_name: string; last_name: string; status: string } | null }[]) {
-        if (x.employee && x.employee.status !== "offboarded" && !ring.some((y) => y.vem === fullName(x.employee!))) ring.push({ vem: fullName(x.employee), roll: ROLL[o.role] ?? o.role });
-      }
-    } else if (o.target_kind === "employee" && o.employee_id) {
-      const { data: e } = await db.from("employee").select("first_name, last_name").eq("id", o.employee_id).maybeSingle();
-      if (e) ring.push({ vem: fullName(e), roll: "" });
-    }
+  const rader = (ordning ?? []).filter((o) => o.team_id === null || o.team_id === (jag?.team_id ?? null));
+  const roller = rader.filter((o) => o.target_kind === "role").map((o) => o.role as string);
+  const utpekade = rader.filter((o) => o.target_kind === "person").map((o) => o.employee_id as string);
+  const [{ data: chefen }, { data: medRoll }, { data: namngivna }] = await Promise.all([
+    jag?.manager_id ? db.from("employee").select("first_name, last_name").eq("id", jag.manager_id).maybeSingle() : Promise.resolve({ data: null }),
+    roller.length ? db.from("employee_role").select("role, employee!employee_role_employee_id_fkey(id, first_name, last_name, status)").in("role", roller) : Promise.resolve({ data: [] }),
+    utpekade.length ? db.from("employee").select("id, first_name, last_name").in("id", utpekade) : Promise.resolve({ data: [] }),
+  ]);
+  const perRoll = new Map<string, { first_name: string; last_name: string }[]>();
+  for (const r of (medRoll ?? []) as unknown as { role: string; employee: { first_name: string; last_name: string; status: string } }[]) {
+    if (r.employee.status === "offboarded") continue;
+    perRoll.set(r.role, [...(perRoll.get(r.role) ?? []), r.employee]);
   }
+  const namngiven = new Map(((namngivna ?? []) as { id: string; first_name: string; last_name: string }[]).map((p) => [p.id, p]));
+  const ring: NdFranvaro["ring"] = rader
+    .map((o) => {
+      if (o.target_kind === "manager") return chefen ? { vem: fullName(chefen), roll: "Din närmaste chef", antal: 1, tel: o.phone ?? null } : null;
+      if (o.target_kind === "role") {
+        const folk = perRoll.get(o.role as string) ?? [];
+        return folk.length ? { vem: folk.map(fullName).join(", "), roll: ROLE_LABEL[o.role as Role] ?? (o.role as string), antal: folk.length, tel: o.phone ?? null } : null;
+      }
+      const p = namngiven.get(o.employee_id as string);
+      return p ? { vem: fullName(p), roll: "Utpekad mottagare", antal: 1, tel: o.phone ?? null } : null;
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null);
 
   const minNamn = [user.employee!.first_name, user.employee!.last_name].map((s) => (s ?? "").trim()).filter(Boolean).join(" ");
   const poster: NdFranvaroPost[] = [
