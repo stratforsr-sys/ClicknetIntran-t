@@ -30,6 +30,8 @@ behörigheter som här: du ser bara det du får se.
 - **Order** och kundkortet. Varje order har nu ett nummer (#12), och
   provisionen är navets: fryst på en godkänd order, och det godkännandet
   skulle ge på en som väntar.
+- **Provision**, räknad av samma motor som här: månaden, trappan, målen,
+  historiken och, för säljchef, VD och ekonomi, laget och perioderna.
 
 Vyerna som inte är kopplade säger det, och har en knapp till samma sak här.
 Ingenting påhittat visas.

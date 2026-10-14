@@ -5,6 +5,44 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-14 · Nav 2.0 på /nav2, pass 5: Order och kundkortet (gren `nav2-utkast`, `04a0b83`)
+
+`src/lib/nav2/order.ts` (`byggOrder`) läser som `/order`: `hamtaOrderUrval`
+utan filter (utkastet filtrerar i webbläsaren), nyckeltalen på
+`hamtaOrder(manad)` med `nettoAntal`, `grundprovision` och `ordervarde`,
+`raknaKo`, `hamtaAvtalsslut`, och kundkortets material — `hamtaTjanster`,
+`hamtaOrderbilagor`, `hamtaOrdersamtal`, `hamtaCrmkopplingar` — för alla order
+på en gång, eftersom kortet öppnas utan omladdning.
+
+- **Provisionen är repots.** Utkastets `OMATRIS` och fasta procentsatser är
+  borta. En godkänd order bär sin frysta `commission_amount`. En som väntar
+  får det godkännandet skulle frysa i dag: `orderforma.ts`
+  (`forhandsprovision`) följer `raknaFramProvision` steg för steg med samma
+  rena funktioner (`gallandeSats`, `affarenFor`, `utkopsprovision`,
+  `finansavgift`) och samma felbesked. SweAuto (#28, fri order utan provision)
+  visar därför "–" och repots skäl, inte noll.
+- **Säljsamtalet** är `bedomSaljsamtal` på de redan kopplade samtalen — samma
+  bedömning som spärren, men utan svepningen (den skriver).
+- **0080_ordernummer** (körd): utkastet talar om "#12", och navet hade inget
+  nummer. Kolumnen är en identitet, numrerad efter `created_at`. Main skriver
+  den aldrig, och triggrarna på `sales_order` rör den inte.
+- **`/nav2/inkio`** (GET) läser Inkio när kortet eller formuläret frågar:
+  `kundaktivitet`, `landningssida` och `bolagsuppslag`, efter samma RLS-koll
+  som `orgnrForInkio`. I preview svarar den `kopplat:false` (nycklarna gäller
+  bara grenen `inkio`).
+
+Borttaget i riktigt läge: talsyntesens påhittade samtal och utskrift (spelaren
+leder till Nav, där uppspelningen loggas), kampanjsidans svarstid och sju
+dagars historik (repot vet bara läget när kortet öppnas), "Ny sedan du
+tittade", leadet i formuläret, Bolagsverkets exempelsvar och Inkio-numren
+som räknades fram ur ordernumret. Godkänna, makulera, rätta, koppla samtal,
+bilagor och förlängning leder till kunden i Nav. Den som inte är säljchef,
+VD eller ekonomi ser ordervyn som säljaren gör, som på `/order`.
+
+Provat lokalt som Fredrik och Mick (16 och 4 order, RLS) och Zen (29), och i
+previewen som Zen: samma tal som lokalt, alla sex flikar, formuläret räknar
+4 000 kr för Paket 2 i 24 månader ur matrisen, inga exempelnamn.
+
 ## 2026-10-14 · Nav 2.0 på /nav2, pass 4: Uppgifter (gren `nav2-utkast`, `2d38996`, `5fa3aca`)
 
 `src/lib/nav2/uppgifter.ts` (`byggUppgifter`) bygger på `hamtaUppgiftsbild`

@@ -7635,7 +7635,7 @@ const LAGE = {
 
 const PROV = {manad:6120, affarer:5, mal:20000, forra:17300, iar:127520, dag:7, dagar:22,
   hist:[['nov',9800],['dec',7200],['jan',11400],['feb',12900],['mar',14100],['apr',13200],['maj',15800],['jun',12100],['jul',8400],['aug',16200],['sep',17300],['okt',6120]]};
-const prognos = () => { const u = pvUnderlag(ME.saljare.namn, PVMAN), t = pvTakt(u); return t.prognos ? t.prognos.totalt : u.summa; };
+let prognos = () => { const u = pvUnderlag(ME.saljare.namn, PVMAN), t = pvTakt(u); return t.prognos ? t.prognos.totalt : u.summa; };
 
 /* ===================== Ritning ===================== */
 const rail = document.getElementById('rail');
@@ -15101,10 +15101,10 @@ FEAT.push(
      Utbetalning sker månaden efter.
    - Säljaren ser bara sig själv. Chefen ser alla, utan placeringssiffror.
    ===================================================================== */
-const PVIDAG = '2026-10-09', PVMAN = '2026-10';
-const PVKVPROC = 1.25, PVKVTAK = 5, PVKVTROSKEL = 160, PVKVMAX = 200;
+let PVIDAG = '2026-10-09', PVMAN = '2026-10';
+let PVKVPROC = 1.25, PVKVTAK = 5, PVKVTROSKEL = 160, PVKVMAX = 200;
 let PVUTKOP = 12, PVOVERTACK = 10, PVEGEN = 40, PVFINANS = 11;
-const PVSATSFRAN = '2026-09-01';
+let PVSATSFRAN = '2026-09-01';
 const PVSALJARE = ['Amira Haddad', 'Elin Berg', 'Mohammed Aziz', 'Sara Nyström', 'Nora Sjöberg', 'Hampus Lund', 'Leila Karimi', 'Oskar Brandt', 'Tilda Wik', 'Erik Moberg', 'Fatima Noor', 'Jonas Lindqvist', 'Ali Rahimi', 'Viktor Holm'];
 const PVANST = {'Amira Haddad':'1027', 'Elin Berg':'1008', 'Mohammed Aziz':'1015', 'Sara Nyström':'1011', 'Nora Sjöberg':'1031', 'Hampus Lund':'1022', 'Leila Karimi':'1029', 'Oskar Brandt':'1034', 'Tilda Wik':'1019', 'Erik Moberg':'1024', 'Fatima Noor':'1036', 'Jonas Lindqvist':'1013', 'Ali Rahimi':'1026', 'Johanna Ek':'1003'};
 
@@ -15196,7 +15196,7 @@ function pvFrys(m){ S.pvFrysNr[m] = new Set(ORDER.filter(o => pvGodkand(o) && o.
 
 /* ---------- Kalendern: arbetsdagar ---------- */
 const pvSista = m => { const [y, mm] = m.split('-').map(Number); return new Date(Date.UTC(y, mm, 0)).toISOString().slice(0, 10); };
-const pvArbetsdagar = m => frDagar(m + '-01', pvSista(m)).filter(frArbetsdag);
+let pvArbetsdagar = m => frDagar(m + '-01', pvSista(m)).filter(frArbetsdag);
 const pvManNamn = m => FRMAN[+m.slice(5, 7)];
 const pvManLang = m => `${pvManNamn(m)}${m.slice(0, 4) !== '2026' ? ' ' + m.slice(0, 4) : ''}`;
 const pvStor = t => t[0].toUpperCase() + t.slice(1);
@@ -15204,7 +15204,7 @@ const pvNastaMan = m => { const [y, mm] = m.split('-').map(Number); return mm ==
 const pvForraMan = m => { const [y, mm] = m.split('-').map(Number); return mm === 1 ? `${y - 1}-12` : `${y}-${String(mm - 1).padStart(2, '0')}`; };
 const pvAvr = b => Math.sign(b) * Math.round(Math.abs(b));
 const pvGen = n => /[sxz]$/i.test(n) ? n : n + 's';
-const pvDagarTill = d => Math.round((Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8)) - Date.UTC(2026, 9, 9)) / 864e5);
+let pvDagarTill = d => Math.round((Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8)) - Date.UTC(2026, 9, 9)) / 864e5);
 const pvSkal = s => /[.!?]$/.test(s) ? s : s + '.';
 
 /* ---------- Trappan ---------- */
@@ -15237,7 +15237,7 @@ function pvKv(vem, m){
   if (b) return {veckor:null, godkanda:b[2], bedomda:b[3]};
   return {veckor:null, godkanda:0, bedomda:0};
 }
-const pvOvertackDel = o => PVOVERTACK / 100 * Math.max(0, oNetto(o) - oProv(o));
+let pvOvertackDel = o => PVOVERTACK / 100 * Math.max(0, oNetto(o) - oProv(o));
 function pvOvertack(m){
   if (m + '-01' < PVSATSFRAN) return {antal:0, makulerade:0, belopp:0, per:{}, ingen:true};
   const lag = ORDER.filter(o => o.vem !== ME.chef.namn);
@@ -15349,9 +15349,9 @@ function pvGa(vem, m){ pvSt(); pvRollKoll(); S.view = 'provision'; S.todoOpen = 
 function pvFlikar(chef){
   if (!chef) return [['manad', 'Min månad', 0], ['historik', 'Historik', 0], ['regler', 'Så räknas det', 0]];
   const utanMal = PVSALJARE.filter(v => { const x = pvMalFor(v, PVMAN); return !x || (x.o === null && x.k === null); }).length;
-  const kanFast = Object.keys({'2026-10':1}).filter(m => !pvStangd(m) && pvSista(m) <= PVIDAG).length;
+  const kanFast = (ND ? pvManader().filter(m => pvLaget(m).medOrder > 0) : Object.keys({'2026-10':1})).filter(m => !pvStangd(m) && pvSista(m) <= PVIDAG).length;
   const vantar = ORDER.filter(o => o.st === 'inskickad' && o.samtal).length;
-  return [['laget', 'Laget', vantar, 'väntar på godkännande'], ['manad', S.pvVem === 'laget' || S.pvVem === ME.chef.namn ? 'Min provision' : fornamn(S.pvVem), 0], ['perioder', 'Perioder och underlag', kanFast, 'kan fastställas'], ['mal', 'Månadsmål', utanMal, 'säljare utan mål i oktober'], ['regler', 'Regler', 0]];
+  return [['laget', 'Laget', vantar, 'väntar på godkännande'], ['manad', S.pvVem === 'laget' || S.pvVem === ME.chef.namn ? 'Min provision' : fornamn(S.pvVem), 0], ['perioder', 'Perioder och underlag', kanFast, 'kan fastställas'], ['mal', 'Månadsmål', utanMal, `säljare utan mål i ${pvManNamn(PVMAN)}`], ['regler', 'Regler', 0]];
 }
 function renderPvView(){
   pvSt(); pvRollKoll();
@@ -15364,7 +15364,7 @@ function renderPvView(){
     <div role="tabpanel" aria-labelledby="pvt-${f}">${f === 'laget' ? pvLagetVy() : f === 'manad' ? pvPersonVy(chef && S.pvVem === 'laget' ? ME.chef.namn : S.pvVem) : f === 'historik' ? pvHistorikVy(ME.saljare.namn) : f === 'perioder' ? pvPerioderVy() : f === 'mal' ? pvMalVy() : pvReglerVy()}</div>`;
 }
 function pvUtbText(m){
-  if (m < '2026-08') return 'Månaden är från tiden före provisionsmotorn.';
+  if (!ND && m < '2026-08') return 'Månaden är från tiden före provisionsmotorn.';
   const p = (S.pvPerioder || {})[m];
   if (p && p.status === 'utbetald') return `${pvStor(pvManLang(m))} är utbetald ${p.ut}.`;
   return `${pvStor(pvManLang(m))} betalas ut med ${pvManNamn(pvNastaMan(m))}lönen.`;
@@ -15373,11 +15373,11 @@ function pvManader(){ const ut = []; let m = PVMAN; for (let i = 0; i < 12; i++)
 function pvValjare(chef){
   const man = pvManader(), i = man.indexOf(S.pvM);
   const vem = chef ? `<label class="pv-sel"><span class="sr">Vems siffror</span><select data-pvvem aria-label="Vems siffror">${[['laget', 'Laget'], [ME.chef.namn, 'Min provision'], ...PVSALJARE.map(v => [v, v])].map(([v, l]) => `<option value="${esc(v)}" ${S.pvVem === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>` : '';
-  return `${vem}<span class="pv-mannav">${note(330)}<button class="ibtn" data-pvmsteg="1" ${i >= man.length - 1 ? 'disabled' : ''} aria-label="Föregående månad" title="Föregående månad (←)">‹</button><label class="pv-sel"><span class="sr">Period</span><select data-pvm aria-label="Period">${man.map(m => `<option value="${m}" ${S.pvM === m ? 'selected' : ''}>${pvStor(pvManLang(m))}${m === PVMAN ? ' · pågår' : (S.pvPerioder[m] ? (S.pvPerioder[m].status === 'utbetald' ? ' · utbetald' : ' · fastställd') : m < '2026-08' ? ' · före motorn' : '')}</option>`).join('')}</select></label><button class="ibtn" data-pvmsteg="-1" ${i <= 0 ? 'disabled' : ''} aria-label="Nästa månad" title="Nästa månad (→)">›</button></span>`;
+  return `${vem}<span class="pv-mannav">${note(330)}<button class="ibtn" data-pvmsteg="1" ${i >= man.length - 1 ? 'disabled' : ''} aria-label="Föregående månad" title="Föregående månad (←)">‹</button><label class="pv-sel"><span class="sr">Period</span><select data-pvm aria-label="Period">${man.map(m => `<option value="${m}" ${S.pvM === m ? 'selected' : ''}>${pvStor(pvManLang(m))}${m === PVMAN ? ' · pågår' : (S.pvPerioder[m] ? (S.pvPerioder[m].status === 'utbetald' ? ' · utbetald' : ' · fastställd') : !ND && m < '2026-08' ? ' · före motorn' : '')}</option>`).join('')}</select></label><button class="ibtn" data-pvmsteg="-1" ${i <= 0 ? 'disabled' : ''} aria-label="Nästa månad" title="Nästa månad (→)">›</button></span>`;
 }
 function pvLage(m){
   const p = (S.pvPerioder || {})[m];
-  if (m < '2026-08') return ['neutral', 'Historik'];
+  if (!ND && m < '2026-08') return ['neutral', 'Historik'];
   if (!p) return ['live', 'Öppen, räknas live'];
   return p.status === 'utbetald' ? ['ok', 'Utbetald'] : ['brand', 'Fastställd'];
 }
@@ -15408,7 +15408,7 @@ function pvPanel(u, t, lage, jag, arChef){
       <div><p class="pv-stor num">${kr(u.summa)}</p>${sd ? `<p class="pv-jmf ${sd.mot >= 0 ? 'upp' : 'ned'}"><b class="num">${sd.mot >= 0 ? '+' : '−'}${kr(Math.abs(sd.mot))}</b> mot samma dag i ${pvManNamn(sd.fm)}, i grundprovision</p>` : ''}<p class="pv-mening">${pvMening(u, jag, arChef)}</p></div>
       <dl class="pv-delar">${delar.map(([l, v, k]) => `<div><dt>${l}</dt><dd><button class="num pv-del" data-pvdel="${k}" title="Visa raderna">${kr(v)}</button></dd></div>`).join('')}</dl>
     </div>
-    ${arChef ? `<p class="pv-chefnot">Volymtrappan och K&amp;V gäller säljare. Övertäcket räknas inte som order och höjer ingen trappa (Ö19).</p>` : u.trappa.length ? pvTrappaVy(u, pr, t) : u.m < PVSATSFRAN ? `<p class="pv-chefnot">Augusti hade ingen volymtrappa. Trappan gäller från 1 september.</p>` : ''}
+    ${arChef ? `<p class="pv-chefnot">Volymtrappan och K&amp;V gäller säljare. Övertäcket räknas inte som order och höjer ingen trappa (Ö19).</p>` : u.trappa.length ? pvTrappaVy(u, pr, t) : u.m < PVSATSFRAN ? `<p class="pv-chefnot">${ND ? `${pvStor(pvManNamn(u.m))} hade ingen volymtrappa. Trappan gäller från ${pvManLang(PVSATSFRAN.slice(0, 7))}.` : 'Augusti hade ingen volymtrappa. Trappan gäller från 1 september.'}</p>` : ''}
   </section>`;
 }
 function pvMening(u, jag, arChef){
@@ -15451,7 +15451,7 @@ function pvAtgarder(u, jag, t, mal){
   const nar = o => { if (!u.nasta) return ''; const n = u.bonusantal + (o && !pvStangd(o.sign.slice(0, 7)) ? 1 : 0); return u.nasta && o && !pvStangd(o.sign.slice(0, 7)) && n >= u.nasta.niva.t ? ` Den ensam räcker till <b>nivå ${u.nasta.niva.t}</b>.` : ''; };
   const sen = o => pvStangd(o.sign.slice(0, 7)) ? ` Den hör till ${pvManNamn(o.sign.slice(0, 7))}, som är fastställd, så den bokförs i ${pvManNamn(u.m)} när den godkänns, utan volymbonus.` : '';
   stopp.forEach(o => a.push([`<b>#${o.nr} ${esc(o.bolag)}</b> saknar säljsamtalet. Utan det kan ordern inte godkännas.${nar(o)}${sen(o)}`, `+${kr(oProv(o))} när den godkänns`, jag ? `<button class="btn btn-p btn-sm" data-pvkoppla="${o.nr}">${I('phone')}Koppla samtalet</button>` : `<button class="btn btn-s btn-sm" data-pvorder="${o.nr}">Öppna</button>`, 'danger']));
-  vant.forEach(o => a.push([`<b>#${o.nr} ${esc(o.bolag)}</b> väntar på ${chef ? 'ditt' : 'Johannas'} godkännande.${nar(o)}${sen(o)}`, `+${kr(oProv(o))} när den godkänns`, chef ? `<button class="btn btn-p btn-sm" data-pvgodkann="${o.nr}">${I('check')}Godkänn</button><button class="btn btn-s btn-sm" data-pvorder="${o.nr}">Öppna</button>` : `<button class="btn btn-s btn-sm" data-pvorder="${o.nr}">Öppna</button>`, '']));
+  vant.forEach(o => a.push([`<b>#${o.nr} ${esc(o.bolag)}</b> väntar på ${chef ? 'ditt' : ND ? 'säljchefens' : 'Johannas'} godkännande.${nar(o)}${sen(o)}`, `+${kr(oProv(o))} när den godkänns`, chef ? `<button class="btn btn-p btn-sm" data-pvgodkann="${o.nr}">${I('check')}Godkänn</button><button class="btn btn-s btn-sm" data-pvorder="${o.nr}">Öppna</button>` : `<button class="btn btn-s btn-sm" data-pvorder="${o.nr}">Öppna</button>`, '']));
   u.utkast.forEach(o => a.push([`<b>#${o.nr} ${esc(o.bolag)}</b> är ett utkast och räknas inte förrän den skickas in.`, o.p ? `+${kr(oProv(o))} när den godkänns` : '', `<button class="btn btn-s btn-sm" data-pvorder="${o.nr}">Öppna</button>`, '']));
   const iManad = u.vantar.filter(o => !pvStangd(o.sign.slice(0, 7)));
   if (u.nasta && iManad.length > 1 && u.bonusantal + iManad.length >= u.nasta.niva.t){
@@ -15495,14 +15495,14 @@ function pvFacitKort(u){
 function pvMalKort(u, t, mal, live){
   const chef = S.role === 'chef';
   if (!mal || (mal.o === null && mal.k === null)){
-    return `<section class="card pv-k">${note(318)}<p class="pv-kt">Mål</p><p class="pv-kv num pv-tom">–</p><p class="pv-ks">inget mål satt</p><p class="pv-kf">${chef ? `<button class="tlink inl" data-pvmalfor="${esc(u.vem)}">Sätt ett mål för ${esc(fornamn(u.vem))}</button>` : 'Johanna har inte satt något mål för månaden. Takten gäller ändå.'}</p></section>`;
+    return `<section class="card pv-k">${note(318)}<p class="pv-kt">Mål</p><p class="pv-kv num pv-tom">–</p><p class="pv-ks">inget mål satt</p><p class="pv-kf">${chef ? `<button class="tlink inl" data-pvmalfor="${esc(u.vem)}">Sätt ett mål för ${esc(fornamn(u.vem))}</button>` : (ND ? 'Inget mål är satt för månaden. Takten gäller ändå.' : 'Johanna har inte satt något mål för månaden. Takten gäller ändå.')}</p></section>`;
   }
   const rad = (enh, malv, nu) => { const x = pvMotMal(malv, nu, live ? t : {...t, andel:1, kvar:0}), sk = n => enh === 'k' ? kr(n) : `${Math.round(n)}`, ord = {fore:['Före takten', 'ok'], i_takt:['I takt', 'info'], efter:['Efter takten', 'warn']}[x.lage];
     return `<div class="pv-malrad"><div class="pv-malh"><b class="num">${pvProc(x.andel)}</b><span>${sk(nu)} av ${sk(malv)}${enh === 'o' ? ' order' : ''}</span>${live ? `<span class="pill t-${ord[1]}">${ord[0]}</span>` : `<span class="pill t-${x.andel >= 1 ? 'ok' : 'neutral'}">${x.andel >= 1 ? 'Nådde målet' : 'Nådde inte'}</span>`}</div>
       <div class="pv-malbar" role="progressbar" aria-valuemin="0" aria-valuemax="${malv}" aria-valuenow="${Math.round(nu)}" aria-label="${enh === 'o' ? 'Ordermål' : 'Kronmål'}: ${sk(nu)} av ${sk(malv)}"><i class="${live ? x.lage : x.andel >= 1 ? 'fore' : 'efter'}" style="width:${Math.min(100, x.andel * 100)}%"></i>${live && x.forvantat > 0 && x.forvantat < malv ? `<em style="left:${x.forvantat / malv * 100}%" title="Där takten säger att du borde stå i dag"></em>` : ''}</div>
       ${live ? `<small>${x.kravPerDag !== null ? `Takten i dag är ${sk(x.forvantat)}; ${chef ? fornamn(u.vem) + ' ligger' : 'du ligger'} ${x.mot >= 0 ? '+' : '−'}${sk(Math.abs(x.mot))}. Det krävs ${enh === 'k' ? kr(x.kravPerDag) : pvDecimal(Math.ceil(x.kravPerDag * 10) / 10) + ' order'} per arbetsdag på de ${t.kvar} som är kvar.` : 'Målet är nått.'}</small>` : ''}</div>`; };
   const ger = live && mal.o !== null && mal.o > u.antal.netto && u.trappa.length ? pvOm(u, mal.o - u.antal.netto) : null;
-  return `<section class="card pv-k">${note(318)}<p class="pv-kt">Mål <small>satt av Johanna</small>${chef ? `<button class="tlink inl pv-malandra" data-pvmalfor="${esc(u.vem)}">Ändra</button>` : ''}</p>${mal.o !== null ? rad('o', mal.o, u.antal.netto) : ''}${mal.k !== null ? rad('k', mal.k, u.summa) : ''}
+  return `<section class="card pv-k">${note(318)}<p class="pv-kt">Mål ${ND ? '' : '<small>satt av Johanna</small>'}${chef ? `<button class="tlink inl pv-malandra" data-pvmalfor="${esc(u.vem)}">Ändra</button>` : ''}</p>${mal.o !== null ? rad('o', mal.o, u.antal.netto) : ''}${mal.k !== null ? rad('k', mal.k, u.summa) : ''}
     ${ger ? `<p class="pv-malger">Når ${chef ? fornamn(u.vem) : 'du'} ${mal.o} order blir månaden <b class="num">≈ ${kr(ger.totalt)}</b>${ger.niva ? `, nivå ${ger.niva.t}` : ''}.</p>` : ''}</section>`;
 }
 function pvKvKort(u){
@@ -15528,8 +15528,8 @@ function pvRaderVy(u, jag){
       ${u.rader.length > 5 ? `<input class="uin pv-sok" data-pvq value="${esc(S.pvQ || '')}" placeholder="Sök kund eller ordernummer" aria-label="Sök bland raderna">` : ''}</div>
     ${synl.length || vantSynl.length ? `<ul class="pv-rlista">${synl.map(r => `<li class="${r.slag}${r.sen ? ' sen' : ''}"><span class="pv-rt">${r.o ? `<button class="tlink" data-pvorder="${r.o.nr}">${esc(r.text)}</button>${pill(r.o)}${r.sen ? '<span class="pill t-signal">Sen</span>' : ''}` : esc(r.text)}<small>${esc(r.sub || '')}</small></span>${r.dag ? `<span class="pv-rd num">${oDat(r.dag)}</span>` : '<span class="pv-rd"></span>'}<b class="num ${r.belopp < 0 ? 'neg' : ''}">${r.belopp < 0 ? '−' : ''}${kr(Math.abs(r.belopp))}</b></li>`).join('')}
       ${synl.length && f === 'alla' && !q ? `<li class="pv-summa"><span class="pv-rt">Summa</span><span class="pv-rd"></span><b class="num">${kr(u.summa)}</b></li>` : synl.length > 1 ? `<li class="pv-summa liten"><span class="pv-rt">Summa av raderna som visas</span><span class="pv-rd"></span><b class="num">${kr(synl.reduce((s, r) => s + r.belopp, 0))}</b></li>` : ''}
-      ${vantSynl.length ? `<li class="pv-rsep">Väntar, räknas inte in i summan</li>${vantSynl.map(o => `<li class="vantar"><span class="pv-rt"><button class="tlink" data-pvorder="${o.nr}">#${o.nr} ${esc(o.bolag)}</button><small>${oAffar(o)} · ${o.st === 'utkast' ? 'utkast' : o.samtal ? 'hos Johanna' : 'säljsamtal saknas'}${pvStangd(o.sign.slice(0, 7)) ? ` · hör till ${pvManNamn(o.sign.slice(0, 7))}, bokförs i ${pvManNamn(u.m)}` : ''}</small></span><span class="pv-rd num">${oDat(o.sign)}</span><b class="num">≈ ${o.p || o.fri ? kr(oProv(o)) : '–'}</b></li>`).join('')}` : ''}</ul>`
-    : `<p class="muted pv-tomt">${u.rader.length || vant.length ? `Inget matchar. <button class="tlink inl" data-pvradrensa>Visa allt</button>` : `Inga godkända order i ${pvManNamn(u.m)} än. Den första godkända ordern hamnar här samma sekund.`}</p>`}
+      ${vantSynl.length ? `<li class="pv-rsep">Väntar, räknas inte in i summan</li>${vantSynl.map(o => `<li class="vantar"><span class="pv-rt"><button class="tlink" data-pvorder="${o.nr}">#${o.nr} ${esc(o.bolag)}</button><small>${oAffar(o)} · ${o.st === 'utkast' ? 'utkast' : o.samtal ? (ND ? 'väntar på godkännande' : 'hos Johanna') : 'säljsamtal saknas'}${pvStangd(o.sign.slice(0, 7)) ? ` · hör till ${pvManNamn(o.sign.slice(0, 7))}, bokförs i ${pvManNamn(u.m)}` : ''}</small></span><span class="pv-rd num">${oDat(o.sign)}</span><b class="num">≈ ${o.p || o.fri ? kr(oProv(o)) : '–'}</b></li>`).join('')}` : ''}</ul>`
+    : `<p class="muted pv-tomt">${u.rader.length || vant.length ? `Inget matchar. <button class="tlink inl" data-pvradrensa>Visa allt</button>` : `Inga godkända order i ${pvManNamn(u.m)} än. ${ND ? 'Den första godkända ordern hamnar här.' : 'Den första godkända ordern hamnar här samma sekund.'}`}</p>`}
     <p class="pv-kf">Grundprovisionen fryses på ordern när den godkänns, så en sats som ändras senare ändrar inte vad någon redan tjänat. Stämmer något inte: <button class="tlink inl" data-go="/arenden">lägg ett ärende</button>, så finns frågan och svaret kvar.</p></section>`;
 }
 function pvChefTakt(u, t){
@@ -15551,8 +15551,8 @@ function pvChefFakta(u){
 /* ---------- Laget (chefen) ---------- */
 function pvLagetVy(){
   const m = S.pvM;
-  if (m < '2026-08') return `<section class="pv-panel"><div class="pv-ph"><span class="pv-etikett">Laget · ${pvManLang(m)}</span><span class="pv-lage neutral"><i></i>Historik</span></div><div class="pv-pk"><div><p class="pv-stor num">–</p><p class="pv-mening">Före augusti 2026 fanns ingen provisionsmotor. Lagets siffror finns i lönesystemet.</p></div></div></section>`;
-  const L = pvLaget(m), lage = pvLage(m), live = m === PVMAN, F = pvForraMan(m) >= '2026-08' ? pvLaget(pvForraMan(m)) : null;
+  if (!ND && m < '2026-08') return `<section class="pv-panel"><div class="pv-ph"><span class="pv-etikett">Laget · ${pvManLang(m)}</span><span class="pv-lage neutral"><i></i>Historik</span></div><div class="pv-pk"><div><p class="pv-stor num">–</p><p class="pv-mening">Före augusti 2026 fanns ingen provisionsmotor. Lagets siffror finns i lönesystemet.</p></div></div></section>`;
+  const L = pvLaget(m), lage = pvLage(m), live = m === PVMAN, F = (ND ? pvManader().includes(pvForraMan(m)) : pvForraMan(m) >= '2026-08') ? pvLaget(pvForraMan(m)) : null;
   // Samma sort för alla: grundprovision plus volymbonus, i samma takt. K&V och övrig bonus skrivs inte fram.
   const takt = live ? L.rader.reduce((s, u) => { const p = pvTakt(u).prognos; return s + (p ? p.totalt : u.grund + u.volym); }, 0) : null;
   const vantar = ORDER.filter(o => o.st === 'inskickad' && o.samtal);
@@ -15600,11 +15600,11 @@ function pvLagtavla(L, m){
 function pvHistorikVy(vem, inbaddad){
   const man = pvManader().slice().reverse(), rader = man.map(m => ({m, u:pvUnderlag(vem, m), mal:pvMalFor(vem, m)}));
   const max = Math.max(1, ...rader.map(r => Math.max(r.u.summa, r.mal && r.mal.k ? r.mal.k : 0)));
-  const iar = rader.filter(r => r.m.startsWith('2026')).reduce((s, r) => s + r.u.summa, 0), bast = rader.reduce((a, b) => b.u.summa > a.u.summa ? b : a), medNiva = rader.filter(r => r.u.niva).length;
+  const iar = rader.filter(r => r.m.startsWith(PVMAN.slice(0, 4))).reduce((s, r) => s + r.u.summa, 0), bast = rader.reduce((a, b) => b.u.summa > a.u.summa ? b : a), medNiva = rader.filter(r => r.u.niva).length;
   const avslutade = rader.filter(r => r.m !== PVMAN && r.u.summa), snitt = avslutade.length ? avslutade.reduce((s, r) => s + r.u.summa, 0) / avslutade.length : 0;
   const nu = rader.find(r => r.m === PVMAN), takt = nu ? pvTakt(nu.u).prognos : null;
   return `<section class="card pv-hist">${note(322)}<div class="chead"><h2>${inbaddad ? 'Tolv månader' : 'Tolv månader bakåt'}</h2><span class="meta">varje månad räknad för sig, med sin egen trappa</span></div>
-    <dl class="pv-strip ljus"><div><dt>Hittills i år</dt><dd class="num">${kr(iar)}</dd></div><div><dt>Bästa månaden</dt><dd class="num">${pvManNamn(bast.m)} · ${kr(bast.u.summa)}</dd></div><div><dt>Snitt per månad</dt><dd class="num">${kr(snitt)}</dd><small>avslutade månader</small></div>${takt ? `<div><dt>${pvStor(pvManNamn(PVMAN))} i samma takt</dt><dd class="num">${kr(takt.totalt)}</dd><small>${takt.totalt >= snitt ? `${kr(takt.totalt - snitt)} över snittet` : `${kr(snitt - takt.totalt)} under snittet`}</small></div>` : ''}<div><dt>Månader med bonusnivå</dt><dd class="num">${medNiva}</dd><small>trappan finns sedan september</small></div></dl>
+    <dl class="pv-strip ljus"><div><dt>Hittills i år</dt><dd class="num">${kr(iar)}</dd></div><div><dt>Bästa månaden</dt><dd class="num">${pvManNamn(bast.m)} · ${kr(bast.u.summa)}</dd></div><div><dt>Snitt per månad</dt><dd class="num">${kr(snitt)}</dd><small>avslutade månader</small></div>${takt ? `<div><dt>${pvStor(pvManNamn(PVMAN))} i samma takt</dt><dd class="num">${kr(takt.totalt)}</dd><small>${takt.totalt >= snitt ? `${kr(takt.totalt - snitt)} över snittet` : `${kr(snitt - takt.totalt)} under snittet`}</small></div>` : ''}<div><dt>Månader med bonusnivå</dt><dd class="num">${medNiva}</dd><small>${ND ? `trappan finns sedan ${pvManLang(PVSATSFRAN.slice(0, 7))}` : 'trappan finns sedan september'}</small></div></dl>
     <div class="pv-staplar" role="img" aria-label="Provision per månad">${snitt ? `<span class="pv-snittlinje" style="bottom:calc(20px + ${snitt / max * 100}% * (100% - 20px) / 100%)" title="Snitt ${kr(snitt)}"></span>` : ''}${rader.map(r => `<button class="pv-stapel ${r.m === S.pvM ? 'vald' : ''} ${r.m === PVMAN ? 'live' : ''} ${r.u.fore ? 'fore' : ''}" data-pvm-set="${r.m}" title="${pvStor(pvManLang(r.m))}: ${r.u.fore && !r.u.summa ? 'ingen uppgift' : kr(r.u.summa)}${r.mal && r.mal.k ? `, mål ${kr(r.mal.k)}` : ''}"><i style="height:${Math.max(2, r.u.summa / max * 100)}%"></i>${r.mal && r.mal.k ? `<em style="bottom:${r.mal.k / max * 100}%"></em>` : ''}<span>${FRMK[+r.m.slice(5, 7)]}</span></button>`).join('')}</div>
     <p class="pv-histlegend"><span><i class="lv"></i>pågår</span><span><i class="ml"></i>kronmål</span><span><i class="sn"></i>snitt</span></p>
     <ul class="pv-hlista">${rader.slice().reverse().map(r => { const l = pvLage(r.m); return `<li><button data-pvm-set="${r.m}" class="${r.m === S.pvM ? 'vald' : ''}"><span class="pv-hm">${pvManLang(r.m)}</span><span class="num pv-ho">${r.u.fore ? '' : `${r.u.antal.netto} order`}</span><span class="pv-hn">${r.u.niva ? `<span class="pill t-ok">Nivå ${r.u.niva.t}</span>` : ''}</span><span class="pill t-${l[0] === 'live' ? 'info' : l[0] === 'brand' ? 'signal' : l[0]}">${l[1]}</span><b class="num">${r.u.fore && !r.u.summa ? '–' : kr(r.u.summa)}</b></button></li>`; }).join('')}</ul></section>`;
@@ -15612,12 +15612,12 @@ function pvHistorikVy(vem, inbaddad){
 
 /* ---------- Perioder och underlag (chefen) ---------- */
 function pvPerioderVy(){
-  const man = ['2026-10', '2026-09', '2026-08'];
+  const man = ND ? pvManader().slice(0, 3) : ['2026-10', '2026-09', '2026-08'];
   const u = S.pvUnderlagM;
   return `<section class="card pv-per">${note(325)}<div class="chead"><h2>Perioder</h2><span class="meta">öppen räknas live · fastställd är bokförd · utbetald är gjord</span></div>
     <ul class="pv-perlista">${man.map((m, i) => { const L = pvLaget(m), p = S.pvPerioder[m], sista = pvSista(m), sistaArb = pvArbetsdagar(m).pop(), kanFast = !p && sista <= PVIDAG, forra = man[i + 1] ? pvLaget(man[i + 1]).summa : null;
       return `<li><span class="pv-hm">${pvManLang(m)}</span><span class="pill t-${p ? (p.status === 'utbetald' ? 'ok' : 'signal') : 'info'}">${p ? (p.status === 'utbetald' ? 'Utbetald' : 'Fastställd') : 'Öppen'}</span>
-        <span class="pv-pertxt">${p ? `Fastställd ${p.fast} av ${fornamn(p.av)}. ${p.status === 'utbetald' ? `Utbetald ${p.ut}.` : `Betalas ut med ${pvManNamn(pvNastaMan(m))}lönen. Ekonomi markerar utbetald.`}` : `${L.medOrder} säljare med order, räknat live. ${kanFast ? 'Kan fastställas.' : `Kan fastställas tidigast ${oDat(sista)}.`}`}</span>
+        <span class="pv-pertxt">${p ? `Fastställd ${p.fast}${p.av ? ` av ${fornamn(p.av)}` : ''}. ${p.status === 'utbetald' ? `Utbetald ${p.ut}.` : `Betalas ut med ${pvManNamn(pvNastaMan(m))}lönen. Ekonomi markerar utbetald.`}` : `${L.medOrder} säljare med order, räknat live. ${kanFast ? 'Kan fastställas.' : `Kan fastställas tidigast ${oDat(sista)}.`}`}</span>
         <span class="pv-perbel"><b class="num">${kr(L.summa)}</b>${forra !== null ? `<small class="num ${L.summa >= forra ? 'upp' : 'ned'}">${L.summa >= forra ? '+' : '−'}${kr(Math.abs(L.summa - forra))} mot ${pvManNamn(man[i + 1])}${p ? '' : ' hittills'}</small>` : ''}</span>
         <span class="pacts"><button class="btn btn-s btn-sm" data-pvunderlag="${m}" aria-pressed="${u === m}">Underlag</button>${!p ? (kanFast ? `<button class="btn btn-p btn-sm" data-pvfaststall="${m}">Fastställ</button>` : S.pvPamint ? `<span class="pill t-ok">${I('bell')}Påminnelse ${oDat(sistaArb)}</span>` : `<button class="btn btn-s btn-sm" data-pvpamin="${sistaArb}">${I('bell')}Påminn mig ${oDat(sistaArb)}</button>`) : ''}</span></li>`; }).join('')}</ul>
     <p class="pv-kf">En fastställd månad räknas aldrig om, inte ens om trappan ändras. En order som godkänns efter att dess månad fastställts bokförs i den öppna månaden, med en anteckning om vilken månad den hör till.</p></section>
@@ -15647,19 +15647,19 @@ function pvOvrigForm(){
       <label class="${fel.bel ? 'err' : ''}">Belopp i kronor<input class="uin num" id="pvbBel" data-pvb="bel" value="${esc(u.bel)}" inputmode="numeric" placeholder="1 000" ${fel.bel ? 'aria-invalid="true"' : ''}>${fel.bel ? `<small class="onfel">${I('fel')}${fel.bel}</small>` : ''}</label>
       <label class="pv-bskal ${fel.skal ? 'err' : ''}">Skäl <small class="muted">obligatoriskt, säljaren ser det</small><input class="uin" id="pvbSkal" data-pvb="skal" value="${esc(u.skal)}" placeholder="Till exempel: största affären i oktober." ${fel.skal ? 'aria-invalid="true"' : ''}>${fel.skal ? `<small class="onfel">${I('fel')}${fel.skal}</small>` : ''}</label>
       <div class="pacts"><button type="button" class="btn btn-p btn-sm" data-pvbonusok>Lägg ${+String(u.bel).replace(/\s/g, '') > 0 ? kr(+String(u.bel).replace(/\s/g, '')) : 'bonusen'} till ${esc(fornamn(u.vem))}</button><button type="button" class="tlink" data-pvbonusavbryt>Avbryt</button></div><p class="pv-kf">Enter lägger bonusen. Hör den till en enskild affär läggs den från orderkortet; då kommer person och månad ur ordern.</p></form>` : ''}
-    ${S.pvOvrig.length ? `<ul class="pv-rlista">${S.pvOvrig.slice().reverse().map(x => `<li class="bonus"><span class="pv-rt">${esc(x.vem)} · ${pvManLang(x.m)}<small>${esc(x.skal)} Lagd av ${esc(fornamn(x.av))}.</small></span><span class="pv-rd">${kanTa(x) ? `<button class="tlink" data-pvbonusta="${x.id}">Ta bort</button>` : '<span class="muted">bokförd</span>'}</span><b class="num">${kr(x.belopp)}</b></li>`).join('')}</ul>` : ''}</section>`;
+    ${S.pvOvrig.length ? `<ul class="pv-rlista">${S.pvOvrig.slice().reverse().map(x => `<li class="bonus"><span class="pv-rt">${esc(x.vem)} · ${pvManLang(x.m)}<small>${esc(x.skal)} ${x.av ? `Lagd av ${esc(fornamn(x.av))}.` : ''}</small></span><span class="pv-rd">${kanTa(x) ? `<button class="tlink" data-pvbonusta="${x.id}">Ta bort</button>` : '<span class="muted">bokförd</span>'}</span><b class="num">${kr(x.belopp)}</b></li>`).join('')}</ul>` : ''}</section>`;
 }
 
 /* ---------- Månadsmål (chefen) ---------- */
 function pvMalVarde(v, m, k){ const u = ((S.pvMalUtk || {})[m] || {})[v]; if (u && k in u) return u[k]; const x = pvMalFor(v, m); return x && x[k] !== null && x[k] !== undefined ? String(x[k]) : ''; }
 function pvMalAndrade(m){ const u = (S.pvMalUtk || {})[m] || {}; let n = 0; Object.entries(u).forEach(([v, x]) => Object.entries(x).forEach(([k, val]) => { const sparat = pvMalFor(v, m); if (String(sparat && sparat[k] !== null && sparat[k] !== undefined ? sparat[k] : '') !== String(val).replace(/\s/g, '')) n++; })); return n; }
 function pvMalVy(){
-  const m = S.pvMalM || PVMAN, forra = pvForraMan(m), framat = ['2026-10', '2026-11', '2026-12', '2027-01'], andrade = pvMalAndrade(m);
+  const m = S.pvMalM || PVMAN, forra = pvForraMan(m), framat = ND ? [PVMAN, pvNastaMan(PVMAN), pvNastaMan(pvNastaMan(PVMAN)), pvNastaMan(pvNastaMan(pvNastaMan(PVMAN)))] : ['2026-10', '2026-11', '2026-12', '2027-01'], andrade = pvMalAndrade(m);
   const sumO = PVSALJARE.reduce((s, v) => s + (+pvMalVarde(v, m, 'o') || 0), 0), sumK = PVSALJARE.reduce((s, v) => s + (+String(pvMalVarde(v, m, 'k')).replace(/\s/g, '') || 0), 0);
   return `<section class="card pv-malvy">${note(326)}<div class="chead"><h2>Månadsmål</h2><span class="meta">innevarande månad och tre framåt. En passerad månad går inte att sätta mål för.</span></div>
     <div class="segs pv-malman" role="group" aria-label="Månad">${framat.map(x => `<button data-pvmalm="${x}" aria-pressed="${m === x}">${pvManLang(x)}${pvMalAndrade(x) ? ' •' : ''}</button>`).join('')}</div>
     <div class="pv-malh2" aria-hidden="true"><span>Säljare</span><span>Order</span><span>Kronor</span><span>${pvManNamn(forra)}: mål och utfall</span></div>
-    <ul class="pv-mallista">${PVSALJARE.map(v => { const f = pvMalFor(v, forra), uf = forra >= '2026-08' && forra <= PVMAN ? pvUnderlag(v, forra) : null, utk = ((S.pvMalUtk || {})[m] || {})[v] || {};
+    <ul class="pv-mallista">${PVSALJARE.map(v => { const f = pvMalFor(v, forra), uf = (ND ? pvManader().includes(forra) : forra >= '2026-08' && forra <= PVMAN) ? pvUnderlag(v, forra) : null, utk = ((S.pvMalUtk || {})[m] || {})[v] || {};
       return `<li class="${S.pvMalFokus === v ? 'fokus' : ''}"><span class="pv-lnamn">${avatar(v, 24)}<b>${esc(v)}</b></span><input class="uin num ${'o' in utk ? 'andrad' : ''}" data-pvmal="${esc(v)}|o" value="${esc(pvMalVarde(v, m, 'o'))}" inputmode="numeric" placeholder="–" aria-label="Ordermål för ${esc(v)}"><input class="uin num ${'k' in utk ? 'andrad' : ''}" data-pvmal="${esc(v)}|k" value="${esc(pvMalVarde(v, m, 'k'))}" inputmode="numeric" placeholder="–" aria-label="Kronmål för ${esc(v)}">
         <small class="pv-forra">${f && f.o !== null && uf ? `${f.o} order → ${uf.antal.netto}${forra === PVMAN ? ' hittills' : ''} <span class="pill t-${uf.antal.netto >= f.o ? 'ok' : 'neutral'}">${uf.antal.netto >= f.o ? 'Nådde' : forra === PVMAN ? 'Pågår' : 'Nådde inte'}</span>` : f && f.o !== null ? `${f.o} order, har inte börjat` : 'inget mål'}${uf && uf.antal.netto && !pvMalVarde(v, m, 'o') ? ` <button class="tlink inl" data-pvmalforslag="${esc(v)}|${uf.antal.netto}">Använd ${uf.antal.netto}</button>` : ''}</small></li>`; }).join('')}
       <li class="pv-malsum"><span><b>Laget</b></span><span class="num">${sumO || '–'}</span><span class="num">${sumK ? kr(sumK) : '–'}</span><small class="pv-forra">summan av de satta målen</small></li></ul>
@@ -15673,9 +15673,9 @@ function pvReglerVy(){
   const ex = u && u.nasta ? (() => { const n = u.nasta.niva.t; return `Med ${n} godkända order i en månad blir nivån ${n}: ${n} × ${kr(u.nasta.niva.a)} = ${kr(n * u.nasta.niva.a)} i volymbonus, utöver grundprovisionen.`; })() : null;
   return `<div class="pv-regler">${note(328)}
     <section class="card"><div class="chead"><h2>Grundprovisionen</h2><span class="meta">engångsbelopp per order, fryst vid godkännandet</span></div>
-      <table class="pv-tab pv-matris"><thead><tr><th>Paket</th><th class="num">12 mån</th><th class="num">24 mån</th><th class="num">36 mån</th></tr></thead><tbody>${[1, 2, 3].map(p => `<tr><td>${OPAKET[p].l} <small class="muted">${OPAKET[p].pris.toLocaleString('sv-SE')} kr/mån</small></td>${[12, 24, 36].map(l => `<td class="num"><b>${kr(OMATRIS[p][l])}</b><small class="muted">värde ${kr(OPAKET[p].pris * l)}</small></td>`).join('')}</tr>`).join('')}</tbody></table>
+      <table class="pv-tab pv-matris"><thead><tr><th>Paket</th><th class="num">12 mån</th><th class="num">24 mån</th><th class="num">36 mån</th></tr></thead><tbody>${ndPaketIds().map(p => `<tr><td>${OPAKET[p].l} <small class="muted">${OPAKET[p].pris.toLocaleString('sv-SE')} kr/mån</small></td>${[12, 24, 36].map(l => `<td class="num"><b>${kr(OMATRIS[p][l])}</b><small class="muted">värde ${kr(OPAKET[p].pris * l)}</small></td>`).join('')}</tr>`).join('')}</tbody></table>
       <ul class="pv-regl"><li><b>Fri order:</b> provisionen sätts för hand och står på ordern.</li><li><b>Utköp:</b> ${PVUTKOP} % av nettot efter utköpet, i stället för matrisen.</li><li><b>Finans:</b> ${PVFINANS} % per år dras från ordervärdet. Matrisens belopp ändras inte.</li><li><b>Makulering:</b> avdraget sker i den månad ordern makuleras, inte i den månad den tecknades.</li></ul></section>
-    <section class="card" id="pvTrappRegel"><div class="chead"><h2>Volymbonusen</h2><span class="meta">från 1 september · retroaktiv på alla månadens order</span>${chef && !a ? '<span class="end"><button class="btn btn-s btn-sm" data-pvregelandra>Ändra trappan</button></span>' : ''}</div>
+    <section class="card" id="pvTrappRegel"><div class="chead"><h2>Volymbonusen</h2><span class="meta">${ND && pvVersion(PVMAN) ? `från ${oDat(pvVersion(PVMAN).fran)}` : 'från 1 september'} · retroaktiv på alla månadens order</span>${chef && !a ? '<span class="end"><button class="btn btn-s btn-sm" data-pvregelandra>Ändra trappan</button></span>' : ''}</div>
       ${PVTRAPPA.filter(x => x.fran > PVIDAG).map(x => `<p class="frb info">${I('kal')}<span><b>En ny trappa gäller från ${oDat(x.fran)}:</b> ${x.nivaer.map(n => `${n.t} order ${kr(n.a)}`).join(' · ')} per order.${chef ? ` <button class="tlink inl" data-pvregelangra="${x.id}">Ta tillbaka</button>` : ''}</span></p>`).join('')}
       ${a ? pvTrappForm(tr) : `<ol class="pv-trlista">${tr.map(x => `<li><b class="num">${x.t} order</b><span class="num">${kr(x.a)} per order</span><small class="muted">${kr(x.a * x.t)} vid exakt ${x.t}</small></li>`).join('')}</ol>`}
       ${ex ? `<p class="pv-exempel">${I('trend')}<span>${ex}</span></p>` : ''}
@@ -15824,12 +15824,12 @@ function pvSpara(namn, txt, klartext){
 function pvCsv(m){
   const rad = pvUnderlagRader(m), p = S.pvPerioder[m];
   const txt = [['Person', 'Anställningsnummer', 'Grundprovision', 'Volymbonus', 'K&V-bonus', 'Övrig bonus', 'Chefsersättning', 'Att betala ut', 'Läge'].join(';'), ...rad.map(r => [r.vem, r.anst || '', r.grund, r.volym, r.kv, r.ovrig, r.chef, r.summa, p ? 'Fastställd' : 'Preliminär'].join(';'))].join('\n');
-  pvSpara(`provisionsunderlag-${m}${p ? '' : '-preliminar'}.csv`, txt, `Underlaget för ${pvManNamn(m)} är sparat${p ? '' : ', märkt preliminärt'}. Exempeldata.`);
+  pvSpara(`provisionsunderlag-${m}${p ? '' : '-preliminar'}.csv`, txt, `Underlaget för ${pvManNamn(m)} är sparat${p ? '' : ', märkt preliminärt'}.${ND ? '' : ' Exempeldata.'}`);
 }
 function pvLagCsv(){
   const m = S.pvM, rad = pvLagRader(pvLaget(m), m).filter(PVLAGTEST[S.pvLagF] || PVLAGTEST.alla);
   const txt = [['Säljare', 'Order netto', 'Väntar', 'Nivå', 'Kvar till nästa', 'Ordermål', 'Andel av målet', 'Ordervärde', 'Intjänat'].join(';'), ...rad.map(x => [x.u.vem, x.u.antal.netto, x.u.vantar.length, x.u.niva ? x.u.niva.t : '', x.u.nasta ? x.u.nasta.kvar : '', x.mal && x.mal.o !== null ? x.mal.o : '', x.mm ? Math.round(x.mm.andel * 100) + ' %' : '', x.u.varde, x.u.summa].join(';'))].join('\n');
-  pvSpara(`laget-${m}.csv`, txt, `Tavlan för ${pvManNamn(m)} är sparad, ${rad.length} säljare. Exempeldata.`);
+  pvSpara(`laget-${m}.csv`, txt, `Tavlan för ${pvManNamn(m)} är sparad, ${rad.length} säljare.${ND ? '' : ' Exempeldata.'}`);
 }
 
 /* Startsidans kort räknas ur samma motor, varje gång det ritas. */
@@ -24545,12 +24545,12 @@ renderBrief = () => ND ? ndHemLage() : _ndHem.renderBrief();
 renderWeek = () => ND ? '' : _ndHem.renderWeek();
 renderTmr = () => ND ? '' : _ndHem.renderTmr();
 renderInbox = () => ND ? '' : _ndHem.renderInbox();
-// Golvet är dagens order mot lagets mål och takt: det kräver både Order och Provision.
-renderGolvet = () => ND && !(ndKopplad('order') && ndKopplad('provision')) ? '' : _ndHem.renderGolvet();
+// Golvet och chefens lagkort är dagens order mot lagets mål och takt. De kopplas med startsidan ('hemlag').
+renderGolvet = () => ND && !NDKOPPLAD.has('hemlag') ? '' : _ndHem.renderGolvet();
 renderAeHem = () => ND && !ndKopplad('anstallda') ? '' : _ndHem.renderAeHem();
 renderDev = () => ND ? '' : _ndHem.renderDev();
 renderNews = () => ND && !ndKopplad('nyheter') ? '' : _ndHem.renderNews();
-renderTeamGoal = () => ND && !ndKopplad('provision') ? '' : _ndHem.renderTeamGoal();
+renderTeamGoal = () => ND && !NDKOPPLAD.has('hemlag') ? '' : _ndHem.renderTeamGoal();
 renderCnHemChef = () => ND && !ndKopplad('coachning') ? '' : _ndHem.renderCnHemChef();
 renderAgenda = () => ND && !ndKopplad('kalender') ? '' : _ndHem.renderAgenda();
 renderCnHem = () => ND && !ndKopplad('coachning') ? '' : _ndHem.renderCnHem();
@@ -25847,6 +25847,170 @@ renderOrdView = ndOrdRoll(renderOrdView);
 kkKort = ndOrdRoll(kkKort);
 
 if (ndO()){ ndOrdStart(); NDKOPPLAD.add('order'); }
+
+/* =====================================================================
+   NAV 2.0 I RIKTIGT LÄGE: PROVISION (prefix nd), v47
+
+   ND.provision (src/lib/nav2/provision.ts) är repots motor, månad för månad
+   och person för person: raknaUnderlag och underlagForAlla på samma order,
+   trappa, K&V, konsekvenslägen och övertäck som /provision. En stängd månad
+   är huvudboken, en öppen är motorn plus det som bokförts för hand. Takten
+   är repots takta, målen sales_target, varningen varningslage.
+
+   Utkastets egen motor (pvUnderlag, pvTakt, pvVarning) räknar alltså inte
+   här. Funktionerna skrivs över och ger repots tal i utkastets former, så
+   att vyerna ritas som de är.
+
+   Läsläge: fastställa, övrig bonus, mål och trappan görs i Nav.
+   ===================================================================== */
+
+const ndP = () => ND && ND.provision;
+const ndPvNamnFor = id => { const p = ndP().personer.find(x => x.id === id); return p ? p.namn : id === ND.jag.id ? ND.jag.namn : null; };
+const ndPvIdFor = namn => { if (namn === ND.jag.namn) return ND.jag.id; const p = ndP().personer.find(x => x.namn === namn); return p ? p.id : null; };
+const ndPvNiva = n => n ? {t:n.t, a:n.a, enhet:n.enhet} : null;
+
+/* ---------- Hydrering ---------- */
+function ndPvStart(){
+  const P = ndP();
+  PVIDAG = kIdag(); PVMAN = P.manad;
+  if (P.kvPolicy){ PVKVPROC = P.kvPolicy.procent; PVKVTAK = P.kvPolicy.tak; PVKVTROSKEL = P.kvPolicy.troskel; if (P.kvPolicy.max) PVKVMAX = P.kvPolicy.max; }
+  // Första månaden som har en trappa, för texten om månader utan.
+  const forsta = Object.keys(P.trappor).filter(m => P.trappor[m].length).sort()[0];
+  PVSATSFRAN = forsta ? forsta + '-01' : PVMAN + '-01';
+  PVSALJARE.length = 0;
+  P.personer.filter(p => p.saljare && p.id !== ND.jag.id).forEach(p => PVSALJARE.push(p.namn));
+  if (!P.chefsvy){ PVSALJARE.length = 0; PVSALJARE.push(ND.jag.namn); }
+  Object.keys(PVANST).forEach(k => delete PVANST[k]);
+  P.personer.forEach(p => { if (p.anst) PVANST[p.namn] = p.anst; });
+  PVTRAPPA.length = 0;
+  P.versioner.forEach((v, i) => PVTRAPPA.push({id:'v' + i, fran:v.fran, till:v.till, nivaer:v.nivaer.map(n => ({t:n.t, a:n.a}))}));
+  // PVKV läses också av K&V-modulens exempel; den töms när K&V kopplas. Provisionen läser den inte här.
+  [PVBOK, PVCHEFBOK, PVHIST, PVVECKOR].forEach(o => Object.keys(o).forEach(k => delete o[k]));
+  Object.entries(P.kvVeckor).forEach(([m, v]) => { PVVECKOR[m] = v.nummer; });
+}
+const _ndPvSt = pvSt;
+pvSt = function(){
+  const forst = !S.pvInit; _ndPvSt();
+  if (!ndP() || !forst) return;
+  const P = ndP();
+  S.pvM = PVMAN; S.pvMalM = PVMAN;
+  S.pvPerioder = Object.fromEntries(Object.entries(P.perioder).map(([m, p]) => [m, {status:p.status, fast:oDat(p.stangd), av:'', ut:p.utbetald ? oDat(p.utbetald) : null}]));
+  S.pvOvrig = P.ovriga.map(x => ({id:x.id, vem:ndPvNamnFor(x.vemId) || 'Okänd', m:x.m, belopp:x.belopp, skal:x.skal, av:'', bokford:x.bokford}));
+  S.pvMal = {};
+  Object.entries(P.mal).forEach(([m, per]) => { S.pvMal[m] = {}; Object.entries(per).forEach(([id, x]) => { const n = ndPvNamnFor(id); if (n) S.pvMal[m][n] = {o:x.o, k:x.k}; }); });
+  S.pvVem = S.role === 'chef' ? 'laget' : ND.jag.namn;
+};
+pvFrys = function(m){ if (!ndP()) return; };
+
+/* ---------- Motorn: repots underlag i utkastets form ---------- */
+const NDPVSLAG = {order:'order', makulering:'avdrag', volymbonus:'bonus', kv_bonus:'bonus', ovrig_bonus:'bonus', avdrag:'avdrag', chefsprovision:'chef', chefsprovision_makulering:'avdrag', rattelse:'bonus', hand:'bonus'};
+const NDPVDEL = {volymbonus:'volym', kv_bonus:'kv', ovrig_bonus:'ovrig', chefsprovision:'chef', rattelse:'ovrig', hand:'ovrig'};
+function ndPvRad(r, x){
+  const o = r.orderId ? ORDER.find(y => y.id === r.orderId) : null;
+  const slag = r.slag === 'rattelse' || r.slag === 'hand' ? (r.belopp < 0 ? 'avdrag' : 'bonus') : NDPVSLAG[r.slag] || 'bonus';
+  const ut = {slag, del:NDPVDEL[r.slag], o:o || null, text:r.text, sub:'', dag:r.dag, belopp:r.belopp};
+  if (r.bokford){ ut.sub = r.note || (r.slag === 'order' && !o ? 'bokförd när månaden fastställdes' : 'bokförd i huvudboken'); if (o) ut.text = `${r.text}: #${o.nr} ${o.bolag}`; return ut; }
+  if (r.slag === 'order' && o){ ut.text = `#${o.nr} ${o.bolag}`; ut.sub = `${oAffar(o)} · ${pvKalla(o)}`; }
+  else if (r.slag === 'makulering' && o){ ut.text = `Makulerad: #${o.nr} ${o.bolag}`; ut.sub = `tecknad ${oDat(o.sign)}, makulerad ${oDat(r.dag || o.sign)}. Avdraget sker i makuleringsmånaden.`; }
+  else if (r.slag === 'volymbonus' && x.niva){ ut.sub = x.niva.enhet === 'amount_per_order' ? `${x.antal.bonusgrundande} order × ${kr(x.niva.a)}. Gäller alla månadens order, inte bara de över tröskeln.` : x.niva.enhet === 'percent' ? `${x.niva.a} % av grundprovisionen` : 'fast belopp för nivån'; }
+  else if (r.slag === 'kv_bonus' && x.kv){ ut.sub = `${x.kv.godkanda} ${x.kv.godkanda === 1 ? 'godkänd vecka' : 'godkända veckor'} × ${String(PVKVPROC).replace('.', ',')} %, på grundprovision och volymbonus`; }
+  else if (r.slag === 'chefsprovision' || r.slag === 'chefsprovision_makulering'){ ut.sub = `${PVOVERTACK ?? '–'} % av det som blir över av ordervärdet efter säljarens provision`; }
+  return ut;
+}
+function ndPvKvVeckor(id, m){
+  const v = ndP().kvVeckor[m]; if (!v || !v.per[id]) return null;
+  return v.per[id].map(x => x.length > 1 ? [x[0], x[1]] : [x[0]]);
+}
+const _ndPvUnderlag = pvUnderlag;
+pvUnderlag = function(vem, m, raknaLive){
+  if (!ndP()) return _ndPvUnderlag(vem, m, raknaLive);
+  const P = ndP(), id = ndPvIdFor(vem), x = id ? (P.underlag[m] || {})[id] : null, stangd = !!P.perioder[m], jag = id === ND.jag.id;
+  const tr = pvTrappa(m), arChef = vem === ME.chef.namn && S.role === 'chef';
+  const egnaM = ORDER.filter(o => o.vem === vem && o.sign.slice(0, 7) === m);
+  const tom = {antal:{signerade:0, makulerade:0, netto:0, bonusgrundande:0}, grund:0, volym:0, niva:null, nasta:null, kv:null, ovrig:0, chefs:null, varde:0, summa:0, forlust:null, rader:[]};
+  const d = x || tom;
+  const chefs = d.chefs ? {antal:d.chefs.antal, makulerade:d.chefs.makulerade, belopp:d.chefs.belopp, per:d.chefs.per} : arChef ? {antal:0, makulerade:0, belopp:0, per:{}} : null;
+  const nasta = d.nasta ? {niva:{t:d.nasta.t, a:d.nasta.a}, kvar:d.nasta.kvar} : !x && tr.length ? {niva:tr[0], kvar:tr[0].t} : null;
+  return {vem, m, stangd, rader:d.rader.map(r => ndPvRad(r, d)), grund:d.grund, antal:{signerade:d.antal.signerade, makulerade:d.antal.makulerade, netto:d.antal.netto},
+    bonusantal:d.antal.bonusgrundande, volym:d.volym, niva:d.niva ? {t:d.niva.t, a:d.niva.a} : null, nasta, trappa:tr,
+    kv:d.kv ? {...d.kv, veckor:ndPvKvVeckor(id, m)} : null, ovrig:d.ovrig, chefs, varde:d.varde, summa:d.summa, forlust:d.forlust,
+    varn:jag && !arChef ? ndPvVarning(m, d.forlust) : null, sena:[],
+    vantar:m === PVMAN ? egnaM.filter(o => o.st === 'inskickad') : [], utkast:m === PVMAN ? egnaM.filter(o => o.st === 'utkast') : []};
+};
+pvTrappa = function(m){ if (!ndP()) return PVTRAPPA.length ? (pvVersion(m) || {nivaer:[]}).nivaer.slice().sort((a, b) => a.t - b.t) : []; return (ndP().trappor[m] || []).map(n => ({t:n.t, a:n.a})); };
+pvArbetsdagar = m => ndP() && ndP().arbetsdagar[m] ? ndP().arbetsdagar[m] : frDagar(m + '-01', pvSista(m)).filter(frArbetsdag);
+pvDagarTill = d => Math.round((Date.parse(d + 'T12:00:00Z') - Date.parse(kIdag() + 'T12:00:00Z')) / 864e5);
+function ndPvVarning(m, forlust){
+  const v = ndP().varning; if (!v) return null;
+  return {antal:v.antal, sist:{dag:v.sist}, nollstalls:v.nollstalls, bonusforlust:forlust && forlust.slice(0, 7) === m ? forlust : null};
+}
+const _ndPvTakt = pvTakt;
+pvTakt = function(u){
+  if (!ndP()) return _ndPvTakt(u);
+  const alla = pvArbetsdagar(u.m), id = ndPvIdFor(u.vem), t = u.m === PVMAN ? ndP().takt[id] : null;
+  const gangna = t ? t.gangna : alla.filter(d => d <= kIdag()).length, totalt = t ? t.totalt : alla.length;
+  const g = {alla, gangna, totalt, kvar:t ? t.kvar : Math.max(0, totalt - gangna), andel:t ? t.andel : totalt ? gangna / totalt : 0};
+  if (!t || !t.prognos) return {...g, prognos:null};
+  const p = t.prognos;
+  return {...g, prognos:{antal:p.antal, grund:p.grund, niva:p.niva ? {t:p.niva.t, a:p.niva.a} : null, bonus:p.bonus, totalt:p.totalt, nasta:p.nasta ? {niva:{t:p.nasta.t, a:p.nasta.a}, kvar:p.nasta.kvar} : null}};
+};
+pvVarning = function(vem){ if (!ndP()) return null; return vem === ND.jag.namn ? ndPvVarning(PVMAN, null) : null; };
+pvManader = function(){ return ndP() ? ndP().manader.slice() : (() => { const ut = []; let m = PVMAN; for (let i = 0; i < 12; i++){ ut.push(m); m = pvForraMan(m); } return ut; })(); };
+
+/* ---------- Startsidans kort: samma underlag ---------- */
+const _ndPvProvSync = pvProvSync;
+pvProvSync = function(){
+  if (!ndP()) return _ndPvProvSync();
+  const man = pvManader(), o = pvUnderlag(ME.saljare.namn, PVMAN), f = pvUnderlag(ME.saljare.namn, man[1]), t = pvTakt(o), mal = pvMalFor(ME.saljare.namn, PVMAN);
+  PROV.manad = o.summa; PROV.affarer = o.antal.netto; PROV.forra = f.summa; PROV.mal = mal && mal.k ? mal.k : null;
+  PROV.dag = t.gangna; PROV.dagar = t.totalt;
+  PROV.hist = man.slice().reverse().map(m => [FRMK[+m.slice(5, 7)], pvUnderlag(ME.saljare.namn, m).summa]);
+  PROV.iar = man.filter(m => m.startsWith(PVMAN.slice(0, 4))).reduce((s, m) => s + pvUnderlag(ME.saljare.namn, m).summa, 0);
+  return o;
+};
+// Utan kronmål finns inget "av målet" att visa, och utan prognos ingen prognos: kortet säger vad som saknas.
+const _ndPvRenderProv = renderProv;
+renderProv = function(){
+  if (!ndP()) return _ndPvRenderProv();
+  pvSt();
+  let h = _ndPvRenderProv();
+  const u = pvUnderlag(ME.saljare.namn, PVMAN), t = pvTakt(u), sd = pvSammaDag(u);
+  if (PROV.mal === null){
+    h = h.replace(/<circle cx="56" cy="56" r="48" stroke="var\(--signal\)"[^>]*\/>/, '').replace(/<circle cx="56" cy="56" r="48" stroke="var\(--signal-soft\)"[^>]*\/>/, '')
+      .replace(/<b>[^<]*%<\/b><span>av målet<\/span>/, '<b>–</b><span>inget mål</span>').replace(/ · förväntat [^<]*av målet/, '')
+      .replace(/<div><dt>Mål<\/dt><dd>[^<]*<\/dd><\/div>/, '<div><dt>Mål</dt><dd>inget satt</dd></div>')
+      .replace(/<line x1="0" x2="100"[^>]*\/>/, '').replace(/<span>streckat = mål [^<]*<\/span>/, '<span></span>')
+      .replace(/Det saknas [^.]* till målet, ungefär [^.]*\.|Du når målet i den här takten\./, '');
+  }
+  if (!t.prognos) h = h.replace(/Prognos i din nuvarande takt: <b class="num">[^<]*<\/b>\./, 'Ingen prognos än: den kräver tre arbetsdagar och minst en godkänd order netto.').replace(/Det saknas [^.]* till målet, ungefär [^.]*\./, '');
+  // Samma läge förra månaden: grundprovisionen på samma arbetsdag, ur förra månadens rader (pvSammaDag).
+  h = h.replace(/<span class="provpace">[\s\S]*?<\/span><\/span><\/div>/, sd ? `<span class="provpace">På samma arbetsdag i ${pvManNamn(sd.fm)} hade du ${kr(sd.grund)} i grundprovision, alltså ${kr(Math.abs(sd.mot))} ${sd.mot >= 0 ? 'före' : 'efter'}.</span></span></div>` : '</span></div>');
+  return h.replace(/<span class="meta">oktober<\/span>/, `<span class="meta">${pvManNamn(PVMAN)}</span>`).replace(/<span>nov<\/span>/, `<span>${PROV.hist[0][0]}</span>`).replace(/<span>okt (\S)/, `<span>${PROV.hist[PROV.hist.length - 1][0]} $1`);
+};
+prognos = () => { const u = pvUnderlag(ME.saljare.namn, PVMAN), t = pvTakt(u); return t.prognos ? t.prognos.totalt : u.summa; };
+
+/* ---------- Läsläge: det som bokför eller ändrar regler görs i Nav ---------- */
+pvBonusLagg = function(){ if (ndP()){ location.href = '/provision'; return; } };
+const _ndPvGodkannHar = pvGodkannHar;
+pvGodkannHar = function(nr){ if (!ndP()) return _ndPvGodkannHar(nr); const o = ORDER.find(x => x.nr === nr); location.href = o ? ndOrdKund(o) : '/order'; };
+const NDPVNAV = {pvfaststall:m => `/provision?manad=${m}-01`, pvbonusok:() => '/provision', pvbonusta:() => '/provision', pvmalspara:() => '/provision/mal', pvregelspara:() => '/provision/regler', pvregelangra:() => '/provision/regler'};
+document.addEventListener('click', e => {
+  if (!ndP() || S.view !== 'provision') return;
+  const b = e.target.closest && e.target.closest('button, a'); if (!b || !b.dataset) return;
+  const k = Object.keys(NDPVNAV).find(x => b.dataset[x] !== undefined);
+  if (k){ e.preventDefault(); e.stopImmediatePropagation(); location.href = NDPVNAV[k](b.dataset[k]); return; }
+  if (b.dataset.pvpamin !== undefined){ e.preventDefault(); e.stopImmediatePropagation(); toast('Det här finns inte i Nav än. Det byggs när Provision får spara.'); return; }
+  if (b.dataset.act === 'toast'){ e.preventDefault(); e.stopImmediatePropagation(); location.href = '/provision'; }
+}, true);
+
+/* ---------- Kretsen: säljchef, VD och ekonomi ser alla, som på /provision ---------- */
+const ndPvRoll = fn => function(...a){
+  if (!ndP() || S.role !== 'chef' || ndP().chefsvy) return fn.apply(this, a);
+  const r = S.role; S.role = 'saljare'; try { return fn.apply(this, a); } finally { S.role = r; }
+};
+renderPvView = ndPvRoll(renderPvView);
+
+if (ndP()){ ndPvStart(); NDKOPPLAD.add('provision'); }
 
 /* Start */
 try { const th = localStorage.getItem('nav2-theme'); if (th && th !== 'auto'){ document.documentElement.setAttribute('data-theme', th); S.theme = th; document.querySelectorAll('#themeSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.themeSet === th))); } } catch(_){}
