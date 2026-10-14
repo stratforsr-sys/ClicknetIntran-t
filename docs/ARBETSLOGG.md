@@ -5,6 +5,34 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-14 · Nav 2.0 på /nav2, pass 4: Uppgifter (gren `nav2-utkast`, `2d38996`, `5fa3aca`)
+
+`src/lib/nav2/uppgifter.ts` (`byggUppgifter`) bygger på `hamtaUppgiftsbild`
+och sidans egna urval, i sidans ordning: `minaOppna`, `attGranska`,
+`vantarPaAndra`, `inkorgen`, `delatMedMig`. En rad hamnar i exakt en lista.
+Det egna som bockats av de senaste 14 dagarna följer med för "Klart i dag",
+veckan och Klara-fliken.
+
+- **Historik och chatt** läses ur `task_event` med samma token; bilden räknar
+  läget ur händelserna men lämnar inte ut dem.
+- **Projekten** har `forsenade` ur bilden och tidsandelen räknad från
+  `project.created_at` till `due_date`. Ett projekt utan deadline säger det i
+  stället för "0 % av tiden gått".
+- **Veckogenomgången** är `weekly_review` som på `/uppgifter/genomgang`
+  (`genomgangslage`, `senasttext`), och kortet visas när repot säger att det
+  är dags (fredag och framåt, tills den är gjord).
+- **Mallarna** är delade och egna, som på `/uppgifter/mallar`.
+
+Utkastet hade saker utan motsvarighet som nu inte syns: "Planerad N dagar i
+rad", "Första steget", en påhittad chattrad när chatten är tom, och en fast
+nia som lades på veckans antal avbockade. Dagens tre, påminn, Navs förslag,
+boka tid och dagens början och slut finns bara i utkastet och säger det vid
+klick. Andra vyers rader i listan (K&V, Anställda, Rekrytering, Nyheter) är
+avstängda tills de vyerna kopplas, och kalenderns möten kommer med Kalendern.
+
+Provat i previewen som Zen: 26 egna, en som väntar på Edvin, 11 projekt,
+historiken i rutan, inga exempelnamn kvar.
+
 ## 2026-10-14 · Nav 2.0 på /nav2, pass 3: Frånvaro (gren `nav2-utkast`)
 
 `src/lib/nav2/franvaro.ts` (`byggFranvaro`) bygger vyn med repots egna
