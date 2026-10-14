@@ -6,6 +6,7 @@ import { hamtaNotiser } from "@/lib/notiser-server";
 import type { Notis } from "@/lib/notiser";
 import { svensktDatum } from "@/lib/klocka";
 import { MFA_REQUIRED_ROLES } from "@/lib/roles";
+import { byggTid, type NdTid } from "./tid";
 import {
   formaLon,
   formaPerson,
@@ -51,6 +52,7 @@ export type Nav2Data = {
   satser: NdSats[] | null;
   loner: NdLon[] | null;
   notiser: Notis[];
+  tid: NdTid;
 };
 
 const PERSONKOLUMNER =
@@ -61,7 +63,7 @@ export async function byggNav2Data(user: CurrentUser): Promise<Nav2Data | null> 
   if (!user.employee) return null;
   const supabase = await supabaseServer();
 
-  const [{ data: personRader }, { data: teamRader }, { data: satsRader, error: satsFel }, { data: lonRader, error: lonFel }, notiser] =
+  const [{ data: personRader }, { data: teamRader }, { data: satsRader, error: satsFel }, { data: lonRader, error: lonFel }, notiser, tid] =
     await Promise.all([
       supabase.from("employee").select(PERSONKOLUMNER).order("first_name"),
       supabase.from("team").select("id, name"),
@@ -75,6 +77,7 @@ export async function byggNav2Data(user: CurrentUser): Promise<Nav2Data | null> 
         .select("id, employee_id, monthly_salary, valid_from, entered_at, entered_by")
         .order("valid_from", { ascending: false }),
       hamtaNotiser(user),
+      byggTid(supabase, user),
     ]);
 
   const ra: RaPerson[] = ((personRader ?? []) as unknown as (Omit<RaPerson, "roller"> & {
@@ -145,5 +148,6 @@ export async function byggNav2Data(user: CurrentUser): Promise<Nav2Data | null> 
     satser: satsFel || !user.permissions.includes("payroll_cost_viewer") ? null : ((satsRader ?? []) as RaSats[]).map((r) => formaSats(r, namn)),
     loner: lonFel || !user.permissions.includes("payroll_cost_viewer") ? null : ((lonRader ?? []) as RaLon[]).map((r) => formaLon(r, namn)),
     notiser,
+    tid,
   };
 }
