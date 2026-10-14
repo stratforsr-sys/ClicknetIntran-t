@@ -8,6 +8,7 @@ import { svensktDatum } from "@/lib/klocka";
 import { MFA_REQUIRED_ROLES } from "@/lib/roles";
 import { byggTid, type NdTid } from "./tid";
 import { byggFranvaro, type NdFranvaro } from "./franvaro";
+import { byggUppgifter, type NdUppgifter } from "./uppgifter";
 import {
   formaLon,
   formaPerson,
@@ -55,6 +56,7 @@ export type Nav2Data = {
   notiser: Notis[];
   tid: NdTid;
   franvaro: NdFranvaro;
+  uppgifter: NdUppgifter;
 };
 
 const PERSONKOLUMNER =
@@ -65,7 +67,7 @@ export async function byggNav2Data(user: CurrentUser): Promise<Nav2Data | null> 
   if (!user.employee) return null;
   const supabase = await supabaseServer();
 
-  const [{ data: personRader }, { data: teamRader }, { data: satsRader, error: satsFel }, { data: lonRader, error: lonFel }, notiser, tid, franvaro] =
+  const [{ data: personRader }, { data: teamRader }, { data: satsRader, error: satsFel }, { data: lonRader, error: lonFel }, notiser, tid, franvaro, uppgifter] =
     await Promise.all([
       supabase.from("employee").select(PERSONKOLUMNER).order("first_name"),
       supabase.from("team").select("id, name"),
@@ -81,6 +83,7 @@ export async function byggNav2Data(user: CurrentUser): Promise<Nav2Data | null> 
       hamtaNotiser(user),
       byggTid(supabase, user),
       byggFranvaro(supabase, user),
+      byggUppgifter(supabase, user),
     ]);
 
   const ra: RaPerson[] = ((personRader ?? []) as unknown as (Omit<RaPerson, "roller"> & {
@@ -153,5 +156,6 @@ export async function byggNav2Data(user: CurrentUser): Promise<Nav2Data | null> 
     notiser,
     tid,
     franvaro,
+    uppgifter,
   };
 }

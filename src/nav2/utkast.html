@@ -9286,7 +9286,7 @@ function progressStrip(){
   const f = fokus(), fk = fKlaraAntal();
   const rest = idagLista(), plan = rest.reduce((s, t) => s + (t.est || 0), 0), fri = friTid();
   const C = 2 * Math.PI * 22, p = alla ? klara / alla : 0;
-  const hist = [...HIST[role()], klara], max = Math.max(...hist, 1), snitt = Math.round(HIST[role()].reduce((a, b) => a + b, 0) / HIST[role()].length);
+  const hist = [...HIST[role()], klara], max = Math.max(...hist, 1), snitt = Math.round(HIST[role()].reduce((a, b) => a + b, 0) / (HIST[role()].length || 1));
   const over = plan > fri;
   const minsta = rest.filter(t => !t.focus).sort((a, b) => b.prio - a.prio || (b.est || 0) - (a.est || 0))[0];
   return `<section class="pstrip" aria-label="Dagens framsteg">${note(30)}
@@ -9454,9 +9454,9 @@ function sidokolumn(){
     ${sondag ? `<section class="card fresh">${note(46)}<h2>Ny vecka i morgon</h2><p>Välj måndagens tre redan nu, så börjar veckan med en plan i stället för en inkorg.</p><button class="btn btn-p btn-sm" data-tab="kommande">Planera måndagen</button></section>` : ''}
     ${fredag ? wrKort() : ''}
     <section class="card"><div class="chead"><h2>Projekt</h2>${note(42)}<span class="end"><button class="tlink" data-act="toast" data-msg="Nytt projekt öppnas.">Nytt projekt</button></span></div>
-      <div class="projs">${proj.map(([n, c, k, a, dl, tidAndel]) => { const andel = k / a, efter = andel + .1 < tidAndel, x = nasta(n);
+      <div class="projs">${proj.map(([n, c, k, a, dl, tidAndel]) => { const andel = a ? k / a : 0, efter = ND ? ndProjEfter(n, andel, tidAndel) : andel + .1 < tidAndel, x = nasta(n);
         return `<div class="proj ${S.projFilter === n ? 'on' : ''}"><button class="pn" data-pfilter="${esc(n)}" title="Visa bara det här projektets uppgifter"><i style="background:${c}"></i>${esc(n)}<span class="pill ${efter ? 't-danger' : 't-ok'}">${efter ? 'Efter' : 'I fas'}</span></button>
-          <span class="pb"><span><i style="width:${andel * 100}%;background:${c}"></i><em style="left:${Math.min(100, tidAndel * 100)}%"></em></span><span class="num">${k}/${a}</span></span>
+          <span class="pb"><span><i style="width:${andel * 100}%;background:${c}"></i>${tidAndel === null ? '' : `<em style="left:${Math.min(100, tidAndel * 100)}%"></em>`}</span><span class="num">${k}/${a}</span></span>
           <span class="pd ${efter ? 'late' : ''}">Deadline ${dl}${efter ? ` · ${Math.round(andel * 100)} % klart, ${Math.round(tidAndel * 100)} % av tiden gått` : ''}</span>
           ${x ? `<span class="pnext"><button class="tick" data-tick="${x.id}" aria-label="Klar: ${esc(x.t)}">${I('check')}</button><span>Nästa: ${esc(x.t)}</span></span>` : ''}</div>`; }).join('')}</div></section>
     ${S.hideKeys ? '' : keysCard()}
@@ -21949,7 +21949,7 @@ progressStrip = function(){
   const klara = klaraIdag().length, kvar = idagLista().length, alla = klara + kvar;
   const f = fokus(), fk = fKlaraAntal();
   const rest = idagLista(), plan = rest.reduce((s, t) => s + (t.est || 0), 0), fri = friTid(), over = plan > fri;
-  const hist = [...HIST[role()], klara], max = Math.max(...hist, 1), snitt = Math.round(HIST[role()].reduce((a, b) => a + b, 0) / HIST[role()].length);
+  const hist = [...HIST[role()], klara], max = Math.max(...hist, 1), snitt = Math.round(HIST[role()].reduce((a, b) => a + b, 0) / (HIST[role()].length || 1));
   const minsta = rest.filter(t => !t.focus).sort((a, b) => b.prio - a.prio || (b.est || 0) - (a.est || 0))[0];
   const huvud = kvar === 0 ? 'Allt för i dag är klart.' : f.length || fk ? `<b class="num">${fk} av ${fk + f.length}</b> i dagens tre · <span class="num">${kvar}</span> kvar i dag` : `<b class="num">${kvar}</b> kvar i dag`;
   return `<section class="upg-kort upg-dag" aria-label="Dagens framsteg">${note(30)}
@@ -22122,9 +22122,9 @@ sidokolumn = function(){
     ${sondag ? `<section class="upg-kort">${note(46)}<div class="upg-kh"><div><h2>Ny vecka i morgon</h2><p>Välj måndagens tre redan nu, så börjar veckan med en plan i stället för en inkorg.</p></div></div><div class="upg-kf upg-kfv"><button type="button" class="btn btn-s btn-sm" data-tab="kommande">Planera måndagen</button></div></section>` : ''}
     ${fredag ? wrKort() : ''}
     <section class="upg-kort"><div class="upg-kh"><div><h2>Projekt</h2></div>${note(42)}<button type="button" class="tlink" data-act="toast" data-msg="Ett nytt projekt får namn, färg och deadline. Det läggs till i listan.">Nytt projekt</button></div>
-      <div class="upg-projs">${proj.map(([n, c, k, a, dl, tidAndel]) => { const andel = k / a, efter = andel + .1 < tidAndel, x = nasta(n), oppna = mine().filter(t => t.proj === n && t.lage === 'oppen' && !isDone(t)).length;
+      <div class="upg-projs">${proj.map(([n, c, k, a, dl, tidAndel]) => { const andel = a ? k / a : 0, efter = ND ? ndProjEfter(n, andel, tidAndel) : andel + .1 < tidAndel, x = nasta(n), oppna = mine().filter(t => t.proj === n && t.lage === 'oppen' && !isDone(t)).length;
         return `<div class="upg-proj ${S.projFilter === n ? 'on' : ''}"><button type="button" class="upg-pn" data-pfilter="${esc(n)}" aria-pressed="${S.projFilter === n}" title="${S.projFilter === n ? 'Visa allt' : 'Visa bara det här projektets uppgifter'}"><i style="background:${c}"></i><b>${esc(n)}</b><span class="${efter ? 'upg-sen' : 'upg-ok'}">${efter ? 'Efter' : 'I fas'}</span></button>
-          <span class="upg-pb" title="${Math.round(andel * 100)} % klart, ${Math.round(tidAndel * 100)} % av tiden har gått"><span><i style="width:${andel * 100}%;background:${c}"></i><em style="left:${Math.min(100, tidAndel * 100)}%"></em></span><span class="num">${k}/${a}</span></span>
+          <span class="upg-pb" title="${Math.round(andel * 100)} % klart, ${tidAndel === null ? 'ingen deadline' : Math.round(tidAndel * 100) + ' % av tiden har gått'}"><span><i style="width:${andel * 100}%;background:${c}"></i>${tidAndel === null ? '' : `<em style="left:${Math.min(100, tidAndel * 100)}%"></em>`}</span><span class="num">${k}/${a}</span></span>
           <span class="upg-sm">Deadline ${dl}${efter ? ` · ${Math.round(andel * 100)} % klart, ${Math.round(tidAndel * 100)} % av tiden gått` : ''}${oppna ? ` · ${oppna} hos dig` : ''}</span>
           ${x ? `<span class="upg-pnext"><button type="button" class="tick" data-tick="${x.id}" aria-label="Klar: ${esc(x.t)}">${I('check')}</button><span>Nästa: ${esc(x.t)}</span></span>` : ''}</div>`; }).join('')}</div></section>
     ${S.hideKeys ? '' : keysCard()}
@@ -22230,7 +22230,7 @@ function upgRutaHtml(t){
   const projekt = `<select class="upg-in upg-sel" data-upgproj="${t.id}" aria-label="Projekt">${['', ...PROJEKT[role()].map(x => x[0])].map(v => `<option value="${esc(v)}" ${(t.proj || '') === v ? 'selected' : ''}>${v ? esc(v) : 'Inget projekt'}</option>`).join('')}</select>`;
   const rad = (k, v) => `<div class="upg-prad"><dt>${k}</dt><dd>${v}</dd></div>`;
   const dk = t.delar.filter(x => x[1]).length;
-  const chatt = t.chatt.length ? t.chatt : [['Johanna Ek','Hör av dig om du kör fast, så tar vi det på 1:1.','11:02']];
+  const chatt = t.chatt.length || ND ? t.chatt : [['Johanna Ek','Hör av dig om du kör fast, så tar vi det på 1:1.','11:02']];
   return `<div class="upg-ruta" role="dialog" aria-modal="true" aria-labelledby="ptitle">
     <header class="upg-rh">
       ${egen && !done ? `<button type="button" class="tick ${t.granskare ? 'rev' : ''}" data-tick="${t.id}" aria-label="${t.granskare ? 'Lämna in' : 'Markera klar'}">${I('check')}</button>` : `<span class="tick ${done ? 'on' : ''}" aria-hidden="true">${I('check')}</span>`}
@@ -25352,6 +25352,134 @@ document.addEventListener('click', e => {
 }, true);
 
 if (ndFr()){ ndFrStart(); NDKOPPLAD.add('franvaro'); }
+
+/* =====================================================================
+   NAV 2.0 I RIKTIGT LÄGE: UPPGIFTER (prefix nd), v47
+
+   ND.uppgifter (src/lib/nav2/uppgifter.ts) i utkastets former: raderna i
+   TASKS, projekten i PROJEKT, mallarna i MALLAR, kollegorna i KOLLEGOR, och
+   det som bockats av i HIST och KLARA_FORR. Listorna är repots egna urval
+   (minaOppna, attGranska, vantarPaAndra, inkorgen, delatMedMig).
+
+   Repot har inte allt utkastet har. Dagens tre, påminn, Navs förslag, boka
+   tid och dagens början och slut finns bara här; de säger det i stället för
+   att låtsas. "Planerad N dagar i rad" har ingen motsvarighet och visas inte.
+   Andra vyers rader i listan (K&V, Anställda, Rekrytering, Nyheter) kommer när
+   de vyerna är kopplade. Kalenderns möten kommer med Kalendern.
+   ===================================================================== */
+
+const ndUp = () => ND && ND.uppgifter;
+const ndDagarTill = d => d ? Math.round((Date.parse(d + 'T12:00:00Z') - Date.parse(kIdag() + 'T12:00:00Z')) / 864e5) : null;
+const ndKl = iso => new Date(iso).toLocaleTimeString('sv-SE', {timeZone:'Europe/Stockholm', hour:'2-digit', minute:'2-digit'});
+const ndDagAv = iso => new Date(iso).toLocaleDateString('sv-SE', {timeZone:'Europe/Stockholm'});
+const NDUPGH = {skapad:'Skapad', tilldelad:'Tilldelad', paborjad:'Påbörjad', inlamnad:'Inlämnad', godkand:'Godkänd', returnerad:'Returnerad', klar:'Klar', ateroppnad:'Öppnad igen', avbruten:'Struken', kommentar:'Kommenterad'};
+const NDUPGROLL = {redigerare:'Redigerare', visare:'Kan se', granskare:'Granskare'};
+// "3 h", "1 dag", "4 dagar": hur länge något har väntat.
+function ndSedan(iso){ const min = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 6e4)); if (min < 60) return `${min} min`; if (min < 1440) return `${Math.round(min / 60)} h`; const d = Math.round(min / 1440); return `${d} ${d === 1 ? 'dag' : 'dagar'}`; }
+
+function ndUpgStart(){
+  const u = ndUp(), r = role(), idag = kIdag();
+  TASKS.length = 0;
+  u.uppgifter.forEach(x => {
+    const h = x.handelser, sista = h[h.length - 1], inl = [...h].reverse().find(e => e.typ === 'inlamnad');
+    const stangd = x.lage === 'klar' || x.lage === 'avbruten';
+    // Det som blev klart före i dag står i KLARA_FORR, inte bland dagens rader.
+    if (stangd && (x.lage === 'avbruten' || !x.klarAt || ndDagAv(x.klarAt) !== idag)) return;
+    TASKS.push({id:x.id, who:r, vy:x.vy, t:x.t, d:stangd ? 0 : ndDagarTill(x.due), nar:x.tid || undefined, tid:x.tid || undefined, est:x.est || undefined, prio:x.prio,
+      lage:x.lage === 'klar' ? 'klar' : x.lage === 'granskas' ? 'granskas' : 'oppen', klarTid:x.klarAt ? ndKl(x.klarAt) : undefined,
+      links:x.links.map(([s, e]) => [s, e]), ndHref:x.links.map(l => l[2]), proj:x.proj || undefined, delar:x.delar.map(([a, b]) => [a, b]),
+      granskare:x.granskare || undefined, ansvarig:x.ansvarig || undefined, serie:x.serie || undefined, besk:x.besk,
+      skapad:`${x.skapadAv} · ${frKort(ndDagAv(x.skapadAt))}`, chatt:h.filter(e => e.typ === 'kommentar' && e.note).map(e => [e.av, e.note, ndKl(e.at)]),
+      focus:0, flyttad:0, stilla:x.stilla, aktivitet:sista ? `${sista.av.split(' ')[0]}: ${(NDUPGH[sista.typ] || sista.typ).toLowerCase()} ${frKort(ndDagAv(sista.at))}` : '',
+      vantat:inl ? ndSedan(inl.at) : undefined, sammanfattning:(x.besk || '').split('\n')[0], roll:x.minRoll ? NDUPGROLL[x.minRoll] : undefined,
+      alder:x.due ? undefined : Math.max(0, -ndDagarTill(ndDagAv(x.skapadAt))), ndHist:h, ndLage:x.lage});
+  });
+  // Projekten: navets färg, antal och deadline. Tidsandelen räknas från projektets start.
+  const proj = u.projekt.map(p => {
+    let tid = null;
+    if (p.due && p.skapad){ const a = Date.parse(ndDagAv(p.skapad) + 'T12:00:00Z'), b = Date.parse(p.due + 'T12:00:00Z'), n = Date.parse(idag + 'T12:00:00Z'); tid = b > a ? Math.min(1, Math.max(0, (n - a) / (b - a))) : 1; }
+    return [p.namn, `var(--${p.farg})`, p.klara, p.antal, p.due ? frKort(p.due).replace(/^\S+ /, '') : '', tid, p.forsenade];
+  });
+  PROJEKT.saljare = proj; PROJEKT.chef = proj;
+  MALLAR.length = 0; u.mallar.forEach(m => MALLAR.push([m.namn, m.moment]));
+  KOLLEGOR.length = 0; KOLLEGOR.push(...u.kollegor);
+  // Kalenderns möten kommer när Kalendern är kopplad. Utan dem räknas dagen som fri.
+  MOTEN.saljare = []; MOTEN.chef = [];
+  // Veckan: det som bockats av måndag till i går, och dagarna innan i dag.
+  const per = {}; u.klara.forEach(k => { const d = ndDagAv(k.at); (per[d] = per[d] || []).push(k.t); });
+  const hist = []; for (let d = ndMandag(idag); d < idag; d = frPlus(d, 1)) if (frDow(d) < 6) hist.push((per[d] || []).length);
+  HIST.saljare = hist; HIST.chef = hist;
+  const forr = Object.keys(per).filter(d => d < idag).sort().reverse().map(d => [d === frPlus(idag, -1) ? 'I går' : frKort(d), per[d]]);
+  KLARA_FORR.saljare = forr; KLARA_FORR.chef = forr;
+}
+const ndProjEfter = (n, andel, tid) => { const p = PROJEKT[role()].find(x => x[0] === n); return !!(p && (p[6] > 0 || (tid !== null && andel + .1 < tid))); };
+
+/* ---------- Andra vyers rader i listan kommer med sina vyer ---------- */
+const _ndAeTaskSynk = aeTaskSynk; aeTaskSynk = function(){ if (ndKopplad('anstallda')) return _ndAeTaskSynk(); };
+const _ndRxTaskSynk = rxTaskSynk; rxTaskSynk = function(){ if (ndKopplad('rekrytering')) return _ndRxTaskSynk(); };
+const _ndNhTaskSynk = nhTaskSynk; nhTaskSynk = function(){ if (ndKopplad('nyheter')) return _ndNhTaskSynk(); };
+const _ndKvTaskSynk = kvTaskSynk; kvTaskSynk = function(){ if (ndKopplad('kv')) return _ndKvTaskSynk(); };
+
+/* ---------- Rutan: navets historik och chatt, och läsläge ---------- */
+const _ndUpgRutaHtml = upgRutaHtml;
+upgRutaHtml = function(t){
+  let h = _ndUpgRutaHtml(t); if (!ndUp()) return h;
+  // Första steget och "Dela upp med Nav" finns inte i navet.
+  h = h.replace(/<div class="upg-forst">[\s\S]*?<\/div>/, '').replace(/<button type="button" class="tlink" data-split="[^"]*">Dela upp med Nav<\/button>/, '');
+  // Chatten är navets kommentarer (ndpatch tar bort utkastets påhittade rad när den är tom).
+  if (!t.chatt.length) h = h.replace('<div class="upg-chat"></div>', '<div class="upg-chat"><p class="upg-sm">Inga kommentarer än.</p></div>');
+  // Historiken: navets händelser i ordning.
+  const hist = (t.ndHist || []).map(e => `<li><span class="num">${frKort(ndDagAv(e.at))} ${ndKl(e.at)}</span>${esc(NDUPGH[e.typ] || e.typ)}${e.av ? ` av ${esc(e.av.split(' ')[0])}` : ''}${e.note && e.typ !== 'kommentar' ? `: ${esc(e.note)}` : ''}</li>`).join('');
+  h = h.replace(/<ul class="upg-hist">[\s\S]*?<\/ul>/, `<ul class="upg-hist">${hist || '<li>Ingen historik.</li>'}</ul>`);
+  // Läsläge: fälten går inte att ändra här, formulären leder till uppgiften i Nav.
+  h = h.replace(/<(input|textarea)([^>]*data-(?:ptitle|upgbesk)=)/g, '<$1 readonly$2').replace(/<select([^>]*data-(?:upgnar|upgproj)=)/g, '<select disabled$1');
+  h = h.replace(/<form class="subadd" data-(?:subadd|chat)="[^"]*">[\s\S]*?<\/form>/g, '');
+  return h.replace('<footer class="upg-rf">', `<p class="upg-sm nd-las">Läsläge. <a class="tlink" href="/uppgifter/${esc(t.id)}">Ändra, kommentera eller bocka i Nav</a></p><footer class="upg-rf">`);
+};
+
+/* ---------- Läsläge i hela vyn ---------- */
+// Det som finns i navet leder till uppgiften där; det som bara finns i utkastet säger det.
+const NDUPGNAV = ['tick', 'approve', 'return', 'reason', 'over', 'overto', 'strike', 'setday', 'upgdag', 'today', 'snooze', 'take', 'triage', 'tri', 'setprio', 'est', 'upgest',
+  'setwhen', 'when', 'reopen', 'reclaim', 'unfollow', 'share', 'sharex', 'sub', 'upgdelbort', 'carry', 'decide', 'batch'];
+const NDUPGBARA = ['focus', 'split', 'sug', 'suggest', 'nudge', 'nudgeall', 'book', 'startday', 'closeday', 'shutdown'];
+const ndUpgId = v => { const id = String(v || '').split('|')[0]; return ndUp() && ndUp().uppgifter.some(x => x.id === id) ? id : null; };
+const ndIUpg = el => S.view === 'uppgifter' || !!(el.closest && el.closest('#todoPanel, #upgRuta'));
+function ndUpgBara(){ toast('Det här finns inte i Nav än. Det byggs när Uppgifter får spara.'); }
+document.addEventListener('click', e => {
+  if (!ndUp()) return;
+  const b = e.target.closest && e.target.closest('button, a, [data-tick]'); if (!b || !b.dataset || !ndIUpg(b)) return;
+  const nav = NDUPGNAV.find(k => b.dataset[k] !== undefined), bara = NDUPGBARA.find(k => b.dataset[k] !== undefined);
+  if (nav){ e.preventDefault(); e.stopImmediatePropagation(); const id = ndUpgId(b.dataset[nav]); location.href = id ? `/uppgifter/${id}` : '/uppgifter'; return; }
+  if (bara){ e.preventDefault(); e.stopImmediatePropagation(); ndUpgBara(); return; }
+  if (b.dataset.act === 'toast'){ e.preventDefault(); e.stopImmediatePropagation(); location.href = /projekt/i.test(b.textContent) ? '/uppgifter/projekt' : '/uppgifter'; }
+}, true);
+// Snabbraden, deluppgifter, chatt och retur är formulär: de görs i Nav.
+document.addEventListener('submit', e => {
+  if (!ndUp() || !ndIUpg(e.target)) return;
+  const f = e.target, ds = f.dataset || {};
+  if (ds.quick !== undefined || ds.subadd !== undefined || ds.chat !== undefined || ds.retur !== undefined || f.querySelector('[data-quick]')){
+    e.preventDefault(); e.stopImmediatePropagation(); const id = ndUpgId(ds.subadd || ds.chat || ds.retur); location.href = id ? `/uppgifter/${id}` : '/uppgifter';
+  }
+}, true);
+// Kortkommandona som ändrar (X klar, M nästa arbetsdag, F dagens tre) och dra-och-släpp av dagens tre.
+document.addEventListener('keydown', e => {
+  if (!ndUp() || S.view !== 'uppgifter' || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.target.closest && e.target.closest('input, textarea, select, [contenteditable]')) return;
+  const k = e.key.toLowerCase();
+  if (k === 'x' || k === 'm'){ e.preventDefault(); e.stopImmediatePropagation(); location.href = '/uppgifter'; }
+  if (k === 'f'){ e.preventDefault(); e.stopImmediatePropagation(); ndUpgBara(); }
+}, true);
+document.addEventListener('dragstart', e => { if (ndUp() && e.target.closest && e.target.closest('.trow[draggable]')){ e.preventDefault(); e.stopImmediatePropagation(); } }, true);
+document.addEventListener('dblclick', e => { if (ndUp() && ndIUpg(e.target) && e.target.closest && e.target.closest('.trow')){ e.preventDefault(); e.stopImmediatePropagation(); } }, true);
+
+/* ---------- Vyn: ingen "Planerad N dagar i rad", och rutan i läsläge ---------- */
+const _ndRenderTasksView = renderTasksView;
+renderTasksView = function(){
+  const h = _ndRenderTasksView(); if (!ndUp()) return h;
+  return h.replace(/<button type="button" class="upg-streak" data-streak[^>]*>[^<]*<\/button>/, '').replace(/<button class="streak" data-streak[^>]*>[\s\S]*?<\/button>/, '');
+};
+
+if (ndUp()){ ndUpgStart(); NDKOPPLAD.add('uppgifter'); }
 
 /* Start */
 try { const th = localStorage.getItem('nav2-theme'); if (th && th !== 'auto'){ document.documentElement.setAttribute('data-theme', th); S.theme = th; document.querySelectorAll('#themeSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.themeSet === th))); } } catch(_){}
