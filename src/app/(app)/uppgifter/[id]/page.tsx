@@ -528,6 +528,8 @@ const HANDELSE_TEXT: Record<string, string> = {
   ateroppnad: "Öppnad igen",
   avbruten: "Avbruten",
   kommentar: "Kommentar",
+  // Nav 2.0 (0092): den som väntar påminde.
+  paminnelse: "Påminnelse",
 };
 
 const PRICK: Record<string, string> = {

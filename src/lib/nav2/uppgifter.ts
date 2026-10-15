@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { SKRIVLAGE } from "./skrivlage";
 import { fullName, type CurrentUser } from "@/lib/auth";
 import { svensktDatum } from "@/lib/klocka";
 import { arStangd, type Lage } from "@/lib/uppgifter";
@@ -63,7 +64,33 @@ export type NdUppgifter = {
   mallar: { namn: string; moment: string[] }[];
   /** Veckogenomgången som på /uppgifter/genomgang: läget, raden "Senast gjord" och kvittona. */
   genomgang: { lage: Genomgangslage; senast: string; kvitton: { week_start: string; completed_at: string; remaining: number }[] };
+  /** 0092: dagens tre, i ordning (uppgifternas id). */
+  fokus: string[];
+  /** 0092: dagens början och slut, och hur många vardagar i rad dagen planerats. */
+  dag: { planerad: string | null; avslutad: string | null; iRad: number };
+  /** 0092: första steget per uppgift. */
+  forstaSteg: Record<string, string>;
+  /** Kollegorna med id, för att lämna över och bjuda in. */
+  personer: { id: string; namn: string }[];
+  /** Sparar vyn (SKRIVLAGE.uppgifter)? Annars svarar /nav2/uppgifter med läsläge. */
+  skriv: boolean;
 };
+
+/** Vardagar i rad med en planerad dag, räknat bakåt från i dag (eller i går om i dag inte planerats än). */
+export function vardagarIRad(planerade: Set<string>, idag: string): number {
+  const dag = (d: string, n: number) => new Date(Date.parse(`${d}T12:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
+  const vardag = (d: string) => { const w = new Date(`${d}T12:00:00Z`).getUTCDay(); return w >= 1 && w <= 5; };
+  let d = planerade.has(idag) ? idag : dag(idag, -1);
+  let n = 0;
+  for (let i = 0; i < 400; i++) {
+    if (vardag(d)) {
+      if (!planerade.has(d)) break;
+      n++;
+    }
+    d = dag(d, -1);
+  }
+  return n;
+}
 
 export async function byggUppgifter(supabase: SupabaseClient, user: CurrentUser): Promise<NdUppgifter> {
   const mig = user.employee!.id;
@@ -146,7 +173,23 @@ export async function byggUppgifter(supabase: SupabaseClient, user: CurrentUser)
 
   // Mallarna den inloggade får använda: delade och egna, som /uppgifter/mallar.
   const synliga = (mallar ?? []).filter((m) => m.shared || m.created_by === mig);
+
+  // 0092: dagens tre, dagarna och första steget.
+  const ids = uppgifter.map((u) => u.id);
+  const [{ data: fokusRader }, { data: dagRader }, { data: stegRader }] = await Promise.all([
+    supabase.from("task_focus").select("task_id, position").eq("employee_id", mig).eq("dag", idag).order("position"),
+    supabase.from("task_day").select("dag, planned_at, closed_at").eq("employee_id", mig).gte("dag", new Date(Date.now() - 400 * 864e5).toISOString().slice(0, 10)),
+    ids.length ? supabase.from("task").select("id, next_step").in("id", ids).not("next_step", "is", null) : Promise.resolve({ data: [] as { id: string; next_step: string }[] }),
+  ]);
+  const dagar = (dagRader ?? []) as { dag: string; planned_at: string | null; closed_at: string | null }[];
+  const iDag = dagar.find((d) => d.dag === idag);
+
   return {
+    fokus: ((fokusRader ?? []) as { task_id: string }[]).map((f) => f.task_id).filter((id) => ids.includes(id)),
+    dag: { planerad: iDag?.planned_at ?? null, avslutad: iDag?.closed_at ?? null, iRad: vardagarIRad(new Set(dagar.filter((d) => d.planned_at).map((d) => d.dag)), idag) },
+    forstaSteg: Object.fromEntries(((stegRader ?? []) as { id: string; next_step: string }[]).map((r) => [r.id, r.next_step])),
+    personer: (personer ?? []).filter((p) => p.id !== mig).map((p) => ({ id: p.id as string, namn: fullName(p) })).sort((a, b) => a.namn.localeCompare(b.namn, "sv")),
+    skriv: SKRIVLAGE.uppgifter,
     uppgifter,
     projekt: bild.projekt
       .filter((p) => !p.archived_at)

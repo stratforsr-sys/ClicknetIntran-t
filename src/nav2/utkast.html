@@ -21954,7 +21954,7 @@ progressStrip = function(){
   const huvud = kvar === 0 ? 'Allt för i dag är klart.' : f.length || fk ? `<b class="num">${fk} av ${fk + f.length}</b> i dagens tre · <span class="num">${kvar}</span> kvar i dag` : `<b class="num">${kvar}</b> kvar i dag`;
   return `<section class="upg-kort upg-dag" aria-label="Dagens framsteg">${note(30)}
     <div class="upg-dagt"><p>${huvud}</p><span class="upg-dagk num">${klara} av ${alla} klara</span>
-      <button type="button" class="upg-streak" data-streak aria-expanded="${S.streakOpen}">Planerad ${S.streak[role()]} dagar i rad</button></div>
+      <button type="button" class="upg-streak" data-streak aria-expanded="${S.streakOpen}">${ND && !S.streak[role()] ? 'Ingen planerad dag än' : `Planerad ${S.streak[role()]} dagar i rad`}</button></div>
     <div class="upg-kap" role="img" aria-label="${minText(plan)} att göra och ${minText(fri)} fri tid i kalendern">${rest.filter(t => t.est).map(t => `<i title="${esc(t.t)} · ${minText(t.est)}" style="flex:${t.est}" class="${t.focus ? 'f' : ''}"></i>`).join('')}<i class="fri" style="flex:${Math.max(1, fri - plan)}"></i></div>
     <div class="upg-dagu"><span class="${over ? 'upg-sen' : ''}"><span class="num">${minText(plan)}</span> att göra · <span class="num">${minText(fri)}</span> fri tid i kalendern${over ? ` · <span class="num">${minText(plan - fri)}</span> får inte plats` : ''}</span>
       ${over && minsta ? `<button type="button" class="tlink" data-snooze="${minsta.id}" title="${esc(minsta.t)}">Flytta ${esc(minsta.t.length > 30 ? minsta.t.slice(0, 28) + '…' : minsta.t)} till måndag</button>` : ''}
@@ -25362,9 +25362,10 @@ if (ndFr()){ ndFrStart(); NDKOPPLAD.add('franvaro'); }
    det som bockats av i HIST och KLARA_FORR. Listorna är repots egna urval
    (minaOppna, attGranska, vantarPaAndra, inkorgen, delatMedMig).
 
-   Repot har inte allt utkastet har. Dagens tre, påminn, Navs förslag, boka
-   tid och dagens början och slut finns bara här; de säger det i stället för
-   att låtsas. "Planerad N dagar i rad" har ingen motsvarighet och visas inte.
+   Det repot saknade har fått backend (0092): dagens tre, dagens början och
+   slut med "Planerad N dagar i rad", första steget och påminn. Allt som
+   ändrar går till /nav2/uppgifter (POST) med repots egna actions; i läsläge
+   svarar rutten det.
    Andra vyers rader i listan (K&V, Anställda, Rekrytering, Nyheter) kommer när
    de vyerna är kopplade. Kalenderns möten kommer med Kalendern.
    ===================================================================== */
@@ -25373,7 +25374,7 @@ const ndUp = () => ND && ND.uppgifter;
 const ndDagarTill = d => d ? Math.round((Date.parse(d + 'T12:00:00Z') - Date.parse(kIdag() + 'T12:00:00Z')) / 864e5) : null;
 const ndKl = iso => new Date(iso).toLocaleTimeString('sv-SE', {timeZone:'Europe/Stockholm', hour:'2-digit', minute:'2-digit'});
 const ndDagAv = iso => new Date(iso).toLocaleDateString('sv-SE', {timeZone:'Europe/Stockholm'});
-const NDUPGH = {skapad:'Skapad', tilldelad:'Tilldelad', paborjad:'Påbörjad', inlamnad:'Inlämnad', godkand:'Godkänd', returnerad:'Returnerad', klar:'Klar', ateroppnad:'Öppnad igen', avbruten:'Struken', kommentar:'Kommenterad'};
+const NDUPGH = {paminnelse:'Påmind', skapad:'Skapad', tilldelad:'Tilldelad', paborjad:'Påbörjad', inlamnad:'Inlämnad', godkand:'Godkänd', returnerad:'Returnerad', klar:'Klar', ateroppnad:'Öppnad igen', avbruten:'Struken', kommentar:'Kommenterad'};
 const NDUPGROLL = {redigerare:'Redigerare', visare:'Kan se', granskare:'Granskare'};
 // "3 h", "1 dag", "4 dagar": hur länge något har väntat.
 function ndSedan(iso){ const min = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 6e4)); if (min < 60) return `${min} min`; if (min < 1440) return `${Math.round(min / 60)} h`; const d = Math.round(min / 1440); return `${d} ${d === 1 ? 'dag' : 'dagar'}`; }
@@ -25391,9 +25392,10 @@ function ndUpgStart(){
       links:x.links.map(([s, e]) => [s, e]), ndHref:x.links.map(l => l[2]), proj:x.proj || undefined, delar:x.delar.map(([a, b]) => [a, b]),
       granskare:x.granskare || undefined, ansvarig:x.ansvarig || undefined, serie:x.serie || undefined, besk:x.besk,
       skapad:`${x.skapadAv} · ${frKort(ndDagAv(x.skapadAt))}`, chatt:h.filter(e => e.typ === 'kommentar' && e.note).map(e => [e.av, e.note, ndKl(e.at)]),
-      focus:0, flyttad:0, stilla:x.stilla, aktivitet:sista ? `${sista.av.split(' ')[0]}: ${(NDUPGH[sista.typ] || sista.typ).toLowerCase()} ${frKort(ndDagAv(sista.at))}` : '',
+      flyttad:0, stilla:x.stilla, aktivitet:sista ? `${sista.av.split(' ')[0]}: ${(NDUPGH[sista.typ] || sista.typ).toLowerCase()} ${frKort(ndDagAv(sista.at))}` : '',
       vantat:inl ? ndSedan(inl.at) : undefined, sammanfattning:(x.besk || '').split('\n')[0], roll:x.minRoll ? NDUPGROLL[x.minRoll] : undefined,
-      alder:x.due ? undefined : Math.max(0, -ndDagarTill(ndDagAv(x.skapadAt))), ndHist:h, ndLage:x.lage});
+      alder:x.due ? undefined : Math.max(0, -ndDagarTill(ndDagAv(x.skapadAt))), ndHist:h, ndLage:x.lage, nasta:(u.forstaSteg || {})[x.id] || '',
+      focus:(u.fokus || []).indexOf(x.id) + 1, ndDelId:x.delar.map(d => d[2])});
   });
   // Projekten: navets färg, antal och deadline. Tidsandelen räknas från projektets start.
   const proj = u.projekt.map(p => {
@@ -25412,6 +25414,8 @@ function ndUpgStart(){
   HIST.saljare = hist; HIST.chef = hist;
   const forr = Object.keys(per).filter(d => d < idag).sort().reverse().map(d => [d === frPlus(idag, -1) ? 'I går' : frKort(d), per[d]]);
   KLARA_FORR.saljare = forr; KLARA_FORR.chef = forr;
+  // Dagens början och slut, och hur många vardagar i rad dagen planerats (0092).
+  if (u.dag){ S.planned = !!u.dag.planerad; S.dayClosed = !!u.dag.avslutad; S.streak = S.streak || {}; S.streak.saljare = u.dag.iRad; S.streak.chef = u.dag.iRad; }
 }
 const ndProjEfter = (n, andel, tid) => { const p = PROJEKT[role()].find(x => x[0] === n); return !!(p && (p[6] > 0 || (tid !== null && andel + .1 < tid))); };
 
@@ -25421,59 +25425,123 @@ const _ndRxTaskSynk = rxTaskSynk; rxTaskSynk = function(){ if (ndKopplad('rekryt
 const _ndNhTaskSynk = nhTaskSynk; nhTaskSynk = function(){ if (ndKopplad('nyheter')) return _ndNhTaskSynk(); };
 const _ndKvTaskSynk = kvTaskSynk; kvTaskSynk = function(){ if (ndKopplad('kv')) return _ndKvTaskSynk(); };
 
-/* ---------- Rutan: navets historik och chatt, och läsläge ---------- */
+/* ---------- Rutan: navets historik och chatt ---------- */
 const _ndUpgRutaHtml = upgRutaHtml;
 upgRutaHtml = function(t){
   let h = _ndUpgRutaHtml(t); if (!ndUp()) return h;
-  // Första steget och "Dela upp med Nav" finns inte i navet.
-  h = h.replace(/<div class="upg-forst">[\s\S]*?<\/div>/, '').replace(/<button type="button" class="tlink" data-split="[^"]*">Dela upp med Nav<\/button>/, '');
-  // Chatten är navets kommentarer (ndpatch tar bort utkastets påhittade rad när den är tom).
   if (!t.chatt.length) h = h.replace('<div class="upg-chat"></div>', '<div class="upg-chat"><p class="upg-sm">Inga kommentarer än.</p></div>');
-  // Historiken: navets händelser i ordning.
   const hist = (t.ndHist || []).map(e => `<li><span class="num">${frKort(ndDagAv(e.at))} ${ndKl(e.at)}</span>${esc(NDUPGH[e.typ] || e.typ)}${e.av ? ` av ${esc(e.av.split(' ')[0])}` : ''}${e.note && e.typ !== 'kommentar' ? `: ${esc(e.note)}` : ''}</li>`).join('');
   h = h.replace(/<ul class="upg-hist">[\s\S]*?<\/ul>/, `<ul class="upg-hist">${hist || '<li>Ingen historik.</li>'}</ul>`);
-  // Navets klockslag finns inte alltid bland utkastets fasta val.
   if (t.nar && !NAR_VAL.includes(t.nar)) h = h.replace(/(<select[^>]*data-upgnar="[^"]*"[^>]*>)/, `$1<option value="${esc(t.nar)}" selected>${esc(t.nar)}</option>`).replace(/<option value="" selected>/, '<option value="">');
-  // Läsläge: fälten går inte att ändra här, formulären leder till uppgiften i Nav.
-  h = h.replace(/<(input|textarea)([^>]*data-(?:ptitle|upgbesk)=)/g, '<$1 readonly$2').replace(/<select([^>]*data-(?:upgnar|upgproj)=)/g, '<select disabled$1');
-  h = h.replace(/<form class="subadd" data-(?:subadd|chat)="[^"]*">[\s\S]*?<\/form>/g, '');
-  return h.replace('<footer class="upg-rf">', `<p class="upg-sm nd-las">Läsläge. <a class="tlink" href="/uppgifter/${esc(t.id)}">Ändra, kommentera eller bocka i Nav</a></p><footer class="upg-rf">`);
+  return h;
 };
 
-/* ---------- Läsläge i hela vyn ---------- */
-// Det som finns i navet leder till uppgiften där; det som bara finns i utkastet säger det.
-const NDUPGNAV = ['wrgo', 'wract', 'tick', 'approve', 'return', 'reason', 'over', 'overto', 'strike', 'setday', 'upgdag', 'today', 'snooze', 'take', 'triage', 'tri', 'setprio', 'est', 'upgest',
-  'setwhen', 'when', 'reopen', 'reclaim', 'unfollow', 'sub', 'upgdelbort', 'carry', 'decide', 'batch'];
-const NDUPGBARA = ['focus', 'split', 'sug', 'suggest', 'nudge', 'nudgeall', 'book', 'startday', 'closeday', 'shutdown'];
-const ndUpgId = v => { const id = String(v || '').split('|')[0]; return ndUp() && ndUp().uppgifter.some(x => x.id === id) ? id : null; };
-const ndIUpg = el => S.view === 'uppgifter' || !!(el.closest && el.closest('#todoPanel, #upgRuta'));
-function ndUpgBara(){ toast('Det här finns inte i Nav än. Det byggs när Uppgifter får spara.'); }
+/* ---------- Skrivningar: /nav2/uppgifter ---------- */
+async function ndUpgPost(handling, data = {}, {ladda = true, tyst = false} = {}){
+  try {
+    const r = await fetch('/nav2/uppgifter', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
+    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    if (s.ok){ if (!tyst) toast(s.ok); if (ladda){ try { sessionStorage.setItem('nd-upg', JSON.stringify({view:S.view, tab:S.tab, panel:S.panel})); } catch(_){} setTimeout(() => location.reload(), 700); } return s; }
+    if (!tyst) toast(s.fel || 'Det gick inte att spara.'); return s;
+  } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
+}
+(() => { if (!ndUp()) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-upg') || 'null'); sessionStorage.removeItem('nd-upg'); } catch(_){}
+  if (m) setTimeout(() => { if (m.view) S.view = m.view; if (m.tab) S.tab = m.tab; if (m.panel && TASKS.some(t => t.id === m.panel)) S.panel = m.panel; render(); }, 0); })();
+const ndUpgT = id => TASKS.find(x => x.id === String(id || '').split('|')[0]);
+const ndUpgNav = id => ndUp() && ndUp().uppgifter.some(x => x.id === id);
+const ndIUpg = el => S.view === 'uppgifter' || !!(el.closest && el.closest('#todoPanel, #upgRuta, #focusOv'));
+// Utkastets dagar (0 = i dag, null = någon gång) som datum.
+const ndUpgDag = d => d === null || d === undefined ? null : frPlus(kIdag(), d);
+function ndNastaVardag(fran = kIdag()){ let d = frPlus(fran, 1); while (frDow(d) > 5) d = frPlus(d, 1); return d; }
+function ndNastaMandag(){ let d = frPlus(kIdag(), 1); while (frDow(d) !== 1) d = frPlus(d, 1); return d; }
+const ndPersonId = namn => { if (namn === ND.jag.namn) return ND.jag.id; const p = (ndUp().personer || []).find(x => x.namn === namn); return p ? p.id : null; };
+const ndProjId = namn => { const p = ndUp().projekt.find(x => x.namn === namn); return p ? p.id : null; };
+
+// Utkastets egna funktioner gör sitt i listan; navet sparar resultatet.
+const _ndBocka = bocka;
+bocka = function(id){ if (!ndUp() || !ndUpgNav(id)) return _ndBocka(id); const t = ndUpgT(id); ndUpgPost(t && t.lage === 'klar' ? 'ateroppna' : 'bocka', {id}); };
+const _ndSkjut = skjut;
+skjut = function(id, till){ if (!ndUp() || !ndUpgNav(id)) return _ndSkjut(id, till); ndUpgPost('planera', {id, dag:till !== undefined ? ndUpgDag(till) : ndNastaVardag()}); };
+const _ndStryk = stryk;
+stryk = function(id){ if (!ndUp() || !ndUpgNav(id)) return _ndStryk(id); ndUpgPost('avbryt', {id, note:'Struken'}); };
+const _ndLamnaOver = lamnaOver;
+lamnaOver = function(id, vem){ if (!ndUp() || !ndUpgNav(id)) return _ndLamnaOver(id, vem); const p = ndPersonId(vem); if (!p){ toast('Personen finns inte i Nav.'); return; } ndUpgPost('tilldela', {id, till:p}); };
+function ndFokusSpara(){ ndUpgPost('fokus', {ids:fokus().filter(x => ndUpgNav(x.id)).map(x => x.id)}, {ladda:false, tyst:true}).then(s => { if (!s.ok) toast(s.fel || 'Dagens tre sparades inte.'); }); }
+const _ndVaxlaFokus = vaxlaFokus;
+vaxlaFokus = function(id, plats){
+  if (!ndUp()) return _ndVaxlaFokus(id, plats);
+  const t = ndUpgT(id), fore = t ? t.d : null; _ndVaxlaFokus(id, plats); ndFokusSpara();
+  if (t && t.focus && fore !== 0 && ndUpgNav(id)) ndUpgPost('planera', {id, dag:kIdag()}, {ladda:false, tyst:true});
+};
+const _ndForeslaTre = foreslaTre;
+foreslaTre = function(){ _ndForeslaTre(); if (ndUp()) ndFokusSpara(); };
+const _ndDelaUpp = delaUpp;
+delaUpp = function(t){
+  if (!ndUp() || !t || !ndUpgNav(t.id)) return _ndDelaUpp(t);
+  const fore = t.delar.length; _ndDelaUpp(t); const steg = t.delar.slice(fore).map(x => x[0]); t.delar.splice(fore);
+  ndUpgPost('dela-upp', {id:t.id, steg});
+};
+const _ndLaggTill = laggTill;
+laggTill = function(rad){
+  if (!ndUp()) return _ndLaggTill(rad);
+  rad = String(rad || '').trim(); if (!rad) return;
+  if (/^\//.test(rad)){ const f = forslag(rad)[0]; if (f){ const m = ndUp().mallar.find(x => x.namn === f.varde); toast(m ? 'Mallen läggs som uppgifter i Nav.' : 'Mallen finns inte.'); } return; }
+  const delar = rad.split(/\s*;\s*/).filter(Boolean);
+  (async () => { for (const r of delar){ const s = await ndUpgPost('skapa', {rad:r}, {ladda:false, tyst:true}); if (!s.ok){ toast(s.fel || 'Uppgiften lades inte upp.'); return; } } toast(delar.length > 1 ? `${delar.length} uppgifter upplagda.` : 'Uppgiften är upplagd.'); try { sessionStorage.setItem('nd-upg', JSON.stringify({view:S.view, tab:S.tab})); } catch(_){} setTimeout(() => location.reload(), 700); })();
+};
+
 document.addEventListener('click', e => {
   if (!ndUp()) return;
   const b = e.target.closest && e.target.closest('button, a, [data-tick]'); if (!b || !b.dataset || !ndIUpg(b)) return;
-  const nav = NDUPGNAV.find(k => b.dataset[k] !== undefined), bara = NDUPGBARA.find(k => b.dataset[k] !== undefined);
-  if (nav){ e.preventDefault(); e.stopImmediatePropagation(); const id = ndUpgId(b.dataset[nav]); location.href = nav === 'wrgo' || nav === 'wract' ? '/uppgifter/genomgang' : id ? `/uppgifter/${id}` : '/uppgifter'; return; }
-  if (bara){ e.preventDefault(); e.stopImmediatePropagation(); ndUpgBara(); return; }
-  if (b.dataset.act === 'toast'){ e.preventDefault(); e.stopImmediatePropagation(); location.href = /projekt/i.test(b.textContent) ? '/uppgifter/projekt' : '/uppgifter'; }
+  const d = b.dataset, stopp = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+  const del = (k) => String(d[k]).split('|');
+  if (d.approve){ stopp(); ndUpgPost('godkann', {id:d.approve}); return; }
+  if (d.setday){ stopp(); const [id, v] = del('setday'); ndUpgPost('planera', {id, dag:v === 'null' ? null : ndUpgDag(+v)}); return; }
+  if (d.today){ stopp(); ndUpgPost('planera', {id:d.today, dag:kIdag()}); return; }
+  if (d.setprio){ stopp(); const [id, v] = del('setprio'); ndUpgPost('andra', {id, falt:{priority:+v}}); return; }
+  if (d.est || d.upgest){ stopp(); const [id, m] = del(d.est ? 'est' : 'upgest'); ndUpgPost('planera', {id, est:+m}); return; }
+  if (d.setwhen){ stopp(); const [id, v] = del('setwhen'); const t = ndUpgT(id); ndUpgPost('planera', {id, dag:t && t.d !== null && t.d !== undefined ? ndUpgDag(t.d) : kIdag(), tid:v}); return; }
+  if (d.book){ stopp(); const t = ndUpgT(d.book); if (!t) return; const s = nastaLucka(t.est || 15); ndUpgPost('planera', {id:t.id, dag:kIdag(), tid:hm(s), est:t.est || 15}); return; }
+  if (d.take){ stopp(); ndUpgPost('planera', {id:d.take, dag:kIdag()}); return; }
+  if (d.reclaim){ stopp(); ndUpgPost('tilldela', {id:d.reclaim, till:ND.jag.id}); return; }
+  if (d.unfollow){ stopp(); ndUpgPost('lamna', {id:d.unfollow}); return; }
+  if (d.nudge){ stopp(); ndUpgPost('paminn', {id:d.nudge}); return; }
+  if (d.nudgeall !== undefined){ stopp(); const ids = listaFor('vantar').filter(t => t.stilla > 5 && ndUpgNav(t.id)).map(t => t.id); if (!ids.length){ toast('Det finns ingen att påminna.'); return; } ndUpgPost('paminn', {ids}); return; }
+  if (d.tri){ stopp(); const [id, v] = del('tri'); if (v === 'stryk') ndUpgPost('avbryt', {id, note:'Struken'}); else ndUpgPost('planera', {id, dag:v === 'idag' ? kIdag() : v === 'mon' ? ndNastaMandag() : null}); return; }
+  if (d.carry){ stopp(); const [id, v] = del('carry'); if (v === 'idag') ndUpgPost('planera', {id, dag:kIdag()}); else if (v === 'senare') ndUpgPost('planera', {id, dag:ndNastaMandag()}); else ndUpgPost('avbryt', {id, note:'Struken'}); return; }
+  if (d.close1){ stopp(); const [id, v] = del('close1'); if (v === 'stryk') ndUpgPost('avbryt', {id, note:'Struken'}); else ndUpgPost('planera', {id, dag:v === 'mon' ? ndNastaMandag() : null}); return; }
+  if (d.decide){ stopp(); const [id, v] = del('decide'); const t = ndUpgT(id);
+    if (v === 'gor') ndUpgPost('planera', {id, dag:kIdag(), tid:'16:00'});
+    else if (v === 'steg' && t){ (async () => { const s = await ndUpgPost('skapa', {titel:`Första steget: ${t.nasta || t.t}`, dag:kIdag(), prio:2}, {ladda:false, tyst:true}); if (s.ok) await ndUpgPost('planera', {id, dag:ndNastaMandag()}); else toast(s.fel || 'Det gick inte att spara.'); })(); }
+    else ndUpgPost('avbryt', {id, note:'Struken'}); return; }
+  if (d.sub){ stopp(); const [id, i] = del('sub'); const t = ndUpgT(id), del2 = t && t.ndDelId ? t.ndDelId[+i] : null; if (!del2){ toast('Deluppgiften finns inte i Nav.'); return; } ndUpgPost(t.delar[+i][1] ? 'ateroppna' : 'bocka', {id:del2}); return; }
+  if (d.upgdelbort){ stopp(); const [id, j] = del('upgdelbort'); const t = ndUpgT(id), del2 = t && t.ndDelId ? t.ndDelId[+j] : null; if (del2) ndUpgPost('avbryt', {id:del2, note:'Borttagen deluppgift'}); return; }
+  if (d.startday !== undefined){ stopp(); ndUpgPost('dag', {vad:'planera'}, {ladda:false}).then(s => { if (s.ok){ S.planned = true; S.streak[role()] = (S.streak[role()] || 0) + (S.planned ? 0 : 1); render(); setTimeout(() => location.reload(), 900); } }); return; }
+  if (d.closeday !== undefined){ stopp(); ndUpgPost('dag', {vad:'avsluta'}, {ladda:false}).then(s => { if (s.ok){ S.dayClosed = true; S.shutdown = false; render(); } }); return; }
+  if (d.reopen !== undefined && S.dayClosed){ stopp(); ndUpgPost('dag', {vad:'oppna'}, {ladda:false}).then(s => { if (s.ok){ S.dayClosed = false; render(); } }); return; }
+  if (d.wrgo === 'klar'){ stopp(); ndUpgPost('genomgang', {}); return; }
+  if (d.wract){ stopp(); const [id, v] = del('wract'); if (v === 'pamin') ndUpgPost('paminn', {id}); else if (v === 'tillbaka') ndUpgPost('tilldela', {id, till:ND.jag.id}); else if (v === 'stryk') ndUpgPost('avbryt', {id, note:'Struken'}); else ndUpgPost('planera', {id, dag:v === 'idag' ? kIdag() : ndNastaMandag()}); return; }
+  if (d.act === 'toast'){ stopp(); toast(d.msg || ''); }
 }, true);
-// Snabbraden, deluppgifter, chatt och retur är formulär: de görs i Nav.
+// Formulären: deluppgift, kommentar och retur. Snabbraden går genom laggTill.
 document.addEventListener('submit', e => {
   if (!ndUp() || !ndIUpg(e.target)) return;
-  const f = e.target, ds = f.dataset || {};
-  if (ds.quick !== undefined || ds.subadd !== undefined || ds.chat !== undefined || ds.retur !== undefined || f.querySelector('[data-quick]')){
-    e.preventDefault(); e.stopImmediatePropagation(); const id = ndUpgId(ds.subadd || ds.chat || ds.retur); location.href = id ? `/uppgifter/${id}` : '/uppgifter';
-  }
+  const f = e.target, ds = f.dataset || {}, v = (f.querySelector('input') || {}).value || '';
+  if (ds.subadd){ e.preventDefault(); e.stopImmediatePropagation(); if (!v.trim()) return; ndUpgPost('skapa', {titel:v.trim(), foralder:ds.subadd}); return; }
+  if (ds.chat){ e.preventDefault(); e.stopImmediatePropagation(); if (!v.trim()) return; ndUpgPost('kommentera', {id:ds.chat, note:v.trim()}); return; }
+  if (ds.retur){ e.preventDefault(); e.stopImmediatePropagation(); if (!v.trim()){ toast('Skriv vad som behöver göras om.'); return; } ndUpgPost('returnera', {id:ds.retur, note:v.trim()}); return; }
 }, true);
-// Kortkommandona som ändrar (X klar, M nästa arbetsdag, F dagens tre) och dra-och-släpp av dagens tre.
-document.addEventListener('keydown', e => {
-  if (!ndUp() || S.view !== 'uppgifter' || e.metaKey || e.ctrlKey || e.altKey) return;
-  if (e.target.closest && e.target.closest('input, textarea, select, [contenteditable]')) return;
-  const k = e.key.toLowerCase();
-  if (k === 'x' || k === 'm'){ e.preventDefault(); e.stopImmediatePropagation(); location.href = '/uppgifter'; }
-  if (k === 'f'){ e.preventDefault(); e.stopImmediatePropagation(); ndUpgBara(); }
+// Fälten i rutan sparas när de ändrats.
+document.addEventListener('change', e => {
+  if (!ndUp() || !e.target.dataset) return;
+  const d = e.target.dataset, v = e.target.value;
+  if (d.upgnar){ e.stopImmediatePropagation(); const t = ndUpgT(d.upgnar); ndUpgPost('planera', {id:d.upgnar, dag:t && t.d !== null && t.d !== undefined ? ndUpgDag(t.d) : kIdag(), tid:/^\d{1,2}:\d{2}$/.test(v) ? v : null}); return; }
+  if (d.upgproj){ e.stopImmediatePropagation(); ndUpgPost('andra', {id:d.upgproj, falt:{project_id:v ? ndProjId(v) : null}}); return; }
+  if (d.upgbesk){ e.stopImmediatePropagation(); ndUpgPost('andra', {id:d.upgbesk, falt:{description_md:v.trim()}}, {ladda:false}); return; }
+  if (d.ptitle){ e.stopImmediatePropagation(); if (!v.trim()){ toast('Skriv vad som ska göras.'); return; } ndUpgPost('andra', {id:d.ptitle, falt:{title:v.trim()}}, {ladda:false}); return; }
+  if (d.pnasta){ e.stopImmediatePropagation(); const t = ndUpgT(d.pnasta); if (t) t.nasta = v.trim(); ndUpgPost('forsta-steg', {id:d.pnasta, text:v.trim()}, {ladda:false}); return; }
 }, true);
-document.addEventListener('dragstart', e => { if (ndUp() && e.target.closest && e.target.closest('.trow[draggable]')){ e.preventDefault(); e.stopImmediatePropagation(); } }, true);
-document.addEventListener('dblclick', e => { if (ndUp() && ndIUpg(e.target) && e.target.closest && e.target.closest('.trow')){ e.preventDefault(); e.stopImmediatePropagation(); } }, true);
+// Kortkommandot M flyttar till nästa arbetsdag (utkastets skjut), X bockar av och F väljer dagens tre — samma funktioner.
 
 /* ---------- Veckogenomgången: navets läge och "Senast gjord" ---------- */
 const _ndWrKort = wrKort;
@@ -25489,13 +25557,6 @@ const _ndQuickAdd = quickAdd;
 quickAdd = function(compact){
   const h = _ndQuickAdd(compact); if (!ndUp() || !KOLLEGOR.length) return h;
   return h.replace(/ring Elin i morgon/g, `ring ${esc(KOLLEGOR[0].split(' ')[0])} i morgon`);
-};
-
-/* ---------- Vyn: ingen "Planerad N dagar i rad", och rutan i läsläge ---------- */
-const _ndRenderTasksView = renderTasksView;
-renderTasksView = function(){
-  const h = _ndRenderTasksView(); if (!ndUp()) return h;
-  return h.replace(/<button type="button" class="upg-streak" data-streak[^>]*>[^<]*<\/button>/, '').replace(/<button class="streak" data-streak[^>]*>[\s\S]*?<\/button>/, '');
 };
 
 if (ndUp()){ ndUpgStart(); NDKOPPLAD.add('uppgifter'); }
@@ -26472,7 +26533,8 @@ kSlapp = function(nyckel, d, s){
   const typ = nyckel.slice(0, 1), id = nyckel.slice(2);
   if (typ === 'q'){ const q = KKO.find(x => x.id === id); if (!q) return; if (kWd(d) > 5){ toast('Välj en vardag.'); return; }
     ndKPost('spara', {falt:{lev:'Välkomstsamtal', order:id, t:`Välkomstsamtal · ${q.kund}`, d, s, e:s + 30, delt:[], pamin:15}}); return; }
-  if (typ === 'u'){ toast('Tiden för uppgiften sparas när Uppgifter får spara.'); return; }
+  // En uppgift får sitt klockslag i Uppgifter (planera), och står då i kalendern.
+  if (typ === 'u'){ const u = TASKS.find(x => x.id === id); if (!u) return; ndUpgPost('planera', {id, dag:d, tid:hm(s), est:Math.max(15, Math.min(240, u.est || 30))}); return; }
 };
 document.addEventListener('click', e => {
   if (!ndK() || S.view !== 'kalender') return;
@@ -26484,8 +26546,8 @@ document.addEventListener('click', e => {
     ndKPost('foresla', {id:ref, dag:dd, start:tmin(ss), langd:ev.e - ev.s, kommentar:(document.querySelector('[data-kfkom]')?.value || '').trim()}); return; }
   if (ds.kstalljs !== undefined){ stopp(); if (!ref) return; ndKPost('stallin', {id:ref}); return; }
   if (ds.kkopiera !== undefined){ stopp(); if (!ref) return; ndKPost('kopiera', {id:ref}); return; }
-  if (ds.kklar !== undefined && ev && ev.kat === 'uppgift'){ stopp(); toast('Uppgiften bockas av när Uppgifter får spara.'); return; }
-  if (ds.kuppgklar !== undefined){ stopp(); toast('Uppgiften bockas av när Uppgifter får spara.'); return; }
+  if (ds.kklar !== undefined && ev && ev.kat === 'uppgift' && ref){ stopp(); ndUpgPost(ev.klar ? 'ateroppna' : 'bocka', {id:ref}); return; }
+  if (ds.kuppgklar !== undefined){ stopp(); const u = TASKS.find(x => x.id === ds.kuppgklar); ndUpgPost(u && u.lage === 'klar' ? 'ateroppna' : 'bocka', {id:ds.kuppgklar}); return; }
   if (ds.kdelabort){ stopp(); const id = ndKId(ds.kdelabort); if (id) ndKPost('delning', {person:id, niva:'upptagen'}, {ladda:false}).then(s => { if (s.ok){ S.kDelaBort.add(ds.kdelabort); render(); } }); return; }
   if (ds.act === 'toast'){
     stopp(); const msg = ds.msg || '';

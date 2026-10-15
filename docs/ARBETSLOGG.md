@@ -5,6 +5,28 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-15 · Nav 2.0, Uppgifter: ingen funktion tas bort (0092)
+
+Pass 4 skickade 29 knappar till nuvarande Nav, sa att tio av utkastets egna
+funktioner inte fanns, gjorde rutans fält skrivskyddade och dolde "Planerad N
+dagar i rad", "Första steget" och "Dela upp med Nav".
+
+- **Utkastets egna funktioner** var regelbaserade, inte AI: "Navs förslag"
+  väljer tre (försenat, brådskande, med klockslag, rör en order) och "Dela upp
+  med Nav" ger tre steg efter nyckelord. Det som behövde lagras var
+  resultatet.
+- **0092** (körd): `task_focus`, `task_day`, `task.next_step` och händelsen
+  `paminnelse`. Repots `/uppgifter/[id]` visar den som "Påminnelse".
+  `HANDELSETYPER` i `lib/uppgifter.ts` är oförändrad, eftersom flera
+  uttömmande uppslag i andra moduler annars hade krävt nya nycklar.
+- **Klienten** låter utkastets egna funktioner (`bocka`, `skjut`, `stryk`,
+  `lamnaOver`, `vaxlaFokus`, `foreslaTre`, `delaUpp`, `laggTill`) göra sitt och
+  skickar resultatet till rutten. Fälten i rutan sparas när de ändras.
+- **Provat** mot previewens riktiga data (Zen) med det nya skriptet
+  (`sess/p17.json`): vyn, förslagen, bocka, rutan, första steget och snabbraden
+  når rutten; inga exempel och inga fel. Uppgifter som säljare provas i
+  previewen efter bygget.
+
 ## 2026-10-15 · Nav 2.0, Kalendern: ingen funktion tas bort (0088–0091)
 
 Pass 7 skickade varje ändring till nuvarande Nav och stängde av att dra poster.

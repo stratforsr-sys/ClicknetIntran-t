@@ -26,7 +26,9 @@ behörigheter som här: du ser bara det du får se.
 - **Klockan**, med samma notiser som här.
 - **Inställningar**: ditt konto, säkerheten och utseendet.
 - **Satser och löner**, för den som har behörigheten för lönekostnad.
-- **Tid**, **Frånvaro** och **Uppgifter**, med samma regler som här.
+- **Tid**, **Frånvaro** och **Uppgifter**, med samma regler som här. I Uppgifter
+  väljer du dagens tre, planerar och avslutar dagen, skriver första steget och
+  påminner den du väntar på.
 - **Order** och kundkortet. Varje order har nu ett nummer (#12), och
   provisionen är navets: fryst på en godkänd order, och det godkännandet
   skulle ge på en som väntar. I kortet spelar du inspelningen direkt, skriver
