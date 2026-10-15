@@ -76,11 +76,11 @@ export async function skrivFel(inlagg: Felinlagg): Promise<boolean> {
     };
 
     if (inlagg.kind === "manual") {
-      // Kolumnen skickas bara med när den har ett värde, så att en rapport
-      // utan pekning ser ut exakt som före 0082.
+      // Utan pekning är fältet undefined och följer inte med i JSON, så att en
+      // rapport utan pekning ser ut exakt som före 0082.
       const { error } = await db
         .from("error_report")
-        .insert(inlagg.pointedAt ? { ...rad, pointed_at: inlagg.pointedAt.slice(0, 300) } : rad);
+        .insert({ ...rad, pointed_at: inlagg.pointedAt ? inlagg.pointedAt.slice(0, 300) : undefined });
       return !error;
     }
 
