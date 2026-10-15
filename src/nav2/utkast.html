@@ -12551,13 +12551,13 @@ const ARORD = [
 ];
 const ARRUT = [[/semester|ledig/, 'ledighet'], [/sjuk/, 'sjuk'], [/fri order|provision på/, 'friorder'], [/faktura/, 'faktura'], [/lösenord|logga in|inloggning/, 'losen'], [/fel i nav|nav krånglar|buggar/, 'felnav'], [/arbetsmiljö|stress/, 'amp'], [/personuppgift|gdpr/, 'personuppg']];
 const arGissa = t => { const s = (t || '').toLowerCase(); for (const [k, re] of ARORD) if (re.test(s)) return k; return 'other'; };
-const arRutin = t => { const s = (t || '').toLowerCase(); const m = ARRUT.find(([re]) => re.test(s)); return m && typeof RUT !== 'undefined' ? RUT.find(r => r.id === m[1]) : null; };
+let arRutin = t => { const s = (t || '').toLowerCase(); const m = ARRUT.find(([re]) => re.test(s)); return m && typeof RUT !== 'undefined' ? RUT.find(r => r.id === m[1]) : null; };
 const arRubrik = t => { const f = (t || '').trim().split(/(?<=[.!?])\s|\n/)[0].trim().replace(/[.!?]$/, ''); return f.length > 64 ? f.slice(0, 61).replace(/\s\S*$/, '') + '…' : f; };
 const aNu = () => KD(kIdag()) / 60000 + now();
 const aAbs = (d, t) => KD(d) / 60000 + tmin(t);
 const aFmt = a => `${kKort(KF(a * 60000))} ${hm(((a % 1440) + 1440) % 1440)}`;
 const aRel = a => { const d = Math.round(a - aNu()); const t = Math.abs(d) < 60 ? `${Math.abs(d)} min` : Math.abs(d) < 1440 * 2 ? `${Math.round(Math.abs(d) / 60)} h` : `${Math.round(Math.abs(d) / 1440)} dagar`; return d >= 0 ? `om ${t}` : `för ${t} sedan`; };
-const HANDL = 'Johanna Ek';
+let HANDL = 'Johanna Ek';
 const ARSTEG = [['skickat','Skickat'], ['last','Läst'], ['pagar','Pågår'], ['svar','Svar'], ['lost','Löst']];
 
 const ARENDEN = [
@@ -12608,7 +12608,7 @@ function arSla(a){
   return kvar <= ARKAT[a.kat].h * 60 / 4 ? 'snart' : 'i_tid';
 }
 function arGa(id){ S.view = 'arenden'; S.arOpen = id || null; S.arChefOpen = S.role === 'chef' ? (id || S.arChefOpen) : null; S.todoOpen = false; S.panel = null; render(); window.scrollTo(0, 0); if (!id) setTimeout(() => document.querySelector('[data-artext]')?.focus(), 30); }
-function arNytt(text){ const u = arUtk(); if (text){ u.text = text; u.kat = null; u.konf = null; } S.view = 'arenden'; S.role === 'chef' ? (S.arAt = S.arAt || 'Elin Berg') : null; render(); window.scrollTo(0, 0); setTimeout(() => { const t = document.querySelector('[data-artext]'); if (t){ t.focus(); t.setSelectionRange(t.value.length, t.value.length); } }, 30); }
+function arNytt(text){ const u = arUtk(); if (text){ u.text = text; u.kat = null; u.konf = null; } S.view = 'arenden'; S.role === 'chef' ? (S.arAt = S.arAt || (ND && ND.arenden ? (ND.arenden.personer.find(p => p.namn !== ND.jag.namn) || {namn:null}).namn : 'Elin Berg')) : null; render(); window.scrollTo(0, 0); setTimeout(() => { const t = document.querySelector('[data-artext]'); if (t){ t.focus(); t.setSelectionRange(t.value.length, t.value.length); } }, 30); }
 
 /* ---------- Säljarens vy ---------- */
 function renderArView(){ return S.role === 'chef' ? arChef() : arSaljare(); }
@@ -12625,7 +12625,7 @@ function arSaljare(){
 }
 function arSkriv(){
   const u = arUtk(), har = u.text.trim().length > 0;
-  const START = [['Min provision stämmer inte','pay','Min provision för september ser för låg ut. '],['Utrustning krånglar','equipment','Mitt headset '],['Jag vill ändra mitt schema','schedule','Jag skulle vilja '],['Något i teamet känns fel','conflict',''],['Arbetsmiljön tar på mig','work_env',''],['Jag vill utvecklas','development','Jag skulle vilja lära mig '],['Något annat','other','']];
+  const START = [['Min provision stämmer inte','pay',`Min provision för ${ND ? FRMAN[+kIdag().slice(5, 7) - 1 || 12] : 'september'} ser för låg ut. `],['Utrustning krånglar','equipment','Mitt headset '],['Jag vill ändra mitt schema','schedule','Jag skulle vilja '],['Något i teamet känns fel','conflict',''],['Arbetsmiljön tar på mig','work_env',''],['Jag vill utvecklas','development','Jag skulle vilja lära mig '],['Något annat','other','']];
   return `<section class="card arskriv ${har ? 'aktiv' : ''}">${note(168)}<div class="chead"><h2>Vad vill du ta upp?</h2><span class="end">${har ? '<span class="muted" style="font-size:12px">Utkastet sparas medan du skriver</span>' : ''}</span></div>
     <textarea class="uin artext" data-artext rows="${har ? 4 : 2}" placeholder="Skriv som du hade sagt det till Johanna. Till exempel: Min provision för september ser för låg ut.">${esc(u.text)}</textarea>
     ${har ? '' : `<div class="qchips arstart">${START.map(([l, k, t]) => `<button class="chip" data-arstart="${k}" data-text="${esc(t)}">${esc(l)}</button>`).join('')}</div>`}
@@ -12640,7 +12640,7 @@ function arDetalj(){
     ${rut ? `<div class="arrutin">${note(170)}${I('rut')}<span>Kanske svarar rutinen <b>${esc(rut.t)}</b> redan på det.<small>${esc(rut.tldr || '')}</small></span><span class="pacts"><button class="btn btn-s btn-sm" data-arrutin="${rut.id}">Läs rutinen</button><button class="btn btn-s btn-sm" data-arrutinlost>Det löste det</button><button class="tlink" data-arutanrutin>Skicka ändå</button></span></div>` : ''}
     <div class="arrad arkonf">${note(171)}<button class="tiswitch" data-arkonf aria-pressed="${konf}"><span><b>Konfidentiellt</b>${ARKAT[kat].konf && u.konf == null ? ' <small class="muted">förvalt för ' + ARKAT[kat].l.toLowerCase() + '</small>' : ''}</span><i></i></button>
       <span class="arses">${I('pers')}Syns för: <b>dig, Johanna och VD</b>${konf ? '. Ingen annan, oavsett roll.' : ', och den Johanna eventuellt lämnar det till.'}</span></div>
-    <div class="arrad">${I('plus')}<span class="qchips">${['Order #1482','Provisionen i oktober', ...u.kontext.filter(k => k.startsWith('Bild: '))].map(k => `<button class="chip ${u.kontext.includes(k) ? 'on' : ''}" data-arkontext="${esc(k)}">${u.kontext.includes(k) ? '✓ ' : '+ '}${esc(k)}</button>`).join('')}<label class="chip" for="arFil">+ Skärmbild</label><input id="arFil" type="file" accept="image/*" data-arfil hidden></span></div>
+    <div class="arrad">${I('plus')}<span class="qchips">${[...(ND ? [ORDER.find(o => o.vem === ME[S.role === 'chef' ? 'chef' : 'saljare'].namn) ? `Order #${ORDER.find(o => o.vem === ME[S.role === 'chef' ? 'chef' : 'saljare'].namn).nr}` : null, `Provisionen i ${FRMAN[+kIdag().slice(5, 7)]}`].filter(Boolean) : ['Order #1482','Provisionen i oktober']), ...u.kontext.filter(k => k.startsWith('Bild: '))].map(k => `<button class="chip ${u.kontext.includes(k) ? 'on' : ''}" data-arkontext="${esc(k)}">${u.kontext.includes(k) ? '✓ ' : '+ '}${esc(k)}</button>`).join('')}<label class="chip" for="arFil">+ Skärmbild</label><input id="arFil" type="file" accept="image/*" data-arfil hidden></span></div>
     <div class="arlofte">${note(172)}${I('tid')}<span>Johanna svarar senast <b>${aFmt(svar)}</b> <span class="muted">(${ARKAT[kat].h >= 168 ? '7 dagar' : ARKAT[kat].h + ' timmar'} för ${ARKAT[kat].l.toLowerCase()})</span>. Du ser när hon läst det.</span></div>
     <div class="pacts arknappar"><button class="btn btn-p" data-arskicka>Skicka till Johanna</button><button class="btn btn-s" data-arprata>${I('kal')}Jag vill hellre prata</button>${note(173)}<button class="tlink" data-arrensa>Släng utkastet</button></div>
   </div>`;
@@ -12713,7 +12713,7 @@ function arDetaljChef(a){
     ${lika.length + 1 >= 3 ? `<div class="arrutin">${note(180)}${I('rut')}<span><b>${lika.length + 1} frågor om semesterersättning på 90 dagar.</b><small>En rutin svarar en gång för alla, och nästa gång föreslås den innan någon skickar ett ärende.</small></span><span class="pacts"><button class="btn btn-s btn-sm" data-arrutinskriv="${a.id}">Skriv en rutin av svaret</button></span></div>` : ''}
     ${a.status !== 'resolved' ? `<div class="arhandl">${note(179)}
       <label>Status<select class="uin" data-arstatus="${a.id}">${[['new','Ny'],['in_progress','Pågår'],['waiting','Väntar på svar']].map(([k, l]) => `<option value="${k}" ${a.status === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-      <label>Handläggare<select class="uin" data-artill="${a.id}" ${a.konf ? 'disabled title="Ett konfidentiellt ärende kan inte lämnas vidare"' : ''}>${[HANDL, 'Lena Holm · ekonomi', 'Ledningen'].map(p => `<option ${a.till === p ? 'selected' : ''}>${p}</option>`).join('')}</select></label>
+      <label>Handläggare<select class="uin" data-artill="${a.id}" ${a.konf ? 'disabled title="Ett konfidentiellt ärende kan inte lämnas vidare"' : ''}>${(ND && ND.arenden ? ndArHandl(a) : [HANDL, 'Lena Holm · ekonomi', 'Ledningen']).map(p => `<option ${a.till === p ? 'selected' : ''}>${p}</option>`).join('')}</select></label>
       ${S.arLosOpen === a.id ? `<div class="arlosform"><textarea class="uin" rows="2" data-arlosning="${a.id}" placeholder="Vad blev lösningen? ${esc(fornamn(a.vem))} ser den och får frågan om det löste ärendet."></textarea><div class="pacts"><button class="btn btn-p btn-sm" data-arlos="${a.id}">${I('check')}Markera löst</button><button class="btn btn-s btn-sm" data-arlosopen="">Avbryt</button></div></div>` : `<button class="btn btn-s btn-sm" data-arlosopen="${a.id}">${I('check')}Markera löst</button>`}
       <span class="muted tismall">Statusen följer samtalet: ditt svar sätter ”väntar på svar”, ${esc(fornamn(a.vem))}s svar sätter ”pågår”.</span></div>` : ''}
   </section>`;
@@ -12728,12 +12728,12 @@ function arStat(){
 function arPaUppdrag(){
   return `<section class="card arskriv aktiv">${note(183)}<div class="chead"><h2>Lägg upp åt någon</h2><span class="end"><button class="olib s" data-arat="" aria-label="Stäng">${I('x')}</button></span></div>
     <p class="muted tismall">För den som ringde eller kom förbi. Ärendet blir personens eget, med samma löfte och samma regler.</p>
-    <div class="arrad"><span class="arlbl">Gäller</span><select class="uin" data-arpers style="width:auto">${KTEAM.filter(p => p !== HANDL).map(p => `<option ${S.arAt === p ? 'selected' : ''}>${p}</option>`).join('')}</select></div>
-    <textarea class="uin artext" data-artext rows="3" placeholder="Vad gäller det?">${esc(arUtk().text)}</textarea><div id="arDetalj">${arUtk().text.trim() ? arDetalj().replace('Skicka till Johanna', 'Lägg upp ärendet').replace(/Johanna svarar senast/, 'Svar utlovas senast') : ''}</div></section>`;
+    <div class="arrad"><span class="arlbl">Gäller</span><select class="uin" data-arpers style="width:auto">${(ND && ND.arenden ? ND.arenden.personer.map(p => p.namn).filter(p => p !== ND.jag.namn) : KTEAM.filter(p => p !== HANDL)).map(p => `<option ${S.arAt === p ? 'selected' : ''}>${p}</option>`).join('')}</select></div>
+    <textarea class="uin artext" data-artext rows="3" placeholder="Vad gäller det?">${esc(arUtk().text)}</textarea><div id="arDetalj">${arUtk().text.trim() ? arDetalj().replace(/Skicka till (Johanna|säljchefen)/, 'Lägg upp ärendet').replace(/(Johanna|Säljchefen) svarar senast/, 'Svar utlovas senast') : ''}</div></section>`;
 }
 
 /* ---------- Händelser ---------- */
-function arDetaljUppdatera(){ arSvtMark(); const el = document.getElementById('arDetalj'); if (el) el.innerHTML = S.role === 'chef' && S.arAt ? arDetalj().replace('Skicka till Johanna', 'Lägg upp ärendet').replace(/Johanna svarar senast/, 'Svar utlovas senast') : arDetalj(); }
+function arDetaljUppdatera(){ arSvtMark(); const el = document.getElementById('arDetalj'); if (el) el.innerHTML = S.role === 'chef' && S.arAt ? arDetalj().replace(/Skicka till (Johanna|säljchefen)/, 'Lägg upp ärendet').replace(/(Johanna|Säljchefen) svarar senast/, 'Svar utlovas senast') : arDetalj(); }
 let arTimer = null;
 document.addEventListener('input', e => {
   if (S.view !== 'arenden' || !e.target.dataset) return;
@@ -12788,7 +12788,7 @@ function arClick(t, e){
   // Chefen
   if (d.arfilt){ S.arFilt = d.arfilt; S.arChefOpen = null; render(); return true; }
   if (d.archef){ S.arChefOpen = d.archef; render(); return true; }
-  if (d.arat !== undefined){ S.arAt = d.arat === '' ? null : 'Elin Berg'; S.arUtk = S.arAt ? arUtk() : S.arUtk; render(); if (S.arAt) setTimeout(() => document.querySelector('[data-artext]')?.focus(), 20); return true; }
+  if (d.arat !== undefined){ S.arAt = d.arat === '' ? null : ND && ND.arenden ? (ND.arenden.personer.find(p => p.namn !== ND.jag.namn) || {namn:null}).namn : 'Elin Berg'; S.arUtk = S.arAt ? arUtk() : S.arUtk; render(); if (S.arAt) setTimeout(() => document.querySelector('[data-artext]')?.focus(), 20); return true; }
   if (d.arlosopen !== undefined){ S.arLosOpen = d.arlosopen || false; render(); if (d.arlosopen) setTimeout(() => document.querySelector('[data-arlosning]')?.focus(), 20); return true; }
   if (d.arlos){ const a = ARENDEN.find(x => x.id === d.arlos), txt = (document.querySelector(`[data-arlosning="${a.id}"]`).value || '').trim(); if (!txt){ toast('Skriv vad lösningen blev. Den som frågade ser den.'); return true; } a.status = 'resolved'; a.lost = aNu(); a.losning = txt; a.fragaLost = true; S.arLosOpen = false; const forraL = S.arChefOpen, nastaL = ARENDEN.filter(x => x.status !== 'resolved' && x.status !== 'waiting').sort((x, y) => x.due - y.due)[0]; if (nastaL) S.arChefOpen = nastaL.id; render(); toast(`Löst. ${fornamn(a.vem)} får frågan om det löste ärendet.${nastaL ? ` Nästa: ${nastaL.konf ? 'konfidentiellt ärende' : nastaL.rubrik}.` : ''}`, () => { a.status = 'in_progress'; a.lost = null; S.arChefOpen = forraL; render(); }); return true; }
   if (d.arrutinskriv){ toast('Ett utkast till rutinen ”Semesterersättning” ligger i Rutiner, med ditt svar som grund. Nästa gång någon skriver om semesterersättning föreslås den först.'); return true; }
@@ -26048,9 +26048,17 @@ function ndKEv(p){
   return {id:p.id, ref:p.ref, href:p.href, d:p.dag, s, e, allday, t:p.rubrik ?? (allday ? 'Borta' : 'Upptagen'), kat:NDKSLAG[p.slag] || 'mote', org, delt,
     plats:'', agenda:'', visa:p.slag === 'ledig' ? 'borta' : 'upptagen', rep:!!p.serie, priv:false, klar:!!p.klar, pamin:NDKPAM[p.paminnelse] || 'Ingen', nd:true, agareId:p.agare};
 }
+// 1:1 heter som i navet (enskildTitel): "1:1 Elin" för de två, "1:1 Zen · Elin" för en tredje.
+function ndKTitel(ev){
+  if (ev.kat !== 'enskilt' || !/^1:1$/.test(ev.t)) return;
+  const andra = (ev.delt.find(d => d[0] !== ev.org) || [])[0], mig = ND.jag.namn;
+  if (!andra) return;
+  ev.t = mig === ev.org ? `1:1 ${fornamn(andra)}` : mig === andra ? `1:1 ${fornamn(ev.org)}` : `1:1 ${fornamn(ev.org)} · ${fornamn(andra)}`;
+}
 // Samma möte i två kalendrar ritas en gång (som repots filter på ref); kollegan blir deltagare.
 function ndKLagg(poster){
   poster.map(ndKEv).forEach(ev => {
+    ndKTitel(ev);
     const i = KEV.findIndex(x => x.id === ev.id); if (i >= 0){ KEV[i] = ev; return; }
     if (ev.ref && ['mote', 'enskilt', 'leverans'].includes(ev.kat)){
       const finns = KEV.find(x => x.nd && x.ref === ev.ref && x.d === ev.d);
@@ -26115,6 +26123,7 @@ function ndKDetalj(e){
       y.plats = x.plats || (x.online ? 'Videolänk' : ''); y.online = x.online; y.agenda = x.agenda || ''; y.serieText = x.serieText || '';
       const org = ndKNamn(x.organisator); if (org) y.org = org;
       y.delt = x.deltagare.map(d => [ndKNamn(d.id) || 'Okänd', d.svar]).filter(d => d[0] !== y.org);
+      ndKTitel(y);
     });
     if (S.view === 'kalender' && S.kPeek) render();
   }).catch(() => NDKAL.detalj.set(e.ref, 'saknas'));
@@ -26171,6 +26180,90 @@ const _ndKSlapp = kSlapp;
 kSlapp = function(nyckel, d, s){ if (!ndK()) return _ndKSlapp(nyckel, d, s); toast('Läsläge: tiden bokas i Nav.'); };
 
 if (ndK()){ ndKalStart(); NDKOPPLAD.add('kalender'); }
+
+/* =====================================================================
+   NAV 2.0 I RIKTIGT LÄGE: ÄRENDEN (prefix nd), v47
+
+   ND.arenden (src/lib/nav2/arenden.ts) är hr_case och case_message med den
+   inloggades token, och case_category med svarstid och förval för
+   konfidentiellt. Fristen är navets due_at, fryst vid upplägget.
+
+   Navet har inget läskvitto, ingen fråga om ärendet blev löst, inga bilagor
+   och ingen lista över vad ärenden lett till. De delarna visas inte, eller
+   säger att de inte finns i Nav än. Den som svarar heter säljchefen tills
+   ärendet har en handläggare. Läsläge: skicka, svara, status, handläggare och
+   lösning görs i Nav.
+   ===================================================================== */
+
+const ndA = () => ND && ND.arenden;
+const ndANamn = id => { if (!id) return null; if (id === ND.jag.id) return ND.jag.namn; const p = ndA().personer.find(x => x.id === id); return p ? p.namn : null; };
+// Utkastets tidsskala (minuter, dag + klockslag i svensk tid) ur en ISO-tid.
+const ndAAbs = iso => KD(ndDagAv(iso)) / 60000 + tmin(ndKl(iso));
+
+function ndArStart(){
+  const A = ndA();
+  Object.keys(ARKAT).forEach(k => delete ARKAT[k]);
+  A.kategorier.forEach(k => { ARKAT[k.id] = {l:k.l, h:k.h, konf:k.konf}; });
+  ARENDEN.length = 0;
+  A.arenden.forEach(a => {
+    const vem = ndANamn(a.vemId) || 'Okänd', till = ndANamn(a.tillId);
+    ARENDEN.push({id:a.id, vem, kat:ARKAT[a.kat] ? a.kat : 'other', rubrik:a.rubrik, skapad:ndAAbs(a.skapad), due:ndAAbs(a.due), status:a.status, konf:a.konf, till:till || 'säljchefen', tillId:a.tillId,
+      lost:a.lost ? ndAAbs(a.lost) : null, losning:a.losning || '', eskalerad:a.eskalerad, kontext:null,
+      msg:a.msg.map(m => [ndANamn(m.avId) || 'Okänd', ndAAbs(m.at), m.text])});
+  });
+  ARLEDDE.length = 0;
+  HANDL = A.hanterare ? ND.jag.namn : 'säljchefen';
+}
+// Rutinförslagen kommer med Rutiner; utkastets exempelrutiner föreslås inte här.
+const _ndArRutin = arRutin;
+arRutin = t => ndA() && !ndKopplad('rutiner') ? null : _ndArRutin(t);
+
+/* ---------- Namnen: den som svarar, aldrig ett exempelnamn ---------- */
+function ndANamnText(h, till){
+  const vem = till && till !== 'säljchefen' ? fornamn(till) : 'säljchefen', Vem = vem.replace(/^./, c => c.toUpperCase());
+  return h.replace(/<b>Du ser när hon läst det<\/b>, när hon svarar/, '<b>Du ser när det besvaras</b>').replace(/ Du ser när hon läst det\./, '').replace(/ · inte läst än/, '')
+    .replace(/Hon godkänner oftast samma dag, och du får en notis\./, '').replace(/när hon svarar/g, 'när det besvaras')
+    .replace(/Den Johanna lämnar/g, 'Den som Johanna lämnar').replace(/den Johanna eventuellt/g, 'den som Johanna eventuellt')
+    .replace(/(>|^|\. )Johanna/g, `$1${Vem}`).replace(/Johannas/g, `${vem}s`).replace(/Johanna/g, vem);
+}
+const _ndArSaljare = arSaljare, _ndArDetalj = arDetalj;
+arSaljare = function(){ const h = _ndArSaljare(); return ndA() ? ndANamnText(h, null) : h; };
+arDetalj = function(){ const h = _ndArDetalj(); return ndA() ? ndANamnText(h, null) : h; };
+const _ndArRad = arRad;
+arRad = function(a){ const h = _ndArRad(a); return ndA() ? ndANamnText(h, a.till) : h; };
+const _ndArSida = arSidaSaljare;
+arSidaSaljare = function(){ const h = _ndArSida(); return ndA() ? ndANamnText(h, null).replace(/<section class="card"><div class="chead"><h2>Det här har ärenden lett till<\/h2>[\s\S]*?<\/section>/, '') : h; };
+const _ndArChef = arChef;
+arChef = function(){
+  const h = _ndArChef(); if (!ndA()) return h;
+  return h.replace(/<small>(allt läst|nya sedan i går)<\/small>/, '<small>läskvitto finns inte i Nav än</small>');
+};
+const _ndArStat = arStat;
+arStat = function(){
+  const h = _ndArStat(); if (!ndA()) return h;
+  return h.replace(/<div class="goalnums" style="margin-top:12px"><span>Bekräftat lösta av den som frågade<\/span><span><b>8<\/b> av 9<\/span><\/div>/, '');
+};
+// Handläggare: de personer navet visar, med den nuvarande först.
+function ndArHandl(a){ const n = ndA().personer.map(p => p.namn); return [a.till, ...n.filter(x => x !== a.till)]; }
+
+/* ---------- Läsläge: det som ändrar ett ärende görs i Nav ---------- */
+const NDARNAV = {arskicka:() => '/arenden/nytt', arprata:() => '/arenden/nytt', arsvar:id => `/arenden/${id}`, arlos:id => `/arenden/${id}`, arlostnej:id => `/arenden/${id}`, arboka:() => '/kalender'};
+const NDARBARA = ['arlostja', 'arpamin', 'arolast', 'arrutinskriv'];
+document.addEventListener('click', e => {
+  if (!ndA() || S.view !== 'arenden') return;
+  const b = e.target.closest && e.target.closest('button, a, label'); if (!b || !b.dataset) return;
+  const k = Object.keys(NDARNAV).find(x => b.dataset[x] !== undefined);
+  if (k){ e.preventDefault(); e.stopImmediatePropagation(); location.href = NDARNAV[k](encodeURIComponent(b.dataset[k])); return; }
+  if (NDARBARA.some(x => b.dataset[x] !== undefined)){ e.preventDefault(); e.stopImmediatePropagation(); toast('Det här finns inte i Nav än. Det byggs när Ärenden får spara.'); }
+}, true);
+document.addEventListener('change', e => {
+  if (!ndA() || S.view !== 'arenden' || !e.target.dataset) return;
+  const ds = e.target.dataset;
+  if (ds.arstatus || ds.artill){ e.stopImmediatePropagation(); location.href = `/arenden/${encodeURIComponent(ds.arstatus || ds.artill)}`; }
+  if (ds.arfil !== undefined){ e.stopImmediatePropagation(); e.target.value = ''; toast('Bilagor på ärenden finns inte i Nav än.'); }
+}, true);
+
+if (ndA()){ ndArStart(); NDKOPPLAD.add('arenden'); }
 
 /* Start */
 try { const th = localStorage.getItem('nav2-theme'); if (th && th !== 'auto'){ document.documentElement.setAttribute('data-theme', th); S.theme = th; document.querySelectorAll('#themeSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.themeSet === th))); } } catch(_){}

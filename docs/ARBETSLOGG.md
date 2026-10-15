@@ -5,6 +5,33 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-14 · Nav 2.0 på /nav2, pass 7: Kalendern (gren `nav2-utkast`, `691902e`)
+
+`src/lib/nav2/kalender.ts` (`byggKalender`) är `hamtaLeveranskalender` för den
+inloggades månad, med personerna och delningsnivåerna (`hamtaPersoner`),
+obesvarade inbjudningar, leveranskön och vem kalendern delas med
+(`hamtaDelningar`). `/nav2/kalender` (GET, bara läsning) hämtar andra
+månader, kollegornas kalendrar och Teamet med samma funktion när vyn
+behöver dem, och en händelses plats, agenda, deltagarnas svar och
+serietext (`hamtaHandelsedetalj`, `regeltext`) när förhandsvisningen öppnas.
+
+- Utkastets exempelkalender (`KEV`, `KPERS`, `KDELNING`, `KKO`) är tömd och
+  fylld ur navet. Röda dagar och frånvaro lägger `frKalSync` till ur den
+  kopplade Frånvaron, som förut.
+- 1:1 heter som i navet (`enskildTitel`).
+- Uppgifters planering räknar med dagens möten (`MOTEN`).
+- Leveranskön visas bara för projektledare, leverans och säljchef.
+- 1:1-kortet visar säljarens provision ur provisionsvyn; K&V och "svagast"
+  står som saknade tills K&V är kopplat.
+
+Läsläge: skapa, flytta, ändra längd, svara, föreslå tid, ställa in,
+påminnelser och delning leder till Nav. Ett klick på en post öppnar
+förhandsvisningen.
+
+Provat lokalt (ritprov ur `calendar_event`, `ndprov/kal.mjs`) som Zen och
+Fredrik, och i previewen som Zen: 58 poster i månadens rutor, Fredriks
+kalender hämtad på begäran, detaljen ger platsen, inga exempelnamn.
+
 ## 2026-10-14 · Nav 2.0 på /nav2, pass 6: Provision (gren `nav2-utkast`, `4720bc5`)
 
 Utkastets egen provisionsmotor (`pvUnderlag`, `pvTakt`, `pvVarning`) räknar

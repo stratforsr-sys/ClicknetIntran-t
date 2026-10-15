@@ -33,6 +33,7 @@ behörigheter som här: du ser bara det du får se.
 - **Provision**, räknad av samma motor som här: månaden, trappan, målen,
   historiken och, för säljchef, VD och ekonomi, laget och perioderna.
 - **Kalendern**: din kalender och, efter delningsnivån, kollegornas.
+- **Ärenden**, med svarstiden som navet lovar.
 
 Vyerna som inte är kopplade säger det, och har en knapp till samma sak här.
 Ingenting påhittat visas.
