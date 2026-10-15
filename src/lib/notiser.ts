@@ -577,6 +577,13 @@ export const NOTIS_KALLOR = [
   "kampanjsida-uppe",
 
   /**
+   * Frånvaro i Nav 2.0 (0093). Båda är HÄNDELSER: chefen registrerade frånvaro
+   * åt en efter ett samtal, eller föreslog en annan period på en ansökan.
+   */
+  "franvaro-registrerad",
+  "franvaro-annan-period",
+
+  /**
    * ANGRA-KNAPPEN HAR MED FLIT INGEN KALLA HAR.
    *
    * `/angra` provades och togs bort igen. Kvittot med angra-knappen visas bara
@@ -675,6 +682,8 @@ export const HANDELSEKALLOR = [
   "fel-lagad",
   "kampanjsida-nere",
   "kampanjsida-uppe",
+  "franvaro-registrerad",
+  "franvaro-annan-period",
 ] as const satisfies readonly Notiskalla[];
 
 export type Handelsekalla = (typeof HANDELSEKALLOR)[number];

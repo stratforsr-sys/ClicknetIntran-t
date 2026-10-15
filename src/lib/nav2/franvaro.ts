@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { SKRIVLAGE } from "./skrivlage";
 import { fullName, hasRole, type CurrentUser } from "@/lib/auth";
 import { ROLE_LABEL, type Role } from "@/lib/roles";
 import { supabaseAdmin } from "@/lib/supabase/server";
@@ -41,6 +42,12 @@ export type NdFranvaroPost = {
 };
 
 export type NdFranvaro = {
+  /** 0093: önskemålsrundan för nästa sommar, eller null. */
+  runda: { ar: number; skickas: string; svar: string; besked: string; skickad: boolean } | null;
+  /** 0093: senaste förslaget på annan period, per ansökan. */
+  forslag: Record<string, { fran: string; till: string; note: string | null; at: string }>;
+  /** Sparar vyn (SKRIVLAGE.franvaro)? Annars svarar /nav2/franvaro med läsläge. */
+  skriv: boolean;
   regler: Regelverk | null;
   typer: Franvarotyp[];
   sparrar: { l: string; fran: string; till: string; typer: string[] }[];
@@ -56,10 +63,15 @@ export type NdFranvaro = {
     ko: Chefsbild["ko"];
     kommande: Chefsbild["kommande"];
     sjuka: Chefsbild["sjuka"];
-    rehab: { namn: string; antal: number; sedan: string }[];
+    /** `kvitterad`: 0093, chefen har dolt signalen vid det här antalet tillfällen. */
+    rehab: { namn: string; antal: number; sedan: string; pid: string; kvitterad: boolean }[];
     team: number;
     /** De chefen ser i registret, utom hen själv: raderna i tavlan. */
     personer: string[];
+    /** Namn till id, för att registrera frånvaro åt någon. */
+    personIds: Record<string, string>;
+    /** Öppen intygsfrist per sjukperiod (sick_report.id → sick_deadline.id), för "Intyg mottaget". */
+    intygsfrist: Record<string, string>;
     /** Teamets perioder: kön (beslutbar), godkänd ledighet och sjukperioder. */
     poster: NdFranvaroPost[];
   };
@@ -180,7 +192,24 @@ export async function byggFranvaro(supabase: SupabaseClient, user: CurrentUser):
     ring,
     frister: oppen && rv ? sjukfrister(oppen.first_sick_day, rv.regler) : [],
     chef: null,
+    runda: null,
+    forslag: {},
+    skriv: SKRIVLAGE.franvaro,
   };
+
+  // 0093: rundan för nästa sommar (laget först, annars den för alla) och förslagen på mina ansökningar.
+  // Nästa sommar: från september är det nästa år.
+  const sommar = Number(idag.slice(0, 4)) + (Number(idag.slice(5, 7)) >= 9 ? 1 : 0);
+  const [{ data: rundor }, { data: forslagRader }] = await Promise.all([
+    supabase.from("vacation_wish_round").select("summer_year, team_id, send_on, answer_by, decide_by, sent_at").eq("summer_year", sommar),
+    supabase.from("absence_proposal").select("request_id, starts_on, ends_on, note, proposed_at").order("proposed_at", { ascending: false }),
+  ]);
+  const runda = (rundor ?? []).find((r) => r.team_id && r.team_id === (jag?.team_id ?? null)) ?? (rundor ?? []).find((r) => !r.team_id) ?? null;
+  if (runda) ut.runda = { ar: runda.summer_year as number, skickas: runda.send_on as string, svar: runda.answer_by as string, besked: runda.decide_by as string, skickad: Boolean(runda.sent_at) };
+  for (const f of forslagRader ?? []) {
+    const id = f.request_id as string;
+    if (!ut.forslag[id]) ut.forslag[id] = { fran: f.starts_on as string, till: f.ends_on as string, note: (f.note as string | null) ?? null, at: f.proposed_at as string };
+  }
 
   // Chefens halva: repots egen chefsbild. Den som inte leder någon får en tom kö.
   if (hasRole(user, "sales_manager", "ceo", "team_lead", "admin")) {
@@ -195,7 +224,9 @@ export async function byggFranvaro(supabase: SupabaseClient, user: CurrentUser):
     const per = new Map<string, Sjukanmalan[]>();
     for (const s of (allaSjuk ?? []) as unknown as (Sjukanmalan & { employee_id: string })[]) per.set(s.employee_id, [...(per.get(s.employee_id) ?? []), s]);
     const rehab: NonNullable<NdFranvaro["chef"]>["rehab"] = [];
-    if (rv) for (const p of pers) { const u = upprepadKorttid(per.get(p.id) ?? [], rv.regler, idag); if (u) rehab.push({ namn: fullName(p), ...u }); }
+    const { data: kvittenser } = await supabase.from("sick_signal_ack").select("employee_id, occasions");
+    const kvitt = new Map((kvittenser ?? []).map((k) => [k.employee_id as string, Number(k.occasions)]));
+    if (rv) for (const p of pers) { const u = upprepadKorttid(per.get(p.id) ?? [], rv.regler, idag); if (u) rehab.push({ namn: fullName(p), ...u, pid: p.id as string, kvitterad: (kvitt.get(p.id as string) ?? -1) >= u.antal }); }
     const del = (m: number | null) => (m !== null ? `${Math.round((m / 60) * 10) / 10} h` : null);
     const teamPoster: NdFranvaroPost[] = [
       ...bild.ko.map((a) => ({ id: a.id, vem: a.namn, pid: a.employeeId, typ: a.typId, fran: a.starts_on, till: a.ends_on, st: "submitted", skal: a.skal, inskickad: a.submitted_at ? svenskKlocka(a.submitted_at) : null, inDag: a.submitted_at ? svensktDatum(a.submitted_at) : null, del: del(a.part_day_minutes), egen: false })),
@@ -205,7 +236,13 @@ export async function byggFranvaro(supabase: SupabaseClient, user: CurrentUser):
         .map((s) => ({ id: s.id, vem: namn.get(s.employee_id) ?? "Okänd", pid: s.employee_id, typ: "sick", fran: s.first_sick_day, till: s.last_sick_day, st: "sick", omf: s.extent_percent, reg: svenskKlocka(s.registered_at), bekr: s.confirmed_at ? svenskKlocka(s.confirmed_at) : null, egen: false })),
     ];
     const personer = pers.filter((p) => p.id !== mig).map((p) => fullName(p)).sort((a, b) => a.localeCompare(b, "sv"));
-    ut.chef = { ko: bild.ko, kommande: bild.kommande, sjuka: bild.sjuka, rehab, team: personer.length, personer, poster: teamPoster };
+    const personIds = Object.fromEntries(pers.filter((p) => p.id !== mig).map((p) => [fullName(p), p.id as string]));
+    const sjukIds = bild.sjuka.map((s) => s.id);
+    const { data: fristRader } = sjukIds.length
+      ? await supabase.from("sick_deadline").select("id, sick_report_id, kind").in("sick_report_id", sjukIds).eq("kind", "certificate").is("completed_at", null)
+      : { data: [] as { id: string; sick_report_id: string; kind: string }[] };
+    const intygsfrist = Object.fromEntries((fristRader ?? []).map((f) => [f.sick_report_id as string, f.id as string]));
+    ut.chef = { ko: bild.ko, kommande: bild.kommande, sjuka: bild.sjuka, rehab, team: personer.length, personer, personIds, intygsfrist, poster: teamPoster };
   }
   return ut;
 }

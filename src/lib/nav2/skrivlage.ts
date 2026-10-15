@@ -15,6 +15,7 @@ export const SKRIVLAGE = {
   provision: false,
   kalender: false,
   uppgifter: false,
+  franvaro: false,
 } as const;
 
 export type Skrivvy = keyof typeof SKRIVLAGE;

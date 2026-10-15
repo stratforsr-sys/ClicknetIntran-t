@@ -5,7 +5,31 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
-## 2026-10-15 · Nav 2.0, Uppgifter: ingen funktion tas bort (0092)
+## 2026-10-15 · Nav 2.0, Frånvaro: ingen funktion tas bort (0093)
+
+Pass 3 skickade ansöka, sjukanmäla, bekräfta, besluta, registrera och taket
+till nuvarande Nav, och skrev om sjukkortet, planeringen och reglerna så att
+anteckningsfältet, sista sjukdagen, "Intyg mottaget", "Planera ett samtal",
+önskemålsrundan och taket med plus och minus försvann.
+
+- **Repots actions** bär det mesta: `skickaAnsokan`, `draTillbaka`,
+  `registreraSjuk` (också åt någon), `avslutaSjuk`, `bekraftaSjuk`,
+  `laggSjukanteckning`, `beslutaAnsokan` (motiveringen krävs vid avslag och
+  när varningar godkänns), `sparaTak`, `forberedIntyg`/`registreraIntyg` och
+  `kvitteraFrist` för intyget.
+- **0093** (körd): `vacation_wish_round` (önskemålsrundan, en per sommar och
+  team), `absence_proposal` (föreslå en annan period; ansökan står kvar) och
+  `sick_signal_ack` (rehabsignalen kvitteras vid ett antal tillfällen och
+  kommer tillbaka när de blir fler). Notiskällorna `franvaro-registrerad` och
+  `franvaro-annan-period`.
+- **Utskicket** av rundan (`src/lib/nav2/franvaro-runda.ts`) görs av
+  dagtidsjobbet och bara när `SKRIVLAGE.franvaro` är på: en uppgift och en
+  notis till var och en i teamet, och rundan markeras skickad först.
+- "Fråga X" (inte instämplad) är en notis, "Ändra" på en beviljad ledighet en
+  uppgift till chefen, och "Planera ett samtal" en uppgift genom `/nav2/uppgifter`.
+- **Provat** lokalt som säljaren Mick (`ndprov/p18.json`): ansökan når rutten
+  med typ, datum och skäl; inga fel. Chefsvyn provas i previewen som Zen.
+
 
 Pass 4 skickade 29 knappar till nuvarande Nav, sa att tio av utkastets egna
 funktioner inte fanns, gjorde rutans fält skrivskyddade och dolde "Planerad N

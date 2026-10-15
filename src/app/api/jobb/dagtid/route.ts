@@ -3,6 +3,8 @@ import { kontrolleraCron } from "@/lib/jobb/behorighet";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { korDagtidsjobbet } from "@/lib/jobb/dagtid";
 import { korKalendersteget } from "@/lib/jobb/kalender";
+import { SKRIVLAGE } from "@/lib/nav2/skrivlage";
+import { skickaRundor } from "@/lib/nav2/franvaro-runda";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -38,7 +40,16 @@ async function kor(request: NextRequest) {
   } catch (e) {
     kalender = { fel: e instanceof Error ? e.message : String(e) };
   }
-  return NextResponse.json({ ...stampling, kalender });
+  // Nav 2.0 (0093): önskemålsrundans utskick, bara när Frånvaro i Nav 2.0 får spara.
+  let runda: unknown = null;
+  if (SKRIVLAGE.franvaro) {
+    try {
+      runda = await skickaRundor(db);
+    } catch (e) {
+      runda = { fel: e instanceof Error ? e.message : String(e) };
+    }
+  }
+  return NextResponse.json({ ...stampling, kalender, runda });
 }
 
 export async function POST(request: NextRequest) {

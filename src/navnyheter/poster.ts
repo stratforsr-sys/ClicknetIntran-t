@@ -28,7 +28,8 @@ behörigheter som här: du ser bara det du får se.
 - **Satser och löner**, för den som har behörigheten för lönekostnad.
 - **Tid**, **Frånvaro** och **Uppgifter**, med samma regler som här. I Uppgifter
   väljer du dagens tre, planerar och avslutar dagen, skriver första steget och
-  påminner den du väntar på.
+  påminner den du väntar på. I Frånvaro kan chefen starta önskemålsrundan
+  inför sommaren, föreslå en annan period och kvittera rehabsignalen.
 - **Order** och kundkortet. Varje order har nu ett nummer (#12), och
   provisionen är navets: fryst på en godkänd order, och det godkännandet
   skulle ge på en som väntar. I kortet spelar du inspelningen direkt, skriver
