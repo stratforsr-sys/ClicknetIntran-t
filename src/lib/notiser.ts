@@ -584,6 +584,23 @@ export const NOTIS_KALLOR = [
   "franvaro-annan-period",
 
   /**
+   * Nav 2.0 (0094), Tid: chefens fråga till den som inte stämplat in eller
+   * har en dag som föreslås som ogiltig frånvaro (`tid-fraga`), "Be X rätta"
+   * en öppen dag (`tid-be-ratta`), påminnelsen om att man fortfarande är
+   * instämplad, fredagens veckokoll, chefens morgonnotis och 16:00-samlingen
+   * (skrivs av dagtidsjobbet bakom `SKRIVLAGE.tid`), påminnelsen om ett nytt
+   * schema som inte setts, och en förklaring till en sen dag (till chefen).
+   */
+  "tid-fraga",
+  "tid-be-ratta",
+  "tid-paminnelse-ut",
+  "tid-veckokoll",
+  "tid-chef-morgon",
+  "tid-chef-kvar",
+  "tid-schema-sett",
+  "tid-sen-forklaring",
+
+  /**
    * ANGRA-KNAPPEN HAR MED FLIT INGEN KALLA HAR.
    *
    * `/angra` provades och togs bort igen. Kvittot med angra-knappen visas bara
@@ -684,6 +701,14 @@ export const HANDELSEKALLOR = [
   "kampanjsida-uppe",
   "franvaro-registrerad",
   "franvaro-annan-period",
+  "tid-fraga",
+  "tid-be-ratta",
+  "tid-paminnelse-ut",
+  "tid-veckokoll",
+  "tid-chef-morgon",
+  "tid-chef-kvar",
+  "tid-schema-sett",
+  "tid-sen-forklaring",
 ] as const satisfies readonly Notiskalla[];
 
 export type Handelsekalla = (typeof HANDELSEKALLOR)[number];

@@ -24747,9 +24747,9 @@ if (ND){ ndStart(); ndBellLast(); }
    samma funktioner som /tid, /tid/ogiltig-franvaro, /tid/lonerapport och
    startsidans dagsbild. Samma kort och samma klasser som utkastet.
 
-   Läsläge: stämpla, rätta, besluta, attestera och schemalägga görs i Nav.
-   Knapparna leder dit. Kort utan riktig källa (påminnelser, vem har tittat,
-   veckokollen) visas inte.
+   Allt utkastet har finns kvar (beställaren 2026-10-15). Det som sparar går
+   till /nav2/tid (src/app/nav2/tid/route.ts), som anropar repots actions och
+   0094 för det navet saknade. I läsläge svarar rutten 423 och visar varför.
    ===================================================================== */
 
 // Repots gallande(): en godkänd rättelse ersätter sin rad, väntande och avslagna räknas inte.
@@ -24788,6 +24788,8 @@ function ndTidStart(){
   if (s){ SCHEMA.start = tmin(s.start); SCHEMA.slut = tmin(s.slut); S.tTol = s.tol; }
   S.events = ND.tid.stamplar ? ndDagensEvents() : [];
   S.tVecka = ndMandag(kIdag());
+  S.ndPaminn = JSON.parse(JSON.stringify(ND.tid.paminn || {in:{pa:true, min:15}, ut:{pa:false, min:15}}));
+  S.ndTiFragat = new Set(); S.ndUnderlag = {}; S.ndTiKlara = 0; S.ndTol = null; S.ndLonPer = null;
 }
 
 /* ---------- Säljaren ---------- */
@@ -24796,17 +24798,23 @@ function ndFelfria(){
   const per = ndTidDagar(), dagar = [...per.keys()].filter(d => d < kIdag()).sort().reverse();
   let n = 0; for (const d of dagar){ if (per.get(d).some(h => h.source === 'system_auto_close')) break; n++; } return n;
 }
+const ndOrg = id => ND.tid.egna.find(h => h.id === id) || null;
+const ndChefF = () => esc(ME.chef.fornamn);
 function ndTidVantar(){
-  const v = [], idag = kIdag(), vecka = ndMandag(idag), forra = ndPlusDag(vecka, -7);
-  ND.tid.egna.filter(h => h.korr === 'pending').forEach(h => v.push(`<div class="tiv"><span class="tic">${I('tid')}</span><div><b>Din rättelse väntar på ${esc(ME.chef.fornamn)} · ${frKort(h.dag)}</b><p>${h.kind === 'in' ? 'Stämplade in' : 'Stämplade ut'} ${h.kl}${h.note ? `: ”${esc(h.note)}”` : ''}. Den gamla tiden gäller tills den är beslutad.</p></div></div>`));
-  ND.tid.egna.filter(h => h.korr === 'rejected' && h.dag >= forra).forEach(h => v.push(`<div class="tiv brand"><span class="tic warn">${I('x')}</span><div><b>${esc(ME.chef.fornamn)} avslog din rättelse · ${frKort(h.dag)}</b><p>${h.kind === 'in' ? 'Instämplingen' : 'Utstämplingen'} ${h.kl} gäller inte. Den tidigare tiden står kvar.</p><div class="pacts"><a class="btn btn-s btn-sm" href="/tid">Rätta i Nav</a></div></div></div>`));
+  const t = ND.tid, v = [], idag = kIdag(), vecka = ndMandag(idag), forra = ndPlusDag(vecka, -7), ex = t.extra || {};
+  t.egna.filter(h => h.korr === 'pending').forEach(h => v.push(`<div class="tiv"><span class="tic">${I('tid')}</span><div><b>Din rättelse väntar på ${ndChefF()} · ${frKort(h.dag)}</b><p>${h.kind === 'in' ? 'Stämplade in' : 'Stämplade ut'} ${h.kl}${h.note ? `: ”${esc(h.note)}”` : ''}. Den gamla tiden gäller tills den är beslutad.</p></div></div>`));
+  t.egna.filter(h => h.korr === 'rejected' && h.dag >= forra && !(ex[h.id] && ex[h.id].sett)).forEach(h => { const o = h.ersatter ? ndOrg(h.ersatter) : null;
+    v.push(`<div class="tiv brand"><span class="tic warn">${I('x')}</span><div><b>${ndChefF()} avslog din rättelse · ${frKort(h.dag)}</b><p>”${esc((ex[h.id] && ex[h.id].skal) || 'Inget skäl angavs.')}” ${o ? `${o.kl} gäller.` : 'Stämplingen läggs inte till.'}</p><div class="pacts"><button class="btn btn-s btn-sm" data-ndtiavslagok="${h.id}">Okej</button><button class="btn btn-s btn-sm" ${o ? `data-tiratt="${o.id}"` : 'data-tilagg'}>Rätta igen</button></div></div></div>`); });
   const per = ndTidDagar();
-  [...per.entries()].filter(([d, l]) => d >= forra && d < idag && l.some(h => h.source === 'system_auto_close') && !ND.tid.egna.some(h => h.dag === d && h.korr)).forEach(([d, l]) => {
+  [...per.entries()].filter(([d, l]) => d >= forra && d < idag && l.some(h => h.source === 'system_auto_close') && !(t.autoOk || []).includes(d) && !t.egna.some(h => h.dag === d && h.korr)).forEach(([d, l]) => {
     const ut = l.find(h => h.source === 'system_auto_close');
-    v.push(`<div class="tiv"><span class="tic">${I('ut')}</span><div><b>${NDDAG[new Date(d + 'T12:00:00Z').getUTCDay() || 7]} ${frKort(d).split(' ').slice(1).join(' ')} stängdes av navet ${ut.kl}</b><p>Du stämplade aldrig ut, så navet stängde dagen när schemat slutade. Stämmer det inte, rätta tiden i Nav.</p><span class="ticons">Påverkar lönerapporten</span><div class="pacts"><a class="btn btn-s btn-sm" href="/tid">Rätta i Nav</a></div></div></div>`);
+    v.push(`<div class="tiv"><span class="tic">${I('ut')}</span><div><b>${NDDAG[new Date(d + 'T12:00:00Z').getUTCDay() || 7]} ${frKort(d).split(' ').slice(1).join(' ')} stängdes av navet ${ut.kl}</b><p>Du stämplade aldrig ut, så navet stängde dagen när schemat slutade. Stämmer tiden?</p><span class="ticons">Påverkar lönerapporten</span><div class="pacts"><button class="btn btn-p btn-sm" data-ndtiautook="${d}">Ja, det stämmer</button><button class="btn btn-s btn-sm" data-tiratt="${ut.id}">Jag gick en annan tid</button></div></div></div>`);
   });
+  (t.schemaKvittens || []).filter(k => !k.sett).forEach(k => { const rader = t.kommande.filter(x => x.fran === k.fran);
+    v.push(`<div class="tiv"><span class="tic">${I('kal')}</span><div><b>Nytt schema från ${frKort(k.fran)}</b><p>${rader.length ? rader.map(x => `${NDDAG[x.veckodag]}ar ${x.start}–${x.slut}`).join(', ') + '.' : 'Schemat gäller redan.'} Ingen sen ankomst bedöms mot schemat förrän du sett det.</p><div class="pacts"><button class="btn btn-p btn-sm" data-ndtischemasett="${k.fran}">Jag har sett det</button></div></div></div>`); });
   return v;
 }
+
 function ndTidSaljare(){
   const t = ND.tid, sch = ndSchemaIdag(), l = stampLage(), n = now(), slut = sch ? tmin(sch.slut) : null, vantar = ndTidVantar(), helg = !sch;
   const status = !t.stamplar ? (t.modulPa ? 'Din roll stämplar inte' : 'Stämplingen är inte påslagen') : l === 'in' ? 'Instämplad' : S.events.length ? 'Utstämplad' : helg ? 'Ingen arbetstid i dag' : 'Inte instämplad';
@@ -24815,9 +24823,9 @@ function ndTidSaljare(){
   return `<header class="top"><div class="hello"><h1>Tid</h1>
     <p class="tisub"><span class="pill ${l === 'in' ? 't-ok' : 't-neutral'}"><i class="tidot ${l === 'in' ? 'on' : ''}"></i>${status}</span>${t.stamplar ? `<span><b class="num" id="tiNu">${dur(worked())}</b> i dag</span>${nasta ? `<span class="muted">·</span><span class="muted">${nasta}</span>` : ''}` : ''}</p>
     <p class="tisub2">${vantar.length ? `<button class="tivbtn" data-tiscroll="tiVantar"><b class="num">${vantar.length}</b> ${vantar.length === 1 ? 'sak väntar på dig' : 'saker väntar på dig'} →</button>` : `<span class="pill t-ok">${I('check')}Inget väntar på dig</span>`}${t.stamplar && ff > 0 ? `<span class="pill t-neutral" title="Arbetsdagar i rad utan en dag som navet fick stänga">${ff} ${ff === 1 ? 'dag' : 'dagar'} utan glömd stämpling</span>` : ''}</p></div>
-    <div class="tools">${t.stamplar ? `<a class="btn btn-p tistamp" href="/tid">${I(l === 'in' ? 'ut' : 'tid')}${l === 'in' ? 'Stämpla ut i Nav' : 'Stämpla in i Nav'}</a>` : ''}</div></header>
+    <div class="tools">${t.stamplar ? `<button class="btn btn-p tistamp" data-act="${l === 'in' ? 'ut' : 'in'}">${I(l === 'in' ? 'ut' : 'tid')}${l === 'in' ? 'Stämpla ut' : S.events.length ? 'Stämpla in igen' : 'Stämpla in'}</button>` : ''}</div></header>
     <div class="tgrid"><div class="col">${t.stamplar ? ndTidIdag() + ndTidVeckan() : ndTidEjStampel()}</div>
-    <div class="col">${ndTidVantarKort(vantar)}${ndTidSchemaKort()}${ndTidRegistrerat()}${tidVemSer()}</div></div>`;
+    <div class="col">${ndTidVantarKort(vantar)}${ndTidSchemaKort()}${ndTidRegistrerat()}${t.stamplar ? ndTidPaminnelser() : ''}${tidVemSer()}</div></div>`;
 }
 function ndTidEjStampel(){
   return `<section class="card"><div class="chead"><h2>Stämpling</h2></div><p class="muted tismall">${ND.tid.modulPa ? 'Din roll har ingen arbetstid som stämplas in och ut. Därför finns inga stämplingar här.' : 'Stämplingen är byggd men inte påslagen i Nav.'}</p></section>`;
@@ -24829,9 +24837,33 @@ function ndTidIdag(){
   return `<section class="card"><div class="chead"><h2>I dag</h2>${sch ? `<span class="meta">Schema ${sch.start}–${sch.slut}</span>` : '<span class="meta">Inget schema i dag</span>'}<span class="end"><span class="tileg"><i></i>Instämplad<i class="pl"></i>Kvar enligt schemat</span></span></div>
     ${tiBand(dagSegs(true), {stor:true, skala:true, nu:n, aria:'Dagens stämplingar mot schemat'})}
     ${lucka > 0 && S.events[lucka + 1] ? `<p class="muted tismall tiluck">Utstämplad ${hm(S.events[lucka].t)}–${hm(S.events[lucka + 1].t)}. Luckan räknas inte som arbetstid.</p>` : ''}${ndTidPrognos()}
-    ${!rader.length ? `<div class="tiempty"><b>Dagen har inte börjat</b><span class="muted">Stämpla in i Nav när du sätter dig.</span></div>` : `<ul class="tirader">${rader.map((h, i) => `<li><span class="num tit">${h.kl}</span><span class="til">${h.kind === 'out' ? 'Stämplade ut' : i > 0 ? 'Stämplade in igen' : 'Stämplade in'}<span class="muted tikalla">${esc(ndKalla(h.source))} · för ${Math.round(n - h.min) >= 60 ? dur(Math.round(n - h.min)) : Math.max(0, Math.round(n - h.min)) + ' min'} sedan</span></span></li>`).join('')}</ul>`}
+    ${!rader.length ? `<div class="tiempty"><b>Dagen har inte börjat</b><span class="muted">Stämpla in i Nav när du sätter dig.</span></div>` : `<ul class="tirader">${rader.map((h, i) => `<li><span class="num tit">${h.kl}</span><span class="til">${h.kind === 'out' ? 'Stämplade ut' : i > 0 ? 'Stämplade in igen' : 'Stämplade in'}<span class="muted tikalla">${esc(ndKalla(h.source))} · för ${Math.round(n - h.min) >= 60 ? dur(Math.round(n - h.min)) : Math.max(0, Math.round(n - h.min)) + ' min'} sedan</span></span>${ndRattKnapp(h)}${S.tRatt === h.id ? ndRattForm(h) : ''}</li>`).join('')}</ul>`}
     ${egnaKorr.length ? `<ul class="tirader">${egnaKorr.map(h => `<li><span class="num tit">${h.kl}</span><span class="til">Rättelse: ${h.kind === 'in' ? 'stämplade in' : 'stämplade ut'}</span><span class="pill ${h.korr === 'pending' ? 't-warn' : h.korr === 'approved' ? 't-ok' : 't-neutral'}">${h.korr === 'pending' ? `Väntar på ${esc(ME.chef.fornamn)}` : h.korr === 'approved' ? 'Godkänd' : 'Avslagen'}</span></li>`).join('')}</ul>` : ''}
-    <div class="tifot"><span class="muted">Ingen rad kan ändras eller tas bort. En rättelse blir en ny rad, och båda syns.</span><a class="tlink" href="/tid">Rätta i Nav</a></div></section>`;
+    <div class="tifot"><span class="muted">Ingen rad kan ändras eller tas bort. En rättelse blir en ny rad, och båda syns.</span>${S.tLagg ? '' : `<button class="tlink" data-tilagg>${I('plus')}Glömde du stämpla?</button>`}</div>
+    ${S.tLagg ? ndLaggForm() : ''}</section>`;
+}
+// Rätta på raden: samma formulär som utkastet, med förslag ur schemat och dialern.
+function ndSchemaFor(dag){ const v = new Date(dag + 'T12:00:00Z').getUTCDay() || 7; return ND.tid.schema.find(s => s.veckodag === v) || null; }
+function ndRattKnapp(h){
+  if (h.kind !== 'in' && h.kind !== 'out') return '';
+  const vant = ND.tid.egna.find(x => x.korr === 'pending' && x.ersatter === h.id);
+  return vant ? `<span class="pill t-warn">Väntar på ${ndChefF()} · <s>${h.kl}</s> → ${vant.kl}</span>` : `<button class="tlink" data-tiratt="${h.id}">Rätta</button>`;
+}
+function ndRattForm(h){
+  const ut = h.kind === 'out', sch = ndSchemaFor(h.dag), samtal = (ND.tid.sistaSamtal || {})[h.dag];
+  const forslag = ut ? [...(sch ? [[sch.slut, 'Schemats slut']] : []), ...(samtal ? [[samtal, 'Sista samtalet i dialern']] : [])] : (sch ? [[sch.start, 'Schemats start']] : []);
+  const vad = h.source === 'system_auto_close' ? 'Stängd av navet' : ut ? 'Stämplade ut' : 'Stämplade in';
+  return `<div class="tiform" data-tiformkey="${h.id}-${ut ? 'ut' : 'in'}">
+    <div class="tifrow"><label>Rätt tid<input type="time" class="uin num" data-tinytid data-fran="${h.kl}" value="${h.kl}"></label><span class="tiforsl">${forslag.map(([t, l]) => `<button class="chip" data-tisatt="${t}">${t} <span class="muted">${l}</span></button>`).join('')}</span></div>
+    <p class="tiprev" data-tiprev>${vad} · nu ${h.kl}. Välj den rätta tiden.</p>
+    <div class="qchips"><span>Varför?</span>${RATT_SKAL.map(x => `<button class="chip ${S.tRattVal === x ? 'on' : ''}" data-tiskal="${esc(x)}">${esc(x)}</button>`).join('')}</div>
+    <input class="uin" data-tivarfor placeholder="Eller skriv själv, och tryck Enter" value="">
+    ${ut && samtal ? `<label class="tibil"><input type="checkbox" data-tibil ${S.tRattBil ? 'checked' : ''}> Bifoga som stöd: sista samtalet i dialern slutade ${samtal}</label>` : ''}
+    <div class="pacts"><button class="btn btn-p btn-sm" data-tiskicka="${h.id}" data-fran="${h.kl}" data-samtal="${samtal || ''}">Skicka till ${ndChefF()}</button><button class="btn btn-s btn-sm" data-tiavbryt>Avbryt</button><span class="muted tihint">Den gamla tiden gäller tills ${ndChefF()} beslutat. Svaret kommer oftast samma dag.</span></div></div>`;
+}
+function ndLaggForm(){
+  return `<div class="tiform"><div class="tifrow"><label>Vad glömde du?<select class="uin" data-tilaggtyp><option>Stämpla in</option><option>Stämpla ut</option></select></label><label>Klockan<input type="time" class="uin num" data-tilaggtid value="${(ndSchemaIdag() || {}).start || '08:00'}"></label></div>
+    <div class="pacts"><button class="btn btn-p btn-sm" data-tilaggskicka>Skicka till ${ndChefF()}</button><button class="btn btn-s btn-sm" data-tiavbryt>Avbryt</button><span class="muted tihint">Raden läggs till som en rättelse. Inget skrivs över.</span></div></div>`;
 }
 function ndTidPrognos(){
   const sch = ndSchemaIdag(); if (!sch || stampLage() !== 'in' || now() >= tmin(sch.slut)) return '';
@@ -24855,14 +24887,20 @@ function ndTidVeckan(){
   const rad = d => {
     const open = S.tDag === d.datum, forst = d.rader.find(h => h.kind === 'in'), sist = [...d.rader].reverse().find(h => h.kind === 'out');
     return `<li class="${d.idag ? 'idag' : open ? 'open' : ''}"><button class="tidrow" data-tidag="${d.datum}" aria-expanded="${open}" ${d.rader.length ? '' : 'disabled'}><span class="tid">${NDDAG[d.i + 1].slice(0, 3)}</span><span class="tib">${tiBand(d.segs.length ? d.segs : [], {aria:`${NDDAG[d.i + 1]} ${forst ? forst.kl : ''}–${sist ? sist.kl : ''}`, nu:d.idag ? now() : null})}</span><span class="num tit2">${forst ? `${forst.kl}–${sist ? sist.kl : ''}` : d.framtid ? '' : '–'}</span><span class="num tisum">${d.rader.length ? dur(d.min) : ''}</span></button>
-      <span class="tiflag">${d.idag ? '<span class="pill t-ok">I dag</span>' : ''}${d.auto ? '<span class="pill t-neutral">Stängd av navet</span>' : ''}</span>
-      ${open ? `<ul class="tidagrader">${d.rader.map(h => `<li><span class="num">${h.kl}</span>${h.kind === 'in' ? 'Stämplade in' : h.source === 'system_auto_close' ? 'Stängd av navet vid schemaslut' : 'Stämplade ut'}</li>`).join('')}</ul>` : ''}</li>`;
+      <span class="tiflag">${d.idag ? '<span class="pill t-ok">I dag</span>' : ''}${d.auto ? '<span class="pill t-neutral">Stängd av navet</span>' : ''}${d.auto && (ND.tid.autoOk || []).includes(d.datum) ? `<span class="pill t-ok">${I('check')}Bekräftad</span>` : ''}${ND.tid.egna.filter(h => h.korr && h.dag === d.datum).map(h => `<span class="pill ${h.korr === 'pending' ? 't-warn' : h.korr === 'approved' ? 't-ok' : 't-neutral'}">${h.korr === 'pending' ? `Väntar på ${ndChefF()} · ${h.kl}` : h.korr === 'approved' ? `${I('check')}Rättad · ${h.kl}` : 'Avslagen'}</span>`).join('')}</span>
+      ${open ? `<ul class="tidagrader">${d.rader.map(h => `<li><span class="num">${h.kl}</span>${h.kind === 'in' ? 'Stämplade in' : h.source === 'system_auto_close' ? 'Stängd av navet vid schemaslut' : 'Stämplade ut'}${d.idag ? '' : ndRattKnapp(h)}${S.tRatt === h.id ? ndRattForm(h) : ''}</li>`).join('')}</ul>` : ''}</li>`;
   };
-  return `<section class="card"><div class="chead"><h2>Veckan</h2><span class="tiwknav"><button class="ibtn tiv-s" data-tivecka="${forra}" ${vk === forra ? 'disabled' : ''} aria-label="Förra veckan">‹</button><span class="num">v. ${ndVecka(vk)}</span><button class="ibtn tiv-s" data-tivecka="${denna}" ${vk === denna ? 'disabled' : ''} aria-label="Den här veckan">›</button></span><span class="end"><span class="num tiwk"><b>${dur(tot)}</b>${vk === denna ? `<small class="tiwkf">förra veckan ${dur(forraTot)}</small>` : ''}</span></span></div>
-    <ul class="tivecka">${dagar.map(rad).join('')}</ul></section>`;
+  const kollad = v => (ND.tid.veckokoll || []).find(k => k.vecka === v && k.ok);
+  const rad2 = (() => { let n = 0, v = kollad(denna) ? denna : forra; while (kollad(v)){ n++; v = ndPlusDag(v, -7); } return n; })();
+  const koll = vk === denna ? `<div class="tikoll ${kollad(denna) ? 'ok' : ''}">${kollad(denna) ? `<span class="tic ok">${I('check')}</span><span><b>Veckan är kollad</b><span class="muted">${rad2 === 1 ? 'Första veckan i rad.' : `${rad2} veckor i rad.`} Det du rättar nu stoppar aldrig lönerapporten.</span></span>`
+      : `<span><b>Stämmer veckan?</b><span class="muted">Trettio sekunder på fredagen. Tryck på en dag för att se raderna. Nav påminner dig 16:30.</span></span><div class="pacts"><button class="btn btn-p btn-sm" data-tiveckaok>Ja, den stämmer</button><button class="btn btn-s btn-sm" data-tinagotfel>Något är fel</button></div>${S.tFelHint ? '<span class="tifelhint">Tryck på dagen som är fel och rätta raden.</span>' : ''}`}</div>`
+    : kollad(vk) ? `<p class="muted tismall" style="margin-top:10px">Vecka ${ndVecka(vk)} kollade du ${esc(ndKortNar(kollad(vk).nar))}.${rad2 > 1 ? ` ${rad2} veckor i rad.` : ''}</p>` : '';
+  return `<section class="card"><div class="chead"><h2>Veckan</h2><span class="tiwknav"><button class="ibtn tiv-s" data-tivecka="${forra}" ${vk === forra ? 'disabled' : ''} aria-label="Förra veckan">‹</button><span class="num">v. ${ndVecka(vk)}</span><button class="ibtn tiv-s" data-tivecka="${denna}" ${vk === denna ? 'disabled' : ''} aria-label="Den här veckan">›</button></span>${kollad(vk) ? `<span class="pill t-ok">${I('check')}Kollad</span>` : ''}<span class="end"><span class="num tiwk"><b>${dur(tot)}</b>${vk === denna ? `<small class="tiwkf">förra veckan ${dur(forraTot)}</small>` : ''}</span></span></div>
+    <ul class="tivecka">${dagar.map(rad).join('')}</ul>${koll}</section>`;
 }
+const ndKortNar = n => { const [d, k] = n.split(' '); return `${frKort(d)} ${k}`; };
 function ndTidVantarKort(vantar){
-  if (!vantar.length) return `<section class="card ti-klar" id="tiVantar"><span class="tic ok">${I('check')}</span><div><b>Allt klart</b><span class="muted">Inget i Tid väntar på dig.</span></div></section>`;
+  if (!vantar.length) return `<section class="card ti-klar" id="tiVantar"><span class="tic ok">${I('check')}</span><div><b>Allt klart</b><span class="muted">Inget i Tid väntar på dig.${ND.tid.stamplar ? ' Nästa koll: fredag 16:30.' : ''}</span></div></section>`;
   return `<section class="card ti-vantar" id="tiVantar"><div class="chead"><h2>Väntar på dig</h2><span class="end"><span class="pill t-signal num">${vantar.length}</span></span></div>${vantar.join('')}</section>`;
 }
 function ndTidSchemaKort(){
@@ -24875,15 +24913,32 @@ function ndTidSchemaKort(){
     <dl class="tidl" style="margin-top:12px">${t.schema[0] ? `<div><dt>Räknas som sen</dt><dd><span class="num">mer än ${tol} min efter start</span></dd></div>` : ''}
     ${t.kommande.length ? `<div><dt>Från ${frKort(t.kommande[0].fran)}</dt><dd>${t.kommande.map(k => `${NDDAG[k.veckodag].slice(0, 3)} ${k.start}–${k.slut}`).join(', ')}</dd></div>` : ''}
     <div><dt>Kommande ledighet</dt><dd>${t.ledigt.length ? t.ledigt.slice(0, 3).map(l => `${esc(l.typ)} ${frPeriod(l.fran, l.till)} <span class="pill t-ok">Beviljad</span>`).join('<br>') : 'Ingen'}</dd></div></dl>
-    <div class="pacts" style="margin-top:12px"><a class="btn btn-s btn-sm" href="/franvaro/sjuk">${I('sjuk')}Sjukanmäl</a><a class="btn btn-s btn-sm" href="/franvaro/ny">${I('franv')}Ansök om ledigt</a></div></section>`;
+    <div class="pacts" style="margin-top:12px"><button class="btn btn-s btn-sm" data-frny="sick">${I('sjuk')}Sjukanmäl</button><button class="btn btn-s btn-sm" data-frny="vacation">${I('franv')}Ansök om ledigt</button></div></section>`;
 }
 function ndTidRegistrerat(){
-  const sena = ND.tid.sena;
+  const sena = ND.tid.sena, tittat = ND.tid.tittat || [];
   return `<section class="card"><div class="chead"><h2>Det som registrerats om dig</h2></div>
-    <p class="muted tismall">Allt Nav sparar om din tid kan du läsa här. Detaljerna om sena dagar gallras efter 90 dagar.</p>
+    <p class="muted tismall">Allt Nav sparar om din tid kan du läsa här. Detaljerna gallras efter 90 dagar, antalet sparas i 12 månader.</p>
     <div class="sect"><h3>Sena dagar</h3><span>${sena.length} senaste 90 dagarna</span></div>
-    ${sena.length ? `<ul class="tilist">${sena.map(s => `<li class="col"><span class="tisrow"><span class="num">${frKort(s.dag)}</span><span class="muted num">${s.min} min efter ${s.schemalagd}</span><span class="pill t-neutral" title="Detaljerna raderas då">gallras om ${s.gallras} d</span></span>${s.kommentar ? `<span class="tisvarad">Din förklaring: ${esc(s.kommentar)}</span>` : ''}</li>`).join('')}</ul>` : '<p class="muted tismall">Inga sena dagar.</p>'}
-    <a class="btn btn-s btn-sm" style="margin-top:10px" href="/personal/${ND.jag.id}/registerutdrag">${I('logg')}Ladda ner allt om dig</a></section>`;
+    ${sena.length ? `<ul class="tilist">${sena.map(s => `<li class="col"><span class="tisrow"><span class="num">${frKort(s.dag)}</span><span class="muted num">${s.min} min efter ${s.schemalagd}</span><span class="pill t-neutral" title="Detaljerna raderas då">gallras om ${s.gallras} d</span></span>
+        ${s.kommentar ? `<span class="tisvarad">Din förklaring: ${esc(s.kommentar)}</span>` : S.tSenaSvarOpen === s.id ? `<span class="tisvar"><input class="uin" data-tisenatext="${s.id}" placeholder="Vad hände? ${ndChefF()} ser det bredvid dagen"><button class="btn btn-s btn-sm" data-tisenasvar="${s.id}">Spara</button></span>` : `<button class="tlink inl" data-tisenaopen="${s.id}">Lägg till en förklaring</button>`}</li>`).join('')}</ul>` : '<p class="muted tismall">Inga sena dagar.</p>'}
+    <div class="sect"><h3>Vem har tittat</h3><span>varje öppning loggas</span></div>
+    ${tittat.length ? `<ul class="tilist">${tittat.map(t => `<li class="col"><span>${esc(t.vem)} ${esc(t.vad)}</span><span class="muted num">${esc(ndKortNar(t.nar))}</span></li>`).join('')}</ul>` : '<p class="muted tismall">Ingen har öppnat dina sena dagar eller tagit med dig i en lönerapport de senaste 90 dagarna.</p>'}
+    <a class="btn btn-s btn-sm" style="margin-top:10px" href="/personal/${ND.jag.id}/registerutdrag">${I('logg')}Ladda ner allt om min tid</a></section>`;
+}
+// Påminn mig: navets val per person (0094), skickas av dagtidsjobbet.
+function ndTidPaminnelser(){
+  const p = S.ndPaminn, sch = ndSchemaIdag() || ND.tid.schema[0]; if (!sch) return '';
+  const P = [['in', 'Om jag inte stämplat in', tmin(sch.start)], ['ut', 'Om jag fortfarande är instämplad', tmin(sch.slut)]];
+  let d = kIdag(), nastaDag = null; if (now() > tmin(sch.start)) d = ndPlusDag(d, 1);
+  for (let i = 0; i < 7 && !nastaDag; i++, d = ndPlusDag(d, 1)) if (ndSchemaFor(d)) nastaDag = d;
+  const dagNamn = nastaDag === kIdag() ? 'i dag' : nastaDag ? NDDAG[new Date(nastaDag + 'T12:00:00Z').getUTCDay() || 7].toLowerCase() : '';
+  const nasta = stampLage() === 'in' && p.ut.pa ? `i dag ${hm(tmin(sch.slut) + p.ut.min)}, om du fortfarande är instämplad` : p.in.pa && nastaDag ? `${dagNamn} ${hm(tmin(ndSchemaFor(nastaDag).start) + p.in.min)}, om du inte stämplat in` : null;
+  return `<section class="card"><div class="chead"><h2>Påminn mig</h2></div>${nasta ? `<p class="tinasta">${I('bell')}Nästa: ${nasta}.</p>` : ''}
+    ${P.map(([k, l, bas]) => `<div class="tipam"><button class="tiswitch" data-tipamin="${k}" aria-pressed="${p[k].pa}"><span>${l} <b class="num">${hm(bas + p[k].min)}</b></span><i></i></button>
+      ${p[k].pa ? `<span class="usak">${[5, 10, 15].map(m => `<button data-tipammin="${k}:${m}" aria-pressed="${p[k].min === m}">${m} min efter</button>`).join('')}</span>` : ''}</div>`).join('')}
+    <div class="tinotis"><span class="hm">${hubMark(22)}</span><div><b>Nav · ${hm(tmin(sch.slut) + p.ut.min)}</b><span>Du är fortfarande instämplad. Schemat slutade ${sch.slut}.</span><span class="tinb"><i>Stämpla ut nu</i><i>Jobbar kvar</i></span></div></div>
+    <p class="muted tismall" style="margin-top:8px">Så ser notisen ut. Den tystnar de dagar du är sjuk eller ledig. Påminnelserna går på klockslag, aldrig på var du befinner dig.</p></section>`;
 }
 
 /* ---------- Chefen ---------- */
@@ -24892,84 +24947,162 @@ function ndTidBlock(){
   const c = ndChefTid(); if (!c) return [];
   return [...c.rattelser.map(r => ({typ:'Väntande rättelse', text:`${r.namn} · ${frKort(r.dag)}`, tab:'gora'})), ...c.oppna.map(o => ({typ:'Dag utan utstämpling', text:`${o.namn} · ${frKort(o.dag)}`, tab:'gora'}))];
 }
+// Trappan: vilken gång ett godkännande blir, räknat som repot (godkända inom trappans fönster).
+function ndTrappText(o){
+  const c = ndChefTid(); if (!c.trappa.length) return '';
+  const steg = [...c.trappa].sort((a, b) => a.ordning - b.ordning), fonster = Math.max(...steg.map(t => t.manader));
+  const grans = (() => { const d = new Date(kIdag() + 'T12:00:00Z'); d.setUTCMonth(d.getUTCMonth() - fonster); return d.toISOString().slice(0, 10); })();
+  const gang = c.ogiltig.filter(x => x.pid === o.pid && x.status === 'godkand' && x.dag >= grans).length + 1;
+  const t = [...steg].reverse().find(x => gang >= x.antal) || null;
+  const ATG = {varning:'Noteras. Ingen påverkan på provisionen.', bonusforlust:'Volymbonus och K&V-bonus för månaden faller. Grundprovisionen rörs aldrig.', arende:'Ett ärende öppnas.'};
+  return `<div class="tikons"><b>Om du godkänner:</b> gång ${gang} inom ${fonster} månader. ${esc(t ? (ATG[t.atgard] || t.atgard) : 'Noteras.')}</div>`;
+}
 function ndTidGora(){
-  const c = ndChefTid(), g = [];
-  c.rattelser.forEach(r => g.push({id:r.id, typ:'beslut', prio:r.timmar >= 48 ? 0 : 2, html:`<div class="tigo ${r.timmar >= 48 ? 'brand' : ''}">${avatar(r.namn, 30)}<div class="tigb"><div class="tigh"><b>${esc(r.namn)}</b><span class="muted">${r.kind === 'in' ? 'stämplade in' : 'stämplade ut'} ${frKort(r.dag)}</span><span class="pill ${r.timmar >= 48 ? 't-danger' : 't-neutral'}">${I('tid')}${r.timmar >= 48 ? `Väntat ${r.timmar} h, över 48 h` : r.timmar ? `Väntat ${r.timmar} h` : 'Nyss'}</span></div>
-    <div class="tiba">${r.fran ? `<span class="num"><s>${r.fran}</s></span><span class="muted">→</span>` : '<span class="muted">Saknad stämpling:</span>'}<span class="num"><b>${r.till}</b></span></div>
-    ${r.note ? `<p class="tiq">”${esc(r.note)}”</p>` : ''}<span class="ticons">Stoppar lönerapporten tills du beslutat</span>
-    <div class="pacts"><a class="btn btn-p btn-sm" href="/tid">Besluta i Nav</a></div></div></div>`}));
-  const ogiltig = c.ogiltig.filter(o => o.status === 'foreslagen');
-  if (ogiltig.length){
-    const per = new Map(); ogiltig.forEach(o => per.set(o.namn, [...(per.get(o.namn) || []), o]));
-    g.push({id:'ogiltig', typ:'beslut', prio:2, html:`<div class="tigo"><span class="tic">${I('franv')}</span><div class="tigb"><div class="tigh"><b>${ogiltig.length} förslag på ogiltig frånvaro</b><span class="muted">från ${per.size} ${per.size === 1 ? 'person' : 'personer'}</span></div>
-      <ul class="tilist">${[...per].slice(0, 6).map(([n, l]) => `<li><span>${esc(n)}</span><span class="muted num">${l.length} ${l.length === 1 ? 'dag' : 'dagar'} · senast ${frKort(l[0].dag)}</span></li>`).join('')}</ul>
-      <p class="muted">Ingenting registreras förrän du intygar. Förslagen syns inte för personen.</p><div class="pacts"><a class="btn btn-p btn-sm" href="/tid/ogiltig-franvaro">Besluta i Nav</a></div></div></div>`});
-  }
-  const ej = c.dagsbild.filter(r => r.lage === 'ej_instamplad');
-  ej.forEach(r => g.push({id:'ej-' + r.employee_id, typ:'fraga', prio:1, html:`<div class="tigo">${avatar(r.namn, 30)}<div class="tigb"><div class="tigh"><b>${esc(r.namn)}</b><span class="muted">inte instämplad i dag</span><span class="pill t-warn">${I('tid')}${esc(r.detalj)}</span></div>
-    <p class="muted">Ingen frånvaro är anmäld. Det kan vara en glömd stämpling, så fråga innan du drar slutsatser.</p><div class="pacts"><a class="btn btn-s btn-sm" href="${esc(r.href)}">Öppna i Nav</a></div></div></div>`}));
-  c.oppna.forEach(o => g.push({id:'oppen-' + o.pid + o.dag, typ:'fraga', prio:1, html:`<div class="tigo">${avatar(o.namn, 30)}<div class="tigb"><div class="tigh"><b>${esc(o.namn)}</b><span class="muted">${frKort(o.dag)} saknar utstämpling</span></div>
-    <p class="muted">Dagen står öppen. Utan schema stänger natten den inte, och en påhittad sluttid vore värre än en öppen dag.</p><span class="ticons">Stoppar lönerapporten</span><div class="pacts"><a class="btn btn-s btn-sm" href="/tid">Rätta i Nav</a></div></div></div>`}));
+  const c = ndChefTid(), g = [], stod = c.stod || {}, sedan = c.senast && c.senast.iso;
+  const ny = r => sedan && r.begard > sedan ? `<span class="pill t-signal">Ny sedan ${esc(c.senast.nar)}</span>` : '';
+  c.rattelser.forEach(r => { const diff = r.fran ? (tmin(r.till) - tmin(r.fran)) * (r.kind === 'out' ? 1 : -1) : null;
+    g.push({id:r.id, typ:'beslut', prio:r.timmar >= 48 ? 0 : 2, html:`<div class="tigo ${r.timmar >= 48 ? 'brand' : ''}">${avatar(r.namn, 30)}<div class="tigb"><div class="tigh"><b>${esc(r.namn)}</b><span class="muted">${r.kind === 'in' ? 'stämplade in' : 'stämplade ut'} ${frKort(r.dag)}</span>${ny(r)}<span class="pill ${r.timmar >= 48 ? 't-danger' : 't-neutral'}">${I('tid')}${r.timmar >= 48 ? `Väntat ${r.timmar} h, över 48` : r.timmar ? `Väntat ${r.timmar} h` : 'Ny'}</span></div>
+    <div class="tiba">${r.fran ? `<span class="num"><s>${r.fran}</s></span><span class="muted">→</span><span class="num"><b>${r.till}</b></span>${diff ? `<span class="pill ${diff > 0 ? 't-warn' : 't-neutral'}">${diff > 0 ? `+${diff} min längre` : `${Math.abs(diff)} min kortare`}</span>` : ''}` : `<span class="muted">Saknad stämpling:</span><span class="num"><b>${r.till}</b></span>`}</div>
+    ${r.note ? `<p class="tiq">”${esc(r.note)}”</p>` : ''}${stod[r.id] ? `<p class="tistod">${I('check')}<span>Stöd: ${esc(stod[r.id])}</span></p>` : ''}<span class="ticons">Stoppar lönerapporten tills du beslutat</span>
+    ${S.tAvslag === r.id ? `<div class="tiavslag"><span class="muted">Skäl till ${esc(fornamn(r.namn))}. Utan skäl går avslaget inte iväg.</span><div class="qchips">${['Tiden stämmer inte med kalendern', 'Prata med mig först', 'Rätta till en annan tid'].map(x => `<button class="chip" data-tiavslagskal="${r.id}" data-text="${esc(x)}">${esc(x)}</button>`).join('')}<button class="tlink" data-tiavslag="">Avbryt</button></div></div>`
+      : `<div class="pacts"><button class="btn btn-p btn-sm" data-tibeslut="${r.id}">${I('check')}Godkänn ${r.till}</button><button class="btn btn-s btn-sm" data-tiavslag="${r.id}">Avslå</button></div>`}</div></div>`}); });
+  c.ogiltig.filter(o => o.status === 'foreslagen').forEach(o => { const f = esc(fornamn(o.namn));
+    g.push({id:'o-' + o.id, typ:'beslut', prio:2, html:`<div class="tigo">${avatar(o.namn, 30)}<div class="tigb"><div class="tigh"><b>${esc(o.namn)}</b><span class="muted">${frKort(o.dag)} · förslag på ogiltig frånvaro</span></div>
+      <p class="muted">${o.min ? `${dur(o.min)} av schemat utan stämpling och utan anmäld frånvaro.` : 'En schemalagd dag utan stämpling och utan anmäld frånvaro.'} Ingenting registreras förrän du intygar. Förslaget syns inte för ${f}.</p>${ndTrappText(o)}
+      <div class="pacts">${S.ndTiFragat.has('o-' + o.id) ? `<span class="pill t-ok">Frågan skickad till ${f}</span>` : `<button class="btn btn-s btn-sm" data-ndtiogiltig="${o.id}" data-b="fraga">Fråga ${f} först</button>`}<button class="btn btn-s btn-sm" data-ndtiogiltig="${o.id}" data-b="avfarda">${f} var här</button><button class="btn btn-p btn-sm" data-ndtiogiltig="${o.id}" data-b="godkann">${f} var inte här</button></div></div></div>`}); });
+  c.dagsbild.filter(r => r.lage === 'ej_instamplad').forEach(r => g.push({id:'ej-' + r.employee_id, typ:'fraga', prio:1, html:`<div class="tigo">${avatar(r.namn, 30)}<div class="tigb"><div class="tigh"><b>${esc(r.namn)}</b><span class="muted">inte instämplad i dag</span><span class="pill t-warn">${I('tid')}${esc(r.detalj)}</span></div>
+    <p class="muted">Ingen frånvaro är anmäld. Det kan vara en glömd stämpling, så fråga innan du drar slutsatser.</p><div class="pacts">${S.ndTiFragat.has(r.employee_id) ? '<span class="pill t-ok">Frågan skickad · svaret kommer i Ärenden</span>' : `<button class="btn btn-p btn-sm" data-ndtifraga="${r.employee_id}">Fråga ${esc(fornamn(r.namn))}</button>`}<button class="btn btn-s btn-sm" data-frreg="${esc(r.namn)}|idag">Registrera frånvaro</button></div></div></div>`}));
+  c.oppna.forEach(o => { const k = o.pid + '|' + o.dag, f = esc(fornamn(o.namn));
+    g.push({id:'oppen-' + k, typ:'fraga', prio:1, html:`<div class="tigo">${avatar(o.namn, 30)}<div class="tigb"><div class="tigh"><b>${esc(o.namn)}</b><span class="muted">${frKort(o.dag)} saknar utstämpling</span></div>
+    <p class="muted">${c.harEgetSchema.includes(o.pid) ? 'Den sista stämplingen ligger efter schemats slut, så navet kunde inte stänga dagen.' : `${f} har inget eget schema, så navet kunde inte stänga dagen.`} En påhittad sluttid vore värre än en öppen dag.</p><span class="ticons">Stoppar lönerapporten</span>
+    <div class="pacts">${S.ndTiFragat.has(k) ? `<span class="pill t-ok">${f} ombedd att rätta · rättelsen hamnar här</span>` : `<button class="btn btn-p btn-sm" data-ndtiberatta="${k}">Be ${f} rätta</button>`}${c.harEgetSchema.includes(o.pid) ? '' : `<button class="btn btn-s btn-sm" data-ndtigeschema="${o.pid}">Ge ${f} teamets schema</button>`}</div></div></div>`}); });
   const sena = c.dagsbild.filter(r => r.lage === 'sen');
   if (sena.length) g.push({id:'sena', typ:'info', prio:3, html:`<div class="tigo"><span class="tic">${I('tid')}</span><div class="tigb"><div class="tigh"><b>${sena.length === 1 ? 'En sen i dag' : `${sena.length} sena i dag`}</b></div>
-    <ul class="tilist tisena">${sena.map(r => `<li><span>${esc(r.namn)}</span><span class="muted num">${esc(r.detalj)}</span></li>`).join('')}</ul><p class="muted tismall">Inget behöver göras. Raden finns i historiken, och personen ser den själv.</p></div></div>`});
+    <ul class="tilist tisena">${sena.map(r => { const m = ndMonster(c.sena30.find(a => a.pid === r.employee_id)); return `<li><span>${esc(r.namn)}${m ? ` <span class="pill t-warn">${esc(m)}</span>` : ''}</span><span class="muted num">${esc(r.detalj)}</span>${ndPunktKnapp(r.employee_id, r.namn, 'tlink')}</li>`; }).join('')}</ul><p class="muted tismall">Inget behöver göras. Raden finns i historiken, och personen ser den själv.</p></div></div>`});
+  (c.schemaSett || []).filter(x => x.sett < x.av).forEach(x => g.push({id:'schema-' + x.fran, typ:'info', prio:4, html:`<div class="tigo"><span class="tic">${I('kal')}</span><div class="tigb"><div class="tigh"><b>Nytt schema från ${frKort(x.fran)}</b><span class="muted">${esc(x.vem)} · ${x.sett} av ${x.av} har sett det</span></div>
+    <div class="kgrad"><span><i style="width:${x.av ? x.sett / x.av * 100 : 0}%"></i></span><span class="num">${x.sett}/${x.av}</span></div>
+    <p class="muted tismall">Saknas: ${esc(x.saknas.slice(0, 6).join(', '))}${x.saknas.length > 6 ? ` och ${x.saknas.length - 6} till` : ''}. Ingen bedöms mot det nya schemat förrän de sett det.</p>
+    <div class="pacts">${S.ndTiFragat.has('schema-' + x.fran) ? '<span class="pill t-ok">Påminda</span>' : `<button class="btn btn-s btn-sm" data-ndtischemapamin="${x.fran}">Påminn dem</button>`}</div></div></div>`}));
   return g.sort((a, b) => a.prio - b.prio);
 }
-function ndTidGoraVy(){
-  const alla = ndTidGora();
-  if (!alla.length) return `<div class="tiempty tiklart"><span class="tic ok">${I('check')}</span><b>Inget att göra</b><span class="muted">Inga rättelser, förslag eller öppna dagar väntar.</span></div>`;
-  return ['beslut', 'fraga', 'info'].map(t => { const x = alla.filter(y => y.typ === t); return x.length ? `<div class="sect"><h3>${GRUPP[t]}</h3><span>${x.length}</span></div><div class="tigolist">${x.map(y => y.html).join('')}</div>` : ''; }).join('');
+// Mönster: minst tre sena dagar på samma veckodag de senaste 30 dagarna.
+function ndMonster(a){
+  if (!a || a.dagar.length < 3) return null;
+  const n = {}; a.dagar.forEach(d => { const v = new Date(d.dag + 'T12:00:00Z').getUTCDay() || 7; n[v] = (n[v] || 0) + 1; });
+  const [v, k] = Object.entries(n).sort((x, y) => y[1] - x[1])[0];
+  return k >= 3 ? `${NDDAG[+v].toLowerCase()}ar` : null;
 }
+function ndPunktKnapp(pid, namn, kl = 'btn btn-s btn-sm'){
+  return ndChefTid().punkter.includes(pid) || S.ndTiFragat.has('p-' + pid) ? '<span class="pill t-ok">På agendan till nästa 1:1</span>' : `<button class="${kl}" data-ndtipunkt="${pid}" data-namn="${esc(namn)}">Ta upp på 1:1</button>`;
+}
+
+function ndTidGoraVy(){
+  const c = ndChefTid(), alla = ndTidGora(), f = S.tFilt;
+  const lista = f ? alla.filter(x => f === 'beslut' ? x.typ === 'beslut' : f === 'ej' ? x.id.startsWith('ej-') : x.id === f) : alla;
+  const klara = (c.klaraIdag || 0) + (S.ndTiKlara || 0), tot = klara + alla.filter(x => x.typ !== 'info').length;
+  if (!alla.length) return `<div class="tiempty tiklart"><span class="tic ok">${I('check')}</span><b>Klart för i dag</b><span class="muted">${klara} ${klara === 1 ? 'sak' : 'saker'} avklarade. Det som dyker upp senare får du som notis 16:00.</span></div>`;
+  const stod = c.rattelser.filter(r => (c.stod || {})[r.id]);
+  return `<div class="tiprog"><span>Klart i dag: <b class="num">${klara}</b> av <span class="num">${tot}</span></span><span class="tiprogbar"><i style="width:${tot ? klara / tot * 100 : 0}%"></i></span><span class="muted">ungefär ${Math.max(1, tot - klara)} min kvar</span></div>
+    ${f ? `<div class="tifilt"><span class="muted">Visar: ${f === 'beslut' ? 'beslut' : f === 'ej' ? 'inte instämplade' : 'urval'}</span><button class="tlink" data-tifilt="">Visa allt</button></div>` : ''}
+    ${['beslut', 'fraga', 'info'].map(t => { const x = lista.filter(y => y.typ === t); return x.length ? `<div class="sect"><h3>${GRUPP[t]}</h3><span>${x.length}</span>${t === 'beslut' && stod.length >= 2 ? `<button class="tlink tibulk" data-ndtibulk>${I('check')}Godkänn de ${stod.length} rättelserna med stöd</button>` : ''}</div><div class="tigolist">${x.map(y => y.html).join('')}</div>` : ''; }).join('')}
+    <p class="muted tismall tinotisrad">${I('bell')}Det som ligger kvar 16:00 får du som notis. Rättelser äldre än 48 h står överst på startsidan.</p>`;
+}
+
 function ndTidChef(){
   const c = ndChefTid(), t = S.tTab, block = ndTidBlock();
-  const n = k => c.dagsbild.filter(r => r.lage === k).length, ej = c.dagsbild.filter(r => r.lage === 'ej_instamplad');
+  const n = k => c.dagsbild.filter(r => r.lage === k), ej = n('ej_instamplad'), fn = l => l.map(r => fornamn(r.namn)).join(', ');
   const besluta = c.rattelser.length + c.ogiltig.filter(o => o.status === 'foreslagen').length, gora = ndTidGora().filter(x => x.typ !== 'info').length;
-  const flikar = [['gora', 'Att göra', gora], ['plats', 'På plats', c.paPlats.length], ['sena', 'Sena och frånvaro', 0], ['lon', 'Lönerapport', block.length], ['regler', 'Scheman och regler', 0]];
+  const flikar = [['gora', 'Att göra', gora], ['plats', 'På plats', c.paPlats.length], ['sena', 'Sena och frånvaro', 0], ['lon', 'Lönerapport', block.length], ['regler', 'Scheman och regler', c.oppna.filter(o => !c.harEgetSchema.includes(o.pid)).length]];
   const inne = t === 'plats' ? ndTidPlats() : t === 'sena' ? ndTidSenaVy() : t === 'lon' ? ndTidLon() : t === 'regler' ? ndTidRegler() : ndTidGoraVy();
-  const tiles = [['På plats', c.paPlats.length, 'plats', `av ${c.bedomda}`], ['Sena i dag', n('sen'), 'sena', c.dagsbild.filter(r => r.lage === 'sen').map(r => r.namn.split(' ')[0]).join(', ') || 'ingen'], ['Inte instämplade', ej.length, 'gora', ej.map(r => r.namn.split(' ')[0]).join(', ') || 'alla är här'], ['Sjuka', n('sjuk'), 'plats', c.dagsbild.filter(r => r.lage === 'sjuk').map(r => r.namn.split(' ')[0]).join(', ') || 'ingen'], ['Lediga', n('ledig'), 'plats', c.dagsbild.filter(r => r.lage === 'ledig').map(r => r.namn.split(' ')[0]).join(', ') || 'ingen'], ['Att besluta', besluta, 'gora', besluta ? 'rättelser och förslag' : 'inget']];
+  const tiles = [['På plats', c.paPlats.length, 'plats', '', `av ${c.bedomda}`], ['Sena i dag', n('sen').length, 'sena', '', fn(n('sen')) || 'ingen'], ['Inte instämplade', ej.length, 'ej', ej.length ? 'act' : '', fn(ej) || 'alla är här'], ['Sjuka', n('sjuk').length, 'fr-sjuk', '', n('sjuk').length ? `${fn(n('sjuk'))} · till Frånvaro` : 'ingen'], ['Lediga', n('ledig').length, 'fr-ledig', '', n('ledig').length ? `${fn(n('ledig'))} · till Frånvaro` : 'ingen'], ['Att besluta', besluta, 'beslut', besluta ? 'act' : '', besluta ? 'rättelser och förslag' : 'inget']];
+  const s48 = c.rattelser.some(r => r.timmar >= 48);
   return `<header class="top"><div class="hello"><h1>Tid</h1><p class="tisub"><span>${c.bedomda} ${c.bedomda === 1 ? 'person' : 'personer'}</span><span class="muted">·</span><span class="muted">${ND.tid.stamplar ? 'Du stämplar själv i Nav.' : 'Din roll stämplar inte in och ut.'}</span></p>
-    ${c.rattelser.some(r => r.timmar >= 48) ? `<p class="tisub2"><button class="pill t-danger tiga48" data-titab="gora">${I('tid')}En rättelse har väntat över 48 h →</button></p>` : ''}</div>
+    <p class="tisub2">${c.senast.nar ? `<span class="pill t-signal">Senast här i dag ${esc(c.senast.nar)} · ${c.senast.nya ? `${c.senast.nya} ${c.senast.nya === 1 ? 'ny' : 'nya'} sedan dess` : 'inget nytt sedan dess'}</span>` : ''}${s48 ? `<button class="pill t-danger tiga48" data-tilage="beslut">${I('tid')}En rättelse har väntat över 48 h →</button>` : ''}</p></div>
     <div class="tools"><button class="btn btn-s" data-titab="lon">${I('lon')}Lönerapport${block.length ? ` <span class="pill t-warn">${block.length}</span>` : ''}</button></div></header>
-    <section class="card tilage">${tiles.map(([l, v, k, sub]) => `<button class="tilk ${k === 'gora' && v ? 'act' : ''}" data-titab="${k}"><b class="num">${v}</b><span>${l}</span><small>${esc(sub)}</small></button>`).join('')}</section>
-    <div class="tgrid"><div class="col"><section class="card tmain"><div class="ttabs" role="group" aria-label="Visa" style="border-top:0;margin-top:0;padding-top:4px">${flikar.map(([k, l, x], i) => `<button data-titab="${k}" aria-pressed="${t === k}" title="Tangent ${i + 1}">${l}${x ? `<span class="n">${x}</span>` : ''}</button>`).join('')}</div>
+    <section class="card tilage">${tiles.map(([l, v, k, cls, sub]) => `<button class="tilk ${cls} ${S.tFilt === k ? 'sel' : ''}" data-tilage="${k}"><b class="num">${v}</b><span>${l}</span><small>${esc(sub)}</small></button>`).join('')}</section>
+    <div class="tgrid"><div class="col"><section class="card tmain"><div class="ttabs" role="group" aria-label="Visa" style="border-top:0;margin-top:0;padding-top:4px">${flikar.map(([k, l, x], i) => `<button data-titab="${k}" aria-pressed="${t === k}" title="Tangent ${i + 1}">${l}${x ? `<span class="n">${x}</span>` : ''}${k === 'gora' && s48 ? '<i class="act"></i>' : ''}</button>`).join('')}</div>
     <div class="tbody">${inne}</div></section></div>
-    <div class="col">${ndTidLonMini()}</div></div>`;
+    <div class="col">${ndTidRytm()}${ndTidLonMini()}${ndTidLoggKort()}</div></div>`;
 }
+function ndTidRytm(){
+  const c = ndChefTid(), ej = c.dagsbild.filter(r => r.lage === 'ej_instamplad').filter(r => !S.ndTiFragat.has(r.employee_id)).length;
+  const kvarDag = c.rattelser.length + ej, kvarVecka = c.ogiltig.filter(o => o.status === 'foreslagen').length, kvarMan = ndTidBlock().length;
+  const R = [['Varje morgon', '2 min', kvarDag ? `${kvarDag} kvar: rättelser och den som inte stämplat in` : 'Klart i dag', 'gora', !kvarDag], ['Måndagar', '10 min', kvarVecka ? `${kvarVecka} förslag på ogiltig frånvaro, och sena med mönster` : 'Klart den här veckan', 'sena', !kvarVecka], ['Första vardagen i månaden', '15 min', kvarMan ? `Lönerapporten: ${kvarMan} saker stoppar den` : 'Lönerapporten är redo', 'lon', !kvarMan]];
+  return `<section class="card"><div class="chead"><h2>Din rytm i Tid</h2><span class="end"><span class="muted" style="font-size:12px">27 min i månaden</span></span></div>
+    ${R.map(([n, m, d, tab, ok]) => `<div class="tirytm ${ok ? 'on' : ''}"><span class="tick">${I('check')}</span><div><b>${n}</b> <span class="muted num">${m}</span><p>${d}</p></div><button class="tlink" data-titab="${tab}">Öppna</button></div>`).join('')}
+    <div class="goalnums" style="margin-top:10px"><span>Rättelser beslutade inom 48 h</span><span>${c.beslut48.av ? `<b>${c.beslut48.inom}</b> av ${c.beslut48.av} senaste` : 'inga beslut än'}</span></div>
+    <div class="usak" style="margin-top:10px"><span>Morgonnotis</span>${['07:45', '08:15', '09:00'].map(x => `<button data-tirytmtid="${x}" aria-pressed="${c.morgonnotis === x}">${x}</button>`).join('')}</div></section>`;
+}
+function ndTidLoggKort(){
+  const l = ndChefTid().logg || [];
+  return `<section class="card"><div class="chead"><h2>Det här syns</h2><span class="end"><span class="pill t-info num">${l.length} denna vecka</span></span></div>
+    <p class="muted tismall">Du ser sena dagar och frånvaro, inte stämplingarna. Varje gång du öppnar en persons sena dagar skrivs det i loggen, och personen ser det under ”Vem har tittat”.</p>
+    ${l.length ? `<ul class="tilist" style="margin-top:6px">${l.slice(0, 4).map(x => `<li><span>${esc(x.namn)} <span class="muted">· ${esc(x.vad)}</span></span><span class="muted num">${esc(ndKortNar(x.nar))}</span></li>`).join('')}</ul>` : '<p class="muted tismall">Inget öppnat den här veckan.</p>'}</section>`;
+}
+
 function ndTidPlats(){
   const c = ndChefTid(), ej = c.dagsbild.filter(r => r.lage === 'ej_instamplad'), borta = c.dagsbild.filter(r => r.lage === 'sjuk' || r.lage === 'ledig');
-  return `${ej.length ? `<div class="sect"><h3>Inte instämplade</h3><span>${ej.length}</span></div><ul class="tiplats ej">${ej.map(r => `<li>${avatar(r.namn, 26)}<span>${esc(r.namn)}</span><span class="muted">${esc(r.detalj)}</span></li>`).join('')}</ul>` : '<div class="sect"><h3>Alla är här eller anmälda</h3></div>'}
+  return `${ej.length ? `<div class="sect"><h3>Inte instämplade</h3><span>${ej.length}</span></div><ul class="tiplats ej">${ej.map(r => `<li>${avatar(r.namn, 26)}<span>${esc(r.namn)}</span>${S.ndTiFragat.has(r.employee_id) ? '<span class="pill t-ok">Frågad</span>' : `<button class="tlink" data-ndtifraga="${r.employee_id}">Fråga</button>`}</li>`).join('')}</ul>` : '<div class="sect"><h3>Alla är här eller anmälda</h3></div>'}
     <div class="sect"><h3>På plats nu</h3><span>${c.paPlats.length} · namn och in-tid, inget mer</span></div>
     ${c.paPlats.length ? `<ul class="tiplats">${c.paPlats.map((p, i) => `<li>${avatar(p.namn, 26, i + 3)}<span>${esc(p.namn)}</span><span class="muted num">${p.sedan}</span></li>`).join('')}</ul>` : '<p class="muted tismall">Ingen är instämplad just nu.</p>'}
     <div class="sect"><h3>Borta i dag</h3><span>${borta.length}</span></div>
     ${borta.length ? `<ul class="tiplats">${borta.map(r => `<li>${avatar(r.namn, 26)}<span>${esc(r.namn)}</span><span class="pill ${r.ton === 'danger' ? 't-danger' : r.ton === 'warn' ? 't-warn' : 't-neutral'}">${esc(r.etikett)}</span><span class="muted">${esc(r.detalj)}</span></li>`).join('')}</ul>` : '<p class="muted tismall">Ingen är borta.</p>'}
+    <div class="sect"><h3>Nästa vecka</h3><span>frånvaro som är anmäld eller sökt</span></div>
+    <div class="tiveckarad">${(c.nastaVecka || []).map(d => `<div><b>${esc(NDDAG[new Date(d.dag + 'T12:00:00Z').getUTCDay() || 7].slice(0, 3))} ${+d.dag.slice(8, 10)}</b>${d.rader.length ? d.rader.map(y => `<span class="pill ${y.vantar ? 't-warn' : 't-neutral'}">${esc(fornamn(y.namn))} · ${esc(y.typ.toLowerCase())}${y.vantar ? ' · väntar på dig' : ''}</span>`).join('') : '<span class="muted">Alla här</span>'}</div>`).join('')}</div>
     <p class="muted tismall" style="margin:12px 0 6px">Hur många timmar någon arbetat syns först i lönerapporten. Ingen rankning, inga timmar per person här.</p>`;
 }
+
 function ndTidSenaVy(){
-  const c = ndChefTid(), beslutade = c.ogiltig.filter(o => o.status !== 'foreslagen'), forslag = c.ogiltig.filter(o => o.status === 'foreslagen');
+  const c = ndChefTid(), beslutade = c.ogiltig.filter(o => o.status !== 'foreslagen' && (o.beslutad || o.dag) >= ndPlusDag(kIdag(), -60)), forslag = c.ogiltig.filter(o => o.status === 'foreslagen');
   const ATG = {varning:'Noteras', bonusforlust:'Bonusen för månaden faller', arende:'Ärende öppnas'};
-  return `<div class="tiloggrad">${I('logg')}<span>Detaljerna om sena dagar gallras efter 90 dagar.</span></div>
+  return `<div class="tiloggrad">${I('logg')}<span>Varje öppning av en persons sena dagar loggas och syns för personen. Detaljerna gallras efter 90 dagar.</span></div>
     <div class="sect"><h3>Sena, 30 dagar</h3><span>per person, flest först</span></div>
-    ${c.sena30.length ? c.sena30.map(a => { const open = S.tSenaOpen === a.namn; return `<div class="tiavv">${avatar(a.namn, 28)}<div class="tigb"><div class="tigh"><b>${esc(a.namn)}</b><span class="pill t-neutral">${a.dagar.length} ${a.dagar.length === 1 ? 'gång' : 'gånger'}</span>${a.kommentar ? '<span class="pill t-info">Har förklarat</span>' : ''}</div>
-      ${open ? `<ul class="tilist">${a.dagar.map(d => `<li><span class="num">${frKort(d.dag)} · ${d.min} min</span></li>`).join('')}</ul>${a.kommentar ? `<p class="tiq">${esc(a.namn.split(' ')[0])} skrev: ”${esc(a.kommentar)}”</p>` : '<p class="muted tismall">Ingen förklaring än.</p>'}` : `<button class="tlink" data-tisenaperson="${esc(a.namn)}">Visa dagarna</button>`}</div></div>`; }).join('') : '<p class="muted tismall">Ingen har varit sen de senaste 30 dagarna.</p>'}
+    ${c.sena30.length ? c.sena30.map(a => { const open = S.tSenaOpen === a.namn, m = ndMonster(a); return `<div class="tiavv ${m ? 'monster' : ''}">${avatar(a.namn, 28)}<div class="tigb"><div class="tigh"><b>${esc(a.namn)}</b><span class="pill t-neutral">${a.dagar.length} ${a.dagar.length === 1 ? 'gång' : 'gånger'}</span>${m ? `<span class="pill t-warn">Mönster: ${esc(m)}</span>` : ''}${a.kommentar ? '<span class="pill t-info">Har förklarat</span>' : ''}</div>
+      ${open ? `<ul class="tilist">${a.dagar.map(d => `<li><span class="num">${frKort(d.dag)} · ${d.min} min</span></li>`).join('')}</ul>${a.kommentar ? `<p class="tiq">${esc(a.namn.split(' ')[0])} skrev: ”${esc(a.kommentar)}”</p>` : '<p class="muted tismall">Ingen förklaring än.</p>'}
+        <div class="pacts">${ndPunktKnapp(a.pid, a.namn, `btn btn-${m ? 'p' : 's'} btn-sm`)}${m ? '<span class="muted tihint">Fråga hur morgnarna ser ut. Det går ofta att lösa med ett annat schema.</span>' : ''}</div>` : `<button class="tlink" data-tisenaperson="${esc(a.namn)}" data-pid="${a.pid}">Visa dagarna</button>`}</div></div>`; }).join('') : '<p class="muted tismall">Ingen har varit sen de senaste 30 dagarna.</p>'}
     <div class="sect"><h3>Ogiltig frånvaro</h3><span>${forslag.length} förslag väntar</span></div>
-    ${forslag.length ? `<div class="tistopp"><b>${forslag.length} förslag väntar på ditt beslut</b><span>Ingenting registreras förrän du intygar.</span><a class="tlink" href="/tid/ogiltig-franvaro" style="align-self:flex-start">Besluta i Nav</a></div>` : ''}
-    ${beslutade.length ? `<div class="sect"><h3>Beslutade, 60 dagar</h3><span>${beslutade.length}${beslutade.length > 20 ? ' · de 20 senaste' : ''}</span></div><table class="titab"><thead><tr><th>Person</th><th>Dag</th><th>Beslut</th><th>Steg</th><th>Åtgärd</th></tr></thead><tbody>${beslutade.slice(0, 20).map(o => `<tr><td>${esc(o.namn)}</td><td class="num">${frKort(o.dag)}</td><td><span class="pill t-neutral">${o.status === 'godkand' ? 'Godkänd' : o.status === 'avvisad' ? 'Avvisad' : 'Hävd'}</span></td><td>${o.ordning ? `Gång ${o.ordning}` : '–'}</td><td>${esc(ATG[o.atgard] || o.atgard || '–')}</td></tr>`).join('')}</tbody></table>${beslutade.length > 20 ? '<a class="tlink" href="/tid/ogiltig-franvaro">Alla i Nav</a>' : ''}` : ''}
+    ${forslag.length ? `<div class="tistopp"><b>${forslag.length} förslag väntar på ditt beslut</b><span>Ingenting registreras förrän du intygar.</span><button class="tlink" data-tilage="beslut" style="align-self:flex-start">Besluta under Att göra</button></div>` : ''}
+    ${beslutade.length ? `<div class="sect"><h3>Beslutade, 60 dagar</h3><span>${beslutade.length}${beslutade.length > 20 ? ' · de 20 senaste' : ''}</span></div><table class="titab"><thead><tr><th>Person</th><th>Dag</th><th>Beslut</th><th>Steg</th><th>Åtgärd</th><th></th></tr></thead><tbody>${beslutade.slice(0, 20).map(o => `<tr><td>${esc(o.namn)}</td><td class="num">${frKort(o.dag)}</td><td><span class="pill t-neutral">${o.status === 'godkand' ? 'Godkänd' : o.status === 'avvisad' ? 'Avvisad' : 'Hävd'}</span></td><td>${o.ordning ? `Gång ${o.ordning}` : '–'}</td><td>${esc(ATG[o.atgard] || o.atgard || '–')}</td><td>${o.status === 'godkand' ? `<button class="tlink" data-ndtihav="${o.id}">Häv</button>` : ''}</td></tr>`).join('')}</tbody></table>` : ''}
     <p class="muted tismall" style="margin:10px 0 6px">Sen ankomst räknas aldrig som ogiltig frånvaro. Den som stämplat in, hur sent som helst, blir aldrig ett förslag.</p>`;
 }
 function ndTidLonMini(){
   const c = ndChefTid(), b = ndTidBlock(), p = c.perioder.find(x => x.start <= kIdag() && x.slut >= kIdag()) || c.perioder[0];
   return `<section class="card"><div class="chead"><h2>Lönerapport</h2><span class="end"><span class="pill ${b.length ? 't-warn' : 't-ok'}">${b.length ? `${b.length} stoppar` : 'Inget stoppar'}</span></span></div>
     ${p ? `<div class="goalnums"><span>${frKort(p.start)} – ${frKort(p.slut)}</span><span>${p.status === 'attested' ? 'Attesterad' : p.skriven ? 'Underlag skrivet' : 'Inte skrivet'}</span></div>` : '<p class="muted tismall">Ingen löneperiod finns.</p>'}
-    ${b.length ? `<ul class="tilist">${b.slice(0, 6).map(x => `<li><span>${esc(x.text)}</span><button class="tlink" data-titab="${x.tab}">Åtgärda</button></li>`).join('')}</ul>` : '<p class="muted tismall">Alla dagar är stängda och alla rättelser beslutade.</p>'}</section>`;
+    ${(() => { const {lop} = ndLonVal(); if (!lop) return ''; const tot = (Date.parse(lop.slut) - Date.parse(lop.start)) / 864e5 + 1, gatt = Math.min(tot, (Date.parse(kIdag()) - Date.parse(lop.start)) / 864e5 + 1); return `<div class="goalnums"><span>Stänger ${frKort(ndPlusDag(lop.slut, 1))}</span><span><b>${Math.max(0, Math.round(tot - gatt))}</b> dagar kvar</span></div><div class="goalbar" style="margin:8px 0 10px"><div class="fill" style="width:${gatt / tot * 100}%"></div></div>`; })()}
+    ${b.length ? `<ul class="tilist">${b.slice(0, 6).map(x => `<li><span>${esc(x.text)}</span><button class="tlink" data-titab="${x.tab}">Åtgärda</button></li>`).join('')}</ul>` : '<p class="muted tismall">Inget stoppar rapporten. Den kan skapas när perioden är slut.</p>'}</section>`;
+}
+// Lönerapporten: den pågående perioden räknas löpande, en skriven period läses ur payroll_row.
+const NDTIMAN = ['januari', 'februari', 'mars', 'april', 'maj', 'juni', 'juli', 'augusti', 'september', 'oktober', 'november', 'december'];
+const ndTiManad = d => NDTIMAN[+d.slice(5, 7) - 1];
+function ndLonVal(){
+  const c = ndChefTid(), lop = c.lopande, pagar = lop && c.perioder.find(p => p.start === lop.start && p.slut === lop.slut);
+  const val = S.ndLonPer || (pagar ? pagar.id : 'lop');
+  return {val, lop, pagar};
 }
 function ndTidLon(){
-  const c = ndChefTid(), b = ndTidBlock(), u = c.underlag, per = u ? c.perioder.find(p => p.id === u.periodId) : null;
-  return `<div class="tiper">${c.perioder.slice(0, 6).map(p => `<a class="chip ${per && p.id === per.id ? 'on' : ''}" href="/tid/lonerapport/${p.id}">${frKort(p.start)} – ${frKort(p.slut)} · ${p.status === 'attested' ? 'attesterad' : p.skriven ? 'skriven' : 'tom'}</a>`).join('') || '<span class="muted">Ingen löneperiod.</span>'}</div>
+  const c = ndChefTid(), b = ndTidBlock(), {val, lop, pagar} = ndLonVal();
+  const per = val === 'lop' ? null : c.perioder.find(p => p.id === val), arLop = val === 'lop' || (per && lop && per.start === lop.start && per.slut === lop.slut);
+  const st = per ? (c.steg[per.id] || {}) : {}, under = per ? (S.ndUnderlag[per.id] || (c.underlag && c.underlag.periodId === per.id ? c.underlag : null)) : null;
+  const chips = [...(pagar ? [] : lop ? [['lop', `${ndTiManad(lop.start)[0].toUpperCase() + ndTiManad(lop.start).slice(1)} · pågår`]] : []), ...c.perioder.slice(0, 6).map(p => [p.id, `${frKort(p.start)} – ${frKort(p.slut)} · ${(c.steg[p.id] || {}).skickad ? 'skickad' : p.status === 'attested' ? 'attesterad' : p.start <= kIdag() && p.slut >= kIdag() ? 'pågår' : p.skriven ? 'skriven' : 'tom'}`])];
+  const rader = arLop && !(per && per.status === 'attested') ? lop.rader : under ? under.rader.map(r => ({...r, forklaring:null, avvik:false})) : null;
+  const kol = c.kolumner.filter(k => k.active);
+  const cell = (k, r) => ({employee_number:r.nr || '–', name:r.namn, email:'', period_start:(per || lop).start, period_end:(per || lop).slut, worked_hours:((r.arbetad) / 60).toFixed(2).replace('.', ','), worked_minutes:String(r.arbetad), adjustment_minutes:r.justering ? (r.justering > 0 ? '+' : '') + r.justering : '0', net_minutes:String(r.arbetad + r.justering), auto_closed_days:String(r.stangda), over_minutes:String(r.utanfor || 0), break_minutes:'–', deviation_count:'–'})[k.field] ?? '–';
+  const steg = [['Rensa', !b.length], ['Granska', !!st.granskad], ['Ladda ner', !!st.nedladdad], ['Skickad till lön', !!st.skickad]];
+  const kanLadda = per && per.skriven && !b.length;
+  if (per && st.skickad) return `<div class="tiper">${chips.map(([k, l]) => `<button class="chip ${val === k ? 'on' : ''}" data-ndtiper="${k}">${esc(l)}</button>`).join('')}</div>
+    <div class="tiempty"><b>${ndTiManad(per.start)[0].toUpperCase() + ndTiManad(per.start).slice(1)} är skickad</b><span class="muted">Attesterad ${per.attesterad ? frKort(per.attesterad) : ''}, nedladdad ${st.nedladdad ? frKort(st.nedladdad) : '–'} och skickad till lön ${frKort(st.skickad)}.</span><div class="pacts"><a class="btn btn-s btn-sm" href="/tid/lonerapport/${per.id}/csv">Ladda ner CSV igen</a></div></div>`;
+  return `<div class="tiper">${chips.map(([k, l]) => `<button class="chip ${val === k ? 'on' : ''}" data-ndtiper="${k}">${esc(l)}</button>`).join('') || '<span class="muted">Ingen löneperiod.</span>'}</div>
+    <ol class="tisteg">${steg.map(([l, ok], i) => `<li class="${ok ? 'ok' : steg.findIndex(x => !x[1]) === i ? 'nu' : ''}"><span class="num">${ok ? '✓' : i + 1}</span>${l}</li>`).join('')}</ol>
     <div class="tistopp ${b.length ? '' : 'ok'}"><b>${b.length ? `${b.length} saker stoppar rapporten` : 'Inget stoppar rapporten'}</b>${b.length ? `<ul>${b.slice(0, 12).map(x => `<li><span class="pill t-warn">${x.typ}</span><span>${esc(x.text)}</span><button class="tlink" data-titab="${x.tab}">Åtgärda</button></li>`).join('')}</ul>` : '<span class="muted">Alla dagar är stängda och alla rättelser beslutade.</span>'}</div>
-    ${u ? `<div class="sect"><h3>Underlag</h3><span>${frKort(per.start)} – ${frKort(per.slut)} · minuter, inga kronor</span></div>
-    <div class="titabwrap"><table class="titab"><thead><tr><th>Anställningsnummer</th><th>Namn</th><th>Arbetade timmar</th><th>Rättelser (min)</th><th>Stängda av navet</th><th>Frånvaro (min)</th></tr></thead><tbody>${u.rader.map(r => `<tr><td class="num">${esc(r.nr || '–')}</td><td>${esc(r.namn)}</td><td class="num">${((r.arbetad + r.justering) / 60).toFixed(2).replace('.', ',')}</td><td class="num">${r.justering ? (r.justering > 0 ? '+' : '') + r.justering : '0'}</td><td class="num">${r.stangda}</td><td class="num">${Object.values(r.franvaro).reduce((s, x) => s + x, 0) || 0}</td></tr>`).join('')}</tbody></table></div>
-    <div class="pacts" style="margin:14px 0 6px"><a class="btn btn-p" href="/tid/lonerapport/${u.periodId}/csv">Ladda ner CSV</a><a class="btn btn-s" href="/tid/lonerapport/${u.periodId}">Granska och attestera i Nav</a><span class="muted tihint">Filen läses av lönesystemet. Nav räknar ingen lön.</span></div>` : '<p class="muted tismall">Inget underlag är skrivet än. Det skrivs i Nav under Lönerapport.</p>'}`;
+    <div class="sect"><h3>Granska</h3><span>${arLop ? `${frKort(lop.start)} – ${frKort(kIdag() < lop.slut ? kIdag() : lop.slut)} hittills` : per ? `${frKort(per.start)} – ${frKort(per.slut)}` : ''} · minuter, inga kronor</span></div>
+    ${rader ? (rader.length ? `<div class="titabwrap"><table class="titab"><thead><tr>${kol.map(k => `<th>${esc(k.header)}</th>`).join('')}<th></th></tr></thead><tbody>${rader.map(r => `<tr class="${r.avvik ? 'kolla' : ''}">${kol.map(k => `<td class="${['name', 'email', 'period_start', 'period_end'].includes(k.field) ? '' : 'num'}">${esc(cell(k, r))}</td>`).join('')}<td>${r.forklaring ? `<span class="pill t-info">${esc(r.forklaring)}</span>` : r.avvik ? '<span class="pill t-warn">Kolla</span>' : ''}</td></tr>`).join('')}</tbody></table></div>
+    <p class="muted tismall">Skillnader som frånvaro förklarar markeras inte. Det som inte förklaras får en gul etikett.</p>` : '<p class="muted tismall">Inga avslutade dagar i perioden än.</p>') : `<p class="muted tismall">${S.ndUnderlag[val] === null ? 'Underlaget hämtas …' : 'Underlaget är inte skrivet för perioden.'}</p>`}
+    <div class="sect"><h3>Kolumner i filen</h3><span>sparas till nästa fil</span></div>
+    <div class="qchips">${c.kolumner.map(k => `<button class="chip ${k.active ? 'on' : ''}" data-ndtikol="${k.id}" data-pa="${k.active ? '' : '1'}" data-falt="${k.field}">${k.active ? '✓ ' : ''}${esc(k.header)}${k.field === 'over_minutes' ? ' <span class="pill t-signal">Nytt</span>' : ''}</button>`).join('')}</div>
+    <div class="pacts" style="margin:14px 0 6px">${st.granskad ? '' : `<button class="btn btn-s" data-ndtigransk="${per ? per.id : ''}" data-start="${(per || lop).start}" data-slut="${(per || lop).slut}">${I('check')}Jag har granskat</button>`}${kanLadda ? `<a class="btn btn-p" href="/tid/lonerapport/${per.id}/csv" data-ndtiladda="${per.id}">Ladda ner CSV</a>` : `<button class="btn btn-p" disabled title="${b.length ? 'Rensa det som stoppar rapporten först' : 'Granska när perioden är slut, så skrivs underlaget'}">Ladda ner CSV</button>`}${per && st.nedladdad && !st.skickad ? `<button class="btn btn-s" data-ndtiskickad="${per.id}">Markera som skickad till lön</button>` : ''}<span class="muted tihint">Filen läses av lönesystemet. Nav räknar ingen lön.</span></div>`;
 }
+
 function ndTidRegler(){
   const c = ndChefTid(), A = 6 * 60, B = 18 * 60, p = m => ((m - A) / (B - A) * 100).toFixed(1), idag = kIdag();
   const grupper = new Map();
@@ -24978,11 +25111,17 @@ function ndTidRegler(){
   const ATG = {varning:'Noteras.', bonusforlust:'Bonusen för månaden faller.', arende:'Ett ärende öppnas.'};
   return `<div class="sect"><h3>Arbetsscheman</h3><span>det mest specifika gäller</span></div>
     <div class="tisregler">${[...grupper.values()].map(g => `<div class="tisrad"><b>${esc(g.vem)}</b>${g.fran > idag ? ` <span class="pill t-signal">Från ${frKort(g.fran)}</span>` : ''}<span class="muted">${dagtext(g.dagar)}</span><span class="tisbar"><i style="left:${p(tmin(g.start))}%;width:${(p(tmin(g.slut)) - p(tmin(g.start))).toFixed(1)}%"></i></span><span class="num">${g.start}–${g.slut}</span></div>`).join('') || '<p class="muted tismall">Inget schema är upplagt. Glömda utstämplingar stängs då aldrig av sig själva.</p>'}</div>
-    <div class="sect"><h3>Tolerans för sen ankomst</h3></div>
-    <p class="muted tismall">${[...new Set(c.scheman.map(s => s.tol))].map(t => `${t} min`).join(', ') || '–'} efter schemats start. Ändras i Nav under Scheman.</p>
+    ${c.oppna.filter(o => !c.harEgetSchema.includes(o.pid)).filter((o, i, l) => l.findIndex(x => x.pid === o.pid) === i).map(o => `<div class="tisrad saknas"><b>${esc(o.namn)}</b><span class="muted">inget eget schema</span><span class="tisbar"></span><span></span><button class="btn btn-p btn-sm" data-ndtigeschema="${o.pid}">Ge ${esc(fornamn(o.namn))} teamets schema</button></div>`).join('')}
+    <p class="muted tismall">Utan schema stänger natten ingen glömd utstämpling, och den öppna dagen stoppar lönerapporten.</p>
+    ${(() => { const t = c.tolerans; if (!t) return '<div class="sect"><h3>Tolerans för sen ankomst</h3></div><p class="muted tismall">Inget schema att ange en tolerans för.</p>';
+      const tol = S.ndTol ?? t.tol, med = x => (c.ankomster || []).filter(a => a.min > tmin(a.start) + x).length;
+      return `<div class="sect"><h3>Tolerans för sen ankomst</h3><span>gäller ${esc(t.namn)}</span></div>
+    <div class="titol"><button class="ibtn tiv-s" data-titol="-1" aria-label="Mindre">−</button><b class="num">${tol} min</b><button class="ibtn tiv-s" data-titol="1" aria-label="Mer">+</button>
+      <span class="muted">Med ${tol} min hade <b>${med(tol)}</b> varit sena i dag. ${tol !== 5 ? `Med 5 min: ${med(5)}.` : `Med 10 min: ${med(10)}. Med 15 min: ${med(15)}.`}</span></div>
+    ${tol !== t.tol ? `<div class="pacts" style="margin-top:8px"><button class="btn btn-p btn-sm" data-tolspara>Spara ${tol} min</button><span class="muted tihint">Gäller från i morgon. Alla får se det nya schemat innan det bedöms.</span></div>` : ''}`; })()}
     <div class="sect"><h3>Trappan för ogiltig frånvaro</h3><span>konfiguration, inte kod</span></div>
     <ol class="titrappa">${c.trappa.map(t => `<li><b class="num">Gång ${t.antal}</b> <span class="muted">inom ${t.manader} månader</span> → ${esc(ATG[t.atgard] || t.atgard)}</li>`).join('')}</ol>
-    <div class="pacts" style="margin:10px 0 6px"><a class="btn btn-s btn-sm" href="/tid/schema">Scheman i Nav</a><a class="btn btn-s btn-sm" href="/tid/sparrar">Spärrar i Nav</a></div>`;
+    <p class="muted tismall" style="margin-bottom:6px">Steget fryses på händelsen när du godkänner den, så en ändring i morgon rör aldrig ett beslut som redan tagits. Trappan ändras under Provision → Regler.</p>`;
 }
 
 /* ---------- Stämpelraden på startsidan ---------- */
@@ -24992,9 +25131,8 @@ function ndSmpAxel(){
   return `<div class="smp-ax" aria-hidden="true"><span style="left:0">${String(Math.floor(a / 60)).padStart(2, '0')}</span><span style="left:${p(m)}%">${String(m / 60).padStart(2, '0')}</span><span style="left:100%">${String(Math.floor(b / 60)).padStart(2, '0')}</span></div>`;
 }
 const ndVeckaHittills = () => ndVeckoDagar(ndMandag(kIdag())).filter(d => d.datum < kIdag()).reduce((s, d) => s + d.min, 0);
-function ndSmpSnabb(){
-  return `<div class="smp-q" aria-label="Snabbval"><a href="/franvaro/ny">${I('franv')}Ansök om ledighet</a><a href="/franvaro/sjuk">${I('sjuk')}Sjukanmälan</a><a href="/arenden/nytt">${I('plus')}Nytt ärende</a><button data-view="tid">${I('tid')}Mina stämplingar</button></div>`;
-}
+function ndSmpSnabb(){ return smpSnabb(false); }
+
 function ndSmpSaljare(){
   const t = ND.tid, sch = ndSchemaIdag(), l = stampLage(), w = worked(), n = now();
   if (!t.stamplar) return '';
@@ -25013,8 +25151,8 @@ function ndSmpSaljare(){
   const tm = har ? `<b class="num" data-smptm>${fmtTid(w)}</b><span>arbetat i dag</span>` : `<b class="num">${sch.start}</b><span>schemat börjar</span>`;
   const fakta = (kl) => `<dl class="${kl}"><div><dt>Kvar av schemat</dt><dd class="num${nara ? ' warm' : ''}" data-smpkvar>${smpKvar(kvar)}</dd></div><div><dt>Veckan</dt><dd class="num">${smpKort(ndVeckaHittills() + w)}</dd></div></dl>`;
   const knapp = l === 'in' ? `<button class="hbtn p" data-act="ut">${I('ut')}Stämpla ut</button>` : har ? `<button class="hbtn ${avslut ? 's' : 'p'}" data-act="in">${I('play')}Stämpla in igen</button>` : `<button class="hbtn p" data-act="in">${I('play')}Stämpla in</button>`;
-  const hjalp = !har ? `Schema ${sch.start}–${sch.slut}. Stämpla in i Nav när du börjar.` : l === 'ute' ? `Schema ${sch.start}–${sch.slut}. Stämpla in igen när du är tillbaka.` : `Schema ${sch.start}–${sch.slut}.`;
-  const dra = open ? `<div class="smp-dra" id="smpDra"><div class="smp-dc"><div><h2>Dagens stämplingar</h2>${smpPass()}</div><div class="smp-fd"><h2>Schemat</h2>${fakta('smp-f smp-f3')}<p class="smp-hjalp smp-h0">${hjalp} Stämplingen görs i Nav i läsläget.</p></div></div>${ndSmpSnabb()}</div>` : '';
+  const hjalp = !har ? `Schema ${sch.start}–${sch.slut}. Stämpla in när du börjar.` : l === 'ute' ? `Schema ${sch.start}–${sch.slut}. Stämpla in igen när du är tillbaka.` : `Schema ${sch.start}–${sch.slut}.`;
+  const dra = open ? `<div class="smp-dra" id="smpDra"><div class="smp-dc"><div><h2>Dagens stämplingar</h2>${smpPass()}</div><div class="smp-fd"><h2>Schemat</h2>${fakta('smp-f smp-f3')}<p class="smp-hjalp smp-h0">${hjalp}</p></div></div>${ndSmpSnabb()}</div>` : '';
   return `<section class="smp${avslut ? ' avslut' : ''}" aria-label="${avslut ? 'Dagen är avslutad' : 'Din dag'}"><div class="smp-r">
     <div class="smp-s" aria-live="polite">${pill}</div><div class="smp-tm">${tm}</div>
     <div class="smp-band" role="img" aria-label="Dagens stämplingar mot schemat ${sch.start} till ${sch.slut}. Arbetat ${smpKort(w)}."><div class="smp-track" id="smpTrack">${smpBand()}</div>${ndSmpAxel()}</div>
@@ -25031,7 +25169,7 @@ function ndSmpChef(){
   const knapp = besluta ? `<button class="hbtn p" data-view="tid" data-titab="gora" aria-label="Tid, ${besluta} att besluta">${I('check')}Att besluta <b class="num">${besluta}</b></button>` : `<button class="hbtn s" data-view="tid">${I('tid')}Tid</button>`;
   const dra = open ? `<div class="smp-dra" id="smpDra"><div class="smp-dh"><div><h2>Dagsläget</h2><p class="smp-hjalp">Ej instämplad betyder bara att Nav inte sett någon instämpling än.</p></div></div>
     <div class="people">${lista || '<p class="smp-tom">Alla är här.</p>'}</div>
-    <div class="smp-q"><a href="/franvaro/attest">${I('check')}Attestera ledighet</a><a href="/arenden">${I('inbox')}Ärendekön</a><button data-view="tid" data-titab="sena">${I('tid')}Sena och frånvaro</button></div></div>` : '';
+    <div class="smp-q"><button data-go="/franvaro/attest">${I('check')}Attestera ledighet</button><button data-go="/arenden">${I('inbox')}Ärendekön</button><button data-view="tid" data-titab="sena">${I('tid')}Sena och frånvaro</button></div></div>` : '';
   return `<section class="smp chef" aria-label="Teamets dag"><div class="smp-r">
     <div class="smp-s" aria-live="polite"><span class="smp-st"><i></i>${smpP(`${dag} ${hm(now())}`, `${dag.slice(0, 3)} ${hm(now())}`)}</span></div>
     <div class="smp-tm"><b class="num">${pa}<small>/${c.bedomda}</small></b><span>på plats</span></div>
@@ -25051,7 +25189,9 @@ tidSaljare = () => ND && ND.tid ? ndTidSaljare() : _ndTidSaljare();
 tidChef = () => ND && ND.tid && ND.tid.chef ? ndTidChef() : ND && ND.tid ? ndTidSaljare() : _ndTidChef();
 tidVemSer = function(){
   const h = _ndTidVemSer(); if (!ND) return h;
-  return h.replace(/<th>Johanna<\/th>/, `<th>${esc(ME.chef.fornamn.charAt(0).toUpperCase() + ME.chef.fornamn.slice(1))}</th>`).replace(/<p class="muted tismall" style="margin-top:8px">Du kvitterade informationen[\s\S]*?<\/p>/, '');
+  const i = ND.tid && ND.tid.info;
+  const rad = !i ? 'Ingen information till personalen om tidsregistreringen är kopplad till stämplingen än.' : i.kvitterad ? `Du kvitterade informationen om tidsregistreringen ${esc(frKort(i.kvitterad))}. <button class="tlink inl" data-go="${esc(i.href)}">Läs den igen</button>` : `Du har inte kvitterat informationen om tidsregistreringen. <button class="tlink inl" data-go="${esc(i.href)}">Läs och kvittera</button>`;
+  return h.replace(/<th>Johanna<\/th>/, `<th>${esc(ME.chef.fornamn.charAt(0).toUpperCase() + ME.chef.fornamn.slice(1))}</th>`).replace(/(<p class="muted tismall" style="margin-top:8px">)Du kvitterade informationen[\s\S]*?(<\/p>)/, (_, a, b) => a + rad + b);
 };
 // Chefens stämpelrad och allt annat som frågar teamNow(): dagsbilden och de instämplade.
 teamNow = function(){
@@ -25068,9 +25208,79 @@ document.addEventListener('click', e => {
   if (b.dataset.tivecka && /^\d{4}-/.test(b.dataset.tivecka)){ e.stopImmediatePropagation(); S.tVecka = b.dataset.tivecka; render(); }
   else if (b.dataset.tidag && /^\d{4}-/.test(b.dataset.tidag)){ e.stopImmediatePropagation(); S.tDag = S.tDag === b.dataset.tidag ? null : b.dataset.tidag; render(); }
 }, true);
-// Stämpla: i läsläget görs det i Nav.
+/* ---------- Skrivningar: /nav2/tid ---------- */
+async function ndTidPost(handling, data = {}, {ladda = true, tyst = false} = {}){
+  try {
+    const r = await fetch('/nav2/tid', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
+    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    if (s.ok !== undefined && !s.fel){ if (!tyst && s.ok) toast(s.ok); if (ladda){ try { sessionStorage.setItem('nd-tid', JSON.stringify({tab:S.tTab, vecka:S.tVecka, dag:S.tDag, lon:S.ndLonPer})); } catch(_){} setTimeout(() => location.reload(), 700); } return s; }
+    if (!tyst) toast(s.fel || 'Det gick inte att spara.'); return s;
+  } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
+}
+(() => { if (!ND || !ND.tid) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-tid') || 'null'); sessionStorage.removeItem('nd-tid'); } catch(_){}
+  if (m) setTimeout(() => { S.view = 'tid'; if (m.tab) S.tTab = m.tab; if (m.vecka) S.tVecka = m.vecka; S.tDag = m.dag || null; S.ndLonPer = m.lon || null; render(); }, 0); })();
+// Chefens senaste besök ("Senast här i dag 08:12"), en gång per sidladdning och tyst.
+const _ndTidChefBesok = tidChef;
+tidChef = function(){ if (ND && ND.tid && ND.tid.chef && !S.ndTidBesok){ S.ndTidBesok = true; setTimeout(() => ndTidPost('besok', {}, {ladda:false, tyst:true}), 0); } return _ndTidChefBesok(); };
+document.addEventListener('click', e => {
+  if (!ND || !ND.tid) return;
+  const b = e.target.closest && e.target.closest('button, a, label'); if (!b || !b.dataset) return;
+  const d = b.dataset, stopp = () => { e.preventDefault(); e.stopImmediatePropagation(); }, c = ND.tid.chef;
+  if (S.view !== 'tid') return;
+  /* Den som stämplar */
+  if (d.tiratt){ stopp(); const h = ndOrg(d.tiratt);
+    if (h && ND.tid.egna.some(x => x.korr === 'pending' && x.ersatter === h.id)){ toast(`En rättelse för den raden väntar redan på ${ME.chef.fornamn}.`); return; }
+    S.tRatt = S.tRatt === d.tiratt ? null : d.tiratt; S.tRattVal = ''; S.tRattBil = false; S.tLagg = false;
+    if (h && h.dag !== kIdag()){ S.tVecka = ndMandag(h.dag); S.tDag = h.dag; }
+    render(); setTimeout(() => { const i = document.querySelector('.tiform input[type=time]'); if (i){ i.focus(); i.scrollIntoView({block:'center', behavior:'smooth'}); } }, 30); return; }
+  if (d.tiskicka){ stopp(); const f = b.closest('.tiform'), till = f.querySelector('[data-tinytid]').value, egen = f.querySelector('[data-tivarfor]').value.trim(), bil = f.querySelector('[data-tibil]')?.checked, varfor = egen || S.tRattVal;
+    if (!till){ toast('Välj den rätta tiden först.'); return; }
+    if (till === d.fran){ toast('Tiden är densamma som förut. Ändra den, eller avbryt.'); f.querySelector('[data-tinytid]').focus(); return; }
+    if (!varfor){ toast(`Skriv varför, eller välj ett skäl. ${ME.chef.fornamn} beslutar snabbare då.`); f.querySelector('[data-tivarfor]').focus(); return; }
+    ndTidPost('ratta', {id:d.tiskicka, tid:till, skal:varfor, stod:bil && d.samtal ? `Sista samtalet i dialern slutade ${d.samtal}` : ''}); return; }
+  if (d.tilaggskicka !== undefined){ stopp(); const typ = document.querySelector('[data-tilaggtyp]').value, tid = document.querySelector('[data-tilaggtid]').value;
+    if (!tid){ toast('Välj klockslaget.'); return; }
+    ndTidPost('lagg', {typ:/ut/i.test(typ) ? 'out' : 'in', dag:kIdag(), tid, skal:S.tRattVal || 'Glömde stämpla'}); return; }
+  if (d.ndtiavslagok){ stopp(); ndTidPost('avslag-sett', {id:d.ndtiavslagok}); return; }
+  if (d.ndtiautook){ stopp(); ndTidPost('auto-ok', {dag:d.ndtiautook}); return; }
+  if (d.ndtischemasett){ stopp(); ndTidPost('schema-sett', {fran:d.ndtischemasett}); return; }
+  if (d.tiveckaok !== undefined){ stopp(); ndTidPost('vecka', {vecka:ndMandag(kIdag()), ok:true}); return; }
+  if (d.tinagotfel !== undefined){ stopp(); S.tFelHint = true; render(); return; }
+  if (d.tisenasvar){ stopp(); const v = (document.querySelector(`[data-tisenatext="${d.tisenasvar}"]`)?.value || '').trim(); if (!v){ toast('Skriv vad som hände, en mening räcker.'); return; } ndTidPost('sen-forklaring', {id:d.tisenasvar, text:v}); return; }
+  if (d.tipamin || d.tipammin){ stopp(); const fore = JSON.parse(JSON.stringify(S.ndPaminn));
+    if (d.tipamin) S.ndPaminn[d.tipamin].pa = !S.ndPaminn[d.tipamin].pa; else { const [k, m] = d.tipammin.split(':'); S.ndPaminn[k].min = +m; }
+    render(); ndTidPost('paminn', S.ndPaminn, {ladda:false}).then(s => { if (s.fel){ S.ndPaminn = fore; render(); } }); return; }
+  /* Chefen */
+  if (!c) return;
+  if (d.tibeslut){ stopp(); ndTidPost('beslut', {id:d.tibeslut, beslut:'ja'}); return; }
+  if (d.tiavslagskal){ stopp(); ndTidPost('beslut', {id:d.tiavslagskal, beslut:'nej', skal:d.text}); return; }
+  if (d.ndtibulk !== undefined){ stopp(); ndTidPost('beslut-stod', {ids:c.rattelser.filter(r => (c.stod || {})[r.id]).map(r => r.id)}); return; }
+  if (d.ndtiogiltig){ stopp(); if (d.b === 'fraga'){ ndTidPost('ogiltig', {id:d.ndtiogiltig, b:'fraga'}, {ladda:false}).then(s => { if (s.ok){ S.ndTiFragat.add('o-' + d.ndtiogiltig); render(); } }); return; }
+    ndTidPost('ogiltig', {id:d.ndtiogiltig, b:d.b}); return; }
+  if (d.ndtihav){ stopp(); ndTidPost('ogiltig', {id:d.ndtihav, b:'hav', skal:'Hävd i Tid.'}); return; }
+  if (d.ndtifraga){ stopp(); ndTidPost('fraga', {vem:d.ndtifraga}, {ladda:false}).then(s => { if (s.ok){ S.ndTiFragat.add(d.ndtifraga); S.ndTiKlara++; render(); } }); return; }
+  if (d.ndtiberatta){ stopp(); const [vem, dag] = d.ndtiberatta.split('|'); ndTidPost('be-ratta', {vem, dag}, {ladda:false}).then(s => { if (s.ok){ S.ndTiFragat.add(d.ndtiberatta); S.ndTiKlara++; render(); } }); return; }
+  if (d.ndtigeschema){ stopp(); ndTidPost('ge-schema', {vem:d.ndtigeschema}); return; }
+  if (d.ndtipunkt){ stopp(); const a = c.sena30.find(x => x.pid === d.ndtipunkt), n = a ? a.dagar.length : 1;
+    ndTidPost('punkt', {vem:d.ndtipunkt, text:`Sena ankomster: ${n} ${n === 1 ? 'gång' : 'gånger'} de senaste 30 dagarna${ndMonster(a) ? `, oftast ${ndMonster(a)}` : ''}. Hur ser morgnarna ut?`}, {ladda:false}).then(s => { if (s.ok){ S.ndTiFragat.add('p-' + d.ndtipunkt); render(); } }); return; }
+  if (d.tisenaperson){ stopp(); S.tSenaOpen = S.tSenaOpen === d.tisenaperson ? null : d.tisenaperson; render();
+    if (S.tSenaOpen && d.pid) ndTidPost('sena-visad', {vem:d.pid}, {ladda:false, tyst:true}).then(s => { if (!s.fel) toast(`Öppningen är loggad. ${fornamn(d.tisenaperson)} ser den under ”Vem har tittat”.`); else if (s.laslage) toast('Läsläge: öppningen loggas när Tid slås på.'); }); return; }
+  if (d.ndtischemapamin){ stopp(); ndTidPost('schema-paminn', {fran:d.ndtischemapamin}, {ladda:false}).then(s => { if (s.ok){ S.ndTiFragat.add('schema-' + d.ndtischemapamin); render(); } }); return; }
+  if (d.tirytmtid){ stopp(); ndTidPost('morgonnotis', {tid:d.tirytmtid}); return; }
+  if (d.titol){ stopp(); const t = c.tolerans; if (!t) return; S.ndTol = Math.min(15, Math.max(1, (S.ndTol ?? t.tol) + +d.titol)); render(); return; }
+  if (d.tolspara !== undefined){ stopp(); ndTidPost('tolerans', {tol:S.ndTol}); return; }
+  if (d.ndtiper){ stopp(); const k = d.ndtiper; S.ndLonPer = k; render();
+    if (k !== 'lop' && !S.ndUnderlag[k] && !(c.underlag && c.underlag.periodId === k) && c.perioder.find(p => p.id === k && p.skriven)){
+      S.ndUnderlag[k] = null; render();
+      fetch('/nav2/tid?period=' + encodeURIComponent(k), {credentials:'same-origin'}).then(r => r.json()).then(s => { S.ndUnderlag[k] = s.underlag || undefined; if (s.fel) toast(s.fel); render(); }).catch(() => { S.ndUnderlag[k] = undefined; toast('Nav svarade inte.'); render(); }); }
+    return; }
+  if (d.ndtikol){ stopp(); if (d.falt === 'name' && !d.pa){ toast('Namnet måste vara med, annars går filen inte att läsa.'); return; } ndTidPost('lon-kolumn', {id:d.ndtikol, pa:!!d.pa}); return; }
+  if (d.ndtigransk !== undefined){ stopp(); ndTidPost('lon-granska', d.ndtigransk ? {period:d.ndtigransk} : {start:d.start, slut:d.slut}); return; }
+  if (d.ndtiskickad){ stopp(); ndTidPost('lon-skickad', {period:d.ndtiskickad}); return; }
+}, true);
+// Stämpla: repots stampla genom /nav2/tid. Servern sätter tiden.
 const _ndStampTid = stamp;
-stamp = function(k){ if (ND){ location.href = '/tid'; return; } return _ndStampTid(k); };
+stamp = function(k){ if (ND && ND.tid){ ndTidPost('stampla', {typ:k === 'in' ? 'in' : 'out'}); return; } return _ndStampTid(k); };
 if (ND && ND.tid){ ndTidStart(); NDKOPPLAD.add('tid'); }
 
 /* =====================================================================

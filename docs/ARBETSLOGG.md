@@ -5,6 +5,36 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-15 · Nav 2.0, Tid: ingen funktion tas bort (0094)
+
+Pass 2 skickade stämpla, rätta, besluta, attestera och schemalägga till
+nuvarande Nav och tog bort påminnelserna, "Vem har tittat", veckokollen,
+rytmkortet, loggkortet, nästa vecka, toleransen och lönestegen.
+
+- **Repots actions** i `/nav2/tid`: `stampla`, `begarRattelse`,
+  `beslutaRattelse`, `godkannHandelse`/`avvisaHandelse`/`havHandelse`,
+  `sparaArbetsschema` (ge någon teamets schema; toleransen som en ny rad från
+  i morgon) och `skapaPeriod`/`generera`/`attestera` ("Jag har granskat", när
+  perioden är slut). Ladda ner är repots CSV-rutt, och uttaget är steget.
+- **0094** (körd): `time_correction_extra` (stöd, avslagets skäl, "Okej"),
+  `time_day_ack`, `work_schedule_seen`, `time_week_check`, `nav_preference`,
+  `one_on_one_point` (också för Coachning), `tid_view_log`,
+  `payroll_period_sent`, `payroll_row.over_minutes` och exportfältet
+  `over_minutes` — inlagt AVSTÄNGT, eftersom databasen delas med produktionen.
+- "Glömde du stämpla?" är en rättelse utan rad att ersätta. Förklaringen till
+  en sen dag skriver `late_arrival.employee_comment`, som repot visar men inte
+  lät skriva.
+- **Bakom `SKRIVLAGE.tid`, också i jobben:** var och ens påminnelse om
+  instämplingen (repots dagtidsjobb får valen), påminnelsen om utstämplingen,
+  fredagens veckokoll, chefens morgonnotis och 16:00-samlingen
+  (`src/lib/nav2/tid-paminnelser.ts`), och regeln att ett nytt schema
+  (`SCHEMA_KVITTENS_FRAN`) inte bedöms för sen ankomst förrän det setts
+  (`src/lib/jobb/tid.ts`).
+- "Utanför schemat (min)" räknas av `src/lib/nav2/utanfor.ts`, i `generera`
+  och i det löpande underlaget.
+- **Provat** lokalt som säljaren Fredrik (`ndprov/p19.json`). Chefsvyn provas i
+  previewen som Zen.
+
 ## 2026-10-15 · Nav 2.0, Frånvaro: ingen funktion tas bort (0093)
 
 Pass 3 skickade ansöka, sjukanmäla, bekräfta, besluta, registrera och taket

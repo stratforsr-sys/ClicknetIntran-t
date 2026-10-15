@@ -138,7 +138,9 @@ export type Exportfalt =
   | "adjustment_minutes"
   | "net_minutes"
   | "auto_closed_days"
-  | "deviation_count";
+  | "deviation_count"
+  /** Nav 2.0 (0094): instämplad tid utanför schemat. */
+  | "over_minutes";
 
 export type Exportkolumn = { sort: number; header: string; field: Exportfalt; active: boolean };
 
@@ -153,6 +155,8 @@ export type Exportrad = {
   adjustment_minutes: number;
   auto_closed_days: number;
   deviation_count: number;
+  /** Nav 2.0 (0094). Saknas den räknas den som noll. */
+  over_minutes?: number;
 };
 
 /** Timmar med två decimaler. Lönesystem vill nästan alltid ha decimaltimmar. */
@@ -186,6 +190,8 @@ export function faltvarde(rad: Exportrad, falt: Exportfalt): string {
       return String(rad.auto_closed_days);
     case "deviation_count":
       return String(rad.deviation_count);
+    case "over_minutes":
+      return String(rad.over_minutes ?? 0);
   }
 }
 

@@ -4,6 +4,8 @@ import { RATTELSE_FRIST_TIMMAR, gallande, arbetadeMinuter, type Handelse } from 
 import { avvikelser, gallandeSchema, tagnaRaster, type Rastschema } from "@/lib/raster";
 import { senAnkomst } from "@/lib/narvaro";
 import { stampelfriaAnstallda } from "@/lib/stampelfri-server";
+import { SKRIVLAGE } from "@/lib/nav2/skrivlage";
+import { SCHEMA_KVITTENS_FRAN } from "@/lib/nav2/tidregler";
 import {
   svensktDatum,
   svenskTidpunkt,
@@ -113,6 +115,19 @@ export async function korTidjobbet(db: SupabaseClient, rastPa: boolean): Promise
 
   const avslutade = new Set((klara ?? []).map((r) => String(r.work_date).slice(0, 10)));
 
+  /**
+   * Nav 2.0 (0094): "Ingen sen ankomst bedöms mot schemat förrän du sett det."
+   * Gäller scheman som börjar gälla från SCHEMA_KVITTENS_FRAN, och bara när Tid
+   * i Nav 2.0 är påslagen — annars ändras ingenting i bedömningen.
+   */
+  const sett = new Set<string>();
+  if (SKRIVLAGE.tid) {
+    const { data: kvitton } = await db.from("work_schedule_seen").select("employee_id, valid_from");
+    for (const k of kvitton ?? []) sett.add(`${k.employee_id}|${String(k.valid_from).slice(0, 10)}`);
+  }
+  const osett = (pid: string, s: { valid_from: string }) =>
+    SKRIVLAGE.tid && String(s.valid_from).slice(0, 10) >= SCHEMA_KVITTENS_FRAN && !sett.has(`${pid}|${String(s.valid_from).slice(0, 10)}`);
+
   const attGora: string[] = [];
   for (let i = IKAPP_DAGAR; i >= 1; i--) {
     const datum = dagarBakat(idag, i);
@@ -212,7 +227,7 @@ export async function korTidjobbet(db: SupabaseClient, rastPa: boolean): Promise
       //
       //    Den stampelfria rollen bedoms inte. En sen ankomst ar en avvikelse
       //    fran en arbetstid som mats, och det ar just det den rollen inte har.
-      if (dagensSchema && !stampelfria.has(p.id)) {
+      if (dagensSchema && !stampelfria.has(p.id) && !osett(p.id, dagensSchema)) {
         const sen = senAnkomst(egna, {
           start_time: dagensSchema.start_time,
           tol_late: dagensSchema.tol_late ?? 1,

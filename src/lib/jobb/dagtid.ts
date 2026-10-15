@@ -85,6 +85,12 @@ export type Dagtidutfall = {
 export async function korDagtidsjobbet(
   db: SupabaseClient,
   nu = new Date(),
+  /**
+   * Nav 2.0 (0094): var och ens eget val under "Påminn mig". Avslaget betyder
+   * ingen påminnelse; minuterna ersätter de femton. Skickas bara in när Tid i
+   * Nav 2.0 är påslagen, så att repots beteende annars är orört.
+   */
+  egnaVal?: Map<string, { pa: boolean; min: number }>,
 ): Promise<Dagtidutfall> {
   const utfall: Dagtidutfall = { helg: false, provade: 0, paminda: 0, fel: [] };
 
@@ -200,8 +206,10 @@ export async function korDagtidsjobbet(
     const start = minuterUrTid(String(dagens[0].start_time));
     if (start === null) continue;
 
+    const egetVal = egnaVal?.get(p.id);
+    if (egetVal && !egetVal.pa) continue;
     const gatt = nuMinuter - start;
-    if (gatt < TOLERANS_MINUTER || gatt > BORTRE_MINUTER) continue;
+    if (gatt < (egetVal?.min ?? TOLERANS_MINUTER) || gatt > BORTRE_MINUTER) continue;
 
     utfall.provade++;
 

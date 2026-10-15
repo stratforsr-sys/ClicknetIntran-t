@@ -9,6 +9,7 @@ import { blockeringar, type Blockering } from "@/lib/lonerapport";
 import { franvarominuter } from "@/lib/franvaro";
 import { schemaminuter } from "@/lib/franvaro-server";
 import { notifiera, notifieraFlera } from "@/lib/notishandelse-server";
+import { utanforSchemat } from "@/lib/nav2/utanfor";
 
 export type PeriodState = { fel?: string; ok?: string; blockeringar?: Blockering[] };
 
@@ -231,6 +232,9 @@ export async function generera(_prev: PeriodState, form: FormData): Promise<Peri
       minuterForDag,
     );
 
+    // Nav 2.0 (0094): "Utanför schemat (min)", samma stämplingar och scheman.
+    const utanfor = await utanforSchemat(db, period.period_start, period.period_end);
+
     await db.from("payroll_row").delete().eq("period_id", period.id);
 
     const rader = (personal ?? []).map((p) => {
@@ -243,6 +247,7 @@ export async function generera(_prev: PeriodState, form: FormData): Promise<Peri
         auto_closed_days: f.autoStangda,
         deviation_count: antalAvvikelser.get(p.id) ?? 0,
         absence_minutes: franvaro.get(p.id) ?? {},
+        over_minutes: utanfor.get(p.id) ?? 0,
       };
     });
 

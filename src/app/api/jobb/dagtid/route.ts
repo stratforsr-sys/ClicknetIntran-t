@@ -5,6 +5,7 @@ import { korDagtidsjobbet } from "@/lib/jobb/dagtid";
 import { korKalendersteget } from "@/lib/jobb/kalender";
 import { SKRIVLAGE } from "@/lib/nav2/skrivlage";
 import { skickaRundor } from "@/lib/nav2/franvaro-runda";
+import { egnaPaminnelser, korTidpaminnelser } from "@/lib/nav2/tid-paminnelser";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -31,7 +32,9 @@ async function kor(request: NextRequest) {
   if (nekad) return nekad;
 
   const db = supabaseAdmin();
-  const stampling = await korDagtidsjobbet(db);
+  // Nav 2.0 (0094): var och ens val under "Påminn mig", bara när Tid i Nav 2.0 är påslagen.
+  const val = SKRIVLAGE.tid ? await egnaPaminnelser(db) : null;
+  const stampling = await korDagtidsjobbet(db, new Date(), val ? new Map([...val].map(([k, v]) => [k, v.in])) : undefined);
   // 0070: Leveranskalenderns serier, förberedelser och utkorg. Eget steg med
   // eget kvitto, så att ett fel i det ena inte döljer det andra.
   let kalender: unknown;
@@ -49,7 +52,15 @@ async function kor(request: NextRequest) {
       runda = { fel: e instanceof Error ? e.message : String(e) };
     }
   }
-  return NextResponse.json({ ...stampling, kalender, runda });
+  let tid: unknown = null;
+  if (val) {
+    try {
+      tid = await korTidpaminnelser(db, val);
+    } catch (e) {
+      tid = { fel: e instanceof Error ? e.message : String(e) };
+    }
+  }
+  return NextResponse.json({ ...stampling, kalender, runda, tid });
 }
 
 export async function POST(request: NextRequest) {

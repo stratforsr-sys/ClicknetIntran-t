@@ -34,7 +34,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     await Promise.all([
       supabase
         .from("payroll_row")
-        .select("employee_id, worked_minutes, break_minutes, auto_closed_days, deviation_count")
+        .select("employee_id, worked_minutes, break_minutes, auto_closed_days, deviation_count, over_minutes")
         .eq("period_id", period.id),
       supabase.from("payroll_adjustment").select("employee_id, minutes").eq("period_id", period.id),
       supabase.from("employee").select("id, first_name, last_name, email, employee_number"),
@@ -62,6 +62,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
         adjustment_minutes: justering.get(r.employee_id) ?? 0,
         auto_closed_days: r.auto_closed_days,
         deviation_count: r.deviation_count,
+        over_minutes: r.over_minutes ?? 0,
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name, "sv"));
