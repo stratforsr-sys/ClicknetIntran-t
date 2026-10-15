@@ -560,6 +560,15 @@ export const NOTIS_KALLOR = [
   "lead-tilldelad",
 
   /**
+   * Fel i Nav 2.0 (0082). Båda är HÄNDELSER: ett svar i tråden och att ett fel
+   * man följer är lagat. Att någon tittar på ens egen rapport, och att den är
+   * avslutad, är fortfarande de härledda `fel-svar` ovan — de här når också de
+   * som sagt "samma för mig", som inte står på raden.
+   */
+  "fel-meddelande",
+  "fel-lagad",
+
+  /**
    * ANGRA-KNAPPEN HAR MED FLIT INGEN KALLA HAR.
    *
    * `/angra` provades och togs bort igen. Kvittot med angra-knappen visas bara
@@ -654,6 +663,8 @@ export const HANDELSEKALLOR = [
   "leverans-studs",
   "lead-ny",
   "lead-tilldelad",
+  "fel-meddelande",
+  "fel-lagad",
 ] as const satisfies readonly Notiskalla[];
 
 export type Handelsekalla = (typeof HANDELSEKALLOR)[number];

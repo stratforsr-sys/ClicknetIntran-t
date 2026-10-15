@@ -5,6 +5,71 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-15 · Nav 2.0, pass 9: Fel med riktig data och allt utkastet har (0082)
+
+Fel är kopplat utan att något i utkastet tagits bort. Det som repot saknade
+har fått backend, och skrivvägen står färdig bakom `SKRIVLAGE.fel` (läsläge).
+
+- **Läsningen** (`src/lib/nav2/fel.ts`): samma `error_report`-fråga som `/fel`
+  med den inloggades token, inget eget rollfilter. Driftkortet är repots
+  `hamtaDrift` för samma krets; stegen läses ur kvittots `meta.resultat` och
+  `meta.fel` (`felforma.ts`), så kortet visar nattjobbets riktiga 13 steg i
+  stället för utkastets sex. Rubriken för en automatisk rad utan meddelande är
+  repots `rubrikFor`. Namnen på den som svarat eller tagit felet hämtas som
+  chefens namn i `data.ts`: bara för- och efternamn, bara för id:n på
+  läsarens egna rader.
+- **0082_fel_utkastet** (körd): sex kolumner på `error_report` (pekning,
+  ägare, bekräftelse, rubrik och råd för alla), tråden, följarna,
+  förekomsterna och två funktioner för alla anställda: `kanda_fel()` ger bara
+  öppna fel som kön gjort kända, med kön-skriven rubrik och råd, och
+  `fel_statistik()` bara antal och mediantider. Torrkört med RLS först:
+  Fredrik ser sina egna rader och de kända felen, Zen kön och förekomsterna,
+  och en halv bekräftelse nekas av villkoret.
+- **"Kom tillbaka"** behövde ingen kolumn: `registrera_fel` räknar upp en
+  avslutad rad utan att öppna den, så en avslutad automatisk rad med
+  `last_seen_at` efter `handled_at` har kommit tillbaka.
+- **`/nav2/fel` (POST)**: rapportera (via `skrivFel`, med webbläsare och
+  pekning), status och avslut (via `sattStatus`), ta, svara, bekräfta eller
+  öppna igen, följ, känt fel, och utkastets egna fel med beskrivning på samma
+  rad. Svar och lagat går som händelser (`fel-meddelande`, `fel-lagad`) till
+  den som rapporterat och de som följer felet.
+- **Väntar på ja:** `supabase/vantar/fel_forekomster.sql` (`registrera_fel`
+  skriver förekomsten, i ett block som aldrig fäller rapporten) och
+  nattjobbets steg `felrapportering`.
+- **Provat lokalt** som Fredrik och Zen (`ndprov/fel.mjs`, `sess/p13.json`):
+  panelen, sidan, flikarna, detaljerna, nattjobbet, inga exempel kvar och
+  inga fel. Tillstånden som produktionen inte har än (kända fel, tråd,
+  "Fungerar det nu?", följt fel, kom tillbaka, staplar) provades med en
+  lokal provfil ovanpå riktig data, aldrig i databasen.
+
+## 2026-10-15 · Nav 2.0, Ärenden: ingen funktion tas bort (`d07f456`, 0081)
+
+Pass 8 gömde det utkastet har och navet saknade — läskvittot, "Löste det här
+ditt ärende?", bilagor, påminnelser, kopplingar och "Det här har ärenden lett
+till" — och kallade det läsläge. Beställaren: ingen funktion får försvinna;
+saknar navet den ska den få backend och bli produktionsredo.
+
+- **0081_arenden_utkastet** (körd): `hr_case_read`, `hr_case_confirmation`,
+  `hr_case_reminder`, `hr_case_link`, `hr_case_attachment` och
+  `case_outcome`. Läsregeln följer ärendet (konfidentiellt bara för personen,
+  säljchef och VD); `case_outcome` läses av alla anställda. Bilagorna har egen
+  tabell i stället för ett nytt ändamål i `file_object`, vars villkor delas av
+  sju ändamål. Provat med RLS: Zen ser raderna på sitt konfidentiella ärende,
+  Fredrik inga.
+- **`/nav2/arenden` (POST)** gör allt som ändrar ett ärende: repots `svara`,
+  `andraStatus` och `tilldela`, och det nya ovanpå 0081 (skapa med kopplingar
+  och åt någon, läst/oläst, bekräfta eller öppna igen, påminn, koppla,
+  utfall, bilaga i två steg med lagringens egen kontroll av storlek och typ).
+  Inloggade har bara läsrätt i databasen; rutten skriver med service role
+  efter egna kontroller, som resten av navet.
+- **`src/lib/nav2/skrivlage.ts`**: en strömbrytare per vy. Ärenden står på
+  läsläge, och rutten svarar 423 innan något händer (provat i previewen, och
+  403 utan rätt ursprung). Att visa en bilaga är en läsning och fungerar
+  alltid.
+
+Vyn visar alla funktionerna med navets data; det som ingen använt än står som
+tomt, inte borttaget.
+
 ## 2026-10-15 · Nav 2.0 på /nav2, pass 8: Ärenden (gren `nav2-utkast`, `59bb4cf`)
 
 `src/lib/nav2/arenden.ts` (`byggArenden`) läser som `/arenden` och

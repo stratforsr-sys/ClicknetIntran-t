@@ -18,6 +18,7 @@ import { svepKoppling } from "@/lib/samtal-order-server";
 import { tolkaOmOtolkade } from "@/lib/samtal-server";
 import { gallraInspelningar } from "@/lib/inspelning-server";
 import { fodSerier } from "@/lib/upprepning-server";
+import { SKRIVLAGE } from "@/lib/nav2/skrivlage";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -164,6 +165,12 @@ export async function GET(request: NextRequest) {
     // andra. Bytte stegen plats hade en inspelning kunnat raderas samma natt
     // som ordern den hor till lades in.
     ["inspelningsgallring", () => gallraInspelningar()],
+    // Nav 2.0 (0082): kontroll av felrapporteringen. En provrapport skrivs den
+    // enda vägen in (`skrivFel`), läses tillbaka och tas bort. Kommer den inte
+    // fram faller steget, och det syns på driftkortet — en tyst kö betyder då
+    // inte längre "inga fel" utan kan betyda "rapporteringen är trasig".
+    // Steget skriver, så det står bakom samma brytare som Fel i Nav 2.0.
+    ["felrapportering", () => (SKRIVLAGE.fel ? provaFelrapporteringen(db) : Promise.resolve({ hoppade_over: "Fel i Nav 2.0 är i läsläge" }))],
   ];
 
   for (const [namn, kor] of steg) {
@@ -256,4 +263,18 @@ export async function GET(request: NextRequest) {
     },
     { status: Object.keys(fel).length > 0 ? 500 : 200 },
   );
+}
+
+/**
+ * Nav 2.0 (0082): skriver en provrapport, läser tillbaka den och tar bort den.
+ * Kastar om den inte kom fram, så att steget faller och larmar.
+ */
+async function provaFelrapporteringen(db: ReturnType<typeof supabaseAdmin>) {
+  const digest = `natt-prov-${new Date().toISOString().slice(0, 10)}`;
+  const path = "/api/jobb/natt/prov";
+  const skriven = await skrivFel({ kind: "automatic", path, digest, message: "Nattjobbets provrapport", blocking: false });
+  const { data } = await db.from("error_report").select("id").eq("digest", digest).eq("path", path).maybeSingle();
+  if (data) await db.from("error_report").delete().eq("id", data.id);
+  if (!skriven || !data) throw new Error("provrapporten kom inte fram till error_report");
+  return { mottagen: true };
 }

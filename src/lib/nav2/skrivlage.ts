@@ -10,6 +10,7 @@
  */
 export const SKRIVLAGE = {
   arenden: false,
+  fel: false,
 } as const;
 
 export type Skrivvy = keyof typeof SKRIVLAGE;

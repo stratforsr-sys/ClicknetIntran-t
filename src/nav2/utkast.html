@@ -12835,7 +12835,7 @@ function railExtra(h){
   if (h === '/coachning'){ const c = cnRailAntal(); return c ? `<span class="cnt" title="${S.role === 'chef' ? 'Behöver något' : 'Väntar på dig'}">${c}</span>` : ''; }
   if (h === '/kalender'){ const n = kNasta(); return n ? `<span class="cnt" title="Nästa: ${esc(n.t)}">${hm(n.s)}</span>` : ''; }
   if (h === '/order'){ ordSt(); const c = S.role === 'chef' ? ORDER.filter(o => o.st === 'inskickad' && o.samtal).length : oMina().filter(o => oStatus(o) === 'stoppad').length; return c ? `<span class="cnt" title="${S.role === 'chef' ? 'Att godkänna' : 'Stoppade order'}">${c}</span>` : ''; }
-  if (h === '/fel'){ felSt(); const c = S.role === 'chef' ? felKo().filter(r => r.status === 'new').length : felMin().filter(r => r.status === 'closed' && r.fraga && !r.tackad).length; return c ? `<span class="cnt" title="${S.role === 'chef' ? 'Nya felrapporter' : 'Nytt besked om din rapport'}">${c}</span>` : ''; }
+  if (h === '/fel'){ felSt(); const c = ndFelHanterar() ? felKo().filter(r => r.status === 'new').length : felMin().filter(r => r.status === 'closed' && r.fraga && !r.tackad).length; return c ? `<span class="cnt" title="${ndFelHanterar() ? 'Nya felrapporter' : 'Nytt besked om din rapport'}">${c}</span>` : ''; }
   if (h === '/franvaro'){ frSt(); const c = S.role === 'chef' ? frBesluta().length + frObekr().length : S.frMina.filter(p => p.st === 'submitted').length; return c ? `<span class="cnt">${c}</span>` : ''; }
   if (h === '/arenden'){
     const c = S.role === 'chef' ? ARENDEN.filter(a => a.status !== 'resolved' && a.status !== 'waiting').length : ARENDEN.filter(a => a.vem === ME.saljare.namn && a.status === 'waiting').length;
@@ -13441,7 +13441,7 @@ FEAT.push(
    automatiska fel grupperas och maskeras, manuella grupperas aldrig.
    ===================================================================== */
 const FELADM = 'Zen Alsabti';
-const FELREL = '9a7e3b0';
+let FELREL = '9a7e3b0';
 const FELSIDA = {'':'Startsidan', order:'Order', leads:'Leads', provision:'Provision', hem:'Startsidan', uppgifter:'Uppgifter', rutiner:'Rutiner', utbildning:'Utbildning', tid:'Tid', kalender:'Kalender', arenden:'Ärenden', franvaro:'Frånvaro', fel:'Fel'};
 const FELST = {new:'Ny', ack:'Tittar på den', closed:'Lagad'};
 /* Kön. tid = minuter före nu i dag (negativt = dagar). Allt här är exempeldata. */
@@ -13489,7 +13489,7 @@ function renderFelPanel(){
     const r = S.felSkickad;
     el.innerHTML = `<div class="felph"><b>Rapportera fel</b><button class="ibtn" data-felstang aria-label="Stäng">${I('x')}</button></div>
       <div class="felklar">${note(226)}<span class="felbock">${I('check')}</span><h3>Tack, den är skickad</h3>
-        <p>${r.blocking ? `${fornamn(FELADM)} fick en notis direkt, eftersom det stoppar dig.` : `${fornamn(FELADM)} går igenom nya rapporter varje morgon.`} Du får besked i Nav när något händer med den, och när den är lagad.</p>
+        <p>${ND ? (r.blocking ? 'De som hanterar kön fick en notis om att det stoppar dig.' : 'De som hanterar kön fick en notis om den.') : r.blocking ? `${fornamn(FELADM)} fick en notis direkt, eftersom det stoppar dig.` : `${fornamn(FELADM)} går igenom nya rapporter varje morgon.`} Du får besked i Nav när något händer med den, och när den är lagad.</p>
         <ol class="felspar"><li class="ok"><i></i>Skickad</li><li><i></i>Tittar på den</li><li><i></i>Lagad</li></ol>
         <div class="pacts"><button class="btn btn-p btn-sm" data-felga>Mina felrapporter</button><button class="btn btn-s btn-sm" data-felstang>Tillbaka till ${esc(sida.toLowerCase())}</button></div></div>`;
     return;
@@ -13502,9 +13502,9 @@ function renderFelPanel(){
       <small class="muted felhint">En mening räcker.<span class="desk"> ⌘ Enter skickar.</span></small>
       <div class="felpek">${note(223)}${S.felPek ? `<span class="chip on">${I('arrow')}${esc(S.felPek)}<button data-felpekbort aria-label="Ta bort">${I('x')}</button></span>` : `<button class="btn btn-s btn-sm" data-felpeka>${I('arrow')}Peka på det som är fel</button><small class="muted">Valfritt. Ingen skärmbild tas, bara vad du pekade på.</small>`}</div>
       <div id="felLik">${felLikHtml(lik)}</div>
-      ${!S.felBlock && /kan inte|går inte|kommer inte|fastnar|hänger sig|snurrar|låst|stoppar/i.test(S.felText) ? `<div class="felforslag">${I('ai')}<span>Låter som att det stoppar dig. Stämmer det?</span><button class="btn btn-s btn-sm" data-felblock>Ja, det stoppar mig</button></div>` : ''}<button class="tiswitch felblock" data-felblock aria-pressed="${S.felBlock}"><span><b>Det stoppar mig från att jobba vidare</b><small class="muted">${S.felBlock ? `${fornamn(FELADM)} får en notis direkt.` : 'Då hamnar den först i kön.'}</small></span><i></i></button>
+      ${!S.felBlock && /kan inte|går inte|kommer inte|fastnar|hänger sig|snurrar|låst|stoppar/i.test(S.felText) ? `<div class="felforslag">${I('ai')}<span>Låter som att det stoppar dig. Stämmer det?</span><button class="btn btn-s btn-sm" data-felblock>Ja, det stoppar mig</button></div>` : ''}<button class="tiswitch felblock" data-felblock aria-pressed="${S.felBlock}"><span><b>Det stoppar mig från att jobba vidare</b><small class="muted">${S.felBlock ? (ND ? 'De som hanterar kön får en notis om att det stoppar dig.' : `${fornamn(FELADM)} får en notis direkt.`) : 'Då hamnar den först i kön.'}</small></span><i></i></button>
       <details class="felctx">${note(224)}<summary>Det här skickar Nav själv</summary><dl class="tidl"><div><dt>Sidan</dt><dd>${esc(sida)}</dd></div><div><dt>Webbläsare</dt><dd>${esc(felWebb())}</dd></div><div><dt>Tid</dt><dd>${hm(now())}</dd></div><div><dt>Version</dt><dd class="num">${FELREL}</dd></div><div><dt>Från</dt><dd>${esc(ME[S.role].namn)}</dd></div></dl>
-        <p class="muted">Läses av ${FELADM} som förvaltar Nav, Johanna och VD. Skriv inte personnummer eller kunduppgifter som inte behövs.</p></details>
+        <p class="muted">${ND ? 'Läses av säljchefen, VD och administratörerna i Nav.' : `Läses av ${FELADM} som förvaltar Nav, Johanna och VD.`} Skriv inte personnummer eller kunduppgifter som inte behövs.</p></details>
       <div class="pacts felsend"><button class="btn btn-p" data-felskicka ${S.felText.trim() ? '' : 'disabled'}>Skicka</button><button class="tlink" data-felga>Mina felrapporter</button></div>
       ${(() => { const m = felMin().filter(r => r.status !== 'closed' || (r.fraga && !r.tackad))[0]; return m ? `<button class="felsenast" data-felga><span class="muted">Din senaste:</span> ${esc(felRubrik(m).slice(0, 46))}${felRubrik(m).length > 46 ? '…' : ''} <span class="pill ${m.status === 'closed' ? 't-ok' : m.status === 'ack' ? 't-signal' : 't-neutral'}">${FELST[m.status]}</span></button>` : ''; })()}
     </div>`;
@@ -13543,7 +13543,7 @@ document.addEventListener('input', e => {
 
 /* ---------- Sidan ---------- */
 function felGa(){ felSt(); S.view = 'fel'; S.felOpen = false; renderFelPanel(); S.todoOpen = false; S.panel = null; render(); window.scrollTo(0, 0); }
-function renderFelView(){ felSt(); return S.role === 'chef' ? felChef() : felSaljare(); }
+function renderFelView(){ felSt(); return ndFelHanterar() ? felChef() : felSaljare(); }
 function felSpar(r){ const steg = r.status === 'closed' ? 2 : r.status === 'ack' ? 1 : 0; return `<ol class="felspar">${['Skickad', 'Tittar på den', 'Lagad'].map((l, i) => `<li class="${i <= steg ? 'ok' : ''}"><i></i>${l}</li>`).join('')}</ol>`; }
 function felSaljare(){
   const mina = felMin().sort((a, b) => ({new:0, ack:1, closed:2}[a.status] - {new:0, ack:1, closed:2}[b.status]));
@@ -13562,11 +13562,11 @@ function felSaljare(){
         </article>`).join('') : '<p class="muted">Du har inte rapporterat något än.</p>'}</section>
     </div><div class="col">
       <section class="card">${note(229)}<div class="chead"><h2>Kända fel just nu</h2></div>
-        ${kanda.map(r => `<div class="felkand"><b>${esc(r.kind === 'manual' ? felRubrik(r) : 'Det går inte att spara ett lead med en e-post som redan finns')}</b><span class="pill ${r.status === 'ack' ? 't-signal' : 't-neutral'}">${FELST[r.status]}</span><p><span class="muted">Under tiden:</span> ${esc(r.kant)}</p><small class="muted felsamma">${(r.kind === 'automatic' ? r.pers : 2) + (S.felOcksa[r.id] ? 1 : 0)} har samma fel</small>${S.felOcksa[r.id] ? `<small class="muted">${I('check')} Du får besked när den är lagad</small>` : `<button class="tlink" data-felocksa="${r.id}">Jag har också det här</button>`}</div>`).join('')}
+        ${kanda.map(r => `<div class="felkand"><b>${esc(ND ? (r.titel || felRubrik(r)) : r.kind === 'manual' ? felRubrik(r) : 'Det går inte att spara ett lead med en e-post som redan finns')}</b><span class="pill ${r.status === 'ack' ? 't-signal' : 't-neutral'}">${FELST[r.status]}</span><p><span class="muted">Under tiden:</span> ${esc(r.kant)}</p><small class="muted felsamma">${(ND ? r.drabbade : r.kind === 'automatic' ? r.pers : 2) + (S.felOcksa[r.id] ? 1 : 0)} har samma fel</small>${S.felOcksa[r.id] ? `<small class="muted">${I('check')} Du får besked när den är lagad</small>` : `<button class="tlink" data-felocksa="${r.id}">Jag har också det här</button>`}</div>`).join('')}
         <p class="muted felhint">Står felet här behöver du inte rapportera det igen. Tryck på Jag har också det här, så får du besked.</p></section>
       <section class="card felvarde">${note(230)}<div class="chead"><h2>Det här har rapporterna gjort</h2></div>
-        <div class="felsiffror"><div><b class="num">17</b><span>fel lagade sedan 1 sep</span></div><div><b class="num">6</b><span>av dem hittade Nav självt</span></div><div><b class="num">${lagade}</b><span>tack vare dig</span></div></div>
-        <p class="muted felhint">Median från rapport till lagat: 2 dagar. Ett fel som stoppar någon lagas oftast samma dag.</p></section>
+        ${(() => { const st = ND ? ndFelStatHtml() : null; return `<div class="felsiffror"><div><b class="num">${ND ? (st ? st.lagade : '–') : 17}</b><span>fel lagade sedan ${ND ? (st ? st.sedan : '–') : '1 sep'}</span></div><div><b class="num">${ND ? (st ? st.auto : '–') : 6}</b><span>av dem hittade Nav självt</span></div><div><b class="num">${ND ? (st ? st.mina : '–') : lagade}</b><span>tack vare dig</span></div></div>`; })()}
+        <p class="muted felhint">${ND ? (ndFelStatHtml() ? ndFelStatHtml().hint : 'Siffrorna gick inte att läsa just nu.') : 'Median från rapport till lagat: 2 dagar. Ett fel som stoppar någon lagas oftast samma dag.'}</p></section>
       <section class="card">${note(231)}<div class="chead"><h2>När en sida går sönder</h2></div><p class="muted" style="font-size:13px;margin:0 0 10px">Då skickar Nav felet själv. Du behöver inte höra av dig, men du får gärna berätta vad du gjorde.</p><button class="btn btn-s btn-sm" data-felkrasch>Visa hur det ser ut</button></section>
     </div></div>
     ${S.felKrasch ? felKraschHtml() : ''}`;
@@ -13584,7 +13584,7 @@ function felChef(){
   const ko = felKo(), oppna = ko.filter(r => r.status !== 'closed'), block = oppna.filter(r => r.blocking), auto = oppna.filter(r => r.kind === 'automatic'), igen = ko.filter(r => r.igen && r.status === 'closed');
   const filt = S.felFilt, lista = filt === 'stoppar' ? block : filt === 'auto' ? auto : filt === 'lagade' ? ko.filter(r => r.status === 'closed') : oppna;
   const vald = ko.find(r => r.id === S.felSel) || lista[0];
-  const tiles = [['Att hantera', oppna.length, 'hantera', oppna.length ? 'sig' : '', `${oppna.filter(r => r.status === 'new').length} nya`], ['Stoppar någon', block.length, 'stoppar', block.length ? 'act' : '', block.map(r => fornamn(r.vem || '')).filter(Boolean).join(', ') || 'ingen'], ['Fångat av Nav', auto.length, 'auto', '', `${auto.reduce((s, r) => s + r.ant, 0)} träffar`], ['Kom tillbaka', igen.length, 'lagade', igen.length ? 'act' : '', igen.length ? 'efter att ha lagats' : 'inget'], ['Till lagat', '2 d', 'lagade', '', 'median, 30 dagar']];
+  const tiles = [['Att hantera', oppna.length, 'hantera', oppna.length ? 'sig' : '', `${oppna.filter(r => r.status === 'new').length} nya`], ['Stoppar någon', block.length, 'stoppar', block.length ? 'act' : '', [...new Set(block.map(r => fornamn(r.vem || '')).filter(Boolean))].join(', ') || 'ingen'], ['Fångat av Nav', auto.length, 'auto', '', `${auto.reduce((s, r) => s + r.ant, 0)} träffar`], ['Kom tillbaka', igen.length, 'lagade', igen.length ? 'act' : '', igen.length ? 'efter att ha lagats' : 'inget'], ['Till lagat', ND ? ndFelMedian() : '2 d', 'lagade', '', ND ? ndFelMedianSub() : 'median, 30 dagar']];
   return `<header class="top"><div class="hello"><h1>Fel och rapporter</h1><p>${note(232)}Det Nav fångat självt och det människor skrivit in. Det som stoppar någon står först.</p></div>
       <div class="tools"><button class="btn btn-s" data-felny>${I('fel')}Rapportera fel</button></div></header>
     <section class="card tilage">${tiles.map(([l, n, k, cls, sub]) => `<button class="tilk ${cls} ${filt === k && l !== 'Till lagat' ? 'sel' : ''}" data-felfilt="${k}"><b class="num">${n}</b><span>${l}</span><small>${esc(sub)}</small></button>`).join('')}</section>
@@ -13592,8 +13592,8 @@ function felChef(){
       <section class="card fellista">${note(233)}<nav class="ttabs" aria-label="Filter">${[['hantera', 'Att hantera', oppna.length], ['stoppar', 'Stoppar någon', block.length], ['auto', 'Fångat av Nav', auto.length], ['lagade', 'Lagade', ko.filter(r => r.status === 'closed').length]].map(([k, l, n]) => `<button data-felfilt="${k}" aria-pressed="${filt === k}">${l} <span class="n">${n}</span></button>`).join('')}</nav>
         ${lista.length ? lista.map(r => `<button class="felrad ${vald && vald.id === r.id ? 'vald' : ''} ${r.blocking && r.status !== 'closed' ? 'block' : ''}" data-felsel="${r.id}">
           <span class="felik ${r.kind}">${r.kind === 'automatic' ? I('ai') : avatar(r.vem, 26)}</span>
-          <span class="felrt"><b>${esc(felRubrik(r).slice(0, 80))}</b><small>${r.kind === 'automatic' ? `Fångat av Nav · ${r.ant} gånger, ${r.pers} personer` : `${esc(r.vem)} · ${esc(r.nar)}`} · ${esc(FELSIDA[r.path.split('/')[1]] || r.path)}</small></span>
-          <span class="felrs">${r.igen ? '<span class="pill t-danger">Kom tillbaka</span>' : r.blocking && r.status !== 'closed' ? '<span class="pill t-danger">Stoppar</span>' : ''}<span class="pill ${r.status === 'new' ? 't-signal' : r.status === 'ack' ? 't-info' : 't-ok'}">${FELST[r.status]}</span></span></button>`).join('') : `<p class="muted" style="padding:14px 4px">Inget här. Kontrollera att felrapporteringen fungerar innan du litar på tystnaden: nattjobbet provar den varje natt.</p>`}</section>
+          <span class="felrt"><b>${esc(felRubrik(r).slice(0, 80))}</b><small>${r.kind === 'automatic' ? `Fångat av Nav · ${ND ? `${r.ant} ${r.ant === 1 ? 'gång' : 'gånger'}${r.pers == null ? '' : `, ${r.pers} ${r.pers === 1 ? 'person' : 'personer'}`}` : `${r.ant} gånger, ${r.pers} personer`}` : `${esc(r.vem)} · ${esc(r.nar)}`} · ${esc(FELSIDA[r.path.split('/')[1]] || r.path)}</small></span>
+          <span class="felrs">${r.igen ? '<span class="pill t-danger">Kom tillbaka</span>' : r.blocking && r.status !== 'closed' ? '<span class="pill t-danger">Stoppar</span>' : ''}<span class="pill ${r.status === 'new' ? 't-signal' : r.status === 'ack' ? 't-info' : 't-ok'}">${FELST[r.status]}</span></span></button>`).join('') : `<p class="muted" style="padding:14px 4px">Inget här. Kontrollera att felrapporteringen fungerar innan du litar på tystnaden${ND && !ND.fel.skriv ? '.' : ': nattjobbet provar den varje natt.'}</p>`}</section>
       <div class="col">${vald ? felDetalj(vald) : ''}${felJobbKort()}</div>
     </div>`;
 }
@@ -13604,12 +13604,12 @@ function felDetalj(r){
     <div class="felmh"><span class="pill ${r.kind === 'automatic' ? 't-info' : 't-neutral'}">${r.kind === 'automatic' ? 'Fångat av Nav' : 'Inrapporterat'}</span>${r.blocking ? '<span class="pill t-danger">Stoppar arbetet</span>' : ''}<span class="end muted num" style="margin-left:auto;font-size:12px">${esc(r.path)}</span></div>
     <h2>${esc(r.kind === 'manual' ? r.body : felRubrik(r))}</h2>
     <div class="felverkt"><button class="btn btn-s btn-sm" data-felsida="${esc(r.path)}">${I('arrow')}Öppna sidan</button>${r.tar ? `<span class="pill t-info">${esc(fornamn(r.tar))} tar den</span>` : `<button class="btn btn-s btn-sm" data-feltar="${r.id}">${I('pers')}Jag tar den</button>`}${r.kind === 'automatic' ? `<span class="muted felrel">Först sett i version ${r.id === 'f6' ? 'a91f0c2' : FELREL}, ${esc(r.forst)}</span>` : ''}</div>
-    ${r.igen ? `<div class="frb danger">${I('fel')}<span><b>Kom tillbaka.</b> Lagades mån 5 okt, men har setts ${r.dagar[5]} gånger i dag. Raden står kvar som lagad, så att det syns att lagningen inte höll.</span></div>` : ''}
+    ${r.igen ? `<div class="frb danger">${I('fel')}<span><b>Kom tillbaka.</b> ${ND ? `Avslutades ${esc(r.handNar)}, men har setts igen ${esc(r.senastLang)}.` : `Lagades mån 5 okt, men har setts ${r.dagar[5]} gånger i dag.`} Raden står kvar som lagad, så att det syns att lagningen inte höll.</span></div>` : ''}
     ${r.kind === 'manual' ? `<p class="felvem">${avatar(r.vem, 22)}<span>${esc(r.vem)} · ${esc(r.nar)}</span></p>
-      <dl class="tidl"><div><dt>Pekade på</dt><dd>${esc(r.pek || '–')}</dd></div><div><dt>Webbläsare</dt><dd>${esc(r.webb)}</dd></div><div><dt>Version</dt><dd class="num">${FELREL}</dd></div></dl>`
+      <dl class="tidl"><div><dt>Pekade på</dt><dd>${esc(r.pek || '–')}</dd></div><div><dt>Webbläsare</dt><dd>${esc(r.webb)}</dd></div><div><dt>Version</dt><dd class="num">${esc(r.release || FELREL)}</dd></div></dl>`
     : `<pre class="felkod">${esc(r.msg)}</pre><details class="felstack"><summary>Stack</summary><pre class="felkod">${esc(r.stack)}</pre></details>
       <div class="felbars" title="Träffar per dag, sex dagar">${r.dagar.map((n, i) => `<span style="height:${Math.max(3, n / max * 100)}%" class="${i === 5 ? 'idag' : ''}"><i>${n || ''}</i></span>`).join('')}</div>
-      <dl class="tidl"><div><dt>Träffar</dt><dd>${r.ant} gånger, ${r.pers} personer</dd></div><div><dt>Först sett</dt><dd>${esc(r.forst)}</dd></div><div><dt>Senast</dt><dd>${esc(r.senast)}</dd></div><div><dt>Felkod</dt><dd class="num">${r.digest}</dd></div></dl>
+      <dl class="tidl"><div><dt>Träffar</dt><dd>${ND ? `${r.ant} ${r.ant === 1 ? 'gång' : 'gånger'}${r.pers == null ? '' : `, ${r.pers} ${r.pers === 1 ? 'person' : 'personer'}`}` : `${r.ant} gånger, ${r.pers} personer`}</dd></div><div><dt>Först sett</dt><dd>${esc(r.forst)}</dd></div><div><dt>Senast</dt><dd>${esc(r.senast)}</dd></div><div><dt>Felkod</dt><dd class="num">${r.digest}</dd></div></dl>
       <p class="muted felhint">${KI('las')} E-post, personnummer och id har tagits bort ur texten innan den sparades, till exempel (email)=(dolt). Vilka som drabbades visas inte.</p>`}
     ${svar.map(([v, t, txt]) => `<div class="felsvar">${avatar(v, 24)}<div><small>${esc(v)} · ${esc(t)}</small><p>${esc(txt)}</p></div></div>`).join('')}
     ${r.status === 'closed' ? `<div class="fellagad">${I('check')}<span>${esc(r.losning)}</span></div><div class="pacts"><button class="btn btn-s btn-sm" data-felstatus="${r.id}|ack">Öppna igen</button></div>`
@@ -26330,6 +26330,201 @@ const _ndArDetaljChef = arDetaljChef;
 arDetaljChef = function(a){ if (ndA() && ndA().skriv && a.olastChef) ndArPost('last', {id:a.id}, true); return _ndArDetaljChef(a); };
 
 if (ndA()){ ndArStart(); NDKOPPLAD.add('arenden'); }
+
+/* =====================================================================
+   NAV 2.0 I RIKTIGT LÄGE: FEL (prefix nd), v47
+
+   ND.fel (src/lib/nav2/fel.ts) är error_report som /fel läser den, med den
+   inloggades token: kön för sales_manager, ceo och admin, och egna rapporter
+   för alla andra. Det 0082 lade till för det utkastet har och navet saknade:
+   vad personen pekade på, "Jag tar den", svaren i tråden, "Fungerar det nu?",
+   "Samma för mig", kända fel med råd för alla (kanda_fel), vad rapporterna
+   gjort (fel_statistik) och träffar per dag (error_occurrence). Driftkortet är
+   repots hamtaDrift med nattjobbets riktiga steg.
+
+   Ingen funktion i utkastet är borttagen. Allt som ändrar något går till
+   /nav2/fel (POST). Så länge vyn är i läsläge (src/lib/nav2/skrivlage.ts)
+   svarar rutten det, och knappen säger det.
+   ===================================================================== */
+
+const ndF = () => ND && ND.fel;
+const ndFNamn = id => { if (!id) return null; if (id === ND.jag.id) return ND.jag.namn; const p = ND.personer.find(x => x.id === id); return p ? p.namn : (ndF().namn || {})[id] || null; };
+// "i dag 11:05" eller "tors 8 okt 16:40", som utkastets exempel.
+function ndFNar(iso, kortIdag){
+  const dag = ndDagAv(iso), kl = ndKl(iso);
+  if (dag === kIdag()) return kortIdag ? kl : `i dag ${kl}`;
+  const d = new Date(dag + 'T12:00:00Z');
+  return `${FRWD[d.getUTCDay() || 7]} ${d.getUTCDate()} ${FRMK[d.getUTCMonth() + 1]}${dag.slice(0, 4) === kIdag().slice(0, 4) ? '' : ' ' + dag.slice(0, 4)} ${kl}`;
+}
+// Webbläsaren ur den sparade user-agent-strängen, med utkastets regler (felWebb läser navigator).
+function ndFelWebb(u){
+  if (!u) return '–';
+  const b = /Edg\//.test(u) ? 'Edge' : /Chrome\/(\d+)/.test(u) ? 'Chrome ' + u.match(/Chrome\/(\d+)/)[1] : /Firefox\/(\d+)/.test(u) ? 'Firefox ' + u.match(/Firefox\/(\d+)/)[1] : /Safari/.test(u) ? 'Safari' : 'Webbläsare';
+  const os = /iPhone|Android/.test(u) ? 'telefon' : /Mac/.test(u) ? 'Mac' : /Windows/.test(u) ? 'Windows' : '';
+  return os ? `${b} · ${os}` : b;
+}
+const ndFDagar = n => n === null || n === undefined ? null : n < 1 ? 'under en dag' : `${Math.round(n)} ${Math.round(n) === 1 ? 'dag' : 'dagar'}`;
+
+function ndFelStart(){
+  const F = ndF();
+  FELREL = F.release || '–';
+  // Sidorna i navet, inte bara utkastets vyer: /personal, /logg, /lonekostnad och nattjobbets steg.
+  Object.values(NDVY).forEach(([n, h]) => { const k = h.slice(1).split('/')[0]; if (k && !(k in FELSIDA)) FELSIDA[k] = n; });
+  Object.assign(FELSIDA, {lonekostnad:'Lönekostnad', api:'Nattjobbet', sok:'Sök', nav2:'Nav 2.0', personal:'Anställda'});
+  FELR.length = 0;
+  F.rader.forEach(r => {
+    const vem = ndFNamn(r.vemId) || (r.kind === 'manual' ? 'Okänd' : null);
+    const igen = r.kind === 'automatic' && r.status === 'closed' && !!r.handAt && r.senast > r.handAt;
+    FELR.push({id:r.id, kind:r.kind, msg:r.kind === 'automatic' ? (r.message || r.rubrik) : (r.message || ''), harMsg:!!r.message, stack:r.stack || '', body:r.body || r.rubrik,
+      path:r.path, digest:r.digest || '', ant:r.ant, pers:r.pers, dagar:r.dagar || [], forst:ndFNar(r.forst), senast:ndFNar(r.senast, true), senastLang:ndFNar(r.senast),
+      status:r.status, blocking:r.blocking, igen, losning:r.losning || 'Avslutad utan kommentar.', handNar:r.handAt ? ndFNar(r.handAt) : '',
+      vem, nar:ndFNar(r.forst), pek:r.pek, webb:ndFelWebb(r.ua), release:r.release, tar:ndFNamn(r.tarId),
+      svar:r.svar.map(m => [ndFNamn(m.avId) || 'Okänd', ndFNar(m.at), m.text]),
+      kant:r.kant || undefined, titel:r.titel, foljer:r.foljer, foljare:r.foljare,
+      // "Fungerar det nu?" ställs på en avslutad egen rapport tills den är besvarad.
+      fraga:r.status === 'closed' && r.kind === 'manual' && !r.bekraftad, tackad:!!(r.bekraftad && r.bekraftad.ok),
+      drabbade:null});
+  });
+  // Kända fel som läsaren inte själv ser i kön: bara rubriken och rådet kön skrivit för alla.
+  F.kanda.forEach(k => {
+    const r = FELR.find(x => x.id === k.id);
+    if (r){ r.drabbade = k.drabbade - (k.foljer ? 1 : 0); return; }
+    // Kön ser redan alla rader; ett känt fel utanför de 200 senaste visas där inte heller.
+    if (F.hanterar) return;
+    FELR.push({id:k.id, kind:k.kind, msg:k.titel, body:k.titel, stack:'', path:k.path, digest:'', ant:0, pers:null, dagar:[], forst:'', senast:'', status:k.status, blocking:false,
+      igen:false, losning:'', vem:null, nar:'', pek:null, webb:'–', svar:[], kant:k.kant, titel:k.titel, foljer:k.foljer, drabbade:k.drabbade - (k.foljer ? 1 : 0), annans:true});
+  });
+  FELR.forEach(r => { if (r.drabbade === null) r.drabbade = r.kind === 'automatic' ? (r.pers || 1) : 1; });
+}
+// Följda fel och vald rad sätts när vyn initieras, inte från utkastets exempel.
+const _ndFelSt = felSt;
+felSt = function(){
+  const forst = !S.felInit; _ndFelSt();
+  if (!ndF() || !forst) return;
+  S.felSel = null; S.felOcksa = {};
+  FELR.forEach(r => { if (r.foljer) S.felOcksa[r.id] = true; });
+};
+// Kön är för den som hanterar den (sales_manager, ceo, admin), som på /fel.
+const ndFelHanterar = () => ndF() ? ndF().hanterar : S.role === 'chef';
+
+/* ---------- Detaljen: navets fält där utkastet hade exempel ---------- */
+const _ndFelDetalj = felDetalj;
+felDetalj = function(r){
+  let h = _ndFelDetalj(r); if (!ndF()) return h;
+  if (r.kind === 'automatic'){
+    h = h.replace(/Först sett i version [^,<]*, ([^<]*)<\/span>/, (m, f) => `Först sett ${f}${r.release ? ` · senast i version ${esc(r.release)}` : ''}</span>`);
+    if (!r.dagar.length) h = h.replace('<div class="felbars" title="Träffar per dag, sex dagar"></div>', '<p class="muted felhint">Träffar per dag och antal personer räknas från det att Nav loggar varje förekomst.</p>');
+    // Felgränsen i webbläsaren skickar bara felkoden och sidan, inget meddelande (repots /api/fel).
+    if (!r.harMsg) h = h.replace(`<pre class="felkod">${esc(r.msg)}</pre>`, '<p class="muted felhint">Felet fångades i webbläsaren. Då sparas bara felkoden och sidan, inget felmeddelande.</p>');
+    if (!r.stack) h = h.replace(/<details class="felstack"><summary>Stack<\/summary><pre class="felkod"><\/pre><\/details>/, '');
+    if (!r.digest) h = h.replace(/<div><dt>Felkod<\/dt><dd class="num"><\/dd><\/div>/, '');
+  }
+  return h;
+};
+
+/* ---------- Driftkortet: nattjobbets riktiga kvitto ---------- */
+const _ndFelJobbKort = felJobbKort;
+felJobbKort = function(){
+  if (!ndF()) return _ndFelJobbKort();
+  const d = ndF().drift; if (!d) return '';
+  const fallna = d.steg.filter(s => !s.ok), gront = d.lage === 'ok' && d.helt;
+  const etikett = {ok:'Nattjobbet kördes som det skulle', forsenat:'Nattjobbet har inte kört på över ett dygn', aldrig:'Nattjobbet har aldrig lämnat något kvitto'}[d.lage];
+  const pill = gront ? `<span class="pill t-ok">${I('check')}Alla ${d.steg.length} gick igenom</span>` : d.lage === 'ok' ? `<span class="pill t-signal">${fallna.length} av ${d.steg.length} föll</span>` : `<span class="pill t-danger">${I('fel')}Larmar</span>`;
+  return `<section class="card">${note(235)}<div class="chead"><h2>Nattjobbet</h2>${pill}</div>
+    ${d.lage === 'ok' ? '' : `<p class="muted felhint">${esc(etikett)}.</p>`}
+    ${d.ts ? `<dl class="tidl"><div><dt>Senast kört</dt><dd>${esc(ndFNar(d.ts))}${d.timmar !== null ? ` · för ${String(d.timmar).replace('.', ',')} timmar sedan` : ''}</dd></div>${d.sekunder !== null ? `<div><dt>Körtid</dt><dd>${String(d.sekunder).replace('.', ',')} s</dd></div>` : ''}</dl>` : ''}
+    <ul class="feljobb">${d.steg.map(s => `<li class="${s.ok ? 'ok' : 'fel'}">${I(s.ok ? 'check' : 'fel')}<span>${esc(s.l)}</span><small class="muted">${esc(s.text)}</small></li>`).join('')}</ul>
+    <p class="muted felhint">${d.ts ? 'Kortet läser kvittot i händelseloggen. Kördes jobbet inte i natt blir kortet rött här och på startsidan, för en vakt som också körs av cron hade tystnat samtidigt.' : 'Det finns inget kvitto alls i händelseloggen. Antingen har jobbet aldrig kört, eller så kör cron-posten inte.'}</p></section>`;
+};
+
+/* ---------- Säljarens sida: kända fel och vad rapporterna gjort ---------- */
+const _ndFelSaljare = felSaljare;
+felSaljare = function(){
+  let h = _ndFelSaljare(); if (!ndF()) return h;
+  if (!/class="felkand"/.test(h)) h = h.replace('<p class="muted felhint">Står felet här', '<p class="muted">Inga kända fel just nu.</p><p class="muted felhint">Står felet här');
+  return h;
+};
+// Siffrorna i "Det här har rapporterna gjort" (fel_statistik), i utkastets meningar.
+function ndFelStatHtml(){
+  const s = ndF().stat; if (!s) return null;
+  const d = new Date(s.sedan + 'T12:00:00Z');
+  return {lagade:s.lagade, sedan:`${d.getUTCDate()} ${FRMK[d.getUTCMonth() + 1]}`, auto:s.automatiska, mina:s.mina,
+    hint:s.lagade30 ? `Median från rapport till lagat: ${ndFDagar(s.medianDagar)}.${s.medianDagarStoppande === null ? '' : s.medianDagarStoppande < 1 ? ' Ett fel som stoppar någon lagas oftast samma dag.' : ` Ett fel som stoppar någon lagas på ${ndFDagar(s.medianDagarStoppande)} i median.`}` : 'Inget fel har lagats de senaste 30 dagarna.'};
+}
+function ndFelMedian(){ const s = ndF().stat; return s && s.lagade30 ? (s.medianDagar < 1 ? '<1 d' : `${Math.round(s.medianDagar)} d`) : '–'; }
+function ndFelMedianSub(){ const s = ndF().stat; return s && s.lagade30 ? 'median, 30 dagar' : 'inget lagat på 30 dagar'; }
+
+/* ---------- Skrivningar: /nav2/fel ---------- */
+async function ndFelPost(handling, data, ladda = true){
+  try {
+    const r = await fetch('/nav2/fel', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
+    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    if (s.ok){ toast(s.ok); if (ladda) setTimeout(() => location.reload(), 600); return s; }
+    toast(s.fel || 'Det gick inte att spara.'); return s;
+  } catch(_){ toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
+}
+const ndFelSida = () => '/' + (S.felSida === 'hem' ? '' : S.felSida || '');
+document.addEventListener('click', e => {
+  if (!ndF()) return;
+  const b = e.target.closest && e.target.closest('button, a'); if (!b || !b.dataset) return;
+  const d = b.dataset, stopp = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+  if (b.matches('[data-go="/fel"]')){ stopp(); felSt(); if (ndFelHanterar()) felGa(); else felRapportera(); return; }
+  if (d.felskicka !== undefined){
+    stopp(); const text = S.felText.trim(); if (!text) return;
+    // Panelen visar "Tack, den är skickad" först när navet sparat rapporten.
+    ndFelPost('rapportera', {text, sida:ndFelSida(), blocking:!!S.felBlock, pek:S.felPek || ''}, false).then(s => { if (s.ok) felClick(b, {preventDefault(){}}); });
+    return;
+  }
+  if (d.felocksa){ stopp(); const id = d.felocksa; ndFelPost('folj', {id}, false).then(s => { if (!s.ok) return; S.felOcksa[id] = true; if (S.felOpen) renderFelPanel(); if (S.view === 'fel') render(); }); return; }
+  if (S.view !== 'fel'){
+    if (b.closest('.felkrasch') && b.dataset.act === 'toast'){ stopp(); ndFelBeskriv(); }
+    return;
+  }
+  if (d.feltack){ stopp(); ndFelPost('bekrafta', {id:d.feltack, ok:true}); return; }
+  if (d.felinte){ stopp(); ndFelPost('bekrafta', {id:d.felinte, ok:false}); return; }
+  if (d.felstatus){ stopp(); const [id, status] = d.felstatus.split('|'); ndFelPost('status', {id, status}); return; }
+  if (d.feltar){ stopp(); ndFelPost('ta', {id:d.feltar}); return; }
+  if (d.felsvara){ stopp(); const txt = (S.felSvarUtk[d.felsvara] || '').trim(); if (!txt){ toast('Skriv något först.'); return; } ndFelPost('svara', {id:d.felsvara, text:txt}); return; }
+  if (d.felavsluta){ stopp(); ndFelPost('status', {id:d.felavsluta, status:'closed', losning:(S.felLosn[d.felavsluta] || '').trim()}); return; }
+  // Öppna sidan: en sida med ett id i sökvägen öppnas på listan den hör till.
+  if (d.felsida){ stopp(); ndGa(d.felsida.split('/:')[0] || '/'); return; }
+  if (b.closest('.felkrasch') && b.dataset.act === 'toast'){ stopp(); ndFelBeskriv(); return; }
+}, true);
+
+/* ---------- När sidan går sönder: Nav skickar felet själv ---------- */
+// Visningen på felsidan ("Visa hur det ser ut") har ingen felkod. Ett riktigt fel har det.
+function ndFelBeskriv(){
+  const k = S.ndFelKrasch, text = (document.getElementById('felKr') || {}).value || '';
+  if (!k){ toast('Det här är en visning av felsidan. När en sida går sönder på riktigt hamnar beskrivningen på samma rad som felet Nav fångade.'); return; }
+  if (!text.trim()){ toast('Skriv några ord först.'); return; }
+  ndFelPost('beskriv', {digest:k.digest, sida:k.sida, text}, false).then(s => { if (s.ok){ S.ndFelKrasch = null; document.getElementById('ndFelOv')?.remove(); } });
+}
+const _ndFelKrasch = felKraschHtml;
+felKraschHtml = function(){
+  const h = _ndFelKrasch(); if (!ndF()) return h;
+  const k = S.ndFelKrasch;
+  return h.replace(/Felkod \d+ · följer med automatiskt/, k ? `Felkod ${esc(k.digest)} · följer med automatiskt` : 'Felkoden följer med automatiskt')
+    .replace('placeholder="Till exempel: jag öppnade order #1491 från startsidan"', 'placeholder="Till exempel: jag öppnade en order från startsidan"');
+};
+// Utkastets egna fel går samma väg som navets felgräns, med meddelandet. I läsläge skickas inget.
+const ndFelSkickade = new Set();
+function ndFelFangat(message, stack){
+  if (!ndF() || !ndF().skriv) return;
+  const nyckel = String(message).slice(0, 200); if (ndFelSkickade.has(nyckel)) return; ndFelSkickade.add(nyckel);
+  const sida = '/nav2' + (S.view && S.view !== 'hem' ? '/' + S.view : '');
+  fetch('/nav2/fel', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, keepalive:true, body:JSON.stringify({handling:'krasch', message:String(message), stack:String(stack || ''), sida})})
+    .then(r => r.json()).then(s => {
+      if (!s.digest) return;
+      S.ndFelKrasch = {digest:s.digest, sida};
+      if (document.getElementById('ndFelOv')) return;
+      const el = document.createElement('div'); el.id = 'ndFelOv'; el.innerHTML = felKraschHtml(); document.body.appendChild(el);
+      el.addEventListener('click', e => { if (e.target.classList.contains('felov') || (e.target.closest && e.target.closest('[data-felkraschstang]'))){ e.stopPropagation(); el.remove(); S.ndFelKrasch = null; render(); } });
+    }).catch(() => {});
+}
+window.addEventListener('error', e => ndFelFangat(e.message || 'Okänt fel', e.error && e.error.stack));
+window.addEventListener('unhandledrejection', e => ndFelFangat((e.reason && e.reason.message) || String(e.reason), e.reason && e.reason.stack));
+
+if (ndF()){ ndFelStart(); NDKOPPLAD.add('fel'); }
 
 /* Start */
 try { const th = localStorage.getItem('nav2-theme'); if (th && th !== 'auto'){ document.documentElement.setAttribute('data-theme', th); S.theme = th; document.querySelectorAll('#themeSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.themeSet === th))); } } catch(_){}

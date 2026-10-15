@@ -34,6 +34,9 @@ behörigheter som här: du ser bara det du får se.
   historiken och, för säljchef, VD och ekonomi, laget och perioderna.
 - **Kalendern**: din kalender och, efter delningsnivån, kollegornas.
 - **Ärenden**, med svarstiden som navet lovar.
+- **Fel**: dina felrapporter och, för den som hanterar kön, kön och
+  nattjobbets kvitto steg för steg. Kända fel med råd, "samma för mig" och
+  svar i tråden finns nu i navet.
 
 Vyerna som inte är kopplade säger det, och har en knapp till samma sak här.
 Ingenting påhittat visas.

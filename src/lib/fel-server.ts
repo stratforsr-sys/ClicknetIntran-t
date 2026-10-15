@@ -39,6 +39,8 @@ export type Felinlagg = {
   blocking?: boolean;
   reporterId?: string | null;
   userAgent?: string | null;
+  /** 0082, Nav 2.0: vad personen pekade på, i ord. Bara manuella rapporter. */
+  pointedAt?: string | null;
 };
 
 /** Vercels commit-sha. Utan den gar det inte att se om ett fel kom tillbaka. */
@@ -74,7 +76,11 @@ export async function skrivFel(inlagg: Felinlagg): Promise<boolean> {
     };
 
     if (inlagg.kind === "manual") {
-      const { error } = await db.from("error_report").insert(rad);
+      // Kolumnen skickas bara med när den har ett värde, så att en rapport
+      // utan pekning ser ut exakt som före 0082.
+      const { error } = await db
+        .from("error_report")
+        .insert(inlagg.pointedAt ? { ...rad, pointed_at: inlagg.pointedAt.slice(0, 300) } : rad);
       return !error;
     }
 
