@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fullName, hasRole, type CurrentUser } from "@/lib/auth";
+import { SKRIVLAGE } from "./skrivlage";
 
 /**
  * Nav 2.0: Ärenden, med samma läsningar som /arenden och /arenden/[id].
@@ -10,7 +11,8 @@ import { fullName, hasRole, type CurrentUser } from "@/lib/auth";
  * ger personen sina egna ärenden, och säljchef och VD de övriga — de
  * konfidentiella bara till dem. Kategorierna med svarstid och förval för
  * konfidentiellt är `case_category`, fristen är `due_at` som fryses vid
- * upplägget. Inget läskvitto finns i navet, och inget sådant visas.
+ * upplägget. Läskvittot, "löste det?", påminnelser, kopplingar, bilagor och
+ * vad ärenden lett till är 0081.
  */
 
 export type NdArende = {
@@ -27,6 +29,16 @@ export type NdArende = {
   losning: string | null;
   eskalerad: boolean;
   msg: { avId: string; at: string; text: string }[];
+  /** 0081: vem som läst och när. */
+  lasta: { avId: string; at: string }[];
+  /** 0081: personens svar på "Löste det här ditt ärende?", eller null. */
+  bekraftat: { lost: boolean; at: string } | null;
+  /** 0081: chefens påminnelser, senaste först. */
+  paminnelser: string[];
+  /** 0081: det ärendet gäller — en order, provisionen, ett bokat samtal. */
+  kopplingar: { kind: string; ref: string; label: string }[];
+  /** 0081: bilagor. Öppnas via /nav2/arenden (handling "visa"). */
+  bilagor: { id: string; namn: string; kb: number; avId: string; at: string }[];
 };
 
 export type NdArenden = {
@@ -35,6 +47,10 @@ export type NdArenden = {
   arenden: NdArende[];
   /** Namnen läsaren får se (RLS), för avsändare, handläggare och "Lägg upp åt någon". */
   personer: { id: string; namn: string }[];
+  /** 0081: det ledningen ändrat efter ärenden. Alla anställda ser listan. */
+  utfall: { fraga: string; utfall: string; at: string }[];
+  /** Om vyn får spara (src/lib/nav2/skrivlage.ts). */
+  skriv: boolean;
 };
 
 export async function byggArenden(supabase: SupabaseClient, user: CurrentUser): Promise<NdArenden> {
@@ -50,9 +66,16 @@ export async function byggArenden(supabase: SupabaseClient, user: CurrentUser): 
     supabase.from("employee").select("id, first_name, last_name").neq("status", "offboarded"),
   ]);
   const ids = (arenden ?? []).map((a) => a.id as string);
-  const { data: meddelanden } = ids.length
-    ? await supabase.from("case_message").select("case_id, author_id, body, created_at").in("case_id", ids).order("created_at")
-    : { data: [] as { case_id: string; author_id: string; body: string; created_at: string }[] };
+  const tom = { data: [] as Record<string, unknown>[] };
+  const [{ data: meddelanden }, { data: lasta }, { data: bekr }, { data: pam }, { data: lankar }, { data: bilagor }, { data: utfall }] = await Promise.all([
+    ids.length ? supabase.from("case_message").select("case_id, author_id, body, created_at").in("case_id", ids).order("created_at") : tom,
+    ids.length ? supabase.from("hr_case_read").select("case_id, employee_id, read_at").in("case_id", ids) : tom,
+    ids.length ? supabase.from("hr_case_confirmation").select("case_id, solved, confirmed_at").in("case_id", ids) : tom,
+    ids.length ? supabase.from("hr_case_reminder").select("case_id, sent_at").in("case_id", ids).order("sent_at", { ascending: false }) : tom,
+    ids.length ? supabase.from("hr_case_link").select("case_id, kind, ref, label").in("case_id", ids) : tom,
+    ids.length ? supabase.from("hr_case_attachment").select("id, case_id, filename, size_bytes, uploaded_by, uploaded_at").in("case_id", ids).order("uploaded_at") : tom,
+    supabase.from("case_outcome").select("fraga, utfall, created_at").order("created_at", { ascending: false }).limit(20),
+  ]);
 
   return {
     hanterare,
@@ -73,7 +96,14 @@ export async function byggArenden(supabase: SupabaseClient, user: CurrentUser): 
       msg: (meddelanden ?? [])
         .filter((m) => m.case_id === a.id)
         .map((m) => ({ avId: m.author_id as string, at: m.created_at as string, text: m.body as string })),
+      lasta: (lasta ?? []).filter((r) => r.case_id === a.id).map((r) => ({ avId: r.employee_id as string, at: r.read_at as string })),
+      bekraftat: (() => { const r = (bekr ?? []).find((x) => x.case_id === a.id); return r ? { lost: Boolean(r.solved), at: r.confirmed_at as string } : null; })(),
+      paminnelser: (pam ?? []).filter((r) => r.case_id === a.id).map((r) => r.sent_at as string),
+      kopplingar: (lankar ?? []).filter((r) => r.case_id === a.id).map((r) => ({ kind: r.kind as string, ref: r.ref as string, label: r.label as string })),
+      bilagor: (bilagor ?? []).filter((r) => r.case_id === a.id).map((r) => ({ id: r.id as string, namn: r.filename as string, kb: Math.max(1, Math.round(Number(r.size_bytes) / 1024)), avId: r.uploaded_by as string, at: r.uploaded_at as string })),
     })),
     personer: (personal ?? []).map((p) => ({ id: p.id as string, namn: fullName(p) })).sort((a, b) => a.namn.localeCompare(b.namn, "sv")),
+    utfall: (utfall ?? []).map((u) => ({ fraga: u.fraga as string, utfall: u.utfall as string, at: u.created_at as string })),
+    skriv: SKRIVLAGE.arenden,
   };
 }

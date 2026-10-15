@@ -26185,83 +26185,149 @@ if (ndK()){ ndKalStart(); NDKOPPLAD.add('kalender'); }
    NAV 2.0 I RIKTIGT LÄGE: ÄRENDEN (prefix nd), v47
 
    ND.arenden (src/lib/nav2/arenden.ts) är hr_case och case_message med den
-   inloggades token, och case_category med svarstid och förval för
-   konfidentiellt. Fristen är navets due_at, fryst vid upplägget.
+   inloggades token, case_category med svarstid och förval för
+   konfidentiellt, och det 0081 lade till för det utkastet har och navet
+   saknade: läskvittot, "Löste det här ditt ärende?", påminnelserna,
+   kopplingarna, bilagorna och "Det här har ärenden lett till".
 
-   Navet har inget läskvitto, ingen fråga om ärendet blev löst, inga bilagor
-   och ingen lista över vad ärenden lett till. De delarna visas inte, eller
-   säger att de inte finns i Nav än. Den som svarar heter säljchefen tills
-   ärendet har en handläggare. Läsläge: skicka, svara, status, handläggare och
-   lösning görs i Nav.
+   Ingen funktion i utkastet är borttagen. Allt som ändrar något går till
+   /nav2/arenden (POST), som gör det med repots egna actions där de finns.
+   Så länge vyn är i läsläge (src/lib/nav2/skrivlage.ts) svarar rutten det,
+   och knappen säger det.
    ===================================================================== */
 
 const ndA = () => ND && ND.arenden;
 const ndANamn = id => { if (!id) return null; if (id === ND.jag.id) return ND.jag.namn; const p = ndA().personer.find(x => x.id === id); return p ? p.namn : null; };
+const ndAId = namn => { if (namn === ND.jag.namn) return ND.jag.id; const p = ndA().personer.find(x => x.namn === namn); return p ? p.id : null; };
 // Utkastets tidsskala (minuter, dag + klockslag i svensk tid) ur en ISO-tid.
 const ndAAbs = iso => KD(ndDagAv(iso)) / 60000 + tmin(ndKl(iso));
 
 function ndArStart(){
-  const A = ndA();
+  const A = ndA(), mig = ND.jag.id;
   Object.keys(ARKAT).forEach(k => delete ARKAT[k]);
   A.kategorier.forEach(k => { ARKAT[k.id] = {l:k.l, h:k.h, konf:k.konf}; });
   ARENDEN.length = 0;
   A.arenden.forEach(a => {
     const vem = ndANamn(a.vemId) || 'Okänd', till = ndANamn(a.tillId);
-    ARENDEN.push({id:a.id, vem, kat:ARKAT[a.kat] ? a.kat : 'other', rubrik:a.rubrik, skapad:ndAAbs(a.skapad), due:ndAAbs(a.due), status:a.status, konf:a.konf, till:till || 'säljchefen', tillId:a.tillId,
-      lost:a.lost ? ndAAbs(a.lost) : null, losning:a.losning || '', eskalerad:a.eskalerad, kontext:null,
-      msg:a.msg.map(m => [ndANamn(m.avId) || 'Okänd', ndAAbs(m.at), m.text])});
+    // Läst: första gången någon annan än den ärendet gäller öppnade det.
+    const andras = a.lasta.filter(r => r.avId !== a.vemId).sort((x, y) => x.at.localeCompare(y.at));
+    const agarens = a.lasta.find(r => r.avId === a.vemId), mitt = a.lasta.find(r => r.avId === mig);
+    const sistaAndra = [...a.msg].reverse().find(m => m.avId !== a.vemId);
+    const kontext = [...a.kopplingar.map(k => k.label), ...a.bilagor.map(b => `Bild: ${b.namn}`)];
+    ARENDEN.push({id:a.id, vem, vemId:a.vemId, kat:ARKAT[a.kat] ? a.kat : 'other', rubrik:a.rubrik, skapad:ndAAbs(a.skapad), due:ndAAbs(a.due), status:a.status, konf:a.konf,
+      till:till || 'säljchefen', tillId:a.tillId, last:andras.length ? ndAAbs(andras[0].at) : undefined,
+      lost:a.lost ? ndAAbs(a.lost) : null, losning:a.losning || '', eskalerad:a.eskalerad, kontext:kontext.length ? kontext : null,
+      bilagor:a.bilagor, msg:a.msg.map(m => [ndANamn(m.avId) || 'Okänd', ndAAbs(m.at), m.text]),
+      // Oläst för personen: ett svar från någon annan efter personens senaste läsning.
+      olast:a.vemId === mig && !!(sistaAndra && (!agarens || agarens.at < sistaAndra.at)),
+      // Oläst för chefen: chefen har inte öppnat ärendet.
+      olastChef:A.hanterare && a.vemId !== mig && !mitt && a.status !== 'resolved',
+      fragaLost:a.status === 'resolved' && !a.bekraftat, bekraftat:a.bekraftat,
+      pamind:a.paminnelser.length ? `${frKort(ndDagAv(a.paminnelser[0]))} ${ndKl(a.paminnelser[0])}` : null});
+    if (a.bekraftat && a.bekraftat.lost) S.arTack.add(a.id);
   });
   ARLEDDE.length = 0;
+  A.utfall.forEach(u => ARLEDDE.push([u.fraga, u.utfall]));
   HANDL = A.hanterare ? ND.jag.namn : 'säljchefen';
 }
-// Rutinförslagen kommer med Rutiner; utkastets exempelrutiner föreslås inte här.
+// Rutinförslagen kommer ur Rutiner; utkastets exempelrutiner föreslås inte innan Rutiner är kopplad.
 const _ndArRutin = arRutin;
 arRutin = t => ndA() && !ndKopplad('rutiner') ? null : _ndArRutin(t);
 
 /* ---------- Namnen: den som svarar, aldrig ett exempelnamn ---------- */
 function ndANamnText(h, till){
   const vem = till && till !== 'säljchefen' ? fornamn(till) : 'säljchefen', Vem = vem.replace(/^./, c => c.toUpperCase());
-  return h.replace(/<b>Du ser när hon läst det<\/b>, när hon svarar/, '<b>Du ser när det besvaras</b>').replace(/ Du ser när hon läst det\./, '').replace(/ · inte läst än/, '')
-    .replace(/Hon godkänner oftast samma dag, och du får en notis\./, '').replace(/när hon svarar/g, 'när det besvaras')
+  return h.replace(/när hon läst det/g, 'när det lästs').replace(/när hon svarar/g, 'när det besvaras').replace(/ Hon godkänner oftast samma dag, och du får en notis\./, '')
     .replace(/Den Johanna lämnar/g, 'Den som Johanna lämnar').replace(/den Johanna eventuellt/g, 'den som Johanna eventuellt')
     .replace(/(>|^|\. )Johanna/g, `$1${Vem}`).replace(/Johannas/g, `${vem}s`).replace(/Johanna/g, vem);
 }
-const _ndArSaljare = arSaljare, _ndArDetalj = arDetalj;
+const _ndArSaljare = arSaljare, _ndArDetalj = arDetalj, _ndArSida = arSidaSaljare, _ndArRad = arRad, _ndArTrad = arTrad;
 arSaljare = function(){ const h = _ndArSaljare(); return ndA() ? ndANamnText(h, null) : h; };
 arDetalj = function(){ const h = _ndArDetalj(); return ndA() ? ndANamnText(h, null) : h; };
-const _ndArRad = arRad;
+arSidaSaljare = function(){
+  const h = _ndArSida(); if (!ndA()) return h;
+  // Listan är navets (case_outcome). Tom lista säger att den är tom.
+  return ndANamnText(h, null).replace('<ul class="tilist"></ul>', '<p class="muted">Inget än. När ledningen ändrar något efter ett ärende står det här.</p>');
+};
 arRad = function(a){ const h = _ndArRad(a); return ndA() ? ndANamnText(h, a.till) : h; };
-const _ndArSida = arSidaSaljare;
-arSidaSaljare = function(){ const h = _ndArSida(); return ndA() ? ndANamnText(h, null).replace(/<section class="card"><div class="chead"><h2>Det här har ärenden lett till<\/h2>[\s\S]*?<\/section>/, '') : h; };
-const _ndArChef = arChef;
-arChef = function(){
-  const h = _ndArChef(); if (!ndA()) return h;
-  return h.replace(/<small>(allt läst|nya sedan i går)<\/small>/, '<small>läskvitto finns inte i Nav än</small>');
+// Bilagorna går att öppna: en signerad länk, som för andra filer i navet.
+arTrad = function(a, saljare){
+  let h = _ndArTrad(a, saljare); if (!ndA()) return h;
+  h = ndANamnText(h, a.till);
+  if (a.bilagor && a.bilagor.length) h = h.replace(/<p class="muted arkon">Kopplat: [^<]*<\/p>/, m => m + `<p class="muted arkon">${a.bilagor.map(b => `<button class="tlink inl" data-ndarbilaga="${a.id}|${b.id}">${I('avtal')}${esc(b.namn)} · ${b.kb} kB</button>`).join(' ')}</p>`);
+  return h;
 };
 const _ndArStat = arStat;
 arStat = function(){
   const h = _ndArStat(); if (!ndA()) return h;
-  return h.replace(/<div class="goalnums" style="margin-top:12px"><span>Bekräftat lösta av den som frågade<\/span><span><b>8<\/b> av 9<\/span><\/div>/, '');
+  const losta = ARENDEN.filter(a => a.status === 'resolved'), bekr = losta.filter(a => a.bekraftat && a.bekraftat.lost).length;
+  return h.replace('<span><b>8</b> av 9</span>', `<span><b>${bekr}</b> av ${losta.length}</span>`);
 };
 // Handläggare: de personer navet visar, med den nuvarande först.
 function ndArHandl(a){ const n = ndA().personer.map(p => p.namn); return [a.till, ...n.filter(x => x !== a.till)]; }
 
-/* ---------- Läsläge: det som ändrar ett ärende görs i Nav ---------- */
-const NDARNAV = {arskicka:() => '/arenden/nytt', arprata:() => '/arenden/nytt', arsvar:id => `/arenden/${id}`, arlos:id => `/arenden/${id}`, arlostnej:id => `/arenden/${id}`, arboka:() => '/kalender'};
-const NDARBARA = ['arlostja', 'arpamin', 'arolast', 'arrutinskriv'];
+/* ---------- Skrivningar: /nav2/arenden ---------- */
+async function ndArPost(handling, data, tyst){
+  try {
+    const r = await fetch('/nav2/arenden', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
+    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    if (s.ok){ if (!tyst){ toast(s.ok); setTimeout(() => location.reload(), 600); } return s; }
+    if (!tyst) toast(s.fel || 'Det gick inte att spara.');
+    return s;
+  } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
+}
+// Bilagor som valts i skrivrutan laddas upp när ärendet är skapat.
+const ndArFiler = [];
+async function ndArLaddaUpp(id){
+  for (const f of ndArFiler.splice(0)){
+    const p = await ndArPost('bilaga-forbered', {id, mime:f.type, storlek:f.size}, true); if (!p.ok || !p.url) continue;
+    const put = await fetch(p.url, {method:'PUT', headers:{'Content-Type':f.type}, body:f}).catch(() => ({ok:false}));
+    if (put.ok) await ndArPost('bilaga-registrera', {id, lager:p.lager, bucket:p.bucket, path:p.path, filId:p.filId, filnamn:f.name}, true);
+  }
+}
+function ndArUtkastData(){
+  const u = arUtk(), kat = arKat(u), text = u.text.trim();
+  const kontext = (u.kontext || []).filter(k => !k.startsWith('Bild: ')).map(k => {
+    const m = /^Order #(\d+)$/.exec(k), o = m && ORDER.find(x => x.nr === +m[1]);
+    return o ? {kind:'order', ref:o.id, label:k} : /^Provisionen i /.test(k) ? {kind:'provision', ref:kIdag().slice(0, 7), label:k} : null;
+  }).filter(Boolean);
+  return {kategori:kat, rubrik:(u.rubrik ?? arRubrik(text)) || ARKAT[kat].l, text, konfidentiellt:arKonf(u), kontext, at:S.role === 'chef' && S.arAt ? ndAId(S.arAt) : ''};
+}
+const NDARBARA = {arboka:'Samtalet bokas när Kalendern får spara.', arrutinskriv:'En rutin av svaret skrivs när Rutiner är kopplad.'};
 document.addEventListener('click', e => {
   if (!ndA() || S.view !== 'arenden') return;
   const b = e.target.closest && e.target.closest('button, a, label'); if (!b || !b.dataset) return;
-  const k = Object.keys(NDARNAV).find(x => b.dataset[x] !== undefined);
-  if (k){ e.preventDefault(); e.stopImmediatePropagation(); location.href = NDARNAV[k](encodeURIComponent(b.dataset[k])); return; }
-  if (NDARBARA.some(x => b.dataset[x] !== undefined)){ e.preventDefault(); e.stopImmediatePropagation(); toast('Det här finns inte i Nav än. Det byggs när Ärenden får spara.'); }
+  const ds = b.dataset, stopp = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+  const text = id => (document.querySelector(`[data-arsvartext="${id}"]`) || {}).value || '';
+  if (ds.arskicka !== undefined || ds.arprata !== undefined){
+    stopp(); const d = ndArUtkastData(); if (!d.text){ toast('Skriv vad det gäller först.'); return; }
+    ndArPost('skapa', d).then(s => { if (s.ok && s.id) ndArLaddaUpp(s.id); }); return;
+  }
+  if (ds.arsvar){ stopp(); if (!text(ds.arsvar).trim()){ toast('Skriv något först.'); return; } ndArPost('svara', {id:ds.arsvar, text:text(ds.arsvar)}); return; }
+  if (ds.arlos){ stopp(); ndArPost('los', {id:ds.arlos, losning:(document.querySelector(`[data-arlosning="${ds.arlos}"]`) || {}).value || ''}); return; }
+  if (ds.arpamin){ stopp(); ndArPost('paminn', {id:ds.arpamin}); return; }
+  if (ds.arolast){ stopp(); ndArPost('olast', {id:ds.arolast}); return; }
+  if (ds.arlostja){ stopp(); ndArPost('bekrafta', {id:ds.arlostja, lost:true}); return; }
+  if (ds.arlostnej){ stopp(); ndArPost('bekrafta', {id:ds.arlostnej, lost:false}); return; }
+  if (ds.ndarbilaga){ stopp(); const [arende, id] = ds.ndarbilaga.split('|'); fetch('/nav2/arenden', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling:'visa', arende, id})}).then(r => r.json()).then(s => { if (s.url) window.open(s.url, '_blank', 'noopener'); else toast(s.fel || 'Bilagan gick inte att öppna.'); }); return; }
+  const k = Object.keys(NDARBARA).find(x => ds[x] !== undefined);
+  if (k){ stopp(); toast(NDARBARA[k]); }
 }, true);
 document.addEventListener('change', e => {
   if (!ndA() || S.view !== 'arenden' || !e.target.dataset) return;
   const ds = e.target.dataset;
-  if (ds.arstatus || ds.artill){ e.stopImmediatePropagation(); location.href = `/arenden/${encodeURIComponent(ds.arstatus || ds.artill)}`; }
-  if (ds.arfil !== undefined){ e.stopImmediatePropagation(); e.target.value = ''; toast('Bilagor på ärenden finns inte i Nav än.'); }
+  if (ds.arstatus){ e.stopImmediatePropagation(); ndArPost('status', {id:ds.arstatus, status:e.target.value}).then(() => render()); }
+  if (ds.artill){ e.stopImmediatePropagation(); ndArPost('tilldela', {id:ds.artill, till:ndAId(e.target.value.split(' ·')[0]) || ''}).then(() => render()); }
+  if (ds.arfil !== undefined && e.target.files && e.target.files[0]){
+    e.stopImmediatePropagation(); const f = e.target.files[0];
+    if (!['application/pdf', 'image/jpeg', 'image/png'].includes(f.type) || f.size > 10 * 1024 * 1024){ toast('Bara PDF, JPEG och PNG, högst 10 MB.'); return; }
+    ndArFiler.push(f); const u = arUtk(); u.kontext = [...u.kontext, `Bild: ${f.name}`]; arSpara(); arDetaljUppdatera();
+    toast(`${f.name} följer med när ärendet skickas.`);
+  }
 }, true);
+// Chefen som öppnar ett ärende har läst det. I läsläge sparas det inte, och det sägs inte heller.
+const _ndArDetaljChef = arDetaljChef;
+arDetaljChef = function(a){ if (ndA() && ndA().skriv && a.olastChef) ndArPost('last', {id:a.id}, true); return _ndArDetaljChef(a); };
 
 if (ndA()){ ndArStart(); NDKOPPLAD.add('arenden'); }
 

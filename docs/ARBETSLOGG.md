@@ -5,6 +5,29 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-15 · Nav 2.0 på /nav2, pass 8: Ärenden (gren `nav2-utkast`, `59bb4cf`)
+
+`src/lib/nav2/arenden.ts` (`byggArenden`) läser som `/arenden` och
+`/arenden/[id]`: `hr_case` (RLS — egna, och för säljchef och VD de övriga och
+de konfidentiella), `case_message`, `case_category` (svarstid och förval för
+konfidentiellt) och namnen läsaren får se. Fristen är `due_at`, fryst vid
+upplägget.
+
+Utkastets exempelärenden, exempelhandläggarna ("Lena Holm · ekonomi",
+"Ledningen"), "Det här har ärenden lett till", "8 av 9 bekräftat lösta" och
+exempelkontexten (order #1482) är borta. Navet har inget läskvitto, så
+steget Läst tänds aldrig och Olästa säger att det inte finns. Den som svarar
+heter säljchefen tills ärendet har en handläggare. Rutinförslag i
+skrivrutan kommer med Rutiner.
+
+Läsläge: skicka, svara, status, handläggare, lösning och "boka en kvart"
+leder till Nav; påminn, oläst, "löste det" och bilagor säger att de inte
+finns i Nav än.
+
+Provat lokalt (`ndprov/ar.mjs`, RLS) som Zen (tre lösta ärenden) och Fredrik
+(inga), och i previewen som Zen tillsammans med Order, Provision och
+Kalendern: inga fel, inga exempelnamn.
+
 ## 2026-10-14 · Nav 2.0 på /nav2, pass 7: Kalendern (gren `nav2-utkast`, `691902e`)
 
 `src/lib/nav2/kalender.ts` (`byggKalender`) är `hamtaLeveranskalender` för den
