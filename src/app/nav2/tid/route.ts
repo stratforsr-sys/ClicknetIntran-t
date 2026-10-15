@@ -310,7 +310,7 @@ export async function POST(request: Request) {
           const s = gallandeSchema((alla ?? []).filter((x) => x.weekday === v && x.scope !== "employee"), p.id as string, (p.team_id as string | null) ?? null, idag)[0];
           if (!s) continue;
           const k = `${s.start_time}|${s.end_time}|${s.tol_late}`;
-          const g = grupper.get(k) ?? { dagar: [], start: String(s.start_time).slice(0, 5), slut: String(s.end_time).slice(0, 5), tol: s.tol_late ?? 1 };
+          const g = grupper.get(k) ?? { dagar: [] as number[], start: String(s.start_time).slice(0, 5), slut: String(s.end_time).slice(0, 5), tol: s.tol_late ?? 1 };
           g.dagar.push(v);
           grupper.set(k, g);
         }
@@ -372,7 +372,7 @@ export async function POST(request: Request) {
           const s = pa.filter((r) => r.scope === scope && r.weekday === v && r.valid_from <= imorgon).sort((a, c) => String(c.valid_from).localeCompare(String(a.valid_from)))[0];
           if (!s) continue;
           const k = `${s.start_time}|${s.end_time}`;
-          const g = grupper.get(k) ?? { dagar: [], start: String(s.start_time).slice(0, 5), slut: String(s.end_time).slice(0, 5) };
+          const g = grupper.get(k) ?? { dagar: [] as number[], start: String(s.start_time).slice(0, 5), slut: String(s.end_time).slice(0, 5) };
           g.dagar.push(v);
           grupper.set(k, g);
         }
