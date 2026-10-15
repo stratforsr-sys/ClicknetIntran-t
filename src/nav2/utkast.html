@@ -15364,7 +15364,7 @@ function renderPvView(){
     <div role="tabpanel" aria-labelledby="pvt-${f}">${f === 'laget' ? pvLagetVy() : f === 'manad' ? pvPersonVy(chef && S.pvVem === 'laget' ? ME.chef.namn : S.pvVem) : f === 'historik' ? pvHistorikVy(ME.saljare.namn) : f === 'perioder' ? pvPerioderVy() : f === 'mal' ? pvMalVy() : pvReglerVy()}</div>`;
 }
 function pvUtbText(m){
-  if (!ND && m < '2026-08') return 'Månaden är från tiden före provisionsmotorn.';
+  if (ND ? m < NDPVFORE : m < '2026-08') return 'Månaden är från tiden före provisionsmotorn.';
   const p = (S.pvPerioder || {})[m];
   if (p && p.status === 'utbetald') return `${pvStor(pvManLang(m))} är utbetald ${p.ut}.`;
   return `${pvStor(pvManLang(m))} betalas ut med ${pvManNamn(pvNastaMan(m))}lönen.`;
@@ -15373,11 +15373,11 @@ function pvManader(){ const ut = []; let m = PVMAN; for (let i = 0; i < 12; i++)
 function pvValjare(chef){
   const man = pvManader(), i = man.indexOf(S.pvM);
   const vem = chef ? `<label class="pv-sel"><span class="sr">Vems siffror</span><select data-pvvem aria-label="Vems siffror">${[['laget', 'Laget'], [ME.chef.namn, 'Min provision'], ...PVSALJARE.map(v => [v, v])].map(([v, l]) => `<option value="${esc(v)}" ${S.pvVem === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>` : '';
-  return `${vem}<span class="pv-mannav">${note(330)}<button class="ibtn" data-pvmsteg="1" ${i >= man.length - 1 ? 'disabled' : ''} aria-label="Föregående månad" title="Föregående månad (←)">‹</button><label class="pv-sel"><span class="sr">Period</span><select data-pvm aria-label="Period">${man.map(m => `<option value="${m}" ${S.pvM === m ? 'selected' : ''}>${pvStor(pvManLang(m))}${m === PVMAN ? ' · pågår' : (S.pvPerioder[m] ? (S.pvPerioder[m].status === 'utbetald' ? ' · utbetald' : ' · fastställd') : !ND && m < '2026-08' ? ' · före motorn' : '')}</option>`).join('')}</select></label><button class="ibtn" data-pvmsteg="-1" ${i <= 0 ? 'disabled' : ''} aria-label="Nästa månad" title="Nästa månad (→)">›</button></span>`;
+  return `${vem}<span class="pv-mannav">${note(330)}<button class="ibtn" data-pvmsteg="1" ${i >= man.length - 1 ? 'disabled' : ''} aria-label="Föregående månad" title="Föregående månad (←)">‹</button><label class="pv-sel"><span class="sr">Period</span><select data-pvm aria-label="Period">${man.map(m => `<option value="${m}" ${S.pvM === m ? 'selected' : ''}>${pvStor(pvManLang(m))}${m === PVMAN ? ' · pågår' : (S.pvPerioder[m] ? (S.pvPerioder[m].status === 'utbetald' ? ' · utbetald' : ' · fastställd') : (ND ? m < NDPVFORE : m < '2026-08') ? ' · före motorn' : '')}</option>`).join('')}</select></label><button class="ibtn" data-pvmsteg="-1" ${i <= 0 ? 'disabled' : ''} aria-label="Nästa månad" title="Nästa månad (→)">›</button></span>`;
 }
 function pvLage(m){
   const p = (S.pvPerioder || {})[m];
-  if (!ND && m < '2026-08') return ['neutral', 'Historik'];
+  if (ND ? m < NDPVFORE : m < '2026-08') return ['neutral', 'Historik'];
   if (!p) return ['live', 'Öppen, räknas live'];
   return p.status === 'utbetald' ? ['ok', 'Utbetald'] : ['brand', 'Fastställd'];
 }
@@ -15437,7 +15437,7 @@ function pvTrappaVy(u, pr, t){
 }
 function pvPanelFore(u){
   return `<section class="pv-panel"><div class="pv-ph"><span class="pv-etikett">${esc(u.vem === ME.saljare.namn ? 'Du' : u.vem)} · ${pvManLang(u.m)}</span><span class="pv-lage neutral"><i></i>Historik</span></div>
-    <div class="pv-pk"><div><p class="pv-stor num">${u.summa ? kr(u.summa) : '–'}</p><p class="pv-mening">Före augusti 2026 fanns ingen provisionsmotor. Summan kommer ur lönesystemet och går inte att bryta ned i order, nivå eller bonusar.</p></div></div></section>`;
+    <div class="pv-pk"><div><p class="pv-stor num">${u.summa ? kr(u.summa) : '–'}</p><p class="pv-mening">Före ${ND ? `${FRMAN[+NDPVFORE.slice(5, 7)]} ${NDPVFORE.slice(0, 4)}` : 'augusti 2026'} fanns ingen provisionsmotor. Summan kommer ur lönesystemet och går inte att bryta ned i order, nivå eller bonusar.</p></div></div></section>`;
 }
 function pvVarningVy(u, jag){
   const v = u.varn; if (!v) return '';
@@ -15551,8 +15551,8 @@ function pvChefFakta(u){
 /* ---------- Laget (chefen) ---------- */
 function pvLagetVy(){
   const m = S.pvM;
-  if (!ND && m < '2026-08') return `<section class="pv-panel"><div class="pv-ph"><span class="pv-etikett">Laget · ${pvManLang(m)}</span><span class="pv-lage neutral"><i></i>Historik</span></div><div class="pv-pk"><div><p class="pv-stor num">–</p><p class="pv-mening">Före augusti 2026 fanns ingen provisionsmotor. Lagets siffror finns i lönesystemet.</p></div></div></section>`;
-  const L = pvLaget(m), lage = pvLage(m), live = m === PVMAN, F = (ND ? pvManader().includes(pvForraMan(m)) : pvForraMan(m) >= '2026-08') ? pvLaget(pvForraMan(m)) : null;
+  if (ND ? m < NDPVFORE : m < '2026-08') return `<section class="pv-panel"><div class="pv-ph"><span class="pv-etikett">Laget · ${pvManLang(m)}</span><span class="pv-lage neutral"><i></i>Historik</span></div><div class="pv-pk"><div><p class="pv-stor num">–</p><p class="pv-mening">Före ${ND ? `${FRMAN[+NDPVFORE.slice(5, 7)]} ${NDPVFORE.slice(0, 4)}` : 'augusti 2026'} fanns ingen provisionsmotor. Lagets siffror finns i lönesystemet.</p></div></div></section>`;
+  const L = pvLaget(m), lage = pvLage(m), live = m === PVMAN, F = (ND ? pvManader().includes(pvForraMan(m)) && pvForraMan(m) >= NDPVFORE : pvForraMan(m) >= '2026-08') ? pvLaget(pvForraMan(m)) : null;
   // Samma sort för alla: grundprovision plus volymbonus, i samma takt. K&V och övrig bonus skrivs inte fram.
   const takt = live ? L.rader.reduce((s, u) => { const p = pvTakt(u).prognos; return s + (p ? p.totalt : u.grund + u.volym); }, 0) : null;
   const vantar = ORDER.filter(o => o.st === 'inskickad' && o.samtal);
@@ -25865,6 +25865,8 @@ function ndSpelRita(){
   const nu = ndSegNu(c); if (nu !== sp.seg){ sp.seg = nu; kkRender(); }
 }
 ndLjud.addEventListener('timeupdate', () => { if (S.kkSpel){ S.kkSpel.t = ndLjud.currentTime; ndSpelRita(); } });
+// "Du lyssnade" först när ljudet faktiskt spelar: det är då /filer har loggat öppningen.
+ndLjud.addEventListener('playing', () => { const sp = S.kkSpel; if (sp && !S.kkLyssnat[sp.id]){ S.kkLyssnat[sp.id] = hm(now()); kkRender(); } });
 ndLjud.addEventListener('ended', () => { if (S.kkSpel){ S.kkSpel.igang = false; kkRender(); } });
 ndLjud.addEventListener('error', () => { if (S.kkSpel){ S.kkSpel.igang = false; kkRender(); toast('Inspelningen gick inte att spela. Den kan vara gallrad, eller så saknar du behörighet.'); } });
 kkSpela = function(id){
@@ -25873,13 +25875,12 @@ kkSpela = function(id){
   if (S.kkSpel && S.kkSpel.id === id && S.kkSpel.igang){ ndLjud.pause(); S.kkSpel.igang = false; kkRender(); return; }
   if (!S.kkSpel || S.kkSpel.id !== id){ ndLjud.src = `/filer/${encodeURIComponent(c.fil)}`; S.kkSpel = {id, t:0, igang:true, hast:S.kkHast || 1, seg:-1}; } else S.kkSpel.igang = true;
   ndLjud.playbackRate = S.kkSpel.hast;
-  if (!S.kkLyssnat[id]) S.kkLyssnat[id] = hm(now());
   ndLjud.play().catch(() => {}); kkRender();
 };
 function ndSok(id, sek, spela){
   const o = ORDER.find(x => x.nr === S.ordOpen), c = o && kkData(o.org).samtal.find(x => x.id === id); if (!c || !c.fil) return;
   if (!S.kkSpel || S.kkSpel.id !== id){ ndLjud.src = `/filer/${encodeURIComponent(c.fil)}`; S.kkSpel = {id, t:0, igang:false, hast:S.kkHast || 1, seg:-1}; }
-  const satt = () => { ndLjud.currentTime = Math.max(0, sek); S.kkSpel.t = ndLjud.currentTime; if (spela){ S.kkSpel.igang = true; if (!S.kkLyssnat[id]) S.kkLyssnat[id] = hm(now()); ndLjud.play().catch(() => {}); } kkRender(); };
+  const satt = () => { ndLjud.currentTime = Math.max(0, sek); S.kkSpel.t = ndLjud.currentTime; if (spela){ S.kkSpel.igang = true; ndLjud.play().catch(() => {}); } kkRender(); };
   if (ndLjud.readyState >= 1) satt(); else { ndLjud.addEventListener('loadedmetadata', satt, {once:true}); ndLjud.load(); }
 }
 
@@ -26094,10 +26095,13 @@ if (ndO()){ ndOrdStart(); NDKOPPLAD.add('order'); }
    här. Funktionerna skrivs över och ger repots tal i utkastets former, så
    att vyerna ritas som de är.
 
-   Läsläge: fastställa, övrig bonus, mål och trappan görs i Nav.
+   Allt som ändrar något går till /nav2/provision (POST), med repots egna
+   actions och det 0087 lade till: att ta bort en övrig bonus (en negativ
+   post) och lönesystemets historik före motorn. I läsläge svarar rutten det.
    ===================================================================== */
 
 const ndP = () => ND && ND.provision;
+let NDPVFORE = '2026-08';
 const ndPvNamnFor = id => { const p = ndP().personer.find(x => x.id === id); return p ? p.namn : id === ND.jag.id ? ND.jag.namn : null; };
 const ndPvIdFor = namn => { if (namn === ND.jag.namn) return ND.jag.id; const p = ndP().personer.find(x => x.namn === namn); return p ? p.id : null; };
 const ndPvNiva = n => n ? {t:n.t, a:n.a, enhet:n.enhet} : null;
@@ -26110,6 +26114,10 @@ function ndPvStart(){
   // Första månaden som har en trappa, för texten om månader utan.
   const forsta = Object.keys(P.trappor).filter(m => P.trappor[m].length).sort()[0];
   PVSATSFRAN = forsta ? forsta + '-01' : PVMAN + '-01';
+  // Motorns första månad: den första med trappa, fastställd period eller provisionsrader i huvudboken.
+  // Före den är månaden historik ur lönesystemet (0087).
+  const medRader = Object.keys(P.underlag).filter(m => Object.values(P.underlag[m]).some(u => u.summa || u.rader.length));
+  NDPVFORE = [forsta, ...Object.keys(P.perioder), ...medRader].filter(Boolean).sort()[0] || PVMAN;
   PVSALJARE.length = 0;
   // Laget är som underlagForAlla: alla med underlag någon av månaderna, och de aktiva säljarna.
   const medUnderlag = new Set(Object.values(P.underlag).flatMap(m => Object.entries(m).filter(([, u]) => u.summa || u.antal.netto || u.rader.length).map(([id]) => id)));
@@ -26134,6 +26142,7 @@ pvSt = function(){
   S.pvMal = {};
   Object.entries(P.mal).forEach(([m, per]) => { S.pvMal[m] = {}; Object.entries(per).forEach(([id, x]) => { const n = ndPvNamnFor(id); if (n) S.pvMal[m][n] = {o:x.o, k:x.k}; }); });
   S.pvVem = S.role === 'chef' ? 'laget' : ND.jag.namn;
+  S.pvPamint = typeof KEV !== 'undefined' && KEV.some(e => /^Fastställ provisionen/.test(e.t || ''));
 };
 pvFrys = function(m){ if (!ndP()) return; };
 
@@ -26159,6 +26168,7 @@ function ndPvKvVeckor(id, m){
 const _ndPvUnderlag = pvUnderlag;
 pvUnderlag = function(vem, m, raknaLive){
   if (!ndP()) return _ndPvUnderlag(vem, m, raknaLive);
+  if (m < NDPVFORE){ const id0 = ndPvIdFor(vem), h = ((ndP().historik || {})[m] || {})[id0]; return {vem, m, fore:true, stangd:true, rader:[], grund:0, antal:{signerade:0, makulerade:0, netto:0}, bonusantal:0, volym:0, niva:null, nasta:null, trappa:[], kv:null, ovrig:0, chefs:null, varde:0, summa:h || 0, forlust:null, varn:null, sena:[], vantar:[], utkast:[]}; }
   const P = ndP(), id = ndPvIdFor(vem), x = id ? (P.underlag[m] || {})[id] : null, stangd = !!P.perioder[m], jag = id === ND.jag.id;
   const tr = pvTrappa(m), arChef = vem === ME.chef.namn && S.role === 'chef';
   const egnaM = ORDER.filter(o => o.vem === vem && o.sign.slice(0, 7) === m);
@@ -26224,18 +26234,53 @@ renderProv = function(){
 };
 prognos = () => { const u = pvUnderlag(ME.saljare.namn, PVMAN), t = pvTakt(u); return t.prognos ? t.prognos.totalt : u.summa; };
 
-/* ---------- Läsläge: det som bokför eller ändrar regler görs i Nav ---------- */
-pvBonusLagg = function(){ if (ndP()){ location.href = '/provision'; return; } };
+/* ---------- Skrivningar: /nav2/provision ---------- */
+async function ndPvPost(handling, data = {}, ladda = true){
+  try {
+    const r = await fetch('/nav2/provision', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
+    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    if (s.ok){ toast(s.ok); if (ladda){ try { sessionStorage.setItem('nd-pv', JSON.stringify({flik:S.pvFlik, m:S.pvM, vem:S.pvVem})); } catch(_){} setTimeout(() => location.reload(), 700); } return s; }
+    toast(s.fel || 'Det gick inte att spara.'); return s;
+  } catch(_){ toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
+}
+// Efter en omladdning: tillbaka till samma flik och månad.
+(() => { if (!ndP()) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-pv') || 'null'); sessionStorage.removeItem('nd-pv'); } catch(_){}
+  if (m) setTimeout(() => { pvSt(); S.view = 'provision'; if (m.flik) S.pvFlik = m.flik; if (m.m) S.pvM = m.m; if (m.vem) S.pvVem = m.vem; render(); }, 0); })();
+// Övrig bonus: utkastets kontroller, sedan repots laggOvrigBonus.
+pvBonusLagg = function(){
+  if (!ndP()) return;
+  const u = S.pvBonusUtk, bel = +String(u.bel).replace(/\s/g, ''), skal = (u.skal || '').trim(), fel = {};
+  if (!(Number.isInteger(bel) && bel > 0)) fel.bel = 'Skriv beloppet i hela kronor, till exempel 1 000.';
+  if (bel > 50000) fel.bel = 'Över 50 000 kr. Kolla beloppet, och lägg större belopp via ekonomi.';
+  if (!skal) fel.skal = 'Skriv skälet. Säljaren ser det, och det står i huvudboken.';
+  if (fel.bel || fel.skal){ S.pvBonusUtk.fel = fel; render(); document.getElementById(fel.bel ? 'pvbBel' : 'pvbSkal')?.focus(); return; }
+  const id = ndPvIdFor(u.vem); if (!id){ toast('Välj vem bonusen gäller.'); return; }
+  ndPvPost('bonus', {vem:id, manad:PVMAN, belopp:bel, skal:pvSkal(skal)});
+};
 const _ndPvGodkannHar = pvGodkannHar;
-pvGodkannHar = function(nr){ if (!ndP()) return _ndPvGodkannHar(nr); const o = ORDER.find(x => x.nr === nr); location.href = o ? ndOrdKund(o) : '/order'; };
-const NDPVNAV = {pvfaststall:m => `/provision?manad=${m}-01`, pvbonusok:() => '/provision', pvbonusta:() => '/provision', pvmalspara:() => '/provision/mal', pvregelspara:() => '/provision/regler', pvregelangra:() => '/provision/regler'};
+pvGodkannHar = function(nr){ if (!ndP()) return _ndPvGodkannHar(nr); const o = ORDER.find(x => x.nr === nr); if (o && typeof ndOrdPost === 'function') ndOrdPost('godkann', {id:o.id}); };
+// Enheten för en tröskel: den nivån har i dag, annars den trappan mest använder.
+function ndPvEnhet(t){ const tr = ndP().trappor[PVMAN] || [], x = tr.find(n => n.t === t); if (x && x.enhet) return x.enhet; const r = {}; tr.forEach(n => { r[n.enhet] = (r[n.enhet] || 0) + 1; }); return Object.keys(r).sort((a, b) => r[b] - r[a])[0] || 'amount_fixed'; }
 document.addEventListener('click', e => {
   if (!ndP() || S.view !== 'provision') return;
   const b = e.target.closest && e.target.closest('button, a'); if (!b || !b.dataset) return;
-  const k = Object.keys(NDPVNAV).find(x => b.dataset[x] !== undefined);
-  if (k){ e.preventDefault(); e.stopImmediatePropagation(); location.href = NDPVNAV[k](b.dataset[k]); return; }
-  if (b.dataset.pvpamin !== undefined){ e.preventDefault(); e.stopImmediatePropagation(); toast('Det här finns inte i Nav än. Det byggs när Provision får spara.'); return; }
-  if (b.dataset.act === 'toast'){ e.preventDefault(); e.stopImmediatePropagation(); location.href = '/provision'; }
+  const d = b.dataset, stopp = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+  if (d.pvfaststall){ stopp(); ndPvPost('faststall', {manad:d.pvfaststall}); return; }
+  if (d.pvpamin){ stopp(); ndPvPost('pamin', {dag:d.pvpamin, manadNamn:pvManNamn(PVMAN)}, false).then(s => { if (s.ok){ S.pvPamint = true; render(); } }); return; }
+  if (d.pvbonusta){ stopp(); ndPvPost('bonus-bort', {id:d.pvbonusta}); return; }
+  if (d.pvmalspara !== undefined){ stopp();
+    const m = S.pvMalM || PVMAN, rader = []; let fel = null;
+    Object.entries(S.pvMalUtk[m] || {}).forEach(([v, x]) => { const nu = {...((S.pvMal[m] || {})[v] || {o:null, k:null})};
+      Object.entries(x).forEach(([k, raw]) => { const r = String(raw).replace(/\s/g, ''); if (r && !(/^\d+$/.test(r) && +r > 0)) fel = fel || [v, k]; nu[k] = r ? +r : null; });
+      const id = ndPvIdFor(v); if (id) rader.push({id, o:nu.o, k:nu.k}); });
+    if (fel){ document.querySelector(`[data-pvmal="${CSS.escape(fel[0])}|${fel[1]}"]`)?.focus(); toast(`Målet för ${fornamn(fel[0])} är inte ett positivt heltal.`); return; }
+    if (!rader.length){ toast('Inga mål är ändrade.'); return; }
+    ndPvPost('mal', {manad:m, rader}); return; }
+  if (d.pvregelspara !== undefined){ stopp();
+    const a = S.pvRegelAndra; if (!a || pvTrappFel(a.nivaer)) return;
+    const nu = pvTrappa(PVMAN).map(n => n.t), nya = a.nivaer.map(n => n.t);
+    ndPvPost('trappa', {fran:a.fran, nivaer:a.nivaer.map(n => ({t:n.t, a:n.a, enhet:ndPvEnhet(n.t)})), borta:nu.filter(t => !nya.includes(t))}); return; }
+  if (d.pvregelangra){ stopp(); ndPvPost('trappa-bort', {}); return; }
 }, true);
 
 /* ---------- Kretsen: säljchef, VD och ekonomi ser alla, som på /provision ---------- */

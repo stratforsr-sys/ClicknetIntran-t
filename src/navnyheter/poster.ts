@@ -34,7 +34,8 @@ behörigheter som här: du ser bara det du får se.
   kampanjsidan inte svarar. En säljare kan lägga en fri order, som säljchef,
   VD eller ekonomi godkänner.
 - **Provision**, räknad av samma motor som här: månaden, trappan, målen,
-  historiken och, för säljchef, VD och ekonomi, laget och perioderna.
+  historiken och, för säljchef, VD och ekonomi, laget och perioderna. Månader
+  före provisionsmotorn visar lönesystemets summa när ekonomi lagt in den.
 - **Kalendern**: din kalender och, efter delningsnivån, kollegornas.
 - **Ärenden**, med svarstiden som navet lovar.
 - **Fel**: dina felrapporter och, för den som hanterar kön, kön och

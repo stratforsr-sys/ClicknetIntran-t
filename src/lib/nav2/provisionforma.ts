@@ -55,6 +55,10 @@ export type NdPvTakt = {
 };
 
 export type NdProvision = {
+  /** 0087: lönesystemets summor före motorn, per manad ("YYYY-MM") och person. */
+  historik?: Record<string, Record<string, number>>;
+  /** Sparar vyn (SKRIVLAGE.provision)? Annars svarar /nav2/provision med läsläge. */
+  skriv?: boolean;
   idag: string;
   manad: string;
   /** Tolv manader, nyast forst, "YYYY-MM". */

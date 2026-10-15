@@ -5,6 +5,30 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-15 · Nav 2.0, Provision: ingen funktion tas bort (0087)
+
+Pass 6 skickade fastställandet, övrig bonus, målen och trappan till nuvarande
+Nav, sa att "Påminn mig" inte fanns, och stängde av utkastets historikläge.
+
+- **`/nav2/provision`** anropar repots actions med deras fält. Trappan sparas
+  nivå för nivå med `sparaNiva`, och borttagna nivåer stängs med `stangNiva`,
+  med samma `verkan` som utkastets "från denna månad / i dag / nästa månad".
+- **Ta bort en övrig bonus**: huvudboken skrivs aldrig om
+  (`commission_entry_ar_last`) och en manuell post får inte bära
+  `external_ref`, så kopplingen original–rättelse ligger i
+  `commission_entry_reversal` (0087). Rättelsen är en negativ post med samma
+  skäl; en fastställd månad nekas.
+- **Historiken**: utkastet har "Före augusti 2026 fanns ingen
+  provisionsmotor" med lönesystemets summa. Gränsen räknas nu ur navets data
+  (första trappan, fastställda perioden eller raden i huvudboken; juni 2026),
+  och summan läses ur `commission_history` (0087). Utan rad står "–".
+- **"Påminn mig"** är ett möte i kalendern via `skapaMote`, som utkastets
+  kalenderpost; knappen blir "Påminnelse …" när mötet finns i `KEV`.
+- **Provat lokalt** som Fredrik och Zen (`ndprov/pv.mjs`, `sess/p10.json`,
+  `sess/p15.json`): historiken, perioderna, påminnelsen, bonusen, målen och
+  trappan når rutten; inga exempel och inga fel.
+- Spelaren i kundkortet: "Du lyssnade" visas först när ljudet faktiskt spelar.
+
 ## 2026-10-15 · Nav 2.0, Order: ingen funktion tas bort (0083–0086)
 
 Pass 5 skickade varje skrivande knapp i ordervyn till nuvarande Nav och gömde

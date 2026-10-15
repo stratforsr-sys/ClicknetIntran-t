@@ -11,6 +11,7 @@ import { hamtaKriterier, hamtaKvPerManad, hamtaPolicyer, hamtaSamtal } from "@/l
 import { hamtaMal } from "@/lib/saljmal-server";
 import { hamtaGodkandaFran, hamtaMinaHandelser, hamtaRegler } from "@/lib/konsekvens-server";
 import { formaProvision, type NdProvision, type Post } from "./provisionforma";
+import { SKRIVLAGE } from "./skrivlage";
 
 export type { NdProvision } from "./provisionforma";
 
@@ -33,6 +34,11 @@ export type { NdProvision } from "./provisionforma";
  *
  * Krets som pa sidan: saljchef, VD och ekonomi ser alla (`provisionschef`),
  * alla andra bara sig sjalva. RLS avgor dessutom vad som gar att lasa.
+ *
+ * 0087: en ovrig bonus som tagits bort ar tva poster i huvudboken (bonusen och
+ * den negativa rattelsen); listan visar ingen av dem, summorna ar oforandrade.
+ * Historiken fore motorn ar lonesystemets summor (`commission_history`).
+ * Skrivningar gar genom /nav2/provision, bakom SKRIVLAGE.provision.
  */
 
 export async function byggProvision(supabase: SupabaseClient, user: CurrentUser): Promise<NdProvision> {
@@ -72,11 +78,23 @@ export async function byggProvision(supabase: SupabaseClient, user: CurrentUser)
     roller: ((p as unknown as { employee_role: { role: string }[] | null }).employee_role ?? []).map((r) => r.role),
   }));
 
-  return formaProvision({
+  const [{ data: motbokningar }, { data: historikrader }] = await Promise.all([
+    supabase.from("commission_entry_reversal").select("original_id, reversal_id"),
+    supabase.from("commission_history").select("employee_id, period_month, amount"),
+  ]);
+  const borttagna = new Set(((motbokningar ?? []) as { original_id: string; reversal_id: string }[]).flatMap((m) => [m.original_id, m.reversal_id]));
+  const historik: Record<string, Record<string, number>> = {};
+  for (const h of (historikrader ?? []) as { employee_id: string; period_month: string; amount: number }[]) {
+    const m = String(h.period_month).slice(0, 7);
+    (historik[m] ??= {})[h.employee_id] = Number(h.amount);
+  }
+
+  const ut = formaProvision({
     mig, provisionschef, malchef, bokforare, idag, idagsDatum,
     poster: poster as Post[],
     material: material as Orderrad[],
     nivaer, perioder, minaHandelser, regler, godkanda, kvPerManad, mal, chefsposter,
     kvSamtal, policyer, kriterier, personrader: personer,
   });
+  return { ...ut, ovriga: ut.ovriga.filter((x) => !borttagna.has(x.id)), historik, skriv: SKRIVLAGE.provision };
 }
