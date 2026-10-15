@@ -36,7 +36,9 @@ behörigheter som här: du ser bara det du får se.
 - **Provision**, räknad av samma motor som här: månaden, trappan, målen,
   historiken och, för säljchef, VD och ekonomi, laget och perioderna. Månader
   före provisionsmotorn visar lönesystemets summa när ekonomi lagt in den.
-- **Kalendern**: din kalender och, efter delningsnivån, kollegornas.
+- **Kalendern**: din kalender och, efter delningsnivån, kollegornas. Möten
+  går att ändra efteråt, var och en väljer sin egen påminnelse, och ett möte
+  kan vara privat eller upprepas varje månad.
 - **Ärenden**, med svarstiden som navet lovar.
 - **Fel**: dina felrapporter och, för den som hanterar kön, kön och
   nattjobbets kvitto steg för steg. Kända fel med råd, "samma för mig" och

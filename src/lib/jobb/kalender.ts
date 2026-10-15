@@ -42,7 +42,7 @@ export async function korKalendersteget(db: SupabaseClient, nu = new Date()): Pr
   let fodda = 0;
   const rader = (serier ?? []) as unknown as {
     id: string;
-    monster: "vardagar" | "veckovis";
+    monster: "vardagar" | "veckovis" | "manadsvis";
     intervall: number;
     veckodag: number | null;
     starts_on: string;

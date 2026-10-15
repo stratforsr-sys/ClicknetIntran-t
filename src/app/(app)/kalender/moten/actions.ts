@@ -150,7 +150,7 @@ export async function skapaMote(indata: {
     const paminnelse = indata.paminnelse ?? 10;
     if (!arMinut(paminnelse, 0, 1440)) return { fel: "Påminnelsen stämmer inte." };
     const visaSom = indata.visaSom ?? "upptagen";
-    if (!["upptagen", "preliminar", "ledig", "borta"].includes(visaSom)) return { fel: "Välj hur tiden ska visas." };
+    if (!["upptagen", "preliminar", "ledig", "borta", "annan"].includes(visaSom)) return { fel: "Välj hur tiden ska visas." };
 
     const svar = await lk<{ event_id: string; undo_id: string; deltagare: string[] }>("lk_skapa_mote", {
       p_aktor: mig,
@@ -478,7 +478,7 @@ export async function skapaSerie(indata: {
     const paminnelse = indata.paminnelse ?? 10;
     if (!arMinut(paminnelse, 0, 1440)) return { fel: "Påminnelsen stämmer inte." };
     const visaSom = indata.visaSom ?? "upptagen";
-    if (!["upptagen", "preliminar", "ledig", "borta"].includes(visaSom)) return { fel: "Välj hur tiden ska visas." };
+    if (!["upptagen", "preliminar", "ledig", "borta", "annan"].includes(visaSom)) return { fel: "Välj hur tiden ska visas." };
 
     const regel = serieregel(indata.upprepa, indata.dag);
     const dagar = forekomster(
@@ -552,7 +552,7 @@ export async function flyttaSerie(eventId: string, dag: string, start: number): 
     const fran = [e.dag as string, dag].sort()[0] < svensktDatum() ? svensktDatum() : [e.dag as string, dag].sort()[0];
     const dagar = forekomster(
       {
-        monster: s.monster as "vardagar" | "veckovis",
+        monster: s.monster as "vardagar" | "veckovis" | "manadsvis",
         veckodagar: s.monster === "veckovis" ? [wd(dag)] : [],
         starts_on: s.starts_on as string,
         ends_on: s.ends_on as string | null,
@@ -1003,4 +1003,89 @@ export async function angringsLage(undoId: string): Promise<"angrad" | "for_sent
   if (!data) return "angrad";
   if (data.created_by !== user.employee.id) return "for_sent";
   return data.used_at ? "angrad" : "for_sent";
+}
+
+// -----------------------------------------------------------------------------
+// Nav 2.0 (0088): ändra ett möte, och var och ens egen påminnelse
+// -----------------------------------------------------------------------------
+
+/**
+ * Rubrik, plats, videolänk, agenda, deltagare, påminnelse och "visa som" på
+ * ett befintligt möte. Tiden ändras med `flytta` och `andraLangd` som förut.
+ * Nya deltagare får en inbjudan, borttagna att mötet är inställt för dem, och
+ * de som är kvar att det ändrats — allt genom utkorgen, och ångra gäller.
+ */
+export async function andraMote(
+  eventId: string,
+  indata: {
+    rubrik: string;
+    plats?: string | null;
+    videolank?: string | null;
+    agenda?: string | null;
+    deltagare: string[];
+    paminnelse?: number | null;
+    visaSom?: string | null;
+  },
+): Promise<Resultat> {
+  try {
+    const user = await aktor();
+    if (!arUuid(eventId)) return { fel: "Händelsen finns inte längre." };
+    if (typeof indata.rubrik !== "string" || !indata.rubrik.trim()) return { fel: "Skriv en rubrik först." };
+    if (indata.rubrik.length > 200) return { fel: "Rubriken får vara högst 200 tecken." };
+    if (!Array.isArray(indata.deltagare) || !indata.deltagare.every(arUuid) || indata.deltagare.length > 50) {
+      return { fel: "Deltagarlistan stämmer inte." };
+    }
+    if (indata.paminnelse != null && !arMinut(indata.paminnelse, 0, 1440)) return { fel: "Påminnelsen stämmer inte." };
+    if (indata.visaSom && !["upptagen", "preliminar", "ledig", "borta", "annan"].includes(indata.visaSom)) return { fel: "Välj hur tiden ska visas." };
+    if (indata.videolank && !/^https:\/\//.test(indata.videolank)) return { fel: "Videolänken ska börja med https://." };
+
+    const r = await lk<{ event_id: string; undo_id: string; deltagare: string[] }>("lk_andra_mote", {
+      p_aktor: user.employee!.id,
+      p_event: eventId,
+      p_title: indata.rubrik.trim(),
+      p_plats: indata.plats?.slice(0, 200) ?? null,
+      p_online_url: indata.videolank?.slice(0, 500) ?? null,
+      p_agenda: (indata.agenda ?? "").slice(0, 4000),
+      p_deltagare: indata.deltagare,
+      p_reminder_min: indata.paminnelse ?? null,
+      p_show_as: indata.visaSom ?? null,
+    });
+    if (!r.ok) return { fel: r.fel };
+    efterat();
+    return { ok: true, kvitto: "Sparat. Deltagarna får besked om ändringen.", angra: r.data.undo_id, eventId };
+  } catch (e) {
+    return fel(e);
+  }
+}
+
+/**
+ * Min påminnelse för ett möte (0088). Organisatören ändrar mötets, en deltagare
+ * sin egen rad. Ingenting skickas till någon.
+ */
+export async function sattPaminnelse(eventId: string, paminnelse: number | null): Promise<Resultat> {
+  try {
+    const user = await aktor();
+    const mig = user.employee!.id;
+    if (!arUuid(eventId)) return { fel: "Händelsen finns inte längre." };
+    if (paminnelse != null && !arMinut(paminnelse, 0, 1440)) return { fel: "Påminnelsen stämmer inte." };
+    const db = supabaseAdmin();
+    const { data: e } = await db.from("calendar_event").select("id, organizer_id, series_id").eq("id", eventId).maybeSingle();
+    if (!e) return { fel: "Händelsen finns inte längre." };
+    if (e.organizer_id === mig) {
+      await db.from("calendar_event").update({ reminder_min: paminnelse ?? 10, updated_at: new Date().toISOString() }).eq("id", eventId);
+    } else {
+      // Deltagarens rad på mötet, eller på serien när mötet är en förekomst.
+      const { data: rad } = await db.from("calendar_attendee").select("id").eq("employee_id", mig).eq("event_id", eventId).maybeSingle();
+      const { data: serierad } = !rad && e.series_id
+        ? await db.from("calendar_attendee").select("id").eq("employee_id", mig).eq("series_id", e.series_id).maybeSingle()
+        : { data: null };
+      const id = rad?.id ?? serierad?.id;
+      if (!id) return { fel: "Du är inte med på mötet." };
+      await db.from("calendar_attendee").update({ reminder_min: paminnelse }).eq("id", id);
+    }
+    revalidatePath("/kalender");
+    return { ok: true, kvitto: paminnelse == null ? "Påminnelsen är avstängd." : "Påminnelsen är sparad.", eventId };
+  } catch (e) {
+    return fel(e);
+  }
 }

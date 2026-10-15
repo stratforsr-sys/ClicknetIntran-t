@@ -5,6 +5,8 @@ import { svensktDatum } from "@/lib/klocka";
 import { hamtaDelningar } from "@/lib/kalender-server";
 import { hamtaHandelsedetalj, hamtaLeveranskalender } from "@/lib/leveranskalender-server";
 import { intervallForVy, overlamning, regeltext, type Post, type Vy } from "@/lib/leveranskalender";
+import { supabaseAdmin } from "@/lib/supabase/server";
+import { SKRIVLAGE } from "./skrivlage";
 
 /**
  * Nav 2.0: Kalendern, med samma funktioner som /kalender.
@@ -19,7 +21,9 @@ import { intervallForVy, overlamning, regeltext, type Post, type Vy } from "@/li
  * också den med läsarens egen token.
  */
 
-export type NdKalposter = { fran: string; till: string; poster: Post[] };
+/** En post med 0090:s flagga: privat möte. */
+export type NdPost = Post & { privat?: boolean };
+export type NdKalposter = { fran: string; till: string; poster: NdPost[] };
 
 export type NdKalender = NdKalposter & {
   mig: string;
@@ -34,13 +38,56 @@ export type NdKalender = NdKalposter & {
     ko: { orderId: string; kund: string; paket: string | null; saljare: string | null; due: string | null; over: number; av: number }[];
   };
   arChef: boolean;
+  /** Sparar vyn (SKRIVLAGE.kalender)? Annars svarar /nav2/kalender (POST) med läsläge. */
+  skriv: boolean;
 };
+
+/**
+ * 0088: den egna påminnelsen. En deltagare kan ha valt en annan än mötets; den
+ * står på deltagarraden, för mötet eller för serien. Bara läsarens egna rader
+ * läses (service role, filtrerat på läsaren), och bara påminnelsen.
+ */
+/**
+ * 0090: privata möten. Den som organiserar, är med eller äger kalendern ser
+ * allt; alla andra ser "Privat". Bara flaggan läses, för de möten som redan
+ * står i vyn.
+ */
+async function privata(mig: string, poster: NdPost[]): Promise<NdPost[]> {
+  const ids = [...new Set(poster.map((p) => p.ref).filter((r): r is string => Boolean(r)))];
+  if (!ids.length) return poster;
+  const { data } = await supabaseAdmin().from("calendar_event").select("id").in("id", ids).eq("is_private", true);
+  const priv = new Set((data ?? []).map((r) => r.id as string));
+  if (!priv.size) return poster;
+  return poster.map((p) => {
+    if (!p.ref || !priv.has(p.ref)) return p;
+    const insyn = p.agare === mig || p.organisator === mig || p.deltagare.includes(mig);
+    return insyn ? { ...p, privat: true } : { ...p, privat: true, rubrik: p.rubrik === null ? null : "Privat", href: null };
+  });
+}
+
+async function egnaPaminnelser(mig: string, poster: NdPost[]): Promise<NdPost[]> {
+  const { data } = await supabaseAdmin()
+    .from("calendar_attendee")
+    .select("event_id, series_id, reminder_min")
+    .eq("employee_id", mig)
+    .not("reminder_min", "is", null);
+  const perHandelse = new Map<string, number>(), perSerie = new Map<string, number>();
+  for (const r of data ?? []) {
+    if (r.event_id) perHandelse.set(r.event_id as string, Number(r.reminder_min));
+    if (r.series_id) perSerie.set(r.series_id as string, Number(r.reminder_min));
+  }
+  if (!perHandelse.size && !perSerie.size) return poster;
+  return poster.map((p) => {
+    const egen = (p.ref ? perHandelse.get(p.ref) : undefined) ?? (p.serieId ? perSerie.get(p.serieId) : undefined);
+    return egen === undefined ? p : { ...p, paminnelse: egen };
+  });
+}
 
 export async function hamtaKalposter(user: CurrentUser, vy: Vy, dag: string, visa: string[]): Promise<NdKalposter | null> {
   const data = await hamtaLeveranskalender(user, vy, dag, visa, svensktDatum());
   if (!data) return null;
   const { fran, till } = intervallForVy(vy, dag);
-  return { fran, till, poster: data.poster };
+  return { fran, till, poster: await privata(user.employee!.id, await egnaPaminnelser(user.employee!.id, data.poster)) };
 }
 
 export async function byggKalender(user: CurrentUser): Promise<NdKalender | null> {
@@ -51,7 +98,7 @@ export async function byggKalender(user: CurrentUser): Promise<NdKalender | null
   return {
     fran,
     till,
-    poster: data.poster,
+    poster: await privata(data.mig, await egnaPaminnelser(data.mig, data.poster)),
     mig: data.mig,
     personer: data.personer.filter((p) => p.id !== data.mig).map((p) => ({ id: p.id, namn: p.namn, grupp: p.grupp, farg: p.farg, niva: p.niva })),
     vantar: data.vantar,
@@ -64,6 +111,7 @@ export async function byggKalender(user: CurrentUser): Promise<NdKalender | null
       }),
     },
     arChef: data.arChef,
+    skriv: SKRIVLAGE.kalender,
   };
 }
 
@@ -71,7 +119,14 @@ export async function byggKalender(user: CurrentUser): Promise<NdKalender | null
 export async function kalDetalj(user: CurrentUser, id: string) {
   const d = await hamtaHandelsedetalj(user, id);
   if (!d) return null;
+  // 0090: ett privat möte visar inte plats och agenda för den som inte är med.
+  const { data: e } = await supabaseAdmin().from("calendar_event").select("is_private, organizer_id").eq("id", id).maybeSingle();
+  const mig = user.employee!.id;
+  if (e?.is_private && e.organizer_id !== mig && !d.deltagare.some((x) => x.id === mig)) {
+    return { plats: null, online: null, agenda: "", organisator: d.organisator, deltagare: [], serieText: d.serie ? regeltext(d.serie) : null, paminnelse: d.paminnelse, privat: true };
+  }
   return {
+    privat: Boolean(e?.is_private),
     plats: d.plats,
     online: d.onlineUrl,
     agenda: d.agenda,

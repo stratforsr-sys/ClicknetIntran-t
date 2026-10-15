@@ -1,7 +1,26 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { arDatum, arVy } from "@/lib/leveranskalender";
+import { supabaseAdmin } from "@/lib/supabase/server";
+import { FORINSTALLNINGAR, STEG, UPPREPA, arDatum, arVy, type Upprepa } from "@/lib/leveranskalender";
+import { lk } from "@/lib/leveranskalender-server";
 import { hamtaKalposter, kalDetalj } from "@/lib/nav2/kalender";
+import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
+import { skapaKalenderpost, stallInDelning } from "@/app/(app)/kalender/actions";
+import {
+  andraLangd,
+  andraMote,
+  flytta,
+  flyttaSerie,
+  foreslaTid,
+  kopiera,
+  sattPaminnelse,
+  skapaLeverans,
+  skapaMote,
+  skapaSerie,
+  stallIn,
+  svara,
+  type Resultat,
+} from "@/app/(app)/kalender/moten/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -36,3 +55,184 @@ export async function GET(request: Request) {
   const data = await hamtaKalposter(user, vy, dag, visa);
   return data ? svar(data) : svar({ fel: "Ingen kalender." }, 404);
 }
+
+/**
+ * Nav 2.0: allt som ändrar kalendern, i en POST.
+ *
+ * ===========================================================================
+ * REPOTS ACTIONS. Möten, serier och 1:1 (`skapaMote`, `skapaSerie`), svar och
+ * förslag, flytt, längd, inställt och kopia (app/(app)/kalender/moten), uppgift
+ * och coachning i kalendern (`skapaKalenderpost`), leveransmöten från kön
+ * (`skapaLeverans`) och delningen (`stallInDelning`) — samma behörighet, samma
+ * utkorg och samma ångra.
+ *
+ * Det nya: ändra ett mötes rubrik, plats, agenda, deltagare och påminnelse
+ * (`andraMote`, 0088), den egna påminnelsen (`sattPaminnelse`), "Varje månad"
+ * (0089) och Privat (0090).
+ * ===========================================================================
+ *
+ * LÄSLÄGE: står `SKRIVLAGE.kalender` på false svarar rutten 423 innan något
+ * skrivs.
+ */
+const UPPREPA_FRAN: Record<string, Upprepa> = { "Upprepas inte": "aldrig", "Varje vardag": "vardagar", "Varje vecka": "vecka", "Varannan vecka": "varannan", "Varje månad": "manad" };
+const STEG_FRAN: Record<string, string> = Object.fromEntries(STEG.map((s) => [FORINSTALLNINGAR[s].lab, s]));
+
+type Falt = {
+  id?: string;
+  typ?: string;
+  t?: string;
+  d?: string;
+  s?: number;
+  e?: number;
+  delt?: string[];
+  plats?: string;
+  video?: string;
+  agenda?: string;
+  visa?: string;
+  pamin?: number | null;
+  upprepa?: string;
+  priv?: boolean;
+  lev?: string;
+  order?: string;
+  heldag?: boolean;
+};
+
+const svarFran = (r: Resultat) => (r.fel ? { fel: r.fel } : { ok: r.kvitto ?? "Sparat.", angra: r.angra ?? null, id: r.eventId ?? null, dag: r.dag ?? null });
+
+export async function POST(request: Request) {
+  const user = await getCurrentUser();
+  const svar2 = (data: unknown, status = 200) => NextResponse.json(data, { status, headers: { "Cache-Control": "private, no-store, max-age=0" } });
+  if (!user?.employee) return svar2({ fel: "Inte inloggad." }, 401);
+  if (!sammaUrsprung(request)) return svar2({ fel: "Fel ursprung." }, 403);
+  let b: Record<string, unknown>;
+  try {
+    b = (await request.json()) as Record<string, unknown>;
+  } catch {
+    return svar2({ fel: "Ogiltig begäran." }, 400);
+  }
+  if (!SKRIVLAGE.kalender) return svar2({ fel: LASLAGE_TEXT, laslage: true }, 423);
+  const handling = String(b.handling ?? "");
+  const id = String(b.id ?? "");
+  const ut = (r: Resultat) => {
+    const x = svarFran(r);
+    return svar2(x, "fel" in x && x.fel ? 400 : 200);
+  };
+
+  try {
+    switch (handling) {
+      case "spara": {
+        const f = (b.falt ?? {}) as Falt;
+        const minuter = (f.e ?? 0) - (f.s ?? 0);
+        const upprepa = UPPREPA_FRAN[f.upprepa ?? "Upprepas inte"] ?? "aldrig";
+        if (!(UPPREPA as readonly string[]).includes(upprepa)) return svar2({ fel: "Välj hur det ska upprepas." }, 400);
+        const deltagare = (f.delt ?? []).filter((x) => UUID.test(x));
+        const privat = async (eventId?: string | null) => {
+          if (eventId && f.priv !== undefined) await supabaseAdmin().from("calendar_event").update({ is_private: Boolean(f.priv) }).eq("id", eventId);
+        };
+
+        // Ändra ett befintligt möte: tiden med flytta/andraLangd, resten med andraMote.
+        if (f.id) {
+          if (!UUID.test(f.id)) return svar2({ fel: "Händelsen finns inte längre." }, 400);
+          const { data: e } = await supabaseAdmin().from("calendar_event").select("dag, tid, minuter, kind").eq("id", f.id).maybeSingle();
+          if (!e) return svar2({ fel: "Händelsen finns inte längre." }, 404);
+          const start = f.s ?? 0;
+          const fore = Number(String(e.tid ?? "00:00").slice(0, 2)) * 60 + Number(String(e.tid ?? "00:00").slice(3, 5));
+          let sist: Resultat = { ok: true, eventId: f.id };
+          if (f.d && (f.d !== e.dag || start !== fore)) {
+            sist = await flytta(f.id, f.d, start);
+            if (sist.fel) return ut(sist);
+          }
+          if (minuter && minuter !== e.minuter) {
+            sist = await andraLangd(f.id, minuter);
+            if (sist.fel) return ut(sist);
+          }
+          if (e.kind === "mote") {
+            sist = await andraMote(f.id, { rubrik: f.t ?? "", plats: f.plats ?? null, videolank: f.video ?? null, agenda: f.agenda ?? "", deltagare, paminnelse: f.pamin ?? null, visaSom: f.visa ?? null });
+            if (sist.fel) return ut(sist);
+          }
+          await privat(f.id);
+          return ut(sist);
+        }
+
+        // Nytt.
+        if (f.typ === "uppgift" || f.typ === "coachning") {
+          const r = await skapaKalenderpost(
+            {},
+            form({ typ: f.typ, title: f.t ?? "", due_date: f.d ?? "", due_time: f.heldag ? "" : hhmm(f.s ?? 0), description_md: f.agenda ?? "", estimate_minutes: minuter || "", priority: "3", upprepas: upprepa === "aldrig" ? "" : "ja" }),
+          );
+          return r.fel ? svar2({ fel: r.fel }, 400) : svar2({ ok: r.ok ?? "Sparat." });
+        }
+        if (f.lev && f.order) {
+          const steg = STEG_FRAN[f.lev];
+          if (!steg) return svar2({ fel: "Välj en förinställning." }, 400);
+          return ut(await skapaLeverans({ orderId: f.order, steg, dag: f.d ?? "", start: f.s ?? 0, minuter: minuter || 30, deltagare, remMig: true, remKund: FORINSTALLNINGAR[steg as keyof typeof FORINSTALLNINGAR].kund }));
+        }
+        if (f.typ === "enskilt" || upprepa !== "aldrig") {
+          const r = await skapaSerie({
+            typ: f.typ === "enskilt" ? "enskilt" : "mote",
+            rubrik: f.t ?? "",
+            med: deltagare,
+            dag: f.d ?? "",
+            start: f.s ?? 0,
+            minuter,
+            upprepa: f.typ === "enskilt" && upprepa === "aldrig" ? "varannan" : upprepa,
+            agenda: f.agenda ?? null,
+            plats: f.plats ?? null,
+            visaSom: f.visa,
+            paminnelse: f.pamin ?? undefined,
+          });
+          if (!r.fel && f.priv && r.eventId) {
+            const { data: e } = await supabaseAdmin().from("calendar_event").select("series_id").eq("id", r.eventId).maybeSingle();
+            if (e?.series_id) await supabaseAdmin().from("calendar_event").update({ is_private: true }).eq("series_id", e.series_id);
+          }
+          return ut(r);
+        }
+        // Ett möte, också ett leveransmöte från formuläret utan kund: förinställningens rubrik och längd.
+        const r = await skapaMote({ rubrik: f.t ?? "", dag: f.d ?? "", start: f.s ?? 0, minuter, deltagare, plats: f.plats ?? null, agenda: f.agenda ?? null, paminnelse: f.pamin ?? undefined, visaSom: f.visa });
+        if (!r.fel) {
+          await privat(r.eventId);
+          if (f.video && r.eventId) await supabaseAdmin().from("calendar_event").update({ online_url: f.video }).eq("id", r.eventId);
+        }
+        return ut(r);
+      }
+      case "svara":
+        return ut(await svara(id, String(b.svar ?? "") as "ja" | "kanske" | "nej", String(b.kommentar ?? "") || null));
+      case "foresla":
+        return ut(await foreslaTid(id, String(b.dag ?? ""), Number(b.start), Number(b.langd), String(b.kommentar ?? "") || null, "kanske"));
+      case "stallin":
+        return ut(await stallIn(id));
+      case "kopiera":
+        return ut(await kopiera(id));
+      case "flytta": {
+        const dag = String(b.dag ?? ""), start = Number(b.start);
+        if (b.serie === true) return ut(await flyttaSerie(id, dag, start));
+        const r = await flytta(id, dag, start);
+        if (r.fel || b.langd === undefined) return ut(r);
+        return ut(await andraLangd(id, Number(b.langd)));
+      }
+      case "langd":
+        return ut(await andraLangd(id, Number(b.langd)));
+      case "pamin":
+        return ut(await sattPaminnelse(id, b.min === null || b.min === undefined ? null : Number(b.min)));
+      case "delning": {
+        const r = await stallInDelning({}, form({ employee_id: String(b.person ?? ""), level: String(b.niva ?? "") }));
+        return r.fel ? svar2({ fel: r.fel }, 400) : svar2({ ok: "Delningen är sparad. Ändringen syns direkt hos dem." });
+      }
+      case "angra": {
+        const r = await lk<{ event_id: string | null }>("lk_angra", { p_aktor: user.employee.id, p_undo: String(b.undo ?? "") });
+        return r.ok ? svar2({ ok: "Ångrat. Inget skickades." }) : svar2({ fel: r.fel }, 400);
+      }
+      default:
+        return svar2({ fel: "Okänd handling." }, 400);
+    }
+  } catch (e) {
+    return svar2({ fel: e instanceof Error ? e.message : "Något gick fel." }, 500);
+  }
+}
+
+function form(falt: Record<string, unknown>): FormData {
+  const f = new FormData();
+  for (const [k, v] of Object.entries(falt)) if (v !== undefined && v !== null) f.set(k, String(v));
+  return f;
+}
+const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;

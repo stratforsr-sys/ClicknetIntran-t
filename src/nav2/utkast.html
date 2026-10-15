@@ -26324,7 +26324,7 @@ function ndKEv(p){
   if (agare !== org) add(agare, p.agare === ND.jag.id && p.svar && p.svar !== 'org' ? p.svar : null);
   (p.deltagare || []).forEach(id => add(ndKNamn(id), null));
   return {id:p.id, ref:p.ref, href:p.href, d:p.dag, s, e, allday, t:p.rubrik ?? (allday ? 'Borta' : 'Upptagen'), kat:NDKSLAG[p.slag] || 'mote', org, delt,
-    plats:'', agenda:'', visa:p.slag === 'ledig' ? 'borta' : 'upptagen', rep:!!p.serie, priv:false, klar:!!p.klar, pamin:NDKPAM[p.paminnelse] || 'Ingen', nd:true, agareId:p.agare};
+    plats:'', agenda:'', visa:p.slag === 'ledig' ? 'borta' : 'upptagen', rep:!!p.serie, priv:!!p.privat, klar:!!p.klar, pamin:NDKPAM[p.paminnelse] || 'Ingen', nd:true, agareId:p.agare};
 }
 // 1:1 heter som i navet (enskildTitel): "1:1 Elin" för de två, "1:1 Zen · Elin" för en tredje.
 function ndKTitel(ev){
@@ -26422,40 +26422,87 @@ const _ndKKo = kKoHtml;
 kKoHtml = function(){ const h = _ndKKo(); return ndK() ? h.split(`${kLen(1e6)} kvar`).join('Väntar på godkännande') : h; };
 kForslagPers = (valda, attr) => (ndK() ? kPers().map(p => p.n) : S.role === 'chef' ? ['Elin Berg','Amira Haddad','Mohammed Aziz','Sara Lind'] : ['Johanna Ek','Elin Berg','Mohammed Aziz']).filter(p => !valda.includes(p)).slice(0, 3).map(p => `<button class="olpchip lagg" data-${attr}="${esc(p)}">+ ${esc(fornamn(p))}</button>`).join('');
 
-/* ---------- Läsläge: det som ändrar kalendern görs i Nav ---------- */
+/* ---------- Skrivningar: /nav2/kalender (POST) ---------- */
 const ndKLank = e => e && e.href ? e.href : `/kalender?dag=${e ? e.d : kIdag()}${e && e.ref && e.nd && ['mote', 'enskilt', 'leverans', 'coachning'].includes(e.kat) ? `&handelse=${e.ref}` : ''}`;
-const NDKNAV = ['knyspara', 'kfspara', 'krsvp', 'kforslagskicka', 'kstalljs', 'kkopiera', 'kklar', 'kflytta', 'kqboka', 'kfforesla', 'kfbehall'];
+const NDKPAMMIN = {'Ingen':null, '5 min före':5, '15 min före':15, '30 min före':30, '1 timme före':60, '1 dag före':1440};
+const NDKVISA = {upptagen:'upptagen', prel:'preliminar', ledig:'ledig', borta:'borta', annan:'annan'};
+async function ndKPost(handling, data = {}, {ladda = true} = {}){
+  try {
+    const r = await fetch('/nav2/kalender', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
+    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    if (!s.ok){ toast(s.fel || 'Det gick inte att spara.'); return s; }
+    // Ångra går genom lk_angra, i fem minuter, som i Nav.
+    if (s.angra) toast(s.ok, () => ndKPost('angra', {undo:s.angra})); else toast(s.ok);
+    if (ladda){ try { sessionStorage.setItem('nd-kal', JSON.stringify({dag:s.dag || S.kDag, vy:S.kVy})); } catch(_){} setTimeout(() => location.reload(), s.angra ? 2500 : 700); }
+    return s;
+  } catch(_){ toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
+}
+(() => { if (!ndK()) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-kal') || 'null'); sessionStorage.removeItem('nd-kal'); } catch(_){}
+  if (m) setTimeout(() => { S.view = 'kalender'; if (m.vy) S.kVy = m.vy; if (m.dag) S.kDag = m.dag; render(); }, 0); })();
+const ndKRef = ev => ev && ev.nd ? ev.ref : null;
+// Formuläret i rutans fält (samma namn som utkastet), med navets id:n.
+function ndKFalt(f){
+  const ev = f.id ? KEV.find(x => x.id === f.id) : null;
+  return {id:ev ? ndKRef(ev) : undefined, typ:f.typ, t:(f.t || '').trim() || (f.lev || ''), d:f.d, s:f.heldag ? 0 : f.s, e:f.heldag ? 1440 : f.e, heldag:!!f.heldag,
+    delt:(f.delt || []).map(n => ndKId(n)).filter(Boolean), plats:f.plats || '', agenda:f.agenda || '', visa:NDKVISA[f.visa] || 'upptagen',
+    pamin:NDKPAMMIN[f.pamin] !== undefined ? NDKPAMMIN[f.pamin] : 15, upprepa:f.upprepa || 'Upprepas inte', priv:!!f.priv, lev:f.lev || undefined, order:f.order || undefined};
+}
+const _ndKSpara = kSpara;
+kSpara = function(f){
+  if (!ndK()) return _ndKSpara(f);
+  if (!(f.t || '').trim() && !f.lev){ toast('Skriv en rubrik först.'); document.querySelector('[data-kff="t"],[data-knyt]')?.focus(); return false; }
+  if (f.typ !== 'uppgift' && !f.heldag && kWd(f.d) > 5){ toast('Välj en vardag.'); return false; }
+  if (f.typ === 'enskilt' && (!f.delt || f.delt.length !== 1)){ toast('Välj en säljare för 1:1.'); return false; }
+  if (f.typ === 'ledig'){ toast('Ledighet söks i Frånvaro.'); frGa(null, 'vacation'); return false; }
+  const ev = f.id ? KEV.find(x => x.id === f.id) : null;
+  if (ev && !ndKRef(ev)){ toast('Den här posten ändras där den kommer ifrån.'); return false; }
+  ndKPost('spara', {falt:ndKFalt(f)}).then(s => { if (s.ok){ S.kForm = null; S.kNy = null; } });
+  return true;
+};
+kFlytta = function(e, d, s, varaktighet, bara){
+  if (!ndK()) return;
+  const ref = ndKRef(e); if (!ref){ toast('Den här posten flyttas där den kommer ifrån.'); render(); return; }
+  if (varaktighet != null && d === e.d && s === e.s) ndKPost('langd', {id:ref, langd:varaktighet});
+  else ndKPost('flytta', {id:ref, dag:d, start:s, langd:varaktighet ?? undefined, serie:!!(e.rep && !bara)});
+};
+const _ndKSlapp = kSlapp;
+kSlapp = function(nyckel, d, s){
+  if (!ndK()) return _ndKSlapp(nyckel, d, s);
+  if (!nyckel) return;
+  const typ = nyckel.slice(0, 1), id = nyckel.slice(2);
+  if (typ === 'q'){ const q = KKO.find(x => x.id === id); if (!q) return; if (kWd(d) > 5){ toast('Välj en vardag.'); return; }
+    ndKPost('spara', {falt:{lev:'Välkomstsamtal', order:id, t:`Välkomstsamtal · ${q.kund}`, d, s, e:s + 30, delt:[], pamin:15}}); return; }
+  if (typ === 'u'){ toast('Tiden för uppgiften sparas när Uppgifter får spara.'); return; }
+};
 document.addEventListener('click', e => {
   if (!ndK() || S.view !== 'kalender') return;
   const b = e.target.closest && e.target.closest('button, a, label'); if (!b || !b.dataset) return;
   const ds = b.dataset, stopp = () => { e.preventDefault(); e.stopImmediatePropagation(); };
-  const ev = S.kPeek ? KEV.find(x => x.id === S.kPeek.id) : null;
-  if (NDKNAV.some(k => ds[k] !== undefined)){ stopp(); location.href = ds.kqboka !== undefined ? '/kalender' : ev ? ndKLank(ev) : `/kalender?dag=${S.kDag || kIdag()}`; return; }
-  if (ds.kdspara !== undefined || ds.kdelabort !== undefined){ stopp(); location.href = '/kalender/delning'; return; }
-  if (ds.kuppgklar !== undefined){ stopp(); location.href = `/uppgifter/${encodeURIComponent(ds.kuppgklar)}`; return; }
+  const ev = S.kPeek ? KEV.find(x => x.id === S.kPeek.id) : null, ref = ndKRef(ev);
+  if (ds.krsvp){ stopp(); if (!ref) return; ndKPost('svara', {id:ref, svar:ds.krsvp, kommentar:(document.querySelector('[data-krsvpkom]')?.value || '').trim()}); return; }
+  if (ds.kforslagskicka !== undefined){ stopp(); if (!ref) return; const dd = document.querySelector('[data-kfd]').value, ss = document.querySelector('[data-kfs]').value;
+    ndKPost('foresla', {id:ref, dag:dd, start:tmin(ss), langd:ev.e - ev.s, kommentar:(document.querySelector('[data-kfkom]')?.value || '').trim()}); return; }
+  if (ds.kstalljs !== undefined){ stopp(); if (!ref) return; ndKPost('stallin', {id:ref}); return; }
+  if (ds.kkopiera !== undefined){ stopp(); if (!ref) return; ndKPost('kopiera', {id:ref}); return; }
+  if (ds.kklar !== undefined && ev && ev.kat === 'uppgift'){ stopp(); toast('Uppgiften bockas av när Uppgifter får spara.'); return; }
+  if (ds.kuppgklar !== undefined){ stopp(); toast('Uppgiften bockas av när Uppgifter får spara.'); return; }
+  if (ds.kdelabort){ stopp(); const id = ndKId(ds.kdelabort); if (id) ndKPost('delning', {person:id, niva:'upptagen'}, {ladda:false}).then(s => { if (s.ok){ S.kDelaBort.add(ds.kdelabort); render(); } }); return; }
   if (ds.act === 'toast'){
     stopp(); const msg = ds.msg || '';
     if (/Utskriften/.test(msg)) { window.print(); return; }
-    if (/Planeringsvyn/.test(msg)) { location.href = '/kalender?vy=planera'; return; }
+    if (/Planeringsvyn/.test(msg)) { S.kVy = 'planera'; render(); return; }
     if (/Videolänken/.test(msg) && ev && ev.online) { window.open(ev.online, '_blank', 'noopener'); return; }
-    location.href = ndKLank(ev);
+    toast(msg);
   }
 }, true);
-document.addEventListener('change', e => { if (ndK() && S.view === 'kalender' && e.target.dataset && (e.target.dataset.kpeekpamin !== undefined || e.target.dataset.kdniva !== undefined)){ e.stopImmediatePropagation(); toast('Läsläge: påminnelser och delning ändras i Nav.'); render(); } }, true);
-// Flytta och ändra längd görs i Nav. Ett klick på en post öppnar förhandsvisningen som vanligt.
-let ndKKlick = null;
-document.addEventListener('pointerdown', e => {
-  if (!ndK() || S.view !== 'kalender' || e.button !== 0) return;
-  const ev = e.target.closest && e.target.closest('.olev'); if (!ev || e.target.closest('.olanslut')) return;
-  e.stopImmediatePropagation(); ndKKlick = ev;
+document.addEventListener('change', e => {
+  if (!ndK() || S.view !== 'kalender' || !e.target.dataset) return;
+  const d = e.target.dataset;
+  if (d.kpeekpamin !== undefined){ e.stopImmediatePropagation(); const ev = KEV.find(x => x.id === d.kpeekpamin), ref = ndKRef(ev); if (!ref) return;
+    const l = e.target.value.replace('Påminnelse ', '').replace('Ingen påminnelse', 'Ingen');
+    ndKPost('pamin', {id:ref, min:NDKPAMMIN[l] !== undefined ? NDKPAMMIN[l] : null}, {ladda:false}).then(s => { if (s.ok){ ev.pamin = l; S.kRemIgn.delete(ev.id); delete S.kRemSnz[ev.id]; kRemRender(); } else render(); }); return; }
+  if (d.kdniva !== undefined){ e.stopImmediatePropagation(); const r = KDELNING[S.role === 'chef' ? 'chef' : 'saljare'][+d.kdniva], id = r && ndKId(r[0]); if (id) ndKPost('delning', {person:id, niva:e.target.value}, {ladda:false}).then(s => { if (s.ok){ r[1] = e.target.value; render(); } }); return; }
 }, true);
-document.addEventListener('pointerup', e => {
-  if (!ndKKlick) return; const el = ndKKlick; ndKKlick = null;
-  if (el.isConnected && el.contains(e.target)) kPeekOppna(el.dataset.kev, el);
-}, true);
-kFlytta = function(){ location.href = `/kalender?dag=${S.kDag || kIdag()}`; };
-const _ndKSlapp = kSlapp;
-kSlapp = function(nyckel, d, s){ if (!ndK()) return _ndKSlapp(nyckel, d, s); toast('Läsläge: tiden bokas i Nav.'); };
 
 if (ndK()){ ndKalStart(); NDKOPPLAD.add('kalender'); }
 

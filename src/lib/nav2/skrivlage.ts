@@ -13,6 +13,7 @@ export const SKRIVLAGE = {
   fel: false,
   order: false,
   provision: false,
+  kalender: false,
 } as const;
 
 export type Skrivvy = keyof typeof SKRIVLAGE;

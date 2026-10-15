@@ -466,25 +466,26 @@ export function felkod(meddelande: string | null | undefined): string | null {
 // -----------------------------------------------------------------------------
 
 /** Formulärets "Upprepa". */
-export const UPPREPA = ["aldrig", "vardagar", "vecka", "varannan"] as const;
+export const UPPREPA = ["aldrig", "vardagar", "vecka", "varannan", "manad"] as const;
 export type Upprepa = (typeof UPPREPA)[number];
 export const UPPREPA_ETIKETT: Record<Upprepa, string> = {
   aldrig: "Upprepas inte",
   vardagar: "Varje vardag",
   vecka: "Varje vecka",
   varannan: "Varannan vecka",
+  manad: "Varje månad",
 };
 
 /** Seriens regel ur formulärets val. "Upprepas inte" är en serie med en enda gång. */
 export function serieregel(upprepa: Upprepa, dag: string): {
-  monster: "vardagar" | "veckovis";
+  monster: "vardagar" | "veckovis" | "manadsvis";
   intervall: 1 | 2;
   veckodag: number;
   starts_on: string;
   ends_on: string | null;
 } {
   return {
-    monster: upprepa === "vardagar" ? "vardagar" : "veckovis",
+    monster: upprepa === "vardagar" ? "vardagar" : upprepa === "manad" ? "manadsvis" : "veckovis",
     intervall: upprepa === "varannan" ? 2 : 1,
     veckodag: wd(dag),
     starts_on: dag,
@@ -496,6 +497,7 @@ export function serieregel(upprepa: Upprepa, dag: string): {
 export function regeltext(r: { monster: string; intervall: number; ends_on?: string | null; starts_on?: string }): string {
   if (r.ends_on && r.starts_on && r.ends_on === r.starts_on) return "en gång";
   if (r.monster === "vardagar") return "varje vardag";
+  if (r.monster === "manadsvis") return "varje månad";
   return r.intervall === 2 ? "varannan vecka" : "varje vecka";
 }
 
@@ -688,6 +690,9 @@ export function notistext(
         : { rubrik: `${av} flyttade ${t}`, detalj: `ny tid ${nar}`, href };
     case "installd":
       return { rubrik: `${av} ställde in ${t}`, detalj: nar, href: "/kalender" };
+    // Nav 2.0 (0088): rubrik, plats, agenda eller deltagare ändrades. Tiden är densamma.
+    case "andrad":
+      return { rubrik: `${av} ändrade ${t}`, detalj: nar, href };
     case "svar": {
       const svar = String(d.svar ?? "");
       const note = typeof d.note === "string" && d.note ? ` · “${d.note}”` : "";

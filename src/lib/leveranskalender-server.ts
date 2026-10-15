@@ -596,7 +596,7 @@ export type Deltagarrad = {
 
 export type Serieinfo = {
   id: string;
-  monster: "vardagar" | "veckovis";
+  monster: "vardagar" | "veckovis" | "manadsvis";
   intervall: number;
   veckodag: number | null;
   starts_on: string;

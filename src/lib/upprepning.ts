@@ -38,13 +38,14 @@ import { datumPlusDagar, veckodag } from "./uppgifter.ts";
  * ett mönster ingen bett om är en sådan räkning som aldrig blir provad på
  * riktigt.
  */
-export const MONSTER = ["dagligen", "vardagar", "veckovis"] as const;
+export const MONSTER = ["dagligen", "vardagar", "veckovis", "manadsvis"] as const;
 export type Monster = (typeof MONSTER)[number];
 
 export const MONSTER_ETIKETT: Record<Monster, string> = {
   dagligen: "Varje dag",
   vardagar: "Varje vardag",
   veckovis: "Vissa veckodagar",
+  manadsvis: "Varje månad",
 };
 
 /**
@@ -210,6 +211,14 @@ export function traffar(regel: Serieregel, datum: string): boolean {
       if (!regel.veckodagar.includes(dag)) return false;
       if ((regel.intervall ?? 1) === 1) return true;
       return veckorMellan(regel.starts_on, datum) % (regel.intervall ?? 1) === 0;
+    case "manadsvis": {
+      // Samma datum som serien började, eller månadens sista dag när månaden
+      // är kortare (en serie som börjar den 31:a infaller den 30 april).
+      const onskad = Number(regel.starts_on.slice(8, 10));
+      const [ar, man] = [Number(datum.slice(0, 4)), Number(datum.slice(5, 7))];
+      const sista = new Date(Date.UTC(ar, man, 0)).getUTCDate();
+      return Number(datum.slice(8, 10)) === Math.min(onskad, sista);
+    }
     default:
       return false;
   }
@@ -245,8 +254,10 @@ export function nastaForekomst(regel: Serieregel, fran: string): string | null {
    * måste ändras den dag ett månadsmönster läggs till — och då fäller provet
    * "nästa hittas för varje mönster" i tests/upprepning.mjs.
    */
-  // Varannan vecka: två veckor plus en dag räcker på samma sätt.
-  for (let i = 0; i < 8 + 7 * ((regel.intervall ?? 1) - 1); i++) {
+  // Varannan vecka: två veckor plus en dag räcker på samma sätt. Ett
+  // månadsmönster infaller inom 31 dagar.
+  const dygn = regel.monster === "manadsvis" ? 32 : 8 + 7 * ((regel.intervall ?? 1) - 1);
+  for (let i = 0; i < dygn; i++) {
     const dag = datumPlusDagar(start, i);
     if (regel.ends_on && dag > regel.ends_on) return null;
     if (traffar(regel, dag)) return dag;
@@ -265,6 +276,7 @@ export function nastaForekomst(regel: Serieregel, fran: string): string | null {
 export function monstertext(regel: Serieregel): string {
   if (regel.monster === "dagligen") return "Varje dag";
   if (regel.monster === "vardagar") return "Varje vardag";
+  if (regel.monster === "manadsvis") return `Varje månad den ${Number(regel.starts_on.slice(8, 10))}:e`;
 
   const namn = normaliseraVeckodagar(regel.veckodagar).map((d) => VECKODAG_NAMN[d]);
   const ord = (regel.intervall ?? 1) === 2 ? "Varannan" : "Varje";

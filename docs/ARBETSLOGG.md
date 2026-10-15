@@ -5,6 +5,31 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-15 · Nav 2.0, Kalendern: ingen funktion tas bort (0088–0091)
+
+Pass 7 skickade varje ändring till nuvarande Nav och stängde av att dra poster.
+Nu går de genom POST på `/nav2/kalender` med repots actions, och det navet
+saknade har fått backend.
+
+- **0088**: `lk_andra_mote` i samma mönster som `lk_flytta` (lås,
+  `lk_far_andra`, läget före, utkorgen). Ångrahandlingen `andra` tillåts, och
+  `lk_angra` återställer också rubriken — oförändrat för andra handlingar,
+  eftersom rubriken inte ändras av dem. Provat i en transaktion: rubrik,
+  plats och påminnelse ändrades, den nya deltagaren fick en inbjudan i
+  utkorgen, och ångra återställde allt och tog bort utkorgsraden.
+  `calendar_attendee.reminder_min` är deltagarens egen påminnelse.
+- **0089**: `manadsvis` i båda seriernas villkor och i `lk_skapa_serie`.
+  Datumen räknas i `upprepning.ts`: samma datum som serien började, eller
+  månadens sista dag. `nastaForekomst` söker 32 dygn för månadsmönstret.
+- **0090**: `is_private`. Nav 2.0 visar "Privat" för den som ser kalendern
+  utan att vara med; detaljen döljer plats och agenda.
+- **0091**: `show_as = 'annan'` ("Arbetar på annan plats").
+- **Mallen `andrad`** i `notistext` och `ICS_MALLAR` (ny version av inbjudan).
+  `tests/notiser-tackning.mjs` har de två nya actions.
+- **Provat lokalt** som Zen och Fredrik (`ndprov/kal.mjs`, `sess/p11.json`,
+  `sess/p16.json`): formuläret, förhandsvisningen och skrivknapparna når
+  rutten; inga exempel och inga fel.
+
 ## 2026-10-15 · Nav 2.0, Provision: ingen funktion tas bort (0087)
 
 Pass 6 skickade fastställandet, övrig bonus, målen och trappan till nuvarande

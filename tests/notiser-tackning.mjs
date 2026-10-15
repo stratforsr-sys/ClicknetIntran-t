@@ -166,6 +166,8 @@ const TACKNING = {
   // notifierat direkt hade Ångra inte kunnat ta tillbaka något.
   // ---------------------------------------------------------------------------
   "kalender/moten::skapaMote": "notifierar via utkorgen (lib/utkorg-server.ts)",
+  "kalender/moten::andraMote": "notifierar via utkorgen (lib/utkorg-server.ts)",
+  "kalender/moten::sattPaminnelse": "ändrar bara den egna påminnelsen; ingen annan berörs",
   "kalender/moten::svara": "notifierar via utkorgen (lib/utkorg-server.ts)",
   "kalender/moten::foreslaTid": "notifierar via utkorgen (lib/utkorg-server.ts)",
   "kalender/moten::godkannForslag": "notifierar via utkorgen (lib/utkorg-server.ts)",

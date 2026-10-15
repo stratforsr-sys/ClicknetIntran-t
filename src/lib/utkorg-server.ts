@@ -410,6 +410,8 @@ const ICS_MALLAR: Record<string, "REQUEST" | "CANCEL"> = {
   inbjudan: "REQUEST",
   "bokat-at-dig": "REQUEST",
   flyttad: "REQUEST",
+  // Nav 2.0 (0088): ändrad rubrik, plats eller agenda ger en ny version av inbjudan.
+  andrad: "REQUEST",
   "forslag-godkant": "REQUEST",
   installd: "CANCEL",
 };
