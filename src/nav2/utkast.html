@@ -10066,7 +10066,7 @@ function rGransk(r){
   return {lage:'ok', text:`Granskad ${r.granskad}`, dagar:d};
 }
 const stegAv = r => r.tl ? r.tl.flatMap(x => x[2]) : r.steg.map(s => s[0]);
-const lasMin = r => Math.max(1, Math.round((r.tldr + ' ' + (r.tl ? r.tl.flatMap(x => x[2]).join(' ') : r.steg.map(s => s.join(' ')).join(' ')) + r.fel.flat().join(' ')).split(/\s+/).length / 180));
+const lasMin = r => Math.max(1, Math.round((r.tldr + ' ' + (r.md || '') + ' ' + (r.tl ? r.tl.flatMap(x => x[2]).join(' ') : r.steg.map(s => s.join(' ')).join(' ')) + r.fel.flat().join(' ')).split(/\s+/).length / 180));
 const datumOm = d => { const dt = ND ? new Date(Date.parse(ND.idag + 'T12:00:00Z') + d * 864e5) : new Date(2026, 9, 9 + d); return `${VD[dt.getDay()]} ${dt.getDate()} ${['jan','feb','mar','apr','maj','jun','jul','aug','sep','okt','nov','dec'][dt.getMonth()]}`; };
 function relTyp(r, x){
   if (r.resa && x.resa){ if (x.resa < r.resa) return 'Gör först'; if (x.resa > r.resa) return 'Nästa steg'; }
@@ -22778,7 +22778,7 @@ function rtnKropp(r, {stegLista, gjorda, harSteg, kv, klarN}){
   const seg = harSteg ? rtnRadio('Läsläge', `<button type="button" data-rfollow="0" aria-pressed="${!S.rFollow}">Läs</button><button type="button" data-rfollow="1" aria-pressed="${S.rFollow}">Följ steg för steg</button>`) : '';
   return `
     <section class="rtn-sam">${note(75)}
-      <div class="rtn-nar"><span class="rtn-rm">När</span><b>${esc(r.nar)}</b></div>
+      ${r.nar ? `<div class="rtn-nar"><span class="rtn-rm">När</span><b>${esc(r.nar)}</b></div>` : ''}
       <p class="rtn-sum">${esc(r.tldr)}</p>
       <dl class="rtn-dl">${r.vem ? `<div><dt>Vem</dt><dd>${esc(r.vem)}</dd></div>` : ''}${r.tid ? `<div><dt>Tar</dt><dd>${esc(r.tid)}</dd></div>` : ''}${resaSteg ? `<div><dt>I säljresan</dt><dd>Steg ${resaSteg.n} av 7: ${resaSteg.namn}</dd></div>` : ''}</dl>
       ${kurs ? `<button type="button" class="rtn-kurs" data-uplay="${kurs.id}">${I('utb')}<span><b>Kortkurs: ${esc(kurs.t)}</b><span class="rtn-rm">${kurs.min} min · ${esc(kurs.besk)}</span></span>${I('arrow')}</button>` : ''}
@@ -27219,6 +27219,9 @@ function ndRutStart(){
 }
 
 /* ---------- Utkastets funktioner med navets data ---------- */
+// "Jag behöver": navets rutiner, i den ordning ndRutStart lagt dem (mest lästa först).
+const _ndSituationer = situationer;
+situationer = function(){ return ndRut() ? SIT.slice() : _ndSituationer(); };
 // Granskningen räknas från i dag, inte från fre 9 okt.
 const _ndRGransk = rGransk;
 rGransk = function(r){
