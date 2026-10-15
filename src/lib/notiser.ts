@@ -601,6 +601,17 @@ export const NOTIS_KALLOR = [
   "tid-sen-forklaring",
 
   /**
+   * Nav 2.0 (0095), Rutiner: "hjälpte inte" till ägaren, ägarens svar,
+   * en rutin som skickats till en kollega, påminnelsen om att kvittera, och
+   * bevakningen av ett område.
+   */
+  "rutin-aterkoppling",
+  "rutin-svar",
+  "rutin-delad",
+  "rutin-kvittera",
+  "rutin-bevakning",
+
+  /**
    * ANGRA-KNAPPEN HAR MED FLIT INGEN KALLA HAR.
    *
    * `/angra` provades och togs bort igen. Kvittot med angra-knappen visas bara
@@ -709,6 +720,11 @@ export const HANDELSEKALLOR = [
   "tid-chef-kvar",
   "tid-schema-sett",
   "tid-sen-forklaring",
+  "rutin-aterkoppling",
+  "rutin-svar",
+  "rutin-delad",
+  "rutin-kvittera",
+  "rutin-bevakning",
 ] as const satisfies readonly Notiskalla[];
 
 export type Handelsekalla = (typeof HANDELSEKALLOR)[number];

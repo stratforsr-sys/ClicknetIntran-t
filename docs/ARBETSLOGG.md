@@ -5,6 +5,31 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-15 · Nav 2.0, pass 10: Rutiner med riktig data och allt utkastet har (0095–0096)
+
+Rutiner var inte kopplat. Utkastets ~40 rutiner är exempel; i navet finns tre
+dokument, och det är dem vyn visar nu.
+
+- **Innehållet i `body_md`** med en fast form (`src/lib/nav2/rutinformat.ts`):
+  sammanfattning, När/Tar/Vem, "Gör så här", "Klart när" och "Om det går fel".
+  Då följer det med i versionerna, sökningen och repots egen sida. En text
+  utan formen visas som den är; redaktören skriver inte om den förrän stegen
+  fylls i, och då står den gamla texten kvar under.
+- **Repots actions** i `/nav2/rutiner`: `skapaDokument`/`sparaDokument` (som
+  avslutar med `redirect()`, som rutten tar som ett ja), `kvittera`,
+  `markeraGranskad` (sex månader) och `arkivera`; uppgifter ur en rutin med
+  `skapaUppgift`.
+- **0095** (körd): `document.routine_meta` (område, kategori, säljresan,
+  sökord, relaterade, uppgifter, "ny för dig"), `document_saved`,
+  `document_note`, `document_run` ("Logga som gjort"), `document_feedback`
+  ("Hjälpte rutinen dig?" och ägarens svar), `document_area_watch` och
+  `nav_setting` (veckans rutin). **0096** (körd): `document_view_log` (mest
+  lästa i teamet och bolaget, trenden, läst i månaden, oläst på 90 dagar) och
+  `document_search_miss` (frågor utan rutin, utan namn).
+- Utkastets exempel töms i riktigt läge: populära, situationer, kollegor,
+  kunder, ägare, uppdaterat, återkoppling och "vem saknar en kvittens" kommer
+  ur navet. Ägarens närvaro visas inte (Tid lovar att kollegor inte ser den).
+
 ## 2026-10-15 · Nav 2.0, Tid: ingen funktion tas bort (0094)
 
 Pass 2 skickade stämpla, rätta, besluta, attestera och schemalägga till

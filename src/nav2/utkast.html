@@ -10067,7 +10067,7 @@ function rGransk(r){
 }
 const stegAv = r => r.tl ? r.tl.flatMap(x => x[2]) : r.steg.map(s => s[0]);
 const lasMin = r => Math.max(1, Math.round((r.tldr + ' ' + (r.tl ? r.tl.flatMap(x => x[2]).join(' ') : r.steg.map(s => s.join(' ')).join(' ')) + r.fel.flat().join(' ')).split(/\s+/).length / 180));
-const datumOm = d => { const dt = new Date(2026, 9, 9 + d); return `${VD[dt.getDay()]} ${dt.getDate()} ${['jan','feb','mar','apr','maj','jun','jul','aug','sep','okt','nov','dec'][dt.getMonth()]}`; };
+const datumOm = d => { const dt = ND ? new Date(Date.parse(ND.idag + 'T12:00:00Z') + d * 864e5) : new Date(2026, 9, 9 + d); return `${VD[dt.getDay()]} ${dt.getDate()} ${['jan','feb','mar','apr','maj','jun','jul','aug','sep','okt','nov','dec'][dt.getMonth()]}`; };
 function relTyp(r, x){
   if (r.resa && x.resa){ if (x.resa < r.resa) return 'Gör först'; if (x.resa > r.resa) return 'Nästa steg'; }
   return 'Läs också';
@@ -22573,7 +22573,7 @@ sparadeVy = function(){
 // Vem som saknar en kvittens, och om personen läst en äldre version (AC-5.6 i repot):
 // skillnaden avgör hur påminnelsen ska låta.
 const RTN_SAKNAR = ['Jonas Lindqvist','Nora Sjöberg','Oskar Brandt','Tilda Wik','Erik Moberg','Mohammed Aziz','Viktor Holm','Sara Nyström','Elin Berg','Amira Haddad','Kim Lund','Lisa Ek','Petra Sandberg','Ali Rahimi'];
-const rtnSaknar = r => r.kvittGrad ? RTN_SAKNAR.slice(0, r.kvittGrad[1] - r.kvittGrad[0]).map((n, i) => [n, r.v > 1 && i % 2 === 0 ? `har kvitterat version ${r.v - 1}` : 'har aldrig kvitterat']) : [];
+const rtnSaknar = r => ND && ND.rutiner ? (r.saknar || []).map(n => [n, r.v > 1 ? `har inte kvitterat version ${r.v}` : 'har aldrig kvitterat']) : r.kvittGrad ? RTN_SAKNAR.slice(0, r.kvittGrad[1] - r.kvittGrad[0]).map((n, i) => [n, r.v > 1 && i % 2 === 0 ? `har kvitterat version ${r.v - 1}` : 'har aldrig kvitterat']) : [];
 forvaltningVy = function(){
   const forf = RUT.filter(r => rGransk(r).lage === 'forfallen'), snart = RUT.filter(r => rGransk(r).lage === 'snart');
   const kv = RUT.filter(r => r.kvittGrad), olast = RUT.filter(r => r.oläst);
@@ -22889,7 +22889,7 @@ fusklapp = function(r){
 /* ---------- Redigera och skapa (ur repots Redaktor.tsx) ---------- */
 // AC-5.1: ingen publicering utan ägare och granskningsdatum. AC-5.4: ändras rubrik eller text blir det
 // en ny version, och kvittenserna nollställs för den. AC-5.9: en lagkrävd typ granskas inom ett år.
-const RTN_ETT_AR = '2027-10-09';
+const RTN_ETT_AR = ND ? `${+ND.idag.slice(0, 4) + 1}${ND.idag.slice(4)}` : '2027-10-09';
 const rtnFalt = r => ({t:r.t, omr:r.omr, kat:r.kat, typ:r.typ, nar:r.nar, vem:r.vem || '', tldr:r.tldr, steg:r.steg.map(s => [s[0], s[1] || '']), agare:r.agare, nasta:r.nasta, kvitt:!!r.kvitt, not:''});
 function rtnRedNy(titel = ''){ const f = {t:titel, omr:'salj', kat:'', typ:'routine', nar:'', vem:'Alla', tldr:'', steg:[['', '']], agare:ME[S.role].namn, nasta:'2027-04-09', kvitt:false, not:''}; return {id:null, uid:null, fraga:false, fel:{}, fran:'lista', titel, f, orig:JSON.stringify(f)}; }
 function rtnRedFran(r, fran){ const f = rtnFalt(r); return {id:r.id, uid:null, fraga:false, fel:{}, fran, f, orig:JSON.stringify(f)}; }
@@ -22934,7 +22934,7 @@ function rtnRedHtml(red){
         ${falt('kat', 'Kategori', `<input id="rtnF-kat" class="rtn-in" data-rtnf="kat" list="rtnKatL" value="${esc(f.kat)}" autocomplete="off" placeholder="Till exempel Kundkontakt"><datalist id="rtnKatL">${kat.map(k => `<option value="${esc(k)}"></option>`).join('')}</datalist>`)}
         ${falt('typ', 'Typ', sel('typ', Object.entries(TYP).map(([k, l]) => `<option value="${k}" ${f.typ === k ? 'selected' : ''}>${l}</option>`).join('')), LAGKRAV.includes(f.typ) ? 'Lagkrav: granskas minst en gång om året.' : '')}
         ${falt('agare', 'Ägare', sel('agare', `<option value="">Välj ägare</option>${[...new Set([...RTN_AGARE, f.agare].filter(Boolean))].map(n => `<option ${f.agare === n ? 'selected' : ''}>${esc(n)}</option>`).join('')}`), 'Den som ansvarar för att innehållet stämmer.')}
-        ${falt('nasta', 'Granskas senast', `<input id="rtnF-nasta" type="date" class="rtn-in" data-rtnf="nasta" value="${esc(f.nasta)}" min="2026-10-09"${LAGKRAV.includes(f.typ) ? ` max="${RTN_ETT_AR}"` : ''}${inv('nasta')}>`)}
+        ${falt('nasta', 'Granskas senast', `<input id="rtnF-nasta" type="date" class="rtn-in" data-rtnf="nasta" value="${esc(f.nasta)}" min="${ND ? ND.idag : '2026-10-09'}"${LAGKRAV.includes(f.typ) ? ` max="${RTN_ETT_AR}"` : ''}${inv('nasta')}>`)}
         ${falt('vem', 'Gäller', `<input id="rtnF-vem" class="rtn-in" data-rtnf="vem" list="rtnVemL" value="${esc(f.vem)}" autocomplete="off"><datalist id="rtnVemL">${['Alla','Säljaren','Säljchefen','Säljaren och säljchefen','Ledningen'].map(v => `<option value="${v}"></option>`).join('')}</datalist>`)}
         <label class="rtn-kryss"><input type="checkbox" data-rtnf="kvitt" ${f.kvitt ? 'checked' : ''}><span><b>Kräver kvittens</b><span class="rtn-rm">Alla som den gäller bekräftar att de läst varje version.</span></span></label>
       </div>
@@ -27168,6 +27168,173 @@ window.addEventListener('error', e => ndFelFangat(e.message || 'Okänt fel', e.e
 window.addEventListener('unhandledrejection', e => ndFelFangat((e.reason && e.reason.message) || String(e.reason), e.reason && e.reason.stack));
 
 if (ndF()){ ndFelStart(); NDKOPPLAD.add('fel'); }
+
+/* =====================================================================
+   NAV 2.0 I RIKTIGT LÄGE: RUTINER (prefix nd)
+
+   Navets dokument ur ND.rutiner (src/lib/nav2/rutiner.ts) i stället för
+   utkastets exempel. Innehållet är tolkat ur body_md (rutinformat.ts); en
+   text utan den fasta formen visas som den är, under "Gör så här".
+
+   Allt utkastet har finns kvar (beställaren 2026-10-15). Det som sparar går
+   till /nav2/rutiner (src/app/nav2/rutiner/route.ts): repots skapa, spara,
+   kvittera, granska och arkivera, och 0095–0096 för resten. I läsläge
+   svarar rutten 423 och visar varför.
+   ===================================================================== */
+
+const ndRut = () => ND && ND.rutiner;
+// Datum i utkastet räknades från fre 9 okt 2026. I riktigt läge från i dag.
+const ndRutIdag = () => (ND && ND.idag) || '2026-10-09';
+function ndRutPlusMan(n){ const d = new Date(ndRutIdag() + 'T12:00:00Z'); d.setUTCMonth(d.getUTCMonth() + n); return d.toISOString().slice(0, 10); }
+
+function ndRutFalt(r){
+  return {t:r.t, omr:r.omr, kat:r.kat, typ:r.typ, nar:r.nar, vem:r.vem || '', tldr:r.tldr, steg:r.steg.length ? r.steg.map(s => [s[0], s[1] || '']) : [['', '']], agare:r.agare, nasta:r.nasta, kvitt:!!r.kvitt, not:''};
+}
+function ndRutStart(){
+  const d = ndRut(); if (!d) return;
+  RUT.splice(0, RUT.length, ...d.rutiner.map(r => ({...r, uppg:r.uppg || undefined, 'oläst':d.olast.includes(r.id)})));
+  const tom = o => Object.keys(o).forEach(k => delete o[k]);
+  tom(HJALPT); RUT.forEach(r => { if (r.hjalpt) HJALPT[r.id] = r.hjalpt; });
+  tom(SVAR); Object.entries(d.svar).forEach(([k, v]) => { SVAR[k] = [v.vem, v.text]; });
+  tom(NARK); tom(AGARSTATUS); tom(TREND); Object.assign(TREND, d.trend);
+  UPPDATERAT.splice(0, UPPDATERAT.length, ...d.uppdaterat.map(([id, dag]) => [id, dag, `Version ${(rutin(id) || {}).v || ''}`]));
+  POPULART.splice(0, POPULART.length, ...d.populart.team);
+  BOLAGET.splice(0, BOLAGET.length, ...d.populart.bolag);
+  SENAST.splice(0, SENAST.length);
+  FRAGOR_UTAN.splice(0, FRAGOR_UTAN.length, ...d.missar);
+  EFTER_KUNDER.splice(0, EFTER_KUNDER.length);
+  // "Jag behöver": de mest lästa först, och sedan resten. Navet har inga situationer utöver rutinerna själva.
+  const ord = [...new Set([...d.populart.bolag, ...RUT.map(r => r.id)])];
+  SIT.splice(0, SIT.length, ...ord.map(id => rutin(id)).filter(Boolean).map(r => [r.t, r.id, omrade(r.omr).ikon]));
+  KOLLEGOR.splice(0, KOLLEGOR.length, ...(ND.personer || []).filter(p => p.id !== ND.jag.id && p.status !== 'offboarded').map(p => p.namn));
+  KUNDER.splice(0, KUNDER.length, ...[...new Set((typeof ORDER !== 'undefined' ? ORDER : []).filter(o => o.vemId === ND.jag.id && o.bolag).map(o => o.bolag))].slice(0, 5));
+  RTN_AGARE.splice(0, RTN_AGARE.length, ...d.agare.map(a => a.namn));
+  Object.assign(S, {
+    sparade:new Set(d.sparade), rNotes:{...d.anteckningar}, rBevaka:new Set(d.bevakar), rLogged:new Set(d.loggatIdag),
+    rRead:new Set(RUT.filter(r => r.sett).map(r => r.id)), rReadV:Object.fromEntries(RUT.filter(r => r.sett).map(r => [r.id, r.settV])), rReadAt:{},
+    rFbList:d.aterkoppling.map(x => [x.rutin, x.text, x.vem, '', x.id]), rSearches:[...d.sokningar], rLast:[], rKvittTid:{},
+    rtnUtkast:d.utkast.map(u => ({uid:u.id, andrad:u.andrad, f:ndRutFalt(u.rutin)})), rtnArkiv:d.arkiv.map(a => ({...a})),
+    rtnVeckans:d.veckans || (RUT[0] && RUT[0].id) || null, rtnVerLog:{}
+  });
+}
+
+/* ---------- Utkastets funktioner med navets data ---------- */
+// Granskningen räknas från i dag, inte från fre 9 okt.
+const _ndRGransk = rGransk;
+rGransk = function(r){
+  if (!ndRut()) return _ndRGransk(r);
+  const d = Math.round((Date.parse(r.nasta) - Date.parse(ndRutIdag())) / 86400000), kort = new Date(r.nasta).toLocaleDateString('sv-SE', {day:'numeric', month:'short'});
+  if (d < 0) return {lage:'forfallen', text:`Ej granskad sedan ${kort}`, dagar:d};
+  if (d <= 45) return {lage:'snart', text:`Granskas senast ${kort}`, dagar:d};
+  return {lage:'ok', text:`Granskad ${r.granskad}`, dagar:d};
+};
+const _ndRtnRedNy = rtnRedNy;
+rtnRedNy = function(titel = ''){
+  const red = _ndRtnRedNy(titel); if (!ndRut()) return red;
+  red.f.agare = ND.jag.namn; red.f.nasta = ndRutPlusMan(6); red.orig = JSON.stringify(red.f); return red;
+};
+// Versionerna är navets (document_version), med datum och ändringsnot.
+const _ndRtnVersioner = rtnVersioner;
+rtnVersioner = function(r){ return ndRut() && r.versioner ? r.versioner.map(v => [v.v, v.d, v.not || (v.v === 1 ? 'Första versionen' : '')]) : _ndRtnVersioner(r); };
+// En text utan den fasta formen visas som den är under "Gör så här".
+function ndMd(md){
+  const rader = String(md || '').split('\n'), ut = []; let lista = null;
+  const inl = t => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\*(.+?)\*/g, '<i>$1</i>');
+  const stang = () => { if (lista){ ut.push(`</${lista}>`); lista = null; } };
+  for (const r of rader){
+    const t = r.trim();
+    if (!t){ stang(); continue; }
+    let m;
+    if ((m = t.match(/^(#{1,4})\s+(.*)$/))){ stang(); ut.push(`<h4>${inl(m[2])}</h4>`); continue; }
+    if ((m = t.match(/^\d+\.\s+(.*)$/))){ if (lista !== 'ol'){ stang(); ut.push('<ol>'); lista = 'ol'; } ut.push(`<li>${inl(m[1])}</li>`); continue; }
+    if ((m = t.match(/^[-*]\s+(.*)$/))){ if (lista !== 'ul'){ stang(); ut.push('<ul>'); lista = 'ul'; } ut.push(`<li>${inl(m[1])}</li>`); continue; }
+    stang(); ut.push(`<p>${inl(t)}</p>`);
+  }
+  stang(); return `<div class="rtn-md">${ut.join('')}</div>`;
+}
+const _ndRtnStegHtml = rtnStegHtml;
+rtnStegHtml = function(r, stegLista, kv){ return ndRut() && !r.steg.length && r.md ? ndMd(r.md) : _ndRtnStegHtml(r, stegLista, kv); };
+
+/* ---------- Skrivningar: /nav2/rutiner ---------- */
+async function ndRutPost(handling, data = {}, {ladda = true, tyst = false} = {}){
+  try {
+    const r = await fetch('/nav2/rutiner', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
+    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    if (s.ok !== undefined && !s.fel){ if (!tyst && s.ok) toast(s.ok); if (ladda){ try { sessionStorage.setItem('nd-rut', JSON.stringify({open:S.rOpen, tab:S.rtab})); } catch(_){} setTimeout(() => location.reload(), 700); } return s; }
+    if (!tyst) toast(s.fel || 'Det gick inte att spara.'); return s;
+  } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
+}
+(() => { if (!ndRut()) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-rut') || 'null'); sessionStorage.removeItem('nd-rut'); } catch(_){}
+  if (m) setTimeout(() => { S.view = 'rutiner'; if (m.tab) S.rtab = m.tab; if (m.open && rutin(m.open)) S.rOpen = m.open; render(); }, 0); })();
+// Öppnad: navets visning (document_view och loggen), tyst.
+const _ndROppna = rOppna;
+rOppna = function(id, kvitt){ _ndROppna(id, kvitt); if (ndRut() && rutin(id)) ndRutPost('visa', {id}, {ladda:false, tyst:true}); };
+const _ndRKvittera = rKvittera;
+rKvittera = function(id){ if (!ndRut()) return _ndRKvittera(id); ndRutPost('kvittera', {id}); };
+const _ndRtnArkivera = rtnArkivera;
+rtnArkivera = function(id){ if (!ndRut()) return _ndRtnArkivera(id); ndRutPost('arkivera', {id}); };
+// Redaktören: utkastets kontroller, sedan repots skapa eller spara.
+const _ndRtnRedSpara = rtnRedSpara;
+rtnRedSpara = function(hur){
+  if (!ndRut()) return _ndRtnRedSpara(hur);
+  const red = S.rtnRed, f = red.f, r = red.id && rutin(red.id), fel = {};
+  if (!f.t.trim()) fel.t = 'Skriv en rubrik.';
+  if (hur !== 'utk'){ if (!f.agare) fel.agare = 'Välj en ägare. En rutin som ingen ansvarar för slutar snabbt att stämma.'; if (!f.nasta) fel.nasta = 'Välj när den senast ska granskas.'; else if (LAGKRAV.includes(f.typ) && f.nasta > RTN_ETT_AR) fel.nasta = 'Ett lagkrav granskas inom ett år.'; }
+  if (r && rtnRedInnehall(r, f) && !f.not.trim()) fel.not = 'Skriv vad som är nytt. Det står i historiken och i kvittensen.';
+  if (Object.keys(fel).length){ red.fel = fel; render(); setTimeout(() => document.getElementById('rtnF-' + Object.keys(fel)[0])?.focus(), 0); return; }
+  const agare = ndRut().agare.find(a => a.namn === f.agare);
+  const falt = {t:f.t.trim(), omr:f.omr, kat:f.kat.trim(), typ:f.typ, nar:f.nar.trim(), vem:f.vem.trim(), tldr:f.tldr.trim(), steg:rtnStegRen(f.steg),
+    klart:r ? r.klart : [], fel:r ? r.fel : [], tid:r ? r.tid : '', agare:agare ? agare.id : null, nasta:f.nasta || ndRutPlusMan(6), kvitt:!!f.kvitt, not:(f.not || '').trim(),
+    resa:r ? r.resa : null, syn:r ? r.syn : [], rel:r ? r.rel : [], uppg:r ? r.uppg || null : null, ny:r ? !!r.ny : false};
+  ndRutPost('spara', {id:r ? r.id : red.uid || undefined, f:falt, hur:hur === 'pub' ? 'publicera' : hur === 'utk' ? 'utkast' : 'spara'});
+};
+document.addEventListener('click', e => {
+  if (!ndRut()) return;
+  const t = e.target.closest && e.target.closest('button, a, label'); if (!t || !t.dataset) return;
+  const d = t.dataset, stopp = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+  if (S.view !== 'rutiner') return;
+  if (d.rspara){ stopp(); const id = d.rspara, pa = !S.sparade.has(id); ndRutPost('spara-stjarna', {id, pa}, {ladda:false}).then(s => { if (!s.fel){ pa ? S.sparade.add(id) : S.sparade.delete(id); render(); } }); return; }
+  if (d.rbevaka){ stopp(); const k = d.rbevaka, pa = !S.rBevaka.has(k); ndRutPost('bevaka', {omr:k, pa}, {ladda:false}).then(s => { if (!s.fel){ pa ? S.rBevaka.add(k) : S.rBevaka.delete(k); render(); } }); return; }
+  if (d.rlogga){ stopp(); ndRutPost('logga', {id:d.rlogga, kund:S.rKund || ''}, {ladda:false}).then(s => { if (!s.fel){ S.rLogged.add(d.rlogga); render(); } }); return; }
+  if (d.rja){ stopp(); ndRutPost('hjalpte', {id:d.rja, ja:true}, {ladda:false}).then(s => { if (!s.fel){ S.rtnJa.add(d.rja); S.rFeedback = null; HJALPT[d.rja] = (HJALPT[d.rja] || 0) + 1; render(); } }); return; }
+  if (d.rgransk){ stopp(); ndRutPost('granska', {id:d.rgransk}); return; }
+  if (d.rpaminn){ stopp(); ndRutPost('paminn', {id:d.rpaminn}, {ladda:false}); return; }
+  if (d.rpaminnalla !== undefined){ stopp(); ndRutPost('paminn-alla', {}, {ladda:false}); return; }
+  if (d.rarkiv){ stopp(); ndRutPost('arkivera', {id:d.rarkiv}); return; }
+  if (d.rtnater){ stopp(); ndRutPost('aterstall', {id:d.rtnater}); return; }
+  if (d.rtnutkbort){ stopp(); ndRutPost('utkast-bort', {id:d.rtnutkbort}); return; }
+  if (d.rskickatill){ stopp(); const p = (ND.personer || []).find(x => x.namn === d.rskickatill); if (!p){ toast('Personen finns inte i Nav.'); return; }
+    ndRutPost('skicka', {id:S.rSkicka || S.rOpen, till:p.id}, {ladda:false}).then(s => { if (!s.fel){ S.rSkicka = null; render(); } }); return; }
+  if (d.rskapa || d.rskapa1){ stopp(); const [id, ett] = (d.rskapa || d.rskapa1).split('|'), r = rutin(id); if (!r || !r.uppg) return;
+    const sel = ett !== undefined ? new Set([+ett]) : (S.rUppSel || new Set(r.uppg.map((_, i) => i)));
+    ndRutPost('uppgifter', {id, rader:r.uppg.filter((_, i) => sel.has(i)), kund:S.rKund || ''}, {ladda:false}).then(s => { if (!s.fel && ett === undefined){ S.rUppDone[id] = {n:sel.size, kund:S.rKund}; render(); } }); return; }
+  if (d.rfeluppg){ stopp(); const [id, i] = d.rfeluppg.split('|'), r = rutin(id); if (!r) return; const [, gor] = r.fel[+i];
+    ndRutPost('uppgifter', {id, rader:[[gor.replace(/^Följ rutinen /, 'Läs ').replace(/\.$/, ''), 0]]}, {ladda:false}).then(s => { if (!s.fel){ S.rtnLagda.add(`${id}|${i}`); render(); } }); return; }
+  if (d.rbesuppg){ stopp(); ndRutPost('uppgifter', {id:S.rOpen, rader:[[d.rbesuppg, 0]]}, {ladda:false}); return; }
+}, true);
+// Formulären: "vad saknades" till ägaren, och ägarens svar.
+document.addEventListener('submit', e => {
+  if (!ndRut()) return;
+  const f = e.target; if (!f.dataset) return;
+  if (f.dataset.rfb !== undefined){ e.preventDefault(); e.stopImmediatePropagation(); const id = f.dataset.rfb, text = (f.querySelector('input') || {}).value || '';
+    ndRutPost('hjalpte', {id, ja:false, skal:S.rFbReason || '', text:text.trim()}, {ladda:false}).then(s => { if (!s.fel){ S.rFeedback = null; S.rFbReason = null; render(); } }); return; }
+  if (f.dataset.rtnsvarf !== undefined){ e.preventDefault(); e.stopImmediatePropagation(); const i = +f.dataset.rtnsvarf, inp = f.querySelector('input'), txt = inp.value.trim(), rad = S.rFbList[i];
+    if (!txt){ inp.setAttribute('aria-invalid', 'true'); inp.placeholder = 'Skriv ett svar först.'; inp.focus(); return; }
+    ndRutPost('svara', {fb:rad[4], text:txt}, {ladda:false}).then(s => { if (!s.fel){ S.rFbList.splice(i, 1); S.rtnSvar = null; render(); } }); }
+}, true);
+// Veckans rutin och din anteckning.
+document.addEventListener('change', e => {
+  if (!ndRut() || !e.target.dataset) return;
+  if (e.target.dataset.rtnveckans !== undefined){ e.stopImmediatePropagation(); const id = e.target.value; ndRutPost('veckans', {id}, {ladda:false}).then(s => { if (!s.fel){ S.rtnVeckans = id; S.rtnVeckVal = false; render(); } }); }
+}, true);
+let ndRutNotTimer = null, ndRutSokTimer = null, ndRutSokSist = '';
+document.addEventListener('input', e => {
+  if (!ndRut() || !e.target.dataset) return;
+  if (e.target.dataset.rnote){ const id = e.target.dataset.rnote, v = e.target.value; S.rNotes[id] = v; clearTimeout(ndRutNotTimer); ndRutNotTimer = setTimeout(() => ndRutPost('anteckning', {id, text:v}, {ladda:false, tyst:true}).then(s => { if (s.laslage) toast(s.fel); }), 900); }
+  // Sökningen: dina senaste, och en sökning utan träff utan ditt namn.
+  if (e.target.id === 'rsok'){ clearTimeout(ndRutSokTimer); ndRutSokTimer = setTimeout(() => { const q = S.rq.trim(); if (q.length < 2 || q === ndRutSokSist) return; ndRutSokSist = q; ndRutPost('sok', {q, traffar:rSok(q).length}, {ladda:false, tyst:true}); }, 1500); }
+}, true);
+if (ndRut()){ ndRutStart(); NDKOPPLAD.add('rutiner'); }
 
 /* Start */
 try { const th = localStorage.getItem('nav2-theme'); if (th && th !== 'auto'){ document.documentElement.setAttribute('data-theme', th); S.theme = th; document.querySelectorAll('#themeSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.themeSet === th))); } } catch(_){}

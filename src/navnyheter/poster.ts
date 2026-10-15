@@ -33,6 +33,10 @@ behörigheter som här: du ser bara det du får se.
   rättar du en stämpling på raden, kollar veckan på fredagen och väljer egna
   påminnelser; chefen ser rättelserna med stöd, nästa veckas frånvaro och
   lönerapportens steg.
+- **Rutiner**, navets egna: sök, spara, följ steg för steg, kvittera, säg om
+  rutinen hjälpte och bevaka ett område. Ägaren svarar på återkopplingen,
+  och den som förvaltar rutinerna ser kvittenser, granskning och vad folk
+  sökt efter utan att hitta.
 - **Order** och kundkortet. Varje order har nu ett nummer (#12), och
   provisionen är navets: fryst på en godkänd order, och det godkännandet
   skulle ge på en som väntar. I kortet spelar du inspelningen direkt, skriver
