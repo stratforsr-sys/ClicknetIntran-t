@@ -85,16 +85,19 @@ export async function GET(request: Request) {
     underlag: {
       periodId: id,
       rader: (rader ?? [])
-        .map((r) => ({
+        .map((r) => {
+          const vem = p.get(r.employee_id);
+          return {
           pid: r.employee_id,
-          namn: p.get(r.employee_id) ? fullName(p.get(r.employee_id)) : "Okänd",
-          nr: String(p.get(r.employee_id)?.employee_number ?? ""),
+          namn: vem ? fullName(vem) : "Okänd",
+          nr: String(vem?.employee_number ?? ""),
           arbetad: r.worked_minutes,
           justering: j.get(r.employee_id) ?? 0,
           stangda: r.auto_closed_days,
           utanfor: r.over_minutes ?? 0,
           franvaro: r.absence_minutes ?? {},
-        }))
+          };
+        })
         .sort((a, b) => a.namn.localeCompare(b.namn, "sv")),
     },
   });
@@ -253,8 +256,8 @@ export async function POST(request: Request) {
         }
         let n = 0;
         for (const r of ids.slice(0, 50)) {
-          const s = await fangad(() => beslutaRattelse(form({ rattelse_id: r, beslut: ja ? "godkann" : "avsla" })));
-          if (s && typeof s === "object" && "fel" in s) return svar({ fel: s.fel }, 403);
+          const s = (await fangad(() => beslutaRattelse(form({ rattelse_id: r, beslut: ja ? "godkann" : "avsla" })))) as { fel?: string } | undefined;
+          if (s?.fel) return svar({ fel: s.fel }, 403);
           const { data: efter } = await db.from("time_event").select("correction_state, decided_by").eq("id", r).maybeSingle();
           if (efter?.decided_by !== mig) continue;
           if (!ja) await db.from("time_correction_extra").upsert({ time_event_id: r, reject_reason: skal, updated_at: new Date().toISOString() });

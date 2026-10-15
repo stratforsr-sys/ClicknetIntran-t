@@ -34,7 +34,7 @@ async function kor(request: NextRequest) {
   const db = supabaseAdmin();
   // Nav 2.0 (0094): var och ens val under "Påminn mig", bara när Tid i Nav 2.0 är påslagen.
   const val = SKRIVLAGE.tid ? await egnaPaminnelser(db) : null;
-  const stampling = await korDagtidsjobbet(db, new Date(), val ? new Map([...val].map(([k, v]) => [k, v.in])) : undefined);
+  const stampling = await korDagtidsjobbet(db, new Date(), val ? new Map([...val].map(([k, v]): [string, { pa: boolean; min: number }] => [k, v.in])) : undefined);
   // 0070: Leveranskalenderns serier, förberedelser och utkorg. Eget steg med
   // eget kvitto, så att ett fel i det ena inte döljer det andra.
   let kalender: unknown;
