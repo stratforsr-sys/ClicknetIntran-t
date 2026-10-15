@@ -157,7 +157,7 @@ export function formaUtskrift(r: { status: string; segments: unknown; error: str
   return {
     status: status === "klar" || status === "fel" ? status : "ko",
     segment: seg
-      .map((x) => {
+      .map((x): NdUtskrift["segment"][number] => {
         const vem = x.vem;
         return {
           s: Number(x.s) || 0,
