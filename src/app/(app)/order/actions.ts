@@ -658,7 +658,12 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
     // En FRI order far vilket tal som helst inom databasens ram, for dess belopp
     // satts anda for hand. Bestallarens val 2026-09-24.
     // ===========================================================================
-    const friOrder = hanterare && form.get("fri_order") === "on";
+    // Nav 2.0 (beställaren 2026-10-15): säljaren får lägga en fri order, och den
+    // går inte ut förrän säljchef, VD eller ekonomi godkänt den. Markören
+    // `fri_order_ritad` skickas bara från /nav2, så /order beter sig som förut.
+    const friOrder = (hanterare || form.has("fri_order_ritad")) && form.get("fri_order") === "on";
+    const friSkal = String(form.get("fri_skal") ?? "").trim().slice(0, 500) || null;
+    if (friOrder && !hanterare && !friSkal) return { fel: "Skriv varför ordern ligger utanför paketen." };
 
     if (friOrder) {
       if (!giltigBindningstid(loptid)) {
@@ -743,6 +748,8 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
       financed: finans,
       proposed_commission_amount: angiven?.belopp ?? null,
       proposed_commission_percent: angiven?.procent ?? null,
+      // 0085: skälet till en fri order, när det skrivits.
+      ...(friOrder && friSkal ? { free_order_reason: friSkal } : {}),
       note,
       status: godkannDirekt ? "signerad" : "inskickad",
       created_by: user.employee!.id,
@@ -2665,10 +2672,12 @@ export async function redigeraOgodkand(_prev: Orderstate, form: FormData): Promi
     // FRI ORDER: chefskretsen väljer med kryssrutan; säljaren behåller det
     // ordern redan är. Ett månadsbelopp på ordern ÄR det som gör den fri —
     // se `raknaFramProvision` och `godkannOrder`.
-    const friOrder = hanterare ? form.get("fri_order") === "on" : rad.monthly_amount != null;
+    // Nav 2.0: med markören `fri_order_ritad` väljer säljaren också (beställaren 2026-10-15).
+    const valjerFri = hanterare || form.has("fri_order_ritad");
+    const friOrder = valjerFri ? form.get("fri_order") === "on" : rad.monthly_amount != null;
     let manadsbelopp: number | null = null;
     if (friOrder) {
-      manadsbelopp = hanterare
+      manadsbelopp = valjerFri
         ? tolkaBelopp(String(form.get("monthly_amount") ?? ""))
         : Number(rad.monthly_amount);
       if (manadsbelopp === null || !(manadsbelopp > 0)) return { fel: "Skriv vad kunden betalar per månad." };
@@ -2705,7 +2714,7 @@ export async function redigeraOgodkand(_prev: Orderstate, form: FormData): Promi
     // manadsbeloppet. Saljaren som redigerar sitt utkast ror den inte alls —
     // nycklarna skrivs da inte.
     let angiven: { belopp: number | null; procent: number | null } | null = null;
-    if (hanterare) {
+    if (valjerFri) {
       if (!friOrder) {
         angiven = { belopp: null, procent: null };
       } else if (form.has("provision_form")) {
@@ -2740,6 +2749,8 @@ export async function redigeraOgodkand(_prev: Orderstate, form: FormData): Promi
             proposed_commission_percent: angiven.procent,
           }
         : {}),
+      // 0085: skälet till en fri order, när /nav2 skickat fältet.
+      ...(form.has("fri_skal") ? { free_order_reason: friOrder ? String(form.get("fri_skal") ?? "").trim().slice(0, 500) || null : null } : {}),
     };
 
     // STATUSEN I VILLKORET: hann ordern godkännas medan formuläret stod öppet

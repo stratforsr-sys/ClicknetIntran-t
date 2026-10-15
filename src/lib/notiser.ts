@@ -569,6 +569,14 @@ export const NOTIS_KALLOR = [
   "fel-lagad",
 
   /**
+   * Kampanjsidan i Nav 2.0 (0086). Båda är HÄNDELSER: en säljare har sett att
+   * kundens sida inte svarar och säger till leveransen, och kontrollen säger
+   * till den säljaren när sidan svarar igen.
+   */
+  "kampanjsida-nere",
+  "kampanjsida-uppe",
+
+  /**
    * ANGRA-KNAPPEN HAR MED FLIT INGEN KALLA HAR.
    *
    * `/angra` provades och togs bort igen. Kvittot med angra-knappen visas bara
@@ -665,6 +673,8 @@ export const HANDELSEKALLOR = [
   "lead-tilldelad",
   "fel-meddelande",
   "fel-lagad",
+  "kampanjsida-nere",
+  "kampanjsida-uppe",
 ] as const satisfies readonly Notiskalla[];
 
 export type Handelsekalla = (typeof HANDELSEKALLOR)[number];

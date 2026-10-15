@@ -561,3 +561,38 @@ async function provaSidan(adress: string): Promise<Sidlage> {
   }
   return sidlage(310);
 }
+
+// -----------------------------------------------------------------------------
+// Nav 2.0 (0083): anteckningen från kundkortet och kontrollen av kampanjsidan
+// -----------------------------------------------------------------------------
+
+/**
+ * En anteckning om kunden, i Inkio (`add-comment` på kunden). Den syns i
+ * kundens tidslinje där och i kundkortets aktivitet här, och skrivs av
+ * tjänstekontot med personens namn först — Inkio vet inte vem i Nav som skrev.
+ *
+ * Skriver bara där `inkioFarSkriva()` säger ja (produktionen), som resten av
+ * kopplingen. Returnerar kommentarens id när Inkio ger det, för fästningen.
+ */
+export async function skrivKundanteckning(orgnr: string, text: string, namn: string): Promise<{ id: string | null } | { fel: string }> {
+  if (!inkioFarSkriva()) return { fel: "Inkio tar bara emot anteckningar från Nav i produktionen." };
+  const kund = await kundMedOrgnr(orgnr);
+  if (!kund) return { fel: "Kunden finns inte i Inkio än. Den läggs in när en order godkänns." };
+  const svar = await anrop<{ id?: string; name?: string } | null>("POST", "/api/comments/add-comment", {
+    json: { reference_doctype: "Customer", reference_id: kund.id, content: `**${namn}** (via Nav): ${text}` },
+  });
+  return { id: svar?.id ?? svar?.name ?? null };
+}
+
+/** Kampanjsidans adress: kundens Webbplats i Inkio, eller null. */
+export async function kampanjadress(orgnr: string): Promise<{ kund: boolean; adress: string | null }> {
+  const kund = await kundMedOrgnr(orgnr);
+  return { kund: Boolean(kund), adress: kund ? landningsadress(kund.website) : null };
+}
+
+/** Kollar en sida som kundkortet gör, och mäter hur lång tid svaret tog. */
+export async function kollaSida(adress: string): Promise<Sidlage & { ms: number }> {
+  const start = Date.now();
+  const lage = await provaSidan(adress);
+  return { ...lage, ms: Date.now() - start };
+}

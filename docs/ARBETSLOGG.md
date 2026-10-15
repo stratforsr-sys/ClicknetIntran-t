@@ -5,7 +5,38 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
-## 2026-10-15 · Nav 2.0, pass 9: Fel med riktig data och allt utkastet har (0082)
+## 2026-10-15 · Nav 2.0, Order: ingen funktion tas bort (0083–0086)
+
+Pass 5 skickade varje skrivande knapp i ordervyn till nuvarande Nav och gömde
+det utkastet har men navet saknade. Beställarens regel 2026-10-15: inget får
+försvinna, och det som saknar backend får backend.
+
+- **Repots actions via `/nav2/order`**, med en vitlista per action över de
+  fält den läser. Knapparna laddar om sidan efter ett svar och öppnar samma
+  order och flik igen (`sessionStorage`). Läsläge: 423 före varje skrivning;
+  samtalskandidaterna och avtalets förslag är läsningar och fungerar alltid.
+- **0083** (körd): `customer_note_pin`, `order_list_seen`, `landing_page`,
+  `landing_page_check`, `call_transcript`; läsregeln följer kunden (en order
+  man ser), samtalet eller personen. Torrkört med RLS: Fredrik ser sin kunds
+  rader, Zen alla; en utskrift försvinner när inspelningen gallras (i den
+  väntande filen).
+- **0084** (körd): `kampanjsidor_lage()`, security invoker, en rad per kund
+  med senaste svar, svarstid, "nere sedan" och de sju dagarna. PostgREST
+  kapar vid 1 000 rader, och kontrollerna blir 144 per kund och dygn.
+- **0085** (körd): `free_order_reason`. Fri order med utkastets fält, och en
+  säljare får lägga den (beställaren 2026-10-15).
+- **0086** (körd): `landing_page_report` för "Meddela leveransen". Ärenden är
+  personalärenden till säljchefen och passade inte.
+- **Inkio**: `skrivKundanteckning`, `kampanjadress` och `kollaSida` i
+  `crm/inkio.ts`. Anteckningen skrivs bara där `inkioFarSkriva()` säger ja.
+- **Spelaren** är utkastets egen, med `/filer/<id>` som ljud. Utskriften visar
+  segmenten när de finns, annars "inte utskrivet än".
+- **Provat lokalt** som Fredrik och Zen (`ndprov/ord.mjs`, `sess/p14.json`):
+  kortet, aktiviteten, anteckningen, spelaren, utskriften, bilagorna,
+  skrivknapparna och fri order med utkast. Alla knappar når rutten, inga
+  exempel och inga fel.
+
+## 2026-10-15 · Nav 2.0, pass 9: Fel med riktig data och allt utkastet har (`5fa595c`, `d084689`, 0082)
 
 Fel är kopplat utan att något i utkastet tagits bort. Det som repot saknade
 har fått backend, och skrivvägen står färdig bakom `SKRIVLAGE.fel` (läsläge).
@@ -41,6 +72,13 @@ har fått backend, och skrivvägen står färdig bakom `SKRIVLAGE.fel` (läsläg
   inga fel. Tillstånden som produktionen inte har än (kända fel, tråd,
   "Fungerar det nu?", följt fel, kom tillbaka, staplar) provades med en
   lokal provfil ovanpå riktig data, aldrig i databasen.
+- **Bygget föll en gång** (`5fa595c`): `insert(villkor ? {...rad, pointed_at} :
+  rad)` är en union av två objekttyper, och Supabases `RejectExcessProperties`
+  tål den inte. Rättat i `d084689` med en enda objekttyp där `pointed_at` är
+  `undefined` utan pekning (JSON tar inte med fältet).
+- **Provat i previewen som Zen** (`d084689`): `#ndData.fel` har 22 rader, 13
+  steg och statistiken; vyn ritas utan fel och utan exempel; `/nav2/fel` svarar
+  423 i läsläge och 403 utan rätt ursprung, och raden är orörd i databasen.
 
 ## 2026-10-15 · Nav 2.0, Ärenden: ingen funktion tas bort (`d07f456`, 0081)
 

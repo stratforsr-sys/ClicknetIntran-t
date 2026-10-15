@@ -29,7 +29,10 @@ behörigheter som här: du ser bara det du får se.
 - **Tid**, **Frånvaro** och **Uppgifter**, med samma regler som här.
 - **Order** och kundkortet. Varje order har nu ett nummer (#12), och
   provisionen är navets: fryst på en godkänd order, och det godkännandet
-  skulle ge på en som väntar.
+  skulle ge på en som väntar. I kortet spelar du inspelningen direkt, skriver
+  en anteckning till Inkio, fäster den överst och säger till leveransen när
+  kampanjsidan inte svarar. En säljare kan lägga en fri order, som säljchef,
+  VD eller ekonomi godkänner.
 - **Provision**, räknad av samma motor som här: månaden, trappan, målen,
   historiken och, för säljchef, VD och ekonomi, laget och perioderna.
 - **Kalendern**: din kalender och, efter delningsnivån, kollegornas.

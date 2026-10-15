@@ -26,7 +26,8 @@ import { gallandeChefssats } from "@/lib/chefsprovision";
 import { gallandeUtkopssats } from "@/lib/utkop";
 import { gallandeFinanssats } from "@/lib/finans";
 import { manadFore, manadsnyckel } from "@/lib/provision";
-import { formaOrder, svenskTid, type NdOrder, type NdSamtal, type RaOrder, type RaSamtal } from "./orderforma";
+import { formaOrder, formaSida, formaUtskrift, svenskTid, type NdOrder, type NdSamtal, type NdSida, type NdUtskrift, type RaOrder, type RaSamtal } from "./orderforma";
+import { SKRIVLAGE } from "./skrivlage";
 
 /**
  * Nav 2.0: Order och kundkortet, med samma funktioner som /order.
@@ -43,6 +44,11 @@ import { formaOrder, svenskTid, type NdOrder, type NdSamtal, type RaOrder, type 
  *
  * Provisionen ar repots: fryst `commission_amount` pa en godkand order, och pa
  * en som vantar det godkannandet skulle frysa i dag (se `orderforma.ts`).
+ *
+ * Det 0083 och 0084 lade till for det utkastet har och navet saknade, med
+ * samma token: den fasta anteckningen per kund, nar personen senast tittade
+ * pa listan, kampanjsidornas lage (`kampanjsidor_lage()`) och utskrifterna av
+ * samtalen. Allt som skriver gar genom /nav2/order, bakom SKRIVLAGE.order.
  */
 
 export type NdOrderdata = {
@@ -83,6 +89,14 @@ export type NdOrderdata = {
   kandidater: { id: string; nar: string; sek: number; nr: string; ljud: boolean }[];
   varselDagar: number;
   ortak: number;
+  /** 0083: den fasta anteckningen per kund (organisationsnummer). */
+  fasta: Record<string, { kommentar: string; text: string; vem: string | null; av: string | null; nar: string }>;
+  /** 0083: nar den inloggade senast oppnade orderlistan, eller null. */
+  sett: string | null;
+  /** 0084: kampanjsidornas lage per kund (organisationsnummer). */
+  sidor: Record<string, NdSida>;
+  /** Sparar vyn (SKRIVLAGE.order)? Annars svarar /nav2/order med lasläge. */
+  skriv: boolean;
 };
 
 const SALJANDE_ROLLER = new Set(["salesperson", "sales_manager", "ceo"]);
@@ -109,7 +123,7 @@ export async function byggOrder(supabase: SupabaseClient, user: CurrentUser): Pr
       hamtaFinanssatser(),
       hamtaPerioder(manadFore(manad, 11)),
       // 0080 och vem som godkant och makulerat — `FALT` i order-server.ts bar dem inte.
-      supabase.from("sales_order").select("id, order_number, approved_by, cancelled_by"),
+      supabase.from("sales_order").select("id, order_number, approved_by, cancelled_by, free_order_reason"),
       supabase.from("employee").select("id, first_name, last_name, status, employee_role!employee_role_employee_id_fkey(role)"),
       supabase
         .from("phone_call")
@@ -133,6 +147,21 @@ export async function byggOrder(supabase: SupabaseClient, user: CurrentUser): Pr
       : Promise.resolve({ data: [] as { id: string; size_bytes: number | null; uploaded_by: string | null }[] }),
   ]);
 
+  // 0083/0084: utskrifterna for samtalen pa listans order, de fasta anteckningarna,
+  // "sett senast" och kampanjsidornas lage. Allt med anvandarens token.
+  const samtalIds = [...samtal.values()].flat().map((c) => c.id);
+  const [{ data: utskriftRader }, { data: fastRader }, { data: settRad }, { data: sidRader }] = await Promise.all([
+    samtalIds.length
+      ? supabase.from("call_transcript").select("call_id, status, segments, error").in("call_id", samtalIds)
+      : Promise.resolve({ data: [] as { call_id: string; status: string; segments: unknown; error: string | null }[] }),
+    supabase.from("customer_note_pin").select("org_number, inkio_comment_id, body, author_name, pinned_by, pinned_at"),
+    supabase.from("order_list_seen").select("seen_at").eq("employee_id", mig).maybeSingle(),
+    supabase.rpc("kampanjsidor_lage"),
+  ]);
+  const utskrifter = new Map<string, NdUtskrift>(
+    ((utskriftRader ?? []) as { call_id: string; status: string; segments: unknown; error: string | null }[]).map((u) => [u.call_id, formaUtskrift(u)]),
+  );
+
   const namnFor = new Map((personer ?? []).map((p) => [p.id as string, fullName(p)]));
   const namn = (id: string | null | undefined) => (id ? namnFor.get(id) ?? null : null);
   const extraFor = new Map((extra ?? []).map((r) => [r.id as string, r]));
@@ -148,6 +177,7 @@ export async function byggOrder(supabase: SupabaseClient, user: CurrentUser): Pr
       order_number: x ? Number(x.order_number) : null,
       approved_by: (x?.approved_by as string | null) ?? null,
       cancelled_by: (x?.cancelled_by as string | null) ?? null,
+      free_order_reason: (x?.free_order_reason as string | null) ?? null,
     } as unknown as RaOrder;
     const { order: ut, samtal: s } = formaOrder(rad, {
       satser: satserna,
@@ -156,6 +186,7 @@ export async function byggOrder(supabase: SupabaseClient, user: CurrentUser): Pr
       bilagor: (bilagor.get(o.id) ?? []).map((b) => ({ ...b, size_bytes: filFor.get(b.id)?.size_bytes ?? null, uploaded_by: filFor.get(b.id)?.uploaded_by ?? null })),
       crm: crm.get(o.id) ?? null,
       namn,
+      utskrifter,
     });
     order.push(ut);
     allaSamtal.push(...s);
@@ -219,5 +250,16 @@ export async function byggOrder(supabase: SupabaseClient, user: CurrentUser): Pr
       })),
     varselDagar: AVTALSSLUT_VARSEL_DAGAR,
     ortak: ORDERTAK,
+    fasta: Object.fromEntries(
+      ((fastRader ?? []) as { org_number: string; inkio_comment_id: string; body: string; author_name: string | null; pinned_by: string | null; pinned_at: string }[]).map((f) => [
+        f.org_number,
+        { kommentar: f.inkio_comment_id, text: f.body, vem: f.author_name, av: namn(f.pinned_by), nar: f.pinned_at },
+      ]),
+    ),
+    sett: ((settRad as { seen_at: string } | null)?.seen_at as string | undefined) ?? null,
+    sidor: Object.fromEntries(
+      ((sidRader ?? []) as (Parameters<typeof formaSida>[0] & { org_number: string })[]).map((r) => [r.org_number, formaSida(r, idag)]),
+    ),
+    skriv: SKRIVLAGE.order,
   };
 }

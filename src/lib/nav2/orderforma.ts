@@ -88,6 +88,8 @@ export type RaOrder = {
   renewal_reason?: string | null;
   proposed_commission_amount: number | null;
   proposed_commission_percent: number | null;
+  /** 0085: skälet till en fri order. */
+  free_order_reason?: string | null;
 };
 
 export type RaSamtal = {
@@ -98,6 +100,8 @@ export type RaSamtal = {
   recordingState: string;
   orderLinkedBy: string | null;
   employeeId: string | null;
+  /** Inspelningen i `file_object`; spelas med `/filer/<id>`, som på /order. */
+  recordingFileId?: string | null;
 };
 
 export type RaBilaga = { id: string; filename: string | null; uploaded_at: string; size_bytes?: number | null; uploaded_by?: string | null };
@@ -134,7 +138,74 @@ export type NdSamtal = {
   /** Kopplat for hand (`order_linked_by`). */
   hand: boolean;
   orderId: string;
+  /** Inspelningens fil-id, eller null. Spelaren hämtar `/filer/<id>` (behörighet och logg som på /order). */
+  fil: string | null;
+  /** 0083: utskriften, eller null när samtalet inte transkriberats. */
+  utskrift: NdUtskrift | null;
 };
+
+/** 0083 `call_transcript`: segment i millisekunder, och vem som talar. */
+export type NdUtskrift = {
+  status: "ko" | "klar" | "fel";
+  segment: { s: number; e: number; vem: "saljare" | "kund" | null; text: string }[];
+  fel: string | null;
+};
+
+export function formaUtskrift(r: { status: string; segments: unknown; error: string | null }): NdUtskrift {
+  const seg = Array.isArray(r.segments) ? (r.segments as Record<string, unknown>[]) : [];
+  const status = r.status;
+  return {
+    status: status === "klar" || status === "fel" ? status : "ko",
+    segment: seg
+      .map((x) => {
+        const vem = x.vem;
+        return {
+          s: Number(x.s) || 0,
+          e: Number(x.e) || 0,
+          vem: vem === "saljare" || vem === "kund" ? vem : null,
+          text: String(x.text ?? "").trim(),
+        };
+      })
+      .filter((x) => x.text)
+      .sort((a, b) => a.s - b.s),
+    fel: r.error ?? null,
+  };
+}
+
+/** 0084 `kampanjsidor_lage()`: kampanjsidans läge för kundkortet. */
+export type NdSida = {
+  url: string | null;
+  ok: boolean | null;
+  ms: number | null;
+  kollad: string | null;
+  nereSedan: string | null;
+  fel: string | null;
+  /** De sju senaste dagarna, äldst först: true = uppe hela dagen, false = nere i perioder, null = inte kollad. */
+  vecka: { dag: string; v: boolean | null }[];
+};
+
+export function formaSida(
+  r: { url: string | null; checked_at: string | null; ok: boolean | null; ms: number | null; status_code: number | null; error: string | null; nere_sedan: string | null; dagar: unknown },
+  idag: string,
+): NdSida {
+  const dagar = (r.dagar && typeof r.dagar === "object" ? r.dagar : {}) as Record<string, boolean>;
+  const d0 = new Date(`${idag}T12:00:00Z`);
+  const vecka = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(d0);
+    d.setUTCDate(d0.getUTCDate() - (6 - i));
+    const dag = d.toISOString().slice(0, 10);
+    return { dag, v: dag in dagar ? Boolean(dagar[dag]) : null };
+  });
+  return {
+    url: r.url,
+    ok: r.checked_at ? Boolean(r.ok) : null,
+    ms: r.ms ?? null,
+    kollad: r.checked_at ?? null,
+    nereSedan: r.nere_sedan ?? null,
+    fel: r.error ?? (r.status_code && r.status_code >= 400 ? `Svarade ${r.status_code}` : null),
+    vecka,
+  };
+}
 
 export type NdOrder = {
   id: string;
@@ -372,6 +443,8 @@ export function formaOrder(
     bilagor: RaBilaga[];
     crm: RaCrm | null;
     namn: (id: string | null | undefined) => string | null;
+    /** 0083: utskrifterna per samtal. */
+    utskrifter?: Map<string, NdUtskrift>;
   },
 ): { order: NdOrder; samtal: NdSamtal[] } {
   const s = ctx.satser;
@@ -444,7 +517,7 @@ export function formaOrder(
           varde,
           prov: o.proposed_commission_percent != null ? Number(o.proposed_commission_percent) : (prov ?? null),
           typ: o.proposed_commission_percent != null ? "%" : "kr",
-          skal: "",
+          skal: o.free_order_reason ?? "",
         }
       : null,
     samtal:
@@ -493,6 +566,8 @@ export function formaOrder(
       order: saljsamtal && c.id === saljsamtal.id ? nr : null,
       hand: c.orderLinkedBy !== null,
       orderId: o.id,
+      fil: c.recordingFileId ?? null,
+      utskrift: ctx.utskrifter?.get(c.id) ?? null,
     }));
 
   return { order, samtal };
