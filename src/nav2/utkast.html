@@ -7380,6 +7380,9 @@ body.nd-riktig .proto{display:none}
 .nd-dl dd{margin:2px 0 0;font-size:13.5px;color:var(--ink)}
 .nd-dl .tlink{padding:0;font-size:13.5px}
 @media (max-width:640px){.nd-dl{grid-template-columns:minmax(0,1fr)}.nd-ej{grid-template-columns:minmax(0,1fr)}.nd-ik{display:none}}
+
+/* Utbildning: ett valt svar i ett prov som rättas först vid inlämningen. */
+.uqalt button.ndvalt{border-color:var(--brand);background:var(--brand-soft);box-shadow:inset 0 0 0 1px var(--brand)}
 </style>
 
 <div class="proto" role="region" aria-label="Prototypinställningar">
@@ -27338,6 +27341,721 @@ document.addEventListener('input', e => {
   if (e.target.id === 'rsok'){ clearTimeout(ndRutSokTimer); ndRutSokTimer = setTimeout(() => { const q = S.rq.trim(); if (q.length < 2 || q === ndRutSokSist) return; ndRutSokSist = q; ndRutPost('sok', {q, traffar:rSok(q).length}, {ladda:false, tyst:true}); }, 1500); }
 }, true);
 if (ndRut()){ ndRutStart(); NDKOPPLAD.add('rutiner'); }
+
+/* =====================================================================
+   NAV 2.0 I RIKTIGT LÄGE: UTBILDNING (prefix nd)
+
+   Navets kurser ur ND.utbildning (src/lib/nav2/utbildning.ts) i stället för
+   utkastets exempel. Modulerna är lektionssteg (utbildningforma.ts): en regel
+   med texten under, en övning med bockar, provets frågor och ditt mål.
+
+   Repots regler gäller: modulerna tas i ordning, ett prov rättas på servern
+   och facit visas först när provet är klarat, så spelaren rättar inte på
+   vägen utan lämnar in provet sist. Ett rollspel blir klart när det bedöms.
+
+   Allt utkastet har finns kvar (beställaren 2026-10-15). Det som sparar går
+   till /nav2/utbildning (src/app/nav2/utbildning/route.ts): repots
+   klarModul, lamnaQuiz, rollspelets inlämning och bedömning, och 0097 för
+   resten. I läsläge svarar rutten 423 och visar varför.
+   ===================================================================== */
+
+const ndUtb = () => ND && ND.utbildning;
+// Den som bedömer och håller 1:1 heter Johanna i utkastet. I navet är det den egna chefen.
+function ndUtbChef(){ return ND ? ((ND.jag && ND.jag.chefFornamn) || 'din chef') : 'Johanna'; }
+const ndUtbDagar = d => d ? Math.round((Date.parse(d + 'T12:00:00Z') - Date.parse(ND.idag + 'T12:00:00Z')) / 864e5) : null;
+const ndUtbDatum = d => `${+d.slice(8, 10)} ${FRMK[+d.slice(5, 7)]} ${d.slice(0, 4)}`;
+const ndUtbVal = s => s && KUNSKAP.saljare[s] ? KUNSKAP.saljare[s][0] : null;
+const ndUtbSkill = s => (FARDIG.find(f => f[0] === s) || [s, 'Ingen färdighet satt'])[1];
+const ndUtbStreck = v => v === null || v === undefined ? '–' : v;
+function ndUtbIndex(src){ const v = FARDIG.map(([s]) => (src || {})[s]).filter(x => x !== null && x !== undefined); return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : null; }
+const ndUtbKund = s => ndUtbVal(s);
+const ndUtbFristDagar = k => ndUtbDagar(k.fristD);
+const ndUtbModulId = (k, i) => k.moduler[i] && k.moduler[i][3];
+
+// Modultexten är radbruten mitt i stycken. Mjuka radbrytningar och citat slås ihop innan ndMd (Rutiner) ritar den.
+function ndUtbMd(md){
+  const ut = [];
+  for (let rad of String(md || '').replace(/\r\n/g, '\n').split('\n')){
+    // En tabellrad blir en punkt: "Kunden sa: med kundens egna ord". Avdelare och tomma rader tas bort.
+    if (/^\s*\|.*\|\s*$/.test(rad)){ const c = rad.trim().slice(1, -1).split('|').map(x => x.trim()); if (c.every(x => !x || /^:?-+:?$/.test(x))) continue; rad = '- ' + (c.length > 1 && c[0] ? `**${c[0]}**: ${c.slice(1).filter(Boolean).join(' · ')}` : c.filter(Boolean).join(' · ')); }
+    const t = rad.trim(), q = t.startsWith('>'), x = q ? t.replace(/^>\s?/, '') : t;
+    const ny = !x || /^(#{1,4}\s|[-*]\s|\d+\.\s)/.test(x);
+    const fore = ut.length ? ut[ut.length - 1] : null;
+    if (!ny && fore && fore.t && (rad.startsWith(' ') || (!/^(#{1,4}\s)/.test(fore.t) && fore.q === q))) fore.t += ' ' + x;
+    else ut.push({t:x, q});
+  }
+  return ndMd(ut.map(r => r.q && r.t ? `*${r.t}*` : r.t).join('\n'));
+}
+
+/* ---------- Navets data i utkastets konstanter ---------- */
+function ndUtbVarfor(k){
+  if (k.rek) return 'Rekommenderad för hela teamet.';
+  if (k.ny) return 'Ny i Nav.';
+  const svag = k.skills.map(s => [s, ndUtbVal(s)]).filter(([, v]) => v !== null && v < 60).sort((a, b) => a[1] - b[1])[0];
+  return svag ? `${ndUtbSkill(svag[0])} är en av dina svagaste delar på kunskapskartan.` : null;
+}
+function ndUtbStart(){
+  const u = ndUtb(); if (!u) return;
+  const tom = o => Object.keys(o).forEach(k => delete o[k]);
+  const kn = {}; FARDIG.forEach(([s]) => { kn[s] = u.kunskap[s] ? [u.kunskap[s][0], u.kunskap[s][1]] : [null, 'inga svar än']; });
+  KUNSKAP.saljare = kn; KUNSKAP.chef = kn;
+  LASTWEEK.saljare = {...u.forraVeckan}; LASTWEEK.chef = LASTWEEK.saljare;
+  KURSER.splice(0, KURSER.length, ...u.kurser.map(k => ({...k, fristD:k.frist, frist:k.frist ? frKort(k.frist) : null,
+    certTillD:k.certTill && /^\d{4}-/.test(k.certTill) ? k.certTill : null, certTill:k.certTill ? (/^\d{4}-/.test(k.certTill) ? ndUtbDatum(k.certTill) : k.certTill) : null})));
+  KURSER.forEach(k => { k.varfor = ndUtbVarfor(k); });
+  const rutinFor = id => (u.kurser.find(k => k.id === id) || {}).rutin || null;
+  REPETITION.splice(0, REPETITION.length, ...u.repetition.map(q => ({...q, forkl:'', rutin:rutinFor(q.kurs)})));
+  ROLLSPEL.splice(0, ROLLSPEL.length, ...u.rollspel.map(r => ({...r, modell:[],
+    // [kriterium, chefens poäng på femgradig skala, id, tak, chefens poäng]
+    kriterier:r.kriterier.map(([l, max, id]) => { const p = r.poang[id]; return [l, p == null ? 0 : Math.round(p / max * 5), id, max, p == null ? null : p]; })})));
+  const forel = u.forelasningar.map(f => ({...f, var:f.var || '', uppfoljning:f.uppfoljning.map(x => [...x])}));
+  FORELASNINGAR.splice(0, FORELASNINGAR.length, ...forel.filter(f => f.kommande).sort((a, b) => a.startar < b.startar ? -1 : 1), ...forel.filter(f => !f.kommande));
+  HEAT.splice(0, HEAT.length, ...u.heat);
+  TEAMMAL.gjort = u.teamVecka.gjort; TEAMMAL.mal = u.teamVecka.mal;
+  TEAM_PERS.splice(0, TEAM_PERS.length, ...(u.team ? u.team.personer.map(p => [p.namn, p.kurser, p.id]) : []));
+  MISSADE.splice(0, MISSADE.length, ...(u.team ? u.team.missade : []));
+  KOLLEGERS_SVAR.splice(0, KOLLEGERS_SVAR.length);
+  [KAPITEL, MAL_FORSLAG, POANG, DRILLDAGAR, CERT_MAN, LEKTIONER].forEach(tom);
+  Object.assign(LEKTIONER, u.lektioner);
+  const noter = u.anteckningar || {};
+  const betygKurs = {};
+  KURSER.forEach(k => { const b = k.moduler.map(m => u.betyg[m[3]]).filter(Boolean); if (b.length) betygKurs[k.id] = b[b.length - 1]; });
+  const self = {};
+  ROLLSPEL.forEach(r => { self[r.id] = {}; r.kriterier.forEach(([l, , id]) => { if (r.sjalv[id]) self[r.id][l] = r.sjalv[id]; }); });
+  Object.assign(S, {
+    repStreak:u.streak, repBast:u.bast, repFrys:0, repIdag:u.repIdag, repTid:u.repTid, uDismiss:new Set(u.dolda), uCertPam:u.certPam,
+    regelbok:u.regelbok.map(r => [r[0], r[1]]), uBetyg:betygKurs, uSelf:self,
+    uNotes:Object.fromEntries(Object.entries(noter).filter(([k]) => /^(rp-|fl-)/.test(k))),
+    uAnmald:new Set(FORELASNINGAR.filter(f => f.anmald).map(f => f.id)), uFragaSkickad:new Set(FORELASNINGAR.filter(f => f.fragaSkickad).map(f => f.id)),
+    uDelat:new Set(FORELASNINGAR.filter(f => f.delat).map(f => f.id)), uPlan:{}, uTeamRep:new Set(REPETITION.filter(q => q.team).map(q => q.id)),
+    uBedom:null, uBedomPoang:{}, rep:null
+  });
+}
+
+/* ---------- Skrivningar: /nav2/utbildning ---------- */
+async function ndUtbPost(handling, data = {}, {ladda = true, tyst = false} = {}){
+  try {
+    const r = await fetch('/nav2/utbildning', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
+    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    if (s.ok !== undefined && !s.fel){ if (!tyst && s.ok) toast(s.ok); if (ladda) ndUtbLadda(); return s; }
+    if (!tyst) toast(s.fel || 'Det gick inte att spara.'); return s;
+  } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
+}
+function ndUtbLadda(){ try { sessionStorage.setItem('nd-utb', JSON.stringify({tab:S.uTab, open:S.uOpen, rp:S.rpOpen, steg:S.rpStep})); } catch(_){} setTimeout(() => location.reload(), 700); }
+(() => { if (!ndUtb()) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-utb') || 'null'); sessionStorage.removeItem('nd-utb'); } catch(_){}
+  if (m) setTimeout(() => { S.view = 'utbildning'; if (m.tab) S.uTab = m.tab; if (m.open && kurs(m.open)) S.uOpen = m.open; if (m.rp && ROLLSPEL.some(r => r.id === m.rp)){ S.rpOpen = m.rp; S.rpStep = m.steg || 1; } render(); }, 0); })();
+// En sparad uppgift: rutten lägger den med repots skapaUppgift.
+const ndUtbUppgift = (titel, extra = {}) => ndUtbPost('uppgift', {titel, ...extra}, {ladda:false});
+
+/* ---------- Repetitionen ---------- */
+// Dagens frågor: teamets först, sedan de förfallna, de svagaste delarna först. Rättas på servern.
+const _ndNyRepetition = nyRepetition;
+nyRepetition = function(typ, ids, skal){
+  if (!ndUtb()) return _ndNyRepetition(typ, ids, skal);
+  if (!ids){
+    const u = ndUtb(), forf = new Set(u.forfallna);
+    const lista = REPETITION.filter(q => forf.has(q.id)).sort((a, b) => (b.team ? 1 : 0) - (a.team ? 1 : 0) || (ndUtbVal(a.skill) ?? 101) - (ndUtbVal(b.skill) ?? 101));
+    ids = lista.slice(0, 3).map(q => q.id);
+    const delar = [...new Set(lista.slice(0, 3).map(q => q.skill).filter(Boolean))];
+    skal = lista.slice(0, 3).some(q => q.team) ? 'Med en fråga ur teamets repetition.' : delar.length ? `Ur dina svagaste delar: ${delar.map(ndUtbSkill).join(', ')}.` : `Ur ${[...new Set(lista.slice(0, 3).map(q => q.kalla))].join(' och ')}.`;
+  }
+  const ord = {}; ids.forEach(id => { const q = REPETITION.find(x => x.id === id); if (q) ord[id] = blanda(q.alt.length); });
+  S.rep = {typ, ids:ids.filter(id => ord[id]), skal, i:0, val:null, sak:'ganska', resultat:[], klar:false, ord};
+};
+const _ndRepetitionKort = repetitionKort;
+repetitionKort = function(){
+  if (!ndUtb()) return _ndRepetitionKort();
+  if (!S.rep) nyRepetition('dagens');
+  const r = S.rep;
+  if (!r.ids.length && !r.klar){
+    const nasta = ndUtb().nastaDag;
+    return `<section class="card urep klar">${note(105)}<div class="ureph"><span class="urepi">${I(REPETITION.length ? 'check' : 'ai')}</span><div><h2>${REPETITION.length ? 'Inget att repetera i dag' : 'Dagens repetition'}</h2>
+      <p>${REPETITION.length ? `Frågorna kommer tillbaka med allt längre mellanrum.${nasta ? ` Nästa ${frKort(nasta)}.` : ''}` : 'Inga frågor än. Frågorna kommer ur prov du klarat, och kommer sedan tillbaka med allt längre mellanrum.'}</p></div></div></section>`;
+  }
+  if (r.klar){
+    const ratt = r.resultat.filter(x => x.ok).length, saker = r.resultat.filter(x => x.sak === 'saker'), sakerRatt = saker.filter(x => x.ok).length;
+    const anvanda = new Set(r.ids), extra = REPETITION.filter(q => !anvanda.has(q.id)).slice(0, 3).map(q => q.id);
+    const igen = x => x.dagar ? (x.dagar === 1 ? 'igen i morgon' : `igen om ${x.dagar} dagar`) : x.ok ? (x.sak === 'gissade' ? 'igen om 2 dagar' : 'igen om 7 dagar') : 'igen i morgon';
+    return `<section class="card urep klar">${note(105)}<div class="ureph"><span class="urepi">${I('check')}</span><div><h2>${r.typ === 'dagens' ? 'Dagens repetition är gjord' : r.typ === 'fornya' ? (r.fornyat ? 'Certifikatet är förnyat' : 'Förnyelsen') : 'Klart'}</h2><p>${ratt} av ${r.resultat.length} rätt. ${r.typ === 'dagens' && !r.laslage ? `Nästa kommer i morgon ${S.repTid}. ${S.repStreak} ${S.repStreak === 1 ? 'vardag' : 'vardagar'} i rad.` : ''}${r.laslage ? 'Läsläge: svaren sparades inte.' : ''}</p></div></div>
+      ${saker.length ? `<p class="ukal">${I('ai')}Du var säker på ${saker.length} och hade rätt på ${sakerRatt}. ${sakerRatt === saker.length ? 'Din känsla stämmer bra.' : 'De säkra felen kommer tillbaka i morgon, för det är de som rättas bäst.'}</p>` : ''}
+      <div class="urepres">${r.resultat.map(x => { const q = REPETITION.find(y => y.id === x.id); return `<span class="${x.ok ? 'ok' : 'fel'}">${x.ok ? '✓' : '✗'} ${esc(q.q.length > 60 ? q.q.slice(0, 58) + '…' : q.q)} ${r.typ === 'fornya' || r.laslage ? '' : `<em>${igen(x)}</em>`}${!x.ok && q.rutin ? ` <button class="tlink" data-ropen="${q.rutin}">Läs i rutinen</button>` : ''}</span>`; }).join('')}</div>
+      ${extra.length && r.typ !== 'fornya' ? `<button class="btn btn-s btn-sm" data-repextra="${extra.join(',')}">Tre frågor till, frivilligt</button>` : ''}</section>`;
+  }
+  const q = REPETITION.find(x => x.id === r.ids[r.i]), ord = r.ord[q.id];
+  const svarat = r.val !== null, ok = svarat && r.val === q.ratt;
+  const rubrik = r.typ === 'dagens' ? 'Dagens repetition' : r.typ === 'forel' ? 'Uppföljning av föreläsningen' : r.typ === 'fortest' ? 'Förtest före föreläsningen' : r.typ === 'fornya' ? 'Förnya certifikatet' : r.typ === 'skill' && q.skill ? `Repetera ${ndUtbSkill(q.skill).toLowerCase()}` : 'Tre frågor till';
+  return `<section class="card urep">${note(105)}
+    <div class="ureph"><span class="urepi">${I('ai')}</span><div><h2>${rubrik}</h2><p>${esc(r.skal || 'Två minuter.')}</p></div><span class="urepn num">${r.i + 1} av ${r.ids.length}</span></div>
+    <div class="urepdots">${r.ids.map((_, i) => `<i class="${i < r.i ? (r.resultat[i]?.ok ? 'ok' : 'fel') : i === r.i ? 'nu' : ''}"></i>`).join('')}</div>
+    <div class="uq"><span class="muted uqk">${q.skill ? `${ndUtbSkill(q.skill)} · ` : ''}ur ${esc(q.kalla)}${q.team ? ' · teamets repetition' : ''}</span><b>${esc(q.q)}</b>
+      <div class="uqalt">${ord.map((oi, pos) => `<button class="${svarat ? (oi === q.ratt ? 'ratt' : oi === r.val ? 'fel' : 'av') : ''}" data-repval="${oi}" ${svarat ? 'disabled' : ''}><kbd>${pos + 1}</kbd>${esc(q.alt[oi])}</button>`).join('')}</div>
+      ${!svarat ? `<div class="usak"><span>Hur säker är du?</span>${[['saker','Säker','S'],['ganska','Ganska',''],['gissade','Gissar','G']].map(([k, l, kb]) => `<button data-repsak="${k}" aria-pressed="${r.sak === k}">${l}${kb ? ` <kbd>${kb}</kbd>` : ''}</button>`).join('')}</div>` : `
+      <div class="ufb ${ok ? 'ok' : 'fel'}"><b>${ok ? (r.sak === 'gissade' ? 'Rätt, fast du gissade.' : 'Rätt.') : r.sak === 'saker' ? 'Inte riktigt, och du var säker.' : 'Inte riktigt.'}</b><span>${ok ? '' : `Rätt svar: ${esc(q.alt[q.ratt])}.`}</span>${!ok && r.sak === 'saker' && r.typ !== 'fornya' ? '<em>Ett fel man var säker på fastnar bäst när det rättas. Den här kommer tillbaka i morgon.</em>' : ''}${!ok && q.rutin ? `<button class="tlink" data-ropen="${q.rutin}">Läs mer i rutinen</button>` : ''}</div>
+      <button class="btn btn-p" data-repnext>${r.i < r.ids.length - 1 ? 'Nästa fråga' : 'Klart'} <kbd>↵</kbd></button>`}
+    </div></section>`;
+};
+const _ndSvaraRep = svaraRep;
+svaraRep = function(oi){
+  if (!ndUtb()) return _ndSvaraRep(oi);
+  const r = S.rep, q = REPETITION.find(x => x.id === r.ids[r.i]), i = r.i;
+  r.val = oi; r.resultat[i] = {id:q.id, ok:oi === q.ratt, sak:r.sak, oid:q.oids[oi]}; render();
+  if (r.typ === 'fornya') return;  // förnyelsen lämnas in sist
+  const kalla = r.typ === 'fortest' ? 'fortest' : r.typ === 'forel' ? 'uppfoljning' : q.team ? 'team' : 'repetition';
+  ndUtbPost('svar', {qid:q.id, val:q.oids[oi], sak:r.sak, kalla}, {ladda:false, tyst:true}).then(s => {
+    if (s.laslage){ if (!r.laslage) toast(s.fel); r.laslage = true; return; }
+    if (s.fel){ toast(s.fel); return; }
+    if (r.resultat[i]) r.resultat[i].dagar = s.dagar; r.sparat = true;
+  });
+};
+const _ndNastaRep = nastaRep;
+nastaRep = function(){
+  if (!ndUtb()) return _ndNastaRep();
+  const r = S.rep;
+  if (r.i < r.ids.length - 1){ r.i += 1; r.val = null; r.sak = 'ganska'; render(); return; }
+  r.klar = true;
+  if (r.typ === 'fornya'){
+    render();
+    ndUtbPost('fornya', {kurs:r.kurs, svar:Object.fromEntries(r.resultat.map(x => [x.id, x.oid]))}, {ladda:false}).then(s => { if (!s.fel){ r.fornyat = true; ndUtbLadda(); } });
+    return;
+  }
+  if (r.typ === 'dagens' && !S.repIdag && !r.laslage){ S.repIdag = true; S.repStreak += 1; S.repBast = Math.max(S.repBast, S.repStreak); }
+  render(); toast(`${r.resultat.filter(x => x.ok).length} av ${r.resultat.length} rätt.${r.typ === 'dagens' && !r.laslage ? ` ${S.repStreak} ${S.repStreak === 1 ? 'vardag' : 'vardagar'} i rad.` : ''}`);
+};
+// Frågor som tränar en färdighet, eller en kurs. Finns inga står det så.
+function ndUtbRepAv(ids, typ, skal, tomText){
+  if (!ids.length){ toast(tomText); return false; }
+  nyRepetition(typ, blanda(ids.length).map(i => ids[i]).slice(0, typ === 'fornya' ? 5 : 3), skal);
+  S.uTab = 'mina'; S.uOpen = null; S.view = 'utbildning'; render(); window.scrollTo(0, 0); return true;
+}
+
+/* ---------- Kurskortet ---------- */
+const _ndKursKort = kursKort;
+kursKort = function(k, opt = {}){
+  if (!ndUtb()) return _ndKursKort(k, opt);
+  if (!k) return '';
+  const p = k.moduler.length ? k.klara / k.moduler.length : 0, klar = kursKlar(k), nasta = !klar ? k.moduler[k.klara] : null, fd = ndUtbFristDagar(k);
+  return `<div class="ukort ${opt.stor ? 'stor' : ''} ${klar ? 'klar' : ''}">${opt.notis ? note(opt.notis) : ''}
+    <span class="uktop"><span class="pill t-${k.typ === 'kort' ? 'signal' : 'neutral'}">${TYPER[k.typ] || 'Kurs'}</span>${k.ny ? '<span class="pill t-info">Ny</span>' : ''}${k.obl && !klar && fd !== null ? `<span class="pill t-${fd <= 7 ? 'danger' : 'warn'}">${fd < 0 ? `${-fd} dagar sen` : `${fd} dagar kvar`}</span>` : k.obl && !klar ? '<span class="pill t-warn">Obligatorisk</span>' : ''}<span class="muted num">${klar ? '✓ Klar' : k.klara ? `${langdText(kvarMin(k))} kvar` : langdText(k.min)}</span></span>
+    <button class="ukopen" data-uopen="${k.id}"><b>${esc(k.t)}</b>
+      ${opt.varfor && k.varfor ? `<span class="ukvarfor">${I(opt.ikon || 'ai')}${esc(k.varfor)}</span>` : nasta && k.klara ? `<span class="muted ukb">Nästa: ${esc(nasta[0])} · ${nasta[2]} min</span>` : `<span class="muted ukb">${esc(k.besk)}</span>`}</button>
+    <span class="ukbar"><span><i style="width:${p * 100}%"></i></span><span class="num muted">${k.klara}/${k.moduler.length}</span></span>
+    <span class="ukfoot"><span class="ukskills">${k.skills.map(s => { const v = ndUtbVal(s); return `<span class="${v !== null && v < 60 ? 'svag' : ''}" title="Din nivå: ${ndUtbStreck(v)}">${ndUtbSkill(s)}</span>`; }).join('')}</span>
+      ${opt.avfarda ? `<button class="tlink" data-udismiss="${k.id}">Inte nu</button>` : ''}${!klar ? `<button class="ukplay" data-uplay="${k.id}" aria-label="${k.klara ? 'Fortsätt' : 'Starta'} ${esc(k.t)}">${I('play')}${k.klara ? 'Fortsätt' : 'Starta'}</button>` : ''}</span>
+  </div>`;
+};
+
+/* ---------- Mina ---------- */
+// Drillens dagar: modulerna delade jämnt över kursens dagar (learning_meta.dagar).
+function ndUtbDrillDag(k){
+  if (!k || !k.dagar) return null;
+  const per = Math.ceil(k.moduler.length / k.dagar), idx = Math.min(k.dagar - 1, Math.floor(k.klara / per)), mods = k.moduler.slice(k.klara, (idx + 1) * per);
+  return {dag:idx + 1, antal:mods.length, min:mods.reduce((s, m) => s + m[2], 0)};
+}
+// Föreläsningen vars uppföljning står på i dag: en du var anmäld till. "I morgon" skjuter den en dag.
+function ndUtbFlIdag(){
+  const noter = ndUtb().anteckningar || {};
+  for (const fl of FORELASNINGAR.filter(f => !f.kommande && f.anmald)){
+    if ((noter['fl-skjut-' + fl.id] || '') > ND.idag) continue;
+    const u = fl.uppfoljning.find(x => x[2] === 'idag');
+    if (u) return [fl, u];
+  }
+  return [null, null];
+}
+const _ndMinaVy = minaVy;
+minaVy = function(){
+  if (!ndUtb()) return _ndMinaVy();
+  const pag = KURSER.filter(k => k.klara > 0 && !kursKlar(k)).sort((a, b) => (b.obl ? 1 : 0) - (a.obl ? 1 : 0));
+  const fort = pag[0];
+  const oblig = KURSER.filter(k => k.obl && !kursKlar(k) && k !== fort).sort((a, b) => (ndUtbFristDagar(a) ?? 9999) - (ndUtbFristDagar(b) ?? 9999));
+  const rek = KURSER.filter(k => !k.obl && !kursKlar(k) && k !== fort && !S.uDismiss.has(k.id)).sort((a, b) => (b.rek ? 1 : 0) - (a.rek ? 1 : 0) || (b.varfor ? 1 : 0) - (a.varfor ? 1 : 0)).slice(0, 3);
+  const [fl, flIdag] = ndUtbFlIdag();
+  const drillDag = ndUtbDrillDag(fort);
+  const oblMin = oblig.reduce((s, k) => s + kvarMin(k), 0);
+  const nastaFort = fort && fort.moduler[fort.klara];
+  return `${repetitionKort()}
+    ${fort ? `<section class="card ufort">${note(106)}<span class="muted ufk">Fortsätt där du var</span>
+      <div class="ufh"><div><h2>${esc(fort.t)}</h2><p>${drillDag ? `<b>Dag ${drillDag.dag} av ${fort.dagar}:</b> ${drillDag.antal} ${drillDag.antal === 1 ? 'modul' : 'moduler'} i dag, ${drillDag.min} min. ` : ''}Nästa: <b>${esc(nastaFort[0])}</b> · ${nastaFort[2]} min${S.uResume[fort.id] ? ` · fortsätter på steg ${S.uResume[fort.id] + 1}` : ''}</p></div>
+      <button class="btn btn-p" data-uplay="${fort.id}">${I('play')}Fortsätt</button></div>
+      <div class="umods">${fort.moduler.map((m, i) => `<i class="${i < fort.klara ? 'ok' : i === fort.klara ? 'nu' : ''}" title="${esc(m[0])}"></i>`).join('')}</div>
+      <div class="ufrow"><span class="muted">${fort.frist ? `Frist ${fort.frist}. ` : ''}${langdText(kvarMin(fort))} kvar. ${fort.moduler.slice(fort.klara).find(m => m[1] === 'quiz') ? `Nästa prov: ${fort.grans} % för godkänt.` : ''}</span><button class="tlink" data-upamin="${fort.id}">Påminn mig 15:30</button></div></section>` : ''}
+    ${flIdag ? `<section class="card ufl">${note(107)}<div class="uflh"><span class="pill t-info">Uppföljning, ${flIdag[0].toLowerCase()}</span><b>${esc(fl.t)}</b></div>
+      <div class="uflsteg">${fl.uppfoljning.map(([d, , st]) => `<span class="${st}"><i>${st === 'klar' ? '✓' : ''}</i>${d}</span>`).join('')}</div>
+      <span class="muted">Föreläsningen ${esc(fl.nar)}. ${esc(flIdag[1])}, två minuter.</span><div class="pacts"><button class="btn btn-p btn-sm" data-ufupp="${fl.id}|${flIdag[0]}">Gör det nu</button><button class="btn btn-s btn-sm" data-ndufl="${fl.id}">I morgon</button></div></section>` : ''}
+    ${oblig.length ? `<div class="sect"><h3>Måste göras ${note(108)}${note(188)}</h3><span>${oblig.length} ${oblig.length === 1 ? 'kurs' : 'kurser'}, ${langdText(oblMin)} kvar</span><button class="tlink" data-uboka style="margin-left:auto">${I('kal')} Boka tid i kalendern</button></div><div class="ugrid">${oblig.map((k, i) => kursKort(k, {notis: i === 0 ? 110 : 0})).join('')}</div>` : ''}
+    ${rek.length ? `<div class="sect"><h3>Rekommenderat för dig ${note(109)}</h3><span>utifrån kunskapskartan, teamet och nya kurser</span></div>
+    <div class="ugrid">${rek.map(k => kursKort(k, {varfor:true, ikon:k.rek ? 'pers' : k.ny ? 'nyh' : 'trend', avfarda:true})).join('')}</div>` : ''}
+    ${!fort && !oblig.length && !rek.length && !KURSER.some(k => !kursKlar(k)) ? `<div class="tempty">${KURSER.length ? 'Allt klart. Inga kurser väntar på dig.' : 'Inga kurser är riktade till dig än.'}</div>` : ''}
+    ${S.regelbok.length ? `<div class="sect"><h3>Din regelbok</h3><span>${S.regelbok.length} ${S.regelbok.length === 1 ? 'regel' : 'regler'} du sparat</span></div><div class="uregelbok">${S.regelbok.map(([r, k]) => `<div><b>${esc(r)}</b><span class="muted">${esc(k)}</span></div>`).join('')}</div>` : ''}`;
+};
+
+/* ---------- Biblioteket ---------- */
+const _ndBiblioteketVy = biblioteketVy;
+biblioteketVy = function(){
+  if (!ndUtb()) return _ndBiblioteketVy();
+  const q = norm(S.uQ.trim());
+  const lista = KURSER.filter(k => (!S.uLen || (S.uLen === 'kort' ? k.min <= 5 : S.uLen === 'mellan' ? k.min > 5 && k.min <= 30 : k.min > 30)) && (!S.uDolj || !kursKlar(k)) && (!q || norm(k.t + ' ' + k.besk + ' ' + k.skills.map(ndUtbSkill).join(' ')).includes(q)));
+  const lagst = k => Math.min(...k.skills.map(s => ndUtbVal(s) ?? 101), 101);
+  const sortera = arr => S.uSort === 'kortast' ? [...arr].sort((a, b) => a.min - b.min) : S.uSort === 'nyast' ? [...arr].sort((a, b) => (b.ny ? 1 : 0) - (a.ny ? 1 : 0)) : [...arr].sort((a, b) => lagst(a) - lagst(b));
+  const delar = S.uSort === 'nytta' ? [...FARDIG].sort((a, b) => (ndUtbVal(a[0]) ?? 101) - (ndUtbVal(b[0]) ?? 101)) : FARDIG;
+  // Kurser och rollspel utan färdighet (learning_meta.skills tomt) samlas sist.
+  const grupper = [...delar.map(([s, namn]) => [s, namn]), [null, 'Kurser utan färdighet satt']];
+  return `<div class="ubib">${note(111)}
+    <div class="romtools"><div class="qin small"><span class="qplus">${I('sok')}</span><input id="uq" value="${esc(S.uQ)}" placeholder="Vad vill du bli bättre på?" aria-label="Sök kurser" autocomplete="off"></div>
+      <div class="segs">${[[null,'Alla'],['kort','5 min'],['mellan','Upp till 30'],['lang','Längre']].map(([k, l]) => `<button data-ulen="${k || ''}" aria-pressed="${S.uLen === k}">${l}</button>`).join('')}</div></div>
+    <div class="romtools"><div class="segs">${[['nytta','Mest nytta för dig'],['kortast','Kortast först'],['nyast','Nyast']].map(([k, l]) => `<button data-usort="${k}" aria-pressed="${S.uSort === k}">${l}</button>`).join('')}</div><label class="utog"><input type="checkbox" data-udolj ${S.uDolj ? 'checked' : ''}>Dölj det jag gjort</label></div>
+    ${grupper.map(([s, namn]) => { const kk = sortera(lista.filter(k => s ? k.skills.includes(s) : !k.skills.length)), rp = ROLLSPEL.filter(r => (r.skill || null) === s);
+      if (!kk.length && !(rp.length && !q && !S.uLen)) return '';
+      const kortast = kk.filter(k => !kursKlar(k)).sort((a, b) => a.min - b.min)[0], v = s ? ndUtbVal(s) : null;
+      return `<div class="sect"><h3>${namn}</h3>${s ? `<span class="ubibk"><span class="kgrad"><span><i style="width:${v || 0}%;${v !== null && v < 60 ? 'background:var(--warn)' : ''}"></i></span><span class="num">${v === null ? '–' : `${v} %`}</span></span></span>` : ''}${kortast ? `<button class="tlink" data-uplay="${kortast.id}">▶ Kortaste: ${kortast.min} min</button>` : ''}</div>
+        <div class="ugrid">${kk.map(k => kursKort(k)).join('')}${!q && !S.uLen ? rp.map(r => `<button class="ukort rp" data-rpopen="${r.id}"><span class="uktop"><span class="pill t-info">Rollspel</span><span class="muted">10 min</span></span><b>${esc(r.t)}</b><span class="muted ukb">${esc(r.kund)}</span></button>`).join('') : ''}</div>`; }).join('')}
+    ${!q && !S.uLen ? `<div class="sect"><h3>Lär dig Nav</h3><span>guidade turer</span></div><div class="ugrid"><a class="ukort" href="/utbildning/systemguider"><span class="uktop"><span class="pill t-neutral">Systemguide</span></span><b>Systemguiderna</b><span class="muted ukb">Finns i nuvarande Nav. De kopplas inte i Nav 2.0 än.</span></a></div>` : ''}
+    ${!lista.length ? `<div class="tempty"><b>Ingen kurs om ”${esc(S.uQ)}” än.</b> <button class="tlink" data-nduonska>Önska en kurs om det</button></div>` : ''}</div>`;
+};
+
+/* ---------- Sidokolumnen ---------- */
+const _ndRadar = radar;
+radar = function(){
+  if (!ndUtb()) return _ndRadar();
+  const n = FARDIG.length, R = 62, cx = 80, cy = 78;
+  const pt = (i, v) => { const a = -Math.PI / 2 + i * 2 * Math.PI / n; return [cx + Math.cos(a) * R * v / 100, cy + Math.sin(a) * R * v / 100]; };
+  const ring = v => FARDIG.map((_, i) => pt(i, v).join(',')).join(' ');
+  const harNu = FARDIG.some(([s]) => ndUtbVal(s) !== null), harForra = FARDIG.some(([s]) => LASTWEEK.saljare[s] != null);
+  const poly = FARDIG.map(([s], i) => pt(i, ndUtbVal(s) || 0).join(',')).join(' ');
+  const forra = FARDIG.map(([s], i) => pt(i, LASTWEEK.saljare[s] || 0).join(',')).join(' ');
+  return `<svg viewBox="-26 -6 212 172" class="uradar" role="img" aria-label="Kunskapskarta som stjärndiagram">
+    ${[25,50,75,100].map(v => `<polygon points="${ring(v)}" fill="none" stroke="var(--line)" stroke-width="1"/>`).join('')}
+    ${harForra ? `<polygon points="${forra}" fill="none" stroke="var(--ink-3)" stroke-dasharray="3 3" stroke-width="1"/>` : ''}
+    ${harNu ? `<polygon points="${poly}" fill="color-mix(in srgb,var(--brand) 22%,transparent)" stroke="var(--brand)" stroke-width="2"/>` : ''}
+    ${FARDIG.map(([s, nn], i) => { const [x, y] = pt(i, 122), v = ndUtbVal(s); return `<text x="${x}" y="${y + 3}" text-anchor="middle" font-size="8.5" fill="${v !== null && v < 60 ? 'var(--warn-ink)' : 'var(--ink-3)'}">${nn.split(' ')[0]}</text>`; }).join('')}
+  </svg>`;
+};
+const _ndUSidokolumn = uSidokolumn;
+uSidokolumn = function(){
+  if (!ndUtb()) return _ndUSidokolumn();
+  const u = ndUtb(), sk = KUNSKAP.saljare, idx = ndUtbIndex(Object.fromEntries(FARDIG.map(([s]) => [s, ndUtbVal(s)])));
+  const nasta = FORELASNINGAR.find(f => f.kommande);
+  const egna = u.teamVecka.egna + (S.rep && S.rep.klar && S.rep.sparat ? S.rep.resultat.length : 0), gjort = TEAMMAL.gjort + (S.rep && S.rep.klar && S.rep.sparat ? S.rep.resultat.length : 0);
+  const veckodag = (new Date(ND.idag + 'T12:00:00Z').getUTCDay() || 7), kvar = Math.max(0, 5 - veckodag);
+  const idagIdx = 21 + veckodag - 1;  // fyra veckor bakåt från måndag, som servern räknar
+  const trend = s => { const v = ndUtbVal(s), f = LASTWEEK.saljare[s]; if (v === null || f == null) return ''; const d = v - f; return d > 0 ? `<span class="tr up">↑${d}</span>` : d < 0 ? `<span class="tr ned">↓${-d}</span>` : ''; };
+  const omDagar = nasta ? ndUtbDagar(nasta.startar.slice(0, 10)) : null;
+  return `<section class="card ukarta">${note(117)}<div class="chead"><h2>Din kunskapskarta</h2><span class="end"><span class="muted num" style="font-size:12px">${idx === null ? '–' : `${idx} %`}</span></span></div>
+      ${radar()}<p class="muted ukf">${FARDIG.some(([s]) => ndUtbVal(s) !== null) ? 'Streckat är förra veckan. Det du inte repeterar sjunker långsamt.' : 'Inga svar än. Kartan fylls när du svarar i repetitionen, på frågor ur kurser som har färdigheter satta.'}</p>
+      ${FARDIG.map(([s, n]) => { const [v, sen] = sk[s]; return `<div class="ukr"><span><b>${n}</b>${trend(s)}<span class="muted">${v !== null && v < 60 ? 'Behöver repeteras · ' : ''}${esc(sen)}</span></span><span class="ukrr"><span class="kgrad"><span><i style="width:${v || 0}%;${v !== null && v < 60 ? 'background:var(--warn)' : ''}"></i></span><span class="num">${ndUtbStreck(v)}</span></span><button class="tlink" data-urepskill="${s}">Repetera</button></span></div>`; }).join('')}
+      <details class="uhur"><summary>Hur räknas det?</summary><p>Andelen rätt svar i repetitionen de senaste 60 dagarna, per färdighet. Frågorna kommer ur proven i kurserna, och varje kurs säger vilka färdigheter den tränar. Det du inte repeterar faller ur fönstret, precis som minnet glömmer.</p></details></section>
+    <section class="card">${note(118)}<div class="chead"><h2>Repetition i rad</h2></div><div class="urs"><b class="num">${S.repStreak}</b><span>${S.repStreak === 1 ? 'vardag' : 'vardagar'} · bästa ${S.repBast}</span></div>
+      <div class="uheat" aria-label="Fyra veckor bakåt">${HEAT.map((v, i) => `<i class="${(i === idagIdx && S.repIdag) || v ? 'on' : ''} ${i % 7 >= 5 ? 'helg' : ''}"></i>`).join('')}</div>
+      <div class="usak" style="margin-top:10px"><span>Påminn mig</span>${['07:45','08:15','12:30'].map(t => `<button data-uremtid="${t}" aria-pressed="${S.repTid === t}">${t}</button>`).join('')}</div></section>
+    <section class="card">${note(119)}<div class="chead"><h2>Teamets vecka</h2></div>${TEAMMAL.mal ? `<div class="goalnums"><span>Repeterade frågor</span><span><b>${gjort}</b> av ${TEAMMAL.mal}</span></div><div class="goalbar" style="margin-top:6px"><div class="fill" style="width:${Math.min(100, gjort / TEAMMAL.mal * 100)}%"></div><div class="pace" style="left:${Math.min(5, veckodag) / 5 * 100}%"><span>takt</span></div></div>` : `<div class="goalnums"><span>Repeterade frågor</span><span><b>${gjort}</b> i veckan</span></div>`}
+      <p class="muted" style="font-size:12px;margin:8px 0 0">Ditt bidrag: <b>${egna}</b> ${egna === 1 ? 'fråga' : 'frågor'}. ${TEAMMAL.mal ? (kvar ? `${kvar} ${kvar === 1 ? 'dag' : 'dagar'} kvar, ungefär ${Math.max(0, Math.ceil((TEAMMAL.mal - gjort) / kvar))} frågor om dagen räcker. ` : '') : 'Inget veckomål är satt för teamet än. '}Ett gemensamt mål, inga topplistor.</p></section>
+    ${nasta ? `<section class="card">${note(120)}<div class="chead"><h2>Nästa föreläsning</h2><span class="end"><span class="pill t-info">${omDagar <= 0 ? 'i dag' : omDagar === 1 ? 'i morgon' : `om ${omDagar} dagar`}</span></span></div><b>${esc(nasta.t)}</b><p class="muted" style="margin:4px 0 10px;font-size:13px">${esc(nasta.nar)}${nasta.vem ? ` · ${esc(nasta.vem)}` : ''}</p>
+      <div class="pacts">${S.uAnmald.has(nasta.id) ? '<span class="pill t-ok">Anmäld · påminnelse 1 h före</span>' : `<button class="btn btn-p btn-sm" data-uanmal="${nasta.id}">Anmäl mig</button>`}<button class="btn btn-s btn-sm" data-utab="forel">Förtest och fråga i förväg</button></div></section>` : ''}`;
+};
+
+/* ---------- Rollspel ---------- */
+const _ndRollspelVy = rollspelVy;
+rollspelVy = function(){
+  if (!ndUtb()) return _ndRollspelVy();
+  if (S.rpOpen){ const r = ROLLSPEL.find(x => x.id === S.rpOpen); if (r) return rollspelSida(r); S.rpOpen = null; }
+  const lista = ROLLSPEL.filter(r => !S.uRpSkill || r.skill === S.uRpSkill).sort((a, b) => (ndUtbVal(a.skill) ?? 101) - (ndUtbVal(b.skill) ?? 101));
+  const delar = [...new Set(ROLLSPEL.map(r => r.skill).filter(Boolean))];
+  const lage = r => r.status === 'bedomt' ? ['ok', `Bedömt ${r.datum}`] : r.status === 'inlamnad' ? ['warn', `Inlämnat ${r.datum}`] : ['neutral', 'Inte gjort'];
+  return `<div>${note(123)}<p class="vhelp">Lyssna på hur det låter, förbered dig, öva och få återkoppling. Ett rollspel tar tio minuter. Sorterat efter vad du behöver mest.</p>
+    ${delar.length ? `<div class="rjump" style="margin-bottom:8px"><button class="chip ${!S.uRpSkill ? 'on' : ''}" data-urpskill="">Alla</button>${delar.map(s => `<button class="chip ${S.uRpSkill === s ? 'on' : ''}" data-urpskill="${s}">${ndUtbSkill(s)}</button>`).join('')}</div>` : ''}
+    ${lista.length ? `<div class="ugrid">${lista.map((r, i) => { const [t, l] = lage(r), v = ndUtbVal(r.skill); return `<button class="ukort rp" data-rpopen="${r.id}"><span class="uktop"><span class="pill t-${t}">${esc(l)}</span>${i === 0 && !S.uRpSkill && r.status === 'ny' ? '<span class="pill t-signal">Rekommenderas</span>' : ''}${r.skill ? `<span class="muted">${ndUtbSkill(r.skill)}</span>` : ''}</span>
+      <b>${esc(r.t)}</b><span class="muted ukb">${esc(r.kund)}</span>${r.status === 'bedomt' ? `<span class="ukbar"><span><i style="width:${rpSnitt(r) / 5 * 100}%"></i></span><span class="num muted">bäst ${rpSnitt(r).toFixed(1).replace('.', ',')} av 5</span></span>` : r.skill ? `<span class="muted ukb">Din nivå i ${ndUtbSkill(r.skill).toLowerCase()}: ${ndUtbStreck(v)}</span>` : ''}</button>`; }).join('')}</div>` : '<div class="tempty">Inga rollspel i dina kurser än.</div>'}</div>`;
+};
+const _ndRollspelSida = rollspelSida;
+rollspelSida = function(r){
+  if (!ndUtb()) return _ndRollspelSida(r);
+  const steg = ['Lyssna','Förbered','Öva','Bedömning','Nästa'], chef = ndUtbChef();
+  const svag = r.status === 'bedomt' ? [...r.kriterier].sort((a, b) => a[4] / a[3] - b[4] / b[3])[0] : null;
+  const self = S.uSelf[r.id] || {};
+  const bedomare = r.bedomare || chef;
+  let inne = '';
+  if (S.rpStep === 1) inne = `<h3>Lyssna på hur det låter</h3><div class="ltext">${ndUtbMd(r.md)}</div>
+      ${r.repliker.length ? `<button class="btn btn-s btn-sm" data-ulasdlg="${r.id}" style="align-self:flex-start">${I('play')}Lyssna på samtalet</button>` : ''}
+      <div class="uregler"><b>Det du bedöms på</b>${r.kriterier.map(([k, , , max]) => `<span>✓ ${esc(k)} <span class="muted">· ${max} p</span></span>`).join('')}</div>`;
+  else if (S.rpStep === 2){
+    inne = `<h3>Förbered dig, en minut</h3><p class="vhelp">Föreställ dig samtalet och skriv tre saker du ska göra. Det gör att du presterar bättre när du övar.</p>
+      ${[1,2,3].map(i => `<input class="uin" id="rpf${i}" placeholder="${['Min första mening','Frågan jag ska ställa','Hur jag föreslår mötet'][i - 1]}" value="${esc((S.uNotes['rp-' + r.id + i]) || '')}" data-unote="rp-${r.id}${i}">`).join('')}`;
+  } else if (S.rpStep === 3) inne = `<h3>Öva</h3><div class="uova">
+      <button class="uovk" data-aistart="${r.id}">${I('ai')}<b>Öva med Nav</b><span>Nav spelar kunden i chatten och bockar av kriterierna medan du svarar.</span></button>
+      <button class="uovk" data-ulaskund="${r.id}">${I('play')}<b>Öva högt</b><span>Nav läser kundens repliker högt. Du svarar som i ett riktigt samtal.</span></button>
+      <button class="uovk" data-ndukollega="${r.id}">${I('pers')}<b>Med en kollega</b><span>Tio minuter. Kollegan spelar kunden och bedömer med samma kriterier.</span></button>
+      <label class="uovk">${I('nyh')}<b>Spela in och lämna in</b><span>${r.status === 'bedomt' ? 'Gör om och lämna in igen.' : r.status === 'inlamnad' ? `Inlämnad ${esc(r.datum)}. ${esc(chef.charAt(0).toUpperCase() + chef.slice(1))} bedömer den.` : `${esc(chef.charAt(0).toUpperCase() + chef.slice(1))} bedömer inspelningen.`}</span><input type="file" accept="audio/*,video/*" data-ndufil="${r.id}" hidden></label></div>`;
+  else if (S.rpStep === 4){
+    const harSjalv = r.kriterier.every(([k]) => self[k]);
+    inne = `<h3>Bedömning</h3>${r.status !== 'bedomt' ? `<div class="tempty">Inte bedömd av ${esc(bedomare)} än. Bedöm dig själv nu, så jämför ni när bedömningen kommer.</div>` : ''}
+      <p class="vhelp">${harSjalv || r.status !== 'bedomt' ? `Din bedömning och ${esc(bedomare)}s, kriterium för kriterium.` : `Bedöm dig själv först. Sedan visas ${esc(bedomare)}s bedömning bredvid.`}</p>
+      <div class="ukrit">${r.kriterier.map(([k, p, , max, raa]) => `<div><span>${esc(k)}</span><span class="usjalv">${[1,2,3,4,5].map(v => `<button data-uself="${r.id}|${esc(k)}|${v}" aria-pressed="${self[k] === v}">${v}</button>`).join('')}</span>${r.status === 'bedomt' && harSjalv ? `<span class="ujmf"><span class="kgrad"><span><i style="width:${raa / max * 100}%;${p <= 2 ? 'background:var(--warn)' : ''}"></i></span><span class="num">${raa}/${max}</span></span>${Math.abs(self[k] - p) >= 2 ? `<em>Du ${self[k] > p ? 'högre' : 'lägre'}</em>` : ''}</span>` : ''}</div>`).join('')}</div>
+      ${r.status === 'bedomt' && harSjalv && r.kommentar ? `<div class="rsvar">${avatar(bedomare, 26)}<span>${esc(r.kommentar)}</span></div>` : ''}`;
+  } else {
+    const forslag = svag ? KURSER.find(k => !kursKlar(k) && k.id !== r.kurs && r.skill && k.skills.includes(r.skill)) : null;
+    inne = svag ? `<h3>Nästa övning</h3><p>Det svagaste i ditt senaste rollspel var <b>${esc(svag[0].toLowerCase())}</b> (${svag[4]}/${svag[3]}).${forslag ? ' Nav föreslår:' : ''}</p>${forslag ? `<div class="ugrid">${kursKort(forslag)}</div>` : ''}
+      <div class="pacts"><button class="btn btn-p btn-sm" data-rpmal="${esc(svag[0])}">Gör ”${esc(svag[0].toLowerCase())}” till veckans mål</button><button class="btn btn-s btn-sm" data-urpboka>Boka 10 min med ${esc(chef)}</button></div>`
+      : '<h3>Nästa övning</h3><p>När rollspelet är bedömt föreslår Nav vad du ska träna på härnäst.</p>';
+  }
+  return `<div class="urp">${note(124)}<button class="tlink" data-rpclose>${I('arrow').replace('<svg','<svg width="14" height="14" style="transform:rotate(180deg);vertical-align:-2px"')} Alla rollspel</button>
+    <h2>${esc(r.t)}</h2><p class="muted">Kunden: ${esc(r.kund)}</p>
+    <ol class="urpsteg">${steg.map((s, i) => `<li><button data-rpstep="${i + 1}" class="${S.rpStep === i + 1 ? 'on' : S.rpStep > i + 1 ? 'ok' : ''}"><i>${S.rpStep > i + 1 ? '✓' : i + 1}</i>${s}</button></li>`).join('')}</ol>
+    <div class="urpin">${inne}</div>
+    <div class="pacts">${S.rpStep > 1 ? '<button class="btn btn-s btn-sm" data-rpprev>Tillbaka</button>' : ''}${S.rpStep < 5 ? '<button class="btn btn-p btn-sm" data-rpnext>Nästa steg</button>' : ''}</div></div>`;
+};
+
+/* ---------- Föreläsningar ---------- */
+const _ndForelVy = forelVy;
+forelVy = function(){
+  if (!ndUtb()) return _ndForelVy();
+  if (!FORELASNINGAR.length) return `<div>${note(126)}<div class="tempty">Inga föreläsningar inlagda än.${chefRoll() || ndUtb().team ? ' Planera en under Teamet.' : ''}</div></div>`;
+  const harFragor = f => f.skill && REPETITION.some(q => q.skill === f.skill);
+  return `<div>${note(126)}${FORELASNINGAR.map(f => { const om = ndUtbDagar(f.startar.slice(0, 10)), vem = f.vem ? fornamn(f.vem) : 'den som håller i den';
+    return f.kommande ? `<section class="ufor"><div class="ufh"><div><span class="pill t-info">Kommande · ${om <= 0 ? 'i dag' : om === 1 ? 'i morgon' : `om ${om} dagar`}</span><h3>${esc(f.t)}</h3><p class="muted">${[f.nar, f.langd, f.vem, f.var].filter(Boolean).map(esc).join(' · ')}</p></div>
+        <div class="pacts">${S.uAnmald.has(f.id) ? '<span class="pill t-ok">Anmäld · i kalendern · påminnelse 1 h före</span>' : `<button class="btn btn-p btn-sm" data-uanmal="${f.id}">Anmäl mig</button>`}</div></div>
+        <div class="ufprep"><b>Före:</b> ${f.forberedelse ? esc(f.forberedelse) : 'Inget att förbereda är inlagt.'} ${harFragor(f) ? `<button class="tlink" data-urepforel="${f.id}">Gör förtestet, 1 min</button>` : ''}</div>
+        <div class="ufkey"><b>Fundera på innan</b>${f.nyckel.length ? f.nyckel.map((n, i) => `<span><i>${i + 1}</i>${esc(n)}</span>`).join('') : '<span class="muted">Inga frågor är inlagda för den här föreläsningen.</span>'}</div>
+        ${S.uFragaSkickad.has(f.id) ? `<p class="rkvok">✓ Din fråga är skickad till ${esc(vem)}.</p>` : `<form class="subadd" data-ufraga="${f.id}"><input placeholder="Skicka en fråga till ${esc(vem)} i förväg. Enter skickar." aria-label="Fråga i förväg" autocomplete="off"></form>`}
+        <p class="muted">Efteråt får du uppföljning dag 1, 3, 7 och 30, så att det du hör faktiskt används.</p></section>`
+      : (() => { const steg = f.uppfoljning.map(x => x[2]), klara = steg.filter(x => x === 'klar').length;
+        return `<section class="ufor"><div class="ufh"><div><span class="pill t-neutral">${esc(f.nar)}</span><h3>${esc(f.t)}</h3><p class="muted">${[f.langd, f.vem].filter(Boolean).map(esc).join(' · ')}</p></div><div class="pacts"><button class="btn btn-s btn-sm" data-ndusev="${f.id}">${I('play')}Se inspelningen</button></div></div>
+        <div class="ufkey"><b>Tre saker att komma ihåg</b>${f.nyckel.length ? f.nyckel.map((n, i) => `<span><i>${i + 1}</i><span>${esc(n)}</span></span>`).join('') : '<span class="muted">Inga nyckelpunkter är inlagda.</span>'}</div>
+        ${f.anmald ? `<div class="ufupp"><b>Uppföljningen · ${klara} av ${steg.length} klara</b><div class="ukbar" style="margin:4px 0 6px"><span><i style="width:${klara / steg.length * 100}%"></i></span></div>${f.uppfoljning.map(([d, vad, lage]) => `<div class="${lage}"><span class="ufd">${d}</span><span>${esc(vad)}</span><span class="ufs">${lage === 'klar' ? '✓ Klar' : lage === 'idag' ? `<button class="btn btn-p btn-sm" data-ufupp="${f.id}|${d}">Gör nu, 2 min</button>` : esc(lage)}</span></div>`).join('')}</div>` : '<p class="muted">Du var inte anmäld, så ingen uppföljning är lagd åt dig.</p>'}
+        <div class="rmynote"><span class="muted">Dina anteckningar ${S.uSparat === 'fl-' + f.id ? '<span class="pill t-ok">Sparat</span>' : ''}</span><textarea data-unote="fl-${f.id}" rows="2" placeholder="Det jag ska prova">${esc(S.uNotes['fl-' + f.id] || '')}</textarea></div>
+        ${S.uDelat.has(f.id) ? '<p class="rkvok">✓ Delat med teamet.</p>' : `<form class="subadd" data-udela="${f.id}"><input placeholder="Dela din bästa insikt med teamet. Enter delar." aria-label="Dela insikt" autocomplete="off"></form>`}</section>`; })(); }).join('')}</div>`;
+};
+
+/* ---------- Certifikat ---------- */
+const _ndCertVy = certVy;
+certVy = function(){
+  if (!ndUtb()) return _ndCertVy();
+  const c = KURSER.filter(k => k.certTill);
+  const man = (a, b) => Math.max(0, Math.round((Date.parse(b + 'T12:00:00Z') - Date.parse(a + 'T12:00:00Z')) / (30.44 * 864e5)));
+  return `<div>${note(127)}<p class="vhelp">Ett certifikat visar att du klarat provet. Det som går ut förnyar du med fem frågor i stället för att göra om hela kursen.</p>
+    <div class="ucert">${c.length ? '' : '<div class="tempty">Inga certifikat än. Du får ett när en kurs är klar.</div>'}${c.map(k => { const tot = k.certTillD && k.certUtfardat ? man(k.certUtfardat, k.certTillD) : null, kvar = k.certTillD ? man(ND.idag, k.certTillD) : null, gatt = k.certTillD && k.certTillD < ND.idag;
+      return `<div class="ucr"><span class="ucri">${I('check')}</span><div><b>${esc(k.t)}</b><span class="muted">${!k.certTillD ? 'Gäller tills vidare' : gatt ? `Gick ut ${esc(k.certTill)}` : `Gäller till ${esc(k.certTill)} · ${kvar} ${kvar === 1 ? 'månad' : 'månader'} kvar`}</span>${tot ? `<span class="ukbar" style="margin-top:6px"><span><i style="width:${Math.min(100, kvar / tot * 100)}%;${kvar <= 2 ? 'background:var(--warn)' : ''}"></i></span></span>` : ''}</div>
+        <div class="pacts"><button class="btn btn-s btn-sm" data-ucert="${k.id}">${S.uCertOpen === k.id ? 'Dölj' : 'Visa'}</button>${k.certTillD && k.cert ? `<button class="btn btn-s btn-sm" data-ndufornya="${k.id}">Förnya med 5 frågor</button>` : ''}</div></div>
+        ${S.uCertOpen === k.id ? `<div class="udiplom">${hubMark(40)}<span class="muted">Clicknet Nav intygar att</span><b class="udn">${esc(ND.jag.namn)}</b><span class="muted">har klarat</span><b>${esc(k.t)}</b><span class="muted">Utfärdat ${esc(ndUtbDatum(k.certUtfardat))}${k.certTillD ? ` · gäller till ${esc(k.certTill)}` : ' · gäller tills vidare'} · ansvarig ${esc(k.agare)}</span></div>` : ''}`; }).join('')}
+    ${KURSER.filter(k => k.obl && !kursKlar(k)).map(k => `<div class="ucr kom"><span class="ucri">${I('utb')}</span><div><b>${esc(k.t)}</b><span class="muted">${k.klara} av ${k.moduler.length} moduler${k.frist ? ` · frist ${k.frist}` : ''}</span></div><button class="btn btn-p btn-sm" data-uplay="${k.id}">${k.klara ? 'Fortsätt' : 'Starta'}</button></div>`).join('')}</div>
+    <label class="utog" style="margin-top:12px"><input type="checkbox" data-ucertpam ${S.uCertPam ? 'checked' : ''}>Påminn mig en månad innan ett certifikat går ut</label></div>`;
+};
+
+/* ---------- Teamet ---------- */
+const _ndTeametVy = teametVy;
+teametVy = function(){
+  if (!ndUtb()) return _ndTeametVy();
+  const t = ndUtb().team;
+  if (!t) return '<div class="tempty">Teamets utbildning syns för den som leder ett team.</div>';
+  const bed = t.attBedoma.find(x => x.id === S.uBedom);
+  const svag = t.karta.filter(([, v]) => v !== null).sort((a, b) => a[1] - b[1]).slice(0, 3);
+  const kursFor = s => KURSER.filter(k => k.skills.includes(s)).sort((a, b) => a.min - b.min)[0];
+  return `<div class="forv">${note(128)}
+    <section class="fcard"><h3>Att bedöma</h3>
+      ${t.attBedoma.length ? t.attBedoma.map(x => `<div class="frow"><span class="pill t-warn">Rollspel</span><b>${esc(x.namn)}: ${esc(x.modul)}</b><span class="muted">Inlämnat ${esc(x.inlamnad)} · lyssna först, öppningen loggas</span><span class="fb"><button class="btn btn-p btn-sm" data-ubedom="${x.id}">${S.uBedom === x.id ? 'Dölj' : 'Lyssna och bedöm'}</button></span></div>
+        ${S.uBedom === x.id ? `<div class="ubedom">${x.fil ? `<a class="btn btn-s btn-sm" href="/filer/${x.fil}" target="_blank" rel="noopener">${I('play')}Spela upp</a>` : '<span class="muted">Inspelningen saknas.</span>'}${x.kriterier.map(k => `<div><span>${esc(k.t)}</span><span class="usjalv">${Array.from({length:k.max + 1}, (_, v) => `<button data-ubp="${k.id}|${v}" aria-pressed="${S.uBedomPoang[k.id] === v}">${v}</button>`).join('')}</span></div>`).join('')}<textarea class="uin" id="ndubedomtext" rows="2" placeholder="En sak som var bra, och en sak att träna på"></textarea><button class="btn btn-p btn-sm" data-ubedomskicka ${x.kriterier.every(k => S.uBedomPoang[k.id] !== undefined) ? '' : 'disabled'}>Skicka bedömningen</button></div>` : ''}`).join('') : '<p class="muted">Inga rollspel väntar på bedömning.</p>'}</section>
+    <section class="fcard"><h3>Obligatoriska kurser, per person</h3>${t.obligatoriska.length && TEAM_PERS.length ? `<div class="utab"><div class="uth"><span></span>${t.obligatoriska.map(k => `<span>${esc(k.t)}</span>`).join('')}<span></span></div>
+      ${TEAM_PERS.map(([n, k, id]) => { const ok = Object.values(k).every(([a, b]) => a === b), forsta = t.obligatoriska.find(o => k[o.id] && k[o.id][0] < k[o.id][1]); return `<div><span>${avatar(n, 22)}${esc(fornamn(n))}</span>${t.obligatoriska.map(o => { const [a, b] = k[o.id] || [0, 0]; return `<span class="kgrad"><span><i style="width:${b ? a / b * 100 : 0}%;${a === b ? '' : b && a / b < .3 ? 'background:var(--warn)' : ''}"></i></span><span class="num">${a}/${b}</span></span>`; }).join('')}<span>${ok ? '<span class="pill t-ok">Klar</span>' : `<button class="tlink" data-ndupaminn="${id}|${forsta ? forsta.id : ''}">Påminn</button>`}</span></div>`; }).join('')}</div>` : '<p class="muted">Inga obligatoriska kurser.</p>'}</section>
+    <section class="fcard"><h3>Frågor teamet missar oftast</h3><p class="vhelp">Ur proven och repetitionen. Lägg dem i teamets repetition, så kommer de tillbaka hos alla.</p>${MISSADE.length ? MISSADE.map(([var_, id, p, why]) => `<div class="frow"><b>${esc(var_)}</b><span class="muted">${p} % svarar fel. ${esc(why)}</span><span class="fb">${S.uTeamRep.has(id) ? '<span class="pill t-ok">I repetitionen</span>' : `<button class="btn btn-s btn-sm" data-uteamrep="${id}">Lägg i teamets repetition</button>`}</span></div>`).join('') : '<p class="muted">Inga frågor har tillräckligt många svar än (minst tre).</p>'}</section>
+    <section class="fcard"><h3>Teamets kunskapskarta</h3><p class="vhelp">Snittet i teamet, ur repetitionen. Ingen enskild person syns här.</p>${svag.length ? svag.map(([s, v]) => { const k = kursFor(s); return `<div class="frow"><b>${ndUtbSkill(s)}</b><span class="kgrad"><span><i style="width:${v}%;${v < 55 ? 'background:var(--warn)' : ''}"></i></span><span class="num">${v} %</span></span><span class="fb">${k ? `<button class="btn btn-s btn-sm" data-ndurek="${k.id}">Rekommendera ${k.typ === 'kort' ? 'kortkurs' : 'kurs'}</button>` : ''}</span></div>`; }).join('') : '<p class="muted">Inga svar än. Kartan fylls när teamet repeterar frågor ur kurser som har färdigheter satta (minst fem svar per del).</p>'}</section>
+    <section class="fcard"><h3>Planera en föreläsning</h3><p class="vhelp">Nav lägger uppföljningen dag 1, 3, 7 och 30 åt dig: frågor, en övning i ett riktigt samtal och ett rollspel.</p>
+      ${S.uNyForel ? `<div class="ubedom"><input class="uin" id="ndufrub" placeholder="Rubrik, till exempel Prisinvändningar"><input class="uin" id="ndufnar" placeholder="Dag och tid, till exempel tor 22 okt 09:30">${[1,2,3].map(i => `<input class="uin" id="ndufnyk${i}" placeholder="Nyckelpunkt ${i}, en mening">`).join('')}<button class="btn btn-p btn-sm" data-unyforelspara>Skapa föreläsning och uppföljning</button></div>` : `<button class="btn btn-p btn-sm" data-unyforel>${I('plus')}Ny föreläsning</button>`}</section>
+    <section class="fcard"><h3>Systemguider</h3><div class="frow"><b>Kom igång med Nav</b><span class="muted">Systemguiderna kopplas inte i Nav 2.0 än.</span><span class="fb"><a class="btn btn-s btn-sm" href="/utbildning/systemguider">Öppna i nuvarande Nav</a></span></div></section>
+  </div>`;
+};
+
+/* ---------- Kursens sida ---------- */
+const _ndKursSida = kursSida;
+kursSida = function(k){
+  if (!ndUtb()) return _ndKursSida(k);
+  if (!k){ S.uOpen = null; return renderUtbView(); }
+  const klar = kursKlar(k), fd = ndUtbFristDagar(k), chef = ndUtbChef();
+  const regler = k.moduler.flatMap(m => ((LEKTIONER[m[3]] || {}).steg || []).filter(s => s.typ === 'text' && s.rubrik !== 'Om provet').map(s => s.regel));
+  const vanta = k.vanta >= 24 ? `${Math.round(k.vanta / 24)} ${Math.round(k.vanta / 24) === 1 ? 'dygn' : 'dygn'}` : k.vanta === 1 ? 'en timme' : `${k.vanta} timmar`;
+  return `<nav class="crumb"><button class="tlink" data-uclose>${I('arrow').replace('<svg','<svg width="14" height="14" style="transform:rotate(180deg);vertical-align:-2px"')} Utbildning</button><span>/</span><span>${TYPER[k.typ] || 'Kurs'}</span></nav>
+    ${!klar ? `<div class="ustart">${note(113)}<b>${esc(k.t)}</b><span class="muted">${k.klara}/${k.moduler.length} · ${langdText(kvarMin(k))} kvar${(() => { let d = kIdag(), n = k.moduler.length - k.klara; while (n > 1){ d = frPlus(d, 1); if (frArbetsdag(d)) n--; } return ` · en del om dagen: klar ${frKort(d)}${k.frist ? `, frist ${k.frist}` : ''}`; })()}</span><button class="btn btn-p btn-sm" data-uplay="${k.id}">${I('play')}${k.klara ? 'Fortsätt' : 'Starta'}</button></div>` : ''}
+    <div class="rgrid">
+      <article class="rart">
+        <div class="rhd"><span class="pill t-neutral">${TYPER[k.typ] || 'Kurs'}</span>${k.obl ? `<span class="pill t-warn">Obligatorisk${fd !== null ? `, ${fd < 0 ? `${-fd} dagar sen` : `${fd} dagar kvar`}` : ''}</span>` : ''}<span class="muted rlas">${langdText(k.min)}${k.dagar ? ` över ${k.dagar} dagar` : ''}</span></div>
+        <h1>${esc(k.t)}</h1>
+        <p class="rsum">${esc(k.besk)}</p>
+        ${k.varfor ? `<div class="ukvarfor big">${I('ai')}<span><b>Varför för dig:</b> ${esc(k.varfor)}</span></div>` : ''}
+        <div class="ufh">${klar ? `<span class="pill t-ok">Klar${k.certTill ? `, certifikat ${k.certTillD ? `till ${esc(k.certTill)}` : 'som gäller tills vidare'}` : ''}</span>` : `<button class="btn btn-p" data-uplay="${k.id}">${I('play')}${k.klara ? 'Fortsätt' : 'Starta'}: ${esc(k.moduler[k.klara][0])} · ${k.moduler[k.klara][2]} min</button>`}${k.rutin ? `<button class="btn btn-s" data-ropen="${k.rutin}">Läs rutinen</button>` : ''}</div>
+        <section><h3 class="uh3">Innehåll</h3><ol class="umodl">${k.moduler.map(([t, typ, min, mid], i) => { const st = i < k.klara ? 'ok' : i === k.klara ? 'nu' : 'last', f = k.forsok[mid], sp = k.sparr[mid];
+          return `<li class="${st}"><span class="umi">${st === 'ok' ? '✓' : st === 'last' ? '🔒' : I((MODIK[typ] || MODIK.las)[0])}</span><span><b>${esc(t)}</b><span class="muted">${(MODIK[typ] || MODIK.las)[1]} · ${langdText(min)}${st === 'last' ? ` · <span class="ulasx">öppnas när ${esc(k.moduler[i - 1][0].toLowerCase())} är klar</span>` : ''}${typ === 'quiz' ? ` · ${k.grans} % för godkänt${k.vanta ? `, ny chans efter ${vanta}` : ''}` : typ === 'rollspel' ? ` · ${esc(chef)} bedömer` : typ === 'ovn' ? ' · görs på plats, låser upp nästa' : ''}${f ? ` · <b class="${f.godkant ? 'okp' : ''}">ditt resultat ${f.poang} %</b>` : ''}${sp ? ` · nästa försök ${esc(sp)}` : ''}</span></span>${st === 'nu' ? `<button class="btn btn-s btn-sm" data-uplay="${k.id}">Starta</button>` : st === 'ok' && (typ === 'las' || typ === 'ovn' || typ === 'quiz') ? `<button class="tlink" data-ndulas="${k.id}|${i}">${typ === 'quiz' ? 'Se frågorna igen' : 'Läs igen'}</button>` : ''}</li>`; }).join('')}</ol></section>
+        ${regler.length || S.regelbok.some(r => r[1] === k.t) ? `<section class="uregelsida">${note(114)}<h3 class="uh3">Kursens regler på en sida</h3>${[...new Set([...regler, ...S.regelbok.filter(r => r[1] === k.t).map(r => r[0])])].map((r, i) => `<div><i>${i + 1}</i><b>${esc(r)}</b></div>`).join('')}</section>` : ''}
+        <section class="uefter"><h3 class="uh3">Efter kursen</h3><p>${k.cert ? `Certifikatet gäller i ${k.cert} månader. ` : ''}Provens frågor kommer tillbaka i Dagens repetition med allt längre mellanrum, ungefär efter 2, 7 och 21 dagar, så att det sitter även om tre månader.</p></section>
+      </article>
+      <aside class="rside"><section class="card"><div class="rown">${avatar(k.agare, 36)}<div><span class="muted">Ansvarig</span><b>${esc(k.agare)}</b></div></div>
+        <div class="pacts" style="margin-top:12px"><button class="btn btn-s btn-sm" data-act="pal">${I('ai')}Fråga Nav om kursen</button><button class="btn btn-s btn-sm" data-arny="Om kursen ”${esc(k.t)}”: ">${I('inbox')}Fråga ${esc(fornamn(k.agare))}</button></div>
+        <dl class="props" style="margin-top:12px"><div><dt>Tränar</dt><dd>${k.skills.map(s => `${ndUtbSkill(s)} (${ndUtbStreck(ndUtbVal(s))})`).join(', ') || 'Ingen färdighet satt'}</dd></div><div><dt>Längd</dt><dd>${langdText(k.min)}, ${k.moduler.length} delar</dd></div><div><dt>Klart</dt><dd>${k.klara} av ${k.moduler.length}</dd></div>${S.uBetyg[k.id] ? `<div><dt>Ditt betyg</dt><dd>${'★'.repeat(S.uBetyg[k.id])}</dd></div>` : ''}</dl></section></aside>
+    </div>`;
+};
+
+/* ---------- Hela vyn ---------- */
+const _ndUtbVyInre = _ndVyer.renderUtbView;
+_ndVyer.renderUtbView = function(){
+  if (!ndUtb()) return _ndUtbVyInre();
+  if (S.uOpen && kurs(S.uOpen)) return kursSida(kurs(S.uOpen));
+  S.uOpen = null;
+  const u = ndUtb(), chef = !!u.team;
+  const flikar = [['mina','Mina'],['bib','Biblioteket'],['rollspel','Rollspel'],['forel','Föreläsningar'],['cert','Certifikat']].concat(chef ? [['team','Teamet']] : []);
+  const t = S.uTab === 'team' && !chef ? 'mina' : S.uTab;
+  const inne = t === 'bib' ? biblioteketVy() : t === 'rollspel' ? rollspelVy() : t === 'forel' ? forelVy() : t === 'cert' ? certVy() : t === 'team' ? teametVy() : minaVy();
+  const oblig = KURSER.filter(k => k.obl && !kursKlar(k));
+  const fort = KURSER.filter(k => k.klara > 0 && !kursKlar(k)).sort((a, b) => (b.obl ? 1 : 0) - (a.obl ? 1 : 0))[0], drill = fort && fort.dagar ? ndUtbDrillDag(fort) : null;
+  const nasta = FORELASNINGAR.find(f => f.kommande);
+  const svagKort = KURSER.filter(k => k.typ === 'kort' && !kursKlar(k)).sort((a, b) => a.min - b.min)[0];
+  const repKlar = repGjord() || !u.forfallna.length;
+  const idx = ndUtbIndex(Object.fromEntries(FARDIG.map(([s]) => [s, ndUtbVal(s)]))), forra = ndUtbIndex(LASTWEEK.saljare);
+  const antal = {mina:(repKlar ? 0 : 1) + oblig.length, rollspel:ROLLSPEL.filter(r => r.status === 'ny').length, forel:FORELASNINGAR.filter(f => f.kommande && !S.uAnmald.has(f.id)).length, team:u.team ? u.team.attBedoma.length : 0};
+  return `<header class="top"><div class="hello"><h1>Utbildning</h1>
+      <div class="uidag">${note(103)}<span class="muted">I dag:</span>
+        <button class="chip ${repKlar ? 'on' : ''}" data-utab="mina">${repGjord() ? '✓ Repetitionen' : !u.forfallna.length ? '✓ Inget att repetera' : 'Repetition, 2 min'}</button>
+        ${drill ? `<button class="chip" data-uplay="${fort.id}">Drill: dag ${drill.dag}, ${drill.min} min</button>` : fort ? `<button class="chip" data-uplay="${fort.id}">${esc(fort.t)}: ${fort.moduler[fort.klara][2]} min</button>` : ''}
+        ${nasta ? `<button class="chip" data-utab="forel">Föreläsning ${esc(frKort(nasta.startar.slice(0, 10)))}</button>` : ''}</div></div>
+      <div class="tools"><div class="uindex"><b class="num">${idx === null ? '–' : `${idx} %`}</b><span>kunskapsindex ${idx !== null && forra !== null && idx !== forra ? `<em class="uindd">${idx > forra ? '↑' : '↓'} ${Math.abs(idx - forra)} sedan förra veckan</em>` : idx === null ? '<em class="uindd">inga svar än</em>' : ''}</span></div>${svagKort ? `<button class="btn btn-s" data-uplay="${svagKort.id}">${I('play')}Fem minuter över?</button>` : ''}${chef ? `<button class="btn btn-p" data-ndunykurs>${I('plus')}Ny kurs</button>` : ''}</div></header>
+    <div class="tgrid">
+      <div class="col"><section class="card tmain">
+        <div class="ttabs" role="group" aria-label="Visa" style="border-top:0;margin-top:0;padding-top:4px">${flikar.map(([k, l], i) => `<button data-utab="${k}" aria-pressed="${t === k}" title="Tangent ${i + 1}">${l}${antal[k] ? `<span class="n">${antal[k]}</span>` : ''}${k === 'mina' && !repKlar ? '<i class="act"></i>' : ''}</button>`).join('')}${note(104)}</div>
+        <div class="tbody">${inne}</div></section></div>
+      <div class="col">${uSidokolumn()}</div>
+    </div>`;
+};
+
+/* ---------- Lektionsspelaren ---------- */
+// Ett prov rättas inte på vägen: svaret går att ändra, och provet lämnas in i sista steget (repots lamnaQuiz).
+// Facit visas bara för ett prov du redan klarat, och då som i utkastet.
+const ndUtbProvlage = st => st.typ === 'fraga' && st.prov && st.ratt === null;
+const _ndRenderPlayer = renderPlayer;
+renderPlayer = function(){
+  if (!ndUtb()) return _ndRenderPlayer();
+  let el = document.getElementById('lplay');
+  const p = S.uPlay;
+  if (!p){ if (el) el.remove(); return; }
+  if (!el){ el = document.createElement('div'); el.id = 'lplay'; el.className = 'lplay'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Lektion'); document.body.appendChild(el); }
+  const lek = LEKTIONER[p.lek], steg = [...lek.steg, {typ:'klar'}], st = steg[p.i], k = kurs(lek.kurs), chef = ndUtbChef();
+  p.max = Math.max(p.max || 0, p.i);
+  const STID = {...STEGTID, rollspel:60};
+  const sekKvar = steg.slice(p.i).reduce((s, x) => s + (STID[x.typ] || 30), 0);
+  const fragor = lek.steg.map((s, i) => [s, i]).filter(([s]) => s.typ === 'fraga'), prov = fragor.some(([s]) => ndUtbProvlage(s));
+  let inne = '';
+  if (st.typ === 'fraga'){
+    if (!p.ord[p.i]) p.ord[p.i] = blanda(st.alt.length);
+    const svar = p.svar[p.i], svarat = svar !== undefined, provlage = ndUtbProvlage(st), ok = svarat && svar === st.ratt, sak = p.sak[p.i] || 'ganska';
+    const nr = fragor.findIndex(([, i]) => i === p.i) + 1;
+    inne = `<span class="lk">${provlage ? `Prov · fråga ${nr} av ${fragor.length}. Svaren rättas när du lämnar in.` : p.review ? 'Repetition, räknas inte om' : 'Kontrollfråga'} ${note(115)}</span><h2>${esc(st.q)}</h2>
+      <div class="uqalt">${p.ord[p.i].map((oi, pos) => `<button class="${!provlage && svarat ? (oi === st.ratt ? 'ratt' : oi === svar ? 'fel' : 'av') : provlage && oi === svar ? 'ndvalt' : ''}" data-lsvar="${oi}" ${!provlage && svarat ? 'disabled' : ''} ${provlage ? `aria-pressed="${oi === svar}"` : ''}><kbd>${pos + 1}</kbd>${esc(st.alt[oi])}</button>`).join('')}</div>
+      ${!provlage && svarat ? `<div class="ufb ${ok ? 'ok' : 'fel'}"><b>${ok ? 'Rätt.' : sak === 'saker' ? 'Inte riktigt, och du var säker. Bra att du såg den.' : 'Inte riktigt.'}</b><span>${ok ? '' : `Rätt svar: ${esc(st.alt[st.ratt])}.`}</span></div>` : ''}`;
+  } else if (st.typ === 'text'){
+    const sparad = S.regelbok.some(r => r[0] === st.regel);
+    inne = `<span class="lk">${esc(st.rubrik)} ${note(116)}</span><div class="lregel">${esc(st.regel)}</div><div class="pacts"><button class="btn btn-s btn-sm" data-lregel="${p.i}">${sparad ? '✓ I din regelbok' : '☆ Spara i min regelbok'}</button><button class="btn btn-s btn-sm" data-llyssna="${p.i}">${I('play')}Läs upp</button></div>${st.md ? `<div class="ltext">${ndUtbMd(st.md)}</div>` : ''}`;
+  } else if (st.typ === 'ovning'){
+    const c = p.ovn;
+    inne = `<span class="lk">Övning, görs på riktigt ${note(122)}</span><h2>${esc(st.text)}</h2><div class="lovn">${st.check.map((x, i) => `<button class="${c.includes(i) ? 'on' : ''}" data-lovn="${i}"><span class="stick ${c.includes(i) ? 'on' : ''}">${I('check')}</span>${esc(x)}</button>`).join('')}</div>
+      <div class="pacts"><button class="btn btn-s btn-sm" data-lovnuppg>${p.ovnUppg ? '✓ I Uppgifter, med checklista' : 'Lägg i Uppgifter med checklista'}</button></div><p class="muted">Du kan fortsätta nu och bocka av senare. Nästa modul öppnas när övningen är bockad.</p>`;
+  } else if (st.typ === 'rollspel'){
+    const r = ROLLSPEL.find(x => x.id === st.modul);
+    inne = `<span class="lk">Rollspel ${note(124)}</span><h2>${esc(lek.titel)}</h2>${r ? `<div class="uregler"><b>Det du bedöms på</b>${r.kriterier.map(([kk, , , max]) => `<span>✓ ${esc(kk)} <span class="muted">· ${max} p</span></span>`).join('')}</div>
+      <p class="muted">${r.status === 'bedomt' ? `Bedömt ${esc(r.datum)}.` : r.status === 'inlamnad' ? `Inlämnat ${esc(r.datum)}. ${esc(chef.charAt(0).toUpperCase() + chef.slice(1))} bedömer det.` : `Spela in samtalet och lämna in det. ${esc(chef.charAt(0).toUpperCase() + chef.slice(1))} bedömer det mot kriterierna, och modulen blir klar när det är bedömt.`}</p>
+      <div class="pacts"><label class="btn btn-p btn-sm">Lämna in inspelningen<input type="file" accept="audio/*,video/*" data-ndufil="${r.id}" hidden></label><button class="btn btn-s btn-sm" data-rpopen="${r.id}">Öppna rollspelet</button></div>` : ''}`;
+  } else if (st.typ === 'mal'){
+    inne = `<span class="lk">Ditt mål ${note(129)}</span><h2>Vad ska du göra annorlunda?</h2>
+      <textarea class="uin" rows="2" data-lmal placeholder="I mitt nästa samtal ska jag…">${esc(p.mal ?? '')}</textarea>
+      <div class="usak"><span>När?</span>${[['nasta','Nästa samtal'],['idag','I dag'],['vecka','Den här veckan']].map(([kk, l]) => `<button data-lnar="${kk}" aria-pressed="${p.nar === kk}">${l}</button>`).join('')}</div>
+      <label class="utog"><input type="checkbox" data-lcoach ${p.coach ? 'checked' : ''}>Visa målet för ${esc(chef)} inför nästa 1:1</label>
+      <div class="pacts"><button class="btn btn-s btn-sm" data-lmaluppg>${p.malUppg ? '✓ Lagt i Uppgifter' : 'Lägg som uppgift'}</button></div>
+      ${fragor.length ? `<div class="lplan"><b>Så ser vi till att det sitter</b><span>Frågorna kommer tillbaka i Dagens repetition när provet är klarat:</span><div>${['om 2 dagar','om 7 dagar','om 21 dagar'].map(x => `<span class="pill t-info">${x}</span>`).join('')}</div></div>` : ''}`;
+  } else if (st.typ === 'klar'){
+    const res = p.resultat;
+    const ratt = fragor.filter(([s, i]) => p.svar[i] === s.ratt).length;
+    const nastaMod = k.moduler[Math.min(k.klara + 1, k.moduler.length - 1)];
+    if (prov && !p.review){
+      inne = !res ? `<span class="lk">Lämna in ${note(130)}</span><h2>${esc(lek.titel)}</h2><p>${fragor.filter(([, i]) => p.svar[i] !== undefined).length} av ${fragor.length} frågor besvarade. Provet rättas när du lämnar in. Gränsen är ${k.grans} %.</p><p class="muted">Gå tillbaka med ← om du vill ändra ett svar.</p>`
+        : `<span class="lk">${res.godkant ? 'Godkänt' : 'Inte godkänt än'} ${note(130)}</span><h2>${res.ratt} av ${res.antal} rätt, ${res.poang} %.</h2>
+          <div class="urepres">${res.fragor.map(f => { const s = fragor.find(([x]) => x.qid === f.id); return `<span class="${f.ratt ? 'ok' : 'fel'}">${f.ratt ? '✓' : '✗'} ${esc(s ? (s[0].q.length > 70 ? s[0].q.slice(0, 68) + '…' : s[0].q) : '')}</span>`; }).join('')}</div>
+          <p class="muted">${res.godkant ? 'Frågorna kommer nu tillbaka i Dagens repetition.' : `Gränsen är ${res.grans} %. Läs modulerna igen och gör om provet${k.vanta ? ' när väntetiden gått' : ''}. Facit visas när provet är klarat.`}</p>
+          <div class="usak"><span>Hur var lektionen?</span>${[1,2,3,4,5].map(v => `<button data-lbetyg="${v}" aria-pressed="${p.betyg === v}">${'★'.repeat(v)}</button>`).join('')}</div>`;
+    } else {
+      inne = `<span class="lk">Klart ${note(130)}</span><h2>${esc(lek.titel)} ${p.review ? 'är läst igen' : 'är klar'}.</h2>
+        <div class="lsum"><div><b class="num">${fragor.length ? `${ratt}/${fragor.length}` : '–'}</b><span>${fragor.length ? 'frågor rätt' : 'inga frågor'}</span></div><div><b class="num">${k.klara}/${k.moduler.length}</b><span>moduler klara</span></div><div><b class="num">${Math.max(1, Math.round(lek.steg.reduce((s, x) => s + (STID[x.typ] || 30), 0) / 60))} min</b><span>tid</span></div></div>
+        ${lek.steg.some(s => s.typ === 'ovning') && !p.review && p.ovn.length < (lek.steg.find(s => s.typ === 'ovning').check.length) ? '<p class="ukal">Övningen är inte bockad än. Modulen blir klar när den är det, och du fortsätter här nästa gång.</p>' : ''}
+        <div class="usak"><span>Hur var lektionen?</span>${[1,2,3,4,5].map(v => `<button data-lbetyg="${v}" aria-pressed="${p.betyg === v}">${'★'.repeat(v)}</button>`).join('')}</div>
+        ${!p.review && !kursKlar(k) && k.klara + 1 < k.moduler.length ? `<p class="muted">Nästa: <b>${esc(nastaMod[0])}</b> · ${nastaMod[2]} min</p>` : ''}`;
+    }
+  }
+  const kanVidare = !(st.typ === 'fraga' && p.svar[p.i] === undefined);
+  const klarText = prov && !p.review && !p.resultat ? 'Lämna in provet' : p.review || kursKlar(k) || k.klara + 1 >= k.moduler.length || (p.resultat && !p.resultat.godkant) ? 'Klar' : 'Klar, till nästa modul';
+  el.innerHTML = `<div class="lpin">
+    <div class="lptop"><button class="ibtn" data-lclose aria-label="Pausa och stäng" title="Pausa, du fortsätter här nästa gång">${I('x')}</button><span class="lpt"><b>${esc(k.t)}</b><span class="muted">${esc(lek.titel)}</span></span><span class="muted num">${Math.max(1, Math.round(sekKvar / 60))} min kvar</span>${note(112)}</div>
+    <div class="lpbar">${steg.map((_, i) => `<button class="${i < p.i ? 'ok' : i === p.i ? 'nu' : ''}" ${i <= p.max && i !== p.i && !p.resultat ? `data-ljump="${i}"` : 'disabled'} aria-label="Steg ${i + 1}"></button>`).join('')}</div>
+    <div class="lpbody">${inne}</div>
+    <div class="lpfoot">${p.i > 0 && !(st.typ === 'klar' && p.resultat) ? '<button class="btn btn-s" data-lprev>← Tillbaka</button>' : '<span></span>'}<span class="muted lpk">${st.typ === 'fraga' && !kanVidare ? (ndUtbProvlage(st) ? '1–4 svarar' : '1–4 svarar · S säker · G gissar') : 'Enter går vidare'}</span>${st.typ !== 'klar' ? `<button class="btn btn-p" data-lnext ${kanVidare ? '' : 'disabled'}>Nästa →</button>` : `<button class="btn btn-p" data-lklar ${p.skickar ? 'disabled' : ''}>${klarText}</button>`}</div>
+  </div>`;
+};
+const _ndStartaLektion = startaLektion;
+startaLektion = function(kid, idx){
+  if (!ndUtb()) return _ndStartaLektion(kid);
+  const k = kurs(kid); if (!k || !k.moduler.length) return;
+  const i = idx !== undefined ? idx : Math.min(k.klara, k.moduler.length - 1), [, typ, , mid] = k.moduler[i];
+  const review = i < k.klara;
+  if (!review && k.sparr[mid]){ toast(`Nästa försök går att göra ${k.sparr[mid]}.`); return; }
+  if (!review && typ === 'rollspel'){ S.view = 'utbildning'; S.uTab = 'rollspel'; S.rpOpen = mid; S.rpStep = 1; S.uOpen = null; render(); return; }
+  if (!LEKTIONER[mid]){ toast('Modulen gick inte att läsa.'); return; }
+  const noter = ndUtb().anteckningar || {};
+  let ovn = []; try { ovn = JSON.parse(noter['ovn:' + mid] || '[]'); } catch(_){}
+  let mal = null; try { mal = JSON.parse(noter['mal:' + mid] || 'null'); } catch(_){}
+  const start = review ? 0 : (S.uResume[kid] || 0);
+  S.uPlay = {lek:mid, kid, i:start, max:start, svar:{}, sak:{}, ord:{}, dlg:{}, gissat:{}, ovn:Array.isArray(ovn) ? ovn : [], mal:mal ? mal.text : null, nar:mal ? mal.nar : 'nasta', coach:mal ? !!mal.coach : false, malUppg:false, ovnUppg:false, review, betyg:ndUtb().betyg[mid] || null};
+  if (start) toast(`Du fortsätter på steg ${start + 1}, där du pausade.`);
+  render();
+};
+const _ndAvslutaLektion = avslutaLektion;
+avslutaLektion = function(){
+  if (!ndUtb()) return _ndAvslutaLektion();
+  const p = S.uPlay; if (!p || p.skickar) return;
+  const k = kurs(p.kid), lek = LEKTIONER[p.lek], mid = p.lek, typ = (k.moduler.find(m => m[3] === mid) || [])[1];
+  const stang = () => { delete S.uResume[p.kid]; S.uPlay = null; S.uOpen = k.id; render(); };
+  // Målet sparas som anteckning ("mal:<modul>"), med om chefen får se det inför 1:1.
+  const malText = (p.mal || '').trim();
+  const sparaMal = () => malText ? ndUtbPost('anteckning', {key:'mal:' + mid, text:JSON.stringify({text:malText, nar:p.nar, coach:!!p.coach, kurs:k.id, modul:lek.titel, datum:ND.idag})}, {ladda:false, tyst:true}) : Promise.resolve({});
+  if (p.review){ if (p.betyg && p.betyg !== ndUtb().betyg[mid]) ndUtbPost('betyg', {modul:mid, betyg:p.betyg}, {ladda:false, tyst:true}); stang(); return; }
+  if (typ === 'quiz'){
+    if (p.resultat){ if (p.betyg) ndUtbPost('betyg', {modul:mid, betyg:p.betyg}, {ladda:false, tyst:true}); S.uPlay = null; S.uOpen = k.id; ndUtbLadda(); return; }
+    const svar = {}; lek.steg.forEach((s, i) => { if (s.typ === 'fraga' && p.svar[i] !== undefined) svar[s.qid] = s.oids[p.svar[i]]; });
+    p.skickar = true; renderPlayer();
+    sparaMal().then(() => ndUtbPost('prov', {modul:mid, svar}, {ladda:false, tyst:true})).then(s => {
+      p.skickar = false;
+      if (s.laslage){ toast(s.fel); stang(); return; }
+      if (s.resultat){ p.resultat = s.resultat; toast(s.ok || s.fel); renderPlayer(); return; }
+      toast(s.fel || 'Provet gick inte att lämna in.'); renderPlayer();
+    });
+    return;
+  }
+  if (typ === 'rollspel'){ stang(); return; }
+  const ovnSteg = lek.steg.find(s => s.typ === 'ovning');
+  if (ovnSteg && p.ovn.length < ovnSteg.check.length){
+    sparaMal(); S.uResume[p.kid] = lek.steg.indexOf(ovnSteg); S.uPlay = null; S.uOpen = k.id; render();
+    toast('Övningen är inte bockad än. Nästa modul öppnas när den är det.'); return;
+  }
+  sparaMal().then(() => ndUtbPost('klar', {modul:mid, betyg:p.betyg || undefined}, {ladda:false})).then(s => {
+    if (s.laslage || s.fel){ stang(); return; }
+    S.uPlay = null; S.uOpen = k.id; ndUtbLadda();
+  });
+};
+
+/* ---------- Händelser ---------- */
+const _ndUtbClick = utbClick;
+utbClick = function(t, e){
+  if (!ndUtb()) return _ndUtbClick(t, e);
+  const d = t.dataset, p = S.uPlay, chef = ndUtbChef();
+  // Repetition per färdighet, före en föreläsning och i uppföljningen: bara riktiga frågor.
+  if (d.urepskill){ const s = d.urepskill; return ndUtbRepAv(REPETITION.filter(q => q.skill === s).map(q => q.id), 'skill', `Bara ${ndUtbSkill(s).toLowerCase()}.`, `Inga frågor tränar ${ndUtbSkill(s).toLowerCase()} än. Färdigheterna sätts per kurs.`) || true; }
+  if (d.urepforel){ const f = FORELASNINGAR.find(x => x.id === d.urepforel); ndUtbRepAv(f && f.skill ? REPETITION.filter(q => q.skill === f.skill).map(q => q.id) : [], 'fortest', 'Förtest före föreläsningen. Det är helt okej att svara fel.', 'Föreläsningen har inga frågor att gissa på än.'); return true; }
+  if (d.ufupp){ const [id, dag] = d.ufupp.split('|'), f = FORELASNINGAR.find(x => x.id === id), steg = {'Dag 1':'dag1','Dag 3':'dag3','Dag 7':'dag7','Dag 30':'dag30'}[dag];
+    ndUtbPost('uppfoljning', {id, steg}, {ladda:false, tyst:true}).then(s => {
+      if (s.fel){ toast(s.fel); return; }
+      const u = f && f.uppfoljning.find(x => x[0] === dag); if (u) u[2] = 'klar';
+      if (!ndUtbRepAv(f && f.skill ? REPETITION.filter(q => q.skill === f.skill).map(q => q.id) : [], 'forel', `Uppföljning av ${f ? f.t : 'föreläsningen'}, ${dag.toLowerCase()}.`, `${dag} är markerad som gjord.`)) render();
+    }); return true; }
+  if (d.ndufl){ ndUtbPost('anteckning', {key:'fl-skjut-' + d.ndufl, text:frPlus(ND.idag, 1)}, {ladda:false, tyst:true}).then(s => { if (s.fel){ toast(s.fel); return; } ndUtb().anteckningar['fl-skjut-' + d.ndufl] = frPlus(ND.idag, 1); render(); toast('Uppföljningen flyttas till i morgon.'); }); return true; }
+  if (d.ndufornya){ const k = kurs(d.ndufornya), ids = REPETITION.filter(q => q.kurs === k.id).map(q => q.id);
+    if (ndUtbRepAv(ids, 'fornya', `Fem frågor ur ${k.t}. Alla rätt förnyar certifikatet.`, 'Kursen har inga frågor att förnya med.')) S.rep.kurs = k.id; render(); return true; }
+  // Uppgifter: repots skapaUppgift.
+  if (d.upamin){ const k = kurs(d.upamin), m = k.moduler[k.klara]; ndUtbUppgift(`${k.t}: ${m[0]}`, {tid:'15:30', min:m[2], kurs:k.id}); return true; }
+  if (d.uboka !== undefined){ const lista = KURSER.filter(k => k.obl && !kursKlar(k)), v = new Date(ND.idag + 'T12:00:00Z').getUTCDay() || 7, tillMandag = 8 - v;
+    if (!lista.length) return true;
+    (async () => { for (let i = 0; i < lista.length; i++){ const k = lista[i], s = await ndUtbPost('uppgift', {titel:`${k.t}: ${langdText(kvarMin(k))}`, dag:tillMandag + i, tid:'08:30', min:Math.min(30, kvarMin(k)), kurs:k.id}, {ladda:false, tyst:true}); if (s.fel){ toast(s.fel); return; } }
+      toast(`${lista.length} ${lista.length === 1 ? 'tid lagd' : 'tider lagda'} i Uppgifter, en kurs per morgon från måndag 08:30.`); })();
+    return true; }
+  if (d.udismiss){ const id = d.udismiss; ndUtbPost('pref', {key:'utb.dolda', value:id}, {ladda:false, tyst:true}).then(s => { if (s.fel){ toast(s.fel); return; } S.uDismiss.add(id); render();
+    toast('Den visas inte här på en vecka.', () => ndUtbPost('pref', {key:'utb.dolda', value:id, bort:true}, {ladda:false, tyst:true}).then(() => { S.uDismiss.delete(id); render(); })); }); return true; }
+  if (d.uremtid){ const tid = d.uremtid; ndUtbPost('pref', {key:'utb.reptid', value:tid}, {ladda:false, tyst:true}).then(s => { if (s.fel){ toast(s.fel); return; } S.repTid = tid; render(); toast(`Dagens repetition kommer klockan ${tid}.`); }); return true; }
+  if (d.nduonska !== undefined){ ndUtbPost('onska', {q:S.uQ}, {ladda:false}); return true; }
+  if (d.ndunykurs !== undefined){ toastActs('Kursbyggaren behöver en AI-tjänst som inte är kopplad till Nav än. En kurs går att skriva för hand i nuvarande Nav.', [['Öppna', () => { location.href = '/utbildning/ny'; }]], 7000); return true; }
+  // Rollspelen.
+  if (d.ulasdlg || d.ulaskund){ const r = ROLLSPEL.find(x => x.id === (d.ulasdlg || d.ulaskund)); if (!r || !r.repliker.length){ toast('Rollspelet har inga repliker inlagda.'); return true; } lasHogt(r.repliker.join(' … ')); if (d.ulaskund) toast('Nav läser kundens repliker. Svara högt efter varje.'); return true; }
+  if (d.uself){ const [id, kk, v] = d.uself.split('|'), r = ROLLSPEL.find(x => x.id === id), kr = r && r.kriterier.find(x => x[0] === kk); if (!kr) return true;
+    ndUtbPost('sjalv', {modul:id, kriterium:kr[2], poang:+v}, {ladda:false, tyst:true}).then(s => { if (s.fel){ toast(s.fel); return; } S.uSelf[id] = {...(S.uSelf[id] || {}), [kk]:+v}; render(); }); return true; }
+  if (d.ndukollega){ const r = ROLLSPEL.find(x => x.id === d.ndukollega); ndUtbUppgift(`Rollspel med en kollega: ${r.t}`, {min:10, kurs:r.kurs}); return true; }
+  if (d.urpboka !== undefined){ ndUtbUppgift(`10 min rollspel med ${chef}`, {tid:'15:45', min:10}); return true; }
+  if (d.rpmal){ ndUtbUppgift(`Veckans mål: ${d.rpmal.toLowerCase()} i varje samtal`, {dag:0}); return true; }
+  if (d.aistart || d.usvar){ toast('Övningskunden behöver en AI-tjänst som inte är kopplad till Nav än. Öva högt eller med en kollega så länge.'); return true; }
+  if (d.urpfyll) return true;
+  // Föreläsningarna.
+  if (d.uanmal){ const id = d.uanmal; ndUtbPost('anmal', {id}, {ladda:false}).then(s => { if (!s.fel){ S.uAnmald.add(id); render(); } }); return true; }
+  if (d.ndusev){ const f = FORELASNINGAR.find(x => x.id === d.ndusev); if (f && f.inspelning) window.open(f.inspelning, '_blank', 'noopener'); else toast('Ingen inspelning är upplagd för föreläsningen.'); return true; }
+  // Teamet.
+  if (d.ubedom){ S.uBedom = S.uBedom === d.ubedom ? null : d.ubedom; S.uBedomPoang = {}; render(); return true; }
+  if (d.ubp){ const [kid, v] = d.ubp.split('|'); S.uBedomPoang[kid] = +v; const txt = document.getElementById('ndubedomtext')?.value || ''; render(); const ta = document.getElementById('ndubedomtext'); if (ta) ta.value = txt; return true; }
+  if (d.ubedomskicka !== undefined){ const note = (document.getElementById('ndubedomtext')?.value || '').trim();
+    if (note.length < 10){ toast('Skriv en återkoppling. Ett betyg utan ord lär ingen sig något av.'); document.getElementById('ndubedomtext')?.focus(); return true; }
+    ndUtbPost('bedom', {id:S.uBedom, note, poang:S.uBedomPoang}); return true; }
+  if (d.ndupaminn){ const [vem, k] = d.ndupaminn.split('|'); ndUtbPost('paminn', {vem, kurs:k}, {ladda:false}); return true; }
+  if (d.uteamrep){ const id = d.uteamrep; ndUtbPost('teamrep', {qid:id}, {ladda:false}).then(s => { if (!s.fel){ S.uTeamRep.add(id); render(); } }); return true; }
+  if (d.ndurek){ ndUtbPost('rekommendera', {kurs:d.ndurek}); return true; }
+  if (d.unyforelspara !== undefined){ const v = id => (document.getElementById(id)?.value || '').trim();
+    ndUtbPost('forelasning-ny', {titel:v('ndufrub'), nar:v('ndufnar'), nyckel:[v('ndufnyk1'), v('ndufnyk2'), v('ndufnyk3')]}); return true; }
+  if (d.uknuff !== undefined) return true;
+  if (d.ndulas){ const [kid, i] = d.ndulas.split('|'); S.view = 'utbildning'; startaLektion(kid, +i); return true; }
+  // Spelaren.
+  if (p){
+    const lek = LEKTIONER[p.lek];
+    if (d.lregel !== undefined){ const st = lek.steg[+d.lregel], k = kurs(p.kid), har = S.regelbok.some(r => r[0] === st.regel);
+      ndUtbPost('regel', {text:st.regel, kurs:k.id, bort:har || undefined}, {ladda:false}).then(s => { if (s.fel) return; if (har) S.regelbok = S.regelbok.filter(r => r[0] !== st.regel); else S.regelbok.push([st.regel, k.t]); renderPlayer(); }); return true; }
+    if (d.llyssna !== undefined){ const st = lek.steg[+d.llyssna]; lasHogt(st.regel + '. ' + String(st.md || '').replace(/[#>*_`]/g, '')); return true; }
+    if (d.lovn !== undefined){ const o = p.ovn, i = +d.lovn; o.includes(i) ? o.splice(o.indexOf(i), 1) : o.push(i); renderPlayer();
+      if (!p.review) ndUtbPost('anteckning', {key:'ovn:' + p.lek, text:JSON.stringify(o)}, {ladda:false, tyst:true}).then(s => { if (s.laslage && !p.ovnLas){ p.ovnLas = true; toast(s.fel); } else if (!s.fel) ndUtb().anteckningar['ovn:' + p.lek] = JSON.stringify(o); }); return true; }
+    if (d.lovnuppg !== undefined){ if (!p.ovnUppg){ const st = lek.steg[p.i]; ndUtbUppgift(`Övning: ${st.text.replace(/\.$/, '')}`, {delar:st.check, kurs:p.kid}).then(s => { if (!s.fel){ p.ovnUppg = true; renderPlayer(); } }); } return true; }
+    if (d.lmaluppg !== undefined){ if (!p.malUppg){ const txt = (p.mal ?? document.querySelector('[data-lmal]')?.value ?? '').trim() || 'Prova det jag lärde mig';
+      ndUtbUppgift(txt.replace(/^I mitt nästa samtal ska jag /i, '').replace(/\.$/, '').replace(/^./, c => c.toUpperCase()), {dag:p.nar === 'vecka' ? 4 : 0, kurs:p.kid}).then(s => { if (!s.fel){ p.malUppg = true; renderPlayer(); } }); } return true; }
+    if (d.lklar !== undefined){ if (!p.skickar) avslutaLektion(); return true; }
+  }
+  return _ndUtbClick(t, e);
+};
+// Formulären: fråga i förväg och dela en insikt.
+document.addEventListener('submit', e => {
+  if (!ndUtb()) return;
+  const f = e.target; if (!f.matches) return;
+  const fraga = f.matches('[data-ufraga]'), dela = f.matches('[data-udela]');
+  if (!fraga && !dela && !f.matches('[data-aisvar]')) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  if (!fraga && !dela) return;
+  const id = fraga ? f.dataset.ufraga : f.dataset.udela, inp = f.querySelector('input'), text = inp.value.trim(); if (!text) return;
+  ndUtbPost(fraga ? 'fraga' : 'insikt', {id, text}, {ladda:false}).then(s => { if (!s.fel){ (fraga ? S.uFragaSkickad : S.uDelat).add(id); render(); } });
+}, true);
+// Anteckningarna: förberedelsen i rollspelet och anteckningen efter en föreläsning sparas medan du skriver.
+const ndUtbNotTimer = {};
+document.addEventListener('input', e => {
+  if (!ndUtb() || !e.target.dataset || e.target.dataset.unote === undefined) return;
+  // Utkastets egen lyssnare visar "Sparat" efter en stund. Här visas det först när navet sparat.
+  e.stopImmediatePropagation();
+  const key = e.target.dataset.unote, v = e.target.value, falt = e.target;
+  S.uNotes[key] = v;
+  clearTimeout(ndUtbNotTimer[key]);
+  ndUtbNotTimer[key] = setTimeout(() => ndUtbPost('anteckning', {key, text:v}, {ladda:false, tyst:true}).then(s => {
+    if (s.laslage){ if (!ndUtbNotTimer.las){ ndUtbNotTimer.las = true; toast(s.fel); } return; }
+    if (s.fel){ toast(s.fel); return; }
+    if (key.startsWith('fl-')){ S.uSparat = key; const pill = falt.closest('.rmynote')?.querySelector('.muted'); if (pill && !pill.querySelector('.pill')) pill.insertAdjacentHTML('beforeend', ' <span class="pill t-ok">Sparat</span>'); }
+  }), 900);
+}, true);
+document.addEventListener('change', e => {
+  if (!ndUtb() || !e.target.dataset) return;
+  if (e.target.dataset.ucertpam !== undefined){ e.stopImmediatePropagation(); const pa = e.target.checked;
+    ndUtbPost('pref', {key:'utb.certpam', value:pa}, {ladda:false, tyst:true}).then(s => { if (s.fel){ toast(s.fel); e.target.checked = !pa; return; } S.uCertPam = pa; toast(pa ? 'Du får en påminnelse en månad innan.' : 'Inga påminnelser om certifikat.'); }); }
+}, true);
+// Rollspelets inspelning: en signerad adress, filen, och sedan registreras den (repots forberedRollspel och registreraRollspel).
+document.addEventListener('change', async e => {
+  if (!ndUtb() || !e.target.dataset || e.target.dataset.ndufil === undefined) return;
+  const modul = e.target.dataset.ndufil, f = e.target.files && e.target.files[0]; if (!f) return;
+  const p = await ndUtbPost('rollspel-forbered', {modul, filnamn:f.name, mime:f.type, storlek:f.size}, {ladda:false, tyst:true});
+  if (p.fel){ toast(p.fel); return; }
+  const mal = p.url || (p.supabaseUrl && p.token ? `${p.supabaseUrl}/storage/v1/object/upload/sign/${p.bucket}/${p.path}?token=${encodeURIComponent(p.token)}` : null);
+  toast('Laddar upp inspelningen …');
+  const r = mal ? await fetch(mal, {method:'PUT', headers:{'Content-Type':f.type || 'application/octet-stream'}, body:f}).catch(() => ({ok:false})) : {ok:false};
+  if (!r.ok){ toast('Inspelningen gick inte att ladda upp. Försök igen.'); return; }
+  S.uPlay = null; S.rpOpen = modul; S.uTab = 'rollspel';
+  ndUtbPost('rollspel-registrera', {modul, fil:p.fileId, filnamn:f.name, store:p.store});
+});
+if (ndUtb()){ ndUtbStart(); NDKOPPLAD.add('utbildning'); }
 
 /* Start */
 try { const th = localStorage.getItem('nav2-theme'); if (th && th !== 'auto'){ document.documentElement.setAttribute('data-theme', th); S.theme = th; document.querySelectorAll('#themeSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.themeSet === th))); } } catch(_){}

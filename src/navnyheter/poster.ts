@@ -37,6 +37,12 @@ behörigheter som här: du ser bara det du får se.
   rutinen hjälpte och bevaka ett område. Ägaren svarar på återkopplingen,
   och den som förvaltar rutinerna ser kvittenser, granskning och vad folk
   sökt efter utan att hitta.
+- **Utbildning**, med navets kurser: dagens repetition ur prov du klarat,
+  lektioner steg för steg med din regelbok och ditt mål, prov som rättas när
+  du lämnar in, rollspel som du lämnar in och bedömer dig själv i, föreläsningar
+  med anmälan och uppföljning, och certifikat som förnyas med fem frågor. Den
+  som leder ett team bedömer rollspelen, ser vem som har kurser kvar och lägger
+  frågor i teamets repetition.
 - **Order** och kundkortet. Varje order har nu ett nummer (#12), och
   provisionen är navets: fryst på en godkänd order, och det godkännandet
   skulle ge på en som väntar. I kortet spelar du inspelningen direkt, skriver

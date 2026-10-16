@@ -18,6 +18,7 @@ export const SKRIVLAGE = {
   franvaro: false,
   tid: false,
   rutiner: false,
+  utbildning: false,
 } as const;
 
 export type Skrivvy = keyof typeof SKRIVLAGE;

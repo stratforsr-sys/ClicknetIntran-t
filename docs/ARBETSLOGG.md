@@ -5,6 +5,39 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-16 · Nav 2.0, pass 11: Utbildning med riktig data och allt utkastet har (0097)
+
+Utkastets Utbildning har nio exempelkurser, en repetitionsbank, rollspel med
+förebilder och två föreläsningar. I navet finns två publicerade kurser, och det
+är dem vyn visar nu.
+
+- **Modulerna som lektionssteg** (`src/lib/nav2/utbildningforma.ts`): texten
+  delas vid sina rubriker. Regeln är avsnittets första citat eller fetstilta
+  rad, och resten visas som den är. En övning får sina numrerade punkter som
+  bockar, ett prov sina frågor, och ett rollspel sin rubrik.
+- **Repots regler gäller.** Modulerna tas i ordning (`farTaModul`). Ett prov
+  rättas på servern (`lamnaQuiz`), och facit visas först när provet är klarat,
+  även för den som får redigera kursen. Spelaren rättar därför inte på vägen:
+  svaren går att ändra, och provet lämnas in i sista steget. Ett rollspel blir
+  klart när det bedöms (`bedomRollspel`, återkoppling på minst tio tecken),
+  och inspelningen öppnas genom `/filer/<id>`, som loggar öppningen.
+- **0097** (körd): `course.learning_meta`, `learning_answer` (repetitionen,
+  rättad på servern; nästa gång i morgon vid fel, om 2 dagar vid ett gissat
+  rätt, om 7 vid ett säkert rätt och sedan tre gånger längre, högst 90),
+  `learning_rule`, `learning_note` (förberedelser, anteckningar, mål och
+  övningens bockar), `module_rating`, `roleplay_self`, `team_repetition`,
+  `lecture` med anmälan, frågor, insikter och uppföljning, och `course_wish`.
+- **Förnyelsen** av ett certifikat med fem frågor är ny: alla rätt (rättat på
+  servern) ger ett nytt certifikat på kursens giltighetstid. Repots
+  `certifieraPerson` skriver bara ett nytt när det gamla gått ut.
+- **Det som saknas står som saknat:** kunskapskartan är tom tills kurserna får
+  färdigheter (`learning_meta.skills`), teamets veckomål är inte satt,
+  övningskunden och kursbyggaren kräver en AI-tjänst, och systemguiderna
+  länkar till nuvarande Nav (undantagna).
+- **Prov utan klon:** `~/nav2-utkast/verktyg/srv/kor.mjs` kör navets riktiga
+  serverkod mot databasen, bara läsning och med RLS som den inloggade (en
+  supabase-lik frågebyggare över `pg`). Provat som Zen och som säljaren Fredrik.
+
 ## 2026-10-15 · Nav 2.0, pass 10: Rutiner med riktig data och allt utkastet har (0095–0096)
 
 Rutiner var inte kopplat. Utkastets ~40 rutiner är exempel; i navet finns tre

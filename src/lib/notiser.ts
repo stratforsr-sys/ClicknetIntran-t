@@ -612,6 +612,14 @@ export const NOTIS_KALLOR = [
   "rutin-bevakning",
 
   /**
+   * Nav 2.0 (0097), Utbildning: en fråga i förväg till den som håller en
+   * föreläsning, och chefens påminnelse om en obligatorisk kurs. Båda är
+   * HÄNDELSER: någon gjorde något som rör dig.
+   */
+  "utbildning-fraga",
+  "utbildning-paminn",
+
+  /**
    * ANGRA-KNAPPEN HAR MED FLIT INGEN KALLA HAR.
    *
    * `/angra` provades och togs bort igen. Kvittot med angra-knappen visas bara
@@ -725,6 +733,8 @@ export const HANDELSEKALLOR = [
   "rutin-delad",
   "rutin-kvittera",
   "rutin-bevakning",
+  "utbildning-fraga",
+  "utbildning-paminn",
 ] as const satisfies readonly Notiskalla[];
 
 export type Handelsekalla = (typeof HANDELSEKALLOR)[number];
