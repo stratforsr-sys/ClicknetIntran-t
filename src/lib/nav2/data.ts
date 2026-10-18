@@ -17,6 +17,7 @@ import { byggFel } from "./fel";
 import { byggRutiner, type NdRutiner } from "./rutiner";
 import { byggUtbildning, type NdUtbildning } from "./utbildning";
 import { byggHem, type NdHem } from "./hem";
+import { byggRekrytering, type NdRekrytering } from "./rekrytering";
 import type { NdFel } from "./felforma";
 import {
   formaLon,
@@ -76,6 +77,7 @@ export type Nav2Data = {
   utbildning: NdUtbildning;
   /** Startsidans egna val och Golvet (0120). Null när kontot saknar anställd. */
   hem: NdHem | null;
+  rekrytering: NdRekrytering;
 };
 
 const PERSONKOLUMNER =
@@ -86,7 +88,7 @@ export async function byggNav2Data(user: CurrentUser): Promise<Nav2Data | null> 
   if (!user.employee) return null;
   const supabase = await supabaseServer();
 
-  const [{ data: personRader }, { data: teamRader }, { data: satsRader, error: satsFel }, { data: lonRader, error: lonFel }, notiser, tid, franvaro, uppgifter, order, provision, kalender, arenden, fel, rutiner, utbildning, hem] =
+  const [{ data: personRader }, { data: teamRader }, { data: satsRader, error: satsFel }, { data: lonRader, error: lonFel }, notiser, tid, franvaro, uppgifter, order, provision, kalender, arenden, fel, rutiner, utbildning, hem, rekrytering] =
     await Promise.all([
       supabase.from("employee").select(PERSONKOLUMNER).order("first_name"),
       supabase.from("team").select("id, name"),
@@ -111,6 +113,7 @@ export async function byggNav2Data(user: CurrentUser): Promise<Nav2Data | null> 
       byggRutiner(supabase, user),
       byggUtbildning(supabase, user),
       byggHem(supabase, user),
+      byggRekrytering(supabase, user),
     ]);
 
   const ra: RaPerson[] = ((personRader ?? []) as unknown as (Omit<RaPerson, "roller"> & {
@@ -192,5 +195,6 @@ export async function byggNav2Data(user: CurrentUser): Promise<Nav2Data | null> 
     rutiner,
     utbildning,
     hem,
+    rekrytering,
   };
 }

@@ -368,6 +368,9 @@ export const NOTIS_KALLOR = [
   "rekrytering-steg",
   "rekrytering-noshow",
   "rekrytering-anstalld",
+  /** En anställd tipsade om en kandidat, och laget ombads tipsa. Går till rekryteringskretsen respektive säljarna. */
+  "rekrytering-tips",
+  "rekrytering-tips-be",
 
   /** Nagon lade upp en anstalld som du ar chef for. */
   "personal-ny",
@@ -688,6 +691,8 @@ export const HANDELSEKALLOR = [
   "rekrytering-steg",
   "rekrytering-noshow",
   "rekrytering-anstalld",
+  "rekrytering-tips",
+  "rekrytering-tips-be",
   "personal-ny",
   "provision-mal",
   "provision-bonus",

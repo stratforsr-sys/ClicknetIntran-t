@@ -5,6 +5,43 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-18 · Nav 2.0, Rekrytering med riktig data och allt utkastet har (0110, EJ KÖRD)
+
+Rekryteringen i Nav 2.0 läser navets kandidater (0030) med den inloggades RLS,
+och kretsen är densamma som `/rekrytering`: säljchef, VD, admin och den med
+behörigheten `recruiter`. Den som inte är i kretsen ser utkastets "Tipsa om en
+säljare", med sina egna tips och hur det gått för dem (steg, aldrig
+bedömningar).
+
+- **Läsning** (`src/lib/nav2/rekrytering.ts`, `rekryteringforma.ts`):
+  kandidaterna i utkastets form, historiken ur stegbytena, scorecards,
+  anteckningar, bokningar, utskick och meriter, Siffrorna (tratten per källa,
+  ansökningar per vecka) och företrädesrätten ur Personal. Utan 0110 läser
+  den det 0030 har (`utan0110`). Det som 0110 bär är då tomt, och vyn säger
+  det i stället för att visa utkastets exempel.
+- **0110** (`0110_rekrytering_utkastet.sql`, additiv, provad med torrkörning, INTE
+  körd) bär det utkastet har och navet saknade: tjänsterna med antal och
+  annonsdatum, tipset med samtycke, svaren i ansökan, erbjudandets villkor,
+  de fem kriterierna och screeningens svar, anteckningar och samtal,
+  intervjutider och bokningar med kalendermötet, bokningslänken, utskicken
+  till kandidaten, begäran om meriter, mallarnas ändrade texter, Så är jobbet,
+  målet och "be laget om tips". K27-villkoren gäller de nya fritextfälten.
+  Stegautomaten i 0030 rörs inte.
+- **`/nav2/rekrytering`** (POST bakom `SKRIVLAGE.rekrytering`, 423 i
+  läsläge): ny kandidat, steg, screening, scorecard, uteblev, boka (repots
+  `skapaMote`), bokningslänk, avboka (`stallIn`), avslag, erbjudande,
+  påminnelse, anställ (som repots `anstallKandidat`, utan avtalsutkastet),
+  anteckning, samtal, talangpoolen, meriter, tider, tjänster, annonsdatum,
+  mallar, Så är jobbet, gallringsfristen, be om tips och tips. CV:t öppnas
+  med en signerad länk även i läsläge.
+- **Utskicken till kandidater skickas inte.** De står som `vantar` i
+  `candidate_message`. Utkorgen i 0069 rörs inte: den känner inte kandidater
+  och är påslagen. Vyn säger att utskicket inte är påslaget än.
+- **Klient:** `moduler/ndrx.js` i utkastmappen. Startsidan får utkastets
+  samlade rad ("N saker i rekryteringen väntar på dig").
+- Nya notiskällor: `rekrytering-tips` och `rekrytering-tips-be`.
+- **Öppna frågor:** se `docs/NASTA_SESSION.md`.
+
 ## 2026-10-18 · Nav 2.0, kvällsnotisen går inte till den som är ledig
 
 Beställaren: tiderna (17:00 vardagar, 18:00 söndag) står, och den som är ledig
