@@ -28371,7 +28371,7 @@ renderNotif = function(){
   if (sondag){
     const {man, fre} = ndHemVecka(), w = WEEK.chef, kal = [0, 1, 2, 3, 4].reduce((s, i) => s + ndHemKal(ndPlusDag(man, i)).length, 0);
     const borta = new Set([0, 1, 2, 3, 4].flatMap(i => ndHemBorta(ndPlusDag(man, i)).map(x => x[0])));
-    t = `Veckan som kommer: ${kal} i kalendern, ${borta.size} borta, ${w.klart.length} saker att få klart`;
+    t = `Veckan som kommer: ${kal} i kalendern, ${borta.size} borta, ${w.klart.length} ${w.klart.length === 1 ? 'sak' : 'saker'} att få klart`;
     b = ndHemBeslut(fre).slice(0, 2).map(([x, s]) => `${x}: ${s}.`).join(' ') || 'Inga beslut med frist i veckan.';
   } else {
     const d = ndHemTmrSynk(), x = TMR.chef;

@@ -126,7 +126,8 @@ export async function POST(request: Request) {
           blocking: false,
           reporterId: mig,
           userAgent: request.headers.get("user-agent"),
-          pointedAt: `Din dag i korthet · ${rad}`,
+          // Var raden stod, i ord. Radens id står kvar i `hem.flaggade` för den som flaggade.
+          pointedAt: `Startsidan · Din dag i korthet · ${text}`.slice(0, 300),
         });
         if (!ok) return svar({ fel: "Det gick inte att spara." }, 500);
         const l = await lasVal("hem.flaggade");
