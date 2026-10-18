@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
-import { fullName, getCurrentUser, hasRole } from "@/lib/auth";
-import { supabaseAdmin } from "@/lib/supabase/server";
+import { fullName, getCurrentUser } from "@/lib/auth";
+import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { skrivFel } from "@/lib/fel-server";
 import { notifiera } from "@/lib/notishandelse-server";
-import { byggGolvet, golvetsLag } from "@/lib/nav2/hem";
+import { byggGolvet } from "@/lib/nav2/hem";
+import { byggKvall } from "@/lib/nav2/hem-kvall";
+import { pushaTill, vapidPublik } from "@/lib/nav2/push";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
 
 export const dynamic = "force-dynamic";
@@ -24,10 +26,15 @@ export const dynamic = "force-dynamic";
  *            `visa` tar tillbaka den.
  *   sett     När du senast tittade på startsidan (`hem.sett`), för "Sedan du tittade".
  *   golvet   Om du syns på Golvet för kollegorna (`hem.golvet`).
- *   lagmal   Lagets mål i ordervärde för månaden (0120 `team_goal`). Säljchef och
- *            VD, samma krets som sätter säljarnas mål (0049).
+ *   push     Slå på kvällsnotisen på den här enheten (0121 `push_subscription`).
+ *   push-av  Stäng av den på den här enheten.
+ *   push-prov  Skicka notisen till dina enheter nu, för att se att den kommer fram.
+ *
+ * Lagets mål sätts i Provision (säljarnas mål, 0049); Golvet räknar summan.
  *
  * GET ?golvet=1 läser Golvet igen (Live), med samma regler som sidan.
+ * GET ?kvall=1 är kvällsnotisens text för den inloggade (`hem-kvall.ts`). Den
+ * hämtas av enhetens service worker när pushen kommer, med personens kaka.
  *
  * LÄSLÄGE: står `SKRIVLAGE.hem` på false svarar POST 423 innan något skrivs.
  */
@@ -42,6 +49,7 @@ export async function GET(request: Request) {
   const user = await getCurrentUser();
   if (!user?.employee) return svar({ fel: "Du måste vara inloggad." }, 401);
   const url = new URL(request.url);
+  if (url.searchParams.get("kvall") === "1") return svar({ kvall: await byggKvall(await supabaseServer(), user) });
   if (url.searchParams.get("golvet") !== "1") return svar({ fel: "Okänd läsning." }, 400);
   return svar({ golvet: await byggGolvet(user) });
 }
@@ -147,20 +155,32 @@ export async function POST(request: Request) {
         return svar({ ok: ja ? "Dina godkända order syns på Golvet för laget." : "Dina order syns inte på Golvet för kollegorna." });
       }
 
-      case "lagmal": {
-        if (!hasRole(user, "sales_manager", "ceo")) return svar({ fel: "Bara säljchef och VD sätter lagets mål." }, 403);
-        const belopp = Number(b.belopp);
-        if (!Number.isFinite(belopp) || belopp <= 0 || belopp > 100_000_000) return svar({ fel: "Skriv målet i kronor." }, 400);
-        const manad = String(b.manad ?? "");
-        if (!/^\d{4}-\d{2}$/.test(manad)) return svar({ fel: "Månaden saknas." }, 400);
-        const lag = await golvetsLag(user);
-        const period = `${manad}-01`;
-        const fraga = db.from("team_goal").delete().eq("period_month", period);
-        await (lag.id ? fraga.eq("team_id", lag.id) : fraga.is("team_id", null));
-        const { error } = await db.from("team_goal").insert({ team_id: lag.id, period_month: period, order_value: Math.round(belopp), set_by: mig });
+      case "push": {
+        const sub = (b.sub ?? {}) as { endpoint?: unknown; keys?: { p256dh?: unknown; auth?: unknown } };
+        const endpoint = String(sub.endpoint ?? ""), p256dh = String(sub.keys?.p256dh ?? ""), auth = String(sub.keys?.auth ?? "");
+        if (!vapidPublik()) return svar({ fel: "Pushnotiser är inte inställda i Nav än." }, 503);
+        if (!/^https:\/\/[^\s]+$/.test(endpoint) || endpoint.length > 1000 || !p256dh || !auth) return svar({ fel: "Enheten gick inte att registrera." }, 400);
+        const { error } = await db.from("push_subscription").upsert(
+          { employee_id: mig, endpoint, p256dh, auth, user_agent: (request.headers.get("user-agent") ?? "").slice(0, 300), created_at: nu, last_error: null },
+          { onConflict: "endpoint" },
+        );
         if (error) return svar({ fel: "Det gick inte att spara." }, 500);
-        await db.from("audit_log").insert({ actor_id: mig, action: "team_goal.set", object_type: "team", object_id: lag.id, meta: { period_month: period, order_value: Math.round(belopp) } });
-        return svar({ ok: "Lagets mål är sparat." });
+        return svar({ ok: "Kvällsnotisen kommer till den här enheten." });
+      }
+
+      case "push-av": {
+        const endpoint = String(b.endpoint ?? "");
+        if (!endpoint) return svar({ fel: "Enheten saknas." }, 400);
+        await db.from("push_subscription").delete().eq("employee_id", mig).eq("endpoint", endpoint);
+        return svar({ ok: "Kvällsnotisen kommer inte hit längre." });
+      }
+
+      case "push-prov": {
+        const u = await pushaTill(db, mig);
+        if (!u.enheter) return svar({ fel: "Ingen enhet har slagit på kvällsnotisen." }, 400);
+        await db.from("push_sent").upsert({ employee_id: mig, kind: "prov", day: nu.slice(0, 10), sent_at: nu, devices: u.ok }, { onConflict: "employee_id,kind,day" });
+        if (!u.ok) return svar({ fel: `Notisen kom inte fram${u.fel.length ? `: ${u.fel[0]}` : "."}` }, 502);
+        return svar({ ok: `Skickad till ${u.ok} ${u.ok === 1 ? "enhet" : "enheter"}. Den kommer om några sekunder.` });
       }
 
       default:

@@ -71,6 +71,9 @@ export function bygCsp(nonce: string): string {
     `font-src 'self' data:`,
     `media-src 'self' ${supabase}${r2}`,
     `connect-src 'self' ${supabase} ${supabase.replace("https://", "wss://")}${r2}`,
+    // Nav 2.0 (0121): kvällsnotisens service worker (/nav2/sw.js). Med 'strict-dynamic' i
+    // script-src räknas inte 'self' där, så utan worker-src går den inte att registrera.
+    `worker-src 'self'`,
     `frame-src 'none'`,
     `object-src 'none'`,
     `base-uri 'self'`,

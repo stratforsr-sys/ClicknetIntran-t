@@ -40,8 +40,9 @@ behörigheter som här: du ser bara det du får se.
 - **Startsidan**: det som väntar på dig samlat ur de kopplade vyerna, med
   de tre mest bråttom överst och knappen för att göra det direkt. Chefen ser
   dagsläget och vilka som är borta framåt, och vid dagens slut nästa
-  arbetsdag. Golvet visar lagets ordervärde i månaden och dagens godkända
-  order, och du kan gratulera en kollega.
+  arbetsdag. Golvet visar lagets order mot målen i Provision och dagens
+  godkända order, och du kan gratulera en kollega. Säljchef, VD och
+  teamledare kan slå på kvällsnotisen i mobilen under Inställningar, Notiser.
 - **Utbildning**, med navets kurser: dagens repetition ur prov du klarat,
   lektioner steg för steg med din regelbok och ditt mål, prov som rättas när
   du lämnar in, rollspel som du lämnar in och bedömer dig själv i, föreläsningar

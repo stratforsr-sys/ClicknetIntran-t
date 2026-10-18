@@ -5,6 +5,27 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-18 · Nav 2.0, kvällsnotisen i mobilen och lagets mål ur Provision (0121)
+
+- **Lagets mål sätts i Provision** (beställaren). Golvet och Teamet räknar
+  summan av säljarnas mål (`sales_target`): ordermålet mot lagets order netto
+  (`nettoAntal`, samma som trappan), kronmålet som tal. `team_goal` (0120) är
+  borttagen i 0121; den var tom. Bara summan lämnar servern.
+- **Kvällsnotisen (E5.8) är byggd med Web Push**, utan nytt paket: VAPID-
+  signaturen görs med `node:crypto` (`src/lib/nav2/push.ts`). Pushen är tom;
+  `public/nav2/sw.js` hämtar texten från `/nav2/hem?kvall=1` med personens egen
+  inloggning (`hem-kvall.ts`, samma byggfunktioner som sidan), så notisen och
+  startsidan säger samma sak och inget om personalen passerar pushtjänsten.
+  Slås på per enhet i Inställningar, Notiser eller i kortet på startsidan
+  (säljchef, VD, teamledare). iPhone kräver Nav på hemskärmen
+  (`public/nav2/manifest.webmanifest`). CSP:n fick `worker-src 'self'`.
+- **Utskicket** är ett steg i dagtidsjobbet: vardagar från 17:00, söndagar
+  från 18:00, en gång per person och dag (`push_sent`). pg_cron ringer
+  produktionen, så det körs först efter mergen, och söndagen kräver
+  `supabase/vantar/hem_sondag.sql`. VAPID-nycklarna ligger i Vercels miljö för
+  previewen av `nav2-utkast` (och i `~/.clicknet/nav-push.env`); produktionen
+  behöver dem vid mergen.
+
 ## 2026-10-18 · Nav 2.0, startsidan får spara (`SKRIVLAGE.hem`)
 
 Beställaren sa ja samma dag. `/nav2/hem` sparar nu: Grattis på Golvet (en per

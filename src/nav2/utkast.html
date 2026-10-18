@@ -1,4 +1,6 @@
 <title>Nav 2.0 startsida</title>
+<link rel="manifest" href="/nav2/manifest.webmanifest" crossorigin="use-credentials">
+<meta name="theme-color" content="#0F2A22">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" media="print" onload="this.media='all'">
@@ -28257,16 +28259,18 @@ renderGolvet = function(){
   if (!ndHemP()) return ND ? '' : _ndHem.renderGolvet();
   const g = ND.hem.golvet; if (!g) return '';
   const sondag = S.mode === 'sondag', t = ndHemTakt(), man = FRMAN[+g.manad.slice(5, 7)];
-  const pct = g.mal ? Math.min(1, Math.max(0, g.netto / g.mal)) : 0, fore = g.mal ? g.netto - g.mal * t.andel : 0;
+  // Lagets mål är summan av säljarnas ordermål i Provision. Baren räknar order netto, som trappan.
+  const mo = g.mal.order, pct = mo ? Math.min(1, Math.max(0, g.antal / mo)) : 0, fore = mo ? Math.round(g.antal - mo * t.andel) : 0;
+  const order = n => `${n} ${Math.abs(n) === 1 ? 'order' : 'order'}`;
   const dolda = g.idagAntal - g.idag.length;
   const lista = sondag ? [] : g.idag;
   const tom = sondag ? `Golvet är tomt i dag.${g.senast ? ` ${ndHemDagNamn(g.senast.dag)}ens order finns under Order.` : ''}` : 'Inga signerade order än i dag. Den första syns här.';
   return `<section class="card" id="golvet" aria-label="Golvet just nu">
     <div class="chead"><h2>Golvet just nu</h2><span class="pill t-ok" style="gap:6px"><i style="width:6px;height:6px;border-radius:50%;background:var(--brand);display:inline-block"></i>Live</span></div>
     <div class="goal">
-      <div class="goalnums"><span>${esc(g.lag || 'Hela bolaget')}, ${man}</span><span><b>${kr(g.netto)}</b>${g.mal ? ` av ${kr(g.mal)}` : ' · inget mål satt för laget'}</span></div>
-      ${g.mal ? `<div class="goalbar" role="img" aria-label="${Math.round(pct * 100)} procent av månadens mål"><div class="fill" style="width:${pct * 100}%"></div><div class="pace" style="left:${t.andel * 100}%"><span>takt</span></div></div>` : ''}
-      <div class="goalnums"><span>${sondag && g.senast ? `${ndHemDagNamn(g.senast.dag)}: <b>${g.senast.antal}</b> signerade · <b>${kr(g.senast.summa)}</b>` : `I dag: <b>${g.idagAntal}</b> signerade · <b>${kr(g.idagSumma)}</b>`}</span><span>${g.mal ? `${kr(Math.abs(Math.round(fore)))} ${fore >= 0 ? 'före takten' : 'efter takten'}` : g.utanVarde ? `${g.utanVarde} order utan ordervärde` : ''}</span></div>
+      <div class="goalnums"><span>${esc(g.lag || 'Hela bolaget')}, ${man}</span><span><b>${order(g.antal)}</b>${mo ? ` av ${mo}` : ''} · ${kr(g.netto)}${mo ? '' : ' · inget mål satt i Provision'}</span></div>
+      ${mo ? `<div class="goalbar" role="img" aria-label="${Math.round(pct * 100)} procent av månadens mål"><div class="fill" style="width:${pct * 100}%"></div><div class="pace" style="left:${t.andel * 100}%"><span>takt</span></div></div>` : ''}
+      <div class="goalnums"><span>${sondag && g.senast ? `${ndHemDagNamn(g.senast.dag)}: <b>${g.senast.antal}</b> signerade · <b>${kr(g.senast.summa)}</b>` : `I dag: <b>${g.idagAntal}</b> signerade · <b>${kr(g.idagSumma)}</b>`}</span><span>${mo ? (fore === 0 ? 'i takt' : `${order(Math.abs(fore))} ${fore > 0 ? 'före takten' : 'efter takten'}`) : g.utanVarde ? `${g.utanVarde} order utan ordervärde` : ''}</span></div>
     </div>
     ${lista.length ? `<ul class="feed" id="feed">${lista.map(ndHemRadHtml).join('')}</ul>` : `<div class="empty" style="padding:18px 0 4px">${tom}</div>`}
     ${!sondag && dolda > 0 ? `<p class="muted nd-sm" style="margin-top:8px">${dolda} ${dolda === 1 ? 'order' : 'order'} till i dag syns bara i summan: säljaren har inte valt att synas på Golvet.</p>` : ''}
@@ -28275,17 +28279,17 @@ renderGolvet = function(){
 renderTeamGoal = function(){
   if (!ndHemP()) return ND ? '' : _ndHem.renderTeamGoal();
   const g = ND.hem.golvet; if (!g) return '';
-  const t = ndHemTakt(), C = 2 * Math.PI * 48, man = FRMAN[+g.manad.slice(5, 7)], pct = g.mal ? g.netto / g.mal : 0;
-  const prognos = t.gangna ? g.netto / t.gangna * t.totalt : null;
+  const t = ndHemTakt(), C = 2 * Math.PI * 48, man = FRMAN[+g.manad.slice(5, 7)], mo = g.mal.order, pct = mo ? g.antal / mo : 0;
+  const prognos = t.gangna ? Math.round(g.antal / t.gangna * t.totalt) : null, prognosKr = t.gangna ? g.netto / t.gangna * t.totalt : null;
   const pv = ndKopplad('provision') && ND.provision && ND.provision.chefsvy ? hemPvPoster() : null;
   ordSt(); const v = ndKopplad('order') && ND.order && ND.order.hanterare ? ORDER.filter(o => o.st === 'inskickad' && o.samtal) : [];
   return `<section class="card" aria-label="Teamet i ${man}">
-    <div class="chead"><h2>Teamet i ${man}</h2><span class="meta">ordervärde${g.lag ? ` · ${esc(g.lag)}` : ''}</span><span class="end"><a class="tlink" href="#" data-view="provision">Provision</a></span></div>
+    <div class="chead"><h2>Teamet i ${man}</h2><span class="meta">order netto${g.lag ? ` · ${esc(g.lag)}` : ''}</span><span class="end"><a class="tlink" href="#" data-view="provision">${mo || !ND.hem.malchef ? 'Provision' : 'Sätt målen i Provision'}</a></span></div>
     <div class="prov">
-      <div class="ring"><svg viewBox="0 0 112 112"><circle cx="56" cy="56" r="48" stroke="var(--surface-2)" stroke-width="10" fill="none"/>${g.mal ? `<circle cx="56" cy="56" r="48" stroke="var(--brand)" stroke-width="10" fill="none" stroke-linecap="round" stroke-dasharray="${C * Math.min(1, Math.max(0, pct))} ${C}"/>` : ''}</svg><div class="c"><div>${g.mal ? `<b>${Math.round(pct * 100)}%</b><span>av målet</span>` : '<b>–</b><span>inget mål</span>'}</div></div></div>
-      <dl class="dl" style="min-width:0"><div><dt>Signerat</dt><dd>${kr(g.netto)}</dd></div><div><dt>Mål</dt><dd>${g.mal ? kr(g.mal) : 'inget satt'}</dd></div><div><dt>Förväntat nu</dt><dd>${g.mal ? kr(g.mal * t.andel) : '–'}</dd></div>${pv ? `<div><dt>Provision att bokföra</dt><dd><button class="tlink inl" data-hempv title="${kr(pv.summa)} i provision för ${man}">${pv.n} order</button></dd></div>` : ''}</dl>
+      <div class="ring"><svg viewBox="0 0 112 112"><circle cx="56" cy="56" r="48" stroke="var(--surface-2)" stroke-width="10" fill="none"/>${mo ? `<circle cx="56" cy="56" r="48" stroke="var(--brand)" stroke-width="10" fill="none" stroke-linecap="round" stroke-dasharray="${C * Math.min(1, Math.max(0, pct))} ${C}"/>` : ''}</svg><div class="c"><div>${mo ? `<b>${Math.round(pct * 100)}%</b><span>av målet</span>` : '<b>–</b><span>inget mål</span>'}</div></div></div>
+      <dl class="dl" style="min-width:0"><div><dt>Signerat</dt><dd>${g.antal} order · ${kr(g.netto)}</dd></div><div><dt>Mål</dt><dd>${mo ? `${mo} order` : 'inget satt'}${g.mal.kronor ? ` <small class="muted">· ${kr(g.mal.kronor)} provision</small>` : ''}</dd></div><div><dt>Förväntat nu</dt><dd>${mo ? `${Math.round(mo * t.andel)} order` : '–'}</dd></div>${pv ? `<div><dt>Provision att bokföra</dt><dd><button class="tlink inl" data-hempv title="${kr(pv.summa)} i provision för ${man}">${pv.n} order</button></dd></div>` : ''}</dl>
     </div>
-    <div class="forecast" style="background:var(--brand-soft);color:var(--brand-ink)">${I('trend')}<span>${g.mal && t.totalt ? `${Math.abs(Math.round((pct - t.andel) * 100))} procentenheter ${pct >= t.andel ? 'före' : 'efter'} takten. ` : ''}${prognos !== null ? `Prognos för månaden: <b class="num">${kr(prognos)}</b>.` : 'Ingen prognos före första arbetsdagen.'}${g.utanVarde ? ` ${g.utanVarde} order saknar ordervärde och räknas inte.` : ''}</span></div>
+    <div class="forecast" style="background:var(--brand-soft);color:var(--brand-ink)">${I('trend')}<span>${mo && t.totalt ? `${Math.abs(Math.round((pct - t.andel) * 100))} procentenheter ${pct >= t.andel ? 'före' : 'efter'} takten. ` : ''}${prognos !== null ? `Prognos för månaden: <b class="num">${prognos} order</b>, ${kr(prognosKr)} i ordervärde.` : 'Ingen prognos före första arbetsdagen.'}${g.mal.utan ? ` ${g.mal.utan} ${g.mal.utan === 1 ? 'säljare' : 'säljare'} med order saknar mål.` : ''}${g.utanVarde ? ` ${g.utanVarde} order saknar ordervärde och räknas inte.` : ''}</span></div>
     ${v.length ? `<button class="frhrad tgvantar" data-ordgavy="besluta"><b>${v.length} order väntar på ditt godkännande</b><span><span>${kr(v.reduce((x, o) => x + oVarde(o), 0))} i ordervärde, äldsta från ${oDat(v.map(o => o.sign).sort()[0])}</span><span class="pill t-signal">Order</span></span></button>` : ''}
   </section>`;
 };
@@ -28374,14 +28378,79 @@ renderNotif = function(){
     t = `${ndHemDagNamn(d)}: ${x.kal.length} i kalendern, ${(x.borta || []).length} borta, ${(x.beslut || []).length} beslut med frist`;
     b = [...(x.beslut || []).map(([n]) => `${n} ska beslutas.`), ...(x.borta || []).slice(0, 1).map(([n, s]) => `${n.split(' ')[0]}: ${s}.`)].join(' ') || 'Inget som väntar på dig.';
   }
+  // Samma text som pushen: den räknas på servern (/nav2/hem?kvall=1). Tills den kommit står sidans egen uträkning.
+  if (S.ndKvall === undefined){ S.ndKvall = null; fetch('/nav2/hem?kvall=1', {credentials:'same-origin'}).then(r => r.ok ? r.json() : null).then(s => { if (s && s.kvall){ S.ndKvall = s.kvall; if (S.view === 'hem') render(); } }).catch(() => {}); }
+  if (S.ndKvall){ t = S.ndKvall.titel; b = S.ndKvall.text; }
   return `<button class="notif" data-tmr aria-label="Kvällsnotisen i mobilen, som den skulle se ut">
       <span class="app-ic">${hubMark(38)}</span>
       <span style="min-width:0;flex:1"><span class="hd"><b>NAV</b><span>${sondag ? 'sön 18:00' : `${ndHemDagNamn(kIdag()).slice(0, 3).toLowerCase()} 17:00`}</span></span>
       <span class="t" style="display:block">${esc(t)}</span>
       <span class="b" style="display:block">${esc(b)}</span></span>
     </button>
-    <div class="notifcap">Så skulle kvällsnotisen se ut i mobilen med dagens data. Nav skickar den inte än (E5.8 ligger i backloggen). Tryck för att öppna.</div>`;
+    <div class="notifcap">Kvällsnotisen med dagens data. Den skickas vardagar kl. 17 och söndagar kl. 18 till enheter där den är på, när Nav 2.0 är i drift. ${ndHemPushRad()}</div>`;
 };
+
+/* ---------- Kvällsnotisen i mobilen: Web Push (0121) ---------- */
+// Läget gäller den här enheten: 'pa', 'av', 'nekad', 'ios' (lägg Nav på hemskärmen först) eller 'utan' (inget stöd).
+S.ndPush = S.ndPush || {lage:null, endpoint:null, upptagen:false};
+const ndHemB64 = t => { const p = '='.repeat((4 - t.length % 4) % 4), b = atob((t + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(b, c => c.charCodeAt(0)); };
+const ndHemIos = () => /iPhone|iPad|iPod/.test(navigator.userAgent) && !(navigator.standalone || matchMedia('(display-mode: standalone)').matches);
+async function ndHemPushLage(){
+  if (!ndHemP() || !ND.hem.push) return;
+  let lage = 'av', endpoint = null;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) lage = ndHemIos() ? 'ios' : 'utan';
+  else if (Notification.permission === 'denied') lage = 'nekad';
+  else {
+    try { const reg = await navigator.serviceWorker.getRegistration('/nav2/'); const sub = reg && await reg.pushManager.getSubscription(); if (sub){ lage = 'pa'; endpoint = sub.endpoint; } } catch(_){}
+  }
+  const fore = S.ndPush.lage; S.ndPush.lage = lage; S.ndPush.endpoint = endpoint;
+  const kort = document.querySelector('#prf-r-kvall .prf-hj'); if (kort) kort.innerHTML = ndHemPushRad();
+  if (fore !== lage && S.view === 'hem') render();
+}
+async function ndHemPushPa(){
+  if (S.ndPush.upptagen) return; S.ndPush.upptagen = true;
+  try {
+    if (Notification.permission !== 'granted' && await Notification.requestPermission() !== 'granted'){ toast('Webbläsaren tillåter inte notiser från Nav. Ändra det i webbläsarens inställningar.'); return; }
+    const reg = await navigator.serviceWorker.register('/nav2/sw.js', {scope:'/nav2/'});
+    if (!reg.active){ const w = reg.installing || reg.waiting; if (w) await new Promise(r => { if (w.state === 'activated') r(); w.addEventListener('statechange', () => { if (w.state === 'activated') r(); }); }); }
+    const sub = await reg.pushManager.getSubscription() || await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:ndHemB64(ND.hem.push.nyckel)});
+    const s = await ndHemPost('push', {sub:sub.toJSON()});
+    if (!s){ await sub.unsubscribe().catch(() => {}); return; }
+    ND.hem.push.enheter++; toast(s.ok);
+  } catch(e){ toast(`Notisen gick inte att slå på: ${e && e.message ? e.message : e}`); }
+  finally { S.ndPush.upptagen = false; ndHemPushLage(); }
+}
+async function ndHemPushAv(){
+  try {
+    const reg = await navigator.serviceWorker.getRegistration('/nav2/'), sub = reg && await reg.pushManager.getSubscription();
+    if (sub){ const s = await ndHemPost('push-av', {endpoint:sub.endpoint}); if (!s) return; await sub.unsubscribe(); ND.hem.push.enheter = Math.max(0, ND.hem.push.enheter - 1); toast(s.ok); }
+  } catch(_){ toast('Det gick inte att stänga av notisen.'); }
+  ndHemPushLage();
+}
+function ndHemPushRad(){
+  const p = ndHemP() && ND.hem.push; if (!p) return 'Pushnotiser är inte inställda i Nav än.';
+  if (!p.ledare) return 'Kvällsnotisen är till för säljchef, VD och teamledare.';
+  const l = S.ndPush.lage, andra = p.enheter - (l === 'pa' ? 1 : 0);
+  const prov = p.enheter ? ' <button class="tlink inl" data-ndpush="prov">Skicka ett prov</button>' : '';
+  if (l === 'pa') return `På för den här enheten${andra > 0 ? ` och ${andra} till` : ''}.${prov} <button class="tlink inl" data-ndpush="av">Stäng av här</button>`;
+  if (l === 'nekad') return `Webbläsaren blockerar notiser från Nav. Tillåt dem i webbläsarens inställningar.${prov}`;
+  if (l === 'ios') return `Lägg först Nav på hemskärmen (Dela, Lägg till på hemskärmen) och öppna det därifrån. Då går notisen att slå på.${prov}`;
+  if (l === 'utan') return `Den här webbläsaren tar inte emot pushnotiser.${prov}`;
+  return `${p.enheter ? `På för ${p.enheter} ${p.enheter === 1 ? 'annan enhet' : 'andra enheter'}. ` : ''}<button class="tlink inl" data-ndpush="pa">Slå på för den här enheten</button>${prov}`;
+}
+// Inställningar, Notiser: samma val som i kortet, för den som inte är på startsidan vid dagens slut.
+const _ndHemPrfNot = prfNotiserSek;
+prfNotiserSek = function(){
+  const h = _ndHemPrfNot(); if (!ndHemP() || !ND.hem.push || !ND.hem.push.ledare) return h;
+  return h + prfKort('kvall', 'Kvällsnotisen i mobilen', 'Nästa arbetsdag på vardagar kl. 17, och veckan som kommer på söndagar kl. 18. En notis per kväll, aldrig något om hälsa.', `<div class="prf-kb"><p class="prf-hj">${ndHemPushRad()}</p></div>`);
+};
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('[data-ndpush]'); if (!b || !ndHemP()) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  const v = b.dataset.ndpush;
+  if (v === 'pa') ndHemPushPa(); else if (v === 'av') ndHemPushAv();
+  else if (v === 'prov') ndHemPost('push-prov').then(s => { if (s) toast(s.ok); });
+}, true);
 
 /* ---------- Din utveckling: kurserna ur Utbildning, K&V när K&V kopplas ---------- */
 renderDev = function(){
@@ -28512,6 +28581,7 @@ if (ND && ND.hem){
   NDKOPPLAD.add('hem'); NDKOPPLAD.add('hemlag');
   ND.hem.dolda.forEach(k => S.hiddenKinds.add(k));
   ND.hem.flaggade.forEach(k => S.flagged.add(k));
+  ndHemPushLage();
   // Senast tittat sparas när startsidan får skriva; i läsläge står den kvar som den var.
   if (ND.hem.skriv) setTimeout(() => ndHemPost('sett'), 4000);
 }

@@ -6,6 +6,7 @@ import { korKalendersteget } from "@/lib/jobb/kalender";
 import { SKRIVLAGE } from "@/lib/nav2/skrivlage";
 import { skickaRundor } from "@/lib/nav2/franvaro-runda";
 import { egnaPaminnelser, korTidpaminnelser } from "@/lib/nav2/tid-paminnelser";
+import { skickaKvallsnotiser } from "@/lib/nav2/hem-kvall";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -60,7 +61,15 @@ async function kor(request: NextRequest) {
       tid = { fel: e instanceof Error ? e.message : String(e) };
     }
   }
-  return NextResponse.json({ ...stampling, kalender, runda, tid });
+  // Nav 2.0 (0121, E5.8): kvällsnotisen till ledarna, vardagar från 17:00 och söndagar från 18:00.
+  // Bakom SKRIVLAGE.hem (i funktionen). Söndagens anrop kräver supabase/vantar/hem_sondag.sql.
+  let kvall: unknown = null;
+  try {
+    kvall = await skickaKvallsnotiser(db);
+  } catch (e) {
+    kvall = { fel: e instanceof Error ? e.message : String(e) };
+  }
+  return NextResponse.json({ ...stampling, kalender, runda, tid, kvall });
 }
 
 export async function POST(request: NextRequest) {

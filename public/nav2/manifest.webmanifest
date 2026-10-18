@@ -1,0 +1,11 @@
+{
+  "name": "Clicknet Nav",
+  "short_name": "Nav",
+  "start_url": "/nav2",
+  "scope": "/nav2",
+  "display": "standalone",
+  "background_color": "#EEF1EC",
+  "theme_color": "#0F2A22",
+  "lang": "sv",
+  "icons": [{"src": "/clicknet-symbol.png", "sizes": "157x200", "type": "image/png", "purpose": "any"}]
+}
