@@ -17,30 +17,29 @@ const REK: Record<string, "ja" | "tveksam" | "nej"> = { yes: "ja", maybe: "tveks
 const REKTEXT: Record<string, string> = { ja: "Ja", tveksam: "Tveksam", nej: "Nej" };
 const KALLA: Record<string, string> = { ansokningssida: "egen ansökningssida", platsbanken: "Platsbanken", linkedin: "LinkedIn", tips: "tips från anställd", spontan: "spontanansökan", annat: "annat" };
 export const RX_MALLNAMN: Record<string, string> = {
-  bekr: "Tack för din ansökan", lank: "Boka en intervju", bokad: "Intervjun är bokad", sms24: "Påminnelse dagen före", sms2: "Påminnelse samma dag",
+  bekr: "Tack för din ansökan", bokad: "Intervjun är bokad", sms24: "Påminnelse dagen före", sms2: "Påminnelse samma dag",
   avslag1: "Avslag efter ansökan eller screening", avslag2: "Avslag efter intervju", erbj: "Erbjudande", pool: "Får vi höra av oss igen?",
-  ringt: "SMS om att du ringt", pamin: "Påminnelse om erbjudandet", avbokad: "Avbokningen", merit: "Svaret om meriterna",
+  ringt: "Mejlet om att du ringt", pamin: "Påminnelse om erbjudandet", avbokad: "Avbokningen", merit: "Svaret om meriterna",
 };
 
 export type RaKandidat = {
-  id: string; first_name: string; last_name: string; email: string; phone: string | null; source_slug: string; role_title: string;
+  id: string; first_name: string; last_name: string; email: string | null; phone: string | null; source_slug: string; role_title: string;
   stage: RxSteg; applied_at: string; stage_at: string; no_show_count: number; rejected_reason: string | null; closed_at: string | null;
   hired_employee_id: string | null; talent_pool: boolean; talent_pool_consent: string | null; gdpr_purge_at: string | null; notes: string | null;
   created_by: string | null;
   // 0110, saknas när migrationen inte är körd
   position_id?: string | null; tipped_by?: string | null; tip_text?: string | null; application_answers?: unknown; cv_file_id?: string | null;
-  offer_start?: string | null; offer_form?: string | null; offer_reply_by?: string | null; offer_sent_at?: string | null; pool_asked_at?: string | null;
+  offer_start?: string | null; offer_form?: string | null; offer_reply_by?: string | null; offer_sent_at?: string | null; pool_asked_at?: string | null; pool_declined_at?: string | null;
 };
 export type RaHandelse = { candidate_id: string; from_stage: string | null; to_stage: string; at: string; by_employee: string | null; note: string | null };
 export type RaScore = { candidate_id: string; stage: string; interviewer_id: string; recommendation: string; strengths: string | null; concerns: string | null; created_at: string; criteria?: unknown; screening?: unknown };
 export type RaNot = { candidate_id: string; kind: string; body: string | null; by_employee: string | null; at: string };
-export type RaBokning = { id: string; candidate_id: string; slot_id: string | null; kind: string; day: string; start_min: number; end_min: number; place: string; attendees: string[]; status: string; booked_by_candidate: boolean; calendar_event_id: string | null; created_at: string; cancelled_at: string | null };
+export type RaBokning = { id: string; candidate_id: string; slot_id: string | null; kind: string; day: string; start_min: number; end_min: number; place: string; attendees: string[]; status: string; calendar_event_id: string | null; created_at: string; cancelled_at: string | null };
 export type RaTid = { id: string; day: string; start_min: number; end_min: number; place: string };
-export type RaMeddelande = { candidate_id: string; booking_id: string | null; template: string; channel: string; status: string; created_at: string; sent_at: string | null };
+export type RaMeddelande = { candidate_id: string; booking_id: string | null; template: string; channel: string; status: string; created_at: string; sent_at: string | null; send_after: string; error: string | null };
 export type RaMerit = { candidate_id: string; requested_at: string; answered_at: string | null };
-export type RaLank = { candidate_id: string; kind: string; attendees: string[]; created_at: string };
-export type RaTjanst = { id: string; slug: string; title: string; short_title: string; headcount: number; start_date: string; opened_at: string; platsbanken_until: string | null; linkedin_until: string | null; page_open: boolean; closed_at: string | null };
-export type RaPolicy = { purge_after_days: number | null; job_text?: string | null; goal_name?: string | null; goal_count?: number | null; goal_by?: string | null; tips_asked_at?: string | null };
+export type RaTjanst = { id: string; title: string; short_title: string; headcount: number; start_date: string; opened_at: string; platsbanken_until: string | null; linkedin_until: string | null; closed_at: string | null };
+export type RaPolicy = { purge_after_days: number | null; job_text?: string | null; tips_asked_at?: string | null };
 
 export type NdRxLogg = { d: string; tid: string; t: string; typ: "in" | "mejl" | "score" | "bok" | "fel" | "steg" | "not" };
 export type NdRxBok = { id: string; typ: "tel" | "int1" | "int2"; d: string; s: string; e: string; med: string[]; plats: string; st: "bokad" | "klar" | "uteblev"; bokadAv: "kandidaten" | null; kev: string | null; sms: Record<string, string> };
@@ -49,7 +48,7 @@ export type NdRxKand = {
   id: string; namn: string; tel: string; epost: string; kalla: string; tj: string; steg: RxSteg; sokte: string; stegD: string;
   svar: string[] | null; cv: string | null; bok: NdRxBok[]; score: NdRxScore[]; logg: NdRxLogg[]; noShow: number;
   tipsAv: string | null; tips: string; avslag: { skal: string; d: string; mall: string | null; not: string } | null;
-  pool: { fragad: string; samtycke: string | null } | null; merit: { d: string; besvarad: string | null } | null;
+  pool: { fragad: string; samtycke: string | null; nej: string | null } | null; merit: { d: string; besvarad: string | null } | null;
   erb: { start: string; form: string; senast: string; skickat: string } | null; pid: string | null; nadd: number | null; ringt: number;
   lank: { d: string; btyp: string; med: string[] } | null; gallras: string | null;
 };
@@ -79,7 +78,7 @@ function strangar(v: unknown): Record<string, string> | undefined {
 
 export type Indata = {
   kandidater: RaKandidat[]; handelser: RaHandelse[]; scores: RaScore[]; noter: RaNot[]; bokningar: RaBokning[]; tider: RaTid[];
-  meddelanden: RaMeddelande[]; meriter: RaMerit[]; lankar: RaLank[]; tjanster: RaTjanst[]; policy: RaPolicy | null;
+  meddelanden: RaMeddelande[]; meriter: RaMerit[]; tjanster: RaTjanst[]; policy: RaPolicy | null;
   namn: Map<string, string>; cvNamn: Map<string, string>;
 };
 
@@ -101,7 +100,6 @@ export function formaKandidat(k: RaKandidat, x: Indata): NdRxKand {
   const avbokade = x.bokningar.filter((b) => b.candidate_id === k.id && b.status === "avbokad");
   const medd = x.meddelanden.filter((m) => m.candidate_id === k.id);
   const merit = x.meriter.filter((m) => m.candidate_id === k.id).sort((a, b) => b.requested_at.localeCompare(a.requested_at))[0];
-  const lank = x.lankar.filter((l) => l.candidate_id === k.id).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
 
   const logg: NdRxLogg[] = [];
   const L = (iso: string, t: string, typ: NdRxLogg["typ"]) => logg.push({ d: dag(iso), tid: kl(iso), t, typ });
@@ -126,19 +124,25 @@ export function formaKandidat(k: RaKandidat, x: Indata): NdRxKand {
     L(n.at, t, n.kind === "not" ? "not" : "in");
   }
   for (const b of [...bok, ...avbokade]) {
-    L(b.created_at, `${BOKNAMN[b.kind] ?? b.kind} bokad ${dagDatum(b.day)} kl. ${hmText(b.start_min)}${b.booked_by_candidate ? ", av kandidaten via bokningslänken" : ""}.`, "bok");
+    L(b.created_at, `${BOKNAMN[b.kind] ?? b.kind} bokad ${dagDatum(b.day)} kl. ${hmText(b.start_min)}.`, "bok");
     if (b.status === "avbokad" && b.cancelled_at) L(b.cancelled_at, `${BOKNAMN[b.kind] ?? b.kind} ${dagDatum(b.day)} kl. ${hmText(b.start_min)} avbokades.`, "bok");
     if (b.status === "uteblev") L(`${b.day}T${hmText(b.end_min)}:00+02:00`, `${fornamn(namn)} kom inte till ${(BOKNAMN[b.kind] ?? b.kind).toLowerCase()}.`, "fel");
   }
   for (const m of medd) {
     const nm = RX_MALLNAMN[m.template] ?? m.template;
-    L(m.sent_at ?? m.created_at, m.status === "skickad" ? `${nm} gick ut.` : m.status === "fel" ? `${nm} gick inte att skicka.` : m.status === "avbruten" ? `${nm} skickades inte.` : `${nm} väntar på utskick. Navet skickar inte till kandidater än.`, "mejl");
+    const t = m.status === "skickad" ? `${nm} gick ut med mejl.`
+      : m.status === "schemalagd" ? `${nm} går ut med mejl ${dagDatum(dag(m.send_after))} kl. ${kl(m.send_after)}.`
+      : m.status === "fel" ? `${nm} gick inte ut${m.error ? `: ${m.error.replace(/\.$/, "")}` : ""}.`
+      : m.status === "avbruten" ? `${nm} skickades inte.`
+      : `${nm} går ut med mejl ${dagDatum(dag(m.send_after))}, när det är under fyra veckor kvar.`;
+    L(m.sent_at ?? m.created_at, t, m.status === "fel" ? "fel" : "mejl");
   }
   if (merit) {
     L(`${merit.requested_at}T09:00:00+02:00`, `${fornamn(namn)} begärde uppgifter om meriterna hos den som fick jobbet (diskrimineringslagen 2 kap. 4 §).`, "in");
     if (merit.answered_at) L(merit.answered_at, "Svaret om meriterna är skrivet.", "steg");
   }
   if (k.talent_pool && k.talent_pool_consent) L(k.talent_pool_consent, `${fornamn(namn)} är i talangpoolen, med samtycke.`, "steg");
+  else if (k.pool_declined_at) L(k.pool_declined_at, `${fornamn(namn)} vill inte vara i talangpoolen.`, "steg");
   if (k.notes) L(k.applied_at, `Anteckning när kandidaten lades upp: ${k.notes}`, "not");
   logg.sort((a, b) => (a.d + a.tid).localeCompare(b.d + b.tid));
 
@@ -151,7 +155,7 @@ export function formaKandidat(k: RaKandidat, x: Indata): NdRxKand {
     id: k.id,
     namn,
     tel: k.phone ?? "",
-    epost: k.email,
+    epost: k.email ?? "",
     kalla: k.source_slug,
     tj: k.position_id ?? "roll:" + (k.role_title || "Säljare"),
     steg: k.stage,
@@ -168,7 +172,7 @@ export function formaKandidat(k: RaKandidat, x: Indata): NdRxKand {
       med: b.attendees.map((a) => x.namn.get(a) ?? "").filter(Boolean),
       plats: b.place,
       st: (b.status === "uteblev" ? "uteblev" : b.status === "klar" ? "klar" : "bokad") as NdRxBok["st"],
-      bokadAv: b.booked_by_candidate ? "kandidaten" : null,
+      bokadAv: null,
       kev: b.calendar_event_id,
       sms: Object.fromEntries(medd.filter((m) => m.booking_id === b.id).map((m) => [m.template, m.status])),
     })),
@@ -188,13 +192,14 @@ export function formaKandidat(k: RaKandidat, x: Indata): NdRxKand {
     tipsAv: k.tipped_by ? N(k.tipped_by) : null,
     tips: k.tip_text ?? "",
     avslag: k.stage === "rejected" ? { skal: k.rejected_reason ?? "Inget skäl angivet", d: dag(avslagH ? avslagH.at : k.closed_at ?? k.stage_at), mall: avslagMedd ? avslagMedd.template : null, not: "" } : null,
-    pool: k.talent_pool && k.talent_pool_consent ? { fragad: dag(k.pool_asked_at ?? k.talent_pool_consent), samtycke: dag(k.talent_pool_consent) } : k.pool_asked_at ? { fragad: dag(k.pool_asked_at), samtycke: null } : null,
+    pool: k.talent_pool && k.talent_pool_consent ? { fragad: dag(k.pool_asked_at ?? k.talent_pool_consent), samtycke: dag(k.talent_pool_consent), nej: null }
+      : k.pool_asked_at ? { fragad: dag(k.pool_asked_at), samtycke: null, nej: k.pool_declined_at ? dag(k.pool_declined_at) : null } : null,
     merit: merit ? { d: merit.requested_at, besvarad: merit.answered_at ? dag(merit.answered_at) : null } : null,
     erb: k.offer_start && k.offer_reply_by ? { start: k.offer_start, form: k.offer_form ?? "probation", senast: k.offer_reply_by, skickat: dag(k.offer_sent_at ?? k.stage_at) } : null,
     pid: k.hired_employee_id,
     nadd: k.stage === "rejected" ? naddFor(h) : null,
     ringt: noter.filter((n) => n.kind === "ej_svar").length,
-    lank: lank && k.stage !== "hired" && k.stage !== "rejected" && !bok.some((b) => b.status === "bokad") ? { d: dag(lank.created_at), btyp: lank.kind, med: lank.attendees.map((a) => x.namn.get(a) ?? "").filter(Boolean) } : null,
+    lank: null,
     gallras: k.gdpr_purge_at ? dag(k.gdpr_purge_at) : null,
   };
 }
@@ -207,7 +212,8 @@ export function formaTider(tider: RaTid[], bokningar: RaBokning[]): NdRxTid[] {
 }
 
 export function formaTjanst(t: RaTjanst): NdRxTjanst {
-  return { id: t.id, slug: t.slug, titel: t.title, kort: t.short_title, antal: t.headcount, start: t.start_date, oppnad: t.opened_at, kanaler: { platsbanken: t.platsbanken_until, linkedin: t.linkedin_until, sida: t.page_open } };
+  // Ingen publik ansökningssida (beställaren 2026-10-18): slug och sida finns för utkastets form.
+  return { id: t.id, slug: "", titel: t.title, kort: t.short_title, antal: t.headcount, start: t.start_date, oppnad: t.opened_at, kanaler: { platsbanken: t.platsbanken_until, linkedin: t.linkedin_until, sida: false } };
 }
 
 /** ISO-veckan för ett datum. */

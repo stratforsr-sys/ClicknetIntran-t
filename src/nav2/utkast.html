@@ -18694,7 +18694,7 @@ function rxFlytta(c, till, txt){
 const rxKopia = () => ({rx:JSON.parse(JSON.stringify(S.rx)), kev:KEV.map(e => e.id)});
 function rxAterstall(k){ S.rx = k.rx; for (let i = KEV.length - 1; i >= 0; i--) if (!k.kev.includes(KEV[i].id)) KEV.splice(i, 1); render(); }
 const rxNotis = (t, s, src, i) => S.rx.notiser.push({id:'rxn' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), i:i || 'rekr', t, s, nar:hm(now()), src});
-const rxFyll = (text, c, x) => text.replace(/\{förnamn\}/g, rxFor(c.namn)).replace(/\{tjänst\}/g, rxTjObj(c.tj).titel.toLowerCase()).replace(/\{länk\}/g, ND ? '{länk}' : 'clicknet.se/boka/' + c.id.slice(2)).replace(/\{datum\}/g, x && x.datum ? aeDagDatum(x.datum) : '').replace(/\{tid\}/g, x && x.tid || '').replace(/\{svar senast\}/g, x && x.senast ? aeDagDatum(x.senast) : '').replace(/\{intervjuare\}/g, rxFor(ME.chef.namn));
+const rxFyll = (text, c, x) => text.replace(/\{förnamn\}/g, rxFor(c.namn)).replace(/\{tjänst\}/g, rxTjObj(c.tj).titel.toLowerCase()).replace(/\{länk\}/g, 'clicknet.se/boka/' + c.id.slice(2)).replace(/\{datum\}/g, x && x.datum ? aeDagDatum(x.datum) : '').replace(/\{tid\}/g, x && x.tid || '').replace(/\{svar senast\}/g, x && x.senast ? aeDagDatum(x.senast) : '').replace(/\{intervjuare\}/g, rxFor(ME.chef.namn));
 const rxMallT = id => S.rx.mallar.find(m => m.id === id);
 
 /* ---------- Att göra ----------
@@ -18712,7 +18712,7 @@ function rxGora(){
     if (kom && kom.d === T){ push(c, 'idag', 'idag', `${RXBOKNAMN[kom.typ]} kl. ${kom.s}`, `${kom.plats}${kom.med.length > 1 ? ' · med ' + aeOch(kom.med.filter(n => n !== aeMig()).map(rxFor)) : ''}`, kom.typ === 'tel' ? ['Öppna manuset', 'screen'] : ['Förbered', 'guide'], [], kom.s); return; }
     if (c.steg === 'new'){
       const f = rxSvarsfrist(c);
-      push(c, 'svar', f < T ? 'sen' : f === T ? 'idag' : 'snart', c.kalla === 'tips' ? `Tips från ${rxFor(c.tipsAv)}` : 'Ny ansökan', `${c.kalla === 'tips' ? `Tipsad ${rxNar(rxDag(c))}` : `Sökte ${rxNar(rxDag(c))} via ${rxKallaL(c.kalla)}`} · ${f < T ? `svarslöftet gick ut ${rxNar(f)}` : `svar senast ${rxNar(f)}`}`, ['Ring och screena', 'screen'], [['Skicka bokningslänk', 'boka'], ['Avslag', 'avslag']]);
+      push(c, 'svar', f < T ? 'sen' : f === T ? 'idag' : 'snart', c.kalla === 'tips' ? `Tips från ${rxFor(c.tipsAv)}` : 'Ny ansökan', `${c.kalla === 'tips' ? `Tipsad ${rxNar(rxDag(c))}` : `Sökte ${rxNar(rxDag(c))} via ${rxKallaL(c.kalla)}`} · ${f < T ? `svarslöftet gick ut ${rxNar(f)}` : `svar senast ${rxNar(f)}`}`, ['Ring och screena', 'screen'], [[ND ? 'Boka en tid' : 'Skicka bokningslänk', 'boka'], ['Avslag', 'avslag']]);
       return;
     }
     if (sista && sista.st === 'uteblev' && !kom){ push(c, 'uteblev', 'idag', `Kom inte till ${RXBOKNAMN[sista.typ].toLowerCase()}`, `${rxBokTid(sista)} · ${c.noShow === 1 ? 'första gången' : c.noShow + ' gånger'}`, ['Boka ny tid', 'boka'], [['Avslag', 'avslag']]); return; }
@@ -18887,7 +18887,7 @@ function rxHemRad(){
   if (S.role !== 'chef') return '';
   rxSt();
   const g = rxGora().filter(x => x.nar !== 'snart'), idag = S.rx.kand.map(c => ({c, b:rxKommande(c)})).filter(x => x.b && x.b.d === rxT()).sort((a, b) => a.b.s.localeCompare(b.b.s))[0];
-  const anst = S.rx.kand.filter(c => c.steg === 'hired').length;
+  const anst = ND ? ndRxMalAnst() : S.rx.kand.filter(c => c.steg === 'hired').length;
   return `<button class="nrow frhrad rxhem" data-rxga="gora"><b>Rekrytering · ${ND && !RXMAL.antal ? `${anst} anställda` : `${anst} av ${RXMAL.antal}`}</b><span><span>${g.length ? `${g.length} att göra` : 'Inget väntar'}${idag ? ` · ${RXBOKNAMN[idag.b.typ].toLowerCase()} ${idag.b.s} med ${rxFor(idag.c.namn)}${tmin(idag.b.s) > now() ? ', om ' + minText(Math.round(tmin(idag.b.s) - now())) : ''}` : ''}</span><span class="pill t-neutral">${I('rekr')}Öppna</span></span></button>`;
 }
 /* Chefens Beslut och att göra på startsidan: en rad som räknas fram ur Att göra och bara syns när något väntar. */
@@ -18936,7 +18936,7 @@ const rxPill = (text, ton) => `<span class="rxpill ${ton || ''}">${text}</span>`
 function renderRxView(){
   rxSt();
   if (S.role !== 'chef') return rxTipsVy();
-  const g = rxGora(), nu = g.filter(x => x.nar !== 'snart').length, oppna = S.rx.kand.filter(rxOppen), anst = S.rx.kand.filter(c => c.steg === 'hired').length;
+  const g = rxGora(), nu = g.filter(x => x.nar !== 'snart').length, oppna = S.rx.kand.filter(rxOppen), anst = ND ? ndRxMalAnst() : S.rx.kand.filter(c => c.steg === 'hired').length;
   const flik = S.rxFlik || (nu ? 'gora' : 'tavla');
   const flikar = [['gora', 'Att göra', nu], ['tavla', 'Tavlan', 0], ['tider', 'Tider', 0], ['tjanster', 'Tjänster', 0], ['siffror', 'Siffror', 0]];
   const c = S.rxOpen && rxK(S.rxOpen);
@@ -18975,9 +18975,9 @@ function rxGoraVy(g){
       <section class="card" aria-label="Intervjuer"><div class="chead"><h2>Intervjuer</h2><span class="end">${note(442)}${note(461)}</span></div>
         ${idag.length || kom.length ? `<ul class="rxint">${[...idag.map(x => ({...x, idag:true})), ...kom.slice(0, 4)].map(({c, b, idag: i}) => { const m = Math.round(tmin(b.s) - now()), pag = i && m <= 0 && tmin(b.e) > now(), fram = i && m > 0, nasta = fram && idag.filter(x => tmin(x.b.s) > now())[0]?.b === b;
           return `<li class="${nasta ? 'nasta' : ''}"><span class="rxintt ${i ? 'idag' : ''}"><b class="num">${b.s}</b><small>${pag ? 'pågår' : fram ? 'om ' + minText(m) : i ? 'i dag' : rxNar(b.d)}</small></span><button class="rxintb" data-rxkand="${c.id}"><b>${esc(c.namn)}</b><small>${RXBOKNAMN[b.typ]} · ${esc(b.plats)}${b.st === 'klar' || (b.st === 'bokad' && rxBokPassad(b) && c.score.some(s => s.steg === rxBokSteg(b.typ))) ? ' · klar' : b.st === 'bokad' && rxBokPassad(b) ? ' · väntar på din bedömning' : ''}</small></button>${fram ? `<button class="tlink" data-rxdo="${b.typ === 'tel' ? 'screen' : 'guide'}|${c.id}">${b.typ === 'tel' ? 'Manuset' : 'Förbered'}</button>` : ''}</li>`; }).join('')}</ul>` : '<p class="aehint">Inga intervjuer bokade.</p>'}
-        ${lediga.length < 4 ? `<div class="frb warn">${I('fel')}<span>${lediga.length ? `Bara ${lediga.length} lediga ${lediga.length === 1 ? 'tid' : 'tider'} kvar.` : 'Inga lediga tider.'} Bokningslänken behöver några att välja bland. <button class="tlink inl" data-rxflik="tider">Lägg till tider</button></span></div>` : `<p class="aehint">${lediga.length} lediga tider att boka. <button class="tlink inl" data-rxflik="tider">Se tiderna</button></p>`}</section>
-      <section class="card" aria-label="${RXMAL.namn}"><div class="chead"><h2>${RXMAL.namn}</h2><span class="meta num">${ND && !RXMAL.antal ? `${anst} anställda` : `${anst} av ${RXMAL.antal}`}</span><span class="end">${note(455)}${note(468)}</span></div>
-        ${ND && !RXMAL.antal ? '' : aeBar(anst, RXMAL.antal, 'stor')}
+        ${lediga.length < 4 ? `<div class="frb warn">${I('fel')}<span>${lediga.length ? `Bara ${lediga.length} lediga ${lediga.length === 1 ? 'tid' : 'tider'} kvar.` : 'Inga lediga tider.'} ${ND ? 'Lägg till några att boka på.' : 'Bokningslänken behöver några att välja bland.'} <button class="tlink inl" data-rxflik="tider">Lägg till tider</button></span></div>` : `<p class="aehint">${lediga.length} lediga tider att boka. <button class="tlink inl" data-rxflik="tider">Se tiderna</button></p>`}</section>
+      <section class="card" aria-label="${RXMAL.namn}"><div class="chead"><h2>${RXMAL.namn}</h2><span class="meta num">${ND && !RXMAL.antal ? `${anst} anställda` : `${anst} av ${RXMAL.antal}`}</span><span class="end">${note(455)}${note(468)}${ND ? ndRxMalKnapp() : ''}</span></div>
+        ${ND && !RXMAL.antal ? '' : aeBar(anst, RXMAL.antal, 'stor')}${ND ? ndRxMalForm() : ''}
         <ul class="rxtjm">${S.rx.tj.map(t => { const a = S.rx.kand.filter(c => c.tj === t.id && c.steg === 'hired').length; return `<li><span>${esc(t.kort)}</span>${aeBar(a, t.antal)}<b class="num">${a} av ${t.antal}</b></li>`; }).join('')}</ul>
         ${rxPrognosRuta(pr)}
         ${pr.sent && pr.tipsPer ? `<div class="aek"><button class="btn btn-s btn-sm" data-rxtipsbe ${S.rx.tipsBett ? 'disabled' : ''}>${I('pling')}${S.rx.tipsBett ? 'Laget är tillfrågat' : 'Be laget om tips'}</button></div>` : ''}</section>
@@ -19003,7 +19003,7 @@ function rxTavlaVy(){
   return `<div class="rxtvh"><div class="qchips" role="group" aria-label="Tjänst">${[['alla', 'Alla tjänster', oppna.length], ...S.rx.tj.map(t => [t.id, t.kort, oppna.filter(c => c.tj === t.id).length])].map(([k, l, n]) => `<button class="chip ${S.rxTj === k ? 'on' : ''}" aria-pressed="${S.rxTj === k}" data-rxtj="${k}">${l} <span class="num muted">${n}</span></button>`).join('')}</div><span class="aehint rxdraghj">${note(447)}${note(469)}Dra ett kort till nästa steg, eller öppna det.</span></div>
     ${traff ? `<p class="rxfilt">Visar ${filt.length} som matchar ”${esc(S.rxQ.trim())}”. <button class="tlink inl" data-rxsokrensa>Visa alla</button></p>` : ''}
     ${val.size ? `<div class="rxbulk" role="region" aria-label="Markerade"><b>${val.size} markerade</b>${F ? `<label class="rxbl">Skäl<select class="uin aesel" data-rxbskal>${RXSKAL.filter(s => s !== 'Tackade nej' && s !== 'Kom inte till intervjun').map(s => `<option ${F.skal === s ? 'selected' : ''}>${s}</option>`).join('')}</select></label><span class="aehint">Var och en får avslagsmejlet med sitt eget namn.</span><button class="btn btn-sm aefarlig" data-rxbulkok>Ge ${val.size} avslag</button><button class="tlink" data-rxformx>Avbryt</button>`
-      : `<button class="btn btn-s btn-sm" data-rxbulk="lank">${I('kal')}Skicka bokningslänk</button><button class="btn btn-s btn-sm" data-rxbulk="avslag">Ge avslag</button><button class="tlink" data-rxvalrensa>Avmarkera</button>`}${note(446)}</div>` : ''}
+      : `${ND ? '' : `<button class="btn btn-s btn-sm" data-rxbulk="lank">${I('kal')}Skicka bokningslänk</button>`}<button class="btn btn-s btn-sm" data-rxbulk="avslag">Ge avslag</button><button class="tlink" data-rxvalrensa>Avmarkera</button>`}${note(446)}</div>` : ''}
     <div class="rxtavla">${RXOPPNA.map(s => { const l = filt.filter(c => c.steg === s).sort((a, b) => a.stegD.localeCompare(b.stegD));
       const vant = l.filter(c => gora.some(x => x.c === c && x.nar !== 'snart')).length;
       return `<section class="rxkol" data-rxkol="${s}" aria-label="${RXETIKETT[s]}"><header><b>${RXETIKETT[s]}</b><span class="num">${l.length}</span>${vant ? `<span class="rxkolb" title="${vant} väntar på dig">${vant}</span>` : ''}${l.length > 1 ? `<button class="tlink rxkolm" data-rxvalkol="${s}">${l.every(c => val.has(c.id)) ? 'Avmarkera' : 'Markera alla'}</button>` : ''}</header><div class="rxkl">${l.map(c => { const [h, ton] = rxHint(c);
@@ -19018,14 +19018,14 @@ function rxTiderVy(){
   const dagar = [...new Set(S.rx.tider.filter(t => t.d >= rxT()).map(t => t.d))].sort(), N = S.rxTidNy;
   return `<div class="tgrid aegrid"><div class="col">
     <section class="card" aria-label="Intervjutider"><div class="chead"><h2>Intervjutider</h2><span class="end">${note(448)}${note(470)}<button class="btn btn-s btn-sm" data-rxtidny>${I('plus')}Lägg till tider</button></span></div>
-      <p class="aehint rxtop">Bokningslänken visar de lediga tiderna, och kandidaten väljer själv. Tider närmare än ett dygn visas inte, eftersom de oftare leder till att någon inte kommer.</p>
+      <p class="aehint rxtop">${ND ? 'Tiderna du bokar kandidater på. Bokningen blir ett möte i din kalender, och kandidaten får en kalenderfil.' : 'Bokningslänken visar de lediga tiderna, och kandidaten väljer själv. Tider närmare än ett dygn visas inte, eftersom de oftare leder till att någon inte kommer.'}</p>
       ${N ? `<div class="rxform rxtidf"><div class="rxfr"><label>Dag<input type="date" class="uin" data-rxtid="d" value="${N.d}" min="${rxT()}"></label><label>Från<input type="time" class="uin" data-rxtid="fran" value="${N.fran}" step="900"></label><label>Till<input type="time" class="uin" data-rxtid="till" value="${N.till}" step="900"></label><label>Längd<select class="uin" data-rxtid="len">${[30, 45, 60].map(m => `<option value="${m}" ${N.len === m ? 'selected' : ''}>${m} min</option>`).join('')}</select></label></div>
         ${N.fel ? `<p class="aefel" role="alert">${N.fel}</p>` : (() => { const p = rxTidPlan(N); return `<p class="aehint">Det blir ${p.ok.length} ${p.ok.length === 1 ? 'tid' : 'tider'}${p.ok.length ? ': ' + p.ok.map(x => x.s).join(', ') : ''}.</p>${p.krock.length ? `<p class="rxkrock">${I('kal')}${p.krock.length === 1 ? 'En tid hoppas över' : p.krock.length + ' tider hoppas över'}, de krockar med ${esc(aeOch([...new Set(p.krock.map(x => `${x.ev.t} ${hm(x.ev.s)}`))]))} i din kalender.</p>` : ''}`; })()}<div class="aek"><button class="btn btn-p btn-sm" data-rxtidok>Lägg till</button><button class="tlink" data-rxtidx>Avbryt</button></div></div>` : ''}
       ${dagar.length ? dagar.map(d => { const l = S.rx.tider.filter(t => t.d === d).sort((a, b) => a.s.localeCompare(b.s)); return `<div class="rxdag"><p class="rxdagh"><b>${aeStor(aeDagDatum(d))}</b><small>${esc(l[0].plats)} · ${l.filter(t => !t.kand).length} lediga av ${l.length}</small><span class="rxdagk"><button class="tlink" data-rxtidkop="${d}">Samma tider veckan efter</button>${l.some(t => !t.kand) ? `<button class="tlink" data-rxtiddag="${d}">Ta bort de lediga</button>` : ''}</span></p><div class="rxslots">${l.map(t => t.kand ? `<button class="rxslot bok" data-rxkand="${t.kand}"><b class="num">${t.s}</b>${esc(rxFor(rxK(t.kand).namn))}</button>` : `<span class="rxslot ${rxSlotOk(t) ? '' : 'nara'}"><b class="num">${t.s}</b>${rxSlotOk(t) ? 'Ledig' : 'För nära'}<button class="rxslx" data-rxtidbort="${t.id}" aria-label="Ta bort ${t.s}">${I('x')}</button></span>`).join('')}</div></div>`; }).join('') : rxTom('Inga tider', 'Lägg till ett block, till exempel tisdag 13–16, så delas det i lika långa tider.')}
     </section></div><div class="col">
     <section class="card" aria-label="Bokade"><div class="chead"><h2>Bokade intervjuer</h2></div>${(() => { const l = []; S.rx.kand.filter(rxOppen).forEach(c => c.bok.filter(b => b.st === 'bokad' && !rxBokPassad(b)).forEach(b => l.push({c, b}))); l.sort((a, b) => (a.b.d + a.b.s).localeCompare(b.b.d + b.b.s));
       return l.length ? `<ul class="rxint">${l.map(({c, b}) => `<li><span class="rxintt"><b class="num">${b.s}</b><small>${rxNar(b.d)}</small></span><button class="rxintb" data-rxkand="${c.id}"><b>${esc(c.namn)}</b><small>${RXBOKNAMN[b.typ]} · ${b.med.length > 1 ? 'med ' + aeOch(b.med.filter(n => n !== aeMig()).map(rxFor)) : esc(b.plats)}</small></button></li>`).join('')}</ul>` : '<p class="aehint">Inget bokat.</p>'; })()}
-      <p class="aehint">${ND ? 'Kalenderfilen och SMS:en dagen före och två timmar före läggs i kön när tiden bokas. Utskicket till kandidater är inte påslaget än, så de står kvar där.' : 'Kandidaten får en kalenderfil när tiden är bokad, ett SMS dagen före och ett två timmar före. Svarar hen NEJ hamnar det i Att göra.'}</p></section>
+      <p class="aehint">${ND ? 'Kandidaten får en kalenderfil när tiden är bokad, och en påminnelse med mejl dagen före och två timmar före. Den som inte har en e-postadress får inget mejl, så ring och berätta tiden.' : 'Kandidaten får en kalenderfil när tiden är bokad, ett SMS dagen före och ett två timmar före. Svarar hen NEJ hamnar det i Att göra.'}</p></section>
     </div></div>`;
 }
 function rxTidAntal(N){ const a = tmin(N.fran), b = tmin(N.till); return b > a ? Math.floor((b - a) / N.len) : 0; }
@@ -19041,18 +19041,18 @@ function rxTjVy(){
         ${aeBar(anst, t.antal, 'stor')}
         <dl class="rxdl"><div><dt>Börjar</dt><dd>${aeDagDatum(t.start)}</dd></div><div><dt>I processen</dt><dd>${i} kandidater</dd></div><div><dt>Öppen sedan</dt><dd>${frKort(t.oppnad)}</dd></div></dl>
         <ul class="rxkan">${[['platsbanken', 'Platsbanken'], ['linkedin', 'LinkedIn']].map(([n, l]) => `<li><b>${l}</b>${k[n] ? `<span class="${frMellan(rxT(), k[n]) <= 7 ? 'aesen' : ''}">publicerad till ${frKort(k[n])}</span><button class="tlink" data-rxforl="${t.id}|${n}">Förläng 30 dagar</button>` : `<span class="muted">inte publicerad</span><button class="tlink" data-rxpubl="${t.id}|${n}">Publicera</button>`}</li>`).join('')}
-          <li><b>Egen ansökningssida</b>${k.sida ? `<span>clicknet.se/jobb/${esc(t.slug || t.id)}</span><button class="tlink" data-rxprev="${t.id}" aria-expanded="${S.rxPrev === t.id}">${S.rxPrev === t.id ? 'Dölj' : 'Förhandsvisa'}</button><button class="tlink" data-rxlank="${t.id}">Kopiera länken</button>` : `<span class="muted">stängd</span><button class="tlink" data-rxsida="${t.id}">Öppna igen</button>`}</li></ul>
-        ${S.rxPrev === t.id ? rxAnsSida(t) : ''}</section>`; }).join('')}
+          ${ND ? '' : `<li><b>Egen ansökningssida</b>${k.sida ? `<span>clicknet.se/jobb/${t.id}</span><button class="tlink" data-rxprev="${t.id}" aria-expanded="${S.rxPrev === t.id}">${S.rxPrev === t.id ? 'Dölj' : 'Förhandsvisa'}</button><button class="tlink" data-rxlank="${t.id}">Kopiera länken</button>` : `<span class="muted">stängd</span><button class="tlink" data-rxsida="${t.id}">Öppna igen</button>`}</li>`}</ul>
+        ${!ND && S.rxPrev === t.id ? rxAnsSida(t) : ''}</section>`; }).join('')}
     ${N ? `<section class="card rxform" aria-label="Ny tjänst"><div class="chead"><h2>Ny tjänst</h2></div><div class="rxfr"><label>Titel<input class="uin" data-rxtjn="titel" value="${esc(N.titel)}" placeholder="Säljare, Halmstad"></label><label>Antal<input class="uin" type="number" min="1" max="20" data-rxtjn="antal" value="${N.antal}"></label><label>Börjar<input class="uin" type="date" data-rxtjn="start" value="${N.start}"></label></div>${N.fel ? `<p class="aefel" role="alert">${N.fel}</p>` : ''}<div class="aek"><button class="btn btn-p btn-sm" data-rxtjnok>Öppna tjänsten</button><button class="tlink" data-rxtjnx>Avbryt</button></div></section>`
       : `<button class="later" data-rxtjny>${I('plus')}Ny tjänst</button>`}
     <section class="card" aria-label="Det som skickas"><div class="chead"><h2>Det som skickas</h2><span class="end">${note(453)}</span></div>
-      <ul class="rxmallar">${S.rx.mallar.map(m => `<li><button class="rxmb" data-rxmall="${m.id}" aria-expanded="${S.rxMall === m.id}"><b>${esc(m.namn)}</b><small>${esc(m.kanal)} · ${esc(m.nar.toLowerCase())}${m.auto ? (ND ? ' · läggs i kön av sig själv' : ' · går ut av sig själv') : ''}</small>${I('chev', 'aechev')}</button>
-        ${S.rxMall === m.id ? `<div class="rxmalle"><textarea class="uin" rows="4" data-rxmalltext="${m.id}" aria-label="Texten i ${esc(m.namn)}">${esc(m.text)}</textarea><p class="aehint">{förnamn}, {tjänst}, {datum}, {tid}, {länk}, {intervjuare} och {svar senast} fylls i. Sparas medan du skriver.</p><div class="rxlas">${ND && !S.rx.kand.length ? '' : `<small>Så ser det ut för ${ND ? esc(rxFor(S.rx.kand[0].namn)) : 'Leo'}</small>${esc(rxFyll(m.text, rxK('c-leo') || S.rx.kand[0], ND ? {datum:aeArbFram(rxT(), 2), tid:'13:00', senast:aeArbFram(rxT(), 3)} : {datum:'2026-10-13', tid:'13:00', senast:'2026-10-14'}))}`}</div>${m.text !== m.org ? `<button class="tlink" data-rxmallaterst="${m.id}">Återställ</button>` : ''}</div>` : ''}</li>`).join('')}</ul></section>
+      ${ND ? ndRxUtskickRad() : ''}<ul class="rxmallar">${S.rx.mallar.map(m => `<li><button class="rxmb" data-rxmall="${m.id}" aria-expanded="${S.rxMall === m.id}"><b>${esc(m.namn)}</b><small>${esc(m.kanal)} · ${esc(m.nar.toLowerCase())}${ND && !m.text ? ' · ingen text än, så inget går ut' : m.auto ? ' · går ut av sig själv' : ''}</small>${I('chev', 'aechev')}</button>
+        ${S.rxMall === m.id ? `<div class="rxmalle"><textarea class="uin" rows="4" data-rxmalltext="${m.id}" aria-label="Texten i ${esc(m.namn)}">${esc(m.text)}</textarea><p class="aehint">{förnamn}, {tjänst}, {datum}, {tid}, {länk}, {intervjuare} och {svar senast} fylls i. Sparas medan du skriver.</p><div class="rxlas">${ND && (!S.rx.kand.length || !m.text) ? '' : `<small>Så ser det ut för ${ND ? esc(rxFor(S.rx.kand[0].namn)) : 'Leo'}</small>${esc(rxFyll(m.text, rxK('c-leo') || S.rx.kand[0], ND ? {datum:aeArbFram(rxT(), 2), tid:'13:00', senast:aeArbFram(rxT(), 3)} : {datum:'2026-10-13', tid:'13:00', senast:'2026-10-14'}))}`}</div>${m.text !== m.org ? `<button class="tlink" data-rxmallaterst="${m.id}">Återställ</button>` : ''}</div>` : ''}</li>`).join('')}</ul></section>
     </div><div class="col">
     <section class="card" aria-label="Så är jobbet"><div class="chead"><h2>Så är jobbet</h2><span class="end">${note(450)}</span></div>
       <p class="aehint rxtop">Läses upp i varje screening och står i annonsen. En ärlig bild gör att fler stannar.</p>
       <textarea class="uin" rows="5" data-rxjobbet aria-label="Så är jobbet">${esc(S.rx.jobbet)}</textarea>
-      <p class="rxlab">Frågorna i ansökan</p><ol class="rxfrl">${RXFRAGOR.map(f => `<li>${esc(f)}</li>`).join('')}</ol></section>
+      ${ND ? '' : `<p class="rxlab">Frågorna i ansökan</p><ol class="rxfrl">${RXFRAGOR.map(f => `<li>${esc(f)}</li>`).join('')}</ol>`}</section>
     <section class="card" aria-label="Företrädesrätt"><div class="chead"><h2>Företrädesrätt</h2><span class="end">${note(451)}</span></div>
       ${ND && fr.some(x => x.okand) ? ndRxForetradeOkand(fr) : fr.some(x => x.har) ? fr.filter(x => x.har).map(x => `<div class="frb danger">${I('fel')}<span><b>${esc(x.p.namn)} har företrädesrätt till ${frKort(x.till)}.</b> Erbjud tjänsten till hen innan någon annan anställs (LAS 25 §).</span></div>`).join('')
         : `<div class="frb ok">${I('check')}<span>Ingen har företrädesrätt till återanställning.${fr.length ? ` ${fr.map(x => `${esc(x.p.namn)} slutade ${frKort(x.p.slut)} efter ${esc(x.orsak)}`).join(', ')}, och det ger ingen företrädesrätt.` : ''}</span></div>`}
@@ -19147,15 +19147,16 @@ function rxHist(c){
 }
 function rxGdpr(c){
   const avsl = !rxOppen(c) && c.steg !== 'hired';
-  return `<section class="rxsek rxgd"><h3>Uppgifterna ${note(452)}</h3><p>${c.steg === 'hired' ? 'Ansökan följer med till personalakten.' : c.pool && c.pool.samtycke ? `I talangpoolen sedan ${frKort(c.pool.samtycke)}, med samtycke. Undantas från gallringen.` : c.pool ? `Frågan om talangpoolen gick ut ${rxNar(c.pool.fragad)}. Inget svar än.` : avsl ? (ND ? (c.gallras ? `Raderas ${frKort(c.gallras)}.` : S.rx.gallring ? 'Avslutades innan fristen beslutades, så ingen gallringsdag är satt.' : 'Sparas tills gallringsfristen är beslutad.') : S.rx.gallring ? `Raderas ${frKort(aeManPlus(c.stegD, S.rx.gallring))}.` : 'Sparas tills gallringsfristen är beslutad.') : 'Sparas medan rekryteringen pågår.'}
+  return `<section class="rxsek rxgd"><h3>Uppgifterna ${note(452)}</h3><p>${c.steg === 'hired' ? 'Ansökan följer med till personalakten.' : c.pool && c.pool.samtycke ? `I talangpoolen sedan ${frKort(c.pool.samtycke)}, med samtycke. Undantas från gallringen.` : c.pool && !(ND && c.pool.nej) ? `Frågan om talangpoolen gick ut ${rxNar(c.pool.fragad)}. Inget svar än.` : avsl ? (ND ? (c.gallras ? `Raderas ${frKort(c.gallras)}.` : S.rx.gallring ? 'Avslutades innan fristen beslutades, så ingen gallringsdag är satt.' : 'Sparas tills gallringsfristen är beslutad.') : S.rx.gallring ? `Raderas ${frKort(aeManPlus(c.stegD, S.rx.gallring))}.` : 'Sparas tills gallringsfristen är beslutad.') : 'Sparas medan rekryteringen pågår.'}
     ${c.merit && c.merit.besvarad ? ` Uppgifter om meriter skickades ${rxNar(c.merit.besvarad)}.` : ''}</p>
+    ${ND && c.pool && !c.pool.samtycke && !c.pool.nej ? `<div class="aek"><button class="btn btn-s btn-sm" data-rxdo="poolja|${c.id}">Svarade ja</button><button class="tlink" data-rxdo="poolnej|${c.id}">Svarade nej</button></div>` : ''}
     ${c.pool && c.pool.samtycke ? `<button class="tlink" data-rxpoolut="${c.id}">Ta ur talangpoolen</button>` : ''}${avsl && !c.merit ? `<button class="tlink" data-rxmeritny="${c.id}">Registrera en begäran om meriter</button>` : ''}</section>`;
 }
 
 /* ---------- Formulären i panelen ---------- */
 function rxFormVy(c, F){
   const x = `<button class="tlink" data-rxformx>Avbryt</button>`;
-  if (F.typ === 'screen') return `<div class="rxform" aria-label="Telefonscreening"><div class="rxfh"><b>Telefonscreening</b><small>Fem frågor, ungefär fem minuter ${note(440)}</small></div>
+  if (F.typ === 'screen') return `<div class="rxform" aria-label="Telefonscreening"><div class="rxfh"><b>Telefonscreening</b><small>${ND ? 'Ungefär fem minuter. Frågorna är inte skrivna än, så läs upp Så är jobbet och anteckna.' : 'Fem frågor, ungefär fem minuter'} ${note(440)}</small></div>
     ${c.tel ? `<a class="btn btn-p btn-sm rxringk" href="tel:${c.tel.replace(/[^\d+]/g, '')}" data-rxring="${c.id}">${I('phone')}Ring ${esc(c.tel)}</a>` : ''}
     <div class="rxlas"><small>Läs upp</small>${esc(S.rx.jobbet)}</div>
     ${RXSCREEN.map(([k, q, val]) => `<div class="rxq"><p>${esc(q)}</p>${c.svar && {varfor:0, ringt:1, start:2, heltid:3}[k] !== undefined && c.svar[{varfor:0, ringt:1, start:2, heltid:3}[k]] ? `<small class="rxians">I ansökan: ${esc(c.svar[{varfor:0, ringt:1, start:2, heltid:3}[k]])}</small>` : ''}${val ? `<div class="segs" role="radiogroup" aria-label="${esc(q)}">${val.map(v => `<button type="button" role="radio" aria-checked="${F.svar[k] === v}" data-rxsc="${k}|${esc(v)}">${esc(v)}</button>`).join('')}</div>` : `<textarea class="uin" rows="2" data-rxscf="${k}" aria-label="${esc(q)}">${esc(F.svar[k] || '')}</textarea>`}</div>`).join('')}
@@ -19165,8 +19166,8 @@ function rxFormVy(c, F){
   if (F.typ === 'score' || F.typ === 'guide'){
     const steg = F.steg, guide = F.typ === 'guide';
     return `<div class="rxform" aria-label="${guide ? 'Intervjuguide' : 'Scorecard'}"><div class="rxfh"><b>${guide ? 'Intervjuguide' : 'Scorecard'} · ${RXETIKETT[steg]}</b><small>${guide ? 'Samma fem saker för alla. Fyll i scorecarden direkt efteråt.' : 'Fyll i innan du läser de andras.'} ${note(443)}</small></div>
-      ${guide ? `<div class="rxlas"><small>Rollspelet</small>${esc(RXROLLSPEL)}</div><div class="rxlas"><small>Så är jobbet, läs upp</small>${esc(S.rx.jobbet)}</div>` : ''}
-      <ul class="rxkritl">${RXKRIT.map(([k, l, q]) => `<li><div><b>${l}</b><small>${esc(q)}</small></div>${guide ? '' : `<div class="segs rxseg" role="radiogroup" aria-label="${l}">${[['ja', 'Ja'], ['oklart', 'Oklart'], ['nej', 'Nej']].map(([v, vl]) => `<button type="button" role="radio" aria-checked="${F.krit[k] === v}" data-rxkrit="${k}|${v}">${vl}</button>`).join('')}</div>`}</li>`).join('')}</ul>
+      ${guide ? `${ND ? '' : `<div class="rxlas"><small>Rollspelet</small>${esc(RXROLLSPEL)}</div>`}<div class="rxlas"><small>Så är jobbet, läs upp</small>${esc(S.rx.jobbet)}</div>` : ''}
+      <ul class="rxkritl">${RXKRIT.map(([k, l, q]) => `<li><div><b>${l}</b>${q ? `<small>${esc(q)}</small>` : ''}</div>${guide ? '' : `<div class="segs rxseg" role="radiogroup" aria-label="${l}">${[['ja', 'Ja'], ['oklart', 'Oklart'], ['nej', 'Nej']].map(([v, vl]) => `<button type="button" role="radio" aria-checked="${F.krit[k] === v}" data-rxkrit="${k}|${v}">${vl}</button>`).join('')}</div>`}</li>`).join('')}</ul>
       ${guide ? `<div class="aek"><button class="btn btn-p btn-sm" data-rxdo="score|${c.id}">Fyll i scorecard</button>${x}</div>` : `
       <p class="rxprog2">${Object.values(F.krit).filter(Boolean).length} av ${RXKRIT.length} bedömda</p>
       <p class="rxlab">Rekommendation</p><div class="segs rxseg ${F.fel && !F.rek ? 'err' : ''}" role="radiogroup" aria-label="Rekommendation">${Object.entries(RXREK).map(([v, [l]]) => `<button type="button" role="radio" aria-checked="${F.rek === v}" data-rxrek="${v}">${l}</button>`).join('')}</div>
@@ -19179,7 +19180,7 @@ function rxFormVy(c, F){
   if (F.typ === 'boka'){
     const fria = S.rx.tider.filter(t => !t.kand && rxSlotOk(t)).sort((a, b) => (a.d + a.s).localeCompare(b.d + b.s));
     return `<div class="rxform" aria-label="Boka"><div class="rxfh"><b>Boka ${RXBOKNAMN[F.btyp].toLowerCase()}</b><small>${note(441)}${note(464)}${fria.length} lediga tider</small></div>
-      <div class="segs rxseg" role="radiogroup" aria-label="Hur"><button type="button" role="radio" aria-checked="${F.satt === 'lank'}" data-rxsatt="lank">${rxFor(c.namn)} väljer själv</button><button type="button" role="radio" aria-checked="${F.satt === 'tid'}" data-rxsatt="tid">Jag väljer tid</button></div>
+      ${ND ? '' : `<div class="segs rxseg" role="radiogroup" aria-label="Hur"><button type="button" role="radio" aria-checked="${F.satt === 'lank'}" data-rxsatt="lank">${rxFor(c.namn)} väljer själv</button><button type="button" role="radio" aria-checked="${F.satt === 'tid'}" data-rxsatt="tid">Jag väljer tid</button></div>`}
       ${(() => { const ok = fria.filter(t => !rxUpptagen(t, F.med).length);
         if (F.satt === 'lank') return `<p class="aehint">${esc(rxFor(c.namn))} får ett mejl och ett SMS med länken och väljer bland ${ok.length} lediga tider${ok.length < fria.length ? `, där ${F.med.length ? 'ni alla' : 'du'} är ${F.med.length ? 'lediga' : 'ledig'}` : ''}. Det minskar risken att hen inte kommer.</p>`;
         if (!fria.length) return `<p class="aehint">Inga lediga tider. <button class="tlink inl" data-rxflikx="tider">Lägg till tider</button></p>`;
@@ -19220,7 +19221,7 @@ function rxFormVy(c, F){
 function rxNyVy(){
   const N = S.rxNy, f = N.fel || {}, dub = N.epost.length > 4 || N.namn.trim().split(/\s+/).length > 1 ? S.rx.kand.find(c => (N.epost && c.epost === N.epost.trim().toLowerCase()) || c.namn.toLowerCase() === N.namn.trim().toLowerCase()) : null;
   const falt = (k, l, typ, ph, hj) => `<label class="rxlab" for="rxN${k}">${l}</label><input id="rxN${k}" class="uin" type="${typ}" data-rxn="${k}" value="${esc(N[k])}" placeholder="${ph}" aria-invalid="${!!f[k]}" ${f[k] ? `aria-describedby="rxNf${k}"` : ''}>${f[k] ? `<p class="aefel" id="rxNf${k}" role="alert">${f[k]}</p>` : hj ? `<p class="aehint">${hj}</p>` : ''}`;
-  return `<div class="rxbak" data-rxnyx></div><aside class="rxpanel" role="dialog" aria-modal="true" aria-labelledby="rxnyh"><header class="rxph"><div><h2 id="rxnyh">Ny kandidat</h2><small>${ND ? 'Hamnar på steget Ny. Tackmejlet läggs i kön, som inte skickas än.' : 'Hamnar på steget Ny och får tackmejlet direkt.'}</small></div><span class="rxpt"><button class="ibtn" data-rxnyx aria-label="Stäng">${I('x')}</button></span></header>
+  return `<div class="rxbak" data-rxnyx></div><aside class="rxpanel" role="dialog" aria-modal="true" aria-labelledby="rxnyh"><header class="rxph"><div><h2 id="rxnyh">Ny kandidat</h2><small>${ND && !rxMallT('bekr').text ? 'Hamnar på steget Ny. Tackmejlet har ingen text än, så inget mejl går ut.' : 'Hamnar på steget Ny och får tackmejlet direkt.'}</small></div><span class="rxpt"><button class="ibtn" data-rxnyx aria-label="Stäng">${I('x')}</button></span></header>
     <div class="rxpb"><div class="rxform rxnyf">
       <button class="later rxklb" data-rxklistra aria-expanded="${!!N.klistra}">${I('chev')}Klistra in en ansökan ${note(466)}</button>
       ${N.klistra ? `<div class="rxkl2"><textarea id="rxNklistra" class="uin" rows="5" data-rxklistratext placeholder="Klistra in mejlet eller texten från Platsbanken">${esc(N.klistraText || '')}</textarea><div class="aek"><button class="btn btn-s btn-sm" data-rxtolka>Fyll i fälten</button><span class="aehint">Namn, mejl, telefon och källa plockas ut. Kontrollera innan du sparar.</span></div></div>` : ''}
@@ -19253,7 +19254,7 @@ function rxTipsVy(){
 }
 /* Den publika ansökningssidan, som kandidaten ser den. */
 function rxAnsSida(t){
-  return `<div class="rxsida" aria-label="Förhandsvisning av ansökningssidan">${note(465)}<small>clicknet.se/jobb/${esc(t.slug || t.id)}</small>${ND ? '<p class="aehint">Förhandsvisning. Sidan finns inte än.</p>' : ''}<h3>${esc(t.titel)}</h3><p>${esc(S.rx.jobbet)}</p><p class="rxsidam">Start ${aeDagDatum(t.start)} · heltid, vardagar 08–17</p>
+  return `<div class="rxsida" aria-label="Förhandsvisning av ansökningssidan">${note(465)}<small>clicknet.se/jobb/${t.id}</small><h3>${esc(t.titel)}</h3><p>${esc(S.rx.jobbet)}</p><p class="rxsidam">Start ${aeDagDatum(t.start)} · heltid, vardagar 08–17</p>
     <ol>${RXFRAGOR.map(f => `<li>${esc(f)}</li>`).join('')}</ol><p class="rxsidag">Namn, mejl, telefon och CV. Du får besked inom två arbetsdagar. Så hanterar vi dina uppgifter: clicknet.se/integritet</p></div>`;
 }
 /* Ett block delas i tider. Tider som krockar med chefens kalender hoppas över. */
@@ -28596,12 +28597,16 @@ if (ND && ND.hem){
    stegloggen, scorecards, och det 0110 lade till (tjänster, tider,
    bokningar, anteckningar, utskick, meriter, mallar, Så är jobbet, målet).
 
-   Allt utkastet har finns kvar (beställaren 2026-10-15). Det som sparar går
-   till /nav2/rekrytering (src/app/nav2/rekrytering/route.ts). I läsläge
-   svarar rutten 423 och knappen säger det. Det som ska till kandidaten
-   (mejl och SMS) läggs i en kö som ingenting tömmer än, och svaren säger
-   det. Utkastets simuleringar (kandidaten som "bokar" och "svarar ja" av sig
-   själv) körs aldrig i riktigt läge.
+   Allt utkastet har finns kvar (beställaren 2026-10-15), utom det
+   beställaren valt bort 2026-10-18: bokningslänken, den publika
+   ansökningssidan och SMS. Det som sparar går till /nav2/rekrytering
+   (src/app/nav2/rekrytering/route.ts). I läsläge svarar rutten 423 och
+   knappen säger det. Mejlen till kandidaten går med Resend
+   (rekrytering-utskick.ts), aldrig från förhandsvisningen. Utkastets
+   exempeltexter i mallarna, frågorna och rollspelet gäller inte: en mall
+   utan text skickar inget, och intervjufrågorna skrivs senare. Utkastets
+   simuleringar (kandidaten som "bokar" och "svarar ja" av sig själv) körs
+   aldrig i riktigt läge.
 
    Den som inte får rekrytera (RLS: far_rekrytera) får säljarens vy, Tipsa
    om en säljare, med sina egna tips. Kandidaternas personuppgifter finns
@@ -28625,23 +28630,36 @@ rxSt = function(){
   if (S.rxInit) return; S.rxInit = true;
   const d = ndRx();
   const kand = d.kand.map(k => JSON.parse(JSON.stringify(k)));
-  S.rx = {kand, tider:d.tider.map(t => ({...t})), mallar:RXMALLSEED.map(m => ({...m, org:m.text, text:d.mallar[m.id] || m.text})), tj:d.tj.map(t => ({...t, kanaler:{...t.kanaler}})),
+  // Mallarna: bara navets texter (utkastets exempel gäller inte), och SMS går som mejl. Bokningslänken finns inte.
+  const mallar = RXMALLSEED.filter(m => m.id !== 'lank').map(m => ({...m, kanal:/SMS/.test(m.kanal) ? 'Mejl' : m.kanal, org:'', text:d.mallar[m.id] || ''}));
+  S.rx = {kand, tider:d.tider.map(t => ({...t})), mallar, tj:d.tj.map(t => ({...t, kanaler:{...t.kanaler}})),
     jobbet:d.jobbet || '', gallring:d.gallringManader, notiser:[], tipsBett:d.tipsBett};
   let flik = null; try { flik = localStorage.getItem('nav2-rxflik'); } catch(_){}
-  Object.assign(S, {rxFlik:flik, rxQ:'', rxSerie:null, rxAnsOpen:null, rxPrev:null, rxSel:null, rxOpen:null, rxForm:null, rxTj:'alla', rxVal:new Set(), rxNy:null, rxAvsl:false, rxMall:null, rxTidNy:null, rxTjNy:null, rxTipsF:{namn:'', kontakt:'', varfor:'', vet:false, fel:{}}});
+  Object.assign(S, {rxMalF:null, rxFlik:flik, rxQ:'', rxSerie:null, rxAnsOpen:null, rxPrev:null, rxSel:null, rxOpen:null, rxForm:null, rxTj:'alla', rxVal:new Set(), rxNy:null, rxAvsl:false, rxMall:null, rxTidNy:null, rxTjNy:null, rxTipsF:{namn:'', kontakt:'', varfor:'', vet:false, fel:{}}});
   // Intervjuerna är möten i kalendern (skapaMote). Kalenderns händelse får kandidaten, inget läggs till.
   kand.forEach(c => c.bok.forEach(b => { const e = b.kev && KEV.find(x => x.ref === b.kev || x.id === b.kev); if (e){ e.rx = c.id; b.kev = e.id; } }));
 };
-// Utkastets exempel töms. Målet, tjänsterna och veckorna kommer ur navet.
+// Utkastets exempel töms. Målet, tjänsterna, veckorna och slutorsakerna kommer ur navet.
+// Frågorna i ansökan, screeningens frågor, intervjufrågorna och rollspelet är utkastets och gäller inte (beställaren 2026-10-18).
 function ndRxStart(){
   const d = ndRx(); if (!d) return;
   RXKSEED.length = 0; RXTJSEED.length = 0; RXTIDSEED.length = 0;
+  RXFRAGOR.length = 0; RXSCREEN.length = 0; RXKRIT.forEach(k => { k[2] = ''; });
   Object.keys(RXHIST).forEach(k => delete RXHIST[k]); Object.keys(RXAVSLUT).forEach(k => delete RXAVSLUT[k]);
+  Object.assign(RXAVSLUT, d.slutorsak || {});
   RXVECKA.splice(0, RXVECKA.length, ...d.vecka);
   RXMED.splice(0, RXMED.length, ...d.rekryterare.map(p => p.namn));
   if (d.kallor.length) RXKALLOR.splice(0, RXKALLOR.length, ...d.kallor);
-  if (d.mal) Object.assign(RXMAL, {namn:d.mal.namn, antal:d.mal.antal, senast:d.mal.senast});
-  else Object.assign(RXMAL, {namn:'Rekryteringen', antal:d.tj.reduce((s, t) => s + t.antal, 0), senast:null});
+  if (d.mal) Object.assign(RXMAL, {namn:d.mal.namn, antal:d.mal.antal, senast:d.mal.senast, fran:d.mal.fran, period:d.mal.period});
+  else Object.assign(RXMAL, {namn:'Rekryteringen', antal:d.tj.reduce((s, t) => s + t.antal, 0), senast:null, fran:null, period:null});
+}
+// De anställda som räknas mot målet: sedan målet sattes, eller i månaden eller kvartalet.
+const ndRxMalAnst = () => S.rx.kand.filter(c => c.steg === 'hired' && (!RXMAL.fran || c.stegD >= RXMAL.fran)).length;
+// En säljare med behörigheten Rekryterare ser chefens vy, med sig själv som den som gör det (aeMig är ME.chef).
+function ndRxSom(fn){
+  if (S.role === 'chef' || !ndRxFar()) return fn();
+  const r = S.role, mc = ME.chef; S.role = 'chef'; ME.chef = ME.saljare;
+  try { return fn(); } finally { S.role = r; ME.chef = mc; }
 }
 
 /* ---------- Utkastets räkning med navets data ---------- */
@@ -28651,11 +28669,13 @@ const _ndRxGora = rxGora;
 rxGora = function(){
   const ut = _ndRxGora(); if (!ndRx()) return ut;
   S.rx.kand.filter(c => c.steg === 'offer' && !c.erb && !ut.some(g => g.c === c)).forEach(c => ut.push({c, typ:'erbj', nar:'idag', t:'Erbjudandet väntar på svar', sub:`Erbjudande sedan ${rxNar(c.stegD)} · villkoren är inte sparade i Nav`, prim:['Tackade ja', 'ja'], sek:[['Tackade nej', 'nej']], tid:''}));
+  // Frågan om talangpoolen: svaret registreras här (samtycket kräver ett ja).
+  S.rx.kand.filter(c => c.pool && !c.pool.samtycke && !c.pool.nej && !ut.some(g => g.c === c)).forEach(c => ut.push({c, typ:'pool', nar:'idag', t:'Svar om talangpoolen', sub:`Frågan gick ut ${rxNar(c.pool.fragad)} · ansökan sparas först efter ett ja`, prim:['Svarade ja', 'poolja'], sek:[['Svarade nej', 'poolnej']], tid:''}));
   return ut;
 };
 // Bokningen börjar utan någon med: kretsen som kan sitta med är navets (RXMED), inte utkastets namn.
 const _ndRxFormStart = rxFormStart;
-rxFormStart = function(typ, cid){ _ndRxFormStart(typ, cid); if (ndRx() && S.rxForm && S.rxForm.typ === 'boka') S.rxForm.med = []; };
+rxFormStart = function(typ, cid){ _ndRxFormStart(typ, cid); if (ndRx() && S.rxForm && S.rxForm.typ === 'boka'){ S.rxForm.med = []; S.rxForm.satt = 'tid'; } };
 // Tid till anställning: ingen gissning när ingen anställts.
 const _ndRxTta = rxTidTillAnst;
 rxTidTillAnst = function(){ if (!ndRx()) return _ndRxTta(); const l = S.rx.kand.filter(c => c.steg === 'hired').map(c => frMellan(rxDag(c), c.stegD)).sort((a, b) => a - b); return l.length ? l[Math.floor(l.length / 2)] : null; };
@@ -28663,9 +28683,14 @@ rxTidTillAnst = function(){ if (!ndRx()) return _ndRxTta(); const l = S.rx.kand.
 const _ndRxPrognos = rxPrognos;
 rxPrognos = function(){
   if (!ndRx()) return _ndRxPrognos();
-  const takt = RXVECKA.slice(-4).reduce((s, v) => s + v[1], 0) / 4, anst = S.rx.kand.filter(c => c.steg === 'hired').length;
-  if (!takt && RXMAL.antal > anst) return {anst, kvar:RXMAL.antal - anst, perAnst:null, takt, datum:null, ingenTakt:true};
-  const p = _ndRxPrognos(); if (p.datum && !RXMAL.senast) p.sent = false; return p;
+  // Som utkastet, men de anställda räknas mot målets period, och utan takt räknas inget datum.
+  const tr = rxTratt(), tot = tr.reduce((s, r) => s + r.totalt, 0), alla = tr.reduce((s, r) => s + r.anst, 0), oppna = S.rx.kand.filter(rxOppen).length;
+  const anst = ndRxMalAnst(), perAnst = alla ? Math.round(tot / alla) : null, takt = RXVECKA.slice(-4).reduce((s, v) => s + v[1], 0) / 4, kvar = Math.max(0, RXMAL.antal - anst);
+  if (!perAnst || !kvar) return {anst, kvar, perAnst, takt, datum:null};
+  if (!takt) return {anst, kvar, perAnst, takt, datum:null, ingenTakt:true};
+  const behov = Math.max(0, kvar * perAnst - oppna), datum = frPlus(rxT(), Math.round(behov / takt * 7) + (rxTidTillAnst() || 0));
+  const tips = tr.find(r => r.kalla === 'tips');
+  return {anst, kvar, perAnst, takt, behov, datum, sent:RXMAL.senast ? datum > RXMAL.senast : false, tipsPer:tips && tips.anst ? Math.round(tips.totalt / tips.anst) : null};
 };
 const _ndRxPrognosText = rxPrognosText;
 rxPrognosText = function(pr){
@@ -28679,44 +28704,46 @@ rxPrognosRuta = function(pr){
   if (!ndRx() || !pr.datum || RXMAL.senast) return _ndRxPrognosRuta(pr);
   return `<div class="rxprd ok"><small>I nuvarande takt</small><b>${aeStor(aeDagDatum(pr.datum))}</b><span>inget slutdatum är satt</span></div><p class="rxprog">${pr.perAnst} ansökningar per anställning och ungefär ${Math.round(pr.takt)} nya i veckan.</p>`;
 };
-// Företrädesrätt (LAS 25 §): navet vet när någon slutade, men inte varför.
+// Företrädesrätt (LAS 25 §): utkastets regel, med orsaken ur Personal (0110 end_reason). Saknas orsaken frågar vyn.
+const NDRXORSAK = [['arbetsbrist', 'Arbetsbrist'], ['egen', 'Sa upp sig själv'], ['provanstallning', 'Provanställningen avbröts'], ['visstid', 'Visstiden tog slut'], ['avsked', 'Avsked'], ['annat', 'Annat']];
+// Orsaken i utkastets mening ("slutade 8 okt efter egen uppsägning").
+const NDRXORSAKTEXT = {arbetsbrist:'arbetsbrist', egen:'egen uppsägning', provanstallning:'avbruten provanställning', visstid:'en visstidsanställning', avsked:'avsked', annat:'annat skäl'};
 const _ndRxForetrade = rxForetrade;
 rxForetrade = function(){
   if (!ndRx()) return _ndRxForetrade();
   const T = rxT();
-  return (ND.personer || []).filter(p => p.status === 'offboarded' && p.slut && frMellan(p.slut, T) <= 274 && frMellan(p.slut, T) >= 0)
-    .map(p => ({p:{id:p.id, namn:p.namn, start:p.start, slut:p.slut}, orsak:null, har:false, okand:true, till:aeManPlus(p.slut, 9)}));
+  return (ND.personer || []).filter(p => p.status === 'offboarded' && p.slut && frMellan(p.slut, T) <= 274 && frMellan(p.slut, T) >= 0).map(p => {
+    const kod = RXAVSLUT[p.id] || null, manader = p.start ? frMellan(p.start, p.slut) / 30.4 : 0;
+    // Under tolv månader ger ingen företrädesrätt, oavsett orsak. Då behöver vyn inte fråga.
+    const kort = manader < 12, m = Math.max(1, Math.round(manader));
+    const orsak = kort ? `${m} ${m === 1 ? 'månads' : 'månaders'} anställning${kod ? ` (${NDRXORSAKTEXT[kod] || kod})` : ''}` : kod ? NDRXORSAKTEXT[kod] || kod : null;
+    return {p:{id:p.id, namn:p.namn, start:p.start, slut:p.slut}, orsak, har:kod === 'arbetsbrist' && !kort, okand:!kod && !kort, till:aeManPlus(p.slut, 9)};
+  });
 };
 function ndRxForetradeOkand(fr){
-  const l = fr.filter(x => x.okand);
-  return `<div class="frb warn">${I('fel')}<span><b>Det går inte att avgöra om någon har företrädesrätt.</b> ${esc(aeOch(l.map(x => `${x.p.namn} slutade ${frKort(x.p.slut)}`)))}, men orsaken till att anställningen tog slut står inte i Nav. Kontrollera ${l.length === 1 ? 'den' : 'dem'} innan någon annan anställs.</span></div>`;
+  const har = fr.filter(x => x.har).map(x => `<div class="frb danger">${I('fel')}<span><b>${esc(x.p.namn)} har företrädesrätt till ${frKort(x.till)}.</b> Erbjud tjänsten till hen innan någon annan anställs (LAS 25 §).</span></div>`).join('');
+  const kan = ndRx().kanSattaOrsak;
+  return har + fr.filter(x => x.okand).map(x => `<div class="frb warn">${I('fel')}<span><b>Varför slutade ${esc(x.p.namn)} ${frKort(x.p.slut)}?</b> Har hen sagts upp på grund av arbetsbrist efter mer än tolv månader har hen företrädesrätt till ${frKort(x.till)}.${kan ? '' : ' Säljchef, VD eller administratör fyller i orsaken.'}
+    ${kan ? `<span class="chips rxorsak">${NDRXORSAK.map(([v, l]) => `<button type="button" class="chip" data-rxslut="${x.p.id}|${v}">${l}</button>`).join('')}</span>` : ''}</span></div>`).join('');
 }
-// Intervjuerna: vad som skickats till kandidaten står i kön, inte i klockan.
+// Intervjuerna: påminnelsernas läge (skickad, schemalagd, gick inte ut) står på bokningen.
 const _ndRxIntervjuer = rxIntervjuer;
 rxIntervjuer = function(c){
   if (!ndRx()) return _ndRxIntervjuer(c);
   if (!c.bok.length) return '';
-  const lage = (b, k) => { const s = (b.sms || {})[k]; return s === 'skickad' ? 'skickat' : s === 'vantar' ? 'väntar på utskick' : s === 'avbruten' ? 'skickas inte' : s === 'fel' ? 'gick inte att skicka' : 'inte planerat'; };
+  const lage = (b, k) => { const s = (b.sms || {})[k]; return s === 'skickad' ? 'skickad' : s === 'schemalagd' ? 'schemalagd' : s === 'vantar' ? 'schemaläggs senare' : s === 'avbruten' ? 'skickas inte' : s === 'fel' ? 'gick inte ut' : 'inte planerad'; };
   return `<section class="rxsek"><h3>Intervjuer ${note(442)}</h3><ul class="rxbok">${c.bok.map((b, i) => { const pass = rxBokPassad(b);
-    const sms = b.typ === 'tel' || b.st !== 'bokad' || pass ? '' : `SMS dagen före: ${lage(b, 'sms24')} · 2 h före: ${lage(b, 'sms2')}`;
+    const sms = b.typ === 'tel' || b.st !== 'bokad' || pass ? '' : `Påminnelse dagen före: ${lage(b, 'sms24')} · 2 h före: ${lage(b, 'sms2')}`;
     return `<li class="${b.st}"><span class="rxbd"><b class="num">${+b.d.slice(8)}</b><small>${FRMK[+b.d.slice(5, 7)]}</small></span><div><b>${RXBOKNAMN[b.typ]} kl. ${b.s}</b><small>${esc(b.plats)}${b.med.length > 1 ? ' · ' + esc(aeOch(b.med.map(rxFor))) : ''}</small>${sms ? `<small>${sms}</small>` : ''}</div>
       ${b.st === 'uteblev' ? rxPill('Kom inte', 'fara') : b.st === 'klar' || (pass && c.score.some(s => s.steg === rxBokSteg(b.typ))) ? rxPill('Klar', 'ok') : !pass ? `<button class="tlink" data-rxavboka="${c.id}|${i}">Avboka</button>` : rxPill('Väntar på scorecard', 'warn')}</li>`; }).join('')}</ul></section>`;
 };
-// Bokningslänken står på kandidaten tills hen bokat (det finns ingen sida att boka på än).
-const _ndRxNastaRuta = rxNastaRuta;
-rxNastaRuta = function(c){
-  const h = _ndRxNastaRuta(c);
-  if (!ndRx() || !c.lank) return h;
-  return h.replace('</div><div class="aek">', `<small>Bokningslänken skapades ${rxNar(c.lank.d)}. Sidan där kandidaten väljer tid finns inte än.</small></div><div class="aek">`);
-};
-
 /* ---------- Säljarens vy: tipsa om en säljare ---------- */
 const _ndRxTipsVy = rxTipsVy;
 rxTipsVy = function(){
   if (!ndRx()) return _ndRxTipsVy();
   const d = ndRx(), F = S.rxTipsF, f = F.fel || {}, mina = d.minaTips;
   const status = k => k.steg === 'new' ? ['Mottaget', 'Rekryteringen hör av sig inom två arbetsdagar.', ''] : k.steg === 'hired' ? ['Anställd', 'Tack för tipset.', 'ok'] : k.steg === 'rejected' ? ['Avslutat', 'Processen är avslutad.', 'neutral'] : ['Pågår', 'Rekryteringen har pratat med hen.', 'info'];
-  const st = d.tipsStat, tj = (d.tj || [])[0], lank = tj ? `clicknet.se/jobb/${tj.slug}?tips=${aeFor(ND.jag.namn).toLowerCase()}` : null;
+  const st = d.tipsStat;
   return `<header class="top"><div class="hello"><h1>Tipsa om en säljare</h1><p>${note(456)}Känner du någon som skulle passa? ${st && st.totalt ? `${st.totalt} ${st.totalt === 1 ? 'ansökan har' : 'ansökningar har'} kommit som tips${st.anst ? `, och ${st.anst === 1 ? 'en' : st.anst} av dem ${st.anst === 1 ? 'är anställd' : 'är anställda'}` : ''}.` : 'Tips är det bästa sättet att hitta nya kollegor.'}</p></div></header>
     <div class="tgrid aegrid"><div class="col"><section class="card rxform" aria-label="Tipsa">
       <label class="rxlab" for="rxTn">Namn</label><input id="rxTn" class="uin" data-rxtf="namn" value="${esc(F.namn)}" placeholder="Förnamn Efternamn" aria-invalid="${!!f.namn}">${f.namn ? `<p class="aefel" role="alert">${f.namn}</p>` : ''}
@@ -28724,10 +28751,7 @@ rxTipsVy = function(){
       <label class="rxlab" for="rxTv">Varför skulle hen passa?</label><textarea id="rxTv" class="uin" rows="3" data-rxtf="varfor" aria-invalid="${!!f.varfor}">${esc(F.varfor)}</textarea>${f.varfor ? `<p class="aefel" role="alert">${f.varfor}</p>` : '<p class="aehint">Ett par meningar räcker. Inget personnummer.</p>'}
       <label class="rxck rxckm ${f.vet ? 'err' : ''}"><input type="checkbox" data-rxtfvet ${F.vet ? 'checked' : ''}>Hen vet att jag tipsar och att Clicknet hör av sig</label>${f.vet ? `<p class="aefel" role="alert">${f.vet}</p>` : ''}
       <div class="aek"><button class="btn btn-p" data-rxtipsok>Skicka tipset</button></div></section></div>
-    <div class="col"><section class="card" aria-label="Din länk"><div class="chead"><h2>Din länk</h2><span class="end">${note(467)}</span></div>
-      <p class="aehint rxtop">Skicka den till någon som skulle passa. Den som söker via länken hamnar som ditt tips.</p>
-      ${lank ? `<div class="rxlankr"><code>${esc(lank)}</code><button class="btn btn-s btn-sm" data-rxtipslank>Kopiera</button></div><p class="aehint">Ansökningssidan finns inte än, så länken leder ingenstans ännu.</p>` : '<p class="aehint">Ingen tjänst är öppen i Nav än, så det finns ingen länk att dela.</p>'}</section>
-    <section class="card" aria-label="Dina tips"><div class="chead"><h2>Dina tips</h2><span class="meta num">${mina.length}</span></div>
+    <div class="col"><section class="card" aria-label="Dina tips"><div class="chead"><h2>Dina tips</h2><span class="meta num">${mina.length}</span></div>
       ${mina.length ? `<ul class="rxrader">${mina.map(k => { const [s, t, ton] = status(k); return `<li class="rxrad"><div class="rxrk">${avatar(k.namn, 28)}<span><b>${esc(k.namn)}</b><small>${esc(t)}</small></span></div>${rxPill(s, ton)}</li>`; }).join('')}</ul>` : rxTom('Inga tips än', 'Det du tipsar om syns här, med hur det går.')}
       <p class="aehint">Du ser bara om processen pågår eller är avslutad. Bedömningarna stannar hos rekryteringen.</p></section></div></div>`;
 };
@@ -28737,9 +28761,25 @@ renderRxView = function(){
   if (!ndRx() || !ndKopplad('rekrytering')) return _ndRxVy();
   rxSt();
   if (!ndRxFar()) return rxTipsVy();
-  if (S.role === 'chef') return _ndRxVy();
-  const r = S.role; S.role = 'chef'; try { return _ndRxVy(); } finally { S.role = r; }
+  return ndRxSom(() => _ndRxVy());
 };
+// Målet: sätts i kortet Rekryteringen (beställaren 2026-10-18), en gång till ett datum eller varje månad eller kvartal.
+function ndRxMalKnapp(){ return S.rxMalF ? '' : `<button class="tlink" data-rxmalny>${ndRx().mal ? 'Ändra målet' : 'Sätt ett mål'}</button>`; }
+function ndRxMalForm(){
+  const F = S.rxMalF, m = ndRx().mal;
+  if (!F) return m && m.period !== 'engang' ? `<p class="aehint">${m.antal} anställda ${m.period === 'manad' ? 'varje månad' : 'varje kvartal'}. Räknas om ${aeDagDatum(frPlus(m.senast, 1))}.</p>` : '';
+  return `<div class="rxform rxmalf" aria-label="Målet">
+    <div class="segs rxseg" role="radiogroup" aria-label="Hur länge">${[['engang', 'Till ett datum'], ['manad', 'Varje månad'], ['kvartal', 'Varje kvartal']].map(([v, l]) => `<button type="button" role="radio" aria-checked="${F.period === v}" data-rxmalp="${v}">${l}</button>`).join('')}</div>
+    <div class="rxfr"><label>Antal anställda<input class="uin" type="number" min="1" max="200" data-rxmalf="antal" value="${esc(String(F.antal))}"></label>${F.period === 'engang' ? `<label>Senast<input class="uin" type="date" min="${rxT()}" data-rxmalf="senast" value="${esc(F.senast)}"></label>` : ''}</div>
+    <label class="rxlab">Namn, valfritt<input class="uin" data-rxmalf="namn" value="${esc(F.namn)}" placeholder="${F.period === 'engang' ? 'Rekryteringen' : F.period === 'manad' ? 'Månadens namn står efter' : 'Kvartalet står efter'}"></label>
+    ${F.fel ? `<p class="aefel" role="alert">${esc(F.fel)}</p>` : ''}
+    <div class="aek"><button class="btn btn-p btn-sm" data-rxmalok>Spara målet</button>${m ? '<button class="tlink" data-rxmalbort>Ta bort målet</button>' : ''}<button class="tlink" data-rxmalx>Avbryt</button></div></div>`;
+}
+// Det som skickas: säger om mejlen går ut härifrån.
+function ndRxUtskickRad(){
+  const u = ndRx().utskick;
+  return u === 'pa' ? '' : `<p class="aehint">${u === 'forhandsvisning' ? 'Förhandsvisningen mejlar inte kandidater. Det gör bara Nav i produktionen.' : 'Mejlen till kandidater är inte konfigurerade, så ingenting går ut.'}</p>`;
+}
 
 /* ---------- Klockan och startsidan ---------- */
 // Lägena (svarslöftet, scorecarden, erbjudandet, meriterna) räknas fram som i utkastet, ovanpå navets notiser.
@@ -28791,6 +28831,9 @@ const ndRxSlotX = t => t ? {datum:t.d, tid:t.s} : null;
 const _ndRxClick = rxClick;
 rxClick = function(t, e){
   if (!ndRx() || S.view !== 'rekrytering') return _ndRxClick(t, e);
+  return ndRxSom(() => ndRxKlick(t, e));
+};
+function ndRxKlick(t, e){
   const d = t.dataset; rxSt();
   const F = S.rxForm, c = F && F.id && rxK(F.id);
   // Utkastets kontroller först, sedan rutten.
@@ -28803,11 +28846,28 @@ rxClick = function(t, e){
     if (akt === 'pamin'){ ndRxPost('pamin', {id, texter:{pamin:`Hej ${rxFor(x.namn)}! En påminnelse om erbjudandet från Clicknet: svara gärna senast ${aeDagDatum(x.erb ? x.erb.senast : rxT())}. /${rxFor(aeMig())}`}}, {ladda:false}); return true; }
     if (akt === 'uteblev'){ ndRxPost('uteblev', {id}); return true; }
     if (akt === 'pool'){ ndRxPost('pool-fraga', {id, texter:{pool:ndRxText('pool', x)}}); return true; }
+    if (akt === 'poolja'){ ndRxPost('pool-in', {id}, {efter:{open:id}}); return true; }
+    if (akt === 'poolnej'){ ndRxPost('pool-nej', {id}, {efter:{open:id}}); return true; }
     return _ndRxClick(t, e); }
+  // Målet
+  if (d.rxmalny !== undefined){ const m = ndRx().mal; S.rxMalF = {period:m ? m.period : 'engang', antal:m ? m.antal : '', senast:m && m.period === 'engang' ? m.senast : '', namn:m ? m.egetNamn : '', fel:''}; rxRita(); return true; }
+  if (d.rxmalp){ S.rxMalF.period = d.rxmalp; S.rxMalF.fel = ''; rxRita(); return true; }
+  if (d.rxmalx !== undefined){ S.rxMalF = null; rxRita(); return true; }
+  if (d.rxmalbort !== undefined){ ndRxPost('mal', {bort:true}); return true; }
+  if (d.rxmalok !== undefined){
+    const F = S.rxMalF, antal = +F.antal;
+    if (!(Number.isInteger(antal) && antal >= 1 && antal <= 200)){ F.fel = 'Antal ska vara mellan 1 och 200.'; rxRita(); return true; }
+    if (F.period === 'engang' && (!F.senast || F.senast < rxT())){ F.fel = 'Välj ett slutdatum från i dag och framåt.'; rxRita(); return true; }
+    ndRxPost('mal', {period:F.period, antal, senast:F.senast, namn:F.namn.trim()}); return true;
+  }
+  // Företrädesrätten: varför anställningen tog slut
+  if (d.rxslut){ const [person, orsak] = d.rxslut.split('|'); ndRxPost('slutorsak', {person, orsak}, {efter:{flik:'tjanster'}}); return true; }
   if (d.rxnyok !== undefined){
     const N = S.rxNy, fel = {}, namn = N.namn.trim().replace(/\s+/g, ' '), ep = N.epost.trim().toLowerCase();
     if (namn.split(' ').length < 2) fel.namn = 'Skriv för- och efternamn.';
-    if (!aeEpostOk(ep)) fel.epost = 'Skriv en e-postadress, till exempel namn@exempel.se.';
+    // E-posten är valfri när det finns ett nummer (beställaren 2026-10-18).
+    if (ep && !aeEpostOk(ep)) fel.epost = 'Skriv en e-postadress, till exempel namn@exempel.se.';
+    else if (!ep && N.tel.replace(/\D/g, '').length < 8) fel.epost = 'Skriv en e-postadress eller ett telefonnummer.';
     if (!N.kalla) fel.kalla = 'Välj varifrån ansökan kom.';
     if (rxPnr(N.not)) fel.not = 'Det ser ut som ett personnummer. Navet sparar inga, så ta bort det.';
     N.fel = fel; if (Object.keys(fel).length){ rxRita(); document.querySelector('.rxnyf [aria-invalid="true"], .rxnyf .err .chip')?.focus(); return true; }
@@ -28816,18 +28876,11 @@ rxClick = function(t, e){
       .then(s => { if (s.id && d.rxnyok !== 'igen'){ try { sessionStorage.setItem('nd-rx', JSON.stringify({flik:S.rxFlik, open:s.id})); } catch(_){} } });
     return true;
   }
-  if (d.rxbulk === 'lank'){
-    const l = [...S.rxVal].map(rxK).filter(x => x && ['new', 'screening'].includes(x.steg) && !rxKommande(x));
-    if (!l.length){ toast('Bokningslänken gäller kandidater på Ny och Screening utan bokad tid.'); return true; }
-    (async () => { let n = 0; for (const x of l){ const s = await ndRxPost('lank', {id:x.id, btyp:'int1', med:[], texter:{lank:ndRxText('lank', x)}}, {ladda:false, tyst:true}); if (s.fel){ toast(s.fel); return; } n++; }
-      toast(`Bokningslänken är skapad för ${n} ${n === 1 ? 'kandidat' : 'kandidater'} och väntar på utskick.`); S.rxVal.clear(); try { sessionStorage.setItem('nd-rx', JSON.stringify({flik:S.rxFlik})); } catch(_){} setTimeout(() => location.reload(), 900); })();
-    return true;
-  }
   if (d.rxbulkok !== undefined){
     const l = [...S.rxVal].map(rxK).filter(x => x && rxOppen(x)), skal = S.rxForm.skal;
     (async () => { let n = 0; for (const x of l){ const mall = ['new', 'screening'].includes(x.steg) ? 'avslag1' : 'avslag2';
         const s = await ndRxPost('avslag', {id:x.id, skal, mejl:true, mall, texter:{[mall]:ndRxText(mall, x)}}, {ladda:false, tyst:true}); if (s.fel){ toast(s.fel); return; } n++; }
-      toast(`${n} avslag är sparade, vart och ett med sitt eget mejl i kön.`); S.rxVal.clear(); S.rxForm = null; try { sessionStorage.setItem('nd-rx', JSON.stringify({flik:S.rxFlik})); } catch(_){} setTimeout(() => location.reload(), 900); })();
+      toast(`${n} avslag är sparade.${rxMallT('avslag1').text && rxMallT('avslag2').text ? ' Var och en får avslagsmejlet med sitt eget namn, om hen har en e-postadress.' : ' Avslagsmallen har ingen text än, så inga mejl gick ut.'}`); S.rxVal.clear(); S.rxForm = null; try { sessionStorage.setItem('nd-rx', JSON.stringify({flik:S.rxFlik})); } catch(_){} setTimeout(() => location.reload(), 900); })();
     return true;
   }
   if (d.rxsvarade){ const x = rxK(d.rxsvarade);
@@ -28848,10 +28901,6 @@ rxClick = function(t, e){
   }
   if (d.rxbokok !== undefined){
     const med = F.med.map(ndRxNamnTillId).filter(Boolean);
-    if (F.satt === 'lank'){
-      if (!S.rx.tider.some(x => !x.kand && rxSlotOk(x) && !rxUpptagen(x, F.med).length)){ F.fel = 'Det finns inga tider där alla som ska vara med är lediga. Lägg till tider, eller ändra vem som är med.'; rxRita(); return true; }
-      ndRxPost('lank', {id:c.id, btyp:F.btyp, med, texter:{lank:ndRxText('lank', c)}}, {efter:{open:c.id}}); return true;
-    }
     const slot = S.rx.tider.find(x => x.id === F.slot && !x.kand);
     if (!slot){ F.fel = 'Välj en tid.'; rxRita(); return true; }
     if (rxUpptagen(slot, F.med).length){ F.fel = 'Någon som ska vara med är upptagen då. Välj en annan tid.'; rxRita(); return true; }
@@ -28903,8 +28952,6 @@ rxClick = function(t, e){
   if (d.rxforl){ const [id, k] = d.rxforl.split('|'), tj = rxTjObj(id), v = tj.kanaler[k]; ndRxPost('annons', {tj:id, kanal:k, till:frPlus(v && v > rxT() ? v : rxT(), 30)}, {efter:{flik:'tjanster'}}); return true; }
   if (d.rxpubl){ const [id, k] = d.rxpubl.split('|'); ndRxPost('annons', {tj:id, kanal:k, till:ndRxPlusDag(30)}, {efter:{flik:'tjanster'}}); return true; }
   if (d.rxstangAnn){ ndRxPost('annons', {tj:d.rxstangAnn, kanal:'stang'}, {efter:{flik:'tjanster'}}); return true; }
-  if (d.rxsida){ ndRxPost('annons', {tj:d.rxsida, kanal:'sida', pa:true}, {efter:{flik:'tjanster'}}); return true; }
-  if (d.rxlank){ const tj = rxTjObj(d.rxlank); kopiera('clicknet.se/jobb/' + (tj.slug || ''), 'Länken är kopierad. Ansökningssidan finns inte än, så den leder ingenstans ännu.'); return true; }
   if (d.rxtjnok !== undefined){
     const N = S.rxTjNy, titel = N.titel.trim(), antal = +N.antal;
     if (!titel){ N.fel = 'Skriv en titel, till exempel Säljare, Halmstad.'; render(); return true; }
@@ -28915,7 +28962,6 @@ rxClick = function(t, e){
   if (d.rxmallaterst){ ndRxPost('mall', {slug:d.rxmallaterst, aterstall:true}, {efter:{flik:'tjanster'}}); return true; }
   if (d.rxgall !== undefined){ ndRxPost('gallring', {manader:+d.rxgall}, {efter:{flik:'tjanster'}}); return true; }
   if (d.rxtipsbe !== undefined){ ndRxPost('be-om-tips', {}, {efter:{flik:S.rxFlik}}); return true; }
-  if (d.rxtipslank !== undefined){ const tj = (ndRx().tj || [])[0]; if (!tj){ toast('Ingen tjänst är öppen i Nav än.'); return true; } kopiera(`clicknet.se/jobb/${tj.slug}?tips=${aeFor(ND.jag.namn).toLowerCase()}`, 'Din länk är kopierad. Ansökningssidan finns inte än, så den leder ingenstans ännu.'); return true; }
   if (d.rxtipsok !== undefined){
     const F2 = S.rxTipsF, f = {}, namn = F2.namn.trim().replace(/\s+/g, ' '), kontakt = F2.kontakt.trim();
     if (namn.split(' ').length < 2) f.namn = 'Skriv för- och efternamn.';
@@ -28924,18 +28970,18 @@ rxClick = function(t, e){
     else if (rxPnr(F2.varfor)) f.varfor = 'Det ser ut som ett personnummer. Navet sparar inga, så ta bort det.';
     if (!F2.vet) f.vet = 'Fråga hen först. Ingen ska bli uppringd utan att veta varför.';
     F2.fel = f; if (Object.keys(f).length){ render(); document.querySelector('.rxform [aria-invalid="true"], .rxform .err input')?.focus(); return true; }
-    ndRxPost('tips', {namn, kontakt, varfor:F2.varfor.trim(), vet:true}).then(s => { if (s.fel && /e-postadress/.test(s.fel)){ F2.fel = {kontakt:s.fel}; render(); } });
+    ndRxPost('tips', {namn, kontakt, varfor:F2.varfor.trim(), vet:true}).then(s => { if (s.fel && /telefonnummer|e-postadress/.test(s.fel)){ F2.fel = {kontakt:s.fel}; render(); } });
     return true;
   }
   return _ndRxClick(t, e);
-};
+}
 // Tavlan: ett kort som dras till screening flyttas i navet, och manuset öppnas efteråt.
 const _ndRxDrop = rxDrop;
 rxDrop = function(id, till){
   if (!ndRx()) return _ndRxDrop(id, till);
   const c = rxK(id); if (!c || c.steg === till) return;
   if (till === 'screening' && rxNasta(c.steg).includes('screening')){ ndRxPost('steg', {id, till}, {efter:{open:id, form:'screen'}}); return; }
-  return _ndRxDrop(id, till);
+  return ndRxSom(() => _ndRxDrop(id, till));
 };
 // Tackade ja: Lägg upp anställd hör till Anställda. Är den inte kopplad öppnas repots anställningsflöde.
 function ndRxJa(c){
@@ -28960,6 +29006,7 @@ document.addEventListener('input', e => {
   if (!ndRx() || S.view !== 'rekrytering' || !e.target.dataset) return;
   const d = e.target.dataset;
   if (d.rxmalltext !== undefined){ const slug = d.rxmalltext, v = e.target.value; clearTimeout(ndRxMallTimer); ndRxMallTimer = setTimeout(() => ndRxPost('mall', {slug, text:v}, {ladda:false, tyst:true}).then(s => { if (s.laslage || s.fel) toast(s.fel); }), 1200); }
+  if (d.rxmalf !== undefined && S.rxMalF){ S.rxMalF[d.rxmalf] = e.target.value; return; }
   if (d.rxjobbet !== undefined){ const v = e.target.value; clearTimeout(ndRxJobbTimer); ndRxJobbTimer = setTimeout(() => ndRxPost('jobbet', {text:v}, {ladda:false, tyst:true}).then(s => { if (s.laslage || s.fel) toast(s.fel); }), 1200); }
 });
 

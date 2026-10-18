@@ -50,9 +50,10 @@ behörigheter som här: du ser bara det du får se.
   som leder ett team bedömer rollspelen, ser vem som har kurser kvar och lägger
   frågor i teamets repetition.
 - **Rekrytering**, för den som rekryterar: Att göra med svarslöftet,
-  tavlan med kandidaterna, intervjutiderna, tjänsterna och mallarna, och
-  siffrorna per källa. Övriga ser Tipsa om en säljare och hur det gått för
-  deras tips. Mejl och SMS till kandidaterna skickas inte från Nav 2.0 än.
+  tavlan med kandidaterna, intervjutiderna, tjänsterna, mallarna och målet
+  (en gång eller varje månad eller kvartal), och siffrorna per källa.
+  Kandidaterna får mejl, med en kalenderfil när intervjun är bokad. Övriga ser
+  Tipsa om en säljare, med telefon eller mejl, och hur det gått för deras tips.
 - **Order** och kundkortet. Varje order har nu ett nummer (#12), och
   provisionen är navets: fryst på en godkänd order, och det godkännandet
   skulle ge på en som väntar. I kortet spelar du inspelningen direkt, skriver

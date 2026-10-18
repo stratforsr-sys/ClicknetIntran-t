@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { randomBytes } from "node:crypto";
 import { fullName, getCurrentUser } from "@/lib/auth";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { svensktDatum } from "@/lib/klocka";
@@ -12,6 +11,7 @@ import { ROLES, type Role } from "@/lib/roles";
 import { signeraLank } from "@/lib/lagring-server";
 import { skapaMote, stallIn } from "@/app/(app)/kalender/moten/actions";
 import { farRekrytera } from "@/lib/nav2/rekrytering";
+import { avbrytKandidatmejl, skickaKandidatmejl, svIso, type Utskicksutfall } from "@/lib/nav2/rekrytering-utskick";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
 
 export const dynamic = "force-dynamic";
@@ -29,14 +29,15 @@ export const dynamic = "force-dynamic";
  * Intervjuerna blir möten i kalendern med repots `skapaMote`, och en avbokning
  * ställer in mötet med `stallIn`.
  *
- * DET NYA (0110): tjänster, tider, bokningar, bokningslänken, anteckningar,
- * scorecardens kriterier och screeningens svar, erbjudandet, talangpoolens
- * fråga, begäran om meriter, mallarnas texter, Så är jobbet, gallringsfristen
- * och tipsen från laget.
+ * DET NYA (0110): tjänster, tider, bokningar, anteckningar, scorecardens
+ * kriterier och screeningens svar, erbjudandet, talangpoolens fråga och svar,
+ * begäran om meriter, mallarnas texter, Så är jobbet, gallringsfristen, målet,
+ * anställningens slutorsak och tipsen från laget.
  *
- * KANDIDATEN FÅR INGENTING HÄRIFRÅN. Det som ska till kandidaten läggs i
- * `candidate_message` som `vantar`, och ingenting tömmer den tabellen. Svaren
- * säger det.
+ * MEJLEN TILL KANDIDATEN går genom Resend (`rekrytering-utskick.ts`): raden
+ * skrivs, sedan skickas eller schemaläggs den, och svaret säger hur det gick.
+ * En mall utan text ger inget mejl. Beställaren 2026-10-18: inga SMS, ingen
+ * bokningslänk och ingen publik ansökningssida.
  * ===========================================================================
  *
  * LÄSLÄGE: står `SKRIVLAGE.rekrytering` på false svarar rutten 423 innan något
@@ -51,11 +52,16 @@ const BOKNAMN: Record<string, string> = { tel: "Telefonscreening", int1: "Interv
 const BOKSTEG: Record<string, Steg> = { tel: "screening", int1: "interview_1", int2: "interview_2" };
 const KALLOR = ["ansokningssida", "platsbanken", "linkedin", "tips", "spontan", "annat"];
 const SKAL = ["Passade inte kraven", "Vi gick vidare med en annan kandidat", "Tackade nej", "Kom inte till intervjun", "Annat"];
-const MALLAR = ["bekr", "lank", "bokad", "sms24", "sms2", "avslag1", "avslag2", "erbj", "pool"];
+const MALLAR = ["bekr", "bokad", "sms24", "sms2", "avslag1", "avslag2", "erbj", "pool"];
+const MALLNAMN: Record<string, string> = {
+  bekr: "Tack för din ansökan", bokad: "Intervjun är bokad", sms24: "Påminnelse dagen före", sms2: "Påminnelse samma dag",
+  avslag1: "Avslag efter ansökan eller screening", avslag2: "Avslag efter intervju", erbj: "Erbjudande", pool: "Får vi höra av oss igen?",
+};
+const ORSAKER = ["arbetsbrist", "egen", "provanstallning", "visstid", "avsked", "annat"];
+const PERIODER = ["engang", "manad", "kvartal"];
 const REK: Record<string, string> = { ja: "yes", tveksam: "maybe", nej: "no" };
 const KRIT = ["driv", "lyssna", "nej", "rost", "palitlig"];
 const SCREEN = ["varfor", "ringt", "heltid", "start", "lon"];
-const UTSKICK = "Navet skickar inte till kandidater än, så det ligger och väntar.";
 
 type Svar = { ok?: string; fel?: string; [k: string]: unknown };
 const svar = (data: Svar, status = 200) => NextResponse.json(data, { status, headers: { "Cache-Control": "private, no-store, max-age=0" } });
@@ -63,14 +69,9 @@ const str = (v: unknown, max = 2000) => (typeof v === "string" ? v.trim().slice(
 const tmin = (s: string) => +s.slice(0, 2) * 60 + +s.slice(3, 5);
 const hm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 const epostOk = (s: string) => /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(s);
+const telOk = (s: string) => s.replace(/\D/g, "").length >= 8;
 const fornamn = (n: string) => n.split(" ")[0] || n;
 const plusDagar = (d: string, n: number) => new Date(Date.parse(d + "T12:00:00Z") + n * 864e5).toISOString().slice(0, 10);
-/** En svensk väggklocka som ISO, för `send_after` (sommartid och vintertid). */
-function svIso(d: string, min: number): string {
-  const gissning = new Date(`${d}T${hm(min)}:00Z`);
-  const off = new Date(gissning.toLocaleString("en-US", { timeZone: "Europe/Stockholm" })).getTime() - new Date(gissning.toLocaleString("en-US", { timeZone: "UTC" })).getTime();
-  return new Date(gissning.getTime() - off).toISOString();
-}
 /** Databasens nej i klartext. Triggern och K27 säger exakt vad som var fel. */
 function dbFel(e: { message?: string } | null, annars: string): string {
   const m = e?.message ?? "";
@@ -105,7 +106,7 @@ export async function POST(request: Request) {
   const kandidaten = async () => {
     if (!id) return null;
     const { data } = await (await supabaseServer()).from("candidate").select("*").eq("id", id).maybeSingle();
-    return data as null | { id: string; first_name: string; last_name: string; email: string; phone: string | null; stage: Steg; role_title: string; position_id: string | null; no_show_count: number; source_slug: string; talent_pool: boolean };
+    return data as null | { id: string; first_name: string; last_name: string; email: string | null; phone: string | null; stage: Steg; role_title: string; position_id: string | null; no_show_count: number; source_slug: string; talent_pool: boolean; closed_at: string | null };
   };
 
   // CV:t visas alltid: det är en läsning. Att det lästes loggas bara när vyn får spara.
@@ -124,14 +125,32 @@ export async function POST(request: Request) {
   if (!SKRIVLAGE.rekrytering) return svar({ fel: LASLAGE_TEXT, laslage: true }, 423);
 
   const namnPa = (k: { first_name: string; last_name: string }) => `${k.first_name} ${k.last_name}`.trim();
-  const klart = (ok: string, extra: Record<string, unknown> = {}) => {
+  // Mejlen till kandidaten: raderna skrivs under handlingen och skickas i klart().
+  const ko: number[] = [];
+  const tomma: string[] = [];
+  const meddela = async (cid: string, template: string, body: string, opt: { booking?: string; efter?: string; ics?: boolean } = {}) => {
+    if (!body.trim()) {
+      if (MALLNAMN[template]) tomma.push(MALLNAMN[template]);
+      return;
+    }
+    const { data } = await db.from("candidate_message").insert({ candidate_id: cid, template, channel: opt.ics ? "mejl_ics" : "mejl", body: body.slice(0, 4000), booking_id: opt.booking ?? null, send_after: opt.efter ?? new Date().toISOString(), created_by: mig }).select("id").single();
+    if (data) ko.push(data.id as number);
+  };
+  const utskicksText = (u: Utskicksutfall | null) => {
+    const delar: string[] = [];
+    if (u?.skickade) delar.push(u.skickade === 1 ? "Mejlet har gått ut." : `${u.skickade} mejl har gått ut.`);
+    if (u?.schemalagda) delar.push(u.schemalagda === 1 ? "Påminnelsen är schemalagd." : `${u.schemalagda} påminnelser är schemalagda.`);
+    if (u?.kvar) delar.push("Det som ligger mer än fyra veckor fram schemaläggs när det närmar sig.");
+    if (u?.fel.length) delar.push(`Mejlet gick inte ut: ${u.fel[0].replace(/\.$/, "")}.`);
+    if (tomma.length) delar.push(`${[...new Set(tomma)].map((t) => `"${t}"`).join(" och ")} har ingen text än, så det mejlet gick inte ut. Skriv texten under Tjänster.`);
+    return delar.join(" ");
+  };
+  const klart = async (ok: string, extra: Record<string, unknown> = {}) => {
     revalidatePath("/rekrytering");
     if (id) revalidatePath(`/rekrytering/${id}`);
-    return svar({ ok, ...extra });
-  };
-  const meddela = async (cid: string, template: string, channel: string, body: string, opt: { booking?: string; efter?: string } = {}) => {
-    if (!body.trim()) return;
-    await db.from("candidate_message").insert({ candidate_id: cid, template, channel, body: body.slice(0, 4000), booking_id: opt.booking ?? null, send_after: opt.efter ?? new Date().toISOString(), created_by: mig });
+    const u = ko.length ? await skickaKandidatmejl(ko.splice(0)) : null;
+    const utskick = utskicksText(u);
+    return svar({ ok: [ok, utskick].filter(Boolean).join(" "), utskick, ...extra });
   };
   const stegNotis = async (cid: string, k: { first_name: string; last_name: string; role_title: string }, fran: Steg, till: Steg, skal?: string | null) =>
     notifieraFlera(await rekryteringskretsen(), {
@@ -167,9 +186,8 @@ export async function POST(request: Request) {
     for (const x of (data ?? []) as { id: string; calendar_event_id: string | null }[]) {
       await db.from("candidate_booking").update({ status: "avbokad", cancelled_at: new Date().toISOString() }).eq("id", x.id);
       if (x.calendar_event_id) await stallIn(x.calendar_event_id);
-      await db.from("candidate_message").update({ status: "avbruten" }).eq("booking_id", x.id).eq("status", "vantar");
+      await avbrytKandidatmejl({ bokning: x.id });
     }
-    await db.from("candidate_booking_link").update({ cancelled_at: new Date().toISOString() }).eq("candidate_id", cid).is("used_at", null).is("cancelled_at", null);
     return (data ?? []).length;
   };
   const texter = (b.texter && typeof b.texter === "object" ? b.texter : {}) as Record<string, unknown>;
@@ -182,25 +200,27 @@ export async function POST(request: Request) {
         const namn = str(b.namn, 160).replace(/\s+/g, " ");
         const [fn, ...rest] = namn.split(" ");
         const epost = str(b.epost, 200).toLowerCase();
+        const tel = str(b.tel, 40);
         const kalla = str(b.kalla, 40);
         const notText = str(b.not);
         if (!fn || !rest.length) return svar({ fel: "Skriv för- och efternamn." }, 400);
-        if (!epostOk(epost)) return svar({ fel: "Skriv en e-postadress, till exempel namn@exempel.se." }, 400);
+        if (epost && !epostOk(epost)) return svar({ fel: "Skriv en e-postadress, till exempel namn@exempel.se." }, 400);
+        if (!epost && !telOk(tel)) return svar({ fel: "Skriv en e-postadress eller ett telefonnummer." }, 400);
         if (!KALLOR.includes(kalla)) return svar({ fel: "Välj varifrån ansökan kom." }, 400);
         if (PNR.test(notText)) return svar({ fel: "Det ser ut som ett personnummer. Navet sparar inga, så ta bort det." }, 400);
         const tj = UUID.test(String(b.tj ?? "")) ? String(b.tj) : null;
         const { data: pos } = tj ? await db.from("recruitment_position").select("id, title").eq("id", tj).maybeSingle() : { data: null };
         const { data: ny, error } = await db.from("candidate").insert({
-          first_name: fn, last_name: rest.join(" "), email: epost, phone: str(b.tel, 40) || null, source_slug: kalla,
+          first_name: fn, last_name: rest.join(" "), email: epost || null, phone: tel || null, source_slug: kalla,
           role_title: pos?.title ?? "Säljare", position_id: pos?.id ?? null, notes: notText || null, created_by: mig,
         }).select("id").single();
         if (error || !ny) return svar({ fel: dbFel(error, "Kandidaten kunde inte sparas. Försök igen.") }, 400);
-        await meddela(ny.id, "bekr", "mejl", text("bekr"));
+        if (epost) await meddela(ny.id, "bekr", text("bekr"));
         await notifieraFlera(await rekryteringskretsen(), {
           av: mig, kalla: "rekrytering-ny", typ: "rekrytering", rubrik: `Ny kandidat: ${namn}`, detalj: `${pos?.title ?? "Säljare"} · via ${kalla}`,
           href: `/rekrytering/${ny.id}`, objekt: { typ: "candidate", id: ny.id },
         });
-        return klart(`${namn} är upplagd. Tackmejlet väntar på utskick: ${UTSKICK}`, { id: ny.id });
+        return klart(`${namn} är upplagd.${epost ? "" : " Hen har ingen e-postadress, så inget tackmejl går ut."}`, { id: ny.id });
       }
 
       case "steg": {
@@ -273,7 +293,7 @@ export async function POST(request: Request) {
         await avbokaKommande(k.id);
         const mote = await skapaMote({
           rubrik: `${BOKNAMN[btyp]} · ${namnPa(k)}`, dag: slot.day, start: slot.start_min, minuter: slot.end_min - slot.start_min, deltagare: med, plats: slot.place,
-          agenda: btyp === "tel" ? "Fem frågor och Så är jobbet. Manuset finns i Rekrytering." : "Fem frågor, ett rollspel och Så är jobbet. Guiden finns i Rekrytering.",
+          agenda: btyp === "tel" ? "Screeningen och Så är jobbet. Manuset finns i Rekrytering." : "Intervjun och Så är jobbet. Guiden och scorecarden finns i Rekrytering.",
         });
         const { data: bok, error } = await db.from("candidate_booking").insert({
           candidate_id: k.id, slot_id: slot.id, kind: btyp, day: slot.day, start_min: slot.start_min, end_min: slot.end_min, place: slot.place,
@@ -283,28 +303,16 @@ export async function POST(request: Request) {
           if (mote.eventId) await stallIn(mote.eventId);
           return svar({ fel: dbFel(error, "Tiden kunde inte bokas.") === "Det finns redan." ? "Tiden hann bokas av någon annan. Välj en annan." : dbFel(error, "Tiden kunde inte bokas.") }, 409);
         }
-        await meddela(k.id, "bokad", "mejl_ics", text("bokad"), { booking: bok.id });
-        if (btyp !== "tel") {
-          await meddela(k.id, "sms24", "sms", text("sms24"), { booking: bok.id, efter: svIso(plusDagar(slot.day, -1), slot.start_min) });
-          await meddela(k.id, "sms2", "sms", text("sms2"), { booking: bok.id, efter: svIso(slot.day, Math.max(0, slot.start_min - 120)) });
+        if (k.email) {
+          await meddela(k.id, "bokad", text("bokad"), { booking: bok.id, ics: true });
+          if (btyp !== "tel") {
+            // Påminnelserna (utkastets SMS) går som mejl. En som redan passerat skickas inte.
+            const dagenFore = svIso(plusDagar(slot.day, -1), slot.start_min), tvaTimmar = svIso(slot.day, Math.max(0, slot.start_min - 120));
+            if (Date.parse(dagenFore) > Date.now()) await meddela(k.id, "sms24", text("sms24"), { booking: bok.id, efter: dagenFore });
+            if (Date.parse(tvaTimmar) > Date.now()) await meddela(k.id, "sms2", text("sms2"), { booking: bok.id, efter: tvaTimmar });
+          }
         }
-        return klart(`Bokat ${slot.day} kl. ${hm(slot.start_min)}, och mötet ligger i kalendern.${mote.fel ? ` Kalendermötet skapades inte: ${mote.fel}` : ""} Bekräftelsen och påminnelserna väntar på utskick: ${UTSKICK}`);
-      }
-
-      case "lank": {
-        const k = await kandidaten();
-        if (!k) return svar({ fel: "Kandidaten finns inte." }, 404);
-        const btyp = String(b.btyp ?? "");
-        if (!BOKNAMN[btyp]) return svar({ fel: "Välj vilken intervju." }, 400);
-        if (!["new", "screening", "interview_1", "interview_2"].includes(k.stage)) return svar({ fel: "Bokningslänken gäller kandidater som inte kommit till erbjudandet." }, 400);
-        const med = (Array.isArray(b.med) ? b.med : []).map(String).filter((x) => UUID.test(x) && x !== mig).slice(0, 10);
-        const f = await stegTill(k, BOKSTEG[btyp]);
-        if (f) return svar({ fel: f }, 400);
-        await avbokaKommande(k.id);
-        const { error } = await db.from("candidate_booking_link").insert({ candidate_id: k.id, kind: btyp, attendees: [mig, ...med], token: randomBytes(18).toString("base64url"), created_by: mig });
-        if (error) return svar({ fel: "Länken kunde inte skapas." }, 400);
-        await meddela(k.id, "lank", "mejl_sms", text("lank"));
-        return klart(`Bokningslänken är skapad. Den väntar på utskick, och sidan där ${fornamn(namnPa(k))} väljer tid finns inte än.`);
+        return klart(`Bokat ${slot.day} kl. ${hm(slot.start_min)}, och mötet ligger i kalendern.${mote.fel ? ` Kalendermötet skapades inte: ${mote.fel}` : ""}${k.email ? "" : ` ${fornamn(namnPa(k))} har ingen e-postadress, så ring och berätta tiden.`}`);
       }
 
       case "avboka": {
@@ -314,9 +322,11 @@ export async function POST(request: Request) {
         if (!bok || bok.status !== "bokad") return svar({ fel: "Bokningen finns inte längre." }, 404);
         await db.from("candidate_booking").update({ status: "avbokad", cancelled_at: new Date().toISOString() }).eq("id", bok.id);
         if (bok.calendar_event_id) await stallIn(bok.calendar_event_id);
-        await db.from("candidate_message").update({ status: "avbruten" }).eq("booking_id", bok.id).eq("status", "vantar");
-        const { data: k } = await db.from("candidate").select("first_name").eq("id", bok.candidate_id).maybeSingle();
-        await meddela(bok.candidate_id, "avbokad", "mejl", `Hej ${k?.first_name ?? ""}! ${BOKNAMN[bok.kind]} ${bok.day} kl. ${hm(bok.start_min)} är avbokad. Vi hör av oss om en ny tid.`);
+        await avbrytKandidatmejl({ bokning: bok.id });
+        // Bekräftelsen hade en kalenderfil. Avbokningen tar bort tiden ur kandidatens kalender.
+        const { data: k } = await db.from("candidate").select("first_name, email").eq("id", bok.candidate_id).maybeSingle();
+        const { data: gick } = await db.from("candidate_message").select("id").eq("booking_id", bok.id).eq("template", "bokad").eq("status", "skickad").limit(1);
+        if (k?.email && gick && gick.length) await meddela(bok.candidate_id, "avbokad", `Hej ${k.first_name}! ${BOKNAMN[bok.kind]} ${bok.day} kl. ${hm(bok.start_min)} är avbokad. Vi hör av oss om en ny tid.`, { booking: bok.id, ics: true });
         return klart(`${BOKNAMN[bok.kind]} är avbokad, mötet är inställt och tiden är ledig igen.`);
       }
 
@@ -333,12 +343,12 @@ export async function POST(request: Request) {
         if (f) return svar({ fel: f }, 400);
         if (notText) await db.from("candidate_note").insert({ candidate_id: k.id, kind: "not", body: notText, by_employee: mig });
         const mall = String(b.mall ?? "");
-        if (b.mejl === true && ["avslag1", "avslag2"].includes(mall)) await meddela(k.id, mall, "mejl", text(mall));
+        if (k.email && b.mejl === true && ["avslag1", "avslag2"].includes(mall)) await meddela(k.id, mall, text(mall));
         if (b.pool === true) {
-          await db.from("candidate").update({ pool_asked_at: new Date().toISOString() }).eq("id", k.id);
-          await meddela(k.id, "pool", "mejl", text("pool"));
+          await db.from("candidate").update({ pool_asked_at: new Date().toISOString(), pool_declined_at: null }).eq("id", k.id);
+          if (k.email) await meddela(k.id, "pool", text("pool"));
         }
-        return klart(`${fornamn(namnPa(k))} har fått avslag.${b.mejl === true || b.pool === true ? ` Mejlet väntar på utskick: ${UTSKICK}` : ""}`);
+        return klart(`${fornamn(namnPa(k))} har fått avslag.${!k.email && (b.mejl === true || b.pool === true) ? " Hen har ingen e-postadress, så inget mejl gick ut." : ""}`);
       }
 
       case "erbjudande": {
@@ -351,15 +361,16 @@ export async function POST(request: Request) {
         if (!["probation", "permanent"].includes(form)) return svar({ fel: "Välj anställningsform." }, 400);
         const f = await flytta(k, "offer", { offer_start: start, offer_reply_by: senast, offer_form: form, offer_sent_at: new Date().toISOString() });
         if (f) return svar({ fel: f }, 400);
-        await meddela(k.id, "erbj", "mejl", text("erbj"));
-        return klart(`Erbjudandet är sparat. ${fornamn(namnPa(k))} svarar senast ${senast}. Mejlet väntar på utskick: ${UTSKICK}`);
+        if (k.email) await meddela(k.id, "erbj", text("erbj"));
+        return klart(`Erbjudandet är sparat. ${fornamn(namnPa(k))} svarar senast ${senast}.${k.email ? "" : " Hen har ingen e-postadress, så berätta det i telefon."}`);
       }
 
       case "pamin": {
         const k = await kandidaten();
         if (!k || k.stage !== "offer") return svar({ fel: "Kandidaten har inget erbjudande." }, 400);
-        await meddela(k.id, "pamin", "sms", text("pamin"));
-        return klart(`Påminnelsen väntar på utskick: ${UTSKICK}`);
+        if (!k.email) return svar({ fel: `${fornamn(namnPa(k))} har ingen e-postadress. Ring i stället.` }, 400);
+        await meddela(k.id, "pamin", text("pamin"));
+        return klart("");
       }
 
       case "anstall": {
@@ -404,26 +415,38 @@ export async function POST(request: Request) {
         if (body && PNR.test(body)) return svar({ fel: "Det ser ut som ett personnummer. Navet sparar inga, så ta bort det." }, 400);
         const { error } = await db.from("candidate_note").insert({ candidate_id: k.id, kind: handling === "anteckning" ? "not" : handling === "ring" ? "ring" : "ej_svar", body, by_employee: mig });
         if (error) return svar({ fel: dbFel(error, "Det kunde inte sparas.") }, 400);
-        if (handling === "ej-svar") await meddela(k.id, "ringt", "sms", text("ringt"));
-        return klart(handling === "anteckning" ? "Anteckningen är sparad." : handling === "ring" ? "" : `Samtalet är sparat. SMS:et väntar på utskick: ${UTSKICK}`);
+        if (handling === "ej-svar" && k.email) await meddela(k.id, "ringt", text("ringt"));
+        return klart(handling === "anteckning" ? "Anteckningen är sparad." : handling === "ring" ? "" : `Samtalet är sparat.${k.email ? "" : " Hen har ingen e-postadress, så inget mejl gick ut."}`);
       }
 
       case "pool-fraga": {
         const k = await kandidaten();
         if (!k) return svar({ fel: "Kandidaten finns inte." }, 404);
-        await db.from("candidate").update({ pool_asked_at: new Date().toISOString() }).eq("id", k.id);
-        await meddela(k.id, "pool", "mejl", text("pool"));
-        return klart(`Frågan väntar på utskick: ${UTSKICK} Ansökan sparas i talangpoolen först när ${fornamn(namnPa(k))} svarat ja.`);
+        if (!k.email) return svar({ fel: `${fornamn(namnPa(k))} har ingen e-postadress. Fråga i telefon, och registrera svaret.` }, 400);
+        await db.from("candidate").update({ pool_asked_at: new Date().toISOString(), pool_declined_at: null }).eq("id", k.id);
+        await meddela(k.id, "pool", text("pool"));
+        return klart(`Ansökan sparas i talangpoolen först när ${fornamn(namnPa(k))} svarat ja, och svaret registrerar du här.`);
       }
       case "pool-in":
       case "pool-ut": {
         // Repots sattTalangpool: samtycket får sitt datum i samma skrivning som flaggan.
+        // Talangpoolen undantas från gallringen (0030). Den som går ur den efter ett avslut får fristen från i dag.
         const k = await kandidaten();
         if (!k) return svar({ fel: "Kandidaten finns inte." }, 404);
         const pa = handling === "pool-in";
-        const { error } = await db.from("candidate").update({ talent_pool: pa, talent_pool_consent: pa ? new Date().toISOString() : null }).eq("id", k.id);
+        const { data: pol } = await db.from("recruitment_policy").select("purge_after_days").eq("id", true).maybeSingle();
+        const frist = (pol?.purge_after_days as number | null | undefined) ?? null;
+        const purge = pa ? null : k.closed_at && frist ? new Date(Date.now() + frist * 864e5).toISOString() : null;
+        const { error } = await db.from("candidate").update({ talent_pool: pa, talent_pool_consent: pa ? new Date().toISOString() : null, pool_declined_at: null, ...(pa || k.closed_at ? { gdpr_purge_at: purge } : {}) }).eq("id", k.id);
         if (error) return svar({ fel: "Det kunde inte sparas." }, 400);
-        return klart(pa ? `${fornamn(namnPa(k))} är i talangpoolen, med samtycke från i dag.` : `${fornamn(namnPa(k))} är inte längre i talangpoolen.`);
+        return klart(pa ? `${fornamn(namnPa(k))} är i talangpoolen, med samtycke från i dag.` : `${fornamn(namnPa(k))} är inte längre i talangpoolen.${purge ? ` Uppgifterna raderas ${purge.slice(0, 10)}.` : ""}`);
+      }
+      case "pool-nej": {
+        const k = await kandidaten();
+        if (!k) return svar({ fel: "Kandidaten finns inte." }, 404);
+        const { error } = await db.from("candidate").update({ pool_declined_at: new Date().toISOString() }).eq("id", k.id);
+        if (error) return svar({ fel: "Det kunde inte sparas." }, 400);
+        return klart(`Registrerat: ${fornamn(namnPa(k))} vill inte vara i talangpoolen.`);
       }
 
       case "merit-ny": {
@@ -442,8 +465,8 @@ export async function POST(request: Request) {
         if (!oppen) return svar({ fel: "Det finns ingen obesvarad begäran." }, 404);
         const { error } = await db.from("candidate_merit_request").update({ answered_at: new Date().toISOString(), answer_text: t, answered_by: mig }).eq("id", oppen.id);
         if (error) return svar({ fel: dbFel(error, "Svaret kunde inte sparas.") }, 400);
-        await meddela(k.id, "merit", "mejl", t);
-        return klart(`Svaret är sparat och väntar på utskick: ${UTSKICK}`);
+        if (k.email) await meddela(k.id, "merit", t);
+        return klart(`Svaret är sparat.${k.email ? "" : " Hen har ingen e-postadress, så skicka svaret på annat sätt."}`);
       }
 
       // ---------------------------------------------------------------- Tider
@@ -477,12 +500,7 @@ export async function POST(request: Request) {
         if (!(Number.isInteger(antal) && antal >= 1 && antal <= 20)) return svar({ fel: "Antal ska vara mellan 1 och 20." }, 400);
         if (!DATUM.test(start) || start <= svensktDatum()) return svar({ fel: "Startdagen ska ligga framåt i tiden." }, 400);
         const kort = (titel.split(",")[1] || titel).trim().slice(0, 60);
-        const bas = kort.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 30) || "tjanst";
-        const { data: tagna } = await db.from("recruitment_position").select("slug").like("slug", `${bas}%`);
-        const har = new Set(((tagna ?? []) as { slug: string }[]).map((x) => x.slug));
-        let slug = bas.length >= 2 ? bas : `${bas}-1`;
-        for (let i = 2; har.has(slug); i++) slug = `${bas}-${i}`;
-        const { error } = await db.from("recruitment_position").insert({ slug, title: titel, short_title: kort, headcount: antal, start_date: start, created_by: mig });
+        const { error } = await db.from("recruitment_position").insert({ title: titel, short_title: kort, headcount: antal, start_date: start, created_by: mig });
         if (error) return svar({ fel: dbFel(error, "Tjänsten kunde inte sparas.") }, 400);
         return klart(`${titel} är öppen. Navet publicerar inga annonser, så anteckna var annonsen ligger när den är ute.`);
       }
@@ -490,8 +508,7 @@ export async function POST(request: Request) {
         const tj = String(b.tj ?? ""), kanal = String(b.kanal ?? "");
         if (!UUID.test(tj)) return svar({ fel: "Tjänsten finns inte." }, 404);
         const falt: Record<string, unknown> = {};
-        if (kanal === "stang") Object.assign(falt, { platsbanken_until: null, linkedin_until: null, page_open: false });
-        else if (kanal === "sida") falt.page_open = b.pa === true;
+        if (kanal === "stang") Object.assign(falt, { platsbanken_until: null, linkedin_until: null });
         else if (kanal === "platsbanken" || kanal === "linkedin") {
           const till = String(b.till ?? "");
           if (!DATUM.test(till) || till < svensktDatum()) return svar({ fel: "Välj ett datum framåt i tiden." }, 400);
@@ -499,7 +516,7 @@ export async function POST(request: Request) {
         } else return svar({ fel: "Okänd kanal." }, 400);
         const { error } = await db.from("recruitment_position").update(falt).eq("id", tj);
         if (error) return svar({ fel: "Det kunde inte sparas." }, 400);
-        return klart(kanal === "stang" ? "Annonserna är antecknade som stängda, och ansökningssidan är stängd. De som redan sökt finns kvar." : kanal === "sida" ? (b.pa === true ? "Ansökningssidan är antecknad som öppen." : "Ansökningssidan är stängd.") : `Antecknat: annonsen på ${kanal === "platsbanken" ? "Platsbanken" : "LinkedIn"} gäller till ${falt[`${kanal}_until`]}. Navet publicerar den inte självt.`);
+        return klart(kanal === "stang" ? "Annonserna är antecknade som stängda. De som redan sökt finns kvar." : `Antecknat: annonsen på ${kanal === "platsbanken" ? "Platsbanken" : "LinkedIn"} gäller till ${falt[`${kanal}_until`]}. Navet publicerar den inte självt.`);
       }
 
       // ---------------------------------------------------------------- Texter och val
@@ -508,7 +525,7 @@ export async function POST(request: Request) {
         if (!MALLAR.includes(slug)) return svar({ fel: "Mallen finns inte." }, 404);
         if (b.aterstall === true) {
           await db.from("recruitment_template").delete().eq("slug", slug);
-          return klart("Texten är återställd.");
+          return klart("Texten är borttagen. Mallen skickar inget förrän den har en text.");
         }
         const t = str(b.text, 4000);
         if (!t) return svar({ fel: "Mallen kan inte vara tom." }, 400);
@@ -528,6 +545,34 @@ export async function POST(request: Request) {
         if (error) return svar({ fel: "Beslutet kunde inte sparas." }, 400);
         return klart(dagar ? `Beslutat: ${m} månader efter avslutad rekrytering. Det gäller processer som avslutas från i dag, och talangpoolen undantas.` : "Gallringsfristen är borttagen. Ingenting raderas förrän en ny är beslutad.");
       }
+      case "mal": {
+        // Ett mål i taget (0110). Ett nytt stänger det gamla, så att historiken står kvar.
+        const nu = new Date().toISOString();
+        if (b.bort === true) {
+          await db.from("recruitment_goal").update({ closed_at: nu }).is("closed_at", null);
+          return klart("Målet är borttaget.");
+        }
+        const period = String(b.period ?? ""), antal = Number(b.antal), malNamn = str(b.namn, 80), senast = String(b.senast ?? "");
+        if (!PERIODER.includes(period)) return svar({ fel: "Välj om målet gäller till ett datum, varje månad eller varje kvartal." }, 400);
+        if (!(Number.isInteger(antal) && antal >= 1 && antal <= 200)) return svar({ fel: "Antal ska vara mellan 1 och 200." }, 400);
+        if (period === "engang" && (!DATUM.test(senast) || senast < svensktDatum())) return svar({ fel: "Välj ett slutdatum från i dag och framåt." }, 400);
+        await db.from("recruitment_goal").update({ closed_at: nu }).is("closed_at", null);
+        const { error } = await db.from("recruitment_goal").insert({ name: malNamn || null, headcount: antal, period, ends_on: period === "engang" ? senast : null, created_by: mig });
+        if (error) return svar({ fel: dbFel(error, "Målet kunde inte sparas.") }, 400);
+        return klart(period === "engang" ? `Målet är ${antal} anställda till ${senast}.` : `Målet är ${antal} anställda ${period === "manad" ? "varje månad" : "varje kvartal"}.`);
+      }
+      case "slutorsak": {
+        // LAS 25 §: varför anställningen tog slut. Personaluppgift, så bara säljchef, VD och admin.
+        if (!user.roles.some((r: string) => ["sales_manager", "ceo", "admin"].includes(r))) return svar({ fel: "Slutorsaken sätts av säljchef, VD eller administratör." }, 403);
+        const person = String(b.person ?? ""), orsak = String(b.orsak ?? "");
+        if (!UUID.test(person)) return svar({ fel: "Personen finns inte." }, 404);
+        if (!ORSAKER.includes(orsak)) return svar({ fel: "Välj varför anställningen tog slut." }, 400);
+        const { data: e } = await db.from("employee").select("id, status, end_date").eq("id", person).maybeSingle();
+        if (!e || e.status !== "offboarded") return svar({ fel: "Det gäller bara den som slutat." }, 400);
+        const { error } = await db.from("employee").update({ end_reason: orsak, end_reason_by: mig, end_reason_at: new Date().toISOString() }).eq("id", person);
+        if (error) return svar({ fel: "Det kunde inte sparas." }, 400);
+        return klart("Orsaken är sparad i Personal.");
+      }
       case "be-om-tips": {
         const { data: salj } = await db.from("employee_role").select("employee_id, employee:employee_id(status)").eq("role", "salesperson");
         const till = ((salj ?? []) as unknown as { employee_id: string; employee: { status: string } | null }[]).filter((x) => x.employee && x.employee.status !== "offboarded").map((x) => x.employee_id);
@@ -544,9 +589,10 @@ export async function POST(request: Request) {
         if (varfor.length < 10) return svar({ fel: "Skriv ett par meningar om varför." }, 400);
         if (PNR.test(varfor)) return svar({ fel: "Det ser ut som ett personnummer. Navet sparar inga, så ta bort det." }, 400);
         if (b.vet !== true) return svar({ fel: "Fråga hen först. Ingen ska bli uppringd utan att veta varför." }, 400);
-        const epost = epostOk(kontakt) ? kontakt.toLowerCase() : str(b.epost, 200).toLowerCase();
-        if (!epostOk(epost)) return svar({ fel: "Navet behöver en e-postadress till den du tipsar om. Skriv mejlet, och numret om du har det." }, 400);
-        const tel = epostOk(kontakt) ? str(b.tel, 40) || null : kontakt.replace(/\D/g, "").length >= 8 ? kontakt : null;
+        // Telefon eller mejl (beställaren 2026-10-18: e-posten är valfri).
+        const epost = epostOk(kontakt) ? kontakt.toLowerCase() : null;
+        const tel = epost ? null : telOk(kontakt) ? kontakt : null;
+        if (!epost && !tel) return svar({ fel: "Skriv ett telefonnummer eller en e-postadress." }, 400);
         const { data: forsta } = await db.from("recruitment_position").select("id, title").is("closed_at", null).order("opened_at").limit(1);
         const pos = (forsta ?? [])[0] as { id: string; title: string } | undefined;
         const { data: ny, error } = await db.from("candidate").insert({

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { kontrolleraCron } from "@/lib/jobb/behorighet";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { tomUtkorgen } from "@/lib/utkorg-server";
+import { tomKandidatko } from "@/lib/nav2/rekrytering-utskick";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -27,10 +28,13 @@ async function kor(request: NextRequest) {
 
   const { data: paminnelser, error } = await supabaseAdmin().rpc("lk_uppgiftspaminnelser");
   const tomning = await tomUtkorgen(200);
+  // Rekryteringens mejl till kandidater som låg mer än 29 dagar fram (Resends gräns).
+  const kandidater = await tomKandidatko();
 
   return NextResponse.json({
     paminnelser: error ? `fel: ${error.message}` : paminnelser,
     ...tomning,
+    kandidater,
   });
 }
 

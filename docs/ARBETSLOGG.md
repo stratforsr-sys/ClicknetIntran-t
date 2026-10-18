@@ -5,6 +5,46 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-18 · Nav 2.0, Rekrytering: beställarens svar (0110 omskriven, EJ KÖRD)
+
+Beställaren svarade på de öppna frågorna samma dag. 0110 är inte körd och
+skrevs om: den körs tillsammans med resten av Nav 2.0, inte före.
+
+- **E-posten är valfri.** `candidate.email` blir nullbar, och ett nytt villkor
+  kräver e-post eller telefon (`candidate_kontakt_finns`). Ett tips eller en
+  ny kandidat med bara nummer går igenom. Den som saknar e-post får inga mejl,
+  och vyn och svaren säger det.
+- **Mejlen till kandidaterna går med Resend, inga SMS.**
+  `src/lib/nav2/rekrytering-utskick.ts` skickar direkt efter handlingen och
+  schemalägger påminnelserna före intervjun hos Resend (utkastets SMS går som
+  mejl). Bekräftelsen har en kalenderfil, och en avbokning skickar en som tar
+  bort tiden. Det som ligger mer än 29 dagar fram schemaläggs av
+  `/api/jobb/utkorg` (`tomKandidatko`). **Förhandsvisningen mejlar aldrig en
+  kandidat** (samma regel som utkorgens `kundmejlTillatet`), och raden blir
+  `fel` så att produktionen inte skickar den senare.
+- **Ingen bokningslänk och ingen publik ansökningssida.** Bokningen är "Jag
+  väljer tid". `candidate_booking_link`, tjänstens `slug` och `page_open` är
+  borta ur 0110.
+- **Utkastets exempeltexter gäller inte:** mallarna har ingen text förrän
+  någon skriver den, och en mall utan text skickar inget. Frågorna i
+  ansökan, screeningens och intervjuns frågor och rollspelet är borta;
+  scorecardens fem kriterier står kvar. Frågorna skrivs senare.
+- **Gallring efter 12 månader** (`purge_after_days = 365`). Avslutade utan
+  gallringsdag får den 0030:s trigger hade gett dem (i dag en: den anställde,
+  2027-09-22). Den som går ur talangpoolen efter ett avslut får fristen från
+  den dagen.
+- **Talangpoolen:** svaret registreras (Svarade ja / Svarade nej, 0110
+  `pool_declined_at`), i Att göra och i kandidatens panel.
+- **Mål** (`recruitment_goal`): en gång till ett datum, eller varje månad
+  eller kvartal. De anställda räknas i perioden. Sätts i kortet
+  Rekryteringen.
+- **Företrädesrätten (LAS 25 §):** `employee.end_reason`. Under tolv
+  månaders anställning ger ingen företrädesrätt, och då frågar vyn inte. Annars
+  frågar den varför anställningen tog slut (säljchef, VD, admin), och
+  arbetsbrist efter tolv månader varnar till nio månader efter slutet.
+- **En säljare med behörigheten Rekryterare** ser chefens vy med sig själv som
+  den som bokar och bedömer.
+
 ## 2026-10-18 · Nav 2.0, Rekrytering med riktig data och allt utkastet har (0110, EJ KÖRD)
 
 Rekryteringen i Nav 2.0 läser navets kandidater (0030) med den inloggades RLS,
