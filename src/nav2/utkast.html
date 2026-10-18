@@ -28210,7 +28210,10 @@ function ndHemDelta(){
   if (sett){ med = n => Date.parse(n.tidpunkt) > Date.parse(sett); ord = `Sedan du tittade ${dag(sett) === idag ? ndHemTid(sett) : frKort(dag(sett))}`; }
   else if (S.mode === 'sondag'){ let d = idag; while (!frArbetsdag(d)) d = ndPlusDag(d, -1); med = n => dag(n.tidpunkt) >= d; ord = `Sedan ${ndHemDagNamn(d).toLowerCase()}`; }
   else { med = n => dag(n.tidpunkt) === idag; ord = S.mode === 'morgon' ? 'I natt och i morse' : 'I dag'; }
-  const nya = ND.notiser.filter(med).sort((a, b) => Date.parse(b.tidpunkt) - Date.parse(a.tidpunkt));
+  // Härledda poster ("7 uppgifter är försenade") är tillstånd: servern ger dem sidladdningens tid, så de är
+  // aldrig nya. Bara händelser (notification_event, med sin egen tid) räknas.
+  const laddad = Date.parse(ND.nu) - 5000;
+  const nya = ND.notiser.filter(n => Date.parse(n.tidpunkt) < laddad).filter(med).sort((a, b) => Date.parse(b.tidpunkt) - Date.parse(a.tidpunkt));
   if (!nya.length) return `${ord}: inget nytt i klockan.`;
   return `${ord}: ${nya.length === 1 ? 'en ny post' : `${nya.length} nya poster`} i klockan, senast ${nya[0].rubrik.replace(/\.$/, '')}.`;
 }
