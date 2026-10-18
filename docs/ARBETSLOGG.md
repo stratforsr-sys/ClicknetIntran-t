@@ -5,6 +5,14 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-18 · Nav 2.0, kvällsnotisen går inte till den som är ledig
+
+Beställaren: tiderna (17:00 vardagar, 18:00 söndag) står, och den som är ledig
+dagen efter får ingen notis. `ledigaDen()` i `hem-kvall.ts`: godkänd frånvaro
+hela dagen eller en sjukanmälan som pågår; borta del av dagen räknas inte.
+Nästa arbetsdag hoppar över helger och röda dagar (23 december ger 28
+december). Kvittot från dagtidsjobbet räknar `lediga`.
+
 ## 2026-10-18 · Nav 2.0, kvällsnotisen i mobilen och lagets mål ur Provision (0121)
 
 - **Lagets mål sätts i Provision** (beställaren). Golvet och Teamet räknar

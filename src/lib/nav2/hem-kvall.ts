@@ -26,6 +26,9 @@ import { SKRIVLAGE } from "./skrivlage";
  * Utskicket (`skickaKvallsnotiser`) körs av dagtidsjobbet: vardagar från 17:00
  * och söndagar från 18:00, svensk tid, en gång per person och dag (`push_sent`),
  * till ledarrollerna (säljchef, VD, teamledare) som slagit på notisen på en enhet.
+ * Beställaren 2026-10-18: tiderna står, och INGEN NOTIS TILL DEN SOM ÄR LEDIG
+ * DAGEN EFTER (på söndagen: måndagen). Ledig = godkänd frånvaro hela dagen eller
+ * en sjukanmälan som pågår. Borta del av dagen räknas inte som ledig.
  */
 
 export type NdKvall = { slag: "kvall" | "sondag"; dagar: string[]; titel: string; text: string };
@@ -127,11 +130,11 @@ function klockan(nu: Date): { dag: string; vd: number; min: number } {
 }
 
 /** Dagtidsjobbets steg. Bakom `SKRIVLAGE.hem`. */
-export async function skickaKvallsnotiser(db: SupabaseClient, nu: Date = new Date()): Promise<{ slag: string | null; mottagare: number; skickade: number; fel: string[] }> {
-  if (!SKRIVLAGE.hem) return { slag: null, mottagare: 0, skickade: 0, fel: [] };
+export async function skickaKvallsnotiser(db: SupabaseClient, nu: Date = new Date()): Promise<{ slag: string | null; mottagare: number; lediga: number; skickade: number; fel: string[] }> {
+  if (!SKRIVLAGE.hem) return { slag: null, mottagare: 0, lediga: 0, skickade: 0, fel: [] };
   const k = klockan(nu);
   const slag = k.vd <= 5 && k.min >= 17 * 60 && k.min < 21 * 60 ? "kvall" : k.vd === 7 && k.min >= 18 * 60 && k.min < 21 * 60 ? "sondag" : null;
-  if (!slag) return { slag: null, mottagare: 0, skickade: 0, fel: [] };
+  if (!slag) return { slag: null, mottagare: 0, lediga: 0, skickade: 0, fel: [] };
 
   const [{ data: roller }, { data: enheter }, { data: skickat }] = await Promise.all([
     db.from("employee_role").select("employee_id, role").in("role", LEDARE),
@@ -140,7 +143,10 @@ export async function skickaKvallsnotiser(db: SupabaseClient, nu: Date = new Dat
   ]);
   const harEnhet = new Set(((enheter ?? []) as { employee_id: string }[]).map((x) => x.employee_id));
   const klara = new Set(((skickat ?? []) as { employee_id: string }[]).map((x) => x.employee_id));
-  const mottagare = [...new Set(((roller ?? []) as { employee_id: string }[]).map((x) => x.employee_id))].filter((id) => harEnhet.has(id) && !klara.has(id));
+  const kandidater = [...new Set(((roller ?? []) as { employee_id: string }[]).map((x) => x.employee_id))].filter((id) => harEnhet.has(id) && !klara.has(id));
+  const dagen = kvallsdagar(k.dag).dagar[0];
+  const lediga = await ledigaDen(db, kandidater, dagen);
+  const mottagare = kandidater.filter((id) => !lediga.has(id));
 
   let skickade = 0;
   const fel: string[] = [];
@@ -153,5 +159,17 @@ export async function skickaKvallsnotiser(db: SupabaseClient, nu: Date = new Dat
     if (u.ok) skickade++;
     fel.push(...u.fel);
   }
-  return { slag, mottagare: mottagare.length, skickade, fel };
+  return { slag, mottagare: mottagare.length, lediga: lediga.size, skickade, fel };
+}
+
+/** Vilka av personerna som är lediga en dag: godkänd frånvaro hela dagen, eller sjukanmälda. */
+export async function ledigaDen(db: SupabaseClient, ids: string[], dag: string): Promise<Set<string>> {
+  if (!ids.length) return new Set();
+  const [{ data: fr }, { data: sjuk }] = await Promise.all([
+    db.from("absence_request").select("employee_id").in("employee_id", ids).eq("status", "approved").is("part_day_minutes", null).lte("starts_on", dag).gte("ends_on", dag),
+    db.from("sick_report").select("employee_id, last_sick_day").in("employee_id", ids).is("cancelled_at", null).lte("first_sick_day", dag),
+  ]);
+  const ut = new Set(((fr ?? []) as { employee_id: string }[]).map((x) => x.employee_id));
+  for (const s of (sjuk ?? []) as { employee_id: string; last_sick_day: string | null }[]) if (s.last_sick_day === null || s.last_sick_day >= dag) ut.add(s.employee_id);
+  return ut;
 }
