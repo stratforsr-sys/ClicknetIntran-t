@@ -5,6 +5,16 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-18 · Nav 2.0, startsidan får spara (`SKRIVLAGE.hem`)
+
+Beställaren sa ja samma dag. `/nav2/hem` sparar nu: Grattis på Golvet (en per
+person och order, säljaren får notisen `order-grattis`), "Stämmer inte" i Din
+dag i korthet (raden döljs för den som flaggade och blir en felrapport i kön på
+/fel), "Visa inte X här", när du senast tittade (efter fyra sekunder på
+startsidan) och lagets mål för säljchef och VD. Knapparna i startsidans rader
+(Bekräfta, Bevilja, Klar, Kvittera) går fortfarande till sina vyers rutter, som
+står kvar i läsläge tills de slås på var för sig.
+
 ## 2026-10-18 · Nav 2.0, startsidan med riktig data och allt utkastet har (0120)
 
 Startsidan sammanfattar de andra vyerna. Varje rad på den kommer nu ur en vy
