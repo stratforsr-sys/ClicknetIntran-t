@@ -22,6 +22,7 @@ export const SKRIVLAGE = {
   // Beställarens ja 2026-10-18: Grattis, Stämmer inte, Visa inte här, Sedan du tittade och lagets mål.
   hem: true,
   rekrytering: false,
+  anstallda: false,
 } as const;
 
 export type Skrivvy = keyof typeof SKRIVLAGE;

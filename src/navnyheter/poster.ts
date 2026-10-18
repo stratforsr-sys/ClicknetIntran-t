@@ -54,6 +54,11 @@ behörigheter som här: du ser bara det du får se.
   (en gång eller varje månad eller kvartal), och siffrorna per källa.
   Kandidaterna får mejl, med en kalenderfil när intervjun är bokad. Övriga ser
   Tipsa om en säljare, med telefon eller mejl, och hur det gått för deras tips.
+- **Anställda**, för säljchef, VD och administratörer: vad som kräver dig och
+  vad andra inte gjort än, lagens frister, registret med oanvända konton,
+  checklistan per person med datum från startdagen, och checklistorna och
+  utskicken som gäller nästa gång någon börjar eller slutar. Den som ska
+  sätta upp något får ett mejl med en Klart-knapp och en påminnelse.
 - **Order** och kundkortet. Varje order har nu ett nummer (#12), och
   provisionen är navets: fryst på en godkänd order, och det godkännandet
   skulle ge på en som väntar. I kortet spelar du inspelningen direkt, skriver

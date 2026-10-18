@@ -626,6 +626,16 @@ export const NOTIS_KALLOR = [
   "order-grattis",
 
   /**
+   * Nav 2.0 (0105), Anställda: en utskicksregel, ett fadderuppdrag eller en
+   * punkt som skickats vidare (uppdrag), påminnelsen före fristen och
+   * eskaleringen till chefen (paminn), och att mottagaren tryckt Klart (klart).
+   * Alla är HÄNDELSER.
+   */
+  "personal-uppdrag",
+  "personal-paminn",
+  "personal-klart",
+
+  /**
    * ANGRA-KNAPPEN HAR MED FLIT INGEN KALLA HAR.
    *
    * `/angra` provades och togs bort igen. Kvittot med angra-knappen visas bara
@@ -744,6 +754,9 @@ export const HANDELSEKALLOR = [
   "utbildning-fraga",
   "utbildning-paminn",
   "order-grattis",
+  "personal-uppdrag",
+  "personal-paminn",
+  "personal-klart",
 ] as const satisfies readonly Notiskalla[];
 
 export type Handelsekalla = (typeof HANDELSEKALLOR)[number];

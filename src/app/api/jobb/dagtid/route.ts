@@ -7,6 +7,7 @@ import { SKRIVLAGE } from "@/lib/nav2/skrivlage";
 import { skickaRundor } from "@/lib/nav2/franvaro-runda";
 import { egnaPaminnelser, korTidpaminnelser } from "@/lib/nav2/tid-paminnelser";
 import { skickaKvallsnotiser } from "@/lib/nav2/hem-kvall";
+import { korAnstalldaPaminnelser } from "@/lib/nav2/anstallda-paminnelser";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -69,7 +70,14 @@ async function kor(request: NextRequest) {
   } catch (e) {
     kvall = { fel: e instanceof Error ? e.message : String(e) };
   }
-  return NextResponse.json({ ...stampling, kalender, runda, tid, kvall });
+  // Nav 2.0 (0105): utskicksreglernas påminnelse och eskalering. Bakom SKRIVLAGE.anstallda (i funktionen).
+  let anstallda: unknown = null;
+  try {
+    anstallda = await korAnstalldaPaminnelser(db);
+  } catch (e) {
+    anstallda = { fel: e instanceof Error ? e.message : String(e) };
+  }
+  return NextResponse.json({ ...stampling, kalender, runda, tid, kvall, anstallda });
 }
 
 export async function POST(request: NextRequest) {

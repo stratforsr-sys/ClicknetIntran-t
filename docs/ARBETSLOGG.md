@@ -5,6 +5,45 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-18 · Nav 2.0, Anställda med riktig data och allt utkastet har (0105 KÖRD)
+
+Anställda i Nav 2.0 läser navets personal med den inloggades RLS. Kretsen är
+densamma som navets checklistor: `can_read_all_employees()` (säljchef, VD,
+admin). Den som inte är i kretsen ser utkastets "Inget för dig här".
+
+- **0105** (`0105_anstallda_utkastet.sql`, additiv, körd): checklistmallarna
+  (`onboarding_template`, `onboarding_template_item`), utskicksreglerna
+  (`onboarding_rule`), punkternas typ, frist, ägare, anteckning, värde,
+  mejl, påminnelser och möte i `onboarding_task` och `offboarding_task`,
+  `employee_onboarding` (fadder, fadderträffar, privat mejl, telefon,
+  tredjeland, välkomstbrevet) och `employee_access_level` (Behörighet i Nav).
+  Fristen sparas som förskjutning från start- eller slutdagen, så den följer
+  med när startdagen flyttas; `due_date` bara när någon flyttat den.
+  Mallarna är utkastets tre rollistor och avslutslistan, med navets egna
+  punkter (Inkio, Dialer, e-post, dator, telefon, passerkort, lönen) inlagda.
+  Inga utskicksregler: utkastets mottagare finns inte. Navets två befintliga
+  listor fick typ och frist.
+- **Läsning** (`src/lib/nav2/anstallda.ts`, `anstalldaforma.ts`): mallar,
+  regler, listorna med frister, fadder, privat mejl, kursernas och
+  rutinernas framsteg (målgruppen, som repots profil), Lynes-användaren,
+  kontojobbets flagga för oanvända konton, om lösenordet bytts, avtalets
+  läge ur `contract` och historiken ur `audit_log`.
+- **`/nav2/anstallda`** (POST bakom `SKRIVLAGE.anstallda`, 423 i läsläge):
+  lägg upp (repots `laggUppAnstalld`, sedan chef, mallens punkter och
+  utskicken), aktivera, nytt lösenord, avsluta (avslutslistan och reglerna
+  först, sedan repots `offboarda`), ta bort (bara den som inte börjat), klar
+  och hoppa över (repots `kvittera…`, AC-1.7), öppna igen, anteckning, flytta,
+  egen punkt, boka (repots `skapaMote`), fadder, fadderträff, välkomstbrevet
+  till privat mejl, påminn, skicka till någon annan, ändra anställningen
+  (byter även inloggningens adress), roll (`andraRoll`), Behörighet i Nav
+  (superadmin, aldrig sig själv, minst en kvar), mallarna och reglerna.
+- **`/nav2/anstallda/klart?id=`**: mottagarens Klart i mejlet. Kräver
+  inloggning och att punkten är skickad till en själv; GET visar bara frågan.
+- **Dagtidsjobbet**: `korAnstalldaPaminnelser` påminner före fristen och
+  eskalerar till chefen dagen efter, bakom `SKRIVLAGE.anstallda`.
+- Nya notiskällor: `personal-uppdrag`, `personal-paminn`, `personal-klart`.
+- **Klient:** `moduler/ndae.js` i utkastmappen, före `ndrx` och `ndma`.
+
 ## 2026-10-18 · Nav 2.0, Rekrytering: beställarens svar (0110 omskriven, EJ KÖRD)
 
 Beställaren svarade på de öppna frågorna samma dag. 0110 är inte körd och

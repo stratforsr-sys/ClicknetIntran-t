@@ -17387,9 +17387,9 @@ function aeDue(start, off){
   return d;
 }
 const aeManPlus = (d, n) => { const t = new Date(Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1 + n, +d.slice(8, 10))); return t.toISOString().slice(0, 10); };
-const aeProvSlut = p => frPlus(aeManPlus(p.start, 6), -1);
+const aeProvSlut = p => p.start ? frPlus(aeManPlus(p.start, 6), -1) : '';
 /* SKV 1160: senast sista dagen i tredje månaden efter den månad då anställningen började. */
-const aeSkvDag = p => new Date(Date.UTC(+p.start.slice(0, 4), +p.start.slice(5, 7) + 3, 0)).toISOString().slice(0, 10);
+const aeSkvDag = p => p.start ? new Date(Date.UTC(+p.start.slice(0, 4), +p.start.slice(5, 7) + 3, 0)).toISOString().slice(0, 10) : '';
 function aeRel(d){
   const n = frMellan(aeT(), d);
   if (n === 0) return 'i dag'; if (n === 1) return 'i morgon'; if (n === -1) return 'i går';
@@ -17552,7 +17552,7 @@ function aeFrister(){
 }
 const aeOnb = () => S.ae.pers.filter(p => p.status === 'onboarding');
 const aeOppetAvslut = () => S.ae.pers.filter(p => p.status === 'offboarded' && p.avslut && aeRakna(p, p.avslut).klara < p.avslut.punkter.length);
-const aeFlaggad = p => p.status !== 'offboarded' && p.senast && frMellan(p.senast, aeT()) >= 45;
+const aeFlaggad = p => p.status !== 'offboarded' && (ND && ND.anstallda && ND.anstallda.far ? !!p.flaggad : p.senast && frMellan(p.senast, aeT()) >= 45);
 
 /* ---------- Ångra, logg och notiser ---------- */
 function aeKopia(){ return {ae:JSON.parse(JSON.stringify(S.ae)), kev:KEV.length}; }
@@ -17750,7 +17750,7 @@ function aeRegVy(){
   const vis = S.ae.pers.filter(filt[S.aeFilt] || filt.alla).filter(p => !q || (p.namn + ' ' + p.jobbmejl + ' ' + aeRoller(p) + ' ' + (AETEAM[p.team] || '')).toLowerCase().includes(q))
     .sort(S.aeOrd === 'start' ? (a, b) => b.start.localeCompare(a.start) : (a, b) => a.namn.localeCompare(b.namn, 'sv'));
   const flagg = S.ae.pers.filter(aeFlaggad), rad = p => { const st = AESTATUS[p.status], r = aeRakna(p), prov = p.form === 'probation' && p.status !== 'offboarded' && aeProvSlut(p) >= T, ny = p.status === 'active' && frMellan(p.start, T) <= 90;
-        return `<li><button class="aerr" data-aepers="${p.id}">${avatar(p.namn, 32)}<span class="aerrn"><b>${esc(p.namn)}${ny ? ' <span class="aeny">Ny</span>' : ''}</b><small>${esc(p.jobbmejl)}</small></span><span class="aerrr">${aeRoller(p)}<small>${esc(AETEAM[p.team] || p.team || '')}</small></span><span class="aerrs num">${frKort(p.start)}${p.start.slice(0, 4) !== T.slice(0, 4) ? ' ' + p.start.slice(0, 4) : ''}</span>
+        return `<li><button class="aerr" data-aepers="${p.id}">${avatar(p.namn, 32)}<span class="aerrn"><b>${esc(p.namn)}${ny ? ' <span class="aeny">Ny</span>' : ''}</b><small>${esc(p.jobbmejl)}</small></span><span class="aerrr">${aeRoller(p)}<small>${esc(AETEAM[p.team] || p.team || '')}</small></span><span class="aerrs num">${p.start ? `${frKort(p.start)}${p.start.slice(0, 4) !== T.slice(0, 4) ? ' ' + p.start.slice(0, 4) : ''}` : '–'}</span>
           <span class="aerrf"><span class="pill ${st[1]}">${st[0]}</span>${p.status === 'onboarding' ? `<span class="aerrp">${aeBar(r.klara, r.alla)}<small class="num">${r.klara}/${r.alla}</small></span>` : ''}${prov ? `<span class="pill t-info">Prov t.o.m. ${frKort(aeProvSlut(p))}</span>` : ''}${aeFlaggad(p) ? '<span class="pill t-warn">Oanvänt konto</span>' : ''}${p.status === 'offboarded' ? `<small>slutade ${frKort(p.slut)}</small>` : ''}</span>${I('chev', 'aechev')}</button></li>`; };
   const team = S.aeOrd === 'start' ? [['', vis]] : Object.keys(AETEAM).map(k => [AETEAM[k], vis.filter(p => p.team === k)]).filter(g => g[1].length);
   return `${flagg.length ? `<div class="aebanner">${I('fel')}<span><b>${flagg.length === 1 ? 'Ett konto har inte använts på 45 dagar.' : `${flagg.length} konton har inte använts på 45 dagar.`}</b> Kontrollera att personen inte slutat utan att avslutas i Nav.</span>${flagg.map(p => `<button class="btn btn-s btn-sm" data-aepers="${p.id}">${esc(p.namn)}</button>`).join('')}${note(402)}</div>` : ''}
@@ -17906,7 +17906,7 @@ function aeAnstKort(p){
   const T = aeT(), andra = S.aeAndra === p.id, prov = p.form === 'probation';
   if (andra) return aeAndraForm(p);
   return `<section class="card" aria-label="Anställningen"><div class="chead"><h2>Anställningen</h2><span class="end">${p.status !== 'offboarded' ? `<button class="tlink" data-aeandra="${p.id}">Ändra</button>` : ''}</span></div>
-    <dl class="dl aedl"><div><dt>Form</dt><dd>${AEFORM[p.form] || p.form}</dd></div><div><dt>Startdag</dt><dd>${frKort(p.start)} ${p.start.slice(0, 4)}</dd></div>${prov ? `<div><dt>Provanställd till</dt><dd>${frKort(aeProvSlut(p))} ${aeProvSlut(p).slice(0, 4)}${aeProvSlut(p) < T ? ' <small class="muted">(passerad)</small>' : `<small class="aedds">besked senast ${frKort(frPlus(aeProvSlut(p), -14))}</small>`}</dd></div>` : ''}${p.slut ? `<div><dt>Slutdag</dt><dd>${frKort(p.slut)} ${p.slut.slice(0, 4)}</dd></div>` : ''}
+    <dl class="dl aedl"><div><dt>Form</dt><dd>${AEFORM[p.form] || p.form}</dd></div><div><dt>Startdag</dt><dd>${p.start ? `${frKort(p.start)} ${p.start.slice(0, 4)}` : 'Saknas i Nav'}</dd></div>${prov && p.start ? `<div><dt>Provanställd till</dt><dd>${frKort(aeProvSlut(p))} ${aeProvSlut(p).slice(0, 4)}${aeProvSlut(p) < T ? ' <small class="muted">(passerad)</small>' : `<small class="aedds">besked senast ${frKort(frPlus(aeProvSlut(p), -14))}</small>`}</dd></div>` : ''}${p.slut ? `<div><dt>Slutdag</dt><dd>${frKort(p.slut)} ${p.slut.slice(0, 4)}</dd></div>` : ''}
       <div><dt>Anställningsnummer</dt><dd>${p.nr}</dd></div><div><dt>Team</dt><dd>${esc(AETEAM[p.team] || p.team || '–')}</dd></div><div><dt>Närmaste chef</dt><dd>${esc(p.chef || '–')}</dd></div>${p.status !== 'offboarded' && p.lista ? `<div><dt>Fadder</dt><dd>${esc(p.fadder || 'Ingen än')}</dd></div>` : ''}
       ${[['Jobbmejl', p.jobbmejl], ['Privat mejl', p.privat], ['Telefon', p.tel]].filter(r => r[1]).map(([k, v]) => `<div><dt>${k}</dt><dd><button class="aekop" data-aekopiera="${esc(v)}" title="Kopiera">${esc(v)}${I('done')}</button></dd></div>`).join('')}${p.lynes ? `<div><dt>Lynes-användare</dt><dd>${esc(p.lynes)}</dd></div>` : ''}${p.tredje ? '<div><dt>Arbetstillstånd</dt><dd>Krävs</dd></div>' : ''}</dl></section>`;
 }
@@ -28588,6 +28588,347 @@ if (ND && ND.hem){
   // Senast tittat sparas när startsidan får skriva; i läsläge står den kvar som den var.
   if (ND.hem.skriv) setTimeout(() => ndHemPost('sett'), 4000);
 }
+
+/* =====================================================================
+   NAV 2.0 I RIKTIGT LÄGE: ANSTÄLLDA (prefix nd), v47
+
+   Navets personal ur ND.anstallda (src/lib/nav2/anstallda.ts och
+   anstalldaforma.ts) i stället för utkastets exempel: checklistmallarna,
+   utskicksreglerna, varje persons lista med frister, ägare, påminnelser och
+   värden, fadder, privat mejl, telefon, tredjeland, kursernas och
+   rutinernas framsteg, Lynes-användaren, flaggan för oanvända konton och
+   historiken ur audit_log. Registret själv kommer med ND.personer (nd.js).
+   Avtalet fyller Avtal (ndma.js) i p.avtal.
+
+   Allt som sparar går till /nav2/anstallda (src/app/nav2/anstallda/route.ts)
+   och avtalets knappar till /nav2/avtal. I läsläge svarar rutten 423, knappen
+   säger det och ingenting ändras på sidan. Utkastets simuleringar
+   ("Exempel: tryck som Simon") körs aldrig: mottagaren trycker Klart i sitt
+   eget mejl (/nav2/anstallda/klart).
+
+   Den som inte får läsa hela personalen (can_read_all_employees) får
+   utkastets "inget för dig".
+   ===================================================================== */
+
+const ndAe = () => ND && ND.anstallda && ND.anstallda.far ? ND.anstallda : null;
+const ndAePers = pid => (ndAe() && ndAe().per[pid]) || null;
+const ndAeId = namn => { const p = S.ae && S.ae.pers.find(q => q.namn === namn); return p ? p.id : null; };
+const ndAeTeamId = namn => { const t = ndAe() && ndAe().team.find(x => x.namn === namn); return t ? t.id : null; };
+const ndAeKopia = o => JSON.parse(JSON.stringify(o));
+
+/* ---------- Konstanterna ur navet ----------
+   Teamen är navets. Utan team står personen under "Utan team", sist. MFA krävs inte för någon roll i
+   navet (MFA_REQUIRED_ROLES är tom), så rollkortet säger inte att den krävs. */
+function ndAeStart(){
+  const d = ndAe(); if (!d){ Object.keys(AETEAM).forEach(k => delete AETEAM[k]); return; }
+  Object.keys(AETEAM).forEach(k => delete AETEAM[k]);
+  d.team.forEach(t => { AETEAM[t.namn] = t.namn; });
+  if (ND.personer.some(p => !p.team)) AETEAM[''] = 'Utan team';
+  if (!(ND.jag && ND.jag.kodKravs)) AEMFA.length = 0;
+}
+
+/* ---------- Tillståndet ur navet ---------- */
+const _ndaeSt = aeSt;
+aeSt = function(){
+  const forst = !S.aeInit;
+  _ndaeSt();
+  if (!forst || !ND || !ND.anstallda) return;
+  const d = ndAe();
+  // Säljaren: utkastets "inget för dig". Mallarna och reglerna är exempel och töms.
+  if (!d){ S.ae.mallar = []; S.ae.regler = []; S.ae.logg = []; S.ae.notiser = []; return; }
+  S.ae.mallar = ndAeKopia(d.mallar);
+  S.ae.regler = ndAeKopia(d.regler);
+  S.ae.logg = ndAeKopia(d.logg);
+  S.ae.notiser = [];
+  S.ae.pers.forEach(p => {
+    const r = d.per[p.id], n = ND.personer.find(x => x.id === p.id);
+    if (n){ p.teamId = n.teamId; p.chefId = n.chefId; }
+    if (!r) return;
+    Object.assign(p, {privat:r.privat, tel:r.tel, tredje:r.tredje, fadder:r.fadder, traff:r.traff, losen:r.losen, lynes:r.lynes, kurser:r.kurser, rutiner:r.rutiner,
+      flaggad:r.flaggad, coach:r.coach, lista:r.lista ? ndAeKopia(r.lista) : null, avslut:r.avslut ? ndAeKopia(r.avslut) : null});
+    if (r.avtal) p.avtal = {...r.avtal, pamind:[]};
+    // Välkomstbrevet: det som sparades, annars tom plats. Utkastets adress är ett exempel.
+    S.aeUtk['v' + p.id] = r.valkomst ? {...r.valkomst} : {tid:'08:30', plats:'', rad:''};
+  });
+  S.aeMallVal = (S.ae.mallar[0] || {}).id || null;
+};
+// Behörigheten i Nav: den som satts för hand (0105) går före befattningens.
+const _ndaeBrhSt = brhSt;
+brhSt = function(){
+  const forst = !S.brhInit; _ndaeBrhSt();
+  const d = ndAe(); if (!d || !forst) return;
+  Object.entries(d.per).forEach(([pid, r]) => { if (r.nivaSatt) S.brh.per[pid] = r.nivaSatt; });
+  const jag = d.per[ND.jag.id]; if (jag && jag.nivaSatt) S.brhNiva = jag.nivaSatt === 'salesperson' ? 'admin' : jag.nivaSatt;
+};
+
+/* ---------- Lägen som räknas ur navet i stället för ur utkastets exempel ---------- */
+const _ndaeICoach = aeICoach;
+aeICoach = function(p){ return ndAe() ? !!p.coach : _ndaeICoach(p); };
+// Oanvända konton: kontojobbets flagga (45 dagar, AC-1.8). aeFlaggad är en const och ändras i ndpatch.py.
+// Påminnelsen från Nav: bara när dagtidsjobbet faktiskt skickat den (auto_reminded_on).
+const _ndaeRegelLage = aeRegelLage;
+aeRegelLage = function(x){
+  const r = _ndaeRegelLage(x);
+  if (ndAe()) r.pamint = x.st === 'open' && !x.sjalv ? x.pamint || null : null;
+  return r;
+};
+// En person utan startdag i navet har ingen provanställning att räkna på.
+const _ndaeFrister = aeFrister;
+aeFrister = function(){
+  if (!ndAe()) return _ndaeFrister();
+  const alla = S.ae.pers; S.ae.pers = alla.filter(p => p.start || p.lista);
+  try { return _ndaeFrister(); } finally { S.ae.pers = alla; }
+};
+
+// Startdagen saknas för några i navet.
+const _ndaeStartText = aeStartText;
+aeStartText = function(p){ return ndAe() && !p.start && p.status !== 'offboarded' ? 'ingen startdag i Nav' : _ndaeStartText(p); };
+// Lägg upp: den inloggades eget team först, inte utkastets "Nord".
+const _ndaeNyTom = aeNyTom;
+aeNyTom = function(){
+  const N = _ndaeNyTom();
+  if (ndAe()){ const jag = ND.personer.find(p => p.id === ND.jag.id); N.f.team = jag && jag.team && AETEAM[jag.team] ? jag.team : AETEAM[''] ? '' : (Object.keys(AETEAM)[0] || ''); }
+  return N;
+};
+
+/* ---------- Skrivningar: /nav2/anstallda ---------- */
+function ndAeMinns(extra = {}){
+  try { sessionStorage.setItem('nd-ae', JSON.stringify({flik:S.aeFlik, pers:S.aePers, open:S.aeOpen, mall:S.aeMallVal, ...extra})); } catch(_){}
+}
+async function ndAePost(handling, data = {}, {ladda = true, tyst = false, minns = {}} = {}){
+  try {
+    const r = await fetch('/nav2/anstallda', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
+    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    if (s.ok !== undefined && !s.fel){ if (!tyst && s.ok) toast(s.ok); if (ladda){ ndAeMinns(minns); setTimeout(() => location.reload(), 700); } return s; }
+    if (!tyst || s.laslage) toast(s.fel || 'Det gick inte att spara.'); return s;
+  } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
+}
+(() => { if (!ndAe()) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-ae') || 'null'); sessionStorage.removeItem('nd-ae'); } catch(_){}
+  if (m) setTimeout(() => { aeSt(); S.view = 'anstallda'; if (m.flik) S.aeFlik = m.flik; S.aePers = m.pers && aeP(m.pers) ? m.pers : null; S.aeOpen = m.open || null;
+    if (m.mall && aeMall(m.mall)) S.aeMallVal = m.mall; render(); }, 0); })();
+
+// Punkten i navet: radens id. Utkastets id ("intro") kan vara mallens nyckel.
+const ndAeRad = key => { const {x} = aeHitta(key); return x && x.rad; };
+
+/* ---------- Lägg upp anställd: repots laggUppAnstalld, sedan chef, checklistan och utskicken ---------- */
+const _ndaeSkapa = aeSkapa;
+aeSkapa = function(){
+  if (!ndAe()) return _ndaeSkapa();
+  const N = S.aeNy, f = N.f;
+  const mall = N.mall || aeMallFor([f.roll]);
+  ndAePost('ny', {f:{fornamn:f.fornamn.trim(), efternamn:f.efternamn.trim(), roll:f.roll, team:ndAeTeamId(f.team) || '', chef:ndAeId(f.chef) || '', start:f.start, form:f.form,
+    jobbmejl:f.jobbmejl.trim(), privat:f.privat.trim(), tel:f.tel.trim(), tredje:!!f.tredje}, mall, bort:N.bort, extra:N.extra, regAv:N.regAv}, {ladda:false}).then(s => {
+    if (!s.losenord) return;
+    // Personen finns i navet nu. Kortet ritas ur det som skickades tills sidan laddas om.
+    const p = {...aeNyPerson(N), id:s.anstalldId, jobbmejl:f.jobbmejl.trim(), losen:false, lynes:'', traff:0, slut:null, avslut:null, lista:null, kurser:null, rutiner:null, avtal:{st:null}};
+    S.ae.pers.push(p);
+    S.aeNy = {klar:s.anstalldId, losen:s.losenord, nd:true}; S.aeNyUtkast = null; render(); window.scrollTo(0, 0);
+  });
+};
+// Rekryteringens anställning svarar med id och lösenord men lägger inte personen i registret förrän sidan laddats om.
+const _ndaeNyKlar = aeNyKlar;
+aeNyKlar = function(N){
+  if (!ndAe() || aeP(N.klar)) return _ndaeNyKlar(N);
+  return `<header class="top"><div class="hello"><h1>Personen är upplagd</h1><p>Kontot finns i navet.</p></div></header>
+    <section class="card aenyklar"><div class="aelosen">${I('ut')}<div><b>Tillfälligt lösenord</b><code class="num">${esc(N.losen)}</code><small>Visas bara nu. Säg det muntligt första dagen, skicka det inte i ett mejl.</small></div><button class="btn btn-s btn-sm" data-aekopiera="${esc(N.losen)}">Kopiera</button></div>
+      <div class="aek"><button class="btn btn-p" data-aepers="${N.klar}">Öppna checklistan</button></div></section>`;
+};
+
+/* ---------- Avtalet: Avtal äger det (ndma.js och /nav2/avtal) ----------
+   Utan avtal i navet erbjuds mallarna i Avtal och att bifoga det påskrivna. Utkastets fyra mallnamn är exempel. */
+const _ndaeAvtalKort = aeAvtalKort;
+aeAvtalKort = function(p){
+  if (!ndAe()) return _ndaeAvtalKort(p);
+  const a = p.avtal || {}, ma = ndKopplad('avtal') && typeof ndMaPost === 'function';
+  if (!ma && a.st !== 'signerat') return `<section class="card aeavtal" id="aeAvtal" aria-label="Avtalet"><div class="chead"><h2>Avtalet</h2></div>
+    <p class="aehint">${a.st === 'utfardat' ? `${esc(a.mall || 'Avtalet')} är utfärdat ${a.utf ? frKort(a.utf) : ''} och väntar på påskrift.` : a.st === 'utkast' ? `${esc(a.mall || 'Avtalet')} är ett utkast.` : `Inget avtal i Nav för ${esc(aeFor(p.namn))}.`} Avtal är inte kopplad än, så avtalet hanteras i nuvarande Nav.</p>
+    <div class="aek"><a class="btn btn-s btn-sm" href="/personal/${encodeURIComponent(p.id)}">${I('avtal')}Öppna i Nav</a></div></section>`;
+  if (a.st === 'utfardat' || a.st === 'signerat') return _ndaeAvtalKort(p).replace(/<button class="tlink" data-aeavtsign="[^"]*">Påskrivet digitalt<\/button>/, ma ? '$&' : '');
+  const steg = `<ol class="aesteg"><li class="nu"><i>1</i><span>Utkast</span></li><li><i>2</i><span>Skickat för påskrift</span></li><li><i>3</i><span>Påskrivet</span></li></ol>`;
+  const bifoga = `<label class="btn btn-s btn-sm aefil">${I('lank')}Bifoga påskrivet avtal<input type="file" class="sr" data-aeavtfil="${p.id}" accept=".pdf,image/*"></label>`;
+  const kropp = a.st === 'utkast'
+    ? `<dl class="dl aedl"><div><dt>Mall</dt><dd>${esc(a.mall || 'Anställningsavtal')}</dd></div>${a.lon ? `<div><dt>Månadslön</dt><dd>${kr(a.lon)}</dd></div>` : ''}</dl>
+       <div class="aek"><button class="btn btn-p btn-sm" data-aeutfarda="${p.id}">${I('pling')}Skicka för påskrift</button>${bifoga}</div><p class="aehint">Lönen och villkoren fylls i avtalet under Avtal.</p>`
+    : `<p class="aehint">Inget avtal i Nav för ${esc(aeFor(p.namn))}. Skapa det ur en mall i Avtal, eller bifoga det påskrivna.</p>
+       <div class="aek"><button class="btn btn-p btn-sm" data-ndaeavtal="${p.id}">${I('avtal')}Skapa avtalet i Avtal</button>${bifoga}</div>`;
+  return `<section class="card aeavtal${S.aeMark === 'avtal' ? ' aemark' : ''}" id="aeAvtal" aria-label="Avtalet"><div class="chead"><h2>Avtalet</h2></div>${steg}${kropp}</section>`;
+};
+async function ndAeBifoga(pid, fil){
+  if (!(ndKopplad('avtal') && typeof ndMaPost === 'function')){ toast('Avtalet hör till Avtal, som inte är kopplad än. Bifoga det i nuvarande Nav.'); setTimeout(() => { location.href = `/personal/${encodeURIComponent(pid)}`; }, 1400); return; }
+  const f = await ndMaPost('bifoga-forbered', {person:pid, filnamn:fil.name, mime:fil.type, storlek:fil.size}, {ladda:false});
+  if (f.fel) return;
+  if (!(await ndLaddaUpp(f, fil))){ toast(`${fil.name} kom inte fram. Försök igen.`); return; }
+  ndAeMinns({pers:pid});
+  ndMaPost('bifoga-registrera', {person:pid, titel:'Anställningsavtal', fil:f.fileId, filnamn:fil.name, store:f.store});
+}
+function ndAeTillAvtal(pid){
+  if (ndKopplad('avtal') && typeof maSt === 'function'){ maSt(); S.view = 'avtal'; S.maOpen = pid; render(); window.scrollTo(0, 0); return; }
+  toast('Avtal är inte kopplad än. Avtalet skapas i nuvarande Nav.'); setTimeout(() => { location.href = '/avtal/nytt'; }, 1400);
+}
+
+/* ---------- Behörighet i Nav ----------
+   Nivån sparas (0105). Navet styrs fortfarande av befattningen, så kortet lovar inte mer än så. */
+const _ndaeRollKort = aeRollKort;
+aeRollKort = function(p){
+  let h = _ndaeRollKort(p);
+  if (!ndAe()) return h;
+  h = h.replace('Ändringen gäller vid nästa sidbyte och står i händelseloggen.', 'Nivån sparas i Nav. Vad navet visar styrs än så länge av befattningen.');
+  if (!(ND.jag && ND.jag.kodKravs)) h = h.replace(' Admin och superadmin kräver kod vid inloggning.', '');
+  return h;
+};
+
+/* ---------- Vyn: texter som bara gäller utkastets exempel ---------- */
+const _ndaeView = renderAeView;
+renderAeView = function(){
+  let h = _ndaeView();
+  if (!ndAe()) return h;
+  h = h.replace(/<small class="aesimh">Exempel: tryck som [^<]*<\/small>/g, '<small class="aesimh">Mottagaren trycker Klart i mejlet</small>')
+    .replace('Registret ser bara chefer, ekonomi och administratörer.', 'Registret ser bara säljchef, VD och administratörer.')
+    .replace('Alla roller återkallades vid avslutet ().', 'Alla roller återkallades vid avslutet.')
+    .replace(/ title="Så ser knappen ut i mejlet\. Tryck för att se vad som händer när [^"]*"/g, ' title="Så ser knappen ut i mejlet."');
+  return h;
+};
+
+/* ---------- Att göra: chefens egna punkter bockas av i navet ---------- */
+const _ndaeBocka = bocka;
+bocka = function(id){
+  const t = TASKS.find(x => x.id === id);
+  if (!ndAe() || !t || !t.ae) return _ndaeBocka(id);
+  const h = aeHitta(t.ae);
+  if (!h.x) return;
+  if (AESJALV.includes(h.x.typ) || h.x.fraga || aeLage(h.p, h.x) !== 'open'){ aeGaSrc(`/personal/${h.p.id}/${h.x.id}`); toast(`${h.x.t} bockas av på punkten.`); return; }
+  ndAePost('klar', {rad:h.x.rad}, {minns:{pers:h.p.id}});
+};
+
+/* ---------- Klicken som sparar ----------
+   Fångas före utkastets aeClick: i läsläge ändras ingenting på sidan, och knappen säger varför. */
+const NDAE_MALLKLICK = ['aemallny', 'aemkop', 'aemroll', 'aemupp', 'aemner', 'aemx', 'aemnyok'];
+document.addEventListener('click', e => {
+  if (!ndAe()) return;
+  const t = e.target.closest && e.target.closest('button, a, [data-brhsatt]'); if (!t || !t.dataset) return;
+  const d = t.dataset, stopp = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+  if (!S.aeInit) return;
+  const P = () => aeP(S.aePers);
+  // Från vilken vy som helst: bocken och påminnelsen i briefen och listan.
+  if (d.aeklar){ stopp(); const {p, x} = aeHitta(d.aeklar); if (!x) return; if (x.fraga){ aeGaSrc(`/personal/${p.id}/${x.id}`); return; } ndAePost('klar', {rad:x.rad}, {minns:{pers:S.view === 'anstallda' ? S.aePers : null}}); return; }
+  if (d.aepamin){ stopp(); const {x} = aeHitta(d.aepamin); if (x) ndAePost('paminn', {rad:x.rad}); return; }
+  if (d.brhsatt){ stopp(); if (t.getAttribute('aria-disabled') === 'true'){ toast('Bara en superadmin ändrar behörigheten.'); return; }
+    const [pid, n] = d.brhsatt.split('|'), p = aeP(pid); if (!p || brhFor(p) === n) return;
+    if (p.id === ND.jag.id){ toast('Din egen behörighet ändrar en annan superadmin. Annars kan du låsa ute dig själv.'); return; }
+    ndAePost('behorighet', {pid, niva:n}, {minns:{pers:pid}}); return; }
+  if (S.view !== 'anstallda') return;
+  if (d.aepaminalla){ stopp(); const id = ndAeId(d.aepaminalla); if (id) ndAePost('paminnalla', {mott:id}); return; }
+  if (d.aepaminp){ stopp(); ndAePost('paminnp', {pid:d.aepaminp}); return; }
+  if (d.aeutbpamin){ stopp(); ndAePost('utbpamin', {pid:d.aeutbpamin}, {ladda:false}); return; }
+  // Personkortet
+  if (d.aelosen !== undefined){ stopp(); const p = P(); S.aeMeny = false; ndAePost('losen', {pid:p.id}, {ladda:false}).then(s => { if (s.losenord){ S.aeLosen = {pid:p.id, ord:s.losenord}; render(); window.scrollTo(0, 0); } }); return; }
+  if (d.aeaktiv !== undefined){ stopp(); ndAePost('aktiv', {pid:S.aePers}); return; }
+  if (d.aeavslutok){ stopp(); const p = aeP(d.aeavslutok), A = S.aeAvslut;
+    if (!A.slut || (p.start && A.slut < p.start)){ A.fel = {slut:`Välj en dag från ${p.start ? frKort(p.start) : 'startdagen'}.`}; render(); aeFokusFel(); return; }
+    ndAePost('avslut', {pid:p.id, slut:A.slut}, {minns:{pers:p.id}}); return; }
+  if (d.aeraderaok){ stopp(); ndAePost('radera', {pid:d.aeraderaok}, {minns:{pers:null}}); return; }
+  // Checklistan
+  if (d.aeoppna){ stopp(); ndAePost('oppna', {rad:ndAeRad(d.aeoppna)}); return; }
+  if (d.aehopok){ stopp(); const v = (S.aeUtk.hoptxt || '').trim();
+    if (!v){ S.aeFel['hop' + d.aehopok] = 'Skriv varför punkten hoppas över. Det krävs, och det syns i historiken.'; render(); aeFokusFel(); return; }
+    ndAePost('hoppa', {rad:ndAeRad(d.aehopok), skal:v}); return; }
+  if (d.aeboka){ stopp(); ndAePost('boka', {rad:ndAeRad(d.aeboka)}); return; }
+  if (d.aetraff){ stopp(); ndAePost('traff', {pid:d.aetraff}); return; }
+  if (d.aecoach){ stopp(); const p = aeP(d.aecoach);
+    if (ndKopplad('coachning') && typeof cnGa === 'function'){ cnGa('/coachning/person/' + encodeURIComponent(p.namn)); return; }
+    toast('Coachning är inte kopplad än. Övningen läggs i nuvarande Nav.'); setTimeout(() => { location.href = '/coachning'; }, 1400); return; }
+  if (d.aevalkok){ stopp(); const p = aeP(d.aevalkok), V = S.aeUtk['v' + p.id] || {};
+    if (!aeEpostOk(p.privat)){ S.aeFel['val' + p.id] = 'Privat mejl saknas. Lägg till det under Anställningen, så går brevet dit.'; render(); return; }
+    const schema = [...document.querySelectorAll('.aeschema li')].map(li => [li.querySelector('.num')?.textContent || '', li.textContent.replace(li.querySelector('.num')?.textContent || '', '').trim()]);
+    ndAePost('valkomst', {pid:p.id, tid:V.tid, plats:V.plats, rad:V.rad, schema}); return; }
+  // Mejlen: mottagaren trycker Klart i sitt mejl. Den som lade upp kan inte trycka åt någon annan.
+  if (d.aesim){ stopp(); const {x} = aeHitta(d.aesim); toast(`${aeFor(x.ag)} trycker Klart i mejlet. Har du gjort det själv: Jag gör det själv.`); return; }
+  if (d.aevardeok){ stopp(); if (d.aesom){ toast('Mottagaren fyller i det i mejlet.'); return; }
+    const {x} = aeHitta(d.aevardeok), v = String(S.aeUtk.varde ?? '').trim();
+    if (x.fraga && !v){ S.aeFel['v' + d.aevardeok] = `Skriv ${x.fraga.toLowerCase()}.`; render(); aeFokusFel(); return; }
+    if (x.fraga === 'E-postadress' && !aeEpostOk(v)){ S.aeFel['v' + d.aevardeok] = 'Skriv en hel adress, till exempel namn@clicknet.se.'; render(); aeFokusFel(); return; }
+    ndAePost('klar', {rad:x.rad, varde:v}); return; }
+  if (d.aesjalv){ const {x} = aeHitta(d.aesjalv); if (!x || x.fraga) return; stopp(); ndAePost('klar', {rad:x.rad}); return; }
+  if (d.aeextraok){ stopp(); const p = aeP(d.aeextraok), v = (S.aeUtk['x' + p.id] || '').trim(); if (!v){ document.querySelector('[data-aeextra]')?.focus(); return; }
+    ndAePost('extra', {pid:p.id, t:v, off:+(S.aeUtk['xd' + p.id] ?? 7)}); return; }
+  // Avtalet
+  if (d.ndaeavtal){ stopp(); ndAeTillAvtal(d.ndaeavtal); return; }
+  if (d.aeutfarda){ stopp(); const p = aeP(d.aeutfarda);
+    if (!(ndKopplad('avtal') && typeof ndMaPost === 'function') || !p.avtal || !p.avtal.id){ ndAeTillAvtal(p.id); return; }
+    ndAeMinns({pers:p.id}); ndMaPost('utfarda', {avtal:p.avtal.id}); return; }
+  if (d.aeavtpamin){ stopp(); const p = aeP(d.aeavtpamin); if (!(ndKopplad('avtal') && typeof ndMaPost === 'function') || !p.avtal || !p.avtal.id){ ndAeTillAvtal(p.id); return; }
+    ndAeMinns({pers:p.id}); ndMaPost('paminn', {avtal:p.avtal.id}); return; }
+  if (d.aeavtsign){ stopp(); const p = aeP(d.aeavtsign); if (!(ndKopplad('avtal') && typeof ndMaPost === 'function') || !p.avtal || !p.avtal.id){ ndAeTillAvtal(p.id); return; }
+    ndAeMinns({pers:p.id}); ndMaPost('paskrivet', {avtal:p.avtal.id, datum:aeT()}); return; }
+  // Anställningen
+  if (d.aeandraok){ stopp(); const p = aeP(d.aeandraok), U = S.aeUtk['e' + p.id], fel = {};
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(U.start || '')) fel.start = 'Välj en startdag.';
+    if (!aeEpostOk(U.jobbmejl)) fel.jobbmejl = 'Skriv en hel adress, till exempel namn@clicknet.se.'; else if (S.ae.pers.some(q => q !== p && q.jobbmejl.toLowerCase() === U.jobbmejl.trim().toLowerCase())) fel.jobbmejl = 'Det finns redan en anställd med den e-postadressen.';
+    if (U.privat && !aeEpostOk(U.privat)) fel.privat = 'Skriv en hel adress, till exempel namn@exempel.se.';
+    S.aeFel['e' + p.id] = fel; if (Object.keys(fel).length){ render(); aeFokusFel(); return; }
+    ndAePost('andra', {pid:p.id, f:{start:U.start, form:U.form, team:ndAeTeamId(U.team) || '', chef:ndAeId(U.chef) || '', jobbmejl:U.jobbmejl.trim(), privat:(U.privat || '').trim(), tel:(U.tel || '').trim(), tredje:!!U.tredje}}); return; }
+  if (d.aeroll){ stopp(); const [pid, r] = d.aeroll.split('|'), p = aeP(pid);
+    if (p.roller.includes(r) && p.roller.length === 1){ toast(`${aeFor(p.namn)} behöver minst en roll för att kunna logga in. Lägg till den nya först.`); return; }
+    ndAePost('roll', {pid, roll:r}, {minns:{pers:pid}}); return; }
+  // Nyanställningen är klar: personen öppnas ur navet, med checklistan som servern byggde.
+  if (S.aeNy && S.aeNy.klar && S.aeNy.nd && (d.aepers || d.aenastaavtal)){ stopp(); ndAeMinns({flik:S.aeFlik, pers:d.aepers || d.aenastaavtal}); location.reload(); return; }
+  // Checklistor
+  if (d.aemdel !== undefined){ stopp(); const M = aeMall(S.aeMallVal); if (M) ndAePost('mall-ta-bort', {id:M.id}, {minns:{mall:null}}); return; }
+  // Utskick
+  if (d.aeregeltest){ stopp(); const ex = S.ae.pers.find(p => p.status === 'onboarding') || aeP(ND.jag.id); ndAePost('regel-test', {id:d.aeregeltest, pid:ex ? ex.id : null}, {ladda:false}); return; }
+  if (d.aeregelpa){ stopp(); ndAePost('regel-pa', {id:d.aeregelpa}); return; }
+  if (d.aeregeldel){ stopp(); ndAePost('regel-ta-bort', {id:d.aeregeldel}); return; }
+  if (d.aeregelok !== undefined){ stopp(); const R = S.aeRegel, D = R.d, fel = {};
+    if (!D.namn.trim()) fel.namn = 'Skriv vad som ska göras, till exempel Lynes-konto.';
+    if (!D.mott) fel.mott = 'Välj vem som gör det.';
+    if (!D.amne.trim()) fel.amne = 'Skriv ett ämne.';
+    if (!D.text.trim()) fel.text = 'Skriv mejlet.';
+    R.fel = fel; if (Object.keys(fel).length){ render(); aeFokusFel(); return; }
+    ndAePost('regel', {regel:{id:R.ny ? null : R.id, namn:D.namn.trim(), mottId:ndAeId(D.mott), roller:D.roller, trigger:D.trigger, klart:+D.klart, pamin:+D.pamin, fraga:D.fraga.trim(), amne:D.amne.trim(), text:D.text, aktiv:R.ny ? true : D.aktiv !== false}}); return; }
+}, true);
+
+/* ---------- Checklistorna sparas hela, en stund efter sista ändringen ----------
+   Utkastet ändrar mallen på sidan. Här skickas den till navet; i läsläge läggs navets mall tillbaka. */
+let ndAeMallTimer = null;
+function ndAeMallSpara(direkt){
+  clearTimeout(ndAeMallTimer);
+  const M = aeMall(S.aeMallVal); if (!M) return;
+  const ny = !/^[0-9a-f-]{36}$/.test(M.id);
+  const gor = () => ndAePost('mall', {mall:{id:ny ? null : M.id, namn:M.namn, roller:M.roller,
+    punkter:M.punkter.map(x => ({id:x.id, t:x.t, off:x.off, typ:x.typ, lag:x.lag, villkor:x.villkor, ag:x.ag === 'chef' || x.ag === 'fadder' ? x.ag : 'person', agId:x.ag === 'chef' || x.ag === 'fadder' ? null : ndAeId(x.ag)}))}},
+    {ladda:false, tyst:true}).then(s => {
+      if (s.laslage || s.fel){ S.ae.mallar = ndAeKopia(ndAe().mallar); if (!aeMall(S.aeMallVal)) S.aeMallVal = (S.ae.mallar[0] || {}).id; render(); return; }
+      if (ny && s.id){ toast('Checklistan är sparad.'); ndAeMinns({mall:s.id}); setTimeout(() => location.reload(), 500); }
+    });
+  if (direkt || ny) gor(); else ndAeMallTimer = setTimeout(gor, 900);
+}
+document.addEventListener('click', e => {
+  if (!ndAe() || S.view !== 'anstallda' || S.aeFlik !== 'mallar') return;
+  const t = e.target.closest && e.target.closest('button'); if (!t || !t.dataset) return;
+  if (NDAE_MALLKLICK.some(k => t.dataset[k] !== undefined)) ndAeMallSpara(['aemallny', 'aemkop', 'aemx'].some(k => t.dataset[k] !== undefined));
+});
+
+/* ---------- Fälten ---------- */
+document.addEventListener('input', e => {
+  if (!ndAe() || S.view !== 'anstallda' || !S.aeInit) return;
+  const d = e.target.dataset || {};
+  if (d.aemn !== undefined || d.aemt !== undefined || d.aemoff !== undefined || d.aemag !== undefined) ndAeMallSpara(false);
+  // Team väljer chef: teamets ledare i navet, annars står chefen kvar. Utkastets namn är exempel.
+  if (d.aen === 'team' && S.aeNy){ const t = ndAe().team.find(x => x.namn === e.target.value); if (t && t.ledare) S.aeNy.f.chef = t.ledare; render(); }
+  if (d.aee === 'team' && S.aeAndra){ const U = S.aeUtk['e' + S.aeAndra], t = ndAe().team.find(x => x.namn === e.target.value); if (U && t && t.ledare){ U.chef = t.ledare; render(); } }
+});
+document.addEventListener('change', e => {
+  if (!ndAe() || S.view !== 'anstallda' || !S.aeInit) return;
+  const d = e.target.dataset || {}, v = e.target.value;
+  const stopp = () => e.stopImmediatePropagation();
+  if (d.aeflyttd && v){ stopp(); const {x} = aeHitta(d.aeflyttd); if (!x || v === x.due) return; if (v < aeT()){ e.target.value = x.due; toast('Välj i dag eller ett senare datum.'); return; } ndAePost('flytta', {rad:x.rad, datum:v}); return; }
+  if (d.aefadder && v){ stopp(); const id = ndAeId(v); if (id) ndAePost('fadder', {pid:d.aefadder, fadder:id}); return; }
+  if (d.aebyt && v){ stopp(); const id = ndAeId(v), {x} = aeHitta(d.aebyt); if (id && x) ndAePost('byt', {rad:x.rad, till:id}); return; }
+  if (d.aeavtfil && e.target.files && e.target.files[0]){ stopp(); ndAeBifoga(d.aeavtfil, e.target.files[0]); return; }
+  if (d.aenot !== undefined){ const {x} = aeHitta(d.aenot); if (x) ndAePost('not', {rad:x.rad, text:v.trim()}, {ladda:false, tyst:true}).then(s => { if (s.ok !== undefined) toast('Anteckningen är sparad.'); }); }
+}, true);
+
+if (ND && ND.anstallda){ ndAeStart(); NDKOPPLAD.add('anstallda'); }
 
 /* =====================================================================
    NAV 2.0 I RIKTIGT LÄGE: REKRYTERING (prefix nd), v47
