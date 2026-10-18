@@ -5,6 +5,40 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-19 · Nav 2.0, Coachning med riktig data, i läsläge (0100 SKRIVEN OCH TORRKÖRD, EJ KÖRD)
+
+Utkastets Coachning läser navets coachning. Ingen funktion i utkastet togs
+bort; det navet saknade fick backend i 0100.
+
+- **Repots lägen.** Överenskommelserna (`coaching_task`) och "senast coachad"
+  räknas av repot: `hamtaLag()` för chefen och `uppgifterFor()` för säljaren
+  (`lageFor`, certifikat, bedömning och kvittens). Laget är repots: alla som
+  RLS släpper fram utom en själv, och de som slutat står inte med.
+- **0100 (ny, additiv):** övningen (`coaching_drill`) med svar per dag,
+  vanorna och deras kontroller, chefens rader (`coaching_message`), personens
+  fokusområde, "Be om en 1:1", flyttat datum (`coaching_task_note`),
+  `coaching_task.nav2_kind` för utkastets "Rollspel live" utan modul,
+  förra målet och området på `coaching_session`, `one_on_one_point.removed_at`
+  och en policy så att chefen ser målen från Utbildning som säljaren valt att
+  visa (`learning_note` `mal:*` med `"coach":true`). Läsningen tål att 0100
+  inte är körd (`utan0100`).
+- **Rutten `/nav2/coachning`** bakom `SKRIVLAGE.coachning = false` (423):
+  repots `skapaUppgift`, `lamnaIn`, `kvittera`, `avbrytUppgift` och
+  `skapaSamtal`; Uppgifters `skapaUppgift` för "Gå förbi i dag" och chefens
+  egna steg; kalenderns `skapaSerie` (1:1, en gång) för bokningen; och 0100
+  för resten. Filen som bevis går genom repots uppladdning med ändamålet
+  `coaching`, som fanns i databasen sedan 0043 men saknades i `filer.ts`.
+- **Klienten** `moduler/ndcn.js`: utkastets exempel (14 säljare,
+  överenskommelser och nio 1:1 i kalendern) står aldrig kvar, "Johanna" är
+  säljarens chef, frågan vid utstämplingen ställs efter Tids omladdning, och
+  Coachnings rader står på startsidan (`ndCnHemRader`).
+- Nya notiskällor: `coachning-ovning`, `coachning-rad`,
+  `coachning-forfragan`, `coachning-datum`.
+- Provat lokalt mot produktionen som Zen och Fredrik (`verktyg/ndprov/cn-p1.json`,
+  `cn-p2.json`): inga exempelnamn, inga fel, varje knapp når rutten.
+
+---
+
 ## 2026-10-18 · Nav 2.0, Anställda med riktig data och allt utkastet har (0105 KÖRD)
 
 Anställda i Nav 2.0 läser navets personal med den inloggades RLS. Kretsen är

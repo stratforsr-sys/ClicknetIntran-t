@@ -54,6 +54,13 @@ behörigheter som här: du ser bara det du får se.
   (en gång eller varje månad eller kvartal), och siffrorna per källa.
   Kandidaterna får mejl, med en kalenderfil när intervjun är bokad. Övriga ser
   Tipsa om en säljare, med telefon eller mejl, och hur det gått för deras tips.
+- **Coachning**: en sak i taget att träna, varje arbetsdag. Säljaren svarar
+  på dagens övning med ett tryck, också när hen stämplar ut, och väljer när
+  dagarna är slut om den blivit en vana. Överenskommelserna med din chef står
+  i samma vy, och du lämnar in dem där, med en fil om det behövs. Inför nästa
+  1:1 skriver du det du vill ta upp, och målen du valt att visa från
+  Utbildning följer med. Chefen ser laget med det som behöver något först, går
+  igenom 1:1:et i fyra steg och bokar nästa direkt.
 - **Anställda**, för säljchef, VD och administratörer: vad som kräver dig och
   vad andra inte gjort än, lagens frister, registret med oanvända konton,
   checklistan per person med datum från startdagen, och checklistorna och

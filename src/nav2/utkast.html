@@ -16384,7 +16384,7 @@ function cnOvFalt(form, o, fel, vem){
   const bib = (CNBIB[o.omr] || []).map((b, i) => [b, i]).filter(([b]) => !nu.includes(b[0]) && !vanor.includes(b[0]));
   const start = cnNastaArb(cnT());
   return `<div class="cnovf">
-    ${bib.length ? `<div class="cnbib"><span class="cnlab">Ur biblioteket, ${CNOMR[o.omr]}</span><div>${bib.map(([b, i]) => `<button class="chip ${o.nar === b[0] && o.da === b[1] ? 'on' : ''}" data-cnbib="${form}|${o.omr}|${i}" aria-pressed="${o.nar === b[0] && o.da === b[1]}"><span>När ${esc(b[0])} → ${esc(b[1])}</span></button>`).join('')}</div></div>` : `<p class="cnhint">Biblioteket för ${CNOMR[o.omr]} är redan använt. Skriv en egen.</p>`}
+    ${bib.length ? `<div class="cnbib"><span class="cnlab">Ur biblioteket, ${CNOMR[o.omr]}</span><div>${bib.map(([b, i]) => `<button class="chip ${o.nar === b[0] && o.da === b[1] ? 'on' : ''}" data-cnbib="${form}|${o.omr}|${i}" aria-pressed="${o.nar === b[0] && o.da === b[1]}"><span>När ${esc(b[0])} → ${esc(b[1])}</span></button>`).join('')}</div></div>` : (ND && !o.omr ? '<p class="cnhint">Välj ett område för förslag ur biblioteket, eller skriv en egen.</p>' : `<p class="cnhint">Biblioteket för ${CNOMR[o.omr]} är redan använt. Skriv en egen.</p>`)}
     <div class="cnomin">
       <div><label class="cnlab" for="cn${form}Nar">När</label><input id="cn${form}Nar" class="uin" data-cn${form}="nar" value="${esc(o.nar)}" placeholder="kunden säger ”det låter dyrt”" maxlength="120" autocomplete="off" aria-invalid="${!!fel.nar}">${fel.nar ? `<p class="cnfel" role="alert">${fel.nar}</p>` : ''}</div>
       <div><label class="cnlab" for="cn${form}Da">→ gör jag</label><input id="cn${form}Da" class="uin" data-cn${form}="da" value="${esc(o.da)}" placeholder="frågar jag vad de jämför med" maxlength="160" autocomplete="off" aria-invalid="${!!fel.da}">${fel.da ? `<p class="cnfel" role="alert">${fel.da}</p>` : ''}</div>
@@ -28189,6 +28189,7 @@ function ndHemRader(){
   }
   // Rekrytering: utkastets samlade rad (rxinb), se ndrx.js.
   if (typeof ndRxHemRader === 'function') ut.push(...ndRxHemRader(chef));
+  if (typeof ndCnHemRader === 'function') ut.push(...ndCnHemRader(chef));
   return ut.map(r => ({...r, roles:[S.role], f:r.bkind}));
 }
 
@@ -29352,6 +29353,402 @@ document.addEventListener('input', e => {
 });
 
 if (ndRx()){ ndRxStart(); NDKOPPLAD.add('rekrytering'); }
+
+/* =====================================================================
+   NAV 2.0 I RIKTIGT LÄGE: COACHNING (prefix nd)
+
+   Navets coachning ur ND.coachning (src/lib/nav2/coachning.ts) i stället
+   för utkastets exempel. Överenskommelserna och "senast coachad" räknas av
+   repot (hamtaLag, uppgifterFor, lageFor). Övningen, vanorna, chefens rader,
+   fokusområdet, förfrågan om en 1:1 och flyttade datum är 0100; punkterna
+   till 1:1 är Tids tabell (0094), och målen från Utbildning visas inför 1:1
+   när säljaren valt det (0097).
+
+   Allt utkastet har finns kvar (beställaren 2026-10-15). Det som sparar går
+   till /nav2/coachning (src/app/nav2/coachning/route.ts). I läsläge svarar
+   rutten 423 och visar varför. Det rutten själv skriver går att ångra; det
+   som går genom repots actions (kvittera, gör om, avbryt, flytta, boka,
+   spara 1:1:et) skickar notiser och ångras inte.
+   ===================================================================== */
+
+const ndCn = () => ND && ND.coachning;
+const ndCnNamn = id => (id && ((ND.coachning.namn || {})[id] || ((ND.personer || []).find(p => p.id === id) || {}).namn)) || '';
+function ndCnId(namn){
+  if (!namn) return null;
+  if (namn === ND.jag.namn) return ND.jag.id;
+  const p = ndCn().personer.find(x => x.namn === namn); if (p) return p.id;
+  const e = Object.entries(ndCn().namn || {}).find(([, n]) => n === namn); return e ? e[0] : null;
+}
+const ndCnFor = n => String(n || '').split(' ')[0];
+const ndCnBibR = (omr, nar, da) => ((CNBIB[omr] || []).find(b => b[0] === nar && b[1] === da) || [])[2] || null;
+
+/* ---------- Skrivningar: /nav2/coachning ---------- */
+function ndCnMinns(t){
+  try { sessionStorage.setItem('nd-cn', JSON.stringify({view:S.view, pers:S.cnPers || null, open:S.cnOpen || null, toast:t || null})); } catch(_){}
+}
+async function ndCnPost(handling, data = {}, {ladda = true, tyst = false, angra = null} = {}){
+  try {
+    const r = await fetch('/nav2/coachning', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
+    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    if (s.ok !== undefined && !s.fel){
+      const ang = angra ? angra(s) : null;
+      if (ladda){ ndCnMinns(!tyst && s.ok ? {msg:s.ok, angra:ang} : null); setTimeout(() => location.reload(), 250); }
+      else if (!tyst && s.ok){ if (ang) toastActs(s.ok, [['Ångra', () => ndCnPost(ang.handling, ang.data)]], 8000); else toast(s.ok); }
+      return s;
+    }
+    if (!tyst) toast(s.fel || 'Det gick inte att spara.'); return s;
+  } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
+}
+(() => { if (!ndCn()) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-cn') || 'null'); sessionStorage.removeItem('nd-cn'); } catch(_){}
+  if (m) setTimeout(() => {
+    cnSt();
+    if (m.view) S.view = m.view;
+    if (m.view === 'coachning'){ S.cnPers = m.pers && CNSEED.some(p => p.vem === m.pers) ? m.pers : null; S.cnOpen = m.open && S.cn.avt.some(a => a.id === m.open) ? m.open : null; }
+    render();
+    if (m.toast && m.toast.msg){ const a = m.toast.angra; a ? toastActs(m.toast.msg, [['Ångra', () => ndCnPost(a.handling, a.data)]], 9000) : toast(m.toast.msg); }
+  }, 0); })();
+
+/* ---------- Tillståndet ur navet ---------- */
+function ndCnStart(){
+  const c = ndCn();
+  CNSEED.length = 0; CNAVTSEED.length = 0;
+  (c.chef ? c.personer : c.personer.filter(p => p.id === ND.jag.id)).forEach(p => CNSEED.push({vem:p.namn}));
+  // Utkastets påhittade 1:1 i kalendern (cn-data.js) står aldrig kvar.
+  for (let i = KEV.length - 1; i >= 0; i--) if (/^cnk\d+$/.test(KEV[i].id)) KEV.splice(i, 1);
+  // Fokusområdet som saknas skrivs ut som det är, utan att stå bland valen.
+  Object.defineProperty(CNOMR, '', {value:'inget valt än', enumerable:false, configurable:true});
+}
+const _ndCnSt = cnSt;
+cnSt = function(){
+  if (!ndCn()) return _ndCnSt();
+  if (S.cnInit) return; S.cnInit = true;
+  const c = ndCn(), cn = {ov:[], avt:[], logg:{}, vanor:[], punkter:{}, medd:[], kv:{}, omr:{}, notiser:[], forfr:{}};
+  S.ndCnPunktId = {};
+  c.personer.forEach(p => { cn.omr[p.namn] = p.omr || ''; cn.kv[p.namn] = p.kv; cn.logg[p.namn] = []; cn.punkter[p.namn] = []; S.ndCnPunktId[p.namn] = []; });
+  c.ovningar.forEach(o => {
+    const vem = ndCnNamn(o.vem); if (!cn.logg[vem]) return;
+    cn.ov.push({id:o.id, vem, omr:o.omr, nar:o.nar, da:o.da, r:o.r, start:o.start, n:o.n, status:o.status, av:ndCnNamn(o.av), svar:{...o.svar}});
+    if (o.status === 'vana') cn.vanor.push({id:o.id, vem, nar:o.nar, da:o.da, omr:o.omr, fran:o.vanaFran, kollar:{...o.kollar}});
+  });
+  c.avtal.forEach(a => { const vem = ndCnNamn(a.vem); if (!cn.logg[vem]) return;
+    cn.avt.push({...a, vem, mot:a.mot ? ndCnNamn(a.mot) : undefined, av:ndCnNamn(a.av), ref:a.ref || undefined, besk:a.besk || undefined, inl:a.inl || undefined, klarD:a.klarD || undefined, kom:a.kom.map(k => [...k])}); });
+  c.logg.forEach(l => { const vem = ndCnNamn(l.vem); if (cn.logg[vem]) cn.logg[vem].push({d:l.d, typ:l.typ, t:l.t, txt:l.txt}); });
+  c.medd.forEach(m => { const vem = ndCnNamn(m.vem); if (cn.logg[vem]) cn.medd.push({id:m.id, vem, d:m.d, tid:m.tid, txt:m.txt, fran:m.fran}); });
+  c.punkter.forEach(p => { const vem = ndCnNamn(p.vem); if (!cn.punkter[vem]) return; cn.punkter[vem].push(p.text); S.ndCnPunktId[vem].push(p.id); });
+  Object.entries(c.forfr).forEach(([id, d]) => { const vem = ndCnNamn(id); if (vem) cn.forfr[vem] = d; });
+  S.cn = cn;
+  let pref = {}, intro = false;
+  try { pref = JSON.parse(localStorage.getItem('nav2-cnlag') || '{}'); intro = localStorage.getItem('nav2-cnintro') === 'sett'; } catch(_){}
+  Object.assign(S, {cnPers:null, cnFilt:['behover', 'tappar', 'd14', 'alla'].includes(pref.filt) ? pref.filt : 'behover', cnSok:'', cnOrd:pref.ord === 'namn' ? 'namn' : 'senast', cnOpen:null, cnNy:null, cnMote:null, cnByt:null, cnIgar:false, cnSaHar:false, cnUnderk:null, cnUtk:{}, cnKlaraOpen:false, cnHistAlla:false, cnFel:{},
+    cnDag:null, cnHistF:'alla', cnFlytt:null, cnMoteUtk:{}, cnPop:null, cnBlink:null, cnIntro:!intro});
+  // 1:1 som pausats står kvar i navet till nästa gång.
+  Object.entries(c.utkast || {}).forEach(([id, M]) => { const vem = ndCnNamn(id); if (vem && M && typeof M === 'object') S.cnMoteUtk[vem] = {...M, vem, fel:{}}; });
+};
+
+/* ---------- Utkastets funktioner med navets data ---------- */
+// Läget är repots (lageFor, certifikat, bedömning, kvittens).
+const _ndCnAvtSt = cnAvtSt;
+cnAvtSt = function(a){ return ndCn() ? a.st : _ndCnAvtSt(a); };
+// Senast coachad: repots regel (kvitterat, underkänt, inlämnat eller ett hållet samtal).
+const _ndCnSenast = cnSenast;
+cnSenast = function(vem){
+  if (!ndCn()) return _ndCnSenast(vem);
+  const p = ndCn().personer.find(x => x.namn === vem);
+  return p && p.senast ? {d:p.senast, dagar:Math.max(0, frMellan(p.senast, cnT())), t:''} : {d:null, dagar:99, t:''};
+};
+// Vem bockar av: personen, motparten, den som lade upp den eller chefen, med riktiga namn.
+const _ndCnVerText = cnVerText;
+cnVerText = function(a, chef){
+  if (!ndCn()) return _ndCnVerText(a, chef);
+  const du = a.vem === cnMig() && !chef, vem = du ? 'du' : cnFor(a.vem), jag = n => n === ND.jag.namn;
+  if (CNTYP[a.typ].sjalv) return a.typ === 'kurs' ? 'klar när kursen är klar' : a.typ === 'lasning' ? 'klar när rutinen är läst' : 'bedöms i Utbildning';
+  if (a.ver === 'motpart') return `${jag(a.mot) ? 'du' : cnFor(a.mot || 'motparten')} bekräftar`;
+  if (a.ver === 'sjalv') return `${vem} bockar av`;
+  if (a.ver === 'skapare') return `${jag(a.av) ? 'du' : cnFor(a.av || 'chefen')} kvitterar`;
+  return chef ? 'du kvitterar' : `${ME.chef.fornamn} kvitterar`;
+};
+const _ndCnTrappa = cnTrappa;
+cnTrappa = function(a){
+  if (!ndCn()) return _ndCnTrappa(a);
+  const n = cnSenDagar(a); if (!n) return null;
+  const chef = S.role === 'chef' ? 'chefen' : ME.chef.fornamn;
+  return CNTRAPPA.map((g, i) => ({d:frPlus(a.due, g), l:['Påminnelse till ' + cnFor(a.vem), 'Besked till ' + chef, 'Ett ärende skapas'][i], klar:n >= g}));
+};
+// Raderna är från den som skrev dem.
+const _ndCnMeddelanden = cnMeddelanden;
+cnMeddelanden = function(vem, mig){
+  if (!ndCn()) return _ndCnMeddelanden(vem, mig);
+  const m = S.cn.medd.filter(x => x.vem === vem).slice(-2).reverse();
+  if (!m.length) return '';
+  return `<ul class="cnmedd">${m.map(x => `<li>${avatar(x.fran || '?', 24)}<span><b>${esc(cnFor(x.fran || ''))}</b> ${esc(x.txt)}<small>${cnDagNamn(x.d)} ${x.tid}${mig ? '' : ` · till ${esc(cnFor(vem))}`}</small></span></li>`).join('')}</ul>`;
+};
+const _ndCnHistorik = cnHistorik;
+cnHistorik = function(vem){
+  if (!ndCn()) return _ndCnHistorik(vem);
+  const T = cnT(), l = cnLogg(vem).map(x => ({...x}));
+  S.cn.ov.filter(o => o.vem === vem).forEach(o => l.push({d:o.start, typ:'ovning', t:o.start > T ? 'Övningen börjar' : 'Övningen började', txt:`När ${o.nar} → ${o.da}.`}));
+  S.cn.medd.filter(m => m.vem === vem).forEach(m => l.push({d:m.d, typ:'meddelande', t:`Rad från ${m.fran || 'chefen'}`, txt:m.txt}));
+  return l.sort((a, b) => b.d.localeCompare(a.d));
+};
+// Inför 1:1: utkastets egna rader, och målen från Utbildning som säljaren valt att visa.
+const _ndCnAutoPunkter = cnAutoPunkter;
+cnAutoPunkter = function(vem){
+  const ut = _ndCnAutoPunkter(vem);
+  if (!ndCn()) return ut;
+  const id = ndCnId(vem);
+  ndCn().mal.filter(m => m.vem === id).forEach(m => ut.push(`Mål från Utbildning${m.modul ? ` (${esc(m.modul)})` : ''}: ${esc(m.text)}`));
+  return ut;
+};
+// Kurserna, rollspelen och rutinerna som går att lägga som överenskommelse.
+const _ndCnRefVal = cnRefVal;
+cnRefVal = function(typ){
+  const v = ndCn() && ndCn().val; if (!v) return _ndCnRefVal(typ);
+  return typ === 'kurs' ? v.kurser : typ === 'rollspel_inspelat' ? v.rollspel : v.rutiner;
+};
+const ndCnRefTitel = (typ, ref) => ((cnRefVal(typ) || []).find(x => x[0] === ref) || [])[1] || '';
+// Notiser och vägar ur repot: /coachning/<person> och /coachning/uppgift/<id>.
+const _ndCnGa = cnGa;
+cnGa = function(src){
+  if (!ndCn()) return _ndCnGa(src);
+  const p = String(src || '').split('/'), uuid = /^[0-9a-f-]{36}$/;
+  if (S.role === 'chef' && uuid.test(p[2] || '')) return _ndCnGa('/coachning/person/' + encodeURIComponent(ndCnNamn(p[2])));
+  if (S.role === 'chef' && p[2] === 'uppgift' && uuid.test(p[3] || '')){ cnSt(); const a = S.cn.avt.find(x => x.id === p[3]); if (a) return _ndCnGa(`/coachning/person/${encodeURIComponent(a.vem)}/${a.id}`); }
+  if (S.role !== 'chef' && uuid.test(p[2] || '')) return _ndCnGa('/coachning');
+  return _ndCnGa(src);
+};
+
+/* ---------- Namnen i utkastets text ---------- */
+// Utkastet skriver ut säljchefen som "Johanna". I riktigt läge är det säljarens chef.
+function ndCnText(html){
+  if (!ndCn() || typeof html !== 'string') return html;
+  if (S.role !== 'chef') html = html.replace(/Johanna Ek/g, esc(ME.chef.namn)).replace(/Johanna/g, esc(ME.chef.fornamn));
+  return html.replace(/Team Nord · (\d+) säljare\./, (_, n) => `${esc(ND.jag.team || 'Laget')} · ${n} ${+n === 1 ? 'person' : 'personer'}.`);
+}
+const _ndCnVy = renderCnView;
+renderCnView = () => ndCnText(_ndCnVy());
+const _ndCnHem = renderCnHem;
+renderCnHem = () => ndCnText(_ndCnHem());
+const _ndCnHemChef = renderCnHemChef;
+renderCnHemChef = () => ndCnText(_ndCnHemChef());
+
+/* ---------- Svaren, och frågan vid stämplingen ---------- */
+const _ndCnSvara = cnSvara;
+cnSvara = function(id, d, v, ladda = true){
+  if (!ndCn()) return _ndCnSvara(id, d, v);
+  const u = S.cnUtk['beh' + id + d] || {}, data = {ov:id, dag:d, v};
+  if (u.txt !== undefined) data.txt = u.txt;
+  if (u.sam !== undefined) data.sam = u.sam;
+  if (u.skal !== undefined) data.skal = u.skal;
+  return ndCnPost('svar', data, {ladda, angra:s => ({handling:'svar-ater', data:{ov:id, dag:d, fore:s.fore}})});
+};
+const _ndCnFraga = cnFraga;
+cnFraga = function(lista, alla){
+  if (!ndCn()) return _ndCnFraga(lista, alla);
+  const ov = lista[0], nr = alla - lista.length + 1;
+  toastActs(alla > 1 ? `Övning ${nr} av ${alla}, ”${cnKort(ov)}”: blev det av i dag?` : 'Dagens övning: blev det av?',
+    Object.keys(CNSVAR).map(v => [CNSVAR[v][0], () => { const sista = lista.length === 1; cnSvara(ov.id, cnT(), v, sista).then(() => { if (!sista) cnFraga(lista.slice(1), alla); }); }]), 20000);
+};
+// Tid stämplar och laddar om sidan. Frågan om övningen ställs när sidan är tillbaka.
+const _ndCnStampad = cnStampad;
+cnStampad = function(k, msg, undo){
+  if (!ndCn()) return _ndCnStampad(k, msg, undo);
+  cnSt();
+  const ovs = S.role === 'saljare' ? cnAktiva(cnMig()).filter(cnIdagAktiv) : [], ov = ovs.find(o => !o.svar[cnT()] && !cnAvgora(o)) || ovs[0];
+  if (!ov || (k === 'in' && ovs.every(o => o.svar[cnT()] || cnAvgora(o)))){ if (msg) toast(msg); return; }
+  const lofte = ovs.length > 1 ? ovs.map(o => `När ${o.nar} → ${o.da}.`).join(' Och: ') : `När ${ov.nar} → ${ov.da}.`;
+  if (k === 'in'){
+    const miss = cnIgarMiss(ov);
+    toastActs(`${msg ? msg + ' ' : ''}${miss ? `${cnStor(cnSedan(miss))} blev det inget svar på övningen, det gör inget. ` : ''}${ovs.length > 1 ? 'Dagens övningar' : 'Dagens övning'}: ${lofte}`,
+      [miss ? [`Svara för ${cnDagNamn(miss)}`, () => cnGa('/coachning/igar')] : ['Visa övningen', () => cnGa('/coachning')]], 10000);
+    return;
+  }
+  if (msg) toast(msg);
+  const kvar = cnAktiva(cnMig()).filter(o => cnIdagAktiv(o) && !o.svar[cnT()]);
+  if (kvar.length) setTimeout(() => cnFraga(kvar, kvar.length), msg ? 1200 : 0);
+};
+if (ndCn() && typeof ndTidPost === 'function'){
+  const _ndCnTidPost = ndTidPost;
+  ndTidPost = async function(h, d = {}, o){
+    const s = await _ndCnTidPost(h, d, o);
+    if (h === 'stampla' && s && !s.fel) try { sessionStorage.setItem('nd-cn-stamp', JSON.stringify({k:d.typ === 'in' ? 'in' : 'ut', msg:s.ok || '', t:Date.now()})); } catch(_){}
+    return s;
+  };
+  let st = null; try { st = JSON.parse(sessionStorage.getItem('nd-cn-stamp') || 'null'); sessionStorage.removeItem('nd-cn-stamp'); } catch(_){}
+  if (st && Date.now() - st.t < 30000) setTimeout(() => cnStampad(st.k, ''), 1000);
+}
+
+/* ---------- Handlingarna som sparar ---------- */
+const _ndCnInlamna = cnInlamna;
+cnInlamna = function(id){
+  if (!ndCn()) return _ndCnInlamna(id);
+  const a = S.cn.avt.find(x => x.id === id), key = 'inl' + id, txt = (S.cnUtk[key] || '').trim();
+  if (!txt){ S.cnFel[key] = a.st === 'underkand' ? 'Skriv ditt nya svar först.' : 'Skriv en kommentar först.'; render(); cnFel(); return; }
+  delete S.cnFel[key]; ndCnPost('lamna-in', {id, text:txt});
+};
+const _ndCnBytStart = cnBytStart;
+cnBytStart = function(vem){
+  if (!ndCn()) return _ndCnBytStart(vem);
+  const B = S.cnUtk.byt, ov = cnAktiva(vem).find(cnAvgora);
+  B.fel = cnOvFel(B, vem, !!ov);
+  if (Object.keys(B.fel).length){ render(); cnFel(); return; }
+  ndCnPost('ovning-ny', {vem:ndCnId(vem), omr:B.omr, nar:B.nar, da:B.da, n:B.n, start:cnNastaArb(cnT()), ersatter:ov ? ov.id : null, r:ndCnBibR(B.omr, B.nar, B.da)},
+    {angra:s => s.id ? {handling:'ovning-bort', data:{ov:s.id, ater:ov ? ov.id : null}} : null});
+};
+const _ndCnNyOk = cnNyOk;
+cnNyOk = function(){
+  if (!ndCn()) return _ndCnNyOk();
+  const N = S.cnNy, T = cnT();
+  let fel = {};
+  if (N.typ === 'ovning') fel = cnOvFel(N, N.vem);
+  else if (CNTYP[N.typ].sjalv){ if (!N.ref) fel.ref = 'Välj vilken.'; }
+  else {
+    if (!N.t.trim()) fel.t = 'Skriv vad som ska göras.';
+    if ((N.typ === 'rollspel_live' || N.typ === 'medlyssning') && !N.mot) fel.mot = 'Välj en kollega.';
+  }
+  if (N.typ !== 'ovning' && (!N.due || N.due < T)) fel.due = !N.due ? 'Välj ett datum.' : 'Datumet har redan varit.';
+  N.fel = fel;
+  if (Object.keys(fel).length){ render(); cnFel(); return; }
+  const vem = ndCnId(N.vem);
+  if (N.typ === 'ovning'){
+    ndCnPost('ovning-ny', {vem, omr:N.omr, nar:N.nar, da:N.da, n:N.n, start:cnNastaArb(T), r:ndCnBibR(N.omr, N.nar, N.da)}, {angra:s => s.id ? {handling:'ovning-bort', data:{ov:s.id}} : null});
+    return;
+  }
+  const rt = ndCnRefTitel(N.typ, N.ref);
+  const titel = N.typ === 'kurs' ? rt : N.typ === 'lasning' ? 'Läs rutinen: ' + rt : N.typ === 'rollspel_inspelat' ? 'Spela in: ' + rt : N.t.trim();
+  ndCnPost('ny', {vem, typ:N.typ, t:titel, besk:N.besk.trim(), due:N.due, ver:CNTYP[N.typ].sjalv ? 'sjalv' : N.ver, bevis:CNTYP[N.typ].sjalv ? 'ingen' : N.bevis, mot:N.mot ? ndCnId(N.mot) : null, ref:N.ref || null});
+};
+const _ndCnMoteSpara = cnMoteSpara;
+cnMoteSpara = function(){
+  if (!ndCn()) return _ndCnMoteSpara();
+  const M = S.cnMote, vem = M.vem, T = cnT(), ef = cnNastaEfter(vem, M.d);
+  const fel = M.vag === 'ny' ? cnOvFel(M, vem, true) : {};
+  M.steg.forEach((x, i) => { if (x.t.trim() && !x.d) fel['steg' + i] = 'Välj ett datum.'; else if (x.t.trim() && x.d < T) fel['steg' + i] = 'Datumet har redan varit.'; });
+  if (!ef && M.boka && (!M.bokaD || M.bokaD <= T)) fel.boka = 'Välj en dag efter i dag.';
+  else if (!ef && M.boka && !frArbetsdag(M.bokaD)) fel.boka = 'Välj en arbetsdag.';
+  M.fel = fel;
+  if (Object.keys(fel).length){ render(); cnFel(); return; }
+  // Punkterna som bockades av: Navs egna rader följer med som text, säljarens egna bockas av i navet.
+  const auto = cnAutoPunkter(vem), egna = S.cn.punkter[vem] || [], ids = S.ndCnPunktId[vem] || [];
+  const ren = h => { const el = document.createElement('div'); el.innerHTML = h; return el.textContent; };
+  const tagit = M.tagit.map(k => k < auto.length ? ren(auto[k]) : egna[k - auto.length]).filter(Boolean);
+  const punkter = M.tagit.filter(k => k >= auto.length).map(k => ids[k - auto.length]).filter(Boolean);
+  const m = cnMoten(vem), e = [m.pagar, m.oant, m.nasta].find(x => x && x.d === M.d && x.nd);
+  ndCnPost('spara-1-1', {vem:ndCnId(vem), d:M.d, lage:M.lage, mal:M.mal, omr:M.omr, forra:M.forra, vag:M.vag, nar:M.nar, da:M.da, n:M.n, start:cnNastaArb(T),
+    steg:M.steg.map(x => ({t:x.t, vem:x.vem, d:x.d})), tagit, punkter, eventId:e ? e.ref : null, boka:!ef && M.boka ? {dag:M.bokaD, start:T_(M.bokaS)} : null});
+};
+const T_ = s => T(s || '10:00');
+
+/* ---------- Klicken ---------- */
+document.addEventListener('click', e => {
+  if (!ndCn()) return;
+  const t = e.target.closest && e.target.closest('button, a, label'); if (!t || !t.dataset) return;
+  const d = t.dataset, stopp = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+  cnSt();
+  // Det som fungerar var man än står: startsidan och laget.
+  if (d.cnfraga){ stopp(); ndCnPost('rad', {vem:ndCnId(d.cnfraga), text:'Hur går övningen? Säg till om den inte passar, så byter vi.'}, {angra:s => ({handling:'rad-bort', data:{ids:s.ids || []}})}); return; }
+  if (d.cnfragaalla !== undefined){ stopp(); const l = cnLaget().filter(v => cnAktiva(v).some(o => cnTappar(o).n >= 2));
+    ndCnPost('rad', {vem:l.map(ndCnId), text:'Hur går övningen? Säg till om den inte passar, så byter vi.'}, {angra:s => ({handling:'rad-bort', data:{ids:s.ids || []}})}); return; }
+  if (d.cnforbi){ stopp(); const ov = cnAktiva(d.cnforbi)[0]; ndCnPost('forbi', {vem:ndCnId(d.cnforbi), text:`Gå förbi ${cnFor(d.cnforbi)}: övningen${ov ? ` om ”${cnKort(ov)}”` : ''}`}); return; }
+  if (d.cnpepp){ stopp(); const ov = cnAktiva(d.cnpepp)[0]; ndCnPost('rad', {vem:ndCnId(d.cnpepp), text:ov ? cnPeppText(ov) : 'Bra jobbat.'}, {angra:s => ({handling:'rad-bort', data:{ids:s.ids || []}})}); return; }
+  if (S.view !== 'coachning') return;
+  const vemMig = cnMig();
+  // Säljaren: övningen, vanorna och punkterna.
+  if (d.cnmed){ stopp(); if ((S.cn.punkter[vemMig] || []).includes(d.cnmed)){ toast('Den raden finns redan bland punkterna.'); return; }
+    ndCnPost('punkt', {text:d.cnmed, kalla:'coachning'}, {angra:s => s.id ? {handling:'punkt-bort', data:{id:s.id}} : null}); return; }
+  if (d.cnavg && d.cnavg !== 'byt'){ stopp(); const id = d.cnov; ndCnPost('ovning-avgor', {ov:id, val:d.cnavg}, {angra:s => s.fore ? {handling:'ovning-ater', data:{ov:id, days:s.fore.days}} : null}); return; }
+  if (d.cnkoll){ stopp(); const v = S.cn.vanor.find(x => x.id === d.cnkoll), kn = v && cnKollNu(v); if (!kn) return; ndCnPost('koll', {ov:v.id, due:kn.d, v:d.cnkv, start:cnNastaArb(cnT())}); return; }
+  if (d.cnovaigen){ stopp(); const v = S.cn.vanor.find(x => x.id === d.cnovaigen); if (!v) return;
+    if (cnAktiva(v.vem).length >= CNMAX){ toast(`Du har redan ${CNMAX} övningar. Gör en klar först, eller ta upp det på 1:1:et.`); return; }
+    ndCnPost('ova-igen', {ov:v.id, start:cnNastaArb(cnT())}, {angra:s => s.id ? {handling:'ovning-bort', data:{ov:s.id}} : null}); return; }
+  if (d.cnpunktok !== undefined){ const v = (S.cnUtk.punkt || '').trim(); if (!v) return; stopp(); ndCnPost('punkt', {text:v}, {angra:s => s.id ? {handling:'punkt-bort', data:{id:s.id}} : null}); return; }
+  if (d.cnpunktx){ stopp(); const id = (S.ndCnPunktId[vemMig] || [])[+d.cnpunktx]; if (!id) return; ndCnPost('punkt-bort', {id}, {angra:() => ({handling:'punkt-ater', data:{id}})}); return; }
+  if (d.cnbeom !== undefined){ stopp(); ndCnPost('be-om', {}, {angra:() => ({handling:'be-om-ater', data:{}})}); return; }
+  // Säljaren: överenskommelserna.
+  if (d.cninlok){ const txt = (S.cnUtk['inl' + d.cninlok] || '').trim(); if (!txt) return; stopp(); cnInlamna(d.cninlok); return; }
+  if (d.cnamot){ stopp(); ndCnPost('be-motpart', {id:d.cnamot}); return; }
+  if (d.cnaklar){ stopp(); ndCnPost('klar', {id:d.cnaklar}); return; }
+  // Chefen: överenskommelserna.
+  if (d.cnkvitt){ stopp(); ndCnPost('kvittera', {id:d.cnkvitt, text:(S.cnUtk['u' + d.cnkvitt] || '').trim()}); return; }
+  if (d.cnunderkok){ const txt = (S.cnUtk['u' + d.cnunderkok] || '').trim(); if (!txt) return; stopp(); ndCnPost('gor-om', {id:d.cnunderkok, text:txt}); return; }
+  if (d.cnflyttok){ const a = S.cn.avt.find(x => x.id === d.cnflyttok), ny = S.cnUtk['f' + d.cnflyttok] || (a && a.due);
+    if (!a || !ny || ny < cnT() || ny === a.due) return; stopp(); ndCnPost('flytta', {id:a.id, due:ny}); return; }
+  if (d.cnavbryt){ stopp(); ndCnPost('avbryt', {id:d.cnavbryt}); return; }
+  // Chefen: 1:1.
+  if (d.cnboka){ stopp(); const l = cnLedig(d.cnboka); ndCnPost('boka', {vem:ndCnId(d.cnboka), dag:l.d, start:l.s}); return; }
+  if (d.cnbokaalla !== undefined){ stopp(); const k = cnKopia(), l = cnLaget().filter(v => !cnMoten(v).nasta && !cnPausad(v));
+    // cnLedig räknar med kalendern, så varje bokning läggs in innan nästa tid söks (som i utkastet), och kalendern återställs sedan.
+    const lista = l.map(v => { const ev = cnBoka(v); return {vem:ndCnId(v), dag:ev.d, start:ev.s}; });
+    S.cn = k.cn; KEV.length = k.kev;
+    ndCnPost('boka', {lista}); return; }
+  // Pausa: utkastet sparas också i navet, så att det finns kvar efter en omladdning.
+  if (d.cnmoteavbryt !== undefined){ const M = S.cnMote; if (M && cnMoteHarInnehall(M)) ndCnPost('utkast', {vem:ndCnId(M.vem), m:{...M, fel:{}}}, {ladda:false, tyst:true}); return; }
+}, true);
+
+/* Rad, skäl och samtal efter svaret sparas utan omladdning. */
+let ndCnTxtTimer = null;
+document.addEventListener('input', e => {
+  if (!ndCn() || !e.target.dataset || !e.target.dataset.cntxt) return;
+  const id = e.target.dataset.cntxt, dag = e.target.dataset.cnd, v = e.target.value;
+  clearTimeout(ndCnTxtTimer); ndCnTxtTimer = setTimeout(() => ndCnPost('svar-falt', {ov:id, dag, txt:v}, {ladda:false, tyst:true}).then(s => { if (s.laslage) toast(s.fel); }), 900);
+}, true);
+document.addEventListener('click', e => {
+  if (!ndCn()) return;
+  const t = e.target.closest && e.target.closest('[data-cnskal], [data-cnsam]'); if (!t) return;
+  const d = t.dataset, ov = d.cnov, dag = d.cnd || cnT();
+  setTimeout(() => { const o = cnOv(ov), s = o && o.svar[dag]; if (!s) return;
+    ndCnPost('svar-falt', d.cnskal ? {ov, dag, skal:s.skal || ''} : {ov, dag, sam:s.sam || ''}, {ladda:false, tyst:true}).then(r => { if (r.laslage) toast(r.fel); }); }, 0);
+}, false);
+
+/* Filen som bevis: repots uppladdning (ändamålet coaching), sedan inlämningen. */
+document.addEventListener('change', async e => {
+  if (!ndCn()) return;
+  const d = e.target.dataset; if (!d || !d.cnafil || !e.target.files || !e.target.files[0]) return;
+  e.stopImmediatePropagation();
+  const f = e.target.files[0], id = d.cnafil;
+  const p = await ndCnPost('fil-forbered', {id, filnamn:f.name, mime:f.type, storlek:f.size}, {ladda:false, tyst:true});
+  if (p.fel){ toast(p.fel); return; }
+  const mal = p.url || (p.supabaseUrl && p.token ? `${p.supabaseUrl}/storage/v1/object/upload/sign/${p.bucket}/${p.path}?token=${encodeURIComponent(p.token)}` : null);
+  const r = mal ? await fetch(mal, {method:'PUT', headers:{'Content-Type':f.type || 'application/octet-stream'}, body:f}).catch(() => ({ok:false})) : {ok:false};
+  if (!r.ok){ toast('Filen kom inte fram. Försök igen.'); return; }
+  ndCnPost('fil-registrera', {id, fil:p.fileId, filnamn:f.name, store:p.store});
+}, true);
+
+/* ---------- Startsidan ----------
+   ndhem byter utkastets INBOX och BRINN mot rader ur de kopplade vyerna. Coachnings rader är utkastets
+   egna: s1 (en överenskommelse att göra om eller som är sen), cnsvar (dagens övning före hemgång) och
+   cntapp (de som tappar övningen), plus det som väntar på chefens kvittering. */
+function ndCnHemRader(chef){
+  if (!ndCn() || !ndKopplad('coachning')) return [];
+  cnSt();
+  const ut = [];
+  if (!chef){
+    cnAvtal(cnMig()).filter(a => cnOppen(a) && cnNu(a)).forEach(a => {
+      const st = cnAvtSt(a), sen = cnSenDagar(a), gor = st === 'underkand';
+      ut.push({id:'cn-' + a.id, nar:gor || sen ? 'nu' : 'idag', i:'coach', ton:gor || sen ? 'danger' : 'warn', kind:'Coachning', bkind:'coachning', t:a.t,
+        d:[CNTYP[a.typ].l, a.due ? (sen ? `skulle vara klar ${frKort(a.due)}` : 'klar senast i dag') : 'inget datum'], pill:gor ? ['Gör om', 'danger'] : sen ? [`${sen} ${sen === 1 ? 'dag' : 'dagar'} sen`, 'danger'] : ['I dag', 'warn'],
+        act:{l:'Öppna'}, heat:gor ? 3.6 : sen ? 3.2 : 2.6, bt:gor ? `Gör om {coachningen}: ${a.t}.` : `{${a.t}} ska vara klar${sen ? '' : ' i dag'}.`, src:'/coachning/uppgift/' + a.id,
+        why:gor ? 'Din chef vill att du gör om den' : sen ? 'Fristen har gått ut' : 'Fristen går ut i dag', ga:() => cnGa('/coachning/uppgift/' + a.id)});
+    });
+    if (cnAktiva(cnMig()).some(o => cnIdagAktiv(o) && !o.svar[cnT()]) && S.mode !== 'morgon')
+      ut.push({id:'cnsvar', nar:'idag', i:'coach', ton:'signal', kind:'Coachning', bkind:'coachning', t:'Dagens övning: blev det av?', d:['Ett tryck'], act:{l:'Svara'}, heat:3.4,
+        bt:'Svara på {dagens övning} innan du går.', src:'/coachning/svara', why:'Ett tryck. Svaret varje dag är det som gör den till en vana', ga:() => cnGa('/coachning/svara')});
+    return ut;
+  }
+  const vant = S.cn.avt.filter(cnVantarChef);
+  if (vant.length) ut.push({id:'cnvant', nar:'idag', i:'coach', ton:'signal', kind:'Coachning', bkind:'coachning', t:`${vant.length} ${vant.length === 1 ? 'inlämning väntar' : 'inlämningar väntar'} på dig`,
+    d:[[...new Set(vant.map(a => cnFor(a.vem)))].join(', ')], act:{l:'Öppna'}, heat:3, bt:`{${vant.length === 1 ? 'En inlämning' : vant.length + ' inlämningar'}} i coachningen väntar på din kvittering.`, src:'/coachning', why:'Kvittera, eller be om att göra om med en kommentar', ga:() => cnGa('/coachning')});
+  const tapp = cnTappNamn();
+  if (tapp) ut.push({id:'cntapp', nar:'idag', i:'coach', ton:'warn', kind:'Coachning', bkind:'coachning', t:`${tapp} har inte svarat på sina övningar på två dagar`, d:['Dag tre är där en ny vana brukar tappas'], act:{l:'Öppna'}, heat:2.8,
+    bt:`{${tapp}} har inte svarat på sina övningar på två dagar.`, src:'/coachning/tappar', why:'Dag tre är där en ny vana brukar tappas', ga:() => cnGa('/coachning/tappar')});
+  return ut;
+}
+// Länkar till /coachning/… (notiser, startsidan) öppnar vyn här.
+if (typeof ndGa === 'function'){
+  const _ndCnNdGa = ndGa;
+  ndGa = function(h){ if (ndCn() && ndKopplad('coachning') && /^\/coachning(\/|$)/.test(String(h || ''))){ cnGa(String(h)); return; } return _ndCnNdGa(h); };
+}
+
+if (ndCn()){ ndCnStart(); NDKOPPLAD.add('coachning'); }
 
 /* Start */
 try { const th = localStorage.getItem('nav2-theme'); if (th && th !== 'auto'){ document.documentElement.setAttribute('data-theme', th); S.theme = th; document.querySelectorAll('#themeSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.themeSet === th))); } } catch(_){}

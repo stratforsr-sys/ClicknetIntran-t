@@ -43,7 +43,9 @@ export type Andamal =
    * i `contract` och arver dess behorighet — den anstallda ser det nar avtalet
    * ar utfardat, och det foljer med i hens registerutdrag.
    */
-  | "employment_contract";
+  | "employment_contract"
+  /** 0043: bevis på en coachningsuppgift (en kommentar räcker inte). Nav 2.0 lämnar in den (0100). */
+  | "coaching";
 
 /** Vad varje andamal far bara. Samma lista som check-villkoret i 0022. */
 export const TILLATNA_TYPER: Record<Andamal, string[]> = {
@@ -60,6 +62,7 @@ export const TILLATNA_TYPER: Record<Andamal, string[]> = {
   call_recording: ["audio/mpeg", "audio/mp4", "audio/wav", "audio/webm"],
   // Ett paskrivet avtal ar en inskannad PDF eller ett telefonfoto av papperet.
   employment_contract: ["application/pdf", "image/jpeg", "image/png"],
+  coaching: ["application/pdf", "image/jpeg", "image/png", "audio/mpeg", "audio/mp4", "audio/wav", "audio/webm"],
 };
 
 /**
@@ -82,6 +85,7 @@ export const MAX_BYTE: Record<Andamal, number> = {
   call_recording: 50 * 1024 * 1024,
   // Ett inskannat avtal pa sex sidor i fargskanning passerar latt tio MB.
   employment_contract: 20 * 1024 * 1024,
+  coaching: 50 * 1024 * 1024,
 };
 
 /**
@@ -114,6 +118,7 @@ export const ANDAMAL_ETIKETT: Record<Andamal, string> = {
   sales_order: "Avtal",
   call_recording: "Inspelat samtal",
   employment_contract: "Anställningsavtal",
+  coaching: "Coachning",
 };
 
 export type Filfel =

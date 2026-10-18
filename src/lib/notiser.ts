@@ -235,6 +235,10 @@ export const NOTIS_KALLOR = [
   "coachning-godkand",
   "coachning-avbruten",
   "coachning-samtal",
+  "coachning-ovning",
+  "coachning-rad",
+  "coachning-forfragan",
+  "coachning-datum",
 
   /** Arendet. Tilldelningen till den som ska hantera, beslutet till agaren. */
   "arende-tilldelad",
@@ -665,6 +669,10 @@ export const HANDELSEKALLOR = [
   "coachning-godkand",
   "coachning-avbruten",
   "coachning-samtal",
+  "coachning-ovning",
+  "coachning-rad",
+  "coachning-forfragan",
+  "coachning-datum",
   "arende-tilldelad",
   "arende-status",
   "order-inskickad",
