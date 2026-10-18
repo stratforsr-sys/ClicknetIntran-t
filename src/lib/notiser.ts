@@ -619,6 +619,9 @@ export const NOTIS_KALLOR = [
   "utbildning-fraga",
   "utbildning-paminn",
 
+  /** Nav 2.0 (0120), startsidan: Grattis på en order på Golvet. */
+  "order-grattis",
+
   /**
    * ANGRA-KNAPPEN HAR MED FLIT INGEN KALLA HAR.
    *
@@ -735,6 +738,7 @@ export const HANDELSEKALLOR = [
   "rutin-bevakning",
   "utbildning-fraga",
   "utbildning-paminn",
+  "order-grattis",
 ] as const satisfies readonly Notiskalla[];
 
 export type Handelsekalla = (typeof HANDELSEKALLOR)[number];

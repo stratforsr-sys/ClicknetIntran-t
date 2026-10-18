@@ -5,6 +5,41 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-18 · Nav 2.0, startsidan med riktig data och allt utkastet har (0120)
+
+Startsidan sammanfattar de andra vyerna. Varje rad på den kommer nu ur en vy
+som är kopplad, och handlingen går till den vyns rutt och står bakom den vyns
+brytare.
+
+- **Beslut och att göra / Kräver dig** och **Din dag i korthet** byggs ur
+  samma rader (`moduler/ndhem.js`): obekräftad sjukanmälan och ledighet att
+  besluta (Frånvaro), order som väntar och order utan säljsamtal (Order),
+  ärenden över tiden utan rubrik som på `/` och svar som väntar på dig
+  (Ärenden), rättelser och ogiltig frånvaro (Tid), rollspel och kurser
+  (Utbildning), rutiner att kvittera och granska (Rutiner), och uppgifter med
+  frist i dag eller passerad (Uppgifter). Bekräfta, Bevilja, Klar och Kvittera
+  anropar `/nav2/franvaro`, `/nav2/uppgifter` och `/nav2/rutiner`.
+- **"Sedan du tittade"** räknar klockans poster sedan förra besöket
+  (`nav_preference hem.sett`), annars sedan i morse eller i fredags.
+- **Golvet just nu och Teamet i månaden** (`src/lib/nav2/hem.ts`): lagets
+  ordervärde räknas med repots `ordervarde()` över laget (samma tal som Orders
+  nyckeltal), mot lagets mål (0120 `team_goal`, nytt: navet hade bara mål per
+  säljare). Dagens godkända order med Grattis (0120 `order_grattis`, notisen
+  `order-grattis`). En säljare ser sina egna rader och kollegor som valt att
+  synas (`hem.golvet`); säljchef, VD och ekonomi ser alla. Golvet läses om
+  varje minut (GET `/nav2/hem?golvet=1`).
+- **Stämpelkortet**: dagens slut för säljaren ("Det här hann du i dag",
+  "Först på måndag") och chefens flikar I dag / 7 / 14 dagar, "Avsluta dagen"
+  och "Bokför provision" är tillbaka. **Nästa arbetsdag**, **Veckan som
+  kommer** och **kvällsnotisen** byggs ur Kalendern, Frånvaro och Uppgifter.
+- **Rättat:** utkastets påhittade order på Golvet ("Jonas signerade Ekhagens
+  Trädgård") visades efter 22 sekunder även i riktigt läge. Frånvarokortet sa
+  "Väntar på Johanna" och kunde visa "null dagar". Länkarna i korten
+  (`data-go`) gav "I utkastet finns bara startsidan" och öppnar nu vyn.
+- `/nav2/hem` (POST bakom `SKRIVLAGE.hem`): grattis, flagga ("Stämmer inte"
+  blir en felrapport i kön på /fel), dolj/visa, sett, golvet och lagmal.
+- **Öppna frågor:** se `docs/NASTA_SESSION.md`.
+
 ## 2026-10-16 · Nav 2.0, pass 11: Utbildning med riktig data och allt utkastet har (0097)
 
 Utkastets Utbildning har nio exempelkurser, en repetitionsbank, rollspel med
