@@ -133,13 +133,17 @@ export async function signeraOchLogga(
   // ned ar en uppgift om halsa i en webblasarflik.
   // ===================================================================
   const arLjud = fil.purpose === "call_recording";
+  // Nav 2.0, Avtal (beställaren 2026-10-19): anställningsavtalet öppnas och läses
+  // direkt i webbläsaren i stället för att laddas ned. Behörigheten och loggen
+  // är desamma; spara går ändå från webbläsarens egen PDF-visare.
+  const visasDirekt = arLjud || fil.purpose === "employment_contract";
 
   const signerad = await signeraLank({
     lager: tolkaLager(fil.store),
     bucket: fil.bucket,
     path: fil.path,
     sekunder: arLjud ? URL_SEKUNDER_LJUD : URL_SEKUNDER,
-    laddaNedSom: arLjud ? null : namn,
+    laddaNedSom: visasDirekt ? null : namn,
   });
 
   if ("fel" in signerad) throw new Error(signerad.fel);

@@ -618,6 +618,9 @@ export const NOTIS_KALLOR = [
   "rutin-kvittera",
   "rutin-bevakning",
 
+  /** Nav 2.0, Avtal: påminnelsen om att skriva under ett utfärdat avtal. */
+  "avtal-paminnelse",
+
   /**
    * Nav 2.0 (0097), Utbildning: en fråga i förväg till den som håller en
    * föreläsning, och chefens påminnelse om en obligatorisk kurs. Båda är
@@ -759,6 +762,7 @@ export const HANDELSEKALLOR = [
   "rutin-delad",
   "rutin-kvittera",
   "rutin-bevakning",
+  "avtal-paminnelse",
   "utbildning-fraga",
   "utbildning-paminn",
   "order-grattis",

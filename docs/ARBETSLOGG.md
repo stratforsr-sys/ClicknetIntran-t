@@ -5,6 +5,17 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-19 · Nav 2.0, Avtal med riktig data, i läsläge (ingen migration)
+
+Utkastets Avtal och Mitt avtal läser navets anställningsavtal (`contract`, 0028/0073) med den inloggades behörighet. I produktionen finns tre avtal, alla uppladdade PDF:er, och inga mallar.
+
+- **Beställarens beslut 2026-10-19:** avtalen laddas upp som PDF per person, ett anställningsavtal och tilläggsavtal; man öppnar PDF:en och läser direkt ur den; ingen textutläsning. Den anställda ser sin egen lön. Bara de med behörighet laddar upp och tar bort. Provanställningen är sex månader.
+- **Mitt avtal:** Öppna avtalet (PDF:en i en ny flik via `/filer/<id>`, loggad öppning), lönen ur `salary_basis` (bara den egna raden), provisionen i månaden ur Order, semestersaldot ur Frånvaro, anställningsformen ur registret. Det som bara står i avtalet ("Står i avtalet") öppnar PDF:en. Utkastets fasta avtalstext (Göteborg, 25:e, en månads varsel) är borta. Ett avtal ur mall visas med sina egna paragrafer (`avtalforma.ts`).
+- **Chefen:** alla personer med läge (påskrivet = uppladdad PDF, "Inte uppladdat"), Att göra med provanställningar enligt LAS, panelen per person med avtalen, Öppna, Ta bort och Ladda upp (rubrik, PDF/JPG/PNG direkt till R2).
+- **`/nav2/avtal`:** repots `forberedAvtalsfil`/`registreraAvtalsfil`, `raderaUtkast`, `draTillbakaAvtal`, `utfardaAvtal`, `skapaAvtal`, och nytt: påminn (notisen `avtal-paminnelse`, en om dagen) och tillsvidare (`employee.employment_type` + `audit_log`). Bakom `SKRIVLAGE.avtal`.
+- **`filer-server.ts`:** `employment_contract` lämnas ut inline i stället för som nedladdning, så att PDF:en går att läsa direkt.
+- Provat lokalt mot produktionen som Zen, Edvin och Fredrik, och ritat på previewsidan med modulen inlagd.
+
 ## 2026-10-19 · Nav 2.0, Coachning med riktig data, i läsläge (0100 SKRIVEN OCH TORRKÖRD, EJ KÖRD)
 
 Utkastets Coachning läser navets coachning. Ingen funktion i utkastet togs

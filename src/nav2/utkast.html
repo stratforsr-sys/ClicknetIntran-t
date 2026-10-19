@@ -29750,6 +29750,257 @@ if (typeof ndGa === 'function'){
 
 if (ndCn()){ ndCnStart(); NDKOPPLAD.add('coachning'); }
 
+/* =====================================================================
+   NAV 2.0 I RIKTIGT LÄGE: AVTAL (prefix nd)
+
+   Navets anställningsavtal ur ND.avtal (src/lib/nav2/avtal.ts) i stället för
+   utkastets exempel. Beställaren 2026-10-19: varje persons avtal och
+   tilläggsavtal laddas upp som PDF, och man öppnar PDF:en och läser direkt ur
+   den. Bara den som hanterar avtal laddar upp och tar bort. Ett avtal ur en
+   mall visas med sina egna paragrafer.
+
+   Avtal fyller p.avtal på registrets personer (S.ae.pers). Anställdas
+   avtalskort läser samma fält, och dess knappar postar till samma rutt.
+
+   Det som sparar går till /nav2/avtal (src/app/nav2/avtal/route.ts): repots
+   bifoga, ta bort (radera utkast / dra tillbaka), utfärda och nytt, plus
+   påminn och tillsvidare. I läsläge svarar rutten 423 och visar varför.
+   ===================================================================== */
+
+const ndMa = () => ND && ND.avtal;
+// Personens avtal: de som gäller (äldst först) och de borttagna. Det första är huvudavtalet, resten tillägg.
+function ndMaAvtalen(pid){
+  const alla = ndMa() ? ndMa().avtal.filter(a => a.personId === pid) : [], galler = alla.filter(a => a.lage !== 'tillbaka');
+  return {galler, hu:galler[0] || null, till:galler.slice(1), tb:alla.filter(a => a.lage === 'tillbaka')};
+}
+// Personens läge: påskrivet så fort en påskriven PDF är uppladdad, annars huvudavtalets läge.
+function ndMaLage(galler){
+  const fil = galler.find(a => a.kalla === 'fil' && a.lage === 'signerat');
+  if (fil) return {st:'signerat', sign:fil.utfardad};
+  const hu = galler[0];
+  return hu ? {st:hu.lage, sign:null} : {st:'saknas', sign:null};
+}
+const ndMaKr = s => { const n = +String(s || '').replace(/[^\d]/g, ''); return n > 0 ? n : null; };
+// Provanställningen är sex månader (beställaren 2026-10-19), om inte ett mallavtal säger annat.
+function ndMaProv(p, v){
+  if (p.form !== 'probation' || !p.start) return null;
+  const m = String((v && v.provanstallning) || '').match(/(\d+)\s*mån/);
+  return m ? frPlus(aeManPlus(p.start, +m[1]), -1) : aeProvSlut(p);
+}
+const ndMaEgenLon = pid => ndMa() && ndMa().minLon && ND.jag && pid === ND.jag.id ? ndMa().minLon : null;
+// p.avtal i den form Anställdas avtalskort och Avtal läser.
+function ndMaPAvtal(pid){
+  const {galler, hu} = ndMaAvtalen(pid), l = ndMaLage(galler), egen = ndMaEgenLon(pid);
+  if (!hu) return {st:null, lon:egen ? egen.belopp : null, utf:null, sign:null, mall:'', pamind:[]};
+  return {st:l.st, lon:egen ? egen.belopp : ndMaKr(hu.villkor.manadslon), utf:hu.utfardad, sign:l.sign, mall:hu.titel, pamind:[...hu.pamint], id:hu.id,
+    fil:hu.fil ? hu.fil.namn : null, filId:hu.fil ? hu.fil.id : null, kalla:hu.kalla, antal:galler.length};
+}
+const _ndMaAeSt = aeSt;
+aeSt = function(){
+  const forst = !S.aeInit; _ndMaAeSt();
+  if (!ndMa() || !forst) return;
+  S.ae.pers.forEach(p => { p.avtal = ndMaPAvtal(p.id); });
+};
+
+/* ---------- Avtalet för en person ---------- */
+const _ndMaAvtal = maAvtal;
+maAvtal = function(p){
+  if (!ndMa()) return _ndMaAvtal(p);
+  const {galler, hu, till, tb} = ndMaAvtalen(p.id), l = ndMaLage(galler), v = hu ? hu.villkor : {}, egen = ndMaEgenLon(p.id), r = p.roller || [];
+  const lon = egen ? egen.belopp : ndMaKr(v.manadslon);
+  return {pid:p.id, namn:p.namn, galler, hu, tb, v, egen, provTill:ndMaProv(p, v), form:p.form, start:p.start || null,
+    befattning:v.befattning || (r.includes('sales_manager') ? 'Säljchef' : r.includes('salesperson') || !r.length ? 'Säljare' : 'Medarbetare'), team:p.team || '',
+    lon, lonStart:lon, mall:hu ? hu.titel : '', st:l.st, utf:hu ? hu.utfardad : null, sign:l.sign,
+    tillagg:till.map(t => ({d:t.utfardad || t.skapad, rubrik:t.titel, text:t.text || '', fil:t.fil, sign:t.kalla === 'fil' ? t.utfardad : null, lon:null})), pamind:hu ? hu.pamint : []};
+};
+// maMitt, maProvOkt och maText är const i utkastet: Avtal har egna i riktigt läge.
+function ndMaMitt(){
+  maSt(); const p = S.ae.pers.find(x => x.id === ND.jag.id), a = p && maAvtal(p);
+  return a && a.hu ? a : null;
+}
+function ndMaProvOkt(){
+  const man = maT().slice(0, 7);
+  return ORDER.filter(o => o.vemId === ND.jag.id && ['signerad', 'betald'].includes(o.st) && String(o.sign || '').startsWith(man)).reduce((s, o) => s + (oProv(o) || 0), 0);
+}
+// Ett mallavtals text att spara, med tilläggen efter.
+function ndMaText(a){
+  return [a.hu.text || '', ...a.tillagg.filter(t => t.text).map(t => `Tillägg ${maDat(t.d)}: ${t.rubrik}\n\n${t.text}`)].join('\n\n');
+}
+
+/* ---------- Chefens frister ---------- */
+const _ndMaGora = maGora;
+maGora = function(){
+  if (!ndMa()) return _ndMaGora();
+  if (!ndMa().hanterar) return [];
+  maSt(); const T = maT(), ut = [];
+  S.ae.pers.filter(p => p.status !== 'offboarded').forEach(p => {
+    const a = maAvtal(p), borjat = p.start ? (p.start > T ? 'Börjar ' + rxNar(p.start) : 'Har börjat') : 'Startdagen saknas i registret';
+    if (a.st === 'utkast') ut.push({p, a, typ:'utkast', nar:'idag', t:'Avtalet är inte skickat', sub:`${borjat}. Skicka det för påskrift.`});
+    if (a.st === 'utfardat') ut.push({p, a, typ:'pask', nar:p.start && p.start <= T ? 'sen' : 'idag', t:p.start && p.start <= T ? 'Har börjat utan påskrivet avtal' : 'Väntar på påskrift', sub:`Skickat ${maDat(a.utf)}${a.pamind.length ? `, påmint ${maDat(a.pamind[a.pamind.length - 1])}` : ''}. Ladda upp det påskrivna avtalet när det kommer.`});
+    if (a.provTill){ const slut = a.provTill, besked = frPlus(slut, -14);
+      if (slut < T) ut.push({p, a, typ:'overgatt', nar:'sen', t:'Provanställningen har gått över i tillsvidare', sub:`Den slutade ${maDat(slut)} utan besked, och då gäller anställningen tills vidare (LAS 6 b §). Registret säger fortfarande provanställd.`});
+      else if (frMellan(T, besked) <= 45) ut.push({p, a, typ:'prov', nar:frMellan(T, besked) <= 14 ? 'idag' : 'snart', t:`Provanställningen slutar ${maDat(slut)}`, sub:`Ska den inte fortsätta måste besked lämnas senast ${aeDagDatum(besked)} (LAS 31 §). Annars blir den tillsvidare.`}); }
+  });
+  const o = {sen:0, idag:1, snart:2}; return ut.sort((a, b) => o[a.nar] - o[b.nar]);
+};
+
+/* ---------- Avtalen som lista, paragraferna och uppladdningen ---------- */
+const ndMaParIdx = (a, id) => a.hu ? a.hu.paragrafer.findIndex(x => x.id === id) + 1 : 0;
+const ndMaParHtml = (par, markera) => `<ol class="mapar">${par.map((x, i) => `<li id="ma-${x.id}" class="${markera === x.id ? 'mark' : ''}"><b><span class="num">§ ${i + 1}</span>${esc(x.rubrik || 'Inledning')}</b>${ndMd(x.text)}</li>`).join('')}</ol>`;
+const NDMA_RAD = {utkast:'Utkast', utfardat:'Skickat för påskrift', signerat:'Påskrivet'};
+// Varje avtal som gäller: öppna PDF:en, och för den som hanterar avtal: ta bort.
+function ndMaListaHtml(a){
+  const ha = ndMa().hanterar;
+  return `<ul class="malista" id="ma-fil">${a.galler.map((x, i) => `<li><div class="malr"><span class="malt"><b>${esc(x.titel)}${i ? '' : a.galler.length > 1 ? ' <small>(huvudavtal)</small>' : ''}</b><small>${x.kalla === 'fil' ? `PDF${x.fil && x.fil.storlek ? ' · ' + Math.max(1, Math.round(x.fil.storlek / 1024)) + ' kB' : ''} · uppladdat ${maDat(x.utfardad)}` : `${NDMA_RAD[x.lage] || ''}${x.utfardad ? ' ' + maDat(x.utfardad) : ''}`}</small></span>
+      <span class="rxpt"><button class="btn btn-s btn-sm" data-maoppna="${x.id}">${I('ut')}Öppna</button>${ha ? `<button class="tlink" data-matabort="${S.maTaBort === x.id ? '' : x.id}">Ta bort</button>` : ''}</span></div>
+      ${ha && S.maTaBort === x.id ? `<div class="aek">${x.lage === 'utkast' ? '' : `<input class="uin" id="maSkal" maxlength="500" placeholder="Varför tas det bort? ${esc(rxFor(a.namn))} får skälet.">`}<button class="btn btn-s btn-sm" data-matabortok="${x.id}">Ta bort avtalet</button><button class="tlink" data-matabort="">Avbryt</button></div>` : ''}</li>`).join('')}</ul>`;
+}
+function ndMaUppHtml(a){
+  if (!ndMa().hanterar) return '';
+  const forslag = a.galler.length ? 'Tilläggsavtal' : 'Anställningsavtal';
+  return `<p class="rxlab">Ladda upp avtal</p><div class="aek"><input class="uin" id="maUppT" list="maUppL" maxlength="200" value="${esc(S.maUppT && S.maUppFor === a.pid ? S.maUppT : forslag)}" aria-label="Rubrik"><datalist id="maUppL"><option value="Anställningsavtal"><option value="Tilläggsavtal"><option value="Tillägg, lön"><option value="Tillägg, provision"></datalist>
+      <label class="btn btn-p btn-sm">${I('plus')}Välj PDF<input type="file" accept="application/pdf,image/jpeg,image/png" data-maupp="${a.pid}" hidden></label></div>
+    <p class="aehint">Det påskrivna avtalet som PDF, JPG eller PNG. ${esc(rxFor(a.namn))} kan öppna det under Mitt avtal direkt.</p>`;
+}
+const ndMaBorttagnaHtml = a => a.tb && a.tb.length && ndMa().hanterar ? `<p class="rxlab">Borttagna</p><ul class="matill">${a.tb.map(t => `<li><b>${esc(t.titel)}</b><p>${esc(t.tillbaka && t.tillbaka.skal || 'Inget skäl angivet.')}</p><small>Borttaget ${maDat(t.tillbaka && t.tillbaka.d)}</small></li>`).join('')}</ul>` : '';
+
+/* ---------- Mitt avtal ---------- */
+const _ndMaMittVy = maMittVy;
+maMittVy = function(a){
+  if (!ndMa()) return _ndMaMittVy(a);
+  a = ndMaMitt();
+  if (!a) return `<header class="top"><div class="hello"><h1>Mitt avtal</h1></div></header>${rxTom('Inget avtal än', 'Ditt avtal dyker upp här när det är uppladdat.')}`;
+  const T = maT(), v = a.v, man = FRMAN[+T.slice(5, 7)], prov = ndMaProvOkt(), sal = FRSALDO.vacation, spar = FRSALDO.saved && !FRSALDO.saved.saknas ? FRSALDO.saved.d : 0, fil = a.hu.kalla === 'fil';
+  const par = id => ndMaParIdx(a, id), parTxt = id => { const i = par(id); return i ? `§ ${i}` : ''; };
+  const kort = [
+    ['lon', 'Lön', a.lon ? kr(a.lon) + ' i månaden' : 'Står i avtalet', a.egen ? `Sedan ${maDat(a.egen.fran)}` : a.lon ? 'Enligt avtalet' : 'Öppna avtalet', null],
+    ['provision', 'Provision', kr(prov) + ' i ' + man, 'Signerade och betalda order', ['/provision', 'Så räknas det']],
+    ['semester', 'Semester', sal && !sal.saknas ? `${sal.d} dagar kvar` : 'Saldot saknas', `${spar ? `plus ${spar} sparade · ` : ''}${v.semesterdagar ? v.semesterdagar + ' per år' : 'minst 25 per år enligt lagen'}`, ['/franvaro', 'Sök ledigt']],
+    ['form', 'Anställning', a.provTill && a.provTill >= T ? `Provanställd till ${maDat(a.provTill)}` : a.form === 'probation' ? 'Provanställd' : a.form === 'consultant' ? 'Konsult' : 'Tillsvidare', a.start ? `Sedan ${maDat(a.start)}, ${maLangd(Math.max(0, maManader(a.start, T)))}` : 'Startdagen saknas i registret', null],
+    ['uppsagning', 'Uppsägningstid', v.uppsagningstid || 'Står i avtalet', v.uppsagningstid ? 'Från din sida' : 'Öppna avtalet', null],
+    ['tid', 'Arbetstid', v.arbetstid || 'Står i avtalet', v.arbetstid ? '' : 'Öppna avtalet', ['/tid', 'Din tid']]
+  ];
+  // Det som bara står i avtalet: en knapp som öppnar det.
+  const las = id => par(id) ? `<button class="tlink" data-mapar="${id}">Visa ${parTxt(id)}</button>` : '<button class="tlink" data-malad>Öppna avtalet</button>';
+  const faq = [
+    ['Hur många semesterdagar har jag kvar?', `${sal && !sal.saknas ? `${sal.d} dagar i år` : 'Saldot finns inte i Nav än'}${spar ? `, plus ${spar} sparade` : ''}. ${v.semesterdagar ? `Enligt avtalet har du ${v.semesterdagar} dagar per år.` : 'Lagen ger minst 25 dagar per år.'}`, las('semester'), ['/franvaro', 'Sök ledigt']],
+    ['Hur räknas provisionen?', 'Efter provisionsmodellen i Nav, under Provision. Vad som gäller just dig står i avtalet.', las('provision'), ['/provision', 'Så räknas det']],
+    ['Hur lång är min uppsägningstid?', `${v.uppsagningstid ? `${v.uppsagningstid} om du säger upp dig, enligt avtalet.` : 'Den står i ditt avtal.'} Om Clicknet säger upp dig gäller lagen om anställningsskydd, och den beror på hur länge du varit anställd.`, las('uppsagning'), null],
+    ['Vad gör jag om jag blir sjuk?', 'Sjukanmäl dig i Nav under Frånvaro samma dag. Sjuklönelagen gäller.', par('sjuk') ? las('sjuk') : '', ['/franvaro', 'Sjukanmälan']],
+    ['När får jag lön?', 'Utbetalningsdagen står i ditt avtal.', las('lon'), null]
+  ];
+  const q = oQnorm((S.maQ || '').trim()), pl = a.hu.paragrafer.filter(x => !q || oQnorm(x.rubrik + ' ' + x.text).includes(q));
+  const skrivet = a.sign ? `Påskrivet, uppladdat ${maDat(a.sign)}` : `Skickat ${maDat(a.utf)}, inte påskrivet än`;
+  return `<header class="top"><div class="hello"><h1>Mitt avtal</h1><p>${esc(a.befattning)}${a.team ? ` i ${esc(a.team)}` : ''}${a.start ? ` sedan ${maDat(a.start)}` : ''}. ${skrivet}.</p></div>
+      <div class="tools"><button class="btn btn-s" data-malad>${I('ut')}Öppna avtalet</button><button class="btn btn-p" data-mafraga>${I('inbox')}Fråga om avtalet</button></div></header>
+    <section class="maband">${kort.map(([id, l, val, s, lank]) => { const ti = par(id) ? id : 'fil';
+      return `<div class="makort"><button class="makb" data-mapar="${ti}" title="${ti === 'fil' ? 'Öppna avtalet' : 'Visa ' + parTxt(id) + ' i avtalet'}"><small>${l}</small><b class="num">${esc(val)}</b><span>${esc(s)}</span>${ti !== 'fil' ? `<i>${parTxt(id)}</i>` : ''}</button>${lank ? `<button class="tlink" ${lank[0] === '/tid' ? 'data-view="tid"' : `data-go="${lank[0]}"`}>${lank[1]}</button>` : ''}</div>`; }).join('')}</section>
+    <div class="tgrid aegrid"><div class="col">
+      <section class="card" aria-label="Avtalet"><div class="chead"><h2>${a.galler.length > 1 ? 'Dina avtal' : 'Avtalet'}</h2>${a.hu.paragrafer.length ? `<span class="end"><label class="nhsok">${I('sok')}<input id="maSok" type="search" placeholder="Sök i avtalet" value="${esc(S.maQ)}" aria-label="Sök i avtalet"></label></span>` : ''}</div>
+        ${ndMaListaHtml(a)}
+        ${fil ? '<p class="aehint">Öppna avtalet för att läsa det. Det öppnas i webbläsaren, och där kan du också spara det.</p>'
+          : pl.length ? ndMaParHtml(pl, S.maPar) : `<ol class="mapar"><li class="matom">${q ? `Inget i avtalet matchar ”${esc(S.maQ.trim())}”.` : 'Avtalet har ingen text i Nav.'}</li></ol>`}
+      </section>
+    </div><div class="col">
+      <section class="card" aria-label="Vanliga frågor"><div class="chead"><h2>Vanliga frågor</h2></div>
+        <ul class="mafaq">${faq.map(([f, s, knapp, lank], i) => `<li><button class="mafq" data-mafaq="${i}" aria-expanded="${S.maFaq === i}"><b>${esc(f)}</b>${I('chev', 'aechev')}</button>${S.maFaq === i ? `<div class="mafs"><p>${esc(s)}</p><div class="aek">${knapp}${lank ? `<button class="btn btn-s btn-sm" data-go="${lank[0]}">${lank[1]}</button>` : ''}</div></div>` : ''}</li>`).join('')}</ul>
+        <p class="aehint">Hittar du inte svaret? <button class="tlink inl" data-mafraga>Fråga om avtalet</button>, så hamnar frågan hos ${esc(ME.chef.fornamn || 'din chef')} som ett ärende.</p></section>
+    </div></div>`;
+};
+
+/* ---------- Chefens vy ---------- */
+const NDMA_ST = {utkast:['Utkast', 'warn'], utfardat:['Skickat', 'info'], signerat:['Påskrivet', 'ok'], saknas:['Inte uppladdat', 'neutral']};
+const _ndMaChefVy = maChefVy;
+maChefVy = function(){
+  if (!ndMa()) return _ndMaChefVy();
+  // Admin utan avtalsrätt (0028: bara säljchef, VD och admin) ser bara sitt eget, som en säljare.
+  if (!ndMa().hanterar){ const a = ndMaMitt(); return a ? maMittVy(a) : `<header class="top"><div class="hello"><h1>Mitt avtal</h1></div></header>${rxTom('Inget avtal än', 'Ditt avtal dyker upp här när det är upplagt.')}`; }
+  const g = maGora(), pers = S.ae.pers.filter(p => p.status !== 'offboarded').sort((a, b) => a.namn.localeCompare(b.namn, 'sv')), oppen = S.maOpen && S.ae.pers.find(p => p.id === S.maOpen);
+  const av = pers.map(p => [p, maAvtal(p)]), pask = av.filter(([, a]) => a.st === 'signerat').length, utan = av.filter(([, a]) => a.st === 'saknas').length, mallar = ndMa().mallar || [];
+  return `<header class="top"><div class="hello"><h1>Avtal</h1><p>${pask} av ${pers.length} har ett påskrivet avtal i Nav.${utan ? ` ${utan} saknar avtal: öppna personen och ladda upp det.` : ''}${g.length ? ` ${g.length} saker väntar.` : ''}</p></div>
+      <div class="tools"><button class="btn btn-p" data-aeny>${I('plus')}Lägg upp anställd</button></div></header>
+    <div class="tgrid aegrid"><div class="col">
+      <section class="card" aria-label="Att göra"><div class="chead"><h2>Att göra</h2><span class="meta num">${g.length}</span></div>
+        ${g.length ? `<ul class="rxrader">${g.map(x => `<li class="rxrad ${x.nar}"><button class="rxrk" data-maopen="${x.p.id}">${avatar(x.p.namn, 30)}<span><b>${esc(x.p.namn)}<i>${esc(x.t)}</i></b><small>${esc(x.sub)}</small></span></button><span class="rxrb">${x.typ === 'pask' ? `<button class="btn btn-s btn-sm" data-mapamin="${x.p.id}" ${x.a.pamind.includes(maT()) ? 'disabled' : ''}>${x.a.pamind.includes(maT()) ? 'Påmint i dag' : 'Påminn'}</button>` : x.typ === 'overgatt' ? `<button class="btn btn-p btn-sm" data-matv="${x.p.id}">Ändra till tillsvidare</button>` : x.typ === 'prov' ? `<button class="btn btn-s btn-sm" data-matv="${x.p.id}">Fortsätter, tillsvidare</button>` : ''}<button class="tlink" data-maopen="${x.p.id}">Öppna</button></span></li>`).join('')}</ul>` : rxTom('Inget väntar', 'Avtal som inte är påskrivna och provanställningar som snart slutar hamnar här.')}</section>
+      <section class="card" aria-label="Alla avtal"><div class="chead"><h2>Alla avtal</h2><span class="meta num">${pers.length}</span></div>
+        <ul class="malista">${av.map(([p, a]) => { const [sl, ston] = NDMA_ST[a.st] || NDMA_ST.saknas;
+          return `<li><button class="malr" data-maopen="${p.id}">${avatar(p.namn, 26)}<span class="malt"><b>${esc(p.namn)}</b><small>${esc(a.mall || 'Inget avtal uppladdat')}${a.galler.length > 1 ? ` + ${a.galler.length - 1} ${a.galler.length === 2 ? 'tillägg' : 'tillägg'}` : ''} · ${a.provTill && a.provTill >= maT() ? 'provanställd till ' + maDat(a.provTill) : p.form === 'probation' ? 'provanställd i registret' : p.form === 'consultant' ? 'konsult' : 'tillsvidare'}</small></span><span class="pill t-${ston}">${sl}</span>${I('chev', 'aechev')}</button></li>`; }).join('')}</ul></section>
+    </div><div class="col">
+      <section class="card" aria-label="Mallar"><div class="chead"><h2>Mallar</h2></div>
+        ${mallar.length ? `<ul class="malista">${mallar.map(m => `<li><div class="malr"><span class="malt"><b>${esc(m.titel)}</b><small>${m.status === 'draft' ? 'Utkast · ' : ''}Ändrad ${maDat(m.andrad)} · ${ndMa().avtal.filter(x => x.mallSlug === m.slug && x.lage !== 'tillbaka').length} avtal</small></span></div></li>`).join('')}</ul>` : rxTom('Inga mallar', 'Avtalen laddas upp som påskrivna PDF:er, ett eller flera per person.')}
+        <p class="aehint">Öppna en person i Alla avtal för att ladda upp anställningsavtalet och tilläggsavtal. De syns direkt under Mitt avtal för den det gäller. Bara säljchef, VD och administratör laddar upp och tar bort.</p></section>
+    </div></div>
+    ${oppen ? maPanel(oppen) : ''}`;
+};
+const _ndMaPanel = maPanel;
+maPanel = function(p){
+  if (!ndMa()) return _ndMaPanel(p);
+  const a = maAvtal(p), sub = !a.hu ? 'Inget avtal uppladdat' : `${a.mall}${a.galler.length > 1 ? ` + ${a.galler.length - 1} tillägg` : ''} · ${a.sign ? 'påskrivet, uppladdat ' + maDat(a.sign) : a.utf ? 'skickat ' + maDat(a.utf) : 'utkast'}`;
+  const text = a.hu && a.hu.kalla === 'mall' && a.hu.paragrafer.length ? ndMaParHtml(a.hu.paragrafer, null) : '';
+  return `<div class="rxbak" data-mastang></div><aside class="rxpanel" role="dialog" aria-modal="true" aria-labelledby="mapn">
+    <header class="rxph">${avatar(p.namn, 42)}<div><h2 id="mapn">${esc(p.namn)}</h2><small>${esc(sub)}</small></div><button class="ibtn rxpx" data-mastang aria-label="Stäng">${I('x')}</button></header>
+    <div class="rxpverk"><span></span><span class="rxpt">${a.hu ? `<button class="btn btn-s btn-sm" data-maladp="${p.id}">${I('ut')}Öppna avtalet</button>` : ''}${ndKopplad('anstallda') ? `<button class="btn btn-s btn-sm" data-rxae="${p.id}">${I('pers')}Öppna i Anställda</button>` : ''}</span></div>
+    <div class="rxpb">${a.galler.length ? ndMaListaHtml(a) : rxTom('Inget avtal uppladdat', ndMa().hanterar ? 'Ladda upp det påskrivna anställningsavtalet här nedanför.' : '')}${text}${ndMaUppHtml(a)}${ndMaBorttagnaHtml(a)}</div></aside>`;
+};
+
+/* ---------- Skrivningar: /nav2/avtal ---------- */
+async function ndMaPost(handling, data = {}, {ladda = true, tyst = false} = {}){
+  try {
+    const r = await fetch('/nav2/avtal', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
+    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    if (s.ok !== undefined && !s.fel){ if (!tyst) toast(s.ok); if (ladda) ndMaLaddaOm(); return s; }
+    if (!tyst) toast(s.fel || 'Det gick inte att spara.'); return s;
+  } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
+}
+function ndMaLaddaOm(){ try { sessionStorage.setItem('nd-ma', JSON.stringify({view:S.view, open:S.maOpen || null})); } catch(_){} setTimeout(() => location.reload(), 700); }
+(() => { if (!ndMa()) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-ma') || 'null'); sessionStorage.removeItem('nd-ma'); } catch(_){}
+  if (m && m.view === 'avtal') setTimeout(() => { maSt(); S.view = 'avtal'; if (m.open && S.ae.pers.some(p => p.id === m.open)) S.maOpen = m.open; render(); }, 0); })();
+// Öppna: PDF:en i en ny flik via /filer/<id> (behörigheten prövas och öppningen loggas). Ett mallavtal sparas som text.
+function ndMaOppna(x, a){
+  if (!x){ toast('Det finns inget avtal att öppna.'); return; }
+  if (x.kalla === 'fil'){ if (x.fil) window.open(`/filer/${encodeURIComponent(x.fil.id)}`, '_blank', 'noopener'); else toast('Filen finns inte längre i Nav.'); return; }
+  maSpara(`${x.titel.replace(/[^\wåäöÅÄÖ-]+/g, '-')}-${(a ? a.namn : '').replace(/\s+/g, '-')}.txt`, a && a.hu === x ? ndMaText(a) : x.text || '');
+}
+// Uppladdningen: rutten ger en signerad väg, filen går direkt dit, och sedan registreras avtalet.
+async function ndMaLaddaUpp(pid, fil){
+  const titel = (document.getElementById('maUppT')?.value || '').trim() || 'Anställningsavtal';
+  S.maUppT = titel; S.maUppFor = pid;
+  toast(`Laddar upp ${fil.name} …`);
+  const p = await ndMaPost('bifoga-forbered', {person:pid, filnamn:fil.name, mime:fil.type, storlek:fil.size}, {ladda:false, tyst:true});
+  if (!p.ok){ toast(p.fel || 'Filen gick inte att ladda upp.'); return; }
+  const mal = p.url || (p.supabaseUrl && p.token ? `${p.supabaseUrl}/storage/v1/object/upload/sign/${p.bucket}/${p.path}?token=${encodeURIComponent(p.token)}` : null);
+  const r = mal ? await fetch(mal, {method:'PUT', headers:{'Content-Type':fil.type || 'application/octet-stream'}, body:fil}).catch(() => ({ok:false})) : {ok:false};
+  if (!r.ok){ toast(`${fil.name} kom inte fram. Försök igen.`); return; }
+  const s = await ndMaPost('bifoga-registrera', {person:pid, titel, fil:p.fileId, filnamn:fil.name, store:p.store}, {ladda:false, tyst:true});
+  if (!s.ok){ toast(s.fel || 'Avtalet gick inte att spara.'); return; }
+  S.maUppT = null; toast(s.ok); ndMaLaddaOm();
+}
+const ndMaHitta = id => ndMa() ? ndMa().avtal.find(x => x.id === id) : null;
+document.addEventListener('click', e => {
+  if (!ndMa() || S.view !== 'avtal') return;
+  const t = e.target.closest && e.target.closest('button, a, label'); if (!t || !t.dataset) return;
+  const d = t.dataset, stopp = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+  maSt();
+  if (d.malad !== undefined){ stopp(); const a = ndMaMitt(); ndMaOppna(a && a.hu, a); return; }
+  if (d.maladp){ stopp(); const p = S.ae.pers.find(x => x.id === d.maladp), a = p && maAvtal(p); ndMaOppna(a && a.hu, a); return; }
+  if (d.maoppna){ stopp(); const x = ndMaHitta(d.maoppna), p = x && S.ae.pers.find(y => y.id === x.personId); ndMaOppna(x, p && maAvtal(p)); return; }
+  if (d.mapar === 'fil'){ stopp(); const a = ndMaMitt(); ndMaOppna(a && a.hu, a); return; }
+  if (d.matabort !== undefined){ stopp(); S.maTaBort = d.matabort || null; render(); setTimeout(() => document.getElementById('maSkal')?.focus(), 20); return; }
+  if (d.matabortok){ stopp(); const x = ndMaHitta(d.matabortok); if (!x) return; const skal = (document.getElementById('maSkal')?.value || '').trim();
+    if (x.lage !== 'utkast' && !skal){ toast('Skriv varför avtalet tas bort. Den det gäller får skälet.'); document.getElementById('maSkal')?.focus(); return; }
+    ndMaPost('ta-bort', {avtal:x.id, skal}).then(s => { if (!s.fel) S.maTaBort = null; }); return; }
+  if (d.mafraga !== undefined){ stopp(); const a = ndMaMitt(), i = a && S.maPar ? ndMaParIdx(a, S.maPar) : 0, x = i ? a.hu.paragrafer[i - 1] : null;
+    arNytt(x ? `Fråga om mitt avtal, § ${i}${x.rubrik ? ' ' + x.rubrik.toLowerCase() : ''}: ` : 'Fråga om mitt avtal: '); toast('Skriv din fråga. Den går till ' + (ME.chef.fornamn || 'din chef') + ' som ett ärende.'); return; }
+  if (d.mapamin){ stopp(); const p = S.ae.pers.find(x => x.id === d.mapamin), a = p && maAvtal(p); if (!a || !a.hu) return; ndMaPost('paminn', {avtal:a.hu.id}); return; }
+  if (d.matv){ stopp(); ndMaPost('tillsvidare', {person:d.matv}); return; }
+}, true);
+document.addEventListener('change', e => {
+  if (!ndMa() || S.view !== 'avtal' || !e.target.dataset || !e.target.dataset.maupp) return;
+  const f = e.target.files && e.target.files[0]; if (f) ndMaLaddaUpp(e.target.dataset.maupp, f);
+  e.target.value = '';
+});
+if (ndMa()) NDKOPPLAD.add('avtal');
+
 /* Start */
 try { const th = localStorage.getItem('nav2-theme'); if (th && th !== 'auto'){ document.documentElement.setAttribute('data-theme', th); S.theme = th; document.querySelectorAll('#themeSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.themeSet === th))); } } catch(_){}
 render();

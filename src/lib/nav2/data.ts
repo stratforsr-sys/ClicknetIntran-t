@@ -20,6 +20,7 @@ import { byggHem, type NdHem } from "./hem";
 import { byggRekrytering, type NdRekrytering } from "./rekrytering";
 import { byggCoachning, type NdCoachning } from "./coachning";
 import { byggAnstallda, type NdAnstallda } from "./anstallda";
+import { byggAvtal, type NdAvtal } from "./avtal";
 import type { NdFel } from "./felforma";
 import {
   formaLon,
@@ -83,6 +84,8 @@ export type Nav2Data = {
   coachning: NdCoachning;
   /** Anställda (0105). `far` är false för den som inte läser hela personalen. */
   anstallda: NdAnstallda;
+  /** Avtal: anställningsavtalen som PDF per person, mallarna och den egna lönen. */
+  avtal: NdAvtal;
 };
 
 const PERSONKOLUMNER =
@@ -93,7 +96,7 @@ export async function byggNav2Data(user: CurrentUser): Promise<Nav2Data | null> 
   if (!user.employee) return null;
   const supabase = await supabaseServer();
 
-  const [{ data: personRader }, { data: teamRader }, { data: satsRader, error: satsFel }, { data: lonRader, error: lonFel }, notiser, tid, franvaro, uppgifter, order, provision, kalender, arenden, fel, rutiner, utbildning, hem, rekrytering, anstallda, coachning] =
+  const [{ data: personRader }, { data: teamRader }, { data: satsRader, error: satsFel }, { data: lonRader, error: lonFel }, notiser, tid, franvaro, uppgifter, order, provision, kalender, arenden, fel, rutiner, utbildning, hem, rekrytering, anstallda, coachning, avtal] =
     await Promise.all([
       supabase.from("employee").select(PERSONKOLUMNER).order("first_name"),
       supabase.from("team").select("id, name"),
@@ -121,6 +124,7 @@ export async function byggNav2Data(user: CurrentUser): Promise<Nav2Data | null> 
       byggRekrytering(supabase, user),
       byggAnstallda(supabase, user),
       byggCoachning(supabase, user),
+      byggAvtal(supabase, user),
     ]);
 
   const ra: RaPerson[] = ((personRader ?? []) as unknown as (Omit<RaPerson, "roller"> & {
@@ -205,5 +209,6 @@ export async function byggNav2Data(user: CurrentUser): Promise<Nav2Data | null> 
     rekrytering,
     anstallda,
     coachning,
+    avtal,
   };
 }

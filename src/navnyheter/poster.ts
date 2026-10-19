@@ -66,6 +66,11 @@ behörigheter som här: du ser bara det du får se.
   checklistan per person med datum från startdagen, och checklistorna och
   utskicken som gäller nästa gång någon börjar eller slutar. Den som ska
   sätta upp något får ett mejl med en Klart-knapp och en påminnelse.
+- **Avtal**: under Mitt avtal öppnar du ditt anställningsavtal och dina
+  tilläggsavtal som PDF och läser dem direkt, med din lön, ditt semestersaldo
+  och din provision bredvid. Säljchef, VD och administratör laddar upp varje
+  persons påskrivna avtal och tillägg och tar bort ett som blev fel, och ser
+  vilka som saknar avtal och när provanställningarna slutar.
 - **Order** och kundkortet. Varje order har nu ett nummer (#12), och
   provisionen är navets: fryst på en godkänd order, och det godkännandet
   skulle ge på en som väntar. I kortet spelar du inspelningen direkt, skriver
