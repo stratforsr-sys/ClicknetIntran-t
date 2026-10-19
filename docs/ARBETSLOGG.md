@@ -5,6 +5,65 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-19 · Nav 2.0, skalet och övergången (steg 4 till produktion)
+
+Steg 4 i "Till produktion" (`~/nav2-utkast/PROMPTER.md`): det som gäller alla
+vyer innan Nav 2.0 kan ligga i produktion. Ingen migration. Klienten
+`moduler/ndskal.js` och `ndskal.css` ligger sist i modullistan, efter
+paletten.
+
+- **Vyer som inte är kopplade** (Nyheter, Leads, K&V, Händelselogg, Adoption)
+  öppnas på samma sida i nuvarande Nav, vilken väg man än tar: menyn,
+  paletten, startsidans kort, klockan och länkarna i vyerna. Förut ledde
+  paletten och länkarna i vyerna till en mellansida ("visar ingenting
+  påhittat"). `render` släpper aldrig fram en sådan vy; Leads, Nyheter och K&V
+  med en post följer med hela adressen (`/nyheter/nav/<slug>`).
+- **`ndGa` öppnar rätt flik eller post** i de kopplade vyerna:
+  `/franvaro/attest`, `/arenden/nytt`, `/tid/ogiltig-franvaro` (Sena och
+  frånvaro), `/tid/lonerapport`, `/uppgifter/<id>`, `/rutiner/<slug>`,
+  `/order/<nr>`, och klockans `/kalender?dag=…&handelse=…` öppnar dagen och
+  händelsen. En post som inte finns i Nav 2.0 och allt repot har som utkastet
+  saknar (schema, spärrar, projekt, systemguider, mallar, statistik …) öppnas
+  i nuvarande Nav (`SKALNAV`).
+- **Utkastets reservtoast** ("I Nav öppnas /x. I utkastet finns bara
+  startsidan.") blir vägen dit. Den kom från en `data-go` som ingen vy tog
+  hand om, paletten och felrapportens sida.
+- **Knappar som bara visade utkastets text:** "Nytt projekt" i Uppgifter går
+  till `/uppgifter` (repots `NyttProjekt`), och "Öppna" på en händelse man
+  inte organiserar i Kalendern går till `/kalender?handelse=<id>` (eller till
+  postens egen adress). Ärendens "Skriv en rutin av svaret" öppnar Rutiners
+  redaktör med rubriken och lösningen, eftersom Rutiner är kopplad.
+- **Inställningar, Påminnelser:** utkastets kort är tillbaka, med Tids
+  stämpelpåminnelser ur 0094 och samma rutt som Tid (`paminn`). Förut stod
+  "kopplas med Tid och Kalender".
+- **Uppgifter räknar dagens möten ur Kalendern** (`MOTEN`). Förut räknades hela
+  dagen som fri.
+- **Dokumentets skal i `/nav2`:** `route.ts` lägger `<!doctype html>`,
+  `<html lang="sv">`, charset och viewport före sidan. Filen saknar dem (claude.ai
+  lägger dem runt artifacten). Utan doctype ritades sidan i quirks-läge, utan
+  `lang` läser skärmläsaren den inte som svenska, och utan viewport ritar en
+  telefon sidan 980 px bred och förminskad. Jämfört i bild: samma utseende
+  utom ett par pixlar på etiketter.
+- **Telefon och tangentbord (X1, X2):** en tabell utan egen rullbar behållare
+  rullar i sin förälder på telefonen (Provisions matris, Tids beslutade sena),
+  så ingen sida rullar i sidled på 375 px. Knappar vars text döljs på smal skärm
+  får texten som etikett (Kalenderns Filter och Dela), en etikett på en ruta
+  utan roll blir en bild (Utbildnings värmekarta, Orders kontrollprickar),
+  `aria-sort` sitter på kolumnrubriken, en rullbar tabell går att nå med Tab,
+  och radknappar som bara tonade bakgrunden vid tangentbordsfokus får en ram.
+  Utkastets förklaringsknappar ritas inte i riktigt läge (dolda, men de bröt
+  flikraderna för skärmläsare).
+- **Demoreglagen:** rollbytet, klocklägena, förklaringarna och "Vad är nytt"
+  sitter bara i demoraden, som är dold i riktigt läge; inget annat sätter
+  rollen eller klockan.
+
+**Prov** (sökrobotar i scratchpaden, navigeringar avbrutna i Chrome): varje
+knapp i varje vy och flik som Zen och Fredrik, och ett varv till som öppnar
+paneler och klickar `data-go` och toastknappar i dem. Inga JS-fel. axe-core
+(WCAG 2.1 A/AA) och riktiga Tab-tryck på 375 och 1440 px. Kvar: kontrasten i
+utkastets dämpade text (beställarens beslut) och två småfel i Provisions
+markup (`dl` i `.pv-strip`, knappar i `.pv-staplar`).
+
 ## 2026-10-19 · Nav 2.0, paletten "Sök, gör eller fråga Nav" med riktig data (0125)
 
 Byggd och provad 2026-10-18, committad i dag efter beställarens ja (den första

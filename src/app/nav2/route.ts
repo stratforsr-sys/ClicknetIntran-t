@@ -23,12 +23,19 @@ export const dynamic = "force-dynamic";
  *   3. Datan ligger i en JSON-tagg FORE skriptet, sa att forsta ritningen
  *      redan ar den riktiga. `<` ersatts sa att en text i datan aldrig kan
  *      avsluta taggen.
+ *
+ * Och dokumentets skal, som claude.ai lagger runt artifacten men som filen
+ * saknar: doctype (annars ritas sidan i quirks-lage), `lang="sv"` (sa att
+ * skarmlasaren laser svenska, WCAG 3.1.1) och viewport (annars ritar en
+ * telefon sidan 980 px bred och forminskad, X2).
  * ===========================================================================
  *
  * Mellanvaran har redan skickat den som saknar session till inloggningen och
  * krävt steg tva och losenordsbyte dar det galler — den har rutten ar ingen
  * /api-rutt och passerar alltsa samma kontroller som varje sida.
  */
+
+const SKAL = `<!doctype html><html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">`;
 
 const TYPSNITT = `<style>
 @font-face{font-family:"Geist";src:url(/nav2/fonts/geist.woff2) format("woff2");font-weight:100 900;font-display:swap}
@@ -58,6 +65,7 @@ export async function GET(request: Request) {
   const forsta = ut.indexOf("<script>");
   if (forsta < 0) return new NextResponse("Utkastet saknar sitt skript.", { status: 500 });
   ut =
+    SKAL +
     ut.slice(0, forsta) +
     `<script nonce="${nonce}" type="application/json" id="ndData">${json}</script><script nonce="${nonce}">` +
     ut.slice(forsta + "<script>".length);

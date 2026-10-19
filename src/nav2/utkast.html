@@ -7385,6 +7385,12 @@ body.nd-riktig .proto{display:none}
 
 /* Utbildning: ett valt svar i ett prov som rättas först vid inlämningen. */
 .uqalt button.ndvalt{border-color:var(--brand);background:var(--brand-soft);box-shadow:inset 0 0 0 1px var(--brand)}
+
+/* ---------- Skalet (prefix skal): telefon och tangentbord, X1 och X2 ---------- */
+/* En tabell utan egen rullbar behållare rullar i sin förälder på telefonen, i stället för att hela sidan rullar i sidled. */
+@media (max-width:640px){body.nd-riktig #wrap :has(> table){overflow-x:auto}}
+/* Radknappar som bara tonade bakgrunden vid tangentbordsfokus får en ram, som resten av navet. Musen ser ingen skillnad. */
+body.nd-riktig :is(.pv-lagrad,.arow[data-agenda],.pv-tab tbody tr[data-pvupers],.prf-mi,.prf-traff button):focus-visible{box-shadow:inset 0 0 0 2px var(--brand)}
 </style>
 
 <div class="proto" role="region" aria-label="Prototypinställningar">
@@ -7469,7 +7475,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':
 const kr = n => Math.round(n).toLocaleString('sv-SE').replace(/ /g,' ') + ' kr';
 const hm = m => { m = Math.max(0, m); const h = Math.floor(m/60) % 24, mm = Math.floor(m%60); return `${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`; };
 const dur = m => { m = Math.max(0, Math.floor(m)); return `${Math.floor(m/60)} t ${String(m%60).padStart(2,'0')} min`; };
-const note = n => `<button class="note" data-note="${n}" aria-label="Förklaring ${n}">${n}</button>`;
+const note = n => ND ? '' : `<button class="note" data-note="${n}" aria-label="Förklaring ${n}">${n}</button>`;
 
 /* ===================== Läge ===================== */
 const AVC = ['#0E7A5F','#C2410C','#3A6EA5','#8E54A8','#5B6B2E','#9A3412','#2F5D62','#7A4A06'];
@@ -30214,6 +30220,192 @@ drawPal = function(q){
     else if (l.startsWith('Ny uppgift: ')) o.run = () => { closePal(); ndPalLaggTill(q.trim()); };
   });
 };
+
+/* =====================================================================
+   SKALET OCH ÖVERGÅNGEN (prefix skal), steg 4 till produktion
+
+   Gäller bara i riktigt läge (ND). Ligger sist i modullistan, så att det som
+   skrivs över här ligger ovanpå vyernas moduler.
+
+   - En vy som inte är kopplad (Nyheter, Leads, K&V, Händelselogg, Adoption)
+     öppnas på samma sida i nuvarande Nav, vilken väg man än tar dit: menyn,
+     paletten, startsidans kort, klockan eller en länk i en vy. Aldrig en
+     mellansida, aldrig utkastets exempel.
+   - Det repot har men utkastet saknar (Schema, Spärrar, Projekt, Systemguider
+     och de andra undantagna) öppnas också i nuvarande Nav.
+   - Utkastets reservtoast ("I Nav öppnas …") blir en riktig väg.
+   - Knappar som bara visade utkastets text leder till samma sak i Nav.
+   ===================================================================== */
+
+/* ---------- Vägarna ---------- */
+// Adresser som alltid hör till nuvarande Nav, även när vyn de ligger under är kopplad.
+const SKALNAV = ['/tid/schema', '/tid/sparrar', '/sparrar', '/schema', '/admin', '/lonekostnad', '/satser', '/avtal/mallar', '/avtal/nytt', '/avtal/bifoga',
+  '/uppgifter/projekt', '/uppgifter/mallar', '/uppgifter/genomgang', '/utbildning/systemguider', '/utbildning/oversikt', '/utbildning/prov', '/utbildning/rollspel', '/utbildning/ny',
+  '/personal/team', '/personal/ny', '/sok', '/logga-in', '/byt-losenord', '/uppstart', '/design', '/coachning/mallar', '/kv/regler', '/provision/regler', '/provision/underlag',
+  '/arenden/statistik', '/kalender/delning', '/kalender/overlamning', '/rutiner/ny', '/franvaro/regler', '/regler', '/filer', '/auth'];
+const skalNav = h => SKALNAV.some(p => h === p || h.startsWith(p + '/') || h.startsWith(p + '?'));
+function skalVy(h){
+  const f = '/' + (h.split(/[/?#]/)[1] || '');
+  if (f === '/') return 'hem';
+  if (f === '/personal') return 'anstallda';
+  return Object.keys(NDVY).find(k => NDVY[k][1] === f) || null;
+}
+// En väg i navet: en kopplad vy öppnas här med rätt flik eller post, allt annat i nuvarande Nav.
+const _skalNdGa = ndGa;
+ndGa = function(href){
+  if (!ND) return _skalNdGa(href);
+  const h = String(href || '/'), bas = h.split(/[?#]/)[0], d = bas.split('/').filter(Boolean), vy = skalVy(bas), sub = d[1] || null;
+  if (bas.startsWith('/installningar') || bas.startsWith('/profil')) return prfGaSrc(h);
+  const nav = () => { location.assign(h); };
+  if (!vy || skalNav(bas) || !ndKopplad(vy)) return nav();
+  switch (vy){
+    case 'hem': S.view = 'hem'; render(); window.scrollTo(0, 0); return;
+    case 'uppgifter': { const t = sub && TASKS.find(x => String(x.id) === sub); if (sub && !t) return nav(); S.view = 'uppgifter'; S.todoOpen = false; S.panel = t ? t.id : null; render(); window.scrollTo(0, 0); return; }
+    case 'rutiner': { if (sub && !(typeof rutin === 'function' && rutin(sub))) return nav(); if (sub){ rOppna(sub); return; } S.view = 'rutiner'; S.rOpen = null; render(); window.scrollTo(0, 0); return; }
+    case 'utbildning': { if (sub && !(typeof kurs === 'function' && kurs(sub))) return nav(); S.view = 'utbildning'; S.uOpen = sub; render(); window.scrollTo(0, 0); return; }
+    case 'tid': { const tab = {lonerapport:'lon', avvikelser:'sena', 'ogiltig-franvaro':'sena'}[sub]; if (sub && (!tab || d[2])) return nav(); gaTid(tab || null); return; }
+    case 'kalender': {
+      // Klockans adresser är /kalender?dag=…&handelse=…: dagen och händelsen öppnas som utkastets egen påminnelse gör.
+      if (sub) return nav();
+      const q = new URLSearchParams(h.split('?')[1] || ''), hid = q.get('handelse'), ev = hid ? KEV.find(x => String(x.id) === hid || String(x.ref) === hid) : null, dag = ev ? ev.d : q.get('dag');
+      S.view = 'kalender'; S.todoOpen = false; S.panel = null;
+      if (dag && /^\d{4}-\d{2}-\d{2}$/.test(dag)){ S.kDag = dag; if (['manad', 'lista', 'team'].includes(S.kVy)) S.kVy = 'arbetsvecka'; }
+      if (ev && !ev.allday) S.kScroll = Math.max(0, (ev.s - 90) / 60 * KPX);
+      render(); window.scrollTo(0, 0);
+      if (ev) setTimeout(() => { const el = document.querySelector(`.olev[data-kev="${ev.id}"]`); if (el) kPeekOppna(ev.id, el); }, 30);
+      return; }
+    case 'arenden': { if (sub === 'nytt'){ arNytt(''); return; } if (sub && !ARENDEN.some(x => String(x.id) === sub)) return nav(); arGa(sub); return; }
+    case 'franvaro': { if (sub && !['attest', 'sjuk', 'planering', 'ny'].includes(sub)) return nav(); frGa(sub === 'ny' ? null : sub); return; }
+    case 'fel': if (sub === 'nytt'){ felRapportera(); return; } if (sub) return nav(); felGa(); return;
+    case 'order': { const o = sub && ORDER.find(x => String(x.nr) === sub || String(x.id) === sub); if (sub && !o) return nav(); ordGa(o ? o.nr : null); return; }
+    case 'provision': if (sub) return nav(); pvGa(); return;
+    case 'coachning': cnGa(h); return;
+    case 'anstallda': { if (sub && (!AEPERS.some(p => String(p[0]) === sub) || d[2] === 'registerutdrag')) return nav(); aeGaSrc(bas); return; }
+    case 'rekrytering': { if (sub){ rxSt(); if (!S.rx.kand.some(c => String(c.id) === sub)) return nav(); } rxGaSrc(bas); return; }
+    case 'avtal': if (sub) return nav(); maGa(); return;
+  }
+  return nav();
+};
+// Vyer som inte är kopplade ritas aldrig: vägen dit går till nuvarande Nav i stället.
+// Den förra vyn står kvar, så att sidan är hel om man går tillbaka.
+let skalForra = 'hem', skalVag = null;
+const _skalRender = render;
+render = function(){
+  if (ND && S.view !== 'hem' && NDVY[S.view] && !ndKopplad(S.view) && !((S.view === 'logg' || S.view === 'adoption') && S.role !== 'chef')){
+    const vag = skalVag || NDVY[S.view][1]; skalVag = null; S.view = skalForra;
+    location.assign(vag); return;
+  }
+  skalForra = S.view; return _skalRender();
+};
+// Leads, Nyheter och K&V med en post: hela adressen följer med.
+const _skalLd = ldGaSrc, _skalNh = nhGaSrc, _skalKv = kvGaSrc;
+ldGaSrc = function(src){ if (ND && !ndKopplad('leads')) skalVag = String(src || '/leads'); return _skalLd(src); };
+nhGaSrc = function(src){ if (ND && !ndKopplad('nyheter')) skalVag = String(src || '/nyheter'); return _skalNh(src); };
+kvGaSrc = function(src){ if (ND && !ndKopplad('kv')) skalVag = String(src || '/kv'); return _skalKv(src); };
+// Utkastets reservtoast blir vägen dit. Den kommer från en data-go eller källa som ingen vy tar hand om
+// ("I Nav öppnas /x. I utkastet finns bara startsidan."), från paletten och från felrapportens sida.
+const _skalToast = toast;
+toast = function(msg, ...rest){
+  if (ND && typeof msg === 'string'){ const m = /^I Nav öppnas (?:källan: )?(\/\S*?)\.(?: I utkastet finns bara startsidan\.)?$/.exec(msg); if (m){ ndGa(m[1]); return; } }
+  return _skalToast(msg, ...rest);
+};
+/* ---------- Knappar som bara visade utkastets text ---------- */
+// Varje rad: utkastets meddelande och vad som gäller i Nav. Fångas före vyernas egna lyssnare.
+const SKALTOAST = [
+  // Uppgifter: ett nytt projekt läggs upp på /uppgifter i nuvarande Nav (repots NyttProjekt, skapaProjekt).
+  [/^Ett nytt projekt får namn|^Nytt projekt öppnas/, () => location.assign('/uppgifter')],
+  // Kalendern: en händelse man inte organiserar, eller en leverans, öppnas i nuvarande Nav (/kalender?handelse=).
+  // En post med egen adress (en uppgift, en order) öppnas där.
+  [/^Händelsen öppnas i Nav\.$|^Leveranspanelen öppnas/, () => { const ev = S.kPeek && KEV.find(x => x.id === S.kPeek.id), id = ev && String(ev.ref || '');
+    if (ev && ev.href) return ndGa(ev.href);
+    location.assign(/^[0-9a-f-]{36}$/.test(id) ? `/kalender?dag=${ev.d}&handelse=${id}` : '/kalender'); }],
+];
+window.addEventListener('click', e => {
+  if (!ND) return;
+  const b = e.target.closest && e.target.closest('[data-act="toast"]'); if (!b) return;
+  const rad = SKALTOAST.find(([re]) => re.test(b.dataset.msg || '')); if (!rad) return;
+  e.preventDefault(); e.stopImmediatePropagation(); rad[1](b);
+}, true);
+
+/* ---------- Ärenden: en rutin av svaret ---------- */
+// Rutiner är kopplad: rutinen skrivs i Rutiners redaktör, med ärendets rubrik och lösningen som grund.
+window.addEventListener('click', e => {
+  if (!ND || S.view !== 'arenden' || !ndKopplad('rutiner')) return;
+  const b = e.target.closest && e.target.closest('[data-arrutinskriv]'); if (!b) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  const a = ARENDEN.find(x => String(x.id) === b.dataset.arrutinskriv);
+  const red = rtnRedNy(a ? a.rubrik : ''); if (a && a.losning) red.f.tldr = a.losning;
+  S.view = 'rutiner'; S.rOpen = null; S.rtnRed = red; render(); window.scrollTo(0, 0);
+}, true);
+
+/* ---------- Inställningar: påminnelserna är Tids ---------- */
+// Utkastets kort, med stämpelpåminnelserna ur navet (0094) och samma rutt som Tid. Kalenderns förval gäller den här enheten, som notisvalen.
+const _skalNotiserSek = prfNotiserSek;
+prfNotiserSek = function(){
+  if (!ND || !ndKopplad('tid') || !S.ndPaminn) return _skalNotiserSek();
+  const p = S.ndPaminn, fore = [S.tPamin, S.tPaminMin];
+  S.tPamin = {in:!!p.in.pa, ut:!!p.ut.pa}; S.tPaminMin = {in:p.in.min, ut:p.ut.min};
+  let h; try { h = _ndNotiserSek(); } finally { [S.tPamin, S.tPaminMin] = fore; }
+  h = h.replace('Notiser visar aldrig skälet till en ledighet eller något om hälsa, bara vad som hänt och var.', 'Valen gäller den här enheten. Notiser visar aldrig skälet till en ledighet eller något om hälsa.');
+  // Utan schema finns inget klockslag att räkna från.
+  if (!TID_SCHEMA.start || !TID_SCHEMA.slut) h = h.replace(/Klockan <span class="num">[^<]*<\/span>/g, () => 'Efter schemat').replace(/: hur länge efter [0-9:]+"/g, ': hur länge efter schemat"');
+  return h;
+};
+function skalPaminn(andra){
+  const fore = JSON.parse(JSON.stringify(S.ndPaminn)); andra(S.ndPaminn); render();
+  ndTidPost('paminn', S.ndPaminn, {ladda:false}).then(s => { if (s.fel){ S.ndPaminn = fore; render(); } });
+}
+window.addEventListener('click', e => {
+  if (!ND || !S.ndPaminn || !ndKopplad('tid')) return;
+  const b = e.target.closest && e.target.closest('[data-prfstamp]'); if (!b) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  const k = b.dataset.prfstamp; if (S.ndPaminn[k]) skalPaminn(p => { p[k].pa = !p[k].pa; });
+}, true);
+window.addEventListener('change', e => {
+  if (!ND || !S.ndPaminn || !ndKopplad('tid') || !e.target.dataset || !e.target.dataset.prfstampmin) return;
+  e.stopImmediatePropagation();
+  const k = e.target.dataset.prfstampmin, m = +e.target.value; if (S.ndPaminn[k]) skalPaminn(p => { p[k].min = m; });
+}, true);
+
+/* ---------- Uppgifter: dagens möten ur Kalendern ---------- */
+// Planeringen räknar fri tid mellan mötena. Utan dem räknades hela dagen som fri.
+function skalMoten(){
+  if (!ND || !ndKopplad('kalender') || !ndKopplad('uppgifter')) return;
+  const idag = kIdag(), jag = ND.jag.id, namn = ND.jag.namn;
+  const l = KEV.filter(e => e.d === idag && !e.allday && e.kat !== 'uppgift' && e.visa !== 'borta' && (e.agareId === jag || e.org === namn || (e.delt || []).some(x => x[0] === namn && x[1] !== 'nej')))
+    .sort((a, b) => a.s - b.s).map(e => [hm(e.s), hm(e.e), e.t]);
+  MOTEN.saljare = l; MOTEN.chef = l;
+}
+skalMoten();
+
+/* ---------- Tangentbord och skärmläsare (X1) ---------- */
+// Rättas efter varje ritning, utan att något syns: namn, roller och rullbara tabeller. Morfningen skriver
+// tillbaka attributen när en vy ritas om, så passet körs också när de ändras. Det sätter bara det som saknas.
+function skalA11y(){
+  // En knapp vars text döljs på smal skärm (Kalenderns Filter och Dela) får texten som etikett.
+  document.querySelectorAll('#app button:not([aria-label]):not([aria-labelledby]), body > [id] button:not([aria-label]):not([aria-labelledby])').forEach(b => {
+    if (b.innerText.trim()) return;
+    const t = (b.textContent || '').replace(/\s+/g, ' ').trim() || b.title;
+    if (t) b.setAttribute('aria-label', t);
+  });
+  // En etikett på en ruta utan roll (värmekartan i Utbildning, Orders kontrollprickar) läses bara som bild.
+  document.querySelectorAll('#wrap div[aria-label]:not([role]), #wrap span[aria-label]:not([role])').forEach(e => e.setAttribute('role', 'img'));
+  // Sorteringen hör till kolumnrubriken, inte till knappen i den.
+  document.querySelectorAll('#wrap th button[aria-sort]').forEach(b => { b.closest('th').setAttribute('aria-sort', b.getAttribute('aria-sort')); b.removeAttribute('aria-sort'); });
+  // Ett sökfält som fäller ut träffar är en kombinationsruta.
+  document.querySelectorAll('#wrap input[aria-expanded]:not([role])').forEach(i => i.setAttribute('role', 'combobox'));
+  // En tabell som rullar i sidled ska gå att rulla med tangentbordet.
+  document.querySelectorAll('#wrap :has(> table)').forEach(w => {
+    const rullar = w.scrollWidth > w.clientWidth + 1 && /(auto|scroll)/.test(getComputedStyle(w).overflowX);
+    if (rullar && !w.hasAttribute('tabindex')){ w.setAttribute('tabindex', '0'); w.setAttribute('data-skalrull', ''); }
+    else if (!rullar && w.hasAttribute('data-skalrull')){ w.removeAttribute('tabindex'); w.removeAttribute('data-skalrull'); }
+  });
+}
+if (ND){
+  let skalA11yT = 0;
+  new MutationObserver(() => { if (!skalA11yT) skalA11yT = requestAnimationFrame(() => { skalA11yT = 0; skalA11y(); }); }).observe(document.body, {childList:true, subtree:true, attributes:true, attributeFilter:['aria-label', 'role', 'aria-sort', 'aria-expanded', 'class']});
+  window.addEventListener('resize', () => requestAnimationFrame(skalA11y));
+}
 
 /* Start */
 try { const th = localStorage.getItem('nav2-theme'); if (th && th !== 'auto'){ document.documentElement.setAttribute('data-theme', th); S.theme = th; document.querySelectorAll('#themeSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.themeSet === th))); } } catch(_){}

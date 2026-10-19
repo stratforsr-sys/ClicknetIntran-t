@@ -24,7 +24,8 @@ behörigheter som här: du ser bara det du får se.
 ## Kopplat nu
 
 - **Klockan**, med samma notiser som här.
-- **Inställningar**: ditt konto, säkerheten och utseendet.
+- **Inställningar**: ditt konto, säkerheten, utseendet och påminnelserna om
+  stämpling, samma som i Tid.
 - **Satser och löner**, för den som har behörigheten för lönekostnad.
 - **Tid**, **Frånvaro** och **Uppgifter**, med samma regler som här. I Uppgifter
   väljer du dagens tre, planerar och avslutar dagen, skriver första steget och
@@ -95,8 +96,10 @@ behörigheter som här: du ser bara det du får se.
   Säljchef, VD och admin ser veckans frågor som Nav inte kunde svara på, utan
   namn.
 
-Vyerna som inte är kopplade säger det, och har en knapp till samma sak här.
-Ingenting påhittat visas.
+Nyheter, Leads, K&V, Händelselogg och Adoption öppnas här i nuvarande Nav,
+vilken väg du än tar dit: menyn, sökningen, en notis eller en länk. Det som
+bara finns här, som scheman, spärrar och projekt, öppnas också här. Nya Nav
+fungerar i mobilens bredd. Ingenting påhittat visas.
 
 ## Läsläge
 
