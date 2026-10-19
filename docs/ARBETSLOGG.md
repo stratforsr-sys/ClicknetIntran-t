@@ -155,6 +155,24 @@ bort; det navet saknade fick backend i 0100.
 
 ---
 
+## 2026-10-19 · Nav 2.0, Anställda: beställarens svar (0106 skriven, ej körd)
+
+- **Tre roller:** Behörighet i Nav skriver befattningen, så att navet följer
+  nivån med dagens regler: Säljare = `salesperson`, Admin = `sales_manager`,
+  Superadmin = `admin`. Övriga befattningar tas bort från personen och
+  loggas (`role.granted`/`role.revoked`), personen får notisen `konto-roll`.
+  En nivå satt för hand (`employee_access_level`) tas bort: nivån räknas ur
+  befattningen. Rollkortet har inte längre "Ändra befattning", och Lägg upp
+  erbjuder bara Säljare, Admin och Superadmin.
+- **Bara superadmin ändrar i personalen** (`/nav2/anstallda` svarar 403
+  annars). Läsningen är oförändrad (`can_read_all_employees`).
+- **0106** (`0106_anstallda_mallarna_som_utkastet.sql`, torrkörd, INTE körd:
+  körs med resten av Nav 2.0): mallarna exakt som utkastets (22, 14, 14 och 4
+  punkter). Navets punkter (Inkio-behörighet, Dialer-kö, e-post, dator,
+  telefon, passerkort, lönen, slutlönen) tas bort ur mallarna; de är
+  utskicksregler i utkastet, som beställaren bygger under Utskick. Inga
+  kopplingar och inga pågående listor rörs.
+
 ## 2026-10-18 · Nav 2.0, Anställda med riktig data och allt utkastet har (0105 KÖRD)
 
 Anställda i Nav 2.0 läser navets personal med den inloggades RLS. Kretsen är

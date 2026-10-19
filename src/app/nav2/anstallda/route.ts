@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { fullName, getCurrentUser, hasRole } from "@/lib/auth";
+import { fullName, getCurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { svensktDatum } from "@/lib/klocka";
 import { siteUrl } from "@/lib/env";
@@ -50,6 +50,8 @@ const DATUM = /^\d{4}-\d{2}-\d{2}$/;
 const EPOST = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const FORMER = ["permanent", "probation", "consultant", "intern"];
 const NIVAER: Niva[] = ["salesperson", "admin", "superadmin"];
+/** Befattningen som en nivå skriver (beställaren 2026-10-19). */
+const ROLL_FOR: Record<Niva, Role> = { salesperson: "salesperson", admin: "sales_manager", superadmin: "admin" };
 
 type Svar = { ok?: string; fel?: string; [k: string]: unknown };
 const svar = (data: Svar, status = 200) => NextResponse.json(data, { status, headers: { "Cache-Control": "private, no-store, max-age=0" } });
@@ -113,8 +115,6 @@ export async function POST(request: Request) {
   const handling = String(b.handling ?? "");
 
   if (!SKRIVLAGE.anstallda) return svar({ fel: LASLAGE_TEXT, laslage: true }, 423);
-  // Samma krets som repots kravChef(). Actions prövar det igen själva.
-  if (!hasRole(user, "sales_manager", "admin")) return svar({ fel: "Du saknar behörighet att ändra i personalen." }, 403);
   const db = supabaseAdmin();
   const idag = svensktDatum();
 
@@ -233,6 +233,9 @@ export async function POST(request: Request) {
     ]);
     return ((satt as { level: Niva } | null)?.level ?? nivaFor(((r ?? []) as unknown as { role: string }[]).map((x) => x.role)));
   };
+
+  // Beställaren 2026-10-19: bara en superadmin ändrar i personalen. Repots actions prövar dessutom kravChef().
+  if ((await niva(mig)) !== "superadmin") return svar({ fel: "Bara en superadmin ändrar i personalen." }, 403);
 
   try {
     switch (handling) {
@@ -593,9 +596,26 @@ export async function POST(request: Request) {
           for (const a of (aktiva ?? []) as unknown as { id: string }[]) if (a.id !== p.id && (await niva(a.id)) === "superadmin") andra++;
           if (!andra) return svar({ fel: "Nav behöver minst en superadmin." }, 400);
         }
-        await db.from("employee_access_level").upsert({ employee_id: p.id, level: ny, set_by: mig, set_at: new Date().toISOString() });
-        await logga(p.id, `ändrade behörigheten i Nav till ${ny === "superadmin" ? "superadmin" : ny === "admin" ? "admin" : "säljare"}.`, { niva: ny });
-        return svar({ ok: "Behörigheten är ändrad." });
+        // Beställaren 2026-10-19: nivån skriver befattningen, så att navet följer den med dagens regler.
+        // Säljare = säljare, Admin = säljchef, Superadmin = administratör. Övriga befattningar tas bort.
+        const roll = ROLL_FOR[ny];
+        const { data: r } = await db.from("employee_role").select("role").eq("employee_id", p.id);
+        const fore = ((r ?? []) as unknown as { role: string }[]).map((x) => x.role);
+        if (!fore.includes(roll)) {
+          await db.from("employee_role").upsert({ employee_id: p.id, role: roll, granted_by: mig });
+          await db.from("audit_log").insert({ actor_id: mig, action: "role.granted", object_type: "employee", object_id: p.id, meta: { roll } });
+        }
+        for (const x of fore.filter((x) => x !== roll)) {
+          await db.from("employee_role").delete().eq("employee_id", p.id).eq("role", x);
+          await db.from("audit_log").insert({ actor_id: mig, action: "role.revoked", object_type: "employee", object_id: p.id, meta: { roll: x } });
+        }
+        // Nivån räknas ur befattningen från och med nu. En nivå satt för hand vore en andra sanning.
+        await db.from("employee_access_level").delete().eq("employee_id", p.id);
+        const namn = ny === "superadmin" ? "Superadmin" : ny === "admin" ? "Admin" : "Säljare";
+        await notifiera({ till: p.id, av: mig, kalla: "konto-roll", typ: "konto", rubrik: `Din behörighet i Nav är nu ${namn}`, detalj: "Menyn kan se annorlunda ut vid nästa sidbyte", href: "/nav2", objekt: { typ: "employee", id: p.id } });
+        await logga(p.id, `ändrade behörigheten i Nav till ${namn.toLowerCase()}.`, { niva: ny });
+        revalidatePath(`/personal/${p.id}`);
+        return svar({ ok: `${p.first_name} är nu ${namn.toLowerCase()}.` });
       }
       case "utbpamin": {
         const p = await personen(b.pid);

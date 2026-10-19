@@ -1,10 +1,10 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { canReadAllEmployees, hasRole, type CurrentUser } from "@/lib/auth";
+import { canReadAllEmployees, type CurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { riktarSigTill } from "@/lib/dokument";
-import { heltNamn, type Niva } from "./forma";
+import { heltNamn, nivaFor, type Niva } from "./forma";
 import {
   formaHandelse,
   formaLista,
@@ -255,7 +255,8 @@ export async function byggAnstallda(supabase: SupabaseClient, user: CurrentUser)
 
   return {
     far: true,
-    hantera: hasRole(user, "sales_manager", "admin"),
+    // Beställaren 2026-10-19: bara superadmin ändrar i personalen. Nivån som rutten räknar den.
+    hantera: (nivaer.get(jag) ?? nivaFor(user.roles)) === "superadmin",
     utan0105: Boolean(mallFel),
     team: ((teamRader ?? []) as unknown as { id: string; name: string; lead_id: string | null }[]).map((t) => ({
       id: t.id,

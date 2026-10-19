@@ -28774,14 +28774,24 @@ function ndAeTillAvtal(pid){
 }
 
 /* ---------- Behörighet i Nav ----------
-   Nivån sparas (0105). Navet styrs fortfarande av befattningen, så kortet lovar inte mer än så. */
+   Beställaren 2026-10-19: bara de tre nivåerna. Nivån skriver befattningen i navet (Säljare = säljare,
+   Admin = säljchef, Superadmin = administratör), så befattningen väljs inte för sig i Anställda. */
 const _ndaeRollKort = aeRollKort;
 aeRollKort = function(p){
   let h = _ndaeRollKort(p);
   if (!ndAe()) return h;
-  h = h.replace('Ändringen gäller vid nästa sidbyte och står i händelseloggen.', 'Nivån sparas i Nav. Vad navet visar styrs än så länge av befattningen.');
+  h = h.replace(/<button class="tlink" data-aerollandra="[^"]*">Ändra befattning<\/button>/, '');
   if (!(ND.jag && ND.jag.kodKravs)) h = h.replace(' Admin och superadmin kräver kod vid inloggning.', '');
   return h;
+};
+// Lägg upp: rollen är en av de tre nivåerna.
+const NDAE_TRE = [['salesperson', 'Säljare'], ['sales_manager', 'Admin'], ['admin', 'Superadmin']];
+const _ndaeNy1 = aeNy1;
+aeNy1 = function(N){
+  const h = _ndaeNy1(N);
+  if (!ndAe()) return h;
+  if (!NDAE_TRE.some(([k]) => k === N.f.roll)) N.f.roll = 'salesperson';
+  return h.replace(/(<select id="aeNroll"[^>]*>)[\s\S]*?(<\/select>)/, (m, a, b) => a + NDAE_TRE.map(([k, l]) => `<option value="${k}" ${N.f.roll === k ? 'selected' : ''}>${l}</option>`).join('') + b);
 };
 
 /* ---------- Vyn: texter som bara gäller utkastets exempel ---------- */
