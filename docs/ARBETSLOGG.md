@@ -5,6 +5,48 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-19 · Nav 2.0, paletten "Sök, gör eller fråga Nav" med riktig data (0125)
+
+Byggd och provad 2026-10-18, committad i dag efter beställarens ja (den första
+commiten stoppades av behörighetskontrollen). Paletten (⌘K) sökte i riktigt
+läge bara i inställningarna, och förslagen och svaren var tömda eftersom de var
+exempel. Nu:
+
+- **I Nav** (`src/lib/nav2/paletten.ts`, GET `/nav2/paletten?q=`): sökningen
+  går med användarens token, som `/sok`, över de kopplade vyerna: uppgifter
+  (rubriken; klienten visar de som står öppna i ens lista), rutiner (navets
+  fulltext med `prefixfraga`, och rubrik och synonymer ur `routine_meta`),
+  publicerade kurser, order (bolaget eller numret, med eller utan #) och
+  ärenden. Repots escapning ur `sokning.ts`. Träffen öppnas i vyn.
+- **Kalendern söks inte per tangenttryck.** Två månader ur
+  `hamtaLeveranskalender` tar sekunder, så de kommande egna posterna hämtas en
+  gång när paletten öppnas (GET `?vad=kalender`, `hamtaKalposter`: delning och
+  privata möten redan tillämpade) och jämförs i klienten i fem minuter.
+- **Gör** går till de kopplade vyernas handlingar. "Ny uppgift" gör som N.
+  "Ny uppgift: …" läggs i dag via `/nav2/uppgifter` (`skapa` ger id), och
+  Ångra stryker den (`avbryt`).
+- **Fråga Nav:** förslagen efter roll och tid på dygnet är tillbaka, utan
+  exempelnamn (månaden och fredagen räknas ur i dag). Att svara kräver en
+  AI-tjänst som inte är kopplad, och svaret säger det med knappar till vyerna
+  där svaret finns. Ur navet utan AI: lönekostnaden (som förut), det raka nejet
+  när en säljare frågar om en kollegas provision (namnen ur registret), och
+  chefens "Vilka frågor kunde Nav inte svara på i veckan?".
+- **0125 `nav_question_miss`** (KÖRD 2026-10-18): fråga, vecka och antal,
+  ingen person (samma skäl som `search_miss` i 0029, men med veckan i
+  nyckeln). `registrera_fragemiss` är stängd för inloggade; `/nav2/paletten`
+  (POST `fraga`, bakom `SKRIVLAGE.paletten = false`) anropar den med service
+  role. `palett_obesvarade` läser veckans frågor för säljchef, VD och admin.
+  "Skapa utkast: rutin om …" går till `/nav2/rutiner` (`spara` utan
+  `publicera`).
+- **Provat om mot `d697ae1`** (efter Rekrytering, Anställda, Coachning och
+  Avtal): servern lokalt mot produktionen som Zen och Fredrik, typkontroll mot
+  de riktiga `@supabase/supabase-js`- och `next`-typerna (0 fel), och klienten
+  på previewsidan som Zen med svaren ur den riktiga serverkoden. "Gå till"
+  öppnar Coachning, Anställda, Rekrytering och Avtal i sina kopplade vyer, och
+  svarsknapparna ("Öppna Coachning", "Öppna Frånvaro") likaså. Utkastets Gör
+  har inga handlingar i de fyra vyerna. Inga JS-fel och inga exempelnamn.
+- **Öppna frågor:** se `docs/NASTA_SESSION.md`.
+
 ## 2026-10-19 · Nav 2.0, Avtal med riktig data, i läsläge (ingen migration)
 
 Utkastets Avtal och Mitt avtal läser navets anställningsavtal (`contract`, 0028/0073) med den inloggades behörighet. I produktionen finns tre avtal, alla uppladdade PDF:er, och inga mallar.

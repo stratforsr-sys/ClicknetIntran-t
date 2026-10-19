@@ -25,6 +25,7 @@ export const SKRIVLAGE = {
   rekrytering: false,
   coachning: false,
   anstallda: false,
+  paletten: false,
 } as const;
 
 export type Skrivvy = keyof typeof SKRIVLAGE;

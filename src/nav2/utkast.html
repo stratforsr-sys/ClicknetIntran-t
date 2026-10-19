@@ -30001,6 +30001,220 @@ document.addEventListener('change', e => {
 });
 if (ndMa()) NDKOPPLAD.add('avtal');
 
+/* =====================================================================
+   NAV 2.0 I RIKTIGT LÄGE: PALETTEN (prefix ndPal), v47
+
+   "Sök, gör eller fråga Nav" (⌘K) med navets data:
+
+   - I Nav: innehållssökningen går till /nav2/paletten (GET, användarens
+     token) över de kopplade vyerna: uppgifter, rutiner (navets fulltext och
+     synonymerna), kurser, order och ärenden. Kalenderns kommande egna poster
+     hämtas en gång när paletten öppnas, med delning och privata möten redan
+     tillämpade, och jämförs här. Inställningarna söks som förut.
+   - Gör: de kopplade vyernas egna handlingar. Ny uppgift gör som N, och
+     "Ny uppgift: …" läggs i dag via /nav2/uppgifter, med Ångra.
+   - Fråga Nav: frågorna står kvar efter roll och tid på dygnet, men att svara
+     kräver en AI-tjänst som inte är kopplad. Svaret säger det och öppnar
+     vyn där svaret finns. Undantagen räknas ur navet utan AI: veckans frågor
+     utan svar (0125, för chefen), lönekostnaden (brh) och det raka nejet om
+     någon annans provision.
+   - Fritt skrivna frågor bokförs utan namn (POST, SKRIVLAGE.paletten; 423 i
+     läsläge).
+   ===================================================================== */
+
+const NDPAL = {sok:new Map(), vantar:null, timer:0, kal:null, kalHamtar:false, obes:null, obesHamtar:false, fragor:new Map()};
+const NDPALVY = ['uppgifter', 'rutiner', 'utbildning', 'order', 'arenden'];
+const ndPalStor = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+
+/* ---------- Läsningarna ---------- */
+// En sökning per paus i skrivandet. Svaret ritas bara om rutan fortfarande visar samma fråga.
+function ndPalSok(nq, q){
+  if (NDPAL.vantar === nq) return;
+  NDPAL.vantar = nq; clearTimeout(NDPAL.timer);
+  NDPAL.timer = setTimeout(() => {
+    const vyer = NDPALVY.filter(v => ndKopplad(v));
+    fetch(`/nav2/paletten?q=${encodeURIComponent(q)}&vyer=${vyer.join(',')}`, {credentials:'same-origin'})
+      .then(r => r.json()).catch(() => ({fel:'Nav svarade inte.'}))
+      .then(s => { NDPAL.sok.set(nq, s.traffar || []); if (NDPAL.vantar === nq) NDPAL.vantar = null; ndPalOmrita(nq); });
+  }, 140);
+}
+function ndPalOmrita(nq){
+  const inp = document.getElementById('palIn');
+  if (!inp || PS.cur || (nq !== undefined && norm(inp.value.trim()) !== nq)) return;
+  const sel = palSel; drawPal(inp.value); palSel = Math.max(0, Math.min(sel, palItems.length - 1)); hl();
+}
+// Kalendern: två månader är navets tyngsta läsning, så den görs en gång i taget och gäller i fem minuter.
+function ndPalKal(){
+  if (!ndKopplad('kalender') || NDPAL.kalHamtar || (NDPAL.kal && Date.now() - NDPAL.kal.t < 3e5)) return;
+  NDPAL.kalHamtar = true;
+  fetch('/nav2/paletten?vad=kalender', {credentials:'same-origin'}).then(r => r.json()).catch(() => ({}))
+    // Ett fel ger inga kalenderträffar, och nästa försök görs först efter samma fem minuter.
+    .then(s => { NDPAL.kalHamtar = false; NDPAL.kal = {t:Date.now(), poster:Array.isArray(s.poster) ? s.poster : []}; if (NDPAL.kal.poster.length) ndPalOmrita(); });
+}
+function ndPalObes(){
+  if (NDPAL.obesHamtar) return;
+  NDPAL.obesHamtar = true;
+  fetch('/nav2/paletten?vad=obesvarade', {credentials:'same-origin'}).then(r => r.json()).catch(() => ({fel:'Nav svarade inte.'}))
+    .then(s => { NDPAL.obesHamtar = false; NDPAL.obes = s; if (PS.key === 'obesvarat') drawAnswer(); });
+}
+
+/* ---------- I Nav: bara riktiga träffar, och de öppnas i vyn ---------- */
+const _palNdInnehall = palInnehall;
+palInnehall = function(nq){
+  if (!ND) return _palNdInnehall(nq);
+  const ut = [], q = (document.getElementById('palIn') || {value:nq}).value.trim() || nq;
+  const T = NDPAL.sok.get(nq);
+  if (!T) ndPalSok(nq, q);
+  const tr = typ => (T || []).filter(x => x.typ === typ);
+  // Uppgifterna: de som står öppna i ens lista, som utkastets mine().
+  const opp = new Map(mine().filter(t => !isDone(t)).map(t => [t.id, t]));
+  tr('uppgift').filter(x => opp.has(x.id)).slice(0, 3).forEach(x => { const t = opp.get(x.id); ut.push({i:'uppg', l:t.t, p:'Uppgift', run:() => { S.view = 'uppgifter'; S.panel = t.id; render(); window.scrollTo(0, 0); }}); });
+  tr('rutin').slice(0, 3).forEach(x => ut.push({i:'rut', l:x.t, p:'Rutin', run:() => rutin(x.id) ? rOppna(x.id) : ndGa(`/rutiner/${x.id}`)}));
+  tr('kurs').slice(0, 2).forEach(x => ut.push({i:'utb', l:x.t, p:'Kurs', run:() => { if (KURSER.some(k => k.id === x.id)){ S.view = 'utbildning'; S.uOpen = x.id; render(); window.scrollTo(0, 0); } else ndGa(`/utbildning/${x.id}`); }}));
+  if (ndKopplad('kalender') && NDPAL.kal){
+    NDPAL.kal.poster.map(p => { const ev = ndKEv(p); ndKTitel(ev); return [p, ev]; }).filter(([, ev]) => norm(ev.t).includes(nq)).slice(0, 2)
+      .forEach(([p, ev]) => ut.push({i:'kal', l:ev.t, p:`${ev.d === kIdag() ? 'i dag' : +ev.d.slice(8) + ' ' + KMK[+ev.d.slice(5, 7)]}${ev.allday ? '' : ' ' + hm(ev.s)}`, run:() => {
+        ndKLagg([p]); const e = KEV.find(x => x.id === ev.id) || KEV.find(x => x.ref && x.ref === ev.ref && x.d === ev.d) || ev; palKal(e); }}));
+  }
+  tr('order').map(x => [x, oMina().find(o => o.nr === x.nr)]).filter(([, o]) => o).slice(0, 3).forEach(([, o]) => ut.push({i:'order', l:`${o.bolag} · #${o.nr}`, p:OSTK[oStatus(o)], run:() => ordGa(o.nr)}));
+  tr('arende').map(x => ARENDEN.find(a => a.id === x.id)).filter(Boolean).slice(0, 2).forEach(a => ut.push({i:'inbox', l:a.rubrik, p:'Ärende', run:() => arGa(a.id)}));
+  prfSok(nq, true).slice(0, 3).forEach(([id, sek, l]) => ut.push({i:PRFSEK.find(s => s[0] === sek)[2], l, p:'Inställningar', run:() => prfGa(sek, id)}));
+  return ut;
+};
+
+/* ---------- Fråga Nav: frågorna står kvar, svaren väntar på en AI-tjänst ---------- */
+// Utkastets frågor, utan exempelnamn. Vyerna är där svaret finns i navet under tiden.
+function ndPalFredag(){ let d = frPlus(kIdag(), 1); while (frDow(d) !== 1) d = frPlus(d, 1); return frPlus(d, 4); }
+function ndPalFragor(roll){
+  const man = FRMAN[+kIdag().slice(5, 7)], fr = ndPalFredag();
+  return roll === 'chef' ? {
+    besluta:['Vad måste jag besluta?', ['franvaro', 'arenden']],
+    teamet:[`Hur ligger teamet mot ${man}målet?`, ['provision', 'order']],
+    godkann:['Vilka order väntar på godkännande?', ['order']],
+    ledigt:['Vilka är lediga de kommande två veckorna?', ['franvaro', 'kalender']]
+  } : {
+    idag:['Vad har jag i dag?', ['uppgifter', 'kalender']],
+    malet:['Hur ligger jag mot målet?', ['provision']],
+    prognos:['Vilka affärer räknas in i prognosen?', ['provision']],
+    perdag:['Hur mycket behöver jag sälja per dag för att nå målet?', ['provision']],
+    ledig:['Vem i teamet är ledig nästa vecka?', ['franvaro']],
+    fredag:[`Kan jag ta ledigt fredag ${+fr.slice(8)} ${FRMAN[+fr.slice(5, 7)]}?`, ['franvaro']],
+    eftersalj:['När ska jag göra eftersälj?', ['rutiner']],
+    samtycke:['Vad gäller för samtycke när samtalet spelas in?', ['rutiner']],
+    coachsen:['Vad händer om coachningsuppgiften blir sen?', ['coachning']]
+  };
+}
+function ndPalSaknas(q, vyer){
+  return {q, lead:'Fråga Nav kan inte svara på det än.', bound:`Svaren kräver en AI-tjänst som inte är kopplad till Nav. Under tiden finns det här i ${prfOch(vyer.map(v => NDVY[v][0]))}.`,
+    rows:[], acts:vyer.map(v => ({l:`Öppna ${NDVY[v][0]}`, open:NDVY[v][1]})), follow:[], ndKalla:'ai'};
+}
+function ndPalObesvarat(){
+  const q = 'Vilka frågor kunde Nav inte svara på i veckan?', o = NDPAL.obes, not = 'Utan namn. Nav sparar bara frågan och hur många gånger den ställts.';
+  if (!o){ ndPalObes(); return {q, lead:'Hämtar veckans frågor …', rows:[], acts:[], follow:[], ndKalla:'nav'}; }
+  if (o.fel) return {q, lead:'Frågorna gick inte att läsa.', bound:o.fel, rows:[], acts:[], follow:[], ndKalla:'nav'};
+  if (!o.farSe) return {q, lead:'Det kan jag inte se.', bound:'Frågorna utan svar syns för säljchef, VD och admin.', rows:[], acts:[], follow:[], ndKalla:'nav'};
+  const f = o.fragor || [];
+  if (!f.length) return {q, lead:'Inga frågor utan svar i veckan.', bound:o.sparas ? '' : 'Läsläge: frågorna sparas först när paletten slås på, så listan fylls inte än.', note:not, rows:[], acts:[], follow:[], ndKalla:'nav'};
+  const top = ndPalStor(f[0].q);
+  return {q, lead:`${f.length} ${f.length === 1 ? 'fråga' : 'frågor'} utan svar i veckan.`, note:not, ndKalla:'nav', follow:[],
+    rows:f.slice(0, 5).map(x => ['exakt', `”${ndPalStor(x.q)}” Ställd ${x.antal} ${x.antal === 1 ? 'gång' : 'gånger'}.`, 'Frågor utan svar']),
+    acts:ndKopplad('rutiner') ? [{l:`Skapa utkast: rutin om ”${top}”`, confirm:`Ett utkast till rutinen ”${top}” skapas med dig som ägare. Inget publiceras.`, ndRutin:top}] : []};
+}
+const _palNdQaFor = qaFor;
+qaFor = function(roll){
+  if (!ND) return _palNdQaFor(roll);
+  const ut = {};
+  Object.entries(ndPalFragor(roll)).forEach(([k, [q, vyer]]) => { ut[k] = ndPalSaknas(q, vyer); });
+  if (roll === 'chef') ut.obesvarat = ndPalObesvarat();
+  return ut;
+};
+// Förslagen följer tiden och rollen, som i utkastet (nd.js tömde dem när svaren var exempel).
+if (ND){
+  const sug = {saljare:{morgon:['idag', 'malet', 'fredag'], dag:['idag', 'malet', 'eftersalj'], slut:['malet', 'perdag', 'fredag'], sondag:['ledig', 'malet', 'fredag']},
+    chef:{morgon:['besluta', 'teamet', 'ledigt'], dag:['besluta', 'teamet', 'obesvarat'], slut:['besluta', 'ledigt', 'obesvarat'], sondag:['ledigt', 'besluta', 'obesvarat']}};
+  Object.keys(sug).forEach(r => Object.keys(sug[r]).forEach(l => { SUG[r][l] = sug[r][l]; }));
+}
+
+// Fritt skrivna frågor: lönekostnaden och behörighetens raka nej räknas ur navet; resten väntar på AI-tjänsten och bokförs utan namn.
+const _palNdFri = friFraga;
+friFraga = function(text){
+  if (!ND) return _palNdFri(text);
+  const t = norm(text);
+  if (/lonekostnad|kostar|lon\b|lonen|loner|arbetsgivaravgift|satser/.test(t)) return _palNdFri(text);
+  if (S.role !== 'chef' && /provision/.test(t)){
+    const namn = new Set(ND.personer.filter(p => p.id !== ND.jag.id).map(p => norm(p.fornamn || p.namn.split(' ')[0] || '')).filter(n => n.length >= 3));
+    if (t.split(/[^a-z0-9]+/).some(o => namn.has(o) || namn.has(o.replace(/s$/, ''))))
+      return {q:text, lead:'Det kan jag inte se.', bound:'Du ser bara din egen provision. Ekonomi, VD och säljchefen ser allas.', rows:[], acts:[], follow:['malet']};
+  }
+  return {q:text, lead:'Fråga Nav kan inte svara på fritt skrivna frågor än.', bound:'Det kräver en AI-tjänst som inte är kopplad till Nav. Sök på ett ord i stället, så letar Nav i det du har.',
+    rows:[], note:ndPalSpara(text), acts:[{l:'Skapa ett ärende i stället', open:'/arenden/nytt'}], follow:[], ndKalla:'ai'};
+};
+// En gång per fråga och sidladdning. Svaret ersätter raden i svaret när det kommer.
+function ndPalSpara(text){
+  const k = norm(text.trim());
+  if (NDPAL.fragor.has(k)) return NDPAL.fragor.get(k);
+  NDPAL.fragor.set(k, 'Frågan sparas utan ditt namn, så att ledningen ser vad som saknas.');
+  fetch('/nav2/paletten', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling:'fraga', text:text.trim()})})
+    .then(r => r.json()).catch(() => ({fel:'Nav svarade inte. Frågan sparades inte.'}))
+    .then(s => {
+      const n = s.ok ? `${s.ok} Ledningen ser vad som saknas.` : s.laslage ? 'Läsläge: frågan sparas utan ditt namn när paletten slås på. Ingenting sparades nu.' : (s.fel || 'Frågan sparades inte.');
+      NDPAL.fragor.set(k, n);
+      if (PS.cur && !PS.key && norm(PS.cur.q.trim()) === k){ PS.cur.note = n; drawAnswer(); }
+    });
+  return NDPAL.fragor.get(k);
+}
+
+/* ---------- Svaret: vad det bygger på, och knappar till vyerna ---------- */
+const _palNdDrawAnswer = drawAnswer;
+drawAnswer = function(){
+  _palNdDrawAnswer(); if (!ND || !PS.cur) return;
+  const k = PS.cur.ndKalla, el = document.querySelector('#palRes .answer .src');
+  if (el) el.innerHTML = `<span class="pill t-neutral">${k === 'ai' ? 'AI-tjänst saknas' : k === 'nav' ? 'Ur Nav, utan namn' : 'Ur Nav'}</span>`;
+};
+const _palNdClick = palClick;
+palClick = function(e){
+  if (!ND) return _palNdClick(e);
+  const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.psrc){ toast(t.dataset.psrc === 'Frågor utan svar' ? 'Räknat sedan måndag, utan namn.' : `Källan är ${t.dataset.psrc}.`); return; }
+  const x = PS.cur && t.dataset.pact !== undefined ? PS.cur.acts[+t.dataset.pact] : null;
+  if (x && x.open && x.open !== '/arenden/nytt' && !x.open.startsWith('/rutiner/')){ closePal(); ndGa(x.open); return; }
+  if (t.matches('[data-pyes]') && PS.cur && PS.confirm !== null){
+    const y = PS.cur.acts[PS.confirm];
+    if (y && y.ndRutin){ closePal(); ndPalRutinUtkast(y.ndRutin); return; }
+  }
+  return _palNdClick(e);
+};
+// Utkastet till en rutin: rutiner-rutten, som redaktören. Inget publiceras.
+function ndPalRutinUtkast(titel){
+  ndRutPost('spara', {hur:'utkast', f:{t:titel, typ:'routine', omr:'adm', nasta:frPlus(kIdag(), 182), agare:ND.jag.id}}, {ladda:false, tyst:true})
+    .then(s => toast(s.fel || 'Utkastet ligger under Rutiner.'));
+}
+
+/* ---------- Gör: de kopplade vyernas handlingar ---------- */
+function ndPalNyUppgift(){
+  if (S.view === 'uppgifter'){ document.getElementById('qinMain')?.focus(); return; }
+  S.todoOpen = true; render(); setTimeout(() => document.getElementById('qinTodo')?.focus(), 50);
+}
+function ndPalLaggTill(text){
+  ndUpgPost('skapa', {titel:text, dag:kIdag()}, {ladda:false, tyst:true}).then(s => {
+    if (!s.ok){ toast(s.fel || 'Uppgiften lades inte upp.'); return; }
+    let angrad = false;
+    const ladda = () => { try { sessionStorage.setItem('nd-upg', JSON.stringify({view:S.view, tab:S.tab})); } catch(_){} location.reload(); };
+    toast('Lagd i Uppgifter, i dag.', () => { angrad = true; ndUpgPost('avbryt', {id:s.id, note:'Ångrad i paletten'}, {ladda:false, tyst:true}).then(a => { toast(a.ok ? 'Ångrat.' : a.fel || 'Det gick inte att ångra.'); setTimeout(ladda, 900); }); });
+    setTimeout(() => { if (!angrad) ladda(); }, 5600);
+  });
+}
+const _palNdDraw = drawPal;
+drawPal = function(q){
+  if (ND) ndPalKal();
+  _palNdDraw(q); if (!ND || !ndKopplad('uppgifter')) return;
+  palItems.forEach(o => {
+    const l = (/<span>([^<]+)<\/span>/.exec(o.html || '') || [])[1] || '';
+    if (l === 'Ny uppgift') o.run = () => { closePal(); ndPalNyUppgift(); };
+    else if (l.startsWith('Ny uppgift: ')) o.run = () => { closePal(); ndPalLaggTill(q.trim()); };
+  });
+};
+
 /* Start */
 try { const th = localStorage.getItem('nav2-theme'); if (th && th !== 'auto'){ document.documentElement.setAttribute('data-theme', th); S.theme = th; document.querySelectorAll('#themeSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.themeSet === th))); } } catch(_){}
 render();

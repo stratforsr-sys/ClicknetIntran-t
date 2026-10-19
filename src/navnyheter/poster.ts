@@ -87,6 +87,13 @@ behörigheter som här: du ser bara det du får se.
 - **Fel**: dina felrapporter och, för den som hanterar kön, kön och
   nattjobbets kvitto steg för steg. Kända fel med råd, "samma för mig" och
   svar i tråden finns nu i navet.
+- **Sök, gör eller fråga Nav** (⌘K): sökningen hittar dina uppgifter,
+  rutiner (även i texten och bilagorna), kurser, kommande möten, order och
+  ärenden, och öppnar dem direkt. Gör går till de kopplade vyerna, och det du
+  skriver kan bli en uppgift för i dag. Att svara på frågor kräver en AI-tjänst
+  som inte är kopplad än, och svaret säger det och visar var svaret finns.
+  Säljchef, VD och admin ser veckans frågor som Nav inte kunde svara på, utan
+  namn.
 
 Vyerna som inte är kopplade säger det, och har en knapp till samma sak här.
 Ingenting påhittat visas.
