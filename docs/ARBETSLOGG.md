@@ -106,6 +106,10 @@ exempel. Nu:
   har inga handlingar i de fyra vyerna. Inga JS-fel och inga exempelnamn.
 - **Öppna frågor:** se `docs/NASTA_SESSION.md`.
 
+## 2026-10-19 · Nav 2.0, Avtal får spara (`SKRIVLAGE.avtal`)
+
+Beställarens ja 2026-10-19. `/nav2/avtal` sparar nu: ladda upp ett påskrivet avtal eller tilläggsavtal som PDF per person, ta bort ett avtal (ett utkast raderas, ett utfärdat dras tillbaka med skäl till den det gällde), påminn om påskrift och ändra till tillsvidare. Bara säljchef, VD och administratör (`far_hantera_avtal()`; tillsvidare kräver `canManageEmployees`). Anställdas "Bifoga påskrivet avtal" går genom samma rutt och sparar alltså också.
+
 ## 2026-10-19 · Nav 2.0, Avtal med riktig data, i läsläge (ingen migration)
 
 Utkastets Avtal och Mitt avtal läser navets anställningsavtal (`contract`, 0028/0073) med den inloggades behörighet. I produktionen finns tre avtal, alla uppladdade PDF:er, och inga mallar.

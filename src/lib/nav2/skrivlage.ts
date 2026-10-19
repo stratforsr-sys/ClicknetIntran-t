@@ -19,7 +19,8 @@ export const SKRIVLAGE = {
   tid: false,
   rutiner: false,
   utbildning: false,
-  avtal: false,
+  // Beställarens ja 2026-10-19: ladda upp och ta bort avtal, påminn om påskrift, tillsvidare.
+  avtal: true,
   // Beställarens ja 2026-10-18: Grattis, Stämmer inte, Visa inte här, Sedan du tittade och lagets mål.
   hem: true,
   rekrytering: false,
