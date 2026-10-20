@@ -123,11 +123,78 @@ function stampel(h: { id: string; kind: string; occurred_at: string; source: str
 
 const kl = (t: string | null | undefined) => (t ?? "").slice(0, 5);
 
+/** Startad innan den väntas in: ett fel kommer fram där den väntas in, inte som ett ohanterat avslag medan något annat väntas in. */
+function tidig<T>(p: Promise<T>): Promise<T> {
+  p.catch(() => {});
+  return p;
+}
+
+/**
+ * Fart (2026-10-20): läsningarna startar så fort det de beror på finns, inte i
+ * tur och ordning. Förut väntade tio omgångar på varandra; nu är det tre för
+ * säljaren och fyra för chefen. Samma frågor och samma svar.
+ */
 export async function byggTid(supabase: SupabaseClient, user: CurrentUser): Promise<NdTid> {
   const mig = user.employee!.id;
   const nu = new Date();
   const idag = svensktDatum(nu);
-  const sparr = await hamtaLage();
+  const admin = supabaseAdmin();
+  const sparrP = hamtaLage();
+  const fyrtio = new Date(Date.parse(svenskDygnsstart(nu)) - 35 * 86400000).toISOString();
+
+  // 0094: det utkastet har och navet saknade. Beror inte på något ovan.
+  const andraP = tidig(Promise.all([
+    supabase.from("time_day_ack").select("work_date").eq("employee_id", mig).eq("kind", "auto_close_ok"),
+    supabase.from("work_schedule_seen").select("valid_from").eq("employee_id", mig),
+    supabase.from("time_week_check").select("week_start, ok, checked_at").eq("employee_id", mig).order("week_start", { ascending: false }).limit(26),
+    supabase.from("nav_preference").select("value").eq("employee_id", mig).eq("key", "tid.paminn").maybeSingle(),
+    supabase.from("tid_view_log").select("viewer_id, what, viewed_at").eq("employee_id", mig).gte("viewed_at", new Date(Date.parse(svenskDygnsstart(nu)) - 90 * 86400000).toISOString()).order("viewed_at", { ascending: false }).limit(30),
+    admin.from("compliance_gate").select("staff_information_id").eq("key", "stampling").maybeSingle(),
+    supabase.from("phone_call").select("ended_at").eq("employee_id", mig).gte("started_at", fyrtio).not("ended_at", "is", null).order("ended_at", { ascending: false }).limit(1000),
+    // Lönerapportens uttag syns för den som finns i den. Läses med service role och bara för de egna perioderna.
+    admin.from("audit_log").select("actor_id, object_id, ts").eq("action", "payroll.exported").gte("ts", new Date(Date.parse(svenskDygnsstart(nu)) - 90 * 86400000).toISOString()).order("ts", { ascending: false }).limit(50),
+  ]));
+
+  // Chefens halva. Samma kallor som /tid, /tid/ogiltig-franvaro, /tid/lonerapport och startsidans dagsbild.
+  // Det som inte beror på något annat startar här, samtidigt med säljarens.
+  const chef = canManageEmployees(user);
+  const manadStart = idag.slice(0, 8) + "01";
+  const chefForstaP = chef
+    ? tidig(Promise.all([
+        sparrP.then((s) => hamtaDagsbild(supabase, nu, s.stampling)),
+        supabase.from("employee").select("id, first_name, last_name, team_id, employee_number, status"),
+        supabase.from("time_event").select(STAMPELKOLUMNER + ", employee_id").gte("occurred_at", svenskDygnsstart(nu)).in("kind", ["in", "out"]).order("occurred_at"),
+        supabase.from("time_event").select(STAMPELKOLUMNER + ", employee_id").eq("correction_state", "pending").order("created_at"),
+        supabase.from("attendance_incident").select("id, employee_id, occurred_on, minutes, status, ordningsnummer, atgard, decided_at, decision_note").or(`status.eq.foreslagen,decided_at.gte.${dagarBakat(idag, 366)}`).order("occurred_on", { ascending: false }),
+        supabase.from("late_arrival").select("employee_id, work_date, minutes_late, employee_comment").gte("work_date", dagarBakat(idag, 30)).order("work_date", { ascending: false }),
+        supabase.from("payroll_period").select("id, period_start, period_end, status, generated_at, attested_at").order("period_start", { ascending: false }),
+        supabase.from("consequence_rule").select("ordning, antal_handelser, periodlangd_manader, atgard, omfattning").order("ordning"),
+        supabase.from("time_event").select(STAMPELKOLUMNER + ", employee_id").gte("occurred_at", new Date(`${manadStart}T00:00:00Z`).toISOString()).order("occurred_at"),
+        supabase.from("team").select("id, name"),
+      ]))
+    : null;
+  // 0094: det chefens Tid i Nav 2.0 har utöver repot.
+  const vecka = (d: string) => dagarBakat(d, svenskVeckodag(svenskTidpunkt(d, "12:00")) - 1);
+  const nastaMandag = dagarBakat(vecka(idag), -7);
+  const nastaFredag = dagarBakat(nastaMandag, -4);
+  const veckaStart = new Date(Date.parse(svenskTidpunkt(vecka(idag), "00:00").toISOString())).toISOString();
+  const chefAndraP = chef
+    ? tidig(Promise.all([
+        supabase.from("work_schedule_seen").select("employee_id, valid_from").gte("valid_from", SCHEMA_KVITTENS_FRAN),
+        supabase.from("time_event").select("created_at, decided_at").not("decided_at", "is", null).not("correction_state", "is", null).order("decided_at", { ascending: false }).limit(10),
+        supabase.from("time_event").select("id", { count: "exact", head: false }).eq("decided_by", mig).gte("decided_at", svenskDygnsstart(nu)),
+        supabase.from("attendance_incident").select("id").eq("decided_by", mig).gte("decided_at", svenskDygnsstart(nu)),
+        supabase.from("nav_preference").select("key, value").eq("employee_id", mig).in("key", ["tid.senast", "tid.morgonnotis"]),
+        supabase.from("tid_view_log").select("employee_id, what, viewed_at").eq("viewer_id", mig).gte("viewed_at", veckaStart).order("viewed_at", { ascending: false }).limit(20),
+        supabase.from("absence_request").select("employee_id, type_id, starts_on, ends_on, status").in("status", ["approved", "submitted"]).lte("starts_on", nastaFredag).gte("ends_on", nastaMandag),
+        supabase.from("sick_report").select("employee_id, first_sick_day, last_sick_day").is("cancelled_at", null).lte("first_sick_day", nastaFredag),
+        supabase.from("payroll_export_column").select("id, header, field, active, sort").order("sort"),
+        supabase.from("payroll_period_sent").select("period_id, sent_at"),
+        supabase.from("audit_log").select("object_id, ts").eq("action", "payroll.exported").order("ts", { ascending: false }).limit(200),
+        supabase.from("one_on_one_point").select("employee_id").eq("source", "tid-sen").is("handled_at", null),
+        supabase.from("absence_type").select("id, label"),
+      ]))
+    : null;
 
   const [{ data: egna }, { data: scheman }, { data: sena }, { data: ledigt }, { data: typer }, { data: jag }] = await Promise.all([
     supabase.from("time_event").select(STAMPELKOLUMNER).eq("employee_id", mig).gte("occurred_at", new Date(Date.parse(svenskDygnsstart(nu)) - 35 * 86400000).toISOString()).order("occurred_at"),
@@ -137,6 +204,7 @@ export async function byggTid(supabase: SupabaseClient, user: CurrentUser): Prom
     supabase.from("absence_type").select("id, label"),
     supabase.from("employee").select("team_id").eq("id", mig).maybeSingle(),
   ]);
+  const sparr = await sparrP;
 
   const typnamn = new Map((typer ?? []).map((t) => [t.id as string, t.label as string]));
   const teamId = (jag?.team_id as string | null) ?? null;
@@ -188,21 +256,18 @@ export async function byggTid(supabase: SupabaseClient, user: CurrentUser): Prom
     sistaSamtal: {},
   };
 
-  // 0094: det utkastet har och navet saknade.
-  const admin = supabaseAdmin();
+  // 0094: det utkastet har och navet saknade. Startade överst; bara rättelsernas extra beror på stämplingarna.
   const egnaKorr = egnaStamplar.filter((h) => h.korr).map((h) => h.id);
-  const fyrtio = new Date(Date.parse(svenskDygnsstart(nu)) - 35 * 86400000).toISOString();
-  const [{ data: extra }, { data: autoOk }, { data: sett }, { data: veckor }, { data: pref }, { data: tittat }, { data: grind }, { data: samtal }, { data: exporter }] = await Promise.all([
+  const [{ data: autoOk }, { data: sett }, { data: veckor }, { data: pref }, { data: tittat }, { data: grind }, { data: samtal }, { data: exporter }] = await andraP;
+  // Vem har tittat: öppnade sena dagar, och uttag av lönerapporter där du finns med.
+  const exp = (exporter ?? []) as { actor_id: string | null; object_id: string; ts: string }[];
+  const tittare = [...new Set([...(tittat ?? []).map((t) => t.viewer_id as string), ...exp.map((e) => e.actor_id).filter((x): x is string => !!x)])];
+  const [{ data: extra }, { data: minaPerioder }, { data: tittarNamn }, { data: dok }] = await Promise.all([
     egnaKorr.length ? supabase.from("time_correction_extra").select("time_event_id, support, reject_reason, rejection_seen_at").in("time_event_id", egnaKorr) : Promise.resolve({ data: [] as { time_event_id: string; support: string | null; reject_reason: string | null; rejection_seen_at: string | null }[] }),
-    supabase.from("time_day_ack").select("work_date").eq("employee_id", mig).eq("kind", "auto_close_ok"),
-    supabase.from("work_schedule_seen").select("valid_from").eq("employee_id", mig),
-    supabase.from("time_week_check").select("week_start, ok, checked_at").eq("employee_id", mig).order("week_start", { ascending: false }).limit(26),
-    supabase.from("nav_preference").select("value").eq("employee_id", mig).eq("key", "tid.paminn").maybeSingle(),
-    supabase.from("tid_view_log").select("viewer_id, what, viewed_at").eq("employee_id", mig).gte("viewed_at", new Date(Date.parse(svenskDygnsstart(nu)) - 90 * 86400000).toISOString()).order("viewed_at", { ascending: false }).limit(30),
-    admin.from("compliance_gate").select("staff_information_id").eq("key", "stampling").maybeSingle(),
-    supabase.from("phone_call").select("ended_at").eq("employee_id", mig).gte("started_at", fyrtio).not("ended_at", "is", null).order("ended_at", { ascending: false }).limit(1000),
-    // Lönerapportens uttag syns för den som finns i den. Läses med service role och bara för de egna perioderna.
-    admin.from("audit_log").select("actor_id, object_id, ts").eq("action", "payroll.exported").gte("ts", new Date(Date.parse(svenskDygnsstart(nu)) - 90 * 86400000).toISOString()).order("ts", { ascending: false }).limit(50),
+    exp.length ? supabase.from("payroll_row").select("period_id").eq("employee_id", mig).in("period_id", [...new Set(exp.map((e) => e.object_id))]) : Promise.resolve({ data: [] as { period_id: string }[] }),
+    tittare.length ? admin.from("employee").select("id, first_name, last_name").in("id", tittare) : Promise.resolve({ data: [] as { id: string; first_name: string; last_name: string }[] }),
+    // K14: informationen till personalen, om den är kopplad.
+    grind?.staff_information_id ? supabase.from("document").select("id, title, slug, version").eq("id", grind.staff_information_id).maybeSingle() : Promise.resolve({ data: null }),
   ]);
   for (const x of extra ?? []) ut.extra[x.time_event_id] = { stod: x.support, skal: x.reject_reason, sett: !!x.rejection_seen_at };
   ut.autoOk = (autoOk ?? []).map((a) => String(a.work_date));
@@ -220,12 +285,7 @@ export async function byggTid(supabase: SupabaseClient, user: CurrentUser): Prom
     const d = svensktDatum(s.ended_at as string);
     if (!ut.sistaSamtal[d]) ut.sistaSamtal[d] = svenskKlocka(s.ended_at as string);
   }
-  // Vem har tittat: öppnade sena dagar, och uttag av lönerapporter där du finns med.
-  const exp = (exporter ?? []) as { actor_id: string | null; object_id: string; ts: string }[];
-  const { data: minaPerioder } = exp.length ? await supabase.from("payroll_row").select("period_id").eq("employee_id", mig).in("period_id", [...new Set(exp.map((e) => e.object_id))]) : { data: [] as { period_id: string }[] };
   const mina = new Set((minaPerioder ?? []).map((r) => r.period_id as string));
-  const tittare = [...new Set([...(tittat ?? []).map((t) => t.viewer_id as string), ...exp.map((e) => e.actor_id).filter((x): x is string => !!x)])];
-  const { data: tittarNamn } = tittare.length ? await admin.from("employee").select("id, first_name, last_name").in("id", tittare) : { data: [] as { id: string; first_name: string; last_name: string }[] };
   const tn = new Map((tittarNamn ?? []).map((p) => [p.id as string, fullName(p)]));
   ut.tittat = [
     ...(tittat ?? []).map((t) => ({ vem: tn.get(t.viewer_id as string) ?? "Okänd", vad: "öppnade dina sena dagar", at: t.viewed_at as string })),
@@ -234,32 +294,39 @@ export async function byggTid(supabase: SupabaseClient, user: CurrentUser): Prom
     .sort((a, b) => b.at.localeCompare(a.at))
     .slice(0, 20)
     .map((t) => ({ vem: t.vem, vad: t.vad, nar: `${svensktDatum(t.at)} ${svenskKlocka(t.at)}` }));
-  // K14: informationen till personalen, om den är kopplad.
-  if (grind?.staff_information_id) {
-    const { data: dok } = await supabase.from("document").select("id, title, slug, version").eq("id", grind.staff_information_id).maybeSingle();
-    if (dok) {
-      const { data: kv } = await supabase.from("document_ack").select("acked_at").eq("document_id", dok.id).eq("employee_id", mig).eq("version", dok.version).maybeSingle();
-      ut.info = { titel: dok.title as string, href: `/rutiner/${dok.slug}`, kvitterad: kv?.acked_at ? svensktDatum(kv.acked_at as string) : null };
-    }
+  if (dok) {
+    const { data: kv } = await supabase.from("document_ack").select("acked_at").eq("document_id", dok.id).eq("employee_id", mig).eq("version", dok.version).maybeSingle();
+    ut.info = { titel: dok.title as string, href: `/rutiner/${dok.slug}`, kvitterad: kv?.acked_at ? svensktDatum(kv.acked_at as string) : null };
   }
 
-  if (!canManageEmployees(user)) return ut;
+  if (!chef || !chefForstaP || !chefAndraP) return ut;
 
-  // Chefens halva. Samma kallor som /tid, /tid/ogiltig-franvaro, /tid/lonerapport och startsidans dagsbild.
-  const manadStart = idag.slice(0, 8) + "01";
-  const [dagsbild, { data: personal }, { data: idagAlla }, { data: vantande }, { data: ogiltig }, { data: sena30 }, { data: perioder }, { data: trappa }, { data: manaden }, { data: teamRader }] =
-    await Promise.all([
-      hamtaDagsbild(supabase, nu, sparr.stampling),
-      supabase.from("employee").select("id, first_name, last_name, team_id, employee_number, status"),
-      supabase.from("time_event").select(STAMPELKOLUMNER + ", employee_id").gte("occurred_at", svenskDygnsstart(nu)).in("kind", ["in", "out"]).order("occurred_at"),
-      supabase.from("time_event").select(STAMPELKOLUMNER + ", employee_id").eq("correction_state", "pending").order("created_at"),
-      supabase.from("attendance_incident").select("id, employee_id, occurred_on, minutes, status, ordningsnummer, atgard, decided_at, decision_note").or(`status.eq.foreslagen,decided_at.gte.${dagarBakat(idag, 366)}`).order("occurred_on", { ascending: false }),
-      supabase.from("late_arrival").select("employee_id, work_date, minutes_late, employee_comment").gte("work_date", dagarBakat(idag, 30)).order("work_date", { ascending: false }),
-      supabase.from("payroll_period").select("id, period_start, period_end, status, generated_at, attested_at").order("period_start", { ascending: false }),
-      supabase.from("consequence_rule").select("ordning, antal_handelser, periodlangd_manader, atgard, omfattning").order("ordning"),
-      supabase.from("time_event").select(STAMPELKOLUMNER + ", employee_id").gte("occurred_at", new Date(`${manadStart}T00:00:00Z`).toISOString()).order("occurred_at"),
-      supabase.from("team").select("id, name"),
-    ]);
+  const [dagsbild, { data: personal }, { data: idagAlla }, { data: vantande }, { data: ogiltig }, { data: sena30 }, { data: perioder }, { data: trappa }, { data: manaden }, { data: teamRader }] = await chefForstaP;
+
+  // Det som beror på chefens första omgång, i en omgång: rättelsernas förra tid och stöd, den skrivna periodens underlag och den pågående periodens.
+  const vant = (vantande ?? []) as unknown as (Handelse & { employee_id: string; note: string | null; created_at: string })[];
+  const ersattaIds = vant.map((v) => v.supersedes_id).filter((x): x is string => !!x);
+  const pl = (perioder ?? []) as { id: string; period_start: string; period_end: string; status: string; generated_at: string | null; attested_at: string | null }[];
+  const skriven = pl.find((p) => p.generated_at);
+  const pagar = pl.find((p) => p.period_start <= idag && p.period_end >= idag);
+  const lopStart = pagar?.period_start ?? manadStart;
+  const lopSlut = pagar?.period_end ?? dagarBakat(dagarBakat(manadStart, -32).slice(0, 8) + "01", 1);
+  const [{ data: ersatta }, lon, { data: stodRader }, { data: journal }, utanfor, { data: lopJust }, { data: lopFranvaro }, { data: lopSjuk }] = await Promise.all([
+    ersattaIds.length ? supabase.from("time_event").select("id, occurred_at").in("id", ersattaIds) : Promise.resolve({ data: [] as { id: string; occurred_at: string }[] }),
+    skriven
+      ? Promise.all([
+          supabase.from("payroll_row").select("employee_id, worked_minutes, auto_closed_days, absence_minutes").eq("period_id", skriven.id),
+          supabase.from("payroll_adjustment").select("employee_id, minutes").eq("period_id", skriven.id),
+        ])
+      : Promise.resolve(null),
+    vant.length ? supabase.from("time_correction_extra").select("time_event_id, support").in("time_event_id", vant.map((v) => v.id)) : Promise.resolve({ data: [] as { time_event_id: string; support: string | null }[] }),
+    admin.from("work_time_journal").select("employee_id, work_date, worked_minutes, auto_closed").gte("work_date", lopStart).lte("work_date", lopSlut),
+    utanforSchemat(admin, lopStart, idag < lopSlut ? idag : lopSlut),
+    pagar ? supabase.from("payroll_adjustment").select("employee_id, minutes").eq("period_id", pagar.id) : Promise.resolve({ data: [] as { employee_id: string; minutes: number }[] }),
+    supabase.from("absence_request").select("employee_id, type_id, starts_on, ends_on").eq("status", "approved").lte("starts_on", lopSlut).gte("ends_on", lopStart),
+    supabase.from("sick_report").select("employee_id, first_sick_day, last_sick_day").is("cancelled_at", null).lte("first_sick_day", lopSlut),
+  ]);
+  const [{ data: settAlla }, { data: beslutade }, { data: minaRattBeslut }, { data: minaOgiltigBeslut }, { data: chefPref }, { data: minLogg }, { data: franvaroNasta }, { data: sjukNasta }, { data: kolumner }, { data: skickade }, { data: uttag }, { data: punkter }, { data: allaTyper }] = await chefAndraP;
 
   // Namnen ur hela registret, ocksa for den som slutat: en gammal rad ska saga vem, inte "Okand".
   const alla = (personal ?? []) as { id: string; first_name: string; last_name: string; team_id: string | null; employee_number: string | number | null; status: string }[];
@@ -280,9 +347,6 @@ export async function byggTid(supabase: SupabaseClient, user: CurrentUser): Prom
     .sort((a, b) => a.sedan.localeCompare(b.sedan));
 
   // Rattelser som vantar: den nya tiden, och den den ersatter om det finns en.
-  const vant = (vantande ?? []) as unknown as (Handelse & { employee_id: string; note: string | null; created_at: string })[];
-  const ersattaIds = vant.map((v) => v.supersedes_id).filter((x): x is string => !!x);
-  const { data: ersatta } = ersattaIds.length ? await supabase.from("time_event").select("id, occurred_at").in("id", ersattaIds) : { data: [] as { id: string; occurred_at: string }[] };
   const ersattTid = new Map((ersatta ?? []).map((e) => [e.id, e.occurred_at]));
 
   // Oppna dagar i manaden: sista gallande stamplingen ar inte "out" (lonerapport.ts), och inte i dag.
@@ -292,14 +356,9 @@ export async function byggTid(supabase: SupabaseClient, user: CurrentUser): Prom
   for (const [pid, hs] of manPer) for (const d of oppnaDagar(gallande(hs))) if (d < idag) oppna.push({ pid, namn: namn.get(pid) ?? "Okänd", dag: d });
 
   // Senaste skrivna perioden: underlaget rad for rad, som /tid/lonerapport/[id].
-  const pl = (perioder ?? []) as { id: string; period_start: string; period_end: string; status: string; generated_at: string | null; attested_at: string | null }[];
-  const skriven = pl.find((p) => p.generated_at);
   let underlag: NonNullable<NdTid["chef"]>["underlag"] = null;
-  if (skriven) {
-    const [{ data: lonrader }, { data: just }] = await Promise.all([
-      supabase.from("payroll_row").select("employee_id, worked_minutes, auto_closed_days, absence_minutes").eq("period_id", skriven.id),
-      supabase.from("payroll_adjustment").select("employee_id, minutes").eq("period_id", skriven.id),
-    ]);
+  if (skriven && lon) {
+    const [{ data: lonrader }, { data: just }] = lon;
     const j = new Map<string, number>();
     for (const x of just ?? []) j.set(x.employee_id, (j.get(x.employee_id) ?? 0) + x.minutes);
     underlag = {
@@ -326,27 +385,6 @@ export async function byggTid(supabase: SupabaseClient, user: CurrentUser): Prom
     senaPer.set(s.employee_id, x);
   }
 
-  // 0094: det chefens Tid i Nav 2.0 har utöver repot.
-  const vecka = (d: string) => dagarBakat(d, svenskVeckodag(svenskTidpunkt(d, "12:00")) - 1);
-  const nastaMandag = dagarBakat(vecka(idag), -7);
-  const nastaFredag = dagarBakat(nastaMandag, -4);
-  const veckaStart = new Date(Date.parse(svenskTidpunkt(vecka(idag), "00:00").toISOString())).toISOString();
-  const [{ data: stodRader }, { data: settAlla }, { data: beslutade }, { data: minaRattBeslut }, { data: minaOgiltigBeslut }, { data: chefPref }, { data: minLogg }, { data: franvaroNasta }, { data: sjukNasta }, { data: kolumner }, { data: skickade }, { data: uttag }, { data: punkter }] = await Promise.all([
-    vant.length ? supabase.from("time_correction_extra").select("time_event_id, support").in("time_event_id", vant.map((v) => v.id)) : Promise.resolve({ data: [] as { time_event_id: string; support: string | null }[] }),
-    supabase.from("work_schedule_seen").select("employee_id, valid_from").gte("valid_from", SCHEMA_KVITTENS_FRAN),
-    supabase.from("time_event").select("created_at, decided_at").not("decided_at", "is", null).not("correction_state", "is", null).order("decided_at", { ascending: false }).limit(10),
-    supabase.from("time_event").select("id", { count: "exact", head: false }).eq("decided_by", mig).gte("decided_at", svenskDygnsstart(nu)),
-    supabase.from("attendance_incident").select("id").eq("decided_by", mig).gte("decided_at", svenskDygnsstart(nu)),
-    supabase.from("nav_preference").select("key, value").eq("employee_id", mig).in("key", ["tid.senast", "tid.morgonnotis"]),
-    supabase.from("tid_view_log").select("employee_id, what, viewed_at").eq("viewer_id", mig).gte("viewed_at", veckaStart).order("viewed_at", { ascending: false }).limit(20),
-    supabase.from("absence_request").select("employee_id, type_id, starts_on, ends_on, status").in("status", ["approved", "submitted"]).lte("starts_on", nastaFredag).gte("ends_on", nastaMandag),
-    supabase.from("sick_report").select("employee_id, first_sick_day, last_sick_day").is("cancelled_at", null).lte("first_sick_day", nastaFredag),
-    supabase.from("payroll_export_column").select("id, header, field, active, sort").order("sort"),
-    supabase.from("payroll_period_sent").select("period_id, sent_at"),
-    supabase.from("audit_log").select("object_id, ts").eq("action", "payroll.exported").order("ts", { ascending: false }).limit(200),
-    supabase.from("one_on_one_point").select("employee_id").eq("source", "tid-sen").is("handled_at", null),
-  ]);
-  const { data: allaTyper } = await supabase.from("absence_type").select("id, label");
   const typNamn = new Map((allaTyper ?? []).map((t) => [t.id as string, t.label as string]));
 
   // Nya scheman: vilka de gäller, hur många som sett dem, och vilka som saknas.
@@ -394,17 +432,7 @@ export async function byggTid(supabase: SupabaseClient, user: CurrentUser): Prom
   const steg: Record<string, { granskad: string | null; nedladdad: string | null; skickad: string | null }> = {};
   for (const p of pl) steg[p.id] = { granskad: p.attested_at ? svensktDatum(p.attested_at) : null, nedladdad: uttagMap.get(p.id) ?? null, skickad: skickadMap.get(p.id) ?? null };
 
-  // Löpande underlag för perioden som pågår: journalen hittills, rättelserna, de stängda dagarna och tiden utanför schemat.
-  const pagar = pl.find((p) => p.period_start <= idag && p.period_end >= idag);
-  const lopStart = pagar?.period_start ?? manadStart;
-  const lopSlut = pagar?.period_end ?? dagarBakat(dagarBakat(manadStart, -32).slice(0, 8) + "01", 1);
-  const [{ data: journal }, utanfor, { data: lopJust }, { data: lopFranvaro }, { data: lopSjuk }] = await Promise.all([
-    admin.from("work_time_journal").select("employee_id, work_date, worked_minutes, auto_closed").gte("work_date", lopStart).lte("work_date", lopSlut),
-    utanforSchemat(admin, lopStart, idag < lopSlut ? idag : lopSlut),
-    pagar ? supabase.from("payroll_adjustment").select("employee_id, minutes").eq("period_id", pagar.id) : Promise.resolve({ data: [] as { employee_id: string; minutes: number }[] }),
-    supabase.from("absence_request").select("employee_id, type_id, starts_on, ends_on").eq("status", "approved").lte("starts_on", lopSlut).gte("ends_on", lopStart),
-    supabase.from("sick_report").select("employee_id, first_sick_day, last_sick_day").is("cancelled_at", null).lte("first_sick_day", lopSlut),
-  ]);
+  // Löpande underlag för perioden som pågår (läst ovan): journalen hittills, rättelserna, de stängda dagarna och tiden utanför schemat.
   const jsum = new Map<string, { arbetad: number; stangda: number; dagar: number }>();
   for (const j of (journal ?? []) as { employee_id: string; worked_minutes: number; auto_closed: boolean }[]) {
     const x = jsum.get(j.employee_id) ?? { arbetad: 0, stangda: 0, dagar: 0 };

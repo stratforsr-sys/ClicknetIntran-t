@@ -128,6 +128,18 @@ type TaskRad = {
 };
 type HandRad = { task_id: string; type: string; at: string; by_employee_id: string; note: string | null; file_id: string | null };
 
+/** Startad innan den väntas in: ett fel kommer fram där den väntas in, inte som ett ohanterat avslag medan något annat väntas in. */
+function tidig<T>(p: Promise<T>): Promise<T> {
+  p.catch(() => {});
+  return p;
+}
+
+/**
+ * Fart (2026-10-20): det som bara beror på vilka personerna är läses i samma
+ * omgång som överenskommelserna, och K&V, övningarnas svar och namnen i
+ * omgången efter. Förut väntade nio omgångar på varandra för chefen, nu sju
+ * (tre av dem är lagets, i repots `hamtaLag`). Samma frågor och samma svar.
+ */
 export async function byggCoachning(supabase: SupabaseClient, user: CurrentUser): Promise<NdCoachning> {
   const mig = user.employee?.id ?? "";
   const chef = farCoacha(user);
@@ -144,9 +156,11 @@ export async function byggCoachning(supabase: SupabaseClient, user: CurrentUser)
     personer = lag.map((p) => ({ id: p.employee_id, namn: p.namn, senast: p.dagarSedan === null ? null : minusDagar(idag, p.dagarSedan) }));
     for (const p of lag) for (const u of p.uppgifter) lage.set(u.id, u.lage);
   } else {
-    const egna: Uppgiftsrad[] = await uppgifterFor(mig, nu);
+    const [egna, { data: sess }]: [Uppgiftsrad[], { data: { held_on: string }[] | null }] = await Promise.all([
+      uppgifterFor(mig, nu),
+      supabase.from("coaching_session").select("held_on").eq("employee_id", mig),
+    ]);
     for (const u of egna) lage.set(u.id, u.lage);
-    const { data: sess } = await supabase.from("coaching_session").select("held_on").eq("employee_id", mig);
     const rorelser = [
       ...egna.flatMap((u) => u.handelser.filter((h) => ["kvitterad", "underkand", "inlamnad"].includes(h.type)).map((h) => ({ at: h.at }))),
       ...((sess ?? []) as { held_on: string }[]).map((s) => ({ at: `${s.held_on}T12:00:00Z` })),
@@ -157,6 +171,25 @@ export async function byggCoachning(supabase: SupabaseClient, user: CurrentUser)
   const ids = personer.map((p) => p.id);
   if (ids.length === 0) return tom;
   const ivem = new Set(ids);
+
+  // Det som bara beror på personerna, samtidigt med överenskommelserna.
+  const idsP = tidig(Promise.all([
+    supabase.from("coaching_session").select("id, employee_id, coach_id, held_on, goal_md, reality_md, will_md, previous_goal_met, focus_id").in("employee_id", ids).order("held_on"),
+    supabase.from("coaching_drill").select("id, employee_id, focus_id, when_text, then_text, routine_slug, days, starts_on, status, habit_since, created_by").in("employee_id", ids).order("starts_on"),
+    supabase.from("coaching_focus").select("id, label, kv_criterion_id").eq("active", true).order("sort"),
+    supabase.from("coaching_person_focus").select("employee_id, focus_id").in("employee_id", ids),
+    supabase.from("coaching_message").select("id, employee_id, from_id, text, created_at").in("employee_id", ids).order("created_at"),
+    supabase.from("coaching_meeting_request").select("employee_id, requested_at").in("employee_id", ids).is("handled_at", null),
+    supabase.from("one_on_one_point").select("id, employee_id, text, source, added_by, removed_at").in("employee_id", ids).is("handled_at", null).is("removed_at", null).order("created_at"),
+    supabase.from("learning_note").select("employee_id, key, text").in("employee_id", ids).like("key", "mal:%"),
+    supabase.from("course").select("id, slug, title, status").order("title"),
+    supabase.from("document").select("id, slug, title, status").order("title"),
+    supabase.from("course_module").select("id, course_id, title, kind").eq("kind", "roleplay"),
+    supabase.from("nav_preference").select("key, value").eq("employee_id", mig).like("key", "coachning.utkast.%"),
+    // K&V för fokusområdet och bedömda rollspel (används längre ner).
+    supabase.from("kv_call").select("id, employee_id, call_date").in("employee_id", ids),
+    supabase.from("roleplay_submission").select("employee_id, module_id, graded_at, graded_by").in("employee_id", ids).not("graded_at", "is", null),
+  ]));
 
   // Överenskommelserna. nav2_kind finns först med 0100.
   const medKind = await supabase
@@ -175,21 +208,25 @@ export async function byggCoachning(supabase: SupabaseClient, user: CurrentUser)
   const rader = taskRader.filter((t) => ivem.has(t.assignee_id));
   const taskIds = rader.map((t) => t.id);
 
-  const [hand, noter, sess, ovn, fokus, pfok, medd, forfr, punkter, malRader, kurser, dok, rollspel, utkast] = await Promise.all([
-    supabase.from("coaching_task_event").select("task_id, type, at, by_employee_id, note, file_id").in("task_id", taskIds).order("at"),
-    supabase.from("coaching_task_note").select("task_id, by_employee_id, text, created_at").in("task_id", taskIds).order("created_at"),
-    supabase.from("coaching_session").select("id, employee_id, coach_id, held_on, goal_md, reality_md, will_md, previous_goal_met, focus_id").in("employee_id", ids).order("held_on"),
-    supabase.from("coaching_drill").select("id, employee_id, focus_id, when_text, then_text, routine_slug, days, starts_on, status, habit_since, created_by").in("employee_id", ids).order("starts_on"),
-    supabase.from("coaching_focus").select("id, label, kv_criterion_id").eq("active", true).order("sort"),
-    supabase.from("coaching_person_focus").select("employee_id, focus_id").in("employee_id", ids),
-    supabase.from("coaching_message").select("id, employee_id, from_id, text, created_at").in("employee_id", ids).order("created_at"),
-    supabase.from("coaching_meeting_request").select("employee_id, requested_at").in("employee_id", ids).is("handled_at", null),
-    supabase.from("one_on_one_point").select("id, employee_id, text, source, added_by, removed_at").in("employee_id", ids).is("handled_at", null).is("removed_at", null).order("created_at"),
-    supabase.from("learning_note").select("employee_id, key, text").in("employee_id", ids).like("key", "mal:%"),
-    supabase.from("course").select("id, slug, title, status").order("title"),
-    supabase.from("document").select("id, slug, title, status").order("title"),
-    supabase.from("course_module").select("id, course_id, title, kind").eq("kind", "roleplay"),
-    supabase.from("nav_preference").select("key, value").eq("employee_id", mig).like("key", "coachning.utkast.%"),
+  // Kursernas framsteg för överenskommelser om en kurs: beror bara på överenskommelserna.
+  const kursIds = [...new Set(rader.filter((t) => t.kind === "kurs" && t.course_id).map((t) => t.course_id!))];
+  const kursP = tidig(
+    kursIds.length
+      ? (async () => {
+          const { data: mods } = await supabase.from("course_module").select("id, course_id").in("course_id", kursIds);
+          const modRader = (mods ?? []) as { id: string; course_id: string }[];
+          const { data: prog } = await supabase.from("module_progress").select("employee_id, module_id, completed_at").in("module_id", modRader.map((m) => m.id)).in("employee_id", ids);
+          return { modRader, prog };
+        })()
+      : Promise.resolve(null),
+  );
+
+  const [[hand, noter], [sess, ovn, fokus, pfok, medd, forfr, punkter, malRader, kurser, dok, rollspel, utkast, kvQ, rsQ]] = await Promise.all([
+    Promise.all([
+      supabase.from("coaching_task_event").select("task_id, type, at, by_employee_id, note, file_id").in("task_id", taskIds).order("at"),
+      supabase.from("coaching_task_note").select("task_id, by_employee_id, text, created_at").in("task_id", taskIds).order("created_at"),
+    ]),
+    idsP,
   ]);
   if ([noter, ovn, pfok, medd, forfr].some((r) => saknas(r.error))) utan0100 = true;
 
@@ -218,15 +255,9 @@ export async function byggCoachning(supabase: SupabaseClient, user: CurrentUser)
   const omrFor = new Map<string, CnOmr>();
   for (const f of fokusRader) if (OMR[f.label]) omrFor.set(f.id, OMR[f.label]);
 
-  // Svaren och vanornas kontroller hör till övningarna.
+  // Svaren och vanornas kontroller hör till övningarna. I samma omgång: K&V-poängen och namnen.
   const ovnIds = ovnRader.map((o) => o.id);
-  const [svarQ, kollQ] = ovnIds.length
-    ? await Promise.all([
-        supabase.from("coaching_drill_answer").select("drill_id, day, answer, note, reason, call_label, answered_at").in("drill_id", ovnIds),
-        supabase.from("coaching_habit_check").select("drill_id, due_on, answer").in("drill_id", ovnIds),
-      ])
-    : [{ data: [] }, { data: [] }];
-
+  const kvRader = (kvQ.data ?? []) as { id: string; employee_id: string; call_date: string }[];
   // Namnen: det RLS ger, och resten (skapare, motpart) med service role.
   const namnIds = [
     ...rader.flatMap((t) => [t.assignee_id, t.partner_id, t.created_by]),
@@ -235,22 +266,27 @@ export async function byggCoachning(supabase: SupabaseClient, user: CurrentUser)
     ...meddRader.map((m) => m.from_id),
     ...ovnRader.map((o) => o.created_by),
   ].filter((x): x is string => !!x);
-  const namn = await namnkarta(namnIds);
+  const [[svarQ, kollQ], poangQ, namn, { data: allaNamn }] = await Promise.all([
+    ovnIds.length
+      ? Promise.all([
+          supabase.from("coaching_drill_answer").select("drill_id, day, answer, note, reason, call_label, answered_at").in("drill_id", ovnIds),
+          supabase.from("coaching_habit_check").select("drill_id, due_on, answer").in("drill_id", ovnIds),
+        ])
+      : Promise.resolve([{ data: [] }, { data: [] }]),
+    kvRader.length ? supabase.from("kv_score").select("call_id, criterion_id, points").in("call_id", kvRader.map((k) => k.id)) : Promise.resolve(null),
+    namnkarta(namnIds),
+    namnIds.length ? supabaseAdmin().from("employee").select("id, first_name, last_name").in("id", [...new Set(namnIds)]) : Promise.resolve({ data: [] as { id: string; first_name: string; last_name: string }[] }),
+  ]);
   for (const p of personer) namn.set(p.id, p.namn);
-  const fattas = [...new Set(namnIds)].filter((x) => !namn.has(x));
-  if (fattas.length) {
-    const { data } = await supabaseAdmin().from("employee").select("id, first_name, last_name").in("id", fattas);
-    for (const e of (data ?? []) as { id: string; first_name: string; last_name: string }[]) namn.set(e.id, fullName(e));
-  }
+  const fattas = new Set([...new Set(namnIds)].filter((x) => !namn.has(x)));
+  for (const e of (allaNamn ?? []) as { id: string; first_name: string; last_name: string }[]) if (fattas.has(e.id)) namn.set(e.id, fullName(e));
   const n = (id: string | null | undefined) => (id ? namn.get(id) ?? "" : "");
 
-  // Kursernas framsteg för överenskommelser om en kurs.
-  const kursIds = [...new Set(rader.filter((t) => t.kind === "kurs" && t.course_id).map((t) => t.course_id!))];
+  // Kursernas framsteg för överenskommelser om en kurs (lästa ovan).
   const kursFramsteg = new Map<string, { klara: number; moduler: number }>();
-  if (kursIds.length) {
-    const { data: mods } = await supabase.from("course_module").select("id, course_id").in("course_id", kursIds);
-    const modRader = (mods ?? []) as { id: string; course_id: string }[];
-    const { data: prog } = await supabase.from("module_progress").select("employee_id, module_id, completed_at").in("module_id", modRader.map((m) => m.id)).in("employee_id", ids);
+  const kursLas = await kursP;
+  if (kursLas) {
+    const { modRader, prog } = kursLas;
     const klara = new Set(((prog ?? []) as { employee_id: string; module_id: string; completed_at: string | null }[]).filter((p) => p.completed_at).map((p) => `${p.employee_id}:${p.module_id}`));
     for (const t of rader.filter((x) => x.kind === "kurs" && x.course_id)) {
       const m = modRader.filter((x) => x.course_id === t.course_id);
@@ -341,11 +377,8 @@ export async function byggCoachning(supabase: SupabaseClient, user: CurrentUser)
   // K&V för fokusområdet: snittet före övningens start och sedan dess. RLS (0036)
   // släpper bara fram K&V för personen själv och för dem som hanterar provisionen.
   const kvPer = new Map<string, [number, number]>();
-  const { data: kvSamtal } = await supabase.from("kv_call").select("id, employee_id, call_date").in("employee_id", ids);
-  const kvRader = (kvSamtal ?? []) as { id: string; employee_id: string; call_date: string }[];
-  if (kvRader.length) {
-    const { data: poang } = await supabase.from("kv_score").select("call_id, criterion_id, points").in("call_id", kvRader.map((k) => k.id));
-    const poangRader = (poang ?? []) as { call_id: string; criterion_id: string; points: number | string }[];
+  if (kvRader.length && poangQ) {
+    const poangRader = (poangQ.data ?? []) as { call_id: string; criterion_id: string; points: number | string }[];
     for (const p of personer) {
       const omr = omrForPerson(p.id);
       const kriterium = fokusRader.find((f) => OMR[f.label] === omr)?.kv_criterion_id;
@@ -378,7 +411,7 @@ export async function byggCoachning(supabase: SupabaseClient, user: CurrentUser)
       logg.push({ vem: t.assignee_id, d: stockholm(x.at).dag, typ, t: x.type === "kvitterad" ? `${n(x.by_employee_id)} kvitterade: ${t.title}` : `${n(x.by_employee_id)} gav återkoppling: ${t.title}`, txt: x.note ?? "" });
     }
   }
-  const { data: rsInl } = await supabase.from("roleplay_submission").select("employee_id, module_id, graded_at, graded_by").in("employee_id", ids).not("graded_at", "is", null);
+  const rsInl = rsQ.data;
   const rsTitel = new Map(rsRader.map((m) => [m.id, m.title]));
   for (const r of (rsInl ?? []) as { employee_id: string; module_id: string; graded_at: string; graded_by: string | null }[])
     logg.push({ vem: r.employee_id, d: stockholm(r.graded_at).dag, typ: "rollspel", t: `Rollspel bedömt: ${rsTitel.get(r.module_id) ?? "rollspel"}`, txt: "" });

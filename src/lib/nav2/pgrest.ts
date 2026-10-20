@@ -37,6 +37,14 @@ import { sattPgKrok } from "./pgkrok";
  * sidan blir lika långsam som i går.
  * ===========================================================================
  *
+ * SAMMA FRÅGA EN GÅNG PER BYGGE (2026-10-20). Delarna läser delvis samma sak
+ * (`absence_type`, `team`, uppgifterna, spärrläget …): 30 av 360 frågor var
+ * dubbletter. En läsfråga med samma text — samma SQL, samma värden, samma roll
+ * och samma claims — körs därför bara en gång per session, och de andra får
+ * samma svar. Det är samma läsning som förut, bara inte två gånger, och
+ * delarna behöver inte veta om det. Varje anropare får en egen kopia, för
+ * delarna sorterar och ändrar i sina listor. En fråga som ger fel minns inte.
+ *
  * Används bara av byggNav2Data (data.ts) via `medPg`. supabaseServer() och
  * supabaseAdmin() lämnar den här klienten medan bygget pågår (AsyncLocalStorage
  * och kroken i pgkrok.ts), så att delar som skapar sin egen klient (notiserna,
@@ -408,8 +416,10 @@ function lit(v: unknown): string {
  */
 class Session {
   stangd = false;
-  /** Hur det gick, för Server-Timing: frågor i Postgres, anrop till REST-lagret och fel. */
-  matt = { pg: 0, rest: 0, fel: 0 };
+  /** Hur det gick, för Server-Timing: frågor i Postgres, anrop till REST-lagret, fel, svar ur minnet, och summan av väntan på en anslutning och av tiden i frågorna (ms). */
+  matt = { pg: 0, rest: 0, fel: 0, minne: 0, ko: 0, db: 0 };
+  /** Frågetext (förordet med roll och claims, och SQL med värdena) → svaret. Bara läsningar, bara den här sessionen. */
+  private minne = new Map<string, Promise<pg.QueryResult>>();
   private klienter: Partial<Record<Vem, SupabaseClient>> = {};
   private forord: Record<Vem, string>;
 
@@ -423,11 +433,36 @@ class Session {
   async fraga(vem: Vem, sql: string, p: unknown[]): Promise<pg.QueryResult> {
     if (avstangd()) throw new EjStod("ingen anslutning");
     const text = this.forord[vem] + sql.replace(/\$(\d+)/g, (_, n) => lit(p[Number(n) - 1]));
+    let svar = this.minne.get(text);
+    if (svar) this.matt.minne++;
+    else {
+      svar = this.kor(vem, text, sql);
+      this.minne.set(text, svar);
+      svar.catch(() => this.minne.delete(text));
+    }
+    return kopia(await svar);
+  }
+
+  private async kor(vem: Vem, text: string, sql: string): Promise<pg.QueryResult> {
     this.matt.pg++;
     const t0 = performance.now();
+    let t1 = t0;
     try {
-      const r = (await this.pool.query(text)) as unknown as pg.QueryResult[];
-      if (LOGG) LOGG.push([vem, 0, Math.round(performance.now() - t0), 0, sql.slice(0, 90)]);
+      // Som pool.query, men med väntan på anslutningen för sig.
+      const klient = await this.pool.connect();
+      t1 = performance.now();
+      let r: pg.QueryResult[];
+      try {
+        r = (await klient.query(text)) as unknown as pg.QueryResult[];
+      } catch (e) {
+        klient.release(e as Error);
+        throw e;
+      }
+      klient.release();
+      const t2 = performance.now();
+      this.matt.ko += t1 - t0;
+      this.matt.db += t2 - t1;
+      if (LOGG) LOGG.push([vem, Math.round(t1 - t0), Math.round(t2 - t1), 0, sql.slice(0, 90)]);
       return r[r.length - 1];
     } catch (e) {
       this.matt.fel++;
@@ -451,6 +486,11 @@ class Session {
   klient(vem: Vem): SupabaseClient {
     return klientProxy(this, vem) as unknown as SupabaseClient;
   }
+}
+
+/** Svaret som anroparen får behålla: raderna kopieras, så att en del som sorterar sin lista inte ändrar en annans. */
+function kopia(r: pg.QueryResult): pg.QueryResult {
+  return { ...r, rows: structuredClone(r.rows) };
 }
 
 /** Efter ett anslutningsfel går byggena via REST-lagret en minut. */
@@ -658,7 +698,7 @@ function rpcfraga(schema: Schema, kalla: { fn: string; args: Record<string, unkn
 /* Ingången.                                                                 */
 /* ------------------------------------------------------------------------ */
 
-export type PgMatt = { pg: number; rest: number; fel: number; anslut: number } | null;
+export type PgMatt = { pg: number; rest: number; fel: number; minne: number; ko: number; db: number; anslut: number } | null;
 
 /**
  * Kör `fn` med läsningarna direkt i Postgres. `identitet` är den mellanvaran
@@ -692,7 +732,7 @@ export async function medPg<T>(
   const anslut = Math.round(performance.now() - t0);
   try {
     const v = await ALS.run(s, fn);
-    return { v, matt: { ...s.matt, anslut } };
+    return { v, matt: { ...s.matt, ko: Math.round(s.matt.ko), db: Math.round(s.matt.db), anslut } };
   } finally {
     s.stang();
   }

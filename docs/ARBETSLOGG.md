@@ -5,6 +5,55 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-20 · Nav 2.0, fart: kedjorna i Tid, notiserna, Coachning, Frånvaro och Kalendern (ingen migration)
+
+Prompten "Fart: kedjorna" i `~/nav2-utkast/PROMPTER.md`. Mätverktygen ligger i
+`~/nav2-utkast/delar/fart/` (spår per fråga med del och anropare, tid i
+Postgres per fråga, simulator, klientmätning).
+
+- **Det som tar tiden är databasens arbete, inte kedjorna.** Zens 360 frågor tar
+  1 220 ms i Postgres med RLS och 30 ms utan: 97 % är policyfunktionerna
+  (`current_employee_id()`, `has_any_role()`, `far_godkanna_franvaro_for()`,
+  `leads_employee()` …), som räknas om för varje rad. De är `SECURITY DEFINER`
+  med `SET search_path`, så de bäddas aldrig in, och var och en slår upp
+  `auth.users`, `employee` och `employee_role`. Ingen av de 206 policyerna har
+  `(select …)` runt sina funktioner. Databasen är Supabase Micro (två delade
+  kärnor): `select 1` skalar till 30 anslutningar, men de riktiga frågorna
+  planar ut vid ~0,85 s, hur många anslutningar som än används.
+- **Inget index saknas** (`explain analyze` på de dyraste: allt är RLS-filter på
+  få rader). Ingen migration i 0155–0159.
+- **Kedjorna (rundresor i följd, Zen / Fredrik):** Tid 10→4 / 5→2, notiserna
+  10→4 / 10→4, Coachning 9→6 / 10→5, Frånvaro 11→5 / 5→2, Kalendern 8→8 / 8→7.
+  Det som återstår ligger i repots `hamtaLag`, `leveranskalender-server.ts` och
+  `kalender-server.ts` (också gamla Navs) och rördes inte.
+- **Ändrat:**
+  - `tid.ts`, `coachning.ts`, `franvaro.ts`, `kalender.ts` och
+    `notiser-server.ts`: läsningar som inte beror på varandra startar samtidigt.
+    Samma frågor, samma svar. `hamtaNotiser` används också av nuvarande Nav och
+    ger samma svar där. Coachningens namn som RLS döljer läses med service role
+    i samma omgång, men används bara för dem som fattas, som förut.
+  - `pgrest.ts`: samma läsfråga (samma SQL, värden, roll och claims) körs en gång
+    per bygge. 30 av Zens 360 frågor var dubbletter, bland annat `hamtaLage`,
+    vars `cache()` inte gäller i en route handler. Varje anropare får en egen
+    kopia (`structuredClone`), för delarna sorterar sina listor.
+  - `matt` får `pg-minne` (svar ur minnet), `pg-ko` (summan av väntan på en
+    anslutning) och `pg-db` (summan av tiden i frågorna). De visar i previewen
+    om kön eller databasen är det långsamma.
+- **Samma svar:** gammal och ny kod direkt efter varandra ger identisk data för
+  Zen, Fredrik och Mick (0 skillnader). `jamfor.mjs` ger IDENTISKA. För Zen
+  skiljer bara Provisions osorterade ordning, som före ändringen. Typkontrollen
+  mot de riktiga typerna (`next` 15.5.23, `@supabase/*`, `pg`, `@types/pg`)
+  ger inga nya fel. Processortiden är oförändrad.
+- **Effekt:** lokalt ~1,1 → ~1,05 s (Zen) och ~1,03 → ~0,88 s (Fredrik).
+  Simulatorn räknar med ~4 % i produktionen, eftersom databasen är mättad.
+  Previewen: se `~/nav2-utkast/HANDOFF.md`, "Fart: kedjorna".
+- **I webbläsaren** tar sidan ~0,1 s efter att datan kommit (0,3 s med fyra
+  gånger strypt processor). Servern är fortfarande det långsamma.
+- **Nästa steg, beställarens beslut:** policyerna i `(select …)`-form. Mätt på
+  de dyraste: `attendance_incident` 95 → 4 ms, `time_event` 61 → 1 ms, samma
+  rader. Databasens arbete per laddning går från ~1,2 s mot ~0,1 s, och datan
+  borde komma ner mot ~0,3–0,4 s. Det rör alla 206 policyer och gamla Nav.
+
 ## 2026-10-20 · Nav 2.0, Händelseloggen kopplad (session 4, läsläge)
 
 Utkastets Händelselogg (`moduler/rls.js`) visar navets händelser för chefen. Inget i utkastets gränssnitt är ändrat.

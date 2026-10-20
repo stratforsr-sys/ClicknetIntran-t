@@ -79,10 +79,22 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
 
   /**
    * G6. Modulspärren behövs för att veta om personen stämplar, och därmed
-   * vilka guider som alls gäller henne. Läses före de andra frågorna eftersom
-   * den är cachead per begäran — sidan under klockan har redan ställt den.
+   * vilka guider som alls gäller henne. Den är cachead per begäran — sidan
+   * under klockan har redan ställt den — och läses samtidigt med de andra
+   * frågorna: ingen av dem beror på den.
    */
-  const lage = await hamtaLage();
+  const lageP = hamtaLage();
+
+  /**
+   * Coachningen, uppgifterna och projektchatten svarar på egna frågor och
+   * beror inte på något här. De startar därför nu, samtidigt med resten, och
+   * läggs i listan på samma plats som förut (längst ner). Ett fel kommer fram
+   * där de väntas in och tystas där, som förut.
+   */
+  const coachningP = coachningsnotiser(user);
+  const uppgifterP = uppgiftsnotiser(user);
+  const chattP = projektchattnotiser(user);
+  for (const p of [coachningP, uppgifterP, chattP]) p.catch(() => {});
 
   const [
     { data: seddRad },
@@ -393,6 +405,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
       .order("ends_on", { ascending: true })
       .limit(MAX_NOTISER),
   ]);
+  const lage = await lageP;
 
   // Ingen rad = allt ar olast. Ratt hall att fela at: en nyanstalld ska se
   // sina rutiner och kurser, inte en tom klocka.
@@ -1269,7 +1282,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
    * yngsta i navet.
    */
   try {
-    notiser.push(...(await coachningsnotiser(user)));
+    notiser.push(...(await coachningP));
   } catch {
     // Tyst. Felet syns i `error_report` via sidans egen felgrans.
   }
@@ -1283,7 +1296,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
    * precis den sortens andra svar som en dag slapper ut nagons anteckningar.
    */
   try {
-    notiser.push(...(await uppgiftsnotiser(user)));
+    notiser.push(...(await uppgifterP));
   } catch {
     // Tyst. Samma skal som ovan.
   }
@@ -1292,7 +1305,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
   // laser andra tabeller, och ett fel i chatten ska inte tysta forfallna
   // uppgifter.
   try {
-    notiser.push(...(await projektchattnotiser(user)));
+    notiser.push(...(await chattP));
   } catch {
     // Tyst. Samma skal som ovan.
   }

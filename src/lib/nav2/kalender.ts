@@ -53,10 +53,18 @@ export type NdKalender = NdKalposter & {
  * står i vyn.
  */
 async function privata(mig: string, poster: NdPost[]): Promise<NdPost[]> {
+  return markeraPrivata(mig, poster, await privataIds(poster));
+}
+
+/** Vilka av posternas möten som är privata. */
+async function privataIds(poster: NdPost[]): Promise<Set<string>> {
   const ids = [...new Set(poster.map((p) => p.ref).filter((r): r is string => Boolean(r)))];
-  if (!ids.length) return poster;
+  if (!ids.length) return new Set();
   const { data } = await supabaseAdmin().from("calendar_event").select("id").in("id", ids).eq("is_private", true);
-  const priv = new Set((data ?? []).map((r) => r.id as string));
+  return new Set((data ?? []).map((r) => r.id as string));
+}
+
+function markeraPrivata(mig: string, poster: NdPost[], priv: Set<string>): NdPost[] {
   if (!priv.size) return poster;
   return poster.map((p) => {
     if (!p.ref || !priv.has(p.ref)) return p;
@@ -65,12 +73,17 @@ async function privata(mig: string, poster: NdPost[]): Promise<NdPost[]> {
   });
 }
 
-async function egnaPaminnelser(mig: string, poster: NdPost[]): Promise<NdPost[]> {
-  const { data } = await supabaseAdmin()
+function lasPaminnelser(mig: string) {
+  return supabaseAdmin()
     .from("calendar_attendee")
     .select("event_id, series_id, reminder_min")
     .eq("employee_id", mig)
     .not("reminder_min", "is", null);
+}
+
+/** `las`: läsningen, om den startats tidigare (byggKalender). */
+async function egnaPaminnelser(mig: string, poster: NdPost[], las: PromiseLike<{ data: { event_id: unknown; series_id: unknown; reminder_min: unknown }[] | null }> = lasPaminnelser(mig)): Promise<NdPost[]> {
+  const { data } = await las;
   const perHandelse = new Map<string, number>(), perSerie = new Map<string, number>();
   for (const r of data ?? []) {
     if (r.event_id) perHandelse.set(r.event_id as string, Number(r.reminder_min));
@@ -90,15 +103,23 @@ export async function hamtaKalposter(user: CurrentUser, vy: Vy, dag: string, vis
   return { fran, till, poster: await privata(user.employee!.id, await egnaPaminnelser(user.employee!.id, data.poster)) };
 }
 
+/**
+ * Fart (2026-10-20): de egna påminnelserna beror bara på vem man är och läses
+ * samtidigt med kalendern, och de privata mötena samtidigt med påminnelserna.
+ * Förut väntade de på varandra efter kalendern. Samma svar.
+ */
 export async function byggKalender(user: CurrentUser): Promise<NdKalender | null> {
   const idag = svensktDatum();
+  const paminnP = user.employee ? Promise.resolve(lasPaminnelser(user.employee.id)) : null;
+  paminnP?.catch(() => {});
   const [data, delningar] = await Promise.all([hamtaLeveranskalender(user, "manad", idag, [], idag), hamtaDelningar(user)]);
   if (!data) return null;
   const { fran, till } = intervallForVy("manad", idag);
+  const [medPaminnelser, priv] = await Promise.all([egnaPaminnelser(data.mig, data.poster, paminnP ?? undefined), privataIds(data.poster)]);
   return {
     fran,
     till,
-    poster: await privata(data.mig, await egnaPaminnelser(data.mig, data.poster)),
+    poster: markeraPrivata(data.mig, medPaminnelser, priv),
     mig: data.mig,
     personer: data.personer.filter((p) => p.id !== data.mig).map((p) => ({ id: p.id, namn: p.namn, grupp: p.grupp, farg: p.farg, niva: p.niva })),
     vantar: data.vantar,

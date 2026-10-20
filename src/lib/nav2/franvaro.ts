@@ -86,10 +86,58 @@ export type NdFranvaro = {
 /** En inmatning i `absence_balance`. Raderna läggs till och ändras aldrig; den senaste per typ gäller. */
 export type NdSaldorad = { typ: string; d: number; asof: string; ar: number | null; av: string; nar: string };
 
+/** Startad innan den väntas in: ett fel kommer fram där den väntas in, inte som ett ohanterat avslag medan något annat väntas in. */
+function tidig<T>(p: Promise<T>): Promise<T> {
+  p.catch(() => {});
+  return p;
+}
+
+/**
+ * Fart (2026-10-20): det som inte beror på något annat läses i första
+ * omgången, och chefsbilden så fort regelverket finns. Förut väntade elva
+ * omgångar på varandra för chefen; nu är det fem (tre av dem i repots
+ * `hamtaChefsbild`). Samma frågor och samma svar.
+ */
 export async function byggFranvaro(supabase: SupabaseClient, user: CurrentUser): Promise<NdFranvaro> {
   const mig = user.employee!.id;
   const idag = svensktDatum();
-  const rv = await hamtaRegelverk();
+  const db = supabaseAdmin();
+  const rvP = tidig(hamtaRegelverk());
+  // Bemanningen: antal andra som är borta per dag, ett år framåt. Läst med
+  // service role som i hamtaProvunderlag, och bara antalet lämnar servern.
+  const andrasP = tidig(Promise.resolve(db
+    .from("absence_request")
+    .select("employee_id, type_id, starts_on, ends_on, employee!absence_request_employee_id_fkey(team_id)")
+    .eq("status", "approved")
+    .lte("starts_on", datumPlus(idag, 365))
+    .gte("ends_on", idag)));
+  // 0093: rundan för nästa sommar (laget först, annars den för alla) och förslagen på mina ansökningar.
+  // Nästa sommar: från september är det nästa år.
+  const sommar = Number(idag.slice(0, 4)) + (Number(idag.slice(5, 7)) >= 9 ? 1 : 0);
+  const rundaP = tidig(Promise.all([
+    supabase.from("vacation_wish_round").select("summer_year, team_id, send_on, answer_by, decide_by, sent_at").eq("summer_year", sommar),
+    supabase.from("absence_proposal").select("request_id, starts_on, ends_on, note, proposed_at").order("proposed_at", { ascending: false }),
+  ]));
+  // Chefens halva: repots egen chefsbild, när regelverket finns, och teamets perioder.
+  const chefsvy = hasRole(user, "sales_manager", "ceo", "team_lead", "admin");
+  const saldovy = hasRole(user, "sales_manager", "ceo", "admin");
+  const inmatatP = saldovy
+    ? tidig(Promise.resolve(db
+        .from("absence_balance")
+        .select("employee_id, type_id, days, as_of, earned_year, entered_by, entered_at")
+        .order("as_of", { ascending: false })
+        .order("entered_at", { ascending: false })
+        .limit(1000)))
+    : null;
+  const bildP = chefsvy ? tidig(rvP.then((rv) => hamtaChefsbild(user, rv?.regler ?? null, rv?.typer ?? [], idag, 30))) : null;
+  const teamP = chefsvy
+    ? tidig(Promise.all([
+        supabase.from("sick_report").select("employee_id, first_sick_day, last_sick_day, registered_at, confirmed_at, cancelled_at, escalated_at, extent_percent, id").is("cancelled_at", null).gte("first_sick_day", dagarBakat(idag, 400)),
+        supabase.from("employee").select("id, first_name, last_name, status"),
+        supabase.from("absence_request").select("id, employee_id, type_id, starts_on, ends_on, part_day_minutes, reason").eq("status", "approved").gte("ends_on", dagarBakat(idag, 60)).lte("starts_on", datumPlus(idag, 335)).neq("employee_id", mig),
+        supabase.from("sick_signal_ack").select("employee_id, occasions"),
+      ]))
+    : null;
 
   const [{ data: egna }, { data: sjuk }, { data: saldon }, { data: sparrar }, { data: tak }, { data: ordning }, { data: jag }] = await Promise.all([
     supabase.from("absence_request").select("id, type_id, starts_on, ends_on, part_day_minutes, status, submitted_at, reason").eq("employee_id", mig).gte("ends_on", dagarBakat(idag, 365)).order("starts_on", { ascending: false }),
@@ -100,12 +148,12 @@ export async function byggFranvaro(supabase: SupabaseClient, user: CurrentUser):
     supabase.from("absence_call_order").select("sort, target_kind, role, employee_id, phone, team_id").eq("active", true).order("sort"),
     supabase.from("employee").select("manager_id, team_id").eq("id", mig).maybeSingle(),
   ]);
+  const rv = await rvP;
 
   // Ringordningen, byggd som på /franvaro/sjuk: teamets rader och bolagets,
   // chefen slås upp per person, en roll blir en rad med alla som har den, och
   // telefonnumret står på raden i ordningen. Namnen med service role: en
   // säljare får inte läsa registret, men navet visar redan vem hen ska ringa.
-  const db = supabaseAdmin();
   const rader = (ordning ?? []).filter((o) => o.team_id === null || o.team_id === (jag?.team_id ?? null));
   const roller = rader.filter((o) => o.target_kind === "role").map((o) => o.role as string);
   const utpekade = rader.filter((o) => o.target_kind === "person").map((o) => o.employee_id as string);
@@ -170,15 +218,9 @@ export async function byggFranvaro(supabase: SupabaseClient, user: CurrentUser):
   // Teamets eget tak går före bolagets, som i hamtaProvunderlag.
   const mittTak = (tak ?? []).find((t) => t.team_id !== null && t.team_id === (jag?.team_id ?? null)) ?? (tak ?? []).find((t) => t.team_id === null) ?? null;
 
-  // Bemanningen: antal andra som är borta per dag, ett år framåt. Läst med
-  // service role som i hamtaProvunderlag, och bara antalet lämnar servern.
+  // Bemanningen (läst ovan).
   const raknas = new Set((rv?.typer ?? []).filter((t) => t.counts_in_staffing).map((t) => t.id));
-  const { data: andras } = await db
-    .from("absence_request")
-    .select("employee_id, type_id, starts_on, ends_on, employee!absence_request_employee_id_fkey(team_id)")
-    .eq("status", "approved")
-    .lte("starts_on", datumPlus(idag, 365))
-    .gte("ends_on", idag);
+  const { data: andras } = await andrasP;
   const bemanning: Record<string, number> = {};
   for (const p of (andras ?? []) as unknown as { employee_id: string; type_id: string; starts_on: string; ends_on: string; employee: { team_id: string | null } | null }[]) {
     if (p.employee_id === mig || !raknas.has(p.type_id)) continue;
@@ -207,13 +249,8 @@ export async function byggFranvaro(supabase: SupabaseClient, user: CurrentUser):
     skriv: SKRIVLAGE.franvaro,
   };
 
-  if (hasRole(user, "sales_manager", "ceo", "admin")) {
-    const { data: inmatat } = await db
-      .from("absence_balance")
-      .select("employee_id, type_id, days, as_of, earned_year, entered_by, entered_at")
-      .order("as_of", { ascending: false })
-      .order("entered_at", { ascending: false })
-      .limit(1000);
+  if (saldovy && inmatatP) {
+    const { data: inmatat } = await inmatatP;
     const rader = (inmatat ?? []) as { employee_id: string; type_id: string; days: number | string; as_of: string; earned_year: number | null; entered_by: string; entered_at: string }[];
     const avIds = [...new Set(rader.map((r) => r.entered_by))];
     const { data: av } = avIds.length ? await db.from("employee").select("id, first_name, last_name").in("id", avIds) : { data: [] };
@@ -223,13 +260,8 @@ export async function byggFranvaro(supabase: SupabaseClient, user: CurrentUser):
     ut.saldon = saldon;
   }
 
-  // 0093: rundan för nästa sommar (laget först, annars den för alla) och förslagen på mina ansökningar.
-  // Nästa sommar: från september är det nästa år.
-  const sommar = Number(idag.slice(0, 4)) + (Number(idag.slice(5, 7)) >= 9 ? 1 : 0);
-  const [{ data: rundor }, { data: forslagRader }] = await Promise.all([
-    supabase.from("vacation_wish_round").select("summer_year, team_id, send_on, answer_by, decide_by, sent_at").eq("summer_year", sommar),
-    supabase.from("absence_proposal").select("request_id, starts_on, ends_on, note, proposed_at").order("proposed_at", { ascending: false }),
-  ]);
+  // 0093: rundan och förslagen (lästa ovan).
+  const [{ data: rundor }, { data: forslagRader }] = await rundaP;
   const runda = (rundor ?? []).find((r) => r.team_id && r.team_id === (jag?.team_id ?? null)) ?? (rundor ?? []).find((r) => !r.team_id) ?? null;
   if (runda) ut.runda = { ar: runda.summer_year as number, skickas: runda.send_on as string, svar: runda.answer_by as string, besked: runda.decide_by as string, skickad: Boolean(runda.sent_at) };
   for (const f of forslagRader ?? []) {
@@ -238,19 +270,13 @@ export async function byggFranvaro(supabase: SupabaseClient, user: CurrentUser):
   }
 
   // Chefens halva: repots egen chefsbild. Den som inte leder någon får en tom kö.
-  if (hasRole(user, "sales_manager", "ceo", "team_lead", "admin")) {
-    const bild = await hamtaChefsbild(user, rv?.regler ?? null, rv?.typer ?? [], idag, 30);
-    const [{ data: allaSjuk }, { data: alla }, { data: godkanda }] = await Promise.all([
-      supabase.from("sick_report").select("employee_id, first_sick_day, last_sick_day, registered_at, confirmed_at, cancelled_at, escalated_at, extent_percent, id").is("cancelled_at", null).gte("first_sick_day", dagarBakat(idag, 400)),
-      supabase.from("employee").select("id, first_name, last_name, status"),
-      supabase.from("absence_request").select("id, employee_id, type_id, starts_on, ends_on, part_day_minutes, reason").eq("status", "approved").gte("ends_on", dagarBakat(idag, 60)).lte("starts_on", datumPlus(idag, 335)).neq("employee_id", mig),
-    ]);
+  if (chefsvy && bildP && teamP) {
+    const [bild, [{ data: allaSjuk }, { data: alla }, { data: godkanda }, { data: kvittenser }]] = await Promise.all([bildP, teamP]);
     const namn = new Map((alla ?? []).map((p) => [p.id, fullName(p)]));
     const pers = (alla ?? []).filter((p) => p.status !== "offboarded");
     const per = new Map<string, Sjukanmalan[]>();
     for (const s of (allaSjuk ?? []) as unknown as (Sjukanmalan & { employee_id: string })[]) per.set(s.employee_id, [...(per.get(s.employee_id) ?? []), s]);
     const rehab: NonNullable<NdFranvaro["chef"]>["rehab"] = [];
-    const { data: kvittenser } = await supabase.from("sick_signal_ack").select("employee_id, occasions");
     const kvitt = new Map((kvittenser ?? []).map((k) => [k.employee_id as string, Number(k.occasions)]));
     if (rv) for (const p of pers) { const u = upprepadKorttid(per.get(p.id) ?? [], rv.regler, idag); if (u) rehab.push({ namn: fullName(p), ...u, pid: p.id as string, kvitterad: (kvitt.get(p.id as string) ?? -1) >= u.antal }); }
     const del = (m: number | null) => (m !== null ? `${Math.round((m / 60) * 10) / 10} h` : null);

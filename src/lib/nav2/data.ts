@@ -125,7 +125,7 @@ export async function byggNav2Data(user: CurrentUser, m?: Nav2Matt, pg?: { authU
   if (!user.employee) return null;
   if (!pg) return bygg(user, m);
   const { v, matt: pm } = await medPg(pg, { server: supabaseServer, admin: supabaseAdmin }, () => bygg(user, m));
-  if (m && pm) Object.assign(m, { pg: pm.pg, "pg-rest": pm.rest, "pg-fel": pm.fel, "pg-anslut": pm.anslut });
+  if (m && pm) Object.assign(m, { pg: pm.pg, "pg-rest": pm.rest, "pg-fel": pm.fel, "pg-anslut": pm.anslut, "pg-minne": pm.minne, "pg-ko": pm.ko, "pg-db": pm.db });
   return v;
 }
 
