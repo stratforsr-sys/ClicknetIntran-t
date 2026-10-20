@@ -6,7 +6,8 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 import { svensktDatum, svenskKlocka } from "@/lib/klocka";
 import { rodaDagar } from "@/lib/saljtakt";
 import { forfallodag } from "@/lib/utbildning";
-import { minuterFor, modulTillSteg, svit, type NdFraga, type NdSteg } from "./utbildningforma";
+import { MINSTA_SVAR, provlage, type Provlage } from "@/lib/prov";
+import { minuterFor, modulTillSteg, svit, type NdFraga, type NdSkriftFraga, type NdSteg } from "./utbildningforma";
 import { veckan } from "./utbildning-paminnelser";
 import { SKRIVLAGE } from "./skrivlage";
 
@@ -26,6 +27,12 @@ import { SKRIVLAGE } from "./skrivlage";
  * färdighet (`learning_meta.moduler`), med kursens första som reserv. Sviten
  * har frysdagar (`svit` i utbildningforma.ts), och teamets veckomål räknas
  * själv (`veckan` i utbildning-paminnelser.ts), bara för säljarna.
+ *
+ * Skriftliga prov (beställaren 2026-10-20, svar 8; tabellerna från 0067): en
+ * fritextmodul har sina frågor som steg och personens senaste försök i
+ * `skriftligt` (svaren, läget, returen och betyget). Frågorna läses med service
+ * role, eftersom `essay_question` är stängd för klienten: rättarstödet följer
+ * bara med i Teamets kö (`team.prov`), som byggs för dem som får rätta.
  */
 
 const FARDIGHETER = ["oppning", "behov", "invand", "avslut", "efter", "produkt", "regler"] as const;
@@ -60,13 +67,39 @@ export type NdKurs = {
   forsok: Record<string, { poang: number; godkant: boolean }>;
 };
 
+/** Mitt senaste skriftliga prov i en modul. */
+export type NdSkriftligt = {
+  lage: Provlage;
+  grans: number;
+  minsta: number;
+  svar: Record<string, string>;
+  poang: Record<string, number | null>;
+  kommentar: Record<string, string>;
+  retur: { note: string; datum: string } | null;
+  resultat: { poang: number; godkant: boolean; aterkoppling: string | null; rattad: string } | null;
+};
+
+/** Ett inlämnat skriftligt prov i Teamets kö, med rättarstödet. */
+export type NdProvRattning = {
+  id: string;
+  namn: string;
+  /** Den inloggades eget prov: visas, men rättas av någon annan i säljledningen. */
+  egen: boolean;
+  modul: string;
+  kurs: string;
+  grans: number;
+  inlamnad: string;
+  returer: number;
+  fragor: { id: string; nr: number; q: string; stod: string | null; max: number; svar: string; kommentar: string | null }[];
+};
+
 export type NdRepFraga = { id: string; skill: string | null; kalla: string; kurs: string; q: string; alt: string[]; oids: string[]; ratt: number; team: boolean };
 
 export type NdUtbildning = {
   /** SKRIVLAGE.utbildning: false = läsläge, knapparna säger att inget sparas. */
   skriv: boolean;
   kurser: NdKurs[];
-  lektioner: Record<string, { kurs: string; modul: number; titel: string; steg: NdSteg[] }>;
+  lektioner: Record<string, { kurs: string; modul: number; titel: string; steg: NdSteg[]; skriftligt?: NdSkriftligt }>;
   repetition: NdRepFraga[];
   forfallna: string[];
   /** Nästa dag en fråga kommer tillbaka, när inget är förfallet i dag. */
@@ -127,6 +160,7 @@ export type NdUtbildning = {
     personer: { id: string; namn: string; kurser: Record<string, [number, number]> }[];
     obligatoriska: { id: string; t: string }[];
     attBedoma: { id: string; namn: string; modul: string; kurs: string; inlamnad: string; fil: string | null; kriterier: { id: string; t: string; max: number }[] }[];
+    prov: NdProvRattning[];
     missade: [string, string, number, string][];
     karta: [string, number | null][];
     onskemal: [string, number][];
@@ -170,7 +204,7 @@ export async function byggUtbildning(supabase: SupabaseClient, user: CurrentUser
       supabase.from("course").select("id, slug, title, description_md, status, valid_months, due_days, pass_threshold, retry_wait_hours, owner_id, published_at, audience_roles, learning_meta").eq("status", "published").order("title"),
       supabase.from("module_progress").select("module_id, completed_at").eq("employee_id", mig),
       supabase.from("certification").select("course_id, issued_at, expires_at").eq("employee_id", mig).order("issued_at", { ascending: false }),
-      supabase.from("course_attempt").select("module_id, score, passed, created_at, note, graded_by").eq("employee_id", mig).order("created_at", { ascending: false }),
+      supabase.from("course_attempt").select("id, module_id, score, passed, created_at, note, graded_by").eq("employee_id", mig).order("created_at", { ascending: false }),
       supabase.from("learning_answer").select("question_id, correct, confidence, answered_at, next_due").eq("employee_id", mig).order("answered_at", { ascending: false }).limit(2000),
       supabase.from("learning_rule").select("text, course_id").eq("employee_id", mig).order("created_at"),
       supabase.from("learning_note").select("key, text").eq("employee_id", mig),
@@ -202,6 +236,57 @@ export async function byggUtbildning(supabase: SupabaseClient, user: CurrentUser
   const modIds = moduler.map((m) => m.id);
   const { data: fragRader } = modIds.length ? await admin.from("quiz_question").select("id, module_id, sort, prompt, quiz_option(id, sort, label, is_correct)").in("module_id", modIds).order("sort") : { data: [] };
 
+  // Skriftliga prov: frågorna utan rättarstöd (service role) och mina försök, senaste först.
+  type InlRad = { id: string; module_id: string; status: string; created_at: string; graded_at: string | null; attempt_id: string | null };
+  type SvarRad = { submission_id: string; question_id: string; body: string; points: number | null; comment: string | null };
+  type ReturRad = { submission_id: string; note: string; returned_at: string };
+  const fritextIds = moduler.filter((m) => m.kind === "fritext").map((m) => m.id);
+  const [skriftSvar, minaInlSvar] = fritextIds.length
+    ? await Promise.all([
+        admin.from("essay_question").select("id, module_id, sort, prompt, max_points").in("module_id", fritextIds).order("sort"),
+        supabase.from("essay_submission").select("id, module_id, status, created_at, graded_at, attempt_id").eq("employee_id", mig).in("module_id", fritextIds).order("created_at", { ascending: false }),
+      ])
+    : [{ data: [] }, { data: [] }];
+  const skriftPer = new Map<string, NdSkriftFraga[]>();
+  for (const f of (skriftSvar.data ?? []) as (NdSkriftFraga & { module_id: string })[]) skriftPer.set(f.module_id, [...(skriftPer.get(f.module_id) ?? []), { id: f.id, sort: f.sort, prompt: f.prompt, max_points: f.max_points }]);
+  const senasteInl = new Map<string, InlRad>();
+  for (const r of (minaInlSvar.data ?? []) as InlRad[]) if (!senasteInl.has(r.module_id)) senasteInl.set(r.module_id, r);
+  const inlIds = [...senasteInl.values()].map((r) => r.id);
+  const [provSvarSvar, provReturSvar] = inlIds.length
+    ? await Promise.all([
+        supabase.from("essay_answer").select("submission_id, question_id, body, points, comment").in("submission_id", inlIds),
+        supabase.from("essay_return").select("submission_id, note, returned_at").in("submission_id", inlIds).order("returned_at", { ascending: false }),
+      ])
+    : [{ data: [] }, { data: [] }];
+  const provSvar = (provSvarSvar.data ?? []) as SvarRad[];
+  const provReturer = (provReturSvar.data ?? []) as ReturRad[];
+  const mittForsok = (forsok ?? []) as { id: string; module_id: string; score: number; passed: boolean; created_at: string; note: string | null }[];
+  const skriftligt = (modId: string, grans: number): NdSkriftligt => {
+    const inl = senasteInl.get(modId) ?? null;
+    const forsoket = inl?.attempt_id ? mittForsok.find((f) => f.id === inl.attempt_id) ?? null : null;
+    const lage: Provlage = inl ? provlage([{ status: inl.status, passed: forsoket ? forsoket.passed : null, created_at: inl.created_at }]) : "ej_paborjat";
+    const svar: Record<string, string> = {};
+    const poang: Record<string, number | null> = {};
+    const kommentar: Record<string, string> = {};
+    for (const a of provSvar) {
+      if (!inl || a.submission_id !== inl.id) continue;
+      svar[a.question_id] = a.body;
+      poang[a.question_id] = a.points;
+      if (a.comment) kommentar[a.question_id] = a.comment;
+    }
+    const retur = inl ? provReturer.find((x) => x.submission_id === inl.id) ?? null : null;
+    return {
+      lage,
+      grans,
+      minsta: MINSTA_SVAR,
+      svar,
+      poang,
+      kommentar,
+      retur: retur ? { note: retur.note, datum: svensktDatum(retur.returned_at) } : null,
+      resultat: forsoket && inl ? { poang: forsoket.score, godkant: forsoket.passed, aterkoppling: forsoket.note, rattad: svensktDatum(inl.graded_at ?? forsoket.created_at) } : null,
+    };
+  };
+
   const klaraSet = new Set((progress ?? []).map((p) => p.module_id as string));
   const godkandaProv = new Set(((forsok ?? []) as { module_id: string; passed: boolean }[]).filter((f) => f.passed).map((f) => f.module_id));
   const fragorPer = new Map<string, NdFraga[]>();
@@ -231,7 +316,7 @@ export async function byggUtbildning(supabase: SupabaseClient, user: CurrentUser
     mods.forEach((m, i) => {
       // Facit i spelaren bara för ett prov personen klarat, även för den som får redigera kursen (repots regel i lamnaQuiz).
       const fragor = (fragorPer.get(m.id) ?? []).map((f) => (godkandaProv.has(m.id) ? f : { ...f, alternativ: f.alternativ.map((a) => ({ ...a, ratt: null })) }));
-      lektioner[m.id] = { kurs: k.slug, modul: i + 1, titel: m.title, steg: modulTillSteg(m, fragor) };
+      lektioner[m.id] = { kurs: k.slug, modul: i + 1, titel: m.title, steg: modulTillSteg(m, fragor, skriftPer.get(m.id) ?? []), ...(m.kind === "fritext" ? { skriftligt: skriftligt(m.id, k.pass_threshold) } : {}) };
     });
     const c = certPer.get(k.id);
     const frist = forfallodag(egen?.start_date ?? null, k.due_days);
@@ -434,12 +519,15 @@ export async function byggUtbildning(supabase: SupabaseClient, user: CurrentUser
 
   // Teamet: obligatoriska kurser per person, rollspel att bedöma, frågor som missas, teamets karta.
   const aktiva = pers.filter((p) => p.status !== "offboarded" && p.id !== mig);
-  const [{ data: allaKlara }, { data: allaSvar }, { data: allaForsok }, { data: onsk }] = await Promise.all([
+  const [{ data: allaKlara }, { data: allaSvar }, { data: allaForsok }, { data: onsk }, { data: provKo }] = await Promise.all([
     supabase.from("module_progress").select("employee_id, module_id").in("module_id", modIds.length ? modIds : ["00000000-0000-0000-0000-000000000000"]),
     admin.from("learning_answer").select("question_id, correct").gte("answered_at", new Date(Date.now() - 60 * 86400000).toISOString()).limit(20000),
     supabase.from("course_attempt").select("employee_id, module_id, answers").not("answers", "is", null).limit(5000),
     redaktor ? admin.from("course_wish").select("query").gte("created_at", new Date(Date.now() - 90 * 86400000).toISOString()) : Promise.resolve({ data: [] as { query: string }[] }),
+    // Inlämnade skriftliga prov. Alla chefer ser alla (policyn essay_submission_read), som i repots kö.
+    supabase.from("essay_submission").select("id, module_id, course_id, employee_id, submitted_at, updated_at").eq("status", "inlamnad").order("submitted_at"),
   ]);
+  const prov = await provko(admin, supabase, (provKo ?? []) as KoRad[], mig, namn);
   const obligatoriska = NdKurser.filter((k) => k.obl);
   const klaraPer = new Map<string, Set<string>>();
   for (const r of (allaKlara ?? []) as { employee_id: string; module_id: string }[]) klaraPer.set(r.employee_id, new Set([...(klaraPer.get(r.employee_id) ?? []), r.module_id]));
@@ -477,9 +565,52 @@ export async function byggUtbildning(supabase: SupabaseClient, user: CurrentUser
         fil: s.file_id,
         kriterier: krit.filter((c) => c.module_id === s.module_id).map((c) => ({ id: c.id, t: c.label, max: c.max_points })),
       })),
+    prov,
     missade,
     karta: FARDIGHETER.map((s): [string, number | null] => { const x = teamSkill.get(s); return [s, x && x[1] >= 5 ? Math.round((x[0] / x[1]) * 100) : null]; }),
     onskemal: [...onskemal.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10),
   };
   return ut;
+}
+
+type KoRad = { id: string; module_id: string; course_id: string; employee_id: string; submitted_at: string | null; updated_at: string };
+
+/**
+ * Teamets kö av skriftliga prov, med rättarstödet (`essay_question.guidance`,
+ * service role). Byggs bara för den som får rätta: Teamet finns bara för
+ * chefsrollerna, samma krets som repots `farRatta` och policyn.
+ */
+async function provko(admin: SupabaseClient, supabase: SupabaseClient, ko: KoRad[], mig: string, namn: Map<string, string>): Promise<NdProvRattning[]> {
+  if (!ko.length) return [];
+  const modIds = [...new Set(ko.map((r) => r.module_id))];
+  const kursIds = [...new Set(ko.map((r) => r.course_id))];
+  const [{ data: fragor }, { data: svar }, { data: returer }, { data: mods }, { data: kurser }] = await Promise.all([
+    admin.from("essay_question").select("id, module_id, sort, prompt, guidance, max_points").in("module_id", modIds).order("sort"),
+    supabase.from("essay_answer").select("submission_id, question_id, body, comment").in("submission_id", ko.map((r) => r.id)),
+    supabase.from("essay_return").select("submission_id").in("submission_id", ko.map((r) => r.id)),
+    admin.from("course_module").select("id, title").in("id", modIds),
+    admin.from("course").select("id, title, pass_threshold").in("id", kursIds),
+  ]);
+  const fr = (fragor ?? []) as { id: string; module_id: string; sort: number; prompt: string; guidance: string | null; max_points: number }[];
+  const sv = (svar ?? []) as { submission_id: string; question_id: string; body: string; comment: string | null }[];
+  const re = (returer ?? []) as { submission_id: string }[];
+  const modNamn = new Map(((mods ?? []) as { id: string; title: string }[]).map((m): [string, string] => [m.id, m.title]));
+  const kursRad = new Map(((kurser ?? []) as { id: string; title: string; pass_threshold: number }[]).map((k): [string, { title: string; pass_threshold: number }] => [k.id, k]));
+  return ko.map((r): NdProvRattning => {
+    const k = kursRad.get(r.course_id);
+    return {
+      id: r.id,
+      namn: namn.get(r.employee_id) ?? "Okänd",
+      egen: r.employee_id === mig,
+      modul: modNamn.get(r.module_id) ?? "",
+      kurs: k?.title ?? "",
+      grans: k?.pass_threshold ?? 80,
+      inlamnad: dagKort(r.submitted_at ?? r.updated_at),
+      returer: re.filter((x) => x.submission_id === r.id).length,
+      fragor: fr.filter((f) => f.module_id === r.module_id).map((f) => {
+        const a = sv.find((x) => x.submission_id === r.id && x.question_id === f.id);
+        return { id: f.id, nr: f.sort, q: f.prompt, stod: f.guidance, max: f.max_points, svar: a?.body ?? "", kommentar: a?.comment ?? null };
+      }),
+    };
+  });
 }

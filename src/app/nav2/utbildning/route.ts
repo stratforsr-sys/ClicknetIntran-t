@@ -7,6 +7,7 @@ import { notifiera } from "@/lib/notishandelse-server";
 import { utgangsdatum } from "@/lib/utbildning";
 import { loggaKurs } from "@/lib/utbildning-server";
 import { bedomRollspel, forberedRollspel, klarModul, lamnaQuiz, registreraRollspel } from "@/app/(app)/utbildning/actions";
+import { lamnaProv, rattaProv, returneraProv, sparaUtkast } from "@/app/(app)/utbildning/prov/actions";
 import { skapaUppgift } from "@/app/(app)/uppgifter/actions";
 import { skapaMote } from "@/app/(app)/kalender/moten/actions";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
@@ -24,6 +25,12 @@ export const dynamic = "force-dynamic";
  * med `bedomRollspel` (återkoppling på minst tio tecken, poäng inom varje
  * kriteriums tak). Uppgifter läggs med `skapaUppgift`, och anmälan till en
  * föreläsning blir ett möte i kalendern med `skapaMote`.
+ *
+ * Skriftliga prov (0067, beställaren 2026-10-20): repots `sparaUtkast` och
+ * `lamnaProv` för den som skriver, `rattaProv` och `returneraProv` för den som
+ * rättar. Reglerna står i actions: provet tas i ordning, inlämnat går inte att
+ * ändra, alla chefer rättar men ingen sitt eget, och betyget och returen kräver
+ * en återkoppling.
  *
  * Det nya (0097): svaren i repetitionen (rättas här, inte i webbläsaren, och
  * nästa gång räknas här: fel i morgon, gissat rätt om 2 dagar, säkert rätt om
@@ -187,6 +194,28 @@ export async function POST(request: Request) {
         await sparaBetyg(m.id, b.betyg);
         revalidatePath("/utbildning", "layout");
         return svar(s.fel ? { fel: s.fel, resultat: s.resultat ?? null, provfel: true } : { ok: s.ok ?? "Inlämnat.", resultat: s.resultat ?? null });
+      }
+      // ---------------------------------------------------------------- Skriftliga prov
+      case "skriv":
+      case "lamna": {
+        const m = await modul(b.modul);
+        if (!m || m.kind !== "fritext") return svar({ fel: "Provet finns inte, eller är inte öppet för dig." }, 404);
+        const f = form({ modul_id: m.id });
+        for (const [q, t] of Object.entries((b.svar ?? {}) as Record<string, unknown>)) if (UUID.test(q)) f.set(`svar_${q}`, String(t ?? "").slice(0, 8000));
+        const s = handling === "skriv" ? await sparaUtkast({}, f) : await lamnaProv({}, f);
+        if (s.fel) return svar({ fel: s.fel }, 400);
+        if (handling === "lamna") await sparaBetyg(m.id, b.betyg);
+        return handling === "lamna" ? klart(s.ok ?? "Inlämnat.") : svar({ ok: s.ok ?? "Sparat." });
+      }
+      case "ratta":
+      case "returnera": {
+        const id = String(b.id ?? "");
+        if (!UUID.test(id)) return svar({ fel: "Inlämningen finns inte." }, 404);
+        const f = form({ id, note: text(b.note, 4000) });
+        for (const [q, v] of Object.entries((b.poang ?? {}) as Record<string, unknown>)) if (UUID.test(q)) f.set(`poang_${q}`, String(v));
+        for (const [q, v] of Object.entries((b.kommentar ?? {}) as Record<string, unknown>)) if (UUID.test(q)) f.set(`kommentar_${q}`, text(v, 2000));
+        const s = handling === "ratta" ? await rattaProv({}, f) : await returneraProv({}, f);
+        return s.fel ? svar({ fel: s.fel }, 400) : klart(s.ok ?? "Klart.");
       }
       case "betyg": {
         const m = await modul(b.modul);

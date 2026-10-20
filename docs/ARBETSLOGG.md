@@ -5,6 +5,43 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-20 · Nav 2.0, Utbildning: skriftliga prov, "Ny kurs" och de gamla adresserna (Gamla Navs sista funktioner, F; ingen migration)
+
+Beställarens svar 8 (2026-10-20): skriftliga prov ska finnas i Nav 2.0. E2:
+kursbyggaren är Claude i chatten. Underlaget är
+`~/nav2-utkast/delar/gamla-nav/inventering.md`.
+
+- **Skriftliga prov i lektionen:** en fritextmodul (`fritext`, 0067) blir ett
+  steg per fråga med en textruta (`skrift` i `utbildningforma.ts`). Frågorna
+  läses med service role, eftersom `essay_question` är stängd för klienten, och
+  rättarstödet följer aldrig med till den som skriver. Personens senaste försök
+  står i `lektioner[modul].skriftligt` (svaren, läget, returen, poängen och
+  kommentarerna per fråga, betyget och återkopplingen). Svaren sparas medan man
+  skriver (repots `sparaUtkast`) och lämnas in i sista steget (`lamnaProv`:
+  minst tio tecken per svar). Efter ett underkänt prov börjar nästa försök med
+  tomma svar, som i repot.
+- **Rättningen i Teamet → Att bedöma:** utkastets rad "Skriftligt prov … Rätta"
+  visar navets inlämnade prov (`team.prov`, alla chefer ser alla, som policyn
+  `essay_submission_read`), med svaren, rättarstödet, poäng 0 till frågans tak
+  och en kommentar per fråga. "Sätt betyget" = `rattaProv`, "Skicka tillbaka för
+  komplettering" = `returneraProv`, båda med återkoppling på minst tio tecken.
+  Ingen rättar sitt eget prov: det visas, men utan knappar.
+- **Rutten** `/nav2/utbildning`: `skriv`, `lamna`, `ratta` och `returnera`
+  anropar repots actions i `prov/actions.ts` (som därför står kvar när gamla
+  Nav tas bort). Bakom `SKRIVLAGE.utbildning` (423 i läsläge).
+- **Notiserna** `prov-ratta` (`/utbildning/prov/<id>`) och `prov-retur`
+  (kursen) är oförändrade: adresserna öppnas i Nav 2.0.
+- **"Ny kurs"** säger att Claude bygger kursen i chatten och pekar inte längre
+  på `/utbildning/ny`.
+- **Vägarna:** `/utbildning/rollspel` och `/utbildning/oversikt` öppnar Teamet
+  (säljaren: Rollspel och Mina), `/utbildning/prov/<id>` öppnar provet för
+  rättning, `/utbildning/ny` Utbildning med beskedet om Claude (`ndUtbGa` i
+  `ndutb.js`, `case 'utbildning'` i `ndskal.js`, `SJALV` i `vagar.ts`). De är
+  borta ur `SKALNAV`. Systemguiderna stannar i nuvarande Nav tills de nya
+  turerna är godkända av beställaren.
+- **Prov:** lokalt som Zen och Fredrik (`~/nav2-utkast/delar/utbildning-f/`),
+  typkontroll mot repots riktiga typer, `kolkoll.py`.
+
 ## 2026-10-20 · Nav 2.0, Gamla Nav P: lösenordet, Kod vid inloggning och palettens sökning i nyheter och personal (ingen migration)
 
 Gamla Navs sista funktioner, punkt P (beställarens svar 15 och inventeringens

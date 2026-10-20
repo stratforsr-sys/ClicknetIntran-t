@@ -10,6 +10,9 @@
  * Provfrågor har facit bara när det får visas (`ratt` är annars null): repot
  * visar facit först när provet är klarat, och spelaren rättar då inte på
  * vägen, utan lämnar in provet i sista steget.
+ *
+ * Ett skriftligt prov (modultypen `fritext`, 0067) blir ett steg per fråga med
+ * en textruta (`skrift`). Frågan följer med, men aldrig rättarstödet.
  */
 
 export type NdSteg =
@@ -17,9 +20,13 @@ export type NdSteg =
   | { typ: "ovning"; text: string; check: string[]; md: string }
   | { typ: "fraga"; prov: boolean; q: string; alt: string[]; oids: string[]; qid: string; ratt: number | null; forkl: string }
   | { typ: "rollspel"; modul: string }
+  | { typ: "skrift"; qid: string; nr: number; q: string; max: number }
   | { typ: "mal" };
 
 export type NdFraga = { id: string; prompt: string; alternativ: { id: string; label: string; ratt: boolean | null }[] };
+
+/** En fråga i ett skriftligt prov, utan rättarstödet. */
+export type NdSkriftFraga = { id: string; sort: number; prompt: string; max_points: number };
 
 // Markeringar bort, men en platshållare som "___" står kvar.
 const ren = (s: string) => s.replace(/_{2,}/g, "\u0000").replace(/[*_`>]/g, "").replace(/\u0000/g, "___").replace(/\s+/g, " ").trim();
@@ -52,7 +59,7 @@ export function minuterFor(kind: string, body: string, fragor: number): number {
   return Math.max(2, Math.round((body ?? "").split(/\s+/).length / 180));
 }
 
-export function modulTillSteg(m: { id: string; title: string; kind: string; body_md: string }, fragor: NdFraga[]): NdSteg[] {
+export function modulTillSteg(m: { id: string; title: string; kind: string; body_md: string }, fragor: NdFraga[], skrift: NdSkriftFraga[] = []): NdSteg[] {
   const steg: NdSteg[] = [];
   const delar = avsnitt(m.body_md);
   if (m.kind === "quiz") {
@@ -70,6 +77,7 @@ export function modulTillSteg(m: { id: string; title: string; kind: string; body
       steg.push({ typ: "ovning", text: fet ? ren(fet[1]) : m.title, check: lista.length ? lista : ["Gjort"], md: "" });
     }
     if (m.kind === "roleplay") steg.push({ typ: "rollspel", modul: m.id });
+    if (m.kind === "fritext") for (const f of skrift) steg.push({ typ: "skrift", qid: f.id, nr: f.sort, q: f.prompt, max: f.max_points });
   }
   if (!steg.length) steg.push({ typ: "text", rubrik: m.title, regel: m.title, md: "" });
   steg.push({ typ: "mal" });

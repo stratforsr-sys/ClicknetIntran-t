@@ -7386,6 +7386,13 @@ body.nd-riktig .proto{display:none}
 /* Utbildning: ett valt svar i ett prov som rättas först vid inlämningen. */
 .uqalt button.ndvalt{border-color:var(--brand);background:var(--brand-soft);box-shadow:inset 0 0 0 1px var(--brand)}
 
+/* Utbildning: skriftligt prov att rätta och svaret i lektionen (Gamla Nav F) */
+.ubedom>.ndurq{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:6px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.ndurq p{margin:0;white-space:pre-wrap;color:var(--ink-2);font-size:14px;line-height:1.5}
+.ndurq .usjalv{align-self:flex-start}
+.ubedom>.pacts{justify-content:flex-start}
+.ndskriftsvar{white-space:pre-wrap}
+
 /* ---------- Skalet (prefix skal): telefon och tangentbord, X1 och X2 ---------- */
 /* En tabell utan egen rullbar behållare rullar i sin förälder på telefonen, i stället för att hela sidan rullar i sidled. */
 @media (max-width:640px){body.nd-riktig #wrap :has(> table){overflow-x:auto}}
@@ -27434,6 +27441,12 @@ if (ndRut()){ ndRutStart(); NDKOPPLAD.add('rutiner'); }
    till /nav2/utbildning (src/app/nav2/utbildning/route.ts): repots
    klarModul, lamnaQuiz, rollspelets inlämning och bedömning, och 0097 för
    resten. I läsläge svarar rutten 423 och visar varför.
+
+   Gamla Navs sista funktioner (F, 2026-10-20): skriftliga prov skrivs i
+   lektionen (sparaUtkast, lamnaProv) och rättas eller skickas tillbaka i
+   Teamet → Att bedöma (rattaProv, returneraProv), med rättarstödet bara för
+   den som rättar. "Ny kurs" pekar på Claude, som bygger kurserna i chatten
+   (E2). Gamla adresser under /utbildning öppnas här (ndUtbGa, via ndskal.js).
    ===================================================================== */
 
 const ndUtb = () => ND && ND.utbildning;
@@ -27542,6 +27555,30 @@ async function ndUtbPost(handling, data = {}, {ladda = true, tyst = false} = {})
 function ndUtbLadda(){ try { sessionStorage.setItem('nd-utb', JSON.stringify({tab:S.uTab, open:S.uOpen, rp:S.rpOpen, steg:S.rpStep})); } catch(_){} setTimeout(() => location.reload(), 700); }
 (() => { if (!ndUtb()) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-utb') || 'null'); sessionStorage.removeItem('nd-utb'); } catch(_){}
   if (m) setTimeout(() => { S.view = 'utbildning'; if (m.tab) S.uTab = m.tab; if (m.open && kurs(m.open)) S.uOpen = m.open; if (m.rp && ROLLSPEL.some(r => r.id === m.rp)){ S.rpOpen = m.rp; S.rpStep = m.steg || 1; } render(); }, 0); })();
+/* ---------- Vägarna (ndGa i ndskal.js) ----------
+   /utbildning, /utbildning/<kurs>, /utbildning/rollspel och /oversikt (Teamet för
+   chefen), /utbildning/prov och /prov/<id> (provet öppet för rättning) och
+   /utbildning/ny (kurser byggs med Claude). Svarar false när målet inte finns. */
+function ndUtbGa(d){
+  if (!ndUtb()) return false;
+  const sub = d[1] || null, chef = !!ndUtb().team;
+  const visa = (tab, open) => { S.view = 'utbildning'; S.uPlay = null; S.uOpen = open || null; S.rpOpen = null; if (tab) S.uTab = tab; render(); window.scrollTo(0, 0); return true; };
+  if (!sub) return visa(null);
+  if (sub === 'rollspel') return visa(chef ? 'team' : 'rollspel');
+  if (sub === 'oversikt') return visa(chef ? 'team' : null);
+  if (sub === 'ny'){ visa(null); ndUtbNyKurs(); return true; }
+  if (sub === 'prov'){
+    const t = ndUtb().team, id = d[2], x = id && t && t.prov.find(y => y.id === id);
+    if (!x){ if (id) toast('Provet är redan rättat eller tillbakaskickat.'); return visa(chef ? 'team' : null); }
+    Object.assign(S, {uRatt:x.id, uRattPoang:{}, uRattKomm:{}, uRattNote:''}); visa('team');
+    setTimeout(() => document.querySelector(`[data-ndurt="${x.id}"]`)?.scrollIntoView({block:'center'}), 60); return true;
+  }
+  if (!kurs(sub)) return false;
+  return visa(null, sub);
+}
+// Kursbyggaren är Claude i chatten (beställaren 2026-10-20, E2), inte /utbildning/ny.
+function ndUtbNyKurs(){ toastActs('Ny kurs: ge materialet till Claude i chatten, så bygger Claude kursen med förtest, regler, frågor och mål och lägger upp den i Nav.', [], 8000); }
+
 // En sparad uppgift: rutten lägger den med repots skapaUppgift.
 const ndUtbUppgift = (titel, extra = {}) => ndUtbPost('uppgift', {titel, ...extra}, {ladda:false});
 
@@ -27837,6 +27874,16 @@ certVy = function(){
 };
 
 /* ---------- Teamet ---------- */
+// Ett skriftligt prov att rätta: svaren, rättarstödet och poäng per fråga (0 till taket), som repots rättning.
+function ndUtbRattning(x){
+  const po = S.uRattPoang || {}, km = S.uRattKomm || {};
+  const tak = x.fragor.reduce((s, f) => s + f.max, 0), satta = x.fragor.filter(f => po[f.id] !== undefined).length, summa = x.fragor.reduce((s, f) => s + Math.min(po[f.id] || 0, f.max), 0);
+  const pct = tak ? Math.round(summa / tak * 100) : 0;
+  return `<div class="ubedom">${x.fragor.map(f => `<div class="ndurq"><b>${f.nr}. ${esc(f.q)}</b><p>${f.svar ? esc(f.svar) : '<span class="muted">Inget svar.</span>'}</p>${f.stod ? `<span class="muted">Rättarstöd: ${esc(f.stod)}</span>` : ''}${x.egen ? '' : `<span class="usjalv">${Array.from({length:f.max + 1}, (_, v) => `<button data-ndurp="${f.id}|${v}" aria-pressed="${po[f.id] === v}">${v}</button>`).join('')}</span><input class="uin" data-ndurk="${f.id}" value="${esc(km[f.id] ?? f.kommentar ?? '')}" placeholder="Kommentar till svaret, om det behövs" aria-label="Kommentar till fråga ${f.nr}">`}</div>`).join('')}
+    ${x.egen ? '<span class="muted">Ditt eget prov. Någon annan i säljledningen sätter betyget.</span>' : `<span class="muted num">${satta} av ${x.fragor.length} frågor har poäng · ${summa} av ${tak} p, ${pct} % · gränsen är ${x.grans} %</span>
+    <textarea class="uin" id="ndurnote" rows="2" placeholder="Återkoppling: en sak som var bra, och en sak att träna på">${esc(S.uRattNote || '')}</textarea>
+    <div class="pacts"><button class="btn btn-p btn-sm" data-ndurskicka ${satta === x.fragor.length ? '' : 'disabled'}>Sätt betyget</button><button class="btn btn-s btn-sm" data-ndurretur>Skicka tillbaka för komplettering</button></div>`}</div>`;
+}
 const _ndTeametVy = teametVy;
 teametVy = function(){
   if (!ndUtb()) return _ndTeametVy();
@@ -27848,7 +27895,9 @@ teametVy = function(){
   return `<div class="forv">${note(128)}
     <section class="fcard"><h3>Att bedöma</h3>
       ${t.attBedoma.length ? t.attBedoma.map(x => `<div class="frow"><span class="pill t-warn">Rollspel</span><b>${esc(x.namn)}: ${esc(x.modul)}</b><span class="muted">Inlämnat ${esc(x.inlamnad)} · lyssna först, öppningen loggas</span><span class="fb"><button class="btn btn-p btn-sm" data-ubedom="${x.id}">${S.uBedom === x.id ? 'Dölj' : 'Lyssna och bedöm'}</button></span></div>
-        ${S.uBedom === x.id ? `<div class="ubedom">${x.fil ? `<a class="btn btn-s btn-sm" href="/filer/${x.fil}" target="_blank" rel="noopener">${I('play')}Spela upp</a>` : '<span class="muted">Inspelningen saknas.</span>'}${x.kriterier.map(k => `<div><span>${esc(k.t)}</span><span class="usjalv">${Array.from({length:k.max + 1}, (_, v) => `<button data-ubp="${k.id}|${v}" aria-pressed="${S.uBedomPoang[k.id] === v}">${v}</button>`).join('')}</span></div>`).join('')}<textarea class="uin" id="ndubedomtext" rows="2" placeholder="En sak som var bra, och en sak att träna på"></textarea><button class="btn btn-p btn-sm" data-ubedomskicka ${x.kriterier.every(k => S.uBedomPoang[k.id] !== undefined) ? '' : 'disabled'}>Skicka bedömningen</button></div>` : ''}`).join('') : '<p class="muted">Inga rollspel väntar på bedömning.</p>'}</section>
+        ${S.uBedom === x.id ? `<div class="ubedom">${x.fil ? `<a class="btn btn-s btn-sm" href="/filer/${x.fil}" target="_blank" rel="noopener">${I('play')}Spela upp</a>` : '<span class="muted">Inspelningen saknas.</span>'}${x.kriterier.map(k => `<div><span>${esc(k.t)}</span><span class="usjalv">${Array.from({length:k.max + 1}, (_, v) => `<button data-ubp="${k.id}|${v}" aria-pressed="${S.uBedomPoang[k.id] === v}">${v}</button>`).join('')}</span></div>`).join('')}<textarea class="uin" id="ndubedomtext" rows="2" placeholder="En sak som var bra, och en sak att träna på"></textarea><button class="btn btn-p btn-sm" data-ubedomskicka ${x.kriterier.every(k => S.uBedomPoang[k.id] !== undefined) ? '' : 'disabled'}>Skicka bedömningen</button></div>` : ''}`).join('') : ''}
+      ${(t.prov || []).map(x => `<div class="frow"><span class="pill t-warn">Skriftligt prov</span><b>${esc(x.namn)}: ${esc(x.modul)}</b><span class="muted">Inlämnat ${esc(x.inlamnad)} · ${x.fragor.length} ${x.fragor.length === 1 ? 'fråga' : 'frågor'}${x.returer ? ' · kompletterat' : ''}</span><span class="fb"><button class="btn btn-s btn-sm" data-ndurt="${x.id}">${S.uRatt === x.id ? 'Dölj' : x.egen ? 'Visa' : 'Rätta'}</button></span></div>${S.uRatt === x.id ? ndUtbRattning(x) : ''}`).join('')}
+      ${!t.attBedoma.length && !(t.prov || []).length ? '<p class="muted">Inga rollspel eller skriftliga prov väntar på bedömning.</p>' : ''}</section>
     <section class="fcard"><h3>Obligatoriska kurser, per person</h3>${t.obligatoriska.length && TEAM_PERS.length ? `<div class="utab"><div class="uth"><span></span>${t.obligatoriska.map(k => `<span>${esc(k.t)}</span>`).join('')}<span></span></div>
       ${TEAM_PERS.map(([n, k, id]) => { const ok = Object.values(k).every(([a, b]) => a === b), forsta = t.obligatoriska.find(o => k[o.id] && k[o.id][0] < k[o.id][1]); return `<div><span>${avatar(n, 22)}${esc(fornamn(n))}</span>${t.obligatoriska.map(o => { const [a, b] = k[o.id] || [0, 0]; return `<span class="kgrad"><span><i style="width:${b ? a / b * 100 : 0}%;${a === b ? '' : b && a / b < .3 ? 'background:var(--warn)' : ''}"></i></span><span class="num">${a}/${b}</span></span>`; }).join('')}<span>${ok ? '<span class="pill t-ok">Klar</span>' : `<button class="tlink" data-ndupaminn="${id}|${forsta ? forsta.id : ''}">Påminn</button>`}</span></div>`; }).join('')}</div>` : '<p class="muted">Inga obligatoriska kurser.</p>'}</section>
     <section class="fcard"><h3>Frågor teamet missar oftast</h3><p class="vhelp">Ur proven och repetitionen. Lägg dem i teamets repetition, så kommer de tillbaka hos alla.</p>${MISSADE.length ? MISSADE.map(([var_, id, p, why]) => `<div class="frow"><b>${esc(var_)}</b><span class="muted">${p} % svarar fel. ${esc(why)}</span><span class="fb">${S.uTeamRep.has(id) ? '<span class="pill t-ok">I repetitionen</span>' : `<button class="btn btn-s btn-sm" data-uteamrep="${id}">Lägg i teamets repetition</button>`}</span></div>`).join('') : '<p class="muted">Inga frågor har tillräckligt många svar än (minst tre).</p>'}</section>
@@ -27860,6 +27909,12 @@ teametVy = function(){
 };
 
 /* ---------- Kursens sida ---------- */
+// Ett skriftligt prov som väntar: på rättning, eller på att du kompletterar.
+function ndUtbSkriftEtikett(mid){
+  const sk = (LEKTIONER[mid] || {}).skriftligt;
+  const t = sk && {utkast:'påbörjat', inlamnad:'väntar på rättning', retur:'tillbaka för komplettering'}[sk.lage];
+  return t ? ` · <b>${t}</b>` : '';
+}
 const _ndKursSida = kursSida;
 kursSida = function(k){
   if (!ndUtb()) return _ndKursSida(k);
@@ -27877,7 +27932,7 @@ kursSida = function(k){
         ${k.varfor ? `<div class="ukvarfor big">${I('ai')}<span><b>Varför för dig:</b> ${esc(k.varfor)}</span></div>` : ''}
         <div class="ufh">${klar ? `<span class="pill t-ok">Klar${k.certTill ? `, certifikat ${k.certTillD ? `till ${esc(k.certTill)}` : 'som gäller tills vidare'}` : ''}</span>` : `<button class="btn btn-p" data-uplay="${k.id}">${I('play')}${k.klara ? 'Fortsätt' : 'Starta'}: ${esc(k.moduler[k.klara][0])} · ${k.moduler[k.klara][2]} min</button>`}${k.rutin ? `<button class="btn btn-s" data-ropen="${k.rutin}">Läs rutinen</button>` : ''}</div>
         <section><h3 class="uh3">Innehåll</h3><ol class="umodl">${k.moduler.map(([t, typ, min, mid], i) => { const st = i < k.klara ? 'ok' : i === k.klara ? 'nu' : 'last', f = k.forsok[mid], sp = k.sparr[mid];
-          return `<li class="${st}"><span class="umi">${st === 'ok' ? '✓' : st === 'last' ? '🔒' : I((MODIK[typ] || MODIK.las)[0])}</span><span><b>${esc(t)}</b><span class="muted">${(MODIK[typ] || MODIK.las)[1]} · ${langdText(min)}${st === 'last' ? ` · <span class="ulasx">öppnas när ${esc(k.moduler[i - 1][0].toLowerCase())} är klar</span>` : ''}${typ === 'quiz' ? ` · ${k.grans} % för godkänt${k.vanta ? `, ny chans efter ${vanta}` : ''}` : typ === 'rollspel' ? ` · ${esc(chef)} bedömer` : typ === 'ovn' ? ' · görs på plats, låser upp nästa' : ''}${f ? ` · <b class="${f.godkant ? 'okp' : ''}">ditt resultat ${f.poang} %</b>` : ''}${sp ? ` · nästa försök ${esc(sp)}` : ''}</span></span>${st === 'nu' ? `<button class="btn btn-s btn-sm" data-uplay="${k.id}">Starta</button>` : st === 'ok' && (typ === 'las' || typ === 'ovn' || typ === 'quiz') ? `<button class="tlink" data-ndulas="${k.id}|${i}">${typ === 'quiz' ? 'Se frågorna igen' : 'Läs igen'}</button>` : ''}</li>`; }).join('')}</ol></section>
+          return `<li class="${st}"><span class="umi">${st === 'ok' ? '✓' : st === 'last' ? '🔒' : I((MODIK[typ] || MODIK.las)[0])}</span><span><b>${esc(t)}</b><span class="muted">${(MODIK[typ] || MODIK.las)[1]} · ${langdText(min)}${st === 'last' ? ` · <span class="ulasx">öppnas när ${esc(k.moduler[i - 1][0].toLowerCase())} är klar</span>` : ''}${typ === 'quiz' ? ` · ${k.grans} % för godkänt${k.vanta ? `, ny chans efter ${vanta}` : ''}` : typ === 'rollspel' ? ` · ${esc(chef)} bedömer` : typ === 'ovn' ? ' · görs på plats, låser upp nästa' : ''}${f ? ` · <b class="${f.godkant ? 'okp' : ''}">ditt resultat ${f.poang} %</b>` : ''}${sp ? ` · nästa försök ${esc(sp)}` : ''}${ndUtbSkriftEtikett(mid)}</span></span>${st === 'nu' ? `<button class="btn btn-s btn-sm" data-uplay="${k.id}">Starta</button>` : st === 'ok' && (typ === 'las' || typ === 'ovn' || typ === 'quiz') ? `<button class="tlink" data-ndulas="${k.id}|${i}">${typ === 'quiz' ? 'Se frågorna igen' : 'Läs igen'}</button>` : ''}</li>`; }).join('')}</ol></section>
         ${regler.length || S.regelbok.some(r => r[1] === k.t) ? `<section class="uregelsida">${note(114)}<h3 class="uh3">Kursens regler på en sida</h3>${[...new Set([...regler, ...S.regelbok.filter(r => r[1] === k.t).map(r => r[0])])].map((r, i) => `<div><i>${i + 1}</i><b>${esc(r)}</b></div>`).join('')}</section>` : ''}
         <section class="uefter"><h3 class="uh3">Efter kursen</h3><p>${k.cert ? `Certifikatet gäller i ${k.cert} månader. ` : ''}Provens frågor kommer tillbaka i Dagens repetition med allt längre mellanrum, ungefär efter 2, 7 och 21 dagar, så att det sitter även om tre månader.</p></section>
       </article>
@@ -27903,7 +27958,7 @@ _ndVyer.renderUtbView = function(){
   const svagKort = KURSER.filter(k => k.typ === 'kort' && !kursKlar(k)).sort((a, b) => a.min - b.min)[0];
   const repKlar = repGjord() || !u.forfallna.length;
   const idx = ndUtbIndex(Object.fromEntries(FARDIG.map(([s]) => [s, ndUtbVal(s)]))), forra = ndUtbIndex(LASTWEEK.saljare);
-  const antal = {mina:(repKlar ? 0 : 1) + oblig.length, rollspel:ROLLSPEL.filter(r => r.status === 'ny').length, forel:FORELASNINGAR.filter(f => f.kommande && !S.uAnmald.has(f.id)).length, team:u.team ? u.team.attBedoma.length : 0};
+  const antal = {mina:(repKlar ? 0 : 1) + oblig.length, rollspel:ROLLSPEL.filter(r => r.status === 'ny').length, forel:FORELASNINGAR.filter(f => f.kommande && !S.uAnmald.has(f.id)).length, team:u.team ? u.team.attBedoma.length + (u.team.prov || []).filter(x => !x.egen).length : 0};
   return `<header class="top"><div class="hello"><h1>Utbildning</h1>
       <div class="uidag">${note(103)}<span class="muted">I dag:</span>
         <button class="chip ${repKlar ? 'on' : ''}" data-utab="mina">${repGjord() ? '✓ Repetitionen' : !u.forfallna.length ? '✓ Inget att repetera' : 'Repetition, 2 min'}</button>
@@ -27922,6 +27977,13 @@ _ndVyer.renderUtbView = function(){
 // Ett prov rättas inte på vägen: svaret går att ändra, och provet lämnas in i sista steget (repots lamnaQuiz).
 // Facit visas bara för ett prov du redan klarat, och då som i utkastet.
 const ndUtbProvlage = st => st.typ === 'fraga' && st.prov && st.ratt === null;
+// Skriftligt prov: svaren går att skriva tills provet är inlämnat, och igen när det kommer tillbaka.
+const ndUtbSkrivbar = p => !!(p && p.skrift && !p.review && ['ej_paborjat', 'utkast', 'retur'].includes(p.skrift.lage));
+const ndUtbOrd = t => { const r = String(t || '').trim(); return r ? r.split(/\s+/).length : 0; };
+function ndUtbSkriftRad(p, st){
+  const sk = LEKTIONER[p.lek].skriftligt, po = sk.resultat && !p.skrift.nytt ? sk.poang[st.qid] : null, n = ndUtbOrd(p.skrift.svar[st.qid]);
+  return `${n} ord · ${po !== null && po !== undefined ? `${po} av ${st.max} p` : `${st.max} p`}${p.skrift.sparat ? ` · ${esc(p.skrift.sparat)}` : ''}`;
+}
 const _ndRenderPlayer = renderPlayer;
 renderPlayer = function(){
   if (!ndUtb()) return _ndRenderPlayer();
@@ -27931,7 +27993,7 @@ renderPlayer = function(){
   if (!el){ el = document.createElement('div'); el.id = 'lplay'; el.className = 'lplay'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Lektion'); document.body.appendChild(el); }
   const lek = LEKTIONER[p.lek], steg = [...lek.steg, {typ:'klar'}], st = steg[p.i], k = kurs(lek.kurs), chef = ndUtbChef();
   p.max = Math.max(p.max || 0, p.i);
-  const STID = {...STEGTID, rollspel:60};
+  const STID = {...STEGTID, rollspel:60, skrift:120};
   const sekKvar = steg.slice(p.i).reduce((s, x) => s + (STID[x.typ] || 30), 0);
   const fragor = lek.steg.map((s, i) => [s, i]).filter(([s]) => s.typ === 'fraga'), prov = fragor.some(([s]) => ndUtbProvlage(s));
   let inne = '';
@@ -27954,6 +28016,16 @@ renderPlayer = function(){
     inne = `<span class="lk">Rollspel ${note(124)}</span><h2>${esc(lek.titel)}</h2>${r ? `<div class="uregler"><b>Det du bedöms på</b>${r.kriterier.map(([kk, , , max]) => `<span>✓ ${esc(kk)} <span class="muted">· ${max} p</span></span>`).join('')}</div>
       <p class="muted">${r.status === 'bedomt' ? `Bedömt ${esc(r.datum)}.` : r.status === 'inlamnad' ? `Inlämnat ${esc(r.datum)}. ${esc(chef.charAt(0).toUpperCase() + chef.slice(1))} bedömer det.` : `Spela in samtalet och lämna in det. ${esc(chef.charAt(0).toUpperCase() + chef.slice(1))} bedömer det mot kriterierna, och modulen blir klar när det är bedömt.`}</p>
       <div class="pacts"><label class="btn btn-p btn-sm">Lämna in inspelningen<input type="file" accept="audio/*,video/*" data-ndufil="${r.id}" hidden></label><button class="btn btn-s btn-sm" data-rpopen="${r.id}">Öppna rollspelet</button></div>` : ''}`;
+  } else if (st.typ === 'skrift'){
+    const sk = lek.skriftligt, las = !ndUtbSkrivbar(p), txt = p.skrift.svar[st.qid] || '', n = lek.steg.filter(x => x.typ === 'skrift').length;
+    const kom = (sk.lage === 'retur' || sk.resultat) && !p.skrift.nytt ? sk.kommentar[st.qid] : null, po = sk.resultat && !p.skrift.nytt ? sk.poang[st.qid] : null;
+    const forst = lek.steg.find(x => x.typ === 'skrift') === st;
+    inne = `<span class="lk">Skriftligt prov · fråga ${st.nr} av ${n} ${note(115)}</span><h2>${esc(st.q)}</h2>
+      ${forst && p.skrift.nytt && sk.resultat ? `<div class="ufb fel"><b>Förra försöket: ${sk.resultat.poang} %, gränsen är ${sk.grans} %.</b><span>${esc(sk.resultat.aterkoppling || '')}</span></div>` : ''}
+      ${forst && sk.lage === 'retur' && sk.retur && !p.review ? `<div class="ufb fel"><b>Tillbaka för komplettering</b><span>${esc(sk.retur.note)}</span></div>` : ''}
+      ${las ? `<p class="ltext ndskriftsvar">${txt ? esc(txt) : '<span class="muted">Inget svar.</span>'}</p>` : `<textarea class="uin" rows="7" data-ndskrift="${st.qid}" placeholder="Svara med egna ord" aria-label="Ditt svar på fråga ${st.nr}">${esc(txt)}</textarea>`}
+      ${kom ? `<div class="ufb ${po !== null && po !== undefined && po >= st.max ? 'ok' : 'fel'}"><b>Kommentar</b><span>${esc(kom)}</span></div>` : ''}
+      <span class="muted num" data-ndskriftlage>${ndUtbSkriftRad(p, st)}</span>`;
   } else if (st.typ === 'mal'){
     inne = `<span class="lk">Ditt mål ${note(129)}</span><h2>Vad ska du göra annorlunda?</h2>
       <textarea class="uin" rows="2" data-lmal placeholder="I mitt nästa samtal ska jag…">${esc(p.mal ?? '')}</textarea>
@@ -27961,6 +28033,15 @@ renderPlayer = function(){
       <label class="utog"><input type="checkbox" data-lcoach ${p.coach ? 'checked' : ''}>Visa målet för ${esc(chef)} inför nästa 1:1</label>
       <div class="pacts"><button class="btn btn-s btn-sm" data-lmaluppg>${p.malUppg ? '✓ Lagt i Uppgifter' : 'Lägg som uppgift'}</button></div>
       ${fragor.length ? `<div class="lplan"><b>Så ser vi till att det sitter</b><span>Frågorna kommer tillbaka i Dagens repetition när provet är klarat:</span><div>${['om 2 dagar','om 7 dagar','om 21 dagar'].map(x => `<span class="pill t-info">${x}</span>`).join('')}</div></div>` : ''}`;
+  } else if (st.typ === 'klar' && lek.skriftligt){
+    const sk = lek.skriftligt, sl = p.skrift, sq = lek.steg.filter(x => x.typ === 'skrift'), res = sk.resultat;
+    const besv = sq.filter(x => (sl.svar[x.qid] || '').trim().length >= sk.minsta).length;
+    inne = ndUtbSkrivbar(p) ? `<span class="lk">Lämna in ${note(130)}</span><h2>${esc(lek.titel)}</h2><p>${besv} av ${sq.length} frågor besvarade. Varje svar behöver minst ${sk.minsta} tecken. Säljledningen rättar provet, och du får svar i navet. Gränsen är ${sk.grans} %.</p><p class="muted">Svaren sparas medan du skriver. Gå tillbaka med ← om du vill ändra ett svar.</p>
+        <div class="usak"><span>Hur var lektionen?</span>${[1,2,3,4,5].map(v => `<button data-lbetyg="${v}" aria-pressed="${p.betyg === v}">${'★'.repeat(v)}</button>`).join('')}</div>`
+      : sl.lage === 'inlamnad' ? `<span class="lk">Inlämnat ${note(130)}</span><h2>${esc(lek.titel)}</h2><p>Provet väntar på rättning. Du får svar i navet när det är rättat.</p>`
+      : res ? `<span class="lk">${res.godkant ? 'Godkänt' : 'Inte godkänt än'} ${note(130)}</span><h2>${res.poang} %.</h2>${res.aterkoppling ? `<div class="ufb ${res.godkant ? 'ok' : 'fel'}"><b>Återkoppling</b><span>${esc(res.aterkoppling)}</span></div>` : ''}
+        <p class="muted">Rättat ${esc(frKort(res.rattad))}. Gränsen är ${sk.grans} %.${res.godkant ? '' : ' Läs modulen igen och gör om provet.'} Poängen och kommentarerna står vid varje fråga.</p>`
+      : `<span class="lk">Klart ${note(130)}</span><h2>${esc(lek.titel)}</h2>`;
   } else if (st.typ === 'klar'){
     const res = p.resultat;
     const ratt = fragor.filter(([s, i]) => p.svar[i] === s.ratt).length;
@@ -27980,7 +28061,7 @@ renderPlayer = function(){
     }
   }
   const kanVidare = !(st.typ === 'fraga' && p.svar[p.i] === undefined);
-  const klarText = prov && !p.review && !p.resultat ? 'Lämna in provet' : p.review || kursKlar(k) || k.klara + 1 >= k.moduler.length || (p.resultat && !p.resultat.godkant) ? 'Klar' : 'Klar, till nästa modul';
+  const klarText = lek.skriftligt && !p.review ? (ndUtbSkrivbar(p) ? 'Lämna in provet' : 'Stäng') : prov && !p.review && !p.resultat ? 'Lämna in provet' : p.review || kursKlar(k) || k.klara + 1 >= k.moduler.length || (p.resultat && !p.resultat.godkant) ? 'Klar' : 'Klar, till nästa modul';
   el.innerHTML = `<div class="lpin">
     <div class="lptop"><button class="ibtn" data-lclose aria-label="Pausa och stäng" title="Pausa, du fortsätter här nästa gång">${I('x')}</button><span class="lpt"><b>${esc(k.t)}</b><span class="muted">${esc(lek.titel)}</span></span><span class="muted num">${Math.max(1, Math.round(sekKvar / 60))} min kvar</span>${note(112)}</div>
     <div class="lpbar">${steg.map((_, i) => `<button class="${i < p.i ? 'ok' : i === p.i ? 'nu' : ''}" ${i <= p.max && i !== p.i && !p.resultat ? `data-ljump="${i}"` : 'disabled'} aria-label="Steg ${i + 1}"></button>`).join('')}</div>
@@ -28002,6 +28083,9 @@ startaLektion = function(kid, idx){
   let mal = null; try { mal = JSON.parse(noter['mal:' + mid] || 'null'); } catch(_){}
   const start = review ? 0 : (S.uResume[kid] || 0);
   S.uPlay = {lek:mid, kid, i:start, max:start, svar:{}, sak:{}, ord:{}, dlg:{}, gissat:{}, ovn:Array.isArray(ovn) ? ovn : [], mal:mal ? mal.text : null, nar:mal ? mal.nar : 'nasta', coach:mal ? !!mal.coach : false, malUppg:false, ovnUppg:false, review, betyg:ndUtb().betyg[mid] || null};
+  // Skriftligt prov: det senaste försöket. Efter ett underkänt börjar nästa försök med tomma svar, som i repot.
+  const sk = LEKTIONER[mid].skriftligt;
+  if (sk){ const nytt = !review && sk.lage === 'underkant'; S.uPlay.skrift = {lage:nytt ? 'ej_paborjat' : sk.lage, nytt, svar:nytt ? {} : {...sk.svar}, sparat:null}; }
   if (start) toast(`Du fortsätter på steg ${start + 1}, där du pausade.`);
   render();
 };
@@ -28015,6 +28099,17 @@ avslutaLektion = function(){
   const malText = (p.mal || '').trim();
   const sparaMal = () => malText ? ndUtbPost('anteckning', {key:'mal:' + mid, text:JSON.stringify({text:malText, nar:p.nar, coach:!!p.coach, kurs:k.id, modul:lek.titel, datum:ND.idag})}, {ladda:false, tyst:true}) : Promise.resolve({});
   if (p.review){ if (p.betyg && p.betyg !== ndUtb().betyg[mid]) ndUtbPost('betyg', {modul:mid, betyg:p.betyg}, {ladda:false, tyst:true}); stang(); return; }
+  if (lek.skriftligt){
+    if (!ndUtbSkrivbar(p)){ if (p.betyg && p.betyg !== ndUtb().betyg[mid]) ndUtbPost('betyg', {modul:mid, betyg:p.betyg}, {ladda:false, tyst:true}); stang(); return; }
+    clearTimeout(ndUtbSkriftTimer); p.skickar = true; renderPlayer();
+    sparaMal().then(() => ndUtbPost('lamna', {modul:mid, svar:p.skrift.svar, betyg:p.betyg || undefined}, {ladda:false, tyst:true})).then(s => {
+      p.skickar = false;
+      if (s.laslage){ toast(s.fel); stang(); return; }
+      if (s.fel){ toast(s.fel); renderPlayer(); return; }
+      toast(s.ok); S.uPlay = null; S.uOpen = k.id; ndUtbLadda();
+    });
+    return;
+  }
   if (typ === 'quiz'){
     if (p.resultat){ if (p.betyg) ndUtbPost('betyg', {modul:mid, betyg:p.betyg}, {ladda:false, tyst:true}); S.uPlay = null; S.uOpen = k.id; ndUtbLadda(); return; }
     const svar = {}; lek.steg.forEach((s, i) => { if (s.typ === 'fraga' && p.svar[i] !== undefined) svar[s.qid] = s.oids[p.svar[i]]; });
@@ -28068,7 +28163,7 @@ utbClick = function(t, e){
   if (d.uremtid){ const tid = d.uremtid, push = ndUtb().skriv ? ndUtbPush() : Promise.resolve(false);
     ndUtbPost('pref', {key:'utb.reptid', value:tid}, {ladda:false, tyst:true}).then(async s => { if (s.fel){ toast(s.fel); return; } S.repTid = tid; render(); toast(`Dagens repetition kommer klockan ${tid}.${await push ? ' Påminnelsen kommer till den här enheten och står i klockan.' : ' Påminnelsen står i klockan.'}`); }); return true; }
   if (d.nduonska !== undefined){ ndUtbPost('onska', {q:S.uQ}, {ladda:false}); return true; }
-  if (d.ndunykurs !== undefined){ toastActs('Kursbyggaren behöver en AI-tjänst som inte är kopplad till Nav än. En kurs går att skriva för hand i nuvarande Nav.', [['Öppna', () => { location.href = '/utbildning/ny'; }]], 7000); return true; }
+  if (d.ndunykurs !== undefined){ ndUtbNyKurs(); return true; }
   // Rollspelen.
   if (d.ulasdlg || d.ulaskund){ const r = ROLLSPEL.find(x => x.id === (d.ulasdlg || d.ulaskund)); if (!r || !r.repliker.length){ toast('Rollspelet har inga repliker inlagda.'); return true; } lasHogt(r.repliker.join(' … ')); if (d.ulaskund) toast('Nav läser kundens repliker. Svara högt efter varje.'); return true; }
   if (d.uself){ const [id, kk, v] = d.uself.split('|'), r = ROLLSPEL.find(x => x.id === id), kr = r && r.kriterier.find(x => x[0] === kk); if (!kr) return true;
@@ -28088,6 +28183,11 @@ utbClick = function(t, e){
   if (d.ubedomskicka !== undefined){ const note = (document.getElementById('ndubedomtext')?.value || '').trim();
     if (note.length < 10){ toast('Skriv en återkoppling. Ett betyg utan ord lär ingen sig något av.'); document.getElementById('ndubedomtext')?.focus(); return true; }
     ndUtbPost('bedom', {id:S.uBedom, note, poang:S.uBedomPoang}); return true; }
+  if (d.ndurt){ Object.assign(S, {uRatt:S.uRatt === d.ndurt ? null : d.ndurt, uRattPoang:{}, uRattKomm:{}, uRattNote:''}); render(); return true; }
+  if (d.ndurp){ const [q, v] = d.ndurp.split('|'); S.uRattPoang[q] = +v; render(); return true; }
+  if (d.ndurskicka !== undefined || d.ndurretur !== undefined){ const retur = d.ndurretur !== undefined, note = (S.uRattNote || '').trim();
+    if (note.length < 10){ toast(retur ? 'Skriv vad som behöver kompletteras. Ett returnerat prov utan besked är en gåta.' : 'Skriv en återkoppling. Ett betyg utan ord lär ingen sig något av.'); document.getElementById('ndurnote')?.focus(); return true; }
+    ndUtbPost(retur ? 'returnera' : 'ratta', {id:S.uRatt, note, poang:S.uRattPoang, kommentar:S.uRattKomm}); return true; }
   if (d.ndupaminn){ const [vem, k] = d.ndupaminn.split('|'); ndUtbPost('paminn', {vem, kurs:k}, {ladda:false}); return true; }
   if (d.uteamrep){ const id = d.uteamrep; ndUtbPost('teamrep', {qid:id}, {ladda:false}).then(s => { if (!s.fel){ S.uTeamRep.add(id); render(); } }); return true; }
   if (d.ndurek){ ndUtbPost('rekommendera', {kurs:d.ndurek}); return true; }
@@ -28120,6 +28220,26 @@ document.addEventListener('submit', e => {
   if (!fraga && !dela) return;
   const id = fraga ? f.dataset.ufraga : f.dataset.udela, inp = f.querySelector('input'), text = inp.value.trim(); if (!text) return;
   ndUtbPost(fraga ? 'fraga' : 'insikt', {id, text}, {ladda:false}).then(s => { if (!s.fel){ (fraga ? S.uFragaSkickad : S.uDelat).add(id); render(); } });
+}, true);
+// Skriftligt prov: svaren sparas medan du skriver (repots sparaUtkast), och rättningens kommentarer hålls över omritningen.
+let ndUtbSkriftTimer = null;
+function ndUtbSkriftLage(){ const p = S.uPlay, el = document.querySelector('[data-ndskriftlage]'), st = p && LEKTIONER[p.lek].steg[p.i]; if (el && st && st.typ === 'skrift') el.innerHTML = ndUtbSkriftRad(p, st); }
+document.addEventListener('input', e => {
+  if (!ndUtb() || !e.target.dataset) return;
+  const d = e.target.dataset;
+  if (d.ndurk !== undefined){ e.stopImmediatePropagation(); S.uRattKomm = {...(S.uRattKomm || {}), [d.ndurk]:e.target.value}; return; }
+  if (e.target.id === 'ndurnote'){ e.stopImmediatePropagation(); S.uRattNote = e.target.value; return; }
+  if (d.ndskrift === undefined) return;
+  const p = S.uPlay; if (!ndUtbSkrivbar(p)) return;
+  e.stopImmediatePropagation();
+  p.skrift.svar[d.ndskrift] = e.target.value; p.skrift.sparat = null; ndUtbSkriftLage();
+  clearTimeout(ndUtbSkriftTimer);
+  const mid = p.lek, sl = p.skrift;
+  ndUtbSkriftTimer = setTimeout(() => ndUtbPost('skriv', {modul:mid, svar:{...sl.svar}}, {ladda:false, tyst:true}).then(s => {
+    if (s.laslage){ if (!sl.las){ sl.las = true; toast(s.fel); } return; }
+    if (s.fel){ toast(s.fel); return; }
+    sl.sparat = s.ok; if (sl.lage === 'ej_paborjat') sl.lage = 'utkast'; ndUtbSkriftLage();
+  }), 2500);
 }, true);
 // Anteckningarna: förberedelsen i rollspelet och anteckningen efter en föreläsning sparas medan du skriver.
 const ndUtbNotTimer = {};
@@ -31393,7 +31513,7 @@ if (ndLd()) NDKOPPLAD.add('leads');
 /* ---------- Vägarna ---------- */
 // Adresser som alltid hör till nuvarande Nav, även när vyn de ligger under är kopplad.
 const SKALNAV = ['/tid/schema', '/tid/sparrar', '/sparrar', '/schema', '/admin', '/lonekostnad', '/satser', '/avtal/mallar', '/avtal/nytt', '/avtal/bifoga',
-  '/uppgifter/projekt', '/uppgifter/mallar', '/uppgifter/genomgang', '/utbildning/systemguider', '/utbildning/oversikt', '/utbildning/prov', '/utbildning/rollspel', '/utbildning/ny',
+  '/uppgifter/projekt', '/uppgifter/mallar', '/uppgifter/genomgang', '/utbildning/systemguider', '/utbildning/oversikt/systemguider', 
   '/personal/team', '/personal/ny', '/logga-in', '/byt-losenord', '/uppstart', '/design', '/coachning/mallar', '/kv/regler', '/provision/regler', '/provision/underlag',
   '/arenden/statistik', '/kalender/delning', '/kalender/overlamning', '/rutiner/ny', '/franvaro/regler', '/regler', '/filer', '/auth'];
 const skalNav = h => SKALNAV.some(p => h === p || h.startsWith(p + '/') || h.startsWith(p + '?'));
@@ -31419,7 +31539,7 @@ ndGa = function(href){
     case 'hem': S.view = 'hem'; render(); window.scrollTo(0, 0); return;
     case 'uppgifter': { const t = sub && TASKS.find(x => String(x.id) === sub); if (sub && !t) return nav(); S.view = 'uppgifter'; S.todoOpen = false; S.panel = t ? t.id : null; render(); window.scrollTo(0, 0); return; }
     case 'rutiner': { if (sub && !(typeof rutin === 'function' && rutin(sub))) return nav(); if (sub){ rOppna(sub); return; } S.view = 'rutiner'; S.rOpen = null; render(); window.scrollTo(0, 0); return; }
-    case 'utbildning': { if (sub && !(typeof kurs === 'function' && kurs(sub))) return nav(); S.view = 'utbildning'; S.uOpen = sub; render(); window.scrollTo(0, 0); return; }
+    case 'utbildning': if (ndUtbGa(d)) return; return nav();
     case 'tid': { const tab = {lonerapport:'lon', avvikelser:'sena', 'ogiltig-franvaro':'sena'}[sub]; if (sub && (!tab || d[2])) return nav(); gaTid(tab || null); return; }
     case 'kalender': {
       // Klockans adresser är /kalender?dag=…&handelse=…: dagen och händelsen öppnas som utkastets egen påminnelse gör.
