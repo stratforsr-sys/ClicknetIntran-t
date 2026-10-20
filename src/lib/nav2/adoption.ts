@@ -1,8 +1,10 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { hasRole, type CurrentUser } from "@/lib/auth";
-import { dagarSedan, klibbighet, tackning, type Aktivitetsdag } from "@/lib/adoption";
+import type { CurrentUser } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase/server";
+import { dagarSedan, tackning, type Aktivitetsdag } from "@/lib/adoption";
+import { nivaFor } from "./forma";
 
 /**
  * Nav 2.0: Adoption (utkastets rlsAdoptionVy) ur repots adoption_*-funktioner (0029).
@@ -13,10 +15,9 @@ import { dagarSedan, klibbighet, tackning, type Aktivitetsdag } from "@/lib/adop
  * personkolumn, och inget har laser forbi dem. Det enda per rad ar en
  * sokstrang och en rutins namn.
  *
- * Kretsen ar 0029:s: sales_manager, ceo och admin. Funktionerna svarar med noll
- * rader for alla andra, sa villkoret har sparar bara frageturerna for en
- * saljare. En tom serie betyder samma sak som i repots sida: ingen statistik
- * att visa, och da far utkastet null och sager att vyn ar for chefer.
+ * BARA SUPERADMIN (bestallaren 2026-10-20), alltsa VD och administrator. Det
+ * ar snavare an 0029:s krets (som ocksa slapper in saljchefen), och for alla
+ * andra skickas ingenting: utkastet far null och visar inte vyn alls.
  *
  * Besok i /nav2 raknas: mellanvaran stamplar varje inloggad begaran utom /api
  * (registrera_aktivitet), och /nav2 ar en sadan.
@@ -33,7 +34,7 @@ export type NdAdoption = {
   anstallda: number;
   /** WAU delat med antalet anstallda, i procent. Null utan namnare. */
   andel: number | null;
-  /** Repots klibbighet: dagens DAU delat med WAU. Null nar veckan ar tom. */
+  /** Snittet av de fem senaste hela vardagarnas DAU delat med WAU den sista av dem. Null utan underlag. */
   aterkommer: number | null;
   /** Sokningar utan traff: texten och hur manga ganger, flest forst. */
   sokmissar: [string, number][];
@@ -42,9 +43,9 @@ export type NdAdoption = {
 };
 
 export async function byggAdoption(supabase: SupabaseClient, user: CurrentUser): Promise<NdAdoption | null> {
-  if (!hasRole(user, "sales_manager", "ceo", "admin")) return null;
+  if (nivaFor(user.roles) !== "superadmin") return null;
 
-  const [akt, sok, nav2sok, glomda, anst] = await Promise.all([
+  const [akt, sok, nav2sok, glomda, anst, fragor] = await Promise.all([
     supabase.rpc("adoption_aktivitet", { p_dagar: DAGAR }),
     supabase.rpc("adoption_sokmissar", { p_antal: 20 }),
     // Nav 2.0:s egna sokningar utan traff (Rutiner, 0096). /sok och search_miss
@@ -52,6 +53,9 @@ export async function byggAdoption(supabase: SupabaseClient, user: CurrentUser):
     supabase.from("document_search_miss").select("query").order("searched_at", { ascending: false }).limit(5000),
     supabase.rpc("adoption_glomda_dokument", { p_dagar: GLOMD_EFTER }),
     supabase.from("employee").select("id", { count: "exact", head: true }).neq("status", "offboarded"),
+    // Palettens fragor utan svar (0125), alla veckor. Tabellen har ingen policy,
+    // bara service role; villkoret ovan ar spärren.
+    supabaseAdmin().from("nav_question_miss").select("q, occurrences").limit(5000),
   ]);
 
   const dagar = ((akt.data ?? []) as { dag: string; dau: number; wau: number }[]).map((d) => ({
@@ -72,12 +76,16 @@ export async function byggAdoption(supabase: SupabaseClient, user: CurrentUser):
     const q = String(m.query ?? "").trim().toLowerCase().slice(0, 100);
     if (q) missar.set(q, (missar.get(q) ?? 0) + 1);
   }
+  for (const m of (fragor.data ?? []) as { q: string; occurrences: number }[]) {
+    const q = String(m.q ?? "").trim().toLowerCase();
+    if (q) missar.set(q, (missar.get(q) ?? 0) + (Number(m.occurrences) || 0));
+  }
 
   return {
     dagar,
     anstallda,
     andel: tackning(dagar, anstallda),
-    aterkommer: klibbighet(dagar),
+    aterkommer: aterkommer(dagar),
     sokmissar: [...missar.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "sv")).slice(0, 20),
     glomda: ((glomda.data ?? []) as { slug: string; title: string; senast: string | null }[]).map((d) => ({
       id: d.slug,
@@ -85,4 +93,19 @@ export async function byggAdoption(supabase: SupabaseClient, user: CurrentUser):
       dagar: dagarSedan(d.senast),
     })),
   };
+}
+
+/**
+ * "Aterkommer" (bestallaren 2026-10-20: "det som ar bast"): hur stor del av
+ * veckans anvandare som ar inne en vanlig arbetsdag. Repots klibbighet() tar
+ * dagens DAU, som ar lag pa morgonen och pa helgen. Har raknas snittet av de
+ * fem senaste HELA vardagarna (i dag star utanfor), delat med WAU den sista
+ * av dem.
+ */
+function aterkommer(dagar: Aktivitetsdag[]): number | null {
+  const idag = dagar[dagar.length - 1]?.dag;
+  const vard = dagar.filter((d) => d.dag !== idag && new Date(`${d.dag}T12:00:00Z`).getUTCDay() % 6 !== 0).slice(-5);
+  const wau = vard[vard.length - 1]?.wau ?? 0;
+  if (!vard.length || !wau) return null;
+  return Math.round((vard.reduce((s, d) => s + d.dau, 0) / vard.length / wau) * 100);
 }

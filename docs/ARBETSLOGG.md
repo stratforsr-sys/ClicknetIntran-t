@@ -5,6 +5,26 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-20 · Nav 2.0, Adoption: beställarens svar
+
+- **Bara superadmin** (VD och administratör, nivån superadmin i Nav 2.0) får
+  `ND.adoption`. För alla andra tas Adoption bort ur menyn, menyarket och
+  paletten (`moduler/ndadopt.js` tar posten ur `NAV.chef`), och ett
+  bokmärke ger "Adoptionen visas bara för superadmin." Databasens funktioner
+  i 0029 släpper fortfarande in säljchefen; Nav 2.0 visar dem inte för hen.
+- **"Återkommer"** ("det som är bäst"): snittet av de fem senaste hela
+  vardagarna (i dag står utanför) delat med veckotalet den sista av dem.
+  Repots `klibbighet()` tog dagens DAU, som är låg på morgonen och på
+  helgen. I dag 73 % mot 56 %.
+- **Anställda** = alla som inte slutat, som förut (beställarens ja).
+- **Sökningar utan träff** omfattar nu också palettens frågor utan svar
+  (`nav_question_miss`, alla veckor, läst med service role bakom
+  superadmin-villkoret). Palettens sökning bokförs inte per tangenttryck: det
+  ger delord, som de två raderna i `search_miss` ("rutin" 322 gånger ur
+  `scripts/mat-inloggad.mjs`, och "a,b" 115 gånger ur sökningens kommatest).
+  De två är mätskriptens och ska bort ur `search_miss`. Det är inte gjort än,
+  för att radera i produktionen kräver beställarens tillstånd.
+
 ## 2026-10-20 · Nav 2.0, Leads med riktig data (i läsläge; migration 0135 skriven och torrkörd, inte körd)
 
 Utkastets Leads (`moduler/ld.js`) visar navets leads. Inventeringen står i

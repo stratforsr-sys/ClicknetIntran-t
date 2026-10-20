@@ -30775,9 +30775,9 @@ prfKlick = function(t, e){
    "Återkommer" (repots klibbighet), sökningarna utan träff och rutinerna
    ingen öppnat på 90 dagar.
 
-   Siffrorna räknar personer, aldrig vem. Bara säljchef, VD och admin får
-   datan (0029:s krets); alla andra får utkastets besked att vyn är för
-   chefer. moduler/rls.js delas med Händelseloggen och ändras inte: allt här
+   Siffrorna räknar personer, aldrig vem. Bara superadmin får datan
+   (beställaren 2026-10-20). För alla andra finns Adoption inte: den står
+   inte i menyn, menyarket eller paletten. moduler/rls.js delas med Händelseloggen och ändras inte: allt här
    skriver över Adoptionens funktioner.
 
    Vyn sparar ingenting själv. "Skapa rutin" och "Öppna" går till Rutiner,
@@ -30817,7 +30817,10 @@ rlsAdoptionVy = function(){
       ${a.glomda.length ? `<ul class="rls-rad">${a.glomda.map(g => `<li><span class="rls-lb"><b>${esc(g.t)}</b><small>${glomd(g)}</small></span><button type="button" class="btn btn-s btn-sm" data-rlsrut="${esc(g.id)}">Öppna</button></li>`).join('')}</ul>` : '<p class="rls-kp">Alla publicerade rutiner har lästs de senaste 90 dagarna.</p>'}</section>`;
 };
 
-// Vem som får vyn avgör datan: utan ND.adoption gäller utkastets besked ("bara för chefer").
+// Vem som får vyn avgör datan. Utan ND.adoption tas posten ur chefens meny, som rälsen, menyarket
+// och palettens sidor läser, och en väg dit (ett bokmärke) ger ett besked i stället för vyn.
+if (ND && !ndAdopt()) NAV.chef.forEach(g => { const i = g.items.findIndex(x => x[2] === '/adoption'); if (i >= 0) g.items.splice(i, 1); });
+for (let i = NAV.chef.length - 1; ND && i >= 0; i--) if (!NAV.chef[i].items.length) NAV.chef.splice(i, 1);
 const _ndAdoptGa = rlsGa;
 rlsGa = function(h){
   if (ND && h === '/adoption'){ if (!ndAdopt()) return false; rlsGaVy('adoption'); return true; }
@@ -31243,7 +31246,7 @@ ndGa = function(href){
       if (sub === 'nav'){ nhGa(); return; }
       if (sub && !nhP(sub)) return nav();
       nhGa(sub); return; }
-    case 'adoption': if (sub) return nav(); if (!rlsGa('/adoption')) toast('Händelseloggen och adoptionen är bara för chefer.'); return;
+    case 'adoption': if (sub) return nav(); if (!rlsGa('/adoption')) toast('Adoptionen visas bara för superadmin.'); return;
   }
   return nav();
 };

@@ -126,10 +126,10 @@ behörigheter som här: du ser bara det du får se.
   hur det gick med ett klick: nästa försök läggs in av sig själv, ett bokat
   möte hamnar i kalendern, och den som blev kund går direkt till en ny order.
   Det mesta går att ångra en stund efteråt.
-- **Adoption**, för säljchef, VD och administratör: hur många som använt Nav
+- **Adoption**, för superadmin: hur många som använt Nav
   i dag och de senaste sju dagarna, hur stor del av de anställda det är och
   hur många som kommer tillbaka, med trettio dagars staplar och samma siffror
-  som tabell. Sökningar utan träff går att göra till en rutin, och rutiner
+  som tabell. Sökningar och frågor utan träff går att göra till en rutin, och rutiner
   ingen öppnat på 90 dagar går att öppna. Siffrorna räknar personer, aldrig
   vem som gjorde vad.
 

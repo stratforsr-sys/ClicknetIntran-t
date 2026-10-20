@@ -97,7 +97,7 @@ export type Nav2Data = {
   profil: NdProfil;
   /** Leads (0076, 0135): fördelarna ser alla, säljaren sina egna. */
   leads: NdLeads;
-  /** Adoption (0029): antal, aldrig vem. Null utanför säljchef, VD och admin. */
+  /** Adoption (0029): antal, aldrig vem. Null för alla utom superadmin. */
   adoption: NdAdoption | null;
   /** Nyheter (0130): inläggen, kvittenserna, läskvittot för den som skrev, och Nytt i navet. */
   nyheter: NdNyheter;
