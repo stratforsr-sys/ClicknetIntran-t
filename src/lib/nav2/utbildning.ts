@@ -3,11 +3,11 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fullName, hasRole, type CurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { svenskDygnsstart, svensktDatum, svenskKlocka } from "@/lib/klocka";
+import { svensktDatum, svenskKlocka } from "@/lib/klocka";
 import { rodaDagar } from "@/lib/saljtakt";
 import { forfallodag } from "@/lib/utbildning";
 import { minuterFor, modulTillSteg, svit, type NdFraga, type NdSteg } from "./utbildningforma";
-import { veckomal } from "./utbildning-paminnelser";
+import { veckan } from "./utbildning-paminnelser";
 import { SKRIVLAGE } from "./skrivlage";
 
 /**
@@ -25,7 +25,7 @@ import { SKRIVLAGE } from "./skrivlage";
  * Steg 2 (0098, beställaren 2026-10-20): en fråga räknas till provmodulens
  * färdighet (`learning_meta.moduler`), med kursens första som reserv. Sviten
  * har frysdagar (`svit` i utbildningforma.ts), och teamets veckomål räknas
- * själv (`veckomal` i utbildning-paminnelser.ts).
+ * själv (`veckan` i utbildning-paminnelser.ts), bara för säljarna.
  */
 
 const FARDIGHETER = ["oppning", "behov", "invand", "avslut", "efter", "produkt", "regler"] as const;
@@ -397,14 +397,13 @@ export async function byggUtbildning(supabase: SupabaseClient, user: CurrentUser
     };
   });
 
-  // Teamets vecka: repeterade frågor sedan måndag, i hela bolaget, och veckomålet. Målet räknas
-  // själv (U2, beställaren 2026-10-20); ett fast tal i nav_setting utb.teammal går före om det sätts.
+  // Teamets vecka: säljarnas repeterade frågor sedan måndag och veckomålet. Målet räknas själv
+  // (U2, beställaren 2026-10-20: bara säljarna); ett fast tal i nav_setting utb.teammal går före om det sätts.
   const veckaStart = plusDagar(idag, -((new Date(`${idag}T12:00:00Z`).getUTCDay() || 7) - 1));
   const malV = installning.get("utb.teammal") as { mal?: number } | undefined;
-  const [{ count: gjortVecka }, mal] = await Promise.all([
-    admin.from("learning_answer").select("id", { count: "exact", head: true }).gte("answered_at", svenskDygnsstart(new Date(`${veckaStart}T12:00:00Z`))),
-    typeof malV?.mal === "number" ? Promise.resolve(malV.mal) : veckomal(admin, veckaStart),
-  ]);
+  const vecka = await veckan(admin, veckaStart);
+  const gjortVecka = vecka.gjort;
+  const mal = typeof malV?.mal === "number" ? malV.mal : vecka.mal;
 
   const ut: NdUtbildning = {
     skriv: SKRIVLAGE.utbildning,

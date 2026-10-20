@@ -229,12 +229,16 @@ Beställarens svar i beslutsrundan (U1–U3) och punkt 4 i
   kursens första som reserv. Färdigheten heter Regler, utan GDPR.
 - **Teamets veckomål (U2):** räknas själv, alla frågor som förfaller under
   veckan för var och en, högst femton per person, som det såg ut på måndagen.
-  Med dagens data 57: sex säljare med två frågor var och tre chefer med femton
-  (den som får redigera kurserna har alla 48 frågor i sin repetition).
+  **Bara säljarna** (beställaren 2026-10-20): den som får redigera kurserna
+  (säljchef, VD, administratör) har alla 48 frågor i sin repetition och räknas
+  varken i målet, i "gjort" eller får påminnelsen. Med dagens data 12: sex
+  säljare med två frågor var.
 - **Frysdagar (U3):** fem dagar med repetition ger en frysdag, högst två
   sparade, och en missad dag tar en automatiskt. Helger, röda dagar, godkänd
   ledighet hela dagen och sjukdom varken räknas eller bryter (`svit` i
-  `utbildningforma.ts`).
+  `utbildningforma.ts`). Beställaren bekräftade 2026-10-20 både att ledig och
+  sjuk inte bryter, och att "en hel vecka" är fem dagar i följd, inte
+  kalenderveckan.
 - **Migration `0098_utbildning_steg2` SKRIVEN OCH TORRKÖRD, INTE KÖRD:**
   färdigheterna, `push_sent_kind_check` med `utb-rep`, och
   `certification.reminded_at`. Körs i steg 6, före `SKRIVLAGE.utbildning`.

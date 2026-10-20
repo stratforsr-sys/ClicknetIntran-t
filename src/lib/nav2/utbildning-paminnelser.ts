@@ -24,6 +24,10 @@ import { SKRIVLAGE } from "./skrivlage";
  * klockan och mejl via Resend (`utbildning-certifikat` står i MEJLKALLOR).
  * Ett förnyat certifikat är en ny rad, så nästa påminnelse kommer av sig själv.
  *
+ * BARA SÄLJARNA (beställaren 2026-10-20). Den som får redigera kurserna
+ * (säljchef, VD, administratör) har alla frågor i sin repetition. Hen får
+ * ingen påminnelse och räknas inte i veckomålet.
+ *
  * Körs av dagtidsjobbet (pg_cron var kvart, vardagar 05–19 UTC), och bara när
  * `SKRIVLAGE.utbildning` är på. pg_cron ringer produktionen, så på grenen
  * körs det här aldrig av sig självt.
@@ -35,6 +39,16 @@ const MAN = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt
 const REDAKTOR = ["sales_manager", "admin", "ceo"];
 /** Dagens repetition tar högst tre frågor (ndutb.js), så en vecka är högst femton. */
 export const VECKOTAK = 15;
+
+/** Säljarna: aktiva utan säljchefs-, administratörs- eller VD-roll. */
+export async function saljarna(db: SupabaseClient): Promise<string[]> {
+  const [{ data: pers }, { data: roller }] = await Promise.all([
+    db.from("employee").select("id").in("status", AKTIV),
+    db.from("employee_role").select("employee_id").in("role", REDAKTOR),
+  ]);
+  const chefer = new Set(((roller ?? []) as { employee_id: string }[]).map((r) => r.employee_id));
+  return ((pers ?? []) as { id: string }[]).map((p) => p.id).filter((id) => !chefer.has(id));
+}
 
 export type Repfraga = { id: string; due: string | null; team: boolean };
 
@@ -81,19 +95,24 @@ export async function repetitionsfragor(db: SupabaseClient, ids: string[], fore:
 export const forfallerSenast = (fragor: Repfraga[], dag: string) => fragor.filter((f) => f.due === null || f.due <= dag || f.team).length;
 
 /**
- * Teamets veckomål (beställaren 2026-10-20, U2): alla frågor som förfaller
- * under veckan för var och en, högst femton per person, räknat som det såg ut
- * på måndagen. Målet står alltså still hela veckan, växer när fler prov klaras
- * och går alltid att nå. Inget sätts för hand.
+ * Teamets vecka (beställaren 2026-10-20, U2): målet är alla frågor som
+ * förfaller under veckan för var och en av säljarna, högst femton per person,
+ * räknat som det såg ut på måndagen. Målet står alltså still hela veckan, växer
+ * när fler prov klaras och går alltid att nå. Inget sätts för hand. `gjort` är
+ * säljarnas svar sedan måndag, så att målet och stapeln räknar samma personer.
  */
-export async function veckomal(db: SupabaseClient, mandag: string): Promise<number> {
-  const { data: pers } = await db.from("employee").select("id").in("status", AKTIV);
-  const ids = ((pers ?? []) as { id: string }[]).map((p) => p.id);
+export async function veckan(db: SupabaseClient, mandag: string): Promise<{ mal: number; gjort: number }> {
+  const ids = await saljarna(db);
+  if (!ids.length) return { mal: 0, gjort: 0 };
+  const start = svenskDygnsstart(new Date(`${mandag}T12:00:00Z`));
   const fredag = new Date(Date.parse(`${mandag}T12:00:00Z`) + 4 * 86400000).toISOString().slice(0, 10);
-  const fragor = await repetitionsfragor(db, ids, svenskDygnsstart(new Date(`${mandag}T12:00:00Z`)));
+  const [fragor, { count }] = await Promise.all([
+    repetitionsfragor(db, ids, start),
+    db.from("learning_answer").select("id", { count: "exact", head: true }).in("employee_id", ids).gte("answered_at", start),
+  ]);
   let mal = 0;
   for (const f of fragor.values()) mal += Math.min(VECKOTAK, forfallerSenast(f, fredag));
-  return mal;
+  return { mal, gjort: count ?? 0 };
 }
 
 /** Notisens text, för klockan och för enhetens service worker. */
@@ -126,15 +145,15 @@ async function repetitionen(db: SupabaseClient, nu: Date): Promise<Utbkvitto["re
   const ut: Utbkvitto["rep"] = { kandidater: 0, lediga: 0, skickade: 0, enheter: 0, fel: [] };
   const k = klockan(nu);
   if (!arbetsdag(k.dag)) return ut;
-  const [{ data: pers }, { data: tider }, { data: skickat }, { data: idag }] = await Promise.all([
-    db.from("employee").select("id").in("status", AKTIV),
+  const [saljare, { data: tider }, { data: skickat }, { data: idag }] = await Promise.all([
+    saljarna(db),
     db.from("nav_preference").select("employee_id, value").eq("key", "utb.reptid"),
     db.from("push_sent").select("employee_id").eq("kind", "utb-rep").eq("day", k.dag),
     db.from("learning_answer").select("employee_id").gte("answered_at", svenskDygnsstart(nu)),
   ]);
   const tid = new Map(((tider ?? []) as { employee_id: string; value: unknown }[]).map((t): [string, number] => [t.employee_id, minuter(t.value)]));
   const klara = new Set([...((skickat ?? []) as { employee_id: string }[]), ...((idag ?? []) as { employee_id: string }[])].map((x) => x.employee_id));
-  const ids = ((pers ?? []) as { id: string }[]).map((p) => p.id).filter((id) => {
+  const ids = saljare.filter((id) => {
     const t = tid.get(id) ?? minuter(null);
     return !klara.has(id) && k.min >= t && k.min < t + FONSTER;
   });
