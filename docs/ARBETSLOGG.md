@@ -5,6 +5,33 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-20 · Nav 2.0, Utbildning: systemguiderna för Nav 2.0 (Gamla Navs sista funktioner, F; ingen migration)
+
+Beställarens svar 9: "Skrivas om för nav 2.0". Turerna godkändes av beställaren
+innan de publicerades.
+
+- **Registret** `src/guider/nav2.ts` (via `GUIDER` i `src/guider/index.ts`):
+  sexton turer med CSS-väljare i utkastet som ankare (en lista med kommatecken
+  = den första som syns), `vag` som Nav 2.0 öppnar med `ndGa`. Gamla slugar
+  med höjd version där momentet finns kvar, så att gamla framsteg står kvar.
+  Avvikelser (rasten) och K&V har ingen tur. Två nya turer ur utkastets kurs,
+  Dagens tre i Uppgifter och Fråga Nav, är `frivillig` (ny i `typer.ts`):
+  de räknas inte i `personlage` eller `provaOnboardad`, annars hade nattjobbet
+  lagt ett ärende per anställd.
+- **Läsningen** `src/lib/nav2/guider.ts` (`ND.utbildning.guider`): turerna
+  för rollen med framstegen, och för chefsrollerna teamets läge för knuffen.
+- **Rutten** `/nav2/utbildning`: `guide-steg`, `guide-klar`, `guide-om` och
+  `knuffa` anropar repots actions i `components/guide/actions.ts` (som därför
+  står kvar när gamla Nav tas bort).
+- **Klienten** `moduler/ndguide.js`: utkastets kort "Kom igång med Nav" i
+  Biblioteket → Lär dig Nav, listan med Starta/Fortsätt/Gör om, turen (en
+  markering och en ruta, vyn går att använda under tiden, Pausa) och
+  knuffen i Teamet. Orienteringen och en vys tur startar av sig själv som i
+  gamla Nav, men bara när Utbildning får spara.
+- **Vägarna:** `/utbildning/systemguider` och `/oversikt/systemguider` öppnas
+  i Nav 2.0; notisernas `href` är oförändrade.
+- **Provet** `tests/guider.mjs` letar efter ankarna i `src/nav2/utkast.html`.
+
 ## 2026-10-20 · Nav 2.0, Kalendern får spara (`SKRIVLAGE.kalender = true`)
 
 - **Beställarens ja** på frågan "Ska Kalendern få spara nu? Det gäller hela

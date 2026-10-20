@@ -1,54 +1,21 @@
 import type { Guide } from "./typer.ts";
 import type { Permission, Role } from "../lib/roles.ts";
-import { KOM_IGANG } from "./kom-igang.ts";
-import {
-  ARENDEN,
-  AVTAL,
-  FEL,
-  FRANVARO,
-  KV,
-  NYHETER,
-  ORDER,
-  PROVISION,
-  RUTINER,
-  STAMPLA,
-} from "./moduler.ts";
-import { AVVIKELSER, LONEKOSTNAD, LONERAPPORT, PERSONAL, REKRYTERING } from "./ledning.ts";
+import { GUIDER_NAV2 } from "./nav2.ts";
 
 /**
  * Registret. Varje guide som finns står här, och ingenting utanför listan går
- * att starta — `hamtaGuide()` är det enda uppslaget, och server actions slår
- * upp slugen här innan de skriver något.
+ * att starta — `hamtaGuide()` är det enda uppslaget, och rutten slår upp slugen
+ * här innan den skriver något.
  *
- * Att lägga till en guide: skriv filen, importera den, lägg den i listan, kör
- * `npm run test:guider`. Provet kontrollerar att varje ankare finns i
- * gränssnittet och att slugen är unik.
+ * Sedan 2026-10-20 är det Nav 2.0:s turer (`nav2.ts`, beställarens svar 9).
+ * Gamla Navs turer (kom-igang.ts, moduler.ts, ledning.ts) pekade på gamla
+ * Navs gränssnitt och används inte längre; de tas bort med gamla Nav.
  *
- * ORDNINGEN I LISTAN ÄR ORDNINGEN I VYN. Startguiden först; därefter i den
- * ordning en ny anställd rimligen möter momenten. Det är inte en tvingande
- * kedja — beslutet 2026-08-31 var fri ordning efter startguiden — men en lista
- * i slumpmässig ordning ser ut som en hög.
+ * ORDNINGEN I LISTAN ÄR ORDNINGEN I VYN (Utbildning → Biblioteket → Lär dig
+ * Nav). Startguiden först, sedan i den ordning en ny anställd rimligen möter
+ * momenten, sist det som bara ledningen ser.
  */
-export const GUIDER: Guide[] = [
-  // Orienteringen först, sedan i den ordning en ny anställd rimligen möter dem:
-  // det alla har, det säljaren gör, och sist det som bara ledningen ser.
-  KOM_IGANG,
-  RUTINER,
-  NYHETER,
-  ARENDEN,
-  FRANVARO,
-  STAMPLA,
-  AVTAL,
-  FEL,
-  ORDER,
-  PROVISION,
-  KV,
-  PERSONAL,
-  REKRYTERING,
-  AVVIKELSER,
-  LONERAPPORT,
-  LONEKOSTNAD,
-];
+export const GUIDER: Guide[] = GUIDER_NAV2;
 
 export function hamtaGuide(slug: string): Guide | null {
   return GUIDER.find((g) => g.slug === slug) ?? null;

@@ -9,6 +9,7 @@ import { forfallodag } from "@/lib/utbildning";
 import { MINSTA_SVAR, provlage, type Provlage } from "@/lib/prov";
 import { minuterFor, modulTillSteg, svit, type NdFraga, type NdSkriftFraga, type NdSteg } from "./utbildningforma";
 import { veckan } from "./utbildning-paminnelser";
+import { byggGuider, type NdGuider } from "./guider";
 import { SKRIVLAGE } from "./skrivlage";
 
 /**
@@ -156,6 +157,8 @@ export type NdUtbildning = {
     inspelning: string | null;
   }[];
   teamVecka: { gjort: number; mal: number | null; egna: number };
+  /** Systemguiderna för Nav 2.0 (guider.ts). */
+  guider: NdGuider;
   team: null | {
     personer: { id: string; namn: string; kurser: Record<string, [number, number]> }[];
     obligatoriska: { id: string; t: string }[];
@@ -198,6 +201,8 @@ export async function byggUtbildning(supabase: SupabaseClient, user: CurrentUser
   const idag = svensktDatum();
   const chef = hasRole(user, "sales_manager", "admin", "ceo", "team_lead");
   const redaktor = hasRole(user, "sales_manager", "admin", "ceo");
+  // Systemguiderna läses samtidigt som resten. Ett fel där får inte fälla Utbildning.
+  const guiderP = byggGuider(supabase, user).catch((): NdGuider => ({ lista: [], team: null }));
 
   const [{ data: kursRader }, { data: progress }, { data: certs }, { data: forsok }, { data: svar }, { data: regler }, { data: noter }, { data: betyg }, { data: sjalv }, { data: teamRep }, { data: forel }, { data: prefs }, { data: teammal }, { data: personal }, { data: ledigt }, { data: sjukt }] =
     await Promise.all([
@@ -514,6 +519,7 @@ export async function byggUtbildning(supabase: SupabaseClient, user: CurrentUser
     forelasningar,
     teamVecka: { gjort: gjortVecka ?? 0, mal: mal || null, egna: svarRader.filter((s) => svensktDatum(s.answered_at) >= veckaStart).length },
     team: null,
+    guider: await guiderP,
   };
   if (!chef) return ut;
 

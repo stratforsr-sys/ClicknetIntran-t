@@ -59,7 +59,9 @@ behörigheter som här: du ser bara det du får se.
   som leder ett team bedömer rollspelen, rättar de skriftliga proven med
   rättarstödet bredvid varje svar eller skickar tillbaka dem för komplettering,
   ser vem som har kurser kvar och lägger
-  frågor i teamets repetition.
+  frågor i teamets repetition. Under Biblioteket, Lär dig Nav, finns korta
+  guidade turer genom Nav, och den som leder ett team kan knuffa den som inte
+  gjort klart.
 - **Rekrytering**, för den som rekryterar: Att göra med svarslöftet,
   tavlan med kandidaterna, intervjutiderna, tjänsterna, mallarna och målet
   (en gång eller varje månad eller kvartal), och siffrorna per källa.

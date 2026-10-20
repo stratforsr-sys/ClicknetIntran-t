@@ -212,6 +212,8 @@ export function personlage(
   nu: Date = new Date(),
 ): Personlage {
   const forSlug = new Map(rader.map((r) => [r.guide_slug, r]));
+  // Frivilliga turer räknas inte (se `frivillig` i typer.ts).
+  guider = guider.filter((g) => !g.frivillig);
 
   let klara = 0;
   let pagar: Personlage["pagar"] = null;

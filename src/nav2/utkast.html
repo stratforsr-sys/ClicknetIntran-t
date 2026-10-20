@@ -7393,6 +7393,18 @@ body.nd-riktig .proto{display:none}
 .ubedom>.pacts{justify-content:flex-start}
 .ndskriftsvar{white-space:pre-wrap}
 
+/* Systemguiderna (Gamla Nav F): markeringen och rutan. Sidan går att använda under tiden. */
+.ndgu{position:fixed;inset:0;z-index:300;pointer-events:none}
+.ndgu.mitt{background:color-mix(in srgb,var(--ink) 32%,transparent)}
+.ndgu-hal{position:fixed;border-radius:12px;box-shadow:0 0 0 9999px color-mix(in srgb,var(--ink) 32%,transparent);outline:2px solid var(--brand);outline-offset:2px;transition:left .25s ease,top .25s ease,width .25s ease,height .25s ease}
+.ndgu-kort{position:fixed;width:min(360px,calc(100vw - 32px));pointer-events:auto;display:flex;flex-direction:column;gap:8px;padding:16px 18px;margin:0;box-shadow:0 12px 32px rgba(0,0,0,.18)}
+.ndgu-kort h3{margin:0;font-size:16px}
+.ndgu-kort p{margin:0;font-size:14px;line-height:1.5;color:var(--ink-2)}
+.ndgu-kort .pacts{justify-content:flex-end;align-items:center}
+.ndgu-kort .pacts .tlink{margin-right:auto}
+@media (max-width:767px){.ndgu-kort{left:16px!important;right:16px;width:auto;top:auto!important;bottom:16px}}
+@media (prefers-reduced-motion:reduce){.ndgu-hal{transition:none}}
+
 /* ---------- Skalet (prefix skal): telefon och tangentbord, X1 och X2 ---------- */
 /* En tabell utan egen rullbar behållare rullar i sin förälder på telefonen, i stället för att hela sidan rullar i sidled. */
 @media (max-width:640px){body.nd-riktig #wrap :has(> table){overflow-x:auto}}
@@ -27567,6 +27579,8 @@ if (ndRut()){ ndRutStart(); NDKOPPLAD.add('rutiner'); }
    Teamet → Att bedöma (rattaProv, returneraProv), med rättarstödet bara för
    den som rättar. "Ny kurs" pekar på Claude, som bygger kurserna i chatten
    (E2). Gamla adresser under /utbildning öppnas här (ndUtbGa, via ndskal.js).
+   Systemguiderna (svar 9) står i ndguide.js: kortet i Biblioteket och
+   knuffen i Teamet ritas därifrån (ndGuKort, ndGuTeam).
    ===================================================================== */
 
 const ndUtb = () => ND && ND.utbildning;
@@ -27687,6 +27701,8 @@ function ndUtbGa(d){
   if (sub === 'rollspel') return visa(chef ? 'team' : 'rollspel');
   if (sub === 'oversikt') return visa(chef ? 'team' : null);
   if (sub === 'ny'){ visa(null); ndUtbNyKurs(); return true; }
+  // Systemguiderna (ndguide.js): listan i Biblioteket, och chefens knuff i Teamet.
+  if (sub === 'systemguider') return visa('bib', ndGu() ? NDGU_KURS : null);
   if (sub === 'prov'){
     const t = ndUtb().team, id = d[2], x = id && t && t.prov.find(y => y.id === id);
     if (!x){ if (id) toast('Provet är redan rättat eller tillbakaskickat.'); return visa(chef ? 'team' : null); }
@@ -27863,7 +27879,7 @@ biblioteketVy = function(){
       const kortast = kk.filter(k => !kursKlar(k)).sort((a, b) => a.min - b.min)[0], v = s ? ndUtbVal(s) : null;
       return `<div class="sect"><h3>${namn}</h3>${s ? `<span class="ubibk"><span class="kgrad"><span><i style="width:${v || 0}%;${v !== null && v < 60 ? 'background:var(--warn)' : ''}"></i></span><span class="num">${v === null ? '–' : `${v} %`}</span></span></span>` : ''}${kortast ? `<button class="tlink" data-uplay="${kortast.id}">▶ Kortaste: ${kortast.min} min</button>` : ''}</div>
         <div class="ugrid">${kk.map(k => kursKort(k)).join('')}${!q && !S.uLen ? rp.map(r => `<button class="ukort rp" data-rpopen="${r.id}"><span class="uktop"><span class="pill t-info">Rollspel</span><span class="muted">10 min</span></span><b>${esc(r.t)}</b><span class="muted ukb">${esc(r.kund)}</span></button>`).join('') : ''}</div>`; }).join('')}
-    ${!q && !S.uLen ? `<div class="sect"><h3>Lär dig Nav</h3><span>guidade turer</span></div><div class="ugrid"><a class="ukort" href="/utbildning/systemguider"><span class="uktop"><span class="pill t-neutral">Systemguide</span></span><b>Systemguiderna</b><span class="muted ukb">Finns i nuvarande Nav. De kopplas inte i Nav 2.0 än.</span></a></div>` : ''}
+    ${!q && !S.uLen ? ndGuKort() : ''}
     ${!lista.length ? `<div class="tempty"><b>Ingen kurs om ”${esc(S.uQ)}” än.</b> <button class="tlink" data-nduonska>Önska en kurs om det</button></div>` : ''}</div>`;
 };
 
@@ -28024,7 +28040,7 @@ teametVy = function(){
     <section class="fcard"><h3>Teamets kunskapskarta</h3><p class="vhelp">Snittet i teamet, ur repetitionen. Ingen enskild person syns här.</p>${svag.length ? svag.map(([s, v]) => { const k = kursFor(s); return `<div class="frow"><b>${ndUtbSkill(s)}</b><span class="kgrad"><span><i style="width:${v}%;${v < 55 ? 'background:var(--warn)' : ''}"></i></span><span class="num">${v} %</span></span><span class="fb">${k ? `<button class="btn btn-s btn-sm" data-ndurek="${k.id}">Rekommendera ${k.typ === 'kort' ? 'kortkurs' : 'kurs'}</button>` : ''}</span></div>`; }).join('') : '<p class="muted">Inga svar än. Kartan fylls när teamet repeterar frågor ur kurser som har färdigheter satta (minst fem svar per del).</p>'}</section>
     <section class="fcard"><h3>Planera en föreläsning</h3><p class="vhelp">Nav lägger uppföljningen dag 1, 3, 7 och 30 åt dig: frågor, en övning i ett riktigt samtal och ett rollspel.</p>
       ${S.uNyForel ? `<div class="ubedom"><input class="uin" id="ndufrub" placeholder="Rubrik, till exempel Prisinvändningar"><input class="uin" id="ndufnar" placeholder="Dag och tid, till exempel tor 22 okt 09:30">${[1,2,3].map(i => `<input class="uin" id="ndufnyk${i}" placeholder="Nyckelpunkt ${i}, en mening">`).join('')}<button class="btn btn-p btn-sm" data-unyforelspara>Skapa föreläsning och uppföljning</button></div>` : `<button class="btn btn-p btn-sm" data-unyforel>${I('plus')}Ny föreläsning</button>`}</section>
-    <section class="fcard"><h3>Systemguider</h3><div class="frow"><b>Kom igång med Nav</b><span class="muted">Systemguiderna kopplas inte i Nav 2.0 än.</span><span class="fb"><a class="btn btn-s btn-sm" href="/utbildning/systemguider">Öppna i nuvarande Nav</a></span></div></section>
+    ${ndGuTeam()}
   </div>`;
 };
 
@@ -28395,6 +28411,181 @@ document.addEventListener('change', async e => {
   ndUtbPost('rollspel-registrera', {modul, fil:p.fileId, filnamn:f.name, store:p.store});
 });
 if (ndUtb()){ ndUtbStart(); NDKOPPLAD.add('utbildning'); }
+
+/* =====================================================================
+   NAV 2.0 I RIKTIGT LÄGE: SYSTEMGUIDERNA (prefix ndGu)
+
+   Beställarens svar 9 (2026-10-20): systemguiderna skrivs om för Nav 2.0.
+   Turerna står i repots register (src/guider/nav2.ts) och kommer i
+   ND.utbildning.guider (src/lib/nav2/guider.ts), med framstegen i
+   guide_progress som förut.
+
+   - Utbildning → Biblioteket → Lär dig Nav: utkastets kort "Kom igång med
+     Nav", med turerna som delar. Kortet öppnar listan med Starta, Fortsätt
+     och Gör om.
+   - En tur markerar det steget handlar om i den riktiga vyn och visar en
+     liten ruta bredvid. Vyn går att använda under tiden. Hittas inget att
+     peka på står rutan mitt på skärmen. Pausa, och du fortsätter på samma
+     steg nästa gång.
+   - Orienteringen startar av sig själv tills den är gjord, och en vys tur
+     första gången vyn öppnas, som i gamla Nav. Bara när Utbildning får spara:
+     i läsläge sparas inga framsteg, och då hade turen startat varje gång.
+   - Teamet → Systemguider: hur många som inte gjort klart, och Knuffa
+     (repots knuffa: notisen "Din chef undrar hur det går").
+   Skrivningarna går till /nav2/utbildning (guide-steg, guide-klar,
+   guide-om, knuffa).
+   ===================================================================== */
+
+const ndGu = () => ND && ND.utbildning && ND.utbildning.guider;
+const NDGU = {g:null, syn:[], i:0, lage:'dator', el:null, visad:new Set(), las:false, ram:0};
+const NDGU_KURS = 'navguide';
+const ndGuEtikett = {klar:'Klar', pagar:'Pågår', ej_paborjad:'Ej påbörjad', omtag:'Gör om'};
+
+/* ---------- Kortet i Biblioteket och listan ---------- */
+// Utkastets kurs "Kom igång med Nav" (typ guide), med navets turer som delar.
+function ndGuKurs(){
+  // Turerna går att göra i vilken ordning som helst. Kortet räknar delarna i ordning, så de klara står först och Nästa blir den första ogjorda.
+  const l = [...ndGu().lista.filter(g => g.lage === 'klar'), ...ndGu().lista.filter(g => g.lage !== 'klar')];
+  return {id:NDGU_KURS, dokId:null, t:'Kom igång med Nav', typ:'guide', min:l.reduce((s, g) => s + g.min, 0), dagar:null, skills:[], resa:null, rutin:null,
+    moduler:l.map(g => [g.titel, 'guide', g.min, g.slug]), klara:l.filter(g => g.lage === 'klar').length, frist:null, fristD:null, obl:false, cert:null, certTill:null, certTillD:null,
+    agare:'Nav', besk:'Korta guidade turer i Nav. Nav visar var allt ligger, steg för steg, i dina riktiga vyer.', ny:false, grans:0, vanta:0, rek:false, sparr:{}, forsok:{}, varfor:null};
+}
+function ndGuKort(){ const u = ndGu(); return u && u.lista.length ? `<div class="sect"><h3>Lär dig Nav</h3><span>guidade turer</span></div><div class="ugrid">${kursKort(ndGuKurs())}</div>` : ''; }
+function ndGuSida(){
+  const u = ndGu(), k = ndGuKurs(), skriv = ndUtb().skriv;
+  return `<nav class="crumb"><button class="tlink" data-uclose>${I('arrow').replace('<svg','<svg width="14" height="14" style="transform:rotate(180deg);vertical-align:-2px"')} Utbildning</button><span>/</span><span>${TYPER.guide}</span></nav>
+    <div class="rgrid"><article class="rart">
+      <div class="rhd"><span class="pill t-neutral">${TYPER.guide}</span><span class="muted rlas">${langdText(k.min)} · ${k.klara} av ${k.moduler.length} klara</span></div>
+      <h1>${esc(k.t)}</h1><p class="rsum">${esc(k.besk)}</p>
+      <section><h3 class="uh3">Turerna</h3><ol class="umodl">${u.lista.map(g => { const klar = g.lage === 'klar';
+        return `<li class="${klar ? 'ok' : ''}"><span class="umi">${klar ? '✓' : I('arrow')}</span><span><b>${esc(g.titel)}</b><span class="muted">${esc(g.besk)} · ${langdText(g.min)}${klar ? '' : ` · ${ndGuEtikett[g.lage]}`}</span></span>${klar ? `<button class="tlink" data-ndguom="${g.slug}">Gör om</button>` : `<button class="btn btn-s btn-sm" data-ndgustart="${g.slug}">${g.lage === 'pagar' ? 'Fortsätt' : g.lage === 'omtag' ? 'Gör om' : 'Starta'}</button>`}</li>`; }).join('')}</ol></section>
+      ${skriv ? '' : '<p class="muted">Turerna går att göra, men framstegen sparas inte förrän Utbildning får spara.</p>'}
+    </article></div>`;
+}
+const _ndGuVy = _ndVyer.renderUtbView;
+_ndVyer.renderUtbView = function(){ if (ndGu() && S.uOpen === NDGU_KURS) return ndGuSida(); return _ndGuVy(); };
+
+/* ---------- Teamet: knuffen ---------- */
+function ndGuTeam(){
+  const t = ndGu() && ndGu().team; if (!t) return '';
+  const kvar = t.filter(p => !p.knuffad), namn = t.map(p => fornamn(p.namn));
+  const vilka = namn.length > 6 ? `${namn.slice(0, 6).join(', ')} och ${namn.length - 6} till` : namn.join(', ');
+  return `<section class="fcard"><h3>Systemguider</h3><div class="frow"><b>Kom igång med Nav</b><span class="muted">${t.length ? `${t.length} i teamet har inte gjort klart: ${esc(vilka)}` : 'Alla i teamet har gjort klart.'}</span><span class="fb">${t.length ? `<button class="btn btn-s btn-sm" data-ndguknuff ${kvar.length ? '' : 'disabled'}>${kvar.length ? `Knuffa ${kvar.length}` : 'Knuffade'}</button>` : ''}</span></div></section>`;
+}
+
+/* ---------- Turen ---------- */
+const ndGuSyns = e => !!e && e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
+function ndGuPost(handling, data){ return ndUtbPost(handling, data, {ladda:false, tyst:true}).then(s => { if (s.laslage && !NDGU.las){ NDGU.las = true; toast('Läsläge: framstegen i turen sparas inte än.'); } return s; }); }
+function ndGuStart(slug, auto){
+  const u = ndGu(), g = u && u.lista.find(x => x.slug === slug); if (!g) return;
+  const lage = window.innerWidth < 768 ? 'mobil' : 'dator';
+  const syn = g.steg.map((s, full) => ({s, full})).filter(x => !x.s.bara || x.s.bara === lage);
+  if (!syn.length) return;
+  const gjorda = g.lage === 'pagar' ? g.sparat : 0;
+  Object.assign(NDGU, {g, syn, lage, i:Math.min(syn.filter(x => x.full < gjorda).length, syn.length - 1)});
+  NDGU.visad.add(slug);
+  if (S.uPlay){ S.uPlay = null; renderPlayer(); }
+  if (!auto && NDGU.i) toast(`Du fortsätter på steg ${NDGU.i + 1}, där du pausade.`);
+  ndGuVisa();
+}
+// Steget hör hemma i en vy: dit först, med Nav 2.0:s egna vägar.
+function ndGuVag(vag){
+  const bas = vag.split(/[?#]/)[0], delar = bas.split('/').filter(Boolean), vy = typeof skalVy === 'function' ? skalVy(bas) : null;
+  if (bas === '/' ? S.view !== 'hem' : (vy !== S.view || delar.length > 1)) ndGa(vag);
+}
+function ndGuVisa(){
+  const st = NDGU.syn[NDGU.i].s;
+  if (st.vag) ndGuVag(st.vag);
+  setTimeout(ndGuRita, st.vag ? 260 : 0);
+}
+function ndGuRita(){
+  if (!NDGU.g) return;
+  const {g, syn, i, lage} = NDGU, st = syn[i].s, sist = i === syn.length - 1;
+  const sel = (lage === 'mobil' && st.mobil) || st.ankare;
+  let el = null; if (sel){ try { el = [...document.querySelectorAll(sel)].find(ndGuSyns) || null; } catch(_){} }
+  NDGU.el = el;
+  let box = document.getElementById('ndgu');
+  if (!box){ box = document.createElement('div'); box.id = 'ndgu'; box.className = 'ndgu'; box.innerHTML = '<div class="ndgu-hal"></div><div class="ndgu-kort card" role="dialog" aria-live="polite"></div>'; document.body.appendChild(box); }
+  const kort = box.querySelector('.ndgu-kort'), krav = st.handling !== 'vidare' && el;
+  kort.setAttribute('aria-label', `Systemguide: ${g.titel}`);
+  kort.innerHTML = `<span class="lk">${esc(g.titel)} · steg ${i + 1} av ${syn.length}</span><h3>${esc(st.rubrik)}</h3><p>${esc(st.text)}</p>
+    <div class="pacts"><button class="tlink" data-ndgupaus>Pausa</button>${i ? '<button class="btn btn-s btn-sm" data-ndgubak>Tillbaka</button>' : ''}${krav ? `<span class="muted">${st.handling === 'fokus' ? 'Klicka i fältet' : 'Tryck där'} för att gå vidare</span>` : `<button class="btn btn-p btn-sm" data-ndgunasta>${sist ? 'Klart' : 'Nästa'}</button>`}</div>`;
+  box.classList.toggle('mitt', !el);
+  if (el){
+    const r = el.getBoundingClientRect();
+    if (r.top < 70 || r.bottom > window.innerHeight - 40) el.scrollIntoView({block:'center', behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'});
+    if (krav){ const typ = st.handling === 'fokus' ? 'focusin' : 'click'; el.addEventListener(typ, () => setTimeout(() => { if (NDGU.g === g && NDGU.i === i) ndGuNasta(); }, 350), {once:true}); }
+  }
+  ndGuPlacera();
+  (kort.querySelector('[data-ndgunasta]') || kort.querySelector('[data-ndgupaus]')).focus({preventScroll:true});
+}
+function ndGuPlacera(){
+  const box = document.getElementById('ndgu'); if (!box || !NDGU.g) return;
+  const hal = box.querySelector('.ndgu-hal'), kort = box.querySelector('.ndgu-kort'), el = NDGU.el;
+  if (!el || !document.contains(el)){ hal.style.display = 'none'; kort.style.left = `${Math.max(16, (window.innerWidth - kort.offsetWidth) / 2)}px`; kort.style.top = `${Math.max(16, (window.innerHeight - kort.offsetHeight) / 2)}px`; return; }
+  const r = el.getBoundingClientRect(), p = 6;
+  Object.assign(hal.style, {display:'block', left:`${r.left - p}px`, top:`${r.top - p}px`, width:`${r.width + 2 * p}px`, height:`${r.height + 2 * p}px`});
+  const h = kort.offsetHeight, w = kort.offsetWidth, under = r.bottom + p + 12, ovan = r.top - p - 12 - h;
+  const top = under + h < window.innerHeight - 16 ? under : ovan > 16 ? ovan : Math.max(16, window.innerHeight - h - 16);
+  kort.style.top = `${top}px`; kort.style.left = `${Math.min(Math.max(16, r.left), window.innerWidth - w - 16)}px`;
+}
+function ndGuNasta(){
+  const {g, syn, i} = NDGU; if (!g) return;
+  if (i === syn.length - 1){
+    ndGuPost('guide-klar', {slug:g.slug}); g.lage = 'klar'; g.sparat = g.steg.length; ndGuStang();
+    toast(`${g.titel} är klar.${g.start ? ' Alla turer ligger under Utbildning → Biblioteket → Lär dig Nav.' : ''}`);
+    if (S.view === 'utbildning') render(); return;
+  }
+  const varde = syn[i].full + 1;
+  ndGuPost('guide-steg', {slug:g.slug, steg:varde}); g.sparat = varde; if (g.lage !== 'klar') g.lage = 'pagar';
+  NDGU.i = i + 1; ndGuVisa();
+}
+function ndGuStang(){ NDGU.g = null; NDGU.el = null; document.getElementById('ndgu')?.remove(); }
+function ndGuPaus(){ const g = NDGU.g; ndGuStang(); if (g) toast('Turen är pausad. Du fortsätter på samma steg under Utbildning → Lär dig Nav.'); }
+document.addEventListener('click', e => {
+  const t = e.target.closest && e.target.closest('[data-ndgunasta],[data-ndgubak],[data-ndgupaus]'); if (!t || !NDGU.g) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  if (t.dataset.ndgunasta !== undefined) ndGuNasta();
+  else if (t.dataset.ndgubak !== undefined){ NDGU.i = Math.max(0, NDGU.i - 1); ndGuVisa(); }
+  else ndGuPaus();
+}, true);
+document.addEventListener('keydown', e => {
+  if (!NDGU.g || /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')) return;
+  const st = NDGU.syn[NDGU.i].s;
+  if (e.key === 'Escape'){ e.preventDefault(); e.stopImmediatePropagation(); ndGuPaus(); }
+  else if ((e.key === 'Enter' || e.key === 'ArrowRight') && (st.handling === 'vidare' || !NDGU.el) && !document.activeElement?.closest('.ndgu-kort .tlink, .ndgu-kort [data-ndgubak]')){ e.preventDefault(); e.stopImmediatePropagation(); ndGuNasta(); }
+  else if (e.key === 'ArrowLeft' && NDGU.i){ e.preventDefault(); e.stopImmediatePropagation(); NDGU.i -= 1; ndGuVisa(); }
+}, true);
+const ndGuOmritning = () => { cancelAnimationFrame(NDGU.ram); NDGU.ram = requestAnimationFrame(ndGuPlacera); };
+window.addEventListener('resize', ndGuOmritning); window.addEventListener('scroll', ndGuOmritning, true);
+
+/* ---------- Av sig själv, som i gamla Nav ---------- */
+// Orienteringen tills den är gjord, sedan en vys tur första gången vyn öppnas. Bara när framstegen sparas.
+function ndGuAuto(){
+  const u = ndGu(); if (!u || !ndUtb().skriv || NDGU.g || S.uPlay || document.querySelector('.modal.open, dialog[open]')) return;
+  const start = u.lista.find(g => g.start);
+  if (start && start.lage !== 'klar'){ if (S.view === 'hem' && !NDGU.visad.has(start.slug)) ndGuStart(start.slug, true); return; }
+  const g = u.lista.find(x => x.modul && x.lage !== 'klar' && !NDGU.visad.has(x.slug) && typeof skalVy === 'function' && skalVy(x.modul) === S.view);
+  if (g) ndGuStart(g.slug, true);
+}
+const _ndGuRender = render;
+render = function(){ const r = _ndGuRender.apply(this, arguments); if (ndGu() && !NDGU.g) setTimeout(ndGuAuto, 700); return r; };
+if (ndGu()) setTimeout(ndGuAuto, 1200);
+
+/* ---------- Händelser i Utbildning ---------- */
+const _ndGuClick = utbClick;
+utbClick = function(t, e){
+  const d = t.dataset;
+  if (ndGu()){
+    if (d.uopen === NDGU_KURS){ S.uOpen = NDGU_KURS; render(); window.scrollTo(0, 0); return true; }
+    if (d.uplay === NDGU_KURS){ const g = ndGu().lista.find(x => x.lage !== 'klar') || ndGu().lista[0]; if (g) ndGuStart(g.slug); return true; }
+    if (d.ndgustart){ ndGuStart(d.ndgustart); return true; }
+    if (d.ndguom){ const slug = d.ndguom, g = ndGu().lista.find(x => x.slug === slug);
+      ndGuPost('guide-om', {slug}).then(() => { if (g){ g.lage = 'ej_paborjad'; g.sparat = 0; } ndGuStart(slug); }); return true; }
+    if (d.ndguknuff !== undefined){ const vem = (ndGu().team || []).filter(p => !p.knuffad).map(p => p.id); if (vem.length) ndUtbPost('knuffa', {vem}); return true; }
+  }
+  return _ndGuClick(t, e);
+};
 
 /* =====================================================================
    NAV 2.0 I RIKTIGT LÄGE: STARTSIDAN (prefix ndHem)
@@ -31633,7 +31824,7 @@ if (ndLd()) NDKOPPLAD.add('leads');
 /* ---------- Vägarna ---------- */
 // Adresser som alltid hör till nuvarande Nav, även när vyn de ligger under är kopplad.
 const SKALNAV = ['/tid/sparrar', '/sparrar', '/schema', '/admin', '/lonekostnad', '/satser', '/avtal/mallar', '/avtal/nytt', '/avtal/bifoga',
-  '/uppgifter/projekt', '/uppgifter/mallar', '/uppgifter/genomgang', '/utbildning/systemguider', '/utbildning/oversikt/systemguider', 
+  '/uppgifter/projekt', '/uppgifter/mallar', '/uppgifter/genomgang', 
   '/personal/team', '/personal/ny', '/logga-in', '/byt-losenord', '/uppstart', '/design', '/coachning/mallar', '/kv/regler', '/provision/regler', '/provision/underlag',
   '/arenden/statistik', '/kalender/delning', '/kalender/overlamning', '/rutiner/ny', '/franvaro/regler', '/regler', '/filer', '/auth'];
 const skalNav = h => SKALNAV.some(p => h === p || h.startsWith(p + '/') || h.startsWith(p + '?'));

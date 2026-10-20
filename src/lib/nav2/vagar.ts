@@ -21,8 +21,9 @@
 const SJALV: RegExp[] = [
   /^\/uppgifter(\/(?!projekt$|mallar$|genomgang$)[^/]+)?$/,
   /^\/rutiner(\/(?!ny$)[^/]+)?$/,
-  /^\/utbildning(\/(?!systemguider$)[^/]+)?$/,
+  /^\/utbildning(\/[^/]+)?$/,
   /^\/utbildning\/prov\/[^/]+$/,
+  /^\/utbildning\/oversikt\/systemguider$/,
   /^\/tid(\/(lonerapport|avvikelser|ogiltig-franvaro|schema))?$/,
   /^\/tid\/lonerapport\/[0-9a-f-]{36}$/,
   /^\/kalender$/,

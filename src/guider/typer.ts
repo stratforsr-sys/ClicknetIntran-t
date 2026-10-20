@@ -132,5 +132,15 @@ export type Guide = {
    */
   vidForstaInloggningen?: boolean;
 
+  /**
+   * Räknas inte när navet avgör om någon är klar med sina guider (onboardad,
+   * påminnelsen i klockan, chefens rad och nattjobbets ärende). Turen finns i
+   * listan och går att göra, men ingen blir "inte klar" av att ha hoppat över
+   * den. Nav 2.0:s två nya turer har den tills beställaren sagt om de ska
+   * krävas (2026-10-20): annars hade varje anställd blivit "inte klar" igen och
+   * nattjobbet lagt ett ärende per person.
+   */
+  frivillig?: boolean;
+
   steg: Steg[];
 };

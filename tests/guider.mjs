@@ -35,7 +35,6 @@ import {
   hamtaGuide,
   startguiden,
 } from "../src/guider/index.ts";
-import { NAV_PREFIX } from "../src/guider/ankare.ts";
 import {
   FRIST_DAGAR,
   STILLASTAENDE_DAGAR,
@@ -60,40 +59,22 @@ const ok = (namn, villkor, extra = "") => {
 const rot = fileURLToPath(new URL("../", import.meta.url));
 const las = (sokvag) => readFileSync(join(rot, sokvag), "utf8");
 
-/** Alla .tsx-filer under src/, som text. Det är där attributen kan sitta. */
-function granssnittet(katalog = join(rot, "src")) {
-  const ut = [];
-  for (const namn of readdirSync(katalog)) {
-    const p = join(katalog, namn);
-    if (statSync(p).isDirectory()) ut.push(...granssnittet(p));
-    else if (namn.endsWith(".tsx")) ut.push(readFileSync(p, "utf8"));
-  }
-  return ut;
-}
-
-const KALLKOD = granssnittet();
-
 /**
- * Ankaren som faktiskt står utskrivna i gränssnittet.
- *
- * TVÅ SKRIVSÄTT, OCH BÅDA RÄKNAS. Vanliga element bär `data-guide="..."` direkt.
- * `Card` tar i stället emot en namngiven `guide`-prop och sätter attributet
- * själv — kortet ska inte kunna ta emot vilka attribut som helst, och flera av
- * korten sitter i ett rutnät där ett omslag hade brutit spaltbredden.
- *
- * Att den andra formen räknas vilar på att `Card` verkligen skickar vidare
- * propen. Det kontrolleras nedan, och utan den kontrollen vore `guide="x"` bara
- * ett ord i en fil.
+ * Nav 2.0 (2026-10-20): turerna pekar på utkastets HTML, `src/nav2/utkast.html`,
+ * med CSS-väljare (se src/guider/nav2.ts). Utkastets utseende ändras inte, så
+ * väljarna är det som redan står i sidan: id, klasser och data-attribut. En del
+ * ritas av skriptet i samma fil, och därför letar provet i hela filen.
  */
-const UTSKRIVNA = new Set();
-for (const fil of KALLKOD) {
-  for (const traff of fil.matchAll(/(?:data-)?guide="([^"]+)"/g)) {
-    // Overlayen bygger sina egna väljare — `[data-guide="${ankare}"]` — och de
-    // är inte utskrivna attribut. Utan undantaget rapporteras de som ett ankare
-    // vid namn "${ankare}" som ingen guide använder.
-    if (traff[1].includes("${")) continue;
-    UTSKRIVNA.add(traff[1]);
-  }
+const UTKAST = las("src/nav2/utkast.html");
+
+/** Varje del av en väljare (#id, .klass, [attribut="värde"]) ska stå i utkastet. */
+function valjarenFinns(valjare) {
+  const delar = [
+    ...[...valjare.matchAll(/#([\w-]+)/g)].map((m) => m[1]),
+    ...[...valjare.matchAll(/\.([\w-]+)/g)].map((m) => m[1]),
+    ...[...valjare.matchAll(/\[([\w-]+)(?:="([^"]*)")?\]/g)].flatMap((m) => (m[2] ? [m[1], m[2]] : [m[1]])),
+  ];
+  return delar.length > 0 && delar.every((d) => UTKAST.includes(d));
 }
 
 console.log("\n\x1b[1mRegistret\x1b[0m");
@@ -170,38 +151,15 @@ console.log("\n\x1b[1mRegistret\x1b[0m");
 console.log("\n\x1b[1mVarje guide går att starta\x1b[0m");
 {
   /**
-   * En guide utan `modul` och utan `vidForstaInloggningen` kan aldrig komma
-   * fram: ingen sida monterar den, och layouten startar bara orienteringen. Den
-   * hade legat i listan och sett ut som ett erbjudande utan att vara ett.
+   * Varje tur går att starta från Utbildning → Biblioteket → Lär dig Nav, så
+   * `modul` är inte längre nödvändig. Den som finns är en vy i Nav 2.0, där
+   * turen startar av sig själv första gången vyn öppnas.
    */
-  for (const g of GUIDER) {
-    ok(
-      `${g.slug}: har en väg in`,
-      Boolean(g.modul) || g.vidForstaInloggningen === true,
-      g.modul ?? "startguide",
-    );
-  }
-
   const moduler = GUIDER.filter((g) => g.modul).map((g) => g.modul);
   ok("en modul har högst en guide", new Set(moduler).size === moduler.length, moduler.join(" "));
   for (const m of moduler) ok(`uppslag på ${m} träffar`, guideForModul(m)?.modul === m);
-
-  /**
-   * Och sidan MONTERAR den faktiskt. Det här är samma sorts kontroll som
-   * ankarprovet: kopplingen mellan guiden och sidan är osynlig för TypeScript,
-   * och en guide som ingen sida monterar syns bara genom att aldrig starta.
-   */
-  for (const g of GUIDER) {
-    if (!g.modul) continue;
-    const sidan = `src/app/(app)${g.modul}/page.tsx`;
-    let kalla = "";
-    try {
-      kalla = las(sidan);
-    } catch {
-      ok(`${g.slug}: ${sidan} finns`, false);
-      continue;
-    }
-    ok(`${g.slug}: monteras av ${g.modul}`, kalla.includes(`slug="${g.slug}"`));
+  for (const m of moduler) {
+    ok(`${m} är en vy i Nav 2.0`, UTKAST.includes(`data-go="${m}"`) || UTKAST.includes(`data-view="${m.slice(1)}"`));
   }
 }
 
@@ -233,49 +191,16 @@ for (const guide of GUIDER) {
 
 console.log("\n\x1b[1mAnkaren finns i gränssnittet\x1b[0m");
 {
-  const navItems = las("src/components/shell/nav-items.ts");
-  const sidebar = las("src/components/shell/Sidebar.tsx");
-
-  // Menyposternas ankare byggs av en funktion — de kan inte stå utskrivna, för
-  // menyn ser olika ut för varje roll. Se src/guider/ankare.ts.
-  ok("sidopanelen märker sina poster", sidebar.includes("data-guide={navAnkare(item.href)}"));
-
-  // Se rubriken över UTSKRIVNA: `guide="x"` på ett kort räknas bara som ett
-  // ankare så länge kortet faktiskt sätter attributet.
-  ok(
-    "Card skickar vidare sin guide-prop",
-    las("src/components/ui/Card.tsx").includes("data-guide={guide}"),
-  );
-
   for (const guide of GUIDER) {
     for (const [nr, steg] of guide.steg.entries()) {
-      // Samma ankare i båda fälten ska inte provas två gånger.
       for (const ankare of new Set([steg.ankare, steg.ankare_mobil])) {
         if (!ankare) continue;
-
-        if (ankare.startsWith(NAV_PREFIX)) {
-          const href = ankare.slice(NAV_PREFIX.length);
-          ok(
-            `${guide.slug} steg ${nr + 1}: menyposten ${href} finns`,
-            navItems.includes(`href: "${href}"`),
-          );
-          continue;
-        }
-
-        ok(`${guide.slug} steg ${nr + 1}: ${ankare}`, UTSKRIVNA.has(ankare));
+        // En lista med kommatecken betyder "den första som syns": minst ett alternativ ska finnas.
+        const alternativ = ankare.split(",").map((a) => a.trim());
+        ok(`${guide.slug} steg ${nr + 1}: ${ankare}`, alternativ.some(valjarenFinns));
       }
     }
   }
-
-  // Inte ett fel, men värt att veta: ett attribut ingen guide pekar på är kod
-  // som ingen underhåller och som nästa person tror används.
-  const anvanda = new Set();
-  for (const g of GUIDER) for (const s of g.steg) {
-    if (s.ankare) anvanda.add(s.ankare);
-    if (s.ankare_mobil) anvanda.add(s.ankare_mobil);
-  }
-  const oanvanda = [...UTSKRIVNA].filter((a) => !anvanda.has(a));
-  if (oanvanda.length) console.log(`    \x1b[33m·\x1b[0m ankare utan guide: ${oanvanda.join(" ")}`);
 }
 
 console.log("\n\x1b[1mBåda lägena ger en spelbar tur\x1b[0m");
@@ -415,7 +340,7 @@ console.log("\n\x1b[1mChefens vy: hur långt någon kommit\x1b[0m");
   // Ingen har rört någonting.
   {
     const l = personlage(paket, [], datum(2), NU);
-    ok("orörd: noll klara", l.klara === 0 && l.av === paket.length);
+    ok("orörd: noll klara", l.klara === 0 && l.av === paket.filter((g) => !g.frivillig).length);
     ok("orörd: ingenting pågår", l.pagar === null);
     ok("orörd: inte onboardad", l.onboardad === false);
     ok("orörd: stillestånd är null, inte noll", l.stillestand === null);
@@ -468,6 +393,14 @@ console.log("\n\x1b[1mChefens vy: hur långt någon kommit\x1b[0m");
     ok("allt klart: markeras inte", starStilla(l) === false);
   }
 
+  // Frivilliga turer (Nav 2.0:s nya, tills beställaren sagt annat) räknas inte.
+  {
+    const frivilliga = paket.filter((g) => g.frivillig);
+    ok("det finns frivilliga turer i säljarens paket", frivilliga.length >= 1);
+    const rader = paket.filter((g) => !g.frivillig).map((g) => klarRad(g, 1));
+    ok("utan de frivilliga: onboardad", personlage(paket, rader, datum(20), NU).onboardad === true);
+  }
+
   // Fristen.
   {
     const inom = personlage(paket, [], datum(FRIST_DAGAR - 1), NU);
@@ -480,7 +413,7 @@ console.log("\n\x1b[1mChefens vy: hur långt någon kommit\x1b[0m");
   // En höjd version med omtag gör en onboardad person icke-klar igen. Det är
   // avsiktligt: annars vore omtaget bara en text i en lista.
   {
-    const g0 = { ...paket[0], version: 2, omtag: true };
+    const g0 = { ...paket[0], version: paket[0].version + 1, omtag: true };
     const paket2 = [g0, ...paket.slice(1)];
     const rader = paket.map((g) => klarRad(g, 1));
     ok("omtag återöppnar paketet", personlage(paket2, rader, datum(3), NU).onboardad === false);

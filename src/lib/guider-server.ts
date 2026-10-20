@@ -221,10 +221,11 @@ export async function provaOnboardad(
   const anstalld = user.employee;
   if (!anstalld || anstalld.status !== "onboarding") return false;
 
+  // Frivilliga turer räknas inte (se `frivillig` i src/guider/typer.ts).
   const mina = guiderForRoller(user.roles, {
     stamplar,
     behorigheter: user.permissions,
-  });
+  }).filter((g) => !g.frivillig);
   if (mina.length === 0) return false;
 
   const rader = await hamtaProgress(anstalld.id);

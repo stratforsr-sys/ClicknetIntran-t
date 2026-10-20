@@ -8,6 +8,8 @@ import { utgangsdatum } from "@/lib/utbildning";
 import { loggaKurs } from "@/lib/utbildning-server";
 import { bedomRollspel, forberedRollspel, klarModul, lamnaQuiz, registreraRollspel } from "@/app/(app)/utbildning/actions";
 import { lamnaProv, rattaProv, returneraProv, sparaUtkast } from "@/app/(app)/utbildning/prov/actions";
+import { bokforGuideKlar, bokforGuidesteg, borjaOmGuide, knuffa } from "@/components/guide/actions";
+import { hamtaGuide } from "@/guider";
 import { skapaUppgift } from "@/app/(app)/uppgifter/actions";
 import { skapaMote } from "@/app/(app)/kalender/moten/actions";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
@@ -31,6 +33,10 @@ export const dynamic = "force-dynamic";
  * rättar. Reglerna står i actions: provet tas i ordning, inlämnat går inte att
  * ändra, alla chefer rättar men ingen sitt eget, och betyget och returen kräver
  * en återkoppling.
+ *
+ * Systemguiderna (beställaren 2026-10-20, svar 9): repots `bokforGuidesteg`,
+ * `bokforGuideKlar` (som också sätter onboardad), `borjaOmGuide` och `knuffa`
+ * (ledningen knuffar vem som helst, en teamledare sina egna, tyst vid nej).
  *
  * Det nya (0097): svaren i repetitionen (rättas här, inte i webbläsaren, och
  * nästa gång räknas här: fel i morgon, gissat rätt om 2 dagar, säkert rätt om
@@ -216,6 +222,23 @@ export async function POST(request: Request) {
         for (const [q, v] of Object.entries((b.kommentar ?? {}) as Record<string, unknown>)) if (UUID.test(q)) f.set(`kommentar_${q}`, text(v, 2000));
         const s = handling === "ratta" ? await rattaProv({}, f) : await returneraProv({}, f);
         return s.fel ? svar({ fel: s.fel }, 400) : klart(s.ok ?? "Klart.");
+      }
+      // ---------------------------------------------------------------- Systemguiderna
+      case "guide-steg":
+      case "guide-klar":
+      case "guide-om": {
+        const slug = String(b.slug ?? "");
+        if (!hamtaGuide(slug)) return svar({ fel: "Turen finns inte." }, 404);
+        if (handling === "guide-steg") await bokforGuidesteg(slug, Number(b.steg));
+        else if (handling === "guide-klar") await bokforGuideKlar(slug);
+        else await borjaOmGuide(slug);
+        return svar({ ok: handling === "guide-om" ? "Turen börjar om från början." : "" });
+      }
+      case "knuffa": {
+        if (!chef) return svar({ fel: "Bara den som leder ett team knuffar." }, 403);
+        const vem = (Array.isArray(b.vem) ? b.vem : [b.vem]).map(String).filter((v) => UUID.test(v)).slice(0, 100);
+        for (const v of vem) await knuffa(v);
+        return klart(vem.length === 1 ? "En knuff om systemguiderna är skickad." : `${vem.length} fick en knuff om att göra klart systemguiderna.`);
       }
       case "betyg": {
         const m = await modul(b.modul);
