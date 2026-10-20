@@ -5,6 +5,28 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-20 · Nav 2.0, Nyheter: beställarens svar (0130 KÖRD, `SKRIVLAGE.nyheter = true`)
+
+Beställaren svarade på Nyheters sex frågor.
+
+- **Får spara: ja.** 0130 körd (`apply-sql.mjs 0130_nyheter_utkastet`, efter en ny
+  torrkörning mot dagens databas), `news_ack.employee_id` i registerutdraget och
+  `SKRIVLAGE.nyheter = true` i samma commit. Schemalagda inlägg går ut när
+  dagtidsjobbet kör i produktionen, alltså först efter mergen.
+- **Grupperna: ja** (teamledare hör till Säljare, ekonomi till Ledningen).
+- **Ångra efter Publicera: behålls**, i tio minuter, som utkastet.
+- **Länk till rutin och knapp till sida: som utkastet**, alltså inget fält i
+  skrivrutan.
+- **Ledningen ser alla inlägg.** Säljchef, VD och administratör (samma krets som
+  `news_post_read` och `farSkriva`) ser alla inlägg i listan och i paletten, med
+  läskvittot (`nhSer` i ndpatch.py). Ett inlägg till andra räknas inte som oläst
+  och ska inte kvitteras.
+- **Nytt i navet från före Nav 2.0 blir läst för alla** vid mergen:
+  `delar/nyheter/svar/nav-lasta-steg7.mjs` (i nav2-utkast-mappen) skriver
+  klockans "läst" för main:s poster och alla anställda som inte slutat. Torrkört:
+  47 poster, 12 anställda, 525 nya rader. Körs i steg 7, inte förut, eftersom
+  nuvarande Nav använder samma rad.
+
 ## 2026-10-20 · Nav 2.0, Utbildning: skriftliga prov, "Ny kurs" och de gamla adresserna (Gamla Navs sista funktioner, F; ingen migration)
 
 Beställarens svar 8 (2026-10-20): skriftliga prov ska finnas i Nav 2.0. E2:

@@ -31,7 +31,7 @@ export const SKRIVLAGE = {
   profil: false,
   // Beställarens svar 2026-10-20 ("det som är bäst"), efter att 0135 körts: fördela, efter samtalet, möten med inbjudan, Ångra.
   leads: true,
-  nyheter: false,
+  nyheter: true,
   // Gamla Nav P: lösenordsbytet och Kod vid inloggning i Inställningar → Säkerhet.
   sakerhet: false,
 } as const;

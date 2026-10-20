@@ -14,9 +14,11 @@ import { heltNamn } from "./forma";
  * ===========================================================================
  * RLS AVGÖR VAD SOM SYNS. Inläggen läses med den inloggades token
  * (`news_post_read`: publicerat och i målgruppen, eget, eller ledningen), som
- * repots sida. Utkastets lista visar sedan det som riktar sig till en själv
- * eller som man skrivit själv (`nhForMig`), så ledningen ser inte andras
- * inlägg till andra grupper här, fast RLS släpper fram dem.
+ * repots sida. Ledningen ser alla inlägg, också i Nav 2.0 (beställaren
+ * 2026-10-20): utkastets lista visar det som riktar sig till en själv eller
+ * som man skrivit (`nhForMig`), och för den som får skriva alla (`nhSer` i
+ * ndpatch.py). Ett inlägg till andra är inget att läsa eller kvittera, så det
+ * räknas inte som oläst.
  *
  * LÄST = notification_dismissed med klockans id för inlägget (`nyhet-<id>`),
  * samma rad som klockans avfärdning skriver. Kvittensen och schemaläggningen

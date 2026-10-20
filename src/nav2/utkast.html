@@ -20092,6 +20092,7 @@ const nhT = () => kIdag();
 const nhJag = () => ME[S.role === 'chef' ? 'chef' : 'saljare'].namn;
 const nhSynlig = p => !p.utkast && (p.at.slice(0, 10) < nhT() || (p.at.slice(0, 10) === nhT() && tmin(p.at.slice(11, 16)) <= now()));
 const nhForMig = p => nhSynlig(p) && (p.av === nhJag() || nhMottagare(p.grupp).includes(nhJag()));
+const nhSer = p => nhForMig(p) || !!(ND && ND.nyheter && ND.nyheter.farSkriva && nhSynlig(p));
 function nhSt(){
   if (S.nhInit) return; S.nhInit = true;
   S.nh = {poster:NHSEED.map(p => ({fast:false, kv:null, kvitt:[], last:[], pamint:[], ...JSON.parse(JSON.stringify(p))})), navLast:new Set(['2026-10-08|Godkända order läggs in i Inkio av sig själva', '2026-10-07|Ladda ner ditt eget anställningsavtal']), notiser:[]};
@@ -20099,9 +20100,9 @@ function nhSt(){
   Object.assign(S, {nhOpen:null, nhFilt:'alla', nhQ:'', nhSkriv:null});
 }
 const nhP = id => S.nh.poster.find(p => p.id === id);
-const nhLast = p => p.last.includes(nhJag()) || p.av === nhJag();
+const nhLast = p => p.last.includes(nhJag()) || p.av === nhJag() || (!!ND && !nhForMig(p));
 const nhKvitt = p => p.kvitt.includes(nhJag());
-const nhKvKravs = p => p.kv && p.av !== nhJag() && !nhKvitt(p) && !p.rut;
+const nhKvKravs = p => p.kv && p.av !== nhJag() && !nhKvitt(p) && !p.rut && (!ND || nhForMig(p));
 const nhNavKey = n => n[0] + '|' + n[1];
 const nhNavOlasta = () => NHNAV.filter(n => n[0] <= nhT() && !S.nh.navLast.has(nhNavKey(n)));
 function nhOlasta(){ nhSt(); return S.nh.poster.filter(p => nhForMig(p) && !nhLast(p)).length + nhNavOlasta().length; }
@@ -20109,7 +20110,7 @@ const nhAttKvittera = () => S.nh.poster.filter(p => nhForMig(p) && nhKvKravs(p))
 /* Ordningen: kvittens som krävs, fästa, olästa, resten nyast först. */
 function nhLista(){
   const q = oQnorm((S.nhQ || '').trim());
-  return S.nh.poster.filter(nhForMig).filter(p => S.nhFilt === 'alla' || (S.nhFilt === 'olasta' ? !nhLast(p) : S.nhFilt === 'kvitt' ? nhKvKravs(p) : S.nhFilt === 'mina' ? p.av === nhJag() : true))
+  return S.nh.poster.filter(nhSer).filter(p => S.nhFilt === 'alla' || (S.nhFilt === 'olasta' ? !nhLast(p) : S.nhFilt === 'kvitt' ? nhKvKravs(p) : S.nhFilt === 'mina' ? p.av === nhJag() : true))
     .filter(p => !q || oQnorm(p.rubrik + ' ' + p.text + ' ' + p.av).includes(q))
     .sort((a, b) => (nhKvKravs(b) - nhKvKravs(a)) || (b.fast - a.fast) || (nhLast(a) - nhLast(b)) || b.at.localeCompare(a.at));
 }
@@ -30859,7 +30860,7 @@ function ndPalNyheter(nq){
   if (!ndKopplad('nyheter') || !ND.nyheter) return [];
   nhSt();
   const ord = nq.split(/\s+/).filter(Boolean);
-  return S.nh.poster.filter(nhForMig).filter(p => { const t = norm(p.rubrik + ' ' + p.text); return ord.every(o => t.includes(o)); })
+  return S.nh.poster.filter(nhSer).filter(p => { const t = norm(p.rubrik + ' ' + p.text); return ord.every(o => t.includes(o)); })
     .sort((a, b) => b.at.localeCompare(a.at)).slice(0, 3)
     .map(p => ({i:'nyh', l:p.rubrik, p:'Nyhet', run:() => nhGa(p.id)}));
 }

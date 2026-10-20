@@ -275,6 +275,8 @@ export const KALLOR: Kalla[] = [
   { tabell: "time_day_ack", kolumn: "employee_id", andamal: "Dagar du kvitterat i Tid" },
   { tabell: "time_week_check", kolumn: "employee_id", andamal: "Veckor du kollat i Tid" },
   { tabell: "work_schedule_seen", kolumn: "employee_id", andamal: "När du sett ditt schema" },
+  // Steg 6 (0130): kvittenserna i Nyheter.
+  { tabell: "news_ack", kolumn: "employee_id", andamal: "Nyhetsinlägg du kvitterat" },
 ];
 
 /**

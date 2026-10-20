@@ -112,9 +112,9 @@ behörigheter som här: du ser bara det du får se.
   de senaste på startsidan. Ett inlägg som ska kvitteras har en sista dag,
   syns i klockan och i dina uppgifter när dagen närmar sig, och kvitteras med
   ett tryck. Den som skrev det ser vilka som läst och kvitterat, och kan
-  påminna resten. Säljchef, VD och administratör skriver i en ruta som visar
-  inlägget som det blir, väljer vem det gäller, fäster det överst och kan
-  schemalägga det till nästa morgon eller måndag.
+  påminna resten. Säljchef, VD och administratör ser alla inlägg och skriver
+  i en ruta som visar inlägget som det blir, väljer vem det gäller, fäster
+  det överst och kan schemalägga det till nästa morgon eller måndag.
 - **Sök, gör eller fråga Nav** (⌘K): sökningen hittar dina uppgifter,
   rutiner (även i texten och bilagorna), kurser, kommande möten, order,
   ärenden och nyheter, och de kollegor du får se i personalregistret, och för
