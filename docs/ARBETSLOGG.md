@@ -5,6 +5,23 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-20 · Nav 2.0, Leads: beställarens svar (0135 KÖRD, Leads får spara)
+
+- **Superadmin ser och fördelar leads** (svar 1): `admin` i `lead_read` och
+  `lead_event_read` (0135) och i `farFordela`, både i `src/lib/nav2/leads.ts`
+  och i repots `src/app/(app)/leads/actions.ts`, som rutten anropar.
+- **Ett bokat möte är ett riktigt möte** (svar 3 och 4): rutten bokar det med
+  Kalenderns `skapaMote` (säljaren organisatör, 45 minuter), sparar
+  `lead.meeting_event_id` (0135) och lägger kunden som gäst med
+  `lead_bjud_in` (0135). Inbjudan är Kalenderns: utkorgen skickar ett vanligt
+  mejl med kalenderfil via Resend från säljaren, och previewen mejlar aldrig
+  en riktig kund. Ångra ställer in mötet (`stallIn`). I Nav 2.0 får den
+  riktiga händelsen "Öppna leadet".
+- **0135 KÖRD** (svar 8, "det som är bäst"), och `SKRIVLAGE.leads = true`.
+  Registerutdraget har `lead_event.actor_id` och `.till` som undantag.
+- Reglerna väntar (svar 2), övriga fält skippas (5), påminnelsen är bara en
+  notis (7). Provraden: se HANDOFF "Del: Leads" (svar 6).
+
 ## 2026-10-20 · Nav 2.0, Adoption: beställarens svar
 
 - **Bara superadmin** (VD och administratör, nivån superadmin i Nav 2.0) får

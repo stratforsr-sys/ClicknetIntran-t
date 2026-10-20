@@ -15,9 +15,10 @@ import { forslag, median, svarstid, trettioDagar } from "./leadsforma";
  * Nav 2.0: Leads i utkastets former (moduler/ld.js).
  *
  * ===========================================================================
- * RLS AVGÖR, som på /leads: säljchef, VD och teamledare ser alla leads och
- * fördelar dem, säljaren ser de leads hen fått. En chef utanför den kretsen
- * (bara `admin`) ser vyn som säljaren gör, som i Order.
+ * RLS AVGÖR, som på /leads: säljchef, VD, teamledare och superadmin ser alla
+ * leads och fördelar dem (superadmin sedan 0135, beställaren 2026-10-20),
+ * säljaren ser de leads hen fått. En chef utanför den kretsen ser vyn som
+ * säljaren gör, som i Order.
  *
  * Det nya i utkastet (försöken, nästa samtal, mötet, skälet, ordern och
  * Ångra) är 0135. Läsningen tål att 0135 inte är körd: då står leadsen som
@@ -62,6 +63,8 @@ export type NdLead = {
   skal: string | null;
   order: number | null;
   orderId: string | null;
+  /** Mötet i Kalendern (0135), när det bokats i Nav 2.0. */
+  moteId: string | null;
   /** När leadet blev kund, för chefens "Blev kund, 30 dagar". */
   kundD: string | null;
   not: string;
@@ -69,7 +72,7 @@ export type NdLead = {
 };
 
 export type NdLeads = {
-  /** Fördelar (säljchef, VD, teamledare). Annars säljarens vy. */
+  /** Fördelar (säljchef, VD, teamledare, superadmin). Annars säljarens vy. */
   chef: boolean;
   skriv: boolean;
   utan0135: boolean;
@@ -87,7 +90,7 @@ export type NdLeads = {
 };
 
 export function farFordela(user: CurrentUser): boolean {
-  return hasRole(user, "sales_manager", "ceo", "team_lead");
+  return hasRole(user, "sales_manager", "ceo", "team_lead", "admin");
 }
 
 const saknas = (e: { message?: string } | null | undefined) => !!e && /does not exist|schema cache|could not find/i.test(e.message ?? "");
@@ -125,6 +128,7 @@ type NyRad = {
   meeting_place: string | null;
   lost_reason: string | null;
   order_id: string | null;
+  meeting_event_id: string | null;
 };
 type StegRad = {
   id: string;
@@ -182,7 +186,7 @@ export async function byggLeads(supabase: SupabaseClient, user: CurrentUser): Pr
 
   const [basSvar, nySvar, stegSvar, autoSvar, saljare] = await Promise.all([
     supabase.from("lead").select(BAS).order("created_at", { ascending: false }).limit(500),
-    supabase.from("lead").select("id, next_call_at, meeting_at, meeting_place, lost_reason, order_id").order("created_at", { ascending: false }).limit(500),
+    supabase.from("lead").select("id, next_call_at, meeting_at, meeting_place, lost_reason, order_id, meeting_event_id").order("created_at", { ascending: false }).limit(500),
     supabase.from("lead_event").select("id, lead_id, at, actor_id, kind, outcome, note, till").order("at").limit(5000),
     supabase.from("nav_setting").select("value").eq("key", "leads.auto").maybeSingle(),
     chef ? hamtaSaljare(supabase) : Promise.resolve([] as { id: string; namn: string }[]),
@@ -248,6 +252,7 @@ export async function byggLeads(supabase: SupabaseClient, user: CurrentUser): Pr
       skal: n?.lost_reason ?? null,
       order: n?.order_id ? (ordernr.get(n.order_id) ?? null) : null,
       orderId: n?.order_id ?? null,
+      moteId: n?.meeting_event_id ?? null,
       kundD: k ? lokal(k).slice(0, 10) : null,
       not: l.note ?? "",
       steg: steg

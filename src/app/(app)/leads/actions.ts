@@ -9,12 +9,13 @@ import { sattKvitto } from "@/lib/toast-server";
 import { arLeadstatus, leadTitel, maskeraPersonnummer, STATUS_ETIKETT } from "@/lib/leads";
 
 /**
- * Den som fördelar leads: säljchef, VD och teamledare. Samma krets som
- * `lead_read` släpper in till ALLA leads i 0076 — den som ser ett otilldelat
- * lead ska också kunna ge det till någon.
+ * Den som fördelar leads: säljchef, VD, teamledare och superadmin (`admin`,
+ * beställaren 2026-10-20). Samma krets som `lead_read` släpper in till ALLA
+ * leads (0076, superadmin sedan 0135) — den som ser ett otilldelat lead ska
+ * också kunna ge det till någon.
  */
 function farFordela(user: Awaited<ReturnType<typeof getCurrentUser>>): boolean {
-  return hasRole(user, "sales_manager", "ceo", "team_lead");
+  return hasRole(user, "sales_manager", "ceo", "team_lead", "admin");
 }
 
 type Leadrad = {

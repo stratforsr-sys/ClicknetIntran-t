@@ -15,6 +15,9 @@
 --   lead.meeting_place
 --   lead.lost_reason     skälet när leadet blev Ej aktuell (eller "Inte nu")
 --   lead.order_id        ordern leadet blev, lagd i Order
+--   lead.meeting_event_id mötet i Kalendern (beställaren 2026-10-20: ett bokat
+--                        möte ska bli ett riktigt möte, och kunden får ett
+--                        vanligt mejl via Resend)
 --   lead_event           varje steg: tilldelad, försök med utfall, spam,
 --                        öppnad igen, kund, påmind. Historiken, svarstiden och
 --                        Ångra läses här.
@@ -23,8 +26,10 @@
 -- VEM SER VAD
 -- -----------------------------------------------------------------------------
 --
--- Samma som leadet: fördelarna (säljchef, VD, teamledare) ser allt, säljaren
--- stegen på de leads hen har. Skrivning går via service role i
+-- Samma som leadet: fördelarna (säljchef, VD, teamledare och superadmin) ser
+-- allt, säljaren stegen på de leads hen har. Superadmin (`admin`) läggs till i
+-- 0076:s `lead_read` här (beställaren 2026-10-20: superadmin ser och fördelar
+-- leads). Skrivning går via service role i
 -- /nav2/leads, som resten av navet. Ingen skrivpolicy — självkontrollen sist
 -- faller om någon lägger till en.
 --
@@ -49,6 +54,7 @@ alter table lead add column if not exists meeting_at    timestamptz;
 alter table lead add column if not exists meeting_place text;
 alter table lead add column if not exists lost_reason   text;
 alter table lead add column if not exists order_id      uuid references sales_order(id) on delete set null;
+alter table lead add column if not exists meeting_event_id uuid references calendar_event(id) on delete set null;
 
 alter table lead drop constraint if exists lead_motesplats;
 alter table lead add constraint lead_motesplats
@@ -111,13 +117,54 @@ comment on column lead_event.fore is
 alter table lead_event enable row level security;
 revoke all on table lead_event from anon;
 
+drop policy if exists lead_read on lead;
+create policy lead_read on lead for select
+  to authenticated
+  using (
+    public.has_any_role(array['sales_manager', 'ceo', 'team_lead', 'admin'])
+    or assigned_to = public.current_employee_id()
+  );
+
 drop policy if exists lead_event_read on lead_event;
 create policy lead_event_read on lead_event for select
   to authenticated
   using (
-    public.has_any_role(array['sales_manager', 'ceo', 'team_lead'])
+    public.has_any_role(array['sales_manager', 'ceo', 'team_lead', 'admin'])
     or exists (select 1 from lead l where l.id = lead_event.lead_id and l.assigned_to = public.current_employee_id())
   );
+
+-- -----------------------------------------------------------------------------
+-- Kunden som gäst på mötet
+-- -----------------------------------------------------------------------------
+--
+-- Mötet skapas med Kalenderns `lk_skapa_mote`. En extern deltagare som läggs
+-- till i en SENARE transaktion får ingen inbjudan av `calendar_attendee_ics`
+-- (0072 skickar bara för en händelse som skapas nu), så den köas här, med
+-- samma `lk_ics_ko`. Utkorgen skickar den som ett vanligt mejl med
+-- kalenderfil via Resend, från organisatören, och aldrig från previewen till
+-- en riktig kund (`kundmejlTillatet`).
+
+create or replace function public.lead_bjud_in(p_event uuid, p_epost text)
+returns bigint
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_epost text := lower(btrim(coalesce(p_epost, '')));
+begin
+  if v_epost !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' or length(v_epost) > 254 then
+    raise exception 'lead_bjud_in: ogiltig e-postadress';
+  end if;
+  if not exists (select 1 from calendar_event where id = p_event and cancelled_at is null) then
+    raise exception 'lead_bjud_in: mötet finns inte';
+  end if;
+  insert into calendar_attendee (event_id, external_email) values (p_event, v_epost) on conflict do nothing;
+  return public.lk_ics_ko(p_event, v_epost, 'REQUEST');
+end;
+$$;
+revoke all on function public.lead_bjud_in(uuid, text) from public, anon, authenticated;
+grant execute on function public.lead_bjud_in(uuid, text) to service_role;
 
 -- -----------------------------------------------------------------------------
 -- Självkontroll

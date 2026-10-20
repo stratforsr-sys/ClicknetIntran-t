@@ -29,7 +29,8 @@ export const SKRIVLAGE = {
   // Beställarens ja 2026-10-20: frågor utan svar bokförs utan namn.
   paletten: true,
   profil: false,
-  leads: false,
+  // Beställarens svar 2026-10-20 ("det som är bäst"), efter att 0135 körts: fördela, efter samtalet, möten med inbjudan, Ångra.
+  leads: true,
   nyheter: false,
 } as const;
 

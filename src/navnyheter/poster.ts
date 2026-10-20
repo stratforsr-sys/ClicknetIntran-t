@@ -124,7 +124,8 @@ behörigheter som här: du ser bara det du får se.
   att göra, fördelar jämnt eller låter Nav fördela automatiskt, och påminner
   den som inte ringt. Säljaren ser sina egna, ringer och säger efter samtalet
   hur det gick med ett klick: nästa försök läggs in av sig själv, ett bokat
-  möte hamnar i kalendern, och den som blev kund går direkt till en ny order.
+  möte hamnar i kalendern och kunden får en inbjudan med mejl, och den som
+  blev kund går direkt till en ny order.
   Det mesta går att ångra en stund efteråt.
 - **Adoption**, för superadmin: hur många som använt Nav
   i dag och de senaste sju dagarna, hur stor del av de anställda det är och

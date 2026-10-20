@@ -30984,7 +30984,8 @@ if (ndNh()){ ndNhFyll(ND.nyheter); NDKOPPLAD.add('nyheter'); }
    vyn som säljaren, som i Order.
 
    Försöken, nästa samtal, mötet, skälet, ordern och historiken är 0135
-   (`lead_event`). Det som sparar går till /nav2/leads; i läsläge svarar
+   (`lead_event`). Ett bokat möte blir ett riktigt möte i Kalendern, och
+   kunden får Kalenderns inbjudan med mejl via Resend (beställaren 2026-10-20). Det som sparar går till /nav2/leads; i läsläge svarar
    rutten 423 och ingenting ändras. Att ge ett lead går genom repots
    tilldelaLead (notisen och mejlet). Ångra gäller i tio minuter.
 
@@ -31039,8 +31040,9 @@ ldSt = function(){
   Object.keys(LDSTAT).forEach(k => delete LDSTAT[k]);
   Object.entries(d.stat).forEach(([n, v]) => { LDSTAT[n] = v.slice(); });
   S.ld = {leads:d.leads.map(ndLdLead), notiser:[], auto:d.auto};
-  // Mötet ligger i kalendern, som i utkastet.
-  S.ld.leads.forEach(l => { if (l.mote){ const e = {id:'ldk-' + l.id, d:l.mote.d, s:tmin(l.mote.s), e:tmin(l.mote.s) + 45, allday:false, t:`Möte · ${l.bolag || l.namn}`, kat:'mote', org:l.vem, delt:[], plats:l.mote.plats, video:l.mote.plats === 'Video', visa:'upptagen', rep:false, priv:false, agenda:l.msg, klar:false, pamin:'15 min före', ld:l.id}; if (!KEV.some(x => x.id === e.id)) KEV.push(e); } });
+  // Mötet ligger i kalendern. Bokat i Nav 2.0 är det ett riktigt möte (0135), som får "Öppna leadet";
+  // annars ritas det som i utkastet.
+  S.ld.leads.forEach(l => { const k = l.moteId && KEV.find(x => String(x.id) === l.moteId || String(x.ref) === l.moteId); if (k){ k.ld = l.id; return; } if (l.mote && !l.moteId){ const e = {id:'ldk-' + l.id, d:l.mote.d, s:tmin(l.mote.s), e:tmin(l.mote.s) + 45, allday:false, t:`Möte · ${l.bolag || l.namn}`, kat:'mote', org:l.vem, delt:[], plats:l.mote.plats, video:l.mote.plats === 'Video', visa:'upptagen', rep:false, priv:false, agenda:l.msg, klar:false, pamin:'15 min före', ld:l.id}; if (!KEV.some(x => x.id === e.id)) KEV.push(e); } });
   Object.assign(S, {ldOpen:null, ldForm:null, ldFlik:null, ldQ:'', ldFilt:'oppna', ldVal:new Set()});
   S.ldPamind = Object.fromEntries(d.pamind.map(n => [n, true]));
 };

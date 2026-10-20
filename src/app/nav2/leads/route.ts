@@ -7,6 +7,7 @@ import { notifiera } from "@/lib/notishandelse-server";
 import { skrivHandelse } from "@/lib/handelselogg-server";
 import { leadTitel, maskeraPersonnummer } from "@/lib/leads";
 import { tilldelaLead, uppdateraLead } from "@/app/(app)/leads/actions";
+import { skapaMote, stallIn } from "@/app/(app)/kalender/moten/actions";
 import { farFordela } from "@/lib/nav2/leads";
 import { ANGRA_MIN, FORE_KOLUMNER, PLATSER, SKAL, type Fore } from "@/lib/nav2/leadsforma";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
@@ -29,8 +30,13 @@ export const dynamic = "force-dynamic";
  * Ordern läggs i Order (`/nav2/order`, `skapa`). Den här rutten skriver bara
  * att leadet blev den ordern.
  *
- * SMS och bekräftelsen till kunden finns inte: navet har ingen SMS-tjänst och
- * inget mejl till kunden är beställt. Svaret säger det.
+ * Mötet (beställaren 2026-10-20): ett bokat möte blir ett riktigt möte i
+ * Kalendern (`skapaMote`, med säljaren som organisatör), och kunden läggs
+ * till som gäst (`lead_bjud_in`, 0135). Inbjudan är Kalenderns: ett vanligt
+ * mejl med kalenderfil via Resend, från säljaren. Ångra ställer in mötet
+ * (`stallIn`), och kunden får då en avbokning om inbjudan hunnit gå.
+ *
+ * SMS finns inte: navet har ingen SMS-tjänst. Svaret säger det.
  * ===========================================================================
  *
  * LÄSLÄGE: står `SKRIVLAGE.leads` på false svarar rutten 423 innan något skrivs.
@@ -56,13 +62,15 @@ type Lead = {
   meeting_place: string | null;
   lost_reason: string | null;
   order_id: string | null;
+  meeting_event_id: string | null;
   note: string | null;
+  message: string | null;
   company: string | null;
   name: string | null;
   email: string | null;
   phone: string | null;
 };
-const KOLUMNER = "id, status, status_changed_at, assigned_to, assigned_at, next_call_at, meeting_at, meeting_place, lost_reason, order_id, note, company, name, email, phone";
+const KOLUMNER = "id, status, status_changed_at, assigned_to, assigned_at, next_call_at, meeting_at, meeting_place, lost_reason, order_id, meeting_event_id, note, message, company, name, email, phone";
 
 function form(falt: Record<string, string>): FormData {
   const f = new FormData();
@@ -273,8 +281,19 @@ export async function POST(request: Request) {
           if ([0, 6].includes(new Date(dag + "T12:00:00Z").getUTCDay())) return svar({ fel: "Det är en helgdag. Välj en vardag." }, 400);
           if (!(PLATSER as readonly string[]).includes(plats)) return svar({ fel: "Välj var mötet hålls." }, 400);
           const t = svenskTidpunkt(dag, kl);
-          falt = { status: "meeting", next_call_at: null, meeting_at: t.toISOString(), meeting_place: plats };
-          ok = `Mötet ligger i kalendern ${VECKODAG[new Date(dag + "T12:00:00Z").getUTCDay()]} ${+dag.slice(8)}/${+dag.slice(5, 7)} kl. ${kl}. Ingen bekräftelse går till kunden från Nav.`;
+          // Mötet i Kalendern, med säljaren som organisatör. 45 minuter, som utkastet.
+          const m = await skapaMote({ rubrik: `Möte · ${leadTitel(l)}`, dag, start: Number(kl.slice(0, 2)) * 60 + Number(kl.slice(3, 5)), minuter: 45, deltagare: [], plats, agenda: l.message ?? null });
+          if (m.fel || !m.eventId) return svar({ fel: m.fel ?? "Mötet kunde inte bokas i kalendern." }, 400);
+          falt = { status: "meeting", next_call_at: null, meeting_at: t.toISOString(), meeting_place: plats, meeting_event_id: m.eventId };
+          const nar = `${VECKODAG[new Date(dag + "T12:00:00Z").getUTCDay()]} ${+dag.slice(8)}/${+dag.slice(5, 7)} kl. ${kl}`;
+          // Kunden som gäst: Kalenderns inbjudan, ett vanligt mejl med kalenderfil via Resend.
+          let bjuden = false;
+          if (l.email) {
+            const { error } = await db.rpc("lead_bjud_in", { p_event: m.eventId, p_epost: l.email });
+            bjuden = !error;
+          }
+          const kontakt = forFor(l.name ?? "") || "Kunden";
+          ok = `Mötet ligger i kalendern ${nar}. ${l.email ? (bjuden ? `${kontakt} får en inbjudan med mejl.` : `Inbjudan till ${kontakt} kunde inte skickas. Bjud in från kalendern.`) : `${kontakt} har ingen e-postadress, så ingen inbjudan gick ut.`}`;
         } else if (utfall === "nej") {
           const skal = String(b.skal ?? "");
           if (!(SKAL as readonly string[]).includes(skal)) return svar({ fel: "Välj ett skäl." }, 400);
@@ -327,6 +346,13 @@ export async function POST(request: Request) {
           if (s.at < nyss) return svar({ fel: `Det går bara att ångra de första ${ANGRA_MIN} minuterna.` }, 400);
           const { data: senare } = await db.from("lead_event").select("id").eq("lead_id", s.lead_id).gt("at", s.at).neq("kind", "paminn").limit(1);
           if ((senare ?? []).length) return svar({ fel: "Något har hänt med leadet efter det. Ändra det i stället." }, 400);
+          // Ett möte som steget bokade ställs in i Kalendern (kunden får en avbokning om inbjudan gått).
+          const { data: nu } = await db.from("lead").select("meeting_event_id").eq("id", s.lead_id).maybeSingle();
+          const mote = (nu as { meeting_event_id: string | null } | null)?.meeting_event_id ?? null;
+          if (mote && mote !== (s.fore.meeting_event_id ?? null)) {
+            const r = await stallIn(mote);
+            if (r.fel) return svar({ fel: `Mötet kunde inte ställas in: ${r.fel}` }, 400);
+          }
           const { error } = await db.from("lead").update(s.fore).eq("id", s.lead_id);
           if (error) throw new Error(`Leadet kunde inte läggas tillbaka: ${error.message}`);
           await db.from("lead_event").delete().eq("id", s.id);

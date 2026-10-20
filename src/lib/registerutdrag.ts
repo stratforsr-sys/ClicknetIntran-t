@@ -509,4 +509,7 @@ export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
   { tabell: "team_repetition", kolumn: "added_by", skal: "Vem som lade till lagets repetitionsfråga" },
   { tabell: "tid_view_log", kolumn: "viewer_id", skal: "Vem som tittade; raden följer med den det gällde" },
   { tabell: "vacation_wish_round", kolumn: "created_by", skal: "Vem som startade önskemålsrundan" },
+  // Steg 6 (0135): Leads, vem som gjorde något på ett lead.
+  { tabell: "lead_event", kolumn: "actor_id", skal: "Vem som tog ett steg på ett lead (gav det, ringde, påminde) — uppgifterna handlar om kunden" },
+  { tabell: "lead_event", kolumn: "till", skal: "Vem ett lead gavs till eller vem som påmindes — uppgifterna handlar om kunden" },
 ];

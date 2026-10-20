@@ -24,6 +24,7 @@ export const FORE_KOLUMNER = [
   "meeting_place",
   "lost_reason",
   "order_id",
+  "meeting_event_id",
 ] as const;
 export type Fore = Partial<Record<(typeof FORE_KOLUMNER)[number], string | null>>;
 
