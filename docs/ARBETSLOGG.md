@@ -5,6 +5,16 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-20 · Nav 2.0, Kalendern får spara (`SKRIVLAGE.kalender = true`)
+
+- **Beställarens ja** på frågan "Ska Kalendern få spara nu? Det gäller hela
+  Kalendern i Nav 2.0: att boka, flytta och ställa in möten." Rutten
+  `/nav2/kalender` (POST) skriver nu i stället för att svara 423, och vyn får
+  `skriv: true`. Migrationerna 0088–0091 är körda sedan 2026-10-15.
+- Gäster utanför Clicknet i mötesformuläret (`08d8b47`) gäller därmed.
+- Kvar: "Boka" i Ärenden och på kundkortet säger fortfarande "Samtalet bokas
+  när Kalendern får spara" (`NDARBARA`, `NDORDBARA`). De är inte kopplade.
+
 ## 2026-10-20 · Nav 2.0, gamla Navs sista funktioner A: Tid (ingen migration)
 
 - **Notisen om ett ändrat schema öppnas i Nav 2.0.** `sparaArbetsschema` (också

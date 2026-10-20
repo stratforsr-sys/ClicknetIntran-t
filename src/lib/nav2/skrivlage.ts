@@ -13,7 +13,8 @@ export const SKRIVLAGE = {
   fel: false,
   order: false,
   provision: false,
-  kalender: false,
+  // Beställarens ja 2026-10-20 ("Ska Kalendern få spara nu?" – "Ja"). 0088–0091 körda 2026-10-15.
+  kalender: true,
   uppgifter: false,
   franvaro: false,
   tid: false,
