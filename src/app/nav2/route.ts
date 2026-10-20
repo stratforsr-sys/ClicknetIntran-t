@@ -3,7 +3,7 @@ import path from "node:path";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { byggNav2Data } from "@/lib/nav2/data";
+import { byggNav2Data, type Nav2Matt } from "@/lib/nav2/data";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +55,10 @@ export async function GET(request: Request) {
   if (!user) return NextResponse.redirect(new URL("/logga-in?nasta=%2Fnav2", request.url));
   if (!user.employee) return NextResponse.redirect(new URL("/", request.url));
 
-  const [html, data, h] = await Promise.all([lasMall(), byggNav2Data(user), headers()]);
+  const matt: Nav2Matt = {};
+  const t0 = performance.now();
+  const [html, data, h] = await Promise.all([lasMall(), byggNav2Data(user, matt), headers()]);
+  const tData = Math.round(performance.now() - t0);
   if (!data) return NextResponse.redirect(new URL("/", request.url));
 
   const nonce = h.get("x-nonce") ?? "";
@@ -75,6 +78,8 @@ export async function GET(request: Request) {
       "Content-Type": "text/html; charset=utf-8",
       // Persondata far aldrig cachas av en mellanliggande proxy.
       "Cache-Control": "private, no-store, max-age=0",
+      // Var tiden gick, per del (X3). Syns bara for den inloggade, i webblasarens natverksflik.
+      "Server-Timing": [`data;dur=${tData}`, ...Object.entries(matt).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k};dur=${v}`)].join(", "),
     },
   });
 }

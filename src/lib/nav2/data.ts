@@ -92,39 +92,50 @@ const PERSONKOLUMNER =
   "id, first_name, last_name, email, status, employment_type, start_date, end_date, employee_number, last_sign_in_at, birth_year, team_id, manager_id," +
   " employee_role!employee_role_employee_id_fkey(role)";
 
-export async function byggNav2Data(user: CurrentUser): Promise<Nav2Data | null> {
+// Tiden per del, i millisekunder, for rutens Server-Timing. Delarna byggs samtidigt,
+// sa sidan ar lika langsam som den langsammaste.
+export type Nav2Matt = Record<string, number>;
+function matt<T>(m: Nav2Matt | undefined, namn: string, p: PromiseLike<T>): Promise<Awaited<T>> {
+  const t0 = performance.now();
+  return Promise.resolve(p).then((v) => {
+    if (m) m[namn] = Math.round(performance.now() - t0);
+    return v as Awaited<T>;
+  });
+}
+
+export async function byggNav2Data(user: CurrentUser, m?: Nav2Matt): Promise<Nav2Data | null> {
   if (!user.employee) return null;
   const supabase = await supabaseServer();
 
   const [{ data: personRader }, { data: teamRader }, { data: satsRader, error: satsFel }, { data: lonRader, error: lonFel }, notiser, tid, franvaro, uppgifter, order, provision, kalender, arenden, fel, rutiner, utbildning, hem, rekrytering, anstallda, coachning, avtal] =
     await Promise.all([
-      supabase.from("employee").select(PERSONKOLUMNER).order("first_name"),
-      supabase.from("team").select("id, name"),
-      supabase
+      matt(m, "personer", supabase.from("employee").select(PERSONKOLUMNER).order("first_name")),
+      matt(m, "team", supabase.from("team").select("id, name")),
+      matt(m, "satser", supabase
         .from("cost_rate")
         .select("id, kind, applies_to, unit, value, valid_from, valid_to, owner_id, review_due, note, created_at, created_by")
         .order("kind")
-        .order("valid_from", { ascending: false }),
-      supabase
+        .order("valid_from", { ascending: false })),
+      matt(m, "loner", supabase
         .from("salary_basis")
         .select("id, employee_id, monthly_salary, valid_from, entered_at, entered_by")
-        .order("valid_from", { ascending: false }),
-      hamtaNotiser(user),
-      byggTid(supabase, user),
-      byggFranvaro(supabase, user),
-      byggUppgifter(supabase, user),
-      byggOrder(supabase, user),
-      byggProvision(supabase, user),
-      byggKalender(user),
-      byggArenden(supabase, user),
-      byggFel(supabase, user),
-      byggRutiner(supabase, user),
-      byggUtbildning(supabase, user),
-      byggHem(supabase, user),
-      byggRekrytering(supabase, user),
-      byggAnstallda(supabase, user),
-      byggCoachning(supabase, user),
-      byggAvtal(supabase, user),
+        .order("valid_from", { ascending: false })),
+      matt(m, "notiser", hamtaNotiser(user)),
+      matt(m, "tid", byggTid(supabase, user)),
+      matt(m, "franvaro", byggFranvaro(supabase, user)),
+      matt(m, "uppgifter", byggUppgifter(supabase, user)),
+      matt(m, "order", byggOrder(supabase, user)),
+      matt(m, "provision", byggProvision(supabase, user)),
+      matt(m, "kalender", byggKalender(user)),
+      matt(m, "arenden", byggArenden(supabase, user)),
+      matt(m, "fel", byggFel(supabase, user)),
+      matt(m, "rutiner", byggRutiner(supabase, user)),
+      matt(m, "utbildning", byggUtbildning(supabase, user)),
+      matt(m, "hem", byggHem(supabase, user)),
+      matt(m, "rekrytering", byggRekrytering(supabase, user)),
+      matt(m, "anstallda", byggAnstallda(supabase, user)),
+      matt(m, "coachning", byggCoachning(supabase, user)),
+      matt(m, "avtal", byggAvtal(supabase, user)),
     ]);
 
   const ra: RaPerson[] = ((personRader ?? []) as unknown as (Omit<RaPerson, "roller"> & {
