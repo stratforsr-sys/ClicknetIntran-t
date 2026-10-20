@@ -41,6 +41,18 @@ räckt: startsidan läser tio av de tjugo delarna, de långsammaste med.
   körs (tabeller och kolumner som inte finns än).
 - `NAV2_PG_URL` ligger i Vercels Preview-miljö för `nav2-utkast`.
   **Inför mergen:** lägg den i Production också (steg 7).
+- **Rättat framåt:** `instrumentation.ts` drar in `supabase/server.ts` även
+  för edge, där `pg` inte finns. `server.ts` frågar nu en krok utan
+  beroenden (`pgkrok.ts`), som `pgrest.ts` sätter.
+- **Mätt i previewen som Zen:** datan 0,85–1,0 s (förut 2,2–3,3 s),
+  processortid 0,3–0,45 s (förut 0,7–1,2 s), första byten 0,3–0,5 s. Kall
+  instans: 1,7–6,5 s första gången (anslutningarna och schemat).
+  Supavisor har 15 serveranslutningar; 15 i stället för 10 i poolen gav
+  ingenting.
+- **Sedan:** en tabell eller kolumn som inte finns (okörda migrationer)
+  svarar direkt med samma fel som REST-lagret (`PGRST205`, `42703`), utan
+  omvägen dit. Delarna känner igen det på "does not exist"/"schema cache".
+  Schemat läses om var femte minut, så att en körd migration syns.
 
 ## 2026-10-20 · Nav 2.0, beslutsrundan: beställarens svar inbyggda (steg 3 till produktion)
 

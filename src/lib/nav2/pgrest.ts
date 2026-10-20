@@ -103,6 +103,8 @@ type Fk = { namn: string; barn: string; far: string; barnKol: string[]; farKol: 
 type Fn = { retset: boolean; sammansatt: boolean; scalar: boolean; argtyper: Record<string, string> };
 type Schema = { fk: Fk[]; tabeller: Set<string>; fn: Map<string, Fn[]> };
 let schemat: Promise<Schema> | null = null;
+/** Schemat läses om efter fem minuter, så att en körd migration syns utan ny instans. */
+let schematLast = 0;
 
 async function lasSchema(c: pg.Pool): Promise<Schema> {
   const { rows: fk } = await c.query(`
@@ -553,6 +555,10 @@ const SKRIVER = new Set(["insert", "update", "upsert", "delete", "throwOnError",
 
 async function utfor(s: Session, vem: Vem, kalla: Kalla, steg: Steg[]): Promise<Svar> {
   if (s.stangd || steg.some(([m]) => SKRIVER.has(m))) return viaRest(s, vem, kalla, steg);
+  // En tabell som inte finns (en migration som inte körts än): samma svar som REST-lagret, utan omvägen dit.
+  if ("tabell" in kalla && !s.schema.tabeller.has(kalla.tabell)) {
+    return { data: null, error: { code: "PGRST205", message: `Could not find the table 'public.${kalla.tabell}' in the schema cache`, details: null, hint: null }, count: null, status: 404, statusText: "Not Found" };
+  }
   let fragan: { sql: string; p: unknown[]; tolka: (r: pg.QueryResult) => Svar | null };
   try {
     fragan = "tabell" in kalla ? tabellfraga(s.schema, kalla.tabell, steg) : rpcfraga(s.schema, kalla, steg);
@@ -565,6 +571,13 @@ async function utfor(s: Session, vem: Vem, kalla: Kalla, steg: Steg[]): Promise<
     // null = ett svar REST-lagret ger som fel (single utan exakt en rad): låt det ge sitt eget.
     return svar ?? viaRest(s, vem, kalla, steg);
   } catch (e) {
+    // En kolumn eller tabell som inte finns (en migration som inte körts än): Postgres
+    // har sista ordet, och REST-lagret hade gett samma fel. Delarna känner igen det på
+    // "does not exist" och läser utan den. Ingen omväg via REST.
+    const pe = e as { code?: string; message?: string; detail?: string; hint?: string };
+    if (pe.code === "42703" || pe.code === "42P01") {
+      return { data: null, error: { code: pe.code, message: pe.message ?? "", details: pe.detail ?? null, hint: pe.hint ?? null }, count: null, status: 400, statusText: "Bad Request" };
+    }
     if (process.env.NAV2_PG_LOGG && !(e instanceof EjStod)) console.error("nav2 pg: fel i Postgres, via REST", e instanceof Error ? e.message : e, fragan.sql);
     return viaRest(s, vem, kalla, steg);
   }
@@ -662,7 +675,13 @@ export async function medPg<T>(
   let schema: Schema;
   try {
     // Första gången i instansen läses schemat, och den första anslutningen öppnas med det.
-    if (!schemat) { schemat = lasSchema(p); schemat.catch(() => { schemat = null; }); }
+    if (!schemat || Date.now() - schematLast > 5 * 60_000) {
+      const nytt = lasSchema(p);
+      // Ett gammalt schema duger medan det nya läses; bara första gången väntar bygget.
+      if (!schemat) schemat = nytt;
+      schematLast = Date.now();
+      nytt.then((v) => { schemat = Promise.resolve(v); }, () => { schematLast = 0; if (schemat === nytt) schemat = null; });
+    }
     schema = await schemat;
   } catch (e) {
     stangAv(e);
