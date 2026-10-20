@@ -90,11 +90,12 @@ behörigheter som här: du ser bara det du får se.
   svar i tråden finns nu i navet.
 - **Sök, gör eller fråga Nav** (⌘K): sökningen hittar dina uppgifter,
   rutiner (även i texten och bilagorna), kurser, kommande möten, order och
-  ärenden, och öppnar dem direkt. Gör går till de kopplade vyerna, och det du
-  skriver kan bli en uppgift för i dag. Att svara på frågor kräver en AI-tjänst
-  som inte är kopplad än, och svaret säger det och visar var svaret finns.
-  Säljchef, VD och admin ser veckans frågor som Nav inte kunde svara på, utan
-  namn.
+  ärenden, och för den som ser dem också personer, kandidater, överenskommelser
+  och avtal, och öppnar dem direkt. Fråga Nav svarar på ett femtiotal frågor,
+  som "Vad har jag i dag?", "Hur ligger jag mot målet?" och "Vem ringer jag när
+  jag blir sjuk?", räknade ur Nav när du frågar och med källan på varje rad.
+  Skriv ? för att se alla. Fritt skrivna frågor sparas utan namn, och säljchef,
+  VD och admin ser dem samlade i ämnen och kan göra en rutin av dem.
 
 Nyheter, Leads, K&V, Händelselogg och Adoption öppnas här i nuvarande Nav,
 vilken väg du än tar dit: menyn, sökningen, en notis eller en länk. Det som

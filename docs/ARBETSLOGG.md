@@ -5,6 +5,33 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-20 · Nav 2.0, Fråga Nav ur navets data, och paletten får spara
+
+Beställarens svar 2026-10-19 (beslutsrundan P1) och 2026-10-20 (palettens frågor):
+
+- **Fråga Nav utan AI** (`src/lib/nav2/palettsvar.ts`, GET `/nav2/paletten?vad=svar&fraga=<nyckel>`):
+  49 frågor, 30 för alla, 1 för säljaren och 18 för chefen (Vad har jag i dag?, Hur ligger jag mot
+  målet?, Vilka order väntar på godkännande?, Vem är borta i dag?, Vilka sjukfrister närmar sig?,
+  Gick nattjobbet som det skulle i natt? …). Svaret räknas när frågan ställs, med vyernas egna
+  byggfunktioner (`byggOrder`, `byggFranvaro`, `byggTid` …) och användarens token: aldrig mer än
+  vyn visar samma person. Raderna märks Exakt, Uträknat (med uträkningen) och Uppskattning;
+  källan på en rad öppnar raden i vyn. Det man skriver matchas mot frågornas text och sökord, och
+  "?" visar alla. En fråga utanför behörigheten får ett rakt nej med vem som ser det.
+- **Fritt skrivna frågor** står som saknade (AI-tjänsten väntar, beslutsrundan E2) och bokförs
+  utan namn: **`SKRIVLAGE.paletten = true`** (beställarens ja 2026-10-20).
+- **Frågor utan svar i ämnen, utan AI:** frågorna grupperas på gemensamma ord (böjningar och
+  sammansättningar räknas som samma ord), högst tre ämnen, och "Så räknas det" visar frågorna.
+  "Skapa utkast: rutin om <ämne>" skapar ett rutinutkast där frågorna är stegen att skriva svaren
+  i och orden sökord (`routine_meta.syn`), så att paletten hittar rutinen när den publiceras.
+  Sparas när `SKRIVLAGE.rutiner` är på.
+- **Sökningen** hittar också personer (den som ser Anställda), kandidater (den som ser
+  Rekrytering), överenskommelser (som Coachning visar personen) och avtal (på namnet för den som
+  hanterar avtal, det egna på "avtal"), ur den data vyn redan fått. Träffen öppnas i vyn.
+- **"Vad måste jag besluta?"** pekar på startsidan, som samlar besluten ur alla kopplade vyer.
+- **Provat:** alla 48 frågor lokalt mot produktionen som Zen och Fredrik (säljaren får nej på
+  chefens frågor och antal i stället för namn på "ledig"), typkontroll mot de riktiga typerna (0
+  fel), klienten på previewsidan som Zen, och i previewen en fråga som bokfördes och togs bort.
+
 ## 2026-10-20 · Nav 2.0 är navet: alla går över, och sidan strömmas (steg 4, beställarens svar)
 
 Beställaren 2026-10-19 svarade på steg 4:s frågor: alla går över från gamla

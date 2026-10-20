@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { PAL_VYER, palettKalender, palettObesvarade, sokPaletten, type PalVy } from "@/lib/nav2/paletten";
+import { svaraPaletten } from "@/lib/nav2/palettsvar";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +13,8 @@ export const dynamic = "force-dynamic";
  *   GET ?q=<text>&vyer=uppgifter,rutiner,…   innehållssökningen, med RLS
  *   GET ?vad=kalender                        kommande egna kalenderposter, en gång per öppning
  *   GET ?vad=obesvarade                      veckans frågor utan svar (chefen, 0125)
+ *   GET ?vad=svar&fraga=<nyckel>             svaret på en av palettens frågor, räknat nu ur
+ *                                            vyernas data (`palettsvar.ts`), utan AI
  *   POST {handling: "fraga", text}           bokför en fritt skriven fråga, utan namn
  *
  * Läsningarna går med användarens token (se `src/lib/nav2/paletten.ts`).
@@ -34,6 +37,10 @@ export async function GET(request: Request) {
     const vad = url.searchParams.get("vad");
     if (vad === "obesvarade") return svar(await palettObesvarade(await supabaseServer(), user));
     if (vad === "kalender") return svar(await palettKalender(user));
+    if (vad === "svar") {
+      const s = await svaraPaletten(await supabaseServer(), user, url.searchParams.get("fraga") ?? "");
+      return s ? svar(s) : svar({ fel: "Okänd fråga." }, 400);
+    }
 
     const q = url.searchParams.get("q") ?? "";
     const vyer = (url.searchParams.get("vyer") ?? "").split(",").filter((v): v is PalVy => (PAL_VYER as readonly string[]).includes(v));

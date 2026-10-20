@@ -30326,6 +30326,132 @@ drawPal = function(q){
   hl();
 };
 
+/* ---------- Beställarens svar 2026-10-20 (steg 2b) ----------
+   - I Nav hittar också personer, kandidater, överenskommelser och avtal, efter roll.
+   - "Vad måste jag besluta?" pekar på startsidan, där besluten ur alla kopplade vyer står.
+   - Veckans frågor utan svar grupperas i ämnen, och ett rutinutkast får frågorna som steg.
+   ---------------------------------------------------------------- */
+
+/* ---------- I Nav: personer, kandidater, överenskommelser och avtal ---------- */
+// Sökningen går i den data vyn redan har fått. Servern läste den med den inloggades behörighet,
+// så en träff är aldrig mer än vyn visar samma person, och den öppnas där.
+const NDPALAESTATUS = {active:'Anställd', onboarding:'Börjar', offboarding:'Slutar', offboarded:'Har slutat'};
+function ndPalNyaVyer(nq){
+  const har = s => norm(s || '').includes(nq), ut = [];
+  // Anställda: bara för den som ser personalen (Admin och Superadmin).
+  if (ndKopplad('anstallda') && ND.anstallda && ND.anstallda.far){
+    aeSt();
+    S.ae.pers.filter(p => har(p.namn) || har(p.jobbmejl)).sort((a, b) => (a.status === 'offboarded') - (b.status === 'offboarded'))
+      .slice(0, 3).forEach(p => ut.push({i:'pers', l:p.namn, p:NDPALAESTATUS[p.status] || 'Person', run:() => aeGa(p.id)}));
+  }
+  // Rekrytering: bara för den som ser kandidaterna (chefen och den med behörigheten Rekryterare).
+  if (ndKopplad('rekrytering') && typeof ndRxFar === 'function' && ndRxFar()){
+    rxSt();
+    S.rx.kand.filter(c => har(c.namn) || har(c.epost) || har(c.mejl)).slice(0, 2)
+      .forEach(c => ut.push({i:'rekr', l:c.namn, p:'Kandidat', run:() => rxGa(c.id)}));
+  }
+  // Coachning: chefen ser lagets överenskommelser, säljaren sina egna (det ND.coachning har).
+  if (ndKopplad('coachning')){
+    cnSt();
+    S.cn.avt.filter(a => har(a.t) || har(a.besk) || (S.role === 'chef' && har(a.vem))).sort((a, b) => ['klar', 'avbruten'].includes(a.st) - ['klar', 'avbruten'].includes(b.st))
+      .slice(0, 2).forEach(a => ut.push({i:'coach', l:a.t, p:S.role === 'chef' ? `Överenskommelse · ${a.vem}` : 'Överenskommelse', run:() => cnGa('/coachning/uppgift/' + a.id)}));
+  }
+  // Avtal: den som hanterar avtal hittar personens avtal på namnet; var och en sitt eget på "avtal".
+  if (ndKopplad('avtal') && ND.avtal){
+    maSt();
+    const ord = /avtal/.test(nq), hanterar = !!ND.avtal.hanterar;
+    S.ae.pers.filter(p => (hanterar && har(p.namn)) || (ord && p.id === ND.jag.id)).map(p => [p, maAvtal(p)]).filter(([, a]) => a && a.hu)
+      .slice(0, 2).forEach(([p, a]) => ut.push({i:'avtal', l:p.id === ND.jag.id ? 'Ditt anställningsavtal' : `Avtal · ${p.namn}`, p:a.st === 'signerat' ? 'Påskrivet' : a.st === 'skickat' ? 'Skickat' : 'Utkast', run:() => maGa(p.id)}));
+  }
+  return ut;
+}
+const _palNdInnehall2 = palInnehall;
+palInnehall = function(nq){
+  const ut = _palNdInnehall2(nq); if (!ND) return ut;
+  // Före inställningarna, som står sist i utkastets ordning.
+  const i = ut.findIndex(x => x.p === 'Inställningar');
+  ut.splice(i < 0 ? ut.length : i, 0, ...ndPalNyaVyer(nq));
+  return ut;
+};
+
+/* ---------- Vad måste jag besluta? Startsidan samlar besluten ur alla kopplade vyer ---------- */
+const _palNdSvar2 = ndPalSvar;
+ndPalSvar = function(k, q){
+  const s = _palNdSvar2(k, q);
+  if (k !== 'besluta' || !ndKopplad('hem') || !s.lead || s.lead === 'Räknar ur Nav …') return s;
+  const not = 'Startsidan samlar det som väntar på dig ur alla kopplade vyer, också Anställda, Rekrytering, Coachning och Avtal, med knappen för att göra det direkt.';
+  return {...s, note:[s.note, not].filter(Boolean).join(' '), acts:[{l:'Öppna startsidan', open:'/'}, ...(s.acts || []).filter(a => a.open !== '/')]};
+};
+
+/* ---------- Frågor utan svar: ämnen, utan AI ---------- */
+// Frågorna jämförs ord för ord. Ett ord som finns i minst två olika frågor blir ett ämne; varje
+// fråga hamnar i högst ett ämne, och ämnet med flest frågor (sedan flest gånger) tas först.
+// Böjningar och sammansättningar räknas som samma ord på de sex första bokstäverna efter att
+// vanliga ändelser tagits bort ("friskvård", "friskvårdsbidraget" → "friskv").
+const NDPALSTOPP = new Set('hur har jag mig min mitt mina vad vem vilka vilken vilket nar var kan ska det den de pa om en ett ar och att for med till fran i av som far man vi ni dom eller inte nagon nagot nagra alla blir bli finns gor gora maste skulle vill eller sa da nu hos utan efter innan under over vara varit ha hade dag dagar'.split(' '));
+const ndPalStam = o => o.replace(/(erna|arna|orna|heten|ande|ende|het|en|et|er|ar|or|na|s|a|e)$/, '').slice(0, 6);
+function ndPalAmnen(fragor){
+  // Varje fråga: stam → ordet som det står, med å, ä och ö kvar.
+  const ord = fragor.map(f => {
+    const m = new Map();
+    (f.q.toLowerCase().match(/[\p{L}\d]+/gu) || []).forEach(w => { const o = norm(w); if (o.length < 3 || NDPALSTOPP.has(o)) return; const st = ndPalStam(o); if (st.length >= 3 && !m.has(st)) m.set(st, w); });
+    return m;
+  });
+  // Ordformen som visas: den kortaste som förekommer ("friskvård", inte "friskvårdsbidraget").
+  const form = (st, idx) => idx.map(i => ord[i].get(st)).sort((a, b) => a.length - b.length)[0];
+  const kvar = new Set(fragor.map((_, i) => i)), amnen = [];
+  while (amnen.length < 3){
+    const rakna = new Map();
+    kvar.forEach(i => ord[i].forEach((_, st) => { const r = rakna.get(st) || {n:0, antal:0}; r.n++; r.antal += fragor[i].antal; rakna.set(st, r); }));
+    const bast = [...rakna].filter(([, r]) => r.n >= 2).sort((a, b) => b[1].n - a[1].n || b[1].antal - a[1].antal)[0];
+    if (!bast) break;
+    const idx = [...kvar].filter(i => ord[i].has(bast[0]));
+    idx.forEach(i => kvar.delete(i));
+    amnen.push({ord:form(bast[0], idx), syn:[...new Set(idx.map(i => ord[i].get(bast[0])))], fragor:idx.map(i => fragor[i]), antal:idx.reduce((s, i) => s + fragor[i].antal, 0)});
+  }
+  return amnen;
+}
+const _palNdObes2 = ndPalObesvarat;
+ndPalObesvarat = function(){
+  const s = _palNdObes2(), o = NDPAL.obes;
+  if (!o || o.fel || !o.farSe || !(o.fragor || []).length) return s;
+  const f = o.fragor, amnen = ndPalAmnen(f), tot = f.reduce((x, y) => x + y.antal, 0);
+  if (!amnen.length) return s;
+  const a0 = amnen[0];
+  const rows = [
+    ...amnen.map(a => ['utraknat', `${a.fragor.length} ${a.fragor.length === 1 ? 'fråga handlar' : 'frågor handlar'} om ${a.ord}, ställda ${a.antal} ${a.antal === 1 ? 'gång' : 'gånger'}.`, null,
+      `Frågor där ”${a.ord}” eller en böjning av ordet förekommer: ${a.fragor.map(x => `”${ndPalStor(x.q)}” (${x.antal})`).join(', ')}.`]),
+    ...f.filter(x => !amnen.some(a => a.fragor.includes(x))).slice(0, 3).map(x => ['exakt', `”${ndPalStor(x.q)}” Ställd ${x.antal} ${x.antal === 1 ? 'gång' : 'gånger'}.`, 'Frågor utan svar'])
+  ];
+  const acts = ndKopplad('rutiner') ? amnen.slice(0, 2).map(a => ({l:`Skapa utkast: rutin om ${a.ord}`,
+    confirm:`Ett utkast till rutinen ”${ndPalStor(a.ord)}” skapas med dig som ägare. De ${a.fragor.length} frågorna blir stegen du skriver svaren i, och orden blir sökord, så att paletten hittar rutinen när den publiceras. Inget publiceras nu.`,
+    ndAmne:a})) : [];
+  return {...s, lead:`${f.length} ${f.length === 1 ? 'fråga' : 'frågor'} utan svar i veckan, ställda ${tot} ${tot === 1 ? 'gång' : 'gånger'}. ${a0.fragor.length} handlar om ${a0.ord}.`, rows, acts};
+};
+// Utkastet: frågorna som steg att besvara, ämnesorden som sökord. Sedan öppnas utkastet i Rutiner.
+function ndPalRutinAmne(a){
+  const f = {t:ndPalStor(a.ord), typ:'routine', omr:'adm', nasta:frPlus(kIdag(), 182), agare:ND.jag.id,
+    tldr:`Svar på det som frågats i Nav om ${a.ord}.`, nar:'När någon undrar över ' + a.ord + '.',
+    steg:a.fragor.map(x => [ndPalStor(x.q), '']), syn:a.syn};
+  ndRutPost('spara', {hur:'utkast', f}, {ladda:false, tyst:true}).then(s => {
+    if (s.fel){ toast(s.fel); return; }
+    toast('Utkastet ligger under Rutiner. Skriv svaren i stegen och publicera.');
+    try { sessionStorage.setItem('nd-rut', JSON.stringify({open:s.id, tab:null})); } catch(_){}
+    setTimeout(() => location.reload(), 900);
+  });
+}
+const _palNdClick2 = palClick;
+palClick = function(e){
+  if (ND){
+    const t = e.target.closest && e.target.closest('button');
+    if (t && t.matches('[data-pyes]') && PS.cur && PS.confirm !== null){
+      const y = PS.cur.acts[PS.confirm];
+      if (y && y.ndAmne){ closePal(); ndPalRutinAmne(y.ndAmne); return; }
+    }
+  }
+  return _palNdClick2(e);
+};
+
 /* =====================================================================
    SKALET OCH ÖVERGÅNGEN (prefix skal), steg 4 till produktion
 

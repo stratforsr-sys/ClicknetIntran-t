@@ -26,7 +26,8 @@ export const SKRIVLAGE = {
   rekrytering: false,
   coachning: false,
   anstallda: false,
-  paletten: false,
+  // Beställarens ja 2026-10-20: frågor utan svar bokförs utan namn.
+  paletten: true,
 } as const;
 
 export type Skrivvy = keyof typeof SKRIVLAGE;
