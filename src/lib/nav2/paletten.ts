@@ -5,6 +5,7 @@ import { hasRole, type CurrentUser } from "@/lib/auth";
 import { svensktDatum } from "@/lib/klocka";
 import { prefixfraga } from "@/lib/dokument";
 import { ilikeMonster, orVillkor } from "@/lib/sokning";
+import { navnyheterFor } from "@/navnyheter";
 import { hamtaKalposter, type NdPost } from "./kalender";
 import { SKRIVLAGE } from "./skrivlage";
 
@@ -35,11 +36,17 @@ import { SKRIVLAGE } from "./skrivlage";
  * Mot databasen gäller `ilike` med repots escapning (`sokning.ts`).
  * ===========================================================================
  *
+ * Nytt i navet (beställarens svar 2026-10-20, Gamla Nav P): `src/navnyheter`
+ * med samma urval som klockan (`navnyheterFor`: roll, behörighet, anställd
+ * sedan) fram till i dag, varje ord i rubrik, ingress eller text. Källan
+ * heter `nyheter` och söks när Nyheter är kopplad. Ledningens inlägg söks i
+ * klienten, i den data Nyheter redan läst med RLS.
+ *
  * Fritt skrivna frågor besvaras inte: det kräver en AI-tjänst som inte är
  * kopplad. Veckans frågor utan svar (0125) läses här för chefen.
  */
 
-export const PAL_VYER = ["uppgifter", "rutiner", "utbildning", "order", "arenden"] as const;
+export const PAL_VYER = ["uppgifter", "rutiner", "utbildning", "order", "arenden", "nyheter"] as const;
 export type PalVy = (typeof PAL_VYER)[number];
 
 export type NdPalTraff =
@@ -47,7 +54,8 @@ export type NdPalTraff =
   | { typ: "rutin"; id: string; t: string }
   | { typ: "kurs"; id: string; t: string }
   | { typ: "order"; nr: number; bolag: string }
-  | { typ: "arende"; id: string; t: string };
+  | { typ: "arende"; id: string; t: string }
+  | { typ: "navnyhet"; id: string; t: string; d: string; href: string | null };
 
 export type NdPalSok = { q: string; traffar: NdPalTraff[] };
 
@@ -134,7 +142,16 @@ export async function sokPaletten(supabase: SupabaseClient, user: CurrentUser, f
       : tom,
   ]);
 
-  return { q, traffar: [...uppgifter, ...rutiner, ...kurser, ...order, ...arenden] };
+  const idag = svensktDatum();
+  const ord = nq.split(/\s+/).filter(Boolean);
+  const navnyheter = vill.has("nyheter")
+    ? navnyheterFor({ roller: user.roles, behorigheter: user.permissions, anstalldSedan: user.employee.start_date })
+        .filter((n) => n.datum <= idag && ord.every((o) => norm(`${n.rubrik} ${n.ingress} ${n.text}`).includes(o)))
+        .slice(0, PER)
+        .map((n): NdPalTraff => ({ typ: "navnyhet", id: n.slug, t: n.rubrik, d: n.datum, href: n.href ?? null }))
+    : [];
+
+  return { q, traffar: [...uppgifter, ...rutiner, ...kurser, ...order, ...arenden, ...navnyheter] };
 }
 
 /** Kommande poster i den egna kalendern, den här månaden och nästa, med rubrik. */

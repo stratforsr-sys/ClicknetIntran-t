@@ -5,6 +5,21 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-20 · Nav 2.0, Gamla Nav P: beställarens svar (Säkerheten får spara, Nytt i navet i paletten)
+
+- **`SKRIVLAGE.sakerhet = true`** (svar 1, "Ja"): lösenordsbytet i Inställningar
+  → Säkerhet sparar. Rutten anropar repots `bytLosenord` som förut.
+- **Kod vid inloggning förblir av** (svar 2, "lösenord för nu räcker"):
+  `MFA_REQUIRED_ROLES` rörs inte. Flödet finns och syns när kravet slås på.
+- **Säljarens personalsökning** (svar 3): den egna raden räcker nu. Står under
+  "senare" i NASTA_SESSION: beställaren vill göra något mer av den.
+- **Nytt i navet i paletten** (svar 4, "Aa det är bra"): `sokPaletten`
+  (`src/lib/nav2/paletten.ts`) har källan `nyheter`, som söker `src/navnyheter`
+  med klockans urval (`navnyheterFor`: roll, behörighet, anställd sedan) fram
+  till i dag, varje ord i rubrik, ingress eller text. Träffen visar datumet och
+  öppnar det posten pekar på, som utkastets "Visa" (en post som pekar på /nav2
+  öppnar Nyheter). Provat lokalt som Zen och Fredrik: urvalet följer rollen.
+
 ## 2026-10-20 · Nav 2.0, gamla Navs sista funktioner C: Anställda (ingen migration)
 
 - **Särskild behörighet** (svar 5) på personens kort i Anställda: Lönekostnad,

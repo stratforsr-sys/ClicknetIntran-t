@@ -31255,11 +31255,20 @@ function ndPalSokSida(q){
   const inp = document.getElementById('palIn');
   if (inp && q){ inp.value = q; inp.dispatchEvent(new Event('input')); }
 }
+// Nytt i navet söks på servern (paletten.ts, källan "nyheter"), med samma urval som klockan.
+// Träffen öppnar det posten pekar på, som utkastets "Visa", annars Nyheter.
+if (!NDPALVY.includes('nyheter')) NDPALVY.push('nyheter');
+function ndPalNavnyheter(nq){
+  const T = NDPAL.sok.get(nq);
+  if (!T || !ndKopplad('nyheter')) return [];
+  return T.filter(x => x.typ === 'navnyhet').slice(0, 2)
+    .map(x => ({i:'nyh', l:x.t, p:`Nytt i Nav · ${frKort(x.d)}`, run:() => x.href && !/^\/nav2(\/|\?|$)/.test(x.href) ? ndGa(x.href) : nhGa()}));
+}
 const _palNdInnehall3 = palInnehall;
 palInnehall = function(nq){
   const ut = _palNdInnehall3(nq); if (!ND || !nq) return ut;
   const i = ut.findIndex(x => x.p === 'Inställningar');
-  ut.splice(i < 0 ? ut.length : i, 0, ...ndPalPersonal(nq), ...ndPalNyheter(nq));
+  ut.splice(i < 0 ? ut.length : i, 0, ...ndPalPersonal(nq), ...ndPalNyheter(nq), ...ndPalNavnyheter(nq));
   return ut;
 };
 

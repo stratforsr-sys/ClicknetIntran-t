@@ -123,7 +123,8 @@ behörigheter som här: du ser bara det du får se.
   det överst och kan schemalägga det till nästa morgon eller måndag.
 - **Sök, gör eller fråga Nav** (⌘K): sökningen hittar dina uppgifter,
   rutiner (även i texten och bilagorna), kurser, kommande möten, order,
-  ärenden och nyheter, och de kollegor du får se i personalregistret, och för
+  ärenden, nyheterna och Nytt i Nav, och de kollegor du får se i
+  personalregistret, och för
   den som ser dem också kandidater, överenskommelser och avtal, och öppnar dem
   direkt. Fråga Nav svarar på ett femtiotal frågor,
   som "Vad har jag i dag?", "Hur ligger jag mot målet?" och "Vem ringer jag när
