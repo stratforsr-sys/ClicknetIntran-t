@@ -2,6 +2,7 @@ import "server-only";
 import { AsyncLocalStorage } from "node:async_hooks";
 import pg from "pg";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { sattPgKrok } from "./pgkrok";
 
 /**
  * Nav 2.0: navets läsningar direkt mot Postgres, med samma RLS och samma svar.
@@ -37,8 +38,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * ===========================================================================
  *
  * Används bara av byggNav2Data (data.ts) via `medPg`. supabaseServer() och
- * supabaseAdmin() lämnar den här klienten medan bygget pågår (AsyncLocalStorage),
- * så att delar som skapar sin egen klient (notiserna, kalendern) också får den.
+ * supabaseAdmin() lämnar den här klienten medan bygget pågår (AsyncLocalStorage
+ * och kroken i pgkrok.ts), så att delar som skapar sin egen klient (notiserna,
+ * kalendern) också får den.
  */
 
 /** Supabase Root 2021 CA. Poolerns certifikat är utfärdat av den, inte av en publik CA. */
@@ -462,11 +464,11 @@ const ALS = new AsyncLocalStorage<Session>();
 const LOGG: [string, number, number, number, string][] | null = process.env.NAV2_PG_LOGG === "2" ? [] : null;
 export const pgLogg = () => LOGG;
 
-/** Under ett bygge: klienten som läser direkt i Postgres. Annars null. */
-export function pgKlient(vem: Vem): SupabaseClient | null {
+// supabaseServer()/supabaseAdmin() frågar kroken (pgkrok.ts): under ett bygge får de klienten här.
+sattPgKrok((vem) => {
   const s = ALS.getStore();
   return s && !s.stangd ? s.klient(vem) : null;
-}
+});
 
 /* ------------------------------------------------------------------------ */
 /* Klienten: spelar in anropen och kör dem i Postgres eller i REST-lagret.   */

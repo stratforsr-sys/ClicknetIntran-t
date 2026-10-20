@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY, SUPABASE_URL } from "@/lib/env";
-import { pgKlient } from "@/lib/nav2/pgrest";
+import { pgKlient } from "@/lib/nav2/pgkrok";
 
 /** Klient med den inloggades rattigheter. RLS galler. Anvand i alla lasningar. */
 export async function supabaseServer() {
