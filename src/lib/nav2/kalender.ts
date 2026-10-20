@@ -141,10 +141,13 @@ export async function kalDetalj(user: CurrentUser, id: string) {
   const d = await hamtaHandelsedetalj(user, id);
   if (!d) return null;
   // 0090: ett privat möte visar inte plats och agenda för den som inte är med.
-  const { data: e } = await supabaseAdmin().from("calendar_event").select("is_private, organizer_id").eq("id", id).maybeSingle();
+  const [{ data: e }, { data: g }] = await Promise.all([
+    supabaseAdmin().from("calendar_event").select("is_private, organizer_id").eq("id", id).maybeSingle(),
+    supabaseAdmin().from("calendar_attendee").select("external_email").eq("event_id", id).not("external_email", "is", null),
+  ]);
   const mig = user.employee!.id;
   if (e?.is_private && e.organizer_id !== mig && !d.deltagare.some((x) => x.id === mig)) {
-    return { plats: null, online: null, agenda: "", organisator: d.organisator, deltagare: [], serieText: d.serie ? regeltext(d.serie) : null, paminnelse: d.paminnelse, privat: true };
+    return { plats: null, online: null, agenda: "", organisator: d.organisator, deltagare: [], gaster: [], serieText: d.serie ? regeltext(d.serie) : null, paminnelse: d.paminnelse, privat: true };
   }
   return {
     privat: Boolean(e?.is_private),
@@ -153,6 +156,8 @@ export async function kalDetalj(user: CurrentUser, id: string) {
     agenda: d.agenda,
     organisator: d.organisator,
     deltagare: d.deltagare.map((x) => ({ id: x.id, svar: x.svar })),
+    // Inbjudna utanför Clicknet (calendar_attendee.external_email): de som fått mejlet med kalenderfilen.
+    gaster: (g ?? []).map((x) => String(x.external_email)),
     serieText: d.serie ? regeltext(d.serie) : null,
     paminnelse: d.paminnelse,
   };

@@ -5,6 +5,29 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-20 · Nav 2.0, Kalendern: gäster utanför Clicknet med e-post (beställarens svar)
+
+- **Beställaren:** "när jag lägger in ett möte ska jag kunna lägga till en
+  person, och då skickas ett vanligt mejl via Resend", också i Kalenderns
+  eget mötesformulär (svaret "Ja det ska gå", efter Leads svar 3).
+- **Formuläret** (`moduler/ndkal.js`, bara i riktigt läge och bara på ett
+  möte): ett fält under deltagarna. Enter lägger till adressen som ett chip
+  (flera går att klistra in på en gång), × tar bort det, och Ctrl/⌘+Enter
+  sparar med det som står i fältet. Öppnas ett befintligt möte syns de som
+  redan bjudits in, utan ×.
+- **Rutten** (`/nav2/kalender`, `spara`): `gaster` i fälten. Varje adress
+  bjuds in med `lead_bjud_in` (0135), alltså Kalenderns utkorg och kalenderfil
+  från organisatören. En adress som är en kollegas blir en vanlig deltagare.
+  Nekas: 1:1, uppgift, en serie (varje förekomst vore ett eget mejl) och ett
+  leveransmöte som ändras. Ångra på ett nytt möte raderar det, och utkorgen
+  hoppar då över inbjudan. `kalDetalj` ger `gaster`.
+- Ingen migration. **Gäller först när Kalendern får spara**
+  (`SKRIVLAGE.kalender` är fortfarande `false`, och rutten svarar 423).
+- **Provraden borttagen** (Leads svar 6, "inget som använts ska vara kvar"):
+  leadet från hemsidans test 2026-10-09, dess två notiser, den dolda notisen
+  och raden i `audit_log`. Raderna är sparade hos beställaren
+  (`~/nav2-utkast/delar/leads/prov/provrad-borttagen.json`).
+
 ## 2026-10-20 · Nav 2.0, Händelseloggen: beställarens svar (ingen migration)
 
 - **Motiveringen syns inte** (svar 1): `reason` står kvar utanför raden, som förut.

@@ -68,7 +68,8 @@ export async function GET(request: Request) {
  *
  * Det nya: ändra ett mötes rubrik, plats, agenda, deltagare och påminnelse
  * (`andraMote`, 0088), den egna påminnelsen (`sattPaminnelse`), "Varje månad"
- * (0089) och Privat (0090).
+ * (0089) och Privat (0090). Gäster utanför Clicknet med e-post på ett möte
+ * (`lead_bjud_in`, 0135; se `gasterFran`).
  * ===========================================================================
  *
  * LÄSLÄGE: står `SKRIVLAGE.kalender` på false svarar rutten 423 innan något
@@ -95,7 +96,44 @@ type Falt = {
   lev?: string;
   order?: string;
   heldag?: boolean;
+  gaster?: string[];
 };
+
+/**
+ * Gäster utanför Clicknet (beställaren 2026-10-20): "när jag lägger in ett möte
+ * ska jag kunna lägga till en person, och då skickas ett vanligt mejl via
+ * Resend". Samma utskick som Leads möten och Kalenderns leveransmöten:
+ * `lead_bjud_in` (0135) lägger adressen i `calendar_attendee.external_email`
+ * och köar `lk_ics_ko`, och utkorgen mejlar kalenderfilen från organisatören.
+ * En adress som är en kollegas blir en vanlig deltagare.
+ */
+const EPOST = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+async function gasterFran(lista: unknown): Promise<{ epost: string[]; kolleger: string[] } | { fel: string }> {
+  if (lista === undefined || lista === null) return { epost: [], kolleger: [] };
+  if (!Array.isArray(lista) || lista.length > 20) return { fel: "Gästlistan stämmer inte." };
+  const epost = [...new Set(lista.map((x) => String(x ?? "").trim().toLowerCase()))].filter(Boolean);
+  const fel = epost.find((x) => !EPOST.test(x) || x.length > 254);
+  if (fel) return { fel: `${fel} är ingen e-postadress.` };
+  if (!epost.length) return { epost, kolleger: [] };
+  const { data } = await supabaseAdmin().from("employee").select("id, email").in("email", epost);
+  const kollega = new Map((data ?? []).map((r) => [String(r.email).toLowerCase(), String(r.id)]));
+  return { epost: epost.filter((x) => !kollega.has(x)), kolleger: [...kollega.values()] };
+}
+const lista = (x: string[]) => (x.length > 1 ? `${x.slice(0, -1).join(", ")} och ${x[x.length - 1]}` : x[0]);
+async function bjudIn(r: Resultat, eventId: string | null | undefined, epost: string[]): Promise<Resultat> {
+  if (r.fel || !eventId || !epost.length) return r;
+  const db = supabaseAdmin();
+  const { data: fanns } = await db.from("calendar_attendee").select("external_email").eq("event_id", eventId).not("external_email", "is", null);
+  const redan = new Set((fanns ?? []).map((x) => String(x.external_email).toLowerCase()));
+  const fick: string[] = [];
+  const inte: string[] = [];
+  for (const adress of epost.filter((x) => !redan.has(x))) {
+    const { error } = await db.rpc("lead_bjud_in", { p_event: eventId, p_epost: adress });
+    (error ? inte : fick).push(adress);
+  }
+  const text = [fick.length ? `${lista(fick)} får en inbjudan med mejl.` : "", inte.length ? `Inbjudan till ${lista(inte)} gick inte att skicka.` : ""].filter(Boolean).join(" ");
+  return text ? { ...r, kvitto: `${r.kvitto ?? "Sparat."} ${text}` } : r;
+}
 
 const svarFran = (r: Resultat) => (r.fel ? { fel: r.fel } : { ok: r.kvitto ?? "Sparat.", angra: r.angra ?? null, id: r.eventId ?? null, dag: r.dag ?? null });
 
@@ -126,6 +164,12 @@ export async function POST(request: Request) {
         const upprepa = UPPREPA_FRAN[f.upprepa ?? "Upprepas inte"] ?? "aldrig";
         if (!(UPPREPA as readonly string[]).includes(upprepa)) return svar2({ fel: "Välj hur det ska upprepas." }, 400);
         const deltagare = (f.delt ?? []).filter((x) => UUID.test(x));
+        const g = await gasterFran(f.gaster);
+        if ("fel" in g) return svar2({ fel: g.fel }, 400);
+        g.kolleger.forEach((id) => deltagare.includes(id) || deltagare.push(id));
+        if (g.epost.length && (f.typ === "uppgift" || f.typ === "coachning" || f.typ === "enskilt")) {
+          return svar2({ fel: "Bara ett möte kan ha gäster utanför Clicknet." }, 400);
+        }
         const privat = async (eventId?: string | null) => {
           if (eventId && f.priv !== undefined) await supabaseAdmin().from("calendar_event").update({ is_private: Boolean(f.priv) }).eq("id", eventId);
         };
@@ -135,6 +179,7 @@ export async function POST(request: Request) {
           if (!UUID.test(f.id)) return svar2({ fel: "Händelsen finns inte längre." }, 400);
           const { data: e } = await supabaseAdmin().from("calendar_event").select("dag, tid, minuter, kind").eq("id", f.id).maybeSingle();
           if (!e) return svar2({ fel: "Händelsen finns inte längre." }, 404);
+          if (g.epost.length && e.kind !== "mote") return svar2({ fel: "Bara ett möte kan ha gäster utanför Clicknet." }, 400);
           const start = f.s ?? 0;
           const fore = Number(String(e.tid ?? "00:00").slice(0, 2)) * 60 + Number(String(e.tid ?? "00:00").slice(3, 5));
           let sist: Resultat = { ok: true, eventId: f.id };
@@ -151,7 +196,7 @@ export async function POST(request: Request) {
             if (sist.fel) return ut(sist);
           }
           await privat(f.id);
-          return ut(sist);
+          return ut(await bjudIn(sist, sist.eventId ?? f.id, g.epost));
         }
 
         // Nytt.
@@ -165,9 +210,12 @@ export async function POST(request: Request) {
         if (f.lev && f.order) {
           const steg = STEG_FRAN[f.lev];
           if (!steg) return svar2({ fel: "Välj en förinställning." }, 400);
-          return ut(await skapaLeverans({ orderId: f.order, steg, dag: f.d ?? "", start: f.s ?? 0, minuter: minuter || 30, deltagare, remMig: true, remKund: FORINSTALLNINGAR[steg as keyof typeof FORINSTALLNINGAR].kund }));
+          const r = await skapaLeverans({ orderId: f.order, steg, dag: f.d ?? "", start: f.s ?? 0, minuter: minuter || 30, deltagare, remMig: true, remKund: FORINSTALLNINGAR[steg as keyof typeof FORINSTALLNINGAR].kund });
+          return ut(await bjudIn(r, r.eventId, g.epost));
         }
         if (f.typ === "enskilt" || upprepa !== "aldrig") {
+          // En serie är många möten, och var och en vore ett eget mejl.
+          if (g.epost.length) return svar2({ fel: "En person utanför Clicknet bjuds in till ett möte som inte upprepas." }, 400);
           const r = await skapaSerie({
             typ: f.typ === "enskilt" ? "enskilt" : "mote",
             rubrik: f.t ?? "",
@@ -193,7 +241,7 @@ export async function POST(request: Request) {
           await privat(r.eventId);
           if (f.video && r.eventId) await supabaseAdmin().from("calendar_event").update({ online_url: f.video }).eq("id", r.eventId);
         }
-        return ut(r);
+        return ut(await bjudIn(r, r.eventId, g.epost));
       }
       case "svara":
         return ut(await svara(id, String(b.svar ?? "") as "ja" | "kanske" | "nej", String(b.kommentar ?? "") || null));
