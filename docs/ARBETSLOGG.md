@@ -5,6 +5,17 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-20 · Nav 2.0, Händelseloggen kopplad (session 4, läsläge)
+
+Utkastets Händelselogg (`moduler/rls.js`) visar navets händelser för chefen. Inget i utkastets gränssnitt är ändrat.
+
+- **Server:** `src/lib/nav2/logg.ts` läser `audit_log` (400 senaste, som `/logg`) och `file_access_log` (öppnade inspelningar, avtal och bilagor; uppladdningarna står redan i `audit_log`), plus namnen och objektens rubriker, allt med den inloggades RLS och via Postgres-läsningen. En säljare får `null` utan frågor. `loggforma.ts` är ren logik: en svensk mening för var och en av de 206 actions koden kan skriva och alla som finns i produktionen, typen ur repots `typFor`, vem som gjorde det ("Nav" för systemet, "Okänd" för ett inloggningsförsök utan konto) och vad det gällde.
+- **Vad en rad inte säger:** `reason` (34 rader har en), fritext ur `meta`, belopp, ett personalärendes rubrik ("Personalärende · rubriken visas bara i ärendet") och frånvarons detaljer ("Detaljerna står i Frånvaro"; en sjukanmälan heter "Frånvaro anmäld", och ett läkarintyg som öppnas "Bilaga öppnad"). Ett personnummer i en rubrik maskeras.
+- **Klient:** `moduler/ndlogg.js` fyller utkastets `RLSLOGG` och `RLSDAG` på plats (de är `const` men muterbara), så `rlsLoggVy` står orörd och `rls.js` (delad med Adoption) är inte ändrad. `ndskal.js`: `case 'logg'` i `ndGa` (`/logg?typ=radering` öppnar filtret), och en säljare får utkastets besked i stället för nuvarande Navs `/logg`. `vagar.ts`: `/logg` i `SJALV`.
+- **Registret:** inget prefix saknades i `MODUL` (49 action-namn i Nav 2.0:s filer). `phone_call.transcript_read` klassades som Ändring; `read` står nu i `UTLAMNANDE`, med en rad i `tests/handelselogg.mjs` (grönt).
+- **Ingen migration, ingen rutt, inget `SKRIVLAGE`:** loggen går inte att ändra.
+- **Provat:** lokalt mot produktionen som Zen (400 rader på 20 dagar) och Fredrik (`null`), hela loggen (1 389 rader) utan engelska rester; klienten i headless Chrome på 1440 och 390 px (menyn, filtret med pilarna, `/logg` och `/logg?typ=`, paletten, säljarens besked), inga skriptfel, inga exempelnamn. Typkontroll mot grenens låsta paket: 0 fel. `kolkoll.py`: 0.
+
 ## 2026-10-20 · Nav 2.0, Nyheter med riktig data, i läsläge (0130 SKRIVEN OCH TORRKÖRD, EJ KÖRD)
 
 Utkastets Nyheter läser navets inlägg och Nytt i navet. Ingen funktion i

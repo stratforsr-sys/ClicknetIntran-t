@@ -82,6 +82,11 @@ behörigheter som här: du ser bara det du får se.
   och din provision bredvid. Säljchef, VD och administratör laddar upp varje
   persons påskrivna avtal och tillägg och tar bort ett som blev fel, och ser
   vilka som saknar avtal och när provanställningarna slutar.
+- **Händelseloggen**, för säljchef, VD och admin: vem som loggat in, fått en
+  roll, ändrat eller tagit bort något, lämnat ut eller öppnat något (också en
+  inspelning eller ett avtal) och vad Nav gjort självt, dag för dag och med
+  filter per typ. Loggen går inte att ändra, och den säger aldrig skälet till
+  en frånvaro eller vad ett personalärende handlar om.
 - **Order** och kundkortet. Varje order har nu ett nummer (#12), och
   provisionen är navets: fryst på en godkänd order, och det godkännandet
   skulle ge på en som väntar. I kortet spelar du inspelningen direkt, skriver
@@ -121,7 +126,7 @@ behörigheter som här: du ser bara det du får se.
   ingen öppnat på 90 dagar går att öppna. Siffrorna räknar personer, aldrig
   vem som gjorde vad.
 
-Leads, K&V och Händelselogg öppnas här i nuvarande Nav,
+Leads och K&V öppnas här i nuvarande Nav,
 vilken väg du än tar dit: menyn, sökningen, en notis eller en länk. Det som
 bara finns här, som scheman, spärrar och projekt, öppnas också här. Nya Nav
 fungerar i mobilens bredd. Ingenting påhittat visas.

@@ -34,6 +34,7 @@ const SJALV: RegExp[] = [
   /^\/personal(\/(?!ny$|team$)[^/]+)?$/,
   /^\/rekrytering(\/(?!ny$)[^/]+)?$/,
   /^\/avtal$/,
+  /^\/logg$/,
   /^\/adoption$/,
   /^\/nyheter(\/[^/]+)?$/,
   /^\/nyheter\/nav\/[^/]+$/,

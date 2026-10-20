@@ -89,6 +89,7 @@ console.log("\n\x1b[1mOrdningen mellan reglerna\x1b[0m");
   ok("commission.underlag_viewed är utlämnande", typFor("commission.underlag_viewed") === "utlamnande");
   ok("employee.data_export är utlämnande", typFor("employee.data_export") === "utlamnande");
   ok("deviation.viewed är utlämnande", typFor("deviation.viewed") === "utlamnande");
+  ok("phone_call.transcript_read är utlämnande", typFor("phone_call.transcript_read") === "utlamnande");
 
   // Men bara pa hela andelsen eller efter ett understreck. "reviewed" innehaller
   // "viewed" som delstrang — en granskad rutin ar inget utlamnande.

@@ -165,8 +165,11 @@ export const MODUL: Record<string, string> = {
   anstallda: "Anställda",
 };
 
-/** Andelser som betyder att nagot lamnades ut eller lastes. */
-const UTLAMNANDE = ["exported", "viewed", "data_export"];
+/**
+ * Andelser som betyder att nagot lamnades ut eller lastes. `read` kom med
+ * Nav 2.0: `phone_call.transcript_read` ar en lasning av nagons samtal.
+ */
+const UTLAMNANDE = ["exported", "viewed", "data_export", "read"];
 
 /** Andelser som betyder att nagot skapades. */
 const SKAPANDE = [

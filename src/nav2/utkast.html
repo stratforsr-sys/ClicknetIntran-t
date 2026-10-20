@@ -30203,6 +30203,31 @@ document.addEventListener('change', e => {
 if (ndMa()) NDKOPPLAD.add('avtal');
 
 /* =====================================================================
+   NAV 2.0 I RIKTIGT LÄGE: HÄNDELSELOGGEN (prefix nd)
+
+   Navets händelser ur ND.logg (src/lib/nav2/logg.ts) i stället för utkastets
+   exempel. Utkastets vy (rlsLoggVy i moduler/rls.js) står orörd: den läser
+   RLSLOGG och RLSDAG, och de fylls här på plats med navets rader i samma form,
+   [dag, klockslag, typ, rubrik, vem, objekt]. moduler/rls.js delas med
+   Adoption och ändras inte.
+
+   Bara chefen. RLS avgör vad som syns, och servern skickar ingenting till en
+   säljare. Loggen går inte att ändra, så här finns ingen rutt.
+   ===================================================================== */
+
+const ndLogg = () => ND && ND.logg;
+if (ND){
+  // Utkastets exempel visas aldrig i riktigt läge, inte heller när loggen inte kom med.
+  RLSLOGG.length = 0;
+  for (const k of Object.keys(RLSDAG)) delete RLSDAG[k];
+  if (ndLogg()){
+    RLSLOGG.push(...ndLogg().rader);
+    Object.assign(RLSDAG, ndLogg().dagar);
+    NDKOPPLAD.add('logg');
+  }
+}
+
+/* =====================================================================
    NAV 2.0 I RIKTIGT LÄGE: PALETTEN (prefix ndPal), v47
 
    "Sök, gör eller fråga Nav" (⌘K) med navets data:
@@ -30983,6 +31008,8 @@ ndGa = function(href){
   const h = String(href || '/'), bas = h.split(/[?#]/)[0], d = bas.split('/').filter(Boolean), vy = skalVy(bas), sub = d[1] || null;
   if (bas.startsWith('/installningar') || bas.startsWith('/profil')) return prfGaSrc(h);
   const nav = () => { location.assign(h); };
+  // Händelseloggen är bara chefens: en säljare får utkastets besked, inte nuvarande Navs /logg.
+  if (vy === 'logg' && S.role !== 'chef'){ toast('Händelseloggen och adoptionen är bara för chefer.'); return; }
   if (!vy || skalNav(bas) || !ndKopplad(vy)) return nav();
   switch (vy){
     case 'hem': S.view = 'hem'; render(); window.scrollTo(0, 0); return;
@@ -31009,6 +31036,9 @@ ndGa = function(href){
     case 'anstallda': { if (sub && (!AEPERS.some(p => String(p[0]) === sub) || d[2] === 'registerutdrag')) return nav(); aeGaSrc(bas); return; }
     case 'rekrytering': { if (sub){ rxSt(); if (!S.rx.kand.some(c => String(c.id) === sub)) return nav(); } rxGaSrc(bas); return; }
     case 'avtal': if (sub) return nav(); maGa(); return;
+    // /logg och /logg?typ=radering: filtret står i adressen, som i repots /logg.
+    case 'logg': { if (sub) return nav();
+      const typ = new URLSearchParams(h.split('?')[1] || '').get('typ'); rlsGaVy('logg'); if (RLSTYP.some(([k]) => k === typ)){ S.rlsLoggTyp = typ; render(); } return; }
     case 'nyheter': {
       // /nyheter/nytt öppnar skrivrutan för den som får skriva, /nyheter/nav/<slug> Nytt i navet, /nyheter/<slug> inlägget.
       nhSt();
