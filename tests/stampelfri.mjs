@@ -104,15 +104,12 @@ console.log("\n\x1b[1mNattjobben fragar\x1b[0m");
 
 console.log("\n\x1b[1mGranssnittet frågar också\x1b[0m");
 {
+  // Startsidan ar Nav 2.0 sedan 2026-10-19 (src/app/(app)/page.tsx skickar dit).
+  // Stamplingsfragan stalls dar av Tid, som hamtar lage och roll ur samma
+  // stampelfri() via src/lib/nav2/tid.ts.
   const startsidan = las("src/app/(app)/page.tsx");
-  ok(
-    "startsidan raknar ihop modulens lage och personens roll",
-    startsidan.includes("const stamplar = sparr.stampling && !stampelfri(user.roles)"),
-  );
-  ok(
-    "och stamplingsfragan stalls bara for den som stamplar",
-    /\n    stamplar\n      \? supabase\n          \.from\("time_event"\)/.test(startsidan),
-  );
+  ok("startsidan ar Nav 2.0", startsidan.includes('redirect("/nav2")'));
+  ok("och Nav 2.0:s Tid fragar stampelfri()", las("src/lib/nav2/tid.ts").includes("stampelfri("));
 
   const nav = las("src/components/shell/nav-items.ts");
   ok("sidopanelen fragar", nav.includes("stampelfri(user.roles)"));

@@ -5,6 +5,41 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-20 · Nav 2.0 är navet: alla går över, och sidan strömmas (steg 4, beställarens svar)
+
+Beställaren 2026-10-19 svarade på steg 4:s frågor: alla går över från gamla
+Nav till Nav 2.0, ingen brytare och ingen väg tillbaka, och Nav 2.0 ska vara
+"super snabbt". Utkastets utseende ändras inte, inte ens för kontrasten.
+
+- **Övergången.** Gamla startsidan (`src/app/(app)/page.tsx`) skickar till
+  `/nav2`, så inloggningen, steg två, lösenordsbytet och sidopanelens Hem
+  landar där. En hel sidladdning av en gammal sida som Nav 2.0 visar själv
+  (bokmärke, länk i ett mejl) skickas av mellanvaran till `/nav2?till=<adress>`,
+  och Nav 2.0 öppnar rätt vy och flik (`src/lib/nav2/vagar.ts`). Det som bara
+  finns i gamla Nav (Nyheter, Leads, K&V, Händelselogg, Adoption, scheman,
+  spärrar, projekt, mallar …) öppnas som förut. Kommer begäran från `/nav2`
+  (Referer) skickas den aldrig om: då har Nav 2.0 skickat dit med flit.
+  Klientnavigeringar och prefetch är inte dokument och rörs inte.
+- **Mätt (Server-Timing, sedan i datan):** `/nav2` byggde alla vyers data, ca
+  330 frågor, före första byten: 2–3,5 s (en gång 17 s), varav 0,7–1,2 s
+  processortid. Även en fråga på `team` tog 0,4–2 s, så delarna köar för
+  varandra. Svaret var 0,99 MB komprimerat och gick inte att cacha.
+- **Sidan strömmas nu.** Skriptet (2,6 MB) och stilen (0,5 MB) är egna filer
+  med versionen i adressen (`/nav2/skript.js?v=…`, `src/lib/nav2/mall.ts`),
+  som webbläsaren sparar ett år. Sidans början med dem går iväg direkt, och
+  webbläsaren hämtar och förbereder skriptet medan datan byggs. Datan kommer
+  sist, och skriptet är `defer`. Går datan inte att bygga skrivs ett besked,
+  och skriptet startar inte (raden före `const ND` i utkastet): utan data ritas
+  utkastets exempel aldrig.
+- **Ärenden:** "Skriv en rutin av svaret" räknas på samma kategori, tre på 90
+  dagar, aldrig på konfidentiella ärenden och inte på Övrigt. Förut bara
+  utkastets semesterexempel.
+- `tests/stampelfri.mjs` läste gamla startsidans källa; nu kontrollerar den
+  att startsidan är Nav 2.0 och att Nav 2.0:s Tid frågar `stampelfri()`.
+
+**Kvar för att bli riktigt snabb:** datan byggs fortfarande vid varje
+laddning. Se NASTA_SESSION.
+
 ## 2026-10-19 · Nav 2.0, skalet och övergången (steg 4 till produktion)
 
 Steg 4 i "Till produktion" (`~/nav2-utkast/PROMPTER.md`): det som gäller alla

@@ -18,6 +18,9 @@ const nextConfig: NextConfig = {
    */
   outputFileTracingIncludes: {
     "/nav2": ["./src/nav2/utkast.html"],
+    // Skriptet och stilen ar egna filer sedan 2026-10-19 (src/lib/nav2/mall.ts).
+    "/nav2/skript.js": ["./src/nav2/utkast.html"],
+    "/nav2/stil.css": ["./src/nav2/utkast.html"],
   },
 
   /**

@@ -7428,6 +7428,8 @@ body.nd-riktig :is(.pv-lagrad,.arow[data-agenda],.pv-tab tbody tr[data-pvupers],
 "use strict";
 /* Nav 2.0 i riktigt läge: datan servern bäddat in (se moduler/nd.js). Null i utkastet. */
 const ND = (() => { try { const el = document.getElementById('ndData'); return el ? JSON.parse(el.textContent) : null; } catch(_){ return null; } })();
+/* Serverad från /nav2 (data-nav2) men utan data: navet kunde inte läsa den. Då startar ingenting, och utkastets exempel ritas aldrig. */
+if (!ND && document.currentScript && document.currentScript.hasAttribute('data-nav2')) return;
 
 /* ===================== Ikoner ===================== */
 const P = {
@@ -12715,13 +12717,13 @@ function arChef(){
 }
 function arDetaljChef(a){
   if (a.olastChef){ a.olastChef = false; a.last = a.last || aNu(); }
-  const sla = arSla(a), lika = ARENDEN.filter(x => x.kat === a.kat && x.id !== a.id && /semester/i.test(x.rubrik) && /semester/i.test(a.rubrik) && aNu() - x.skapad < 90 * 1440);
+  const sla = arSla(a), lika = ND ? (a.konf || a.kat === 'other' ? [] : ARENDEN.filter(x => x.kat === a.kat && x.id !== a.id && !x.konf && aNu() - x.skapad < 90 * 1440)) : ARENDEN.filter(x => x.kat === a.kat && x.id !== a.id && /semester/i.test(x.rubrik) && /semester/i.test(a.rubrik) && aNu() - x.skapad < 90 * 1440);
   return `<section class="card ardetalj">${note(178)}
     <div class="ardh"><div><h2>${esc(a.rubrik)}</h2><p class="muted">${esc(a.vem)} · ${ARKAT[a.kat].l} · skickat ${aFmt(a.skapad)}</p></div><span class="ardhk">${a.status === 'waiting' ? (a.pamind ? `<span class="pill t-ok">Påmind ${a.pamind}</span>` : `<button class="btn btn-s btn-sm" data-arpamin="${a.id}">${I('bell')}Påminn ${esc(fornamn(a.vem))}</button>`) : ''}<button class="tlink" data-arolast="${a.id}" title="Markera som oläst">Oläst</button></span>${a.konf ? `<span class="pill t-info">${I('las')}Konfidentiellt</span>` : ''}</div>
     ${a.status !== 'resolved' ? `<div class="arfristrad ${sla}"><span>Svar utlovat senast <b class="num">${aFmt(a.due)}</b> · ${sla === 'over' ? `<b>${aRel(a.due).replace('för ', '')} över tiden</b>` : aRel(a.due)}</span><span class="muted">Fristen frystes när ärendet lades upp.</span></div>` : ''}
     ${a.konf ? `<p class="muted tismall">Syns bara för ${esc(fornamn(a.vem))}, dig och VD. Det kan inte lämnas vidare.</p>` : ''}
     ${arTrad(a, false)}
-    ${lika.length + 1 >= 3 ? `<div class="arrutin">${note(180)}${I('rut')}<span><b>${lika.length + 1} frågor om semesterersättning på 90 dagar.</b><small>En rutin svarar en gång för alla, och nästa gång föreslås den innan någon skickar ett ärende.</small></span><span class="pacts"><button class="btn btn-s btn-sm" data-arrutinskriv="${a.id}">Skriv en rutin av svaret</button></span></div>` : ''}
+    ${lika.length + 1 >= 3 ? `<div class="arrutin">${note(180)}${I('rut')}<span><b>${lika.length + 1} frågor om ${ND ? esc(ARKAT[a.kat].l.toLowerCase()) : 'semesterersättning'} på 90 dagar.</b><small>En rutin svarar en gång för alla, och nästa gång föreslås den innan någon skickar ett ärende.</small></span><span class="pacts"><button class="btn btn-s btn-sm" data-arrutinskriv="${a.id}">Skriv en rutin av svaret</button></span></div>` : ''}
     ${a.status !== 'resolved' ? `<div class="arhandl">${note(179)}
       <label>Status<select class="uin" data-arstatus="${a.id}">${[['new','Ny'],['in_progress','Pågår'],['waiting','Väntar på svar']].map(([k, l]) => `<option value="${k}" ${a.status === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <label>Handläggare<select class="uin" data-artill="${a.id}" ${a.konf ? 'disabled title="Ett konfidentiellt ärende kan inte lämnas vidare"' : ''}>${(ND && ND.arenden ? ndArHandl(a) : [HANDL, 'Lena Holm · ekonomi', 'Ledningen']).map(p => `<option ${a.till === p ? 'selected' : ''}>${p}</option>`).join('')}</select></label>
@@ -30029,13 +30031,14 @@ if (ndMa()) NDKOPPLAD.add('avtal');
      tillämpade, och jämförs här. Inställningarna söks som förut.
    - Gör: de kopplade vyernas egna handlingar. Ny uppgift gör som N, och
      "Ny uppgift: …" läggs i dag via /nav2/uppgifter, med Ångra.
-   - Fråga Nav: frågorna står kvar efter roll och tid på dygnet, men att svara
-     kräver en AI-tjänst som inte är kopplad. Svaret säger det och öppnar
-     vyn där svaret finns. Undantagen räknas ur navet utan AI: veckans frågor
-     utan svar (0125, för chefen), lönekostnaden (brh) och det raka nejet om
-     någon annans provision.
-   - Fritt skrivna frågor bokförs utan namn (POST, SKRIVLAGE.paletten; 423 i
-     läsläge).
+   - Fråga Nav (beställaren 2026-10-19: utan AI tills vidare): ett femtiotal
+     frågor, 31 för säljaren och 48 för chefen, besvarade ur navets data när
+     de ställs (GET ?vad=svar, src/lib/nav2/palettsvar.ts). Förslagen följer
+     roll och tid på dygnet; det man skriver matchas mot frågornas text och
+     sökord, och "?" visar alla. Källan på en rad öppnar raden i vyn.
+   - Fritt skrivna frågor: lönekostnaden (brh) och det raka nejet om någon
+     annans provision räknas ur navet. Resten kräver en AI-tjänst; frågan
+     bokförs utan namn (POST, SKRIVLAGE.paletten; 423 i läsläge).
    ===================================================================== */
 
 const NDPAL = {sok:new Map(), vantar:null, timer:0, kal:null, kalHamtar:false, obes:null, obesHamtar:false, fragor:new Map()};
@@ -30098,41 +30101,89 @@ palInnehall = function(nq){
   return ut;
 };
 
-/* ---------- Fråga Nav: frågorna står kvar, svaren väntar på en AI-tjänst ---------- */
-// Utkastets frågor, utan exempelnamn. Vyerna är där svaret finns i navet under tiden.
+/* ---------- Fråga Nav: navets frågor, räknade när de ställs ---------- */
+// Frågorna och deras sökord. Svaren räknas på servern (src/lib/nav2/palettsvar.ts) med samma
+// nycklar, ur vyernas data i det ögonblick frågan ställs. Rollen styr vilka som visas; servern
+// svarar ändå bara med det personen får se.
 function ndPalFredag(){ let d = frPlus(kIdag(), 1); while (frDow(d) !== 1) d = frPlus(d, 1); return frPlus(d, 4); }
-function ndPalFragor(roll){
-  const man = FRMAN[+kIdag().slice(5, 7)], fr = ndPalFredag();
-  return roll === 'chef' ? {
-    besluta:['Vad måste jag besluta?', ['franvaro', 'arenden']],
-    teamet:[`Hur ligger teamet mot ${man}målet?`, ['provision', 'order']],
-    godkann:['Vilka order väntar på godkännande?', ['order']],
-    ledigt:['Vilka är lediga de kommande två veckorna?', ['franvaro', 'kalender']]
-  } : {
-    idag:['Vad har jag i dag?', ['uppgifter', 'kalender']],
-    malet:['Hur ligger jag mot målet?', ['provision']],
-    prognos:['Vilka affärer räknas in i prognosen?', ['provision']],
-    perdag:['Hur mycket behöver jag sälja per dag för att nå målet?', ['provision']],
-    ledig:['Vem i teamet är ledig nästa vecka?', ['franvaro']],
-    fredag:[`Kan jag ta ledigt fredag ${+fr.slice(8)} ${FRMAN[+fr.slice(5, 7)]}?`, ['franvaro']],
-    eftersalj:['När ska jag göra eftersälj?', ['rutiner']],
-    samtycke:['Vad gäller för samtycke när samtalet spelas in?', ['rutiner']],
-    coachsen:['Vad händer om coachningsuppgiften blir sen?', ['coachning']]
-  };
+function ndPalFragor(){
+  const m = +kIdag().slice(5, 7), man = FRMAN[m], forra = FRMAN[m === 1 ? 12 : m - 1], fr = ndPalFredag();
+  return [
+    ['idag', 'alla', 'Vad har jag i dag?', 'idag dag schema agenda moten'],
+    ['moten', 'alla', 'Vilka möten har jag resten av veckan?', 'moten mote kalender vecka'],
+    ['nasta11', 'alla', 'När är min nästa 1:1?', '1:1 enskilt samtal chef coachning mote'],
+    ['forsenat', 'alla', 'Vilka av mina uppgifter är försenade?', 'uppgifter sen sena frist forsenad'],
+    ['vantar', 'alla', 'Vad väntar jag på från andra?', 'vantar uppgifter andra kollega'],
+    ['malet', 'alla', 'Hur ligger jag mot målet?', 'mal malet provision takt'],
+    ['prognos', 'alla', `Vad landar min provision på i ${man}?`, 'prognos provision manad landar'],
+    ['perdag', 'alla', 'Hur mycket behöver jag sälja per dag för att nå målet?', 'mal per dag salja kvar'],
+    ['forra', 'alla', `Vad fick jag i provision i ${forra}?`, 'provision forra manaden lon utbetalning'],
+    ['minaorder', 'alla', `Hur många order har jag fått godkända i ${man}?`, 'order godkanda salt affarer antal'],
+    ['godkann', 'alla', 'Vilka order väntar på godkännande?', 'order godkanna godkannande vantar inskickad'],
+    ['stoppade', 'alla', 'Vilka order är stoppade, och varför?', 'order stoppad stoppade saljsamtal samtal saknas'],
+    ['loperut', 'alla', 'Vilka avtal löper ut inom 90 dagar?', 'avtal loper ut slut fornyelse kund'],
+    ['teamet', 'alla', `Hur ligger laget mot ${man}målet?`, 'lag laget team mal golvet ordervarde'],
+    ['semester', 'alla', 'Hur många semesterdagar har jag kvar?', 'semester saldo dagar kvar ledig'],
+    ['ansokt', 'alla', 'Vilka ledigheter har jag ansökt om?', 'ledighet ansokt ansokan semester beslut'],
+    ['fredag', 'alla', `Kan jag ta ledigt fredag ${+fr.slice(8)} ${FRMAN[+fr.slice(5, 7)]}?`, 'ledig ledigt fredag semester ansoka'],
+    ['sjukring', 'alla', 'Vem ringer jag när jag blir sjuk?', 'sjuk ringa ringordning chef sjukanmala'],
+    ['sjukanmalan', 'alla', 'Hur sjukanmäler jag mig?', 'sjuk sjukanmalan rutin'],
+    ['jobbat', 'alla', 'Hur mycket har jag jobbat den här veckan?', 'jobbat timmar tid arbetstid vecka stampla'],
+    ['instamplad', 'alla', 'När stämplade jag in i dag?', 'stampla stamplade instamplad tid'],
+    ['sena', 'alla', 'Hur ofta har jag kommit sent den senaste månaden?', 'sen sent sena ankomster tid'],
+    ['kvittera', 'alla', 'Vilka rutiner har jag inte kvitterat?', 'rutiner kvittera kvittens lasa'],
+    ['eftersalj', 'alla', 'När ska jag göra eftersälj?', 'eftersalj rutin kund'],
+    ['samtycke', 'alla', 'Vad gäller för samtycke när samtalet spelas in?', 'samtycke inspelning samtal rutin'],
+    ['kurser', 'alla', 'Vilka kurser har jag kvar?', 'kurser kurs utbildning moduler obligatorisk'],
+    ['repetition', 'alla', 'Har jag repetition i dag?', 'repetition fragor utbildning'],
+    ['arenden', 'alla', 'Har mina ärenden fått svar?', 'arenden arende svar'],
+    ['fel', 'alla', 'Är felen jag rapporterat lagade?', 'fel bugg rapport lagad'],
+    ['coach', 'alla', 'Vad har jag lovat i coachningen?', 'coachning overenskommelse uppgift lovat'],
+    ['ledig', 'saljare', 'Vem i teamet är ledig nästa vecka?', 'ledig borta team kollegor vecka'],
+    ['besluta', 'chef', 'Vad måste jag besluta?', 'beslut besluta attest godkanna vantar'],
+    ['ledigt', 'chef', 'Vilka är lediga de kommande två veckorna?', 'ledig ledigt borta semester team'],
+    ['borta', 'chef', 'Vem är borta i dag?', 'borta sjuk ledig team'],
+    ['ejinne', 'chef', 'Vem har inte stämplat in i dag?', 'stamplat instamplad saknas tid'],
+    ['frister', 'chef', 'Vilka sjukfrister närmar sig?', 'sjuk frist frister lakarintyg forsakringskassan'],
+    ['rehab', 'chef', 'Vem har upprepad korttidsfrånvaro?', 'rehab sjuk upprepad korttidsfranvaro'],
+    ['arendetid', 'chef', 'Vilka ärenden har passerat svarstiden?', 'arenden svarstid sena'],
+    ['rattelser', 'chef', 'Vilka rättelser väntar på mig?', 'rattelser rattelse stampling ogiltig franvaro tid'],
+    ['kurserteam', 'chef', 'Vem har obligatoriska kurser kvar?', 'kurser utbildning team obligatorisk'],
+    ['bedoma', 'chef', 'Vilka rollspel väntar på bedömning?', 'rollspel bedoma bedomning utbildning'],
+    ['kvittenser', 'chef', 'Vilka rutiner saknar kvittenser?', 'rutiner kvittenser saknar'],
+    ['granska', 'chef', 'Vilka rutiner ska granskas snart?', 'rutiner granska granskning'],
+    ['felko', 'chef', 'Vilka fel är öppna i kön?', 'fel felko buggar oppna'],
+    ['natten', 'chef', 'Gick nattjobbet som det skulle i natt?', 'nattjobb nattjobbet natt drift jobb'],
+    ['perioder', 'chef', 'Vilka provisionsmånader är inte fastställda?', 'provision faststalla faststalld period manad'],
+    ['coachteam', 'chef', 'Vilka överenskommelser i coachningen är försenade?', 'coachning overenskommelser forsenade team'],
+    ['kandidater', 'chef', 'Vilka kandidater är i processen?', 'kandidater rekrytering intervju'],
+    ['obesvarat', 'chef', 'Vilka frågor kunde Nav inte svara på i veckan?', 'fragor obesvarade saknas']
+  ];
 }
-function ndPalSaknas(q, vyer){
-  return {q, lead:'Fråga Nav kan inte svara på det än.', bound:`Svaren kräver en AI-tjänst som inte är kopplad till Nav. Under tiden finns det här i ${prfOch(vyer.map(v => NDVY[v][0]))}.`,
-    rows:[], acts:vyer.map(v => ({l:`Öppna ${NDVY[v][0]}`, open:NDVY[v][1]})), follow:[], ndKalla:'ai'};
+const ndPalForRoll = roll => ndPalFragor().filter(f => f[1] === 'alla' || f[1] === roll);
+// Svaren: hämtas på nytt varje gång frågan ställs, så att en order som lades upp nyss kommer med.
+NDPAL.svar = new Map();
+function ndPalHamtaSvar(k){
+  NDPAL.svar.set(k, {lage:'laddar'});
+  fetch(`/nav2/paletten?vad=svar&fraga=${encodeURIComponent(k)}`, {credentials:'same-origin'})
+    .then(r => r.json()).catch(() => ({fel:'Nav svarade inte.'}))
+    .then(s => { NDPAL.svar.set(k, s.fel ? {lage:'fel', fel:s.fel} : {lage:'klar', s}); if (PS.key === k) drawAnswer(); });
+}
+function ndPalSvar(k, q){
+  const x = NDPAL.svar.get(k);
+  if (!x || x.lage === 'laddar') return {q, lead:x ? 'Räknar ur Nav …' : '', rows:[], acts:[], follow:[], ndKalla:'nav'};
+  if (x.lage === 'fel') return {q, lead:'Svaret gick inte att räkna fram.', bound:x.fel, rows:[], acts:[], follow:[], ndKalla:'nav'};
+  return {...x.s, q, bound:x.s.bound || '', ndKalla:'nav'};
 }
 function ndPalObesvarat(){
   const q = 'Vilka frågor kunde Nav inte svara på i veckan?', o = NDPAL.obes, not = 'Utan namn. Nav sparar bara frågan och hur många gånger den ställts.';
-  if (!o){ ndPalObes(); return {q, lead:'Hämtar veckans frågor …', rows:[], acts:[], follow:[], ndKalla:'nav'}; }
-  if (o.fel) return {q, lead:'Frågorna gick inte att läsa.', bound:o.fel, rows:[], acts:[], follow:[], ndKalla:'nav'};
-  if (!o.farSe) return {q, lead:'Det kan jag inte se.', bound:'Frågorna utan svar syns för säljchef, VD och admin.', rows:[], acts:[], follow:[], ndKalla:'nav'};
+  if (!o) return {q, lead:'Hämtar veckans frågor …', rows:[], acts:[], follow:[], ndKalla:'utan'};
+  if (o.fel) return {q, lead:'Frågorna gick inte att läsa.', bound:o.fel, rows:[], acts:[], follow:[], ndKalla:'utan'};
+  if (!o.farSe) return {q, lead:'Det kan jag inte se.', bound:'Frågorna utan svar syns för säljchef, VD och admin.', rows:[], acts:[], follow:[], ndKalla:'utan'};
   const f = o.fragor || [];
-  if (!f.length) return {q, lead:'Inga frågor utan svar i veckan.', bound:o.sparas ? '' : 'Läsläge: frågorna sparas först när paletten slås på, så listan fylls inte än.', note:not, rows:[], acts:[], follow:[], ndKalla:'nav'};
+  if (!f.length) return {q, lead:'Inga frågor utan svar i veckan.', bound:o.sparas ? '' : 'Läsläge: frågorna sparas först när paletten slås på, så listan fylls inte än.', note:not, rows:[], acts:[], follow:[], ndKalla:'utan'};
   const top = ndPalStor(f[0].q);
-  return {q, lead:`${f.length} ${f.length === 1 ? 'fråga' : 'frågor'} utan svar i veckan.`, note:not, ndKalla:'nav', follow:[],
+  return {q, lead:`${f.length} ${f.length === 1 ? 'fråga' : 'frågor'} utan svar i veckan.`, note:not, ndKalla:'utan', follow:[],
     rows:f.slice(0, 5).map(x => ['exakt', `”${ndPalStor(x.q)}” Ställd ${x.antal} ${x.antal === 1 ? 'gång' : 'gånger'}.`, 'Frågor utan svar']),
     acts:ndKopplad('rutiner') ? [{l:`Skapa utkast: rutin om ”${top}”`, confirm:`Ett utkast till rutinen ”${top}” skapas med dig som ägare. Inget publiceras.`, ndRutin:top}] : []};
 }
@@ -30140,15 +30191,34 @@ const _palNdQaFor = qaFor;
 qaFor = function(roll){
   if (!ND) return _palNdQaFor(roll);
   const ut = {};
-  Object.entries(ndPalFragor(roll)).forEach(([k, [q, vyer]]) => { ut[k] = ndPalSaknas(q, vyer); });
-  if (roll === 'chef') ut.obesvarat = ndPalObesvarat();
+  ndPalForRoll(roll).forEach(([k, , q]) => { ut[k] = k === 'obesvarat' ? ndPalObesvarat() : ndPalSvar(k, q); });
   return ut;
+};
+const _palNdShowAnswer = showAnswer;
+showAnswer = function(key, fri){
+  if (ND && key){ if (key === 'obesvarat'){ NDPAL.obes = null; ndPalObes(); } else ndPalHamtaSvar(key); }
+  return _palNdShowAnswer(key, fri);
 };
 // Förslagen följer tiden och rollen, som i utkastet (nd.js tömde dem när svaren var exempel).
 if (ND){
   const sug = {saljare:{morgon:['idag', 'malet', 'fredag'], dag:['idag', 'malet', 'eftersalj'], slut:['malet', 'perdag', 'fredag'], sondag:['ledig', 'malet', 'fredag']},
     chef:{morgon:['besluta', 'teamet', 'ledigt'], dag:['besluta', 'teamet', 'obesvarat'], slut:['besluta', 'ledigt', 'obesvarat'], sondag:['ledigt', 'besluta', 'obesvarat']}};
   Object.keys(sug).forEach(r => Object.keys(sug[r]).forEach(l => { SUG[r][l] = sug[r][l]; }));
+}
+// Det man skriver jämförs med frågans text och sökord, ord för ord. "?" visar alla frågor.
+const NDPALSMA = new Set(['hur', 'har', 'jag', 'mig', 'min', 'mitt', 'mina', 'vad', 'vem', 'vilka', 'vilken', 'nar', 'kan', 'ska', 'det', 'den', 'de', 'pa', 'om', 'en', 'ett', 'ar', 'och', 'att', 'till', 'for', 'med', 'av', 'mycket', 'manga', 'i', 'jo', 'nu', 'fran']);
+function ndPalTraffar(roll, nq){
+  const lista = ndPalForRoll(roll);
+  if (nq === '?') return lista.map(f => f[0]);
+  const ord = nq.split(/[^a-z0-9:]+/).filter(o => o.length >= 2 && !NDPALSMA.has(o));
+  return lista.map(([k, , q, sok]) => {
+    const text = norm(q);
+    if (text.includes(nq)) return [k, 2];
+    if (!ord.length) return [k, 0];
+    const w = norm(`${q} ${sok}`).split(/[^a-z0-9:]+/).filter(Boolean);
+    const n = ord.filter(o => w.some(x => x.startsWith(o) || (o.length >= 5 && x.includes(o)) || (x.length >= 5 && o.startsWith(x)))).length;
+    return [k, n && n / ord.length >= .5 ? n / ord.length : 0];
+  }).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]).filter((x, i, l) => x[1] >= l[0][1] - .25).slice(0, 5).map(x => x[0]);
 }
 
 // Fritt skrivna frågor: lönekostnaden och behörighetens raka nej räknas ur navet; resten väntar på AI-tjänsten och bokförs utan namn.
@@ -30162,7 +30232,7 @@ friFraga = function(text){
     if (t.split(/[^a-z0-9]+/).some(o => namn.has(o) || namn.has(o.replace(/s$/, ''))))
       return {q:text, lead:'Det kan jag inte se.', bound:'Du ser bara din egen provision. Ekonomi, VD och säljchefen ser allas.', rows:[], acts:[], follow:['malet']};
   }
-  return {q:text, lead:'Fråga Nav kan inte svara på fritt skrivna frågor än.', bound:'Det kräver en AI-tjänst som inte är kopplad till Nav. Sök på ett ord i stället, så letar Nav i det du har.',
+  return {q:text, lead:'Den frågan kan Nav inte svara på.', bound:'Nav svarar på frågorna i listan, räknade ur det du får se. Skriv ? för att se alla. Fritt skrivna frågor kräver en AI-tjänst, och den är inte kopplad.',
     rows:[], note:ndPalSpara(text), acts:[{l:'Skapa ett ärende i stället', open:'/arenden/nytt'}], follow:[], ndKalla:'ai'};
 };
 // En gång per fråga och sidladdning. Svaret ersätter raden i svaret när det kommer.
@@ -30185,12 +30255,20 @@ const _palNdDrawAnswer = drawAnswer;
 drawAnswer = function(){
   _palNdDrawAnswer(); if (!ND || !PS.cur) return;
   const k = PS.cur.ndKalla, el = document.querySelector('#palRes .answer .src');
-  if (el) el.innerHTML = `<span class="pill t-neutral">${k === 'ai' ? 'AI-tjänst saknas' : k === 'nav' ? 'Ur Nav, utan namn' : 'Ur Nav'}</span>`;
+  if (el) el.innerHTML = `<span class="pill t-neutral">${k === 'ai' ? 'AI-tjänst saknas' : k === 'utan' ? 'Ur Nav, utan namn' : 'Ur Nav, räknat nu'}</span>`;
+  // Källan på en rad öppnar raden i vyn: radens egen länk, annars vyn källan heter.
+  const rader = PS.cur.rows || [];
+  document.querySelectorAll('#palRes .answer .facts > li').forEach((li, i) => {
+    const b = li.querySelector('[data-psrc]'), r = rader[i]; if (!b || !r) return;
+    const h = r[4] || (PS.cur.kallor || {})[r[2]];
+    if (h) b.dataset.ndhref = h;
+  });
 };
 const _palNdClick = palClick;
 palClick = function(e){
   if (!ND) return _palNdClick(e);
   const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.ndhref){ closePal(); ndGa(t.dataset.ndhref); return; }
   if (t.dataset.psrc){ toast(t.dataset.psrc === 'Frågor utan svar' ? 'Räknat sedan måndag, utan namn.' : `Källan är ${t.dataset.psrc}.`); return; }
   const x = PS.cur && t.dataset.pact !== undefined ? PS.cur.acts[+t.dataset.pact] : null;
   if (x && x.open && x.open !== '/arenden/nytt' && !x.open.startsWith('/rutiner/')){ closePal(); ndGa(x.open); return; }
@@ -30222,13 +30300,30 @@ function ndPalLaggTill(text){
 }
 const _palNdDraw = drawPal;
 drawPal = function(q){
-  if (ND) ndPalKal();
-  _palNdDraw(q); if (!ND || !ndKopplad('uppgifter')) return;
-  palItems.forEach(o => {
-    const l = (/<span>([^<]+)<\/span>/.exec(o.html || '') || [])[1] || '';
-    if (l === 'Ny uppgift') o.run = () => { closePal(); ndPalNyUppgift(); };
-    else if (l.startsWith('Ny uppgift: ')) o.run = () => { closePal(); ndPalLaggTill(q.trim()); };
+  if (!ND) return _palNdDraw(q);
+  ndPalKal();
+  const role = S.role === 'chef' ? 'chef' : 'saljare', all = qaFor(role);
+  const nq = norm(q.trim());
+  const qs = nq ? ndPalTraffar(role, nq) : SUG[role][S.mode].filter(k => all[k]);
+  const acts = ACTIONS().filter(x => !nq || norm(x.l).includes(nq) || (x.k && norm(x.k).includes(nq)));
+  const pages = PAGES().filter(([l]) => !nq || norm(l).includes(nq));
+  palItems = [];
+  let html = '';
+  const grp = (title, arr, fn) => { if (!arr.length) return; html += `<div class="gh">${title}</div>`; arr.forEach(x => { const o = fn(x); palItems.push(o); html += `<button class="opt ${o.cls||''}" data-pi="${palItems.length-1}" role="option">${o.html}</button>`; }); };
+  if (!nq) grp('Senast', senastPoster(), x => ({html:`${I(x.i)}<span>${esc(x.l)}</span><span class="p">${esc(x.p)}</span>`, run:()=>{ closePal(); x.run(); }}));
+  grp(nq ? 'Fråga Nav' : 'Förslag just nu', qs, k => ({cls:'ai', html:`${I('ai')}<span>${esc(all[k].q)}</span>`, run:()=>showAnswer(k)}));
+  if (nq.length >= 2) grp('I Nav', palInnehall(nq), x => ({html:`${I(x.i)}<span>${esc(x.l)}</span><span class="p">${esc(x.p)}</span>`, run:()=>{ closePal(); x.run(); }}));
+  if (nq && nq !== '?' && !qs.length) grp('Fråga Nav', [q.trim()], x => ({cls:'ai', html:`${I('ai')}<span>Fråga: ”${esc(x)}”</span>`, run:()=>showAnswer(null, x)}));
+  grp('Gör', acts, x => {
+    const run = x.l === 'Ny uppgift' && ndKopplad('uppgifter') ? () => ndPalNyUppgift() : x.run;
+    return {html:`${I(x.i)}<span>${esc(x.l)}</span>`, run:()=>{ closePal(); run(); }};
   });
+  grp('Gå till', pages.slice(0, nq ? 12 : 6), ([l,i,h]) => ({html:`${I(i)}<span>${esc(l)}</span><span class="p">${h}</span>`, run:()=>{ closePal(); ndGa(h); }}));
+  if (nq.length >= 3 && nq !== '?' && !qs.length) grp('Lägg till', [q.trim()], x => ({html:`${I('plus')}<span>Ny uppgift: ”${esc(x)}”</span><span class="p">i dag</span>`, run:()=>{ closePal(); ndKopplad('uppgifter') ? ndPalLaggTill(x) : ndGa('/uppgifter'); }}));
+  if (!palItems.length) html = `<div class="empty"><b>Inga träffar</b>Prova ett annat ord.</div>`;
+  document.getElementById('palRes').innerHTML = html;
+  document.querySelectorAll('#palRes .opt[data-pi]').forEach(o => o.addEventListener('mousemove', () => { palSel = +o.dataset.pi; hl(); }));
+  hl();
 };
 
 /* =====================================================================
@@ -30415,6 +30510,14 @@ if (ND){
   let skalA11yT = 0;
   new MutationObserver(() => { if (!skalA11yT) skalA11yT = requestAnimationFrame(() => { skalA11yT = 0; skalA11y(); }); }).observe(document.body, {childList:true, subtree:true, attributes:true, attributeFilter:['aria-label', 'role', 'aria-sort', 'aria-expanded', 'class']});
   window.addEventListener('resize', () => requestAnimationFrame(skalA11y));
+}
+
+/* ---------- Övergången: alla i Nav 2.0 (beställaren 2026-10-19) ---------- */
+// En gammal adress som Nav 2.0 kan visa (bokmärke, mejl, notis) skickas av mellanvaran hit som /nav2?till=/x.
+// Den öppnas här; kan Nav 2.0 inte visa posten går vägen vidare till sidan i nuvarande Nav (Referer /nav2 släpper igenom den).
+if (ND){
+  const till = new URLSearchParams(location.search).get('till');
+  if (till && /^\/(?!\/)/.test(till)){ try { history.replaceState(null, '', '/nav2'); } catch(_){} setTimeout(() => ndGa(till), 0); }
 }
 
 /* Start */

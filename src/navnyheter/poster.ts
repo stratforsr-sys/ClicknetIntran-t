@@ -101,6 +101,9 @@ vilken väg du än tar dit: menyn, sökningen, en notis eller en länk. Det som
 bara finns här, som scheman, spärrar och projekt, öppnas också här. Nya Nav
 fungerar i mobilens bredd. Ingenting påhittat visas.
 
+Nya Nav är navet: startsidan och inloggningen leder hit, och en gammal
+länk eller ett bokmärke öppnar samma sak här.
+
 ## Läsläge
 
 Ingenting sparas från /nav2 förrän det slås på, vy för vy.`,

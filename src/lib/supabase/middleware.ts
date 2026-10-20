@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY, SUPABASE_URL, isConfigured } from "@/lib/env";
 import { bygCsp } from "@/lib/csp";
+import { nav2Adress, franNav2 } from "@/lib/nav2/vagar";
 import { kvittoGiltigt, STEG2_KAKA } from "@/lib/mfa";
 import { MFA_REQUIRED_ROLES } from "@/lib/roles";
 import { BYTESVAG, kraverByte } from "@/lib/losenordsbyte";
@@ -213,6 +214,23 @@ export async function updateSession(request: NextRequest) {
     url.pathname = BYTESVAG;
     url.search = "";
     return avsluta(NextResponse.redirect(url));
+  }
+
+  /**
+   * Overgangen till Nav 2.0 (bestallaren 2026-10-19). En hel sidladdning av en
+   * gammal sida som Nav 2.0 visar sjalv gar dit. Se src/lib/nav2/vagar.ts.
+   */
+  if (user && !undantag && request.method === "GET") {
+    const dokument = request.headers.get("sec-fetch-dest") === "document" ||
+      (!request.headers.has("sec-fetch-dest") && !request.headers.has("rsc") && (request.headers.get("accept") ?? "").includes("text/html"));
+    const till = dokument && !franNav2(request.headers.get("referer"), request.nextUrl.origin) ? nav2Adress(path, request.nextUrl.search) : null;
+    if (till) {
+      const url = request.nextUrl.clone();
+      const [p, q] = till.split("?");
+      url.pathname = p;
+      url.search = "?" + q;
+      return avsluta(NextResponse.redirect(url));
+    }
   }
 
   if (user && path === "/logga-in") {
