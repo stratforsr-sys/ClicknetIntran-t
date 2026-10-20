@@ -5,6 +5,54 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-20 · Nav 2.0, fart: policyerna i `(select …)`-form (0155, skriven och torrkörd, inte körd)
+
+Fortsättning på "Fart: kedjorna" nedan, efter beställarens ja till omskrivningen.
+Verktygen ligger i `~/nav2-utkast/delar/fart/rls/`.
+
+- **0155_rls_initplan:** 161 av 208 policyer (public och storage) skrivs i
+  initplan-form. Ett anrop utan kolumner som argument (`current_employee_id()`,
+  `has_any_role(ARRAY[…])`, `can_read_all_employees()` …) står i
+  `( SELECT f() )` och räknas en gång per sats i stället för en gång per rad.
+  Roller, kommando och namn är orörda, liksom anrop med kolumner som argument
+  (`leads_employee(employee_id)` …). Filen är genererad ur `pg_policies` av
+  `generera.mjs`.
+- **Samma regler:** varje ändrad policy, gammalt mot nytt uttryck, på varje
+  rad. Nio konton: alla roller, onboarding, offboardad, lösenordsbyte, utan
+  inloggning och okänt id. Resultat: 1 449 prov, 163 035 rader, 0 avvikelser
+  (`bevisa.mjs`).
+- **Effekt:** en laddnings riktiga frågor, i en transaktion som rullades
+  tillbaka. Postgres-tiden går från ~1,3 s till ~0,4 s: Zen 1 297 → 380 ms,
+  Fredrik 1 324 → 517 ms och Mick 1 344 → 457 ms. Större databas behövs inte
+  nu; mät igen efter 0155.
+- **Det som ändras är radordningen.** Raderna är desamma, men planerna blir
+  andra (index i stället för tabellgenomläsning). Därför kommer rader som
+  frågan inte sorterar, eller som har lika värden i sorteringen, i en annan
+  ordning. Hela bygget spelades in och spelades upp, med och utan 0155:
+  - Mick: identiskt.
+  - Fredrik: ordningen bland order samma dag i provisionsunderlaget ändras.
+  - Zen:
+    - chefens frånvarolistor (`sjuka`, `poster`) ändrar ordning
+    - Coachningens överenskommelser och logg ändrar ordning
+    - i lönerapportens löpande period kan förklaringen bli en annan av två
+      sjukperioder
+
+  Ordningen är redan i dag odefinierad, eftersom en uppdaterad rad flyttar
+  sig. Beställaren beslutar om koden ska sortera uttryckligen innan 0155
+  körs (HANDOFF, "Fart: kedjorna").
+- **Vakt:** filen avbryter om någon av de 161 policyerna har ändrats sedan den
+  skrevs. Återställningen ligger i `supabase/ner/0155_rls_initplan.sql`, med
+  samma slags vakt. apply-sql kör den aldrig. Torrkört:
+  - upp
+  - upp och sedan ner, som ger exakt samma policyer som före
+  - vakten i tre fall
+- **Körs i steg 6,** sist av Nav 2.0-migrationerna. Har de lagt till
+  policyer: kör `generera.mjs` igen.
+- **Rättelse:** i posten nedan stod att simulatorn räknade med ~4 %. Previewen
+  visade ingen skillnad i tid (se posten).
+
+---
+
 ## 2026-10-20 · Nav 2.0, Kalendern: gäster utanför Clicknet med e-post (beställarens svar)
 
 - **Beställaren:** "när jag lägger in ett möte ska jag kunna lägga till en
@@ -158,8 +206,10 @@ Postgres per fråga, simulator, klientmätning).
   mot de riktiga typerna (`next` 15.5.23, `@supabase/*`, `pg`, `@types/pg`)
   ger inga nya fel. Processortiden är oförändrad.
 - **Effekt:** lokalt ~1,1 → ~1,05 s (Zen) och ~1,03 → ~0,88 s (Fredrik).
-  Simulatorn räknar med ~4 % i produktionen, eftersom databasen är mättad.
-  Previewen: se `~/nav2-utkast/HANDOFF.md`, "Fart: kedjorna".
+  I previewen (fem varma laddningar som Zen) gav det ingen skillnad i tid:
+  datan 912 → 908 ms i median, processortiden 314 → 263 ms. Databasen är
+  mättad. *Rättat 2026-10-20; här stod först att simulatorn räknade med ~4 %.*
+  Se `~/nav2-utkast/HANDOFF.md`, "Fart: kedjorna".
 - **I webbläsaren** tar sidan ~0,1 s efter att datan kommit (0,3 s med fyra
   gånger strypt processor). Servern är fortfarande det långsamma.
 - **Nästa steg, beställarens beslut:** policyerna i `(select …)`-form. Mätt på
