@@ -65,6 +65,12 @@ export type NdFranvaro = {
   /** Som på /franvaro/sjuk: en rad per plats i ordningen, med numret om det finns. */
   ring: { vem: string; roll: string; antal: number; tel: string | null }[];
   frister: { kind: string; due_on: string }[];
+  /**
+   * Gamla Nav B: den inloggades kalenderflöden för ledighet (`calendar_feed`, E7.3), som /franvaro.
+   * Bara `mine` och `team`: flödet bär bara beviljad ledighet (beställaren 2026-09-22), så mötesflödet
+   * (`handelser`) visas inte här. Adressen är den egna och visas bara för ägaren.
+   */
+  floden: { scope: string; token: string; aktiv: boolean; lasningar: number; senast: string | null }[];
   chef: null | {
     ko: Chefsbild["ko"];
     kommande: Chefsbild["kommande"];
@@ -103,6 +109,8 @@ export async function byggFranvaro(supabase: SupabaseClient, user: CurrentUser):
   const idag = svensktDatum();
   const db = supabaseAdmin();
   const rvP = tidig(hamtaRegelverk());
+  // Gamla Nav B: de egna kalenderflödena för ledighet. RLS släpper också säljchef och VD på andras, så filtret på den egna raden behövs.
+  const flodeP = tidig(Promise.resolve(supabase.from("calendar_feed").select("scope, token, revoked_at, read_count, last_read_at").eq("employee_id", mig).in("scope", ["mine", "team"])));
   // Bemanningen: antal andra som är borta per dag, ett år framåt. Läst med
   // service role som i hamtaProvunderlag, och bara antalet lämnar servern.
   const andrasP = tidig(Promise.resolve(db
@@ -229,6 +237,7 @@ export async function byggFranvaro(supabase: SupabaseClient, user: CurrentUser):
   }
   const oppen = (sjuk ?? []).find((s) => !s.last_sick_day || s.last_sick_day >= idag);
 
+  const { data: flodeRader } = await flodeP;
   const ut: NdFranvaro = {
     regler: rv?.regler ?? null,
     typer: rv?.typer ?? [],
@@ -243,6 +252,9 @@ export async function byggFranvaro(supabase: SupabaseClient, user: CurrentUser):
     poster,
     ring,
     frister: oppen && rv ? sjukfrister(oppen.first_sick_day, rv.regler) : [],
+    floden: ((flodeRader ?? []) as { scope: string; token: string; revoked_at: string | null; read_count: number | null; last_read_at: string | null }[])
+      .map((f) => ({ scope: f.scope, token: f.token, aktiv: !f.revoked_at, lasningar: f.read_count ?? 0, senast: f.last_read_at ? svensktDatum(f.last_read_at) : null }))
+      .sort((a, b) => (a.scope === "mine" ? -1 : 1) - (b.scope === "mine" ? -1 : 1)),
     chef: null,
     runda: null,
     forslag: {},

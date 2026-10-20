@@ -31,7 +31,9 @@ behörigheter som här: du ser bara det du får se.
 - **Tid**, **Frånvaro** och **Uppgifter**, med samma regler som här. I Uppgifter
   väljer du dagens tre, planerar och avslutar dagen, skriver första steget och
   påminner den du väntar på. I Frånvaro kan chefen starta önskemålsrundan
-  inför sommaren, föreslå en annan period och kvittera rehabsignalen. I Tid
+  inför sommaren, föreslå en annan period och kvittera rehabsignalen. Där går
+  det också att ställa in en beviljad ledighet eller en sjukanmälan som blev
+  fel, och lägga in sin ledighet i den egna kalendern med en hemlig adress. I Tid
   rättar du en stämpling på raden, kollar veckan på fredagen och väljer egna
   påminnelser; chefen ser rättelserna med stöd, nästa veckas frånvaro och
   lönerapportens steg. Chefen lägger också nya scheman, med tider per

@@ -15,7 +15,11 @@ import {
   mataInSaldo,
   registreraIntyg,
   registreraSjuk,
+  rotaFlode,
+  skapaFlode,
   skickaAnsokan,
+  stallInLedighet,
+  stallInSjuk,
   type FranvaroState,
 } from "@/app/(app)/franvaro/actions";
 import { sparaTak } from "@/app/(app)/franvaro/regler/actions";
@@ -35,6 +39,10 @@ export const dynamic = "force-dynamic";
  * rehabsignalen, starta önskemålsrundan, och registrera annan frånvaro än sjuk
  * åt någon efter ett samtal (en godkänd ansökan som chefen lagt in; samma
  * krets som får registrera sjukanmälan åt någon).
+ *
+ * Gamla Nav B (2026-10-20): ställa in en beviljad ledighet och en
+ * sjukanmälan (`stallInLedighet`, `stallInSjuk`, med repots kretsar och
+ * notiser) och kalenderflödet för ledighet (`skapaFlode`, `rotaFlode`).
  * ===========================================================================
  *
  * LÄSLÄGE: står `SKRIVLAGE.franvaro` på false svarar rutten 423 innan något
@@ -81,6 +89,27 @@ export async function POST(request: Request) {
 
   try {
     switch (handling) {
+      case "stall-in": {
+        // Repots stallInLedighet: den egna, eller den som får besluta om sorten. Personen får notisen.
+        if (!UUID.test(id)) return svar({ fel: "Okänd ledighet." }, 400);
+        return fran(await stallInLedighet({}, form({ id })), "Ledigheten är inställd.");
+      }
+      case "stall-in-sjuk": {
+        // Repots stallInSjuk: den egna, den som leder personen, säljchef och VD. Raden står kvar men räknas inte.
+        if (!UUID.test(id)) return svar({ fel: "Okänd anmälan." }, 400);
+        return fran(await stallInSjuk({}, form({ id })), "Anmälan är inställd.");
+      }
+      case "flode": {
+        // Kalenderflödet (E7.3): skapa, byta adress eller stänga. Bara ledighetens flöden (beställaren 2026-09-22).
+        const scope = String(b.scope ?? "mine"), vad = String(b.vad ?? "");
+        if (scope !== "mine" && scope !== "team") return svar({ fel: "Okänd sorts flöde." }, 400);
+        if (vad === "skapa") {
+          if (scope !== "mine") return svar({ fel: "Teamets flöde skapas inte här." }, 400);
+          return fran(await skapaFlode({}, form({ scope })), "Flödet är skapat.");
+        }
+        if (vad === "byt" || vad === "stang") return fran(await rotaFlode({}, form({ scope, stang: vad === "stang" ? "1" : "" })), vad === "stang" ? "Flödet är stängt." : "Ny adress skapad.");
+        return svar({ fel: "Okänd handling." }, 400);
+      }
       case "ansok":
         return fran(
           await skickaAnsokan({}, form({ typ: b.typ, fran: b.fran, till: b.till ?? b.fran, langd: b.till && b.till !== b.fran ? "flera" : "en_dag", deldag: b.deldag ? "1" : "", minuter: b.minuter ?? 0, skal: b.skal ?? "" })),

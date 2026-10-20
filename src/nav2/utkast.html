@@ -25764,6 +25764,75 @@ document.addEventListener('change', async e => {
   ndFrPost('intyg-registrera', {rapport:egen.id, fil:p.fileId, filnamn:f.name, store:p.store});
 }, true);
 
+/* ---------- Gamla Nav B: ställa in, kalenderflödet och /franvaro/<id> ----------
+   Beställaren 2026-10-20 (svar 4). Repots stallInLedighet och stallInSjuk prövar själva vem som får:
+   den egna, och den som får besluta om sorten eller leder personen. Inställningen bekräftas i toasten. */
+function ndFrStallIn(id, sjuk){
+  const p = [...FRPER, ...(ndFr().poster || [])].find(x => x.id === id); if (!p) return;
+  const t = FTYP[p.typ] || {l:p.typ}, egen = p.egen;
+  const text = sjuk ? `Ställa in ${egen ? 'din' : `${fornamn(p.vem)}s`} sjukanmälan från ${frKort(p.fran)}? Dagarna räknas inte längre som sjukfrånvaro och behöver registreras på nytt.`
+    : `Ställa in ${egen ? 'din' : `${fornamn(p.vem)}s`} ${t.l.toLowerCase()} ${frPeriod(p.fran, p.till)}? ${egen ? 'Den' : `${fornamn(p.vem)} får besked, och den`} räknas inte längre i saldot eller bemanningen.`;
+  toastActs(text, [[sjuk ? 'Ställ in anmälan' : 'Ställ in', () => ndFrPost(sjuk ? 'stall-in-sjuk' : 'stall-in', {id})]], 9000);
+}
+// Säljaren: Ställ in bredvid Ändra på en godkänd ledighet.
+const _ndFrMinaKortB = frMinaKort;
+frMinaKort = function(){
+  const h = _ndFrMinaKortB(); if (!ndFr()) return h;
+  return h.replace(/(<button class="tlink" data-ndfrandra="([^"]+)"[^>]*>Ändra<\/button>)/g, (m, b, id) => `${b}<button class="tlink" data-ndfrstallin="${id}">Ställ in</button>`);
+};
+// Säljaren: en sjukanmälan som blev fel går att ställa in.
+const _ndFrSjukStatusB = frSjukStatus;
+frSjukStatus = function(){
+  const h = _ndFrSjukStatusB(); if (!ndFr()) return h;
+  const s = ndFr().poster.find(x => x.typ === 'sick' && (!x.till || x.till >= kIdag())); if (!s) return h;
+  return h.replace(/(<div class="pacts">[\s\S]*?)(<\/div>\s*<\/section>\s*)$/, (m, a, b) => `${a}<button class="tlink" data-ndfrstallinsjuk="${s.id}">Blev anmälan fel? Ställ in den</button>${b}`);
+};
+// Chefen: i tavlans rad för en period.
+const _ndFrDetaljRadB = frDetaljRad;
+frDetaljRad = function(p){
+  const h = _ndFrDetaljRadB(p); if (!ndFr() || !p) return h;
+  const knapp = p.typ === 'sick' ? (p.till && p.till < kIdag() ? '' : `<button class="tlink" data-ndfrstallinsjuk="${p.id}">Ställ in anmälan</button>`) : p.st === 'approved' && (p.till || p.fran) >= kIdag() ? `<button class="btn btn-s btn-sm" data-ndfrstallin="${p.id}">Ställ in</button>` : '';
+  return knapp ? h.replace('<button class="ibtn" data-fropen=""', `${knapp}<button class="ibtn" data-fropen=""`) : h;
+};
+// Kalenderflödet (E7.3): din ledighet i din egen kalender. Bara beviljad ledighet, aldrig sorten och aldrig sjukfrånvaro.
+function ndFrFlodeKort(){
+  const f = ndFr(); if (!f || !f.floden) return '';
+  const levande = f.floden.filter(x => x.aktiv), mitt = levande.find(x => x.scope === 'mine');
+  const rad = x => { const url = `${location.origin}/api/ical/${x.token}`;
+    return `<div style="margin:4px 0 12px"><b>${x.scope === 'team' ? 'Teamets ledighet' : 'Din ledighet'}</b><code class="num" style="display:block;word-break:break-all;font-size:12px;margin:6px 0">${esc(url)}</code>
+      <div class="pacts"><button class="btn btn-s btn-sm" data-ndfrkopiera="${esc(url)}">Kopiera</button><button class="tlink" data-ndfrflode="byt" data-scope="${x.scope}">Byt adress</button><button class="tlink aefarligl" data-ndfrflode="stang" data-scope="${x.scope}">Stäng</button><span class="muted tihint">${x.lasningar ? `Läst ${x.lasningar} ${x.lasningar === 1 ? 'gång' : 'gånger'}${x.senast ? `, senast ${frKort(x.senast)}` : ''}.` : x.senast ? `Senast läst ${frKort(x.senast)}.` : 'Inte läst än.'}</span></div></div>`; };
+  return `<section class="card"><div class="chead"><h2>Kalenderflöde</h2></div>
+    ${levande.map(rad).join('')}
+    ${mitt ? '' : `<p class="muted">Lägg in din beviljade ledighet i din egen kalender, utan att logga in.</p><div class="pacts"><button class="btn btn-s btn-sm" data-ndfrflode="skapa" data-scope="mine">Skapa adress</button></div>`}
+    <p class="muted frhint">Adressen är hemlig och fungerar utan inloggning, och den som lägger in den i Google eller Outlook lägger innehållet där. Flödet visar namn, datum och ordet Ledig: aldrig vilken sorts ledighet och aldrig sjukfrånvaro. Det är enkelriktat, och en ny adress stänger den gamla direkt.</p></section>`;
+}
+const _ndFrVemSerB = frVemSer;
+frVemSer = function(){ return _ndFrVemSerB() + (ndFr() ? ndFrFlodeKort() : ''); };
+const _ndFrOversiktB = frOversikt;
+frOversikt = function(){ const h = _ndFrOversiktB(); return ndFr() ? h + ndFrFlodeKort() : h; };
+// /franvaro/<id> (ndGa i ndskal.js): ansökan öppen. Chefen får beslutet eller tavlans rad, den sökande sin rad, som blinkar till.
+function ndFrGaAnsokan(id){
+  const p = FRPER.find(x => x.id === id), chef = ndFrChef();
+  const blink = el => { if (!el) return; el.scrollIntoView({block:'center', behavior:'smooth'}); if (!matchMedia('(prefers-reduced-motion: reduce)').matches && el.animate) el.animate([{boxShadow:'0 0 0 3px var(--accent, #1f7a5a)'}, {boxShadow:'0 0 0 0 transparent'}], {duration:1400, easing:'ease-out'}); };
+  if (chef && p){
+    if (p.st === 'submitted'){ frGa('attest'); S.frOpen = id; render(); setTimeout(() => blink(document.getElementById('fra-' + id)), 40); return; }
+    frGa('oversikt'); S.frOpen = id; render(); setTimeout(() => blink(document.querySelector('.frdet')), 40); return;
+  }
+  frGa();
+  setTimeout(() => { const b = document.querySelector(`[data-ndfrandra="${id}"], [data-frdra="${id}"], [data-ndfrstallin="${id}"]`); blink(b && b.closest('.frmrad')); }, 40);
+}
+document.addEventListener('click', e => {
+  if (!ndFr() || S.view !== 'franvaro') return;
+  const b = e.target.closest && e.target.closest('button'); if (!b || !b.dataset) return;
+  const d = b.dataset, stopp = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+  if (d.ndfrstallin){ stopp(); ndFrStallIn(d.ndfrstallin, false); return; }
+  if (d.ndfrstallinsjuk){ stopp(); ndFrStallIn(d.ndfrstallinsjuk, true); return; }
+  if (d.ndfrkopiera){ stopp(); try { navigator.clipboard.writeText(d.ndfrkopiera); toast('Adressen är kopierad. Lägg in den som en kalender från webben.'); } catch(_){ toast('Markera adressen och kopiera den.'); } return; }
+  if (d.ndfrflode){ stopp(); const vad = d.ndfrflode;
+    if (vad === 'stang'){ toastActs('Stänga flödet? Kalendern som läser adressen får inget mer.', [['Stäng', () => ndFrPost('flode', {vad, scope:d.scope})]], 8000); return; }
+    ndFrPost('flode', {vad, scope:d.scope}); return; }
+}, true);
+
 if (ndFr()){ ndFrStart(); NDKOPPLAD.add('franvaro'); }
 
 /* =====================================================================
@@ -31949,7 +32018,8 @@ ndGa = function(href){
       if (ev) setTimeout(() => { const el = document.querySelector(`.olev[data-kev="${ev.id}"]`); if (el) kPeekOppna(ev.id, el); }, 30);
       return; }
     case 'arenden': { if (sub === 'nytt'){ arNytt(''); return; } if (sub && !ARENDEN.some(x => String(x.id) === sub)) return nav(); arGa(sub); return; }
-    case 'franvaro': { if (sub && !['attest', 'sjuk', 'planering', 'ny'].includes(sub)) return nav(); frGa(sub === 'ny' ? null : sub); return; }
+    // Gamla Nav B: /franvaro/<id> öppnar ansökan (notiserna om beslut, ny ansökan, ändringsfråga och inställd ledighet).
+    case 'franvaro': { if (sub && /^[0-9a-f-]{36}$/.test(sub) && !d[2]){ ndFrGaAnsokan(sub); return; } if (sub && !['attest', 'sjuk', 'planering', 'ny'].includes(sub)) return nav(); frGa(sub === 'ny' ? null : sub); return; }
     case 'fel': if (sub === 'nytt'){ felRapportera(); return; } if (sub) return nav(); felGa(); return;
     case 'order': { const o = sub && ORDER.find(x => String(x.nr) === sub || String(x.id) === sub); if (sub && !o) return nav(); ordGa(o ? o.nr : null); return; }
     case 'provision': if (sub) return nav(); pvGa(); return;

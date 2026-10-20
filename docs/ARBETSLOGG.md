@@ -5,6 +5,23 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-20 · Nav 2.0, gamla Navs sista funktioner B: Frånvaro (ingen migration)
+
+- **Ställa in en beviljad ledighet** (svar 4): "Ställ in" bredvid Ändra på den
+  egna godkända ledigheten, och i tavlans rad för chefen. Rutten `stall-in`
+  anropar repots `stallInLedighet` (den egna, eller den som får besluta om
+  sorten), och personen får notisen `franvaro-installd`.
+- **Ställa in en sjukanmälan:** på det egna sjukkortet ("Blev anmälan fel?") och i
+  tavlans rad för chefen. Rutten `stall-in-sjuk` = `stallInSjuk` (den egna, den
+  som leder personen, säljchef och VD). Raden står kvar men räknas inte.
+- **Kalenderflödet för ledighet** (E7.3): kortet Kalenderflöde i Frånvaro med
+  adressen, Kopiera, Byt adress och Stäng, och Skapa adress. Rutten `flode` =
+  `skapaFlode`/`rotaFlode`. Bara ledighetens flöden (`mine`, ett befintligt
+  `team`), enligt iCal-beslutet 2026-09-22.
+- `/franvaro/<id>` öppnar ansökan: chefen får beslutet eller tavlans rad, den
+  sökande sin rad. Bakom `SKRIVLAGE.franvaro` (423 i läsläge). Spannet 0165–0169
+  är oanvänt.
+
 ## 2026-10-20 · Nav 2.0, Gamla Nav P: beställarens svar (Säkerheten får spara, Nytt i navet i paletten)
 
 - **`SKRIVLAGE.sakerhet = true`** (svar 1, "Ja"): lösenordsbytet i Inställningar

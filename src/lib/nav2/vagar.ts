@@ -29,6 +29,7 @@ const SJALV: RegExp[] = [
   /^\/kalender$/,
   /^\/arenden(\/(?!statistik$)[^/]+)?$/,
   /^\/franvaro(\/(attest|sjuk|planering|ny))?$/,
+  /^\/franvaro\/[0-9a-f-]{36}$/,
   /^\/fel(\/nytt)?$/,
   /^\/order$/,
   /^\/provision$/,
