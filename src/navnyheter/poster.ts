@@ -42,7 +42,7 @@ behörigheter som här: du ser bara det du får se.
   de tre mest bråttom överst och knappen för att göra det direkt. Chefen ser
   dagsläget och vilka som är borta framåt, och vid dagens slut nästa
   arbetsdag. Golvet visar lagets order mot målen i Provision och dagens
-  godkända order, och du kan gratulera en kollega. Säljchef, VD och
+  godkända order för hela laget, och du kan gratulera en kollega. Säljchef, VD och
   teamledare kan slå på kvällsnotisen i mobilen under Inställningar, Notiser.
 - **Utbildning**, med navets kurser: dagens repetition ur prov du klarat,
   lektioner steg för steg med din regelbok och ditt mål, prov som rättas när
@@ -61,12 +61,15 @@ behörigheter som här: du ser bara det du får se.
   i samma vy, och du lämnar in dem där, med en fil om det behövs. Inför nästa
   1:1 skriver du det du vill ta upp, och målen du valt att visa från
   Utbildning följer med. Chefen ser laget med det som behöver något först, går
-  igenom 1:1:et i fyra steg och bokar nästa direkt.
+  igenom 1:1:et i fyra steg och bokar nästa direkt. Det mesta du gör går att
+  ångra en stund efteråt, och en överenskommelse som avbryts får ett skäl.
 - **Anställda**, för säljchef, VD och administratörer: vad som kräver dig och
   vad andra inte gjort än, lagens frister, registret med oanvända konton,
   checklistan per person med datum från startdagen, och checklistorna och
   utskicken som gäller nästa gång någon börjar eller slutar. Den som ska
-  sätta upp något får ett mejl med en Klart-knapp och en påminnelse.
+  sätta upp något får ett mejl med en Klart-knapp och en påminnelse i navet.
+  Avslutet frågar varför anställningen tar slut, och en kandidat som anställs
+  i Rekrytering får samma checklista som i Lägg upp.
 - **Avtal**: under Mitt avtal öppnar du ditt anställningsavtal och dina
   tilläggsavtal som PDF och läser dem direkt, med din lön, ditt semestersaldo
   och din provision bredvid. Säljchef, VD och administratör laddar upp varje
@@ -87,7 +90,8 @@ behörigheter som här: du ser bara det du får se.
 - **Ärenden**, med svarstiden som navet lovar.
 - **Fel**: dina felrapporter och, för den som hanterar kön, kön och
   nattjobbets kvitto steg för steg. Kända fel med råd, "samma för mig" och
-  svar i tråden finns nu i navet.
+  svar i tråden finns nu i navet, och kön markerar själv ett fel som känt med
+  ett råd under tiden.
 - **Sök, gör eller fråga Nav** (⌘K): sökningen hittar dina uppgifter,
   rutiner (även i texten och bilagorna), kurser, kommande möten, order och
   ärenden, och för den som ser dem också personer, kandidater, överenskommelser

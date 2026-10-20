@@ -13,8 +13,9 @@ import {
   skapaSamtal,
   skapaUppgift as skapaCoachuppgift,
 } from "@/app/(app)/coachning/actions";
-import { skapaUppgift } from "@/app/(app)/uppgifter/actions";
+import { avbryt as avbrytEgen, skapaUppgift } from "@/app/(app)/uppgifter/actions";
 import { skapaSerie } from "@/app/(app)/kalender/moten/actions";
+import { lk } from "@/lib/leveranskalender-server";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
 
 export const dynamic = "force-dynamic";
@@ -36,9 +37,18 @@ export const dynamic = "force-dynamic";
  * ändamålet `coaching`, som repot inte hade någon inlämning för) och 1:1:ets
  * utkast (`nav_preference`).
  *
- * Ångra: det rutten själv skriver går att ångra (svaret, övningen, punkten,
- * förfrågan, raden). Repots actions skickar notiser och skriver händelser som
- * inte tas tillbaka, så de ångras inte här.
+ * Ångra (beställaren 2026-10-19: "Ångra överallt"): allt går att ångra i tio
+ * minuter. Det rutten själv skriver tas bort. Det repots actions skrev tas
+ * tillbaka här: kvittering, gör om, inlämning och klar (händelseraden),
+ * avbrott (raden öppnas igen), flyttat datum, bokade 1:1 (kalenderns
+ * `lk_angra`) och ett sparat 1:1 (samtalet, åtagandena, övningen, fokus,
+ * punkterna och nästa bokning). En notis som redan gått ut står kvar.
+ *
+ * Rollspel live (beställaren 2026-10-19: "lossa kravet"): 0101 låter
+ * `rollspel_live` sakna rollspelsmodul. Repots `skapaUppgift` kräver fortfarande
+ * en modul för den typen, så överenskommelsen skapas som `uppgift` och får sedan
+ * sitt slag. Utan 0101 avvisar databasen bytet, och då märks den med
+ * `nav2_kind` som förut.
  * ===========================================================================
  *
  * LÄSLÄGE: står `SKRIVLAGE.coachning` på false svarar rutten 423 innan något skrivs.
@@ -57,6 +67,8 @@ const OMR: Record<string, string> = {
   avtal: "Korrekt avtalshantering",
 };
 const MAX_OVNINGAR = 2;
+// Hur länge Ångra gäller för det som går genom repots actions.
+const ANGRA_MIN = 10;
 
 type Svar = { ok?: string; fel?: string; [k: string]: unknown };
 const svar = (data: Svar, status = 200) => NextResponse.json(data, { status, headers: { "Cache-Control": "private, no-store, max-age=0" } });
@@ -91,6 +103,8 @@ export async function POST(request: Request) {
   const db = supabaseAdmin();
   const idag = svensktDatum();
   const coach = farCoacha(user);
+  const nyss = new Date(Date.now() - ANGRA_MIN * 60e3).toISOString();
+  const forSent = () => svar({ fel: `Det går bara att ångra de första ${ANGRA_MIN} minuterna.` }, 400);
 
   // Den det gäller, eller dennes chef (repots arChefFor, samma krets som RLS).
   const farRora = async (vem: string) => UUID.test(vem) && (vem === mig || (await arChefFor(user, vem)));
@@ -348,9 +362,13 @@ export async function POST(request: Request) {
         );
         if (s.fel) return svar({ fel: s.fel }, 400);
         if (live) {
-          // 0043 kräver en rollspelsmodul för rollspel_live, och utkastet väljer ingen. Se 0100.
+          // Repots skapaUppgift kräver en modul för rollspel_live; utkastet väljer ingen. 0101 lossar
+          // databasens krav, så slaget sätts efteråt. Utan 0101 märks den som förut (0100).
           const { data: ny } = await db.from("coaching_task").select("id").eq("assignee_id", vem).eq("created_by", mig).eq("title", titel).order("created_at", { ascending: false }).limit(1).maybeSingle();
-          if (ny) await db.from("coaching_task").update({ nav2_kind: "rollspel_live" }).eq("id", ny.id);
+          if (ny) {
+            const { error: slag } = await db.from("coaching_task").update({ kind: "rollspel_live" }).eq("id", ny.id);
+            if (slag) await db.from("coaching_task").update({ nav2_kind: "rollspel_live" }).eq("id", ny.id);
+          }
         }
         return svar({ ok: "Överenskommelsen är lagd. Personen ser den i Coachning." });
       }
@@ -409,32 +427,91 @@ export async function POST(request: Request) {
         if (ny === u.due_date) return svar({ ok: "" });
         const kort = (d: string | null) => (d ? `${+d.slice(8, 10)}/${+d.slice(5, 7)}` : "inget datum");
         await db.from("coaching_task").update({ due_date: ny }).eq("id", u.id);
-        await db.from("coaching_task_note").insert({ task_id: u.id, by_employee_id: mig, text: `Flyttade datumet från ${kort(u.due_date)} till ${kort(ny)}.` });
+        const { data: not } = await db.from("coaching_task_note").insert({ task_id: u.id, by_employee_id: mig, text: `Flyttade datumet från ${kort(u.due_date)} till ${kort(ny)}.` }).select("id").maybeSingle();
         await notifiera({ till: u.assignee_id, av: mig, kalla: "coachning-datum", typ: "coachning", rubrik: "Nytt datum", detalj: `${u.title}: klar senast ${kort(ny)}`, href: `/coachning/uppgift/${u.id}` });
         revalidatePath("/coachning");
-        return svar({ ok: "Nytt datum. Personen får en notis, och påminnelserna räknas från det." });
+        return svar({ ok: "Nytt datum. Personen får en notis, och påminnelserna räknas från det.", fore: u.due_date, not: (not?.id as string | undefined) ?? null, due: ny });
+      }
+      case "flytta-ater": {
+        const u = await uppgift(str(b.id, 40));
+        if (!u || u.cancelled_at) return svar({ fel: "Överenskommelsen finns inte." }, 404);
+        if (u.created_by !== mig && !(await chefFor(u.assignee_id))) return svar({ fel: "Du får inte flytta den här överenskommelsen." }, 403);
+        const fore = str(b.fore, 10), not = str(b.not, 40);
+        if (u.due_date !== str(b.due, 10)) return svar({ fel: "Datumet har ändrats igen sedan dess." }, 409);
+        if (UUID.test(not)) {
+          const { data: n } = await db.from("coaching_task_note").select("created_at").eq("id", not).eq("task_id", u.id).eq("by_employee_id", mig).maybeSingle();
+          if (!n || String(n.created_at) < nyss) return forSent();
+          await db.from("coaching_task_note").delete().eq("id", not);
+        }
+        await db.from("coaching_task").update({ due_date: DATUM.test(fore) ? fore : null }).eq("id", u.id);
+        revalidatePath("/coachning");
+        return svar({ ok: "Ångrat. Datumet är som förut; notisen hann gå ut." });
       }
       case "avbryt": {
         const u = await uppgift(str(b.id, 40));
         if (!u) return svar({ fel: "Överenskommelsen finns inte." }, 404);
-        // Repot kräver ett skäl; utkastet har inget fält för det (öppen fråga till beställaren).
-        return fran(await avbrytUppgift({}, form({ task_id: u.id, reason: str(b.skal, 500) || "Inget skäl angivet (Nav 2.0)." })), "Överenskommelsen är avbruten.");
+        // Skälet skrivs i raden under knappen (beställaren 2026-10-19), och repot kräver det.
+        const skal = str(b.skal, 500);
+        if (!skal) return svar({ fel: "Skriv varför överenskommelsen avbryts." }, 400);
+        return fran(await avbrytUppgift({}, form({ task_id: u.id, reason: skal })), "Överenskommelsen är avbruten. Personen får en notis med skälet.");
+      }
+      case "avbryt-ater": {
+        const id = str(b.id, 40);
+        if (!UUID.test(id)) return svar({ fel: "Överenskommelsen finns inte." }, 404);
+        const { data: t } = await db.from("coaching_task").select("cancelled_at, cancelled_by").eq("id", id).maybeSingle();
+        if (!t || !t.cancelled_at || t.cancelled_by !== mig) return svar({ fel: "Överenskommelsen är inte avbruten av dig." }, 404);
+        if (String(t.cancelled_at) < nyss) return forSent();
+        await db.from("coaching_task").update({ cancelled_at: null, cancelled_by: null, cancel_reason: null }).eq("id", id);
+        await db.from("coaching_task_event").delete().eq("task_id", id).eq("type", "avbruten").eq("by_employee_id", mig).gte("at", nyss);
+        revalidatePath("/coachning");
+        return svar({ ok: "Ångrat. Överenskommelsen gäller igen; notisen hann gå ut." });
+      }
+      case "handelse-ater": {
+        // Kvittera, gör om, lämna in, klar och be motparten: repots actions skriver en händelserad.
+        const u = await uppgift(str(b.id, 40));
+        if (!u) return svar({ fel: "Överenskommelsen finns inte." }, 404);
+        const { data: h } = await db
+          .from("coaching_task_event")
+          .select("id, at")
+          .eq("task_id", u.id)
+          .eq("by_employee_id", mig)
+          .in("type", ["kvitterad", "underkand", "inlamnad"])
+          .order("at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (!h) return svar({ fel: "Det finns inget att ångra." }, 404);
+        if (String(h.at) < nyss) return forSent();
+        await db.from("coaching_task_event").delete().eq("id", h.id);
+        revalidatePath("/coachning");
+        return svar({ ok: "Ångrat. Notisen hann gå ut." });
       }
 
       // ---------------------------------------------------------------- 1:1
       case "boka": {
         const lista = (Array.isArray(b.lista) ? b.lista : [b]) as { vem?: unknown; dag?: unknown; start?: unknown }[];
-        const bokade: string[] = [];
+        const bokade: string[] = [], angra: string[] = [], req: string[] = [];
         for (const x of lista) {
           const vem = str(x.vem, 40), dag = str(x.dag, 10), start = Number(x.start);
           if (!(await chefFor(vem))) return svar({ fel: "Du kan bara boka 1:1 med personer i ditt lag." }, 403);
           if (!DATUM.test(dag) || dag <= idag) return svar({ fel: "Välj en dag efter i dag." }, 400);
           const r = await skapaSerie({ typ: "enskilt", rubrik: "1:1", med: [vem], dag, start, minuter: 30, upprepa: "aldrig", agenda: "Börja med veckans övning och det säljaren vill ta upp." });
-          if (r.fel) return svar({ fel: r.fel }, 400);
-          await db.from("coaching_meeting_request").update({ handled_at: new Date().toISOString(), handled_by: mig }).eq("employee_id", vem).is("handled_at", null);
+          if (r.fel) return svar({ fel: r.fel, angra, req }, 400);
+          if (r.angra) angra.push(r.angra);
+          const { data: fr } = await db.from("coaching_meeting_request").update({ handled_at: new Date().toISOString(), handled_by: mig }).eq("employee_id", vem).is("handled_at", null).select("id");
+          for (const f of (fr ?? []) as { id: string }[]) req.push(f.id);
           bokade.push(vem);
         }
-        return svar({ ok: bokade.length > 1 ? `Bokat ${bokade.length} 1:1. Var och en får en inbjudan.` : "1:1:et är bokat, och inbjudan ligger i kalendern." });
+        return svar({ ok: bokade.length > 1 ? `Bokat ${bokade.length} 1:1. Var och en får en inbjudan.` : "1:1:et är bokat, och inbjudan ligger i kalendern.", angra, req });
+      }
+      case "boka-ater": {
+        const angra = (Array.isArray(b.angra) ? b.angra : []).map((x) => str(x, 40)).filter((x) => UUID.test(x));
+        const req = (Array.isArray(b.req) ? b.req : []).map((x) => str(x, 40)).filter((x) => UUID.test(x));
+        for (const u of angra) {
+          const r = await lk<{ event_id: string | null }>("lk_angra", { p_aktor: mig, p_undo: u });
+          if (!r.ok) return svar({ fel: r.fel }, 400);
+        }
+        if (req.length) await db.from("coaching_meeting_request").update({ handled_at: null, handled_by: null }).in("id", req).eq("handled_by", mig).gte("handled_at", nyss);
+        return svar({ ok: angra.length > 1 ? "Ångrat. Mötena är borttagna, och de inbjudna får veta det." : "Ångrat. 1:1:et är borttaget, och den inbjudna får veta det." });
       }
       case "spara-1-1": {
         const vem = str(b.vem, 40);
@@ -464,34 +541,98 @@ export async function POST(request: Request) {
         const { data: sess } = await db.from("coaching_session").select("id").eq("employee_id", vem).eq("coach_id", mig).eq("held_on", dag).order("created_at", { ascending: false }).limit(1).maybeSingle();
         const sessId = (sess?.id as string | undefined) ?? null;
         const omr = str(b.omr, 20), fid = await fokusId(omr);
+        // Det som behövs för att ta tillbaka 1:1:et (Ångra).
+        const { data: fokusFore } = await db.from("coaching_person_focus").select("focus_id, set_by, set_at").eq("employee_id", vem).maybeSingle();
         if (sessId) await db.from("coaching_session").update({ previous_goal_met: ["ja", "delvis", "nej"].includes(String(b.forra)) ? String(b.forra) : null, focus_id: fid }).eq("id", sessId);
         if (fid) await db.from("coaching_person_focus").upsert({ employee_id: vem, focus_id: fid, set_by: mig, set_at: new Date().toISOString() }, { onConflict: "employee_id" });
         // Nästa övning.
         const { data: akt } = await db.from("coaching_drill").select("id, days").eq("employee_id", vem).eq("status", "aktiv").order("starts_on").limit(1).maybeSingle();
+        let nyOv: string | null = null;
         if (akt && vag === "vana") await db.from("coaching_drill").update({ status: "vana", habit_since: idag, ended_at: new Date().toISOString() }).eq("id", akt.id);
         if (akt && vag === "forlang") await db.from("coaching_drill").update({ days: Math.min(60, (akt.days as number) + 5) }).eq("id", akt.id);
         if (vag === "ny") {
           const r = await nyOvning(vem, { omr, nar: str(b.nar, 120), da: str(b.da, 160), n: Number(b.n) || 5, start: str(b.start, 10), session: sessId }, (akt?.id as string | undefined) ?? null);
           if ("fel" in r) return svar({ fel: `1:1:et är sparat, men övningen inte: ${r.fel}` }, 400);
+          nyOv = r.id;
         }
         // Chefens egna steg blir uppgifter i Uppgifter.
-        for (const x of rena.filter((y) => y.chef)) await skapaUppgift({}, form({ title: x.t, due_date: x.d, priority: 3, description_md: "Ur 1:1:et i Coachning." }));
+        const egna: string[] = [];
+        for (const x of rena.filter((y) => y.chef)) {
+          const u = await skapaUppgift({}, form({ title: x.t, due_date: x.d, priority: 3, description_md: "Ur 1:1:et i Coachning." }));
+          if (u.id) egna.push(u.id);
+        }
         // Punkterna som togs upp, och förfrågan om en tid.
         const pids = (Array.isArray(b.punkter) ? b.punkter : []).map((x) => str(x, 40)).filter((x) => UUID.test(x));
         if (pids.length) await db.from("one_on_one_point").update({ handled_at: new Date().toISOString(), session_id: sessId }).in("id", pids).eq("employee_id", vem);
-        await db.from("coaching_meeting_request").update({ handled_at: new Date().toISOString(), handled_by: mig }).eq("employee_id", vem).is("handled_at", null);
+        const { data: fr } = await db.from("coaching_meeting_request").update({ handled_at: new Date().toISOString(), handled_by: mig }).eq("employee_id", vem).is("handled_at", null).select("id");
         // Det bokade 1:1:et i kalendern får sitt samtal.
         const ev = str(b.eventId, 40);
         if (sessId && UUID.test(ev)) await db.rpc("lk_koppla_samtal", { p_aktor: mig, p_event: ev, p_session: sessId });
         // Nästa 1:1.
-        let bokat = "";
+        let bokat = "", bokatAngra: string | null = null;
         const nb = b.boka as { dag?: unknown; start?: unknown } | null;
         if (nb && nb.dag) {
           const r = await skapaSerie({ typ: "enskilt", rubrik: "1:1", med: [vem], dag: str(nb.dag, 10), start: Number(nb.start), minuter: 30, upprepa: "aldrig", agenda: "Börja med veckans övning och det säljaren vill ta upp." });
           bokat = r.fel ? ` Nästa 1:1 bokades inte: ${r.fel}` : " Nästa 1:1 är bokat.";
+          bokatAngra = r.angra ?? null;
         }
         await db.from("nav_preference").delete().eq("employee_id", mig).eq("key", `coachning.utkast.${vem}`);
-        return svar({ ok: `1:1:et är sparat, och personen ser sammanfattningen.${bokat}` });
+        const angra = sessId
+          ? {
+              sess: sessId,
+              akt: akt && (vag === "vana" || vag === "forlang" || vag === "ny") ? { id: akt.id as string, days: akt.days as number } : null,
+              nyOv,
+              fokus: fokusFore ?? null,
+              egna,
+              pids,
+              req: ((fr ?? []) as { id: string }[]).map((x) => x.id),
+              bokat: bokatAngra,
+            }
+          : null;
+        return svar({ ok: `1:1:et är sparat, och personen ser sammanfattningen.${bokat}`, angra });
+      }
+      case "spara-1-1-ater": {
+        // Tar tillbaka ett sparat 1:1 i omvänd ordning. Notiserna som gick ut står kvar.
+        const vem = str(b.vem, 40);
+        if (!coach || !(await chefFor(vem))) return svar({ fel: "Du kan bara ta tillbaka dina egna 1:1." }, 403);
+        const a = (b.a ?? {}) as { sess?: unknown; akt?: { id?: unknown; days?: unknown } | null; nyOv?: unknown; fokus?: { focus_id?: unknown; set_by?: unknown; set_at?: unknown } | null; egna?: unknown; pids?: unknown; req?: unknown; bokat?: unknown };
+        const sess = str(a.sess, 40);
+        if (!UUID.test(sess)) return svar({ fel: "1:1:et finns inte." }, 404);
+        const { data: sa } = await db.from("coaching_session").select("coach_id, employee_id, created_at").eq("id", sess).maybeSingle();
+        if (!sa || sa.coach_id !== mig || sa.employee_id !== vem) return svar({ fel: "1:1:et finns inte." }, 404);
+        if (String(sa.created_at) < nyss) return forSent();
+        const idLista = (v: unknown) => (Array.isArray(v) ? v : []).map((x) => str(x, 40)).filter((x) => UUID.test(x));
+        // Nästa 1:1 i kalendern, och kopplingen till det hållna.
+        const bokatId = str(a.bokat, 40);
+        if (UUID.test(bokatId)) await lk<{ event_id: string | null }>("lk_angra", { p_aktor: mig, p_undo: bokatId });
+        await db.from("calendar_event").update({ coaching_session_id: null }).eq("coaching_session_id", sess);
+        // Övningen: den nya bort (om ingen svarat), den förra som den var.
+        const nyOv = str(a.nyOv, 40);
+        if (UUID.test(nyOv)) {
+          const { count } = await db.from("coaching_drill_answer").select("day", { count: "exact", head: true }).eq("drill_id", nyOv);
+          if (!count) await db.from("coaching_drill").delete().eq("id", nyOv).eq("employee_id", vem);
+        }
+        const aktId = str(a.akt?.id, 40), aktDagar = Number(a.akt?.days);
+        if (UUID.test(aktId))
+          await db.from("coaching_drill").update({ status: "aktiv", habit_since: null, ended_at: null, days: aktDagar >= 1 && aktDagar <= 60 ? aktDagar : 5 }).eq("id", aktId).eq("employee_id", vem);
+        // Fokusområdet som det var.
+        const ff = a.fokus;
+        if (ff && UUID.test(str(ff.focus_id, 40))) await db.from("coaching_person_focus").upsert({ employee_id: vem, focus_id: str(ff.focus_id, 40), set_by: UUID.test(str(ff.set_by, 40)) ? str(ff.set_by, 40) : mig, set_at: str(ff.set_at, 40) || new Date().toISOString() }, { onConflict: "employee_id" });
+        else await db.from("coaching_person_focus").delete().eq("employee_id", vem).eq("set_by", mig).gte("set_at", nyss);
+        // Chefens egna steg i Uppgifter avbryts (repots avbryt, som loggar varför).
+        for (const id of idLista(a.egna)) await avbrytEgen({}, form({ id, note: "Ångrat: 1:1:et i Coachning togs tillbaka." }));
+        // Punkterna och förfrågan står öppna igen.
+        const pids = idLista(a.pids), req = idLista(a.req);
+        if (pids.length) await db.from("one_on_one_point").update({ handled_at: null, session_id: null }).in("id", pids).eq("employee_id", vem);
+        if (req.length) await db.from("coaching_meeting_request").update({ handled_at: null, handled_by: null }).in("id", req).eq("handled_by", mig);
+        // Åtagandena (med sina händelser) och samtalet.
+        await db.from("coaching_task").delete().eq("session_id", sess).eq("created_by", mig);
+        const { error } = await db.from("coaching_session").delete().eq("id", sess);
+        if (error) return svar({ fel: `1:1:et togs inte bort: ${error.message}` }, 400);
+        // Det som skrevs står kvar som utkast.
+        if (b.m && typeof b.m === "object") await db.from("nav_preference").upsert({ employee_id: mig, key: `coachning.utkast.${vem}`, value: b.m, updated_at: new Date().toISOString() }, { onConflict: "employee_id,key" });
+        revalidatePath("/coachning");
+        return svar({ ok: "Ångrat. 1:1:et är borttaget och ligger kvar som utkast; notisen hann gå ut." });
       }
 
       default:

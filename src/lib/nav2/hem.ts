@@ -34,11 +34,10 @@ import { vapidPublik } from "./push";
  * summan och antalet räknas med service role, med repots egen `ordervarde()`
  * så att talet är samma som Orders nyckeltal räknat över laget.
  *
- * Kollegornas RADER (namn, kund, belopp) är något annat än en summa. Utkastets
- * egen förklaring säger att Golvet bör vara frivilligt per säljare innan det
- * slås på. En säljare ser därför sina egna rader och de kollegor som sagt ja
- * (`hem.golvet` = true). Den som får läsa allas order i navet (säljchef, VD,
- * ekonomi: `far_hantera_provision`) ser alla rader, som på /order.
+ * Kollegornas RADER (namn, kund, belopp) syns för alla i laget, som i
+ * utkastet (beställaren 2026-10-19, beslutsrundan: "alla ser alla"). Före
+ * beslutet såg en säljare bara sina egna rader och de kollegor som valt att
+ * synas (`hem.golvet`); valet sparas fortfarande men styr inte längre något.
  * ===========================================================================
  */
 
@@ -123,10 +122,9 @@ export async function byggGolvet(user: CurrentUser, nu: Date = new Date()): Prom
   if (!ids.length) return { lag: lag.namn, manad: manad.slice(0, 7), mal: ingetMal, antal: 0, netto: 0, utanVarde: 0, idag: [], idagAntal: 0, idagSumma: 0, senast: null };
 
   const KOL = "id, salesperson_id, package_id, term_months, signed_on, period_month, status, order_value, buyout_amount, finance_amount, cancel_period_month, approved_at, company_name";
-  const [{ data: manadens }, { data: senaste }, { data: syns }, { data: malen }] = await Promise.all([
+  const [{ data: manadens }, { data: senaste }, { data: malen }] = await Promise.all([
     db.from("sales_order").select(KOL).in("salesperson_id", ids).or(`period_month.eq.${manad},cancel_period_month.eq.${manad}`),
     db.from("sales_order").select(KOL).in("salesperson_id", ids).in("status", ["signerad", "betald"]).gte("approved_at", vecka).order("approved_at", { ascending: false }),
-    db.from("nav_preference").select("employee_id, value").eq("key", "hem.golvet").in("employee_id", ids),
     db.from("sales_target").select("employee_id, target_orders, target_amount").eq("period_month", manad).in("employee_id", ids),
   ]);
   // Lagets mål = summan av säljarnas mål för månaden. Bara summan lämnar servern (0049: säljaren ser inte andras mål).
@@ -141,16 +139,14 @@ export async function byggGolvet(user: CurrentUser, nu: Date = new Date()): Prom
   const varde = ordervarde((manadens ?? []) as unknown as Order[], manad);
   const antal = nettoAntal((manadens ?? []) as unknown as Order[], manad);
 
-  // Radernas krets, se rubriken.
-  const allaRader = hasRole(user, "sales_manager", "ceo", "finance");
-  const sagtJa = new Set(((syns ?? []) as { employee_id: string; value: unknown }[]).filter((x) => x.value === true).map((x) => x.employee_id));
   const namn = new Map(folk.map((p) => [p.id, `${(p.first_name ?? "").trim()}${p.last_name ? ` ${p.last_name.trim().charAt(0)}.` : ""}`.trim()]));
   const paketNamn = new Map(((paket ?? []) as { id: number; label: string }[]).map((p) => [p.id, p.label]));
 
   type Rad = { id: string; salesperson_id: string; package_id: number | null; term_months: number | null; status: string; order_value: number | string | null; approved_at: string | null; company_name: string | null };
   const godkanda = ((senaste ?? []) as unknown as Rad[]).filter((o) => o.approved_at && harGodkants(o.status as Order["status"]));
   const dagens = godkanda.filter((o) => svensktDatum(new Date(o.approved_at as string)) === idag);
-  const synliga = dagens.filter((o) => allaRader || o.salesperson_id === mig || sagtJa.has(o.salesperson_id));
+  // Alla i laget ser dagens rader (se rubriken).
+  const synliga = dagens;
 
   const { data: gratt } = synliga.length
     ? await db.from("order_grattis").select("order_id, employee_id").in("order_id", synliga.map((o) => o.id))

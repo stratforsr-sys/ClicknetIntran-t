@@ -27076,8 +27076,24 @@ felDetalj = function(r){
     if (!r.stack) h = h.replace(/<details class="felstack"><summary>Stack<\/summary><pre class="felkod"><\/pre><\/details>/, '');
     if (!r.digest) h = h.replace(/<div><dt>Felkod<\/dt><dd class="num"><\/dd><\/div>/, '');
   }
+  // Kön gör ett fel till ett känt fel med rubrik och råd (beställaren 2026-10-19: "Lägg till rutan").
+  if (ndFelHanterar() && r.status !== 'closed' && !r.annans){ const i = h.lastIndexOf('</section>'); if (i > 0) h = h.slice(0, i) + ndFelKantHtml(r) + h.slice(i); }
   return h;
 };
+const ndFelKantU = {};
+function ndFelKantHtml(r){
+  const u = ndFelKantU[r.id] || {titel:r.titel || '', kant:r.kant || ''}, klar = u.titel.trim() && u.kant.trim();
+  return `<div class="felavsl"><label for="felK-${r.id}">Känt fel <small class="muted">Rubriken och rådet syns för alla under Kända fel tills felet är lagat</small></label>
+    <div class="felsvarny"><input class="uin" id="felK-${r.id}" data-ndfelkanttitel="${r.id}" value="${esc(u.titel)}" maxlength="200" placeholder="Rubrik, till exempel: Uppladdningen fastnar i Safari"></div>
+    <div class="felsvarny"><input class="uin" aria-label="Under tiden" data-ndfelkantrad="${r.id}" value="${esc(u.kant)}" maxlength="500" placeholder="Under tiden: till exempel Ladda upp från Chrome tills det är lagat."><button class="btn btn-s btn-sm" data-ndfelkant="${r.id}" ${klar ? '' : 'disabled'}>${r.kant ? 'Spara' : 'Markera som känt fel'}</button>${r.kant ? `<button class="tlink" data-ndfelkantbort="${r.id}">Ta bort från Kända fel</button>` : ''}</div></div>`;
+}
+document.addEventListener('input', e => {
+  const d = e.target.dataset; if (!ndF() || !d || !(d.ndfelkanttitel || d.ndfelkantrad)) return;
+  const id = d.ndfelkanttitel || d.ndfelkantrad, r = FELR.find(x => x.id === id); if (!r) return;
+  const u = ndFelKantU[id] = ndFelKantU[id] || {titel:r.titel || '', kant:r.kant || ''};
+  u[d.ndfelkanttitel ? 'titel' : 'kant'] = e.target.value;
+  const b = document.querySelector(`[data-ndfelkant="${id}"]`); if (b) b.disabled = !(u.titel.trim() && u.kant.trim());
+}, true);
 
 /* ---------- Driftkortet: nattjobbets riktiga kvitto ---------- */
 const _ndFelJobbKort = felJobbKort;
@@ -27143,6 +27159,8 @@ document.addEventListener('click', e => {
   if (d.feltar){ stopp(); ndFelPost('ta', {id:d.feltar}); return; }
   if (d.felsvara){ stopp(); const txt = (S.felSvarUtk[d.felsvara] || '').trim(); if (!txt){ toast('Skriv något först.'); return; } ndFelPost('svara', {id:d.felsvara, text:txt}); return; }
   if (d.felavsluta){ stopp(); ndFelPost('status', {id:d.felavsluta, status:'closed', losning:(S.felLosn[d.felavsluta] || '').trim()}); return; }
+  if (d.ndfelkant){ stopp(); const u = ndFelKantU[d.ndfelkant]; if (!u || !u.titel.trim() || !u.kant.trim()) return; ndFelPost('kant', {id:d.ndfelkant, titel:u.titel.trim(), kant:u.kant.trim()}); return; }
+  if (d.ndfelkantbort){ stopp(); ndFelPost('kant', {id:d.ndfelkantbort, titel:'', kant:''}); return; }
   // Öppna sidan: en sida med ett id i sökvägen öppnas på listan den hör till.
   if (d.felsida){ stopp(); ndGa(d.felsida.split('/:')[0] || '/'); return; }
   if (b.closest('.felkrasch') && b.dataset.act === 'toast'){ stopp(); ndFelBeskriv(); return; }
@@ -27691,7 +27709,6 @@ rollspelSida = function(r){
     inne = `<h3>Förbered dig, en minut</h3><p class="vhelp">Föreställ dig samtalet och skriv tre saker du ska göra. Det gör att du presterar bättre när du övar.</p>
       ${[1,2,3].map(i => `<input class="uin" id="rpf${i}" placeholder="${['Min första mening','Frågan jag ska ställa','Hur jag föreslår mötet'][i - 1]}" value="${esc((S.uNotes['rp-' + r.id + i]) || '')}" data-unote="rp-${r.id}${i}">`).join('')}`;
   } else if (S.rpStep === 3) inne = `<h3>Öva</h3><div class="uova">
-      <button class="uovk" data-aistart="${r.id}">${I('ai')}<b>Öva med Nav</b><span>Nav spelar kunden i chatten och bockar av kriterierna medan du svarar.</span></button>
       <button class="uovk" data-ulaskund="${r.id}">${I('play')}<b>Öva högt</b><span>Nav läser kundens repliker högt. Du svarar som i ett riktigt samtal.</span></button>
       <button class="uovk" data-ndukollega="${r.id}">${I('pers')}<b>Med en kollega</b><span>Tio minuter. Kollegan spelar kunden och bedömer med samma kriterier.</span></button>
       <label class="uovk">${I('nyh')}<b>Spela in och lämna in</b><span>${r.status === 'bedomt' ? 'Gör om och lämna in igen.' : r.status === 'inlamnad' ? `Inlämnad ${esc(r.datum)}. ${esc(chef.charAt(0).toUpperCase() + chef.slice(1))} bedömer den.` : `${esc(chef.charAt(0).toUpperCase() + chef.slice(1))} bedömer inspelningen.`}</span><input type="file" accept="audio/*,video/*" data-ndufil="${r.id}" hidden></label></div>`;
@@ -27989,7 +28006,8 @@ utbClick = function(t, e){
   if (d.ndukollega){ const r = ROLLSPEL.find(x => x.id === d.ndukollega); ndUtbUppgift(`Rollspel med en kollega: ${r.t}`, {min:10, kurs:r.kurs}); return true; }
   if (d.urpboka !== undefined){ ndUtbUppgift(`10 min rollspel med ${chef}`, {tid:'15:45', min:10}); return true; }
   if (d.rpmal){ ndUtbUppgift(`Veckans mål: ${d.rpmal.toLowerCase()} i varje samtal`, {dag:0}); return true; }
-  if (d.aistart || d.usvar){ toast('Övningskunden behöver en AI-tjänst som inte är kopplad till Nav än. Öva högt eller med en kollega så länge.'); return true; }
+  // Övningskunden (Öva med Nav) är borttagen tills AI-tjänsten finns (beställaren 2026-10-19, E2). Utkastets chatt öppnas aldrig.
+  if (d.aistart || d.usvar) return true;
   if (d.urpfyll) return true;
   // Föreläsningarna.
   if (d.uanmal){ const id = d.uanmal; ndUtbPost('anmal', {id}, {ladda:false}).then(s => { if (!s.fel){ S.uAnmald.add(id); render(); } }); return true; }
@@ -28613,7 +28631,8 @@ if (ND && ND.hem){
    och avtalets knappar till /nav2/avtal. I läsläge svarar rutten 423, knappen
    säger det och ingenting ändras på sidan. Utkastets simuleringar
    ("Exempel: tryck som Simon") körs aldrig: mottagaren trycker Klart i sitt
-   eget mejl (/nav2/anstallda/klart).
+   eget mejl (/nav2/anstallda/klart) eller i notisen. Påminnelserna är notiser
+   (beställaren 2026-10-20, A9), och avslutet frågar varför (A10).
 
    Den som inte får läsa hela personalen (can_read_all_employees) får
    utkastets "inget för dig".
@@ -28720,13 +28739,17 @@ async function ndAePost(handling, data = {}, {ladda = true, tyst = false, minns 
 const ndAeRad = key => { const {x} = aeHitta(key); return x && x.rad; };
 
 /* ---------- Lägg upp anställd: repots laggUppAnstalld, sedan chef, checklistan och utskicken ---------- */
+/* Formulärets fält. Rekryteringens anställning skickar samma (ndrx.js, beställaren 2026-10-20, A7). */
+function ndAeNyData(N){
+  const f = N.f;
+  return {f:{fornamn:f.fornamn.trim(), efternamn:f.efternamn.trim(), roll:f.roll, team:ndAeTeamId(f.team) || '', chef:ndAeId(f.chef) || '', start:f.start, form:f.form,
+    jobbmejl:f.jobbmejl.trim(), privat:f.privat.trim(), tel:f.tel.trim(), tredje:!!f.tredje}, mall:N.mall || aeMallFor([f.roll]), bort:N.bort, extra:N.extra, regAv:N.regAv};
+}
 const _ndaeSkapa = aeSkapa;
 aeSkapa = function(){
   if (!ndAe()) return _ndaeSkapa();
   const N = S.aeNy, f = N.f;
-  const mall = N.mall || aeMallFor([f.roll]);
-  ndAePost('ny', {f:{fornamn:f.fornamn.trim(), efternamn:f.efternamn.trim(), roll:f.roll, team:ndAeTeamId(f.team) || '', chef:ndAeId(f.chef) || '', start:f.start, form:f.form,
-    jobbmejl:f.jobbmejl.trim(), privat:f.privat.trim(), tel:f.tel.trim(), tredje:!!f.tredje}, mall, bort:N.bort, extra:N.extra, regAv:N.regAv}, {ladda:false}).then(s => {
+  ndAePost('ny', ndAeNyData(N), {ladda:false}).then(s => {
     if (!s.losenord) return;
     // Personen finns i navet nu. Kortet ritas ur det som skickades tills sidan laddas om.
     const p = {...aeNyPerson(N), id:s.anstalldId, jobbmejl:f.jobbmejl.trim(), losen:false, lynes:'', traff:0, slut:null, avslut:null, lista:null, kurser:null, rutiner:null, avtal:{st:null}};
@@ -28808,6 +28831,19 @@ renderAeView = function(){
   return h;
 };
 
+/* ---------- Avslutet frågar varför ----------
+   Beställaren 2026-10-20 (A10): orsaken sparas i Personal (0110 end_reason), samma koder som Rekryteringens
+   företrädesrätt (LAS 25 §). Ett litet tillägg i utkastets ruta. */
+const NDAE_ORSAK = [['egen', 'Sa upp sig själv'], ['arbetsbrist', 'Arbetsbrist'], ['provanstallning', 'Provanställningen avbröts'], ['visstid', 'Visstiden tog slut'], ['avsked', 'Avsked'], ['annat', 'Annat']];
+const _ndaeAvslutRuta = aeAvslutRuta;
+aeAvslutRuta = function(p){
+  const h = _ndaeAvslutRuta(p);
+  if (!ndAe()) return h;
+  const A = S.aeAvslut, fel = (A.fel || {}).orsak;
+  return h.replace('<ul class="aesum">', `<label class="aelab" for="ndAeOrsak">Varför tar anställningen slut?</label><select id="ndAeOrsak" class="uin" data-ndaeorsak aria-invalid="${!!fel}"><option value="">Välj</option>${NDAE_ORSAK.map(([k, l]) => `<option value="${k}" ${A.orsak === k ? 'selected' : ''}>${l}</option>`).join('')}</select>${fel ? `<p class="aefel" role="alert">${fel}</p>` : ''}
+    <ul class="aesum">`);
+};
+
 /* ---------- Att göra: chefens egna punkter bockas av i navet ---------- */
 const _ndaeBocka = bocka;
 bocka = function(id){
@@ -28844,7 +28880,8 @@ document.addEventListener('click', e => {
   if (d.aeaktiv !== undefined){ stopp(); ndAePost('aktiv', {pid:S.aePers}); return; }
   if (d.aeavslutok){ stopp(); const p = aeP(d.aeavslutok), A = S.aeAvslut;
     if (!A.slut || (p.start && A.slut < p.start)){ A.fel = {slut:`Välj en dag från ${p.start ? frKort(p.start) : 'startdagen'}.`}; render(); aeFokusFel(); return; }
-    ndAePost('avslut', {pid:p.id, slut:A.slut}, {minns:{pers:p.id}}); return; }
+    if (!A.orsak){ A.fel = {orsak:'Välj varför anställningen tar slut. Rekrytering kollar företrädesrätten mot den.'}; render(); aeFokusFel(); return; }
+    ndAePost('avslut', {pid:p.id, slut:A.slut, orsak:A.orsak}, {minns:{pers:p.id}}); return; }
   if (d.aeraderaok){ stopp(); ndAePost('radera', {pid:d.aeraderaok}, {minns:{pers:null}}); return; }
   // Checklistan
   if (d.aeoppna){ stopp(); ndAePost('oppna', {rad:ndAeRad(d.aeoppna)}); return; }
@@ -28943,6 +28980,7 @@ document.addEventListener('change', e => {
   if (d.aeflyttd && v){ stopp(); const {x} = aeHitta(d.aeflyttd); if (!x || v === x.due) return; if (v < aeT()){ e.target.value = x.due; toast('Välj i dag eller ett senare datum.'); return; } ndAePost('flytta', {rad:x.rad, datum:v}); return; }
   if (d.aefadder && v){ stopp(); const id = ndAeId(v); if (id) ndAePost('fadder', {pid:d.aefadder, fadder:id}); return; }
   if (d.aebyt && v){ stopp(); const id = ndAeId(v), {x} = aeHitta(d.aebyt); if (id && x) ndAePost('byt', {rad:x.rad, till:id}); return; }
+  if (d.ndaeorsak !== undefined && S.aeAvslut){ stopp(); S.aeAvslut.orsak = v; if (S.aeAvslut.fel) delete S.aeAvslut.fel.orsak; return; }
   if (d.aeavtfil && e.target.files && e.target.files[0]){ stopp(); ndAeBifoga(d.aeavtfil, e.target.files[0]); return; }
   if (d.aenot !== undefined){ const {x} = aeHitta(d.aenot); if (x) ndAePost('not', {rad:x.rad, text:v.trim()}, {ladda:false, tyst:true}).then(s => { if (s.ok !== undefined) toast('Anteckningen är sparad.'); }); }
 }, true);
@@ -29349,13 +29387,15 @@ function ndRxJa(c){
   rxJa(c.erb ? c : Object.assign(c, {erb:{start:'', form:'permanent', senast:'', skickat:c.stegD}}));
   if (S.aeNy && S.aeNy.f){ S.aeNy.f.team = ''; S.aeNy.f.jobbmejl = ''; }
 }
-// Anställda kopplad: upplägget av en kandidat går genom rekryteringens rutt (repots anstallKandidat).
+// Anställda kopplad: upplägget av en kandidat går genom rekryteringens rutt (repots anstallKandidat), med
+// samma fält som Lägg upp: mallen, chefen, kontaktuppgifterna och punkterna (beställaren 2026-10-20, A7).
 const _ndRxAeSkapa = aeSkapa;
 aeSkapa = function(){
   const N = S.aeNy, cid = N && N.rx;
   if (!ndRx() || !cid) return _ndRxAeSkapa();
-  const f = N.f;
-  ndRxPost('anstall', {id:cid, f:{fornamn:f.fornamn, efternamn:f.efternamn, epost:f.jobbmejl, roll:f.roll, form:f.form, start:f.start, team:f.teamId || f.team || '', nummer:f.nr || f.nummer || ''}}, {ladda:false}).then(s => {
+  const f = N.f, d = ndAeNyData(N);
+  d.f.epost = d.f.jobbmejl; d.f.nummer = f.nr || f.nummer || '';
+  ndRxPost('anstall', {id:cid, ...d}, {ladda:false}).then(s => {
     if (s.losenord){ S.aeNy = {klar:s.anstalldId, losen:s.losenord, rx:cid}; render(); window.scrollTo(0, 0); }
   });
 };
@@ -29384,9 +29424,10 @@ if (ndRx()){ ndRxStart(); NDKOPPLAD.add('rekrytering'); }
 
    Allt utkastet har finns kvar (beställaren 2026-10-15). Det som sparar går
    till /nav2/coachning (src/app/nav2/coachning/route.ts). I läsläge svarar
-   rutten 423 och visar varför. Det rutten själv skriver går att ångra; det
-   som går genom repots actions (kvittera, gör om, avbryt, flytta, boka,
-   spara 1:1:et) skickar notiser och ångras inte.
+   rutten 423 och visar varför. Allt går att ångra i tio minuter (beställaren
+   2026-10-19), också det som går genom repots actions (kvittera, gör om,
+   lämna in, klar, avbryt, flytta, boka, spara 1:1:et). En notis som redan
+   gått ut står kvar. Avbryt frågar efter ett skäl i en rad under knappen.
    ===================================================================== */
 
 const ndCn = () => ND && ND.coachning;
@@ -29442,7 +29483,8 @@ cnSt = function(){
   if (S.cnInit) return; S.cnInit = true;
   const c = ndCn(), cn = {ov:[], avt:[], logg:{}, vanor:[], punkter:{}, medd:[], kv:{}, omr:{}, notiser:[], forfr:{}};
   S.ndCnPunktId = {};
-  c.personer.forEach(p => { cn.omr[p.namn] = p.omr || ''; cn.kv[p.namn] = p.kv; cn.logg[p.namn] = []; cn.punkter[p.namn] = []; S.ndCnPunktId[p.namn] = []; });
+  // K&V före och efter visas inte när båda är 0 (beställaren 2026-10-19).
+  c.personer.forEach(p => { cn.omr[p.namn] = p.omr || ''; cn.kv[p.namn] = p.kv && (p.kv[0] || p.kv[1]) ? p.kv : null; cn.logg[p.namn] = []; cn.punkter[p.namn] = []; S.ndCnPunktId[p.namn] = []; });
   c.ovningar.forEach(o => {
     const vem = ndCnNamn(o.vem); if (!cn.logg[vem]) return;
     cn.ov.push({id:o.id, vem, omr:o.omr, nar:o.nar, da:o.da, r:o.r, start:o.start, n:o.n, status:o.status, av:ndCnNamn(o.av), svar:{...o.svar}});
@@ -29601,7 +29643,7 @@ cnInlamna = function(id){
   if (!ndCn()) return _ndCnInlamna(id);
   const a = S.cn.avt.find(x => x.id === id), key = 'inl' + id, txt = (S.cnUtk[key] || '').trim();
   if (!txt){ S.cnFel[key] = a.st === 'underkand' ? 'Skriv ditt nya svar först.' : 'Skriv en kommentar först.'; render(); cnFel(); return; }
-  delete S.cnFel[key]; ndCnPost('lamna-in', {id, text:txt});
+  delete S.cnFel[key]; ndCnPost('lamna-in', {id, text:txt}, {angra:ndCnHandAter(id)});
 };
 const _ndCnBytStart = cnBytStart;
 cnBytStart = function(vem){
@@ -29651,10 +29693,34 @@ cnMoteSpara = function(){
   const tagit = M.tagit.map(k => k < auto.length ? ren(auto[k]) : egna[k - auto.length]).filter(Boolean);
   const punkter = M.tagit.filter(k => k >= auto.length).map(k => ids[k - auto.length]).filter(Boolean);
   const m = cnMoten(vem), e = [m.pagar, m.oant, m.nasta].find(x => x && x.d === M.d && x.nd);
+  const utk = {...M, fel:{}};
   ndCnPost('spara-1-1', {vem:ndCnId(vem), d:M.d, lage:M.lage, mal:M.mal, omr:M.omr, forra:M.forra, vag:M.vag, nar:M.nar, da:M.da, n:M.n, start:cnNastaArb(T),
-    steg:M.steg.map(x => ({t:x.t, vem:x.vem, d:x.d})), tagit, punkter, eventId:e ? e.ref : null, boka:!ef && M.boka ? {dag:M.bokaD, start:T_(M.bokaS)} : null});
+    steg:M.steg.map(x => ({t:x.t, vem:x.vem, d:x.d})), tagit, punkter, eventId:e ? e.ref : null, boka:!ef && M.boka ? {dag:M.bokaD, start:T_(M.bokaS)} : null},
+    {angra:s => s.angra ? {handling:'spara-1-1-ater', data:{vem:ndCnId(vem), a:s.angra, m:utk}} : null});
 };
 const T_ = s => T(s || '10:00');
+// Ångra för det repots actions skrev (händelseraden på överenskommelsen).
+const ndCnHandAter = id => () => ({handling:'handelse-ater', data:{id}});
+const ndCnBokaAter = s => s.angra && s.angra.length ? {handling:'boka-ater', data:{angra:s.angra, req:s.req || []}} : null;
+
+/* ---------- Avbryt: skälet i en rad under knappen ---------- */
+function ndCnAvbrytRad(a){
+  const k = 'av' + a.id, fel = S.cnFel[k];
+  return `<div class="cnflytt"><label class="cnlab" for="cnAv-${a.id}">Varför avbryts den?</label><div class="cnaknapp"><input id="cnAv-${a.id}" class="uin" data-ndcnavtxt="${a.id}" value="${esc(S.cnUtk[k] || '')}" maxlength="500" aria-invalid="${!!fel}" placeholder="Till exempel: passar inte längre efter 1:1:et"><button class="btn btn-p btn-sm" data-ndcnavok="${a.id}">Avbryt överenskommelsen</button><button class="tlink" data-ndcnavx>Tillbaka</button></div>${fel ? `<p class="cnfel" role="alert">${fel}</p>` : ''}<small class="muted">${esc(cnFor(a.vem))} får en notis med skälet.</small></div>`;
+}
+const _ndCnAvbrytVy = renderCnView;
+renderCnView = function(){
+  let h = _ndCnAvbrytVy();
+  if (!ndCn() || !S.ndCnAvbryt) return h;
+  const a = S.cn.avt.find(x => x.id === S.ndCnAvbryt), knapp = `data-cnavbryt="${S.ndCnAvbryt}"`, i = h.indexOf(knapp);
+  if (!a || i < 0) return h;
+  const slut = h.indexOf('</div>', i);
+  return slut < 0 ? h : h.slice(0, slut + 6) + ndCnAvbrytRad(a) + h.slice(slut + 6);
+};
+document.addEventListener('input', e => {
+  const d = e.target.dataset; if (!ndCn() || !d || !d.ndcnavtxt) return;
+  S.cnUtk['av' + d.ndcnavtxt] = e.target.value;
+}, true);
 
 /* ---------- Klicken ---------- */
 document.addEventListener('click', e => {
@@ -29683,21 +29749,26 @@ document.addEventListener('click', e => {
   if (d.cnbeom !== undefined){ stopp(); ndCnPost('be-om', {}, {angra:() => ({handling:'be-om-ater', data:{}})}); return; }
   // Säljaren: överenskommelserna.
   if (d.cninlok){ const txt = (S.cnUtk['inl' + d.cninlok] || '').trim(); if (!txt) return; stopp(); cnInlamna(d.cninlok); return; }
-  if (d.cnamot){ stopp(); ndCnPost('be-motpart', {id:d.cnamot}); return; }
-  if (d.cnaklar){ stopp(); ndCnPost('klar', {id:d.cnaklar}); return; }
+  if (d.cnamot){ stopp(); ndCnPost('be-motpart', {id:d.cnamot}, {angra:ndCnHandAter(d.cnamot)}); return; }
+  if (d.cnaklar){ stopp(); ndCnPost('klar', {id:d.cnaklar}, {angra:ndCnHandAter(d.cnaklar)}); return; }
   // Chefen: överenskommelserna.
-  if (d.cnkvitt){ stopp(); ndCnPost('kvittera', {id:d.cnkvitt, text:(S.cnUtk['u' + d.cnkvitt] || '').trim()}); return; }
-  if (d.cnunderkok){ const txt = (S.cnUtk['u' + d.cnunderkok] || '').trim(); if (!txt) return; stopp(); ndCnPost('gor-om', {id:d.cnunderkok, text:txt}); return; }
+  if (d.cnkvitt){ stopp(); ndCnPost('kvittera', {id:d.cnkvitt, text:(S.cnUtk['u' + d.cnkvitt] || '').trim()}, {angra:ndCnHandAter(d.cnkvitt)}); return; }
+  if (d.cnunderkok){ const txt = (S.cnUtk['u' + d.cnunderkok] || '').trim(); if (!txt) return; stopp(); ndCnPost('gor-om', {id:d.cnunderkok, text:txt}, {angra:ndCnHandAter(d.cnunderkok)}); return; }
   if (d.cnflyttok){ const a = S.cn.avt.find(x => x.id === d.cnflyttok), ny = S.cnUtk['f' + d.cnflyttok] || (a && a.due);
-    if (!a || !ny || ny < cnT() || ny === a.due) return; stopp(); ndCnPost('flytta', {id:a.id, due:ny}); return; }
-  if (d.cnavbryt){ stopp(); ndCnPost('avbryt', {id:d.cnavbryt}); return; }
+    if (!a || !ny || ny < cnT() || ny === a.due) return; stopp(); ndCnPost('flytta', {id:a.id, due:ny}, {angra:s => ({handling:'flytta-ater', data:{id:a.id, fore:s.fore, not:s.not, due:s.due}})}); return; }
+  if (d.cnavbryt){ stopp(); S.ndCnAvbryt = S.ndCnAvbryt === d.cnavbryt ? null : d.cnavbryt; S.cnFlytt = null; render();
+    setTimeout(() => { const el = document.getElementById('cnAv-' + d.cnavbryt); if (el) el.focus(); }, 0); return; }
+  if (d.ndcnavx !== undefined){ stopp(); S.ndCnAvbryt = null; render(); return; }
+  if (d.ndcnavok){ stopp(); const id = d.ndcnavok, k = 'av' + id, skal = (S.cnUtk[k] || '').trim();
+    if (!skal){ S.cnFel[k] = 'Skriv varför den avbryts.'; render(); cnFel(); return; }
+    delete S.cnFel[k]; ndCnPost('avbryt', {id, skal}, {angra:() => ({handling:'avbryt-ater', data:{id}})}); return; }
   // Chefen: 1:1.
-  if (d.cnboka){ stopp(); const l = cnLedig(d.cnboka); ndCnPost('boka', {vem:ndCnId(d.cnboka), dag:l.d, start:l.s}); return; }
+  if (d.cnboka){ stopp(); const l = cnLedig(d.cnboka); ndCnPost('boka', {vem:ndCnId(d.cnboka), dag:l.d, start:l.s}, {angra:ndCnBokaAter}); return; }
   if (d.cnbokaalla !== undefined){ stopp(); const k = cnKopia(), l = cnLaget().filter(v => !cnMoten(v).nasta && !cnPausad(v));
     // cnLedig räknar med kalendern, så varje bokning läggs in innan nästa tid söks (som i utkastet), och kalendern återställs sedan.
     const lista = l.map(v => { const ev = cnBoka(v); return {vem:ndCnId(v), dag:ev.d, start:ev.s}; });
     S.cn = k.cn; KEV.length = k.kev;
-    ndCnPost('boka', {lista}); return; }
+    ndCnPost('boka', {lista}, {angra:ndCnBokaAter}); return; }
   // Pausa: utkastet sparas också i navet, så att det finns kvar efter en omladdning.
   if (d.cnmoteavbryt !== undefined){ const M = S.cnMote; if (M && cnMoteHarInnehall(M)) ndCnPost('utkast', {vem:ndCnId(M.vem), m:{...M, fel:{}}}, {ladda:false, tyst:true}); return; }
 }, true);

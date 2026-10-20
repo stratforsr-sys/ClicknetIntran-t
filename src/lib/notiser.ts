@@ -643,6 +643,13 @@ export const NOTIS_KALLOR = [
   "personal-klart",
 
   /**
+   * Nav 2.0, Anställda och Rekrytering (beställaren 2026-10-20): de andra
+   * superadminerna får veta när någon läggs upp, anställs eller avslutas.
+   * En HÄNDELSE.
+   */
+  "personal-anstallning",
+
+  /**
    * ANGRA-KNAPPEN HAR MED FLIT INGEN KALLA HAR.
    *
    * `/angra` provades och togs bort igen. Kvittot med angra-knappen visas bara
@@ -769,6 +776,7 @@ export const HANDELSEKALLOR = [
   "personal-uppdrag",
   "personal-paminn",
   "personal-klart",
+  "personal-anstallning",
 ] as const satisfies readonly Notiskalla[];
 
 export type Handelsekalla = (typeof HANDELSEKALLOR)[number];

@@ -3,11 +3,11 @@ import { revalidatePath } from "next/cache";
 import { fullName, getCurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { svensktDatum } from "@/lib/klocka";
-import { siteUrl } from "@/lib/env";
 import { skickaEpost } from "@/lib/epost";
 import { notifiera } from "@/lib/notishandelse-server";
 import { ROLES, type Role } from "@/lib/roles";
 import { laggUppAnstalld } from "@/lib/anstallning-server";
+import { anstalldaVerktyg, namnPa, startFran, type MallPunkt, type Person } from "@/lib/nav2/anstallda-start";
 import {
   aktivera,
   andraRoll,
@@ -19,8 +19,8 @@ import {
   taBortAnstalld,
 } from "@/app/(app)/personal/actions";
 import { skapaMote } from "@/app/(app)/kalender/moten/actions";
-import { aeDue, arbetsdagar, AE_TYPER, frist, fyll, type FyllPerson } from "@/lib/nav2/anstalldaforma";
-import { nivaFor, type Niva } from "@/lib/nav2/forma";
+import { aeDue, arbetsdagar, AE_TYPER, frist, fyll } from "@/lib/nav2/anstalldaforma";
+import { type Niva } from "@/lib/nav2/forma";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
 
 export const dynamic = "force-dynamic";
@@ -49,6 +49,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const DATUM = /^\d{4}-\d{2}-\d{2}$/;
 const EPOST = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const FORMER = ["permanent", "probation", "consultant", "intern"];
+/** Slutorsaken, samma koder som 0110 `end_reason` och Rekryteringens LAS 25 §. */
+const SLUTORSAK_TEXT: Record<string, string> = { egen: "egen uppsägning", arbetsbrist: "arbetsbrist", provanstallning: "provanställningen avbröts", visstid: "visstiden tog slut", avsked: "avsked", annat: "annat skäl" };
+const SLUTORSAKER = Object.keys(SLUTORSAK_TEXT);
 const NIVAER: Niva[] = ["salesperson", "admin", "superadmin"];
 /** Befattningen som en nivå skriver (beställaren 2026-10-19). */
 const ROLL_FOR: Record<Niva, Role> = { salesperson: "salesperson", admin: "sales_manager", superadmin: "admin" };
@@ -84,20 +87,13 @@ async function fangad(f: () => Promise<unknown>): Promise<string | null> {
 function dagarMellan(a: string, b: string): number {
   return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000);
 }
-const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c);
 
-type Person = {
-  id: string; first_name: string; last_name: string; email: string; status: string; employment_type: string;
-  start_date: string | null; end_date: string | null; team_id: string | null; manager_id: string | null; employee_number: string | number | null;
-};
 type Punkt = {
   id: string; employee_id: string; label: string; state: string; kind: string; item_key: string | null; owner: string; owner_id: string | null;
   self_owned: boolean; rule_id: string | null; ask_for: string | null; reminded: string[] | null; offset_days: number | null; offset_special: string | null;
   due_date: string | null; created_on: string; sent_on: string | null; mail_subject: string | null; mail_body: string | null; condition: string | null;
 };
 const PUNKT = "id, employee_id, label, state, kind, item_key, owner, owner_id, self_owned, rule_id, ask_for, reminded, offset_days, offset_special, due_date, created_on, sent_on, mail_subject, mail_body, condition";
-type MallPunkt = { key: string; label: string; offset_days: number | null; offset_special: string | null; kind: string; law_ref: string | null; condition: string | null; owner: string; owner_id: string | null; sort: number };
-type Regel = { id: string; name: string; recipient_id: string | null; roles: string[] | null; trigger: string; due_offset: number; remind_days: number; ask_for: string | null; subject: string; body: string; active: boolean };
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
@@ -119,22 +115,12 @@ export async function POST(request: Request) {
   const idag = svensktDatum();
 
   // ---------------------------------------------------------------- Hjälpare
-  const personen = async (id: unknown): Promise<Person | null> => {
-    const pid = String(id ?? "");
-    if (!UUID.test(pid)) return null;
-    const { data } = await db
-      .from("employee")
-      .select("id, first_name, last_name, email, status, employment_type, start_date, end_date, team_id, manager_id, employee_number")
-      .eq("id", pid)
-      .maybeSingle();
-    return (data as Person | null) ?? null;
-  };
-  const namnPa = (p: { first_name: string; last_name: string }) => `${p.first_name} ${p.last_name}`.replace(/\s+/g, " ").trim();
-  const namnFor = async (id: string | null): Promise<{ namn: string; epost: string } | null> => {
-    if (!id) return null;
-    const { data } = await db.from("employee").select("first_name, last_name, email").eq("id", id).maybeSingle();
-    return data ? { namn: namnPa(data as { first_name: string; last_name: string }), epost: String((data as { email: string }).email ?? "") } : null;
-  };
+  // Lägg upps steg och hjälparna de delar med Rekryteringens anställning (A7) ligger i anstallda-start.ts.
+  const { personen, namnFor, logga, fyllFor, mejla, regelPunkter, mallPunkter, somRad, niva, meddelaSuperadmin, startaListan } = anstalldaVerktyg(
+    db,
+    { id: mig, namn: jagNamn, epost: user.employee.email },
+    idag,
+  );
   /** Punkten och vilken lista den ligger i. */
   const punkten = async (id: unknown): Promise<{ x: Punkt; tabell: "onboarding_task" | "offboarding_task" } | null> => {
     const rid = String(id ?? "");
@@ -144,96 +130,23 @@ export async function POST(request: Request) {
     const { data: off } = await db.from("offboarding_task").select(PUNKT).eq("id", rid).maybeSingle();
     return off ? { x: off as unknown as Punkt, tabell: "offboarding_task" } : null;
   };
-  const logga = (pid: string, text: string, meta: Record<string, unknown> = {}) =>
-    db.from("audit_log").insert({ actor_id: mig, action: "anstallda.handelse", object_type: "employee", object_id: pid, meta: { text, ...meta } });
-  const fyllFor = async (p: Person): Promise<FyllPerson> => {
-    const [{ data: r }, chef, { data: t }] = await Promise.all([
-      db.from("employee_role").select("role").eq("employee_id", p.id),
-      namnFor(p.manager_id),
-      p.team_id ? db.from("team").select("name").eq("id", p.team_id).maybeSingle() : Promise.resolve({ data: null }),
-    ]);
-    return {
-      namn: namnPa(p),
-      roller: ((r ?? []) as unknown as { role: string }[]).map((x) => x.role),
-      start: p.start_date,
-      slut: p.end_date,
-      jobbmejl: p.email,
-      chef: chef?.namn ?? null,
-      team: (t as { name: string } | null)?.name ?? "",
-      nr: p.employee_number === null || p.employee_number === undefined ? "" : String(p.employee_number),
-    };
-  };
-  const klartLank = (rad: string) => `${siteUrl().replace(/\/+$/, "")}/nav2/anstallda/klart?id=${rad}`;
-  /** Mejlet till den som ska göra något, med Klart-länken. */
-  const mejla = async (till: string, amne: string, text: string, rad: string | null, due: string | null) => {
-    const html = `<div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5">${esc(text).replace(/\n/g, "<br>")}${due ? `<p style="color:#666">Klart senast ${esc(due)}.</p>` : ""}${rad ? `<p><a href="${klartLank(rad)}" style="display:inline-block;background:#1f6f5c;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Klart</a></p>` : ""}</div>`;
-    return skickaEpost({ till, amne, text: `${text}${due ? `\n\nKlart senast ${due}.` : ""}${rad ? `\n\nTryck Klart här: ${klartLank(rad)}` : ""}`, html, svaraTill: user.employee!.email });
-  };
   const bas = (p: Person, tabell: string) => (tabell === "offboarding_task" ? p.end_date : p.start_date);
   const fristFor = (x: Punkt, p: Person, tabell: string) =>
     frist({ bas: bas(p, tabell), skapad: x.kind === "regel" ? (x.sent_on ?? x.created_on) : x.created_on, off: x.offset_days, spec: x.offset_special, flyttad: x.due_date });
 
-  /** Regelpunkterna för en person, och mejlen till mottagarna. */
-  /** `fp` läses före avslutet: offboarda tar bort rollerna, och reglerna väljs på dem. */
-  const regelPunkter = async (p: Person, trigger: "start" | "slut", av: string[], tabell: "onboarding_task" | "offboarding_task", sortFran: number, fpFore?: FyllPerson) => {
-    const { data } = await db.from("onboarding_rule").select("id, name, recipient_id, roles, trigger, due_offset, remind_days, ask_for, subject, body, active").eq("trigger", trigger).eq("active", true);
-    const fp = fpFore ? { ...fpFore, slut: p.end_date } : await fyllFor(p);
-    const roller = fp.roller;
-    const regler = ((data ?? []) as unknown as Regel[]).filter((r) => !av.includes(r.id) && r.recipient_id && (!r.roles || !r.roles.length || r.roles.some((x) => roller.includes(x))));
-    const rader: Record<string, unknown>[] = [];
-    for (const [i, r] of regler.entries()) {
-      const mott = await namnFor(r.recipient_id);
-      rader.push({
-        employee_id: p.id, label: r.name, sort: sortFran + i, kind: "regel", owner: "person", owner_id: r.recipient_id, self_owned: r.recipient_id === mig,
-        rule_id: r.id, offset_days: r.due_offset, sent_on: idag, remind_days: r.remind_days, ask_for: r.ask_for, created_on: idag,
-        mail_subject: fyll(r.subject, fp, mott?.namn ?? "", jagNamn), mail_body: fyll(r.body, fp, mott?.namn ?? "", jagNamn),
-      });
-    }
-    if (!rader.length) return 0;
-    const { data: nya } = await db.from(tabell).insert(rader).select("id, owner_id, self_owned, mail_subject, mail_body, offset_days, created_on, sent_on, kind, due_date, offset_special");
-    let mejl = 0;
-    for (const n of (nya ?? []) as unknown as { id: string; owner_id: string; self_owned: boolean; mail_subject: string; mail_body: string; offset_days: number; created_on: string; sent_on: string; kind: string; due_date: string | null; offset_special: string | null }[]) {
-      if (n.self_owned) continue;
-      const mott = await namnFor(n.owner_id);
-      if (!mott?.epost) continue;
-      const due = frist({ bas: trigger === "slut" ? p.end_date : p.start_date, skapad: n.sent_on, off: n.offset_days, spec: null, flyttad: null });
-      await mejla(mott.epost, n.mail_subject, n.mail_body, n.id, due);
-      await notifiera({ till: n.owner_id, av: mig, kalla: "personal-uppdrag", typ: "uppgift", rubrik: n.mail_subject, detalj: `Klart senast ${due}`, href: `/nav2/anstallda/klart?id=${n.id}`, objekt: { typ: "employee", id: p.id } });
-      mejl++;
-    }
-    return mejl;
-  };
-  /** Mallens punkter för en person, med villkoren prövade. */
-  const mallPunkter = async (mallId: string, p: { employment_type: string }, tredje: boolean): Promise<MallPunkt[]> => {
-    const { data } = await db.from("onboarding_template_item").select("key, label, offset_days, offset_special, kind, law_ref, condition, owner, owner_id, sort").eq("template_id", mallId).order("sort");
-    return ((data ?? []) as unknown as MallPunkt[]).filter((x) => !x.condition || (x.condition === "tredje" ? tredje : x.condition === "prov" ? p.employment_type === "probation" : true));
-  };
-  const somRad = (x: MallPunkt, pid: string, sort: number) => ({
-    employee_id: pid, label: x.label, sort, item_key: x.key, kind: x.kind, offset_days: x.offset_days, offset_special: x.offset_special,
-    law_ref: x.law_ref, condition: x.condition, owner: x.owner, owner_id: x.owner_id, created_on: idag,
-  });
   const klarMarkera = (tabell: string, pid: string, typ: string) =>
     db.from(tabell).update({ state: "done", handled_by: mig, handled_at: new Date().toISOString() }).eq("employee_id", pid).eq("kind", typ).eq("state", "open");
+  /** Beställaren 2026-10-20 (A9): påminnelsen är en notis i Nav till den som ansvarar för punkten. Mejlet via Resend byggs ut senare. */
   const paminn = async (x: Punkt, p: Person, tabell: string): Promise<boolean> => {
     if ((x.reminded ?? []).includes(idag) || x.self_owned || !x.owner_id || x.state !== "open") return false;
     const mott = await namnFor(x.owner_id);
-    if (!mott?.epost) return false;
+    if (!mott) return false;
     const due = fristFor(x, p, tabell);
-    await mejla(mott.epost, `Påminnelse: ${x.mail_subject ?? x.label}`, `Hej ${mott.namn.split(" ")[0]},\n\n${x.label} för ${namnPa(p)} är inte klart än.\n\n${x.mail_body ?? ""}`, x.id, due);
     await notifiera({ till: x.owner_id, av: mig, kalla: "personal-paminn", typ: "uppgift", rubrik: `Påminnelse: ${x.label}`, detalj: `${namnPa(p)} · klart senast ${due}`, href: `/nav2/anstallda/klart?id=${x.id}`, objekt: { typ: "employee", id: p.id } });
     await db.from(tabell).update({ reminded: [...(x.reminded ?? []), idag] }).eq("id", x.id);
     await logga(p.id, `påminde ${mott.namn}: ${x.label}.`);
     return true;
   };
-  /** Den effektiva behörigheten: satt för hand, annars ur befattningen. */
-  const niva = async (pid: string): Promise<Niva> => {
-    const [{ data: satt }, { data: r }] = await Promise.all([
-      db.from("employee_access_level").select("level").eq("employee_id", pid).maybeSingle(),
-      db.from("employee_role").select("role").eq("employee_id", pid),
-    ]);
-    return ((satt as { level: Niva } | null)?.level ?? nivaFor(((r ?? []) as unknown as { role: string }[]).map((x) => x.role)));
-  };
-
   // Beställaren 2026-10-19: bara en superadmin ändrar i personalen. Repots actions prövar dessutom kravChef().
   if ((await niva(mig)) !== "superadmin") return svar({ fel: "Bara en superadmin ändrar i personalen." }, 403);
 
@@ -252,35 +165,15 @@ export async function POST(request: Request) {
         if (privat && !EPOST.test(privat)) return svar({ fel: "Skriv en hel privat adress, till exempel namn@exempel.se." }, 400);
         const formen = FORMER.includes(String(f.form)) ? String(f.form) : "permanent";
         const teamId = UUID.test(String(f.team ?? "")) ? String(f.team) : null;
-        const chefId = UUID.test(String(f.chef ?? "")) ? String(f.chef) : null;
-        const tredje = f.tredje === true;
         const s = await laggUppAnstalld(
           { epost, fornamn: str(f.fornamn, 80), efternamn: str(f.efternamn, 80), roll, anstallningsform: formen, startdatum: start, anstallningsnummer: str(f.nr, 40) || null, teamId },
           mig,
         );
         if ("fel" in s) return svar({ fel: s.fel }, 400);
         const pid = s.employeeId;
-        if (chefId) await fangad(() => sattOrganisation(form({ employee_id: pid, team_id: teamId ?? "", manager_id: chefId })));
-        const mallId = UUID.test(String(b.mall ?? "")) ? String(b.mall) : null;
-        await db.from("employee_onboarding").upsert({ employee_id: pid, template_id: mallId, private_email: privat || null, phone: str(f.tel, 40) || null, third_country: tredje, updated_by: mig });
-        const p = await personen(pid);
-        if (!p) return svar({ fel: "Personen lades upp men gick inte att läsa tillbaka." }, 500);
-        const bort = Array.isArray(b.bort) ? (b.bort as unknown[]).map(String) : [];
-        const punkter = mallId ? (await mallPunkter(mallId, p, tredje)).filter((x) => !bort.includes(x.key)) : [];
-        const extra = (Array.isArray(b.extra) ? (b.extra as { t?: unknown; off?: unknown }[]) : [])
-          .map((x) => ({ t: str(x.t, 120), off: Math.max(-60, Math.min(365, Math.round(Number(x.off) || 0))) }))
-          .filter((x) => x.t);
-        const nu = new Date().toISOString();
-        const rader = [
-          ...punkter.map((x, i) => ({ ...somRad(x, pid, i), ...(x.kind === "konto" ? { state: "done", handled_by: mig, handled_at: nu } : {}) })),
-          ...extra.map((x, i) => ({ employee_id: pid, label: x.t, sort: punkter.length + i, kind: "vanlig", offset_days: x.off, created_on: idag })),
-        ];
-        if (rader.length) await db.from("onboarding_task").insert(rader);
-        const regAv = Array.isArray(b.regAv) ? (b.regAv as unknown[]).map(String) : [];
-        const mejl = await regelPunkter(p, "start", regAv, "onboarding_task", rader.length);
-        if (chefId && chefId !== mig)
-          await notifiera({ till: chefId, av: mig, kalla: "personal-uppdrag", typ: "uppgift", rubrik: `${namnPa(p)} är upplagd i navet`, detalj: `Du är närmaste chef · börjar ${start}`, href: "/nav2", objekt: { typ: "employee", id: pid } });
-        await logga(pid, `startade checklistan${mejl ? ` och ${mejl} mejl gick ut` : ""}.`);
+        const st = await startaListan(pid, startFran(b, f, roll, teamId));
+        if (!st) return svar({ fel: "Personen lades upp men gick inte att läsa tillbaka." }, 500);
+        const p = st.p;
         revalidatePath("/personal");
         return svar({ ok: `${namnPa(p)} är upplagd i navet.`, anstalldId: pid, losenord: s.losenord });
       }
@@ -306,6 +199,9 @@ export async function POST(request: Request) {
         if (p.status === "offboarded") return svar({ fel: "Anställningen är redan avslutad." }, 400);
         const slut = String(b.slut ?? "");
         if (!DATUM.test(slut) || (p.start_date && slut < p.start_date)) return svar({ fel: `Välj en dag från ${p.start_date ?? "startdagen"}.` }, 400);
+        // Beställaren 2026-10-20 (A10): avslutet frågar varför (0110 `end_reason`, Rekryteringens LAS 25 §).
+        const orsak = String(b.orsak ?? "");
+        if (!SLUTORSAKER.includes(orsak)) return svar({ fel: "Välj varför anställningen tar slut." }, 400);
         // Avslutslistan först: repots offboarda lägger bara in sin egen lista när det inte finns någon.
         const { data: mall } = await db.from("onboarding_template").select("id").eq("is_exit", true).maybeSingle();
         const punkter = mall ? await mallPunkter((mall as { id: string }).id, p, false) : [];
@@ -322,9 +218,12 @@ export async function POST(request: Request) {
         const { data: logg } = await db.from("audit_log").select("meta").eq("object_id", p.id).eq("action", "employee.offboarded").order("ts", { ascending: false }).limit(1).maybeSingle();
         const stangda = Number((logg as { meta: { stangda_arenden?: number } | null } | null)?.meta?.stangda_arenden ?? 0);
         if (stangda > 0) await db.from("offboarding_task").update({ note: `${stangda} öppet personalärende${stangda === 1 ? "" : "n"} stängdes automatiskt. Kontrollera att inget kräver åtgärd.` }).eq("employee_id", p.id).eq("item_key", "arenden");
+        // Utan 0110 finns inte kolumnen. Då står orsaken bara i historiken, och Rekrytering frågar i efterhand.
+        await db.from("employee").update({ end_reason: orsak, end_reason_by: mig, end_reason_at: new Date().toISOString() }).eq("id", p.id);
         const p2 = (await personen(p.id)) ?? p;
         const mejl = await regelPunkter(p2, "slut", [], "offboarding_task", punkter.length, fpFore);
-        await logga(p.id, `startade avslutslistan${mejl ? `. ${mejl} mejl gick ut` : ""}.`);
+        await meddelaSuperadmin(`${namnPa(p)} avslutas`, `${jagNamn} avslutade · sista dag ${slut} · ${SLUTORSAK_TEXT[orsak]}`, p.id);
+        await logga(p.id, `startade avslutslistan (${SLUTORSAK_TEXT[orsak]})${mejl ? `. ${mejl} mejl gick ut` : ""}.`, { end_reason: orsak });
         return svar({ ok: `Anställningen är avslutad med sista dag ${slut}.${mejl ? ` ${mejl} mejl gick ut.` : ""}` });
       }
       case "radera": {

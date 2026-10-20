@@ -2,8 +2,6 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { svensktDatum } from "@/lib/klocka";
-import { siteUrl } from "@/lib/env";
-import { skickaEpost } from "@/lib/epost";
 import { notifiera } from "@/lib/notishandelse-server";
 import { SKRIVLAGE } from "@/lib/nav2/skrivlage";
 import { arbetsdagar, frist } from "@/lib/nav2/anstalldaforma";
@@ -12,8 +10,9 @@ import { arbetsdagar, frist } from "@/lib/nav2/anstalldaforma";
  * Nav 2.0 (0105), Anställda: utskicksreglernas påminnelse och eskalering.
  *
  *   - Påminnelsen: `remind_days` arbetsdagar före fristen, en gång, aldrig
- *     samma dag som mejlet gick (utkastets aeRegelLage). Mottagaren får ett
- *     mejl med Klart-länken och en notis (`personal-paminn`).
+ *     samma dag som mejlet gick (utkastets aeRegelLage). Den som ansvarar för
+ *     punkten får en notis i Nav (`personal-paminn`) som leder till Klart.
+ *     Beställaren 2026-10-20 (A9): först notis, mejlet via Resend byggs ut senare.
  *   - Eskaleringen: arbetsdagen efter fristen får närmaste chef en notis om att
  *     det inte är gjort. En gång per punkt (`escalated_on`).
  *
@@ -45,13 +44,7 @@ export async function korAnstalldaPaminnelser(db: SupabaseClient, nu = new Date(
       const namn = `${p.first_name} ${p.last_name}`.trim();
       const pd = arbetsdagar(due, -(r.remind_days ?? 2));
       if (!r.auto_reminded_on && pd > skickat && idag >= pd && idag <= due) {
-        const { data: m } = await db.from("employee").select("first_name, email").eq("id", r.owner_id).maybeSingle();
-        const mott = m as { first_name: string; email: string } | null;
-        if (mott?.email) {
-          const lank = `${siteUrl().replace(/\/+$/, "")}/nav2/anstallda/klart?id=${r.id}`;
-          await skickaEpost({ till: mott.email, amne: `Påminnelse: ${r.mail_subject ?? r.label}`, text: `Hej ${mott.first_name},\n\n${r.label} för ${namn} ska vara klart senast ${due}.\n\n${r.mail_body ?? ""}\n\nTryck Klart här: ${lank}` });
-          await notifiera({ till: r.owner_id, av: null, kalla: "personal-paminn", typ: "uppgift", rubrik: `Påminnelse: ${r.label}`, detalj: `${namn} · klart senast ${due}`, href: `/nav2/anstallda/klart?id=${r.id}`, objekt: { typ: "employee", id: p.id } });
-        }
+        await notifiera({ till: r.owner_id, av: null, kalla: "personal-paminn", typ: "uppgift", rubrik: `Påminnelse: ${r.label}`, detalj: `${namn} · klart senast ${due}`, href: `/nav2/anstallda/klart?id=${r.id}`, objekt: { typ: "employee", id: p.id } });
         await db.from(tabell).update({ auto_reminded_on: idag }).eq("id", r.id);
         paminda++;
       }

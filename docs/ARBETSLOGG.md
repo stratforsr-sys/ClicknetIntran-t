@@ -5,6 +5,70 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-20 · Nav 2.0, beslutsrundan: beställarens svar inbyggda (steg 3 till produktion)
+
+Steg 3 i "Till produktion" (`~/nav2-utkast/PROMPTER.md`): frågorna från alla
+delar samlades och ställdes till beställaren några i taget. Frågorna och svaren
+ligger i `~/nav2-utkast/delar/beslutsrundan/fragor.md`, och svaren står under
+varje del i HANDOFF.md. Det som byggs av andra sessioner: U1–U3 (Utbildning,
+steg 2) och P1 (paletten, `42a69ab`). Resten är byggt här.
+
+- **Coachning.**
+  - **C2:** rollspel live får finnas utan kursmodul. Migration
+    `0101_coachning_rollspel_live_utan_modul` lossar `coaching_task_kalla` och
+    `task_series_kalla` och flyttar de rader som 0100 sparat som
+    `nav2_kind = rollspel_live`. Den är torrkörd tillsammans med 0100 (ett
+    rollspel live utan modul går in, en kurs utan kurs-id gör det inte) och
+    körs i steg 6. Fram till dess sparar rutten som förut.
+  - **C3:** Avbryt frågar efter ett skäl i en rad (`skal` krävs).
+  - **C5:** allt går att ångra i tio minuter: lämna in, klar, be motparten,
+    kvittera, gör om, avbryt, flytta datum, boka och spara 1:1. Det sker med
+    handlingarna `*-ater` i `/nav2/coachning`. Ångra 1:1 tar tillbaka
+    bokningen (`lk_angra`), övningen, fokuset, chefens egna uppgifter,
+    punkterna, förfrågningarna och sessionen, och lägger tillbaka utkastet.
+    En notis som redan gått ut står kvar.
+  - **C6:** raden "K&V före och efter" döljs när båda är 0.
+- **Fel (F1):** kön (säljchef, VD, admin) får "Markera som känt fel" i
+  felets detalj, med rubrik och råd under tiden. Det går till rutten `kant`,
+  och tomma fält tar bort felet från Kända fel.
+- **Startsidan (S1):** alla ser alla. Golvet visar varje godkänd order för
+  hela laget, och `hem.golvet` är inget villkor längre (`hem.ts`).
+- **Anställda.**
+  - **A2:** 0105:s mallar står kvar (utkastets rollistor plus Navs punkter).
+    `0106_anstallda_mallarna_som_utkastet` (aldrig körd) är borttagen.
+  - **A3:** inga utskicksregler än. De andra superadminerna får notisen
+    `personal-anstallning` när någon läggs upp, anställs från Rekrytering
+    eller avslutas. Det är en ny källa i båda listorna i `notiser.ts`.
+  - **A7:** Rekryteringens anställning gör som Lägg upp: rollens mall med
+    frister, de egna punkterna, utskicken, chefens notis och superadminernas
+    notis. Stegen efter kontot ligger i `src/lib/nav2/anstallda-start.ts`
+    (`startaListan`), som båda rutterna anropar. Hjälparna flyttades dit ur
+    `/nav2/anstallda` oförändrade. Utan vald mall väljs mallen för
+    befattningen, och annars den första, som utkastets `aeMallFor`.
+    Klienten skickar samma fält från båda (`ndAeNyData`).
+  - **A9:** påminnelserna är en notis i Nav till den som ansvarar för
+    punkten, både den manuella och dagtidsjobbets. Mejlet via Resend byggs ut
+    senare.
+  - **A10:** avslutet frågar varför. Valen är samma koder som 0110
+    `end_reason` och Rekryteringens företrädesrätt: egen uppsägning,
+    arbetsbrist, provanställning, visstid, avsked och annat. Avsked är med
+    eftersom 0110 och Rekrytering har det. Före 0110 står orsaken bara i
+    historiken.
+- **Utbildning (E2):** övningskunden (Öva med Nav) är borttagen tills
+  AI-tjänsten finns. Det är beställarens uttryckliga undantag från "ingen
+  funktion försvinner". Öva högt, med en kollega och spela in står kvar.
+- **Externa tjänster:**
+  - E1: taltjänsten blir KB-Whisper på en hyrd server efter utrullningen.
+  - E2: AI-tjänsten väntar, och Claude bygger kurserna i chatten.
+  - E3: mötestjänsten väntar.
+  - E4: Web Push är med i första utrullningen, och nycklarna och
+    `hem_sondag.sql` hanteras vid mergen.
+
+Typkollat mot de riktiga typerna för `@supabase/supabase-js` 2.112.3,
+`@supabase/ssr` 0.7.0 och `next` 15.5.23, med 0 fel i de ändrade filerna.
+`notiser`, `notiser-tackning`, `navnyheter`, `stampelfri` och `dagslage` är
+gröna.
+
 ## 2026-10-20 · Nav 2.0, Fråga Nav ur navets data, och paletten får spara
 
 Beställarens svar 2026-10-19 (beslutsrundan P1) och 2026-10-20 (palettens frågor):

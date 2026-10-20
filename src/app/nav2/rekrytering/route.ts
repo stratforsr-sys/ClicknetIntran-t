@@ -6,7 +6,7 @@ import { svensktDatum } from "@/lib/klocka";
 import { STEG_ETIKETT, nastaSteg, type Steg } from "@/lib/rekrytering";
 import { notifieraFlera, rekryteringskretsen } from "@/lib/notishandelse-server";
 import { laggUppAnstalld } from "@/lib/anstallning-server";
-import { checklista } from "@/lib/onboarding";
+import { anstalldaVerktyg, startFran } from "@/lib/nav2/anstallda-start";
 import { ROLES, type Role } from "@/lib/roles";
 import { signeraLank } from "@/lib/lagring-server";
 import { skapaMote, stallIn } from "@/app/(app)/kalender/moten/actions";
@@ -25,7 +25,10 @@ export const dynamic = "force-dynamic";
  * utan scorecard och anställd bara med en employee-rad. Notiserna är repots
  * (`rekrytering-ny`, `-steg`, `-noshow`, `-anstalld`) till samma krets.
  * Anställningen gör samma sak som `anstallKandidat`: `laggUppAnstalld`,
- * kopplingen och steget i en skrivning, checklistan, loggen och notisen.
+ * kopplingen och steget i en skrivning, loggen och notisen. Checklistan är
+ * Lägg upps i Anställda (beställaren 2026-10-20, A7): rollens mall med
+ * frister, de egna punkterna, utskicken och superadminernas notis, genom
+ * samma `startaListan` (anstallda-start.ts).
  * Intervjuerna blir möten i kalendern med repots `skapaMote`, och en avbokning
  * ställer in mötet med `stallIn`.
  *
@@ -389,14 +392,16 @@ export async function POST(request: Request) {
           anstallningsnummer: str(f.nummer, 40) || null, teamId: UUID.test(String(f.team ?? "")) ? String(f.team) : null,
         };
         if (!epostOk(uppg.epost)) return svar({ fel: "Skriv jobbmejlet. Det blir inloggningen i navet." }, 400);
+        const privat = str(f.privat, 200);
+        if (privat && !epostOk(privat)) return svar({ fel: "Skriv en hel privat adress, till exempel namn@exempel.se." }, 400);
         const s = await laggUppAnstalld(uppg, mig);
         if ("fel" in s) return svar({ fel: s.fel }, 400);
         const { error: stegfel } = await db.from("candidate").update({ hired_employee_id: s.employeeId, stage: "hired" }).eq("id", k.id);
         if (stegfel) return svar({ halvvags: true, anstalldId: s.employeeId, losenord: s.losenord, fel: `${namnPa(k)} är upplagd som anställd, men kandidaten står kvar på erbjudande: ${stegfel.message}. Lösenordet gäller — skriv ner det nu, det visas inte igen.` }, 500);
-        const nu = new Date().toISOString();
-        await db.from("onboarding_task").insert(checklista(false, s.kurser.length).map((p, i) => ({ employee_id: s.employeeId, label: p.label, sort: i, state: p.automatisk ? "done" : "open", handled_by: p.automatisk ? mig : null, handled_at: p.automatisk ? nu : null })));
+        const krets = await rekryteringskretsen();
+        await anstalldaVerktyg(db, { id: mig, namn: jagNamn, epost: user.employee.email }, svensktDatum()).startaListan(s.employeeId, { ...startFran(b, f, roll, uppg.teamId), utom: krets });
         await db.from("audit_log").insert({ actor_id: mig, action: "candidate.hired", object_type: "candidate", object_id: k.id, meta: { employee_id: s.employeeId, roll, avtal: null, rutiner: s.rutiner.length, kurser: s.kurser.length } });
-        await notifieraFlera(await rekryteringskretsen(), {
+        await notifieraFlera(krets, {
           av: mig, kalla: "rekrytering-anstalld", typ: "rekrytering", rubrik: `${namnPa(k)} är anställd`, detalj: `${roll} · ${s.rutiner.length} rutiner och ${s.kurser.length} kurser tilldelade`,
           href: `/personal/${s.employeeId}`, objekt: { typ: "candidate", id: k.id },
         });
