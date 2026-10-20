@@ -7,7 +7,7 @@
  * lank i ett mejl eller en notis till /franvaro/attest blir
  * /nav2?till=/franvaro/attest, och Nav 2.0 oppnar ratt vy och flik (`ndGa` i
  * utkastets moduler/ndskal.js). Det som bara finns i nuvarande Nav (Nyheter,
- * Leads, K&V, Handelselogg, Adoption, scheman, sparrar, projekt, mallar …)
+ * Leads, K&V, Handelselogg, scheman, sparrar, projekt, mallar …)
  * star inte har och oppnas som forut.
  *
  * NAV 2.0 SKICKAR ANDA HIT MED FLIT. Finns en post inte i Nav 2.0 gar vagen
@@ -34,6 +34,7 @@ const SJALV: RegExp[] = [
   /^\/personal(\/(?!ny$|team$)[^/]+)?$/,
   /^\/rekrytering(\/(?!ny$)[^/]+)?$/,
   /^\/avtal$/,
+  /^\/adoption$/,
   /^\/profil(\/[^/]+)?$/,
 ];
 

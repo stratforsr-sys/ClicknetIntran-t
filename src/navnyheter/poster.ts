@@ -107,8 +107,14 @@ behörigheter som här: du ser bara det du får se.
   jag blir sjuk?", räknade ur Nav när du frågar och med källan på varje rad.
   Skriv ? för att se alla. Fritt skrivna frågor sparas utan namn, och säljchef,
   VD och admin ser dem samlade i ämnen och kan göra en rutin av dem.
+- **Adoption**, för säljchef, VD och administratör: hur många som använt Nav
+  i dag och de senaste sju dagarna, hur stor del av de anställda det är och
+  hur många som kommer tillbaka, med trettio dagars staplar och samma siffror
+  som tabell. Sökningar utan träff går att göra till en rutin, och rutiner
+  ingen öppnat på 90 dagar går att öppna. Siffrorna räknar personer, aldrig
+  vem som gjorde vad.
 
-Nyheter, Leads, K&V, Händelselogg och Adoption öppnas här i nuvarande Nav,
+Nyheter, Leads, K&V och Händelselogg öppnas här i nuvarande Nav,
 vilken väg du än tar dit: menyn, sökningen, en notis eller en länk. Det som
 bara finns här, som scheman, spärrar och projekt, öppnas också här. Nya Nav
 fungerar i mobilens bredd. Ingenting påhittat visas.

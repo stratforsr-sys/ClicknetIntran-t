@@ -30741,12 +30741,83 @@ prfKlick = function(t, e){
 };
 
 /* =====================================================================
+   NAV 2.0 I RIKTIGT LÄGE: ADOPTION (prefix nd)
+
+   Utkastets Adoption (rlsAdoptionVy i moduler/rls.js) med navets siffror ur
+   ND.adoption (src/lib/nav2/adoption.ts), som läser repots adoption_*-
+   funktioner i 0029. Markupen är utkastets, rad för rad. Det som byts är
+   datan: de 30 dagarna, antalet anställda (inte 16), andelen och
+   "Återkommer" (repots klibbighet), sökningarna utan träff och rutinerna
+   ingen öppnat på 90 dagar.
+
+   Siffrorna räknar personer, aldrig vem. Bara säljchef, VD och admin får
+   datan (0029:s krets); alla andra får utkastets besked att vyn är för
+   chefer. moduler/rls.js delas med Händelseloggen och ändras inte: allt här
+   skriver över Adoptionens funktioner.
+
+   Vyn sparar ingenting själv. "Skapa rutin" och "Öppna" går till Rutiner,
+   som är kopplad och har sin egen rutt.
+   ===================================================================== */
+
+const ndAdopt = () => ND && ND.adoption;
+
+// En dag i serien som utkastets {d, dau, wau}, med datumet i lokal tid så att helgen blir rätt.
+const _ndAdoptData = rlsAdoptionData;
+rlsAdoptionData = function(){
+  const a = ndAdopt(); if (!a) return ND ? [] : _ndAdoptData();
+  return a.dagar.map(x => { const [y, m, d] = x.dag.split('-').map(Number); return {d:new Date(y, m - 1, d), dau:x.dau, wau:x.wau}; });
+};
+
+const _ndAdoptVy = rlsAdoptionVy;
+rlsAdoptionVy = function(){
+  const a = ndAdopt(); if (!a) return ND ? '' : _ndAdoptVy();
+  const dag = rlsAdoptionData(), sista = dag[dag.length - 1] || {dau:0, wau:0}, anst = a.anstallda;
+  // Staplarna mäts mot alla anställda, som i utkastet, och aldrig över 100 %.
+  const topp = Math.max(1, anst, ...dag.map(x => x.wau));
+  const pr = n => n === null || n === undefined ? '–' : `${n} %`;
+  const dat = d => `${d.getDate()} ${['jan','feb','mar','apr','maj','jun','jul','aug','sep','okt','nov','dec'][d.getMonth()]}`;
+  const glomd = g => { const r = typeof rutin === 'function' ? rutin(g.id) : null, vem = r && r.agare ? ` · ${esc(r.agare)}` : '';
+    return `${g.dagar === null ? 'Aldrig öppnad' : `Senast för ${g.dagar} ${g.dagar === 1 ? 'dag' : 'dagar'} sedan`}${vem}`; };
+  return `<header class="top rls-vh"><div class="hello"><h1>Adoption</h1><p>Används Nav? Siffrorna räknar personer, sökningar och rutiner, aldrig vem som gjorde vad.</p></div></header>
+    <section class="card rls-kort">${note(545)}<h2 class="rls-kh">Aktiva användare</h2><p class="rls-kp">En person räknas den dag hen använt Nav. Veckotalet räknar skilda personer de senaste sju dagarna.</p>
+      <dl class="rls-tal"><div><dt>I dag</dt><dd class="num">${sista.dau}</dd></div><div><dt>Senaste sju dagarna</dt><dd class="num">${sista.wau}</dd></div><div><dt>Av ${anst} anställda</dt><dd class="num">${pr(a.andel)}</dd></div><div><dt>Återkommer</dt><dd class="num">${pr(a.aterkommer)}</dd></div></dl>
+      <div class="rls-stap" aria-hidden="true">${dag.map(x => `<span style="--w:${Math.round(x.wau / topp * 100)}%;--r:${x.wau ? Math.round(x.dau / x.wau * 100) : 0}%"${x.d.getDay() % 6 ? '' : ' class="rls-helg"'}><i></i></span>`).join('')}</div>
+      <div class="rls-stapx" aria-hidden="true"><span>${dag.length ? dat(dag[0].d) : ''}</span><span>i dag</span></div>
+      <p class="rls-forkl"><i class="rls-fd"></i>den dagen <i class="rls-fw"></i>sju dagar bakåt</p>
+      <details class="rls-tab"><summary>Visa siffrorna som tabell</summary><div class="rls-tabw"><table><caption class="sr">Aktiva användare per dag de senaste ${dag.length} dagarna</caption><thead><tr><th scope="col">Dag</th><th scope="col">Den dagen</th><th scope="col">Sju dagar bakåt</th></tr></thead><tbody>${[...dag].reverse().map(x => `<tr><td class="num">${x.d.getFullYear()}-${String(x.d.getMonth() + 1).padStart(2, '0')}-${String(x.d.getDate()).padStart(2, '0')}</td><td class="num">${x.dau}</td><td class="num">${x.wau}</td></tr>`).join('')}</tbody></table></div></details>
+    </section>
+    <section class="card rls-kort"><h2 class="rls-kh">Sökningar utan träff</h2><p class="rls-kp">Det närmaste Nav kommer ett önskemål: någon letade efter något som inte finns. Bara texten och hur många gånger den sökts sparas.</p>
+      ${a.sokmissar.length ? `<ul class="rls-rad">${a.sokmissar.map(([q, n]) => `<li><span class="rls-lb"><b>”${esc(q)}”</b><small class="num">${rlsPlural(n, 'gång', 'gånger')}</small></span><button type="button" class="btn btn-s btn-sm" data-rlsrtnny="${esc(q.replace(/\?$/, ''))}">Skapa rutin</button></li>`).join('')}</ul>` : '<p class="rls-kp">Inga sökningar utan träff än.</p>'}</section>
+    <section class="card rls-kort"><h2 class="rls-kh">Rutiner ingen har öppnat</h2><p class="rls-kp">En rutin ingen läser styr inget arbete. Gör den känd eller arkivera den i Rutiner, under Förvaltning.</p>
+      ${a.glomda.length ? `<ul class="rls-rad">${a.glomda.map(g => `<li><span class="rls-lb"><b>${esc(g.t)}</b><small>${glomd(g)}</small></span><button type="button" class="btn btn-s btn-sm" data-rlsrut="${esc(g.id)}">Öppna</button></li>`).join('')}</ul>` : '<p class="rls-kp">Alla publicerade rutiner har lästs de senaste 90 dagarna.</p>'}</section>`;
+};
+
+// Vem som får vyn avgör datan: utan ND.adoption gäller utkastets besked ("bara för chefer").
+const _ndAdoptGa = rlsGa;
+rlsGa = function(h){
+  if (ND && h === '/adoption'){ if (!ndAdopt()) return false; rlsGaVy('adoption'); return true; }
+  return _ndAdoptGa(h);
+};
+// Samma vakt som utkastets render har för rollen: vyn ritas aldrig utan sin data.
+const _ndAdoptRender = render;
+render = function(){ if (ND && S.view === 'adoption' && !ndAdopt()) S.view = 'hem'; return _ndAdoptRender(); };
+
+// "Öppna" på en rutin som inte står i Rutiner (en målgrupp chefen inte ingår i) öppnas på sin adress.
+window.addEventListener('click', e => {
+  if (!ND || S.view !== 'adoption') return;
+  const b = e.target.closest && e.target.closest('[data-rlsrut]'); if (!b || (typeof rutin === 'function' && rutin(b.dataset.rlsrut))) return;
+  e.preventDefault(); e.stopImmediatePropagation(); ndGa(`/rutiner/${b.dataset.rlsrut}`);
+}, true);
+
+if (ND && 'adoption' in ND) NDKOPPLAD.add('adoption');
+
+/* =====================================================================
    SKALET OCH ÖVERGÅNGEN (prefix skal), steg 4 till produktion
 
    Gäller bara i riktigt läge (ND). Ligger sist i modullistan, så att det som
    skrivs över här ligger ovanpå vyernas moduler.
 
-   - En vy som inte är kopplad (Nyheter, Leads, K&V, Händelselogg, Adoption)
+   - En vy som inte är kopplad (Nyheter, Leads, K&V, Händelselogg)
      öppnas på samma sida i nuvarande Nav, vilken väg man än tar dit: menyn,
      paletten, startsidans kort, klockan eller en länk i en vy. Aldrig en
      mellansida, aldrig utkastets exempel.
@@ -30802,6 +30873,7 @@ ndGa = function(href){
     case 'anstallda': { if (sub && (!AEPERS.some(p => String(p[0]) === sub) || d[2] === 'registerutdrag')) return nav(); aeGaSrc(bas); return; }
     case 'rekrytering': { if (sub){ rxSt(); if (!S.rx.kand.some(c => String(c.id) === sub)) return nav(); } rxGaSrc(bas); return; }
     case 'avtal': if (sub) return nav(); maGa(); return;
+    case 'adoption': if (sub) return nav(); if (!rlsGa('/adoption')) toast('Händelseloggen och adoptionen är bara för chefer.'); return;
   }
   return nav();
 };

@@ -23,6 +23,7 @@ import { byggCoachning, type NdCoachning } from "./coachning";
 import { byggAnstallda, type NdAnstallda } from "./anstallda";
 import { byggAvtal, type NdAvtal } from "./avtal";
 import { byggProfil, type NdProfil } from "./profil";
+import { byggAdoption, type NdAdoption } from "./adoption";
 import type { NdFel } from "./felforma";
 import {
   formaLon,
@@ -90,6 +91,8 @@ export type Nav2Data = {
   avtal: NdAvtal;
   /** Profilen i Inställningar (0107): tilltalsnamn, telefon, privat mejl och allas profilbilder. */
   profil: NdProfil;
+  /** Adoption (0029): antal, aldrig vem. Null utanför säljchef, VD och admin. */
+  adoption: NdAdoption | null;
 };
 
 const PERSONKOLUMNER =
@@ -123,7 +126,7 @@ async function bygg(user: CurrentUser, m?: Nav2Matt): Promise<Nav2Data | null> {
   if (!user.employee) return null;
   const supabase = await supabaseServer();
 
-  const [{ data: personRader }, { data: teamRader }, { data: satsRader, error: satsFel }, { data: lonRader, error: lonFel }, notiser, tid, franvaro, uppgifter, order, provision, kalender, arenden, fel, rutiner, utbildning, hem, rekrytering, anstallda, coachning, avtal, profil] =
+  const [{ data: personRader }, { data: teamRader }, { data: satsRader, error: satsFel }, { data: lonRader, error: lonFel }, notiser, tid, franvaro, uppgifter, order, provision, kalender, arenden, fel, rutiner, utbildning, hem, rekrytering, anstallda, coachning, avtal, profil, adoption] =
     await Promise.all([
       matt(m, "personer", supabase.from("employee").select(PERSONKOLUMNER).order("first_name")),
       matt(m, "team", supabase.from("team").select("id, name")),
@@ -153,6 +156,7 @@ async function bygg(user: CurrentUser, m?: Nav2Matt): Promise<Nav2Data | null> {
       matt(m, "coachning", byggCoachning(supabase, user)),
       matt(m, "avtal", byggAvtal(supabase, user)),
       matt(m, "profil", byggProfil(supabase, user)),
+      matt(m, "adoption", byggAdoption(supabase, user)),
     ]);
 
   const ra: RaPerson[] = ((personRader ?? []) as unknown as (Omit<RaPerson, "roller"> & {
@@ -239,5 +243,6 @@ async function bygg(user: CurrentUser, m?: Nav2Matt): Promise<Nav2Data | null> {
     coachning,
     avtal,
     profil,
+    adoption,
   };
 }

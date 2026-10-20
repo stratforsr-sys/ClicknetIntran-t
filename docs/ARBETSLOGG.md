@@ -5,6 +5,43 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-20 · Nav 2.0, Adoption med riktig data (i läsläge, ingen migration)
+
+Session 5 i "Fem vyer och gamla Navs sista sidor" (`~/nav2-utkast/PROMPTER.md`).
+Utkastets Adoption (`rlsAdoptionVy` i `moduler/rls.js`) visar navets siffror.
+
+- **Servern:** `src/lib/nav2/adoption.ts` (`ND.adoption`) läser repots
+  `adoption_aktivitet(30)`, `adoption_sokmissar(20)` och
+  `adoption_glomda_dokument(90)` ur 0029 och räknar andelen och "Återkommer"
+  med repots `tackning()` och `klibbighet()`. Allt går genom funktionerna, som
+  svarar med antal: `activity_day` har fortfarande ingen läspolicy. Bara
+  säljchef, VD och administratör (0029:s krets) får datan; övriga får `null`
+  och utkastets besked att vyn är för chefer. Läses direkt i Postgres
+  (`pgrest.ts` tar `returns table`-funktioner).
+- **Antalet anställda** var hårdkodat till 16. Nu räknas alla som inte slutat
+  (`status <> 'offboarded'`, 12 i dag). Repots sida räknar bara `active` (5),
+  men 5 av de 7 i `onboarding` använder navet, så andelen hade blivit över
+  100 %.
+- **Sökningar utan träff** = `search_miss` (bara `/sok` i nuvarande Nav) plus
+  Nav 2.0:s egna i Rutiner (`document_search_miss`, 0096), ihopslagna på
+  texten. Annars hade listan slutat växa när nuvarande Nav stängs.
+- **Rutiner ingen öppnat** = repots `adoption_glomda_dokument` (den läser
+  `document_view.last_seen`, som båda naven skriver), inte Rutiners
+  `olast` (den räknar på `document_view_log`, som bara Nav 2.0 skriver och
+  som är tom i produktionen). "Skapa rutin" och "Öppna" går till Rutiner.
+- **Räknas /nav2 i `activity_day`? Ja.** Mellanvaran stämplar
+  `registrera_aktivitet()` för varje inloggad begäran utom `/api`, och
+  matchern tar `/nav2` och dess rutter. Provat i previewen: ett anrop till
+  `/nav2` utan kakan `nav_dag` fick den satt.
+- **Klienten:** `moduler/ndadopt.js` (före `ndskal` i modullistan) skriver
+  över `rlsAdoptionVy`, `rlsAdoptionData` och `rlsGa` med utkastets markup.
+  `rls.js` delas med Händelseloggen och är orörd.
+- **Skalet:** `ndGa('/adoption')` öppnar vyn (`case 'adoption'` i
+  `ndskal.js`), och `/adoption` står i `SJALV` (`src/lib/nav2/vagar.ts`), så
+  ett bokmärke landar i Nav 2.0.
+- Ingen skrivning, ingen rutt, ingen `SKRIVLAGE`-nyckel. Spannet 0150–0154
+  är oanvänt.
+
 ## 2026-10-20 · Nav 2.0, Utbildning steg 2: påminnelserna, färdigheterna, veckomålet och frysdagarna
 
 Beställarens svar i beslutsrundan (U1–U3) och punkt 4 i
