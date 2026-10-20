@@ -56,9 +56,9 @@ export async function GET(request: Request) {
   if (!user.employee) return NextResponse.redirect(new URL("/", request.url));
 
   const matt: Nav2Matt = {};
-  const t0 = performance.now();
+  const t0 = performance.now(), c0 = process.cpuUsage();
   const [html, data, h] = await Promise.all([lasMall(), byggNav2Data(user, matt), headers()]);
-  const tData = Math.round(performance.now() - t0);
+  const tData = Math.round(performance.now() - t0), c1 = process.cpuUsage(c0), cpu = Math.round((c1.user + c1.system) / 1000);
   if (!data) return NextResponse.redirect(new URL("/", request.url));
 
   const nonce = h.get("x-nonce") ?? "";
@@ -79,7 +79,7 @@ export async function GET(request: Request) {
       // Persondata far aldrig cachas av en mellanliggande proxy.
       "Cache-Control": "private, no-store, max-age=0",
       // Var tiden gick, per del (X3). Syns bara for den inloggade, i webblasarens natverksflik.
-      "Server-Timing": [`data;dur=${tData}`, ...Object.entries(matt).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k};dur=${v}`)].join(", "),
+      "Server-Timing": [`data;dur=${tData}`, `cpu;dur=${cpu}`, ...Object.entries(matt).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k};dur=${v}`)].join(", "),
     },
   });
 }
