@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { byggNav2Data, type Nav2Matt } from "@/lib/nav2/data";
 import { lasUtkast } from "@/lib/nav2/mall";
+import { lasIdentitet } from "@/lib/identitet";
 
 export const dynamic = "force-dynamic";
 
@@ -69,7 +70,10 @@ export async function GET(request: Request) {
   // Datan borjar byggas innan nagot skickas.
   const matt: Nav2Matt = {};
   const t0 = performance.now(), c0 = process.cpuUsage();
-  const data = byggNav2Data(user, matt).then(
+  // Läsningarna direkt i Postgres med den identitet mellanvaran verifierat; aldrig för ett konto med lösenordstvång (0017).
+  const id = lasIdentitet(h);
+  const pg = id && !id.kraverLosenordsbyte && id.authUserId === user.authUserId ? { authUserId: id.authUserId, email: id.email } : null;
+  const data = byggNav2Data(user, matt, pg).then(
     (v) => ({ v, fel: null as unknown }),
     (fel: unknown) => ({ v: null, fel }),
   );

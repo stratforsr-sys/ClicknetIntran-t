@@ -5,6 +5,43 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-20 · Nav 2.0: datan läses direkt i Postgres (fart, beställarens "den allra snabbaste")
+
+`/nav2` bygger alla vyers data vid varje laddning, ca 360 frågor. Mätt:
+genom REST-lagret (PostgREST) tar en fråga ~35 ms och bara 10–15 körs åt
+gången (10 samtidiga 50 ms, 40 samtidiga 140 ms), så datan tog 2,0–3,3 s.
+Det var varken nätet (HTTP/2 och färre anslutningar gav ingenting) eller
+dubbletter (34 av 360). Att bara hämta en vys data när den öppnas hade inte
+räckt: startsidan läser tio av de tjugo delarna, de långsammaste med.
+
+- **`src/lib/nav2/pgrest.ts`:** samma `from().select().eq()…` och `rpc()`
+  som supabase-js, översatta till SQL och körda direkt i Postgres via
+  Supavisor (transaktionsläge, `NAV2_PG_URL`, poolerns rotcertifikat
+  inbäddat och verifierat). Varje fråga är en egen kort transaktion i en
+  rundresa: `set local role authenticated`, skrivskydd och den inloggades
+  claims (`sub`, `email`, `role`, byggda av servern ur identiteten
+  mellanvaran verifierat). RLS gäller alltså som förut. Admin-läsningarna
+  får `service_role`. Svaret byggs med Postgres `json_agg` som PostgREST
+  gör: samma nycklar, datum, tal, inbäddningar (också en-till-en via unik
+  nyckel), `!inner` och taket på 1000 rader.
+- **Allt annat går som förut:** skrivningar, `storage`, `auth`, okända
+  anrop, tvetydiga relationer och varje fråga som ger fel i Postgres
+  spelas upp på den vanliga klienten. Saknas `NAV2_PG_URL`, eller svarar
+  inte anslutningen, går bygget via REST (en minut efter ett
+  anslutningsfel). Konton med lösenordstvång (0017) går alltid via REST.
+- **Hur:** `byggNav2Data(user, m, pg)` kör bygget i `medPg`, och
+  `supabaseServer()`/`supabaseAdmin()` lämnar Postgres-klienten medan det
+  pågår (AsyncLocalStorage), så att notiserna och kalendern också får den.
+  `pg` flyttad till dependencies, `@types/pg` tillagd.
+- **Provat:** hela datan byggd båda vägarna för Zen (chef), Fredrik och
+  Mick (säljare) och jämförd: identisk, utom ordningen på några rader utan
+  sortering i Provision (som REST-lagret också ger i godtycklig ordning).
+  Härifrån (20 ms per rundresa) 1,1–1,9 s mot 2,0–3,3 s; från Vercel i
+  Stockholm är rundresan 1–2 ms. 21 frågor går via REST tills migrationerna
+  körs (tabeller och kolumner som inte finns än).
+- `NAV2_PG_URL` ligger i Vercels Preview-miljö för `nav2-utkast`.
+  **Inför mergen:** lägg den i Production också (steg 7).
+
 ## 2026-10-20 · Nav 2.0, beslutsrundan: beställarens svar inbyggda (steg 3 till produktion)
 
 Steg 3 i "Till produktion" (`~/nav2-utkast/PROMPTER.md`): frågorna från alla

@@ -6,6 +6,7 @@ import { hamtaNotiser } from "@/lib/notiser-server";
 import type { Notis } from "@/lib/notiser";
 import { svensktDatum } from "@/lib/klocka";
 import { MFA_REQUIRED_ROLES } from "@/lib/roles";
+import { medPg } from "./pgrest";
 import { byggTid, type NdTid } from "./tid";
 import { byggFranvaro, type NdFranvaro } from "./franvaro";
 import { byggUppgifter, type NdUppgifter } from "./uppgifter";
@@ -103,7 +104,19 @@ function matt<T>(m: Nav2Matt | undefined, namn: string, p: PromiseLike<T>): Prom
   });
 }
 
-export async function byggNav2Data(user: CurrentUser, m?: Nav2Matt): Promise<Nav2Data | null> {
+/**
+ * `pg`: den identitet mellanvaran verifierat. Med den går läsningarna direkt i
+ * Postgres med samma RLS (pgrest.ts), ca tio gånger snabbare än via REST-lagret.
+ */
+export async function byggNav2Data(user: CurrentUser, m?: Nav2Matt, pg?: { authUserId: string; email: string | null } | null): Promise<Nav2Data | null> {
+  if (!user.employee) return null;
+  if (!pg) return bygg(user, m);
+  const { v, matt: pm } = await medPg(pg, { server: supabaseServer, admin: supabaseAdmin }, () => bygg(user, m));
+  if (m && pm) Object.assign(m, { pg: pm.pg, "pg-rest": pm.rest, "pg-fel": pm.fel, "pg-anslut": pm.anslut });
+  return v;
+}
+
+async function bygg(user: CurrentUser, m?: Nav2Matt): Promise<Nav2Data | null> {
   if (!user.employee) return null;
   const supabase = await supabaseServer();
 

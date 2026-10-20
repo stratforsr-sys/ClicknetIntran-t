@@ -107,7 +107,8 @@ bara finns här, som scheman, spärrar och projekt, öppnas också här. Nya Nav
 fungerar i mobilens bredd. Ingenting påhittat visas.
 
 Nya Nav är navet: startsidan och inloggningen leder hit, och en gammal
-länk eller ett bokmärke öppnar samma sak här.
+länk eller ett bokmärke öppnar samma sak här. Och det öppnas snabbare:
+navet läser din data direkt ur databasen, med samma behörigheter som förut.
 
 ## Läsläge
 
