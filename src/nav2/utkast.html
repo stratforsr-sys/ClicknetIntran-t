@@ -29486,6 +29486,82 @@ document.addEventListener('change', e => {
   if (d.aenot !== undefined){ const {x} = aeHitta(d.aenot); if (x) ndAePost('not', {rad:x.rad, text:v.trim()}, {ladda:false, tyst:true}).then(s => { if (s.ok !== undefined) toast('Anteckningen är sparad.'); }); }
 }, true);
 
+/* ---------- Gamla Nav C: det som bara fanns i gamla Navs /personal ----------
+   Beställaren 2026-10-20 (svar 5 och 12): särskild behörighet, obligatoriska rutiner, vad en borttagning tar med
+   sig och teamen byggs in. Små tillägg i utkastets kort, i utkastets klasser. Saldot är kortet Semester (ndsal.js). */
+const NDAE_BEH = [['payroll_cost_viewer', 'Lönekostnad'], ['recruiter', 'Rekryterare'], ['attendance_approver', 'Beslutar om ogiltig frånvaro i sitt team']];
+function ndAeBehKort(p){
+  const A = ndAe(); if (!A || !A.hantera || p.status === 'offboarded') return '';
+  const har = (A.per[p.id] || {}).behorigheter || [], far = A.farBehorighet;
+  return `<section class="card" aria-label="Särskild behörighet"><div class="chead"><h2>Särskild behörighet</h2></div>
+    <ul class="aeroll">${NDAE_BEH.map(([k, l]) => { const pa = har.includes(k); return `<li><button data-ndaebeh="${p.id}|${k}" aria-pressed="${pa}" ${far ? '' : 'disabled'}><i>${pa ? I('check') : ''}</i><span>${l}</span></button></li>`; }).join('')}</ul>
+    <p class="aehint">Ges per person, aldrig per roll, och varje ändring loggas. ${far ? 'Lönekostnaden visar vad kollegorna kostar: ge den till dig och VD, inte till en teknisk administratör.' : 'Bara säljchef och VD delar ut den.'}</p></section>`;
+}
+const _ndaeRollKortC = aeRollKort;
+aeRollKort = function(p){ return _ndaeRollKortC(p) + ndAeBehKort(p); };
+// Obligatoriska rutiner: de som rollen och teamet kräver, med vad som inte är kvitterat först.
+const _ndaeUtbKortC = aeUtbKort;
+aeUtbKort = function(p){
+  const h = _ndaeUtbKortC(p), r = ndAePers(p.id), l = r && r.rutinLista;
+  if (!h || !l || !l.length) return h;
+  const lista = `<p class="aehint">Obligatoriska rutiner, efter roll och team:</p><ul class="tilist">${l.map(x => `<li><span>${esc(x.titel)}</span>${x.klar ? '<span class="pill t-ok">Kvitterad</span>' : '<span class="pill t-warn">Ej kvitterad</span>'}<button class="tlink" data-go="/rutiner/${esc(x.slug)}">Öppna</button></li>`).join('')}</ul>`;
+  return h.replace(/(<\/ul>)(\s*<div class="aek">)/, (m, a, b) => a + lista + b);
+};
+// Ta bort: vad som raderas och vad som står kvar med namnet (repots hamtaReferenser), innan knappen trycks.
+const _ndaeRaderaRutaC = aeRaderaRuta;
+aeRaderaRuta = function(p){
+  const h = _ndaeRaderaRutaC(p); if (!ndAe()) return h;
+  const R = S.ndAeRef && S.ndAeRef.pid === p.id ? S.ndAeRef : null;
+  if (!R){ S.ndAeRef = {pid:p.id, hamtar:true}; fetch('/nav2/anstallda?referenser=' + encodeURIComponent(p.id), {credentials:'same-origin'}).then(r => r.json()).then(s => { if (S.ndAeRef && S.ndAeRef.pid === p.id) S.ndAeRef = {pid:p.id, ...s}; render(); }).catch(() => { S.ndAeRef = {pid:p.id, fel:'Nav svarade inte.'}; render(); }); }
+  const lista = l => l.map(x => `${esc(x.tabell)} <span class="num">${x.antal}</span>`).join(', ');
+  const R2 = S.ndAeRef;
+  const text = !R2 || R2.hamtar ? 'Hämtar vad som tas bort …' : R2.fel ? esc(R2.fel)
+    : `<b>Raderas:</b> ${R2.raderas.length ? lista(R2.raderas) : 'inget mer än raden, som försvinner helt'}.${R2.behalls.length ? ` <b>Står kvar med ”${esc(p.namn)} (borttagen anställd)”:</b> ${lista(R2.behalls)}. De raderna är företagets, till exempel en signerad order, så namnet står kvar.` : ''}`;
+  return h + `<div class="aebanner neutral">${I('logg')}<span>${text}</span></div>`;
+};
+// Teamen i fliken Personal: namn och teamledare. Teamledaren ser medlemmarnas uppgifter (leads_employee()).
+function ndAeTeamKort(){
+  const A = ndAe(); if (!A) return '';
+  const pers = S.ae.pers.filter(p => p.status !== 'offboarded'), E = S.ndAeTeam || null, kan = A.hantera;
+  const val = (sel) => `<option value="">Ingen ledare</option>${pers.slice().sort((a, b) => a.namn.localeCompare(b.namn, 'sv')).map(p => `<option value="${p.id}" ${sel === p.id ? 'selected' : ''}>${esc(p.namn)}</option>`).join('')}`;
+  const rad = t => { const m = pers.filter(p => p.teamId === t.id), red = E && E.id === t.id;
+    if (red) return `<li class="ndaeteamred"><div class="tiform"><div class="tifrow"><label>Namn<input class="uin" data-ndaeteamnamn value="${esc(E.namn)}" maxlength="80"></label><label>Teamledare<select class="uin" data-ndaeteamled>${val(E.ledare)}</select></label></div>
+      <p class="tiprev on">${E.ledare ? `${esc((pers.find(p => p.id === E.ledare) || {}).namn || 'Ledaren')} ser ${m.length ? `${m.length === 1 ? 'en medlems' : `${m.length} medlemmars`}` : 'medlemmarnas'} frånvaro och sjukanmälningar, stämplingar och scheman, sena ankomster, coachning, utbildning och samtal.` : 'Utan ledare ser ingen teamledare medlemmarnas uppgifter. Närmaste chef ser dem fortfarande.'}</p>
+      <div class="pacts"><button class="btn btn-p btn-sm" data-ndaeteamspara="${t.id}">Spara</button><button class="btn btn-s btn-sm" data-ndaeteamx>Avbryt</button>${m.length ? '' : `<button class="tlink aefarligl" data-ndaeteambort="${t.id}">Ta bort teamet</button>`}</div></div></li>`;
+    return `<li><span><b>${esc(t.namn)}</b> <span class="muted">${m.length} ${m.length === 1 ? 'medlem' : 'medlemmar'}${t.ledare ? ` · ledare ${esc(t.ledare)}` : ' · ingen ledare'}</span>${m.length ? `<br><small class="muted">${m.map(p => esc(p.namn)).join(', ')}</small>` : ''}</span>${kan ? `<button class="tlink" data-ndaeteamandra="${t.id}">Ändra</button>` : ''}</li>`; };
+  const utan = pers.filter(p => !p.teamId);
+  return `<section class="card" aria-label="Team" id="ndAeTeam" style="margin-top:16px"><div class="chead"><h2>Team</h2><span class="meta num">${A.team.length}</span>${kan && !(E && E.id === 'ny') ? '<span class="end"><button class="tlink" data-ndaeteamny>Nytt team</button></span>' : ''}</div>
+    ${E && E.id === 'ny' ? `<div class="tiform"><div class="tifrow"><label>Namn<input class="uin" data-ndaeteamnamn value="${esc(E.namn)}" maxlength="80" placeholder="Team Syd"></label></div><div class="pacts"><button class="btn btn-p btn-sm" data-ndaeteamskapa>Skapa teamet</button><button class="btn btn-s btn-sm" data-ndaeteamx>Avbryt</button><span class="muted tihint">Medlemmar flyttas till teamet på personens kort, under Anställningen.</span></div></div>` : ''}
+    ${A.team.length ? `<ul class="tilist">${A.team.map(rad).join('')}</ul>` : '<p class="muted">Inga team än. Ett team ger teamledaren insyn i medlemmarnas uppgifter.</p>'}
+    <p class="aehint">Teamledaren ser medlemmarnas frånvaro och sjukanmälningar, stämplingar och scheman, sena ankomster, coachning, utbildning och samtal.${utan.length ? ` Utan team: ${utan.map(p => esc(p.namn)).join(', ')}.` : ''} Bara ett tomt team går att ta bort.</p></section>`;
+}
+const _ndaeRegVyC = aeRegVy;
+aeRegVy = function(){ return _ndaeRegVyC() + (ndAe() ? ndAeTeamKort() : ''); };
+// /personal/team och /personal/ny (ndGa i ndskal.js): fliken Personal med teamen, och Lägg upp.
+function ndAeGaTeam(){ aeGa(null, 'personal'); setTimeout(() => document.getElementById('ndAeTeam')?.scrollIntoView({block:'start', behavior:'smooth'}), 30); }
+function ndAeGaNy(){ aeGa(null); const b = document.querySelector('[data-aeny]'); if (b) b.click(); }
+document.addEventListener('input', e => {
+  if (!ndAe() || S.view !== 'anstallda' || !S.ndAeTeam) return;
+  if (e.target.dataset && e.target.dataset.ndaeteamnamn !== undefined) S.ndAeTeam.namn = e.target.value;
+}, true);
+document.addEventListener('change', e => {
+  if (!ndAe() || S.view !== 'anstallda' || !S.ndAeTeam) return;
+  if (e.target.dataset && e.target.dataset.ndaeteamled !== undefined){ e.stopImmediatePropagation(); S.ndAeTeam.ledare = e.target.value; render(); }
+}, true);
+document.addEventListener('click', e => {
+  if (!ndAe() || S.view !== 'anstallda') return;
+  const t = e.target.closest && e.target.closest('button'); if (!t || !t.dataset) return;
+  const d = t.dataset, stopp = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+  if (d.ndaebeh){ stopp(); const [pid, k] = d.ndaebeh.split('|'), har = ((ndAePers(pid) || {}).behorigheter || []).includes(k); ndAePost('sarskild', {pid, beh:k, pa:!har}, {minns:{pers:pid}}); return; }
+  if (d.aeraderax !== undefined) S.ndAeRef = null;
+  if (d.ndaeteamny !== undefined){ stopp(); S.ndAeTeam = {id:'ny', namn:'', ledare:''}; render(); setTimeout(() => document.querySelector('[data-ndaeteamnamn]')?.focus(), 30); return; }
+  if (d.ndaeteamandra){ stopp(); const x = ndAe().team.find(q => q.id === d.ndaeteamandra); if (!x) return; S.ndAeTeam = {id:x.id, namn:x.namn, ledare:x.ledareId || ''}; render(); setTimeout(() => document.querySelector('[data-ndaeteamnamn]')?.focus(), 30); return; }
+  if (d.ndaeteamx !== undefined){ stopp(); S.ndAeTeam = null; render(); return; }
+  if (d.ndaeteamskapa !== undefined){ stopp(); const n = (S.ndAeTeam.namn || '').trim(); if (!n){ toast('Teamet behöver ett namn.'); return; } ndAePost('team-ny', {namn:n}, {minns:{flik:'personal', pers:null}}); return; }
+  if (d.ndaeteamspara){ stopp(); const E = S.ndAeTeam, n = (E.namn || '').trim(); if (!n){ toast('Teamet behöver ett namn.'); return; } ndAePost('team-spara', {id:d.ndaeteamspara, namn:n, ledare:E.ledare || ''}, {minns:{flik:'personal', pers:null}}); return; }
+  if (d.ndaeteambort){ stopp(); ndAePost('team-bort', {id:d.ndaeteambort}, {minns:{flik:'personal', pers:null}}); return; }
+}, true);
+
 if (ND && ND.anstallda){ ndAeStart(); NDKOPPLAD.add('anstallda'); }
 
 /* =====================================================================
@@ -31825,7 +31901,7 @@ if (ndLd()) NDKOPPLAD.add('leads');
 // Adresser som alltid hör till nuvarande Nav, även när vyn de ligger under är kopplad.
 const SKALNAV = ['/tid/sparrar', '/sparrar', '/schema', '/admin', '/lonekostnad', '/satser', '/avtal/mallar', '/avtal/nytt', '/avtal/bifoga',
   '/uppgifter/projekt', '/uppgifter/mallar', '/uppgifter/genomgang', 
-  '/personal/team', '/personal/ny', '/logga-in', '/byt-losenord', '/uppstart', '/design', '/coachning/mallar', '/kv/regler', '/provision/regler', '/provision/underlag',
+  '/logga-in', '/byt-losenord', '/uppstart', '/design', '/coachning/mallar', '/kv/regler', '/provision/regler', '/provision/underlag',
   '/arenden/statistik', '/kalender/delning', '/kalender/overlamning', '/rutiner/ny', '/franvaro/regler', '/regler', '/filer', '/auth'];
 const skalNav = h => SKALNAV.some(p => h === p || h.startsWith(p + '/') || h.startsWith(p + '?'));
 function skalVy(h){
@@ -31869,7 +31945,8 @@ ndGa = function(href){
     case 'order': { const o = sub && ORDER.find(x => String(x.nr) === sub || String(x.id) === sub); if (sub && !o) return nav(); ordGa(o ? o.nr : null); return; }
     case 'provision': if (sub) return nav(); pvGa(); return;
     case 'coachning': cnGa(h); return;
-    case 'anstallda': { if (sub && (!AEPERS.some(p => String(p[0]) === sub) || d[2] === 'registerutdrag')) return nav(); aeGaSrc(bas); return; }
+    // Gamla Nav C: /personal/team (teamen i fliken Personal) och /personal/ny (Lägg upp).
+    case 'anstallda': { if (sub === 'team' && !d[2]){ ndAeGaTeam(); return; } if (sub === 'ny' && !d[2]){ ndAeGaNy(); return; } if (sub && (!AEPERS.some(p => String(p[0]) === sub) || d[2] === 'registerutdrag')) return nav(); aeGaSrc(bas); return; }
     case 'rekrytering': { if (sub){ rxSt(); if (!S.rx.kand.some(c => String(c.id) === sub)) return nav(); } rxGaSrc(bas); return; }
     case 'avtal': if (sub) return nav(); maGa(); return;
     case 'leads': { if (sub){ ldSt(); if (!ldL(sub)) return nav(); } ldGa(sub || null); return; }

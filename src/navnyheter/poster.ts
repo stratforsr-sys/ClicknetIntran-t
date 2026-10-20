@@ -82,7 +82,9 @@ behörigheter som här: du ser bara det du får se.
   utskicken som gäller nästa gång någon börjar eller slutar. Den som ska
   sätta upp något får ett mejl med en Klart-knapp och en påminnelse i navet.
   Avslutet frågar varför anställningen tar slut, och en kandidat som anställs
-  i Rekrytering får samma checklista som i Lägg upp.
+  i Rekrytering får samma checklista som i Lägg upp. Superadmin delar också ut
+  särskild behörighet, ser vilka obligatoriska rutiner var och en har kvar,
+  ser vad en borttagning tar med sig och sätter upp teamen och teamledarna.
 - **Avtal**: under Mitt avtal öppnar du ditt anställningsavtal och dina
   tilläggsavtal som PDF och läser dem direkt, med din lön, ditt semestersaldo
   och din provision bredvid. Säljchef, VD och administratör laddar upp varje

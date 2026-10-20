@@ -5,6 +5,26 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-20 · Nav 2.0, gamla Navs sista funktioner C: Anställda (ingen migration)
+
+- **Särskild behörighet** (svar 5) på personens kort i Anställda: Lönekostnad,
+  Rekryterare och Beslutar om ogiltig frånvaro i sitt team. Rutten `sarskild`
+  anropar repots `andraBehorighet`, så bara säljchef och VD delar ut den
+  (AC-13.13), och personen får notisen. Behörigheterna läses med RLS
+  (`employee_permission_read`).
+- **Obligatoriska rutiner** per person (rollen och teamet), med vad som inte är
+  kvitterat först, i kortet Utbildning och rutiner (`rutinLista`).
+- **Vad en borttagning tar med sig:** rutan Ta bort visar vad som raderas och vad
+  som står kvar med namnet, ur repots `hamtaReferenser` (GET
+  `/nav2/anstallda?referenser=`).
+- **Team** (svar 12) i fliken Personal: skapa, byta namn, sätta teamledare och
+  ta bort ett tomt team (`skapaTeam`, `sparaTeam`, `taBortTeam`). Kortet säger
+  vad teamledaren ser (`leads_employee()`), och vilka som saknar team.
+- **Saldot** fanns redan (kortet Semester, `6627e5a`).
+- `/personal/team` och `/personal/ny` öppnas i Nav 2.0. Bakom
+  `SKRIVLAGE.anstallda` (423 i läsläge), och bara superadmin ändrar i
+  personalen. Spannet 0170–0174 är oanvänt.
+
 ## 2026-10-20 · Nav 2.0, Utbildning: systemguiderna för Nav 2.0 (Gamla Navs sista funktioner, F; ingen migration)
 
 Beställarens svar 9: "Skrivas om för nav 2.0". Turerna godkändes av beställaren

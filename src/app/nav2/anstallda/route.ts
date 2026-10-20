@@ -1,22 +1,28 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { fullName, getCurrentUser } from "@/lib/auth";
+import { fullName, getCurrentUser, hasRole } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { svensktDatum } from "@/lib/klocka";
 import { skickaEpost } from "@/lib/epost";
 import { notifiera } from "@/lib/notishandelse-server";
-import { ROLES, type Role } from "@/lib/roles";
+import { PERMISSIONS, ROLES, type Permission, type Role } from "@/lib/roles";
+import { perTabell } from "@/lib/personal-radering";
 import { laggUppAnstalld } from "@/lib/anstallning-server";
 import { anstalldaVerktyg, namnPa, startFran, type MallPunkt, type Person } from "@/lib/nav2/anstallda-start";
 import {
   aktivera,
+  andraBehorighet,
   andraRoll,
   aterstallLosenord,
   kvitteraOffboarding,
   kvitteraOnboarding,
   offboarda,
   sattOrganisation,
+  skapaTeam,
+  sparaTeam,
   taBortAnstalld,
+  taBortTeam,
+  hamtaReferenser,
 } from "@/app/(app)/personal/actions";
 import { skapaMote } from "@/app/(app)/kalender/moten/actions";
 import { aeDue, arbetsdagar, AE_TYPER, frist, fyll } from "@/lib/nav2/anstalldaforma";
@@ -40,6 +46,11 @@ export const dynamic = "force-dynamic";
  * Det nya (0105): checklistmallarna, utskicksreglerna, punkternas frister,
  * ägare, anteckningar, värden och påminnelser, fadder och fadderträffar,
  * välkomstbrevet, privat mejl, telefon, tredjeland och Behörighet i Nav.
+ *
+ * Gamla Nav C (2026-10-20): särskild behörighet (`andraBehorighet`, bara
+ * säljchef och VD delar ut den, AC-13.13), vad en borttagning tar med sig
+ * (GET `?referenser=`, `hamtaReferenser`) och teamen (`skapaTeam`,
+ * `sparaTeam`, `taBortTeam`; teamledaren styr `leads_employee()`).
  * ===========================================================================
  *
  * LÄSLÄGE: står `SKRIVLAGE.anstallda` på false svarar rutten 423 innan något skrivs.
@@ -94,6 +105,22 @@ type Punkt = {
   due_date: string | null; created_on: string; sent_on: string | null; mail_subject: string | null; mail_body: string | null; condition: string | null;
 };
 const PUNKT = "id, employee_id, label, state, kind, item_key, owner, owner_id, self_owned, rule_id, ask_for, reminded, offset_days, offset_special, due_date, created_on, sent_on, mail_subject, mail_body, condition";
+
+/** Gamla Nav C: vad en borttagning tar med sig, som "Visa vad som tas bort" på /personal/[id]. Läsning, svarar också i läsläge. */
+export async function GET(request: Request) {
+  const user = await getCurrentUser();
+  if (!user?.employee) return svar({ fel: "Du måste vara inloggad." }, 401);
+  const pid = new URL(request.url).searchParams.get("referenser") ?? "";
+  if (!UUID.test(pid)) return svar({ fel: "Okänd person." }, 400);
+  const { niva } = anstalldaVerktyg(supabaseAdmin(), { id: user.employee.id, namn: fullName(user.employee), epost: user.employee.email }, svensktDatum());
+  if ((await niva(user.employee.id)) !== "superadmin") return svar({ fel: "Bara en superadmin ändrar i personalen." }, 403);
+  try {
+    const rader = await hamtaReferenser(pid);
+    return svar({ ok: "", raderas: perTabell(rader.filter((r) => r.atgard === "raderas")), behalls: perTabell(rader.filter((r) => r.atgard === "behalls")) });
+  } catch (e) {
+    return svar({ fel: e instanceof Error ? e.message : "Kunde inte läsa vad som hänger i personen." }, 403);
+  }
+}
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
@@ -516,6 +543,54 @@ export async function POST(request: Request) {
         revalidatePath(`/personal/${p.id}`);
         return svar({ ok: `${p.first_name} är nu ${namn.toLowerCase()}.` });
       }
+      case "sarskild": {
+        // Repots andraBehorighet: per person, aldrig per roll. Bara säljchef och VD delar ut den (den kastar annars).
+        const p = await personen(b.pid);
+        if (!p) return svar({ fel: "Personen finns inte." }, 404);
+        if (p.status === "offboarded") return svar({ fel: "Anställningen är avslutad." }, 400);
+        const beh = String(b.beh ?? "");
+        if (!PERMISSIONS.includes(beh as Permission)) return svar({ fel: "Okänd behörighet." }, 400);
+        if (!hasRole(user, "sales_manager", "ceo")) return svar({ fel: "Bara säljchef och VD får dela ut särskild behörighet." }, 403);
+        const f = await fangad(() => andraBehorighet(form({ employee_id: p.id, behorighet: beh, pa: b.pa === true ? "1" : "0" })));
+        if (f) return svar({ fel: f }, 403);
+        return svar({ ok: b.pa === true ? `${namnPa(p)} har fått behörigheten. Den loggas, och ${namnPa(p).split(" ")[0]} får en notis.` : "Behörigheten är borttagen och loggad." });
+      }
+
+      case "team-ny": {
+        const namn = str(b.namn, 80);
+        const s = await skapaTeam({}, form({ namn }));
+        return s.fel ? svar({ fel: s.fel }, 400) : svar({ ok: s.ok ?? `Teamet ${namn} är skapat.` });
+      }
+
+      case "team-spara": {
+        // Namn och teamledare i ett svep (repots sparaTeam). Ledaren ser medlemmarnas uppgifter (leads_employee()).
+        const tid = String(b.id ?? ""), namn = str(b.namn, 80), ledare = String(b.ledare ?? "");
+        if (!UUID.test(tid)) return svar({ fel: "Okänt team." }, 400);
+        if (!namn) return svar({ fel: "Teamet behöver ett namn." }, 400);
+        const { data: t } = await db.from("team").select("id, name, lead_id").eq("id", tid).maybeSingle();
+        if (!t) return svar({ fel: "Teamet finns inte." }, 404);
+        const { data: krock } = await db.from("team").select("id").ilike("name", namn).neq("id", tid).limit(1);
+        if (krock?.length) return svar({ fel: "Det finns redan ett team med det namnet." }, 400);
+        if (ledare) {
+          const l = await personen(ledare);
+          if (!l || l.status === "offboarded") return svar({ fel: "Teamledaren finns inte." }, 404);
+        }
+        const f = await fangad(() => sparaTeam(form({ team_id: tid, namn, lead_id: ledare })));
+        if (f) return svar({ fel: f }, 403);
+        return svar({ ok: ledare && ledare !== t.lead_id ? `Sparat. ${(await namnFor(ledare))?.namn ?? "Ledaren"} ser nu medlemmarnas uppgifter.` : "Teamet är sparat." });
+      }
+
+      case "team-bort": {
+        // Bara ett tomt team (repots taBortTeam gör annars ingenting): ingen ska tyst byta vem som ser vem.
+        const tid = String(b.id ?? "");
+        if (!UUID.test(tid)) return svar({ fel: "Okänt team." }, 400);
+        const { count } = await db.from("employee").select("id", { count: "exact", head: true }).eq("team_id", tid);
+        if ((count ?? 0) > 0) return svar({ fel: "Teamet har medlemmar. Flytta dem först, en i taget." }, 400);
+        const f = await fangad(() => taBortTeam(form({ team_id: tid })));
+        if (f) return svar({ fel: f }, 403);
+        return svar({ ok: "Teamet är borttaget." });
+      }
+
       case "utbpamin": {
         const p = await personen(b.pid);
         if (!p) return svar({ fel: "Personen finns inte." }, 404);

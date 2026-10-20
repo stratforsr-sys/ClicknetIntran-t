@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { canReadAllEmployees, type CurrentUser } from "@/lib/auth";
+import { canReadAllEmployees, hasRole, type CurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { riktarSigTill } from "@/lib/dokument";
 import { heltNamn, nivaFor, type Niva } from "./forma";
@@ -55,6 +55,10 @@ export type NdAePers = {
   kurser: [string, number, number][] | null;
   /** [kvitterade, alla] av de obligatoriska rutinerna. */
   rutiner: [number, number] | null;
+  /** Gamla Nav C: de obligatoriska rutinerna (rollen och teamet), som /personal/[id]. */
+  rutinLista: { titel: string; slug: string; klar: boolean }[] | null;
+  /** Gamla Nav C: särskild behörighet (`employee_permission`), läst med RLS: säljchef och VD ser den. */
+  behorigheter: string[];
   /** Kontojobbets flagga (45 dagar utan inloggning). */
   flaggad: string | null;
   coach: boolean;
@@ -77,6 +81,8 @@ export type NdAnstallda = {
   far: boolean;
   /** Får skriva i personalen (navets canManageEmployees). */
   hantera: boolean;
+  /** Gamla Nav C: får dela ut särskild behörighet (repots andraBehorighet: säljchef och VD, AC-13.13). */
+  farBehorighet: boolean;
   /** 0105 gick inte att läsa. */
   utan0105: boolean;
   team: { id: string; namn: string; ledare: string | null; ledareId: string | null }[];
@@ -86,7 +92,7 @@ export type NdAnstallda = {
   logg: NdAeLogg[];
 };
 
-const TOM: NdAnstallda = { far: false, hantera: false, utan0105: false, team: [], mallar: [], regler: [], per: {}, logg: [] };
+const TOM: NdAnstallda = { far: false, hantera: false, farBehorighet: false, utan0105: false, team: [], mallar: [], regler: [], per: {}, logg: [] };
 
 type RaPers = {
   id: string; first_name: string; last_name: string; email: string; status: string; start_date: string | null; end_date: string | null;
@@ -116,6 +122,7 @@ export async function byggAnstallda(supabase: SupabaseClient, user: CurrentUser)
     { data: handelser },
     { data: byten },
     { data: avtalRader },
+    { data: behRader },
   ] = await Promise.all([
     supabase.from("employee").select("id, first_name, last_name, email, status, start_date, end_date, team_id, inactive_flagged_at, created_at, employee_role!employee_role_employee_id_fkey(role)"),
     supabase.from("team").select("id, name, lead_id").order("name"),
@@ -139,6 +146,7 @@ export async function byggAnstallda(supabase: SupabaseClient, user: CurrentUser)
       .order("ts", { ascending: false })
       .limit(1000),
     supabase.from("contract").select("id, employee_id, title, status, source, issued_at, created_at").neq("status", "withdrawn").order("created_at", { ascending: false }),
+    supabase.from("employee_permission").select("employee_id, permission"),
   ]);
 
   const pers = (persRader ?? []) as unknown as RaPers[];
@@ -159,12 +167,14 @@ export async function byggAnstallda(supabase: SupabaseClient, user: CurrentUser)
   const [{ data: lynesRader }, { data: coachRader }, { data: dok }, { data: ack }, { data: kurser }, { data: moduler }, { data: framsteg }] = await Promise.all([
     admin.from("phone_identity").select("employee_id, value").eq("kind", "lynes_user").in("employee_id", ids.length ? ids : [jag]),
     admin.from("coaching_task").select("assignee_id").is("cancelled_at", null).in("assignee_id", iListan.length ? iListan : [jag]),
-    admin.from("document").select("id, title, version, audience_roles, audience_teams").eq("status", "published").eq("requires_ack", true),
+    admin.from("document").select("id, title, slug, version, audience_roles, audience_teams").eq("status", "published").eq("requires_ack", true),
     admin.from("document_ack").select("employee_id, document_id, version").in("employee_id", iListan.length ? iListan : [jag]),
     admin.from("course").select("id, title, audience_roles").eq("status", "published").order("title"),
     admin.from("course_module").select("id, course_id"),
     admin.from("module_progress").select("employee_id, module_id").in("employee_id", iListan.length ? iListan : [jag]),
   ]);
+  const behPer = new Map<string, string[]>();
+  for (const b of (behRader ?? []) as unknown as { employee_id: string; permission: string }[]) behPer.set(b.employee_id, [...(behPer.get(b.employee_id) ?? []), b.permission]);
   const lynes = new Map(((lynesRader ?? []) as unknown as { employee_id: string; value: string }[]).map((r) => [r.employee_id, r.value]));
   const iCoach = new Set(((coachRader ?? []) as unknown as { assignee_id: string }[]).map((r) => r.assignee_id));
   const kvitterat = new Set(((ack ?? []) as unknown as { employee_id: string; document_id: string; version: number }[]).map((a) => `${a.employee_id}:${a.document_id}:${a.version}`));
@@ -204,7 +214,7 @@ export async function byggAnstallda(supabase: SupabaseClient, user: CurrentUser)
     const mallId = o?.template_id ?? null;
     const lista = formaLista(egnaOn, p.start_date, mallar.find((m) => m.id === mallId) ?? mallar.find((m) => !m.slut && m.roller.some((x) => r.includes(x))) ?? null, namn, mallId);
     const avslut = formaLista(egnaOff, p.end_date, mallar.find((m) => m.slut) ?? null, namn, mallar.find((m) => m.slut)?.id ?? null);
-    const rutinDok = ((dok ?? []) as unknown as { id: string; version: number; audience_roles: string[] | null; audience_teams: string[] | null }[]).filter((d) => riktarSigTill(d, r, p.team_id));
+    const rutinDok = ((dok ?? []) as unknown as { id: string; title: string; slug: string; version: number; audience_roles: string[] | null; audience_teams: string[] | null }[]).filter((d) => riktarSigTill(d, r, p.team_id));
     const kurslista = ((kurser ?? []) as unknown as { id: string; title: string; audience_roles: string[] | null }[]).filter((k) =>
       riktarSigTill({ audience_roles: k.audience_roles, audience_teams: [] }, r, p.team_id),
     );
@@ -223,6 +233,8 @@ export async function byggAnstallda(supabase: SupabaseClient, user: CurrentUser)
         return [k.title, m.filter((id) => klaraMod.has(`${p.id}:${id}`)).length, m.length];
       }) : null,
       rutiner: aktiv ? [rutinDok.filter((d) => kvitterat.has(`${p.id}:${d.id}:${d.version}`)).length, rutinDok.length] : null,
+      rutinLista: aktiv ? rutinDok.map((d) => ({ titel: d.title, slug: d.slug, klar: kvitterat.has(`${p.id}:${d.id}:${d.version}`) })).sort((a, b) => Number(a.klar) - Number(b.klar) || a.titel.localeCompare(b.titel, "sv")) : null,
+      behorigheter: behPer.get(p.id) ?? [],
       flaggad: p.inactive_flagged_at ? p.inactive_flagged_at.slice(0, 10) : null,
       coach: iCoach.has(p.id),
       lista,
@@ -257,6 +269,7 @@ export async function byggAnstallda(supabase: SupabaseClient, user: CurrentUser)
     far: true,
     // Beställaren 2026-10-19: bara superadmin ändrar i personalen. Nivån som rutten räknar den.
     hantera: (nivaer.get(jag) ?? nivaFor(user.roles)) === "superadmin",
+    farBehorighet: hasRole(user, "sales_manager", "ceo"),
     utan0105: Boolean(mallFel),
     team: ((teamRader ?? []) as unknown as { id: string; name: string; lead_id: string | null }[]).map((t) => ({
       id: t.id,
