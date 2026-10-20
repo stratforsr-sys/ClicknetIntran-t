@@ -239,9 +239,9 @@ export async function byggFranvaro(supabase: SupabaseClient, user: CurrentUser):
     const personIds = Object.fromEntries(pers.filter((p) => p.id !== mig).map((p) => [fullName(p), p.id as string]));
     const sjukIds = bild.sjuka.map((s) => s.id);
     const { data: fristRader } = sjukIds.length
-      ? await supabase.from("sick_deadline").select("id, sick_report_id, kind").in("sick_report_id", sjukIds).eq("kind", "certificate").is("completed_at", null)
-      : { data: [] as { id: string; sick_report_id: string; kind: string }[] };
-    const intygsfrist = Object.fromEntries((fristRader ?? []).map((f) => [f.sick_report_id as string, f.id as string]));
+      ? await supabase.from("sick_deadline").select("id, report_id, kind").in("report_id", sjukIds).eq("kind", "certificate").is("completed_at", null)
+      : { data: [] as { id: string; report_id: string; kind: string }[] };
+    const intygsfrist = Object.fromEntries((fristRader ?? []).map((f) => [f.report_id as string, f.id as string]));
     ut.chef = { ko: bild.ko, kommande: bild.kommande, sjuka: bild.sjuka, rehab, team: personer.length, personer, personIds, intygsfrist, poster: teamPoster };
   }
   return ut;

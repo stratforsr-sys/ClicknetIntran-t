@@ -160,7 +160,7 @@ export async function byggRutiner(supabase: SupabaseClient, user: CurrentUser): 
         Promise.resolve({ data: ((loggen ?? []) as { document_id: string; viewed_at: string }[]).filter((v) => svensktDatum(v.viewed_at) >= manadStart) }),
         admin.from("document_feedback").select("document_id").in("document_id", ids).eq("helped", true),
         redaktor ? admin.from("document_ack").select("document_id, version, employee_id").in("document_id", ids) : Promise.resolve({ data: [] as { document_id: string; version: number; employee_id: string }[] }),
-        admin.from("audit_log").select("object_id, created_at").eq("action", "document.reviewed").in("object_id", ids).order("created_at", { ascending: false }),
+        admin.from("audit_log").select("object_id, ts").eq("action", "document.reviewed").in("object_id", ids).order("ts", { ascending: false }),
       ])
     : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }];
 
@@ -182,7 +182,7 @@ export async function byggRutiner(supabase: SupabaseClient, user: CurrentUser): 
   const lasare = raknaPer(visningar as { document_id: string }[] | null);
   const hjalptPer = raknaPer(hjalpt as { document_id: string }[] | null);
   const granskadPer = new Map<string, string>();
-  for (const g of (granskningar ?? []) as { object_id: string; created_at: string }[]) if (!granskadPer.has(g.object_id as string)) granskadPer.set(g.object_id as string, g.created_at as string);
+  for (const g of (granskningar ?? []) as { object_id: string; ts: string }[]) if (!granskadPer.has(g.object_id as string)) granskadPer.set(g.object_id as string, g.ts as string);
 
   // Målgruppen som matches_audience: tomma listor betyder alla.
   const iMalgrupp = (d: Dok, p: { id: string; team_id: string | null }) => {

@@ -5,6 +5,53 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-20 · Nav 2.0, genomgången och proven (steg 5 till produktion)
+
+Steg 5 i "Till produktion" (`~/nav2-utkast/PROMPTER.md`): varje vy som chef
+(Zen) och som säljare (Fredrik), varje funktion i utkastet mot repot och
+tvärtom, RLS-prov för de nya tabellerna och repots prov.
+
+- **Fyra frågor som aldrig gav något.** Navets frågor är otypade, så en
+  kolumn som inte finns syns inte i bygget: frågan svarar fel, och vyn visar
+  tomt. `audit_log` har `ts`, inte `created_at`, så Tids rad "tog med dig i
+  lönerapporten" och datumet för lönerapportens uttag aldrig kom fram, och
+  Rutiners "senast granskad" alltid var tom. `sick_deadline` har `report_id`,
+  inte `sick_report_id`, så Frånvaros "Intyg mottaget" aldrig fick sin frist.
+  En kolumnkontroll (`~/nav2-utkast/verktyg/genomgang/kolkoll.py`) läser varje
+  supabase-fråga mot schemat; main ger noll träffar, grenen nu också.
+- **Händelseloggen:** `tests/handelselogg.mjs` var rött på main, för att
+  uppgiftsserier, uppgiftsmallar och skriftliga prov loggade utan att stå i
+  `MODUL`. De står där nu, liksom Nav 2.0:s egna (kund, säljsamtal, sen
+  ankomst, Anställda).
+- **Registerutdraget** saknade allt i Nav 2.0: 91 kolumner som pekar på en
+  anställd stod varken som källa eller som undantag (`registerutdrag.ts`),
+  och `tests/registerutdrag.mjs` var rött på main. 48 följer nu med i
+  utdraget, och 43 är undantag (vem som gjorde något på någon annans rad).
+  Raderna för 0100, 0107 och 0110 läggs in när de körs (steg 6).
+- **Provision:** två fel i markupen (en `small` direkt i en `dl`, knappar i
+  ett element med `role="img"`). Utseendet är detsamma.
+- **Profilen i Inställningar** (beställaren 2026-10-20). Utkastet sparade
+  profilbilden, tilltalsnamnet, telefonen och det privata mejlet i
+  webbläsaren. Nu ligger de i Nav: telefonen och mejlet i samma fält som
+  Anställda visar och välkomstbrevet går till (0105), tilltalsnamnet bredvid,
+  och bilden i `employee_photo` (0107). Bilden syns för alla inloggade, på
+  alla enheter: i sidhuvudet, på Golvet, i kalendern och i personlistorna.
+  `/nav2/profil` skriver bara den egna profilen, bakom `SKRIVLAGE.profil`
+  (av), och Ångra går genom rutten. Bilden ligger i databasen, inte i
+  fillagringen, eftersom varje fil där loggar en rad per visning (K36).
+  **0107 är skriven och torrkörd men inte körd** (körs med de andra i steg 6);
+  tills dess visar profilen det som finns och säger inget om bilder.
+- **Varje vy som chef och som säljare** (en sökrobot som klickar varje knapp
+  från en nyladdad sida, med riktig data): inga JS-fel, inga exempelnamn och
+  inga påhittade id:n, och varje handling når en rutt som känner den.
+- **Proven:** `tests/rls.mjs` har samma tre röda kontroller på main som på
+  grenen (Ekonomi och `file_object`), `tests/handelselogg.mjs` och
+  `registerutdrag.mjs` är gröna (röda på main), notisproven gröna.
+  RLS-provet för de nya tabellerna från 0080 (också 0100, 0101, 0107 och
+  0110, torrkörda och tillbakarullade): anon nekas överallt, ingen tabell
+  går att skriva direkt, och det en säljare ser av en kollega är det som är
+  gemensamt med flit.
+
 ## 2026-10-20 · Nav 2.0: datan läses direkt i Postgres (fart, beställarens "den allra snabbaste")
 
 `/nav2` bygger alla vyers data vid varje laddning, ca 360 frågor. Mätt:

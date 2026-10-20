@@ -25,7 +25,8 @@ behörigheter som här: du ser bara det du får se.
 
 - **Klockan**, med samma notiser som här.
 - **Inställningar**: ditt konto, säkerheten, utseendet och påminnelserna om
-  stämpling, samma som i Tid.
+  stämpling, samma som i Tid. Din profilbild syns för alla i Nav, på alla
+  enheter, och du väljer själv vad Nav ska kalla dig.
 - **Satser och löner**, för den som har behörigheten för lönekostnad.
 - **Tid**, **Frånvaro** och **Uppgifter**, med samma regler som här. I Uppgifter
   väljer du dagens tre, planerar och avslutar dagen, skriver första steget och

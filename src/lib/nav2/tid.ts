@@ -202,7 +202,7 @@ export async function byggTid(supabase: SupabaseClient, user: CurrentUser): Prom
     admin.from("compliance_gate").select("staff_information_id").eq("key", "stampling").maybeSingle(),
     supabase.from("phone_call").select("ended_at").eq("employee_id", mig).gte("started_at", fyrtio).not("ended_at", "is", null).order("ended_at", { ascending: false }).limit(1000),
     // Lönerapportens uttag syns för den som finns i den. Läses med service role och bara för de egna perioderna.
-    admin.from("audit_log").select("actor_id, object_id, created_at").eq("action", "payroll.exported").gte("created_at", new Date(Date.parse(svenskDygnsstart(nu)) - 90 * 86400000).toISOString()).order("created_at", { ascending: false }).limit(50),
+    admin.from("audit_log").select("actor_id, object_id, ts").eq("action", "payroll.exported").gte("ts", new Date(Date.parse(svenskDygnsstart(nu)) - 90 * 86400000).toISOString()).order("ts", { ascending: false }).limit(50),
   ]);
   for (const x of extra ?? []) ut.extra[x.time_event_id] = { stod: x.support, skal: x.reject_reason, sett: !!x.rejection_seen_at };
   ut.autoOk = (autoOk ?? []).map((a) => String(a.work_date));
@@ -221,7 +221,7 @@ export async function byggTid(supabase: SupabaseClient, user: CurrentUser): Prom
     if (!ut.sistaSamtal[d]) ut.sistaSamtal[d] = svenskKlocka(s.ended_at as string);
   }
   // Vem har tittat: öppnade sena dagar, och uttag av lönerapporter där du finns med.
-  const exp = (exporter ?? []) as { actor_id: string | null; object_id: string; created_at: string }[];
+  const exp = (exporter ?? []) as { actor_id: string | null; object_id: string; ts: string }[];
   const { data: minaPerioder } = exp.length ? await supabase.from("payroll_row").select("period_id").eq("employee_id", mig).in("period_id", [...new Set(exp.map((e) => e.object_id))]) : { data: [] as { period_id: string }[] };
   const mina = new Set((minaPerioder ?? []).map((r) => r.period_id as string));
   const tittare = [...new Set([...(tittat ?? []).map((t) => t.viewer_id as string), ...exp.map((e) => e.actor_id).filter((x): x is string => !!x)])];
@@ -229,7 +229,7 @@ export async function byggTid(supabase: SupabaseClient, user: CurrentUser): Prom
   const tn = new Map((tittarNamn ?? []).map((p) => [p.id as string, fullName(p)]));
   ut.tittat = [
     ...(tittat ?? []).map((t) => ({ vem: tn.get(t.viewer_id as string) ?? "Okänd", vad: "öppnade dina sena dagar", at: t.viewed_at as string })),
-    ...exp.filter((e) => mina.has(e.object_id) && e.actor_id).map((e) => ({ vem: tn.get(e.actor_id!) ?? "Okänd", vad: "tog med dig i lönerapporten", at: e.created_at })),
+    ...exp.filter((e) => mina.has(e.object_id) && e.actor_id).map((e) => ({ vem: tn.get(e.actor_id!) ?? "Okänd", vad: "tog med dig i lönerapporten", at: e.ts })),
   ]
     .sort((a, b) => b.at.localeCompare(a.at))
     .slice(0, 20)
@@ -343,7 +343,7 @@ export async function byggTid(supabase: SupabaseClient, user: CurrentUser): Prom
     supabase.from("sick_report").select("employee_id, first_sick_day, last_sick_day").is("cancelled_at", null).lte("first_sick_day", nastaFredag),
     supabase.from("payroll_export_column").select("id, header, field, active, sort").order("sort"),
     supabase.from("payroll_period_sent").select("period_id, sent_at"),
-    supabase.from("audit_log").select("object_id, created_at").eq("action", "payroll.exported").order("created_at", { ascending: false }).limit(200),
+    supabase.from("audit_log").select("object_id, ts").eq("action", "payroll.exported").order("ts", { ascending: false }).limit(200),
     supabase.from("one_on_one_point").select("employee_id").eq("source", "tid-sen").is("handled_at", null),
   ]);
   const { data: allaTyper } = await supabase.from("absence_type").select("id, label");
@@ -390,7 +390,7 @@ export async function byggTid(supabase: SupabaseClient, user: CurrentUser): Prom
   // Lönerapportens steg: granskad = attesterad, nedladdad = senaste uttaget, skickad = 0094.
   const skickadMap = new Map((skickade ?? []).map((s) => [s.period_id as string, svensktDatum(s.sent_at as string)]));
   const uttagMap = new Map<string, string>();
-  for (const u of uttag ?? []) if (!uttagMap.has(u.object_id as string)) uttagMap.set(u.object_id as string, svensktDatum(u.created_at as string));
+  for (const u of uttag ?? []) if (!uttagMap.has(u.object_id as string)) uttagMap.set(u.object_id as string, svensktDatum(u.ts as string));
   const steg: Record<string, { granskad: string | null; nedladdad: string | null; skickad: string | null }> = {};
   for (const p of pl) steg[p.id] = { granskad: p.attested_at ? svensktDatum(p.attested_at) : null, nedladdad: uttagMap.get(p.id) ?? null, skickad: skickadMap.get(p.id) ?? null };
 

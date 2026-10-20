@@ -151,6 +151,18 @@ export const MODUL: Record<string, string> = {
   coaching_task: "Coachningsuppgift",
   coaching_session: "Coachningssamtal",
   coaching_template: "Coachningsmall",
+  // Uppgiftsserier och uppgiftsmallar (kalenderns pass 3) och skriftliga prov
+  // (0067) loggade utan att stå här; provet var rött på main av det.
+  task_series: "Uppgiftsserie",
+  task_template: "Uppgiftsmall",
+  prov: "Skriftligt prov",
+  // Nav 2.0 (/nav2): kundkortets anteckningar och kampanjsida, uppspelade
+  // utskrifter, säljarens förklaring till en sen ankomst och händelserna i
+  // Anställdas checklistor.
+  customer: "Kund",
+  phone_call: "Säljsamtal",
+  late_arrival: "Sen ankomst",
+  anstallda: "Anställda",
 };
 
 /** Andelser som betyder att nagot lamnades ut eller lastes. */
