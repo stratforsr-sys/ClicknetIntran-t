@@ -48,7 +48,7 @@ export async function loggaInMedLosenord(_prev: LoginState, form: FormData): Pro
   // FORE redirect(). `redirect()` fungerar genom att kasta, sa allt som star
   // efter den kors aldrig — en logg pa andra sidan hade varit tyst borta.
   await loggaInloggning(epost, "losenord");
-  redirect("/");
+  redirect("/nav2");
 }
 
 /** Svenska genomgaende, aven i felmeddelanden (UI-PRD §8). */

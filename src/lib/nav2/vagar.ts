@@ -39,6 +39,9 @@ const SJALV: RegExp[] = [
 
 /** Adressen i Nav 2.0 for en gammal sida, eller null om sidan stannar i nuvarande Nav. */
 export function nav2Adress(path: string, search: string): string | null {
+  // Startsidan gar hit direkt. Annars strommar (app)-layouten forst och
+  // page.tsx skickar vidare med en meta refresh: fyra sekunder i previewen.
+  if (path === "/") return "/nav2";
   if (!SJALV.some((r) => r.test(path))) return null;
   return "/nav2?till=" + encodeURIComponent(path + search);
 }

@@ -21,12 +21,12 @@ export default async function VerifieraSida({
   if (!user) redirect("/logga-in");
 
   const kvitto = (await cookies()).get(STEG2_KAKA)?.value;
-  if (!kraverMfa(user) || (await kvittoGiltigt(kvitto, user.authUserId))) redirect("/");
+  if (!kraverMfa(user) || (await kvittoGiltigt(kvitto, user.authUserId))) redirect("/nav2");
 
   // Oppen vidarebefordran ar en riktig risk pa just den har sidan: det ar hit
   // en angripare vill styra nagon precis efter en lyckad inloggning. Bara
   // vagar inom navet slapps igenom.
-  const nasta = sp.nasta && /^\/(?!\/)/.test(sp.nasta) ? sp.nasta : "/";
+  const nasta = sp.nasta && /^\/(?!\/)/.test(sp.nasta) ? sp.nasta : "/nav2";
 
   return (
     <main className="grid min-h-dvh place-items-center px-4 py-12">

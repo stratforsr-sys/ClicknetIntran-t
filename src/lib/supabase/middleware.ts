@@ -228,14 +228,14 @@ export async function updateSession(request: NextRequest) {
       const url = request.nextUrl.clone();
       const [p, q] = till.split("?");
       url.pathname = p;
-      url.search = "?" + q;
+      url.search = q ? "?" + q : "";
       return avsluta(NextResponse.redirect(url));
     }
   }
 
   if (user && path === "/logga-in") {
     const url = request.nextUrl.clone();
-    url.pathname = "/";
+    url.pathname = "/nav2";
     url.search = "";
     return avsluta(NextResponse.redirect(url));
   }

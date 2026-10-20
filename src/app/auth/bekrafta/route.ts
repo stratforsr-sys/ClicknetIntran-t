@@ -12,7 +12,7 @@ import { loggaInloggning } from "@/lib/inloggningslogg-server";
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl;
   const code = searchParams.get("code");
-  const nasta = searchParams.get("nasta") ?? "/";
+  const nasta = searchParams.get("nasta") ?? "/nav2";
 
   if (code) {
     const supabase = await supabaseServer();

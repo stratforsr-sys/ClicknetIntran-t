@@ -63,6 +63,12 @@ Nav till Nav 2.0, ingen brytare och ingen väg tillbaka, och Nav 2.0 ska vara
   utkastets semesterexempel.
 - `tests/stampelfri.mjs` läste gamla startsidans källa; nu kontrollerar den
   att startsidan är Nav 2.0 och att Nav 2.0:s Tid frågar `stampelfri()`.
+- **Rättat framåt efter prov i previewen:** `/` gick via (app)-layoutens
+  strömning och en meta refresh, ~4 s innan Nav 2.0 ens begärdes. Nu skickar
+  mellanvaran `/` direkt till `/nav2` (307), och inloggningen, steg två,
+  länkinloggningen och `/logga-in` för den inloggade går till `/nav2` utan
+  omväg. Mätt efter strömningen: första byten 0,4–0,6 s (förut 3–5,3 s),
+  100 kB komprimerat (förut 0,99 MB), datan 2,2–3,3 s.
 
 **Kvar för att bli riktigt snabb:** datan byggs fortfarande vid varje
 laddning. Se NASTA_SESSION.
