@@ -34,7 +34,9 @@ behörigheter som här: du ser bara det du får se.
   inför sommaren, föreslå en annan period och kvittera rehabsignalen. I Tid
   rättar du en stämpling på raden, kollar veckan på fredagen och väljer egna
   påminnelser; chefen ser rättelserna med stöd, nästa veckas frånvaro och
-  lönerapportens steg.
+  lönerapportens steg. Chefen lägger också nya scheman, med tider per
+  veckodag och ett startdatum, justerar en attesterad lönerapport i minuter
+  och lägger upp ogiltig frånvaro för hand.
 - **Rutiner**, navets egna: sök, spara, följ steg för steg, kvittera, säg om
   rutinen hjälpte och bevaka ett område. Ägaren svarar på återkopplingen,
   och den som förvaltar rutinerna ser kvittenser, granskning och vad folk

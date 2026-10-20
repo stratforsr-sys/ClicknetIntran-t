@@ -7,8 +7,8 @@ import { gallandeSchema } from "@/lib/raster";
 import { hamtaLage } from "@/lib/sparrar";
 import { medRoll, notifiera, notifieraFlera } from "@/lib/notishandelse-server";
 import { begarRattelse, beslutaRattelse, sparaArbetsschema, stampla } from "@/app/(app)/tid/actions";
-import { avvisaHandelse, godkannHandelse, havHandelse } from "@/app/(app)/tid/ogiltig-franvaro/actions";
-import { attestera, generera, skapaPeriod } from "@/app/(app)/tid/lonerapport/actions";
+import { avvisaHandelse, godkannHandelse, havHandelse, laggUppHandelse } from "@/app/(app)/tid/ogiltig-franvaro/actions";
+import { attestera, generera, laggJustering, skapaPeriod } from "@/app/(app)/tid/lonerapport/actions";
 import { MORGONNOTIS_VAL, PAMINN_MINUTER, SCHEMA_KVITTENS_FRAN } from "@/lib/nav2/tidregler";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
 
@@ -24,6 +24,11 @@ export const dynamic = "force-dynamic";
  * schema och ändra toleransen (`sparaArbetsschema`, en ny rad med nytt
  * `valid_from`; ett schema skrivs aldrig om), och lönerapportens period,
  * underlag och attest (`skapaPeriod`, `generera`, `attestera`).
+ *
+ * Gamla Nav A (2026-10-20): ett nytt schema med tider per veckodag och ett
+ * "gäller från", för bolaget, ett team eller en person (repots Schemaform och
+ * `sparaArbetsschema`), en justering i minuter på en attesterad löneperiod
+ * (`laggJustering`) och ogiltig frånvaro för hand (`laggUppHandelse`).
  *
  * Det nya (0094): en saknad stämpling som rättelse utan en rad att ersätta,
  * stödet och avslagets skäl (`time_correction_extra`), "Okej" på ett avslag,
@@ -283,6 +288,13 @@ export async function POST(request: Request) {
         return svar({ fel: "Okänd handling." }, 400);
       }
 
+      case "ogiltig-ny": {
+        // Repots Upplaggning: raden går in som ett förslag, och beslutet tas som vanligt. Rätten prövas i databasen (far_godkanna_franvaro_for).
+        const vem = String(b.vem ?? "");
+        if (!UUID.test(vem)) return svar({ fel: "Välj en person." }, 400);
+        return fran(await laggUppHandelse({}, form({ employee_id: vem, datum: String(b.dag ?? ""), minuter: String(b.min ?? "") })), "Händelsen ligger nu som förslag.");
+      }
+
       case "fraga": {
         if (!chef) return svar({ fel: "Bara chef får fråga." }, 403);
         const p = await person(String(b.vem ?? ""));
@@ -384,6 +396,30 @@ export async function POST(request: Request) {
         return svar({ ok: `Toleransen är ${tol} min från i morgon.` });
       }
 
+      case "schema-ny": {
+        // Repots Schemaform: nya rader med ett "gäller från". Ett schema skrivs aldrig om, och de berörda får notisen.
+        if (!chef) return svar({ fel: "Bara säljchef och administratör får ändra scheman." }, 403);
+        const scope = String(b.scope ?? "");
+        if (scope !== "company" && scope !== "team" && scope !== "employee") return svar({ fel: "Välj vem schemat gäller." }, 400);
+        const vem = scope === "company" ? "" : String(b.vem ?? "");
+        if (scope !== "company" && !UUID.test(vem)) return svar({ fel: "Välj vem schemat gäller." }, 400);
+        if (scope === "team") {
+          const { data: t } = await db.from("team").select("id").eq("id", vem).maybeSingle();
+          if (!t) return svar({ fel: "Teamet finns inte." }, 404);
+        }
+        if (scope === "employee") {
+          const p = await person(vem);
+          if (!p || p.status === "offboarded") return svar({ fel: "Personen finns inte." }, 404);
+        }
+        const dagar = (Array.isArray(b.dagar) ? (b.dagar as unknown[]) : []).map(Number).filter((d) => Number.isInteger(d) && d >= 1 && d <= 7);
+        const start = String(b.start ?? ""), slut = String(b.slut ?? ""), galler = String(b.fran ?? "");
+        if (!KLOCKA.test(start) || !KLOCKA.test(slut)) return svar({ fel: "Fyll i både start och slut." }, 400);
+        if (!DATUM.test(galler)) return svar({ fel: "Välj från vilken dag schemat gäller." }, 400);
+        const s = (await fangad(() => sparaArbetsschema({}, form({ scope, scope_id: vem, veckodag: [...new Set(dagar)], start_time: start, end_time: slut, valid_from: galler, tol_late: String(b.tol ?? "") })))) as { fel?: string; ok?: string };
+        if (s.fel) return svar({ fel: s.fel }, 400);
+        return svar({ ok: s.ok ?? `Sparat. Gäller från ${galler}.` });
+      }
+
       case "morgonnotis": {
         const t = String(b.tid ?? "");
         if (!(MORGONNOTIS_VAL as readonly string[]).includes(t)) return svar({ fel: "Välj en av tiderna." }, 400);
@@ -425,6 +461,20 @@ export async function POST(request: Request) {
         await db.from("payroll_period_sent").upsert({ period_id: String(b.period), sent_by: mig, sent_at: new Date().toISOString() });
         await db.from("audit_log").insert({ actor_id: mig, action: "payroll.sent", object_type: "payroll_period", object_id: String(b.period) });
         return svar({ ok: "Markerad som skickad till lön." });
+      }
+
+      case "lon-justering": {
+        // Repots Justering: bara på en attesterad period och för någon som finns i underlaget, som /tid/lonerapport/[id].
+        if (!hasRole(user, "sales_manager", "ceo", "admin")) return svar({ fel: "Du saknar behörighet för den här åtgärden." }, 403);
+        const pid = String(b.period ?? ""), vem = String(b.vem ?? "");
+        if (!UUID.test(pid)) return svar({ fel: "Okänd period." }, 400);
+        if (!UUID.test(vem)) return svar({ fel: "Välj vem justeringen gäller." }, 400);
+        const { data: per } = await db.from("payroll_period").select("status").eq("id", pid).maybeSingle();
+        if (!per) return svar({ fel: "Perioden finns inte." }, 404);
+        if (per.status !== "attested") return svar({ fel: "Perioden är inte attesterad. Före attesten rättas tiden med en rättelse." }, 400);
+        const { data: rad } = await db.from("payroll_row").select("employee_id").eq("period_id", pid).eq("employee_id", vem).maybeSingle();
+        if (!rad) return svar({ fel: "Personen finns inte i periodens underlag." }, 400);
+        return fran(await laggJustering({}, form({ period_id: pid, employee_id: vem, minuter: String(b.min ?? ""), motivering: String(b.skal ?? "").trim().slice(0, 500) })), "Justeringen är bokförd.");
       }
 
       case "lon-kolumn": {

@@ -99,6 +99,9 @@ export type NdTid = {
     punkter: string[];
     personIds: Record<string, string>;
     harEgetSchema: string[];
+    /** Gamla Nav A: teamen att lägga ett schema för, och lönerapportens justeringsposter (`payroll_adjustment`). */
+    team: { id: string; namn: string }[];
+    justeringar: { id: string; period: string; pid: string; namn: string; min: number; skal: string; nar: string }[];
     tolerans: null | { scope: string; scopeId: string | null; namn: string; tol: number };
   };
 };
@@ -193,6 +196,8 @@ export async function byggTid(supabase: SupabaseClient, user: CurrentUser): Prom
         supabase.from("audit_log").select("object_id, ts").eq("action", "payroll.exported").order("ts", { ascending: false }).limit(200),
         supabase.from("one_on_one_point").select("employee_id").eq("source", "tid-sen").is("handled_at", null),
         supabase.from("absence_type").select("id, label"),
+        // Gamla Nav A: justeringsposterna, som /tid/lonerapport/[id] visar bredvid underlaget.
+        supabase.from("payroll_adjustment").select("id, period_id, employee_id, minutes, reason, created_at").order("created_at", { ascending: false }).limit(200),
       ]))
     : null;
 
@@ -326,7 +331,7 @@ export async function byggTid(supabase: SupabaseClient, user: CurrentUser): Prom
     supabase.from("absence_request").select("employee_id, type_id, starts_on, ends_on").eq("status", "approved").lte("starts_on", lopSlut).gte("ends_on", lopStart),
     supabase.from("sick_report").select("employee_id, first_sick_day, last_sick_day").is("cancelled_at", null).lte("first_sick_day", lopSlut),
   ]);
-  const [{ data: settAlla }, { data: beslutade }, { data: minaRattBeslut }, { data: minaOgiltigBeslut }, { data: chefPref }, { data: minLogg }, { data: franvaroNasta }, { data: sjukNasta }, { data: kolumner }, { data: skickade }, { data: uttag }, { data: punkter }, { data: allaTyper }] = await chefAndraP;
+  const [{ data: settAlla }, { data: beslutade }, { data: minaRattBeslut }, { data: minaOgiltigBeslut }, { data: chefPref }, { data: minLogg }, { data: franvaroNasta }, { data: sjukNasta }, { data: kolumner }, { data: skickade }, { data: uttag }, { data: punkter }, { data: allaTyper }, { data: justAlla }] = await chefAndraP;
 
   // Namnen ur hela registret, ocksa for den som slutat: en gammal rad ska saga vem, inte "Okand".
   const alla = (personal ?? []) as { id: string; first_name: string; last_name: string; team_id: string | null; employee_number: string | number | null; status: string }[];
@@ -541,6 +546,16 @@ export async function byggTid(supabase: SupabaseClient, user: CurrentUser): Prom
     punkter: [...new Set((punkter ?? []).map((p) => p.employee_id as string))],
     personIds: Object.fromEntries(pers.map((p) => [namn.get(p.id)!, p.id])),
     harEgetSchema: [...new Set(rader.filter((r) => r.scope === "employee" && r.employee_id).map((r) => r.employee_id as string))],
+    team: [...teamNamn].map(([id, n]) => ({ id, namn: n })).sort((a, b) => a.namn.localeCompare(b.namn, "sv")),
+    justeringar: ((justAlla ?? []) as { id: string; period_id: string; employee_id: string; minutes: number; reason: string; created_at: string }[]).map((j) => ({
+      id: j.id,
+      period: j.period_id,
+      pid: j.employee_id,
+      namn: namn.get(j.employee_id) ?? "Okänd",
+      min: j.minutes,
+      skal: j.reason,
+      nar: svensktDatum(j.created_at),
+    })),
     tolerans: tolRad ? { scope: tolRad.scope, scopeId: tolRad.scope === "team" ? tolRad.team_id : null, namn: tolRad.scope === "team" ? (teamNamn.get(tolRad.team_id ?? "") ?? "Teamet") : "Hela bolaget", tol: tolRad.tol_late ?? 1 } : null,
   };
   return ut;

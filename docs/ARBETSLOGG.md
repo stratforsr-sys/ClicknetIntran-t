@@ -5,6 +5,27 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-20 · Nav 2.0, gamla Navs sista funktioner A: Tid (ingen migration)
+
+- **Notisen om ett ändrat schema öppnas i Nav 2.0.** `sparaArbetsschema` (också
+  via Nav 2.0:s "Ge teamets schema") skickar `/tid/schema`, som förut landade i
+  gamla Nav. Nu öppnar `ndGa` Scheman och regler för chefen och kortet "Ditt
+  schema" för säljaren, och `/tid/schema` står i `SJALV`. `/tid/lonerapport/<id>`
+  (attesten och justeringen) öppnar perioden i Lönerapport; säljaren får sin Tid.
+- **Schemaredigeraren** (svar 1) i Tid → Scheman och regler: "Nytt schema" med
+  bolaget, ett team eller en person, veckodagar, start, slut, tolerans och
+  "gäller från", och en rad som visar vad som sparas. Rutten `schema-ny` anropar
+  repots `sparaArbetsschema`: nya rader, inget skrivs om, och de berörda får
+  notisen.
+- **Justering i minuter** (svar 2) i Tid → Lönerapport, på en attesterad period
+  och för någon i underlaget, som `/tid/lonerapport/[id]`: rutten `lon-justering`
+  = `laggJustering`. Justeringsposterna listas under perioden (`justeringar` i
+  `ND.tid.chef`).
+- **Ogiltig frånvaro för hand** (svar 2) i Sena och frånvaro: rutten
+  `ogiltig-ny` = `laggUppHandelse` (rätten prövas i databasen). Raden blir ett
+  förslag som beslutas under Att göra.
+- Bakom `SKRIVLAGE.tid` (423 i läsläge). Spannet 0160–0164 är oanvänt.
+
 ## 2026-10-20 · Nav 2.0, Nyheter: beställarens svar (0130 KÖRD, `SKRIVLAGE.nyheter = true`)
 
 Beställaren svarade på Nyheters sex frågor.
