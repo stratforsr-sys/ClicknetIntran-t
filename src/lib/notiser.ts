@@ -640,6 +640,9 @@ export const NOTIS_KALLOR = [
   /** Nav 2.0 (0120), startsidan: Grattis på en order på Golvet. */
   "order-grattis",
 
+  /** Nav 2.0 (0130), Nyheter: författaren påminner den som inte läst eller kvitterat. En HÄNDELSE. */
+  "nyhet-paminn",
+
   /**
    * Nav 2.0 (0105), Anställda: en utskicksregel, ett fadderuppdrag eller en
    * punkt som skickats vidare (uppdrag), påminnelsen före fristen och
@@ -783,6 +786,7 @@ export const HANDELSEKALLOR = [
   "utbildning-repetition",
   "utbildning-certifikat",
   "order-grattis",
+  "nyhet-paminn",
   "personal-uppdrag",
   "personal-paminn",
   "personal-klart",

@@ -24,6 +24,7 @@ import { byggAnstallda, type NdAnstallda } from "./anstallda";
 import { byggAvtal, type NdAvtal } from "./avtal";
 import { byggProfil, type NdProfil } from "./profil";
 import { byggAdoption, type NdAdoption } from "./adoption";
+import { byggNyheter, type NdNyheter } from "./nyheter";
 import type { NdFel } from "./felforma";
 import {
   formaLon,
@@ -93,6 +94,8 @@ export type Nav2Data = {
   profil: NdProfil;
   /** Adoption (0029): antal, aldrig vem. Null utanför säljchef, VD och admin. */
   adoption: NdAdoption | null;
+  /** Nyheter (0130): inläggen, kvittenserna, läskvittot för den som skrev, och Nytt i navet. */
+  nyheter: NdNyheter;
 };
 
 const PERSONKOLUMNER =
@@ -126,7 +129,7 @@ async function bygg(user: CurrentUser, m?: Nav2Matt): Promise<Nav2Data | null> {
   if (!user.employee) return null;
   const supabase = await supabaseServer();
 
-  const [{ data: personRader }, { data: teamRader }, { data: satsRader, error: satsFel }, { data: lonRader, error: lonFel }, notiser, tid, franvaro, uppgifter, order, provision, kalender, arenden, fel, rutiner, utbildning, hem, rekrytering, anstallda, coachning, avtal, profil, adoption] =
+  const [{ data: personRader }, { data: teamRader }, { data: satsRader, error: satsFel }, { data: lonRader, error: lonFel }, notiser, tid, franvaro, uppgifter, order, provision, kalender, arenden, fel, rutiner, utbildning, hem, rekrytering, anstallda, coachning, avtal, profil, adoption, nyheter] =
     await Promise.all([
       matt(m, "personer", supabase.from("employee").select(PERSONKOLUMNER).order("first_name")),
       matt(m, "team", supabase.from("team").select("id, name")),
@@ -157,6 +160,7 @@ async function bygg(user: CurrentUser, m?: Nav2Matt): Promise<Nav2Data | null> {
       matt(m, "avtal", byggAvtal(supabase, user)),
       matt(m, "profil", byggProfil(supabase, user)),
       matt(m, "adoption", byggAdoption(supabase, user)),
+      matt(m, "nyheter", byggNyheter(supabase, user)),
     ]);
 
   const ra: RaPerson[] = ((personRader ?? []) as unknown as (Omit<RaPerson, "roller"> & {
@@ -244,5 +248,6 @@ async function bygg(user: CurrentUser, m?: Nav2Matt): Promise<Nav2Data | null> {
     avtal,
     profil,
     adoption,
+    nyheter,
   };
 }

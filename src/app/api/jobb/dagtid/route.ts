@@ -8,6 +8,7 @@ import { skickaRundor } from "@/lib/nav2/franvaro-runda";
 import { egnaPaminnelser, korTidpaminnelser } from "@/lib/nav2/tid-paminnelser";
 import { skickaKvallsnotiser } from "@/lib/nav2/hem-kvall";
 import { korAnstalldaPaminnelser } from "@/lib/nav2/anstallda-paminnelser";
+import { publiceraSchemalagda } from "@/lib/nav2/nyheter-jobb";
 import { korUtbildningsPaminnelser } from "@/lib/nav2/utbildning-paminnelser";
 
 export const dynamic = "force-dynamic";
@@ -86,7 +87,14 @@ async function kor(request: NextRequest) {
   } catch (e) {
     utbildning = { fel: e instanceof Error ? e.message : String(e) };
   }
-  return NextResponse.json({ ...stampling, kalender, runda, tid, kvall, anstallda, utbildning });
+  // Nav 2.0 (0130): schemalagda inlägg i Nyheter ("I morgon 07:30"). Bakom SKRIVLAGE.nyheter (i funktionen).
+  let nyheter: unknown = null;
+  try {
+    nyheter = await publiceraSchemalagda(db);
+  } catch (e) {
+    nyheter = { fel: e instanceof Error ? e.message : String(e) };
+  }
+  return NextResponse.json({ ...stampling, kalender, runda, tid, kvall, anstallda, utbildning, nyheter });
 }
 
 export async function POST(request: NextRequest) {

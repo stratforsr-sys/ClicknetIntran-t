@@ -5,6 +5,40 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-20 · Nav 2.0, Nyheter med riktig data, i läsläge (0130 SKRIVEN OCH TORRKÖRD, EJ KÖRD)
+
+Utkastets Nyheter läser navets inlägg och Nytt i navet. Ingen funktion i
+utkastet togs bort; det navet saknade fick backend i 0130. Produktionen har
+inga inlägg än (`news_post` är tom), så listan står tom med riktig data.
+
+- **Läsningen** (`src/lib/nav2/nyheter.ts`, ND-nyckeln `nyheter`): inläggen med
+  den inloggades token (`news_post_read`), utkastets regel för vad som syns
+  (det som gäller en själv och det man skrivit), och Nytt i navet med
+  `navnyheterFor()`, samma filter som klockan. Läst = `notification_dismissed`
+  med klockans id (`nyhet-<id>`, `navnyhet-<slug>`), som `markeraNavnyhetLast`.
+  Läskvittot (vilka som läst och kvitterat) räknas med service role och skickas
+  bara till författaren och ledningen. Tål att 0130 saknas (`utan0130`).
+- **Utkastets grupper som roller** (`NH_GRUPPER`): Säljare = säljare och
+  teamledare, Ledningen = säljchef, VD, administratör och ekonomi, Leveransen =
+  projektledare och leverans, ur utkastets egna personer. En målgrupp skriven i
+  nuvarande Nav visas med sina riktiga mottagare.
+- **0130 (ny, additiv):** `news_post.ack_due` (kvittens med sista dag),
+  `news_post.scheduled_at` (I morgon 07:30, måndag 07:30) och `news_ack`
+  (RLS: egen rad, författaren och ledningen).
+- **Rutten `/nav2/nyheter`** bakom `SKRIVLAGE.nyheter = false` (423): repots
+  `skapaNyhet`, `publiceraNyhet` och `arkiveraNyhet`, och 0130 för läst,
+  kvittera, fäst och lossa, påminn (notiskällan `nyhet-paminn`, en gång om
+  dagen, `audit_log` `news.reminded`), schemalägg, spara som utkast och Ångra
+  (kvittensen, fäst, arkivet, Nytt i navet, och publiceringen i tio minuter).
+  Svaret bär Nyheters nya data, så vyn ritas om utan omladdning.
+- **Dagtidsjobbet** publicerar schemalagda inlägg (`nyheter-jobb.ts`), bakom
+  samma brytare. pg_cron ringer bara produktionen.
+- **Klienten** `moduler/ndnh.js` (före `ndskal`). Startsidans nyhetskort och
+  Nytt i navet är kopplade, och gamla adresser (`/nyheter`, `/nyheter/<slug>`,
+  `/nyheter/nytt`, `/nyheter/nav/<slug>`) öppnas i Nav 2.0 (`SJALV`, `ndGa`).
+- **Till steg 6:** kör 0130 med de andra och
+  `~/nav2-utkast/delar/nyheter/registerutdrag-steg6.py` (`news_ack`).
+
 ## 2026-10-20 · Nav 2.0, Adoption med riktig data (i läsläge, ingen migration)
 
 Session 5 i "Fem vyer och gamla Navs sista sidor" (`~/nav2-utkast/PROMPTER.md`).

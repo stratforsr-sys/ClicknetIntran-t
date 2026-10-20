@@ -99,6 +99,13 @@ behörigheter som här: du ser bara det du får se.
   nattjobbets kvitto steg för steg. Kända fel med råd, "samma för mig" och
   svar i tråden finns nu i navet, och kön markerar själv ett fel som känt med
   ett råd under tiden.
+- **Nyheter**: inläggen från ledningen och Nytt i navet på samma ställe, och
+  de senaste på startsidan. Ett inlägg som ska kvitteras har en sista dag,
+  syns i klockan och i dina uppgifter när dagen närmar sig, och kvitteras med
+  ett tryck. Den som skrev det ser vilka som läst och kvitterat, och kan
+  påminna resten. Säljchef, VD och administratör skriver i en ruta som visar
+  inlägget som det blir, väljer vem det gäller, fäster det överst och kan
+  schemalägga det till nästa morgon eller måndag.
 - **Sök, gör eller fråga Nav** (⌘K): sökningen hittar dina uppgifter,
   rutiner (även i texten och bilagorna), kurser, kommande möten, order och
   ärenden, och för den som ser dem också personer, kandidater, överenskommelser
@@ -114,7 +121,7 @@ behörigheter som här: du ser bara det du får se.
   ingen öppnat på 90 dagar går att öppna. Siffrorna räknar personer, aldrig
   vem som gjorde vad.
 
-Nyheter, Leads, K&V och Händelselogg öppnas här i nuvarande Nav,
+Leads, K&V och Händelselogg öppnas här i nuvarande Nav,
 vilken väg du än tar dit: menyn, sökningen, en notis eller en länk. Det som
 bara finns här, som scheman, spärrar och projekt, öppnas också här. Nya Nav
 fungerar i mobilens bredd. Ingenting påhittat visas.

@@ -35,6 +35,8 @@ const SJALV: RegExp[] = [
   /^\/rekrytering(\/(?!ny$)[^/]+)?$/,
   /^\/avtal$/,
   /^\/adoption$/,
+  /^\/nyheter(\/[^/]+)?$/,
+  /^\/nyheter\/nav\/[^/]+$/,
   /^\/profil(\/[^/]+)?$/,
 ];
 

@@ -20057,7 +20057,7 @@ const NHGRUPP = {alla:'Alla', salj:'Säljare', ledning:'Ledningen', leverans:'Le
 const NHSALJ = ['Amira Haddad', 'Elin Berg', 'Mohammed Aziz', 'Sara Nyström', 'Ali Rahimi', 'Viktor Holm', 'Jonas Lindqvist', 'Nora Sjöberg', 'Hampus Lund', 'Oskar Brandt', 'Erik Moberg', 'Fatima Noor', 'Tilda Wik', 'Leila Karimi'];
 const NHLED = ['Johanna Ek', 'Simon Menduza', 'Linnea Ström', 'Petra Sandberg'];
 const NHLEV = ['Sara Lind', 'Omar Haddad', 'Robin Sjö'];
-const nhMottagare = g => g === 'salj' ? NHSALJ : g === 'ledning' ? NHLED : g === 'leverans' ? NHLEV : [...NHSALJ, ...NHLED, ...NHLEV];
+let nhMottagare = g => g === 'salj' ? NHSALJ : g === 'ledning' ? NHLED : g === 'leverans' ? NHLEV : [...NHSALJ, ...NHLED, ...NHLEV];
 const NHSEED = [
   {id:'n-kamp', at:'2026-10-05 08:30', av:'Johanna Ek', grupp:'salj', fast:true, kv:'2026-10-16', rubrik:'Kampanjvecka 45: ingen ledighet 2–6 november',
     text:'Vecka 45 kör vi kampanjvecka med fokus på Paket 3. Ledighet går inte att söka för de dagarna, och redan beviljad ledighet står kvar.\n\nVi samlas måndag 2 november 08:30 för en genomgång av erbjudandet. Kvittera att du läst, så vet jag att alla har koll.',
@@ -20149,7 +20149,7 @@ function nhHemKort(){
 /* ---------- Vyn ---------- */
 function renderNhView(){
   nhSt();
-  const chef = S.role === 'chef', l = nhLista(), kv = nhAttKvittera(), nav = NHNAV.filter(n => n[0] <= nhT()), navO = nhNavOlasta(), p = S.nhOpen && nhP(S.nhOpen);
+  const chef = ND ? ndNhFar() : S.role === 'chef', l = nhLista(), kv = nhAttKvittera(), nav = NHNAV.filter(n => n[0] <= nhT()), navO = nhNavOlasta(), p = S.nhOpen && nhP(S.nhOpen);
   const flikar = [['alla', 'Alla', 0], ['olasta', 'Olästa', S.nh.poster.filter(x => nhForMig(x) && !nhLast(x)).length], ['kvitt', 'Att kvittera', kv.length], ...(chef ? [['mina', 'Mina inlägg', 0]] : [])];
   return `<header class="top"><div class="hello"><h1>Nyheter</h1><p>${note(481)}${kv.length ? `${kv.length === 1 ? 'Ett inlägg' : kv.length + ' inlägg'} väntar på din kvittens.` : chef ? 'Det du skriver hamnar här och hos dem det gäller.' : 'Besked från ledningen och det som är nytt i Nav.'}</p></div>
       <div class="tools"><label class="nhsok">${I('sok')}<input id="nhSok" type="search" placeholder="Sök" value="${esc(S.nhQ)}" aria-label="Sök i nyheterna"></label>${chef ? `<button class="btn btn-p" data-nhskriv>${I('plus')}Skriv inlägg</button>` : ''}</div></header>
@@ -20167,7 +20167,7 @@ function nhKort(p, chef, oppen){
   const mott = nhMottagare(p.grupp).filter(n => n !== p.av), las = mott.filter(n => p.last.includes(n)), kvt = mott.filter(n => p.kvitt.includes(n)), egen = p.av === nhJag();
   const saknar = (p.kv ? mott.filter(n => !p.kvitt.includes(n)) : mott.filter(n => !p.last.includes(n)));
   return `<li class="card nhk ${nhLast(p) ? '' : 'olast'} ${nhKvKravs(p) ? 'kv' : ''}" id="nh-${p.id}">
-    <button class="nhkh" data-nhopen="${p.id}" aria-expanded="${oppen}">${avatar(p.av, 30)}<span class="nhkt"><b>${esc(p.rubrik)}</b><small>${esc(p.av)} · ${nhNar(p.at)} · ${NHGRUPP[p.grupp]}</small></span>${p.fast ? `<span class="pill t-neutral">Fäst</span>` : ''}${nhKvKravs(p) ? `<span class="pill t-warn">Kvittera senast ${frKort(p.kv)}</span>` : !nhLast(p) ? `<span class="pill t-signal">Ny</span>` : ''}${I('chev', 'aechev')}</button>
+    <button class="nhkh" data-nhopen="${p.id}" aria-expanded="${oppen}">${avatar(p.av, 30)}<span class="nhkt"><b>${esc(p.rubrik)}</b><small>${esc(p.av)} · ${nhNar(p.at)} · ${ND ? esc(ndNhGrupp(p)) : NHGRUPP[p.grupp]}</small></span>${p.fast ? `<span class="pill t-neutral">Fäst</span>` : ''}${nhKvKravs(p) ? `<span class="pill t-warn">Kvittera senast ${frKort(p.kv)}</span>` : !nhLast(p) ? `<span class="pill t-signal">Ny</span>` : ''}${I('chev', 'aechev')}</button>
     ${oppen ? `<div class="nhkb">${nhStycken(p.text)}
       <div class="aek">${p.rut ? `<button class="btn btn-p btn-sm" data-ropen="${p.rut}" data-rtokvitt="1">Läs rutinen och kvittera</button>` : ''}${nhKvKravs(p) ? `<button class="btn btn-p btn-sm" data-nhkvitt="${p.id}">${I('check')}Jag har läst och förstått</button>` : p.kv && nhKvitt(p) ? `<span class="pill t-ok">${I('check')}Kvitterat</span>` : ''}${p.go ? `<button class="btn btn-s btn-sm" data-go="${p.go}">${p.go === '/rekrytering' ? 'Tipsa om en säljare' : p.go === '/provision' ? 'Så räknas det' : 'Öppna'}</button>` : ''}</div>
       ${egen || chef ? `<div class="nhstat">${note(483)}<div><b class="num">${las.length} av ${mott.length}</b> har läst${p.kv ? ` · <b class="num">${kvt.length}</b> har kvitterat` : ''}</div>${aeBar(p.kv ? kvt.length : las.length, mott.length)}
@@ -30812,6 +30812,142 @@ window.addEventListener('click', e => {
 if (ND && 'adoption' in ND) NDKOPPLAD.add('adoption');
 
 /* =====================================================================
+   NAV 2.0 I RIKTIGT LÄGE: NYHETER (prefix ndNh)
+
+   Navets inlägg ur ND.nyheter (src/lib/nav2/nyheter.ts) i stället för
+   utkastets exempel, och Nytt i navet ur repots släpplista
+   (src/navnyheter/poster.ts) med samma filter och samma "läst" som klockan.
+
+   Allt utkastet har finns kvar (beställaren 2026-10-15). Det som sparar går
+   till /nav2/nyheter (src/app/nav2/nyheter/route.ts): repots skapa,
+   publicera och arkivera, och 0130 för kvittensen och schemaläggningen.
+   Svaret bär Nyheters nya data, så vyn ritas om utan omladdning och Ångra
+   står kvar. I läsläge svarar rutten 423 och visar varför.
+
+   Varje inlägg har en egen grupp ('p:<slug>') med sina riktiga mottagare,
+   eftersom en målgrupp skriven i nuvarande Nav (roller och team) inte alltid
+   är en av utkastets fyra. nhMottagare och etiketten görs om i ndpatch.py.
+   ===================================================================== */
+
+const ndNh = () => ND && ND.nyheter;
+const ndNhFar = () => !!(ndNh() && ND.nyheter.farSkriva);
+// Etiketten på kortet: utkastets grupp, eller målgruppen som den skrevs i nuvarande Nav.
+const ndNhGrupp = p => p.gruppNamn || NHGRUPP[p.grupp] || 'Alla';
+const ndNhPost1 = slug => ndNh() && ND.nyheter.poster.find(p => p.id === slug);
+
+function ndNhTillS(d){
+  return {
+    poster:d.poster.map(p => ({id:p.id, dbId:p.dbId, at:p.at, av:p.av, grupp:'p:' + p.id, gruppNamn:p.gruppNamn, fast:p.fast, kv:p.kv, rubrik:p.rubrik, text:p.text,
+      last:[...p.last], kvitt:[...p.kvitt], pamint:[...p.pamint], schema:p.schema, rut:null, go:null})),
+    navLast:new Set(d.nav.filter(n => n.last).map(n => n.datum + '|' + n.rubrik)), notiser:[]
+  };
+}
+const ndNhUtkast = u => u ? {id:u.id, rubrik:u.rubrik, text:u.text, grupp:u.grupp, kv:u.kv, fast:u.fast, nar:'nu', fel:{}} : null;
+function ndNhFyll(d){
+  // Nytt i navet: [datum, rubrik, ingress, adress, slug].
+  NHNAV.splice(0, NHNAV.length, ...d.nav.map(n => [n.datum, n.rubrik, n.ingress, n.href, n.slug]));
+  // Skrivrutans grupper: de riktiga mottagarna, för den som får skriva.
+  const g = d.grupper || {salj:[], ledning:[], leverans:[]};
+  NHSALJ.splice(0, NHSALJ.length, ...g.salj); NHLED.splice(0, NHLED.length, ...g.ledning); NHLEV.splice(0, NHLEV.length, ...g.leverans);
+}
+// Ny data efter en skrivning: samma öppna inlägg, och skrivrutans utkast ur navet.
+function ndNhNy(d){
+  if (!d) return;
+  ND.nyheter = d; ndNhFyll(d);
+  const oppen = S.nhOpen; S.nh = ndNhTillS(d); S.nhOpen = oppen && nhP(oppen) ? oppen : null;
+  if (!S.nhSkriv) S.nhUtkast = ndNhUtkast(d.utkast) || S.nhUtkast;
+}
+
+/* ---------- Utkastets funktioner med navets data ---------- */
+const _ndNhSt = nhSt;
+nhSt = function(){
+  if (!ndNh()) return _ndNhSt();
+  if (S.nhInit) return; S.nhInit = true;
+  S.nh = ndNhTillS(ND.nyheter);
+  // Utkastet: det senaste egna i navet, annars det som sparats på den här enheten (läsläge).
+  S.nhUtkast = ndNhUtkast(ND.nyheter.utkast);
+  if (!S.nhUtkast) try { const u = JSON.parse(localStorage.getItem('nav2-nhutkast') || 'null'); if (u && u.rubrik !== undefined) S.nhUtkast = u; } catch(_){}
+  Object.assign(S, {nhOpen:null, nhFilt:'alla', nhQ:'', nhSkriv:null});
+};
+// Mottagarna: inläggets egna, eller skrivrutans grupp.
+const _ndNhMottagare = nhMottagare;
+nhMottagare = function(g){
+  if (!ndNh()) return _ndNhMottagare(g);
+  if (String(g).startsWith('p:')){ const p = ndNhPost1(String(g).slice(2)); return p ? p.mott : []; }
+  const gr = ND.nyheter.grupper; return gr ? (gr[g] || gr.alla) : [];
+};
+// Öppnat är läst: samma rad som klockans avfärdning. Tyst, och i läsläge bara här.
+const _ndNhMarkera = nhMarkera;
+nhMarkera = function(p){ const ny = !!(p && !nhLast(p)); _ndNhMarkera(p); if (ndNh() && ny) ndNhSkicka('last', {id:p.id}, {tyst:true}); };
+// Klockan: utkastets lägesnotiser (kvittens inom tre dagar, och för författaren de som inte kvitterat).
+const _ndNhBell = bellPoster;
+bellPoster = function(){ const p = _ndNhBell(); if (!ndNh() || !ndKopplad('nyheter')) return p; nhSt(); return [...nhLagesnotiser(), ...p]; };
+
+/* ---------- Skrivningar: /nav2/nyheter ---------- */
+async function ndNhSkicka(handling, data = {}, {tyst = false} = {}){
+  try {
+    const r = await fetch('/nav2/nyheter', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
+    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    if (s.ok !== undefined && !s.fel){ if (s.nyheter) ndNhNy(s.nyheter); return s; }
+    if (!tyst) toast(s.fel || 'Det gick inte att spara.'); return s;
+  } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
+}
+const ndNhNavSlug = key => { const n = NHNAV.find(x => nhNavKey(x) === key); return n ? n[4] : null; };
+function ndNhAngra(handling, data, efter){ return () => ndNhSkicka(handling, data).then(s => { if (!s.fel){ if (efter) efter(); render(); } }); }
+
+document.addEventListener('click', e => {
+  if (!ndNh() || !ndKopplad('nyheter')) return;
+  const t = e.target.closest && e.target.closest('button, a, label'); if (!t || !t.dataset) return;
+  const d = t.dataset, stopp = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+  // Nytt i navet från startsidan: läst, och sedan till Nyheter som i utkastet.
+  if (d.nhnav && S.view !== 'nyheter'){ stopp(); nhSt(); const slug = ndNhNavSlug(d.nhnav); if (slug) ndNhSkicka('nav-last', {slugs:[slug]}).then(() => render()); nhGa(); return; }
+  if (S.view !== 'nyheter') return;
+  nhSt();
+  if (d.nhkvitt){ stopp(); const p = nhP(d.nhkvitt); if (!p) return;
+    ndNhSkicka('kvittera', {id:p.id}).then(s => { if (s.fel) return; render(); toast(`Kvitterat. ${rxFor(p.av)} ser att du läst.`, ndNhAngra('kvittera-ater', {id:p.id})); }); return; }
+  if (d.nhnav){ stopp(); const slug = ndNhNavSlug(d.nhnav); if (!slug) return;
+    ndNhSkicka('nav-last', {slugs:[slug]}).then(s => { if (s.fel) return; render(); toast('Markerat som läst.', ndNhAngra('nav-ater', {slugs:[slug]})); }); return; }
+  if (d.nhnavalla !== undefined){ stopp(); const slugs = nhNavOlasta().map(n => n[4]).filter(Boolean); if (!slugs.length) return;
+    ndNhSkicka('nav-last', {slugs}).then(s => { if (s.fel) return; render(); toast('Allt i Nytt i Nav är markerat som läst.', ndNhAngra('nav-ater', {slugs})); }); return; }
+  if (d.nhpamin){ stopp(); const p = nhP(d.nhpamin); if (!p) return;
+    ndNhSkicka('paminn', {id:p.id}).then(s => { if (s.fel) return; render(); toast(s.ok); }); return; }
+  if (d.nhfast){ stopp(); const p = nhP(d.nhfast); if (!p) return; const fore = !!p.fast;
+    ndNhSkicka('fast', {id:p.id, pa:!fore}).then(s => { if (s.fel) return; render(); toast(s.ok, ndNhAngra('fast', {id:p.id, pa:fore})); }); return; }
+  if (d.nharkiv){ stopp(); const p = nhP(d.nharkiv); if (!p) return; const fast = !!p.fast;
+    ndNhSkicka('arkivera', {id:p.id}).then(s => { if (s.fel) return; S.nhOpen = null; render(); toast(s.ok, ndNhAngra('arkivera-ater', {id:p.id, fast})); }); return; }
+  // Spara som utkast: i navet. Går det inte (läsläge, ingen rubrik) sparas det på den här enheten, som i utkastet.
+  if (d.nhskrivx !== undefined && S.nhSkriv){
+    const N = S.nhSkriv; if (!(N.rubrik.trim() || N.text.trim())) return;
+    stopp();
+    const lokalt = () => { S.nhUtkast = {...N, fel:{}}; nhSparaUtk(); S.nhSkriv = null; render(); toast('Utkastet är sparat. Det öppnas nästa gång du skriver.'); };
+    ndNhSkicka('utkast', {id:N.id, rubrik:N.rubrik, text:N.text, grupp:N.grupp, kv:N.kv, fast:N.fast}, {tyst:true}).then(s => {
+      if (s.fel) return lokalt();
+      S.nhSkriv = null; S.nhUtkast = ndNhUtkast(ND.nyheter.utkast); try { localStorage.removeItem('nav2-nhutkast'); } catch(_){} render(); toast(s.ok);
+    });
+    return;
+  }
+  // Publicera eller schemalägg: utkastets kontroller, sedan rutten.
+  if (d.nhpubl !== undefined && S.nhSkriv){
+    stopp();
+    const N = S.nhSkriv, f = {};
+    if (!N.rubrik.trim()) f.rubrik = 'Skriv en rubrik.';
+    if (N.text.trim().length < 10) f.text = 'Skriv några meningar om vad som gäller.';
+    else if (rxPnr(N.text)) f.text = 'Det ser ut som ett personnummer. Navet sparar inga, så ta bort det.';
+    if (N.kv && N.kv < nhT()) f.allm = 'Sista dagen för kvittens kan inte ligga bakåt i tiden.';
+    N.fel = f; if (Object.keys(f).length){ render(); document.querySelector('.nhskriv [aria-invalid="true"]')?.focus(); return; }
+    ndNhSkicka('publicera', {id:N.id, rubrik:N.rubrik.trim(), text:N.text.trim(), grupp:N.grupp, kv:N.kv, fast:N.fast, nar:N.nar}, {tyst:true}).then(s => {
+      if (s.fel){ if (s.falt){ N.fel = {[s.falt]:s.fel}; render(); document.querySelector('.nhskriv [aria-invalid="true"]')?.focus(); } else toast(s.fel); return; }
+      S.nhSkriv = null; S.nhUtkast = ndNhUtkast(ND.nyheter.utkast); try { localStorage.removeItem('nav2-nhutkast'); } catch(_){}
+      S.nhOpen = N.nar === 'nu' && nhP(s.slug) ? s.slug : null; render();
+      toast(s.ok, ndNhAngra('publicera-ater', {id:s.slug}));
+    });
+    return;
+  }
+}, true);
+
+if (ndNh()){ ndNhFyll(ND.nyheter); NDKOPPLAD.add('nyheter'); }
+
+/* =====================================================================
    SKALET OCH ÖVERGÅNGEN (prefix skal), steg 4 till produktion
 
    Gäller bara i riktigt läge (ND). Ligger sist i modullistan, så att det som
@@ -30873,6 +31009,13 @@ ndGa = function(href){
     case 'anstallda': { if (sub && (!AEPERS.some(p => String(p[0]) === sub) || d[2] === 'registerutdrag')) return nav(); aeGaSrc(bas); return; }
     case 'rekrytering': { if (sub){ rxSt(); if (!S.rx.kand.some(c => String(c.id) === sub)) return nav(); } rxGaSrc(bas); return; }
     case 'avtal': if (sub) return nav(); maGa(); return;
+    case 'nyheter': {
+      // /nyheter/nytt öppnar skrivrutan för den som får skriva, /nyheter/nav/<slug> Nytt i navet, /nyheter/<slug> inlägget.
+      nhSt();
+      if (sub === 'nytt'){ nhGa(); if (ndNhFar()) setTimeout(() => document.querySelector('[data-nhskriv]')?.click(), 0); return; }
+      if (sub === 'nav'){ nhGa(); return; }
+      if (sub && !nhP(sub)) return nav();
+      nhGa(sub); return; }
     case 'adoption': if (sub) return nav(); if (!rlsGa('/adoption')) toast('Händelseloggen och adoptionen är bara för chefer.'); return;
   }
   return nav();
@@ -30888,10 +31031,9 @@ render = function(){
   }
   skalForra = S.view; return _skalRender();
 };
-// Leads, Nyheter och K&V med en post: hela adressen följer med.
-const _skalLd = ldGaSrc, _skalNh = nhGaSrc, _skalKv = kvGaSrc;
+// Leads och K&V med en post: hela adressen följer med.
+const _skalLd = ldGaSrc, _skalKv = kvGaSrc;
 ldGaSrc = function(src){ if (ND && !ndKopplad('leads')) skalVag = String(src || '/leads'); return _skalLd(src); };
-nhGaSrc = function(src){ if (ND && !ndKopplad('nyheter')) skalVag = String(src || '/nyheter'); return _skalNh(src); };
 kvGaSrc = function(src){ if (ND && !ndKopplad('kv')) skalVag = String(src || '/kv'); return _skalKv(src); };
 // Utkastets reservtoast blir vägen dit. Den kommer från en data-go eller källa som ingen vy tar hand om
 // ("I Nav öppnas /x. I utkastet finns bara startsidan."), från paletten och från felrapportens sida.

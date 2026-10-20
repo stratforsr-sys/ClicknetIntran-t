@@ -29,6 +29,7 @@ export const SKRIVLAGE = {
   // Beställarens ja 2026-10-20: frågor utan svar bokförs utan namn.
   paletten: true,
   profil: false,
+  nyheter: false,
 } as const;
 
 export type Skrivvy = keyof typeof SKRIVLAGE;
