@@ -12,6 +12,7 @@ import {
   forberedIntyg,
   kvitteraFrist,
   laggSjukanteckning,
+  mataInSaldo,
   registreraIntyg,
   registreraSjuk,
   skickaAnsokan,
@@ -85,6 +86,19 @@ export async function POST(request: Request) {
           await skickaAnsokan({}, form({ typ: b.typ, fran: b.fran, till: b.till ?? b.fran, langd: b.till && b.till !== b.fran ? "flera" : "en_dag", deldag: b.deldag ? "1" : "", minuter: b.minuter ?? 0, skal: b.skal ?? "" })),
           "Skickat. Du får besked i Nav.",
         );
+      case "saldo": {
+        // Repots mataInSaldo: säljchef, VD och administratör; personen får en notis. Ett saldo läggs till och ändras aldrig.
+        const pid = String(b.pid ?? "");
+        if (!/^[0-9a-f-]{36}$/.test(pid)) return svar({ fel: "Ingen person vald." }, 400);
+        // Ett tomt fält är inte noll dagar (Number("") är 0 i mataInSaldo).
+        const dagar = String(b.dagar ?? "").trim().replace(",", ".");
+        if (!/^\d{1,3}(\.\d)?$/.test(dagar)) return svar({ fel: "Ange antal dagar, till exempel 25 eller 12,5." }, 400);
+        const typ = b.typ === "saved_vacation" ? "saved_vacation" : "vacation";
+        return fran(
+          await mataInSaldo({}, form({ employee_id: pid, typ, dagar, as_of: b.asof, intjanandear: typ === "saved_vacation" ? (b.ar ?? "") : "" })),
+          "Saldot är inmatat. Personen får en notis.",
+        );
+      }
       case "dra":
         return fran(await draTillbaka({}, form({ id })), "Ansökan är tillbakadragen.");
       case "sjuk":

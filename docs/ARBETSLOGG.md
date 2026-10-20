@@ -5,6 +5,31 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-20 · Nav 2.0: semestersaldot matas in i Anställda (beställarens svar på steg 5)
+
+Saldot är hur många semesterdagar var och en har kvar, och de sparade dagarna
+med året de tjänades in. Nav räknar ingen semesterrätt (AC-2.17, K5): siffran
+kommer från lönesystemet och matas in för hand. Frånvaro visar den, och
+ansökan räknar mot den. `absence_balance` hade 0 rader. Den enda inmatningen
+fanns på gamla Navs personalsida, och den adressen leder numera till Nav 2.0,
+som saknade en plats för det. Det gick alltså inte att mata in alls.
+Beställaren: "fixa det som behövs med saldot".
+
+- **Kortet Semester** på personens kort i Anställda (`moduler/ndsal.js`),
+  under Anställningen: senaste semesterdagar och sparade dagar, med datumet
+  de gällde och vem som matade in dem, och de tidigare under. Mata in saldo:
+  typ, dagar, datum och, för sparade dagar, intjänandeåret.
+- **Servern:** `ND.franvaro.saldon` (`src/lib/nav2/franvaro.ts`, med service
+  role, bara för säljchef, VD och administratör; läsrätten i 0019 saknar
+  administratören) och handlingen `saldo` i `/nav2/franvaro`, som anropar
+  repots `mataInSaldo`: samma regler, samma händelse i loggen, och personen
+  får notisen `franvaro-saldo`. Bakom `SKRIVLAGE.franvaro`, alltså 423 tills
+  Frånvaro får spara. Ett tomt fält nekas (repots `Number("")` hade blivit 0).
+- **Siffrorna:** ingen har tagit ut semester (beställaren). Alla började i
+  augusti–oktober 2026, och semesteråret börjar 1 april. Vilken siffra som
+  ska in beror på hur bolaget räknar semestern, och den frågan är
+  beställarens.
+
 ## 2026-10-20 · Nav 2.0, genomgången och proven (steg 5 till produktion)
 
 Steg 5 i "Till produktion" (`~/nav2-utkast/PROMPTER.md`): varje vy som chef

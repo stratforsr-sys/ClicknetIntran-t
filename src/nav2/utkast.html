@@ -28991,6 +28991,93 @@ document.addEventListener('change', e => {
 if (ND && ND.anstallda){ ndAeStart(); NDKOPPLAD.add('anstallda'); }
 
 /* =====================================================================
+   NAV 2.0 I RIKTIGT LÄGE: SEMESTERSALDOT I ANSTÄLLDA (prefix ndsal), v47
+
+   Saldot är hur många semesterdagar en person har kvar, och de sparade
+   dagarna med året de tjänades in (18 § semesterlagen: fem år). Nav räknar
+   ingen semesterrätt (AC-2.17, K5): siffran kommer från lönesystemet och
+   matas in för hand. Frånvaro visar den för personen själv, och ansökan
+   räknar mot den. Utkastet har ingen plats att mata in den; beställaren
+   2026-10-20: "fixa det som behövs med saldot". Kortet Semester ligger på
+   personens kort i Anställda, under Anställningen.
+
+   Saldona kommer ur ND.franvaro.saldon (src/lib/nav2/franvaro.ts), bara för
+   säljchef, VD och administratör. Spara går till /nav2/franvaro (handlingen
+   saldo, repots mataInSaldo, bakom SKRIVLAGE.franvaro). Ett saldo ändras
+   aldrig: ett nytt läggs till, och det förra står kvar under. Personen får en
+   notis. I läsläge svarar rutten 423 och ingenting ändras.
+
+   Står efter ndae.js i modullistan.
+   ===================================================================== */
+
+const ndSal = () => ND && ND.franvaro && ND.franvaro.saldon ? ND.franvaro.saldon : null;
+const NDSALTYP = {vacation:'Semesterdagar', saved_vacation:'Sparade dagar'};
+const ndSalAr = ar => ar ? `${ar}/${String((ar + 1) % 100).padStart(2, '0')}` : '';
+const ndSalDag = d => `${frKort(d)}${d.slice(0, 4) !== aeT().slice(0, 4) ? ' ' + d.slice(0, 4) : ''}`;
+const ndSalTal = d => String(d).replace('.', ',');
+
+function ndSalKort(p){
+  const rader = ndSal()[p.id] || [], U = S.ndSalUtk && S.ndSalUtk.pid === p.id ? S.ndSalUtk : null;
+  const senast = typ => rader.find(r => r.typ === typ);
+  const v = senast('vacation'), s = senast('saved_vacation'), tidigare = rader.filter(r => r !== v && r !== s);
+  const rad = (r, l) => `<div><dt>${l}</dt><dd><span class="num">${ndSalTal(r.d)}</span> dagar${r.ar ? ` från ${ndSalAr(r.ar)}` : ''}<small class="muted"> · gällde ${esc(ndSalDag(r.asof))} · ${esc(r.av)}</small></dd></div>`;
+  const vy = `<section class="card" aria-label="Semester"><div class="chead"><h2>Semester</h2>${!U && p.status !== 'offboarded' ? `<span class="end"><button class="tlink" data-ndsalny="${p.id}">Mata in saldo</button></span>` : ''}</div>
+    ${v || s ? `<dl class="dl aedl">${v ? rad(v, 'Semesterdagar') : ''}${s ? rad(s, 'Sparade dagar') : ''}</dl>` : `<p class="muted">Inget saldo inmatat. Siffran kommer från lönesystemet; Nav räknar inte semesterrätt.</p>`}
+    ${tidigare.length ? `<p class="aehint">Tidigare: ${tidigare.slice(0, 4).map(r => `${ndSalTal(r.d)} ${r.typ === 'saved_vacation' ? 'sparade' : 'dagar'} (gällde ${esc(ndSalDag(r.asof))})`).join(', ')}${tidigare.length > 4 ? ` och ${tidigare.length - 4} till` : ''}.</p>` : ''}`;
+  if (!U) return vy + '</section>';
+  const f = U.fel || {};
+  const fel = k => f[k] ? `<p class="aefel" role="alert">${esc(f[k])}</p>` : '';
+  return vy + `
+    <label class="aelab" for="ndSalTyp">Vad</label><select id="ndSalTyp" class="uin" data-ndsal="typ">${Object.entries(NDSALTYP).map(([k, l]) => `<option value="${k}" ${U.typ === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+    <label class="aelab" for="ndSalDagar">Dagar kvar</label><input id="ndSalDagar" class="uin" inputmode="decimal" data-ndsal="dagar" value="${esc(U.dagar)}" aria-invalid="${!!f.dagar}" autocomplete="off" placeholder="25">${fel('dagar')}
+    <label class="aelab" for="ndSalAsof">Gällde</label><input id="ndSalAsof" class="uin" type="date" max="${kIdag()}" data-ndsal="asof" value="${esc(U.asof)}" aria-invalid="${!!f.asof}">${fel('asof')}
+    ${U.typ === 'saved_vacation' ? `<label class="aelab" for="ndSalAr">Intjänade semesteråret</label><input id="ndSalAr" class="uin" inputmode="numeric" data-ndsal="ar" value="${esc(U.ar)}" aria-invalid="${!!f.ar}" placeholder="2025 för 2025/26" autocomplete="off">${fel('ar')}<p class="aehint">Med året går det att säga när dagarna måste tas ut. Utan det ges ingen varning.</p>` : ''}
+    <p class="aehint">Siffran från lönesystemet, den dag den gällde. ${esc(p.namn.split(' ')[0])} får en notis. Det förra saldot står kvar under.</p>
+    <div class="aek"><button class="btn btn-s btn-sm" data-ndsalx>Avbryt</button><button class="btn btn-p btn-sm" data-ndsalok="${p.id}">Spara</button></div></section>`;
+}
+
+const _ndsalAnstKort = aeAnstKort;
+aeAnstKort = function(p){
+  const h = _ndsalAnstKort(p);
+  return ndSal() && S.aeAndra !== p.id ? h + ndSalKort(p) : h;
+};
+
+function ndSalFel(U){
+  const f = {}, d = String(U.dagar).trim().replace(',', '.');
+  if (!/^\d{1,3}(\.\d)?$/.test(d)) f.dagar = 'Skriv antal dagar, till exempel 25 eller 12,5.';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(U.asof)) f.asof = 'Välj dagen siffran gällde.';
+  else if (U.asof > kIdag()) f.asof = 'Saldot kan inte gälla en dag som inte har kommit.';
+  if (U.typ === 'saved_vacation' && String(U.ar).trim() && !/^20\d\d$/.test(String(U.ar).trim())) f.ar = 'Skriv året semesteråret började, till exempel 2025.';
+  return f;
+}
+
+document.addEventListener('click', e => {
+  if (!ndSal() || S.view !== 'anstallda') return;
+  const t = e.target.closest && e.target.closest('button'); if (!t || !t.dataset) return;
+  const d = t.dataset, stopp = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+  if (d.ndsalny){ stopp(); S.ndSalUtk = {pid:d.ndsalny, typ:'vacation', dagar:'', asof:kIdag(), ar:'', fel:{}}; render(); document.getElementById('ndSalDagar')?.focus(); return; }
+  if (d.ndsalx !== undefined){ stopp(); S.ndSalUtk = null; render(); return; }
+  if (d.ndsalok){ stopp(); const U = S.ndSalUtk; if (!U || U.pid !== d.ndsalok) return;
+    U.fel = ndSalFel(U); if (Object.keys(U.fel).length){ render(); document.querySelector('#ndSalTyp ~ [aria-invalid="true"]')?.focus(); return; }
+    if (U.sparar) return; U.sparar = true; render();
+    ndFrPost('saldo', {pid:U.pid, typ:U.typ, dagar:String(U.dagar).trim().replace(',', '.'), asof:U.asof, ar:String(U.ar).trim()}, {ladda:false}).then(s => {
+      U.sparar = false; if (!s.ok) return;
+      ndAeMinns({pers:U.pid}); setTimeout(() => location.reload(), 700);
+    });
+  }
+}, true);
+
+document.addEventListener('input', e => {
+  const k = e.target.dataset && e.target.dataset.ndsal; if (!k || !S.ndSalUtk) return;
+  if (k === 'typ') return;
+  S.ndSalUtk[k] = e.target.value; if (S.ndSalUtk.fel) delete S.ndSalUtk.fel[k];
+});
+document.addEventListener('change', e => {
+  const k = e.target.dataset && e.target.dataset.ndsal; if (k !== 'typ' || !S.ndSalUtk) return;
+  S.ndSalUtk.typ = e.target.value; render();
+});
+
+/* =====================================================================
    NAV 2.0 I RIKTIGT LÄGE: REKRYTERING (prefix nd), v47
 
    Navets kandidater ur ND.rekrytering (src/lib/nav2/rekrytering.ts och

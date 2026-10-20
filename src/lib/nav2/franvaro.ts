@@ -55,6 +55,12 @@ export type NdFranvaro = {
   /** Andra som är borta per dag (godkänd ledighet), bara dagar med minst en. */
   bemanning: Record<string, number>;
   saldo: { vacation: { d: number; asof: string } | null; saved: { d: number; asof: string } | null };
+  /**
+   * Saldona per person, nyast först, för den som får mata in dem (repots
+   * `mataInSaldo`: säljchef, VD och administratör). Null för alla andra.
+   * Läst med service role: läsrätten i 0019 saknar administratören.
+   */
+  saldon: Record<string, NdSaldorad[]> | null;
   poster: NdFranvaroPost[];
   /** Som på /franvaro/sjuk: en rad per plats i ordningen, med numret om det finns. */
   ring: { vem: string; roll: string; antal: number; tel: string | null }[];
@@ -76,6 +82,9 @@ export type NdFranvaro = {
     poster: NdFranvaroPost[];
   };
 };
+
+/** En inmatning i `absence_balance`. Raderna läggs till och ändras aldrig; den senaste per typ gäller. */
+export type NdSaldorad = { typ: string; d: number; asof: string; ar: number | null; av: string; nar: string };
 
 export async function byggFranvaro(supabase: SupabaseClient, user: CurrentUser): Promise<NdFranvaro> {
   const mig = user.employee!.id;
@@ -188,6 +197,7 @@ export async function byggFranvaro(supabase: SupabaseClient, user: CurrentUser):
     tak: mittTak ? mittTak.max_absent : null,
     bemanning,
     saldo: { vacation: saldo("vacation"), saved: saldo("saved_vacation") },
+    saldon: null,
     poster,
     ring,
     frister: oppen && rv ? sjukfrister(oppen.first_sick_day, rv.regler) : [],
@@ -196,6 +206,22 @@ export async function byggFranvaro(supabase: SupabaseClient, user: CurrentUser):
     forslag: {},
     skriv: SKRIVLAGE.franvaro,
   };
+
+  if (hasRole(user, "sales_manager", "ceo", "admin")) {
+    const { data: inmatat } = await db
+      .from("absence_balance")
+      .select("employee_id, type_id, days, as_of, earned_year, entered_by, entered_at")
+      .order("as_of", { ascending: false })
+      .order("entered_at", { ascending: false })
+      .limit(1000);
+    const rader = (inmatat ?? []) as { employee_id: string; type_id: string; days: number | string; as_of: string; earned_year: number | null; entered_by: string; entered_at: string }[];
+    const avIds = [...new Set(rader.map((r) => r.entered_by))];
+    const { data: av } = avIds.length ? await db.from("employee").select("id, first_name, last_name").in("id", avIds) : { data: [] };
+    const avNamn = new Map(((av ?? []) as { id: string; first_name: string; last_name: string }[]).map((e) => [e.id, fullName(e)]));
+    const saldon: Record<string, NdSaldorad[]> = {};
+    for (const r of rader) (saldon[r.employee_id] ??= []).push({ typ: r.type_id, d: Number(r.days), asof: r.as_of, ar: r.earned_year, av: avNamn.get(r.entered_by) ?? "Okänd", nar: svenskKlocka(r.entered_at) });
+    ut.saldon = saldon;
+  }
 
   // 0093: rundan för nästa sommar (laget först, annars den för alla) och förslagen på mina ansökningar.
   // Nästa sommar: från september är det nästa år.

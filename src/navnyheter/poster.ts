@@ -66,7 +66,8 @@ behörigheter som här: du ser bara det du får se.
   ångra en stund efteråt, och en överenskommelse som avbryts får ett skäl.
 - **Anställda**, för säljchef, VD och administratörer: vad som kräver dig och
   vad andra inte gjort än, lagens frister, registret med oanvända konton,
-  checklistan per person med datum från startdagen, och checklistorna och
+  checklistan per person med datum från startdagen, semestersaldot som
+  personen ser i Frånvaro, och checklistorna och
   utskicken som gäller nästa gång någon börjar eller slutar. Den som ska
   sätta upp något får ett mejl med en Klart-knapp och en påminnelse i navet.
   Avslutet frågar varför anställningen tar slut, och en kandidat som anställs
