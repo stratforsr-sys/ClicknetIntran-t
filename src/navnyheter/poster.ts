@@ -114,13 +114,17 @@ behörigheter som här: du ser bara det du får se.
   inlägget som det blir, väljer vem det gäller, fäster det överst och kan
   schemalägga det till nästa morgon eller måndag.
 - **Sök, gör eller fråga Nav** (⌘K): sökningen hittar dina uppgifter,
-  rutiner (även i texten och bilagorna), kurser, kommande möten, order och
-  ärenden, och för den som ser dem också personer, kandidater, överenskommelser
-  och avtal, och öppnar dem direkt. Fråga Nav svarar på ett femtiotal frågor,
+  rutiner (även i texten och bilagorna), kurser, kommande möten, order,
+  ärenden och nyheter, och de kollegor du får se i personalregistret, och för
+  den som ser dem också kandidater, överenskommelser och avtal, och öppnar dem
+  direkt. Fråga Nav svarar på ett femtiotal frågor,
   som "Vad har jag i dag?", "Hur ligger jag mot målet?" och "Vem ringer jag när
   jag blir sjuk?", räknade ur Nav när du frågar och med källan på varje rad.
   Skriv ? för att se alla. Fritt skrivna frågor sparas utan namn, och säljchef,
   VD och admin ser dem samlade i ämnen och kan göra en rutin av dem.
+- **Inställningar → Säkerhet**: byt lösenord direkt i nya Nav, med kraven
+  som bockas av medan du skriver. Kräver din roll en kod vid inloggning
+  bekräftar du enheten med koden från mejlet där, och kan glömma den igen.
 - **Leads**: förfrågningarna från hemsidan. Säljchef, VD och teamledare ger
   varje lead till en säljare, med förslag på den som är på plats och har minst
   att göra, fördelar jämnt eller låter Nav fördela automatiskt, och påminner

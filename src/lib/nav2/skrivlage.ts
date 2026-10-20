@@ -32,6 +32,8 @@ export const SKRIVLAGE = {
   // Beställarens svar 2026-10-20 ("det som är bäst"), efter att 0135 körts: fördela, efter samtalet, möten med inbjudan, Ångra.
   leads: true,
   nyheter: false,
+  // Gamla Nav P: lösenordsbytet och Kod vid inloggning i Inställningar → Säkerhet.
+  sakerhet: false,
 } as const;
 
 export type Skrivvy = keyof typeof SKRIVLAGE;

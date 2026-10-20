@@ -30717,6 +30717,45 @@ palClick = function(e){
   return _palNdClick2(e);
 };
 
+/* ---------- Gamla Nav P (2026-10-20): personalen och nyheterna, som /sok ----------
+   Beställarens svar 15: "sök där också så klart rollbaserat". Båda söks i den data
+   servern redan läst med den inloggades token, så RLS avgör som på /sok:
+   - Personalen: den som ser Anställda hittar personerna där (ovan). Andra hittar de
+     rader personalregistret ger dem: säljaren sig själv (Inställningar), teamledaren
+     sitt team (personens sida i Coachning). Har slutat visas inte, som på /sok.
+   - Nyheterna: de publicerade inlägg man är mottagare av (och egna schemalagda),
+     på rubriken och texten. Varje ord ska finnas med.
+   /sok?q=… öppnar paletten med frågan (ndGa i ndskal.js). */
+function ndPalPersonal(nq){
+  if (ND.anstallda && ND.anstallda.far && ndKopplad('anstallda')) return [];
+  const har = s => norm(s || '').includes(nq);
+  const lag = S.role === 'chef' && ndKopplad('coachning') && typeof cnLaget === 'function' ? (cnSt(), cnLaget()) : [];
+  return ND.personer.filter(p => p.status !== 'offboarded' && (har(p.namn) || har(p.epost)))
+    .map(p => [p, p.id === ND.jag.id ? () => prfGa('konto') : lag.includes(p.namn) ? () => cnGa('/coachning/person/' + encodeURIComponent(p.namn)) : null])
+    .filter(([, run]) => run).slice(0, 3)
+    .map(([p, run]) => ({i:'pers', l:p.namn, p:[p.roller.map(r => AEROLL[r] || r)[0], p.epost].filter(Boolean).join(' · '), run}));
+}
+function ndPalNyheter(nq){
+  if (!ndKopplad('nyheter') || !ND.nyheter) return [];
+  nhSt();
+  const ord = nq.split(/\s+/).filter(Boolean);
+  return S.nh.poster.filter(nhForMig).filter(p => { const t = norm(p.rubrik + ' ' + p.text); return ord.every(o => t.includes(o)); })
+    .sort((a, b) => b.at.localeCompare(a.at)).slice(0, 3)
+    .map(p => ({i:'nyh', l:p.rubrik, p:'Nyhet', run:() => nhGa(p.id)}));
+}
+function ndPalSokSida(q){
+  openPal();
+  const inp = document.getElementById('palIn');
+  if (inp && q){ inp.value = q; inp.dispatchEvent(new Event('input')); }
+}
+const _palNdInnehall3 = palInnehall;
+palInnehall = function(nq){
+  const ut = _palNdInnehall3(nq); if (!ND || !nq) return ut;
+  const i = ut.findIndex(x => x.p === 'Inställningar');
+  ut.splice(i < 0 ? ut.length : i, 0, ...ndPalPersonal(nq), ...ndPalNyheter(nq));
+  return ut;
+};
+
 /* =====================================================================
    NAV 2.0 I RIKTIGT LÄGE: PROFILEN (prefix nd), v47
 
@@ -30820,6 +30859,111 @@ prfKlick = function(t, e){
     return true;
   }
   return _ndprfKlick(t, e);
+};
+
+/* =====================================================================
+   SÄKERHETEN: lösenordet och Kod vid inloggning (Gamla Nav P, 2026-10-20)
+
+   Utkastets kort i Inställningar → Säkerhet, med navets regler: bytet och
+   koden går till /nav2/sakerhet (src/app/nav2/sakerhet/route.ts), som anropar
+   repots bytLosenord, skickaKod, verifieraKod och glomEnheten. Läget kommer ur
+   ND.sakerhet (src/lib/nav2/sakerhet.ts): om kontot kräver kod, om den här
+   enheten är bekräftad och till när, och klockslaget för ett byte i dag.
+   Utkastets fältkontroller körs först; serverns svar om det nuvarande eller
+   det nya lösenordet står under fältet, som utkastets egna fel.
+   ===================================================================== */
+
+const ndSak = () => ND && ND.sakerhet ? ND.sakerhet : null;
+
+async function ndSakPost(handling, data = {}){
+  try {
+    const r = await fetch('/nav2/sakerhet', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
+    return await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+  } catch(_){ return {fel:'Nav svarade inte.'}; }
+}
+
+/* ---------- Läget ur navet ---------- */
+const _ndsakSt = prfSt;
+prfSt = function(){
+  const forst = !S.prfInit; _ndsakSt();
+  const d = ndSak(); if (!forst || !d) return;
+  const enhet = !!(d.kodKravs && d.enhet);
+  ['chef', 'saljare'].forEach(r => { S.prfS2[r] = {enhet, till:enhet ? d.enhet.till : null, flode:null}; if (d.bytt) S.prfLBytt[r] = d.bytt; else delete S.prfLBytt[r]; });
+};
+
+/* ---------- Korten: utkastets, med navets krav ---------- */
+// Utkastets prfMfa läser rollerna mot AEMFA. Under ritningen står där det navet säger om kontot.
+const _ndsakSek = prfSakerhetSek;
+prfSakerhetSek = function(prim){
+  const d = ndSak(); if (!d) return _ndsakSek(prim);
+  const p = prfP(), spar = AEMFA.splice(0);
+  if (d.kodKravs && p) AEMFA.push(...p.roller);
+  try { return _ndSakerhetSek(prim).replace(/ I utkastet är koden [\d ]+\./, ''); }
+  finally { AEMFA.splice(0, AEMFA.length, ...spar); }
+};
+
+/* ---------- Lösenordet ---------- */
+// Serverns fel om ett fält gäller så länge fältet har samma värde.
+const _ndsakLosenFel = prfLosenFel;
+prfLosenFel = function(L){
+  const f = _ndsakLosenFel(L), s = L && L.srv;
+  if (s && L[s.f] === s.v && !f[s.f]) f[s.f] = s.fel;
+  return f;
+};
+const _ndsakLosenSpara = prfLosenSpara;
+prfLosenSpara = function(){
+  const L = S.prfL;
+  if (!ndSak() || !L || Object.keys(prfLosenFel(L)).length) return _ndsakLosenSpara();
+  if (S.ndSakVantar) return false; S.ndSakVantar = true;
+  ndSakPost('losen', {nu:L.nu, ny:L.ny, upp:L.upp}).then(s => {
+    S.ndSakVantar = false;
+    if (S.prfL !== L) return;
+    if (s.fel){
+      const f = /nuvarande/i.test(s.fel) ? 'nu' : /nya|nekade|lösenordet (måste|är för)/i.test(s.fel) ? 'ny' : null;
+      if (!f || s.laslage){ toast(s.fel); return; }
+      L.srv = {f, v:L[f], fel:s.fel}; L.forsok = true; S.prfFokus = `[data-prfl="${f}"]`; render(); return;
+    }
+    _ndsakLosenSpara();
+  });
+  return true;
+};
+
+/* ---------- Kod vid inloggning ---------- */
+const _ndsakKodSkicka = prfKodSkicka;
+prfKodSkicka = function(){
+  if (!ndSak()) return _ndsakKodSkicka();
+  const s = prfS2(), f = s.flode || {};
+  if (prfKvar(f)) return _ndsakKodSkicka();
+  if (S.ndSakVantar) return; S.ndSakVantar = true;
+  ndSakPost('kod-skicka').then(r => {
+    S.ndSakVantar = false;
+    if (r.fel){ if (f.skickadMs){ f.fel = r.fel; render(); } else toast(r.fel); return; }
+    s.flode = {skickadMs:Date.now(), kod:'', fel:'', ok:r.ok};
+    S.prfFokus = '[data-prfkod]'; render();
+  });
+};
+const _ndsakKodBekrafta = prfKodBekrafta;
+prfKodBekrafta = function(){
+  const s = prfS2(), f = s && s.flode;
+  if (!ndSak() || !f || !(f.kod || '').replace(/\s/g, '')) return _ndsakKodBekrafta();
+  if (S.ndSakVantar) return; S.ndSakVantar = true;
+  ndSakPost('kod-bekrafta', {kod:f.kod.replace(/\s/g, '')}).then(r => {
+    S.ndSakVantar = false;
+    if (s.flode !== f) return;
+    if (r.fel){ if (r.laslage) toast(r.fel); else f.fel = r.fel; S.prfFokus = '[data-prfkod]'; render(); return; }
+    s.enhet = true; s.till = r.till; s.flode = null;
+    prfStatus('s2', 'Enheten är bekräftad.', null); S.prfFokus = '[data-prfglom]'; render();
+  });
+};
+
+const _ndsakKlick = prfKlick;
+prfKlick = function(t, e){
+  if (ndSak() && t.dataset.prfglom !== undefined){
+    if (S.ndSakVantar) return true; S.ndSakVantar = true;
+    ndSakPost('glom').then(r => { S.ndSakVantar = false; if (r.fel){ toast(r.fel); return; } _ndsakKlick(t, e); });
+    return true;
+  }
+  return _ndsakKlick(t, e);
 };
 
 /* =====================================================================
@@ -31250,7 +31394,7 @@ if (ndLd()) NDKOPPLAD.add('leads');
 // Adresser som alltid hör till nuvarande Nav, även när vyn de ligger under är kopplad.
 const SKALNAV = ['/tid/schema', '/tid/sparrar', '/sparrar', '/schema', '/admin', '/lonekostnad', '/satser', '/avtal/mallar', '/avtal/nytt', '/avtal/bifoga',
   '/uppgifter/projekt', '/uppgifter/mallar', '/uppgifter/genomgang', '/utbildning/systemguider', '/utbildning/oversikt', '/utbildning/prov', '/utbildning/rollspel', '/utbildning/ny',
-  '/personal/team', '/personal/ny', '/sok', '/logga-in', '/byt-losenord', '/uppstart', '/design', '/coachning/mallar', '/kv/regler', '/provision/regler', '/provision/underlag',
+  '/personal/team', '/personal/ny', '/logga-in', '/byt-losenord', '/uppstart', '/design', '/coachning/mallar', '/kv/regler', '/provision/regler', '/provision/underlag',
   '/arenden/statistik', '/kalender/delning', '/kalender/overlamning', '/rutiner/ny', '/franvaro/regler', '/regler', '/filer', '/auth'];
 const skalNav = h => SKALNAV.some(p => h === p || h.startsWith(p + '/') || h.startsWith(p + '?'));
 function skalVy(h){
@@ -31265,6 +31409,8 @@ ndGa = function(href){
   if (!ND) return _skalNdGa(href);
   const h = String(href || '/'), bas = h.split(/[?#]/)[0], d = bas.split('/').filter(Boolean), vy = skalVy(bas), sub = d[1] || null;
   if (bas.startsWith('/installningar') || bas.startsWith('/profil')) return prfGaSrc(h);
+  // /sok?q=… (nuvarande Navs sökning) öppnar paletten med frågan ifylld (Gamla Nav P).
+  if (bas === '/sok') return ndPalSokSida(new URLSearchParams(h.split('?')[1] || '').get('q') || '');
   const nav = () => { location.assign(h); };
   // Händelseloggen är bara superadmins (beställaren 2026-10-20): alla andra får ett besked, inte nuvarande Navs /logg.
   if (vy === 'logg' && (S.role !== 'chef' || (ND && !ND.logg))){ toast('Händelseloggen visas bara för superadmin.'); return; }

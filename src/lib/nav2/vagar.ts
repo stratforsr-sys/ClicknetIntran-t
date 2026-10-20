@@ -40,6 +40,7 @@ const SJALV: RegExp[] = [
   /^\/nyheter(\/[^/]+)?$/,
   /^\/nyheter\/nav\/[^/]+$/,
   /^\/profil(\/[^/]+)?$/,
+  /^\/sok$/,
 ];
 
 /** Adressen i Nav 2.0 for en gammal sida, eller null om sidan stannar i nuvarande Nav. */

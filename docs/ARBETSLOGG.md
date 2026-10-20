@@ -5,6 +5,42 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-20 · Nav 2.0, Gamla Nav P: lösenordet, Kod vid inloggning och palettens sökning i nyheter och personal (ingen migration)
+
+Gamla Navs sista funktioner, punkt P (beställarens svar 15 och inventeringens
+avsnitt 7). `/profil/sakerhet` och `/sok` behövs inte längre.
+
+- **Säkerheten:** utkastets kort i Inställningar → Säkerhet (lösenordsformuläret
+  och Kod vid inloggning) är kopplade i stället för länkarna till nuvarande Nav.
+  Läsningen `src/lib/nav2/sakerhet.ts` (`ND.sakerhet`): om kontot kräver kod
+  (repots `kraverMfa`, av för alla så länge MFA_REQUIRED_ROLES är tom), om
+  enheten är bekräftad (kvittot i `nav_steg2`, med dagen det går ut) och
+  klockslaget för ett byte i dag (audit_log, egen rad, service role).
+  Rutten `/nav2/sakerhet` (POST bakom `SKRIVLAGE.sakerhet = false`, 423 i
+  läsläge) anropar repots `bytLosenord`, `skickaKod`, `verifieraKod` och
+  `glomEnheten` oförändrade, med deras krav, fel och händelselogg. Koden
+  skickas och bekräftas bara när kontot kräver den. Serverns fel om det
+  nuvarande eller det nya lösenordet står under fältet. `/byt-losenord`
+  (tvånget vid första inloggningen) stannar i inloggningen.
+- **Paletten:** sökningen hittar nyheterna (de inlägg man är mottagare av, på
+  rubrik och text) och personalen som `/sok`: den som ser Anställda som förut,
+  andra de rader personalregistret ger dem (säljaren sig själv, som öppnar
+  Inställningar; teamledaren sitt team, som öppnar personen i Coachning). Båda
+  söks i den data servern redan läst med den inloggades token.
+- **Vägen:** `/sok?q=…` öppnar paletten med frågan (`ndGa` och `SJALV`), och
+  `/sok` är borttagen ur `SKALNAV`. `/profil/sakerhet` öppnade redan
+  Inställningar → Säkerhet.
+- **Provat:** läsningen lokalt som Zen och Fredrik med giltigt, förfalskat och
+  inget kvitto; `tsc` över repot med de låsta paketen (ett inlagt fel
+  fångades); `tests/notiser`, `notiser-tackning`, `handelselogg` och
+  `navnyheter` gröna; kolumnkontrollen; klienten i headless Chrome på
+  previewens data för Zen med fetch stubbad (fel under fältet, läsläget, bytt,
+  Glöm, skicka, fel och rätt kod) och som säljare och teamledare (paletten).
+
+## 2026-10-20 · Nav 2.0: gamla Navs sista sidor inventerade (session 6, ingen kod)
+
+**Nav 2.0: gamla Navs sista sidor inventerade (session 6, ingen kod).** Varje sida, rutt och server action under `src/app/(app)` är jämförd med Nav 2.0 och utkastet. Av 86 sidor öppnas 33 redan i Nav 2.0. Av de 53 andra finns 16 i Nav 2.0 (det saknas bara en väg dit), 8 kopplas av pågående sessioner, 7 finns i utkastet i annan form, 16 saknas helt eller till en del och 6 behövs inte längre. Gamla Nav kan inte tas bort helt förrän K&V är kopplad. Sex notislänkar landar i gamla Nav fast funktionen finns i Nav 2.0 (`ndGa`/`SJALV`). Satser och löner och lösenordsbytet har formulär i utkastet men saknar backend. 16 frågor till beställaren. Inventeringen: `~/nav2-utkast/delar/gamla-nav/inventering.md`.
+
 ## 2026-10-20 · Nav 2.0, fart: policyerna i `(select …)`-form (0155, skriven och torrkörd, inte körd)
 
 Fortsättning på "Fart: kedjorna" nedan, efter beställarens ja till omskrivningen.
