@@ -48,7 +48,12 @@ behörigheter som här: du ser bara det du får se.
 - **Utbildning**, med navets kurser: dagens repetition ur prov du klarat,
   lektioner steg för steg med din regelbok och ditt mål, prov som rättas när
   du lämnar in, rollspel som du lämnar in och bedömer dig själv i, föreläsningar
-  med anmälan och uppföljning, och certifikat som förnyas med fem frågor. Den
+  med anmälan och uppföljning, och certifikat som förnyas med fem frågor. Välj
+  när du vill bli påmind om dagens repetition, så kommer en notis i mobilen och
+  i klockan, och en månad innan ett certifikat går ut får du ett mejl. Varje
+  fråga räknas till en färdighet på din kunskapskarta, en hel vecka med
+  repetition ger en frysdag för en dag du missar, och teamet har ett
+  gemensamt veckomål som räknas själv. Den
   som leder ett team bedömer rollspelen, ser vem som har kurser kvar och lägger
   frågor i teamets repetition.
 - **Rekrytering**, för den som rekryterar: Att göra med svarslöftet,

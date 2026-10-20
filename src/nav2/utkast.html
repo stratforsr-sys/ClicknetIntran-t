@@ -27392,6 +27392,8 @@ if (ndRut()){ ndRutStart(); NDKOPPLAD.add('rutiner'); }
    ===================================================================== */
 
 const ndUtb = () => ND && ND.utbildning;
+// Färdigheten heter Regler, utan GDPR (beställaren 2026-10-20, U1).
+FARDIG.forEach(f => { if (f[0] === 'regler') f[1] = 'Regler'; });
 // Den som bedömer och håller 1:1 heter Johanna i utkastet. I navet är det den egna chefen.
 function ndUtbChef(){ return ND ? ((ND.jag && ND.jag.chefFornamn) || 'din chef') : 'Johanna'; }
 const ndUtbDagar = d => d ? Math.round((Date.parse(d + 'T12:00:00Z') - Date.parse(ND.idag + 'T12:00:00Z')) / 864e5) : null;
@@ -27455,13 +27457,32 @@ function ndUtbStart(){
   const self = {};
   ROLLSPEL.forEach(r => { self[r.id] = {}; r.kriterier.forEach(([l, , id]) => { if (r.sjalv[id]) self[r.id][l] = r.sjalv[id]; }); });
   Object.assign(S, {
-    repStreak:u.streak, repBast:u.bast, repFrys:0, repIdag:u.repIdag, repTid:u.repTid, uDismiss:new Set(u.dolda), uCertPam:u.certPam,
+    repStreak:u.streak, repBast:u.bast, repFrys:u.frys || 0, repIdag:u.repIdag, repTid:u.repTid, uDismiss:new Set(u.dolda), uCertPam:u.certPam,
     regelbok:u.regelbok.map(r => [r[0], r[1]]), uBetyg:betygKurs, uSelf:self,
     uNotes:Object.fromEntries(Object.entries(noter).filter(([k]) => /^(rp-|fl-)/.test(k))),
     uAnmald:new Set(FORELASNINGAR.filter(f => f.anmald).map(f => f.id)), uFragaSkickad:new Set(FORELASNINGAR.filter(f => f.fragaSkickad).map(f => f.id)),
     uDelat:new Set(FORELASNINGAR.filter(f => f.delat).map(f => f.id)), uPlan:{}, uTeamRep:new Set(REPETITION.filter(q => q.team).map(q => q.id)),
     uBedom:null, uBedomPoang:{}, rep:null
   });
+}
+
+/* ---------- Påminnelsen i mobilen (0098) ----------
+   Samma Web Push som startsidans kvällsnotis (ndhem.js, /nav2/hem push): enheten
+   slås på när man väljer klockslag under "Påminn mig". Pushen kommer tom, och
+   enhetens service worker hämtar texten från /nav2/utbildning?push=1. */
+async function ndUtbPush(){
+  const p = ND.hem && ND.hem.push;
+  if (!p || !('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window) || Notification.permission === 'denied') return false;
+  try {
+    if (Notification.permission !== 'granted' && await Notification.requestPermission() !== 'granted') return false;
+    const reg = await navigator.serviceWorker.register('/nav2/sw.js', {scope:'/nav2/'});
+    if (!reg.active){ const w = reg.installing || reg.waiting; if (w) await new Promise(r => { if (w.state === 'activated') r(); w.addEventListener('statechange', () => { if (w.state === 'activated') r(); }); }); }
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub){ const t = p.nyckel, b = atob((t + '='.repeat((4 - t.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/')); sub = await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:Uint8Array.from(b, c => c.charCodeAt(0))}); }
+    const r = await fetch('/nav2/hem', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling:'push', sub:sub.toJSON()})});
+    const s = await r.json().catch(() => ({fel:true}));
+    return !s.fel;
+  } catch(_){ return false; }
 }
 
 /* ---------- Skrivningar: /nav2/utbildning ---------- */
@@ -27675,7 +27696,7 @@ uSidokolumn = function(){
       ${radar()}<p class="muted ukf">${FARDIG.some(([s]) => ndUtbVal(s) !== null) ? 'Streckat är förra veckan. Det du inte repeterar sjunker långsamt.' : 'Inga svar än. Kartan fylls när du svarar i repetitionen, på frågor ur kurser som har färdigheter satta.'}</p>
       ${FARDIG.map(([s, n]) => { const [v, sen] = sk[s]; return `<div class="ukr"><span><b>${n}</b>${trend(s)}<span class="muted">${v !== null && v < 60 ? 'Behöver repeteras · ' : ''}${esc(sen)}</span></span><span class="ukrr"><span class="kgrad"><span><i style="width:${v || 0}%;${v !== null && v < 60 ? 'background:var(--warn)' : ''}"></i></span><span class="num">${ndUtbStreck(v)}</span></span><button class="tlink" data-urepskill="${s}">Repetera</button></span></div>`; }).join('')}
       <details class="uhur"><summary>Hur räknas det?</summary><p>Andelen rätt svar i repetitionen de senaste 60 dagarna, per färdighet. Frågorna kommer ur proven i kurserna, och varje kurs säger vilka färdigheter den tränar. Det du inte repeterar faller ur fönstret, precis som minnet glömmer.</p></details></section>
-    <section class="card">${note(118)}<div class="chead"><h2>Repetition i rad</h2></div><div class="urs"><b class="num">${S.repStreak}</b><span>${S.repStreak === 1 ? 'vardag' : 'vardagar'} · bästa ${S.repBast}</span></div>
+    <section class="card">${note(118)}<div class="chead"><h2>Repetition i rad</h2></div><div class="urs"><b class="num">${S.repStreak}</b><span>${S.repStreak === 1 ? 'vardag' : 'vardagar'} · bästa ${S.repBast} · ${S.repFrys} ${S.repFrys === 1 ? 'frysdag sparad' : 'frysdagar sparade'}</span></div>
       <div class="uheat" aria-label="Fyra veckor bakåt">${HEAT.map((v, i) => `<i class="${(i === idagIdx && S.repIdag) || v ? 'on' : ''} ${i % 7 >= 5 ? 'helg' : ''}"></i>`).join('')}</div>
       <div class="usak" style="margin-top:10px"><span>Påminn mig</span>${['07:45','08:15','12:30'].map(t => `<button data-uremtid="${t}" aria-pressed="${S.repTid === t}">${t}</button>`).join('')}</div></section>
     <section class="card">${note(119)}<div class="chead"><h2>Teamets vecka</h2></div>${TEAMMAL.mal ? `<div class="goalnums"><span>Repeterade frågor</span><span><b>${gjort}</b> av ${TEAMMAL.mal}</span></div><div class="goalbar" style="margin-top:6px"><div class="fill" style="width:${Math.min(100, gjort / TEAMMAL.mal * 100)}%"></div><div class="pace" style="left:${Math.min(5, veckodag) / 5 * 100}%"><span>takt</span></div></div>` : `<div class="goalnums"><span>Repeterade frågor</span><span><b>${gjort}</b> i veckan</span></div>`}
@@ -27999,7 +28020,8 @@ utbClick = function(t, e){
     return true; }
   if (d.udismiss){ const id = d.udismiss; ndUtbPost('pref', {key:'utb.dolda', value:id}, {ladda:false, tyst:true}).then(s => { if (s.fel){ toast(s.fel); return; } S.uDismiss.add(id); render();
     toast('Den visas inte här på en vecka.', () => ndUtbPost('pref', {key:'utb.dolda', value:id, bort:true}, {ladda:false, tyst:true}).then(() => { S.uDismiss.delete(id); render(); })); }); return true; }
-  if (d.uremtid){ const tid = d.uremtid; ndUtbPost('pref', {key:'utb.reptid', value:tid}, {ladda:false, tyst:true}).then(s => { if (s.fel){ toast(s.fel); return; } S.repTid = tid; render(); toast(`Dagens repetition kommer klockan ${tid}.`); }); return true; }
+  if (d.uremtid){ const tid = d.uremtid, push = ndUtb().skriv ? ndUtbPush() : Promise.resolve(false);
+    ndUtbPost('pref', {key:'utb.reptid', value:tid}, {ladda:false, tyst:true}).then(async s => { if (s.fel){ toast(s.fel); return; } S.repTid = tid; render(); toast(`Dagens repetition kommer klockan ${tid}.${await push ? ' Påminnelsen kommer till den här enheten och står i klockan.' : ' Påminnelsen står i klockan.'}`); }); return true; }
   if (d.nduonska !== undefined){ ndUtbPost('onska', {q:S.uQ}, {ladda:false}); return true; }
   if (d.ndunykurs !== undefined){ toastActs('Kursbyggaren behöver en AI-tjänst som inte är kopplad till Nav än. En kurs går att skriva för hand i nuvarande Nav.', [['Öppna', () => { location.href = '/utbildning/ny'; }]], 7000); return true; }
   // Rollspelen.

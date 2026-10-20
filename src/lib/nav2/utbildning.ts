@@ -3,9 +3,11 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fullName, hasRole, type CurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { svensktDatum, svenskKlocka } from "@/lib/klocka";
+import { svenskDygnsstart, svensktDatum, svenskKlocka } from "@/lib/klocka";
+import { rodaDagar } from "@/lib/saljtakt";
 import { forfallodag } from "@/lib/utbildning";
-import { minuterFor, modulTillSteg, type NdFraga, type NdSteg } from "./utbildningforma";
+import { minuterFor, modulTillSteg, svit, type NdFraga, type NdSteg } from "./utbildningforma";
+import { veckomal } from "./utbildning-paminnelser";
 import { SKRIVLAGE } from "./skrivlage";
 
 /**
@@ -19,6 +21,11 @@ import { SKRIVLAGE } from "./skrivlage";
  * repetition i rad, nästa gång en fråga kommer tillbaka), regelboken,
  * anteckningarna, lektionsbetygen, självskattningen av rollspel, teamets
  * repetition och föreläsningarna.
+ *
+ * Steg 2 (0098, beställaren 2026-10-20): en fråga räknas till provmodulens
+ * färdighet (`learning_meta.moduler`), med kursens första som reserv. Sviten
+ * har frysdagar (`svit` i utbildningforma.ts), och teamets veckomål räknas
+ * själv (`veckomal` i utbildning-paminnelser.ts).
  */
 
 const FARDIGHETER = ["oppning", "behov", "invand", "avslut", "efter", "produkt", "regler"] as const;
@@ -68,6 +75,8 @@ export type NdUtbildning = {
   forraVeckan: Record<string, number | null>;
   streak: number;
   bast: number;
+  /** Sparade frysdagar, högst två. */
+  frys: number;
   heat: number[];
   repIdag: boolean;
   repTid: string;
@@ -156,7 +165,7 @@ export async function byggUtbildning(supabase: SupabaseClient, user: CurrentUser
   const chef = hasRole(user, "sales_manager", "admin", "ceo", "team_lead");
   const redaktor = hasRole(user, "sales_manager", "admin", "ceo");
 
-  const [{ data: kursRader }, { data: progress }, { data: certs }, { data: forsok }, { data: svar }, { data: regler }, { data: noter }, { data: betyg }, { data: sjalv }, { data: teamRep }, { data: forel }, { data: prefs }, { data: teammal }, { data: personal }] =
+  const [{ data: kursRader }, { data: progress }, { data: certs }, { data: forsok }, { data: svar }, { data: regler }, { data: noter }, { data: betyg }, { data: sjalv }, { data: teamRep }, { data: forel }, { data: prefs }, { data: teammal }, { data: personal }, { data: ledigt }, { data: sjukt }] =
     await Promise.all([
       supabase.from("course").select("id, slug, title, description_md, status, valid_months, due_days, pass_threshold, retry_wait_hours, owner_id, published_at, audience_roles, learning_meta").eq("status", "published").order("title"),
       supabase.from("module_progress").select("module_id, completed_at").eq("employee_id", mig),
@@ -172,6 +181,9 @@ export async function byggUtbildning(supabase: SupabaseClient, user: CurrentUser
       supabase.from("nav_preference").select("key, value").eq("employee_id", mig).in("key", ["utb.reptid", "utb.dolda", "utb.certpam"]),
       supabase.from("nav_setting").select("key, value").in("key", ["utb.teammal", "utb.rekommenderad"]),
       admin.from("employee").select("id, first_name, last_name, team_id, status, start_date, manager_id"),
+      // Sviten: dagar man är ledig eller sjuk varken räknas eller bryter.
+      supabase.from("absence_request").select("starts_on, ends_on").eq("employee_id", mig).eq("status", "approved").is("part_day_minutes", null).gte("ends_on", plusDagar(idag, -800)),
+      supabase.from("sick_report").select("first_sick_day, last_sick_day").eq("employee_id", mig).is("cancelled_at", null).gte("first_sick_day", plusDagar(idag, -800)),
     ]);
 
   const pers = (personal ?? []) as { id: string; first_name: string; last_name: string; team_id: string | null; status: string; start_date: string | null; manager_id: string | null }[];
@@ -206,6 +218,9 @@ export async function byggUtbildning(supabase: SupabaseClient, user: CurrentUser
   const egen = pers.find((p) => p.id === mig);
   const installning = new Map(((teammal ?? []) as { key: string; value: unknown }[]).map((x): [string, unknown] => [x.key, x.value]));
   const rekommenderade = ((installning.get("utb.rekommenderad") as { kurser?: string[] } | undefined)?.kurser ?? []).filter((x) => typeof x === "string");
+  // Provmodulens färdighet (learning_meta.moduler), annars kursens första.
+  const modulSkill = new Map<string, string>();
+  for (const k of kurser) for (const [mod, sk] of Object.entries(((k.learning_meta ?? {}) as { moduler?: Record<string, unknown> }).moduler ?? {})) if (typeof sk === "string" && (FARDIGHETER as readonly string[]).includes(sk)) modulSkill.set(mod, sk);
   const NdKurser: NdKurs[] = kurser.map((k) => {
     const meta = (k.learning_meta ?? {}) as { typ?: string; skills?: string[]; dagar?: number; resa?: number; rutin?: string };
     const mods = moduler.filter((m) => m.course_id === k.id);
@@ -269,7 +284,7 @@ export async function byggUtbildning(supabase: SupabaseClient, user: CurrentUser
     for (const f of fs) {
       const ratt = f.alternativ.findIndex((a) => a.ratt === true);
       if (ratt < 0) continue;
-      repetition.push({ id: f.id, skill: k.skills[0] ?? null, kalla: k.t, kurs: k.id, q: f.prompt, alt: f.alternativ.map((a) => a.label), oids: f.alternativ.map((a) => a.id), ratt, team: teamSet.has(f.id) });
+      repetition.push({ id: f.id, skill: modulSkill.get(modId) ?? k.skills[0] ?? null, kalla: k.t, kurs: k.id, q: f.prompt, alt: f.alternativ.map((a) => a.label), oids: f.alternativ.map((a) => a.id), ratt, team: teamSet.has(f.id) });
     }
   }
   const svarRader = (svar ?? []) as { question_id: string; correct: boolean; confidence: string; answered_at: string; next_due: string }[];
@@ -292,23 +307,19 @@ export async function byggUtbildning(supabase: SupabaseClient, user: CurrentUser
   const kunskap: NdUtbildning["kunskap"] = {};
   for (const s of FARDIGHETER) kunskap[s] = [nu[s], sedan(svarRader.find((x) => skillFor.get(x.question_id) === s)?.answered_at ?? null, idag)];
 
-  // Repetition i rad: vardagar bakåt med minst ett svar.
+  // Repetition i rad, med frysdagar. Helger, röda dagar, ledighet och sjukdom varken räknas eller bryter.
   const dagar = new Set(svarRader.map((s) => svensktDatum(s.answered_at)));
-  const vardag = (d: string) => { const v = new Date(`${d}T12:00:00Z`).getUTCDay(); return v !== 0 && v !== 6; };
-  let streak = 0;
-  for (let d = dagar.has(idag) ? idag : plusDagar(idag, -1), n = 0; n < 400; d = plusDagar(d, -1), n++) {
-    if (!vardag(d)) continue;
-    if (!dagar.has(d)) break;
-    streak++;
-  }
-  // Bästa svit: vardagar i följd med minst ett svar (helgerna bryter den inte).
-  const nastaVardag = (d: string) => { let x = plusDagar(d, 1); while (!vardag(x)) x = plusDagar(x, 1); return x; };
-  let bast = 0, lopande = 0, fore: string | null = null;
-  for (const d of [...dagar].filter(vardag).sort()) {
-    lopande = fore && nastaVardag(fore) === d ? lopande + 1 : 1;
-    bast = Math.max(bast, lopande);
-    fore = d;
-  }
+  const borta = new Set<string>();
+  const spann = (fran: string, till: string) => { for (let d = fran < plusDagar(idag, -800) ? plusDagar(idag, -800) : fran, n = 0; d <= till && d <= idag && n < 900; d = plusDagar(d, 1), n++) borta.add(d); };
+  for (const a of (ledigt ?? []) as { starts_on: string; ends_on: string }[]) spann(a.starts_on, a.ends_on);
+  for (const s of (sjukt ?? []) as { first_sick_day: string; last_sick_day: string | null }[]) spann(s.first_sick_day, s.last_sick_day ?? idag);
+  const roda = new Map<number, Set<string>>();
+  const ledig = (d: string) => {
+    const v = new Date(`${d}T12:00:00Z`).getUTCDay(), ar = +d.slice(0, 4);
+    if (!roda.has(ar)) roda.set(ar, rodaDagar(ar));
+    return v === 0 || v === 6 || roda.get(ar)!.has(d) || borta.has(d);
+  };
+  const { streak, bast, frys } = svit(dagar, idag, ledig);
   // Fyra veckor bakåt, måndag till söndag.
   const mandag = (() => { const d = new Date(`${idag}T12:00:00Z`); const v = d.getUTCDay() || 7; return plusDagar(idag, -(v - 1) - 21); })();
   const heat = Array.from({ length: 28 }, (_, i) => (dagar.has(plusDagar(mandag, i)) ? 1 : 0));
@@ -333,7 +344,7 @@ export async function byggUtbildning(supabase: SupabaseClient, user: CurrentUser
         kurs: k.id,
         t: m.title,
         kund: forsta(m.body_md),
-        skill: k.skills[0] ?? null,
+        skill: modulSkill.get(m.id) ?? k.skills[0] ?? null,
         kriterier: krit.filter((c) => c.module_id === m.id).map((c): [string, number, string, number] => [c.label, c.max_points, c.id, 0]),
         status: bedomd ? "bedomt" : mina.length ? "inlamnad" : "ny",
         datum: bedomd ? dagKort(bedomd.graded_at!) : mina[0] ? dagKort(mina[0].submitted_at) : null,
@@ -386,11 +397,14 @@ export async function byggUtbildning(supabase: SupabaseClient, user: CurrentUser
     };
   });
 
-  // Teamets vecka: repeterade frågor sedan måndag, i hela bolaget, och veckomålet om ett är satt.
+  // Teamets vecka: repeterade frågor sedan måndag, i hela bolaget, och veckomålet. Målet räknas
+  // själv (U2, beställaren 2026-10-20); ett fast tal i nav_setting utb.teammal går före om det sätts.
   const veckaStart = plusDagar(idag, -((new Date(`${idag}T12:00:00Z`).getUTCDay() || 7) - 1));
-  const { count: gjortVecka } = await admin.from("learning_answer").select("id", { count: "exact", head: true }).gte("answered_at", `${veckaStart}T00:00:00+02:00`);
   const malV = installning.get("utb.teammal") as { mal?: number } | undefined;
-  const mal = typeof malV?.mal === "number" ? malV.mal : null;
+  const [{ count: gjortVecka }, mal] = await Promise.all([
+    admin.from("learning_answer").select("id", { count: "exact", head: true }).gte("answered_at", svenskDygnsstart(new Date(`${veckaStart}T12:00:00Z`))),
+    typeof malV?.mal === "number" ? Promise.resolve(malV.mal) : veckomal(admin, veckaStart),
+  ]);
 
   const ut: NdUtbildning = {
     skriv: SKRIVLAGE.utbildning,
@@ -403,6 +417,7 @@ export async function byggUtbildning(supabase: SupabaseClient, user: CurrentUser
     forraVeckan: karta(plusDagar(idag, -7)),
     streak,
     bast: Math.max(bast, streak),
+    frys,
     heat,
     repIdag: dagar.has(idag),
     repTid: typeof pref.get("utb.reptid") === "string" ? (pref.get("utb.reptid") as string) : "08:15",
@@ -413,7 +428,7 @@ export async function byggUtbildning(supabase: SupabaseClient, user: CurrentUser
     betyg: Object.fromEntries((betyg ?? []).map((b) => [b.module_id as string, b.stars as number])),
     rollspel,
     forelasningar,
-    teamVecka: { gjort: gjortVecka ?? 0, mal, egna: svarRader.filter((s) => svensktDatum(s.answered_at) >= veckaStart).length },
+    teamVecka: { gjort: gjortVecka ?? 0, mal: mal || null, egna: svarRader.filter((s) => svensktDatum(s.answered_at) >= veckaStart).length },
     team: null,
   };
   if (!chef) return ut;

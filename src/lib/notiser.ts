@@ -629,6 +629,14 @@ export const NOTIS_KALLOR = [
   "utbildning-fraga",
   "utbildning-paminn",
 
+  /**
+   * Nav 2.0 (0098), Utbildning: påminnelsen om dagens repetition klockan man
+   * valt, och om ett certifikat som går ut om en månad. Dagtidsjobbet skriver
+   * dem, en gång per dag och en gång per certifikat. HÄNDELSER.
+   */
+  "utbildning-repetition",
+  "utbildning-certifikat",
+
   /** Nav 2.0 (0120), startsidan: Grattis på en order på Golvet. */
   "order-grattis",
 
@@ -772,6 +780,8 @@ export const HANDELSEKALLOR = [
   "avtal-paminnelse",
   "utbildning-fraga",
   "utbildning-paminn",
+  "utbildning-repetition",
+  "utbildning-certifikat",
   "order-grattis",
   "personal-uppdrag",
   "personal-paminn",

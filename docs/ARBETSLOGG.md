@@ -5,6 +5,46 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-20 · Nav 2.0, Utbildning steg 2: påminnelserna, färdigheterna, veckomålet och frysdagarna
+
+Beställarens svar i beslutsrundan (U1–U3) och punkt 4 i
+`~/nav2-utkast/delar/utbildning/beslut.md`. Läsläge: allt bakom
+`SKRIVLAGE.utbildning`, och jobbet körs bara i produktionen (pg_cron ringer main).
+
+- **Påminnelsen om repetitionen** (`src/lib/nav2/utbildning-paminnelser.ts`,
+  ett nytt steg i `/api/jobb/dagtid`): klockan man valt under "Påminn mig"
+  (`utb.reptid`, annars 08:15) och två timmar framåt, på arbetsdagar (inte
+  röda dagar), bara om man har frågor som förfaller och inte svarat på någon i
+  dag, och inte om man är ledig eller sjuk (`ledigaDen` ur kvällsnotisen). Den
+  står i klockan (`utbildning-repetition`) och går som Web Push till de enheter
+  man slagit på. En gång per person och dag: `push_sent` `utb-rep`, raden
+  först. Pushen är tom som kvällsnotisens; `public/nav2/sw.js` frågar
+  `/nav2/utbildning?push=1` först, som svarar med texten om personens senaste
+  push i dag var repetitionens. Enheten slås på när man väljer klockslag
+  (`ndUtbPush` i `moduler/ndutb.js`, samma `/nav2/hem` push som startsidan),
+  och då kan också en säljare få pushen.
+- **Certifikat som går ut:** en månad innan, en gång per certifikat
+  (`certification.reminded_at`, satt i samma uppdatering som avgör vem som
+  skickar), om `utb.certpam` inte är avstängt. Notis i klockan och mejl
+  (`utbildning-certifikat` i `MEJLKALLOR`). I dag har inget certifikat ett
+  slutdatum (8 rader, alla utan).
+- **Färdigheterna (U1, godkända 2026-10-20):** `course.learning_meta.skills`
+  per kurs och `.moduler` per prov, i 0098. En fråga får provets färdighet, med
+  kursens första som reserv. Färdigheten heter Regler, utan GDPR.
+- **Teamets veckomål (U2):** räknas själv, alla frågor som förfaller under
+  veckan för var och en, högst femton per person, som det såg ut på måndagen.
+  Med dagens data 57: sex säljare med två frågor var och tre chefer med femton
+  (den som får redigera kurserna har alla 48 frågor i sin repetition).
+- **Frysdagar (U3):** fem dagar med repetition ger en frysdag, högst två
+  sparade, och en missad dag tar en automatiskt. Helger, röda dagar, godkänd
+  ledighet hela dagen och sjukdom varken räknas eller bryter (`svit` i
+  `utbildningforma.ts`).
+- **Migration `0098_utbildning_steg2` SKRIVEN OCH TORRKÖRD, INTE KÖRD:**
+  färdigheterna, `push_sent_kind_check` med `utb-rep`, och
+  `certification.reminded_at`. Körs i steg 6, före `SKRIVLAGE.utbildning`.
+  Utan den skriver påminnelsen ingen rad (villkoret nekar) och skickar alltså
+  ingenting.
+
 ## 2026-10-20 · Nav 2.0: semestersaldot matas in i Anställda (beställarens svar på steg 5)
 
 Saldot är hur många semesterdagar var och en har kvar, och de sparade dagarna

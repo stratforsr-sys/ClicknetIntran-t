@@ -174,6 +174,13 @@ export const MEJLKALLOR = [
    */
   "lead-ny",
   "lead-tilldelad",
+
+  /**
+   * Nav 2.0 (0098), Utbildning: ett certifikat går ut om en månad. En gång per
+   * certifikat. Den som inte är inne i Utbildning den månaden ska ändå hinna
+   * förnya det.
+   */
+  "utbildning-certifikat",
 ] as const satisfies readonly Handelsekalla[];
 
 export type Mejlkalla = (typeof MEJLKALLOR)[number];

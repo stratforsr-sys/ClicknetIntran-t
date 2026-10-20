@@ -10,6 +10,7 @@ import { bedomRollspel, forberedRollspel, klarModul, lamnaQuiz, registreraRollsp
 import { skapaUppgift } from "@/app/(app)/uppgifter/actions";
 import { skapaMote } from "@/app/(app)/kalender/moten/actions";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
+import { forfallerSenast, repetitionsfragor, repText } from "@/lib/nav2/utbildning-paminnelser";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,11 @@ export const dynamic = "force-dynamic";
  * ===========================================================================
  *
  * LÄSLÄGE: står `SKRIVLAGE.utbildning` på false svarar rutten 423 innan något skrivs.
+ *
+ * GET ?push=1 är påminnelsens text för den inloggade (0098). Enhetens service
+ * worker (`public/nav2/sw.js`) frågar här först när en tom push kommer: var
+ * personens senaste push i dag repetitionens (`push_sent` `utb-rep`) svarar
+ * rutten med texten, annars med null, och då är det startsidans kvällsnotis.
  */
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -84,6 +90,18 @@ function tolkaNar(s: string, idag: string): string | null {
   }
   if (Number.isNaN(Date.parse(`${dag}T12:00:00Z`))) return null;
   return tidpunkt(dag, hh, mm);
+}
+
+export async function GET(request: Request) {
+  const user = await getCurrentUser();
+  if (!user?.employee) return svar({ fel: "Du måste vara inloggad." }, 401);
+  if (new URL(request.url).searchParams.get("push") !== "1") return svar({ fel: "Okänd läsning." }, 400);
+  const mig = user.employee.id, idag = svensktDatum();
+  const db = supabaseAdmin();
+  const { data: senast } = await db.from("push_sent").select("kind").eq("employee_id", mig).eq("day", idag).order("sent_at", { ascending: false }).limit(1).maybeSingle();
+  if ((senast as { kind: string } | null)?.kind !== "utb-rep") return svar({ rep: null });
+  const fragor = await repetitionsfragor(db, [mig], new Date().toISOString());
+  return svar({ rep: repText(forfallerSenast(fragor.get(mig) ?? [], idag)) });
 }
 
 export async function POST(request: Request) {

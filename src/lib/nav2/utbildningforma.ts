@@ -75,3 +75,34 @@ export function modulTillSteg(m: { id: string; title: string; kind: string; body
   steg.push({ typ: "mal" });
   return steg;
 }
+
+/**
+ * Repetition i rad, med frysdagar (beställaren 2026-10-20, U3).
+ *
+ *   - Sviten räknar dagar med minst ett svar. Dagar då man inte förväntas
+ *     repetera (`ledig`: helg, röd dag, godkänd ledighet hela dagen, sjuk)
+ *     varken räknas eller bryter.
+ *   - Fem dagar med repetition, en hel arbetsvecka, ger en frysdag. Högst två
+ *     är sparade.
+ *   - En missad dag tar en frysdag automatiskt, och sviten står kvar. Utan
+ *     frysdag börjar den om.
+ *   - I dag bryter aldrig sviten: dagen är inte slut än.
+ *
+ * Ren, så att den går att prova utan databas.
+ */
+export function svit(dagar: Set<string>, idag: string, ledig: (dag: string) => boolean): { streak: number; bast: number; frys: number } {
+  const forsta = [...dagar].filter((d) => d <= idag).sort()[0];
+  let streak = 0, bast = 0, frys = 0, iRad = 0;
+  if (!forsta) return { streak, bast, frys };
+  for (let d = forsta, n = 0; d <= idag && n < 800; d = new Date(Date.parse(`${d}T12:00:00Z`) + 86400000).toISOString().slice(0, 10), n++) {
+    if (ledig(d)) continue;
+    if (dagar.has(d)) {
+      streak++;
+      bast = Math.max(bast, streak);
+      if (++iRad === 5) { iRad = 0; frys = Math.min(2, frys + 1); }
+    } else if (d === idag) continue;
+    else if (frys > 0) frys--;
+    else { streak = 0; iRad = 0; }
+  }
+  return { streak, bast, frys };
+}

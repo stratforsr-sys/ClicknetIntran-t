@@ -8,6 +8,7 @@ import { skickaRundor } from "@/lib/nav2/franvaro-runda";
 import { egnaPaminnelser, korTidpaminnelser } from "@/lib/nav2/tid-paminnelser";
 import { skickaKvallsnotiser } from "@/lib/nav2/hem-kvall";
 import { korAnstalldaPaminnelser } from "@/lib/nav2/anstallda-paminnelser";
+import { korUtbildningsPaminnelser } from "@/lib/nav2/utbildning-paminnelser";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -77,7 +78,15 @@ async function kor(request: NextRequest) {
   } catch (e) {
     anstallda = { fel: e instanceof Error ? e.message : String(e) };
   }
-  return NextResponse.json({ ...stampling, kalender, runda, tid, kvall, anstallda });
+  // Nav 2.0 (0098): Utbildnings påminnelser, repetitionen (Web Push + klockan) och certifikat
+  // som går ut om en månad (klockan + mejl). Bakom SKRIVLAGE.utbildning (i funktionen).
+  let utbildning: unknown = null;
+  try {
+    utbildning = await korUtbildningsPaminnelser(db);
+  } catch (e) {
+    utbildning = { fel: e instanceof Error ? e.message : String(e) };
+  }
+  return NextResponse.json({ ...stampling, kalender, runda, tid, kvall, anstallda, utbildning });
 }
 
 export async function POST(request: NextRequest) {
