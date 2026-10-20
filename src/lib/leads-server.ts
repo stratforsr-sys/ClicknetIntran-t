@@ -7,6 +7,7 @@ import { notifieraFlera, leadkretsen } from "@/lib/notishandelse-server";
 import { skrivHandelse } from "@/lib/handelselogg-server";
 import { skrivFel } from "@/lib/fel-server";
 import { DUBBLETT_TIMMAR, leadTitel, tolkaInskick, type TolkatLead } from "@/lib/leads";
+import { fordelaNyttLead } from "@/lib/nav2/leads";
 
 /**
  * Mottagningen av ett lead från hemsidan (0076).
@@ -198,6 +199,9 @@ export async function taEmotLead(request: NextRequest): Promise<NextResponse> {
     // En dubblett och ett spamlead stör ingen. Originalet har redan sagt till,
     // och dubbletten syns på det.
     if (!spam && !original) {
+      // Nav 2.0 (0135): "Fördela automatiskt" ger leadet till den som är på
+      // plats och har minst att göra. Gör ingenting förrän Leads får spara.
+      await fordelaNyttLead(rad.id);
       await notifieraFlera(await leadkretsen(), {
         av: null,
         kalla: "lead-ny",

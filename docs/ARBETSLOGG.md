@@ -5,6 +5,51 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-20 · Nav 2.0, Leads med riktig data (i läsläge; migration 0135 skriven och torrkörd, inte körd)
+
+Utkastets Leads (`moduler/ld.js`) visar navets leads. Inventeringen står i
+`~/nav2-utkast/delar/leads/inventering.md`.
+
+- **Läsningen:** `src/lib/nav2/leads.ts` (`ND.leads`, `byggLeads`) läser `lead`
+  med RLS, som `/leads`: säljchef, VD och teamledare ser alla och fördelar
+  (`farFordela`), säljaren sina egna. En chef utanför den kretsen (bara
+  `admin`) ser vyn som säljaren, som i Order. Säljarnas 30 dagar (antal,
+  svarstid, möten, kunder) och lagets svarstid räknas i servern
+  (`leadsforma.ts`); säljaren får bara lagets tal. Läsningen tål att 0135
+  saknas (`utan0135`).
+- **0135 (`0135_leads_utkastet.sql`, additiv):** `lead.next_call_at`,
+  `meeting_at`/`meeting_place`, `lost_reason` och `order_id`, och
+  `lead_event` (tilldelad, försök med utfall, spam, öppnad, kund, påmind) med
+  leadets läge före varje steg (`fore`, för Ångra). RLS som leadet, ingen
+  skrivpolicy, villkor mot personnummer, okända utfall, skäl och platser.
+  Torrkörd i en transaktion som rullades tillbaka: villkoren nekar, Ångra
+  lägger tillbaka läget, säljaren ser stegen bara på sina egna leads, anon nekas.
+- **Rutten** `/nav2/leads` (POST bakom `SKRIVLAGE.leads = false`, 423 i
+  läsläge): `ge` och `jamt` (repots `tilldelaLead`, med notisen och mejlet),
+  `auto` (`nav_setting` `leads.auto`), `paminn` (ny notiskälla `lead-paminn`),
+  `spam` (repots `uppdateraLead`), `oppna`, `forsok` (svarade inte, pratade,
+  möte, ej aktuell; "Inte nu" = nytt samtal om tre månader), `kund` (ordern
+  är lagd i Order) och `angra` (tio minuter, bara den som gjorde steget).
+  Anteckningar maskeras som i repot.
+- **Fördela automatiskt:** `taEmotLead` (`leads-server.ts`) ger ett nytt lead
+  till förslaget (instämplad säljare med minst öppna, sedan snabbast svar)
+  när brytaren är på, och bara när `SKRIVLAGE.leads` är på.
+- **Klienten** `moduler/ndld.js` (före `ndskal`): fyller utkastets
+  konstanter, skriver över `ldSt`, `ldForslag` (bara säljare, ur Tids
+  instämplade) och `ldSiffror`, och kopplar knapparna till rutten. "Blev
+  kund" öppnar Orders formulär, och när Orders `skapa` svarat blir leadet
+  kund med ordern. Startsidans rad (`ldinb`) läggs i `ndHemRader`. Texter där
+  navets data saknas (svarstid, nästa samtal, mötestid) i `ndpatch.py`.
+- **Skalet:** `case 'leads'` i `ndGa`, `/leads` och `/leads/<id>` i `SJALV`,
+  och `skalVag`-omslaget för Leads är borttaget.
+- **Provat:** läsningen lokalt som Zen och Fredrik (`kor.mjs`), sidan i
+  headless Chrome med Zens riktiga data och, för säljarens flöde, en lokal
+  provsida; `tsc` över hela repot med de låsta paketen; `tests/leads`,
+  `notiser`, `notiser-tackning`, `navnyheter`, `handelselogg` gröna;
+  kolumnkontrollen mot schemat med 0135: inga träffar.
+- **Till steg 6:** kör 0135, och `~/nav2-utkast/delar/leads/registerutdrag-steg6.py`
+  på `src/lib/registerutdrag.ts` i samma commit. Öppna frågor: HANDOFF "Del: Leads".
+
 ## 2026-10-20 · Nav 2.0, fart: kedjorna i Tid, notiserna, Coachning, Frånvaro och Kalendern (ingen migration)
 
 Prompten "Fart: kedjorna" i `~/nav2-utkast/PROMPTER.md`. Mätverktygen ligger i

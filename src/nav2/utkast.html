@@ -19889,7 +19889,7 @@ function ldRad(l, chef){
 }
 function ldSaljVy(){
   const mina = ldMina(), nu = mina.filter(ldRingNu).sort((a, b) => (a.nasta || a.tilldelad || '').localeCompare(b.nasta || b.tilldelad || '')), sen = mina.filter(l => ldOppen(l) && !ldRingNu(l)).sort((a, b) => ((a.mote && a.mote.d + a.mote.s) || a.nasta || '').localeCompare((b.mote && b.mote.d + b.mote.s) || b.nasta || ''));
-  const klara = mina.filter(l => !ldOppen(l)), st = LDSTAT[ME.saljare.namn] || [0, 0, 0, 0];
+  const klara = mina.filter(l => !ldOppen(l)), st = LDSTAT[ME.saljare.namn] || [0, ND ? null : 0, 0, 0];
   return `<header class="top"><div class="hello"><h1>Mina leads</h1><p>${note(474)}${nu.length ? `${nu.length === 1 ? 'Ett lead' : nu.length + ' leads'} att ringa nu.` : 'Inget att ringa just nu.'} Ring inom en timme, då är chansen sju gånger större.</p></div></header>
     <div class="tgrid aegrid"><div class="col">
       <section class="card" aria-label="Ring nu"><div class="chead"><h2>Ring nu</h2><span class="meta num">${nu.length}</span><span class="end">${note(475)}</span></div>
@@ -19898,8 +19898,8 @@ function ldSaljVy(){
       ${klara.length ? `<button class="later" data-ldklara aria-expanded="${!!S.ldKlara}">${I('chev')}Avslutade: ${klara.filter(l => l.status === 'won').length} blev kund, ${klara.filter(l => l.status !== 'won').length} ej aktuella</button>${S.ldKlara ? `<section class="card"><ul class="ldrader">${klara.map(l => ldRad(l, false)).join('')}</ul></section>` : ''}` : ''}
     </div><div class="col">
       <section class="card" aria-label="Dina 30 dagar"><div class="chead"><h2>Dina 30 dagar</h2><span class="end">${note(476)}</span></div>
-        <dl class="ldkpi"><div><dt>Leads</dt><dd class="num">${st[0] + mina.length}</dd></div><div><dt>Svarstid</dt><dd class="num">${st[1]} min</dd></div><div><dt>Möten</dt><dd class="num">${st[2] + mina.filter(l => l.mote).length}</dd></div><div><dt>Kunder</dt><dd class="num">${st[3] + mina.filter(l => l.status === 'won').length}</dd></div></dl>
-        <p class="aehint">Svarstiden är tiden från att du fick leadet till första samtalet. Laget ligger på ${Math.round(Object.values(LDSTAT).reduce((s, v) => s + v[1], 0) / Object.keys(LDSTAT).length)} min.</p></section>
+        <dl class="ldkpi"><div><dt>Leads</dt><dd class="num">${ND ? st[0] : st[0] + mina.length}</dd></div><div><dt>Svarstid</dt><dd class="num">${st[1] === null ? '–' : st[1] + ' min'}</dd></div><div><dt>Möten</dt><dd class="num">${ND ? st[2] : st[2] + mina.filter(l => l.mote).length}</dd></div><div><dt>Kunder</dt><dd class="num">${ND ? st[3] : st[3] + mina.filter(l => l.status === 'won').length}</dd></div></dl>
+        <p class="aehint">Svarstiden är tiden från att du fick leadet till första samtalet. ${ND ? (ND.leads.lag === null ? 'Lagets svarstid räknas när de första samtalen är sparade.' : `Laget ligger på ${ND.leads.lag} min.`) : `Laget ligger på ${Math.round(Object.values(LDSTAT).reduce((s, v) => s + v[1], 0) / Object.keys(LDSTAT).length)} min.`}</p></section>
     </div></div>`;
 }
 function ldChefVy(){
@@ -19914,14 +19914,14 @@ function ldChefVy(){
         ${f.length ? `<ul class="ldrader">${f.map(l => { const sp = ldSpamLik(l), m = ldMin(l.at);
           return `<li class="ldrad ${m >= 60 ? 'sen' : ''}"><button class="ldrk" data-ldopen="${l.id}"><span class="ldav">${esc((l.bolag || l.namn).slice(0, 1))}</span><span><b>${esc(l.bolag || l.namn)}${sp ? ' <i class="pill t-warn">Ser ut som reklam</i>' : ''}</b><small>${esc(l.msg.slice(0, 70))}${l.msg.length > 70 ? '…' : ''}</small><small><span class="${m >= 60 ? 'ldsen' : ''}">${ldTid(l.at)} · ${ldVantText(m)} sedan</span>${l.ort ? ' · ' + esc(l.ort) : ''}${l.kamp ? ' · ' + esc(l.kamp) : ''}</small></span></button>
             <span class="ldrb">${sp ? `<button class="btn btn-s btn-sm" data-lddo="spam|${l.id}">Spam</button>` : fs[0] ? `<button class="btn btn-p btn-sm" data-ldge="${l.id}|${esc(fs[0].namn)}">Ge till ${esc(rxFor(fs[0].namn))}</button>` : ''}<select class="uin ldsel" data-ldgeval="${l.id}" aria-label="Ge till någon annan"><option value="">Annan…</option>${fs.map(x => `<option value="${esc(x.namn)}">${esc(x.namn)} · ${x.oppna} öppna</option>`).join('')}</select></span></li>`; }).join('')}</ul>
-          ${fs[0] ? `<p class="aehint">Förslaget är den som är på plats och har minst att göra: ${esc(rxFor(fs[0].namn))} har ${fs[0].oppna} öppna leads och svarar på ${fs[0].svar} min i snitt.</p>` : '<p class="aehint">Ingen säljare är instämplad just nu.</p>'}` : rxTom('Allt är fördelat', S.ld.auto ? 'Nya leads går direkt till den som är på plats och har minst att göra.' : 'Nya leads från hemsidan hamnar här.')}</section>
+          ${fs[0] ? `<p class="aehint">Förslaget är den som är på plats och har minst att göra: ${esc(rxFor(fs[0].namn))} har ${fs[0].oppna} öppna leads och ${fs[0].svar === null ? 'ingen svarstid än' : `svarar på ${fs[0].svar} min i snitt`}.</p>` : '<p class="aehint">Ingen säljare är instämplad just nu.</p>'}` : rxTom('Allt är fördelat', S.ld.auto ? 'Nya leads går direkt till den som är på plats och har minst att göra.' : 'Nya leads från hemsidan hamnar här.')}</section>
       <section class="card" aria-label="Alla leads"><div class="chead"><h2>Alla leads</h2><span class="end"><label class="ldsok">${I('sok')}<input id="ldSok" type="search" placeholder="Sök" value="${esc(S.ldQ)}" aria-label="Sök bland leads"></label></span></div>
         <div class="qchips" role="group" aria-label="Visa">${[['oppna', 'Öppna'], ['new', 'Nya'], ['contacted', 'Kontaktade'], ['meeting', 'Möten'], ['won', 'Kunder'], ['lost', 'Ej aktuella'], ['alla', 'Alla']].map(([k, l]) => `<button class="chip ${S.ldFilt === k ? 'on' : ''}" aria-pressed="${S.ldFilt === k}" data-ldfilt="${k}">${l} <span class="num muted">${S.ld.leads.filter(x => ldSynlig(x) && x.vem && (k === 'alla' || (k === 'oppna' ? ldOppen(x) : x.status === k))).length}</span></button>`).join('')}</div>
         ${lista.filter(l => l.vem).length ? `<ul class="ldrader">${lista.filter(l => l.vem).map(l => ldRad(l, true)).join('')}</ul>` : rxTom('Inget här', 'Ändra filtret eller sökningen.')}</section>
     </div><div class="col">
       <section class="card" aria-label="Säljarna"><div class="chead"><h2>Säljarna</h2><span class="end">${note(479)}</span></div>
         <ul class="ldsalj">${per.map(p => { const vant = p.nya.map(ldVantat).filter(x => x !== null), max = vant.length ? Math.max(...vant) : 0;
-          return `<li><span class="ldsn">${avatar(p.namn, 26)}<span class="ldst"><b>${esc(p.namn)}</b><small>${p.inne === 'inne' ? 'på plats' : p.inne === 'sjuk' ? 'sjuk' : p.inne === 'ledig' ? 'ledig' : 'inte instämplad'} · svarar på ${p.st[1]} min</small></span></span>
+          return `<li><span class="ldsn">${avatar(p.namn, 26)}<span class="ldst"><b>${esc(p.namn)}</b><small>${p.inne === 'inne' ? 'på plats' : p.inne === 'sjuk' ? 'sjuk' : p.inne === 'ledig' ? 'ledig' : 'inte instämplad'} · ${p.st[1] === null ? 'ingen svarstid än' : `svarar på ${p.st[1]} min`}</small></span></span>
             <span class="ldsk"><span title="Nya, inte ringda">${p.nya.length}</span><span title="Ringa igen">${p.ringa.length}</span><span title="Möten">${p.moten.length}</span></span>
             ${max >= 60 ? `<button class="tlink ldsen" data-ldpamin="${esc(p.namn)}" ${S.ldPamind && S.ldPamind[p.namn] ? 'disabled' : ''}>${S.ldPamind && S.ldPamind[p.namn] ? 'Påmind' : `${ldVantText(max)} utan samtal · Påminn`}</button>` : ''}</li>`; }).join('')}</ul>
         <p class="aehint">Siffrorna är nya, att ringa igen och möten.</p></section>
@@ -19953,9 +19953,9 @@ function ldNastaRuta(l, chef){
   else if (l.status === 'lost' || l.status === 'spam'){ t = LDSTATUS[l.status][0]; sub = l.skal || ''; k = l.status === 'lost' ? `<button class="tlink" data-lddo="ateroppna|${l.id}">Öppna igen</button>` : ''; }
   else if (chef && l.vem !== ME.chef.namn){ const v = ldVantat(l); t = l.status === 'new' ? `${rxFor(l.vem)} har inte ringt än` : LDSTATUS[l.status][0]; sub = l.status === 'new' ? `Fick leadet ${ldTid(l.tilldelad)}, ${ldVantText(v)} sedan.` : l.mote ? `Möte ${rxNar(l.mote.d)} ${l.mote.s}, ${l.mote.plats.toLowerCase()}.` : l.nasta ? `Ringer igen ${ldDag(ldD(l.nasta))} ${ldTid(l.nasta)}.` : '';
     k = `${l.status === 'new' ? `<button class="btn btn-s btn-sm" data-ldpamin="${esc(l.vem)}">Påminn ${esc(rxFor(l.vem))}</button>` : ''}<select class="uin ldsel" data-ldgeval="${l.id}" aria-label="Ge till någon annan"><option value="">Ge till någon annan…</option>${ldForslag().filter(x => x.namn !== l.vem).map(x => `<option value="${esc(x.namn)}">${esc(x.namn)} · ${x.oppna} öppna</option>`).join('')}</select>`; }
-  else if (l.status === 'meeting'){ t = `Möte ${rxNar(l.mote.d)} kl. ${l.mote.s}`; sub = `${l.mote.plats}. Mötet ligger i din kalender.`; k = `<button class="btn btn-p btn-sm" data-lddo="efter|${l.id}">Efter mötet</button>`; }
+  else if (l.status === 'meeting' && l.mote){ t = `Möte ${rxNar(l.mote.d)} kl. ${l.mote.s}`; sub = `${l.mote.plats}. Mötet ligger i din kalender.`; k = `<button class="btn btn-p btn-sm" data-lddo="efter|${l.id}">Efter mötet</button>`; }
   else { const v = ldVantat(l), sen = (v || 0) >= 60;
-    t = l.status === 'new' ? (sen ? `Väntat ${ldVantText(v)} på ett samtal` : 'Ring nu') : l.nasta && l.nasta <= ldNu() ? 'Dags att ringa igen' : `Ring igen ${ldDag(ldD(l.nasta))} ${ldTid(l.nasta)}`;
+    t = l.status === 'new' ? (sen ? `Väntat ${ldVantText(v)} på ett samtal` : 'Ring nu') : !l.nasta ? 'Inget nästa samtal planerat' : l.nasta <= ldNu() ? 'Dags att ringa igen' : `Ring igen ${ldDag(ldD(l.nasta))} ${ldTid(l.nasta)}`;
     sub = l.status === 'new' ? 'Inom en timme är chansen sju gånger större att få prata med den som bestämmer.' : `Försök ${l.forsok.length + 1}${l.forsok.filter(x => x[2] === 'svar').length ? `, ${l.forsok.filter(x => x[2] === 'svar').length} utan svar` : ''}.`;
     k = `${l.tel ? `<a class="btn btn-p btn-sm" href="tel:${l.tel.replace(/[^\d+]/g, '')}" data-ldring="${l.id}">${I('phone')}Ring ${esc(l.tel)}</a>` : `<a class="btn btn-p btn-sm" href="mailto:${esc(l.epost)}">${I('inbox')}Mejla, telefon saknas</a>`}<button class="btn btn-s btn-sm" data-lddo="efter|${l.id}">Efter samtalet</button>`; }
   return `<div class="rxnasta ${(ldVantat(l) || 0) >= 60 ? 'sen' : ''}"><div><b>${esc(t)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</div><div class="aek">${k}</div></div>`;
@@ -30973,6 +30973,202 @@ document.addEventListener('click', e => {
 if (ndNh()){ ndNhFyll(ND.nyheter); NDKOPPLAD.add('nyheter'); }
 
 /* =====================================================================
+   NAV 2.0 I RIKTIGT LÄGE: LEADS (prefix nd)
+
+   Navets leads ur ND.leads (src/lib/nav2/leads.ts) i stället för utkastets
+   exempel. RLS avgör som på /leads: säljchef, VD och teamledare ser alla och
+   fördelar, säljaren ser de leads hen fått. En chef utanför den kretsen ser
+   vyn som säljaren, som i Order.
+
+   Försöken, nästa samtal, mötet, skälet, ordern och historiken är 0135
+   (`lead_event`). Det som sparar går till /nav2/leads; i läsläge svarar
+   rutten 423 och ingenting ändras. Att ge ett lead går genom repots
+   tilldelaLead (notisen och mejlet). Ångra gäller i tio minuter.
+
+   "Blev kund" öppnar Orders formulär med leadets uppgifter. När Order har
+   skapat ordern (`skapa` i /nav2/order) blir leadet kund med den ordern.
+   ===================================================================== */
+
+const ndLd = () => ND && ND.leads;
+const ndLdFor = n => String(n || '').split(' ')[0];
+// Namn → id: säljarna, de instämplade och de som redan har ett lead.
+function ndLdId(namn){
+  if (!namn) return null;
+  if (namn === ND.jag.namn) return ND.jag.id;
+  const s = ndLd().saljare.find(x => x.namn === namn); if (s) return s.id;
+  const p = ((ND.tid && ND.tid.chef && ND.tid.chef.paPlats) || []).find(x => x.namn === namn); if (p) return p.id;
+  const l = ((S.ld && S.ld.leads) || []).find(x => x.vem === namn && x.vemId); return l ? l.vemId : null;
+}
+
+/* ---------- Tillståndet ur navet ---------- */
+// Utkastets former: forsok [dag, tid, utfall, anteckning] och historiken {d, tid, t}.
+function ndLdLead(x){
+  const l = {...x, mote:x.mote ? {...x.mote} : null, forsok:[], logg:[]};
+  const L = (at, t) => l.logg.push({d:at.slice(0, 10), tid:at.slice(11, 16), t});
+  L(x.at, `Kom in från ${x.sida || 'hemsidan'}${x.kamp ? ` (${x.kamp})` : ''}.`);
+  // Tilldelat i nuvarande Nav, eller innan 0135: bara att det skedde.
+  if (x.tilldelad && !x.steg.some(s => s.typ === 'tilldelad')) L(x.tilldelad, `${x.vem} fick leadet.`);
+  let svar = 0;
+  x.steg.forEach(s => {
+    const av = s.av ? rxFor(s.av) : 'Nav', d = s.at.slice(0, 10), t = s.at.slice(11, 16);
+    if (s.typ === 'tilldelad') L(s.at, `${av} gav leadet till ${s.till}.`);
+    else if (s.typ === 'forsok'){
+      l.forsok.push([d, t, s.utfall, s.not || '']);
+      if (s.utfall === 'svar'){ svar++; L(s.at, `${av}: svarade inte (försök ${svar}).${s.not ? ' ' + s.not : ''}`); }
+      else if (s.utfall === 'pratade') L(s.at, `${av}: pratade${s.not ? '. ' + s.not : ''}.`);
+      else if (s.utfall === 'mote') L(s.at, `${av}: möte bokat${s.not ? '. ' + s.not : ''}.`);
+      else if (s.utfall === 'nej'){ const sk = LDSKAL.find(k => (s.not || '').startsWith(k)) || '', rest = (s.not || '').slice(sk.length).replace(/^\.\s*/, '');
+        L(s.at, sk === 'Inte nu' ? `${av}: inte nu.${rest ? ' ' + rest : ''}` : `${av}: ej aktuell${sk ? ', ' + sk.toLowerCase() : ''}.${rest ? ' ' + rest : ''}`); }
+    }
+    else if (s.typ === 'spam') L(s.at, 'Markerat som spam.');
+    else if (s.typ === 'oppnad') L(s.at, 'Öppnades igen.');
+    else if (s.typ === 'kund'){ l.forsok.push([d, t, 'kund', x.order ? `Order #${x.order}.` : '']); L(s.at, x.order ? `Blev kund: order #${x.order}.` : 'Blev kund.'); }
+    else if (s.typ === 'paminn') L(s.at, `${av} påminde ${rxFor(s.till || '')} om leadet.`);
+  });
+  return l;
+}
+const _ndLdSt = ldSt;
+ldSt = function(){
+  if (!ndLd()) return _ndLdSt();
+  if (S.ldInit) return; S.ldInit = true;
+  const d = ndLd();
+  // Utkastets 30 dagar per säljare är exempel: navets egna står där i stället.
+  Object.keys(LDSTAT).forEach(k => delete LDSTAT[k]);
+  Object.entries(d.stat).forEach(([n, v]) => { LDSTAT[n] = v.slice(); });
+  S.ld = {leads:d.leads.map(ndLdLead), notiser:[], auto:d.auto};
+  // Mötet ligger i kalendern, som i utkastet.
+  S.ld.leads.forEach(l => { if (l.mote){ const e = {id:'ldk-' + l.id, d:l.mote.d, s:tmin(l.mote.s), e:tmin(l.mote.s) + 45, allday:false, t:`Möte · ${l.bolag || l.namn}`, kat:'mote', org:l.vem, delt:[], plats:l.mote.plats, video:l.mote.plats === 'Video', visa:'upptagen', rep:false, priv:false, agenda:l.msg, klar:false, pamin:'15 min före', ld:l.id}; if (!KEV.some(x => x.id === e.id)) KEV.push(e); } });
+  Object.assign(S, {ldOpen:null, ldForm:null, ldFlik:null, ldQ:'', ldFilt:'oppna', ldVal:new Set()});
+  S.ldPamind = Object.fromEntries(d.pamind.map(n => [n, true]));
+};
+// Förslaget: bara säljare, ur Tids instämplade. Utan känd svarstid sist bland de lika.
+const _ndLdForslag = ldForslag;
+ldForslag = function(){
+  if (!ndLd()) return _ndLdForslag();
+  const salj = new Set(ndLd().saljare.map(p => p.namn)), pa = (ND.tid && ND.tid.chef && ND.tid.chef.paPlats) || [];
+  return pa.filter(p => salj.has(p.namn) && p.namn !== ND.jag.namn).map(p => ({namn:p.namn, oppna:S.ld.leads.filter(l => l.vem === p.namn && ldOppen(l)).length, svar:(LDSTAT[p.namn] || [0, null])[1]}))
+    .sort(ndLdOrdning);
+};
+const ndLdOrdning = (a, b) => a.oppna - b.oppna || (a.svar === null ? 1e9 : a.svar) - (b.svar === null ? 1e9 : b.svar) || a.namn.localeCompare(b.namn, 'sv');
+// Chefens siffror: kunder och alla leads räknas på de senaste 30 dagarna ur navet.
+const _ndLdSiffror = ldSiffror;
+ldSiffror = function(){
+  const r = _ndLdSiffror(); if (!ndLd()) return r;
+  const g = frPlus(ldT(), -30);
+  r.kunder = S.ld.leads.filter(l => l.status === 'won' && l.kundD && l.kundD >= g).length;
+  r.tot = S.ld.leads.filter(l => ldSynlig(l) && !l.dubbl && l.status !== 'spam' && ldD(l.at) >= g).length;
+  return r;
+};
+// Den som inte fördelar leads ser sina egna, som säljaren (repots farFordela).
+const _ndLdVy = renderLdView;
+renderLdView = function(){
+  if (!ndLd() || ndLd().chef || S.role !== 'chef') return _ndLdVy();
+  const r = S.role; S.role = 'saljare'; try { return _ndLdVy(); } finally { S.role = r; }
+};
+// Fördela jämnt och automatiskt: utkastets regel, ett lead i taget till den som har minst.
+function ndLdPlan(){
+  const fs = ldForslag(), extra = {}, plan = [];
+  ldAttFordela().filter(l => !ldSpamLik(l)).forEach(l => {
+    const v = fs.map(x => ({...x, oppna:x.oppna + (extra[x.namn] || 0)})).sort(ndLdOrdning)[0];
+    if (!v) return; plan.push({id:l.id, till:ndLdId(v.namn)}); extra[v.namn] = (extra[v.namn] || 0) + 1;
+  });
+  return plan;
+}
+
+/* ---------- Skrivningar: /nav2/leads ---------- */
+function ndLdMinns(t){ try { sessionStorage.setItem('nd-ld', JSON.stringify({open:S.ldOpen || null, toast:t || null})); } catch(_){} }
+async function ndLdPost(handling, data = {}, {ladda = true, tyst = false} = {}){
+  try {
+    const r = await fetch('/nav2/leads', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
+    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    if (s.ok && !s.fel){
+      if (ladda){ ndLdMinns(!tyst ? {msg:s.ok, angra:s.angra || null} : null); setTimeout(() => location.reload(), 250); }
+      else if (!tyst) toast(s.ok);
+      return s;
+    }
+    if (!tyst) toast(s.fel || 'Det gick inte att spara.'); return s;
+  } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
+}
+(() => { if (!ndLd()) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-ld') || 'null'); sessionStorage.removeItem('nd-ld'); } catch(_){}
+  if (m) setTimeout(() => {
+    ldSt(); S.view = 'leads'; S.ldOpen = m.open && ldL(m.open) ? m.open : null; render(); window.scrollTo(0, 0);
+    if (m.toast && m.toast.msg){ const a = m.toast.angra; a ? toastActs(m.toast.msg, [['Ångra', () => ndLdPost(a.handling, a.data)]], 9000) : toast(m.toast.msg); }
+  }, 0); })();
+function ndLdGe(id, namn){
+  const till = ndLdId(namn);
+  if (!till){ toast(`${namn} finns inte i Nav.`); return; }
+  ndLdPost('ge', {id, till});
+}
+// Ordern från ett lead: Order skapar den, och sedan blir leadet kund med den ordern.
+const _ndLdOrdPost = ndOrdPost;
+ndOrdPost = async function(handling, data, opt){
+  const lid = handling === 'skapa' && S.ordNy && S.ordNy.lead;
+  const s = await _ndLdOrdPost(handling, data, opt);
+  if (lid && ndLd() && s && s.ok && s.id){ const k = await ndLdPost('kund', {id:lid, order:s.id}, {ladda:false, tyst:true}); if (k.fel) toast(`Ordern är lagd, men leadet kunde inte markeras som kund: ${k.fel}`); }
+  return s;
+};
+
+/* ---------- Knapparna ---------- */
+document.addEventListener('click', e => {
+  if (!ndLd() || S.view !== 'leads' || !S.ldInit) return;
+  const b = e.target.closest && e.target.closest('button, a'); if (!b || !b.dataset) return;
+  const ds = b.dataset, stopp = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+  if (ds.ldge){ stopp(); const [id, namn] = ds.ldge.split('|'); ndLdGe(id, namn); return; }
+  if (ds.ldjamt !== undefined){ stopp(); const plan = ndLdPlan(); if (!plan.length){ toast('Ingen säljare är instämplad just nu.'); return; } ndLdPost('jamt', {plan}); return; }
+  if (ds.ldpamin){ stopp(); const vem = ndLdId(ds.ldpamin); if (vem) ndLdPost('paminn', {vem}); return; }
+  if (ds.lddo){
+    const [a, id] = ds.lddo.split('|');
+    if (a === 'spam'){ stopp(); ndLdPost('spam', {id}); return; }
+    if (a === 'ateroppna'){ stopp(); ndLdPost('oppna', {id, nasta:aeArbFram(ldT(), 1) + ' 10:00'}); return; }
+    if (a === 'ge'){ stopp(); const v = ldForslag()[0]; if (v) ndLdGe(id, v.namn); else toast('Ingen säljare är instämplad just nu.'); return; }
+    return;   // Ring och Efter samtalet: utkastets formulär
+  }
+  if (ds.ldok !== undefined){
+    const F = S.ldForm, l = F && ldL(F.id); if (!F || !l || F.utfall === 'kund') return;   // Blev kund: Orders formulär, som i utkastet
+    stopp();
+    const not = (F.not || '').trim();
+    if (rxPnr(not)){ F.fel = 'Det ser ut som ett personnummer. Navet sparar inga, så ta bort det.'; ldRita(); return; }
+    if (F.utfall === 'nej' && !F.skal){ F.fel = 'Välj ett skäl.'; ldRita(); return; }
+    if (F.utfall === 'mote' && (!F.d || F.d < ldT() || !F.s)){ F.fel = 'Välj en dag från i dag och en tid.'; ldRita(); return; }
+    if (F.utfall === 'mote' && !frArbetsdag(F.d)){ F.fel = 'Det är en helgdag. Välj en vardag.'; ldRita(); return; }
+    const n = l.forsok.filter(y => y[2] === 'svar').length + 1;
+    const data = {id:l.id, utfall:F.utfall, not};
+    if (F.utfall === 'svar'){ data.nasta = ldNastaForsok(n); data.sms = !!F.sms; }
+    if (F.utfall === 'pratade') data.nasta = F.nar;
+    if (F.utfall === 'mote') Object.assign(data, {d:F.d, s:F.s, plats:F.plats});
+    if (F.utfall === 'nej') data.skal = F.skal;
+    ndLdPost('forsok', data);
+    return;
+  }
+}, true);
+document.addEventListener('change', e => {
+  if (!ndLd() || S.view !== 'leads' || !S.ldInit) return;
+  const d = e.target.dataset || {};
+  if (d.ldgeval !== undefined && e.target.value){ e.stopImmediatePropagation(); const namn = e.target.value; e.target.value = ''; ndLdGe(d.ldgeval, namn); return; }
+  if (d.ldauto !== undefined){ e.stopImmediatePropagation(); const pa = e.target.checked; e.target.checked = !!S.ld.auto; ndLdPost('auto', {pa, plan:pa ? ndLdPlan() : []}); return; }
+}, true);
+
+/* ---------- Startsidan: utkastets rad (ldinb) i Beslut och att göra och Din dag i korthet ---------- */
+// ndhem byter INBOX mot sina rader, så raden läggs i ndHemRader.
+if (typeof ndHemRader === 'function'){
+  const _ndLdHem = ndHemRader;
+  ndHemRader = function(){
+    const ut = _ndLdHem();
+    if (!ndLd() || !ndKopplad('leads')) return ut;
+    const chef = S.role === 'chef' && ndLd().chef, r = S.role;
+    if (S.role === 'chef' && !chef) S.role = 'saljare';
+    let x; try { x = ldInboxDel(); } finally { S.role = r; }
+    if (!x) return ut;
+    const sen = !!x.pill, n = chef ? ldAttFordela().length : ldMina().filter(ldRingNu).length;
+    ut.push({id:'ldinb', nar:x.nar, i:'lead', ton:x.ton, kind:'Leads', bkind:'leads', t:x.t, d:x.d, pill:x.pill, act:{l:chef ? 'Fördela' : 'Ring'},
+      heat:sen ? 4 : 2.8, bt:chef ? `{${n === 1 ? 'Ett nytt lead' : n + ' nya leads'}} att fördela.` : `{${n === 1 ? 'Ett lead' : n + ' leads'}} att ringa.`, src:'/leads', why:x.d[0] || '', ga:() => ldGa(), roles:[S.role], f:'leads'});
+    return ut;
+  };
+}
+
+if (ndLd()) NDKOPPLAD.add('leads');
+
+/* =====================================================================
    SKALET OCH ÖVERGÅNGEN (prefix skal), steg 4 till produktion
 
    Gäller bara i riktigt läge (ND). Ligger sist i modullistan, så att det som
@@ -31036,6 +31232,7 @@ ndGa = function(href){
     case 'anstallda': { if (sub && (!AEPERS.some(p => String(p[0]) === sub) || d[2] === 'registerutdrag')) return nav(); aeGaSrc(bas); return; }
     case 'rekrytering': { if (sub){ rxSt(); if (!S.rx.kand.some(c => String(c.id) === sub)) return nav(); } rxGaSrc(bas); return; }
     case 'avtal': if (sub) return nav(); maGa(); return;
+    case 'leads': { if (sub){ ldSt(); if (!ldL(sub)) return nav(); } ldGa(sub || null); return; }
     // /logg och /logg?typ=radering: filtret står i adressen, som i repots /logg.
     case 'logg': { if (sub) return nav();
       const typ = new URLSearchParams(h.split('?')[1] || '').get('typ'); rlsGaVy('logg'); if (RLSTYP.some(([k]) => k === typ)){ S.rlsLoggTyp = typ; render(); } return; }
@@ -31061,9 +31258,8 @@ render = function(){
   }
   skalForra = S.view; return _skalRender();
 };
-// Leads och K&V med en post: hela adressen följer med.
-const _skalLd = ldGaSrc, _skalKv = kvGaSrc;
-ldGaSrc = function(src){ if (ND && !ndKopplad('leads')) skalVag = String(src || '/leads'); return _skalLd(src); };
+// K&V med en post: hela adressen följer med.
+const _skalKv = kvGaSrc;
 kvGaSrc = function(src){ if (ND && !ndKopplad('kv')) skalVag = String(src || '/kv'); return _skalKv(src); };
 // Utkastets reservtoast blir vägen dit. Den kommer från en data-go eller källa som ingen vy tar hand om
 // ("I Nav öppnas /x. I utkastet finns bara startsidan."), från paletten och från felrapportens sida.

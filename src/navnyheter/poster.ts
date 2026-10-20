@@ -119,6 +119,13 @@ behörigheter som här: du ser bara det du får se.
   jag blir sjuk?", räknade ur Nav när du frågar och med källan på varje rad.
   Skriv ? för att se alla. Fritt skrivna frågor sparas utan namn, och säljchef,
   VD och admin ser dem samlade i ämnen och kan göra en rutin av dem.
+- **Leads**: förfrågningarna från hemsidan. Säljchef, VD och teamledare ger
+  varje lead till en säljare, med förslag på den som är på plats och har minst
+  att göra, fördelar jämnt eller låter Nav fördela automatiskt, och påminner
+  den som inte ringt. Säljaren ser sina egna, ringer och säger efter samtalet
+  hur det gick med ett klick: nästa försök läggs in av sig själv, ett bokat
+  möte hamnar i kalendern, och den som blev kund går direkt till en ny order.
+  Det mesta går att ångra en stund efteråt.
 - **Adoption**, för säljchef, VD och administratör: hur många som använt Nav
   i dag och de senaste sju dagarna, hur stor del av de anställda det är och
   hur många som kommer tillbaka, med trettio dagars staplar och samma siffror
