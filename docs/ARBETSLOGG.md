@@ -5,6 +5,14 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-20 · Nav 2.0, Händelseloggen: beställarens svar (ingen migration)
+
+- **Motiveringen syns inte** (svar 1): `reason` står kvar utanför raden, som förut.
+- **Bara superadmin** (svar 2), alltså VD och administratör, som Adoption: `byggLogg` ger `null` för alla andra utan en enda fråga, `moduler/ndlogg.js` tar Händelselogg ur chefens meny (rälsen, menyarket och palettens sidor läser den) och tar bort en tom grupp, och `ndGa('/logg')` ger beskedet "Händelseloggen visas bara för superadmin." i stället för vyn eller nuvarande Navs `/logg`. `audit_log_read` är orörd (säljchefen släpps fortfarande fram av RLS, men Nav 2.0 frågar inte).
+- **Sju dagar** (svar 3): i dag och de sex dagarna före, i svenska kalenderdygn (`LOGG_DAGAR`, `dagarBakat` och `svenskTidpunkt`), med taket `LOGG_TAK = 1000` mot en ovanligt stökig vecka. En vanlig vecka är ett hundratal rader (104 i dag). Fotnoten räknar raderna, som förut.
+- **Öppningar i en följd blir en rad** (svar 4): samma person och samma fil, eller samma persons inspelningar på samma order, där varje öppning kommer inom tio minuter efter den förra (`slaIhopFiler`). Raden får klockslaget då följden började, och för inspelningarna antalet: "3 säljsamtal · order till …". De tre raderna 11:41 var tre olika inspelningar på samma order, inte en inspelning tre gånger. 30 dagars öppningar: 25 blir 14 rader.
+- **Provat:** lokalt mot produktionen (Zen 104 rader på 7 dagar; rollerna säljchef + teamledare, ekonomi och säljare ger `null` på 0–1 ms; VD och admin var för sig ger loggen); klienten i headless Chrome som superadmin (1440 px: menyn, filtret, `/logg?typ=`, paletten, inga exempelnamn) och som Admin (1440 och 390 px: ingen System-grupp, ingen träff i paletten, beskedet på `/logg`), inga skriptfel. Typkontroll mot grenens låsta paket: 0 fel i Nav 2.0:s filer (två i `layout.tsx` är macOS skiftlägesfel, `Pling`/`pling`). Sidan byggdes ur grenens `utkast.html` med bara loggens modul och `ndGa`-raden utbytta, så andra delars okommitterade rader följer inte med.
+
 ## 2026-10-20 · Nav 2.0, Leads: beställarens svar (0135 KÖRD, Leads får spara)
 
 - **Superadmin ser och fördelar leads** (svar 1): `admin` i `lead_read` och

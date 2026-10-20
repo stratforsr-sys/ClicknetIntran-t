@@ -30211,8 +30211,11 @@ if (ndMa()) NDKOPPLAD.add('avtal');
    [dag, klockslag, typ, rubrik, vem, objekt]. moduler/rls.js delas med
    Adoption och ändras inte.
 
-   Bara chefen. RLS avgör vad som syns, och servern skickar ingenting till en
-   säljare. Loggen går inte att ändra, så här finns ingen rutt.
+   Bara superadmin (beställaren 2026-10-20): servern skickar ingenting till
+   någon annan, och då finns Händelseloggen inte för dem. Den står inte i
+   menyn, menyarket eller paletten, och en väg dit (ett bokmärke) ger ett
+   besked i stället för vyn, som i Adoption. Loggen visar de senaste sju
+   dagarna. Den går inte att ändra, så här finns ingen rutt.
    ===================================================================== */
 
 const ndLogg = () => ND && ND.logg;
@@ -30226,6 +30229,15 @@ if (ND){
     NDKOPPLAD.add('logg');
   }
 }
+
+// Utan ND.logg tas posten ur chefens meny, som rälsen, menyarket och palettens sidor läser.
+if (ND && !ndLogg()) NAV.chef.forEach(g => { const i = g.items.findIndex(x => x[2] === '/logg'); if (i >= 0) g.items.splice(i, 1); });
+for (let i = NAV.chef.length - 1; ND && i >= 0; i--) if (!NAV.chef[i].items.length) NAV.chef.splice(i, 1);
+const _ndLoggGa = rlsGa;
+rlsGa = function(h){
+  if (ND && h === '/logg'){ if (!ndLogg()) return false; rlsGaVy('logg'); return true; }
+  return _ndLoggGa(h);
+};
 
 /* =====================================================================
    NAV 2.0 I RIKTIGT LÄGE: PALETTEN (prefix ndPal), v47
@@ -31179,7 +31191,7 @@ if (ndLd()) NDKOPPLAD.add('leads');
    Gäller bara i riktigt läge (ND). Ligger sist i modullistan, så att det som
    skrivs över här ligger ovanpå vyernas moduler.
 
-   - En vy som inte är kopplad (Nyheter, Leads, K&V, Händelselogg)
+   - En vy som inte är kopplad (Nyheter, Leads, K&V)
      öppnas på samma sida i nuvarande Nav, vilken väg man än tar dit: menyn,
      paletten, startsidans kort, klockan eller en länk i en vy. Aldrig en
      mellansida, aldrig utkastets exempel.
@@ -31209,8 +31221,8 @@ ndGa = function(href){
   const h = String(href || '/'), bas = h.split(/[?#]/)[0], d = bas.split('/').filter(Boolean), vy = skalVy(bas), sub = d[1] || null;
   if (bas.startsWith('/installningar') || bas.startsWith('/profil')) return prfGaSrc(h);
   const nav = () => { location.assign(h); };
-  // Händelseloggen är bara chefens: en säljare får utkastets besked, inte nuvarande Navs /logg.
-  if (vy === 'logg' && S.role !== 'chef'){ toast('Händelseloggen och adoptionen är bara för chefer.'); return; }
+  // Händelseloggen är bara superadmins (beställaren 2026-10-20): alla andra får ett besked, inte nuvarande Navs /logg.
+  if (vy === 'logg' && (S.role !== 'chef' || (ND && !ND.logg))){ toast('Händelseloggen visas bara för superadmin.'); return; }
   if (!vy || skalNav(bas) || !ndKopplad(vy)) return nav();
   switch (vy){
     case 'hem': S.view = 'hem'; render(); window.scrollTo(0, 0); return;

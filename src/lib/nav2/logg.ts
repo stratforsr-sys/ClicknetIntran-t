@@ -2,17 +2,22 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CurrentUser } from "@/lib/auth";
-import { svenskKlocka, svensktDatum } from "@/lib/klocka";
+import { dagarBakat, svenskKlocka, svenskTidpunkt, svensktDatum } from "@/lib/klocka";
 import { heltNamn, nivaFor } from "./forma";
-import { arUuid, formaLogg, LOGG_RADER, type NdLogg, type RaFil, type RaFilvisning, type RaHandelse, type Uppslag } from "./loggforma";
+import { arUuid, formaLogg, LOGG_DAGAR, LOGG_TAK, type NdLogg, type RaFil, type RaFilvisning, type RaHandelse, type Uppslag } from "./loggforma";
 
 /**
  * Nav 2.0: händelseloggen (utkastets Händelselogg i moduler/rls.js, repots /logg).
  *
  * ===========================================================================
- * BARA CHEFEN, OCH RLS AVGÖR. `audit_log_read` släpper fram säljchef, VD och
- * admin, och `file_access_log_read` de filer den inloggade själv får öppna.
- * En säljare får ingenting (null), och vyn nås inte i utkastet.
+ * BARA SUPERADMIN (beställaren 2026-10-20), alltså VD och administratör. Det
+ * är snävare än `audit_log_read` (som också släpper in säljchefen), och för
+ * alla andra skickas ingenting: utkastet får null och visar inte vyn alls.
+ * Inom kretsen avgör RLS, och `file_access_log_read` ger de filer den
+ * inloggade själv får öppna.
+ *
+ * Loggen visar de senaste sju dagarna (LOGG_DAGAR), och samma inspelning som
+ * spelas flera gånger i rad blir en rad (loggforma.ts).
  *
  * Loggen går inte att ändra: här finns ingen rutt och inget SKRIVLAGE.
  * Händelserna är repots `audit_log` och de öppnade filerna i
@@ -24,11 +29,14 @@ import { arUuid, formaLogg, LOGG_RADER, type NdLogg, type RaFil, type RaFilvisni
 type RaPerson = { id: string; first_name: string | null; last_name: string | null };
 
 export async function byggLogg(supabase: SupabaseClient, user: CurrentUser): Promise<NdLogg | null> {
-  if (nivaFor(user.roles) === "salesperson") return null;
+  if (nivaFor(user.roles) !== "superadmin") return null;
+
+  const idag = svensktDatum();
+  const fran = svenskTidpunkt(dagarBakat(idag, LOGG_DAGAR - 1), "00:00").toISOString();
 
   const [{ data: hRader }, { data: fRader }, { data: pRader }] = await Promise.all([
-    supabase.from("audit_log").select("id, actor_id, action, object_type, object_id, ts, meta").order("ts", { ascending: false }).limit(LOGG_RADER),
-    supabase.from("file_access_log").select("id, file_id, actor_id, action, purpose, ts").neq("action", "upload").order("ts", { ascending: false }).limit(LOGG_RADER),
+    supabase.from("audit_log").select("id, actor_id, action, object_type, object_id, ts, meta").gte("ts", fran).order("ts", { ascending: false }).limit(LOGG_TAK),
+    supabase.from("file_access_log").select("id, file_id, actor_id, action, purpose, ts").neq("action", "upload").gte("ts", fran).order("ts", { ascending: false }).limit(LOGG_TAK),
     supabase.from("employee").select("id, first_name, last_name"),
   ]);
   const handelser = (hRader ?? []) as unknown as RaHandelse[];
@@ -75,5 +83,5 @@ export async function byggLogg(supabase: SupabaseClient, user: CurrentUser): Pro
     fil: new Map(filer2.map((f) => [f.id, f] as [string, RaFil])),
   };
 
-  return formaLogg(handelser, filer, u, svensktDatum(), { dag: (ts) => svensktDatum(ts), klocka: (ts) => svenskKlocka(ts) });
+  return formaLogg(handelser, filer, u, idag, { dag: (ts) => svensktDatum(ts), klocka: (ts) => svenskKlocka(ts) });
 }

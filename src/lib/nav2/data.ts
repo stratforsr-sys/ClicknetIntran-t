@@ -101,7 +101,7 @@ export type Nav2Data = {
   adoption: NdAdoption | null;
   /** Nyheter (0130): inläggen, kvittenserna, läskvittot för den som skrev, och Nytt i navet. */
   nyheter: NdNyheter;
-  /** Händelseloggen: bara chefen (null för en säljare), raderna i utkastets form (loggforma.ts). */
+  /** Händelseloggen: bara superadmin (null för alla andra), de senaste sju dagarna i utkastets form (loggforma.ts). */
   logg: NdLogg | null;
 };
 

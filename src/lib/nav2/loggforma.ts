@@ -59,8 +59,23 @@ export type NdLogg = {
   dagar: Record<string, string>;
 };
 
-/** Hur många rader loggen visar. Samma som repots /logg. */
-export const LOGG_RADER = 400;
+/**
+ * Hur långt bakåt loggen går: i dag och de sex dagarna före, i svenska
+ * kalenderdygn (beställaren 2026-10-20: "det räcker med 7 dagar för nu").
+ * Taket skyddar bara mot en ovanligt stökig vecka; en vanlig vecka är ett
+ * hundratal rader.
+ */
+export const LOGG_DAGAR = 7;
+export const LOGG_TAK = 1000;
+
+/**
+ * Öppningar i en följd blir en rad (beställaren 2026-10-20): samma person och
+ * samma fil, eller samma persons inspelningar på samma order (en order kan ha
+ * flera samtal), där varje öppning kommer inom så här många minuter efter den
+ * förra. Raden får klockslaget då följden började, och för inspelningarna
+ * hur många samtal det var.
+ */
+export const SAMMA_LASNING_MIN = 10;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const arUuid = (s: unknown): s is string => typeof s === "string" && UUID.test(s);
@@ -473,14 +488,15 @@ function vem(actor: string | null, prefix: string, u: Uppslag): string {
 
 /* ---------- Filerna ---------- */
 
-function filRad(f: RaFilvisning, u: Uppslag): { rubrik: string; objekt: string } {
+function filRad(f: RaFilvisning, u: Uppslag, antal = 1): { rubrik: string; objekt: string } {
   const fil = u.fil.get(f.file_id);
   const andamal = fil?.purpose ?? f.purpose ?? "";
   const om = fil?.subject_employee_id ? u.namn.get(fil.subject_employee_id) ?? null : null;
   switch (andamal) {
     case "call_recording": {
       const kund = fil?.sales_order_id ? u.order.get(fil.sales_order_id) : undefined;
-      return { rubrik: "Inspelning öppnad", objekt: kund ? `Säljsamtal · order till ${maskera(kund)}` : fil?.sales_order_id ? "Säljsamtal till en order" : om ? `Säljsamtal · ${om}` : "Säljsamtal" };
+      const samtal = antal > 1 ? `${antal} säljsamtal` : "Säljsamtal";
+      return { rubrik: "Inspelning öppnad", objekt: kund ? `${samtal} · order till ${maskera(kund)}` : fil?.sales_order_id ? `${samtal} till en order` : om ? `${samtal} · ${om}` : samtal };
     }
     case "employment_contract": return { rubrik: "Avtal öppnat", objekt: om ? `Anställningsavtal · ${om}` : "Anställningsavtal" };
     case "sales_order": return { rubrik: "Avtal öppnat", objekt: fil?.sales_order_id && u.order.get(fil.sales_order_id) ? `Order till ${maskera(u.order.get(fil.sales_order_id) as string)}` : "Avtal på en order" };
@@ -491,6 +507,23 @@ function filRad(f: RaFilvisning, u: Uppslag): { rubrik: string; objekt: string }
     case "sick_certificate": return { rubrik: "Bilaga öppnad", objekt: FRANVARO };
   }
   return { rubrik: "Fil öppnad", objekt: "En fil" };
+}
+
+export type Filfoljd = { f: RaFilvisning; filer: Set<string> };
+
+/** Öppningarna i följder: den första öppningen i varje följd, och vilka filer följden öppnade. */
+export function slaIhopFiler(filer: RaFilvisning[], u: Uppslag): Filfoljd[] {
+  const oppen = new Map<string, { foljd: Filfoljd; sist: number }>();
+  const kvar: Filfoljd[] = [];
+  for (const f of [...filer].sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts))) {
+    const fil = u.fil.get(f.file_id), order = (fil?.purpose ?? f.purpose) === "call_recording" ? fil?.sales_order_id : null;
+    const nyckel = `${f.actor_id ?? ""}|${f.action}|${order ? `o${order}` : `f${f.file_id}`}`, t = Date.parse(f.ts), o = oppen.get(nyckel);
+    if (o && t - o.sist <= SAMMA_LASNING_MIN * 60000) { o.foljd.filer.add(f.file_id); o.sist = t; continue; }
+    const foljd = { f, filer: new Set([f.file_id]) };
+    oppen.set(nyckel, { foljd, sist: t });
+    kvar.push(foljd);
+  }
+  return kvar;
 }
 
 /* ---------- Dagen ---------- */
@@ -520,18 +553,19 @@ export function formaLogg(handelser: RaHandelse[], filer: RaFilvisning[], u: Upp
       },
     })),
     // Uppladdningar står redan i audit_log (contract.file_added, sales_order.attachment_added).
-    ...filer.filter((f) => f.action !== "upload").map((f) => ({
+    ...slaIhopFiler(filer.filter((f) => f.action !== "upload"), u).map(({ f, filer: antal }) => ({
       ts: f.ts,
       nyckel: `f${String(f.id).padStart(12, "0")}`,
-      rad: (): NdLoggRad => { const x = filRad(f, u); return [tid.dag(f.ts), tid.klocka(f.ts), "utlamnande", x.rubrik, vem(f.actor_id, "file", u), x.objekt]; },
+      rad: (): NdLoggRad => { const x = filRad(f, u, antal.size); return [tid.dag(f.ts), tid.klocka(f.ts), "utlamnande", x.rubrik, vem(f.actor_id, "file", u), x.objekt]; },
     })),
   ];
   alla.sort((a, b) => (a.ts < b.ts ? 1 : a.ts > b.ts ? -1 : a.nyckel < b.nyckel ? 1 : -1));
+  const forsta = plusDagar(idag, -(LOGG_DAGAR - 1));
   const rader: NdLoggRad[] = [];
   for (const x of alla) {
-    if (rader.length >= LOGG_RADER) break;
+    if (rader.length >= LOGG_TAK) break;
     const r = x.rad();
-    if (r) rader.push(r);
+    if (r && r[0] >= forsta) rader.push(r);
   }
   const dagar: Record<string, string> = {};
   for (const r of rader) if (!dagar[r[0]]) dagar[r[0]] = dagRubrik(r[0], idag);
