@@ -5,6 +5,21 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-21 · Nav 2.0, Anställda: företagets underlag raderas aldrig med en person (0170 skriven, inte körd)
+
+- **Spärren:** `ta_bort_anstalld()` (0046) raderar allt med ON DELETE CASCADE
+  mot employee, och dit hör samtalsinspelningarna (`file_object`, 5 743 för
+  nio säljare) och anställningsavtalen (`contract`). "Ta bort helt" för den
+  som har börjat spärras därför när de skulle följa med: rutan säger vad som
+  finns ("1 694 samtalsinspelningar och anställningsavtalet") och erbjuder
+  Avsluta anställningen. `radera` prövar samma sak (`skyddat()` i
+  `/nav2/anstallda`), och GET `?referenser=` svarar med `skyddat`.
+- **0170** tar de två ur `anstalld_raderingsmal()`, så att de räknas som
+  "behalls" och personalposten står kvar med "(borttagen anställd)", som för
+  en signerad order. Provad i en transaktion som rullades tillbaka (Edvin:
+  `file_object` 1 695 och `contract` 1 går från raderas till behalls). När
+  den är körd släpper spärren av sig själv.
+
 ## 2026-10-21 · Nav 2.0, Provision: superadmin sätter chefens sats (ingen migration)
 
 Beställaren 2026-10-20 (svar på steg 5:s fråga 2): bokföringen i gamla

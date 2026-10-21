@@ -29903,15 +29903,19 @@ aeRaderaRuta = function(p){
   const h = _ndaeRaderaRutaC2(p);
   if (!ndAe() || !ndAeHarBorjat(p)) return h;
   const slutad = p.status === 'offboarded', fn = esc(aeFor(p.namn)), ok = ndAeNamnLika(S.ndAeRadNamn, p.namn);
+  const R = S.ndAeRef && S.ndAeRef.pid === p.id ? S.ndAeRef : null, avsl = slutad ? '' : '<button class="btn btn-s btn-sm" data-aeavslut>Avsluta anställningen</button>';
+  // Företagets underlag (inspelningarna, anställningsavtalet) raderas aldrig med en person: då finns bara Avsluta.
+  if (R && R.skyddat) return h.replace(/^<div class="aebanner fara">[\s\S]*?<\/div>/, () => `<div class="aebanner fara">${I('fel')}<span><b>${esc(p.namn)} kan inte tas bort helt.</b> ${fn} har ${esc(R.skyddat)}, som är företagets underlag och skulle raderas med posten. ${slutad ? 'Anställningen är avslutad: inloggningen är stängd, och allt står kvar.' : 'Avsluta anställningen i stället: inloggningen stängs och rollerna återkallas, och allt står kvar.'}</span><button class="btn btn-s btn-sm" data-aeraderax>${slutad ? 'Stäng' : 'Avbryt'}</button>${avsl}</div>`);
   const ruta = `<div class="aebanner fara">${I('fel')}<span><b>Ta bort ${esc(p.namn)} helt?</b> ${slutad ? 'Anställningen är redan avslutad.' : `Sägs ${fn} upp räcker det att avsluta anställningen: inloggningen stängs och rollerna återkallas, och lön, order, provision och historiken står kvar.`} Ta bort helt raderar personalposten och det som bara hör till ${fn}, och går inte att ångra. Skriv namnet för att bekräfta.</span>
     <input class="uin" data-ndaeradnamn style="flex:1 1 200px;max-width:260px" placeholder="${esc(p.namn)}" value="${esc(S.ndAeRadNamn || '')}" aria-label="Skriv ${esc(p.namn)} för att bekräfta" autocomplete="off" spellcheck="false">
-    <button class="btn btn-s btn-sm" data-aeraderax>Avbryt</button>${slutad ? '' : '<button class="btn btn-s btn-sm" data-aeavslut>Avsluta anställningen</button>'}<button class="btn btn-sm aefarlig" data-aeraderaok="${p.id}" ${ok ? '' : 'disabled'}>Ta bort helt</button></div>`;
+    <button class="btn btn-s btn-sm" data-aeraderax>Avbryt</button>${avsl}<button class="btn btn-sm aefarlig" data-aeraderaok="${p.id}" ${ok && R && !R.hamtar && !R.fel ? '' : 'disabled'}>Ta bort helt</button></div>`;
   return h.replace(/^<div class="aebanner fara">[\s\S]*?<\/div>/, () => ruta);
 };
 document.addEventListener('input', e => {
   if (!ndAe() || S.view !== 'anstallda' || !e.target.dataset || e.target.dataset.ndaeradnamn === undefined) return;
   S.ndAeRadNamn = e.target.value; const p = aeP(S.aePers), b = document.querySelector('[data-aeraderaok]');
-  if (p && b) b.disabled = !ndAeNamnLika(S.ndAeRadNamn, p.namn);
+  const R = S.ndAeRef && p && S.ndAeRef.pid === p.id ? S.ndAeRef : null;
+  if (p && b) b.disabled = !ndAeNamnLika(S.ndAeRadNamn, p.namn) || !R || R.hamtar || !!R.fel;
 }, true);
 // Teamen i fliken Personal: namn och teamledare. Teamledaren ser medlemmarnas uppgifter (leads_employee()).
 function ndAeTeamKort(){

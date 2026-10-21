@@ -6,7 +6,7 @@ import { svensktDatum } from "@/lib/klocka";
 import { skickaEpost } from "@/lib/epost";
 import { notifiera } from "@/lib/notishandelse-server";
 import { PERMISSION_LABEL, PERMISSIONS, ROLES, type Permission, type Role } from "@/lib/roles";
-import { perTabell } from "@/lib/personal-radering";
+import { perTabell, type Referens } from "@/lib/personal-radering";
 import { laggUppAnstalld } from "@/lib/anstallning-server";
 import { anstalldaVerktyg, namnPa, startFran, type MallPunkt, type Person } from "@/lib/nav2/anstallda-start";
 import {
@@ -106,6 +106,31 @@ type Punkt = {
 };
 const PUNKT = "id, employee_id, label, state, kind, item_key, owner, owner_id, self_owned, rule_id, ask_for, reminded, offset_days, offset_special, due_date, created_on, sent_on, mail_subject, mail_body, condition";
 
+/**
+ * Beställaren 2026-10-21 ("best practice"): företagets underlag raderas aldrig med en person. Samtalsinspelningarna är
+ * bevis för ordrarna, och anställningsavtalet ska sparas. `ta_bort_anstalld()` raderar dem (file_object och contract har
+ * ON DELETE CASCADE mot employee), så "Ta bort helt" spärras när de skulle följa med. 0170 låter dem stå kvar med namnet;
+ * när den är körd räknas de som "behalls" och spärren släpper av sig själv. Svarar med vad som skulle raderas, eller null.
+ */
+async function skyddat(db: ReturnType<typeof supabaseAdmin>, pid: string): Promise<string | null> {
+  const { data } = await db.rpc("referenser_till_anstalld", { p_employee: pid });
+  const rader = (data ?? []) as Referens[], raderas = (t: string) => rader.some((x) => x.tabell === t && x.atgard === "raderas");
+  if (!raderas("file_object") && !raderas("contract")) return null;
+  const antal = async (q: PromiseLike<{ count: number | null }>) => (await q).count ?? 0;
+  const [filer, insp, avtal] = await Promise.all([
+    raderas("file_object") ? antal(db.from("file_object").select("id", { count: "exact", head: true }).eq("subject_employee_id", pid)) : 0,
+    raderas("file_object") ? antal(db.from("file_object").select("id", { count: "exact", head: true }).eq("subject_employee_id", pid).eq("purpose", "call_recording")) : 0,
+    raderas("contract") ? antal(db.from("contract").select("id", { count: "exact", head: true }).eq("employee_id", pid)) : 0,
+  ]);
+  const tal = (n: number) => n.toLocaleString("sv-SE");
+  const delar = [
+    insp ? `${tal(insp)} ${insp === 1 ? "samtalsinspelning" : "samtalsinspelningar"}` : "",
+    // Avtalets PDF ligger både i contract och i file_object: det är samma avtal.
+    avtal ? (avtal === 1 ? "anställningsavtalet" : `${tal(avtal)} avtal`) : filer - insp ? `${tal(filer - insp)} ${filer - insp === 1 ? "fil" : "filer"}` : "",
+  ].filter(Boolean);
+  return delar.length ? (delar.length > 1 ? `${delar.slice(0, -1).join(", ")} och ${delar[delar.length - 1]}` : delar[0]) : null;
+}
+
 /** Gamla Nav C: vad en borttagning tar med sig, som "Visa vad som tas bort" på /personal/[id]. Läsning, svarar också i läsläge. */
 export async function GET(request: Request) {
   const user = await getCurrentUser();
@@ -116,7 +141,7 @@ export async function GET(request: Request) {
   if ((await niva(user.employee.id)) !== "superadmin") return svar({ fel: "Bara en superadmin ändrar i personalen." }, 403);
   try {
     const rader = await hamtaReferenser(pid);
-    return svar({ ok: "", raderas: perTabell(rader.filter((r) => r.atgard === "raderas")), behalls: perTabell(rader.filter((r) => r.atgard === "behalls")) });
+    return svar({ ok: "", raderas: perTabell(rader.filter((r) => r.atgard === "raderas")), behalls: perTabell(rader.filter((r) => r.atgard === "behalls")), skyddat: await skyddat(supabaseAdmin(), pid) });
   } catch (e) {
     return svar({ fel: e instanceof Error ? e.message : "Kunde inte läsa vad som hänger i personen." }, 403);
   }
@@ -263,6 +288,8 @@ export async function POST(request: Request) {
         const bekraftelse = borjat ? String(b.bekraftelse ?? "") : namnPa(p);
         if (borjat && bekraftelse.replace(/\s+/g, " ").trim().toLowerCase() !== namnPa(p).replace(/\s+/g, " ").trim().toLowerCase())
           return svar({ fel: `Skriv ${namnPa(p)} för att bekräfta.` }, 400);
+        const skydd = borjat ? await skyddat(db, p.id) : null;
+        if (skydd) return svar({ fel: `${namnPa(p)} har ${skydd}, som är företagets underlag och skulle raderas med posten. Avsluta anställningen i stället: inloggningen stängs, och allt står kvar.` }, 400);
         const { data: oppna } = borjat ? { data: [] } : await db.from("onboarding_task").select(PUNKT).eq("employee_id", p.id).eq("kind", "regel").eq("state", "open");
         const besked = (oppna ?? []) as unknown as Punkt[];
         const s = await medOmdirigering(() => taBortAnstalld({} as Parameters<typeof taBortAnstalld>[0], form({ employee_id: p.id, bekraftelse })));
