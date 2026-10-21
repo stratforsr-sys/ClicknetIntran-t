@@ -21,7 +21,8 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
   `arkiveraUppgiftsmall`). Momenten skrivs en per rad, `titel | dag | minuter`
   som i repot, med en förhandsvisning. "/" i snabbraden lägger nu mallen som
   uppgifter på riktigt (`anvandUppgiftsmall`, start i dag); förut kom bara en
-  toast.
+  toast. "Lägg ut" på en mall i kortet lägger den från en dag man väljer, som
+  gamla Navs mallsida.
 - **Serier:** "Avsluta serien" i uppgiftsrutan för en uppgift i en serie
   (`avslutaSerie`, seriens ägare).
 - **Kopplingar:** "Koppla" i uppgiftsrutan, till en order, en person, ett

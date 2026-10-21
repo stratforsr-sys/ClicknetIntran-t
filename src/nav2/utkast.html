@@ -26082,11 +26082,14 @@ function ndMallPrev(E){
   const rader = String(E.moment || '').split('\n').map(r => r.trim()).filter(Boolean);
   if (!rader.length) return 'Skriv minst ett moment.';
   const dagar = rader.map(r => +((r.split('|')[1] || '0').trim()) || 0);
-  return `${rader.length} moment, ${Math.max(...dagar) ? `från dag 0 till dag ${Math.max(...dagar)}` : 'alla samma dag'}. Den som använder mallen väljer startdagen.`;
+  return `${rader.length} moment, ${Math.max(...dagar) ? `från dag 0 till dag ${Math.max(...dagar)}` : 'alla samma dag'}. Dag 0 är startdagen: i dag med / i snabbraden, eller den dag du väljer under Lägg ut.`;
 }
 function ndMallKort(){
   const u = ndUp(), E = S.ndMallE;
-  const rad = m => `<li><span><b>${esc(m.namn)}</b> <span class="muted">${m.moment.length} moment${m.delad ? ' · delad' : ''}${m.egen ? '' : ' · någon annans'}</span></span>${m.egen ? `<button type="button" class="tlink" data-ndmandra="${m.id}">Ändra</button><button type="button" class="tlink" data-ndmarkiv="${m.id}">Arkivera</button>` : ''}</li>`;
+  const L = S.ndMallLagg;
+  const rad = m => L && L.id === m.id
+    ? `<li><span><b>${esc(m.namn)}</b> <span class="muted">${m.moment.length} moment, från</span></span><input type="date" class="uin" data-ndmdag value="${L.dag}" aria-label="Startdag"><button type="button" class="btn btn-p btn-sm" data-ndmlaggok="${m.id}">Lägg ut</button><button type="button" class="tlink" data-ndmlaggx>Avbryt</button></li>`
+    : `<li><span><b>${esc(m.namn)}</b> <span class="muted">${m.moment.length} moment${m.delad ? ' · delad' : ''}${m.egen ? '' : ' · någon annans'}</span></span><button type="button" class="tlink" data-ndmlagg="${m.id}">Lägg ut</button>${m.egen ? `<button type="button" class="tlink" data-ndmandra="${m.id}">Ändra</button><button type="button" class="tlink" data-ndmarkiv="${m.id}">Arkivera</button>` : ''}</li>`;
   const form = E ? `<div class="tiform"><div class="tifrow"><label>Namn<input class="uin" data-ndmf="namn" value="${esc(E.namn)}" maxlength="80" placeholder="Till exempel: Ny kund, första veckan"></label></div>
       <textarea class="uin num" rows="5" data-ndmf="moment" aria-label="Moment, ett per rad" placeholder="Ring kunden | 0&#10;Skicka offerten | 2 | 30">${esc(E.moment)}</textarea>
       <p class="tiprev on" data-ndmprev>${ndMallPrev(E)}</p>
@@ -26166,6 +26169,7 @@ document.addEventListener('change', e => {
   const d = e.target.dataset, v = e.target.value;
   if (d.ndpf && S.ndProj){ e.stopImmediatePropagation(); S.ndProj[d.ndpf] = v; return; }
   if (d.ndmdelad !== undefined && S.ndMallE){ S.ndMallE.delad = e.target.checked; return; }
+  if (d.ndmdag !== undefined && S.ndMallLagg){ e.stopImmediatePropagation(); S.ndMallLagg.dag = v; return; }
   if (d.ndkslag !== undefined && S.ndKoppla){ e.stopImmediatePropagation(); S.ndKoppla.slag = v; S.ndKoppla.mal = ''; render(); return; }
   if (d.ndkmal !== undefined && S.ndKoppla){ e.stopImmediatePropagation(); S.ndKoppla.mal = v; return; }
   if (d.ndksynlig !== undefined && S.ndKoppla){ S.ndKoppla.synlig = e.target.checked; return; }
@@ -26198,6 +26202,9 @@ document.addEventListener('click', e => {
   if (d.ndmspara !== undefined){ stopp(); const E = S.ndMallE; if (!(E.namn || '').trim()){ toast('Ge mallen ett namn.'); return; } if (!(E.moment || '').trim()){ toast('En mall behöver minst ett moment.'); return; }
     ndUpgPost(E.id ? 'mall-andra' : 'mall-ny', {mall:E.id || undefined, namn:E.namn.trim(), moment:E.moment, besk:E.besk || '', delad:!!E.delad}); return; }
   if (d.ndmarkiv){ stopp(); ndUpgPost('mall-arkivera', {mall:d.ndmarkiv}); return; }
+  if (d.ndmlagg){ stopp(); S.ndMallLagg = {id:d.ndmlagg, dag:kIdag()}; render(); return; }
+  if (d.ndmlaggx !== undefined){ stopp(); S.ndMallLagg = null; render(); return; }
+  if (d.ndmlaggok){ stopp(); const dag = S.ndMallLagg && /^\d{4}-\d{2}-\d{2}$/.test(S.ndMallLagg.dag) ? S.ndMallLagg.dag : kIdag(); S.ndMallLagg = null; ndUpgPost('mall', {mall:d.ndmlaggok, dag}); return; }
   if (d.ndserieslut){ stopp(); toastActs('Avsluta serien? Inga nya förekomster skapas, och de kommande som ingen rört tas bort. Den här står kvar.', [['Avsluta serien', () => ndUpgPost('serie-avsluta', {id:d.ndserieslut})]], 9000); return; }
   if (d.ndkoppla){ stopp(); S.ndKoppla = {id:d.ndkoppla, slag:'order', mal:'', synlig:false, val:null}; render();
     fetch('/nav2/uppgifter?kopplingsval=1', {credentials:'same-origin'}).then(r => r.json()).then(s => { if (S.ndKoppla && S.ndKoppla.id === d.ndkoppla){ S.ndKoppla.val = s.val || {}; if (s.fel) toast(s.fel); render(); } }).catch(() => { toast('Nav svarade inte.'); }); return; }
