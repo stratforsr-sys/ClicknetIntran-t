@@ -5,6 +5,35 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-21 · Nav 2.0, gamla Navs sista funktioner E: Rutiner och Coachning (ingen migration)
+
+- **Rutinernas bilagor** (svar 7): rutinrutan har avsnittet Bilagor, med
+  länkar till `/filer/<id>` (kortlivad adress, varje öppning loggas) och
+  storlek, och "sökbar" för en PDF. Säljchef, admin och ägaren lägger till
+  (PDF, JPG, PNG, högst 10 MB) och tar bort. Filen går direkt till lagringen
+  (R2 eller Supabase) med repots signerade adress; CSP:ns connect-src släpper
+  in R2 sedan `afd00f5`. Rutterna `bilaga-forbered`, `bilaga-registrera` och
+  `bilaga-bort` = repots `forberedBilaga`, `registreraBilaga`, `taBortBilaga`;
+  borttagningen prövar först att filen är en bilaga på just den rutinen.
+  `ND.rutiner.rutiner[].bilagor` läses med den inloggades token (`file_object`
+  ärver dokumentets policy), och `farRed` säger vem som får ändra.
+- **Coachningens mallar med flera steg** (svar 11, ersätter C4): kortet Mallar
+  i chefens Läget visar mallarna med momenten, och Ny mall skriver dem en per
+  rad som i repot (`rubrik | typ | dagar | slug | fokusområden`), med en
+  förhandsvisning som säger vad som är fel. "Från mall" på personens
+  Överenskommelser lägger upp alla moment på en gång, med fristerna från en
+  vald startdag. Rutterna `mall-ny` och `mall-tillampa` = `skapaMall` och
+  `tillampaMall`. `ND.coachning.mallar` (null för säljaren).
+- **"Påbörja":** "Jag har börjat" för den uppgiften gäller, "Markera som
+  påbörjad" för chefen, på en överenskommelse som inte påbörjats och inte
+  bockas av av sig själv. Rutten `paborja` = `paborjaUppgift`, och Ångra tar
+  bort händelseraden (`handelse-ater` tar nu också `paborjad`).
+- **Vägarna:** `/rutiner/ny` öppnar redaktören, `/rutiner/<slug>/redigera`
+  rutinen i redaktören, `/rutiner/<slug>/kvittenser` Förvaltning med vem som
+  saknas, och `/coachning/mallar` mallkortet. Den som inte får redigera eller
+  förvalta får rutinen. Allt bakom `SKRIVLAGE.rutiner` och
+  `SKRIVLAGE.coachning` (423 i läsläge). Spannet 0180–0184 är oanvänt.
+
 ## 2026-10-21 · Nav 2.0, Utbildning: alla gör om systemguiderna, och nattjobbet kan lägga sina ärenden (Gamla Nav F; ingen migration)
 
 Beställarens svar 2026-10-21: att alla gör om turerna i Nav 2.0 "är viktigt",

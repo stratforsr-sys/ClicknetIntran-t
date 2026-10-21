@@ -27798,6 +27798,61 @@ document.addEventListener('input', e => {
   // Sökningen: dina senaste, och en sökning utan träff utan ditt namn.
   if (e.target.id === 'rsok'){ clearTimeout(ndRutSokTimer); ndRutSokTimer = setTimeout(() => { const q = S.rq.trim(); if (q.length < 2 || q === ndRutSokSist) return; ndRutSokSist = q; ndRutPost('sok', {q, traffar:rSok(q).length}, {ladda:false, tyst:true}); }, 1500); }
 }, true);
+/* ---------- Gamla Nav E: bilagorna och vägarna ----------
+   Beställaren 2026-10-20 (svar 7): bilagor till en rutin byggs in. Länken går till /filer/<id>, som ger en
+   kortlivad adress och loggar varje öppning (E2.12, K36), och aldrig direkt till lagringen. Säljchef, admin
+   och ägaren lägger till och tar bort (repots kravRedaktor). */
+const ndRutStorlek = b => b < 1024 ? `${b} B` : b < 1048576 ? `${Math.round(b / 1024)} kB` : `${(b / 1048576).toFixed(1).replace('.', ',')} MB`;
+function ndRutBilagor(r){
+  const l = r.bilagor || [], red = r.farRed;
+  if (!l.length && !red) return '';
+  const laddar = S.ndRutBil === r.id;
+  return `<section class="rtn-blk" aria-label="Bilagor"><div class="rtn-bh"><h3>Bilagor</h3>${l.length ? `<span class="rtn-rm num">${l.length}</span>` : ''}</div>
+    ${l.length ? l.map(b => `<div class="rtn-fr"><div class="rtn-frt"><b><a href="/filer/${b.id}" target="_blank" rel="noopener noreferrer">${esc(b.namn)}</a></b><span class="rtn-rm"><span class="num">${ndRutStorlek(b.byte)}</span>${b.sokbar ? ' · <span title="Texten i filen går att söka på">sökbar</span>' : ''}</span></div>${red ? `<span class="rtn-knappar"><button type="button" class="tlink" data-ndrutbilbort="${b.id}">Ta bort</button></span>` : ''}</div>`).join('') : '<p class="rtn-rm">Inga bilagor.</p>'}
+    ${red ? `<div class="pacts"><label class="btn btn-s btn-sm"${laddar ? ' aria-disabled="true"' : ''}>${laddar ? 'Laddar upp …' : 'Lägg till bilaga'}<input type="file" accept="application/pdf,image/jpeg,image/png" data-ndrutbil="${r.id}" hidden ${laddar ? 'disabled' : ''}></label><span class="rtn-rm">PDF, JPG eller PNG, högst 10 MB. Texten i en PDF blir sökbar.</span></div>` : ''}</section>`;
+}
+const _ndRtnKroppE = rtnKropp;
+rtnKropp = function(r, o){
+  const h = _ndRtnKroppE(r, o); if (!ndRut()) return h;
+  const b = ndRutBilagor(r); if (!b) return h;
+  const fb = feedbackHtml(r), i = fb ? h.lastIndexOf(fb) : -1;
+  return i >= 0 ? h.slice(0, i) + b + h.slice(i) : h + b;
+};
+// En signerad adress, filen direkt till lagringen (R2 eller Supabase), och sedan registreras den.
+document.addEventListener('change', async e => {
+  if (!ndRut() || !e.target.dataset || e.target.dataset.ndrutbil === undefined) return;
+  e.stopImmediatePropagation(); const id = e.target.dataset.ndrutbil, f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f) return;
+  if (!['application/pdf', 'image/jpeg', 'image/png'].includes(f.type)){ toast('Bara PDF, JPG eller PNG.'); return; }
+  if (f.size > 10 * 1048576){ toast('Filen är större än 10 MB.'); return; }
+  S.ndRutBil = id; render();
+  const klar = m => { S.ndRutBil = null; render(); if (m) toast(m); };
+  const p = await ndRutPost('bilaga-forbered', {id, filnamn:f.name, mime:f.type, storlek:f.size}, {ladda:false, tyst:true});
+  if (!p.ok){ klar(p.fel || 'Bilagan kom inte fram.'); return; }
+  const mal = p.url || (p.supabaseUrl && p.token ? `${p.supabaseUrl}/storage/v1/object/upload/sign/${p.bucket}/${p.path}?token=${encodeURIComponent(p.token)}` : null);
+  const r = mal ? await fetch(mal, {method:'PUT', headers:{'Content-Type':f.type}, body:f}).catch(() => ({ok:false})) : {ok:false};
+  if (!r.ok){ klar('Bilagan kom inte fram. Försök igen.'); return; }
+  const s = await ndRutPost('bilaga-registrera', {id, fil:p.fileId, filnamn:f.name, store:p.store});
+  if (s.fel) klar();
+}, true);
+document.addEventListener('click', e => {
+  if (!ndRut() || S.view !== 'rutiner') return;
+  const b = e.target.closest && e.target.closest('button'); if (!b || !b.dataset || !b.dataset.ndrutbilbort) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  const id = S.rOpen, r = rutin(id), x = r && (r.bilagor || []).find(q => q.id === b.dataset.ndrutbilbort); if (!x) return;
+  toastActs(`Ta bort ”${x.namn}” från rutinen? Filen går inte längre att öppna härifrån.`, [['Ta bort', () => ndRutPost('bilaga-bort', {id, fil:x.id})]], 8000);
+}, true);
+// Vägarna (ndGa i ndskal.js): /rutiner/ny, /rutiner/<slug>/redigera och /rutiner/<slug>/kvittenser.
+// Den som inte får redigera eller förvalta får rutinen, eller Rutiner.
+function ndRutGa(sub, vad){
+  const r = sub && sub !== 'ny' ? rutin(sub) : null, chef = chefRoll();
+  S.view = 'rutiner';
+  if (sub === 'ny'){ S.rOpen = null; if (chef) S.rtnRed = rtnRedNy(''); render(); window.scrollTo(0, 0); return; }
+  if (!r){ S.rOpen = null; render(); window.scrollTo(0, 0); return; }
+  if (vad === 'redigera' && r.farRed){ S.rtnRed = rtnRedFran(r, 'lista'); S.rOpen = r.id; render(); return; }
+  if (vad === 'kvittenser' && chef && r.kvittGrad){ S.rtab = 'forv'; S.rOpen = null; S.rtnKvOppen = r.id; render(); setTimeout(() => document.getElementById('rtn-f-kv')?.scrollIntoView({block:'start', behavior:'smooth'}), 30); return; }
+  rOppna(r.id);
+}
+
 if (ndRut()){ ndRutStart(); NDKOPPLAD.add('rutiner'); }
 
 /* =====================================================================
@@ -30743,6 +30798,111 @@ if (typeof ndGa === 'function'){
   ndGa = function(h){ if (ndCn() && ndKopplad('coachning') && /^\/coachning(\/|$)/.test(String(h || ''))){ cnGa(String(h)); return; } return _ndCnNdGa(h); };
 }
 
+/* ---------- Gamla Nav E: mallarna med flera steg och "påbörja" ----------
+   Beställaren 2026-10-20 (svar 11, ersätter C4): mallarna och "påbörja" byggs in. En mall är en rampplan:
+   momenten skrivs en gång och läggs upp som överenskommelser för en person, med fristerna räknade från en
+   startdag (repots skapaMall och tillampaMall). Utkastets "Mallar" i Ny överenskommelse fyller fortfarande
+   bara i fälten. "Påbörja" är repots paborjaUppgift: den uppgiften gäller, eller chefen, en gång. */
+const NDCN_MALLTYP = {uppgift:'Uppgift', manus:'Manus', medlyssning:'Medlyssning', kurs:'Utbildning', lasning:'Läs och kvittera'};
+function ndCnMallPrev(text){
+  const rader = String(text || '').split('\n').map(r => r.trim()).filter(Boolean);
+  if (!rader.length) return {ok:false, tom:true, t:'Skriv ett moment per rad.'};
+  if (rader.length > 50) return {ok:false, t:'Högst 50 moment i en mall.'};
+  let max = 0;
+  for (const [i, r] of rader.entries()){
+    const d = r.split('|').map(x => x.trim()), typ = d[1] || 'uppgift', dag = d[2] ? Number(d[2]) : 0;
+    if (!d[0]) return {ok:false, t:`Rad ${i + 1} saknar rubrik.`};
+    if (!NDCN_MALLTYP[typ]) return {ok:false, t:`Rad ${i + 1}: ”${d[1]}” är ingen malltyp. Skriv ${Object.keys(NDCN_MALLTYP).join(', ')}.`};
+    if (!Number.isInteger(dag) || dag < 0 || dag > 365) return {ok:false, t:`Rad ${i + 1}: dagarna ska vara ett heltal mellan 0 och 365.`};
+    if ((typ === 'kurs' || typ === 'lasning') && !d[3]) return {ok:false, t:`Rad ${i + 1}: ${NDCN_MALLTYP[typ].toLowerCase()} behöver en slug i fjärde fältet.`};
+    max = Math.max(max, dag);
+  }
+  return {ok:true, t:`${rader.length} moment, ${max ? `från dag 0 till dag ${max}` : 'alla samma dag'}. Slugar och fokusområden prövas när mallen sparas.`};
+}
+// Kortet Mallar i chefens Läget (högerkolumnen), och /coachning/mallar.
+function ndCnMallKort(){
+  const C = ndCn(), l = C.mallar || [], E = S.ndCnMallE, opp = S.ndCnMallOpp;
+  const rad = m => { const sista = m.moment.length ? Math.max(...m.moment.map(x => x.dag)) : 0, o = opp === m.id;
+    return `<li class="cnarad${o ? ' open' : ''}"><button class="cnahead" data-ndcnmallopp="${m.id}" aria-expanded="${o}"><span class="cnai">${I('notes')}</span><span class="cnat"><b>${esc(m.namn)}</b><small>${m.moment.length} moment${sista ? ` · sista efter ${sista} ${sista === 1 ? 'dag' : 'dagar'}` : ''}</small></span><span class="cnap">${m.aktiv ? '' : '<span class="pill t-neutral">Vilande</span>'}</span>${I('chev', 'cnachev')}</button>
+      ${o ? `<div class="cnabody">${m.besk ? `<p class="cnbesk">${esc(m.besk)}</p>` : ''}<ol class="cnmallmom">${m.moment.map(x => `<li><span class="num muted">dag ${x.dag}</span> ${esc(x.t)} <small class="muted">${NDCN_MALLTYP[x.typ] || esc(x.typ)}</small></li>`).join('')}</ol><p class="cnhint">Läggs upp från personens kort, under Överenskommelser.</p></div>` : ''}</li>`; };
+  const pv = E ? ndCnMallPrev(E.moment) : null;
+  const form = E ? `<div class="tiform"><div class="tifrow"><label>Namn<input class="uin" data-ndcnmf="namn" value="${esc(E.namn)}" maxlength="120" placeholder="Till exempel: Rampplan, nya säljare"></label></div>
+      <textarea class="uin num" rows="6" data-ndcnmf="moment" aria-label="Moment, ett per rad" placeholder="Lyssna på tre avslut | medlyssning | 2&#10;Säljmanuset | lasning | 3 | saljmanus&#10;Första veckan | kurs | 5 | introduktion | Avslut">${esc(E.moment)}</textarea>
+      <p class="tiprev on" data-ndcnmprev${pv.ok || pv.tom ? '' : ' style="color:var(--danger)"'}>${esc(pv.t)}</p>
+      <textarea class="uin" rows="2" data-ndcnmf="besk" placeholder="Vad mallen är till för. Valfritt.">${esc(E.besk)}</textarea>
+      <div class="pacts"><button class="btn btn-p btn-sm" data-ndcnmspara>Spara mallen</button><button class="btn btn-s btn-sm" data-ndcnmavbryt>Avbryt</button><span class="muted tihint">En rad: rubrik | typ | dagar från start | slug | fokusområden. Typerna: ${Object.keys(NDCN_MALLTYP).join(', ')}. Kurs och läsning behöver kursens eller rutinens slug.</span></div></div>` : '';
+  return `<section class="card" aria-label="Mallar" id="ndCnMallar"><div class="chead"><h2>Mallar</h2><span class="meta num">${l.length}</span>${E ? '' : '<span class="end"><button class="tlink" data-ndcnmny>Ny mall</button></span>'}</div>
+    ${form}
+    ${l.length ? `<ul class="cnalist">${l.map(rad).join('')}</ul>` : E ? '' : '<div class="empty"><b>Ingen mall än</b>En mall är en rampplan: momenten skrivs en gång och läggs upp för varje ny person, med fristerna från startdagen.</div>'}</section>`;
+}
+const _ndCnLagetVyE = cnLagetVy;
+cnLagetVy = function(){
+  const h = _ndCnLagetVyE(); if (!ndCn() || !ndCn().mallar) return h;
+  return h.replace(/(<\/div><\/div>)$/, ndCnMallKort() + '$1');
+};
+// Personens kort: "Från mall" bredvid Ny, med startdagen. Alla moment blir överenskommelser på en gång.
+function ndCnMallTForm(vem){
+  const l = (ndCn().mallar || []).filter(m => m.aktiv), T = S.ndCnMallT, m = l.find(x => x.id === T.mall);
+  const sista = m && m.moment.length ? frPlus(T.dag, Math.max(...m.moment.map(x => x.dag))) : null;
+  return `<div class="tiform" data-ndcnmallt><div class="tifrow"><label>Mall<select class="uin" data-ndcnmt="mall"><option value="">Välj</option>${l.map(x => `<option value="${x.id}" ${T.mall === x.id ? 'selected' : ''}>${esc(x.namn)}</option>`).join('')}</select></label><label>Startdag<input type="date" class="uin cndate" data-ndcnmt="dag" value="${T.dag}"></label></div>
+    <p class="tiprev on">${m ? `${m.moment.length} ${m.moment.length === 1 ? 'överenskommelse' : 'överenskommelser'} för ${esc(cnFor(vem))}, ${sista && sista !== T.dag ? `från ${frKort(T.dag)} till ${frKort(sista)}` : `${frKort(T.dag)}`}. ${esc(cnFor(vem))} får dem i Coachning.` : 'Välj en mall.'}</p>
+    <div class="pacts"><button class="btn btn-p btn-sm" data-ndcnmtok ${m ? '' : 'disabled'}>Lägg upp</button><button class="btn btn-s btn-sm" data-ndcnmtx>Avbryt</button></div></div>`;
+}
+const _ndCnAvtKortE = cnAvtKort;
+cnAvtKort = function(vem, chef){
+  let h = _ndCnAvtKortE(vem, chef); const C = ndCn();
+  if (!C || !chef || !C.mallar || !C.mallar.some(m => m.aktiv)) return h;
+  h = h.replace(/(<button class="btn btn-s btn-sm" data-cnny="[^"]*">)/, `<button class="tlink" data-ndcnmallt="${esc(vem)}">Från mall</button>$1`);
+  return S.ndCnMallT && S.ndCnMallT.vem === vem ? h.replace(/(<\/span><\/div>)/, `$1${ndCnMallTForm(vem)}`) : h;
+};
+// Påbörja: den uppgiften gäller ("Jag har börjat") eller chefen ("Markera som påbörjad"). Inte för det som bockas av
+// av sig självt (utbildning, inspelade rollspel, läsning).
+const _ndCnAvtInneE = cnAvtInne;
+cnAvtInne = function(a, chef, st){
+  const h = _ndCnAvtInneE(a, chef, st);
+  if (!ndCn() || st !== 'ej_paborjad' || (CNTYP[a.typ] || {}).sjalv || (!chef && a.vem !== cnMig())) return h;
+  const k = `<button class="btn btn-s btn-sm" data-ndcnpaborja="${a.id}">${chef ? 'Markera som påbörjad' : 'Jag har börjat'}</button>`;
+  return h.includes('<div class="cnaknapp">') ? h.replace('<div class="cnaknapp">', `<div class="cnaknapp">${k}`) : h + `<div class="cnaknapp">${k}</div>`;
+};
+// /coachning/mallar (cnGa nedan): chefens Läget med mallkortet.
+function ndCnGaMallar(){
+  S.view = 'coachning'; S.cnPers = null; S.cnMote = null;
+  if (S.role !== 'chef' || !ndCn().mallar){ render(); window.scrollTo(0, 0); return; }
+  render(); setTimeout(() => document.getElementById('ndCnMallar')?.scrollIntoView({block:'start', behavior:'smooth'}), 30);
+}
+const _ndCnGaE = cnGa;
+cnGa = function(src){
+  const p = String(src || '').split('?')[0].split('/');
+  if (ndCn() && p[2] === 'mallar' && !p[3]){ ndCnGaMallar(); return; }
+  return _ndCnGaE(src);
+};
+document.addEventListener('input', e => {
+  if (!ndCn() || S.view !== 'coachning' || !e.target.dataset) return;
+  const d = e.target.dataset;
+  if (d.ndcnmf && S.ndCnMallE){ S.ndCnMallE[d.ndcnmf] = e.target.value; if (d.ndcnmf === 'moment'){ const pv = document.querySelector('[data-ndcnmprev]'), r = ndCnMallPrev(e.target.value); if (pv){ pv.textContent = r.t; pv.style.color = r.ok || r.tom ? '' : 'var(--danger)'; } } }
+}, true);
+document.addEventListener('change', e => {
+  if (!ndCn() || S.view !== 'coachning' || !e.target.dataset || !e.target.dataset.ndcnmt || !S.ndCnMallT) return;
+  e.stopImmediatePropagation(); S.ndCnMallT[e.target.dataset.ndcnmt] = e.target.value; render();
+}, true);
+document.addEventListener('click', e => {
+  if (!ndCn() || S.view !== 'coachning') return;
+  const b = e.target.closest && e.target.closest('button'); if (!b || !b.dataset) return;
+  const d = b.dataset, stopp = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+  if (d.ndcnpaborja){ stopp(); ndCnPost('paborja', {id:d.ndcnpaborja}, {angra:ndCnHandAter(d.ndcnpaborja)}); return; }
+  if (d.ndcnmny !== undefined){ stopp(); S.ndCnMallE = {namn:'', moment:'', besk:''}; render(); setTimeout(() => document.querySelector('[data-ndcnmf="namn"]')?.focus(), 30); return; }
+  if (d.ndcnmavbryt !== undefined){ stopp(); S.ndCnMallE = null; render(); return; }
+  if (d.ndcnmspara !== undefined){ stopp(); const E = S.ndCnMallE, r = ndCnMallPrev(E.moment);
+    if (!E.namn.trim()){ toast('Ge mallen ett namn.'); return; } if (!r.ok){ toast(r.t); return; }
+    ndCnPost('mall-ny', {namn:E.namn.trim(), moment:E.moment, besk:E.besk.trim()}); return; }
+  if (d.ndcnmallopp){ stopp(); S.ndCnMallOpp = S.ndCnMallOpp === d.ndcnmallopp ? null : d.ndcnmallopp; render(); return; }
+  if (d.ndcnmallt){ stopp(); S.ndCnMallT = S.ndCnMallT && S.ndCnMallT.vem === d.ndcnmallt ? null : {vem:d.ndcnmallt, mall:'', dag:cnT()}; render(); return; }
+  if (d.ndcnmtx !== undefined){ stopp(); S.ndCnMallT = null; render(); return; }
+  if (d.ndcnmtok !== undefined){ stopp(); const T = S.ndCnMallT; if (!T || !T.mall) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(T.dag)){ toast('Välj en startdag.'); return; }
+    S.ndCnMallT = null; ndCnPost('mall-tillampa', {mall:T.mall, vem:ndCnId(T.vem), dag:T.dag}); return; }
+}, true);
+
 if (ndCn()){ ndCnStart(); NDKOPPLAD.add('coachning'); }
 
 /* =====================================================================
@@ -32151,8 +32311,8 @@ if (ndLd()) NDKOPPLAD.add('leads');
 /* ---------- Vägarna ---------- */
 // Adresser som alltid hör till nuvarande Nav, även när vyn de ligger under är kopplad.
 const SKALNAV = ['/tid/sparrar', '/sparrar', '/schema', '/admin', '/lonekostnad', '/satser', '/avtal/mallar', '/avtal/nytt', '/avtal/bifoga',
-  '/logga-in', '/byt-losenord', '/uppstart', '/design', '/coachning/mallar', '/kv/regler', '/provision/regler', '/provision/underlag',
-  '/arenden/statistik', '/kalender/delning', '/kalender/overlamning', '/rutiner/ny', '/franvaro/regler', '/regler', '/filer', '/auth'];
+  '/logga-in', '/byt-losenord', '/uppstart', '/design', '/kv/regler', '/provision/regler', '/provision/underlag',
+  '/arenden/statistik', '/kalender/delning', '/kalender/overlamning', '/franvaro/regler', '/regler', '/filer', '/auth'];
 const skalNav = h => SKALNAV.some(p => h === p || h.startsWith(p + '/') || h.startsWith(p + '?'));
 function skalVy(h){
   const f = '/' + (h.split(/[/?#]/)[1] || '');
@@ -32176,7 +32336,8 @@ ndGa = function(href){
     case 'hem': S.view = 'hem'; render(); window.scrollTo(0, 0); return;
     // Gamla Nav D: /uppgifter/projekt/<id> (projektet; utan id projektkolumnen), /uppgifter/mallar (mallarna) och /uppgifter/genomgang (veckogenomgången).
     case 'uppgifter': { if (sub === 'projekt' && !d[3]){ ndUpgGaProjekt(d[2] || null); return; } if (sub === 'mallar' && !d[2]){ ndUpgGaMallar(); return; } if (sub === 'genomgang' && !d[2]){ ndUpgGaGenomgang(); return; } const t = sub && TASKS.find(x => String(x.id) === sub); if (sub && !t) return nav(); S.view = 'uppgifter'; S.todoOpen = false; S.panel = t ? t.id : null; render(); window.scrollTo(0, 0); return; }
-    case 'rutiner': { if (sub && !(typeof rutin === 'function' && rutin(sub))) return nav(); if (sub){ rOppna(sub); return; } S.view = 'rutiner'; S.rOpen = null; render(); window.scrollTo(0, 0); return; }
+    // Gamla Nav E: /rutiner/ny (redaktören), /rutiner/<slug>/redigera och /rutiner/<slug>/kvittenser (Förvaltning).
+    case 'rutiner': { if (sub === 'ny' || (sub && ['redigera', 'kvittenser'].includes(d[2]) && !d[3])){ ndRutGa(sub, d[2]); return; } if (sub && !(typeof rutin === 'function' && rutin(sub))) return nav(); if (sub){ rOppna(sub); return; } S.view = 'rutiner'; S.rOpen = null; render(); window.scrollTo(0, 0); return; }
     case 'utbildning': if (ndUtbGa(d)) return; return nav();
     // Gamla Nav A: /tid/schema (chefens Scheman och regler, säljarens Ditt schema) och /tid/lonerapport/<id> (perioden).
     case 'tid': { if (sub === 'schema' && !d[2]){ ndTidSchemaGa(); return; } if (sub === 'lonerapport' && d[2] && !d[3]){ ndTidPeriod(d[2]); return; } const tab = {lonerapport:'lon', avvikelser:'sena', 'ogiltig-franvaro':'sena'}[sub]; if (sub && (!tab || d[2])) return nav(); gaTid(tab || null); return; }

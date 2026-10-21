@@ -79,6 +79,9 @@ export type NdCnMedd = { id: string; vem: string; fran: string; franId: string; 
 export type NdCnPunkt = { id: string; vem: string; text: string; kalla: string; av: string | null };
 export type NdCnMal = { vem: string; text: string; modul: string; datum: string };
 
+/** Gamla Nav E: en coachningsmall med flera steg (`coaching_template`), som /coachning/mallar. `dag` räknas från startdagen. */
+export type NdCnMall = { id: string; namn: string; besk: string; aktiv: boolean; moment: { t: string; typ: string; dag: number }[] };
+
 export type NdCoachning = {
   utan0100: boolean;
   chef: boolean;
@@ -94,6 +97,8 @@ export type NdCoachning = {
   namn: Record<string, string>;
   val: { kurser: [string, string][]; rollspel: [string, string][]; rutiner: [string, string][] } | null;
   utkast: Record<string, unknown>;
+  /** Gamla Nav E: mallarna för den som coachar (farCoacha), med RLS. null för säljaren. */
+  mallar: NdCnMall[] | null;
 };
 
 const saknas = (e: { message?: string } | null | undefined) => !!e && /does not exist|schema cache|could not find|finns inte/i.test(e.message ?? "");
@@ -145,8 +150,15 @@ export async function byggCoachning(supabase: SupabaseClient, user: CurrentUser)
   const chef = farCoacha(user);
   const idag = svensktDatum();
   const nu = new Date();
-  const tom: NdCoachning = { utan0100: false, chef, fokus: [], personer: [], ovningar: [], avtal: [], logg: [], medd: [], punkter: [], mal: [], forfr: {}, namn: {}, val: null, utkast: {} };
+  const tom: NdCoachning = { utan0100: false, chef, fokus: [], personer: [], ovningar: [], avtal: [], logg: [], medd: [], punkter: [], mal: [], forfr: {}, namn: {}, val: null, utkast: {}, mallar: null };
   if (!mig) return tom;
+  // Gamla Nav E: coachningsmallarna, startade direkt och invänta sist. Saknas tabellen blir listan tom.
+  const mallP = chef
+    ? tidig(Promise.all([
+        supabase.from("coaching_template").select("id, name, description_md, active").order("name"),
+        supabase.from("coaching_template_item").select("template_id, sort, kind, title, offset_days").order("sort"),
+      ]))
+    : null;
 
   // Laget och lägena, med repots egna funktioner.
   let personer: { id: string; namn: string; senast: string | null }[] = [];
@@ -433,6 +445,19 @@ export async function byggCoachning(supabase: SupabaseClient, user: CurrentUser)
     mal.push({ vem: r.employee_id, text: String(m.text).slice(0, 300), modul: String(m.modul ?? ""), datum: String(m.datum ?? "") });
   }
 
+  const mallRader = mallP ? await mallP : null;
+  const mallar: NdCnMall[] | null = mallRader
+    ? ((mallRader[0].data ?? []) as { id: string; name: string; description_md: string | null; active: boolean }[]).map((m) => ({
+        id: m.id,
+        namn: m.name,
+        besk: m.description_md ?? "",
+        aktiv: m.active !== false,
+        moment: ((mallRader[1].data ?? []) as { template_id: string; sort: number; kind: string; title: string; offset_days: number }[])
+          .filter((p) => p.template_id === m.id)
+          .map((p) => ({ t: p.title, typ: p.kind, dag: p.offset_days })),
+      }))
+    : null;
+
   const utkastMap: Record<string, unknown> = {};
   for (const u of (utkast.data ?? []) as { key: string; value: unknown }[]) utkastMap[u.key.slice("coachning.utkast.".length)] = u.value;
 
@@ -460,5 +485,6 @@ export async function byggCoachning(supabase: SupabaseClient, user: CurrentUser)
         }
       : null,
     utkast: utkastMap,
+    mallar,
   };
 }

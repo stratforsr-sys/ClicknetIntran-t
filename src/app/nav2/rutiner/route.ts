@@ -5,7 +5,7 @@ import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { dagarBakat, svensktDatum } from "@/lib/klocka";
 import { notifiera, notifieraFlera } from "@/lib/notishandelse-server";
 import { DOC_TYPES, type DocType } from "@/lib/dokument";
-import { arkivera, kvittera, markeraGranskad, skapaDokument, sparaDokument } from "@/app/(app)/rutiner/actions";
+import { arkivera, forberedBilaga, kvittera, markeraGranskad, registreraBilaga, skapaDokument, sparaDokument, taBortBilaga } from "@/app/(app)/rutiner/actions";
 import { skapaUppgift } from "@/app/(app)/uppgifter/actions";
 import { franMarkdown, tillMarkdown, type Rutinfalt } from "@/lib/nav2/rutinformat";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
@@ -29,6 +29,10 @@ export const dynamic = "force-dynamic";
  * rutinen dig?" och ägarens svar, bevakning av ett område, veckans rutin,
  * skicka till en kollega, påminnelse om kvittens, återställ ur arkivet och
  * släng ett utkast.
+ *
+ * Gamla Nav E (2026-10-21): bilagor (`forberedBilaga`, `registreraBilaga`,
+ * `taBortBilaga`). Filen går direkt till lagringen (R2 eller Supabase) med
+ * den signerade adressen; CSP:ns connect-src släpper in R2 (`csp.ts`).
  * ===========================================================================
  *
  * LÄSLÄGE: står `SKRIVLAGE.rutiner` på false svarar rutten 423 innan något skrivs.
@@ -279,6 +283,32 @@ export async function POST(request: Request) {
         await db.from("document").delete().eq("id", d.id).eq("status", "draft");
         await db.from("audit_log").insert({ actor_id: mig, action: "document.draft_deleted", object_type: "document", object_id: d.id, meta: { titel: d.title } });
         return svar({ ok: "Utkastet är slängt." });
+      }
+
+      case "bilaga-forbered": {
+        // Gamla Nav E: repots forberedBilaga prövar redaktören (säljchef, admin, ägaren) och ger en signerad adress.
+        const d = await dokument();
+        if (!d) return svar({ fel: "Rutinen finns inte." }, 404);
+        const s = await forberedBilaga(d.id, String(b.filnamn ?? "bilaga").slice(0, 200), String(b.mime ?? ""), Number(b.storlek ?? 0));
+        return "fel" in s && s.fel ? svar({ fel: s.fel }, 400) : svar({ ok: "Klar att ladda upp.", ...s, supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ?? null });
+      }
+      case "bilaga-registrera": {
+        // Filen ligger uppe: repots registreraBilaga knyter den till rutinen och gör en PDF sökbar.
+        const d = await dokument();
+        if (!d) return svar({ fel: "Rutinen finns inte." }, 404);
+        if (!UUID.test(String(b.fil ?? ""))) return svar({ fel: "Okänd fil." }, 400);
+        const s = await registreraBilaga(d.id, String(b.fil), String(b.filnamn ?? "bilaga").slice(0, 200), String(b.store ?? ""));
+        return s.fel ? svar({ fel: s.fel }, 400) : svar({ ok: "Bilagan är tillagd." });
+      }
+      case "bilaga-bort": {
+        // Bara en bilaga på just den rutinen: repots taBortBilaga prövar dokumentet, inte filen.
+        const d = await dokument();
+        if (!d) return svar({ fel: "Rutinen finns inte." }, 404);
+        const fil = String(b.fil ?? "");
+        const { data: rad } = UUID.test(fil) ? await db.from("file_object").select("id").eq("id", fil).eq("document_id", d.id).eq("purpose", "document_attachment").is("removed_at", null).maybeSingle() : { data: null };
+        if (!rad) return svar({ fel: "Bilagan finns inte." }, 404);
+        const s = await taBortBilaga({}, form({ id: d.id, fil_id: fil }));
+        return s.fel ? svar({ fel: s.fel }, 400) : svar({ ok: "Bilagan är borttagen." });
       }
 
       case "spara": {

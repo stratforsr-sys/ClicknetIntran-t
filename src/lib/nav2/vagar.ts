@@ -21,7 +21,8 @@
 const SJALV: RegExp[] = [
   /^\/uppgifter(\/[^/]+)?$/,
   /^\/uppgifter\/projekt\/[0-9a-f-]{36}$/,
-  /^\/rutiner(\/(?!ny$)[^/]+)?$/,
+  /^\/rutiner(\/[^/]+)?$/,
+  /^\/rutiner\/[^/]+\/(redigera|kvittenser)$/,
   /^\/utbildning(\/[^/]+)?$/,
   /^\/utbildning\/prov\/[^/]+$/,
   /^\/utbildning\/oversikt\/systemguider$/,
@@ -34,7 +35,7 @@ const SJALV: RegExp[] = [
   /^\/fel(\/nytt)?$/,
   /^\/order$/,
   /^\/provision$/,
-  /^\/coachning(\/(?!mallar$)[^/]+)?$/,
+  /^\/coachning(\/[^/]+)?$/,
   /^\/coachning\/uppgift\/[^/]+$/,
   /^\/personal(\/[^/]+)?$/,
   /^\/rekrytering(\/(?!ny$)[^/]+)?$/,

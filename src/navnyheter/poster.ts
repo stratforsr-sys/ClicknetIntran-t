@@ -46,7 +46,8 @@ behörigheter som här: du ser bara det du får se.
 - **Rutiner**, navets egna: sök, spara, följ steg för steg, kvittera, säg om
   rutinen hjälpte och bevaka ett område. Ägaren svarar på återkopplingen,
   och den som förvaltar rutinerna ser kvittenser, granskning och vad folk
-  sökt efter utan att hitta.
+  sökt efter utan att hitta. En rutin kan ha bilagor, till exempel en
+  prislista som PDF, och texten i en PDF går att söka på.
 - **Startsidan**: det som väntar på dig samlat ur de kopplade vyerna, med
   de tre mest bråttom överst och knappen för att göra det direkt. Chefen ser
   dagsläget och vilka som är borta framåt, och vid dagens slut nästa
@@ -81,6 +82,9 @@ behörigheter som här: du ser bara det du får se.
   Utbildning följer med. Chefen ser laget med det som behöver något först, går
   igenom 1:1:et i fyra steg och bokar nästa direkt. Det mesta du gör går att
   ångra en stund efteråt, och en överenskommelse som avbryts får ett skäl.
+  Chefen skriver mallar med flera steg och lägger upp en hel rampplan på en
+  gång från en startdag, och den som börjat på en överenskommelse kan säga
+  det med ett tryck.
 - **Anställda**, för säljchef, VD och administratörer: vad som kräver dig och
   vad andra inte gjort än, lagens frister, registret med oanvända konton,
   checklistan per person med datum från startdagen, semestersaldot som

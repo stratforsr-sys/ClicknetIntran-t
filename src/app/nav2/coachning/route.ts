@@ -10,10 +10,12 @@ import {
   avbrytUppgift,
   kvittera,
   lamnaIn,
+  paborjaUppgift,
   skapaSamtal,
   skapaUppgift as skapaCoachuppgift,
 } from "@/app/(app)/coachning/actions";
 import { avbryt as avbrytEgen, skapaUppgift } from "@/app/(app)/uppgifter/actions";
+import { skapaMall, tillampaMall } from "@/app/(app)/coachning/mallar/actions";
 import { skapaSerie } from "@/app/(app)/kalender/moten/actions";
 import { lk } from "@/lib/leveranskalender-server";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
@@ -50,6 +52,14 @@ export const dynamic = "force-dynamic";
  * sitt slag. Utan 0101 avvisar databasen bytet, och då märks den med
  * `nav2_kind` som förut.
  * ===========================================================================
+ *
+ * Gamla Nav E (2026-10-21, svar 11): mallarna med flera steg (`skapaMall`,
+ * `tillampaMall`, med repots kontroller av slugar, fokusområden och chefskap)
+ * och "påbörja" (`paborjaUppgift`, som Ångras med händelseraden).
+ *
+ * Gamla Nav E (2026-10-21, svar 11): mallarna med flera steg (`skapaMall`,
+ * `tillampaMall`, med repots kontroller av slugar, fokusområden och chefskap)
+ * och "påbörja" (`paborjaUppgift`, som Ångras med händelseraden).
  *
  * LÄSLÄGE: står `SKRIVLAGE.coachning` på false svarar rutten 423 innan något skrivs.
  */
@@ -372,6 +382,26 @@ export async function POST(request: Request) {
         }
         return svar({ ok: "Överenskommelsen är lagd. Personen ser den i Coachning." });
       }
+      case "paborja": {
+        // Gamla Nav E: den uppgiften gäller eller dennes chef (repots paborjaUppgift prövar det). En gång, inte två.
+        const u = await uppgift(str(b.id, 40));
+        if (!u) return svar({ fel: "Överenskommelsen finns inte." }, 404);
+        const s = await paborjaUppgift({}, form({ task_id: u.id }));
+        return s.fel ? svar({ fel: s.fel }, 400) : svar({ ok: s.ok ?? "Markerad som påbörjad." });
+      }
+      case "mall-ny": {
+        // Momenten en per rad: rubrik | typ | dagar | slug | fokusområden (repots tolkaMall).
+        if (!coach) return svar({ fel: "Bara teamledare, säljchef och VD hanterar coachningsmallar." }, 403);
+        return fran(await skapaMall({}, form({ name: str(b.namn, 120), description_md: str(b.besk, 2000), moment: str(b.moment, 8000) })), "Mallen är sparad.");
+      }
+      case "mall-tillampa": {
+        // Alla moment blir överenskommelser i en insert, med fristerna räknade från startdagen.
+        const vem = str(b.vem, 40), dag = str(b.dag, 10);
+        if (!coach || !UUID.test(vem) || !(await chefFor(vem))) return svar({ fel: "Du kan bara lägga upp uppgifter för personer du är chef för." }, 403);
+        if (!DATUM.test(dag)) return svar({ fel: "Startdatumet är inte giltigt." }, 400);
+        const s = await tillampaMall({}, form({ template_id: str(b.mall, 40), assignee_id: vem, start_date: dag }));
+        return s.fel ? svar({ fel: s.fel }, 400) : svar({ ok: s.ok ?? "Mallen är lagd." });
+      }
       case "lamna-in": {
         const u = await uppgift(str(b.id, 40));
         if (!u || u.assignee_id !== mig) return svar({ fel: "Överenskommelsen finns inte." }, 404);
@@ -475,7 +505,7 @@ export async function POST(request: Request) {
           .select("id, at")
           .eq("task_id", u.id)
           .eq("by_employee_id", mig)
-          .in("type", ["kvitterad", "underkand", "inlamnad"])
+          .in("type", ["kvitterad", "underkand", "inlamnad", "paborjad"])
           .order("at", { ascending: false })
           .limit(1)
           .maybeSingle();

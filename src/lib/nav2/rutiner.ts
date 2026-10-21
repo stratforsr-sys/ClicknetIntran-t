@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { fullName, hasRole, type CurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { svensktDatum } from "@/lib/klocka";
+import { visningsnamn } from "@/lib/filer";
 import { franMarkdown } from "./rutinformat";
 
 /**
@@ -60,6 +61,10 @@ export type NdRutin = {
   audienceRoles: string[];
   audienceTeams: string[];
   kategoriSokvag: string;
+  /** Gamla Nav E: bilagorna (E2.12), som /rutiner/[slug]. Länkarna går till /filer/<id>, som loggar varje öppning. */
+  bilagor: { id: string; namn: string; byte: number; sokbar: boolean }[];
+  /** Säljchef, admin eller ägaren: samma krets som repots kravRedaktor, som får lägga till och ta bort bilagor. */
+  farRed: boolean;
 };
 
 export type NdRutiner = {
@@ -154,6 +159,12 @@ export async function byggRutiner(supabase: SupabaseClient, user: CurrentUser): 
 
   const dokRader = (doks ?? []) as Dok[];
   const ids = dokRader.map((d) => d.id);
+  // Gamla Nav E: bilagorna med den inloggades token. file_object ärver dokumentets policy (0022), så den
+  // som inte ser dokumentet ser inte heller att det har bilagor. Startad här, väntas in före formningen.
+  const bilagorP = ids.length
+    ? Promise.resolve(supabase.from("file_object").select("id, document_id, filename, mime_type, size_bytes").eq("purpose", "document_attachment").in("document_id", ids).is("removed_at", null).order("uploaded_at"))
+    : Promise.resolve({ data: [] as { id: string; document_id: string; filename: string | null; mime_type: string; size_bytes: number }[] });
+  bilagorP.catch(() => {});
   const [{ data: versioner }, { data: visningar }, { data: hjalpt }, { data: allaKvitton }, { data: granskningar }] = ids.length
     ? await Promise.all([
         supabase.from("document_version").select("document_id, version, body_md, changed_at, change_note").in("document_id", ids).order("version", { ascending: false }),
@@ -164,6 +175,10 @@ export async function byggRutiner(supabase: SupabaseClient, user: CurrentUser): 
       ])
     : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }];
 
+  const { data: bilageRader } = await bilagorP;
+  const bilagorPer = new Map<string, NdRutin["bilagor"]>();
+  for (const f of (bilageRader ?? []) as { id: string; document_id: string; filename: string | null; mime_type: string; size_bytes: number }[])
+    bilagorPer.set(f.document_id, [...(bilagorPer.get(f.document_id) ?? []), { id: f.id, namn: visningsnamn({ purpose: "document_attachment", filename: f.filename, mime_type: f.mime_type }), byte: f.size_bytes, sokbar: f.mime_type === "application/pdf" }]);
   const pers = (personal ?? []) as { id: string; first_name: string; last_name: string; team_id: string | null; status: string }[];
   const namn = new Map(pers.map((p) => [p.id, fullName(p)]));
   const aktiva = pers.filter((p) => p.status !== "offboarded");
@@ -248,6 +263,8 @@ export async function byggRutiner(supabase: SupabaseClient, user: CurrentUser): 
       audienceRoles: d.audience_roles ?? [],
       audienceTeams: d.audience_teams ?? [],
       kategoriSokvag: d.category_path,
+      bilagor: bilagorPer.get(d.id) ?? [],
+      farRed: redaktor || d.owner_id === mig,
     };
   };
 
