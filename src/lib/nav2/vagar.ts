@@ -19,7 +19,8 @@
  * klientnavigeringar och prefetch ar inte dokument och rors inte.
  */
 const SJALV: RegExp[] = [
-  /^\/uppgifter(\/(?!projekt$|mallar$|genomgang$)[^/]+)?$/,
+  /^\/uppgifter(\/[^/]+)?$/,
+  /^\/uppgifter\/projekt\/[0-9a-f-]{36}$/,
   /^\/rutiner(\/(?!ny$)[^/]+)?$/,
   /^\/utbildning(\/[^/]+)?$/,
   /^\/utbildning\/prov\/[^/]+$/,

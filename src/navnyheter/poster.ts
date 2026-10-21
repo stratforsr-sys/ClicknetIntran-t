@@ -30,7 +30,11 @@ behörigheter som här: du ser bara det du får se.
 - **Satser och löner**, för den som har behörigheten för lönekostnad.
 - **Tid**, **Frånvaro** och **Uppgifter**, med samma regler som här. I Uppgifter
   väljer du dagens tre, planerar och avslutar dagen, skriver första steget och
-  påminner den du väntar på. I Frånvaro kan chefen starta önskemålsrundan
+  påminner den du väntar på. Där lägger du upp ett projekt, bjuder in
+  kollegor och skriver i projektets chatt, gör egna mallar som "/" i
+  snabbraden lägger ut som uppgifter, avslutar en serie och kopplar en
+  uppgift till en order, en person, ett ärende, en kurs eller en coachning.
+  I Frånvaro kan chefen starta önskemålsrundan
   inför sommaren, föreslå en annan period och kvittera rehabsignalen. Där går
   det också att ställa in en beviljad ledighet eller en sjukanmälan som blev
   fel, och lägga in sin ledighet i den egna kalendern med en hemlig adress. I Tid

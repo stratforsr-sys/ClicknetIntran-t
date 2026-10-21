@@ -5,10 +5,20 @@ import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { svensktDatum } from "@/lib/klocka";
 import { notifiera } from "@/lib/notishandelse-server";
 import {
+  andraProjekt,
   andraUppgift,
+  arkiveraProjekt,
   ateroppna,
   avbryt,
+  avslutaSerie,
   bjudIn,
+  bjudInProjekt,
+  koppla,
+  markeraProjektchattLast,
+  skapaProjekt,
+  skrivProjektmeddelande,
+  taBortKoppling,
+  taBortProjektmedlem,
   bocka,
   godkann,
   kommentera,
@@ -20,7 +30,7 @@ import {
   tilldela,
   type UppgiftState,
 } from "@/app/(app)/uppgifter/actions";
-import { anvandUppgiftsmall } from "@/app/(app)/uppgifter/mallar/actions";
+import { andraUppgiftsmall, anvandUppgiftsmall, arkiveraUppgiftsmall, skapaUppgiftsmall } from "@/app/(app)/uppgifter/mallar/actions";
 import { slutforGenomgang } from "@/app/(app)/uppgifter/genomgang/actions";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
 
@@ -49,6 +59,8 @@ export const dynamic = "force-dynamic";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const DATUM = /^\d{4}-\d{2}-\d{2}$/;
+/** Projektens färger, som repots NyttProjekt. */
+const FARGER = ["brand", "info", "accent", "ok", "warn", "danger"];
 
 type Svar = { ok?: string; fel?: string; [k: string]: unknown };
 const svar = (data: Svar, status = 200) => NextResponse.json(data, { status, headers: { "Cache-Control": "private, no-store, max-age=0" } });
@@ -69,6 +81,31 @@ async function uppgiften(id: string) {
     .eq("id", id)
     .maybeSingle();
   return data;
+}
+
+/** Gamla Nav D: väljarna för en koppling, som /uppgifter/[id] läser dem: med den inloggades token (RLS). Läsning, svarar också i läsläge. */
+export async function GET(request: Request) {
+  const user = await getCurrentUser();
+  if (!user?.employee) return svar({ fel: "Du måste vara inloggad." }, 401);
+  if (new URL(request.url).searchParams.get("kopplingsval") !== "1") return svar({ fel: "Okänd fråga." }, 400);
+  const supabase = await supabaseServer();
+  const [{ data: personer }, { data: order }, { data: arenden }, { data: kurser }, { data: coachning }] = await Promise.all([
+    supabase.from("employee").select("id, first_name, last_name").neq("status", "offboarded").order("first_name"),
+    supabase.from("sales_order").select("id, company_name").order("created_at", { ascending: false }).limit(50),
+    supabase.from("hr_case").select("id, subject").order("created_at", { ascending: false }).limit(50),
+    supabase.from("course").select("id, title").eq("status", "published").order("title"),
+    supabase.from("coaching_task").select("id, title").is("cancelled_at", null).limit(50),
+  ]);
+  return svar({
+    ok: "",
+    val: {
+      order: (order ?? []).map((o) => ({ id: o.id as string, namn: o.company_name as string })),
+      person: (personer ?? []).map((p) => ({ id: p.id as string, namn: fullName(p) })),
+      arende: (arenden ?? []).map((a) => ({ id: a.id as string, namn: a.subject as string })),
+      kurs: (kurser ?? []).map((k) => ({ id: k.id as string, namn: k.title as string })),
+      coachning: (coachning ?? []).map((c) => ({ id: c.id as string, namn: c.title as string })),
+    },
+  });
 }
 
 export async function POST(request: Request) {
@@ -160,6 +197,34 @@ export async function POST(request: Request) {
           "Sparat.",
         );
       }
+      /* ---------------- Gamla Nav D: projekten, mallarna, serien och kopplingarna (repots actions) ---------------- */
+      case "projekt-ny":
+        return fran(await skapaProjekt({}, form({ name: String(b.namn ?? "").trim().slice(0, 120), color: FARGER.includes(String(b.farg)) ? b.farg : "brand", due_date: DATUM.test(String(b.due ?? "")) ? b.due : "", description_md: String(b.besk ?? "").slice(0, 4000) })), "Projektet finns.");
+      case "projekt-andra":
+        return fran(await andraProjekt({}, form({ id, name: String(b.namn ?? "").trim().slice(0, 120), color: FARGER.includes(String(b.farg)) ? b.farg : "brand", due_date: DATUM.test(String(b.due ?? "")) ? b.due : "", description_md: String(b.besk ?? "").slice(0, 4000), owner_id: UUID.test(String(b.agare ?? "")) ? b.agare : "" })), "Sparat.");
+      case "projekt-arkivera":
+        return fran(await arkiveraProjekt({}, form({ id, aterstall: b.aterstall === true ? "ja" : "" })), b.aterstall === true ? "Framplockat." : "Arkiverat.");
+      case "projekt-bjud":
+        return fran(await bjudInProjekt({}, form({ id, employee_id: b.vem ?? "", role: b.roll === "visare" ? "visare" : "redigerare" })), "Inbjuden.");
+      case "projekt-bort":
+        return fran(await taBortProjektmedlem({}, form({ id, employee_id: b.vem ?? "" })), "Borttagen.");
+      case "projekt-skriv":
+        return fran(await skrivProjektmeddelande({}, form({ id, body: String(b.text ?? "") })), "Skickat.");
+      case "projekt-last":
+        await markeraProjektchattLast(id);
+        return svar({ ok: "" });
+      case "mall-ny":
+        return fran(await skapaUppgiftsmall({}, form({ name: b.namn ?? "", moment: b.moment ?? "", description_md: b.besk ?? "", shared: b.delad === true ? "on" : null })), "Mallen är sparad.");
+      case "mall-andra":
+        return fran(await andraUppgiftsmall({}, form({ template_id: b.mall ?? "", name: b.namn ?? "", moment: b.moment ?? "", description_md: b.besk ?? "", shared: b.delad === true ? "on" : null })), "Mallen är uppdaterad.");
+      case "mall-arkivera":
+        return fran(await arkiveraUppgiftsmall({}, form({ template_id: b.mall ?? "" })), "Klart.");
+      case "serie-avsluta":
+        return fran(await avslutaSerie({}, form({ id })), "Rutinen är avslutad.");
+      case "koppla":
+        return fran(await koppla({}, form({ id, slag: b.slag ?? "", mal: b.mal ?? "", visible_to_subject: b.synlig === true ? "ja" : "" })), "Kopplad.");
+      case "koppla-bort":
+        return fran(await taBortKoppling({}, form({ id, link_id: b.lank ?? "" })), "Borttagen.");
       case "mall":
         return fran(await anvandUppgiftsmall({}, form({ template_id: b.mall ?? "", start_date: b.dag ?? idag })), "Mallen är lagd som uppgifter.");
       case "genomgang": {

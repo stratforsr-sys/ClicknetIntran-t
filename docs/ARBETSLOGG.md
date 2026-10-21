@@ -5,6 +5,34 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-21 · Nav 2.0, gamla Navs sista funktioner D: Uppgifter (ingen migration)
+
+- **Projekt:** "Nytt projekt" i projektkolumnen öppnar ett formulär (namn,
+  deadline, färg, beskrivning) i stället för att skicka till gamla Nav. Rutten
+  `projekt-ny` = repots `skapaProjekt`. Ett valt projekt får en panel över
+  listan: ägare och deadline, Ändra (`andraProjekt`, ägaren kan lämnas över),
+  Arkivera och Plocka fram (`arkiveraProjekt`), deltagarna med roll, Bjud in
+  som redigerare eller visare (`bjudInProjekt`), Ta bort
+  (`taBortProjektmedlem`), och projektets chatt (`skrivProjektmeddelande`,
+  `markeraProjektchattLast`). Arkiverade projekt ligger i en egen rad under
+  kolumnen.
+- **Uppgiftsmallar:** kortet Mallar (länken "Hantera mallar") skapar, ändrar,
+  arkiverar och plockar fram mallar (`skapaUppgiftsmall`, `andraUppgiftsmall`,
+  `arkiveraUppgiftsmall`). Momenten skrivs en per rad, `titel | dag | minuter`
+  som i repot, med en förhandsvisning. "/" i snabbraden lägger nu mallen som
+  uppgifter på riktigt (`anvandUppgiftsmall`, start i dag); förut kom bara en
+  toast.
+- **Serier:** "Avsluta serien" i uppgiftsrutan för en uppgift i en serie
+  (`avslutaSerie`, seriens ägare).
+- **Kopplingar:** "Koppla" i uppgiftsrutan, till en order, en person, ett
+  ärende, en kurs eller en coachningsuppgift (`koppla`), och Ta bort
+  (`taBortKoppling`). Väljarna läses med `GET /nav2/uppgifter?kopplingsval=1`,
+  med den inloggades RLS, som `/uppgifter/[id]` läser dem.
+- `/uppgifter/projekt/<id>`, `/uppgifter/mallar` och `/uppgifter/genomgang`
+  öppnas i Nav 2.0 (projektet, mallkortet, veckogenomgången), så projektets
+  notiser och påminnelsen om genomgången landar där. Allt bakom
+  `SKRIVLAGE.uppgifter` (423 i läsläge). Spannet 0175–0179 är oanvänt.
+
 ## 2026-10-20 · Nav 2.0, gamla Navs sista funktioner B: Frånvaro (ingen migration)
 
 - **Ställa in en beviljad ledighet** (svar 4): "Ställ in" bredvid Ändra på den
