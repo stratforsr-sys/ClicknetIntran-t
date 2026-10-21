@@ -27703,7 +27703,7 @@ document.addEventListener('click', e => {
   if (ds.kdelabort){ stopp(); const id = ndKId(ds.kdelabort); if (id) ndKPost('delning', {person:id, niva:'upptagen'}, {ladda:false}).then(s => { if (s.ok){ S.kDelaBort.add(ds.kdelabort); render(); } }); return; }
   if (ds.act === 'toast'){
     stopp(); const msg = ds.msg || '';
-    if (/Utskriften/.test(msg)) { window.print(); return; }
+    if (/Utskriften/.test(msg)) { ndKSkrivUt(); return; }
     if (/Planeringsvyn/.test(msg)) { S.kVy = 'planera'; render(); return; }
     if (/Videolänken/.test(msg) && ev && ev.online) { window.open(ev.online, '_blank', 'noopener'); return; }
     toast(msg);
@@ -27723,6 +27723,32 @@ document.addEventListener('keydown', e => {
   if (!ndK() || S.view !== 'kalender' || e.key !== 'Enter' || e.metaKey || e.ctrlKey || !e.target.dataset || e.target.dataset.kff !== 'gastny') return;
   e.preventDefault(); e.stopImmediatePropagation(); ndKGastLagg();
 }, true);
+
+/* ---------- Skriv ut ----------
+   "Skriv ut" skrev hela sidan: menyn, vänsterfältet och bara den del av rutnätet som syntes. Nu skrivs vyn ensam,
+   på liggande A4, med timmarna från vyns första post till dess sista (minst 07–18) och utan knappar och paneler.
+   Spara som PDF i utskriftsrutan ger en PDF. Stilen finns bara medan kalendern skrivs ut. */
+function ndKSkrivTimmar(){
+  const dagar = ['dag', 'arbetsvecka', 'vecka'].includes(S.kVy) ? kDagar() : [], p = KEV.filter(e => dagar.includes(e.d) && !e.allday && !e.inst && !kTyp(e));
+  return [Math.min(7, ...p.map(e => Math.floor(e.s / 60))), Math.max(18, ...p.map(e => Math.ceil(e.e / 60)))];
+}
+function ndKSkrivUt(){
+  const vy = document.querySelector('.olhuvud'); if (!vy) return;
+  // En kopia av vyn direkt under body, som bara syns i utskriften. Rutnätet beskärs till timmarna med posterna.
+  const ut = document.createElement('div'); ut.id = 'ndkUtskrift'; ut.className = 'ol'; ut.appendChild(vy.cloneNode(true));
+  ut.querySelectorAll('[id]').forEach(x => x.removeAttribute('id'));
+  const [a, b] = ndKSkrivTimmar(), st = document.createElement('style');
+  st.textContent = '@page{size:A4 landscape;margin:10mm}@media screen{#ndkUtskrift{display:none}}'
+    + '@media print{body>*:not(#ndkUtskrift){display:none!important}#ndkUtskrift{display:block;height:auto;background:#fff}'
+    + `#ndkUtskrift .olscroll{flex:none;height:${(b - a) * KPX + 12}px;overflow:hidden}#ndkUtskrift .olinner{margin-top:${12 - a * KPX}px}`
+    + '#ndkUtskrift .olnav button:not(.olperiod),#ndkUtskrift .olnavsp,#ndkUtskrift .olsumma,#ndkUtskrift .olpop,#ndkUtskrift .olserie,#ndkUtskrift .olanslut,'
+    + '#ndkUtskrift .olplus,#ndkUtskrift .olledig,#ndkUtskrift .olnu,#ndkUtskrift .olnulbl,#ndkUtskrift .olrz,#ndkUtskrift .olhov,#ndkUtskrift .olselm,#ndkUtskrift .olperiod svg,#ndkUtskrift .note{display:none!important}'
+    + '#ndkUtskrift *{-webkit-print-color-adjust:exact;print-color-adjust:exact}}';
+  document.head.appendChild(st); document.body.appendChild(ut);
+  const klar = () => { st.remove(); ut.remove(); window.removeEventListener('afterprint', klar); };
+  window.addEventListener('afterprint', klar);
+  try { window.print(); } catch(_){ klar(); toast('Utskriften går inte att starta här.'); }
+}
 
 /* ---------- Telefonen: rulla, tryck och håll in (Outlook i telefonen) ----------
    Utkastets rutnät har touch-action:none, så Dag och Vecka gick inte att rulla med fingret, och varje beröring

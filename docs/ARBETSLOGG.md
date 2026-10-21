@@ -5,6 +5,19 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-21 · Nav 2.0, Kalendern som Outlook, del 7: utskrift av vyn (ingen migration)
+
+- **Felet:** "Skriv ut" skrev hela sidan: menyn, vänsterfältet och bara den
+  del av rutnätet som syntes på skärmen.
+- **Nu:** vyn skrivs ensam på liggande A4 (en kopia direkt under `body` som
+  bara syns i utskriften), utan knappar och paneler. I Dag och Vecka
+  beskärs rutnätet till timmarna från vyns första till sista post, minst
+  07–18. Månad och Lista får gå över flera sidor. "Spara som PDF" i
+  utskriftsrutan ger PDF:en.
+- **Del 6 provad** på previewns skript (`0578420`) med riktiga pekgester:
+  rutnätet rullar 249 px och inget skapas (förut rullade det inte, och
+  fingret drog ut ett nytt block).
+
 ## 2026-10-21 · Nav 2.0, Kalendern som Outlook, del 6: kalendern i telefonen (ingen migration)
 
 - **Felet:** utkastets rutnät har `touch-action:none`, så Dag och Vecka gick
