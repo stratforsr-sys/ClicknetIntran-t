@@ -5,6 +5,17 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-21 · Nav 2.0, gamla Navs sista funktioner A, svaren: ett schema gäller framåt (ingen migration)
+
+- **Ett schema kan inte gälla bakåt** (beställaren 2026-10-21, "kör på best
+  practice"): `schema-ny` i `/nav2/tid` avvisar ett "gäller från" före i dag,
+  och datumfältet i Nytt schema har i dag som lägsta dag. Passerade dagar är
+  redan bedömda (sena, frånvaro, lönerapporten) och rättas med en justering.
+  Repots `sparaArbetsschema` tar fortfarande emot ett datum bakåt.
+- **`audit_log` 1612 står kvar** (`payroll.exported` 2026-10-20 22:08):
+  händelseloggen skrivs bara till, och uttaget gjordes på riktigt av Zens
+  konto. Rättas aldrig i efterhand.
+
 ## 2026-10-21 · Nav 2.0, fart: uttrycklig ordning före 0155, och 0155 täcker Nyheter (0155 inte körd)
 
 Fortsättning på "policyerna i `(select …)`-form" nedan. Beställarens svar på

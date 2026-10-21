@@ -25188,6 +25188,7 @@ function ndSchemaNyText(){
   if (!f.start || !f.slut) return 'Fyll i både start och slut.';
   if (f.slut <= f.start) return 'Sluttiden måste ligga efter starttiden.';
   if (!f.fran) return 'Välj från vilken dag schemat gäller.';
+  if (f.fran < kIdag()) return 'Ett schema gäller från i dag eller senare. Passerade dagar rättas med en justering i lönerapporten.';
   return `${esc(vem)}: ${ndDagtext(f.dagar)} ${f.start}–${f.slut}, från ${frKort(f.fran)}. Sen ankomst räknas från ${hm(tmin(f.start) + tol + 1)}.`;
 }
 function ndSchemaNyForm(){
@@ -25198,7 +25199,7 @@ function ndSchemaNyForm(){
     <div class="tifrow"><label>Gäller<select class="uin" data-ndsnscope>${[['company', 'Hela bolaget'], ['team', 'Ett team'], ['employee', 'En person']].map(([k, l]) => `<option value="${k}" ${f.scope === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       ${f.scope === 'company' ? '' : `<label>${f.scope === 'team' ? 'Team' : 'Person'}<select class="uin" data-ndsnvem><option value="">Välj</option>${lista.map(([id, n]) => `<option value="${id}" ${f.vem === id ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>`}</div>
     <div class="qchips"><span>Dagar</span>${NDKORTDAG.map((d, i) => `<button class="chip ${f.dagar.includes(i + 1) ? 'on' : ''}" data-ndsndag="${i + 1}" aria-pressed="${f.dagar.includes(i + 1)}">${d}</button>`).join('')}</div>
-    <div class="tifrow"><label>Start<input type="time" class="uin num" data-ndsnf="start" value="${f.start}"></label><label>Slut<input type="time" class="uin num" data-ndsnf="slut" value="${f.slut}"></label><label>Tolerans, min<input type="number" min="1" max="60" step="1" class="uin num" data-ndsnf="tol" value="${f.tol}"></label><label>Gäller från<input type="date" class="uin num" data-ndsnf="fran" value="${f.fran}"></label></div>
+    <div class="tifrow"><label>Start<input type="time" class="uin num" data-ndsnf="start" value="${f.start}"></label><label>Slut<input type="time" class="uin num" data-ndsnf="slut" value="${f.slut}"></label><label>Tolerans, min<input type="number" min="1" max="60" step="1" class="uin num" data-ndsnf="tol" value="${f.tol}"></label><label>Gäller från<input type="date" class="uin num" data-ndsnf="fran" min="${kIdag()}" value="${f.fran}"></label></div>
     <p class="tiprev on" data-ndsnprev>${ndSchemaNyText()}</p>
     <div class="pacts"><button class="btn btn-p btn-sm" data-ndsnspara>Spara schemat</button><button class="btn btn-s btn-sm" data-ndsnavbryt>Avbryt</button><span class="muted tihint">Det gamla schemat står kvar i historiken. De som berörs får en notis.</span></div></div>`;
 }
@@ -25248,6 +25249,7 @@ document.addEventListener('click', e => {
     if (!f.dagar.length){ toast('Välj minst en dag.'); return; }
     if (!f.start || !f.slut || f.slut <= f.start){ toast('Sluttiden måste ligga efter starttiden.'); return; }
     if (!f.fran){ toast('Välj från vilken dag schemat gäller.'); return; }
+    if (f.fran < kIdag()){ toast('Ett schema gäller från i dag eller senare.'); return; }
     ndTidPost('schema-ny', {scope:f.scope, vem:f.vem, dagar:f.dagar, start:f.start, slut:f.slut, tol:f.tol, fran:f.fran}).then(s => { if (s && s.ok !== undefined && !s.fel) S.ndSchemaNy = null; }); return; }
   if (d.ndjustny){ stopp(); S.ndJust = {period:d.ndjustny, vem:'', min:'', skal:''}; render(); fokus('[data-ndjustvem]'); return; }
   if (d.ndjustavbryt !== undefined){ stopp(); S.ndJust = null; render(); return; }

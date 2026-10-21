@@ -415,6 +415,8 @@ export async function POST(request: Request) {
         const start = String(b.start ?? ""), slut = String(b.slut ?? ""), galler = String(b.fran ?? "");
         if (!KLOCKA.test(start) || !KLOCKA.test(slut)) return svar({ fel: "Fyll i både start och slut." }, 400);
         if (!DATUM.test(galler)) return svar({ fel: "Välj från vilken dag schemat gäller." }, 400);
+        // Beställaren 2026-10-21: ett schema gäller framåt. Passerade dagar är redan bedömda (sena, frånvaro, lönerapporten) och rättas med en justering.
+        if (galler < idag) return svar({ fel: "Ett schema gäller från i dag eller senare. Dagar som redan passerat rättas med en justering i lönerapporten." }, 400);
         const s = (await fangad(() => sparaArbetsschema({}, form({ scope, scope_id: vem, veckodag: [...new Set(dagar)], start_time: start, end_time: slut, valid_from: galler, tol_late: String(b.tol ?? "") })))) as { fel?: string; ok?: string };
         if (s.fel) return svar({ fel: s.fel }, 400);
         return svar({ ok: s.ok ?? `Sparat. Gäller från ${galler}.` });
