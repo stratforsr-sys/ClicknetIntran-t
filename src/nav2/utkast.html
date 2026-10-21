@@ -27343,6 +27343,7 @@ function ndKDetalj(e){
 }
 const _ndKPeek = kPeekKort;
 kPeekKort = function(){ if (ndK() && S.kPeek) ndKDetalj(KEV.find(x => x.id === S.kPeek.id)); return _ndKPeek(); };
+const ndKFlyttaPers = ev => [ev.org, ...ev.delt.map(x => x[0])].filter(p => p && p !== 'Ledningen');
 // 1:1-kortet: säljarens månad ur provisionen, när läsaren får se den. Inget annat påhittat.
 const _ndKEnskild = kEnskild;
 kEnskild = function(e){
@@ -27356,6 +27357,89 @@ kEnskild = function(e){
 const _ndKKo = kKoHtml;
 kKoHtml = function(){ const h = _ndKKo(); return ndK() ? h.split(`${kLen(1e6)} kvar`).join('Väntar på godkännande') : h; };
 kForslagPers = (valda, attr) => (ndK() ? kPers().map(p => p.n) : S.role === 'chef' ? ['Elin Berg','Amira Haddad','Mohammed Aziz','Sara Lind'] : ['Johanna Ek','Elin Berg','Mohammed Aziz']).filter(p => !valda.includes(p)).slice(0, 3).map(p => `<button class="olpchip lagg" data-${attr}="${esc(p)}">+ ${esc(fornamn(p))}</button>`).join('');
+
+/* ---------- Ledig/upptagen ur navet (Outlooks schemaassistent) ----------
+   kUpptagen räknade bara på KEV: den egna kalendern och de kollegor som är ikryssade. För alla andra sa
+   formuläret "Alla är lediga" och assistenten visade tomma rader. Nu läser den repots upptagetFor
+   (GET ?upptaget=…&fran=…, 16 dagar åt gången) genom samma projektioner som kalendern: bara att tiden är tagen,
+   aldrig vad. Möten man tackat nej till och "Visa som ledig" räknas inte; frånvaro hela dagen gör dagen upptagen.
+   Det som letar en tid (Föreslå tid, Nästa lediga tid, Flytta) väntar på datan innan det letar. */
+const NDKUPP = {data:new Map(), laddat:new Map(), hamtar:new Map()};
+const ndKUppHar = (id, fran, till) => (NDKUPP.laddat.get(id) || []).some(([a, b]) => a <= fran && b >= till);
+const ndKUppSaknas = (namn, fran, till) => namn.map(ndKId).filter(Boolean).filter(id => !ndKUppHar(id, fran, till));
+function ndKUppHamta(namn, fran, till){
+  const ids = [...new Set(ndKUppSaknas(namn, fran, till))];
+  if (!ids.length) return Promise.resolve(false);
+  const starter = []; for (let d = fran; d <= till; d = kPlus(d, 16)) starter.push(d);
+  return Promise.all(starter.map(d => {
+    const nyckel = `${ids.join(',')}|${d}`;
+    if (!NDKUPP.hamtar.has(nyckel)) NDKUPP.hamtar.set(nyckel, fetch(`/nav2/kalender?upptaget=${ids.join(',')}&fran=${d}`, {credentials:'same-origin'})
+      .then(r => r.ok ? r.json() : null).then(x => {
+        NDKUPP.hamtar.delete(nyckel); if (!x || !x.upptaget) return false;
+        ids.forEach(id => { NDKUPP.data.set(id, Object.assign(NDKUPP.data.get(id) || {}, x.upptaget[id] || {})); NDKUPP.laddat.set(id, [...(NDKUPP.laddat.get(id) || []), [x.fran, x.till]]); });
+        return true;
+      }).catch(() => { NDKUPP.hamtar.delete(nyckel); return false; }));
+    return NDKUPP.hamtar.get(nyckel);
+  })).then(r => r.some(Boolean));
+}
+// Händelsen som ändras eller flyttas står inte i vägen för sig själv.
+function ndKUppSkip(){ const id = (S.kForm && S.kForm.id) || (S.kPeek && S.kPeek.id), ev = id && KEV.find(x => x.id === id); return ev && ev.nd ? ev.ref : null; }
+const _ndKUpptagen = kUpptagen;
+kUpptagen = function(p, d, s, e){
+  const id = ndK() && ndKId(p);
+  if (!id || !ndKUppHar(id, d, d)) return _ndKUpptagen(p, d, s, e);
+  const dag = (NDKUPP.data.get(id) || {})[d], skip = ndKUppSkip();
+  return !!dag && (dag.ledig || dag.block.some(b => (!skip || b.id !== skip) && b.s < e && b.e > s));
+};
+// Ritar om när datan kommit, utan att det man skriver i formuläret eller snabbkortet försvinner.
+function ndKRitaOm(){
+  if (S.view !== 'kalender') return;
+  if (S.kForm) kLasForm();
+  if (S.kNy){ const t = document.querySelector('[data-knyt]'); if (t) S.kNy.t = t.value; }
+  const a = document.activeElement, k = a && a.dataset ? (a.dataset.kff ? `[data-kff="${a.dataset.kff}"]` : a.dataset.knyt !== undefined ? '[data-knyt]' : null) : null, pos = k && a.selectionStart;
+  render();
+  if (k){ const el = document.querySelector(k); if (el){ el.focus(); try { if (pos != null) el.setSelectionRange(pos, pos); } catch(_){} } }
+}
+function ndKUppBehov(namn, d){ if (ndKUppSaknas(namn, d, d).length) ndKUppHamta(namn, d, kPlus(d, 15)).then(ny => { if (ny) ndKRitaOm(); }); }
+const NDKKOLLAR = 'Kollar om alla är lediga …';
+const ndKKollar = (namn, d) => ndKUppSaknas(namn.filter(n => n !== kJag()), d, d).length > 0;
+// Assistentens rader: en kollega vars kalender inte är laddad får navets upptagna block, utan rubrik.
+const _ndKAss = kAssistent;
+kAssistent = function(f, pers){
+  let h = _ndKAss(f, pers);
+  if (!ndK()) return h;
+  const A = 7 * 60, B = 18 * 60, p = m => ((Math.min(B, Math.max(A, m)) - A) / (B - A) * 100).toFixed(2), skip = ndKUppSkip();
+  pers.forEach((x, i) => {
+    const id = ndKId(x); if (!id || (id === ND.jag.id && ndKHar(id, f.d, f.d)) || !ndKUppHar(id, f.d, f.d)) return;
+    const dag = (NDKUPP.data.get(id) || {})[f.d]; if (!dag) return;
+    const syns = new Set(KEV.filter(e => e.d === f.d && !e.inst && e.ref && kAgs(e, x)).map(e => e.ref));
+    const block = dag.ledig ? '<span class="olsab borta" style="left:0;width:100%">Borta</span>'
+      : dag.block.filter(b => b.id !== skip && !syns.has(b.id)).map(b => `<span class="olsab" style="left:${p(b.s)}%;width:${(p(b.e) - p(b.s)).toFixed(2)}%" title="Upptagen"></span>`).join('');
+    const a = h.indexOf(`data-ksarad="${i}"`); if (a < 0) return;
+    const t = h.indexOf('class="oltarb"', a), slut = t < 0 ? -1 : h.indexOf('</span>', t) + 7; if (slut < 7) return;
+    h = h.slice(0, slut) + block + h.slice(slut);
+  });
+  return ndKKollar(pers, f.d) ? h.replace(/(<p class="ol(?:ok|mut)">)(Alla är lediga\.|Någon är upptagen\.)/, `$1${NDKKOLLAR}`) : h;
+};
+const _ndKSnabb = kSnabb;
+kSnabb = function(){
+  const h = _ndKSnabb(), n = S.kNy;
+  if (ndK() && n && (n.delt || []).length) ndKUppBehov([kJag(), ...n.delt], n.d);
+  return h;
+};
+// En ledig tid letas aldrig före i dag (repots autopick). Utkastets kForslaTid hoppade bara över passerade
+// minuter i dag, så Flytta på ett möte som varit föreslog en tid i det förflutna.
+const _ndKForslaTid = kForslaTid;
+kForslaTid = function(personer, langd, fran){ return _ndKForslaTid(personer, langd, ndK() && (!fran || fran < kIdag()) ? kIdag() : fran); };
+/* Knapparna som letar en tid väntar på navets data för de två veckor de letar i, och trycks sedan igen. */
+function ndKVanta(e, sel, namn, fran, dagar){
+  if (fran < kIdag()) fran = kIdag();
+  const till = kPlus(fran, dagar);
+  if (!ndKUppSaknas(namn, fran, till).length) return false;
+  e.preventDefault(); e.stopImmediatePropagation(); toast('Kollar vilka tider som är lediga …');
+  ndKUppHamta(namn, fran, till).then(() => { const b = document.querySelector(sel); if (b) b.click(); });
+  return true;
+}
 
 /* ---------- Skrivningar: /nav2/kalender (POST) ---------- */
 const ndKLank = e => e && e.href ? e.href : `/kalender?dag=${e ? e.d : kIdag()}${e && e.ref && e.nd && ['mote', 'enskilt', 'leverans', 'coachning'].includes(e.kat) ? `&handelse=${e.ref}` : ''}`;
@@ -27406,7 +27490,12 @@ kOppnaForm = function(over){
 };
 const _ndKFormular = kFormular;
 kFormular = function(){
-  const h = _ndKFormular(), f = S.kForm;
+  let h = _ndKFormular();
+  const f = S.kForm;
+  if (ndK() && f){
+    if (!ndKHar(ND.jag.id, f.d, f.d)) ndKHamta('vecka', f.d, [], [ND.jag.id]);
+    if ((f.delt || []).length){ ndKUppBehov([kJag(), ...f.delt], f.d); if (ndKKollar(f.delt, f.d)) h = h.replace(/(<div class="olmsg ok">[\s\S]*?<span>)[^<]*(<\/span>)/, `$1${NDKKOLLAR}$2`); }
+  }
   if (!ndK() || !f || f.typ !== 'mote') return h;
   const slut = '</span><small class="olmut">Inbjudna får en notis och ett mejl med .ics.', i = h.indexOf(slut);
   if (i < 0) return h;
@@ -27526,6 +27615,9 @@ document.addEventListener('click', e => {
   if (ds.kserie !== undefined){ stopp(); const sr = S.kSerie, x = sr && KEV.find(k => k.id === sr.id); S.kSerie = null;
     if (!ds.kserie || !x){ render(); return; } kFlytta(x, sr.d, sr.s, null, ds.kserie === 'en'); return; }
   if (ds.ndkcal){ stopp(); ndKCalVaxla(ds.ndkcal); return; }
+  if ((ds.kfforesla !== undefined || ds.ksanasta !== undefined) && S.kForm){ kLasForm();
+    if (ndKVanta(e, ds.kfforesla !== undefined ? '[data-kfforesla]' : '[data-ksanasta]', [kJag(), ...(S.kForm.delt || [])], S.kForm.d, 15)) return; }
+  if (ds.kflytta !== undefined && ev && ndKVanta(e, '[data-kflytta]', ndKFlyttaPers(ev), ev.d, 8)) return;
   if (ds.kdelabort){ stopp(); const id = ndKId(ds.kdelabort); if (id) ndKPost('delning', {person:id, niva:'upptagen'}, {ladda:false}).then(s => { if (s.ok){ S.kDelaBort.add(ds.kdelabort); render(); } }); return; }
   if (ds.act === 'toast'){
     stopp(); const msg = ds.msg || '';

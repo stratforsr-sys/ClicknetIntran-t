@@ -5,6 +5,27 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-21 · Nav 2.0, Kalendern som Outlook, del 2: ledig/upptagen ur navet (ingen migration)
+
+- **Felet:** schemaassistenten, krockrutan ("Alla är lediga"), Föreslå tid,
+  Nästa lediga tid och Flytta räknade bara på det som låg i webbläsaren: den
+  egna månaden och de kollegor som var ikryssade. För alla andra sa Nav
+  "Alla är lediga".
+- **Nu:** `GET /nav2/kalender?upptaget=<id>,…&fran=` ger repots
+  `upptagetFor` (16 dagar, högst 20 personer) genom samma projektioner som
+  kalendern, så läsaren får veta att tiden är tagen men inte vad. Möten man
+  tackat nej till och "Visa som ledig" räknas inte, och frånvaro hela dagen
+  gör dagen upptagen. Formuläret och snabbkortet hämtar för deltagarna och
+  skriver "Kollar om alla är lediga …" tills svaret kommit; assistentens rader
+  får de upptagna blocken; knapparna som letar en tid väntar på datan och
+  trycks sedan igen. Det man skriver i formuläret står kvar när det ritas om.
+- **Flytta på ett möte som varit** föreslog en tid i det förflutna. En ledig
+  tid letas nu aldrig före i dag, som repots `autopick`.
+- **Del 1 provad i previewen** (`e048259`, som Zen): Ctrl-kopian av ett möte
+  utan deltagare blev ett nytt möte med samma fält och ångrades; "Hela serien"
+  flyttade K&V Protokoll till torsdagar (bara kommande gånger) och ångrades,
+  id för id som före. Inget i utkorgen.
+
 ## 2026-10-21 · Nav 2.0, Kalendern som Outlook, del 1: det som såg sparat ut sparas (ingen migration)
 
 - **Beställaren:** "kalendern ska vara fullkomlig som outlook". Inventeringen

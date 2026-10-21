@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser, type CurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { FORINSTALLNINGAR, STEG, UPPREPA, arDatum, arVy, kvittoKopierad, type Upprepa } from "@/lib/leveranskalender";
-import { hamtaHandelsedetalj, lk } from "@/lib/leveranskalender-server";
+import { fonsterFran, hamtaHandelsedetalj, lk, upptagetFor } from "@/lib/leveranskalender-server";
 import { hamtaKalposter, kalDetalj } from "@/lib/nav2/kalender";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
 import { skapaKalenderpost, stallInDelning } from "@/app/(app)/kalender/actions";
@@ -31,6 +31,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
  *
  *   ?vy=manad|team|vecka&dag=YYYY-MM-DD&visa=<id>,<id>   posterna, som /kalender
  *   ?detalj=<calendar_event.id>                           en händelse i sin helhet
+ *   ?upptaget=<id>,<id>&fran=YYYY-MM-DD                   ledig/upptagen i 15 dagar, för assistenten
  *
  * BARA LASNING, med samma funktioner och samma delningsnivaer som sidan
  * (`hamtaLeveranskalender`, `hamtaHandelsedetalj`).
@@ -46,6 +47,18 @@ export async function GET(request: Request) {
     if (!UUID.test(detalj)) return svar({ fel: "Okänd händelse." }, 400);
     const d = await kalDetalj(user, detalj);
     return d ? svar(d) : svar({ fel: "Händelsen finns inte, eller så får du inte se detaljerna." }, 404);
+  }
+
+  // Ledig/upptagen (Outlooks schemaassistent): repots `upptagetFor`, genom samma projektioner som kalendern,
+  // så att läsaren bara får veta att tiden är tagen. Möten man tackat nej till och "Visa som ledig" räknas inte;
+  // frånvaro hela dagen gör dagen upptagen. Högst 20 personer och 15 dagar, som repots hamtaUpptaget.
+  const upp = url.searchParams.get("upptaget");
+  if (upp !== null) {
+    const fran = url.searchParams.get("fran");
+    const personer = upp.split(",").filter((id) => UUID.test(id));
+    if (!arDatum(fran) || !personer.length || personer.length > 20) return svar({ fel: "Okända personer eller dag." }, 400);
+    const { till } = fonsterFran(fran, 15);
+    return svar({ fran, till, upptaget: await upptagetFor(user, personer, fran, till) });
   }
 
   const vy = url.searchParams.get("vy");
