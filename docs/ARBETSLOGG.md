@@ -5,6 +5,19 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-21 · Nav 2.0, Kalendern som Outlook, del 6: kalendern i telefonen (ingen migration)
+
+- **Felet:** utkastets rutnät har `touch-action:none`, så Dag och Vecka gick
+  inte att rulla med fingret, och varje beröring startade ett nytt block.
+- **Nu (bara med finger; musen är som förut):** rutnätet rullar; ett tryck
+  öppnar posten eller snabbkortet på den halvtimmen; håll in (0,45 s, med en
+  kort vibration där telefonen kan) lyfter posten för att flytta den, tar tag
+  i nederkanten för att ändra längd, eller drar ut ett nytt block. Sedan tar
+  utkastets egna dra-hanterare över. Under ett lyft rullar inte sidan.
+- **Del 5 provad i previewen** (`bfca141`, som Zen): ett möte med länk och
+  "Preliminär" sparades, lästes tillbaka, redigerades utan länk (länken stod
+  kvar) och ångrades; inget kvar och inget i utkorgen.
+
 ## 2026-10-21 · Nav 2.0, Kalendern som Outlook, del 5: Visa som syns, och möteslänken sparas (ingen migration)
 
 - **Visa som:** formuläret sparade preliminär, ledig, borta och annan plats

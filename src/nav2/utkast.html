@@ -27724,6 +27724,54 @@ document.addEventListener('keydown', e => {
   e.preventDefault(); e.stopImmediatePropagation(); ndKGastLagg();
 }, true);
 
+/* ---------- Telefonen: rulla, tryck och håll in (Outlook i telefonen) ----------
+   Utkastets rutnät har touch-action:none, så Dag och Vecka gick inte att rulla med fingret, och varje beröring
+   startade ett nytt block. Med finger: rutnätet rullar; ett tryck öppnar posten eller snabbkortet på den halvtimmen;
+   håll in (0,45 s) lyfter posten för att flytta den, tar tag i kanten för att ändra längd, eller drar ut ett nytt
+   block. Därefter tar utkastets egna dra-hanterare över (kDrag i samma form). Musen är som förut. */
+const NDKHALL = 450;
+let ndKTouch = null;
+if (ndK()){ const st = document.createElement('style'); st.textContent = '.olcol{touch-action:pan-y}'; document.head.appendChild(st); }
+document.addEventListener('pointerdown', e => {
+  if (!ndK() || S.view !== 'kalender' || e.pointerType !== 'touch' || !e.target.closest) return;
+  const col = e.target.closest('.olcol'); if (!col || e.target.closest('.olanslut,.olfler')) return;
+  e.stopImmediatePropagation();
+  const ev = e.target.closest('.olev'), rz = e.target.closest('.olrz');
+  const t = {x0:e.clientX, y0:e.clientY, col, ev, rz, id:e.pointerId, lyft:false};
+  t.timer = setTimeout(() => {
+    if (ndKTouch !== t) return;
+    t.lyft = true; try { navigator.vibrate && navigator.vibrate(12); } catch(_){}
+    const m = kMinFran(col, t.y0);
+    if (rz && ev){ kDrag = {typ:'rz', id:ev.dataset.kev, el:ev, col, y0:t.y0, h0:ev.offsetHeight}; return; }
+    if (ev){ const x = KEV.find(k => k.id === ev.dataset.kev); if (!x) return; ev.classList.add('drar'); kDrag = {typ:'flytt', id:x.id, el:ev, col, y0:t.y0, x0:t.x0, off:m - x.s, rorde:false}; return; }
+    const s0 = Math.floor(m / 30) * 30, sel = document.createElement('div'); sel.className = 'olselm'; sel.style.top = s0 / 60 * KPX + 'px'; sel.style.height = KPX / 2 + 'px';
+    sel.innerHTML = `<span>${hm(s0)}–${hm(s0 + 30)}</span>`; col.appendChild(sel);
+    kDrag = {typ:'ny', col, s0, s:s0, e:s0 + 30, sel};
+  }, NDKHALL);
+  ndKTouch = t;
+}, true);
+// Rör sig fingret före hållet är det en rullning: inget lyfts.
+document.addEventListener('pointermove', e => {
+  const t = ndKTouch; if (!t || e.pointerId !== t.id || t.lyft) return;
+  if (Math.abs(e.clientX - t.x0) + Math.abs(e.clientY - t.y0) > 8){ clearTimeout(t.timer); ndKTouch = null; }
+}, true);
+// Under ett lyft rullar inte sidan (touchmove stoppas, så webbläsaren inte avbryter pekaren).
+document.addEventListener('touchmove', e => { if (ndKTouch && ndKTouch.lyft && kDrag) e.preventDefault(); }, {passive:false, capture:true});
+document.addEventListener('pointercancel', () => { if (!ndKTouch) return; clearTimeout(ndKTouch.timer); ndKTouch = null; if (kDrag){ if (kDrag.sel) kDrag.sel.remove(); kDrag = null; render(); } }, true);
+document.addEventListener('pointerup', e => {
+  const t = ndKTouch; if (!t || e.pointerId !== t.id) return;
+  clearTimeout(t.timer); ndKTouch = null;
+  if (t.lyft){ if (t.ev) t.ev.classList.remove('drar'); return; }   // utkastets pointerup avslutar draget
+  e.stopImmediatePropagation();
+  // Ett tryck.
+  if (t.ev){ kPeekOppna(t.ev.dataset.kev, t.ev); return; }
+  if (S.kPeek || S.kNy || S.kMenu){ S.kPeek = null; S.kNy = null; S.kMenu = null; render(); return; }
+  const d = t.col.dataset.kdag, s0 = Math.floor(kMinFran(t.col, t.y0) / 30) * 30, r = t.col.getBoundingClientRect();
+  if (kWd(d) > 5){ toast('Välj en vardag.'); return; }
+  S.kNy = {d, s:s0, e:s0 + 30, typ:'mote', x:r.right + 8 + 340 < innerWidth ? r.right + 8 : Math.max(12, r.left - 348), y:t.y0 - 40, delt:[], t0:Date.now()}; S.kPeek = null; render();
+  setTimeout(() => document.querySelector('[data-knyt]')?.focus(), 20);
+}, true);
+
 if (ndK()){ ndKalStart(); NDKOPPLAD.add('kalender'); }
 
 /* =====================================================================

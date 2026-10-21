@@ -144,6 +144,8 @@ behörigheter som här: du ser bara det du får se.
   agendan direkt i mötet.
   Klistra in en Teams-, Meet- eller Zoom-länk i platsfältet, så öppnar
   Anslut mötet. Ett preliminärt möte syns som preliminärt.
+  I telefonen rullar du kalendern med fingret, trycker för ett nytt möte
+  och håller in ett möte för att flytta det.
 - **Ärenden**, med svarstiden som navet lovar. Chefen får ett ärende av
   nattjobbet när en överenskommelse i Coachning är fjorton dagar över fristen
   eller någon inte gjort systemguiderna i tid, och ägaren när en sats ska ses
