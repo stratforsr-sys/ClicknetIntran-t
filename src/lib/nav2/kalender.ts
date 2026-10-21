@@ -21,8 +21,11 @@ import { SKRIVLAGE } from "./skrivlage";
  * också den med läsarens egen token.
  */
 
-/** En post med 0090:s flagga: privat möte. */
-export type NdPost = Post & { privat?: boolean };
+/**
+ * En post med 0090:s flagga (privat möte), "Visa som" när den inte är upptagen, och mötets länk till den som
+ * är med (organiserar, deltar eller äger kalendern), så att Anslut syns på posten, i Min dag och i påminnelsen.
+ */
+export type NdPost = Post & { privat?: boolean; visaSom?: string; online?: string };
 export type NdKalposter = { fran: string; till: string; poster: NdPost[] };
 
 export type NdKalender = NdKalposter & {
@@ -40,6 +43,8 @@ export type NdKalender = NdKalposter & {
   arChef: boolean;
   /** Sparar vyn (SKRIVLAGE.kalender)? Annars svarar /nav2/kalender (POST) med läsläge. */
   skriv: boolean;
+  /** Platserna i mina senaste möten, för formulärets förslag (i stället för utkastets påhittade rum). */
+  platser: string[];
 };
 
 /**
@@ -56,20 +61,27 @@ async function privata(mig: string, poster: NdPost[]): Promise<NdPost[]> {
   return markeraPrivata(mig, poster, await privataIds(poster));
 }
 
-/** Vilka av posternas möten som är privata. */
-async function privataIds(poster: NdPost[]): Promise<Set<string>> {
-  const ids = [...new Set(poster.map((p) => p.ref).filter((r): r is string => Boolean(r)))];
-  if (!ids.length) return new Set();
-  const { data } = await supabaseAdmin().from("calendar_event").select("id").in("id", ids).eq("is_private", true);
-  return new Set((data ?? []).map((r) => r.id as string));
+type Extra = Map<string, { privat: boolean; visa: string; online: string | null }>;
+
+/** Posternas möten: privat (0090), "Visa som" och länken. Bara de möten som redan står i vyn läses. */
+async function privataIds(poster: NdPost[]): Promise<Extra> {
+  const ids = [...new Set(poster.filter((p) => ["mote", "enskilt", "leverans"].includes(p.slag)).map((p) => p.ref).filter((r): r is string => Boolean(r)))];
+  if (!ids.length) return new Map();
+  const { data } = await supabaseAdmin().from("calendar_event").select("id, is_private, show_as, online_url").in("id", ids);
+  return new Map((data ?? []).map((r) => [r.id as string, { privat: Boolean(r.is_private), visa: String(r.show_as ?? "upptagen"), online: (r.online_url as string | null) ?? null }]));
 }
 
-function markeraPrivata(mig: string, poster: NdPost[], priv: Set<string>): NdPost[] {
-  if (!priv.size) return poster;
+function markeraPrivata(mig: string, poster: NdPost[], extra: Extra): NdPost[] {
+  if (!extra.size) return poster;
   return poster.map((p) => {
-    if (!p.ref || !priv.has(p.ref)) return p;
+    const x = p.ref ? extra.get(p.ref) : undefined;
+    if (!x) return p;
     const insyn = p.agare === mig || p.organisator === mig || p.deltagare.includes(mig);
-    return insyn ? { ...p, privat: true } : { ...p, privat: true, rubrik: p.rubrik === null ? null : "Privat", href: null };
+    const ut: NdPost = { ...p };
+    if (x.visa !== "upptagen") ut.visaSom = x.visa;
+    if (x.online && insyn) ut.online = x.online;
+    if (!x.privat) return ut;
+    return insyn ? { ...ut, privat: true } : { ...ut, privat: true, rubrik: p.rubrik === null ? null : "Privat", href: null };
   });
 }
 
@@ -112,7 +124,10 @@ export async function byggKalender(user: CurrentUser): Promise<NdKalender | null
   const idag = svensktDatum();
   const paminnP = user.employee ? Promise.resolve(lasPaminnelser(user.employee.id)) : null;
   paminnP?.catch(() => {});
-  const [data, delningar] = await Promise.all([hamtaLeveranskalender(user, "manad", idag, [], idag), hamtaDelningar(user)]);
+  const platserP = user.employee
+    ? supabaseAdmin().from("calendar_event").select("plats").eq("organizer_id", user.employee.id).not("plats", "is", null).order("created_at", { ascending: false }).limit(60)
+    : null;
+  const [data, delningar, platsrader] = await Promise.all([hamtaLeveranskalender(user, "manad", idag, [], idag), hamtaDelningar(user), platserP ?? Promise.resolve({ data: [] })]);
   if (!data) return null;
   const { fran, till } = intervallForVy("manad", idag);
   const [medPaminnelser, priv] = await Promise.all([egnaPaminnelser(data.mig, data.poster, paminnP ?? undefined), privataIds(data.poster)]);
@@ -133,6 +148,7 @@ export async function byggKalender(user: CurrentUser): Promise<NdKalender | null
     },
     arChef: data.arChef,
     skriv: SKRIVLAGE.kalender,
+    platser: [...new Set(((platsrader.data ?? []) as { plats: string | null }[]).map((r) => String(r.plats ?? "").trim()).filter(Boolean))].slice(0, 8),
   };
 }
 

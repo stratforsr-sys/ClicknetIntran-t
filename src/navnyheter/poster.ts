@@ -142,6 +142,8 @@ behörigheter som här: du ser bara det du får se.
   eller behåller tiden med ett klick.
   I ett 1:1 ber du säljaren förbereda sig och lägger till punkter på
   agendan direkt i mötet.
+  Klistra in en Teams-, Meet- eller Zoom-länk i platsfältet, så öppnar
+  Anslut mötet. Ett preliminärt möte syns som preliminärt.
 - **Ärenden**, med svarstiden som navet lovar. Chefen får ett ärende av
   nattjobbet när en överenskommelse i Coachning är fjorton dagar över fristen
   eller någon inte gjort systemguiderna i tid, och ägaren när en sats ska ses

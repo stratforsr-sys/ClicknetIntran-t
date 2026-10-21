@@ -27247,6 +27247,8 @@ const NDKGRUPP = {salj:'Säljteamet', lev:'Leverans', ovr:'Övriga'};
 const NDKSLAG = {mote:'mote', enskilt:'enskilt', coachning:'coachning', leverans:'leverans', uppgift:'uppgift', ledig:'ledig', order:'frist', frist:'frist'};
 const NDKPAM = {5:'5 min före', 15:'15 min före', 30:'30 min före', 60:'1 timme före', 1440:'1 dag före'};
 const NDKAL = {laddat:new Map(), hamtar:new Set(), detalj:new Map()};
+// "Visa som" i navet (calendar_event.show_as) → utkastets namn. Upptagen är förvalet.
+const NDKVISAFRAN = {preliminar:'prel', ledig:'ledig', borta:'borta', annan:'annan'};
 function ndKNamn(id){ if (!id) return null; if (id === ND.jag.id) return ND.jag.namn; const p = ndK().personer.find(x => x.id === id); return p ? p.namn : null; }
 function ndKId(namn){ if (namn === ND.jag.namn) return ND.jag.id; const p = ndK().personer.find(x => x.namn === namn); return p ? p.id : null; }
 
@@ -27258,7 +27260,7 @@ function ndKEv(p){
   if (agare !== org) add(agare, p.agare === ND.jag.id && p.svar && p.svar !== 'org' ? p.svar : null);
   (p.deltagare || []).forEach(id => add(ndKNamn(id), null));
   return {id:p.id, ref:p.ref, href:p.href, d:p.dag, s, e, allday, t:p.rubrik ?? (allday ? 'Borta' : 'Upptagen'), kat:NDKSLAG[p.slag] || 'mote', org, delt,
-    plats:'', agenda:'', visa:p.slag === 'ledig' ? 'borta' : 'upptagen', rep:!!p.serie, priv:!!p.privat, klar:!!p.klar, pamin:NDKPAM[p.paminnelse] || 'Ingen', nd:true, agareId:p.agare, serieId:p.serieId || null};
+    plats:'', agenda:'', visa:p.slag === 'ledig' ? 'borta' : NDKVISAFRAN[p.visaSom] || 'upptagen', video:!!p.online, online:p.online || null, rep:!!p.serie, priv:!!p.privat, klar:!!p.klar, pamin:NDKPAM[p.paminnelse] || 'Ingen', nd:true, agareId:p.agare, serieId:p.serieId || null};
 }
 // 1:1 heter som i navet (enskildTitel): "1:1 Elin" för de två, "1:1 Zen · Elin" för en tredje.
 function ndKTitel(ev){
@@ -27332,7 +27334,7 @@ function ndKDetalj(e){
   fetch(`/nav2/kalender?detalj=${e.ref}`, {credentials:'same-origin'}).then(r => r.ok ? r.json() : null).then(x => {
     NDKAL.detalj.set(e.ref, x || 'saknas'); if (!x) return;
     KEV.filter(y => y.ref === e.ref).forEach(y => {
-      y.plats = x.plats || (x.online ? 'Videolänk' : ''); y.online = x.online; y.agenda = x.agenda || ''; y.serieText = x.serieText || '';
+      y.plats = x.plats || (x.online ? 'Videolänk' : ''); y.online = x.online; y.video = !!x.online; y.agenda = x.agenda || ''; y.serieText = x.serieText || '';
       const org = ndKNamn(x.organisator); if (org) y.org = org;
       y.delt = x.deltagare.map(d => [ndKNamn(d.id) || 'Okänd', d.svar]).filter(d => d[0] !== y.org);
       y.gaster = x.gaster || [];
@@ -27348,7 +27350,11 @@ const _ndKPeek = kPeekKort;
 kPeekKort = function(){
   const e = ndK() && S.kPeek ? KEV.find(x => x.id === S.kPeek.id) : null;
   if (e) ndKDetalj(e);
-  const h = _ndKPeek();
+  let h = _ndKPeek();
+  if (e && e.online && e.plats && e.plats !== 'Videolänk'){
+    const a = h.indexOf('<p class="olpkr">' + KI('plats')), b = a < 0 ? -1 : h.indexOf('</p>', a) + 4;
+    if (b > 3) h = h.slice(0, b) + `<p class="olpkr">${KI('video')}<span>Videolänk <button class="tlink inl" data-act="toast" data-msg="Videolänken öppnas.">Anslut</button></span></p>` + h.slice(b);
+  }
   return e && (e.ndSvar || []).length && (e.org === kJag() || e.farAndra) ? ndKSvarIn(h, e) : h;
 };
 /* Kommentarerna och förslagen står under svarsräkningen, en rad per person, som i Outlooks spårning.
@@ -27508,9 +27514,19 @@ const ndKRef = ev => ev && ev.nd ? ev.ref : null;
 function ndKFalt(f){
   const ev = f.id ? KEV.find(x => x.id === f.id) : null;
   return {id:ev ? ndKRef(ev) : undefined, typ:f.typ, t:(f.t || '').trim() || (f.lev || ''), d:f.d, s:f.heldag ? 0 : f.s, e:f.heldag ? 1440 : f.e, heldag:!!f.heldag,
-    delt:(f.delt || []).map(n => ndKId(n)).filter(Boolean), plats:f.plats || '', agenda:f.agenda || '', visa:NDKVISA[f.visa] || 'upptagen',
+    delt:(f.delt || []).map(n => ndKId(n)).filter(Boolean), ...ndKPlatsLank(f, ev), agenda:f.agenda || '', visa:NDKVISA[f.visa] || 'upptagen',
     pamin:NDKPAMMIN[f.pamin] !== undefined ? NDKPAMMIN[f.pamin] : 15, upprepa:f.upprepa || 'Upprepas inte', priv:!!f.priv, lev:f.lev || undefined, order:f.order || undefined,
     gaster:f.typ === 'mote' ? (f.gaster || []).filter(a => !(f.gastFore || []).includes(a)) : []};
+}
+/* Möteslänken (beslutsrundan 2026-10-20: Nav sparar en länk som skrivs in, men skapar ingen). En länk som klistras
+   in i platsfältet (Teams, Meet, Zoom) blir mötets länk, och Anslut öppnar den. Står Videolänk i kryss och ingen
+   länk finns sparas ingenting förrän den klistrats in. Avkryssad Videolänk tar bort länken. */
+const NDKLANK = /https?:\/\/\S+/i;
+function ndKPlatsLank(f, ev){
+  const t = (f.plats || '').trim(), m = t.match(NDKLANK);
+  if (m) return {plats:t.replace(m[0], '').replace(/\s{2,}/g, ' ').trim(), video:m[0]};
+  if (f.typ === 'uppgift') return {plats:t};
+  return {plats:t, video:f.video && ev && ev.online ? ev.online : ''};
 }
 /* Gäster utanför Clicknet (beställaren 2026-10-20): en e-postadress i mötesformuläret får Kalenderns
    inbjudan, ett vanligt mejl med kalenderfil via Resend. Raden finns bara i riktigt läge och bara på ett möte. */
@@ -27530,13 +27546,15 @@ function ndKGastLagg(){
 }
 const _ndKOppna = kOppnaForm;
 kOppnaForm = function(over){
-  if (ndK() && over && over.id){ const ev = KEV.find(x => x.id === over.id); over = {...over, gastFore:(ev && ev.gaster) || [], gaster:[], levEv:!!ev && ev.kat === 'leverans'}; }
+  if (ndK() && over && over.id){ const ev = KEV.find(x => x.id === over.id); over = {...over, gastFore:(ev && ev.gaster) || [], gaster:[], levEv:!!ev && ev.kat === 'leverans'};
+    if (ev && ev.online) over = {...over, plats:[over.plats && over.plats !== 'Videolänk' ? over.plats : '', ev.online].filter(Boolean).join(' '), video:true}; }
   return _ndKOppna(over);
 };
 const _ndKFormular = kFormular;
 kFormular = function(){
   let h = _ndKFormular();
   const f = S.kForm;
+  if (ndK()) h = h.replace(/<datalist id="olplatser">[\s\S]*?<\/datalist>/, `<datalist id="olplatser">${[...(ndK().platser || []), 'Telefon'].filter((x, i, a) => a.indexOf(x) === i).map(x => `<option>${esc(x)}</option>`).join('')}</datalist>`);
   if (ndK() && f){
     if (!ndKHar(ND.jag.id, f.d, f.d)) ndKHamta('vecka', f.d, [], [ND.jag.id]);
     if ((f.delt || []).length){ ndKUppBehov([kJag(), ...f.delt], f.d); if (ndKKollar(f.delt, f.d)) h = h.replace(/(<div class="olmsg ok">[\s\S]*?<span>)[^<]*(<\/span>)/, `$1${NDKKOLLAR}$2`); }
@@ -27562,6 +27580,7 @@ kSpara = function(f){
   if (f.typ === 'mote' && !f.id && (f.gaster || []).length && f.upprepa && f.upprepa !== 'Upprepas inte'){ toast('En person utanför Clicknet bjuds in till ett möte som inte upprepas.'); return false; }
   const ev = f.id ? KEV.find(x => x.id === f.id) : null;
   if (ev && !ndKRef(ev)){ toast('Den här posten ändras där den kommer ifrån.'); return false; }
+  if (f.typ !== 'uppgift' && f.video && !NDKLANK.test(f.plats || '') && !(ev && ev.online)){ toast('Klistra in mötets länk (Teams, Meet eller Zoom) i platsfältet.'); document.querySelector('[data-kff="plats"]')?.focus(); return false; }
   ndKPost('spara', {falt:ndKFalt(f)}).then(s => { if (s.ok){ S.kForm = null; S.kNy = null; } });
   return true;
 };
@@ -27641,6 +27660,20 @@ document.addEventListener('keydown', e => {
 document.addEventListener('input', e => {
   if (!ndK() || !e.target.dataset || e.target.dataset.kdny === undefined || e.inputType !== 'insertReplacementText' && e.inputType) return;
   if (ndK().personer.some(p => p.namn === e.target.value)) ndKDnyLagg(e.target);
+}, true);
+
+/* Anslut (på posten, i kortet, i Min dag och i påminnelsefönstret, på alla sidor) öppnar mötets länk. Utkastet visade
+   bara en toast. Posten hittas via raden knappen sitter i, kortet som är öppet, eller dagens nästa möte med länk. */
+document.addEventListener('click', e => {
+  if (!ndK()) return;
+  const b = e.target.closest && e.target.closest('[data-act="toast"]'); if (!b || !/^Videolänken öppnas/.test(b.dataset.msg || '')) return;
+  const rad = b.closest('[data-kev]') || (b.closest('.olremrad') && b.closest('.olremrad').querySelector('[data-kremval]'));
+  const id = rad ? (rad.dataset.kev || rad.dataset.kremval) : S.view === 'kalender' && S.kPeek ? S.kPeek.id : null;
+  let ev = id ? KEV.find(x => x.id === id) : null;
+  if (!ev || !ev.online){ const t = (b.dataset.msg.match(/för (.+)\.$/) || [])[1], idag = kIdag();
+    ev = KEV.filter(x => x.online && x.d === idag && kMin(x) && (!t || x.t === t) && x.e > now()).sort((x, y) => x.s - y.s)[0] || ev; }
+  e.preventDefault(); e.stopImmediatePropagation();
+  if (ev && ev.online) window.open(ev.online, '_blank', 'noopener'); else toast('Mötet har ingen länk. Klistra in den i mötets platsfält.');
 }, true);
 
 document.addEventListener('click', e => {

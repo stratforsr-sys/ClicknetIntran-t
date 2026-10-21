@@ -192,6 +192,16 @@ async function kopieraTill(user: CurrentUser, id: string, dag: string, start: nu
   return { ...r, kvitto: kvittoKopierad(dag, start, deltagare.length > 0) + (gaster ? " Gästerna utanför Clicknet följer inte med." : "") };
 }
 
+/**
+ * Möteslänken (beslutsrundan 2026-10-20: Nav sparar en länk som skrivs in, men skapar ingen). Bara http(s).
+ * `undefined` = klienten skickade ingen, och ett befintligt mötes länk står kvar.
+ */
+function lank(v: unknown): string | null | undefined {
+  if (v === undefined) return undefined;
+  const t = String(v ?? "").trim();
+  return /^https?:\/\/\S+$/i.test(t) && t.length <= 500 ? t : null;
+}
+
 const svarFran = (r: Resultat) => (r.fel ? { fel: r.fel } : { ok: r.kvitto ?? "Sparat.", angra: r.angra ?? null, id: r.eventId ?? null, dag: r.dag ?? null });
 
 export async function POST(request: Request) {
@@ -221,6 +231,8 @@ export async function POST(request: Request) {
         const upprepa = UPPREPA_FRAN[f.upprepa ?? "Upprepas inte"] ?? "aldrig";
         if (!(UPPREPA as readonly string[]).includes(upprepa)) return svar2({ fel: "Välj hur det ska upprepas." }, 400);
         const deltagare = (f.delt ?? []).filter((x) => UUID.test(x));
+        const video = lank(f.video);
+        if (f.video && !video) return svar2({ fel: "Möteslänken ska börja med https://." }, 400);
         const g = await gasterFran(f.gaster);
         if ("fel" in g) return svar2({ fel: g.fel }, 400);
         g.kolleger.forEach((id) => deltagare.includes(id) || deltagare.push(id));
@@ -234,7 +246,7 @@ export async function POST(request: Request) {
         // Ändra ett befintligt möte: tiden med flytta/andraLangd, resten med andraMote.
         if (f.id) {
           if (!UUID.test(f.id)) return svar2({ fel: "Händelsen finns inte längre." }, 400);
-          const { data: e } = await supabaseAdmin().from("calendar_event").select("dag, tid, minuter, kind").eq("id", f.id).maybeSingle();
+          const { data: e } = await supabaseAdmin().from("calendar_event").select("dag, tid, minuter, kind, online_url").eq("id", f.id).maybeSingle();
           if (!e) return svar2({ fel: "Händelsen finns inte längre." }, 404);
           if (g.epost.length && e.kind !== "mote") return svar2({ fel: "Bara ett möte kan ha gäster utanför Clicknet." }, 400);
           const start = f.s ?? 0;
@@ -249,7 +261,7 @@ export async function POST(request: Request) {
             if (sist.fel) return ut(sist);
           }
           if (e.kind === "mote") {
-            sist = await andraMote(f.id, { rubrik: f.t ?? "", plats: f.plats ?? null, videolank: f.video ?? null, agenda: f.agenda ?? "", deltagare, paminnelse: f.pamin ?? null, visaSom: f.visa ?? null });
+            sist = await andraMote(f.id, { rubrik: f.t ?? "", plats: f.plats ?? null, videolank: video === undefined ? ((e.online_url as string | null) ?? null) : video, agenda: f.agenda ?? "", deltagare, paminnelse: f.pamin ?? null, visaSom: f.visa ?? null });
             if (sist.fel) return ut(sist);
           }
           await privat(f.id);
@@ -286,9 +298,9 @@ export async function POST(request: Request) {
             visaSom: f.visa,
             paminnelse: f.pamin ?? undefined,
           });
-          if (!r.fel && f.priv && r.eventId) {
+          if (!r.fel && (f.priv || video) && r.eventId) {
             const { data: e } = await supabaseAdmin().from("calendar_event").select("series_id").eq("id", r.eventId).maybeSingle();
-            if (e?.series_id) await supabaseAdmin().from("calendar_event").update({ is_private: true }).eq("series_id", e.series_id);
+            if (e?.series_id) await supabaseAdmin().from("calendar_event").update({ ...(f.priv ? { is_private: true } : {}), ...(video ? { online_url: video } : {}) }).eq("series_id", e.series_id);
           }
           return ut(r);
         }
@@ -296,7 +308,7 @@ export async function POST(request: Request) {
         const r = await skapaMote({ rubrik: f.t ?? "", dag: f.d ?? "", start: f.s ?? 0, minuter, deltagare, plats: f.plats ?? null, agenda: f.agenda ?? null, paminnelse: f.pamin ?? undefined, visaSom: f.visa });
         if (!r.fel) {
           await privat(r.eventId);
-          if (f.video && r.eventId) await supabaseAdmin().from("calendar_event").update({ online_url: f.video }).eq("id", r.eventId);
+          if (video && r.eventId) await supabaseAdmin().from("calendar_event").update({ online_url: video }).eq("id", r.eventId);
         }
         return ut(await bjudIn(r, r.eventId, g.epost));
       }

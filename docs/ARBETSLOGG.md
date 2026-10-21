@@ -5,6 +5,25 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-21 · Nav 2.0, Kalendern som Outlook, del 5: Visa som syns, och möteslänken sparas (ingen migration)
+
+- **Visa som:** formuläret sparade preliminär, ledig, borta och annan plats
+  (`show_as`), men Nav 2.0 ritade alla möten som upptagna. Nu läser
+  `byggKalender` och `hamtaKalposter` `show_as` för vyns möten (samma läsning
+  som Privat), och posten ritas som i utkastet: preliminär streckad, borta
+  och ledig med sina kanter. Att redigera ett möte behåller valet.
+- **Möteslänken** (beslutsrundan 2026-10-20: Nav sparar en länk som skrivs
+  in, men skapar ingen): en länk som klistras in i platsfältet (Teams, Meet,
+  Zoom) blir mötets länk, också för en serie. Anslut på posten, i kortet, i
+  Min dag och i påminnelsefönstret öppnar den; förut visade de bara en
+  toast. Länken lämnas bara ut till den som är med i mötet. Kryssas
+  Videolänk utan länk säger Nav till. Att redigera ett möte nollställde
+  förut länken (klienten skickade ingen); nu står den kvar.
+- **Platsförslagen** i formuläret var utkastets påhittade rum. Nu är de
+  platserna i ens egna senaste möten, plus Telefon.
+- **Del 4 provad i previewen** (`a781580`, som Zen): 1:1 Michael visar den
+  riktiga punkten på agendan.
+
 ## 2026-10-21 · Nav 2.0, Kalendern som Outlook, del 4: 1:1-kortets knappar tillbaka (ingen migration)
 
 - **Felet:** utkastets 1:1-kort har "Be om förberedelse" och "Lägg till
