@@ -5,6 +5,21 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-21 · Nav 2.0, Kalendern som Outlook, del 4: 1:1-kortets knappar tillbaka (ingen migration)
+
+- **Felet:** utkastets 1:1-kort har "Be om förberedelse" och "Lägg till
+  punkt", men Nav 2.0:s `kEnskild` ritade kortet utan dem, och K&V stod som
+  "–". 87 av 118 händelser i kalendern är 1:1.
+- **Nu:** knapparna går till repots `beOmForberedelse` (säljaren får en
+  notis att fylla på agendan) och `laggTillPunkt` (ett fält i kortet, Enter
+  lägger till). De öppna punkterna på agendan står under knapparna och bockas
+  av med Klar (`bockaAv`). `kalDetalj` läser 1:1:ets innehåll med repots
+  `hamtaEnskilt` och läsarens token, och K&V senast kommer därifrån.
+  `POST forbered`, `punkt` och `bocka`.
+- **Del 3 provad i previewen** (`20cb2ab`, som Zen): detaljen bär
+  kommentarerna och förslagen bara till den som får ändra mötet, och
+  `besluta` utan förslag nekas utan att något skrivs.
+
 ## 2026-10-21 · Nav 2.0, Kalendern som Outlook, del 3: arrangören ser svaren och förslagen (ingen migration)
 
 - **Felet:** en deltagare kunde svara med en kommentar och föreslå en ny tid,

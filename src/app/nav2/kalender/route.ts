@@ -9,12 +9,15 @@ import { skapaKalenderpost, stallInDelning } from "@/app/(app)/kalender/actions"
 import {
   andraLangd,
   andraMote,
+  beOmForberedelse,
+  behallTid,
+  bockaAv,
   flytta,
   flyttaSerie,
-  behallTid,
   foreslaTid,
   godkannForslag,
   kopiera,
+  laggTillPunkt,
   sattPaminnelse,
   skapaLeverans,
   skapaMote,
@@ -81,7 +84,8 @@ export async function GET(request: Request) {
  * (`skapaLeverans`) och delningen (`stallInDelning`) — samma behörighet, samma
  * utkorg och samma ångra.
  *
- * Arrangörens beslut om ett förslag (`godkannForslag`, `behallTid`): "besluta".
+ * Arrangörens beslut om ett förslag (`godkannForslag`, `behallTid`): "besluta". 1:1-kortet:
+ * `beOmForberedelse`, `laggTillPunkt`, `bockaAv`.
  *
  * Det nya: ändra ett mötes rubrik, plats, agenda, deltagare och påminnelse
  * (`andraMote`, 0088), den egna påminnelsen (`sattPaminnelse`), "Varje månad"
@@ -305,6 +309,13 @@ export async function POST(request: Request) {
         const person = String(b.person ?? "");
         return ut(await (b.godkann === true ? godkannForslag(id, person) : behallTid(id, person)));
       }
+      // 1:1-kortet: be säljaren förbereda, en punkt på agendan, bocka av en punkt.
+      case "forbered":
+        return ut(await beOmForberedelse(id));
+      case "punkt":
+        return ut(await laggTillPunkt(String(b.serie ?? ""), "agenda", String(b.text ?? ""), b.dag ? String(b.dag) : null, null));
+      case "bocka":
+        return ut(await bockaAv(String(b.punkt ?? ""), b.klar === true));
       case "stallin":
         return ut(await stallIn(id));
       case "kopiera":

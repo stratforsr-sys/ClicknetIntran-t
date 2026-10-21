@@ -3,7 +3,7 @@ import "server-only";
 import type { CurrentUser } from "@/lib/auth";
 import { svensktDatum } from "@/lib/klocka";
 import { hamtaDelningar } from "@/lib/kalender-server";
-import { hamtaHandelsedetalj, hamtaLeveranskalender } from "@/lib/leveranskalender-server";
+import { hamtaEnskilt, hamtaHandelsedetalj, hamtaLeveranskalender } from "@/lib/leveranskalender-server";
 import { intervallForVy, overlamning, regeltext, type Post, type Vy } from "@/lib/leveranskalender";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { SKRIVLAGE } from "./skrivlage";
@@ -146,6 +146,8 @@ export async function kalDetalj(user: CurrentUser, id: string) {
     supabaseAdmin().from("calendar_attendee").select("external_email").eq("event_id", id).not("external_email", "is", null),
   ]);
   const mig = user.employee!.id;
+  // 1:1: punkterna på agendan och säljarens K&V, med läsarens token (coachningskretsen, som /kalender).
+  const enskilt = d.slag === "enskilt" ? await hamtaEnskilt(user, d).catch(() => null) : null;
   if (e?.is_private && e.organizer_id !== mig && !d.deltagare.some((x) => x.id === mig)) {
     return { plats: null, online: null, agenda: "", organisator: d.organisator, deltagare: [], gaster: [], serieText: d.serie ? regeltext(d.serie) : null, paminnelse: d.paminnelse, privat: true };
   }
@@ -163,5 +165,13 @@ export async function kalDetalj(user: CurrentUser, id: string) {
     gaster: (g ?? []).map((x) => String(x.external_email)),
     serieText: d.serie ? regeltext(d.serie) : null,
     paminnelse: d.paminnelse,
+    enskilt: enskilt
+      ? {
+          serie: enskilt.seriesId,
+          farSkriva: enskilt.farSkriva,
+          kv: enskilt.siffror.kv,
+          punkter: (enskilt.punkter ?? []).filter((p) => p.kind === "agenda").map((p) => ({ id: p.id, text: p.text, klar: p.klar })),
+        }
+      : null,
   };
 }

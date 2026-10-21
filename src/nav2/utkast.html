@@ -27258,7 +27258,7 @@ function ndKEv(p){
   if (agare !== org) add(agare, p.agare === ND.jag.id && p.svar && p.svar !== 'org' ? p.svar : null);
   (p.deltagare || []).forEach(id => add(ndKNamn(id), null));
   return {id:p.id, ref:p.ref, href:p.href, d:p.dag, s, e, allday, t:p.rubrik ?? (allday ? 'Borta' : 'Upptagen'), kat:NDKSLAG[p.slag] || 'mote', org, delt,
-    plats:'', agenda:'', visa:p.slag === 'ledig' ? 'borta' : 'upptagen', rep:!!p.serie, priv:!!p.privat, klar:!!p.klar, pamin:NDKPAM[p.paminnelse] || 'Ingen', nd:true, agareId:p.agare};
+    plats:'', agenda:'', visa:p.slag === 'ledig' ? 'borta' : 'upptagen', rep:!!p.serie, priv:!!p.privat, klar:!!p.klar, pamin:NDKPAM[p.paminnelse] || 'Ingen', nd:true, agareId:p.agare, serieId:p.serieId || null};
 }
 // 1:1 heter som i navet (enskildTitel): "1:1 Elin" för de två, "1:1 Zen · Elin" för en tredje.
 function ndKTitel(ev){
@@ -27337,7 +27337,7 @@ function ndKDetalj(e){
       y.delt = x.deltagare.map(d => [ndKNamn(d.id) || 'Okänd', d.svar]).filter(d => d[0] !== y.org);
       y.gaster = x.gaster || [];
       // Arrangörens del av svaren: kommentarer och förslag om ny tid (bara till den som får ändra mötet).
-      y.farAndra = !!x.farAndra;
+      y.farAndra = !!x.farAndra; y.enskilt = x.enskilt || null;
       y.ndSvar = x.deltagare.filter(d => d.note || d.forslag).map(d => ({id:d.id, namn:ndKNamn(d.id) || 'Okänd', svar:d.svar, note:d.note || '', forslag:d.forslag || null}));
       ndKTitel(y);
     });
@@ -27367,15 +27367,37 @@ function ndKSvarIn(h, e){
   return h.slice(0, j + 4) + rader + h.slice(j + 4);
 }
 const ndKFlyttaPers = ev => [ev.org, ...ev.delt.map(x => x[0])].filter(p => p && p !== 'Ledningen');
-// 1:1-kortet: säljarens månad ur provisionen, när läsaren får se den. Inget annat påhittat.
+// 1:1-kortet: säljarens månad ur provisionen när läsaren får se den, K&V ur navet (repots hamtaEnskilt), och
+// utkastets två knappar mot repots handlingar: "Be om förberedelse" (beOmForberedelse) och "Lägg till punkt"
+// (laggTillPunkt). Punkterna på agendan står under knapparna och bockas av med Klar (bockaAv).
 const _ndKEnskild = kEnskild;
 kEnskild = function(e){
   if (!ndK()) return _ndKEnskild(e);
-  const vem = e.delt[0] && e.delt[0][0];
-  if (!vem || !ndP() || !ndP().chefsvy || !ndP().personer.some(p => p.namn === vem)) return '';
-  const u = pvUnderlag(vem, PVMAN), mal = pvMalFor(vem, PVMAN);
-  return `<div class="olenskild"><div><small>Provision i ${pvManNamn(PVMAN)}</small><b class="num">${kr(u.summa)}${mal && mal.k ? ` av ${kr(mal.k)}` : ''}</b></div><div><small>K&amp;V senast</small><b class="num">–</b></div><div><small>Svagast</small><b>–</b></div></div>`;
+  const vem = e.delt[0] && e.delt[0][0], x = e.enskilt, kv = x && x.kv ? x.kv : '–';
+  const pv = vem && ndP() && ndP().chefsvy && ndP().personer.some(p => p.namn === vem);
+  let h = '';
+  if (pv){ const u = pvUnderlag(vem, PVMAN), mal = pvMalFor(vem, PVMAN);
+    h += `<div class="olenskild"><div><small>Provision i ${pvManNamn(PVMAN)}</small><b class="num">${kr(u.summa)}${mal && mal.k ? ` av ${kr(mal.k)}` : ''}</b></div><div><small>K&amp;V senast</small><b class="num">${esc(kv)}</b></div><div><small>Svagast</small><b>–</b></div></div>`; }
+  else if (x && x.kv) h += `<div class="olenskild"><div><small>K&amp;V senast</small><b class="num">${esc(kv)}</b></div></div>`;
+  if (!e.ref || !e.serieId) return h;
+  h += `<div class="pacts" style="margin:6px 0 2px"><button class="btn btn-s btn-sm" data-ndkforbered>Be om förberedelse</button><button class="btn btn-s btn-sm" data-ndkpunktny>Lägg till punkt</button></div>`;
+  if (S.ndKPunkt === e.id) h += `<input class="uin olkom" data-ndkpunkt maxlength="300" placeholder="Punkt på agendan, Enter lägger till" aria-label="Punkt på agendan">`;
+  ((x && x.punkter) || []).filter(p => !p.klar).forEach(p => {
+    h += `<p class="olpkr">${KI('text')}<span>${esc(p.text)} <button class="tlink inl" data-ndkbocka="${p.id}">Klar</button></span></p>`;
+  });
+  return h;
 };
+// Kortets 1:1-del läses om efter en ändring, utan att sidan laddas om.
+function ndKEnskildOm(e){ NDKAL.detalj.delete(e.ref); ndKDetalj(e); }
+function ndKPunktLagg(el){
+  const e = KEV.find(x => S.kPeek && x.id === S.kPeek.id), text = (el.value || '').trim();
+  if (!e || !text) return;
+  ndKPost('punkt', {serie:e.serieId, text, dag:e.d}, {ladda:false}).then(s => { if (!s.ok) return; S.ndKPunkt = null; ndKEnskildOm(e); render(); });
+}
+document.addEventListener('keydown', e => {
+  if (!ndK() || S.view !== 'kalender' || e.key !== 'Enter' || !e.target.dataset || e.target.dataset.ndkpunkt === undefined) return;
+  e.preventDefault(); e.stopImmediatePropagation(); ndKPunktLagg(e.target);
+}, true);
 // Leveranskön: en order som väntar på godkännande har ingen frist än.
 const _ndKKo = kKoHtml;
 kKoHtml = function(){ const h = _ndKKo(); return ndK() ? h.split(`${kLen(1e6)} kvar`).join('Väntar på godkännande') : h; };
@@ -27631,6 +27653,9 @@ document.addEventListener('click', e => {
   if (ds.kforslagskicka !== undefined){ stopp(); if (!ref) return; const dd = document.querySelector('[data-kfd]').value, ss = document.querySelector('[data-kfs]').value;
     ndKPost('foresla', {id:ref, dag:dd, start:tmin(ss), langd:ev.e - ev.s, kommentar:(document.querySelector('[data-kfm]')?.value || '').trim()}); return; }
   if (ds.kstalljs !== undefined){ stopp(); if (!ref) return; ndKPost('stallin', {id:ref}); return; }
+  if (ds.ndkforbered !== undefined){ stopp(); if (ref) ndKPost('forbered', {id:ref}, {ladda:false}); return; }
+  if (ds.ndkpunktny !== undefined){ stopp(); S.ndKPunkt = S.ndKPunkt === S.kPeek.id ? null : S.kPeek.id; render(); document.querySelector('[data-ndkpunkt]')?.focus(); return; }
+  if (ds.ndkbocka){ stopp(); ndKPost('bocka', {punkt:ds.ndkbocka, klar:true}, {ladda:false}).then(s => { if (s.ok && ev){ ndKEnskildOm(ev); render(); } }); return; }
   if (ds.ndkbeslut){ stopp(); if (!ref) return; ndKPost('besluta', {id:ref, person:ds.ndkperson, godkann:ds.ndkbeslut === 'ja'}); return; }
   if (ds.kkopiera !== undefined){ stopp(); if (!ref) return; ndKPost('kopiera', {id:ref}); return; }
   if (ds.kklar !== undefined && ev && ev.kat === 'uppgift' && ref){ stopp(); ndUpgPost(ev.klar ? 'ateroppna' : 'bocka', {id:ref}); return; }
