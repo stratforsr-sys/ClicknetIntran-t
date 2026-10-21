@@ -27290,7 +27290,7 @@ function ndKalStart(){
   KPERS.chef = pers; KPERS.saljare = pers;
   KDELNING.chef = k.delning.map(d => [d.namn, d.niva]); KDELNING.saljare = KDELNING.chef;
   KKO.length = 0;
-  if (k.lev.farSe) k.lev.ko.forEach(q => KKO.push({id:q.orderId, kund:q.kund, paket:q.paket || 'Paket saknas', saljare:q.saljare ? fornamn(q.saljare) : '–', kvar:q.due ? Math.round((Date.parse(q.due) - Date.now()) / 6e4) : 1e6, over:q.over, utanFrist:!q.due}));
+  if (k.lev.farSe) k.lev.ko.forEach(q => KKO.push({id:q.orderId, kund:q.kund, paket:q.paket || 'Paket saknas', saljare:q.saljare && ndKNamn(q.saljare) ? fornamn(ndKNamn(q.saljare)) : '–', kvar:q.due ? Math.round((Date.parse(q.due) - Date.now()) / 6e4) : 1e6, over:q.over, utanFrist:!q.due}));
   ndKMoten();
 }
 // Uppgifternas planering räknar med dagens möten ur kalendern.
@@ -27447,6 +27447,68 @@ kSlapp = function(nyckel, d, s){
   // En uppgift får sitt klockslag i Uppgifter (planera), och står då i kalendern.
   if (typ === 'u'){ const u = TASKS.find(x => x.id === id); if (!u) return; ndUpgPost('planera', {id, dag:d, tid:hm(s), est:Math.max(15, Math.min(240, u.est || 30))}); return; }
 };
+/* Ctrl- eller Alt-dra kopierar (Outlook). Utkastet lade kopian bara i webbläsaren; här sparas den i navet,
+   på dagen och tiden där den släpptes (/nav2/kalender, kopiera med dag och start). Lyssnaren går före utkastets. */
+document.addEventListener('pointerup', e => {
+  if (!ndK() || !kDrag || kDrag.typ !== 'flytt' || !kDrag.rorde || !(e.ctrlKey || e.altKey)) return;
+  const dr = kDrag, x = KEV.find(k => k.id === dr.id), ref = ndKRef(x); kDrag = null;
+  if (!ref || x.kat !== 'mote'){ render(); toast('Bara ett möte kopieras genom att dra. Ett 1:1 är en serie.'); return; }
+  render(); if (kWd(dr.d) > 5){ toast('Välj en vardag.'); return; }
+  ndKPost('kopiera', {id:ref, dag:dr.d, start:dr.s});
+}, true);
+
+/* Vänsterfältets "Mina kalendrar" (Kalender, Uppgifter, Frånvaro, Helgdagar i Sverige) var text. Nu visar och döljer
+   de sina slag, som rutorna i Outlook, med samma val som Filter. */
+const NDKCAL = {'Kalender':['mote', 'enskilt', 'coachning', 'leverans', 'frist'], 'Uppgifter':['uppgift'], 'Frånvaro':['ledig'], 'Helgdagar i Sverige':['helg']};
+const ndKCalPa = n => !NDKCAL[n].every(k => S.kTyper.has(k));
+function ndKCalVaxla(n){ if (!NDKCAL[n]) return; const pa = ndKCalPa(n); NDKCAL[n].forEach(k => pa ? S.kTyper.add(k) : S.kTyper.delete(k)); render(); document.querySelector(`[data-ndkcal="${n}"]`)?.focus(); }
+const _ndKFalt = kFalt;
+kFalt = function(){
+  const h = _ndKFalt();
+  if (!ndK()) return h;
+  return h.replace(/<label class="olcal"><span class="olchk(?: on)?" style="--c:([^"]+)">[\s\S]*?<\/span><span>(Kalender|Uppgifter|Frånvaro|Helgdagar i Sverige)<\/span>/g, (m, c, n) => {
+    const pa = ndKCalPa(n);
+    return `<label class="olcal" data-ndkcal="${n}" role="checkbox" aria-checked="${pa}" tabindex="0"><span class="olchk ${pa ? 'on' : ''}" style="--c:${c}">${pa ? I('check') : ''}</span><span>${n}</span>`;
+  });
+};
+document.addEventListener('keydown', e => {
+  if (!ndK() || S.view !== 'kalender' || (e.key !== 'Enter' && e.key !== ' ') || !e.target.dataset || !e.target.dataset.ndkcal) return;
+  e.preventDefault(); ndKCalVaxla(e.target.dataset.ndkcal);
+}, true);
+
+/* Dela: "Lägg till en person" hade ingen hanterare. Namnet väljs bland kollegorna, och personen får nivån
+   "Kan se rubriker och platser" (Outlooks förval). Nivån ändras sedan i raden, som för de andra. */
+const _ndKDela = kDela;
+kDela = function(){
+  const h = _ndKDela();
+  if (!ndK()) return h;
+  const har = new Set(KDELNING.chef.filter(([n]) => !S.kDelaBort.has(n)).map(([n]) => n));
+  const val = ndK().personer.filter(p => !har.has(p.namn)).map(p => `<option value="${esc(p.namn)}">`).join('');
+  return h.replace('placeholder="Lägg till en person" data-kdny>', `placeholder="Lägg till en person" data-kdny list="ndKDnyLista" autocomplete="off"><datalist id="ndKDnyLista">${val}</datalist>`);
+};
+function ndKDnyLagg(el){
+  const q = (el.value || '').trim().toLowerCase(); if (!q) return;
+  const pers = ndK().personer, exakt = pers.filter(p => p.namn.toLowerCase() === q), borjar = pers.filter(p => p.namn.toLowerCase().startsWith(q));
+  const p = exakt.length === 1 ? exakt[0] : borjar.length === 1 ? borjar[0] : null;
+  if (!p){ toast(borjar.length ? 'Flera heter så. Skriv hela namnet.' : 'Ingen kollega heter så.'); return; }
+  const rader = KDELNING.chef, finns = rader.find(([n]) => n === p.namn);
+  if (finns && !S.kDelaBort.has(p.namn)){ toast(`${fornamn(p.namn)} finns redan i listan.`); return; }
+  ndKPost('delning', {person:p.id, niva:'rubriker'}, {ladda:false}).then(s => {
+    if (!s.ok) return;
+    if (finns) finns[1] = 'rubriker'; else rader.push([p.namn, 'rubriker']);
+    S.kDelaBort.delete(p.namn); render(); document.querySelector('[data-kdny]')?.focus();
+  });
+}
+document.addEventListener('keydown', e => {
+  if (!ndK() || S.view !== 'kalender' || e.key !== 'Enter' || !e.target.dataset || e.target.dataset.kdny === undefined) return;
+  e.preventDefault(); e.stopImmediatePropagation(); ndKDnyLagg(e.target);
+}, true);
+// Ett val i namnlistan lägger till direkt.
+document.addEventListener('input', e => {
+  if (!ndK() || !e.target.dataset || e.target.dataset.kdny === undefined || e.inputType !== 'insertReplacementText' && e.inputType) return;
+  if (ndK().personer.some(p => p.namn === e.target.value)) ndKDnyLagg(e.target);
+}, true);
+
 document.addEventListener('click', e => {
   if (!ndK() || S.view !== 'kalender') return;
   const b = e.target.closest && e.target.closest('button, a, label'); if (!b || !b.dataset) return;
@@ -27460,6 +27522,10 @@ document.addEventListener('click', e => {
   if (ds.kkopiera !== undefined){ stopp(); if (!ref) return; ndKPost('kopiera', {id:ref}); return; }
   if (ds.kklar !== undefined && ev && ev.kat === 'uppgift' && ref){ stopp(); ndUpgPost(ev.klar ? 'ateroppna' : 'bocka', {id:ref}); return; }
   if (ds.kuppgklar !== undefined){ stopp(); const u = TASKS.find(x => x.id === ds.kuppgklar); ndUpgPost(u && u.lage === 'klar' ? 'ateroppna' : 'bocka', {id:ds.kuppgklar}); return; }
+  // Flyttbannern för en serie: "Hela serien" flyttade bara posterna i webbläsaren. Nu går båda knapparna till navet.
+  if (ds.kserie !== undefined){ stopp(); const sr = S.kSerie, x = sr && KEV.find(k => k.id === sr.id); S.kSerie = null;
+    if (!ds.kserie || !x){ render(); return; } kFlytta(x, sr.d, sr.s, null, ds.kserie === 'en'); return; }
+  if (ds.ndkcal){ stopp(); ndKCalVaxla(ds.ndkcal); return; }
   if (ds.kdelabort){ stopp(); const id = ndKId(ds.kdelabort); if (id) ndKPost('delning', {person:id, niva:'upptagen'}, {ladda:false}).then(s => { if (s.ok){ S.kDelaBort.add(ds.kdelabort); render(); } }); return; }
   if (ds.act === 'toast'){
     stopp(); const msg = ds.msg || '';

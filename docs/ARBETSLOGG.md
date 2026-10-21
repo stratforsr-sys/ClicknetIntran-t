@@ -5,6 +5,30 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-21 · Nav 2.0, Kalendern som Outlook, del 1: det som såg sparat ut sparas (ingen migration)
+
+- **Beställaren:** "kalendern ska vara fullkomlig som outlook". Inventeringen
+  mot Outlook och listan som byggs står i `~/nav2-utkast/delar/kalender-outlook/`
+  och i HANDOFF, "Del: Kalendern som Outlook", hos beställaren. Listan byggs
+  uppifrån, en del per commit. Spannet är 0200–0204.
+- **"Hela serien"** i flyttbannern flyttade bara posterna i webbläsaren och
+  sa "Hela serien flyttad". Nu går den till repots `flyttaSerie`, och "Bara
+  den här gången" till `flytta`.
+- **Ctrl- eller Alt-dra** kopierar ett möte till dagen och tiden där det
+  släpps: `kopiera` med `dag` och `start` i `/nav2/kalender` (`kopieraTill`)
+  gör ett nytt möte med samma rubrik, plats, agenda, deltagare, påminnelse,
+  Visa som och Privat, och en enda inbjudan. Arrangören, eller den som får
+  planera om hos arrangören, kopierar. Gäster utanför Clicknet följer inte
+  med. Förut syntes kopian bara i webbläsaren.
+- **Dela → Lägg till en person** hade ingen hanterare, inte ens i utkastet.
+  Kollegan väljs i namnlistan och får nivån "Kan se rubriker och platser"
+  (Outlooks förval), som sedan ändras i raden.
+- **Mina kalendrar** (Kalender, Uppgifter, Frånvaro, Helgdagar i Sverige)
+  visar och döljer sina slag, med samma val som Filter. Helgdagsrutan stod
+  okryssad fast de röda dagarna visades.
+- **Leveranskön** skrev säljarens id ("såld av bd2d7924-…") i stället för
+  namnet.
+
 ## 2026-10-21 · Nav 2.0, Anställda: stämplingar och arbetstidsjournal står också kvar (0170 KÖRD)
 
 - **Beställaren:** kör 0170, och stämplingarna och arbetstidsjournalen ska

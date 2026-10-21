@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, type CurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { FORINSTALLNINGAR, STEG, UPPREPA, arDatum, arVy, type Upprepa } from "@/lib/leveranskalender";
-import { lk } from "@/lib/leveranskalender-server";
+import { FORINSTALLNINGAR, STEG, UPPREPA, arDatum, arVy, kvittoKopierad, type Upprepa } from "@/lib/leveranskalender";
+import { hamtaHandelsedetalj, lk } from "@/lib/leveranskalender-server";
 import { hamtaKalposter, kalDetalj } from "@/lib/nav2/kalender";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
 import { skapaKalenderpost, stallInDelning } from "@/app/(app)/kalender/actions";
@@ -135,6 +135,42 @@ async function bjudIn(r: Resultat, eventId: string | null | undefined, epost: st
   return text ? { ...r, kvitto: `${r.kvitto ?? "Sparat."} ${text}` } : r;
 }
 
+/**
+ * Ctrl- eller Alt-dra (Outlook): en kopia av mötet på den dag och tid man släpper det. Repots `kopiera` lägger
+ * kopian en vecka fram; att sedan flytta den hade gett deltagarna två utskick. Här blir kopian ett nytt möte med
+ * samma rubrik, plats, agenda, deltagare, påminnelse, "Visa som" och Privat, och en enda inbjudan. Arrangören,
+ * eller den som får planera om i arrangörens kalender, kopierar; kopian står i arrangörens kalender. Gäster
+ * utanför Clicknet följer inte med, eftersom de annars fick ett mejl de inte bett om.
+ */
+async function kopieraTill(user: CurrentUser, id: string, dag: string, start: number): Promise<Resultat> {
+  if (!UUID.test(id)) return { fel: "Händelsen finns inte längre." };
+  const d = await hamtaHandelsedetalj(user, id);
+  if (!d || d.installd) return { fel: "Händelsen finns inte längre." };
+  if (d.slag !== "mote") return { fel: "Bara ett möte kopieras genom att dra. Ett 1:1 är en serie, och en leverans bokas från kön." };
+  if (!d.farAndra) return { fel: "Bara arrangören kopierar mötet. Du kan föreslå en ny tid." };
+  const db = supabaseAdmin();
+  const [{ data: e }, { count: gaster }] = await Promise.all([
+    db.from("calendar_event").select("show_as, is_private, online_url").eq("id", id).maybeSingle(),
+    db.from("calendar_attendee").select("id", { count: "exact", head: true }).eq("event_id", id).not("external_email", "is", null),
+  ]);
+  const deltagare = d.deltagare.map((x) => x.id).filter((x) => x !== d.organisator);
+  const r = await skapaMote({
+    organisator: d.organisator,
+    rubrik: d.rubrik,
+    dag,
+    start,
+    minuter: d.minuter ?? 30,
+    deltagare,
+    plats: d.plats,
+    agenda: d.agenda,
+    paminnelse: d.paminnelse,
+    visaSom: (e?.show_as as string | undefined) ?? undefined,
+  });
+  if (r.fel || !r.eventId) return r;
+  if (e?.is_private || e?.online_url) await db.from("calendar_event").update({ is_private: Boolean(e.is_private), online_url: e.online_url ?? null }).eq("id", r.eventId);
+  return { ...r, kvitto: kvittoKopierad(dag, start, deltagare.length > 0) + (gaster ? " Gästerna utanför Clicknet följer inte med." : "") };
+}
+
 const svarFran = (r: Resultat) => (r.fel ? { fel: r.fel } : { ok: r.kvitto ?? "Sparat.", angra: r.angra ?? null, id: r.eventId ?? null, dag: r.dag ?? null });
 
 export async function POST(request: Request) {
@@ -250,6 +286,8 @@ export async function POST(request: Request) {
       case "stallin":
         return ut(await stallIn(id));
       case "kopiera":
+        // Med dag och start: Ctrl- eller Alt-dra. Utan: "Kopiera till nästa vecka", repots kopiera.
+        if (b.dag !== undefined) return ut(await kopieraTill(user, id, String(b.dag ?? ""), Number(b.start)));
         return ut(await kopiera(id));
       case "flytta": {
         const dag = String(b.dag ?? ""), start = Number(b.start);

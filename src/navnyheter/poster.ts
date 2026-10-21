@@ -132,6 +132,9 @@ behörigheter som här: du ser bara det du får se.
   går att ändra efteråt, var och en väljer sin egen påminnelse, och ett möte
   kan vara privat eller upprepas varje månad. Skriv en e-postadress i
   mötet, så får också den som inte jobbar på Clicknet en inbjudan med mejl.
+  Håll in Ctrl eller Alt när du drar ett möte, så kopieras det dit du
+  släpper det. Under Mina kalendrar döljer du uppgifterna, frånvaron eller
+  helgdagarna med en bock.
 - **Ärenden**, med svarstiden som navet lovar. Chefen får ett ärende av
   nattjobbet när en överenskommelse i Coachning är fjorton dagar över fristen
   eller någon inte gjort systemguiderna i tid, och ägaren när en sats ska ses
