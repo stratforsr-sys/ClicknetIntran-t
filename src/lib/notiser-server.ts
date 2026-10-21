@@ -270,6 +270,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
       .select("id, kalla, typ, rubrik, detalj, href, created_at, object_type, object_id")
       .gte("created_at", new Date(Date.now() - HANDELSE_DAGAR * 86_400_000).toISOString())
       .order("created_at", { ascending: false })
+      .order("id")
       .limit(MAX_NOTISER * 2),
 
     /**

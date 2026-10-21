@@ -328,8 +328,8 @@ export async function byggTid(supabase: SupabaseClient, user: CurrentUser): Prom
     admin.from("work_time_journal").select("employee_id, work_date, worked_minutes, auto_closed").gte("work_date", lopStart).lte("work_date", lopSlut),
     utanforSchemat(admin, lopStart, idag < lopSlut ? idag : lopSlut),
     pagar ? supabase.from("payroll_adjustment").select("employee_id, minutes").eq("period_id", pagar.id) : Promise.resolve({ data: [] as { employee_id: string; minutes: number }[] }),
-    supabase.from("absence_request").select("employee_id, type_id, starts_on, ends_on").eq("status", "approved").lte("starts_on", lopSlut).gte("ends_on", lopStart),
-    supabase.from("sick_report").select("employee_id, first_sick_day, last_sick_day").is("cancelled_at", null).lte("first_sick_day", lopSlut),
+    supabase.from("absence_request").select("employee_id, type_id, starts_on, ends_on").eq("status", "approved").lte("starts_on", lopSlut).gte("ends_on", lopStart).order("starts_on").order("created_at"),
+    supabase.from("sick_report").select("employee_id, first_sick_day, last_sick_day").is("cancelled_at", null).lte("first_sick_day", lopSlut).order("first_sick_day").order("registered_at"),
   ]);
   const [{ data: settAlla }, { data: beslutade }, { data: minaRattBeslut }, { data: minaOgiltigBeslut }, { data: chefPref }, { data: minLogg }, { data: franvaroNasta }, { data: sjukNasta }, { data: kolumner }, { data: skickade }, { data: uttag }, { data: punkter }, { data: allaTyper }, { data: justAlla }] = await chefAndraP;
 

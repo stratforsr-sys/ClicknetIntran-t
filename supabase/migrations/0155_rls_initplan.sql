@@ -15,9 +15,13 @@
 -- Anrop med kolumner som argument (leads_employee(employee_id) …) är orörda.
 -- Bevis: varje ändrad policy ger samma sant/falskt på varje rad för konton i
 -- varje roll och läge (bevisa.mjs: 1 449 prov, 163 035 rader, 0 avvikelser).
+-- news_ack_read (0130) har tomma tabeller och är prövad på 3 360 påhittade
+-- par av anställd och nyhet (bevisa-tom.mjs), 0 avvikelser.
 --
--- Det som ändras: ordningen bland rader som frågan inte sorterar (andra planer,
--- t.ex. index i stället för tabellgenomläsning). Se HANDOFF, "Fart: kedjorna".
+-- Planerna blir andra (index i stället för tabellgenomläsning), så rader som en
+-- fråga inte sorterar kan komma i annan ordning. Där det syntes sorterar koden
+-- uttryckligen sedan 2026-10-21 (Provision, Frånvaro, Coachning, lönerapporten,
+-- notiserna): hela datan för tolv konton är densamma före och med 0155.
 --
 -- Genererad ur pg_policies (inte ur äldre migrationer) av
 -- ~/nav2-utkast/delar/fart/rls/generera.mjs. Vakten nedan avbryter om någon av
@@ -131,6 +135,7 @@ BEGIN
     ('public', 'module_progress', 'module_progress_read', '0febe439ecd9a23bb8762d8c608a1714', 'd41d8cd98f00b204e9800998ecf8427e'),
     ('public', 'module_rating', 'module_rating_read', 'f11eb67108e08360fa719a4813987a8c', 'd41d8cd98f00b204e9800998ecf8427e'),
     ('public', 'nav_preference', 'nav_preference_read', '725a98923b8aa7a37e15c30be0456b74', 'd41d8cd98f00b204e9800998ecf8427e'),
+    ('public', 'news_ack', 'news_ack_read', '05879497bf70922449fb03f1e98fa50c', 'd41d8cd98f00b204e9800998ecf8427e'),
     ('public', 'news_post', 'news_post_read', '9f2f9d767a5f1729bdb688ff66d5712f', 'd41d8cd98f00b204e9800998ecf8427e'),
     ('public', 'notification_dismissed', 'notification_dismissed_read', '725a98923b8aa7a37e15c30be0456b74', 'd41d8cd98f00b204e9800998ecf8427e'),
     ('public', 'notification_event', 'notification_event_read', '725a98923b8aa7a37e15c30be0456b74', 'd41d8cd98f00b204e9800998ecf8427e'),
@@ -341,6 +346,9 @@ ALTER POLICY "manager_commission_rate_read" ON public."manager_commission_rate" 
 ALTER POLICY "module_progress_read" ON public."module_progress" USING (((employee_id = ( SELECT current_employee_id() AS current_employee_id)) OR ( SELECT can_read_all_employees() AS can_read_all_employees) OR leads_employee(employee_id)));
 ALTER POLICY "module_rating_read" ON public."module_rating" USING (((employee_id = ( SELECT current_employee_id() AS current_employee_id)) OR ( SELECT has_any_role(ARRAY['sales_manager'::text, 'admin'::text, 'ceo'::text]) AS has_any_role)));
 ALTER POLICY "nav_preference_read" ON public."nav_preference" USING ((employee_id = ( SELECT current_employee_id() AS current_employee_id)));
+ALTER POLICY "news_ack_read" ON public."news_ack" USING (((employee_id = ( SELECT current_employee_id() AS current_employee_id)) OR (EXISTS ( SELECT 1
+   FROM news_post p
+  WHERE ((p.id = news_ack.post_id) AND (p.author_id = ( SELECT current_employee_id() AS current_employee_id))))) OR ( SELECT has_any_role(ARRAY['sales_manager'::text, 'admin'::text, 'ceo'::text]) AS has_any_role)));
 ALTER POLICY "news_post_read" ON public."news_post" USING ((((status = 'published'::text) AND matches_audience(audience_roles, audience_teams)) OR (author_id = ( SELECT current_employee_id() AS current_employee_id)) OR ( SELECT has_any_role(ARRAY['sales_manager'::text, 'admin'::text, 'ceo'::text]) AS has_any_role)));
 ALTER POLICY "notification_dismissed_read" ON public."notification_dismissed" USING ((employee_id = ( SELECT current_employee_id() AS current_employee_id)));
 ALTER POLICY "notification_event_read" ON public."notification_event" USING ((employee_id = ( SELECT current_employee_id() AS current_employee_id)));

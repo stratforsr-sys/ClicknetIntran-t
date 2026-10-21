@@ -207,14 +207,18 @@ export async function byggCoachning(supabase: SupabaseClient, user: CurrentUser)
   const medKind = await supabase
     .from("coaching_task")
     .select("id, title, description_md, kind, assignee_id, partner_id, created_by, verify_by, evidence, due_date, cancelled_at, course_id, module_id, document_id, created_at, nav2_kind")
-    .in("assignee_id", ids);
+    .in("assignee_id", ids)
+    .order("created_at")
+    .order("id");
   let utan0100 = saknas(medKind.error);
   let taskRader = (medKind.data ?? []) as unknown as TaskRad[];
   if (utan0100) {
     const { data } = await supabase
       .from("coaching_task")
       .select("id, title, description_md, kind, assignee_id, partner_id, created_by, verify_by, evidence, due_date, cancelled_at, course_id, module_id, document_id, created_at")
-      .in("assignee_id", ids);
+      .in("assignee_id", ids)
+      .order("created_at")
+      .order("id");
     taskRader = (data ?? []) as unknown as TaskRad[];
   }
   const rader = taskRader.filter((t) => ivem.has(t.assignee_id));

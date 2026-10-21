@@ -110,6 +110,7 @@ BEGIN
     ('public', 'module_progress', 'module_progress_read', '934027327e3a17bfbbbe3184d1aa745e', 'd41d8cd98f00b204e9800998ecf8427e'),
     ('public', 'module_rating', 'module_rating_read', '5da1c7e2cdd94e6187529243b231b131', 'd41d8cd98f00b204e9800998ecf8427e'),
     ('public', 'nav_preference', 'nav_preference_read', '8cbd60d9121088ac91bf10c782684f03', 'd41d8cd98f00b204e9800998ecf8427e'),
+    ('public', 'news_ack', 'news_ack_read', 'b84bd3285ce3f03d69b39a31383337a4', 'd41d8cd98f00b204e9800998ecf8427e'),
     ('public', 'news_post', 'news_post_read', '66c19cead9ceadf6f7548839884234cf', 'd41d8cd98f00b204e9800998ecf8427e'),
     ('public', 'notification_dismissed', 'notification_dismissed_read', '8cbd60d9121088ac91bf10c782684f03', 'd41d8cd98f00b204e9800998ecf8427e'),
     ('public', 'notification_event', 'notification_event_read', '8cbd60d9121088ac91bf10c782684f03', 'd41d8cd98f00b204e9800998ecf8427e'),
@@ -320,6 +321,9 @@ ALTER POLICY "manager_commission_rate_read" ON public."manager_commission_rate" 
 ALTER POLICY "module_progress_read" ON public."module_progress" USING (((employee_id = current_employee_id()) OR can_read_all_employees() OR leads_employee(employee_id)));
 ALTER POLICY "module_rating_read" ON public."module_rating" USING (((employee_id = current_employee_id()) OR has_any_role(ARRAY['sales_manager'::text, 'admin'::text, 'ceo'::text])));
 ALTER POLICY "nav_preference_read" ON public."nav_preference" USING ((employee_id = current_employee_id()));
+ALTER POLICY "news_ack_read" ON public."news_ack" USING (((employee_id = current_employee_id()) OR (EXISTS ( SELECT 1
+   FROM news_post p
+  WHERE ((p.id = news_ack.post_id) AND (p.author_id = current_employee_id())))) OR has_any_role(ARRAY['sales_manager'::text, 'admin'::text, 'ceo'::text])));
 ALTER POLICY "news_post_read" ON public."news_post" USING ((((status = 'published'::text) AND matches_audience(audience_roles, audience_teams)) OR (author_id = current_employee_id()) OR has_any_role(ARRAY['sales_manager'::text, 'admin'::text, 'ceo'::text])));
 ALTER POLICY "notification_dismissed_read" ON public."notification_dismissed" USING ((employee_id = current_employee_id()));
 ALTER POLICY "notification_event_read" ON public."notification_event" USING ((employee_id = current_employee_id()));

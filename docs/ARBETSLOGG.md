@@ -5,6 +5,43 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-21 · Nav 2.0, fart: uttrycklig ordning före 0155, och 0155 täcker Nyheter (0155 inte körd)
+
+Fortsättning på "policyerna i `(select …)`-form" nedan. Beställarens svar på
+radordningen: "Det ska inte bli fel, så fixa det som blir fel." Verktygen
+ligger i `~/nav2-utkast/delar/fart/` (`rls/`, `ordning/`).
+
+- **Det som flyttade.** Hela datan för tolv konton (alla aktiva och i
+  onboarding), byggd två gånger ur samma inspelade frågor: före och med 0155.
+  På fem ställen visades rader i den ordning de råkar ligga i tabellen. 0155
+  ändrar den ordningen, och det gör redan i dag varje uppdatering av en rad.
+  Nu sorterar koden uttryckligen:
+  - **Provision, säljarens underlag** (`hamtaOrderFor`): order som signerats
+    samma dag. Fredrik och Mick såg dem redan i en annan ordning än chefen ser
+    samma rader. Nu `signed_on`, sedan `created_at`, nyast först, som
+    `hamtaOrder`, så säljarens och chefens underlag är identiska.
+  - **Frånvaro, chefens perioder** (`nav2/franvaro.ts`): i tidsordning,
+    `first_sick_day` och `starts_on`, och därefter anmälningstid respektive
+    skapad. **Sjuklistan** (`hamtaChefsbild`): samma första dag i
+    anmälningsordning.
+  - **Coachning, överenskommelserna** och därmed loggen: i den ordning de
+    lades, `created_at` och sedan `id`. Utkastet sorterar listorna på datum,
+    så det syns bara mellan lika datum.
+  - **Lönerapporten, löpande period:** förklaringen är periodens första
+    frånvaro (`starts_on`, `first_sick_day`), inte den som råkade komma först.
+  - **Notiserna:** händelser från samma ögonblick står i den ordning de
+    skrevs (`id`), alltså som i dag.
+- **Prov.** Ny kod före och med 0155: hela datan identisk för alla tolv.
+  Gammal mot ny kod i dag: ordningen skiljer bara på ställena ovan (Zen,
+  Simon, Fredrik, Mick och Edvin); för de andra sju är datan identisk.
+  Typkontrollen mot de riktiga typerna ger inga nya fel.
+- **0155 omgenererad.** 0130 (Nyheter, körd 2026-10-20 på kvällen) lade till
+  `news_ack_read`, så 0155 omfattar nu 162 av 209 policyer. Tabellerna är
+  tomma, så policyn prövades på 3 360 påhittade par av anställd och nyhet (en
+  nyhet per anställd, skriven av den, i en `WITH` som skuggar tabellen): 0
+  avvikelser (`bevisa-tom.mjs`). Torrkörd utan avvikelser, och 0155 följd av
+  återställningen ger exakt de gamla policyerna. 0155 körs fortfarande i steg 6.
+
 ## 2026-10-21 · Nav 2.0: nattjobbet lägger sina ärenden om satser och coachning (ingen migration)
 
 Beställaren 2026-10-21: "fixa det ifall det är fel". Det var fel.

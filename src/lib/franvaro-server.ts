@@ -349,7 +349,8 @@ export async function hamtaChefsbild(
       .select("id, employee_id, first_sick_day, last_sick_day, extent_percent, confirmed_at, escalated_at")
       .is("cancelled_at", null)
       .or(`last_sick_day.is.null,last_sick_day.gte.${idag}`)
-      .order("first_sick_day", { ascending: false }),
+      .order("first_sick_day", { ascending: false })
+      .order("registered_at"),
   ]);
 
   // Alla personer som förekommer någonstans i bilden. En fråga, inte tre.

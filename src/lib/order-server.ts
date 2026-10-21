@@ -162,7 +162,8 @@ export async function hamtaOrderFor(employeeId: string, franOchMed: string): Pro
     .select(FALT)
     .eq("salesperson_id", employeeId)
     .or(ror(franOchMed))
-    .order("signed_on", { ascending: false });
+    .order("signed_on", { ascending: false })
+    .order("created_at", { ascending: false });
 
   return tolka(data ?? []);
 }

@@ -140,9 +140,9 @@ export async function byggFranvaro(supabase: SupabaseClient, user: CurrentUser):
   const bildP = chefsvy ? tidig(rvP.then((rv) => hamtaChefsbild(user, rv?.regler ?? null, rv?.typer ?? [], idag, 30))) : null;
   const teamP = chefsvy
     ? tidig(Promise.all([
-        supabase.from("sick_report").select("employee_id, first_sick_day, last_sick_day, registered_at, confirmed_at, cancelled_at, escalated_at, extent_percent, id").is("cancelled_at", null).gte("first_sick_day", dagarBakat(idag, 400)),
+        supabase.from("sick_report").select("employee_id, first_sick_day, last_sick_day, registered_at, confirmed_at, cancelled_at, escalated_at, extent_percent, id").is("cancelled_at", null).gte("first_sick_day", dagarBakat(idag, 400)).order("first_sick_day").order("registered_at"),
         supabase.from("employee").select("id, first_name, last_name, status"),
-        supabase.from("absence_request").select("id, employee_id, type_id, starts_on, ends_on, part_day_minutes, reason").eq("status", "approved").gte("ends_on", dagarBakat(idag, 60)).lte("starts_on", datumPlus(idag, 335)).neq("employee_id", mig),
+        supabase.from("absence_request").select("id, employee_id, type_id, starts_on, ends_on, part_day_minutes, reason").eq("status", "approved").gte("ends_on", dagarBakat(idag, 60)).lte("starts_on", datumPlus(idag, 335)).neq("employee_id", mig).order("starts_on").order("created_at"),
         supabase.from("sick_signal_ack").select("employee_id, occasions"),
       ]))
     : null;
