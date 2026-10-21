@@ -5,6 +5,22 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-21 · Nav 2.0, gamla Navs sista funktioner B, svaren: säljaren ber chefen ställa in, och mötena i den egna kalendern (ingen migration)
+
+- **Säljaren ställer inte in själv** (beställaren 2026-10-21): "Ställ in"
+  bredvid Ändra är för en säljare "Be att få ställa in", som skickar
+  `andringsfraga` med `vad: "stall-in"`: en uppgift till chefen ("Ställ in
+  ledigheten för …") och notisen med `href: /franvaro/<id>`, där chefen har
+  Ställ in i tavlans rad. `stall-in` i `/nav2/franvaro` svarar 403 när en
+  säljare försöker ställa in sin egen. Admin och superadmin ställer in sin
+  egen direkt, som förut.
+- **Mötesflödet** (beställaren: "kalendern ska vara fullkomlig som Outlook"):
+  rutan Kalenderflöde har Dina möten bredvid Din ledighet (`calendar_feed`
+  med scope `handelser`, 0072; `lk_ical_handelser()`: rubrik, tid, plats och
+  länk, 60 dagar bakåt och ett år framåt). `flode` tar emot `handelser`, och
+  `ND.franvaro.floden` läser det. Repots `skapaFlode`, `rotaFlode` och
+  `/api/ical/<token>` hade det redan.
+
 ## 2026-10-21 · Nav 2.0, Anställda: företagets underlag raderas aldrig med en person (0170 skriven, inte körd)
 
 - **Spärren:** `ta_bort_anstalld()` (0046) raderar allt med ON DELETE CASCADE

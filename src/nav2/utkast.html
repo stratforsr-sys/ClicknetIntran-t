@@ -25780,12 +25780,19 @@ function ndFrStallIn(id, sjuk){
     : `Ställa in ${egen ? 'din' : `${fornamn(p.vem)}s`} ${t.l.toLowerCase()} ${frPeriod(p.fran, p.till)}? ${egen ? 'Den' : `${fornamn(p.vem)} får besked, och den`} räknas inte längre i saldot eller bemanningen.`;
   toastActs(text, [[sjuk ? 'Ställ in anmälan' : 'Ställ in', () => ndFrPost(sjuk ? 'stall-in-sjuk' : 'stall-in', {id})]], 9000);
 }
-// Säljaren: Ställ in bredvid Ändra på en godkänd ledighet.
+// Bredvid Ändra på en godkänd ledighet. Beställaren 2026-10-21: säljaren ställer inte in själv, hen ber chefen
+// (andringsfraga med vad: stall-in, och chefen landar på ledigheten). Admin och superadmin ställer in sin egen direkt.
 const _ndFrMinaKortB = frMinaKort;
 frMinaKort = function(){
   const h = _ndFrMinaKortB(); if (!ndFr()) return h;
-  return h.replace(/(<button class="tlink" data-ndfrandra="([^"]+)"[^>]*>Ändra<\/button>)/g, (m, b, id) => `${b}<button class="tlink" data-ndfrstallin="${id}">Ställ in</button>`);
+  const be = ND.jag.niva === 'salesperson';
+  return h.replace(/(<button class="tlink" data-ndfrandra="([^"]+)"[^>]*>Ändra<\/button>)/g, (m, b, id) => `${b}${be ? `<button class="tlink" data-ndfrbestallin="${id}">Be att få ställa in</button>` : `<button class="tlink" data-ndfrstallin="${id}">Ställ in</button>`}`);
 };
+function ndFrBeStallIn(id){
+  const p = [...FRPER, ...(ndFr().poster || [])].find(x => x.id === id); if (!p) return;
+  const t = FTYP[p.typ] || {l:p.typ};
+  toastActs(`Be din chef ställa in din ${t.l.toLowerCase()} ${frPeriod(p.fran, p.till)}? Ledigheten gäller tills chefen ställt in den.`, [['Skicka frågan', () => ndFrPost('andringsfraga', {id, vad:'stall-in'}, {ladda:false})]], 9000);
+}
 // Säljaren: en sjukanmälan som blev fel går att ställa in.
 const _ndFrSjukStatusB = frSjukStatus;
 frSjukStatus = function(){
@@ -25801,16 +25808,18 @@ frDetaljRad = function(p){
   return knapp ? h.replace('<button class="ibtn" data-fropen=""', `${knapp}<button class="ibtn" data-fropen=""`) : h;
 };
 // Kalenderflödet (E7.3): din ledighet i din egen kalender. Bara beviljad ledighet, aldrig sorten och aldrig sjukfrånvaro.
+// Beställaren 2026-10-21 ("kalendern ska vara fullkomlig som Outlook"): också dina möten ur Kalendern (handelser, 0072).
+const NDFRFLODE = {mine:'Din ledighet', handelser:'Dina möten', team:'Teamets ledighet'};
 function ndFrFlodeKort(){
   const f = ndFr(); if (!f || !f.floden) return '';
-  const levande = f.floden.filter(x => x.aktiv), mitt = levande.find(x => x.scope === 'mine');
+  const levande = f.floden.filter(x => x.aktiv), mitt = levande.find(x => x.scope === 'mine'), moten = levande.find(x => x.scope === 'handelser');
   const rad = x => { const url = `${location.origin}/api/ical/${x.token}`;
-    return `<div style="margin:4px 0 12px"><b>${x.scope === 'team' ? 'Teamets ledighet' : 'Din ledighet'}</b><code class="num" style="display:block;word-break:break-all;font-size:12px;margin:6px 0">${esc(url)}</code>
+    return `<div style="margin:4px 0 12px"><b>${NDFRFLODE[x.scope] || x.scope}</b><code class="num" style="display:block;word-break:break-all;font-size:12px;margin:6px 0">${esc(url)}</code>
       <div class="pacts"><button class="btn btn-s btn-sm" data-ndfrkopiera="${esc(url)}">Kopiera</button><button class="tlink" data-ndfrflode="byt" data-scope="${x.scope}">Byt adress</button><button class="tlink aefarligl" data-ndfrflode="stang" data-scope="${x.scope}">Stäng</button><span class="muted tihint">${x.lasningar ? `Läst ${x.lasningar} ${x.lasningar === 1 ? 'gång' : 'gånger'}${x.senast ? `, senast ${frKort(x.senast)}` : ''}.` : x.senast ? `Senast läst ${frKort(x.senast)}.` : 'Inte läst än.'}</span></div></div>`; };
   return `<section class="card"><div class="chead"><h2>Kalenderflöde</h2></div>
     ${levande.map(rad).join('')}
-    ${mitt ? '' : `<p class="muted">Lägg in din beviljade ledighet i din egen kalender, utan att logga in.</p><div class="pacts"><button class="btn btn-s btn-sm" data-ndfrflode="skapa" data-scope="mine">Skapa adress</button></div>`}
-    <p class="muted frhint">Adressen är hemlig och fungerar utan inloggning, och den som lägger in den i Google eller Outlook lägger innehållet där. Flödet visar namn, datum och ordet Ledig: aldrig vilken sorts ledighet och aldrig sjukfrånvaro. Det är enkelriktat, och en ny adress stänger den gamla direkt.</p></section>`;
+    ${mitt && moten ? '' : `<p class="muted">${!mitt && !moten ? 'Lägg in din beviljade ledighet och dina möten i din egen kalender, utan att logga in.' : !mitt ? 'Lägg in din beviljade ledighet i din egen kalender, utan att logga in.' : 'Lägg in dina möten i din egen kalender, utan att logga in.'}</p><div class="pacts">${mitt ? '' : '<button class="btn btn-s btn-sm" data-ndfrflode="skapa" data-scope="mine">Adress för ledigheten</button>'}${moten ? '' : '<button class="btn btn-s btn-sm" data-ndfrflode="skapa" data-scope="handelser">Adress för mötena</button>'}</div>`}
+    <p class="muted frhint">Adressen är hemlig och fungerar utan inloggning, och den som lägger in den i Google eller Outlook lägger innehållet där. Ledigheten visar namn, datum och ordet Ledig: aldrig vilken sorts ledighet och aldrig sjukfrånvaro. Mötena visar rubrik, tid, plats och länk, 60 dagar bakåt och ett år framåt: aldrig agendan och aldrig vilka andra som är med. Flödet är enkelriktat, och en ny adress stänger den gamla direkt.</p></section>`;
 }
 const _ndFrVemSerB = frVemSer;
 frVemSer = function(){ return _ndFrVemSerB() + (ndFr() ? ndFrFlodeKort() : ''); };
@@ -25833,6 +25842,7 @@ document.addEventListener('click', e => {
   const d = b.dataset, stopp = () => { e.preventDefault(); e.stopImmediatePropagation(); };
   if (d.ndfrstallin){ stopp(); ndFrStallIn(d.ndfrstallin, false); return; }
   if (d.ndfrstallinsjuk){ stopp(); ndFrStallIn(d.ndfrstallinsjuk, true); return; }
+  if (d.ndfrbestallin){ stopp(); ndFrBeStallIn(d.ndfrbestallin); return; }
   if (d.ndfrkopiera){ stopp(); try { navigator.clipboard.writeText(d.ndfrkopiera); toast('Adressen är kopierad. Lägg in den som en kalender från webben.'); } catch(_){ toast('Markera adressen och kopiera den.'); } return; }
   if (d.ndfrflode){ stopp(); const vad = d.ndfrflode;
     if (vad === 'stang'){ toastActs('Stänga flödet? Kalendern som läser adressen får inget mer.', [['Stäng', () => ndFrPost('flode', {vad, scope:d.scope})]], 8000); return; }

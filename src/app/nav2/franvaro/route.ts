@@ -24,6 +24,7 @@ import {
 } from "@/app/(app)/franvaro/actions";
 import { sparaTak } from "@/app/(app)/franvaro/regler/actions";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
+import { nivaFor } from "@/lib/nav2/forma";
 
 export const dynamic = "force-dynamic";
 
@@ -92,6 +93,10 @@ export async function POST(request: Request) {
       case "stall-in": {
         // Repots stallInLedighet: den egna, eller den som får besluta om sorten. Personen får notisen.
         if (!UUID.test(id)) return svar({ fel: "Okänd ledighet." }, 400);
+        // Beställaren 2026-10-21: säljaren ställer inte in sin egen beviljade ledighet, hen frågar chefen (andringsfraga).
+        const { data: egen } = await db.from("absence_request").select("employee_id").eq("id", id).maybeSingle();
+        if (egen?.employee_id === mig && nivaFor(user.roles) === "salesperson")
+          return svar({ fel: "Be din chef ställa in den. Tryck Be att få ställa in, så får chefen frågan." }, 403);
         return fran(await stallInLedighet({}, form({ id })), "Ledigheten är inställd.");
       }
       case "stall-in-sjuk": {
@@ -100,11 +105,12 @@ export async function POST(request: Request) {
         return fran(await stallInSjuk({}, form({ id })), "Anmälan är inställd.");
       }
       case "flode": {
-        // Kalenderflödet (E7.3): skapa, byta adress eller stänga. Bara ledighetens flöden (beställaren 2026-09-22).
+        // Kalenderflödet (E7.3): skapa, byta adress eller stänga. Ledigheten (beställaren 2026-09-22) och, sedan beställaren
+        // 2026-10-21 ("kalendern ska vara fullkomlig som Outlook"), mötena: `handelser` (0072), rubrik, tid, plats och länk.
         const scope = String(b.scope ?? "mine"), vad = String(b.vad ?? "");
-        if (scope !== "mine" && scope !== "team") return svar({ fel: "Okänd sorts flöde." }, 400);
+        if (scope !== "mine" && scope !== "team" && scope !== "handelser") return svar({ fel: "Okänd sorts flöde." }, 400);
         if (vad === "skapa") {
-          if (scope !== "mine") return svar({ fel: "Teamets flöde skapas inte här." }, 400);
+          if (scope === "team") return svar({ fel: "Teamets flöde skapas inte här." }, 400);
           return fran(await skapaFlode({}, form({ scope })), "Flödet är skapat.");
         }
         if (vad === "byt" || vad === "stang") return fran(await rotaFlode({}, form({ scope, stang: vad === "stang" ? "1" : "" })), vad === "stang" ? "Flödet är stängt." : "Ny adress skapad.");
@@ -219,6 +225,8 @@ export async function POST(request: Request) {
       }
       case "andringsfraga": {
         // Den som fått ledigt ber chefen ändra eller ställa in den: en uppgift till chefen, som gäller tills den är gjord.
+        // `vad: "stall-in"` (beställaren 2026-10-21): säljaren ber bara om att ställa in, och chefen landar på ledigheten.
+        const stall = b.vad === "stall-in";
         const { data: ans } = await (await supabaseServer()).from("absence_request").select("id, employee_id, starts_on, ends_on, status").eq("id", id).maybeSingle();
         if (!ans || ans.employee_id !== mig || ans.status !== "approved") return svar({ fel: "Ingen godkänd ledighet att ändra." }, 400);
         const { data: jag } = await db.from("employee").select("manager_id").eq("id", mig).maybeSingle();
@@ -226,12 +234,12 @@ export async function POST(request: Request) {
         if (!chef) return svar({ fel: "Du har ingen chef i Nav att fråga." }, 400);
         const { data: t } = await db
           .from("task")
-          .insert({ title: `Ändra eller ställ in ledigheten för ${fullName(user.employee)} ${ans.starts_on}–${ans.ends_on}`, description_md: String(b.note ?? "").trim(), assignee_id: chef, created_by: mig, due_date: ans.starts_on, priority: 2 })
+          .insert({ title: `${stall ? "Ställ in" : "Ändra eller ställ in"} ledigheten för ${fullName(user.employee)} ${ans.starts_on}–${ans.ends_on}`, description_md: String(b.note ?? "").trim() || (stall ? `${fullName(user.employee)} vill ställa in ledigheten. Öppna den under Frånvaro: /franvaro/${ans.id}` : ""), assignee_id: chef, created_by: mig, due_date: ans.starts_on, priority: 2 })
           .select("id")
           .single();
         if (t) await db.from("task_event").insert({ task_id: t.id, type: "skapad", by_employee_id: mig, note: null });
-        await notifiera({ till: chef, av: mig, kalla: "uppgift-tilldelad", typ: "uppgift", rubrik: `${fullName(user.employee)} vill ändra eller ställa in sin ledighet`, detalj: `${ans.starts_on}–${ans.ends_on}`, href: t ? `/uppgifter/${t.id}` : "/franvaro" });
-        return svar({ ok: "Frågan är skickad. Den gäller tills din chef svarat." });
+        await notifiera({ till: chef, av: mig, kalla: "uppgift-tilldelad", typ: "uppgift", rubrik: `${fullName(user.employee)} vill ${stall ? "ställa in" : "ändra eller ställa in"} sin ledighet`, detalj: `${ans.starts_on}–${ans.ends_on}`, href: stall ? `/franvaro/${ans.id}` : t ? `/uppgifter/${t.id}` : "/franvaro" });
+        return svar({ ok: stall ? "Frågan är skickad. Ledigheten gäller tills din chef ställt in den." : "Frågan är skickad. Den gäller tills din chef svarat." });
       }
       case "runda": {
         // Utkastets datum: utskick 1 februari, svar 1 mars, besked 1 april.

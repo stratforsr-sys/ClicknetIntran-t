@@ -66,7 +66,8 @@ export type NdFranvaro = {
   ring: { vem: string; roll: string; antal: number; tel: string | null }[];
   frister: { kind: string; due_on: string }[];
   /**
-   * Gamla Nav B: den inloggades kalenderflöden för ledighet (`calendar_feed`, E7.3), som /franvaro.
+   * Gamla Nav B: den inloggades kalenderflöden (`calendar_feed`, E7.3), som /franvaro: ledigheten, teamets och,
+   * sedan beställaren 2026-10-21, mötena (`handelser`, 0072).
    * Bara `mine` och `team`: flödet bär bara beviljad ledighet (beställaren 2026-09-22), så mötesflödet
    * (`handelser`) visas inte här. Adressen är den egna och visas bara för ägaren.
    */
@@ -110,7 +111,7 @@ export async function byggFranvaro(supabase: SupabaseClient, user: CurrentUser):
   const db = supabaseAdmin();
   const rvP = tidig(hamtaRegelverk());
   // Gamla Nav B: de egna kalenderflödena för ledighet. RLS släpper också säljchef och VD på andras, så filtret på den egna raden behövs.
-  const flodeP = tidig(Promise.resolve(supabase.from("calendar_feed").select("scope, token, revoked_at, read_count, last_read_at").eq("employee_id", mig).in("scope", ["mine", "team"])));
+  const flodeP = tidig(Promise.resolve(supabase.from("calendar_feed").select("scope, token, revoked_at, read_count, last_read_at").eq("employee_id", mig).in("scope", ["mine", "handelser", "team"])));
   // Bemanningen: antal andra som är borta per dag, ett år framåt. Läst med
   // service role som i hamtaProvunderlag, och bara antalet lämnar servern.
   const andrasP = tidig(Promise.resolve(db
@@ -254,7 +255,7 @@ export async function byggFranvaro(supabase: SupabaseClient, user: CurrentUser):
     frister: oppen && rv ? sjukfrister(oppen.first_sick_day, rv.regler) : [],
     floden: ((flodeRader ?? []) as { scope: string; token: string; revoked_at: string | null; read_count: number | null; last_read_at: string | null }[])
       .map((f) => ({ scope: f.scope, token: f.token, aktiv: !f.revoked_at, lasningar: f.read_count ?? 0, senast: f.last_read_at ? svensktDatum(f.last_read_at) : null }))
-      .sort((a, b) => (a.scope === "mine" ? -1 : 1) - (b.scope === "mine" ? -1 : 1)),
+      .sort((a, b) => ["mine", "handelser", "team"].indexOf(a.scope) - ["mine", "handelser", "team"].indexOf(b.scope)),
     chef: null,
     runda: null,
     forslag: {},

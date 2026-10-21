@@ -35,9 +35,10 @@ behörigheter som här: du ser bara det du får se.
   snabbraden lägger ut som uppgifter, avslutar en serie och kopplar en
   uppgift till en order, en person, ett ärende, en kurs eller en coachning.
   I Frånvaro kan chefen starta önskemålsrundan
-  inför sommaren, föreslå en annan period och kvittera rehabsignalen. Där går
-  det också att ställa in en beviljad ledighet eller en sjukanmälan som blev
-  fel, och lägga in sin ledighet i den egna kalendern med en hemlig adress. I Tid
+  inför sommaren, föreslå en annan period och kvittera rehabsignalen. Där kan
+  du också be chefen ställa in en beviljad ledighet, ställa in en sjukanmälan
+  som blev fel, och lägga in din ledighet och dina möten i den egna kalendern
+  med en hemlig adress. I Tid
   rättar du en stämpling på raden, kollar veckan på fredagen och väljer egna
   påminnelser; chefen ser rättelserna med stöd, nästa veckas frånvaro och
   lönerapportens steg. Chefen lägger också nya scheman, med tider per
