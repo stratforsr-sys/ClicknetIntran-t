@@ -83,27 +83,49 @@ async function uppgiften(id: string) {
   return data;
 }
 
-/** Gamla Nav D: väljarna för en koppling, som /uppgifter/[id] läser dem: med den inloggades token (RLS). Läsning, svarar också i läsläge. */
+/**
+ * Gamla Nav D: väljarna för en koppling, som /uppgifter/[id] läser dem: med den inloggades token (RLS). Läsning, svarar
+ * också i läsläge. Ordrarna, ärendena och coachningsuppgifterna är de 50 senaste; `sok` (beställaren 2026-10-21, "det som
+ * är bäst") söker bland alla av en sort (`slag`), också de äldre. Personerna och kurserna kommer alla och filtreras i klienten.
+ */
 export async function GET(request: Request) {
   const user = await getCurrentUser();
   if (!user?.employee) return svar({ fel: "Du måste vara inloggad." }, 401);
-  if (new URL(request.url).searchParams.get("kopplingsval") !== "1") return svar({ fel: "Okänd fråga." }, 400);
+  const url = new URL(request.url);
+  if (url.searchParams.get("kopplingsval") !== "1") return svar({ fel: "Okänd fråga." }, 400);
   const supabase = await supabaseServer();
-  const [{ data: personer }, { data: order }, { data: arenden }, { data: kurser }, { data: coachning }] = await Promise.all([
-    supabase.from("employee").select("id, first_name, last_name").neq("status", "offboarded").order("first_name"),
-    supabase.from("sales_order").select("id, company_name").order("created_at", { ascending: false }).limit(50),
-    supabase.from("hr_case").select("id, subject").order("created_at", { ascending: false }).limit(50),
+  // PostgREST-filtrets egna tecken tas bort, så att sökordet inte kan bli ett filter.
+  const sok = (url.searchParams.get("sok") ?? "").replace(/[%_,()*\\:."]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
+  const slag = url.searchParams.get("slag") ?? "";
+  const m = `%${sok}%`;
+  const orderQ = () => supabase.from("sales_order").select("id, company_name, signed_on").order("created_at", { ascending: false }).limit(50);
+  const arendeQ = () => supabase.from("hr_case").select("id, subject").order("created_at", { ascending: false }).limit(50);
+  const coachQ = () => supabase.from("coaching_task").select("id, title, assignee_id").is("cancelled_at", null).order("created_at", { ascending: false }).limit(50);
+  const { data: personer } = await supabase.from("employee").select("id, first_name, last_name").neq("status", "offboarded").order("first_name");
+  const namn = new Map(((personer ?? []) as { id: string; first_name: string; last_name: string }[]).map((p) => [p.id, fullName(p)]));
+  // Samma kund kan ha flera order, och samma coachningsuppgift ges till flera: dagen och personen skiljer dem åt.
+  const somOrder = (r: unknown[] | null) => ((r ?? []) as { id: string; company_name: string; signed_on: string | null }[]).map((o) => ({ id: o.id, namn: o.signed_on ? `${o.company_name} · ${o.signed_on}` : o.company_name }));
+  const somArende = (r: unknown[] | null) => ((r ?? []) as { id: string; subject: string }[]).map((a) => ({ id: a.id, namn: a.subject }));
+  const somCoach = (r: unknown[] | null) => ((r ?? []) as { id: string; title: string; assignee_id: string | null }[]).map((c) => ({ id: c.id, namn: c.assignee_id && namn.get(c.assignee_id) ? `${c.title} · ${namn.get(c.assignee_id)}` : c.title }));
+  if (sok.length >= 2 && (slag === "order" || slag === "arende" || slag === "coachning")) {
+    if (slag === "order") return svar({ ok: "", slag, val: somOrder((await orderQ().or(`company_name.ilike.${m},org_number.ilike.${m},contact_name.ilike.${m}`)).data) });
+    if (slag === "arende") return svar({ ok: "", slag, val: somArende((await arendeQ().ilike("subject", m)).data) });
+    return svar({ ok: "", slag, val: somCoach((await coachQ().ilike("title", m)).data) });
+  }
+  const [{ data: order }, { data: arenden }, { data: kurser }, { data: coachning }] = await Promise.all([
+    orderQ(),
+    arendeQ(),
     supabase.from("course").select("id, title").eq("status", "published").order("title"),
-    supabase.from("coaching_task").select("id, title").is("cancelled_at", null).limit(50),
+    coachQ(),
   ]);
   return svar({
     ok: "",
     val: {
-      order: (order ?? []).map((o) => ({ id: o.id as string, namn: o.company_name as string })),
-      person: (personer ?? []).map((p) => ({ id: p.id as string, namn: fullName(p) })),
-      arende: (arenden ?? []).map((a) => ({ id: a.id as string, namn: a.subject as string })),
+      order: somOrder(order),
+      person: [...namn].map(([id, n]) => ({ id, namn: n })),
+      arende: somArende(arenden),
       kurs: (kurser ?? []).map((k) => ({ id: k.id as string, namn: k.title as string })),
-      coachning: (coachning ?? []).map((c) => ({ id: c.id as string, namn: c.title as string })),
+      coachning: somCoach(coachning),
     },
   });
 }

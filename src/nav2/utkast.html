@@ -26135,6 +26135,34 @@ ndUpgStart = function(){
   TASKS.forEach(t => { const x = per.get(t.id); if (!x) return; t.ndSerieId = x.serieId; t.ndSerieAgare = x.serieAgare; t.ndLinkIds = x.linkIds; t.ndFarRed = x.farRed; t.ndLinks = x.links; });
 };
 const NDUPGKOPPLA = [['order', 'Order (kund)'], ['person', 'Person'], ['arende', 'Ärende'], ['kurs', 'Utbildning'], ['coachning', 'Coachningsuppgift']];
+// Sökningen (beställaren 2026-10-21, "det som är bäst"): order, ärenden och coachning söks i servern bland alla, också de
+// äldre än de 50 senaste. Personer och kurser kommer alla och filtreras här. Bara listan ritas om, så fältet behåller fokus.
+const NDKSOKSERVER = ['order', 'arende', 'coachning'];
+const NDKSOKTEXT = {order:'Kund, org.nr eller kontakt', person:'Namn', arende:'Ämne', kurs:'Kursens namn', coachning:'Uppgiftens namn'};
+function ndKVal(K){
+  if (!K || !K.val) return null;
+  const q = (K.sok || '').trim().toLowerCase();
+  if (q.length >= 2 && NDKSOKSERVER.includes(K.slag)) return K.sokVal && K.sokVal.slag === K.slag && K.sokVal.q === q ? K.sokVal.val : null;
+  const l = K.val[K.slag] || [];
+  return q && !NDKSOKSERVER.includes(K.slag) ? l.filter(v => v.namn.toLowerCase().includes(q)) : l;
+}
+function ndKOpts(K){
+  const val = ndKVal(K), q = (K.sok || '').trim();
+  if (val === null) return `<option value="">${K.val ? 'Söker …' : 'Hämtar …'}</option>`;
+  return `<option value="">${val.length ? (q ? `${val.length === 50 ? 'Minst 50' : val.length} ${val.length === 1 ? 'träff' : 'träffar'}` : 'Välj') : q ? 'Ingen träff' : 'Inget att välja'}</option>${val.map(v => `<option value="${v.id}" ${K.mal === v.id ? 'selected' : ''}>${esc(v.namn)}</option>`).join('')}`;
+}
+function ndKRitaVal(){ const s = document.querySelector('[data-ndkmal]'); if (s && S.ndKoppla) s.innerHTML = ndKOpts(S.ndKoppla); }
+let ndKTimer = 0;
+document.addEventListener('input', e => {
+  if (!ndUp() || !S.ndKoppla || !e.target.dataset || e.target.dataset.ndksok === undefined) return;
+  const K = S.ndKoppla, q = e.target.value.trim().toLowerCase(); K.sok = e.target.value; K.mal = '';
+  if (q.length < 2 || !NDKSOKSERVER.includes(K.slag)){ ndKRitaVal(); return; }
+  ndKRitaVal(); clearTimeout(ndKTimer);
+  ndKTimer = setTimeout(() => { const slag = K.slag;
+    fetch(`/nav2/uppgifter?kopplingsval=1&slag=${slag}&sok=${encodeURIComponent(q)}`, {credentials:'same-origin'}).then(r => r.json()).then(s => {
+      if (S.ndKoppla !== K || K.slag !== slag || (K.sok || '').trim().toLowerCase() !== q) return;
+      if (s.fel){ toast(s.fel); return; } K.sokVal = {slag, q, val:s.val || []}; ndKRitaVal(); }).catch(() => toast('Nav svarade inte.')); }, 250);
+}, true);
 const _ndUpgRutaHtmlD = upgRutaHtml;
 upgRutaHtml = function(t){
   let h = _ndUpgRutaHtmlD(t); if (!ndUp() || !ndUpgNav(t.id)) return h;
@@ -26143,9 +26171,8 @@ upgRutaHtml = function(t){
   if (t.ndFarRed){
     const K = S.ndKoppla && S.ndKoppla.id === t.id ? S.ndKoppla : null;
     const finns = (t.ndLinks || []).map((l, i) => `<li><span>${esc(l[0])}: ${esc(l[1])}</span><button type="button" class="tlink" data-ndkopplabort="${t.id}|${t.ndLinkIds[i]}">Ta bort</button></li>`).join('');
-    const val = K && K.val ? (K.val[K.slag] || []) : null;
     extra.push(`<div class="upg-prad"><dt>${t.links.length ? '' : 'Kopplad till'}</dt><dd>${K ? `<div class="tiform">${finns ? `<ul class="tilist">${finns}</ul>` : ''}
-      <div class="tifrow"><label>Koppla till<select class="uin" data-ndkslag>${NDUPGKOPPLA.map(([k, l]) => `<option value="${k}" ${K.slag === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label><label>Vad<select class="uin" data-ndkmal>${val === null ? '<option value="">Hämtar …</option>' : `<option value="">${val.length ? 'Välj' : 'Inget att välja'}</option>${val.map(v => `<option value="${v.id}" ${K.mal === v.id ? 'selected' : ''}>${esc(v.namn)}</option>`).join('')}`}</select></label></div>
+      <div class="tifrow"><label>Koppla till<select class="uin" data-ndkslag>${NDUPGKOPPLA.map(([k, l]) => `<option value="${k}" ${K.slag === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label><label>Sök<input class="uin" data-ndksok value="${esc(K.sok || '')}" placeholder="${NDKSOKTEXT[K.slag]}" autocomplete="off" ${K.val ? '' : 'disabled'}></label><label style="min-width:0">Vad<select class="uin" data-ndkmal style="width:100%;max-width:100%">${ndKOpts(K)}</select></label></div>
       ${K.slag === 'person' ? `<label class="tibil"><input type="checkbox" data-ndksynlig ${K.synlig ? 'checked' : ''}> Låt personen se uppgiften. Utan bock syns den inte för hen, men den följer med i hens registerutdrag.</label>` : ''}
       <div class="pacts"><button type="button" class="btn btn-s btn-sm" data-ndkspara="${t.id}">Koppla</button><button type="button" class="btn btn-s btn-sm" data-ndkavbryt>Stäng</button></div></div>` : `<button type="button" class="tlink" data-ndkoppla="${t.id}">${t.links.length ? 'Ändra kopplingar' : 'Koppla'}</button>`}</dd></div>`);
   }
@@ -26186,7 +26213,7 @@ document.addEventListener('change', e => {
   if (d.ndpf && S.ndProj){ e.stopImmediatePropagation(); S.ndProj[d.ndpf] = v; return; }
   if (d.ndmdelad !== undefined && S.ndMallE){ S.ndMallE.delad = e.target.checked; return; }
   if (d.ndmdag !== undefined && S.ndMallLagg){ e.stopImmediatePropagation(); S.ndMallLagg.dag = v; return; }
-  if (d.ndkslag !== undefined && S.ndKoppla){ e.stopImmediatePropagation(); S.ndKoppla.slag = v; S.ndKoppla.mal = ''; render(); return; }
+  if (d.ndkslag !== undefined && S.ndKoppla){ e.stopImmediatePropagation(); S.ndKoppla.slag = v; S.ndKoppla.mal = ''; S.ndKoppla.sok = ''; render(); return; }
   if (d.ndkmal !== undefined && S.ndKoppla){ e.stopImmediatePropagation(); S.ndKoppla.mal = v; return; }
   if (d.ndksynlig !== undefined && S.ndKoppla){ S.ndKoppla.synlig = e.target.checked; return; }
 }, true);

@@ -5,6 +5,20 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-21 · Nav 2.0, gamla Navs sista funktioner D, svaren: sökning i kopplingsväljarna (ingen migration)
+
+- **Sökning** (beställaren 2026-10-21, "det som är bäst"): uppgiftsrutans
+  Koppla har ett sökfält. Order (kund, org.nr eller kontakt), ärenden och
+  coachningsuppgifter söks i servern bland alla, med den inloggades RLS och
+  högst 50 träffar: `GET /nav2/uppgifter?kopplingsval=1&slag=…&sok=…`.
+  Personer och kurser, som redan kommer alla, filtreras i klienten. Bara
+  listan ritas om, så fältet behåller fokus. Ordern visas med
+  undertecknandedagen och coachningsuppgiften med personen, eftersom samma
+  kund och samma uppgift kan finnas flera gånger.
+- **"/" i snabbraden** lägger fortfarande ut mallen från i dag; en annan dag
+  väljs under Lägg ut i mallkortet. Det snabba ska vara snabbt (beställaren:
+  "det som är bäst").
+
 ## 2026-10-21 · Nav 2.0, gamla Navs sista funktioner G, steg 1: satser, lön och födelseår sparas i Nav 2.0 (migration 0190 skriven och torrkörd, inte körd)
 
 Inventeringens avsnitt 7: utan det går ingen sats eller lön att ändra när
