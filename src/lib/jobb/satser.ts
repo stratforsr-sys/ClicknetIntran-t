@@ -1,6 +1,8 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { frist } from "@/lib/arenden";
+
 /**
  * E15.8 / §13.3 / K28: arlig paminnelse om satsunderhall, med dokumenterad
  * agare.
@@ -49,7 +51,19 @@ export async function korSatsjobbet(
       (r) => (r.employee as unknown as { status: string }).status !== "offboarded",
     )?.employee_id ?? null;
 
+  // Svarstiden kommer fran kategorin, som for ett arende lagt for hand.
+  // `sla_hours` och `due_at` ar NOT NULL utan standardvarde: utan dem avvisar
+  // databasen raden.
+  const { data: kategori } = await db
+    .from("case_category")
+    .select("sla_hours")
+    .eq("id", "other")
+    .maybeSingle();
+  const slaTimmar = Number(kategori?.sla_hours ?? 72);
+
+  const nu = new Date();
   let arenden = 0;
+  const felen: string[] = [];
 
   for (const sats of gallande) {
     const mottagare = sats.owner_id ?? fallback;
@@ -70,7 +84,7 @@ export async function korSatsjobbet(
 
     if (fanns) continue;
 
-    const { data: arende } = await db
+    const { data: arende, error: felet } = await db
       .from("hr_case")
       .insert({
         employee_id: mottagare,
@@ -78,11 +92,18 @@ export async function korSatsjobbet(
         category: "other",
         subject: `Se över satsen ${sats.kind}${sats.applies_to ? ` (${sats.applies_to})` : ""} — ${referens}`,
         assigned_to: mottagare,
+        sla_hours: slaTimmar,
+        due_at: frist(nu, slaTimmar),
       })
       .select("id")
       .single();
 
-    if (!arende) continue;
+    // Ett arende som inte gick att lagga far inte bli tystnad. Felet samlas och
+    // kastas efter rundan, sa att kvittot visar steget som fallet.
+    if (felet || !arende) {
+      felen.push(felet?.message ?? "inget ärende tillbaka");
+      continue;
+    }
 
     await db.from("case_message").insert({
       case_id: arende.id,
@@ -107,6 +128,12 @@ export async function korSatsjobbet(
     });
 
     arenden += 1;
+  }
+
+  if (felen.length > 0) {
+    throw new Error(
+      `${felen.length} av ${gallande.length} ärenden kunde inte läggas (${arenden} lades): ${felen[0]}`,
+    );
   }
 
   return { forfallna: gallande.length, arenden };

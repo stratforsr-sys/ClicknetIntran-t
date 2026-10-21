@@ -5,6 +5,37 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-21 · Nav 2.0: nattjobbet lägger sina ärenden om satser och coachning (ingen migration)
+
+Beställaren 2026-10-21: "fixa det ifall det är fel". Det var fel.
+
+- **Felet:** satsjobbet (`src/lib/jobb/satser.ts`) och coachningsjobbet
+  (`src/lib/jobb/coachning.ts`) lade sina ärenden utan `sla_hours` och
+  `due_at`, som är NOT NULL utan standardvärde. Databasen avvisade varje rad,
+  felet sväljdes, och kvittot sa "arenden: 0". Coachningen har haft
+  försenade överenskommelser varje natt sedan 2026-09-18, upp till tio, och
+  lagt noll ärenden. Satsjobbet har aldrig haft något förfallet, så där har
+  felet legat vilande. Samma fel som guidejobbet hade (rättat i `f74b60b`).
+- **Rättelsen:** båda tar svarstiden från kategorin `other` (72 timmar) och
+  fristen från `frist()`, som guidejobbet. Ett ärende som inte går att lägga
+  samlas och kastas efter rundan, så att nattkvittot blir `job.night_partial`
+  med steget i `fel` i stället för att tystna.
+- **Efter mergen:** första natten får Zen tio coachningsärenden, ett per
+  överenskommelse (fem om Fredrik, fem om Mick; Zen är närmaste chef för
+  båda). Natten därpå inga nya: referensen i rubriken hindrar dubbletter.
+  Satsjobbet har inget förfallet i dag. Första sats som passerar sitt
+  översynsdatum ger ett ärende till ägaren, eller till säljchefen om ägare
+  saknas.
+- **Provat** mot produktionsdatan i en transaktion som rullades tillbaka, med
+  de riktiga jobbfunktionerna: före rättelsen 0 ärenden, efter 10 + 1 (med en
+  sats som förföll bara i transaktionen) och 0 natten därpå. Ett simulerat fel
+  kastar "10 av 10 ärenden kunde inte läggas".
+- **Provet** `tests/arenden.mjs` läser varje insättning i `hr_case` under
+  `src` och kräver `sla_hours` och `due_at`. Det föll på de två jobben före
+  rättelsen.
+- **Nytt i Nav:** Ärenden-punkten i posten om Nav 2.0 säger att nattjobbet
+  lägger ärenden till chefen.
+
 ## 2026-10-21 · Nav 2.0, gamla Navs sista funktioner E: Rutiner och Coachning (ingen migration)
 
 - **Rutinernas bilagor** (svar 7): rutinrutan har avsnittet Bilagor, med

@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { frist } from "@/lib/arenden";
 import { ARENDE_EFTER_DAGAR, TYP_ETIKETT, arSjalvsann, lageFor, type Handelse, type Uppgiftstyp } from "@/lib/coachning";
 
 /**
@@ -78,8 +79,19 @@ export async function korCoachningsjobbet(
       .map((r) => r.employee_id)
       .find((id) => personPer.has(id)) ?? null;
 
+  // Svarstiden kommer fran kategorin, som for ett arende lagt for hand.
+  // `sla_hours` och `due_at` ar NOT NULL utan standardvarde: utan dem avvisar
+  // databasen raden.
+  const { data: kategori } = await db
+    .from("case_category")
+    .select("sla_hours")
+    .eq("id", "other")
+    .maybeSingle();
+  const slaTimmar = Number(kategori?.sla_hours ?? 72);
+
   let forsenade = 0;
   let arenden = 0;
+  const felen: string[] = [];
 
   for (const u of manskliga) {
     const lage = lageFor({
@@ -115,7 +127,7 @@ export async function korCoachningsjobbet(
     const namn = `${person.first_name} ${person.last_name}`.trim();
     const dagarOver = Math.floor((Date.now() - Date.parse(`${u.due_date}T23:59:59Z`)) / 86_400_000);
 
-    const { data: arende } = await db
+    const { data: arende, error: felet } = await db
       .from("hr_case")
       .insert({
         employee_id: mottagare,
@@ -123,11 +135,18 @@ export async function korCoachningsjobbet(
         category: "other",
         subject: `${namn} har en coachningsuppgift ${dagarOver} dagar över fristen — ${referens}`,
         assigned_to: mottagare,
+        sla_hours: slaTimmar,
+        due_at: frist(idag, slaTimmar),
       })
       .select("id")
       .single();
 
-    if (!arende) continue;
+    // Ett arende som inte gick att lagga far inte bli tystnad. Felet samlas och
+    // kastas efter rundan, sa att kvittot visar steget som fallet.
+    if (felet || !arende) {
+      felen.push(felet?.message ?? "inget ärende tillbaka");
+      continue;
+    }
 
     await db.from("case_message").insert({
       case_id: arende.id,
@@ -153,6 +172,12 @@ export async function korCoachningsjobbet(
     });
 
     arenden += 1;
+  }
+
+  if (felen.length > 0) {
+    throw new Error(
+      `${felen.length} av ${forsenade} ärenden kunde inte läggas (${arenden} lades): ${felen[0]}`,
+    );
   }
 
   return { granskade: uppgifter.length, forsenade, arenden };

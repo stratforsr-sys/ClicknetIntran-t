@@ -119,7 +119,10 @@ behörigheter som här: du ser bara det du får se.
   går att ändra efteråt, var och en väljer sin egen påminnelse, och ett möte
   kan vara privat eller upprepas varje månad. Skriv en e-postadress i
   mötet, så får också den som inte jobbar på Clicknet en inbjudan med mejl.
-- **Ärenden**, med svarstiden som navet lovar.
+- **Ärenden**, med svarstiden som navet lovar. Chefen får ett ärende av
+  nattjobbet när en överenskommelse i Coachning är fjorton dagar över fristen
+  eller någon inte gjort systemguiderna i tid, och ägaren när en sats ska ses
+  över.
 - **Fel**: dina felrapporter och, för den som hanterar kön, kön och
   nattjobbets kvitto steg för steg. Kända fel med råd, "samma för mig" och
   svar i tråden finns nu i navet, och kön markerar själv ett fel som känt med

@@ -1,10 +1,15 @@
 #!/usr/bin/env node
 /**
  * M4 provas utan databas: fristen, farglaggningen, medianen och forslaget om
- * att skriva en rutin.
+ * att skriva en rutin. Och att varje stalle i koden som lagger ett arende ger
+ * det en frist.
  *
  *   node --experimental-strip-types tests/arenden.mjs
  */
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import {
   slaLage,
   frist,
@@ -118,6 +123,46 @@ console.log("\n\x1b[1mAC-4.7: tre liknande frågor är en rutin som saknas\x1b[0
 console.log("\n\x1b[1mAC-4.6: anonyma ärenden är avstängda\x1b[0m");
 {
   ok("strömbrytaren står på false tills 50 anställda", ANONYMA_ARENDEN === false);
+}
+
+console.log("\n\x1b[1mVarje ärende som läggs får en frist\x1b[0m");
+{
+  // `hr_case.sla_hours` och `due_at` ar NOT NULL utan standardvarde. Tre
+  // nattjobb lade sina arenden utan dem fran augusti till oktober 2026: varje
+  // rad avvisades, felet svaljdes, och kvittot sa "arenden: 0" natt efter natt.
+  // Provet laser varje insattning i hr_case i koden, sa att nasta stalle som
+  // lagger ett arende inte gor om det.
+  const rot = fileURLToPath(new URL("../src", import.meta.url));
+  const filer = [];
+  const ga = (katalog) => {
+    for (const namn of readdirSync(katalog)) {
+      const vag = join(katalog, namn);
+      if (statSync(vag).isDirectory()) ga(vag);
+      else if (/\.tsx?$/.test(namn)) filer.push(vag);
+    }
+  };
+  ga(rot);
+
+  const insattningar = [];
+  for (const fil of filer) {
+    const text = readFileSync(fil, "utf8");
+    for (const m of text.matchAll(/from\("hr_case"\)\s*\.insert\(/g)) {
+      // Allt fram till parentesen som stanger insert(.
+      let djup = 1;
+      let i = m.index + m[0].length;
+      while (i < text.length && djup > 0) {
+        if (text[i] === "(") djup++;
+        else if (text[i] === ")") djup--;
+        i++;
+      }
+      insattningar.push({ fil: fil.slice(rot.length + 1), kropp: text.slice(m.index + m[0].length, i) });
+    }
+  }
+
+  ok("insättningarna hittas", insattningar.length >= 6, `${insattningar.length} st`);
+  for (const { fil, kropp } of insattningar) {
+    ok(`${fil} sätter sla_hours och due_at`, /\bsla_hours\b/.test(kropp) && /\bdue_at\b/.test(kropp));
+  }
 }
 
 console.log(fel === 0 ? "\n\x1b[32mAlla kontroller godkända.\x1b[0m\n" : `\n\x1b[31m${fel} underkända.\x1b[0m\n`);
