@@ -11,7 +11,9 @@ import {
   andraMote,
   flytta,
   flyttaSerie,
+  behallTid,
   foreslaTid,
+  godkannForslag,
   kopiera,
   sattPaminnelse,
   skapaLeverans,
@@ -78,6 +80,8 @@ export async function GET(request: Request) {
  * och coachning i kalendern (`skapaKalenderpost`), leveransmöten från kön
  * (`skapaLeverans`) och delningen (`stallInDelning`) — samma behörighet, samma
  * utkorg och samma ångra.
+ *
+ * Arrangörens beslut om ett förslag (`godkannForslag`, `behallTid`): "besluta".
  *
  * Det nya: ändra ett mötes rubrik, plats, agenda, deltagare och påminnelse
  * (`andraMote`, 0088), den egna påminnelsen (`sattPaminnelse`), "Varje månad"
@@ -296,6 +300,11 @@ export async function POST(request: Request) {
         return ut(await svara(id, String(b.svar ?? "") as "ja" | "kanske" | "nej", String(b.kommentar ?? "") || null));
       case "foresla":
         return ut(await foreslaTid(id, String(b.dag ?? ""), Number(b.start), Number(b.langd), String(b.kommentar ?? "") || null, "kanske"));
+      case "besluta": {
+        // Arrangören om en deltagares förslag: godkänn (mötet flyttas, de andra svarar igen) eller behåll tiden.
+        const person = String(b.person ?? "");
+        return ut(await (b.godkann === true ? godkannForslag(id, person) : behallTid(id, person)));
+      }
       case "stallin":
         return ut(await stallIn(id));
       case "kopiera":

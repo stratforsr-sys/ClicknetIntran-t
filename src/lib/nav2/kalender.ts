@@ -155,7 +155,10 @@ export async function kalDetalj(user: CurrentUser, id: string) {
     online: d.onlineUrl,
     agenda: d.agenda,
     organisator: d.organisator,
-    deltagare: d.deltagare.map((x) => ({ id: x.id, svar: x.svar })),
+    // Kommentaren till svaret och förslaget om ny tid är till arrangören (och den som får planera om hos henne),
+    // som i Outlook. Hon godkänner eller behåller tiden i kortet (POST besluta).
+    deltagare: d.deltagare.map((x) => (d.farAndra ? { id: x.id, svar: x.svar, note: x.note, forslag: x.forslag } : { id: x.id, svar: x.svar })),
+    farAndra: d.farAndra,
     // Inbjudna utanför Clicknet (calendar_attendee.external_email): de som fått mejlet med kalenderfilen.
     gaster: (g ?? []).map((x) => String(x.external_email)),
     serieText: d.serie ? regeltext(d.serie) : null,

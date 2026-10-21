@@ -27336,13 +27336,36 @@ function ndKDetalj(e){
       const org = ndKNamn(x.organisator); if (org) y.org = org;
       y.delt = x.deltagare.map(d => [ndKNamn(d.id) || 'Okänd', d.svar]).filter(d => d[0] !== y.org);
       y.gaster = x.gaster || [];
+      // Arrangörens del av svaren: kommentarer och förslag om ny tid (bara till den som får ändra mötet).
+      y.farAndra = !!x.farAndra;
+      y.ndSvar = x.deltagare.filter(d => d.note || d.forslag).map(d => ({id:d.id, namn:ndKNamn(d.id) || 'Okänd', svar:d.svar, note:d.note || '', forslag:d.forslag || null}));
       ndKTitel(y);
     });
     if (S.view === 'kalender' && S.kPeek) render();
   }).catch(() => NDKAL.detalj.set(e.ref, 'saknas'));
 }
 const _ndKPeek = kPeekKort;
-kPeekKort = function(){ if (ndK() && S.kPeek) ndKDetalj(KEV.find(x => x.id === S.kPeek.id)); return _ndKPeek(); };
+kPeekKort = function(){
+  const e = ndK() && S.kPeek ? KEV.find(x => x.id === S.kPeek.id) : null;
+  if (e) ndKDetalj(e);
+  const h = _ndKPeek();
+  return e && (e.ndSvar || []).length && (e.org === kJag() || e.farAndra) ? ndKSvarIn(h, e) : h;
+};
+/* Kommentarerna och förslagen står under svarsräkningen, en rad per person, som i Outlooks spårning.
+   Ett förslag har Godkänn (mötet flyttas, de andra svarar igen) och Behåll tiden (förslagsställaren får veta). */
+const NDKSVARORD = {ja:'ja', kanske:'preliminärt', vantar:'inte än', nej:'nej'};
+function ndKSvarIn(h, e){
+  const ank = '<p class="olpkr">' + KI('pers'), i = h.indexOf(ank), j = i < 0 ? -1 : h.indexOf('</p>', i);
+  if (j < 0) return h;
+  const rader = e.ndSvar.map(d => {
+    const f = d.forslag, vem = esc(fornamn(d.namn));
+    const kom = d.note ? ` <span class="olmut">”${esc(d.note)}”</span>` : '';
+    if (!f) return `<p class="olpkr">${KI('text')}<span><b>${vem}</b> svarade ${NDKSVARORD[d.svar] || d.svar}:${kom}</span></p>`;
+    return `<p class="olpkr">${KI('klocka')}<span><b>${vem}</b> föreslår ${kKort(f.dag)} <b class="num">${hm(f.start)}–${hm(f.start + f.minuter)}</b>${f.note ? ` <span class="olmut">”${esc(f.note)}”</span>` : ''}${kom}<br>`
+      + `<button class="tlink inl" data-ndkbeslut="ja" data-ndkperson="${d.id}">Godkänn</button> · <button class="tlink inl" data-ndkbeslut="nej" data-ndkperson="${d.id}">Behåll tiden</button></span></p>`;
+  }).join('');
+  return h.slice(0, j + 4) + rader + h.slice(j + 4);
+}
 const ndKFlyttaPers = ev => [ev.org, ...ev.delt.map(x => x[0])].filter(p => p && p !== 'Ledningen');
 // 1:1-kortet: säljarens månad ur provisionen, när läsaren får se den. Inget annat påhittat.
 const _ndKEnskild = kEnskild;
@@ -27606,8 +27629,9 @@ document.addEventListener('click', e => {
   const ev = S.kPeek ? KEV.find(x => x.id === S.kPeek.id) : null, ref = ndKRef(ev);
   if (ds.krsvp){ stopp(); if (!ref) return; ndKPost('svara', {id:ref, svar:ds.krsvp, kommentar:(document.querySelector('[data-krsvpkom]')?.value || '').trim()}); return; }
   if (ds.kforslagskicka !== undefined){ stopp(); if (!ref) return; const dd = document.querySelector('[data-kfd]').value, ss = document.querySelector('[data-kfs]').value;
-    ndKPost('foresla', {id:ref, dag:dd, start:tmin(ss), langd:ev.e - ev.s, kommentar:(document.querySelector('[data-kfkom]')?.value || '').trim()}); return; }
+    ndKPost('foresla', {id:ref, dag:dd, start:tmin(ss), langd:ev.e - ev.s, kommentar:(document.querySelector('[data-kfm]')?.value || '').trim()}); return; }
   if (ds.kstalljs !== undefined){ stopp(); if (!ref) return; ndKPost('stallin', {id:ref}); return; }
+  if (ds.ndkbeslut){ stopp(); if (!ref) return; ndKPost('besluta', {id:ref, person:ds.ndkperson, godkann:ds.ndkbeslut === 'ja'}); return; }
   if (ds.kkopiera !== undefined){ stopp(); if (!ref) return; ndKPost('kopiera', {id:ref}); return; }
   if (ds.kklar !== undefined && ev && ev.kat === 'uppgift' && ref){ stopp(); ndUpgPost(ev.klar ? 'ateroppna' : 'bocka', {id:ref}); return; }
   if (ds.kuppgklar !== undefined){ stopp(); const u = TASKS.find(x => x.id === ds.kuppgklar); ndUpgPost(u && u.lage === 'klar' ? 'ateroppna' : 'bocka', {id:ds.kuppgklar}); return; }

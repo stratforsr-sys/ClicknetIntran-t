@@ -5,6 +5,20 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-21 · Nav 2.0, Kalendern som Outlook, del 3: arrangören ser svaren och förslagen (ingen migration)
+
+- **Felet:** en deltagare kunde svara med en kommentar och föreslå en ny tid,
+  men arrangören såg ingetdera: `kalDetalj` tog bara med svaret, och repots
+  `godkannForslag`/`behallTid` var inte kopplade. Notisen om förslaget
+  öppnade ett möte där förslaget inte stod.
+- **Nu:** kortet har en rad per deltagare som kommenterat eller föreslagit,
+  under svarsräkningen: "Fredrik föreslår fre 23 okt 11:00–11:30" med
+  meddelandet, och Godkänn (mötet flyttas, de andra svarar igen) eller
+  Behåll tiden (förslagsställaren får veta). `POST besluta`. Kommentarerna
+  och förslagen lämnas bara ut till den som får ändra mötet (`farAndra`).
+- **Förslagets meddelande skickades aldrig:** ndkal läste ett fält som inte
+  finns (`data-kfkom`); utkastets fält heter `data-kfm`.
+
 ## 2026-10-21 · Nav 2.0, Kalendern som Outlook, del 2: ledig/upptagen ur navet (ingen migration)
 
 - **Felet:** schemaassistenten, krockrutan ("Alla är lediga"), Föreslå tid,
