@@ -57,7 +57,7 @@ export type NdAePers = {
   rutiner: [number, number] | null;
   /** Gamla Nav C: de obligatoriska rutinerna (rollen och teamet), som /personal/[id]. */
   rutinLista: { titel: string; slug: string; klar: boolean }[] | null;
-  /** Gamla Nav C: särskild behörighet (`employee_permission`), läst med RLS: säljchef och VD ser den. */
+  /** Gamla Nav C: särskild behörighet (`employee_permission`): RLS för säljchef och VD, servicerollen för superadmin. */
   behorigheter: string[];
   /** Kontojobbets flagga (45 dagar utan inloggning). */
   flaggad: string | null;
@@ -81,7 +81,7 @@ export type NdAnstallda = {
   far: boolean;
   /** Får skriva i personalen (navets canManageEmployees). */
   hantera: boolean;
-  /** Gamla Nav C: får dela ut särskild behörighet (repots andraBehorighet: säljchef och VD, AC-13.13). */
+  /** Gamla Nav C: får dela ut särskild behörighet. Beställaren 2026-10-21: superadmin (repots andraBehorighet: säljchef och VD). */
   farBehorighet: boolean;
   /** 0105 gick inte att läsa. */
   utan0105: boolean;
@@ -122,7 +122,7 @@ export async function byggAnstallda(supabase: SupabaseClient, user: CurrentUser)
     { data: handelser },
     { data: byten },
     { data: avtalRader },
-    { data: behRader },
+    { data: behRls },
   ] = await Promise.all([
     supabase.from("employee").select("id, first_name, last_name, email, status, start_date, end_date, team_id, inactive_flagged_at, created_at, employee_role!employee_role_employee_id_fkey(role)"),
     supabase.from("team").select("id, name, lead_id").order("name"),
@@ -174,6 +174,10 @@ export async function byggAnstallda(supabase: SupabaseClient, user: CurrentUser)
     admin.from("module_progress").select("employee_id, module_id").in("employee_id", iListan.length ? iListan : [jag]),
   ]);
   const behPer = new Map<string, string[]>();
+  // Beställaren 2026-10-21: superadmin delar ut den särskilda behörigheten och ser den därför med servicerollen.
+  // RLS (employee_permission_read) släpper bara säljchef och VD.
+  const hantera = (nivaer.get(jag) ?? nivaFor(user.roles)) === "superadmin";
+  const behRader = hantera && !hasRole(user, "sales_manager", "ceo") ? (await admin.from("employee_permission").select("employee_id, permission")).data : behRls;
   for (const b of (behRader ?? []) as unknown as { employee_id: string; permission: string }[]) behPer.set(b.employee_id, [...(behPer.get(b.employee_id) ?? []), b.permission]);
   const lynes = new Map(((lynesRader ?? []) as unknown as { employee_id: string; value: string }[]).map((r) => [r.employee_id, r.value]));
   const iCoach = new Set(((coachRader ?? []) as unknown as { assignee_id: string }[]).map((r) => r.assignee_id));
@@ -268,8 +272,8 @@ export async function byggAnstallda(supabase: SupabaseClient, user: CurrentUser)
   return {
     far: true,
     // Beställaren 2026-10-19: bara superadmin ändrar i personalen. Nivån som rutten räknar den.
-    hantera: (nivaer.get(jag) ?? nivaFor(user.roles)) === "superadmin",
-    farBehorighet: hasRole(user, "sales_manager", "ceo"),
+    hantera,
+    farBehorighet: hantera,
     utan0105: Boolean(mallFel),
     team: ((teamRader ?? []) as unknown as { id: string; name: string; lead_id: string | null }[]).map((t) => ({
       id: t.id,

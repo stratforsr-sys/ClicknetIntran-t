@@ -5,6 +5,27 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-21 · Nav 2.0, gamla Navs sista funktioner C, svaren: superadmin delar ut behörigheten, och den som sägs upp går att ta bort (ingen migration)
+
+- **Särskild behörighet** (beställaren 2026-10-21: bara säljare, admin och
+  superadmin, och superadmin ska få göra det): `sarskild` i `/nav2/anstallda`
+  skriver `employee_permission` med servicerollen, loggar
+  `permission.granted`/`permission.revoked` och skickar notisen
+  `konto-behorighet`, som repots `andraBehorighet` (den används fortfarande
+  för säljchef och VD). `farBehorighet` = superadmin, och behörigheterna
+  läses med servicerollen för en superadmin som RLS inte släpper in.
+- **Ta bort den som har börjat** ("vi måste ju ta bort en personal ifall den
+  sägs upp"): Mer → "Ta bort … helt" för alla utom en själv. Rutan föreslår
+  först Avsluta anställningen (inloggningen stängs, lön, order och provision
+  står kvar), visar vad som raderas och vad som står kvar med namnet, och
+  "Ta bort helt" öppnas först när namnet är skrivet. `radera` prövar namnet
+  (repots `taBortAnstalld` gör det igen). Den som inte har börjat tas bort
+  som förut.
+- **Svenska namn i raderingens lista:** `personal-radering.ts` har namn på
+  alla tabeller med en nyckel mot `employee` (pg_constraint 2026-10-21; 95
+  saknades, bland dem `notification_event` = Notiser). Gäller också gamla
+  Navs TaBort.
+
 ## 2026-10-21 · Nav 2.0, gamla Navs sista funktioner A, svaren: ett schema gäller framåt (ingen migration)
 
 - **Ett schema kan inte gälla bakåt** (beställaren 2026-10-21, "kör på best

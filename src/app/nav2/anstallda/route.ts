@@ -5,7 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 import { svensktDatum } from "@/lib/klocka";
 import { skickaEpost } from "@/lib/epost";
 import { notifiera } from "@/lib/notishandelse-server";
-import { PERMISSIONS, ROLES, type Permission, type Role } from "@/lib/roles";
+import { PERMISSION_LABEL, PERMISSIONS, ROLES, type Permission, type Role } from "@/lib/roles";
 import { perTabell } from "@/lib/personal-radering";
 import { laggUppAnstalld } from "@/lib/anstallning-server";
 import { anstalldaVerktyg, namnPa, startFran, type MallPunkt, type Person } from "@/lib/nav2/anstallda-start";
@@ -256,11 +256,18 @@ export async function POST(request: Request) {
       case "radera": {
         const p = await personen(b.pid);
         if (!p) return svar({ fel: "Personen finns inte." }, 404);
-        if (p.status !== "onboarding" || (p.start_date && p.start_date <= idag)) return svar({ fel: "Bara den som inte har börjat kan tas bort. Avsluta anställningen i stället." }, 400);
-        const { data: oppna } = await db.from("onboarding_task").select(PUNKT).eq("employee_id", p.id).eq("kind", "regel").eq("state", "open");
+        // Beställaren 2026-10-21: den som sägs upp ska också gå att ta bort, som i gamla Nav. Den som har börjat bekräftas
+        // med namnet skrivet för hand (repots taBortAnstalld prövar det), och det som är företagets står kvar med namnet.
+        if (p.id === mig) return svar({ fel: "Du kan inte ta bort dig själv." }, 400);
+        const borjat = !(p.status === "onboarding" && (!p.start_date || p.start_date > idag));
+        const bekraftelse = borjat ? String(b.bekraftelse ?? "") : namnPa(p);
+        if (borjat && bekraftelse.replace(/\s+/g, " ").trim().toLowerCase() !== namnPa(p).replace(/\s+/g, " ").trim().toLowerCase())
+          return svar({ fel: `Skriv ${namnPa(p)} för att bekräfta.` }, 400);
+        const { data: oppna } = borjat ? { data: [] } : await db.from("onboarding_task").select(PUNKT).eq("employee_id", p.id).eq("kind", "regel").eq("state", "open");
         const besked = (oppna ?? []) as unknown as Punkt[];
-        const s = await medOmdirigering(() => taBortAnstalld({} as Parameters<typeof taBortAnstalld>[0], form({ employee_id: p.id, bekraftelse: namnPa(p) })));
+        const s = await medOmdirigering(() => taBortAnstalld({} as Parameters<typeof taBortAnstalld>[0], form({ employee_id: p.id, bekraftelse })));
         if (s.fel) return svar({ fel: s.fel }, 400);
+        if (borjat) return svar({ ok: `${namnPa(p)} är borttagen. Inloggningen är stängd, och det som är företagets står kvar med namnet.` });
         for (const x of besked) {
           if (x.self_owned || !x.owner_id) continue;
           const mott = await namnFor(x.owner_id);
@@ -544,15 +551,25 @@ export async function POST(request: Request) {
         return svar({ ok: `${p.first_name} är nu ${namn.toLowerCase()}.` });
       }
       case "sarskild": {
-        // Repots andraBehorighet: per person, aldrig per roll. Bara säljchef och VD delar ut den (den kastar annars).
+        // Per person, aldrig per roll. Beställaren 2026-10-21: superadmin delar ut den (prövat ovan). Repots andraBehorighet
+        // släpper bara säljchef och VD, så samma skrivning, logg och notis görs här: säljchef och VD går fortfarande via den.
         const p = await personen(b.pid);
         if (!p) return svar({ fel: "Personen finns inte." }, 404);
         if (p.status === "offboarded") return svar({ fel: "Anställningen är avslutad." }, 400);
-        const beh = String(b.beh ?? "");
-        if (!PERMISSIONS.includes(beh as Permission)) return svar({ fel: "Okänd behörighet." }, 400);
-        if (!hasRole(user, "sales_manager", "ceo")) return svar({ fel: "Bara säljchef och VD får dela ut särskild behörighet." }, 403);
-        const f = await fangad(() => andraBehorighet(form({ employee_id: p.id, behorighet: beh, pa: b.pa === true ? "1" : "0" })));
-        if (f) return svar({ fel: f }, 403);
+        const beh = String(b.beh ?? "") as Permission;
+        if (!PERMISSIONS.includes(beh)) return svar({ fel: "Okänd behörighet." }, 400);
+        if (hasRole(user, "sales_manager", "ceo")) {
+          const f = await fangad(() => andraBehorighet(form({ employee_id: p.id, behorighet: beh, pa: b.pa === true ? "1" : "0" })));
+          if (f) return svar({ fel: f }, 403);
+        } else {
+          const { error } = b.pa === true
+            ? await db.from("employee_permission").upsert({ employee_id: p.id, permission: beh, granted_by: mig })
+            : await db.from("employee_permission").delete().eq("employee_id", p.id).eq("permission", beh);
+          if (error) return svar({ fel: "Behörigheten kunde inte sparas." }, 500);
+          await db.from("audit_log").insert({ actor_id: mig, action: b.pa === true ? "permission.granted" : "permission.revoked", object_type: "employee", object_id: p.id, meta: { behorighet: beh } });
+          await notifiera({ till: p.id, av: mig, kalla: "konto-behorighet", typ: "konto", rubrik: b.pa === true ? `Du har fått behörigheten ${PERMISSION_LABEL[beh]}` : `Behörigheten ${PERMISSION_LABEL[beh]} är borttagen`, detalj: b.pa === true ? "Den öppnar en ny vy för dig" : "Vyn den öppnade är stängd igen", href: `/personal/${p.id}`, objekt: { typ: "employee", id: p.id } });
+          revalidatePath(`/personal/${p.id}`);
+        }
         return svar({ ok: b.pa === true ? `${namnPa(p)} har fått behörigheten. Den loggas, och ${namnPa(p).split(" ")[0]} får en notis.` : "Behörigheten är borttagen och loggad." });
       }
 

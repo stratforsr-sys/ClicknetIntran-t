@@ -29682,7 +29682,7 @@ document.addEventListener('click', e => {
     if (!A.slut || (p.start && A.slut < p.start)){ A.fel = {slut:`Välj en dag från ${p.start ? frKort(p.start) : 'startdagen'}.`}; render(); aeFokusFel(); return; }
     if (!A.orsak){ A.fel = {orsak:'Välj varför anställningen tar slut. Rekrytering kollar företrädesrätten mot den.'}; render(); aeFokusFel(); return; }
     ndAePost('avslut', {pid:p.id, slut:A.slut, orsak:A.orsak}, {minns:{pers:p.id}}); return; }
-  if (d.aeraderaok){ stopp(); ndAePost('radera', {pid:d.aeraderaok}, {minns:{pers:null}}); return; }
+  if (d.aeraderaok){ stopp(); ndAePost('radera', {pid:d.aeraderaok, bekraftelse:S.ndAeRadNamn || ''}, {minns:{pers:null}}); return; }
   // Checklistan
   if (d.aeoppna){ stopp(); ndAePost('oppna', {rad:ndAeRad(d.aeoppna)}); return; }
   if (d.aehopok){ stopp(); const v = (S.aeUtk.hoptxt || '').trim();
@@ -29794,7 +29794,7 @@ function ndAeBehKort(p){
   const har = (A.per[p.id] || {}).behorigheter || [], far = A.farBehorighet;
   return `<section class="card" aria-label="Särskild behörighet"><div class="chead"><h2>Särskild behörighet</h2></div>
     <ul class="aeroll">${NDAE_BEH.map(([k, l]) => { const pa = har.includes(k); return `<li><button data-ndaebeh="${p.id}|${k}" aria-pressed="${pa}" ${far ? '' : 'disabled'}><i>${pa ? I('check') : ''}</i><span>${l}</span></button></li>`; }).join('')}</ul>
-    <p class="aehint">Ges per person, aldrig per roll, och varje ändring loggas. ${far ? 'Lönekostnaden visar vad kollegorna kostar: ge den till dig och VD, inte till en teknisk administratör.' : 'Bara säljchef och VD delar ut den.'}</p></section>`;
+    <p class="aehint">Ges per person, aldrig per roll, och varje ändring loggas. ${far ? 'Lönekostnaden visar vad kollegorna kostar: ge den bara till den som sätter lönerna.' : 'Bara en superadmin delar ut den.'}</p></section>`;
 }
 const _ndaeRollKortC = aeRollKort;
 aeRollKort = function(p){ return _ndaeRollKortC(p) + ndAeBehKort(p); };
@@ -29818,6 +29818,31 @@ aeRaderaRuta = function(p){
     : `<b>Raderas:</b> ${R2.raderas.length ? lista(R2.raderas) : 'inget mer än raden, som försvinner helt'}.${R2.behalls.length ? ` <b>Står kvar med ”${esc(p.namn)} (borttagen anställd)”:</b> ${lista(R2.behalls)}. De raderna är företagets, till exempel en signerad order, så namnet står kvar.` : ''}`;
   return h + `<div class="aebanner neutral">${I('logg')}<span>${text}</span></div>`;
 };
+// Beställaren 2026-10-21: den som sägs upp ska också gå att ta bort, som i gamla Nav. Rutan föreslår först att avsluta
+// anställningen (inloggningen stängs, och lön, order och provision står kvar). Ta bort helt bekräftas med namnet.
+const ndAeHarBorjat = p => !(p.status === 'onboarding' && p.start > aeT());
+const ndAeNamnLika = (a, b) => (a || '').replace(/\s+/g, ' ').trim().toLowerCase() === (b || '').replace(/\s+/g, ' ').trim().toLowerCase();
+const _ndaePersonVyC2 = aePersonVy;
+aePersonVy = function(p){
+  const h = _ndaePersonVyC2(p), A = ndAe();
+  if (!A || !A.hantera || !S.aeMeny || !ndAeHarBorjat(p) || p.id === ND.jag.id) return h;
+  return h.replace(/(<div class="aemenyl" role="menu">[\s\S]*?)(<\/div>)/, (m, a, b) => `${a}<button role="menuitem" data-aeradera class="fara">${I('x')}Ta bort ${esc(aeFor(p.namn))} helt</button>${b}`);
+};
+const _ndaeRaderaRutaC2 = aeRaderaRuta;
+aeRaderaRuta = function(p){
+  const h = _ndaeRaderaRutaC2(p);
+  if (!ndAe() || !ndAeHarBorjat(p)) return h;
+  const slutad = p.status === 'offboarded', fn = esc(aeFor(p.namn)), ok = ndAeNamnLika(S.ndAeRadNamn, p.namn);
+  const ruta = `<div class="aebanner fara">${I('fel')}<span><b>Ta bort ${esc(p.namn)} helt?</b> ${slutad ? 'Anställningen är redan avslutad.' : `Sägs ${fn} upp räcker det att avsluta anställningen: inloggningen stängs och rollerna återkallas, och lön, order, provision och historiken står kvar.`} Ta bort helt raderar personalposten och det som bara hör till ${fn}, och går inte att ångra. Skriv namnet för att bekräfta.</span>
+    <input class="uin" data-ndaeradnamn style="flex:1 1 200px;max-width:260px" placeholder="${esc(p.namn)}" value="${esc(S.ndAeRadNamn || '')}" aria-label="Skriv ${esc(p.namn)} för att bekräfta" autocomplete="off" spellcheck="false">
+    <button class="btn btn-s btn-sm" data-aeraderax>Avbryt</button>${slutad ? '' : '<button class="btn btn-s btn-sm" data-aeavslut>Avsluta anställningen</button>'}<button class="btn btn-sm aefarlig" data-aeraderaok="${p.id}" ${ok ? '' : 'disabled'}>Ta bort helt</button></div>`;
+  return h.replace(/^<div class="aebanner fara">[\s\S]*?<\/div>/, () => ruta);
+};
+document.addEventListener('input', e => {
+  if (!ndAe() || S.view !== 'anstallda' || !e.target.dataset || e.target.dataset.ndaeradnamn === undefined) return;
+  S.ndAeRadNamn = e.target.value; const p = aeP(S.aePers), b = document.querySelector('[data-aeraderaok]');
+  if (p && b) b.disabled = !ndAeNamnLika(S.ndAeRadNamn, p.namn);
+}, true);
 // Teamen i fliken Personal: namn och teamledare. Teamledaren ser medlemmarnas uppgifter (leads_employee()).
 function ndAeTeamKort(){
   const A = ndAe(); if (!A) return '';
@@ -29852,7 +29877,9 @@ document.addEventListener('click', e => {
   const t = e.target.closest && e.target.closest('button'); if (!t || !t.dataset) return;
   const d = t.dataset, stopp = () => { e.preventDefault(); e.stopImmediatePropagation(); };
   if (d.ndaebeh){ stopp(); const [pid, k] = d.ndaebeh.split('|'), har = ((ndAePers(pid) || {}).behorigheter || []).includes(k); ndAePost('sarskild', {pid, beh:k, pa:!har}, {minns:{pers:pid}}); return; }
-  if (d.aeraderax !== undefined) S.ndAeRef = null;
+  if (d.aeraderax !== undefined){ S.ndAeRef = null; S.ndAeRadNamn = ''; }
+  if (d.aeavslut !== undefined && S.aeRadera){ S.aeRadera = false; S.ndAeRef = null; S.ndAeRadNamn = ''; }
+  if (d.aeradera !== undefined) S.ndAeRadNamn = '';
   if (d.ndaeteamny !== undefined){ stopp(); S.ndAeTeam = {id:'ny', namn:'', ledare:''}; render(); setTimeout(() => document.querySelector('[data-ndaeteamnamn]')?.focus(), 30); return; }
   if (d.ndaeteamandra){ stopp(); const x = ndAe().team.find(q => q.id === d.ndaeteamandra); if (!x) return; S.ndAeTeam = {id:x.id, namn:x.namn, ledare:x.ledareId || ''}; render(); setTimeout(() => document.querySelector('[data-ndaeteamnamn]')?.focus(), 30); return; }
   if (d.ndaeteamx !== undefined){ stopp(); S.ndAeTeam = null; render(); return; }
