@@ -5,6 +5,24 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-21 · Nav 2.0, Provision och Satser och löner får spara (beställarens svar på G; migration 0190 KÖRD)
+
+- **Fråga 1, "ja såklart":** `SKRIVLAGE.provision` och `SKRIVLAGE.satser` är
+  `true`. Allt i Provision sparar, också fastställa, övrig bonus, målen,
+  trappan, chefens sats, konsekvenstrappan och Utbetald. I Satser och löner
+  sparar satserna, lönerna, födelseåren, intäkterna och beräkningen.
+- **Fråga 2, "Ja kör":** `0190_satser_utkastet` är körd
+  (`schema_migrations`). Skatteverkets regler för unga och för de äldsta går
+  att lägga in, och Ersatta fylls.
+- **Fråga 3, "Nej vi började i augusti":** juni och juli markeras inte som
+  utbetalda. Raden under Perioder som nämnde äldre fastställda månader är
+  borttagen, och knappen finns bara på de tre månader listan visar.
+- **Fråga 4 och 6:** chefens sats stannar hos superadmin som också är
+  säljchef eller VD, och konsekvenstrappan hos säljchef och VD.
+- **Fråga 5, "han behöver ingen onboarding":** Simon Menduza (VD) har status
+  `active` (som repots `aktivera`, `employee.activated` i händelseloggen,
+  ingen notis). Han går nu att välja som mottagare av övertäcket.
+
 ## 2026-10-21 · Nav 2.0, gamla Navs sista funktioner G, steg 2–4: konsekvenstrappan, Utbetald, intäkterna och täckningsgraden, och vägarna (ingen ny migration)
 
 - **Konsekvenstrappan** (svar 13): kortet Ogiltig frånvaro under Provision →

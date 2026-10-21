@@ -27160,9 +27160,6 @@ pvPerioderVy = function(){
   if (!ndP() || !ndP().bokforare) return h;
   Object.entries(S.pvPerioder || {}).forEach(([m, p]) => { if (p.status !== 'faststalld') return;
     h = h.replace(new RegExp(`(data-pvunderlag="${m}" aria-pressed="(?:true|false)">Underlag</button>)`), `$1<button class="btn btn-s btn-sm" data-pvutbetald="${m}">Markera utbetald</button>`); });
-  // Listan visar de tre senaste månaderna. En äldre fastställd månad som inte är utbetald nämns under den, så att den går att markera.
-  const visade = pvManader().slice(0, 3), aldre = Object.entries(S.pvPerioder || {}).filter(([m, p]) => p.status === 'faststalld' && !visade.includes(m)).map(([m]) => m).sort();
-  if (aldre.length) h = h.replace(/<\/ul>(\s*<p class="pv-kf">En fastställd)/, `</ul><p class="frb info">${I('kal')}<span>${pvStor(aldre.map(pvManLang).join(' och '))} ${aldre.length === 1 ? 'är fastställd men inte markerad som utbetald' : 'är fastställda men inte markerade som utbetalda'}. ${aldre.map(m => `<button class="tlink inl" data-pvutbetald="${m}">Markera ${pvManLang(m)} utbetald</button>`).join(' · ')}</span></p>$1`);
   return h;
 };
 // Tid → Scheman och regler: "Trappan ändras under Provision → Regler" går dit.

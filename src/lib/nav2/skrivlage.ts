@@ -12,7 +12,8 @@ export const SKRIVLAGE = {
   arenden: false,
   fel: false,
   order: false,
-  provision: false,
+  // Beställarens ja 2026-10-21 (Gamla Nav G): allt i Provision sparar, också chefens sats, konsekvenstrappan och Utbetald.
+  provision: true,
   // Beställarens ja 2026-10-20 ("Ska Kalendern få spara nu?" – "Ja"). 0088–0091 körda 2026-10-15.
   kalender: true,
   uppgifter: false,
@@ -35,8 +36,8 @@ export const SKRIVLAGE = {
   nyheter: true,
   // Beställarens ja 2026-10-20 (Gamla Nav P): lösenordsbytet och Kod vid inloggning i Inställningar → Säkerhet.
   sakerhet: true,
-  // Gamla Nav G: Satser och löner (Inställningar) sparar genom /nav2/satser. Läsläge tills beställaren säger ja.
-  satser: false,
+  // Beställarens ja 2026-10-21 (Gamla Nav G): Satser och löner sparar genom /nav2/satser. 0190 körd samma dag.
+  satser: true,
 } as const;
 
 export type Skrivvy = keyof typeof SKRIVLAGE;
