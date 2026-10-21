@@ -43,6 +43,13 @@ export type Satser = {
   /** Fylld alder vid arets ingang for den aldre nedsattningen. */
   seniorMin: number;
   /**
+   * 0190: Skatteverkets tillfalliga sats for unga (`employer_fee_young`), i
+   * procent. Saknas den galler `reducerad` for unga, som forut.
+   */
+  ung?: number | null;
+  /** 0190: ingen avgift alls fran den har fyllda aldern (`no_fee_age_min`). */
+  ingenMin?: number | null;
+  /**
    * Tackningsgrad i procent, for break-even (AC-13.7). Null nar ingen satt
    * den — och da raknas inget break-even. En pahittad tackningsgrad ger en
    * siffra som ser exakt ut och ar gissad.
@@ -68,16 +75,23 @@ export function alderVidAretsIngang(ar: number, fodelsear: number): number {
  *
  * Bada nedsattningarna ger samma procentsats. Skillnaden ar att ungdomarnas ar
  * takad per manad och de aldres inte ar det.
+ *
+ * 0190 (Nav 2.0, samma ordning som utkastets `satsAvgift`): forst ingen avgift
+ * for de aldsta, sedan de aldre, sedan de unga med sin egen sats om den finns.
+ * Utan raderna ar svaret detsamma som forut.
  */
 export function avgiftssats(
   alderVidIngang: number,
   satser: Satser,
-): { procent: number; tak: number | null; grund: "standard" | "ung" | "senior" } {
+): { procent: number; tak: number | null; grund: "standard" | "ung" | "senior" | "ingen" } {
+  if (satser.ingenMin != null && satser.ingenMin > 0 && alderVidIngang >= satser.ingenMin) {
+    return { procent: 0, tak: null, grund: "ingen" };
+  }
   if (alderVidIngang >= satser.seniorMin) {
     return { procent: satser.reducerad, tak: null, grund: "senior" };
   }
   if (alderVidIngang >= satser.ungMin && alderVidIngang <= satser.ungMax) {
-    return { procent: satser.reducerad, tak: satser.reduceradTak, grund: "ung" };
+    return { procent: satser.ung ?? satser.reducerad, tak: satser.reduceradTak, grund: "ung" };
   }
   return { procent: satser.standard, tak: null, grund: "standard" };
 }

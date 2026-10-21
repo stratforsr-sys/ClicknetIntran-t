@@ -78,6 +78,8 @@ export async function hamtaSatser(db: SupabaseClient, datum: string): Promise<Sa
     ungMin: forst("young_age_min") ?? 0,
     ungMax: forst("young_age_max") ?? 0,
     seniorMin: forst("senior_age_min") ?? 0,
+    ung: forst("employer_fee_young"),
+    ingenMin: forst("no_fee_age_min"),
     tackningsgrad: forst("contribution_margin"),
     franvarofaktor,
   };

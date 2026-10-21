@@ -44,6 +44,22 @@ export type NdErsatt = {
   ersattSkal: string | null;
 };
 
+/**
+ * Gamla Nav G steg 3 (svar 14): intäkterna och täckningsgraden per löneperiod,
+ * som gamla /lonekostnad. `personer` är de som har en rad i löneunderlaget
+ * (`payroll_row`, det `raknaPeriod` räknar på), `intakter` det som matats in
+ * (`revenue_entry`) och `rader` den senaste beräkningen (`cost_calculation`).
+ */
+export type NdLonperiod = {
+  id: string;
+  fran: string;
+  till: string;
+  personer: string[];
+  intakter: Record<string, number>;
+  rader: { vemId: string; kostnad: number; intakt: number | null; bidrag: number | null; breakEven: number | null }[];
+  raknad: string | null;
+};
+
 export type NdSatsdata = {
   /** Superadmin med payroll_cost_viewer: utkastets formulär öppnas. */
   andra: boolean;
@@ -51,6 +67,8 @@ export type NdSatsdata = {
   skriv: boolean;
   ersatta: NdErsatt[];
   ersattaSaknas: boolean;
+  /** De sex senaste löneperioderna, nyast först. */
+  perioder: NdLonperiod[];
 };
 
 type RaErsatt = {
@@ -101,7 +119,36 @@ export async function byggSatser(supabase: SupabaseClient, user: CurrentUser): P
         ersattSkal: r.reason,
       }));
 
+  const { data: periodrader } = await supabase
+    .from("payroll_period")
+    .select("id, period_start, period_end")
+    .order("period_start", { ascending: false })
+    .limit(6);
+  const per = (periodrader ?? []) as unknown as { id: string; period_start: string; period_end: string }[];
+  const ids = per.map((p) => p.id);
+  const [{ data: lonrader }, { data: intaktrader }, { data: berakningar }] = ids.length
+    ? await Promise.all([
+        supabase.from("payroll_row").select("period_id, employee_id").in("period_id", ids),
+        supabase.from("revenue_entry").select("period_id, employee_id, amount").in("period_id", ids),
+        supabase.from("cost_calculation").select("period_id, employee_id, total_cost, revenue, contribution, break_even_revenue, calculated_at").in("period_id", ids),
+      ])
+    : [{ data: [] }, { data: [] }, { data: [] }];
+  const tal = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+  const perioder: NdLonperiod[] = per.map((p) => {
+    const b = ((berakningar ?? []) as unknown as { period_id: string; employee_id: string; total_cost: number | string; revenue: number | string | null; contribution: number | string | null; break_even_revenue: number | string | null; calculated_at: string }[]).filter((x) => x.period_id === p.id);
+    return {
+      id: p.id,
+      fran: dag(p.period_start)!,
+      till: dag(p.period_end)!,
+      personer: [...new Set(((lonrader ?? []) as unknown as { period_id: string; employee_id: string }[]).filter((x) => x.period_id === p.id).map((x) => x.employee_id))],
+      intakter: Object.fromEntries(((intaktrader ?? []) as unknown as { period_id: string; employee_id: string; amount: number | string }[]).filter((x) => x.period_id === p.id).map((x) => [x.employee_id, Number(x.amount)])),
+      rader: b.map((x) => ({ vemId: x.employee_id, kostnad: Number(x.total_cost), intakt: tal(x.revenue), bidrag: tal(x.contribution), breakEven: tal(x.break_even_revenue) })),
+      raknad: b.length ? dag(b.map((x) => x.calculated_at).sort().slice(-1)[0]) : null,
+    };
+  });
+
   return {
+    perioder,
     andra: nivaFor(user.roles) === "superadmin",
     skriv: SKRIVLAGE.satser,
     ersatta,

@@ -4,9 +4,9 @@ import { getCurrentUser, hasRole } from "@/lib/auth";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { svensktDatum } from "@/lib/klocka";
 import { laggOvrigBonus } from "@/app/(app)/provision/actions";
-import { faststallPeriod } from "@/app/(app)/provision/stangning";
+import { faststallPeriod, markeraUtbetald } from "@/app/(app)/provision/stangning";
 import { sparaMal, taBortMal } from "@/app/(app)/provision/mal/actions";
-import { sparaChefssats, sparaNiva, stangNiva } from "@/app/(app)/provision/regler/actions";
+import { sparaChefssats, sparaKonsekvenssteg, sparaNiva, stangNiva, taBortKonsekvenssteg } from "@/app/(app)/provision/regler/actions";
 import { skapaMote } from "@/app/(app)/kalender/moten/actions";
 import { nivaFor } from "@/lib/nav2/forma";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
@@ -33,6 +33,11 @@ export const dynamic = "force-dynamic";
  * själv innan något annat. `sparaChefssats` kräver dessutom säljchef eller VD,
  * som på /provision/regler. En sats som inte börjat gälla går att ta tillbaka,
  * som en kommande trappa.
+ *
+ * Gamla Nav G (svar 13): konsekvenstrappan för ogiltig frånvaro
+ * (`konsekvens` = repots `sparaKonsekvenssteg` och `taBortKonsekvenssteg`,
+ * säljchef och VD) och att markera en fastställd månad som utbetald
+ * (`utbetald` = `markeraUtbetald`, ekonomi och VD).
  * ===========================================================================
  *
  * LÄSLÄGE: står `SKRIVLAGE.provision` på false svarar rutten 423 innan något
@@ -190,6 +195,25 @@ export async function POST(request: Request) {
         revalidatePath("/order");
         return svar({ ok: "Den kommande satsen är borttagen. Satsen som gäller i dag gäller vidare." });
       }
+
+      case "konsekvens": {
+        // Hela trappan på en gång: de borttagna stegen först, sedan varje steg som det står.
+        const steg = Array.isArray(b.steg) ? (b.steg as { ordning: number; antal: number; manader: number; atgard: string; notifiera: boolean }[]).slice(0, 10) : [];
+        const borta = Array.isArray(b.borta) ? (b.borta as number[]).slice(0, 10) : [];
+        for (const o of borta) {
+          const s = await taBortKonsekvenssteg({}, form({ ordning: o }));
+          if (s.fel) return svar({ fel: s.fel }, 400);
+        }
+        for (const x of steg) {
+          const s = await sparaKonsekvenssteg({}, form({ ordning: x.ordning, antal_handelser: x.antal, periodlangd_manader: x.manader, atgard: x.atgard, notifiera: x.notifiera ? "on" : undefined }));
+          if (s.fel) return svar({ fel: s.fel }, 400);
+        }
+        return svar({ ok: "Trappan för ogiltig frånvaro är sparad. Den gäller framåt; beslutade händelser behåller sitt steg." });
+      }
+
+      case "utbetald":
+        if (!MANAD.test(manad)) return svar({ fel: "Okänd månad." }, 400);
+        return fran(await markeraUtbetald({}, form({ period_month: `${manad}-01` })), "Månaden är markerad som utbetald.");
 
       case "pamin": {
         const dag = String(b.dag ?? "");

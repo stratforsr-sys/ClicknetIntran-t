@@ -108,6 +108,8 @@ export async function byggProvision(supabase: SupabaseClient, user: CurrentUser)
     nivaer, perioder, minaHandelser, regler, godkanda, kvPerManad, mal, chefsposter,
     kvSamtal, policyer, kriterier, personrader: personer,
   });
+  const konsekvens = regler.map((r) => ({ ordning: r.ordning, antal: r.antal_handelser, manader: r.periodlangd_manader, atgard: r.atgard, notifiera: r.notifiera }));
+
   let chefssats: NdChefssats | null = null;
   if (chefsrader) {
     const namn = new Map(personer.map((p) => [p.id, fullName(p)]));
@@ -131,5 +133,5 @@ export async function byggProvision(supabase: SupabaseClient, user: CurrentUser)
     };
   }
 
-  return { ...ut, ovriga: ut.ovriga.filter((x) => !borttagna.has(x.id)), historik, skriv: SKRIVLAGE.provision, chefssats };
+  return { ...ut, ovriga: ut.ovriga.filter((x) => !borttagna.has(x.id)), historik, skriv: SKRIVLAGE.provision, chefssats, konsekvens };
 }

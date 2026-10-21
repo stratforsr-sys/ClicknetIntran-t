@@ -3,7 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { svensktDatum } from "@/lib/klocka";
 import { farSeLonekostnad } from "@/lib/lonekostnad-server";
-import { sparaFodelsear, sparaLon, sparaSats } from "@/app/(app)/lonekostnad/actions";
+import { raknaPeriod, sparaFodelsear, sparaIntakt, sparaLon, sparaSats } from "@/app/(app)/lonekostnad/actions";
 import { nivaFor } from "@/lib/nav2/forma";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
 
@@ -27,6 +27,10 @@ export const dynamic = "force-dynamic";
  *     två rader med samma dag när `applies_to` är null, så repots upsert
  *     ersätter inte av sig själv.
  *   - Skatteverkets rättelse: samma två rörelser för varje rad.
+ *
+ * Gamla Nav G steg 3 (svar 14): intäkterna per löneperiod (`intakt` =
+ * `sparaIntakt`, en rad per person) och beräkningen (`rakna` = `raknaPeriod`),
+ * alltså täckningsgraden som gamla /lonekostnad visade.
  * ===========================================================================
  *
  * VEM: den som har `payroll_cost_viewer` (repots krav, K26) och är superadmin
@@ -253,6 +257,28 @@ export async function POST(request: Request) {
         if (!/^\d{4}$/.test(ar) || +ar < 1900 || +ar > max) return svar({ fel: "Året ser inte rimligt ut. Det ska vara ett fyrsiffrigt årtal för någon som är minst 15 år." }, 400);
         const s = await sparaFodelsear({}, form({ employee_id: vem, birth_year: ar }));
         return s.fel ? svar({ fel: s.fel }, 400) : svar({ ok: s.ok ?? "Födelseåret är sparat." });
+      }
+
+      case "intakt": {
+        const period = String(b.period ?? "");
+        if (!UUID.test(period)) return svar({ fel: "Okänd löneperiod." }, 400);
+        const rader = (Array.isArray(b.rader) ? (b.rader as { vem: string; belopp: unknown }[]) : []).slice(0, 100);
+        let n = 0;
+        for (const r of rader) {
+          const belopp = String(r.belopp ?? "").replace(/\s/g, "");
+          if (!UUID.test(String(r.vem ?? "")) || !/^\d+$/.test(belopp)) continue;
+          const s = await sparaIntakt({}, form({ period_id: period, employee_id: r.vem, amount: belopp }));
+          if (s.fel) return svar({ fel: n ? `${n} intäkter sparade, sedan: ${s.fel}` : s.fel }, 400);
+          n++;
+        }
+        return n ? svar({ ok: `${n} ${n === 1 ? "intäkt" : "intäkter"} sparade. Räkna perioden för att se täckningsbidraget.` }) : svar({ fel: "Skriv intäkten i hela kronor." }, 400);
+      }
+
+      case "rakna": {
+        const period = String(b.period ?? "");
+        if (!UUID.test(period)) return svar({ fel: "Okänd löneperiod." }, 400);
+        const s = await raknaPeriod({}, form({ period_id: period }));
+        return s.fel ? svar({ fel: s.fel }, 400) : svar({ ok: s.ok ?? "Perioden är räknad." });
       }
 
       default:

@@ -84,6 +84,8 @@ export type NdProvision = {
   ovriga: { id: string; vemId: string; m: string; belopp: number; skal: string; bokford: boolean }[];
   /** Chefens sats (0050), bara for superadmin. Annars null. */
   chefssats?: NdChefssats | null;
+  /** Konsekvenstrappan for ogiltig franvaro (0037), i ordning. Alla ser den; saljchef och VD andrar (`malchef`). */
+  konsekvens?: { ordning: number; antal: number; manader: number; atgard: string; notifiera: boolean }[];
 };
 
 /**

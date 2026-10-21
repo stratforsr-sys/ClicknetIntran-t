@@ -29,7 +29,9 @@ behörigheter som här: du ser bara det du får se.
   enheter, och du väljer själv vad Nav ska kalla dig.
 - **Satser och löner**, för den som har behörigheten för lönekostnad. En
   superadmin med behörigheten ändrar satserna, lönerna och födelseåren där,
-  och lägger in Skatteverkets rättelser med en knapp.
+  och lägger in Skatteverkets rättelser med en knapp. Under Intäkter och
+  täckningsgrad matas intäkten in per löneperiod, och Nav räknar vad som
+  blev kvar.
 - **Tid**, **Frånvaro** och **Uppgifter**, med samma regler som här. I Uppgifter
   väljer du dagens tre, planerar och avslutar dagen, skriver första steget och
   påminner den du väntar på. Där lägger du upp ett projekt, bjuder in
@@ -122,6 +124,8 @@ behörigheter som här: du ser bara det du får se.
   före provisionsmotorn visar lönesystemets summa när ekonomi lagt in den.
   Under Regler sätter superadmin säljchefens ersättning: övertäcket, satsen
   på egen försäljning och vem som får övertäcket, från en dag man väljer.
+  Säljchef och VD ändrar stegen för ogiltig frånvaro där, och ekonomi
+  markerar en fastställd månad som utbetald under Perioder.
 - **Kalendern**: din kalender och, efter delningsnivån, kollegornas. Möten
   går att ändra efteråt, var och en väljer sin egen påminnelse, och ett möte
   kan vara privat eller upprepas varje månad. Skriv en e-postadress i

@@ -5,6 +5,42 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-21 · Nav 2.0, gamla Navs sista funktioner G, steg 2–4: konsekvenstrappan, Utbetald, intäkterna och täckningsgraden, och vägarna (ingen ny migration)
+
+- **Konsekvenstrappan** (svar 13): kortet Ogiltig frånvaro under Provision →
+  Regler visar trappan ur `consequence_rule` (`ND.provision.konsekvens`) i
+  stället för utkastets fasta text.
+  - Säljchef och VD (`malchef`) har "Ändra stegen": antal gånger, inom hur
+    många månader, följden och notisen per steg, plus lägga till och ta bort
+    det sista steget.
+  - Rutten `konsekvens` anropar repots `taBortKonsekvenssteg` och
+    `sparaKonsekvenssteg`, och skickar bara de steg som ändrats.
+  - Trappan gäller framåt (steget fryses på händelsen), och ett steg som en
+    beslutad händelse pekar på går inte att ta bort (23503).
+  - Tid → Scheman och regler: "Trappan ändras under Provision → Regler" är nu
+    en länk dit.
+- **Markera utbetald** (svar 13): en knapp på varje fastställd månad i
+  Perioder, för ekonomi och VD (`bokforare`). Rutten `utbetald` anropar
+  `markeraUtbetald`.
+- **Intäkterna och täckningsgraden** (svar 14): kortet "Intäkter och
+  täckningsgrad" sist i Inställningar → Satser och löner.
+  - Kortet visar de sex senaste löneperioderna, och per person kostnaden,
+    intäkten och bidraget.
+  - Summan visar lönekostnad, intäkt och täckningsbidrag, och break-even när
+    täckningsgraden är satt.
+  - Rutterna `intakt` (= `sparaIntakt`) och `rakna` (= `raknaPeriod`) ligger
+    i `/nav2/satser`. Läsningen `ND.satsdata.perioder` görs med den
+    inloggades token.
+  - Repots motor (`avgiftssats`, `hamtaSatser`) räknar nu som utkastets
+    `satsAvgift` med 0190:s nya sorter: ingen avgift från `no_fee_age_min`,
+    och de ungas egen sats `employer_fee_young` före den nedsatta. Utan
+    raderna blir svaret som förut, och `test:lonekostnad` är grönt.
+- **Vägarna:** `/lonekostnad` och `/lonekostnad/satser` öppnar Inställningar
+  → Satser och löner, `/provision/regler` Regler, `/provision/mal` Månadsmål
+  och `/provision/underlag/<månad>` underlaget i Perioder. De står i `SJALV`,
+  och `/lonekostnad`, `/provision/regler` och `/provision/underlag` är borta
+  ur `SKALNAV`. Ingen notis eller inget mejl pekade dit.
+
 ## 2026-10-21 · Nav 2.0, gamla Navs sista funktioner E, svaren: mallar som går att ändra och ångra, och bilagor i redaktören (ingen migration)
 
 - **Ändra och lägga vilande** (beställaren 2026-10-21: ja): en mall i

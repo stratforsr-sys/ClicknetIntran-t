@@ -7404,6 +7404,26 @@ body.nd-riktig .proto{display:none}
 .ndgu-kort .pacts .tlink{margin-right:auto}
 @media (max-width:767px){.ndgu-kort{left:16px!important;right:16px;width:auto;top:auto!important;bottom:16px}}
 @media (prefers-reduced-motion:reduce){.ndgu-hal{transition:none}}
+/* Gamla Nav G: konsekvenstrappan (Provision → Regler, Ogiltig frånvaro) och intäkterna (Satser och löner). */
+#pvFranvaroRegel .pv-kslista{list-style:none;margin:4px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+#pvFranvaroRegel .pv-kslista li{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:10px 12px;border-radius:12px;background:var(--surface-2)}
+#pvFranvaroRegel .pv-kslista b{font-size:13.5px;min-width:52px}
+#pvFranvaroRegel .pv-kslista .pv-trin .uin{width:56px}
+#pvFranvaroRegel .pv-kslista select.uin{width:auto;padding:6px 9px;font-size:13px}
+.pv-ksnot{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-3)}
+.pv-ksnot input{accent-color:var(--brand)}
+.pv-ksplus{margin-top:8px}
+.sats-tgsum{margin-top:12px}
+.sats-tglista{list-style:none;margin:12px 0;padding:0;display:flex;flex-direction:column}
+.sats-tglista li{display:grid;grid-template-columns:minmax(0,1fr) 92px 112px 92px;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+.sats-tglista li:last-child{border-bottom:0}
+.sats-tglista li>span:not(:first-child){text-align:right}
+.sats-tglista .sats-tgh{font-size:12px;color:var(--prf-ink-3);padding-top:0}
+.sats-tglista .prf-in{height:32px;text-align:right}
+.sats-tgn{display:flex;align-items:center;gap:8px;min-width:0}
+.sats-tgn>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sats-tgneg{color:var(--danger)}
+@media (max-width:600px){.sats-tglista li{grid-template-columns:minmax(0,1fr) 96px;row-gap:4px}.sats-tglista .sats-tgh{display:none}.sats-tglista li>span:nth-child(2){display:none}}
 /* Chefens sats (Provision → Regler): tre rutor i det halvbreda kortet, och mottagaren bredvid procentfälten. */
 .pv-trin select.uin{width:auto;max-width:100%;text-align:left}
 #pvChefRegel .chead h2{white-space:nowrap}
@@ -27094,6 +27114,99 @@ pvReglerVy = function(){
     ${c.rader.length > 1 ? `<details class="pv-versioner"><summary>Versioner, ${c.rader.length}</summary><ul>${c.rader.map(r => `<li><span class="num">${oDat(r.fran)}${r.till ? ` – ${oDat(frPlus(r.till, -1))}` : ' och framåt'}</span><span>${esc(r.vem)} · ${ndPvCsPct(r.overtack)} övertäck · ${ndPvCsPct(r.egen)} egen${r.av ? ` · satt av ${esc(r.av)}` : ''}</span></li>`).join('')}</ul></details>` : ''}</section>`;
   return h.slice(0, i) + ny + h.slice(j);
 };
+/* ---------- Gamla Nav G: konsekvenstrappan och Utbetald (svar 13) ---------- */
+// Kortet "Ogiltig frånvaro" visar trappan ur consequence_rule (ND.provision.konsekvens), och säljchef och VD (malchef)
+// ändrar den här med repots sparaKonsekvenssteg och taBortKonsekvenssteg. Trappan är inte versionerad: steget fryses
+// på händelsen när den godkänns, så en ändring gäller framåt av sig själv. Ekonomi och VD (bokforare) markerar en
+// fastställd månad som utbetald i Perioder (markeraUtbetald).
+const NDKSORD = ['', 'Första', 'Andra', 'Tredje', 'Fjärde', 'Femte', 'Sjätte', 'Sjunde', 'Åttonde', 'Nionde', 'Tionde'];
+const NDKSTAL = ['noll', 'en', 'två', 'tre', 'fyra', 'fem', 'sex', 'sju', 'åtta', 'nio', 'tio', 'elva', 'tolv'];
+const NDKSATG = {varning:['Varning', 'varning.'], skriftlig_erinran:['Skriftlig erinran', 'skriftlig erinran.'], bonusforlust:['Bonusförlust', 'volymbonusen och K&amp;V-bonusen för den månaden faller, och orderräknaren börjar om från noll.'], arende:['Personalärende', 'ett personalärende.']};
+const ndKs = () => ndP() && ndP().konsekvens;
+const ndKsText = x => `${x.antal === 1 ? 'Första gången' : `${NDKSORD[x.antal] || `${x.antal}:e`} gången inom ${x.manader === 1 ? 'en månad' : `${NDKSTAL[x.manader] || x.manader} månader`}`}: ${(NDKSATG[x.atgard] || [x.atgard, esc(x.atgard)])[1]}`;
+function ndKsFel(steg){
+  for (const x of steg){
+    if (!(Number.isInteger(x.antal) && x.antal >= 1 && x.antal <= 20)) return `Steg ${x.ordning}: antalet gånger är ett heltal från 1 till 20.`;
+    if (!(Number.isInteger(x.manader) && x.manader >= 1 && x.manader <= 24)) return `Steg ${x.ordning}: perioden är 1 till 24 månader.`;
+  }
+  return null;
+}
+function ndKsForm(){
+  const a = S.pvKsAndra, nu = ndKs(), fel = ndKsFel(a.steg);
+  const andradeSteg = a.steg.filter(x => { const f = nu.find(y => y.ordning === x.ordning); return !f || ['antal', 'manader', 'atgard', 'notifiera'].some(k => f[k] !== x[k]); });
+  const borta = nu.filter(f => !a.steg.some(x => x.ordning === f.ordning)), andrat = andradeSteg.length + borta.length;
+  return `<div class="pv-trform"><ol class="pv-kslista">${a.steg.map((x, i) => {
+      const f = nu.find(y => y.ordning === x.ordning), and = k => !f || f[k] !== x[k] ? 'andrad' : '';
+      return `<li><b>Steg ${x.ordning}</b><label class="pv-trin"><input class="uin num ${and('antal')}" data-pvks="${i}|antal" value="${Number.isNaN(x.antal) ? '' : x.antal}" inputmode="numeric" aria-label="Antal gånger, steg ${x.ordning}"><span>${x.antal === 1 ? 'gång' : 'gånger'} inom</span></label><label class="pv-trin"><input class="uin num ${and('manader')}" data-pvks="${i}|manader" value="${Number.isNaN(x.manader) ? '' : x.manader}" inputmode="numeric" aria-label="Månader, steg ${x.ordning}"><span>mån</span></label><select class="uin ${and('atgard')}" data-pvks="${i}|atgard" aria-label="Följd, steg ${x.ordning}">${Object.entries(NDKSATG).map(([k, [l]]) => `<option value="${k}" ${x.atgard === k ? 'selected' : ''}>${l}</option>`).join('')}</select><label class="pv-ksnot"><input type="checkbox" data-pvks="${i}|notifiera" ${x.notifiera ? 'checked' : ''}><span>Notis</span></label></li>`; }).join('')}</ol>
+    <div class="pacts pv-ksplus"><button class="tlink" data-pvksny>Lägg till ett steg</button>${a.steg.length ? `<button class="tlink" data-pvksbort>Ta bort steg ${a.steg[a.steg.length - 1].ordning}</button>` : ''}</div>
+    ${fel ? `<p class="frb danger">${I('fel')}<span>${fel}</span></p>` : ''}
+    <div class="pacts"><button class="btn btn-p btn-sm" data-pvksspara ${fel || !andrat ? 'disabled' : ''}>${andrat ? 'Spara trappan' : 'Ändra ett steg först'}</button><button class="tlink" data-pvksavbryt>Avbryt</button></div>
+    <p class="pv-kf">Trappan gäller framåt. En händelse som redan godkänts behåller sitt steg, och ett steg som en beslutad händelse pekar på går inte att ta bort.</p></div>`;
+}
+const _ndPvRegler2 = pvReglerVy;
+pvReglerVy = function(){
+  const h = _ndPvRegler2(), ks = ndKs();
+  if (!ks) return h;
+  const i = h.indexOf('<section class="card" id="pvFranvaroRegel">'); if (i < 0) return h;
+  const j = h.indexOf('</section>', i) + '</section>'.length, a = S.pvKsAndra, kan = ndP().malchef && S.role === 'chef';
+  const ny = `<section class="card" id="pvFranvaroRegel"><div class="chead"><h2>Ogiltig frånvaro</h2>${kan && !a ? '<span class="end"><button class="btn btn-s btn-sm" data-pvksandra>Ändra stegen</button></span>' : ''}</div>
+    ${a ? ndKsForm() : `<ul class="pv-regl">${ks.length ? ks.map(x => `<li>${ndKsText(x)}</li>`).join('') : '<li>Ingen trappa är satt: en godkänd ogiltig frånvaro får ingen följd.</li>'}<li>Grundprovisionen och övrig bonus rörs aldrig. Sen ankomst räknas aldrig.</li></ul>`}</section>`;
+  return h.slice(0, i) + ny + h.slice(j);
+};
+// Perioder: Markera utbetald på en fastställd månad, för ekonomi och VD.
+const _ndPvPerioder = pvPerioderVy;
+pvPerioderVy = function(){
+  let h = _ndPvPerioder();
+  if (!ndP() || !ndP().bokforare) return h;
+  Object.entries(S.pvPerioder || {}).forEach(([m, p]) => { if (p.status !== 'faststalld') return;
+    h = h.replace(new RegExp(`(data-pvunderlag="${m}" aria-pressed="(?:true|false)">Underlag</button>)`), `$1<button class="btn btn-s btn-sm" data-pvutbetald="${m}">Markera utbetald</button>`); });
+  // Listan visar de tre senaste månaderna. En äldre fastställd månad som inte är utbetald nämns under den, så att den går att markera.
+  const visade = pvManader().slice(0, 3), aldre = Object.entries(S.pvPerioder || {}).filter(([m, p]) => p.status === 'faststalld' && !visade.includes(m)).map(([m]) => m).sort();
+  if (aldre.length) h = h.replace(/<\/ul>(\s*<p class="pv-kf">En fastställd)/, `</ul><p class="frb info">${I('kal')}<span>${pvStor(aldre.map(pvManLang).join(' och '))} ${aldre.length === 1 ? 'är fastställd men inte markerad som utbetald' : 'är fastställda men inte markerade som utbetalda'}. ${aldre.map(m => `<button class="tlink inl" data-pvutbetald="${m}">Markera ${pvManLang(m)} utbetald</button>`).join(' · ')}</span></p>$1`);
+  return h;
+};
+// Tid → Scheman och regler: "Trappan ändras under Provision → Regler" går dit.
+if (typeof ndTidRegler === 'function'){ const _ndTidRegler = ndTidRegler; ndTidRegler = function(...a){ return _ndTidRegler.apply(this, a).replace('Trappan ändras under Provision → Regler.', '<button class="tlink inl" data-ndpvregler>Trappan ändras under Provision → Regler.</button>'); }; }
+// De gamla adresserna (Gamla Nav G, ndGa i ndskal.js): /provision/regler, /provision/mal och /provision/underlag/<månad>.
+// Målen och underlaget är chefens (säljchef, VD och ekonomi); för alla andra öppnas Provision som vanligt.
+function ndPvGa(sub, a, b){
+  if (!ndP() || b) return false;
+  const chef = S.role === 'chef' && ndP().chefsvy;
+  if (sub === 'regler' && !a){ pvGa(); S.pvFlik = 'regler'; render(); return true; }
+  if (sub === 'mal' && !a){ pvGa(); if (chef){ S.pvFlik = 'mal'; render(); } return true; }
+  if (sub === 'underlag' && /^\d{4}-\d{2}$/.test(a || '')){ pvGa(); if (chef){ S.pvFlik = 'perioder'; S.pvUnderlagM = a; render(); setTimeout(() => document.getElementById('pvDok')?.scrollIntoView({block:'start'}), 60); } return true; }
+  return false;
+}
+function ndPvTillRegler(id){ ndPvGa('regler'); if (id) setTimeout(() => document.getElementById(id)?.scrollIntoView({block:'center'}), 60); }
+document.addEventListener('click', e => {
+  if (!ndP()) return;
+  const b = e.target.closest && e.target.closest('button'); if (!b || !b.dataset) return;
+  const d = b.dataset, stopp = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+  if (d.ndpvregler !== undefined){ stopp(); ndPvTillRegler('pvFranvaroRegel'); return; }
+  if (S.view !== 'provision') return;
+  if (d.pvutbetald){ stopp(); ndPvPost('utbetald', {manad:d.pvutbetald}); return; }
+  if (d.pvksandra !== undefined){ stopp(); S.pvKsAndra = {steg:ndKs().map(x => ({...x}))}; render(); return; }
+  if (d.pvksavbryt !== undefined){ stopp(); S.pvKsAndra = null; render(); return; }
+  if (d.pvksny !== undefined && S.pvKsAndra){ stopp(); const st = S.pvKsAndra.steg, s = st[st.length - 1]; st.push({ordning:s ? s.ordning + 1 : 1, antal:s && Number.isInteger(s.antal) ? s.antal + 1 : 1, manader:s && Number.isInteger(s.manader) ? s.manader : 3, atgard:'varning', notifiera:true}); render(); return; }
+  if (d.pvksbort !== undefined && S.pvKsAndra){ stopp(); S.pvKsAndra.steg.pop(); render(); return; }
+  if (d.pvksspara !== undefined && S.pvKsAndra){ stopp();
+    const a = S.pvKsAndra, nu = ndKs(); if (ndKsFel(a.steg)) return;
+    const steg = a.steg.filter(x => { const f = nu.find(y => y.ordning === x.ordning); return !f || ['antal', 'manader', 'atgard', 'notifiera'].some(k => f[k] !== x[k]); });
+    ndPvPost('konsekvens', {steg, borta:nu.filter(f => !a.steg.some(x => x.ordning === f.ordning)).map(f => f.ordning)}); return; }
+}, true);
+document.addEventListener('change', e => {
+  if (!ndP() || S.view !== 'provision' || !S.pvKsAndra || !e.target.dataset || !e.target.dataset.pvks) return;
+  const [i, k] = e.target.dataset.pvks.split('|'), x = S.pvKsAndra.steg[+i]; if (!x) return;
+  if (k === 'atgard'){ x.atgard = e.target.value; render(); }
+  if (k === 'notifiera'){ x.notifiera = e.target.checked; render(); }
+});
+document.addEventListener('input', e => {
+  if (!ndP() || S.view !== 'provision' || !S.pvKsAndra || !e.target.dataset || !e.target.dataset.pvks) return;
+  const [i, k] = e.target.dataset.pvks.split('|'), x = S.pvKsAndra.steg[+i]; if (!x || (k !== 'antal' && k !== 'manader')) return;
+  const r = e.target.value.replace(/\s/g, ''); x[k] = r === '' ? NaN : Number(r); clearTimeout(S._pvT);
+  S._pvT = setTimeout(() => { const p = e.target.selectionStart; render(); const el = document.querySelector(`[data-pvks="${i}|${k}"]`); if (el){ el.focus(); try { el.setSelectionRange(p, p); } catch(_){} } }, 300);
+});
+
 document.addEventListener('change', e => {
   if (!ndP() || S.view !== 'provision' || !S.pvChefAndra || !e.target.dataset) return;
   const d = e.target.dataset;
@@ -30150,13 +30263,13 @@ async function ndSatsPost(handling, data = {}, ladda = true){
   try {
     const r = await fetch('/nav2/satser', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
     const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
-    if (s.ok){ toast(s.ok); if (ladda){ try { sessionStorage.setItem('nd-sats', JSON.stringify({open:S.satsOpen})); } catch(_){} setTimeout(() => location.reload(), 700); } return s; }
+    if (s.ok){ toast(s.ok); if (ladda){ try { sessionStorage.setItem('nd-sats', JSON.stringify({open:S.satsOpen, tg:S.satsTgP || null})); } catch(_){} setTimeout(() => location.reload(), 700); } return s; }
     toast(s.fel || 'Det gick inte att spara.'); return s;
   } catch(_){ toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
 }
 // Efter en omladdning: tillbaka till Satser och löner, med samma sats öppen.
 (() => { if (!ndSd()) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-sats') || 'null'); sessionStorage.removeItem('nd-sats'); } catch(_){}
-  if (m) setTimeout(() => { prfGa('satser'); if (m.open){ S.satsOpen = m.open; render(); } }, 0); })();
+  if (m) setTimeout(() => { prfGa('satser'); if (m.tg) S.satsTgP = m.tg; if (m.open) S.satsOpen = m.open; if (m.open || m.tg) render(); }, 0); })();
 
 // Ny sats: utkastets kontroller (fel, och Ersätt när det redan finns en sats från dagen), sedan rutten.
 const _ndSatsSpara = satsSpara;
@@ -30204,6 +30317,54 @@ document.addEventListener('click', e => {
   if (!r.dbId){ toast('Satsen finns inte i Nav. Ladda om sidan.'); return; }
   ndSatsPost('agare', {id:r.dbId, agare:ndSatsId(A.agare), oversyn:A.oversyn || null, till:A.till || null});
 }, true);
+
+/* ---------- Gamla Nav G steg 3: intäkterna och täckningsgraden (svar 14) ---------- */
+// Per löneperiod, som gamla /lonekostnad: vad var och en kostade (cost_calculation), vad de drog in (revenue_entry,
+// sparaIntakt) och vad som blev kvar. "Räkna perioden" är repots raknaPeriod, med satserna och lönerna ovan.
+const ndTg = () => { const sd = ndSd(); return sd && sd.perioder ? sd.perioder : null; };
+function ndTgHtml(){
+  const P = ndTg(); if (!P) return '';
+  const andra = satsAndra(), hj = 'Per löneperiod: vad var och en kostade, vad de drog in och vad som blev kvar. Räknas med satserna och lönerna ovan.';
+  if (!P.length) return prfKort('sats-tg', 'Intäkter och täckningsgrad', hj, `<div class="prf-kb"><p class="prf-hj">Ingen löneperiod finns. Lönekostnaden räknas per löneperiod, eftersom frånvaron hämtas ur löneunderlaget i Tid.</p></div>`);
+  const p = P.find(x => x.id === S.satsTgP) || P[0], utk = (S.satsTgUtk || {})[p.id] || {}, rad = id => p.rader.find(x => x.vemId === id);
+  const ids = [...new Set([...p.personer, ...p.rader.map(x => x.vemId)])].map(id => [id, ndSatsNamn(id) || 'Okänd']).sort((a, b) => a[1].localeCompare(b[1], 'sv'));
+  const sum = f => p.rader.reduce((s, x) => s + (f(x) ?? 0), 0), har = f => p.rader.some(x => f(x) !== null);
+  const kr0 = v => satsKr(v), andrade = Object.keys(utk).length;
+  return prfKort('sats-tg', 'Intäkter och täckningsgrad', hj, `<div class="prf-kb">
+    <div class="segs" role="group" aria-label="Löneperiod">${P.map(x => `<button type="button" data-satstgp="${x.id}" aria-pressed="${x.id === p.id}">${satsDatumK(x.fran)} – ${satsDatumK(x.till)}</button>`).join('')}</div>
+    ${p.rader.length ? `<div class="brh-antal sats-tgsum"><div><span>Lönekostnad</span><b class="num">${kr0(sum(x => x.kostnad))}</b></div><div><span>Intäkt</span><b class="num">${har(x => x.intakt) ? kr0(sum(x => x.intakt)) : '–'}</b></div><div><span>Täckningsbidrag</span><b class="num">${har(x => x.bidrag) ? kr0(sum(x => x.bidrag)) : '–'}</b></div></div>
+      <p class="prf-hj">Räknad ${satsDatumK(p.raknad)}. Break-even för perioden: ${har(x => x.breakEven) ? kr0(sum(x => x.breakEven)) + ' sålt' : 'täckningsgraden är inte satt'}.</p>` : `<p class="prf-hj">${p.personer.length ? 'Perioden är inte räknad än.' : 'Löneperioden har inga rader än. Generera lönerapporten i Tid först.'}</p>`}
+    ${ids.length ? `<ul class="sats-tglista"><li class="sats-tgh" aria-hidden="true"><span>Person</span><span>Kostnad</span><span>Intäkt</span><span>Bidrag</span></li>${ids.map(([id, n]) => { const r = rad(id), v = id in utk ? utk[id] : p.intakter[id] ?? '';
+      return `<li><span class="sats-tgn">${avatar(n, 20)}<span>${esc(n)}</span></span><span class="num">${r ? kr0(r.kostnad) : '–'}</span><span>${andra ? `<input class="prf-in num" data-satstgi="${id}" value="${esc(String(v))}" inputmode="numeric" placeholder="–" aria-label="Intäkt för ${esc(n)}">` : `<span class="num">${p.intakter[id] !== undefined ? kr0(p.intakter[id]) : '–'}</span>`}</span><span class="num${r && r.bidrag !== null && r.bidrag < 0 ? ' sats-tgneg' : ''}">${r && r.bidrag !== null ? kr0(r.bidrag) : '–'}</span></li>`; }).join('')}</ul>` : ''}
+    ${andra && p.personer.length ? `<div class="prf-knappar"><button type="button" class="btn btn-s btn-sm" data-satstgspara ${andrade ? '' : 'disabled'}>${andrade ? `Spara ${andrade} ${andrade === 1 ? 'intäkt' : 'intäkter'}` : 'Spara intäkter'}</button><button type="button" class="btn btn-p btn-sm" data-satstgrakna>Räkna perioden</button></div>` : ''}
+    <p class="prf-hj">Utan månadslön räknas ingen kostnad, och utan täckningsgrad inget break-even. En ny beräkning ersätter den förra för perioden.</p></div>`);
+}
+const _ndTgSatsSek = satsSek;
+satsSek = function(){ const h = _ndTgSatsSek(); return ndTg() ? h.replace('<div class="prf-sr" aria-live="polite">', ndTgHtml() + '<div class="prf-sr" aria-live="polite">') : h; };
+if (ndTg()) PRFSOK.push(['sats-tg', 'satser', 'Intäkter och täckningsgrad', ['intäkt', 'intäkter', 'täckningsgrad', 'täckningsbidrag', 'break-even', 'lönekostnad', 'löneperiod']]);
+document.addEventListener('click', e => {
+  if (!ndTg()) return;
+  const t = e.target.closest && e.target.closest('button'); if (!t || !t.closest('#prfRuta')) return;
+  const d = t.dataset, P = ndTg(), p = P.find(x => x.id === S.satsTgP) || P[0];
+  if (d.satstgp){ e.preventDefault(); S.satsTgP = d.satstgp; render(); return; }
+  if (!p) return;
+  if (d.satstgspara !== undefined){ e.preventDefault();
+    const utk = (S.satsTgUtk || {})[p.id] || {}, rader = Object.entries(utk).map(([vem, belopp]) => ({vem, belopp:String(belopp).replace(/\s/g, '')}));
+    const fel = rader.find(r => r.belopp !== '' && !/^\d+$/.test(r.belopp)); if (fel){ toast(`Intäkten för ${ndSatsNamn(fel.vem) || 'personen'} är inte ett heltal i kronor.`); document.querySelector(`[data-satstgi="${fel.vem}"]`)?.focus(); return; }
+    if (!rader.some(r => r.belopp !== '')){ toast('Skriv en intäkt i hela kronor först.'); return; }
+    ndSatsPost('intakt', {period:p.id, rader:rader.filter(r => r.belopp !== '')}); return; }
+  if (d.satstgrakna !== undefined){ e.preventDefault();
+    if (Object.keys((S.satsTgUtk || {})[p.id] || {}).length){ toast('Spara intäkterna först, så räknas de med.'); return; }
+    ndSatsPost('rakna', {period:p.id}); return; }
+}, true);
+document.addEventListener('input', e => {
+  if (!ndTg() || !e.target.dataset || !e.target.dataset.satstgi) return;
+  const P = ndTg(), p = P.find(x => x.id === S.satsTgP) || P[0], id = e.target.dataset.satstgi;
+  const m = (S.satsTgUtk = S.satsTgUtk || {})[p.id] = (S.satsTgUtk[p.id] || {}), sparat = p.intakter[id] !== undefined ? String(p.intakter[id]) : '';
+  if (e.target.value.replace(/\s/g, '') === sparat) delete m[id]; else m[id] = e.target.value;
+  const n = Object.keys(m).length, b = document.querySelector('[data-satstgspara]');
+  if (b){ b.disabled = !n; b.textContent = n ? `Spara ${n} ${n === 1 ? 'intäkt' : 'intäkter'}` : 'Spara intäkter'; }
+});
 
 /* =====================================================================
    NAV 2.0 I RIKTIGT LÄGE: REKRYTERING (prefix nd), v47
@@ -32572,8 +32733,8 @@ if (ndLd()) NDKOPPLAD.add('leads');
 
 /* ---------- Vägarna ---------- */
 // Adresser som alltid hör till nuvarande Nav, även när vyn de ligger under är kopplad.
-const SKALNAV = ['/tid/sparrar', '/sparrar', '/schema', '/admin', '/lonekostnad', '/satser', '/avtal/mallar', '/avtal/nytt', '/avtal/bifoga',
-  '/logga-in', '/byt-losenord', '/uppstart', '/design', '/kv/regler', '/provision/regler', '/provision/underlag',
+const SKALNAV = ['/tid/sparrar', '/sparrar', '/schema', '/admin', '/satser', '/avtal/mallar', '/avtal/nytt', '/avtal/bifoga',
+  '/logga-in', '/byt-losenord', '/uppstart', '/design', '/kv/regler',
   '/arenden/statistik', '/kalender/delning', '/kalender/overlamning', '/franvaro/regler', '/regler', '/filer', '/auth'];
 const skalNav = h => SKALNAV.some(p => h === p || h.startsWith(p + '/') || h.startsWith(p + '?'));
 function skalVy(h){
@@ -32593,6 +32754,8 @@ ndGa = function(href){
   const nav = () => { location.assign(h); };
   // Händelseloggen är bara superadmins (beställaren 2026-10-20): alla andra får ett besked, inte nuvarande Navs /logg.
   if (vy === 'logg' && (S.role !== 'chef' || (ND && !ND.logg))){ toast('Händelseloggen visas bara för superadmin.'); return; }
+  // Gamla Nav G: /lonekostnad och /lonekostnad/satser är Inställningar → Satser och löner.
+  if (bas === '/lonekostnad' || bas === '/lonekostnad/satser') return prfGa('satser');
   if (!vy || skalNav(bas) || !ndKopplad(vy)) return nav();
   switch (vy){
     case 'hem': S.view = 'hem'; render(); window.scrollTo(0, 0); return;
@@ -32618,7 +32781,8 @@ ndGa = function(href){
     case 'franvaro': { if (sub && /^[0-9a-f-]{36}$/.test(sub) && !d[2]){ ndFrGaAnsokan(sub); return; } if (sub && !['attest', 'sjuk', 'planering', 'ny'].includes(sub)) return nav(); frGa(sub === 'ny' ? null : sub); return; }
     case 'fel': if (sub === 'nytt'){ felRapportera(); return; } if (sub) return nav(); felGa(); return;
     case 'order': { const o = sub && ORDER.find(x => String(x.nr) === sub || String(x.id) === sub); if (sub && !o) return nav(); ordGa(o ? o.nr : null); return; }
-    case 'provision': if (sub) return nav(); pvGa(); return;
+    // Gamla Nav G: /provision/regler, /provision/mal och /provision/underlag/<månad> (ndPvGa i ndpv.js).
+    case 'provision': if (sub && !ndPvGa(sub, d[2], d[3])) return nav(); if (!sub) pvGa(); return;
     case 'coachning': cnGa(h); return;
     // Gamla Nav C: /personal/team (teamen i fliken Personal) och /personal/ny (Lägg upp).
     case 'anstallda': { if (sub === 'team' && !d[2]){ ndAeGaTeam(); return; } if (sub === 'ny' && !d[2]){ ndAeGaNy(); return; } if (sub && (!AEPERS.some(p => String(p[0]) === sub) || d[2] === 'registerutdrag')) return nav(); aeGaSrc(bas); return; }
