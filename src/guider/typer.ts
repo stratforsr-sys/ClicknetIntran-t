@@ -83,7 +83,11 @@ export type Guide = {
    */
   version: number;
 
-  /** Tvingar om alla vid versionshöjningen. Utan den gäller nya versionen bara nya. */
+  /**
+   * Tvingar om alla vid versionshöjningen. Utan den gäller nya versionen bara nya.
+   * Fristen för omtaget räknas från natten versionen kom i bruk, inte från
+   * startdatumet — se `infort` i `personlage()`.
+   */
   omtag?: boolean;
 
   /**
@@ -136,9 +140,8 @@ export type Guide = {
    * Räknas inte när navet avgör om någon är klar med sina guider (onboardad,
    * påminnelsen i klockan, chefens rad och nattjobbets ärende). Turen finns i
    * listan och går att göra, men ingen blir "inte klar" av att ha hoppat över
-   * den. Nav 2.0:s två nya turer har den tills beställaren sagt om de ska
-   * krävas (2026-10-20): annars hade varje anställd blivit "inte klar" igen och
-   * nattjobbet lagt ett ärende per person.
+   * den. Ingen tur har den i dag: beställaren ville 2026-10-21 att alla gör
+   * alla turerna i Nav 2.0, även de två nya.
    */
   frivillig?: boolean;
 

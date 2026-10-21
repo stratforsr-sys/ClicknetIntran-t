@@ -48,6 +48,7 @@ import {
   starStilla,
   startSteg,
   synligaSteg,
+  versionsnyckel,
 } from "../src/lib/guider.ts";
 
 let fel = 0;
@@ -286,7 +287,8 @@ console.log("\n\x1b[1mAtt återuppta en tur\x1b[0m");
 
 console.log("\n\x1b[1mKlar, och klar nog\x1b[0m");
 {
-  const g = startguiden();
+  // Startturen som version 1 utan omtag: proven nedan höjer den själva.
+  const g = { ...startguiden(), version: 1, omtag: false };
   const rad = (over) => ({ guide_slug: g.slug, version: 1, steg: 0, completed_at: null, ...over });
 
   ok("ingen rad är inte klar", arKlar(g, null) === false);
@@ -393,12 +395,18 @@ console.log("\n\x1b[1mChefens vy: hur långt någon kommit\x1b[0m");
     ok("allt klart: markeras inte", starStilla(l) === false);
   }
 
-  // Frivilliga turer (Nav 2.0:s nya, tills beställaren sagt annat) räknas inte.
+  // Beställaren 2026-10-21: alla gör om turerna i Nav 2.0, och alla turer krävs.
   {
-    const frivilliga = paket.filter((g) => g.frivillig);
-    ok("det finns frivilliga turer i säljarens paket", frivilliga.length >= 1);
-    const rader = paket.filter((g) => !g.frivillig).map((g) => klarRad(g, 1));
-    ok("utan de frivilliga: onboardad", personlage(paket, rader, datum(20), NU).onboardad === true);
+    const hojda = GUIDER.filter((g) => g.version > 1);
+    ok("varje höjd tur har omtag", hojda.length >= 10 && hojda.every((g) => g.omtag === true), hojda.filter((g) => !g.omtag).map((g) => g.slug).join(", "));
+    ok("ingen tur är frivillig", GUIDER.every((g) => !g.frivillig));
+  }
+
+  // En frivillig tur räknas inte, om någon får flaggan igen (se typer.ts).
+  {
+    const paket2 = paket.map((g, i) => (i === paket.length - 1 ? { ...g, frivillig: true } : g));
+    const rader = paket2.filter((g) => !g.frivillig).map((g) => klarRad(g, 1));
+    ok("utan den frivilliga: onboardad", personlage(paket2, rader, datum(20), NU).onboardad === true);
   }
 
   // Fristen.
@@ -417,6 +425,30 @@ console.log("\n\x1b[1mChefens vy: hur långt någon kommit\x1b[0m");
     const paket2 = [g0, ...paket.slice(1)];
     const rader = paket.map((g) => klarRad(g, 1));
     ok("omtag återöppnar paketet", personlage(paket2, rader, datum(3), NU).onboardad === false);
+  }
+
+  /**
+   * Fristen för en ny version räknas från natten den kom i bruk (`infort`, ur
+   * nattjobbet), inte från startdatumet. Annars hade bytet till Nav 2.0 gjort
+   * varje anställd sen samma natt — deras startdatum ligger månader bakåt.
+   */
+  {
+    const veteran = datum(200);
+    const omtagna = paket.map((g) => ({ ...g, version: g.version + 1, omtag: true }));
+    const gamlaRader = paket.map((g) => klarRad(g, 100));
+    const ibruk = (d) => new Map(omtagna.map((g) => [versionsnyckel(g), dagarSen(d)]));
+    ok("utan infort: omtaget gör veteranen sen direkt (därav infort)", personlage(omtagna, gamlaRader, veteran, NU).forsenad === true);
+    ok("ingen version i bruk än: ingen är sen", personlage(omtagna, gamlaRader, veteran, NU, new Map()).forsenad === false);
+    ok(`i bruk i ${FRIST_DAGAR - 1} dagar: inte sen`, personlage(omtagna, gamlaRader, veteran, NU, ibruk(FRIST_DAGAR - 1)).forsenad === false);
+    ok(`i bruk i ${FRIST_DAGAR + 1} dagar: sen`, personlage(omtagna, gamlaRader, veteran, NU, ibruk(FRIST_DAGAR + 1)).forsenad === true);
+    ok(
+      "anställd efter bytet: fristen räknas från startdatumet",
+      personlage(omtagna, [], datum(FRIST_DAGAR + 1), NU, ibruk(60)).forsenad === true &&
+        personlage(omtagna, [], datum(FRIST_DAGAR - 1), NU, ibruk(60)).forsenad === false,
+    );
+    ok("utan startdatum aldrig sen, även med infort", personlage(omtagna, [], null, NU, ibruk(60)).forsenad === false);
+    ok("gjort om allt: inte sen", personlage(omtagna, omtagna.map((g) => klarRad(g, 1)), veteran, NU, ibruk(60)).forsenad === false);
+    ok("versionsnyckeln bär slug och version", versionsnyckel({ slug: "a", version: 3 }) === "a@3");
   }
 
   ok("dagarSedan på null är null", dagarSedan(null, NU) === null);

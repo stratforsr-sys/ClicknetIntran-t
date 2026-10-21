@@ -20,11 +20,16 @@ import type { Guide } from "./typer.ts";
  * förut. Alla turer ligger också under Utbildning → Biblioteket → Lär dig Nav.
  * ===========================================================================
  *
- * SLUGARNA ÄR DE GAMLA där momentet finns kvar, med versionen höjd, så att den
- * som gått igenom en tur inte behöver göra om den (`omtag` är inte satt; det är
- * beställarens beslut). Avvikelser (rasten) och K&V har ingen tur: rasten är
- * borttagen och K&V är dold tills vidare. Två turer är nya, ur utkastets kurs
- * "Kom igång med Nav": Dagens tre i Uppgifter och Fråga Nav.
+ * SLUGARNA ÄR DE GAMLA där momentet finns kvar, med versionen höjd och
+ * `omtag: true`: alla gör om turerna i Nav 2.0, även den som gått igenom dem i
+ * gamla Nav (beställaren 2026-10-21: "Det är viktigt"). Avvikelser (rasten) och
+ * K&V har ingen tur: rasten är borttagen och K&V är dold tills vidare. Två
+ * turer är nya, ur utkastets kurs "Kom igång med Nav": Dagens tre i Uppgifter
+ * och Fråga Nav. De krävs som de andra.
+ *
+ * Fristen för en ny version räknas från natten den kom i bruk, inte från
+ * startdatumet (`infort` i `personlage()`, bokfört av nattjobbet). Annars hade
+ * alla som redan jobbar varit över fristen första natten efter bytet.
  */
 
 const MENY = (etikett: string) => `.ritem[data-rlsl="${etikett}"]`;
@@ -34,6 +39,7 @@ export const KOM_IGANG_NAV2: Guide = {
   titel: "Kom igång i Nav",
   beskrivning: "Var allt ligger, och vad du gör härifrån. Fyra minuter.",
   version: 2,
+  omtag: true,
   minuter: 4,
   roller: [],
   vidForstaInloggningen: true,
@@ -119,7 +125,6 @@ export const UPPGIFTER_NAV2: Guide = {
   version: 1,
   minuter: 2,
   roller: [],
-  frivillig: true,
   modul: "/uppgifter",
   steg: [
     {
@@ -162,6 +167,7 @@ export const RUTINER_NAV2: Guide = {
   titel: "Hitta en rutin",
   beskrivning: "Var arbetssätten står, och vad en kvittens betyder.",
   version: 2,
+  omtag: true,
   minuter: 2,
   roller: [],
   modul: "/rutiner",
@@ -199,6 +205,7 @@ export const NYHETER_NAV2: Guide = {
   titel: "Nyheter",
   beskrivning: "Besked från ledningen och det som är nytt i Nav.",
   version: 2,
+  omtag: true,
   minuter: 2,
   roller: [],
   modul: "/nyheter",
@@ -229,6 +236,7 @@ export const ARENDEN_NAV2: Guide = {
   titel: "Ärenden",
   beskrivning: "Frågor till ledningen som inte försvinner i en chatt.",
   version: 2,
+  omtag: true,
   minuter: 2,
   roller: [],
   modul: "/arenden",
@@ -259,6 +267,7 @@ export const FRANVARO_NAV2: Guide = {
   titel: "Ansök om ledighet",
   beskrivning: "Söka ledigt, sjukanmäla dig och se vad som är beslutat.",
   version: 2,
+  omtag: true,
   minuter: 2,
   roller: [],
   modul: "/franvaro",
@@ -289,6 +298,7 @@ export const STAMPLA_NAV2: Guide = {
   titel: "Stämpla in och ut",
   beskrivning: "Knappen, dagens rader och vad som händer om du glömmer.",
   version: 2,
+  omtag: true,
   minuter: 2,
   roller: [],
   krav: "stamplar",
@@ -327,6 +337,7 @@ export const AVTAL_NAV2: Guide = {
   titel: "Mitt avtal",
   beskrivning: "Ditt anställningsavtal, utan att fråga någon.",
   version: 2,
+  omtag: true,
   minuter: 1,
   roller: [],
   modul: "/avtal",
@@ -350,6 +361,7 @@ export const FEL_NAV2: Guide = {
   titel: "Rapportera fel",
   beskrivning: "Vad du gör när Nav gör fel, och varför det är värt en halv minut.",
   version: 2,
+  omtag: true,
   minuter: 1,
   roller: [],
   modul: "/fel",
@@ -374,6 +386,7 @@ export const ORDER_NAV2: Guide = {
   titel: "Lägg en order",
   beskrivning: "Ny order, vad som räknas och hur ordern tar sig vidare.",
   version: 2,
+  omtag: true,
   minuter: 3,
   roller: ["salesperson", "sales_manager", "ceo", "finance"],
   modul: "/order",
@@ -411,6 +424,7 @@ export const PROVISION_NAV2: Guide = {
   titel: "Din provision",
   beskrivning: "Månadens siffra, dagens order, takten och vägen till nästa bonus.",
   version: 3,
+  omtag: true,
   minuter: 3,
   roller: ["salesperson", "sales_manager", "ceo", "finance"],
   modul: "/provision",
@@ -450,6 +464,7 @@ export const PERSONAL_NAV2: Guide = {
   titel: "Anställda",
   beskrivning: "Det som kräver dig, och vad som händer när någon läggs upp.",
   version: 2,
+  omtag: true,
   minuter: 2,
   roller: ["sales_manager", "ceo", "admin"],
   modul: "/personal",
@@ -476,6 +491,7 @@ export const REKRYTERING_NAV2: Guide = {
   titel: "Rekrytering",
   beskrivning: "Kandidaterna, intervjuerna och det som väntar på dig.",
   version: 2,
+  omtag: true,
   minuter: 2,
   roller: ["sales_manager", "ceo", "admin"],
   modul: "/rekrytering",
@@ -506,6 +522,7 @@ export const LONERAPPORT_NAV2: Guide = {
   titel: "Lönerapport",
   beskrivning: "Underlaget per period, och vad som låser det.",
   version: 2,
+  omtag: true,
   minuter: 2,
   roller: ["finance", "sales_manager", "ceo", "admin"],
   steg: [
@@ -536,6 +553,7 @@ export const LONEKOSTNAD_NAV2: Guide = {
   titel: "Satser och löner",
   beskrivning: "Vad en säljare kostar, och varför siffran inte är ett löneunderlag.",
   version: 2,
+  omtag: true,
   minuter: 2,
   roller: [],
   behorighet: "payroll_cost_viewer",
@@ -567,7 +585,6 @@ export const FRAGA_NAV_NAV2: Guide = {
   version: 1,
   minuter: 1,
   roller: [],
-  frivillig: true,
   steg: [
     {
       ankare: ".rls-sok, .cmdk-btn",

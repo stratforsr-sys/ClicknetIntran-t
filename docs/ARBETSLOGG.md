@@ -5,6 +5,37 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-21 · Nav 2.0, Utbildning: alla gör om systemguiderna, och nattjobbet kan lägga sina ärenden (Gamla Nav F; ingen migration)
+
+Beställarens svar 2026-10-21: att alla gör om turerna i Nav 2.0 "är viktigt",
+de två nya ska inte bort, och Avvikelser och K&V får vara utan tur.
+
+- **Registret** `src/guider/nav2.ts`: de fjorton gamla slugarna har
+  `omtag: true`. Ett genomförande i gamla Nav räknas inte längre som klart, och
+  Lär dig Nav visar "Gör om". Dagens tre i Uppgifter och Fråga Nav är inte
+  längre `frivillig`: alla sexton krävs. Fältet `frivillig` finns kvar men
+  används inte.
+- **Fristen per tur** (`personlage(…, infort)` i `src/lib/guider.ts`): för en ny
+  version räknas den från natten versionen kom i bruk, inte från startdatumet.
+  Annars hade alla som redan jobbar varit över fristen första natten efter
+  bytet. Nattjobbet bokför natten i `audit_log` (`guide.version_infort`, en rad
+  för alla nya den natten; etikett i `loggforma.ts`), och gör det bara när
+  `SKRIVLAGE.utbildning` är på, eftersom framstegen inte sparas i läsläge. En
+  tur som inte står där har inte kommit i bruk, och ingen kan vara sen med den.
+- **Nattjobbets ärenden** (`src/lib/jobb/guider.ts`): inserten i `hr_case`
+  saknade `sla_hours` och `due_at`, som är NOT NULL utan standardvärde. Varje
+  försök föll, felet sväljdes, och jobbet rapporterade "forsenade: 5, arenden:
+  0" natt efter natt. Nu tar den svarstiden från kategorin `other` och fristen
+  från `frist()`, och kastar efter rundan om något ärende inte gick att lägga.
+  Texten pekar på Utbildning → Teamet och säger hur många turer som ska göras om.
+  Satsjobbet (`jobb/satser.ts`) och coachningsjobbet (`jobb/coachning.ts`) har
+  samma fel och är inte rättade här (coachningen: "forsenade: 10, arenden: 0").
+- **Påminnelsen i klockan** (`notiser-server.ts`): nästa tur väljs med `arKlar`,
+  inte bara `completed_at`. Annars hade ingen som gjort turen i gamla Nav blivit
+  påmind.
+- **Provet** `tests/guider.mjs`: omtag på varje höjd tur, ingen frivillig, och
+  fristen med och utan `infort`.
+
 ## 2026-10-21 · Nav 2.0, gamla Navs sista funktioner D: Uppgifter (ingen migration)
 
 - **Projekt:** "Nytt projekt" i projektkolumnen öppnar ett formulär (namn,

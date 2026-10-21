@@ -162,10 +162,16 @@ export const STILLASTAENDE_DAGAR = 3;
 
 /**
  * Så lång tid har man på sig att gå igenom hela sitt paket, räknat från
- * startdatumet. Utan spärrar är den ingen gräns utan en signal: det är den här
- * siffran nattjobbet larmar på. Ändras den ändras den här.
+ * startdatumet — eller, för en tur i ny version, från natten den kom i bruk
+ * (se `infort` i `personlage()`). Utan spärrar är den ingen gräns utan en
+ * signal: det är den här siffran nattjobbet larmar på. Ändras den ändras den här.
  */
 export const FRIST_DAGAR = 14;
+
+/** En guides version som nyckel, i nattjobbets bokföring av när den kom i bruk. */
+export function versionsnyckel(guide: Pick<Guide, "slug" | "version">): string {
+  return `${guide.slug}@${guide.version}`;
+}
 
 const DYGN = 24 * 60 * 60 * 1000;
 
@@ -204,12 +210,20 @@ export type Personlage = {
  * samtal. Därför är `stillestand` null i det fallet i stället för antalet dagar
  * sedan anställningen — vilket hade sett ut som ett larm om något som ingen
  * ännu haft en chans att göra fel.
+ *
+ * FRISTEN RÄKNAS PER TUR. Utan `infort` från startdatumet, som förut. Med den
+ * (`versionsnyckel` → när versionen kom i bruk, ur nattjobbet) från det senare
+ * av startdatumet och den natten. Annars hade en versionshöjning med `omtag`,
+ * eller en ny tur, gjort alla som redan jobbar sena samma natt: deras
+ * startdatum ligger månader bakåt. En tur som saknas i `infort` har inte kommit
+ * i bruk än, och ingen kan vara sen med den.
  */
 export function personlage(
   guider: Guide[],
   rader: Progress[],
   startdatum: string | null,
   nu: Date = new Date(),
+  infort?: ReadonlyMap<string, string>,
 ): Personlage {
   const forSlug = new Map(rader.map((r) => [r.guide_slug, r]));
   // Frivilliga turer räknas inte (se `frivillig` i typer.ts).
@@ -241,7 +255,18 @@ export function personlage(
 
   const onboardad = guider.length > 0 && klara === guider.length;
   const paborjad = rader.some((r) => r.steg > 0);
-  const dagarKvarISysslan = dagarSedan(startdatum, nu);
+  const sen = guider.some((guide) => {
+    if (arKlar(guide, forSlug.get(guide.slug))) return false;
+    let fran = startdatum;
+    if (infort) {
+      const ibruk = infort.get(versionsnyckel(guide));
+      if (!ibruk) return false;
+      // ISO-strängar jämförs i ordning: "2026-11-02T03:05…" > "2026-09-08".
+      if (fran && ibruk > fran) fran = ibruk;
+    }
+    const dagar = dagarSedan(fran, nu);
+    return dagar !== null && dagar > FRIST_DAGAR;
+  });
 
   return {
     klara,
@@ -250,8 +275,7 @@ export function personlage(
     senast,
     stillestand: paborjad ? dagarSedan(senast, nu) : null,
     onboardad,
-    forsenad:
-      !onboardad && dagarKvarISysslan !== null && dagarKvarISysslan > FRIST_DAGAR,
+    forsenad: !onboardad && sen,
   };
 }
 

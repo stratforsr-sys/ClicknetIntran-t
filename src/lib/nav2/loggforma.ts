@@ -215,6 +215,7 @@ const RUBRIK: Record<string, string> = {
   "gate.enabled": "Spärr påslagen",
   "guide.nudged": "Påminnelse om guide",
   "guide.onboarding_overdue": "Onboarding försenad",
+  "guide.version_infort": "Systemguider i ny version",
   "job.night_ok": "Nattjobbet kördes",
   "job.night_partial": "Nattjobbet kördes med fel",
   "journal.exported": "Arbetstidsjournal exporterad",
@@ -475,7 +476,7 @@ function objekt(r: RaHandelse, u: Uppslag): string {
     case "gate": return "Spärrarna";
     case "cost": return objPerson ?? "Lönekostnaden";
     case "calendar": return m.scope === "mine" ? "Eget kalenderflöde" : "Kalendern";
-    case "guide": return objPerson ?? person(m.employee_id) ?? "Guiderna";
+    case "guide": return objPerson ?? person(m.employee_id) ?? (Array.isArray(m.guider) ? st(m.guider.length, "tur", "turer") : "Guiderna");
   }
   return objPerson ?? modulNamn(r.action);
 }

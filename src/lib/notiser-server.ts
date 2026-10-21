@@ -20,7 +20,7 @@ import { stampelfri } from "@/lib/stampelfri";
 import { AVTALSSLUT_VARSEL_DAGAR, dagarTill } from "@/lib/order";
 import { guiderForRoller } from "@/guider";
 import { MAX_I_KLOCKAN, navnyheterFor, tidpunktFor } from "@/navnyheter";
-import { dagarSedan, personlage, type Progress } from "@/lib/guider";
+import { arKlar, dagarSedan, personlage, type Progress } from "@/lib/guider";
 import { coachningsnotiser } from "@/lib/coachning-server";
 import { projektchattnotiser, uppgiftsnotiser } from "@/lib/uppgifter-server";
 
@@ -832,9 +832,11 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
     const mitt = personlage(minaGuider, minaRader, user.employee.start_date);
 
     // Nasta tur som inte ar klar. Bar id:t, sa posten aterupstar av sig sjalv
-    // nar man gjort klart den man stod i och nasta tar vid.
+    // nar man gjort klart den man stod i och nasta tar vid. `arKlar` och inte
+    // bara completed_at: en tur som hojts med `omtag` ar inte klar for att den
+    // gjordes i en aldre version. Frivilliga turer raknas inte (se typer.ts).
     const nasta = minaGuider.find(
-      (g) => !minaRader.some((r) => r.guide_slug === g.slug && r.completed_at),
+      (g) => !g.frivillig && !arKlar(g, minaRader.find((r) => r.guide_slug === g.slug)),
     );
 
     /**

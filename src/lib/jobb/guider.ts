@@ -1,8 +1,10 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { guiderForRoller } from "@/guider";
-import { FRIST_DAGAR, personlage, type Progress } from "@/lib/guider";
+import { GUIDER, guiderForRoller } from "@/guider";
+import { FRIST_DAGAR, behoverOmtag, personlage, versionsnyckel, type Progress } from "@/lib/guider";
+import { frist } from "@/lib/arenden";
+import { SKRIVLAGE } from "@/lib/nav2/skrivlage";
 import { stampelfri } from "@/lib/stampelfri";
 import type { Permission, Role } from "@/lib/roles";
 
@@ -34,6 +36,15 @@ import type { Permission, Role } from "@/lib/roles";
  *
  * DEN SOM AVSLUTATS RÖRS INTE. En offboardad person har inget onboardingpaket
  * kvar att bli klar med, och ett ärende om henne är bara brus i kön.
+ *
+ * FRISTEN FÖR EN NY VERSION RÄKNAS FRÅN NATTEN DEN KOM I BRUK. Se
+ * `versionerIBruk()` nedan och `infort` i `personlage()`.
+ *
+ * ETT ÄRENDE SOM INTE GÅR ATT LÄGGA SKA SYNAS. Fram till 2026-10-21 saknade
+ * inserten `sla_hours` och `due_at`, som är NOT NULL utan standardvärde. Varje
+ * försök föll, felet sväljdes, och jobbet rapporterade "forsenade: 5, arenden:
+ * 0" natt efter natt. Nu kastar steget efter rundan, så att nattjobbet bokförs
+ * som delvis fallerat och felet står i loggen.
  */
 export async function korGuidejobbet(
   db: SupabaseClient,
@@ -78,9 +89,19 @@ export async function korGuidejobbet(
       .map((r) => r.employee_id)
       .find((id) => personal.some((p) => p.id === id)) ?? null;
 
+  const infort = await versionerIBruk(db);
+
+  const { data: kategori } = await db
+    .from("case_category")
+    .select("sla_hours")
+    .eq("id", "other")
+    .maybeSingle();
+  const slaTimmar = Number(kategori?.sla_hours ?? 72);
+
   const nu = new Date();
   let forsenade = 0;
   let arenden = 0;
+  const felen: string[] = [];
 
   for (const person of personal) {
     const roller = rollPer.get(person.id) ?? [];
@@ -90,7 +111,8 @@ export async function korGuidejobbet(
     });
     if (guider.length === 0) continue;
 
-    const lage = personlage(guider, raderPer.get(person.id) ?? [], person.start_date, nu);
+    const rader = raderPer.get(person.id) ?? [];
+    const lage = personlage(guider, rader, person.start_date, nu, infort);
     if (!lage.forsenad) continue;
     forsenade += 1;
 
@@ -113,7 +135,7 @@ export async function korGuidejobbet(
     if (fanns) continue;
 
     const namn = `${person.first_name} ${person.last_name}`.trim();
-    const { data: arende } = await db
+    const { data: arende, error: felet } = await db
       .from("hr_case")
       .insert({
         employee_id: mottagare,
@@ -121,17 +143,29 @@ export async function korGuidejobbet(
         category: "other",
         subject: `${namn} har inte gått igenom sina systemguider — ${referens}`,
         assigned_to: mottagare,
+        sla_hours: slaTimmar,
+        due_at: frist(nu, slaTimmar),
       })
       .select("id")
       .single();
 
-    if (!arende) continue;
+    if (felet || !arende) {
+      felen.push(felet?.message ?? "inget ärende tillbaka");
+      continue;
+    }
+
+    const omtag = guider.filter(
+      (g) => !g.frivillig && behoverOmtag(g, rader.find((r) => r.guide_slug === g.slug)),
+    ).length;
 
     await db.from("case_message").insert({
       case_id: arende.id,
       author_id: mottagare,
       body: [
         `${namn} började ${person.start_date ?? "okänt datum"} och har ${lage.klara} av ${lage.av} systemguider klara.`,
+        ...(omtag > 0
+          ? [`${omtag} av turerna är gjorda i en äldre version och ska göras om i den nya.`]
+          : []),
         lage.pagar
           ? `Senast påbörjad tur: ${lage.pagar.titel}, steg ${lage.pagar.steg} av ${lage.pagar.av}.`
           : "Ingen tur är påbörjad.",
@@ -139,8 +173,8 @@ export async function korGuidejobbet(
           ? "Ingen aktivitet alls är bokförd."
           : `Senaste rörelsen var för ${lage.stillestand} dagar sedan.`,
         "",
-        `Fristen är ${FRIST_DAGAR} dagar från startdatum. Guiderna låser ingenting — det här är en signal, inte en spärr.`,
-        "Läget per person: Utbildning → Översikt → Systemguider. Därifrån går det att knuffa.",
+        `Fristen är ${FRIST_DAGAR} dagar från startdatum, eller från natten en tur kom i ny version om det var senare. Guiderna låser ingenting — det här är en signal, inte en spärr.`,
+        "Läget per person: Utbildning → Teamet. Därifrån går det att knuffa.",
         "",
         "Påminnelsen kommer från nattjobbet (G6).",
       ].join("\n"),
@@ -157,5 +191,64 @@ export async function korGuidejobbet(
     arenden += 1;
   }
 
+  if (felen.length > 0) {
+    throw new Error(
+      `${felen.length} av ${forsenade} ärenden kunde inte läggas (${arenden} lades): ${felen[0]}`,
+    );
+  }
+
   return { granskade: personal.length, forsenade, arenden };
+}
+
+/**
+ * När varje guideversion kom i bruk, som `versionsnyckel` → tidpunkt.
+ *
+ * ===========================================================================
+ * LOGGEN ÄR MINNET
+ *
+ * Första natten en version finns i registret bokför jobbet den i `audit_log`
+ * (`guide.version_infort`, en rad för alla nya den natten), och fristen för
+ * den versionen räknas därifrån. Jobbet körs bara i produktionen (pg_cron
+ * ringer upp den), så natten är den då versionen faktiskt nådde personalen —
+ * inte dagen någon provade den i en preview mot samma databas. Samma grepp
+ * som 0105, som läser `employee.created` ur loggen för att veta när någon
+ * lades upp.
+ *
+ * BARA NÄR UTBILDNING FÅR SPARA. I läsläge bokförs inga framsteg, och den som
+ * gått igenom turen hade ändå räknats som sen. Då bokförs ingenting, och
+ * ingen version är i bruk — fristen börjar natten efter att vyn slagits på.
+ * ===========================================================================
+ */
+async function versionerIBruk(db: SupabaseClient): Promise<Map<string, string>> {
+  const { data, error } = await db
+    .from("audit_log")
+    .select("ts, meta")
+    .eq("action", "guide.version_infort");
+  if (error) throw new Error(error.message);
+
+  const karta = new Map<string, string>();
+  for (const rad of (data ?? []) as { ts: string; meta: { guider?: { slug: string; version: number }[] } | null }[]) {
+    for (const g of rad.meta?.guider ?? []) {
+      const nyckel = versionsnyckel(g);
+      const fanns = karta.get(nyckel);
+      if (!fanns || rad.ts < fanns) karta.set(nyckel, rad.ts);
+    }
+  }
+
+  if (!SKRIVLAGE.utbildning) return karta;
+  const nya = GUIDER.filter((g) => !karta.has(versionsnyckel(g)));
+  if (nya.length === 0) return karta;
+
+  const nu = new Date().toISOString();
+  const { error: felet } = await db.from("audit_log").insert({
+    actor_id: null,
+    action: "guide.version_infort",
+    object_type: "guide",
+    reason: "Systemguider i ny version i bruk; fristen räknas härifrån",
+    meta: { guider: nya.map((g) => ({ slug: g.slug, version: g.version, titel: g.titel })) },
+  });
+  if (felet) throw new Error(felet.message);
+
+  for (const g of nya) karta.set(versionsnyckel(g), nu);
+  return karta;
 }
