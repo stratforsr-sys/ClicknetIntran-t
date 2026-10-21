@@ -5,6 +5,20 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-21 · Nav 2.0, Kalendern som Outlook, del 8: sökning i hela kalendern (ingen migration)
+
+- **Felet:** sökfältet tonade bara ned det som inte matchade i den laddade
+  månaden; ett möte förra månaden eller i december gick inte att hitta.
+- **Nu:** Enter i sökfältet söker i hela kalendern (`GET ?sok=`,
+  `sokKalender`): rubrik, plats, agenda och arrangörens namn, med läsarens
+  token så att RLS (`lk_ser_handelse`) avgör vad som syns. Ett privat möte
+  hittas bara av den som organiserar eller är med. Träffarna står i
+  Lista-vyns form, kommande först och sedan det som varit, högst 50; en
+  träff öppnar dagen. Räknaren i sökfältet räknar träffarna. Att skriva
+  vidare eller rensa tar bort träfflistan.
+- **Del 7 provad** på previewns skript (`ef87685`): utskriften visar vyn
+  ensam.
+
 ## 2026-10-21 · Nav 2.0, Kalendern som Outlook, del 7: utskrift av vyn (ingen migration)
 
 - **Felet:** "Skriv ut" skrev hela sidan: menyn, vänsterfältet och bara den

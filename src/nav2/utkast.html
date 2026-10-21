@@ -27724,6 +27724,38 @@ document.addEventListener('keydown', e => {
   e.preventDefault(); e.stopImmediatePropagation(); ndKGastLagg();
 }, true);
 
+/* ---------- Sök i hela kalendern ----------
+   Sökfältet tonade bara ned det som inte matchade i den laddade månaden. Enter söker nu i hela kalendern (rubrik,
+   plats, agenda och arrangörens namn; GET ?sok=, med läsarens behörighet) och visar träffarna i Lista-vyns form,
+   kommande först. En träff öppnar dagen. Ändras eller rensas sökningen försvinner träfflistan. */
+function ndKSokHar(){ const x = S.ndKSok; return !!x && x.q === S.kQ.trim(); }
+function ndKSok(q){
+  q = q.trim(); if (q.length < 2){ toast('Skriv minst två tecken.'); return; }
+  const lq = q.toLowerCase(), pers = [ND.jag, ...ndK().personer.map(p => ({id:p.id, namn:p.namn}))].filter(p => p.namn.toLowerCase().includes(lq)).map(p => p.id);
+  S.ndKSok = {q, laddar:true, poster:[]}; S.kVy = 'lista'; render(); document.querySelector('[data-ksok]')?.focus();
+  fetch(`/nav2/kalender?sok=${encodeURIComponent(q)}${pers.length ? `&pers=${pers.join(',')}` : ''}`, {credentials:'same-origin'}).then(r => r.ok ? r.json() : null).then(x => {
+    if (!S.ndKSok || S.ndKSok.q !== q) return;
+    S.ndKSok = {q, laddar:false, poster:(x && x.poster) || [], fel:!x};
+    if (S.view === 'kalender'){ const el = document.activeElement, pos = el && el.dataset && el.dataset.ksok !== undefined ? el.selectionStart : null; render(); if (pos != null){ const i = document.querySelector('[data-ksok]'); if (i){ i.focus(); i.setSelectionRange(pos, pos); } } }
+  }).catch(() => { if (S.ndKSok && S.ndKSok.q === q){ S.ndKSok = {q, laddar:false, poster:[], fel:true}; render(); } });
+}
+const _ndKLista = kLista;
+kLista = function(){
+  if (!ndK() || !ndKSokHar()) return _ndKLista();
+  const x = S.ndKSok, idag = kIdag(), dagar = [...new Set(x.poster.map(p => p.dag))];
+  const rubrik = x.laddar ? 'Söker i hela kalendern …' : x.fel ? 'Sökningen gick inte att göra.' : `${x.poster.length ? x.poster.length : 'Inga'} ${x.poster.length === 1 ? 'möte' : 'möten'} i hela kalendern`;
+  return `<div class="ollista"><div class="olldag"><h3>”${esc(x.q)}” <span>${rubrik}</span></h3></div>${dagar.map(d => `<div class="olldag ${d === idag ? 'idag' : ''}"><h3>${d === idag ? 'I dag · ' : ''}${kLang(d)} <span>v. ${kV(d)}</span></h3>${x.poster.filter(p => p.dag === d).map(p => {
+    const kat = NDKSLAG[p.slag] || 'mote', tid = p.start === null ? 'Heldag' : `${hm(p.start)}–${hm(p.start + Math.max(15, p.minuter || 30))}`;
+    return `<button class="ollrad ${d < idag ? 'forbi' : ''}" data-kgo="${d}" data-kvyset="dag" style="--c:${KKAT[kat].c}"><span class="num">${tid}</span><i></i><span><b>${esc(p.rubrik)}</b>${p.plats ? `<small>${esc(p.plats)}</small>` : ''}</span></button>`;
+  }).join('')}</div>`).join('')}</div>`;
+};
+const _ndKTraffar = kTraffar;
+kTraffar = function(){ return ndK() && ndKSokHar() && !S.ndKSok.laddar ? S.ndKSok.poster.length : _ndKTraffar(); };
+document.addEventListener('keydown', e => {
+  if (!ndK() || S.view !== 'kalender' || e.key !== 'Enter' || !e.target.dataset || e.target.dataset.ksok === undefined) return;
+  e.preventDefault(); e.stopImmediatePropagation(); S.kQ = e.target.value; ndKSok(e.target.value);
+}, true);
+
 /* ---------- Skriv ut ----------
    "Skriv ut" skrev hela sidan: menyn, vänsterfältet och bara den del av rutnätet som syntes. Nu skrivs vyn ensam,
    på liggande A4, med timmarna från vyns första post till dess sista (minst 07–18) och utan knappar och paneler.

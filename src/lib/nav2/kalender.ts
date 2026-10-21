@@ -5,7 +5,7 @@ import { svensktDatum } from "@/lib/klocka";
 import { hamtaDelningar } from "@/lib/kalender-server";
 import { hamtaEnskilt, hamtaHandelsedetalj, hamtaLeveranskalender } from "@/lib/leveranskalender-server";
 import { intervallForVy, overlamning, regeltext, type Post, type Vy } from "@/lib/leveranskalender";
-import { supabaseAdmin } from "@/lib/supabase/server";
+import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { SKRIVLAGE } from "./skrivlage";
 
 /**
@@ -190,4 +190,45 @@ export async function kalDetalj(user: CurrentUser, id: string) {
         }
       : null,
   };
+}
+
+/** En träff i sökningen: ett möte, 1:1 eller leveransmöte. */
+export type NdSokTraff = { ref: string; rubrik: string; dag: string; start: number | null; minuter: number | null; plats: string | null; slag: string };
+
+/**
+ * Sökning i hela kalendern (Outlook), inte bara i den laddade månaden: rubrik, plats och agenda, och arrangörens
+ * namn. Med läsarens token, så RLS (`lk_ser_handelse`) avgör vilka möten som syns, som i förhandsvisningen. Ett
+ * privat möte hittas bara av den som organiserar eller är med (0090). Kommande först, sedan det som varit.
+ */
+export async function sokKalender(user: CurrentUser, fraga: string, personer: string[]): Promise<{ poster: NdSokTraff[] }> {
+  const mig = user.employee!.id;
+  const t = fraga.replace(/[%,()*\\"']/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
+  if (t.length < 2) return { poster: [] };
+  const villkor = [`title.ilike.%${t}%`, `plats.ilike.%${t}%`, `agenda_md.ilike.%${t}%`];
+  if (personer.length) villkor.push(`organizer_id.in.(${personer.join(",")})`);
+  const supabase = await supabaseServer();
+  const { data } = await supabase
+    .from("calendar_event")
+    .select("id, title, dag, tid, minuter, plats, kind, organizer_id, series_id, is_private")
+    .is("cancelled_at", null)
+    .or(villkor.join(","))
+    .order("dag", { ascending: false })
+    .limit(80);
+  const rader = (data ?? []) as unknown as { id: string; title: string; dag: string; tid: string | null; minuter: number | null; plats: string | null; kind: string; organizer_id: string; series_id: string | null; is_private: boolean }[];
+  const privata = rader.filter((r) => r.is_private && r.organizer_id !== mig);
+  let med = new Set<string>();
+  if (privata.length) {
+    const { data: a } = await supabaseAdmin()
+      .from("calendar_attendee")
+      .select("event_id, series_id")
+      .eq("employee_id", mig)
+      .or(`event_id.in.(${privata.map((r) => r.id).join(",")}),series_id.in.(${[...new Set(privata.map((r) => r.series_id).filter(Boolean))].join(",") || "00000000-0000-0000-0000-000000000000"})`);
+    med = new Set(((a ?? []) as { event_id: string | null; series_id: string | null }[]).flatMap((x) => [x.event_id, x.series_id]).filter((x): x is string => Boolean(x)));
+  }
+  const idag = svensktDatum();
+  const poster = rader
+    .filter((r) => !r.is_private || r.organizer_id === mig || med.has(r.id) || (r.series_id !== null && med.has(r.series_id)))
+    .map((r) => ({ ref: r.id, rubrik: r.title, dag: String(r.dag).slice(0, 10), start: r.tid ? Number(r.tid.slice(0, 2)) * 60 + Number(r.tid.slice(3, 5)) : null, minuter: r.minuter, plats: r.plats, slag: r.kind }))
+    .sort((a, b) => (a.dag >= idag) !== (b.dag >= idag) ? (a.dag >= idag ? -1 : 1) : a.dag >= idag ? a.dag.localeCompare(b.dag) || (a.start ?? 0) - (b.start ?? 0) : b.dag.localeCompare(a.dag));
+  return { poster: poster.slice(0, 50) };
 }

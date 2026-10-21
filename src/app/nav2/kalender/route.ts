@@ -3,7 +3,7 @@ import { getCurrentUser, type CurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { FORINSTALLNINGAR, STEG, UPPREPA, arDatum, arVy, kvittoKopierad, type Upprepa } from "@/lib/leveranskalender";
 import { fonsterFran, hamtaHandelsedetalj, lk, upptagetFor } from "@/lib/leveranskalender-server";
-import { hamtaKalposter, kalDetalj } from "@/lib/nav2/kalender";
+import { hamtaKalposter, kalDetalj, sokKalender } from "@/lib/nav2/kalender";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
 import { skapaKalenderpost, stallInDelning } from "@/app/(app)/kalender/actions";
 import {
@@ -37,6 +37,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
  *   ?vy=manad|team|vecka&dag=YYYY-MM-DD&visa=<id>,<id>   posterna, som /kalender
  *   ?detalj=<calendar_event.id>                           en händelse i sin helhet
  *   ?upptaget=<id>,<id>&fran=YYYY-MM-DD                   ledig/upptagen i 15 dagar, för assistenten
+ *   ?sok=<text>&pers=<id>,<id>                            sökning i hela kalendern (pers: arrangörer vars namn matchar)
  *
  * BARA LASNING, med samma funktioner och samma delningsnivaer som sidan
  * (`hamtaLeveranskalender`, `hamtaHandelsedetalj`).
@@ -64,6 +65,12 @@ export async function GET(request: Request) {
     if (!arDatum(fran) || !personer.length || personer.length > 20) return svar({ fel: "Okända personer eller dag." }, 400);
     const { till } = fonsterFran(fran, 15);
     return svar({ fran, till, upptaget: await upptagetFor(user, personer, fran, till) });
+  }
+
+  const sok = url.searchParams.get("sok");
+  if (sok !== null) {
+    const pers = (url.searchParams.get("pers") ?? "").split(",").filter((id) => UUID.test(id)).slice(0, 20);
+    return svar(await sokKalender(user, sok, pers));
   }
 
   const vy = url.searchParams.get("vy");

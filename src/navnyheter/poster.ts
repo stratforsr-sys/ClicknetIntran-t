@@ -147,6 +147,8 @@ behörigheter som här: du ser bara det du får se.
   I telefonen rullar du kalendern med fingret, trycker för ett nytt möte
   och håller in ett möte för att flytta det.
   Skriv ut skriver vyn du ser, utan menyer, och sparar den som PDF.
+  Tryck Enter i sökfältet för att söka i hela kalendern, inte bara i
+  månaden du ser.
 - **Ärenden**, med svarstiden som navet lovar. Chefen får ett ärende av
   nattjobbet när en överenskommelse i Coachning är fjorton dagar över fristen
   eller någon inte gjort systemguiderna i tid, och ägaren när en sats ska ses
