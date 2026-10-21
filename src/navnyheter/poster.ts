@@ -102,6 +102,8 @@ behörigheter som här: du ser bara det du får se.
   i Rekrytering får samma checklista som i Lägg upp. Superadmin delar också ut
   särskild behörighet, ser vilka obligatoriska rutiner var och en har kvar,
   ser vad en borttagning tar med sig och sätter upp teamen och teamledarna.
+  Den som tas bort helt tar aldrig med sig samtalsinspelningar,
+  anställningsavtal, stämplingar eller arbetstidsjournal.
 - **Avtal**: under Mitt avtal öppnar du ditt anställningsavtal och dina
   tilläggsavtal som PDF och läser dem direkt, med din lön, ditt semestersaldo
   och din provision bredvid. Säljchef, VD och administratör laddar upp varje

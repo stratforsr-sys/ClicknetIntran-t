@@ -5,6 +5,20 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-21 · Nav 2.0, Anställda: stämplingar och arbetstidsjournal står också kvar (0170 KÖRD)
+
+- **Beställaren:** kör 0170, och stämplingarna och arbetstidsjournalen ska
+  också stå kvar när någon tas bort helt.
+- **0170** tar nu även `time_event` och `work_time_journal` ur
+  `anstalld_raderingsmal()` (de stod med för hand, och båda har ON DELETE NO
+  ACTION). Rättelserna i `time_correction_extra` följer stämplingarna. Den
+  som tas bort helt tar alltså aldrig med sig inspelningar, avtal,
+  stämplingar eller journal. Personalposten står kvar med "(borttagen
+  anställd)", och resten raderas som förut.
+- **Körd** mot produktionen samma kväll. Den gäller gamla Navs "Ta bort ur
+  navet" också, eftersom båda anropar samma `ta_bort_anstalld()`. Spärren i
+  Nav 2.0 (`skyddat()`) släpper av sig själv.
+
 ## 2026-10-21 · Nav 2.0, Provision och Satser och löner får spara (beställarens svar på G; migration 0190 KÖRD)
 
 - **Fråga 1, "ja såklart":** `SKRIVLAGE.provision` och `SKRIVLAGE.satser` är
@@ -145,7 +159,7 @@ gamla Nav är borta. Utkastets formulär i Inställningar → Satser och löner
   `ND.franvaro.floden` läser det. Repots `skapaFlode`, `rotaFlode` och
   `/api/ical/<token>` hade det redan.
 
-## 2026-10-21 · Nav 2.0, Anställda: företagets underlag raderas aldrig med en person (0170 skriven, inte körd)
+## 2026-10-21 · Nav 2.0, Anställda: företagets underlag raderas aldrig med en person (0170, körd samma kväll)
 
 - **Spärren:** `ta_bort_anstalld()` (0046) raderar allt med ON DELETE CASCADE
   mot employee, och dit hör samtalsinspelningarna (`file_object`, 5 743 för
