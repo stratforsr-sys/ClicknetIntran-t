@@ -5,6 +5,43 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-21 · Nav 2.0, gamla Navs sista funktioner G, steg 1: satser, lön och födelseår sparas i Nav 2.0 (migration 0190 skriven och torrkörd, inte körd)
+
+Inventeringens avsnitt 7: utan det går ingen sats eller lön att ändra när
+gamla Nav är borta. Utkastets formulär i Inställningar → Satser och löner
+(`sats.js`) var avstängda i Nav 2.0 (`satsAndra = brhSuper() && !ND`).
+
+- **Vem:** formulären öppnas för superadmin med `payroll_cost_viewer`
+  (`ND.satsdata.andra`). Repots actions kräver behörigheten, och utkastets
+  behörighetsmatris ger "Ändra satser, se och ändra månadslöner" till
+  superadmin. `/nav2/satser` frågar om båda innan läsläget prövas och svarar
+  annars 403.
+- **Rutten** `/nav2/satser` (POST, bakom `SKRIVLAGE.satser`, 423 i läsläge,
+  `sammaUrsprung`):
+  - `sats` = repots `sparaSats` (enheten följer satsen), med Gäller till på
+    raden.
+  - Ersätt: den gamla raden sparas i `cost_rate_replaced` och tas bort, och
+    den nya läggs in. Den unika nyckeln (kind, applies_to, valid_from)
+    släpper igenom två rader samma dag när applies_to är null, så repots
+    upsert ersätter inte av sig själv. Går den nya inte att lägga in läggs
+    den gamla tillbaka.
+  - `skv` gör samma rörelser för Skatteverkets regel.
+  - `agare` sätter ägare, översyn och slut på en rad, eller ägare och
+    översyn på alla gällande rader utan ägare (`cost.rate_changed`).
+  - `lon` = `sparaLon`, och `ar` = `sparaFodelsear`.
+- **Migration 0190** (skriven och torrkörd, inte körd):
+  - `cost_rate_kind_check` släpper in `employer_fee_young` (Skatteverkets
+    tillfälliga sats för unga) och `no_fee_age_min` (ingen avgift för de
+    äldsta). Utkastet räknar redan med dem.
+  - `cost_rate_replaced` är "Ersatta", med läspolicy som `cost_rate` och
+    ingen skrivpolicy.
+  - Tills 0190 körts svarar rutten att satsen kräver migrationen, och
+    Ersatta är tom.
+- **Klienten** `moduler/ndsats.js` (efter `ndsal`): utkastets kontroller körs
+  först, sedan rutten, och efter ett ja öppnas Satser igen. Läsningen
+  `ND.satsdata` finns i `src/lib/nav2/satser.ts`. Texterna som pekade på
+  gamla Navs Lönekostnad är omskrivna.
+
 ## 2026-10-21 · Nav 2.0, gamla Navs sista funktioner B, svaren: säljaren ber chefen ställa in, och mötena i den egna kalendern (ingen migration)
 
 - **Säljaren ställer inte in själv** (beställaren 2026-10-21): "Ställ in"

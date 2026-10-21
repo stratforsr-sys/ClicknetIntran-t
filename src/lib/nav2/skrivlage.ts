@@ -35,6 +35,8 @@ export const SKRIVLAGE = {
   nyheter: true,
   // Beställarens ja 2026-10-20 (Gamla Nav P): lösenordsbytet och Kod vid inloggning i Inställningar → Säkerhet.
   sakerhet: true,
+  // Gamla Nav G: Satser och löner (Inställningar) sparar genom /nav2/satser. Läsläge tills beställaren säger ja.
+  satser: false,
 } as const;
 
 export type Skrivvy = keyof typeof SKRIVLAGE;

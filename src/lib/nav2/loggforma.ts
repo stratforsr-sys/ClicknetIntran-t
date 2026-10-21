@@ -163,6 +163,8 @@ const RUBRIK: Record<string, string> = {
   "contract_template.updated": "Avtalsmall ändrad",
   "cost.birth_year_set": "Födelseår satt",
   "cost.calculated": "Lönekostnad beräknad",
+  "cost.rate_changed": "Sats ändrad",
+  "cost.rate_replaced": "Sats ersatt",
   "cost.rate_review_due": "Sats behöver ses över",
   "cost.rate_set": "Sats satt",
   "cost.revenue_set": "Intäkt satt",

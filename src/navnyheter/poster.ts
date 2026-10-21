@@ -27,7 +27,9 @@ behörigheter som här: du ser bara det du får se.
 - **Inställningar**: ditt konto, säkerheten, utseendet och påminnelserna om
   stämpling, samma som i Tid. Din profilbild syns för alla i Nav, på alla
   enheter, och du väljer själv vad Nav ska kalla dig.
-- **Satser och löner**, för den som har behörigheten för lönekostnad.
+- **Satser och löner**, för den som har behörigheten för lönekostnad. En
+  superadmin med behörigheten ändrar satserna, lönerna och födelseåren där,
+  och lägger in Skatteverkets rättelser med en knapp.
 - **Tid**, **Frånvaro** och **Uppgifter**, med samma regler som här. I Uppgifter
   väljer du dagens tre, planerar och avslutar dagen, skriver första steget och
   påminner den du väntar på. Där lägger du upp ett projekt, bjuder in

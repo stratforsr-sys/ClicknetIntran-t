@@ -23873,10 +23873,10 @@ function satsSt(){
   Object.assign(S, {satsUtk:null, satsOpen:null, satsLon:null, satsAgare:null, satsVisa:'gallande', satsLonVisa:'alla', satsHit:null, satsSr:''});
 }
 const satsFar = () => S.role === 'chef';
-const satsAndra = () => brhSuper() && !ND;
+const satsAndra = () => brhSuper() && (!ND || !!(ND.satsdata && ND.satsdata.andra));
 // Lönerna: superadmin i utkastet, och i navet den som har behörigheten för lönekostnad (K26).
 const satsSeLoner = () => ND ? !!ND.loner : brhSuper();
-const satsLasText = () => ND ? 'Läsläge: satserna ändras i Nav, under Lönekostnad.' : 'En superadmin ändrar satserna.';
+const satsLasText = () => ND ? 'En superadmin med behörigheten för lönekostnad ändrar satserna.' : 'En superadmin ändrar satserna.';
 const satsJag = () => ME.chef.namn;
 
 /* ---------- Siffror och datum ---------- */
@@ -24161,7 +24161,7 @@ function satsSkvHtml(andra){
       <dl class="sats-jmf">${r.fel.map(f => `<div><dt>${f.fore ? 'Före 1 april 2026' : esc(SATSKIND[f.kind].l)}</dt><dd><span class="sats-ar num">${esc(vardeTxt(f))}</span>${I('arrow')}<span class="num">${typeof f.ska === 'string' ? esc(f.ska) : satsVarde(SATSKIND[f.kind].u, f.ska)}</span></dd></div>`).join('')}</dl></div>
       ${andra ? `<button type="button" class="btn btn-s btn-sm" data-satsskv="${r.id}">Lägg in</button>` : ''}</li>`).join('')}</ul>
       ${andra && fel.length > 1 ? `<div class="sats-skvf"><p class="prf-hj">Varje rättelse blir nya rader. Det som ersätts står kvar under Ersatta.</p><button type="button" class="btn btn-s btn-sm" data-satsskv="alla">Lägg in alla ${fel.length}</button></div>` : ''}
-      ${!andra ? `<p class="prf-hj">${ND ? 'Läsläge: rättelserna läggs in i Nav, under Lönekostnad.' : 'En superadmin lägger in rättelserna.'}</p>` : ''}`
+      ${!andra ? `<p class="prf-hj">${ND ? 'En superadmin med behörigheten för lönekostnad lägger in rättelserna.' : 'En superadmin lägger in rättelserna.'}</p>` : ''}`
     : `<p class="sats-ok">${I('check')}<span>Full avgift, äldre, de äldsta och unga stämmer med Skatteverket i dag.</span></p>`}
     <p class="prf-hj"><a class="sats-kalla" href="${SATSSKV.url}" target="_blank" rel="noopener">Skatteverkets sida om arbetsgivaravgifter</a>. Nav jämför bara. Satserna ändras aldrig av sig själva.</p>
   </div>`);
@@ -24215,7 +24215,7 @@ function satsLonDetalj(p, x){
   return `<div class="sats-d">
     ${x ? `<p class="sats-kalk num">${satsKr(x.brutto)} lön + ${satsKr(x.avgift)} (${SATSGRUNDT[x.manader[0].grund]}, ${satsTal(x.manader[0].procent)} %${x.manader[0].tak && x.brutto > x.manader[0].tak ? `, full över ${satsKr(x.manader[0].tak)}` : ''}) = <b>${satsKr(x.total)}</b> per månad${x.breakEven ? ` · break-even ${satsKr(x.breakEven)} sålt` : ''}</p>${x.anm.map(a => `<p class="prf-hj">${esc(a)}</p>`).join('')}` : ''}
     ${hist.length ? `<ol class="sats-hist">${hist.map(l => `<li><span class="num sats-hv">${satsKr(l.belopp)}</span><span class="sats-hd">${satsDatumK(l.fran)}</span>${l.fran > idag ? satsDot('sats-bla', 'Kommer') : l === satsLonPa(p.id, idag) ? satsDot('sats-gron', 'Gäller') : satsDot('sats-gra', 'Tidigare')}<small>Inlagd ${satsDatumK(l.inlagd)} av ${esc(l.av)}</small></li>`).join('')}</ol>` : '<p class="prf-hj">Ingen löneuppgift än.</p>'}
-    ${!satsAndra() ? `<p class="prf-hj">${ND ? 'Läsläge: lönen och födelseåret ändras i Nav, under Lönekostnad.' : 'En superadmin ändrar lönen.'}</p>` : `<div class="sats-lflik" role="radiogroup" aria-label="Vad vill du lägga in">${[['lon', 'Ny månadslön'], ['ar', 'Födelseår']].map(([k, l]) => `<button type="button" role="radio" aria-checked="${(L.lage || 'lon') === k}" tabindex="${(L.lage || 'lon') === k ? 0 : -1}" data-satsllage="${k}">${l}</button>`).join('')}</div>
+    ${!satsAndra() ? `<p class="prf-hj">${ND ? 'En superadmin med behörigheten för lönekostnad ändrar lönen och födelseåret.' : 'En superadmin ändrar lönen.'}</p>` : `<div class="sats-lflik" role="radiogroup" aria-label="Vad vill du lägga in">${[['lon', 'Ny månadslön'], ['ar', 'Födelseår']].map(([k, l]) => `<button type="button" role="radio" aria-checked="${(L.lage || 'lon') === k}" tabindex="${(L.lage || 'lon') === k ? 0 : -1}" data-satsllage="${k}">${l}</button>`).join('')}</div>
     ${L.lage === 'ar' ? `<div class="sats-par"><div class="prf-f"><label for="satsL-ar">Födelseår</label><input id="satsL-ar" class="prf-in num" data-satsl="ar" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="1995" value="${esc(L.ar)}" ${inv('ar')}>${felP('ar')}<p class="prf-hj">${/^\d{4}$/.test(String(L.ar)) ? `${satsAlder(+kIdag().slice(0, 4), +L.ar)} år vid årets ingång: ${SATSGRUNDT[satsAvgift(satsAlder(+kIdag().slice(0, 4), +L.ar), satsGaller(kIdag())).grund]}.` : 'Bara året. Aldrig datum eller personnummer.'}</p></div></div>`
       : `<div class="sats-par"><div class="prf-f"><label for="satsL-belopp">Månadslön</label><span class="sats-enh"><input id="satsL-belopp" class="prf-in num" data-satsl="belopp" inputmode="numeric" autocomplete="off" placeholder="${x ? x.lon.belopp : '27500'}" value="${esc(L.belopp)}" ${inv('belopp')}><span aria-hidden="true">kr</span></span>${felP('belopp')}</div>
         <div class="prf-f"><label for="satsL-fran">Gäller från</label><input id="satsL-fran" type="date" class="prf-in" data-satsl="fran" value="${esc(L.fran)}" ${inv('fran')}>${felP('fran')}</div></div>
@@ -30060,6 +30060,106 @@ document.addEventListener('change', e => {
   const k = e.target.dataset && e.target.dataset.ndsal; if (k !== 'typ' || !S.ndSalUtk) return;
   S.ndSalUtk.typ = e.target.value; render();
 });
+
+/* =====================================================================
+   NAV 2.0 I RIKTIGT LÄGE: SATSER OCH LÖNER SPARAS (prefix ndsats), v47
+
+   Inställningar → Satser och löner läser redan riktig data (ND.satser,
+   ND.loner, födelseåren i ND.personer). Här öppnas utkastets formulär
+   (satsAndra, i ndpatch.py) för den som är superadmin och har behörigheten
+   för lönekostnad (ND.satsdata.andra), och varje formulär sparar genom
+   /nav2/satser (POST, bakom SKRIVLAGE.satser, 423 i läsläge):
+
+     Ny sats (satsSpara)          sats   = repots sparaSats, med Gäller till,
+                                           och Ersätt (0190: den gamla raden
+                                           står kvar under Ersatta)
+     Skatteverkets rättelse       skv    = samma rörelser för regelns rader
+     Ägare, översyn och slut      agare  = den raden, eller alla gällande
+                                           rader utan ägare
+     Lön och födelseår            lon/ar = sparaLon, sparaFodelsear
+
+   Utkastets kontroller körs först och visar sina fel som förut. Efter ett ja
+   laddas sidan om och öppnas på Satser igen. Ersatta läses ur
+   ND.satsdata.ersatta (tom tills 0190 körts).
+
+   Står efter ndsal.js i modullistan.
+   ===================================================================== */
+
+const ndSd = () => ND && ND.satsdata;
+const ndSatsNamn = id => { if (!id) return null; const p = (ND.personer || []).find(x => x.id === id); return p ? p.namn : null; };
+const ndSatsId = namn => { if (!namn) return null; const p = (ND.personer || []).find(x => x.namn === namn); return p ? p.id : null; };
+
+/* ---------- Hydrering: databasens id på varje rad, och Ersatta ---------- */
+const _ndSatsSt2 = satsSt;
+satsSt = function(){
+  const forst = !S.satsInit; _ndSatsSt2();
+  if (!ND || !forst || !ND.satser) return;
+  // Utkastets rader får egna id (cr1 …). Databasens id behövs för Ägare, översyn och slut.
+  S.sats.rader.forEach(r => { const x = ND.satser.find(y => y.kind === r.kind && (y.applies || null) === (r.applies_to || null) && y.fran === r.valid_from); if (x) r.dbId = x.id; });
+  const sd = ndSd(); if (!sd) return;
+  S.sats.ersatta = sd.ersatta.map(x => ({id:'er-' + x.id, kind:x.kind, applies_to:x.applies, unit:x.unit, value:x.value, valid_from:x.fran, valid_to:x.till,
+    owner:ndSatsNamn(x.agareId), review_due:x.oversyn, note:x.note, skapad:x.skapad, av:ndSatsNamn(x.avId), ersattD:x.ersattD, ersattAv:ndSatsNamn(x.ersattAvId) || 'Okänd', ersattSkal:x.ersattSkal}));
+};
+
+/* ---------- Skrivningar: /nav2/satser ---------- */
+async function ndSatsPost(handling, data = {}, ladda = true){
+  try {
+    const r = await fetch('/nav2/satser', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
+    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    if (s.ok){ toast(s.ok); if (ladda){ try { sessionStorage.setItem('nd-sats', JSON.stringify({open:S.satsOpen})); } catch(_){} setTimeout(() => location.reload(), 700); } return s; }
+    toast(s.fel || 'Det gick inte att spara.'); return s;
+  } catch(_){ toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
+}
+// Efter en omladdning: tillbaka till Satser och löner, med samma sats öppen.
+(() => { if (!ndSd()) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-sats') || 'null'); sessionStorage.removeItem('nd-sats'); } catch(_){}
+  if (m) setTimeout(() => { prfGa('satser'); if (m.open){ S.satsOpen = m.open; render(); } }, 0); })();
+
+// Ny sats: utkastets kontroller (fel, och Ersätt när det redan finns en sats från dagen), sedan rutten.
+const _ndSatsSpara = satsSpara;
+satsSpara = function(){
+  const u = S.satsUtk; if (!ndSd() || !u || !satsAndra()) return _ndSatsSpara();
+  const fel = satsUtkFel(u);
+  if (Object.keys(fel).length) return _ndSatsSpara();
+  ndSatsPost('sats', {kind:u.kind, applies:u.applies || null, value:u.value, fran:u.fran, till:u.till || null, agare:ndSatsId(u.agare), oversyn:u.oversyn || null, note:u.note.trim(), ersatt:!!u.ersatt});
+  return true;
+};
+// Skatteverket: en regel, eller alla som har fel. Regel för regel, och sidan laddas om efter den sista.
+const _ndSatsSkv = satsSkv;
+satsSkv = async function(id){
+  if (!ndSd() || !satsAndra()) return _ndSatsSkv(id);
+  const regler = satsKontroll().filter(r => r.fel.length && (id === 'alla' || r.id === id)); if (!regler.length) return;
+  const jag = ND.jag.id, slutAr = `${kIdag().slice(0, 4)}-12-15`;
+  for (let i = 0; i < regler.length; i++){
+    const r = regler[i];
+    const s = await ndSatsPost('skv', {regel:r.rub, ersatt:r.ersatt || [], rader:r.rader.map(([kind, value, fran, till, note]) => ({kind, value, fran, till, note, agare:jag, oversyn:till ? satsPlusDagar(till, -30) : slutAr}))}, i === regler.length - 1);
+    if (!s.ok) return;
+  }
+};
+// Lön och födelseår: utkastets kontroller, sedan sparaLon eller sparaFodelsear.
+const _ndSatsLonSpara = satsLonSpara;
+satsLonSpara = function(pid){
+  const L = S.satsLon, p = S.ae.pers.find(x => x.id === pid); if (!ndSd() || !L || !p || !satsAndra()) return _ndSatsLonSpara(pid);
+  if (Object.keys(satsLonFel(L, p)).length) return _ndSatsLonSpara(pid);
+  if (L.lage === 'ar') ndSatsPost('ar', {vem:pid, ar:String(L.ar).trim()});
+  else ndSatsPost('lon', {vem:pid, belopp:String(L.belopp).replace(/\s/g, ''), fran:L.fran});
+  return true;
+};
+// Ägare, översyn och slut: en rad, eller alla gällande rader utan ägare.
+document.addEventListener('click', e => {
+  if (!ndSd()) return;
+  const t = e.target.closest && e.target.closest('button'); if (!t || !t.dataset.satsagok || !t.closest('#prfRuta')) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  const A = S.satsAgare; if (!A || !satsAndra()) return;
+  if (A.id === 'alla'){
+    const ids = satsRaderPa(kIdag()).filter(r => !r.owner && r.dbId).map(r => r.dbId);
+    if (!ids.length){ toast('Alla gällande satser har redan en ägare.'); return; }
+    ndSatsPost('agare', {id:'alla', ids, agare:ndSatsId(A.agare), oversyn:A.oversyn || null}); return;
+  }
+  const r = S.sats.rader.find(x => x.id === A.id); if (!r) return;
+  if (A.till && A.till < r.valid_from){ A.fel = 'Slutdatumet kan inte ligga före startdatumet.'; render(); return; }
+  if (!r.dbId){ toast('Satsen finns inte i Nav. Ladda om sidan.'); return; }
+  ndSatsPost('agare', {id:r.dbId, agare:ndSatsId(A.agare), oversyn:A.oversyn || null, till:A.till || null});
+}, true);
 
 /* =====================================================================
    NAV 2.0 I RIKTIGT LÄGE: REKRYTERING (prefix nd), v47
