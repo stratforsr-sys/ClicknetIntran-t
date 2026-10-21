@@ -7404,6 +7404,10 @@ body.nd-riktig .proto{display:none}
 .ndgu-kort .pacts .tlink{margin-right:auto}
 @media (max-width:767px){.ndgu-kort{left:16px!important;right:16px;width:auto;top:auto!important;bottom:16px}}
 @media (prefers-reduced-motion:reduce){.ndgu-hal{transition:none}}
+/* Chefens sats (Provision → Regler): tre rutor i det halvbreda kortet, och mottagaren bredvid procentfälten. */
+.pv-trin select.uin{width:auto;max-width:100%;text-align:left}
+#pvChefRegel .chead h2{white-space:nowrap}
+@media (min-width:901px){#pvChefRegel .pv-trlista{grid-template-columns:repeat(3,minmax(0,1fr))}}
 
 /* ---------- Skalet (prefix skal): telefon och tangentbord, X1 och X2 ---------- */
 /* En tabell utan egen rullbar behållare rullar i sin förälder på telefonen, i stället för att hela sidan rullar i sidled. */
@@ -26998,7 +27002,73 @@ document.addEventListener('click', e => {
     const nu = pvTrappa(PVMAN).map(n => n.t), nya = a.nivaer.map(n => n.t);
     ndPvPost('trappa', {fran:a.fran, nivaer:a.nivaer.map(n => ({t:n.t, a:n.a, enhet:ndPvEnhet(n.t)})), borta:nu.filter(t => !nya.includes(t))}); return; }
   if (d.pvregelangra){ stopp(); ndPvPost('trappa-bort', {}); return; }
+  if (d.pvchefandra !== undefined){ stopp(); const r = ndPvCsOppen(); S.pvChefAndra = {o:r ? String(r.overtack).replace('.', ',') : '', e:r ? String(r.egen).replace('.', ',') : '', vem:r ? r.vemId : '', fran:'nasta'}; render(); return; }
+  if (d.pvchefavbryt !== undefined){ stopp(); S.pvChefAndra = null; render(); return; }
+  if (d.pvchefspara !== undefined){ stopp(); const a = S.pvChefAndra; if (!a || ndPvCsFel(a)) return; ndPvPost('chefssats', {vem:a.vem, overtack:ndPvCsTal(a.o), egen:ndPvCsTal(a.e), fran:a.fran}); return; }
+  if (d.pvchefangra !== undefined){ stopp(); ndPvPost('chefssats-bort', {}); return; }
 }, true);
+
+/* ---------- Chefens sats: superadmin sätter den (beställaren 2026-10-20) ---------- */
+// ND.provision.chefssats finns bara för superadmin. Kortet "Säljchefens ersättning" får trappans form:
+// Ändra, Gäller från, en kommande sats att ta tillbaka och versionerna. Sparas med repots sparaChefssats.
+const ndPvCs = () => ndP() && ndP().chefssats;
+const ndPvCsOppen = () => { const c = ndPvCs(); return c ? c.rader.find(r => !r.till) || null : null; };
+const ndPvCsTal = v => { const t = String(v ?? '').replace(/\s/g, '').replace(',', '.'); if (!t) return null; const n = Number(t); return Number.isFinite(n) ? n : null; };
+const ndPvCsPct = n => `${String(n).replace('.', ',')} %`;
+const ndPvCsNamn = id => { const c = ndPvCs(), m = c.mottagare.find(x => x.id === id), r = c.rader.find(x => x.vemId === id); return m ? m.namn : r ? r.vem : 'Okänd'; };
+function ndPvCsFel(a){
+  const o = ndPvCsTal(a.o), e = ndPvCsTal(a.e);
+  if (o === null || e === null) return 'Skriv båda satserna i procent, till exempel 10.';
+  if (o < 0 || o > 100 || e < 0 || e > 100) return 'En procentsats ligger mellan 0 och 100.';
+  if (!a.vem) return 'Välj vem som får övertäcket.';
+  return null;
+}
+function ndPvCsForm(){
+  const c = ndPvCs(), a = S.pvChefAndra, nu = ndPvCsOppen() || {overtack:null, egen:null, vemId:''}, fel = ndPvCsFel(a);
+  const o = ndPvCsTal(a.o), e = ndPvCsTal(a.e), andO = o !== nu.overtack, andE = e !== nu.egen, andV = a.vem !== nu.vemId;
+  const vem = [...c.mottagare.map(m => m.id), ...(nu.vemId && !c.mottagare.some(m => m.id === nu.vemId) ? [nu.vemId] : [])];
+  // Övertäcket slås upp på orderns signeringsdag och fryses när ordern godkänns: de som väntar och är signerade från dagen får den nya satsen.
+  const dag = a.fran === 'manad' ? PVMAN + '-01' : a.fran === 'nu' ? kIdag() : pvNastaMan(PVMAN) + '-01', mott = ndPvCsNamn(a.vem);
+  const vant = ORDER.filter(x => x.st === 'inskickad' && x.samtal && x.sign >= dag && x.vem !== mott);
+  const sum = p => { const spar = PVOVERTACK; PVOVERTACK = p; try { return vant.reduce((s, x) => s + pvOvertackDel(x), 0); } finally { PVOVERTACK = spar; } };
+  const effekt = !fel && andO && vant.length && PVOVERTACK !== null ? [sum(PVOVERTACK), sum(o)] : null;
+  const nastaNamn = pvManNamn(pvNastaMan(PVMAN));
+  return `<div class="pv-trform"><ol class="pv-trlista">
+      <li><b>Övertäck</b><label class="pv-trin"><input class="uin num ${andO ? 'andrad' : ''}" data-pvchef="o" value="${esc(a.o)}" inputmode="decimal" aria-label="Övertäck i procent"><span>%</span></label><small class="muted">${andO && nu.overtack !== null ? `var ${ndPvCsPct(nu.overtack)}` : '&nbsp;'}</small></li>
+      <li><b>Egen försäljning</b><label class="pv-trin"><input class="uin num ${andE ? 'andrad' : ''}" data-pvchef="e" value="${esc(a.e)}" inputmode="decimal" aria-label="Egen försäljning i procent"><span>%</span></label><small class="muted">${andE && nu.egen !== null ? `var ${ndPvCsPct(nu.egen)}` : '&nbsp;'}</small></li>
+      <li><b>Får övertäcket</b><label class="pv-trin"><select class="uin ${andV ? 'andrad' : ''}" data-pvchef="vem" aria-label="Vem får övertäcket">${a.vem ? '' : '<option value="" selected disabled>Välj</option>'}${vem.map(id => `<option value="${id}" ${id === a.vem ? 'selected' : ''}>${esc(ndPvCsNamn(id))}</option>`).join('')}</select></label><small class="muted">${andV && nu.vemId ? `var ${esc(ndPvCsNamn(nu.vemId))}` : 'en person i taget'}</small></li></ol>
+    ${fel ? `<p class="frb danger">${I('fel')}<span>${fel}</span></p>` : ''}
+    <fieldset class="pv-gf"><legend>Gäller från</legend>${[['manad', `Order signerade i ${pvManNamn(PVMAN)}`, `Från ${oDat(PVMAN + '-01')}, på order som godkänns härefter.`], ['nu', 'Från och med i dag', `Order signerade från ${oDat(kIdag())}.`], ['nasta', `Från och med ${nastaNamn}`, `${pvStor(pvManNamn(PVMAN))} räknas som förut.`]].map(([k, l, s]) => `<label class="pv-gfval ${a.fran === k ? 'on' : ''}"><input type="radio" name="pvchefgf" data-pvchefgf="${k}" ${a.fran === k ? 'checked' : ''}><span><b>${l}</b><small>${s}</small></span></label>`).join('')}</fieldset>
+    ${effekt ? `<p class="frb info">${I('trend')}<span>${vant.length} order väntar på godkännande. Med ${ndPvCsPct(o)} blir övertäcket på ${vant.length === 1 ? 'den' : 'dem'} ≈ <b class="num">${kr(Math.round(effekt[1]))}</b>, i stället för ${kr(Math.round(effekt[0]))}.</span></p>` : ''}
+    <div class="pacts"><button class="btn btn-p btn-sm" data-pvchefspara ${fel || !(andO || andE || andV) ? 'disabled' : ''}>${andO || andE || andV ? 'Spara som ny version' : 'Ändra en sats först'}</button><button class="tlink" data-pvchefavbryt>Avbryt</button></div>
+    <p class="pv-kf">En ändring är en ny rad, aldrig en överskrivning. Godkända order behåller sitt övertäck, och en fastställd månad rörs aldrig.</p></div>`;
+}
+const _ndPvRegler = pvReglerVy;
+pvReglerVy = function(){
+  const h = _ndPvRegler(), c = ndPvCs();
+  if (!c || S.role !== 'chef') return h;
+  const i = h.indexOf('<section class="card"><div class="chead"><h2>Säljchefens ersättning</h2>'); if (i < 0) return h;
+  const j = h.indexOf('</section>', i) + '</section>'.length, gammal = h.slice(i, j), a = S.pvChefAndra;
+  const lista = gammal.slice(gammal.indexOf('<ul class="pv-regl">'), gammal.lastIndexOf('</ul>') + 5);
+  const k = c.rader.find(r => !r.till && r.fran > kIdag());
+  const ny = `<section class="card" id="pvChefRegel"><div class="chead"><h2>Säljchefens ersättning</h2><span class="meta">syns bara för säljchef, VD och ekonomi</span>${a ? '' : '<span class="end"><button class="btn btn-s btn-sm" data-pvchefandra>Ändra satsen</button></span>'}</div>
+    ${k ? `<p class="frb info">${I('kal')}<span><b>En ny sats gäller från ${oDat(k.fran)}:</b> ${ndPvCsPct(k.overtack)} övertäck och ${ndPvCsPct(k.egen)} på egen försäljning, till ${esc(k.vem)}. <button class="tlink inl" data-pvchefangra>Ta tillbaka</button></span></p>` : ''}
+    ${a ? ndPvCsForm() : lista}
+    ${c.rader.length > 1 ? `<details class="pv-versioner"><summary>Versioner, ${c.rader.length}</summary><ul>${c.rader.map(r => `<li><span class="num">${oDat(r.fran)}${r.till ? ` – ${oDat(frPlus(r.till, -1))}` : ' och framåt'}</span><span>${esc(r.vem)} · ${ndPvCsPct(r.overtack)} övertäck · ${ndPvCsPct(r.egen)} egen${r.av ? ` · satt av ${esc(r.av)}` : ''}</span></li>`).join('')}</ul></details>` : ''}</section>`;
+  return h.slice(0, i) + ny + h.slice(j);
+};
+document.addEventListener('change', e => {
+  if (!ndP() || S.view !== 'provision' || !S.pvChefAndra || !e.target.dataset) return;
+  const d = e.target.dataset;
+  if (d.pvchefgf){ S.pvChefAndra.fran = d.pvchefgf; render(); }
+  if (d.pvchef === 'vem'){ S.pvChefAndra.vem = e.target.value; render(); }
+});
+document.addEventListener('input', e => {
+  if (!ndP() || S.view !== 'provision' || !S.pvChefAndra || !e.target.dataset) return;
+  const d = e.target.dataset; if (d.pvchef !== 'o' && d.pvchef !== 'e') return;
+  S.pvChefAndra[d.pvchef] = e.target.value; clearTimeout(S._pvT);
+  S._pvT = setTimeout(() => { const p = e.target.selectionStart; render(); const i = document.querySelector(`[data-pvchef="${d.pvchef}"]`); if (i){ i.focus(); try { i.setSelectionRange(p, p); } catch(_){} } }, 300);
+});
 
 /* ---------- Kretsen: säljchef, VD och ekonomi ser alla, som på /provision ---------- */
 const ndPvRoll = fn => function(...a){

@@ -5,6 +5,31 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-21 · Nav 2.0, Provision: superadmin sätter chefens sats (ingen migration)
+
+Beställaren 2026-10-20 (svar på steg 5:s fråga 2): bokföringen i gamla
+`/provision` behövs inte, men chefens sats ska gå att sätta i Nav 2.0, och det
+gör superadmin.
+
+- **Var:** kortet "Säljchefens ersättning" under Provision → Regler, i
+  trappans form: Ändra satsen, tre rutor (övertäck, egen försäljning, vem som
+  får övertäcket), Gäller från med repots tre val, och Versioner under. En
+  sats som inte börjat gälla står som en ruta med Ta tillbaka. Med "Order
+  signerade i <månad>" eller "Från och med i dag" visar formuläret vad de
+  order som väntar på godkännande får i övertäck med den nya satsen.
+- **Hur:** handlingen `chefssats` i `/nav2/provision` = repots
+  `sparaChefssats` (0–100 %, `tolkaVerkan`/`galleFran`, den gamla raden stängs
+  eller tas bort, `audit_log` `manager_commission_rate.set`). `chefssats-bort`
+  tar bort en sats som inte börjat gälla och öppnar raden före den igen, som
+  `trappa-bort` (`manager_commission_rate.future_removed`, med en rubrik i
+  Händelseloggen).
+- **Vem:** rutten svarar 403 för den som inte är superadmin, innan läsläget
+  prövas. `sparaChefssats` kräver dessutom säljchef eller VD. Läsningen
+  (`ND.provision.chefssats`: versionerna och mottagarna, aktiva säljchefer
+  och VD som i repots `hamtaSaljbara`) görs bara för superadmin som ser
+  laget, med den inloggades token. Säljaren ser ingenting nytt.
+- Bakom `SKRIVLAGE.provision` (423 i läsläge). Ingen migration.
+
 ## 2026-10-21 · Nav 2.0, gamla Navs sista funktioner C, svaren: superadmin delar ut behörigheten, och den som sägs upp går att ta bort (ingen migration)
 
 - **Särskild behörighet** (beställaren 2026-10-21: bara säljare, admin och

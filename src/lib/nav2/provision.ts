@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { hasRole, type CurrentUser } from "@/lib/auth";
+import { fullName, hasRole, type CurrentUser } from "@/lib/auth";
 import { svensktDatum } from "@/lib/klocka";
 import { hamtaAllProvision, hamtaProvision } from "@/lib/provision-server";
 import { manadFore, manadsnyckel } from "@/lib/provision";
@@ -10,7 +10,8 @@ import { hamtaNivaer, hamtaPerioder } from "@/lib/bonus-server";
 import { hamtaKriterier, hamtaKvPerManad, hamtaPolicyer, hamtaSamtal } from "@/lib/kv-server";
 import { hamtaMal } from "@/lib/saljmal-server";
 import { hamtaGodkandaFran, hamtaMinaHandelser, hamtaRegler } from "@/lib/konsekvens-server";
-import { formaProvision, type NdProvision, type Post } from "./provisionforma";
+import { formaProvision, type NdChefssats, type NdProvision, type Post } from "./provisionforma";
+import { nivaFor } from "./forma";
 import { SKRIVLAGE } from "./skrivlage";
 
 export type { NdProvision } from "./provisionforma";
@@ -39,7 +40,13 @@ export type { NdProvision } from "./provisionforma";
  * den negativa rattelsen); listan visar ingen av dem, summorna ar oforandrade.
  * Historiken fore motorn ar lonesystemets summor (`commission_history`).
  * Skrivningar gar genom /nav2/provision, bakom SKRIVLAGE.provision.
+ *
+ * Chefens sats (bestallaren 2026-10-20): superadmin satter den, sa bara
+ * superadmin far alla versioner och mottagarna. Mottagarna ar som repots
+ * `hamtaSaljbara`: aktiva med rollen saljchef eller VD.
  */
+
+type Chefsrad = { id: string; employee_id: string; override_percent: number | string; own_sale_percent: number | string; valid_from: string; valid_to: string | null; set_by: string | null };
 
 export async function byggProvision(supabase: SupabaseClient, user: CurrentUser): Promise<NdProvision> {
   const mig = user.employee!.id;
@@ -78,10 +85,15 @@ export async function byggProvision(supabase: SupabaseClient, user: CurrentUser)
     roller: ((p as unknown as { employee_role: { role: string }[] | null }).employee_role ?? []).map((r) => r.role),
   }));
 
-  const [{ data: motbokningar }, { data: historikrader }] = await Promise.all([
+  const superadmin = provisionschef && nivaFor(user.roles) === "superadmin";
+  const [{ data: motbokningar }, { data: historikrader }, { data: chefsdata }] = await Promise.all([
     supabase.from("commission_entry_reversal").select("original_id, reversal_id"),
     supabase.from("commission_history").select("employee_id, period_month, amount"),
+    superadmin
+      ? supabase.from("manager_commission_rate").select("id, employee_id, override_percent, own_sale_percent, valid_from, valid_to, set_by")
+      : Promise.resolve({ data: null }),
   ]);
+  const chefsrader = superadmin ? ((chefsdata ?? []) as unknown as Chefsrad[]) : null;
   const borttagna = new Set(((motbokningar ?? []) as { original_id: string; reversal_id: string }[]).flatMap((m) => [m.original_id, m.reversal_id]));
   const historik: Record<string, Record<string, number>> = {};
   for (const h of (historikrader ?? []) as { employee_id: string; period_month: string; amount: number }[]) {
@@ -96,5 +108,28 @@ export async function byggProvision(supabase: SupabaseClient, user: CurrentUser)
     nivaer, perioder, minaHandelser, regler, godkanda, kvPerManad, mal, chefsposter,
     kvSamtal, policyer, kriterier, personrader: personer,
   });
-  return { ...ut, ovriga: ut.ovriga.filter((x) => !borttagna.has(x.id)), historik, skriv: SKRIVLAGE.provision };
+  let chefssats: NdChefssats | null = null;
+  if (chefsrader) {
+    const namn = new Map(personer.map((p) => [p.id, fullName(p)]));
+    chefssats = {
+      rader: chefsrader
+        .map((r) => ({
+          id: r.id,
+          vemId: r.employee_id,
+          vem: namn.get(r.employee_id) ?? "Okänd",
+          overtack: Number(r.override_percent),
+          egen: Number(r.own_sale_percent),
+          fran: String(r.valid_from).slice(0, 10),
+          till: r.valid_to ? String(r.valid_to).slice(0, 10) : null,
+          av: r.set_by ? namn.get(r.set_by) ?? null : null,
+        }))
+        .sort((a, b) => (a.fran < b.fran ? 1 : -1)),
+      mottagare: personer
+        .filter((p) => p.status === "active" && p.roller.some((r) => r === "sales_manager" || r === "ceo"))
+        .map((p) => ({ id: p.id, namn: fullName(p) }))
+        .sort((a, b) => a.namn.localeCompare(b.namn, "sv")),
+    };
+  }
+
+  return { ...ut, ovriga: ut.ovriga.filter((x) => !borttagna.has(x.id)), historik, skriv: SKRIVLAGE.provision, chefssats };
 }

@@ -6,8 +6,9 @@ import { svensktDatum } from "@/lib/klocka";
 import { laggOvrigBonus } from "@/app/(app)/provision/actions";
 import { faststallPeriod } from "@/app/(app)/provision/stangning";
 import { sparaMal, taBortMal } from "@/app/(app)/provision/mal/actions";
-import { sparaNiva, stangNiva } from "@/app/(app)/provision/regler/actions";
+import { sparaChefssats, sparaNiva, stangNiva } from "@/app/(app)/provision/regler/actions";
 import { skapaMote } from "@/app/(app)/kalender/moten/actions";
+import { nivaFor } from "@/lib/nav2/forma";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +28,11 @@ export const dynamic = "force-dynamic";
  * kommande trappa tar bort nivåerna som inte börjat gälla och öppnar de som
  * de skulle ersätta. "Påminn mig" om fastställandet är ett möte i kalendern
  * (`skapaMote`), som utkastets kalenderpost.
+ *
+ * Chefens sats (beställaren 2026-10-20): bara superadmin, och rutten frågar
+ * själv innan något annat. `sparaChefssats` kräver dessutom säljchef eller VD,
+ * som på /provision/regler. En sats som inte börjat gälla går att ta tillbaka,
+ * som en kommande trappa.
  * ===========================================================================
  *
  * LÄSLÄGE: står `SKRIVLAGE.provision` på false svarar rutten 423 innan något
@@ -62,6 +68,9 @@ export async function POST(request: Request) {
   const handling = String(b.handling ?? "");
   const manad = String(b.manad ?? "");
 
+  if ((handling === "chefssats" || handling === "chefssats-bort") && nivaFor(user.roles) !== "superadmin") {
+    return svar({ fel: "Bara en superadmin sätter chefens sats." }, 403);
+  }
   if (!SKRIVLAGE.provision) return svar({ fel: LASLAGE_TEXT, laslage: true }, 423);
   const db = supabaseAdmin();
 
@@ -153,6 +162,33 @@ export async function POST(request: Request) {
         await db.from("audit_log").insert({ actor_id: mig, action: "commission_bonus_level.future_removed", object_type: "commission_bonus_level", object_id: "kommande", meta: { fran: datum } });
         revalidatePath("/provision");
         return svar({ ok: "Den kommande trappan är borttagen." });
+      }
+
+      case "chefssats": {
+        const verkan = VERKAN[String(b.fran ?? "")];
+        if (!verkan) return svar({ fel: "Välj från när satsen ska gälla." }, 400);
+        if (!UUID.test(String(b.vem ?? ""))) return svar({ fel: "Välj vem som får övertäcket." }, 400);
+        return fran(
+          await sparaChefssats({}, form({ employee_id: b.vem, override_percent: b.overtack, own_sale_percent: b.egen, verkan })),
+          "Chefens sats är sparad.",
+        );
+      }
+
+      case "chefssats-bort": {
+        // Samma krets som sparaChefssats. Den öppna raden har inte börjat gälla; raden före den gäller vidare.
+        if (!hasRole(user, "sales_manager", "ceo")) return svar({ fel: "Bara säljchef och VD får ändra provisionsreglerna." }, 403);
+        const idag = svensktDatum(new Date());
+        const { data: kommande } = await db.from("manager_commission_rate").select("id, valid_from").is("valid_to", null).gt("valid_from", idag).maybeSingle();
+        if (!kommande) return svar({ fel: "Det finns ingen kommande sats." }, 400);
+        const dag = String(kommande.valid_from);
+        const { error } = await db.from("manager_commission_rate").delete().eq("id", kommande.id);
+        if (error) return svar({ fel: `Satsen togs inte bort: ${error.message}` }, 500);
+        await db.from("manager_commission_rate").update({ valid_to: null }).eq("valid_to", dag);
+        await db.from("audit_log").insert({ actor_id: mig, action: "manager_commission_rate.future_removed", object_type: "manager_commission_rate", object_id: kommande.id, meta: { valid_from: dag } });
+        revalidatePath("/provision/regler");
+        revalidatePath("/provision");
+        revalidatePath("/order");
+        return svar({ ok: "Den kommande satsen är borttagen. Satsen som gäller i dag gäller vidare." });
       }
 
       case "pamin": {

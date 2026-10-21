@@ -82,6 +82,18 @@ export type NdProvision = {
   varning: { antal: number; sist: string; nollstalls: string; nasta: string | null } | null;
   /** Ovriga bonusar i huvudboken (`ovrig_bonus`), for listan i Perioder. */
   ovriga: { id: string; vemId: string; m: string; belopp: number; skal: string; bokford: boolean }[];
+  /** Chefens sats (0050), bara for superadmin. Annars null. */
+  chefssats?: NdChefssats | null;
+};
+
+/**
+ * Chefens sats: alla versioner av `manager_commission_rate`, nyast forst, och
+ * vilka som kan fa overtacket. `till` ar dagen raden slutade galla (som
+ * trappans `valid_to`), null for den oppna. `av` ar den som satte raden.
+ */
+export type NdChefssats = {
+  rader: { id: string; vemId: string; vem: string; overtack: number; egen: number; fran: string; till: string | null; av: string | null }[];
+  mottagare: { id: string; namn: string }[];
 };
 
 

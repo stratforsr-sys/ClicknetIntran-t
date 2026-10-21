@@ -231,6 +231,7 @@ const RUBRIK: Record<string, string> = {
   "lead.note_changed": "Leadanteckning ändrad",
   "lead.status_changed": "Lead ändrat",
   "lead.unassigned": "Lead återlämnat",
+  "manager_commission_rate.future_removed": "Kommande chefssats borttagen",
   "manager_commission_rate.set": "Chefens sats satt",
   "news.archived": "Nyhet arkiverad",
   "news.drafted": "Nyhet sparad som utkast",

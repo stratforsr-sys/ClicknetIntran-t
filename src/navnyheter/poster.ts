@@ -115,6 +115,8 @@ behörigheter som här: du ser bara det du får se.
 - **Provision**, räknad av samma motor som här: månaden, trappan, målen,
   historiken och, för säljchef, VD och ekonomi, laget och perioderna. Månader
   före provisionsmotorn visar lönesystemets summa när ekonomi lagt in den.
+  Under Regler sätter superadmin säljchefens ersättning: övertäcket, satsen
+  på egen försäljning och vem som får övertäcket, från en dag man väljer.
 - **Kalendern**: din kalender och, efter delningsnivån, kollegornas. Möten
   går att ändra efteråt, var och en väljer sin egen påminnelse, och ett möte
   kan vara privat eller upprepas varje månad. Skriv en e-postadress i
