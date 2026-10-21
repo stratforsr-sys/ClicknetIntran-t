@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { fullName, type CurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { svensktDatum } from "@/lib/klocka";
-import { dagarSedanCoachning, type Uppgiftslage } from "@/lib/coachning";
+import { dagarSedanCoachning, skrivMall, type Uppgiftslage, type Uppgiftstyp } from "@/lib/coachning";
 import { farCoacha, hamtaLag, namnkarta, uppgifterFor, type Uppgiftsrad } from "@/lib/coachning-server";
 
 /**
@@ -80,7 +80,7 @@ export type NdCnPunkt = { id: string; vem: string; text: string; kalla: string; 
 export type NdCnMal = { vem: string; text: string; modul: string; datum: string };
 
 /** Gamla Nav E: en coachningsmall med flera steg (`coaching_template`), som /coachning/mallar. `dag` räknas från startdagen. */
-export type NdCnMall = { id: string; namn: string; besk: string; aktiv: boolean; moment: { t: string; typ: string; dag: number }[] };
+export type NdCnMall = { id: string; namn: string; besk: string; aktiv: boolean; moment: { t: string; typ: string; dag: number }[]; text: string };
 
 export type NdCoachning = {
   utan0100: boolean;
@@ -156,7 +156,9 @@ export async function byggCoachning(supabase: SupabaseClient, user: CurrentUser)
   const mallP = chef
     ? tidig(Promise.all([
         supabase.from("coaching_template").select("id, name, description_md, active").order("name"),
-        supabase.from("coaching_template_item").select("template_id, sort, kind, title, offset_days").order("sort"),
+        supabase.from("coaching_template_item").select("id, template_id, sort, kind, title, offset_days, course_id, document_id").order("sort"),
+        // Beställaren 2026-10-21: en mall går att ändra. Texten för Ändra skrivs med slugarna och fokusområdena (repots skrivMall).
+        supabase.from("coaching_template_item_focus").select("item_id, focus_id"),
       ]))
     : null;
 
@@ -450,16 +452,25 @@ export async function byggCoachning(supabase: SupabaseClient, user: CurrentUser)
   }
 
   const mallRader = mallP ? await mallP : null;
+  type Mallpost = { id: string; template_id: string; sort: number; kind: string; title: string; offset_days: number; course_id: string | null; document_id: string | null };
+  const mallFokus = new Map<string, string[]>();
+  const fokusEtikett = new Map(fokusRader.map((f) => [f.id, f.label]));
+  for (const f of (mallRader?.[2].data ?? []) as { item_id: string; focus_id: string }[]) {
+    const l = fokusEtikett.get(f.focus_id);
+    if (l) mallFokus.set(f.item_id, [...(mallFokus.get(f.item_id) ?? []), l]);
+  }
   const mallar: NdCnMall[] | null = mallRader
-    ? ((mallRader[0].data ?? []) as { id: string; name: string; description_md: string | null; active: boolean }[]).map((m) => ({
-        id: m.id,
-        namn: m.name,
-        besk: m.description_md ?? "",
-        aktiv: m.active !== false,
-        moment: ((mallRader[1].data ?? []) as { template_id: string; sort: number; kind: string; title: string; offset_days: number }[])
-          .filter((p) => p.template_id === m.id)
-          .map((p) => ({ t: p.title, typ: p.kind, dag: p.offset_days })),
-      }))
+    ? ((mallRader[0].data ?? []) as { id: string; name: string; description_md: string | null; active: boolean }[]).map((m) => {
+        const poster = ((mallRader[1].data ?? []) as Mallpost[]).filter((p) => p.template_id === m.id);
+        return {
+          id: m.id,
+          namn: m.name,
+          besk: m.description_md ?? "",
+          aktiv: m.active !== false,
+          moment: poster.map((p) => ({ t: p.title, typ: p.kind, dag: p.offset_days })),
+          text: skrivMall(poster.map((p) => ({ sort: p.sort, title: p.title, kind: p.kind as Uppgiftstyp, offset_days: p.offset_days, kalla_slug: (p.course_id && kursSlug.get(p.course_id)) || (p.document_id && dokSlug.get(p.document_id)) || null, fokus: mallFokus.get(p.id) ?? [] }))),
+        };
+      })
     : null;
 
   const utkastMap: Record<string, unknown> = {};

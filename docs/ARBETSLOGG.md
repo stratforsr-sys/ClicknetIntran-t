@@ -5,6 +5,25 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-21 · Nav 2.0, gamla Navs sista funktioner E, svaren: mallar som går att ändra och ångra, och bilagor i redaktören (ingen migration)
+
+- **Ändra och lägga vilande** (beställaren 2026-10-21: ja): en mall i
+  kortet Mallar har Ändra och Lägg vilande eller Väck mallen. Ändra öppnar
+  Ny mall med texten (repots `skrivMall`), och `mall-andra` prövar som
+  `skapaMall` (`tolkaMall`, slugarna, fokusområdena) och byter momenten i
+  mallen; faller insättningen läggs de gamla tillbaka. Det som redan lagts
+  upp rörs inte. `mall-vila` sätter `active`, en vilande mall syns inte
+  under Från mall, och `mall-tillampa` avvisar den. Loggas som
+  `coaching_template.updated`, `.paused`, `.resumed`.
+- **Ångra "Från mall"** (ja): `mall-tillampa` svarar med id:na, och Ångra i
+  toasten (tio minuter, `mall-ater`) tar bort alla på en gång, bara det du
+  själv lade upp och bara om ingen hunnit börja (annars Avbryt, en i taget).
+  `coaching_template.undone` i loggen.
+- **Bilagor i redaktören** ("det som är bäst"): avsnittet Bilagor finns i
+  redaktören för ett utkast och en publicerad rutin. Där laddas sidan inte
+  om, så osparade ändringar står kvar; listan uppdateras på plats. En ny
+  rutin säger "Spara som utkast först".
+
 ## 2026-10-21 · Nav 2.0, gamla Navs sista funktioner D, svaren: sökning i kopplingsväljarna (ingen migration)
 
 - **Sökning** (beställaren 2026-10-21, "det som är bäst"): uppgiftsrutans

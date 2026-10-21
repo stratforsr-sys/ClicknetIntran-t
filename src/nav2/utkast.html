@@ -27927,6 +27927,21 @@ rtnKropp = function(r, o){
   const fb = feedbackHtml(r), i = fb ? h.lastIndexOf(fb) : -1;
   return i >= 0 ? h.slice(0, i) + b + h.slice(i) : h + b;
 };
+// Beställaren 2026-10-21 ("det som är bäst"): bilagorna finns också i redaktören, för ett utkast och en publicerad
+// rutin. Där laddas sidan inte om (osparade ändringar i redaktören hade försvunnit); listan uppdateras på plats.
+function ndRutRedRutin(red){
+  if (!red) return null;
+  if (red.id) return rutin(red.id) || null;
+  const u = red.uid && (ndRut().utkast || []).find(x => x.id === red.uid);
+  return u ? u.rutin : null;
+}
+const _ndRtnRedHtmlE = rtnRedHtml;
+rtnRedHtml = function(red){
+  const h = _ndRtnRedHtmlE(red); if (!ndRut()) return h;
+  const r = ndRutRedRutin(red);
+  const blk = r ? ndRutBilagor(r) : `<section class="rtn-blk" aria-label="Bilagor"><div class="rtn-bh"><h3>Bilagor</h3></div><p class="rtn-rm">Spara som utkast först, så kan du lägga till bilagor. De följer med när rutinen publiceras.</p></section>`;
+  return blk ? h.replace(/(\s*<\/div>\s*<div class="rtn-reds">)/, () => blk + '\n      </div>\n      <div class="rtn-reds">') : h;
+};
 // En signerad adress, filen direkt till lagringen (R2 eller Supabase), och sedan registreras den.
 document.addEventListener('change', async e => {
   if (!ndRut() || !e.target.dataset || e.target.dataset.ndrutbil === undefined) return;
@@ -27940,15 +27955,17 @@ document.addEventListener('change', async e => {
   const mal = p.url || (p.supabaseUrl && p.token ? `${p.supabaseUrl}/storage/v1/object/upload/sign/${p.bucket}/${p.path}?token=${encodeURIComponent(p.token)}` : null);
   const r = mal ? await fetch(mal, {method:'PUT', headers:{'Content-Type':f.type}, body:f}).catch(() => ({ok:false})) : {ok:false};
   if (!r.ok){ klar('Bilagan kom inte fram. Försök igen.'); return; }
-  const s = await ndRutPost('bilaga-registrera', {id, fil:p.fileId, filnamn:f.name, store:p.store});
-  if (s.fel) klar();
+  const iRed = !!S.rtnRed, rr = iRed ? ndRutRedRutin(S.rtnRed) : null;
+  const s = await ndRutPost('bilaga-registrera', {id, fil:p.fileId, filnamn:f.name, store:p.store}, {ladda:!iRed});
+  if (s.fel){ klar(); return; }
+  if (iRed){ if (rr) rr.bilagor = [...(rr.bilagor || []), {id:p.fileId, namn:f.name, byte:f.size, sokbar:f.type === 'application/pdf'}]; klar(); }
 }, true);
 document.addEventListener('click', e => {
   if (!ndRut() || S.view !== 'rutiner') return;
   const b = e.target.closest && e.target.closest('button'); if (!b || !b.dataset || !b.dataset.ndrutbilbort) return;
   e.preventDefault(); e.stopImmediatePropagation();
-  const id = S.rOpen, r = rutin(id), x = r && (r.bilagor || []).find(q => q.id === b.dataset.ndrutbilbort); if (!x) return;
-  toastActs(`Ta bort ”${x.namn}” från rutinen? Filen går inte längre att öppna härifrån.`, [['Ta bort', () => ndRutPost('bilaga-bort', {id, fil:x.id})]], 8000);
+  const iRed = !!S.rtnRed, r = iRed ? ndRutRedRutin(S.rtnRed) : rutin(S.rOpen), x = r && (r.bilagor || []).find(q => q.id === b.dataset.ndrutbilbort); if (!x) return;
+  toastActs(`Ta bort ”${x.namn}” från rutinen? Filen går inte längre att öppna härifrån.`, [['Ta bort', () => ndRutPost('bilaga-bort', {id:r.id, fil:x.id}, {ladda:!iRed}).then(s => { if (iRed && !s.fel){ r.bilagor = r.bilagor.filter(q => q.id !== x.id); render(); } })]], 8000);
 }, true);
 // Vägarna (ndGa i ndskal.js): /rutiner/ny, /rutiner/<slug>/redigera och /rutiner/<slug>/kvittenser.
 // Den som inte får redigera eller förvalta får rutinen, eller Rutiner.
@@ -31064,16 +31081,17 @@ function ndCnMallKort(){
   const C = ndCn(), l = C.mallar || [], E = S.ndCnMallE, opp = S.ndCnMallOpp;
   const rad = m => { const sista = m.moment.length ? Math.max(...m.moment.map(x => x.dag)) : 0, o = opp === m.id;
     return `<li class="cnarad${o ? ' open' : ''}"><button class="cnahead" data-ndcnmallopp="${m.id}" aria-expanded="${o}"><span class="cnai">${I('notes')}</span><span class="cnat"><b>${esc(m.namn)}</b><small>${m.moment.length} moment${sista ? ` · sista efter ${sista} ${sista === 1 ? 'dag' : 'dagar'}` : ''}</small></span><span class="cnap">${m.aktiv ? '' : '<span class="pill t-neutral">Vilande</span>'}</span>${I('chev', 'cnachev')}</button>
-      ${o ? `<div class="cnabody">${m.besk ? `<p class="cnbesk">${esc(m.besk)}</p>` : ''}<ol class="cnmallmom">${m.moment.map(x => `<li><span class="num muted">dag ${x.dag}</span> ${esc(x.t)} <small class="muted">${NDCN_MALLTYP[x.typ] || esc(x.typ)}</small></li>`).join('')}</ol><p class="cnhint">Läggs upp från personens kort, under Överenskommelser.</p></div>` : ''}</li>`; };
+      ${o ? `<div class="cnabody">${m.besk ? `<p class="cnbesk">${esc(m.besk)}</p>` : ''}<ol class="cnmallmom">${m.moment.map(x => `<li><span class="num muted">dag ${x.dag}</span> ${esc(x.t)} <small class="muted">${NDCN_MALLTYP[x.typ] || esc(x.typ)}</small></li>`).join('')}</ol><p class="cnhint">${m.aktiv ? 'Läggs upp från personens kort, under Överenskommelser.' : 'Vilande: syns inte under Från mall. Det som redan lagts upp gäller.'}</p>
+        <div class="pacts"><button class="tlink" data-ndcnmandra="${m.id}">Ändra</button><button class="tlink" data-ndcnmvila="${m.id}|${m.aktiv ? 0 : 1}">${m.aktiv ? 'Lägg vilande' : 'Väck mallen'}</button></div></div>` : ''}</li>`; };
   const pv = E ? ndCnMallPrev(E.moment) : null;
   const form = E ? `<div class="tiform"><div class="tifrow"><label>Namn<input class="uin" data-ndcnmf="namn" value="${esc(E.namn)}" maxlength="120" placeholder="Till exempel: Rampplan, nya säljare"></label></div>
       <textarea class="uin num" rows="6" data-ndcnmf="moment" aria-label="Moment, ett per rad" placeholder="Lyssna på tre avslut | medlyssning | 2&#10;Säljmanuset | lasning | 3 | saljmanus&#10;Första veckan | kurs | 5 | introduktion | Avslut">${esc(E.moment)}</textarea>
       <p class="tiprev on" data-ndcnmprev${pv.ok || pv.tom ? '' : ' style="color:var(--danger)"'}>${esc(pv.t)}</p>
       <textarea class="uin" rows="2" data-ndcnmf="besk" placeholder="Vad mallen är till för. Valfritt.">${esc(E.besk)}</textarea>
-      <div class="pacts"><button class="btn btn-p btn-sm" data-ndcnmspara>Spara mallen</button><button class="btn btn-s btn-sm" data-ndcnmavbryt>Avbryt</button><span class="muted tihint">En rad: rubrik | typ | dagar från start | slug | fokusområden. Typerna: ${Object.keys(NDCN_MALLTYP).join(', ')}. Kurs och läsning behöver kursens eller rutinens slug.</span></div></div>` : '';
+      <div class="pacts"><button class="btn btn-p btn-sm" data-ndcnmspara>${E.id ? 'Spara ändringen' : 'Spara mallen'}</button><button class="btn btn-s btn-sm" data-ndcnmavbryt>Avbryt</button><span class="muted tihint">${E.id ? 'Det som redan lagts upp från mallen rörs inte. ' : ''}En rad: rubrik | typ | dagar från start | slug | fokusområden. Typerna: ${Object.keys(NDCN_MALLTYP).join(', ')}. Kurs och läsning behöver kursens eller rutinens slug.</span></div></div>` : '';
   return `<section class="card" aria-label="Mallar" id="ndCnMallar"><div class="chead"><h2>Mallar</h2><span class="meta num">${l.length}</span>${E ? '' : '<span class="end"><button class="tlink" data-ndcnmny>Ny mall</button></span>'}</div>
     ${form}
-    ${l.length ? `<ul class="cnalist">${l.map(rad).join('')}</ul>` : E ? '' : '<div class="empty"><b>Ingen mall än</b>En mall är en rampplan: momenten skrivs en gång och läggs upp för varje ny person, med fristerna från startdagen.</div>'}</section>`;
+    ${l.length ? `<ul class="cnalist">${[...l].sort((a, b) => (b.aktiv - a.aktiv) || a.namn.localeCompare(b.namn, 'sv')).map(rad).join('')}</ul>` : E ? '' : '<div class="empty"><b>Ingen mall än</b>En mall är en rampplan: momenten skrivs en gång och läggs upp för varje ny person, med fristerna från startdagen.</div>'}</section>`;
 }
 const _ndCnLagetVyE = cnLagetVy;
 cnLagetVy = function(){
@@ -31085,7 +31103,7 @@ function ndCnMallTForm(vem){
   const l = (ndCn().mallar || []).filter(m => m.aktiv), T = S.ndCnMallT, m = l.find(x => x.id === T.mall);
   const sista = m && m.moment.length ? frPlus(T.dag, Math.max(...m.moment.map(x => x.dag))) : null;
   return `<div class="tiform" data-ndcnmallt><div class="tifrow"><label>Mall<select class="uin" data-ndcnmt="mall"><option value="">Välj</option>${l.map(x => `<option value="${x.id}" ${T.mall === x.id ? 'selected' : ''}>${esc(x.namn)}</option>`).join('')}</select></label><label>Startdag<input type="date" class="uin cndate" data-ndcnmt="dag" value="${T.dag}"></label></div>
-    <p class="tiprev on">${m ? `${m.moment.length} ${m.moment.length === 1 ? 'överenskommelse' : 'överenskommelser'} för ${esc(cnFor(vem))}, ${sista && sista !== T.dag ? `från ${frKort(T.dag)} till ${frKort(sista)}` : `${frKort(T.dag)}`}. ${esc(cnFor(vem))} får dem i Coachning.` : 'Välj en mall.'}</p>
+    <p class="tiprev on">${m ? `${m.moment.length} ${m.moment.length === 1 ? 'överenskommelse' : 'överenskommelser'} för ${esc(cnFor(vem))}, ${sista && sista !== T.dag ? `från ${frKort(T.dag)} till ${frKort(sista)}` : `${frKort(T.dag)}`}. ${esc(cnFor(vem))} får dem i Coachning. Ångra tar bort alla de första tio minuterna.` : 'Välj en mall.'}</p>
     <div class="pacts"><button class="btn btn-p btn-sm" data-ndcnmtok ${m ? '' : 'disabled'}>Lägg upp</button><button class="btn btn-s btn-sm" data-ndcnmtx>Avbryt</button></div></div>`;
 }
 const _ndCnAvtKortE = cnAvtKort;
@@ -31134,13 +31152,17 @@ document.addEventListener('click', e => {
   if (d.ndcnmavbryt !== undefined){ stopp(); S.ndCnMallE = null; render(); return; }
   if (d.ndcnmspara !== undefined){ stopp(); const E = S.ndCnMallE, r = ndCnMallPrev(E.moment);
     if (!E.namn.trim()){ toast('Ge mallen ett namn.'); return; } if (!r.ok){ toast(r.t); return; }
-    ndCnPost('mall-ny', {namn:E.namn.trim(), moment:E.moment, besk:E.besk.trim()}); return; }
+    ndCnPost(E.id ? 'mall-andra' : 'mall-ny', {id:E.id, namn:E.namn.trim(), moment:E.moment, besk:E.besk.trim()}); return; }
+  // Beställaren 2026-10-21: en mall går att ändra och lägga vilande.
+  if (d.ndcnmandra){ stopp(); const m = (ndCn().mallar || []).find(x => x.id === d.ndcnmandra); if (!m) return; S.ndCnMallE = {id:m.id, namn:m.namn, moment:m.text || '', besk:m.besk}; render(); setTimeout(() => { const f = document.querySelector('[data-ndcnmf="moment"]'); if (f){ f.focus(); f.scrollIntoView({block:'center', behavior:'smooth'}); } }, 30); return; }
+  if (d.ndcnmvila){ stopp(); const [id, a] = d.ndcnmvila.split('|'); ndCnPost('mall-vila', {id, aktiv:a === '1'}); return; }
   if (d.ndcnmallopp){ stopp(); S.ndCnMallOpp = S.ndCnMallOpp === d.ndcnmallopp ? null : d.ndcnmallopp; render(); return; }
   if (d.ndcnmallt){ stopp(); S.ndCnMallT = S.ndCnMallT && S.ndCnMallT.vem === d.ndcnmallt ? null : {vem:d.ndcnmallt, mall:'', dag:cnT()}; render(); return; }
   if (d.ndcnmtx !== undefined){ stopp(); S.ndCnMallT = null; render(); return; }
   if (d.ndcnmtok !== undefined){ stopp(); const T = S.ndCnMallT; if (!T || !T.mall) return;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(T.dag)){ toast('Välj en startdag.'); return; }
-    S.ndCnMallT = null; ndCnPost('mall-tillampa', {mall:T.mall, vem:ndCnId(T.vem), dag:T.dag}); return; }
+    // Beställaren 2026-10-21: Ångra i tio minuter tar bort alla på en gång.
+    S.ndCnMallT = null; ndCnPost('mall-tillampa', {mall:T.mall, vem:ndCnId(T.vem), dag:T.dag}, {angra:s => s.ids && s.ids.length ? {handling:'mall-ater', data:{ids:s.ids}} : null}); return; }
 }, true);
 
 if (ndCn()){ ndCnStart(); NDKOPPLAD.add('coachning'); }

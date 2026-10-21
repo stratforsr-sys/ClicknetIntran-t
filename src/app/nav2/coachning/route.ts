@@ -6,6 +6,7 @@ import { svensktDatum } from "@/lib/klocka";
 import { notifiera } from "@/lib/notishandelse-server";
 import { forberedUppladdning, registreraFil } from "@/lib/filer-server";
 import { arChefFor, farCoacha } from "@/lib/coachning-server";
+import { MALLTYP_KRAVER_SLUG, tolkaMall } from "@/lib/coachning";
 import {
   avbrytUppgift,
   kvittera,
@@ -394,13 +395,90 @@ export async function POST(request: Request) {
         if (!coach) return svar({ fel: "Bara teamledare, säljchef och VD hanterar coachningsmallar." }, 403);
         return fran(await skapaMall({}, form({ name: str(b.namn, 120), description_md: str(b.besk, 2000), moment: str(b.moment, 8000) })), "Mallen är sparad.");
       }
+      case "mall-andra": {
+        // Beställaren 2026-10-21: en mall går att ändra. Samma regler som repots skapaMall (tolkaMall, slugarna och
+        // fokusområdena slås upp när mallen sparas). Momenten byts i mallen; överenskommelser som redan lagts upp rörs inte.
+        if (!coach) return svar({ fel: "Bara teamledare, säljchef och VD hanterar coachningsmallar." }, 403);
+        const id = str(b.id, 40), namn = str(b.namn, 120);
+        if (!UUID.test(id)) return svar({ fel: "Mallen finns inte." }, 404);
+        const { data: mall } = await db.from("coaching_template").select("id, name").eq("id", id).maybeSingle();
+        if (!mall) return svar({ fel: "Mallen finns inte." }, 404);
+        if (!namn) return svar({ fel: "Ge mallen ett namn." }, 400);
+        const { rader, fel } = tolkaMall(str(b.moment, 8000));
+        if (fel) return svar({ fel }, 400);
+        if (!rader.length) return svar({ fel: "En mall behöver minst ett moment." }, 400);
+        const kursslugar = rader.filter((x) => x.kind === "kurs" && x.kalla_slug).map((x) => x.kalla_slug!);
+        const dokslugar = rader.filter((x) => x.kind === "lasning" && x.kalla_slug).map((x) => x.kalla_slug!);
+        const [{ data: kurser }, { data: dok }, { data: fokus }, { data: gamla }] = await Promise.all([
+          db.from("course").select("id, slug").in("slug", kursslugar.length ? kursslugar : ["-"]),
+          db.from("document").select("id, slug").in("slug", dokslugar.length ? dokslugar : ["-"]),
+          db.from("coaching_focus").select("id, label").eq("active", true),
+          db.from("coaching_template_item").select("id, sort, kind, title, description_md, verify_by, evidence, offset_days, course_id, module_id, document_id").eq("template_id", id),
+        ]);
+        const kalla = new Map<string, string>([...(kurser ?? []).map((k) => [`kurs:${k.slug}`, k.id as string] as [string, string]), ...(dok ?? []).map((d) => [`lasning:${d.slug}`, d.id as string] as [string, string])]);
+        for (const x of rader) {
+          if (MALLTYP_KRAVER_SLUG.includes(x.kind) && !kalla.has(`${x.kind}:${x.kalla_slug}`))
+            return svar({ fel: `Rad ${x.sort}: hittar ingen ${x.kind === "kurs" ? "kurs" : "publicerat dokument"} med slugen "${x.kalla_slug}".` }, 400);
+        }
+        const fokusId = new Map((fokus ?? []).map((f) => [String(f.label).toLowerCase(), f.id as string]));
+        for (const x of rader) for (const f of x.fokus) if (!fokusId.has(f.toLowerCase()))
+          return svar({ fel: `Rad ${x.sort}: "${f}" är inget fokusområde. Välj bland ${(fokus ?? []).map((q) => q.label).join(", ")}.` }, 400);
+        const { data: gamlaFokus } = await db.from("coaching_template_item_focus").select("item_id, focus_id").in("item_id", (gamla ?? []).map((g) => g.id as string).concat(["00000000-0000-0000-0000-000000000000"]));
+        // Momenten byts: de gamla tas bort (fokus följer med i kaskad) och de nya läggs in. Faller insättningen läggs de gamla tillbaka.
+        await db.from("coaching_template_item").delete().eq("template_id", id);
+        const nyaId = rader.map(() => crypto.randomUUID());
+        const { error: insfel } = await db.from("coaching_template_item").insert(rader.map((x, i) => ({ id: nyaId[i], template_id: id, sort: x.sort, kind: x.kind, title: x.title, offset_days: x.offset_days, course_id: x.kind === "kurs" ? kalla.get(`kurs:${x.kalla_slug}`) : null, document_id: x.kind === "lasning" ? kalla.get(`lasning:${x.kalla_slug}`) : null })));
+        if (insfel) {
+          if (gamla?.length) await db.from("coaching_template_item").insert(gamla.map((g) => ({ ...g, template_id: id })));
+          if (gamlaFokus?.length) await db.from("coaching_template_item_focus").insert(gamlaFokus);
+          return svar({ fel: `Momenten sparades inte: ${insfel.message}` }, 500);
+        }
+        const kopplingar = rader.flatMap((x, i) => x.fokus.map((f) => ({ item_id: nyaId[i], focus_id: fokusId.get(f.toLowerCase())! })));
+        if (kopplingar.length) await db.from("coaching_template_item_focus").insert(kopplingar);
+        await db.from("coaching_template").update({ name: namn, description_md: str(b.besk, 2000) }).eq("id", id);
+        await db.from("audit_log").insert({ actor_id: mig, action: "coaching_template.updated", object_type: "coaching_template", object_id: id, meta: { name: namn, fore: mall.name, moment: rader.length } });
+        revalidatePath("/coachning/mallar");
+        return svar({ ok: `Mallen "${namn}" är ändrad, med ${rader.length} moment. Det som redan lagts upp rörs inte.` });
+      }
+      case "mall-vila": {
+        // Beställaren 2026-10-21: en mall kan läggas vilande (repots kolumn active). En vilande mall syns inte under Från mall.
+        if (!coach) return svar({ fel: "Bara teamledare, säljchef och VD hanterar coachningsmallar." }, 403);
+        const id = str(b.id, 40), aktiv = b.aktiv === true;
+        if (!UUID.test(id)) return svar({ fel: "Mallen finns inte." }, 404);
+        const { data: m } = await db.from("coaching_template").update({ active: aktiv }).eq("id", id).select("name").maybeSingle();
+        if (!m) return svar({ fel: "Mallen finns inte." }, 404);
+        await db.from("audit_log").insert({ actor_id: mig, action: aktiv ? "coaching_template.resumed" : "coaching_template.paused", object_type: "coaching_template", object_id: id, meta: { name: m.name } });
+        return svar({ ok: aktiv ? `"${m.name}" går att lägga upp igen.` : `"${m.name}" är vilande. Den syns inte under Från mall, och det som redan lagts upp rörs inte.` });
+      }
       case "mall-tillampa": {
         // Alla moment blir överenskommelser i en insert, med fristerna räknade från startdagen.
-        const vem = str(b.vem, 40), dag = str(b.dag, 10);
+        const vem = str(b.vem, 40), dag = str(b.dag, 10), mallId = str(b.mall, 40);
         if (!coach || !UUID.test(vem) || !(await chefFor(vem))) return svar({ fel: "Du kan bara lägga upp uppgifter för personer du är chef för." }, 403);
         if (!DATUM.test(dag)) return svar({ fel: "Startdatumet är inte giltigt." }, 400);
-        const s = await tillampaMall({}, form({ template_id: str(b.mall, 40), assignee_id: vem, start_date: dag }));
-        return s.fel ? svar({ fel: s.fel }, 400) : svar({ ok: s.ok ?? "Mallen är lagd." });
+        if (UUID.test(mallId)) {
+          const { data: m } = await db.from("coaching_template").select("active").eq("id", mallId).maybeSingle();
+          if (m && m.active === false) return svar({ fel: "Mallen är vilande. Väck den i Mallar först." }, 400);
+        }
+        const fore = new Date(Date.now() - 1000).toISOString();
+        const s = await tillampaMall({}, form({ template_id: mallId, assignee_id: vem, start_date: dag }));
+        if (s.fel) return svar({ fel: s.fel }, 400);
+        // Beställaren 2026-10-21: "Från mall" går att ångra i tio minuter, alla på en gång. Repots tillampaMall ger inga id.
+        const { data: nya } = await db.from("coaching_task").select("id").eq("template_id", mallId).eq("assignee_id", vem).eq("created_by", mig).gte("created_at", fore);
+        return svar({ ok: s.ok ?? "Mallen är lagd.", ids: (nya ?? []).map((x) => x.id as string) });
+      }
+      case "mall-ater": {
+        // Bara det du själv lade upp de senaste tio minuterna, och bara om ingen hunnit börja: då tas alla bort på en gång.
+        const ids = (Array.isArray(b.ids) ? b.ids : []).map((x) => str(x, 40)).filter((x) => UUID.test(x)).slice(0, 60);
+        if (!ids.length) return svar({ fel: "Det finns inget att ångra." }, 404);
+        const { data: t } = await db.from("coaching_task").select("id, created_at, template_id, cancelled_at").in("id", ids).eq("created_by", mig);
+        if ((t ?? []).length !== ids.length || (t ?? []).some((x) => !x.template_id)) return svar({ fel: "Det finns inget att ångra." }, 404);
+        if ((t ?? []).some((x) => String(x.created_at) < nyss)) return forSent();
+        const { data: h } = await db.from("coaching_task_event").select("task_id").in("task_id", ids).neq("type", "tilldelad").limit(1);
+        if (h?.length) return svar({ fel: "Någon har redan börjat på en av dem. Avbryt dem en i taget i stället." }, 400);
+        await db.from("coaching_task").delete().in("id", ids).eq("created_by", mig);
+        await db.from("audit_log").insert({ actor_id: mig, action: "coaching_template.undone", object_type: "coaching_template", object_id: String(t![0].template_id), meta: { uppgifter: ids.length } });
+        revalidatePath("/coachning");
+        return svar({ ok: `Ångrat. ${ids.length === 1 ? "Överenskommelsen är borttagen" : `Alla ${ids.length} överenskommelser är borttagna`}.` });
       }
       case "lamna-in": {
         const u = await uppgift(str(b.id, 40));

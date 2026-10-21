@@ -50,7 +50,8 @@ behörigheter som här: du ser bara det du får se.
   rutinen hjälpte och bevaka ett område. Ägaren svarar på återkopplingen,
   och den som förvaltar rutinerna ser kvittenser, granskning och vad folk
   sökt efter utan att hitta. En rutin kan ha bilagor, till exempel en
-  prislista som PDF, och texten i en PDF går att söka på.
+  prislista som PDF, och texten i en PDF går att söka på. Bilagorna läggs
+  till också i redaktören, för ett utkast.
 - **Startsidan**: det som väntar på dig samlat ur de kopplade vyerna, med
   de tre mest bråttom överst och knappen för att göra det direkt. Chefen ser
   dagsläget och vilka som är borta framåt, och vid dagens slut nästa
@@ -87,7 +88,8 @@ behörigheter som här: du ser bara det du får se.
   ångra en stund efteråt, och en överenskommelse som avbryts får ett skäl.
   Chefen skriver mallar med flera steg och lägger upp en hel rampplan på en
   gång från en startdag, och den som börjat på en överenskommelse kan säga
-  det med ett tryck.
+  det med ett tryck. Mallen går att ändra och lägga vilande, och blev det fel
+  ångrar du hela rampplanen på en gång de första tio minuterna.
 - **Anställda**, för säljchef, VD och administratörer: vad som kräver dig och
   vad andra inte gjort än, lagens frister, registret med oanvända konton,
   checklistan per person med datum från startdagen, semestersaldot som
