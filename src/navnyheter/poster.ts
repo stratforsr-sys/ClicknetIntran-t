@@ -164,6 +164,8 @@ behörigheter som här: du ser bara det du får se.
   slutdatum.
   Färgkategorier som i Outlook: sätt röd, blå eller någon av de andra på en
   post i snabbkortet, och döp om dem som du vill. De syns bara för dig.
+  Tryck på en deltagares namn i ett möte för att göra den valfri. Föreslå
+  tid letar då bara efter en tid som passar de obligatoriska.
 - **Ärenden**, med svarstiden som navet lovar. Chefen får ett ärende av
   nattjobbet när en överenskommelse i Coachning är fjorton dagar över fristen
   eller någon inte gjort systemguiderna i tid, och ägaren när en sats ska ses

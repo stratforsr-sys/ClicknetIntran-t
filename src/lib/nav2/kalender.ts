@@ -189,10 +189,17 @@ export async function kalDetalj(user: CurrentUser, id: string) {
   const d = await hamtaHandelsedetalj(user, id);
   if (!d) return null;
   // 0090: ett privat möte visar inte plats och agenda för den som inte är med.
-  const [{ data: e }, { data: g }] = await Promise.all([
+  const [{ data: e }, { data: g }, { data: v }] = await Promise.all([
     supabaseAdmin().from("calendar_event").select("is_private, organizer_id").eq("id", id).maybeSingle(),
     supabaseAdmin().from("calendar_attendee").select("external_email").eq("event_id", id).not("external_email", "is", null),
+    // Valfria deltagare (0203), på mötet eller serien. Före 0203 felar frågan, och då är alla obligatoriska.
+    supabaseAdmin()
+      .from("calendar_attendee")
+      .select("employee_id")
+      .eq("optional", true)
+      .or(d.serie ? `event_id.eq.${id},series_id.eq.${d.serie.id}` : `event_id.eq.${id}`),
   ]);
+  const valfria = new Set(((v ?? []) as { employee_id: string | null }[]).map((r) => r.employee_id).filter((x): x is string => Boolean(x)));
   const mig = user.employee!.id;
   const arrangor = d.organisator === mig;
   // 1:1: punkterna på agendan och säljarens K&V, med läsarens token (coachningskretsen, som /kalender).
@@ -209,7 +216,7 @@ export async function kalDetalj(user: CurrentUser, id: string) {
     // Kommentaren till svaret och förslaget om ny tid är till arrangören, som i Outlook. Hon godkänner eller
     // behåller tiden i kortet (POST besluta). Beställaren 2026-10-22: ett ombud ("Kan planera om", "Delegat")
     // ändrar inte i ägarens kalender, så bara arrangören, inte repots farAndra.
-    deltagare: d.deltagare.map((x) => (arrangor ? { id: x.id, svar: x.svar, note: x.note, forslag: x.forslag } : { id: x.id, svar: x.svar })),
+    deltagare: d.deltagare.map((x) => ({ ...(arrangor ? { id: x.id, svar: x.svar, note: x.note, forslag: x.forslag } : { id: x.id, svar: x.svar }), ...(valfria.has(x.id) ? { valfri: true } : {}) })),
     farAndra: arrangor,
     // Inbjudna utanför Clicknet (calendar_attendee.external_email): de som fått mejlet med kalenderfilen.
     gaster: (g ?? []).map((x) => String(x.external_email)),

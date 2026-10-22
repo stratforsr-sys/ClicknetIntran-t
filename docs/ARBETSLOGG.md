@@ -5,6 +5,22 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-22 · Nav 2.0, Kalendern som Outlook, del 13: valfria deltagare (0203 körd)
+
+- **Beställaren 2026-10-22 (svar 4):** "har Outlook det, då gör det".
+- **Nu:** ett tryck på deltagarens namn i mötesformuläret växlar mellan
+  obligatorisk och valfri ("· valfri"). Den valfria får samma inbjudan,
+  men Föreslå tid, Nästa lediga tid och schemaläggningsassistenten letar
+  bara en tid då de obligatoriska är lediga ("De obligatoriska är lediga.",
+  raden märkt "valfri"). Ett öppnat möte visar vilka som är valfria.
+- **Servern:** `Falt.valfria`, `sattValfria` efter `skapaMote`,
+  `skapaSerie` och en ändring (mötets eller seriens rader);
+  `kalDetalj` märker deltagarna `valfri`.
+- **0203 (`supabase/migrations/0203_kalender_valfria_deltagare.sql`):**
+  `calendar_attendee.optional boolean default false`, nullbar med flit
+  (`lk_angra` lägger tillbaka äldre rader utan fältet). Torrkörd och körd.
+- Prov: `prov/del13.json` lokalt och i previewen.
+
 ## 2026-10-22 · Nav 2.0, Kalendern som Outlook, del 12: färgkategorier som i Outlook, och "Konferens" (ingen migration)
 
 - **Beställaren 2026-10-22 (svar 6):** "exakt kategorier som röd, blå och

@@ -132,6 +132,8 @@ type Falt = {
   upprepa?: string;
   /** Seriens slutdatum (Outlooks "Slutar"), tomt = löper vidare. */
   slut?: string | null;
+  /** Valfria deltagare (Outlook, 0203): id:n bland `delt`. */
+  valfria?: string[];
   priv?: boolean;
   lev?: string;
   order?: string;
@@ -209,6 +211,21 @@ async function kopieraTill(user: CurrentUser, id: string, dag: string, start: nu
   if (r.fel || !r.eventId) return r;
   if (e?.is_private || e?.online_url) await db.from("calendar_event").update({ is_private: Boolean(e.is_private), online_url: e.online_url ?? null }).eq("id", r.eventId);
   return { ...r, kvitto: kvittoKopierad(dag, start, deltagare.length > 0) + (gaster ? " Gästerna utanför Clicknet följer inte med." : "") };
+}
+
+/**
+ * Valfria deltagare (beställaren 2026-10-22, svar 4; 0203): efter att mötet eller serien sparats sätts
+ * `calendar_attendee.optional` på mötets eller seriens rader. Före 0203 finns kolumnen inte, och då står alla
+ * som obligatoriska, som förut.
+ */
+async function sattValfria(eventId: string | null | undefined, valfria: readonly string[] | undefined): Promise<void> {
+  if (!eventId || valfria === undefined) return;
+  const db = supabaseAdmin();
+  const { data: e } = await db.from("calendar_event").select("series_id").eq("id", eventId).maybeSingle();
+  const pa = (q: ReturnType<ReturnType<typeof db.from>["update"]>) => (e?.series_id ? q.eq("series_id", e.series_id) : q.eq("event_id", eventId));
+  const ids = valfria.filter((x) => UUID.test(x));
+  await pa(db.from("calendar_attendee").update({ optional: false }));
+  if (ids.length) await pa(db.from("calendar_attendee").update({ optional: true })).in("employee_id", ids);
 }
 
 /** Formulärets "Upprepas" → seriens regel (calendar_series). */
@@ -368,6 +385,7 @@ export async function POST(request: Request) {
             if (sist.fel) return ut(sist);
           }
           await privat(f.id);
+          await sattValfria(f.id, f.valfria);
           return ut(await bjudIn(sist, sist.eventId ?? f.id, g.epost));
         }
 
@@ -410,6 +428,7 @@ export async function POST(request: Request) {
               await supabaseAdmin().from("calendar_event").delete().eq("series_id", e.series_id).gt("dag", f.slut);
             }
           }
+          if (!r.fel) await sattValfria(r.eventId, f.valfria);
           return ut(r);
         }
         // Ett möte, också ett leveransmöte från formuläret utan kund: förinställningens rubrik och längd.
@@ -417,6 +436,7 @@ export async function POST(request: Request) {
         if (!r.fel) {
           await privat(r.eventId);
           if (video && r.eventId) await supabaseAdmin().from("calendar_event").update({ online_url: video }).eq("id", r.eventId);
+          await sattValfria(r.eventId, f.valfria);
         }
         return ut(await bjudIn(r, r.eventId, g.epost));
       }

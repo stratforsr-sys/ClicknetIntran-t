@@ -27340,6 +27340,7 @@ function ndKDetalj(e){
       y.gaster = x.gaster || [];
       // Arrangörens del av svaren: kommentarer och förslag om ny tid (bara till den som får ändra mötet).
       y.farAndra = !!x.farAndra; y.enskilt = x.enskilt || null; y.serieRegel = x.serieRegel || null;
+      y.valfria = x.deltagare.filter(d => d.valfri).map(d => ndKNamn(d.id)).filter(Boolean);
       y.ndSvar = x.deltagare.filter(d => d.note || d.forslag).map(d => ({id:d.id, namn:ndKNamn(d.id) || 'Okänd', svar:d.svar, note:d.note || '', forslag:d.forslag || null}));
       ndKTitel(y);
     });
@@ -27470,7 +27471,11 @@ kAssistent = function(f, pers){
     const t = h.indexOf('class="oltarb"', a), slut = t < 0 ? -1 : h.indexOf('</span>', t) + 7; if (slut < 7) return;
     h = h.slice(0, slut) + block + h.slice(slut);
   });
-  return ndKKollar(pers, f.d) ? h.replace(/(<p class="ol(?:ok|mut)">)(Alla är lediga\.|Någon är upptagen\.)/, `$1${NDKKOLLAR}`) : h;
+  // Valfria (0203): märkta i raden, och "lediga" gäller de obligatoriska.
+  const valfria = (f.valfria || []).filter(n => pers.includes(n));
+  valfria.forEach(n => { const i = pers.indexOf(n), a = h.indexOf(`data-ksarad="${i}"`), b = a < 0 ? -1 : h.lastIndexOf('</span>', h.lastIndexOf('<div class="olsat"', a)); if (b > 0) h = h.slice(0, b) + ' <small>valfri</small>' + h.slice(b); });
+  if (valfria.length && pers.filter(x => !valfria.includes(x)).every(x => !kUpptagen(x, f.d, f.s, f.e))) h = h.replace('<p class="olmut">Någon är upptagen.', '<p class="olok">De obligatoriska är lediga.');
+  return ndKKollar(pers.filter(x => !valfria.includes(x)), f.d) ? h.replace(/(<p class="ol(?:ok|mut)">)(Alla är lediga\.|Någon är upptagen\.|De obligatoriska är lediga\.)/, `$1${NDKKOLLAR}`) : h;
 };
 const _ndKSnabb = kSnabb;
 kSnabb = function(){
@@ -27481,7 +27486,11 @@ kSnabb = function(){
 // En ledig tid letas aldrig före i dag (repots autopick). Utkastets kForslaTid hoppade bara över passerade
 // minuter i dag, så Flytta på ett möte som varit föreslog en tid i det förflutna.
 const _ndKForslaTid = kForslaTid;
-kForslaTid = function(personer, langd, fran){ return _ndKForslaTid(personer, langd, ndK() && (!fran || fran < kIdag()) ? kIdag() : fran); };
+kForslaTid = function(personer, langd, fran){
+  // Valfria deltagare (Outlook, 0203) räknas inte när en tid letas.
+  const valfria = ndK() && S.kForm ? (S.kForm.valfria || []) : [];
+  return _ndKForslaTid(personer.filter(p => !valfria.includes(p)), langd, ndK() && (!fran || fran < kIdag()) ? kIdag() : fran);
+};
 /* Knapparna som letar en tid väntar på navets data för de två veckor de letar i, och trycks sedan igen. */
 function ndKVanta(e, sel, namn, fran, dagar){
   if (fran < kIdag()) fran = kIdag();
@@ -27515,7 +27524,7 @@ function ndKFalt(f){
   const ev = f.id ? KEV.find(x => x.id === f.id) : null;
   return {id:ev ? ndKRef(ev) : undefined, typ:f.typ, t:(f.t || '').trim() || (f.lev || ''), d:f.d, s:f.heldag ? 0 : f.s, e:f.heldag ? 1440 : f.e, heldag:!!f.heldag,
     delt:(f.delt || []).map(n => ndKId(n)).filter(Boolean), ...ndKPlatsLank(f, ev), agenda:f.agenda || '', visa:NDKVISA[f.visa] || 'upptagen',
-    pamin:NDKPAMMIN[f.pamin] !== undefined ? NDKPAMMIN[f.pamin] : 15, upprepa:f.upprepa || 'Upprepas inte', slut:f.upprepa && f.upprepa !== 'Upprepas inte' ? (f.slut || '') : undefined, priv:!!f.priv, lev:f.lev || undefined, order:f.order || undefined,
+    pamin:NDKPAMMIN[f.pamin] !== undefined ? NDKPAMMIN[f.pamin] : 15, upprepa:f.upprepa || 'Upprepas inte', slut:f.upprepa && f.upprepa !== 'Upprepas inte' ? (f.slut || '') : undefined, valfria:f.typ === 'uppgift' ? undefined : (f.valfria || []).filter(n => (f.delt || []).includes(n)).map(n => ndKId(n)).filter(Boolean), priv:!!f.priv, lev:f.lev || undefined, order:f.order || undefined,
     gaster:f.typ === 'mote' ? (f.gaster || []).filter(a => !(f.gastFore || []).includes(a)) : []};
 }
 /* Möteslänken (beslutsrundan 2026-10-20: Nav sparar en länk som skrivs in, men skapar ingen). En länk som klistras
@@ -27549,7 +27558,8 @@ kOppnaForm = function(over){
   if (ndK() && over && over.id){ const ev = KEV.find(x => x.id === over.id); over = {...over, gastFore:(ev && ev.gaster) || [], gaster:[], levEv:!!ev && ev.kat === 'leverans'};
     if (ev && ev.online) over = {...over, plats:[over.plats && over.plats !== 'Videolänk' ? over.plats : '', ev.online].filter(Boolean).join(' '), video:true};
     // En gång i en serie: seriens mönster och slut ur navet (utkastet gissade "Varje vardag" eller "Varannan vecka").
-    if (ev && ev.rep && ev.serieRegel) over = {...over, upprepa:ev.serieRegel.upprepa, slut:ev.serieRegel.slut || ''}; }
+    if (ev && ev.rep && ev.serieRegel) over = {...over, upprepa:ev.serieRegel.upprepa, slut:ev.serieRegel.slut || ''};
+    over = {...over, valfria:(ev && ev.valfria) || []}; }
   S.ndKSerieVal = null;
   return _ndKOppna(over);
 };
@@ -27562,7 +27572,7 @@ kFormular = function(){
     if (!ndKHar(ND.jag.id, f.d, f.d)) ndKHamta('vecka', f.d, [], [ND.jag.id]);
     if ((f.delt || []).length){ ndKUppBehov([kJag(), ...f.delt], f.d); if (ndKKollar(f.delt, f.d)) h = h.replace(/(<div class="olmsg ok">[\s\S]*?<span>)[^<]*(<\/span>)/, `$1${NDKKOLLAR}$2`); }
   }
-  if (ndK() && f) h = ndKSerieForm(h, f);
+  if (ndK() && f) h = ndKValfriaForm(ndKSerieForm(h, f), f);
   if (!ndK() || !f || f.typ !== 'mote') return h;
   const slut = '</span><small class="olmut">Inbjudna får en notis och ett mejl med .ics.', i = h.indexOf(slut);
   if (i < 0) return h;
@@ -27916,6 +27926,24 @@ document.addEventListener('click', e => {
   const v = b.dataset.ndkserieval;
   if (!v){ S.ndKSerieVal = null; render(); return; }
   kLasForm(); S.ndKSerieVal = v; kSpara(S.kForm);
+}, true);
+
+/* ---------- Valfria deltagare som i Outlook (beställaren 2026-10-22, svar 4; 0203) ----------
+   Ett tryck på deltagarens namn i formuläret växlar mellan obligatorisk och valfri. Den valfria får samma inbjudan,
+   men Föreslå tid, Nästa lediga tid och assistenten letar bara en tid då de obligatoriska är lediga. */
+function ndKValfriaForm(h, f){
+  if (f.typ === 'uppgift') return h;
+  (f.delt || []).forEach(p => {
+    const v = (f.valfria || []).includes(p), a = `${esc(p)}<button data-kfdelt="${esc(p)}"`;
+    h = h.replace(a, `<button type="button" data-ndkvalfri="${esc(p)}" title="${v ? 'Valfri. Tryck för obligatorisk.' : 'Obligatorisk. Tryck för valfri.'}" style="all:unset;cursor:pointer">${esc(p)}${v ? ' <span class="olmut">· valfri</span>' : ''}</button><button data-kfdelt="${esc(p)}"`);
+  });
+  return h;
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('[data-ndkvalfri]'); if (!b || !ndK() || !S.kForm) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  kLasForm(); const f = S.kForm, n = b.dataset.ndkvalfri, v = f.valfria || [];
+  f.valfria = v.includes(n) ? v.filter(x => x !== n) : [...v, n]; render();
 }, true);
 
 /* ---------- Färgkategorier som i Outlook (beställaren 2026-10-22, svar 6) ----------
