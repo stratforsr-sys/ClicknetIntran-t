@@ -3,6 +3,7 @@ import { kontrolleraCron } from "@/lib/jobb/behorighet";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { tomUtkorgen } from "@/lib/utkorg-server";
 import { tomKandidatko } from "@/lib/nav2/rekrytering-utskick";
+import { motespaminnelser } from "@/lib/nav2/kalender-push";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -15,7 +16,8 @@ export const maxDuration = 60;
  * Den vanliga vägen är `after()` i den action som skrev raderna. Den här tar
  * det som blev kvar när en funktion dog innan ångerfönstret gått ut, och den
  * lägger först uppgifternas påminnelser i utkorgen (`lk_uppgiftspaminnelser`),
- * så att de töms i samma svep.
+ * och mötenas på deras påminnelsetid (`motespaminnelser`, Nav 2.0: de kommer
+ * som push i telefonen), så att de töms i samma svep.
  *
  * JOBBET SKAPAS AVSTÄNGT i 0069 och slås på när grenen mergats: `job_target`
  * pekar på produktionen, och där finns rutten först efter mergen.
@@ -27,12 +29,14 @@ async function kor(request: NextRequest) {
   if (nekad) return nekad;
 
   const { data: paminnelser, error } = await supabaseAdmin().rpc("lk_uppgiftspaminnelser");
+  const moten = await motespaminnelser(supabaseAdmin()).catch((e: unknown) => `fel: ${e instanceof Error ? e.message : String(e)}`);
   const tomning = await tomUtkorgen(200);
   // Rekryteringens mejl till kandidater som låg mer än 29 dagar fram (Resends gräns).
   const kandidater = await tomKandidatko();
 
   return NextResponse.json({
     paminnelser: error ? `fel: ${error.message}` : paminnelser,
+    moten,
     ...tomning,
     kandidater,
   });

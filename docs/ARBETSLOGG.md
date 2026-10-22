@@ -5,6 +5,31 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-22 · Nav 2.0, Kalendern som Outlook, del 10: allt i kalendern som push i telefonen (ingen migration)
+
+- **Beställaren 2026-10-22 (fråga 7):** "super viktigt, allt i kalendern ska
+  komma som notis i telefonen".
+- **Nu:** varje kalendernotis pushas när raden står i klockan:
+  `notifiera`, `notifieraFlera` och `notifieraFranUtkorgen` anropar
+  `pushaHandelse` (`src/lib/nav2/kalender-push.ts`, `PUSHKALLOR`: inbjudan,
+  flytt, ändring, inställt, svar, förslag och beslut, 1:1-punkter och
+  förberedelse, delningar, leveransens notiser, uppgiftens påminnelse).
+  Mötets påminnelse på påminnelsetiden: `motespaminnelser` i
+  `/api/jobb/utkorg` (varje minut) lägger en `kalender-paminnelse` per person
+  och starttid i utkorgen (arrangören och deltagarna på mötet eller serien som
+  inte tackat nej; den egna påminnelsen före mötets), mallen `paminnelse` ger
+  "Om 15 minuter, kl 10:00 · Kontoret". Pushen är tom som förut;
+  `public/nav2/sw.js` frågar först `/nav2/kalender?push=<endpoint>`
+  (`kalPushNasta`: den äldsta kalendernotisen enheten inte visat, markör per
+  enhet i `nav_preference` `push.kal.<enhet>`), och trycket öppnar posten.
+- **Slå på:** Inställningar → Notiser → "Kalendern i telefonen", för alla
+  roller (samma enhet som kvällsnotisen). `ndskal.js` ritade utkastets
+  notiskort förbi modulernas tillägg när Tid var kopplad, så kvällsnotisens
+  kort syntes aldrig; nu följer korten med.
+- **Gäller först efter merge:** pg_cron ringer produktionen (main). Provat
+  lokalt mot produktionens data (`prov/pam-prov.mjs`, `prov/push-prov.mjs`)
+  och kortet på en lokal sida (`prov/del10.json`).
+
 ## 2026-10-21 · Nav 2.0: Inloggningen i Nav 2.0:s utseende, inloggning med kod och "Glömt lösenordet?" (ingen migration)
 
 Beställaren 2026-10-20: inloggningen ska vara ordentlig, minimalistisk men

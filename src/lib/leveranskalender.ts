@@ -760,6 +760,13 @@ export function notistext(
       return { rubrik: `Påminnelsen till ${d.mottagare === "kund" ? "kunden" : "dig"} kom inte fram`, detalj: `${u.rubrik} · ${nar}`, href };
     case "uppgift-paminnelse":
       return { rubrik: u.rubrik, detalj: `Om tio minuter, kl ${nyTid ?? ""}`.trim(), href };
+    // Mötets påminnelse på påminnelsetiden (Nav 2.0, `motespaminnelser`). `min` är personens påminnelse.
+    case "paminnelse": {
+      const min = Number(d.min ?? 0);
+      const om = min >= 1440 ? "I morgon" : min >= 60 ? `Om ${min / 60 === 1 ? "en timme" : `${min / 60} timmar`}` : min > 0 ? `Om ${min} minuter` : "Nu";
+      const plats = typeof d.plats === "string" && d.plats ? ` · ${d.plats}` : "";
+      return { rubrik: u.rubrik, detalj: `${om}, kl ${u.tid ?? ""}${plats}`, href };
+    }
     default:
       return null;
   }

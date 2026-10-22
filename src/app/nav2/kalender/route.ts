@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 import { FORINSTALLNINGAR, STEG, UPPREPA, arDatum, arVy, kvittoKopierad, type Upprepa } from "@/lib/leveranskalender";
 import { fonsterFran, hamtaHandelsedetalj, lk, upptagetFor } from "@/lib/leveranskalender-server";
 import { hamtaKalposter, kalDetalj, sokKalender } from "@/lib/nav2/kalender";
+import { kalPushNasta } from "@/lib/nav2/kalender-push";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
 import { skapaKalenderpost, stallInDelning } from "@/app/(app)/kalender/actions";
 import {
@@ -65,6 +66,13 @@ export async function GET(request: Request) {
     if (!arDatum(fran) || !personer.length || personer.length > 20) return svar({ fel: "Okända personer eller dag." }, 400);
     const { till } = fonsterFran(fran, 15);
     return svar({ fran, till, upptaget: await upptagetFor(user, personer, fran, till) });
+  }
+
+  // Service workern (public/nav2/sw.js) när en tom push kommit: den äldsta kalendernotisen den här enheten inte visat.
+  const push = url.searchParams.get("push");
+  if (push !== null) {
+    if (!/^https:\/\//.test(push) || push.length > 1000) return svar({ notis: null });
+    return svar({ notis: await kalPushNasta(user.employee.id, push) });
   }
 
   const sok = url.searchParams.get("sok");

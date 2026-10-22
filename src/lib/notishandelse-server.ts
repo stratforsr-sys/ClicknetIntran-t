@@ -4,6 +4,7 @@ import { after } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { HANDELSEKALLOR, type Handelsekalla, type Notistyp } from "@/lib/notiser";
 import { kallanMejlas, mejlaHandelse } from "@/lib/epost-notis";
+import { pushaHandelse } from "@/lib/nav2/kalender-push";
 import type { Bilaga } from "@/lib/epost";
 import type { Role, Permission } from "@/lib/roles";
 
@@ -87,6 +88,7 @@ export async function notifiera(handelse: Handelse): Promise<boolean> {
 
     // Raden finns. Brevet — om kallan ar en av dem som mejlas — gar efterat.
     kanskeMejla([handelse.till], handelse);
+    kanskePusha([handelse.till], handelse.kalla);
     return true;
   } catch {
     return false;
@@ -143,6 +145,19 @@ function kanskeMejla(mottagare: readonly string[], handelse: Omit<Handelse, "til
 }
 
 /**
+ * Pushen till telefonen, for kalenderns kallor (Nav 2.0, `kalender-push.ts`).
+ * Samma skal som brevet att den gar i `after()`: varje enhet ar ett anrop till
+ * Google eller Apple, och det ska inte laggas pa den som vantar pa svaret.
+ */
+function kanskePusha(mottagare: readonly string[], kalla: string): void {
+  try {
+    after(() => pushaHandelse(mottagare, kalla));
+  } catch {
+    // Ingen begaran att haka i. Notisen star kvar i klockan.
+  }
+}
+
+/**
  * Samma handelse till flera mottagare, i EN insert.
  *
  * En slinga med ett anrop per mottagare hade gett samma rader, och det ar inte
@@ -180,6 +195,7 @@ export async function notifieraFlera(
     if (error) return 0;
 
     kanskeMejla(unika, handelse);
+    kanskePusha(unika, handelse.kalla);
     return unika.length;
   } catch {
     return 0;
@@ -234,6 +250,8 @@ export async function notifieraFranUtkorgen(handelse: Handelse): Promise<boolean
     href: handelse.href,
     bilagor: handelse.bilagor,
   });
+  // Kalenderns notiser kommer också i telefonen (Nav 2.0). `pushaHandelse` kastar aldrig.
+  await pushaHandelse([handelse.till], handelse.kalla);
   return true;
 }
 

@@ -157,6 +157,8 @@ behörigheter som här: du ser bara det du får se.
   månaden du ser.
   Den du delar din kalender med ser den, men flyttar och bokar inte i
   den. Det gör bara du.
+  Allt i kalendern kommer som notis i telefonen, också mötets påminnelse.
+  Slå på det i Inställningar, Notiser, Kalendern i telefonen.
 - **Ärenden**, med svarstiden som navet lovar. Chefen får ett ärende av
   nattjobbet när en överenskommelse i Coachning är fjorton dagar över fristen
   eller någon inte gjort systemguiderna i tid, och ägaren när en sats ska ses

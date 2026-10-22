@@ -524,7 +524,9 @@ export const NOTIS_KALLOR = [
    *
    * `uppgift-paminnelse` är uppgiftens påminnelse tio minuter före, skriven av
    * utkorgsjobbet. Den är en händelse — "nu är det dags" — och inte ett
-   * tillstånd: efter klockslaget har den gjort sitt.
+   * tillstånd: efter klockslaget har den gjort sitt. `kalender-paminnelse` är
+   * samma sak för ett möte, på mötets påminnelsetid (Nav 2.0, del 10: den
+   * kommer som push i telefonen; `kalender-push.ts`).
    *
    * `utkorg-fel` går till admin när en rad i utkorgen misslyckats tre gånger.
    *
@@ -547,6 +549,7 @@ export const NOTIS_KALLOR = [
   "kalender-forslag",
   "kalender-forslag-beslut",
   "uppgift-paminnelse",
+  "kalender-paminnelse",
   "utkorg-fel",
   "kalender-punkt",
   "kalender-forberedelse",
@@ -752,6 +755,7 @@ export const HANDELSEKALLOR = [
   "kalender-forslag",
   "kalender-forslag-beslut",
   "uppgift-paminnelse",
+  "kalender-paminnelse",
   "utkorg-fel",
   "kalender-punkt",
   "kalender-forberedelse",

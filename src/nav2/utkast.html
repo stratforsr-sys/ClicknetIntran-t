@@ -27830,6 +27830,51 @@ document.addEventListener('pointerup', e => {
   setTimeout(() => document.querySelector('[data-knyt]')?.focus(), 20);
 }, true);
 
+/* ---------- Kalendern i telefonen (push) ----------
+   Beställaren 2026-10-22: allt i kalendern ska komma som notis i telefonen. Navet pushar varje kalendernotis och mötets
+   påminnelse (kalender-push.ts); här slås det på per enhet, för alla roller. Samma enhet och samma prenumeration som
+   kvällsnotisen (/nav2/hem, push), med startsidans läge (S.ndPush), men en egen text: kvällsnotisen är bara ledarnas. */
+const ndKPushOk = () => ndHemP() && ND.hem.push && ndK();
+function ndKPushRad(){
+  const p = ND.hem.push, l = S.ndPush.lage, andra = p.enheter - (l === 'pa' ? 1 : 0);
+  if (l === 'pa') return `På för den här enheten${andra > 0 ? ` och ${andra} till` : ''}. <button class="tlink inl" data-ndkpush="av">Stäng av här</button>`;
+  if (l === 'nekad') return 'Webbläsaren blockerar notiser från Nav. Tillåt dem i webbläsarens inställningar.';
+  if (l === 'ios') return 'Lägg först Nav på hemskärmen (Dela, Lägg till på hemskärmen) och öppna det därifrån. Då går notisen att slå på.';
+  if (l === 'utan') return 'Den här webbläsaren tar inte emot pushnotiser.';
+  return `${p.enheter ? `På för ${p.enheter} ${p.enheter === 1 ? 'annan enhet' : 'andra enheter'}. ` : ''}<button class="tlink inl" data-ndkpush="pa">Slå på för den här enheten</button>`;
+}
+const _ndKPrfNot = prfNotiserSek;
+prfNotiserSek = function(){
+  const h = _ndKPrfNot(); if (!ndKPushOk()) return h;
+  return h + prfKort('kalpush', 'Kalendern i telefonen', 'Inbjudningar, flyttade och inställda möten, svar, förslag och mötets påminnelse, också när Nav inte är öppet.', `<div class="prf-kb"><p class="prf-hj">${ndKPushRad()}</p></div>`);
+};
+async function ndKPushPa(){
+  if (S.ndPush.upptagen) return; S.ndPush.upptagen = true;
+  try {
+    if (Notification.permission !== 'granted' && await Notification.requestPermission() !== 'granted'){ toast('Webbläsaren tillåter inte notiser från Nav. Ändra det i webbläsarens inställningar.'); return; }
+    const reg = await navigator.serviceWorker.register('/nav2/sw.js', {scope:'/nav2/'});
+    if (!reg.active){ const w = reg.installing || reg.waiting; if (w) await new Promise(r => { if (w.state === 'activated') r(); w.addEventListener('statechange', () => { if (w.state === 'activated') r(); }); }); }
+    const fanns = await reg.pushManager.getSubscription(), sub = fanns || await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:ndHemB64(ND.hem.push.nyckel)});
+    const s = await ndHemPost('push', {sub:sub.toJSON()});
+    if (!s){ if (!fanns) await sub.unsubscribe().catch(() => {}); return; }
+    if (!fanns) ND.hem.push.enheter++;
+    toast('Klart. Kalendern kommer som notis på den här enheten.');
+  } catch(e){ toast(`Notisen gick inte att slå på: ${e && e.message ? e.message : e}`); }
+  finally { S.ndPush.upptagen = false; await ndHemPushLage(); render(); }
+}
+async function ndKPushAv(){
+  try {
+    const reg = await navigator.serviceWorker.getRegistration('/nav2/'), sub = reg && await reg.pushManager.getSubscription();
+    if (sub){ const s = await ndHemPost('push-av', {endpoint:sub.endpoint}); if (!s) return; await sub.unsubscribe(); ND.hem.push.enheter = Math.max(0, ND.hem.push.enheter - 1); toast('Notiserna är av på den här enheten.'); }
+  } catch(_){ toast('Det gick inte att stänga av notisen.'); }
+  await ndHemPushLage(); render();
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('[data-ndkpush]'); if (!b || !ndKPushOk()) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  if (b.dataset.ndkpush === 'pa') ndKPushPa(); else ndKPushAv();
+}, true);
+
 if (ndK()){ ndKalStart(); NDKOPPLAD.add('kalender'); }
 
 /* =====================================================================
@@ -33206,7 +33251,9 @@ prfNotiserSek = function(){
   h = h.replace('Notiser visar aldrig skälet till en ledighet eller något om hälsa, bara vad som hänt och var.', 'Valen gäller den här enheten. Notiser visar aldrig skälet till en ledighet eller något om hälsa.');
   // Utan schema finns inget klockslag att räkna från.
   if (!TID_SCHEMA.start || !TID_SCHEMA.slut) h = h.replace(/Klockan <span class="num">[^<]*<\/span>/g, () => 'Efter schemat').replace(/: hur länge efter [0-9:]+"/g, ': hur länge efter schemat"');
-  return h;
+  // Korten som modulerna lägger efter Påminnelser (kvällsnotisen, Kalendern i telefonen) följer med.
+  const ovan = _skalNotiserSek(), slut = 'kopplas med Tid och Kalender.</p></div></div>', j = ovan.indexOf(slut);
+  return h + (j >= 0 ? ovan.slice(j + slut.length) : '');
 };
 function skalPaminn(andra){
   const fore = JSON.parse(JSON.stringify(S.ndPaminn)); andra(S.ndPaminn); render();
