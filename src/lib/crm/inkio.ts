@@ -330,11 +330,16 @@ export const inkio: CrmAdapter = {
 
     if (order.state === "draft") {
       // Ett utkast går inte att makulera, bara att radera — och inte så länge
-      // en fil hänger på det.
-      const innehall = await anrop<{ documents: { id: string }[] }>("GET", "/api/filehandler/get-record-contents", {
-        query: { doctype: "Sales Order", record_id: order.id },
-      });
-      for (const d of innehall.documents ?? []) {
+      // en fil hänger på det. get-files ersatte get-record-contents 2026-10 och
+      // svarar med listan direkt. Bara filer som hänger på just den här ordern
+      // raderas, ifall svaret någon gång tar med kundens övriga dokument.
+      const filer = await anrop<{ id: string; linked_doctype: string; linked_id: string }[]>(
+        "GET",
+        "/api/filehandler/get-files",
+        { query: { doctype: "Sales Order", record_id: order.id } },
+      );
+      for (const d of filer ?? []) {
+        if (d.linked_doctype !== "Sales Order" || d.linked_id !== order.id) continue;
         await anrop("DELETE", `/api/records/document/${encodeURIComponent(d.id)}`);
       }
       await anrop("DELETE", `/api/records/sales-order/${encodeURIComponent(order.id)}`);

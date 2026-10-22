@@ -5,6 +5,38 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-22 · Inkio: utkast går att radera igen (get-files)
+
+Gren `inkio-nya-nycklar`, ej mergad. Inkio tog bort
+`GET /api/filehandler/get-record-contents` när Dokument-sidans postvy
+försvann (bekräftat av Inkio). Den användes på ett enda ställe: när en order
+som ligger som **utkast** i Inkio makuleras med "Makulera även i Inkio" måste
+utkastets filer raderas före ordern. Anropet gav 404, så makuleringen hade
+fastnat i utkorgen. Det har aldrig hänt: ingen `crm_order` har varit ett
+utkast, `integration_log` (system crm) har inga fel.
+
+**Ersättaren är `GET /api/filehandler/get-files`** med samma parametrar
+(`doctype=Sales Order&record_id=…`). Svaret är en lista direkt, inte
+`{ documents }`. Formen lästes mot en riktig order innan koden skrevs: varje
+post har `id` (dokumentets), `linked_doctype` och `linked_id`. Koden raderar
+bara poster där `linked_doctype = "Sales Order"` och `linked_id` = ordern, så
+ett svar som någon gång tar med kundens andra dokument inte kan radera dem.
+
+**Resten av integrationen är genomgången mot Inkios nya spec** (573
+operationer): de femton övriga anropen i `inkio.ts` finns kvar med samma
+form. `inkio-mappning.ts`, `synk-server.ts`, `order-server.ts` och
+`order/actions.ts` anropar inte Inkio direkt.
+
+**Nycklarna byttes INTE.** `~/.clicknet/crm.env` innehåller samma nyckel och
+hemlighet som redan ligger i Vercel (Production och Preview/inkio). Läsanropen
+(`logged-user`, `records/service`, `get-sellers`, `records/customer`) ger 200
+med dem.
+
+Samma rättelse behövs i Nav 2.0-grenens kopia av `inkio.ts`, under låset i
+`~/nav2-utkast/PARALLELLT.md`. Den är inte rörd här.
+
+---
+
 ## 2026-10-09 · Finans på order (0079)
 
 Gren `finans-pa-order`, ej mergad. Beställaren: *"När vi lägger upp ordrar i

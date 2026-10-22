@@ -14,6 +14,21 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "inkio-utkast-gar-att-makulera",
+    rubrik: "Utkast i Inkio försvinner när ordern makuleras",
+    ingress:
+      "Makulerar du en order som bara ligger som utkast i Inkio raderas utkastet där, med sina filer, precis som det var tänkt.",
+    text: `En order utan avtal eller inspelning hamnar som **utkast** i Inkio. Makulerar du
+den i navet med **Makulera även i Inkio** ikryssat raderas utkastet och filerna
+på det i Inkio.
+
+Inkio bytte adressen dit filerna hämtas, så en sådan makulering hade fastnat.
+Ingen har hunnit råka ut för det.`,
+    datum: "2026-10-22",
+    roller: ["sales_manager", "ceo", "finance"],
+    href: "/order",
+  },
+  {
     slug: "finans-pa-order",
     rubrik: "Finans på order",
     ingress:
