@@ -5,6 +5,22 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-22 · Nav 2.0, Kalendern som Outlook, del 9: ett ombud ändrar inte i ägarens kalender (0200 skriven, inte körd)
+
+- **Beställaren 2026-10-22 (fråga 1):** den som fått nivån "Kan planera om"
+  eller "Delegat" ska inte flytta eller boka i ägarens kalender. Repots
+  `lk_far_andra` släppte fram de två nivåerna, och Nav 2.0:s rutt gick rakt
+  igenom till `lk_flytta`, `lk_andra_mote`, `lk_stall_in`, `lk_kopiera` och
+  `lk_besluta_forslag`.
+- **Nu:** `/nav2/kalender` ändrar en befintlig händelse bara för arrangören
+  (`baraArrangoren`: spara med id, flytta, längd, ställ in, kopiera,
+  besluta). Svaret, förslaget, den egna påminnelsen och 1:1-punkterna är
+  deltagarens och rörs inte. `kalDetalj` ger kommentarerna, förslagen och
+  `farAndra` bara till arrangören. Nivåerna står kvar och ger hela insynen.
+- **0200 (`supabase/migrations/0200_kalender_inga_ombud.sql`)** gör samma sak
+  i databasen, också för gamla Navs actions. Torrkörd: arrangören true,
+  någon annan false, 0 delningar berörs. Inte körd.
+
 ## 2026-10-21 · Nav 2.0, Kalendern som Outlook, del 8: sökning i hela kalendern (ingen migration)
 
 - **Felet:** sökfältet tonade bara ned det som inte matchade i den laddade

@@ -167,7 +167,7 @@ async function bjudIn(r: Resultat, eventId: string | null | undefined, epost: st
  * Ctrl- eller Alt-dra (Outlook): en kopia av mötet på den dag och tid man släpper det. Repots `kopiera` lägger
  * kopian en vecka fram; att sedan flytta den hade gett deltagarna två utskick. Här blir kopian ett nytt möte med
  * samma rubrik, plats, agenda, deltagare, påminnelse, "Visa som" och Privat, och en enda inbjudan. Arrangören,
- * eller den som får planera om i arrangörens kalender, kopierar; kopian står i arrangörens kalender. Gäster
+ * kopierar (beställaren 2026-10-22: inget ombud); kopian står i arrangörens kalender. Gäster
  * utanför Clicknet följer inte med, eftersom de annars fick ett mejl de inte bett om.
  */
 async function kopieraTill(user: CurrentUser, id: string, dag: string, start: number): Promise<Resultat> {
@@ -175,7 +175,7 @@ async function kopieraTill(user: CurrentUser, id: string, dag: string, start: nu
   const d = await hamtaHandelsedetalj(user, id);
   if (!d || d.installd) return { fel: "Händelsen finns inte längre." };
   if (d.slag !== "mote") return { fel: "Bara ett möte kopieras genom att dra. Ett 1:1 är en serie, och en leverans bokas från kön." };
-  if (!d.farAndra) return { fel: "Bara arrangören kopierar mötet. Du kan föreslå en ny tid." };
+  if (d.organisator !== user.employee?.id) return { fel: "Bara arrangören kopierar mötet. Du kan föreslå en ny tid." };
   const db = supabaseAdmin();
   const [{ data: e }, { count: gaster }] = await Promise.all([
     db.from("calendar_event").select("show_as, is_private, online_url").eq("id", id).maybeSingle(),
@@ -197,6 +197,19 @@ async function kopieraTill(user: CurrentUser, id: string, dag: string, start: nu
   if (r.fel || !r.eventId) return r;
   if (e?.is_private || e?.online_url) await db.from("calendar_event").update({ is_private: Boolean(e.is_private), online_url: e.online_url ?? null }).eq("id", r.eventId);
   return { ...r, kvitto: kvittoKopierad(dag, start, deltagare.length > 0) + (gaster ? " Gästerna utanför Clicknet följer inte med." : "") };
+}
+
+/**
+ * Beställaren 2026-10-22: ett ombud ("Kan planera om", "Delegat") flyttar och bokar inte i ägarens kalender.
+ * Databasens lk_far_andra släpper fram dem (0200, skriven men inte körd, stänger det där); här ändrar bara
+ * arrangören en händelse som redan finns. Svaret, förslaget, påminnelsen och 1:1-punkterna är deltagarens egna.
+ */
+const ARRANGORENS = ["besluta", "stallin", "kopiera", "flytta", "langd"];
+async function baraArrangoren(user: CurrentUser, id: string): Promise<Resultat | null> {
+  if (!UUID.test(id)) return { fel: "Händelsen finns inte längre." };
+  const { data } = await supabaseAdmin().from("calendar_event").select("organizer_id").eq("id", id).maybeSingle();
+  if (!data) return { fel: "Händelsen finns inte längre." };
+  return data.organizer_id === user.employee?.id ? null : { fel: "Bara arrangören ändrar händelsen." };
 }
 
 /**
@@ -231,6 +244,11 @@ export async function POST(request: Request) {
   };
 
   try {
+    const andras = handling === "spara" ? String((b.falt as Falt | undefined)?.id ?? "") : ARRANGORENS.includes(handling) ? id : "";
+    if (andras) {
+      const nej = await baraArrangoren(user, andras);
+      if (nej) return ut(nej);
+    }
     switch (handling) {
       case "spara": {
         const f = (b.falt ?? {}) as Falt;

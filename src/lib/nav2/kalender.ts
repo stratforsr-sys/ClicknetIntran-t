@@ -162,6 +162,7 @@ export async function kalDetalj(user: CurrentUser, id: string) {
     supabaseAdmin().from("calendar_attendee").select("external_email").eq("event_id", id).not("external_email", "is", null),
   ]);
   const mig = user.employee!.id;
+  const arrangor = d.organisator === mig;
   // 1:1: punkterna på agendan och säljarens K&V, med läsarens token (coachningskretsen, som /kalender).
   const enskilt = d.slag === "enskilt" ? await hamtaEnskilt(user, d).catch(() => null) : null;
   if (e?.is_private && e.organizer_id !== mig && !d.deltagare.some((x) => x.id === mig)) {
@@ -173,10 +174,11 @@ export async function kalDetalj(user: CurrentUser, id: string) {
     online: d.onlineUrl,
     agenda: d.agenda,
     organisator: d.organisator,
-    // Kommentaren till svaret och förslaget om ny tid är till arrangören (och den som får planera om hos henne),
-    // som i Outlook. Hon godkänner eller behåller tiden i kortet (POST besluta).
-    deltagare: d.deltagare.map((x) => (d.farAndra ? { id: x.id, svar: x.svar, note: x.note, forslag: x.forslag } : { id: x.id, svar: x.svar })),
-    farAndra: d.farAndra,
+    // Kommentaren till svaret och förslaget om ny tid är till arrangören, som i Outlook. Hon godkänner eller
+    // behåller tiden i kortet (POST besluta). Beställaren 2026-10-22: ett ombud ("Kan planera om", "Delegat")
+    // ändrar inte i ägarens kalender, så bara arrangören, inte repots farAndra.
+    deltagare: d.deltagare.map((x) => (arrangor ? { id: x.id, svar: x.svar, note: x.note, forslag: x.forslag } : { id: x.id, svar: x.svar })),
+    farAndra: arrangor,
     // Inbjudna utanför Clicknet (calendar_attendee.external_email): de som fått mejlet med kalenderfilen.
     gaster: (g ?? []).map((x) => String(x.external_email)),
     serieText: d.serie ? regeltext(d.serie) : null,

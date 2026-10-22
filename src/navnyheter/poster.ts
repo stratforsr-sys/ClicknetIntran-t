@@ -149,6 +149,8 @@ behörigheter som här: du ser bara det du får se.
   Skriv ut skriver vyn du ser, utan menyer, och sparar den som PDF.
   Tryck Enter i sökfältet för att söka i hela kalendern, inte bara i
   månaden du ser.
+  Den du delar din kalender med ser den, men flyttar och bokar inte i
+  den. Det gör bara du.
 - **Ärenden**, med svarstiden som navet lovar. Chefen får ett ärende av
   nattjobbet när en överenskommelse i Coachning är fjorton dagar över fristen
   eller någon inte gjort systemguiderna i tid, och ägaren när en sats ska ses
