@@ -5,6 +5,7 @@ import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import {
   bygStig,
   provaFil,
+  stadaEfterRegistreringsfel,
   visningsnamn,
   URL_SEKUNDER,
   URL_SEKUNDER_LJUD,
@@ -261,6 +262,21 @@ export async function registreraFil(args: {
   const lager = tolkaLager(args.store);
   const bucket = bucketen(lager);
 
+  // F1-4. Id:t kommer fran klienten, och sokvagen raknas fram ur det. Ar id:t
+  // redan registrerat ligger nagon annans fil pa sokvagen — ett paskrivet
+  // avtal, ett intyg — och varje `taBort` nedan hade raderat den. Fragan gors
+  // darfor fore allt som ror lagringen, och svaret ar ett fel, inte ett forsok.
+  // Efter den ar filen pa sokvagen den nyss uppladdade, och stadningarna fore
+  // insert far ta bort den som forut.
+  const { data: finns, error: finnsfel } = await db
+    .from("file_object")
+    .select("id")
+    .eq("id", args.fileId)
+    .maybeSingle();
+
+  if (finnsfel) return { fel: "Filen kunde inte registreras. Försök igen." };
+  if (finns) return { fel: "Filen är redan registrerad." };
+
   // Vad ligger dar egentligen? Lagringens eget svar, inte klientens pastaende.
   const huvud = await huvudUppgifter({
     lager,
@@ -316,8 +332,10 @@ export async function registreraFil(args: {
   });
 
   if (radfel) {
-    await taBort({ lager, bucket, path });
-    return { fel: radfel.message };
+    // En dubblett har betyder att en annan registrering av samma id hann fore
+    // mellan fragan ovan och insert. Filen ar da dess, och den lamnas.
+    if (stadaEfterRegistreringsfel(radfel, false)) await taBort({ lager, bucket, path });
+    return { fel: radfel.code === "23505" ? "Filen är redan registrerad." : radfel.message };
   }
 
   await db.from("file_access_log").insert({

@@ -9,6 +9,7 @@ import { tillSlug } from "@/lib/dokument";
 import { tolkaFragor, sparrTill, MODULTYPER, avbockningsbar } from "@/lib/utbildning";
 import { procent, tolkaKriterier } from "@/lib/rollspel";
 import { tolkaProvfragor } from "@/lib/prov";
+import { paraIhop, planeraProvfragor, type GammalFraga } from "@/lib/provfragor";
 import { certifieraPerson, farTaModul, loggaKurs } from "@/lib/utbildning-server";
 import { forberedUppladdning, registreraFil } from "@/lib/filer-server";
 
@@ -158,9 +159,52 @@ export async function sparaKurs(_prev: KursState, form: FormData): Promise<KursS
 }
 
 /**
- * En modul och dess fragor sparas i samma svep. Fragorna skrivs om fran
- * grunden varje gang — de ar innehall, inte historik, och en delvis uppdaterad
- * fragelista ar varre an en omskriven.
+ * C6. Skriver en plan fran `provfragor.ts` i en tabell med UNIQUE (foralder,
+ * sort): ta bort, parkera, uppdatera, lagg till.
+ *
+ * Unikheten provas rad for rad och gar inte att skjuta upp, sa tva fragor som
+ * byter plats hade krockat. Den som flyttar parkeras forst under det lagsta
+ * nummer som finns, och alla uppdateras sedan i en enda upsert.
+ */
+async function skrivPaPlats(
+  db: ReturnType<typeof supabaseAdmin>,
+  tabell: string,
+  andring: {
+    tabort: string[];
+    uppdatera: { rad: { id: string; sort: number } & Record<string, unknown>; gammalSort: number }[];
+    lagg: Record<string, unknown>[];
+  },
+): Promise<{ fel: string } | { nya: { id: string; sort: number }[] }> {
+  if (andring.tabort.length > 0) {
+    const { error } = await db.from(tabell).delete().in("id", andring.tabort);
+    if (error) return { fel: error.message };
+  }
+
+  const flyttas = andring.uppdatera.filter((u) => u.rad.sort !== u.gammalSort);
+  const lagst = Math.min(0, ...andring.uppdatera.map((u) => u.gammalSort));
+  for (const [i, u] of flyttas.entries()) {
+    const { error } = await db.from(tabell).update({ sort: lagst - 1 - i }).eq("id", u.rad.id);
+    if (error) return { fel: error.message };
+  }
+
+  if (andring.uppdatera.length > 0) {
+    const { error } = await db.from(tabell).upsert(andring.uppdatera.map((u) => u.rad));
+    if (error) return { fel: error.message };
+  }
+
+  if (andring.lagg.length === 0) return { nya: [] };
+  const { data, error } = await db.from(tabell).insert(andring.lagg).select("id, sort");
+  if (error) return { fel: error.message };
+  return { nya: (data ?? []) as { id: string; sort: number }[] };
+}
+
+/**
+ * En modul och dess fragor sparas i samma svep.
+ *
+ * C6: quizets fragor och rollspelets kriterier uppdateras pa plats och skrivs
+ * inte om fran grunden. Svaren i repetitionen (`learning_answer`), lagets
+ * repetition och sjalvskattningarna kaskaderar pa deras id, och en omskriven
+ * lista tog dem med sig vid varje sparning. Se `provfragor.ts`.
  */
 export async function sparaModul(_prev: KursState, form: FormData): Promise<KursState> {
   const user = await kravRedaktor();
@@ -232,28 +276,56 @@ export async function sparaModul(_prev: KursState, form: FormData): Promise<Kurs
   }
 
   if (kind === "quiz") {
-    await db.from("quiz_question").delete().eq("module_id", id);
-    for (const [i, f] of fragor.entries()) {
-      const { data: fraga } = await db
-        .from("quiz_question")
-        .insert({ module_id: id, sort: i + 1, prompt: f.prompt })
-        .select("id")
-        .single();
-      if (!fraga) continue;
-      await db.from("quiz_option").insert(
-        f.alternativ.map((a, j) => ({
-          question_id: fraga.id,
-          sort: j + 1,
-          label: a.label,
-          is_correct: a.ratt,
+    const { data: gamla, error: lasfel } = await db
+      .from("quiz_question")
+      .select("id, sort, prompt, quiz_option(id, sort, label)")
+      .eq("module_id", id);
+    if (lasfel) return { fel: "Frågorna kunde inte läsas, och inget av dem är ändrat. Försök igen." };
+
+    const plan = planeraProvfragor(
+      ((gamla ?? []) as unknown as (Omit<GammalFraga, "alternativ"> & { quiz_option: GammalFraga["alternativ"] | null })[]).map(
+        (g) => ({ id: g.id, sort: g.sort, prompt: g.prompt, alternativ: g.quiz_option ?? [] }),
+      ),
+      fragor,
+    );
+
+    const fragorna = await skrivPaPlats(db, "quiz_question", {
+      tabort: plan.tabort,
+      uppdatera: plan.uppdatera.map((u) => ({
+        rad: { id: u.id, module_id: id, sort: u.sort, prompt: u.prompt },
+        gammalSort: u.gammalSort,
+      })),
+      lagg: plan.lagg.map((l) => ({ module_id: id, sort: l.sort, prompt: l.prompt })),
+    });
+    if ("fel" in fragorna) return { fel: `Frågorna kunde inte sparas: ${fragorna.fel}` };
+
+    // Alternativen: de i fragor som stod kvar paras pa samma satt, och de nya
+    // fragornas laggs in efter att fragorna fatt sina id.
+    const nyttId = new Map(fragorna.nya.map((n) => [n.sort, n.id]));
+    const alternativen = await skrivPaPlats(db, "quiz_option", {
+      tabort: plan.uppdatera.flatMap((u) => u.alternativ.tabort),
+      uppdatera: plan.uppdatera.flatMap((u) =>
+        u.alternativ.uppdatera.map((a) => ({
+          rad: { id: a.id, question_id: u.id, sort: a.sort, label: a.label, is_correct: a.ratt },
+          gammalSort: a.gammalSort,
         })),
-      );
-    }
+      ),
+      lagg: [
+        ...plan.uppdatera.flatMap((u) =>
+          u.alternativ.lagg.map((a) => ({ question_id: u.id, sort: a.sort, label: a.label, is_correct: a.ratt })),
+        ),
+        ...plan.lagg.flatMap((l) =>
+          l.alternativ.map((a) => ({ question_id: nyttId.get(l.sort), sort: a.sort, label: a.label, is_correct: a.ratt })),
+        ),
+      ],
+    });
+    if ("fel" in alternativen) return { fel: `Svarsalternativen kunde inte sparas: ${alternativen.fel}` };
   }
 
   if (kind === "fritext") {
     /**
-     * Fragorna skrivs om fran grunden, som quizets och rollspelets.
+     * Fragorna skrivs om fran grunden. (Quizets fragor och rollspelets
+     * kriterier uppdateras pa plats sedan C6; provets gor det inte an.)
      *
      * VAD SOM FOLJER MED I FALLET: `essay_answer` kaskaderar pa `question_id`,
      * sa ett REDAN INLAMNAT svar pa en fraga som skrivs om forsvinner. Det ar
@@ -277,21 +349,36 @@ export async function sparaModul(_prev: KursState, form: FormData): Promise<Kurs
   }
 
   if (kind === "roleplay") {
-    // Kriterierna skrivs om i sin helhet. Poang som redan satts pekar pa den
-    // GAMLA raden, och `roleplay_score` kaskaderar — en bedomning som redan ar
-    // gjord tappar alltsa sina delpoang om rubriken skrivs om. Sjalva betyget
-    // star kvar i `course_attempt`, som ar historiken, och det ar den som
-    // raknas.
-    await db.from("roleplay_criterion").delete().eq("module_id", id);
-    await db.from("roleplay_criterion").insert(
-      kriterier.map((k, i) => ({
-        module_id: id,
-        sort: i + 1,
-        label: k.label,
-        guidance: k.guidance,
-        max_points: k.max_points,
-      })),
+    // C6: kriterierna uppdateras pa plats, parade pa text och sedan position
+    // som quizets fragor. `roleplay_score` och sjalvskattningen i
+    // `roleplay_self` kaskaderar pa kriteriets id, och en omskriven rubrik tog
+    // bada med sig. Ett kriterium som tas bort tar fortfarande sina delpoang;
+    // betyget star kvar i `course_attempt`, som ar historiken.
+    const { data: gamla, error: lasfel } = await db
+      .from("roleplay_criterion")
+      .select("id, sort, label")
+      .eq("module_id", id);
+    if (lasfel) return { fel: "Kriterierna kunde inte läsas, och inget av dem är ändrat. Försök igen." };
+
+    const plan = paraIhop(
+      (gamla ?? []) as { id: string; sort: number; label: string }[],
+      kriterier,
+      (g) => g.label,
+      (n) => n.label,
     );
+    const falt = (k: (typeof kriterier)[number], sort: number) => ({
+      module_id: id,
+      sort,
+      label: k.label,
+      guidance: k.guidance,
+      max_points: k.max_points,
+    });
+    const skrivet = await skrivPaPlats(db, "roleplay_criterion", {
+      tabort: plan.tabort,
+      uppdatera: plan.par.map((p) => ({ rad: { id: p.gammal.id, ...falt(p.ny, p.sort) }, gammalSort: p.gammal.sort })),
+      lagg: plan.lagg.map((l) => falt(l.ny, l.sort)),
+    });
+    if ("fel" in skrivet) return { fel: `Kriterierna kunde inte sparas: ${skrivet.fel}` };
   }
 
   await loggaKurs(user.employee!.id, modulId ? "course.module_updated" : "course.module_added", kursId, {

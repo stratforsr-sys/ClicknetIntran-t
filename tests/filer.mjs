@@ -15,6 +15,7 @@ import {
   URL_SEKUNDER,
   bygStig,
   provaFil,
+  stadaEfterRegistreringsfel,
   storlek,
   visningsnamn,
 } from "../src/lib/filer.ts";
@@ -130,6 +131,15 @@ ok(
   "avtalet behaller sitt filnamn",
   visningsnamn({ purpose: "employment_contract", filename: "Avtal Anna.pdf", mime_type: "application/pdf" }) === "Avtal Anna.pdf",
 );
+
+// F1-4. Ett id som redan ar registrerat pekar pa en fil som nagon annan rad
+// ager. Den far aldrig tas bort for att en ny registrering fallit.
+rubrik("Nar en misslyckad registrering far ta bort filen");
+ok("inget fel, inget att stada", stadaEfterRegistreringsfel(null, false) === false);
+ok("en dubblett (23505) ror aldrig filen", stadaEfterRegistreringsfel({ code: "23505" }, false) === false);
+ok("ett annat fel stadar bort den nyss uppladdade filen", stadaEfterRegistreringsfel({ code: "23514" }, false) === true);
+ok("ett fel utan kod stadar ocksa", stadaEfterRegistreringsfel({}, false) === true);
+ok("fanns raden fore, ror aldrig filen", stadaEfterRegistreringsfel({ code: "23514" }, true) === false);
 
 console.log(fel === 0 ? "\n\x1b[32mAlla prov gick igenom.\x1b[0m" : `\n\x1b[31m${fel} prov föll.\x1b[0m`);
 process.exit(fel === 0 ? 0 : 1);
