@@ -447,7 +447,8 @@ async function bilaga(user: CurrentUser, handling: string, id: string, b: Record
       const storlek = Number(b.storlek ?? 0);
       if (!BILAGA_MIME.has(mime)) return { fel: "Bifoga PDF, bilder, Word, Excel, PowerPoint eller text.", status: 400 };
       if (!(storlek > 0 && storlek <= BILAGA_MAX)) return { fel: "Filen får vara högst 25 MB.", status: 400 };
-      const { error } = await db.from("calendar_attachment").select("id", { head: true, count: "exact" }).limit(1);
+      // Före 0201 finns inte tabellen. En head-fråga svarar då utan fel, så frågan hämtar en rad.
+      const { error } = await db.from("calendar_attachment").select("id").limit(1);
       if (error) return { fel: BILAGA_SAKNAS, status: 400 };
       const lager = lagerForNyaFiler();
       const bucket = bucketen(lager);
