@@ -1,3 +1,5 @@
+import { visasINav2 } from "./skrivlage.ts";
+
 /**
  * Overgangen: Nav 2.0 ar navet (bestallaren 2026-10-19: "ta over alla fran
  * gamla nav till 2.0", ingen vag tillbaka).
@@ -15,41 +17,46 @@
  * den (`franNav2`). Annars hade det blivit en loop.
  * ===========================================================================
  *
+ * BRON (K6): varje monster bar sin vy. I produktionen skickas en adress om
+ * forst nar vyn far spara (`visasINav2`, skrivlage.ts). Tills dess stannar den
+ * pa sidan har, dar personalen kan stampla, lagga order och soka ledighet.
+ * Previewen skickar om allt, som forut.
+ *
  * Bara hela sidladdningar (Sec-Fetch-Dest: document) skickas om. Navets egna
  * klientnavigeringar och prefetch ar inte dokument och rors inte.
  */
-const SJALV: RegExp[] = [
-  /^\/uppgifter(\/[^/]+)?$/,
-  /^\/uppgifter\/projekt\/[0-9a-f-]{36}$/,
-  /^\/rutiner(\/[^/]+)?$/,
-  /^\/rutiner\/[^/]+\/(redigera|kvittenser)$/,
-  /^\/utbildning(\/[^/]+)?$/,
-  /^\/utbildning\/prov\/[^/]+$/,
-  /^\/utbildning\/oversikt\/systemguider$/,
-  /^\/tid(\/(lonerapport|avvikelser|ogiltig-franvaro|schema))?$/,
-  /^\/tid\/lonerapport\/[0-9a-f-]{36}$/,
-  /^\/kalender$/,
-  /^\/arenden(\/(?!statistik$)[^/]+)?$/,
-  /^\/franvaro(\/(attest|sjuk|planering|ny))?$/,
-  /^\/franvaro\/[0-9a-f-]{36}$/,
-  /^\/fel(\/nytt)?$/,
-  /^\/order$/,
-  /^\/provision$/,
-  /^\/provision\/(regler|mal)$/,
-  /^\/provision\/underlag\/\d{4}-\d{2}$/,
-  /^\/lonekostnad(\/satser)?$/,
-  /^\/coachning(\/[^/]+)?$/,
-  /^\/coachning\/uppgift\/[^/]+$/,
-  /^\/personal(\/[^/]+)?$/,
-  /^\/rekrytering(\/(?!ny$)[^/]+)?$/,
-  /^\/avtal$/,
-  /^\/leads(\/[^/]+)?$/,
-  /^\/logg$/,
-  /^\/adoption$/,
-  /^\/nyheter(\/[^/]+)?$/,
-  /^\/nyheter\/nav\/[^/]+$/,
-  /^\/profil(\/[^/]+)?$/,
-  /^\/sok$/,
+export const SJALV: ReadonlyArray<readonly [vy: string, monster: RegExp]> = [
+  ["uppgifter", /^\/uppgifter(\/[^/]+)?$/],
+  ["uppgifter", /^\/uppgifter\/projekt\/[0-9a-f-]{36}$/],
+  ["rutiner", /^\/rutiner(\/[^/]+)?$/],
+  ["rutiner", /^\/rutiner\/[^/]+\/(redigera|kvittenser)$/],
+  ["utbildning", /^\/utbildning(\/[^/]+)?$/],
+  ["utbildning", /^\/utbildning\/prov\/[^/]+$/],
+  ["utbildning", /^\/utbildning\/oversikt\/systemguider$/],
+  ["tid", /^\/tid(\/(lonerapport|avvikelser|ogiltig-franvaro|schema))?$/],
+  ["tid", /^\/tid\/lonerapport\/[0-9a-f-]{36}$/],
+  ["kalender", /^\/kalender$/],
+  ["arenden", /^\/arenden(\/(?!statistik$)[^/]+)?$/],
+  ["franvaro", /^\/franvaro(\/(attest|sjuk|planering|ny))?$/],
+  ["franvaro", /^\/franvaro\/[0-9a-f-]{36}$/],
+  ["fel", /^\/fel(\/nytt)?$/],
+  ["order", /^\/order$/],
+  ["provision", /^\/provision$/],
+  ["provision", /^\/provision\/(regler|mal)$/],
+  ["provision", /^\/provision\/underlag\/\d{4}-\d{2}$/],
+  ["satser", /^\/lonekostnad(\/satser)?$/],
+  ["coachning", /^\/coachning(\/[^/]+)?$/],
+  ["coachning", /^\/coachning\/uppgift\/[^/]+$/],
+  ["anstallda", /^\/personal(\/[^/]+)?$/],
+  ["rekrytering", /^\/rekrytering(\/(?!ny$)[^/]+)?$/],
+  ["avtal", /^\/avtal$/],
+  ["leads", /^\/leads(\/[^/]+)?$/],
+  ["logg", /^\/logg$/],
+  ["adoption", /^\/adoption$/],
+  ["nyheter", /^\/nyheter(\/[^/]+)?$/],
+  ["nyheter", /^\/nyheter\/nav\/[^/]+$/],
+  ["profil", /^\/profil(\/[^/]+)?$/],
+  ["sok", /^\/sok$/],
 ];
 
 /** Adressen i Nav 2.0 for en gammal sida, eller null om sidan stannar i nuvarande Nav. */
@@ -57,7 +64,7 @@ export function nav2Adress(path: string, search: string): string | null {
   // Startsidan gar hit direkt. Annars strommar (app)-layouten forst och
   // page.tsx skickar vidare med en meta refresh: fyra sekunder i previewen.
   if (path === "/") return "/nav2";
-  if (!SJALV.some((r) => r.test(path))) return null;
+  if (!SJALV.some(([vy, r]) => r.test(path) && visasINav2(vy))) return null;
   return "/nav2?till=" + encodeURIComponent(path + search);
 }
 

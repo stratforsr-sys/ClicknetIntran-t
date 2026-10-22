@@ -24470,7 +24470,8 @@ const NDVY = {
   rekrytering:['Rekrytering', '/rekrytering'], leads:['Leads', '/leads'], nyheter:['Nyheter', '/nyheter'], avtal:['Avtal', '/avtal'], kv:['K&V', '/kv'],
   logg:['Händelselogg', '/logg'], adoption:['Adoption', '/adoption']
 };
-const ndKopplad = vy => !ND || NDKOPPLAD.has(vy);
+// Bron (K6): i produktionen öppnas en vy i läsläge i nuvarande Nav tills den får spara (ND.iNuvarande, skrivlage.ts).
+const ndKopplad = vy => !ND || (NDKOPPLAD.has(vy) && !(ND.iNuvarande || []).includes(vy));
 // Det som är kopplat, i klartext. Samma lista på startsidan och i vyerna som inte är det.
 function ndKoppladText(){
   const l = [ND && ND.satser ? 'Inställningar med satser och löner' : 'Inställningar', 'klockan', ...[...NDKOPPLAD].filter(k => NDVY[k]).map(k => NDVY[k][0].toLowerCase())];
@@ -33264,6 +33265,15 @@ const SKALNAV = ['/tid/sparrar', '/sparrar', '/schema', '/admin', '/satser', '/a
   '/logga-in', '/byt-losenord', '/uppstart', '/design', '/kv/regler',
   '/arenden/statistik', '/kalender/delning', '/kalender/overlamning', '/franvaro/regler', '/regler', '/filer', '/auth'];
 const skalNav = h => SKALNAV.some(p => h === p || h.startsWith(p + '/') || h.startsWith(p + '?'));
+// En väg inom navet, med samma regler som inloggningens sakerNasta (src/lib/inloggning.ts), annars null.
+// "//x" och "/\x" är adresser till en annan värd i webbläsaren, och styrtecken tas bort av adressparsern
+// (B1/G6). Inloggningens egna sidor släpps inte igenom: de skickar vidare igen.
+function ndSakerTill(s){
+  const v = String(s ?? '');
+  if (!/^\/(?![/\\])/.test(v) || /[\u0000-\u001f\u007f\\]/.test(v)) return null;
+  if (v === '/' || v.startsWith('/logga-in') || v.startsWith('/auth')) return null;
+  return v;
+}
 function skalVy(h){
   const f = '/' + (h.split(/[/?#]/)[1] || '');
   if (f === '/') return 'hem';
@@ -33278,7 +33288,8 @@ ndGa = function(href){
   if (bas.startsWith('/installningar') || bas.startsWith('/profil')) return prfGaSrc(h);
   // /sok?q=… (nuvarande Navs sökning) öppnar paletten med frågan ifylld (Gamla Nav P).
   if (bas === '/sok') return ndPalSokSida(new URLSearchParams(h.split('?')[1] || '').get('q') || '');
-  const nav = () => { location.assign(h); };
+  // Aldrig ut ur sajten. Skalets egna vägar till inloggningen och startsidan går som förut.
+  const nav = () => { if (ndSakerTill(h) !== null || /^\/(logga-in|auth)([/?#]|$)|^\/$/.test(h)) location.assign(h); };
   // Händelseloggen är bara superadmins (beställaren 2026-10-20): alla andra får ett besked, inte nuvarande Navs /logg.
   if (vy === 'logg' && (S.role !== 'chef' || (ND && !ND.logg))){ toast('Händelseloggen visas bara för superadmin.'); return; }
   // Gamla Nav G: /lonekostnad och /lonekostnad/satser är Inställningar → Satser och löner.
@@ -33341,6 +33352,10 @@ render = function(){
   }
   skalForra = S.view; return _skalRender();
 };
+// Bron: stämplingen går till nuvarande Navs Tid så länge Tid inte sparar. ndtid.js lindar stamp ovanpå nd.js spärr,
+// och paletten anropar stamp direkt, så spärren ligger ytterst här.
+const _skalStamp = stamp;
+stamp = function(k){ if (ND && !ndKopplad('tid')){ location.assign('/tid'); return; } return _skalStamp(k); };
 // K&V med en post: hela adressen följer med.
 const _skalKv = kvGaSrc;
 kvGaSrc = function(src){ if (ND && !ndKopplad('kv')) skalVag = String(src || '/kv'); return _skalKv(src); };
@@ -33454,8 +33469,8 @@ if (ND){
 // En gammal adress som Nav 2.0 kan visa (bokmärke, mejl, notis) skickas av mellanvaran hit som /nav2?till=/x.
 // Den öppnas här; kan Nav 2.0 inte visa posten går vägen vidare till sidan i nuvarande Nav (Referer /nav2 släpper igenom den).
 if (ND){
-  const till = new URLSearchParams(location.search).get('till');
-  if (till && /^\/(?!\/)/.test(till)){ try { history.replaceState(null, '', '/nav2'); } catch(_){} setTimeout(() => ndGa(till), 0); }
+  const till = ndSakerTill(new URLSearchParams(location.search).get('till'));
+  if (till){ try { history.replaceState(null, '', '/nav2'); } catch(_){} setTimeout(() => ndGa(till), 0); }
 }
 
 /* Start */

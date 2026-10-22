@@ -5,6 +5,34 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-22 · Granskningen S02, K6 del 1: bron, `?till=`, demoraden och jobben (ingen migration)
+
+- **Bron: i produktion visas en vy i Nav 2.0 först när den sparar (H1).** En
+  merge hade annars skickat `/tid`, `/order`, `/franvaro` … till vyer i
+  läsläge, och stämplingen hade svarat 423. `BRO` i `skrivlage.ts` följer
+  `VERCEL_ENV=production` och kan tvingas med `NAV2_BRO=1`/`0`. Med bron
+  skickar mellanvaran inte om en vy i läsläge (`vagar.ts`: `SJALV` är par
+  `[vy, mönster]`, `nav2Adress` frågar `visasINav2`), och `ND.iNuvarande`
+  gör att `ndKopplad` i `nd.js` räknar vyn som okopplad, så skalet öppnar
+  den i nuvarande Nav. Stämpla i paletten går till `/tid` (spärren ytterst
+  i `ndskal.js`). Previewen beter sig som förut. En vy flyttar över av sig
+  själv den dag dess `SKRIVLAGE`-rad slås på. Provad lokalt med
+  `NAV2_BRO=1` för Zen och en säljare.
+- **`?till=` stannar på sajten (B1/G6):** `ndSakerTill` i `ndskal.js` har
+  samma regler som `sakerNasta`, så `/nav2?till=%2F%5Cevil.example` öppnar
+  ingenting utanför navet. `nav()` i `ndGa` vägrar också vägar ut.
+- **Demoraden (G3):** rutten lägger `<body class="nd-riktig">` före
+  markupen, så "Utkast · Exempeldata" syns inte medan datan byggs.
+- **Nyhetsjobbet (H3, F2-21):** bara utkast vars schemalagda tid passerade
+  de senaste 48 timmarna (`attPublicera`), och uppdateringen kräver
+  `scheduled_at`. 0 schemalagda utkast i `news_post` 2026-10-22.
+- **Coachningsjobbet (H7):** bara frister 14–44 dagar bakåt
+  (`inomFonstret`), händelserna i omgångar om 100, och ett läsfel lägger
+  inget ärende utan fäller steget. 16 uppgifter i fönstret 2026-10-22, varav
+  10 inte klara: räkna igen före mergen.
+- **Prov:** `tests/bro.mjs` (räknar ur `SKRIVLAGE`, förblir grönt när vyer
+  slås på), `nav2-till.mjs`, `nyheter-jobb.mjs`, `jobb-coachning.mjs`.
+
 ## 2026-10-22 · Granskningen S01: lk_andra_mote och två läsfunktioner bara för service role (0205 körd)
 
 - **Hålet (K1: A1, C1, C17):** `pg_default_acl` i public ger anon och

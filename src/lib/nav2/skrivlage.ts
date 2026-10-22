@@ -42,6 +42,31 @@ export const SKRIVLAGE = {
 
 export type Skrivvy = keyof typeof SKRIVLAGE;
 
+/**
+ * BRON (K6, granskningen 2026-10-22): i produktionen visas en vy i Nav 2.0
+ * först när den får spara. En vy i läsläge kan inte stämpla, lägga order eller
+ * söka ledighet, så tills den slås på öppnas den i nuvarande Nav: mellanvaran
+ * skickar inte om dess gamla adresser (vagar.ts), och skalet i utkastet öppnar
+ * den där i stället för att rita den (`ND.iNuvarande`, moduler/nd.js).
+ *
+ * PREVIEWEN VISAR ALLT, som förut, så att beställaren kan prova vyerna i
+ * läsläge. Bron följer `VERCEL_ENV` och kan tvingas med `NAV2_BRO=1` eller `0`.
+ * Den dag en rad ovan slås på flyttar vyn över av sig själv.
+ */
+export const BRO: boolean =
+  process.env.NAV2_BRO === "1" ? true : process.env.NAV2_BRO === "0" ? false : process.env.VERCEL_ENV === "production";
+
+/** Om vyn visas i Nav 2.0. Vyer utan rad ovan (startsidans grund, sökningen, loggen …) påverkas inte av bron. */
+export function visasINav2(vy: string): boolean {
+  if (!BRO) return true;
+  return Object.hasOwn(SKRIVLAGE, vy) ? SKRIVLAGE[vy as Skrivvy] : true;
+}
+
+/** Vyerna som med bron öppnas i nuvarande Nav. Tom utan bron. */
+export function iNuvarande(): Skrivvy[] {
+  return BRO ? (Object.keys(SKRIVLAGE) as Skrivvy[]).filter((k) => !SKRIVLAGE[k]) : [];
+}
+
 export const LASLAGE_TEXT = "Läsläge: det här sparas när beställaren slår på vyn. Ingenting ändrades.";
 
 /** Samma ursprung som sidan. Rutterna tar kakor, så en annan sajt får inte posta hit. */

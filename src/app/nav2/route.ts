@@ -83,6 +83,10 @@ export async function GET(request: Request) {
     SKAL +
     fore +
     `<link rel="stylesheet" href="/nav2/stil.css?v=${d.vStil}">` +
+    // Riktigt läge från första ritningen (G3): utkastets regel `body.nd-riktig .proto` döljer demoraden
+    // ("Utkast · Exempeldata") redan medan datan byggs, och när den inte gick att bygga. Filen har ingen
+    // egen <body>, så taggen läggs här, före markupen. ndStart lägger samma klass och ändrar ingenting.
+    `<body class="nd-riktig">` +
     d.mitt +
     `<script nonce="${nonce}" src="/nav2/skript.js?v=${d.vSkript}" data-nav2 defer></script>`;
 

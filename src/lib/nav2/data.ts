@@ -31,6 +31,7 @@ import { byggNyheter, type NdNyheter } from "./nyheter";
 import type { NdFel } from "./felforma";
 import { byggSakerhet, type NdSakerhet } from "./sakerhet";
 import { byggSatser, type NdSatsdata } from "./satser";
+import { iNuvarande, type Skrivvy } from "./skrivlage";
 import {
   formaLon,
   formaPerson,
@@ -109,6 +110,8 @@ export type Nav2Data = {
   sakerhet: NdSakerhet;
   /** Satser och löner: vem som ändrar, läsläget och Ersatta (0190). Null utan behörigheten för lönekostnad. */
   satsdata: NdSatsdata | null;
+  /** Bron (K6): vyerna som öppnas i nuvarande Nav tills de får spara. Tom i previewen. */
+  iNuvarande: Skrivvy[];
 };
 
 const PERSONKOLUMNER =
@@ -270,5 +273,6 @@ async function bygg(user: CurrentUser, m?: Nav2Matt): Promise<Nav2Data | null> {
     leads,
     sakerhet,
     satsdata,
+    iNuvarande: iNuvarande(),
   };
 }

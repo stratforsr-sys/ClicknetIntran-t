@@ -32,13 +32,33 @@ import { ARENDE_EFTER_DAGAR, TYP_ETIKETT, arSjalvsann, lageFor, type Handelse, t
  * uppfoljning i M6, och ett arende till hade betytt tva kanaler for samma
  * forsening — den dagen de sager olika vet ingen vilken som galler.
  */
+/**
+ * FONSTRET: FRISTEN PASSERADES FOR 14 TILL 44 DAGAR SEDAN (granskningen H7).
+ * Pa main har steget tyst misslyckats, sa utan en nedre grans hade forsta
+ * natten efter mergen gjort hela kon sedan dess till arenden pa en gang. Med
+ * fonstret passerar varje ny forsening en gang, med trettio natter pa sig att
+ * bli ett arende, och kon fran fore mergen blir aldrig nagot.
+ */
+export const FONSTER_DAGAR = 30;
+
+const dagFore = (idag: string, dagar: number) =>
+  new Date(Date.parse(`${idag}T12:00:00Z`) - dagar * 86_400_000).toISOString().slice(0, 10);
+
+/** Om fristen (`YYYY-MM-DD`) passerades for minst 14 och hogst 44 dagar sedan, raknat fran `idag`. */
+export function inomFonstret(frist: string, idag: string): boolean {
+  return frist <= dagFore(idag, ARENDE_EFTER_DAGAR) && frist >= dagFore(idag, ARENDE_EFTER_DAGAR + FONSTER_DAGAR);
+}
+
+/** Handelserna lases for hogst sa manga uppgifter at gangen: en lang `in`-lista blir en adress som ar for lang. */
+const OMGANG = 100;
+
 export async function korCoachningsjobbet(
   db: SupabaseClient,
+  idag: Date = new Date(),
 ): Promise<{ granskade: number; forsenade: number; arenden: number }> {
-  const idag = new Date();
-  const grans = new Date(idag);
-  grans.setDate(grans.getDate() - ARENDE_EFTER_DAGAR);
-  const gransdatum = grans.toISOString().slice(0, 10);
+  const dag = idag.toISOString().slice(0, 10);
+  const gransdatum = dagFore(dag, ARENDE_EFTER_DAGAR);
+  const nedre = dagFore(dag, ARENDE_EFTER_DAGAR + FONSTER_DAGAR);
 
   /**
    * Fragan filtrerar pa fristen i DATABASEN, inte i minnet. En modul som vaxer
@@ -50,22 +70,38 @@ export async function korCoachningsjobbet(
     .select("id, title, kind, assignee_id, created_by, due_date")
     .is("cancelled_at", null)
     .not("due_date", "is", null)
-    .lte("due_date", gransdatum);
+    .lte("due_date", gransdatum)
+    .gte("due_date", nedre);
 
   if (error) throw new Error(error.message);
   if (!uppgifter || uppgifter.length === 0) return { granskade: 0, forsenade: 0, arenden: 0 };
 
-  const manskliga = uppgifter.filter((u) => !arSjalvsann(u.kind as Uppgiftstyp));
+  const manskliga = uppgifter.filter((u) => !arSjalvsann(u.kind as Uppgiftstyp) && inomFonstret(u.due_date, dag));
   if (manskliga.length === 0) return { granskade: uppgifter.length, forsenade: 0, arenden: 0 };
 
-  const [{ data: handelser }, { data: personal }, { data: rollrader }] = await Promise.all([
-    db.from("coaching_task_event").select("task_id, type, at").in("task_id", manskliga.map((u) => u.id)),
+  /**
+   * HANDELSERNA I OMGANGAR, OCH ETT FEL STOPPAR STEGET. En uppgift utan
+   * handelser raknas som ej paborjad, sa en lasning som felar eller kapas hade
+   * gjort avslutade uppgifter till "N dagar over fristen" och lagt arenden om
+   * namngivna saljare som inte stammer. Hellre inget arende i natt an fel arende.
+   */
+  const handelser: { task_id: string; type: string; at: string }[] = [];
+  for (let i = 0; i < manskliga.length; i += OMGANG) {
+    const { data, error: felet } = await db
+      .from("coaching_task_event")
+      .select("task_id, type, at")
+      .in("task_id", manskliga.slice(i, i + OMGANG).map((u) => u.id));
+    if (felet) throw new Error(`Coachningens händelser gick inte att läsa, inga ärenden lades: ${felet.message}`);
+    handelser.push(...(data ?? []));
+  }
+
+  const [{ data: personal }, { data: rollrader }] = await Promise.all([
     db.from("employee").select("id, first_name, last_name, status, manager_id").neq("status", "offboarded"),
     db.from("employee_role").select("employee_id, role"),
   ]);
 
   const perUppgift = new Map<string, Handelse[]>();
-  for (const h of handelser ?? []) {
+  for (const h of handelser) {
     perUppgift.set(h.task_id, [...(perUppgift.get(h.task_id) ?? []), { type: h.type as Handelse["type"], at: h.at }]);
   }
 
@@ -125,7 +161,7 @@ export async function korCoachningsjobbet(
     if (fanns) continue;
 
     const namn = `${person.first_name} ${person.last_name}`.trim();
-    const dagarOver = Math.floor((Date.now() - Date.parse(`${u.due_date}T23:59:59Z`)) / 86_400_000);
+    const dagarOver = Math.floor((idag.getTime() - Date.parse(`${u.due_date}T23:59:59Z`)) / 86_400_000);
 
     const { data: arende, error: felet } = await db
       .from("hr_case")
