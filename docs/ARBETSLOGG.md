@@ -5,6 +5,32 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-22 · Nav 2.0, Kalendern som Outlook, del 15: ombud som i Outlook – en assistent flyttar, svarar och bokar (0201 skriven, inte körd)
+
+- **Beställaren 2026-10-22, efter del 9:** "det vore faktiskt bra att ifall
+  man vill kunna dela behörighet till någon som kan flytta mina möten eller
+  svara och boka åt mig ifall jag tex har en assistent". Det tar tillbaka
+  svar 1 och del 9. Nivåerna i Dela gäller som texterna säger.
+- **"Kan planera om"** redigerar, flyttar (också genom att dra), kopierar och
+  ställer in de möten ägaren ordnar. Snabbkortet får ägarens knappar, och
+  ombudet ser kommentarerna och förslagen och godkänner dem.
+- **"Delegat"** gör det, och svarar dessutom på ägarens inbjudningar
+  ("Åt Fredrik: Acceptera, Preliminärt, Avböj" i snabbkortet; POST svara med
+  `for`) och bokar möten åt ägaren ("Från" i formuläret; POST spara med
+  `for`, ägaren blir arrangör). Åt någon annan bokas ett möte som inte
+  upprepas och har ett klockslag.
+- **Rutten:** `baraArrangoren` släpper fram arrangören och ombuden
+  (`ombudFor` i `src/lib/nav2/kalender.ts`), `delegatFor` prövar delegaten,
+  `kalDetalj` ger `farAndra` och `svaraFor`. Ett privat möte döljs fortfarande
+  för ombudet, som i Outlook.
+- **0201 (`supabase/migrations/0201_kalender_ombud_och_bilagor.sql`):**
+  `lk_far_andra` som i 0069 (redigera och delegat), `lk_svara_at` (bara
+  delegaten, svaret blir ägarens, Ångra hör till delegaten), och tabellen för
+  del 16:s bilagor. Torrkörd (`prov/torr-0201.mjs`). Inte körd: före 0201
+  säger rutten att ombuden får boka och svara när databasen fått 0201.
+- **Inget ändras för någon i dag:** ingen delar sin kalender
+  (`calendar_share` är tom).
+
 ## 2026-10-22 · Granskningen S03: en skrivväg i Nav 2.0 (ndSkriv) med lås, tidsgräns, idempotensnyckel och utloggad-besked; medNyckel på servern (0208 körd)
 
 **Varför.** Granskningen 2026-10-22 (G1, G2, G4, F2-3): 19 av 20 skrivhjälpare i utkastet saknade skydd mot dubbla skick och tidsgräns. Ett dubbelklick eller en Enter som repeteras gav två övriga bonusar i Provision, två möten med två kundinbjudningar i Kalendern och Leads, och två publicerade nyheter. En utloggad användare (global `signOut()` i telefonen, utgånget steg två, tvingat lösenordsbyte) fick "Nav svarade inte." vid varje sparning, eftersom `fetch` följer mellanvarans 307 till inloggningen och får HTML.

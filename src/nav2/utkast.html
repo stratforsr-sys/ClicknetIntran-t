@@ -27402,7 +27402,7 @@ function ndKDetalj(e){
       y.delt = x.deltagare.map(d => [ndKNamn(d.id) || 'Okänd', d.svar]).filter(d => d[0] !== y.org);
       y.gaster = x.gaster || [];
       // Arrangörens del av svaren: kommentarer och förslag om ny tid (bara till den som får ändra mötet).
-      y.farAndra = !!x.farAndra; y.enskilt = x.enskilt || null; y.serieRegel = x.serieRegel || null;
+      y.farAndra = !!x.farAndra; y.enskilt = x.enskilt || null; y.serieRegel = x.serieRegel || null; y.svaraFor = x.svaraFor || [];
       y.valfria = x.deltagare.filter(d => d.valfri).map(d => ndKNamn(d.id)).filter(Boolean);
       y.ndSvar = x.deltagare.filter(d => d.note || d.forslag).map(d => ({id:d.id, namn:ndKNamn(d.id) || 'Okänd', svar:d.svar, note:d.note || '', forslag:d.forslag || null}));
       ndKTitel(y);
@@ -27586,7 +27586,7 @@ function ndKFalt(f){
   const ev = f.id ? KEV.find(x => x.id === f.id) : null;
   return {id:ev ? ndKRef(ev) : undefined, typ:f.typ, t:(f.t || '').trim() || (f.lev || ''), d:f.d, s:f.heldag ? 0 : f.s, e:f.heldag ? 1440 : f.e, heldag:!!f.heldag,
     delt:(f.delt || []).map(n => ndKId(n)).filter(Boolean), ...ndKPlatsLank(f, ev), agenda:f.agenda || '', visa:NDKVISA[f.visa] || 'upptagen',
-    pamin:NDKPAMMIN[f.pamin] !== undefined ? NDKPAMMIN[f.pamin] : 15, upprepa:f.upprepa || 'Upprepas inte', slut:f.upprepa && f.upprepa !== 'Upprepas inte' ? (f.slut || '') : undefined, slutdag:f.heldag ? (f.slutdag || '') : undefined, valfria:f.typ === 'uppgift' ? undefined : (f.valfria || []).filter(n => (f.delt || []).includes(n)).map(n => ndKId(n)).filter(Boolean), priv:!!f.priv, lev:f.lev || undefined, order:f.order || undefined,
+    pamin:NDKPAMMIN[f.pamin] !== undefined ? NDKPAMMIN[f.pamin] : 15, upprepa:f.upprepa || 'Upprepas inte', slut:f.upprepa && f.upprepa !== 'Upprepas inte' ? (f.slut || '') : undefined, slutdag:f.heldag ? (f.slutdag || '') : undefined, valfria:f.typ === 'uppgift' ? undefined : (f.valfria || []).filter(n => (f.delt || []).includes(n)).map(n => ndKId(n)).filter(Boolean), for:!f.id && f.typ === 'mote' && f.for ? f.for : undefined, priv:!!f.priv, lev:f.lev || undefined, order:f.order || undefined,
     gaster:f.typ === 'mote' ? (f.gaster || []).filter(a => !(f.gastFore || []).includes(a)) : []};
 }
 /* Möteslänken (beslutsrundan 2026-10-20: Nav sparar en länk som skrivs in, men skapar ingen). En länk som klistras
@@ -28075,6 +28075,53 @@ document.addEventListener('click', e => {
   ndKKatSpar('kategori', {id:ev.ref, serie:ev.serieId || '', farger:ny});
 }, true);
 document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.dataset && e.target.dataset.ndkkatnamn !== undefined){ e.preventDefault(); document.querySelector('[data-ndkkatspara]')?.click(); } }, true);
+
+/* ---------- Ombud som i Outlook (beställaren 2026-10-22: "dela behörighet till någon som kan flytta mina möten eller
+   svara och boka åt mig ifall jag tex har en assistent"; 0201) ----------
+   Nivåerna i Dela gäller som de står: "Kan planera om" redigerar, flyttar, kopierar och ställer in ägarens möten i
+   ägarens kalender, och "Delegat" svarar dessutom på ägarens inbjudningar och bokar möten åt hen (Från i formuläret).
+   Navet prövar samma sak (lk_far_andra, lk_svara_at). */
+const ndKOmbudNiva = namn => { const p = ndK() && namn ? ndK().personer.find(x => x.namn === namn) : null; return p && ['redigera', 'delegat'].includes(p.niva) ? p.niva : null; };
+const ndKOmbud = e => !!e && !!ndKRef(e) && e.org !== kJag() && !!ndKOmbudNiva(e.org) && ['mote', 'enskilt', 'leverans'].includes(e.kat);
+const ndKDelegatFor = () => ndK() ? ndK().personer.filter(p => p.niva === 'delegat') : [];
+const _ndKOmbudPeek = kPeekKort;
+kPeekKort = function(){
+  let h = _ndKOmbudPeek(); if (!ndK() || !S.kPeek) return h;
+  const e = KEV.find(x => x.id === S.kPeek.id); if (!e) return h;
+  const oppna = '<button class="olbtn" data-act="toast" data-msg="Händelsen öppnas i Nav.">Öppna</button>';
+  if (ndKOmbud(e)) h = h.replace(oppna, `<button class="olbtn" data-kred>Redigera</button>${e.allday ? '' : '<button class="olbtn" data-kflytta>Flytta</button><button class="olbtn" data-kkopiera>Kopiera till nästa vecka</button>'}<button class="olbtn olfarlig" data-kstall="${e.id}">Ställ in</button>`);
+  const at = (e.svaraFor || []).map(id => [id, ndKNamn(id)]).filter(([, n]) => n);
+  if (!at.length) return h;
+  const rader = at.map(([id, n]) => { const sv = (e.delt.find(d => d[0] === n) || [, 'vantar'])[1];
+    return `<p class="olpkr">${KI('pers')}<span>Åt ${esc(fornamn(n))} <span class="olmut">· ${sv === 'vantar' ? 'har inte svarat' : `svarade ${NDKSVARORD[sv] || sv}`}</span></span></p><div class="olrsvp">${[['ja', 'Acceptera'], ['kanske', 'Preliminärt'], ['nej', 'Avböj']].map(([k, l]) => `<button class="${sv === k ? 'on' : ''}" data-ndksvarat="${id}" data-ndksvar="${k}">${k === 'ja' ? I('check') : k === 'nej' ? I('x') : '<span class="olfr">?</span>'}${l}</button>`).join('')}</div>`; }).join('');
+  const j = h.indexOf('<div class="olpkf">'), k = j > 0 ? h.lastIndexOf('</div>', j) : -1;
+  return k > 0 ? h.slice(0, k) + rader + h.slice(k) : h;
+};
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('[data-ndksvarat]'); if (!b || !ndK() || !S.kPeek) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  const ev = KEV.find(x => x.id === S.kPeek.id), ref = ndKRef(ev); if (!ref) return;
+  ndKPost('svara', {id:ref, for:b.dataset.ndksvarat, svar:b.dataset.ndksvar});
+}, true);
+// Formuläret: Från, när någon gjort mig till delegat. Ett nytt möte bokas då i ägarens kalender, med ägaren som arrangör.
+const _ndKOmbudForm = kFormular;
+kFormular = function(){
+  const h = _ndKOmbudForm(), f = S.kForm, at = ndKDelegatFor();
+  if (!ndK() || !f || f.id || f.typ !== 'mote' || !at.length) return h;
+  const i = h.indexOf('Privat</label>'); if (i < 0) return h;
+  const val = `<label class="olfsel">Från <select data-kff="for" aria-label="Boka i kalendern för"><option value="">Mig</option>${at.map(p => `<option value="${p.id}" ${f.for === p.id ? 'selected' : ''}>${esc(p.namn)}</option>`).join('')}</select></label>`;
+  return h.slice(0, i + 14) + val + h.slice(i + 14);
+};
+// Dra ägarens möte: utkastet lät bara organisatören flytta. Ombudet flyttar som organisatören (kFlytta → POST flytta).
+document.addEventListener('pointerup', e => {
+  const dr = kDrag; if (!dr || dr.typ !== 'flytt' || !dr.rorde || e.ctrlKey || e.altKey || !ndK()) return;
+  const x = KEV.find(k => k.id === dr.id); if (!ndKOmbud(x)) return;
+  kDrag = null;
+  if (dr.d === x.d && dr.s === x.s){ render(); return; }
+  if (kWd(dr.d) > 5){ render(); toast('Välj en vardag.'); return; }
+  if (x.rep){ S.kSerie = {id:x.id, d:dr.d, s:dr.s}; render(); return; }
+  kFlytta(x, dr.d, dr.s);
+}, true);
 
 if (ndK()){ ndKalStart(); NDKOPPLAD.add('kalender'); }
 

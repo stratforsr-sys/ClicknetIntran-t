@@ -238,6 +238,15 @@ export async function byggKalender(user: CurrentUser): Promise<NdKalender | null
   };
 }
 
+/**
+ * Ombuden (0201, beställaren 2026-10-22): vilka som delat sin kalender med läsaren på nivån "Kan planera om"
+ * (redigera) eller "Delegat". Samma nivåer som databasens lk_far_andra släpper fram.
+ */
+export async function ombudFor(mig: string): Promise<Map<string, "redigera" | "delegat">> {
+  const { data } = await supabaseAdmin().from("calendar_share").select("owner_id, level").eq("viewer_id", mig).in("level", ["redigera", "delegat"]);
+  return new Map((data ?? []).map((r) => [String(r.owner_id), r.level as "redigera" | "delegat"]));
+}
+
 /** En händelse för förhandsvisningen: plats, agenda och deltagarnas svar. */
 export async function kalDetalj(user: CurrentUser, id: string) {
   const d = await hamtaHandelsedetalj(user, id);
@@ -255,7 +264,10 @@ export async function kalDetalj(user: CurrentUser, id: string) {
   ]);
   const valfria = new Set(((v ?? []) as { employee_id: string | null }[]).map((r) => r.employee_id).filter((x): x is string => Boolean(x)));
   const mig = user.employee!.id;
-  const arrangor = d.organisator === mig;
+  // Ombud (0201): den som får planera om i arrangörens kalender gör det arrangören gör med mötet, och en delegat
+  // svarar dessutom åt dem som delat sin kalender med hen.
+  const ombud = await ombudFor(mig);
+  const arrangor = d.organisator === mig || ombud.has(d.organisator);
   // 1:1: punkterna på agendan och säljarens K&V, med läsarens token (coachningskretsen, som /kalender).
   const enskilt = d.slag === "enskilt" ? await hamtaEnskilt(user, d).catch(() => null) : null;
   if (e?.is_private && e.organizer_id !== mig && !d.deltagare.some((x) => x.id === mig)) {
@@ -267,11 +279,13 @@ export async function kalDetalj(user: CurrentUser, id: string) {
     online: d.onlineUrl,
     agenda: d.agenda,
     organisator: d.organisator,
-    // Kommentaren till svaret och förslaget om ny tid är till arrangören, som i Outlook. Hon godkänner eller
-    // behåller tiden i kortet (POST besluta). Beställaren 2026-10-22: ett ombud ("Kan planera om", "Delegat")
-    // ändrar inte i ägarens kalender, så bara arrangören, inte repots farAndra.
+    // Kommentaren till svaret och förslaget om ny tid är till arrangören och hens ombud, som i Outlook. De godkänner
+    // eller behåller tiden i kortet (POST besluta).
     deltagare: d.deltagare.map((x) => ({ ...(arrangor ? { id: x.id, svar: x.svar, note: x.note, forslag: x.forslag } : { id: x.id, svar: x.svar }), ...(valfria.has(x.id) ? { valfri: true } : {}) })),
     farAndra: arrangor,
+    // Beställaren 2026-10-22: "kunna dela behörighet till någon som kan flytta mina möten eller svara och boka åt
+    // mig". De inbjudna som läsaren är delegat för, och som hen alltså svarar åt (POST svara med for).
+    svaraFor: d.deltagare.filter((x) => x.id !== mig && x.id !== d.organisator && ombud.get(x.id) === "delegat").map((x) => x.id),
     // Inbjudna utanför Clicknet (calendar_attendee.external_email): de som fått mejlet med kalenderfilen.
     gaster: (g ?? []).map((x) => String(x.external_email)),
     serieText: d.serie ? regeltext(d.serie) : null,

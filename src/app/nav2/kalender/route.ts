@@ -3,7 +3,7 @@ import { getCurrentUser, type CurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { FORINSTALLNINGAR, STEG, UPPREPA, WDL, arDatum, arVy, kvittoKopierad, plus, wd, type Upprepa, type Upptaget } from "@/lib/leveranskalender";
 import { fonsterFran, hamtaHandelsedetalj, lk, upptagetFor } from "@/lib/leveranskalender-server";
-import { KATEGORIFARGER, KATEGORINYCKEL, hamtaKalposter, kalDetalj, lasKategorier, sokKalender } from "@/lib/nav2/kalender";
+import { KATEGORIFARGER, KATEGORINYCKEL, hamtaKalposter, kalDetalj, lasKategorier, ombudFor, sokKalender } from "@/lib/nav2/kalender";
 import { kalPushNasta } from "@/lib/nav2/kalender-push";
 import { svensktDatum } from "@/lib/klocka";
 import { HORISONT_DAGAR, forekomster } from "@/lib/upprepning";
@@ -141,6 +141,8 @@ type Falt = {
   order?: string;
   heldag?: boolean;
   gaster?: string[];
+  /** Boka åt (Outlooks ombud, 0201): ägarens id, när en delegat bokar ett möte i ägarens kalender. */
+  for?: string;
 };
 
 /**
@@ -183,7 +185,7 @@ async function bjudIn(r: Resultat, eventId: string | null | undefined, epost: st
  * Ctrl- eller Alt-dra (Outlook): en kopia av mötet på den dag och tid man släpper det. Repots `kopiera` lägger
  * kopian en vecka fram; att sedan flytta den hade gett deltagarna två utskick. Här blir kopian ett nytt möte med
  * samma rubrik, plats, agenda, deltagare, påminnelse, "Visa som" och Privat, och en enda inbjudan. Arrangören,
- * kopierar (beställaren 2026-10-22: inget ombud); kopian står i arrangörens kalender. Gäster
+ * eller hens ombud, kopierar; kopian står i arrangörens kalender. Gäster
  * utanför Clicknet följer inte med, eftersom de annars fick ett mejl de inte bett om.
  */
 async function kopieraTill(user: CurrentUser, id: string, dag: string, start: number): Promise<Resultat> {
@@ -191,7 +193,7 @@ async function kopieraTill(user: CurrentUser, id: string, dag: string, start: nu
   const d = await hamtaHandelsedetalj(user, id);
   if (!d || d.installd) return { fel: "Händelsen finns inte längre." };
   if (d.slag !== "mote") return { fel: "Bara ett möte kopieras genom att dra. Ett 1:1 är en serie, och en leverans bokas från kön." };
-  if (d.organisator !== user.employee?.id) return { fel: "Bara arrangören kopierar mötet. Du kan föreslå en ny tid." };
+  if (d.organisator !== user.employee?.id && !(await ombudFor(user.employee!.id)).has(d.organisator)) return { fel: "Bara arrangören kopierar mötet. Du kan föreslå en ny tid." };
   const db = supabaseAdmin();
   const [{ data: e }, { count: gaster }] = await Promise.all([
     db.from("calendar_event").select("show_as, is_private, online_url").eq("id", id).maybeSingle(),
@@ -381,17 +383,26 @@ async function andraSerie(user: CurrentUser, id: string, a: Serieandring): Promi
 }
 
 /**
- * Beställaren 2026-10-22: ett ombud ("Kan planera om", "Delegat") flyttar och bokar inte i ägarens kalender.
- * Databasens lk_far_andra släpper fram dem (0200, skriven men inte körd, stänger det där); här ändrar bara
- * arrangören en händelse som redan finns. Svaret, förslaget, påminnelsen och 1:1-punkterna är deltagarens egna.
+ * Ombud som i Outlook (beställaren 2026-10-22, efter del 9: "kunna dela behörighet till någon som kan flytta mina
+ * möten eller svara och boka åt mig ifall jag tex har en assistent"; 0201). En händelse som redan finns ändras av
+ * arrangören, eller av den som fått "Kan planera om" eller "Delegat" i arrangörens kalender (databasens
+ * lk_far_andra). Svaret, förslaget, påminnelsen och 1:1-punkterna är deltagarens egna.
  */
 const ARRANGORENS = ["besluta", "stallin", "kopiera", "flytta", "langd", "serie"];
 async function baraArrangoren(user: CurrentUser, id: string): Promise<Resultat | null> {
   if (!UUID.test(id)) return { fel: "Händelsen finns inte längre." };
   const { data } = await supabaseAdmin().from("calendar_event").select("organizer_id").eq("id", id).maybeSingle();
   if (!data) return { fel: "Händelsen finns inte längre." };
-  return data.organizer_id === user.employee?.id ? null : { fel: "Bara arrangören ändrar händelsen." };
+  if (data.organizer_id === user.employee?.id || (await ombudFor(user.employee!.id)).has(data.organizer_id)) return null;
+  return { fel: "Bara arrangören, eller den som fått planera om i hens kalender, ändrar händelsen." };
 }
+/** Delegaten bokar åt ägaren och svarar på ägarens inbjudningar ("Kan planera om" flyttar bara). */
+async function delegatFor(user: CurrentUser, agare: unknown): Promise<string | Resultat> {
+  const id = String(agare ?? "");
+  if (!UUID.test(id)) return { fel: "Okänd kalender." };
+  return (await ombudFor(user.employee!.id)).get(id) === "delegat" ? id : { fel: "Du är inte delegat i den kalendern. Ägaren ger nivån under Dela." };
+}
+const OMBUD_SAKNAS = "Ombuden får boka och svara när databasen fått 0201.";
 
 /**
  * Möteslänken (beslutsrundan 2026-10-20: Nav sparar en länk som skrivs in, men skapar ingen). Bara http(s).
@@ -483,7 +494,10 @@ export async function POST(request: Request) {
           return ut(await bjudIn(sist, sist.eventId ?? f.id, g.epost));
         }
 
-        // Nytt.
+        // Nytt. Åt någon annan bokas ett möte (Outlook bokar allt; här möten, som är det en assistent bokar).
+        if (f.for && f.for !== user.employee.id && (f.typ !== "mote" || f.heldag || upprepa !== "aldrig" || f.lev)) {
+          return svar2({ fel: "Åt någon annan bokas ett möte som inte upprepas och har ett klockslag." }, 400);
+        }
         if (f.typ === "uppgift" || f.typ === "coachning") {
           const r = await skapaKalenderpost(
             {},
@@ -535,8 +549,17 @@ export async function POST(request: Request) {
           if (!r.fel) await sattValfria(r.eventId, f.valfria);
           return ut(r);
         }
-        // Ett möte, också ett leveransmöte från formuläret utan kund: förinställningens rubrik och längd.
-        const r = await skapaMote({ rubrik: f.t ?? "", dag: f.d ?? "", start: f.s ?? 0, minuter, deltagare, plats: f.plats ?? null, agenda: f.agenda ?? null, paminnelse: f.pamin ?? undefined, visaSom: f.visa });
+        // Ett möte, också ett leveransmöte från formuläret utan kund: förinställningens rubrik och längd. En delegat
+        // bokar det åt ägaren (Outlooks "Från"): ägaren är arrangör, och delegaten är inte med om hen inte bjudit sig.
+        let organisator: string | undefined;
+        if (f.for && f.for !== user.employee.id) {
+          const vem = await delegatFor(user, f.for);
+          if (typeof vem !== "string") return ut(vem);
+          organisator = vem;
+        }
+        const r0 = await skapaMote({ organisator, rubrik: f.t ?? "", dag: f.d ?? "", start: f.s ?? 0, minuter, deltagare: deltagare.filter((x) => x !== organisator), plats: f.plats ?? null, agenda: f.agenda ?? null, paminnelse: f.pamin ?? undefined, visaSom: f.visa });
+        // Före 0201 nekar databasen ombudet med lk:behorighet ("Bara organisatören …").
+        const r = organisator && r0.fel && /^Bara organisatören/.test(r0.fel) ? { fel: OMBUD_SAKNAS } : r0;
         if (!r.fel) {
           await privat(r.eventId);
           if (video && r.eventId) await supabaseAdmin().from("calendar_event").update({ online_url: video }).eq("id", r.eventId);
@@ -544,8 +567,19 @@ export async function POST(request: Request) {
         }
         return ut(await bjudIn(r, r.eventId, g.epost));
       }
-      case "svara":
-        return ut(await svara(id, String(b.svar ?? "") as "ja" | "kanske" | "nej", String(b.kommentar ?? "") || null));
+      case "svara": {
+        if (!b.for || b.for === user.employee.id) return ut(await svara(id, String(b.svar ?? "") as "ja" | "kanske" | "nej", String(b.kommentar ?? "") || null));
+        // Delegaten svarar åt ägaren (0201, lk_svara_at): svaret blir ägarens, och arrangören får samma notis.
+        const vem = await delegatFor(user, b.for);
+        if (typeof vem !== "string") return ut(vem);
+        const svaret = String(b.svar ?? "");
+        if (!["ja", "kanske", "nej"].includes(svaret) || !UUID.test(id)) return svar2({ fel: "Välj ett svar." }, 400);
+        const r = await lk<{ undo_id?: string }>("lk_svara_at", { p_aktor: user.employee.id, p_for: vem, p_event: id, p_svar: svaret, p_note: String(b.kommentar ?? "").trim().slice(0, 500) || null, p_hela_serien: b.helaSerien === true });
+        if (!r.ok) return svar2({ fel: /lk_svara_at/.test(r.fel) ? OMBUD_SAKNAS : r.fel }, 400);
+        const { data: p } = await supabaseAdmin().from("employee").select("first_name").eq("id", vem).maybeSingle();
+        const namn = String(p?.first_name ?? "ägaren");
+        return svar2({ ok: `Svarat ${svaret === "ja" ? "ja" : svaret === "nej" ? "nej" : "preliminärt"} åt ${namn}.`, angra: r.data.undo_id ?? null, id, dag: null });
+      }
       case "foresla":
         return ut(await foreslaTid(id, String(b.dag ?? ""), Number(b.start), Number(b.langd), String(b.kommentar ?? "") || null, "kanske"));
       case "besluta": {
