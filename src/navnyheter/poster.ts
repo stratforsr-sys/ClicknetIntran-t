@@ -159,6 +159,9 @@ behörigheter som här: du ser bara det du får se.
   den. Det gör bara du.
   Allt i kalendern kommer som notis i telefonen, också mötets påminnelse.
   Slå på det i Inställningar, Notiser, Kalendern i telefonen.
+  Ändrar du en gång i en serie frågar kalendern som Outlook: bara den här
+  gången, den här och följande, eller hela serien. Serien kan också få ett
+  slutdatum.
 - **Ärenden**, med svarstiden som navet lovar. Chefen får ett ärende av
   nattjobbet när en överenskommelse i Coachning är fjorton dagar över fristen
   eller någon inte gjort systemguiderna i tid, och ägaren när en sats ska ses

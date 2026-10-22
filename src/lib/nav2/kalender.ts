@@ -182,6 +182,10 @@ export async function kalDetalj(user: CurrentUser, id: string) {
     // Inbjudna utanför Clicknet (calendar_attendee.external_email): de som fått mejlet med kalenderfilen.
     gaster: (g ?? []).map((x) => String(x.external_email)),
     serieText: d.serie ? regeltext(d.serie) : null,
+    // Formulärets "Upprepas" och "Slutar" när en gång i serien öppnas (del 11; utkastet gissade på mönstret).
+    serieRegel: d.serie
+      ? { upprepa: d.serie.monster === "vardagar" ? "Varje vardag" : d.serie.monster === "manadsvis" ? "Varje månad" : d.serie.intervall === 2 ? "Varannan vecka" : "Varje vecka", slut: d.serie.ends_on }
+      : null,
     paminnelse: d.paminnelse,
     enskilt: enskilt
       ? {

@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser, type CurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { FORINSTALLNINGAR, STEG, UPPREPA, arDatum, arVy, kvittoKopierad, type Upprepa } from "@/lib/leveranskalender";
+import { FORINSTALLNINGAR, STEG, UPPREPA, WDL, arDatum, arVy, kvittoKopierad, plus, wd, type Upprepa } from "@/lib/leveranskalender";
 import { fonsterFran, hamtaHandelsedetalj, lk, upptagetFor } from "@/lib/leveranskalender-server";
 import { hamtaKalposter, kalDetalj, sokKalender } from "@/lib/nav2/kalender";
 import { kalPushNasta } from "@/lib/nav2/kalender-push";
+import { svensktDatum } from "@/lib/klocka";
+import { HORISONT_DAGAR, forekomster } from "@/lib/upprepning";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
 import { skapaKalenderpost, stallInDelning } from "@/app/(app)/kalender/actions";
 import {
@@ -128,6 +130,8 @@ type Falt = {
   visa?: string;
   pamin?: number | null;
   upprepa?: string;
+  /** Seriens slutdatum (Outlooks "Slutar"), tomt = löper vidare. */
+  slut?: string | null;
   priv?: boolean;
   lev?: string;
   order?: string;
@@ -207,12 +211,78 @@ async function kopieraTill(user: CurrentUser, id: string, dag: string, start: nu
   return { ...r, kvitto: kvittoKopierad(dag, start, deltagare.length > 0) + (gaster ? " Gästerna utanför Clicknet följer inte med." : "") };
 }
 
+/** Formulärets "Upprepas" → seriens regel (calendar_series). */
+const MONSTER_FRAN: Record<string, { monster: "vardagar" | "veckovis" | "manadsvis"; intervall: 1 | 2 }> = {
+  "Varje vardag": { monster: "vardagar", intervall: 1 },
+  "Varje vecka": { monster: "veckovis", intervall: 1 },
+  "Varannan vecka": { monster: "veckovis", intervall: 2 },
+  "Varje månad": { monster: "manadsvis", intervall: 1 },
+};
+
+type Serieandring = { fran: "har" | "alla"; dag: string; start: number; minuter?: number; upprepa?: string; slut?: string | null; titel?: string };
+
+/**
+ * En serie som i Outlook (beställaren 2026-10-22, fråga 2: "ja, exakt som Outlook"): "den här och följande" eller
+ * alla, med tid, längd, mönster, veckodag, slutdatum och rubrik (0202, `lk_andra_serie`). Det som inte skickas står
+ * kvar som i serien. Förekomsterna räknas med samma regel som jobbet som fyller på serien (`forekomster`, åtta
+ * veckor fram). Före 0202 svarar rutten att bara den här gången går att ändra.
+ */
+async function andraSerie(user: CurrentUser, id: string, a: Serieandring): Promise<Resultat> {
+  if (!arDatum(a.dag)) return { fel: "Välj ett datum." };
+  if (!Number.isInteger(a.start) || a.start < 0 || a.start > 1435 || a.start % 5 !== 0) return { fel: "Välj en starttid." };
+  if (a.slut && !arDatum(a.slut)) return { fel: "Välj när serien slutar." };
+  const db = supabaseAdmin();
+  const { data: e } = await db.from("calendar_event").select("series_id").eq("id", id).maybeSingle();
+  if (!e?.series_id) return { fel: "Händelsen är inte en del av en serie." };
+  const { data: s } = await db.from("calendar_series").select("kind, title, minuter, monster, intervall, starts_on, ends_on").eq("id", e.series_id).maybeSingle();
+  if (!s) return { fel: "Serien finns inte längre." };
+  const regel = a.upprepa && MONSTER_FRAN[a.upprepa] ? MONSTER_FRAN[a.upprepa] : { monster: s.monster as "vardagar" | "veckovis" | "manadsvis", intervall: (s.intervall === 2 ? 2 : 1) as 1 | 2 };
+  if (s.kind === "enskilt" && regel.monster !== "veckovis") return { fel: "En 1:1 är varje eller varannan vecka." };
+  if (regel.monster === "veckovis" && wd(a.dag) > 5) return { fel: "Välj en vardag." };
+  const minuter = a.minuter ?? (s.minuter as number);
+  if (!Number.isInteger(minuter) || minuter < 5 || minuter > 480) return { fel: "Välj en längd mellan 5 minuter och 8 timmar." };
+  const slut = a.slut === undefined ? ((s.ends_on as string | null) ?? null) : a.slut || null;
+  const idag = svensktDatum();
+  const fran = a.fran === "har" ? (a.dag < idag ? idag : a.dag) : idag;
+  if (slut && slut < fran) return { fel: "Serien kan inte sluta innan den börjar." };
+  const dagar = forekomster(
+    { monster: regel.monster, veckodagar: regel.monster === "veckovis" ? [wd(a.dag)] : [], starts_on: a.fran === "har" ? a.dag : (s.starts_on as string), ends_on: slut, intervall: regel.intervall },
+    fran,
+    plus(idag, HORISONT_DAGAR),
+  );
+  const text = regel.monster === "vardagar" ? "varje vardag" : regel.monster === "manadsvis" ? "varje månad" : `${regel.intervall === 2 ? "varannan " : ""}${WDL[wd(a.dag)].toLowerCase()}${regel.intervall === 2 ? "" : "ar"}`;
+  const r = await lk<{ undo_id: string; svara_igen: string[]; event_id: string }>("lk_andra_serie", {
+    p_aktor: user.employee!.id,
+    p_event: id,
+    p_fran_har: a.fran === "har",
+    p_tid: `${String(Math.floor(a.start / 60)).padStart(2, "0")}:${String(a.start % 60).padStart(2, "0")}`,
+    p_minuter: minuter,
+    p_monster: regel.monster,
+    p_intervall: regel.intervall,
+    p_veckodag: regel.monster === "veckovis" ? wd(a.dag) : null,
+    p_ends_on: slut,
+    p_dagar: dagar,
+    p_regeltext: text,
+    p_title: s.kind === "enskilt" ? null : (a.titel ?? "").trim().slice(0, 200) || null,
+  });
+  if (!r.ok) return { fel: /lk_andra_serie/.test(r.fel) ? "Serien ändras som i Outlook när databasen fått 0202. Bara den här gången går att ändra än." : r.fel };
+  const igen = r.data.svara_igen.length;
+  const vem = a.fran === "har" ? "Den här och kommande gånger" : "Hela serien";
+  return {
+    ok: true,
+    eventId: r.data.event_id,
+    angra: r.data.undo_id,
+    dag: a.dag,
+    kvitto: `${vem} ändrad: ${text}${slut ? ` till ${slut}` : ""}.${igen ? ` ${igen === 1 ? "En deltagare behöver" : `${igen} deltagare behöver`} svara igen.` : ""}`,
+  };
+}
+
 /**
  * Beställaren 2026-10-22: ett ombud ("Kan planera om", "Delegat") flyttar och bokar inte i ägarens kalender.
  * Databasens lk_far_andra släpper fram dem (0200, skriven men inte körd, stänger det där); här ändrar bara
  * arrangören en händelse som redan finns. Svaret, förslaget, påminnelsen och 1:1-punkterna är deltagarens egna.
  */
-const ARRANGORENS = ["besluta", "stallin", "kopiera", "flytta", "langd"];
+const ARRANGORENS = ["besluta", "stallin", "kopiera", "flytta", "langd", "serie"];
 async function baraArrangoren(user: CurrentUser, id: string): Promise<Resultat | null> {
   if (!UUID.test(id)) return { fel: "Händelsen finns inte längre." };
   const { data } = await supabaseAdmin().from("calendar_event").select("organizer_id").eq("id", id).maybeSingle();
@@ -331,9 +401,14 @@ export async function POST(request: Request) {
             visaSom: f.visa,
             paminnelse: f.pamin ?? undefined,
           });
-          if (!r.fel && (f.priv || video) && r.eventId) {
+          if (!r.fel && (f.priv || video || f.slut) && r.eventId) {
             const { data: e } = await supabaseAdmin().from("calendar_event").select("series_id").eq("id", r.eventId).maybeSingle();
             if (e?.series_id) await supabaseAdmin().from("calendar_event").update({ ...(f.priv ? { is_private: true } : {}), ...(video ? { online_url: video } : {}) }).eq("series_id", e.series_id);
+            // "Slutar" (Outlook): serien slutar där, och gångerna efter tas bort. Ångra tar bort hela serien som förut.
+            if (e?.series_id && f.slut && arDatum(f.slut) && f.slut >= (f.d ?? "")) {
+              await supabaseAdmin().from("calendar_series").update({ ends_on: f.slut }).eq("id", e.series_id);
+              await supabaseAdmin().from("calendar_event").delete().eq("series_id", e.series_id).gt("dag", f.slut);
+            }
           }
           return ut(r);
         }
@@ -370,9 +445,38 @@ export async function POST(request: Request) {
       case "flytta": {
         const dag = String(b.dag ?? ""), start = Number(b.start);
         if (b.serie === true) return ut(await flyttaSerie(id, dag, start));
+        // "Den här och följande" i flyttbannern: samma regel, ny dag och tid från den här gången.
+        if (b.serie === "foljande") return ut(await andraSerie(user, id, { fran: "har", dag, start }));
         const r = await flytta(id, dag, start);
         if (r.fel || b.langd === undefined) return ut(r);
         return ut(await andraLangd(id, Number(b.langd)));
+      }
+      // Formuläret på en gång i en serie, "Den här och följande" eller "Hela serien" (Outlook).
+      case "serie": {
+        const f = (b.falt ?? {}) as Falt;
+        const r = await andraSerie(user, id, {
+          fran: b.fran === "alla" ? "alla" : "har",
+          dag: f.d ?? "",
+          start: f.s ?? 0,
+          minuter: (f.e ?? 0) - (f.s ?? 0) || undefined,
+          upprepa: f.upprepa,
+          slut: f.slut === undefined ? undefined : f.slut || null,
+          titel: f.t,
+        });
+        if (r.fel) return ut(r);
+        // Platsen, länken, Visa som och Privat från formuläret gäller de nya gångerna (0202 tar dem från den ändrade gången).
+        const video = lank(f.video);
+        const { data: e } = await supabaseAdmin().from("calendar_event").select("series_id").eq("id", r.eventId ?? id).maybeSingle();
+        if (e?.series_id) {
+          const fran = b.fran === "alla" ? svensktDatum() : (f.d ?? svensktDatum());
+          await supabaseAdmin()
+            .from("calendar_event")
+            .update({ plats: f.plats ?? null, ...(video !== undefined ? { online_url: video } : {}), ...(f.visa ? { show_as: f.visa } : {}), ...(f.priv !== undefined ? { is_private: Boolean(f.priv) } : {}) })
+            .eq("series_id", e.series_id)
+            .gte("dag", fran)
+            .eq("avviker", false);
+        }
+        return ut(r);
       }
       case "langd":
         return ut(await andraLangd(id, Number(b.langd)));

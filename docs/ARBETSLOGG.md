@@ -5,6 +5,32 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-22 · Nav 2.0, Kalendern som Outlook, del 11: serier som i Outlook (0202 skriven och torrkörd, inte körd)
+
+- **Beställaren 2026-10-22 (fråga 2, öppen sedan 2026-09-22):** "ja, exakt som
+  Outlook".
+- **Nu:** en ändrad gång i en serie frågar som Outlook: "Bara den här
+  gången" (som förut), "Den här och följande" eller "Hela serien"
+  (utkastets `olserie`-banner i formuläret). Flyttbannern får samma tredje
+  val. Formuläret får "Slutar" under Upprepas (tomt = löper vidare), och en
+  öppnad gång visar seriens riktiga mönster och slut (`kalDetalj`
+  `serieRegel`; utkastet gissade "Varje vardag" eller "Varannan vecka").
+  En ny serie med slutdatum slutar där.
+- **Rutten:** POST `serie` och `flytta` med `serie:"foljande"` →
+  `andraSerie`: tid, längd, mönster (varje vardag, vecka, varannan vecka,
+  månad), veckodag, slut och rubrik; förekomsterna med samma regel som
+  jobbet som fyller på serien (`forekomster`, åtta veckor). Bara arrangören.
+  Plats, länk, Visa som och Privat från formuläret gäller de nya gångerna.
+- **0202 (`supabase/migrations/0202_kalender_serier_som_outlook.sql`):**
+  `lk_andra_serie` (som `lk_flytta_serie` med hela regeln; "den här och
+  följande" flyttar seriens början, så de tidigare gångerna står kvar;
+  deltagarna svarar igen; de nya gångerna får plats, länk, Visa som och
+  Privat, som `lk_fod_forekomster` annars tappar) och `lk_angra`, som nu
+  återställer hela regeln och rubriken. Torrkörd på K&V-serien
+  (`prov/torr-0202.mjs`): följande och alla, Ångra exakt som före, någon
+  annan, lördag och slut före början nekas. **Inte körd:** före 0202 svarar
+  rutten att bara den här gången går att ändra.
+
 ## 2026-10-22 · Nav 2.0, Kalendern som Outlook, del 10: allt i kalendern som push i telefonen (ingen migration)
 
 - **Beställaren 2026-10-22 (fråga 7):** "super viktigt, allt i kalendern ska

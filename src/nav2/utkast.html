@@ -27339,7 +27339,7 @@ function ndKDetalj(e){
       y.delt = x.deltagare.map(d => [ndKNamn(d.id) || 'Okänd', d.svar]).filter(d => d[0] !== y.org);
       y.gaster = x.gaster || [];
       // Arrangörens del av svaren: kommentarer och förslag om ny tid (bara till den som får ändra mötet).
-      y.farAndra = !!x.farAndra; y.enskilt = x.enskilt || null;
+      y.farAndra = !!x.farAndra; y.enskilt = x.enskilt || null; y.serieRegel = x.serieRegel || null;
       y.ndSvar = x.deltagare.filter(d => d.note || d.forslag).map(d => ({id:d.id, namn:ndKNamn(d.id) || 'Okänd', svar:d.svar, note:d.note || '', forslag:d.forslag || null}));
       ndKTitel(y);
     });
@@ -27515,7 +27515,7 @@ function ndKFalt(f){
   const ev = f.id ? KEV.find(x => x.id === f.id) : null;
   return {id:ev ? ndKRef(ev) : undefined, typ:f.typ, t:(f.t || '').trim() || (f.lev || ''), d:f.d, s:f.heldag ? 0 : f.s, e:f.heldag ? 1440 : f.e, heldag:!!f.heldag,
     delt:(f.delt || []).map(n => ndKId(n)).filter(Boolean), ...ndKPlatsLank(f, ev), agenda:f.agenda || '', visa:NDKVISA[f.visa] || 'upptagen',
-    pamin:NDKPAMMIN[f.pamin] !== undefined ? NDKPAMMIN[f.pamin] : 15, upprepa:f.upprepa || 'Upprepas inte', priv:!!f.priv, lev:f.lev || undefined, order:f.order || undefined,
+    pamin:NDKPAMMIN[f.pamin] !== undefined ? NDKPAMMIN[f.pamin] : 15, upprepa:f.upprepa || 'Upprepas inte', slut:f.upprepa && f.upprepa !== 'Upprepas inte' ? (f.slut || '') : undefined, priv:!!f.priv, lev:f.lev || undefined, order:f.order || undefined,
     gaster:f.typ === 'mote' ? (f.gaster || []).filter(a => !(f.gastFore || []).includes(a)) : []};
 }
 /* Möteslänken (beslutsrundan 2026-10-20: Nav sparar en länk som skrivs in, men skapar ingen). En länk som klistras
@@ -27547,7 +27547,10 @@ function ndKGastLagg(){
 const _ndKOppna = kOppnaForm;
 kOppnaForm = function(over){
   if (ndK() && over && over.id){ const ev = KEV.find(x => x.id === over.id); over = {...over, gastFore:(ev && ev.gaster) || [], gaster:[], levEv:!!ev && ev.kat === 'leverans'};
-    if (ev && ev.online) over = {...over, plats:[over.plats && over.plats !== 'Videolänk' ? over.plats : '', ev.online].filter(Boolean).join(' '), video:true}; }
+    if (ev && ev.online) over = {...over, plats:[over.plats && over.plats !== 'Videolänk' ? over.plats : '', ev.online].filter(Boolean).join(' '), video:true};
+    // En gång i en serie: seriens mönster och slut ur navet (utkastet gissade "Varje vardag" eller "Varannan vecka").
+    if (ev && ev.rep && ev.serieRegel) over = {...over, upprepa:ev.serieRegel.upprepa, slut:ev.serieRegel.slut || ''}; }
+  S.ndKSerieVal = null;
   return _ndKOppna(over);
 };
 const _ndKFormular = kFormular;
@@ -27559,6 +27562,7 @@ kFormular = function(){
     if (!ndKHar(ND.jag.id, f.d, f.d)) ndKHamta('vecka', f.d, [], [ND.jag.id]);
     if ((f.delt || []).length){ ndKUppBehov([kJag(), ...f.delt], f.d); if (ndKKollar(f.delt, f.d)) h = h.replace(/(<div class="olmsg ok">[\s\S]*?<span>)[^<]*(<\/span>)/, `$1${NDKKOLLAR}$2`); }
   }
+  if (ndK() && f) h = ndKSerieForm(h, f);
   if (!ndK() || !f || f.typ !== 'mote') return h;
   const slut = '</span><small class="olmut">Inbjudna får en notis och ett mejl med .ics.', i = h.indexOf(slut);
   if (i < 0) return h;
@@ -27580,6 +27584,15 @@ kSpara = function(f){
   if (f.typ === 'mote' && !f.id && (f.gaster || []).length && f.upprepa && f.upprepa !== 'Upprepas inte'){ toast('En person utanför Clicknet bjuds in till ett möte som inte upprepas.'); return false; }
   const ev = f.id ? KEV.find(x => x.id === f.id) : null;
   if (ev && !ndKRef(ev)){ toast('Den här posten ändras där den kommer ifrån.'); return false; }
+  // En gång i en serie (Outlook): den här gången, den här och följande, eller hela serien.
+  if (ev && ev.rep && f.typ !== 'uppgift' && S.ndKSerieVal !== 'en'){
+    if (!S.ndKSerieVal){ S.ndKSerieVal = 'fraga'; render(); return false; }
+    if (S.ndKSerieVal === 'har' || S.ndKSerieVal === 'alla'){
+      if (f.slut && f.slut < f.d){ toast('Serien kan inte sluta innan den börjar.'); S.ndKSerieVal = 'fraga'; render(); return false; }
+      ndKPost('serie', {id:ndKRef(ev), fran:S.ndKSerieVal, falt:ndKFalt(f)}).then(s => { if (s.ok){ S.kForm = null; S.kNy = null; S.ndKSerieVal = null; render(); } else { S.ndKSerieVal = 'fraga'; render(); } });
+      return true;
+    }
+  }
   if (f.typ !== 'uppgift' && f.video && !NDKLANK.test(f.plats || '') && !(ev && ev.online)){ toast('Klistra in mötets länk (Teams, Meet eller Zoom) i platsfältet.'); document.querySelector('[data-kff="plats"]')?.focus(); return false; }
   ndKPost('spara', {falt:ndKFalt(f)}).then(s => { if (s.ok){ S.kForm = null; S.kNy = null; } });
   return true;
@@ -27695,7 +27708,9 @@ document.addEventListener('click', e => {
   if (ds.kuppgklar !== undefined){ stopp(); const u = TASKS.find(x => x.id === ds.kuppgklar); ndUpgPost(u && u.lage === 'klar' ? 'ateroppna' : 'bocka', {id:ds.kuppgklar}); return; }
   // Flyttbannern för en serie: "Hela serien" flyttade bara posterna i webbläsaren. Nu går båda knapparna till navet.
   if (ds.kserie !== undefined){ stopp(); const sr = S.kSerie, x = sr && KEV.find(k => k.id === sr.id); S.kSerie = null;
-    if (!ds.kserie || !x){ render(); return; } kFlytta(x, sr.d, sr.s, null, ds.kserie === 'en'); return; }
+    if (!ds.kserie || !x){ render(); return; }
+    if (ds.kserie === 'foljande'){ const ref = ndKRef(x); if (ref) ndKPost('flytta', {id:ref, dag:sr.d, start:sr.s, serie:'foljande'}); else render(); return; }
+    kFlytta(x, sr.d, sr.s, null, ds.kserie === 'en'); return; }
   if (ds.ndkcal){ stopp(); ndKCalVaxla(ds.ndkcal); return; }
   if ((ds.kfforesla !== undefined || ds.ksanasta !== undefined) && S.kForm){ kLasForm();
     if (ndKVanta(e, ds.kfforesla !== undefined ? '[data-kfforesla]' : '[data-ksanasta]', [kJag(), ...(S.kForm.delt || [])], S.kForm.d, 15)) return; }
@@ -27873,6 +27888,34 @@ document.addEventListener('click', e => {
   const b = e.target.closest && e.target.closest('[data-ndkpush]'); if (!b || !ndKPushOk()) return;
   e.preventDefault(); e.stopImmediatePropagation();
   if (b.dataset.ndkpush === 'pa') ndKPushPa(); else ndKPushAv();
+}, true);
+
+/* ---------- Serier som i Outlook (beställaren 2026-10-22: "ja, exakt som Outlook") ----------
+   Formuläret får "Slutar" under Upprepas (tomt = löper vidare). En ändrad gång i en serie frågar som Outlook: bara den
+   här gången (som förut), den här och följande, eller hela serien (POST serie, 0202). Flyttbannern får samma tredje
+   val. Utkastets egen banner (olserie) och knappar (olbtn); inget nytt utseende. */
+function ndKSerieForm(h, f){
+  if (f.upprepa && f.upprepa !== 'Upprepas inte' && f.typ !== 'uppgift'){
+    const i = h.indexOf('</select>', h.indexOf('data-kff="upprepa"'));
+    if (i > 0) h = h.slice(0, i + 9) + `<small class="olmut">Slutar <input class="uin" type="date" data-kff="slut" value="${esc(f.slut || '')}" min="${esc(f.d || '')}" aria-label="Serien slutar" style="width:auto;display:inline-block"> ${f.slut ? '' : '· löper vidare'}</small>` + h.slice(i + 9);
+  }
+  if (S.ndKSerieVal === 'fraga'){
+    const j = h.indexOf('>', h.indexOf('class="olform')) + 1;
+    if (j > 0) h = h.slice(0, j) + `<div class="olserie" role="alert">${KI('upprepa')}<span><b>${esc(f.t || '')}</b> är återkommande. Spara ändringen för:</span><button class="olbtn primar" data-ndkserieval="en">Bara den här gången</button><button class="olbtn" data-ndkserieval="har">Den här och följande</button><button class="olbtn" data-ndkserieval="alla">Hela serien</button><button class="olbtn" data-ndkserieval="">Avbryt</button></div>` + h.slice(j);
+  }
+  return h;
+}
+const _ndKSerieBanner = kSerieBanner;
+kSerieBanner = function(){
+  const h = _ndKSerieBanner(); if (!ndK()) return h;
+  return h.replace('<button class="olbtn" data-kserie="alla">', '<button class="olbtn" data-kserie="foljande">Den här och följande</button><button class="olbtn" data-kserie="alla">');
+};
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('[data-ndkserieval]'); if (!b || !ndK()) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  const v = b.dataset.ndkserieval;
+  if (!v){ S.ndKSerieVal = null; render(); return; }
+  kLasForm(); S.ndKSerieVal = v; kSpara(S.kForm);
 }, true);
 
 if (ndK()){ ndKalStart(); NDKOPPLAD.add('kalender'); }
