@@ -5,6 +5,39 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-22 · Granskningen S01: lk_andra_mote och två läsfunktioner bara för service role (0205 körd)
+
+- **Hålet (K1: A1, C1, C17):** `pg_default_acl` i public ger anon och
+  authenticated EXECUTE på varje ny funktion, och 0088/0091 gjorde bara
+  `revoke … from public`. `lk_andra_mote` (SECURITY DEFINER) kontrollerade
+  bara att argumentet `p_aktor` var arrangören, så vem som helst med den
+  publika anon-nyckeln och två id:n kunde skriva om ett möte och skicka
+  notiser i arrangörens namn via `/rest/v1/rpc/lk_andra_mote`. Öppet sedan
+  2026-10-15. `lk_narvaro` (deltagare och externa adresser för vilket möte
+  som helst) och `lk_i_leverans` var körbara för authenticated.
+- **0205 (`supabase/migrations/0205_rattigheter_lk.sql`):** bara rättigheter,
+  inga funktionskroppar: `revoke all … from public, anon, authenticated` och
+  `grant execute … to service_role` för de tre. Kartläggningen först (bara
+  läsning): ingen policy, vy eller SECURITY INVOKER-funktion använder
+  `lk_narvaro`/`lk_i_leverans`; deras 17 anropare är DEFINER-funktioner.
+  Appen anropar `lk_*` bara via `lk()` med service role, och `main` anropar
+  ingen av de tre. Torrkörd: RLS-läsningarna som Zen (kalendern, uppgifter,
+  projekt, `kalender_handelser`/`kalender_poster`/`leverans_kunder`) lika
+  före och efter, direktanrop som anon/authenticated nekas. Körd före den här
+  committen. Service role ändrar fortfarande ett PROV-möte (transaktion,
+  rollback, inga notiser).
+- **Vakten `tests/rattigheter-db.mjs`** (`npm run test:rattigheter`, kräver
+  `DATABASE_URL`, bara läsning, inte i `npm test`): listar varje SECURITY
+  DEFINER-funktion i public som anon eller authenticated får köra och jämför
+  med `TILLATNA` (39 st). En ny funktion som glömt `revoke … from public,
+  anon, authenticated` faller med `nya rättigheter: …`. Röd före 0205 med
+  just de tre, grön efter. Kör den före varje commit med en migration.
+- **Kvar (inte S01):** `kalender_niva` och de fyra synlighetsfunktionerna tar
+  läsaren ur ett argument (C17 punkt 3, bara ja/nej och id krävs); `kanda_fel`,
+  `fel_statistik` och `kampanjsidor_lage` kan köras av anon (C10, ofarligt).
+  Om hålet har utnyttjats syns inte i databasen; beställaren tittar i
+  Supabase-panelen, Logs → API, efter `/rest/v1/rpc/lk_andra_mote`.
+
 ## 2026-10-22 · Nav 2.0, Kalendern som Outlook, del 14: heldag och möten över flera dagar (0204 körd)
 
 - **Beställaren 2026-10-22 (svar 3):** "nej, men kan vara bra att ha med om
