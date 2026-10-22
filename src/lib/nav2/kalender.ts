@@ -262,6 +262,12 @@ export async function kalDetalj(user: CurrentUser, id: string) {
       .eq("optional", true)
       .or(d.serie ? `event_id.eq.${id},series_id.eq.${d.serie.id}` : `event_id.eq.${id}`),
   ]);
+  const { data: bl } = await supabaseAdmin()
+    .from("calendar_attachment")
+    .select("id, filename, size_bytes, mime_type, series_id")
+    .or(d.serie ? `event_id.eq.${id},series_id.eq.${d.serie.id}` : `event_id.eq.${id}`)
+    .order("uploaded_at");
+  const bilagor = ((bl ?? []) as { id: string; filename: string; size_bytes: number; mime_type: string; series_id: string | null }[]).map((r) => ({ id: r.id, namn: r.filename, storlek: r.size_bytes, mime: r.mime_type, serie: Boolean(r.series_id) }));
   const valfria = new Set(((v ?? []) as { employee_id: string | null }[]).map((r) => r.employee_id).filter((x): x is string => Boolean(x)));
   const mig = user.employee!.id;
   // Ombud (0201): den som får planera om i arrangörens kalender gör det arrangören gör med mötet, och en delegat
@@ -286,6 +292,8 @@ export async function kalDetalj(user: CurrentUser, id: string) {
     // Beställaren 2026-10-22: "kunna dela behörighet till någon som kan flytta mina möten eller svara och boka åt
     // mig". De inbjudna som läsaren är delegat för, och som hen alltså svarar åt (POST svara med for).
     svaraFor: d.deltagare.filter((x) => x.id !== mig && x.id !== d.organisator && ombud.get(x.id) === "delegat").map((x) => x.id),
+    // Bilagorna (0201): på mötet, eller på serien för en gång i en serie. Före 0201 felar frågan, och listan är tom.
+    bilagor,
     // Inbjudna utanför Clicknet (calendar_attendee.external_email): de som fått mejlet med kalenderfilen.
     gaster: (g ?? []).map((x) => String(x.external_email)),
     serieText: d.serie ? regeltext(d.serie) : null,

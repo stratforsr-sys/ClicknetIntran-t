@@ -5,6 +5,23 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-22 · Nav 2.0, Kalendern som Outlook, del 16: bilagor på möten (0201)
+
+- **Beställaren 2026-10-22:** ja till bilagor (Outlook: "Bifoga fil").
+- **Snabbkortet** listar mötets bilagor med storlek. Ett tryck öppnar: PDF
+  och bilder i en ny flik, Word, Excel, PowerPoint och text laddas ned med
+  sitt namn. Arrangören och hens ombud bifogar ("Bifoga fil", flera på en
+  gång) och tar bort (×, två tryck). En gång i en serie får filen för hela
+  serien, så att den följer med varje gång och överlever att serien ändras.
+- **Rutten:** `bilaga-forbered` (signerad uppladdning direkt till
+  lagringen, högst 25 MB), `bilaga-registrera` (lagringens egna uppgifter om
+  storlek och typ, sedan raden), `bilaga-visa` (en länk i 60 sekunder, för
+  den som ser mötets detaljer; ett privat möte som man inte är med på ger
+  inga) och `bilaga-bort`. `kalDetalj` ger `bilagor`. Ingen notis går ut.
+- **0201:** `calendar_attachment` (mötet eller serien, aldrig båda; bara
+  service role; raderas med mötet). Före 0201 säger rutten att bilagor kommer
+  med databasens uppdatering.
+
 ## 2026-10-22 · Nav 2.0, Kalendern som Outlook, del 15: ombud som i Outlook – en assistent flyttar, svarar och bokar (0201 skriven, inte körd)
 
 - **Beställaren 2026-10-22, efter del 9:** "det vore faktiskt bra att ifall

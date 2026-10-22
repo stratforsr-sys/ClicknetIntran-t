@@ -27402,7 +27402,7 @@ function ndKDetalj(e){
       y.delt = x.deltagare.map(d => [ndKNamn(d.id) || 'Okänd', d.svar]).filter(d => d[0] !== y.org);
       y.gaster = x.gaster || [];
       // Arrangörens del av svaren: kommentarer och förslag om ny tid (bara till den som får ändra mötet).
-      y.farAndra = !!x.farAndra; y.enskilt = x.enskilt || null; y.serieRegel = x.serieRegel || null; y.svaraFor = x.svaraFor || [];
+      y.farAndra = !!x.farAndra; y.enskilt = x.enskilt || null; y.serieRegel = x.serieRegel || null; y.svaraFor = x.svaraFor || []; y.bilagor = Array.isArray(x.bilagor) ? x.bilagor : null;
       y.valfria = x.deltagare.filter(d => d.valfri).map(d => ndKNamn(d.id)).filter(Boolean);
       y.ndSvar = x.deltagare.filter(d => d.note || d.forslag).map(d => ({id:d.id, namn:ndKNamn(d.id) || 'Okänd', svar:d.svar, note:d.note || '', forslag:d.forslag || null}));
       ndKTitel(y);
@@ -28121,6 +28121,65 @@ document.addEventListener('pointerup', e => {
   if (kWd(dr.d) > 5){ render(); toast('Välj en vardag.'); return; }
   if (x.rep){ S.kSerie = {id:x.id, d:dr.d, s:dr.s}; render(); return; }
   kFlytta(x, dr.d, dr.s);
+}, true);
+
+/* ---------- Bilagor som i Outlook (beställaren 2026-10-22: ja; 0201) ----------
+   Snabbkortet listar mötets bilagor, och ett tryck öppnar (PDF och bilder i en ny flik, Office och text laddas ned).
+   Arrangören och hens ombud bifogar (Bifoga fil) och tar bort (×, två tryck). En gång i en serie får filen för hela
+   serien. Filen går direkt till lagringen, och navet sparar raden när lagringen sagt vad som kom in. */
+if (typeof KIKON === 'object' && !KIKON.gem) KIKON.gem = '<path d="M20 11.5l-7.8 7.8a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/>';
+const ndKStorlek = n => n >= 1048576 ? `${(n / 1048576).toFixed(1).replace('.', ',')} MB` : `${Math.max(1, Math.round(n / 1024))} kB`;
+const _ndKBilPeek = kPeekKort;
+kPeekKort = function(){
+  const h = _ndKBilPeek(); if (!ndK() || !S.kPeek) return h;
+  const e = KEV.find(x => x.id === S.kPeek.id); if (!e || !ndKRef(e) || !Array.isArray(e.bilagor)) return h;
+  const far = e.org === kJag() || ndKOmbud(e);
+  if (!e.bilagor.length && !far) return h;
+  const rad = `<p class="olpkr">${KI('gem')}<span>${e.bilagor.map(b => `<span style="display:inline-flex;align-items:center;gap:6px"><button class="tlink inl" data-ndkbilaga="${b.id}">${esc(b.namn)}</button><span class="olmut">${ndKStorlek(b.storlek)}</span>${far ? `<button class="tlink inl" data-ndkbilagabort="${b.id}" aria-label="Ta bort ${esc(b.namn)}">${S.ndKBilBort === b.id ? 'Ta bort?' : '×'}</button>` : ''}</span>`).join('<br>')}${far ? `${e.bilagor.length ? '<br>' : ''}<button class="tlink inl" data-ndkbifoga>${S.ndKBifogar ? 'Bifogar …' : 'Bifoga fil'}</button><input type="file" data-ndkfil hidden multiple>` : ''}</span></p>`;
+  const j = h.indexOf('<div class="olpkf">'), k = j > 0 ? h.lastIndexOf('</div>', j) : -1;
+  return k > 0 ? h.slice(0, k) + rad + h.slice(k) : h;
+};
+const ndKBil = async (handling, data) => { try { return ndSvar(await ndSkriv('/nav2/kalender', {handling, ...data})); } catch(_){ return {fel:'Nav svarade inte.'}; } };
+const ndKBilOm = ev => { NDKAL.detalj.delete(ev.ref); ndKDetalj(ev); };
+async function ndKBifoga(ev, filer){
+  const ref = ndKRef(ev); if (!ref || !filer.length) return;
+  S.ndKBifogar = true; render();
+  let sist = null;
+  for (const f of filer){
+    const p = await ndKBil('bilaga-forbered', {id:ref, filnamn:f.name, mime:f.type, storlek:f.size});
+    if (!p.ok){ ndSkrivFel(p); continue; }
+    if (!p.url){ toast(`${f.name} gick inte att ladda upp.`); continue; }
+    const put = await fetch(p.url, {method:'PUT', headers:{'Content-Type':f.type}, body:f}).catch(() => ({ok:false}));
+    if (!put.ok){ toast(`${f.name} gick inte att ladda upp.`); continue; }
+    const r = await ndKBil('bilaga-registrera', {id:ref, lager:p.lager, bucket:p.bucket, path:p.path, filId:p.filId, filnamn:f.name});
+    if (r.ok) sist = r.ok; else ndSkrivFel(r);
+  }
+  S.ndKBifogar = false; if (sist) toast(sist);
+  ndKBilOm(ev); render();
+}
+document.addEventListener('click', e => {
+  const t = e.target.closest && e.target.closest('[data-ndkbilaga],[data-ndkbilagabort],[data-ndkbifoga]'); if (!t || !ndK() || !S.kPeek) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  const ev = KEV.find(x => x.id === S.kPeek.id), ref = ndKRef(ev); if (!ref) return;
+  if (t.dataset.ndkbifoga !== undefined){ if (!S.ndKBifogar) document.querySelector('[data-ndkfil]')?.click(); return; }
+  const bort = t.dataset.ndkbilagabort;
+  if (bort){
+    if (S.ndKBilBort !== bort){ S.ndKBilBort = bort; render(); return; }
+    S.ndKBilBort = null;
+    ndKBil('bilaga-bort', {id:ref, bilaga:bort}).then(s => { if (!s.ok){ ndSkrivFel(s); render(); return; } toast(s.ok); ndKBilOm(ev); });
+    return;
+  }
+  // Fliken öppnas i själva trycket (annars stoppar webbläsaren den), och adressen sätts när navet svarat. Stoppas
+  // fliken ändå öppnar kvittots knapp den, och Nav står kvar.
+  const w = window.open('', '_blank'); if (w) w.opener = null;
+  ndKBil('bilaga-visa', {id:ref, bilaga:t.dataset.ndkbilaga}).then(s => {
+    if (!s.ok || !s.url){ if (w) w.close(); ndSkrivFel(s); return; }
+    if (w) w.location.href = s.url; else toastActs('Bilagan är klar att öppna.', [['Öppna', () => window.open(s.url, '_blank', 'noopener')]]);
+  });
+}, true);
+document.addEventListener('change', e => {
+  if (!e.target.dataset || e.target.dataset.ndkfil === undefined || !ndK() || !S.kPeek) return;
+  const ev = KEV.find(x => x.id === S.kPeek.id); if (ev) ndKBifoga(ev, [...e.target.files]);
 }, true);
 
 if (ndK()){ ndKalStart(); NDKOPPLAD.add('kalender'); }

@@ -169,6 +169,8 @@ behörigheter som här: du ser bara det du får se.
   Har du en assistent? Ge hen "Kan planera om" under Dela, så flyttar och
   redigerar hen dina möten, eller "Delegat", så svarar hen också på dina
   inbjudningar och bokar möten åt dig (Från i formuläret).
+  Bifoga filer till ett möte i snabbkortet: offerten, agendan eller
+  presentationen. Alla som är med öppnar dem där.
 - **Ärenden**, med svarstiden som navet lovar. Chefen får ett ärende av
   nattjobbet när en överenskommelse i Coachning är fjorton dagar över fristen
   eller någon inte gjort systemguiderna i tid, och ägaren när en sats ska ses

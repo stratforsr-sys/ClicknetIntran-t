@@ -6,6 +6,7 @@ import { fonsterFran, hamtaHandelsedetalj, lk, upptagetFor } from "@/lib/leveran
 import { KATEGORIFARGER, KATEGORINYCKEL, hamtaKalposter, kalDetalj, lasKategorier, ombudFor, sokKalender } from "@/lib/nav2/kalender";
 import { kalPushNasta } from "@/lib/nav2/kalender-push";
 import { svensktDatum } from "@/lib/klocka";
+import { bucketen, huvudUppgifter, lagerForNyaFiler, signeraLank, signeraUppladdning, taBort } from "@/lib/lagring-server";
 import { HORISONT_DAGAR, forekomster } from "@/lib/upprepning";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
 import { skapaKalenderpost, stallInDelning } from "@/app/(app)/kalender/actions";
@@ -388,7 +389,7 @@ async function andraSerie(user: CurrentUser, id: string, a: Serieandring): Promi
  * arrangören, eller av den som fått "Kan planera om" eller "Delegat" i arrangörens kalender (databasens
  * lk_far_andra). Svaret, förslaget, påminnelsen och 1:1-punkterna är deltagarens egna.
  */
-const ARRANGORENS = ["besluta", "stallin", "kopiera", "flytta", "langd", "serie"];
+const ARRANGORENS = ["besluta", "stallin", "kopiera", "flytta", "langd", "serie", "bilaga-forbered", "bilaga-registrera", "bilaga-bort"];
 async function baraArrangoren(user: CurrentUser, id: string): Promise<Resultat | null> {
   if (!UUID.test(id)) return { fel: "Händelsen finns inte längre." };
   const { data } = await supabaseAdmin().from("calendar_event").select("organizer_id").eq("id", id).maybeSingle();
@@ -403,6 +404,105 @@ async function delegatFor(user: CurrentUser, agare: unknown): Promise<string | R
   return (await ombudFor(user.employee!.id)).get(id) === "delegat" ? id : { fel: "Du är inte delegat i den kalendern. Ägaren ger nivån under Dela." };
 }
 const OMBUD_SAKNAS = "Ombuden får boka och svara när databasen fått 0201.";
+
+/**
+ * Bilagor som i Outlook (beställaren 2026-10-22: ja; 0201, calendar_attachment). Arrangören och hens ombud bifogar
+ * och tar bort; alla som ser mötets detaljer öppnar. En gång i en serie får filen för hela serien, så att den följer
+ * med varje gång och överlever att serien ändras. Filen går direkt till lagringen (signerad uppladdning, som
+ * ärendenas bilagor), och raden skrivs först när lagringen själv sagt vad som kom in.
+ */
+const BILAGA_MIME = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "text/plain",
+  "text/csv",
+  "application/msword",
+  "application/vnd.ms-excel",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+]);
+const BILAGA_MAX = 25 * 1024 * 1024;
+const BILAGA_SAKNAS = "Bilagor kommer med databasens uppdatering (0201).";
+type Lager = ReturnType<typeof lagerForNyaFiler>;
+/** Mötet eller, för en gång i en serie, serien: det bilagan hänger på. */
+async function bilagansAgare(id: string): Promise<{ event_id: string } | { series_id: string } | null> {
+  const { data } = await supabaseAdmin().from("calendar_event").select("id, series_id").eq("id", id).maybeSingle();
+  if (!data) return null;
+  return data.series_id ? { series_id: String(data.series_id) } : { event_id: String(data.id) };
+}
+async function bilaga(user: CurrentUser, handling: string, id: string, b: Record<string, unknown>): Promise<Record<string, unknown> & { status?: number }> {
+  const db = supabaseAdmin();
+  const agare = await bilagansAgare(id);
+  if (!agare) return { fel: "Händelsen finns inte längre.", status: 404 };
+  const mapp = `kalender/${"series_id" in agare ? agare.series_id : agare.event_id}`;
+  const [kol, varde] = "series_id" in agare ? ["series_id", agare.series_id] : ["event_id", agare.event_id];
+  switch (handling) {
+    case "bilaga-forbered": {
+      const mime = String(b.mime ?? "").toLowerCase();
+      const storlek = Number(b.storlek ?? 0);
+      if (!BILAGA_MIME.has(mime)) return { fel: "Bifoga PDF, bilder, Word, Excel, PowerPoint eller text.", status: 400 };
+      if (!(storlek > 0 && storlek <= BILAGA_MAX)) return { fel: "Filen får vara högst 25 MB.", status: 400 };
+      const { error } = await db.from("calendar_attachment").select("id", { head: true, count: "exact" }).limit(1);
+      if (error) return { fel: BILAGA_SAKNAS, status: 400 };
+      const lager = lagerForNyaFiler();
+      const bucket = bucketen(lager);
+      const filId = crypto.randomUUID();
+      const path = `${mapp}/${filId}`;
+      const v = await signeraUppladdning({ lager, bucket, path, mime, sekunder: 300 });
+      if ("fel" in v) return { fel: v.fel, status: 500 };
+      return { ok: "Klar att ladda upp.", lager, bucket, path, filId, ...v };
+    }
+    case "bilaga-registrera": {
+      const lager = String(b.lager ?? "") as Lager;
+      const bucket = String(b.bucket ?? "");
+      const path = String(b.path ?? "");
+      const filId = String(b.filId ?? "");
+      if (!UUID.test(filId) || path !== `${mapp}/${filId}` || !["r2", "supabase"].includes(lager) || bucket !== bucketen(lager)) return { fel: "Fel sökväg.", status: 400 };
+      // Lagringens egna uppgifter, inte klientens: storlek och typ provas här.
+      const h = await huvudUppgifter({ lager, bucket, path, mapp, fileId: filId });
+      if (!h || !BILAGA_MIME.has(h.mime) || !(h.storlek > 0 && h.storlek <= BILAGA_MAX)) {
+        if (h) await taBort({ lager, bucket, path });
+        return { fel: "Filen kom inte fram, eller är av fel sort.", status: 400 };
+      }
+      const filnamn = String(b.filnamn ?? "").replace(/[\/ -]/g, " ").trim().slice(0, 200) || "Bilaga";
+      const { error } = await db.from("calendar_attachment").insert({ ...agare, store: lager, bucket, path, filename: filnamn, mime_type: h.mime, size_bytes: h.storlek, uploaded_by: user.employee!.id });
+      if (error) {
+        await taBort({ lager, bucket, path });
+        return { fel: "Bilagan kunde inte sparas.", status: 500 };
+      }
+      return { ok: "series_id" in agare ? `${filnamn} är bifogad, för hela serien.` : `${filnamn} är bifogad.` };
+    }
+    case "bilaga-bort": {
+      const bid = String(b.bilaga ?? "");
+      if (!UUID.test(bid)) return { fel: "Bilagan finns inte.", status: 404 };
+      const { data: f } = await db.from("calendar_attachment").select("store, bucket, path, filename").eq("id", bid).eq(kol, varde).maybeSingle();
+      if (!f) return { fel: "Bilagan finns inte.", status: 404 };
+      await db.from("calendar_attachment").delete().eq("id", bid);
+      await taBort({ lager: f.store as Lager, bucket: String(f.bucket), path: String(f.path) });
+      return { ok: `${f.filename} är borttagen.` };
+    }
+    case "bilaga-visa": {
+      // En läsning: den som ser mötets detaljer (kalDetalj, med privata möten och delningsnivåerna) öppnar filen.
+      const d = await kalDetalj(user, id);
+      // Ett privat möte som läsaren inte är med på ger inga bilagor (kalDetalj svarar då utan dem).
+      if (!d || !("bilagor" in d)) return { fel: "Du får inte se mötets bilagor.", status: 403 };
+      const bid = String(b.bilaga ?? "");
+      if (!UUID.test(bid)) return { fel: "Bilagan finns inte.", status: 404 };
+      const { data: f } = await db.from("calendar_attachment").select("store, bucket, path, filename, mime_type").eq("id", bid).eq(kol, varde).maybeSingle();
+      if (!f) return { fel: "Bilagan finns inte.", status: 404 };
+      // PDF och bilder öppnas i fliken; Office och text laddas ned med sitt namn.
+      const iFliken = f.mime_type === "application/pdf" || String(f.mime_type).startsWith("image/");
+      const l = await signeraLank({ lager: f.store as Lager, bucket: String(f.bucket), path: String(f.path), sekunder: 60, laddaNedSom: iFliken ? null : String(f.filename) });
+      return "url" in l ? { ok: "Öppnar bilagan.", url: l.url } : { fel: l.fel, status: 500 };
+    }
+  }
+  return { fel: "Okänd handling.", status: 400 };
+}
 
 /**
  * Möteslänken (beslutsrundan 2026-10-20: Nav sparar en länk som skrivs in, men skapar ingen). Bara http(s).
@@ -659,6 +759,13 @@ export async function POST(request: Request) {
         }
         const { error } = await db.from("nav_preference").upsert({ employee_id: mig, key: KATEGORINYCKEL, value: k, updated_at: new Date().toISOString() }, { onConflict: "employee_id,key" });
         return error ? svar2({ fel: "Det gick inte att spara." }, 500) : svar2({ ok: handling === "kategori" ? "Kategorin är sparad." : "Namnet är sparat.", kategorier: k });
+      }
+      case "bilaga-forbered":
+      case "bilaga-registrera":
+      case "bilaga-bort":
+      case "bilaga-visa": {
+        const { status, ...x } = await bilaga(user, handling, id, b);
+        return svar2(x, status ?? 200);
       }
       case "langd":
         return ut(await andraLangd(id, Number(b.langd)));
