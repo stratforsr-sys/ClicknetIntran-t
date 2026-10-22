@@ -235,7 +235,7 @@ async function sattValfria(eventId: string | null | undefined, valfria: readonly
  * också en lördag eller söndag, högst 32 dagar. Före 0204 svarar rutten att heldag kommer med uppdateringen.
  */
 const DAGTEXT = (dag: string, slut: string | null) => {
-  const f = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("sv-SE", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+  const f = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("sv-SE", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }).replace(/\./g, "");
   return slut && slut > dag ? `${f(dag)}–${f(slut)}` : f(dag);
 };
 const HELDAG_SAKNAS = "Heldag kommer med databasens uppdatering (0204).";
