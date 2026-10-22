@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, type CurrentUser } from "@/lib/auth";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { svensktDatum, svenskTidpunkt } from "@/lib/klocka";
 import { arArbetsdag, dagPlus, veckodag } from "@/lib/saljtakt";
@@ -9,6 +9,7 @@ import { notifieraFlera } from "@/lib/notishandelse-server";
 import { hamtaNavnyhet, navnyheterFor } from "@/navnyheter";
 import { arkiveraNyhet, publiceraNyhet, skapaNyhet } from "@/app/(app)/nyheter/actions";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
+import { medNyckel } from "@/lib/nav2/nyckel";
 import { NH_GRUPPER, byggNyheter, farSkrivaNyheter, iMalgrupp, saknas0130, type NhGrupp } from "@/lib/nav2/nyheter";
 
 export const dynamic = "force-dynamic";
@@ -100,6 +101,12 @@ export async function POST(request: Request) {
   } catch {
     return svar({ fel: "Ogiltig begäran." }, 400);
   }
+  // Publicera skapar ett inlägg och en notisrunda. Samma nyckel en gång till ger samma svar, inte ett inlägg till (granskningen G2, F2-3).
+  if (b.handling === "publicera") return medNyckel(request, mig, () => utfor(user, mig, b));
+  return utfor(user, mig, b);
+}
+
+async function utfor(user: CurrentUser, mig: string, b: Record<string, unknown>): Promise<Response> {
   const handling = String(b.handling ?? "");
   const slug = String(b.id ?? "");
 

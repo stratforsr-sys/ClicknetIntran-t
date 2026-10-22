@@ -5,6 +5,26 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-22 · Granskningen S03: en skrivväg i Nav 2.0 (ndSkriv) med lås, tidsgräns, idempotensnyckel och utloggad-besked; medNyckel på servern (0208 körd)
+
+**Varför.** Granskningen 2026-10-22 (G1, G2, G4, F2-3): 19 av 20 skrivhjälpare i utkastet saknade skydd mot dubbla skick och tidsgräns. Ett dubbelklick eller en Enter som repeteras gav två övriga bonusar i Provision, två möten med två kundinbjudningar i Kalendern och Leads, och två publicerade nyheter. En utloggad användare (global `signOut()` i telefonen, utgånget steg två, tvingat lösenordsbyte) fick "Nav svarade inte." vid varje sparning, eftersom `fetch` följer mellanvarans 307 till inloggningen och får HTML.
+
+**Klienten (`moduler/nd.js`, blocket "Skrivvägen").** `ndSkriv(url, data, {nyckel, knapp, tid = 20000})` är den enda vägen för POST mot `/nav2/*`:
+- **Lås** per `url|kroppen` (eller en egen `nyckel`): ett dubbeltryck skickar samma kropp, medan en annan sparning under väntetiden (två bockar, en autosparning med ny text) går igenom. Det andra trycket skickar ingenting och får "Det här sparas redan. Vänta ett ögonblick.", en gång per lås.
+- **Tidsgräns** 20 s med `AbortController`: "Nav svarade inte på 20 sekunder. Det kan ha sparats: ladda om och titta innan du försöker igen."
+- **Nyckeln** `X-Nav-Nyckel` (slumpad). Fick försöket inget svar (tidsgräns, nätfel, serverns 409 pågår) skickas samma nyckel igen inom 60 s, och bara för samma kropp.
+- **Svaret i klartext:** omdirigering till `/logga-in`, `/byt-losenord` eller `/auth`, 401, eller ett svar som inte är JSON betyder utloggad: "Du är utloggad. Logga in i en ny flik och tryck Spara igen." med knappen Logga in (`/logga-in?nasta=%2Fnav2` i ny flik) i samma kvitto. 423 ger serverns läslägestext, 400/403/404/409 serverns `fel`, ≥ 500 "Nav kunde inte spara (fel <status>). Försök igen om en stund."
+- **Knappen** som trycktes får `aria-busy="true"` under anropet (ur `window.event`). Utseendet är oförändrat: inget `disabled`, ingen spinner.
+- `ndLas(url, {tid})` gör samma tolkning för GET, utan lås och nyckel. `ndSkrivFel(s)` visar ett nej i vyns vanliga kvitto; `ndSvar(s)` ger hjälparna serverns JSON som förut.
+
+Alla 19 vyhjälpare (`ndAePost` … `ndUtbPost`) och dessutom Säkerheten, palettens fråga, ärendets bilaga, orderns avtalsläsning, Frånvarons rehab-slinga och Utbildningens push går genom `ndSkriv`; alla GET mot `/nav2/*` genom `ndLas`. Kraschrapportens `keepalive` och uppladdningarnas PUT mot lagringen är orörda. `location.reload()` efter sparningar är kvar (klienten del 2, S13).
+
+**Servern.** `src/lib/nav2/nyckel.ts`: `medNyckel(request, aktor, gor)` tar raden i `nav_skrivnyckel` (0208) med `on conflict (nyckel) do nothing returning`. Första gången körs handlingen och status och JSON sparas; samma nyckel igen ger samma svar med `X-Nav-Upprepad: 1`; medan den första pågår 409 med pågår-texten och `pagar: true`, och då behåller klienten nyckeln till nästa försök. En annans nyckel ger 400, en nyckel äldre än ett dygn räknas som ny och äldre rader raderas före varje ny. Utan huvudet körs handlingen som förut. Nyheters `publicera` går genom den (POST delad i `POST` + `utfor`). Vysessionerna i våg 2 (S05–S09) använder den i sina skapande handlingar.
+
+**0208 `nav_skrivnyckel`** KÖRD 2026-10-22: `nyckel text primary key, aktor uuid → employee on delete cascade, skapad, klar, status, svar jsonb`, index på `skapad`, RLS utan policyer, inga rättigheter för anon/authenticated. Torrkörd: andra insert med samma nyckel ger 0 rader `returning`, `has_table_privilege('authenticated', …, 'SELECT')` är falskt.
+
+**Prov.** `tests/nav2-nyckel.mjs` (beslutet och hela `medNyckel` med ett lager i minnet) och `tests/nav2-skriv.mjs` (läser blocket ur `src/nav2/utkast.html` och kör det med påhittad `fetch`: dubbelklick, utloggad, 423, 4xx, 5xx, tidsgräns och samma nyckel inom 60 s, knappen, `ndLas`). Probe i webbläsare (sidan med Zens data, varje POST fångad med CDP innan den lämnar webbläsaren): en POST per dubbelklick i de vyer som sparar, och utloggad-kvittot med Logga in när mellanvaran svarar 307.
+
 ## 2026-10-22 · Granskningen S02, K6 del 1: bron, `?till=`, demoraden och jobben (ingen migration)
 
 - **Bron: i produktion visas en vy i Nav 2.0 först när den sparar (H1).** En

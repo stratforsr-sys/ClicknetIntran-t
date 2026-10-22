@@ -24478,6 +24478,73 @@ function ndKoppladText(){
   return prfOch(l);
 }
 
+/* ---------- Skrivvägen: ett lås per handling, en tidsgräns, en nyckel och svaret i klartext ---------- */
+// Granskningen G2 och G4. Alla vyhjälpare skickar här. Ett dubbelklick eller en Enter som repeteras
+// ger en begäran (samma kropp). En som hänger avbryts efter 20 s, och nästa försök inom 60 s bär samma nyckel
+// (X-Nav-Nyckel), så att servern (medNyckel) inte gör samma sak två gånger. En omdirigering till
+// inloggningen betyder utloggad, inte "Nav svarade inte".
+const NDSKRIVTEXT = {
+  utloggad:'Du är utloggad. Logga in i en ny flik och tryck Spara igen.',
+  tid:'Nav svarade inte på 20 sekunder. Det kan ha sparats: ladda om och titta innan du försöker igen.',
+  natet:'Nav gick inte att nå. Det kan ha sparats: ladda om och titta innan du försöker igen.',
+  pagar:'Det här sparas redan. Vänta ett ögonblick.',
+  serverfel:s => `Nav kunde inte spara (fel ${s}). Försök igen om en stund.`
+};
+const NDLOGGAIN = '/logga-in?nasta=%2Fnav2';
+const NDSKRIVER = new Map(), NDSENAST = new Map();
+const ndNyNyckel = () => crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+// Svaret, tolkat. Inloggningen, steg två och lösenordsbytet svarar med en sida, aldrig JSON.
+async function ndTolka(r){
+  const typ = (r.headers && r.headers.get('content-type')) || '';
+  if (r.redirected && /^[a-z]+:\/\/[^/]+\/(logga-in|byt-losenord|auth)([/?#]|$)/i.test(r.url || '')) return {ok:false, status:r.status, data:null, fel:NDSKRIVTEXT.utloggad, utloggad:true};
+  if (r.status >= 500) return {ok:false, status:r.status, data:null, fel:NDSKRIVTEXT.serverfel(r.status)};
+  if (r.status === 401 || !/json/i.test(typ)) return {ok:false, status:r.status, data:null, fel:NDSKRIVTEXT.utloggad, utloggad:true};
+  // En kropp som fastnar efter huvudet är tidsgränsen, inte en utloggning.
+  const data = await r.json().catch(e => { if (e && e.name === 'AbortError') throw e; return null; });
+  if (!data) return {ok:false, status:r.status, data:null, fel:NDSKRIVTEXT.utloggad, utloggad:true};
+  if (r.status === 423) return {ok:false, status:423, data, fel:data.fel || 'Läsläge.', laslage:true};
+  if (!r.ok || data.fel) return {ok:false, status:r.status, data, fel:data.fel || 'Det gick inte att spara.'};
+  return {ok:true, status:r.status, data};
+}
+async function ndHamta(url, init, tid){
+  const ac = new AbortController(), t = setTimeout(() => ac.abort(), tid);
+  try { return await ndTolka(await fetch(url, {...init, credentials:'same-origin', signal:ac.signal})); }
+  catch(e){ return {ok:false, status:0, data:null, fel:e && e.name === 'AbortError' ? NDSKRIVTEXT.tid : NDSKRIVTEXT.natet, hangde:true}; }
+  finally { clearTimeout(t); }
+}
+// Knappen som trycktes, när anropet kommer direkt ur ett klick (en Enter markerar ingen).
+const ndTryckt = () => { const e = window.event; return e && e.type === 'click' && e.target && e.target.closest ? e.target.closest('button') || undefined : undefined; };
+async function ndSkriv(url, data, {nyckel, knapp = ndTryckt(), tid = 20000} = {}){
+  // Låset är hela kroppen: ett dubbeltryck skickar samma sak, en annan sparning under väntetiden (två bockar,
+  // en autosparning med ny text) går igenom, och en sparad nyckel gäller bara samma skrivning (granskningen I1, I2).
+  const las = nyckel ?? `${url}|${JSON.stringify(data)}`;
+  // Det andra trycket: ingen begäran, och pågår-texten en gång per lås (en Enter som hålls nere repeterar).
+  const pag = NDSKRIVER.get(las);
+  if (pag){ const sagt = pag.sagt; pag.sagt = true; return {ok:false, status:0, data:null, fel:NDSKRIVTEXT.pagar, pagar:true, sagt}; }
+  const forra = NDSENAST.get(las), id = forra && Date.now() - forra.t < 60000 ? forra.id : ndNyNyckel();
+  if (knapp) knapp.setAttribute('aria-busy', 'true');
+  const p = ndHamta(url, {method:'POST', headers:{'Content-Type':'application/json', 'X-Nav-Nyckel':id}, body:JSON.stringify(data)}, tid);
+  NDSKRIVER.set(las, {p, sagt:false});
+  try {
+    const s = await p;
+    // Utan svar kan det ha sparats: nästa försök bär samma nyckel. Med ett svar är saken avgjord.
+    // Serverns 409 pågår betyder att det första försöket fortfarande körs: samma nyckel nästa gång också.
+    if (s.hangde || (s.status === 409 && s.data && s.data.pagar)) NDSENAST.set(las, {id, t:Date.now()}); else NDSENAST.delete(las);
+    return s;
+  } finally { NDSKRIVER.delete(las); if (knapp) knapp.removeAttribute('aria-busy'); }
+}
+function ndLas(url, {tid = 20000} = {}){ return ndHamta(url, {method:'GET'}, tid); }
+// Ett nej i ett kvitto, som vyerna redan visar sina. Utloggad får Logga in, som öppnar inloggningen i en ny flik.
+function ndSkrivFel(s, reserv = 'Det gick inte att spara.'){
+  if (s.pagar && s.sagt) return;
+  // Flera anrop kan bli utloggade samtidigt. Ett besked räcker så länge det syns.
+  if (s.utloggad){ if (![...document.querySelectorAll('#toasts .toast span')].some(x => x.textContent === s.fel)) toastActs(s.fel, [['Logga in', () => window.open(NDLOGGAIN, '_blank', 'noopener')]], 12000); }
+  else toast(s.fel || reserv);
+}
+// Hjälparnas gamla form: serverns JSON, med nejet i fel.
+const ndSvar = s => s.ok ? s.data : {...(s.data || {}), fel:s.fel, utloggad:s.utloggad, laslage:s.laslage, pagar:s.pagar, sagt:s.sagt};
+/* ---------- Skrivvägen slut ---------- */
+
 /* ---------- Tiden ---------- */
 const NDTZ = new Intl.DateTimeFormat('sv-SE', {timeZone:'Europe/Stockholm', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hourCycle:'h23'});
 function ndTid(d = new Date()){
@@ -25388,16 +25455,15 @@ function ndTidPeriod(id){
   gaTid('lon');
   if (per && per.skriven && !S.ndUnderlag[per.id] && !(c.underlag && c.underlag.periodId === per.id)){
     const k = per.id; S.ndUnderlag[k] = null; render();
-    fetch('/nav2/tid?period=' + encodeURIComponent(k), {credentials:'same-origin'}).then(r => r.json()).then(s => { S.ndUnderlag[k] = s.underlag || undefined; if (s.fel) toast(s.fel); render(); }).catch(() => { S.ndUnderlag[k] = undefined; toast('Nav svarade inte.'); render(); });
+    ndLas('/nav2/tid?period=' + encodeURIComponent(k)).then(ndSvar).then(s => { S.ndUnderlag[k] = s.underlag || undefined; if (s.fel) ndSkrivFel(s); render(); }).catch(() => { S.ndUnderlag[k] = undefined; toast('Nav svarade inte.'); render(); });
   }
 }
 /* ---------- Skrivningar: /nav2/tid ---------- */
 async function ndTidPost(handling, data = {}, {ladda = true, tyst = false} = {}){
   try {
-    const r = await fetch('/nav2/tid', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
-    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    const s = ndSvar(await ndSkriv('/nav2/tid', {handling, ...data}));
     if (s.ok !== undefined && !s.fel){ if (!tyst && s.ok) toast(s.ok); if (ladda){ try { sessionStorage.setItem('nd-tid', JSON.stringify({tab:S.tTab, vecka:S.tVecka, dag:S.tDag, lon:S.ndLonPer})); } catch(_){} setTimeout(() => location.reload(), 700); } return s; }
-    if (!tyst) toast(s.fel || 'Det gick inte att spara.'); return s;
+    if (!tyst) ndSkrivFel(s); return s;
   } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
 }
 (() => { if (!ND || !ND.tid) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-tid') || 'null'); sessionStorage.removeItem('nd-tid'); } catch(_){}
@@ -25455,7 +25521,7 @@ document.addEventListener('click', e => {
   if (d.ndtiper){ stopp(); const k = d.ndtiper; S.ndLonPer = k; render();
     if (k !== 'lop' && !S.ndUnderlag[k] && !(c.underlag && c.underlag.periodId === k) && c.perioder.find(p => p.id === k && p.skriven)){
       S.ndUnderlag[k] = null; render();
-      fetch('/nav2/tid?period=' + encodeURIComponent(k), {credentials:'same-origin'}).then(r => r.json()).then(s => { S.ndUnderlag[k] = s.underlag || undefined; if (s.fel) toast(s.fel); render(); }).catch(() => { S.ndUnderlag[k] = undefined; toast('Nav svarade inte.'); render(); }); }
+      ndLas('/nav2/tid?period=' + encodeURIComponent(k)).then(ndSvar).then(s => { S.ndUnderlag[k] = s.underlag || undefined; if (s.fel) ndSkrivFel(s); render(); }).catch(() => { S.ndUnderlag[k] = undefined; toast('Nav svarade inte.'); render(); }); }
     return; }
   if (d.ndtikol){ stopp(); if (d.falt === 'name' && !d.pa){ toast('Namnet måste vara med, annars går filen inte att läsa.'); return; } ndTidPost('lon-kolumn', {id:d.ndtikol, pa:!!d.pa}); return; }
   if (d.ndtigransk !== undefined){ stopp(); ndTidPost('lon-granska', d.ndtigransk ? {period:d.ndtigransk} : {start:d.start, slut:d.slut}); return; }
@@ -25740,10 +25806,9 @@ frReglerVy = function(){
 /* ---------- Skrivningar: /nav2/franvaro ---------- */
 async function ndFrPost(handling, data = {}, {ladda = true, tyst = false} = {}){
   try {
-    const r = await fetch('/nav2/franvaro', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
-    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    const s = ndSvar(await ndSkriv('/nav2/franvaro', {handling, ...data}));
     if (s.ok){ if (!tyst) toast(s.ok); if (ladda){ try { sessionStorage.setItem('nd-fr', JSON.stringify({tab:S.frTab})); } catch(_){} setTimeout(() => location.reload(), 700); } return s; }
-    toast(s.fel || 'Det gick inte att spara.'); return s;
+    ndSkrivFel(s); return s;
   } catch(_){ toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
 }
 (() => { if (!ndFr()) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-fr') || 'null'); sessionStorage.removeItem('nd-fr'); } catch(_){}
@@ -25771,7 +25836,7 @@ document.addEventListener('click', e => {
   if (d.frtak){ stopp(); const nu = ndFr().tak ?? 0; ndFrPost('tak', {tak:Math.max(1, Math.min(8, nu + +d.frtak))}); return; }
   if (d.ndfrtakny !== undefined){ stopp(); ndFrPost('tak', {tak:3}); return; }
   if (d.frrehabok !== undefined){ stopp(); const l = ndFr().chef ? ndFr().chef.rehab.filter(r => !r.kvitterad) : [];
-    (async () => { for (const r of l){ const s = await fetch('/nav2/franvaro', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling:'rehab-ok', vem:r.pid, antal:r.antal})}).then(x => x.json()).catch(() => ({fel:'Nav svarade inte.'})); if (!s.ok){ toast(s.fel || 'Det gick inte att spara.'); return; } }
+    (async () => { for (const r of l){ const s = ndSvar(await ndSkriv('/nav2/franvaro', {handling:'rehab-ok', vem:r.pid, antal:r.antal})); if (!s.ok){ ndSkrivFel(s); return; } }
       S.frRehabOk = true; render(); toast('Signalen döljs. Den kommer tillbaka om det blir fler tillfällen.'); })(); return; }
   if (d.ndfrsamtal){ stopp(); const namn = d.ndfrsamtal; if (typeof ndUpgPost === 'function') ndUpgPost('skapa', {titel:`Samtal med ${fornamn(namn)} om hur hen har det`, prio:2}, {ladda:false}); return; }
   if (d.ndfrfraga){ stopp(); const id = ndFrId(d.ndfrfraga); if (!id){ toast('Personen finns inte i Nav.'); return; } ndFrPost('fraga-instamplad', {vem:id}, {ladda:false}); return; }
@@ -25957,10 +26022,9 @@ upgRutaHtml = function(t){
 /* ---------- Skrivningar: /nav2/uppgifter ---------- */
 async function ndUpgPost(handling, data = {}, {ladda = true, tyst = false} = {}){
   try {
-    const r = await fetch('/nav2/uppgifter', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
-    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    const s = ndSvar(await ndSkriv('/nav2/uppgifter', {handling, ...data}));
     if (s.ok){ if (!tyst) toast(s.ok); if (ladda){ try { sessionStorage.setItem('nd-upg', JSON.stringify({view:S.view, tab:S.tab, panel:S.panel})); } catch(_){} setTimeout(() => location.reload(), 700); } return s; }
-    if (!tyst) toast(s.fel || 'Det gick inte att spara.'); return s;
+    if (!tyst) ndSkrivFel(s); return s;
   } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
 }
 (() => { if (!ndUp()) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-upg') || 'null'); sessionStorage.removeItem('nd-upg'); } catch(_){}
@@ -25984,7 +26048,7 @@ const _ndStryk = stryk;
 stryk = function(id){ if (!ndUp() || !ndUpgNav(id)) return _ndStryk(id); ndUpgPost('avbryt', {id, note:'Struken'}); };
 const _ndLamnaOver = lamnaOver;
 lamnaOver = function(id, vem){ if (!ndUp() || !ndUpgNav(id)) return _ndLamnaOver(id, vem); const p = ndPersonId(vem); if (!p){ toast('Personen finns inte i Nav.'); return; } ndUpgPost('tilldela', {id, till:p}); };
-function ndFokusSpara(){ ndUpgPost('fokus', {ids:fokus().filter(x => ndUpgNav(x.id)).map(x => x.id)}, {ladda:false, tyst:true}).then(s => { if (!s.ok) toast(s.fel || 'Dagens tre sparades inte.'); }); }
+function ndFokusSpara(){ ndUpgPost('fokus', {ids:fokus().filter(x => ndUpgNav(x.id)).map(x => x.id)}, {ladda:false, tyst:true}).then(s => { if (!s.ok) ndSkrivFel(s, 'Dagens tre sparades inte.'); }); }
 const _ndVaxlaFokus = vaxlaFokus;
 vaxlaFokus = function(id, plats){
   if (!ndUp()) return _ndVaxlaFokus(id, plats);
@@ -26005,7 +26069,7 @@ laggTill = function(rad){
   rad = String(rad || '').trim(); if (!rad) return;
   if (/^\//.test(rad)){ const f = forslag(rad)[0]; if (f){ const m = ndUp().mallar.find(x => x.namn === f.varde); toast(m ? 'Mallen läggs som uppgifter i Nav.' : 'Mallen finns inte.'); } return; }
   const delar = rad.split(/\s*;\s*/).filter(Boolean);
-  (async () => { for (const r of delar){ const s = await ndUpgPost('skapa', {rad:r}, {ladda:false, tyst:true}); if (!s.ok){ toast(s.fel || 'Uppgiften lades inte upp.'); return; } } toast(delar.length > 1 ? `${delar.length} uppgifter upplagda.` : 'Uppgiften är upplagd.'); try { sessionStorage.setItem('nd-upg', JSON.stringify({view:S.view, tab:S.tab})); } catch(_){} setTimeout(() => location.reload(), 700); })();
+  (async () => { for (const r of delar){ const s = await ndUpgPost('skapa', {rad:r}, {ladda:false, tyst:true}); if (!s.ok){ ndSkrivFel(s, 'Uppgiften lades inte upp.'); return; } } toast(delar.length > 1 ? `${delar.length} uppgifter upplagda.` : 'Uppgiften är upplagd.'); try { sessionStorage.setItem('nd-upg', JSON.stringify({view:S.view, tab:S.tab})); } catch(_){} setTimeout(() => location.reload(), 700); })();
 };
 
 document.addEventListener('click', e => {
@@ -26030,7 +26094,7 @@ document.addEventListener('click', e => {
   if (d.close1){ stopp(); const [id, v] = del('close1'); if (v === 'stryk') ndUpgPost('avbryt', {id, note:'Struken'}); else ndUpgPost('planera', {id, dag:v === 'mon' ? ndNastaMandag() : null}); return; }
   if (d.decide){ stopp(); const [id, v] = del('decide'); const t = ndUpgT(id);
     if (v === 'gor') ndUpgPost('planera', {id, dag:kIdag(), tid:'16:00'});
-    else if (v === 'steg' && t){ (async () => { const s = await ndUpgPost('skapa', {titel:`Första steget: ${t.nasta || t.t}`, dag:kIdag(), prio:2}, {ladda:false, tyst:true}); if (s.ok) await ndUpgPost('planera', {id, dag:ndNastaMandag()}); else toast(s.fel || 'Det gick inte att spara.'); })(); }
+    else if (v === 'steg' && t){ (async () => { const s = await ndUpgPost('skapa', {titel:`Första steget: ${t.nasta || t.t}`, dag:kIdag(), prio:2}, {ladda:false, tyst:true}); if (s.ok) await ndUpgPost('planera', {id, dag:ndNastaMandag()}); else ndSkrivFel(s); })(); }
     else ndUpgPost('avbryt', {id, note:'Struken'}); return; }
   if (d.sub){ stopp(); const [id, i] = del('sub'); const t = ndUpgT(id), del2 = t && t.ndDelId ? t.ndDelId[+i] : null; if (!del2){ toast('Deluppgiften finns inte i Nav.'); return; } ndUpgPost(t.delar[+i][1] ? 'ateroppna' : 'bocka', {id:del2}); return; }
   if (d.upgdelbort){ stopp(); const [id, j] = del('upgdelbort'); const t = ndUpgT(id), del2 = t && t.ndDelId ? t.ndDelId[+j] : null; if (del2) ndUpgPost('avbryt', {id:del2, note:'Borttagen deluppgift'}); return; }
@@ -26180,9 +26244,9 @@ document.addEventListener('input', e => {
   if (q.length < 2 || !NDKSOKSERVER.includes(K.slag)){ ndKRitaVal(); return; }
   ndKRitaVal(); clearTimeout(ndKTimer);
   ndKTimer = setTimeout(() => { const slag = K.slag;
-    fetch(`/nav2/uppgifter?kopplingsval=1&slag=${slag}&sok=${encodeURIComponent(q)}`, {credentials:'same-origin'}).then(r => r.json()).then(s => {
+    ndLas(`/nav2/uppgifter?kopplingsval=1&slag=${slag}&sok=${encodeURIComponent(q)}`).then(ndSvar).then(s => {
       if (S.ndKoppla !== K || K.slag !== slag || (K.sok || '').trim().toLowerCase() !== q) return;
-      if (s.fel){ toast(s.fel); return; } K.sokVal = {slag, q, val:s.val || []}; ndKRitaVal(); }).catch(() => toast('Nav svarade inte.')); }, 250);
+      if (s.fel){ ndSkrivFel(s); return; } K.sokVal = {slag, q, val:s.val || []}; ndKRitaVal(); }).catch(() => toast('Nav svarade inte.')); }, 250);
 }, true);
 const _ndUpgRutaHtmlD = upgRutaHtml;
 upgRutaHtml = function(t){
@@ -26271,7 +26335,7 @@ document.addEventListener('click', e => {
   if (d.ndmlaggok){ stopp(); const dag = S.ndMallLagg && /^\d{4}-\d{2}-\d{2}$/.test(S.ndMallLagg.dag) ? S.ndMallLagg.dag : kIdag(); S.ndMallLagg = null; ndUpgPost('mall', {mall:d.ndmlaggok, dag}); return; }
   if (d.ndserieslut){ stopp(); toastActs('Avsluta serien? Inga nya förekomster skapas, och de kommande som ingen rört tas bort. Den här står kvar.', [['Avsluta serien', () => ndUpgPost('serie-avsluta', {id:d.ndserieslut})]], 9000); return; }
   if (d.ndkoppla){ stopp(); S.ndKoppla = {id:d.ndkoppla, slag:'order', mal:'', synlig:false, val:null}; render();
-    fetch('/nav2/uppgifter?kopplingsval=1', {credentials:'same-origin'}).then(r => r.json()).then(s => { if (S.ndKoppla && S.ndKoppla.id === d.ndkoppla){ S.ndKoppla.val = s.val || {}; if (s.fel) toast(s.fel); render(); } }).catch(() => { toast('Nav svarade inte.'); }); return; }
+    ndLas('/nav2/uppgifter?kopplingsval=1').then(ndSvar).then(s => { if (S.ndKoppla && S.ndKoppla.id === d.ndkoppla){ S.ndKoppla.val = s.val || {}; if (s.fel) ndSkrivFel(s); render(); } }).catch(() => { toast('Nav svarade inte.'); }); return; }
   if (d.ndkavbryt !== undefined){ stopp(); S.ndKoppla = null; render(); return; }
   if (d.ndkspara){ stopp(); const K = S.ndKoppla; if (!K.mal){ toast('Välj vad uppgiften ska kopplas till.'); return; } ndUpgPost('koppla', {id:d.ndkspara, slag:K.slag, mal:K.mal, synlig:!!K.synlig}); return; }
   if (d.ndkopplabort){ stopp(); const [id, lank] = d.ndkopplabort.split('|'); ndUpgPost('koppla-bort', {id, lank}); return; }
@@ -26450,7 +26514,7 @@ ordBolagsverket = function(tyst){
   const kund = ORDER.find(o => o.org.replace('-', '') === k.slice(-10));
   if (kund){ Object.assign(n, {bolag:n.bolag || kund.bolag, ort:n.ort || kund.ort, adress:n.adress || kund.adress, postnr:n.postnr || kund.postnr, uppslag:'ok'}); return; }
   n.uppslag = 'hamtar';
-  fetch(`/nav2/inkio?vad=bolag&orgnr=${encodeURIComponent(n.org)}`, {credentials:'same-origin'}).then(r => r.json()).then(s => {
+  ndLas(`/nav2/inkio?vad=bolag&orgnr=${encodeURIComponent(n.org)}`).then(ndSvar).then(s => {
     if (S.ordNy !== n) return;
     if (!s.kopplat){ n.uppslag = 'ejkopplat'; }
     else if (s.bolag && (s.bolag.namn || s.bolag.adress)){ const b = s.bolag, a = b.adress || {}; Object.assign(n, {bolag:n.bolag || b.namn || '', adress:a.address_line_1 || n.adress, postnr:a.pincode || n.postnr, ort:a.city || n.ort, uppslag:'ok'}); if (!tyst) toast(`Hämtat: ${b.namn || n.bolag}.`); }
@@ -26475,7 +26539,7 @@ function ndKundHamta(o, om){
   const k = o.org;
   if (NDKUND[k] && !om) return;
   NDKUND[k] = {laddar:true, id:o.id};
-  fetch(`/nav2/inkio?vad=kund&order=${encodeURIComponent(o.id)}`, {credentials:'same-origin'}).then(r => r.json()).then(s => { NDKUND[k] = {...s, id:o.id, kl:ndKl(new Date().toISOString())}; if (S.view === 'order' && S.ordOpen) kkRender(); })
+  ndLas(`/nav2/inkio?vad=kund&order=${encodeURIComponent(o.id)}`).then(ndSvar).then(s => { NDKUND[k] = {...s, id:o.id, kl:ndKl(new Date().toISOString())}; if (S.view === 'order' && S.ordOpen) kkRender(); })
     .catch(() => { NDKUND[k] = {fel:'Inkio svarade inte.', id:o.id, kl:ndKl(new Date().toISOString())}; if (S.view === 'order' && S.ordOpen) kkRender(); });
 }
 const _ndKkData = kkData;
@@ -26687,8 +26751,8 @@ function ndLasAvtal(x){
   const fil = (x.bilagor || [])[0];
   if (!fil){ NDLAS[x.nr] = {fel:'Inget avtal är bifogat.'}; kkRender(); return; }
   NDLAS[x.nr] = {laddar:true};
-  fetch('/nav2/order', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling:'las-avtal', id:x.id, fil:fil.id})})
-    .then(r => r.json()).then(s => { NDLAS[x.nr] = s.forslag ? {forslag:s.forslag} : {fel:s.fel || 'Avtalet gick inte att läsa.'}; kkRender(); })
+  ndSkriv('/nav2/order', {handling:'las-avtal', id:x.id, fil:fil.id})
+    .then(ndSvar).then(s => { NDLAS[x.nr] = s.forslag ? {forslag:s.forslag} : {fel:s.fel || 'Avtalet gick inte att läsa.'}; kkRender(); })
     .catch(() => { NDLAS[x.nr] = {fel:'Nav svarade inte.'}; kkRender(); });
 }
 // Filer laddas upp i två steg, som i Nav: en signerad adress, och sedan registreras filen.
@@ -26704,10 +26768,10 @@ o7Bifoga = async function(nr, files){
   let ok = 0;
   for (const f of fs){
     const p = await ndOrdPost('bilaga-forbered', {id:x.id, filnamn:f.name, mime:f.type, storlek:f.size}, {ladda:false, tyst:true});
-    if (!p.ok){ toast(p.fel || 'Filen gick inte att ladda upp.'); return; }
+    if (!p.ok){ ndSkrivFel(p, 'Filen gick inte att ladda upp.'); return; }
     if (!(await ndLaddaUpp(p, f))){ toast(`${f.name} kom inte fram. Försök igen.`); return; }
     const r = await ndOrdPost('bilaga-registrera', {id:x.id, fil:p.fileId, filnamn:f.name, store:p.store}, {ladda:false, tyst:true});
-    if (!r.ok){ toast(r.fel || 'Filen gick inte att spara.'); return; }
+    if (!r.ok){ ndSkrivFel(r, 'Filen gick inte att spara.'); return; }
     ok++;
   }
   toast(ok > 1 ? `${ok} filer är bifogade till #${nr}.` : `${fs[0].name} är bifogad till #${nr}.`); ndOrdMinns(); setTimeout(() => location.reload(), 700);
@@ -26717,10 +26781,9 @@ o7Bifoga = async function(nr, files){
 function ndOrdMinns(){ try { sessionStorage.setItem('nd-ord', JSON.stringify({open:S.ordOpen, flik:S.kkFlik})); } catch(_){} }
 async function ndOrdPost(handling, data = {}, {ladda = true, tyst = false} = {}){
   try {
-    const r = await fetch('/nav2/order', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
-    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    const s = ndSvar(await ndSkriv('/nav2/order', {handling, ...data}));
     if (s.ok){ if (!tyst) toast(s.ok); if (ladda){ ndOrdMinns(); setTimeout(() => location.reload(), 700); } return s; }
-    if (!tyst) toast(s.fel || 'Det gick inte att spara.');
+    if (!tyst) ndSkrivFel(s);
     return s;
   } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
 }
@@ -26758,9 +26821,9 @@ async function ndOrdSkicka(utkast){
   // Avtalet laddas upp först. En ny order kräver det; en rättad får det som bilaga.
   if (ndOrdAvtalFil && !utkast){
     const p = await ndOrdPost(ratta ? 'bilaga-forbered' : 'avtal-forbered', {id:ratta ? ratta.id : '', filnamn:ndOrdAvtalFil.name, mime:ndOrdAvtalFil.type, storlek:ndOrdAvtalFil.size}, {ladda:false, tyst:true});
-    if (!p.ok){ toast(p.fel || 'Avtalet gick inte att ladda upp.'); return; }
+    if (!p.ok){ ndSkrivFel(p, 'Avtalet gick inte att ladda upp.'); return; }
     if (!(await ndLaddaUpp(p, ndOrdAvtalFil))){ toast('Avtalet kom inte fram. Försök igen.'); return; }
-    if (ratta){ const r = await ndOrdPost('bilaga-registrera', {id:ratta.id, fil:p.fileId, filnamn:ndOrdAvtalFil.name, store:p.store}, {ladda:false, tyst:true}); if (!r.ok){ toast(r.fel || 'Avtalet gick inte att spara.'); return; } }
+    if (ratta){ const r = await ndOrdPost('bilaga-registrera', {id:ratta.id, fil:p.fileId, filnamn:ndOrdAvtalFil.name, store:p.store}, {ladda:false, tyst:true}); if (!r.ok){ ndSkrivFel(r, 'Avtalet gick inte att spara.'); return; } }
     else { falt.avtal_fil_id = p.fileId; falt.avtal_store = p.store; falt.avtal_filnamn = ndOrdAvtalFil.name; }
   }
   let s;
@@ -26768,10 +26831,10 @@ async function ndOrdSkicka(utkast){
     s = await ndOrdPost('ratta', {id:ratta.id, falt}, {ladda:false, tyst:true});
     if (s.ok && ratta.st === 'utkast' && !utkast) s = await ndOrdPost('skicka-in', {id:ratta.id}, {ladda:false, tyst:true});
   } else s = await ndOrdPost(utkast ? 'utkast' : 'skapa', {falt}, {ladda:false, tyst:true});
-  if (!s.ok){ toast(s.fel || 'Det gick inte att spara.'); return; }
+  if (!s.ok){ ndSkrivFel(s); return; }
   // Säljsamtalet kopplas när ordern finns.
   const id = ratta ? ratta.id : s.id;
-  if (n.samtal && id){ const k = await ndOrdPost('koppla', {id, samtal:n.samtal}, {ladda:false, tyst:true}); if (!k.ok) toast(k.fel || 'Säljsamtalet kunde inte kopplas. Koppla det i kortet.'); }
+  if (n.samtal && id){ const k = await ndOrdPost('koppla', {id, samtal:n.samtal}, {ladda:false, tyst:true}); if (!k.ok) ndSkrivFel(k, 'Säljsamtalet kunde inte kopplas. Koppla det i kortet.'); }
   try { localStorage.removeItem('nav2-ordutkast'); } catch(_){}
   toast(s.ok); S.ordNy = null; ndOrdAvtalFil = null; S.ndForlang = null; ndOrdMinns(); setTimeout(() => location.reload(), 700);
 }
@@ -27016,10 +27079,9 @@ prognos = () => { const u = pvUnderlag(ME.saljare.namn, PVMAN), t = pvTakt(u); r
 /* ---------- Skrivningar: /nav2/provision ---------- */
 async function ndPvPost(handling, data = {}, ladda = true){
   try {
-    const r = await fetch('/nav2/provision', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
-    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    const s = ndSvar(await ndSkriv('/nav2/provision', {handling, ...data}));
     if (s.ok){ toast(s.ok); if (ladda){ try { sessionStorage.setItem('nd-pv', JSON.stringify({flik:S.pvFlik, m:S.pvM, vem:S.pvVem})); } catch(_){} setTimeout(() => location.reload(), 700); } return s; }
-    toast(s.fel || 'Det gick inte att spara.'); return s;
+    ndSkrivFel(s); return s;
   } catch(_){ toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
 }
 // Efter en omladdning: tillbaka till samma flik och månad.
@@ -27319,7 +27381,7 @@ function ndKBehov(){
 }
 function ndKHamta(vy, dag, visa, markera){
   const nyckel = `${vy}|${dag}|${visa.join(',')}`; if (NDKAL.hamtar.has(nyckel)) return; NDKAL.hamtar.add(nyckel);
-  fetch(`/nav2/kalender?vy=${vy}&dag=${dag}${visa.length ? `&visa=${visa.join(',')}` : ''}`, {credentials:'same-origin'}).then(r => r.json()).then(s => {
+  ndLas(`/nav2/kalender?vy=${vy}&dag=${dag}${visa.length ? `&visa=${visa.join(',')}` : ''}`).then(ndSvar).then(s => {
     NDKAL.hamtar.delete(nyckel); if (!s || !s.poster) return;
     ndKLagg(s.poster); markera.forEach(id => ndKMarkera(id, s.fran, s.till)); ndKMoten();
     if (S.view === 'kalender' || S.view === 'hem') render();
@@ -27332,7 +27394,7 @@ renderKalView = function(){ if (ndK()) ndKBehov(); return _ndRenderKal(); };
 function ndKDetalj(e){
   if (!e || !e.nd || !e.ref || NDKAL.detalj.has(e.ref) || !['mote', 'enskilt', 'leverans', 'coachning'].includes(e.kat)) return;
   NDKAL.detalj.set(e.ref, 'hamtar');
-  fetch(`/nav2/kalender?detalj=${e.ref}`, {credentials:'same-origin'}).then(r => r.ok ? r.json() : null).then(x => {
+  ndLas(`/nav2/kalender?detalj=${e.ref}`).then(s => s.ok ? s.data : null).then(x => {
     NDKAL.detalj.set(e.ref, x || 'saknas'); if (!x) return;
     KEV.filter(y => y.ref === e.ref).forEach(y => {
       y.plats = x.plats || (x.online ? 'Videolänk' : ''); y.online = x.online; y.video = !!x.online; y.agenda = x.agenda || ''; y.serieText = x.serieText || '';
@@ -27426,8 +27488,8 @@ function ndKUppHamta(namn, fran, till){
   const starter = []; for (let d = fran; d <= till; d = kPlus(d, 16)) starter.push(d);
   return Promise.all(starter.map(d => {
     const nyckel = `${ids.join(',')}|${d}`;
-    if (!NDKUPP.hamtar.has(nyckel)) NDKUPP.hamtar.set(nyckel, fetch(`/nav2/kalender?upptaget=${ids.join(',')}&fran=${d}`, {credentials:'same-origin'})
-      .then(r => r.ok ? r.json() : null).then(x => {
+    if (!NDKUPP.hamtar.has(nyckel)) NDKUPP.hamtar.set(nyckel, ndLas(`/nav2/kalender?upptaget=${ids.join(',')}&fran=${d}`)
+      .then(s => s.ok ? s.data : null).then(x => {
         NDKUPP.hamtar.delete(nyckel); if (!x || !x.upptaget) return false;
         ids.forEach(id => { NDKUPP.data.set(id, Object.assign(NDKUPP.data.get(id) || {}, x.upptaget[id] || {})); NDKUPP.laddat.set(id, [...(NDKUPP.laddat.get(id) || []), [x.fran, x.till]]); });
         return true;
@@ -27508,9 +27570,8 @@ const NDKPAMMIN = {'Ingen':null, '5 min före':5, '15 min före':15, '30 min fö
 const NDKVISA = {upptagen:'upptagen', prel:'preliminar', ledig:'ledig', borta:'borta', annan:'annan'};
 async function ndKPost(handling, data = {}, {ladda = true} = {}){
   try {
-    const r = await fetch('/nav2/kalender', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
-    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
-    if (!s.ok){ toast(s.fel || 'Det gick inte att spara.'); return s; }
+    const s = ndSvar(await ndSkriv('/nav2/kalender', {handling, ...data}));
+    if (!s.ok){ ndSkrivFel(s); return s; }
     // Ångra går genom lk_angra, i fem minuter, som i Nav.
     if (s.angra) toast(s.ok, () => ndKPost('angra', {undo:s.angra})); else toast(s.ok);
     if (ladda){ try { sessionStorage.setItem('nd-kal', JSON.stringify({dag:s.dag || S.kDag, vy:S.kVy})); } catch(_){} setTimeout(() => location.reload(), s.angra ? 2500 : 700); }
@@ -27761,7 +27822,7 @@ function ndKSok(q){
   q = q.trim(); if (q.length < 2){ toast('Skriv minst två tecken.'); return; }
   const lq = q.toLowerCase(), pers = [ND.jag, ...ndK().personer.map(p => ({id:p.id, namn:p.namn}))].filter(p => p.namn.toLowerCase().includes(lq)).map(p => p.id);
   S.ndKSok = {q, laddar:true, poster:[]}; S.kVy = 'lista'; render(); document.querySelector('[data-ksok]')?.focus();
-  fetch(`/nav2/kalender?sok=${encodeURIComponent(q)}${pers.length ? `&pers=${pers.join(',')}` : ''}`, {credentials:'same-origin'}).then(r => r.ok ? r.json() : null).then(x => {
+  ndLas(`/nav2/kalender?sok=${encodeURIComponent(q)}${pers.length ? `&pers=${pers.join(',')}` : ''}`).then(s => s.ok ? s.data : null).then(x => {
     if (!S.ndKSok || S.ndKSok.q !== q) return;
     S.ndKSok = {q, laddar:false, poster:(x && x.poster) || [], fel:!x};
     if (S.view === 'kalender'){ const el = document.activeElement, pos = el && el.dataset && el.dataset.ksok !== undefined ? el.selectionStart : null; render(); if (pos != null){ const i = document.querySelector('[data-ksok]'); if (i){ i.focus(); i.setSelectionRange(pos, pos); } } }
@@ -28105,10 +28166,9 @@ function ndArHandl(a){ const n = ndA().personer.map(p => p.namn); return [a.till
 /* ---------- Skrivningar: /nav2/arenden ---------- */
 async function ndArPost(handling, data, tyst){
   try {
-    const r = await fetch('/nav2/arenden', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
-    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    const s = ndSvar(await ndSkriv('/nav2/arenden', {handling, ...data}));
     if (s.ok){ if (!tyst){ toast(s.ok); setTimeout(() => location.reload(), 600); } return s; }
-    if (!tyst) toast(s.fel || 'Det gick inte att spara.');
+    if (!tyst) ndSkrivFel(s);
     return s;
   } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
 }
@@ -28145,7 +28205,7 @@ document.addEventListener('click', e => {
   if (ds.arolast){ stopp(); ndArPost('olast', {id:ds.arolast}); return; }
   if (ds.arlostja){ stopp(); ndArPost('bekrafta', {id:ds.arlostja, lost:true}); return; }
   if (ds.arlostnej){ stopp(); ndArPost('bekrafta', {id:ds.arlostnej, lost:false}); return; }
-  if (ds.ndarbilaga){ stopp(); const [arende, id] = ds.ndarbilaga.split('|'); fetch('/nav2/arenden', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling:'visa', arende, id})}).then(r => r.json()).then(s => { if (s.url) window.open(s.url, '_blank', 'noopener'); else toast(s.fel || 'Bilagan gick inte att öppna.'); }); return; }
+  if (ds.ndarbilaga){ stopp(); const [arende, id] = ds.ndarbilaga.split('|'); ndSkriv('/nav2/arenden', {handling:'visa', arende, id}).then(ndSvar).then(s => { if (s.url) window.open(s.url, '_blank', 'noopener'); else ndSkrivFel(s, 'Bilagan gick inte att öppna.'); }); return; }
   const k = Object.keys(NDARBARA).find(x => ds[x] !== undefined);
   if (k){ stopp(); toast(NDARBARA[k]); }
 }, true);
@@ -28309,10 +28369,9 @@ function ndFelMedianSub(){ const s = ndF().stat; return s && s.lagade30 ? 'media
 /* ---------- Skrivningar: /nav2/fel ---------- */
 async function ndFelPost(handling, data, ladda = true){
   try {
-    const r = await fetch('/nav2/fel', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
-    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    const s = ndSvar(await ndSkriv('/nav2/fel', {handling, ...data}));
     if (s.ok){ toast(s.ok); if (ladda) setTimeout(() => location.reload(), 600); return s; }
-    toast(s.fel || 'Det gick inte att spara.'); return s;
+    ndSkrivFel(s); return s;
   } catch(_){ toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
 }
 const ndFelSida = () => '/' + (S.felSida === 'hem' ? '' : S.felSida || '');
@@ -28472,10 +28531,9 @@ rtnStegHtml = function(r, stegLista, kv){ return ndRut() && !r.steg.length && r.
 /* ---------- Skrivningar: /nav2/rutiner ---------- */
 async function ndRutPost(handling, data = {}, {ladda = true, tyst = false} = {}){
   try {
-    const r = await fetch('/nav2/rutiner', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
-    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    const s = ndSvar(await ndSkriv('/nav2/rutiner', {handling, ...data}));
     if (s.ok !== undefined && !s.fel){ if (!tyst && s.ok) toast(s.ok); if (ladda){ try { sessionStorage.setItem('nd-rut', JSON.stringify({open:S.rOpen, tab:S.rtab})); } catch(_){} setTimeout(() => location.reload(), 700); } return s; }
-    if (!tyst) toast(s.fel || 'Det gick inte att spara.'); return s;
+    if (!tyst) ndSkrivFel(s); return s;
   } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
 }
 (() => { if (!ndRut()) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-rut') || 'null'); sessionStorage.removeItem('nd-rut'); } catch(_){}
@@ -28544,7 +28602,7 @@ document.addEventListener('change', e => {
 let ndRutNotTimer = null, ndRutSokTimer = null, ndRutSokSist = '';
 document.addEventListener('input', e => {
   if (!ndRut() || !e.target.dataset) return;
-  if (e.target.dataset.rnote){ const id = e.target.dataset.rnote, v = e.target.value; S.rNotes[id] = v; clearTimeout(ndRutNotTimer); ndRutNotTimer = setTimeout(() => ndRutPost('anteckning', {id, text:v}, {ladda:false, tyst:true}).then(s => { if (s.laslage) toast(s.fel); }), 900); }
+  if (e.target.dataset.rnote){ const id = e.target.dataset.rnote, v = e.target.value; S.rNotes[id] = v; clearTimeout(ndRutNotTimer); ndRutNotTimer = setTimeout(() => ndRutPost('anteckning', {id, text:v}, {ladda:false, tyst:true}).then(s => { if (s.laslage) ndSkrivFel(s); }), 900); }
   // Sökningen: dina senaste, och en sökning utan träff utan ditt namn.
   if (e.target.id === 'rsok'){ clearTimeout(ndRutSokTimer); ndRutSokTimer = setTimeout(() => { const q = S.rq.trim(); if (q.length < 2 || q === ndRutSokSist) return; ndRutSokSist = q; ndRutPost('sok', {q, traffar:rSok(q).length}, {ladda:false, tyst:true}); }, 1500); }
 }, true);
@@ -28735,8 +28793,7 @@ async function ndUtbPush(){
     if (!reg.active){ const w = reg.installing || reg.waiting; if (w) await new Promise(r => { if (w.state === 'activated') r(); w.addEventListener('statechange', () => { if (w.state === 'activated') r(); }); }); }
     let sub = await reg.pushManager.getSubscription();
     if (!sub){ const t = p.nyckel, b = atob((t + '='.repeat((4 - t.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/')); sub = await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:Uint8Array.from(b, c => c.charCodeAt(0))}); }
-    const r = await fetch('/nav2/hem', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling:'push', sub:sub.toJSON()})});
-    const s = await r.json().catch(() => ({fel:true}));
+    const s = ndSvar(await ndSkriv('/nav2/hem', {handling:'push', sub:sub.toJSON()}));
     return !s.fel;
   } catch(_){ return false; }
 }
@@ -28744,10 +28801,9 @@ async function ndUtbPush(){
 /* ---------- Skrivningar: /nav2/utbildning ---------- */
 async function ndUtbPost(handling, data = {}, {ladda = true, tyst = false} = {}){
   try {
-    const r = await fetch('/nav2/utbildning', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
-    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    const s = ndSvar(await ndSkriv('/nav2/utbildning', {handling, ...data}));
     if (s.ok !== undefined && !s.fel){ if (!tyst && s.ok) toast(s.ok); if (ladda) ndUtbLadda(); return s; }
-    if (!tyst) toast(s.fel || 'Det gick inte att spara.'); return s;
+    if (!tyst) ndSkrivFel(s); return s;
   } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
 }
 function ndUtbLadda(){ try { sessionStorage.setItem('nd-utb', JSON.stringify({tab:S.uTab, open:S.uOpen, rp:S.rpOpen, steg:S.rpStep})); } catch(_){} setTimeout(() => location.reload(), 700); }
@@ -28837,8 +28893,8 @@ svaraRep = function(oi){
   if (r.typ === 'fornya') return;  // förnyelsen lämnas in sist
   const kalla = r.typ === 'fortest' ? 'fortest' : r.typ === 'forel' ? 'uppfoljning' : q.team ? 'team' : 'repetition';
   ndUtbPost('svar', {qid:q.id, val:q.oids[oi], sak:r.sak, kalla}, {ladda:false, tyst:true}).then(s => {
-    if (s.laslage){ if (!r.laslage) toast(s.fel); r.laslage = true; return; }
-    if (s.fel){ toast(s.fel); return; }
+    if (s.laslage){ if (!r.laslage) ndSkrivFel(s); r.laslage = true; return; }
+    if (s.fel){ ndSkrivFel(s); return; }
     if (r.resultat[i]) r.resultat[i].dagar = s.dagar; r.sparat = true;
   });
 };
@@ -29304,8 +29360,8 @@ avslutaLektion = function(){
     clearTimeout(ndUtbSkriftTimer); p.skickar = true; renderPlayer();
     sparaMal().then(() => ndUtbPost('lamna', {modul:mid, svar:p.skrift.svar, betyg:p.betyg || undefined}, {ladda:false, tyst:true})).then(s => {
       p.skickar = false;
-      if (s.laslage){ toast(s.fel); stang(); return; }
-      if (s.fel){ toast(s.fel); renderPlayer(); return; }
+      if (s.laslage){ ndSkrivFel(s); stang(); return; }
+      if (s.fel){ ndSkrivFel(s); renderPlayer(); return; }
       toast(s.ok); S.uPlay = null; S.uOpen = k.id; ndUtbLadda();
     });
     return;
@@ -29316,9 +29372,9 @@ avslutaLektion = function(){
     p.skickar = true; renderPlayer();
     sparaMal().then(() => ndUtbPost('prov', {modul:mid, svar}, {ladda:false, tyst:true})).then(s => {
       p.skickar = false;
-      if (s.laslage){ toast(s.fel); stang(); return; }
+      if (s.laslage){ ndSkrivFel(s); stang(); return; }
       if (s.resultat){ p.resultat = s.resultat; toast(s.ok || s.fel); renderPlayer(); return; }
-      toast(s.fel || 'Provet gick inte att lämna in.'); renderPlayer();
+      ndSkrivFel(s, 'Provet gick inte att lämna in.'); renderPlayer();
     });
     return;
   }
@@ -29344,30 +29400,30 @@ utbClick = function(t, e){
   if (d.urepforel){ const f = FORELASNINGAR.find(x => x.id === d.urepforel); ndUtbRepAv(f && f.skill ? REPETITION.filter(q => q.skill === f.skill).map(q => q.id) : [], 'fortest', 'Förtest före föreläsningen. Det är helt okej att svara fel.', 'Föreläsningen har inga frågor att gissa på än.'); return true; }
   if (d.ufupp){ const [id, dag] = d.ufupp.split('|'), f = FORELASNINGAR.find(x => x.id === id), steg = {'Dag 1':'dag1','Dag 3':'dag3','Dag 7':'dag7','Dag 30':'dag30'}[dag];
     ndUtbPost('uppfoljning', {id, steg}, {ladda:false, tyst:true}).then(s => {
-      if (s.fel){ toast(s.fel); return; }
+      if (s.fel){ ndSkrivFel(s); return; }
       const u = f && f.uppfoljning.find(x => x[0] === dag); if (u) u[2] = 'klar';
       if (!ndUtbRepAv(f && f.skill ? REPETITION.filter(q => q.skill === f.skill).map(q => q.id) : [], 'forel', `Uppföljning av ${f ? f.t : 'föreläsningen'}, ${dag.toLowerCase()}.`, `${dag} är markerad som gjord.`)) render();
     }); return true; }
-  if (d.ndufl){ ndUtbPost('anteckning', {key:'fl-skjut-' + d.ndufl, text:frPlus(ND.idag, 1)}, {ladda:false, tyst:true}).then(s => { if (s.fel){ toast(s.fel); return; } ndUtb().anteckningar['fl-skjut-' + d.ndufl] = frPlus(ND.idag, 1); render(); toast('Uppföljningen flyttas till i morgon.'); }); return true; }
+  if (d.ndufl){ ndUtbPost('anteckning', {key:'fl-skjut-' + d.ndufl, text:frPlus(ND.idag, 1)}, {ladda:false, tyst:true}).then(s => { if (s.fel){ ndSkrivFel(s); return; } ndUtb().anteckningar['fl-skjut-' + d.ndufl] = frPlus(ND.idag, 1); render(); toast('Uppföljningen flyttas till i morgon.'); }); return true; }
   if (d.ndufornya){ const k = kurs(d.ndufornya), ids = REPETITION.filter(q => q.kurs === k.id).map(q => q.id);
     if (ndUtbRepAv(ids, 'fornya', `Fem frågor ur ${k.t}. Alla rätt förnyar certifikatet.`, 'Kursen har inga frågor att förnya med.')) S.rep.kurs = k.id; render(); return true; }
   // Uppgifter: repots skapaUppgift.
   if (d.upamin){ const k = kurs(d.upamin), m = k.moduler[k.klara]; ndUtbUppgift(`${k.t}: ${m[0]}`, {tid:'15:30', min:m[2], kurs:k.id}); return true; }
   if (d.uboka !== undefined){ const lista = KURSER.filter(k => k.obl && !kursKlar(k)), v = new Date(ND.idag + 'T12:00:00Z').getUTCDay() || 7, tillMandag = 8 - v;
     if (!lista.length) return true;
-    (async () => { for (let i = 0; i < lista.length; i++){ const k = lista[i], s = await ndUtbPost('uppgift', {titel:`${k.t}: ${langdText(kvarMin(k))}`, dag:tillMandag + i, tid:'08:30', min:Math.min(30, kvarMin(k)), kurs:k.id}, {ladda:false, tyst:true}); if (s.fel){ toast(s.fel); return; } }
+    (async () => { for (let i = 0; i < lista.length; i++){ const k = lista[i], s = await ndUtbPost('uppgift', {titel:`${k.t}: ${langdText(kvarMin(k))}`, dag:tillMandag + i, tid:'08:30', min:Math.min(30, kvarMin(k)), kurs:k.id}, {ladda:false, tyst:true}); if (s.fel){ ndSkrivFel(s); return; } }
       toast(`${lista.length} ${lista.length === 1 ? 'tid lagd' : 'tider lagda'} i Uppgifter, en kurs per morgon från måndag 08:30.`); })();
     return true; }
-  if (d.udismiss){ const id = d.udismiss; ndUtbPost('pref', {key:'utb.dolda', value:id}, {ladda:false, tyst:true}).then(s => { if (s.fel){ toast(s.fel); return; } S.uDismiss.add(id); render();
+  if (d.udismiss){ const id = d.udismiss; ndUtbPost('pref', {key:'utb.dolda', value:id}, {ladda:false, tyst:true}).then(s => { if (s.fel){ ndSkrivFel(s); return; } S.uDismiss.add(id); render();
     toast('Den visas inte här på en vecka.', () => ndUtbPost('pref', {key:'utb.dolda', value:id, bort:true}, {ladda:false, tyst:true}).then(() => { S.uDismiss.delete(id); render(); })); }); return true; }
   if (d.uremtid){ const tid = d.uremtid, push = ndUtb().skriv ? ndUtbPush() : Promise.resolve(false);
-    ndUtbPost('pref', {key:'utb.reptid', value:tid}, {ladda:false, tyst:true}).then(async s => { if (s.fel){ toast(s.fel); return; } S.repTid = tid; render(); toast(`Dagens repetition kommer klockan ${tid}.${await push ? ' Påminnelsen kommer till den här enheten och står i klockan.' : ' Påminnelsen står i klockan.'}`); }); return true; }
+    ndUtbPost('pref', {key:'utb.reptid', value:tid}, {ladda:false, tyst:true}).then(async s => { if (s.fel){ ndSkrivFel(s); return; } S.repTid = tid; render(); toast(`Dagens repetition kommer klockan ${tid}.${await push ? ' Påminnelsen kommer till den här enheten och står i klockan.' : ' Påminnelsen står i klockan.'}`); }); return true; }
   if (d.nduonska !== undefined){ ndUtbPost('onska', {q:S.uQ}, {ladda:false}); return true; }
   if (d.ndunykurs !== undefined){ ndUtbNyKurs(); return true; }
   // Rollspelen.
   if (d.ulasdlg || d.ulaskund){ const r = ROLLSPEL.find(x => x.id === (d.ulasdlg || d.ulaskund)); if (!r || !r.repliker.length){ toast('Rollspelet har inga repliker inlagda.'); return true; } lasHogt(r.repliker.join(' … ')); if (d.ulaskund) toast('Nav läser kundens repliker. Svara högt efter varje.'); return true; }
   if (d.uself){ const [id, kk, v] = d.uself.split('|'), r = ROLLSPEL.find(x => x.id === id), kr = r && r.kriterier.find(x => x[0] === kk); if (!kr) return true;
-    ndUtbPost('sjalv', {modul:id, kriterium:kr[2], poang:+v}, {ladda:false, tyst:true}).then(s => { if (s.fel){ toast(s.fel); return; } S.uSelf[id] = {...(S.uSelf[id] || {}), [kk]:+v}; render(); }); return true; }
+    ndUtbPost('sjalv', {modul:id, kriterium:kr[2], poang:+v}, {ladda:false, tyst:true}).then(s => { if (s.fel){ ndSkrivFel(s); return; } S.uSelf[id] = {...(S.uSelf[id] || {}), [kk]:+v}; render(); }); return true; }
   if (d.ndukollega){ const r = ROLLSPEL.find(x => x.id === d.ndukollega); ndUtbUppgift(`Rollspel med en kollega: ${r.t}`, {min:10, kurs:r.kurs}); return true; }
   if (d.urpboka !== undefined){ ndUtbUppgift(`10 min rollspel med ${chef}`, {tid:'15:45', min:10}); return true; }
   if (d.rpmal){ ndUtbUppgift(`Veckans mål: ${d.rpmal.toLowerCase()} i varje samtal`, {dag:0}); return true; }
@@ -29402,7 +29458,7 @@ utbClick = function(t, e){
       ndUtbPost('regel', {text:st.regel, kurs:k.id, bort:har || undefined}, {ladda:false}).then(s => { if (s.fel) return; if (har) S.regelbok = S.regelbok.filter(r => r[0] !== st.regel); else S.regelbok.push([st.regel, k.t]); renderPlayer(); }); return true; }
     if (d.llyssna !== undefined){ const st = lek.steg[+d.llyssna]; lasHogt(st.regel + '. ' + String(st.md || '').replace(/[#>*_`]/g, '')); return true; }
     if (d.lovn !== undefined){ const o = p.ovn, i = +d.lovn; o.includes(i) ? o.splice(o.indexOf(i), 1) : o.push(i); renderPlayer();
-      if (!p.review) ndUtbPost('anteckning', {key:'ovn:' + p.lek, text:JSON.stringify(o)}, {ladda:false, tyst:true}).then(s => { if (s.laslage && !p.ovnLas){ p.ovnLas = true; toast(s.fel); } else if (!s.fel) ndUtb().anteckningar['ovn:' + p.lek] = JSON.stringify(o); }); return true; }
+      if (!p.review) ndUtbPost('anteckning', {key:'ovn:' + p.lek, text:JSON.stringify(o)}, {ladda:false, tyst:true}).then(s => { if (s.laslage && !p.ovnLas){ p.ovnLas = true; ndSkrivFel(s); } else if (!s.fel) ndUtb().anteckningar['ovn:' + p.lek] = JSON.stringify(o); }); return true; }
     if (d.lovnuppg !== undefined){ if (!p.ovnUppg){ const st = lek.steg[p.i]; ndUtbUppgift(`Övning: ${st.text.replace(/\.$/, '')}`, {delar:st.check, kurs:p.kid}).then(s => { if (!s.fel){ p.ovnUppg = true; renderPlayer(); } }); } return true; }
     if (d.lmaluppg !== undefined){ if (!p.malUppg){ const txt = (p.mal ?? document.querySelector('[data-lmal]')?.value ?? '').trim() || 'Prova det jag lärde mig';
       ndUtbUppgift(txt.replace(/^I mitt nästa samtal ska jag /i, '').replace(/\.$/, '').replace(/^./, c => c.toUpperCase()), {dag:p.nar === 'vecka' ? 4 : 0, kurs:p.kid}).then(s => { if (!s.fel){ p.malUppg = true; renderPlayer(); } }); } return true; }
@@ -29436,8 +29492,8 @@ document.addEventListener('input', e => {
   clearTimeout(ndUtbSkriftTimer);
   const mid = p.lek, sl = p.skrift;
   ndUtbSkriftTimer = setTimeout(() => ndUtbPost('skriv', {modul:mid, svar:{...sl.svar}}, {ladda:false, tyst:true}).then(s => {
-    if (s.laslage){ if (!sl.las){ sl.las = true; toast(s.fel); } return; }
-    if (s.fel){ toast(s.fel); return; }
+    if (s.laslage){ if (!sl.las){ sl.las = true; ndSkrivFel(s); } return; }
+    if (s.fel){ ndSkrivFel(s); return; }
     sl.sparat = s.ok; if (sl.lage === 'ej_paborjat') sl.lage = 'utkast'; ndUtbSkriftLage();
   }), 2500);
 }, true);
@@ -29451,22 +29507,22 @@ document.addEventListener('input', e => {
   S.uNotes[key] = v;
   clearTimeout(ndUtbNotTimer[key]);
   ndUtbNotTimer[key] = setTimeout(() => ndUtbPost('anteckning', {key, text:v}, {ladda:false, tyst:true}).then(s => {
-    if (s.laslage){ if (!ndUtbNotTimer.las){ ndUtbNotTimer.las = true; toast(s.fel); } return; }
-    if (s.fel){ toast(s.fel); return; }
+    if (s.laslage){ if (!ndUtbNotTimer.las){ ndUtbNotTimer.las = true; ndSkrivFel(s); } return; }
+    if (s.fel){ ndSkrivFel(s); return; }
     if (key.startsWith('fl-')){ S.uSparat = key; const pill = falt.closest('.rmynote')?.querySelector('.muted'); if (pill && !pill.querySelector('.pill')) pill.insertAdjacentHTML('beforeend', ' <span class="pill t-ok">Sparat</span>'); }
   }), 900);
 }, true);
 document.addEventListener('change', e => {
   if (!ndUtb() || !e.target.dataset) return;
   if (e.target.dataset.ucertpam !== undefined){ e.stopImmediatePropagation(); const pa = e.target.checked;
-    ndUtbPost('pref', {key:'utb.certpam', value:pa}, {ladda:false, tyst:true}).then(s => { if (s.fel){ toast(s.fel); e.target.checked = !pa; return; } S.uCertPam = pa; toast(pa ? 'Du får en påminnelse en månad innan.' : 'Inga påminnelser om certifikat.'); }); }
+    ndUtbPost('pref', {key:'utb.certpam', value:pa}, {ladda:false, tyst:true}).then(s => { if (s.fel){ ndSkrivFel(s); e.target.checked = !pa; return; } S.uCertPam = pa; toast(pa ? 'Du får en påminnelse en månad innan.' : 'Inga påminnelser om certifikat.'); }); }
 }, true);
 // Rollspelets inspelning: en signerad adress, filen, och sedan registreras den (repots forberedRollspel och registreraRollspel).
 document.addEventListener('change', async e => {
   if (!ndUtb() || !e.target.dataset || e.target.dataset.ndufil === undefined) return;
   const modul = e.target.dataset.ndufil, f = e.target.files && e.target.files[0]; if (!f) return;
   const p = await ndUtbPost('rollspel-forbered', {modul, filnamn:f.name, mime:f.type, storlek:f.size}, {ladda:false, tyst:true});
-  if (p.fel){ toast(p.fel); return; }
+  if (p.fel){ ndSkrivFel(p); return; }
   const mal = p.url || (p.supabaseUrl && p.token ? `${p.supabaseUrl}/storage/v1/object/upload/sign/${p.bucket}/${p.path}?token=${encodeURIComponent(p.token)}` : null);
   toast('Laddar upp inspelningen …');
   const r = mal ? await fetch(mal, {method:'PUT', headers:{'Content-Type':f.type || 'application/octet-stream'}, body:f}).catch(() => ({ok:false})) : {ok:false};
@@ -29892,8 +29948,8 @@ renderTeamGoal = function(){
 async function ndHemLive(){
   if (!ndHemP() || S.view !== 'hem' || document.hidden) return;
   try {
-    const r = await fetch('/nav2/hem?golvet=1', {credentials:'same-origin'}); if (!r.ok) return;
-    const s = await r.json(); if (!s.golvet) return;
+    const x = await ndLas('/nav2/hem?golvet=1'); if (!x.ok) return;
+    const s = x.data; if (!s.golvet) return;
     const fore = new Set((ND.hem.golvet ? ND.hem.golvet.idag : []).map(x => x.id));
     const nya = s.golvet.idag.filter(x => !fore.has(x.id));
     if (JSON.stringify(s.golvet) === JSON.stringify(ND.hem.golvet)) return;
@@ -29974,7 +30030,7 @@ renderNotif = function(){
     b = [...(x.beslut || []).map(([n]) => `${n} ska beslutas.`), ...(x.borta || []).slice(0, 1).map(([n, s]) => `${n.split(' ')[0]}: ${s}.`)].join(' ') || 'Inget som väntar på dig.';
   }
   // Samma text som pushen: den räknas på servern (/nav2/hem?kvall=1). Tills den kommit står sidans egen uträkning.
-  if (S.ndKvall === undefined){ S.ndKvall = null; fetch('/nav2/hem?kvall=1', {credentials:'same-origin'}).then(r => r.ok ? r.json() : null).then(s => { if (s && s.kvall){ S.ndKvall = s.kvall; if (S.view === 'hem') render(); } }).catch(() => {}); }
+  if (S.ndKvall === undefined){ S.ndKvall = null; ndLas('/nav2/hem?kvall=1').then(s => s.ok ? s.data : null).then(s => { if (s && s.kvall){ S.ndKvall = s.kvall; if (S.view === 'hem') render(); } }).catch(() => {}); }
   if (S.ndKvall){ t = S.ndKvall.titel; b = S.ndKvall.text; }
   return `<button class="notif" data-tmr aria-label="Kvällsnotisen i mobilen, som den skulle se ut">
       <span class="app-ic">${hubMark(38)}</span>
@@ -30142,9 +30198,8 @@ smpChef = function(){
 /* ---------- Klick: radernas handlingar, källorna, Grattis och valen ---------- */
 async function ndHemPost(handling, data = {}){
   try {
-    const r = await fetch('/nav2/hem', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
-    const s = await r.json().catch(() => ({}));
-    if (s.fel){ toast(s.fel); return null; }
+    const s = ndSvar(await ndSkriv('/nav2/hem', {handling, ...data}));
+    if (s.fel){ ndSkrivFel(s); return null; }
     return s;
   } catch(_){ toast('Nav svarade inte.'); return null; }
 }
@@ -30290,10 +30345,9 @@ function ndAeMinns(extra = {}){
 }
 async function ndAePost(handling, data = {}, {ladda = true, tyst = false, minns = {}} = {}){
   try {
-    const r = await fetch('/nav2/anstallda', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
-    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    const s = ndSvar(await ndSkriv('/nav2/anstallda', {handling, ...data}));
     if (s.ok !== undefined && !s.fel){ if (!tyst && s.ok) toast(s.ok); if (ladda){ ndAeMinns(minns); setTimeout(() => location.reload(), 700); } return s; }
-    if (!tyst || s.laslage) toast(s.fel || 'Det gick inte att spara.'); return s;
+    if (!tyst || s.laslage) ndSkrivFel(s); return s;
   } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
 }
 (() => { if (!ndAe()) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-ae') || 'null'); sessionStorage.removeItem('nd-ae'); } catch(_){}
@@ -30576,7 +30630,7 @@ const _ndaeRaderaRutaC = aeRaderaRuta;
 aeRaderaRuta = function(p){
   const h = _ndaeRaderaRutaC(p); if (!ndAe()) return h;
   const R = S.ndAeRef && S.ndAeRef.pid === p.id ? S.ndAeRef : null;
-  if (!R){ S.ndAeRef = {pid:p.id, hamtar:true}; fetch('/nav2/anstallda?referenser=' + encodeURIComponent(p.id), {credentials:'same-origin'}).then(r => r.json()).then(s => { if (S.ndAeRef && S.ndAeRef.pid === p.id) S.ndAeRef = {pid:p.id, ...s}; render(); }).catch(() => { S.ndAeRef = {pid:p.id, fel:'Nav svarade inte.'}; render(); }); }
+  if (!R){ S.ndAeRef = {pid:p.id, hamtar:true}; ndLas('/nav2/anstallda?referenser=' + encodeURIComponent(p.id)).then(ndSvar).then(s => { if (S.ndAeRef && S.ndAeRef.pid === p.id) S.ndAeRef = {pid:p.id, ...s}; render(); }).catch(() => { S.ndAeRef = {pid:p.id, fel:'Nav svarade inte.'}; render(); }); }
   const lista = l => l.map(x => `${esc(x.tabell)} <span class="num">${x.antal}</span>`).join(', ');
   const R2 = S.ndAeRef;
   const text = !R2 || R2.hamtar ? 'Hämtar vad som tas bort …' : R2.fel ? esc(R2.fel)
@@ -30789,10 +30843,9 @@ satsSt = function(){
 /* ---------- Skrivningar: /nav2/satser ---------- */
 async function ndSatsPost(handling, data = {}, ladda = true){
   try {
-    const r = await fetch('/nav2/satser', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
-    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    const s = ndSvar(await ndSkriv('/nav2/satser', {handling, ...data}));
     if (s.ok){ toast(s.ok); if (ladda){ try { sessionStorage.setItem('nd-sats', JSON.stringify({open:S.satsOpen, tg:S.satsTgP || null})); } catch(_){} setTimeout(() => location.reload(), 700); } return s; }
-    toast(s.fel || 'Det gick inte att spara.'); return s;
+    ndSkrivFel(s); return s;
   } catch(_){ toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
 }
 // Efter en omladdning: tillbaka till Satser och löner, med samma sats öppen.
@@ -31112,14 +31165,13 @@ ndGa = function(h){ if (ndRx() && ndKopplad('rekrytering') && /^\/rekrytering(\/
 /* ---------- Skrivningar: /nav2/rekrytering ---------- */
 async function ndRxPost(handling, data = {}, {ladda = true, tyst = false, efter = null} = {}){
   try {
-    const r = await fetch('/nav2/rekrytering', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
-    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    const s = ndSvar(await ndSkriv('/nav2/rekrytering', {handling, ...data}));
     if (s.ok !== undefined && !s.fel){
       if (!tyst && s.ok) toast(s.ok);
       if (ladda){ try { sessionStorage.setItem('nd-rx', JSON.stringify({flik:S.rxFlik, open:S.rxOpen, ...(efter || {})})); } catch(_){} setTimeout(() => location.reload(), 900); }
       return s;
     }
-    if (!tyst) toast(s.fel || 'Det gick inte att spara.'); return s;
+    if (!tyst) ndSkrivFel(s); return s;
   } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
 }
 // Efter omladdningen: samma flik, samma kandidat, och formuläret som hör till nästa steg.
@@ -31184,7 +31236,7 @@ function ndRxKlick(t, e){
   if (d.rxbulkok !== undefined){
     const l = [...S.rxVal].map(rxK).filter(x => x && rxOppen(x)), skal = S.rxForm.skal;
     (async () => { let n = 0; for (const x of l){ const mall = ['new', 'screening'].includes(x.steg) ? 'avslag1' : 'avslag2';
-        const s = await ndRxPost('avslag', {id:x.id, skal, mejl:true, mall, texter:{[mall]:ndRxText(mall, x)}}, {ladda:false, tyst:true}); if (s.fel){ toast(s.fel); return; } n++; }
+        const s = await ndRxPost('avslag', {id:x.id, skal, mejl:true, mall, texter:{[mall]:ndRxText(mall, x)}}, {ladda:false, tyst:true}); if (s.fel){ ndSkrivFel(s); return; } n++; }
       toast(`${n} avslag är sparade.${rxMallT('avslag1').text && rxMallT('avslag2').text ? ' Var och en får avslagsmejlet med sitt eget namn, om hen har en e-postadress.' : ' Avslagsmallen har ingen text än, så inga mejl gick ut.'}`); S.rxVal.clear(); S.rxForm = null; try { sessionStorage.setItem('nd-rx', JSON.stringify({flik:S.rxFlik})); } catch(_){} setTimeout(() => location.reload(), 900); })();
     return true;
   }
@@ -31231,7 +31283,7 @@ function ndRxKlick(t, e){
   if (d.rxmeritny){ ndRxPost('merit-ny', {id:d.rxmeritny}, {efter:{open:d.rxmeritny, form:'merit'}}); return true; }
   if (d.rxmeritok !== undefined){ if (!F.text.trim()){ F.fel = 'Skriv svaret.'; rxRita(); return true; } ndRxPost('merit-svar', {id:c.id, text:F.text}, {efter:{open:c.id}}); return true; }
   if (d.rxpoolut){ ndRxPost('pool-ut', {id:d.rxpoolut}, {efter:{open:d.rxpoolut}}); return true; }
-  if (d.rxcv){ ndRxPost('cv', {id:d.rxcv}, {ladda:false, tyst:true}).then(s => { if (s.url) window.open(s.url, '_blank', 'noopener'); else toast(s.fel || 'CV:t gick inte att öppna.'); }); return true; }
+  if (d.rxcv){ ndRxPost('cv', {id:d.rxcv}, {ladda:false, tyst:true}).then(s => { if (s.url) window.open(s.url, '_blank', 'noopener'); else ndSkrivFel(s, 'CV:t gick inte att öppna.'); }); return true; }
   if (d.rxring){ ndRxPost('ring', {id:d.rxring}, {ladda:false, tyst:true}); return false; }
   // Tider
   if (d.rxtidok !== undefined){
@@ -31312,9 +31364,9 @@ let ndRxMallTimer = null, ndRxJobbTimer = null;
 document.addEventListener('input', e => {
   if (!ndRx() || S.view !== 'rekrytering' || !e.target.dataset) return;
   const d = e.target.dataset;
-  if (d.rxmalltext !== undefined){ const slug = d.rxmalltext, v = e.target.value; clearTimeout(ndRxMallTimer); ndRxMallTimer = setTimeout(() => ndRxPost('mall', {slug, text:v}, {ladda:false, tyst:true}).then(s => { if (s.laslage || s.fel) toast(s.fel); }), 1200); }
+  if (d.rxmalltext !== undefined){ const slug = d.rxmalltext, v = e.target.value; clearTimeout(ndRxMallTimer); ndRxMallTimer = setTimeout(() => ndRxPost('mall', {slug, text:v}, {ladda:false, tyst:true}).then(s => { if (s.laslage || s.fel) ndSkrivFel(s); }), 1200); }
   if (d.rxmalf !== undefined && S.rxMalF){ S.rxMalF[d.rxmalf] = e.target.value; return; }
-  if (d.rxjobbet !== undefined){ const v = e.target.value; clearTimeout(ndRxJobbTimer); ndRxJobbTimer = setTimeout(() => ndRxPost('jobbet', {text:v}, {ladda:false, tyst:true}).then(s => { if (s.laslage || s.fel) toast(s.fel); }), 1200); }
+  if (d.rxjobbet !== undefined){ const v = e.target.value; clearTimeout(ndRxJobbTimer); ndRxJobbTimer = setTimeout(() => ndRxPost('jobbet', {text:v}, {ladda:false, tyst:true}).then(s => { if (s.laslage || s.fel) ndSkrivFel(s); }), 1200); }
 });
 
 if (ndRx()){ ndRxStart(); NDKOPPLAD.add('rekrytering'); }
@@ -31354,15 +31406,14 @@ function ndCnMinns(t){
 }
 async function ndCnPost(handling, data = {}, {ladda = true, tyst = false, angra = null} = {}){
   try {
-    const r = await fetch('/nav2/coachning', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
-    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    const s = ndSvar(await ndSkriv('/nav2/coachning', {handling, ...data}));
     if (s.ok !== undefined && !s.fel){
       const ang = angra ? angra(s) : null;
       if (ladda){ ndCnMinns(!tyst && s.ok ? {msg:s.ok, angra:ang} : null); setTimeout(() => location.reload(), 250); }
       else if (!tyst && s.ok){ if (ang) toastActs(s.ok, [['Ångra', () => ndCnPost(ang.handling, ang.data)]], 8000); else toast(s.ok); }
       return s;
     }
-    if (!tyst) toast(s.fel || 'Det gick inte att spara.'); return s;
+    if (!tyst) ndSkrivFel(s); return s;
   } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
 }
 (() => { if (!ndCn()) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-cn') || 'null'); sessionStorage.removeItem('nd-cn'); } catch(_){}
@@ -31685,14 +31736,14 @@ let ndCnTxtTimer = null;
 document.addEventListener('input', e => {
   if (!ndCn() || !e.target.dataset || !e.target.dataset.cntxt) return;
   const id = e.target.dataset.cntxt, dag = e.target.dataset.cnd, v = e.target.value;
-  clearTimeout(ndCnTxtTimer); ndCnTxtTimer = setTimeout(() => ndCnPost('svar-falt', {ov:id, dag, txt:v}, {ladda:false, tyst:true}).then(s => { if (s.laslage) toast(s.fel); }), 900);
+  clearTimeout(ndCnTxtTimer); ndCnTxtTimer = setTimeout(() => ndCnPost('svar-falt', {ov:id, dag, txt:v}, {ladda:false, tyst:true}).then(s => { if (s.laslage) ndSkrivFel(s); }), 900);
 }, true);
 document.addEventListener('click', e => {
   if (!ndCn()) return;
   const t = e.target.closest && e.target.closest('[data-cnskal], [data-cnsam]'); if (!t) return;
   const d = t.dataset, ov = d.cnov, dag = d.cnd || cnT();
   setTimeout(() => { const o = cnOv(ov), s = o && o.svar[dag]; if (!s) return;
-    ndCnPost('svar-falt', d.cnskal ? {ov, dag, skal:s.skal || ''} : {ov, dag, sam:s.sam || ''}, {ladda:false, tyst:true}).then(r => { if (r.laslage) toast(r.fel); }); }, 0);
+    ndCnPost('svar-falt', d.cnskal ? {ov, dag, skal:s.skal || ''} : {ov, dag, sam:s.sam || ''}, {ladda:false, tyst:true}).then(r => { if (r.laslage) ndSkrivFel(r); }); }, 0);
 }, false);
 
 /* Filen som bevis: repots uppladdning (ändamålet coaching), sedan inlämningen. */
@@ -31702,7 +31753,7 @@ document.addEventListener('change', async e => {
   e.stopImmediatePropagation();
   const f = e.target.files[0], id = d.cnafil;
   const p = await ndCnPost('fil-forbered', {id, filnamn:f.name, mime:f.type, storlek:f.size}, {ladda:false, tyst:true});
-  if (p.fel){ toast(p.fel); return; }
+  if (p.fel){ ndSkrivFel(p); return; }
   const mal = p.url || (p.supabaseUrl && p.token ? `${p.supabaseUrl}/storage/v1/object/upload/sign/${p.bucket}/${p.path}?token=${encodeURIComponent(p.token)}` : null);
   const r = mal ? await fetch(mal, {method:'PUT', headers:{'Content-Type':f.type || 'application/octet-stream'}, body:f}).catch(() => ({ok:false})) : {ok:false};
   if (!r.ok){ toast('Filen kom inte fram. Försök igen.'); return; }
@@ -32052,10 +32103,9 @@ maPanel = function(p){
 /* ---------- Skrivningar: /nav2/avtal ---------- */
 async function ndMaPost(handling, data = {}, {ladda = true, tyst = false} = {}){
   try {
-    const r = await fetch('/nav2/avtal', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
-    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    const s = ndSvar(await ndSkriv('/nav2/avtal', {handling, ...data}));
     if (s.ok !== undefined && !s.fel){ if (!tyst) toast(s.ok); if (ladda) ndMaLaddaOm(); return s; }
-    if (!tyst) toast(s.fel || 'Det gick inte att spara.'); return s;
+    if (!tyst) ndSkrivFel(s); return s;
   } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
 }
 function ndMaLaddaOm(){ try { sessionStorage.setItem('nd-ma', JSON.stringify({view:S.view, open:S.maOpen || null})); } catch(_){} setTimeout(() => location.reload(), 700); }
@@ -32073,12 +32123,12 @@ async function ndMaLaddaUpp(pid, fil){
   S.maUppT = titel; S.maUppFor = pid;
   toast(`Laddar upp ${fil.name} …`);
   const p = await ndMaPost('bifoga-forbered', {person:pid, filnamn:fil.name, mime:fil.type, storlek:fil.size}, {ladda:false, tyst:true});
-  if (!p.ok){ toast(p.fel || 'Filen gick inte att ladda upp.'); return; }
+  if (!p.ok){ ndSkrivFel(p, 'Filen gick inte att ladda upp.'); return; }
   const mal = p.url || (p.supabaseUrl && p.token ? `${p.supabaseUrl}/storage/v1/object/upload/sign/${p.bucket}/${p.path}?token=${encodeURIComponent(p.token)}` : null);
   const r = mal ? await fetch(mal, {method:'PUT', headers:{'Content-Type':fil.type || 'application/octet-stream'}, body:fil}).catch(() => ({ok:false})) : {ok:false};
   if (!r.ok){ toast(`${fil.name} kom inte fram. Försök igen.`); return; }
   const s = await ndMaPost('bifoga-registrera', {person:pid, titel, fil:p.fileId, filnamn:fil.name, store:p.store}, {ladda:false, tyst:true});
-  if (!s.ok){ toast(s.fel || 'Avtalet gick inte att spara.'); return; }
+  if (!s.ok){ ndSkrivFel(s, 'Avtalet gick inte att spara.'); return; }
   S.maUppT = null; toast(s.ok); ndMaLaddaOm();
 }
 const ndMaHitta = id => ndMa() ? ndMa().avtal.find(x => x.id === id) : null;
@@ -32177,8 +32227,8 @@ function ndPalSok(nq, q){
   NDPAL.vantar = nq; clearTimeout(NDPAL.timer);
   NDPAL.timer = setTimeout(() => {
     const vyer = NDPALVY.filter(v => ndKopplad(v));
-    fetch(`/nav2/paletten?q=${encodeURIComponent(q)}&vyer=${vyer.join(',')}`, {credentials:'same-origin'})
-      .then(r => r.json()).catch(() => ({fel:'Nav svarade inte.'}))
+    ndLas(`/nav2/paletten?q=${encodeURIComponent(q)}&vyer=${vyer.join(',')}`)
+      .then(ndSvar).catch(() => ({fel:'Nav svarade inte.'}))
       .then(s => { NDPAL.sok.set(nq, s.traffar || []); if (NDPAL.vantar === nq) NDPAL.vantar = null; ndPalOmrita(nq); });
   }, 140);
 }
@@ -32191,14 +32241,14 @@ function ndPalOmrita(nq){
 function ndPalKal(){
   if (!ndKopplad('kalender') || NDPAL.kalHamtar || (NDPAL.kal && Date.now() - NDPAL.kal.t < 3e5)) return;
   NDPAL.kalHamtar = true;
-  fetch('/nav2/paletten?vad=kalender', {credentials:'same-origin'}).then(r => r.json()).catch(() => ({}))
+  ndLas('/nav2/paletten?vad=kalender').then(ndSvar).catch(() => ({}))
     // Ett fel ger inga kalenderträffar, och nästa försök görs först efter samma fem minuter.
     .then(s => { NDPAL.kalHamtar = false; NDPAL.kal = {t:Date.now(), poster:Array.isArray(s.poster) ? s.poster : []}; if (NDPAL.kal.poster.length) ndPalOmrita(); });
 }
 function ndPalObes(){
   if (NDPAL.obesHamtar) return;
   NDPAL.obesHamtar = true;
-  fetch('/nav2/paletten?vad=obesvarade', {credentials:'same-origin'}).then(r => r.json()).catch(() => ({fel:'Nav svarade inte.'}))
+  ndLas('/nav2/paletten?vad=obesvarade').then(ndSvar).catch(() => ({fel:'Nav svarade inte.'}))
     .then(s => { NDPAL.obesHamtar = false; NDPAL.obes = s; if (PS.key === 'obesvarat') drawAnswer(); });
 }
 
@@ -32290,8 +32340,8 @@ const ndPalForRoll = roll => ndPalFragor().filter(f => f[1] === 'alla' || f[1] =
 NDPAL.svar = new Map();
 function ndPalHamtaSvar(k){
   NDPAL.svar.set(k, {lage:'laddar'});
-  fetch(`/nav2/paletten?vad=svar&fraga=${encodeURIComponent(k)}`, {credentials:'same-origin'})
-    .then(r => r.json()).catch(() => ({fel:'Nav svarade inte.'}))
+  ndLas(`/nav2/paletten?vad=svar&fraga=${encodeURIComponent(k)}`)
+    .then(ndSvar).catch(() => ({fel:'Nav svarade inte.'}))
     .then(s => { NDPAL.svar.set(k, s.fel ? {lage:'fel', fel:s.fel} : {lage:'klar', s}); if (PS.key === k) drawAnswer(); });
 }
 function ndPalSvar(k, q){
@@ -32365,9 +32415,10 @@ function ndPalSpara(text){
   const k = norm(text.trim());
   if (NDPAL.fragor.has(k)) return NDPAL.fragor.get(k);
   NDPAL.fragor.set(k, 'Frågan sparas utan ditt namn, så att ledningen ser vad som saknas.');
-  fetch('/nav2/paletten', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling:'fraga', text:text.trim()})})
-    .then(r => r.json()).catch(() => ({fel:'Nav svarade inte. Frågan sparades inte.'}))
+  ndSkriv('/nav2/paletten', {handling:'fraga', text:text.trim()})
+    .then(ndSvar).catch(() => ({fel:'Nav svarade inte. Frågan sparades inte.'}))
     .then(s => {
+      if (s.utloggad) ndSkrivFel(s);
       const n = s.ok ? `${s.ok} Ledningen ser vad som saknas.` : s.laslage ? 'Läsläge: frågan sparas utan ditt namn när paletten slås på. Ingenting sparades nu.' : (s.fel || 'Frågan sparades inte.');
       NDPAL.fragor.set(k, n);
       if (PS.cur && !PS.key && norm(PS.cur.q.trim()) === k){ PS.cur.note = n; drawAnswer(); }
@@ -32406,7 +32457,7 @@ palClick = function(e){
 // Utkastet till en rutin: rutiner-rutten, som redaktören. Inget publiceras.
 function ndPalRutinUtkast(titel){
   ndRutPost('spara', {hur:'utkast', f:{t:titel, typ:'routine', omr:'adm', nasta:frPlus(kIdag(), 182), agare:ND.jag.id}}, {ladda:false, tyst:true})
-    .then(s => toast(s.fel || 'Utkastet ligger under Rutiner.'));
+    .then(s => ndSkrivFel(s, 'Utkastet ligger under Rutiner.'));
 }
 
 /* ---------- Gör: de kopplade vyernas handlingar ---------- */
@@ -32416,7 +32467,7 @@ function ndPalNyUppgift(){
 }
 function ndPalLaggTill(text){
   ndUpgPost('skapa', {titel:text, dag:kIdag()}, {ladda:false, tyst:true}).then(s => {
-    if (!s.ok){ toast(s.fel || 'Uppgiften lades inte upp.'); return; }
+    if (!s.ok){ ndSkrivFel(s, 'Uppgiften lades inte upp.'); return; }
     let angrad = false;
     const ladda = () => { try { sessionStorage.setItem('nd-upg', JSON.stringify({view:S.view, tab:S.tab})); } catch(_){} location.reload(); };
     toast('Lagd i Uppgifter, i dag.', () => { angrad = true; ndUpgPost('avbryt', {id:s.id, note:'Ångrad i paletten'}, {ladda:false, tyst:true}).then(a => { toast(a.ok ? 'Ångrat.' : a.fel || 'Det gick inte att ångra.'); setTimeout(ladda, 900); }); });
@@ -32559,7 +32610,7 @@ function ndPalRutinAmne(a){
     tldr:`Svar på det som frågats i Nav om ${a.ord}.`, nar:'När någon undrar över ' + a.ord + '.',
     steg:a.fragor.map(x => [ndPalStor(x.q), '']), syn:a.syn};
   ndRutPost('spara', {hur:'utkast', f}, {ladda:false, tyst:true}).then(s => {
-    if (s.fel){ toast(s.fel); return; }
+    if (s.fel){ ndSkrivFel(s); return; }
     toast('Utkastet ligger under Rutiner. Skriv svaren i stegen och publicera.');
     try { sessionStorage.setItem('nd-rut', JSON.stringify({open:s.id, tab:null})); } catch(_){}
     setTimeout(() => location.reload(), 900);
@@ -32647,10 +32698,9 @@ const ndPrf = () => ND && ND.profil ? ND.profil : null;
 
 async function ndPrfPost(handling, data = {}){
   try {
-    const r = await fetch('/nav2/profil', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
-    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    const s = ndSvar(await ndSkriv('/nav2/profil', {handling, ...data}));
     if (s.ok !== undefined && !s.fel) return s;
-    toast(s.fel || 'Det gick inte att spara.'); return s;
+    ndSkrivFel(s); return s;
   } catch(_){ toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
 }
 
@@ -32746,8 +32796,7 @@ const ndSak = () => ND && ND.sakerhet ? ND.sakerhet : null;
 
 async function ndSakPost(handling, data = {}){
   try {
-    const r = await fetch('/nav2/sakerhet', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
-    return await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    return ndSvar(await ndSkriv('/nav2/sakerhet', {handling, ...data}));
   } catch(_){ return {fel:'Nav svarade inte.'}; }
 }
 
@@ -32789,7 +32838,7 @@ prfLosenSpara = function(){
     if (S.prfL !== L) return;
     if (s.fel){
       const f = /nuvarande/i.test(s.fel) ? 'nu' : /nya|nekade|lösenordet (måste|är för)/i.test(s.fel) ? 'ny' : null;
-      if (!f || s.laslage){ toast(s.fel); return; }
+      if (!f || s.laslage || s.utloggad){ ndSkrivFel(s); return; }
       L.srv = {f, v:L[f], fel:s.fel}; L.forsok = true; S.prfFokus = `[data-prfl="${f}"]`; render(); return;
     }
     _ndsakLosenSpara();
@@ -32806,7 +32855,7 @@ prfKodSkicka = function(){
   if (S.ndSakVantar) return; S.ndSakVantar = true;
   ndSakPost('kod-skicka').then(r => {
     S.ndSakVantar = false;
-    if (r.fel){ if (f.skickadMs){ f.fel = r.fel; render(); } else toast(r.fel); return; }
+    if (r.fel){ if (f.skickadMs && !r.utloggad){ f.fel = r.fel; render(); } else ndSkrivFel(r); return; }
     s.flode = {skickadMs:Date.now(), kod:'', fel:'', ok:r.ok};
     S.prfFokus = '[data-prfkod]'; render();
   });
@@ -32819,7 +32868,7 @@ prfKodBekrafta = function(){
   ndSakPost('kod-bekrafta', {kod:f.kod.replace(/\s/g, '')}).then(r => {
     S.ndSakVantar = false;
     if (s.flode !== f) return;
-    if (r.fel){ if (r.laslage) toast(r.fel); else f.fel = r.fel; S.prfFokus = '[data-prfkod]'; render(); return; }
+    if (r.fel){ if (r.laslage || r.utloggad) ndSkrivFel(r); else f.fel = r.fel; S.prfFokus = '[data-prfkod]'; render(); return; }
     s.enhet = true; s.till = r.till; s.flode = null;
     prfStatus('s2', 'Enheten är bekräftad.', null); S.prfFokus = '[data-prfglom]'; render();
   });
@@ -32829,7 +32878,7 @@ const _ndsakKlick = prfKlick;
 prfKlick = function(t, e){
   if (ndSak() && t.dataset.prfglom !== undefined){
     if (S.ndSakVantar) return true; S.ndSakVantar = true;
-    ndSakPost('glom').then(r => { S.ndSakVantar = false; if (r.fel){ toast(r.fel); return; } _ndsakKlick(t, e); });
+    ndSakPost('glom').then(r => { S.ndSakVantar = false; if (r.fel){ ndSkrivFel(r); return; } _ndsakKlick(t, e); });
     return true;
   }
   return _ndsakKlick(t, e);
@@ -32984,10 +33033,9 @@ bellPoster = function(){ const p = _ndNhBell(); if (!ndNh() || !ndKopplad('nyhet
 /* ---------- Skrivningar: /nav2/nyheter ---------- */
 async function ndNhSkicka(handling, data = {}, {tyst = false} = {}){
   try {
-    const r = await fetch('/nav2/nyheter', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
-    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    const s = ndSvar(await ndSkriv('/nav2/nyheter', {handling, ...data}));
     if (s.ok !== undefined && !s.fel){ if (s.nyheter) ndNhNy(s.nyheter); return s; }
-    if (!tyst) toast(s.fel || 'Det gick inte att spara.'); return s;
+    if (!tyst) ndSkrivFel(s); return s;
   } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
 }
 const ndNhNavSlug = key => { const n = NHNAV.find(x => nhNavKey(x) === key); return n ? n[4] : null; };
@@ -33034,7 +33082,7 @@ document.addEventListener('click', e => {
     if (N.kv && N.kv < nhT()) f.allm = 'Sista dagen för kvittens kan inte ligga bakåt i tiden.';
     N.fel = f; if (Object.keys(f).length){ render(); document.querySelector('.nhskriv [aria-invalid="true"]')?.focus(); return; }
     ndNhSkicka('publicera', {id:N.id, rubrik:N.rubrik.trim(), text:N.text.trim(), grupp:N.grupp, kv:N.kv, fast:N.fast, nar:N.nar}, {tyst:true}).then(s => {
-      if (s.fel){ if (s.falt){ N.fel = {[s.falt]:s.fel}; render(); document.querySelector('.nhskriv [aria-invalid="true"]')?.focus(); } else toast(s.fel); return; }
+      if (s.fel){ if (s.falt){ N.fel = {[s.falt]:s.fel}; render(); document.querySelector('.nhskriv [aria-invalid="true"]')?.focus(); } else ndSkrivFel(s); return; }
       S.nhSkriv = null; S.nhUtkast = ndNhUtkast(ND.nyheter.utkast); try { localStorage.removeItem('nav2-nhutkast'); } catch(_){}
       S.nhOpen = N.nar === 'nu' && nhP(s.slug) ? s.slug : null; render();
       toast(s.ok, ndNhAngra('publicera-ater', {id:s.slug}));
@@ -33154,14 +33202,13 @@ function ndLdPlan(){
 function ndLdMinns(t){ try { sessionStorage.setItem('nd-ld', JSON.stringify({open:S.ldOpen || null, toast:t || null})); } catch(_){} }
 async function ndLdPost(handling, data = {}, {ladda = true, tyst = false} = {}){
   try {
-    const r = await fetch('/nav2/leads', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handling, ...data})});
-    const s = await r.json().catch(() => ({fel:'Nav svarade inte.'}));
+    const s = ndSvar(await ndSkriv('/nav2/leads', {handling, ...data}));
     if (s.ok && !s.fel){
       if (ladda){ ndLdMinns(!tyst ? {msg:s.ok, angra:s.angra || null} : null); setTimeout(() => location.reload(), 250); }
       else if (!tyst) toast(s.ok);
       return s;
     }
-    if (!tyst) toast(s.fel || 'Det gick inte att spara.'); return s;
+    if (!tyst) ndSkrivFel(s); return s;
   } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
 }
 (() => { if (!ndLd()) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-ld') || 'null'); sessionStorage.removeItem('nd-ld'); } catch(_){}
