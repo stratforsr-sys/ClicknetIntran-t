@@ -27260,7 +27260,7 @@ function ndKEv(p){
   if (agare !== org) add(agare, p.agare === ND.jag.id && p.svar && p.svar !== 'org' ? p.svar : null);
   (p.deltagare || []).forEach(id => add(ndKNamn(id), null));
   return {id:p.id, ref:p.ref, href:p.href, d:p.dag, s, e, allday, t:p.rubrik ?? (allday ? 'Borta' : 'Upptagen'), kat:NDKSLAG[p.slag] || 'mote', org, delt,
-    plats:'', agenda:'', visa:p.slag === 'ledig' ? 'borta' : NDKVISAFRAN[p.visaSom] || 'upptagen', video:!!p.online, online:p.online || null, rep:!!p.serie, priv:!!p.privat, klar:!!p.klar, pamin:NDKPAM[p.paminnelse] || 'Ingen', nd:true, agareId:p.agare, serieId:p.serieId || null};
+    plats:'', agenda:'', visa:p.slag === 'ledig' ? 'borta' : NDKVISAFRAN[p.visaSom] || 'upptagen', video:!!p.online, online:p.online || null, rep:!!p.serie, priv:!!p.privat, klar:!!p.klar, pamin:NDKPAM[p.paminnelse] || 'Ingen', nd:true, agareId:p.agare, serieId:p.serieId || null, heldagFran:p.heldag ? p.heldag.fran : null, heldagTill:p.heldag ? p.heldag.till : null};
 }
 // 1:1 heter som i navet (enskildTitel): "1:1 Elin" för de två, "1:1 Zen · Elin" för en tredje.
 function ndKTitel(ev){
@@ -27524,7 +27524,7 @@ function ndKFalt(f){
   const ev = f.id ? KEV.find(x => x.id === f.id) : null;
   return {id:ev ? ndKRef(ev) : undefined, typ:f.typ, t:(f.t || '').trim() || (f.lev || ''), d:f.d, s:f.heldag ? 0 : f.s, e:f.heldag ? 1440 : f.e, heldag:!!f.heldag,
     delt:(f.delt || []).map(n => ndKId(n)).filter(Boolean), ...ndKPlatsLank(f, ev), agenda:f.agenda || '', visa:NDKVISA[f.visa] || 'upptagen',
-    pamin:NDKPAMMIN[f.pamin] !== undefined ? NDKPAMMIN[f.pamin] : 15, upprepa:f.upprepa || 'Upprepas inte', slut:f.upprepa && f.upprepa !== 'Upprepas inte' ? (f.slut || '') : undefined, valfria:f.typ === 'uppgift' ? undefined : (f.valfria || []).filter(n => (f.delt || []).includes(n)).map(n => ndKId(n)).filter(Boolean), priv:!!f.priv, lev:f.lev || undefined, order:f.order || undefined,
+    pamin:NDKPAMMIN[f.pamin] !== undefined ? NDKPAMMIN[f.pamin] : 15, upprepa:f.upprepa || 'Upprepas inte', slut:f.upprepa && f.upprepa !== 'Upprepas inte' ? (f.slut || '') : undefined, slutdag:f.heldag ? (f.slutdag || '') : undefined, valfria:f.typ === 'uppgift' ? undefined : (f.valfria || []).filter(n => (f.delt || []).includes(n)).map(n => ndKId(n)).filter(Boolean), priv:!!f.priv, lev:f.lev || undefined, order:f.order || undefined,
     gaster:f.typ === 'mote' ? (f.gaster || []).filter(a => !(f.gastFore || []).includes(a)) : []};
 }
 /* Möteslänken (beslutsrundan 2026-10-20: Nav sparar en länk som skrivs in, men skapar ingen). En länk som klistras
@@ -27559,7 +27559,9 @@ kOppnaForm = function(over){
     if (ev && ev.online) over = {...over, plats:[over.plats && over.plats !== 'Videolänk' ? over.plats : '', ev.online].filter(Boolean).join(' '), video:true};
     // En gång i en serie: seriens mönster och slut ur navet (utkastet gissade "Varje vardag" eller "Varannan vecka").
     if (ev && ev.rep && ev.serieRegel) over = {...over, upprepa:ev.serieRegel.upprepa, slut:ev.serieRegel.slut || ''};
-    over = {...over, valfria:(ev && ev.valfria) || []}; }
+    over = {...over, valfria:(ev && ev.valfria) || []};
+    // Heldag (0204): hela mötet, också från dag två i ett möte över flera dagar.
+    if (ev && ev.allday && ev.kat === 'mote') over = {...over, heldag:true, d:ev.heldagFran || ev.d, slutdag:ev.heldagTill || ev.heldagFran || ev.d}; }
   S.ndKSerieVal = null;
   return _ndKOppna(over);
 };
@@ -27572,7 +27574,7 @@ kFormular = function(){
     if (!ndKHar(ND.jag.id, f.d, f.d)) ndKHamta('vecka', f.d, [], [ND.jag.id]);
     if ((f.delt || []).length){ ndKUppBehov([kJag(), ...f.delt], f.d); if (ndKKollar(f.delt, f.d)) h = h.replace(/(<div class="olmsg ok">[\s\S]*?<span>)[^<]*(<\/span>)/, `$1${NDKKOLLAR}$2`); }
   }
-  if (ndK() && f) h = ndKValfriaForm(ndKSerieForm(h, f), f);
+  if (ndK() && f) h = ndKHeldagForm(ndKValfriaForm(ndKSerieForm(h, f), f), f);
   if (!ndK() || !f || f.typ !== 'mote') return h;
   const slut = '</span><small class="olmut">Inbjudna får en notis och ett mejl med .ics.', i = h.indexOf(slut);
   if (i < 0) return h;
@@ -27927,6 +27929,25 @@ document.addEventListener('click', e => {
   if (!v){ S.ndKSerieVal = null; render(); return; }
   kLasForm(); S.ndKSerieVal = v; kSpara(S.kForm);
 }, true);
+
+/* ---------- Heldag och flera dagar som i Outlook (beställaren 2026-10-22, svar 3; 0204) ----------
+   Utkastets ruta Heldag sparar nu ett möte utan klockslag (förut nekade navet), och "till" ger ett möte över flera
+   dagar (mässa, utbildning). Mötet står på varje dag i vyn; snabbkortet säger "heldag till …" och arrangören kan
+   redigera och ställa in det. En serie och en 1:1 har alltid ett klockslag. */
+function ndKHeldagForm(h, f){
+  if (!f.heldag || f.typ === 'uppgift' || f.typ === 'enskilt') return h;
+  const a = 'data-kff="heldag"', i = h.indexOf(a), j = i < 0 ? -1 : h.indexOf('</label>', i);
+  if (j < 0) return h;
+  return h.slice(0, j + 8) + `<span class="olmut" style="display:inline-flex;align-items:center;gap:6px">till <input class="uin" type="date" data-kff="slutdag" value="${esc(f.slutdag || f.d || '')}" min="${esc(f.d || '')}" aria-label="Sista dagen" style="width:auto"></span>` + h.slice(j + 8);
+}
+const _ndKHeldagPeek = kPeekKort;
+kPeekKort = function(){
+  let h = _ndKHeldagPeek(); if (!ndK() || !S.kPeek) return h;
+  const e = KEV.find(x => x.id === S.kPeek.id); if (!e || !e.allday || e.kat !== 'mote' || !e.nd) return h;
+  if (e.heldagTill && e.heldagTill > (e.heldagFran || e.d)) h = h.replace(`${kLang(e.d)} · heldag`, `${kLang(e.heldagFran || e.d)} · heldag till ${kKort(e.heldagTill)}`);
+  if (e.org === kJag() && ndKRef(e)) h = h.replace('<button class="olbtn" data-act="toast" data-msg="Händelsen öppnas i Nav.">Öppna</button>', `<button class="olbtn" data-kred>Redigera</button><button class="olbtn olfarlig" data-kstall="${e.id}">Ställ in</button>`);
+  return h;
+};
 
 /* ---------- Valfria deltagare som i Outlook (beställaren 2026-10-22, svar 4; 0203) ----------
    Ett tryck på deltagarens namn i formuläret växlar mellan obligatorisk och valfri. Den valfria får samma inbjudan,

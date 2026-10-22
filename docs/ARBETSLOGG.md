@@ -5,6 +5,31 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-22 · Nav 2.0, Kalendern som Outlook, del 14: heldag och möten över flera dagar (0204 körd)
+
+- **Beställaren 2026-10-22 (svar 3):** "nej, men kan vara bra att ha med om
+  Outlook har det". Outlook har båda. Utkastets ruta Heldag nekades av
+  navet ("Ett möte är mellan 15 minuter och 8 timmar").
+- **Nu:** Heldag sparar ett möte utan klockslag, också en lördag eller
+  söndag, och "till" i formuläret ger ett möte över flera dagar (högst 32).
+  Mötet står på varje dag i vyn (`flerdagar` i `src/lib/nav2/kalender.ts`,
+  också mina som började före vyn); snabbkortet säger "heldag till …" och
+  arrangören kan redigera och ställa in det; formuläret öppnar hela mötet.
+  Ett möte kan gå till och från heldag. En serie och en 1:1 har alltid
+  ett klockslag.
+- **Rutten:** `skapaHeldag` (`lk_skapa_heldag`), `andraHeldag`
+  (`lk_andra_heldag`: deltagarna svarar igen, notisen flyttad), och
+  ledig/upptagen gör hela dagen upptagen för ett heldagsmöte som inte visas
+  som ledigt (`medHeldagar`). Kalenderfilen skriver datum
+  (`DTSTART;VALUE=DATE`, `ical.ts` `heldag`), mejlet säger "hela dagen",
+  och mötets push-påminnelse hoppar över heldag.
+- **0204 (`supabase/migrations/0204_kalender_heldag.sql`):**
+  `calendar_event.slutdag` (bara utan klockslag, högst 31 dagar efter),
+  `lk_skapa_heldag`, `lk_andra_heldag`, `lk_angra` som återställer
+  slutdagen. Torrkörd (`prov/torr-0204.mjs`: skapa, tre dagar, till ett
+  klockslag och tillbaka med Ångra, projektionen som Zen, nekanden) och
+  körd före den här committen (utkorgen läser `slutdag`).
+
 ## 2026-10-22 · Nav 2.0, Kalendern som Outlook, del 13: valfria deltagare (0203 körd)
 
 - **Beställaren 2026-10-22 (svar 4):** "har Outlook det, då gör det".

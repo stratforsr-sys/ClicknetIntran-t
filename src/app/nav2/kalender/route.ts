@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser, type CurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { FORINSTALLNINGAR, STEG, UPPREPA, WDL, arDatum, arVy, kvittoKopierad, plus, wd, type Upprepa } from "@/lib/leveranskalender";
+import { FORINSTALLNINGAR, STEG, UPPREPA, WDL, arDatum, arVy, kvittoKopierad, plus, wd, type Upprepa, type Upptaget } from "@/lib/leveranskalender";
 import { fonsterFran, hamtaHandelsedetalj, lk, upptagetFor } from "@/lib/leveranskalender-server";
 import { KATEGORIFARGER, KATEGORINYCKEL, hamtaKalposter, kalDetalj, lasKategorier, sokKalender } from "@/lib/nav2/kalender";
 import { kalPushNasta } from "@/lib/nav2/kalender-push";
@@ -67,7 +67,7 @@ export async function GET(request: Request) {
     const personer = upp.split(",").filter((id) => UUID.test(id));
     if (!arDatum(fran) || !personer.length || personer.length > 20) return svar({ fel: "Okända personer eller dag." }, 400);
     const { till } = fonsterFran(fran, 15);
-    return svar({ fran, till, upptaget: await upptagetFor(user, personer, fran, till) });
+    return svar({ fran, till, upptaget: await medHeldagar(await upptagetFor(user, personer, fran, till), personer, fran, till) });
   }
 
   // Service workern (public/nav2/sw.js) när en tom push kommit: den äldsta kalendernotisen den här enheten inte visat.
@@ -134,6 +134,8 @@ type Falt = {
   slut?: string | null;
   /** Valfria deltagare (Outlook, 0203): id:n bland `delt`. */
   valfria?: string[];
+  /** Sista dagen för ett heldagsmöte över flera dagar (0204). */
+  slutdag?: string;
   priv?: boolean;
   lev?: string;
   order?: string;
@@ -226,6 +228,90 @@ async function sattValfria(eventId: string | null | undefined, valfria: readonly
   const ids = valfria.filter((x) => UUID.test(x));
   await pa(db.from("calendar_attendee").update({ optional: false }));
   if (ids.length) await pa(db.from("calendar_attendee").update({ optional: true })).in("employee_id", ids);
+}
+
+/**
+ * Heldag och möten över flera dagar (beställaren 2026-10-22, svar 3: Outlook har det; 0204). Ett möte utan klockslag,
+ * också en lördag eller söndag, högst 32 dagar. Före 0204 svarar rutten att heldag kommer med uppdateringen.
+ */
+const DAGTEXT = (dag: string, slut: string | null) => {
+  const f = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("sv-SE", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+  return slut && slut > dag ? `${f(dag)}–${f(slut)}` : f(dag);
+};
+const HELDAG_SAKNAS = "Heldag kommer med databasens uppdatering (0204).";
+
+async function skapaHeldag(
+  user: CurrentUser,
+  a: { rubrik: string; dag: string; slutdag: string | null; deltagare: string[]; plats: string | null; video: string | null; agenda: string; visaSom: string | null },
+): Promise<Resultat> {
+  if (!a.rubrik.trim()) return { fel: "Skriv en rubrik först." };
+  if (!arDatum(a.dag)) return { fel: "Välj ett datum." };
+  const slut = a.slutdag && arDatum(a.slutdag) && a.slutdag > a.dag ? a.slutdag : null;
+  if (slut && slut > plus(a.dag, 31)) return { fel: "Ett möte över flera dagar är högst 32 dagar." };
+  const r = await lk<{ event_id: string; undo_id: string; deltagare: string[] }>("lk_skapa_heldag", {
+    p_aktor: user.employee!.id,
+    p_title: a.rubrik.trim().slice(0, 200),
+    p_dag: a.dag,
+    p_slutdag: slut ?? a.dag,
+    p_deltagare: a.deltagare,
+    p_plats: a.plats,
+    p_online_url: a.video,
+    p_agenda: a.agenda,
+    p_show_as: a.visaSom ?? "upptagen",
+  });
+  if (!r.ok) return { fel: /lk_skapa_heldag/.test(r.fel) ? HELDAG_SAKNAS : r.fel };
+  const n = r.data.deltagare.length;
+  return { ok: true, eventId: r.data.event_id, angra: r.data.undo_id, dag: a.dag, kvitto: `${a.rubrik.trim()} är bokat ${DAGTEXT(a.dag, slut)}, hela dagen.${n ? ` ${n === 1 ? "En deltagare får" : `${n} deltagare får`} en inbjudan.` : ""}` };
+}
+
+async function andraHeldag(user: CurrentUser, id: string, dag: string, slutdag: string | null, start: number | null, minuter: number | null): Promise<Resultat> {
+  if (!arDatum(dag)) return { fel: "Välj ett datum." };
+  if (slutdag && slutdag > plus(dag, 31)) return { fel: "Ett möte över flera dagar är högst 32 dagar." };
+  if (start !== null && (start % 5 !== 0 || start < 0 || start > 1435)) return { fel: "Välj en starttid." };
+  const r = await lk<{ event_id: string; undo_id: string; svara_igen: string[] }>("lk_andra_heldag", {
+    p_aktor: user.employee!.id,
+    p_event: id,
+    p_dag: dag,
+    p_slutdag: slutdag,
+    p_tid: start === null ? null : `${String(Math.floor(start / 60)).padStart(2, "0")}:${String(start % 60).padStart(2, "0")}`,
+    p_minuter: minuter,
+  });
+  if (!r.ok) return { fel: /lk_andra_heldag/.test(r.fel) ? HELDAG_SAKNAS : r.fel };
+  const n = r.data.svara_igen.length;
+  return { ok: true, eventId: id, angra: r.data.undo_id, dag, kvitto: `Flyttat till ${start === null ? `${DAGTEXT(dag, slutdag)}, hela dagen` : DAGTEXT(dag, null)}.${n ? ` ${n === 1 ? "En deltagare behöver" : `${n} deltagare behöver`} svara igen.` : ""}` };
+}
+
+/**
+ * Ledig/upptagen: repots `upptagetFor` hoppar över poster utan klockslag. Ett heldagsmöte (0204) som inte visas som
+ * ledigt gör hela dagen upptagen för arrangören och dem som inte tackat nej, som i Outlook.
+ */
+async function medHeldagar(upp: Upptaget, personer: string[], fran: string, till: string): Promise<Upptaget> {
+  const db = supabaseAdmin();
+  const { data: moten, error } = await db
+    .from("calendar_event")
+    .select("id, dag, slutdag, organizer_id, show_as")
+    .is("tid", null)
+    .is("cancelled_at", null)
+    .eq("kind", "mote")
+    .neq("show_as", "ledig")
+    .lte("dag", till)
+    .gte("starts_at", new Date(Date.parse(`${fran}T00:00:00Z`) - 32 * 864e5).toISOString());
+  if (error || !moten?.length) return upp;
+  const ids = moten.map((m) => m.id as string);
+  const { data: med } = await db.from("calendar_attendee").select("event_id, employee_id, response").in("event_id", ids).in("employee_id", personer);
+  for (const m of moten as { id: string; dag: string; slutdag: string | null; organizer_id: string }[]) {
+    const vem = new Set<string>();
+    if (personer.includes(m.organizer_id)) vem.add(m.organizer_id);
+    for (const a of (med ?? []) as { event_id: string; employee_id: string; response: string }[]) if (a.event_id === m.id && a.response !== "nej") vem.add(a.employee_id);
+    for (let d = m.dag; d <= (m.slutdag ?? m.dag); d = plus(d, 1)) {
+      if (d < fran || d > till) continue;
+      for (const p of vem) {
+        upp[p] = upp[p] ?? {};
+        upp[p][d] = { block: upp[p][d]?.block ?? [], ledig: true };
+      }
+    }
+  }
+  return upp;
 }
 
 /** Formulärets "Upprepas" → seriens regel (calendar_series). */
@@ -366,17 +452,25 @@ export async function POST(request: Request) {
         // Ändra ett befintligt möte: tiden med flytta/andraLangd, resten med andraMote.
         if (f.id) {
           if (!UUID.test(f.id)) return svar2({ fel: "Händelsen finns inte längre." }, 400);
-          const { data: e } = await supabaseAdmin().from("calendar_event").select("dag, tid, minuter, kind, online_url").eq("id", f.id).maybeSingle();
+          const { data: e } = await supabaseAdmin().from("calendar_event").select("dag, tid, minuter, kind, online_url, slutdag").eq("id", f.id).maybeSingle();
           if (!e) return svar2({ fel: "Händelsen finns inte längre." }, 404);
           if (g.epost.length && e.kind !== "mote") return svar2({ fel: "Bara ett möte kan ha gäster utanför Clicknet." }, 400);
           const start = f.s ?? 0;
           const fore = Number(String(e.tid ?? "00:00").slice(0, 2)) * 60 + Number(String(e.tid ?? "00:00").slice(3, 5));
           let sist: Resultat = { ok: true, eventId: f.id };
-          if (f.d && (f.d !== e.dag || start !== fore)) {
+          // Heldag (0204): till, från eller inom heldag går genom lk_andra_heldag; resten som förut.
+          if (e.kind === "mote" && (f.heldag || e.tid === null)) {
+            const slut = f.heldag ? (f.slutdag && f.slutdag > (f.d ?? "") ? f.slutdag : null) : null;
+            const lika = f.d === e.dag && (f.heldag ? e.tid === null && (e.slutdag ?? null) === slut : e.tid !== null && start === fore && minuter === e.minuter);
+            if (!lika) {
+              sist = await andraHeldag(user, f.id, f.d ?? "", slut, f.heldag ? null : start, f.heldag ? null : minuter);
+              if (sist.fel) return ut(sist);
+            }
+          } else if (f.d && (f.d !== e.dag || start !== fore)) {
             sist = await flytta(f.id, f.d, start);
             if (sist.fel) return ut(sist);
           }
-          if (minuter && minuter !== e.minuter) {
+          if (!(e.kind === "mote" && (f.heldag || e.tid === null)) && minuter && minuter !== e.minuter) {
             sist = await andraLangd(f.id, minuter);
             if (sist.fel) return ut(sist);
           }
@@ -401,6 +495,16 @@ export async function POST(request: Request) {
           const steg = STEG_FRAN[f.lev];
           if (!steg) return svar2({ fel: "Välj en förinställning." }, 400);
           const r = await skapaLeverans({ orderId: f.order, steg, dag: f.d ?? "", start: f.s ?? 0, minuter: minuter || 30, deltagare, remMig: true, remKund: FORINSTALLNINGAR[steg as keyof typeof FORINSTALLNINGAR].kund });
+          return ut(await bjudIn(r, r.eventId, g.epost));
+        }
+        // Heldag och flera dagar (0204), ett möte utan klockslag. En serie och en 1:1 har alltid ett klockslag.
+        if (f.heldag) {
+          if (f.typ === "enskilt" || upprepa !== "aldrig") return svar2({ fel: "En serie och en 1:1 har ett klockslag. Ta bort Heldag eller Upprepas." }, 400);
+          const r = await skapaHeldag(user, { rubrik: f.t ?? "", dag: f.d ?? "", slutdag: f.slutdag ?? null, deltagare, plats: f.plats ?? null, video: video ?? null, agenda: f.agenda ?? "", visaSom: f.visa ?? null });
+          if (!r.fel) {
+            await privat(r.eventId);
+            await sattValfria(r.eventId, f.valfria);
+          }
           return ut(await bjudIn(r, r.eventId, g.epost));
         }
         if (f.typ === "enskilt" || upprepa !== "aldrig") {

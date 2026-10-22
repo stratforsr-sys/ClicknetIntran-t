@@ -68,6 +68,7 @@ type Mote = {
   starts_at: string;
   reminder_min: number;
   plats: string | null;
+  tid: string | null;
 };
 type Deltagarrad = { event_id: string | null; series_id: string | null; employee_id: string; response: string; reminder_min: number | null };
 
@@ -84,7 +85,7 @@ export async function motespaminnelser(db: SupabaseClient, nu = new Date()): Pro
   const till = new Date(nu.getTime() + (1440 + 1) * 60_000).toISOString();
   const { data: moten } = await db
     .from("calendar_event")
-    .select("id, organizer_id, series_id, starts_at, reminder_min, plats")
+    .select("id, organizer_id, series_id, starts_at, reminder_min, plats, tid")
     .is("cancelled_at", null)
     .gte("starts_at", fran)
     .lte("starts_at", till);
@@ -105,6 +106,8 @@ export async function motespaminnelser(db: SupabaseClient, nu = new Date()): Pro
 
   const rader: { kind: string; payload: Record<string, unknown>; idempotency_key: string; event_id: string; not_before: string }[] = [];
   for (const m of lista) {
+    // Heldag (0204) har inget klockslag att påminna inför.
+    if (!m.tid) continue;
     const start = new Date(m.starts_at).getTime();
     // Mötets rad går före seriens för samma person.
     const vem = new Map<string, { svar: string; min: number | null }>();

@@ -433,10 +433,11 @@ type Icshandelse = {
   step: string | null;
   series_id: string | null;
   updated_at: string;
+  slutdag?: string | null;
 };
 
 const ICS_KOLUMNER =
-  "id, kind, title, dag, tid, minuter, starts_at, plats, online_url, ics_sequence, cancelled_at, organizer_id, order_id, step, series_id, updated_at";
+  "id, kind, title, dag, tid, minuter, starts_at, plats, online_url, ics_sequence, cancelled_at, organizer_id, order_id, step, series_id, updated_at, slutdag";
 
 function somMote(e: Icshandelse, rubrik: string, beskrivning: string | null): Mote {
   return {
@@ -449,6 +450,8 @@ function somMote(e: Icshandelse, rubrik: string, beskrivning: string | null): Mo
     url: e.online_url,
     beskrivning,
     andrad: new Date(e.updated_at),
+    // Heldag och flera dagar (0204): utan klockslag.
+    heldag: e.tid ? null : { fran: e.dag, till: e.slutdag ?? e.dag },
   };
 }
 
@@ -546,7 +549,9 @@ async function ics(rad: Utkorgsrad): Promise<boolean> {
   const vad = arSteg(e.step) ? FORINSTALLNINGAR[e.step].lab : e.title;
   const rubrik = `${vad} med Clicknet`;
   const start = minuter(e.tid) ?? 0;
-  const nar = `${liten(datumLang(e.dag))} kl ${hm(start)}–${hm(start + (e.minuter ?? 30))}`;
+  const nar = e.tid
+    ? `${liten(datumLang(e.dag))} kl ${hm(start)}–${hm(start + (e.minuter ?? 30))}`
+    : `${liten(datumLang(e.dag))}${e.slutdag ? ` till ${liten(datumLang(e.slutdag))}` : ""}, hela dagen`;
   const kontakt = (o?.contact_name as string | null | undefined)?.split(" ")[0] ?? null;
 
   const ics = inbjudan(

@@ -25,7 +25,7 @@ import { SKRIVLAGE } from "./skrivlage";
  * En post med 0090:s flagga (privat möte), "Visa som" när den inte är upptagen, och mötets länk till den som
  * är med (organiserar, deltar eller äger kalendern), så att Anslut syns på posten, i Min dag och i påminnelsen.
  */
-export type NdPost = Post & { privat?: boolean; visaSom?: string; online?: string };
+export type NdPost = Post & { privat?: boolean; visaSom?: string; online?: string; /** Heldag över flera dagar (0204): första och sista dagen. */ heldag?: { fran: string; till: string } };
 export type NdKalposter = { fran: string; till: string; poster: NdPost[] };
 
 export type NdKalender = NdKalposter & {
@@ -135,7 +135,60 @@ export async function hamtaKalposter(user: CurrentUser, vy: Vy, dag: string, vis
   const data = await hamtaLeveranskalender(user, vy, dag, visa, svensktDatum());
   if (!data) return null;
   const { fran, till } = intervallForVy(vy, dag);
-  return { fran, till, poster: await privata(user.employee!.id, await egnaPaminnelser(user.employee!.id, data.poster)) };
+  const poster = await flerdagar(user.employee!.id, data.poster, fran, till);
+  return { fran, till, poster: await privata(user.employee!.id, await egnaPaminnelser(user.employee!.id, poster)) };
+}
+
+const plusDag = (d: string, n: number) => new Date(Date.parse(`${d}T12:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
+
+/**
+ * Heldag över flera dagar (beställaren 2026-10-22, svar 3; 0204): projektionen ger mötet på sin första dag. Här står
+ * det på varje dag i vyn (id:t får dagen som tillägg), och mina möten som började före vyn och slutar i den läggs
+ * till. Alla dagarna bär `heldag` (första och sista), så att formuläret öppnar hela mötet.
+ */
+async function flerdagar(mig: string, poster: Post[], fran: string, till: string): Promise<NdPost[]> {
+  const db = supabaseAdmin();
+  const refs = [...new Set(poster.filter((p) => p.start === null && p.slag === "mote" && p.ref).map((p) => p.ref as string))];
+  const [{ data: iVyn }, { data: egna }, { data: med }] = await Promise.all([
+    refs.length ? db.from("calendar_event").select("id, dag, slutdag").in("id", refs).not("slutdag", "is", null) : Promise.resolve({ data: [] }),
+    db.from("calendar_event").select("id, title, dag, slutdag, organizer_id").is("tid", null).is("cancelled_at", null).eq("organizer_id", mig).lt("dag", fran).gte("slutdag", fran),
+    db.from("calendar_attendee").select("event_id").eq("employee_id", mig).neq("response", "nej").not("event_id", "is", null),
+  ]);
+  const medIds = ((med ?? []) as { event_id: string }[]).map((r) => r.event_id);
+  const { data: inbjuden } = medIds.length
+    ? await db.from("calendar_event").select("id, title, dag, slutdag, organizer_id").is("tid", null).is("cancelled_at", null).in("id", medIds).lt("dag", fran).gte("slutdag", fran)
+    : { data: [] };
+  type Rad = { id: string; title?: string; dag: string; slutdag: string; organizer_id?: string };
+  const span = new Map<string, Rad>();
+  for (const r of [...((iVyn ?? []) as Rad[]), ...((egna ?? []) as Rad[]), ...((inbjuden ?? []) as Rad[])]) span.set(r.id, { ...span.get(r.id), ...r });
+  if (!span.size) return poster;
+
+  const ut: NdPost[] = [];
+  for (const p of poster) {
+    const r = p.ref ? span.get(p.ref) : undefined;
+    if (!r || p.start !== null) {
+      ut.push(p);
+      continue;
+    }
+    const heldag = { fran: r.dag, till: r.slutdag };
+    ut.push({ ...p, heldag });
+    for (let d = plusDag(r.dag > fran ? r.dag : plusDag(fran, -1), 1); d <= r.slutdag && d <= till; d = plusDag(d, 1)) {
+      if (d > r.dag) ut.push({ ...p, id: `${p.id}:${d}`, dag: d, heldag });
+    }
+    span.delete(p.ref as string);
+  }
+  // Mina som började före vyn: ingen post ur projektionen att utgå från.
+  for (const r of span.values()) {
+    if (!r.title || r.dag >= fran) continue;
+    const heldag = { fran: r.dag, till: r.slutdag };
+    const bas: NdPost = {
+      id: `${mig}:mote:${r.id}`, ref: r.id, slag: "mote", agare: mig, dag: fran, start: null, minuter: null, rubrik: r.title,
+      svar: r.organizer_id === mig ? "org" : "ja", klar: false, href: null, organisator: r.organizer_id ?? null, deltagare: [],
+      serie: false, serieId: null, steg: null, utfall: null, forsok: 1, paminnelse: 0, heldag,
+    };
+    for (let d = fran; d <= r.slutdag && d <= till; d = plusDag(d, 1)) ut.push({ ...bas, id: d === fran ? bas.id : `${bas.id}:${d}`, dag: d });
+  }
+  return ut;
 }
 
 /**
@@ -161,7 +214,8 @@ export async function byggKalender(user: CurrentUser): Promise<NdKalender | null
   ]);
   if (!data) return null;
   const { fran, till } = intervallForVy("manad", idag);
-  const [medPaminnelser, priv] = await Promise.all([egnaPaminnelser(data.mig, data.poster, paminnP ?? undefined), privataIds(data.poster)]);
+  const allaPoster = await flerdagar(data.mig, data.poster, fran, till);
+  const [medPaminnelser, priv] = await Promise.all([egnaPaminnelser(data.mig, allaPoster, paminnP ?? undefined), privataIds(allaPoster)]);
   return {
     fran,
     till,

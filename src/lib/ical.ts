@@ -137,6 +137,8 @@ export type Mote = {
   url?: string | null;
   beskrivning?: string | null;
   andrad?: Date | null;
+  /** Heldag (0204): första och sista dagen. Då skrivs datum i stället för tidpunkter. */
+  heldag?: { fran: string; till: string } | null;
 };
 
 export type Part = { namn?: string | null; epost: string };
@@ -162,8 +164,9 @@ function vevent(
     `UID:${m.id}@nav.clicknet.se`,
     `SEQUENCE:${Math.max(0, m.sekvens)}`,
     `DTSTAMP:${utc(nu)}`,
-    `DTSTART:${utc(m.start)}`,
-    `DTEND:${utc(slut)}`,
+    ...(m.heldag
+      ? [`DTSTART;VALUE=DATE:${utanBindestreck(m.heldag.fran)}`, `DTEND;VALUE=DATE:${utanBindestreck(dagenEfter(m.heldag.till))}`]
+      : [`DTSTART:${utc(m.start)}`, `DTEND:${utc(slut)}`]),
     `SUMMARY:${esc(m.rubrik)}`,
   ];
   if (m.andrad) rader.push(`LAST-MODIFIED:${utc(m.andrad)}`);
