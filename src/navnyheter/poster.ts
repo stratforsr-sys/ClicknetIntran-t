@@ -162,6 +162,8 @@ behörigheter som här: du ser bara det du får se.
   Ändrar du en gång i en serie frågar kalendern som Outlook: bara den här
   gången, den här och följande, eller hela serien. Serien kan också få ett
   slutdatum.
+  Färgkategorier som i Outlook: sätt röd, blå eller någon av de andra på en
+  post i snabbkortet, och döp om dem som du vill. De syns bara för dig.
 - **Ärenden**, med svarstiden som navet lovar. Chefen får ett ärende av
   nattjobbet när en överenskommelse i Coachning är fjorton dagar över fristen
   eller någon inte gjort systemguiderna i tid, och ägaren när en sats ska ses

@@ -27557,7 +27557,7 @@ const _ndKFormular = kFormular;
 kFormular = function(){
   let h = _ndKFormular();
   const f = S.kForm;
-  if (ndK()) h = h.replace(/<datalist id="olplatser">[\s\S]*?<\/datalist>/, `<datalist id="olplatser">${[...(ndK().platser || []), 'Telefon'].filter((x, i, a) => a.indexOf(x) === i).map(x => `<option>${esc(x)}</option>`).join('')}</datalist>`);
+  if (ndK()) h = h.replace(/<datalist id="olplatser">[\s\S]*?<\/datalist>/, `<datalist id="olplatser">${[...(ndK().platser || []), 'Konferens', 'Telefon'].filter((x, i, a) => a.indexOf(x) === i).map(x => `<option>${esc(x)}</option>`).join('')}</datalist>`);
   if (ndK() && f){
     if (!ndKHar(ND.jag.id, f.d, f.d)) ndKHamta('vecka', f.d, [], [ND.jag.id]);
     if ((f.delt || []).length){ ndKUppBehov([kJag(), ...f.delt], f.d); if (ndKKollar(f.delt, f.d)) h = h.replace(/(<div class="olmsg ok">[\s\S]*?<span>)[^<]*(<\/span>)/, `$1${NDKKOLLAR}$2`); }
@@ -27917,6 +27917,53 @@ document.addEventListener('click', e => {
   if (!v){ S.ndKSerieVal = null; render(); return; }
   kLasForm(); S.ndKSerieVal = v; kSpara(S.kForm);
 }, true);
+
+/* ---------- Färgkategorier som i Outlook (beställaren 2026-10-22, svar 6) ----------
+   Sex färger, personliga som i Outlook: var och en sätter sina egna på sina poster och döper om dem. Posten ritas i
+   den första kategorins färg i min egen kalender (en kollegas kalender behåller sin färg). En post i en serie får
+   färgen för hela serien. Raden står i snabbkortet; namnen byts där. Sparas i navet (POST kategori, kategorinamn). */
+const NDKKAT = [['rod','Röd','#D64545'],['orange','Orange','#E07B2E'],['gul','Gul','#C9A21C'],['gron','Grön','#3A9A5B'],['bla','Blå','#2F7BD0'],['lila','Lila','#8754C4']];
+const ndKKatAlla = () => { const k = ndK(); if (!k) return {namn:{}, pa:{}}; if (!k.kategorier) k.kategorier = {namn:{}, pa:{}}; return k.kategorier; };
+const ndKKatNamn = f => ndKKatAlla().namn[f] || `${NDKKAT.find(x => x[0] === f)[1]} kategori`;
+const ndKKatNyckel = e => e.serieId ? `s:${e.serieId}` : e.ref;
+const ndKKatPa = e => (e && e.nd && e.ref && ndKKatAlla().pa[ndKKatNyckel(e)]) || [];
+if (typeof KIKON === 'object' && !KIKON.kategori) KIKON.kategori = '<path d="M3.5 12.2V4.5a1 1 0 0 1 1-1h7.7l8.3 8.3-8.7 8.7z"/><circle cx="8" cy="8" r="1.3"/>';
+const _ndKStil = kStil;
+kStil = function(x){
+  const st = _ndKStil(x); if (!ndK() || x.kal) return st;
+  const f = ndKKatPa(x.e)[0]; return f ? {...st, c:NDKKAT.find(k => k[0] === f)[2]} : st;
+};
+const _ndKKatPeek = kPeekKort;
+kPeekKort = function(){
+  let h = _ndKKatPeek(); if (!ndK() || !S.kPeek) return h;
+  const e = KEV.find(x => x.id === S.kPeek.id); if (!e || !e.nd || !e.ref || !kMin(e)) return h;
+  const pa = ndKKatPa(e), namn = S.ndKKatNamn === e.id;
+  const rad = `<p class="olpkr">${KI('kategori')}<span>${namn
+    ? `${NDKKAT.map(([f, , c]) => `<label class="olmut" style="display:flex;align-items:center;gap:6px;margin:2px 0"><i style="width:10px;height:10px;border-radius:50%;background:${c};flex:none"></i><input class="uin" data-ndkkatnamn="${f}" value="${esc(ndKKatNamn(f))}" maxlength="40" style="padding:3px 6px"></label>`).join('')}<button class="tlink inl" data-ndkkatspara>Spara namnen</button>`
+    : `<span style="display:inline-flex;gap:6px;flex-wrap:wrap;align-items:center">${NDKKAT.map(([f, , c]) => `<button type="button" data-ndkkat="${f}" aria-pressed="${pa.includes(f)}" title="${esc(ndKKatNamn(f))}" aria-label="${esc(ndKKatNamn(f))}" style="width:18px;height:18px;border-radius:50%;background:${c};border:2px solid ${pa.includes(f) ? 'var(--ink)' : 'transparent'};box-shadow:0 0 0 1px rgba(0,0,0,.08) inset;cursor:pointer;padding:0"></button>`).join('')}</span>${pa.length ? `<br><span class="olmut">${pa.map(f => esc(ndKKatNamn(f))).join(' · ')}${e.serieId ? ' · hela serien' : ''}</span>` : ''} <button class="tlink inl" data-ndkkatnamnbyt>Byt namn</button>`}</span></p>`;
+  const j = h.indexOf('<div class="olpkf">'), k = j > 0 ? h.lastIndexOf('</div>', j) : -1;
+  return k > 0 ? h.slice(0, k) + rad + h.slice(k) : h;
+};
+function ndKKatSpar(handling, data){
+  ndKPost(handling, data, {ladda:false}).then(s => { if (!s.ok || !s.kategorier) return; ndK().kategorier = s.kategorier; render(); });
+}
+document.addEventListener('click', e => {
+  const t = e.target.closest && e.target.closest('[data-ndkkat],[data-ndkkatnamnbyt],[data-ndkkatspara]'); if (!t || !ndK() || !S.kPeek) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  const ev = KEV.find(x => x.id === S.kPeek.id); if (!ev || !ev.ref) return;
+  if (t.dataset.ndkkatnamnbyt !== undefined){ S.ndKKatNamn = ev.id; render(); setTimeout(() => document.querySelector('[data-ndkkatnamn]')?.focus(), 20); return; }
+  if (t.dataset.ndkkatspara !== undefined){
+    const fore = ndKKatAlla().namn, andrade = [...document.querySelectorAll('[data-ndkkatnamn]')].filter(i => i.value.trim() !== ndKKatNamn(i.dataset.ndkkatnamn));
+    S.ndKKatNamn = null; if (!andrade.length){ render(); return; }
+    (async () => { for (const i of andrade) { const s = await ndKPost('kategorinamn', {farg:i.dataset.ndkkatnamn, namn:i.value.trim()}, {ladda:false}); if (s.ok && s.kategorier) ndK().kategorier = s.kategorier; } render(); })();
+    return;
+  }
+  const f = t.dataset.ndkkat, pa = ndKKatPa(ev), ny = pa.includes(f) ? pa.filter(x => x !== f) : [...pa, f];
+  // Direkt i vyn, som i Outlook; navet svarar med hela listan.
+  const k = ndKKatAlla(); if (ny.length) k.pa[ndKKatNyckel(ev)] = ny; else delete k.pa[ndKKatNyckel(ev)]; render();
+  ndKKatSpar('kategori', {id:ev.ref, serie:ev.serieId || '', farger:ny});
+}, true);
+document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.dataset && e.target.dataset.ndkkatnamn !== undefined){ e.preventDefault(); document.querySelector('[data-ndkkatspara]')?.click(); } }, true);
 
 if (ndK()){ ndKalStart(); NDKOPPLAD.add('kalender'); }
 

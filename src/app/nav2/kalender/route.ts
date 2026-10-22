@@ -3,7 +3,7 @@ import { getCurrentUser, type CurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { FORINSTALLNINGAR, STEG, UPPREPA, WDL, arDatum, arVy, kvittoKopierad, plus, wd, type Upprepa } from "@/lib/leveranskalender";
 import { fonsterFran, hamtaHandelsedetalj, lk, upptagetFor } from "@/lib/leveranskalender-server";
-import { hamtaKalposter, kalDetalj, sokKalender } from "@/lib/nav2/kalender";
+import { KATEGORIFARGER, KATEGORINYCKEL, hamtaKalposter, kalDetalj, lasKategorier, sokKalender } from "@/lib/nav2/kalender";
 import { kalPushNasta } from "@/lib/nav2/kalender-push";
 import { svensktDatum } from "@/lib/klocka";
 import { HORISONT_DAGAR, forekomster } from "@/lib/upprepning";
@@ -477,6 +477,30 @@ export async function POST(request: Request) {
             .eq("avviker", false);
         }
         return ut(r);
+      }
+      // Färgkategorierna (Outlook): mina egna, på en post eller en hel serie, och namnen. Bara min egen rad i nav_preference.
+      case "kategori":
+      case "kategorinamn": {
+        const mig = user.employee.id;
+        const db = supabaseAdmin();
+        const { data: rad } = await db.from("nav_preference").select("value").eq("employee_id", mig).eq("key", KATEGORINYCKEL).maybeSingle();
+        const k = lasKategorier(rad?.value);
+        if (handling === "kategori") {
+          const serie = String(b.serie ?? "");
+          if (!UUID.test(id) || (serie && !UUID.test(serie))) return svar2({ fel: "Händelsen finns inte längre." }, 400);
+          const farger = (Array.isArray(b.farger) ? b.farger : []).map(String).filter((f) => (KATEGORIFARGER as readonly string[]).includes(f));
+          const nyckel = serie ? `s:${serie}` : id;
+          if (farger.length) k.pa[nyckel] = [...new Set(farger)];
+          else delete k.pa[nyckel];
+        } else {
+          const farg = String(b.farg ?? "");
+          if (!(KATEGORIFARGER as readonly string[]).includes(farg)) return svar2({ fel: "Okänd färg." }, 400);
+          const namn = String(b.namn ?? "").trim().slice(0, 40);
+          if (namn) k.namn[farg as (typeof KATEGORIFARGER)[number]] = namn;
+          else delete k.namn[farg as (typeof KATEGORIFARGER)[number]];
+        }
+        const { error } = await db.from("nav_preference").upsert({ employee_id: mig, key: KATEGORINYCKEL, value: k, updated_at: new Date().toISOString() }, { onConflict: "employee_id,key" });
+        return error ? svar2({ fel: "Det gick inte att spara." }, 500) : svar2({ ok: handling === "kategori" ? "Kategorin är sparad." : "Namnet är sparat.", kategorier: k });
       }
       case "langd":
         return ut(await andraLangd(id, Number(b.langd)));

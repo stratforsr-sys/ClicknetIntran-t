@@ -45,7 +45,30 @@ export type NdKalender = NdKalposter & {
   skriv: boolean;
   /** Platserna i mina senaste möten, för formulärets förslag (i stället för utkastets påhittade rum). */
   platser: string[];
+  /** Mina färgkategorier (Outlook): namnen och vilka poster som har vilka färger. Bara mina, som i Outlook. */
+  kategorier: Kategorier;
 };
+
+/**
+ * Färgkategorier som i Outlook (beställaren 2026-10-22, svar 6): sex färger, var och en sätter sina egna på sina
+ * poster och kan döpa om dem. De är personliga, som i Outlook, och ligger i `nav_preference` (`kal.kategorier`):
+ * ingen annan ser dem och ingen migration behövs. En post i en serie får färgen för hela serien (`s:<serie>`).
+ */
+export const KATEGORIFARGER = ["rod", "orange", "gul", "gron", "bla", "lila"] as const;
+export type Kategorier = { namn: Partial<Record<(typeof KATEGORIFARGER)[number], string>>; pa: Record<string, string[]> };
+export const KATEGORINYCKEL = "kal.kategorier";
+
+export function lasKategorier(v: unknown): Kategorier {
+  const x = (v ?? {}) as { namn?: Record<string, unknown>; pa?: Record<string, unknown> };
+  const namn: Kategorier["namn"] = {};
+  for (const f of KATEGORIFARGER) if (typeof x.namn?.[f] === "string" && String(x.namn[f]).trim()) namn[f] = String(x.namn[f]).trim().slice(0, 40);
+  const pa: Record<string, string[]> = {};
+  for (const [k, f] of Object.entries(x.pa ?? {})) {
+    const farger = (Array.isArray(f) ? f : []).filter((y): y is string => (KATEGORIFARGER as readonly string[]).includes(String(y)));
+    if (farger.length) pa[k] = farger;
+  }
+  return { namn, pa };
+}
 
 /**
  * 0088: den egna påminnelsen. En deltagare kan ha valt en annan än mötets; den
@@ -127,7 +150,15 @@ export async function byggKalender(user: CurrentUser): Promise<NdKalender | null
   const platserP = user.employee
     ? supabaseAdmin().from("calendar_event").select("plats").eq("organizer_id", user.employee.id).not("plats", "is", null).order("created_at", { ascending: false }).limit(60)
     : null;
-  const [data, delningar, platsrader] = await Promise.all([hamtaLeveranskalender(user, "manad", idag, [], idag), hamtaDelningar(user), platserP ?? Promise.resolve({ data: [] })]);
+  const katP = user.employee
+    ? supabaseAdmin().from("nav_preference").select("value").eq("employee_id", user.employee.id).eq("key", KATEGORINYCKEL).maybeSingle()
+    : null;
+  const [data, delningar, platsrader, katrad] = await Promise.all([
+    hamtaLeveranskalender(user, "manad", idag, [], idag),
+    hamtaDelningar(user),
+    platserP ?? Promise.resolve({ data: [] }),
+    katP ?? Promise.resolve({ data: null }),
+  ]);
   if (!data) return null;
   const { fran, till } = intervallForVy("manad", idag);
   const [medPaminnelser, priv] = await Promise.all([egnaPaminnelser(data.mig, data.poster, paminnP ?? undefined), privataIds(data.poster)]);
@@ -149,6 +180,7 @@ export async function byggKalender(user: CurrentUser): Promise<NdKalender | null
     arChef: data.arChef,
     skriv: SKRIVLAGE.kalender,
     platser: [...new Set(((platsrader.data ?? []) as { plats: string | null }[]).map((r) => String(r.plats ?? "").trim()).filter(Boolean))].slice(0, 8),
+    kategorier: lasKategorier((katrad.data as { value?: unknown } | null)?.value),
   };
 }
 

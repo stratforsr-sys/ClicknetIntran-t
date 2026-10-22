@@ -5,6 +5,22 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-22 · Nav 2.0, Kalendern som Outlook, del 12: färgkategorier som i Outlook, och "Konferens" (ingen migration)
+
+- **Beställaren 2026-10-22 (svar 6):** "exakt kategorier som röd, blå och
+  allt sånt som Outlook har". Svar 5: inga rum, "skriv bara konferens".
+- **Nu:** snabbkortet får en rad med Outlooks sex färger (röd, orange, gul,
+  grön, blå, lila). En post kan ha flera; den ritas i den första färgen i min
+  kalender (`kStil`), en kollegas kalender behåller sin färg. En post i en
+  serie får färgen för hela serien. "Byt namn" döper om färgerna
+  ("Röd kategori" → "Kund"). Kategorierna är personliga som i Outlook:
+  `nav_preference` `kal.kategorier` (`lasKategorier`, `KATEGORIFARGER` i
+  `src/lib/nav2/kalender.ts`), i kalenderns data (`kategorier`) och POST
+  `kategori`, `kategorinamn` (bara den egna raden).
+- Formulärets platsförslag: "Konferens" står med, före "Telefon".
+- Prov: `prov/del12.json` lokalt (färgen i rutnätet, flera färger, namnet,
+  Konferens).
+
 ## 2026-10-22 · Nav 2.0, Kalendern som Outlook, del 11: serier som i Outlook (0202 skriven och torrkörd, inte körd)
 
 - **Beställaren 2026-10-22 (fråga 2, öppen sedan 2026-09-22):** "ja, exakt som
