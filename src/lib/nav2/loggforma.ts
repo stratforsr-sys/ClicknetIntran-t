@@ -114,6 +114,7 @@ const RUBRIK: Record<string, string> = {
   "auth.step2_verified": "Enhet bekräftad",
   "auth.step2_failed": "Fel kod för enheten",
   "auth.step2_forgotten": "Enhet glömd",
+  "auth.code_sent": "Kod till mejlen",
   "calendar.feed_created": "Kalenderflöde skapat",
   "calendar.feed_revoked": "Kalenderflöde återkallat",
   "calendar.feed_rotated": "Kalenderflöde förnyat",
@@ -377,11 +378,12 @@ function objekt(r: RaHandelse, u: Uppslag): string {
 
   switch (prefix) {
     case "auth": {
-      if (andelse === "login") return m.metod === "lank" ? "Med länk" : "Med lösenord";
+      if (andelse === "login") return m.metod === "lank" ? "Med länk" : m.metod === "kod" ? "Med kod till mejlen" : "Med lösenord";
       if (andelse === "login_failed") return typeof m.orsak === "string" && m.orsak ? maskera(m.orsak.replace(/\.[\s\S]*$/, "")) : "Inloggningen misslyckades";
+      if (andelse === "code_sent") return m.syfte === "glomt" ? "Glömt lösenordet" : m.syfte === "byte" ? "I lösenordsbytet" : m.syfte === "steg2" ? "Steg två" : "För inloggning";
       if (andelse === "step2_verified") { const d = tal(m.dygn); return d ? `Ny enhet · gäller i ${d} dagar` : "Ny enhet"; }
       if (andelse === "temp_password_set") return objPerson ?? "En anställd";
-      if (andelse === "password_changed") return m.tvingat ? "Bytt vid första inloggningen" : "Eget konto";
+      if (andelse === "password_changed") return m.efter_kod ? "Glömt lösenordet · nytt efter kod" : m.tvingat ? "Bytt vid första inloggningen" : "Eget konto";
       return "Eget konto";
     }
     case "role": { const roll = typeof m.roll === "string" ? ROLL[m.roll] ?? m.roll : "Roll"; return objPerson ? `${roll} · ${objPerson}` : roll; }

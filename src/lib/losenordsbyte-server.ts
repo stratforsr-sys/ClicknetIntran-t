@@ -52,6 +52,33 @@ export async function utforBytLosenord(
     return { fel: ["Det nuvarande lösenordet stämmer inte."] };
   }
 
+  return sattNytt(user, nytt, gammalt, false);
+}
+
+/**
+ * "Glömt lösenordet?": ett nytt lösenord utan det gamla.
+ *
+ * Bara för den som just loggat in med en engångskod till sin mejl och har
+ * kvittot från det (`aterstallningGiltig` i src/lib/aterstallning.ts). Den
+ * kontrollen gör anroparen; här ställs samma krav på det nya ordet som vid
+ * varje annat byte, och tvånget tas bort på samma sätt.
+ */
+export async function utforNyttLosenord(
+  user: CurrentUser,
+  nytt: string,
+  upprepat: string,
+): Promise<Bytesresultat> {
+  if (!nytt) return { fel: ["Skriv ett nytt lösenord."] };
+  if (nytt !== upprepat) return { fel: ["De två nya lösenorden är inte lika."] };
+  return sattNytt(user, nytt, null, true);
+}
+
+async function sattNytt(
+  user: CurrentUser,
+  nytt: string,
+  gammalt: string | null,
+  efterKod: boolean,
+): Promise<Bytesresultat> {
   // Reglerna star i `losenordskrav.ts` och ar sedan 2026-09-02 tva: minst atta
   // tecken och minst en siffra. Profilen och den tvingade sidan gar bada
   // harigenom, sa de kan inte glida isar.
@@ -149,7 +176,7 @@ export async function utforBytLosenord(
       action: "auth.password_changed",
       object_type: "auth",
       object_id: user.authUserId,
-      meta: { tvingat: hadeTvang },
+      meta: efterKod ? { tvingat: hadeTvang, efter_kod: true } : { tvingat: hadeTvang },
     });
   }
 

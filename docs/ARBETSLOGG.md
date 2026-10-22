@@ -5,6 +5,109 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-21 · Nav 2.0: Inloggningen i Nav 2.0:s utseende, inloggning med kod och "Glömt lösenordet?" (ingen migration)
+
+Beställaren 2026-10-20: inloggningen ska vara ordentlig, minimalistisk men
+robust och se ut som om en ingenjör byggt den, och (andra varvet) inte vara
+tråkig: varje panel och funktion skulle gås igenom med förbättringar. Tredje
+varvet 2026-10-21: en bakgrund som rör sig, en sida vit och en sida något,
+stark men inte överdriven.
+
+- **Skalet** (`src/app/logga-in/Skal.tsx`, `inloggning.css`) bär `/logga-in`,
+  `/logga-in/verifiera`, `/byt-losenord` och `/uppstart`. Nav 2.0:s tokens
+  (`--n-` under `:where(:root:has(.in-sida), .in-sida)`), typsnitt
+  (`public/nav2/fonts` via `next/font/local`: `/nav2/fonts` kräver inloggning)
+  och tema (`nav2-theme`, skript med svarets nonce). Kortet har Nav 2.0:s mörka
+  band: navmärket (snurrar medan något väntar), **lampan** och **klockan**
+  (svensk tid). Foten visar byggets sha.
+- **Den delade sidan och urtavlan** (`src/app/logga-in/Urtavla.tsx`,
+  `src/lib/dagsljus.ts`). Från 960 px delas sidan: formuläret på den ljusa
+  halvan, och på den mörka står bandet och urtavlan, navmärket i stort. Ringen
+  är dygnet (middag överst) med dagens dagsljus i Stockholm som en grön båge:
+  det som varit lyser, det som är kvar är dovt, och nu-strecket går fram varje
+  minut. Runt den står året, ett streck per dag så långt som dagen är ljus
+  (midsommar överst), grönt för det som varit och bärnsten för i dag; musen
+  över strecken visar den dagen. Ekrarna går ett varv i minuten i takt med
+  klockan, snurrar fort medan inloggningen väntar (`aria-busy`) och rullar ut
+  till nästa eker när svaret kommit. Solen räknas i webbläsaren med NOAA:s
+  formel (inom en minut från api.sunrise-sunset.org); inget hämtas. Lagren som
+  rör sig vrids med `rotate` och ritas aldrig om. Allt står still med
+  prefers-reduced-motion, och en knapp stoppar rörelsen (WCAG 2.2.2, valet i
+  localStorage). Över tavlan, på dess mittlinje rakt ovanför middagen och
+  midsommaren, står devisen "Vi leder dig mot din vision" med ett streck från
+  årets topp upp till den; den kommer sist i uppbyggnaden (strecket växer upp,
+  texten öppnar sig från mitten och blir skarp) och står som en vanlig mening
+  för skärmläsaren. Smalare än 960 px står kortet kvar högt upp (där
+  tangentbordet inte når) med foten under, och under foten tar en mörk yta
+  resten av skärmen ut i kanterna: tavlan stiger upp ur nederkanten som en
+  sol, med devisen, sommaren och dagen över kanten och vintern och natten
+  under. Devisen är minst 18 px; avläsningen står bara för skärmläsaren och
+  pausknappen i hörnet.
+- **Lampan** (`band.tsx`, `natlage.ts`, rutten `src/app/logga-in/halsa/route.ts`):
+  frågar GoTrues `/auth/v1/health` med den publika nyckeln (minne 15 s per
+  instans, gräns 4 s) och säger Navet svarar / Svarar långsamt (över 1,5 s) /
+  Inloggningen svarar inte / Ingen kontakt / Ingen anslutning. Var 60:e sekund
+  medan sidan syns. Är tjänsten nere säger formuläret det innan man försökt.
+- **Inloggningen** (`Inloggning.tsx`, `actions.ts`): hälsning och datumrad som på
+  startsidan. Enheten minns kontot (httpOnly-kakan `nav_konto`, path
+  `/logga-in`, ett halvår från senaste inloggningen: adress, namn, senaste
+  inloggning), och då står en rad
+  med initialerna, adressen och "Senast här i går 08:12" i stället för
+  adressfältet; "Byt konto" glömmer det (`glomKontot`). Raden "Efter
+  inloggningen öppnas Kalendern" när `nasta` pekar på en vy (`malNamn`). Efter
+  en lyckad inloggning "Välkommen, Zen · Öppnar Kalendern…" medan nästa sida
+  laddas (handlingarna gör ingen `redirect`; sidan går dit med
+  `location.assign` och har en länk om det dröjer). Enter i adressen går till
+  lösenordet, "Menade du zen@clicknet.se?" vid skrivfel i domänen, Visa blir
+  dolt när formuläret skickas, tre fel lösenord i rad gör länken till en knapp
+  som skickar en kod direkt, spärren räknar ned på knappen. Nätfel fångas
+  (`skyddad` i `natlage.ts`) i stället för att kasta till `global-error.tsx`.
+- **Kod till mejlen, och NAVET MEJLAR DEN SJÄLVT** (`src/lib/kodmejl-server.ts`,
+  `src/lib/kodbrev.ts`). Supabases mall för magisk länk bar bara en länk
+  (DRIFTSATTNING punkt 0, 2026-08-16) och dess inbyggda utskick tar ett par mejl
+  i timmen. Koden tas nu fram med `admin.generateLink` (magiclink; samma kod som
+  `verifyOtp` godtar, se tests/rls.mjs) och skickas med Resend (`skickaEpost`),
+  i navets eget utseende med koden först i ämnesraden. Bara till personer i
+  registret som inte slutat och har ett konto (uppslaget med `ilike`, `_` och
+  `%` skyddade). Spärrar: en kod per person och minut, högst 100 i navet per tio
+  minuter, båda ur `audit_log` där varje kod står som `auth.code_sent` (syftet,
+  aldrig koden; Händelseloggen visar "Kod till mejlen"). Utan Resend skickar
+  Supabase som förut. Samma svar, och samma svarstid (minst 1,2 s), för okänd
+  adress, för spärren och för ett skickat mejl. Steg två i
+  profilen (`skickaKod`) går samma väg. Kodsteget (`steg.tsx`, `KodSteg`, samma
+  i alla fyra flöden): "Skickad 09:02 · gäller till 10:02", nedräkning till ny
+  kod, tips om skräpposten efter 30 s, "En ny kod är skickad. Den förra gäller
+  inte längre." Inklistrad kod skickas direkt. Den magiska länken är borttagen
+  ur formuläret; `/auth/bekrafta` står kvar.
+- **"Glömt lösenordet?"** = koden med syftet `glomt`, eller kod-inloggning på
+  ett konto med tvingat byte. Efter koden en signerad kaka
+  (`src/lib/aterstallning.ts`, 15 minuter, bunden till kontot, egen
+  signeringsdomän), och `/byt-losenord` frågar inte efter det gamla.
+- **Lösenordsbytet:** "Välkommen till navet, Zen" vid första inloggningen
+  (namnet med service role, `namnFor` i `src/lib/inloggning-server.ts`: kontots
+  token ser inget under tvånget). "Föreslå ett åt mig" (`losenordsforslag.ts`:
+  fyra ord och ett tal, runt 37 bitar) med Kopiera. "Glömt det?" ger en kod i
+  stället för det gamla lösenordet (`skickaKodForByte`/`bekraftaKodForByte`).
+  "Välj ett nytt lösenord före 15:47"; har tiden gått ut säger sidan det och
+  erbjuder en ny kod. Olika i upprepningen syns så fort den inte kan bli rätt.
+- **Steg två:** exakt datum ("Enheten kommer ihåg dig till 20 november"),
+  "Jag har redan en kod", kodsteget. Profilens `verifieraKod` sa "Koden har
+  gått ut" även vid fel kod: GoTrue skiljer inte på dem, nu en text för båda.
+- **Rättat:** `nasta` följer med (med frågan) och genom `sakerNasta`;
+  mellanvaran skickar den som redan är inloggad på `/logga-in` dit `nasta`
+  pekar (bara GET, en server action från en kvarglömd flik släpps fram).
+  Öppen vidarebefordran i `/auth/bekrafta` stängd. "Du är utloggad" efter
+  utloggningen.
+- **Provat.** `tests/inloggning.mjs` (`npm run test:inloggning`, 132
+  kontroller: vidarebefordran, tider kring sommartid i tre zoner, Supabases
+  fel, kontokakan, förslagen, kodmejlet, dagsljuset mot facit). Serverdelarna med esbuild och låtsat
+  Supabase och Resend (87 kontroller: actions, kodmejlets spärrar, kvittot,
+  lampans rutt, mellanvaran;
+  `~/nav2-utkast/delar/inloggning/srvprov/`). Provbänk i headless Chrome med
+  de riktiga komponenterna (`…/provbank/`): varje flöde, ljust, mörkt, 390 px,
+  960–2560 px, telefonens tavla 360–959 px (stående och liggande), tabbordning, kontrast AA, urtavlans uppbyggnad bild för bild,
+  snurret och pausen. Typkontroll av hela repot: inga nya fel.
+
 ## 2026-10-22 · Nav 2.0, Kalendern som Outlook, del 9: ett ombud ändrar inte i ägarens kalender (0200 skriven, inte körd)
 
 - **Beställaren 2026-10-22 (fråga 1):** den som fått nivån "Kan planera om"

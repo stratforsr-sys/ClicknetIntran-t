@@ -1,123 +1,75 @@
-"use client";
+import type { Metadata, Viewport } from "next";
+import { cookies } from "next/headers";
+import {
+  KONTOKAKA,
+  avatarFarg,
+  dagText,
+  fornamn,
+  halsning,
+  iStockholm,
+  initialer,
+  lasKonto,
+  malNamn,
+  sakerNasta,
+  senastText,
+} from "@/lib/inloggning";
+import type { KontoVy } from "./falt";
+import { Skal } from "./Skal";
+import { Inloggning, type Ingang } from "./Inloggning";
 
-import { useActionState, useState } from "react";
-import { Button } from "@/components/ui/Button";
-import { Field, Input } from "@/components/ui/Field";
-import { Notis } from "@/components/ui/Notis";
-import { loggaInMedLosenord, skickaMagiskLank, type LoginState } from "./actions";
+export const metadata: Metadata = { title: "Logga in — Clicknet Nav" };
 
-const TOM: LoginState = {};
+/** Adressfältet i mobilens webbläsare i samma ton som sidan. */
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#EEF1EC" },
+    { media: "(prefers-color-scheme: dark)", color: "#0B1210" },
+  ],
+};
 
-export default function LoggaIn() {
-  // Losenord ligger forst tills utskicken fungerar. Den magiska lanken kraver
-  // bade rattad Site URL i Supabase och en riktig avsandare — tills dess leder
-  // den till en sida som inte finns, och det ar en dalig forsta upplevelse.
-  const [metod, setMetod] = useState<"lank" | "losenord">("losenord");
-  const [lankState, skickaLank, lankVantar] = useActionState(skickaMagiskLank, TOM);
-  const [losenState, loggaIn, losenVantar] = useActionState(loggaInMedLosenord, TOM);
-
-  const state = metod === "lank" ? lankState : losenState;
-
-  return (
-    <main className="grid min-h-dvh place-items-center px-4 py-12">
-      <div className="w-full max-w-[26rem]">
-        <div className="mb-8 flex flex-col items-center gap-3 text-center">
-          <span className="grid size-12 place-items-center rounded-sm bg-brand-900 font-display text-h1 leading-none text-brand-500">
-            C
-          </span>
-          <h1 className="text-display text-ink-900">
-            Clicknet <span className="text-brand-700">Nav</span>
-          </h1>
-          <p className="text-body text-ink-500">Vi leder dig mot din vision.</p>
-        </div>
-
-        <div className="rounded-md bg-surface p-6 shadow-elev-1">
-          {lankState.skickat ? (
-            <div className="flex flex-col gap-4">
-              <Notis ton="ok">
-                Länken är skickad. Öppna mejlet och klicka på länken för att logga in.
-              </Notis>
-              <p className="text-small text-ink-500">
-                Länken gäller i en timme. Kolla skräpposten om den inte dykt upp inom någon minut.
-              </p>
-            </div>
-          ) : (
-            <>
-              <div
-                role="tablist"
-                aria-label="Välj inloggningssätt"
-                className="mb-6 flex gap-1 rounded-full bg-canvas p-1"
-              >
-                <Flik aktiv={metod === "losenord"} onClick={() => setMetod("losenord")}>
-                  Lösenord
-                </Flik>
-                <Flik aktiv={metod === "lank"} onClick={() => setMetod("lank")}>
-                  Magisk länk
-                </Flik>
-              </div>
-
-              <form
-                action={metod === "lank" ? skickaLank : loggaIn}
-                className="flex flex-col gap-4"
-              >
-                <Field label="E-post" namn="epost" fel={state.fel}>
-                  <Input
-                    namn="epost"
-                    type="email"
-                    autoComplete="email"
-                    required
-                    placeholder="fornamn@clicknet.se"
-                    fel={state.fel}
-                  />
-                </Field>
-
-                {metod === "losenord" && (
-                  <Field label="Lösenord" namn="losenord">
-                    <Input
-                      namn="losenord"
-                      type="password"
-                      autoComplete="current-password"
-                      required
-                    />
-                  </Field>
-                )}
-
-                <Button type="submit" laddar={lankVantar || losenVantar} className="mt-2 w-full">
-                  {metod === "lank" ? "Skicka inloggningslänk" : "Logga in"}
-                </Button>
-              </form>
-            </>
-          )}
-        </div>
-
-        <p className="mt-6 text-center text-small text-ink-500">
-          Saknar du konto? Be din chef lägga upp dig i navet.
-        </p>
-      </div>
-    </main>
-  );
-}
-
-function Flik({
-  aktiv,
-  onClick,
-  children,
+/**
+ * Sidan läser allt den behöver innan den ritas, så att formuläret är rätt
+ * från första bilden och inte hoppar när skriptet kommit:
+ *
+ *   - `nasta`: dit mellanvaran ville skicka en, med frågan kvar
+ *     (/kalender?dag=… ur ett mejl). Bara vägar inom navet, se sakerNasta.
+ *   - `fel=lank` från /auth/bekrafta och `utloggad` från /auth/logga-ut.
+ *   - kontot som loggade in senast på den här enheten, och hälsningen och
+ *     datumraden i svensk tid. Texterna räknas ut här och inte i webbläsaren,
+ *     så att servern och skärmen säger samma sak.
+ */
+export default async function LoggaIn({
+  searchParams,
 }: {
-  aktiv: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
+  searchParams: Promise<{ nasta?: string; fel?: string; utloggad?: string }>;
 }) {
+  const sp = await searchParams;
+  const nu = new Date();
+  const sparat = lasKonto((await cookies()).get(KONTOKAKA)?.value);
+  const konto: KontoVy | null = sparat
+    ? {
+        epost: sparat.epost,
+        namn: sparat.namn,
+        fornamn: fornamn(sparat.namn),
+        // Utan namn: "zen.andersson@…" ger ZA, som namnet hade gett.
+        initialer: initialer(sparat.namn ?? sparat.epost.split("@")[0].replace(/[._-]+/g, " ")),
+        farg: avatarFarg(sparat.namn ?? sparat.epost),
+        senast: sparat.senast ? senastText(new Date(sparat.senast), nu) : null,
+      }
+    : null;
+  const nasta = sakerNasta(sp.nasta);
+  const ingang: Ingang = sp.fel === "lank" ? "lank" : sp.utloggad !== undefined ? "utloggad" : null;
+
   return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={aktiv}
-      onClick={onClick}
-      className={`min-h-9 flex-1 rounded-full text-small font-semibold transition-colors duration-fast ease-brand ${
-        aktiv ? "bg-surface text-ink-900 shadow-elev-1" : "text-ink-500 hover:text-ink-900"
-      }`}
-    >
-      {children}
-    </button>
+    <Skal fot="Saknar du konto? Be din chef lägga upp dig i navet.">
+      <Inloggning
+        konto={konto}
+        nasta={nasta}
+        mal={malNamn(nasta)}
+        halsning={halsning(iStockholm(nu).minut)}
+        dag={dagText(nu)}
+        ingang={ingang}
+      />
+    </Skal>
   );
 }

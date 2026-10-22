@@ -1,0 +1,1568 @@
+/* =========================================================================
+   Inloggningen — Nav 2.0:s ytterdörr
+
+   Samma formspråk som /nav2 (src/nav2/utkast.html): samma tokens, samma
+   typsnitt, samma navmärke och samma tre teman. Den som loggar in ska se
+   samma produkt före och efter, inte två.
+
+   Tokens ligger med prefixet --n- och bara på sidor som bär .in-sida, så de
+   kan inte krocka med det gamla navets --color-* i globals.css. Hexvärdena
+   står här och inte i globals.css: de hör till Nav 2.0, som har sina egna i
+   utkastet, och inte till det gamla systemets palett.
+   ========================================================================= */
+
+/*
+ * :where() och inte en vanlig lista: en webbläsare utan :has() kastar hela
+ * regeln om en enda selektor i en lista är okänd, och då hade sidan stått utan
+ * färger. :where() hoppar bara över den den inte förstår. Specificiteten är
+ * noll överallt, så temablocken nedan vinner på ordningen.
+ */
+:where(:root:has(.in-sida), .in-sida) {
+  color-scheme: light;
+  --n-bg: #EEF1EC;
+  --n-surface: #FBFCFA;
+  --n-surface-2: #F3F6F1;
+  --n-line: #DCE3DA;
+  --n-line-2: #C9D3C7;
+  --n-ink: #13201C;
+  --n-ink-2: #47554F;
+  --n-ink-3: #6A7771;
+  /* Foten står på bakgrunden och inte på kortet; ink-3 når där bara 4,2:1. */
+  --n-ink-fot: #5B6862;
+  --n-brand: #0E7A5F;
+  --n-brand-hover: #0B664F;
+  --n-on-brand: #FFFFFF;
+  --n-danger: #C4473C;
+  --n-danger-ink: #8C2C24;
+  --n-warn: #B7860F;
+  --n-warn-ink: #6F5005;
+  --n-ok-ink: #0A5A46;
+  --n-hub: #0F2A22;
+  --n-hub-ink: #EAF4EE;
+  --n-hub-ink-2: #A8C2B6;
+  --n-hub-ink-3: #6F8F82;
+  --n-hub-line: rgba(220, 245, 232, .12);
+  --n-hub-brand: #4FD1A5;
+  --n-hub-signal: #F2B24C;
+  --n-hub-danger: #F4907F;
+  --n-shadow: 0 1px 2px rgba(19, 40, 32, .05), 0 6px 24px -12px rgba(19, 40, 32, .18);
+  --n-ease: cubic-bezier(.2, .8, .2, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :where(:root:not([data-theme="light"]):has(.in-sida), :root:not([data-theme="light"]) .in-sida) {
+    color-scheme: dark;
+    --n-bg: #0B1210;
+    --n-surface: #111A17;
+    --n-surface-2: #16211D;
+    --n-line: #22302B;
+    --n-line-2: #2E3E38;
+    --n-ink: #E5EEE9;
+    --n-ink-2: #A6B5AE;
+    --n-ink-3: #8A9992;
+    --n-ink-fot: #8A9992;
+    --n-brand: #3FC79A;
+    --n-brand-hover: #5AD6AC;
+    --n-on-brand: #06120E;
+    --n-danger: #EE7B6F;
+    --n-danger-ink: #F5A79E;
+    --n-warn: #E2B84A;
+    --n-warn-ink: #EDD08A;
+    --n-ok-ink: #7FE0BE;
+    --n-hub: #15241F;
+    --n-shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 28px -14px rgba(0, 0, 0, .6);
+  }
+}
+
+:where(:root[data-theme="dark"]:has(.in-sida), :root[data-theme="dark"] .in-sida) {
+  color-scheme: dark;
+  --n-bg: #0B1210;
+  --n-surface: #111A17;
+  --n-surface-2: #16211D;
+  --n-line: #22302B;
+  --n-line-2: #2E3E38;
+  --n-ink: #E5EEE9;
+  --n-ink-2: #A6B5AE;
+  --n-ink-3: #8A9992;
+  --n-ink-fot: #8A9992;
+  --n-brand: #3FC79A;
+  --n-brand-hover: #5AD6AC;
+  --n-on-brand: #06120E;
+  --n-danger: #EE7B6F;
+  --n-danger-ink: #F5A79E;
+  --n-warn: #E2B84A;
+  --n-warn-ink: #EDD08A;
+  --n-ok-ink: #7FE0BE;
+  --n-hub: #15241F;
+  --n-shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 28px -14px rgba(0, 0, 0, .6);
+}
+
+/* Bakgrunden ända ut i kanten, även när iOS drar sidan förbi toppen. */
+html:has(.in-sida),
+html:has(.in-sida) body {
+  background: var(--n-bg);
+}
+
+/* ---------- Sidan ---------- */
+
+.in-sida {
+  box-sizing: border-box;
+  min-height: 100dvh;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  padding: max(20px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  color: var(--n-ink);
+  font: 400 15px/1.5 var(--in-f-body), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.in-sida *,
+.in-sida *::before,
+.in-sida *::after {
+  box-sizing: border-box;
+}
+
+.in-sida :focus-visible {
+  outline: 2px solid var(--n-brand);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.in-mitt {
+  display: grid;
+  /*
+   * Fast avstånd uppifrån, inte centrerat. Ett centrerat kort flyttar sig
+   * uppåt varje gång ett fel eller en varning gör det högre; här växer det
+   * bara nedåt, och fältet man skriver i står still.
+   */
+  place-items: start center;
+  padding: clamp(16px, 13vh, 150px) 0 40px;
+}
+
+.in-kort {
+  width: 100%;
+  max-width: 400px;
+  overflow: hidden;
+  background: var(--n-surface);
+  border: 1px solid var(--n-line);
+  border-radius: 18px;
+  box-shadow: var(--n-shadow);
+  animation: in-upp .32s var(--n-ease) both;
+}
+
+.in-innehall {
+  padding: 24px 28px 24px;
+}
+
+@media (max-width: 440px) {
+  /* På telefonen högt upp: tangentbordet tar den nedre halvan. */
+  .in-mitt {
+    padding-top: 4vh;
+  }
+
+  .in-kort {
+    border-radius: 16px;
+  }
+
+  .in-innehall {
+    padding: 20px 18px 20px;
+  }
+}
+
+/* ---------- Bandet ---------- */
+
+/*
+ * Nav 2.0:s mörka yta (menyn, stämpelraden) överst i kortet: märket till
+ * vänster, lampan och klockan till höger. Det enda mörka på sidan, så att
+ * ögat hittar navet först och formuläret sedan.
+ */
+.in-band {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 16px 13px 16px;
+  background: var(--n-hub);
+  color: var(--n-hub-ink);
+  box-shadow: inset 0 -1px 0 var(--n-hub-line);
+}
+
+.in-marke {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.in-marke svg {
+  flex: none;
+  display: block;
+}
+
+.in-wm {
+  font: 700 19px/1 var(--in-f-display), ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -.03em;
+  color: var(--n-hub-ink);
+}
+
+.in-under {
+  margin-top: 3px;
+  font-size: 10.5px;
+  line-height: 1;
+  color: var(--n-hub-ink-2);
+  letter-spacing: .02em;
+}
+
+.in-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  font-size: 12px;
+}
+
+/* Lampan: en prick och ett ord. Pricken pulserar tre gånger när läget byts. */
+.in-lampa {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-weight: 550;
+  white-space: nowrap;
+  color: var(--n-hub-ink-2);
+  cursor: default;
+}
+
+.in-lampa i {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.in-lampa[data-lage="kollar"] i {
+  animation: in-andas 1.2s ease-in-out infinite;
+}
+
+.in-lampa[data-lage="uppe"] {
+  color: var(--n-hub-brand);
+}
+
+.in-lampa[data-lage="langsam"],
+.in-lampa[data-lage="offline"] {
+  color: var(--n-hub-signal);
+}
+
+.in-lampa[data-lage="nere"],
+.in-lampa[data-lage="kontakt"] {
+  color: var(--n-hub-danger);
+}
+
+.in-lampa:not([data-lage="kollar"]) i {
+  animation: in-prick 1.6s ease-in-out 3;
+}
+
+.in-lampa-kort {
+  display: none;
+}
+
+.in-klocka {
+  padding-left: 12px;
+  border-left: 1px solid var(--n-hub-line);
+  font: 500 12.5px/1 var(--in-f-mono), ui-monospace, "SF Mono", Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  color: var(--n-hub-ink);
+}
+
+@media (max-width: 440px) {
+  .in-band {
+    padding: 12px 14px;
+  }
+
+  /* På telefonen det korta ordet; det långa läses ändå upp. */
+  .in-lampa-lang {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .in-lampa-kort {
+    display: inline;
+  }
+}
+
+/*
+ * Navet snurrar medan servern arbetar, och medan nästa sida laddas efter en
+ * lyckad inloggning. Ekrarna är symmetriska, så ett varv på 60 grader går runt
+ * utan skarv. Det är sidans enda väntesymbol, och den sitter på märket och
+ * inte i knappen: knappen säger redan "Loggar in…".
+ */
+.in-ekrar {
+  transform-box: view-box;
+  transform-origin: 16px 16px;
+}
+
+.in-kort:has([aria-busy="true"]) .in-ekrar {
+  animation: in-varv .55s linear infinite;
+}
+
+.in-kort:has([aria-busy="true"]) .in-nav {
+  animation: in-puls 1.1s ease-in-out infinite;
+}
+
+/* ---------- Rubrik ---------- */
+
+.in-rubrik {
+  margin: 0;
+  font: 600 26px/1.1 var(--in-f-display), ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -.02em;
+  text-wrap: balance;
+}
+
+.in-ingress {
+  margin: 6px 0 20px;
+  color: var(--n-ink-2);
+  text-wrap: pretty;
+}
+
+/* Datumraden under hälsningen, som på Nav 2.0:s startsida. */
+.in-dag {
+  margin: 6px 0 20px;
+  color: var(--n-ink-3);
+  font-size: 14px;
+}
+
+/* Vart inloggningen leder, när den inte leder till startsidan. */
+.in-mal {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -8px 0 18px;
+  font-size: 13px;
+  color: var(--n-ink-2);
+}
+
+.in-mal svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--n-brand);
+}
+
+.in-mal b {
+  font-weight: 600;
+  color: var(--n-ink);
+}
+
+/* När koden skickades och hur länge den gäller. Tiden är klockans, i bandet. */
+.in-kodmeta {
+  margin: -12px 0 16px;
+  font-size: 12px;
+  color: var(--n-ink-3);
+}
+
+/* "Välkommen, Zen · Öppnar Kalendern…" medan nästa sida laddas. */
+.in-klar {
+  padding: 2px 0 4px;
+  animation: in-upp .28s var(--n-ease) both;
+}
+
+.in-klar .in-ingress {
+  margin-bottom: 0;
+}
+
+.in-klar .in-hjalp {
+  margin-top: 14px;
+}
+
+.in-ingress b {
+  font-weight: 600;
+  color: var(--n-ink);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Formuläret ---------- */
+
+.in-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: in-in .22s var(--n-ease) both;
+}
+
+.in-falt {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/*
+ * Ett fält med ett tillägg till höger om etiketten. Tillägget ligger efter
+ * fältet i koden (tabbordningen) och flyttas upp hit med rutnätet.
+ */
+.in-falt-med {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 12px;
+}
+
+.in-falt-med > * {
+  grid-column: 1 / -1;
+}
+
+.in-falt-med > .in-etikett {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: baseline;
+}
+
+.in-falt-med > .in-tillagg {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: baseline;
+}
+
+.in-etikett {
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--n-ink);
+}
+
+.in-ruta {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: var(--n-surface);
+  border: 1px solid var(--n-line-2);
+  border-radius: 10px;
+  transition: border-color .15s, box-shadow .15s;
+}
+
+.in-ruta:hover {
+  border-color: color-mix(in srgb, var(--n-ink) 28%, var(--n-line-2));
+}
+
+.in-ruta:focus-within {
+  border-color: var(--n-brand);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--n-brand) 18%, transparent);
+}
+
+.in-ruta[data-fel] {
+  border-color: var(--n-danger);
+}
+
+.in-ruta[data-fel]:focus-within {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--n-danger) 18%, transparent);
+}
+
+/* Rutan visar fokus (focus-within). En egen ring på fältet blev en ring i ringen. */
+.in-sida .in-input:focus-visible {
+  outline: none;
+}
+
+.in-input {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  margin: 0;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--n-ink);
+  font: inherit;
+  font-size: 15px;
+  outline: none;
+}
+
+.in-input::placeholder {
+  color: var(--n-ink-3);
+  opacity: 1;
+}
+
+/* Under 16 px zoomar iOS in sidan när fältet får fokus. */
+@media (max-width: 640px), (pointer: coarse) {
+  .in-input {
+    font-size: 16px;
+  }
+}
+
+/* Webbläsarens autofyll målar annars rutan gul eller ljusblå, även i mörkt läge. */
+.in-input:-webkit-autofill,
+.in-input:-webkit-autofill:hover,
+.in-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--n-ink);
+  caret-color: var(--n-ink);
+  box-shadow: 0 0 0 40px var(--n-surface) inset;
+  transition: background-color 9999s;
+}
+
+.in-input[readonly] {
+  color: var(--n-ink-2);
+}
+
+/*
+ * Domänen som skrivs in åt en. Spegeln har exakt samma typsnitt och utfyllnad
+ * som fältet och är osynlig; bara domänen efter den syns. Den ligger bakom
+ * texten och tar aldrig emot ett klick.
+ */
+.in-skugga {
+  position: absolute;
+  inset: 0 auto 0 0;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 15px;
+  white-space: pre;
+  pointer-events: none;
+  overflow: hidden;
+  max-width: 100%;
+}
+
+@media (max-width: 640px), (pointer: coarse) {
+  .in-skugga {
+    font-size: 16px;
+  }
+}
+
+.in-skugga > span:first-child {
+  visibility: hidden;
+}
+
+.in-skugga > span:last-child {
+  color: var(--n-ink-3);
+}
+
+.in-visa {
+  flex: none;
+  height: 32px;
+  margin-right: 6px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--n-ink-2);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 550;
+  cursor: pointer;
+  transition: background-color .15s, color .15s;
+}
+
+.in-visa:hover {
+  background: var(--n-surface-2);
+  color: var(--n-ink);
+}
+
+.in-text {
+  margin: 0;
+  color: var(--n-ink-2);
+  text-wrap: pretty;
+}
+
+.in-text b {
+  font-weight: 600;
+  color: var(--n-ink);
+  overflow-wrap: anywhere;
+}
+
+.in-hjalp {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--n-ink-3);
+  text-wrap: pretty;
+}
+
+.in-caps {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--n-warn-ink);
+}
+
+.in-caps svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+/* Kontot enheten minns, i adressfältets ställe. */
+.in-konto {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px 10px 10px;
+  border: 1px solid var(--n-line);
+  border-radius: 12px;
+}
+
+.in-av {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: #FFFFFF;
+  font-size: 12.5px;
+  font-weight: 650;
+  letter-spacing: .02em;
+}
+
+.in-konto-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.in-konto-adress {
+  overflow: hidden;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.in-konto-senast {
+  margin-top: 1px;
+  font-size: 12px;
+  color: var(--n-ink-3);
+}
+
+.in-konto .in-lank {
+  flex: none;
+}
+
+/* "Menade du zen@clicknet.se?" under adressen. */
+.in-forslag {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--n-ink-2);
+}
+
+.in-forslag .in-lank {
+  font-size: inherit;
+  font-weight: 600;
+  color: var(--n-brand);
+  text-decoration-color: color-mix(in srgb, var(--n-brand) 40%, transparent);
+}
+
+/* Under ett föreslaget lösenord: rådet och Kopiera. */
+.in-forslagsrad {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12.5px;
+  color: var(--n-ink-3);
+}
+
+.in-forslagsrad .in-lank {
+  flex: none;
+  font-size: inherit;
+}
+
+/*
+ * Två fält bredvid varandra (förnamn, efternamn). minmax(0, …): ett fält är
+ * annars minst så brett som webbläsarens egen fältbredd, och den andra
+ * kolumnen hamnar utanför kortet.
+ */
+.in-tva {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 440px) {
+  .in-tva {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+
+/* Kodfältet: siffror i mono, med luft, så att det går att läsa av mot mejlet. */
+.in-input.in-kod {
+  height: 52px;
+  font: 500 22px/1 var(--in-f-mono), ui-monospace, "SF Mono", Menlo, monospace;
+  letter-spacing: .28em;
+  font-variant-numeric: tabular-nums;
+}
+
+.in-input.in-kod::placeholder {
+  letter-spacing: .28em;
+  color: var(--n-line-2);
+}
+
+/* Kraven på ett nytt lösenord: bockas av medan man skriver. */
+.in-krav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12.5px;
+  color: var(--n-ink-3);
+}
+
+.in-krav li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: color .15s;
+}
+
+.in-krav svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.in-krav li[data-ok] {
+  color: var(--n-ok-ink);
+}
+
+/* Styrkan: tre streck, ett råd och inget krav. */
+.in-styrka {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--n-ink-3);
+}
+
+.in-styrka-spar {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  flex: 1;
+}
+
+.in-styrka-spar i {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--n-line);
+  transition: background-color .2s;
+}
+
+.in-styrka[data-steg="1"] .in-styrka-spar i:nth-child(1) { background: var(--n-danger); }
+.in-styrka[data-steg="2"] .in-styrka-spar i:nth-child(-n+2) { background: var(--n-warn); }
+.in-styrka[data-steg="3"] .in-styrka-spar i { background: var(--n-brand); }
+
+.in-mono {
+  font-family: var(--in-f-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.in-fellista {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* ---------- Besked ---------- */
+
+.in-fel,
+.in-besked {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.in-fel {
+  color: var(--n-danger-ink);
+}
+
+.in-besked {
+  color: var(--n-ok-ink);
+}
+
+.in-besked[data-ton="neutral"] {
+  color: var(--n-ink-2);
+}
+
+.in-besked[data-ton="varning"] {
+  color: var(--n-warn-ink);
+}
+
+.in-fel svg,
+.in-besked svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+}
+
+/* ---------- Knappar och länkar ---------- */
+
+.in-knapp {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 44px;
+  margin-top: 2px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--n-brand);
+  color: var(--n-on-brand);
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background-color .15s, transform .12s var(--n-ease), opacity .15s;
+}
+
+.in-knapp:hover {
+  background: var(--n-brand-hover);
+}
+
+.in-knapp:active {
+  transform: translateY(1px) scale(.99);
+}
+
+.in-knapp:disabled {
+  cursor: progress;
+  opacity: .72;
+  transform: none;
+}
+
+a.in-knapp {
+  text-decoration: none;
+}
+
+/* Andra valet, när det blivit det troliga: koden efter tre fel lösenord. */
+.in-knapp-sek {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1px solid var(--n-line-2);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--n-ink);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 550;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: border-color .15s, color .15s;
+}
+
+.in-knapp-sek:hover {
+  border-color: var(--n-brand);
+  color: var(--n-brand);
+}
+
+.in-lank {
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--n-ink-2);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: var(--n-line-2);
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: color .15s, text-decoration-color .15s;
+}
+
+.in-lank:hover {
+  color: var(--n-ink);
+  text-decoration-color: var(--n-ink-3);
+}
+
+.in-lank:disabled {
+  color: var(--n-ink-3);
+  text-decoration: none;
+  cursor: default;
+}
+
+.in-lank .in-mono {
+  font-family: var(--in-f-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* En länk inne i ett fel tar felets färg. */
+.in-fel .in-lank {
+  color: inherit;
+  font-size: inherit;
+  font-weight: 600;
+  text-decoration-color: currentColor;
+}
+
+.in-hjalp b {
+  font-weight: 600;
+  color: var(--n-ink-2);
+  overflow-wrap: anywhere;
+}
+
+.in-rad {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.in-rad[data-mitt] {
+  justify-content: center;
+}
+
+.in-skilje {
+  height: 1px;
+  margin: 4px 0 0;
+  border: 0;
+  background: var(--n-line);
+}
+
+.in-forebesked {
+  margin-bottom: 16px;
+}
+
+.in-efterkod {
+  margin-top: 14px;
+}
+
+.in-tips {
+  margin-top: 12px;
+}
+
+hr.in-efterkod {
+  margin-top: 16px;
+}
+
+/* ---------- Foten ---------- */
+
+.in-fot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  width: 100%;
+  max-width: 1080px;
+  margin: 0 auto;
+  font-size: 12px;
+  color: var(--n-ink-fot);
+}
+
+.in-fot p {
+  margin: 0;
+}
+
+.in-fot form {
+  display: inline;
+}
+
+.in-fot .in-lank {
+  font-size: inherit;
+}
+
+.in-fot .in-mono {
+  font-family: var(--in-f-mono), ui-monospace, monospace;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.01em;
+}
+
+@media (max-width: 440px) {
+  .in-fot {
+    flex-direction: column;
+    text-align: center;
+  }
+}
+
+.in-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---------- Den delade sidan och urtavlan ---------- */
+
+/*
+ * På en bred skärm delas sidan: formuläret på den ljusa halvan, urtavlan på
+ * den mörka (Urtavla.tsx). Bandet flyttar ut överst på den mörka halvan, så
+ * att den halvan bär allt som är navet (märket, lampan, klockan och tavlan)
+ * och den ljusa bara det man ska göra. Smalare än så står tavlan under kortet
+ * (se "Tavlan på en smal skärm" längre ned).
+ */
+.in-panel {
+  display: none;
+}
+
+@media (min-width: 960px) {
+  html:has(.in-sida),
+  html:has(.in-sida) body {
+    background: var(--n-surface);
+  }
+
+  .in-sida {
+    --in-vanster: max(460px, 44%);
+    position: relative;
+    grid-template-columns: var(--in-vanster) minmax(0, 1fr);
+    grid-template-rows: 1fr auto;
+    padding: 0;
+    background: var(--n-surface);
+  }
+
+  .in-mitt {
+    grid-column: 1;
+    grid-row: 1;
+    padding: clamp(72px, 24vh, 240px) 48px 40px;
+  }
+
+  /* Formuläret står direkt på den ljusa halvan; ramen fanns för ett kort på en bakgrund. */
+  .in-kort {
+    max-width: 380px;
+    overflow: visible;
+    background: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    animation: none;
+  }
+
+  /*
+   * Rörelsen flyttar till innehållet. Kortet får ingen transform: ett element
+   * med transform blir bandets referens, och då hade bandet hoppat med.
+   */
+  .in-innehall {
+    padding: 0;
+    animation: in-upp .32s var(--n-ease) both;
+  }
+
+  .in-band {
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    left: var(--in-vanster);
+    right: 0;
+    padding: 28px 32px 0 36px;
+    background: none;
+    box-shadow: none;
+  }
+
+  .in-fot {
+    grid-column: 1;
+    grid-row: 2;
+    max-width: none;
+    padding: 0 48px 28px;
+  }
+
+  .in-panel {
+    display: block;
+    grid-column: 2;
+    grid-row: 1 / -1;
+    position: relative;
+    background: var(--n-hub);
+    color: var(--n-hub-ink);
+  }
+
+  /* Den gröna fokusringen syns inte på mörkt; på panelen är den navets gröna. */
+  .in-panel :focus-visible {
+    outline-color: var(--n-hub-brand);
+  }
+}
+
+/*
+ * Tavlan står kvar i bild när en lång sida (lösenordsbytet med fel) rullar.
+ * Lagren som vrids är kvadrater, och en vriden kvadrats hörn hade annars gett
+ * sidan en vågrät rullning som kommer och går med ekrarna.
+ */
+.in-ut-ram {
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+  overflow: hidden;
+  container-type: size;
+  display: grid;
+  place-items: center;
+  /*
+   * Tavlans storlek. Den står en bit under mitten: dess nedre del är tom
+   * (midvinterns streck är korta) och får gå ned mot texten i hörnet, och
+   * ovanför behöver devisen plats under bandet. Gränserna: devisen minst
+   * 88 px från toppen (,536 = halva tavlan + avståndet + texten − förskjutningen),
+   * och tavlans nedersta etikett över texten nere till vänster (,508).
+   */
+  --in-ut-d: min(88cqw, calc((50cqh - 88px) / .536), calc((50cqh - 106px) / .508), 960px);
+}
+
+.in-ut {
+  position: relative;
+  grid-area: 1 / 1;
+  width: var(--in-ut-d);
+  aspect-ratio: 1;
+  translate: 0 calc(var(--in-ut-d) * .088);
+  animation: in-ut-in .9s var(--n-ease) both;
+}
+
+/*
+ * Devisen och kursen. Storlek och läge följer tavlan, så att de står i samma
+ * förhållande på varje skärm: texten är 5,4 % av tavlan, och strecket går
+ * från strax under den ned till midsommarens streck. Rubriktypsnittet i sin
+ * största optiska storlek, så att devisen inte låter som hälsningen bredvid.
+ * Den kommer sist i uppbyggnaden: strecket växer upp från tavlan, och devisen
+ * öppnar sig från mitten och blir skarp, som en bländare.
+ */
+.in-ut-devis {
+  position: relative;
+  grid-area: 1 / 1;
+  margin: 0;
+  translate: 0 calc(var(--in-ut-d) * -.509);
+  font: 500 calc(var(--in-ut-d) * .054)/1 var(--in-f-display), ui-sans-serif, system-ui, sans-serif;
+  font-variation-settings: "opsz" 96;
+  letter-spacing: -.025em;
+  color: var(--n-hub-ink);
+  white-space: nowrap;
+}
+
+.in-ut-devis > span {
+  display: block;
+  animation: in-ut-devis .75s var(--n-ease) 1.3s backwards;
+}
+
+.in-ut-devis::after {
+  content: "";
+  position: absolute;
+  top: calc(100% + var(--in-ut-d) * .016);
+  left: calc(50% - .75px);
+  width: 1.5px;
+  height: calc(var(--in-ut-d) * .085);
+  background: var(--n-hub-ink);
+  opacity: .34;
+  transform-origin: bottom;
+  animation: in-ut-kurs .5s var(--n-ease) 1.05s backwards;
+}
+
+.in-ut > svg,
+.in-ut-hjul,
+.in-ut-hjul > svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.in-ut svg path,
+.in-ut svg line {
+  fill: none;
+}
+
+/* Året: det som varit i grönt, det som kommer i spårets färg, i dag i bärnsten. */
+.in-ut-fore {
+  stroke: var(--n-hub-brand);
+  stroke-width: 1.8;
+  stroke-opacity: calc(.9 * var(--styrka, 1));
+}
+
+.in-ut-efter {
+  stroke: var(--n-hub-ink);
+  stroke-width: 1.8;
+  stroke-opacity: .16;
+}
+
+.in-ut-idag {
+  stroke: var(--n-hub-signal);
+  stroke-width: 4.5;
+  stroke-linecap: round;
+}
+
+.in-ut-pek {
+  stroke: var(--n-hub-ink);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+
+/* Tolv vågor, en per månad, medurs från nyår, och i dag sist. */
+.in-ut-ar > g,
+.in-ut-idag {
+  transform-box: view-box;
+  transform-origin: 500px 500px;
+  animation: in-ut-vag .8s var(--n-ease) both;
+  animation-delay: calc(.3s + var(--m) * 38ms);
+}
+
+.in-ut-idag {
+  animation-duration: .6s;
+  animation-delay: 1s;
+}
+
+/* Dygnet: spåret, dagens ljus och timmarna. */
+.in-ut-spar {
+  stroke: var(--n-hub-ink);
+  stroke-opacity: .1;
+  stroke-width: 10;
+  stroke-dasharray: 1;
+  animation: in-ut-dra 1.1s var(--n-ease) .1s both;
+}
+
+.in-ut-ljus {
+  stroke: var(--n-hub-brand);
+  stroke-width: 10;
+  stroke-dasharray: 1;
+  animation: in-ut-dra .9s var(--n-ease) .55s both;
+}
+
+/* Det som är kvar av dagsljuset: panelens färg över bågen, när den ritats klart. */
+.in-ut-kvar {
+  stroke: var(--n-hub);
+  stroke-opacity: .55;
+  stroke-width: 10;
+  animation: in-in .5s var(--n-ease) 1.45s both;
+}
+
+/* Skårorna har panelens färg: de skär timmarna ur ringen. */
+.in-ut-skaror {
+  stroke: var(--n-hub);
+  stroke-width: 3;
+  animation: in-in .4s linear .9s both;
+}
+
+/* Ekrarna och navet. Ett varv i minuten; uppbyggnaden vrider in dem. */
+.in-ut-ekrar {
+  animation: in-ut-hjul-in 1.2s var(--n-ease) .15s both, in-ut-varv 60s linear infinite;
+}
+
+.in-ut-ekrar line {
+  stroke: var(--n-hub-ink);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.in-ut-nav {
+  fill: none;
+  stroke: var(--n-hub-ink);
+  stroke-width: 3;
+}
+
+.in-ut-axel {
+  fill: var(--n-hub-signal);
+}
+
+.in-ut-ram[data-stilla] .in-ut-ekrar {
+  animation-play-state: running, paused;
+}
+
+/* Nu-strecket på dygnet, som nu-strecket i stämpelradens dagsband. */
+.in-ut-nu {
+  rotate: var(--nu);
+  transition: rotate 1s var(--n-ease);
+  animation: in-ut-in-nu .5s var(--n-ease) .9s both;
+}
+
+.in-ut-nu line {
+  stroke: var(--n-hub-ink);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.in-ut-nu circle {
+  fill: var(--n-hub-ink);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: in-prick 1.6s ease-in-out 1.3s 3;
+}
+
+.in-ut-etikett {
+  position: absolute;
+  translate: -50% -50%;
+  font: 500 11px/1 var(--in-f-mono), ui-monospace, "SF Mono", Menlo, monospace;
+  letter-spacing: .04em;
+  /* ink-3 ger 4,3:1 mot panelen; en femtedel ink-2 i den ger 4,9:1. */
+  color: color-mix(in srgb, var(--n-hub-ink-2) 20%, var(--n-hub-ink-3));
+  white-space: nowrap;
+  pointer-events: none;
+  animation: in-in .6s var(--n-ease) .8s both;
+}
+
+.in-ut-idagtext {
+  color: var(--n-hub-signal);
+  animation-delay: 1.2s;
+}
+
+/* Texten och knappen längst ned på den mörka halvan. */
+.in-ut-fot {
+  position: absolute;
+  left: 36px;
+  right: 28px;
+  bottom: 28px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+/* Avläsningen kommer när tavlan står klar. */
+.in-ut-text {
+  animation: in-upp .5s var(--n-ease) .95s both;
+}
+
+.in-ut-rubrik {
+  margin: 0;
+  font-size: 12px;
+  color: var(--n-hub-ink-2);
+}
+
+.in-ut-langd {
+  margin: 4px 0 0;
+  font: 600 22px/1.2 var(--in-f-display), ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -.01em;
+  color: var(--n-hub-ink);
+}
+
+.in-ut-langd span {
+  font: 400 13px/1.2 var(--in-f-body), ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0;
+  color: var(--n-hub-ink-2);
+}
+
+.in-ut-sol {
+  margin: 7px 0 0;
+  font: 500 11.5px/1 var(--in-f-mono), ui-monospace, "SF Mono", Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  color: var(--n-hub-ink-2);
+}
+
+.in-ut-paus {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--n-hub-line);
+  border-radius: 50%;
+  background: none;
+  color: var(--n-hub-ink-2);
+  cursor: pointer;
+  transition: color .15s, border-color .15s;
+}
+
+.in-ut-paus:hover {
+  color: var(--n-hub-ink);
+  border-color: rgba(220, 245, 232, .28);
+}
+
+.in-ut-paus svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ---------- Tavlan på en smal skärm ---------- */
+
+/*
+ * På telefonen står kortet kvar högt upp, där tangentbordet inte når, och
+ * foten flyttar upp under det. Under foten tar en mörk yta resten av skärmen,
+ * ut i kanterna och ned under nederkanten, och där stiger tavlan upp ur
+ * kanten som en sol: devisen överst, sedan sommaren och dagen, och vintern och
+ * natten under kanten. Ytan är minst 240 px; på en liten telefon rullar sidan
+ * hellre lite än att tavlan krymper bort.
+ *
+ * Avläsningen nere i hörnet får ingen plats bredvid tavlan. Den står kvar för
+ * skärmläsaren, och knappen som stoppar rörelsen flyttar upp i hörnet.
+ */
+@media (max-width: 959.98px) {
+  .in-sida {
+    grid-template-rows: auto auto minmax(240px, 1fr);
+  }
+
+  .in-mitt {
+    grid-row: 1;
+    padding-bottom: 20px;
+  }
+
+  .in-fot {
+    grid-row: 2;
+  }
+
+  .in-panel {
+    display: block;
+    grid-row: 3;
+    position: relative;
+    margin: 20px -16px calc(-1 * max(16px, env(safe-area-inset-bottom)));
+    border-radius: 28px 28px 0 0;
+    background: var(--n-hub);
+    color: var(--n-hub-ink);
+  }
+
+  .in-panel :focus-visible {
+    outline-color: var(--n-hub-brand);
+  }
+
+  /*
+   * Tavlans storlek: så bred att årets streck når nästan ut i kanterna (,92 är
+   * strecken och initialerna vid dagjämningen), men aldrig så stor att navet
+   * går ned under kanten (,624 är devisen, kursen och halva tavlan). Navet
+   * står strax ovanför kanten, som solen vid horisonten.
+   */
+  .in-ut-ram {
+    position: absolute;
+    inset: 0;
+    height: auto;
+    place-items: start center;
+    --in-ut-topp: 26px;
+    --in-ut-d: min(calc((100cqw - 20px) / .92), calc((100cqh - 54px) / .624), 560px);
+  }
+
+  /* Tavlan kan vara bredare än skärmen och centreras därför för hand: ett för brett rutnätsbarn hamnar till vänster. */
+  .in-ut {
+    justify-self: start;
+    margin-left: calc(50cqw - var(--in-ut-d) / 2);
+    translate: 0 calc(var(--in-ut-topp) + var(--in-ut-d) * .124);
+  }
+
+  /*
+   * Devisen läses på armlängds avstånd och får inte bli mindre än 18 px, även
+   * när tavlan är liten. Kursen tar då det texten tar extra, så att den
+   * fortfarande slutar vid midsommaren (,139 = ,155 till årets topp − ,016).
+   * Den täta spärren är ritad för rubrikstorlek; vid 18 px flyter orden ihop.
+   */
+  .in-ut-devis {
+    translate: 0 var(--in-ut-topp);
+    font-size: max(var(--in-ut-d) * .054, 18px);
+    letter-spacing: -.008em;
+  }
+
+  .in-ut-devis::after {
+    height: calc(var(--in-ut-d) * .139 - 1em);
+  }
+
+  .in-ut-fot {
+    top: 14px;
+    right: 14px;
+    bottom: auto;
+    left: auto;
+  }
+
+  .in-ut-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+
+/* ---------- Rörelse ---------- */
+
+@keyframes in-upp {
+  from { opacity: 0; transform: translateY(6px); }
+}
+
+@keyframes in-in {
+  from { opacity: 0; }
+}
+
+@keyframes in-varv {
+  to { transform: rotate(60deg); }
+}
+
+@keyframes in-puls {
+  50% { opacity: .35; }
+}
+
+/* Stämpelradens prick (smpdot i utkastet). */
+@keyframes in-prick {
+  50% { transform: scale(.55); opacity: .5; }
+}
+
+@keyframes in-andas {
+  50% { opacity: .35; }
+}
+
+@keyframes in-ut-in {
+  from { opacity: 0; transform: scale(.965); }
+}
+
+@keyframes in-ut-vag {
+  from { opacity: 0; transform: scale(.9); }
+}
+
+@keyframes in-ut-dra {
+  from { stroke-dashoffset: 1; }
+}
+
+@keyframes in-ut-hjul-in {
+  from { opacity: 0; transform: rotate(-50deg) scale(.9); }
+}
+
+@keyframes in-ut-varv {
+  to { rotate: 360deg; }
+}
+
+@keyframes in-ut-in-nu {
+  from { opacity: 0; transform: scale(1.08); }
+}
+
+@keyframes in-ut-kurs {
+  from { transform: scaleY(0); }
+}
+
+/* Negativa marginaler i klippet, så att i:s prickar och g:s ögla inte klipps i slutet. */
+@keyframes in-ut-devis {
+  from { clip-path: inset(-.4em 50%); filter: blur(6px); }
+  to { clip-path: inset(-.4em -.2em); filter: blur(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .in-kort,
+  .in-form,
+  .in-klar,
+  .in-lampa i,
+  .in-kort:has([aria-busy="true"]) .in-ekrar,
+  .in-kort:has([aria-busy="true"]) .in-nav,
+  .in-innehall,
+  .in-ut,
+  .in-ut-ar > g,
+  .in-ut-spar,
+  .in-ut-ljus,
+  .in-ut-kvar,
+  .in-ut-skaror,
+  .in-ut-ekrar,
+  .in-ut-nu,
+  .in-ut-nu circle,
+  .in-ut-etikett,
+  .in-ut-idag,
+  .in-ut-text,
+  .in-ut-devis > span,
+  .in-ut-devis::after {
+    animation: none;
+  }
+
+  /* Tavlan står redan still; då finns inget att stoppa. */
+  .in-ut-paus {
+    display: none;
+  }
+
+  .in-sida *,
+  .in-sida *::before,
+  .in-sida *::after {
+    transition-duration: 0s !important;
+  }
+}

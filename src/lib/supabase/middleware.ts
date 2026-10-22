@@ -7,6 +7,7 @@ import { kvittoGiltigt, STEG2_KAKA } from "@/lib/mfa";
 import { MFA_REQUIRED_ROLES } from "@/lib/roles";
 import { BYTESVAG, kraverByte } from "@/lib/losenordsbyte";
 import { rensaIdentitet, skrivIdentitet } from "@/lib/identitet";
+import { sakerNasta } from "@/lib/inloggning";
 
 /**
  * Publika vagar. Allt annat kraver session.
@@ -157,7 +158,10 @@ export async function updateSession(request: NextRequest) {
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = "/logga-in";
-    url.searchParams.set("nasta", path);
+    // Frågan följer med i nasta, inte bredvid: annars hamnar /kalenderns
+    // ?dag= på inloggningssidan och försvinner efter inloggningen.
+    url.search = "";
+    if (path !== "/") url.searchParams.set("nasta", path + request.nextUrl.search);
     return avsluta(NextResponse.redirect(url));
   }
 
@@ -233,11 +237,18 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
-  if (user && path === "/logga-in") {
-    const url = request.nextUrl.clone();
-    url.pathname = "/nav2";
-    url.search = "";
-    return avsluta(NextResponse.redirect(url));
+  /**
+   * Redan inloggad på inloggningssidan: vidare dit inloggningen skulle ha
+   * lett (`nasta`, bara vägar inom navet), inte alltid till startsidan. En
+   * länk ur ett mejl som öppnas i en ny flik landar då där den skulle.
+   *
+   * Bara GET. En server action från en flik som stod kvar på inloggningen är
+   * ett POST hit, och en omdirigering hade gjort det till ett POST mot en
+   * annan sida, som svarar med något handlingen inte förstår.
+   */
+  if (user && path === "/logga-in" && request.method === "GET") {
+    const mal = new URL(sakerNasta(request.nextUrl.searchParams.get("nasta")), request.nextUrl.origin);
+    return avsluta(NextResponse.redirect(mal));
   }
 
   /**

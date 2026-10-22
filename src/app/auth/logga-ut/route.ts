@@ -11,5 +11,7 @@ export async function POST(request: NextRequest) {
 
   const supabase = await supabaseServer();
   await supabase.auth.signOut();
-  return NextResponse.redirect(new URL("/logga-in", request.url), { status: 303 });
+  // ?utloggad: inloggningssidan säger att det gick. Utan beskedet ser en
+  // utloggning ut som att sessionen bara tog slut.
+  return NextResponse.redirect(new URL("/logga-in?utloggad", request.url), { status: 303 });
 }

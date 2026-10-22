@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { loggaInloggning } from "@/lib/inloggningslogg-server";
+import { sakerNasta } from "@/lib/inloggning";
 
 /**
  * Landningspunkt for den magiska lanken.
@@ -12,7 +13,9 @@ import { loggaInloggning } from "@/lib/inloggningslogg-server";
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl;
   const code = searchParams.get("code");
-  const nasta = searchParams.get("nasta") ?? "/nav2";
+  // Bara vägar inom navet. Förut gick "?nasta=@annan.se" rakt ut: efter
+  // ursprunget blev det "https://navet@annan.se", en annan värd.
+  const nasta = sakerNasta(searchParams.get("nasta"));
 
   if (code) {
     const supabase = await supabaseServer();

@@ -6,6 +6,7 @@ import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { skapaKvitto, STEG2_KAKA, STEG2_DYGN } from "@/lib/mfa";
 import { utforBytLosenord } from "@/lib/losenordsbyte-server";
+import { skickaKodmejl } from "@/lib/kodmejl-server";
 
 export type ProfilState = { fel?: string; ok?: string };
 
@@ -72,18 +73,11 @@ export async function skickaKod(_prev: ProfilState, _form: FormData): Promise<Pr
   const user = await getCurrentUser();
   if (!user) return { fel: "Du måste vara inloggad." };
 
-  const supabase = await supabaseServer();
-  const { error } = await supabase.auth.signInWithOtp({
-    email: user.email,
-    options: { shouldCreateUser: false },
-  });
-
-  if (error) {
-    const m = error.message.toLowerCase();
-    if (m.includes("rate") || m.includes("too many") || m.includes("seconds"))
-      return { fel: "En kod är redan skickad. Vänta en minut innan du begär en ny." };
-    return { fel: "Koden kunde inte skickas. Kontrollera mejlutskicket i Supabase." };
-  }
+  // Navets eget mejl, som vid inloggningen. En kod som gick hit för mindre än
+  // en minut sedan gäller fortfarande, så spärren är inget fel.
+  const utfall = await skickaKodmejl(user.email, "steg2");
+  if (utfall === "mejlgrans") return { fel: "Navet har skickat många mejl den senaste stunden. Försök igen om en stund." };
+  if (utfall !== "skickad" && utfall !== "sparr") return { fel: "Koden kunde inte skickas just nu. Försök igen om en stund." };
 
   return { ok: `Kod skickad till ${user.email}. Den gäller i en timme.` };
 }
@@ -111,9 +105,9 @@ export async function verifieraKod(_prev: ProfilState, form: FormData): Promise<
     if (user.employee) {
       await logga(user.employee.id, "auth.step2_failed", user.authUserId, { ip: await klientIp() });
     }
-    const m = (error?.message ?? "").toLowerCase();
-    if (m.includes("expired")) return { fel: "Koden har gått ut. Begär en ny." };
-    return { fel: "Koden stämmer inte. Kontrollera att du tagit den senaste." };
+    // GoTrue svarar "Token has expired or is invalid" både för fel kod och
+    // för en kod som gått ut, så de två går inte att skilja på här.
+    return { fel: "Koden stämmer inte eller har gått ut. Kontrollera att du tog den senaste." };
   }
 
   // Koden kom till ratt brevlada, men verifyOtp slapper igenom vilket konto

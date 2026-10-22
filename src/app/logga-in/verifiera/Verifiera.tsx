@@ -1,76 +1,90 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/Button";
-import { Field, Input } from "@/components/ui/Field";
-import { Notis } from "@/components/ui/Notis";
+import { startTransition, useActionState, useEffect, useState } from "react";
+import { oppnarText } from "@/lib/inloggning";
 import { skickaKod, verifieraKod, type ProfilState } from "@/app/(app)/profil/actions";
+import { Fel } from "../falt";
+import { skyddad } from "../natlage";
+import { Klar, KodSteg, nySkickad, type Skickad } from "../steg";
 
 const TOM: ProfilState = {};
 
-export function Verifiera({ epost, nasta }: { epost: string; nasta: string }) {
-  const router = useRouter();
-  const [skickat, skicka, skickar] = useActionState(skickaKod, TOM);
-  const [svar, verifiera, verifierar] = useActionState(verifieraKod, TOM);
+const vidNatfel = (fel: string): ProfilState => ({ fel });
 
-  // Kvittot ligger i en kaka som satts av server actionen. Sidan under maste
-  // ritas om for att mellanvaran ska se den.
+const SKICKA = skyddad<ProfilState>(skickaKod, vidNatfel);
+
+const VERIFIERA = skyddad<ProfilState>(async (forra, form) => {
+  if (!String(form.get("kod") ?? "").replace(/\D/g, "")) return { fel: "Skriv in koden från mejlet." };
+  return verifieraKod(forra, form);
+}, vidNatfel);
+
+/**
+ * Steg två: en kod till mejlen, en gång per enhet och STEG2_DYGN dygn.
+ * Handlingarna är profilens (samma kvitto, samma logg); kodsteget är
+ * inloggningens, så att koden ser likadan ut överallt.
+ *
+ * "Jag har redan en kod": den som laddat om sidan efter att koden kom ska
+ * inte behöva vänta en minut på en ny.
+ */
+export function Verifiera({ epost, nasta, minnsTill }: { epost: string; nasta: string; minnsTill: string }) {
+  const [skick, skicka, skickar] = useActionState(SKICKA, TOM);
+  const [ver, verifiera, verifierar] = useActionState(VERIFIERA, TOM);
+  const [skickad, setSkickad] = useState<Skickad | null>(null);
+  const [harKod, setHarKod] = useState(false);
+  const [fel, setFel] = useState<string | null>(null);
+  const [nr, setNr] = useState(0);
+
   useEffect(() => {
-    if (svar.ok) {
-      router.replace(nasta);
-      router.refresh();
-    }
-  }, [svar.ok, nasta, router]);
+    if (skick === TOM) return;
+    if (skick.ok) setSkickad((f) => nySkickad(f));
+    setFel(skick.fel ?? null);
+    setNr((n) => n + 1);
+  }, [skick]);
+
+  useEffect(() => {
+    if (ver === TOM) return;
+    setFel(ver.fel ?? null);
+    setNr((n) => n + 1);
+  }, [ver]);
+
+  if (ver.ok) {
+    return <Klar rubrik="Klart" text={`Enheten är bekräftad till ${minnsTill}. ${oppnarText(nasta)}`} till={nasta} />;
+  }
 
   return (
-    <div className="flex flex-col gap-5">
-      {skickat.ok && <Notis ton="ok">{skickat.ok}</Notis>}
-      {skickat.fel && <Notis ton="danger">{skickat.fel}</Notis>}
-
-      {!skickat.ok ? (
-        <form action={skicka} className="flex flex-col gap-4">
-          <p className="text-body text-ink-700">
-            Vi skickar en engångskod till <strong className="text-ink-900">{epost}</strong>.
-          </p>
-          <Button type="submit" laddar={skickar} className="w-full">
-            Skicka koden
-          </Button>
-        </form>
-      ) : (
-        <form action={verifiera} className="flex flex-col gap-4">
-          <Field label="Koden från mejlet" namn="kod" fel={svar.fel}>
-            <Input
-              namn="kod"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              maxLength={8}
-              autoFocus
-              required
-              fel={svar.fel}
-            />
-          </Field>
-          <Button type="submit" laddar={verifierar || Boolean(svar.ok)} className="w-full">
-            Fortsätt
-          </Button>
-        </form>
-      )}
-
-      {skickat.ok && (
-        <form action={skicka}>
-          <button
-            type="submit"
-            disabled={skickar}
-            className="text-small text-ink-500 underline hover:text-ink-900 disabled:opacity-45"
-          >
-            Skicka en ny kod
-          </button>
-        </form>
-      )}
-
-      <p className="text-small text-ink-500">
-        Enheten kommer ihåg dig i 30 dagar. Sedan frågar vi igen.
+    <>
+      <h1 className="in-rubrik">Ett steg till</h1>
+      <p className="in-ingress">
+        Din roll når personuppgifter och lönedata. Därför bekräftar vi att det är du, en gång per enhet och månad.
       </p>
-    </div>
+      {skickad || harKod ? (
+        <KodSteg
+          skickad={skickad ?? { tid: null, nyFran: 0, igen: false }}
+          action={verifiera}
+          vantar={verifierar}
+          knapp="Fortsätt"
+          fel={fel}
+          nr={nr}
+          skickaIgen={() => startTransition(() => skicka(new FormData()))}
+          skickarIgen={skickar}
+        />
+      ) : (
+        <form action={skicka} className="in-form" aria-busy={skickar}>
+          <p className="in-text">
+            Vi mejlar en engångskod till <b>{epost}</b>.
+          </p>
+          {fel ? <Fel id="in-formfel">{fel}</Fel> : null}
+          <button type="submit" className="in-knapp" disabled={skickar}>
+            {skickar ? "Skickar…" : "Skicka koden"}
+          </button>
+          <div className="in-rad" data-mitt="">
+            <button type="button" className="in-lank" onClick={() => setHarKod(true)}>
+              Jag har redan en kod
+            </button>
+          </div>
+        </form>
+      )}
+      <p className="in-hjalp in-efterkod">Enheten kommer ihåg dig till {minnsTill}. Sedan frågar vi igen.</p>
+    </>
   );
 }

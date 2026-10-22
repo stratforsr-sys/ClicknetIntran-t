@@ -63,7 +63,8 @@ async function klientIp(): Promise<string | null> {
   }
 }
 
-export type Inloggningsmetod = "losenord" | "lank";
+/** "kod" = engångskod till mejlen (inloggningen sedan 2026-10-20). */
+export type Inloggningsmetod = "losenord" | "lank" | "kod";
 
 /** En lyckad inloggning. */
 export async function loggaInloggning(epost: string, metod: Inloggningsmetod): Promise<void> {

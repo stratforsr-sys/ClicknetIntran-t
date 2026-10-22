@@ -23,6 +23,12 @@ behörigheter som här: du ser bara det du får se.
 
 ## Kopplat nu
 
+- **Inloggningen**, i Nav 2.0:s utseende. Den minns ditt konto, så det räcker
+  med lösenordet. Glömt det? Be om en kod till mejlen, logga in med den och
+  välj ett nytt, gärna ett som navet föreslår. Bredvid står navets urtavla,
+  och på telefonen stiger den upp under formuläret: dagens dagsljus i
+  Stockholm och hela året, ett streck per dag, under vår devis: Vi leder dig
+  mot din vision.
 - **Klockan**, med samma notiser som här.
 - **Inställningar**: ditt konto, säkerheten, utseendet och påminnelserna om
   stämpling, samma som i Tid. Din profilbild syns för alla i Nav, på alla
