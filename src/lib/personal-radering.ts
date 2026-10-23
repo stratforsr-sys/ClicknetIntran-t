@@ -218,3 +218,27 @@ export function perTabell(rader: Referens[]): { tabell: string; antal: number }[
     .map(([tabell, antal]) => ({ tabell: tabellnamn(tabell), antal }))
     .sort((a, b) => b.antal - a.antal || a.tabell.localeCompare(b.tabell, "sv"));
 }
+
+/**
+ * S09 (F1-5, C7): en fil i lagringen vars rad forsvann med personen.
+ *
+ * `ta_bort_anstalld()` raderar raderna i databasen men ror inte lagringen.
+ * Lakarintyget foljer sjukanmalan i kaskad och ärendebilagan foljer arendet,
+ * och filerna lag kvar utan nagon rad som pekade pa dem. Ingen kunde hitta dem
+ * for ett utdrag eller radera dem (art. 17). Raderingen samlar darfor
+ * filerna fore (`personal-radering-server.ts`) och tar bort innehallet for de
+ * rader som inte langre finns efter. Det som star kvar (avtal, inspelningar
+ * till en order: foretagets underlag, 0170) rors inte.
+ */
+export type Lagringsrad = {
+  id: string;
+  tabell: "file_object" | "hr_case_attachment";
+  store: string;
+  bucket: string;
+  path: string;
+};
+
+/** Raderna som fanns fore raderingen men inte efter. `kvar` innehaller `tabell|id`. */
+export function forsvunna(fore: Lagringsrad[], kvar: Set<string>): Lagringsrad[] {
+  return fore.filter((r) => !kvar.has(`${r.tabell}|${r.id}`));
+}

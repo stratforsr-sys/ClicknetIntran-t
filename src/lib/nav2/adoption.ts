@@ -5,6 +5,7 @@ import type { CurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { dagarSedan, tackning, type Aktivitetsdag } from "@/lib/adoption";
 import { nivaFor } from "./forma";
+import { palettGrans } from "@/lib/nav2/gallring";
 
 /**
  * Nav 2.0: Adoption (utkastets rlsAdoptionVy) ur repots adoption_*-funktioner (0029).
@@ -53,9 +54,10 @@ export async function byggAdoption(supabase: SupabaseClient, user: CurrentUser):
     supabase.from("document_search_miss").select("query").order("searched_at", { ascending: false }).limit(5000),
     supabase.rpc("adoption_glomda_dokument", { p_dagar: GLOMD_EFTER }),
     supabase.from("employee").select("id", { count: "exact", head: true }).neq("status", "offboarded"),
-    // Palettens fragor utan svar (0125), alla veckor. Tabellen har ingen policy,
-    // bara service role; villkoret ovan ar spärren.
-    supabaseAdmin().from("nav_question_miss").select("q, occurrences").limit(5000),
+    // Palettens fragor utan svar (0125), bara veckorna inom lagringstiden (B5,
+    // S09): det gallringen tar bort ska inte heller visas har medan den ar av.
+    // Tabellen har ingen policy, bara service role; villkoret ovan ar spärren.
+    supabaseAdmin().from("nav_question_miss").select("q, occurrences").gte("dag", palettGrans(new Date())).limit(5000),
   ]);
 
   const dagar = ((akt.data ?? []) as { dag: string; dau: number; wau: number }[]).map((d) => ({

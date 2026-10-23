@@ -9,6 +9,7 @@ import { arkivera, forberedBilaga, kvittera, markeraGranskad, registreraBilaga, 
 import { skapaUppgift } from "@/app/(app)/uppgifter/actions";
 import { franMarkdown, tillMarkdown, type Rutinfalt } from "@/lib/nav2/rutinformat";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
+import { maskera } from "@/lib/nav2/gallring";
 
 export const dynamic = "force-dynamic";
 
@@ -120,7 +121,8 @@ export async function POST(request: Request) {
 
       case "sok": {
         // Dina senaste sökningar, och en sökning utan träff utan ditt namn (0096).
-        const q = String(b.q ?? "").trim().slice(0, 200);
+        // Personnummer maskeras före sparning, både i dina senaste och i missarna (S09, F2-7).
+        const q = maskera(String(b.q ?? "").trim()).slice(0, 200).trim();
         if (q.length < 2) return svar({ ok: "" });
         const { data: pref } = await db.from("nav_preference").select("value").eq("employee_id", mig).eq("key", "rutiner.sok").maybeSingle();
         const fore = Array.isArray(pref?.value) ? (pref.value as string[]) : [];

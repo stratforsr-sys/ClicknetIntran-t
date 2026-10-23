@@ -4,6 +4,7 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -171,6 +172,57 @@ export async function taBort(args: {
   } catch (e) {
     return { ok: false, fel: e instanceof Error ? e.message : String(e) };
   }
+}
+
+/**
+ * S09 (gallringen): alla filer under ett prefix, med när de senast ändrades.
+ *
+ * Bara läsning. R2 svarar 1000 nycklar åt gången och Supabase 1000 poster per
+ * mapp; båda läses tills det tar slut. Supabase visar undermappar som poster
+ * utan id (arendenas bilagor ligger i `arenden/<ärende>/<fil>`), och de läses
+ * en nivå ner. Ett fel returneras, aldrig en halv lista.
+ */
+export async function listaObjekt(args: {
+  lager: Lager;
+  bucket: string;
+  prefix: string;
+}): Promise<{ objekt: { path: string; andrad: string | null }[] } | { fel: string }> {
+  const objekt: { path: string; andrad: string | null }[] = [];
+  if (args.lager === "r2") {
+    try {
+      let token: string | undefined;
+      do {
+        const svar = await r2().send(
+          new ListObjectsV2Command({ Bucket: args.bucket, Prefix: `${args.prefix}/`, ContinuationToken: token, MaxKeys: 1000 }),
+        );
+        for (const o of svar.Contents ?? []) {
+          if (o.Key) objekt.push({ path: o.Key, andrad: o.LastModified ? o.LastModified.toISOString() : null });
+        }
+        token = svar.IsTruncated ? svar.NextContinuationToken : undefined;
+      } while (token);
+      return { objekt };
+    } catch (e) {
+      return { fel: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  const lagring = supabaseAdmin().storage.from(args.bucket);
+  const mapp = async (vag: string, djup: number): Promise<string | null> => {
+    for (let fran = 0; ; fran += 1000) {
+      const { data, error } = await lagring.list(vag, { limit: 1000, offset: fran, sortBy: { column: "name", order: "asc" } });
+      if (error) return error.message;
+      for (const o of data ?? []) {
+        if (o.id) objekt.push({ path: `${vag}/${o.name}`, andrad: o.updated_at ?? o.created_at ?? null });
+        else if (djup > 0) {
+          const f = await mapp(`${vag}/${o.name}`, djup - 1);
+          if (f) return f;
+        }
+      }
+      if ((data ?? []).length < 1000) return null;
+    }
+  };
+  const f = await mapp(args.prefix, 1);
+  return f ? { fel: f } : { objekt };
 }
 
 /**

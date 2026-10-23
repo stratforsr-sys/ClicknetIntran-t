@@ -18,6 +18,17 @@
 -- loggar en rad per visning (K36), och en avatar visas på varje sida.
 -- `previous` är bilden före, för Ångra. Alla inloggade läser bilderna;
 -- bara rutten skriver (ingen skrivpolicy).
+--
+-- Bilden tas bort när anställningen avslutas (beställaren 2026-10-20), av en
+-- utlösare på `employee.status`, så att det gäller vilken väg avslutet än tar
+-- (nuvarande Nav, Nav 2.0, SQL). Till dess syns den inte för en som har slutat.
+--
+-- Granskningen S09 (2026-10-23, F1-11, C4, H12): det här är den beslutade
+-- filen, med utlösaren. Dessutom läser en inloggad bara `employee_id`, `image`
+-- och `updated_at`. `previous` (bilden före, kvar efter "Ta bort" för Ångra)
+-- och `updated_by` når bara rutten med service role, så en borttagen bild går
+-- inte att hämta via REST med anon-nyckeln och en sessionskaka. Körs när
+-- Profil slås på (S10), aldrig med apply-sql.mjs utan argument.
 -- =============================================================================
 
 alter table public.employee_onboarding
@@ -36,3 +47,21 @@ alter table public.employee_photo enable row level security;
 
 create policy employee_photo_read on public.employee_photo for select to authenticated
   using (public.current_employee_id() is not null);
+
+-- Kolumnrättigheter: policyn avgör raderna, rättigheterna kolumnerna.
+revoke all on public.employee_photo from anon, authenticated;
+grant select (employee_id, image, updated_at) on public.employee_photo to authenticated;
+
+create or replace function public.employee_photo_bort_vid_avslut() returns trigger
+  language plpgsql security definer set search_path = public as $$
+begin
+  if new.status = 'offboarded' and old.status is distinct from 'offboarded' then
+    delete from public.employee_photo where employee_id = new.id;
+  end if;
+  return new;
+end $$;
+revoke all on function public.employee_photo_bort_vid_avslut() from public, anon, authenticated;
+grant execute on function public.employee_photo_bort_vid_avslut() to service_role;
+
+create trigger employee_photo_bort_vid_avslut after update of status on public.employee
+  for each row execute function public.employee_photo_bort_vid_avslut();

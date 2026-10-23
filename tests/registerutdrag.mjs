@@ -17,7 +17,7 @@
  * Kravs DATABASE_URL, eftersom fragan gar mot schemat och inte mot koden.
  */
 import pg from "pg";
-import { KALLOR, UNDANTAG } from "../src/lib/registerutdrag.ts";
+import { BARN, KALLOR, UNDANTAG } from "../src/lib/registerutdrag.ts";
 import { LASES_AVEN, ordningFor } from "../src/lib/registerutdrag-ordning.ts";
 
 let fel = 0;
@@ -93,6 +93,27 @@ console.log("\n\x1b[1mTabellerna gar att lasa\x1b[0m");
     if (finns[0].t === null) ok(`${k.tabell} finns`, false);
   }
   ok("alla tabeller i KALLOR finns i schemat", true, `${KALLOR.length} tabeller`);
+}
+
+console.log("\n\x1b[1mBarnkallorna nas via en forlader som finns\x1b[0m");
+{
+  // S09 (F1-1). En tabell utan nyckel mot employee syns inte i jamforelsen
+  // ovan, sa den kan bara komma med via sin forlader. Forladern maste vara en
+  // kalla, kolumnerna maste finnas, och barnet maste sta i LASES_AVEN sa att
+  // ordningen provas nedan.
+  const kallTabeller = new Set(KALLOR.map((k) => k.tabell));
+  const { rows: kol } = await db.query(
+    `select table_name || '.' || column_name as n from information_schema.columns where table_schema = 'public'`,
+  );
+  const finns = new Set(kol.map((r) => r.n));
+  const utanForalder = BARN.filter((b) => !kallTabeller.has(b.foralder));
+  ok("varje barns forlader ar en kalla", utanForalder.length === 0, utanForalder.map((b) => b.tabell).join(", "));
+  const spokBarn = BARN.filter((b) => !finns.has(`${b.tabell}.${b.kolumn}`) || !finns.has(`${b.foralder}.${b.falt}`));
+  ok("barnens kolumner finns", spokBarn.length === 0, spokBarn.map((b) => `${b.tabell}.${b.kolumn}`).join(", "));
+  const ejLast = BARN.filter((b) => !kallTabeller.has(b.tabell) && !LASES_AVEN.includes(b.tabell));
+  ok("varje barn star i LASES_AVEN", ejLast.length === 0, ejLast.map((b) => b.tabell).join(", "));
+  const utanAndamal = BARN.filter((b) => !b.andamal || b.andamal.trim().length < 3);
+  ok(`${BARN.length} barnkallor har ett andamal`, utanAndamal.length === 0, utanAndamal.map((b) => b.tabell).join(", "));
 }
 
 console.log("\n\x1b[1mVarje kalla las i en stabil ordning\x1b[0m");

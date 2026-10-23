@@ -88,7 +88,9 @@ export const TILLATNA = {
   "kalender_poster(uuid,date,date)": { roller: "authenticated", md5: "f73f7bd8b5b2" },
   "kanda_fel()": { roller: "authenticated", md5: "c3a8fffbc29d" },
   "leverans_kunder(uuid)": { roller: "authenticated", md5: "fca84683da0a" },
-  "palett_obesvarade(integer)": { roller: "authenticated", md5: "0ea484dc15a1" },
+  // S09 (0223): lamnar inte langre ut nagon tid, bara fragan och antalet. Rollen
+  // provas i funktionen (has_any_role), inget aktorsargument.
+  "palett_obesvarade(integer)": { roller: "authenticated", md5: "bcbe440c1e02" },
   // Tar lasaren som argument och jamfor inte med den inloggade (C17 punkt 3,
   // S05 ratter dem). lk_ser_*, projekt_synligt och uppgift_synlig anvands i
   // policyer med current_employee_id(); kalender_niva anropas av appen med

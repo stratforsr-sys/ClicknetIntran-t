@@ -19,6 +19,9 @@ export const ORDNING: Record<string, readonly string[]> = {
   break_deviation_month: ["employee_id", "month", "kind"],
   break_schedule_ack: ["schedule_id", "employee_id"],
   calendar_share: ["owner_id", "viewer_id"],
+  coaching_drill_answer: ["drill_id", "day"],
+  coaching_habit_check: ["drill_id", "due_on"],
+  coaching_person_focus: ["employee_id"],
   commission_history: ["employee_id", "period_month"],
   delivery: ["order_id"],
   delivery_handoff: ["order_id"],
@@ -28,6 +31,7 @@ export const ORDNING: Record<string, readonly string[]> = {
   document_saved: ["employee_id", "document_id"],
   document_view: ["document_id", "employee_id"],
   employee_access_level: ["employee_id"],
+  essay_answer: ["submission_id", "question_id"],
   employee_onboarding: ["employee_id"],
   employee_permission: ["employee_id", "permission"],
   employee_role: ["employee_id", "role"],
@@ -42,6 +46,7 @@ export const ORDNING: Record<string, readonly string[]> = {
   module_progress: ["employee_id", "module_id"],
   module_rating: ["employee_id", "module_id"],
   nav_preference: ["employee_id", "key"],
+  nav_skrivnyckel: ["nyckel"],
   news_ack: ["post_id", "employee_id"],
   notification_dismissed: ["employee_id", "notice_id"],
   notification_seen: ["employee_id"],
@@ -61,8 +66,13 @@ export const ORDNING: Record<string, readonly string[]> = {
   work_schedule_seen: ["employee_id", "valid_from"],
 };
 
-/** Tabellerna utdraget laser utover KALLOR: via arendet, uppgiften, filen och fran bada hallen. */
-export const LASES_AVEN = ["case_message", "task_event", "file_access_log", "audit_log", "calendar_share"] as const;
+/** Tabellerna utdraget laser utover KALLOR: via arendet, uppgiften, filen, fran bada hallen och BARN. */
+export const LASES_AVEN = [
+  "case_message", "task_event", "file_access_log", "audit_log", "calendar_share",
+  // S09: barnkallorna i BARN (registerutdrag.ts).
+  "coaching_drill_answer", "coaching_habit_check", "essay_answer", "candidate_stage_event",
+  "interview_scorecard", "candidate_note", "candidate_message", "candidate_booking", "candidate_merit_request",
+] as const;
 
 export function ordningFor(tabell: string): readonly string[] {
   return ORDNING[tabell] ?? ["id"];

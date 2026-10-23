@@ -277,6 +277,40 @@ export const KALLOR: Kalla[] = [
   { tabell: "work_schedule_seen", kolumn: "employee_id", andamal: "När du sett ditt schema" },
   // Steg 6 (0130): kvittenserna i Nyheter.
   { tabell: "news_ack", kolumn: "employee_id", andamal: "Nyhetsinlägg du kvitterat" },
+  // S09 (2026-10-23, F1-1/C3): Coachningens tabeller ur 0100 och skrivnycklarna ur 0208.
+  // Svaren på övningarna, provsvaren och kandidatens rader nås via sin förälder,
+  // se BARN nedan. employee_photo läggs in när 0107 körs (S10, klassning.md).
+  { tabell: "coaching_drill", kolumn: "employee_id", andamal: "Dina övningar i Coachning" },
+  { tabell: "coaching_message", kolumn: "employee_id", andamal: "Meddelanden till dig i Coachning" },
+  { tabell: "coaching_person_focus", kolumn: "employee_id", andamal: "Ditt fokusområde i Coachning" },
+  { tabell: "coaching_meeting_request", kolumn: "employee_id", andamal: "Dina förfrågningar om ett samtal med chefen" },
+  { tabell: "coaching_task_note", kolumn: "by_employee_id", andamal: "Anteckningar i dina coachningsuppgifter, och det du skrivit i andras" },
+  { tabell: "nav_skrivnyckel", kolumn: "aktor", andamal: "Dina senaste sparningar i Nav 2.0 och navets svar (sparas ett dygn)" },
+];
+
+/**
+ * Tabeller utan egen nyckel mot `employee`, som hamtas via en forlader i
+ * KALLOR: `kolumn` i barnet ska vara lika med `falt` i forladerns rader.
+ *
+ * Provet ser dem inte, eftersom de saknar nyckel mot employee — darfor star de
+ * har och inte i en kommentar. Ar barnet sjalvt en kalla (coaching_task_note)
+ * slas raderna ihop pa id.
+ */
+export type Barn = { tabell: string; kolumn: string; foralder: string; falt: string; andamal: string };
+
+export const BARN: Barn[] = [
+  { tabell: "coaching_drill_answer", kolumn: "drill_id", foralder: "coaching_drill", falt: "id", andamal: "Dina svar på övningarna i Coachning" },
+  { tabell: "coaching_habit_check", kolumn: "drill_id", foralder: "coaching_drill", falt: "id", andamal: "Dina svar på vanekollen i Coachning" },
+  { tabell: "coaching_task_note", kolumn: "task_id", foralder: "coaching_task", falt: "id", andamal: "Anteckningar i dina coachningsuppgifter, och det du skrivit i andras" },
+  { tabell: "coaching_task_event", kolumn: "task_id", foralder: "coaching_task", falt: "id", andamal: "Det du skrivit i coachningsuppgifter, och chefens kvitteringar i dina egna" },
+  { tabell: "essay_answer", kolumn: "submission_id", foralder: "essay_submission", falt: "id", andamal: "Dina svar i skriftliga prov, med poäng och kommentarer" },
+  // Den som anstallts via rekryteringen: hela processen, inte bara kandidatraden.
+  { tabell: "candidate_stage_event", kolumn: "candidate_id", foralder: "candidate", falt: "id", andamal: "Stegen i din rekryteringsprocess" },
+  { tabell: "interview_scorecard", kolumn: "candidate_id", foralder: "candidate", falt: "id", andamal: "Intervjuomdömen om dig" },
+  { tabell: "candidate_note", kolumn: "candidate_id", foralder: "candidate", falt: "id", andamal: "Anteckningar om dig som kandidat" },
+  { tabell: "candidate_message", kolumn: "candidate_id", foralder: "candidate", falt: "id", andamal: "Mejl och sms till dig som kandidat" },
+  { tabell: "candidate_booking", kolumn: "candidate_id", foralder: "candidate", falt: "id", andamal: "Dina intervjubokningar" },
+  { tabell: "candidate_merit_request", kolumn: "candidate_id", foralder: "candidate", falt: "id", andamal: "Referenstagningen och referensernas svar om dig" },
 ];
 
 /**
@@ -514,4 +548,24 @@ export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
   // Steg 6 (0135): Leads, vem som gjorde något på ett lead.
   { tabell: "lead_event", kolumn: "actor_id", skal: "Vem som tog ett steg på ett lead (gav det, ringde, påminde) — uppgifterna handlar om kunden" },
   { tabell: "lead_event", kolumn: "till", skal: "Vem ett lead gavs till eller vem som påmindes — uppgifterna handlar om kunden" },
+  // S09 (2026-10-23, F1-1/C3/H16): 0100, 0110 och 0190, vem som gjorde något.
+  { tabell: "coaching_drill", kolumn: "created_by", skal: "Vem som lade upp övningen; övningen följer med den som fick den" },
+  { tabell: "coaching_message", kolumn: "from_id", skal: "Avsändaren; meddelandet följer med den det skrevs till" },
+  { tabell: "coaching_person_focus", kolumn: "set_by", skal: "Vem som satte fokuset; fokuset följer med den det gäller" },
+  { tabell: "coaching_meeting_request", kolumn: "handled_by", skal: "Vem som tog hand om någon annans förfrågan" },
+  { tabell: "employee", kolumn: "end_reason_by", skal: "Vem som angav orsaken till att någon annans anställning slutade" },
+  { tabell: "candidate", kolumn: "tipped_by", skal: "Vem som tipsade om en kandidat; raden är kandidatens" },
+  { tabell: "candidate_note", kolumn: "by_employee", skal: "Vem som skrev en anteckning om en kandidat" },
+  { tabell: "candidate_booking", kolumn: "created_by", skal: "Vem som bokade kandidaten" },
+  { tabell: "candidate_message", kolumn: "created_by", skal: "Vem som skickade till kandidaten" },
+  { tabell: "candidate_merit_request", kolumn: "registered_by", skal: "Vem som bad om referensen" },
+  { tabell: "candidate_merit_request", kolumn: "answered_by", skal: "Vem som förde in referensens svar" },
+  { tabell: "interview_slot", kolumn: "created_by", skal: "Vem som lade ut intervjutiden" },
+  { tabell: "recruitment_position", kolumn: "created_by", skal: "Vem som öppnade tjänsten" },
+  { tabell: "recruitment_template", kolumn: "updated_by", skal: "Vem som skrev om rekryteringsmallen" },
+  { tabell: "recruitment_policy", kolumn: "tips_asked_by", skal: "Vem som bad personalen om tips" },
+  { tabell: "recruitment_goal", kolumn: "created_by", skal: "Vem som satte rekryteringsmålet" },
+  { tabell: "cost_rate_replaced", kolumn: "owner_id", skal: "Vem som ägde en ersatt sats (som cost_rate.owner_id, K28)" },
+  { tabell: "cost_rate_replaced", kolumn: "created_by", skal: "Vem som satte den ersatta satsen" },
+  { tabell: "cost_rate_replaced", kolumn: "replaced_by", skal: "Vem som ersatte satsen" },
 ];

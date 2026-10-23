@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { KALLOR } from "@/lib/registerutdrag";
+import { BARN, KALLOR } from "@/lib/registerutdrag";
 import { ordningFor } from "@/lib/registerutdrag-ordning";
 import { delaUpp, iTur, lasSidvis } from "@/lib/sidvis";
 
@@ -115,6 +115,28 @@ export async function hamtaRegisterutdrag(
   // och 2026-10-22 hade Nav 2.0-grenen nastan dubbelt sa manga kallor.
   const utfall = await iTur(KALLOR, 6, (kalla) => lasAllt(db, kalla.tabell, kalla.kolumn, employeeId));
   KALLOR.forEach((kalla, i) => svar(kalla.tabell, kalla.andamal, utfall[i]));
+
+  /**
+   * S09 (F1-1). Tabeller som bara nas via en forlader: svaren pa ovningarna,
+   * provsvaren och, for den som anstallts via rekryteringen, hela processen.
+   * Ar barnet sjalvt en kalla (coaching_task_note: det du skrivit i andras
+   * uppgifter) slas raderna ihop pa id, sa att chefens anteckningar i dina
+   * egna uppgifter ocksa kommer med.
+   */
+  const barnUtfall = await iTur(BARN, 6, async (b) => {
+    const ids = via(b.foralder, b.falt);
+    return ids ? lasAllt(db, b.tabell, b.kolumn, ids) : olast(b.foralder);
+  });
+  BARN.forEach((b, i) => {
+    const nytt = barnUtfall[i];
+    const redan = data[b.tabell];
+    // Ett fel i en av lasningarna gor kallan olast; en redan olast kalla star kvar som den ar.
+    if ("fel" in nytt || !redan) return svar(b.tabell, b.andamal, nytt);
+    if (olasta.has(b.tabell)) return;
+    const ihop = new Map<unknown, Rad>();
+    for (const r of [...(redan.rader as Rad[]), ...nytt.rader]) ihop.set(r.id ?? JSON.stringify(r), r);
+    svar(b.tabell, b.andamal, { rader: [...ihop.values()] });
+  });
 
   // Dialogen i egna arenden. Gar inte att hamta pa employee_id — traden hanger
   // pa arendet — och att utelamna den hade gjort arendena till rubriker utan

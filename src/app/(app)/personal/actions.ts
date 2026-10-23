@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import type { Referens } from "@/lib/personal-radering";
+import { filerForeRadering, stadaLagringEfterRadering } from "@/lib/personal-radering-server";
 import { getCurrentUser, canManageEmployees, hasRole } from "@/lib/auth";
 import { ROLES, PERMISSIONS, ROLE_LABEL, PERMISSION_LABEL, type Role, type Permission } from "@/lib/roles";
 import { nyttTillfalligtLosenord } from "@/lib/losenord";
@@ -461,6 +462,10 @@ export async function taBortAnstalld(
       return { fel: `Skriv ${namn} exakt som det står för att bekräfta.` };
     }
 
+    // S09 (F1-5, C7): filerna samlas före och tas bort ur lagringen efter,
+    // för de rader som raderingen tog med sig (personal-radering-server.ts).
+    const filerFore = await filerForeRadering(db, employeeId);
+
     const { data: svar, error } = await db.rpc("ta_bort_anstalld", { p_employee: employeeId });
     if (error) return { fel: `Personen kunde inte tas bort: ${error.message}` };
 
@@ -485,7 +490,18 @@ export async function taBortAnstalld(
       raderades_helt: svar?.raderades_helt ?? null,
       kvarvarande: svar?.kvarvarande ?? null,
       fore: svar?.fore ?? null,
+      filer_fore: filerFore.length,
     });
+
+    // Lagringen sist: auth-kontot och loggraden ovan far inte vanta pa den. Hinner
+    // den inte klart blir resten foraldralosa filer, som nattens gallring ser.
+    const lagring = await stadaLagringEfterRadering(db, filerFore);
+    if (lagring.borttagna > 0 || lagring.fel.length > 0) {
+      await logga(user.employee!.id, "employee.files_removed", "employee", employeeId, {
+        borttagna: lagring.borttagna,
+        fel: lagring.fel.length ? lagring.fel.slice(0, 20) : null,
+      });
+    }
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
   }

@@ -174,10 +174,10 @@ export type NdPalObesvarade = {
   farSe: boolean;
   /** Bokförs frågorna (SKRIVLAGE.paletten)? I läsläge fylls listan inte. */
   sparas: boolean;
-  fragor: { q: string; antal: number; senast: string }[];
+  fragor: { q: string; antal: number }[];
 };
 
-/** Veckans frågor utan svar (0125), utan namn. */
+/** Veckans frågor utan svar (0125), utan namn och sedan 0223 utan tid (S09, F2-7). */
 export async function palettObesvarade(supabase: SupabaseClient, user: CurrentUser): Promise<NdPalObesvarade> {
   const farSe = hasRole(user, "sales_manager", "ceo", "admin");
   const sparas = SKRIVLAGE.paletten;
@@ -187,6 +187,6 @@ export async function palettObesvarade(supabase: SupabaseClient, user: CurrentUs
   return {
     farSe,
     sparas,
-    fragor: ((data ?? []) as { q: string; antal: number; senast: string }[]).map((r) => ({ q: r.q, antal: Number(r.antal), senast: String(r.senast) })),
+    fragor: ((data ?? []) as { q: string; antal: number }[]).map((r) => ({ q: r.q, antal: Number(r.antal) })),
   };
 }

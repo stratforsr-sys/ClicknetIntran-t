@@ -19,6 +19,7 @@ import { tolkaOmOtolkade } from "@/lib/samtal-server";
 import { gallraInspelningar } from "@/lib/inspelning-server";
 import { fodSerier } from "@/lib/upprepning-server";
 import { SKRIVLAGE } from "@/lib/nav2/skrivlage";
+import { gallra } from "@/lib/nav2/gallring";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -165,6 +166,11 @@ export async function GET(request: NextRequest) {
     // andra. Bytte stegen plats hade en inspelning kunnat raderas samma natt
     // som ordern den hor till lades in.
     ["inspelningsgallring", () => gallraInspelningar()],
+    // S09 (GDPR, 2026-10-23): kandidater, CV, palettens frågor och filer i
+    // lagringen som ingen rad pekar på. Steget räknar varje natt och skriver de
+    // fyra antalen i kvittot. Det raderar först när GALLRA är på i gallring.ts
+    // (beställarens ja med antalen framför sig, B6), aldrig av sig självt.
+    ["gallring", () => gallra(new Date(), { kor: true })],
     // Nav 2.0 (0082): kontroll av felrapporteringen. En provrapport skrivs den
     // enda vägen in (`skrivFel`), läses tillbaka och tas bort. Kommer den inte
     // fram faller steget, och det syns på driftkortet — en tyst kö betyder då
