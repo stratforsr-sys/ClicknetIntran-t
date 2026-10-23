@@ -13,7 +13,8 @@ export const SKRIVLAGE = {
   arenden: true,
   // Beställarens ja 2026-10-22 (B7).
   fel: true,
-  order: false,
+  // Beställarens ja 2026-10-22 (B7) och 2026-10-23 (B12).
+  order: true,
   // Beställarens ja 2026-10-21 (Gamla Nav G): allt i Provision sparar, också chefens sats, konsekvenstrappan och Utbetald.
   provision: true,
   // Beställarens ja 2026-10-20 ("Ska Kalendern få spara nu?" – "Ja"). 0088–0091 körda 2026-10-15.

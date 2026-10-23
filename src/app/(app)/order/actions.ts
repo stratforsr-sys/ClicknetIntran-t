@@ -18,11 +18,14 @@ import { kronor, manadsnamn, manadsnyckel, tolkaBelopp } from "@/lib/provision";
 import { rattelseposter, rorPengar } from "@/lib/rattelse";
 import {
   angivenProvision,
+  bilagaBortNej,
   giltigRabatt,
   godkannandeSkrevs,
   paketManadsbelopp,
   rabattAnteckning,
   rabattUrFormular,
+  rattelsePris,
+  rattelseProvision,
   tjansterUrFormular,
 } from "@/lib/orderregler";
 import { forberedUppladdning, registreraFil, taBortInnehall } from "@/lib/filer-server";
@@ -1054,7 +1057,13 @@ async function raknaFramProvision(
    * Saknas den, eller ryms den inte under listpriset, galler listpriset som
    * forut. En fri order (`manadsbelopp`) bryr sig inte om den.
    */
-  affaren: { manadsbelopp: number | null; tjanster: Tjanst[]; finans: boolean; rabatt?: number | null },
+  /*
+   * `fryst` (granskningen S10b, D10): priset en GODKAND paketorder redan bar i
+   * `monthly_amount`. En rattelse raknar pa det i stallet for pa dagens
+   * listpris, sa att ett andrat listpris varken nekar rattelsen eller blir en
+   * rabatt. Bara `redigeraOrder` skickar det, och bara nar priset star kvar.
+   */
+  affaren: { manadsbelopp: number | null; tjanster: Tjanst[]; finans: boolean; rabatt?: number | null; fryst?: number | null },
 ): Promise<Framrakning> {
   const db = supabaseAdmin();
 
@@ -1147,7 +1156,10 @@ async function raknaFramProvision(
         fel: "Paketet finns inte. Välj ett paket eller kryssa i att ordern inte följer paketreglerna.",
       };
     }
-    manadsbelopp = paketManadsbelopp(Number(paketrad.list_price), affaren.rabatt);
+    manadsbelopp =
+      affaren.fryst != null && affaren.fryst > 0
+        ? affaren.fryst
+        : paketManadsbelopp(Number(paketrad.list_price), affaren.rabatt);
     vardekalla = "package";
   }
 
@@ -1718,7 +1730,7 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
           " contact_email, package_id, term_months, signed_on, starts_on, period_month," +
           " is_addon, note, monthly_amount, commission_amount, commission_source," +
           " order_value, order_value_source, buyout_amount, financed, finance_amount, created_by," +
-          " discounted_monthly_amount",
+          " discounted_monthly_amount, proposed_commission_percent",
       )
       .eq("id", id)
       .maybeSingle();
@@ -1800,7 +1812,7 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
     const skal = String(form.get("reason") ?? "").trim();
     if (!skal) return { fel: "En rättelse kräver ett skäl. Det är det första någon frågar efter." };
 
-    const note = String(form.get("note") ?? "").trim() || (rad.note as string | null);
+    let note = String(form.get("note") ?? "").trim() || (rad.note as string | null);
 
     // ===========================================================================
     // UPPHOVSPERSONENS RATTELSE. Egen vag, och det ar avsiktligt.
@@ -1952,22 +1964,42 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
     // ovan, med samma dolda falt (`finans_ritad`).
     const finans = finansUrFormular(form) ?? rad.financed === true;
 
-    // RABATTEN (S08, B2): ett formulär som ritade priset avgör, annars står orderns kvar.
+    // PRISET (S08 B2, S10b D10): det frysta priset gäller så länge paketet är
+    // detsamma och priset står kvar. Ett ändrat pris eller ett annat paket
+    // prövas mot dagens listpris, som när en order läggs (`rattelsePris`).
     let rabatt: number | null = null;
+    let fryst: number | null = null;
     if (!friOrder) {
       const listpris = await listprisFor(paket);
-      const val = rabattUrFormular(form, listpris);
-      if (val && "fel" in val) return { fel: val.fel };
-      rabatt = val
-        ? val.rabatt
-        : giltigRabatt(listpris, rad.discounted_monthly_amount == null ? null : Number(rad.discounted_monthly_amount));
+      const val = rattelsePris(form, {
+        listpris,
+        sammaPaket: paket === Number(rad.package_id),
+        fryst: rad.order_value_source === "package" && rad.monthly_amount != null ? Number(rad.monthly_amount) : null,
+        frystRabatt: rad.discounted_monthly_amount == null ? null : Number(rad.discounted_monthly_amount),
+      });
+      if ("fel" in val) return { fel: val.fel };
+      ({ rabatt, fryst } = val);
+      // Ett nytt pris skriver rabattraden i anteckningen, som när ordern läggs ("chefen ser rabatten").
+      if (fryst === null && listpris !== null && form.has("pris_ritad")) {
+        note = rabattAnteckning(note, listpris, rabatt, String(form.get("rabatt_skal") ?? ""));
+      }
     }
 
-    const nya = await raknaFramProvision(paket, loptid, signerad, saljare, form, utkopet, {
+    // EN HANDSATT PROVISION STÅR KVAR (S10b, D10). Nav 2.0:s formulär har inget
+    // provisionsfält för en paketorder, så utan eget val i formuläret läggs
+    // orderns frysta belopp tillbaka i stället för att matrisen räknar om det.
+    const provisionsformular = rattelseProvision(form, {
+      commission_source: rad.commission_source as string | null,
+      commission_amount: rad.commission_amount as number | string | null,
+      proposed_commission_percent: rad.proposed_commission_percent as number | string | null,
+    });
+
+    const nya = await raknaFramProvision(paket, loptid, signerad, saljare, provisionsformular, utkopet, {
       manadsbelopp: friOrder ? manadsbelopp : null,
       tjanster: await tjansterPaOrder(id),
       finans,
       rabatt,
+      fryst,
     });
     if (!nya.klar) return { fel: nya.fel };
 
@@ -3057,6 +3089,30 @@ export async function taBortOrderbilaga(_prev: Orderstate, form: FormData): Prom
 
   try {
     const user = await kravBilageratt(orderId);
+
+    // FILEN SKA VARA EN ORDERBILAGA PÅ DEN HÄR ORDERN (granskningen S10b). Förut
+    // prövades bara ordern, så ett fil-id från en annan order eller en
+    // samtalsinspelning på den egna togs bort lika gärna. Se `bilagaBortNej`.
+    const rad = await hamtaRad(orderId);
+    const { data: fil } = await supabaseAdmin()
+      .from("file_object")
+      .select("id, sales_order_id, purpose, removed_at")
+      .eq("id", fileId)
+      .maybeSingle();
+    const nej = bilagaBortNej({
+      orderId,
+      status: rad?.status ?? null,
+      egen: rad?.salesperson_id === user.employee!.id,
+      hanterare: farHantera(user),
+      fil: fil
+        ? {
+            sales_order_id: (fil.sales_order_id as string | null) ?? null,
+            purpose: (fil.purpose as string | null) ?? null,
+            removed_at: (fil.removed_at as string | null) ?? null,
+          }
+        : null,
+    });
+    if (nej) return { fel: nej };
 
     // Innehallet tas bort ur bucketen, raden och oppningsloggen star kvar
     // (0022). En fil som gick att radera helt hade tagit sin egen logg med sig.

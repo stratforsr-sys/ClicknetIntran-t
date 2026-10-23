@@ -182,8 +182,118 @@ ok("rabatten sparas", /discounted_monthly_amount/.test(ut));
 ok("startdatumets form prövas", /\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$\/\.test\(start\)/.test(ut));
 ok("utköpet prövas (tomt, noll, negativt)", /Utköpsbeloppet/.test(ut));
 const at = rutt.slice(rutt.indexOf('case "ateruppta":'), rutt.indexOf('case "inkio-igen":'));
-ok("ateruppta: säljaren ångrar sitt eget utfall (farAngraUtfall), chefen som förut", /farAngraUtfall\(/.test(at) && /aterupptaBevakning\(/.test(at));
+ok("ateruppta: säljaren ångrar sitt eget utfall (farAngraUtfall via bevakaIgen), chefen som förut", /farAngraUtfall\(|bevakaIgen\(/.test(at) && /aterupptaBevakning\(/.test(at));
 ok("skapa och utkast går genom medNyckel", /case "skapa":[\s\S]{0,200}?return medNyckel\(/.test(rutt) && /case "utkast":\s*return medNyckel\(request, mig, \(\) => sparaUtkast\(/.test(rutt));
+
+// ---------------------------------------------------------------------------
+// S10b: D10, D23 och de mindre fynden
+// ---------------------------------------------------------------------------
+rubrik("Rättelse av en godkänd paketorder: det frysta priset gäller (D10, S10b)");
+const rp = (falt, o) => (typeof R.rattelsePris === "function" ? R.rattelsePris(fd(falt), o) : { fel: "rattelsePris saknas" });
+const fr = { sammaPaket: true, fryst: 1495, frystRabatt: null };
+{
+  const a = rp({ pris_ritad: "1", monthly_amount: "1495" }, { ...fr, listpris: 1395 });
+  ok("listpriset sänkt sedan godkännandet: rättelsen nekas inte", !("fel" in a), JSON.stringify(a));
+  ok("listpriset sänkt: det frysta priset gäller", a.fryst === 1495 && a.rabatt === null, JSON.stringify(a));
+  const b = rp({ pris_ritad: "1", monthly_amount: "1495" }, { ...fr, listpris: 1595 });
+  ok("listpriset höjt: ingen tyst rabatt", !("fel" in b) && b.rabatt === null && b.fryst === 1495, JSON.stringify(b));
+  const c = rp({ pris_ritad: "1", monthly_amount: "1295" }, { sammaPaket: true, fryst: 1295, frystRabatt: 1295, listpris: 1395 });
+  ok("en fryst rabatt står kvar som den var", !("fel" in c) && c.fryst === 1295 && c.rabatt === 1295, JSON.stringify(c));
+  const d = rp({ monthly_amount: "" }, { ...fr, listpris: 1395 });
+  ok("utan prismarkör (/order): det frysta priset gäller", !("fel" in d) && d.fryst === 1495 && d.rabatt === null, JSON.stringify(d));
+  const e = rp({ pris_ritad: "1", monthly_amount: "" }, { ...fr, listpris: 1395 });
+  ok("tomt prisfält: orört, det frysta priset gäller", !("fel" in e) && e.fryst === 1495, JSON.stringify(e));
+  const f = rp({ pris_ritad: "1", monthly_amount: "1200" }, { ...fr, listpris: 1395 });
+  ok("ett ändrat pris under dagens listpris: en ny rabatt", !("fel" in f) && f.fryst === null && f.rabatt === 1200, JSON.stringify(f));
+  const g = rp({ pris_ritad: "1", monthly_amount: "1500" }, { ...fr, listpris: 1395 });
+  ok("ett ändrat pris över dagens listpris: nej med besked", "fel" in g);
+  const h = rp({ pris_ritad: "1", monthly_amount: "1995" }, { sammaPaket: false, fryst: 1495, frystRabatt: null, listpris: 1995 });
+  ok("annat paket: dagens listpris, inget fryst", !("fel" in h) && h.fryst === null && h.rabatt === null, JSON.stringify(h));
+  const i = rp({ pris_ritad: "1", monthly_amount: "1 495" }, { ...fr, listpris: 1395 });
+  ok("samma pris med mellanslag är samma pris", !("fel" in i) && i.fryst === 1495, JSON.stringify(i));
+}
+const frystLagre = await berakna(SALJ, { fryst: 1395 });
+ok("raknaFramProvision: ett fryst pris under listpriset räknas som det är", frystLagre.klar && frystLagre.satt.order_value === 33480 && frystLagre.satt.monthly_amount === 1395, String(frystLagre.satt?.order_value ?? frystLagre.fel));
+const frystHogre = await berakna(SALJ, { fryst: 1595 });
+ok("raknaFramProvision: ett fryst pris över dagens listpris räknas som det är", frystHogre.klar && frystHogre.satt.order_value === 38280 && frystHogre.satt.monthly_amount === 1595, String(frystHogre.satt?.order_value ?? frystHogre.fel));
+ok("raknaFramProvision: det frysta priset rör inte matrisen", frystHogre.satt?.commission_amount === lista.satt.commission_amount && frystHogre.satt?.commission_source === "matrix" && frystHogre.satt?.order_value_source === "package");
+const red = act.slice(act.indexOf("export async function redigeraOrder("), act.indexOf("export async function returneraOrder("));
+ok("redigeraOrder prövar priset med rattelsePris", /rattelsePris\(form,/.test(red));
+ok("redigeraOrder skickar det frysta priset till raknaFramProvision", /raknaFramProvision\([\s\S]{0,400}?\bfryst\b/.test(red));
+
+rubrik("Rättelse av en paketorder med handsatt provision (D10, S10b)");
+{
+  const rv = (falt, o) => (typeof R.rattelseProvision === "function" ? R.rattelseProvision(fd(falt), o) : fd(falt));
+  const a = rv({ package_id: "2" }, { commission_source: "manual", commission_amount: 5000 });
+  ok("handsatt på ordern, inget val i formuläret: beloppet följer med", a.get("provision_form") === "belopp" && a.get("commission_amount") === "5000");
+  const b = rv({ package_id: "2" }, { commission_source: "matrix", commission_amount: 2400 });
+  ok("matrisen på ordern: formuläret orört", !b.has("provision_form"));
+  const c = rv({ provision_form: "procent", commission_percent: "10" }, { commission_source: "manual", commission_amount: 5000 });
+  ok("formuläret har ett eget val: det gäller", c.get("provision_form") === "procent" && c.get("commission_percent") === "10");
+  const d = rv({ provision_form: "" }, { commission_source: "manual", commission_amount: "5000.00" });
+  ok("tomt val i formuläret: beloppet följer med", d.get("provision_form") === "belopp" && d.get("commission_amount") === "5000");
+  const handsatt = await raknaFramProvision(2, 24, "2026-10-20", SALJ, a, null, { manadsbelopp: null, tjanster: [], finans: false, fryst: 1495 });
+  ok("raknaFramProvision: den handsatta provisionen räknas inte om på matrisen", handsatt.klar && handsatt.satt.commission_amount === 5000 && handsatt.satt.commission_source === "manual", JSON.stringify(handsatt.satt ?? handsatt.fel));
+  ok("redigeraOrder lägger tillbaka orderns handsatta provision", /rattelseProvision\(form,/.test(red) && /commission_source/.test(red));
+}
+
+rubrik("Ta bort en orderbilaga (D23, S10b)");
+{
+  const nej = (a) => (typeof R.bilagaBortNej === "function" ? R.bilagaBortNej({ orderId: "o1", status: "inskickad", egen: true, hanterare: false, fil: { sales_order_id: "o1", purpose: "sales_order", removed_at: null }, ...a }) : "saknas");
+  ok("säljaren tar bort en fil på sin inskickade order", nej({}) === null, String(nej({})));
+  ok("en fil på en annan order: nej", typeof nej({ fil: { sales_order_id: "o2", purpose: "sales_order", removed_at: null } }) === "string");
+  ok("en inspelning på ordern: nej (bara orderbilagor)", typeof nej({ fil: { sales_order_id: "o1", purpose: "call_recording", removed_at: null } }) === "string");
+  ok("en fil som inte finns: nej", typeof nej({ fil: null }) === "string");
+  ok("redan borttagen: nej", typeof nej({ fil: { sales_order_id: "o1", purpose: "sales_order", removed_at: "2026-10-23T10:00:00Z" } }) === "string");
+  ok("säljaren på en godkänd order: nej", typeof nej({ status: "signerad" }) === "string");
+  ok("säljchefen på en godkänd order: ja", nej({ status: "signerad", egen: false, hanterare: true }) === null);
+  ok("någon annans order: nej", typeof nej({ egen: false }) === "string");
+  ok("en makulerad order behåller sina filer", typeof nej({ status: "makulerad", hanterare: true }) === "string");
+  const tb = act.slice(act.indexOf("export async function taBortOrderbilaga("), act.indexOf("export async function lasAvtalsforslag("));
+  ok("taBortOrderbilaga prövar filen och ordern före borttagningen", tb.indexOf("bilagaBortNej(") > 0 && tb.indexOf("bilagaBortNej(") < tb.indexOf("taBortInnehall("));
+}
+
+rubrik("Bevaka igen efter tio minuter (D23, S10b)");
+{
+  const bi = (o, mig, hanterare) => (typeof R.bevakaIgen === "function" ? R.bevakaIgen(o, mig, hanterare, nu) : { fel: "saknas", status: 500 });
+  const gammalt = { ...utfall, renewal_at: "2026-10-23T10:00:00Z" };
+  ok("säljchefen: ett gammalt utfall bevakas igen", bi(gammalt, "chef", true) === "hanterare");
+  ok("säljaren inom tio minuter: sitt eget", bi(utfall, "me", false) === "egen");
+  ok("säljaren efter tio minuter: 403", bi(gammalt, "me", false)?.status === 403);
+  ok("någon annans order: 404", bi(gammalt, "annan", false)?.status === 404);
+  ok("ett förlängt avtal: nej", bi({ ...gammalt, renewal_outcome: "forlangd" }, "chef", true)?.status === 400);
+  ok("ett avtal som redan bevakas: nej", bi({ ...gammalt, renewal_outcome: null }, "chef", true)?.status === 400);
+  const at2 = rutt.slice(rutt.indexOf('case "ateruppta":'), rutt.indexOf('case "inkio-igen":'));
+  ok("rutten avgör med bevakaIgen", /bevakaIgen\(/.test(at2));
+}
+
+rubrik("Rabattraden var den än står (S08, mindre)");
+ok("en rabattrad som inte står först dubbleras inte", R.rabattAnteckning("Ring före 10. Rabatt 200 kr/mån: Kampanj.", 1495, 1295, "") === "Rabatt 200 kr/mån: Kampanj. Ring före 10.", String(R.rabattAnteckning("Ring före 10. Rabatt 200 kr/mån: Kampanj.", 1495, 1295, "")));
+ok("en rabattrad mitt i tas bort vid listpris", R.rabattAnteckning("Ring före 10. Rabatt 200 kr/mån: Kampanj. Mejla avtalet.", 1495, null, "") === "Ring före 10. Mejla avtalet.");
+ok("ett skäl med punkt i behålls helt", R.rabattAnteckning("Rabatt 200 kr/mån: Kampanj v.42. Ring före 10.", 1495, 1295, "") === "Rabatt 200 kr/mån: Kampanj v.42. Ring före 10.");
+
+// S10b omgång 2 (granskarens fynd)
+rubrik("Granskarens fynd (S10b omgång 2)");
+{
+  const rv = (falt, o) => R.rattelseProvision(fd(falt), { proposed_commission_percent: null, ...o });
+  const a = rv({ provision_form: "belopp", commission_amount: "4000" }, { commission_source: "manager", commission_amount: 4000 });
+  ok("V1: chefens egen fria order, oförändrat belopp: inget handsatt (40 % räknas om)", !a.has("provision_form") && !a.has("commission_amount"));
+  const b = rv({ provision_form: "belopp", commission_amount: "4500" }, { commission_source: "manager", commission_amount: 4000 });
+  ok("V1: ett ändrat belopp är ett beslut och gäller", b.get("provision_form") === "belopp" && b.get("commission_amount") === "4500");
+  const c = rv({ provision_form: "procent", commission_percent: "40" }, { commission_source: "manager", commission_amount: 4000, proposed_commission_percent: 40 });
+  ok("V1: den angivna procenten oförändrad: inget handsatt", !c.has("provision_form"));
+  const d = rv({ provision_form: "belopp", commission_amount: "3000" }, { commission_source: "manual", commission_amount: 3000 });
+  ok("V1: en handsatt provision står kvar handsatt", d.get("provision_form") === "belopp" && d.get("commission_amount") === "3000");
+  const e = rv({ provision_form: "belopp", commission_amount: "2 000" }, { commission_source: "buyout", commission_amount: 2000 });
+  ok("V1: utköpets provision oförändrad: räknas om på utköpssatsen", !e.has("provision_form"));
+  const f = R.rattelsePris(fd({ pris_ritad: "1", monthly_amount: "1495" }), { sammaPaket: true, fryst: 1495, frystRabatt: 1295, listpris: 1495 });
+  ok("M3: en inaktuell rabatt följer inte med det frysta priset", f.fryst === 1495 && f.rabatt === null, JSON.stringify(f));
+  ok("M6: dubbla mellanslag i resten av anteckningen rörs inte", R.rabattAnteckning("Ring  före 10.", 1495, null, "") === "Ring  före 10.");
+  ok("M6: borttagen rad mitt i lämnar ett mellanslag", R.rabattAnteckning("Ring före 10. Rabatt 200 kr/mån: K. Mejla.", 1495, null, "") === "Ring före 10. Mejla.");
+  ok("M1: redigeraOrder skriver rabattraden vid ett nytt pris", /rabattAnteckning\(/.test(red) && /rabatt_skal/.test(red));
+  ok("M1: rutten släpper igenom rabatt_skal för en godkänd order", /rattaGodkand: \[[^\]]*"rabatt_skal"/.test(rutt));
+  ok("V1: redigeraOrder skickar den angivna procenten till rattelseProvision", /proposed_commission_percent/.test(red));
+}
 
 console.log(fel ? `\n\x1b[31m${fel} prov föll.\x1b[0m` : "\n\x1b[32mAlla prov gick igenom.\x1b[0m");
 process.exit(fel ? 1 : 0);

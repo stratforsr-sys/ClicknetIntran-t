@@ -7,7 +7,7 @@ import { notifieraFlera } from "@/lib/notishandelse-server";
 import { skrivKundanteckning } from "@/lib/crm/inkio";
 import { LOPTIDER, giltigBindningstid, giltigTelefon, giltigtSigneringsdatum, normaliseraOrgnr } from "@/lib/order";
 import { tolkaBelopp } from "@/lib/provision";
-import { angivenProvision, farAngraUtfall, rabattAnteckning, rabattUrFormular, tjansterUrFormular } from "@/lib/orderregler";
+import { angivenProvision, bevakaIgen, rabattAnteckning, rabattUrFormular, tjansterUrFormular } from "@/lib/orderregler";
 import { medNyckel } from "@/lib/nav2/nyckel";
 import {
   aterupptaBevakning,
@@ -75,7 +75,7 @@ const FALT = {
   skapa: ["salesperson_id", "company_name", "org_number", "contact_name", "contact_phone", "contact_email", "customer_street", "customer_postal_code", "customer_city", "avtal_fil_id", "avtal_store", "avtal_filnamn", "package_id", "term_months", "fri_order", "monthly_amount", "signed_on", "starts_on", "note", "is_addon", "godkann", "forlanger_id", "provision_form", "commission_percent", "commission_amount", "tjanster", "finans", "har_utkop", "buyout_amount", "finans_ritad", "har_utkop_ritad", "fri_order_ritad", "fri_skal", "pris_ritad", "rabatt_skal"],
   rattaOgodkand: ["company_name", "org_number", "contact_name", "contact_phone", "contact_email", "customer_street", "customer_postal_code", "customer_city", "package_id", "term_months", "fri_order", "monthly_amount", "signed_on", "starts_on", "salesperson_id", "is_addon", "note", "tjanster", "finans", "har_utkop", "buyout_amount", "provision_form", "commission_percent", "commission_amount", "finans_ritad", "har_utkop_ritad", "fri_order_ritad", "fri_skal", "pris_ritad", "rabatt_skal"],
   // D10: allt `redigeraOrder` läser (se tests/nav2-orderfalt.mjs för det som medvetet inte går fram).
-  rattaGodkand: ["company_name", "org_number", "contact_name", "contact_phone", "contact_email", "reason", "note", "package_id", "term_months", "monthly_amount", "signed_on", "starts_on", "salesperson_id", "is_addon", "tjanster", "finans", "har_utkop", "buyout_amount", "finans_ritad", "har_utkop_ritad", "pris_ritad", "provision_form", "commission_percent", "commission_amount"],
+  rattaGodkand: ["company_name", "org_number", "contact_name", "contact_phone", "contact_email", "reason", "note", "package_id", "term_months", "monthly_amount", "signed_on", "starts_on", "salesperson_id", "is_addon", "tjanster", "finans", "har_utkop", "buyout_amount", "finans_ritad", "har_utkop_ritad", "pris_ritad", "provision_form", "commission_percent", "commission_amount", "rabatt_skal"],
   rattaFranAvtal: ["company_name", "org_number", "contact_name", "contact_phone", "package_id", "term_months", "signed_on"],
 } as const;
 
@@ -194,18 +194,18 @@ export async function POST(request: Request) {
       case "avsluta-avtal":
         return fran(await avslutaAvtal({}, form({ id, renewal_reason: b.reason ?? "" })), "Bevakningen av avtalet är avslutad.");
       case "ateruppta": {
-        if (hanterare) return fran(await aterupptaBevakning({}, form({ id })), "Bevakningen är tillbaka.");
-        // Ångra efter "Förlänger inte" (D23): säljaren tar tillbaka sitt eget besked i tio minuter.
+        // Ångra efter "Förlänger inte" och Bevaka igen (D23, S08 och S10b): säljchef, VD och
+        // ekonomi tar tillbaka ett avslutat utfall när som helst, säljaren sitt eget i tio minuter.
         if (!UUID.test(id)) return svar({ fel: "Ordern finns inte." }, 404);
         const { data: o } = await db
           .from("sales_order")
           .select("id, company_name, salesperson_id, renewal_outcome, renewal_by, renewal_at")
           .eq("id", id)
           .maybeSingle();
-        if (!o || o.salesperson_id !== mig) return svar({ fel: "Ordern finns inte." }, 404);
-        if (!farAngraUtfall(o as { renewal_outcome: string | null; renewal_by: string | null; renewal_at: string | null; salesperson_id: string }, mig)) {
-          return svar({ fel: "Ett utfall som är äldre än tio minuter tas tillbaka av säljchef, VD eller ekonomi." }, 403);
-        }
+        if (!o) return svar({ fel: "Ordern finns inte." }, 404);
+        const vem = bevakaIgen(o as { renewal_outcome: string | null; renewal_by: string | null; renewal_at: string | null; salesperson_id: string }, mig, hanterare);
+        if (typeof vem === "object") return svar({ fel: vem.fel }, vem.status);
+        if (vem === "hanterare") return fran(await aterupptaBevakning({}, form({ id })), "Bevakningen är tillbaka.");
         const { data: skrivet, error } = await db
           .from("sales_order")
           .update({ renewal_outcome: null, renewal_at: null, renewal_by: null, renewal_reason: null, renewal_order_id: null })

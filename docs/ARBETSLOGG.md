@@ -5,6 +5,30 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-23 · Granskningen S10b: Order sparar (B7 och B12)
+
+- **D10, rättelse av en godkänd order.** Knappen Rätta visas på en godkänd order för säljchef, VD
+  och ekonomi, på samma plats som på en inskickad (beställarens ja 2026-10-23). Det frysta priset
+  gäller: `rattelsePris` (`src/lib/orderregler.ts`) räknar på `monthly_amount` så länge paketet är
+  detsamma och priset står kvar, så att ett sänkt listpris inte nekar rättelsen och ett höjt inte
+  blir en rabatt. Ett ändrat pris eller ett annat paket prövas mot dagens listpris och skriver
+  rabattraden. En paketorder med handsatt provision räknas inte om på matrisen
+  (`rattelseProvision`), och en förifylld, oförändrad provision på chefens egen fria order blir
+  inte handsatt (40 % räknas om). En godkänd rättelse kräver varken avtal eller nytt säljsamtal,
+  och tilläggsmärket följer med.
+- **D23.** "Ta bort" på en orderbilaga (frågar först, som i Rutiner) och "Bevaka igen" på en
+  avslutad förnyelse (säljchef, VD, ekonomi). `taBortOrderbilaga` prövar nu att filen är en
+  orderbilaga PÅ ordern (`bilagaBortNej`). Förut gick vilket fil-id som helst att ta bort, också en
+  samtalsinspelning. Säljaren tar bort på sin egen order före godkännandet. "Kunden förlänger inte."
+  står kvar i kortet efter omladdningen.
+- **Mindre (S08).** En rabattrad som inte stod först dubblerades. "10.000" blev 10 kr i formuläret.
+- **`SKRIVLAGE.order = true`.** Med bron flyttar Order till Nav 2.0 i produktionen vid mergen.
+  `supabase/vantar/order_jobb.sql` och `fel_forekomster.sql` körs INTE nu. S12 kör dem vid mergen,
+  eftersom pg_cron bara ringer produktionen.
+- **Prov:** `tests/nav2-order.mjs` och `nav2-orderfalt.mjs` (nya fall).
+
+---
+
 ## 2026-10-23 · Granskningen S15: texterna till personalen (H19, F2-20)
 
 - **Nytt i navet.** Posten `nav-2-med-riktig-data` är omskriven för dagen Nav 2.0 mergas:

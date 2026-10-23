@@ -164,6 +164,8 @@ const HJALPARE = {
   "medAngivenProvision(form": ["provision_form", "commission_percent", "commission_amount"],
   "raknaFramProvision(": ["provision_form", "commission_percent", "commission_amount"],
   "rabattUrFormular(form": ["pris_ritad", "monthly_amount"],
+  "rattelsePris(form": ["pris_ritad", "monthly_amount"],
+  "rattelseProvision(form": ["provision_form", "commission_percent", "commission_amount"],
 };
 function laser(fn) {
   const s = act.indexOf(`export async function ${fn}(`);
@@ -199,8 +201,6 @@ const IGNORERAS = {
     fri_order: "orderns order_value_source avgör",
     fri_order_ritad: "orderns order_value_source avgör",
     fri_skal: "skälet sattes när ordern lades",
-    // Rättelsens skäl (`reason`) bär det; anteckningen ändras inte av rabatten här.
-    rabatt_skal: "rättelsens skäl bär det",
   },
 };
 const HANDLINGAR = [
@@ -250,6 +250,79 @@ for (const m of rutt.matchAll(/\bform\(\{/g)) {
   }
 }
 ok("rutten sätter minst ett kryssfält själv (makulera_i_inkio)", ruttKryss >= 1);
+
+// ---------------------------------------------------------------------------
+// S10b: klientens nya delar
+// ---------------------------------------------------------------------------
+{
+  const vm = await import("node:vm");
+  rubrik("ndTal läser svenska belopp (S08:s mindre fynd D17, S10b)");
+  const rad = /^const ndTal = .*$/m.exec(html)?.[0];
+  ok("ndTal finns i utkastet", !!rad);
+  const c = { String };
+  vm.createContext(c);
+  vm.runInContext(`${rad ?? "const ndTal = () => NaN;"}; this.ndTal = ndTal;`, c);
+  for (const [in_, ut] of [["10.000", 10000], ["10 000", 10000], ["1 295", 1295], ["1 295,50", 1295.5], ["1.295,50", 1295.5], ["1295.50", 1295.5], ["12,5", 12.5], ["995", 995], ["", 0], ["abc", 0], [null, 0], ["1 295", 1295]]) {
+    ok(`ndTal(${JSON.stringify(in_)}) = ${ut}`, c.ndTal(in_) === ut, String(c.ndTal(in_)));
+  }
+
+  rubrik("Rätta på en godkänd order är påslagen (D10, B12)");
+  ok("NDORD_RATTA_GODKAND = true", /const NDORD_RATTA_GODKAND = true;/.test(html));
+
+  rubrik("Ta bort en bilaga och Bevaka igen (D23, B12)");
+  const a = html.indexOf("const ndOrdKanTaBort = ");
+  const b = html.indexOf("/* ---------- Skrivningar: /nav2/order ---------- */", a);
+  ok("klientens block finns", a > 0 && b > a);
+  if (a > 0 && b > a) {
+    const kod = html.slice(a, b);
+    const filrad = (namn, las) => `<div class="kkfil"><i></i><span><b>${namn}</b><small class="muted">1 kB</small></span><button class="btn btn-s btn-sm" data-kkoppnafil="${namn}">Öppna</button>${las ? '<button class="btn btn-s btn-sm" data-kklas="1">Läs ur avtalet</button>' : ""}</div>`;
+    const c2 = {
+      S: { role: "saljare" }, ME: { saljare: { namn: "Sara" } }, ndO: () => ({ varselDagar: 90, hanterare: true }), esc: (x) => String(x),
+      oDagarTillSlut: (x) => x.dagar,
+      kkBilagor: (_o, alla) => `<section class="kksek"><h3>Avtal och bilagor</h3>${alla.map((x) => `<div class="kkbilg"><p class="kkdag">#${x.nr}</p>${x.bilagor.map((f) => filrad(f.namn, x.st === "inskickad")).join("")}<label class="ondrop">x</label></div>`).join("")}<p class="muted kkhj">Varje öppning loggas, som för samtalen. En godkänd order går inte att ändra, därför finns Läs ur avtalet bara före godkännandet.</p></section>`,
+      oLoperUt: (x) => ["signerad", "betald"].includes(x.st) && !x.fornyelse && x.dagar <= 90,
+      kkOversikt: (_o, _d, _alla, bar) => (c2.oLoperUt(bar) ? (bar.fornyAvslag ? `<p class="frb danger"><svg></svg><span><b>Kunden förlänger inte.</b> ${bar.fornyAvslag}</span></p>` : '<div class="kkforny">Dags att förlänga</div>') : ""),
+    };
+    vm.createContext(c2);
+    vm.runInContext(`${kod}; this.kkBilagor = kkBilagor; this.kkOversikt = kkOversikt;`, c2);
+    const alla = [
+      { nr: 11, st: "inskickad", vem: "Sara", bilagor: [{ id: "f11", namn: "Avtal-11.pdf" }] },
+      { nr: 12, st: "signerad", vem: "Sara", bilagor: [{ id: "f12", namn: "Avtal-12.pdf" }, { id: "f12b", namn: "Bild.png" }] },
+      { nr: 13, st: "makulerad", vem: "Sara", bilagor: [{ id: "f13", namn: "Avtal-13.pdf" }] },
+    ];
+    const salj = c2.kkBilagor({}, alla);
+    ok("säljaren: Ta bort på sin inskickade order, efter Läs ur avtalet", /Läs ur avtalet<\/button><button class="btn btn-s btn-sm" data-ndordbort="11\|f11">Ta bort<\/button><\/div>/.test(salj));
+    ok("säljaren: inget Ta bort på en godkänd eller makulerad order", !/data-ndordbort="1[23]\|/.test(salj));
+    c2.S.role = "chef";
+    const chef = c2.kkBilagor({}, alla);
+    ok("chefen: Ta bort på varje fil på den godkända ordern, med rätt id", chef.includes('data-ndordbort="12|f12"') && chef.includes('data-ndordbort="12|f12b"'));
+    ok("chefen: inget Ta bort på en makulerad order", !chef.includes('data-ndordbort="13|'));
+    ok("texten om godkända order stämmer med Rätta", chef.includes("En godkänd order rättas bara av säljchef, VD och ekonomi") && !chef.includes("går inte att ändra"));
+    ok("samma knappstil som Läs ur avtalet", (chef.match(/<button class="btn btn-s btn-sm" data-ndordbort=/g) ?? []).length === 3);
+
+    const bar = { nr: 12, st: "signerad", dagar: 40, fornyAvslag: "Bytte till konkurrent", fornyelse: { utfall: "avslutad" } };
+    const ov = c2.kkOversikt({}, {}, alla, bar);
+    ok("efter omladdningen står Kunden förlänger inte kvar", ov.includes("<b>Kunden förlänger inte.</b> Bytte till konkurrent"));
+    ok("chefen: Bevaka igen i raden", /<\/span><button class="btn btn-s btn-sm" data-ndordbevaka="12">Bevaka igen<\/button><\/p>/.test(ov));
+    ok("oLoperUt är återställd efteråt", c2.oLoperUt(bar) === false);
+    c2.S.role = "saljare";
+    ok("säljaren: raden utan Bevaka igen (Ångra i kvittot i tio minuter)", !c2.kkOversikt({}, {}, alla, bar).includes("Bevaka igen") && c2.kkOversikt({}, {}, alla, bar).includes("Kunden förlänger inte."));
+    ok("utan utfall: kortet som förut", c2.kkOversikt({}, {}, alla, { nr: 12, st: "signerad", dagar: 40, fornyAvslag: null, fornyelse: null }).includes("Dags att förlänga"));
+  }
+  ok("klicket Ta bort frågar först (toastActs) och skickar bilaga-bort", /ds\.ndordbort[\s\S]{0,400}toastActs\([\s\S]{0,200}'bilaga-bort'/.test(html));
+  ok("klicket Bevaka igen skickar ateruppta", /ds\.ndordbevaka[\s\S]{0,120}'ateruppta'/.test(html));
+}
+
+// S10b omgång 2 (granskarens fynd)
+rubrik("Granskarens fynd i klienten (S10b omgång 2)");
+{
+  const sk = html.slice(html.indexOf("async function ndOrdSkicka("), html.indexOf("const NDORD_RATTA_GODKAND"));
+  ok("V3: en godkänd rättelse stoppas inte av avtal eller säljsamtal", /godkandRatta[\s\S]{0,200}'avtal'[\s\S]{0,40}'samtal'/.test(sk));
+  ok("V2: bara ett riktigt samtals-id kopplas, aldrig efter en godkänd rättelse", /n\.samtal && id && !godkandRatta && \/\^\[0-9a-f-\]\{36\}\$\/\.test\(n\.samtal\)/.test(sk));
+  ok("M7: rättelsen tar med orderns tilläggsmärke", /fran && fran\.ratta[\s\S]{0,160}addon/.test(html));
+  ok("M8: knapparna kräver hanterare", /ndOrdKanTaBort = x => [^\n]*ndO\(\)\.hanterare/.test(html) && /S\.role === 'chef' && ndO\(\)\.hanterare \? h\.replace/.test(html));
+  ok("Boka i kundkortet: Kalendern sparar (S15:s text)", /kkboka:'Boka samtalet i Kalendern\.'/.test(html));
+}
 
 console.log(fel ? `\n\x1b[31m${fel} prov föll.\x1b[0m` : "\n\x1b[32mAlla prov gick igenom.\x1b[0m");
 process.exit(fel ? 1 : 0);

@@ -26372,7 +26372,7 @@ if (ndUp()){ ndUpgStart(); NDKOPPLAD.add('uppgifter'); }
 
    Ordernumret är 0080 (sales_order.order_number). Inkio, kampanjsidan och
    Bolagsverket läses när kortet eller formuläret frågar (/nav2/inkio).
-   Läsläge: allt som ändrar en order görs i Nav.
+   Sparar sedan 2026-10-23 (B7 och B12): allt går genom /nav2/order.
    ===================================================================== */
 
 const ndO = () => ND && ND.order;
@@ -26507,6 +26507,7 @@ ordNyStart = function(fran){
   const r = _ndOrdNyStart(fran);
   if (ndO() && S.ordNy && (!fran || !fran.sign)) S.ordNy.sign = kIdag();
   if (ndO() && S.ordNy && S.role === 'chef' && !fran) S.ordNy.vem = '';
+  if (ndO() && S.ordNy && fran && fran.ratta){ const o = ORDER.find(x => x.nr === fran.ratta); if (o) S.ordNy.addon = !!o.addon; }
   return r;
 };
 o7DatumVal = function(k, n){
@@ -26791,6 +26792,30 @@ o7Bifoga = async function(nr, files){
   toast(ok > 1 ? `${ok} filer är bifogade till #${nr}.` : `${fs[0].name} är bifogad till #${nr}.`); ndOrdMinns(); setTimeout(() => location.reload(), 700);
 };
 
+/* ---------- Ta bort en bilaga och Bevaka igen (granskningen S10b, D23; beställarens ja 2026-10-23) ---------- */
+// Säljaren tar bort på sin egen order före godkännandet; säljchef, VD och ekonomi på alla utom makulerade
+// (servern prövar detsamma i bilagaBortNej, och att filen är en orderbilaga på just den ordern).
+const ndOrdKanTaBort = x => x.st !== 'makulerad' && ((S.role === 'chef' && ndO().hanterare) || (x.vem === ME.saljare.namn && !['signerad', 'betald'].includes(x.st)));
+const _ndKkBilagor = kkBilagor;
+kkBilagor = function(o, alla){
+  const h = _ndKkBilagor(o, alla); if (!ndO()) return h;
+  let i = -1;
+  return h.replace(/<div class="kkbilg">[\s\S]*?(?=<div class="kkbilg">|<p class="muted kkhj">)/g, blk => {
+    const x = alla[++i]; if (!x || !ndOrdKanTaBort(x)) return blk;
+    let k = -1;
+    return blk.replace(/(<div class="kkfil">[\s\S]*?)(<\/div>)/g, (m, a, b) => { const f = (x.bilagor || [])[++k]; return f ? `${a}<button class="btn btn-s btn-sm" data-ndordbort="${x.nr}|${esc(f.id)}">Ta bort</button>${b}` : m; });
+  }).replace('En godkänd order går inte att ändra, därför finns Läs ur avtalet bara före godkännandet.', 'En godkänd order rättas bara av säljchef, VD och ekonomi, därför finns Läs ur avtalet bara före godkännandet.');
+};
+// "Kunden förlänger inte" står kvar i kortet efter omladdningen, som i utkastet (bevakningen räknar det inte),
+// och säljchef, VD och ekonomi kan bevaka igen. Säljaren har Ångra i kvittot i tio minuter.
+const _ndKkOversikt = kkOversikt;
+kkOversikt = function(o, d, alla, bar){
+  if (!ndO() || !bar || !bar.fornyAvslag) return _ndKkOversikt(o, d, alla, bar);
+  const lu = oLoperUt; oLoperUt = x => x === bar ? ['signerad', 'betald'].includes(x.st) && oDagarTillSlut(x) <= ndO().varselDagar : lu(x);
+  let h; try { h = _ndKkOversikt(o, d, alla, bar); } finally { oLoperUt = lu; }
+  return S.role === 'chef' && ndO().hanterare ? h.replace(/(<p class="frb danger">[\s\S]*?<b>Kunden förlänger inte\.<\/b>[\s\S]*?<\/span>)(<\/p>)/, `$1<button class="btn btn-s btn-sm" data-ndordbevaka="${bar.nr}">Bevaka igen</button>$2`) : h;
+};
+
 /* ---------- Skrivningar: /nav2/order ---------- */
 function ndOrdMinns(){ try { sessionStorage.setItem('nd-ord', JSON.stringify({open:S.ordOpen, flik:S.kkFlik})); } catch(_){} }
 async function ndOrdPost(handling, data = {}, {ladda = true, tyst = false} = {}){
@@ -26806,7 +26831,8 @@ async function ndOrdPost(handling, data = {}, {ladda = true, tyst = false} = {})
   if (m) setTimeout(() => { S.view = 'order'; if (m.open && ORDER.some(o => o.nr === m.open)){ S.ordOpen = m.open; S.ordSel = m.open; if (m.flik) S.kkFlik = m.flik; } render(); }, 0); })();
 // Paketet med listpris närmast månadsbeloppet (beställaren 2026-10-15, fri order).
 function ndNarmastePaket(man){ const p = ndO().paket.slice().sort((a, b) => Math.abs(a.pris - man) - Math.abs(b.pris - man))[0]; return p ? p.id : null; }
-const ndTal = v => +String(v ?? '').replace(/\s/g, '').replace(',', '.') || 0;
+// "10.000" och "10 000" är tiotusen; "1 295,50" och "1295.50" har decimaler (S10b: "10.000" blev 10 kr).
+const ndTal = v => { let t = String(v ?? '').replace(/[\s\u00a0]/g, ''); if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.'); else if (/^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, ''); return +t || 0; };
 // Formuläret i repots fältnamn (skapaOrder, redigeraOgodkand, redigeraOrder).
 function ndOrdFalt(n){
   const fri = n.p === 0, lop = +n.lop || 0, varde = fri ? ndTal(n.friVarde) : 0, man = fri ? (lop ? Math.round(varde / lop) : 0) : 0;
@@ -26836,7 +26862,8 @@ document.addEventListener('change', e => { if (ndO() && S.view === 'order' && S.
 document.addEventListener('drop', e => { if (ndO() && S.ordNy && e.target.closest && e.target.closest('.ondrop') && e.dataTransfer.files[0]) ndOrdAvtalFil = e.dataTransfer.files[0]; }, true);
 async function ndOrdSkicka(utkast){
   const n = S.ordNy; if (!n) return;
-  if (!utkast){ const fel = onFel(n); if (Object.keys(fel).filter(k => k !== 'mejl').length){ Object.keys(fel).forEach(k => S.ordRor.add(k)); ordUppdatera(); document.querySelector(`[data-onga="${Object.keys(fel)[0]}"]`)?.click(); toast(`${Object.keys(fel).length} saker saknas. De står i rött.`); return; } }
+  const godkandRatta = !!(n.ratta && ORDER.some(x => x.nr === n.ratta && ['signerad', 'betald'].includes(x.st)));
+  if (!utkast){ const fel = onFel(n); if (godkandRatta){ delete fel['avtal']; delete fel['samtal']; } if (Object.keys(fel).filter(k => k !== 'mejl').length){ Object.keys(fel).forEach(k => S.ordRor.add(k)); ordUppdatera(); document.querySelector(`[data-onga="${Object.keys(fel)[0]}"]`)?.click(); toast(`${Object.keys(fel).length} saker saknas. De står i rött.`); return; } }
   const falt = ndOrdFalt(n), ratta = n.ratta ? ORDER.find(x => x.nr === n.ratta) : null;
   if (S.role === 'chef' && !utkast && !ratta) falt.godkann = 'on';
   // Avtalet laddas upp först. En ny order kräver det; en rättad får det som bilaga.
@@ -26857,15 +26884,15 @@ async function ndOrdSkicka(utkast){
   if (!s.ok){ ndSkrivFel(s); return; }
   // Säljsamtalet kopplas när ordern finns.
   const id = ratta ? ratta.id : s.id;
-  if (n.samtal && id){ const k = await ndOrdPost('koppla', {id, samtal:n.samtal}, {ladda:false, tyst:true}); if (!k.ok) ndSkrivFel(k, 'Säljsamtalet kunde inte kopplas. Koppla det i kortet.'); }
+  if (n.samtal && id && !godkandRatta && /^[0-9a-f-]{36}$/.test(n.samtal)){ const k = await ndOrdPost('koppla', {id, samtal:n.samtal}, {ladda:false, tyst:true}); if (!k.ok) ndSkrivFel(k, 'Säljsamtalet kunde inte kopplas. Koppla det i kortet.'); }
   try { localStorage.removeItem('nav2-ordutkast'); } catch(_){}
   toast(s.ok); S.ordNy = null; ndOrdAvtalFil = null; S.ndForlang = null; ndOrdMinns(); setTimeout(() => location.reload(), 700);
 }
-// D10 (granskningen S08): Rätta på en godkänd order, för säljchef, VD och ekonomi. Rutten, formuläret och skälet
-// är klara; knappen är ett nytt element i kundkortet och visas först när beställaren sagt ja (sätt true).
-const NDORD_RATTA_GODKAND = false;
+// D10 (granskningen S08): Rätta på en godkänd order, för säljchef, VD och ekonomi, på samma plats och i samma stil
+// som på en inskickad. Beställarens ja 2026-10-23 (B12). Det frysta priset och en handsatt provision står kvar (S10b).
+const NDORD_RATTA_GODKAND = true;
 const _ndKkAtg = kkAtg;
-kkAtg = function(o){ const a = _ndKkAtg(o); if (!NDORD_RATTA_GODKAND || !ndO() || S.role !== 'chef' || !['signerad', 'betald'].includes(o.st)) return a;
+kkAtg = function(o){ const a = _ndKkAtg(o); if (!NDORD_RATTA_GODKAND || !ndO() || S.role !== 'chef' || !ndO().hanterare || !['signerad', 'betald'].includes(o.st)) return a;
   const i = a.findIndex(x => x.includes('data-ordmak=')); a.splice(i < 0 ? a.length : i, 0, `<button class="btn btn-s btn-sm" data-ordratta="${o.nr}">Rätta</button>`); return a; };
 const _ndO7Godkann = o7Godkann;
 o7Godkann = function(nr){ if (!ndO()) return _ndO7Godkann(nr); const o = ORDER.find(x => x.nr === nr); if (o) ndOrdPost('godkann', {id:o.id}); };
@@ -26874,7 +26901,7 @@ function ndOrdNy(o){ const s = ndO().sett; return !!(s && o.skapad && o.skapad >
 let ndOrdSett = false;
 function ndOrdSettNu(){ if (ndOrdSett || !ndO() || !ndO().skriv) return; ndOrdSett = true; ndOrdPost('sett', {}, {ladda:false, tyst:true}); }
 
-const NDORDBARA = {kkboka:'Samtalet bokas när Kalendern får spara.'};
+const NDORDBARA = {kkboka:'Boka samtalet i Kalendern.'};
 function ndOrdFor(b){
   const v = Object.values(b.dataset || {}).map(x => String(x).split('|')[0]).find(x => /^\d+$/.test(x));
   return (v && ORDER.find(o => o.nr === +v)) || ORDER.find(o => o.nr === S.ordOpen) || null;
@@ -26902,6 +26929,9 @@ document.addEventListener('click', e => {
     ndOrdPost('avsluta-avtal', {id:x.id, reason:t}, {ladda:false, tyst:true}).then(s => { if (!s.ok){ ndSkrivFel(s); return; } x.fornyAvslag = t; S.kkForny = null; render();
       toast(s.ok, () => ndOrdPost('ateruppta', {id:x.id}, {ladda:false}).then(r => { if (r.ok){ x.fornyAvslag = null; render(); } })); }); return; }
   if (ds.kkinkioigen){ stopp(); ndOrdPost('inkio-igen', {id:nr('kkinkioigen').id}); return; }
+  if (ds.ndordbevaka){ stopp(); const x = nr('ndordbevaka'); if (x) ndOrdPost('ateruppta', {id:x.id}); return; }
+  if (ds.ndordbort){ stopp(); const [n, fil] = ds.ndordbort.split('|'), x = ORDER.find(y => y.nr === +n), f = x && (x.bilagor || []).find(q => q.id === fil); if (!f) return;
+    toastActs(`Ta bort ”${f.namn}” från #${x.nr}? Filen går inte längre att öppna.`, [['Ta bort', () => ndOrdPost('bilaga-bort', {id:x.id, fil:f.id})]], 8000); return; }
   if (ds.ordforny){ const o = ndOrdFor(b); S.ndForlang = o ? o.id : null; return; }
   if (ds.onskicka !== undefined || ds.o7entill !== undefined){ stopp(); ndOrdSkicka(false); return; }
   if (ds.onutkast !== undefined){ stopp(); ndOrdSkicka(true); return; }

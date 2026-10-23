@@ -184,8 +184,10 @@ export function rabattUrFormular(
   return { rabatt: giltigRabatt(listpris, pris) };
 }
 
-// "Rabatt 200 kr/mån: Kampanj." först i anteckningen, som utkastets ordSkapa skriver den.
-const RABATTRAD = /^Rabatt \d[\d\s\u00a0]*(?:[.,]\d{1,2})? kr\/mån(?:: [^\n]*?)?\.\s*/;
+// "Rabatt 200 kr/mån: Kampanj." i anteckningen, som utkastets ordSkapa skriver den. Raden
+// hittas var den än står (S10b: en rad som inte stod först dubblerades) och slutar vid en
+// punkt följd av mellanrum eller slutet, så att ett skäl som "Kampanj v.42" behålls helt.
+const RABATTRAD = /(^|\s)Rabatt \d[\d\s\u00a0]*(?:[.,]\d{1,2})? kr\/mån(?:: [^\n]*?)?\.(?=\s|$)/;
 
 /**
  * Anteckningen med rabatten först: `Rabatt <X> kr/mån: <skäl>.` (utkastets
@@ -193,8 +195,9 @@ const RABATTRAD = /^Rabatt \d[\d\s\u00a0]*(?:[.,]\d{1,2})? kr\/mån(?:: [^\n]*?)
  * mening om rabatt i annan form rörs inte.
  */
 export function rabattAnteckning(note: string | null, listpris: number, rabatt: number | null, skal: string): string | null {
-  const gammal = RABATTRAD.exec(note ?? "")?.[0] ?? "";
-  const utan = (note ?? "").replace(RABATTRAD, "").trim();
+  const gammal = (RABATTRAD.exec(note ?? "")?.[0] ?? "").trim();
+  // Raden och mellanrummet efter den tas bort; resten av anteckningen rörs inte.
+  const utan = (note ?? "").replace(new RegExp(RABATTRAD.source + "[ \\t]*"), "$1").trim();
   if (rabatt === null) return utan || null;
   // Utan nytt skäl står det gamla kvar: formuläret minns inte snabbvalet när ordern öppnas igen.
   const s = (skal.trim() || (/^Rabatt [^:]*: (.*)\.\s*$/.exec(gammal)?.[1] ?? "")).replace(/\.$/, "").slice(0, 200);
@@ -231,4 +234,118 @@ export function farAngraUtfall(
 
 export function godkannandeSkrevs(skrivet: { id: string }[] | null | undefined): boolean {
   return Array.isArray(skrivet) && skrivet.length > 0;
+}
+
+// =============================================================================
+// RÄTTELSE AV EN GODKÄND ORDER (granskningen S10b, D10)
+//
+// En godkänd paketorder bär sitt frysta pris i `monthly_amount` (listpriset den
+// dag den godkändes, eller rabatten). Rättelsen räknade förut om priset mot
+// DAGENS listpris: sänktes listpriset nekades rättelsen ("högre än listpriset"),
+// och höjdes det blev det frysta priset en rabatt i tysthet. Nu gäller det
+// frysta priset så länge paketet är detsamma och priset står kvar (eller inte
+// skickades, som från /order). Ett ändrat pris eller ett annat paket är ett nytt
+// beslut och prövas mot dagens listpris, som när en order läggs.
+// =============================================================================
+export function rattelsePris(
+  form: FormData,
+  o: { listpris: number | null; sammaPaket: boolean; fryst: number | null; frystRabatt: number | null },
+): { fryst: number | null; rabatt: number | null } | { fel: string } {
+  const frystGaller = o.sammaPaket && o.fryst !== null && o.fryst > 0;
+  // Rabatten följer med bara när den är det frysta priset; en inaktuell kolumn skrivs inte tillbaka.
+  const behall = () => ({ fryst: o.fryst, rabatt: o.frystRabatt !== null && o.frystRabatt === o.fryst ? o.fryst : null });
+  if (!form.has("pris_ritad")) return frystGaller ? behall() : { fryst: null, rabatt: giltigRabatt(o.listpris, o.frystRabatt) };
+  const text = String(form.get("monthly_amount") ?? "").trim();
+  // Ett tomt fält betyder orört, som i resten av rättelsen.
+  if (frystGaller && (!text || tolkaBelopp(text) === o.fryst)) return behall();
+  const val = rabattUrFormular(form, o.listpris);
+  if (val && "fel" in val) return val;
+  return { fryst: null, rabatt: val?.rabatt ?? null };
+}
+
+/**
+ * Formuläret en rättelse räknar provisionen på (S10b, D10).
+ *
+ * Nav 2.0:s formulär har inget provisionsfält för en paketorder. En paketorder
+ * vars provision sattes för hand (`commission_source = 'manual'`) räknades
+ * därför om på matrisen vid varje rättelse. Väljer formuläret ingen provision
+ * själv läggs orderns frysta belopp tillbaka, som `medAngivenProvision` gör vid
+ * godkännandet; bär formuläret ett eget val gäller det.
+ *
+ * Omvänt för en fri order vars provision INTE sattes för hand (chefens egen
+ * försäljning, utköpet): formuläret är förifyllt med den frysta provisionen,
+ * och ett oförändrat tal där är förifyllningen, inget beslut. Det tas bort, så
+ * att regeln räknar om (40 % av det nya värdet), i stället för att det frysta
+ * beloppet blir handsatt i tysthet. Ett ändrat tal är ett beslut och gäller.
+ */
+export function rattelseProvision(
+  form: FormData,
+  rad: { commission_source: string | null; commission_amount: number | string | null; proposed_commission_percent?: number | string | null },
+): FormData {
+  const formen = String(form.get("provision_form") ?? "").trim();
+  const kopia = new FormData();
+  for (const [k, v] of form.entries()) kopia.append(k, v);
+  if (formen !== "") {
+    if (rad.commission_source === "manual") return form;
+    const tal = (k: string) => tolkaBelopp(String(form.get(k) ?? "").trim().replace(/%$/, ""));
+    const oforandrad =
+      formen === "procent"
+        ? rad.proposed_commission_percent != null && tal("commission_percent") === Number(rad.proposed_commission_percent)
+        : rad.commission_amount != null && tal("commission_amount") === Number(rad.commission_amount);
+    if (!oforandrad) return form;
+    for (const k of ["provision_form", "commission_amount", "commission_percent"]) kopia.delete(k);
+    return kopia;
+  }
+  if (rad.commission_source !== "manual" || rad.commission_amount == null) return form;
+  kopia.set("provision_form", "belopp");
+  kopia.set("commission_amount", String(Number(rad.commission_amount)));
+  kopia.delete("commission_percent");
+  return kopia;
+}
+
+// =============================================================================
+// TA BORT EN ORDERBILAGA (granskningen S10b, D23; beställarens ja 2026-10-23)
+//
+// Filen måste vara en orderbilaga PÅ DEN ORDERN. Förut prövades bara ordern, så
+// ett fil-id från en annan order, eller en samtalsinspelning på den egna, togs
+// bort lika gärna. Säljaren tar bort på sin egen order före godkännandet; en
+// godkänd orders avtal är underlag och tas bort av säljchef, VD eller ekonomi.
+// En makulerad order behåller sina filer.
+// =============================================================================
+export function bilagaBortNej(a: {
+  orderId: string;
+  status: string | null;
+  egen: boolean;
+  hanterare: boolean;
+  fil: { sales_order_id: string | null; purpose: string | null; removed_at: string | null } | null;
+}): string | null {
+  if (!a.fil || a.fil.sales_order_id !== a.orderId || a.fil.purpose !== "sales_order") return "Filen hör inte till ordern.";
+  if (a.fil.removed_at) return "Filen är redan borttagen.";
+  if (a.status === "makulerad") return "En makulerad order behåller sina filer.";
+  if (!a.hanterare && !a.egen) return "Du får inte ta bort något från någon annans order.";
+  if (!a.hanterare && (a.status === "signerad" || a.status === "betald")) {
+    return "En godkänd order behåller sitt avtal. Säljchef, VD eller ekonomi tar bort en fil som blev fel.";
+  }
+  return null;
+}
+
+// =============================================================================
+// BEVAKA IGEN (granskningen S10b, D23; beställarens ja 2026-10-23)
+//
+// Ett "Förlänger inte" tas tillbaka av säljchef, VD och ekonomi när som helst
+// (`aterupptaBevakning`), och av säljaren själv i tio minuter (`farAngraUtfall`).
+// Bara ett avslutat utfall: ett förlängt avtal har en ny order som bevakas.
+// =============================================================================
+export function bevakaIgen(
+  o: { renewal_outcome: string | null; renewal_by: string | null; renewal_at: string | null; salesperson_id: string },
+  mig: string,
+  hanterare: boolean,
+  nu: number = Date.now(),
+): "hanterare" | "egen" | { fel: string; status: number } {
+  if (o.renewal_outcome === "forlangd") return { fel: "Avtalet är förlängt med en ny order, och den bevakas.", status: 400 };
+  if (o.renewal_outcome !== "avslutad") return { fel: "Avtalet bevakas redan.", status: 400 };
+  if (hanterare) return "hanterare";
+  if (o.salesperson_id !== mig) return { fel: "Ordern finns inte.", status: 404 };
+  if (farAngraUtfall(o, mig, nu)) return "egen";
+  return { fel: "Ett utfall som är äldre än tio minuter tas tillbaka av säljchef, VD eller ekonomi.", status: 403 };
 }
