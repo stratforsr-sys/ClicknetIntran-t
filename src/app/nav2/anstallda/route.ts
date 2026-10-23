@@ -28,6 +28,8 @@ import { skapaMote } from "@/app/(app)/kalender/moten/actions";
 import { aeDue, arbetsdagar, AE_TYPER, frist, fyll } from "@/lib/nav2/anstalldaforma";
 import { type Niva } from "@/lib/nav2/forma";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
+import { avslutNu, harPersonnummer, PNR_TEXT } from "@/lib/nav2/avslutforma";
+import { CHECKLISTA } from "@/lib/offboarding-server";
 
 export const dynamic = "force-dynamic";
 
@@ -254,15 +256,54 @@ export async function POST(request: Request) {
         // Beställaren 2026-10-20 (A10): avslutet frågar varför (0110 `end_reason`, Rekryteringens LAS 25 §).
         const orsak = String(b.orsak ?? "");
         if (!SLUTORSAKER.includes(orsak)) return svar({ fel: "Välj varför anställningen tar slut." }, 400);
+        const nu = avslutNu(slut, idag);
+        // Granskningen F1-8: sista dag framåt stängs av nattjobbet natten efter sista dagen. Nattjobbet
+        // går bara i produktionen, så förhandsvisningen (samma databas) registrerar inget sådant avslut.
+        if (!nu && process.env.VERCEL_ENV !== "production")
+          return svar({ fel: "I förhandsvisningen går bara ett avslut med sista dag i dag eller tidigare: ett avslut framåt stängs av nattjobbet, som bara går i produktionen. Ingenting ändrades." }, 400);
+        // Ett avslut som redan är registrerat med sista dag framåt har sin lista. Det flyttas, eller
+        // stängs nu om den nya sista dagen är i dag eller passerad. Ingen andra lista läggs in.
+        const { count: listor } = await db.from("offboarding_task").select("id", { count: "exact", head: true }).eq("employee_id", p.id);
+        const planerat = (listor ?? 0) > 0;
+        const nuIso = new Date().toISOString();
+        if (planerat && !nu) {
+          const { error } = await db.from("employee").update({ end_date: slut, end_reason: orsak, end_reason_by: mig, end_reason_at: nuIso }).eq("id", p.id).neq("status", "offboarded");
+          if (error) return svar({ fel: "Det gick inte att spara." }, 500);
+          await db.from("audit_log").insert({ actor_id: mig, action: "employee.offboarding_scheduled", object_type: "employee", object_id: p.id, meta: { slutdatum: slut, end_reason: orsak, flyttat_fran: p.end_date } });
+          await logga(p.id, `flyttade sista dagen till ${slut} (${SLUTORSAK_TEXT[orsak]}).`, { end_reason: orsak });
+          return svar({ ok: `Sista dagen är nu ${slut}. Inloggningen stängs natten efter sista dagen.` });
+        }
         // Avslutslistan först: repots offboarda lägger bara in sin egen lista när det inte finns någon.
-        const { data: mall } = await db.from("onboarding_template").select("id").eq("is_exit", true).maybeSingle();
-        const punkter = mall ? await mallPunkter((mall as { id: string }).id, p, false) : [];
-        const fpFore = await fyllFor(p);
-        const { data: inlagda } = punkter.length ? await db.from("offboarding_task").insert(punkter.map((x, i) => somRad(x, p.id, i))).select("id") : { data: [] };
+        let punkter: Awaited<ReturnType<typeof mallPunkter>> = [];
+        let fpFore: Awaited<ReturnType<typeof fyllFor>> | undefined;
+        let inlagdaIds: string[] = [];
+        if (!planerat) {
+          const { data: mall } = await db.from("onboarding_template").select("id").eq("is_exit", true).maybeSingle();
+          punkter = mall ? await mallPunkter((mall as { id: string }).id, p, false) : [];
+          fpFore = await fyllFor(p);
+          const { data: inlagda } = punkter.length ? await db.from("offboarding_task").insert(punkter.map((x, i) => somRad(x, p.id, i))).select("id") : { data: [] };
+          inlagdaIds = ((inlagda ?? []) as unknown as { id: string }[]).map((x) => x.id);
+          // Ett avslut framåt behöver sin lista (nattjobbets markör): en tom mall ger repots egen.
+          if (!nu && !inlagdaIds.length) {
+            const { data: repots } = await db.from("offboarding_task").insert(CHECKLISTA.map((label, i) => ({ employee_id: p.id, label, sort: i }))).select("id");
+            inlagdaIds = ((repots ?? []) as unknown as { id: string }[]).map((x) => x.id);
+          }
+        }
+        const angra = async () => { if (inlagdaIds.length) await db.from("offboarding_task").delete().in("id", inlagdaIds); };
+        if (!nu) {
+          if (!inlagdaIds.length) return svar({ fel: "Avslutslistan kunde inte läggas in. Ingenting ändrades." }, 500);
+          const { error } = await db.from("employee").update({ end_date: slut, end_reason: orsak, end_reason_by: mig, end_reason_at: nuIso }).eq("id", p.id);
+          if (error) { await angra(); return svar({ fel: "Det gick inte att spara. Ingenting ändrades." }, 500); }
+          await db.from("audit_log").insert({ actor_id: mig, action: "employee.offboarding_scheduled", object_type: "employee", object_id: p.id, meta: { slutdatum: slut, end_reason: orsak } });
+          const p3 = (await personen(p.id)) ?? p;
+          const mejl3 = await regelPunkter(p3, "slut", [], "offboarding_task", punkter.length, fpFore);
+          await meddelaSuperadmin(`${namnPa(p)} avslutas`, `${jagNamn} avslutade · sista dag ${slut} · ${SLUTORSAK_TEXT[orsak]}`, p.id);
+          await logga(p.id, `startade avslutslistan (${SLUTORSAK_TEXT[orsak]}), sista dag ${slut}${mejl3 ? `. ${mejl3} mejl gick ut` : ""}.`, { end_reason: orsak });
+          return svar({ ok: `Avslutet är registrerat med sista dag ${slut}. Inloggningen stängs natten efter sista dagen.${mejl3 ? ` ${mejl3} mejl gick ut.` : ""}` });
+        }
         const fel = await fangad(() => offboarda(form({ employee_id: p.id, slutdatum: slut })));
         if (fel) {
-          const ids = ((inlagda ?? []) as unknown as { id: string }[]).map((x) => x.id);
-          if (ids.length) await db.from("offboarding_task").delete().in("id", ids);
+          await angra();
           return svar({ fel }, 400);
         }
         await klarMarkera("offboarding_task", p.id, "konto");
@@ -271,11 +312,12 @@ export async function POST(request: Request) {
         const stangda = Number((logg as { meta: { stangda_arenden?: number } | null } | null)?.meta?.stangda_arenden ?? 0);
         if (stangda > 0) await db.from("offboarding_task").update({ note: `${stangda} öppet personalärende${stangda === 1 ? "" : "n"} stängdes automatiskt. Kontrollera att inget kräver åtgärd.` }).eq("employee_id", p.id).eq("item_key", "arenden");
         // Utan 0110 finns inte kolumnen. Då står orsaken bara i historiken, och Rekrytering frågar i efterhand.
-        await db.from("employee").update({ end_reason: orsak, end_reason_by: mig, end_reason_at: new Date().toISOString() }).eq("id", p.id);
+        await db.from("employee").update({ end_reason: orsak, end_reason_by: mig, end_reason_at: nuIso }).eq("id", p.id);
+        // Ett tidigarelagt avslut har redan fått sin lista och sina mejl när det registrerades.
         const p2 = (await personen(p.id)) ?? p;
-        const mejl = await regelPunkter(p2, "slut", [], "offboarding_task", punkter.length, fpFore);
-        await meddelaSuperadmin(`${namnPa(p)} avslutas`, `${jagNamn} avslutade · sista dag ${slut} · ${SLUTORSAK_TEXT[orsak]}`, p.id);
-        await logga(p.id, `startade avslutslistan (${SLUTORSAK_TEXT[orsak]})${mejl ? `. ${mejl} mejl gick ut` : ""}.`, { end_reason: orsak });
+        const mejl = planerat ? 0 : await regelPunkter(p2, "slut", [], "offboarding_task", punkter.length, fpFore);
+        await meddelaSuperadmin(`${namnPa(p)} avslutas`, `${jagNamn} avslutade${planerat ? " i förtid" : ""} · sista dag ${slut} · ${SLUTORSAK_TEXT[orsak]}`, p.id);
+        await logga(p.id, planerat ? `stängde anställningen i förtid, sista dag ${slut} (${SLUTORSAK_TEXT[orsak]}).` : `startade avslutslistan (${SLUTORSAK_TEXT[orsak]})${mejl ? `. ${mejl} mejl gick ut` : ""}.`, { end_reason: orsak });
         return svar({ ok: `Anställningen är avslutad med sista dag ${slut}.${mejl ? ` ${mejl} mejl gick ut.` : ""}` });
       }
       case "radera": {
@@ -313,6 +355,8 @@ export async function POST(request: Request) {
         const skal = str(b.skal, 500);
         if (hoppa && !skal) return svar({ fel: "Skriv varför punkten hoppas över. Det krävs, och det syns i historiken." }, 400);
         const varde = str(b.varde, 200);
+        // K27 (granskningen F1-9): värdet och skälet tar inga personnummer.
+        if (harPersonnummer(varde, skal)) return svar({ fel: PNR_TEXT }, 400);
         if (!hoppa && x.ask_for && !varde) return svar({ fel: `Skriv ${x.ask_for.toLowerCase()}.` }, 400);
         if (!hoppa && x.ask_for === "E-postadress" && !EPOST.test(varde)) return svar({ fel: "Skriv en hel adress, till exempel namn@clicknet.se." }, 400);
         if (!hoppa && x.ask_for === "Lynes-användare") {
@@ -347,7 +391,9 @@ export async function POST(request: Request) {
       case "not": {
         const h = await punkten(b.rad);
         if (!h) return svar({ fel: "Punkten finns inte." }, 404);
-        await db.from(h.tabell).update({ note: str(b.text, 500) || null }).eq("id", h.x.id);
+        const not = str(b.text, 500);
+        if (harPersonnummer(not)) return svar({ fel: PNR_TEXT }, 400);
+        await db.from(h.tabell).update({ note: not || null }).eq("id", h.x.id);
         return svar({ ok: "Anteckningen är sparad." });
       }
       case "flytta": {
@@ -364,7 +410,9 @@ export async function POST(request: Request) {
         if (!p) return svar({ fel: "Personen finns inte." }, 404);
         const t = str(b.t, 120);
         if (!t) return svar({ fel: "Skriv punkten först." }, 400);
-        const tabell = p.status === "offboarded" ? "offboarding_task" : "onboarding_task";
+        // Ett planerat avslut (sista dag framåt) har sin avslutslista redan före avslutet (granskningen F1-8).
+        const { count: avs } = await db.from("offboarding_task").select("id", { count: "exact", head: true }).eq("employee_id", p.id);
+        const tabell = p.status === "offboarded" || ((avs ?? 0) > 0 && p.end_date) ? "offboarding_task" : "onboarding_task";
         const start = bas(p, tabell) ?? idag;
         const off = Math.max(-60, Math.min(365, Math.round(Number(b.off) || 0)));
         // Har personen redan börjat räknas en frist framåt från i dag, som i utkastet.

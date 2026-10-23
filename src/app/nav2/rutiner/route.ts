@@ -208,6 +208,8 @@ export async function POST(request: Request) {
         const d = await dokument();
         const till = String(b.till ?? "");
         if (!d || !UUID.test(till)) return svar({ fel: "Rutinen eller mottagaren finns inte." }, 404);
+        // Bara en publicerad rutin skickas (granskningen F2-18): ett utkast syns bara för redaktörerna.
+        if (d.status !== "published") return svar({ fel: "Bara en publicerad rutin går att skicka." }, 400);
         const { data: p } = await db.from("employee").select("first_name").eq("id", till).maybeSingle();
         if (!p) return svar({ fel: "Mottagaren finns inte." }, 404);
         await notifiera({ till, av: mig, kalla: "rutin-delad", typ: "rutin", rubrik: `${jagNamn} skickade en rutin till dig`, detalj: d.title as string, href: `/rutiner/${d.slug}` });
@@ -233,6 +235,37 @@ export async function POST(request: Request) {
         if (!d) return svar({ fel: "Rutinen finns inte." }, 404);
         const fel = await fangad(() => markeraGranskad(form({ document_id: d.id, slug: d.slug, manader: 6 })));
         return fel ? svar({ fel }, 403) : svar({ ok: "Markerad som granskad. Nästa granskning om sex månader." });
+      }
+
+      // Granskningen G8: "Fråga <ägare>" frågar rutinens ägare ur navet, inte ett namn ur klienten.
+      case "fraga": {
+        const d = await dokument();
+        if (!d) return svar({ fel: "Rutinen finns inte." }, 404);
+        if (!d.owner_id) return svar({ fel: "Rutinen har ingen ägare. Fråga din chef i Ärenden." }, 400);
+        if (d.owner_id === mig) return svar({ fel: "Du äger rutinen själv." }, 400);
+        const { data: agare } = await db.from("employee").select("first_name, status").eq("id", d.owner_id).maybeSingle();
+        if (!agare || agare.status === "offboarded") return svar({ fel: "Ägaren finns inte längre i navet. Fråga din chef i Ärenden." }, 400);
+        await notifiera({ till: d.owner_id as string, av: mig, kalla: "rutin-aterkoppling", typ: "rutin", rubrik: `${jagNamn} har en fråga om ”${d.title}”`, detalj: "Hör av dig, eller skriv svaret i rutinen.", href: `/rutiner/${d.slug}` });
+        return svar({ ok: `${agare.first_name} får frågan i Nav, med rutinen kopplad.` });
+      }
+
+      // Granskningen G8: "Påminn ägarna om granskning" – samma urval som förvaltningsvyn (förfallna och inom 45 dagar).
+      case "paminn-granska": {
+        if (!redaktor) return svar({ fel: "Bara säljchef och administratör påminner om granskning." }, 403);
+        const idag = svensktDatum();
+        const { data: doks } = await db
+          .from("document")
+          .select("id, slug, title, owner_id, review_due")
+          .eq("status", "published")
+          .not("review_due", "is", null)
+          .lte("review_due", dagarBakat(idag, -45));
+        let n = 0;
+        for (const d of (doks ?? []) as { id: string; slug: string; title: string; owner_id: string | null; review_due: string }[]) {
+          if (!d.owner_id) continue;
+          const sen = d.review_due < idag;
+          if (await notifiera({ till: d.owner_id, av: mig, kalla: "rutin-aterkoppling", typ: "rutin", rubrik: sen ? `Granska ”${d.title}”` : `Snart dags att granska ”${d.title}”`, detalj: sen ? `Skulle granskats senast ${d.review_due}.` : `Granskas senast ${d.review_due}.`, href: `/rutiner/${d.slug}` })) n++;
+        }
+        return svar({ ok: n ? `Ägarna till ${n} ${n === 1 ? "rutin" : "rutiner"} fick en påminnelse om granskning.` : "Ingen ägare behövde en påminnelse." });
       }
 
       case "paminn":

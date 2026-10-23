@@ -33,6 +33,7 @@ export const ORDNING: Record<string, readonly string[]> = {
   employee_access_level: ["employee_id"],
   essay_answer: ["submission_id", "question_id"],
   employee_onboarding: ["employee_id"],
+  employee_photo: ["employee_id"],
   employee_permission: ["employee_id", "permission"],
   employee_role: ["employee_id", "role"],
   error_report_follower: ["error_id", "employee_id"],

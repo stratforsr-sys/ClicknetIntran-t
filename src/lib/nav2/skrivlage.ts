@@ -24,7 +24,8 @@ export const SKRIVLAGE = {
   franvaro: true,
   // Beställarens ja 2026-10-22 (B7).
   tid: true,
-  rutiner: false,
+  // Beställarens ja 2026-10-22 (B7).
+  rutiner: true,
   // Beställarens ja 2026-10-22 (B7).
   utbildning: true,
   // Beställarens ja 2026-10-19: ladda upp och ta bort avtal, påminn om påskrift, tillsvidare.
@@ -35,10 +36,12 @@ export const SKRIVLAGE = {
   rekrytering: true,
   // Beställarens ja 2026-10-22 (B7).
   coachning: true,
-  anstallda: false,
+  // Beställarens ja 2026-10-22 (B7).
+  anstallda: true,
   // Beställarens ja 2026-10-20: frågor utan svar bokförs utan namn.
   paletten: true,
-  profil: false,
+  // Beställarens ja 2026-10-22 (B7).
+  profil: true,
   // Beställarens svar 2026-10-20 ("det som är bäst"), efter att 0135 körts: fördela, efter samtalet, möten med inbjudan, Ångra.
   leads: true,
   nyheter: true,

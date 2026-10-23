@@ -240,6 +240,8 @@ export const KALLOR: Kalla[] = [
   { tabell: "document_view_log", kolumn: "employee_id", andamal: "När du öppnat rutiner" },
   { tabell: "employee_access_level", kolumn: "employee_id", andamal: "Din nivå i Nav 2.0" },
   { tabell: "employee_onboarding", kolumn: "employee_id", andamal: "Introduktionen: privat mejl, telefon, fadder och välkomstbrev" },
+  // 0107 (körd när Profil slogs på, granskningen S10; klassningen i S09).
+  { tabell: "employee_photo", kolumn: "employee_id", andamal: "Din profilbild" },
   { tabell: "error_occurrence", kolumn: "employee_id", andamal: "När ett fel drabbade dig" },
   { tabell: "error_report_follower", kolumn: "employee_id", andamal: "Fel du följer" },
   { tabell: "error_report_message", kolumn: "author_id", andamal: "Det du skrivit i felrapporter" },
@@ -518,6 +520,7 @@ export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
   { tabell: "employee_access_level", kolumn: "set_by", skal: "Vem som satte nivån" },
   { tabell: "employee_onboarding", kolumn: "mentor_id", skal: "Faddern; introduktionen följer med den nyanställda" },
   { tabell: "employee_onboarding", kolumn: "updated_by", skal: "Vem som senast ändrade introduktionen" },
+  { tabell: "employee_photo", kolumn: "updated_by", skal: "Vem som senast bytte bilden" },
   { tabell: "error_report", kolumn: "assigned_to", skal: "Vem som fått felet att rätta" },
   { tabell: "essay_return", kolumn: "returned_by", skal: "Vem som lämnade tillbaka ett prov; provet följer med den som skrev det" },
   { tabell: "essay_submission", kolumn: "graded_by", skal: "Vem som rättade provet" },

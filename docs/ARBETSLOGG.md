@@ -5,6 +5,30 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-23 · Granskningen S10, omgång 3: Anställda, Profil och Rutiner sparar (B7); 0229 och 0107 körda
+
+- **Anställda (F1-8).** Ett avslut med sista dag i dag eller bakåt stänger inloggningen direkt,
+  som förut. Med sista dag framåt läggs avslutslistan och orsaken in nu, `employee.end_date`
+  sätts, och nattjobbet (steget `avslut`, `src/lib/nav2/anstallda-avslut.ts`) stänger kontot
+  natten efter sista dagen med repots offboarding-kärna, som brutits ut ordagrant ur `offboarda`
+  till `src/lib/offboarding-server.ts` (`stangAnstallning`; gamla Nav anropar samma kod). Ett
+  planerat avslut kan flyttas eller stängas i förtid i samma ruta. Avslutslistan syns under
+  uppsägningstiden (`ndae.js`, `aeOppetAvslut` via `ndpatch-ae.py`). Förhandsvisningen registrerar
+  bara avslut med sista dag i dag eller bakåt, eftersom nattjobbet bara går i produktionen.
+- **Anställda (F1-9).** Värde, anteckning och skäl i checklistorna tar inga personnummer
+  (`harPersonnummer`, `src/lib/nav2/avslutforma.ts`; CHECK i 0229, KÖRD). Chefens notis bär
+  inte värdet.
+- **Profil.** S09:s rättade 0107 KÖRD; `employee_photo` i registerutdraget. F1-11: Ångra efter
+  Ta bort eller byte gäller tio minuter, nattsteget `profilbilder` tar bort den förra bilden,
+  och GET `?bild=` svarar 404 för den som slutat.
+- **Rutiner (G8).** "Fråga <ägare>" och "Påminn ägarna om granskning" var påhittade kvitton. Nu
+  frågar rutten rutinens ägare ur navet (`fraga`) och påminner ägarna till förfallna och snart
+  förfallna rutiner (`paminn-granska`), med notisen `rutin-aterkoppling`. `skicka` skickar bara en
+  publicerad rutin (F2-18).
+- **Prov:** nya `tests/nav2-anstallda-avslut.mjs`, `nav2-profil-bild.mjs`, `nav2-rutiner-fraga.mjs`.
+
+---
+
 ## 2026-10-23 · Granskningen S05: Kalendern tappar inga möten, en sparning ger ett besked per person, "Ingen påminnelse" gäller (0201, 0210–0213)
 
 **Varför.** Granskningen 2026-10-22 (K2/E1 kritiskt, E2, E3, E4, E14, C2, G2). Kalendern sparar redan i produktionen.

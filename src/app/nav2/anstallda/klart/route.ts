@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { notifiera } from "@/lib/notishandelse-server";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
+import { harPersonnummer, PNR_TEXT } from "@/lib/nav2/avslutforma";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +67,7 @@ export async function POST(request: Request) {
   if (x.state !== "open") return sida("Redan klart", `<p>${esc(x.label)} för ${esc(namn)} är redan bockat. Tack!</p>`);
   if (!SKRIVLAGE.anstallda) return sida("Läsläge", `<p>${esc(LASLAGE_TEXT)}</p>`, 423);
   const varde = String((await request.formData()).get("varde") ?? "").trim().slice(0, 200);
+  if (harPersonnummer(varde)) return sida("Saknas", `<p>${esc(PNR_TEXT)} <a href="">Tillbaka</a></p>`, 400);
   if (x.ask_for && !varde) return sida("Saknas", `<p>Skriv ${esc(x.ask_for.toLowerCase())}. <a href="">Tillbaka</a></p>`, 400);
   if (x.ask_for === "E-postadress" && !EPOST.test(varde)) return sida("Saknas", `<p>Skriv en hel adress, till exempel namn@clicknet.se. <a href="">Tillbaka</a></p>`, 400);
   const mig = user.employee!.id;
@@ -84,7 +86,8 @@ export async function POST(request: Request) {
   if (chef)
     await notifiera({
       till: chef, av: mig, kalla: "personal-klart", typ: "uppgift", rubrik: `${x.label} klart för ${namn}`,
-      detalj: varde ? `${x.ask_for}: ${varde}` : tabell === "onboarding_task" ? "Onboarding" : "Avslut", href: "/nav2", objekt: { typ: "employee", id: x.employee_id },
+      // Värdet står inte i notisen (granskningen F1-9): det finns i Anställda för den som får se det.
+      detalj: varde && x.ask_for ? `${x.ask_for} är ifyllt` : tabell === "onboarding_task" ? "Onboarding" : "Avslut", href: "/nav2", objekt: { typ: "employee", id: x.employee_id },
     });
   return sida("Tack!", `<p>${esc(x.label)} för ${esc(namn)} är bockat${varde ? `: ${esc(varde)}` : ""}. ${chef ? "Närmaste chef ser det i Nav." : ""}</p>`);
 }

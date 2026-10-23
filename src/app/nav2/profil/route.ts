@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { bildAdress } from "@/lib/nav2/profil";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
+import { angraGaller } from "@/lib/nav2/profilbild";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +48,9 @@ export async function GET(request: Request) {
   if (!user?.employee) return svar({ fel: "Du måste vara inloggad." }, 401);
   const id = new URL(request.url).searchParams.get("bild") ?? "";
   if (!UUID.test(id)) return svar({ fel: "Okänd läsning." }, 400);
+  // Den som slutat visas inte (granskningen F1-11). 0107:s utlösare tar bilden vid avslutet; det här gäller också före den.
+  const { data: vem } = await supabaseAdmin().from("employee").select("status, removed_at").eq("id", id).maybeSingle();
+  if (!vem || vem.status === "offboarded" || vem.removed_at) return svar({ fel: "Ingen bild." }, 404);
   const supabase = await supabaseServer();
   const { data } = await supabase.from("employee_photo").select("image").eq("employee_id", id).maybeSingle();
   const bild = franHex(data?.image);
@@ -75,8 +79,8 @@ export async function POST(request: Request) {
   const nu = new Date().toISOString();
 
   const lasBild = async () => {
-    const { data, error } = await db.from("employee_photo").select("image, previous").eq("employee_id", mig).maybeSingle();
-    return { image: franHex(data?.image), previous: franHex(data?.previous), error };
+    const { data, error } = await db.from("employee_photo").select("image, previous, updated_at").eq("employee_id", mig).maybeSingle();
+    return { image: franHex(data?.image), previous: franHex(data?.previous), uppdaterad: (data?.updated_at as string | null | undefined) ?? null, error };
   };
   const sparaBild = async (image: Buffer | null, previous: Buffer | null) => {
     const { error } = await db
@@ -142,6 +146,8 @@ export async function POST(request: Request) {
         const nuv = await lasBild();
         if (nuv.error) return svar({ fel: "Det gick inte att spara." }, 500);
         if (!nuv.previous && !nuv.image) return svar({ ok: "", url: null });
+        // Ångra gäller i tio minuter; sedan tar nattjobbet bort den förra bilden (granskningen F1-11).
+        if (nuv.previous && !angraGaller(nuv.uppdaterad)) return svar({ fel: "Det går bara att ångra strax efter. Välj bilden igen." }, 400);
         if (!(await sparaBild(nuv.previous, nuv.image))) return svar({ fel: "Det gick inte att spara." }, 500);
         return svar({ ok: "", url: nuv.previous ? bildAdress(mig, nu) : null });
       }

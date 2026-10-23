@@ -17605,7 +17605,7 @@ function aeFrister(){
   return ut.sort((a, b) => a.x.due.localeCompare(b.x.due));
 }
 const aeOnb = () => S.ae.pers.filter(p => p.status === 'onboarding');
-const aeOppetAvslut = () => S.ae.pers.filter(p => p.status === 'offboarded' && p.avslut && aeRakna(p, p.avslut).klara < p.avslut.punkter.length);
+const aeOppetAvslut = () => S.ae.pers.filter(p => (p.status === 'offboarded' || (ND && p.slut && p.avslut && p.avslut.punkter.length)) && p.avslut && aeRakna(p, p.avslut).klara < p.avslut.punkter.length);
 const aeFlaggad = p => p.status !== 'offboarded' && (ND && ND.anstallda && ND.anstallda.far ? !!p.flaggad : p.senast && frMellan(p.senast, aeT()) >= 45);
 
 /* ---------- Ångra, logg och notiser ---------- */
@@ -28725,6 +28725,14 @@ rtnRedSpara = function(hur){
     resa:r ? r.resa : null, syn:r ? r.syn : [], rel:r ? r.rel : [], uppg:r ? r.uppg || null : null, ny:r ? !!r.ny : false};
   ndRutPost('spara', {id:r ? r.id : red.uid || undefined, f:falt, hur:hur === 'pub' ? 'publicera' : hur === 'utk' ? 'utkast' : 'spara'});
 };
+// "Fråga <ägare>" och "Påminn ägarna om granskning" går till riktiga handlingar (granskningen G8):
+// rutten frågar ägaren ur navet och påminner rutinernas ägare. Knapparna och texten är utkastets.
+const _ndG8RSida = rSida;
+rSida = function(r, ...x){ const h = _ndG8RSida(r, ...x); return ndRut() && r ? h.replace(/data-act="toast" data-msg="[^"]*får frågan i Nav[^"]*"/, `data-ndrutfraga="${esc(r.id)}"`) : h; };
+const _ndG8FelHtml = felHtml;
+felHtml = function(r, ...x){ const h = _ndG8FelHtml(r, ...x); return ndRut() && r ? h.replace(/data-act="toast" data-msg="[^"]*får frågan i Nav[^"]*"/, `data-ndrutfraga="${esc(r.id)}"`) : h; };
+const _ndG8Forvaltning = forvaltningVy;
+forvaltningVy = function(...x){ const h = _ndG8Forvaltning(...x); return ndRut() ? h.replace(/data-act="toast" data-msg="Ägarna till \d+ rutiner fick en påminnelse om granskning\."/, 'data-ndrutpaminng') : h; };
 document.addEventListener('click', e => {
   if (!ndRut()) return;
   const t = e.target.closest && e.target.closest('button, a, label'); if (!t || !t.dataset) return;
@@ -28735,6 +28743,8 @@ document.addEventListener('click', e => {
   if (d.rlogga){ stopp(); ndRutPost('logga', {id:d.rlogga, kund:S.rKund || ''}, {ladda:false}).then(s => { if (!s.fel){ S.rLogged.add(d.rlogga); render(); } }); return; }
   if (d.rja){ stopp(); ndRutPost('hjalpte', {id:d.rja, ja:true}, {ladda:false}).then(s => { if (!s.fel){ S.rtnJa.add(d.rja); S.rFeedback = null; HJALPT[d.rja] = (HJALPT[d.rja] || 0) + 1; render(); } }); return; }
   if (d.rgransk){ stopp(); ndRutPost('granska', {id:d.rgransk}); return; }
+  if (d.ndrutfraga){ stopp(); ndRutPost('fraga', {id:d.ndrutfraga}, {ladda:false}); return; }
+  if (d.ndrutpaminng !== undefined){ stopp(); ndRutPost('paminn-granska', {}, {ladda:false}); return; }
   if (d.rpaminn){ stopp(); ndRutPost('paminn', {id:d.rpaminn}, {ladda:false}); return; }
   if (d.rpaminnalla !== undefined){ stopp(); ndRutPost('paminn-alla', {}, {ladda:false}); return; }
   if (d.rarkiv){ stopp(); ndRutPost('arkivera', {id:d.rarkiv}); return; }
@@ -30624,9 +30634,18 @@ aeAvslutRuta = function(p){
   const h = _ndaeAvslutRuta(p);
   if (!ndAe()) return h;
   const A = S.aeAvslut, fel = (A.fel || {}).orsak;
-  return h.replace('<ul class="aesum">', `<label class="aelab" for="ndAeOrsak">Varför tar anställningen slut?</label><select id="ndAeOrsak" class="uin" data-ndaeorsak aria-invalid="${!!fel}"><option value="">Välj</option>${NDAE_ORSAK.map(([k, l]) => `<option value="${k}" ${A.orsak === k ? 'selected' : ''}>${l}</option>`).join('')}</select>${fel ? `<p class="aefel" role="alert">${fel}</p>` : ''}
+  // Sista dag framåt: kontot stängs natten efter sista dagen, inte direkt (granskningen F1-8).
+  // Rutan ritas inte om när datumet byts, så texten säger båda fallen.
+  return h.replace('Inloggningen stängs och rollerna återkallas.', 'Inloggningen stängs och rollerna återkallas: i dag, eller natten efter sista dagen om den ligger framåt.').replace('<ul class="aesum">', `<label class="aelab" for="ndAeOrsak">Varför tar anställningen slut?</label><select id="ndAeOrsak" class="uin" data-ndaeorsak aria-invalid="${!!fel}"><option value="">Välj</option>${NDAE_ORSAK.map(([k, l]) => `<option value="${k}" ${A.orsak === k ? 'selected' : ''}>${l}</option>`).join('')}</select>${fel ? `<p class="aefel" role="alert">${fel}</p>` : ''}
     <ul class="aesum">`);
 };
+
+/* ---------- Ett planerat avslut visar sin avslutslista (granskningen F1-8) ----------
+   Med sista dag framåt står personen kvar som aktiv till natten efter sista dagen, men avslutslistan
+   finns redan och dess frister (avslutningssamtalet, utrustningen) ligger före sista dagen. */
+const ndAePlanerat = p => !!(ND && p && p.status !== 'offboarded' && p.slut && p.avslut && p.avslut.punkter && p.avslut.punkter.length);
+const _ndaeLista = aeLista;
+aeLista = function(p){ return ndAePlanerat(p) ? p.avslut : _ndaeLista(p); };
 
 /* ---------- Att göra: chefens egna punkter bockas av i navet ---------- */
 const _ndaeBocka = bocka;

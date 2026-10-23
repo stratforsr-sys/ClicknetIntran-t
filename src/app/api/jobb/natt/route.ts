@@ -19,6 +19,9 @@ import { tolkaOmOtolkade } from "@/lib/samtal-server";
 import { gallraInspelningar } from "@/lib/inspelning-server";
 import { fodSerier } from "@/lib/upprepning-server";
 import { SKRIVLAGE } from "@/lib/nav2/skrivlage";
+import { stangPlaneradeAvslut } from "@/lib/nav2/anstallda-avslut";
+import { rensaForraBilder } from "@/lib/nav2/profilbild";
+import { svensktDatum } from "@/lib/klocka";
 import { gallra } from "@/lib/nav2/gallring";
 
 export const dynamic = "force-dynamic";
@@ -121,6 +124,12 @@ export async function GET(request: NextRequest) {
      */
     ["serier", () => fodSerier(db)],
     ["konton", () => korKontojobbet(db)],
+    // Granskningen S10 (F1-8): ett avslut med sista dag framåt stänger kontot natten efter
+    // sista dagen. Bara när Anställda får spara (i funktionen).
+    ["avslut", () => stangPlaneradeAvslut(db, svensktDatum())],
+    // Granskningen S10 (F1-11): en borttagen eller utbytt profilbild finns kvar för Ångra i tio
+    // minuter; sedan tas den förra bilden bort.
+    ["profilbilder", () => (SKRIVLAGE.profil ? rensaForraBilder(db).then((n) => ({ rensade: n })) : Promise.resolve({ hoppade_over: "Profil är i läsläge" }))],
     ["arenden", () => korArendejobbet(db)],
     // E7: eskalering av obekraftade sjukanmalningar, K37-frister och
     // paminnelser om oregistrerad franvaro. Steget kor aven nar stamplingen ar
