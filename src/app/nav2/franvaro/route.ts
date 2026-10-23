@@ -24,6 +24,9 @@ import {
 } from "@/app/(app)/franvaro/actions";
 import { sparaTak } from "@/app/(app)/franvaro/regler/actions";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
+import { farBesluta, hamtaProvunderlag, hamtaRegelverk, lederPersonen } from "@/lib/franvaro-server";
+import { upprepadKorttid, type Sjukanmalan } from "@/lib/franvaro";
+import { provaRegistrering, REGISTRERAD_TEXT } from "@/lib/nav2/franvaroforma";
 import { nivaFor } from "@/lib/nav2/forma";
 
 export const dynamic = "force-dynamic";
@@ -173,19 +176,47 @@ export async function POST(request: Request) {
         const vem = String(b.vem ?? ""), typ = String(b.typ ?? ""), dag = String(b.dag ?? "");
         if (!UUID.test(vem) || !DATUM.test(dag)) return svar({ fel: "Välj person och dag." }, 400);
         if (typ === "sick") return fran(await registreraSjuk({}, form({ for: vem, forsta_dag: dag, omfattning: 100 })), "Sjukanmälan är registrerad.");
-        if (!(await farLeda(vem))) return svar({ fel: "Du kan bara registrera frånvaro för dem du leder." }, 403);
-        const { data: sort } = await db.from("absence_type").select("id").eq("id", typ).maybeSingle();
-        if (!sort) return svar({ fel: "Okänd sort." }, 400);
+        if (vem === mig) return svar({ fel: "Din egen ledighet söker du som vanligt." }, 400);
+        // Samma prövning som ett beslut och en ansökan (granskningen D22): beslutsrätten
+        // för sorten, spärrperioder, bemanningstaket, saldot, befintlig ledighet och helgdagar.
+        const rv = await hamtaRegelverk();
+        const sort = rv?.typer.find((t) => t.id === typ && t.requestable && t.active);
+        if (!rv || !sort) return svar({ fel: "Okänd sort." }, 400);
+        if (!farBesluta(user, sort.approval_level, await lederPersonen(user, vem)))
+          return svar({ fel: "Du har inte behörighet att besluta om den här sortens ledighet för personen." }, 403);
+        const { data: personen } = await db.from("employee").select("team_id").eq("id", vem).maybeSingle();
+        if (!personen) return svar({ fel: "Personen finns inte." }, 404);
+        const ans = { employee_id: vem, type_id: sort.id, starts_on: dag, ends_on: dag, part_day_minutes: null };
+        const pr = provaRegistrering(ans, await hamtaProvunderlag(vem, (personen.team_id as string | null) ?? null, sort, rv.regler, dag, dag));
+        if ("fel" in pr) return svar({ fel: pr.fel }, 400);
+        const godkand = pr.status === "approved";
         const nu = new Date().toISOString();
         const { data: rad, error } = await db
           .from("absence_request")
-          .insert({ employee_id: vem, type_id: typ, starts_on: dag, ends_on: dag, status: "approved", submitted_at: nu, decided_by: mig, decided_at: nu, created_by: mig, reason: "Registrerad efter samtal" })
+          .insert({
+            employee_id: vem,
+            type_id: sort.id,
+            starts_on: dag,
+            ends_on: dag,
+            status: pr.status,
+            submitted_at: nu,
+            created_by: mig,
+            reason: REGISTRERAD_TEXT,
+            rules_broken: pr.brott,
+            decided_by: godkand ? mig : null,
+            decided_at: godkand ? nu : null,
+            override_reason: godkand && pr.brott.length ? REGISTRERAD_TEXT : null,
+          })
           .select("id")
           .single();
+        // Två registreringar samtidigt: villkoret i 0019 stoppar den andra godkända raden.
+        if (error?.code === "23P01") return svar({ fel: "Personen har redan godkänd frånvaro den dagen." }, 409);
         if (error || !rad) return svar({ fel: `Frånvaron sparades inte: ${error?.message ?? "okänt fel"}` }, 500);
-        await db.from("audit_log").insert({ actor_id: mig, action: "absence.registered_for", object_type: "absence_request", object_id: rad.id, meta: { employee_id: vem, typ, dag } });
-        await notifiera({ till: vem, av: mig, kalla: "franvaro-registrerad", typ: "franvaro", rubrik: `${fullName(user.employee)} registrerade frånvaro för dig`, detalj: dag, href: "/franvaro", objekt: { typ: "absence_request", id: rad.id } });
+        await db.from("audit_log").insert({ actor_id: mig, action: "absence.registered_for", object_type: "absence_request", object_id: rad.id, meta: { employee_id: vem, typ: sort.id, dag, status: pr.status, regelbrott: pr.brott } });
         revalidatePath("/franvaro");
+        if (!godkand)
+          return svar({ ok: `${pr.texter.join(" ")} Registreringen ligger därför som en ansökan i kön. Besluta den där, med en motivering.` });
+        await notifiera({ till: vem, av: mig, kalla: "franvaro-registrerad", typ: "franvaro", rubrik: `${fullName(user.employee)} registrerade frånvaro för dig`, detalj: dag, href: "/franvaro", objekt: { typ: "absence_request", id: rad.id } });
         return svar({ ok: "Registrerat. Personen får en notis." });
       }
       case "forslag": {
@@ -204,7 +235,13 @@ export async function POST(request: Request) {
         if (!hasRole(user, "sales_manager", "ceo")) return svar({ fel: "Du saknar behörighet." }, 403);
         const vem = String(b.vem ?? "");
         if (!UUID.test(vem)) return svar({ fel: "Okänd person." }, 400);
-        await db.from("sick_signal_ack").upsert({ employee_id: vem, occasions: Number(b.antal) || 0, acked_by: mig, acked_at: new Date().toISOString() }, { onConflict: "employee_id" });
+        // Antalet räknas här, inte i klienten (granskningen D22): ett för högt antal hade dolt signalen för gott.
+        const rv = await hamtaRegelverk();
+        if (!rv) return svar({ fel: "Regelverket saknas." }, 500);
+        const { data: anm } = await db.from("sick_report").select("first_sick_day, cancelled_at").eq("employee_id", vem);
+        const u = upprepadKorttid((anm ?? []) as Sjukanmalan[], rv.regler, idag);
+        if (!u) return svar({ fel: "Det finns ingen signal att kvittera." }, 400);
+        await db.from("sick_signal_ack").upsert({ employee_id: vem, occasions: u.antal, acked_by: mig, acked_at: new Date().toISOString() }, { onConflict: "employee_id" });
         return svar({ ok: "Signalen döljs. Den kommer tillbaka om det blir fler tillfällen." });
       }
       case "intyg-mottaget":

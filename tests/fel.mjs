@@ -14,6 +14,7 @@ import {
   MAX_MEDDELANDE,
   maskera,
   maskeraOchKlipp,
+  rensaDigest,
   rensaSokvag,
   rubrikFor,
   sorteraKo,
@@ -117,6 +118,20 @@ ok(
   rubrikFor({ kind: "automatic", body: null, message: null, digest: "a1b2c3d4e5", path: "/franvaro" }) ===
     "Fel på /franvaro (a1b2c3d4)",
 );
+
+// Granskningen S10 (B2): digesten kommer från en oinloggad avsändare och ritas
+// i chefens felvy. Bara Nexts och navets egna format släpps fram.
+console.log("\n\x1b[1mDigesten (B2)\x1b[0m");
+{
+  const r = typeof rensaDigest === "function" ? rensaDigest : () => "saknas";
+  ok("en Next-digest står kvar", r("2843791842") === "2843791842");
+  ok("navets egen står kvar", r("nav2-a1b2c3d4e5f6") === "nav2-a1b2c3d4e5f6");
+  ok("<img> i digesten blir null", r('<img src=x onerror="alert(1)">') === null);
+  ok("citattecken och mellanslag blir null", r('abc" class="x') === null);
+  ok("101 tecken blir null", r("a".repeat(101)) === null);
+  ok("100 tecken står kvar", r("a".repeat(100)) === "a".repeat(100));
+  ok("tom sträng och annat än text blir null", r("") === null && r(42) === null && r(null) === null);
+}
 
 console.log(fel === 0 ? "\n\x1b[32mAlla prov gick igenom.\x1b[0m" : `\n\x1b[31m${fel} prov föll.\x1b[0m`);
 process.exit(fel === 0 ? 0 : 1);

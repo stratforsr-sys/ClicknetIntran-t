@@ -738,5 +738,50 @@ rubrik("Regelbrotten som text");
 ok("en känd kod blir en mening", brottext("frist").endsWith("."));
 ok("en okänd kod faller tillbaka på sig själv och försvinner inte", brottext("nagot_nytt") === "nagot_nytt");
 
+// -----------------------------------------------------------------------------
+// Nav 2.0 (granskningen S10): saldot och chefens registrering efter samtal.
+{
+  const forma = await import("../src/lib/nav2/franvaroforma.ts").catch((e) => ({ fel: e }));
+  rubrik("Nav 2.0: sparad semester summeras per intjänandeår (D7)");
+  ok("franvaroforma.ts finns", !forma.fel, forma.fel?.code ?? "");
+  const egetSaldo = forma.egetSaldo ?? (() => null);
+  const sparade = [
+    { type_id: "saved_vacation", days: 3, as_of: "2026-04-01", earned_year: 2023 },
+    { type_id: "saved_vacation", days: 5, as_of: "2026-08-01", earned_year: 2024 },
+    { type_id: "vacation", days: 25, as_of: "2026-04-01", earned_year: null },
+    { type_id: "vacation", days: 14, as_of: "2026-10-01", earned_year: null },
+  ];
+  ok("3 + 5 sparade dagar ger 8", egetSaldo(sparade, "saved_vacation")?.d === 8, JSON.stringify(egetSaldo(sparade, "saved_vacation")));
+  ok("inmatade samma dag ger också 8", egetSaldo(sparade.slice(0, 2).map((r) => ({ ...r, as_of: "2026-04-01" })), "saved_vacation")?.d === 8);
+  ok("årets semester: den senaste inmatningen gäller (14)", egetSaldo(sparade, "vacation")?.d === 14);
+  ok("asof är det äldsta som summan bygger på", egetSaldo(sparade, "saved_vacation")?.asof === "2026-04-01");
+  ok("ingen rad ger null", egetSaldo(sparade, "comp_leave") === null);
+
+  rubrik("Nav 2.0: chefens registrering prövas som ett beslut (D22)");
+  const prova = forma.provaRegistrering ?? (() => ({ fel: "saknas" }));
+  const idag = "2026-10-21"; // onsdag
+  const reg = (over = {}) => ansokan({ starts_on: idag, ends_on: idag, type_id: "vab", ...over });
+  const r1 = prova(reg(), grund({ typ: VAB, idag }));
+  ok("VAB i dag utan regelbrott blir godkänd direkt", r1.status === "approved" && r1.texter?.length === 0, JSON.stringify(r1));
+  const r2 = prova(reg({ type_id: "vacation" }), grund({ idag }));
+  ok("fristen gäller inte chefen efter samtalet: semester i dag blir godkänd", r2.status === "approved", JSON.stringify(r2));
+  ok("men fristen fryses i rules_broken", r2.brott?.includes("frist"), JSON.stringify(r2.brott));
+  const r3 = prova(reg(), grund({ typ: VAB, idag, sparrperioder: [{ label: "Kampanjveckan", starts_on: "2026-10-19", ends_on: "2026-10-23", type_ids: [], team_ids: [] }] }));
+  ok("en spärrperiod gör registreringen till en ansökan i kön", r3.status === "submitted" && r3.brott?.includes("sparrperiod"), JSON.stringify(r3));
+  ok("och texten säger vilken regel", (r3.texter ?? []).some((t) => t.includes("Kampanjveckan")));
+  const r4 = prova(
+    reg({ type_id: "vacation" }),
+    grund({ idag, teamId: "t1", tak: { team_id: "t1", max_absent: 1 }, andrasPerioder: [{ employee_id: "annan", type_id: "vacation", starts_on: idag, ends_on: idag, part_day_minutes: null, team_id: "t1" }] }),
+  );
+  ok("bemanningstaket gör registreringen till en ansökan", r4.status === "submitted" && r4.brott?.includes("bemanning"), JSON.stringify(r4));
+  const r5 = prova(reg({ type_id: "vacation" }), grund({ idag, saldon: [{ type_id: "vacation", days: 0, as_of: "2026-10-01", earned_year: null }] }));
+  ok("saldot räcker inte: en ansökan", r5.status === "submitted" && r5.brott?.includes("saldo"), JSON.stringify(r5));
+  const r6 = prova(reg(), grund({ typ: VAB, idag, egnaPerioder: [{ employee_id: "mig", type_id: "vacation", starts_on: idag, ends_on: idag, part_day_minutes: null }] }));
+  ok("redan ledig samma dag: en ansökan, aldrig en andra godkänd rad", r6.status === "submitted" && r6.brott?.includes("overlapp"), JSON.stringify(r6));
+  ok("beskedet talar till chefen, inte till den som söker", (r6.texter ?? []).every((t) => !/^Du /.test(t)) && (r6.texter ?? []).some((t) => /^Personen har/.test(t)), JSON.stringify(r6.texter));
+  ok("lördag är ingen arbetsdag", "fel" in prova(reg({ starts_on: "2026-10-24", ends_on: "2026-10-24" }), grund({ typ: VAB, idag: "2026-10-24" })));
+  ok("juldagen är ingen arbetsdag", "fel" in prova(reg({ starts_on: "2026-12-25", ends_on: "2026-12-25" }), grund({ typ: VAB, idag: "2026-12-25" })));
+}
+
 console.log(fel === 0 ? "\n\x1b[32mAlla prov gick igenom.\x1b[0m" : `\n\x1b[31m${fel} prov föll.\x1b[0m`);
 process.exit(fel === 0 ? 0 : 1);

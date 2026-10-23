@@ -11,23 +11,28 @@
 export const SKRIVLAGE = {
   // Beställarens ja 2026-10-22 (B7).
   arenden: true,
-  fel: false,
+  // Beställarens ja 2026-10-22 (B7).
+  fel: true,
   order: false,
   // Beställarens ja 2026-10-21 (Gamla Nav G): allt i Provision sparar, också chefens sats, konsekvenstrappan och Utbetald.
   provision: true,
   // Beställarens ja 2026-10-20 ("Ska Kalendern få spara nu?" – "Ja"). 0088–0091 körda 2026-10-15.
   kalender: true,
-  uppgifter: false,
-  franvaro: false,
+  // Beställarens ja 2026-10-22 (B7).
+  uppgifter: true,
+  // Beställarens ja 2026-10-22 (B7).
+  franvaro: true,
   // Beställarens ja 2026-10-22 (B7).
   tid: true,
   rutiner: false,
-  utbildning: false,
+  // Beställarens ja 2026-10-22 (B7).
+  utbildning: true,
   // Beställarens ja 2026-10-19: ladda upp och ta bort avtal, påminn om påskrift, tillsvidare.
   avtal: true,
   // Beställarens ja 2026-10-18: Grattis, Stämmer inte, Visa inte här, Sedan du tittade och lagets mål.
   hem: true,
-  rekrytering: false,
+  // Beställarens ja 2026-10-22 (B7).
+  rekrytering: true,
   // Beställarens ja 2026-10-22 (B7).
   coachning: true,
   anstallda: false,

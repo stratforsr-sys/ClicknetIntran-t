@@ -101,7 +101,7 @@ export async function korTidpaminnelser(db: SupabaseClient, val: Map<string, Pam
   // `jobb/dagtid.ts`: en ansökan som bara är inskickad räknas inte.
   const [{ data: ledighet }, { data: sjuk }] = await Promise.all([
     db.from("absence_request").select("employee_id").eq("status", "approved").lte("starts_on", idag).gte("ends_on", idag),
-    db.from("sick_report").select("employee_id, last_sick_day").is("cancelled_at", null).lte("first_sick_day", idag),
+    db.from("sick_report").select("employee_id, last_sick_day").is("cancelled_at", null).lte("first_sick_day", idag).or(`last_sick_day.is.null,last_sick_day.gte.${idag}`),
   ]);
   const borta = new Set(((ledighet ?? []) as { employee_id: string }[]).map((r) => r.employee_id));
   for (const r of (sjuk ?? []) as { employee_id: string; last_sick_day: string | null }[]) {

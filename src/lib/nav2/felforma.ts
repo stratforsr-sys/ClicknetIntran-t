@@ -1,5 +1,5 @@
 /**
- * Nav 2.0: Fel i den form utkastet ritar. Ren logik, inga importer utom typer.
+ * Nav 2.0: Fel i den form utkastet ritar. Ren logik: typer och repots rena `fel.ts`.
  *
  * Raderna är `error_report` som /fel läser dem, med det 0082 lade till för det
  * utkastet har och navet saknade: vad personen pekade på, vem som tar felet,
@@ -12,6 +12,7 @@
  */
 
 import type { Driftlage } from "../jobb/larm.ts";
+import { rensaDigest } from "../fel.ts";
 
 export type NdFelrad = {
   id: string;
@@ -151,7 +152,8 @@ export function felRubrik(r: Pick<RaFelrad, "kind" | "message" | "body" | "diges
     const forsta = r.message.split("\n")[0].trim();
     return forsta.length > 90 ? `${forsta.slice(0, 90)}…` : forsta;
   }
-  return `Fel på ${r.path}${r.digest ? ` (${r.digest.slice(0, 8)})` : ""}`;
+  const digest = rensaDigest(r.digest);
+  return `Fel på ${r.path}${digest ? ` (${digest.slice(0, 8)})` : ""}`;
 }
 
 export function formaFelrad(r: RaFelrad, hanterar: boolean, x?: RaFelExtra): NdFelrad {
@@ -161,7 +163,8 @@ export function formaFelrad(r: RaFelrad, hanterar: boolean, x?: RaFelExtra): NdF
   return {
     id: r.id,
     kind: r.kind === "manual" ? "manual" : "automatic",
-    digest: r.digest,
+    // Bara ett giltigt format når klienten, också för rader som lades in före rättelsen (granskningen B2).
+    digest: rensaDigest(r.digest),
     path: r.path,
     rubrik: felRubrik(r),
     message: r.message,

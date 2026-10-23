@@ -25972,7 +25972,7 @@ function ndUpgStart(){
     // Det som blev klart före i dag står i KLARA_FORR, inte bland dagens rader.
     if (stangd && (x.lage === 'avbruten' || !x.klarAt || ndDagAv(x.klarAt) !== idag)) return;
     TASKS.push({id:x.id, who:r, vy:x.vy, t:x.t, d:stangd ? 0 : ndDagarTill(x.due), nar:x.tid || undefined, tid:x.tid || undefined, est:x.est || undefined, prio:x.prio,
-      lage:x.lage === 'klar' ? 'klar' : x.lage === 'granskas' ? 'granskas' : 'oppen', klarTid:x.klarAt ? ndKl(x.klarAt) : undefined,
+      lage:x.lage === 'klar' ? 'klar' : x.lage === 'granskas' ? 'granskas' : 'oppen', startad:x.lage === 'pagar', klarTid:x.klarAt ? ndKl(x.klarAt) : undefined,
       links:x.links.map(([s, e]) => [s, e]), ndHref:x.links.map(l => l[2]), proj:x.proj || undefined, delar:x.delar.map(([a, b]) => [a, b]),
       granskare:x.granskare || undefined, ansvarig:x.ansvarig || undefined, serie:x.serie || undefined, besk:x.besk,
       skapad:`${x.skapadAv} · ${frKort(ndDagAv(x.skapadAt))}`, chatt:h.filter(e => e.typ === 'kommentar' && e.note).map(e => [e.av, e.note, ndKl(e.at)]),
@@ -26013,6 +26013,8 @@ const _ndKvTaskSynk = kvTaskSynk; kvTaskSynk = function(){ if (ndKopplad('kv')) 
 const _ndUpgRutaHtml = upgRutaHtml;
 upgRutaHtml = function(t){
   let h = _ndUpgRutaHtml(t); if (!ndUp()) return h;
+  // Returnerad är ett eget läge, inte "Ej påbörjad" eller "Försenad" (granskningen F2-15).
+  if (t.ndLage === 'returnerad' && !isDone(t)) h = h.replace(/(<p class="upg-rstatus"><span class="upg-dot )[^"]*">[^<]*</, '$1upg-hog">Returnerad<');
   if (!t.chatt.length) h = h.replace('<div class="upg-chat"></div>', '<div class="upg-chat"><p class="upg-sm">Inga kommentarer än.</p></div>');
   const hist = (t.ndHist || []).map(e => `<li><span class="num">${frKort(ndDagAv(e.at))} ${ndKl(e.at)}</span>${esc(NDUPGH[e.typ] || e.typ)}${e.av ? ` av ${esc(e.av.split(' ')[0])}` : ''}${e.note && e.typ !== 'kommentar' ? `: ${esc(e.note)}` : ''}</li>`).join('');
   h = h.replace(/<ul class="upg-hist">[\s\S]*?<\/ul>/, `<ul class="upg-hist">${hist || '<li>Ingen historik.</li>'}</ul>`);
@@ -26058,6 +26060,17 @@ vaxlaFokus = function(id, plats){
 };
 const _ndForeslaTre = foreslaTre;
 foreslaTre = function(){ _ndForeslaTre(); if (ndUp()) ndFokusSpara(); };
+// Påbörjat sparas (granskningen F2-15): fokusläget sätter `startad` i listan, och navet får paborja.
+// Bara Ej påbörjad och Returnerad påbörjas: en uppgift som granskas ska aldrig dras ur granskarens kö.
+function ndUpgPaborja(id){
+  const t = ndUpgT(id); if (!t || !ndUpgNav(t.id) || !['ej_paborjad', 'returnerad'].includes(t.ndLage)) return;
+  const fore = t.ndLage; t.ndLage = 'pagar';
+  ndUpgPost('paborja', {id:t.id}, {ladda:false, tyst:true}).then(s => { if (!s.ok){ t.ndLage = fore; t.startad = false; ndSkrivFel(s, 'Påbörjat sparades inte.'); render(); } });
+}
+const _ndFokusStart = fokusStart;
+fokusStart = function(ids){ _ndFokusStart(ids); if (ndUp() && ndUp().skriv && S.fokusMode) ndUpgPaborja(S.fokusMode.id); };
+const _ndFokusNasta = fokusNasta;
+fokusNasta = function(){ _ndFokusNasta(); if (ndUp() && ndUp().skriv && S.fokusMode) ndUpgPaborja(S.fokusMode.id); };
 const _ndDelaUpp = delaUpp;
 delaUpp = function(t){
   if (!ndUp() || !t || !ndUpgNav(t.id)) return _ndDelaUpp(t);
@@ -28410,7 +28423,8 @@ function ndFelStart(){
     const vem = ndFNamn(r.vemId) || (r.kind === 'manual' ? 'Okänd' : null);
     const igen = r.kind === 'automatic' && r.status === 'closed' && !!r.handAt && r.senast > r.handAt;
     FELR.push({id:r.id, kind:r.kind, msg:r.kind === 'automatic' ? (r.message || r.rubrik) : (r.message || ''), harMsg:!!r.message, stack:r.stack || '', body:r.body || r.rubrik,
-      path:r.path, digest:r.digest || '', ant:r.ant, pers:r.pers, dagar:r.dagar || [], forst:ndFNar(r.forst), senast:ndFNar(r.senast, true), senastLang:ndFNar(r.senast),
+      // Felkoden ritas utan esc i utkastets felDetalj: bara ett giltigt format släpps fram (granskningen B2).
+      path:r.path, digest:/^[A-Za-z0-9_-]{1,100}$/.test(r.digest || '') ? r.digest : '', ant:r.ant, pers:r.pers, dagar:r.dagar || [], forst:ndFNar(r.forst), senast:ndFNar(r.senast, true), senastLang:ndFNar(r.senast),
       status:r.status, blocking:r.blocking, igen, losning:r.losning || 'Avslutad utan kommentar.', handNar:r.handAt ? ndFNar(r.handAt) : '',
       vem, nar:ndFNar(r.forst), pek:r.pek, webb:ndFelWebb(r.ua), release:r.release, tar:ndFNamn(r.tarId),
       svar:r.svar.map(m => [ndFNamn(m.avId) || 'Okänd', ndFNar(m.at), m.text]),
@@ -31230,7 +31244,8 @@ const _ndRxIntervjuer = rxIntervjuer;
 rxIntervjuer = function(c){
   if (!ndRx()) return _ndRxIntervjuer(c);
   if (!c.bok.length) return '';
-  const lage = (b, k) => { const s = (b.sms || {})[k]; return s === 'skickad' ? 'skickad' : s === 'schemalagd' ? 'schemalagd' : s === 'vantar' ? 'schemaläggs senare' : s === 'avbruten' ? 'skickas inte' : s === 'fel' ? 'gick inte ut' : 'inte planerad'; };
+  // En påminnelse väntar i navet tills det är dags (inget schemaläggs hos Resend), och `skickar` är den som går nu (0228).
+  const lage = (b, k) => { const s = (b.sms || {})[k]; return s === 'skickad' ? 'skickad' : s === 'schemalagd' ? 'schemalagd' : s === 'vantar' ? 'schemalagd' : s === 'skickar' ? 'skickas nu' : s === 'avbruten' ? 'skickas inte' : s === 'fel' ? 'gick inte ut' : 'inte planerad'; };
   return `<section class="rxsek"><h3>Intervjuer ${note(442)}</h3><ul class="rxbok">${c.bok.map((b, i) => { const pass = rxBokPassad(b);
     const sms = b.typ === 'tel' || b.st !== 'bokad' || pass ? '' : `Påminnelse dagen före: ${lage(b, 'sms24')} · 2 h före: ${lage(b, 'sms2')}`;
     return `<li class="${b.st}"><span class="rxbd"><b class="num">${+b.d.slice(8)}</b><small>${FRMK[+b.d.slice(5, 7)]}</small></span><div><b>${RXBOKNAMN[b.typ]} kl. ${b.s}</b><small>${esc(b.plats)}${b.med.length > 1 ? ' · ' + esc(aeOch(b.med.map(rxFor))) : ''}</small>${sms ? `<small>${sms}</small>` : ''}</div>

@@ -6,7 +6,8 @@ import { fullName, hasRole, type CurrentUser } from "@/lib/auth";
 import { ROLE_LABEL, type Role } from "@/lib/roles";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { hamtaChefsbild, hamtaRegelverk, type Chefsbild } from "@/lib/franvaro-server";
-import { datumPlus, sjukfrister, upprepadKorttid, type Franvarotyp, type Regelverk, type Sjukanmalan } from "@/lib/franvaro";
+import { datumPlus, sjukfrister, upprepadKorttid, type Franvarotyp, type Regelverk, type Saldo, type Sjukanmalan } from "@/lib/franvaro";
+import { egetSaldo } from "./franvaroforma";
 import { dagarBakat, svensktDatum, svenskKlocka } from "@/lib/klocka";
 
 /**
@@ -151,7 +152,7 @@ export async function byggFranvaro(supabase: SupabaseClient, user: CurrentUser):
   const [{ data: egna }, { data: sjuk }, { data: saldon }, { data: sparrar }, { data: tak }, { data: ordning }, { data: jag }] = await Promise.all([
     supabase.from("absence_request").select("id, type_id, starts_on, ends_on, part_day_minutes, status, submitted_at, reason").eq("employee_id", mig).gte("ends_on", dagarBakat(idag, 365)).order("starts_on", { ascending: false }),
     supabase.from("sick_report").select("id, first_sick_day, last_sick_day, extent_percent, registered_at, confirmed_at, cancelled_at, escalated_at").eq("employee_id", mig).is("cancelled_at", null).order("first_sick_day", { ascending: false }),
-    supabase.from("absence_balance").select("type_id, days, as_of").eq("employee_id", mig).order("as_of", { ascending: false }),
+    supabase.from("absence_balance").select("type_id, days, as_of, earned_year").eq("employee_id", mig).order("as_of", { ascending: false }),
     supabase.from("absence_blackout").select("label, starts_on, ends_on, type_ids, team_ids").gte("ends_on", idag).order("starts_on"),
     supabase.from("staffing_cap").select("team_id, max_absent"),
     supabase.from("absence_call_order").select("sort, target_kind, role, employee_id, phone, team_id").eq("active", true).order("sort"),
@@ -220,10 +221,8 @@ export async function byggFranvaro(supabase: SupabaseClient, user: CurrentUser):
     })),
   ];
 
-  const saldo = (typ: string) => {
-    const s = (saldon ?? []).find((x) => x.type_id === typ);
-    return s ? { d: Number(s.days), asof: s.as_of } : null;
-  };
+  // Som repots saldoFor: senaste raden per intjänandeår, summerad (granskningen D7).
+  const saldo = (typ: string) => egetSaldo((saldon ?? []) as Saldo[], typ);
   // Teamets eget tak går före bolagets, som i hamtaProvunderlag.
   const mittTak = (tak ?? []).find((t) => t.team_id !== null && t.team_id === (jag?.team_id ?? null)) ?? (tak ?? []).find((t) => t.team_id === null) ?? null;
 

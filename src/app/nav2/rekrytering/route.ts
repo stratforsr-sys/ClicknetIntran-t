@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { fullName, getCurrentUser } from "@/lib/auth";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
-import { svensktDatum } from "@/lib/klocka";
+import { svenskaMinuter, svensktDatum } from "@/lib/klocka";
 import { STEG_ETIKETT, nastaSteg, type Steg } from "@/lib/rekrytering";
 import { notifieraFlera, rekryteringskretsen } from "@/lib/notishandelse-server";
 import { laggUppAnstalld } from "@/lib/anstallning-server";
@@ -11,7 +11,8 @@ import { ROLES, type Role } from "@/lib/roles";
 import { signeraLank } from "@/lib/lagring-server";
 import { skapaMote, stallIn } from "@/app/(app)/kalender/moten/actions";
 import { farRekrytera } from "@/lib/nav2/rekrytering";
-import { avbrytKandidatmejl, skickaKandidatmejl, svIso, type Utskicksutfall } from "@/lib/nav2/rekrytering-utskick";
+import { avbrytKandidatmejl, kandidatmejlTillatet, skickaKandidatmejl, svIso, type Utskicksutfall } from "@/lib/nav2/rekrytering-utskick";
+import { attAvboka } from "@/lib/nav2/rekryteringforma";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
 
 export const dynamic = "force-dynamic";
@@ -131,20 +132,31 @@ export async function POST(request: Request) {
   // Mejlen till kandidaten: raderna skrivs under handlingen och skickas i klart().
   const ko: number[] = [];
   const tomma: string[] = [];
+  const nekade: string[] = [];
   const meddela = async (cid: string, template: string, body: string, opt: { booking?: string; efter?: string; ics?: boolean } = {}) => {
     if (!body.trim()) {
       if (MALLNAMN[template]) tomma.push(MALLNAMN[template]);
       return;
     }
-    const { data } = await db.from("candidate_message").insert({ candidate_id: cid, template, channel: opt.ics ? "mejl_ics" : "mejl", body: body.slice(0, 4000), booking_id: opt.booking ?? null, send_after: opt.efter ?? new Date().toISOString(), created_by: mig }).select("id").single();
-    if (data) ko.push(data.id as number);
+    // Förhandsvisningen delar databas med produktionen: raden blir `fel` redan här,
+    // så att produktionens minutjobb aldrig hinner ta den (granskningen F1-7).
+    const { data: mottagare } = await db.from("candidate").select("email").eq("id", cid).maybeSingle();
+    const tillats = kandidatmejlTillatet((mottagare?.email as string | null | undefined) ?? null);
+    const orsak = "Förhandsvisningen mejlar inte kandidater.";
+    const { data } = await db
+      .from("candidate_message")
+      .insert({ candidate_id: cid, template, channel: opt.ics ? "mejl_ics" : "mejl", body: body.slice(0, 4000), booking_id: opt.booking ?? null, send_after: opt.efter ?? new Date().toISOString(), created_by: mig, status: tillats ? "vantar" : "fel", error: tillats ? null : orsak })
+      .select("id")
+      .single();
+    if (data && tillats) ko.push(data.id as number);
+    if (!tillats) nekade.push(orsak);
   };
   const utskicksText = (u: Utskicksutfall | null) => {
     const delar: string[] = [];
     if (u?.skickade) delar.push(u.skickade === 1 ? "Mejlet har gått ut." : `${u.skickade} mejl har gått ut.`);
-    if (u?.schemalagda) delar.push(u.schemalagda === 1 ? "Påminnelsen är schemalagd." : `${u.schemalagda} påminnelser är schemalagda.`);
-    if (u?.kvar) delar.push("Det som ligger mer än fyra veckor fram schemaläggs när det närmar sig.");
-    if (u?.fel.length) delar.push(`Mejlet gick inte ut: ${u.fel[0].replace(/\.$/, "")}.`);
+    if (u?.kvar) delar.push(u.kvar === 1 ? "Påminnelsen går ut när det är dags." : `${u.kvar} påminnelser går ut när det är dags.`);
+    const felen = [...(u?.fel ?? []), ...nekade];
+    if (felen.length) delar.push(`Mejlet gick inte ut: ${felen[0].replace(/\.$/, "")}.`);
     if (tomma.length) delar.push(`${[...new Set(tomma)].map((t) => `"${t}"`).join(" och ")} har ingen text än, så det mejlet gick inte ut. Skriv texten under Tjänster.`);
     return delar.join(" ");
   };
@@ -184,14 +196,31 @@ export async function POST(request: Request) {
     }
     return null;
   };
-  const avbokaKommande = async (cid: string) => {
-    const { data } = await db.from("candidate_booking").select("id, calendar_event_id, day, start_min").eq("candidate_id", cid).eq("status", "bokad").gte("day", svensktDatum());
-    for (const x of (data ?? []) as { id: string; calendar_event_id: string | null }[]) {
-      await db.from("candidate_booking").update({ status: "avbokad", cancelled_at: new Date().toISOString() }).eq("id", x.id);
+  /** Bekräftelsen hade en kalenderfil: avbokningen (CANCEL) tar bort tiden ur kandidatens kalender. */
+  const avbokadMejl = async (cid: string, bok: { id: string; kind: string; day: string; start_min: number }, foljd: string) => {
+    const { data: k } = await db.from("candidate").select("first_name, email").eq("id", cid).maybeSingle();
+    const { data: gick } = await db.from("candidate_message").select("id").eq("booking_id", bok.id).eq("template", "bokad").eq("status", "skickad").limit(1);
+    if (k?.email && gick && gick.length) await meddela(cid, "avbokad", `Hej ${k.first_name}! ${BOKNAMN[bok.kind]} ${bok.day} kl. ${hm(bok.start_min)} är avbokad. ${foljd}`, { booking: bok.id, ics: true });
+  };
+  /**
+   * Avbokar kandidatens kommande bokningar (granskningen F1-10): bara de som
+   * börjar efter nu, aldrig `utom` (den nya), och med avbokningsmejl när
+   * `foljd` anges (en ombokning).
+   */
+  const avbokaKommande = async (cid: string, opt: { utom?: string; foljd?: string } = {}) => {
+    const nu = new Date();
+    const { data } = await db.from("candidate_booking").select("id, kind, calendar_event_id, day, start_min").eq("candidate_id", cid).eq("status", "bokad").gte("day", svensktDatum(nu));
+    const lista = attAvboka((data ?? []) as { id: string; kind: string; calendar_event_id: string | null; day: string; start_min: number }[], svensktDatum(nu), svenskaMinuter(nu), opt.utom);
+    let n = 0;
+    for (const x of lista) {
+      const { data: tog } = await db.from("candidate_booking").update({ status: "avbokad", cancelled_at: nu.toISOString() }).eq("id", x.id).eq("status", "bokad").select("id");
+      if (!tog || !tog.length) continue;
+      n++;
       if (x.calendar_event_id) await stallIn(x.calendar_event_id);
       await avbrytKandidatmejl({ bokning: x.id });
+      if (opt.foljd) await avbokadMejl(cid, x, opt.foljd);
     }
-    return (data ?? []).length;
+    return n;
   };
   const texter = (b.texter && typeof b.texter === "object" ? b.texter : {}) as Record<string, unknown>;
   const text = (k: string) => str(texter[k], 4000);
@@ -293,7 +322,7 @@ export async function POST(request: Request) {
         if (!slot) return svar({ fel: "Tiden finns inte längre." }, 404);
         const f = await stegTill(k, BOKSTEG[btyp]);
         if (f) return svar({ fel: f }, 400);
-        await avbokaKommande(k.id);
+        // Den nya bokningen skrivs först. Går den inte (tiden hann tas) står den gamla kvar (granskningen F1-10).
         const mote = await skapaMote({
           rubrik: `${BOKNAMN[btyp]} · ${namnPa(k)}`, dag: slot.day, start: slot.start_min, minuter: slot.end_min - slot.start_min, deltagare: med, plats: slot.place,
           agenda: btyp === "tel" ? "Screeningen och Så är jobbet. Manuset finns i Rekrytering." : "Intervjun och Så är jobbet. Guiden och scorecarden finns i Rekrytering.",
@@ -306,6 +335,8 @@ export async function POST(request: Request) {
           if (mote.eventId) await stallIn(mote.eventId);
           return svar({ fel: dbFel(error, "Tiden kunde inte bokas.") === "Det finns redan." ? "Tiden hann bokas av någon annan. Välj en annan." : dbFel(error, "Tiden kunde inte bokas.") }, 409);
         }
+        // Sedan avbokas det som den nya ersätter, med avbokningen i kandidatens kalender.
+        await avbokaKommande(k.id, { utom: bok.id as string, foljd: "Den nya tiden kommer i ett eget mejl." });
         if (k.email) {
           await meddela(k.id, "bokad", text("bokad"), { booking: bok.id, ics: true });
           if (btyp !== "tel") {
@@ -326,10 +357,7 @@ export async function POST(request: Request) {
         await db.from("candidate_booking").update({ status: "avbokad", cancelled_at: new Date().toISOString() }).eq("id", bok.id);
         if (bok.calendar_event_id) await stallIn(bok.calendar_event_id);
         await avbrytKandidatmejl({ bokning: bok.id });
-        // Bekräftelsen hade en kalenderfil. Avbokningen tar bort tiden ur kandidatens kalender.
-        const { data: k } = await db.from("candidate").select("first_name, email").eq("id", bok.candidate_id).maybeSingle();
-        const { data: gick } = await db.from("candidate_message").select("id").eq("booking_id", bok.id).eq("template", "bokad").eq("status", "skickad").limit(1);
-        if (k?.email && gick && gick.length) await meddela(bok.candidate_id, "avbokad", `Hej ${k.first_name}! ${BOKNAMN[bok.kind]} ${bok.day} kl. ${hm(bok.start_min)} är avbokad. Vi hör av oss om en ny tid.`, { booking: bok.id, ics: true });
+        await avbokadMejl(bok.candidate_id as string, bok as { id: string; kind: string; day: string; start_min: number }, "Vi hör av oss om en ny tid.");
         return klart(`${BOKNAMN[bok.kind]} är avbokad, mötet är inställt och tiden är ledig igen.`);
       }
 

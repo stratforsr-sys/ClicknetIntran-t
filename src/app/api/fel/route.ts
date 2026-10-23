@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { skrivFel } from "@/lib/fel-server";
+import { rensaDigest } from "@/lib/fel";
 import { siteUrl } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
@@ -56,7 +57,7 @@ export async function POST(request: NextRequest) {
     await skrivFel({
       kind: "automatic",
       path: typeof kropp.path === "string" ? kropp.path : "/",
-      digest: typeof kropp.digest === "string" ? kropp.digest.slice(0, 100) : null,
+      digest: rensaDigest(kropp.digest),
       reporterId,
       userAgent: request.headers.get("user-agent"),
     });

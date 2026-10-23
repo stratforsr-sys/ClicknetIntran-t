@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { getCurrentUser, hasRole } from "@/lib/auth";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { skrivFel } from "@/lib/fel-server";
-import { MAX_BODY } from "@/lib/fel";
+import { MAX_BODY, rensaDigest } from "@/lib/fel";
 import { normaliseraFel } from "@/lib/jobb/larm";
 import { notifiera, notifieraFlera } from "@/lib/notishandelse-server";
 import { sattStatus } from "@/app/(app)/fel/actions";
@@ -99,7 +99,7 @@ export async function POST(request: Request) {
         const ok = await skrivFel({
           kind: "manual",
           path: String(b.sida ?? "/"),
-          digest: String(b.digest ?? "") || null,
+          digest: rensaDigest(b.digest),
           body: text,
           blocking: b.blocking === true,
           reporterId: mig,

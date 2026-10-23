@@ -83,6 +83,17 @@ export function maskeraOchKlipp(text: string | null | undefined, tak: number): s
 }
 
 /**
+ * Digesten som den får lagras och visas (granskningen B2). `/api/fel` tar emot
+ * den utan inloggning, och chefens felvy ritar den. Bara Nexts digester och
+ * navets egna (`nav2-…`) släpps fram: bokstäver, siffror, `_` och `-`, högst
+ * 100 tecken. Allt annat blir null.
+ */
+export const DIGEST_FORMAT = /^[A-Za-z0-9_-]{1,100}$/;
+export function rensaDigest(v: unknown): string | null {
+  return typeof v === "string" && DIGEST_FORMAT.test(v) ? v : null;
+}
+
+/**
  * Sokvag utan query och fragment.
  *
  * En query bar sokord, filter och ibland ett namn — `/sok?q=anna` sager vem

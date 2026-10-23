@@ -5,6 +5,41 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-23 · Granskningen S10, omgång 2: Frånvaro, Uppgifter, Fel, Rekrytering och Utbildning sparar (B7); 0228 och 0098 körda
+
+Beställarens ja (B7) gäller vy för vy när spärrarna är rättade. Fem vyer till slås
+på (`SKRIVLAGE.franvaro`, `.uppgifter`, `.fel`, `.rekrytering`, `.utbildning`).
+- **Frånvaro (D7, D22).** Sparad semester summeras per intjänandeår som repots
+  `saldoFor` (`src/lib/nav2/franvaroforma.ts`, `egetSaldo`). Chefens "registrera
+  efter samtal" prövas mot beslutsrätten för sorten (`farBesluta`), spärrperioder,
+  bemanningstaket, saldot, befintlig ledighet och helgdagar (`provaRegistrering`).
+  Fristerna gäller inte en registrering efter samtal; de fryses i `rules_broken`
+  med motiveringen "Registrerad efter samtal". Bryter registreringen mot en
+  riktig regel läggs den som en ansökan i kön, där chefen beslutar med motivering
+  (0019 kräver motivering när en godkänd rad bryter mot en regel, och formuläret
+  har inget fält för den). `rehab-ok` räknar antalet på servern.
+- **Uppgifter (F2-15).** Pågår och Returnerad står kvar (`moduler/ndupg.js`), och
+  fokusläget skickar `paborja` för en uppgift som inte påbörjats eller som
+  returnerats, aldrig för en som granskas.
+- **Fel (B2).** Digesten släpps bara fram i formatet `^[A-Za-z0-9_-]{1,100}$`
+  (`rensaDigest` i `src/lib/fel.ts`): i `/api/fel`, i `/nav2/fel`, i
+  `formaFelrad` (också gamla rader) och i `moduler/ndfel.js`.
+- **Rekrytering (F1-7, F1-10).** Ett kandidatmejl tas med en villkorad
+  uppdatering, vantar → skickar (0228 KÖRD), så att rutten och minutjobbet aldrig
+  skickar samma rad. Inget schemaläggs hos Resend längre (S14: nyckeln får bara
+  skicka, så ett schemalagt brev gick inte att avbryta): påminnelserna väntar i
+  `candidate_message` och minutjobbet skickar dem när det är dags, och en
+  avbokning sätter dem till `avbruten`. Förhandsvisningen skriver raden som `fel`
+  direkt. En ombokning skriver den nya bokningen först och avbokar sedan bara det
+  som börjar efter nu, med CANCEL till kandidaten (`attAvboka`).
+- **Utbildning.** 0098 torrkörd igen mot dagens databas och KÖRD med filnamn.
+  C6 rättades i S04 (`60c08e4`).
+- **Tid (D24).** Frågan mot `sick_report` i morgonnotisen har nu en övre gräns.
+- **Prov:** `tests/franvaro.mjs`, `fel.mjs`, nya `nav2-uppgifter-lage.mjs` och
+  `rekrytering-utskick.mjs` (attrapper, ingen databas), alla gröna.
+
+---
+
 ## 2026-10-23 · Granskningen S08: Order sparar finans, fri order och rabatt rätt, makulering når Inkio, godkännandet en gång (0221 körd; vyn fortfarande i läsläge)
 
 **Vad.** Rättelserna av K4/D1, K5/D2, D3 och D6 ur granskningen, plus D16 och delar av D10/D23. `SKRIVLAGE.order` är orörd (S10 slår på, B7).

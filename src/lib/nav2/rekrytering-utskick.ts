@@ -1,7 +1,7 @@
 import "server-only";
 
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { avbrytSchemalagt, epostArKonfigurerad, skickaEpost, type Bilaga } from "@/lib/epost";
+import { epostArKonfigurerad, skickaEpost, type Bilaga } from "@/lib/epost";
 import { inbjudan } from "@/lib/ical";
 
 /**
@@ -9,23 +9,27 @@ import { inbjudan } from "@/lib/ical";
  *
  * ===========================================================================
  * BARA MEJL (beställaren 2026-10-18). Utkastets SMS-påminnelser går som mejl.
- * Rutten /nav2/rekrytering skriver raden och skickar direkt. En påminnelse
- * före intervjun schemaläggs hos Resend (`scheduled_at`), och en avbokning
- * avbryter den där. Resend håller ett brev i högst 30 dagar, så det som ligger
- * längre fram står som `vantar` tills utkorgsjobbet (`/api/jobb/utkorg`, varje
- * minut) schemalägger det.
+ * Rutten /nav2/rekrytering skriver raden och skickar det som ska gå nu. En
+ * påminnelse före intervjun står som `vantar` i databasen tills dess tid kommer,
+ * och utkorgsjobbet (`/api/jobb/utkorg`, varje minut) skickar den då. En
+ * avbokning sätter raden till `avbruten`. Inget schemaläggs hos Resend: nyckeln
+ * får bara skicka, så ett schemalagt brev går inte att avbryta (S14, 2026-10-23).
  *
  * FÖRHANDSVISNINGEN MEJLAR ALDRIG EN KANDIDAT. Den delar databas med
- * produktionen, så en rad som skrivs där blir `fel` med orsaken direkt. Annars
- * hade produktionens jobb skickat den senare. Samma regel som utkorgens
+ * produktionen, så rutten skriver en rad i förhandsvisningen som `fel` med
+ * orsaken redan när den läggs in, och här blir den `fel` om den ändå kommer
+ * hit. Annars hade produktionens jobb skickat den senare.
+ *
+ * EN GÅNG (granskningen F1-7): en rad tas med vantar → skickar innan den
+ * skickas, så att rutten och minutjobbet aldrig skickar samma rad. Samma regel som utkorgens
  * `kundmejlTillatet`: bara produktionen, eller en adress på resend.dev.
  *
  * En mall utan text skickas inte: rutten skriver ingen rad.
  * ===========================================================================
  */
 
-/** Resend tar emot ett schemalagt brev upp till 30 dagar fram. En dags marginal. */
-export const RESEND_DAGAR = 29;
+/** Hur långt fram en rad får ligga och ändå tas nu: minutjobbet går varje minut. */
+const NU_MARGINAL_MS = 60_000;
 
 const AMNE: Record<string, string> = {
   bekr: "Tack för din ansökan till Clicknet",
@@ -68,21 +72,38 @@ type Rad = {
 };
 type Bokning = { id: string; kind: string; day: string; start_min: number; end_min: number; place: string };
 
-export type Utskicksutfall = { skickade: number; schemalagda: number; kvar: number; fel: string[] };
+export type Utskicksutfall = { skickade: number; kvar: number; fel: string[] };
 
-/** Skicka (eller schemalägg) raderna som väntar. Kastar aldrig. */
+/** Skicka de rader som väntar och vars tid har kommit. Kastar aldrig. */
 export async function skickaKandidatmejl(ids: number[]): Promise<Utskicksutfall> {
-  const ut: Utskicksutfall = { skickade: 0, schemalagda: 0, kvar: 0, fel: [] };
+  const ut: Utskicksutfall = { skickade: 0, kvar: 0, fel: [] };
   if (!ids.length) return ut;
   const db = supabaseAdmin();
-  const { data } = await db.from("candidate_message").select("*").in("id", ids).eq("status", "vantar");
+  // Raderna tas med en villkorad uppdatering, vantar → skickar (0228, granskningen
+  // F1-7). Rutten och minutjobbet kan gå samtidigt, men bara den som flyttade
+  // raden skickar den. En rad vars tid inte kommit tas inte: den väntar här,
+  // inte hos Resend (S14: nyckeln får bara skicka, så ett schemalagt brev går
+  // inte att avbryta).
+  const { data, error } = await db
+    .from("candidate_message")
+    .update({ status: "skickar" })
+    .in("id", ids)
+    .eq("status", "vantar")
+    .lte("send_after", new Date(Date.now() + NU_MARGINAL_MS).toISOString())
+    .select("*");
+  if (error) {
+    ut.fel.push(`Raderna kunde inte tas: ${error.message}`);
+    return ut;
+  }
   const rader = (data ?? []) as unknown as Rad[];
+  const { count: kvar } = await db.from("candidate_message").select("id", { count: "exact", head: true }).in("id", ids).eq("status", "vantar");
+  ut.kvar = kvar ?? 0;
   if (!rader.length) return ut;
 
   const kandIds = [...new Set(rader.map((r) => r.candidate_id))];
   const avsIds = [...new Set(rader.map((r) => r.created_by).filter((v): v is string => !!v))];
   const bokIds = [...new Set(rader.map((r) => r.booking_id).filter((v): v is string => !!v))];
-  const [{ data: kand }, { data: avs }, { data: bok }] = await Promise.all([
+  const [{ data: kand, error: kandFel }, { data: avs }, { data: bok }] = await Promise.all([
     db.from("candidate").select("id, first_name, last_name, email").in("id", kandIds),
     avsIds.length ? db.from("employee").select("id, first_name, last_name, email").in("id", avsIds) : Promise.resolve({ data: [] }),
     bokIds.length ? db.from("candidate_booking").select("id, kind, day, start_min, end_min, place").in("id", bokIds) : Promise.resolve({ data: [] }),
@@ -92,20 +113,29 @@ export async function skickaKandidatmejl(ids: number[]): Promise<Utskicksutfall>
   const bokning = new Map(((bok ?? []) as Bokning[]).map((b): [string, Bokning] => [b.id, b]));
 
   const fel = async (r: Rad, orsak: string) => {
-    await db.from("candidate_message").update({ status: "fel", error: orsak.slice(0, 500) }).eq("id", r.id);
+    await db.from("candidate_message").update({ status: "fel", error: orsak.slice(0, 500) }).eq("id", r.id).eq("status", "skickar");
     ut.fel.push(orsak);
   };
-  const grans = Date.now() + RESEND_DAGAR * 864e5;
+  // Det som tagits men inte provats lämnas tillbaka (ett tillfälligt fel eller ett undantag), så att nästa körning tar det.
+  const klara = new Set<number>();
+  const lamnaTillbaka = async () => {
+    const kvarIds = rader.map((r) => r.id).filter((id) => !klara.has(id));
+    if (kvarIds.length) await db.from("candidate_message").update({ status: "vantar" }).in("id", kvarIds).eq("status", "skickar");
+  };
+  if (kandFel) {
+    ut.fel.push(`Kandidaterna kunde inte läsas: ${kandFel.message}`);
+    await lamnaTillbaka();
+    return ut;
+  }
 
+  try {
   for (const r of rader) {
+    klara.add(r.id);
     const k = kandidat.get(r.candidate_id);
-    if (!k) continue;
+    if (!k) { await fel(r, "Kandidaten finns inte längre."); continue; }
     if (!k.email) { await fel(r, "Kandidaten har ingen e-postadress."); continue; }
     if (!kandidatmejlTillatet(k.email)) { await fel(r, "Förhandsvisningen mejlar inte kandidater."); continue; }
     if (!epostArKonfigurerad()) { await fel(r, "Utskicket är inte konfigurerat (RESEND_API_KEY eller EMAIL_FROM saknas)."); continue; }
-    const nar = Date.parse(r.send_after);
-    if (nar > grans) { ut.kvar++; continue; }
-    const schemalagt = nar > Date.now() + 60_000 ? new Date(nar).toISOString() : undefined;
 
     const fran = r.created_by ? avsandare.get(r.created_by) : undefined;
     const b = r.booking_id ? bokning.get(r.booking_id) : undefined;
@@ -122,45 +152,45 @@ export async function skickaKandidatmejl(ids: number[]): Promise<Utskicksutfall>
     }
     const amne = r.template === "bokad" && b ? `${AMNE.bokad} ${b.day} kl. ${hm(b.start_min)}` : AMNE[r.template] ?? "Från Clicknet";
 
-    const u = await skickaEpost({ till: k.email, amne, text: r.body, svaraTill: fran?.email ?? undefined, schemalagtVid: schemalagt, bilagor });
+    const u = await skickaEpost({ till: k.email, amne, text: r.body, svaraTill: fran?.email ?? undefined, bilagor });
     if (!u.skickat) { await fel(r, u.orsak); continue; }
-    await db.from("candidate_message").update({ status: schemalagt ? "schemalagd" : "skickad", resend_id: u.id || null, sent_at: schemalagt ? null : new Date().toISOString(), error: null }).eq("id", r.id);
-    if (schemalagt) ut.schemalagda++;
-    else ut.skickade++;
+    const { error: efter } = await db.from("candidate_message").update({ status: "skickad", resend_id: u.id || null, sent_at: new Date().toISOString(), error: null }).eq("id", r.id);
+    // Mejlet har gått. Raden står kvar som `skickar` och skickas aldrig igen; felet syns i svaret.
+    if (efter) ut.fel.push(`Mejlet gick ut, men raden kunde inte uppdateras: ${efter.message}`);
+    ut.skickade++;
+  }
+  } catch (e) {
+    // Raden som kastade räknas som provad (den kan ha gått ut); resten lämnas tillbaka.
+    ut.fel.push(e instanceof Error ? e.message : "Utskicket avbröts.");
+  } finally {
+    await lamnaTillbaka();
   }
   return ut;
 }
 
-/** Avbryt det som inte gått ut: för en bokning, eller allt för en kandidat. */
+/**
+ * Avbryt det som inte gått ut: för en bokning, eller allt för en kandidat.
+ * Bara rader som väntar, med en villkorad uppdatering: en rad som minutjobbet
+ * just tagit (`skickar`) är redan på väg och rörs inte. Inget går till Resend,
+ * eftersom inget schemaläggs där.
+ */
 export async function avbrytKandidatmejl(filter: { bokning?: string; kandidat?: string; mallar?: string[] }): Promise<number> {
   const db = supabaseAdmin();
-  let q = db.from("candidate_message").select("id, status, resend_id").in("status", ["vantar", "schemalagd"]);
+  let q = db.from("candidate_message").update({ status: "avbruten" }).eq("status", "vantar");
   if (filter.bokning) q = q.eq("booking_id", filter.bokning);
   if (filter.kandidat) q = q.eq("candidate_id", filter.kandidat);
   if (filter.mallar?.length) q = q.in("template", filter.mallar);
-  const { data } = await q;
-  let n = 0;
-  for (const r of (data ?? []) as { id: number; status: string; resend_id: string | null }[]) {
-    if (r.status === "schemalagd" && r.resend_id) {
-      const u = await avbrytSchemalagt(r.resend_id);
-      if (!u.skickat) {
-        await db.from("candidate_message").update({ error: `Kunde inte avbrytas hos Resend: ${u.orsak}`.slice(0, 500) }).eq("id", r.id);
-        continue;
-      }
-    }
-    await db.from("candidate_message").update({ status: "avbruten" }).eq("id", r.id);
-    n++;
-  }
-  return n;
+  const { data } = await q.select("id");
+  return (data ?? []).length;
 }
 
-/** Utkorgsjobbet: det som väntat för att det låg för långt fram. */
+/** Utkorgsjobbet, varje minut: det som väntat på sin tid (påminnelserna före intervjun). */
 export async function tomKandidatko(antal = 50): Promise<Utskicksutfall> {
   const { data } = await supabaseAdmin()
     .from("candidate_message")
     .select("id")
     .eq("status", "vantar")
-    .lte("send_after", new Date(Date.now() + RESEND_DAGAR * 864e5).toISOString())
+    .lte("send_after", new Date(Date.now() + NU_MARGINAL_MS).toISOString())
     .order("send_after")
     .limit(antal);
   return skickaKandidatmejl(((data ?? []) as { id: number }[]).map((r) => r.id));

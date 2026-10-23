@@ -69,6 +69,26 @@ const VD = ["sön", "mån", "tis", "ons", "tors", "fre", "lör"];
 const dagDatum = (d: string) => { const t = new Date(d + "T12:00:00Z"); return `${VD[t.getUTCDay()]} ${t.getUTCDate()} ${MAN[t.getUTCMonth() + 1]}`; };
 const fornamn = (n: string) => n.split(" ")[0] || n;
 
+/** Raden i kandidatens historik för ett mejl. `skickar` är raden medan den skickas (0228, granskningen F1-7). */
+export function meddelandetext(m: { status: string; send_after: string; error?: string | null }, nm: string): string {
+  return m.status === "skickad" ? `${nm} gick ut med mejl.`
+    : m.status === "skickar" ? `${nm} skickas nu.`
+    : m.status === "schemalagd" ? `${nm} går ut med mejl ${dagDatum(dag(m.send_after))} kl. ${kl(m.send_after)}.`
+    : m.status === "fel" ? `${nm} gick inte ut${m.error ? `: ${m.error.replace(/\.$/, "")}` : ""}.`
+    : m.status === "avbruten" ? `${nm} skickades inte.`
+    : `${nm} går ut med mejl ${dagDatum(dag(m.send_after))} kl. ${kl(m.send_after)}.`;
+}
+
+/**
+ * Bokningarna som avbokas när en ny tid bokas eller kandidaten får avslag
+ * (granskningen F1-10): bara de som börjar efter nu, och aldrig den nya.
+ * En intervju som hållits i morse står kvar, också när scorecarden inte är
+ * ifylld än.
+ */
+export function attAvboka<T extends { id: string; day: string; start_min: number }>(bokningar: T[], idag: string, nuMin: number, utom?: string): T[] {
+  return bokningar.filter((b) => b.id !== utom && (b.day > idag || (b.day === idag && b.start_min > nuMin)));
+}
+
 function strangar(v: unknown): Record<string, string> | undefined {
   if (!v || typeof v !== "object" || Array.isArray(v)) return undefined;
   const ut: Record<string, string> = {};
@@ -130,11 +150,7 @@ export function formaKandidat(k: RaKandidat, x: Indata): NdRxKand {
   }
   for (const m of medd) {
     const nm = RX_MALLNAMN[m.template] ?? m.template;
-    const t = m.status === "skickad" ? `${nm} gick ut med mejl.`
-      : m.status === "schemalagd" ? `${nm} går ut med mejl ${dagDatum(dag(m.send_after))} kl. ${kl(m.send_after)}.`
-      : m.status === "fel" ? `${nm} gick inte ut${m.error ? `: ${m.error.replace(/\.$/, "")}` : ""}.`
-      : m.status === "avbruten" ? `${nm} skickades inte.`
-      : `${nm} går ut med mejl ${dagDatum(dag(m.send_after))}, när det är under fyra veckor kvar.`;
+    const t = meddelandetext(m, nm);
     L(m.sent_at ?? m.created_at, t, m.status === "fel" ? "fel" : "mejl");
   }
   if (merit) {
