@@ -5,11 +5,16 @@
  *   node scripts/apply-sql.mjs                  -> kor alla ej korda
  *   node scripts/apply-sql.mjs 0001_identitet   -> kor en specifik
  *
- * Varje fil kors i en transaktion och bokfors i schema_migrations.
+ * Varje fil kors i en transaktion och bokfors i schema_migrations. Finns
+ * tests/rattigheter-db.mjs kors dess kontroll fore commit: en migration som
+ * gor en SECURITY DEFINER-funktion korbar for anon eller authenticated utan
+ * att den star i TILLATNA, eller som oppnar forvalet igen, rullas tillbaka.
  */
+import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import pg from "pg";
 
 const url = process.env.DATABASE_URL;
@@ -37,6 +42,10 @@ const applied = new Map(
   (await client.query("select name, checksum from schema_migrations")).rows.map((r) => [r.name, r.checksum]),
 );
 
+const vaktFil = path.join(process.cwd(), "tests", "rattigheter-db.mjs");
+const vakt = existsSync(vaktFil) ? (await import(pathToFileURL(vaktFil).href)).kontrollera : null;
+if (!vakt) console.warn("! tests/rattigheter-db.mjs saknas: rattigheterna provas inte.");
+
 const files = (await readdir(dir)).filter((f) => f.endsWith(".sql")).sort();
 let ran = 0;
 
@@ -58,6 +67,10 @@ for (const file of files) {
   try {
     await client.query("begin");
     await client.query(sql);
+    if (vakt) {
+      const v = await vakt(client);
+      if (v.fel.length > 0) throw new Error(`vakten (tests/rattigheter-db.mjs) vagrar:\n  ${v.fel.join("\n  ")}`);
+    }
     await client.query("insert into schema_migrations (name, checksum) values ($1, $2)", [name, checksum]);
     await client.query("commit");
     console.log("ok");

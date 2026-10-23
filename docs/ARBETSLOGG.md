@@ -5,6 +5,42 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-23 · Granskningen S01 del 2: nya funktioner stängda från början, och apply-sql kör vakten (0240 körd)
+
+- **Slutgranskningen av S01** (färska ögon) fann två brister i vakten. Den
+  blev röd först när ett nytt hål redan var öppet i produktionen, eftersom
+  `apply-sql.mjs` skriver före commit. Och den jämförde bara signaturer, så
+  en omskriven godkänd funktion gick igenom. Beställaren 2026-10-23: "Bygg
+  klart allting".
+- **0240 (`supabase/migrations/0240_rattigheter_forval.sql`):** bara
+  rättigheter. `alter default privileges for role postgres revoke execute on
+  functions from public` (globalt: ett förval per schema kan inte ta bort
+  Postgres inbyggda PUBLIC=X, prövat) och samma för anon och authenticated i
+  public. En ny funktion får nu bara postgres och service role. C10: anon
+  kan inte längre köra `kanda_fel`, `fel_statistik`, `matches_audience` (tre
+  argument) och `kampanjsidor_lage`; triggerfunktionerna
+  `candidate_stegbyte_loggas` och `coaching_kvittens_vaktas` har ingen roll
+  kvar (triggern prövar inte EXECUTE, prövat). `supabase_admin` går inte att
+  ändra och skapar inga av navets funktioner. Torrkörd: RLS-läsningarna som
+  Zen (nyheter, kurser, dokument, kända fel, kalendern, kandidater,
+  coachning) lika före och efter.
+- **Vakten `tests/rattigheter-db.mjs`** fallerar nu också på ett förval som
+  öppnar nya funktioner, fler roller än posten i `TILLATNA` (roll per post),
+  en ändrad kropp (md5 av `pg_get_functiondef` per post), ett aktörsargument
+  (`p_aktor` och liknande, oavsett listan), vyer utan `security_invoker` som
+  anon eller authenticated får läsa, och DEFINER-funktioner i alla scheman.
+  Med migrationsfiler som argument körs de först i en transaktion som rullas
+  tillbaka. `kontrollera(db)` exporteras. 37 godkända.
+- **`scripts/apply-sql.mjs`** kör `kontrollera` före `commit` om
+  `tests/rattigheter-db.mjs` finns, och rullar tillbaka en migration som
+  fallerar. Provat: ett `select 1` vägrades så länge förvalet var öppet, och
+  ingen rad skrevs.
+- **Provat:** vakten röd före 0240 (förvalet, anon på tre, triggerfunktionerna),
+  grön efter (37). Provfilerna i `~/nav2-utkast/delar/granskning/S01/prov/`
+  ger var sitt väntat utslag: glömd revoke, omskriven funktion, `p_aktor`, vy,
+  anon på en godkänd funktion; med 0240 före blir den glömda funktionen inte
+  körbar.
+
 ## 2026-10-22 · Nav 2.0, Kalendern som Outlook, del 16: bilagor på möten (0201)
 
 - **Beställaren 2026-10-22:** ja till bilagor (Outlook: "Bifoga fil").
