@@ -7,6 +7,16 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
 
 ---
 
+## Granskningen S15 — texterna till personalen (2026-10-23), på `nav2-utkast`
+
+Nytt i navet-posten `nav-2-med-riktig-data` säger nu det som gäller vid mergen och går till
+alla. **Vid mergen (S12):** sätt postens `datum` till mergedagen; står Order inte på, ta bort
+"ordern" ur stycket "Allt sparar". Läsläge-texter som syntes oavsett `SKRIVLAGE` är borta.
+Lanseringsbeskedet (beställaren skickar det dagen före) står i
+`~/nav2-utkast/delar/granskning/S15/lanseringsbesked.md`.
+
+---
+
 ## Granskningen S14 — Resend och Inkio till 100 % (2026-10-23), på `nav2-utkast`
 
 `inkio-nya-nycklar` (`f763a5d`, get-files) är inmergad i grenen, och heldagsmöten

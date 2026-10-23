@@ -15,219 +15,39 @@ import type { Navnyhet } from "./typer.ts";
 export const POSTER: Navnyhet[] = [
   {
     slug: "nav-2-med-riktig-data",
-    rubrik: "Nav 2.0 med riktig data, i läsläge",
+    rubrik: "Nav 2.0 är navet",
     ingress:
-      "Nya Nav går att öppna på /nav2 med din riktiga data. Ingenting du gör där sparas än, och vyerna kopplas en i taget.",
-    text: `Öppna **/nav2**. Det är det nya Nav, med samma inloggning och samma
-behörigheter som här: du ser bara det du får se.
+      "Nya Nav öppnas när du loggar in. Allt du gör där sparas, och dina gamla länkar leder rätt.",
+    text: `Nav 2.0 öppnas när du loggar in, med samma konto och samma behörigheter
+som förut. Du ser bara det du får se.
 
-## Kopplat nu
+## Var du hittar allt
 
-- **Inloggningen**, i Nav 2.0:s utseende. Den minns ditt konto, så det räcker
-  med lösenordet. Glömt det? Be om en kod till mejlen, logga in med den och
-  välj ett nytt, gärna ett som navet föreslår. Bredvid står navets urtavla,
-  och på telefonen stiger den upp under formuläret: dagens dagsljus i
-  Stockholm och hela året, ett streck per dag, under vår devis: Vi leder dig
-  mot din vision.
-- **Klockan**, med samma notiser som här.
-- **Inställningar**: ditt konto, säkerheten, utseendet och påminnelserna om
-  stämpling, samma som i Tid. Din profilbild syns för alla i Nav, på alla
-  enheter, och du väljer själv vad Nav ska kalla dig.
-- **Satser och löner**, för den som har behörigheten för lönekostnad. En
-  superadmin med behörigheten ändrar satserna, lönerna och födelseåren där,
-  och lägger in Skatteverkets rättelser med en knapp. Under Intäkter och
-  täckningsgrad matas intäkten in per löneperiod, och Nav räknar vad som
-  blev kvar.
-- **Tid**, **Frånvaro** och **Uppgifter**, med samma regler som här. I Uppgifter
-  väljer du dagens tre, planerar och avslutar dagen, skriver första steget och
-  påminner den du väntar på. Där lägger du upp ett projekt, bjuder in
-  kollegor och skriver i projektets chatt, gör egna mallar som "/" i
-  snabbraden lägger ut som uppgifter, avslutar en serie och kopplar en
-  uppgift till en order, en person, ett ärende, en kurs eller en coachning.
-  I Frånvaro kan chefen starta önskemålsrundan
-  inför sommaren, föreslå en annan period och kvittera rehabsignalen. Där kan
-  du också be chefen ställa in en beviljad ledighet, ställa in en sjukanmälan
-  som blev fel, och lägga in din ledighet och dina möten i den egna kalendern
-  med en hemlig adress. I Tid
-  rättar du en stämpling på raden, kollar veckan på fredagen och väljer egna
-  påminnelser; chefen ser rättelserna med stöd, nästa veckas frånvaro och
-  lönerapportens steg. Chefen lägger också nya scheman, med tider per
-  veckodag och ett startdatum, justerar en attesterad lönerapport i minuter
-  och lägger upp ogiltig frånvaro för hand.
-- **Rutiner**, navets egna: sök, spara, följ steg för steg, kvittera, säg om
-  rutinen hjälpte och bevaka ett område. Ägaren svarar på återkopplingen,
-  och den som förvaltar rutinerna ser kvittenser, granskning och vad folk
-  sökt efter utan att hitta. En rutin kan ha bilagor, till exempel en
-  prislista som PDF, och texten i en PDF går att söka på. Bilagorna läggs
-  till också i redaktören, för ett utkast.
-- **Startsidan**: det som väntar på dig samlat ur de kopplade vyerna, med
-  de tre mest bråttom överst och knappen för att göra det direkt. Chefen ser
-  dagsläget och vilka som är borta framåt, och vid dagens slut nästa
-  arbetsdag. Golvet visar lagets order mot målen i Provision och dagens
-  godkända order för hela laget, och du kan gratulera en kollega. Säljchef, VD och
-  teamledare kan slå på kvällsnotisen i mobilen under Inställningar, Notiser.
-- **Utbildning**, med navets kurser: dagens repetition ur prov du klarat,
-  lektioner steg för steg med din regelbok och ditt mål, prov som rättas när
-  du lämnar in, skriftliga prov som du svarar på med egna ord, rollspel som du lämnar in och bedömer dig själv i, föreläsningar
-  med anmälan och uppföljning, och certifikat som förnyas med fem frågor. Välj
-  när du vill bli påmind om dagens repetition, så kommer en notis i mobilen och
-  i klockan, och en månad innan ett certifikat går ut får du ett mejl. Varje
-  fråga räknas till en färdighet på din kunskapskarta, en hel vecka med
-  repetition ger en frysdag för en dag du missar, och teamet har ett
-  gemensamt veckomål som räknas själv. Den
-  som leder ett team bedömer rollspelen, rättar de skriftliga proven med
-  rättarstödet bredvid varje svar eller skickar tillbaka dem för komplettering,
-  ser vem som har kurser kvar och lägger
-  frågor i teamets repetition. Under Biblioteket, Lär dig Nav, finns korta
-  guidade turer genom Nav, som alla gör, även den som gjorde dem i gamla Nav,
-  och den som leder ett team kan knuffa den som inte gjort klart.
-- **Rekrytering**, för den som rekryterar: Att göra med svarslöftet,
-  tavlan med kandidaterna, intervjutiderna, tjänsterna, mallarna och målet
-  (en gång eller varje månad eller kvartal), och siffrorna per källa.
-  Kandidaterna får mejl, med en kalenderfil när intervjun är bokad. Övriga ser
-  Tipsa om en säljare, med telefon eller mejl, och hur det gått för deras tips.
-- **Coachning**: en sak i taget att träna, varje arbetsdag. Säljaren svarar
-  på dagens övning med ett tryck, också när hen stämplar ut, och väljer när
-  dagarna är slut om den blivit en vana. Överenskommelserna med din chef står
-  i samma vy, och du lämnar in dem där, med en fil om det behövs. Inför nästa
-  1:1 skriver du det du vill ta upp, och målen du valt att visa från
-  Utbildning följer med. Chefen ser laget med det som behöver något först, går
-  igenom 1:1:et i fyra steg och bokar nästa direkt. Det mesta du gör går att
-  ångra en stund efteråt, och en överenskommelse som avbryts får ett skäl.
-  Chefen skriver mallar med flera steg och lägger upp en hel rampplan på en
-  gång från en startdag, och den som börjat på en överenskommelse kan säga
-  det med ett tryck. Mallen går att ändra och lägga vilande, och blev det fel
-  ångrar du hela rampplanen på en gång de första tio minuterna.
-- **Anställda**, för säljchef, VD och administratörer: vad som kräver dig och
-  vad andra inte gjort än, lagens frister, registret med oanvända konton,
-  checklistan per person med datum från startdagen, semestersaldot som
-  personen ser i Frånvaro, och checklistorna och
-  utskicken som gäller nästa gång någon börjar eller slutar. Den som ska
-  sätta upp något får ett mejl med en Klart-knapp och en påminnelse i navet.
-  Avslutet frågar varför anställningen tar slut, och en kandidat som anställs
-  i Rekrytering får samma checklista som i Lägg upp. Superadmin delar också ut
-  särskild behörighet, ser vilka obligatoriska rutiner var och en har kvar,
-  ser vad en borttagning tar med sig och sätter upp teamen och teamledarna.
-  Den som tas bort helt tar aldrig med sig samtalsinspelningar,
-  anställningsavtal, stämplingar eller arbetstidsjournal.
-- **Avtal**: under Mitt avtal öppnar du ditt anställningsavtal och dina
-  tilläggsavtal som PDF och läser dem direkt, med din lön, ditt semestersaldo
-  och din provision bredvid. Säljchef, VD och administratör laddar upp varje
-  persons påskrivna avtal och tillägg och tar bort ett som blev fel, och ser
-  vilka som saknar avtal och när provanställningarna slutar.
-- **Händelseloggen**, för VD och administratör: vem som loggat in, fått en
-  roll, ändrat eller tagit bort något, lämnat ut eller öppnat något (också en
-  inspelning eller ett avtal) och vad Nav gjort självt, de senaste sju dagarna
-  dag för dag och med filter per typ. Flera inspelningar som öppnas i en följd
-  blir en rad. Loggen går inte att ändra, och den säger aldrig skälet till en
-  frånvaro eller vad ett personalärende handlar om.
-- **Order** och kundkortet. Varje order har nu ett nummer (#12), och
-  provisionen är navets: fryst på en godkänd order, och det godkännandet
-  skulle ge på en som väntar. I kortet spelar du inspelningen direkt, skriver
-  en anteckning till Inkio, fäster den överst och säger till leveransen när
-  kampanjsidan inte svarar. En säljare kan lägga en fri order, som säljchef,
-  VD eller ekonomi godkänner.
-- **Provision**, räknad av samma motor som här: månaden, trappan, målen,
-  historiken och, för säljchef, VD och ekonomi, laget och perioderna. Månader
-  före provisionsmotorn visar lönesystemets summa när ekonomi lagt in den.
-  Under Regler sätter superadmin säljchefens ersättning: övertäcket, satsen
-  på egen försäljning och vem som får övertäcket, från en dag man väljer.
-  Säljchef och VD ändrar stegen för ogiltig frånvaro där, och ekonomi
-  markerar en fastställd månad som utbetald under Perioder.
-- **Kalendern**: din kalender och, efter delningsnivån, kollegornas. Möten
-  går att ändra efteråt, var och en väljer sin egen påminnelse, och ett möte
-  kan vara privat eller upprepas varje månad. Skriv en e-postadress i
-  mötet, så får också den som inte jobbar på Clicknet en inbjudan med mejl.
-  Håll in Ctrl eller Alt när du drar ett möte, så kopieras det dit du
-  släpper det. Under Mina kalendrar döljer du uppgifterna, frånvaron eller
-  helgdagarna med en bock.
-  Bjuder du in kollegor säger mötet direkt om någon är upptagen, och
-  Föreslå tid hittar en tid som passar alla, också hos dem vars kalender du
-  inte har öppen.
-  Föreslår någon en ny tid står förslaget i mötet, och du godkänner det
-  eller behåller tiden med ett klick.
-  I ett 1:1 ber du säljaren förbereda sig och lägger till punkter på
-  agendan direkt i mötet.
-  Klistra in en Teams-, Meet- eller Zoom-länk i platsfältet, så öppnar
-  Anslut mötet. Ett preliminärt möte syns som preliminärt.
-  I telefonen rullar du kalendern med fingret, trycker för ett nytt möte
-  och håller in ett möte för att flytta det.
-  Skriv ut skriver vyn du ser, utan menyer, och sparar den som PDF.
-  Tryck Enter i sökfältet för att söka i hela kalendern, inte bara i
-  månaden du ser.
-  Allt i kalendern kommer som notis i telefonen, också mötets påminnelse.
-  Slå på det i Inställningar, Notiser, Kalendern i telefonen.
-  Ändrar du en gång i en serie frågar kalendern som Outlook: bara den här
-  gången, den här och följande, eller hela serien. Serien kan också få ett
-  slutdatum.
-  Färgkategorier som i Outlook: sätt röd, blå eller någon av de andra på en
-  post i snabbkortet, och döp om dem som du vill. De syns bara för dig.
-  Tryck på en deltagares namn i ett möte för att göra den valfri. Föreslå
-  tid letar då bara efter en tid som passar de obligatoriska.
-  Heldag fungerar nu, och ett möte kan gå över flera dagar: kryssa i
-  Heldag och välj till vilken dag.
-  Har du en assistent? Ge hen "Kan planera om" under Dela, så flyttar och
-  redigerar hen dina möten, eller "Delegat", så svarar hen också på dina
-  inbjudningar och bokar möten åt dig (Från i formuläret).
-  Bifoga filer till ett möte i snabbkortet: offerten, agendan eller
-  presentationen. Alla som är med öppnar dem där.
-- **Ärenden**, med svarstiden som navet lovar. Chefen får ett ärende av
-  nattjobbet när en överenskommelse i Coachning är fjorton dagar över fristen
-  eller någon inte gjort systemguiderna i tid, och ägaren när en sats ska ses
-  över.
-- **Fel**: dina felrapporter och, för den som hanterar kön, kön och
-  nattjobbets kvitto steg för steg. Kända fel med råd, "samma för mig" och
-  svar i tråden finns nu i navet, och kön markerar själv ett fel som känt med
-  ett råd under tiden.
-- **Nyheter**: inläggen från ledningen och Nytt i navet på samma ställe, och
-  de senaste på startsidan. Ett inlägg som ska kvitteras har en sista dag,
-  syns i klockan och i dina uppgifter när dagen närmar sig, och kvitteras med
-  ett tryck. Den som skrev det ser vilka som läst och kvitterat, och kan
-  påminna resten. Säljchef, VD och administratör ser alla inlägg och skriver
-  i en ruta som visar inlägget som det blir, väljer vem det gäller, fäster
-  det överst och kan schemalägga det till nästa morgon eller måndag.
-- **Sök, gör eller fråga Nav** (⌘K): sökningen hittar dina uppgifter,
-  rutiner (även i texten och bilagorna), kurser, kommande möten, order,
-  ärenden, nyheterna och Nytt i Nav, och de kollegor du får se i
-  personalregistret, och för
-  den som ser dem också kandidater, överenskommelser och avtal, och öppnar dem
-  direkt. Fråga Nav svarar på ett femtiotal frågor,
-  som "Vad har jag i dag?", "Hur ligger jag mot målet?" och "Vem ringer jag när
-  jag blir sjuk?", räknade ur Nav när du frågar och med källan på varje rad.
-  Skriv ? för att se alla. Fritt skrivna frågor sparas utan namn, och säljchef,
-  VD och admin ser dem samlade i ämnen och kan göra en rutin av dem.
-- **Inställningar → Säkerhet**: byt lösenord direkt i nya Nav, med kraven
-  som bockas av medan du skriver. Kräver din roll en kod vid inloggning
-  bekräftar du enheten med koden från mejlet där, och kan glömma den igen.
-- **Leads**: förfrågningarna från hemsidan. Säljchef, VD och teamledare ger
-  varje lead till en säljare, med förslag på den som är på plats och har minst
-  att göra, fördelar jämnt eller låter Nav fördela automatiskt, och påminner
-  den som inte ringt. Säljaren ser sina egna, ringer och säger efter samtalet
-  hur det gick med ett klick: nästa försök läggs in av sig själv, ett bokat
-  möte hamnar i kalendern och kunden får en inbjudan med mejl, och den som
-  blev kund går direkt till en ny order.
-  Det mesta går att ångra en stund efteråt.
-- **Adoption**, för superadmin: hur många som använt Nav
-  i dag och de senaste sju dagarna, hur stor del av de anställda det är och
-  hur många som kommer tillbaka, med trettio dagars staplar och samma siffror
-  som tabell. Sökningar och frågor utan träff går att göra till en rutin, och rutiner
-  ingen öppnat på 90 dagar går att öppna. Siffrorna räknar personer, aldrig
-  vem som gjorde vad.
+- **Överst i menyn:** Hem, Uppgifter, Nyheter, Rutiner, Utbildning och Tid.
+- **Min vy:** Kalender, Ärenden och Frånvaro.
+- **Försäljning:** Order, Leads och Provision.
+- **Personal:** Coachning, Mitt avtal och Tipsa om en säljare. Chefer och
+  administratörer har fler poster här, som Anställda och Rekrytering.
+- **Profil och inställningar**, under din bild uppe till höger: ditt konto,
+  profilbilden, lösenordet, utseendet och notiserna.
+- **⌘K eller Ctrl+K** söker i hela Nav, gör det vanligaste direkt och svarar
+  på frågor som "Hur ligger jag mot målet?".
 
-Leads och K&V öppnas här i nuvarande Nav,
-vilken väg du än tar dit: menyn, sökningen, en notis eller en länk. Det som
-bara finns här, som scheman, spärrar och projekt, öppnas också här. Nya Nav
-fungerar i mobilens bredd. Ingenting påhittat visas.
+## Allt sparar
 
-Nya Nav är navet: startsidan och inloggningen leder hit, och en gammal
-länk eller ett bokmärke öppnar samma sak här. Och det öppnas snabbare:
-navet läser din data direkt ur databasen, med samma behörigheter som förut.
+Det du gör i Nav 2.0 sparas, i alla vyer: stämplingen, ledigheten, ordern,
+mötet, uppgiften och resten.
 
-## Läsläge
+## Gamla länkar leder rätt
 
-Ingenting sparas från /nav2 förrän det slås på, vy för vy.`,
+Ett bokmärke, en länk i ett mejl eller en notis öppnar samma sak i Nav 2.0.
+K&V öppnas som förut, i det gamla Nav.
+
+## Något som inte fungerar?
+
+Tryck **Rapportera fel**, i menyn eller med ⌘K. Sidan du stod på följer med.`,
     datum: "2026-10-14",
-    roller: ["ceo", "admin"],
+    roller: [],
     href: "/nav2",
   },
   {

@@ -102,7 +102,7 @@ export async function GET(request: Request) {
         c.enqueue(enc.encode(`<script nonce="${nonce}" type="application/json" id="ndData">${json}</script>` + d.efter));
       } else {
         if (fel) console.error("nav2: datan gick inte att bygga", fel);
-        c.enqueue(enc.encode(BESKED("Nav kunde inte läsa din data just nu", "Ladda om sidan om en stund. Händer det igen, skriv en felrapport i nuvarande Nav.") + d.efter));
+        c.enqueue(enc.encode(BESKED("Nav kunde inte läsa din data just nu", "Ladda om sidan om en stund. Händer det igen, säg till den som administrerar Nav.") + d.efter));
       }
       c.close();
     },

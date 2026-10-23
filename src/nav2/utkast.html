@@ -24636,7 +24636,7 @@ function ndEjKopplad(vy){
       <span class="nd-ik" aria-hidden="true">${I('lank')}</span>
       <div><h2 id="ndEjT">${esc(namn)} visar ingenting påhittat</h2>
         <p>Vyn är byggd i utkastet men läser inte ur Nav än. Tills den gör det finns allt i nuvarande Nav.</p>
-        <p class="nd-sm">Kopplat nu: ${esc(ndKoppladText())}. Läsläge: ingenting du gör här sparas.</p>
+        <p class="nd-sm">Kopplat nu: ${esc(ndKoppladText())}.</p>
         <div class="nd-kn"><a class="btn btn-p btn-sm" href="${vag}">Öppna ${esc(namn.toLowerCase())} i Nav</a></div></div>
     </section>`;
 }
@@ -24692,12 +24692,12 @@ function ndHemLage(){
   const ej = Object.keys(NDVY).filter(v => v !== 'hem' && !NDKOPPLAD.has(v) && (S.role === 'chef' || !['logg', 'adoption', 'anstallda'].includes(v)));
   const n = ND.notiser.filter(x => x.olast).length;
   return `<section class="card nd-hem" aria-labelledby="ndHemT">
-    <div class="chead"><h2 id="ndHemT">Nav 2.0 med riktig data</h2><span class="meta">läsläge</span></div>
-    <p class="nd-sm">Det här är utkastet kopplat till Nav. Det du ser är riktigt, och ingenting du gör här sparas än.</p>
+    <div class="chead"><h2 id="ndHemT">Nav 2.0 med riktig data</h2><span class="meta">läget</span></div>
+    <p class="nd-sm">Det du ser läses ur Nav, och det du gör här sparas.</p>
     <dl class="nd-dl"><div><dt>Du är</dt><dd>${esc(ND.jag.namn)} · ${esc(NDNIVA[ND.jag.niva])}${ND.jag.team ? ` · ${esc(ND.jag.team)}` : ''}</dd></div>
       <div><dt>Notiser</dt><dd>${n ? `<button class="tlink" data-bell>${n} olästa i klockan</button>` : 'Inga olästa'}</dd></div>
       <div><dt>Kopplat</dt><dd>${esc(ndKoppladText())}</dd></div></dl>
-    <p class="nd-sm">Inte kopplat än: ${esc(prfOch(ej.map(v => NDVY[v][0])))}. De öppnas i nuvarande Nav tills de är det.</p>
+    <p class="nd-sm">Öppnas i nuvarande Nav: ${esc(prfOch(ej.map(v => NDVY[v][0])))}.</p>
   </section>`;
 }
 
@@ -24781,7 +24781,7 @@ prfKontoSek = function(){
     + prfKort('uppg', 'Mina uppgifter', '', `<div class="prf-kb">
         <div class="prf-las"><span class="prf-l">Namn</span><span class="prf-lv">${esc(j.namn)}</span><span class="prf-hj">Står i avtal och lön. Ändras i Anställda.</span></div>
         <div class="prf-las"><span class="prf-l">Jobbmejl</span><span class="prf-lv">${I('prflas')}${esc(j.epost)}</span><span class="prf-hj">Låst. Det är ditt konto i Nav: inloggningen och koden går dit.</span></div>
-        <p class="prf-hj">Tilltalsnamn, telefon och privat mejl finns inte i Nav än. De sparas när utkastet får skriva.</p></div>`)
+        <p class="prf-hj">Tilltalsnamn, telefon och privat mejl kunde inte läsas just nu. Ladda om sidan.</p></div>`)
     + prfKort('reg', 'Dina uppgifter i navet', 'Det här står om dig i personalregistret.', `<div class="prf-kb"><dl class="prf-dl">
         ${rad('Behörighet', esc(NDNIVA[j.niva]))}${rad('Befattning', esc(j.roller.map(r => AEROLL[r] || r).join(', ') || 'Ingen'))}
         ${rad('Team', esc(j.team || 'Inget team'))}${rad('Chef', esc(j.chef || 'Ingen'))}
@@ -28353,7 +28353,7 @@ function ndArUtkastData(){
   }).filter(Boolean);
   return {kategori:kat, rubrik:(u.rubrik ?? arRubrik(text)) || ARKAT[kat].l, text, konfidentiellt:arKonf(u), kontext, at:S.role === 'chef' && S.arAt ? ndAId(S.arAt) : ''};
 }
-const NDARBARA = {arboka:'Samtalet bokas när Kalendern får spara.', arrutinskriv:'En rutin av svaret skrivs när Rutiner är kopplad.'};
+const NDARBARA = {arboka:'Boka samtalet i Kalendern.', arrutinskriv:'En rutin av svaret skrivs när Rutiner är kopplad.'};
 document.addEventListener('click', e => {
   if (!ndA() || S.view !== 'arenden') return;
   const b = e.target.closest && e.target.closest('button, a, label'); if (!b || !b.dataset) return;
@@ -30053,7 +30053,7 @@ renderBrief = function(){
   const vantar = ['coachning', 'kv', 'leads', 'rekrytering', 'anstallda', 'avtal', 'nyheter'].filter(v => !NDKOPPLAD.has(v)).map(v => NDVY[v][0]);
   const h = _ndHem.renderBrief();
   // Foten säger vad sammanfattningen bygger på, och vad den inte kan se än.
-  return h.replace('Skriven av Nav från det du har behörighet att se', `Skriven av Nav från det du har behörighet att se${vantar.length ? `. ${esc(prfOch(vantar))} räknas in när de kopplas` : ''}`);
+  return h.replace('Skriven av Nav från det du har behörighet att se', `Skriven av Nav från det du har behörighet att se${vantar.length ? `. ${esc(prfOch(vantar))} räknas inte in` : ''}`);
 };
 renderInbox = function(){
   if (!ndHemP()) return ND ? '' : _ndHem.renderInbox();

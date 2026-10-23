@@ -5,6 +5,21 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-23 · Granskningen S15: texterna till personalen (H19, F2-20)
+
+- **Nytt i navet.** Posten `nav-2-med-riktig-data` är omskriven för dagen Nav 2.0 mergas:
+  "Nav 2.0 är navet", var allt finns i menyn, att allt sparar, att gamla länkar leder rätt och
+  att K&V öppnas som förut i gamla Nav. Den gäller nu alla (`roller: []`, var VD och admin), och
+  slugen är densamma. Inga löften om K&V eller "Skapa avtal ur mall" (B4). **S12 sätter `datum`
+  till mergedagen**, och står Order inte på vid mergen tas "ordern" bort ur "Allt sparar".
+- **Läsläge-texterna.** De som syntes oberoende av `SKRIVLAGE` är borta eller sanna
+  (`moduler/nd.js`, `ndhem.js`, `ndar.js`, `src/app/nav2/route.ts`). De som bara visas när en
+  vy står på `false` (423-svaret `LASLAGE_TEXT`, Utbildningens tur, palettens frågor, Tids
+  öppning, Anställdas och Rekryteringens "inte kopplad") står kvar. Bara text, inget utseende.
+- **Lanseringsbeskedet** till personalen ligger i `~/nav2-utkast/delar/granskning/S15/lanseringsbesked.md`.
+
+---
+
 ## 2026-10-23 · Granskningen S10, omgång 3: Anställda, Profil och Rutiner sparar (B7); 0229 och 0107 körda
 
 - **Anställda (F1-8).** Ett avslut med sista dag i dag eller bakåt stänger inloggningen direkt,
