@@ -51,6 +51,10 @@ as $function$
           or public.kalender_niva(p_organizer, p_aktor) in ('redigera','delegat'));
 $function$;
 
+-- Bara service role (granskningen K1, regel 4): alla lk_*-funktioner som frågar den körs med service role.
+revoke all on function public.lk_far_andra(uuid, uuid) from public, anon, authenticated;
+grant execute on function public.lk_far_andra(uuid, uuid) to service_role;
+
 create or replace function public.lk_svara_at(
   p_aktor uuid, p_for uuid, p_event uuid, p_svar text, p_note text, p_hela_serien boolean
 )

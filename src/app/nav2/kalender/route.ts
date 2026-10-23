@@ -1,18 +1,19 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser, type CurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { FORINSTALLNINGAR, STEG, UPPREPA, WDL, arDatum, arVy, kvittoKopierad, plus, wd, type Upprepa, type Upptaget } from "@/lib/leveranskalender";
-import { fonsterFran, hamtaHandelsedetalj, lk, upptagetFor } from "@/lib/leveranskalender-server";
+import { FORINSTALLNINGAR, STEG, UPPREPA, WDL, arDatum, arVy, kvittoFlyttad, kvittoKopierad, plus, wd, type Upprepa, type Upptaget } from "@/lib/leveranskalender";
+import { fonsterFran, fornamn, hamtaHandelsedetalj, lk, upptagetFor } from "@/lib/leveranskalender-server";
 import { KATEGORIFARGER, KATEGORINYCKEL, hamtaKalposter, kalDetalj, lasKategorier, ombudFor, sokKalender } from "@/lib/nav2/kalender";
 import { kalPushNasta } from "@/lib/nav2/kalender-push";
+import { andradeDelar, ombudetsFalt, type KalMote } from "@/lib/nav2/kalender-andring";
 import { svensktDatum } from "@/lib/klocka";
 import { bucketen, huvudUppgifter, lagerForNyaFiler, signeraLank, signeraUppladdning, taBort } from "@/lib/lagring-server";
 import { HORISONT_DAGAR, forekomster } from "@/lib/upprepning";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
+import { medNyckel } from "@/lib/nav2/nyckel";
 import { skapaKalenderpost, stallInDelning } from "@/app/(app)/kalender/actions";
 import {
   andraLangd,
-  andraMote,
   beOmForberedelse,
   behallTid,
   bockaAv,
@@ -197,7 +198,7 @@ async function kopieraTill(user: CurrentUser, id: string, dag: string, start: nu
   if (d.organisator !== user.employee?.id && !(await ombudFor(user.employee!.id)).has(d.organisator)) return { fel: "Bara arrangören kopierar mötet. Du kan föreslå en ny tid." };
   const db = supabaseAdmin();
   const [{ data: e }, { count: gaster }] = await Promise.all([
-    db.from("calendar_event").select("show_as, is_private, online_url").eq("id", id).maybeSingle(),
+    db.from("calendar_event").select("show_as, is_private, online_url, reminder_off").eq("id", id).maybeSingle(),
     db.from("calendar_attendee").select("id", { count: "exact", head: true }).eq("event_id", id).not("external_email", "is", null),
   ]);
   const deltagare = d.deltagare.map((x) => x.id).filter((x) => x !== d.organisator);
@@ -210,7 +211,7 @@ async function kopieraTill(user: CurrentUser, id: string, dag: string, start: nu
     deltagare,
     plats: d.plats,
     agenda: d.agenda,
-    paminnelse: d.paminnelse,
+    paminnelse: e?.reminder_off ? null : d.paminnelse,
     visaSom: (e?.show_as as string | undefined) ?? undefined,
   });
   if (r.fel || !r.eventId) return r;
@@ -357,7 +358,9 @@ async function andraSerie(user: CurrentUser, id: string, a: Serieandring): Promi
     plus(idag, HORISONT_DAGAR),
   );
   const text = regel.monster === "vardagar" ? "varje vardag" : regel.monster === "manadsvis" ? "varje månad" : `${regel.intervall === 2 ? "varannan " : ""}${WDL[wd(a.dag)].toLowerCase()}${regel.intervall === 2 ? "" : "ar"}`;
-  const r = await lk<{ undo_id: string; svara_igen: string[]; event_id: string }>("lk_andra_serie", {
+  // Vid "Den här och följande" från en senare gång delar 0211 serien som Outlook: den gamla slutar dagen före, och
+  // svaret bär den nya seriens id och dess första gång (event_id), som kvittot och Ångra (dela_serie) gäller.
+  const r = await lk<{ undo_id: string; svara_igen: string[]; event_id: string; series_id: string }>("lk_andra_serie", {
     p_aktor: user.employee!.id,
     p_event: id,
     p_fran_har: a.fran === "har",
@@ -515,6 +518,104 @@ function lank(v: unknown): string | null | undefined {
   return /^https?:\/\/\S+$/i.test(t) && t.length <= 500 ? t : null;
 }
 
+/**
+ * Mötet som det står i databasen, i `andradeDelar`s form (granskningen E2): deltagarna är mötets egna rader, eller
+ * seriens när en gång inte har egna (lk_narvaro), utan arrangören.
+ */
+async function motetNu(id: string): Promise<(KalMote & { organizer_id: string }) | null> {
+  const db = supabaseAdmin();
+  const { data: e } = await db
+    .from("calendar_event")
+    .select("dag, tid, minuter, title, plats, online_url, agenda_md, reminder_min, reminder_off, show_as, is_private, organizer_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!e) return null;
+  const { data: narvaro } = await db.rpc("lk_narvaro", { p_event: id });
+  const rader = ((narvaro ?? []) as { rad: string; employee_id: string | null }[]).filter((r) => r.employee_id && r.employee_id !== e.organizer_id);
+  const { data: valfria } = rader.length ? await db.from("calendar_attendee").select("id").in("id", rader.map((r) => r.rad)).eq("optional", true) : { data: [] };
+  const valfriaRader = new Set(((valfria ?? []) as { id: string }[]).map((r) => r.id));
+  return {
+    dag: String(e.dag),
+    tid: (e.tid as string | null) ?? null,
+    minuter: (e.minuter as number | null) ?? null,
+    title: String(e.title ?? ""),
+    plats: (e.plats as string | null) ?? null,
+    online_url: (e.online_url as string | null) ?? null,
+    agenda: String(e.agenda_md ?? ""),
+    deltagare: rader.map((r) => r.employee_id as string),
+    valfria: rader.filter((r) => valfriaRader.has(r.rad)).map((r) => r.employee_id as string),
+    reminder_min: (e.reminder_min as number | null) ?? null,
+    reminder_off: Boolean(e.reminder_off),
+    show_as: String(e.show_as ?? "upptagen"),
+    is_private: Boolean(e.is_private),
+    organizer_id: String(e.organizer_id),
+  };
+}
+
+type Sparat = { event_id: string; undo_id: string | null; andrat: string[]; skickat: { inbjudna?: number; installd?: number; besked?: number; kalla?: string | null; svara_igen?: string[] } };
+
+/**
+ * Formulärets sparning av ett möte (granskningen E2, 0212): det som ändrats, i ett anrop och med en ångerrad. Ingen
+ * ändring = inget anrop och inget besked. Påminnelsen (E3): `pamin` saknas = som förut, null = "Ingen" (E4).
+ */
+async function sparaMote(user: CurrentUser, id: string, f: Falt, deltagare: string[], videoIn: string | null | undefined, heldag: boolean): Promise<Resultat> {
+  const fore = await motetNu(id);
+  if (!fore) return { fel: "Händelsen finns inte längre." };
+  const mig = user.employee!.id;
+  const ombud = ombudetsFalt({ arrangor: fore.organizer_id === mig, privat: fore.is_private, deltar: fore.deltagare.includes(mig), video: videoIn });
+  if ("fel" in ombud) return { fel: ombud.fel };
+  const video = ombud.video;
+  const start = f.s ?? 0;
+  const minuter = (f.e ?? 0) - start;
+  const efter: KalMote = {
+    ...fore,
+    // Heldag har redan gått genom lk_andra_heldag; här ändras bara ett mötes klockslag och längd.
+    dag: heldag ? fore.dag : f.d || fore.dag,
+    tid: heldag ? fore.tid : hhmm(start),
+    minuter: heldag ? fore.minuter : minuter || fore.minuter,
+    title: (f.t ?? "").trim().slice(0, 200),
+    plats: (f.plats ?? "").trim().slice(0, 200) || null,
+    online_url: video === undefined ? fore.online_url : video,
+    agenda: (f.agenda ?? "").slice(0, 4000),
+    deltagare,
+    valfria: f.valfria === undefined ? fore.valfria.filter((x) => deltagare.includes(x)) : f.valfria.filter((x) => deltagare.includes(x)),
+    reminder_min: typeof f.pamin === "number" ? f.pamin : fore.reminder_min,
+    reminder_off: f.pamin === undefined ? fore.reminder_off : f.pamin === null,
+    show_as: f.visa || fore.show_as,
+    is_private: f.priv === undefined ? fore.is_private : Boolean(f.priv),
+  };
+  if (!efter.title) return { fel: "Skriv en rubrik först." };
+  if (!andradeDelar(fore, efter).size) return { ok: true, eventId: id, dag: fore.dag, kvitto: "Inget ändrades." };
+  const r = await lk<Sparat>("lk_spara_mote", {
+    p_aktor: user.employee!.id,
+    p_event: id,
+    p_dag: efter.dag,
+    p_tid: efter.tid,
+    p_minuter: efter.minuter,
+    p_title: efter.title,
+    p_plats: efter.plats,
+    p_online_url: efter.online_url,
+    p_agenda: efter.agenda,
+    p_deltagare: efter.deltagare,
+    p_valfria: efter.valfria,
+    p_reminder_min: efter.reminder_min,
+    p_reminder_off: efter.reminder_off,
+    p_show_as: efter.show_as,
+    p_privat: efter.is_private,
+  });
+  if (!r.ok) return { fel: /lk_spara_mote/.test(r.fel) ? "Mötet sparas när databasen fått 0212." : r.fel };
+  const k = r.data.skickat ?? {};
+  const delar: string[] = [];
+  if (r.data.andrat.includes("tid") && efter.tid) {
+    const namn = await fornamn(k.svara_igen ?? []);
+    delar.push(kvittoFlyttad(efter.dag, Number(efter.tid.slice(0, 2)) * 60 + Number(efter.tid.slice(3, 5)), (k.svara_igen ?? []).map((x) => namn.get(x) ?? "").filter(Boolean)));
+  } else delar.push("Sparat.");
+  if (k.inbjudna) delar.push(k.inbjudna === 1 ? "En ny deltagare får en inbjudan." : `${k.inbjudna} nya deltagare får en inbjudan.`);
+  if (k.installd) delar.push(k.installd === 1 ? "Den som togs bort får veta att mötet är inställt." : `De ${k.installd} som togs bort får veta att mötet är inställt.`);
+  if (!r.data.andrat.includes("tid") && k.besked) delar.push(k.kalla === "kalender-flyttad" ? "Deltagarna får besked om ändringen." : "Deltagarna ser ändringen i Nav.");
+  return { ok: true, eventId: id, dag: efter.dag, angra: r.data.undo_id ?? undefined, kvitto: delar.join(" ") };
+}
+
 const svarFran = (r: Resultat) => (r.fel ? { fel: r.fel } : { ok: r.kvitto ?? "Sparat.", angra: r.angra ?? null, id: r.eventId ?? null, dag: r.dag ?? null });
 
 export async function POST(request: Request) {
@@ -529,6 +630,19 @@ export async function POST(request: Request) {
     return svar2({ fel: "Ogiltig begäran." }, 400);
   }
   if (!SKRIVLAGE.kalender) return svar2({ fel: LASLAGE_TEXT, laslage: true }, 423);
+  const inloggad = user as Inloggad;
+  // Det som skapar något (ett möte, en heldag, en serie, en uppgift, ett leveransmöte, gästernas inbjudan, en kopia)
+  // görs en gång per nyckel (granskningen G2, S03:s medNyckel): Enter som upprepas i snabbrutan eller ett nytt försök
+  // efter en tidsgräns ger samma svar i stället för ett möte till och ett mejl till till varje gäst.
+  const skapar = (b.handling === "spara" && !((b.falt ?? {}) as Falt).id) || b.handling === "kopiera";
+  if (skapar) return medNyckel(request, inloggad.employee.id, () => utfor(inloggad, b));
+  return utfor(inloggad, b);
+}
+
+type Inloggad = CurrentUser & { employee: NonNullable<CurrentUser["employee"]> };
+
+async function utfor(user: Inloggad, b: Record<string, unknown>): Promise<Response> {
+  const svar2 = (data: unknown, status = 200) => NextResponse.json(data, { status, headers: { "Cache-Control": "private, no-store, max-age=0" } });
   const handling = String(b.handling ?? "");
   const id = String(b.id ?? "");
   const ut = (r: Resultat) => {
@@ -561,7 +675,7 @@ export async function POST(request: Request) {
           if (eventId && f.priv !== undefined) await supabaseAdmin().from("calendar_event").update({ is_private: Boolean(f.priv) }).eq("id", eventId);
         };
 
-        // Ändra ett befintligt möte: tiden med flytta/andraLangd, resten med andraMote.
+        // Ändra ett befintligt möte: ett möte i ett anrop (lk_spara_mote, 0212), andra poster tiden med flytta/andraLangd.
         if (f.id) {
           if (!UUID.test(f.id)) return svar2({ fel: "Händelsen finns inte längre." }, 400);
           const { data: e } = await supabaseAdmin().from("calendar_event").select("dag, tid, minuter, kind, online_url, slutdag").eq("id", f.id).maybeSingle();
@@ -578,16 +692,20 @@ export async function POST(request: Request) {
               sist = await andraHeldag(user, f.id, f.d ?? "", slut, f.heldag ? null : start, f.heldag ? null : minuter);
               if (sist.fel) return ut(sist);
             }
-          } else if (f.d && (f.d !== e.dag || start !== fore)) {
+          } else if (e.kind !== "mote" && f.d && (f.d !== e.dag || start !== fore)) {
             sist = await flytta(f.id, f.d, start);
             if (sist.fel) return ut(sist);
           }
-          if (!(e.kind === "mote" && (f.heldag || e.tid === null)) && minuter && minuter !== e.minuter) {
-            sist = await andraLangd(f.id, minuter);
-            if (sist.fel) return ut(sist);
-          }
           if (e.kind === "mote") {
-            sist = await andraMote(f.id, { rubrik: f.t ?? "", plats: f.plats ?? null, videolank: video === undefined ? ((e.online_url as string | null) ?? null) : video, agenda: f.agenda ?? "", deltagare, paminnelse: f.pamin ?? null, visaSom: f.visa ?? null });
+            // Rubrik, plats, länk, agenda, deltagare, valfria, påminnelse, Visa som, Privat och (utom för heldag) tiden:
+            // en ändring, ett besked per person och bara om något ändrats (granskningen E2).
+            const r = await sparaMote(user, f.id, f, deltagare, video, f.heldag === true || e.tid === null);
+            if (r.fel) return ut(r);
+            // Heldagens datum (lk_andra_heldag) och resten är två steg; Ångra gäller det sista, som förut.
+            return ut(await bjudIn(r.angra || !sist.angra ? r : sist, f.id, g.epost));
+          }
+          if (minuter && minuter !== e.minuter) {
+            sist = await andraLangd(f.id, minuter);
             if (sist.fel) return ut(sist);
           }
           await privat(f.id);
@@ -636,11 +754,17 @@ export async function POST(request: Request) {
             agenda: f.agenda ?? null,
             plats: f.plats ?? null,
             visaSom: f.visa,
-            paminnelse: f.pamin ?? undefined,
+            // null = "Ingen påminnelse" (granskningen E4); saknas = 10 minuter.
+            paminnelse: f.pamin === null ? null : (f.pamin ?? undefined),
           });
           if (!r.fel && (f.priv || video || f.slut) && r.eventId) {
             const { data: e } = await supabaseAdmin().from("calendar_event").select("series_id").eq("id", r.eventId).maybeSingle();
-            if (e?.series_id) await supabaseAdmin().from("calendar_event").update({ ...(f.priv ? { is_private: true } : {}), ...(video ? { online_url: video } : {}) }).eq("series_id", e.series_id);
+            if (e?.series_id) {
+              const egenskaper = { ...(f.priv ? { is_private: true } : {}), ...(video ? { online_url: video } : {}) };
+              await supabaseAdmin().from("calendar_event").update(egenskaper).eq("series_id", e.series_id);
+              // Också på serien (0210), så att gångerna jobbet föder senare får dem (granskningen C2).
+              await supabaseAdmin().from("calendar_series").update(egenskaper).eq("id", e.series_id);
+            }
             // "Slutar" (Outlook): serien slutar där, och gångerna efter tas bort. Ångra tar bort hela serien som förut.
             if (e?.series_id && f.slut && arDatum(f.slut) && f.slut >= (f.d ?? "")) {
               await supabaseAdmin().from("calendar_series").update({ ends_on: f.slut }).eq("id", e.series_id);
@@ -658,7 +782,7 @@ export async function POST(request: Request) {
           if (typeof vem !== "string") return ut(vem);
           organisator = vem;
         }
-        const r0 = await skapaMote({ organisator, rubrik: f.t ?? "", dag: f.d ?? "", start: f.s ?? 0, minuter, deltagare: deltagare.filter((x) => x !== organisator), plats: f.plats ?? null, agenda: f.agenda ?? null, paminnelse: f.pamin ?? undefined, visaSom: f.visa });
+        const r0 = await skapaMote({ organisator, rubrik: f.t ?? "", dag: f.d ?? "", start: f.s ?? 0, minuter, deltagare: deltagare.filter((x) => x !== organisator), plats: f.plats ?? null, agenda: f.agenda ?? null, paminnelse: f.pamin === null ? null : (f.pamin ?? undefined), visaSom: f.visa });
         // Före 0201 nekar databasen ombudet med lk:behorighet ("Bara organisatören …").
         const r = organisator && r0.fel && /^Bara organisatören/.test(r0.fel) ? { fel: OMBUD_SAKNAS } : r0;
         if (!r.fel) {
@@ -723,17 +847,16 @@ export async function POST(request: Request) {
           titel: f.t,
         });
         if (r.fel) return ut(r);
-        // Platsen, länken, Visa som och Privat från formuläret gäller de nya gångerna (0202 tar dem från den ändrade gången).
+        // Platsen, länken, Visa som och Privat från formuläret gäller de nya gångerna (0202 tar dem från den ändrade gången),
+        // och serien (0210), så att också gångerna jobbet föder senare får dem (granskningen C2). Vid "Den här och
+        // följande" är serien den nya (0211), och den gamla behåller sina.
         const video = lank(f.video);
         const { data: e } = await supabaseAdmin().from("calendar_event").select("series_id").eq("id", r.eventId ?? id).maybeSingle();
         if (e?.series_id) {
           const fran = b.fran === "alla" ? svensktDatum() : (f.d ?? svensktDatum());
-          await supabaseAdmin()
-            .from("calendar_event")
-            .update({ plats: f.plats ?? null, ...(video !== undefined ? { online_url: video } : {}), ...(f.visa ? { show_as: f.visa } : {}), ...(f.priv !== undefined ? { is_private: Boolean(f.priv) } : {}) })
-            .eq("series_id", e.series_id)
-            .gte("dag", fran)
-            .eq("avviker", false);
+          const egenskaper = { plats: (f.plats ?? "").trim().slice(0, 200) || null, ...(video !== undefined ? { online_url: video } : {}), ...(f.visa ? { show_as: f.visa } : {}), ...(f.priv !== undefined ? { is_private: Boolean(f.priv) } : {}) };
+          await supabaseAdmin().from("calendar_event").update(egenskaper).eq("series_id", e.series_id).gte("dag", fran).eq("avviker", false);
+          await supabaseAdmin().from("calendar_series").update(egenskaper).eq("id", e.series_id);
         }
         return ut(r);
       }
@@ -771,7 +894,8 @@ export async function POST(request: Request) {
       case "langd":
         return ut(await andraLangd(id, Number(b.langd)));
       case "pamin":
-        return ut(await sattPaminnelse(id, b.min === null || b.min === undefined ? null : Number(b.min)));
+        // null = "Ingen påminnelse", "motets" = som mötet (granskningen E4).
+        return ut(await sattPaminnelse(id, b.min === "motets" ? "motets" : b.min === null || b.min === undefined ? null : Number(b.min)));
       case "delning": {
         const r = await stallInDelning({}, form({ employee_id: String(b.person ?? ""), level: String(b.niva ?? "") }));
         return r.fel ? svar2({ fel: r.fel }, 400) : svar2({ ok: "Delningen är sparad. Ändringen syns direkt hos dem." });

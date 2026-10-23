@@ -27353,7 +27353,8 @@ const ndK = () => ND && ND.kalender;
 const NDKFARG = ['#6B7A79', '#C2410C', '#0B7F6E', '#3E86C9', '#8E54A8', '#B7860F', '#2F6FB5'];
 const NDKGRUPP = {salj:'Säljteamet', lev:'Leverans', ovr:'Övriga'};
 const NDKSLAG = {mote:'mote', enskilt:'enskilt', coachning:'coachning', leverans:'leverans', uppgift:'uppgift', ledig:'ledig', order:'frist', frist:'frist'};
-const NDKPAM = {5:'5 min före', 15:'15 min före', 30:'30 min före', 60:'1 timme före', 1440:'1 dag före'};
+// 10 minuter är navets förval (repots skapaMote), så det måste gå att visa (granskningen E4).
+const NDKPAM = {5:'5 min före', 10:'10 min före', 15:'15 min före', 30:'30 min före', 60:'1 timme före', 1440:'1 dag före'};
 const NDKAL = {laddat:new Map(), hamtar:new Set(), detalj:new Map()};
 // "Visa som" i navet (calendar_event.show_as) → utkastets namn. Upptagen är förvalet.
 const NDKVISAFRAN = {preliminar:'prel', ledig:'ledig', borta:'borta', annan:'annan'};
@@ -27464,6 +27465,7 @@ kPeekKort = function(){
     const a = h.indexOf('<p class="olpkr">' + KI('plats')), b = a < 0 ? -1 : h.indexOf('</p>', a) + 4;
     if (b > 3) h = h.slice(0, b) + `<p class="olpkr">${KI('video')}<span>Videolänk <button class="tlink inl" data-act="toast" data-msg="Videolänken öppnas.">Anslut</button></span></p>` + h.slice(b);
   }
+  h = ndKPam10(h, e && e.pamin, 'Påminnelse ');
   return e && (e.ndSvar || []).length && (e.org === kJag() || e.farAndra) ? ndKSvarIn(h, e) : h;
 };
 /* Kommentarerna och förslagen står under svarsräkningen, en rad per person, som i Outlooks spårning.
@@ -27611,7 +27613,13 @@ function ndKVanta(e, sel, namn, fran, dagar){
 
 /* ---------- Skrivningar: /nav2/kalender (POST) ---------- */
 const ndKLank = e => e && e.href ? e.href : `/kalender?dag=${e ? e.d : kIdag()}${e && e.ref && e.nd && ['mote', 'enskilt', 'leverans', 'coachning'].includes(e.kat) ? `&handelse=${e.ref}` : ''}`;
-const NDKPAMMIN = {'Ingen':null, '5 min före':5, '15 min före':15, '30 min före':30, '1 timme före':60, '1 dag före':1440};
+const NDKPAMMIN = {'Ingen':null, '5 min före':5, '10 min före':10, '15 min före':15, '30 min före':30, '1 timme före':60, '1 dag före':1440};
+/* Utkastets listor har inget "10 min före". Står mötet på 10 minuter läggs valet in, valt, så att listan inte visar
+   "Ingen" för ett möte som påminner (granskningen E4). Bara för det mötet; andra listor är som förut. */
+function ndKPam10(h, varde, fore){
+  if (varde !== '10 min före') return h;
+  return h.replace(`<option >${fore}5 min före</option>`, `$&<option selected>${fore}10 min före</option>`);
+}
 const NDKVISA = {upptagen:'upptagen', prel:'preliminar', ledig:'ledig', borta:'borta', annan:'annan'};
 async function ndKPost(handling, data = {}, {ladda = true} = {}){
   try {
@@ -27631,7 +27639,9 @@ function ndKFalt(f){
   const ev = f.id ? KEV.find(x => x.id === f.id) : null;
   return {id:ev ? ndKRef(ev) : undefined, typ:f.typ, t:(f.t || '').trim() || (f.lev || ''), d:f.d, s:f.heldag ? 0 : f.s, e:f.heldag ? 1440 : f.e, heldag:!!f.heldag,
     delt:(f.delt || []).map(n => ndKId(n)).filter(Boolean), ...ndKPlatsLank(f, ev), agenda:f.agenda || '', visa:NDKVISA[f.visa] || 'upptagen',
-    pamin:NDKPAMMIN[f.pamin] !== undefined ? NDKPAMMIN[f.pamin] : 15, upprepa:f.upprepa || 'Upprepas inte', slut:f.upprepa && f.upprepa !== 'Upprepas inte' ? (f.slut || '') : undefined, slutdag:f.heldag ? (f.slutdag || '') : undefined, valfria:f.typ === 'uppgift' ? undefined : (f.valfria || []).filter(n => (f.delt || []).includes(n)).map(n => ndKId(n)).filter(Boolean), for:!f.id && f.typ === 'mote' && f.for ? f.for : undefined, priv:!!f.priv, lev:f.lev || undefined, order:f.order || undefined,
+    // Påminnelsen skickas bara när den ändrats (granskningen E3): ett befintligt möte öppnas med sin egen, och en
+    // sparning av något annat skriver inte om den för alla. null = "Ingen" (E4).
+    pamin:f.id && f.pamin === f.paminFore ? undefined : NDKPAMMIN[f.pamin] !== undefined ? NDKPAMMIN[f.pamin] : 15, upprepa:f.upprepa || 'Upprepas inte', slut:f.upprepa && f.upprepa !== 'Upprepas inte' ? (f.slut || '') : undefined, slutdag:f.heldag ? (f.slutdag || '') : undefined, valfria:f.typ === 'uppgift' ? undefined : (f.valfria || []).filter(n => (f.delt || []).includes(n)).map(n => ndKId(n)).filter(Boolean), for:!f.id && f.typ === 'mote' && f.for ? f.for : undefined, priv:!!f.priv, lev:f.lev || undefined, order:f.order || undefined,
     gaster:f.typ === 'mote' ? (f.gaster || []).filter(a => !(f.gastFore || []).includes(a)) : []};
 }
 /* Möteslänken (beslutsrundan 2026-10-20: Nav sparar en länk som skrivs in, men skapar ingen). En länk som klistras
@@ -27667,6 +27677,8 @@ kOppnaForm = function(over){
     // En gång i en serie: seriens mönster och slut ur navet (utkastet gissade "Varje vardag" eller "Varannan vecka").
     if (ev && ev.rep && ev.serieRegel) over = {...over, upprepa:ev.serieRegel.upprepa, slut:ev.serieRegel.slut || ''};
     over = {...over, valfria:(ev && ev.valfria) || []};
+    // Mötets påminnelse, inte mitt förval (granskningen E3); "Ingen" när den är avstängd.
+    if (ev) over = {...over, pamin:ev.pamin || 'Ingen', paminFore:ev.pamin || 'Ingen'};
     // Heldag (0204): hela mötet, också från dag två i ett möte över flera dagar.
     if (ev && ev.allday && ev.kat === 'mote') over = {...over, heldag:true, d:ev.heldagFran || ev.d, slutdag:ev.heldagTill || ev.heldagFran || ev.d}; }
   S.ndKSerieVal = null;
@@ -27676,6 +27688,7 @@ const _ndKFormular = kFormular;
 kFormular = function(){
   let h = _ndKFormular();
   const f = S.kForm;
+  if (ndK() && f) h = ndKPam10(h, f.pamin, '');
   if (ndK()) h = h.replace(/<datalist id="olplatser">[\s\S]*?<\/datalist>/, `<datalist id="olplatser">${[...(ndK().platser || []), 'Konferens', 'Telefon'].filter((x, i, a) => a.indexOf(x) === i).map(x => `<option>${esc(x)}</option>`).join('')}</datalist>`);
   if (ndK() && f){
     if (!ndKHar(ND.jag.id, f.d, f.d)) ndKHamta('vecka', f.d, [], [ND.jag.id]);

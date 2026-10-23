@@ -130,7 +130,8 @@ export async function skapaMote(indata: {
   deltagare: string[];
   plats?: string | null;
   agenda?: string | null;
-  paminnelse?: number;
+  /** Minuter före. null = "Ingen påminnelse" (reminder_off, 0212); utelämnad = 10. */
+  paminnelse?: number | null;
   visaSom?: string;
 }): Promise<Resultat> {
   try {
@@ -172,6 +173,10 @@ export async function skapaMote(indata: {
     // mötet tas raden bort, och värdet med den.
     if (visaSom !== "upptagen") {
       await supabaseAdmin().from("calendar_event").update({ show_as: visaSom }).eq("id", svar.data.event_id);
+    }
+    // "Ingen påminnelse" (granskningen E4, 0212) skrivs på samma sätt: förut blev den 10 minuter.
+    if (indata.paminnelse === null) {
+      await supabaseAdmin().from("calendar_event").update({ reminder_off: true }).eq("id", svar.data.event_id);
     }
 
     const namn = await fornamn(svar.data.deltagare);
@@ -462,7 +467,8 @@ export async function skapaSerie(indata: {
   agenda?: string | null;
   plats?: string | null;
   visaSom?: string;
-  paminnelse?: number;
+  /** Minuter före. null = "Ingen påminnelse" (reminder_off, 0212); utelämnad = 10. */
+  paminnelse?: number | null;
 }): Promise<Resultat> {
   try {
     const user = await aktor();
@@ -509,12 +515,22 @@ export async function skapaSerie(indata: {
     if (!r.ok) return { fel: r.fel };
 
     // Plats och "visa som" gäller förekomsterna och lämnar ingenting i
-    // utkorgen. De förekomster som föds senare får seriens standard.
+    // utkorgen. De förekomster som föds senare får dem från serien (0210).
     if (visaSom !== "upptagen" || indata.plats) {
       await supabaseAdmin()
         .from("calendar_event")
         .update({ show_as: visaSom, plats: indata.plats?.slice(0, 200) ?? null })
         .eq("series_id", r.data.series_id);
+      // Också på serien (0210): gångerna jobbet föder senare får dem då (granskningen C2).
+      await supabaseAdmin()
+        .from("calendar_series")
+        .update({ show_as: visaSom, plats: indata.plats?.slice(0, 200) ?? null })
+        .eq("id", r.data.series_id);
+    }
+    // "Ingen påminnelse" (granskningen E4, 0212): på serien, så att gångerna jobbet föder senare får den (0213).
+    if (indata.paminnelse === null) {
+      await supabaseAdmin().from("calendar_series").update({ reminder_off: true }).eq("id", r.data.series_id);
+      await supabaseAdmin().from("calendar_event").update({ reminder_off: true }).eq("series_id", r.data.series_id);
     }
 
     const namn = await fornamn(r.data.deltagare);
@@ -1061,18 +1077,23 @@ export async function andraMote(
 /**
  * Min påminnelse för ett möte (0088). Organisatören ändrar mötets, en deltagare
  * sin egen rad. Ingenting skickas till någon.
+ *
+ * `null` = "Ingen påminnelse" (granskningen E4, 0212: reminder_off). Förut blev
+ * arrangörens "Ingen" 10 minuter och deltagarens "mötets", så pushen kom ändå.
+ * `"motets"` = deltagaren följer mötets påminnelse igen.
  */
-export async function sattPaminnelse(eventId: string, paminnelse: number | null): Promise<Resultat> {
+export async function sattPaminnelse(eventId: string, paminnelse: number | null | "motets"): Promise<Resultat> {
   try {
     const user = await aktor();
     const mig = user.employee!.id;
     if (!arUuid(eventId)) return { fel: "Händelsen finns inte längre." };
-    if (paminnelse != null && !arMinut(paminnelse, 0, 1440)) return { fel: "Påminnelsen stämmer inte." };
+    if (paminnelse != null && paminnelse !== "motets" && !arMinut(paminnelse, 0, 1440)) return { fel: "Påminnelsen stämmer inte." };
     const db = supabaseAdmin();
     const { data: e } = await db.from("calendar_event").select("id, organizer_id, series_id").eq("id", eventId).maybeSingle();
     if (!e) return { fel: "Händelsen finns inte längre." };
     if (e.organizer_id === mig) {
-      await db.from("calendar_event").update({ reminder_min: paminnelse ?? 10, updated_at: new Date().toISOString() }).eq("id", eventId);
+      const varde = typeof paminnelse === "number" ? { reminder_min: paminnelse, reminder_off: false } : { reminder_off: paminnelse === null };
+      await db.from("calendar_event").update({ ...varde, updated_at: new Date().toISOString() }).eq("id", eventId);
     } else {
       // Deltagarens rad på mötet, eller på serien när mötet är en förekomst.
       const { data: rad } = await db.from("calendar_attendee").select("id").eq("employee_id", mig).eq("event_id", eventId).maybeSingle();
@@ -1081,10 +1102,16 @@ export async function sattPaminnelse(eventId: string, paminnelse: number | null)
         : { data: null };
       const id = rad?.id ?? serierad?.id;
       if (!id) return { fel: "Du är inte med på mötet." };
-      await db.from("calendar_attendee").update({ reminder_min: paminnelse }).eq("id", id);
+      const varde =
+        typeof paminnelse === "number"
+          ? { reminder_min: paminnelse, reminder_off: false }
+          : paminnelse === null
+            ? { reminder_min: null, reminder_off: true }
+            : { reminder_min: null, reminder_off: null };
+      await db.from("calendar_attendee").update(varde).eq("id", id);
     }
     revalidatePath("/kalender");
-    return { ok: true, kvitto: paminnelse == null ? "Påminnelsen är avstängd." : "Påminnelsen är sparad.", eventId };
+    return { ok: true, kvitto: paminnelse === null ? "Påminnelsen är avstängd." : paminnelse === "motets" ? "Du påminns som mötet." : "Påminnelsen är sparad.", eventId };
   } catch (e) {
     return fel(e);
   }

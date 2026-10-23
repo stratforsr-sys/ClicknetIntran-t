@@ -27,13 +27,14 @@ import { datumPlusDagar, veckodag } from "./uppgifter.ts";
 // -----------------------------------------------------------------------------
 
 /**
- * TRE MÖNSTER. Beställarens ord 2026-09-17:
+ * MÖNSTREN. Beställarens ord 2026-09-17:
  *
  *   "om man kan välja en dag, så tex måndag, då upprepas ju den varje måndag
  *    tex oså, så dagligen, vardagar, eller veckovis där man kan välja en dag"
  *
- * Månadsvis, "första måndagen i månaden" och årligen efterfrågades INTE och
- * står därför inte här. Det är inte snålhet: varje mönster som finns måste
+ * Månadsvis ("Varje månad") lades till för Kalendern i Nav 2.0 (d5c042d).
+ * "Första måndagen i månaden" och årligen efterfrågades INTE och står därför
+ * inte här. Det är inte snålhet: varje mönster som finns måste
  * räkna rätt över årsskiften, skottdagar och månader som saknar den 31:e, och
  * ett mönster ingen bett om är en sådan räkning som aldrig blir provad på
  * riktigt.

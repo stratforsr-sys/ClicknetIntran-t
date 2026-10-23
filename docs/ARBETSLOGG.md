@@ -5,6 +5,29 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-23 · Granskningen S05: Kalendern tappar inga möten, en sparning ger ett besked per person, "Ingen påminnelse" gäller (0201, 0210–0213)
+
+**Varför.** Granskningen 2026-10-22 (K2/E1 kritiskt, E2, E3, E4, E14, C2, G2). Kalendern sparar redan i produktionen.
+- "Den här och följande" följt av "Hela serien" raderade tyst gångerna före delningen (E1).
+- Varje "Spara" på ett möte skickade "ändrat" med mejl, push och ny .ics till alla, också "Ny tid … Vi har flyttat mötet" till kunder, fast ingenting ändrats. En ny tid gav två–tre besked per person, och Ångra ångrade bara sista steget (E2).
+- Formuläret öppnades med användarens förvalda påminnelse och skrev om mötets påminnelse för alla (E3). "Ingen påminnelse" stängde inte av något (E4).
+- Privat, länk, plats och Visa som följde inte med när jobbet födde vecka 9 och framåt (C2). Två Enter i snabbrutan gav två möten och två mejl till gästerna (G2).
+
+**0210 `kalender_serie_egenskaper`** (KÖRD 2026-10-23): `calendar_series.is_private/plats/online_url/show_as`, ifyllda ur seriens senaste gång; `lk_fod_forekomster` sätter dem på varje ny gång. Rutten och repots `skapaSerie` skriver dem på serien.
+
+**0211 `kalender_dela_serie`** (KÖRD): `lk_andra_serie` delar serien som Outlook vid "den här och följande" från en senare gång: den gamla slutar dagen före (`ends_on`), en ny serie tar resten (regel, tid, rubrik, den ändrade gångens egenskaper; deltagarna svarar igen; en 1:1:s öppna punkter och seriens bilagor flyttar med). Svaret bär den nya seriens id. `calendar_series.fortsatter_i` pekar på den nya delen, och den gamla kan aldrig löpa in i den (också med tomt Slutar). `lk_angra` får `dela_serie` (allt tillbaka), återställer seriens egenskaper vid `flytta_serie` och Privat i det allmänna läget. "Hela serien" flyttar aldrig `starts_on`. `lk_flytta_serie` (flyttbannern) är orörd (E7 är ett eget fynd).
+
+**0212 `kalender_spara_mote`** (KÖRD): `reminder_off` på mötet, deltagaren och serien, och `lk_spara_mote` = hela formulärets sparning av ett möte i en transaktion med en ångerrad. Den räknar själv vad som ändrats: inget → inga skrivningar; ny deltagare → inbjudan, borttagen → inställt; de som är kvar får ETT besked (tid → flyttad och svarar igen, plats/länk → ändrad, mejlas inom sju dagar; bara rubrik/agenda → `kalender-flyttad-tyst`, inget mejl, ingen .ics; påminnelse, Visa som, Privat, valfria → inget). `ics_sequence` +1 bara för tid eller plats, så externa gäster får bara då en ny inbjudan. Behörighet med `lk_far_andra` (arrangören och ombuden efter 0201). `lk_andra_mote` står kvar för gamla Nav. Rutten räknar samma sak först (`andradeDelar`, ny `src/lib/nav2/kalender-andring.ts`) och svarar "Inget ändrades." utan anrop. Ett ombud utan insyn kan inte radera länken med en tom ruta, och ett privat möte hen inte är med på nekas.
+
+**0213 `kalender_ingen_paminnelse`** (KÖRD): jobbet föder gångar med seriens `reminder_off`, och Ångra återställer den (gamla ångerrader utan nyckeln behåller värdet). "Ingen" skrivs av rutten och repots `skapaMote`/`skapaSerie`/`sattPaminnelse` (deltagarens `"motets"` = som mötet), och `motespaminnelser` hoppar över den (`skaPaminna`). Klienten öppnar ett befintligt möte med mötets påminnelse, skickar den bara när den ändrats, och visar 10 minuter.
+
+**0201 `kalender_ombud_och_bilagor`** (Kalendern som Outlook del 15–16, KÖRD i samma omgång, före 0211 som läser `calendar_attachment`): `lk_far_andra` som i 0069 (bara service role), `lk_svara_at`, `calendar_attachment`. `calendar_share` är tom, så ingen får ombud förrän någon delar.
+
+**G2.** `spara` utan id (möte, heldag, serie, uppgift, leverans, gästernas inbjudan) och `kopiera` går genom `medNyckel` (S03).
+
+**Prov.** `tests/upprepning.mjs` 82 (var rött, E14), `kalender-andring.mjs` 32 (ny), `kalender-push.mjs` 8 (ny), `kalender`, `leveranskalender`, `notiser`, `notiser-tackning` gröna; vakten `tests/rattigheter-db.mjs` grön. Torrkörningarna (`~/nav2-utkast/delar/granskning/S05/prov/torr-0210…0213.mjs`, rullade tillbaka) med E1-scenariot, Ångra, sommartiden, utkorgens rader per sparning och "Ingen". Liggaren med alla beslut: `delar/granskning/S05/progress.md`.
+
+
 ## 2026-10-23 · Granskningen S10, omgång 2: Frånvaro, Uppgifter, Fel, Rekrytering och Utbildning sparar (B7); 0228 och 0098 körda
 
 Beställarens ja (B7) gäller vy för vy när spärrarna är rättade. Fem vyer till slås

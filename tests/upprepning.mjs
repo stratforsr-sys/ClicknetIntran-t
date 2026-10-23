@@ -50,15 +50,22 @@ const regel = (over) => ({
 });
 
 // -----------------------------------------------------------------------------
-rubrik("Monstren ar tre, och alla tre ar namngivna");
+rubrik("Monstren ar fyra, och alla fyra ar namngivna");
 
-ok("MONSTER har tre varden", MONSTER.length === 3, MONSTER.join(", "));
+// Manadsvis kom till i d5c042d (Kalendern: "Varje manad"). Provet vantade sig
+// fortfarande tre monster och var rott pa grenen (granskningen E14).
+ok("MONSTER har fyra varden", MONSTER.length === 4, MONSTER.join(", "));
+ok(
+  "MONSTER ar dagligen, vardagar, veckovis och manadsvis",
+  MONSTER.join() === "dagligen,vardagar,veckovis,manadsvis",
+);
 ok(
   "varje monster har en etikett",
   MONSTER.every((m) => typeof MONSTER_ETIKETT[m] === "string" && MONSTER_ETIKETT[m].length > 0),
 );
-ok("arMonster slapper igenom de tre", MONSTER.every(arMonster));
-ok("arMonster avvisar manadsvis", !arMonster("manadsvis"));
+ok("arMonster slapper igenom de fyra", MONSTER.every(arMonster));
+ok("arMonster godtar manadsvis", arMonster("manadsvis"));
+ok("arMonster avvisar arligen", !arMonster("arligen"));
 ok(
   "alla sju veckodagar har ett namn",
   [1, 2, 3, 4, 5, 6, 7].every((d) => typeof VECKODAG_NAMN[d] === "string"),

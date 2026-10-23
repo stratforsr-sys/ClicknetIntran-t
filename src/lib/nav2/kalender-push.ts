@@ -3,6 +3,9 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { pushaTill } from "@/lib/nav2/push";
+import { skaPaminna } from "@/lib/nav2/kalender-andring";
+
+export { skaPaminna };
 
 /**
  * Nav 2.0: allt i kalendern som push i telefonen (Kalendern som Outlook, del 10).
@@ -67,10 +70,12 @@ type Mote = {
   series_id: string | null;
   starts_at: string;
   reminder_min: number;
+  /** "Ingen påminnelse" för mötet (0212). */
+  reminder_off: boolean | null;
   plats: string | null;
   tid: string | null;
 };
-type Deltagarrad = { event_id: string | null; series_id: string | null; employee_id: string; response: string; reminder_min: number | null };
+type Deltagarrad = { event_id: string | null; series_id: string | null; employee_id: string; response: string; reminder_min: number | null; reminder_off: boolean | null };
 
 /**
  * Lägger mötenas påminnelser i utkorgen, en per person och starttid. Arrangören
@@ -85,7 +90,7 @@ export async function motespaminnelser(db: SupabaseClient, nu = new Date()): Pro
   const till = new Date(nu.getTime() + (1440 + 1) * 60_000).toISOString();
   const { data: moten } = await db
     .from("calendar_event")
-    .select("id, organizer_id, series_id, starts_at, reminder_min, plats, tid")
+    .select("id, organizer_id, series_id, starts_at, reminder_min, reminder_off, plats, tid")
     .is("cancelled_at", null)
     .gte("starts_at", fran)
     .lte("starts_at", till);
@@ -95,9 +100,9 @@ export async function motespaminnelser(db: SupabaseClient, nu = new Date()): Pro
   const ids = lista.map((m) => m.id);
   const serier = [...new Set(lista.map((m) => m.series_id).filter((s): s is string => Boolean(s)))];
   const [{ data: pa }, { data: ps }] = await Promise.all([
-    db.from("calendar_attendee").select("event_id, series_id, employee_id, response, reminder_min").in("event_id", ids).not("employee_id", "is", null),
+    db.from("calendar_attendee").select("event_id, series_id, employee_id, response, reminder_min, reminder_off").in("event_id", ids).not("employee_id", "is", null),
     serier.length
-      ? db.from("calendar_attendee").select("event_id, series_id, employee_id, response, reminder_min").in("series_id", serier).not("employee_id", "is", null)
+      ? db.from("calendar_attendee").select("event_id, series_id, employee_id, response, reminder_min, reminder_off").in("series_id", serier).not("employee_id", "is", null)
       : Promise.resolve({ data: [] as Deltagarrad[] }),
   ]);
   const perMote = new Map<string, Deltagarrad[]>(), perSerie = new Map<string, Deltagarrad[]>();
@@ -110,13 +115,18 @@ export async function motespaminnelser(db: SupabaseClient, nu = new Date()): Pro
     if (!m.tid) continue;
     const start = new Date(m.starts_at).getTime();
     // Mötets rad går före seriens för samma person.
-    const vem = new Map<string, { svar: string; min: number | null }>();
-    for (const r of perSerie.get(m.series_id ?? "") ?? []) vem.set(r.employee_id, { svar: r.response, min: r.reminder_min });
-    for (const r of perMote.get(m.id) ?? []) vem.set(r.employee_id, { svar: r.response, min: r.reminder_min ?? vem.get(r.employee_id)?.min ?? null });
-    if (m.organizer_id && !vem.has(m.organizer_id)) vem.set(m.organizer_id, { svar: "ja", min: null });
-    for (const [person, { svar, min }] of vem) {
+    const vem = new Map<string, { svar: string; min: number | null; av: boolean | null }>();
+    for (const r of perSerie.get(m.series_id ?? "") ?? []) vem.set(r.employee_id, { svar: r.response, min: r.reminder_min, av: r.reminder_off ?? null });
+    for (const r of perMote.get(m.id) ?? []) {
+      const s = vem.get(r.employee_id);
+      vem.set(r.employee_id, { svar: r.response, min: r.reminder_min ?? s?.min ?? null, av: r.reminder_off ?? s?.av ?? null });
+    }
+    if (m.organizer_id && !vem.has(m.organizer_id)) vem.set(m.organizer_id, { svar: "ja", min: null, av: null });
+    for (const [person, { svar, min, av }] of vem) {
       if (svar === "nej") continue;
-      const fore = min ?? m.reminder_min;
+      // "Ingen påminnelse" (granskningen E4): mötets eller deltagarens, null = ingen push.
+      const fore = skaPaminna({ reminder_min: m.reminder_min, reminder_off: Boolean(m.reminder_off) }, { reminder_min: min, reminder_off: av });
+      if (fore === null) continue;
       const nar = start - fore * 60_000;
       if (nu.getTime() < nar || nu.getTime() >= start + (fore === 0 ? 2 * 60_000 : 0)) continue;
       rader.push({
