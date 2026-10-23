@@ -82,6 +82,17 @@ console.log("\n\x1b[1mSkiftesdygnen\x1b[0m");
   ok("dagen fore skiftet", dagarBakat("2026-03-30", 1) === "2026-03-29");
   ok("dagen fore hostskiftet", dagarBakat("2026-10-26", 1) === "2026-10-25");
   ok("fjorton dagar bakat", dagarBakat("2026-08-17", 14) === "2026-08-03");
+
+  // D11 (granskningen S10): hostens sondag har 25 timmar och varens 23.
+  // Dygnsslutet ar nasta dygns start minus en millisekund, inte start + 24 h.
+  const host = svenskDygnsslut("2026-10-25");
+  ok("hostskiftets dygn slutar 22:59:59.999Z", host === "2026-10-25T22:59:59.999Z", host);
+  const var_ = svenskDygnsslut("2027-03-28");
+  ok("varskiftets dygn slutar 21:59:59.999Z", var_ === "2027-03-28T21:59:59.999Z", var_);
+  const nyar = svenskDygnsslut("2026-12-31");
+  ok("nyarsafton slutar 22:59:59.999Z", nyar === "2026-12-31T22:59:59.999Z", nyar);
+  ok("dygnen ligger kant i kant over skiftet",
+    new Date(svenskDygnsslut("2026-10-25")).getTime() + 1 === svenskTidpunkt("2026-10-26", "00:00").getTime());
 }
 
 console.log("\n\x1b[1mVeckodag raknas i svensk tid\x1b[0m");

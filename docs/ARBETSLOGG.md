@@ -5,6 +5,30 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-23 · Granskningen S10, K6 del 2: Tid, Coachning och Ärenden sparar (B7), sommartiden och morgonnotisen (D11, D24)
+
+Beställarens ja till att alla vyer får spara (B7, 2026-10-22) gäller vy för vy,
+så snart vyns spärrar i granskningen är rättade. Tid, Coachning och Ärenden hade
+inga spärrar i det de sparar, och slås på först (`SKRIVLAGE.tid`, `.coachning`,
+`.arenden` = true). Med bron flyttar de till Nav 2.0 i produktionen vid mergen;
+i previewen svarar rutterna inte längre 423. Ingen migration.
+- **D11 · Sommartiden.** `svenskDygnsslut` lade på exakt 24 timmar, så sista
+  söndagen i oktober (25 timmar) tappade 23:00–23:59 och sista söndagen i mars
+  överlappade nästa dygn. Nu: nästa dygns midnatt minus en millisekund
+  (`src/lib/klocka.ts`). Gäller nattjobbet, utanför schemat, påminnelserna och
+  frånvarojobbet. `tests/klocka.mjs` har fallen (25 okt, 28 mars, nyår, kant i kant).
+- **D24 · Morgonnotisen.** Chefens "N har inte stämplat in" räknade beviljad
+  ledighet och pågående sjukdom. Nu samma regel som instämplingens påminnelse
+  (`jobb/dagtid.ts`): beviljad ledighet som täcker dagen och sjukanmälan utan
+  slutdag eller med slutdag i dag räknas bort; en inskickad ansökan räknas inte.
+  Nytt prov `tests/tid-paminnelser.mjs` (attrapp, ingen databas).
+- **Räknat 2026-10-23** (det vyerna läser): `time_event` 281 totalt,
+  `attendance_incident` 178, `coaching_task_event` 50, `coaching_task` 21,
+  `case_message` 9, `hr_case` 3. `phone_call` (8 515) och `audit_log` (1 436)
+  läses filtrerat med `limit`. Ingen läsning nära 1000.
+
+---
+
 ## 2026-10-22 · Granskningen S04: tre produktionsfel i gamla Nav (C6, F1-4, F1-2)
 
 Gren `granskning-produktion` från `main` (`453f792`), **ej mergad** — beställaren

@@ -9,7 +9,8 @@
  * uttryckliga ja.
  */
 export const SKRIVLAGE = {
-  arenden: false,
+  // Beställarens ja 2026-10-22 (B7).
+  arenden: true,
   fel: false,
   order: false,
   // Beställarens ja 2026-10-21 (Gamla Nav G): allt i Provision sparar, också chefens sats, konsekvenstrappan och Utbetald.
@@ -18,7 +19,8 @@ export const SKRIVLAGE = {
   kalender: true,
   uppgifter: false,
   franvaro: false,
-  tid: false,
+  // Beställarens ja 2026-10-22 (B7).
+  tid: true,
   rutiner: false,
   utbildning: false,
   // Beställarens ja 2026-10-19: ladda upp och ta bort avtal, påminn om påskrift, tillsvidare.
@@ -26,7 +28,8 @@ export const SKRIVLAGE = {
   // Beställarens ja 2026-10-18: Grattis, Stämmer inte, Visa inte här, Sedan du tittade och lagets mål.
   hem: true,
   rekrytering: false,
-  coachning: false,
+  // Beställarens ja 2026-10-22 (B7).
+  coachning: true,
   anstallda: false,
   // Beställarens ja 2026-10-20: frågor utan svar bokförs utan namn.
   paletten: true,

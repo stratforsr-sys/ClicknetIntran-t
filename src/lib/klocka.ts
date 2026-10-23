@@ -103,9 +103,15 @@ export function svenskDygnsstart(nu: Date = new Date()): string {
   return svenskTidpunkt(svensktDatum(nu), "00:00").toISOString();
 }
 
-/** Dygnets sista millisekund, svensk tid. */
+/**
+ * Dygnets sista millisekund, svensk tid: nästa dygns midnatt minus en
+ * millisekund. Inte start + 24 timmar: sista söndagen i oktober har 25 timmar
+ * och sista söndagen i mars 23 (granskningen D11).
+ */
 export function svenskDygnsslut(datum: string): string {
-  return new Date(svenskTidpunkt(datum, "00:00").getTime() + 24 * 3600_000 - 1).toISOString();
+  const [a, m, d] = datum.split("-").map(Number);
+  const nasta = new Date(Date.UTC(a, m - 1, d + 1)).toISOString().slice(0, 10);
+  return new Date(svenskTidpunkt(nasta, "00:00").getTime() - 1).toISOString();
 }
 
 /** Datumet `n` dygn före `datum`, räknat i svenska kalenderdygn. */

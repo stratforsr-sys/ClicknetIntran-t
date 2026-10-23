@@ -96,7 +96,19 @@ export async function korTidpaminnelser(db: SupabaseClient, val: Map<string, Pam
     db.from("time_event").select("id", { count: "exact", head: true }).eq("correction_state", "pending"),
     db.from("attendance_incident").select("id", { count: "exact", head: true }).eq("status", "foreslagen"),
   ]);
+  // Beviljad ledighet och pågående sjukdom är inte "har inte stämplat in"
+  // (granskningen D24). Samma regel som instämplingens påminnelse i
+  // `jobb/dagtid.ts`: en ansökan som bara är inskickad räknas inte.
+  const [{ data: ledighet }, { data: sjuk }] = await Promise.all([
+    db.from("absence_request").select("employee_id").eq("status", "approved").lte("starts_on", idag).gte("ends_on", idag),
+    db.from("sick_report").select("employee_id, last_sick_day").is("cancelled_at", null).lte("first_sick_day", idag),
+  ]);
+  const borta = new Set(((ledighet ?? []) as { employee_id: string }[]).map((r) => r.employee_id));
+  for (const r of (sjuk ?? []) as { employee_id: string; last_sick_day: string | null }[]) {
+    if (!r.last_sick_day || r.last_sick_day >= idag) borta.add(r.employee_id);
+  }
   const ejInne = pers.filter((p) => {
+    if (borta.has(p.id)) return false;
     const s = gallandeSchema(scheman ?? [], p.id, p.team_id, idag)[0];
     return s && nuMin > min(String(s.start_time)) + 15 && gallande(perPerson.get(p.id) ?? []).length === 0;
   }).length;
