@@ -217,3 +217,16 @@ export function bygStig(andamal: Andamal, id: string): string {
 export function accept(andamal: Andamal): string {
   return TILLATNA_TYPER[andamal].join(",");
 }
+
+/**
+ * F1-4. Far en misslyckad registrering ta bort filen i lagringen?
+ *
+ * Bara om filen ar den nyss uppladdade. Sokvagen raknas fram ur id:t, och id:t
+ * kommer fran klienten: ar det ett id som redan ar registrerat ar filen pa den
+ * sokvagen nagon annans, till exempel ett paskrivet anstallningsavtal. Faller
+ * insert pa dubbletten (23505), eller fanns raden redan fore registreringen,
+ * ror vi den inte.
+ */
+export function stadaEfterRegistreringsfel(fel: { code?: string } | null, fannsFore: boolean): boolean {
+  return fel !== null && !fannsFore && fel.code !== "23505";
+}

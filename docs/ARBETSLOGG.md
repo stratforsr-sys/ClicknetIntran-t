@@ -5,6 +5,71 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-22 · Granskningen S04: tre produktionsfel i gamla Nav (C6, F1-4, F1-2)
+
+Gren `granskning-produktion` från `main` (`453f792`), **ej mergad** — beställaren
+2026-10-22: *"Jag vill att ingenting mergas, bara gör klart jobbet så att det
+mergas säkert och utan risker eller problem sen när jag väl säger ja."* Fynden
+kommer ur granskningen av Nav 2.0 (`~/nav2-utkast/delar/granskning/`, plan
+`PRODUKTION-main.md`), men alla tre finns på main i dag. Ingen migration.
+
+**C6 · Kursredigeraren raderade repetitionshistoriken.** `sparaModul` skrev om
+ett quiz från grunden (delete + insert) vid varje sparning, och
+`learning_answer`, `team_repetition` (0097) kaskaderar på `quiz_question.id`.
+Ett rättat stavfel tog alltså varje säljares repetitionsschema, kunskapskarta och
+svit med sig. Nu planerar `src/lib/provfragor.ts` vad som uppdateras, läggs till
+och tas bort, och actionen skriver det på plats.
+- **Paras först på oförändrad text, sedan på liknande text** (likhet ≥ 0,5,
+  Dice på teckenpar utan accenter, `likhet()` i `provfragor.ts`). Bara position
+  (som planen föreslog) hade gett fel svar när en fråga i mitten tas bort:
+  frågan efter hade tagit över dess id och svar. Och en ny fråga hade fått en
+  annans historik för att den råkade stå på en ledig plats (granskarens fynd).
+  En fråga som skrivits om helt är en ny fråga, och bara den förlorar sina svar.
+- **Alternativen paras likadant** inom sin fråga. Inget pekar på `quiz_option`
+  med främmande nyckel, men `course_attempt.answers` och en öppen quiz bär
+  alternativens id.
+- **`UNIQUE (module_id, sort)` går inte att skjuta upp**, och Postgres provar
+  den rad för rad. Den som byter plats parkeras därför först under lägsta
+  befintliga sort, och sedan uppdateras alla i en enda upsert (`skrivPaPlats`).
+- **Rollspelets kriterier på samma sätt** (`roleplay_score`, `roleplay_self`).
+- **Det skriftliga provet är orört**: `essay_answer` kaskaderar fortfarande, med
+  den varning som redan står i redigeraren. Öppen fråga.
+- Provat end-to-end med den riktiga `sparaModul` och supabase-js mot PostgREST
+  på en `PROV — granskning S04`-kurs (17 kontroller, städat efteråt). Mot mains
+  gamla action föll provet: id:n byttes, och svaren och lagets repetition
+  försvann.
+
+**F1-4 · En registrering med ett befintligt fil-id raderade filen.**
+`registreraFil` räknar sökvägen ur klientens id, och när insert föll på
+dubbletten anropades `taBort` på den befintliga filen (till exempel ett påskrivet
+anställningsavtal). Nu frågas `file_object` först: finns id:t svarar den "Filen
+är redan registrerad." utan att röra lagringen. Faller insert på 23505 (en
+kapplöpning efter frågan) lämnas filen (`stadaEfterRegistreringsfel` i
+`filer.ts`). Andra fel städar som förut. Alla tre vägarna i Nav 2.0
+(`bifoga-registrera`, `fil-registrera`, `rollspel-registrera`) går genom
+`registreraFil`.
+
+**F1-2 · Registerutdraget kapades tyst vid 1000 rader.** Varje källa läses nu
+sidvis (`src/lib/sidvis.ts`) i primärnyckelns ordning
+(`src/lib/registerutdrag-ordning.ts`, som även täcker Nav 2.0-grenens källor).
+Listor med id hämtas i omgångar om 100. Ett fel blir en rad "Kunde inte läsas",
+också för det som hämtas via en källa som inte gick att läsa.
+- Jämfört med `count(*)` för personen med flest samtal: main gav 1000 av 1916
+  samtal, 1000 av 1882 filer och 0 av 7 filöppningar, eftersom IN-listan på
+  ~37 kB nekades tyst. Grenen ger 68 av 68 källor lika, och 117 av 117 med
+  Nav 2.0-grenens källor.
+- Källorna läses sex åt gången (`iTur` i `sidvis.ts`), och rutten har
+  `maxDuration = 60`. En i taget tog 6–8 s för den personen, och nu tar det
+  2,5–4 s.
+- `tests/registerutdrag.mjs` har en ny kontroll: varje källa ordnas på sin
+  primärnyckel. Kontrollen "alla redovisade" var röd redan före (kolumner
+  saknas sedan tidigare, S09:s del) och är oförändrad.
+
+**Prov:** `tests/sidvis.mjs`, `tests/provfragor.mjs` (nya, i `npm test`) och
+`tests/filer.mjs` gröna, och hela den rena sviten 51/51. Inga lokala byggen. En
+fristående granskare typkontrollerade ändringen mot supabase-js 2.112.3 (0 fel)
+och fuzzade parkeringen i `skrivPaPlats` i 200 000 fall utan någon krock.
+
 ## 2026-10-23 · Granskningen S01 del 2: nya funktioner stängda från början, och apply-sql kör vakten (0240 körd)
 
 - **Slutgranskningen av S01** (färska ögon) fann två brister i vakten. Den

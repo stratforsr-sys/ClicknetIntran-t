@@ -5,6 +5,9 @@ import { hamtaRegisterutdrag } from "@/lib/registerutdrag-server";
 import { svensktDatum } from "@/lib/klocka";
 
 export const dynamic = "force-dynamic";
+// F1-2: utdraget laser nu alla rader sidvis, och for den med flest samtal och
+// filer ar det runt hundra fragor.
+export const maxDuration = 60;
 
 /**
  * AC-12.4, K25: registerutdrag som nedladdningsbar JSON.

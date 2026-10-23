@@ -18,6 +18,7 @@
  */
 import pg from "pg";
 import { KALLOR, UNDANTAG } from "../src/lib/registerutdrag.ts";
+import { LASES_AVEN, ordningFor } from "../src/lib/registerutdrag-ordning.ts";
 
 let fel = 0;
 const ok = (namn, villkor, extra = "") => {
@@ -92,6 +93,28 @@ console.log("\n\x1b[1mTabellerna gar att lasa\x1b[0m");
     if (finns[0].t === null) ok(`${k.tabell} finns`, false);
   }
   ok("alla tabeller i KALLOR finns i schemat", true, `${KALLOR.length} tabeller`);
+}
+
+console.log("\n\x1b[1mVarje kalla las i en stabil ordning\x1b[0m");
+{
+  // F1-2. Utdraget laser sidvis, och tva sidor ur en fraga utan unik ordning
+  // kan overlappa eller hoppa over rader. Ordningen ska vara tabellens
+  // primarnyckel; en ny kalla utan `id` som nyckel behover en rad i ORDNING.
+  const tabeller = [...new Set([...KALLOR.map((k) => k.tabell), ...LASES_AVEN])];
+  const { rows: nycklar } = await db.query(
+    `select c.relname as tabell,
+            (select array_agg(a.attname::text) from pg_attribute a
+              where a.attrelid = c.oid and a.attnum = any(i.indkey)) as pk
+       from pg_class c
+       join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
+       join pg_index i on i.indrelid = c.oid and i.indisprimary
+      where c.relname = any($1)`,
+    [tabeller],
+  );
+  const pk = new Map(nycklar.map((r) => [r.tabell, [...r.pk].sort().join(",")]));
+  const fela = tabeller.filter((t) => pk.get(t) !== [...ordningFor(t)].sort().join(","));
+  ok(`${tabeller.length} kallor ordnas pa sin primarnyckel`, fela.length === 0,
+    fela.map((t) => `${t}: ${ordningFor(t).join(",")} mot ${pk.get(t) ?? "ingen primarnyckel"}`).join("; "));
 }
 
 await db.end();
