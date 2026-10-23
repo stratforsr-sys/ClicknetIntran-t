@@ -6,6 +6,7 @@ import { HANDELSEKALLOR, type Handelsekalla } from "@/lib/notiser";
 import { ANGER_SEKUNDER, FORINSTALLNINGAR, arSteg, datumLang, dayLabel, hm, kundbrev, minuter, notistext, type Notisrad } from "@/lib/leveranskalender";
 import { andraSchemalagt, avbrytSchemalagt, skickaEpost, type Bilaga } from "@/lib/epost";
 import { inbjudan, type Mote } from "@/lib/ical";
+import { icsGaller } from "@/lib/utkorg-ics";
 import { adapter, type Crmstatus } from "@/lib/crm/adapter";
 import { crmKundId, leveransICrm, makuleraICrm, skapaICrm } from "@/lib/crm/synk-server";
 
@@ -476,7 +477,8 @@ async function kollegansIcs(eventId: string, till: string, metod: "REQUEST" | "C
     const db = supabaseAdmin();
     const { data } = await db.from("calendar_event").select(ICS_KOLUMNER).eq("id", eventId).maybeSingle();
     const e = data as unknown as Icshandelse | null;
-    if (!e || !e.tid || e.series_id) return null;
+    // Ett heldagsmöte (0204) får sin fil som heldagspost, som gästens.
+    if (!e || !(e.tid || e.dag) || e.series_id) return null;
     if ((metod === "CANCEL") !== Boolean(e.cancelled_at)) return null;
 
     const { data: folk } = await db.from("employee").select("id, first_name, last_name, email").in("id", [e.organizer_id, till]);
@@ -518,9 +520,7 @@ async function ics(rad: Utkorgsrad): Promise<boolean> {
 
   const { data } = await db.from("calendar_event").select(ICS_KOLUMNER).eq("id", eventId).maybeSingle();
   const e = data as unknown as Icshandelse | null;
-  if (!e || !e.tid || !epost) return false;
-  if (e.ics_sequence !== sekvens) return false;
-  if ((metod === "CANCEL") !== Boolean(e.cancelled_at)) return false;
+  if (!e || !icsGaller(e, epost, sekvens, metod)) return false;
   if (metod === "REQUEST") {
     const { data: kvar } = await db
       .from("calendar_attendee")

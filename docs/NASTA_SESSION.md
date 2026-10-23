@@ -7,6 +7,22 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
 
 ---
 
+## Granskningen S14 — Resend och Inkio till 100 % (2026-10-23), på `nav2-utkast`
+
+`inkio-nya-nycklar` (`f763a5d`, get-files) är inmergad i grenen, och heldagsmöten
+får sin inbjudan till gäster (`src/lib/utkorg-ics.ts`, `tests/utkorg-ics.mjs`).
+Ingen migration. Inventeringen av varje Resend- och Inkio-anrop med prov står i
+`~/nav2-utkast/delar/granskning/S14/inventering.md`.
+
+- **Kvar hos beställaren:** `INKIO_API_KEY`/`INKIO_API_SECRET` i Preview för
+  `nav2-utkast` (utan dem svarar `/nav2/inkio` `kopplat:false`), och Resends
+  webhook + `RESEND_WEBHOOK_SECRET` (Production och Preview). Kommandona står i
+  `~/nav2-utkast/HANDOFF.md`, "Del: Granskning S14".
+- **Till S08:** `/nav2/order` `makulera` skickar `makulera_i_inkio: "1"`, men
+  `makuleraOrder` jämför med `"on"`, så Nav 2.0 makulerar aldrig i Inkio.
+- **Till S10:** Rekryteringens `avbrytKandidatmejl` avbokar hos Resend, men
+  nyckeln är send-only (401), så en avbokad intervju får ändå påminnelsen.
+
 ## Granskningen S04 — gren `granskning-produktion`, EJ MERGAD (2026-10-22)
 
 Tre fel som finns i produktionen i dag, rättade på en gren från `main`. Planen
@@ -104,6 +120,24 @@ Det klickbara utkastet till ett nytt Nav (en HTML-fil, `src/nav2/utkast.html`) k
 - **Migration `0080_ordernummer` KÖRD 2026-10-14** (`sales_order.order_number`, identitet, numrerat efter `created_at`). Nästa lediga: `0081`. Main läser inte kolumnen.
 - **Order, att veta:** Inkio-nycklarna i preview gäller bara grenen `inkio`, så på `nav2-utkast` svarar `/nav2/inkio` `kopplat:false` och kortet säger det. Den som inte är säljchef, VD eller ekonomi ser ordervyn som säljaren (repots `hasRole` på `/order`). Golvet och chefens lagkort på startsidan väntar på startsidans pass (`hemlag`). Provisionens krets är som på `/provision`: säljchef, VD och ekonomi ser alla, alla andra sig själva. Lagets summa tar med alla som har underlag, som `underlagForAlla`, men inte säljchefens övertäck (utkastets "till säljarna").
 - **Nästa:** vyerna en i taget, varje med samma funktion som repots motsvarande sida (som klockan med `hamtaNotiser`).
+
+## Inkio: utkast raderas via get-files — INMERGAD I `nav2-utkast` 2026-10-23 (granskningen S14), inte i main (B8)
+
+Ingen migration. En ändring i `src/lib/crm/inkio.ts` (`makulera`, utkastgrenen).
+
+### Kvar
+
+- Prova skrivvägen lokalt (previewen skriver inte till Inkio,
+  `inkioFarSkriva`): märkt testkund + UTKAST, bifoga fil, radera via
+  `makulera`, se i Inkio att utkast och fil är borta, radera testkunden.
+- Visa previewen; merga först på beställarens ja.
+- Efter merge: `integration_log` (system crm) utan nya fel; följ nästa riktiga
+  order i `crm_order`.
+- Nav 2.0-grenens kopia: GJORT, mergen i granskningen S14 (2026-10-23). Main i
+  produktionen svarar fortfarande 404 på `get-record-contents` tills den stora mergen.
+- Ska de gamla nycklarna spärras i Inkio? Beställarens beslut. Och finns det
+  några nya alls? `crm.env` innehåller de som redan används.
+- Ingen order i `sales_order` sedan 2026-10-09 (kontrollerat 2026-10-22).
 
 ## Finans på order (0079) — MERGAT TILL MAIN 2026-10-10 (`c1cbb79`)
 

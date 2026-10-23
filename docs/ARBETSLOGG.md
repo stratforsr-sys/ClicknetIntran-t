@@ -39,6 +39,46 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-23 · Granskningen S14: Resend och Inkio till 100 % (B9)
+
+Beställaren 2026-10-23 (B9): varje väg där navet mejlar eller pratar med Inkio
+ska fungera i Nav 2.0 lika bra som eller bättre än på main, före mergen.
+
+**Inventeringen** (`~/nav2-utkast/delar/granskning/S14/inventering.md`): 18
+mejlvägar och 17 Inkio-anrop, ur tarbollar av main och grenen, var och en provad
+eller förklarad.
+
+**Inkio.** `inkio-nya-nycklar` (`f763a5d`) är inmergad: ett utkast i Inkio
+raderas via `get-files`. Inkio svarar 404 "No endpoint" på `get-record-contents`
+sedan oktober, så main i produktionen fastnar om en order som bara ligger som
+utkast i Inkio makuleras med "Makulera även i Inkio". Det har aldrig hänt
+(0 utkast i `crm_order`, 0 fel, utkorgen tom). Nyhetsposten från grenen togs inte
+med: det är en rättelse ingen märkte. Varje anrop provat mot det riktiga API:t
+med grenens kod: läsningar riktiga, skrivningar torra mot svarsformen (14 av 14
+gröna; main faller på get-record-contents).
+
+**Heldagsmöten fick ingen inbjudan.** Nav 2.0 låter ett heldagsmöte (0204) ha
+gäster utanför Clicknet, köar kalenderfilen och säger "får en inbjudan med mejl",
+men utkorgens `ics()` hoppade över varje händelse utan klockslag. Villkoret står
+nu i `src/lib/utkorg-ics.ts` (`icsGaller`: en dag räcker), och kollegans fil
+(`kollegansIcs`) följer samma regel. `tests/utkorg-ics.mjs` var rött före
+rättelsen och är grönt efter.
+
+**Provat i previewen** (enda mottagare zen@clicknet.se eller delivered@resend.dev):
+inloggningskoden (`auth.code_sent`), kalenderns inbjudan och avbokning till en
+gäst, och Leads bokade möte och Ångra. Notisbrevet och morgonbrevet provades
+lokalt med grenens kod mot den riktiga databasen, och bara Zens brev skickades.
+Resends webhook (`/api/resend`) prövar Svix-signaturen rätt (provat lokalt med en
+provhemlighet) men svarar 503 tills `RESEND_WEBHOOK_SECRET` finns. Provdatan är
+borttagen.
+
+**Inte rättat här (andra sessioner äger filerna):** `/nav2/order` skickar
+`makulera_i_inkio: "1"` och `makuleraOrder` jämför med `"on"` (S08), och
+Rekryteringen avbokar schemalagda kandidatmejl hos Resend med en send-only-nyckel
+(S10).
+
+---
+
 ## 2026-10-23 · Granskningen S10, K6 del 2: Tid, Coachning och Ärenden sparar (B7), sommartiden och morgonnotisen (D11, D24)
 
 Beställarens ja till att alla vyer får spara (B7, 2026-10-22) gäller vy för vy,
@@ -2699,6 +2739,35 @@ och den inloggades `sub`: en säljare får sin egen rad och varken satser eller
 löner; superadmin får 13 personer, 6 satser och 3 löner. Sidan ritad i headless
 Chrome som båda, utan fel. Klockan provades lokalt med `notification_event`;
 i navet är det `hamtaNotiser`, som också räknar härledda poster.
+## 2026-10-22 · Inkio: utkast går att radera igen (get-files)
+
+Gren `inkio-nya-nycklar`, ej mergad. Inkio tog bort
+`GET /api/filehandler/get-record-contents` när Dokument-sidans postvy
+försvann (bekräftat av Inkio). Den användes på ett enda ställe: när en order
+som ligger som **utkast** i Inkio makuleras med "Makulera även i Inkio" måste
+utkastets filer raderas före ordern. Anropet gav 404, så makuleringen hade
+fastnat i utkorgen. Det har aldrig hänt: ingen `crm_order` har varit ett
+utkast, `integration_log` (system crm) har inga fel.
+
+**Ersättaren är `GET /api/filehandler/get-files`** med samma parametrar
+(`doctype=Sales Order&record_id=…`). Svaret är en lista direkt, inte
+`{ documents }`. Formen lästes mot en riktig order innan koden skrevs: varje
+post har `id` (dokumentets), `linked_doctype` och `linked_id`. Koden raderar
+bara poster där `linked_doctype = "Sales Order"` och `linked_id` = ordern, så
+ett svar som någon gång tar med kundens andra dokument inte kan radera dem.
+
+**Resten av integrationen är genomgången mot Inkios nya spec** (573
+operationer): de femton övriga anropen i `inkio.ts` finns kvar med samma
+form. `inkio-mappning.ts`, `synk-server.ts`, `order-server.ts` och
+`order/actions.ts` anropar inte Inkio direkt.
+
+**Nycklarna byttes INTE.** `~/.clicknet/crm.env` innehåller samma nyckel och
+hemlighet som redan ligger i Vercel (Production och Preview/inkio). Läsanropen
+(`logged-user`, `records/service`, `get-sellers`, `records/customer`) ger 200
+med dem.
+
+Samma rättelse behövs i Nav 2.0-grenens kopia av `inkio.ts`, under låset i
+`~/nav2-utkast/PARALLELLT.md`. Den är inte rörd här.
 
 ---
 
