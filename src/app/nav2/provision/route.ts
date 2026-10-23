@@ -10,6 +10,7 @@ import { sparaChefssats, sparaKonsekvenssteg, sparaNiva, stangNiva, taBortKonsek
 import { skapaMote } from "@/app/(app)/kalender/moten/actions";
 import { nivaFor } from "@/lib/nav2/forma";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
+import { medNyckel } from "@/lib/nav2/nyckel";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,9 @@ export const dynamic = "force-dynamic";
  *
  * Det nya (0087): att ta bort en övrig bonus i en öppen månad. En post skrivs
  * aldrig om (`commission_entry_ar_last`), så borttagningen är en negativ post
- * med samma skäl och en rad i `commission_entry_reversal`. Att ta bort en
+ * med samma skäl och en rad i `commission_entry_reversal`, båda skrivna i ett
+ * steg av `ta_bort_ovrig_bonus` (0215). Att lägga en övrig bonus går genom
+ * `medNyckel`, så samma begäran två gånger blir en post. Att ta bort en
  * kommande trappa tar bort nivåerna som inte börjat gälla och öppnar de som
  * de skulle ersätta. "Påminn mig" om fastställandet är ett möte i kalendern
  * (`skapaMote`), som utkastets kalenderpost.
@@ -87,9 +90,13 @@ export async function POST(request: Request) {
 
       case "bonus":
         if (!MANAD.test(manad)) return svar({ fel: "Okänd månad." }, 400);
-        return fran(
-          await laggOvrigBonus({}, form({ employee_id: b.vem, period_month: `${manad}-01`, amount: b.belopp, note: b.skal, sales_order_id: b.order ?? "" })),
-          "Bonusen är bokförd.",
+        // Granskningen S06 (G1): ett dubbelklick eller ett nytt försök efter
+        // tidsgränsen bär samma X-Nav-Nyckel och får samma svar, inte en post till.
+        return medNyckel(request, mig, async () =>
+          fran(
+            await laggOvrigBonus({}, form({ employee_id: b.vem, period_month: `${manad}-01`, amount: b.belopp, note: b.skal, sales_order_id: b.order ?? "" })),
+            "Bonusen är bokförd.",
+          ),
         );
 
       case "bonus-bort": {
@@ -97,29 +104,18 @@ export async function POST(request: Request) {
         if (!hasRole(user, "sales_manager", "finance", "ceo")) return svar({ fel: "Bara säljchef, ekonomi och VD får ta bort en övrig bonus." }, 403);
         const id = String(b.id ?? "");
         if (!UUID.test(id)) return svar({ fel: "Okänd bonus." }, 400);
-        const { data: post } = await db.from("commission_entry").select("id, employee_id, period_month, amount, kind, note, sales_order_id").eq("id", id).maybeSingle();
-        if (!post || post.kind !== "ovrig_bonus") return svar({ fel: "Bonusen finns inte." }, 404);
-        const { data: tagen } = await db.from("commission_entry_reversal").select("original_id").or(`original_id.eq.${id},reversal_id.eq.${id}`).maybeSingle();
-        if (tagen) return svar({ fel: "Bonusen är redan borttagen." }, 400);
-        const { data: stangd } = await db.from("commission_period").select("period_month").eq("period_month", post.period_month).maybeSingle();
-        if (stangd) return svar({ fel: "Månaden är fastställd. En bonus i en fastställd månad rättas med en ny post i den öppna månaden." }, 400);
-        const { data: ny, error } = await db
-          .from("commission_entry")
-          .insert({
-            employee_id: post.employee_id,
-            period_month: post.period_month,
-            amount: -Number(post.amount),
-            kind: "ovrig_bonus",
-            source: "manual",
-            note: `Borttagen: ${post.note ?? ""}`.slice(0, 500),
-            sales_order_id: post.sales_order_id,
-            entered_by: mig,
-          })
-          .select("id")
-          .single();
-        if (error || !ny) return svar({ fel: `Bonusen togs inte bort: ${error?.message ?? "okänt fel"}` }, 500);
-        await db.from("commission_entry_reversal").insert({ original_id: id, reversal_id: ny.id, created_by: mig });
-        await db.from("audit_log").insert({ actor_id: mig, action: "commission.bonus_removed", object_type: "commission_entry", object_id: id, meta: { reversal: ny.id } });
+        // Granskningen S06 (D4/C5): låset, prövningen, motposten och kopplingen
+        // i en transaktion (0215). Ett andra anrop väntar på det första och får
+        // pv:redan_borttagen; faller kopplingen rullas motposten tillbaka.
+        const { data: motpost, error } = await db.rpc("ta_bort_ovrig_bonus", { p_aktor: mig, p_post: id });
+        if (error || typeof motpost !== "string") {
+          const kod = error?.message ?? "";
+          if (kod.includes("pv:ogiltig")) return svar({ fel: "Bonusen finns inte." }, 404);
+          if (kod.includes("pv:redan_borttagen")) return svar({ fel: "Bonusen är redan borttagen." }, 400);
+          if (kod.includes("pv:faststalld")) return svar({ fel: "Månaden är fastställd. En bonus i en fastställd månad rättas med en ny post i den öppna månaden." }, 400);
+          return svar({ fel: `Bonusen togs inte bort: ${kod || "okänt fel"}` }, 500);
+        }
+        await db.from("audit_log").insert({ actor_id: mig, action: "commission.bonus_removed", object_type: "commission_entry", object_id: id, meta: { reversal: motpost } });
         revalidatePath("/provision");
         return svar({ ok: "Bonusen är borttagen. Huvudboken visar en negativ post med samma skäl." });
       }

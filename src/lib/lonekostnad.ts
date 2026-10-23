@@ -30,18 +30,32 @@
  * ===========================================================================
  */
 
+/**
+ * GRANSKNINGEN S06 (D8): EN SAKNAD SATS AR NULL, ALDRIG NOLL.
+ *
+ * `hamtaSatser` foll tillbaka pa 0 for en sats som saknades. For
+ * `senior_age_min` betydde det att `alder >= 0` var sant for alla, och varje
+ * anstalld fick den nedsatta avgiften (10,21 % i stallet for 31,42 %) fran den
+ * dag raden slutade galla. Nu ar en saknad sats null, och null betyder:
+ *   - aldersgransen for aldre saknas: ingen far den nedsattningen,
+ *   - den nedsatta avgiften, taket eller spannet for unga saknas: ingen far
+ *     den nedsattning som behover dem,
+ *   - standardavgiften saknas: ingen berakning gors (`raknaLonekostnad` kastar,
+ *     och `raknaPeriod` svarar med ett fel innan nagot skrivs).
+ * Varje fall ger en rad i `anmarkningar` (`saknadeSatser`).
+ */
 export type Satser = {
-  /** Full arbetsgivaravgift, i procent. */
-  standard: number;
+  /** Full arbetsgivaravgift, i procent. Null: ingen berakning gors. */
+  standard: number | null;
   /** Endast alderspensionsavgift, i procent. Galler unga och aldre. */
-  reducerad: number;
-  /** Tak per kalendermanad for den lagre satsen. */
-  reduceradTak: number;
+  reducerad: number | null;
+  /** Tak per kalendermanad for den lagre satsen. Null eller 0: ingen ungdomsnedsattning. */
+  reduceradTak: number | null;
   /** Fylld alder vid arets ingang, nedre och ovre grans for unga. */
-  ungMin: number;
-  ungMax: number;
-  /** Fylld alder vid arets ingang for den aldre nedsattningen. */
-  seniorMin: number;
+  ungMin: number | null;
+  ungMax: number | null;
+  /** Fylld alder vid arets ingang for den aldre nedsattningen. Null eller 0: ingen far den. */
+  seniorMin: number | null;
   /**
    * 0190: Skatteverkets tillfalliga sats for unga (`employer_fee_young`), i
    * procent. Saknas den galler `reducerad` for unga, som forut.
@@ -87,13 +101,86 @@ export function avgiftssats(
   if (satser.ingenMin != null && satser.ingenMin > 0 && alderVidIngang >= satser.ingenMin) {
     return { procent: 0, tak: null, grund: "ingen" };
   }
-  if (alderVidIngang >= satser.seniorMin) {
+  // S06 (D8): en nedsattning galler bara nar varje sats den behover finns.
+  if (satser.seniorMin != null && satser.seniorMin > 0 && satser.reducerad != null && alderVidIngang >= satser.seniorMin) {
     return { procent: satser.reducerad, tak: null, grund: "senior" };
   }
-  if (alderVidIngang >= satser.ungMin && alderVidIngang <= satser.ungMax) {
-    return { procent: satser.ung ?? satser.reducerad, tak: satser.reduceradTak, grund: "ung" };
+  const ungSats = satser.ung ?? satser.reducerad;
+  if (
+    satser.ungMin != null &&
+    satser.ungMax != null &&
+    satser.reduceradTak != null &&
+    satser.reduceradTak > 0 &&
+    ungSats != null &&
+    alderVidIngang >= satser.ungMin &&
+    alderVidIngang <= satser.ungMax
+  ) {
+    return { procent: ungSats, tak: satser.reduceradTak, grund: "ung" };
   }
+  if (satser.standard == null) throw new Error(SAKNAR_STANDARD);
   return { procent: satser.standard, tak: null, grund: "standard" };
+}
+
+/** Felet nar standardavgiften saknas: da gors ingen berakning alls. */
+export const SAKNAR_STANDARD =
+  "Arbetsgivaravgiften (full avgift) saknas för perioden, så lönekostnaden räknas inte. Lägg in satsen under Satser och löner.";
+
+/**
+ * Anmarkningarna for satser som saknas (S06, D8). Tom nar allt finns. Samma
+ * texter i `raknaLonekostnad` och i svaret fran `raknaPeriod`.
+ */
+export function saknadeSatser(satser: Satser): string[] {
+  const ut: string[] = [];
+  if (satser.standard == null) ut.push(SAKNAR_STANDARD);
+  if (satser.reducerad == null && satser.ung == null) {
+    ut.push("Den nedsatta arbetsgivaravgiften saknas för perioden, så ingen får nedsättningen för unga eller äldre. Lägg in satsen under Satser och löner.");
+  } else if (satser.reducerad == null) {
+    ut.push("Den nedsatta arbetsgivaravgiften saknas för perioden, så ingen får nedsättningen för äldre. Lägg in satsen under Satser och löner.");
+  }
+  if (satser.seniorMin == null || !(satser.seniorMin > 0)) {
+    ut.push("Åldersgränsen för äldre saknas för perioden, så ingen får nedsättningen för äldre. Lägg in satsen under Satser och löner.");
+  }
+  if (satser.ungMin == null || satser.ungMax == null) {
+    ut.push("Åldersspannet för unga saknas för perioden, så ingen får nedsättningen för unga. Lägg in satsen under Satser och löner.");
+  } else if (satser.reduceradTak == null || !(satser.reduceradTak > 0)) {
+    ut.push("Månadstaket för unga saknas för perioden, så ingen får nedsättningen för unga. Lägg in satsen under Satser och löner.");
+  }
+  return ut;
+}
+
+/** En rad ur `cost_rate`, som `hamtaSatser` laser den. */
+export type Satsrad = { kind: string; applies_to: string | null; value: number | string; valid_from: string; valid_to: string | null };
+
+/**
+ * Satserna som gallde vid ett givet datum, ur raderna. Ren, sa att regeln gar
+ * att prova: den senaste raden med `valid_from <= datum` som inte gatt ut
+ * vinner per nyckel, och en sats utan rad ar null (S06, D8).
+ */
+export function satserUrRader(alla: Satsrad[], datum: string): Satser {
+  const rader = alla
+    .filter((r) => r.valid_from <= datum && (!r.valid_to || r.valid_to >= datum))
+    .sort((a, b) => (a.valid_from < b.valid_from ? 1 : a.valid_from > b.valid_from ? -1 : 0));
+  const forst = (kind: string, appliesTo: string | null = null): number | null => {
+    const rad = rader.find((r) => r.kind === kind && (r.applies_to ?? null) === appliesTo);
+    return rad ? Number(rad.value) : null;
+  };
+  const franvarofaktor: Record<string, number> = {};
+  for (const r of rader) {
+    if (r.kind !== "absence_cost_factor" || !r.applies_to) continue;
+    if (!(r.applies_to in franvarofaktor)) franvarofaktor[r.applies_to] = Number(r.value);
+  }
+  return {
+    standard: forst("employer_fee_standard"),
+    reducerad: forst("employer_fee_reduced"),
+    reduceradTak: forst("employer_fee_reduced_cap"),
+    ungMin: forst("young_age_min"),
+    ungMax: forst("young_age_max"),
+    seniorMin: forst("senior_age_min"),
+    ung: forst("employer_fee_young"),
+    ingenMin: forst("no_fee_age_min"),
+    tackningsgrad: forst("contribution_margin"),
+    franvarofaktor,
+  };
 }
 
 export type Manadsdel = {
@@ -201,7 +288,11 @@ export type Berakning = {
  * glomt fylla i.
  */
 export function raknaLonekostnad(underlag: Underlag, satser: Satser): Berakning {
-  const anmarkningar: string[] = [];
+  // S06 (D8): utan standardavgift gors ingen berakning, och en saknad sats
+  // star i anmarkningarna i stallet for att bli noll.
+  if (satser.standard == null) throw new Error(SAKNAR_STANDARD);
+  const standard = satser.standard;
+  const anmarkningar: string[] = saknadeSatser(satser);
 
   // --- Steg 2: franvaroavdrag -----------------------------------------------
   const franvarominuter = Object.values(underlag.franvarominuter).reduce((s, m) => s + m, 0);
@@ -245,14 +336,14 @@ export function raknaLonekostnad(underlag: Underlag, satser: Satser): Berakning 
       underlag.fodelsear === null ? null : alderVidAretsIngang(del.ar, underlag.fodelsear);
     const sats =
       alder === null
-        ? { procent: satser.standard, tak: null, grund: "standard" as const }
+        ? { procent: standard, tak: null, grund: "standard" as const }
         : avgiftssats(alder, satser);
 
     // Taket ar per kalendermanad och galler den del av ERSATTNINGEN som ligger
     // under det. Over taket full sats — inte lagre sats pa hela beloppet.
     let avgift: number;
     if (sats.tak !== null && lonedel > sats.tak) {
-      avgift = (sats.tak * sats.procent) / 100 + ((lonedel - sats.tak) * satser.standard) / 100;
+      avgift = (sats.tak * sats.procent) / 100 + ((lonedel - sats.tak) * standard) / 100;
       anmarkningar.push(
         `${del.ar}-${String(del.manad).padStart(2, "0")}: lönen överstiger månadstaket för den lägre satsen, så delen över taket har full avgift.`,
       );

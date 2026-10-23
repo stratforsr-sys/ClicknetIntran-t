@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CurrentUser } from "@/lib/auth";
-import type { Satser } from "@/lib/lonekostnad";
+import { satserUrRader, type Satser, type Satsrad } from "@/lib/lonekostnad";
 
 /**
  * E15: hamtningen av satser och underlag.
@@ -50,39 +50,18 @@ export async function hamtaSatser(db: SupabaseClient, datum: string): Promise<Sa
     .lte("valid_from", datum)
     .order("valid_from", { ascending: false });
 
-  const rader = (data ?? []).filter((r) => !r.valid_to || r.valid_to >= datum);
-
-  // Forsta traffen per nyckel vinner, och listan ar sorterad med senaste
-  // `valid_from` forst.
-  const forst = (kind: string, appliesTo: string | null = null): number | null => {
-    const rad = rader.find((r) => r.kind === kind && (r.applies_to ?? null) === appliesTo);
-    return rad ? Number(rad.value) : null;
-  };
-
-  const franvarofaktor: Record<string, number> = {};
-  for (const r of rader) {
-    if (r.kind !== "absence_cost_factor" || !r.applies_to) continue;
-    if (!(r.applies_to in franvarofaktor)) franvarofaktor[r.applies_to] = Number(r.value);
-  }
-
   /**
-   * Saknas en sats faller den tillbaka pa noll — och det ar med flit inte ett
-   * "rimligt standardvarde". En arbetsgivaravgift pa noll ser fel ut direkt i
-   * vyn; ett dolt standardvarde pa 31,42 hade sett ratt ut och tyst gjort
-   * `cost_rate` overflodig, vilket ar precis vad E15.2 forbjuder.
+   * Forsta traffen per nyckel vinner (`satserUrRader`, ren och provad i
+   * tests/lonekostnad.mjs). En sats som saknas ar null, inte noll.
+   *
+   * Granskningen S06 (D8): reservvardet var 0, med motiveringen att en avgift
+   * pa noll "ser fel ut direkt i vyn". For aldersgransen for aldre gjorde det
+   * tvartom: `alder >= 0` gav alla den nedsatta avgiften, och lonekostnaden
+   * blev runt 21 % for lag utan att nagot sag fel ut. Hur null raknas star i
+   * `Satser` och `saknadeSatser` (lonekostnad.ts). Fortfarande inget dolt
+   * standardvarde (E15.2).
    */
-  return {
-    standard: forst("employer_fee_standard") ?? 0,
-    reducerad: forst("employer_fee_reduced") ?? 0,
-    reduceradTak: forst("employer_fee_reduced_cap") ?? 0,
-    ungMin: forst("young_age_min") ?? 0,
-    ungMax: forst("young_age_max") ?? 0,
-    seniorMin: forst("senior_age_min") ?? 0,
-    ung: forst("employer_fee_young"),
-    ingenMin: forst("no_fee_age_min"),
-    tackningsgrad: forst("contribution_margin"),
-    franvarofaktor,
-  };
+  return satserUrRader((data ?? []) as Satsrad[], datum);
 }
 
 /** Manadslonen som gallde vid periodens borjan. */

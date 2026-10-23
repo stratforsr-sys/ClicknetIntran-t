@@ -131,5 +131,28 @@ rubrik("Fel och gränser");
   ok("en nyckel äldre än ett dygn räknas som ny", n === 2, `${n} gånger`);
 }
 
+// Granskningen S06 (G1): "Lägg 2 000 kr till Fredrik" i Provision går genom medNyckel.
+rubrik("Övrig bonus i Provision (S06, G1)");
+{
+  const l = minne();
+  const poster = [];
+  // Som laggOvrigBonus: en ren insert, och inget i databasen stoppar en dubblett.
+  const gor = async () => { poster.push({ vem: "Fredrik", belopp: 2000 }); return Response.json({ ok: "Bonusen är bokförd." }); };
+  const pv = (nyckel) => new Request("https://nav.test/nav2/provision", { method: "POST", headers: { "x-nav-nyckel": nyckel } });
+  const a = await medNyckel(pv("k-bonus-0001"), ZEN, gor, l);
+  // Klienten fick inget svar inom tidsgränsen och försöker igen med samma nyckel.
+  const b = await medNyckel(pv("k-bonus-0001"), ZEN, gor, l);
+  ok("samma nyckel två gånger: en post", poster.length === 1, `${poster.length} poster`);
+  ok("det andra svaret är det första, märkt som upprepning", b.status === 200 && (await b.json()).ok === "Bonusen är bokförd." && b.headers.get("x-nav-upprepad") === "1" && a.status === 200);
+  ok("beslutet för det andra försöket är upprepa", nyckelBeslut(false, l.rader.get("k-bonus-0001")) === "upprepa");
+}
+{
+  // Rutten slår in handlingen bonus i medNyckel (annars når nyckeln aldrig fram).
+  const { readFileSync } = await import("node:fs");
+  const kalla = readFileSync(new URL("../src/app/nav2/provision/route.ts", import.meta.url), "utf8");
+  const gren = kalla.slice(kalla.indexOf('case "bonus":'), kalla.indexOf('case "bonus-bort"'));
+  ok("provisionsruttens bonus går genom medNyckel", /import \{[^}]*\bmedNyckel\b[^}]*\} from "@\/lib\/nav2\/nyckel"/.test(kalla) && /return medNyckel\(request, mig,/.test(gren));
+}
+
 console.log(fel === 0 ? "\n\x1b[32mAlla prov gick igenom.\x1b[0m" : `\n\x1b[31m${fel} prov föll.\x1b[0m`);
 process.exit(fel === 0 ? 0 : 1);

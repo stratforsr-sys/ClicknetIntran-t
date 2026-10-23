@@ -166,9 +166,14 @@ export function formaProvision(x: ProvisionIndata): NdProvision {
     const lista: Underlag[] = provisionschef
       ? underlagForAlla(material, m, nivaer, kvM, lagenM, chefsposter)
       : [raknaUnderlag(mig, material, m, nivaer, kvM.get(mig) ?? null, lagenM.get(mig) ?? null, chefsposter.filter((p) => p.manager_id === mig))];
-    // Saljarna och jag sjalv ska alltid ha en rad, aven en tom manad.
+    // Saljarna och jag sjalv ska alltid ha en rad, aven en tom manad. Och var
+    // och en med poster i manaden: en saljare som slutat med en eftersläpande
+    // order, eller en icke-saljare med en ovrig bonus (granskningen S06, D5).
+    // Annars saknas de i underlaget och i summan vid Faststall.
     const har = new Set(lista.map((u) => u.employee_id));
-    const extra = provisionschef ? [...saljarIds, mig] : [];
+    const extra = provisionschef
+      ? [...new Set([...saljarIds, mig, ...poster.filter((p) => p.period_month === m).map((p) => p.employee_id)])]
+      : [];
     for (const id of extra) {
       if (!har.has(id)) lista.push(raknaUnderlag(id, material, m, nivaer, kvM.get(id) ?? null, lagenM.get(id) ?? null, chefsposter));
     }

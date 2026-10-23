@@ -6,6 +6,7 @@ import { farSeLonekostnad } from "@/lib/lonekostnad-server";
 import { raknaPeriod, sparaFodelsear, sparaIntakt, sparaLon, sparaSats } from "@/app/(app)/lonekostnad/actions";
 import { nivaFor } from "@/lib/nav2/forma";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
+import { BARANDE, kanSluta, satsNyckel, slutNekas } from "@/lib/nav2/satsforma";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,10 @@ export const dynamic = "force-dynamic";
  *
  * LÄSLÄGE: står `SKRIVLAGE.satser` på false svarar rutten 423 innan något
  * skrivs. `employer_fee_young`, `no_fee_age_min` och Ersatta kräver 0190.
+ *
+ * Granskningen S06 (D8): ett slutdatum på en bärande sats (full avgift och
+ * åldersgränsen för äldre; `BARANDE` i satsforma.ts) nekas med 400 innan något sparas,
+ * om ingen rad med samma nyckel tar vid senast dagen efter (`kanSluta`).
  */
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -129,6 +134,31 @@ export async function POST(request: Request) {
     await db.from("cost_rate_replaced").delete().eq("rate_id", rad.id).eq("replaced_by", mig);
   }
 
+  /**
+   * Granskningen S06 (D8): får en bärande sats sluta `till`? Null betyder ja,
+   * annars texten att neka med. `extra` är rader som läggs in i samma begäran
+   * (Skatteverkets rättelse), `utom` rader som tas bort i den.
+   */
+  async function slutFel(
+    kind: string,
+    applies: string | null,
+    fran: string,
+    till: string | null,
+    extra: { kind: string; applies: string | null; fran: string }[] = [],
+    utom: { kind: string; fran: string }[] = [],
+  ): Promise<string | null> {
+    if (!till || !BARANDE.has(kind)) return null;
+    const q = db.from("cost_rate").select("kind, applies_to, valid_from").eq("kind", kind);
+    const { data } = await (applies === null ? q.is("applies_to", null) : q.eq("applies_to", applies));
+    const alla = [
+      ...((data ?? []) as { kind: string; applies_to: string | null; valid_from: string }[])
+        .filter((r) => !utom.some((u) => u.kind === r.kind && u.fran === String(r.valid_from).slice(0, 10)))
+        .map((r) => ({ nyckel: satsNyckel(r.kind, r.applies_to), giltig_fran: String(r.valid_from).slice(0, 10) })),
+      ...extra.map((r) => ({ nyckel: satsNyckel(r.kind, r.applies), giltig_fran: r.fran })),
+    ];
+    return kanSluta({ nyckel: satsNyckel(kind, applies), giltig_fran: fran, giltig_till: till }, alla) ? null : slutNekas(till);
+  }
+
   /** En ny rad med repots sparaSats, och slutdatumet på den. */
   async function nySats(x: { kind: string; applies: string | null; value: number; fran: string; till: string | null; agare: string | null; oversyn: string | null; note: string }): Promise<string | null> {
     const s = await sparaSats({}, form({ kind: x.kind, applies_to: x.applies ?? "", unit: ENHET[x.kind], value: x.value, valid_from: x.fran, review_due: x.oversyn ?? "", owner_id: x.agare ?? "", note: x.note }));
@@ -164,6 +194,8 @@ export async function POST(request: Request) {
       case "sats": {
         const x = lasSats(b);
         if ("fel" in x) return svar({ fel: x.fel }, 400);
+        const nej = await slutFel(x.kind, x.applies, x.fran, x.till);
+        if (nej) return svar({ fel: nej }, 400);
         const gammal = await radFran(x.kind, x.applies, x.fran);
         if (gammal && b.ersatt !== true) return svar({ fel: `Det finns redan en sats från ${x.fran}. Ersätt den, eller välj ett annat datum.` }, 400);
         if (gammal) {
@@ -186,6 +218,16 @@ export async function POST(request: Request) {
         const lasta = in_.map((r) => lasSats((r ?? {}) as Record<string, unknown>));
         const fel0 = lasta.find((x) => "fel" in x) as { fel: string } | undefined;
         if (fel0) return svar({ fel: fel0.fel }, 400);
+        {
+          // Slutdatumen prövas innan något ersätts: raderna i rättelsen räknas
+          // som efterföljare, och de som den tar bort gör det inte.
+          const nya = lasta as Exclude<ReturnType<typeof lasSats>, { fel: string }>[];
+          const utom = bort.map((r) => (Array.isArray(r) ? (r as unknown[]).map(String) : ["", ""])).map(([kind, fran]) => ({ kind, fran }));
+          for (const x of nya) {
+            const nej = await slutFel(x.kind, x.applies, x.fran, x.till, nya.filter((y) => y !== x), utom);
+            if (nej) return svar({ fel: nej }, 400);
+          }
+        }
         for (const r of bort) {
           const [kind, fran] = Array.isArray(r) ? (r as unknown[]).map(String) : ["", ""];
           if (!ENHET[kind] || !DATUM.test(fran)) continue;
@@ -232,6 +274,11 @@ export async function POST(request: Request) {
         if (!rad) return svar({ fel: "Satsen finns inte." }, 404);
         const till = datumEllerNull(b.till);
         if (till && till < String(rad.valid_from).slice(0, 10)) return svar({ fel: "Slutdatumet kan inte ligga före startdatumet." }, 400);
+        // Ett oförändrat slutdatum prövas inte igen: ägare och översyn ska gå att sätta på en äldre rad.
+        if (till && till !== (rad.valid_to ? String(rad.valid_to).slice(0, 10) : null)) {
+          const nej = await slutFel(rad.kind, rad.applies_to, String(rad.valid_from).slice(0, 10), till);
+          if (nej) return svar({ fel: nej }, 400);
+        }
         const { error } = await db.from("cost_rate").update({ owner_id: agare, review_due: oversyn, valid_to: till }).eq("id", id);
         if (error) return svar({ fel: error.message }, 400);
         await logga("cost.rate_changed", rad.kind, { agare, oversyn, galler_till: till, galler_fran: rad.valid_from, galler: rad.applies_to });

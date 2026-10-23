@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
-import { raknaLonekostnad, type Underlag } from "@/lib/lonekostnad";
+import { raknaLonekostnad, saknadeSatser, SAKNAR_STANDARD, type Underlag } from "@/lib/lonekostnad";
 import { farSeLonekostnad, hamtaLonerFor, hamtaSatser } from "@/lib/lonekostnad-server";
 
 export type KostnadState = { fel?: string; ok?: string };
@@ -230,6 +230,11 @@ export async function raknaPeriod(_prev: KostnadState, form: FormData): Promise<
     return { fel: "Löneperioden har inga rader än. Generera lönerapporten först." };
 
   const satser = await hamtaSatser(db, period.period_start);
+  // Granskningen S06 (D8): utan standardavgift gors ingen berakning, och de
+  // gamla raderna star kvar. Ovriga saknade satser ger ingen nedsattning och
+  // sags i svaret nedan.
+  if (satser.standard == null) return { fel: SAKNAR_STANDARD };
+  const saknas = saknadeSatser(satser);
   const { data: intakter } = await db
     .from("revenue_entry")
     .select("employee_id, amount")
@@ -311,8 +316,8 @@ export async function raknaPeriod(_prev: KostnadState, form: FormData): Promise<
 
   return {
     ok:
-      utanLon > 0
+      (utanLon > 0
         ? `${skrivna} rader räknade. ${utanLon} hoppades över — de saknar löneuppgift.`
-        : `${skrivna} rader räknade.`,
+        : `${skrivna} rader räknade.`) + (saknas.length ? ` ${saknas.join(" ")}` : ""),
   };
 }

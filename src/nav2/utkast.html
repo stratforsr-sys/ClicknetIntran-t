@@ -23921,16 +23921,17 @@ function satsGaller(datum){
   const v = (k, a = null) => { const r = satsRadFor(k, a, datum); return r ? Number(r.value) : null; };
   const franvarofaktor = {};
   satsRaderPa(datum).forEach(r => { if (r.kind === 'absence_cost_factor' && r.applies_to && !(r.applies_to in franvarofaktor)) franvarofaktor[r.applies_to] = Number(r.value); });
-  // Saknas en sats faller den tillbaka på noll, aldrig på ett dolt standardvärde (repots E15.2).
-  return {standard:v('employer_fee_standard') ?? 0, reducerad:v('employer_fee_reduced') ?? 0, reduceradTak:v('employer_fee_reduced_cap') ?? 0,
+  // Aldrig ett dolt standardvärde (repots E15.2). En saknad nedsatt avgift eller ett saknat tak är null och ger ingen
+  // nedsättning, som servern (granskningen S06, D8). Saknas full avgift räknar servern inte alls; här blir den noll, som syns.
+  return {standard:v('employer_fee_standard') ?? 0, reducerad:v('employer_fee_reduced'), reduceradTak:v('employer_fee_reduced_cap'),
     ungMin:v('young_age_min'), ungMax:v('young_age_max'), ung:v('employer_fee_young'), seniorMin:v('senior_age_min'), ingenMin:v('no_fee_age_min'),
     tackningsgrad:v('contribution_margin'), franvarofaktor};
 }
 const satsAlder = (ar, fodd) => ar - fodd - 1;   // fylld ålder vid årets ingång (K27)
 function satsAvgift(alder, s){
   if (s.ingenMin !== null && s.ingenMin > 0 && alder >= s.ingenMin) return {procent:0, tak:null, grund:'ingen'};
-  if (s.seniorMin !== null && s.seniorMin > 0 && alder >= s.seniorMin) return {procent:s.reducerad, tak:null, grund:'aldre'};
-  if (s.ungMin !== null && s.ungMax !== null && alder >= s.ungMin && alder <= s.ungMax) return {procent:s.ung ?? s.reducerad, tak:s.reduceradTak, grund:'ung'};
+  if (s.seniorMin !== null && s.seniorMin > 0 && s.reducerad !== null && alder >= s.seniorMin) return {procent:s.reducerad, tak:null, grund:'aldre'};
+  if (s.ungMin !== null && s.ungMax !== null && s.reduceradTak !== null && s.reduceradTak > 0 && (s.ung ?? s.reducerad) !== null && alder >= s.ungMin && alder <= s.ungMax) return {procent:s.ung ?? s.reducerad, tak:s.reduceradTak, grund:'ung'};
   return {procent:s.standard, tak:null, grund:'full'};
 }
 const SATSGRUND = {full:'Full', ung:'Unga', aldre:'Äldre', ingen:'Ingen avgift'};
@@ -27023,6 +27024,19 @@ pvUnderlag = function(vem, m, raknaLive){
     kv:d.kv ? {...d.kv, veckor:ndPvKvVeckor(id, m)} : null, ovrig:d.ovrig, chefs, varde:d.varde, summa:d.summa, forlust:d.forlust,
     varn:jag && !arChef ? ndPvVarning(m, d.forlust) : null, sena:[],
     vantar:m === PVMAN ? egnaM.filter(o => o.st === 'inskickad') : [], utkast:m === PVMAN ? egnaM.filter(o => o.st === 'utkast') : []};
+};
+/* Laget: summan av allas underlag. Granskningen S06 (D5): i riktigt läge
+   räknas summorna på alla personer i månadens underlag, också den inloggade
+   (chefens egen försäljning och övertäck), en säljare som slutat och en
+   icke-säljare med en övrig bonus. Listan (rader) börjar fortfarande med
+   säljarna, men summan vid Fastställ utesluter ingen. */
+const _ndPvLaget = pvLaget;
+pvLaget = function(m){
+  const L = _ndPvLaget(m), P = ndP();
+  if (!P || !P.chefsvy || m < NDPVFORE) return L;
+  const alla = Object.values(P.underlag[m] || {});
+  const sum = f => alla.reduce((s, x) => s + (f(x) || 0), 0);
+  return {...L, summa:sum(x => x.summa), grund:sum(x => x.grund), volym:sum(x => x.volym), kv:sum(x => x.kv ? x.kv.belopp : 0), ovrig:sum(x => x.ovrig), varde:sum(x => x.varde), antal:sum(x => x.antal.netto)};
 };
 pvTrappa = function(m){ if (!ndP()) return PVTRAPPA.length ? (pvVersion(m) || {nivaer:[]}).nivaer.slice().sort((a, b) => a.t - b.t) : []; return (ndP().trappor[m] || []).map(n => ({t:n.t, a:n.a})); };
 pvArbetsdagar = m => ndP() && ndP().arbetsdagar[m] ? ndP().arbetsdagar[m] : frDagar(m + '-01', pvSista(m)).filter(frArbetsdag);

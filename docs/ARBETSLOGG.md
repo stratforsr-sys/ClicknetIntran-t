@@ -5,6 +5,44 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-23 · Granskningen S06: en övrig bonus bokas och dras en gång (0215, medNyckel), underlaget och Fastställ tar med alla, en saknad sats ger aldrig nedsatt avgift
+
+**Varför.** Granskningen 2026-10-22 (G1, D4/C5, D5, D8). Provision och Satser sparar redan, så alla fyra fel gällde pengar i produktionen:
+- Ett dubbelklick på "Lägg 2 000 kr till Fredrik" gav två poster (G1).
+- "Ta bort" på en övrig bonus gjorde tre separata turer utan transaktion. Ett dubbelklick eller ett nytt försök gav två motposter, alltså −2X (D4/C5).
+- Månadens underlag och summan vid Fastställ saknade den inloggade (chefens egen försäljning och övertäck), säljare som slutat och icke-säljare med en övrig bonus (D5).
+- En saknad `senior_age_min` föll tillbaka på 0, så alla fick 10,21 % i stället för 31,42 %, och Nav 2.0 kunde sätta ett slutdatum som skapade luckan (D8).
+
+**0215 `ta_bort_ovrig_bonus(p_aktor, p_post) → uuid`** (KÖRD 2026-10-23). Funktionen gör allt i en transaktion:
+- Den låser posten (`for update`) och prövar att det är en övrig bonus, att den inte redan är borttagen och inte själv är en motpost, och att månaden inte är fastställd.
+- Den skriver motposten med exakt de fält rutten skrev förut, och sedan kopplingen i `commission_entry_reversal`.
+- Felkoderna är `pv:ogiltig`, `pv:redan_borttagen` och `pv:faststalld`.
+- Funktionen är SECURITY DEFINER och bara service role får köra den. Vakten är grön.
+
+Rutten `bonus-bort` anropar funktionen och översätter felkoderna: ett andra anrop får "Bonusen är redan borttagen.", och ett okänt fel visas som det är. `bonus` går genom `medNyckel` (S03), så samma `X-Nav-Nyckel` ger samma svar och ingen ny post. Gamla Navs `laggOvrigBonus` är orörd.
+
+**Underlaget (D5).** `provisionforma.ts` lägger till varje `employee_id` med poster i månaden bland personerna utöver motorns (chefsvyn). Klientens `pvLaget` (`ndpv.js`) räknar summan och delarna på alla i `P.underlag[månad]`, i riktigt läge och chefsvy. Listan börjar fortfarande med säljarna.
+- I agentens scenario är oktober nu 6 300 kr, lika med main (förut 3 500 kr).
+- Med Zens riktiga data visar Perioder oktober 2 157 kr, september 136 479 kr och augusti 7 110 kr (förut 1 400, 81 820 och 4 250 kr, utan Zens egna belopp).
+- Augusti har nu också Vlado, som slutat och har två poster på netto 0.
+
+**Satserna (D8).** En saknad sats är null, aldrig 0. Regeln ligger i `satserUrRader` (ren, i `lonekostnad.ts`), och `hamtaSatser` använder den.
+- I `avgiftssats` gäller en nedsättning bara när varje sats den behöver finns. En åldersgräns eller ett tak på 0 räknas som saknat.
+- Saknas full avgift kastar `raknaLonekostnad` `SAKNAR_STANDARD`, och `raknaPeriod` svarar med felet innan de gamla raderna tas bort.
+- Varje saknad sats ger en rad i anmärkningarna (`saknadeSatser`), och raderna står också i svaret från Räkna.
+- Förhandsvisningen (`moduler/sats.js`, `satsGaller`/`satsAvgift`) räknar likadant.
+- Rutten `/nav2/satser` nekar med 400, innan något sparas, ett slutdatum på full avgift eller på åldersgränsen för äldre som ingen rad tar vid senast dagen efter. Det gäller ny rad, Skatteverkets rättelse och ändring av en befintlig rad (`kanSluta`, `BARANDE` i den nya rena filen `src/lib/nav2/satsforma.ts`).
+- Skatteverkets regel för unga, som slutar 2027-09-30 utan efterföljare, går igenom.
+
+**Prov.** Alla gröna:
+- `tests/nav2-provisionforma.mjs` (ny, 11): agentens scenario ger 6 300 kr.
+- `tests/nav2-satser.mjs` (ny, 18): `kanSluta`, och förhandsvisningen mot servern i 192 fall med saknade satser, 0 olika.
+- `tests/lonekostnad.mjs` (76): saknade satser och `satserUrRader`.
+- `tests/nav2-nyckel.mjs` (22): bonusen går genom `medNyckel`.
+- `provision`, `provision-motor`, `konsekvenser` och `provisionsunderlag`.
+- Agentens `lonekostnad-jmf.mjs` ger 20 000 av 20 000 lika mellan förhandsvisningen och servern.
+- 0215 torrkörd i en transaktion som rullades tillbaka (`delar/granskning/S06/torr-0215.mjs`, 12/12).
+
 ## 2026-10-23 · Granskningen S07: Avtal och Leads (F1-3, F2-1–F2-4, ingen migration)
 
 - **F1-3 · "Påskrivet digitalt"** svarade "Okänd handling" (rutten har ingen

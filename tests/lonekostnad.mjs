@@ -17,6 +17,7 @@ import {
   manaderIPerioden,
   raknaLonekostnad,
   kronor,
+  satserUrRader,
 } from "../src/lib/lonekostnad.ts";
 
 let fel = 0;
@@ -235,6 +236,49 @@ ok("tusenavgransare ar ett hart mellanslag", kronor(48320) === "48\u00a0320 kr",
 ok("ett belopp under tusen far ingen avgransare", kronor(950) === "950 kr");
 ok("ore avrundas bort — vyn visar hela kronor", kronor(48320.49) === "48\u00a0320 kr");
 ok("null blir tankstreck", kronor(null) === "—");
+
+rubrik("En saknad sats ger aldrig nedsatt avgift (granskningen S06, D8)");
+// hamtaSatser foll tillbaka pa `senior_age_min ?? 0`, och `alder >= 0` ar sant
+// for alla: utan raden for aldre fick varje anstalld 10,21 % i stallet for
+// 31,42 %. En saknad sats ar nu null, och null betyder "ingen nedsattning".
+{
+  const S8 = { standard: 31.42, reducerad: 10.21, reduceradTak: 25000, ungMin: 19, ungMax: 23, seniorMin: 67, tackningsgrad: null, franvarofaktor: {} };
+  const jan = (fodd) => ({ manadslon: 30000, fodelsear: fodd, periodStart: "2027-01-01", periodSlut: "2027-01-31", franvarominuter: {}, arbetadeMinuter: 1, intakt: null });
+  const sjuttio = 2027 - 70 - 1, fyrtio = 2027 - 40 - 1, tjugo = 2027 - 20 - 1;
+  const utan = { ...S8, seniorMin: null };
+  const a70 = raknaLonekostnad(jan(sjuttio), utan), a40 = raknaLonekostnad(jan(fyrtio), utan);
+  ok("senior_age_min saknas: 70-aringen far full avgift", a70.manader[0].procent === 31.42 && a70.manader[0].grund === "standard", JSON.stringify(a70.manader[0]));
+  ok("och 40-aringen far full avgift", a40.manader[0].procent === 31.42 && a40.manader[0].grund === "standard");
+  ok("med en anmarkning om den saknade aldersgransen", a70.anmarkningar.some((x) => /äldre/.test(x) && /saknas/.test(x)), a70.anmarkningar.join(" | "));
+  const m70 = raknaLonekostnad(jan(sjuttio), S8);
+  ok("med 67 far 70-aringen 10,21 %", m70.manader[0].procent === 10.21 && m70.manader[0].grund === "senior");
+  ok("och ingen anmarkning om saknade satser", !m70.anmarkningar.some((x) => /saknas för perioden/.test(x)), m70.anmarkningar.join(" | "));
+  ok("aldersgransen 0 ar ingen aldersgrans", avgiftssats(40, { ...S8, seniorMin: 0 }).grund === "standard");
+  const utanTak = raknaLonekostnad(jan(tjugo), { ...S8, reduceradTak: null });
+  ok("taket for unga saknas: 20-aringen far full avgift", utanTak.manader[0].procent === 31.42 && utanTak.manader[0].grund === "standard", JSON.stringify(utanTak.manader[0]));
+  ok("med en anmarkning om taket", utanTak.anmarkningar.some((x) => /tak/.test(x) && /saknas/.test(x)));
+  ok("med taket far 20-aringen den lagre satsen", raknaLonekostnad(jan(tjugo), S8).manader[0].grund === "ung");
+  const utanRed = raknaLonekostnad(jan(sjuttio), { ...S8, reducerad: null });
+  ok("den nedsatta avgiften saknas: 70-aringen far full avgift, inte 0 %", utanRed.manader[0].procent === 31.42, JSON.stringify(utanRed.manader[0]));
+  ok("ungdomsspannet saknas: 20-aringen far full avgift", raknaLonekostnad(jan(tjugo), { ...S8, ungMin: null, ungMax: null }).manader[0].grund === "standard");
+  let kastade = "";
+  try { raknaLonekostnad(jan(fyrtio), { ...S8, standard: null }); } catch (e) { kastade = e.message; }
+  ok("standardavgiften saknas: ingen berakning gors", /standard|arbetsgivaravgift/i.test(kastade), kastade || "raknade anda");
+}
+
+rubrik("Satserna ur cost_rate-raderna (hamtaSatser)");
+{
+  const r = (kind, value, valid_from = "2026-01-01", valid_to = null, applies_to = null) => ({ kind, applies_to, value, valid_from, valid_to });
+  const alla = [r("employer_fee_standard", 31.42), r("employer_fee_reduced", 10.21), r("employer_fee_reduced_cap", 25000), r("young_age_min", 19), r("young_age_max", 23), r("contribution_margin", 30)];
+  const s = satserUrRader(alla, "2027-01-01");
+  ok("en saknad aldersgrans for aldre blir null, inte 0", s.seniorMin === null, String(s.seniorMin));
+  ok("de som finns laser som forut", s.standard === 31.42 && s.reduceradTak === 25000 && s.ungMin === 19 && s.tackningsgrad === 30);
+  const slut = satserUrRader([...alla, r("senior_age_min", 67, "2026-01-01", "2026-12-31")], "2027-01-01");
+  ok("en aldersgrans som slutat galla 2026-12-31 saknas i januari", slut.seniorMin === null);
+  ok("men galler i december", satserUrRader([...alla, r("senior_age_min", 67, "2026-01-01", "2026-12-31")], "2026-12-15").seniorMin === 67);
+  const tom = satserUrRader([], "2027-01-01");
+  ok("utan rader ar allt null utom franvarofaktorn", tom.standard === null && tom.reducerad === null && tom.reduceradTak === null && tom.ungMin === null && tom.ungMax === null && tom.seniorMin === null && Object.keys(tom.franvarofaktor).length === 0);
+}
 
 console.log(fel === 0 ? "\n\x1b[32mAlla prov gick igenom.\x1b[0m" : `\n\x1b[31m${fel} prov föll.\x1b[0m`);
 process.exit(fel === 0 ? 0 : 1);
