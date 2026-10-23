@@ -5,6 +5,19 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-23 · Granskningen S08: Order sparar finans, fri order och rabatt rätt, makulering når Inkio, godkännandet en gång (0221 körd; vyn fortfarande i läsläge)
+
+**Vad.** Rättelserna av K4/D1, K5/D2, D3 och D6 ur granskningen, plus D16 och delar av D10/D23. `SKRIVLAGE.order` är orörd (S10 slår på, B7).
+- **K4 (D1):** `/nav2/order` kastade `finans_ritad`, `har_utkop_ritad`, `fri_order_ritad` och `fri_skal`. Finansen försvann på varje ny order, och säljarens fria order blev en paketorder. Nu står markörerna i `FALT` för skapa och båda rättelserna. Räknat med main:s `raknaFramProvision` genom rutten: paket 2 i 36 mån med finans ger säljarens övertäck 3 426 kr och chefens egen 14 424 kr (förut 5 202 och 21 528).
+- **K5 (D2), beslut B2:** "Kunden betalar per månad" på en paketorder skickas nu (`pris_ritad` + `monthly_amount`). Under listpris är det en rabatt: säljarens matrisprovision är oförändrad, medan ordervärdet, chefens egen försäljning, övertäcket och priset till Inkio räknas på det verkliga priset. Godkännandet fryser `monthly_amount` = rabattpriset (det `synk-server.ts` skickar till Inkio). Före godkännandet står rabatten i den nya kolumnen `sales_order.discounted_monthly_amount` (**0221 KÖRD**), eftersom ett månadsbelopp på en ogodkänd order betyder fri order. Ett pris över listpris nekas. Anteckningen får `Rabatt X kr/mån: skäl.` först (utkastets text). Paket 2 för 1 295 kr i 24 mån ger 31 080 kr. Utan ändrat pris, och i /order, är allt som förut.
+- **D3:** makuleringen skickade `"1"`, och actionen kräver `"on"`, så ingen order makulerades i Inkio från Nav 2.0 (också S14:s fynd). Nu `"on"`, och fältvakten prövar kryssfältens värde.
+- **D6:** `godkannOrder` uppdaterar med `.eq("status", <läst>)` och `.select("id")`. Två tryck läser båda `inskickad`, och den andra slutar med "Ordern är redan godkänd eller hann ändras" innan övertäck, eftersläpning och notis skrivs.
+- **D16:** "Spara som utkast" (`sparaUtkast` i rutten) prövar signeringsdatum, startdatum, matrisens löptider för paket, fritt belopp, utköp, angiven provision och tjänsterna med `skapaOrder`s regler. `skapa` och `utkast` går genom `medNyckel` (S03).
+- **D10, D23:** `FALT.rattaGodkand` har allt `redigeraOrder` läser, och en godkänd rättelse får skälet ur ändringarna (`o7Diff`). Knappen Rätta på en godkänd order ligger bakom `NDORD_RATTA_GODKAND = false` i `ndord.js`, eftersom den är ett nytt element (väntar på beställarens ja). "Förlänger inte" har utkastets Ångra igen (`ateruppta`; säljaren ångrar sitt eget utfall i tio minuter, chefen som förut).
+- `tjansterUrFormular` och `angivenProvision` är flyttade ordagrant ur `order/actions.ts` till nya `src/lib/orderregler.ts`, tillsammans med rabatt- och godkännandereglerna.
+
+**Prov:** `tests/nav2-orderfalt.mjs` (fälten klienten skickar mot `FALT` och actionen, kryssvärden, `ndOrdFalt` körd), `tests/nav2-order.mjs` (rabatten genom `raknaFramProvision` ur actions.ts, förhandsvisningen, D6, D16, Ångra). Orderproven oförändrat gröna. Liggaren: `~/nav2-utkast/delar/granskning/S08/progress.md`.
+
 ## 2026-10-23 · Granskningen S09 (GDPR): registerutdraget täcker alla nycklar, palettens frågor maskeras och får en dag i stället för klockslag (0223 körd), gallringssteget räknar (avstängt), 0107 rättad (inte körd), 0224 skriven (inte körd)
 
 Plan: `~/nav2-utkast/delar/granskning/GDPR.md`. Fynden F1-1, F1-5, F1-6, F1-11, C3, C4, C7, C16, F2-7, H12 och H16. Beslut B5 (lagringstider) gäller som rekommenderat. Ingenting raderas utan beställarens ja (B6), så gallringen committas avstängd.

@@ -44,6 +44,7 @@ import {
 import { gallandeUtkopssats, harUtkop, nettoEfterUtkop, utkopsprovision, type Utkopssats } from "../utkop.ts";
 import { finansavgift, gallandeFinanssats, nettoEfterFinans, type Finanssats } from "../finans.ts";
 import { bedomSaljsamtal } from "../samtal-order.ts";
+import { giltigRabatt } from "../orderregler.ts";
 
 /** Raden som `order-server.ts` lamnar ut (FALT), plus det 0080 lade till. */
 export type RaOrder = {
@@ -90,6 +91,8 @@ export type RaOrder = {
   proposed_commission_percent: number | null;
   /** 0085: skälet till en fri order. */
   free_order_reason?: string | null;
+  /** 0221 (granskningen S08, B2): rabatterat pris på en paketorder. */
+  discounted_monthly_amount?: number | null;
 };
 
 export type RaSamtal = {
@@ -315,6 +318,7 @@ export function forhandsprovision(
     | "financed"
     | "proposed_commission_amount"
     | "proposed_commission_percent"
+    | "discounted_monthly_amount"
   >,
   tjanster: Tjanst[],
   s: Satserna,
@@ -344,7 +348,9 @@ export function forhandsprovision(
   if (!friOrder && !s.paket.some((p) => p.id === o.package_id)) {
     return fall("Paketet finns inte. Välj ett paket eller kryssa i att ordern inte följer paketreglerna.");
   }
-  const varde = beraknatOrdervarde(o, s.paket, tjanster);
+  // Rabatterat paketpris (S08, B2): ordervärdet på det kunden betalar, matrisen orörd.
+  const rabatt = friOrder ? null : giltigRabatt(s.paket.find((p) => p.id === o.package_id)?.list_price ?? null, o.discounted_monthly_amount);
+  const varde = beraknatOrdervarde(rabatt === null ? o : { ...o, monthly_amount: rabatt }, s.paket, tjanster);
   if (varde === null) return fall("Ordervärdet går inte att räkna.");
 
   // 1c. Finansen
@@ -455,7 +461,8 @@ export function formaOrder(
   // Fri order: utanfor paketen. Godkand: vardet sattes for hand. Annars: ett angivet manadsbelopp.
   const fri = fryst ? o.order_value_source === "manual" : o.monthly_amount !== null;
   const listpris = s.paket.find((p) => p.id === o.package_id)?.list_price ?? null;
-  const man = o.monthly_amount ?? (fri ? null : listpris);
+  // En rabatterad paketorder visar det kunden betalar (S08, B2); godkänd står den frysta.
+  const man = o.monthly_amount ?? (fri ? null : giltigRabatt(listpris, o.discounted_monthly_amount) ?? listpris);
 
   const varde = fryst ? o.order_value : fh!.varde;
   const prov = fryst ? o.commission_amount : fh!.provision;

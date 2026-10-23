@@ -26806,10 +26806,17 @@ function ndOrdFalt(n){
   if (n.addon) f.is_addon = 'on';
   if (n.finans) f.finans = 'on';
   if (n.utkopOn){ f.har_utkop = 'on'; f.buyout_amount = String(ndTal(n.utkop)); }
-  if (fri){ f.fri_order = 'on'; f.monthly_amount = String(man); f.fri_skal = n.friSkal.trim(); f.provision_form = n.friTyp === '%' ? 'procent' : 'belopp'; f[n.friTyp === '%' ? 'commission_percent' : 'commission_amount'] = String(ndTal(n.friProv)); }
+  if (fri){ f.fri_order = 'on'; f.monthly_amount = String(man); f.fri_skal = n.friSkal.trim(); f.provision_form = n.friTyp === '%' ? 'procent' : 'belopp'; if (String(n.friProv ?? '').trim()) f[n.friTyp === '%' ? 'commission_percent' : 'commission_amount'] = String(ndTal(n.friProv)); }
+  // Paketorder (granskningen S08, beslut B2): "Kunden betalar per månad" fryses. Under listpris är det en rabatt,
+  // med skälet ur snabbvalen; servern skriver "Rabatt X kr/mån: skäl." i anteckningen som utkastets ordSkapa.
+  else { f.pris_ritad = '1'; if (ndTal(n.man) > 0) f.monthly_amount = String(ndTal(n.man)); if (n.o7rabatt) f.rabatt_skal = n.o7rabatt; }
   if (S.ndForlang) f.forlanger_id = S.ndForlang;
   return f;
 }
+// Byts paketet medan priset står på det förra paketets listpris följer priset med till det nya
+// listpriset; ett eget pris står kvar (och syns som "under listpris"). Före utkastets egen hanterare.
+document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-onp]'); const n = S.ordNy; if (!b || !ndO() || !n) return;
+  const ny = +b.dataset.onp, fore = n.p; if (ny && fore && ny !== fore && OPAKET[fore] && OPAKET[ny] && ndTal(n.man) === OPAKET[fore].pris) n.man = String(OPAKET[ny].pris); }, true);
 // Avtalet i formuläret: utkastet sparar namnet, navet behöver filen.
 let ndOrdAvtalFil = null;
 document.addEventListener('change', e => { if (ndO() && S.view === 'order' && S.ordNy && e.target.dataset && e.target.dataset.onfil !== undefined) ndOrdAvtalFil = e.target.files && e.target.files[0] || null; }, true);
@@ -26827,6 +26834,8 @@ async function ndOrdSkicka(utkast){
     if (ratta){ const r = await ndOrdPost('bilaga-registrera', {id:ratta.id, fil:p.fileId, filnamn:ndOrdAvtalFil.name, store:p.store}, {ladda:false, tyst:true}); if (!r.ok){ ndSkrivFel(r, 'Avtalet gick inte att spara.'); return; } }
     else { falt.avtal_fil_id = p.fileId; falt.avtal_store = p.store; falt.avtal_filnamn = ndOrdAvtalFil.name; }
   }
+  // En godkänd order (D10): redigeraOrder kräver ett skäl. Formuläret har inget skälfält, så ändringarna är skälet.
+  if (ratta && ['signerad', 'betald'].includes(ratta.st)){ const ch = o7Diff(ratta, n); falt.reason = `Rättad i Nav 2.0${ch.length ? ': ' + ch.join(', ') : ''}.`; }
   let s;
   if (ratta){
     s = await ndOrdPost('ratta', {id:ratta.id, falt}, {ladda:false, tyst:true});
@@ -26839,6 +26848,12 @@ async function ndOrdSkicka(utkast){
   try { localStorage.removeItem('nav2-ordutkast'); } catch(_){}
   toast(s.ok); S.ordNy = null; ndOrdAvtalFil = null; S.ndForlang = null; ndOrdMinns(); setTimeout(() => location.reload(), 700);
 }
+// D10 (granskningen S08): Rätta på en godkänd order, för säljchef, VD och ekonomi. Rutten, formuläret och skälet
+// är klara; knappen är ett nytt element i kundkortet och visas först när beställaren sagt ja (sätt true).
+const NDORD_RATTA_GODKAND = false;
+const _ndKkAtg = kkAtg;
+kkAtg = function(o){ const a = _ndKkAtg(o); if (!NDORD_RATTA_GODKAND || !ndO() || S.role !== 'chef' || !['signerad', 'betald'].includes(o.st)) return a;
+  const i = a.findIndex(x => x.includes('data-ordmak=')); a.splice(i < 0 ? a.length : i, 0, `<button class="btn btn-s btn-sm" data-ordratta="${o.nr}">Rätta</button>`); return a; };
 const _ndO7Godkann = o7Godkann;
 o7Godkann = function(nr){ if (!ndO()) return _ndO7Godkann(nr); const o = ORDER.find(x => x.nr === nr); if (o) ndOrdPost('godkann', {id:o.id}); };
 // "Ny sedan du tittade": navet minns när listan senast öppnades (0083).
@@ -26869,7 +26884,10 @@ document.addEventListener('click', e => {
   if (ds.ordraderaok){ stopp(); const t = text('ordRad'); if (!t){ toast('Skriv varför ordern raderas. Skälet står i loggen.'); return; } ndOrdPost('radera', {id:nr('ordraderaok').id, reason:t}); return; }
   if (ds.kkkoppla || ds.ordkopplasamtal){ stopp(); const v = (ds.kkkoppla || ds.ordkopplasamtal).split('|'); const o = ORDER.find(x => x.nr === +v[0]); if (o) ndOrdPost('koppla', {id:o.id, samtal:v[1]}); return; }
   if (ds.o7loss){ stopp(); ndOrdPost('lossa', {samtal:ds.o7loss}); return; }
-  if (ds.kkfornejok){ stopp(); const t = text('kkFn'); if (!t){ toast('Skriv varför. Det hjälper nästa gång.'); return; } ndOrdPost('avsluta-avtal', {id:nr('kkfornejok').id, reason:t}); return; }
+  if (ds.kkfornejok){ stopp(); const t = text('kkFn'); if (!t){ toast('Skriv varför. Det hjälper nästa gång.'); return; } const x = nr('kkfornejok');
+    // Som i utkastet: rutan stängs, raden visar skälet, och kvittot har Ångra (D23: `ateruppta`).
+    ndOrdPost('avsluta-avtal', {id:x.id, reason:t}, {ladda:false, tyst:true}).then(s => { if (!s.ok){ ndSkrivFel(s); return; } x.fornyAvslag = t; S.kkForny = null; render();
+      toast(s.ok, () => ndOrdPost('ateruppta', {id:x.id}, {ladda:false}).then(r => { if (r.ok){ x.fornyAvslag = null; render(); } })); }); return; }
   if (ds.kkinkioigen){ stopp(); ndOrdPost('inkio-igen', {id:nr('kkinkioigen').id}); return; }
   if (ds.ordforny){ const o = ndOrdFor(b); S.ndForlang = o ? o.id : null; return; }
   if (ds.onskicka !== undefined || ds.o7entill !== undefined){ stopp(); ndOrdSkicka(false); return; }

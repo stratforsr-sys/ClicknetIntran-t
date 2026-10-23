@@ -16,6 +16,15 @@ import { getCurrentUser, hasRole, type CurrentUser } from "@/lib/auth";
 import { svensktDatum } from "@/lib/klocka";
 import { kronor, manadsnamn, manadsnyckel, tolkaBelopp } from "@/lib/provision";
 import { rattelseposter, rorPengar } from "@/lib/rattelse";
+import {
+  angivenProvision,
+  giltigRabatt,
+  godkannandeSkrevs,
+  paketManadsbelopp,
+  rabattAnteckning,
+  rabattUrFormular,
+  tjansterUrFormular,
+} from "@/lib/orderregler";
 import { forberedUppladdning, registreraFil, taBortInnehall } from "@/lib/filer-server";
 import { las, taBort } from "@/lib/lagring-server";
 import { tolkaLager } from "@/lib/lagring";
@@ -129,90 +138,6 @@ function utkopUrFormular(form: FormData): { utkop: number | null } | { fel: stri
  */
 export type Orderstate = { fel?: string; ok?: string; orderId?: string };
 
-/**
- * Tillaggstjansterna, ur formularet.
- *
- * ===========================================================================
- * LISTAN KOMMER SOM JSON I ETT FALT, och det ar ett val.
- *
- * Antalet tjanster ar obestamt — det ar hela poangen med raderna — och
- * indexerade faltnamn (`tjanst_namn_0`, `tjanst_namn_1`) tvingar servern att
- * gissa var listan tar slut genom att rakna uppat tills ett falt saknas. En
- * bortglomd rad mitt i hade da tyst kapat resten.
- *
- * DEN HAR FUNKTIONEN AR ENDA STALLET JSON:EN TOLKAS, och den litar inte pa
- * nagot i den: talen ar pengar som gar rakt in i provisionsunderlaget genom
- * `affarensVarde`. Varje falt provas, och ett fel blir en mening till
- * anvandaren i stallet for en rad i databasen.
- * ===========================================================================
- */
-function tjansterUrFormular(form: FormData): { tjanster: Tjanst[] } | { fel: string } {
-  const text = String(form.get("tjanster") ?? "").trim();
-  if (!text) return { tjanster: [] };
-
-  let ratt: unknown;
-  try {
-    ratt = JSON.parse(text);
-  } catch {
-    return { fel: "Tjänsterna på ordern gick inte att läsa. Ladda om sidan och försök igen." };
-  }
-  if (!Array.isArray(ratt)) {
-    return { fel: "Tjänsterna på ordern gick inte att läsa. Ladda om sidan och försök igen." };
-  }
-
-  // Tjugo ar ingen asikt om hur manga tjanster en affar kan ha, utan en
-  // yttre grans: en klient som skickar tusen rader ska motas av en mening och
-  // inte av tusen inserts.
-  if (ratt.length > 20) return { fel: "Högst tjugo tjänster per order." };
-
-  const tjanster: Tjanst[] = [];
-
-  for (const rad of ratt as Record<string, unknown>[]) {
-    const namn = String(rad.name ?? "").trim();
-    if (!namn) return { fel: "En tjänst saknar namn." };
-
-    const fakturering = String(rad.billing ?? "");
-    if (fakturering !== "engang" && fakturering !== "manad") {
-      return { fel: `Välj engångsavgift eller månadsavgift för "${namn}".` };
-    }
-
-    const belopp =
-      typeof rad.amount === "number" ? rad.amount : tolkaBelopp(String(rad.amount ?? ""));
-    if (belopp === null || belopp <= 0) {
-      return { fel: `Beloppet för "${namn}" gick inte att tolka.` };
-    }
-
-    // EN ENGANGSAVGIFT HAR ALDRIG EGEN BINDNINGSTID. Den kan inte loepa ut, och
-    // `tjanst_engang_utan_bindning` i 0068 nekar raden — men beskedet ska komma
-    // harifran som en mening, inte som ett villkorsnamn ur databasen.
-    const egenBindning = fakturering === "manad" && rad.follows_order === false;
-
-    let manader: number | null = null;
-    let start: string | null = null;
-
-    if (egenBindning) {
-      manader = Number(rad.term_months);
-      start = String(rad.starts_on ?? "");
-      if (!giltigBindningstid(manader)) {
-        return { fel: `Bindningstiden för "${namn}" ska vara 1–60 hela månader.` };
-      }
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) {
-        return { fel: `Startdatumet för "${namn}" saknas.` };
-      }
-    }
-
-    tjanster.push({
-      name: namn,
-      billing: fakturering,
-      amount: belopp,
-      follows_order: fakturering === "manad" && !egenBindning,
-      term_months: manader,
-      starts_on: start,
-    });
-  }
-
-  return { tjanster };
-}
 
 /**
  * Skriver om orderns tjansterader till precis den lista som skickades in.
@@ -367,6 +292,8 @@ type Orderrad_skrivning = {
   /** 0078. Provisionen som skrevs in nar en fri order skickades in. */
   proposed_commission_amount: number | string | null;
   proposed_commission_percent: number | string | null;
+  /** 0221 (S08, B2). Rabatterat pris pa en paketorder, annars null. */
+  discounted_monthly_amount: number | string | null;
 };
 
 async function hamtaRad(id: string): Promise<Orderrad_skrivning | null> {
@@ -383,48 +310,13 @@ async function hamtaRad(id: string): Promise<Orderrad_skrivning | null> {
         " monthly_amount, commission_amount, buyout_amount, financed," +
         // 0078. Godkannandet laser dem nar dess eget formular inte bar nagon
         // provision — se `medAngivenProvision`.
-        " proposed_commission_amount, proposed_commission_percent",
+        " proposed_commission_amount, proposed_commission_percent, discounted_monthly_amount",
     )
     .eq("id", id)
     .maybeSingle();
   return (data as unknown as Orderrad_skrivning | null) ?? null;
 }
 
-// =============================================================================
-// PROVISIONEN SOM SKREVS IN PA EN FRI ORDER SOM SKICKAS IN (0078).
-//
-// Beställaren 2026-10-09: en fri order pa chefen sjalv, 20 % i faltet, "Godkänn
-// direkt" inte kryssat — och vid godkannandet blev det 40 %. `skapaOrder` raknade
-// bara provisionen nar ordern godkandes i samma steg, sa talet i faltet kastades,
-// och godkannandet tolkade det tomma som "rakna fram det".
-//
-// Nu sparas det som skrevs i `proposed_commission_*`, och godkannandet lagger
-// tillbaka det i formularet nar formularet inte sjalvt bar nagon provision. Det
-// ar samma tolkning som `raknaFramProvision` gor — talet gar alltsa genom
-// precis samma kontroller som om det skrivits vid godkannandet.
-// =============================================================================
-function angivenProvision(
-  form: FormData,
-): { belopp: number | null; procent: number | null } | { fel: string } {
-  const formen = String(form.get("provision_form") ?? "").trim();
-  if (formen === "procent") {
-    const text = String(form.get("commission_percent") ?? "").trim();
-    if (!text) return { belopp: null, procent: null };
-    const procent = tolkaBelopp(text.replace(/%$/, ""));
-    if (procent === null) return { fel: "Procentsatsen gick inte att tolka." };
-    if (procent < 0 || procent > 100) return { fel: "Procentsatsen ska vara mellan 0 och 100." };
-    return { belopp: null, procent };
-  }
-  // Utan valjaren raknas ingenting som handsatt — samma regel som i
-  // `raknaFramProvision`.
-  if (formen === "") return { belopp: null, procent: null };
-  const text = String(form.get("commission_amount") ?? "").trim();
-  if (!text) return { belopp: null, procent: null };
-  const belopp = tolkaBelopp(text);
-  if (belopp === null) return { fel: "Provisionsbeloppet gick inte att tolka." };
-  if (belopp < 0) return { fel: "Provisionen kan inte vara negativ." };
-  return { belopp, procent: null };
-}
 
 /**
  * Formularet godkannandet raknar pa. Bar det en egen provision (valjaren i
@@ -448,6 +340,15 @@ function medAngivenProvision(form: FormData, rad: Orderrad_skrivning): FormData 
     kopia.set("commission_amount", String(Number(belopp)));
   }
   return kopia;
+}
+
+/**
+ * Paketets listpris i dag, eller null. Bara rabatten (S08) behöver det före
+ * `raknaFramProvision`, som läser samma rad (också ett inaktivt paket).
+ */
+async function listprisFor(paket: number): Promise<number | null> {
+  const { data } = await supabaseAdmin().from("sales_package").select("list_price").eq("id", paket).maybeSingle();
+  return data ? Number(data.list_price) : null;
 }
 
 async function logga(
@@ -678,6 +579,17 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
       return { fel: "Skriv vad kunden betalar per månad." };
     }
 
+    // RABATTERAT PAKETPRIS (granskningen S08, beslut B2). Bara ett formulär som
+    // ritade priset (`pris_ritad`, Nav 2.0) kan ge det; /order beter sig som förut.
+    let rabatt: number | null = null;
+    let listpris: number | null = null;
+    if (!friOrder && form.has("pris_ritad")) {
+      listpris = await listprisFor(paket);
+      const val = rabattUrFormular(form, listpris);
+      if (val && "fel" in val) return { fel: val.fel };
+      rabatt = val?.rabatt ?? null;
+    }
+
     const signerad = String(form.get("signed_on") ?? "").trim();
     if (!giltigtSigneringsdatum(signerad)) {
       return { fel: "Signeringsdatumet är ogiltigt eller ligger i framtiden." };
@@ -707,7 +619,11 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
     const tjansteval = tjansterUrFormular(form);
     if ("fel" in tjansteval) return { fel: tjansteval.fel };
 
-    const note = String(form.get("note") ?? "").trim() || null;
+    // Rabatten står först i anteckningen, som utkastets ordSkapa skrev den: chefen ser den vid godkännandet.
+    const note =
+      rabatt !== null && listpris !== null
+        ? rabattAnteckning(String(form.get("note") ?? ""), listpris, rabatt, String(form.get("rabatt_skal") ?? ""))
+        : String(form.get("note") ?? "").trim() || null;
     const tillagg = form.get("is_addon") === "on";
 
     // Chefen kan godkanna i samma steg. Saljaren skickar in.
@@ -750,6 +666,8 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
       proposed_commission_percent: angiven?.procent ?? null,
       // 0085: skälet till en fri order, när det skrivits.
       ...(friOrder && friSkal ? { free_order_reason: friSkal } : {}),
+      // 0221: rabatterat paketpris. Bara när det finns, så att en vanlig order skrivs som förut.
+      ...(rabatt !== null ? { discounted_monthly_amount: rabatt } : {}),
       note,
       status: godkannDirekt ? "signerad" : "inskickad",
       created_by: user.employee!.id,
@@ -765,7 +683,7 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
         saljare,
         form,
         utkopsval.utkop,
-        { manadsbelopp, tjanster: tjansteval.tjanster, finans },
+        { manadsbelopp, tjanster: tjansteval.tjanster, finans, rabatt },
       );
       if (!provision.klar) return { fel: provision.fel };
 
@@ -919,6 +837,7 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
       starts_on: startdatum,
       ends_on: avtalsslut(startdatum, loptid),
       monthly_amount: manadsbelopp,
+      ...(rabatt !== null ? { discounted_monthly_amount: rabatt } : {}),
       tjanster: tjansteval.tjanster.length,
       // UR `slutligt`, inte `insats`: de frysta falten lyfts ur `insats` ovan,
       // sa loggen bar fram till 2026-10-09 null for bada aven pa ett godkannande.
@@ -1128,7 +1047,14 @@ async function raknaFramProvision(
    * fallback — och en glomd anropare ska falla i bygget, inte tyst rakna en
    * finansaffar som om finanspartnern inte tog nagot.
    */
-  affaren: { manadsbelopp: number | null; tjanster: Tjanst[]; finans: boolean },
+  /*
+   * `rabatt` (granskningen S08, beslut B2): vad kunden betalar per manad pa en
+   * PAKETORDER under listpris. Matrisen ror den inte; ordervardet, chefens
+   * sats och overtacket raknas pa den, och den fryses som `monthly_amount`.
+   * Saknas den, eller ryms den inte under listpriset, galler listpriset som
+   * forut. En fri order (`manadsbelopp`) bryr sig inte om den.
+   */
+  affaren: { manadsbelopp: number | null; tjanster: Tjanst[]; finans: boolean; rabatt?: number | null },
 ): Promise<Framrakning> {
   const db = supabaseAdmin();
 
@@ -1221,7 +1147,7 @@ async function raknaFramProvision(
         fel: "Paketet finns inte. Välj ett paket eller kryssa i att ordern inte följer paketreglerna.",
       };
     }
-    manadsbelopp = Number(paketrad.list_price);
+    manadsbelopp = paketManadsbelopp(Number(paketrad.list_price), affaren.rabatt);
     vardekalla = "package";
   }
 
@@ -1619,6 +1545,9 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
     // det.
     // ===========================================================================
     const manadsbeloppPaOrdern = rad.monthly_amount == null ? null : Number(rad.monthly_amount);
+    // RABATTEN (0221) KOMMER OCKSÅ UR ORDERN. Bara på en paketorder.
+    const rabattPaOrdern =
+      manadsbeloppPaOrdern === null && rad.discounted_monthly_amount != null ? Number(rad.discounted_monthly_amount) : null;
 
     const provision = await raknaFramProvision(
       rad.package_id,
@@ -1635,6 +1564,7 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
         tjanster: await tjansterPaOrder(id),
         // FINANSVALET KOMMER UR ORDERN, av samma skal som utkopet ovan.
         finans: rad.financed === true,
+        rabatt: rabattPaOrdern,
       },
     );
     if (!provision.klar) return { fel: provision.fel };
@@ -1657,8 +1587,18 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
     // precis den tysta forlusten som rattas har. Se `bokforEfterslapning`.
     const forSent = harStangdPeriod(rad.signed_on, await stangdaManader());
 
-    const { error } = await supabaseAdmin().from("sales_order").update(andring).eq("id", id);
+    // EN GÅNG (granskningen S08, D6). Statusen som lästes står i villkoret, och
+    // raden läses tillbaka. Två tryck på Godkänn läser båda `inskickad`; den
+    // andra uppdateringen träffar ingen rad och slutar här, innan övertäck,
+    // eftersläpning och notis skrivs en gång till.
+    const { data: skrivet, error } = await supabaseAdmin()
+      .from("sales_order")
+      .update(andring)
+      .eq("id", id)
+      .eq("status", rad.status)
+      .select("id");
     if (error) return { fel: error.message };
+    if (!godkannandeSkrevs(skrivet)) return { fel: "Ordern är redan godkänd eller hann ändras. Ladda om sidan." };
 
     await logga(user, "sales_order.approved", id, {
       salesperson_id: rad.salesperson_id,
@@ -1777,7 +1717,8 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
         "id, status, salesperson_id, company_name, org_number, contact_name, contact_phone," +
           " contact_email, package_id, term_months, signed_on, starts_on, period_month," +
           " is_addon, note, monthly_amount, commission_amount, commission_source," +
-          " order_value, order_value_source, buyout_amount, financed, finance_amount, created_by",
+          " order_value, order_value_source, buyout_amount, financed, finance_amount, created_by," +
+          " discounted_monthly_amount",
       )
       .eq("id", id)
       .maybeSingle();
@@ -2011,10 +1952,22 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
     // ovan, med samma dolda falt (`finans_ritad`).
     const finans = finansUrFormular(form) ?? rad.financed === true;
 
+    // RABATTEN (S08, B2): ett formulär som ritade priset avgör, annars står orderns kvar.
+    let rabatt: number | null = null;
+    if (!friOrder) {
+      const listpris = await listprisFor(paket);
+      const val = rabattUrFormular(form, listpris);
+      if (val && "fel" in val) return { fel: val.fel };
+      rabatt = val
+        ? val.rabatt
+        : giltigRabatt(listpris, rad.discounted_monthly_amount == null ? null : Number(rad.discounted_monthly_amount));
+    }
+
     const nya = await raknaFramProvision(paket, loptid, signerad, saljare, form, utkopet, {
       manadsbelopp: friOrder ? manadsbelopp : null,
       tjanster: await tjansterPaOrder(id),
       finans,
+      rabatt,
     });
     if (!nya.klar) return { fel: nya.fel };
 
@@ -2122,6 +2075,7 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
         starts_on: startdatum,
         is_addon: form.get("is_addon") === "on",
         note,
+        discounted_monthly_amount: rabatt,
         // `nya.satt` bar `buyout_amount` och skrivs sist, sa det ar rakningens
         // svar som star pa ordern och inte formularets rader — de tva ar samma
         // tal, men bara ett av dem har gatt genom kontrollerna.
@@ -2160,6 +2114,7 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
         financed: rad.financed === true,
         finance_amount: rad.finance_amount == null ? null : Number(rad.finance_amount),
         monthly_amount: rad.monthly_amount == null ? null : Number(rad.monthly_amount),
+        discounted_monthly_amount: rad.discounted_monthly_amount == null ? null : Number(rad.discounted_monthly_amount),
         package_id: rad.package_id,
         term_months: rad.term_months,
         signed_on: rad.signed_on,
@@ -2174,6 +2129,7 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
         financed: nya.satt.financed,
         finance_amount: nya.satt.finance_amount,
         monthly_amount: nya.satt.monthly_amount,
+        discounted_monthly_amount: rabatt,
         package_id: paket,
         term_months: loptid,
         signed_on: signerad,
@@ -2618,7 +2574,7 @@ export async function redigeraOgodkand(_prev: Orderstate, form: FormData): Promi
     const { data: raddata } = await db
       .from("sales_order")
       .select(
-        "id, status, salesperson_id, company_name, org_number, contact_name, contact_phone, contact_email, customer_street, customer_postal_code, customer_city, package_id, term_months, signed_on, starts_on, is_addon, monthly_amount, buyout_amount, financed, note, proposed_commission_amount, proposed_commission_percent",
+        "id, status, salesperson_id, company_name, org_number, contact_name, contact_phone, contact_email, customer_street, customer_postal_code, customer_city, package_id, term_months, signed_on, starts_on, is_addon, monthly_amount, buyout_amount, financed, note, proposed_commission_amount, proposed_commission_percent, discounted_monthly_amount",
       )
       .eq("id", id)
       .maybeSingle();
@@ -2686,6 +2642,26 @@ export async function redigeraOgodkand(_prev: Orderstate, form: FormData): Promi
       return { fel: "Välj en bindningstid." };
     }
 
+    // RABATTERAT PAKETPRIS (S08, B2). Ett formulär som ritade priset (`pris_ritad`)
+    // avgör; annars står orderns kvar. En fri order har ingen.
+    let rabatt: number | null = null;
+    let listpris: number | null = null;
+    let rabattRitad = false;
+    if (!friOrder) {
+      listpris = await listprisFor(paket);
+      const val = rabattUrFormular(form, listpris);
+      if (val && "fel" in val) return { fel: val.fel };
+      rabattRitad = val !== null;
+      rabatt = val
+        ? val.rabatt
+        : giltigRabatt(listpris, rad.discounted_monthly_amount == null ? null : Number(rad.discounted_monthly_amount));
+    }
+    const noteText = String(form.get("note") ?? "").trim() || null;
+    const anteckning =
+      rabattRitad && listpris !== null && (rabatt !== null || rad.discounted_monthly_amount != null)
+        ? rabattAnteckning(noteText, listpris, rabatt, String(form.get("rabatt_skal") ?? ""))
+        : noteText;
+
     const signerad = String(form.get("signed_on") ?? "").trim();
     if (!giltigtSigneringsdatum(signerad)) {
       return { fel: "Signeringsdatumet är ogiltigt eller ligger i framtiden." };
@@ -2742,7 +2718,8 @@ export async function redigeraOgodkand(_prev: Orderstate, form: FormData): Promi
       is_addon: form.get("is_addon") === "on",
       buyout_amount: utkop,
       financed: finans,
-      note: String(form.get("note") ?? "").trim() || null,
+      note: anteckning,
+      discounted_monthly_amount: rabatt,
       ...(angiven
         ? {
             proposed_commission_amount: angiven.belopp,
@@ -2776,6 +2753,7 @@ export async function redigeraOgodkand(_prev: Orderstate, form: FormData): Promi
       "buyout_amount",
       "proposed_commission_amount",
       "proposed_commission_percent",
+      "discounted_monthly_amount",
     ]);
     const lika = (k: string, a: unknown, b: unknown) =>
       TAL.has(k) && a != null && b != null ? Number(a) === Number(b) : String(a ?? "") === String(b ?? "");

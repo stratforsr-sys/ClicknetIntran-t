@@ -123,7 +123,7 @@ export async function byggOrder(supabase: SupabaseClient, user: CurrentUser): Pr
       hamtaFinanssatser(),
       hamtaPerioder(manadFore(manad, 11)),
       // 0080 och vem som godkant och makulerat — `FALT` i order-server.ts bar dem inte.
-      supabase.from("sales_order").select("id, order_number, approved_by, cancelled_by, free_order_reason"),
+      supabase.from("sales_order").select("id, order_number, approved_by, cancelled_by, free_order_reason, discounted_monthly_amount"),
       supabase.from("employee").select("id, first_name, last_name, status, employee_role!employee_role_employee_id_fkey(role)"),
       supabase
         .from("phone_call")
@@ -178,6 +178,8 @@ export async function byggOrder(supabase: SupabaseClient, user: CurrentUser): Pr
       approved_by: (x?.approved_by as string | null) ?? null,
       cancelled_by: (x?.cancelled_by as string | null) ?? null,
       free_order_reason: (x?.free_order_reason as string | null) ?? null,
+      // 0221 (S08): numeric kommer som sträng.
+      discounted_monthly_amount: x?.discounted_monthly_amount == null ? null : Number(x.discounted_monthly_amount),
     } as unknown as RaOrder;
     const { order: ut, samtal: s } = formaOrder(rad, {
       satser: satserna,
