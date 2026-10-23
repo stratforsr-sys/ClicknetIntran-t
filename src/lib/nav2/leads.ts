@@ -9,7 +9,7 @@ import { notifiera } from "@/lib/notishandelse-server";
 import { skrivHandelse } from "@/lib/handelselogg-server";
 import { leadTitel, nyckel, OPPNA } from "@/lib/leads";
 import { SKRIVLAGE } from "./skrivlage";
-import { forslag, median, svarstid, trettioDagar } from "./leadsforma";
+import { forslag, median, svarstid, tilldelaVillkorat, trettioDagar } from "./leadsforma";
 
 /**
  * Nav 2.0: Leads i utkastets former (moduler/ld.js).
@@ -342,24 +342,41 @@ export async function fordelaNyttLead(leadId: string): Promise<void> {
     if (!(inst?.value as { pa?: boolean } | null)?.pa) return;
     const [forst] = await paPlatsNu();
     if (!forst) return;
-    const { data: rad } = await db.from("lead").select("id, status, assigned_to, assigned_at, company, name, email, phone").eq("id", leadId).maybeSingle();
-    const l = rad as unknown as { id: string; status: string; assigned_to: string | null; assigned_at: string | null; company: string | null; name: string | null; email: string | null; phone: string | null } | null;
+    type Rad = { id: string; status: string; assigned_to: string | null; assigned_at: string | null; company: string | null; name: string | null; email: string | null; phone: string | null };
+    const las = async (id: string) => {
+      const { data: rad } = await db.from("lead").select("id, status, assigned_to, assigned_at, company, name, email, phone").eq("id", id).maybeSingle();
+      return (rad as unknown as Rad | null) ?? null;
+    };
+    const l = await las(leadId);
     if (!l || l.assigned_to || l.status !== "new") return;
-    const nar = new Date().toISOString();
-    const { error } = await db.from("lead").update({ assigned_to: forst.id, assigned_at: nar }).eq("id", leadId).is("assigned_to", null);
-    if (error) return;
-    await db.from("lead_event").insert({ lead_id: leadId, actor_id: null, kind: "tilldelad", till: forst.id, fore: { assigned_to: null, assigned_at: null } });
-    await skrivHandelse({ actorId: null, action: "lead.assigned", objectType: "lead", objectId: leadId, meta: { till: forst.id, fran: null, automatiskt: true } });
-    await notifiera({
-      till: forst.id,
-      av: null,
-      kalla: "lead-tilldelad",
-      typ: "lead",
-      rubrik: `Lead till dig: ${leadTitel(l)}`,
-      detalj: [l.company ? l.name : null, l.phone ?? l.email].filter(Boolean).join(" · "),
-      href: `/leads/${leadId}`,
-      objekt: { typ: "lead", id: leadId },
-    });
+    // Villkorad (granskningen F2-2): har en fördelare hunnit före skrivs inget steg, ingen logg och ingen notis.
+    await tilldelaVillkorat<Rad>(
+      {
+        las,
+        uppdatera: async (id, till) => {
+          const { data, error } = await db.from("lead").update({ assigned_to: till, assigned_at: new Date().toISOString() }).eq("id", id).is("assigned_to", null).eq("status", "new").select("id");
+          return error ? 0 : (data ?? []).length;
+        },
+        namn: async () => null,
+        efter: async (rad) => {
+          await db.from("lead_event").insert({ lead_id: leadId, actor_id: null, kind: "tilldelad", till: forst.id, fore: { assigned_to: null, assigned_at: null } });
+          await skrivHandelse({ actorId: null, action: "lead.assigned", objectType: "lead", objectId: leadId, meta: { till: forst.id, fran: null, automatiskt: true } });
+          await notifiera({
+            till: forst.id,
+            av: null,
+            kalla: "lead-tilldelad",
+            typ: "lead",
+            rubrik: `Lead till dig: ${leadTitel(rad)}`,
+            detalj: [rad.company ? rad.name : null, rad.phone ?? rad.email].filter(Boolean).join(" · "),
+            href: `/leads/${leadId}`,
+            objekt: { typ: "lead", id: leadId },
+          });
+        },
+      },
+      leadId,
+      forst.id,
+      null,
+    );
   } catch {
     // Leadet ligger kvar hos fördelarna, som utan automatiken.
   }

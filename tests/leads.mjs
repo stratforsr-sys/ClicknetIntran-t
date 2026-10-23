@@ -25,6 +25,8 @@ import {
   STATUS_TON,
   OPPNA,
 } from "../src/lib/leads.ts";
+import { moteNyss, nyTilldelning, tilldelaVillkorat } from "../src/lib/nav2/leadsforma.ts";
+import { readFileSync } from "node:fs";
 
 let fel = 0;
 const ok = (namn, villkor, extra = "") => {
@@ -201,6 +203,106 @@ console.log("\n\x1b[1mStatusarna\x1b[0m");
   ok("alla har en etikett", STATUSAR.every((s) => typeof STATUS_ETIKETT[s] === "string"));
   ok("alla har en ton", STATUSAR.every((s) => typeof STATUS_TON[s] === "string"));
   ok("öppna är en delmängd", OPPNA.every((s) => STATUSAR.includes(s)));
+}
+
+console.log("\n\x1b[1mNav 2.0: ett steg på ett otilldelat lead (granskningen F2-1)\x1b[0m");
+{
+  const CHEF = "11111111-1111-4111-8111-111111111111", ELIN = "22222222-2222-4222-8222-222222222222";
+  const NU = "2026-10-23T09:00:00.000Z";
+  const t = nyTilldelning({ assigned_to: null }, CHEF, true, NU);
+  ok("fördelaren som sparar ett utfall får leadet", !!t && t.assigned_to === CHEF);
+  ok("och tiden hen fick det", !!t && t.assigned_at === NU);
+  ok("ett lead som redan har säljare byter inte säljare", nyTilldelning({ assigned_to: ELIN }, CHEF, true, NU) === null);
+  ok("säljarens eget lead ändras inte", nyTilldelning({ assigned_to: ELIN }, ELIN, false, NU) === null);
+  ok("den som inte fördelar får inget otilldelat lead", nyTilldelning({ assigned_to: null }, ELIN, false, NU) === null);
+}
+
+console.log("\n\x1b[1mNav 2.0: ett lead ges till en säljare (granskningen F2-2)\x1b[0m");
+{
+  const LID = "33333333-3333-4333-8333-333333333333";
+  const ELIN = "22222222-2222-4222-8222-222222222222", SARA = "44444444-4444-4444-8444-444444444444";
+  const NAMN = { [ELIN]: "Elin Ek", [SARA]: "Sara Sund" };
+  // Den falska kedjan: läsningar i tur och ordning, och hur många rader uppdateringen ändrar.
+  const falsk = (lasningar, antal) => {
+    const a = { uppdatera: [], efter: 0 };
+    return {
+      a,
+      dep: {
+        las: async () => (lasningar.length ? lasningar.shift() : null),
+        uppdatera: async (id, till, vantad) => { a.uppdatera.push([id, till, vantad]); return antal; },
+        namn: async (id) => NAMN[id] ?? null,
+        efter: async () => { a.efter++; },
+      },
+    };
+  };
+  const lead = (vem) => ({ id: LID, assigned_to: vem });
+
+  let f = falsk([lead(null), lead(ELIN)], 0);
+  let r = await tilldelaVillkorat(f.dep, LID, SARA, null);
+  ok("två fördelare samtidigt: 0 rader ger fel", r.fel === "Leadet har redan getts till Elin.", r.fel);
+  ok("och ingen notis eller mejl", f.a.efter === 0);
+  ok("uppdateringen var villkorad på ingen säljare", f.a.uppdatera.length === 1 && f.a.uppdatera[0][2] === null);
+
+  f = falsk([lead(null)], 1);
+  r = await tilldelaVillkorat(f.dep, LID, SARA, null);
+  ok("1 rad: ingen fel", !r.fel && r.andrad === true);
+  ok("1 rad: notisen och mejlet en gång", f.a.efter === 1);
+
+  f = falsk([lead(ELIN)], 1);
+  r = await tilldelaVillkorat(f.dep, LID, SARA, null);
+  ok("sidan laddades före automatiken: samma besked", r.fel === "Leadet har redan getts till Elin.", r.fel);
+  ok("och ingen uppdatering alls", f.a.uppdatera.length === 0 && f.a.efter === 0);
+
+  f = falsk([lead(ELIN)], 1);
+  r = await tilldelaVillkorat(f.dep, LID, SARA, ELIN);
+  ok("Ge till någon annan med rätt föregående: går", !r.fel && r.andrad === true && f.a.uppdatera[0][2] === ELIN);
+
+  f = falsk([lead(ELIN)], 1);
+  r = await tilldelaVillkorat(f.dep, LID, SARA, undefined);
+  ok("gamla Nav utan fore: villkoret är det som lästes", !r.fel && f.a.uppdatera[0][2] === ELIN && f.a.efter === 1);
+
+  f = falsk([lead(ELIN), lead(SARA)], 0);
+  r = await tilldelaVillkorat(f.dep, LID, SARA, undefined);
+  ok("gamla Nav: samma lead ändrat under tiden ger samma besked", r.fel === "Leadet har redan getts till Sara.", r.fel);
+
+  f = falsk([lead(SARA)], 1);
+  r = await tilldelaVillkorat(f.dep, LID, SARA, undefined);
+  ok("redan hos den det ska till: ingen ändring och ingen notis", !r.fel && r.andrad === false && f.a.uppdatera.length === 0 && f.a.efter === 0);
+
+  f = falsk([lead(null), lead(null)], 0);
+  r = await tilldelaVillkorat(f.dep, LID, SARA, ELIN);
+  ok("tilldelningen togs bort under tiden: säg att det ändrats", typeof r.fel === "string" && /ändrats/.test(r.fel), r.fel);
+
+  f = falsk([], 1);
+  r = await tilldelaVillkorat(f.dep, LID, SARA, null);
+  ok("leadet finns inte", r.fel === "Leadet finns inte.");
+}
+
+console.log("\n\x1b[1mNav 2.0: Möte bokat en gång (granskningen F2-3)\x1b[0m");
+{
+  const ELIN = "22222222-2222-4222-8222-222222222222", SARA = "44444444-4444-4444-8444-444444444444";
+  const nu = Date.parse("2026-10-23T09:00:00.000Z");
+  const s = (sek, extra = {}) => ({ kind: "forsok", outcome: "mote", actor_id: ELIN, at: new Date(nu - sek * 1000).toISOString(), ...extra });
+  ok("ett möte av samma säljare för 5 s sedan nekas", moteNyss([s(5)], ELIN, nu) === true);
+  ok("efter 61 s går ett nytt möte", moteNyss([s(61)], ELIN, nu) === false);
+  ok("en annan säljares möte räknas inte", moteNyss([s(5, { actor_id: SARA })], ELIN, nu) === false);
+  ok("ett annat utfall räknas inte", moteNyss([s(5, { outcome: "svar" })], ELIN, nu) === false);
+  ok("inga steg", moteNyss([], ELIN, nu) === false);
+}
+
+console.log("\n\x1b[1mNav 2.0: ordningen i Efter samtalet (granskningen S07, V1)\x1b[0m");
+{
+  // Rutten går inte att köra utan Next, så ordningen läses ur källan: steget skrivs före mötet,
+  // så att ett andra "Möte bokat" ser det och Ångra finns, och inget kastas efter att mötet skapats.
+  const src = readFileSync(new URL("../src/app/nav2/leads/route.ts", import.meta.url), "utf8");
+  const a = src.indexOf("const forsok = async"), e = src.indexOf("\n  };\n", a);
+  const f = a >= 0 && e > a ? src.slice(a, e) : "";
+  ok("forsok finns i rutten", f.length > 0);
+  const steg = f.indexOf('await steg(l, "forsok"'), mote = f.indexOf("await skapaMote(");
+  ok("steget skrivs efter den villkorade uppdateringen", steg > f.indexOf("await andraVillkorat("));
+  ok("steget skrivs före mötet", steg >= 0 && mote > steg);
+  ok("ett möte som inte gick att boka tar bort steget igen", /if \(m\.fel \|\| !m\.eventId\) \{[\s\S]*?lead_event"\)\.delete\(\)\.eq\("id", h\)/.test(f));
+  ok("ingenting kastas efter att mötet skapats", !/throw /.test(f.slice(mote)));
 }
 
 console.log(fel === 0

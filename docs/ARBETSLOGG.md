@@ -5,6 +5,40 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-23 · Granskningen S07: Avtal och Leads (F1-3, F2-1–F2-4, ingen migration)
+
+- **F1-3 · "Påskrivet digitalt"** svarade "Okänd handling" (rutten har ingen
+  `paskrivet`). Enligt beslut B3 öppnar knappen nu Avtals uppladdning för
+  personen, med det utfärdade avtalets rubrik ifylld och filväljaren öppen
+  (`moduler/ndae.js`). Den påskrivna PDF:en blir ett eget avtal (0073), och
+  `paminn` nekar när personen har ett uppladdat avtal från mallavtalets
+  `issued_at` eller senare (`vantarPaPaskrift` i `avtalforma.ts`, prov
+  `tests/nav2-avtal-vantar.mjs`). `nytt` (skapa ur mall) har fortfarande ingen
+  anropare: B4, en egen del senare.
+- **F2-1 · Ett lead tappas aldrig.** Ett steg som en fördelare sparar på ett
+  otilldelat lead ger leadet till fördelaren i samma villkorade uppdatering
+  (`nyTilldelning`). Alla leads och chipsens antal visar också otilldelade leads
+  som inte är nya (två `one()` i `ndpatch.py`). Produktionen har 0 leads, så
+  inget att rätta (B6).
+- **F2-2 · Ett lead ges till en säljare.** `tilldelaLead` (repots action,
+  också gamla Nav) uppdaterar villkorat på den säljare sidan visade (`fore`;
+  gamla Nav: det som lästes) och notifierar och mejlar bara när en rad ändrats
+  (`tilldelaVillkorat` i `leadsforma.ts`). `fordelaNyttLead` likadant. En krock
+  ger "Leadet har redan getts till <förnamn>."
+- **F2-3 · Möte bokat en gång.** `forsok` går genom `medNyckel`; leadet
+  uppdateras villkorat på läget som lästes, steget skrivs, och först sedan
+  skapas mötet och kundens inbjudan. Ett andra "Möte bokat" av samma person
+  inom 60 s nekas. Ett möte som inte går att boka rullar tillbaka leadet och
+  steget.
+- **F2-4 · Ångra** prövar alla steg innan något läggs tillbaka, återställer
+  "Fördela automatiskt" först och ställer in bara ett möte som steget självt
+  bokade. Fördela jämnt hoppar över ett lead som någon annan hann ge bort, i
+  stället för att svara 400 utan Ångra.
+- Prov: `tests/leads.mjs` (94), `tests/nav2-avtal-vantar.mjs` (10), `avtal`,
+  `notiser-tackning`, `nav2-nyckel`, `nav2-skriv` gröna; tsc 0 fel.
+
+---
+
 ## 2026-10-23 · Granskningen S10, K6 del 2: Tid, Coachning och Ärenden sparar (B7), sommartiden och morgonnotisen (D11, D24)
 
 Beställarens ja till att alla vyer får spara (B7, 2026-10-22) gäller vy för vy,

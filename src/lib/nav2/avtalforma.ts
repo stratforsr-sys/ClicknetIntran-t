@@ -165,6 +165,30 @@ export function lage(r: Pick<RaAvtal, "status" | "source">): NdAvtalLage {
   return r.source === "upload" ? "signerat" : "utfardat";
 }
 
+type AvtalVantar = Pick<RaAvtal, "employee_id" | "source" | "status" | "issued_at">;
+
+/**
+ * Väntar ett utfärdat mallavtal fortfarande på påskrift? Nej så snart personen
+ * har ett uppladdat avtal (0073: påskrivet när det laddas upp) som gäller och
+ * kom in samma stund som mallavtalet eller senare. Granskningen F1-3 och
+ * beslut B3 (beställaren 2026-10-22): "Påskrivet digitalt" öppnar
+ * uppladdningen av det påskrivna avtalet, som blir ett eget avtal. Ett
+ * uppladdat avtal från före mallavtalet är ett äldre avtal och säger inget om
+ * det nya. Påminnelsen (`paminn`) frågar den här.
+ */
+export function vantarPaPaskrift(mall: AvtalVantar, personensAvtal: AvtalVantar[]): boolean {
+  if (mall.status !== "issued" || mall.source !== "template" || !mall.issued_at) return false;
+  const fran = Date.parse(mall.issued_at);
+  return !personensAvtal.some(
+    (a) =>
+      a.employee_id === mall.employee_id &&
+      a.source === "upload" &&
+      a.status === "issued" &&
+      !!a.issued_at &&
+      Date.parse(a.issued_at) >= fran,
+  );
+}
+
 export function formaAvtal(
   r: RaAvtal,
   fil: NdAvtalet["fil"],

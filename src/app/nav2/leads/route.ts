@@ -9,7 +9,8 @@ import { leadTitel, maskeraPersonnummer } from "@/lib/leads";
 import { tilldelaLead, uppdateraLead } from "@/app/(app)/leads/actions";
 import { skapaMote, stallIn } from "@/app/(app)/kalender/moten/actions";
 import { farFordela } from "@/lib/nav2/leads";
-import { ANGRA_MIN, FORE_KOLUMNER, PLATSER, SKAL, type Fore } from "@/lib/nav2/leadsforma";
+import { ANGRA_MIN, FORE_KOLUMNER, MOTE_SPARR_SEK, PLATSER, SKAL, moteNyss, nyTilldelning, type Fore } from "@/lib/nav2/leadsforma";
+import { medNyckel } from "@/lib/nav2/nyckel";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
 
 export const dynamic = "force-dynamic";
@@ -40,6 +41,17 @@ export const dynamic = "force-dynamic";
  * ===========================================================================
  *
  * LÄSLÄGE: står `SKRIVLAGE.leads` på false svarar rutten 423 innan något skrivs.
+ *
+ * GRANSKNINGEN S07 (2026-10-23):
+ *   - F2-1: ett steg som en fördelare sparar på ett otilldelat lead ger leadet
+ *     till fördelaren, i samma villkorade uppdatering som steget.
+ *   - F2-2: att ge ett lead är villkorat på den säljare sidan visade (`fore`),
+ *     och notisen och mejlet går bara när en rad ändrats.
+ *   - F2-3: "Efter samtalet" går genom `medNyckel`, leadet uppdateras (villkorat
+ *     på läget som lästes) innan mötet skapas, och ett andra "Möte bokat" av
+ *     samma person inom en minut nekas.
+ *   - F2-4: Ångra prövar alla steg innan något läggs tillbaka, och ställer in
+ *     bara ett möte som steget självt bokade.
  */
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -141,15 +153,131 @@ export async function POST(request: Request) {
     if (error) throw new Error(`Leadet kunde inte sparas: ${error.message}`);
     return statusAndrad;
   };
+  // Uppdatera bara om leadet fortfarande ser ut som när det lästes (granskningen F2-1, F2-3): två tryck,
+  // två flikar eller en fördelare och en säljare samtidigt ger då ett steg, inte två.
+  const VILLKOR = ["status", "assigned_to", "next_call_at", "meeting_at", "meeting_event_id"] as const;
+  const andraVillkorat = async (l: Lead, falt: Partial<Lead>) => {
+    const statusAndrad = falt.status !== undefined && falt.status !== l.status;
+    let q = db
+      .from("lead")
+      .update({ ...falt, ...(statusAndrad ? { status_changed_at: new Date().toISOString() } : {}) })
+      .eq("id", l.id);
+    for (const k of VILLKOR) q = l[k] === null ? q.is(k, null) : q.eq(k, l[k] as string);
+    const { data, error } = await q.select("id");
+    if (error) throw new Error(`Leadet kunde inte sparas: ${error.message}`);
+    return { andrad: (data ?? []).length > 0, statusAndrad };
+  };
   const klart = (ok: string, handelser: string[], extra: Record<string, unknown> = {}) => {
     revalidatePath("/leads");
     return svar({ ok, angra: handelser.length ? { handling: "angra", data: { handelser } } : null, ...extra });
   };
 
-  // Att ge ett lead: repots tilldelaLead (notisen och mejlet), sedan steget.
-  const ge = async (l: Lead, till: string, actor: string | null = mig) => {
-    await tilldelaLead(form({ lead_id: l.id, assigned_to: till }));
+  // Att ge ett lead: repots tilldelaLead (villkorad på `fore`, notisen och mejlet bara när en rad ändrats),
+  // sedan steget. Ett nej kastas med beskedet "Leadet har redan getts till <förnamn>."
+  const ge = async (l: Lead, till: string, fore: string | null, actor: string | null = mig) => {
+    await tilldelaLead(form({ lead_id: l.id, assigned_to: till, fore: fore ?? "" }));
     return steg(l, "tilldelad", { till, actor });
+  };
+
+  // "Efter samtalet" (F2-1, F2-3). Leadet uppdateras villkorat först; ett möte skapas bara när det lyckades.
+  const forsok = async (): Promise<Response> => {
+    const l = await hamta(b.id);
+    if (!l) return svar({ fel: "Leadet finns inte." }, 404);
+    if (!farSkota(l)) return svar({ fel: "Leadet är inte ditt." }, 403);
+    if (!["new", "contacted", "meeting"].includes(l.status)) return svar({ fel: "Leadet är avslutat. Öppna det igen först." }, 400);
+    const utfall = String(b.utfall ?? "");
+    // K27: maskeras som i uppdateraLead. Klienten har redan sagt till om ett personnummer.
+    const not = maskeraPersonnummer(String(b.not ?? "").trim()).slice(0, 1000) || null;
+    const forsokNr = async () => {
+      const { count } = await db.from("lead_event").select("id", { count: "exact", head: true }).eq("lead_id", l.id).eq("kind", "forsok").eq("outcome", "svar");
+      return (count ?? 0) + 1;
+    };
+    let falt: Partial<Lead>, ok = "";
+    let mote: { dag: string; kl: string; plats: string } | null = null;
+    if (utfall === "svar" || utfall === "pratade") {
+      const d = tidpunkt(b.nasta);
+      const max = utfall === "svar" ? 14 : 40;
+      if (!d || d.getTime() < Date.now() - 5 * 60_000 || d.getTime() > Date.now() + max * 864e5) return svar({ fel: "Välj när du ska ringa igen." }, 400);
+      falt = { status: "contacted", next_call_at: d.toISOString() };
+      if (utfall === "svar") {
+        const n = await forsokNr();
+        ok = `Nästa försök ${nar(d)}.${b.sms === true ? " Inget SMS gick ut: Nav har ingen SMS-tjänst än." : ""}`;
+        if (n >= 4) ok = `${n} försök utan svar. Fortsätt eller välj Ej aktuell.`;
+      } else ok = `Sparat. Leadet kommer tillbaka ${nar(d)}.`;
+    } else if (utfall === "mote") {
+      const dag = String(b.d ?? ""), kl = String(b.s ?? ""), plats = String(b.plats ?? "");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dag) || dag < svensktDatum() || !KLOCKA.test(kl)) return svar({ fel: "Välj en dag från i dag och en tid." }, 400);
+      if ([0, 6].includes(new Date(dag + "T12:00:00Z").getUTCDay())) return svar({ fel: "Det är en helgdag. Välj en vardag." }, 400);
+      if (!(PLATSER as readonly string[]).includes(plats)) return svar({ fel: "Välj var mötet hålls." }, 400);
+      // Ett andra "Möte bokat" av samma person inom en minut är ett dubbeltryck eller en omsändning (F2-3).
+      const { data: nyss } = await db
+        .from("lead_event")
+        .select("kind, outcome, actor_id, at")
+        .eq("lead_id", l.id)
+        .eq("kind", "forsok")
+        .eq("outcome", "mote")
+        .gte("at", new Date(Date.now() - MOTE_SPARR_SEK * 1000).toISOString());
+      if (moteNyss((nyss ?? []) as { kind: string; outcome: string | null; actor_id: string | null; at: string }[], mig, Date.now())) {
+        return svar({ fel: "Mötet är redan bokat. Det ligger i kalendern." }, 409);
+      }
+      // `meeting_event_id` sätts först när mötet finns.
+      falt = { status: "meeting", next_call_at: null, meeting_at: svenskTidpunkt(dag, kl).toISOString(), meeting_place: plats };
+      mote = { dag, kl, plats };
+    } else if (utfall === "nej") {
+      const skal = String(b.skal ?? "");
+      if (!(SKAL as readonly string[]).includes(skal)) return svar({ fel: "Välj ett skäl." }, 400);
+      if (skal === "Inte nu") {
+        const d = svenskTidpunkt(new Date(Date.now() + 91 * 864e5).toISOString().slice(0, 10), "10:00");
+        falt = { status: "contacted", next_call_at: d.toISOString(), lost_reason: skal };
+        ok = `Nav påminner dig ${nar(d).replace(/ \d\d:\d\d$/, "")}.`;
+      } else {
+        falt = { status: "lost", next_call_at: null, lost_reason: skal };
+        ok = "Leadet är avslutat.";
+      }
+    } else return svar({ fel: "Okänt utfall." }, 400);
+
+    // F2-1: en fördelare som sparar ett steg på ett otilldelat lead får leadet.
+    const tilldelning = nyTilldelning(l, mig, fordelar, new Date().toISOString());
+    const { andrad, statusAndrad } = await andraVillkorat(l, { ...falt, ...(tilldelning ?? {}) });
+    if (!andrad) return svar({ fel: "Leadet ändrades av någon annan nyss. Ladda om och försök igen." }, 409);
+    // Steget skrivs direkt: ett andra "Möte bokat" ser det (moteNyss), och Ångra finns från början.
+    const h = await steg(l, "forsok", { outcome: utfall, note: utfall === "nej" ? [String(b.skal), not].filter(Boolean).join(". ").slice(0, 1000) : not });
+
+    if (mote) {
+      const { dag, kl, plats } = mote;
+      // Mötet i Kalendern, med säljaren som organisatör. 45 minuter, som utkastet.
+      const m = await skapaMote({ rubrik: `Möte · ${leadTitel(l)}`, dag, start: Number(kl.slice(0, 2)) * 60 + Number(kl.slice(3, 5)), minuter: 45, deltagare: [], plats, agenda: l.message ?? null });
+      if (m.fel || !m.eventId) {
+        // Leadet tillbaka som det var: inget möte, inget steg. Bara om ingen annan hunnit ändra det under tiden.
+        await db.from("lead_event").delete().eq("id", h);
+        await db.from("lead").update(foreAv(l)).eq("id", l.id).eq("status", "meeting").eq("meeting_at", falt.meeting_at as string).is("next_call_at", null);
+        return svar({ fel: m.fel ?? "Mötet kunde inte bokas i kalendern." }, 400);
+      }
+      const narText = `${VECKODAG[new Date(dag + "T12:00:00Z").getUTCDay()]} ${+dag.slice(8)}/${+dag.slice(5, 7)} kl. ${kl}`;
+      // Kunden som gäst: Kalenderns inbjudan, ett vanligt mejl med kalenderfil via Resend.
+      let bjuden = false;
+      if (l.email) {
+        const { error } = await db.rpc("lead_bjud_in", { p_event: m.eventId, p_epost: l.email });
+        bjuden = !error;
+      }
+      // Mötet finns nu, så ett fel härifrån blir ett svar och inget kast: nyckeln sparas, och ett nytt tryck ger inget andra möte.
+      const { error: kopp } = await db.from("lead").update({ meeting_event_id: m.eventId }).eq("id", l.id);
+      if (kopp) return svar({ fel: `Mötet ligger i kalendern ${narText}, men kunde inte kopplas till leadet (${kopp.message}). Ställ in det i kalendern om det ska bort.` }, 500);
+      const kontakt = forFor(l.name ?? "") || "Kunden";
+      ok = `Mötet ligger i kalendern ${narText}. ${l.email ? (bjuden ? `${kontakt} får en inbjudan med mejl.` : `Inbjudan till ${kontakt} kunde inte skickas. Bjud in från kalendern.`) : `${kontakt} har ingen e-postadress, så ingen inbjudan gick ut.`}`;
+    }
+
+    if (tilldelning) {
+      await skrivHandelse({ actorId: mig, action: "lead.assigned", objectType: "lead", objectId: l.id, meta: { till: mig, fran: null, steg: "forsok" } });
+    }
+    await skrivHandelse({
+      actorId: mig,
+      action: statusAndrad ? "lead.status_changed" : "lead.attempt",
+      objectType: "lead",
+      objectId: l.id,
+      meta: statusAndrad ? { fran: l.status, till: falt.status, utfall } : { utfall },
+    });
+    return klart(tilldelning ? `${ok} Leadet är ditt nu.` : ok, [h]);
   };
 
   try {
@@ -162,8 +290,11 @@ export async function POST(request: Request) {
         const vem = UUID.test(till) ? await namnPa(till) : null;
         if (!vem) return svar({ fel: "Personen finns inte i registret." }, 400);
         if (l.assigned_to === till) return svar({ fel: `${leadTitel(l)} är redan ${forFor(vem)}s.` }, 400);
-        const fore = l.assigned_to ? await namnPa(l.assigned_to) : null;
-        const h = await ge(l, till);
+        // Den säljare sidan visade. Utan `fore` (en äldre klient) gäller det som lästes nyss.
+        const foreId = b.fore === undefined ? l.assigned_to : b.fore === null || b.fore === "" ? null : String(b.fore);
+        if (foreId !== null && !UUID.test(foreId)) return svar({ fel: "Ogiltig begäran." }, 400);
+        const fore = foreId ? await namnPa(foreId) : null;
+        const h = await ge(l, till, foreId);
         return klart(`${leadTitel(l)} gick till ${vem}${fore ? ` i stället för ${forFor(fore)}` : ""}. ${forFor(vem)} fick ett mejl och en notis.`, [h]);
       }
 
@@ -173,6 +304,7 @@ export async function POST(request: Request) {
         const plan = (Array.isArray(b.plan) ? b.plan : []).slice(0, 100) as { id?: unknown; till?: unknown }[];
         const per: Record<string, number> = {};
         const handelser: string[] = [];
+        let hunnit = 0;
         let fore: boolean | null = null;
         if (handling === "auto") {
           const { data: inst } = await db.from("nav_setting").select("value").eq("key", "leads.auto").maybeSingle();
@@ -189,15 +321,22 @@ export async function POST(request: Request) {
           if (!l || l.assigned_to || l.status !== "new" || !UUID.test(till)) continue;
           const vem = await namnPa(till);
           if (!vem) continue;
-          handelser.push(await ge(l, till));
+          // Ett lead som någon annan hann ge bort hoppas över; resten fördelas och kan ångras (F2-4).
+          try {
+            handelser.push(await ge(l, till, null));
+          } catch {
+            hunnit++;
+            continue;
+          }
           per[vem] = (per[vem] ?? 0) + 1;
         }
+        const ochHunnit = hunnit ? ` ${hunnit === 1 ? "Ett lead" : `${hunnit} leads`} hade redan fått en säljare.` : "";
         const lista = Object.entries(per).map(([n, a]) => `${forFor(n)} ${a}`);
         const och = lista.length > 1 ? `${lista.slice(0, -1).join(", ")} och ${lista[lista.length - 1]}` : lista[0] ?? "";
-        if (handling === "jamt") return klart(handelser.length ? `Fördelat: ${och}.` : "Inget att fördela.", handelser);
+        if (handling === "jamt") return klart(handelser.length ? `Fördelat: ${och}.${ochHunnit}` : `Inget att fördela.${ochHunnit}`, handelser);
         return klart(
           handelser.length
-            ? `Automatisk fördelning är på. ${handelser.length} leads fördelades nu.`
+            ? `Automatisk fördelning är på. ${handelser.length} leads fördelades nu.${ochHunnit}`
             : "Automatisk fördelning är på. Nya leads går till den som är på plats och har minst att göra.",
           [],
           { angra: { handling: "angra", data: { handelser, auto: fore } } },
@@ -252,71 +391,8 @@ export async function POST(request: Request) {
         return klart(`Leadet är öppet igen, med ett samtal ${nar(d)}.`, [h]);
       }
 
-      case "forsok": {
-        const l = await hamta(b.id);
-        if (!l) return svar({ fel: "Leadet finns inte." }, 404);
-        if (!farSkota(l)) return svar({ fel: "Leadet är inte ditt." }, 403);
-        if (!["new", "contacted", "meeting"].includes(l.status)) return svar({ fel: "Leadet är avslutat. Öppna det igen först." }, 400);
-        const utfall = String(b.utfall ?? "");
-        // K27: maskeras som i uppdateraLead. Klienten har redan sagt till om ett personnummer.
-        const not = maskeraPersonnummer(String(b.not ?? "").trim()).slice(0, 1000) || null;
-        const forsokNr = async () => {
-          const { count } = await db.from("lead_event").select("id", { count: "exact", head: true }).eq("lead_id", l.id).eq("kind", "forsok").eq("outcome", "svar");
-          return (count ?? 0) + 1;
-        };
-        let falt: Partial<Lead>, ok: string;
-        if (utfall === "svar" || utfall === "pratade") {
-          const d = tidpunkt(b.nasta);
-          const max = utfall === "svar" ? 14 : 40;
-          if (!d || d.getTime() < Date.now() - 5 * 60_000 || d.getTime() > Date.now() + max * 864e5) return svar({ fel: "Välj när du ska ringa igen." }, 400);
-          falt = { status: "contacted", next_call_at: d.toISOString() };
-          if (utfall === "svar") {
-            const n = await forsokNr();
-            ok = `Nästa försök ${nar(d)}.${b.sms === true ? " Inget SMS gick ut: Nav har ingen SMS-tjänst än." : ""}`;
-            if (n >= 4) ok = `${n} försök utan svar. Fortsätt eller välj Ej aktuell.`;
-          } else ok = `Sparat. Leadet kommer tillbaka ${nar(d)}.`;
-        } else if (utfall === "mote") {
-          const dag = String(b.d ?? ""), kl = String(b.s ?? ""), plats = String(b.plats ?? "");
-          if (!/^\d{4}-\d{2}-\d{2}$/.test(dag) || dag < svensktDatum() || !KLOCKA.test(kl)) return svar({ fel: "Välj en dag från i dag och en tid." }, 400);
-          if ([0, 6].includes(new Date(dag + "T12:00:00Z").getUTCDay())) return svar({ fel: "Det är en helgdag. Välj en vardag." }, 400);
-          if (!(PLATSER as readonly string[]).includes(plats)) return svar({ fel: "Välj var mötet hålls." }, 400);
-          const t = svenskTidpunkt(dag, kl);
-          // Mötet i Kalendern, med säljaren som organisatör. 45 minuter, som utkastet.
-          const m = await skapaMote({ rubrik: `Möte · ${leadTitel(l)}`, dag, start: Number(kl.slice(0, 2)) * 60 + Number(kl.slice(3, 5)), minuter: 45, deltagare: [], plats, agenda: l.message ?? null });
-          if (m.fel || !m.eventId) return svar({ fel: m.fel ?? "Mötet kunde inte bokas i kalendern." }, 400);
-          falt = { status: "meeting", next_call_at: null, meeting_at: t.toISOString(), meeting_place: plats, meeting_event_id: m.eventId };
-          const nar = `${VECKODAG[new Date(dag + "T12:00:00Z").getUTCDay()]} ${+dag.slice(8)}/${+dag.slice(5, 7)} kl. ${kl}`;
-          // Kunden som gäst: Kalenderns inbjudan, ett vanligt mejl med kalenderfil via Resend.
-          let bjuden = false;
-          if (l.email) {
-            const { error } = await db.rpc("lead_bjud_in", { p_event: m.eventId, p_epost: l.email });
-            bjuden = !error;
-          }
-          const kontakt = forFor(l.name ?? "") || "Kunden";
-          ok = `Mötet ligger i kalendern ${nar}. ${l.email ? (bjuden ? `${kontakt} får en inbjudan med mejl.` : `Inbjudan till ${kontakt} kunde inte skickas. Bjud in från kalendern.`) : `${kontakt} har ingen e-postadress, så ingen inbjudan gick ut.`}`;
-        } else if (utfall === "nej") {
-          const skal = String(b.skal ?? "");
-          if (!(SKAL as readonly string[]).includes(skal)) return svar({ fel: "Välj ett skäl." }, 400);
-          if (skal === "Inte nu") {
-            const d = svenskTidpunkt(new Date(Date.now() + 91 * 864e5).toISOString().slice(0, 10), "10:00");
-            falt = { status: "contacted", next_call_at: d.toISOString(), lost_reason: skal };
-            ok = `Nav påminner dig ${nar(d).replace(/ \d\d:\d\d$/, "")}.`;
-          } else {
-            falt = { status: "lost", next_call_at: null, lost_reason: skal };
-            ok = "Leadet är avslutat.";
-          }
-        } else return svar({ fel: "Okänt utfall." }, 400);
-        const statusAndrad = await andra(l, falt);
-        const h = await steg(l, "forsok", { outcome: utfall, note: utfall === "nej" ? [String(b.skal), not].filter(Boolean).join(". ").slice(0, 1000) : not });
-        await skrivHandelse({
-          actorId: mig,
-          action: statusAndrad ? "lead.status_changed" : "lead.attempt",
-          objectType: "lead",
-          objectId: l.id,
-          meta: statusAndrad ? { fran: l.status, till: falt.status, utfall } : { utfall },
-        });
-        return klart(ok, [h]);
-      }
+      case "forsok":
+        return await medNyckel(request, mig, forsok);
 
       case "kund": {
         // Ordern är lagd i Order (`skapa`). Här blir leadet den ordern.
@@ -340,28 +416,35 @@ export async function POST(request: Request) {
         const nyss = new Date(Date.now() - ANGRA_MIN * 60_000).toISOString();
         let n = 0;
         // Senast först, så att två steg på samma lead läggs tillbaka i rätt ordning.
-        const { data: sr } = ids.length ? await db.from("lead_event").select("id, lead_id, at, actor_id, kind, fore").in("id", ids).order("at", { ascending: false }) : { data: [] };
-        for (const s of (sr ?? []) as unknown as { id: string; lead_id: string; at: string; actor_id: string | null; kind: string; fore: Fore }[]) {
+        const { data: sr } = ids.length ? await db.from("lead_event").select("id, lead_id, at, actor_id, kind, outcome, fore").in("id", ids).order("at", { ascending: false }) : { data: [] };
+        const rader = (sr ?? []) as unknown as { id: string; lead_id: string; at: string; actor_id: string | null; kind: string; outcome: string | null; fore: Fore }[];
+        // F2-4: pröva alla steg innan något läggs tillbaka, så att ett nej inte lämnar hälften ångrat.
+        const iAngran = new Set(rader.map((s) => s.id));
+        for (const s of rader) {
           if (s.actor_id !== mig) return svar({ fel: "Bara den som gjorde det kan ångra." }, 403);
           if (s.at < nyss) return svar({ fel: `Det går bara att ångra de första ${ANGRA_MIN} minuterna.` }, 400);
-          const { data: senare } = await db.from("lead_event").select("id").eq("lead_id", s.lead_id).gt("at", s.at).neq("kind", "paminn").limit(1);
-          if ((senare ?? []).length) return svar({ fel: "Något har hänt med leadet efter det. Ändra det i stället." }, 400);
-          // Ett möte som steget bokade ställs in i Kalendern (kunden får en avbokning om inbjudan gått).
-          const { data: nu } = await db.from("lead").select("meeting_event_id").eq("id", s.lead_id).maybeSingle();
-          const mote = (nu as { meeting_event_id: string | null } | null)?.meeting_event_id ?? null;
-          if (mote && mote !== (s.fore.meeting_event_id ?? null)) {
-            const r = await stallIn(mote);
-            if (r.fel) return svar({ fel: `Mötet kunde inte ställas in: ${r.fel}` }, 400);
-          }
-          const { error } = await db.from("lead").update(s.fore).eq("id", s.lead_id);
-          if (error) throw new Error(`Leadet kunde inte läggas tillbaka: ${error.message}`);
-          await db.from("lead_event").delete().eq("id", s.id);
-          await skrivHandelse({ actorId: mig, action: "lead.undone", objectType: "lead", objectId: s.lead_id, meta: { steg: s.kind } });
-          n++;
+          const { data: senare } = await db.from("lead_event").select("id").eq("lead_id", s.lead_id).gt("at", s.at).neq("kind", "paminn");
+          if (((senare ?? []) as { id: string }[]).some((x) => !iAngran.has(x.id))) return svar({ fel: "Något har hänt med leadet efter det. Ändra det i stället." }, 400);
         }
         if (typeof b.auto === "boolean" && fordelar) {
           await db.from("nav_setting").upsert({ key: "leads.auto", value: { pa: b.auto }, updated_by: mig, updated_at: new Date().toISOString() });
           await skrivHandelse({ actorId: mig, action: "lead.auto", objectType: "lead", objectId: mig, meta: { pa: b.auto, angrat: true } });
+        }
+        for (const s of rader) {
+          // Mötet som just det här steget bokade ställs in i Kalendern (kunden får en avbokning om inbjudan gått).
+          if (s.kind === "forsok" && s.outcome === "mote") {
+            const { data: nu } = await db.from("lead").select("meeting_event_id").eq("id", s.lead_id).maybeSingle();
+            const mote = (nu as { meeting_event_id: string | null } | null)?.meeting_event_id ?? null;
+            if (mote && mote !== (s.fore.meeting_event_id ?? null)) {
+              const r = await stallIn(mote);
+              if (r.fel) return svar({ fel: `${n ? `${n} av ${rader.length} steg är ångrade. ` : ""}Mötet kunde inte ställas in: ${r.fel}` }, 400);
+            }
+          }
+          const { error } = await db.from("lead").update(s.fore).eq("id", s.lead_id);
+          if (error) throw new Error(`${n ? `${n} av ${rader.length} steg är ångrade. ` : ""}Leadet kunde inte läggas tillbaka: ${error.message}`);
+          await db.from("lead_event").delete().eq("id", s.id);
+          await skrivHandelse({ actorId: mig, action: "lead.undone", objectType: "lead", objectId: s.lead_id, meta: { steg: s.kind } });
+          n++;
         }
         revalidatePath("/leads");
         return svar({ ok: n || typeof b.auto === "boolean" ? "Ångrat." : "Inget att ångra." });

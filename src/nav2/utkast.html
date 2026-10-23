@@ -19959,8 +19959,8 @@ function ldChefVy(){
             <span class="ldrb">${sp ? `<button class="btn btn-s btn-sm" data-lddo="spam|${l.id}">Spam</button>` : fs[0] ? `<button class="btn btn-p btn-sm" data-ldge="${l.id}|${esc(fs[0].namn)}">Ge till ${esc(rxFor(fs[0].namn))}</button>` : ''}<select class="uin ldsel" data-ldgeval="${l.id}" aria-label="Ge till någon annan"><option value="">Annan…</option>${fs.map(x => `<option value="${esc(x.namn)}">${esc(x.namn)} · ${x.oppna} öppna</option>`).join('')}</select></span></li>`; }).join('')}</ul>
           ${fs[0] ? `<p class="aehint">Förslaget är den som är på plats och har minst att göra: ${esc(rxFor(fs[0].namn))} har ${fs[0].oppna} öppna leads och ${fs[0].svar === null ? 'ingen svarstid än' : `svarar på ${fs[0].svar} min i snitt`}.</p>` : '<p class="aehint">Ingen säljare är instämplad just nu.</p>'}` : rxTom('Allt är fördelat', S.ld.auto ? 'Nya leads går direkt till den som är på plats och har minst att göra.' : 'Nya leads från hemsidan hamnar här.')}</section>
       <section class="card" aria-label="Alla leads"><div class="chead"><h2>Alla leads</h2><span class="end"><label class="ldsok">${I('sok')}<input id="ldSok" type="search" placeholder="Sök" value="${esc(S.ldQ)}" aria-label="Sök bland leads"></label></span></div>
-        <div class="qchips" role="group" aria-label="Visa">${[['oppna', 'Öppna'], ['new', 'Nya'], ['contacted', 'Kontaktade'], ['meeting', 'Möten'], ['won', 'Kunder'], ['lost', 'Ej aktuella'], ['alla', 'Alla']].map(([k, l]) => `<button class="chip ${S.ldFilt === k ? 'on' : ''}" aria-pressed="${S.ldFilt === k}" data-ldfilt="${k}">${l} <span class="num muted">${S.ld.leads.filter(x => ldSynlig(x) && x.vem && (k === 'alla' || (k === 'oppna' ? ldOppen(x) : x.status === k))).length}</span></button>`).join('')}</div>
-        ${lista.filter(l => l.vem).length ? `<ul class="ldrader">${lista.filter(l => l.vem).map(l => ldRad(l, true)).join('')}</ul>` : rxTom('Inget här', 'Ändra filtret eller sökningen.')}</section>
+        <div class="qchips" role="group" aria-label="Visa">${[['oppna', 'Öppna'], ['new', 'Nya'], ['contacted', 'Kontaktade'], ['meeting', 'Möten'], ['won', 'Kunder'], ['lost', 'Ej aktuella'], ['alla', 'Alla']].map(([k, l]) => `<button class="chip ${S.ldFilt === k ? 'on' : ''}" aria-pressed="${S.ldFilt === k}" data-ldfilt="${k}">${l} <span class="num muted">${S.ld.leads.filter(x => ldSynlig(x) && (x.vem || ND && x.status !== 'new') && (k === 'alla' || (k === 'oppna' ? ldOppen(x) : x.status === k))).length}</span></button>`).join('')}</div>
+        ${lista.filter(l => l.vem || ND && l.status !== 'new').length ? `<ul class="ldrader">${lista.filter(l => l.vem || ND && l.status !== 'new').map(l => ldRad(l, true)).join('')}</ul>` : rxTom('Inget här', 'Ändra filtret eller sökningen.')}</section>
     </div><div class="col">
       <section class="card" aria-label="Säljarna"><div class="chead"><h2>Säljarna</h2><span class="end">${note(479)}</span></div>
         <ul class="ldsalj">${per.map(p => { const vant = p.nya.map(ldVantat).filter(x => x !== null), max = vant.length ? Math.max(...vant) : 0;
@@ -30640,7 +30640,10 @@ document.addEventListener('click', e => {
   if (d.aeavtpamin){ stopp(); const p = aeP(d.aeavtpamin); if (!(ndKopplad('avtal') && typeof ndMaPost === 'function') || !p.avtal || !p.avtal.id){ ndAeTillAvtal(p.id); return; }
     ndAeMinns({pers:p.id}); ndMaPost('paminn', {avtal:p.avtal.id}); return; }
   if (d.aeavtsign){ stopp(); const p = aeP(d.aeavtsign); if (!(ndKopplad('avtal') && typeof ndMaPost === 'function') || !p.avtal || !p.avtal.id){ ndAeTillAvtal(p.id); return; }
-    ndAeMinns({pers:p.id}); ndMaPost('paskrivet', {avtal:p.avtal.id, datum:aeT()}); return; }
+    // B3 (beställaren 2026-10-22): det påskrivna avtalet laddas upp som ett eget avtal, med det utfärdades rubrik.
+    // Avtals panel för personen öppnas med rubriken ifylld, och filväljaren direkt (klicket ger rätten att öppna den).
+    S.maUppT = p.avtal.mall || 'Anställningsavtal'; S.maUppFor = p.id; ndAeTillAvtal(p.id);
+    const val = document.querySelector(`input[data-maupp="${CSS.escape(p.id)}"]`); if (val) val.click(); return; }
   // Anställningen
   if (d.aeandraok){ stopp(); const p = aeP(d.aeandraok), U = S.aeUtk['e' + p.id], fel = {};
     if (!/^\d{4}-\d{2}-\d{2}$/.test(U.start || '')) fel.start = 'Välj en startdag.';
@@ -33211,7 +33214,10 @@ if (ndNh()){ ndNhFyll(ND.nyheter); NDKOPPLAD.add('nyheter'); }
    (`lead_event`). Ett bokat möte blir ett riktigt möte i Kalendern, och
    kunden får Kalenderns inbjudan med mejl via Resend (beställaren 2026-10-20). Det som sparar går till /nav2/leads; i läsläge svarar
    rutten 423 och ingenting ändras. Att ge ett lead går genom repots
-   tilldelaLead (notisen och mejlet). Ångra gäller i tio minuter.
+   tilldelaLead (notisen och mejlet), villkorat på den säljare sidan visade.
+   Ett steg som en fördelare sparar på ett otilldelat lead ger leadet till
+   fördelaren, och Alla leads visar också otilldelade leads som inte är nya
+   (granskningen S07, F2-1 och F2-2). Ångra gäller i tio minuter.
 
    "Blev kund" öppnar Orders formulär med leadets uppgifter. När Order har
    skapat ordern (`skapa` i /nav2/order) blir leadet kund med den ordern.
@@ -33325,7 +33331,9 @@ async function ndLdPost(handling, data = {}, {ladda = true, tyst = false} = {}){
 function ndLdGe(id, namn){
   const till = ndLdId(namn);
   if (!till){ toast(`${namn} finns inte i Nav.`); return; }
-  ndLdPost('ge', {id, till});
+  // Den säljare sidan visar (granskningen F2-2): har någon annan hunnit ge bort leadet säger servern det, i stället för att ta det tyst.
+  const l = ldL(id);
+  ndLdPost('ge', {id, till, fore:l && l.vemId ? l.vemId : null});
 }
 // Ordern från ett lead: Order skapar den, och sedan blir leadet kund med den ordern.
 const _ndLdOrdPost = ndOrdPost;

@@ -14,6 +14,7 @@ import {
   utfardaAvtal,
 } from "@/app/(app)/avtal/actions";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
+import { vantarPaPaskrift } from "@/lib/nav2/avtalforma";
 
 export const dynamic = "force-dynamic";
 
@@ -87,7 +88,7 @@ export async function POST(request: Request) {
   const avtalId = String(b.avtal ?? "");
   const avtalet = async () => {
     if (!UUID.test(avtalId)) return null;
-    const { data } = await db.from("contract").select("id, employee_id, title, source, status").eq("id", avtalId).maybeSingle();
+    const { data } = await db.from("contract").select("id, employee_id, title, source, status, issued_at").eq("id", avtalId).maybeSingle();
     return data;
   };
 
@@ -96,6 +97,11 @@ export async function POST(request: Request) {
       const a = await avtalet();
       if (!a) return svar({ fel: "Avtalet finns inte." }, 404);
       if (a.status !== "issued" || a.source !== "template") return svar({ fel: "Avtalet väntar inte på påskrift." }, 400);
+      // F1-3/B3: den påskrivna PDF:en laddas upp som ett eget avtal. Finns den, är påminnelsen onödig.
+      const { data: personens } = await db.from("contract").select("employee_id, source, status, issued_at").eq("employee_id", a.employee_id as string);
+      if (!vantarPaPaskrift(a as Parameters<typeof vantarPaPaskrift>[0], (personens ?? []) as Parameters<typeof vantarPaPaskrift>[1])) {
+        return svar({ fel: "Det påskrivna avtalet är redan uppladdat, så ingen påminnelse behövs." }, 400);
+      }
       const { data: senast } = await db.from("notification_event").select("created_at").eq("kalla", "avtal-paminnelse").eq("object_id", a.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
       if (senast && svensktDatum(new Date(senast.created_at as string)) === svensktDatum()) return svar({ fel: "Det är redan påmint i dag." }, 409);
       const gick = await notifiera({
