@@ -7,6 +7,29 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
 
 ---
 
+## Säljtavlan på /salesboard — gren `salesboard`, EJ MERGAD (2026-10-25)
+
+Prototypen v5 är inbyggd i den riktiga tavlan. Besluten R35–R43 står överst i
+`docs/superpowers/specs/2026-10-23-salesboard-design.md` (§0): målet i ordervärde,
+topplistan, inspelade ljud, hela skärmen.
+
+- **0250 är INTE körd.** Den är ändrad på plats (statistiken ger elva månader till
+  grafen, `motif` borta). 0250–0254 är lediga i `schema_migrations` (frågat 2026-10-25).
+  Kör efter ja: `set -a; . ~/.clicknet/nav.env; set +a; node scripts/apply-sql.mjs 0250_saljtavlan`,
+  sedan dörrklockan i Realtime (`update public.sales_order set status = status where false`
+  ska ge en signal på kanalen `salesboard`) och vakten `npm run test:rattigheter`.
+- **Före 0250** går tavlan på standarderna: ingen graf bakåt, inga testhändelser,
+  ingen dold säljare. Målet sätts i inställningarnas kort 02 Månadsmål.
+- **Main** rörs först efter beställarens ja och B8.
+- **Proven:** `TZ=UTC node --experimental-strip-types tests/salesboard{,-parning,-motor,-ljud,-server,-tavla,-ko,-installningar}.mjs`, alla gröna.
+- **Selen** (utanför repot): `~/sb-sele` bygger den riktiga Tavla-koden med esbuild och
+  påhittad data (`node bygg.mjs`, `./bild.sh <namn> "fall=order&t=2.5"`, `node svep.mjs`).
+  Ingen `npm run dev`.
+- **Inte kontrollerat:** ljudet i högtalare (ingen har lyssnat på den riktiga koden),
+  Realtime-klockan och tavlan mot riktig data (väntar på 0250).
+
+---
+
 ## Granskningen S15 — texterna till personalen (2026-10-23), på `nav2-utkast`
 
 Nytt i navet-posten `nav-2-med-riktig-data` säger nu det som gäller vid mergen och går till

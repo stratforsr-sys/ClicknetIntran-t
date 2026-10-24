@@ -14,6 +14,42 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "saljtavlan",
+    rubrik: "Säljtavlan på kontorets TV",
+    ingress:
+      "Varje ny order syns och hörs på kontorets TV, och laget ser hur det ligger till mot månadens mål i kronor.",
+    text: `Säljtavlan visar lagets månad på kontorets TV: en topplista med varje
+säljares order och ordervärde, månadens mål i kronor med takten och prognosen,
+ordervärdet per månad det senaste året och de senaste orderna.
+
+## När någon säljer
+
+När en order godkänns tar den över hela skärmen en kort stund, med säljarens
+namn, paketet och ordervärdet, och kassan ringer när beloppet landar. Sedan
+krymper den in i listan över senaste order, och topplistan och målet räknas upp.
+
+En stor affär får en egen scen med trumvirvel, och när laget når månadens mål
+fyller det hela skärmen. Din första order någonsin, personbästa och dagsrekord
+får också något extra.
+
+Provision visas aldrig på tavlan.
+
+## Om du inte vill synas
+
+Be en administratör att visa dig med initialer, eller som "En säljare". Då står
+du inte i topplistan, men dina order räknas ändå med i lagets siffror.
+
+## För administratörer
+
+Tavlan ställs in under **/salesboard/installningar**. Där sätter du månadens mål
+i kronor, kopplar en TV med koden som står på den, väljer lag och vad som ska
+firas, och bestämmer när tavlan får låta. Där finns också knappar för att prova
+tavlan.`,
+    datum: "2026-10-25",
+    roller: [],
+    href: "/salesboard",
+  },
+  {
     slug: "nav-2-med-riktig-data",
     rubrik: "Nav 2.0 är navet",
     ingress:

@@ -1,0 +1,718 @@
+/* =========================================================================
+   Säljtavlan: parningen, avbrottet och startrutan. Tavlan själv och firandet
+   står längst ner (tv-), efter den godkända prototypen.
+
+   Parningen är en duk på 1920×1080 som skalas till skärmen.
+
+   Allt mäts i dukens pixlar. Tavla.tsx skalar duken med transform och
+   centrerar den, så att tavlan ser likadan ut på en 1080p-TV, en 4K-TV och en
+   laptop. Bakgrunden är hub-färgen hela vägen ut.
+
+   Färg bara där den betyder något: mint för det som räknas och det som är
+   nytt, bärnsten för stor affär och det som ligger över målet. Efter takten är
+   bärnsten med text, aldrig rött. Inga gradienter, inget glöd.
+
+   Det enda som rör sig av sig självt är den levande pricken och mintkantens
+   toning. Allt annat är stilla eller räknas ur en bildruta (motion/).
+   ========================================================================= */
+
+.sb-rot {
+  --hub: #0f2a22;
+  --hub-2: #153a2f;
+  --hub-line: rgba(220, 245, 232, 0.12);
+  --hub-ink: #eaf4ee;
+  --hub-ink-2: #a8c2b6;
+  --hub-ink-3: #6f8f82;
+  --hub-brand: #4fd1a5;
+  --hub-signal: #f2b24c;
+  --hub-track: rgba(220, 245, 232, 0.1);
+  /* Månadens segment före i dag, och kanten på dem som ligger efter takten. */
+  --sb-seg-forr: #3a9e7e;
+  --sb-seg-efter: rgba(242, 178, 76, 0.55);
+  /* Panelens bläck: mörkt på mint och bärnsten. */
+  --pa: #0f2a22;
+  --pa-2: rgba(15, 42, 34, 0.68);
+  --pa-linje: rgba(15, 42, 34, 0.22);
+  --pa-spar: rgba(15, 42, 34, 0.16);
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 18px;
+  --r-xl: 24px;
+  --sb-display: var(--f-display, "Bricolage Grotesque"), ui-sans-serif, system-ui, sans-serif;
+  --sb-body: var(--f-body, "Geist"), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --sb-mono: var(--f-mono, "Geist Mono"), ui-monospace, "SF Mono", Menlo, monospace;
+
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: var(--hub);
+  color: var(--hub-ink);
+  font-family: var(--sb-body);
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  cursor: default;
+}
+
+.sb-rot *,
+.sb-rot *::before,
+.sb-rot *::after {
+  box-sizing: border-box;
+}
+
+.sb-duk {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1920px;
+  height: 1080px;
+  transform-origin: 0 0;
+  overflow: hidden;
+  background: var(--hub);
+}
+
+/* Duken visas först när den skalats (Tavla.tsx), så att den aldrig blinkar i fel storlek. */
+.sb-duk-dold {
+  visibility: hidden;
+}
+
+.sb-skift {
+  position: absolute;
+  inset: 0;
+}
+
+/* ---------- Gemensamt ------------------------------------------------- */
+
+.sb-etikett {
+  font: 600 24px/1 var(--sb-body);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--hub-ink-2);
+}
+
+.sb-t-ink { color: var(--hub-ink); }
+.sb-t-ink2 { color: var(--hub-ink-2); }
+.sb-t-ink3 { color: var(--hub-ink-3); }
+.sb-t-brand { color: var(--hub-brand); }
+.sb-t-signal { color: var(--hub-signal); }
+
+.sb-mono {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--hub-2);
+  box-shadow: inset 0 0 0 2px var(--hub-line);
+  color: var(--hub-ink);
+  font-family: var(--sb-body);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.sb-mono-omvand {
+  background: var(--pa);
+  box-shadow: none;
+  color: var(--hub-brand);
+}
+
+.sb-mono-prick {
+  display: block;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+
+/* ---------- Statusraden: den stationära ramen -------------------------- */
+
+.sb-status {
+  position: absolute;
+  top: 0;
+  /* 4 px ut över dukens kanter: inbränningsskyddet flyttar duken 0–2 px, och hårlinjen
+     ska ändå gå kant i kant. Innehållet står kvar 72 px in. */
+  left: -4px;
+  right: -4px;
+  height: 72px;
+  padding: 0 76px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--hub-line);
+  background: var(--hub);
+  z-index: 30;
+  font-size: 24px;
+  white-space: nowrap;
+}
+
+.sb-status-v,
+.sb-status-h {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+}
+
+.sb-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  font: 600 22px/1 var(--sb-body);
+  letter-spacing: 0.18em;
+  color: var(--hub-brand);
+}
+
+.sb-live-av {
+  letter-spacing: 0.02em;
+  font-weight: 500;
+  font-size: 24px;
+  color: var(--hub-signal);
+}
+
+.sb-prick {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* Den levande pricken andas var 2,4 s. Den enda rörelsen i vila som inte är data. */
+.sb-prick-lever {
+  animation: sb-andas 2.4s ease-in-out infinite;
+}
+
+@keyframes sb-andas {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.32;
+  }
+}
+
+.sb-namn {
+  font-weight: 500;
+  color: var(--hub-ink);
+}
+
+.sb-lag {
+  color: var(--hub-ink-2);
+  font-weight: 400;
+}
+
+.sb-datum {
+  color: var(--hub-ink-2);
+}
+
+.sb-klocka {
+  font: 500 30px/1 var(--sb-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--hub-ink);
+}
+
+.sb-ljud {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--hub-ink-2);
+}
+
+.sb-ljud-blockerat {
+  color: var(--hub-signal);
+}
+
+.sb-ljud-starta {
+  margin-left: 8px;
+  height: 44px;
+  padding: 0 18px;
+  border: 1px solid var(--hub-signal);
+  border-radius: 999px;
+  background: none;
+  color: var(--hub-signal);
+  font: 500 22px/1 var(--sb-body);
+  cursor: pointer;
+}
+
+.sb-ljud-starta:focus-visible {
+  outline: 3px solid var(--hub-ink);
+  outline-offset: 4px;
+}
+
+.sb-hogtalare {
+  display: block;
+}
+
+.sb-dampad,
+.sb-vila.sb-dampad {
+  opacity: 0.55;
+}
+
+
+/* ---------- Starta tavlan ----------------------------------------------- */
+
+.sb-start {
+  position: absolute;
+  inset: 72px -4px -4px -4px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 30px;
+  background: rgba(15, 42, 34, 0.93);
+}
+
+.sb-start-etikett {
+  font: 600 24px/1 var(--sb-body);
+  letter-spacing: 0.18em;
+  color: var(--hub-ink-3);
+  margin-bottom: 10px;
+}
+
+.sb-start p {
+  margin: 8px 0 0;
+  max-width: 980px;
+  text-align: center;
+  text-wrap: balance;
+  font: 400 32px/1.35 var(--sb-body);
+  color: var(--hub-ink-2);
+}
+
+.sb-start-knapp {
+  display: inline-flex;
+  align-items: center;
+  gap: 22px;
+  height: 120px;
+  padding: 0 64px;
+  border: 0;
+  border-radius: var(--r-xl);
+  background: var(--hub-brand);
+  color: var(--pa);
+  font: 600 56px/1 var(--sb-display);
+  letter-spacing: -0.01em;
+  cursor: pointer;
+}
+
+.sb-start-knapp:focus-visible,
+.sb-start-utan:focus-visible,
+.sb-helskarm:focus-visible {
+  outline: 4px solid var(--hub-ink);
+  outline-offset: 6px;
+}
+
+.sb-start-utan {
+  border: 0;
+  background: none;
+  padding: 12px 20px;
+  color: var(--hub-ink-2);
+  font: 500 30px/1 var(--sb-body);
+  text-decoration: underline;
+  text-underline-offset: 8px;
+  text-decoration-thickness: 2px;
+  cursor: pointer;
+}
+
+
+/* ---------- Parningen och avbrottet -------------------------------------- */
+
+.sb-par {
+  position: absolute;
+  inset: 72px 0 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  text-align: center;
+}
+
+.sb-par-kod {
+  display: flex;
+  align-items: center;
+  gap: 56px;
+  margin-top: 18px;
+  font: 500 196px/1 var(--sb-mono);
+  letter-spacing: 0.08em;
+  color: var(--hub-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.sb-par-kod i {
+  display: block;
+  width: 56px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--hub-ink-3);
+}
+
+/* Tiden som är kvar på koden: en hårlinje som krymper mot mitten. */
+.sb-par-tid {
+  width: 1080px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--hub-track);
+  overflow: hidden;
+}
+
+.sb-par-tid i {
+  display: block;
+  height: 100%;
+  background: var(--hub-brand);
+  transform-origin: 50% 50%;
+}
+
+.sb-par-text {
+  margin: 18px 0 0;
+  max-width: 1200px;
+  font: 400 36px/1.4 var(--sb-body);
+  color: var(--hub-ink-2);
+  text-wrap: balance;
+}
+
+.sb-par-text b {
+  font-weight: 500;
+  color: var(--hub-ink);
+}
+
+.sb-par-rubrik {
+  margin: 0;
+  font: 600 88px/1.05 var(--sb-display);
+  letter-spacing: -0.02em;
+  color: var(--hub-ink);
+}
+
+.sb-par-not {
+  margin: 0;
+  font: 400 28px/1.3 var(--sb-body);
+  color: var(--hub-ink-3);
+}
+
+.sb-par-in {
+  position: absolute;
+  bottom: 56px;
+  font: 400 24px/1 var(--sb-body);
+  color: var(--hub-ink-3);
+  text-decoration: underline;
+  text-underline-offset: 6px;
+}
+
+/* =========================================================================
+   Säljtavlan: tavlan i vila och firandet (den godkända prototypen v5).
+
+   Hela skärmen fylls: 1 u = 1 px på en 1920×1080-TV, skalat efter fönstret
+   (--u). Under 900 px staplas allt och veckodagarna göms. Klasserna har
+   prefixet tv-, så att de aldrig möter parningens sb- eller inställningarnas si-.
+
+   Färg bara där den betyder något: mint för det som räknas och det som är
+   nytt, amber för stor affär, ettan och det som ligger över målet. Efter
+   takten står i dov text, aldrig rött.
+
+   Allt i firandet räknas ur en bildruta (motion/). Det enda som rör sig av sig
+   självt i vila är den levande pricken.
+   ========================================================================= */
+
+.tv-rot {
+  --bg: #0F2A22;
+  --yta: #143529;
+  --yta-2: #1A3F32;
+  --scen: #0A1F18;
+  --linje: rgba(234, 243, 239, 0.09);
+  --text: #EAF3EF;
+  --dov: #8FAEA3;
+  --svag: #5E8073;
+  --mint: #4FD1A5;
+  --amber: #F2B24C;
+  --under: #355A4C;
+  --f-rubrik: var(--f-display, "Bricolage Grotesque"), "Avenir Next", system-ui, sans-serif;
+  --f-text: var(--f-body, "Geist"), "Helvetica Neue", system-ui, sans-serif;
+  --f-siffra: var(--f-mono, "Geist Mono"), ui-monospace, "SF Mono", Menlo, monospace;
+  --u: min(calc(100vw / 1920), calc(100vh / 1080));
+  color-scheme: dark;
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--f-text);
+  -webkit-font-smoothing: antialiased;
+  cursor: default;
+}
+.tv-rot *, .tv-rot *::before, .tv-rot *::after { box-sizing: border-box; }
+.tv-rot button { font: inherit; }
+.tv-rot :focus-visible { outline: 2px solid var(--mint); outline-offset: 3px; }
+.tv-rot.tv-mus-dold { cursor: none; }
+/* Under 900 px: en kolumn, och 760 u över bredden i stället för 1 000, så att en telefon kan läsa den. */
+@media (max-width: 899px) { .tv-rot { --u: calc(100vw / 760); overflow-y: auto; } }
+
+/* Tavlan */
+.tv-scen {
+  position: fixed; inset: 0;
+  padding-block: calc(34 * var(--u));
+  padding-left: max(16px, env(safe-area-inset-left, 0px), calc(48 * var(--u)));
+  padding-right: max(16px, env(safe-area-inset-right, 0px), calc(48 * var(--u)));
+  display: grid; grid-template-rows: calc(64 * var(--u)) minmax(0, 1fr); gap: calc(24 * var(--u));
+  font-variant-numeric: tabular-nums; transform-origin: 50% 30%;
+  transition: opacity 1.2s;
+}
+/* Utanför arbetsdagen dämpas tavlan, så att den inte lyser upp ett tomt kontor. */
+.tv-scen.tv-dampad { opacity: 0.55; }
+.tv-huvud { display: flex; align-items: center; justify-content: space-between; gap: calc(24 * var(--u)); min-width: 0; }
+.tv-marke { display: flex; align-items: baseline; gap: calc(18 * var(--u)); min-width: 0; }
+.tv-marke h1 { margin: 0; font: 800 calc(46 * var(--u))/1 var(--f-rubrik); letter-spacing: -0.02em; white-space: nowrap; }
+.tv-marke span { font: 500 calc(22 * var(--u)) var(--f-text); color: var(--dov); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-huvud-h { display: flex; align-items: center; gap: calc(36 * var(--u)); font: 500 calc(24 * var(--u)) var(--f-text); color: var(--dov); white-space: nowrap; }
+.tv-live { display: inline-flex; align-items: center; gap: calc(10 * var(--u)); font: 500 calc(16 * var(--u)) var(--f-siffra); letter-spacing: .14em; text-transform: uppercase; color: var(--mint); }
+.tv-live i { width: calc(10 * var(--u)); height: calc(10 * var(--u)); border-radius: 50%; background: var(--mint); animation: tv-puls 2.4s ease-in-out infinite; }
+.tv-live.tv-av { color: var(--amber); }
+.tv-live.tv-av i { background: var(--amber); animation: none; }
+@keyframes tv-puls { 50% { opacity: .35; } }
+.tv-klocka { font: 500 calc(46 * var(--u))/1 var(--f-siffra); color: var(--text); letter-spacing: -0.02em; }
+/* Ljudet syns bara när det inte låter: en tyst tavla ska säga varför. */
+.tv-ljudchip { display: inline-flex; align-items: center; gap: calc(8 * var(--u)); font: 500 calc(15 * var(--u)) var(--f-siffra); letter-spacing: .08em; text-transform: uppercase; color: var(--dov); border: 1px solid var(--linje); border-radius: 99px; padding: calc(6 * var(--u)) calc(14 * var(--u)); background: none; }
+button.tv-ljudchip { cursor: pointer; color: var(--amber); border-color: rgba(242,178,76,.4); }
+.tv-ljudchip svg { width: calc(16 * var(--u)); height: calc(16 * var(--u)); }
+
+.tv-kropp { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: calc(28 * var(--u)); min-height: 0; }
+.tv-kort { background: var(--yta); border-radius: calc(22 * var(--u)); padding: calc(24 * var(--u)) calc(30 * var(--u)); min-height: 0; display: flex; flex-direction: column; position: relative; }
+.tv-kort-rubrik { display: flex; align-items: baseline; justify-content: space-between; gap: calc(16 * var(--u)); margin-bottom: calc(12 * var(--u)); }
+.tv-kort-rubrik h2 { margin: 0; font: 700 calc(28 * var(--u))/1.1 var(--f-rubrik); letter-spacing: -0.01em; white-space: nowrap; }
+.tv-kort-rubrik small { font: 500 calc(15 * var(--u)) var(--f-siffra); color: var(--dov); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-tom { margin: auto; text-align: center; font: 500 calc(22 * var(--u)) var(--f-text); color: var(--dov); max-width: 28em; }
+
+/* Topplistan */
+.tv-lista { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.tv-rad, .tv-rad-huvud { display: grid; align-items: center; grid-template-columns: calc(56 * var(--u)) minmax(0, 1fr) repeat(5, calc(58 * var(--u))) calc(72 * var(--u)) calc(86 * var(--u)) calc(178 * var(--u)); }
+.tv-rad-huvud { font: 500 calc(14 * var(--u)) var(--f-siffra); color: var(--svag); letter-spacing: .1em; text-transform: uppercase; padding: 0 calc(14 * var(--u)) calc(10 * var(--u)); border-bottom: 1px solid var(--linje); }
+.tv-rad-huvud .tv-idag-kol { color: var(--mint); }
+.tv-rad-huvud > :nth-child(n+3) { text-align: center; }
+.tv-rad-huvud > :nth-last-child(-n+3) { text-align: right; }
+.tv-rader { flex: 1; min-height: 0; display: grid; grid-template-rows: repeat(9, minmax(0, 1fr)); }
+.tv-rad { padding: 0 calc(14 * var(--u)); border-bottom: 1px solid var(--linje); position: relative; background: var(--yta); min-height: 0; }
+.tv-rad:last-child { border-bottom: 0; }
+.tv-rad.tv-flyttar { z-index: 2; }
+.tv-rad.tv-etta { background: linear-gradient(90deg, rgba(242,178,76,.11), rgba(242,178,76,0) 60%), var(--yta); border-radius: calc(12 * var(--u)); border-bottom-color: transparent; }
+.tv-plats { font: 700 calc(34 * var(--u))/1 var(--f-rubrik); color: var(--svag); }
+.tv-etta .tv-plats { color: var(--amber); }
+.tv-rad.tv-pall .tv-plats { color: var(--dov); }
+.tv-vem { display: flex; align-items: center; gap: calc(16 * var(--u)); min-width: 0; }
+.tv-ini { flex: none; width: calc(48 * var(--u)); height: calc(48 * var(--u)); border-radius: 50%; background: var(--yta-2); display: grid; place-items: center; font: 600 calc(17 * var(--u)) var(--f-text); color: var(--dov); }
+.tv-etta .tv-ini { box-shadow: 0 0 0 2px var(--amber); color: var(--amber); }
+.tv-rad-namn { font: 600 calc(28 * var(--u))/1.1 var(--f-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-upp { flex: none; font: 600 calc(15 * var(--u)) var(--f-siffra); color: var(--mint); background: rgba(79,209,165,.13); border-radius: 99px; padding: calc(4 * var(--u)) calc(10 * var(--u)); }
+.tv-dag { display: grid; place-items: center; height: 100%; }
+.tv-dag.tv-idag { background: rgba(79,209,165,.06); }
+.tv-dag svg { display: block; overflow: visible; height: calc(30 * var(--u)); width: auto; }
+.tv-dag svg line { stroke: var(--text); stroke-width: 3.2; stroke-linecap: round; }
+.tv-dag.tv-idag svg line { stroke: var(--mint); }
+.tv-noll { width: calc(5 * var(--u)); height: calc(5 * var(--u)); border-radius: 50%; background: var(--under); }
+.tv-idag-tal { text-align: right; font: 500 calc(28 * var(--u)) var(--f-siffra); color: var(--mint); }
+.tv-idag-tal.tv-noll-tal { color: var(--under); }
+.tv-manad, .tv-varde { text-align: right; white-space: nowrap; }
+.tv-manad { font: 700 calc(44 * var(--u))/1 var(--f-rubrik); }
+.tv-varde { font: 500 calc(24 * var(--u)) var(--f-siffra); color: var(--dov); }
+.tv-enh { font-size: .72em; color: var(--svag); margin-left: .25em; }
+/* Huvudmåttet bestämmer ordningen och vilken kolumn som bär vikten. */
+.tv-mat-varde .tv-manad { font: 500 calc(28 * var(--u)) var(--f-siffra); color: var(--dov); }
+.tv-mat-varde .tv-varde { font: 700 calc(34 * var(--u))/1 var(--f-rubrik); color: var(--text); letter-spacing: -0.01em; }
+
+/* Höger */
+.tv-hoger { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: calc(22 * var(--u)); min-height: 0; }
+.tv-matare { min-width: 0; }
+.tv-m-topp { display: flex; justify-content: space-between; align-items: baseline; gap: calc(10 * var(--u)); font: 500 calc(14 * var(--u)) var(--f-siffra); letter-spacing: .05em; text-transform: uppercase; color: var(--dov); white-space: nowrap; }
+.tv-m-topp .tv-bra { color: var(--mint); }
+.tv-m-tal { margin-top: calc(6 * var(--u)); display: flex; align-items: baseline; gap: calc(10 * var(--u)); white-space: nowrap; }
+.tv-m-tal b { font: 800 calc(72 * var(--u))/0.95 var(--f-rubrik); letter-spacing: -0.035em; transition: color .6s; }
+.tv-m-av { font: 500 calc(24 * var(--u)) var(--f-text); color: var(--dov); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-stapel { position: relative; height: calc(14 * var(--u)); border-radius: 99px; background: var(--yta-2); margin: calc(16 * var(--u)) 0 calc(10 * var(--u)); }
+.tv-stapel .tv-fyll { position: absolute; inset: 0 auto 0 0; border-radius: 99px; background: var(--mint); transition: background .6s; }
+.tv-stapel .tv-takt { position: absolute; top: calc(-8 * var(--u)); bottom: calc(-8 * var(--u)); width: 2px; background: var(--text); opacity: .7; }
+/* Halvvägs: en etikett över mitten i sex sekunder, och sedan ett litet märke. */
+.tv-halv { position: absolute; left: 50%; bottom: calc(100% + calc(10 * var(--u))); translate: -50% 0; font: 600 calc(13 * var(--u)) var(--f-siffra); letter-spacing: .12em; text-transform: uppercase; color: var(--mint); white-space: nowrap; }
+.tv-halv-mark { position: absolute; left: 50%; top: calc(2 * var(--u)); bottom: calc(2 * var(--u)); width: 2px; margin-left: -1px; background: var(--bg); opacity: .5; }
+.tv-m-fakta { display: flex; flex-wrap: nowrap; gap: calc(14 * var(--u)); white-space: nowrap; font: 500 calc(18 * var(--u)) var(--f-text); color: var(--dov); }
+.tv-m-fakta b { color: var(--text); font-weight: 600; }
+.tv-matare.tv-natt .tv-m-tal b, .tv-matare.tv-natt .tv-m-topp .tv-bra { color: var(--amber); }
+.tv-matare.tv-natt .tv-fyll { background: var(--amber); }
+.tv-m-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: calc(20 * var(--u)); margin-top: calc(12 * var(--u)); padding-top: calc(12 * var(--u)); border-top: 1px solid var(--linje); }
+.tv-m-stats small { display: block; font: 500 calc(13 * var(--u)) var(--f-siffra); letter-spacing: .06em; text-transform: uppercase; color: var(--dov); white-space: nowrap; }
+.tv-m-stats b { display: block; margin-top: calc(4 * var(--u)); font: 600 calc(24 * var(--u)) var(--f-siffra); white-space: nowrap; }
+.tv-m-stats .tv-enh { font-size: .7em; font-weight: 500; }
+
+.tv-graf-yta { position: relative; flex: 1; min-height: 0; }
+.tv-graf-yta svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.tv-graf .natt-r { fill: var(--mint); }
+.tv-graf .under-r { fill: var(--under); }
+.tv-graf .nu-r { fill: var(--mint); }
+.tv-graf .prognos { fill: none; stroke: var(--mint); stroke-width: 2; stroke-dasharray: 5 5; opacity: .7; }
+.tv-graf .malstreck { stroke: var(--amber); stroke-width: 3; stroke-linecap: round; }
+.tv-graf .rutnat { stroke: var(--linje); stroke-width: 1; }
+.tv-graf text { font-family: var(--f-siffra); fill: var(--dov); }
+.tv-graf .v { fill: var(--text); }
+.tv-graf .v.nu, .tv-graf .man.nu { fill: var(--mint); font-weight: 600; }
+.tv-teckn { display: flex; flex-wrap: wrap; gap: calc(6 * var(--u)) calc(22 * var(--u)); font: 500 calc(14 * var(--u)) var(--f-siffra); color: var(--dov); letter-spacing: .04em; margin-top: calc(10 * var(--u)); }
+.tv-teckn i { display: inline-block; width: calc(12 * var(--u)); height: calc(12 * var(--u)); border-radius: 3px; margin-right: calc(8 * var(--u)); vertical-align: -1px; }
+
+.tv-flode { display: flex; flex-direction: column; }
+.tv-post { display: grid; grid-template-columns: calc(76 * var(--u)) minmax(0, 1fr) auto; align-items: center; gap: calc(14 * var(--u)); height: calc(50 * var(--u)); border-top: 1px solid var(--linje); position: relative; }
+.tv-post:first-child { border-top: 0; }
+.tv-post time { font: 500 calc(18 * var(--u)) var(--f-siffra); color: var(--dov); white-space: nowrap; }
+.tv-pn { font: 600 calc(22 * var(--u))/1.15 var(--f-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-pp { font: 400 calc(16 * var(--u)) var(--f-text); color: var(--dov); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-pv { font: 600 calc(24 * var(--u)) var(--f-siffra); white-space: nowrap; }
+.tv-post.tv-stor .tv-pv { color: var(--amber); }
+/* En order som kom in utan firande (för gammal, efterregistrerad) lyser till och tonar tillbaka. */
+.tv-post.tv-tyst-ny { animation: tv-blink 2.4s cubic-bezier(.2,0,0,1); }
+@keyframes tv-blink { from { background: rgba(79,209,165,.22); } to { background: transparent; } }
+
+/* Firandet: en ny order */
+.tv-fira { position: fixed; inset: 0; z-index: 10; pointer-events: none; }
+.tv-f-band, .tv-f-yta { position: absolute; inset: 0; }
+.tv-f-band { background: var(--mint); }
+.tv-f-yta { background: var(--scen); }
+.tv-f-inne { position: absolute; inset: 0; display: flex; flex-direction: column; padding: calc(104 * var(--u)) max(16px, calc(150 * var(--u))) calc(96 * var(--u)); }
+.tv-f-etikett { display: inline-flex; align-items: center; gap: calc(16 * var(--u)); font: 600 calc(26 * var(--u)) var(--f-siffra); letter-spacing: .2em; text-transform: uppercase; color: var(--mint); align-self: flex-start; }
+.tv-f-etikett i { width: calc(16 * var(--u)); height: calc(16 * var(--u)); border-radius: 50%; background: currentColor; }
+.tv-test { position: absolute; top: calc(40 * var(--u)); right: max(16px, calc(48 * var(--u))); font: 600 calc(18 * var(--u)) var(--f-siffra); letter-spacing: .2em; color: var(--scen); background: var(--amber); border-radius: calc(6 * var(--u)); padding: calc(6 * var(--u)) calc(12 * var(--u)); }
+.tv-f-namn { align-self: flex-start; margin-top: calc(30 * var(--u)); font: 800 calc(176 * var(--u))/1.02 var(--f-rubrik); letter-spacing: -0.035em; white-space: nowrap; transform-origin: 0 50%; }
+.tv-ord { display: inline-block; overflow: hidden; vertical-align: bottom; padding: 0 .03em .1em 0; margin-bottom: -.1em; }
+.tv-ord > span { display: inline-block; }
+.tv-f-varde { align-self: flex-start; margin-top: calc(18 * var(--u)); display: flex; align-items: baseline; font: 800 calc(290 * var(--u))/1 var(--f-rubrik); letter-spacing: -0.02em; color: var(--mint); transform-origin: 0 70%; }
+.tv-od-c { display: inline-block; height: 1em; clip-path: inset(0 -0.3em); text-align: center; }
+.tv-od-s { display: flex; flex-direction: column; }
+.tv-od-s span { display: block; height: 1em; line-height: 1; }
+.tv-od-mell { display: inline-block; width: .2em; }
+.tv-f-kr { font-size: .32em; color: var(--dov); margin-left: .3em; letter-spacing: 0; }
+.tv-f-vad { margin-top: calc(22 * var(--u)); font: 500 calc(44 * var(--u)) var(--f-text); color: var(--dov); }
+.tv-f-vad b { color: var(--text); font-weight: 600; }
+.tv-f-fakta { margin-top: auto; display: flex; flex-wrap: wrap; gap: calc(16 * var(--u)); }
+.tv-f-fakta span { font: 500 calc(28 * var(--u)) var(--f-text); color: var(--dov); background: rgba(234,243,239,.07); border-radius: 99px; padding: calc(12 * var(--u)) calc(26 * var(--u)); }
+.tv-f-fakta b { color: var(--text); font-weight: 600; }
+.tv-f-fakta .tv-hojd { color: var(--scen); background: var(--amber); }
+.tv-f-fakta .tv-hojd b { color: inherit; }
+.tv-f-lag { margin-top: calc(34 * var(--u)); }
+.tv-f-lag-text { display: flex; justify-content: space-between; gap: calc(24 * var(--u)); font: 500 calc(22 * var(--u)) var(--f-siffra); letter-spacing: .08em; text-transform: uppercase; color: var(--dov); }
+.tv-f-lag-text b { color: var(--text); font-weight: 600; }
+.tv-f-lag-spar { position: relative; margin-top: calc(14 * var(--u)); height: calc(16 * var(--u)); border-radius: 99px; background: rgba(234,243,239,.08); overflow: hidden; }
+.tv-f-lag-spar div { position: absolute; inset: 0 auto 0 0; border-radius: 99px; background: var(--mint); }
+.tv-f-mini { position: absolute; }
+.tv-f-mini .tv-post { height: 100%; border: 0; }
+
+/* Serien: raderna byggs upp en i taget. */
+.tv-s-rader { margin-top: calc(36 * var(--u)); display: flex; flex-direction: column; gap: calc(10 * var(--u)); }
+.tv-s-rad { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: calc(32 * var(--u)); padding: calc(14 * var(--u)) 0; border-bottom: 1px solid rgba(234,243,239,.08); }
+.tv-s-namn { font: 700 calc(64 * var(--u))/1.05 var(--f-rubrik); letter-spacing: -0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-s-namn small { margin-left: calc(20 * var(--u)); font: 500 calc(28 * var(--u)) var(--f-text); color: var(--dov); letter-spacing: 0; }
+.tv-s-varde { font: 700 calc(64 * var(--u))/1 var(--f-rubrik); color: var(--mint); white-space: nowrap; }
+.tv-s-varde .tv-f-kr { font-size: .45em; }
+.tv-s-rad.tv-stor .tv-s-varde { color: var(--amber); }
+.tv-s-fler { font: 500 calc(28 * var(--u)) var(--f-text); color: var(--dov); padding-top: calc(10 * var(--u)); }
+.tv-s-summa { margin-top: calc(26 * var(--u)); font: 500 calc(40 * var(--u)) var(--f-text); color: var(--dov); }
+.tv-s-summa b { color: var(--text); font-weight: 600; }
+
+/* Firandet: en stor affär. Egen komposition: springa, trumvirvel, smäll, amber. */
+.tv-jatte .tv-f-inne { padding: 0; display: block; }
+.tv-j-rader { position: absolute; inset: 0; display: grid; grid-template-rows: repeat(5, 1fr); align-items: center; overflow: hidden; }
+.tv-j-rad { white-space: nowrap; }
+.tv-j-rad span { display: inline-block; font: 800 calc(200 * var(--u))/1 var(--f-rubrik); letter-spacing: -0.02em; text-transform: uppercase; color: transparent; -webkit-text-stroke: calc(2 * var(--u)) var(--j-ton, transparent); }
+.tv-j-kant { position: absolute; left: 0; right: 0; height: calc(4 * var(--u)); background: var(--amber); }
+.tv-j-ring { position: absolute; left: 50%; top: 50%; width: calc(360 * var(--u)); height: calc(360 * var(--u)); margin: calc(-180 * var(--u)) 0 0 calc(-180 * var(--u)); border: calc(6 * var(--u)) solid var(--scen); border-radius: 50%; opacity: 0; }
+.tv-j-mitt { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 0 max(16px, calc(120 * var(--u))); }
+.tv-j-mitt .tv-f-etikett { align-self: center; }
+.tv-j-varde { align-self: center; font-size: calc(300 * var(--u)); color: var(--amber); transform-origin: 50% 55%; margin-top: calc(18 * var(--u)); }
+.tv-j-varde .tv-f-kr { color: inherit; }
+.tv-j-varde.tv-snurrar .tv-od-c { -webkit-mask-image: linear-gradient(transparent, #000 24%, #000 76%, transparent); mask-image: linear-gradient(transparent, #000 24%, #000 76%, transparent); }
+.tv-j-saker { width: calc(560 * var(--u)); max-width: 80%; height: calc(6 * var(--u)); margin-top: calc(18 * var(--u)); border-radius: 99px; background: rgba(242,178,76,.18); overflow: hidden; }
+.tv-j-saker div { height: 100%; background: var(--amber); transform-origin: 0 50%; }
+.tv-j-namn { margin-top: calc(2 * var(--u)); font: 800 calc(132 * var(--u))/1.02 var(--f-rubrik); letter-spacing: -0.035em; white-space: nowrap; color: var(--scen); }
+.tv-j-vad { margin-top: calc(16 * var(--u)); font: 500 calc(40 * var(--u)) var(--f-text); color: color-mix(in srgb, var(--scen) 72%, transparent); }
+.tv-j-vad b { color: var(--scen); font-weight: 600; }
+.tv-j-fakta { margin-top: calc(34 * var(--u)); justify-content: center; }
+.tv-jatte .tv-j-fakta span { color: color-mix(in srgb, var(--scen) 78%, transparent); background: color-mix(in srgb, var(--scen) 10%, transparent); }
+.tv-jatte .tv-j-fakta b { color: var(--scen); }
+.tv-jatte .tv-j-fakta .tv-hojd { background: var(--scen); color: var(--amber); }
+.tv-jatte .tv-j-fakta .tv-hojd b { color: inherit; }
+.tv-j-lag { width: min(calc(1100 * var(--u)), 100%); margin-top: calc(40 * var(--u)); text-align: left; }
+.tv-jatte .tv-f-lag-text { color: color-mix(in srgb, var(--scen) 70%, transparent); }
+.tv-jatte .tv-f-lag-text b { color: var(--scen); }
+.tv-j-spar { position: relative; margin-top: calc(14 * var(--u)); height: calc(18 * var(--u)); border-radius: 99px; background: color-mix(in srgb, var(--scen) 14%, transparent); overflow: hidden; }
+.tv-j-spar div { position: absolute; top: 0; bottom: 0; }
+.tv-j-fore { left: 0; background: color-mix(in srgb, var(--scen) 40%, transparent); }
+.tv-j-ny { background: var(--scen); }
+
+/* Firandet: målet nått */
+.tv-malet { position: fixed; inset: 0; z-index: 11; pointer-events: none; background: var(--scen); display: grid; place-items: center; }
+.tv-malet-inre { text-align: center; padding: 0 max(16px, calc(80 * var(--u))); }
+.tv-malet .tv-f-etikett { color: var(--amber); align-self: center; }
+.tv-malet h3 { margin: calc(28 * var(--u)) 0 0; font: 800 calc(250 * var(--u))/0.98 var(--f-rubrik); letter-spacing: -0.045em; color: var(--amber); }
+.tv-malet-rad { margin: calc(30 * var(--u)) 0 0; font: 500 calc(40 * var(--u)) var(--f-text); color: var(--dov); }
+.tv-malet-rad b { color: var(--text); font-weight: 600; }
+.tv-malet-summa { margin-top: calc(30 * var(--u)); display: flex; flex-direction: column; align-items: center; gap: calc(8 * var(--u)); }
+.tv-malet-summa small { font: 500 calc(24 * var(--u)) var(--f-siffra); letter-spacing: .14em; text-transform: uppercase; color: var(--dov); }
+.tv-malet-summa .tv-f-varde { align-self: center; margin: 0; font-size: calc(120 * var(--u)); color: var(--text); }
+.tv-laget { display: flex; flex-wrap: wrap; justify-content: center; gap: calc(14 * var(--u)); margin: calc(44 * var(--u)) auto 0; max-width: calc(1560 * var(--u)); }
+.tv-laget span { font: 500 calc(24 * var(--u)) var(--f-text); background: var(--yta-2); border-radius: 99px; padding: calc(10 * var(--u)) calc(22 * var(--u)); }
+.tv-laget span b { font-family: var(--f-siffra); color: var(--amber); margin-left: calc(10 * var(--u)); }
+.tv-laget span em { font: normal 400 calc(20 * var(--u)) var(--f-siffra); color: var(--dov); margin-left: calc(10 * var(--u)); }
+
+/* Styrningen svävar över tavlan och gömmer sig när ingen rör musen. */
+.tv-styr {
+  position: fixed; z-index: 20; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); translate: -50% 0;
+  width: max-content; max-width: calc(100vw - 32px);
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; padding: 8px;
+  background: rgba(10, 31, 24, .88); border: 1px solid var(--linje); border-radius: 14px;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 12px 40px rgba(0,0,0,.35);
+  transition: opacity .35s, translate .35s;
+}
+.tv-styr.tv-gomd { opacity: 0; translate: -50% 14px; pointer-events: none; }
+.tv-styr button, .tv-styr a { background: var(--yta); color: var(--text); border: 1px solid var(--linje); border-radius: 9px; padding: 8px 12px; font: 500 14px var(--f-text); cursor: pointer; display: inline-flex; align-items: center; gap: 8px; text-decoration: none; }
+.tv-styr button:hover, .tv-styr a:hover { background: var(--yta-2); }
+.tv-styr kbd { font: 500 11px var(--f-siffra); color: var(--dov); border: 1px solid var(--linje); border-radius: 4px; padding: 1px 5px; }
+.tv-styr button.tv-styr-ljud { border-color: var(--mint); color: var(--mint); }
+.tv-styr button[aria-pressed="true"] { background: var(--mint); color: var(--bg); border-color: var(--mint); }
+.tv-styr button[aria-pressed="true"] kbd { color: var(--bg); border-color: rgba(15,42,34,.3); }
+
+@media (max-width: 899px) {
+  .tv-scen { position: relative; inset: auto; min-height: 100%; grid-template-rows: auto auto; padding-bottom: 220px; }
+  .tv-huvud { flex-wrap: wrap; }
+  .tv-huvud-h { flex-wrap: wrap; gap: calc(18 * var(--u)); }
+  .tv-kropp { grid-template-columns: minmax(0, 1fr); }
+  .tv-rader { grid-template-rows: none; grid-auto-rows: calc(84 * var(--u)); }
+  .tv-rad, .tv-rad-huvud { grid-template-columns: calc(40 * var(--u)) minmax(0, 1fr) calc(52 * var(--u)) calc(60 * var(--u)) calc(150 * var(--u)); }
+  /* Monogrammet viker för namnet: på en telefon är namnet det som ska synas. */
+  .tv-ini { display: none; }
+  .tv-dag, .tv-rad-huvud > :nth-child(n+3):nth-child(-n+7) { display: none; }
+  .tv-hoger { grid-template-rows: auto; }
+  .tv-graf-yta { height: calc(320 * var(--u)); flex: none; }
+  /* Etiketterna får aldrig bli mindre än 10 px, hur smal skärmen än är. */
+  .tv-rad-huvud, .tv-kort-rubrik small, .tv-m-topp, .tv-m-stats small, .tv-teckn, .tv-live, .tv-ljudchip { font-size: max(10px, calc(14 * var(--u))); }
+  .tv-pp, .tv-m-fakta, .tv-marke span, .tv-huvud-h { font-size: max(12px, calc(18 * var(--u))); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tv-live i { animation: none; }
+  .tv-post.tv-tyst-ny { animation: none; background: rgba(79,209,165,.12); }
+  .tv-scen { transition: none; }
+}
+
+/* Raden som fått en order lyser mint och tonar tillbaka (opaciteten räknas ur landningen). */
+.tv-rad-ljus { position: absolute; inset: 0; border-radius: inherit; background: var(--mint); pointer-events: none; }
+/* Inbränningsskyddet flyttar hela tavlan 0–2 px var fjärde minut. */
+.tv-skift { position: fixed; inset: 0; }
+@media (max-width: 899px) { .tv-skift { position: static; transform: none !important; } }
+
+/* Startrutan på tavlan: prototypens formspråk, ett kort mitt på en dämpad tavla. */
+.tv-rot .sb-start {
+  position: fixed; inset: 0; z-index: 30; display: grid; place-content: center; justify-items: center; gap: calc(18 * var(--u));
+  background: rgba(10, 31, 24, 0.82); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); text-align: center; padding: 16px;
+}
+.tv-rot .sb-start-etikett { font: 600 calc(20 * var(--u)) var(--f-siffra); letter-spacing: .2em; color: var(--mint); }
+.tv-rot .sb-start-knapp {
+  font: 700 calc(40 * var(--u)) var(--f-rubrik); letter-spacing: -0.01em; color: var(--bg); background: var(--mint);
+  border: 0; border-radius: 99px; padding: calc(22 * var(--u)) calc(56 * var(--u)); cursor: pointer; width: auto; height: auto;
+}
+.tv-rot .sb-start-knapp:hover { background: #6fdcb7; }
+.tv-rot .sb-start p { margin: 0; max-width: 32em; font: 500 calc(24 * var(--u)) var(--f-text); color: var(--dov); }
+.tv-rot .sb-start-utan { font: 500 calc(20 * var(--u)) var(--f-text); color: var(--text); background: none; border: 0; border-bottom: 1px solid var(--linje); padding: 4px 2px; cursor: pointer; }

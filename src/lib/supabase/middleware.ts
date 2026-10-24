@@ -15,8 +15,14 @@ import { sakerNasta } from "@/lib/inloggning";
  * /api star med eftersom rutterna dar autentiserar sig sjalva — det
  * schemalagda jobbet har ingen session att visa upp, och skulle annars
  * omdirigeras till inloggningssidan och tyst gora ingenting.
+ *
+ * /salesboard star med av samma skal: saljtavlan hanger pa en TV utan session.
+ * Varje rutt och sida under /salesboard provar sjalv vem som fragar, en parad
+ * skarm eller en inloggad anstalld (src/lib/salesboard/atkomst.ts). Sessionen
+ * fornyas fortfarande har for den som ar inloggad, och steg tva och
+ * losenordsbytet galler som forut.
  */
-const PUBLIC = ["/logga-in", "/auth", "/uppstart", "/api"];
+const PUBLIC = ["/logga-in", "/auth", "/uppstart", "/api", "/salesboard"];
 
 /** E6.5. Kakan som haller nere dagsstamplingen. Bar ett datum, inget mer. */
 const AKTIVITETSKAKA = "nav_dag";
