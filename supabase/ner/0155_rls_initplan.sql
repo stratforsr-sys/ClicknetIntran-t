@@ -56,6 +56,7 @@ BEGIN
     ('public', 'contract_template', 'contract_template_read', '8f2433581851396108ec0f9e65f4b03d', 'd41d8cd98f00b204e9800998ecf8427e'),
     ('public', 'cost_calculation', 'cost_calculation_read', '845ae96c40aa4daf15164901131ebae0', 'd41d8cd98f00b204e9800998ecf8427e'),
     ('public', 'cost_rate', 'cost_rate_read', '845ae96c40aa4daf15164901131ebae0', 'd41d8cd98f00b204e9800998ecf8427e'),
+    ('public', 'cost_rate_replaced', 'cost_rate_replaced_read', '845ae96c40aa4daf15164901131ebae0', 'd41d8cd98f00b204e9800998ecf8427e'),
     ('public', 'course', 'course_read', '1aa6c885a45c11625c5d45cbd6c89cc2', 'd41d8cd98f00b204e9800998ecf8427e'),
     ('public', 'course_attempt', 'course_attempt_read', '934027327e3a17bfbbbe3184d1aa745e', 'd41d8cd98f00b204e9800998ecf8427e'),
     ('public', 'course_wish', 'course_wish_read', '5da1c7e2cdd94e6187529243b231b131', 'd41d8cd98f00b204e9800998ecf8427e'),
@@ -73,6 +74,7 @@ BEGIN
     ('public', 'employee_access_level', 'employee_access_level_read', '8809204b98f7f60acc15ca91494a05b4', 'd41d8cd98f00b204e9800998ecf8427e'),
     ('public', 'employee_onboarding', 'employee_onboarding_read', 'dcedd3096b54e7566556893fa2d6c33e', 'd41d8cd98f00b204e9800998ecf8427e'),
     ('public', 'employee_permission', 'employee_permission_read', 'f1a9a3210179702453f84d6ad3bfe78c', 'd41d8cd98f00b204e9800998ecf8427e'),
+    ('public', 'employee_photo', 'employee_photo_read', '9d314e679ac37d777161faf1dd2ac925', 'd41d8cd98f00b204e9800998ecf8427e'),
     ('public', 'employee_role', 'employee_role_read', '934027327e3a17bfbbbe3184d1aa745e', 'd41d8cd98f00b204e9800998ecf8427e'),
     ('public', 'error_occurrence', 'error_occurrence_las', '13956ba262bed60e9dfce028bcc6568a', 'd41d8cd98f00b204e9800998ecf8427e'),
     ('public', 'error_report', 'error_report_read', '4a173a8fc3faae3daa6ae1e0e506b73c', 'd41d8cd98f00b204e9800998ecf8427e'),
@@ -228,6 +230,7 @@ ALTER POLICY "contract_read" ON public."contract" USING ((far_hantera_avtal() OR
 ALTER POLICY "contract_template_read" ON public."contract_template" USING (far_hantera_avtal());
 ALTER POLICY "cost_calculation_read" ON public."cost_calculation" USING (har_lonekostnadsbehorighet());
 ALTER POLICY "cost_rate_read" ON public."cost_rate" USING (har_lonekostnadsbehorighet());
+ALTER POLICY "cost_rate_replaced_read" ON public."cost_rate_replaced" USING (har_lonekostnadsbehorighet());
 ALTER POLICY "course_read" ON public."course" USING ((((status = 'published'::text) AND matches_audience(audience_roles, '{}'::uuid[])) OR (owner_id = current_employee_id()) OR has_any_role(ARRAY['sales_manager'::text, 'admin'::text, 'ceo'::text])));
 ALTER POLICY "course_attempt_read" ON public."course_attempt" USING (((employee_id = current_employee_id()) OR can_read_all_employees() OR leads_employee(employee_id)));
 ALTER POLICY "course_wish_read" ON public."course_wish" USING (((employee_id = current_employee_id()) OR has_any_role(ARRAY['sales_manager'::text, 'admin'::text, 'ceo'::text])));
@@ -251,6 +254,7 @@ ALTER POLICY "employee_read" ON public."employee" USING ((((auth_user_id = auth.
 ALTER POLICY "employee_access_level_read" ON public."employee_access_level" USING (((employee_id = current_employee_id()) OR can_read_all_employees()));
 ALTER POLICY "employee_onboarding_read" ON public."employee_onboarding" USING (can_read_all_employees());
 ALTER POLICY "employee_permission_read" ON public."employee_permission" USING (((employee_id = current_employee_id()) OR has_any_role(ARRAY['sales_manager'::text, 'ceo'::text])));
+ALTER POLICY "employee_photo_read" ON public."employee_photo" USING ((current_employee_id() IS NOT NULL));
 ALTER POLICY "employee_role_read" ON public."employee_role" USING (((employee_id = current_employee_id()) OR can_read_all_employees() OR leads_employee(employee_id)));
 ALTER POLICY "error_occurrence_las" ON public."error_occurrence" USING (has_any_role(ARRAY['sales_manager'::text, 'ceo'::text, 'admin'::text]));
 ALTER POLICY "error_report_read" ON public."error_report" USING ((has_any_role(ARRAY['sales_manager'::text, 'ceo'::text, 'admin'::text]) OR (reporter_id = current_employee_id())));

@@ -5,6 +5,12 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-25 · 0155 körd: policyerna räknas en gång per sats
+
+- Genererad om ur `pg_policies` samma dag, sist av alla policyändringar (B10), eftersom en äldre
+  fil hade skrivit tillbaka gamla uttryck. Bevisad rad för rad för nio konton, 0 avvikelser.
+- Previewen som Zen: datan gick från cirka 1 000 ms till cirka 470 ms med varm anslutning.
+
 ## 2026-10-25 · Granskningen S16: behörighetsspärren (B13) och V4
 
 - **Superadmin på riktigt.** Beställaren 2026-10-23: raderna märkta "förslag" ska bara gå att göra

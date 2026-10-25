@@ -7,6 +7,18 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
 
 ---
 
+## 0155 KÖRD (2026-10-25 16:17 UTC), före mergen
+
+`0155_rls_initplan` är genererad på nytt ur dagens policyer (164 av 211 ändrade, två fler än
+versionen från 2026-10-21: `cost_rate_replaced_read`, `employee_photo_read`). Bevisad före
+körning: 1 476 prov (policy × konto), 185 913 rader, 0 avvikelser. Torrkörd fram och tillbaka,
+0 avvikelser. Previewen som Zen: datan cirka 1 000 ms varm före och cirka 470 ms efter, `pg-rest` 0
+och `pg-fel` 0. Återställning: `supabase/ner/0155_rls_initplan.sql`. **Varje policy som ändras
+härefter skrivs i initplan-form** (`( SELECT f() )`), annars blir den långsam igen. Nyhetsposten
+`nav-2-med-riktig-data` har mergedagens datum.
+
+---
+
 ## Granskningen S16 — behörighetsspärren (B13) och V4 (2026-10-25), på `nav2-utkast`
 
 Det som var märkt "förslag" i behörighetskortet är bara Superadmins (VD eller administratör), på

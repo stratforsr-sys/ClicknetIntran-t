@@ -46,7 +46,7 @@ K&V öppnas som förut, i det gamla Nav.
 ## Något som inte fungerar?
 
 Tryck **Rapportera fel**, i menyn eller med ⌘K. Sidan du stod på följer med.`,
-    datum: "2026-10-14",
+    datum: "2026-10-25",
     roller: [],
     href: "/nav2",
   },
