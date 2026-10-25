@@ -50,6 +50,9 @@ export const SKRIVLAGE = {
   sakerhet: true,
   // Beställarens ja 2026-10-21 (Gamla Nav G): Satser och löner sparar genom /nav2/satser. 0190 körd samma dag.
   satser: true,
+  // Beställaren 2026-10-25: säljtavlans inställningar ska gå att se och använda i Inställningar → Säljtavlan,
+  // bara för superadmin. Samma skrivningar som gamla /salesboard/installningar redan gjorde.
+  salesboard: true,
 } as const;
 
 export type Skrivvy = keyof typeof SKRIVLAGE;

@@ -7437,6 +7437,58 @@ body.nd-riktig :is(.pv-lagrad,.arow[data-agenda],.pv-tab tbody tr[data-pvupers],
 .kktal dd.ndsmall,.pv-strip dd.ndsmall,.pv-strip.ljus dd.ndsmall{margin:0;font:inherit;color:inherit;white-space:normal;overflow:visible;text-overflow:clip}
 .kktal dd.ndsmall{font-size:11.5px}
 .pv-strip dd.ndsmall{font-size:11px}
+/* <ndsb.css> */
+/* Säljtavlan (ndsb.js): bara det utkastets prf- och sats-delar inte redan har. Tokens som resten. */
+.sb-lage{grid-template-columns:repeat(3,minmax(0,1fr))}
+.sb-lage b,.sb-facit b{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb-facit>div>span+span{margin-top:1px}
+.sb-para{align-items:flex-start}
+.sb-para>.prf-f{max-width:none}
+.sb-para>.prf-f:first-child{flex:1 1 180px;max-width:220px}
+.sb-para>.prf-f:nth-child(2){flex:1 1 160px;max-width:240px}
+.sb-para>.sb-parak{flex:none;align-self:flex-end;padding-bottom:3px}
+.sb-para>.sb-parah{flex:1 1 100%;margin:-6px 0 0}
+.sb-kod{font-family:var(--f-mono);letter-spacing:.08em;text-transform:uppercase}
+.sb-kod::placeholder{letter-spacing:.08em}
+.sb-rad{flex-wrap:wrap}
+.sb-rad .prf-swt small{display:block}
+/* Hjälptexterna i korten bryts i stället för att kapas: de bär regeln, inte bara en rubrik. */
+[id^="prf-r-sb-"] .prf-swt small{white-space:normal;overflow:visible;text-overflow:clip}
+.sb-rad .prf-seg{margin:0;align-self:center}
+.sb-rad .sb-fraga{flex:none;gap:12px}
+.sb-namnin{height:32px;max-width:280px}
+.sb-dold .prf-swt b{color:var(--ink-2)}
+.sb-patavlan{color:var(--ink);font-weight:550}
+.sb-bred{max-width:none}
+.sb-smal{max-width:220px;margin-bottom:8px}
+.sb-tidspar{display:flex;align-items:center;gap:8px;color:var(--prf-ink-3)}
+.sb-tid{width:auto;padding-right:8px}
+.sb-steg{gap:10px}
+.sb-steg output{min-width:2ch;text-align:center;font-size:15px;font-weight:600;color:var(--ink)}
+.sb-dygn{margin:0;display:flex;flex-direction:column;gap:6px}
+.sb-dygn-rad{display:grid;grid-template-columns:72px minmax(0,1fr);align-items:center;gap:10px;font-size:12px;color:var(--prf-ink-3)}
+.sb-dygn-spar{position:relative;height:8px;border-radius:4px;background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--line)}
+.sb-dygn-spar i{position:absolute;top:0;bottom:0;border-radius:4px}
+.sb-arbete{background:color-mix(in srgb,var(--ink) 22%,transparent)}
+.sb-ljud{background:var(--brand)}
+.sb-dygn-spar b{position:absolute;top:-3px;bottom:-3px;width:2px;margin-left:-1px;border-radius:1px;background:var(--warn)}
+.sb-dygn-skala .sb-dygn-spar{height:14px;background:none;box-shadow:none}
+.sb-dygn-skala .sb-dygn-spar span{position:absolute;transform:translateX(-50%);font-size:11px;font-variant-numeric:tabular-nums}
+.sb-dygn-skala .sb-dygn-spar span:first-child{transform:none}
+.sb-dygn-skala .sb-dygn-spar span:last-child{transform:translateX(-100%)}
+.sb-dygn-skala>.num{font-variant-numeric:tabular-nums;color:var(--warn-ink)}
+.sb-tv ol{margin:10px 0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:12.5px;line-height:1.5;color:var(--ink-2)}
+.sb-tv ol b{font-weight:550;color:var(--ink)}
+.sb-kommando{display:flex;align-items:flex-start;gap:10px}
+.sb-kommando code{flex:1;min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface-2);font:11.5px/1.5 var(--f-mono);color:var(--ink-2);overflow-wrap:anywhere}
+.sb-farg{width:8px;height:8px;border-radius:50%;flex:none}
+.sb-mint{background:var(--brand)}
+.sb-barnsten{background:var(--warn)}
+.prf-summa+.sb-rad{border-top:0}
+@media (max-width:640px){.sb-para>.prf-f:first-child,.sb-para>.prf-f:nth-child(2){max-width:none}
+  /* Texten får hela raden; valen, knapparna och brytaren lägger sig under den. */
+  .sb-rad>.prf-swt{flex:1 1 calc(100% - 44px)}.sb-rad>.sb-fraga{margin-right:auto}.sb-rad>.prf-seg{margin-left:40px}}
+/* </ndsb.css> */
 </style>
 
 <div class="proto" role="region" aria-label="Prototypinställningar">
@@ -31163,6 +31215,571 @@ document.addEventListener('input', e => {
   const n = Object.keys(m).length, b = document.querySelector('[data-satstgspara]');
   if (b){ b.disabled = !n; b.textContent = n ? `Spara ${n} ${n === 1 ? 'intäkt' : 'intäkter'}` : 'Spara intäkter'; }
 });
+
+/* <ndsb> */
+/* =====================================================================
+   NAV 2.0 I RIKTIGT LÄGE: SÄLJTAVLAN (prefix sb)
+
+   Inställningar → Säljtavlan, bara för superadmin (beställaren 2026-10-25).
+   Allt som gamla /salesboard/installningar hade: skärmarna med parningen,
+   månadsmålet, visningen, firandet, ljudet med Lyssna och volymprovet,
+   säljarnas visning och testet. Datan är ND.saljtavlan
+   (src/lib/nav2/saljtavlan.ts, null för alla andra), och varje ändring går
+   genom /nav2/salesboard (POST, bakom SKRIVLAGE.salesboard, 423 i läsläge).
+
+   Varje kontroll sparar direkt, en i taget och i den ordning de gjordes. Det
+   som visas är det servern senast bekräftat med ändringarna som väntar ovanpå,
+   så ett nej tar bara bort sin egen ändring. Kortets rad säger vad som sparades,
+   med Ångra (prfStatus), och ett nej står i kortet.
+
+   Skärmlistan läses om var 30:e sekund medan sektionen är öppen, och var
+   tredje medan en nyss parad TV hämtar sin nyckel. "Sedd för …" räknas på
+   serverns klocka och går varje sekund utan att sektionen ritas om.
+
+   Före 0250 (installerad falskt) väntar skärmarna, säljarna och testet på
+   installationen; målet, visningen, firandet och ljudet sparar ändå.
+
+   Står efter ndsats.js i modullistan.
+   ===================================================================== */
+
+P.sbtv = '<rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M8.5 20h7M12 16.5V20"/>';
+const sbD = () => ND && ND.saljtavlan;
+const sbFar = () => !!sbD() && brhSuper();
+const sbOk = () => { const d = sbD(); return d && !d.fel ? d : null; };
+const SBTAL = new Intl.NumberFormat('sv-SE');
+const sbTal = n => SBTAL.format(n);
+const sbKr = n => `${SBTAL.format(Math.ceil(n))} kr`;
+const SBKL = new Intl.DateTimeFormat('sv-SE', {timeZone:'Europe/Stockholm', hour:'2-digit', minute:'2-digit', hourCycle:'h23'});
+const SBDAG = new Intl.DateTimeFormat('sv-SE', {timeZone:'Europe/Stockholm', day:'numeric', month:'short'});
+const sbKl = ms => SBKL.format(ms);
+const SBANSLUTEN_MS = 180000;
+const SBDOLT = 'En säljare';
+const SBKORT = 'salesboard';
+
+/* ---------- Tillståndet: det servern bekräftat, och det som väntar ovanpå ---------- */
+function sbSt(){
+  if (S.sb) return S.sb;
+  const d = sbOk();
+  S.sb = {bas:d ? d.installningar : null, vant:[], skarmar:d ? d.skarmar : [], skarmVant:[], personer:d ? d.personer : [], personVant:[], troskel:d ? d.troskel : null, personerInaktuella:false,
+    skew:d ? (Date.parse(d.serverNu) - Date.now()) || 0 : 0, lop:0, andringar:0, fel:{}, faltfel:{}, utk:{}, para:{kod:'', namn:'', skickar:false}, andrar:null, fragar:null,
+    vantaPa:null, uppdFel:null, kopierat:false, spelar:null, ljudLage:null, skickat:{}};
+  return S.sb;
+}
+const sbNu = () => Date.now() + sbSt().skew;
+// Samma sammanslagning som uppdatera() i src/lib/salesboard/installningar.ts, för det som väntar på svar.
+function sbLagg(i, delar){
+  const n = JSON.parse(JSON.stringify(i));
+  for (const [k, v] of Object.entries(delar)){
+    if (k === 'mal') Object.entries(v).forEach(([m, x]) => { if (x === null) delete n.mal[m]; else n.mal[m] = x; });
+    else if (k === 'firande') Object.entries(v).forEach(([f, x]) => { if (f === 'storAffar') Object.assign(n.firande.storAffar, x); else n.firande[f] = x; });
+    else if (k === 'ljud' || k === 'arbetsdag') Object.assign(n[k], v);
+    else n[k] = v;
+  }
+  return n;
+}
+const sbLaggSkarm = (l, op) => op.typ === 'bort' ? l.filter(s => s.id !== op.id) : l.map(s => s.id !== op.id ? s : op.typ === 'namn' ? {...s, namn:op.namn} : {...s, ljud:op.ljud});
+const sbInst = () => { const s = sbSt(); return s.vant.reduce((i, v) => sbLagg(i, v.delar), s.bas); };
+const sbSkarmar = () => { const s = sbSt(); return s.skarmVant.reduce((l, v) => sbLaggSkarm(l, v.op), s.skarmar); };
+const sbPersoner = () => { const s = sbSt(); if (s.personerInaktuella) return null; return s.personVant.reduce((l, v) => l.map(p => p.id === v.id ? {...p, visning:v.visning} : p), s.personer); };
+
+/* ---------- Klockan, kalendern och namnen: tavlans egna regler (regler.ts, saljtakt.ts) ---------- */
+const sbMin = hhmm => { const [h, m] = String(hhmm).split(':').map(Number); return h * 60 + m; };
+function sbIFonster(min, fran, till){ const a = sbMin(fran), b = sbMin(till); if (a === b) return false; return a < b ? min >= a && min < b : min >= a || min < b; }
+const sbArbetsdag = datum => { const d = new Date(datum + 'T12:00:00Z').getUTCDay(); return d !== 0 && d !== 6 && !sbOk().roda.includes(datum); };
+function sbLjudTillatet(ms, l){ if (!l.pa || l.volym <= 0) return false; const t = ndTid(new Date(ms)); if (l.helgTyst && !sbArbetsdag(t.datum)) return false; return sbIFonster(t.min, l.fran, l.till); }
+function sbInomArbetsdag(ms, a){ const t = ndTid(new Date(ms)); return sbArbetsdag(t.datum) && sbIFonster(t.min, a.fran, a.till); }
+function sbLjudlage(i, nu){
+  if (!i.ljud.pa) return {kort:'Ljudet av', lang:'Av på alla skärmar.', pa:false};
+  if (i.ljud.volym <= 0) return {kort:'Ljudet på 0', lang:'Volymen är 0, så det hörs inget.', pa:false};
+  if (sbLjudTillatet(nu, i.ljud)) return {kort:`Ljudet på, ${i.ljud.volym}`, lang:'Låter nu, på skärmarna som spelar ljud.', pa:true};
+  if (i.ljud.fran === i.ljud.till) return {kort:'Tyst nu', lang:'Ljudtiden börjar och slutar samtidigt, så tavlan är alltid tyst.', pa:false};
+  return {kort:'Tyst nu', lang:`Tyst nu. Tavlan låter ${i.ljud.helgTyst ? 'vardagar ' : ''}${i.ljud.fran}–${i.ljud.till}.`, pa:false};
+}
+function sbSedan(tid, nu){
+  const ms = Math.max(0, nu - tid);
+  if (ms < 5000) return 'nyss';
+  if (ms < 60000) return `för ${Math.floor(ms / 1000)} s sedan`;
+  if (ms < 3600000) return `för ${Math.floor(ms / 60000)} min sedan`;
+  const dag = ndTid(new Date(tid)).datum;
+  if (dag === ndTid(new Date(nu)).datum) return `i dag ${sbKl(tid)}`;
+  if (dag === ndTid(new Date(nu - 86400000)).datum) return `i går ${sbKl(tid)}`;
+  return `${SBDAG.format(tid).replace('.', '')} ${sbKl(tid)}`;
+}
+const sbAnsluten = (s, nu) => s.sedd !== null && nu - Date.parse(s.sedd) < SBANSLUTEN_MS;
+const sbArDold = v => v !== 'namn' && v !== 'initialer';
+const sbRensa = n => typeof n === 'string' ? n.normalize('NFC').trim() : '';
+const sbForsta = n => [...sbRensa(n).toLocaleUpperCase('sv-SE')][0] || '';
+function sbVisningsnamn(fornamn, efternamn, form, vis){
+  if (sbArDold(vis)) return SBDOLT;
+  const f = sbRensa(fornamn), e = sbRensa(efternamn);
+  if (vis === 'initialer') return [sbForsta(f), sbForsta(e)].filter(Boolean).map(b => b + '.').join(' ') || SBDOLT;
+  const delar = form === 'fornamn' ? [f] : form === 'hela' ? [f, e] : [f, e && `${sbForsta(e)}.`];
+  return delar.filter(Boolean).join(' ') || SBDOLT;
+}
+const sbInitialer = (f, e, vis) => sbArDold(vis) ? '·' : (sbForsta(f) + sbForsta(e)) || '·';
+// Ett mål gäller tills ett nytt sätts (malFor).
+const sbMalFor = (mal, manad) => Object.keys(mal).filter(k => k <= manad).sort().reduce((v, k) => mal[k], null);
+function sbManader(){ const d = ndIdag(), ar = +d.slice(0, 4), m = +d.slice(5, 7); return [d.slice(0, 7), m === 12 ? `${ar + 1}-01` : `${ar}-${String(m + 1).padStart(2, '0')}`]; }
+function sbArbetsdagar(manad){ const [ar, m] = manad.split('-').map(Number), sista = new Date(Date.UTC(ar, m, 0)).getUTCDate(); let n = 0; for (let d = 1; d <= sista; d++) if (sbArbetsdag(`${manad}-${String(d).padStart(2, '0')}`)) n++; return n; }
+const sbManadNamn = manad => NDMAN[+manad.slice(5, 7)] || manad;
+const sbStor = s => s.charAt(0).toUpperCase() + s.slice(1);
+const sbPerDag = (mal, manad) => { const n = sbArbetsdagar(manad); return n ? {kr:Math.ceil(mal / n / 100) * 100, dagar:n} : null; };
+
+/* ---------- Skrivvägen: en i taget, i den ordning de gjordes ---------- */
+let sbKo = Promise.resolve();
+function sbKor(kropp, knapp){ const p = sbKo.then(() => ndSkriv('/nav2/salesboard', kropp, {knapp})); sbKo = p.catch(() => {}); return p; }
+function sbNej(kort, r){
+  if (r.utloggad) ndSkrivFel(r);
+  const s = sbSt(); s.fel[kort] = r.fel || 'Det gick inte att spara.'; S.prfSr = s.fel[kort];
+}
+// Delarna skickas, och `omvand(fore)` ger delarna som tar tillbaka det som gällde före, för Ångra.
+function sbSpara(kort, vad, delar, omvand, angra = false){
+  const s = sbSt(), fore = sbInst(), n = ++s.lop;
+  s.vant.push({n, delar}); delete s.fel[kort]; render();
+  return sbKor({handling:'spara', delar}).then(r => {
+    s.vant = s.vant.filter(v => v.n !== n);
+    // Ett Ångra som inte gick fram får inte stå kvar som "Ångrat.".
+    if (!r.ok){ if (!r.pagar) sbNej(kort, r); if (angra) delete S.prfSparat[kort]; render(); return; }
+    const d = r.data;
+    if (d.installningar) s.bas = d.installningar;
+    if (d.personer){ s.personer = d.personer; s.personerInaktuella = false; }
+    if (d.personerInaktuella) s.personerInaktuella = true;
+    if ('troskel' in d) s.troskel = d.troskel;
+    const tillbaka = omvand && !angra ? omvand(fore) : null;
+    prfStatus(kort, angra ? 'Ångrat.' : `${vad}: sparat.`, tillbaka ? () => sbSpara(kort, vad, tillbaka, null, true) : null);
+    S.prfSr = angra ? `${vad}: ångrat.` : `${vad}: sparat.`;
+    render();
+  });
+}
+function sbSkarm(op, kropp, vad, klart, tillbaka){
+  const s = sbSt(), n = ++s.lop;
+  s.skarmVant.push({n, op}); delete s.fel['sb-skarmar']; render();
+  return sbKor(kropp).then(r => {
+    s.andringar++; s.skarmVant = s.skarmVant.filter(v => v.n !== n);
+    if (!r.ok){ if (!r.pagar) sbNej('sb-skarmar', r); render(); return; }
+    s.skarmar = r.data.skarmar || sbLaggSkarm(s.skarmar, op);
+    prfStatus('sb-skarmar', klart, tillbaka ? () => sbSkarm(tillbaka.op, tillbaka.kropp, vad, 'Ångrat.', null) : null);
+    S.prfSr = `${vad}: ${klart.toLowerCase()}`;
+    render();
+  });
+}
+const SBVIS = [['namn', 'Namn'], ['initialer', 'Initialer'], ['dold', 'Dold']];
+function sbPerson(p, vis, angra = false){
+  const s = sbSt(), gammal = (sbPersoner() || []).find(x => x.id === p.id)?.visning ?? p.visning, n = ++s.lop, namn = `${p.fornamn} ${p.efternamn}`.trim() || 'Utan namn';
+  s.personVant.push({n, id:p.id, visning:vis}); delete s.fel['sb-saljare']; render();
+  // Bara visningen skickas (R33): en sida som stått öppen länge skriver aldrig över något annat.
+  return sbKor({handling:'person', id:p.id, display:vis}).then(r => {
+    s.personVant = s.personVant.filter(v => v.n !== n);
+    if (!r.ok){ if (!r.pagar) sbNej('sb-saljare', r); render(); return; }
+    s.personer = s.personer.map(x => x.id === p.id ? {...x, visning:vis} : x);
+    const text = `${namn}: ${SBVIS.find(v => v[0] === vis)[1].toLowerCase()}.`;
+    prfStatus('sb-saljare', angra ? 'Ångrat.' : text, angra ? null : () => sbPerson(p, gammal, true));
+    S.prfSr = text; render();
+  });
+}
+async function sbPara(knapp){
+  const s = sbSt(); if (s.para.skickar || !sbKodKlar()) return;
+  const namn = s.para.namn.replace(/\s+/g, ' ').trim() || `Skärm ${sbSkarmar().length + 1}`;
+  s.para.skickar = true; delete s.fel['sb-skarmar']; render();
+  const r = await sbKor({handling:'para', kod:sbRenKod(s.para.kod), namn}, knapp);
+  s.para.skickar = false; s.andringar++;
+  if (!r.ok){ if (!r.pagar) sbNej('sb-skarmar', r); render(); return; }
+  if (r.data.skarmar) s.skarmar = r.data.skarmar;
+  if (r.data.ny) s.vantaPa = {id:r.data.ny, till:Date.now() + 90000};
+  s.para = {kod:'', namn:'', skickar:false};
+  prfStatus('sb-skarmar', `${namn} är parad.`, null);
+  S.prfSr = `${namn} är parad. TV:n hämtar sin nyckel inom några sekunder.`; render();
+}
+async function sbTesta(typ, etikett, knapp){
+  const s = sbSt(); if (s.skickat[typ]) return;
+  s.skickat[typ] = 'pa'; delete s.fel['sb-test']; render();
+  const r = await sbKor({handling:'testa', typ}, knapp);
+  if (!r.ok){ delete s.skickat[typ]; if (!r.pagar) sbNej('sb-test', r); render(); return; }
+  s.skickat[typ] = 'klar'; prfStatus('sb-test', `${etikett}: skickat.`, null); S.prfSr = `${etikett}: skickat.`; render();
+  setTimeout(() => { if (s.skickat[typ] === 'klar'){ delete s.skickat[typ]; render(); } }, 1500);
+}
+// Skärmarna, för "sedd för …". En läsning som startade före en ändring av skärmarna kan bära den gamla listan.
+async function sbLasOm(){
+  const s = sbSt(); if (s.lasar) return;
+  s.lasar = true; const fore = s.andringar;
+  const r = await ndLas('/nav2/salesboard'); s.lasar = false;
+  if (!r.ok){ if (r.utloggad) ndSkrivFel(r); s.uppdFel = Date.now(); render(); return; }
+  s.uppdFel = null; if (r.data.nu) s.skew = Date.parse(r.data.nu) - Date.now() || 0;
+  if (r.data.skarmar && fore === s.andringar && !s.skarmVant.length) s.skarmar = r.data.skarmar;
+  render();
+}
+
+/* ---------- Ljudet: samma filer, samma normalisering och kompressor som tavlan (ljud.ts) ---------- */
+const SBLJUD = {ctx:null, huvud:null, buf:{}, laddar:null};
+async function sbLjudUpp(){
+  const L = SBLJUD;
+  if (L.ctx && L.ctx.state === 'closed') Object.assign(L, {ctx:null, huvud:null, laddar:null});
+  if (!L.ctx){
+    const K = window.AudioContext || window.webkitAudioContext; if (!K) return 'saknas';
+    const ctx = new K(), komp = ctx.createDynamicsCompressor(), h = ctx.createGain();
+    Object.assign(komp.threshold, {value:-10}); Object.assign(komp.knee, {value:6}); Object.assign(komp.ratio, {value:3}); Object.assign(komp.attack, {value:.003}); Object.assign(komp.release, {value:.25});
+    komp.connect(ctx.destination); h.connect(komp); Object.assign(L, {ctx, huvud:h});
+  }
+  const ctx = L.ctx;
+  L.laddar = L.laddar || Promise.all(['svisch', 'kassa', 'horn'].filter(id => !L.buf[id]).map(id => fetch(`/salesboard/ljud/${id}.m4a`, {cache:'force-cache'})
+    .then(r => { if (!r.ok) throw new Error(String(r.status)); return r.arrayBuffer(); }).then(b => ctx.decodeAudioData(b))
+    .then(buf => { let t = 0; for (let c = 0; c < buf.numberOfChannels; c++){ const d = buf.getChannelData(c); for (let i = 0; i < d.length; i += 4) t = Math.max(t, Math.abs(d[i])); } L.buf[id] = {buf, norm:t > 0 ? .9 / t : 1}; })
+    .catch(e => console.warn('Säljtavlan: ljudet gick inte att läsa:', id, e && e.message)))).then(() => { if (Object.keys(L.buf).length < 3) L.laddar = null; });
+  // resume() anropas i själva klicket: Safari släpper bara fram ljud i gesten.
+  if (ctx.state !== 'running') await Promise.race([Promise.resolve(ctx.resume()).catch(() => {}), new Promise(r => setTimeout(r, 1500))]);
+  if (ctx.state !== 'running') return 'blockerat';
+  await Promise.race([L.laddar, new Promise(r => setTimeout(r, 4000))]);
+  return 'igang';
+}
+function sbLjudet(id, t, styrka = 1, fran = 0){
+  const L = SBLJUD, x = L.buf[id]; if (!x || !L.ctx) return;
+  const k = L.ctx.createBufferSource(), g = L.ctx.createGain();
+  k.buffer = x.buf; g.gain.value = x.norm * styrka; k.connect(g).connect(L.huvud);
+  k.onended = () => { try { k.disconnect(); g.disconnect(); } catch(_){} };
+  k.start(t, fran);
+}
+async function sbLyssna(vad, volym, ms, spel){
+  const s = sbSt(), lage = await sbLjudUpp();
+  s.ljudLage = lage; if (lage !== 'igang'){ render(); return; }
+  const L = SBLJUD, t = L.ctx.currentTime;
+  L.huvud.gain.cancelScheduledValues(t); L.huvud.gain.setValueAtTime(.9 * (volym / 100) ** 2, t);
+  if (volym <= 0){ render(); return; }
+  spel(t + .05); s.spelar = vad; render();
+  clearTimeout(s.spelarT); s.spelarT = setTimeout(() => { if (s.spelar === vad){ s.spelar = null; render(); } }, ms);
+}
+// En ny order som på tavlan: svischet, kassans "ching" när värdet landar, och hornet.
+const sbProv = v => sbLyssna('prov', v, 2600, t => { sbLjudet('svisch', t, .45, .18); sbLjudet('kassa', t + 1.07); sbLjudet('horn', t + 1.54, .5); });
+const sbVolymProv = v => { if (v > 0) sbLyssna('volym', v, 900, t => sbLjudet('kassa', t)); };
+
+/* ---------- Byggstenarna ---------- */
+const sbAv = () => sbOk().skriv ? '' : 'disabled';
+const sbFelP = id => { const f = sbSt().fel[id]; return f ? `<p class="prf-fel" role="alert">${I('prfvarn')}<span>${esc(f)}</span></p>` : ''; };
+const sbKort = (id, titel, besk, inne) => prfKort(id, titel, besk, `<div class="prf-kb">${inne}${sbFelP(id)}</div>`);
+const sbVantar = vad => `<p class="sats-las">${I('prflas')}<span>${vad} väntar på installationen av säljtavlans tabeller. Målet, visningen, firandet och ljudet går att ändra redan nu.</span></p>`;
+const sbSw = (data, on, l, h, extra = '') => { const id = 'sbSw' + data.replace(/\W/g, ''); return `<div class="prf-swrad"><span class="prf-swt"><b id="${id}L">${l}</b>${h ? `<small id="${id}H">${h}</small>` : ''}</span>${extra}<button type="button" role="switch" class="prf-sw" aria-checked="${on}" aria-labelledby="${id}L" ${h ? `aria-describedby="${id}H"` : ''} data-${data} ${sbAv()}><i></i></button></div>`; };
+const sbSeg = (namn, etikett, val, alt) => `<fieldset class="prf-seg" aria-label="${esc(etikett)}">${alt.map(([v, l]) => `<label><input type="radio" name="sb-${namn}" value="${v}" data-sbval="${namn}" ${val === v ? 'checked' : ''} ${sbAv()}><span>${l}</span></label>`).join('')}</fieldset>`;
+const sbTid = (nyckel, varde, etikett) => { const u = sbSt().utk[nyckel]; return `<input type="time" class="prf-in sb-tid" data-sbtid="${nyckel}" aria-label="${etikett}" value="${esc(u ?? varde)}" ${sbAv()}>`; };
+function sbBelopp(nyckel, varde, etikett, tomText = ''){
+  const s = sbSt(), u = s.utk[nyckel], fel = s.faltfel[nyckel], id = 'sbB-' + nyckel.replace(/\W/g, '-');
+  return `<span class="sats-enh"><input id="${id}" class="prf-in num" inputmode="numeric" autocomplete="off" data-sbbelopp="${nyckel}" aria-label="${esc(etikett)}" placeholder="${esc(tomText)}" value="${esc(u ?? (varde === null ? '' : sbTal(varde)))}" ${fel ? `aria-invalid="true" aria-describedby="${id}F"` : ''} ${sbAv()}><span aria-hidden="true">kr</span></span>${fel ? `<p class="prf-fel" id="${id}F">${I('prfvarn')}<span>${esc(fel)}</span></p>` : ''}`;
+}
+const sbRenKod = kod => String(kod).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, sbOk().granser.kod.langd);
+const sbKodFel = ren => [...new Set([...ren].filter(t => !sbOk().granser.kod.alfabet.includes(t)))];
+const sbKodKlar = () => { const r = sbRenKod(sbSt().para.kod); return r.length === sbOk().granser.kod.langd && !sbKodFel(r).length; };
+const sbKodVisad = ren => { const h = sbOk().granser.kod.langd / 2; return ren.length > h ? `${ren.slice(0, h)}-${ren.slice(h)}` : ren; };
+
+/* ---------- Läget överst: skärmarna, ljudet och laget ---------- */
+function sbLageHtml(i, nu){
+  const d = sbOk(), l = sbSkarmar(), anslutna = l.filter(s => sbAnsluten(s, nu)).length, lj = sbLjudlage(i, nu), lag = d.lagen.find(x => x.id === i.lag);
+  const skarm = !d.installerad ? 'Väntar' : !l.length ? 'Ingen parad' : `${anslutna}/${l.length}`;
+  return `<div class="brh-antal sb-lage" aria-label="Tavlan just nu"><div><span>Skärmar anslutna</span><b class="num">${skarm}</b></div><div><span>Ljud</span><b class="${lj.pa ? 'sats-gron' : ''}">${esc(lj.kort)}</b></div><div><span>Laget</span><b>${esc(lag ? lag.namn : 'Alla lag')}</b></div></div>`;
+}
+
+/* ---------- Skärmar ---------- */
+function sbSkarmLage(s, nu){
+  if (!s.parad){ const gammal = nu - Date.parse(s.skapad) > sbOk().granser.kod.giltigMs + 60000; return gammal ? ['prf-varn', 'TV:n anslöt aldrig. Koppla bort och para igen.'] : ['prf-varn', 'Väntar på TV:n']; }
+  if (!s.sedd) return ['prf-neutral', 'Parad, inte sedd än'];
+  const t = Date.parse(s.sedd); return [nu - t < SBANSLUTEN_MS ? 'prf-ok' : 'prf-neutral', `Sedd ${sbSedan(t, nu)}`];
+}
+function sbSkarmRad(s, nu){
+  const S2 = sbSt(), [klass, text] = sbSkarmLage(s, nu), andrar = S2.andrar && S2.andrar.id === s.id, fragar = S2.fragar === s.id, g = sbOk().granser;
+  const namn = andrar ? `<input class="prf-in sb-namnin" id="sbNamn-${s.id}" data-sbnamnin="${s.id}" maxlength="${g.namn}" value="${esc(S2.andrar.namn)}" aria-label="Nytt namn för ${esc(s.namn)}" autocomplete="off">` : `<b>${esc(s.namn)}</b>`;
+  const knappar = fragar ? `<span class="prf-knappar sb-fraga" role="group" aria-label="Koppla bort ${esc(s.namn)}?"><button type="button" class="btn btn-s btn-sm prf-slang" data-sbbort="${s.id}" ${sbAv()}>Koppla bort</button><button type="button" class="btn btn-s btn-sm" data-sbbortx>Avbryt</button></span>`
+    : `<span class="prf-knappar sb-fraga"><button type="button" class="prf-angra" data-sbbyt="${s.id}" ${andrar ? 'disabled' : ''} ${sbAv()}>Byt namn</button><button type="button" class="prf-angra prf-slang" data-sbfraga="${s.id}" ${sbAv()}>Koppla bort</button></span>`;
+  return `<div class="prf-swrad sb-rad" id="sbSkarm-${s.id}"><span class="prf-swt">${namn}<small><span class="prf-dot ${klass}" ${s.sedd && s.parad ? `data-sbsedd="${esc(s.sedd)}"` : ''}>${esc(text)}</span>${s.webblasare ? ` · <span class="num">${esc(s.webblasare)}</span>` : ''}</small>
+      ${s.tv ? `<small>TV:ns egen webbläsare släpper sällan fram ljud. En mini-PC med Chromium är säkrare.</small>` : ''}${fragar ? `<small>TV:n visar parningen igen vid nästa hämtning, inom en minut.</small>` : ''}</span>
+    ${knappar}<span class="prf-n" aria-hidden="true">Ljud</span><button type="button" role="switch" class="prf-sw" aria-checked="${s.ljud}" aria-label="Spela ljud på ${esc(s.namn)}" data-sbskarmljud="${s.id}" ${sbAv()}><i></i></button></div>`;
+}
+function sbParaHtml(){
+  const s = sbSt(), g = sbOk().granser.kod, ren = sbRenKod(s.para.kod), fel = sbKodFel(ren), forslag = `Skärm ${sbSkarmar().length + 1}`;
+  return `<form class="sats-par sb-para" data-sbpara novalidate>
+    <div class="prf-f"><label for="sbKod">Kod från TV:n</label><span class="sats-enh"><input id="sbKod" class="prf-in sb-kod" data-sbkod value="${esc(sbKodVisad(ren))}" placeholder="K7M4-QX9P" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="${g.langd + 4}" aria-describedby="sbKodH" ${fel.length ? 'aria-invalid="true"' : ''} ${sbAv()}><span aria-hidden="true" class="num">${ren.length}/${g.langd}</span></span></div>
+    <div class="prf-f"><label for="sbNamn">Namn</label><input id="sbNamn" class="prf-in" data-sbparanamn value="${esc(s.para.namn)}" placeholder="${esc(forslag)}" maxlength="${sbOk().granser.namn}" autocomplete="off" ${sbAv()}></div>
+    <div class="prf-f sb-parak"><button type="submit" class="btn ${sbKodKlar() ? 'btn-p' : 'btn-s'} btn-sm" ${!sbKodKlar() || s.para.skickar ? 'disabled' : ''} ${s.para.skickar ? 'aria-busy="true"' : ''} ${sbAv()}>${s.para.skickar ? 'Parar …' : 'Para'}</button></div>
+    <p class="${fel.length ? 'prf-fel' : 'prf-hj'} sb-parah" id="sbKodH">${fel.length ? `${I('prfvarn')}<span>Koden har aldrig ${esc(fel.join(', '))}. Den använder inte I, O, 0 och 1, som är lätta att läsa fel.</span>` : `Koden står på TV:n när den öppnar ${esc(sbOk().adress)}. Den gäller i ${Math.round(g.giltigMs / 60000)} minuter.`}</p>
+  </form>`;
+}
+function sbTvHjalp(){
+  const s = sbSt(), kommando = `chromium --kiosk --noerrdialogs --disable-infobars --disable-session-crashed-bubble --disable-features=Translate --check-for-update-interval=31536000 --autoplay-policy=no-user-gesture-required https://${sbOk().adress}`;
+  return `<details class="brh-fran sb-tv"><summary>Sätta upp en TV</summary><ol class="sb-steg">
+      <li><b>Datorn.</b> En mini-PC eller en Raspberry Pi 5 med Chromium, kopplad till TV:n med HDMI. Stäng av skärmsläckaren och strömsparläget.</li>
+      <li><b>Kioskläget.</b> Starta Chromium med flaggorna nedan. Den sista låter tavlan spela ljud utan att någon klickar.</li>
+      <li><b>Koden.</b> TV:n visar en kod på åtta tecken. Skriv in den här ovan och ge skärmen ett namn.</li>
+      <li><b>Undvik TV:ns egen webbläsare</b> om det ska låta. Den släpper sällan fram ljud utan ett klick på skärmen.</li></ol>
+    <div class="sb-kommando"><code>${esc(kommando)}</code><button type="button" class="btn btn-s btn-sm" data-sbkopiera>${s.kopierat ? 'Kopierat' : 'Kopiera'}</button></div></details>`;
+}
+function sbSkarmarKort(nu){
+  const d = sbOk(), s = sbSt(), l = sbSkarmar(), anslutna = l.filter(x => sbAnsluten(x, nu)).length;
+  const besk = 'TV:apparaterna som visar tavlan. En skärm paras en gång och håller sig sedan inloggad.';
+  if (!d.installerad) return sbKort('sb-skarmar', 'Skärmar', besk, sbVantar('Skärmarna'));
+  return sbKort('sb-skarmar', 'Skärmar', besk, `${sbParaHtml()}
+    ${l.length ? `<div class="prf-lista"><div class="prf-summa"><span><b class="num">${anslutna}</b> av <span class="num">${l.length}</span> ${l.length === 1 ? 'skärm är ansluten' : 'skärmar är anslutna'} nu</span></div>${l.map(x => sbSkarmRad(x, nu)).join('')}</div>` : '<p class="prf-hj">Ingen skärm är parad än. Öppna tavlan på TV:n, så visar den en kod.</p>'}
+    ${s.uppdFel !== null ? `<p class="prf-hj" role="status">Kunde inte uppdatera ${sbKl(s.uppdFel)}. Listan visar det som senast gick att läsa, och sidan försöker igen.</p>` : ''}
+    ${sbTvHjalp()}`);
+}
+
+/* ---------- Månadsmål ---------- */
+function sbMalKort(i){
+  const d = sbOk(), [denna, nasta] = sbManader(), f = d.facit;
+  const rad = (manad, forst) => {
+    const eget = Object.hasOwn(i.mal, manad) ? i.mal[manad] : null, arvt = sbMalFor(i.mal, manad), namn = sbManadNamn(manad), pd = arvt !== null ? sbPerDag(arvt, manad) : null;
+    const hj = (eget !== null ? (forst ? 'Månadens eget mål. Töm fältet för att låta månaden ärva det som gällde före.' : `Gäller från 1 ${namn}.`)
+      : arvt !== null ? `Inget eget mål: ${sbKr(arvt)} gäller, från månaden före.`
+      : forst ? 'Inget mål. Tavlan visar månadens ordervärde utan takt och utan firande när målet nås.' : 'Inget mål än. Utan ett eget mål ärvs månaden före.')
+      + (pd ? ` ≈ ${sbKr(pd.kr)} per arbetsdag, på ${pd.dagar} arbetsdagar.` : '');
+    return `<div class="prf-f"><label for="sbB-mal-${manad}">${sbStor(namn)}</label>${sbBelopp('mal:' + manad, eget, `Målet för ${namn}, i kronor`, arvt !== null ? sbTal(arvt) : 'Inget mål')}<p class="prf-hj">${esc(hj)}</p></div>`;
+  };
+  const manadsrad = m => m ? `<b class="num">${sbKr(m.varde)}</b><span>${esc(sbManadNamn(m.nyckel))} ${m.nyckel.slice(0, 4)}${m.mal !== null ? ` · mål ${sbKr(m.mal)}` : ''}</span>` : '<b>–</b><span>Inget att visa än</span>';
+  const malNu = sbMalFor(i.mal, denna), pd = malNu !== null ? sbPerDag(malNu, denna) : null;
+  return sbKort('sb-mal', 'Månadsmål', 'Lagets mål i ordervärde. Antal order visas som statistik, utan eget mål. Ett mål gäller tills ett nytt sätts.',
+    `${rad(denna, true)}${rad(nasta, false)}
+    <div class="brh-antal sb-facit"><div><span>Förra månaden</span>${manadsrad(f && f.forra)}</div><div><span>Rekordet</span>${manadsrad(f && f.rekord && f.rekord.varde > 0 ? f.rekord : null)}</div>
+      <div><span>Per arbetsdag</span>${pd ? `<b class="num">≈ ${sbKr(pd.kr)}</b><span>${esc(sbManadNamn(denna))}, ${pd.dagar} arbetsdagar</span>` : '<b>–</b><span>Inget mål</span>'}</div></div>`);
+}
+
+/* ---------- Visning ---------- */
+function sbVisningKort(i, nu){
+  const d = sbOk(), pers = sbPersoner(), lagFinns = i.lag === null || d.lagen.some(l => l.id === i.lag), antal = pers ? pers.length : null;
+  const ex = (pers || []).find(p => p.visning === 'namn' && p.fornamn && p.efternamn) || null;
+  const former = [['fornamn', 'Förnamn'], ['fornamn_e', 'Förnamn E.'], ['hela', 'Hela namnet']];
+  const arbetar = sbInomArbetsdag(nu, i.arbetsdag);
+  return sbKort('sb-visning', 'Visning', 'Vilka tavlan visar och hur. Ändringar syns på alla skärmar inom några sekunder.', `
+    <div class="prf-f"><label for="sbLag">Laget</label><select class="prf-in prf-sel" id="sbLag" data-sblag aria-describedby="sbLagH" ${sbAv()}><option value="">Alla lag</option>${d.lagen.map(l => `<option value="${esc(l.id)}" ${lagFinns && i.lag === l.id ? 'selected' : ''}>${esc(l.namn)}</option>`).join('')}</select>
+      <p class="prf-hj" id="sbLagH">${!lagFinns ? 'Det valda laget finns inte längre. Tavlan visar alla.' : antal === null ? 'Lagets säljare gick inte att läsa om. Ladda om sidan.' : `${antal} ${antal === 1 ? 'person' : 'personer'} kan synas på tavlan${i.lag ? ' i laget' : ''}: säljarna och den som sålt nyss.`}</p></div>
+    <div class="prf-f sb-bred"><span class="prf-l" id="sbNamnformL">Namn</span><fieldset class="prf-val prf-val3" aria-labelledby="sbNamnformL" aria-describedby="sbNamnformH">${former.map(([v, l]) => `<label class="prf-opt"><input type="radio" name="sb-namn" value="${v}" data-sbval="namn" ${i.namn === v ? 'checked' : ''} ${sbAv()}><span><b>${l}</b>${ex ? `<small>${esc(sbVisningsnamn(ex.fornamn, ex.efternamn, v, 'namn'))}</small>` : ''}</span></label>`).join('')}</fieldset>
+      <p class="prf-hj" id="sbNamnformH">Gäller dem som visas med namn. Den som valt initialer eller att vara dold påverkas inte.</p></div>
+    <div class="prf-f"><span class="prf-l">Topplistan</span>${sbSeg('ordning', 'Topplistans ordning', i.ordning, [['varde', 'Ordervärde'], ['antal', 'Antal order']])}<p class="prf-hj">Vad som avgör ordningen. Månadsmålet är alltid ordervärde. Tangenten V växlar på en skärm utan att spara här.</p></div>
+    <div class="prf-f"><span class="prf-l">Arbetsdagen</span><span class="sb-tidspar">${sbTid('arbetsdag.fran', i.arbetsdag.fran, 'Arbetsdagen börjar')}<span aria-hidden="true">–</span>${sbTid('arbetsdag.till', i.arbetsdag.till, 'Arbetsdagen slutar')}</span>
+      <p class="prf-hj">Utanför arbetsdagen vilar tavlan i 55 %, så att den inte lyser upp ett tomt kontor. <span class="prf-dot ${arbetar ? 'prf-ok' : 'prf-neutral'}">${arbetar ? 'Arbetsdag nu' : 'Vilar nu'}</span></p></div>
+    <div class="prf-f"><span class="prf-l">Rörelse</span>${sbSeg('rorelse', 'Rörelse', i.rorelse, [['full', 'Full'], ['lugn', 'Lugn']])}<p class="prf-hj">Lugn: firandet står still och tonas in och ut, utan svep och räkneverk. Ljudet är detsamma. En skärm som ber om mindre rörelse får lugn ändå.</p></div>`);
+}
+
+/* ---------- Firande ---------- */
+const SBFIRA = [['forstaOrdern', 'Första ordern', 'Säljarens första godkända order någonsin: ”Första ordern”, ”Välkommen till tavlan” och fanfaren i stället för hornet.'],
+  ['dagensForsta', 'Dagens första', 'Lagets första order i dag får pillret ”Dagens första”.'],
+  ['personbasta', 'Personbästa', 'Fler order i dag än säljarens bästa dag hittills, från två. Ett amber piller.'],
+  ['dagsrekord', 'Dagsrekord', 'Lagets bästa dag i månaden, från tre order. En gång per dag.'],
+  ['halvvags', 'Halvvägs', 'Målkortet säger ”Halvvägs” i sex sekunder när ordervärdet passerar halva målet, och mitten får ett märke.'],
+  ['maletNatt', 'Målet nått', 'Det stora ögonblicket när ordervärdet når månadens mål, en gång per månad och skärm.']];
+function sbFirandeKort(i){
+  const d = sbOk(), s = sbSt(), t = s.troskel, stor = i.firande.storAffar, auto = stor.lage === 'auto', grans = auto ? (t ? t.auto : null) : stor.belopp;
+  const belopp = d.facit ? d.facit.belopp : null, stora = grans !== null && belopp && belopp.length ? belopp.filter(b => b >= grans).length : null;
+  const dagar = s.utk.dagar ?? i.firande.efterregistreradDagar, gr = d.granser.efterregistreradDagar;
+  const fran = auto && !t ? 'Tröskeln gick inte att räkna just nu.'
+    : `Stor affär från <b class="num">${sbKr(auto && t ? t.auto : stor.belopp)}</b>, ${auto && t ? (t.percentil ? `topp 10 % av ${t.underlag} order de senaste 90 dagarna` : `tills det finns ${d.minstaUnderlag} order att räkna topp 10 % på (${t.underlag} de senaste 90 dagarna)`) : t ? `auto hade gett ${sbKr(t.auto)}` : 'fast belopp'}.`
+      + (stora !== null ? ` ${stora} av ${belopp.length} order de senaste två veckorna hade firats som stora.` : '');
+  return sbKort('sb-firande', 'Firande', 'Vad som får ett eget ögonblick. En vanlig order firas alltid.', `
+    <div class="prf-f sb-bred"><span class="prf-l">Stor affär</span>${sbSeg('stor', 'Stor affär', stor.lage, [['auto', 'Auto (topp 10 %)'], ['belopp', 'Fast belopp']])}
+      ${auto ? '' : `<div class="sb-smal">${sbBelopp('stor', stor.belopp, 'Belopp för stor affär, i kronor')}</div>`}
+      <p class="sats-eff" aria-live="polite">${fran}</p><p class="prf-hj">Bärnstensfärgad panel, större värde och ett mässingslager i ljudet.</p></div>
+    <div class="prf-lista">${SBFIRA.map(([k, l, h]) => sbSw(`sbfira="${k}"`, i.firande[k], l, h)).join('')}</div>
+    <div class="prf-f"><span class="prf-l" id="sbEfterL">Efterregistrerad</span><div class="prf-zoom sb-steg" role="group" aria-labelledby="sbEfterL"><button type="button" class="prf-zk" data-sbdagar="-1" aria-label="En dag färre" ${dagar <= gr.min ? 'disabled' : ''} ${sbAv()}>−</button><output class="num" aria-live="polite">${dagar}</output><button type="button" class="prf-zk" data-sbdagar="1" aria-label="En dag fler" ${dagar >= gr.max ? 'disabled' : ''} ${sbAv()}>+</button><span>${dagar === 1 ? 'dag' : 'dagar'}</span></div>
+      <p class="prf-hj">En order som signerats mer än ${dagar} ${dagar === 1 ? 'dag' : 'dagar'} före godkännandet räknas men firas inte. Pappersarbete som tas igen ska inte fira i klump.</p></div>`);
+}
+
+/* ---------- Ljud ---------- */
+function sbDygn(i, nu){
+  const spann = (a, b) => { const x = sbMin(a), y = sbMin(b); return x === y ? [] : x < y ? [[x, y]] : [[x, 1440], [0, y]]; };
+  const pct = m => `${(m / 1440 * 100).toFixed(3)}%`, nuMin = ndTid(new Date(nu)).min;
+  const rad = (namn, delar, k) => `<div class="sb-dygn-rad"><span>${namn}</span><span class="sb-dygn-spar">${delar.map(([a, b]) => `<i class="${k}" style="left:${pct(a)};width:${pct(b - a)}"></i>`).join('')}<b style="left:${pct(nuMin)}"></b></span></div>`;
+  return `<figure class="sb-dygn" aria-label="Arbetsdag ${i.arbetsdag.fran}–${i.arbetsdag.till}, ljudtid ${i.ljud.fran}–${i.ljud.till}, klockan ${sbKl(nu)}">${rad('Arbetsdag', spann(i.arbetsdag.fran, i.arbetsdag.till), 'sb-arbete')}${rad('Ljudtid', i.ljud.pa ? spann(i.ljud.fran, i.ljud.till) : [], 'sb-ljud')}
+    <div class="sb-dygn-rad sb-dygn-skala" aria-hidden="true"><span class="num">${sbKl(nu)}</span><span class="sb-dygn-spar">${[0, 6, 12, 18, 24].map(h => `<span style="left:${pct(h * 60)}">${String(h).padStart(2, '0')}</span>`).join('')}</span></div></figure>`;
+}
+function sbLjudKort(i, nu){
+  const d = sbOk(), s = sbSt(), lage = sbLjudlage(i, nu), volym = s.utk.volym ?? i.ljud.volym, g = d.granser.volym;
+  const hj = s.ljudLage === 'blockerat' || s.ljudLage === 'saknas' ? 'Webbläsaren släppte inte fram ljudet. Klicka en gång till, eller prova en annan webbläsare.' : volym <= 0 ? 'Volymen är 0, så det hörs inget.' : 'En ny order, på den här datorn och i vald volym.';
+  return sbKort('sb-ljud', 'Ljud', 'Inspelade ljud: en kassa och ett horn för varje order, trumvirvel och smäll för en stor affär, fanfar och arena när målet nås. Gäller direkt på alla skärmar som spelar ljud.', `
+    <div class="prf-lista">${sbSw('sbljudpa', i.ljud.pa, 'Ljud på', esc(lage.lang), `<span class="prf-dot ${lage.pa ? 'prf-ok' : 'prf-neutral'}">${lage.pa ? 'Låter nu' : esc(lage.kort)}</span>`)}
+      ${sbSw('sbhelg', i.ljud.helgTyst, 'Tyst på helger', 'Lördag, söndag och röda dagar, som julafton.')}</div>
+    <div class="prf-f sb-bred"><label for="sbVolym">Volym</label><div class="prf-zoom"><input type="range" id="sbVolym" min="${g.min}" max="${g.max}" step="1" value="${volym}" data-sbvolym aria-describedby="sbVolymH" ${sbAv()}><output class="num" for="sbVolym" id="sbVolymV">${volym}</output></div>
+      <p class="prf-hj" id="sbVolymH">Målet nått är starkast, en vanlig order svagast. Släpp reglaget för att höra kassan.</p></div>
+    <div class="prf-f"><span class="prf-l">Ljudtid</span><span class="sb-tidspar">${sbTid('ljud.fran', i.ljud.fran, 'Ljudtiden börjar')}<span aria-hidden="true">–</span>${sbTid('ljud.till', i.ljud.till, 'Ljudtiden slutar')}</span><p class="prf-hj">Tavlan låter bara inom ljudtiden. Den får gå över midnatt.</p></div>
+    ${sbDygn(i, nu)}
+    <div class="prf-rad"><p class="prf-hj">${esc(hj)}</p><button type="button" class="btn btn-s btn-sm" data-sblyssna aria-pressed="${s.spelar === 'prov'}">${I('play')}${s.spelar === 'prov' ? 'Spelar …' : 'Lyssna'}</button></div>
+    <p class="prf-hj">${esc(d.licens)}</p>`);
+}
+
+/* ---------- Säljarna ---------- */
+function sbSaljarKort(i){
+  const d = sbOk(), pers = sbPersoner(), lista = pers || [], dolda = lista.filter(p => sbArDold(p.visning)).length, lagnamn = new Map(d.lagen.map(l => [l.id, l.namn]));
+  const flera = i.lag === null && new Set(lista.map(p => p.lag)).size > 1;
+  const besk = 'Alla som kan synas på tavlan: säljarna, säljchefen och VD:n, och den som sålt nyss. Ändras bara på deras egen begäran. Dold står inte i topplistan och firas som ”En säljare”.';
+  if (!d.installerad) return sbKort('sb-saljare', 'Säljarna', besk, sbVantar('Säljarnas val'));
+  if (pers === null) return sbKort('sb-saljare', 'Säljarna', besk, `<div class="prf-rad"><p class="prf-hj">Säljarna i det nya laget gick inte att läsa.</p><button type="button" class="btn btn-s btn-sm" data-sbladda>Ladda om</button></div>`);
+  if (!lista.length) return sbKort('sb-saljare', 'Säljarna', besk, `<p class="prf-hj">Ingen kan synas på tavlan${i.lag ? ' i laget' : ''} än.</p>`);
+  return sbKort('sb-saljare', 'Säljarna', besk, `<div class="prf-lista"><div class="prf-summa"><span><b class="num">${lista.length}</b> ${lista.length === 1 ? 'person' : 'personer'}${dolda ? ` · <span class="num">${dolda}</span> ${dolda === 1 ? 'dold' : 'dolda'}` : ''}</span></div>
+    ${lista.map((p, n) => { const dold = sbArDold(p.visning), fullt = `${p.fornamn} ${p.efternamn}`.trim() || 'Utan namn', lag = flera && p.lag ? lagnamn.get(p.lag) : null;
+      return `<div class="prf-swrad sb-rad${dold ? ' sb-dold' : ''}"><span class="av" style="width:28px;height:28px;background:${dold ? 'var(--line-2)' : AVC[n % AVC.length]};font-size:11px" aria-hidden="true">${esc(sbInitialer(p.fornamn, p.efternamn, p.visning))}</span>
+        <span class="prf-swt"><b>${esc(fullt)}${p.varfor ? ` <span class="prf-n${p.varfor === 'Slutat' ? ' sats-gul' : ''}">${esc(p.varfor)}</span>` : ''}${lag ? ` <span class="prf-n">${esc(lag)}</span>` : ''}</b><small>På tavlan: <span class="sb-patavlan">${esc(sbVisningsnamn(p.fornamn, p.efternamn, i.namn, p.visning))}</span>${dold ? ' · inte i topplistan, inget personligt i firandet' : ''}</small></span>
+        <fieldset class="prf-seg" aria-label="Visning för ${esc(fullt)}">${SBVIS.map(([v, l]) => `<label><input type="radio" name="sb-vis-${esc(p.id)}" value="${v}" data-sbvis="${esc(p.id)}" ${p.visning === v ? 'checked' : ''} ${sbAv()}><span>${l}</span></label>`).join('')}</fieldset></div>`; }).join('')}</div>`);
+}
+
+/* ---------- Testa tavlan ---------- */
+const SBTEST = [['order', 'Ny order', 'mint'], ['stor', 'Stor affär', 'barnsten'], ['forsta', 'Första ordern', 'mint'], ['serie', 'Tre order', 'mint'], ['malet', 'Målet nått', 'mint']];
+function sbTestKort(nu){
+  const d = sbOk(), s = sbSt(), anslutna = sbSkarmar().filter(x => sbAnsluten(x, nu)).length;
+  const besk = 'Ett påhittat ögonblick på alla skärmar, märkt TEST. Det räknas aldrig.', oppna = `<a class="btn btn-s btn-sm" href="/salesboard" target="_blank" rel="noopener">Öppna tavlan ${I('arrow')}</a>`;
+  if (!d.installerad) return sbKort('sb-test', 'Testa tavlan', besk, `${sbVantar('Testet')}<div class="prf-knappar">${oppna}</div>`);
+  return sbKort('sb-test', 'Testa tavlan', besk, `<div class="prf-knappar">${SBTEST.map(([typ, l, farg]) => `<button type="button" class="btn btn-s btn-sm" data-sbtesta="${typ}" data-sbtestl="${l}" ${s.skickat[typ] === 'pa' ? 'aria-busy="true"' : ''} ${sbAv()}><i class="sb-farg sb-${farg}" aria-hidden="true"></i>${s.skickat[typ] === 'klar' ? 'Skickat' : l}</button>`).join('')}</div>
+    <div class="prf-rad"><p class="prf-hj">${anslutna === 0 ? 'Ingen skärm är ansluten just nu, så inget syns förrän en ansluter.' : anslutna === 1 ? '1 skärm är ansluten nu och spelar testet inom några sekunder.' : `${anslutna} skärmar är anslutna nu och spelar testet inom några sekunder.`}</p>${oppna}</div>`);
+}
+
+/* ---------- Sektionen ---------- */
+function sbSek(){
+  const D = sbD();
+  if (D && D.fel) return prfKort('sb-fel', 'Säljtavlan', '', `<div class="prf-kb"><div class="prf-rad"><p class="prf-hj">${esc(D.fel)} Inställningarna gick inte att läsa, och ingenting har ändrats.</p><button type="button" class="btn btn-s btn-sm" data-sbladda>Ladda om</button></div></div>`);
+  const d = sbOk(), i = sbInst(), nu = sbNu();
+  return `${d.skriv ? '' : `<p class="sats-las">${I('prflas')}<span>Läsläge: säljtavlans inställningar sparas när beställaren slår på dem.</span></p>`}${sbLageHtml(i, nu)}${sbSkarmarKort(nu)}${sbMalKort(i)}${sbVisningKort(i, nu)}${sbFirandeKort(i)}${sbLjudKort(i, nu)}${sbSaljarKort(i)}${sbTestKort(nu)}`;
+}
+
+/* ---------- Kopplingen till inställningsrutan ---------- */
+PRFSEK.push([SBKORT, 'Säljtavlan', 'sbtv', 'TV:n på kontoret: skärmarna, målet, firandet och ljudet. Bara för superadmin.']);
+PRFSOK.push(
+  ['sb-skarmar', SBKORT, 'Skärmar och parning', ['tv', 'skärm', 'skärmar', 'para', 'parning', 'kod', 'säljtavla', 'tavla', 'kiosk']],
+  ['sb-mal', SBKORT, 'Månadsmål', ['mål', 'månadsmål', 'ordervärde', 'säljtavla']],
+  ['sb-visning', SBKORT, 'Tavlans visning', ['lag', 'namn', 'topplista', 'arbetsdag', 'rörelse', 'säljtavla']],
+  ['sb-firande', SBKORT, 'Firande på tavlan', ['stor affär', 'firande', 'rekord', 'efterregistrerad', 'säljtavla']],
+  ['sb-ljud', SBKORT, 'Tavlans ljud', ['ljud', 'volym', 'ljudtid', 'helg', 'tyst', 'säljtavla']],
+  ['sb-saljare', SBKORT, 'Säljarna på tavlan', ['säljare', 'dold', 'initialer', 'säljtavla']],
+  ['sb-test', SBKORT, 'Testa tavlan', ['test', 'testa', 'säljtavla']]
+);
+const _sbPrfSok = prfSok;
+prfSok = function(q, palett){ return _sbPrfSok(q, palett).filter(([, sek]) => sek !== SBKORT || sbFar()); };
+const _sbPrfGa = prfGa;
+prfGa = function(sek, rad){ if (sek === SBKORT && !sbFar()) sek = null; return _sbPrfGa(sek, rad); };
+const _sbPrfAdminSek = prfAdminSek;
+prfAdminSek = function(){ return S.prfRuta && S.prfRuta.sek === SBKORT ? sbSek() : _sbPrfAdminSek(); };
+const _sbRutaHtml = prfRutaHtml;
+prfRutaHtml = function(){
+  const R = S.prfRuta; if (R && R.sek === SBKORT && !sbFar()) R.sek = 'konto';
+  let h = _sbRutaHtml();
+  // Fliken hamnar sist, efter Administration och Satser, och bara för superadmin.
+  h = h.replace(/<button type="button" role="tab" id="prfTab-salesboard"[\s\S]*?<\/button>/, '');
+  if (sbFar()){
+    const flik = `<button type="button" role="tab" id="prfTab-${SBKORT}" aria-selected="${R.sek === SBKORT}" aria-controls="prfPanel" tabindex="${R.sek === SBKORT ? 0 : -1}" data-prfsek="${SBKORT}">${I('sbtv')}<span>Säljtavlan</span>${I('prfpil', 'prf-mpil')}</button>`;
+    const efter = /<button type="button" role="tab" id="prfTab-satser"[\s\S]*?<\/button>/.test(h) ? /(<button type="button" role="tab" id="prfTab-satser"[\s\S]*?<\/button>)/ : /(<button type="button" role="tab" id="prfTab-admin"[\s\S]*?<\/button>)/;
+    h = h.replace(efter, m => m + flik);
+  }
+  return h;
+};
+
+/* ---------- Händelserna ---------- */
+const sbI = el => el && el.closest && el.closest('#prfRuta') && sbOk();
+document.addEventListener('click', e => {
+  const t = e.target.closest && e.target.closest('button'); if (!t || !t.closest('#prfRuta')) return;
+  const d = t.dataset, klart = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+  // Ladda om finns också när inställningarna inte gick att läsa.
+  if (d.sbladda !== undefined){ klart(); location.reload(); return; }
+  if (!sbOk()) return;
+  const s = sbSt(), i = sbInst();
+  if (d.sbljudpa !== undefined){ klart(); sbSpara('sb-ljud', 'Ljudet', {ljud:{pa:!i.ljud.pa}}, f => ({ljud:{pa:f.ljud.pa}})); return; }
+  if (d.sbhelg !== undefined){ klart(); sbSpara('sb-ljud', 'Tyst på helger', {ljud:{helgTyst:!i.ljud.helgTyst}}, f => ({ljud:{helgTyst:f.ljud.helgTyst}})); return; }
+  if (d.sbfira){ klart(); const k = d.sbfira, l = SBFIRA.find(x => x[0] === k)[1]; sbSpara('sb-firande', l, {firande:{[k]:!i.firande[k]}}, f => ({firande:{[k]:f.firande[k]}})); return; }
+  if (d.sbdagar){ klart(); const g = sbOk().granser.efterregistreradDagar, nu = s.utk.dagar ?? i.firande.efterregistreradDagar, v = Math.min(g.max, Math.max(g.min, nu + +d.sbdagar)); s.utk.dagar = v; render();
+    // Sparas när stegandet stannat, som ett reglage.
+    clearTimeout(s.dagarT); s.dagarT = setTimeout(() => { const v2 = s.utk.dagar; delete s.utk.dagar; if (v2 !== undefined && v2 !== sbInst().firande.efterregistreradDagar) sbSpara('sb-firande', 'Efterregistrerad', {firande:{efterregistreradDagar:v2}}, f => ({firande:{efterregistreradDagar:f.firande.efterregistreradDagar}})); else render(); }, 450); return; }
+  if (d.sblyssna !== undefined){ klart(); sbProv(s.utk.volym ?? i.ljud.volym); return; }
+  if (d.sbtesta){ klart(); sbTesta(d.sbtesta, d.sbtestl, t); return; }
+  if (d.sbskarmljud){ klart(); const x = sbSkarmar().find(y => y.id === d.sbskarmljud); if (!x) return;
+    sbSkarm({typ:'ljud', id:x.id, ljud:!x.ljud}, {handling:'ljud_skarm', id:x.id, ljud:!x.ljud}, x.namn, `${x.namn}: ljudet ${x.ljud ? 'av' : 'på'}.`, {op:{typ:'ljud', id:x.id, ljud:x.ljud}, kropp:{handling:'ljud_skarm', id:x.id, ljud:x.ljud}}); return; }
+  if (d.sbbyt){ klart(); const x = sbSkarmar().find(y => y.id === d.sbbyt); if (!x) return; s.andrar = {id:x.id, namn:x.namn}; s.fragar = null; render(); const el = document.getElementById('sbNamn-' + x.id); if (el){ el.focus(); el.select(); } return; }
+  // Id:t läses före ritningen: morfen gör om den klickade knappen till Avbryt, och dataset följer med.
+  if (d.sbfraga){ klart(); const id = d.sbfraga; s.fragar = id; s.andrar = null; render(); document.querySelector(`#sbSkarm-${id} [data-sbbortx]`)?.focus(); return; }
+  if (d.sbbortx !== undefined){ klart(); const id = s.fragar; s.fragar = null; render(); document.querySelector(`#sbSkarm-${id} [data-sbfraga]`)?.focus(); return; }
+  if (d.sbbort){ klart(); const x = sbSkarmar().find(y => y.id === d.sbbort); s.fragar = null; if (!x) return;
+    // Tokenen nollas på servern, så en bortkoppling går inte att ångra. Skärmen paras igen.
+    sbSkarm({typ:'bort', id:x.id}, {handling:'koppla_bort', id:x.id}, x.namn, `${x.namn} är bortkopplad.`, null); return; }
+  if (d.sbkopiera !== undefined){ klart(); const k = t.parentElement.querySelector('code').textContent;
+    Promise.resolve(navigator.clipboard && navigator.clipboard.writeText(k)).then(() => { s.kopierat = true; render(); setTimeout(() => { s.kopierat = false; render(); }, 1500); }, () => {}); return; }
+}, true);
+document.addEventListener('submit', e => {
+  if (!e.target.matches || !e.target.matches('[data-sbpara]') || !sbI(e.target)) return;
+  e.preventDefault(); e.stopImmediatePropagation(); sbPara(e.target.querySelector('button[type="submit"]') || undefined);
+}, true);
+document.addEventListener('input', e => {
+  const t = e.target; if (!sbI(t)) return; const s = sbSt(), d = t.dataset;
+  if (d.sbkod !== undefined){ s.para.kod = t.value; delete s.fel['sb-skarmar']; render(); const el = document.getElementById('sbKod'); if (el && document.activeElement === el) el.setSelectionRange(el.value.length, el.value.length); return; }
+  if (d.sbparanamn !== undefined){ s.para.namn = t.value; render(); return; }
+  if (d.sbnamnin){ if (s.andrar) s.andrar.namn = t.value; return; }
+  if (d.sbbelopp){ s.utk[d.sbbelopp] = t.value; return; }
+  if (d.sbtid){ s.utk[d.sbtid] = t.value; return; }
+  // Reglaget: talet följer med medan det dras. Det sparas och provas när det släpps (change).
+  if (d.sbvolym !== undefined){ s.utk.volym = +t.value; const o = document.getElementById('sbVolymV'); if (o) o.textContent = t.value; }
+}, true);
+document.addEventListener('change', e => {
+  const t = e.target; if (!sbI(t)) return; const s = sbSt(), d = t.dataset, i = sbInst();
+  if (d.sbvolym !== undefined){
+    // Släpps reglaget hörs kassan i den nya volymen. Med piltangenterna kommer ett change per steg: kassan
+    // högst var 300:e ms, och sparningen när stegandet stannat.
+    const v = +t.value; s.utk.volym = v;
+    if (Date.now() - (s.provT || 0) > 300){ s.provT = Date.now(); sbVolymProv(v); }
+    clearTimeout(s.volymT); s.volymT = setTimeout(() => { delete s.utk.volym; if (v !== sbInst().ljud.volym) sbSpara('sb-ljud', 'Volymen', {ljud:{volym:v}}, f => ({ljud:{volym:f.ljud.volym}})); else render(); }, 350); return; }
+  if (d.sblag !== undefined){ const v = t.value || null, namn = (sbOk().lagen.find(l => l.id === v) || {namn:'Alla lag'}).namn; sbSpara('sb-visning', `Laget, ${namn}`, {lag:v}, f => ({lag:f.lag})); return; }
+  if (d.sbval === 'namn') sbSpara('sb-visning', 'Namnen', {namn:t.value}, f => ({namn:f.namn}));
+  else if (d.sbval === 'ordning') sbSpara('sb-visning', 'Topplistans ordning', {ordning:t.value}, f => ({ordning:f.ordning}));
+  else if (d.sbval === 'rorelse') sbSpara('sb-visning', 'Rörelsen', {rorelse:t.value}, f => ({rorelse:f.rorelse}));
+  else if (d.sbval === 'stor') sbSpara('sb-firande', 'Stor affär', {firande:{storAffar:{lage:t.value}}}, f => ({firande:{storAffar:{lage:f.firande.storAffar.lage}}}));
+  else if (d.sbvis){ const p = (sbPersoner() || []).find(x => x.id === d.sbvis); if (p) sbPerson(p, t.value); }
+}, true);
+document.addEventListener('focusin', e => {
+  const t = e.target; if (!sbI(t) || !t.dataset.sbbelopp) return; const s = sbSt(), k = t.dataset.sbbelopp;
+  if (s.utk[k] !== undefined) return;
+  // I fältet står talet utan mellanslag, så att det går att skriva om.
+  const i = sbInst(), v = k === 'stor' ? i.firande.storAffar.belopp : Object.hasOwn(i.mal, k.slice(4)) ? i.mal[k.slice(4)] : null;
+  s.utk[k] = v === null ? '' : String(v); t.value = s.utk[k];
+}, true);
+// På window: inställningsrutans egen lyssnare (capture på document) stänger rutan på Escape och hinner annars före.
+window.addEventListener('keydown', e => {
+  const t = e.target; if (!sbI(t) || t.tagName !== 'INPUT') return; const d = t.dataset;
+  if (!(d.sbbelopp || d.sbtid || d.sbnamnin)) return;
+  if (e.key === 'Enter'){ e.preventDefault(); e.stopImmediatePropagation(); t.blur(); }
+  else if (e.key === 'Escape'){ e.preventDefault(); e.stopImmediatePropagation(); t.dataset.sbavbryt = '1'; t.blur(); }
+}, true);
+document.addEventListener('focusout', e => {
+  const t = e.target; if (!sbI(t) || t.tagName !== 'INPUT') return; const s = sbSt(), d = t.dataset, avbryt = d.sbavbryt === '1', i = sbInst();
+  delete d.sbavbryt;
+  if (d.sbnamnin){
+    const x = sbSkarmar().find(y => y.id === d.sbnamnin), namn = (s.andrar ? s.andrar.namn : '').replace(/\s+/g, ' ').trim(); s.andrar = null;
+    if (!avbryt && x && namn && namn !== x.namn) sbSkarm({typ:'namn', id:x.id, namn}, {handling:'byt_namn', id:x.id, namn}, x.namn, `${x.namn} heter nu ${namn}.`, {op:{typ:'namn', id:x.id, namn:x.namn}, kropp:{handling:'byt_namn', id:x.id, namn:x.namn}});
+    else render();
+    return;
+  }
+  if (d.sbtid){
+    const k = d.sbtid, v = s.utk[k]; delete s.utk[k];
+    const [del, falt] = k.split('.'), gammal = i[del][falt];
+    if (!avbryt && v && /^\d\d:\d\d$/.test(v) && v !== gammal){ const vad = del === 'ljud' ? 'Ljudtiden' : 'Arbetsdagen'; sbSpara(del === 'ljud' ? 'sb-ljud' : 'sb-visning', vad, {[del]:{[falt]:v}}, f => ({[del]:{[falt]:f[del][falt]}})); }
+    else render();
+    return;
+  }
+  if (d.sbbelopp){
+    const k = d.sbbelopp, text = String(s.utk[k] ?? '').replace(/\s/g, ''); delete s.utk[k];
+    const mal = k.startsWith('mal:'), manad = mal ? k.slice(4) : null, gr = mal ? sbOk().granser.mal : sbOk().granser.belopp;
+    const nu = mal ? (Object.hasOwn(i.mal, manad) ? i.mal[manad] : null) : i.firande.storAffar.belopp;
+    if (avbryt){ delete s.faltfel[k]; render(); return; }
+    if (text === '' && mal){ delete s.faltfel[k]; if (nu !== null) sbSpara('sb-mal', `Målet för ${sbManadNamn(manad)}`, {mal:{[manad]:null}}, f => ({mal:{[manad]:Object.hasOwn(f.mal, manad) ? f.mal[manad] : null}})); else render(); return; }
+    const n = /^\d+$/.test(text) ? Number(text) : NaN;
+    if (!Number.isInteger(n) || n < gr.min || n > gr.max){ s.faltfel[k] = `Ett belopp från ${sbTal(gr.min)} till ${sbTal(gr.max)} kr.`; render(); return; }
+    delete s.faltfel[k];
+    if (n === nu){ render(); return; }
+    if (mal) sbSpara('sb-mal', `Målet för ${sbManadNamn(manad)}, ${sbKr(n)}`, {mal:{[manad]:n}}, f => ({mal:{[manad]:Object.hasOwn(f.mal, manad) ? f.mal[manad] : null}}));
+    else sbSpara('sb-firande', 'Beloppet för stor affär', {firande:{storAffar:{belopp:n}}}, f => ({firande:{storAffar:{belopp:f.firande.storAffar.belopp}}}));
+  }
+}, true);
+
+/* ---------- Klockan: "sedd för …" varje sekund, läget var tionde, listan var 30:e ---------- */
+let sbTick = 0;
+const sbOppen = () => !!(sbOk() && S.prfRuta && S.prfRuta.sek === SBKORT && document.visibilityState === 'visible');
+setInterval(() => {
+  if (!sbOppen()) return;
+  const s = sbSt(), nu = sbNu(); sbTick++;
+  document.querySelectorAll('#prfRuta [data-sbsedd]').forEach(el => { const t = 'Sedd ' + sbSedan(Date.parse(el.dataset.sbsedd), nu); if (el.textContent !== t) el.textContent = t; });
+  if (s.vantaPa){ const x = sbSkarmar().find(y => y.id === s.vantaPa.id); if (!x || x.parad || Date.now() > s.vantaPa.till) s.vantaPa = null; }
+  const fokus = document.activeElement, skriver = fokus && fokus.closest && fokus.closest('#prfRuta') && /^(INPUT|SELECT)$/.test(fokus.tagName) && fokus.type !== 'range' && fokus.type !== 'radio';
+  if (sbOk().installerad && (sbSkarmar().length || s.vantaPa) && sbTick % (s.vantaPa ? 3 : 30) === 0) sbLasOm();
+  else if (sbTick % 10 === 0 && !skriver) render();
+}, 1000);
+document.addEventListener('visibilitychange', () => { if (sbOppen() && sbOk().installerad && sbSkarmar().length) sbLasOm(); });
+/* </ndsb> */
 
 /* =====================================================================
    NAV 2.0 I RIKTIGT LÄGE: REKRYTERING (prefix nd), v47

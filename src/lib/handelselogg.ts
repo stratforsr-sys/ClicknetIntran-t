@@ -163,6 +163,8 @@ export const MODUL: Record<string, string> = {
   phone_call: "Säljsamtal",
   late_arrival: "Sen ankomst",
   anstallda: "Anställda",
+  // Säljtavlan (/salesboard, 0250): skärmarna, inställningarna och säljarnas val.
+  salesboard: "Säljtavlan",
 };
 
 /**

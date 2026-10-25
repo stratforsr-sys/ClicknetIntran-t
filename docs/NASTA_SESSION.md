@@ -7,6 +7,31 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
 
 ---
 
+## Säljtavlan på /salesboard — inmergad i `nav2-utkast` (2026-10-25), mergas till main med Nav 2.0
+
+Prototypen v5 är inbyggd i den riktiga tavlan. Besluten R35–R43 står överst i
+`docs/superpowers/specs/2026-10-23-salesboard-design.md` (§0): målet i ordervärde,
+topplistan, inspelade ljud, hela skärmen.
+
+- **0250 KÖRD** (2026-10-25 17:56 UTC, beställarens ja). Vakten grön, ringklockan provad
+  (en anon-klient på kanalen `salesboard` fick `ping`).
+- **Inställningarna** finns bara i Nav 2.0: **Inställningar → Säljtavlan**, bara för
+  superadmin (beställaren 2026-10-25). Klienten är `moduler/ndsb.js` i `~/nav2-utkast`
+  (inbyggd med `delar/saljtavlan/bygg-utkast.py`), datan `ND.saljtavlan`
+  (`src/lib/nav2/saljtavlan.ts`), rutten `/nav2/salesboard` (`SKRIVLAGE.salesboard`).
+  `/salesboard/installningar` skickar dit; `/salesboard/skriv` finns inte längre.
+- **Utan 0250** (en databas där den inte körts) går tavlan på standarderna, och
+  skärmarna, säljarnas val och testet säger att de väntar på installationen.
+- **Main**: följer med Nav 2.0-mergen (beställaren 2026-10-25), efter B8.
+- **Proven:** `TZ=UTC node --experimental-strip-types tests/salesboard{,-parning,-motor,-ljud,-server,-tavla,-ko,-installningar}.mjs`, alla gröna.
+- **Selen** (utanför repot): `~/sb-sele` bygger den riktiga Tavla-koden med esbuild och
+  påhittad data (`node bygg.mjs`, `./bild.sh <namn> "fall=order&t=2.5"`, `node svep.mjs`).
+  Ingen `npm run dev`.
+- **Inte kontrollerat:** ljudet i högtalare (ingen har lyssnat på den riktiga koden,
+  varken tavlan eller Lyssna i inställningarna), tavlan mot riktig data och inställningssektionen mot riktig data i previewen.
+
+---
+
 ## 0155 KÖRD (2026-10-25 16:17 UTC), före mergen
 
 `0155_rls_initplan` är genererad på nytt ur dagens policyer (164 av 211 ändrade, två fler än

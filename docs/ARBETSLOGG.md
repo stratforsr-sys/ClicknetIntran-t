@@ -5,6 +5,22 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-25 · Säljtavlan inmergad i `nav2-utkast`, 0250 körd
+
+Beställaren 2026-10-25: säljtavlan följer med Nav 2.0 och mergas till main tillsammans med den.
+Grenen `salesboard` (`8c37c55` + `60f5f14`) är ihopslagen till en commit ovanpå `nav2-utkast`.
+Konflikterna var bara textuella: `package.json` (båda provlistorna), ARBETSLOGG och NASTA_SESSION.
+`src/nav2/utkast.html` byggd om ur grenens version med `delar/saljtavlan/bygg-utkast.py`.
+
+**0250 KÖRD** (17:56 UTC, efter beställarens ja). Torrkörd först med vakten från `nav2-utkast`
+(grenens `salesboard`-vakt kände inte till 0241:s nya adoption-kroppar): inga nya rättigheter.
+Efteråt: fyra tabeller med RLS, varken anon eller authenticated når tabellerna eller funktionerna,
+`salesboard_statistik` svarar, och ringklockan ringer: en anon-klient på kanalen `salesboard` fick
+en `ping` på `delete from salesboard_person where false` (ingen rad ändrad).
+
+**Inte kontrollerat:** ljudet i högtalare, tavlan och Inställningar → Säljtavlan mot riktig data i
+previewen (kräver att beställaren loggar in som superadmin).
+
 ## 2026-10-25 · 0155 körd: policyerna räknas en gång per sats
 
 - Genererad om ur `pg_policies` samma dag, sist av alla policyändringar (B10), eftersom en äldre
@@ -28,6 +44,82 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
   raderar sitt eget utkast som förut. Båda står i `delar/granskning/S16/inventering.md`.
 - **V4:** `taBortBilaga` i Rutiner tog bort vilket fil-id som helst, eftersom bara dokumentet
   prövades. Nu krävs en levande `document_attachment` på just den rutinen, som S10b gjorde i Order.
+## 2026-10-25 · Säljtavlan: inställningarna i Nav 2.0, bara superadmin; förbättringsvarvet (gren `salesboard`)
+
+- **Varför:** beställaren hittade inga inställningar och ville kunna se och använda dem,
+  men **bara** i Nav 2.0:s Inställningar och **bara** för superadmin (VD, administratör).
+- **Nav 2.0:** ny sektion **Inställningar → Säljtavlan** (`moduler/ndsb.js` + `ndsb.css` i
+  `~/nav2-utkast`, inbyggd med `delar/saljtavlan/bygg-utkast.py`; `ndsb` står efter `ndsats`
+  i `ndpatch.py`). Fliken står sist, efter Satser, och bara när `ND.saljtavlan` finns.
+  Utkastets egna delar: `prfKort`, brytare, `prf-seg`, `prf-opt`, `sats-enh`, `brh-antal`;
+  egen CSS bara för dygnsremsan, kodfältet och raderna. Allt från gamla sidan finns kvar:
+  läget överst, Skärmar med parning, byt namn, ljud per skärm, koppla bort och TV-hjälpen,
+  Månadsmål (förra månaden, rekordet, per arbetsdag), Visning, Firande (tröskeln och hur
+  många som hade firats som stora), Ljud (Lyssna, kassan när reglaget släpps, dygnet),
+  Säljarna och Testa. Varje ändring sparar direkt, en i taget i ordning, och kortet säger
+  "…: sparat." med **Ångra** (`prfStatus`); bortkoppling går inte att ångra (tokenen nollas).
+- **Servern:** `ND.saljtavlan` byggs i `src/lib/nav2/saljtavlan.ts` (null för alla utom
+  superadmin, innan något läses; ett läsfel ger `{fel}` och resten av navet ritas). Rutten
+  `src/app/nav2/salesboard/route.ts` (POST + GET för skärmlistan): samma ursprung, superadmin
+  (403 annars, innan något läses eller skrivs), `SKRIVLAGE.salesboard` (423 i läsläge),
+  `medNyckel`. Arbetet flyttat ur `/salesboard/skriv` till `src/lib/salesboard/handlingar.ts`;
+  `/salesboard/skriv` finns inte längre, så ingen skrivväg står öppen för admin.
+- **Behörigheten:** `tavlansAdmin` släpper bara in superadmin (`farAndraTavlan` i
+  `skrivning.ts`). Tavlans knapp Inställningar syns bara för en inloggad superadmin och går
+  till `/nav2?till=/installningar/salesboard`; `/salesboard/installningar` skickas dit.
+  Parningstexten säger Nav → Inställningar → Säljtavlan → Para.
+- **Förbättringsvarvet** (stegcommit 9c0ad09, ihopslagen hit), 30 punkter: rubriken (ring
+  vid ny order, "Öppnar 08:00 / i morgon / måndag", "Tyst till …"); topplistan ("X kr till
+  2:a" under en snittorder, "–" för nollor, "+ N säljare till", tom lista hänvisar till
+  Visning); målkortet ("≈ N order" kvar, per arbetsdag); grafen (REKORD-märket, förklaringen
+  bara för det som finns, inga axelsiffror); senaste order ("ingen order än i dag", strecket
+  där i dag slutar); ordern ("≈ N order kvar till målet", högst fyra punkter); stor affär
+  ("N× en snittorder", minst 10 % av målet först); serien ("på N minuter", "från N säljare");
+  målet (den som tog laget över namnges, aldrig en dold; "Nästa: rekordmånaden"); ljudet
+  (volymprovet med kassan, valet minns efter omladdning); parningen (tre numrerade steg,
+  "Försök nu"); inställningarna (förra månaden och rekordet, per arbetsdag, antalet stora
+  affärer vid tröskeln); offline dämpar talen.
+- **Kontrollerat:** de åtta sviterna (1 349 kontroller) med nytt behörighetsprov (säljare,
+  admin, superadmin mot rutten: 403, 403, 200), `bro`, `guider`, `nav2-skriv`, `nav2-nyckel`,
+  `nav2-satser`, `navnyheter` m.fl. gröna; esbuild tolkar rutterna. Sektionen i headless
+  Chrome med påhittad data och en låtsasserver: 67 kontroller (spara och Ångra på varje fält,
+  fel vid fältet, 400/403/423/401, parning, namnbyte med Enter/Esc, koppla bort, säljare,
+  testet en gång), före 0250, läsläge, läsfel och säljare (ingen flik, ingen sökträff),
+  1440 px och 390 px.
+- **Inte kontrollerat:** ljudet i högtalare (Lyssna och volymprovet), sektionen mot riktig
+  data i previewen (kräver inloggning som superadmin), Realtime. 0250 är inte körd.
+
+---
+
+## 2026-10-25 · Säljtavlan: prototypen v5 inbyggd (gren `salesboard`)
+
+- **Varför:** beställaren godkände prototypen v5 ("Super snyggt") och ändrade tre
+  beslut: målet är i ordervärde, ordervärdet syns på TV:n, provision aldrig. Specen
+  har fått §0 med R35–R43; den gamla layouten (segmentstapel, tidslinje, remsa) utgår.
+- **Servern:** `forma.ts` räknar ordervärdet netto som `nettoAntal` räknar antalet,
+  topplistan (aktiva i laget vars roll kan sälja, R30, plus alla med order i månaden
+  eller veckan, utom de dolda), streck per veckodag, månadens största affär och elva
+  månader till grafen ur `salesboard_statistik`. Målet per månad ligger i
+  inställningarna och ärvs framåt (`malFor`). En dold säljare får inga personliga tal
+  ur servern (R23, prov i `salesboard-server`). Kunden läses inte längre.
+- **0250** ändrad på plats, inte körd: `manader` i statistiken (provad mot riktiga
+  databasen i en transaktion som rullades tillbaka: september 23 brutto − 1 makulerad
+  = 22, 639 962 kr), `motif` borta.
+- **Klienten:** ny vy (`Vila.tsx`, prefix `tv-` i `tavla.css`), nya kompositioner
+  (`motion/Ordern.tsx` vanlig och stor, `Serie.tsx`, `Malet.tsx`) bildruta för bildruta
+  som prototypen, landningen i bildrutor från bytet (FLIP, räkneverk, grafen), och
+  `ljud.ts` med de tio inspelningarna. `ko.ts` har kön och vad som syns; köprovet
+  skrevs om först och var rött innan koden ändrades.
+- **Rättat från loggboken:** R33 (bara visningen skrivs), `<Pil />` efter Logga in,
+  loggning när skärmarna inte går att läsa om efter en skrivning, och CAS-stämpeln:
+  en sparning skriver alltid en tid efter den den läste (`nastaStampel`), så två
+  sparningar från samma läsning kan aldrig båda landa.
+- **Kontrollerat:** alla åtta sviter gröna; esbuild tolkar sidorna och rutterna;
+  bilder och DOM-läsningar i selen mot prototypen (vila, vanlig order, smällen, den
+  stora affärens vila, serien, utgången, målet, landningen, telefonbredd).
+- **Inte kontrollerat:** ljudet i högtalare, Realtime och riktig data före 0250.
+
+---
 
 ## 2026-10-23 · Granskningen S10b: Order sparar (B7 och B12)
 
