@@ -151,6 +151,16 @@ export function canManageEmployees(user: CurrentUser | null): boolean {
   return hasRole(user, "sales_manager", "admin");
 }
 
+/**
+ * Superadmin i Nav 2.0 (tre roller, beslut 2026-10-14): VD eller administratör.
+ * Samma regel som `nivaFor` i `src/lib/nav2/forma.ts`. Beställaren 2026-10-23
+ * (B13): regler som gäller alla, det som inte går att ångra och händelseloggen
+ * är bara Superadmins, också i gamla Nav, eftersom båda skriver i samma databas.
+ */
+export function arSuperadmin(user: CurrentUser | null): boolean {
+  return hasRole(user, "ceo", "admin");
+}
+
 export function fullName(e: { first_name: string; last_name: string }): string {
   return `${e.first_name} ${e.last_name}`.trim();
 }

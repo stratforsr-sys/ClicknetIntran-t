@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
-import { getCurrentUser, canManageEmployees } from "@/lib/auth";
+import { arSuperadmin, getCurrentUser, canManageEmployees } from "@/lib/auth";
 import {
   dygnetsStart,
   lageNu,
@@ -271,6 +271,10 @@ async function kravSchemaansvarig() {
   return user;
 }
 
+// B13 (beställaren 2026-10-23): scheman för bolaget och för ett team är "Regler som gäller alla" och bara Superadmins.
+// En persons eget schema är Personalen, och det ändrar säljchef och administratör som förut.
+const ALLA_NEJ = "Scheman för bolaget och för ett team ändras av en superadmin.";
+
 function niva(form: FormData) {
   const scope = String(form.get("scope") ?? "company");
   const id = String(form.get("scope_id") ?? "") || null;
@@ -310,6 +314,7 @@ async function schemamottagare(
 export async function sparaArbetsschema(_prev: TidState, form: FormData): Promise<TidState> {
   const user = await kravSchemaansvarig();
   const { scope, employee_id, team_id } = niva(form);
+  if (scope !== "employee" && !arSuperadmin(user)) return { fel: ALLA_NEJ };
 
   const veckodagar = form.getAll("veckodag").map(Number).filter((d) => d >= 1 && d <= 7);
   const start = String(form.get("start_time") ?? "");
@@ -374,6 +379,7 @@ export async function sparaArbetsschema(_prev: TidState, form: FormData): Promis
 export async function sparaRastschema(_prev: TidState, form: FormData): Promise<TidState> {
   const user = await kravSchemaansvarig();
   const { scope, employee_id, team_id } = niva(form);
+  if (scope !== "employee" && !arSuperadmin(user)) return { fel: ALLA_NEJ };
 
   const veckodagar = form.getAll("veckodag").map(Number).filter((d) => d >= 1 && d <= 7);
   const fonsterStart = String(form.get("window_start") ?? "");

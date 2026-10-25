@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { getCurrentUser, hasRole } from "@/lib/auth";
+import { arSuperadmin, getCurrentUser } from "@/lib/auth";
 import { svensktDatum } from "@/lib/klocka";
 import { manadFore, manadsnyckel } from "@/lib/provision";
 import { konfigurationsfel, troskelIProcent, type KvKriterium, type KvPolicy } from "@/lib/kv";
@@ -17,8 +17,9 @@ export type KvReglerState = { fel?: string; ok?: string };
  */
 async function kravRegelagare() {
   const user = await getCurrentUser();
-  if (!hasRole(user, "sales_manager", "ceo") || !user?.employee) {
-    throw new Error("Bara saljchef och VD far andra K&V-reglerna.");
+  // B13 (beställaren 2026-10-23): bara Superadmin.
+  if (!arSuperadmin(user) || !user?.employee) {
+    throw new Error("Bara en superadmin ändrar K&V-reglerna.");
   }
   return user;
 }

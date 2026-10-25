@@ -410,6 +410,17 @@ export async function taBortBilaga(_prev: DokumentState, form: FormData): Promis
 
   try {
     const user = await kravRedaktor(dokumentId);
+    // Granskningen V4 (S16): kravRedaktor prövar dokumentet, inte filen. Utan det här
+    // gick vilket fil-id som helst att ta bort, också en samtalsinspelning eller ett avtal.
+    const { data: fil } = await supabaseAdmin()
+      .from("file_object")
+      .select("id")
+      .eq("id", fileId)
+      .eq("document_id", dokumentId)
+      .eq("purpose", "document_attachment")
+      .is("removed_at", null)
+      .maybeSingle();
+    if (!fil) return { fel: "Bilagan hör inte till rutinen." };
     await taBortInnehall(fileId, user.employee!.id);
 
     // Texten raknas om ur de bilagor som ar kvar. Att i stallet dra bort den

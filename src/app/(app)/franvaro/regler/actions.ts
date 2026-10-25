@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { getCurrentUser, hasRole } from "@/lib/auth";
+import { arSuperadmin, getCurrentUser } from "@/lib/auth";
 import type { FranvaroState } from "../actions";
 
 /**
@@ -18,13 +18,14 @@ import type { FranvaroState } from "../actions";
  * att motorn räknade fel.
  */
 
+// B13 (beställaren 2026-10-23): bara Superadmin. Förut säljchef, VD och administratör.
 function farAndra(user: Awaited<ReturnType<typeof getCurrentUser>>): boolean {
-  return hasRole(user, "sales_manager", "ceo", "admin");
+  return arSuperadmin(user);
 }
 
 export async function sparaTyp(_prev: FranvaroState, form: FormData): Promise<FranvaroState> {
   const user = await getCurrentUser();
-  if (!farAndra(user)) return { fel: "Reglerna ändras av säljchef, VD eller administratör." };
+  if (!farAndra(user)) return { fel: "Frånvaroreglerna ändras av en superadmin." };
 
   const id = String(form.get("id") ?? "");
   const tal = (namn: string) => {
@@ -75,7 +76,7 @@ export async function sparaTyp(_prev: FranvaroState, form: FormData): Promise<Fr
 
 export async function sparaPolicy(_prev: FranvaroState, form: FormData): Promise<FranvaroState> {
   const user = await getCurrentUser();
-  if (!farAndra(user)) return { fel: "Reglerna ändras av säljchef, VD eller administratör." };
+  if (!farAndra(user)) return { fel: "Frånvaroreglerna ändras av en superadmin." };
 
   const tal = (namn: string, min: number, max: number) => {
     const v = Number(form.get(namn));
@@ -127,7 +128,7 @@ export async function sparaPolicy(_prev: FranvaroState, form: FormData): Promise
 
 export async function sparaSparrperiod(_prev: FranvaroState, form: FormData): Promise<FranvaroState> {
   const user = await getCurrentUser();
-  if (!farAndra(user)) return { fel: "Spärrperioder sätts av säljchef, VD eller administratör." };
+  if (!farAndra(user)) return { fel: "Spärrperioder sätts av en superadmin." };
 
   const taBort = String(form.get("ta_bort") ?? "");
   const db = supabaseAdmin();
@@ -184,7 +185,7 @@ export async function sparaSparrperiod(_prev: FranvaroState, form: FormData): Pr
 
 export async function sparaTak(_prev: FranvaroState, form: FormData): Promise<FranvaroState> {
   const user = await getCurrentUser();
-  if (!farAndra(user)) return { fel: "Bemanningstak sätts av säljchef, VD eller administratör." };
+  if (!farAndra(user)) return { fel: "Bemanningstak sätts av en superadmin." };
 
   const teamId = String(form.get("team_id") ?? "") || null;
   const rad = String(form.get("max_absent") ?? "").trim();
@@ -229,7 +230,7 @@ export async function sparaTak(_prev: FranvaroState, form: FormData): Promise<Fr
 
 export async function sparaRingordning(_prev: FranvaroState, form: FormData): Promise<FranvaroState> {
   const user = await getCurrentUser();
-  if (!farAndra(user)) return { fel: "Mottagarordningen sätts av säljchef, VD eller administratör." };
+  if (!farAndra(user)) return { fel: "Mottagarordningen sätts av en superadmin." };
 
   const db = supabaseAdmin();
   const taBort = String(form.get("ta_bort") ?? "");

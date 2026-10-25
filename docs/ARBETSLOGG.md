@@ -5,6 +5,24 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-25 · Granskningen S16: behörighetsspärren (B13) och V4
+
+- **Superadmin på riktigt.** Beställaren 2026-10-23: raderna märkta "förslag" ska bara gå att göra
+  för Superadmin. Spärren ligger i gamla Navs actions, som Nav 2.0:s rutter anropar, så en vakt
+  täcker båda: `arSuperadmin` (`hasRole(user, "ceo", "admin")`, samma regel som `nivaFor`). Rutter som
+  skriver direkt (`trappa-bort`, `chefssats-bort`) prövar `nivaFor` själva. Utseendet är orört:
+  servern nekar med ett besked.
+- **Databasen behövde nästan ingenting.** Regeltabellerna har inga skrivpolicyer för inloggade, och
+  `radera_order`/`ta_bort_anstalld` är bara servicerollens. Bara `adoption_*` (0029) släppte in
+  säljchefen: 0241 byter rollvillkoret och inget annat.
+- **Händelseloggens RLS rördes inte.** `audit_log` läses också av Admins egna vyer (Anställdas
+  historik, lönerapporten, avvikelser). Policyn smalnas av först när de läsningarna gått över till
+  servicerollen.
+- **Tolkningar:** "scheman" = bolagets och teamens (en persons eget schema är Personalen); säljaren
+  raderar sitt eget utkast som förut. Båda står i `delar/granskning/S16/inventering.md`.
+- **V4:** `taBortBilaga` i Rutiner tog bort vilket fil-id som helst, eftersom bara dokumentet
+  prövades. Nu krävs en levande `document_attachment` på just den rutinen, som S10b gjorde i Order.
+
 ## 2026-10-23 · Granskningen S10b: Order sparar (B7 och B12)
 
 - **D10, rättelse av en godkänd order.** Knappen Rätta visas på en godkänd order för säljchef, VD

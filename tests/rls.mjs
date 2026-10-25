@@ -2396,11 +2396,10 @@ console.log("\n\x1b[1mE6.5: adoption raknas i antal, och gar aldrig att bryta ne
   );
   await db.query(`select registrera_sokmiss($1)`, ["rlstest-finns-inte"]);
 
-  // Samma krets som handelseloggen. Ingen annan.
+  // Bara Superadmin (VD eller administratör) sedan 0241 (granskningen S16, B13).
+  // Säljchefen David är Admin och får noll rader, som alla andra.
   const chefen = await rpc(tD, "adoption_aktivitet", { p_dagar: 7 });
-  // Sju dagar bakat ar sju rader, i dag inraknad. En serie med hal i hade
-  // gjort staplarna i vyn olika breda beroende pa om nagon var inloggad.
-  ok("saljchefen far aktivitetsserien", chefen.rader === 7, `${chefen.rader} rader, HTTP ${chefen.status}`);
+  ok("saljchefen far 0 rader (0241, B13)", chefen.rader === 0, `${chefen.rader} rader, HTTP ${chefen.status}`);
 
   for (const [namn, tok] of [["Anna", tA], ["Cecilia (teamledare)", tC], ["Eva (ekonomi)", tE]]) {
     const svar = await rpc(tok, "adoption_aktivitet", { p_dagar: 7 });
@@ -2408,7 +2407,7 @@ console.log("\n\x1b[1mE6.5: adoption raknas i antal, och gar aldrig att bryta ne
   }
 
   const missarChef = await rpc(tD, "adoption_sokmissar", { p_antal: 20 });
-  ok("saljchefen ser trafflosa sokningar", missarChef.rader >= 1, `${missarChef.rader} rader`);
+  ok("saljchefen ser inga trafflosa sokningar (0241, B13)", missarChef.rader === 0, `${missarChef.rader} rader`);
   const missarAnna = await rpc(tA, "adoption_sokmissar", { p_antal: 20 });
   ok("Anna ser inga", missarAnna.rader === 0, `${missarAnna.rader} rader`);
 

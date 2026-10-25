@@ -23802,9 +23802,9 @@ const BRHMATRIS = [
   ['Satserna', 'Läsa satserna och kontrollen mot Skatteverket', [0, 1, 1], true],
   ['Satser och löner', 'Ändra satser, se och ändra månadslöner', [0, 0, 1], true],
   ['Behörigheter', 'Ge och ta behörighet', [0, 0, 1], true],
-  ['Regler som gäller alla', 'Provisionstrappan, K&V-regler, frånvaroregler, scheman', [0, 0, 1], false],
-  ['Det som inte går att ångra', 'Fastställa provisionsmånaden, radera order och anställda', [0, 0, 1], false],
-  ['Händelselogg och Adoption', 'Vem gjorde vad, och hur Nav används', [0, 0, 1], false]
+  ['Regler som gäller alla', 'Provisionstrappan, K&V-regler, frånvaroregler, scheman', [0, 0, 1], true],
+  ['Det som inte går att ångra', 'Fastställa provisionsmånaden, radera order och anställda', [0, 0, 1], true],
+  ['Händelselogg och Adoption', 'Vem gjorde vad, och hur Nav används', [0, 0, 1], true]
 ];
 const brhNiva = () => S.role === 'chef' ? (S.brhNiva || 'admin') : 'salesperson';
 const brhSuper = () => brhNiva() === 'superadmin';
@@ -24263,7 +24263,7 @@ function brhKort(){
       <div role="row" class="brh-th"><span role="columnheader">Får</span>${BRHORDNING.map(k => `<span role="columnheader">${BRHNIVA[k].l}</span>`).join('')}</div>
       ${BRHMATRIS.map(([t, h, v, inf]) => `<div role="row" class="brh-tr"><span role="rowheader"><b>${esc(t)}</b><small>${esc(h)}${inf ? '' : ' · <em>förslag</em>'}</small></span>${v.map((x, i) => `<span role="cell" class="brh-c">${x ? `${I('check')}<span class="prf-sr">Ja</span>` : `<i aria-hidden="true"></i><span class="prf-sr">Nej</span>`}</span>`).join('')}</div>`).join('')}
     </div>
-    <p class="prf-hj">Admin driver verksamheten. Superadmin äger pengarna, behörigheterna och det som inte går att ångra. Rader märkta förslag är inte spärrade i utkastet än.</p>
+    <p class="prf-hj">Admin driver verksamheten. Superadmin äger pengarna, behörigheterna och det som inte går att ångra. Nav prövar varje rad på servern.</p>
     <details class="brh-fran"><summary>Så blir repots åtta roller tre</summary><ul>${Object.entries(BRHFRAN).map(([r, n]) => `<li><span>${esc(AEROLL[r] || r)}</span>${I('arrow')}<b>${BRHNIVA[n].l}</b></li>`).join('')}</ul><p class="prf-hj">Leverans är admin tills vidare. Ändras per person i Anställda.</p></details>
   </div>`);
 }

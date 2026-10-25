@@ -3,7 +3,8 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { supabaseServer } from "@/lib/supabase/server";
-import { fullName } from "@/lib/auth";
+import { notFound } from "next/navigation";
+import { arSuperadmin, fullName, getCurrentUser } from "@/lib/auth";
 import { modulNamn, TYPER, TYP_ETIKETT, typFor, type Handelsetyp } from "@/lib/handelselogg";
 
 export const dynamic = "force-dynamic";
@@ -144,6 +145,10 @@ export default async function Logg({
 }: {
   searchParams: Promise<{ typ?: string }>;
 }) {
+  // B13 (beställaren 2026-10-23): bara Superadmin. RLS på audit_log släpper fortfarande in säljchefen, eftersom Admins egna
+  // vyer (Anställdas historik, lönerapporten) läser samma tabell.
+  if (!arSuperadmin(await getCurrentUser())) notFound();
+
   const { typ } = await searchParams;
   const valdTyp = TYPER.includes(typ as Handelsetyp) ? (typ as Handelsetyp) : null;
 

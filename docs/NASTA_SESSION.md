@@ -7,6 +7,18 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
 
 ---
 
+## Granskningen S16 — behörighetsspärren (B13) och V4 (2026-10-25), på `nav2-utkast`
+
+Det som var märkt "förslag" i behörighetskortet är bara Superadmins (VD eller administratör), på
+servern och i gamla Nav: provisionstrappan, konsekvensstegen och chefens sats, K&V-reglerna,
+frånvaroreglerna, scheman för bolaget och ett team, Fastställ, radera en order som lämnat utkastet,
+radera en anställd, Händelseloggen och Adoption. En vakt `arSuperadmin` (`src/lib/auth.ts`).
+**0241 KÖRD** (`adoption_*` bara ceo/admin). V4: en rutins bilaga tas bara bort om filen hör till
+rutinen. **Kvar:** `audit_log_read` släpper fortfarande in säljchefen, eftersom Admins egna vyer läser
+samma tabell (efter mergen). Inventering och tolkningar: `~/nav2-utkast/delar/granskning/S16/inventering.md`.
+
+---
+
 ## Granskningen S15 — texterna till personalen (2026-10-23), på `nav2-utkast`
 
 Nytt i navet-posten `nav-2-med-riktig-data` säger nu det som gäller vid mergen och går till

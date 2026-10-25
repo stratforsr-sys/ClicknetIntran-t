@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import type { Referens } from "@/lib/personal-radering";
 import { filerForeRadering, stadaLagringEfterRadering } from "@/lib/personal-radering-server";
-import { getCurrentUser, canManageEmployees, hasRole } from "@/lib/auth";
+import { arSuperadmin, getCurrentUser, canManageEmployees, hasRole } from "@/lib/auth";
 import { ROLES, PERMISSIONS, ROLE_LABEL, PERMISSION_LABEL, type Role, type Permission } from "@/lib/roles";
 import { nyttTillfalligtLosenord } from "@/lib/losenord";
 import { kravByte, laggUppAnstalld as laggUpp } from "@/lib/anstallning-server";
@@ -312,7 +312,9 @@ export async function taBortAnstalld(
   form: FormData,
 ): Promise<RaderingState> {
   try {
-    const user = await kravChef();
+    // B13 (beställaren 2026-10-23): bara Superadmin. Förut säljchef och administratör (kravChef).
+    const user = await getCurrentUser();
+    if (!arSuperadmin(user) || !user?.employee) return { fel: "Bara en superadmin tar bort en anställd." };
     const db = supabaseAdmin();
 
     const employeeId = String(form.get("employee_id") ?? "");
