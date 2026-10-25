@@ -254,9 +254,15 @@ export default function Parning(): ReactElement {
           <div className="sb-par-tid" aria-hidden="true">
             <i style={{ transform: `scaleX(${andel})` }} />
           </div>
-          <p className="sb-par-text">
-            Öppna <b>{adress}/salesboard/installningar</b> på en dator, välj <b>Para ny skärm</b> och skriv koden.
-          </p>
+          <ol className="sb-par-steg">
+            <li>
+              Öppna <b>{adress}/nav2</b> på en dator, som superadmin
+            </li>
+            <li>
+              Välj <b>Inställningar → Säljtavlan → Para</b>
+            </li>
+            <li>Skriv koden ovan</li>
+          </ol>
           <p className="sb-par-not">
             Koden gäller {minuter <= 1 ? "en minut till" : `${minuter} minuter till`}. Tavlan startar här av sig själv. F ger helskärm.
           </p>
@@ -295,6 +301,9 @@ export function Avbrott(): ReactElement {
       <div className="sb-etikett">TAVLAN</div>
       <p className="sb-par-rubrik">Tavlan når inte navet just nu.</p>
       <p className="sb-par-text">Den försöker igen om {kvar} s.</p>
+      <button type="button" className="sb-start-utan" onClick={() => window.location.reload()}>
+        Försök nu
+      </button>
     </Ram>
   );
 }

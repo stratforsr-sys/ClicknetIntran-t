@@ -31,12 +31,19 @@ export type SerieProps = {
   vh: number;
 };
 
-/** "3 nya order · 14:02–14:05", eller med ett klockslag när de kom samma minut. */
+/**
+ * "3 nya order på 4 minuter" när de kom tätt (inom en kvart), annars med
+ * klockslagen: "3 nya order · 09:12–14:05", eller ett när de kom samma minut.
+ */
 function etikettFor(order: readonly { tid: string }[], test: boolean): string {
   const tider = order.map((o) => Date.parse(o.tid)).filter((t) => Number.isFinite(t));
   const fran = tider.length ? klockslag(Math.min(...tider)) : "";
   const till = tider.length ? klockslag(Math.max(...tider)) : "";
-  return `${order.length} ${test ? "testorder" : "nya order"} · ${fran === till ? fran : `${fran}–${till}`}`;
+  const minuter = tider.length ? Math.round((Math.max(...tider) - Math.min(...tider)) / 60_000) : 0;
+  const vad = `${order.length} ${test ? "testorder" : "nya order"}`;
+  if (fran === till) return `${vad} · ${fran}`;
+  if (minuter >= 1 && minuter <= 15) return `${vad} på ${minuter} ${minuter === 1 ? "minut" : "minuter"}`;
+  return `${vad} · ${fran}–${till}`;
 }
 
 export function Serie(p: SerieProps): ReactElement {
@@ -52,6 +59,7 @@ export function Serie(p: SerieProps): ReactElement {
   const m = p.till;
   const visas = d.order.slice(0, SERIE_MAX);
   const summa = d.order.reduce((s, o) => s + (o.belopp ?? 0), 0);
+  const saljare = new Set(d.order.map((o) => o.person)).size;
   const lagP = ip(f, [t.lag + 18, t.lag + 62], [0, 1], STD);
   const lagV = mix(d.lag.fran.varde, d.lag.till.varde, lagP);
   const lagO = Math.round(mix(d.lag.fran.antal, d.lag.till.antal, lagP));
@@ -102,6 +110,12 @@ export function Serie(p: SerieProps): ReactElement {
         </div>
         <div className="tv-s-summa" style={inglid(t.summa)}>
           Tillsammans <b>{kronor(summa)}</b>
+          {saljare > 1 ? (
+            <>
+              {" "}
+              från <b>{saljare}</b> säljare
+            </>
+          ) : null}
         </div>
         <div className="tv-f-lag" style={{ marginTop: "auto", opacity: ip(f, [t.lag, t.lag + 14], [0, 1]) }}>
           <div className="tv-f-lag-text">

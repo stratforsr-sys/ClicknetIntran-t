@@ -21,9 +21,10 @@ import {
 } from "@/lib/salesboard/skrivning";
 
 /**
- * Säljtavlans inställningar: läsningarna som sidan och skrivrutten delar.
+ * Säljtavlans inställningar: läsningarna som Nav 2.0:s sektion och skrivrutten delar.
  *
- * Inställningssidan och `/salesboard/skriv` läser samma sak: skärmarna, de som
+ * Inställningar → Säljtavlan (`src/lib/nav2/saljtavlan.ts`) och `/nav2/salesboard`
+ * läser samma sak: skärmarna, de som
  * tavlan kan visa med sina val, och tröskeln för stor affär. Frågorna står här en
  * gång, och vad svaren betyder står i `skrivning.ts` (`saljarutfall`,
  * `installationslage`), som är provat.

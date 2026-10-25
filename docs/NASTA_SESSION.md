@@ -7,7 +7,7 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
 
 ---
 
-## Säljtavlan på /salesboard — gren `salesboard`, EJ MERGAD (2026-10-25)
+## Säljtavlan på /salesboard — gren `salesboard`, EJ MERGAD (2026-10-25, inställningarna i Nav 2.0)
 
 Prototypen v5 är inbyggd i den riktiga tavlan. Besluten R35–R43 står överst i
 `docs/superpowers/specs/2026-10-23-salesboard-design.md` (§0): målet i ordervärde,
@@ -18,15 +18,22 @@ topplistan, inspelade ljud, hela skärmen.
   Kör efter ja: `set -a; . ~/.clicknet/nav.env; set +a; node scripts/apply-sql.mjs 0250_saljtavlan`,
   sedan dörrklockan i Realtime (`update public.sales_order set status = status where false`
   ska ge en signal på kanalen `salesboard`) och vakten `npm run test:rattigheter`.
+- **Inställningarna** finns bara i Nav 2.0: **Inställningar → Säljtavlan**, bara för
+  superadmin (beställaren 2026-10-25). Klienten är `moduler/ndsb.js` i `~/nav2-utkast`
+  (inbyggd med `delar/saljtavlan/bygg-utkast.py`), datan `ND.saljtavlan`
+  (`src/lib/nav2/saljtavlan.ts`), rutten `/nav2/salesboard` (`SKRIVLAGE.salesboard`).
+  `/salesboard/installningar` skickar dit; `/salesboard/skriv` finns inte längre.
 - **Före 0250** går tavlan på standarderna: ingen graf bakåt, inga testhändelser,
-  ingen dold säljare. Målet sätts i inställningarnas kort 02 Månadsmål.
+  ingen dold säljare. Målet, visningen, firandet och ljudet sparar ändå; skärmarna,
+  säljarnas val och testet säger att de väntar på installationen.
 - **Main** rörs först efter beställarens ja och B8.
 - **Proven:** `TZ=UTC node --experimental-strip-types tests/salesboard{,-parning,-motor,-ljud,-server,-tavla,-ko,-installningar}.mjs`, alla gröna.
 - **Selen** (utanför repot): `~/sb-sele` bygger den riktiga Tavla-koden med esbuild och
   påhittad data (`node bygg.mjs`, `./bild.sh <namn> "fall=order&t=2.5"`, `node svep.mjs`).
   Ingen `npm run dev`.
-- **Inte kontrollerat:** ljudet i högtalare (ingen har lyssnat på den riktiga koden),
-  Realtime-klockan och tavlan mot riktig data (väntar på 0250).
+- **Inte kontrollerat:** ljudet i högtalare (ingen har lyssnat på den riktiga koden,
+  varken tavlan eller Lyssna i inställningarna), Realtime-klockan, tavlan mot riktig data
+  (väntar på 0250) och inställningssektionen mot riktig data i previewen.
 
 ---
 

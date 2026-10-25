@@ -5,6 +5,53 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-25 · Säljtavlan: inställningarna i Nav 2.0, bara superadmin; förbättringsvarvet (gren `salesboard`)
+
+- **Varför:** beställaren hittade inga inställningar och ville kunna se och använda dem,
+  men **bara** i Nav 2.0:s Inställningar och **bara** för superadmin (VD, administratör).
+- **Nav 2.0:** ny sektion **Inställningar → Säljtavlan** (`moduler/ndsb.js` + `ndsb.css` i
+  `~/nav2-utkast`, inbyggd med `delar/saljtavlan/bygg-utkast.py`; `ndsb` står efter `ndsats`
+  i `ndpatch.py`). Fliken står sist, efter Satser, och bara när `ND.saljtavlan` finns.
+  Utkastets egna delar: `prfKort`, brytare, `prf-seg`, `prf-opt`, `sats-enh`, `brh-antal`;
+  egen CSS bara för dygnsremsan, kodfältet och raderna. Allt från gamla sidan finns kvar:
+  läget överst, Skärmar med parning, byt namn, ljud per skärm, koppla bort och TV-hjälpen,
+  Månadsmål (förra månaden, rekordet, per arbetsdag), Visning, Firande (tröskeln och hur
+  många som hade firats som stora), Ljud (Lyssna, kassan när reglaget släpps, dygnet),
+  Säljarna och Testa. Varje ändring sparar direkt, en i taget i ordning, och kortet säger
+  "…: sparat." med **Ångra** (`prfStatus`); bortkoppling går inte att ångra (tokenen nollas).
+- **Servern:** `ND.saljtavlan` byggs i `src/lib/nav2/saljtavlan.ts` (null för alla utom
+  superadmin, innan något läses; ett läsfel ger `{fel}` och resten av navet ritas). Rutten
+  `src/app/nav2/salesboard/route.ts` (POST + GET för skärmlistan): samma ursprung, superadmin
+  (403 annars, innan något läses eller skrivs), `SKRIVLAGE.salesboard` (423 i läsläge),
+  `medNyckel`. Arbetet flyttat ur `/salesboard/skriv` till `src/lib/salesboard/handlingar.ts`;
+  `/salesboard/skriv` finns inte längre, så ingen skrivväg står öppen för admin.
+- **Behörigheten:** `tavlansAdmin` släpper bara in superadmin (`farAndraTavlan` i
+  `skrivning.ts`). Tavlans knapp Inställningar syns bara för en inloggad superadmin och går
+  till `/nav2?till=/installningar/salesboard`; `/salesboard/installningar` skickas dit.
+  Parningstexten säger Nav → Inställningar → Säljtavlan → Para.
+- **Förbättringsvarvet** (stegcommit 9c0ad09, ihopslagen hit), 30 punkter: rubriken (ring
+  vid ny order, "Öppnar 08:00 / i morgon / måndag", "Tyst till …"); topplistan ("X kr till
+  2:a" under en snittorder, "–" för nollor, "+ N säljare till", tom lista hänvisar till
+  Visning); målkortet ("≈ N order" kvar, per arbetsdag); grafen (REKORD-märket, förklaringen
+  bara för det som finns, inga axelsiffror); senaste order ("ingen order än i dag", strecket
+  där i dag slutar); ordern ("≈ N order kvar till målet", högst fyra punkter); stor affär
+  ("N× en snittorder", minst 10 % av målet först); serien ("på N minuter", "från N säljare");
+  målet (den som tog laget över namnges, aldrig en dold; "Nästa: rekordmånaden"); ljudet
+  (volymprovet med kassan, valet minns efter omladdning); parningen (tre numrerade steg,
+  "Försök nu"); inställningarna (förra månaden och rekordet, per arbetsdag, antalet stora
+  affärer vid tröskeln); offline dämpar talen.
+- **Kontrollerat:** de åtta sviterna (1 349 kontroller) med nytt behörighetsprov (säljare,
+  admin, superadmin mot rutten: 403, 403, 200), `bro`, `guider`, `nav2-skriv`, `nav2-nyckel`,
+  `nav2-satser`, `navnyheter` m.fl. gröna; esbuild tolkar rutterna. Sektionen i headless
+  Chrome med påhittad data och en låtsasserver: 67 kontroller (spara och Ångra på varje fält,
+  fel vid fältet, 400/403/423/401, parning, namnbyte med Enter/Esc, koppla bort, säljare,
+  testet en gång), före 0250, läsläge, läsfel och säljare (ingen flik, ingen sökträff),
+  1440 px och 390 px.
+- **Inte kontrollerat:** ljudet i högtalare (Lyssna och volymprovet), sektionen mot riktig
+  data i previewen (kräver inloggning som superadmin), Realtime. 0250 är inte körd.
+
+---
+
 ## 2026-10-25 · Säljtavlan: prototypen v5 inbyggd (gren `salesboard`)
 
 - **Varför:** beställaren godkände prototypen v5 ("Super snyggt") och ändrade tre

@@ -1,8 +1,8 @@
+import "server-only";
+
 import { getCurrentUser } from "@/lib/auth";
 import { skrivHandelse } from "@/lib/handelselogg-server";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { medNyckel } from "@/lib/nav2/nyckel";
-import { sammaUrsprung } from "@/lib/nav2/skrivlage";
 import { tavlansAdmin } from "@/lib/salesboard/atkomst";
 import { lasSaljareOchTroskel, lasSkarmar, type Dbfel } from "@/lib/salesboard/installningsdata";
 import { hasha } from "@/lib/salesboard/parning";
@@ -10,12 +10,10 @@ import { saknasAn } from "@/lib/salesboard/saknas";
 import {
   FEL,
   HANDELSER,
-  atkomstsvar,
   efterForsok,
   parningsutfall,
   nastaStampel,
   planeraSparning,
-  tolkaSkrivning,
   type Atkomstlage,
   type Delar,
   type Installningsrad,
@@ -23,12 +21,10 @@ import {
 } from "@/lib/salesboard/skrivning";
 import { svar } from "@/lib/salesboard/svar";
 
-export const dynamic = "force-dynamic";
-
 /**
- * Säljtavlan: allt som ändrar tavlan, i en rutt (spec §7 och §9).
+ * Säljtavlan: allt som ändrar tavlan (spec §7 och §9). Rutten är
+ * `/nav2/salesboard`, Nav 2.0:s Inställningar → Säljtavlan; här görs arbetet.
  *
- *   POST, `{handling, …}`:
  *   spara        delar av inställningarna (`nav_setting` "salesboard")
  *   para         en kod från TV:n och ett namn: skärmen skapas och koden löses in
  *   byt_namn     en skärms namn
@@ -37,17 +33,11 @@ export const dynamic = "force-dynamic";
  *   person       en säljares visning (namn, initialer, dold)
  *   testa        en testhändelse som alla skärmar spelar med märket TEST
  *
- *   GET: skärmarna, `{skarmar, nu}`. Inställningssidan frågar var 30:e sekund
- *   efter "sedd för …", och en dålig läsning stannar i skärmkortet.
- *
  * ===========================================================================
- * BARA ADMIN, FRÅN NAVETS EGEN SIDA. `/salesboard` står i mellanvarans
- * `PUBLIC` (en TV har ingen session), så rutten avgör själv. En skrivning prövar
- * först samma ursprung (rutten tar kakor, och en annan sajt får inte ens fråga
- * vem som är inloggad); en läsning har inget att förfalska och prövas inte på
- * det. Sedan nivån admin eller superadmin (`tavlansAdmin`). Bara ett säkert nej
- * ger nej: utan session 401, en säljare 403. Går det inte att veta (databasen
- * svarar inte) blir det 503, aldrig 401 eller 403 (`atkomstsvar`).
+ * BARA SUPERADMIN (beställaren 2026-10-25). Rutten frågar `vemFragar` innan
+ * något läses eller skrivs, och bara ett säkert nej ger nej: utan session 401,
+ * en säljare eller admin 403. Går det inte att veta (databasen svarar inte)
+ * blir det 503, aldrig 401 eller 403 (`atkomstsvar`).
  *
  * INGENTING TAPPAS TYST. Kroppen tolkas i `skrivning.ts`: varje del prövas,
  * och en del som inte landar som den skickades ger 400 med delen, i stället
@@ -57,10 +47,6 @@ export const dynamic = "force-dynamic";
  * skrivningen gäller bara om raden fortfarande har det `updated_at` som lästes.
  * Hann någon emellan läses raden om och delarna läggs ovanpå den nya, en gång.
  * Krockar det igen svarar rutten 409 och ingenting sparas.
- *
- * EN SKRIVNING EN GÅNG. Allt går genom `medNyckel`: samma `X-Nav-Nyckel` en
- * gång till ger samma svar, så ett försök som hängde kan skickas igen utan
- * två skärmar eller två testhändelser.
  * ===========================================================================
  *
  * Före 0250 finns inte skärmarna, säljarnas val och testhändelserna. Då svarar
@@ -88,26 +74,26 @@ const nuIso = () => new Date().toISOString();
  */
 function dbFel(objekt: string | null, e: Dbfel, vad: string) {
   if (objekt && saknasAn(objekt, e)) return svar({ fel: FEL.inteInstallerad }, 503);
-  console.error(`salesboard/skriv: ${vad}:`, e.message ?? e);
+  console.error(`salesboard: ${vad}:`, e.message ?? e);
   return svar({ fel: FEL.ovantat }, 500);
 }
 
 /** Skärmarna efter en skrivning som redan lyckats. Går de inte att läsa följer ingen lista med, aldrig ett fel. */
 async function skarmarEfter(db: Db) {
   const r = await lasSkarmar(db);
-  if (r.lasning !== "svar") console.error("salesboard/skriv: skärmarna efter skrivningen:", r.fel?.code ?? "", r.fel?.message ?? r.lasning);
+  if (r.lasning !== "svar") console.error("salesboard: skärmarna efter skrivningen:", r.fel?.code ?? "", r.fel?.message ?? r.lasning);
   return r.lasning === "svar" ? r.skarmar : undefined;
 }
 
 /** Vem som frågar, som ett läge (`atkomstsvar` avgör svaret). Kastar aldrig. */
-async function vemFragar(): Promise<Atkomstlage> {
+export async function vemFragar(): Promise<Atkomstlage> {
   try {
     const admin = await tavlansAdmin();
     if (admin?.employee) return { typ: "admin", id: admin.employee.id };
     // Ett säkert nej. Bara för att välja rätt: utan session ska klienten be om en inloggning.
     return { typ: "nej", session: (await getCurrentUser()) !== null };
   } catch (e) {
-    console.error("salesboard/skriv: åtkomsten:", e instanceof Error ? e.message : e);
+    console.error("salesboard: åtkomsten:", e instanceof Error ? e.message : e);
     return { typ: "oklart" };
   }
 }
@@ -196,7 +182,7 @@ async function para(db: Db, kod: string, namn: string, mig: string): Promise<Res
   if (utfall !== "klar") {
     const { error: stadfel } = await db.from("salesboard_screen").delete().eq("id", id);
     // Blir den kvar står den som "Väntar på TV:n" och går att koppla bort.
-    if (stadfel) console.error("salesboard/skriv: skärmen utan kod blev kvar:", stadfel.message);
+    if (stadfel) console.error("salesboard: skärmen utan kod blev kvar:", stadfel.message);
     return utfall === "fel" ? dbFel("salesboard_pairing", losfel as Dbfel, "koden") : svar({ fel: FEL.koden, del: "kod" }, 404);
   }
 
@@ -249,11 +235,11 @@ async function testa(db: Db, mig: string, typ: Extract<Skrivning, { handling: "t
   if (error) return dbFel("salesboard_event", error, "testet");
 
   const { error: stadfel } = await db.from("salesboard_event").delete().lt("created_at", new Date(Date.now() - DYGN_MS).toISOString());
-  if (stadfel) console.error("salesboard/skriv: städningen av testhändelserna:", stadfel.message);
+  if (stadfel) console.error("salesboard: städningen av testhändelserna:", stadfel.message);
   return svar({ ok: "Skickat." });
 }
 
-async function utfor(s: Skrivning, mig: string): Promise<Response> {
+export async function utfor(s: Skrivning, mig: string): Promise<Response> {
   const db = supabaseAdmin();
   switch (s.handling) {
     case "spara":
@@ -280,49 +266,13 @@ async function utfor(s: Skrivning, mig: string): Promise<Response> {
   }
 }
 
-export async function POST(request: Request) {
-  if (!sammaUrsprung(request)) return svar({ fel: FEL.ursprung }, 403);
-
-  try {
-    const vem = await vemFragar();
-    const nej = atkomstsvar(vem);
-    if (nej || vem.typ !== "admin") return svar({ fel: nej?.fel ?? FEL.ovantat }, nej?.status ?? 500);
-
-    let kropp: unknown;
-    try {
-      kropp = await request.json();
-    } catch {
-      return svar({ fel: FEL.ogiltig }, 400);
-    }
-    const skrivning = tolkaSkrivning(kropp);
-    if ("fel" in skrivning) return svar(skrivning, 400);
-
-    return await medNyckel(request, vem.id, () => utfor(skrivning, vem.id));
-  } catch (e) {
-    console.error("salesboard/skriv:", e instanceof Error ? e.message : e);
-    return svar({ fel: FEL.ovantat }, 500);
+/** Skärmarna, för "sedd för …". `nu` är serverns klocka, så att sidan räknar på servertid. */
+export async function skarmlistan(): Promise<Response> {
+  const r = await lasSkarmar(supabaseAdmin());
+  if (r.lasning === "saknas") return svar({ fel: FEL.inteInstallerad }, 503);
+  if (r.lasning === "fel") {
+    console.error("salesboard: skärmarna:", r.fel?.message);
+    return svar({ fel: FEL.svararInte }, 503);
   }
-}
-
-/**
- * Skärmarna, för inställningssidans lista. Samma åtkomst som skrivningarna. `nu`
- * är serverns klocka, så att sidan räknar "sedd för …" på servertid.
- */
-export async function GET() {
-  try {
-    const vem = await vemFragar();
-    const nej = atkomstsvar(vem);
-    if (nej) return svar({ fel: nej.fel }, nej.status);
-
-    const r = await lasSkarmar(supabaseAdmin());
-    if (r.lasning === "saknas") return svar({ fel: FEL.inteInstallerad }, 503);
-    if (r.lasning === "fel") {
-      console.error("salesboard/skriv: skärmarna:", r.fel?.message);
-      return svar({ fel: FEL.svararInte }, 503);
-    }
-    return svar({ skarmar: r.skarmar, nu: nuIso() });
-  } catch (e) {
-    console.error("salesboard/skriv: skärmarna:", e instanceof Error ? e.message : e);
-    return svar({ fel: FEL.ovantat }, 500);
-  }
+  return svar({ skarmar: r.skarmar, nu: nuIso() });
 }

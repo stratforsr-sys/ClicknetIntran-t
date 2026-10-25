@@ -377,6 +377,39 @@
   color: var(--hub-ink);
 }
 
+/* Tre steg på datorn, numrerade: det man gör, i ordning. */
+.sb-par-steg {
+  display: flex;
+  gap: 56px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: steg;
+  font: 400 32px/1.35 var(--sb-body);
+  color: var(--hub-ink-2);
+  text-align: left;
+}
+
+.sb-par-steg li {
+  counter-increment: steg;
+  display: flex;
+  gap: 18px;
+  align-items: baseline;
+  max-width: 560px;
+}
+
+.sb-par-steg li::before {
+  content: counter(steg);
+  flex: none;
+  font: 500 28px/1 var(--sb-mono);
+  color: var(--hub-brand);
+}
+
+.sb-par-steg b {
+  font-weight: 500;
+  color: var(--hub-ink);
+}
+
 .sb-par-rubrik {
   margin: 0;
   font: 600 88px/1.05 var(--sb-display);
@@ -459,6 +492,8 @@
 }
 /* Utanför arbetsdagen dämpas tavlan, så att den inte lyser upp ett tomt kontor. */
 .tv-scen.tv-dampad { opacity: 0.55; }
+/* Offline: talen kan vara gamla, och ser ut så. */
+.tv-scen.tv-gammal .tv-kropp { opacity: .6; filter: saturate(.3); transition: opacity .6s, filter .6s; }
 .tv-huvud { display: flex; align-items: center; justify-content: space-between; gap: calc(24 * var(--u)); min-width: 0; }
 .tv-marke { display: flex; align-items: baseline; gap: calc(18 * var(--u)); min-width: 0; }
 .tv-marke h1 { margin: 0; font: 800 calc(46 * var(--u))/1 var(--f-rubrik); letter-spacing: -0.02em; white-space: nowrap; }
@@ -469,6 +504,12 @@
 .tv-live.tv-av { color: var(--amber); }
 .tv-live.tv-av i { background: var(--amber); animation: none; }
 @keyframes tv-puls { 50% { opacity: .35; } }
+/* En ny order, också en tyst, slår en ring kring punkten: datan lever. */
+.tv-live i { position: relative; }
+.tv-live i b { position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 2px var(--mint); animation: tv-ping 1.6s cubic-bezier(.2,0,0,1) both; }
+@keyframes tv-ping { from { transform: scale(1); opacity: .9; } to { transform: scale(3.4); opacity: 0; } }
+.tv-live.tv-vilar { color: var(--dov); }
+.tv-live.tv-vilar i { background: var(--dov); animation: none; }
 .tv-klocka { font: 500 calc(46 * var(--u))/1 var(--f-siffra); color: var(--text); letter-spacing: -0.02em; }
 /* Ljudet syns bara när det inte låter: en tyst tavla ska säga varför. */
 .tv-ljudchip { display: inline-flex; align-items: center; gap: calc(8 * var(--u)); font: 500 calc(15 * var(--u)) var(--f-siffra); letter-spacing: .08em; text-transform: uppercase; color: var(--dov); border: 1px solid var(--linje); border-radius: 99px; padding: calc(6 * var(--u)) calc(14 * var(--u)); background: none; }
@@ -481,6 +522,7 @@ button.tv-ljudchip { cursor: pointer; color: var(--amber); border-color: rgba(24
 .tv-kort-rubrik h2 { margin: 0; font: 700 calc(28 * var(--u))/1.1 var(--f-rubrik); letter-spacing: -0.01em; white-space: nowrap; }
 .tv-kort-rubrik small { font: 500 calc(15 * var(--u)) var(--f-siffra); color: var(--dov); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tv-tom { margin: auto; text-align: center; font: 500 calc(22 * var(--u)) var(--f-text); color: var(--dov); max-width: 28em; }
+.tv-tom small { display: block; margin-top: calc(8 * var(--u)); font-size: .78em; color: var(--svag); }
 
 /* Topplistan */
 .tv-lista { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -502,6 +544,10 @@ button.tv-ljudchip { cursor: pointer; color: var(--amber); border-color: rgba(24
 .tv-etta .tv-ini { box-shadow: 0 0 0 2px var(--amber); color: var(--amber); }
 .tv-rad-namn { font: 600 calc(28 * var(--u))/1.1 var(--f-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tv-upp { flex: none; font: 600 calc(15 * var(--u)) var(--f-siffra); color: var(--mint); background: rgba(79,209,165,.13); border-radius: 99px; padding: calc(4 * var(--u)) calc(10 * var(--u)); }
+/* Jakten: en enda rad i listan är nära platsen ovanför. */
+.tv-namnblock { display: flex; flex-direction: column; min-width: 0; }
+.tv-jakt { font: 500 calc(15 * var(--u)) var(--f-siffra); color: var(--amber); letter-spacing: .04em; white-space: nowrap; margin-top: calc(3 * var(--u)); }
+.tv-fler { margin: calc(8 * var(--u)) 0 0; text-align: center; font: 500 calc(14 * var(--u)) var(--f-siffra); color: var(--svag); letter-spacing: .1em; text-transform: uppercase; }
 .tv-dag { display: grid; place-items: center; height: 100%; }
 .tv-dag.tv-idag { background: rgba(79,209,165,.06); }
 .tv-dag svg { display: block; overflow: visible; height: calc(30 * var(--u)); width: auto; }
@@ -509,7 +555,7 @@ button.tv-ljudchip { cursor: pointer; color: var(--amber); border-color: rgba(24
 .tv-dag.tv-idag svg line { stroke: var(--mint); }
 .tv-noll { width: calc(5 * var(--u)); height: calc(5 * var(--u)); border-radius: 50%; background: var(--under); }
 .tv-idag-tal { text-align: right; font: 500 calc(28 * var(--u)) var(--f-siffra); color: var(--mint); }
-.tv-idag-tal.tv-noll-tal { color: var(--under); }
+.tv-idag-tal.tv-noll-tal, .tv-manad.tv-noll-tal { color: var(--under); }
 .tv-manad, .tv-varde { text-align: right; white-space: nowrap; }
 .tv-manad { font: 700 calc(44 * var(--u))/1 var(--f-rubrik); }
 .tv-varde { font: 500 calc(24 * var(--u)) var(--f-siffra); color: var(--dov); }
@@ -552,12 +598,15 @@ button.tv-ljudchip { cursor: pointer; color: var(--amber); border-color: rgba(24
 .tv-graf text { font-family: var(--f-siffra); fill: var(--dov); }
 .tv-graf .v { fill: var(--text); }
 .tv-graf .v.nu, .tv-graf .man.nu { fill: var(--mint); font-weight: 600; }
+.tv-graf .rek { fill: var(--amber); letter-spacing: .14em; font-weight: 600; }
 .tv-teckn { display: flex; flex-wrap: wrap; gap: calc(6 * var(--u)) calc(22 * var(--u)); font: 500 calc(14 * var(--u)) var(--f-siffra); color: var(--dov); letter-spacing: .04em; margin-top: calc(10 * var(--u)); }
 .tv-teckn i { display: inline-block; width: calc(12 * var(--u)); height: calc(12 * var(--u)); border-radius: 3px; margin-right: calc(8 * var(--u)); vertical-align: -1px; }
 
 .tv-flode { display: flex; flex-direction: column; }
 .tv-post { display: grid; grid-template-columns: calc(76 * var(--u)) minmax(0, 1fr) auto; align-items: center; gap: calc(14 * var(--u)); height: calc(50 * var(--u)); border-top: 1px solid var(--linje); position: relative; }
 .tv-post:first-child { border-top: 0; }
+/* Där i dag slutar blir strecket tydligare. */
+.tv-post.tv-forr { border-top-color: var(--svag); }
 .tv-post time { font: 500 calc(18 * var(--u)) var(--f-siffra); color: var(--dov); white-space: nowrap; }
 .tv-pn { font: 600 calc(22 * var(--u))/1.15 var(--f-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tv-pp { font: 400 calc(16 * var(--u)) var(--f-text); color: var(--dov); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -656,6 +705,8 @@ button.tv-ljudchip { cursor: pointer; color: var(--amber); border-color: rgba(24
 .tv-laget span { font: 500 calc(24 * var(--u)) var(--f-text); background: var(--yta-2); border-radius: 99px; padding: calc(10 * var(--u)) calc(22 * var(--u)); }
 .tv-laget span b { font-family: var(--f-siffra); color: var(--amber); margin-left: calc(10 * var(--u)); }
 .tv-laget span em { font: normal 400 calc(20 * var(--u)) var(--f-siffra); color: var(--dov); margin-left: calc(10 * var(--u)); }
+.tv-malet-nasta { margin: calc(40 * var(--u)) 0 0; font: 500 calc(26 * var(--u)) var(--f-siffra); color: var(--dov); letter-spacing: .04em; }
+.tv-malet-nasta b { color: var(--amber); font-weight: 600; }
 
 /* Styrningen svävar över tavlan och gömmer sig när ingen rör musen. */
 .tv-styr {
@@ -693,6 +744,7 @@ button.tv-ljudchip { cursor: pointer; color: var(--amber); border-color: rgba(24
 }
 @media (prefers-reduced-motion: reduce) {
   .tv-live i { animation: none; }
+  .tv-live i b { display: none; }
   .tv-post.tv-tyst-ny { animation: none; background: rgba(79,209,165,.12); }
   .tv-scen { transition: none; }
 }

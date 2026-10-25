@@ -9,6 +9,7 @@ import {
   byggomladdning,
   flodeTid,
   grafPlan,
+  jakten,
   kronor,
   matarRader,
   matarText,
@@ -46,7 +47,7 @@ console.log("\nFormat och texter");
 
 console.log("\nMålkortet");
 {
-  const bas = { varde: 434_400, mal: 550_000, forvantat: 425_000, prognos: 562_000, natt: null };
+  const bas = { varde: 434_400, mal: 550_000, forvantat: 425_000, prognos: 562_000, natt: null, dagarKvar: 0, snitt: 0 };
   const fore = matarRader(bas);
   ok("före takten i mint", fore.status === `9${H}400${H}kr före takten` && fore.bra && !fore.natt, fore.status);
   ok("kvar och prognos", JSON.stringify(fore.fakta) === JSON.stringify([{ fet: `115${H}600${H}kr`, text: "kvar" }, { fet: `562${H}tkr`, text: "Prognos", fetSist: true }]));
@@ -58,7 +59,26 @@ console.log("\nMålkortet");
   const utan = matarRader({ ...bas, mal: null });
   ok("utan mål ingen status, och en rad som säger det", utan.status === null && utan.fakta[0].fet === "Inget mål");
   ok("utan prognos (före arbetsdag tre) står bara kvar", matarRader({ ...bas, prognos: null }).fakta.length === 1);
+  const takt = matarRader({ ...bas, dagarKvar: 6, snitt: 18_100 });
+  ok("kvar räknas i order på lagets snitt, uppåt", takt.fakta[0].text === `kvar · ≈${H}7 order`, takt.fakta[0].text);
+  ok("och per arbetsdag, uppåt till hundratal", takt.fakta[1].fet === `19${H}300${H}kr` && takt.fakta[1].text === "per arbetsdag", takt.fakta[1].fet);
+  ok("sista arbetsdagen visar inget per dag", !matarRader({ ...bas, dagarKvar: 1, snitt: 18_100 }).fakta.some((d) => d.text === "per arbetsdag"));
   ok("raden byter först när talet landat (R31)", matarText(bas, { ...bas, varde: 560_000 }, RULL - 1).status === fore.status && matarText(bas, { ...bas, varde: 560_000 }, RULL).status === "Målet nått");
+}
+
+console.log("\nTopplistans jakt");
+{
+  const rader = [
+    { person: "a", antal: 9, varde: 160_000 },
+    { person: "b", antal: 8, varde: 120_000 },
+    { person: "c", antal: 7, varde: 117_400 },
+    { person: "d", antal: 0, varde: 0 },
+  ];
+  const j = jakten(rader, "varde", 18_100);
+  ok("närmast platsen ovanför, i kronor", j?.person === "c" && j.text === `2${H}600${H}kr till 2:a`, j?.text);
+  ok("ingen jakt när avståndet är större än en snittorder", jakten(rader.slice(0, 2), "varde", 18_100) === null);
+  ok("efter antal: en order bort, högst upp först", jakten(rader, "antal", 18_100)?.text === "1 order till 1:a");
+  ok("den som inte sålt jagar inte", jakten([{ person: "a", antal: 1, varde: 100 }, { person: "b", antal: 0, varde: 0 }], "antal", 100) === null);
 }
 
 console.log("\nStrecken");
@@ -86,6 +106,9 @@ console.log("\nGrafen");
   ok("utan mål inget målstreck", utan.staplar.every((s) => s.malY === null));
   const liten = grafPlan({ W: 660, H: 300, historik: historik.map((m) => ({ ...m, varde: 0, mal: null })), nu: { namn: "okt", varde: 17_940, mal: null, antal: 1, prognos: null } });
   ok("en liten månad får en egen skala", liten.linjer.at(-1).etikett === "20" || liten.linjer.at(-1).etikett === "19", liten.linjer.map((l) => l.etikett).join(","));
+  ok("rekordmånaden är den bästa av de tolv", hog.staplar.filter((s) => s.rekord).length === 1 && hog.staplar[10].rekord);
+  ok("slår månaden rekordet bär den märket", natt.staplar.filter((s) => s.rekord).length === 1 && grafPlan({ W: 660, H: 300, historik, nu: { namn: "okt", varde: 700_000, mal: 550_000, antal: 30, prognos: null } }).staplar[11].rekord);
+  ok("utan tre månader med värde inget rekord", liten.staplar.every((s) => !s.rekord));
   ok("verktygstipset har värde, mål och antal", hog.staplar[0].titel === `m0: 318${H}400${H}kr av 520${H}000${H}kr · 20 order`, hog.staplar[0].titel);
 }
 

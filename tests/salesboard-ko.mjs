@@ -244,6 +244,14 @@ avsnitt("förloppet");
   ok("målet väntar 650 ms och har sitt eget spår", m.tider.byt === MALET_VANTA && m.spar.map((p) => p.ljud).join() === "small,fanfar,arena");
   ok("laget som chips, efter värde, bara de som sålt", lika(m.data.laget.map((x) => x.namn), ["Elin B.", "Amira H.", "Jonas K."]));
   ok("med fem arbetsdagar kvar", m.data.dagarKvar === 5 && m.data.mal === 550_000 && m.data.varde === 560_000);
+  ok("utan ordern som tog laget över namnges ingen, och utan historik inget rekord", m.data.avgorande === null && m.data.rekord === null);
+  const sista = ord("Z", { person: "jonas", tid: NU });
+  const medSista = { ...bild({ bas: 550_000, order: [sista], nu: plus(NU, 2) }), historik: [{ nyckel: "2026-09", namn: "sep", antal: 30, varde: 627_400, mal: 520_000 }] };
+  const m2 = fl(post({ typ: "malet", natt: NU }, medSista), fore);
+  ok("den vars order nådde målet namnges", m2.data.avgorande === "Jonas K.", String(m2.data.avgorande));
+  ok("rekordmånaden är nästa mål när den inte är slagen", m2.data.rekord === 627_400);
+  const dold = { ...medSista, order: [{ ...sista, person: "dold" }] };
+  ok("en dold säljare namnges aldrig", fl(post({ typ: "malet", natt: NU }, dold), fore).data.avgorande === null);
 
   const tre = [ord("A"), ord("B", { person: "elin" }), ord("C", { person: "jonas" })];
   const s = fl(post({ typ: "serie", order: tre }, bild({ order: tre, nu: plus(NU, 2) })), fore);

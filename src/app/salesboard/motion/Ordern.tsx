@@ -15,7 +15,7 @@
 
 import { useRef, type CSSProperties, type ReactElement, type ReactNode, type RefObject } from "react";
 import type { Forloppsdata } from "../ko.ts";
-import { heltal, klockslag, kronor, ordtal, taggText } from "../vy.ts";
+import { HART, heltal, klockslag, kronor, ordtal, snitt, taggText } from "../vy.ts";
 import { Ord, Postrad, Rakneverk, passa, rektUtanTransform, useMatt, type Rekt } from "./delar";
 import { ANDAS, SAKRING, STD, SVEP, UT, farg, fjader, ip, mix, skalaMix } from "./kurvor.ts";
 import { useCurrentFrame } from "./motor";
@@ -66,27 +66,41 @@ function platsFaktum(plats: number | null, fore: number | null, manad: string): 
   return { fet: `${ordtal(plats)} plats`, text: `i ${manad}` };
 }
 
-/** Pillren för en order, i prototypens ordning, högst fem. */
+/**
+ * Pillren för en order, högst fyra. Det som bara händer ibland (största affären,
+ * välkomsten, rekorden) står först. Platsen och vägen till målet får alltid plats:
+ * det är dem rummet räknar på. Det som blir över ryms i det som är kvar.
+ */
 function faktaFor(d: OrderProps["data"], test: boolean, stor: boolean): Faktum[] {
   if (test) return [{ fet: "Test", text: "räknas inte" }];
-  const ut: Faktum[] = [];
-  if (d.fakta.storsta) ut.push({ fet: "Månadens största affär", text: "", hojd: true });
-  if (d.variant === "forsta") ut.push({ fet: `Välkommen till tavlan, ${d.person.namn.split(" ")[0]}`, text: "", hojd: true });
+  const sallan: Faktum[] = [];
+  const ovrigt: Faktum[] = [];
+  if (d.fakta.storsta) sallan.push({ fet: "Månadens största affär", text: "", hojd: true });
+  if (d.variant === "forsta") sallan.push({ fet: `Välkommen till tavlan, ${d.person.namn.split(" ")[0]}`, text: "", hojd: true });
   for (const t of d.taggar) {
     if (t.typ === "dagensForsta") continue;
     const x = taggText(t);
-    ut.push({ fet: x.fet, text: x.text, hojd: true });
+    sallan.push({ fet: x.fet, text: x.text, hojd: true });
   }
+  const belopp = d.order.belopp ?? 0;
+  const snittet = snitt(d.lag.fran.varde, d.lag.fran.antal);
   if (stor) {
-    if (d.lag.mal && d.order.belopp) ut.push({ fet: `${Math.max(1, Math.round((d.order.belopp / d.lag.mal) * 100))} %`, text: "av värdemålet i en enda affär" });
+    const andel = d.lag.mal && belopp ? Math.max(1, Math.round((belopp / d.lag.mal) * 100)) : 0;
+    // En tiondel av månadens mål i en affär är det största som går att säga om den.
+    if (andel) (andel >= 10 ? sallan : ovrigt).push({ fet: `${andel} %`, text: "av månadens mål i en enda affär" });
+    const ganger = snittet > 0 ? Math.round(belopp / snittet) : 0;
+    if (ganger >= 2) ovrigt.push({ fet: `${ganger}×`, text: "en snittorder" });
   } else {
-    if (d.fakta.nr !== null) ut.push({ fet: ordtal(d.fakta.nr), text: `ordern i ${d.manad}` });
-    if (d.taggar.some((t) => t.typ === "dagensForsta")) ut.push({ fet: "Dagens första", text: "" });
-    else if (d.fakta.idag !== null) ut.push({ fet: ordtal(d.fakta.idag), text: "i dag" });
+    if (d.fakta.nr !== null) ovrigt.push({ fet: ordtal(d.fakta.nr), text: `ordern i ${d.manad}` });
+    if (d.taggar.some((t) => t.typ === "dagensForsta")) ovrigt.push({ fet: "Dagens första", text: "" });
+    else if (d.fakta.idag !== null) ovrigt.push({ fet: ordtal(d.fakta.idag), text: "i dag" });
   }
   const plats = platsFaktum(d.fakta.plats, d.fakta.platsFore, d.manad);
-  if (plats) ut.push(plats);
-  return ut.slice(0, 5);
+  const kvar = d.lag.mal !== null ? d.lag.mal - d.lag.till.varde : 0;
+  const snittEfter = snitt(d.lag.till.varde, d.lag.till.antal);
+  const mal: Faktum | null = kvar > 0 && snittEfter > 0 ? { fet: `≈${HART}${heltal(Math.ceil(kvar / snittEfter))} order`, text: "kvar till målet" } : null;
+  const fasta = [plats, mal].filter((x): x is Faktum => x !== null);
+  return [...[...sallan, ...ovrigt].slice(0, 4 - fasta.length), ...fasta];
 }
 
 function Etikett({ text, stil }: { text: string; stil?: CSSProperties }): ReactElement {

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Säljtavlans inställningar: det skrivrutten (`/salesboard/skriv`) läser in,
- * och det sidan och rutten formar ur raderna. Fem saker står på spel och
+ * Säljtavlans inställningar: det skrivrutten (`/nav2/salesboard`) läser in,
+ * och det Nav 2.0:s sektion och rutten formar ur raderna. Fem saker står på spel och
  * provas åt båda hållen:
  *
  *   1. INGET TAPPAS TYST. `uppdatera` hoppar med flit över en del den inte kan
@@ -18,7 +18,7 @@
  *   5. RADERNA FORMAS LIKA på sidan och i rutten: skärmarna på namn i svensk
  *      ordning, alla som tavlan kan visa med sina val (dolt åt det säkra
  *      hållet), och tröskeln för stor affär som tavlan räknar den.
- *   6. BESLUTEN: vem som får skriva (401, 403, 503), parningens inlösen,
+ *   6. BESLUTEN: vem som får skriva (bara superadmin: 401, 403, 503), parningens inlösen,
  *      läget före 0250 och sparningen som jämför och byter (R25).
  *
  *   TZ=UTC node --experimental-strip-types tests/salesboard-installningar.mjs
@@ -27,6 +27,7 @@ import { readFileSync } from "node:fs";
 import { isDeepStrictEqual } from "node:util";
 import { STANDARD, malFor, normalisera, uppdatera } from "../src/lib/salesboard/installningar.ts";
 import { SALJANDE_ROLLER } from "../src/lib/salesboard/regler.ts";
+import { nivaFor } from "../src/lib/nav2/forma.ts";
 import { troskelFranStatistik } from "../src/lib/salesboard/forma.ts";
 import { arModulKand, typFor } from "../src/lib/handelselogg.ts";
 import {
@@ -43,7 +44,7 @@ import {
   parningsutfall,
   planeraSparning,
   saljarutfall,
-  sidansVag,
+  farAndraTavlan,
   tavlansPersoner,
   tillampa,
   tolkaSkrivning,
@@ -293,7 +294,7 @@ console.log("\ntesta: typen");
 // -----------------------------------------------------------------------------
 console.log("\nTexterna och händelserna");
 {
-  ok("säljaren får beskedet ur briefen", FEL.inteAdmin === "Bara admin kan ändra säljtavlan.", FEL.inteAdmin);
+  ok("den som inte är superadmin får beskedet", FEL.inteAdmin === "Säljtavlan ändras av en superadmin.", FEL.inteAdmin);
   ok("koden som inte finns", FEL.koden === "Koden finns inte eller har gått ut.", FEL.koden);
   ok("tabellerna som inte finns än", FEL.inteInstallerad === "Säljtavlans tabeller är inte installerade än.", FEL.inteInstallerad);
   ok("namnets gräns står i texten", FEL.namn.includes(String(NAMN_MAX)), FEL.namn);
@@ -481,10 +482,20 @@ console.log("\nBesluten i rutten och på sidan");
   ok("en säljare: 403 med briefens text", lika(atkomstsvar({ typ: "nej", session: true }), { status: 403, fel: FEL.inteAdmin }));
   ok("går det inte att veta: 503, aldrig 401 eller 403", lika(atkomstsvar({ typ: "oklart" }), { status: 503, fel: FEL.svararInte }));
 
-  ok("sidan: utan session till inloggningen", sidansVag({ typ: "nej", session: false }) === "inloggning");
-  ok("sidan: en säljare får nejet", sidansVag({ typ: "nej", session: true }) === "nej");
-  ok("sidan: går det inte att veta, ett lugnt fel", sidansVag({ typ: "oklart" }) === "stopp");
-  ok("sidan: admin ser korten", sidansVag(admin) === "visa");
+
+  // Beställaren 2026-10-25: bara superadmin. Rutten /nav2/salesboard frågar `vemFragar`, som ger
+  // { typ: "admin" } bara när `farAndraTavlan(nivaFor(roller))` håller, och `atkomstsvar` avgör svaret.
+  const status = (roller) => {
+    const lage = farAndraTavlan(nivaFor(roller)) ? { typ: "admin", id: "e1" } : { typ: "nej", session: true };
+    return atkomstsvar(lage)?.status ?? 200;
+  };
+  ok("säljaren mot rutten: 403", status(["salesperson"]) === 403, status(["salesperson"]));
+  ok("admin (säljchef) mot rutten: 403", status(["sales_manager"]) === 403, status(["sales_manager"]));
+  ok("admin (teamledare, ekonomi, leverans) mot rutten: 403", ["team_lead", "finance", "delivery", "project_manager"].every((r) => status([r]) === 403));
+  ok("superadmin (administratör) mot rutten: 200", status(["admin"]) === 200, status(["admin"]));
+  ok("superadmin (VD) mot rutten: 200", status(["ceo"]) === 200, status(["ceo"]));
+  ok("den högsta rollen gäller: säljare och VD får 200", status(["salesperson", "ceo"]) === 200);
+  ok("utan roller: 403", status([]) === 403);
 
   ok("parningen: en rad löstes in", parningsutfall(null, 1) === "klar");
   ok("parningen: ingen rad, skärmen bort och 404", parningsutfall(null, 0) === "ingen-kod");

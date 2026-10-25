@@ -15,6 +15,7 @@
 
 import { memo, useLayoutEffect, useRef, useState, type CSSProperties, type ReactElement, type RefObject } from "react";
 import type { Ordning, TavlePerson } from "@/lib/salesboard/typer";
+import { arArbetsdag } from "@/lib/saljtakt";
 import { rangordna, type Siffror, type Visning } from "./ko.ts";
 import { Postrad } from "./motion/delar";
 import { STD, ip } from "./motion/kurvor.ts";
@@ -33,6 +34,7 @@ import {
   datumrad,
   grafPlan,
   heltal,
+  jakten,
   klockslag,
   kronor,
   matarText,
@@ -78,14 +80,24 @@ const Huvud = memo(function Huvud({
   offline,
   ljud,
   startaLjud,
+  tystTill,
+  oppnar,
+  puls,
 }: {
   lag: string | null;
   nuMs: number;
   offline: string | null;
   ljud: Ljudlage;
   startaLjud?: () => void;
+  /** När ljudtiden börjar igen, "08:00" eller "måndag 08:00". */
+  tystTill: string | null;
+  /** När arbetsdagen börjar, bara när tavlan vilar. */
+  oppnar: string | null;
+  /** Byts när flödet fått en ny order, också en tyst: då slår live-punkten en ring. */
+  puls: string;
 }): ReactElement {
-  const ljudtext = ljud === "blockerat" ? "Ljud blockerat" : ljud === "tyst" ? "Tyst nu" : ljud === "av" ? "Ljud av" : null;
+  const ljudtext =
+    ljud === "blockerat" ? "Ljud blockerat" : ljud === "tyst" ? (tystTill ? `Tyst till ${tystTill}` : "Tyst nu") : ljud === "av" ? "Ljud av" : null;
   return (
     <header className="tv-huvud">
       <div className="tv-marke">
@@ -111,9 +123,16 @@ const Huvud = memo(function Huvud({
             <i />
             Offline sedan {offline}
           </span>
+        ) : oppnar ? (
+          <span className="tv-live tv-vilar">
+            <i />
+            Öppnar {oppnar}
+          </span>
         ) : (
           <span className="tv-live">
-            <i />
+            <i>
+              <b key={puls} />
+            </i>
             Live
           </span>
         )}
@@ -165,7 +184,11 @@ function Topplistan({
   lr: number | null;
   ordning: Ordning;
 }): ReactElement {
-  const rader = rangordna(v.tal.rader, ordning).slice(0, TOPPLISTANS_RADER);
+  const alla = rangordna(v.tal.rader, ordning);
+  const rader = alla.slice(0, TOPPLISTANS_RADER);
+  const fler = alla.length - rader.length;
+  // Jakten står still i vila; under en landning är det ↑2 som talar.
+  const jakt = lr === null ? jakten(rader, ordning, snitt(v.tal.lag.varde, v.tal.lag.antal)) : null;
   const fore = landning ? rangordna(landning.fran.rader, ordning) : null;
   const vd = v.bild.idag.veckodag;
   const manad = v.bild.manad.namn.toLowerCase();
@@ -191,7 +214,10 @@ function Topplistan({
           <span>Ordervärde</span>
         </div>
         {rader.length === 0 ? (
-          <p className="tv-tom">Inga säljare i laget än.</p>
+          <p className="tv-tom">
+            Inga säljare i laget än.
+            <small>Välj lag under Inställningar → Säljtavlan → Visning.</small>
+          </p>
         ) : (
           <div className="tv-rader">
             {rader.map((r, i) => {
@@ -213,7 +239,10 @@ function Topplistan({
                   <span className="tv-plats">{i + 1}</span>
                   <div className="tv-vem">
                     <span className="tv-ini">{person.initialer}</span>
-                    <span className="tv-rad-namn">{person.namn}</span>
+                    <span className="tv-namnblock">
+                      <span className="tv-rad-namn">{person.namn}</span>
+                      {jakt?.person === r.person ? <span className="tv-jakt">{jakt.text}</span> : null}
+                    </span>
                     {upp > 0 ? (
                       <span className="tv-upp" style={{ opacity: ip(lr ?? 0, [0, 18, UPP, UPP + 18], [0, 1, 1, 0]) }}>
                         ↑{upp}
@@ -225,14 +254,15 @@ function Topplistan({
                       <Streckrad n={n} ny={d === vd ? nyttStreck : -1} lr={lr} />
                     </div>
                   ))}
-                  <span className={`tv-idag-tal${r.idag ? "" : " tv-noll-tal"}`}>{r.idag}</span>
-                  <span className="tv-manad">{heltal(antal)}</span>
+                  <span className={`tv-idag-tal${r.idag ? "" : " tv-noll-tal"}`}>{r.idag || "–"}</span>
+                  <span className={`tv-manad${antal ? "" : " tv-noll-tal"}`}>{antal ? heltal(antal) : "–"}</span>
                   <span className="tv-varde">{krHtml(varde)}</span>
                 </div>
               );
             })}
           </div>
         )}
+        {fler > 0 ? <p className="tv-fler">+ {fler} säljare till</p> : null}
       </div>
     </section>
   );
@@ -249,6 +279,9 @@ export const malLage = (v: Visning): Matarlage => ({
   forvantat: v.bild.manad.forvantat,
   prognos: v.bild.manad.prognos,
   natt: v.bild.manad.natt,
+  // De gångna räknar med i dag när det är en arbetsdag; i dag är ändå kvar att sälja på.
+  dagarKvar: Math.max(0, v.bild.manad.dagar.totalt - v.bild.manad.dagar.gangna) + (arArbetsdag(v.bild.idag.datum) ? 1 : 0),
+  snitt: snitt(v.tal.lag.varde, v.tal.lag.antal),
 });
 
 function Malkortet({
@@ -382,20 +415,13 @@ function Grafen({ v, landning, lr, u }: { v: Visning; landning: Landning | null;
     <section className="tv-kort tv-graf" aria-label="Ordervärde per månad">
       <div className="tv-kort-rubrik">
         <h2>Ordervärde per månad</h2>
+        <small>tkr</small>
       </div>
       <div className="tv-graf-yta" ref={yta}>
         {plan && storlek ? (
           <svg viewBox={`0 0 ${storlek.W} ${storlek.H}`} role="img" aria-label="Ordervärde per månad de senaste tolv månaderna">
-            <text x={plan.x0 - 12} y={16} textAnchor="end" fontSize={13}>
-              tkr
-            </text>
             {plan.linjer.map((l, i) => (
-              <g key={i}>
-                <line className="rutnat" x1={plan.x0} x2={storlek.W} y1={l.y} y2={l.y} />
-                <text x={plan.x0 - 12} y={l.y + 5} textAnchor="end" fontSize={14}>
-                  {l.etikett}
-                </text>
-              </g>
+              <line key={i} className="rutnat" x1={plan.x0} x2={storlek.W} y1={l.y} y2={l.y} />
             ))}
             {plan.staplar.map((s, i) => (
               <g key={i}>
@@ -408,6 +434,11 @@ function Grafen({ v, landning, lr, u }: { v: Visning; landning: Landning | null;
                   </path>
                 ) : null}
                 {s.malY !== null ? <line className="malstreck" x1={s.x - 4} x2={s.x + s.b + 4} y1={s.malY} y2={s.malY} /> : null}
+                {s.rekord ? (
+                  <text className="rek" x={s.x + s.b / 2} y={s.etikettY - 21} textAnchor="middle" fontSize={12}>
+                    REKORD
+                  </text>
+                ) : null}
                 <text className={`v${s.nu ? " nu" : ""}`} x={s.x + s.b / 2} y={s.etikettY} textAnchor="middle" fontSize={17}>
                   {s.etikett}
                 </text>
@@ -420,22 +451,30 @@ function Grafen({ v, landning, lr, u }: { v: Visning; landning: Landning | null;
         ) : null}
       </div>
       <div className="tv-teckn">
-        <span>
-          <i style={{ background: "var(--mint)" }} />
-          nådde målet
-        </span>
-        <span>
-          <i style={{ background: "var(--under)" }} />
-          under målet
-        </span>
-        <span>
-          <i style={{ background: "var(--amber)", height: 3, verticalAlign: 4 }} />
-          månadens mål
-        </span>
-        <span>
-          <i style={{ border: "2px dashed var(--mint)", background: "none" }} />
-          prognos
-        </span>
+        {plan?.staplar.some((s) => s.klass === "natt-r") ? (
+          <span>
+            <i style={{ background: "var(--mint)" }} />
+            nådde målet
+          </span>
+        ) : null}
+        {plan?.staplar.some((s) => s.klass === "under-r") ? (
+          <span>
+            <i style={{ background: "var(--under)" }} />
+            under målet
+          </span>
+        ) : null}
+        {plan?.staplar.some((s) => s.malY !== null) ? (
+          <span>
+            <i style={{ background: "var(--amber)", height: 3, verticalAlign: 4 }} />
+            månadens mål
+          </span>
+        ) : null}
+        {plan?.staplar.some((s) => s.prognosY !== null) ? (
+          <span>
+            <i style={{ border: "2px dashed var(--mint)", background: "none" }} />
+            prognos
+          </span>
+        ) : null}
       </div>
     </section>
   );
@@ -464,9 +503,7 @@ function Flodet({
     <section className="tv-kort" aria-label="Senaste order">
       <div className="tv-kort-rubrik">
         <h2>Senaste order</h2>
-        <small>
-          i dag {heltal(idagAntal)} order · {kronor(idagSumma)}
-        </small>
+        <small>{idagAntal === 0 ? "ingen order än i dag" : `i dag ${heltal(idagAntal)} order · ${kronor(idagSumma)}`}</small>
       </div>
       <div className="tv-flode" ref={flodeRef}>
         {rader.length === 0 ? <p className="tv-tom">Ingen order de senaste två veckorna.</p> : null}
@@ -474,10 +511,12 @@ function Flodet({
           const fi = landning ? landning.franFlode.indexOf(o.nyckel) : -1;
           const dy = lr !== null && fi >= 0 && fi !== i ? (fi - i) * (1 - steg(lr, FLODE_FLIP)) : 0;
           const stil: CSSProperties = { ...(dy !== 0 ? { translate: `0 ${dy * 100}%` } : {}), ...(v.dolda.has(o.nyckel) ? { opacity: 0 } : {}) };
+          // Ett streck där i dag slutar: det ovanför är dagens, det under är tidigare.
+          const grans = i > 0 && rader[i - 1].dag === v.bild.idag.datum && o.dag !== v.bild.idag.datum;
           return (
             <div
               key={o.nyckel}
-              className={`tv-post${o.niva === "stor" ? " tv-stor" : ""}${tysta.has(o.nyckel) ? " tv-tyst-ny" : ""}`}
+              className={`tv-post${o.niva === "stor" ? " tv-stor" : ""}${tysta.has(o.nyckel) ? " tv-tyst-ny" : ""}${grans ? " tv-forr" : ""}`}
               style={stil}
             >
               <Postrad order={o} person={v.bild.personer[o.person] ?? DOLD} idag={v.bild.idag.datum} />
@@ -503,6 +542,8 @@ export function Vila({
   offline,
   ljud,
   startaLjud,
+  tystTill,
+  oppnar,
   dampad,
   rorelse,
   flodeRef,
@@ -519,6 +560,8 @@ export function Vila({
   offline: string | null;
   ljud: Ljudlage;
   startaLjud?: () => void;
+  tystTill: string | null;
+  oppnar: string | null;
   dampad: boolean;
   /** Tavlans motrörelse under svepet, i u. */
   rorelse: { dy: number; skala: number };
@@ -529,8 +572,17 @@ export function Vila({
   const stil: CSSProperties | undefined =
     rorelse.dy !== 0 || rorelse.skala !== 1 ? { translate: `0 ${rorelse.dy * u}px`, scale: String(rorelse.skala) } : undefined;
   return (
-    <main className={`tv-scen${dampad ? " tv-dampad" : ""}`} style={stil}>
-      <Huvud lag={v.bild.lag} nuMs={Math.floor(nuMs / 1000) * 1000} offline={offline} ljud={ljud} startaLjud={startaLjud} />
+    <main className={`tv-scen${dampad ? " tv-dampad" : ""}${offline ? " tv-gammal" : ""}`} style={stil}>
+      <Huvud
+        lag={v.bild.lag}
+        nuMs={Math.floor(nuMs / 1000) * 1000}
+        offline={offline}
+        ljud={ljud}
+        startaLjud={startaLjud}
+        tystTill={tystTill}
+        oppnar={dampad ? oppnar : null}
+        puls={v.bild.order[0]?.nyckel ?? ""}
+      />
       <div className="tv-kropp">
         <Topplistan v={v} landning={landning} lr={lr} ordning={ordning} />
         <div className="tv-hoger">

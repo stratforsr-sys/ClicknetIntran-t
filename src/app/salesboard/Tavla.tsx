@@ -26,7 +26,7 @@
  */
 
 import { Component, useCallback, useEffect, useReducer, useRef, useState, type ReactElement, type ReactNode } from "react";
-import { hornTillatet, inomArbetsdag, ljudTillatet, planera, type Minne } from "@/lib/salesboard/regler";
+import { hornTillatet, inomArbetsdag, ljudTillatet, nastaStart, planera, type Minne } from "@/lib/salesboard/regler";
 import type { Ogonblick, Ordning } from "@/lib/salesboard/typer";
 import { natkalla, type Kalla, type Kallstatus } from "./kalla";
 import { aktuell, forlopp, mottagning, nycklarFor, samlaKo, tavlansRorelse, visning as visningFor, type Forlopp, type Kopost, type Visning } from "./ko.ts";
@@ -52,6 +52,8 @@ const START_FALLS_MS = 30_000;
 const STYR_MS = 3_000;
 const MINNESNYCKEL = "salesboard.minne";
 const ORDNINGSNYCKEL = "salesboard.ordning";
+/** Personens senaste ljudval, så att en omladdning inte frågar igen. */
+const LJUDVAL = "salesboard.ljudval";
 
 // -----------------------------------------------------------------------------
 // Typer
@@ -200,10 +202,13 @@ export default function Tavla({
   start,
   kalla,
   fryst,
+  installningar = false,
 }: {
   start: Ogonblick;
   /** "nat" är navets källa. Förhandsvisningen skickar en egen. */
   kalla: Kalla | "nat";
+  /** Knappen till Nav 2.0:s Inställningar → Säljtavlan. Bara för en inloggad superadmin, aldrig på en skärm. */
+  installningar?: boolean;
   /** Bara förhandsvisningen: varje komposition står still på den här sekunden. */
   fryst?: number;
 }): ReactElement {
@@ -345,6 +350,16 @@ export default function Tavla({
       aktiv = false;
     };
   }, [skaLata, fryst, lasUpp]);
+
+  // En person som valt förut slipper rutan efter en omladdning: "av" gäller direkt,
+  // och "pa" försöker tyst. Släpper webbläsaren inte fram ljudet utan klick står
+  // rutan kvar som vanligt.
+  useEffect(() => {
+    if (arSkarm || fryst !== undefined) return;
+    const val = las<"pa" | "av">(LJUDVAL);
+    if (val === "av") settLjudval("av");
+    else if (val === "pa") void lasUpp().then((ok) => ok && settLjudval((v) => (v === "vantar" ? "pa" : v)));
+  }, [arSkarm, fryst, lasUpp]);
 
   // Tillståndet läses varje sekund, också när ljudet går: en kontext kan lämna
   // "running" (en ny ljudenhet, Safaris avbrott). Blockerat: försök igen när fliken syns.
@@ -707,6 +722,7 @@ export default function Tavla({
   const startRuta = visaStart && !(arSkarm && startFalld);
   const startaLjud = () => {
     settLjudval("pa");
+    spara(LJUDVAL, "pa");
     void lasUpp();
   };
 
@@ -721,6 +737,8 @@ export default function Tavla({
     offline,
     ljud: ljudlage,
     startaLjud: visaStart && !startRuta ? startaLjud : undefined,
+    tystTill: ljudlage === "tyst" ? nastaStart(new Date(nuMs).toISOString(), inst.ljud.fran, inst.ljud.helgTyst) : null,
+    oppnar: dampad ? nastaStart(new Date(nuMs).toISOString(), inst.arbetsdag.fran, true) : null,
     dampad,
     flodeRef,
     kortRef,
@@ -758,7 +776,14 @@ export default function Tavla({
             Starta tavlan
           </button>
           <p>Webbläsaren väntar på ett klick innan tavlan får låta.</p>
-          <button type="button" className="sb-start-utan" onClick={() => settLjudval("av")}>
+          <button
+            type="button"
+            className="sb-start-utan"
+            onClick={() => {
+              settLjudval("av");
+              spara(LJUDVAL, "av");
+            }}
+          >
             Fortsätt utan ljud
           </button>
         </div>
@@ -775,7 +800,7 @@ export default function Tavla({
         <button type="button" onClick={() => helskarm.current()}>
           Helskärm <kbd>F</kbd>
         </button>
-        {arSkarm ? null : <a href="/salesboard/installningar">Inställningar</a>}
+        {installningar && !arSkarm ? <a href="/nav2?till=%2Finstallningar%2Fsalesboard">Inställningar</a> : null}
       </div>
     </div>
   );

@@ -38,6 +38,7 @@ import {
   initialerFor,
   inomArbetsdag,
   ljudTillatet,
+  nastaStart,
   hornTillatet,
   planera,
   samla,
@@ -259,6 +260,12 @@ console.log("\nregler");
   ok("fredag 09:30 svensk tid låter", ljudTillatet("2026-10-23T07:30:00Z", ljud) === true);
   ok("fredag 18:30 låter inte", ljudTillatet("2026-10-23T16:30:00Z", ljud) === false);
   ok("lördag 11:00 låter inte med tyst på helger", ljudTillatet("2026-10-24T09:00:00Z", ljud) === false);
+  ok("före öppning i dag: bara klockslaget", nastaStart("2026-10-23T05:00:00Z", "08:00", true) === "08:00");
+  ok("efter stängning en torsdag: i morgon", nastaStart("2026-10-22T17:00:00Z", "08:00", true) === "i morgon 08:00");
+  ok("fredag kväll: måndag", nastaStart("2026-10-23T17:00:00Z", "08:00", true) === "måndag 08:00");
+  ok("utan arbetsdagskrav: lördag är i morgon", nastaStart("2026-10-23T17:00:00Z", "08:00", false) === "i morgon 08:00");
+  ok("julafton och juldagarna hoppas över", nastaStart("2026-12-23T17:00:00Z", "08:00", true) === "måndag 08:00", nastaStart("2026-12-23T17:00:00Z", "08:00", true));
+  ok("en tid som inte går att läsa ger null", nastaStart("trasig", "08:00", true) === null && nastaStart("2026-10-23T05:00:00Z", "", true) === null);
   ok("lördag 11:00 låter när helgen inte är tyst", ljudTillatet("2026-10-24T09:00:00Z", medHelg) === true);
 
   // Fönstret är halvöppet: från och med `fran`, till men inte med `till`.

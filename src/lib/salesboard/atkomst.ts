@@ -7,6 +7,7 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 import { nivaFor } from "@/lib/nav2/forma";
 import { hasha } from "@/lib/salesboard/parning";
 import { lasningen } from "@/lib/salesboard/saknas";
+import { farAndraTavlan } from "@/lib/salesboard/skrivning";
 import {
   PARKAKA,
   SKARMKAKA,
@@ -150,14 +151,13 @@ export async function tavlansAtkomst(request?: Request): Promise<Atkomst | null>
 }
 
 /**
- * Den inloggade, om hen får ändra tavlan: nivån admin eller superadmin
- * (`nivaFor`). Kastar, som `tavlansAtkomst`, när det inte går att veta.
+ * Den inloggade, om hen får ändra tavlan: bara superadmin (`farAndraTavlan`).
+ * Kastar, som `tavlansAtkomst`, när det inte går att veta.
  */
 export async function tavlansAdmin(): Promise<CurrentUser | null> {
   const user = await aktivPerson();
   if (!user) return null;
-  const niva = nivaFor(user.roles);
-  return niva === "admin" || niva === "superadmin" ? user : null;
+  return farAndraTavlan(nivaFor(user.roles)) ? user : null;
 }
 
 // -----------------------------------------------------------------------------

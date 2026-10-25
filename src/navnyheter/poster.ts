@@ -36,14 +36,16 @@ Provision visas aldrig på tavlan.
 
 ## Om du inte vill synas
 
-Be en administratör att visa dig med initialer, eller som "En säljare". Då står
-du inte i topplistan, men dina order räknas ändå med i lagets siffror.
+Be VD:n eller en administratör att visa dig med initialer, eller som "En
+säljare". Då står du inte i topplistan, men dina order räknas ändå med i lagets
+siffror.
 
-## För administratörer
+## För VD och administratörer
 
-Tavlan ställs in under **/salesboard/installningar**. Där sätter du månadens mål
-i kronor, kopplar en TV med koden som står på den, väljer lag och vad som ska
-firas, och bestämmer när tavlan får låta. Där finns också knappar för att prova
+Tavlan ställs in i Nav under **Inställningar → Säljtavlan**, och bara ni ser den
+sektionen. Där sätter du månadens mål i kronor, kopplar en TV med koden som står
+på den, väljer lag och vad som ska firas, och bestämmer när tavlan får låta. Varje
+ändring sparas direkt och går att ångra. Där finns också knappar för att prova
 tavlan.`,
     datum: "2026-10-25",
     roller: [],

@@ -10,7 +10,7 @@
 
 import type { ReactElement } from "react";
 import type { Forloppsdata } from "../ko.ts";
-import { heltal, kronor } from "../vy.ts";
+import { heltal, kronor, tkr } from "../vy.ts";
 import { Ord, Rakneverk, type Rekt } from "./delar";
 import { SVEP, UT, fjader, ip, skalaMix } from "./kurvor.ts";
 import { useCurrentFrame } from "./motor";
@@ -56,7 +56,16 @@ export function Malet(p: MaletProps): ReactElement | null {
           <Ord text="Målet nått." y={(i) => (1 - fjader(f, 22 + i * 8, 13, 140)) * 112} />
         </h3>
         <p className="tv-malet-rad" style={{ opacity: ip(f, [62, 80], [0, 1]), translate: `0 ${ip(f, [62, 84], [24 * u, 0], UT)}px` }}>
-          Månadens mål på <b>{kronor(d.mal)}</b>, {d.dagarKvar === 0 ? "på " : "med "}
+          {d.avgorande ? (
+            <>
+              <b>{d.avgorande}</b> tog laget över målet på <b>{kronor(d.mal)}</b>,{" "}
+            </>
+          ) : (
+            <>
+              Månadens mål på <b>{kronor(d.mal)}</b>,{" "}
+            </>
+          )}
+          {d.dagarKvar === 0 ? "på " : "med "}
           <b>{dagar}</b> och <b>{heltal(d.antal)} order</b> hittills.
         </p>
         <div className="tv-malet-summa" style={{ opacity: ip(f, [74, 86], [0, 1]) }}>
@@ -81,6 +90,11 @@ export function Malet(p: MaletProps): ReactElement | null {
             );
           })}
         </div>
+        {d.rekord !== null ? (
+          <p className="tv-malet-nasta" style={{ opacity: ip(f, [150, 166], [0, 1]) }}>
+            Nästa: rekordmånaden <b>{tkr(d.rekord)}</b>
+          </p>
+        ) : null}
       </div>
       {p.test ? <span className="tv-test">TEST</span> : null}
     </div>

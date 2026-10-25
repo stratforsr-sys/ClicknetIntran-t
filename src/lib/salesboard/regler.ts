@@ -9,7 +9,7 @@
 
 import { svensktDatum, svenskaMinuter } from "../klocka.ts";
 import { dagarTill } from "../order.ts";
-import { arArbetsdag } from "../saljtakt.ts";
+import { arArbetsdag, dagPlus, veckodag } from "../saljtakt.ts";
 import type { Namnform, Ogonblick, TavleHandelse, TavleOrder, TavlansInstallningar, Testtyp, Visning } from "./typer.ts";
 
 // -----------------------------------------------------------------------------
@@ -261,6 +261,25 @@ export function ljudTillatet(nuIso: string, ljud: TavlansInstallningar["ljud"]):
 export function inomArbetsdag(nuIso: string, arbetsdag: TavlansInstallningar["arbetsdag"]): boolean {
   const nu = svenskTid(nuIso);
   return nu !== null && arArbetsdag(nu.dag) && iFonster(nu.minuter, arbetsdag.fran, arbetsdag.till);
+}
+
+const VECKODAGAR = ["söndag", "måndag", "tisdag", "onsdag", "torsdag", "fredag", "lördag"];
+
+/**
+ * När klockan nästa gång slår `fran`, som rubriken säger det: "08:00" i dag,
+ * "i morgon 08:00", annars veckodagen, "måndag 08:00". Med `baraArbetsdagar`
+ * hoppas helger och röda dagar över. Null när tiden inte går att läsa, eller när
+ * inget öppnar inom två veckor.
+ */
+export function nastaStart(nuIso: string, fran: string, baraArbetsdagar: boolean): string | null {
+  const nu = svenskTid(nuIso);
+  if (!nu || Number.isNaN(tillMinuter(fran))) return null;
+  for (let i = nu.minuter < tillMinuter(fran) ? 0 : 1; i <= 14; i++) {
+    const dag = dagPlus(nu.dag, i);
+    if (baraArbetsdagar && !arArbetsdag(dag)) continue;
+    return i === 0 ? fran : i === 1 ? `i morgon ${fran}` : `${VECKODAGAR[veckodag(dag)]} ${fran}`;
+  }
+  return null;
 }
 
 // -----------------------------------------------------------------------------

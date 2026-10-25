@@ -3,15 +3,13 @@
  * formar ur raderna (spec §7 och §9).
  *
  * Ren logik utan Supabase och Next, så att den går att prova med node
- * (`tests/salesboard-installningar.mjs`). Rutten `/salesboard/skriv` tolkar
- * kroppen här, och sidan `/salesboard/installningar` formar skärmarna, säljarna
- * och tröskeln med samma funktioner som rutten svarar med.
+ * (`tests/salesboard-installningar.mjs`). Rutten `/nav2/salesboard` tolkar
+ * kroppen här, och Nav 2.0:s Inställningar → Säljtavlan (`src/lib/nav2/saljtavlan.ts`)
+ * formar skärmarna, säljarna och tröskeln med samma funktioner som rutten svarar med.
  *
  * SERVERKOD, som `parning.ts` och `nyckel.ts`: koden från TV:n normaliseras
- * genom `normaliseraKod`, och `parning.ts` drar in `node:crypto`. Filen får
- * därför inte importeras av klienten (`Installningar.tsx`), bara dess typer med
- * `import type`, som försvinner i bygget. Gränserna klienten behöver får den av
- * sidan.
+ * genom `normaliseraKod`, och `parning.ts` drar in `node:crypto`. Gränserna
+ * klienten behöver följer med i `ND.saljtavlan`.
  *
  * ===========================================================================
  * EN SKRIVNING SOM INTE LANDAR SOM DEN SKICKADES SPARAS INTE.
@@ -57,7 +55,7 @@ export const GRANSER = {
 export const FEL = {
   ursprung: "Fel ursprung.",
   utloggad: "Du är utloggad. Logga in igen och försök en gång till.",
-  inteAdmin: "Bara admin kan ändra säljtavlan.",
+  inteAdmin: "Säljtavlan ändras av en superadmin.",
   ogiltig: "Ogiltig begäran.",
   handling: "Okänd handling.",
   inget: "Inget att spara.",
@@ -748,11 +746,13 @@ export function atkomstsvar(a: Atkomstlage): { status: 401 | 403 | 503; fel: str
   return a.session ? { status: 403, fel: FEL.inteAdmin } : { status: 401, fel: FEL.utloggad };
 }
 
-/** Sidans väg, med samma regel: bara utan session till inloggningen, och bara ett säkert nej ger nejet. */
-export function sidansVag(a: Atkomstlage): "inloggning" | "nej" | "stopp" | "visa" {
-  if (a.typ === "admin") return "visa";
-  if (a.typ === "oklart") return "stopp";
-  return a.session ? "nej" : "inloggning";
+/**
+ * Vem som får ändra tavlan: bara superadmin (beställaren 2026-10-25), alltså VD
+ * och administratör. Säljchef och teamledare är admin och får nej, som säljaren.
+ * `niva` är `nivaFor(roller)` i `src/lib/nav2/forma.ts`.
+ */
+export function farAndraTavlan(niva: string): boolean {
+  return niva === "superadmin";
 }
 
 /**

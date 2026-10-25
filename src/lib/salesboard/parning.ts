@@ -5,7 +5,7 @@
  * Ren logik utan Supabase, kakor och Next, så att filen går att prova med node
  * (tests/salesboard-parning.mjs). Men slumpen och hashen kommer ur `node:crypto`,
  * och filen är därför SERVERKOD: den får inte importeras av en klientkomponent
- * (Parning.tsx, Installningar.tsx) eller av middleware. Koden formateras på
+ * (Parning.tsx) eller av middleware. Koden formateras på
  * servern och skickas färdig till TV:n ("K7M4-QX9P").
  *
  * Flödet i stort står i spec §9 (docs/superpowers/specs/2026-10-23-salesboard-design.md).

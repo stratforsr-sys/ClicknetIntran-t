@@ -183,8 +183,20 @@ export const rull = (fran: number, till: number, lr: number, langd: number): num
 // Målkortet
 // -----------------------------------------------------------------------------
 
-/** Det målkortets rader räknas på. */
-export type Matarlage = { varde: number; mal: number | null; forvantat: number | null; prognos: number | null; natt: string | null };
+/**
+ * Det målkortets rader räknas på. `dagarKvar` är arbetsdagarna som återstår, i dag
+ * medräknad, och `snitt` lagets snitt per order: av dem blir "per arbetsdag" och
+ * "≈ 7 order".
+ */
+export type Matarlage = {
+  varde: number;
+  mal: number | null;
+  forvantat: number | null;
+  prognos: number | null;
+  natt: string | null;
+  dagarKvar: number;
+  snitt: number;
+};
 
 /** En del av en rad: det feta och resten, i den ordningen eller omvänt. */
 export type Del = { fet: string; text: string; fetSist?: boolean };
@@ -210,13 +222,18 @@ export function matarRader(m: Matarlage): { status: string | null; bra: boolean;
     };
   }
   const diff = m.forvantat === null ? 0 : m.varde - m.forvantat;
+  const kvar = m.mal - m.varde;
   const rund = Math.round(diff / 100) * 100;
   const status = Math.abs(rund) < 100 ? "I takt" : rund > 0 ? `${kronor(rund)} före takten` : `${kronor(-rund)} efter takten`;
   return {
     status,
     bra: diff >= 0,
     natt,
-    fakta: [{ fet: kronor(m.mal - m.varde), text: "kvar" }, ...(m.prognos !== null ? [{ fet: tkr(m.prognos), text: "Prognos", fetSist: true }] : [])],
+    fakta: [
+      { fet: kronor(kvar), text: m.snitt > 0 ? `kvar · ≈${HART}${heltal(Math.ceil(kvar / m.snitt))} order` : "kvar" },
+      ...(m.dagarKvar > 1 ? [{ fet: kronor(Math.ceil(kvar / m.dagarKvar / 100) * 100), text: "per arbetsdag" }] : []),
+      ...(m.prognos !== null ? [{ fet: tkr(m.prognos), text: "Prognos", fetSist: true }] : []),
+    ],
   };
 }
 
@@ -226,6 +243,36 @@ export function matarRader(m: Matarlage): { status: string | null; bra: boolean;
  */
 export function matarText(fran: Matarlage, till: Matarlage, lr: number): ReturnType<typeof matarRader> {
   return matarRader(lr >= RULL ? till : fran);
+}
+
+// -----------------------------------------------------------------------------
+// Topplistans jakt: den som ligger närmast platsen ovanför
+// -----------------------------------------------------------------------------
+
+/**
+ * Den enda raden i topplistan som får "3 200 kr till 2:a": den som har kortast
+ * väg till platsen ovanför, när vägen är kortare än en snittorder (efter ordervärde)
+ * eller en enda order (efter antal). En rad, aldrig flera: det ska vara ett lopp att
+ * följa, inte en tabell till. `rader` står i topplistans ordning.
+ */
+export function jakten(
+  rader: readonly { person: string; antal: number; varde: number }[],
+  ordning: "antal" | "varde",
+  snittorder: number,
+): { person: string; text: string } | null {
+  let basta: { person: string; avstand: number; plats: number } | null = null;
+  for (let i = 1; i < rader.length; i++) {
+    const ovan = rader[i - 1];
+    const r = rader[i];
+    if (r.antal === 0) continue;
+    const avstand = ordning === "varde" ? ovan.varde - r.varde : ovan.antal - r.antal;
+    const nara = ordning === "varde" ? avstand > 0 && avstand < snittorder : avstand <= 1;
+    // Efter ordervärde jämförs avstånden i kronor, efter antal vinner den högst upp.
+    if (nara && (!basta || (ordning === "varde" && avstand < basta.avstand))) basta = { person: r.person, avstand, plats: i };
+  }
+  if (!basta) return null;
+  const till = `till ${ordtal(basta.plats)}`;
+  return { person: basta.person, text: ordning === "varde" ? `${kronor(basta.avstand)} ${till}` : `1 order ${till}` };
 }
 
 // -----------------------------------------------------------------------------
@@ -265,6 +312,8 @@ export type Grafstapel = {
   etikett: string;
   namn: string;
   nu: boolean;
+  /** Den bästa månaden av de tolv, när det finns något att jämföra med. */
+  rekord: boolean;
   titel: string;
 };
 
@@ -276,8 +325,8 @@ function jamntSteg(max: number, linjer: number): number {
 }
 
 /**
- * Grafens geometri: tolv staplar (elva månader och den här), målstreck, prognosen
- * och skalan. `W` och `H` är ytans storlek i u. Skalan har sju steg när grafen är
+ * Grafens geometri: tolv staplar (elva månader och den här), målstreck, prognosen,
+ * rekordmånaden och rutnätet. `W` och `H` är ytans storlek i u. Skalan har sju steg när grafen är
  * hög och bara varannan linje när den är låg (under 170 u), så att etiketterna inte
  * trängs: 100 000 kr per steg blir 200 000.
  */
@@ -291,7 +340,8 @@ export function grafPlan(o: {
   const natt = o.nu.mal !== null && o.nu.varde >= o.nu.mal;
   const prognos = !natt && o.nu.prognos !== null && o.nu.prognos > o.nu.varde ? o.nu.prognos : null;
   const hogst = Math.max(1, ...manader.map((m) => Math.max(m.varde, m.mal ?? 0)), prognos ?? 0);
-  const x0 = 58;
+  // Skalans siffror står inte ut: varje stapel bär sitt värde, och linjerna är bara rutnät.
+  const x0 = 8;
   const y0 = o.H - 34;
   const h = Math.max(1, y0 - 34);
   const steg = jamntSteg(hogst * 1.04, 7);
@@ -302,6 +352,7 @@ export function grafPlan(o: {
   const b = Math.min(44, kol * 0.58);
   const linjer: { y: number; etikett: string }[] = [];
   for (let v = 0; v <= max + 1e-6; v += linjesteg) linjer.push({ y: y(v), etikett: heltal(v / 1000) });
+  const basta = manader.filter((m) => m.varde > 0).length >= 3 ? manader.reduce((b, m, i) => (m.varde > manader[b].varde ? i : b), 0) : -1;
   const staplar = manader.map((m, i): Grafstapel => {
     const ar = i === manader.length - 1;
     const x = x0 + i * kol + (kol - b) / 2;
@@ -319,6 +370,7 @@ export function grafPlan(o: {
       etikett: heltal(m.varde / 1000),
       namn: m.namn,
       nu: ar,
+      rekord: i === basta,
       titel: `${m.namn}: ${kronor(m.varde)}${m.mal !== null ? ` av ${kronor(m.mal)}` : ""} · ${heltal(m.antal)} order`,
     };
   });

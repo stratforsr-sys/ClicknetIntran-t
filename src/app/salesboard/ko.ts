@@ -253,6 +253,10 @@ export type Forloppsdata =
       antal: number;
       dagarKvar: number;
       laget: { namn: string; antal: number; varde: number }[];
+      /** Den vars order tog laget över målet, eller null (dold säljare, test, okänd). */
+      avgorande: string | null;
+      /** Rekordmånaden de elva före, när månaden inte slagit den än. */
+      rekord: number | null;
     }
   | { typ: "halvvags" };
 
@@ -372,6 +376,10 @@ export function forlopp(
   const laget = rangordna(efterTal.rader, o.ordning)
     .filter((r) => r.antal > 0)
     .map((r) => ({ namn: (efter.personer[r.person] ?? DOLD).namn, antal: r.antal, varde: r.varde }));
+  // Ordern vars godkännande är målets tidpunkt tog laget över.
+  const avgor = f.typ === "malet" ? efter.order.find((x) => x.tid === f.natt) : undefined;
+  const avgorare = avgor ? efter.personer[avgor.person] : undefined;
+  const basta = Math.max(0, ...efter.historik.slice(-11).map((m) => m.varde));
   const tider = maletTider();
   return {
     ...bas,
@@ -383,6 +391,8 @@ export function forlopp(
       antal: efterTal.lag.antal,
       dagarKvar: Math.max(0, efter.manad.dagar.totalt - efter.manad.dagar.gangna),
       laget,
+      avgorande: avgorare && avgorare.dold === false ? avgorare.namn : null,
+      rekord: basta > efterTal.lag.varde ? basta : null,
     },
     tider,
     varaktighet: tider.slut,

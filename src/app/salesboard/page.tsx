@@ -1,4 +1,6 @@
+import { nivaFor } from "@/lib/nav2/forma";
 import { tavlansAtkomst } from "@/lib/salesboard/atkomst";
+import { farAndraTavlan } from "@/lib/salesboard/skrivning";
 import { byggTavlan } from "@/lib/salesboard/tavlan";
 import type { Ogonblick } from "@/lib/salesboard/typer";
 import Parning, { Avbrott } from "./Parning";
@@ -40,5 +42,7 @@ export default async function Saljtavlan() {
     console.error("salesboard: bilden", e instanceof Error ? e.message : e);
     return <Avbrott />;
   }
-  return <Tavla start={start} kalla="nat" />;
+  // Inställningarna finns i Nav 2.0, bara för superadmin. Knappen visas bara för den som når dem.
+  const installningar = atkomst.typ === "person" && farAndraTavlan(nivaFor(atkomst.user.roles));
+  return <Tavla start={start} kalla="nat" installningar={installningar} />;
 }
