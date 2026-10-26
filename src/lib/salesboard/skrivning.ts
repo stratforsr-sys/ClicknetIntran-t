@@ -27,11 +27,11 @@
 import { harGodkants, raknas, type Orderstatus } from "../order.ts";
 import { ROLES, ROLE_LABEL } from "../roles.ts";
 import { troskelFranStatistik, type Tavlestatistik } from "./forma.ts";
-import { MAL_GRANSER, normalisera, uppdatera } from "./installningar.ts";
+import { BILD_ID, MAL_GRANSER, TAVLING_GRANSER, normalisera, uppdatera } from "./installningar.ts";
 import { normaliseraKod } from "./parning.ts";
 import { AKTIVA_STATUSAR, MINSTA_UNDERLAG, SALJANDE_ROLLER, arDold } from "./regler.ts";
 import { personvalen, type Lasning } from "./saknas.ts";
-import type { Namnform, Ordning, TavlansInstallningar, Testtyp, Visning } from "./typer.ts";
+import type { Namnform, Ordning, TavlansInstallningar, Tavling, Testtyp, Visning } from "./typer.ts";
 
 // -----------------------------------------------------------------------------
 // Gränserna och texterna
@@ -50,6 +50,13 @@ export const GRANSER = {
   belopp: { min: 1_000, max: 10_000_000 },
   mal: MAL_GRANSER,
   efterregistreradDagar: { min: 0, max: 30 },
+  /**
+   * Tävlingen: priset i tecken, och prisbilden som den kommer från webbläsaren,
+   * redan beskuren till 800 × 1000 och omkodad till JPEG. En bild på 5 MB in blir
+   * runt 150 kB ut, så 700 kB räcker med marginal och stänger ute det som inte
+   * gått genom beskärningen.
+   */
+  tavling: { pris: TAVLING_GRANSER.pris, bild: { min: 1_000, max: 700_000 }, inByte: 5 * 1024 * 1024 },
 } as const;
 
 export const FEL = {
@@ -74,6 +81,10 @@ export const FEL = {
   /** Två sparningar möttes, och den här förlorade två gånger (R25). Ingenting sparades. */
   samtidigt: "Någon annan sparade samtidigt. Ladda om sidan och försök igen.",
   ovantat: "Något gick fel. Försök igen om en stund.",
+  /** På kräver ett pris: tavlan ska aldrig visa en tävling utan att säga vad man vinner. */
+  prisKravs: "Skriv ett pris innan tävlingen slås på. Stäng av den innan priset tas bort.",
+  bild: "Bilden gick inte att läsa. Välj en JPEG, PNG eller WebP på högst 5 MB.",
+  bildSpara: "Bilden byts med knappen Välj bild, inte genom att spara.",
 } as const;
 
 /**
@@ -88,6 +99,7 @@ export const HANDELSER = {
   ljud_skarm: "salesboard.screen_sound_changed",
   koppla_bort: "salesboard.screen_revoked",
   person: "salesboard.person_changed",
+  bild: "salesboard.prize_image_changed",
 } as const;
 
 // -----------------------------------------------------------------------------
@@ -107,6 +119,8 @@ export type Delar = {
     storAffar?: Partial<TavlansInstallningar["firande"]["storAffar"]>;
   };
   ljud?: Partial<TavlansInstallningar["ljud"]>;
+  /** Månad → det som ändras i månadens tävling. Null tar bort månadens tävling. Bilden byts bara med `bild`. */
+  tavling?: Record<string, Partial<Tavling> | null>;
 };
 
 export type Skrivning =
@@ -116,7 +130,9 @@ export type Skrivning =
   | { handling: "ljud_skarm"; id: string; ljud: boolean }
   | { handling: "koppla_bort"; id: string }
   | { handling: "person"; id: string; display: Visning }
-  | { handling: "testa"; typ: Testtyp };
+  | { handling: "testa"; typ: Testtyp }
+  /** Månadens prisbild som base64 (JPEG), eller null för att ta bort den. */
+  | { handling: "bild"; manad: string; data: string | null };
 
 /** Ett nej. `del` är fältet eller delen det gällde, så att klienten kan visa felet där. */
 export type Avslag = { fel: string; del?: string };
@@ -139,6 +155,7 @@ const FALT: Record<Skrivning["handling"], readonly string[]> = {
   koppla_bort: ["id"],
   person: ["id", "display"],
   testa: ["typ"],
+  bild: ["manad", "data"],
 };
 
 /**
@@ -146,7 +163,16 @@ const FALT: Record<Skrivning["handling"], readonly string[]> = {
  * visning eller testtyp läggs till i `typer.ts` utan att läggas till här.
  */
 const VISNINGAR: Record<Visning, true> = { namn: true, initialer: true, dold: true };
-const TESTTYPER: Record<Testtyp, true> = { order: true, stor: true, forsta: true, serie: true, malet: true };
+const TESTTYPER: Record<Testtyp, true> = {
+  order: true,
+  stor: true,
+  forsta: true,
+  serie: true,
+  malet: true,
+  tavling: true,
+  knuff: true,
+  grans: true,
+};
 
 type Objekt = Record<string, unknown>;
 
@@ -177,7 +203,10 @@ function namnUr(x: unknown): string | Avslag {
 type Regel =
   | { typ: "brytare"; etikett: string }
   | { typ: "val"; etikett: string; alt: readonly string[] }
-  | { typ: "heltal"; etikett: string; min: number; max: number; enhet: string }
+  | { typ: "heltal"; etikett: string; min: number; max: number; enhet: string; tom?: boolean }
+  | { typ: "text"; etikett: string; max: number }
+  | { typ: "bild"; etikett: string }
+  | { typ: "tavling"; etikett: string }
   | { typ: "klockslag"; etikett: string }
   | { typ: "lag"; etikett: string }
   | { typ: "mal"; etikett: string }
@@ -195,6 +224,15 @@ const klockslag = (etikett: string): Regel => ({ typ: "klockslag", etikett });
 const heltal = (etikett: string, g: { min: number; max: number }, enhet = ""): Regel => ({ typ: "heltal", etikett, ...g, enhet });
 const grupp = (etikett: string, falt: Record<string, Regel>): Regel => ({ typ: "grupp", etikett, falt });
 
+/** Fälten i en månads tävling. Bilden står med så att en sparning av den går att pröva, men `spara` tar den inte. */
+const tavlingRegel = (manad: string): Regel =>
+  grupp(`Tävlingen för ${manad}`, {
+    pa: brytare(`Tävlingen för ${manad}`),
+    pris: { typ: "text", etikett: `Priset för ${manad}`, max: TAVLING_GRANSER.pris },
+    grans: { typ: "heltal", etikett: `Kvalgränsen för ${manad}`, ...MAL_GRANSER, enhet: " kr", tom: true },
+    bild: { typ: "bild", etikett: `Bilden för ${manad}` },
+  });
+
 /**
  * Inställningarnas form, fält för fält, med ett namn att säga i ett fel. Samma
  * fält som `tolka` i installningar.ts läser, och inga andra: `version` skrivs
@@ -205,6 +243,7 @@ const FORMEN: Record<string, Regel> = {
   namn: val("Namnformen", ["fornamn", "fornamn_e", "hela"] satisfies Namnform[]),
   ordning: val("Ordningen", ["varde", "antal"] satisfies Ordning[]),
   mal: { typ: "mal", etikett: "Målen" },
+  tavling: { typ: "tavling", etikett: "Tävlingen" },
   arbetsdag: grupp("Arbetsdagen", { fran: klockslag("Arbetsdagens början"), till: klockslag("Arbetsdagens slut") }),
   rorelse: val("Rörelsen", ["full", "lugn"] satisfies TavlansInstallningar["rorelse"][]),
   firande: grupp("Firandet", {
@@ -243,11 +282,36 @@ function prova(regel: Regel, x: unknown, del: string): { varde: unknown } | Avsl
     case "val":
       return typeof x === "string" && regel.alt.includes(x) ? { varde: x } : nej(`ett av ${regel.alt.join(", ")}`);
     case "heltal":
+      if (x === null && regel.tom) return { varde: null };
       return Number.isInteger(x) && (x as number) >= regel.min && (x as number) <= regel.max
         ? { varde: x }
         : nej(`ett heltal från ${tal(regel.min)} till ${tal(regel.max)}${regel.enhet}`);
     case "klockslag":
       return typeof x === "string" && KLOCKSLAG.test(x) ? { varde: x } : nej("ett klockslag som 08:00");
+    case "text": {
+      if (typeof x !== "string") return nej(`en text på högst ${regel.max} tecken`);
+      const text = x.normalize("NFC").replace(/\s+/g, " ").trim();
+      if (KONSTIGA.test(text)) return { fel: `${regel.etikett} får bara innehålla vanliga tecken.`, del };
+      return [...text].length <= regel.max ? { varde: text } : nej(`en text på högst ${regel.max} tecken`);
+    }
+    case "bild":
+      return x === null || (typeof x === "string" && BILD_ID.test(x)) ? { varde: x } : nej("en uppladdad bild");
+    case "tavling": {
+      if (!arObjekt(x) || Object.keys(x).length === 0) return nej("en eller flera månader med en tävling");
+      const ut: Objekt = {};
+      for (const [manad, varde] of Object.entries(x)) {
+        const vag = `${del}.${manad}`;
+        if (!MALMANAD.test(manad)) return { fel: `Okänd månad: ${manad}.`, del: vag };
+        if (varde === null) {
+          ut[manad] = null;
+          continue;
+        }
+        const r = prova(tavlingRegel(manad), varde, vag);
+        if ("fel" in r) return r;
+        ut[manad] = r.varde;
+      }
+      return { varde: ut };
+    }
     case "lag": {
       if (x === null) return { varde: null };
       const id = idUr(x);
@@ -316,7 +380,18 @@ export function tolkaSkrivning(kropp: unknown): Skrivning | Avslag {
   switch (h) {
     case "spara": {
       const d = provaGrupp(FORMEN, kropp.delar, "", "Delarna");
-      return "fel" in d ? d : { handling: h, delar: d.varde as Delar };
+      if ("fel" in d) return d;
+      // Bilden byts med `bild`, som lägger upp filen först. Ett id från klienten pekar på en fil som kanske inte finns.
+      for (const [manad, t] of Object.entries((d.varde.tavling ?? {}) as Objekt)) {
+        if (arObjekt(t) && Object.hasOwn(t, "bild")) return { fel: FEL.bildSpara, del: `tavling.${manad}.bild` };
+      }
+      return { handling: h, delar: d.varde as Delar };
+    }
+    case "bild": {
+      if (typeof kropp.manad !== "string" || !MALMANAD.test(kropp.manad)) return { fel: "Okänd månad.", del: "manad" };
+      if (kropp.data === null) return { handling: h, manad: kropp.manad, data: null };
+      const data = bildUr(kropp.data);
+      return data === null ? { fel: FEL.bild, del: "data" } : { handling: h, manad: kropp.manad, data };
     }
     case "para": {
       const kod = normaliseraKod(kropp.kod as string);
@@ -350,6 +425,27 @@ export function tolkaSkrivning(kropp: unknown): Skrivning | Avslag {
   }
 }
 
+/**
+ * Prisbilden som base64 utan prefix, eller null. Den ska vara en JPEG (webbläsaren
+ * har beskurit och kodat om den) inom gränserna, prövat på de riktiga byten och
+ * inte på det prefixet påstår.
+ */
+export function bildUr(x: unknown): string | null {
+  if (typeof x !== "string") return null;
+  const m = /^data:image\/jpeg;base64,([A-Za-z0-9+/]+={0,2})$/.exec(x);
+  if (!m) return null;
+  const b64 = m[1];
+  const byte = Math.floor((b64.length * 3) / 4) - (b64.endsWith("==") ? 2 : b64.endsWith("=") ? 1 : 0);
+  if (byte < GRANSER.tavling.bild.min || byte > GRANSER.tavling.bild.max) return null;
+  let borjan: string;
+  try {
+    borjan = atob(b64.slice(0, 8));
+  } catch {
+    return null;
+  }
+  return borjan.charCodeAt(0) === 0xff && borjan.charCodeAt(1) === 0xd8 && borjan.charCodeAt(2) === 0xff ? b64 : null;
+}
+
 // --- Efter `uppdatera` --------------------------------------------------------
 
 /** Regeln för en väg som "ljud.volym", eller undefined för en del som inte finns. */
@@ -358,6 +454,12 @@ function regelFor(vag: string): Regel | undefined {
   let regel: Regel | undefined;
   for (const bit of vag.split(".")) {
     if (regel?.typ === "mal") return MALMANAD.test(bit) ? malRegel(bit) : undefined;
+    if (regel?.typ === "tavling") {
+      if (!MALMANAD.test(bit)) return undefined;
+      regel = tavlingRegel(bit);
+      falt = regel.typ === "grupp" ? regel.falt : {};
+      continue;
+    }
     if (!finns(falt, bit)) return undefined;
     regel = falt[bit];
     falt = regel.typ === "grupp" ? regel.falt : {};
@@ -390,10 +492,15 @@ function vardeVid(objekt: unknown, vag: string): unknown {
 export function tillampa(nu: TavlansInstallningar, delar: Delar): { installningar: TavlansInstallningar } | Avslag {
   if (!arObjekt(delar)) return { fel: "Delarna ska vara ett objekt.", del: "delar" };
   const ny = uppdatera(nu, delar);
+  for (const [manad, t] of Object.entries(delar.tavling ?? {})) {
+    // På kräver ett pris, åt båda hållen: att slå på utan pris, och att tömma priset medan den är på.
+    const blev = ny.tavling[manad];
+    if (t !== null && !blev?.pa && (t.pa === true || (nu.tavling[manad]?.pa && t.pa !== false))) return { fel: FEL.prisKravs, del: `tavling.${manad}` };
+  }
   for (const [vag, varde] of lov(delar)) {
     if (Object.is(vardeVid(ny, vag), varde)) continue;
-    // Ett borttaget mål landar som ett mål som inte finns: månaden ärver det före.
-    if (varde === null && vag.startsWith("mal.") && vardeVid(ny, vag) === undefined) continue;
+    // Ett borttaget mål landar som ett mål som inte finns: månaden ärver det före. En borttagen tävling likaså.
+    if (varde === null && (vag.startsWith("mal.") || /^tavling\.[^.]+$/.test(vag)) && vardeVid(ny, vag) === undefined) continue;
     const regel = regelFor(vag);
     if (!regel) return { fel: `Okänd del: ${vag}.`, del: vag };
     // Ett värde som inte klarar sin regel säger regelns krav. Ett som klarar den

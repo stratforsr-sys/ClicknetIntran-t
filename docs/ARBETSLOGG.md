@@ -5,6 +5,76 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-26 · Säljtavlan: månadens tävling
+
+Beställaren ville att tavlan ska visa tävlingen, knuffa den som är nära och visa priset
+med en bild. Allt ställs in i Nav 2.0 och bara av superadmin.
+
+Brainstormen gav reglerna: tävlingen är en kalendermånad, en enskild säljare vinner med
+högst ordervärde, dolda säljare är inte med, och kvalgränsen krävs för att vinna.
+Beställaren valde mellanspel var tionde minut, en knuff direkt efter ordern och en scen
+vid gränsen. I dag kom ett tillägg: brytaren Av stänger av alla tävlingsscener.
+
+Designen bygger på tre fynd:
+- Målgradienten: avståndet sägs i order, inte i kronor.
+- Rivalitet mellan grannar: tvåan ställs mot ettan.
+- Barankay: den som ligger långt efter visas aldrig.
+
+Spec och plan står i `docs/superpowers/`.
+
+**Mina val**, som beställaren godkände med "Bygg upp allting nu":
+- Sista veckan går mellanspelet var femte minut, och sista dagen står det "Avgörs i dag".
+- Vinnaren visas första arbetsdagens morgon.
+- Lika i toppen delar ledningen och priset.
+- Ingen egen scen för ny ledare.
+
+**Byggt**
+- **Inställningen och skrivvägen** (`installningar.ts`, `skrivning.ts`, `handlingar.ts`):
+  - `tavling` per månad. På kräver pris, och priset har högst 60 tecken utan konstiga tecken.
+  - Kvalgränsen inom målets gränser, eller null.
+  - Handlingen `bild` lägger upp en JPEG som egen rad i `nav_setting`. Bilder som ingen
+    månad pekar på städas bort.
+  - Bilden ligger i databasen och inte i fillagringen, som profilbilderna. Den är en fil på
+    cirka 150 kB i månaden, och tavlans egen rutt kan då ge samma åtkomst som datan.
+- **Ögonblicksbilden** (`forma.ts`, `tavlan.ts`): `tavling` med `dagarKvar`, och `vinnare`.
+  - Vinnaren beräknas bara första arbetsdagen och bara efter en påslagen tävling.
+  - Den räknas på förra månadens order, i laget, utan dolda säljare och mot gränsen.
+- **Loppet och planeringen** (`tavling.ts`, `regler.ts`, `ko.ts`):
+  - Inom räckhåll betyder högst tre snittorder bakom, och högst två visas utöver ledaren.
+  - Knuffen går en gång per dag, och gränsscenen en gång per månad, sparat i `Minne`.
+  - Bara en order som firas knuffar.
+  - Kön går ordern, gränsen, knuffen, målet.
+  - `aktuell` släpper tävlingsposter när brytaren slagits av.
+- **Kompositionerna** `motion/Tavlingen.tsx` (mellanspelet och vinnaren) och
+  `motion/Knuffen.tsx` (knuffen och gränsen).
+  - Bildrutedrivna och utan CSS-övergångar.
+  - Staplarna har en stagger på 130 ms, och gränsen är ett streckat märke.
+  - Mellanspelet är tyst, och knuffen har ett svagt ljud.
+  - Prisbilden förladdas och avkodas innan den visas.
+- **Nav 2.0-kortet "Månadens tävling"** (`ndsb.js`):
+  - Två månader, var och en med brytaren, priset med räknare, gränsen och bilden.
+  - Bilden beskärs till 4:5 i canvas innan den laddas upp.
+  - Kortet visar läget just nu (`facit.topp`/`varden`).
+  - Testknapparna Tävlingen, Knuffen och Gränsen, och en ruta för tävlingen i lägesraden.
+
+**Verifierat**
+- Alla åtta provsviter gröna, med nya prov för:
+  - läsaren och skrivningen
+  - bilden
+  - vinnaren
+  - loppet
+  - knuffen och gränsen i planeringen
+  - kön
+  - tiderna och ljuden
+- Sidprovet med låtsasserver: de gamla 68 kontrollerna och 36 nya.
+- Varje scen sedd i selen, också svepet in och ut, bildruta för bildruta. Två saker rättades
+  efter det:
+  - Gränslinjen gick genom texten.
+  - Utgången blinkade mint.
+
+**Inte kontrollerat:** uppladdning och visning mot riktig data i previewen, och ljuden i en
+högtalare.
+
 ## 2026-10-25 · Säljtavlan inmergad i `nav2-utkast`, 0250 körd
 
 Beställaren 2026-10-25: säljtavlan följer med Nav 2.0 och mergas till main tillsammans med den.

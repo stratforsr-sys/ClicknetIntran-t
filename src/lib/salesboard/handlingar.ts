@@ -20,6 +20,8 @@ import {
   type Skrivning,
 } from "@/lib/salesboard/skrivning";
 import { svar } from "@/lib/salesboard/svar";
+import { BILD_ID, normalisera } from "@/lib/salesboard/installningar";
+import type { TavlansInstallningar } from "@/lib/salesboard/typer";
 
 /**
  * Säljtavlan: allt som ändrar tavlan (spec §7 och §9). Rutten är
@@ -32,6 +34,7 @@ import { svar } from "@/lib/salesboard/svar";
  *   koppla_bort  skärmen kopplas bort och dess token slutar gälla
  *   person       en säljares visning (namn, initialer, dold)
  *   testa        en testhändelse som alla skärmar spelar med märket TEST
+ *   bild         månadens prisbild: en egen rad i `nav_setting`, och id:t i tävlingen
  *
  * ===========================================================================
  * BARA SUPERADMIN (beställaren 2026-10-25). Rutten frågar `vemFragar` innan
@@ -109,18 +112,31 @@ export async function vemFragar(): Promise<Atkomstlage> {
  * gick att läsa om.
  */
 async function spara(db: Db, delar: Delar, mig: string): Promise<Response> {
+  const r = await sparaDelar(db, delar, mig);
+  if ("svar" in r) return r.svar;
+  await stadaBilder(db, r.fore, r.efter);
+  return r.ok;
+}
+
+/** Som `spara`, men med inställningarna före och efter, för den som behöver dem (bilden). */
+async function sparaDelar(
+  db: Db,
+  delar: Delar,
+  mig: string,
+): Promise<{ svar: Response } | { ok: Response; fore: TavlansInstallningar; efter: TavlansInstallningar }> {
+  const nej = (svaret: Response) => ({ svar: svaret });
   if (delar.lag) {
     const { data: lag, error: lagfel } = await db.from("team").select("id").eq("id", delar.lag).maybeSingle();
-    if (lagfel) return dbFel(null, lagfel, "laget");
-    if (!lag) return svar({ fel: FEL.laget, del: "lag" }, 400);
+    if (lagfel) return nej(dbFel(null, lagfel, "laget"));
+    if (!lag) return nej(svar({ fel: FEL.laget, del: "lag" }, 400));
   }
 
   for (let forsok = 1; ; forsok++) {
     const { data, error } = await db.from("nav_setting").select("value, updated_at").eq("key", NYCKEL).maybeSingle();
-    if (error) return dbFel(null, error, "inställningarna");
+    if (error) return nej(dbFel(null, error, "inställningarna"));
 
     const plan = planeraSparning(data as Installningsrad, delar);
-    if ("fel" in plan) return svar(plan, 400);
+    if ("fel" in plan) return nej(svar(plan, 400));
 
     // Stämpeln är alltid senare än den som lästes, så att två sparningar från samma läsning
     // aldrig båda kan landa, hur klockorna i två instanser än går.
@@ -128,7 +144,7 @@ async function spara(db: Db, delar: Delar, mig: string): Promise<Response> {
     let landade: boolean;
     if (plan.villkor === null) {
       const { error: skrivfel } = await db.from("nav_setting").insert({ key: NYCKEL, ...rad });
-      if (skrivfel && skrivfel.code !== UNIK) return dbFel(null, skrivfel, "sparningen");
+      if (skrivfel && skrivfel.code !== UNIK) return nej(dbFel(null, skrivfel, "sparningen"));
       landade = !skrivfel;
     } else {
       const { data: skrivna, error: skrivfel } = await db
@@ -137,24 +153,30 @@ async function spara(db: Db, delar: Delar, mig: string): Promise<Response> {
         .eq("key", NYCKEL)
         .eq("updated_at", plan.villkor)
         .select("key");
-      if (skrivfel) return dbFel(null, skrivfel, "sparningen");
+      if (skrivfel) return nej(dbFel(null, skrivfel, "sparningen"));
       landade = (skrivna ?? []).length > 0;
     }
 
     const beslut = efterForsok(forsok, landade);
     if (beslut === "igen") continue;
-    if (beslut === "krock") return svar({ fel: FEL.samtidigt }, 409);
+    if (beslut === "krock") return nej(svar({ fel: FEL.samtidigt }, 409));
 
+    const fore = normalisera((data as Installningsrad)?.value);
+    const efter = plan.installningar;
     await skrivHandelse({ actorId: mig, action: HANDELSER.spara, objectType: "nav_setting", objectId: NYCKEL, meta: { delar } });
-    if (!("lag" in delar)) return svar({ ok: "Sparat.", installningar: plan.installningar });
+    if (!("lag" in delar)) return { ok: svar({ ok: "Sparat.", installningar: efter }), fore, efter };
 
-    const laget = await lasSaljareOchTroskel(db, plan.installningar.lag, []);
-    return svar({
-      ok: "Sparat.",
-      installningar: plan.installningar,
-      troskel: laget.troskel,
-      ...(laget.personer ? { personer: laget.personer } : { personerInaktuella: true }),
-    });
+    const laget = await lasSaljareOchTroskel(db, efter.lag, []);
+    return {
+      ok: svar({
+        ok: "Sparat.",
+        installningar: efter,
+        troskel: laget.troskel,
+        ...(laget.personer ? { personer: laget.personer } : { personerInaktuella: true }),
+      }),
+      fore,
+      efter,
+    };
   }
 }
 
@@ -239,6 +261,55 @@ async function testa(db: Db, mig: string, typ: Extract<Skrivning, { handling: "t
   return svar({ ok: "Skickat." });
 }
 
+/** Raden i `nav_setting` där en prisbild ligger. Nyckeln klarar tabellens villkor (`^[a-z0-9.-]{1,60}$`). */
+export const bildnyckel = (id: string): string => `salesboard.bild.${id}`;
+
+/**
+ * Månadens prisbild. Bilden läggs upp som en egen rad först, och sedan sparas
+ * id:t i månadens tävling som en vanlig sparning (R25: ingen sparning skriver över
+ * en annan). Går sparningen inte igenom tas den nya raden bort igen. Gick den
+ * igenom tas den gamla bilden bort, om ingen annan månad pekar på den.
+ *
+ * Bilden ligger i databasen och inte i fillagringen, som profilbilderna: den är
+ * en enda JPEG på runt 150 kB per månad, den behöver ingen signerad adress, och
+ * tavlans egen rutt (`/salesboard/bild`) kan då ge samma åtkomst som tavlans data.
+ */
+async function bild(db: Db, mig: string, s: Extract<Skrivning, { handling: "bild" }>): Promise<Response> {
+  let id: string | null = null;
+  if (s.data !== null) {
+    id = [...crypto.getRandomValues(new Uint8Array(12))].map((b) => b.toString(16).padStart(2, "0")).join("");
+    const { error } = await db.from("nav_setting").insert({
+      key: bildnyckel(id),
+      value: { mime: "image/jpeg", data: s.data, manad: s.manad },
+      updated_by: mig,
+      updated_at: nuIso(),
+    });
+    if (error) return dbFel(null, error, "bilden");
+  }
+
+  const r = await sparaDelar(db, { tavling: { [s.manad]: { bild: id } } }, mig);
+  if ("svar" in r) {
+    if (id) await taBortBild(db, id);
+    return r.svar;
+  }
+  await stadaBilder(db, r.fore, r.efter);
+  await skrivHandelse({ actorId: mig, action: HANDELSER.bild, objectType: "nav_setting", objectId: NYCKEL, meta: { manad: s.manad, bild: id } });
+  return r.ok;
+}
+
+/** Tar bort de prisbilder som ingen månad pekar på längre: en bytt bild, eller en borttagen tävling. */
+async function stadaBilder(db: Db, fore: TavlansInstallningar, efter: TavlansInstallningar): Promise<void> {
+  const kvar = new Set(Object.values(efter.tavling).map((t) => t.bild));
+  for (const id of new Set(Object.values(fore.tavling).map((t) => t.bild))) if (id && !kvar.has(id)) await taBortBild(db, id);
+}
+
+/** Tar bort en prisbild. En bild som blir kvar kostar några hundra kilobyte och är inget fel. */
+async function taBortBild(db: Db, id: string): Promise<void> {
+  if (!BILD_ID.test(id)) return;
+  const { error } = await db.from("nav_setting").delete().eq("key", bildnyckel(id));
+  if (error) console.error("salesboard: bilden blev kvar:", id, error.message);
+}
+
 export async function utfor(s: Skrivning, mig: string): Promise<Response> {
   const db = supabaseAdmin();
   switch (s.handling) {
@@ -263,6 +334,8 @@ export async function utfor(s: Skrivning, mig: string): Promise<Response> {
       return person(db, mig, s);
     case "testa":
       return testa(db, mig, s.typ);
+    case "bild":
+      return bild(db, mig, s);
   }
 }
 

@@ -19,7 +19,7 @@
  * ===========================================================================
  */
 
-import type { Namnform, Ordning, TavlansInstallningar } from "./typer.ts";
+import type { Namnform, Ordning, TavlansInstallningar, Tavling } from "./typer.ts";
 
 /**
  * Samma form med varje fält skrivskyddat, också i delobjekten. En skrivning är då ett
@@ -53,6 +53,7 @@ export const STANDARD: DjupSkrivskyddad<TavlansInstallningar> = djupfrys<Tavlans
   namn: "fornamn_e",
   ordning: "varde",
   mal: {},
+  tavling: {},
   arbetsdag: { fran: "08:00", till: "18:00" },
   rorelse: "full",
   firande: {
@@ -81,6 +82,13 @@ export const MAL_GRANSER = { min: 1_000, max: 100_000_000 } as const;
 
 /** Så många månaders mål sparas. Äldre stryks, de nyaste står kvar. */
 const MAL_MANADER = 36;
+
+/** Tävlingens gränser: priset i tecken, och bildens id (24 hex, `nav_setting` "salesboard.bild.<id>"). */
+export const TAVLING_GRANSER = { pris: 60 } as const;
+export const BILD_ID = /^[0-9a-f]{24}$/;
+
+/** Styrtecken, osynliga tecken och riktningsväxlingar: de stryks ur ett pris som läses. */
+const KONSTIGA_ALLA = /[\u0000-\u001f\u007f-\u009f\u00ad\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/g;
 
 /** "HH:MM" på ett dygn, 00:00–23:59. */
 const KLOCKSLAG = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -148,6 +156,60 @@ function malen(x: unknown, bas: Record<string, number>): Record<string, number> 
   return Object.fromEntries(manader.slice(-MAL_MANADER).map((k) => [k, ut[k]]));
 }
 
+/** En tävling utan något valt. */
+const INGEN_TAVLING: Tavling = { pa: false, pris: "", bild: null, grans: null };
+
+/** Ett pris: sammansatt, blanksteg ihopslagna, utan konstiga tecken, högst 60 tecken. */
+function prisUr(x: unknown, bas: string): string {
+  if (typeof x !== "string") return bas;
+  return [...x.normalize("NFC").replace(KONSTIGA_ALLA, "").replace(/\s+/g, " ").trim()].slice(0, TAVLING_GRANSER.pris).join("");
+}
+
+/**
+ * Tävlingarna per månad, som målen: det som läses läggs ovanpå `bas`, en månad
+ * med null tas bort, och ett fält i en månad byts utan att resten rörs. Till
+ * skillnad från målen ärvs en tävling aldrig: priset byts varje månad.
+ *
+ * På kräver ett pris. Ett tomt pris ger alltid en avslagen tävling, så att tavlan
+ * aldrig visar "Månadens tävling" utan att säga vad man vinner.
+ */
+function tavlingarna(x: unknown, bas: Record<string, Tavling>): Record<string, Tavling> {
+  const ut: Record<string, Tavling> = Object.fromEntries(Object.entries(bas).map(([k, t]) => [k, { ...t }]));
+  if (typeof x === "object" && x !== null && !Array.isArray(x)) {
+    for (const [manad, varde] of Object.entries(x as Record<string, unknown>)) {
+      if (!MANAD.test(manad)) continue;
+      if (varde === null) {
+        delete ut[manad];
+        continue;
+      }
+      if (typeof varde !== "object" || Array.isArray(varde)) continue;
+      const fore = ut[manad] ?? INGEN_TAVLING;
+      const bild = falt(varde, "bild");
+      const grans = falt(varde, "grans");
+      const pris = prisUr(falt(varde, "pris"), fore.pris);
+      ut[manad] = {
+        pa: brytare(falt(varde, "pa"), fore.pa) && pris !== "",
+        pris,
+        bild: bild === null ? null : typeof bild === "string" && BILD_ID.test(bild) ? bild : fore.bild,
+        grans:
+          grans === null
+            ? null
+            : typeof grans === "number" && Number.isFinite(grans) && grans >= MAL_GRANSER.min && grans <= MAL_GRANSER.max
+              ? Math.round(grans)
+              : fore.grans,
+      };
+    }
+  }
+  const manader = Object.keys(ut).sort();
+  return Object.fromEntries(manader.slice(-MAL_MANADER).map((k) => [k, ut[k]]));
+}
+
+/** Månadens tävling när den är på, annars null. Ärvs inte. */
+export function tavlingFor(tavling: Readonly<Record<string, Tavling>>, manad: string): Tavling | null {
+  const t = Object.hasOwn(tavling, manad) ? tavling[manad] : undefined;
+  return t && t.pa && t.pris ? t : null;
+}
+
 /**
  * Månadens mål i kronor: månadens eget, annars det senaste före den, annars null.
  * Ett mål gäller alltså tills någon sätter ett nytt, också bakåt i grafen.
@@ -186,6 +248,7 @@ function tolka(indata: unknown, bas: TavlansInstallningar): TavlansInstallningar
     namn: alternativ(falt(indata, "namn"), NAMNFORMER, bas.namn),
     ordning: alternativ(falt(indata, "ordning"), ORDNINGAR, bas.ordning),
     mal: malen(falt(indata, "mal"), bas.mal),
+    tavling: tavlingarna(falt(indata, "tavling"), bas.tavling),
     arbetsdag: arbetsdagen(arbetsdag, bas.arbetsdag),
     rorelse: alternativ(falt(indata, "rorelse"), RORELSER, bas.rorelse),
     firande: {
@@ -217,6 +280,8 @@ function tolka(indata: unknown, bas: TavlansInstallningar): TavlansInstallningar
  * - Volymen klipps till 0–100 och blir ett heltal.
  * - Efterregistrerad klipps till 0–30 dagar, och beloppet till 1 000–10 000 000 kr.
  * - Målen är månad → kronor inom `MAL_GRANSER`; det som inte går att läsa stryks.
+ * - Tävlingen är månad → {pa, pris, bild, grans}. På kräver ett pris, och priset
+ *   kapas till 60 tecken utan konstiga tecken.
  * - Tider som inte är "HH:MM" faller tillbaka på standarden, liksom fel typ.
  * - Arbetsdagen måste sluta efter att den börjat, annars faller hela paret
  *   tillbaka på standarden. Ljudtiden är fri och får gå över midnatt.

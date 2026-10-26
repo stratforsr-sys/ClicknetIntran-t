@@ -25,7 +25,7 @@
  */
 import { readFileSync } from "node:fs";
 import { isDeepStrictEqual } from "node:util";
-import { STANDARD, malFor, normalisera, uppdatera } from "../src/lib/salesboard/installningar.ts";
+import { STANDARD, malFor, normalisera, tavlingFor, uppdatera } from "../src/lib/salesboard/installningar.ts";
 import { SALJANDE_ROLLER } from "../src/lib/salesboard/regler.ts";
 import { nivaFor } from "../src/lib/nav2/forma.ts";
 import { troskelFranStatistik } from "../src/lib/salesboard/forma.ts";
@@ -36,6 +36,7 @@ import {
   HANDELSER,
   NAMN_MAX,
   atkomstsvar,
+  bildUr,
   efterForsok,
   formaSaljare,
   formaSkarmar,
@@ -547,6 +548,82 @@ console.log("\nKällkoden bär inga osynliga tecken (Trojan Source)");
     const funna = [...text].filter((t) => osynlig(t.codePointAt(0)));
     ok(`${fil}: inga osynliga tecken eller riktningsväxlingar`, funna.length === 0, funna.map((t) => t.codePointAt(0).toString(16)).join(" "));
   }
+}
+
+console.log("\ntävlingen: läsningen");
+{
+  const id = "0123456789abcdef01234567";
+  const t = normalisera({
+    tavling: {
+      "2026-10": { pa: true, pris: "  Spa   för två ", bild: id, grans: 120_000 },
+      "2026-11": { pa: true, pris: "" },
+      "2026-13": { pa: true, pris: "x" },
+      "2026-12": { pa: "ja", pris: 5, bild: "https://x.se/b.jpg", grans: 50 },
+    },
+  });
+  ok("en tävling läses, och priset trimmas", lika(t.tavling["2026-10"], { pa: true, pris: "Spa för två", bild: id, grans: 120_000 }), visa(t.tavling["2026-10"]));
+  ok("på utan pris är av", t.tavling["2026-11"].pa === false);
+  ok("en månad som inte finns stryks", !("2026-13" in t.tavling));
+  ok("fel typer får det som gällde, och en adress är ingen bild", lika(t.tavling["2026-12"], { pa: false, pris: "", bild: null, grans: null }), visa(t.tavling["2026-12"]));
+  ok("standarden har ingen tävling", lika(STANDARD.tavling, {}) && lika(normalisera(null).tavling, {}));
+  ok("ett för långt pris kapas till 60 tecken", [...normalisera({ tavling: { "2026-10": { pa: true, pris: "å".repeat(80) } } }).tavling["2026-10"].pris].length === 60);
+  ok("konstiga tecken stryks ur priset", normalisera({ tavling: { "2026-10": { pa: true, pris: "Spa\u202e för två\u200b" } } }).tavling["2026-10"].pris === "Spa för två");
+  ok("tavlingFor ger bara en påslagen tävling", tavlingFor(t.tavling, "2026-10")?.pris === "Spa för två" && tavlingFor(t.tavling, "2026-11") === null);
+  ok("en tävling ärvs inte till månaden efter", tavlingFor(t.tavling, "2026-11") === null && tavlingFor({ "2026-09": t.tavling["2026-10"] }, "2026-10") === null);
+  ok("tavlingFor tål en tom tabell och __proto__", tavlingFor({}, "2026-10") === null && tavlingFor({}, "__proto__") === null);
+  const u = uppdatera(t, { tavling: { "2026-10": { grans: null } } });
+  ok("ett fält i månaden byts och resten står kvar", lika(u.tavling["2026-10"], { pa: true, pris: "Spa för två", bild: id, grans: null }), visa(u.tavling["2026-10"]));
+  ok("null tar bort månadens tävling", !("2026-10" in uppdatera(t, { tavling: { "2026-10": null } }).tavling));
+  ok("en annan del rör inte tävlingen", lika(uppdatera(t, { ljud: { volym: 3 } }).tavling, t.tavling));
+  ok("installningar.ts läser inte samma objekt två gånger", uppdatera(t, {}).tavling["2026-10"] !== t.tavling["2026-10"]);
+}
+
+console.log("\ntävlingen: skrivningen");
+{
+  const s = spara({ tavling: { "2026-11": { pa: true, pris: "  Hörlurar ", grans: 90_000 } } });
+  ok("en tävling går igenom, och priset trimmas", lika(s, { handling: "spara", delar: { tavling: { "2026-11": { pa: true, pris: "Hörlurar", grans: 90_000 } } } }), visa(s));
+  ok("ett pris på 60 tecken går", !avslag(spara({ tavling: { "2026-11": { pris: "x".repeat(60) } } })));
+  ok("ett pris på 61 tecken ger fel", avslag(spara({ tavling: { "2026-11": { pris: "x".repeat(61) } } }), "tavling.2026-11.pris"));
+  ok("ett pris med riktningsväxling ger fel", avslag(spara({ tavling: { "2026-11": { pris: "Spa\u202e" } } }), "tavling.2026-11.pris"));
+  ok("ett pris som inte är text ger fel", avslag(spara({ tavling: { "2026-11": { pris: 5 } } }), "tavling.2026-11.pris"));
+  ok("ingen gräns (null) går", !avslag(spara({ tavling: { "2026-11": { grans: null } } })));
+  ok("gränsen 999 kr ger fel", avslag(spara({ tavling: { "2026-11": { grans: 999 } } }), "tavling.2026-11.grans"));
+  ok("bilden går inte att spara med spara", avslag(spara({ tavling: { "2026-11": { bild: "0123456789abcdef01234567" } } }), "tavling.2026-11.bild"));
+  ok("en okänd månad ger fel", avslag(spara({ tavling: { "2026-13": { pa: false } } }), "tavling.2026-13"));
+  ok("ett okänt fält i månaden ger fel", avslag(spara({ tavling: { "2026-11": { vinst: 1 } } }), "tavling.2026-11.vinst"));
+  ok("hela månaden null går", lika(spara({ tavling: { "2026-11": null } }), { handling: "spara", delar: { tavling: { "2026-11": null } } }));
+  ok("en tom tävling ger fel", avslag(spara({ tavling: {} }), "tavling"));
+
+  const bas = normalisera(null);
+  const utan = tillampa(bas, { tavling: { "2026-11": { pa: true } } });
+  ok("på utan pris ger fel som säger varför", avslag(utan) && utan.fel === FEL.prisKravs, visa(utan));
+  const med = tillampa(bas, { tavling: { "2026-11": { pa: true, pris: "Hörlurar" } } });
+  ok("på med pris landar", !avslag(med) && lika(med.installningar.tavling["2026-11"], { pa: true, pris: "Hörlurar", bild: null, grans: null }), visa(med));
+  const tom = tillampa(med.installningar, { tavling: { "2026-11": { pris: "" } } });
+  ok("priset går inte att tömma medan tävlingen är på", avslag(tom) && tom.fel === FEL.prisKravs, visa(tom));
+  ok("av och tomt pris i samma sparning går", !avslag(tillampa(med.installningar, { tavling: { "2026-11": { pa: false, pris: "" } } })));
+  ok("av går alltid", !avslag(tillampa(med.installningar, { tavling: { "2026-11": { pa: false } } })));
+  const bort = tillampa(med.installningar, { tavling: { "2026-11": null } });
+  ok("en borttagen tävling landar", !avslag(bort) && !("2026-11" in bort.installningar.tavling), visa(bort));
+  const gr = tillampa(med.installningar, { tavling: { "2026-11": { grans: 120_000 } } });
+  ok("gränsen landar", !avslag(gr) && gr.installningar.tavling["2026-11"].grans === 120_000);
+  ok("gränsen kan tas bort", tillampa(gr.installningar, { tavling: { "2026-11": { grans: null } } }).installningar.tavling["2026-11"].grans === null);
+}
+
+console.log("\ntävlingen: bilden");
+{
+  const jpeg = (byte) => "data:image/jpeg;base64," + Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(byte - 4, 7)]).toString("base64");
+  const b = tolkaSkrivning({ handling: "bild", manad: "2026-11", data: jpeg(40_000) });
+  ok("en JPEG går igenom som base64 utan prefix", b.handling === "bild" && b.manad === "2026-11" && Buffer.from(b.data, "base64").length === 40_000, visa(b).slice(0, 80));
+  ok("null tar bort bilden", lika(tolkaSkrivning({ handling: "bild", manad: "2026-11", data: null }), { handling: "bild", manad: "2026-11", data: null }));
+  ok("en PNG ger fel", avslag(tolkaSkrivning({ handling: "bild", manad: "2026-11", data: "data:image/png;base64," + Buffer.alloc(5000, 1).toString("base64") }), "data"));
+  ok("ett JPEG-prefix på annat ger fel", bildUr("data:image/jpeg;base64," + Buffer.alloc(5000, 1).toString("base64")) === null);
+  ok("en för liten bild ger fel", bildUr(jpeg(500)) === null);
+  ok("700 kB går, ett steg till inte", bildUr(jpeg(GRANSER.tavling.bild.max)) !== null && bildUr(jpeg(GRANSER.tavling.bild.max + 3)) === null);
+  ok("en okänd månad ger fel", avslag(tolkaSkrivning({ handling: "bild", manad: "oktober", data: null }), "manad"));
+  ok("ett fält till ger fel", avslag(tolkaSkrivning({ handling: "bild", manad: "2026-11", data: null, url: "x" }), "url"));
+  ok("bilden loggas som en salesboard-händelse", HANDELSER.bild.startsWith("salesboard."));
+  for (const typ of ["tavling", "knuff", "grans"]) ok(`testet ${typ} går att skicka`, lika(tolkaSkrivning({ handling: "testa", typ }), { handling: "testa", typ }));
 }
 
 console.log("\nmålens arv, stämpeln och de säljande rollerna");

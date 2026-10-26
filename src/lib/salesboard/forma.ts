@@ -29,7 +29,7 @@
 import { dagarBakat, svenskTidpunkt, svensktDatum } from "../klocka.ts";
 import { harGodkants, nettoAntal, raknas, type Order, type Orderstatus } from "../order.ts";
 import { MINSTA_DAGAR_FOR_PROGNOS, arbetsdagarIManad, arbetsdagarTill } from "../saljtakt.ts";
-import { malFor } from "./installningar.ts";
+import { malFor, tavlingFor } from "./installningar.ts";
 import {
   AKTIVA_STATUSAR,
   MINSTA_UNDERLAG,
@@ -48,6 +48,8 @@ import type {
   TavlePerson,
   TavleSaljare,
   TavlansInstallningar,
+  TavleTavling,
+  TavleVinnare,
   Testtyp,
   Visning,
 } from "./typer.ts";
@@ -132,6 +134,11 @@ export type TavlansRader = {
   statistik: Tavlestatistik | null;
   /** Testhändelserna från `tavlansFonster().handelserFran`. */
   handelser: RaTavleHandelse[];
+  /**
+   * Förra månadens order (`period_month` eller `cancel_period_month` i den), bara när
+   * vinnaren ska visas (`vinnarensManad`). Annars tom eller utelämnad.
+   */
+  forraManadens?: RaTavleOrder[];
   /** Id till nyckel. I servern `nyckelFor`. */
   nyckel: (id: string) => string;
 };
@@ -191,6 +198,21 @@ export function tavlansFonster(nu: Date): {
     senasteFran: svenskTidpunkt(dagarBakat(idag, ORDERLISTANS_DAGAR), "00:00").toISOString(),
     handelserFran: new Date(nu.getTime() - HANDELSER_MS).toISOString(),
   };
+}
+
+/** Prisbildens adress på tavlan. Bilden ligger bakom tavlans egen åtkomst (`/salesboard/bild`). */
+export const bildAdress = (id: string | null): string | null => (id ? `/salesboard/bild?id=${id}` : null);
+
+/**
+ * Månaden vars vinnare ska visas, "2026-09-01", eller null. Vinnaren visas första
+ * arbetsdagen i nästa månad, och bara om förra månadens tävling var på.
+ * `tavlan.ts` läser förra månadens order bara då.
+ */
+export function vinnarensManad(installningar: TavlansInstallningar, nu: Date): string | null {
+  const { idag, manad } = tavlansFonster(nu);
+  if (arbetsdagarIManad(manad)[0] !== idag) return null;
+  const forra = manadenFore(manad);
+  return tavlingFor(installningar.tavling, forra.slice(0, 7)) ? forra : null;
 }
 
 // -----------------------------------------------------------------------------
@@ -611,8 +633,42 @@ export function formaOgonblick(
     .filter((h): h is TavleHandelse => h !== null)
     .sort((a, b) => a.id - b.id);
 
-  // Lagets id och målen stannar här. Lagets namn står i `lag`, målen i månaden och grafen.
-  const { lag: _lagId, mal: _mal, ...utanLag } = installningar;
+  // --- Tävlingen --------------------------------------------------------------------------
+  // Loppet räknar tavlan själv ur `saljare`, som redan är utan de dolda. Här står bara priset.
+  const t = tavlingFor(installningar.tavling, manad.slice(0, 7));
+  const tavling: TavleTavling | null = t ? { pris: t.pris, bild: bildAdress(t.bild), grans: t.grans, dagarKvar: Math.max(0, totalt - gangna) } : null;
+
+  // Förra månadens vinnare: högst ordervärde netto i laget, utan de dolda, och minst gränsen.
+  let vinnare: TavleVinnare | null = null;
+  const vinnarensM = vinnarensManad(installningar, nu);
+  const forraT = vinnarensM ? tavlingFor(installningar.tavling, vinnarensM.slice(0, 7)) : null;
+  if (vinnarensM && forraT) {
+    const perSaljare = new Map<string, RaTavleOrder[]>();
+    for (const o of rader.forraManadens ?? []) {
+      if (!iLaget(o.salesperson_id)) continue;
+      perSaljare.set(o.salesperson_id, [...(perSaljare.get(o.salesperson_id) ?? []), o]);
+    }
+    const varden = [...perSaljare].filter(([id]) => !person(id).dold).map(([id, egna]) => ({ id, varde: nettoVarde(egna, vinnarensM) }));
+    const hogst = Math.max(0, ...varden.map((v) => v.varde));
+    const vann = hogst > 0 && (forraT.grans === null || hogst >= forraT.grans) ? varden.filter((v) => v.varde === hogst).map((v) => v.id) : [];
+    for (const id of vann) {
+      const p = person(id);
+      personer[p.nyckel] = p;
+    }
+    vinnare = {
+      nyckel: vinnarensM.slice(0, 7),
+      manad: (MANADER[Number(vinnarensM.slice(5, 7)) - 1] ?? "").toLowerCase(),
+      pris: forraT.pris,
+      bild: bildAdress(forraT.bild),
+      personer: vann.map((id) => nyckel(id)).sort(),
+      varde: vann.length ? hogst : null,
+      grans: forraT.grans,
+    };
+  }
+
+  // Lagets id, målen och tävlingarna stannar här. Lagets namn står i `lag`, målen i månaden och grafen,
+  // och den här månadens tävling i `tavling`.
+  const { lag: _lagId, mal: _mal, tavling: _tavling, ...utanLag } = installningar;
 
   return {
     v: 1,
@@ -645,5 +701,7 @@ export function formaOgonblick(
     historik,
     personer,
     handelser,
+    tavling,
+    vinnare,
   };
 }

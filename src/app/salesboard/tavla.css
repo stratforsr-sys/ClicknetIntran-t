@@ -708,6 +708,52 @@ button.tv-ljudchip { cursor: pointer; color: var(--amber); border-color: rgba(24
 .tv-malet-nasta { margin: calc(40 * var(--u)) 0 0; font: 500 calc(26 * var(--u)) var(--f-siffra); color: var(--dov); letter-spacing: .04em; }
 .tv-malet-nasta b { color: var(--amber); font-weight: 600; }
 
+/* Tävlingen: mellanspelet och vinnaren. Prisbilden till vänster, priset och loppet till höger. */
+.tv-tav { position: fixed; inset: 0; z-index: 10; pointer-events: none; }
+.tv-tav-inne { position: absolute; inset: 0; display: grid; grid-template-columns: 44% minmax(0, 1fr); }
+.tv-tav-inne.tv-utan-bild { grid-template-columns: minmax(0, 1fr); }
+.tv-tav-bild { position: relative; overflow: hidden; background: var(--yta); }
+.tv-tav-bild img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.tv-tav-text { display: flex; flex-direction: column; justify-content: center; min-width: 0; padding: 0 max(16px, calc(120 * var(--u))) 0 calc(104 * var(--u)); }
+.tv-utan-bild .tv-tav-text { padding: 0 max(16px, calc(150 * var(--u))); }
+.tv-tav .tv-f-etikett { color: var(--amber); }
+.tv-tav h3 { margin: calc(30 * var(--u)) 0 0; font: 800 calc(150 * var(--u))/0.98 var(--f-rubrik); letter-spacing: -0.04em; }
+.tv-tav-regel { margin: calc(26 * var(--u)) 0 0; font: 500 calc(34 * var(--u))/1.3 var(--f-text); color: var(--dov); }
+.tv-tav-regel b { color: var(--text); font-weight: 600; }
+.tv-tav-sats { margin: calc(22 * var(--u)) 0 0; font: 700 calc(64 * var(--u))/1.1 var(--f-rubrik); letter-spacing: -0.02em; }
+.tv-tav-sats em, .tv-knuff-sats em { font-style: normal; color: var(--amber); }
+.tv-tav h3.tv-tav-namn { color: var(--amber); }
+.tv-lopp {
+  --lopp-namn: calc(300 * var(--u)); --lopp-tal: calc(220 * var(--u)); --lopp-gap: calc(28 * var(--u));
+  position: relative; margin-top: calc(60 * var(--u)); display: flex; flex-direction: column; gap: calc(30 * var(--u));
+}
+.tv-lopp-rad { display: grid; grid-template-columns: var(--lopp-namn) minmax(0, 1fr) var(--lopp-tal); align-items: center; column-gap: var(--lopp-gap); row-gap: calc(8 * var(--u)); }
+.tv-lopp-namn { font: 700 calc(40 * var(--u))/1.1 var(--f-rubrik); letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-lopp-spar { position: relative; height: calc(24 * var(--u)); border-radius: 99px; background: var(--yta-2); }
+.tv-lopp-fyll { position: absolute; inset: 0 auto 0 0; border-radius: 99px; background: var(--mint); }
+.tv-lopp-kr { text-align: right; white-space: nowrap; font: 600 calc(32 * var(--u)) var(--f-siffra); }
+.tv-lopp-text { grid-column: 2 / 4; font: 500 calc(19 * var(--u)) var(--f-siffra); letter-spacing: .08em; text-transform: uppercase; color: var(--mint); }
+.tv-lopp-rad.tv-leder .tv-lopp-fyll { background: var(--amber); }
+.tv-lopp-rad.tv-leder .tv-lopp-text { color: var(--amber); }
+/* Kvalgränsen: ett streckat märke genom varje stapel, och beloppet över den första. */
+.tv-lopp-grans { position: absolute; top: calc(-10 * var(--u)); bottom: calc(-10 * var(--u)); width: 0; margin-left: calc(-1 * var(--u)); border-left: calc(2 * var(--u)) dashed var(--text); }
+.tv-lopp-grans span { position: absolute; bottom: calc(100% + 8 * var(--u)); left: 0; translate: -50% 0; font: 500 calc(16 * var(--u)) var(--f-siffra); font-style: normal; letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; color: var(--dov); }
+.tv-tav-fot { margin: calc(56 * var(--u)) 0 0; font: 500 calc(19 * var(--u)) var(--f-siffra); letter-spacing: .12em; text-transform: uppercase; color: var(--svag); }
+
+/* Tävlingen: knuffen (mint) och gränsen (bärnsten). */
+.tv-knuff-linje { position: absolute; inset: 0 0 auto 0; height: calc(8 * var(--u)); background: var(--mint); transform-origin: 0 50%; }
+.tv-knuff-grans .tv-knuff-linje { background: var(--amber); }
+.tv-knuff-inne { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; padding: 0 max(16px, calc(150 * var(--u))); }
+.tv-knuff .tv-f-etikett { color: var(--mint); }
+.tv-knuff-grans .tv-f-etikett { color: var(--amber); }
+.tv-knuff-namn { margin-top: calc(30 * var(--u)); font: 800 calc(150 * var(--u))/1.02 var(--f-rubrik); letter-spacing: -0.035em; white-space: nowrap; }
+.tv-knuff-sats { margin: calc(18 * var(--u)) 0 0; font: 700 calc(72 * var(--u))/1.1 var(--f-rubrik); letter-spacing: -0.02em; max-width: calc(1500 * var(--u)); }
+.tv-knuff .tv-knuff-sats em { color: var(--mint); }
+.tv-knuff-grans .tv-knuff-sats em { color: var(--amber); }
+.tv-knuff-fot { margin-top: calc(56 * var(--u)); display: flex; align-items: center; gap: calc(28 * var(--u)); font: 500 calc(32 * var(--u))/1.35 var(--f-text); color: var(--dov); }
+.tv-knuff-fot img { width: calc(112 * var(--u)); height: calc(140 * var(--u)); object-fit: cover; border-radius: calc(12 * var(--u)); flex: none; }
+.tv-knuff-fot b { color: var(--text); font-weight: 600; }
+
 /* Styrningen svävar över tavlan och gömmer sig när ingen rör musen. */
 .tv-styr {
   position: fixed; z-index: 20; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); translate: -50% 0;

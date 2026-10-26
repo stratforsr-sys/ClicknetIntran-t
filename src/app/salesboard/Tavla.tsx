@@ -27,16 +27,19 @@
 
 import { Component, useCallback, useEffect, useReducer, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { hornTillatet, inomArbetsdag, ljudTillatet, nastaStart, planera, type Minne } from "@/lib/salesboard/regler";
+import { MELLANSPEL_MS, mellanspelDags, vinnareDags } from "@/lib/salesboard/tavling";
 import type { Ogonblick, Ordning } from "@/lib/salesboard/typer";
 import { natkalla, type Kalla, type Kallstatus } from "./kalla";
 import { aktuell, forlopp, mottagning, nycklarFor, samlaKo, tavlansRorelse, visning as visningFor, type Forlopp, type Kopost, type Visning } from "./ko.ts";
 import { Ljudmotor } from "./ljud.ts";
 import { rektUtanTransform, type Rekt } from "./motion/delar";
 import { FPS } from "./motion/matte.ts";
+import { Knuffen, type KnuffenProps } from "./motion/Knuffen";
 import { Malet, type MaletProps } from "./motion/Malet";
 import { Spelare } from "./motion/motor";
 import { Ordern, type OrderProps } from "./motion/Ordern";
 import { Serie, type SerieProps } from "./motion/Serie";
+import { Tavlingen, type TavlingenProps } from "./motion/Tavlingen";
 import { Vila, malLage, type Landning, type Ljudlage } from "./Vila";
 import { BLINK, LANDNING, OFFLINE_MS, UPP, byggomladdning, klockslag, nattomladdning, pixelskift } from "./vy.ts";
 
@@ -76,6 +79,10 @@ type Spelning = Gemensamt &
     | { typ: "serie"; props: SerieProps }
     | { typ: "malet"; props: MaletProps }
     | { typ: "halvvags"; props: null }
+    | { typ: "tavling"; props: TavlingenProps }
+    | { typ: "vinnare"; props: TavlingenProps }
+    | { typ: "knuff"; props: KnuffenProps }
+    | { typ: "grans"; props: KnuffenProps }
   );
 
 /** Fönstret: pixlar per u (1 u = 1 px på 1920×1080) och storleken. */
@@ -203,6 +210,7 @@ export default function Tavla({
   kalla,
   fryst,
   installningar = false,
+  mellanspelEfterMs,
 }: {
   start: Ogonblick;
   /** "nat" är navets källa. Förhandsvisningen skickar en egen. */
@@ -211,6 +219,8 @@ export default function Tavla({
   installningar?: boolean;
   /** Bara förhandsvisningen: varje komposition står still på den här sekunden. */
   fryst?: number;
+  /** Bara förhandsvisningen: det första mellanspelet kommer så här långt efter starten, inte efter tio minuter. */
+  mellanspelEfterMs?: number;
 }): ReactElement {
   // Tillståndet som kön och tiden ändrar. Allt läses vid ritningen; `rita()` ritar om.
   const t = useRef({
@@ -234,6 +244,11 @@ export default function Tavla({
     /** Den senaste vyn som gick att rita (VilaSkydd). */
     sistaBra: null as Visning | null,
     vilaOk: true,
+    /** Tävlingen: när mellanspelet senast hade sin tur, och när en knuff eller gränsscen senast spelades (servertid). */
+    senastMellanspel: Date.parse(start.nu) - (mellanspelEfterMs !== undefined ? MELLANSPEL_MS - mellanspelEfterMs : 0),
+    senastKnuff: null as number | null,
+    /** Prisbilderna: adress → laddas, klar (avkodad) eller fel. En bild som felar visas inte. */
+    bilder: new Map<string, "laddar" | "klar" | "fel">(),
   });
   const [, rita] = useReducer((x: number) => x + 1, 0);
   const [ruta, settRuta] = useState(0);
@@ -418,7 +433,19 @@ export default function Tavla({
       const gem: Gemensamt = { id, forlopp: f, ...klocka, bytt: false };
       const { u, vw, vh } = levande.current.fonster;
       const d = f.data;
+      // Prisbilden bara när den är avkodad. Annars spelas scenen utan bildytan, aldrig med en halv bild.
+      const bildFor = (url: string | null) => (url && tt.bilder.get(url) === "klar" ? url : null);
       switch (d.typ) {
+        case "tavling":
+          return { ...gem, typ: "tavling", props: { data: d, test: f.test, lugn: lugnNu, bild: bildFor(d.tavling.bild), u } };
+        case "vinnare":
+          return { ...gem, typ: "vinnare", props: { data: d, test: f.test, lugn: lugnNu, bild: bildFor(d.vinnare.bild), u } };
+        case "knuff":
+        case "grans": {
+          tt.senastKnuff = Date.now() + levande.current.offset;
+          const props: KnuffenProps = { data: d, test: f.test, lugn: lugnNu, bild: bildFor(d.tavling.bild), u, vw };
+          return d.typ === "knuff" ? { ...gem, typ: "knuff", props } : { ...gem, typ: "grans", props };
+        }
         case "halvvags":
           return { ...gem, typ: "halvvags", props: null };
         case "order":
@@ -477,7 +504,7 @@ export default function Tavla({
       const spel = tt.spel;
       tt.spel = null;
       const f = spel.forlopp;
-      if (!f.test && f.data.typ !== "halvvags" && f.data.typ !== "malet") {
+      if (!f.test && (f.data.typ === "order" || f.data.typ === "serie")) {
         // Det som kom in tyst under förloppet (för gammalt, efterregistrerat) lyser till.
         const fore = new Set(f.fore.order.map((o) => o.nyckel));
         const vantar = new Set(vantande().flatMap((p) => nycklarFor(p.firande)));
@@ -559,7 +586,7 @@ export default function Tavla({
       // Tavlan rör sig bara under svepet (motrörelsen) och halvvägs; under resten står den still.
       const behov = spel.typ === "halvvags" || r <= 30 ? r : r >= byt ? byt : 31;
       settRuta((fore) => (fore === behov ? fore : behov));
-      if (!spel.bytt && r >= byt && spel.typ !== "halvvags" && spel.typ !== "malet" && !spel.forlopp.test) {
+      if (!spel.bytt && r >= byt && (spel.typ === "order" || spel.typ === "serie") && !spel.forlopp.test) {
         // Bytet: det tavlan visade blir landningens början, och landningen räknas härifrån.
         spel.bytt = true;
         const fore = visningFor({ visad: t.current.visad, vantande: vantande(), spel: spel.forlopp, r: byt - 1 });
@@ -678,6 +705,54 @@ export default function Tavla({
 
   const lugnt = !spel && t.current.ko.length === 0 && !t.current.samlar;
   const arbetsdag = inomArbetsdag(new Date(nuMs).toISOString(), inst.arbetsdag);
+
+  // --- Tävlingen: prisbilderna förladdas, och mellanspelet och vinnaren läggs in när tavlan är lugn ---
+  const prisbilder = [bildNu.tavling?.bild, bildNu.vinnare?.bild].filter((x): x is string => Boolean(x));
+  const prisnyckel = prisbilder.join(" ");
+  useEffect(() => {
+    const tt = t.current;
+    for (const url of prisbilder) {
+      if (tt.bilder.has(url)) continue;
+      tt.bilder.set(url, "laddar");
+      const img = new Image();
+      img.src = url;
+      img.decode().then(
+        () => {
+          tt.bilder.set(url, "klar");
+          rita();
+        },
+        () => {
+          tt.bilder.set(url, "fel");
+          rita();
+        },
+      );
+    }
+    // Bilderna byts sällan; nyckeln säger när.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prisnyckel]);
+  const bildKlar = (url: string | null | undefined) => !url || t.current.bilder.get(url) !== "laddar";
+
+  useEffect(() => {
+    if (fryst !== undefined) return;
+    const tt = t.current;
+    const bild = tt.senaste;
+    if (tt.minne && vinnareDags({ bild, visad: tt.minne.vinnare, lugnt, arbetsdag, bildKlar: bildKlar(bild.vinnare?.bild) })) {
+      tt.minne = { ...tt.minne, vinnare: true };
+      spara(MINNESNYCKEL, tt.minne);
+      tt.ko.push({ firande: { typ: "vinnare" }, efter: bild });
+      startaNasta();
+      return;
+    }
+    const dags = mellanspelDags({ bild, nuMs, senastMs: tt.senastMellanspel, knuffMs: tt.senastKnuff, lugnt, arbetsdag, bildKlar: bildKlar(bild.tavling?.bild) });
+    if (dags === "vanta") return;
+    tt.senastMellanspel = nuMs;
+    if (dags === "nu") {
+      tt.ko.push({ firande: { typ: "tavling" }, efter: bild });
+      startaNasta();
+    }
+    // Klockan driver det här, en gång per sekund.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [klientMs, lugnt, arbetsdag, fryst]);
   useEffect(() => {
     if (fryst !== undefined || !lugnt) return;
     const online = typeof navigator === "undefined" || navigator.onLine !== false;
@@ -764,6 +839,10 @@ export default function Tavla({
             <Spelare key={spel.id} komposition={Ordern} props={spel.props} varaktighet={spel.forlopp.varaktighet} klocka={spel.klocka} onKlar={() => avsluta(spel.id)} />
           ) : spel.typ === "serie" ? (
             <Spelare key={spel.id} komposition={Serie} props={spel.props} varaktighet={spel.forlopp.varaktighet} klocka={spel.klocka} onKlar={() => avsluta(spel.id)} />
+          ) : spel.typ === "tavling" || spel.typ === "vinnare" ? (
+            <Spelare key={spel.id} komposition={Tavlingen} props={spel.props} varaktighet={spel.forlopp.varaktighet} klocka={spel.klocka} onKlar={() => avsluta(spel.id)} />
+          ) : spel.typ === "knuff" || spel.typ === "grans" ? (
+            <Spelare key={spel.id} komposition={Knuffen} props={spel.props} varaktighet={spel.forlopp.varaktighet} klocka={spel.klocka} onKlar={() => avsluta(spel.id)} />
           ) : (
             <Spelare key={spel.id} komposition={Malet} props={spel.props} varaktighet={spel.forlopp.varaktighet} klocka={spel.klocka} onKlar={() => avsluta(spel.id)} />
           )}

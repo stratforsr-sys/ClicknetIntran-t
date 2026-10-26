@@ -147,3 +147,51 @@ export function maletLjud(): Ljudpunkt[] {
     { f: v + 30, ljud: "arena", p: { styrka: 0.85, tona: [5.6, 1.8] } },
   ];
 }
+
+// -----------------------------------------------------------------------------
+// Tävlingen (spec 2026-10-26)
+// -----------------------------------------------------------------------------
+
+/** Mellanspelet: tolv sekunder, varav den sista sekunden är utgången. */
+export const TAVLING_LANGD = 720;
+/** Ytan sluter sig tillbaka över tavlan härifrån. */
+export const TAVLING_UT = 660;
+/** Loppets första stapel, och mellanrummet till nästa (cirka 130 ms). */
+export const LOPP_FORSTA = 70;
+export const LOPP_STEG = 8;
+/** En stapel växer på så här många bildrutor. */
+export const LOPP_VAXER = 28;
+/** Knuffen och gränsen: fem och en halv sekund. */
+export const KNUFF_LANGD = 330;
+export const KNUFF_UT = 284;
+/** Vinnaren: nio sekunder. */
+export const VINNARE_LANGD = 540;
+export const VINNARE_UT = 486;
+
+/** Stapel `i` i loppet börjar växa här. Tre staplar ryms på 16 bildrutor, under en halv sekund. */
+export const loppStart = (i: number): number => LOPP_FORSTA + i * LOPP_STEG;
+
+/** Scenerna landar ingen order: `byt` är 0, och tavlan bakom står still. */
+export const tavlingTider = (): Ordertider => ({ byt: 0, slut: TAVLING_LANGD });
+export const knuffTider = (): Ordertider => ({ byt: 0, slut: KNUFF_LANGD });
+export const vinnareTider = (): Ordertider => ({ byt: 0, slut: VINNARE_LANGD });
+
+/**
+ * Knuffen och gränsen: ett kort svisch när ytan sveper in, och sedan ett lätt ljud
+ * när meningen landar, svagare än en order. Mellanspelet är tyst: ett ljud var
+ * tionde minut vore tjat.
+ */
+export function knuffLjud(typ: "knuff" | "grans"): Ljudpunkt[] {
+  if (typ === "knuff") return [{ f: 0, ljud: "svisch", p: { styrka: 0.32, fran: 0.18 } }, { f: 46, ljud: "pengar", p: { styrka: 0.45 } }];
+  return [{ f: 0, ljud: "svisch", p: { styrka: 0.4, fran: 0.18 } }, { f: 44, ljud: "trumpeter", p: { styrka: 0.5, tona: [2.4, 0.9] } }];
+}
+
+/** Vinnaren: som målet men svagare. Utan vinnare är scenen tyst. */
+export function vinnareLjud(medVinnare: boolean): Ljudpunkt[] {
+  if (!medVinnare) return [];
+  return [
+    { f: Math.round(30 - 0.36 * FPS), ljud: "small", p: { styrka: 0.6 } },
+    { f: 24, ljud: "fanfar", p: { styrka: 0.75 } },
+    { f: 30, ljud: "arena", p: { styrka: 0.6, tona: [4.6, 1.6] } },
+  ];
+}

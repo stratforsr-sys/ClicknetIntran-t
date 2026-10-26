@@ -26,7 +26,8 @@ import {
   visning,
 } from "../src/app/salesboard/ko.ts";
 import { STANDARD } from "../src/lib/salesboard/installningar.ts";
-import { CHING, KRYMP, MALET_VANTA, STOR_VILA, VANLIG_VILA, vanligL } from "../src/app/salesboard/motion/tider.ts";
+import { CHING, KNUFF_LANGD, KNUFF_UT, KRYMP, LOPP_VAXER, MALET_VANTA, STOR_VILA, TAVLING_LANGD, TAVLING_UT, VANLIG_VILA, VINNARE_LANGD, knuffLjud, loppStart, vanligL, vinnareLjud } from "../src/app/salesboard/motion/tider.ts";
+import { LJUD } from "../src/app/salesboard/ljud.ts";
 import { RULL, matarText } from "../src/app/salesboard/vy.ts";
 
 let fel = 0;
@@ -289,6 +290,62 @@ avsnitt("vad tavlan visar");
   ok("medan talet rullar står det som gällde", matarText(fran, till, RULL - 1).status === matarText(fran, fran, 0).status);
   ok("när talet landat står Målet nått", matarText(fran, till, RULL).status === "Målet nått", matarText(fran, till, RULL).status);
   ok("och raden säger hur mycket över", JSON.stringify(matarText(fran, till, RULL).fakta).includes("+8\u00a0900"), JSON.stringify(matarText(fran, till, RULL).fakta));
+}
+
+avsnitt("Tävlingen i kön");
+{
+  const T = { pris: "Spa för två", bild: "/salesboard/bild?id=0123456789abcdef01234567", grans: 160_000, dagarKvar: 5 };
+  const med = (b, over = {}) => ({ ...b, tavling: T, vinnare: null, ...over });
+  const b = med(bild());
+  const av = { ...b, tavling: null };
+  for (const f of [{ typ: "tavling" }, { typ: "knuff", person: "amira" }, { typ: "grans", person: "elin" }]) {
+    ok(`brytaren av tar bort ${f.typ} som väntar`, aktuell(post(f, b), av) === null);
+  }
+  ok("mellanspelet spelas när tävlingen är på", aktuell(post({ typ: "tavling" }, b), b) !== null);
+  ok("gränsen spelas inte om säljaren åkt under den medan den väntade", aktuell(post({ typ: "grans", person: "elin" }, b), b) === null);
+  ok("gränsen spelas när säljaren är över", aktuell(post({ typ: "grans", person: "elin" }, b), med(bild(), { tavling: { ...T, grans: 150_000 } })) !== null);
+  const knuffBild = { ...b, saljare: b.saljare.map((r) => (r.person === "amira" ? { ...r, varde: 140_000 } : r)) };
+  ok("knuffen spelas när säljaren är inom en order", aktuell(post({ typ: "knuff", person: "amira" }, knuffBild), knuffBild) !== null);
+  ok("knuffen spelas inte när säljaren åkt efter igen", aktuell(post({ typ: "knuff", person: "amira" }, knuffBild), b) === null);
+  ok("en okänd säljare knuffas inte", aktuell(post({ typ: "knuff", person: "okand" }, knuffBild), knuffBild) === null);
+  ok("vinnaren spelas bara med en vinnare i bilden", aktuell(post({ typ: "vinnare" }, b), b) === null);
+
+  const o = { fore: b, senaste: b, vantande: [], nuIso: NU, ordning: "varde" };
+  const m = forlopp(post({ typ: "tavling" }, b), o);
+  ok("mellanspelet bär loppet: ledaren och den inom räckhåll", lika(m.data.lopp.rader.map((x) => [x.person, x.text]), [["elin", "leder · en order till gränsen"], ["amira", "tre order bakom"]]), JSON.stringify(m.data.lopp.rader.map((x) => x.text)));
+  ok("mellanspelet landar ingen order och är tyst", m.nycklar.length === 0 && m.spar.length === 0 && m.tider.byt === 0);
+  ok("mellanspelet flyttar inte tavlan", lika(tavlansRorelse(m, 10), { dy: 0, skala: 1 }));
+  const v = visning({ visad: b, vantande: [], spel: m, r: 400 });
+  ok("under mellanspelet visar tavlan det den visade", v.bild === b && v.dolda.size === 0);
+  const k = forlopp(post({ typ: "knuff", person: "amira" }, knuffBild), { ...o, fore: knuffBild, senaste: knuffBild });
+  ok("knuffen säger avståndet i order och vem som leder", k.data.avstand === "en order" && k.data.ledare === "Elin B." && k.data.forsprang === 10_000, JSON.stringify(k.data).slice(0, 200));
+  ok("under gränsen är det ledningen och inte priset", k.data.over === false);
+  ok("knuffen har ett lätt ljud", k.spar.length === 2 && k.spar.some((x) => x.ljud === "pengar"));
+  const g = forlopp(post({ typ: "grans", person: "elin" }, b), o);
+  ok("gränsen bär platsen och värdet", g.data.plats === 1 && g.data.varde === 150_000);
+  const test = forlopp(post({ typ: "test", testtyp: "tavling", id: 1 }, av), { ...o, fore: av, senaste: av });
+  ok("testet spelar ett påhittat lopp när tävlingen är av", test.test && test.data.tavling.pris === "Testpriset" && test.data.lopp.rader.length === 3);
+  const testK = forlopp(post({ typ: "test", testtyp: "knuff", id: 2 }, b), o);
+  ok("testet av knuffen använder månadens pris", testK.data.typ === "knuff" && testK.data.tavling.pris === "Spa för två" && testK.data.person.nyckel === "test-b");
+  const V = { nyckel: "2026-09", manad: "september", pris: "Hörlurar", bild: null, personer: ["elin"], varde: 182_400, grans: null };
+  const vb = med(bild(), { vinnare: V });
+  const vf = forlopp(post({ typ: "vinnare" }, vb), { ...o, fore: vb, senaste: vb });
+  ok("vinnaren bär namnen", lika(vf.data.namn, ["Elin B."]) && vf.spar.length === 3);
+  const tomV = med(bild(), { vinnare: { ...V, personer: [], varde: null } });
+  const ingen = forlopp(post({ typ: "vinnare" }, tomV), { ...o, fore: tomV, senaste: tomV });
+  ok("utan vinnare är scenen tyst", ingen.data.namn.length === 0 && ingen.spar.length === 0);
+}
+
+avsnitt("Tävlingens tider och ljud");
+{
+  ok("mellanspelet är tolv sekunder och knuffen fem och en halv", TAVLING_LANGD === 720 && KNUFF_LANGD === 330 && VINNARE_LANGD === 540);
+  ok("staplarnas stagger är cirka 130 ms och under en halv sekund för tre", loppStart(1) - loppStart(0) === 8 && loppStart(2) - loppStart(0) < 30);
+  ok("alla staplar har landat långt före utgången", loppStart(2) + LOPP_VAXER < TAVLING_UT - 300);
+  ok("utgången ryms i scenen", TAVLING_UT + 48 <= TAVLING_LANGD && KNUFF_UT + 40 <= KNUFF_LANGD);
+  const alla = [...knuffLjud("knuff"), ...knuffLjud("grans"), ...vinnareLjud(true)];
+  ok("varje ljud finns bland inspelningarna", alla.every((p) => LJUD.includes(p.ljud)), JSON.stringify(alla.map((p) => p.ljud)));
+  ok("knuffen och gränsen ligger inom scenen och är svagare än en order", alla.every((p) => p.f >= 0 && p.f < KNUFF_LANGD) && [...knuffLjud("knuff"), ...knuffLjud("grans")].every((p) => (p.p?.styrka ?? 1) <= 0.5));
+  ok("utan vinnare är vinnaren tyst", vinnareLjud(false).length === 0);
 }
 
 console.log(fel ? `\n\x1b[31m${fel} fel\x1b[0m` : "\n\x1b[32mallt gick igenom\x1b[0m");

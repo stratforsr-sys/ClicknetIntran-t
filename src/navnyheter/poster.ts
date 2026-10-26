@@ -14,6 +14,37 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "saljtavlan-tavling",
+    rubrik: "Månadens tävling på säljtavlan",
+    ingress: "Tavlan visar priset, loppet och hur många order du har kvar till ledningen.",
+    text: `Varje månad kan det finnas ett pris, till exempel spa för två. Den med högst
+ordervärde i månaden vinner. Ibland finns det en kvalgräns: ett minsta ordervärde
+som krävs för att kunna vinna. Når ingen gränsen vinner ingen.
+
+## På tavlan
+
+Var tionde minut visar tavlan priset och loppet: den som leder och de som ligger
+högst tre order efter. Avståndet räknas i order, och en order är lagets snittorder.
+Den sista veckan kommer loppet var femte minut.
+
+Kommer du inom en order från ledningen säger tavlan det direkt efter din order. Den
+säger det högst en gång om dagen. Passerar du kvalgränsen säger tavlan att du är med
+och tävlar.
+
+Första arbetsdagen i nästa månad visar tavlan vem som vann.
+
+Har du valt att vara dold på tavlan är du inte med i tävlingen.
+
+## För VD och administratörer
+
+Tävlingen läggs upp i Nav under **Inställningar → Säljtavlan → Månadens tävling**.
+Där väljer du pris, bild och kvalgräns för den här och nästa månad. Stänger du av
+tävlingen visar tavlan ingenting av den.`,
+    datum: "2026-10-26",
+    roller: [],
+    href: "/salesboard",
+  },
+  {
     slug: "saljtavlan",
     rubrik: "Säljtavlan på kontorets TV",
     ingress:

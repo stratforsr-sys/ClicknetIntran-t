@@ -10,7 +10,8 @@
 import { svensktDatum, svenskaMinuter } from "../klocka.ts";
 import { dagarTill } from "../order.ts";
 import { arArbetsdag, dagPlus, veckodag } from "../saljtakt.ts";
-import type { Namnform, Ogonblick, TavleHandelse, TavleOrder, TavlansInstallningar, Testtyp, Visning } from "./typer.ts";
+import { snittorder } from "./tavling.ts";
+import type { Namnform, Ogonblick, TavleHandelse, TavleOrder, TavleSaljare, TavlansInstallningar, Testtyp, Visning } from "./typer.ts";
 
 // -----------------------------------------------------------------------------
 // Namn och monogram
@@ -339,7 +340,15 @@ export type Firande =
   | { typ: "serie"; order: TavleOrder[] }
   | { typ: "halvvags" }
   | { typ: "malet"; natt: string }
-  | { typ: "test"; testtyp: Testtyp; id: number };
+  | { typ: "test"; testtyp: Testtyp; id: number }
+  /** Tävlingen: säljaren passerade kvalgränsen med en order som just kom. */
+  | { typ: "grans"; person: string }
+  /** Tävlingen: säljaren kom inom en order från ledaren med en order som just kom. */
+  | { typ: "knuff"; person: string }
+  /** Tävlingens mellanspel. Läggs in av tavlan när den är lugn, aldrig av planeringen. */
+  | { typ: "tavling" }
+  /** Förra månadens vinnare. Läggs in av tavlan, en gång. */
+  | { typ: "vinnare" };
 
 /**
  * Vad tavlan kommer ihåg mellan två bilder. Den sparas i `localStorage` som JSON
@@ -372,6 +381,12 @@ export type Minne = {
   malet: boolean;
   /** Dagen då dagsrekordet har sagts, så att det sägs en gång per dag. */
   dagsrekord: string | null;
+  /** Tävlingen: de som knuffats under dagen `dag`, högst en gång per dag och säljare. */
+  knuff: string[];
+  /** Tävlingen: de som passerat kvalgränsen i månaden, sedda eller firade. */
+  grans: string[];
+  /** Tävlingen: förra månadens vinnare är visad på den här skärmen. */
+  vinnare: boolean;
 };
 
 /** Klockslaget som millisekunder, eller NaN när det inte går att läsa. */
@@ -414,6 +429,9 @@ const kopiera = (m: Minne): Minne => ({
   halvvags: m.halvvags,
   malet: m.malet,
   dagsrekord: m.dagsrekord,
+  knuff: [...m.knuff],
+  grans: [...m.grans],
+  vinnare: m.vinnare,
 });
 
 /** Högsta id bland testhändelserna, eller 0. */
@@ -441,7 +459,16 @@ function lasMinne(minne: unknown): Minne | null {
     typeof m.halvvags === "boolean" &&
     typeof m.malet === "boolean" &&
     (m.dagsrekord === null || typeof m.dagsrekord === "string");
-  return giltigt ? { ...(minne as Minne), dag: typeof m.dag === "string" ? m.dag : null } : null;
+  if (!giltigt) return null;
+  // Tävlingens fält är nya: ett minne utan dem har inte knuffat någon och inte visat någon vinnare.
+  const lista = (x: unknown): string[] => (Array.isArray(x) ? x.filter((y): y is string => typeof y === "string") : []);
+  return {
+    ...(minne as Minne),
+    dag: typeof m.dag === "string" ? m.dag : null,
+    knuff: lista(m.knuff),
+    grans: lista(m.grans),
+    vinnare: m.vinnare === true,
+  };
 }
 
 /**
@@ -513,7 +540,72 @@ function borja(ny: Ogonblick, fore: Minne | null): Minne {
     halvvags: (samma?.halvvags ?? false) || (harMal(mal) && varde >= halvaMalet(mal)),
     malet: (samma?.malet ?? false) || (harMal(mal) && varde >= mal),
     dagsrekord: slarDagsrekord(ny.idag) || samma?.dagsrekord === datum ? datum : null,
+    knuff: fore !== null && fore.dag === datum && samma ? [...fore.knuff] : [],
+    // Den som redan är över gränsen vid en start har passerat den: det firas inte i efterhand.
+    grans: unika([...(samma?.grans ?? []), ...overGransen(ny)]),
+    vinnare: samma?.vinnare ?? false,
   };
+}
+
+/** De som är över månadens kvalgräns i bilden. Utan tävling eller utan gräns ingen. */
+function overGransen(bild: Ogonblick): string[] {
+  const grans = bild.tavling?.grans;
+  return typeof grans === "number" ? bild.saljare.filter((r) => r.varde >= grans).map((r) => r.person) : [];
+}
+
+/**
+ * Tävlingens två ögonblick efter nya order: gränsen och knuffen. Bara för den
+ * som har en order som firas i den här bilden (en efterregistrerad order
+ * knuffar inte), och för var och en bara den vars order kom sist.
+ *
+ * - **Gränsen**: säljaren gick från under kvalgränsen till den eller över. En
+ *   gång per månad, och passerat är sett också när det inte firas.
+ * - **Knuffen**: säljaren, som inte leder, gick från mer än en snittorder bakom
+ *   ledaren till högst en. En gång per dag. Tar ordern säljaren förbi ledaren,
+ *   eller till lika, spelas ingen knuff: då säger ordern "Leder".
+ *
+ * Utan tävling (brytaren av) ingenting, och då antecknas ingenting heller.
+ */
+function tavlingsogonblick(
+  forra: Ogonblick,
+  ny: Ogonblick,
+  firas: readonly TavleOrder[],
+  fore: { knuff: string[]; grans: string[] },
+): { firanden: Firande[]; knuff: string[]; grans: string[] } {
+  const t = ny.tavling;
+  if (!t) return { firanden: [], knuff: fore.knuff, grans: fore.grans };
+
+  const senast = new Map<string, number>();
+  for (const o of firas) senast.set(o.person, Math.max(senast.get(o.person) ?? -Infinity, ms(o.tid)));
+  const sist = (rader: readonly TavleSaljare[]): string | null =>
+    rader.filter((r) => senast.has(r.person)).sort((a, b) => (senast.get(b.person) ?? 0) - (senast.get(a.person) ?? 0))[0]?.person ?? null;
+  const forraVarde = new Map(forra.saljare.map((r) => [r.person, r.varde]));
+  const firanden: Firande[] = [];
+
+  let grans = fore.grans;
+  if (t.grans !== null) {
+    const g = t.grans;
+    const korsade = ny.saljare.filter((r) => r.varde >= g && (forraVarde.get(r.person) ?? 0) < g && !grans.includes(r.person));
+    const vem = sist(korsade);
+    if (vem) firanden.push({ typ: "grans", person: vem });
+    grans = unika([...grans, ...korsade.map((r) => r.person)]);
+  }
+
+  let knuff = fore.knuff;
+  const snitt = snittorder(ny.manad.varde, ny.manad.antal);
+  const topp = Math.max(0, ...ny.saljare.map((r) => r.varde));
+  const forraTopp = Math.max(0, ...forra.saljare.map((r) => r.varde));
+  if (snitt > 0) {
+    const nara = ny.saljare.filter(
+      (r) => r.varde < topp && topp - r.varde <= snitt && forraTopp - (forraVarde.get(r.person) ?? 0) > snitt && !knuff.includes(r.person),
+    );
+    const vem = sist(nara);
+    if (vem) {
+      firanden.push({ typ: "knuff", person: vem });
+      knuff = [...knuff, vem];
+    }
+  }
+  return { firanden, knuff, grans };
 }
 
 /**
@@ -616,6 +708,13 @@ export function planera(
     });
   }
 
+  // --- Tävlingen: gränsen och knuffen, efter ordern och före målet ------------------
+  const sammaDagNu = fore.dag === datum;
+  const tavlan = utanAvbrott
+    ? tavlingsogonblick(forra, ny, firas, { knuff: sammaDagNu ? fore.knuff : [], grans: fore.grans })
+    : { firanden: [], knuff: sammaDagNu ? fore.knuff : [], grans: unika([...fore.grans, ...overGransen(ny)]) };
+  firanden.push(...tavlan.firanden);
+
   // --- Målet och halvvägs ----------------------------------------------------
   let halvvags = fore.halvvags;
   let malet = fore.malet;
@@ -661,6 +760,9 @@ export function planera(
       halvvags,
       malet,
       dagsrekord,
+      knuff: tavlan.knuff,
+      grans: tavlan.grans,
+      vinnare: fore.vinnare,
     },
   };
 }

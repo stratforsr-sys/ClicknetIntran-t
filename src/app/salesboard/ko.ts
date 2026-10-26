@@ -21,11 +21,17 @@
  */
 
 import { arDoldPa, samla, variantFor, type Firande, type Tagg } from "../../lib/salesboard/regler.ts";
-import type { Ogonblick, Ordning, TavleOrder, TavlePerson } from "../../lib/salesboard/typer.ts";
+import { iOrder, lopp, ordOrder, snittorder, type Lopp } from "../../lib/salesboard/tavling.ts";
+import type { Ogonblick, Ordning, TavleOrder, TavlePerson, TavleTavling, TavleVinnare } from "../../lib/salesboard/typer.ts";
 import { ip, SVEP } from "./motion/kurvor.ts";
 import {
   HALVVAGS,
   SERIE_MAX,
+  knuffLjud,
+  knuffTider,
+  tavlingTider,
+  vinnareLjud,
+  vinnareTider,
   maletLjud,
   maletTider,
   orderLjud,
@@ -97,6 +103,10 @@ export function samlaKo(poster: readonly Kopost[], senaste: Ogonblick): Kopost[]
   });
 }
 
+/** Tävlingens scener: de spelas över tavlan och landar ingen order. */
+export const TAVLINGSSCENER = ["tavling", "knuff", "grans", "vinnare"] as const;
+export const arTavlingsscen = (typ: string): boolean => (TAVLINGSSCENER as readonly string[]).includes(typ);
+
 /** Har laget ett mål i kronor, och står värdet på minst `andel` av det? */
 const vidMal = (bild: Ogonblick, andel: number): boolean => {
   const mal = bild.manad.mal;
@@ -128,6 +138,19 @@ export function aktuell(post: Kopost, senaste: Ogonblick): Kopost | null {
   }
   if (f.typ === "malet") return vidMal(senaste, 1) ? post : null;
   if (f.typ === "halvvags") return vidMal(senaste, 0.5) ? post : null;
+  // Tävlingen: brytaren av tar bort allt som väntar, och en knuff eller gräns som inte längre
+  // är sann (en makulering medan den väntade) spelas inte.
+  const t = senaste.tavling;
+  if (f.typ === "tavling") return t ? post : null;
+  if (f.typ === "vinnare") return senaste.vinnare ? post : null;
+  if (f.typ === "grans" || f.typ === "knuff") {
+    const rad = t ? senaste.saljare.find((x) => x.person === f.person) : undefined;
+    if (!t || !rad) return null;
+    if (f.typ === "grans") return t.grans !== null && rad.varde >= t.grans ? post : null;
+    const topp = Math.max(...senaste.saljare.map((x) => x.varde));
+    const snitt = snittorder(senaste.manad.varde, senaste.manad.antal);
+    return rad.varde < topp && topp - rad.varde <= snitt ? post : null;
+  }
   return post;
 }
 
@@ -208,6 +231,19 @@ export const TESTPERSONER: readonly TavlePerson[] = [
   { nyckel: "test-c", namn: "Test C.", initialer: "TC", dold: false },
 ];
 
+/** Tävlingen som ett test spelar: månadens om den är på, annars ett påhittat pris. */
+const testTavling = (bild: Ogonblick): TavleTavling =>
+  bild.tavling ?? { pris: "Testpriset", bild: null, grans: 120_000, dagarKvar: Math.max(0, bild.manad.dagar.totalt - bild.manad.dagar.gangna) };
+const TESTLOPP: Lopp = {
+  snitt: 18_400,
+  topp: 121_300,
+  rader: [
+    { person: "test-a", varde: 121_300, leder: true, bakom: 0, over: true, text: "leder" },
+    { person: "test-b", varde: 112_900, leder: false, bakom: 1, over: false, text: "en order bakom" },
+    { person: "test-c", varde: 94_600, leder: false, bakom: 2, over: false, text: "två order bakom" },
+  ],
+};
+
 function testorder(i: number, nu: string, dag: string, stor: boolean, forsta: boolean): TavleOrder {
   return {
     nyckel: `test-${i}-${nu}`,
@@ -258,7 +294,40 @@ export type Forloppsdata =
       /** Rekordmånaden de elva före, när månaden inte slagit den än. */
       rekord: number | null;
     }
-  | { typ: "halvvags" };
+  | { typ: "halvvags" }
+  | {
+      typ: "tavling";
+      tavling: TavleTavling;
+      /** "oktober". */
+      manad: string;
+      lopp: Lopp;
+      personer: Record<string, TavlePerson>;
+    }
+  | {
+      typ: "knuff";
+      person: TavlePerson;
+      tavling: TavleTavling;
+      /** "en order": avståndet till ledaren. */
+      avstand: string;
+      /** Har säljaren nått gränsen? Annars är det ledningen och inte priset hen är nära. */
+      over: boolean;
+      /** "Anna L." eller "Anna L. och Sara E." */
+      ledare: string;
+      /** Ledarens försprång i kronor. */
+      forsprang: number;
+      tid: string;
+    }
+  | {
+      typ: "grans";
+      person: TavlePerson;
+      tavling: TavleTavling;
+      manad: string;
+      varde: number;
+      /** Platsen i loppet på ordervärde, 1 för den som leder. */
+      plats: number;
+      tid: string;
+    }
+  | { typ: "vinnare"; vinnare: TavleVinnare; namn: string[] };
 
 export type Forlopp = {
   data: Forloppsdata;
@@ -297,12 +366,95 @@ export function forlopp(
   const mal = efter.manad.mal;
   const manad = efter.manad.namn.toLowerCase();
   const dag = fore.idag.datum;
-  const typ: Forloppsdata["typ"] = f.typ === "test" ? (f.testtyp === "serie" ? "serie" : f.testtyp === "malet" ? "malet" : "order") : f.typ;
+  const typ: Forloppsdata["typ"] =
+    f.typ === "test"
+      ? f.testtyp === "serie" || f.testtyp === "malet" || f.testtyp === "tavling" || f.testtyp === "knuff" || f.testtyp === "grans"
+        ? f.testtyp
+        : "order"
+      : f.typ;
   const bas = { test, fore, efter };
   const steg = (till: Lagsteg["till"]): Lagsteg => ({ fran: lagUr(foreTal), till, mal });
 
   if (typ === "halvvags") {
     return { ...bas, data: { typ: "halvvags" }, tider: { byt: 0, slut: HALVVAGS }, varaktighet: HALVVAGS, spar: [], nycklar: [] };
+  }
+
+  // --- Tävlingen ----------------------------------------------------------------
+  // Talen är de som syns på tavlan (`efterTal`, utan det som väntar), så att scenen och
+  // topplistan bakom den aldrig säger olika saker. Testen spelar påhittade säljare.
+  const testPersoner = Object.fromEntries(TESTPERSONER.map((p) => [p.nyckel, p]));
+  if (typ === "tavling") {
+    const t = test ? testTavling(efter) : efter.tavling!;
+    const l = test ? TESTLOPP : lopp(efterTal.rader, efterTal.lag, t.grans);
+    const tider = tavlingTider();
+    return {
+      ...bas,
+      data: { typ: "tavling", tavling: t, manad, lopp: l ?? { rader: [], snitt: 0, topp: 0 }, personer: test ? testPersoner : efter.personer },
+      tider,
+      varaktighet: tider.slut,
+      spar: [],
+      nycklar: [],
+    };
+  }
+  if (typ === "knuff" || typ === "grans") {
+    const t = test ? testTavling(efter) : efter.tavling!;
+    const vem = f.typ === "knuff" || f.typ === "grans" ? f.person : typ === "knuff" ? "test-b" : "test-a";
+    const rader: readonly { person: string; varde: number }[] = test ? TESTLOPP.rader : rangordna(efterTal.rader, "varde");
+    const personer = test ? testPersoner : efter.personer;
+    const rad = rader.find((x) => x.person === vem);
+    const varde = rad?.varde ?? 0;
+    const topp = rader[0]?.varde ?? 0;
+    const snitt = test ? TESTLOPP.snitt : snittorder(efterTal.lag.varde, efterTal.lag.antal);
+    const namn = (k: string) => (personer[k] ?? DOLD).namn;
+    const tider = knuffTider();
+    if (typ === "knuff") {
+      const ledare = rader.filter((x) => x.varde === topp && x.person !== vem).map((x) => namn(x.person));
+      return {
+        ...bas,
+        data: {
+          typ: "knuff",
+          person: personer[vem] ?? DOLD,
+          tavling: t,
+          avstand: ordOrder(iOrder(topp - varde, snitt)),
+          over: t.grans === null || varde >= t.grans,
+          ledare: ledare.join(" och "),
+          forsprang: Math.max(0, topp - varde),
+          tid: o.nuIso,
+        },
+        tider,
+        varaktighet: tider.slut,
+        spar: knuffLjud("knuff"),
+        nycklar: [],
+      };
+    }
+    return {
+      ...bas,
+      data: {
+        typ: "grans",
+        person: personer[vem] ?? DOLD,
+        tavling: t,
+        manad,
+        varde,
+        plats: 1 + rader.filter((x) => x.varde > varde).length,
+        tid: o.nuIso,
+      },
+      tider,
+      varaktighet: tider.slut,
+      spar: knuffLjud("grans"),
+      nycklar: [],
+    };
+  }
+  if (typ === "vinnare") {
+    const v = efter.vinnare!;
+    const tider = vinnareTider();
+    return {
+      ...bas,
+      data: { typ: "vinnare", vinnare: v, namn: v.personer.map((k) => (efter.personer[k] ?? DOLD).namn) },
+      tider,
+      varaktighet: tider.slut,
+      spar: vinnareLjud(v.personer.length > 0),
+      nycklar: [],
+    };
   }
 
   if (typ === "order") {
@@ -428,7 +580,7 @@ const TOM: ReadonlySet<string> = new Set();
 export function visning(o: { visad: Ogonblick; vantande: readonly Kopost[]; spel: Forlopp | null; r: number }): Visning {
   const utesluten = new Set(o.vantande.flatMap((p) => nycklarFor(p.firande)));
   const spel = o.spel;
-  if (!spel || spel.test || spel.data.typ === "malet" || spel.data.typ === "halvvags") {
+  if (!spel || spel.test || spel.data.typ === "malet" || spel.data.typ === "halvvags" || arTavlingsscen(spel.data.typ)) {
     return {
       bild: o.visad,
       tal: siffror(o.visad, utesluten),
@@ -458,7 +610,7 @@ export function visning(o: { visad: Ogonblick; vantande: readonly Kopost[]; spel
  * tavlan tillbaka, och det är den som syns runt panelen.
  */
 export function tavlansRorelse(spel: Forlopp | null, r: number): { dy: number; skala: number } {
-  if (!spel || spel.data.typ === "malet" || spel.data.typ === "halvvags" || r >= spel.tider.byt) return { dy: 0, skala: 1 };
+  if (!spel || spel.data.typ === "malet" || spel.data.typ === "halvvags" || arTavlingsscen(spel.data.typ) || r >= spel.tider.byt) return { dy: 0, skala: 1 };
   if (spel.data.typ === "order" && spel.data.variant === "stor") return { dy: 0, skala: ip(r, [0, 28], [1, 0.92], SVEP) };
   return { dy: ip(r, [0, 23], [0, -40], SVEP), skala: ip(r, [0, 23], [1, 0.97], SVEP) };
 }
