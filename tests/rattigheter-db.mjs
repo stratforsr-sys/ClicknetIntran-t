@@ -80,9 +80,9 @@ export const TILLATNA = {
   "matches_audience(text[],uuid[])": { roller: "authenticated", md5: "d250894576ad" },
   "matches_audience(text[],uuid[],uuid[])": { roller: "authenticated", md5: "84e4da34e7fd" },
   // Laser om andra men kontrollerar anroparen; anropas med anvandarens klient.
-  "adoption_aktivitet(integer)": { roller: "authenticated", md5: "17ee3560f8ea" },
-  "adoption_glomda_dokument(integer)": { roller: "authenticated", md5: "10a5ae0f602f" },
-  "adoption_sokmissar(integer)": { roller: "authenticated", md5: "abb84ffd27d1" },
+  "adoption_aktivitet(integer)": { roller: "authenticated", md5: "cb283d9df536" }, // 0241: bara Superadmin (S16, B13)
+  "adoption_glomda_dokument(integer)": { roller: "authenticated", md5: "d661c93ac381" }, // 0241
+  "adoption_sokmissar(integer)": { roller: "authenticated", md5: "7fb90502f003" }, // 0241
   "fel_statistik()": { roller: "authenticated", md5: "50386f16b3db" },
   "kalender_handelser(uuid,date,date)": { roller: "authenticated", md5: "19f96e2e5e0d" },
   "kalender_poster(uuid,date,date)": { roller: "authenticated", md5: "f73f7bd8b5b2" },

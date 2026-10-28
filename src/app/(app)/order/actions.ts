@@ -12,7 +12,7 @@ import {
   type Kundaktivitet,
   type Landningssida,
 } from "@/lib/crm/inkio";
-import { getCurrentUser, hasRole, type CurrentUser } from "@/lib/auth";
+import { arSuperadmin, getCurrentUser, hasRole, type CurrentUser } from "@/lib/auth";
 import { svensktDatum } from "@/lib/klocka";
 import { kronor, manadsnamn, manadsnyckel, tolkaBelopp } from "@/lib/provision";
 import { rattelseposter, rorPengar } from "@/lib/rattelse";
@@ -2495,8 +2495,9 @@ export async function raderaOrder(_prev: Orderstate, form: FormData): Promise<Or
         return { fel: "Det är inte din order." };
       }
     } else {
-      if (!farHantera(user)) {
-        return { fel: "Bara säljchef, VD och ekonomi får radera en order som lämnat utkastet." };
+      // B13 (beställaren 2026-10-23): bara Superadmin. Förut säljchef, VD och ekonomi.
+      if (!arSuperadmin(user)) {
+        return { fel: "Bara en superadmin raderar en order som lämnat utkastet." };
       }
       if (!skal) return { fel: "Skriv varför ordern raderas — det står i loggen." };
     }

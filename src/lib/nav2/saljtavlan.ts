@@ -41,7 +41,14 @@ import { SKRIVLAGE } from "./skrivlage";
  * läsa står `fel` med en rad, och resten av Nav 2.0 ritas som vanligt.
  */
 
-export type NdSaljtavlanFacit = { forra: TavleManad | null; rekord: TavleManad | null; belopp: number[] };
+export type NdSaljtavlanFacit = {
+  forra: TavleManad | null;
+  rekord: TavleManad | null;
+  belopp: number[];
+  /** Tävlingen just nu: de två främsta på ordervärde, och allas värden, högst först. Utan dolda, som på tavlan. */
+  topp: { namn: string; varde: number }[];
+  varden: number[];
+};
 
 export type NdSaljtavlan =
   | { fel: string }
@@ -110,7 +117,14 @@ async function lasFacit(): Promise<NdSaljtavlanFacit | null> {
     const b = await byggTavlan(null);
     const forra = b.historik.at(-1) ?? null;
     const rekord = b.historik.reduce<TavleManad | null>((r, m) => (m.varde > (r?.varde ?? 0) ? m : r), null);
-    return { forra, rekord, belopp: b.order.map((o) => o.belopp ?? 0).filter((x) => x > 0) };
+    const rader = [...b.saljare].sort((x, y) => y.varde - x.varde);
+    return {
+      forra,
+      rekord,
+      belopp: b.order.map((o) => o.belopp ?? 0).filter((x) => x > 0),
+      topp: rader.filter((x) => x.varde > 0).slice(0, 2).map((x) => ({ namn: b.personer[x.person]?.namn ?? "En säljare", varde: x.varde })),
+      varden: rader.map((x) => x.varde),
+    };
   } catch (e) {
     console.error("Säljtavlans inställningar: tavlans bild:", e instanceof Error ? e.message : e);
     return null;

@@ -45,6 +45,8 @@ import {
   storAffarTroskel,
   visningsnamn,
 } from "../src/lib/salesboard/regler.ts";
+import { MELLANSPEL_MS, SISTA_VECKAN_MS, iOrder, lopp, mellanspelDags, mellanspelVar, ordOrder, snittorder, vinnareDags } from "../src/lib/salesboard/tavling.ts";
+import { snitt as vySnitt } from "../src/app/salesboard/vy.ts";
 
 let fel = 0;
 const ok = (namn, villkor, extra = "") => {
@@ -336,6 +338,7 @@ console.log("\nregler");
     namn: "fornamn_e",
     ordning: "varde",
     mal: {},
+    tavling: {},
     arbetsdag: { fran: "08:00", till: "18:00" },
     rorelse: "full",
     firande: {
@@ -656,7 +659,7 @@ console.log("\nplanera");
   };
   /** Bilden med nya order överst (den nyaste först, som servern listar dem) och den kända under. */
   const med = (nya, over = {}) => bild({ order: [...nya, TIDIG], ...over });
-  const minneAv = (over = {}) => ({ kanda: [], dag: DAG, handelse: 0, manad: "2026-10", halvvags: false, malet: false, dagsrekord: null, ...over });
+  const minneAv = (over = {}) => ({ kanda: [], dag: DAG, handelse: 0, manad: "2026-10", halvvags: false, malet: false, dagsrekord: null, knuff: [], grans: [], vinnare: false, ...over });
   /** Ett steg i vanlig drift: minnet efter en start på `forra`, om inget annat anges. */
   const steg = (forra, ny, minne = planera(null, forra, null).minne) => planera(forra, ny, minne);
 
@@ -1324,7 +1327,7 @@ console.log("\nplanera");
     const gammaltForsenat = planera(bild({ nu: kl("10:05:00"), order: [T] }), bild({ nu: kl("10:04:00"), order: [T] }), gammaltMinne);
     ok(
       "ett försenat svar lämnar ett minne utan dag som det var, med dagen okänd (null)",
-      gammaltForsenat.firanden.length === 0 && lika(gammaltForsenat.minne, { ...gammaltMinne, dag: null }),
+      gammaltForsenat.firanden.length === 0 && lika(gammaltForsenat.minne, { ...gammaltMinne, dag: null, knuff: [], grans: [], vinnare: false }),
     );
 
     // Minnet bär alltid bildens dag: efter en start, ett vanligt steg och ett dagsbyte.
@@ -1684,6 +1687,129 @@ console.log("\nplanera");
     ok("samma ögonblick är inom spärren", hornTillatet(1000, 1000) === false);
     ok("en klocka som gått bakåt spärrar inte för alltid", hornTillatet(50_000, 1000) === true);
   }
+}
+
+// -----------------------------------------------------------------------------
+console.log("\ntävlingen: loppet");
+{
+  const r = (person, varde) => ({ person, varde });
+  const lag = { varde: 368_000, antal: 20 }; // snitt 18 400
+  const l = lopp([r("d", 40_000), r("a", 118_400), r("c", 88_400), r("b", 110_000), r("e", 0)], lag, null);
+  ok("snittordern är lagets, som i vy.ts", l.snitt === 18_400 && snittorder(368_000, 20) === vySnitt(368_000, 20));
+  ok("ledaren och de inom räckhåll, i ordning", lika(l.rader.map((x) => [x.person, x.text]), [["a", "leder"], ["b", "en order bakom"], ["c", "två order bakom"]]), JSON.stringify(l.rader.map((x) => x.text)));
+  ok("den som ligger långt efter visas aldrig", !l.rader.some((x) => x.person === "d" || x.person === "e"));
+  const tre = lopp([r("a", 118_400), r("b", 110_000), r("c", 100_000), r("x", 95_000)], lag, null);
+  ok("högst två utöver ledaren", tre.rader.length === 3 && tre.rader.at(-1).person === "c");
+  const g = lopp([r("a", 118_400), r("b", 110_000)], lag, 120_000);
+  ok("ledaren under gränsen: hur långt kvar, i order", g.rader[0].text === "leder · en order till gränsen" && g.rader[0].over === false, g.rader[0].text);
+  ok("över gränsen står inget om den", lopp([r("a", 130_000)], lag, 120_000).rader[0].text === "leder");
+  const delad = lopp([r("b", 100_000), r("a", 100_000), r("c", 90_000)], lag, null);
+  ok("lika i toppen delar ledningen", lika(delad.rader.map((x) => x.text), ["delar ledningen", "delar ledningen", "en order bakom"]), JSON.stringify(delad.rader.map((x) => x.text)));
+  ok("ingen inom räckhåll: försprånget", lopp([r("a", 200_000), r("b", 50_000)], lag, null).rader[0].text === "leder med nio order");
+  ok("ensam med order: bara leder", lika(lopp([r("a", 20_000), r("b", 0)], lag, null).rader.map((x) => x.text), ["leder"]));
+  ok("ingen har sålt: inget lopp", lopp([r("a", 0), r("b", 0)], lag, null) === null && lopp([], lag, null) === null);
+  ok("utan snittorder: inget lopp", lopp([r("a", 10_000)], { varde: 0, antal: 0 }, null) === null);
+  ok("en krona bakom är en order bakom", iOrder(1, 18_400) === 1 && iOrder(18_400, 18_400) === 1 && iOrder(18_401, 18_400) === 2);
+  ok("orden", ordOrder(1) === "en order" && ordOrder(3) === "tre order" && ordOrder(12) === "12 order");
+  ok("var tionde minut, sista veckan var femte", mellanspelVar(5) === MELLANSPEL_MS && mellanspelVar(4) === SISTA_VECKAN_MS && mellanspelVar(0) === SISTA_VECKAN_MS);
+  ok("snittordern avrundas till hundratal", snittorder(100_000, 3) === 33_300);
+}
+
+console.log("\ntävlingen: när mellanspelet och vinnaren spelas");
+{
+  const T = { pris: "Spa för två", bild: null, grans: null, dagarKvar: 5 };
+  const bild = (over = {}) => ({ tavling: T, vinnare: null, saljare: [{ person: "a", varde: 50_000 }], manad: { varde: 50_000, antal: 3 }, ...over });
+  const fraga = (over = {}) => mellanspelDags({ bild: bild(), nuMs: 1_000_000, senastMs: 0, knuffMs: null, lugnt: true, arbetsdag: true, bildKlar: true, ...over });
+  ok("turen har kommit: nu", fraga() === "nu");
+  ok("brytaren av: aldrig", fraga({ bild: bild({ tavling: null }) }) === "vanta");
+  ok("ett firande spelas: vänta", fraga({ lugnt: false }) === "vanta");
+  ok("utanför arbetsdagen: vänta", fraga({ arbetsdag: false }) === "vanta");
+  ok("bilden laddas: vänta", fraga({ bildKlar: false }) === "vanta");
+  ok("nio minuter efter förra: vänta", fraga({ nuMs: 9 * 60_000, senastMs: 0 }) === "vanta");
+  ok("sista veckan räcker fem minuter", fraga({ nuMs: 5 * 60_000, bild: bild({ tavling: { ...T, dagarKvar: 2 } }) }) === "nu");
+  ok("en knuff för en minut sedan: turen hoppas över", fraga({ knuffMs: 1_000_000 - 60_000 }) === "hoppa");
+  ok("en knuff för tre minuter sedan: nu", fraga({ knuffMs: 1_000_000 - 180_000 }) === "nu");
+  ok("ingen har sålt: turen hoppas över", fraga({ bild: bild({ saljare: [{ person: "a", varde: 0 }], manad: { varde: 0, antal: 0 } }) }) === "hoppa");
+  const V = { nyckel: "2026-09", manad: "september", pris: "x", bild: null, personer: ["a"], varde: 1, grans: null };
+  ok("vinnaren en gång när tavlan är lugn", vinnareDags({ bild: bild({ vinnare: V }), visad: false, lugnt: true, arbetsdag: true, bildKlar: true }));
+  ok("vinnaren inte två gånger", !vinnareDags({ bild: bild({ vinnare: V }), visad: true, lugnt: true, arbetsdag: true, bildKlar: true }));
+  ok("vinnaren inte före arbetsdagen", !vinnareDags({ bild: bild({ vinnare: V }), visad: false, lugnt: true, arbetsdag: false, bildKlar: true }));
+  ok("ingen vinnare i bilden: inget", !vinnareDags({ bild: bild(), visad: false, lugnt: true, arbetsdag: true, bildKlar: true }));
+}
+
+console.log("\ntävlingen: knuffen och gränsen i planeringen");
+{
+  const NU = "2026-10-23T10:00:00Z";
+  const DAG = "2026-10-23";
+  const T = { pris: "Spa för två", bild: null, grans: 120_000, dagarKvar: 5 };
+  const pers = (k) => ({ nyckel: k, namn: k.toUpperCase(), initialer: k[0], dold: false });
+  const order = (nyckel, person, belopp, over = {}) => ({
+    nyckel, person, tid: new Date(Date.parse(NU) - 60_000).toISOString(), dag: DAG, paket: "Paket", bindning: 24, belopp, niva: "vanlig",
+    efterreg: false, forstaNagonsin: false, saljarensDagsantal: 1, saljarensBasta: 3, manaden: true, ...over,
+  });
+  const base = (saljare, order = [], over = {}) => {
+    const { lag, mal, tavling, ...inst } = structuredClone(STANDARD);
+    const varde = saljare.reduce((s, x) => s + x.varde, 0);
+    return {
+      v: 1, nu: NU, bygge: "x", lag: null, skarm: null, installningar: inst,
+      manad: { nyckel: "2026-10", namn: "Oktober", antal: 20, varde, mal: null, forvantat: null, prognos: null, dagar: { gangna: 17, totalt: 22 }, natt: null, storsta: null },
+      idag: { datum: DAG, veckodag: 4, antal: order.length, summa: 0, bastaDag: 9 },
+      saljare: saljare.map((x) => ({ antal: 1, vecka: [0, 0, 0, 0, 0], idag: 0, ...x })),
+      historik: [], order, personer: Object.fromEntries(["anna", "jonas", "sara"].map((k) => [k, pers(k)])), handelser: [],
+      tavling: T, vinnare: null, ...over,
+    };
+  };
+  // Anna 118 400, Jonas 90 000, Sara 50 000: snitt (258 400 / 20) ≈ 12 900.
+  const fore = base([{ person: "anna", varde: 118_400 }, { person: "jonas", varde: 90_000 }, { person: "sara", varde: 50_000 }]);
+  const m0 = planera(null, fore, null).minne;
+  const salj = (person, belopp, extra = {}, f = fore) => {
+    const o = order(`o-${person}-${belopp}`, person, belopp, extra);
+    return base(f.saljare.map((x) => (x.person === person ? { ...x, varde: x.varde + belopp } : x)), [o, ...f.order], { nu: new Date(Date.parse(f.nu) + 1000).toISOString() });
+  };
+  const typer = (r) => r.firanden.map((f) => (f.typ === "knuff" || f.typ === "grans" ? `${f.typ}:${f.person}` : f.typ));
+
+  const nyJ = salj("jonas", 19_000);
+  const r1 = planera(fore, nyJ, m0);
+  ok("en order som tar säljaren inom en order från ledaren knuffar", lika(typer(r1), ["order", "knuff:jonas"]), JSON.stringify(typer(r1)));
+  ok("knuffen står i minnet för dagen", lika(r1.minne.knuff, ["jonas"]));
+  const r2 = planera(nyJ, salj("jonas", 100, {}, nyJ), r1.minne);
+  ok("samma säljare knuffas högst en gång per dag", !typer(r2).includes("knuff:jonas"), JSON.stringify(typer(r2)));
+  const imorgon = planera(fore, { ...nyJ, idag: { ...nyJ.idag, datum: "2026-10-26" } }, { ...m0, dag: "2026-10-25", knuff: ["jonas"] });
+  ok("en ny dag får knuffen igen", !imorgon.minne.knuff.includes("jonas") || typer(imorgon).includes("knuff:jonas"), JSON.stringify(imorgon.minne.knuff));
+  ok("en order förbi ledaren knuffar inte: ordern säger Leder", !typer(planera(fore, salj("jonas", 40_000), m0)).some((t) => t.startsWith("knuff")));
+  ok("till lika med ledaren knuffar inte", !typer(planera(fore, salj("jonas", 28_400), m0)).some((t) => t.startsWith("knuff")));
+  ok("en efterregistrerad order knuffar inte", !typer(planera(fore, salj("jonas", 19_000, { efterreg: true }), m0)).some((t) => t.startsWith("knuff")));
+  ok("den som redan var inom en order knuffas inte igen av nästa order", !typer(planera(nyJ, salj("jonas", 500, {}, nyJ), { ...r1.minne, knuff: [] })).some((t) => t.startsWith("knuff")));
+  ok("brytaren av: ingen knuff", lika(typer(planera({ ...fore, tavling: null }, { ...nyJ, tavling: null }, m0)), ["order"]));
+
+  const nyA = salj("anna", 2_000);
+  const g1 = planera(fore, nyA, m0);
+  ok("en order över kvalgränsen ger gränsscenen", lika(typer(g1), ["order", "grans:anna"]), JSON.stringify(typer(g1)));
+  ok("gränsen står i minnet för månaden", g1.minne.grans.includes("anna"));
+  ok("gränsen firas en gång per månad", !typer(planera(nyA, salj("anna", 500, {}, nyA), g1.minne)).includes("grans:anna"));
+  const startOver = planera(null, nyA, null).minne;
+  ok("vid en start är den som redan är över gränsen sedd", startOver.grans.includes("anna"));
+  ok("utan gräns ingen gränsscen", !typer(planera({ ...fore, tavling: { ...T, grans: null } }, { ...nyA, tavling: { ...T, grans: null } }, m0)).includes("grans:anna"));
+  const tyst = planera(fore, salj("anna", 2_000, { efterreg: true }), m0);
+  ok("en efterregistrerad order över gränsen firas inte, men räknas som passerad", !typer(tyst).includes("grans:anna") && tyst.minne.grans.includes("anna"));
+
+  // Två i samma bild: den vars order kom sist får scenen.
+  const tva = (() => {
+    const oa = order("x-a", "anna", 2_000, { tid: "2026-10-23T09:58:00Z" });
+    const oj = order("x-j", "jonas", 19_000, { tid: "2026-10-23T09:59:30Z" });
+    return base([{ person: "anna", varde: 120_400 }, { person: "jonas", varde: 109_000 }, { person: "sara", varde: 50_000 }], [oj, oa], { nu: "2026-10-23T10:00:01Z" });
+  })();
+  const rt = planera(fore, tva, m0);
+  ok("ordningen är ordern, gränsen, knuffen", lika(typer(rt).slice(-2), ["grans:anna", "knuff:jonas"]) && typer(rt)[0] === "order", JSON.stringify(typer(rt)));
+  const malbild = { ...nyJ, manad: { ...nyJ.manad, mal: 270_000 } };
+  const rm = planera({ ...fore, manad: { ...fore.manad, mal: 270_000 } }, malbild, m0);
+  ok("målet kommer efter knuffen", lika(typer(rm), ["order", "knuff:jonas", "malet"]), JSON.stringify(typer(rm)));
+
+  const gammalt = { kanda: [], dag: DAG, handelse: 0, manad: "2026-10", halvvags: false, malet: false, dagsrekord: null };
+  const rg = planera(fore, nyJ, gammalt);
+  ok("ett minne utan tävlingens fält läses, och knuffen spelas", lika(typer(rg), ["order", "knuff:jonas"]) && rg.minne.vinnare === false, JSON.stringify(typer(rg)));
+  const dold = base([{ person: "anna", varde: 118_400 }, { person: "sara", varde: 50_000 }], [order("o-d", "dold1", 30_000)]);
+  ok("en dold säljare står inte i loppet och knuffar aldrig", !typer(planera(fore, dold, m0)).some((t) => t.startsWith("knuff") || t.startsWith("grans")));
 }
 
 console.log(fel === 0 ? "\n\x1b[32mAllt grönt.\x1b[0m\n" : `\n\x1b[31m${fel} fel.\x1b[0m\n`);

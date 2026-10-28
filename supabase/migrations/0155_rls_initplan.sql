@@ -81,6 +81,7 @@ BEGIN
     ('public', 'contract_template', 'contract_template_read', '4f8228d7254c58b9086171fa117f86a4', 'd41d8cd98f00b204e9800998ecf8427e'),
     ('public', 'cost_calculation', 'cost_calculation_read', '321aaf73b9a80f7d7800a4acd43be4c5', 'd41d8cd98f00b204e9800998ecf8427e'),
     ('public', 'cost_rate', 'cost_rate_read', '321aaf73b9a80f7d7800a4acd43be4c5', 'd41d8cd98f00b204e9800998ecf8427e'),
+    ('public', 'cost_rate_replaced', 'cost_rate_replaced_read', '321aaf73b9a80f7d7800a4acd43be4c5', 'd41d8cd98f00b204e9800998ecf8427e'),
     ('public', 'course', 'course_read', '9043eaa115d45621bfd710cea521f699', 'd41d8cd98f00b204e9800998ecf8427e'),
     ('public', 'course_attempt', 'course_attempt_read', '0febe439ecd9a23bb8762d8c608a1714', 'd41d8cd98f00b204e9800998ecf8427e'),
     ('public', 'course_wish', 'course_wish_read', 'f11eb67108e08360fa719a4813987a8c', 'd41d8cd98f00b204e9800998ecf8427e'),
@@ -98,6 +99,7 @@ BEGIN
     ('public', 'employee_access_level', 'employee_access_level_read', '8027ccda49351a668f7224a22bea8583', 'd41d8cd98f00b204e9800998ecf8427e'),
     ('public', 'employee_onboarding', 'employee_onboarding_read', 'd17b53fe4d4179561083d87f0766a61f', 'd41d8cd98f00b204e9800998ecf8427e'),
     ('public', 'employee_permission', 'employee_permission_read', '552a5cd789992bd8967a68e9302c49f6', 'd41d8cd98f00b204e9800998ecf8427e'),
+    ('public', 'employee_photo', 'employee_photo_read', '0d6df89da20a9d1754de60e57a4c35da', 'd41d8cd98f00b204e9800998ecf8427e'),
     ('public', 'employee_role', 'employee_role_read', '0febe439ecd9a23bb8762d8c608a1714', 'd41d8cd98f00b204e9800998ecf8427e'),
     ('public', 'error_occurrence', 'error_occurrence_las', 'a59c308ba68add5679d62960853b2897', 'd41d8cd98f00b204e9800998ecf8427e'),
     ('public', 'error_report', 'error_report_read', '5294144f7e3d542e7ad7adcb0a75eb07', 'd41d8cd98f00b204e9800998ecf8427e'),
@@ -253,6 +255,7 @@ ALTER POLICY "contract_read" ON public."contract" USING ((( SELECT far_hantera_a
 ALTER POLICY "contract_template_read" ON public."contract_template" USING (( SELECT far_hantera_avtal() AS far_hantera_avtal));
 ALTER POLICY "cost_calculation_read" ON public."cost_calculation" USING (( SELECT har_lonekostnadsbehorighet() AS har_lonekostnadsbehorighet));
 ALTER POLICY "cost_rate_read" ON public."cost_rate" USING (( SELECT har_lonekostnadsbehorighet() AS har_lonekostnadsbehorighet));
+ALTER POLICY "cost_rate_replaced_read" ON public."cost_rate_replaced" USING (( SELECT har_lonekostnadsbehorighet() AS har_lonekostnadsbehorighet));
 ALTER POLICY "course_read" ON public."course" USING ((((status = 'published'::text) AND matches_audience(audience_roles, '{}'::uuid[])) OR (owner_id = ( SELECT current_employee_id() AS current_employee_id)) OR ( SELECT has_any_role(ARRAY['sales_manager'::text, 'admin'::text, 'ceo'::text]) AS has_any_role)));
 ALTER POLICY "course_attempt_read" ON public."course_attempt" USING (((employee_id = ( SELECT current_employee_id() AS current_employee_id)) OR ( SELECT can_read_all_employees() AS can_read_all_employees) OR leads_employee(employee_id)));
 ALTER POLICY "course_wish_read" ON public."course_wish" USING (((employee_id = ( SELECT current_employee_id() AS current_employee_id)) OR ( SELECT has_any_role(ARRAY['sales_manager'::text, 'admin'::text, 'ceo'::text]) AS has_any_role)));
@@ -276,6 +279,7 @@ ALTER POLICY "employee_read" ON public."employee" USING ((((auth_user_id = ( SEL
 ALTER POLICY "employee_access_level_read" ON public."employee_access_level" USING (((employee_id = ( SELECT current_employee_id() AS current_employee_id)) OR ( SELECT can_read_all_employees() AS can_read_all_employees)));
 ALTER POLICY "employee_onboarding_read" ON public."employee_onboarding" USING (( SELECT can_read_all_employees() AS can_read_all_employees));
 ALTER POLICY "employee_permission_read" ON public."employee_permission" USING (((employee_id = ( SELECT current_employee_id() AS current_employee_id)) OR ( SELECT has_any_role(ARRAY['sales_manager'::text, 'ceo'::text]) AS has_any_role)));
+ALTER POLICY "employee_photo_read" ON public."employee_photo" USING ((( SELECT current_employee_id() AS current_employee_id) IS NOT NULL));
 ALTER POLICY "employee_role_read" ON public."employee_role" USING (((employee_id = ( SELECT current_employee_id() AS current_employee_id)) OR ( SELECT can_read_all_employees() AS can_read_all_employees) OR leads_employee(employee_id)));
 ALTER POLICY "error_occurrence_las" ON public."error_occurrence" USING (( SELECT has_any_role(ARRAY['sales_manager'::text, 'ceo'::text, 'admin'::text]) AS has_any_role));
 ALTER POLICY "error_report_read" ON public."error_report" USING ((( SELECT has_any_role(ARRAY['sales_manager'::text, 'ceo'::text, 'admin'::text]) AS has_any_role) OR (reporter_id = ( SELECT current_employee_id() AS current_employee_id))));

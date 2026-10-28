@@ -36,7 +36,7 @@ import { svensktDatum } from "../src/lib/klocka.ts";
 import { normalisera } from "../src/lib/salesboard/installningar.ts";
 import { hasha, normaliseraKod, nyKod, nyToken, visaKod } from "../src/lib/salesboard/parning.ts";
 import { MINSTA_UNDERLAG, RESERV_TROSKEL, storAffarTroskel } from "../src/lib/salesboard/regler.ts";
-import { formaOgonblick, lasStatistik, tavlansFonster, troskelFranStatistik } from "../src/lib/salesboard/forma.ts";
+import { formaOgonblick, lasStatistik, tavlansFonster, troskelFranStatistik, vinnarensManad } from "../src/lib/salesboard/forma.ts";
 import { nyckelFor } from "../src/lib/salesboard/nyckel.ts";
 import { lasningen, personvalen, saknasIDatabasen } from "../src/lib/salesboard/saknas.ts";
 import {
@@ -214,7 +214,7 @@ console.log("\nÖgonblicksbilden");
 
   // --- Display-säker -----------------------------------------------------------
   ok("inget lag-id bland inställningarna", !("lag" in bild.installningar));
-  const { lag: _lag, mal: _mal, ...utanLag } = INST;
+  const { lag: _lag, mal: _mal, tavling: _tavling, ...utanLag } = INST;
   ok("resten av inställningarna följer med", lika(bild.installningar, utanLag));
   for (const [vad, id] of [["Elins", ELIN], ["Amiras", AMIRA], ["Jonas", JONAS], ["Olles", OLLE], ["Nils", NILS], ["lagets", LAG]]) {
     ok(`${vad} id finns inte i JSON-strängen`, !json.includes(id));
@@ -831,6 +831,42 @@ console.log("\nNycklarna");
 }
 
 // -----------------------------------------------------------------------------
+console.log("\nTävlingen och vinnaren");
+{
+  const ID = "0123456789abcdef01234567";
+  const PA = normalisera({ ...INST, tavling: { "2026-10": { pa: true, pris: "Spa för två", bild: ID, grans: 120_000 } } });
+  const b = forma({}, PA);
+  ok("en påslagen tävling står i bilden", lika(b.tavling, { pris: "Spa för två", bild: `/salesboard/bild?id=${ID}`, grans: 120_000, dagarKvar: 5 }), JSON.stringify(b.tavling));
+  ok("inställningarna i bilden bär inga tävlingar", !("tavling" in b.installningar) && !("mal" in b.installningar));
+  ok("utan tävling är fältet null", forma().tavling === null && forma().vinnare === null);
+  const AV = normalisera({ ...INST, tavling: { "2026-10": { pa: false, pris: "Spa för två" } } });
+  ok("en avslagen tävling ger null: tavlan visar ingenting", forma({}, AV).tavling === null);
+  ok("en tävling i september gäller inte i oktober", forma({}, normalisera({ ...INST, tavling: { "2026-09": { pa: true, pris: "Hörlurar" } } })).tavling === null);
+  ok("utan bild är adressen null", forma({}, normalisera({ ...INST, tavling: { "2026-10": { pa: true, pris: "Hörlurar" } } })).tavling.bild === null);
+
+  // Första arbetsdagen i november, måndag 2 november 2026: oktobers vinnare.
+  const MAN = new Date("2026-11-02T08:30:00Z");
+  const okt = (n, vem, kr) => order(n, vem, `2026-10-${String(10 + (n % 10)).padStart(2, "0")}T10:00:00Z`, { order_value: kr, order_value_source: "manual" });
+  const forra = [okt(31, ELIN, 40_000), okt(32, ELIN, 25_000), okt(33, JONAS, 50_000), okt(34, AMIRA, 90_000), okt(35, OLLE, 100_000)];
+  const NOV = (grans, pa = true) => normalisera({ ...INST, tavling: { "2026-10": { pa, pris: "Spa för två", bild: ID, grans } } });
+  const v = forma({ manadens: [], senaste: [], forraManadens: forra }, NOV(60_000), MAN).vinnare;
+  ok("vinnaren är den med högst ordervärde i laget, utan den dolda", lika(v?.personer, [k(ELIN)]) && v.varde === 65_000, JSON.stringify(v));
+  ok("vinnaren bär månaden, priset och bilden", v?.nyckel === "2026-10" && v.manad === "oktober" && v.pris === "Spa för två" && v.bild === `/salesboard/bild?id=${ID}`);
+  ok("vinnaren står i personerna", forma({ manadens: [], senaste: [], forraManadens: forra }, NOV(60_000), MAN).personer[k(ELIN)]?.namn === "Elin B.");
+  const ingen = forma({ manadens: [], senaste: [], forraManadens: forra }, NOV(70_000), MAN).vinnare;
+  ok("når ingen gränsen vinner ingen", lika(ingen?.personer, []) && ingen.varde === null && ingen.grans === 70_000, JSON.stringify(ingen));
+  const lika2 = [okt(41, ELIN, 50_000), okt(42, JONAS, 50_000)];
+  const delad = forma({ manadens: [], senaste: [], forraManadens: lika2 }, NOV(null), MAN).vinnare;
+  ok("lika i toppen delar priset", lika(delad?.personer, [k(ELIN), k(JONAS)].sort()) && delad.varde === 50_000, JSON.stringify(delad));
+  ok("utan order vinner ingen", lika(forma({ manadens: [], senaste: [], forraManadens: [] }, NOV(null), MAN).vinnare?.personer, []));
+  ok("vinnaren visas bara första arbetsdagen", forma({ forraManadens: forra }, NOV(null), new Date("2026-11-03T08:30:00Z")).vinnare === null);
+  ok("och bara om förra månadens tävling var på", forma({ forraManadens: forra }, NOV(null, false), MAN).vinnare === null);
+  ok("vinnarensManad säger när förra månaden läses", vinnarensManad(NOV(null), MAN) === "2026-10-01" && vinnarensManad(NOV(null), NU) === null && vinnarensManad(NOV(null, false), MAN) === null);
+  const lordag = new Date("2026-08-01T08:30:00Z");
+  ok("en månad som börjar en lördag: vinnaren på måndagen", vinnarensManad(normalisera({ tavling: { "2026-07": { pa: true, pris: "x" } } }), lordag) === null
+    && vinnarensManad(normalisera({ tavling: { "2026-07": { pa: true, pris: "x" } } }), new Date("2026-08-03T08:30:00Z")) === "2026-07-01");
+}
+
 console.log("\nParningens hash");
 {
   // Rutten hashar koden ur `nyKod`, admin skriver in den med streck och små

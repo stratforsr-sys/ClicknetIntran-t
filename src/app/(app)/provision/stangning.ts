@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { getCurrentUser, hasRole } from "@/lib/auth";
+import { arSuperadmin, getCurrentUser, hasRole } from "@/lib/auth";
 import { svensktDatum } from "@/lib/klocka";
 import { giltigManad, manadFore, manadsnamn } from "@/lib/provision";
 import {
@@ -38,19 +38,10 @@ export type StangningState = { fel?: string; ok?: string };
  */
 
 /**
- * Vem som far faststalla en period. Saljchef, ekonomi och VD (avsnitt 5.6).
- *
- * Kretsen ar bredare an den som andrar reglerna — ekonomi far stanga men inte
- * bestamma vad som ska betalas ut. Kontrollen star bade har och i RLS; den har
- * hindrar skrivningen, som sker med service role och gar forbi RLS.
+ * Vem som far faststalla en period: Superadmin (B13, beställaren 2026-10-23).
+ * Kontrollen star i faststallPeriod; den hindrar skrivningen, som sker med
+ * service role och gar forbi RLS. Markera utbetald har sin egen krets.
  */
-async function kravAttestant() {
-  const user = await getCurrentUser();
-  if (!hasRole(user, "finance", "ceo", "sales_manager") || !user?.employee) {
-    throw new Error("Bara saljchef, ekonomi och VD far faststalla en provisionsperiod.");
-  }
-  return user;
-}
 
 /** Sista dagen i manaden, som "2026-08-31". */
 function sistaDagen(manad: string): string {
@@ -78,7 +69,9 @@ export async function faststallPeriod(
   form: FormData,
 ): Promise<StangningState> {
   try {
-    const user = await kravAttestant();
+    // B13 (beställaren 2026-10-23): bara Superadmin. Att fastställa går inte att ångra. Förut säljchef, ekonomi och VD (avsnitt 5.6).
+    const user = await getCurrentUser();
+    if (!arSuperadmin(user) || !user?.employee) return { fel: "Bara en superadmin fastställer provisionsmånaden." };
     const manad = String(form.get("period_month") ?? "").trim();
 
     if (!giltigManad(manad)) return { fel: "Manaden ar inte giltig, eller ligger i framtiden." };

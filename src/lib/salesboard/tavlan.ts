@@ -6,6 +6,7 @@ import {
   formaOgonblick,
   lasStatistik,
   tavlansFonster,
+  vinnarensManad,
   type RaTavleHandelse,
   type RaTavleOrder,
   type RaTavlePaket,
@@ -100,7 +101,9 @@ async function bygg(nu: Date): Promise<Ogonblick> {
   // Order läses för hela bolaget och laget väljs i `formaOgonblick`, så att allt
   // kan frågas på en gång. Det är några tiotal order i månaden, långt under
   // de tusen rader som API:t kapar vid.
-  const [lagSvar, forstaPersonSvar, valSvar, paketSvar, manadSvar, senasteSvar, forstaStatistikSvar, handelseSvar] =
+  // Förra månadens order läses bara första arbetsdagen efter en tävling, för vinnaren.
+  const forraManad = vinnarensManad(installningar, nu);
+  const [lagSvar, forstaPersonSvar, valSvar, paketSvar, manadSvar, senasteSvar, forstaStatistikSvar, handelseSvar, forraSvar] =
     await Promise.all([
       lagId ? db.from("team").select("id, name").eq("id", lagId).maybeSingle() : null,
       anstallda(lagId),
@@ -120,12 +123,16 @@ async function bygg(nu: Date): Promise<Ogonblick> {
         .eq("kind", "test")
         .gte("created_at", fonster.handelserFran)
         .order("id", { ascending: true }),
+      forraManad
+        ? db.from("sales_order").select(ORDERKOLUMNER).or(`period_month.eq.${forraManad},cancel_period_month.eq.${forraManad}`)
+        : null,
     ]);
 
   if (lagSvar?.error) las("laget", lagSvar.error);
   if (paketSvar.error) las("paketen", paketSvar.error);
   if (manadSvar.error) las("månadens order", manadSvar.error);
   if (senasteSvar.error) las("de senaste orderna", senasteSvar.error);
+  if (forraSvar?.error) las("förra månadens order", forraSvar.error);
 
   // Ett lag som inte finns längre: tavlan visar alla i stället för en tom
   // tavla, och personerna och statistiken läses om för alla.
@@ -173,6 +180,7 @@ async function bygg(nu: Date): Promise<Ogonblick> {
       senaste: (senasteSvar.data ?? []) as unknown as RaTavleOrder[],
       statistik: tal,
       handelser: (handelseLas === "svar" ? (handelseSvar.data ?? []) : []) as unknown as RaTavleHandelse[],
+      forraManadens: (forraSvar?.data ?? []) as unknown as RaTavleOrder[],
       nyckel: nyckelFor,
     },
     installningar,

@@ -7439,7 +7439,7 @@ body.nd-riktig :is(.pv-lagrad,.arow[data-agenda],.pv-tab tbody tr[data-pvupers],
 .pv-strip dd.ndsmall{font-size:11px}
 /* <ndsb.css> */
 /* Säljtavlan (ndsb.js): bara det utkastets prf- och sats-delar inte redan har. Tokens som resten. */
-.sb-lage{grid-template-columns:repeat(3,minmax(0,1fr))}
+.sb-lage{grid-template-columns:repeat(4,minmax(0,1fr))}
 .sb-lage b,.sb-facit b{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sb-facit>div>span+span{margin-top:1px}
 .sb-para{align-items:flex-start}
@@ -7488,6 +7488,20 @@ body.nd-riktig :is(.pv-lagrad,.arow[data-agenda],.pv-tab tbody tr[data-pvupers],
 @media (max-width:640px){.sb-para>.prf-f:first-child,.sb-para>.prf-f:nth-child(2){max-width:none}
   /* Texten får hela raden; valen, knapparna och brytaren lägger sig under den. */
   .sb-rad>.prf-swt{flex:1 1 calc(100% - 44px)}.sb-rad>.sb-fraga{margin-right:auto}.sb-rad>.prf-seg{margin-left:40px}}
+/* Månadens tävling: prisbilden i stående 4:5 bredvid fälten, en rad per månad. */
+.sb-tav{display:grid;grid-template-columns:104px minmax(0,1fr);gap:16px;align-items:start}
+.sb-tav+.sb-tav{border-top:1px solid var(--line);padding-top:16px;margin-top:4px}
+.sb-tavbild{aspect-ratio:4/5;border-radius:8px;overflow:hidden;background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--line);display:grid;place-items:center}
+.sb-tavbild img{width:100%;height:100%;object-fit:cover;display:block}
+.sb-tavbild span{font-size:11.5px;color:var(--prf-ink-3);text-align:center;padding:6px}
+.sb-tavfalt{display:flex;flex-direction:column;gap:12px;min-width:0}
+.sb-tavfalt>.prf-swrad{padding:0;border:0}
+.sb-tavfalt .prf-knappar{align-items:center;flex-wrap:wrap;gap:10px}
+.sb-valj{position:relative;overflow:hidden;cursor:pointer}
+.sb-valj input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.sb-valj.sb-av{opacity:.5;pointer-events:none}
+.sb-valj:focus-within{outline:2px solid var(--brand);outline-offset:2px}
+@media (max-width:640px){.sb-lage{grid-template-columns:repeat(2,minmax(0,1fr))}.sb-tav{grid-template-columns:72px minmax(0,1fr);gap:12px}}
 /* </ndsb.css> */
 </style>
 
@@ -23854,9 +23868,9 @@ const BRHMATRIS = [
   ['Satserna', 'Läsa satserna och kontrollen mot Skatteverket', [0, 1, 1], true],
   ['Satser och löner', 'Ändra satser, se och ändra månadslöner', [0, 0, 1], true],
   ['Behörigheter', 'Ge och ta behörighet', [0, 0, 1], true],
-  ['Regler som gäller alla', 'Provisionstrappan, K&V-regler, frånvaroregler, scheman', [0, 0, 1], false],
-  ['Det som inte går att ångra', 'Fastställa provisionsmånaden, radera order och anställda', [0, 0, 1], false],
-  ['Händelselogg och Adoption', 'Vem gjorde vad, och hur Nav används', [0, 0, 1], false]
+  ['Regler som gäller alla', 'Provisionstrappan, K&V-regler, frånvaroregler, scheman', [0, 0, 1], true],
+  ['Det som inte går att ångra', 'Fastställa provisionsmånaden, radera order och anställda', [0, 0, 1], true],
+  ['Händelselogg och Adoption', 'Vem gjorde vad, och hur Nav används', [0, 0, 1], true]
 ];
 const brhNiva = () => S.role === 'chef' ? (S.brhNiva || 'admin') : 'salesperson';
 const brhSuper = () => brhNiva() === 'superadmin';
@@ -24315,7 +24329,7 @@ function brhKort(){
       <div role="row" class="brh-th"><span role="columnheader">Får</span>${BRHORDNING.map(k => `<span role="columnheader">${BRHNIVA[k].l}</span>`).join('')}</div>
       ${BRHMATRIS.map(([t, h, v, inf]) => `<div role="row" class="brh-tr"><span role="rowheader"><b>${esc(t)}</b><small>${esc(h)}${inf ? '' : ' · <em>förslag</em>'}</small></span>${v.map((x, i) => `<span role="cell" class="brh-c">${x ? `${I('check')}<span class="prf-sr">Ja</span>` : `<i aria-hidden="true"></i><span class="prf-sr">Nej</span>`}</span>`).join('')}</div>`).join('')}
     </div>
-    <p class="prf-hj">Admin driver verksamheten. Superadmin äger pengarna, behörigheterna och det som inte går att ångra. Rader märkta förslag är inte spärrade i utkastet än.</p>
+    <p class="prf-hj">Admin driver verksamheten. Superadmin äger pengarna, behörigheterna och det som inte går att ångra. Nav prövar varje rad på servern.</p>
     <details class="brh-fran"><summary>Så blir repots åtta roller tre</summary><ul>${Object.entries(BRHFRAN).map(([r, n]) => `<li><span>${esc(AEROLL[r] || r)}</span>${I('arrow')}<b>${BRHNIVA[n].l}</b></li>`).join('')}</ul><p class="prf-hj">Leverans är admin tills vidare. Ändras per person i Anställda.</p></details>
   </div>`);
 }
@@ -31237,7 +31251,11 @@ document.addEventListener('input', e => {
    serverns klocka och går varje sekund utan att sektionen ritas om.
 
    Före 0250 (installerad falskt) väntar skärmarna, säljarna och testet på
-   installationen; målet, visningen, firandet och ljudet sparar ändå.
+   installationen; målet, tävlingen, visningen, firandet och ljudet sparar ändå.
+
+   Månadens tävling (2026-10-26): pris, prisbild, kvalgräns och brytaren På,
+   per månad och utan arv. Av betyder att tavlan inte visar något om tävlingen.
+   Bilden beskärs till 4:5 och kodas om till JPEG här, före uppladdningen.
 
    Står efter ndsats.js i modullistan.
    ===================================================================== */
@@ -31273,10 +31291,12 @@ function sbLagg(i, delar){
     if (k === 'mal') Object.entries(v).forEach(([m, x]) => { if (x === null) delete n.mal[m]; else n.mal[m] = x; });
     else if (k === 'firande') Object.entries(v).forEach(([f, x]) => { if (f === 'storAffar') Object.assign(n.firande.storAffar, x); else n.firande[f] = x; });
     else if (k === 'ljud' || k === 'arbetsdag') Object.assign(n[k], v);
+    else if (k === 'tavling') Object.entries(v).forEach(([m, x]) => { if (x === null) delete n.tavling[m]; else { const t = {...SBINGEN, ...(n.tavling[m] || {}), ...x}; t.pa = t.pa && !!t.pris; n.tavling[m] = t; } });
     else n[k] = v;
   }
   return n;
 }
+const SBINGEN = {pa:false, pris:'', bild:null, grans:null};
 const sbLaggSkarm = (l, op) => op.typ === 'bort' ? l.filter(s => s.id !== op.id) : l.map(s => s.id !== op.id ? s : op.typ === 'namn' ? {...s, namn:op.namn} : {...s, ljud:op.ljud});
 const sbInst = () => { const s = sbSt(); return s.vant.reduce((i, v) => sbLagg(i, v.delar), s.bas); };
 const sbSkarmar = () => { const s = sbSt(); return s.skarmVant.reduce((l, v) => sbLaggSkarm(l, v.op), s.skarmar); };
@@ -31470,9 +31490,9 @@ const sbKodVisad = ren => { const h = sbOk().granser.kod.langd / 2; return ren.l
 
 /* ---------- Läget överst: skärmarna, ljudet och laget ---------- */
 function sbLageHtml(i, nu){
-  const d = sbOk(), l = sbSkarmar(), anslutna = l.filter(s => sbAnsluten(s, nu)).length, lj = sbLjudlage(i, nu), lag = d.lagen.find(x => x.id === i.lag);
+  const d = sbOk(), l = sbSkarmar(), anslutna = l.filter(s => sbAnsluten(s, nu)).length, lj = sbLjudlage(i, nu), lag = d.lagen.find(x => x.id === i.lag), tv = i.tavling[sbManader()[0]];
   const skarm = !d.installerad ? 'Väntar' : !l.length ? 'Ingen parad' : `${anslutna}/${l.length}`;
-  return `<div class="brh-antal sb-lage" aria-label="Tavlan just nu"><div><span>Skärmar anslutna</span><b class="num">${skarm}</b></div><div><span>Ljud</span><b class="${lj.pa ? 'sats-gron' : ''}">${esc(lj.kort)}</b></div><div><span>Laget</span><b>${esc(lag ? lag.namn : 'Alla lag')}</b></div></div>`;
+  return `<div class="brh-antal sb-lage" aria-label="Tavlan just nu"><div><span>Skärmar anslutna</span><b class="num">${skarm}</b></div><div><span>Ljud</span><b class="${lj.pa ? 'sats-gron' : ''}">${esc(lj.kort)}</b></div><div><span>Laget</span><b>${esc(lag ? lag.namn : 'Alla lag')}</b></div><div><span>Tävlingen</span><b class="${tv && tv.pa ? 'sats-gron' : ''}">${esc(tv && tv.pa ? tv.pris : 'Av')}</b></div></div>`;
 }
 
 /* ---------- Skärmar ---------- */
@@ -31536,6 +31556,58 @@ function sbMalKort(i){
     <div class="brh-antal sb-facit"><div><span>Förra månaden</span>${manadsrad(f && f.forra)}</div><div><span>Rekordet</span>${manadsrad(f && f.rekord && f.rekord.varde > 0 ? f.rekord : null)}</div>
       <div><span>Per arbetsdag</span>${pd ? `<b class="num">≈ ${sbKr(pd.kr)}</b><span>${esc(sbManadNamn(denna))}, ${pd.dagar} arbetsdagar</span>` : '<b>–</b><span>Inget mål</span>'}</div></div>`);
 }
+
+/* ---------- Månadens tävling ---------- */
+const SBPRIS = 60, SBBILD_IN = 5 * 1024 * 1024, SBBILD_TYPER = ['image/jpeg', 'image/png', 'image/webp'];
+const sbRenPris = x => String(x).normalize('NFC').replace(/\s+/g, ' ').trim();
+// Läget just nu, ur tavlans bild: ledaren, och hur många som är över gränsen. Bara den här månaden.
+function sbTavLage(t){
+  const f = sbOk().facit; if (!f || !f.topp || !f.topp.length) return 'Ingen har sålt något än den här månaden.';
+  const [a, b] = f.topp, over = t.grans !== null ? f.varden.filter(v => v >= t.grans).length : null;
+  const ledare = b && b.varde === a.varde ? `${a.namn} och ${b.namn} delar ledningen med ${sbKr(a.varde)}` : `${a.namn} leder med ${sbKr(a.varde)}`;
+  return `Just nu: ${ledare}.` + (over !== null ? ` ${over === 0 ? 'Ingen' : over} av ${f.varden.length} är över gränsen.` : '');
+}
+function sbTavRad(i, manad, forst){
+  const s = sbSt(), t = i.tavling[manad] || SBINGEN, namn = sbManadNamn(manad), u = s.utk['pris:' + manad], pris = u ?? t.pris, laddar = s.bildar && s.bildar[manad];
+  const swH = !t.pris ? 'Skriv ett pris först.' : t.pa ? (forst ? 'På: tavlan visar loppet var tionde minut, knuffar den som kommer inom en order från ledningen och firar den som passerar gränsen.' : `På från 1 ${namn}.`) : 'Av: inget om tävlingen syns på tavlan.';
+  const id = 'sbTav' + manad.replace('-', '');
+  return `<div class="sb-tav" id="${id}">
+    <div class="sb-tavbild">${t.bild ? `<img src="/salesboard/bild?id=${esc(t.bild)}" alt="">` : `<span>${laddar ? 'Laddar upp …' : 'Ingen bild'}</span>`}</div>
+    <div class="sb-tavfalt">
+      <div class="prf-swrad"><span class="prf-swt"><b id="${id}L">${esc(sbStor(namn))}</b><small id="${id}H">${esc(swH)}</small></span><button type="button" role="switch" class="prf-sw" aria-checked="${t.pa}" aria-labelledby="${id}L" aria-describedby="${id}H" data-sbtavpa="${manad}" ${!t.pris || !sbOk().skriv ? 'disabled' : ''}><i></i></button></div>
+      <div class="prf-f sb-bred"><label for="${id}P">Pris</label><span class="sats-enh"><input id="${id}P" class="prf-in" data-sbpris="${manad}" maxlength="${SBPRIS}" autocomplete="off" placeholder="Till exempel spa för två" value="${esc(pris)}" ${sbAv()}><span aria-hidden="true" class="num">${[...pris].length}/${SBPRIS}</span></span></div>
+      <div class="prf-f"><label for="sbB-grans-${manad}">Kvalgräns</label>${sbBelopp('grans:' + manad, t.grans, `Kvalgränsen för ${namn}, i kronor`, 'Ingen gräns')}<p class="prf-hj">Minsta ordervärde för att kunna vinna. Når ingen gränsen vinner ingen.</p></div>
+      <div class="prf-knappar"><label class="btn btn-s btn-sm sb-valj${sbOk().skriv ? '' : ' sb-av'}">${t.bild ? 'Byt bild' : 'Välj bild'}<input type="file" accept="${SBBILD_TYPER.join(',')}" data-sbbild="${manad}" ${sbAv()} ${laddar ? 'disabled' : ''}></label>${t.bild ? `<button type="button" class="prf-angra prf-slang" data-sbbildbort="${manad}" ${sbAv()}>Ta bort bilden</button>` : ''}<span class="prf-hj">JPEG, PNG eller WebP, högst 5 MB. Beskärs till stående 4:5.</span></div>
+      ${forst && t.pa ? `<p class="sats-eff" aria-live="polite">${esc(sbTavLage(t))}</p>` : ''}
+      ${!forst ? '<p class="prf-hj">Ny månad, nytt pris: en tävling ärvs aldrig.</p>' : ''}
+    </div></div>`;
+}
+function sbTavlingKort(i){
+  const [denna, nasta] = sbManader();
+  return sbKort('sb-tavling', 'Månadens tävling', 'Ett pris till den med högst ordervärde i månaden. Säljare som valt att vara dolda är inte med.', `${sbTavRad(i, denna, true)}${sbTavRad(i, nasta, false)}`);
+}
+// Bilden beskärs till 4:5 och blir en JPEG på 800 × 1000 här, så att servern bara tar emot en sorts fil.
+async function sbBeskar(fil){
+  const b = await createImageBitmap(fil), W = 800, H = 1000, k = Math.max(W / b.width, H / b.height), w = b.width * k, h = b.height * k;
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, W, H); x.drawImage(b, (W - w) / 2, (H - h) / 2, w, h); b.close && b.close();
+  return c.toDataURL('image/jpeg', .85);
+}
+async function sbBild(manad, fil){
+  const s = sbSt(), namn = sbManadNamn(manad);
+  delete s.fel['sb-tavling'];
+  if (fil && (!SBBILD_TYPER.includes(fil.type) || fil.size > SBBILD_IN)){ s.fel['sb-tavling'] = 'Bilden ska vara en JPEG, PNG eller WebP på högst 5 MB.'; render(); return; }
+  let data = null;
+  if (fil){ try { data = await sbBeskar(fil); } catch(_){ s.fel['sb-tavling'] = 'Bilden gick inte att läsa. Välj en annan.'; render(); return; } }
+  s.bildar = {...(s.bildar || {}), [manad]:true}; render();
+  const r = await sbKor({handling:'bild', manad, data});
+  delete s.bildar[manad];
+  if (!r.ok){ if (!r.pagar) sbNej('sb-tavling', r); render(); return; }
+  if (r.data.installningar) s.bas = r.data.installningar;
+  const text = fil ? `Bilden för ${namn}: sparad.` : `Bilden för ${namn}: borttagen.`;
+  prfStatus('sb-tavling', text, null); S.prfSr = text; render();
+}
+const sbTavUndo = (manad, falt) => f => ({tavling:{[manad]:f.tavling[manad] ? {[falt]:f.tavling[manad][falt]} : null}});
 
 /* ---------- Visning ---------- */
 function sbVisningKort(i, nu){
@@ -31615,7 +31687,8 @@ function sbSaljarKort(i){
 }
 
 /* ---------- Testa tavlan ---------- */
-const SBTEST = [['order', 'Ny order', 'mint'], ['stor', 'Stor affär', 'barnsten'], ['forsta', 'Första ordern', 'mint'], ['serie', 'Tre order', 'mint'], ['malet', 'Målet nått', 'mint']];
+const SBTEST = [['order', 'Ny order', 'mint'], ['stor', 'Stor affär', 'barnsten'], ['forsta', 'Första ordern', 'mint'], ['serie', 'Tre order', 'mint'], ['malet', 'Målet nått', 'mint'],
+  ['tavling', 'Tävlingen', 'barnsten'], ['knuff', 'Knuffen', 'mint'], ['grans', 'Gränsen', 'barnsten']];
 function sbTestKort(nu){
   const d = sbOk(), s = sbSt(), anslutna = sbSkarmar().filter(x => sbAnsluten(x, nu)).length;
   const besk = 'Ett påhittat ögonblick på alla skärmar, märkt TEST. Det räknas aldrig.', oppna = `<a class="btn btn-s btn-sm" href="/salesboard" target="_blank" rel="noopener">Öppna tavlan ${I('arrow')}</a>`;
@@ -31629,7 +31702,7 @@ function sbSek(){
   const D = sbD();
   if (D && D.fel) return prfKort('sb-fel', 'Säljtavlan', '', `<div class="prf-kb"><div class="prf-rad"><p class="prf-hj">${esc(D.fel)} Inställningarna gick inte att läsa, och ingenting har ändrats.</p><button type="button" class="btn btn-s btn-sm" data-sbladda>Ladda om</button></div></div>`);
   const d = sbOk(), i = sbInst(), nu = sbNu();
-  return `${d.skriv ? '' : `<p class="sats-las">${I('prflas')}<span>Läsläge: säljtavlans inställningar sparas när beställaren slår på dem.</span></p>`}${sbLageHtml(i, nu)}${sbSkarmarKort(nu)}${sbMalKort(i)}${sbVisningKort(i, nu)}${sbFirandeKort(i)}${sbLjudKort(i, nu)}${sbSaljarKort(i)}${sbTestKort(nu)}`;
+  return `${d.skriv ? '' : `<p class="sats-las">${I('prflas')}<span>Läsläge: säljtavlans inställningar sparas när beställaren slår på dem.</span></p>`}${sbLageHtml(i, nu)}${sbSkarmarKort(nu)}${sbMalKort(i)}${sbTavlingKort(i)}${sbVisningKort(i, nu)}${sbFirandeKort(i)}${sbLjudKort(i, nu)}${sbSaljarKort(i)}${sbTestKort(nu)}`;
 }
 
 /* ---------- Kopplingen till inställningsrutan ---------- */
@@ -31637,6 +31710,7 @@ PRFSEK.push([SBKORT, 'Säljtavlan', 'sbtv', 'TV:n på kontoret: skärmarna, mål
 PRFSOK.push(
   ['sb-skarmar', SBKORT, 'Skärmar och parning', ['tv', 'skärm', 'skärmar', 'para', 'parning', 'kod', 'säljtavla', 'tavla', 'kiosk']],
   ['sb-mal', SBKORT, 'Månadsmål', ['mål', 'månadsmål', 'ordervärde', 'säljtavla']],
+  ['sb-tavling', SBKORT, 'Månadens tävling', ['tävling', 'pris', 'vinst', 'kvalgräns', 'prisbild', 'säljtavla']],
   ['sb-visning', SBKORT, 'Tavlans visning', ['lag', 'namn', 'topplista', 'arbetsdag', 'rörelse', 'säljtavla']],
   ['sb-firande', SBKORT, 'Firande på tavlan', ['stor affär', 'firande', 'rekord', 'efterregistrerad', 'säljtavla']],
   ['sb-ljud', SBKORT, 'Tavlans ljud', ['ljud', 'volym', 'ljudtid', 'helg', 'tyst', 'säljtavla']],
@@ -31673,6 +31747,9 @@ document.addEventListener('click', e => {
   if (!sbOk()) return;
   const s = sbSt(), i = sbInst();
   if (d.sbljudpa !== undefined){ klart(); sbSpara('sb-ljud', 'Ljudet', {ljud:{pa:!i.ljud.pa}}, f => ({ljud:{pa:f.ljud.pa}})); return; }
+  if (d.sbtavpa){ klart(); const m = d.sbtavpa, t = i.tavling[m]; if (!t || !t.pris) return;
+    sbSpara('sb-tavling', `Tävlingen i ${sbManadNamn(m)} ${t.pa ? 'av' : 'på'}`, {tavling:{[m]:{pa:!t.pa}}}, sbTavUndo(m, 'pa')); return; }
+  if (d.sbbildbort){ klart(); sbBild(d.sbbildbort, null); return; }
   if (d.sbhelg !== undefined){ klart(); sbSpara('sb-ljud', 'Tyst på helger', {ljud:{helgTyst:!i.ljud.helgTyst}}, f => ({ljud:{helgTyst:f.ljud.helgTyst}})); return; }
   if (d.sbfira){ klart(); const k = d.sbfira, l = SBFIRA.find(x => x[0] === k)[1]; sbSpara('sb-firande', l, {firande:{[k]:!i.firande[k]}}, f => ({firande:{[k]:f.firande[k]}})); return; }
   if (d.sbdagar){ klart(); const g = sbOk().granser.efterregistreradDagar, nu = s.utk.dagar ?? i.firande.efterregistreradDagar, v = Math.min(g.max, Math.max(g.min, nu + +d.sbdagar)); s.utk.dagar = v; render();
@@ -31702,6 +31779,7 @@ document.addEventListener('input', e => {
   if (d.sbparanamn !== undefined){ s.para.namn = t.value; render(); return; }
   if (d.sbnamnin){ if (s.andrar) s.andrar.namn = t.value; return; }
   if (d.sbbelopp){ s.utk[d.sbbelopp] = t.value; return; }
+  if (d.sbpris){ s.utk['pris:' + d.sbpris] = t.value; const n = t.parentElement.querySelector('.num'); if (n) n.textContent = `${[...t.value].length}/${SBPRIS}`; return; }
   if (d.sbtid){ s.utk[d.sbtid] = t.value; return; }
   // Reglaget: talet följer med medan det dras. Det sparas och provas när det släpps (change).
   if (d.sbvolym !== undefined){ s.utk.volym = +t.value; const o = document.getElementById('sbVolymV'); if (o) o.textContent = t.value; }
@@ -31714,6 +31792,7 @@ document.addEventListener('change', e => {
     const v = +t.value; s.utk.volym = v;
     if (Date.now() - (s.provT || 0) > 300){ s.provT = Date.now(); sbVolymProv(v); }
     clearTimeout(s.volymT); s.volymT = setTimeout(() => { delete s.utk.volym; if (v !== sbInst().ljud.volym) sbSpara('sb-ljud', 'Volymen', {ljud:{volym:v}}, f => ({ljud:{volym:f.ljud.volym}})); else render(); }, 350); return; }
+  if (d.sbbild){ const fil = t.files && t.files[0]; t.value = ''; if (fil) sbBild(d.sbbild, fil); return; }
   if (d.sblag !== undefined){ const v = t.value || null, namn = (sbOk().lagen.find(l => l.id === v) || {namn:'Alla lag'}).namn; sbSpara('sb-visning', `Laget, ${namn}`, {lag:v}, f => ({lag:f.lag})); return; }
   if (d.sbval === 'namn') sbSpara('sb-visning', 'Namnen', {namn:t.value}, f => ({namn:f.namn}));
   else if (d.sbval === 'ordning') sbSpara('sb-visning', 'Topplistans ordning', {ordning:t.value}, f => ({ordning:f.ordning}));
@@ -31725,13 +31804,13 @@ document.addEventListener('focusin', e => {
   const t = e.target; if (!sbI(t) || !t.dataset.sbbelopp) return; const s = sbSt(), k = t.dataset.sbbelopp;
   if (s.utk[k] !== undefined) return;
   // I fältet står talet utan mellanslag, så att det går att skriva om.
-  const i = sbInst(), v = k === 'stor' ? i.firande.storAffar.belopp : Object.hasOwn(i.mal, k.slice(4)) ? i.mal[k.slice(4)] : null;
+  const i = sbInst(), v = k === 'stor' ? i.firande.storAffar.belopp : k.startsWith('grans:') ? (i.tavling[k.slice(6)] || SBINGEN).grans : Object.hasOwn(i.mal, k.slice(4)) ? i.mal[k.slice(4)] : null;
   s.utk[k] = v === null ? '' : String(v); t.value = s.utk[k];
 }, true);
 // På window: inställningsrutans egen lyssnare (capture på document) stänger rutan på Escape och hinner annars före.
 window.addEventListener('keydown', e => {
   const t = e.target; if (!sbI(t) || t.tagName !== 'INPUT') return; const d = t.dataset;
-  if (!(d.sbbelopp || d.sbtid || d.sbnamnin)) return;
+  if (!(d.sbbelopp || d.sbtid || d.sbnamnin || d.sbpris)) return;
   if (e.key === 'Enter'){ e.preventDefault(); e.stopImmediatePropagation(); t.blur(); }
   else if (e.key === 'Escape'){ e.preventDefault(); e.stopImmediatePropagation(); t.dataset.sbavbryt = '1'; t.blur(); }
 }, true);
@@ -31749,6 +31828,24 @@ document.addEventListener('focusout', e => {
     const [del, falt] = k.split('.'), gammal = i[del][falt];
     if (!avbryt && v && /^\d\d:\d\d$/.test(v) && v !== gammal){ const vad = del === 'ljud' ? 'Ljudtiden' : 'Arbetsdagen'; sbSpara(del === 'ljud' ? 'sb-ljud' : 'sb-visning', vad, {[del]:{[falt]:v}}, f => ({[del]:{[falt]:f[del][falt]}})); }
     else render();
+    return;
+  }
+  if (d.sbpris){
+    const m = d.sbpris, t0 = i.tavling[m] || SBINGEN, v = sbRenPris(s.utk['pris:' + m] ?? t0.pris); delete s.utk['pris:' + m];
+    if (avbryt || v === t0.pris){ render(); return; }
+    if (!v && t0.pa){ s.fel['sb-tavling'] = 'Stäng av tävlingen innan priset tas bort.'; render(); return; }
+    sbSpara('sb-tavling', `Priset för ${sbManadNamn(m)}`, {tavling:{[m]:{pris:v}}}, sbTavUndo(m, 'pris'));
+    return;
+  }
+  if (d.sbbelopp && d.sbbelopp.startsWith('grans:')){
+    const k = d.sbbelopp, m = k.slice(6), text = String(s.utk[k] ?? '').replace(/\s/g, ''); delete s.utk[k];
+    const nu = (i.tavling[m] || SBINGEN).grans, gr = sbOk().granser.mal;
+    if (avbryt){ delete s.faltfel[k]; render(); return; }
+    if (text === ''){ delete s.faltfel[k]; if (nu !== null) sbSpara('sb-tavling', `Kvalgränsen för ${sbManadNamn(m)}: ingen`, {tavling:{[m]:{grans:null}}}, sbTavUndo(m, 'grans')); else render(); return; }
+    const n = /^\d+$/.test(text) ? Number(text) : NaN;
+    if (!Number.isInteger(n) || n < gr.min || n > gr.max){ s.faltfel[k] = `Ett belopp från ${sbTal(gr.min)} till ${sbTal(gr.max)} kr, eller tomt för ingen gräns.`; render(); return; }
+    delete s.faltfel[k];
+    if (n !== nu) sbSpara('sb-tavling', `Kvalgränsen för ${sbManadNamn(m)}, ${sbKr(n)}`, {tavling:{[m]:{grans:n}}}, sbTavUndo(m, 'grans')); else render();
     return;
   }
   if (d.sbbelopp){

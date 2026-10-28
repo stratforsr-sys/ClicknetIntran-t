@@ -41,7 +41,22 @@ export type Visning = "namn" | "initialer" | "dold";
 export type Ordning = "varde" | "antal";
 
 /** Testhändelserna admin kan skicka från inställningarna. */
-export type Testtyp = "order" | "stor" | "forsta" | "serie" | "malet";
+export type Testtyp = "order" | "stor" | "forsta" | "serie" | "malet" | "tavling" | "knuff" | "grans";
+
+/**
+ * Månadens tävling (spec 2026-10-26). Den som har högst ordervärde i månaden och
+ * har nått `grans` vinner `pris`. Av betyder att tavlan inte visar något om
+ * tävlingen, och På kräver ett pris.
+ */
+export type Tavling = {
+  pa: boolean;
+  /** "Spa för två", högst 60 tecken. */
+  pris: string;
+  /** Bildens id (`nav_setting` "salesboard.bild.<id>"), aldrig en adress. */
+  bild: string | null;
+  /** Kvalgränsen i kronor, eller null utan gräns. */
+  grans: number | null;
+};
 
 /**
  * Tavlans inställningar, som de ligger i `nav_setting` under nyckeln
@@ -64,6 +79,8 @@ export type TavlansInstallningar = {
    * tills någon ändrar det.
    */
   mal: Record<string, number>;
+  /** Tävlingen per månad ("2026-10" → …). Ärvs inte: en månad utan egen tävling har ingen. */
+  tavling: Record<string, Tavling>;
   /** Arbetsdagen för vilan, "HH:MM" svensk tid. */
   arbetsdag: { fran: string; till: string };
   rorelse: "full" | "lugn";
@@ -177,7 +194,7 @@ export type Ogonblick = {
    * Utan `lag`: lagets id (`team.id`) är internt och ska inte ut på en TV eller i
    * utvecklarverktygen. Lagets namn står i `lag` ovan.
    */
-  installningar: Omit<TavlansInstallningar, "lag" | "mal">;
+  installningar: Omit<TavlansInstallningar, "lag" | "mal" | "tavling">;
   manad: {
     /** "2026-10". Ett nytt värde nollställer det tavlan kommit ihåg om månaden. */
     nyckel: string;
@@ -219,4 +236,33 @@ export type Ogonblick = {
   order: TavleOrder[];
   personer: Record<string, TavlePerson>;
   handelser: TavleHandelse[];
+  /** Månadens tävling när den är på, annars null. Loppet räknar tavlan själv ur `saljare`. */
+  tavling: TavleTavling | null;
+  /** Förra månadens vinnare, bara första arbetsdagen i månaden och bara om tävlingen var på. */
+  vinnare: TavleVinnare | null;
+};
+
+/** Månadens tävling som tavlan får se den. */
+export type TavleTavling = {
+  pris: string;
+  /** Adressen till prisbilden (`/salesboard/bild?id=…`), eller null utan bild. */
+  bild: string | null;
+  grans: number | null;
+  /** Arbetsdagar kvar efter i dag. 0 är sista arbetsdagen. */
+  dagarKvar: number;
+};
+
+/** Hur förra månadens tävling slutade. */
+export type TavleVinnare = {
+  /** "2026-09". */
+  nyckel: string;
+  /** "september". */
+  manad: string;
+  pris: string;
+  bild: string | null;
+  /** Vinnarnas nycklar i `personer`, fler vid lika. Tom när ingen nådde gränsen. */
+  personer: string[];
+  /** Vinnarens ordervärde, eller null utan vinnare. */
+  varde: number | null;
+  grans: number | null;
 };

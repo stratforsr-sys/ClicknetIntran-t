@@ -153,7 +153,8 @@ export async function POST(request: Request) {
       }
 
       case "trappa-bort": {
-        if (!hasRole(user, "sales_manager", "ceo")) return svar({ fel: "Bara säljchef och VD får ändra provisionsreglerna." }, 403);
+        // B13 (beställaren 2026-10-23): bara Superadmin. Samma vakt som repots kravRegelagare.
+        if (nivaFor(user.roles) !== "superadmin") return svar({ fel: "Bara en superadmin ändrar provisionsreglerna." }, 403);
         const idag = svensktDatum(new Date());
         const { data: kommande } = await db.from("commission_bonus_level").select("id, valid_from").gt("valid_from", idag);
         if (!kommande || !kommande.length) return svar({ fel: "Det finns ingen kommande trappa." }, 400);
@@ -177,7 +178,8 @@ export async function POST(request: Request) {
 
       case "chefssats-bort": {
         // Samma krets som sparaChefssats. Den öppna raden har inte börjat gälla; raden före den gäller vidare.
-        if (!hasRole(user, "sales_manager", "ceo")) return svar({ fel: "Bara säljchef och VD får ändra provisionsreglerna." }, 403);
+        // B13 (beställaren 2026-10-23): bara Superadmin. Samma vakt som repots kravRegelagare.
+        if (nivaFor(user.roles) !== "superadmin") return svar({ fel: "Bara en superadmin ändrar provisionsreglerna." }, 403);
         const idag = svensktDatum(new Date());
         const { data: kommande } = await db.from("manager_commission_rate").select("id, valid_from").is("valid_to", null).gt("valid_from", idag).maybeSingle();
         if (!kommande) return svar({ fel: "Det finns ingen kommande sats." }, 400);

@@ -5,6 +5,115 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-26 · Säljtavlan: månadens tävling
+
+Beställaren ville att tavlan ska visa tävlingen, knuffa den som är nära och visa priset
+med en bild. Allt ställs in i Nav 2.0 och bara av superadmin.
+
+Brainstormen gav reglerna: tävlingen är en kalendermånad, en enskild säljare vinner med
+högst ordervärde, dolda säljare är inte med, och kvalgränsen krävs för att vinna.
+Beställaren valde mellanspel var tionde minut, en knuff direkt efter ordern och en scen
+vid gränsen. I dag kom ett tillägg: brytaren Av stänger av alla tävlingsscener.
+
+Designen bygger på tre fynd:
+- Målgradienten: avståndet sägs i order, inte i kronor.
+- Rivalitet mellan grannar: tvåan ställs mot ettan.
+- Barankay: den som ligger långt efter visas aldrig.
+
+Spec och plan står i `docs/superpowers/`.
+
+**Mina val**, som beställaren godkände med "Bygg upp allting nu":
+- Sista veckan går mellanspelet var femte minut, och sista dagen står det "Avgörs i dag".
+- Vinnaren visas första arbetsdagens morgon.
+- Lika i toppen delar ledningen och priset.
+- Ingen egen scen för ny ledare.
+
+**Byggt**
+- **Inställningen och skrivvägen** (`installningar.ts`, `skrivning.ts`, `handlingar.ts`):
+  - `tavling` per månad. På kräver pris, och priset har högst 60 tecken utan konstiga tecken.
+  - Kvalgränsen inom målets gränser, eller null.
+  - Handlingen `bild` lägger upp en JPEG som egen rad i `nav_setting`. Bilder som ingen
+    månad pekar på städas bort.
+  - Bilden ligger i databasen och inte i fillagringen, som profilbilderna. Den är en fil på
+    cirka 150 kB i månaden, och tavlans egen rutt kan då ge samma åtkomst som datan.
+- **Ögonblicksbilden** (`forma.ts`, `tavlan.ts`): `tavling` med `dagarKvar`, och `vinnare`.
+  - Vinnaren beräknas bara första arbetsdagen och bara efter en påslagen tävling.
+  - Den räknas på förra månadens order, i laget, utan dolda säljare och mot gränsen.
+- **Loppet och planeringen** (`tavling.ts`, `regler.ts`, `ko.ts`):
+  - Inom räckhåll betyder högst tre snittorder bakom, och högst två visas utöver ledaren.
+  - Knuffen går en gång per dag, och gränsscenen en gång per månad, sparat i `Minne`.
+  - Bara en order som firas knuffar.
+  - Kön går ordern, gränsen, knuffen, målet.
+  - `aktuell` släpper tävlingsposter när brytaren slagits av.
+- **Kompositionerna** `motion/Tavlingen.tsx` (mellanspelet och vinnaren) och
+  `motion/Knuffen.tsx` (knuffen och gränsen).
+  - Bildrutedrivna och utan CSS-övergångar.
+  - Staplarna har en stagger på 130 ms, och gränsen är ett streckat märke.
+  - Mellanspelet är tyst, och knuffen har ett svagt ljud.
+  - Prisbilden förladdas och avkodas innan den visas.
+- **Nav 2.0-kortet "Månadens tävling"** (`ndsb.js`):
+  - Två månader, var och en med brytaren, priset med räknare, gränsen och bilden.
+  - Bilden beskärs till 4:5 i canvas innan den laddas upp.
+  - Kortet visar läget just nu (`facit.topp`/`varden`).
+  - Testknapparna Tävlingen, Knuffen och Gränsen, och en ruta för tävlingen i lägesraden.
+
+**Verifierat**
+- Alla åtta provsviter gröna, med nya prov för:
+  - läsaren och skrivningen
+  - bilden
+  - vinnaren
+  - loppet
+  - knuffen och gränsen i planeringen
+  - kön
+  - tiderna och ljuden
+- Sidprovet med låtsasserver: de gamla 68 kontrollerna och 36 nya.
+- Varje scen sedd i selen, också svepet in och ut, bildruta för bildruta. Två saker rättades
+  efter det:
+  - Gränslinjen gick genom texten.
+  - Utgången blinkade mint.
+
+**Inte kontrollerat:** uppladdning och visning mot riktig data i previewen, och ljuden i en
+högtalare.
+
+## 2026-10-25 · Säljtavlan inmergad i `nav2-utkast`, 0250 körd
+
+Beställaren 2026-10-25: säljtavlan följer med Nav 2.0 och mergas till main tillsammans med den.
+Grenen `salesboard` (`8c37c55` + `60f5f14`) är ihopslagen till en commit ovanpå `nav2-utkast`.
+Konflikterna var bara textuella: `package.json` (båda provlistorna), ARBETSLOGG och NASTA_SESSION.
+`src/nav2/utkast.html` byggd om ur grenens version med `delar/saljtavlan/bygg-utkast.py`.
+
+**0250 KÖRD** (17:56 UTC, efter beställarens ja). Torrkörd först med vakten från `nav2-utkast`
+(grenens `salesboard`-vakt kände inte till 0241:s nya adoption-kroppar): inga nya rättigheter.
+Efteråt: fyra tabeller med RLS, varken anon eller authenticated når tabellerna eller funktionerna,
+`salesboard_statistik` svarar, och ringklockan ringer: en anon-klient på kanalen `salesboard` fick
+en `ping` på `delete from salesboard_person where false` (ingen rad ändrad).
+
+**Inte kontrollerat:** ljudet i högtalare, tavlan och Inställningar → Säljtavlan mot riktig data i
+previewen (kräver att beställaren loggar in som superadmin).
+
+## 2026-10-25 · 0155 körd: policyerna räknas en gång per sats
+
+- Genererad om ur `pg_policies` samma dag, sist av alla policyändringar (B10), eftersom en äldre
+  fil hade skrivit tillbaka gamla uttryck. Bevisad rad för rad för nio konton, 0 avvikelser.
+- Previewen som Zen: datan gick från cirka 1 000 ms till cirka 470 ms med varm anslutning.
+
+## 2026-10-25 · Granskningen S16: behörighetsspärren (B13) och V4
+
+- **Superadmin på riktigt.** Beställaren 2026-10-23: raderna märkta "förslag" ska bara gå att göra
+  för Superadmin. Spärren ligger i gamla Navs actions, som Nav 2.0:s rutter anropar, så en vakt
+  täcker båda: `arSuperadmin` (`hasRole(user, "ceo", "admin")`, samma regel som `nivaFor`). Rutter som
+  skriver direkt (`trappa-bort`, `chefssats-bort`) prövar `nivaFor` själva. Utseendet är orört:
+  servern nekar med ett besked.
+- **Databasen behövde nästan ingenting.** Regeltabellerna har inga skrivpolicyer för inloggade, och
+  `radera_order`/`ta_bort_anstalld` är bara servicerollens. Bara `adoption_*` (0029) släppte in
+  säljchefen: 0241 byter rollvillkoret och inget annat.
+- **Händelseloggens RLS rördes inte.** `audit_log` läses också av Admins egna vyer (Anställdas
+  historik, lönerapporten, avvikelser). Policyn smalnas av först när de läsningarna gått över till
+  servicerollen.
+- **Tolkningar:** "scheman" = bolagets och teamens (en persons eget schema är Personalen); säljaren
+  raderar sitt eget utkast som förut. Båda står i `delar/granskning/S16/inventering.md`.
+- **V4:** `taBortBilaga` i Rutiner tog bort vilket fil-id som helst, eftersom bara dokumentet
+  prövades. Nu krävs en levande `document_attachment` på just den rutinen, som S10b gjorde i Order.
 ## 2026-10-25 · Säljtavlan: inställningarna i Nav 2.0, bara superadmin; förbättringsvarvet (gren `salesboard`)
 
 - **Varför:** beställaren hittade inga inställningar och ville kunna se och använda dem,

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { getCurrentUser, hasRole } from "@/lib/auth";
+import { arSuperadmin, getCurrentUser } from "@/lib/auth";
 import { svensktDatum } from "@/lib/klocka";
 import { kronor, manadFore, manadsnyckel } from "@/lib/provision";
 import { BONUSENHETER, type Bonusenhet } from "@/lib/provision-motor";
@@ -22,14 +22,16 @@ export type ReglerState = { fel?: string; ok?: string };
  * 0034 redan drog.
  * ===========================================================================
  *
- * Vem som far andra: SALJCHEF OCH VD. Ekonomi ser men andrar inte
+ * Vem som far andra: SUPERADMIN (B13, beställaren 2026-10-23; förut säljchef
+ * och VD). Ekonomi ser men andrar inte
  * (PROVISION_SPEC.md avsnitt 2). Den som betalar ut ska inte ocksa vara den som
  * bestammer vad som ska betalas ut.
  */
 async function kravRegelagare() {
   const user = await getCurrentUser();
-  if (!hasRole(user, "sales_manager", "ceo") || !user?.employee) {
-    throw new Error("Bara saljchef och VD far andra provisionsreglerna.");
+  // B13 (beställaren 2026-10-23): bara Superadmin.
+  if (!arSuperadmin(user) || !user?.employee) {
+    throw new Error("Bara en superadmin ändrar provisionsreglerna.");
   }
   return user;
 }
