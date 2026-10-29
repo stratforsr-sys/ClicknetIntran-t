@@ -443,6 +443,9 @@ const TACKNING = {
   "profil::skickaKod": "Den egna handlingen.",
   "profil::verifieraKod": "Den egna handlingen.",
   "profil::glomEnheten": "Den egna handlingen.",
+  "profil::hamtaUtskick": "Bara en laesning av den egna inställningen. Ingenting skrivs.",
+  "profil::sparaUtskickAction":
+    "En inställning om hur notiser levereras, inte en handelse om en person. Det egna lagret ar den egna handlingen, de andra lagren sparas bara av superadmin och bokfors i audit_log (notification_rule.changed).",
   "angra::angra":
     "Kvittot med angra-knappen visas bara for den som NYSS gjorde atgarden, och varje gren gor om behorighetskontrollen. Angraren ar alltsa alltid samma person som utforaren, och `notifiera()` skickar aldrig till aktoren. Se rubriken i notiser.ts.",
 };

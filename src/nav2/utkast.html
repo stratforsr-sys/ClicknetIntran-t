@@ -7503,6 +7503,28 @@ body.nd-riktig :is(.pv-lagrad,.arow[data-agenda],.pv-tab tbody tr[data-pvupers],
 .sb-valj:focus-within{outline:2px solid var(--brand);outline-offset:2px}
 @media (max-width:640px){.sb-lage{grid-template-columns:repeat(2,minmax(0,1fr))}.sb-tav{grid-template-columns:72px minmax(0,1fr);gap:12px}}
 /* </ndsb.css> */
+/* Utskick: raderna följer Säljtavlans och Notisernas, bara med en pil för områdena och en lista att välja person i. */
+.ut-opp{flex:none;display:grid;place-items:center;width:22px;height:22px;margin-left:-4px;border-radius:5px;color:var(--prf-ink-3)}
+.ut-opp:hover{color:var(--ink);background:var(--surface-2)}
+.ut-opp:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
+.ut-pil{width:14px;height:14px;transition:transform .15s var(--ease)}
+.ut-opp[aria-expanded="true"] .ut-pil{transform:rotate(90deg)}
+.ut-grupp{margin:0 0 4px 7px;padding-left:14px;border-left:1px solid var(--line-2)}
+.ut-barn .prf-swt b{font-weight:450}
+.ut-last .prf-swt b{color:var(--ink-2)}
+.ut-last .prf-sw{opacity:.45;cursor:not-allowed}
+.ut-rad{flex-wrap:wrap}
+.ut-rad .prf-seg{margin:0;align-self:center}
+.ut-pers{display:flex;flex-direction:column;max-height:280px;overflow:auto;margin:0 0 8px;border:1px solid var(--line);border-radius:6px}
+.ut-p{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;text-align:left;border-top:1px solid var(--line)}
+.ut-p:first-child{border-top:0}
+.ut-p:hover{background:var(--surface-2)}
+.ut-p[aria-pressed="true"]{background:var(--surface-2);box-shadow:inset 2px 0 0 var(--brand)}
+.ut-p:focus-visible{outline:2px solid var(--brand);outline-offset:-2px}
+.ut-p b{display:block;font-size:13.5px;font-weight:550;color:var(--ink)}
+.ut-p small{font-size:12.5px;color:var(--prf-ink-3)}
+.ut-p em{font-style:normal;font-size:12px;color:var(--prf-ink-3);white-space:nowrap}
+@media (prefers-reduced-motion:reduce){.ut-pil{transition:none}}
 </style>
 
 <div class="proto" role="region" aria-label="Prototypinställningar">
@@ -21266,7 +21288,8 @@ function prfTemaSynk(){ if (S.prfRuta || S.prfMeny) render(); }
 const prfDatornMorkt = () => matchMedia('(prefers-color-scheme: dark)').matches;
 
 /* ---------- Klockan: bara de sorter man vill ha ---------- */
-const prfNotisPa = (kat, r = prfRoll()) => !kat || (S.prfLagrat ? S.prfLagrat.notis[r][kat] !== false : true);
+// I live-läge filtrerar servern klockan själv (utskicken, 0255); localStorage-valen gäller bara demot.
+const prfNotisPa = (kat, r = prfRoll()) => !!ND || !kat || (S.prfLagrat ? S.prfLagrat.notis[r][kat] !== false : true);
 const _prfBellPoster = bellPoster;
 bellPoster = function(){ return _prfBellPoster().filter(x => prfNotisPa(prfKat(x.id))); };
 // Det som ligger i klockan nu, per sort: antalet och den senaste rubriken. Räknas en gång per ritning.
@@ -34456,6 +34479,285 @@ if (ND){
   const till = ndSakerTill(new URLSearchParams(location.search).get('till'));
   if (till){ try { history.replaceState(null, '', '/nav2'); } catch(_){} setTimeout(() => ndGa(till), 0); }
 }
+
+/* ---------- Utskick: vem får vad, i vilken kanal (0255) ----------
+   Notiser (det egna lagret) och Utskick (superadmin: bolaget, nivåerna och var och en) läser och skriver mot /nav2/utskick.
+   Utan ND (demot) gäller Notiser som förut, med valen i localStorage. Servern filtrerar klockan själv. */
+P.utskick = '<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>';
+const UTKORT = 'utskick';
+const UTK = ['klocka', 'mejl', 'push', 'morgon'];
+const UTKANAL = {klocka:['klocka', 'I klockan', 'Det som väntar på dig står kvar i vyerna, även när notisen är av.'],
+  mejl:['ut-mejl', 'Mejl', 'Det som mejlas till dig. Inloggningskoder skickas alltid och går inte att stänga av.'],
+  push:['ut-push', 'Telefonen', 'Pushnotiser till de enheter där du slagit på dem.'],
+  morgon:['ut-morgon', 'Morgonbrevet', 'Vilka avsnitt som kommer med i brevet på morgonen.']};
+const UTSKORT = {klocka:'I klockan', mejl:'Mejl', push:'Telefonen', morgon:'Morgonbrevet'};
+const UTLC = {klocka:'klockan', mejl:'mejlet', push:'telefonen', morgon:'morgonbrevet'};
+const UTALLT = {klocka:'Allt i klockan', mejl:'Allt som mejlas', push:'Allt i telefonen', morgon:'Hela morgonbrevet'};
+const utFar = () => !!ND && brhSuper();
+function utSt(){ return S.ut || (S.ut = {vy:null, laddar:false, fel:'', oppen:{}, omf:'alla', niva:'salesperson', pid:null, q:'', ffel:{}, vant:0, minaGammal:false}); }
+function utLadda(om){
+  const s = utSt(); if (s.laddar || (s.vy && !om)) return;
+  s.laddar = true; s.fel = '';
+  ndLas('/nav2/utskick').then(r => {
+    s.laddar = false;
+    const d = r.ok ? r.data : null;
+    if (d && d.katalog && !d.fel){ if (!s.vant){ s.vy = d; s.minaGammal = false; } }
+    else if (!s.vy) s.fel = (d && d.fel) || r.fel || 'Utskicken gick inte att läsa.';
+    render();
+  });
+}
+/* Samma regler som far() i src/lib/utskick.ts: det mest specifika först i varje lager, och person före nivå före bolaget. */
+const utF = (l, k, n) => { const r = l && l[k]; return r && typeof r[n] === 'boolean' ? r[n] : undefined; };
+function utForsta(l, k, nyck){ for (const n of nyck){ const v = utF(l, k, n); if (v !== undefined) return v; } return undefined; }
+const utSa = (L, k, n) => utForsta(L.person, k, n) ?? utForsta(L.niva, k, n) ?? utForsta(L.alla, k, n);
+const utLast = (L, k, n) => utSa(L, k, n) === false;
+function utFarEgen(L, k, n, st){ const sa = utSa(L, k, n); if (sa === false) return false; const e = utForsta(L.egen, k, n); return e !== undefined ? e : (sa ?? st); }
+const utAntalAv = r => { let n = 0; for (const k of Object.keys(r || {})) for (const v of Object.values(r[k] || {})) if (v === false) n++; return n; };
+const utNyckelNamn = (vy, k, n) => {
+  if (n === '*') return 'Hela kanalen';
+  const c = vy.katalog;
+  if (n.startsWith('omrade:')) return (c.omraden.find(o => o.id === n.slice(7)) || {namn:n}).namn;
+  if (n.startsWith('avsnitt:')) return (c.avsnitt.find(a => a.id === n.slice(8)) || {namn:n}).namn;
+  for (const o of c.omraden){ const x = o.sorter.find(y => 'sort:' + y.id === n); if (x) return x.namn; }
+  return n;
+};
+/* Raderna per kanal: områden med sina sorter (morgonbrevet: avsnitten), med läge och lås för mig. */
+function utKanalRader(vy, kanal){
+  const L = vy.mina;
+  if (kanal === 'morgon'){
+    const sorter = vy.katalog.avsnitt.map(a => { const n = ['avsnitt:' + a.id, '*']; return {id:a.id, nyckel:'avsnitt:' + a.id, namn:a.namn, pa:utFarEgen(L, kanal, n, true), last:utLast(L, kanal, n)}; });
+    return {kanal, omraden:[], sorter, tot:sorter.length, pa:sorter.filter(x => x.pa).length, last:sorter.length > 0 && sorter.every(x => x.last)};
+  }
+  const omraden = vy.katalog.omraden.map(o => {
+    const sorter = o.sorter.filter(x => x.kanaler.includes(kanal)).map(x => { const n = ['sort:' + x.id, 'omrade:' + o.id, '*']; return {id:x.id, nyckel:'sort:' + x.id, namn:x.namn, pa:utFarEgen(L, kanal, n, !!x.standard[kanal]), last:utLast(L, kanal, n)}; });
+    return {id:o.id, nyckel:'omrade:' + o.id, namn:o.namn, sorter, pa:sorter.filter(x => x.pa).length, last:sorter.length > 0 && sorter.every(x => x.last), nlast:sorter.filter(x => x.last).length};
+  }).filter(o => o.sorter.length);
+  const tot = omraden.reduce((a, o) => a + o.sorter.length, 0);
+  return {kanal, omraden, sorter:[], tot, pa:omraden.reduce((a, o) => a + o.pa, 0), last:tot > 0 && omraden.every(o => o.last)};
+}
+/* Lagren: läsa, ändra och byta ut. */
+function utRegler(ml){
+  const vy = utSt().vy; if (!vy) return null;
+  if (ml.lager === 'egen') return vy.mina.egen || (vy.mina.egen = {});
+  const b = vy.bolaget; if (!b) return null;
+  if (ml.lager === 'alla') return b.alla || (b.alla = {});
+  if (ml.lager === 'niva') return b.nivaer[ml.niva] || (b.nivaer[ml.niva] = {});
+  const p = b.personer.find(x => x.id === ml.employeeId); return p ? p.person : null;
+}
+function utByt(ml, r){
+  const vy = utSt().vy; if (!vy || !r) return;
+  if (ml.lager === 'egen') vy.mina.egen = r;
+  else if (vy.bolaget){
+    if (ml.lager === 'alla') vy.bolaget.alla = r; else if (ml.lager === 'niva') vy.bolaget.nivaer[ml.niva] = r;
+    else { const p = vy.bolaget.personer.find(x => x.id === ml.employeeId); if (p){ p.person = r; p.av = utAntalAv(p.person) + utAntalAv(p.egen); } }
+  }
+}
+function utLagg(ml, kanal, nyckel, v){
+  const reg = utRegler(ml); if (!reg) return;
+  const r = reg[kanal] || (reg[kanal] = {});
+  if (v === null) delete r[nyckel]; else r[nyckel] = v;
+  if (!Object.keys(r).length) delete reg[kanal];
+  if (ml.lager === 'person'){ const p = utSt().vy.bolaget.personer.find(x => x.id === ml.employeeId); if (p) p.av = utAntalAv(p.person) + utAntalAv(p.egen); }
+}
+/* Skriver en eller flera nycklar i ett lager, i ordning. Det visas direkt och rullas tillbaka om servern säger nej. */
+let utKo = Promise.resolve();
+function utSkriv(ml, kanal, par, txt, st, angra = false){
+  const s = utSt(); if (!s.vy || !utRegler(ml)) return Promise.resolve();
+  const fore = par.map(([n]) => [n, utF(utRegler(ml), kanal, n) ?? null]);
+  s.vant++; delete s.ffel[st];
+  par.forEach(([n, v]) => utLagg(ml, kanal, n, v)); if (ml.lager !== 'egen') s.minaGammal = true; render();
+  const kor = async () => {
+    let sist = null;
+    for (const [n, v] of par){
+      const r = await ndSkriv('/nav2/utskick', {lager:ml.lager, niva:ml.niva, employeeId:ml.employeeId, kanal, nyckel:n, varde:v}, {knapp:null});
+      if (!r.ok) return r;
+      if (r.data && r.data.regler) sist = r.data.regler;
+    }
+    return {ok:true, regler:sist};
+  };
+  const p = utKo.then(kor); utKo = p.catch(() => {});
+  return p.then(r => {
+    s.vant--;
+    if (!r.ok){
+      if (!r.pagar){ fore.forEach(([n, v]) => utLagg(ml, kanal, n, v)); if (r.utloggad) ndSkrivFel(r); s.ffel[st] = r.fel || 'Det gick inte att spara.'; S.prfSr = s.ffel[st]; }
+      if (angra) delete S.prfSparat[st];
+      render(); return;
+    }
+    if (!s.vant && r.regler) utByt(ml, r.regler);
+    prfStatus(st, angra ? 'Ångrat.' : `${txt}.`, angra ? null : () => utSkriv(ml, kanal, fore, txt, st, true));
+    S.prfSr = angra ? `${txt}: ångrat.` : `${txt}.`;
+    render();
+  });
+}
+const utFel = st => { const f = utSt().ffel[st]; return f ? `<p class="prf-fel" role="alert">${I('prfvarn')}<span>${esc(f)}</span></p>` : ''; };
+const utOppen = id => !!utSt().oppen[id];
+const utPil = (id, namn) => `<button type="button" class="ut-opp" data-utoppna="${esc(id)}" aria-expanded="${utOppen(id)}" aria-label="${utOppen(id) ? 'Dölj' : 'Visa'} ${esc(namn)}">${I('prfpil', 'ut-pil')}</button>`;
+const utId = s => 'ut' + String(s).replace(/\*/g, 'alla').replace(/\W/g, '');
+/* En rad med brytare. `attr` är data-attributet, `val` dess värde. */
+function utSw(attr, val, on, l, h, o = {}){
+  const id = utId(attr + val);
+  return `<div class="prf-swrad${o.barn ? ' ut-barn' : ''}${o.last ? ' ut-last' : ''}">${o.pil || ''}<span class="prf-swt"><b id="${id}L">${l}</b>${h ? `<small id="${id}H">${h}</small>` : ''}</span><button type="button" role="switch" class="prf-sw" aria-checked="${on}" aria-labelledby="${id}L" ${h ? `aria-describedby="${id}H"` : ''} ${attr}="${esc(val)}" ${o.last ? 'disabled' : ''}><i></i></button></div>`;
+}
+const UTLAST = 'Avstängt av superadmin';
+/* ---------- Inställningar, Notiser: det egna lagret ---------- */
+function utEgetKort(vy, kanal){
+  const [id, titel, besk] = UTKANAL[kanal], d = utKanalRader(vy, kanal), st = 'ut-' + kanal, ordet = kanal === 'morgon' ? 'avsnitt' : 'sorter';
+  const alla = utSw('data-utegen', kanal + '|*', d.pa > 0, UTALLT[kanal], d.last ? UTLAST : `${d.pa} av ${d.tot} ${ordet} är på`, {last:d.last});
+  const rader = kanal === 'morgon'
+    ? d.sorter.map(x => utSw('data-utegen', kanal + '|' + x.nyckel, x.pa, esc(x.namn), x.last ? UTLAST : '', {last:x.last})).join('')
+    : d.omraden.map(o => {
+        const oid = 'e:' + kanal + '|' + o.id, barn = utOppen(oid) ? `<div class="ut-grupp">${o.sorter.map(x => utSw('data-utegen', kanal + '|' + x.nyckel, x.pa, esc(x.namn), x.last ? UTLAST : '', {last:x.last, barn:true})).join('')}</div>` : '';
+        const h = o.last ? UTLAST : `${o.pa} av ${o.sorter.length} på${o.nlast ? ` · ${o.nlast} avstängda av superadmin` : ''}`;
+        return utSw('data-utegen', kanal + '|' + o.nyckel, o.pa > 0, esc(o.namn), h, {last:o.last, pil:utPil(oid, o.namn)}) + barn;
+      }).join('');
+  const summa = `<div class="prf-summa"><span><b class="num">${d.pa}</b> av <span class="num">${d.tot}</span> ${ordet} är på</span>${d.pa < d.tot && !d.last ? `<button type="button" class="prf-angra" data-utegenalla="${kanal}">Slå på alla</button>` : ''}</div>`;
+  const slut = kanal === 'klocka' ? `<p class="prf-hj">Notiser visar aldrig skälet till en ledighet eller något om hälsa, bara vad som hänt och var.</p>` : '';
+  return prfKort(id, titel, besk, `<div class="prf-kb prf-lista">${summa}${alla}${rader}${slut}${utFel(st)}</div>`, {st});
+}
+function utEgnaKort(){
+  const s = utSt(), vy = s.vy;
+  if (!vy){
+    const [id, titel, besk] = UTKANAL.klocka;
+    return prfKort(id, titel, besk, `<div class="prf-kb">${s.fel ? `<div class="prf-rad"><p class="prf-hj">${esc(s.fel)} Inga val har ändrats.</p><button type="button" class="btn btn-s btn-sm" data-utladda>Försök igen</button></div>` : `<p class="prf-hj" role="status">Läser dina val …</p>`}</div>`, {st:'ut-klocka'});
+  }
+  return UTK.map(k => utEgetKort(vy, k)).join('');
+}
+const _utNotiserSek = prfNotiserSek;
+prfNotiserSek = function(){
+  const h = _utNotiserSek(); if (!ND) return h;
+  const s = utSt();
+  if (!s.vy && !s.laddar && !s.fel) utLadda(); else if (s.vy && s.minaGammal && !s.laddar && !s.vant) utLadda(true);
+  const i = h.indexOf('id="prf-r-klocka"'); if (i < 0) return h;
+  const a = h.lastIndexOf('<div class="prf-kort', i), b = h.indexOf('<div class="prf-kort', i + 1);
+  return h.slice(0, a) + utEgnaKort() + (b < 0 ? '' : h.slice(b));
+};
+/* ---------- Inställningar, Utskick (superadmin) ---------- */
+function utOmf(vy){
+  const s = utSt(), b = vy.bolaget;
+  if (s.omf === 'alla') return {ml:{lager:'alla'}, regler:b.alla || {}, namn:'hela bolaget', ovan:[]};
+  if (s.omf === 'niva'){ const n = vy.katalog.nivaer.find(x => x.id === s.niva) || vy.katalog.nivaer[0]; s.niva = n.id; return {ml:{lager:'niva', niva:n.id}, regler:b.nivaer[n.id] || {}, namn:`nivån ${n.namn.toLowerCase()}`, ovan:[['bolaget', b.alla]]}; }
+  const p = b.personer.find(x => x.id === s.pid); if (!p) return null;
+  return {ml:{lager:'person', employeeId:p.id}, regler:p.person || {}, namn:p.namn, p, ovan:[['nivån', b.nivaer[p.niva]], ['bolaget', b.alla]]};
+}
+function utArvt(o, kanal, nyck, st){
+  for (const [fran, l] of o.ovan){ const v = utForsta(l, kanal, nyck); if (v !== undefined) return `Ärver ${v ? 'på' : 'av'} från ${fran}`; }
+  return st === undefined ? 'Ärver standarden' : `Ärver standarden: ${st ? 'på' : 'av'}`;
+}
+function utTri(o, kanal, nyckel, namn, nyck, st, ex = {}){
+  const v = utF(o.regler, kanal, nyckel), val = v === undefined ? 'arv' : v ? 'pa' : 'av', rid = utId(`${o.ml.lager}${o.ml.niva || ''}${o.ml.employeeId || ''}${kanal}${nyckel}`);
+  const h = v === undefined ? (ex.h || utArvt(o, kanal, nyck, st)) : (ex.h || '');
+  return `<div class="prf-swrad ut-rad${ex.barn ? ' ut-barn' : ''}">${ex.pil || ''}<span class="prf-swt"><b>${esc(namn)}</b>${h ? `<small>${esc(h)}</small>` : ''}</span><fieldset class="prf-seg" aria-label="${esc(namn)}, ${esc(UTLC[kanal])}">${[['arv', 'Ärv'], ['pa', 'På'], ['av', 'Av']].map(([k, t]) => `<label><input type="radio" name="${rid}" value="${k}" data-uttri="${esc(kanal + '|' + nyckel)}" ${val === k ? 'checked' : ''}><span>${t}</span></label>`).join('')}</fieldset></div>`;
+}
+function utSkortKort(vy, o, kanal){
+  const st = 'ut-s-' + kanal, reg = (o.regler && o.regler[kanal]) || {}, satta = Object.keys(reg).length, av = Object.values(reg).filter(v => v === false).length;
+  const summa = `<div class="prf-summa"><span>${satta ? `<b class="num">${satta}</b> ${satta === 1 ? 'val satt' : 'val satta'} här, <span class="num">${av}</span> av` : 'Inget satt här, allt ärvs'}</span></div>`;
+  let rader;
+  if (kanal === 'morgon') rader = vy.katalog.avsnitt.map(a => utTri(o, kanal, 'avsnitt:' + a.id, a.namn, ['avsnitt:' + a.id, '*'], true)).join('');
+  else rader = vy.katalog.omraden.map(om => {
+    const sorter = om.sorter.filter(x => x.kanaler.includes(kanal)); if (!sorter.length) return '';
+    const oid = 's:' + kanal + '|' + om.id, nSatta = sorter.filter(x => utF(o.regler, kanal, 'sort:' + x.id) !== undefined).length;
+    const barn = utOppen(oid) ? `<div class="ut-grupp">${sorter.map(x => utTri(o, kanal, 'sort:' + x.id, x.namn, ['sort:' + x.id, 'omrade:' + om.id, '*'], x.standard[kanal], {barn:true})).join('')}</div>` : '';
+    return utTri(o, kanal, 'omrade:' + om.id, om.namn, ['omrade:' + om.id, '*'], undefined, {pil:utPil(oid, om.namn), h:nSatta ? `${nSatta} av ${sorter.length} sorter har eget val` : ''}) + barn;
+  }).join('');
+  return prfKort(st, UTSKORT[kanal], kanal === 'morgon' ? 'Vilka avsnitt som kommer med i morgonbrevet.' : `Vad som går ut i ${UTLC[kanal]}.`,
+    `<div class="prf-kb prf-lista">${summa}${utTri(o, kanal, '*', 'Hela kanalen', ['*'], undefined, {})}${rader}${utFel(st)}</div>`, {st});
+}
+function utPersLista(vy){
+  const s = utSt(), q = norm(s.q.trim()), lista = vy.bolaget.personer.filter(p => !q || norm(p.namn).includes(q)).sort((a, b) => a.namn.localeCompare(b.namn, 'sv'));
+  const niv = id => (vy.katalog.nivaer.find(n => n.id === id) || {namn:id}).namn;
+  if (!lista.length) return `<p class="prf-hj">${q ? 'Ingen som heter så.' : 'Inga personer.'}</p>`;
+  return lista.map(p => `<button type="button" class="ut-p" data-utperson="${esc(p.id)}" aria-pressed="${s.pid === p.id}"><span><b>${esc(p.namn)}</b><small>${esc(niv(p.niva))}</small></span>${p.av ? `<em class="num">${p.av} ${p.av === 1 ? 'avstängd' : 'avstängda'}</em>` : ''}</button>`).join('');
+}
+function utEgenLasning(vy, p){
+  const rader = UTK.map(k => { const r = (p.egen && p.egen[k]) || {}, av = Object.keys(r).filter(n => r[n] === false).map(n => utNyckelNamn(vy, k, n)), pa = Object.keys(r).filter(n => r[n] === true).map(n => utNyckelNamn(vy, k, n));
+    return av.length || pa.length ? `<div class="prf-swrad"><span class="prf-swt"><b>${UTSKORT[k]}</b><small>${av.length ? `Stängt: ${esc(av.join(', '))}` : ''}${av.length && pa.length ? '. ' : ''}${pa.length ? `Valt på: ${esc(pa.join(', '))}` : ''}</small></span></div>` : ''; }).filter(Boolean);
+  return prfKort('ut-egenval', 'Det personen valt själv', 'Bara att läsa. Personen kan stänga av mer, men aldrig slå på det som är stängt här.', `<div class="prf-kb prf-lista">${rader.length ? rader.join('') : `<p class="prf-hj">${esc(p.namn)} har inte ändrat något själv.</p>`}</div>`);
+}
+function utSek(){
+  const s = utSt(), vy = s.vy;
+  if (!vy){
+    if (!s.laddar && !s.fel) utLadda();
+    return prfKort('ut-omfang', 'Utskick', '', `<div class="prf-kb">${s.fel ? `<div class="prf-rad"><p class="prf-hj">${esc(s.fel)} Inget har ändrats.</p><button type="button" class="btn btn-s btn-sm" data-utladda>Försök igen</button></div>` : `<p class="prf-hj" role="status">Läser utskicken …</p>`}</div>`);
+  }
+  if (!vy.bolaget) return prfKort('ut-omfang', 'Utskick', '', `<div class="prf-kb"><p class="prf-hj">Utskicken för hela bolaget kan bara ställas av en superadmin.</p></div>`);
+  if (!s.vant && s.minaGammal && !s.laddar) utLadda(true);
+  const o = utOmf(vy), b = vy.bolaget, niv = vy.katalog.nivaer, seg = (namn, etikett, alt, val, data) => `<fieldset class="prf-seg" aria-label="${etikett}">${alt.map(([k, t]) => `<label><input type="radio" name="${namn}" value="${k}" ${data} ${val === k ? 'checked' : ''}><span>${esc(t)}</span></label>`).join('')}</fieldset>`;
+  const atg = b.personer.reduce((a, p) => a + (p.av ? 1 : 0), 0);
+  const intro = `<p class="prf-hj">Här styr du vad som kommer till vem: i klockan, mejlet, telefonen och morgonbrevet. Det mest specifika gäller, så en person går före sin nivå och nivån före hela bolaget. Var och en kan alltid stänga av mer i sina egna inställningar, men aldrig slå på det du stängt här. Inloggningskoder berörs aldrig.</p>`;
+  const omf = seg('ut-omf', 'Vem gäller det', [['alla', 'Hela bolaget'], ['niva', 'Nivå'], ['person', 'Person']], s.omf, 'data-utomf')
+    + (s.omf === 'niva' ? seg('ut-niva', 'Nivå', niv.map(n => [n.id, n.namn]), s.niva, 'data-utniva') : '')
+    + (s.omf === 'person' ? `<div class="prf-f"><label for="utSok">Sök person</label><input type="search" class="prf-in" id="utSok" data-utsok placeholder="Namn" autocomplete="off" spellcheck="false" value="${esc(s.q)}"></div><div class="ut-pers" data-utlista role="group" aria-label="Personer">${utPersLista(vy)}</div>` : '');
+  const summa = `<div class="prf-summa"><span><b class="num">${atg}</b> av <span class="num">${b.personer.length}</span> personer har något avstängt</span>${o ? `<span class="prf-n">Du ändrar: ${esc(o.namn)}</span>` : ''}</div>`;
+  return prfKort('ut-omfang', 'Utskick', '', `<div class="prf-kb">${intro}${summa}${omf}</div>`)
+    + (o ? UTK.map(k => utSkortKort(vy, o, k)).join('') + (o.p ? utEgenLasning(vy, o.p) : '') : `<div class="prf-kort"><div class="prf-kb"><p class="prf-hj">Välj en person ovan för att se och ändra vad hen får.</p></div></div>`);
+}
+/* ---------- Kopplingen till inställningsrutan ---------- */
+PRFSEK.push([UTKORT, 'Utskick', 'utskick', 'Vem som får vad, i klockan, mejlet, telefonen och morgonbrevet. Bara för superadmin.']);
+PRFSOK.push(
+  ['ut-mejl', 'notiser', 'Mejl, vad som mejlas till dig', ['mejl', 'e-post', 'utskick']],
+  ['ut-push', 'notiser', 'Pushnotiser i telefonen', ['push', 'telefon', 'mobil', 'utskick']],
+  ['ut-morgon', 'notiser', 'Morgonbrevet, avsnitten', ['morgonbrev', 'morgonbrevet', 'avsnitt', 'utskick']],
+  ['ut-omfang', UTKORT, 'Utskick: bolaget, nivå eller person', ['utskick', 'notiser', 'nivå', 'person', 'bolaget', 'vem får', 'avstängd']],
+  ['ut-s-klocka', UTKORT, 'Utskick i klockan', ['utskick', 'klockan', 'notiser']],
+  ['ut-s-mejl', UTKORT, 'Utskick i mejlet', ['utskick', 'mejl', 'e-post']],
+  ['ut-s-push', UTKORT, 'Utskick i telefonen', ['utskick', 'push', 'telefon']],
+  ['ut-s-morgon', UTKORT, 'Utskick i morgonbrevet', ['utskick', 'morgonbrev', 'avsnitt']],
+  ['ut-egenval', UTKORT, 'Det personen valt själv', ['utskick', 'egna val', 'stängt själv']]
+);
+const _utPrfSok = prfSok;
+prfSok = function(q, palett){ return _utPrfSok(q, palett).filter(([id, sek]) => (sek !== UTKORT || utFar()) && (!(sek === 'notiser' && id.startsWith('ut-')) || !!ND)); };
+const _utPrfGa = prfGa;
+prfGa = function(sek, rad){ if (sek === UTKORT && !utFar()) sek = null; return _utPrfGa(sek, rad); };
+const _utPrfAdminSek = prfAdminSek;
+prfAdminSek = function(){ return S.prfRuta && S.prfRuta.sek === UTKORT ? utSek() : _utPrfAdminSek(); };
+const _utRutaHtml = prfRutaHtml;
+prfRutaHtml = function(){
+  const R = S.prfRuta; if (R && R.sek === UTKORT && !utFar()) R.sek = 'konto';
+  let h = _utRutaHtml();
+  h = h.replace(/<button type="button" role="tab" id="prfTab-utskick"[\s\S]*?<\/button>/, '');
+  if (utFar()){
+    const flik = `<button type="button" role="tab" id="prfTab-${UTKORT}" aria-selected="${R.sek === UTKORT}" aria-controls="prfPanel" tabindex="${R.sek === UTKORT ? 0 : -1}" data-prfsek="${UTKORT}">${I('utskick')}<span>Utskick</span>${I('prfpil', 'prf-mpil')}</button>`;
+    const efter = ['salesboard', 'satser', 'admin'].map(k => new RegExp(`(<button type="button" role="tab" id="prfTab-${k}"[\\s\\S]*?</button>)`)).find(r => r.test(h));
+    if (efter) h = h.replace(efter, m => m + flik);
+  }
+  return h;
+};
+/* ---------- Händelserna ---------- */
+document.addEventListener('click', e => {
+  const t = e.target.closest && e.target.closest('button'); if (!t || !t.closest('#prfRuta')) return;
+  const d = t.dataset, klart = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+  if (d.utladda !== undefined){ klart(); const s = utSt(); s.fel = ''; utLadda(true); render(); return; }
+  if (d.utoppna){ klart(); const s = utSt(); s.oppen[d.utoppna] = !s.oppen[d.utoppna]; S.prfFokus = `[data-utoppna="${d.utoppna}"]`; render(); return; }
+  if (d.utperson){ klart(); utSt().pid = d.utperson; render(); return; }
+  const vy = utSt().vy; if (!vy) return;
+  if (d.utegen){
+    klart(); const [kanal, nyckel] = d.utegen.split('|'), ml = {lager:'egen'}, rad = utKanalRader(vy, kanal), set = Object.keys(utRegler(ml)[kanal] || {});
+    let pa, par, namn;
+    if (nyckel === '*'){ pa = rad.pa > 0; par = [['*', !pa], ...set.filter(n => n !== '*').map(n => [n, null])]; namn = UTALLT[kanal]; }
+    else if (nyckel.startsWith('omrade:')){ const o = rad.omraden.find(x => x.nyckel === nyckel); if (!o) return; pa = o.pa > 0; const barn = o.sorter.map(x => x.nyckel); par = [[nyckel, !pa], ...set.filter(n => barn.includes(n)).map(n => [n, null])]; namn = o.namn; }
+    else { const x = (kanal === 'morgon' ? rad.sorter : rad.omraden.flatMap(o => o.sorter)).find(y => y.nyckel === nyckel); if (!x) return; pa = x.pa; par = [[nyckel, !pa]]; namn = x.namn; }
+    utSkriv(ml, kanal, par, `${UTSKORT[kanal]}, ${namn}: ${pa ? 'av' : 'på'}`, 'ut-' + kanal); return; }
+  if (d.utegenalla){
+    klart(); const kanal = d.utegenalla, set = Object.keys(utRegler({lager:'egen'})[kanal] || {});
+    utSkriv({lager:'egen'}, kanal, [['*', true], ...set.filter(n => n !== '*').map(n => [n, null])], `${UTSKORT[kanal]}: alla på`, 'ut-' + kanal); return; }
+}, true);
+document.addEventListener('change', e => {
+  const t = e.target; if (!t || !t.closest || !t.dataset || !t.closest('#prfRuta')) return;
+  const d = t.dataset;
+  if (d.utomf){ e.stopImmediatePropagation(); utSt().omf = t.value; render(); return; }
+  if (d.utniva){ e.stopImmediatePropagation(); utSt().niva = t.value; render(); return; }
+  if (d.uttri){
+    e.stopImmediatePropagation(); const vy = utSt().vy; if (!vy || !vy.bolaget) return;
+    const o = utOmf(vy); if (!o) return;
+    const [kanal, nyckel] = d.uttri.split('|'), v = t.value === 'pa' ? true : t.value === 'av' ? false : null;
+    utSkriv(o.ml, kanal, [[nyckel, v]], `${UTSKORT[kanal]}, ${utNyckelNamn(vy, kanal, nyckel)}, ${o.namn}: ${v === null ? 'ärver' : v ? 'på' : 'av'}`, 'ut-s-' + kanal);
+  }
+}, true);
+document.addEventListener('input', e => {
+  const t = e.target; if (!t || !t.dataset || t.dataset.utsok === undefined || !t.closest('#prfRuta')) return;
+  e.stopImmediatePropagation(); const s = utSt(); s.q = t.value;
+  const el = document.querySelector('#prfRuta [data-utlista]'); if (el && s.vy && s.vy.bolaget) el.innerHTML = utPersLista(s.vy);
+}, true);
 
 /* Start */
 try { const th = localStorage.getItem('nav2-theme'); if (th && th !== 'auto'){ document.documentElement.setAttribute('data-theme', th); S.theme = th; document.querySelectorAll('#themeSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.themeSet === th))); } } catch(_){}

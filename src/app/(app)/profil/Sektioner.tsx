@@ -17,6 +17,10 @@ import {
 } from "@/lib/roles";
 import { Steg2 } from "./Steg2";
 import { Losenord } from "./Losenord";
+import { MinaUtskick } from "./MinaUtskick";
+import { UtskickAdmin } from "./UtskickAdmin";
+import { arSuperadmin, utskicksvy } from "@/lib/utskick-server";
+import { standardFor } from "@/lib/utskick-standard";
 
 /**
  * Installningarnas innehall, en sektion per export.
@@ -152,6 +156,20 @@ export async function SakerhetSektion() {
   );
 }
 
+/** "Notiser och mejl": vad som når den inloggade, kanal för kanal. */
+export async function UtskickSektion() {
+  const user = await getCurrentUser();
+  if (!user?.employee) return null;
+  return <MinaUtskick vy={await utskicksvy(user, standardFor)} />;
+}
+
+/** Utskick för superadmin: bolaget, nivåerna och personerna. Gatas här och i sidan. */
+export async function UtskickAdminSektion() {
+  const user = await getCurrentUser();
+  if (!user?.employee || !arSuperadmin(user)) return null;
+  return <UtskickAdmin vy={await utskicksvy(user, standardFor)} />;
+}
+
 /**
  * Genvagar till de vyer som staller in navet i stallet for att anvanda det.
  *
@@ -178,6 +196,8 @@ const BESKRIVNING: Record<string, string> = {
     "Arbetsgivaravgifter, månadslöner och täckningsgrad.",
   "/design":
     "Levande stilguide över varje primitiv i navet.",
+  "/utskick":
+    "Vem som får vad, i klockan, mejlet, telefonen och morgonbrevet. Bolaget, en nivå eller en person.",
 };
 
 export async function AdministrationSektion() {

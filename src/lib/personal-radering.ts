@@ -156,6 +156,7 @@ const TABELL: Record<string, string> = {
   nav_setting: "Navets inställningar",
   news_ack: "Kvitterade nyheter",
   notification_event: "Notiser",
+  notification_rule: "Inställningar för mejl och notiser",
   onboarding_rule: "Regler för on- och offboarding",
   onboarding_template: "Checklistor för on- och offboarding",
   onboarding_template_item: "Punkter i checklistorna",

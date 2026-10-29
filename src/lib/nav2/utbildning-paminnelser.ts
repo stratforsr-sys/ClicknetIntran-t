@@ -5,6 +5,7 @@ import { svenskDygnsstart, svensktDatum } from "@/lib/klocka";
 import { rodaDagar } from "@/lib/saljtakt";
 import { notifiera } from "@/lib/notishandelse-server";
 import { pushaTill } from "./push";
+import { vilkaFar } from "@/lib/utskick-server";
 import { ledigaDen } from "./hem-kvall";
 import { SKRIVLAGE } from "./skrivlage";
 
@@ -163,13 +164,15 @@ async function repetitionen(db: SupabaseClient, nu: Date): Promise<Utbkvitto["re
   const lediga = await ledigaDen(db, kandidater, k.dag);
   ut.kandidater = kandidater.length;
   ut.lediga = lediga.size;
+  // Utskicken (0255): raden i klockan går genom `notifiera()`, pushen spärras här.
+  const pushas = new Set(await vilkaFar(kandidater, "push", "utbildning-repetition", true, db));
   for (const id of kandidater.filter((x) => !lediga.has(x))) {
     // Raden först: hellre en missad påminnelse än två samma dag om jobbet körs två gånger samtidigt.
     const { error } = await db.from("push_sent").insert({ employee_id: id, kind: "utb-rep", day: k.dag });
     if (error) { ut.fel.push(error.message); continue; }
     const t = repText(forfallerSenast(fragor.get(id) ?? [], k.dag));
     await notifiera({ till: id, av: null, kalla: "utbildning-repetition", typ: "kurs", rubrik: t.titel, detalj: t.text, href: "/utbildning" });
-    const p = await pushaTill(db, id);
+    const p = pushas.has(id) ? await pushaTill(db, id) : { enheter: 0, ok: 0, fel: [] as string[] };
     if (p.enheter) await db.from("push_sent").update({ devices: p.ok }).eq("employee_id", id).eq("kind", "utb-rep").eq("day", k.dag);
     ut.skickade++;
     ut.enheter += p.ok;

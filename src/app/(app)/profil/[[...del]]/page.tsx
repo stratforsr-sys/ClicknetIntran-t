@@ -7,12 +7,13 @@ import {
   KontoSektion,
   SakerhetSektion,
   AdministrationSektion,
+  UtskickSektion,
   harAdministration,
 } from "../Sektioner";
 
 export const metadata = { title: "Inställningar — Clicknet Nav" };
 
-const DELAR = ["sakerhet", "utseende"];
+const DELAR = ["sakerhet", "utseende", "utskick"];
 
 /**
  * Installningarna som egen sida.
@@ -58,6 +59,10 @@ export default async function InstallningsSida({
 
       <Avsnitt id="utseende" titel="Utseende">
         <Utseende />
+      </Avsnitt>
+
+      <Avsnitt id="utskick" titel="Notiser och mejl">
+        <UtskickSektion />
       </Avsnitt>
 
       {harAdministration(user) && (

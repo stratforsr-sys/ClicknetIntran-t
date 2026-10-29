@@ -165,6 +165,8 @@ export const MODUL: Record<string, string> = {
   anstallda: "Anställda",
   // Säljtavlan (/salesboard, 0250): skärmarna, inställningarna och säljarnas val.
   salesboard: "Säljtavlan",
+  // Utskicken (0255): vem som får vad i klockan, mejlet, telefonen och morgonbrevet.
+  notification_rule: "Utskick",
 };
 
 /**

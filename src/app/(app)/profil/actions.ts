@@ -7,6 +7,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { skapaKvitto, STEG2_KAKA, STEG2_DYGN } from "@/lib/mfa";
 import { utforBytLosenord } from "@/lib/losenordsbyte-server";
 import { skickaKodmejl } from "@/lib/kodmejl-server";
+import { sparaUtskick, utskicksvy, type Andring, type Sparat, type Utskicksvy } from "@/lib/utskick-server";
+import { standardFor } from "@/lib/utskick-standard";
 
 export type ProfilState = { fel?: string; ok?: string };
 
@@ -142,3 +144,33 @@ export async function glomEnheten(): Promise<void> {
   revalidatePath("/profil");
 }
 
+
+// -----------------------------------------------------------------------------
+// Utskick (0255): vem som far vad, i vilken kanal
+// -----------------------------------------------------------------------------
+
+/**
+ * Vyn for den inloggade. Superadmin far dessutom bolagets lager och alla
+ * personer. Funktionen tar INGET id: vems vy det ar avgors av sessionen.
+ */
+export async function hamtaUtskick(): Promise<Utskicksvy | null> {
+  const user = await getCurrentUser();
+  if (!user?.employee) return null;
+  return utskicksvy(user, standardFor);
+}
+
+/**
+ * En brytare. Vem som far andra vad prövas i `sparaUtskick` och ingen annanstans:
+ * det egna lagret bara for den inloggade sjalv, de tre andra bara for superadmin.
+ * Argumentet ar obetrott (en server action ar en publik adress) och valideras dar.
+ */
+export async function sparaUtskickAction(andring: Andring): Promise<Sparat> {
+  const user = await getCurrentUser();
+  if (!user?.employee) return { ok: false, fel: "Du måste vara inloggad.", status: 401 };
+  const svar = await sparaUtskick(user, andring);
+  if (svar.ok) {
+    revalidatePath("/profil");
+    revalidatePath("/utskick");
+  }
+  return svar;
+}

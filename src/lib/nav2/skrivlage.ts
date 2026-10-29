@@ -53,6 +53,9 @@ export const SKRIVLAGE = {
   // Beställaren 2026-10-25: säljtavlans inställningar ska gå att se och använda i Inställningar → Säljtavlan,
   // bara för superadmin. Samma skrivningar som gamla /salesboard/installningar redan gjorde.
   salesboard: true,
+  // Beställaren 2026-10-29: en allomfattande inställning för mejl, klockan, telefonen och
+  // morgonbrevet (utskicken, 0255). Skrivningen svarar med ett begripligt fel tills 0255 körts.
+  utskick: true,
 } as const;
 
 export type Skrivvy = keyof typeof SKRIVLAGE;

@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { KontoSektion, SakerhetSektion } from "@/app/(app)/profil/Sektioner";
+import { KontoSektion, SakerhetSektion, UtskickSektion } from "@/app/(app)/profil/Sektioner";
 import { Utseende } from "@/components/shell/Utseende";
 
 /**
@@ -24,6 +24,8 @@ export default async function ProfilPanel({
       return <SakerhetSektion />;
     case "utseende":
       return <Utseende />;
+    case "utskick":
+      return <UtskickSektion />;
     default:
       notFound();
   }

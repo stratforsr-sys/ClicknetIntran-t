@@ -3,6 +3,7 @@ import "server-only";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { epostArKonfigurerad, skickaKo, type Bilaga, type Brev } from "@/lib/epost";
 import type { Handelsekalla } from "@/lib/notiser";
+import { vilkaFar } from "@/lib/utskick-server";
 
 /**
  * BRYGGAN MELLAN KLOCKAN OCH INKORGEN.
@@ -187,8 +188,7 @@ export type Mejlkalla = (typeof MEJLKALLOR)[number];
 
 const MEJLAS = new Set<string>(MEJLKALLOR);
 
-/** Sant för de källor som ska mejlas. Anropas av `notifiera()` före allt annat
- *  arbete, så att de sjutton andra källorna inte kostar en uppslagning. */
+/** Sant för de källor som mejlas när ingen ställt in något annat (utskicken, 0255). */
 export function kallanMejlas(kalla: string): boolean {
   return MEJLAS.has(kalla);
 }
@@ -236,11 +236,13 @@ export async function mejlaHandelse(
   utskick: Utskick,
 ): Promise<number> {
   try {
-    if (!kallanMejlas(utskick.kalla)) return 0;
     if (mottagare.length === 0) return 0;
     if (!epostArKonfigurerad()) return 0;
 
-    const unika = [...new Set(mottagare)].filter(Boolean);
+    // Utskicken (0255): `MEJLKALLOR` är bara standardläget. Superadmin och
+    // personen själv kan stänga en sort, ett område eller hela mejlet — och
+    // slå på en sort som inte mejlas annars.
+    const unika = await vilkaFar(mottagare, "mejl", utskick.kalla, kallanMejlas(utskick.kalla));
     if (unika.length === 0) return 0;
 
     const { data: personer } = await supabaseAdmin()

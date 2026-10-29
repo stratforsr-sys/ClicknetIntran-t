@@ -3,7 +3,7 @@ import { after } from "next/server";
 
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { HANDELSEKALLOR, type Handelsekalla, type Notistyp } from "@/lib/notiser";
-import { kallanMejlas, mejlaHandelse } from "@/lib/epost-notis";
+import { mejlaHandelse } from "@/lib/epost-notis";
 import { pushaHandelse } from "@/lib/nav2/kalender-push";
 import type { Bilaga } from "@/lib/epost";
 import type { Role, Permission } from "@/lib/roles";
@@ -126,8 +126,8 @@ export async function notifiera(handelse: Handelse): Promise<boolean> {
  * skrivs raden anda och brevet uteblir.
  */
 function kanskeMejla(mottagare: readonly string[], handelse: Omit<Handelse, "till">): void {
-  if (!kallanMejlas(handelse.kalla)) return;
-
+  // Utskicken (0255): en sort som inte mejlas som standard kan vara påslagen
+  // för någon, så frågan ställs i `mejlaHandelse` — efter svaret, i `after()`.
   const utskick = {
     kalla: handelse.kalla,
     rubrik: handelse.rubrik,

@@ -23,6 +23,7 @@ import { MAX_I_KLOCKAN, navnyheterFor, tidpunktFor } from "@/navnyheter";
 import { arKlar, dagarSedan, personlage, type Progress } from "@/lib/guider";
 import { coachningsnotiser } from "@/lib/coachning-server";
 import { projektchattnotiser, uppgiftsnotiser } from "@/lib/uppgifter-server";
+import { filtreraKlockan } from "@/lib/utskick-server";
 
 /** G6. Sa lange far det sta stilla innan klockan sager till. */
 const TYST_DAGAR = 3;
@@ -1353,7 +1354,9 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
     .filter((n) => n.tidpunkt && !bortklickade.has(n.id))
     .map((n) => (n.olast && !arNy(n.tidpunkt) ? { ...n, olast: false } : n));
 
-  return sortera(kvar).slice(0, MAX_NOTISER);
+  // Utskicken (0255): det personen eller superadmin stängt för klockan. Före
+  // kapningen, av samma skäl som avfärdningen: en avstängd sort tar ingen plats.
+  return sortera(await filtreraKlockan(mig, kvar)).slice(0, MAX_NOTISER);
 }
 
 /**

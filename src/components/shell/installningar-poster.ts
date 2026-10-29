@@ -1,6 +1,7 @@
 import type { CurrentUser } from "@/lib/auth";
 import { canManageEmployees, hasRole } from "@/lib/auth";
 import { farSeLonekostnad } from "@/lib/lonekostnad-server";
+import { arSuperadmin } from "@/lib/utskick-server";
 import { INSTALLNINGAR_START, type InstallningsPost } from "./installningar-delade";
 
 /**
@@ -26,6 +27,7 @@ export function installningsPoster(user: CurrentUser | null): InstallningsPost[]
     { href: INSTALLNINGAR_START, label: "Konto", ikon: "konto" },
     { href: `${INSTALLNINGAR_START}/sakerhet`, label: "Säkerhet", ikon: "las" },
     { href: `${INSTALLNINGAR_START}/utseende`, label: "Utseende", ikon: "utseende" },
+    { href: `${INSTALLNINGAR_START}/utskick`, label: "Notiser och mejl", ikon: "klocka" },
   ];
 
   if (canManageEmployees(user)) {
@@ -39,6 +41,9 @@ export function installningsPoster(user: CurrentUser | null): InstallningsPost[]
   }
   if (farSeLonekostnad(user)) {
     poster.push({ href: "/lonekostnad/satser", label: "Satser och löner", ikon: "kontroll" });
+  }
+  if (user && arSuperadmin(user)) {
+    poster.push({ href: "/utskick", label: "Utskick", ikon: "klocka" });
   }
   if (hasRole(user, "admin")) {
     poster.push({ href: "/design", label: "Designsystem", ikon: "design" });

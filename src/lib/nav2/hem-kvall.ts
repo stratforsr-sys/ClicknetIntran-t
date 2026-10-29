@@ -9,6 +9,7 @@ import { byggFranvaro, type NdFranvaroPost } from "./franvaro";
 import { byggUppgifter, type NdUppgift } from "./uppgifter";
 import { byggArenden, type NdArende } from "./arenden";
 import { pushaTill } from "./push";
+import { vilkaFar } from "@/lib/utskick-server";
 import { SKRIVLAGE } from "./skrivlage";
 
 /**
@@ -146,7 +147,8 @@ export async function skickaKvallsnotiser(db: SupabaseClient, nu: Date = new Dat
   const kandidater = [...new Set(((roller ?? []) as { employee_id: string }[]).map((x) => x.employee_id))].filter((id) => harEnhet.has(id) && !klara.has(id));
   const dagen = kvallsdagar(k.dag).dagar[0];
   const lediga = await ledigaDen(db, kandidater, dagen);
-  const mottagare = kandidater.filter((id) => !lediga.has(id));
+  // Utskicken (0255): kvällsnotisen kan stängas av superadmin eller av ledaren själv.
+  const mottagare = await vilkaFar(kandidater.filter((id) => !lediga.has(id)), "push", "kvallsnotis", true, db);
 
   let skickade = 0;
   const fel: string[] = [];

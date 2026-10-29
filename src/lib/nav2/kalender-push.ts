@@ -4,6 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { pushaTill } from "@/lib/nav2/push";
 import { skaPaminna } from "@/lib/nav2/kalender-andring";
+import { HANDELSEKALLOR } from "@/lib/notiser";
+import { pushbaraFor, vilkaFar } from "@/lib/utskick-server";
 
 export { skaPaminna };
 
@@ -51,9 +53,13 @@ export const PUSHKALLOR = new Set<string>([
 
 /** Pushar till mottagarnas enheter, om källan är kalenderns. Kastar aldrig: notisraden står redan. */
 export async function pushaHandelse(mottagare: readonly string[], kalla: string): Promise<void> {
-  if (!PUSHKALLOR.has(kalla)) return;
+  // Dagens repetition pushas av sitt eget jobb (`utbildning-paminnelser.ts`), med sin egen text.
+  if (kalla === "utbildning-repetition") return;
   const db = supabaseAdmin();
-  for (const id of new Set(mottagare)) {
+  // Utskicken (0255): `PUSHKALLOR` är standardläget. Telefonen kan stängas per
+  // sort, område eller helt, och en sort utanför kalendern kan slås på.
+  const fa = await vilkaFar(mottagare, "push", kalla, PUSHKALLOR.has(kalla), db);
+  for (const id of fa) {
     try {
       await pushaTill(db, id);
     } catch {
@@ -149,7 +155,9 @@ export async function motespaminnelser(db: SupabaseClient, nu = new Date()): Pro
 export type Pushnotis = { id: number; titel: string; text: string; url: string };
 
 /**
- * Den äldsta kalendernotisen som den här enheten inte visat, eller null. Varje
+ * Den äldsta pushbara notisen som den här enheten inte visat, eller null.
+ * Pushbar är det som utskicken (0255) släpper igenom till personens telefon:
+ * kalendern som standard, plus de sorter hen eller superadmin slagit på. Varje
  * enhet har sin egen markör (`nav_preference` `push.kal.<enhet>`): personens
  * alla enheter får samma push, och var och en visar samma notis. Utan markör
  * (en ny enhet) räknas bara de senaste femton minuterna, så att en nyss
@@ -169,7 +177,7 @@ export async function kalPushNasta(mig: string, endpoint: string): Promise<Pushn
     .from("notification_event")
     .select("id, rubrik, detalj, href")
     .eq("employee_id", mig)
-    .in("kalla", [...PUSHKALLOR])
+    .in("kalla", await pushbaraFor(mig, HANDELSEKALLOR.filter((k) => k !== "utbildning-repetition"), (k) => PUSHKALLOR.has(k)))
     .gt("id", markor)
     .gte("created_at", golv)
     .order("id", { ascending: true })

@@ -14,6 +14,32 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "utskick-installning",
+    rubrik: "Välj själv vad du får mejl och notiser om",
+    ingress: "Stäng av det du inte behöver, i klockan, mejlet, telefonen och morgonbrevet.",
+    text: `Under **Inställningar → Notiser** bestämmer du vad navet skickar till dig, i
+fyra kanaler: klockan, mejlet, telefonen och morgonbrevet.
+
+Varje kanal har en brytare för allt och en för varje område, till exempel Order,
+Tid eller Kalender. Fäll ut ett område för att välja sort för sort. Du kan
+behålla mejlet om en makulerad order men stänga av det om en returnerad, och du
+kan slå på ett mejl om något som annars bara syns i klockan.
+
+Morgonbrevet går att stänga helt eller avsnitt för avsnitt.
+
+Koden när du loggar in kommer alltid. Den går inte att stänga av.
+
+## För superadmin
+
+Under **Inställningar → Utskick** ställer du in samma sak för hela bolaget, för en
+nivå (säljare, admin eller superadmin) eller för en enskild person. Det du stänger
+av där kan ingen slå på igen för egen del. Det du låter vara kan var och en stänga
+av själv.`,
+    datum: "2026-10-29",
+    roller: [],
+    href: "/profil",
+  },
+  {
     slug: "saljtavlan-tavling",
     rubrik: "Månadens tävling på säljtavlan",
     ingress: "Tavlan visar priset, loppet och hur många order du har kvar till ledningen.",

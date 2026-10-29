@@ -5,6 +5,33 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-29 · Utskicken: en inställning för mejl, klockan, telefonen och morgonbrevet
+
+Beställaren ville kunna stänga av vem som får mejl, på vad, och notiserna — i båda naven.
+Läget före: Nav 2.0:s Notiser-flik sparade i localStorage och filtrerade bara klockan i
+den webbläsaren; mejl och push gick inte att stänga någonstans; gamla Nav hade ingenting.
+
+**Spärren sitter i utgångarna, inte hos anroparna.** Varje kanal har en enda väg ut:
+`mejlaHandelse`, `pushaHandelse`/`kalPushNasta` (+ kvällsnotisen och repetitionen),
+`korMorgonjobbet` och `hamtaNotiser`. Båda naven skriver genom samma `notifiera()`, så
+en spärr där gäller i båda utan att ett enda anrop ändras. Klockan filtreras vid
+läsningen, inte skrivningen: raden finns kvar och kommer tillbaka om sorten slås på.
+
+**Standardläget är det gamla beteendet** (`MEJLKALLOR`, `PUSHKALLOR`), så ingen märker
+inställningen förrän någon ändrar något. `MEJLKALLOR` är därmed inte längre en gräns utan
+ett förval: en sort som inte mejlas kan slås på.
+
+**Fyra lager**, superadmins tre läses smalast först (person, nivå, bolaget), och inom ett
+lager sorten före området före kanalen. Superadmins "av" går inte att öppna; personen kan
+stänga resten. I det egna lagret suddar en bred brytare de smalare under sig
+(`andraMedUnder`) — "allt mejl av" ska betyda av.
+
+**Ett läsfel stänger ingenting.** Går `notification_rule` inte att läsa går allt ut som
+förut. Det gör också att koden kan ligga ute innan 0255 körts.
+
+Samma dag, separat: gamla Navs mejl stängdes av i produktion genom att `EMAIL_FROM` togs
+bort ur Vercel Production och produktionen byggdes om. Ingen kod på main rördes.
+
 ## 2026-10-26 · Säljtavlan: månadens tävling
 
 Beställaren ville att tavlan ska visa tävlingen, knuffa den som är nära och visa priset

@@ -6,6 +6,7 @@ import { svensktDatum } from "@/lib/klocka";
 import { lageAv, arStangd, fristtext, type Handelsetyp, type Lage } from "@/lib/uppgifter";
 import { kursLage } from "@/lib/utbildning";
 import { AVTALSSLUT_VARSEL_DAGAR } from "@/lib/order";
+import { morgonFilter } from "@/lib/utskick-server";
 
 /**
  * Morgonbrevet: dagens plan, en gång per arbetsdag.
@@ -180,6 +181,16 @@ export async function korMorgonjobbet(db: SupabaseClient, nu = new Date()): Prom
     } catch (e) {
       fel.push(`${namn}: ${e instanceof Error ? e.message : String(e)}`);
     }
+  }
+
+  /**
+   * Utskicken (0255): superadmin och personen själv kan stänga hela brevet
+   * eller ett avsnitt. Avsnitten tas bort FÖRE räkningen nedan, så att den som
+   * stängt allt inte räknas som mottagare och inte får ett tomt brev.
+   */
+  const slapps = await morgonFilter(db, [...samling.keys()]);
+  for (const [id, avsnitten] of samling) {
+    for (const namn of [...avsnitten.keys()]) if (!slapps(id, namn)) avsnitten.delete(namn);
   }
 
   const harNagot = [...samling.entries()].filter(([, avsnitten]) =>
