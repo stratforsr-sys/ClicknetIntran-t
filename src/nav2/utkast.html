@@ -34759,6 +34759,269 @@ document.addEventListener('input', e => {
   const el = document.querySelector('#prfRuta [data-utlista]'); if (el && s.vy && s.vy.bolaget) el.innerHTML = utPersLista(s.vy);
 }, true);
 
+/* =====================================================================
+   NAV 2.0 SOM APP: REGISTRERINGEN OCH BAKÅTKNAPPEN (prefix ndapp)
+
+   Utkastet byter vy med S.view och render() utan historik. På Android stängde
+   bakåtknappen då hela appen, och på iPhone gjorde svepet från kanten ingenting.
+
+   Registreringen: appens service worker (/app-sw.js, räckvidd /) efter load.
+   Pushens /nav2/sw.js med räckvidd /nav2/ rörs inte: byts den tappas alla
+   enheters prenumerationer. Fel sväljs, appen fungerar även utan.
+
+   Historiken (adressen ändras aldrig, så ?till= och mellanvaran är opåverkade):
+   - Start: bara replaceState({ndv}); en omladdning öppnar först vyn som posten bär (R12). Ingen vaktpost, så en omladdning lägger
+     ingen post och bakåt från första posten lämnar appen med ett tryck.
+   - Vybyte: pushState({ndv}). Ligger en lagerpost överst ersätts den i stället.
+   - Lager (paletten, en låda, en ruta med aria-modal): öppnas ett lager läggs
+     en lagerpost ({ndv, ndlager}) över vyns post, under användaraktiveringen
+     (strax efter klick och tangent, och efter varje render). Bakåt tar bort
+     den och skickar Esc, så lagret stängs med utkastets egen kod. Står lagret
+     kvar läggs lagerposten tillbaka (nästa bakåt är ett nytt försök, ingen vy byts).
+     Stängs lagret på annat sätt går lagerposten tyst bakåt.
+   - Bakåt utan lager: vyn sätts om på samma sätt som vyklicket gör (taskClick).
+
+   Färsk data och senaste versionen: datan bakas in i sidan (#ndData), och en installerad app
+   har ingen dra-för-att-ladda-om. Tas appen fram efter NDAPP_OMLADDNING_MIN minuter dold laddas
+   den om. Versionen (<meta name="nav-version"> mot GET /nav2/version) kollas vid varje
+   framtagning och var NDAPP_VERSIONSKOLL_MIN:e minut, högst en gång per minut. Sidan laddas
+   ALDRIG om om något ligger över vyn (ndAppLagerOppet) eller något är halvskrivet
+   (ndAppOsparat), och aldrig under ögonen på någon: har sidan stått synlig visas bara
+   "Nav har uppdaterats." en gång, och omladdningen sker nästa gång den tas fram och är säker.
+   Saknas taggen, är svaret inte JSON (utloggad) eller är v null händer ingenting.
+
+   Siffran på appikonen: samma tal som på klockan, bellOlasta(). ndAppSiffra() körs efter varje render()
+   och vid visibilitychange, men anropar navigator.setAppBadge / clearAppBadge bara när talet ändrats
+   sedan förra gången. Siffran uppdateras när appen är öppen eller tas fram, inte medan den är stängd.
+   På iPhone syns den bara när notiserna är påslagna (Apples villkor).
+
+   Tipset: på iPhone, när Nav inte är lagt på hemskärmen (ndHemIos), visas en gång per enhet hur man gör.
+   Att det visats sparas i localStorage['nav-app-tips'], när tipset visas (inte medan sidan är dold). Android får inget: Chrome visar sin egen rad.
+
+   Allt sker bara när ND finns: demot är orört.
+   ===================================================================== */
+
+// Sant när något ligger över vyn som bakåt ska stänga före allt annat.
+function ndAppLagerOppet(){
+  return !!(document.getElementById('pal') || document.querySelector('[aria-modal="true"]')
+    || S.panel || S.todoOpen || S.fokusMode || S.keysOverlay || S.prfRuta);
+}
+
+// Siffran på appikonen. Talet är klockans (bellOlasta), så de två aldrig säger olika. Null = inget satt än, så
+// att första anropet även rensar en siffra som blev kvar från förra gången. Utan API:t (Firefox) händer inget.
+let ndAppSistaSiffra = null;
+function ndAppSiffra(){
+  if (!ND) return;
+  try {
+    const n = bellOlasta();
+    if (n === ndAppSistaSiffra) return;
+    ndAppSistaSiffra = n;
+    if (n > 0){ if (navigator.setAppBadge) Promise.resolve(navigator.setAppBadge(n)).catch(() => {}); }
+    else if (navigator.clearAppBadge) Promise.resolve(navigator.clearAppBadge()).catch(() => {});
+  } catch(_){}
+}
+
+const NDAPP_OMLADDNING_MIN = 20;
+const NDAPP_VERSIONSKOLL_MIN = 30;
+
+// Fält som personen har skrivit i (betrodda input-händelser), för att texten ska överleva en omritning:
+// utkastet ritar om fält från tillståndet (value="${S.quick}"), och då är defaultValue lika med value och
+// ingenting ser ändrat ut. Nyckeln är id, annars name, annars aria-label, annars placeholder; fält utan
+// någon av dem minns inte. Töms fältet av personen glöms nyckeln.
+const ndAppSkrivet = new Set();
+const ndAppFaltNyckel = f => f.id || f.getAttribute('name') || f.getAttribute('aria-label') || f.getAttribute('placeholder') || '';
+const ndAppTextFalt = f => f.tagName === 'TEXTAREA' || f.tagName === 'SELECT'
+  || (f.tagName === 'INPUT' && !/^(checkbox|radio|file|hidden|button|submit|reset|image|range|color)$/i.test(f.type));
+
+// Sant när en rättning i Teamet är påbörjad (Utbildningens S.uRatt*): poängknapparna är inga fält, och kommentarerna
+// och återkopplingen ritas inline ur tillståndet, så fältkontrollen nedan ser dem inte efter en omritning.
+function ndAppRattning(){
+  if (!S.uRatt) return false;
+  return Object.keys(S.uRattPoang || {}).length > 0
+    || Object.values(S.uRattKomm || {}).some(v => String(v || '').trim())
+    || !!String(S.uRattNote || '').trim();
+}
+
+// Sant när något fält skiljer sig från sitt standardläge (text, kryssruta, val), när ett fält som personen
+// skrivit i fortfarande har text, eller när fokus står i ett fält:
+// då är personen mitt i något och sidan får inte laddas om. Ett enkelval utan selected står på sitt första
+// val i standardläget (option.defaultSelected är falskt där), så det jämförs mot det i stället.
+function ndAppOsparat(){
+  if (ndAppRattning()) return true;
+  const a = document.activeElement;
+  if (a && (a.tagName === 'TEXTAREA' || a.tagName === 'SELECT' || a.isContentEditable
+      || (a.tagName === 'INPUT' && !/^(checkbox|radio|button|submit|reset|image|hidden|range|color)$/i.test(a.type)))) return true;
+  for (const f of document.querySelectorAll('input, textarea, select')){
+    if (f.tagName === 'SELECT'){
+      const val = [...f.options];
+      if (f.multiple){ if (val.some(o => o.selected !== o.defaultSelected)) return true; continue; }
+      const std = val.filter(o => o.defaultSelected).pop() || val.find(o => !o.disabled) || null;
+      if (val.some(o => o.selected !== (o === std))) return true;
+    } else if (f.tagName === 'INPUT' && /^(checkbox|radio)$/i.test(f.type)){
+      if (f.checked !== f.defaultChecked) return true;
+    } else if (f.tagName === 'TEXTAREA' || (f.tagName === 'INPUT' && !/^(button|submit|reset|image|hidden)$/i.test(f.type))){
+      if (f.value !== f.defaultValue) return true;
+    }
+    // Ritat om från tillståndet: värdet är fältets standard, men personen skrev det.
+    if (f.value && ndAppSkrivet.size && ndAppTextFalt(f) && ndAppSkrivet.has(ndAppFaltNyckel(f))) return true;
+  }
+  return false;
+}
+
+if (ND){
+  // Minnet över vad personen skrivit: fångstfas på window, bara betrodda händelser. Window går före document:
+  // Utbildningens lyssnare på document stoppar händelsen (stopImmediatePropagation) för rättningens fält och svaren.
+  window.addEventListener('input', e => {
+    const f = e.target;
+    if (!e.isTrusted || !f || !f.tagName || !ndAppTextFalt(f)) return;
+    const n = ndAppFaltNyckel(f);
+    if (!n) return;
+    if (f.value) ndAppSkrivet.add(n); else ndAppSkrivet.delete(n);
+  }, true);
+
+  // Registreringen
+  const ndAppRegistrera = () => {
+    try { if ('serviceWorker' in navigator) navigator.serviceWorker.register('/app-sw.js', {scope:'/'}).catch(() => {}); } catch(_){}
+  };
+  if (document.readyState === 'complete') ndAppRegistrera();
+  else window.addEventListener('load', ndAppRegistrera);
+
+  // Historiken
+  try {
+    let ndAppSistaVy = S.view, ndAppFranBak = false, ndAppTyst = false;
+    // Posten som sidan startade på. Den överlever en omladdning, så den läses före start-replaceState (R12).
+    const ndAppSparad = history.state && typeof history.state.ndv === 'string' ? history.state.ndv : null;
+    const ndAppDjuplank = !!new URLSearchParams(location.search).get('till');
+    const ndAppOvre = () => history.state || {};
+    const ndAppLagerPost = () => !!ndAppOvre().ndlager;
+    history.replaceState({ndv:S.view}, '', location.pathname);
+
+    // Lagret öppnat utan lagerpost: lägg den. Lagret stängt på annat sätt än bakåt: ta bort posten tyst.
+    const ndAppKontroll = stang => {
+      const oppet = ndAppLagerOppet(), post = ndAppLagerPost();
+      if (oppet && !post) history.pushState({ndv:S.view, ndlager:true}, '', location.pathname);
+      else if (stang && !oppet && post && !ndAppTyst){
+        ndAppTyst = true;
+        setTimeout(() => { ndAppTyst = false; }, 1000);
+        history.back();
+      }
+    };
+    const ndAppSen = () => setTimeout(() => ndAppKontroll(true), 0);
+    document.addEventListener('click', ndAppSen, true);
+    document.addEventListener('keydown', ndAppSen, true);
+
+    const _ndAppRender = render;
+    render = function(){
+      _ndAppRender();
+      // Safari kastar SecurityError när historiken ändras för tätt. Ritningen är klar, så felet får inte nå anroparen.
+      try {
+        if (S.view !== ndAppSistaVy){
+          ndAppSistaVy = S.view;
+          if (!ndAppFranBak){
+            if (ndAppLagerPost()) history.replaceState({ndv:S.view}, '', location.pathname);
+            else history.pushState({ndv:S.view}, '', location.pathname);
+          }
+        }
+        ndAppKontroll(false);
+        ndAppSen();
+      } catch(_){}
+    };
+
+    window.addEventListener('popstate', e => {
+      if (ndAppTyst){ ndAppTyst = false; return; }
+      const st = e.state;
+      if (!st || !st.ndv) return;
+      if (ndAppLagerOppet()){
+        // Posten under är vyns egen. Esc stänger lagret med koden i utkastet och i rutorna.
+        (document.activeElement || document.body).dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true, cancelable:true}));
+        if (ndAppLagerOppet()) history.pushState({ndv:S.view, ndlager:true}, '', location.pathname);
+        return;
+      }
+      if (st.ndlager){ ndAppTyst = true; setTimeout(() => { ndAppTyst = false; }, 1000); history.back(); return; }
+      if (st.ndv === S.view) return;
+      ndAppFranBak = true;
+      try {
+        // Samma städning som vyklicket: taskClick nollar lagerfälten, sätter S.view, ritar och rullar upp.
+        if (typeof taskClick === 'function') taskClick({dataset:{view:st.ndv}}, {preventDefault(){}});
+        else { S.view = st.ndv; render(); window.scrollTo(0, 0); }
+      } finally { ndAppFranBak = false; }
+      ndAppSistaVy = S.view;
+    });
+
+    // Omladdningen (frånvaro, ny version) landar i vyn man lämnade, inte på hem. En djuplänk (?till=) går alltid före,
+    // och en ny navigering till /nav2 har ingen post (history.state är null) och startar på hem. Ingen ny post läggs.
+    try {
+      if (ndAppSparad && ndAppSparad !== S.view && !ndAppDjuplank){
+        ndAppFranBak = true;
+        try { taskClick({dataset:{view:ndAppSparad}}, {preventDefault(){}}); } finally { ndAppFranBak = false; }
+        ndAppSistaVy = S.view;
+        history.replaceState({ndv:S.view}, '', location.pathname);
+      }
+    } catch(_){}
+  } catch(_){}
+
+  // Färsk data och senaste versionen
+  try {
+    let ndAppDoldSedan = 0, ndAppSistaKoll = 0, ndAppNyVersion = false, ndAppTipsat = false;
+    const ndAppSakert = () => !ndAppLagerOppet() && !ndAppOsparat();
+    const ndAppLaddaOm = () => { location.reload(); };
+
+    // Frågar servern vilken version som körs. ny = sidan är nyss tagen fram (annars har den stått synlig).
+    const ndAppVersionskoll = ny => {
+      const m = document.querySelector('meta[name="nav-version"]');
+      const min = m && m.content;
+      if (!min || Date.now() - ndAppSistaKoll < 60000) return;
+      ndAppSistaKoll = Date.now();
+      fetch('/nav2/version', {cache:'no-store'}).then(r => r.json()).then(d => {
+        if (!d || typeof d.v !== 'string' || !d.v || d.v === min) return;
+        ndAppNyVersion = true;
+        // Säkerheten prövas när svaret kommer, inte när frågan gick: personen kan ha börjat skriva.
+        if (ny && !document.hidden && ndAppSakert()) return ndAppLaddaOm();
+        if (!ndAppTipsat && typeof toast === 'function'){
+          ndAppTipsat = true;
+          toast('Nav har uppdaterats.', () => location.reload(), 'Ladda om');
+        }
+      }).catch(() => {});
+    };
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden){ ndAppDoldSedan = Date.now(); return; }
+      const borta = ndAppDoldSedan ? Date.now() - ndAppDoldSedan : 0;
+      ndAppDoldSedan = 0;
+      if ((borta >= NDAPP_OMLADDNING_MIN * 60000 || ndAppNyVersion) && ndAppSakert()) return ndAppLaddaOm();
+      ndAppVersionskoll(true);
+    });
+    setInterval(() => { if (!document.hidden) ndAppVersionskoll(false); }, NDAPP_VERSIONSKOLL_MIN * 60000);
+  } catch(_){}
+
+  // Siffran på appikonen
+  try {
+    const _ndAppRenderSiffra = render;
+    render = function(){
+      _ndAppRenderSiffra();
+      ndAppSiffra();
+    };
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) ndAppSiffra(); });
+    ndAppSiffra();
+  } catch(_){}
+
+  // Tipset. Går localStorage inte att läsa eller skriva visas det inte, hellre än vid varje besök.
+  try {
+    if (ndHemIos()){
+      let visat = true;
+      try { visat = !!localStorage.getItem('nav-app-tips'); } catch(_){ visat = true; }
+      // Flaggan sätts först när tipset visas: en dold sida eller en sida man lämnar inom två sekunder bränner den inte.
+      if (!visat) setTimeout(() => {
+        try {
+          if (document.hidden || localStorage.getItem('nav-app-tips')) return;
+          localStorage.setItem('nav-app-tips', '1');
+          toast('Nav fungerar som app: tryck på Dela och välj Lägg till på hemskärmen.');
+        } catch(_){}
+      }, 2000);
+    }
+  } catch(_){}
+}
+
 /* Start */
 try { const th = localStorage.getItem('nav2-theme'); if (th && th !== 'auto'){ document.documentElement.setAttribute('data-theme', th); S.theme = th; document.querySelectorAll('#themeSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.themeSet === th))); } } catch(_){}
 render();

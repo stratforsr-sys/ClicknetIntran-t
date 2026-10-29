@@ -5,6 +5,37 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-29 · Appen: Nav på hemskärmen (iPhone och Android), utan nytt utseende
+
+Beställaren ville kunna ha Nav som app i telefonen. Utseendet är oförändrat: inga nya färger,
+ingen ny layout, ingen `viewport-fit`, och statusraden på iPhone är standard (ljus), beslutat.
+Plan, rapporter och prov ligger i `~/nav2-utkast/delar/app/` (PLAN.md, rapport/, progress.md).
+Ingen migration.
+
+- **Manifestet** `public/nav2/manifest.webmanifest`: id `/nav2`, start `/nav2`, scope `/`,
+  standalone, ikoner i `public/nav2/ikon/` (192, 512, maskable 512, apple-touch 180;
+  `src/app/apple-icon.png` är samma byte). Genvägar på Android: Kalendern, Tid och Uppgifter
+  (`/nav2?till=…`). Länkas från `layout.tsx` (manifest + apple-taggar).
+- **Utan inloggning** (`src/lib/publikavagar.ts`, läses av mellanvaran): bara manifestet,
+  `/nav2/sw.js`, `/app-sw.js`, `/.well-known/assetlinks.json` (för Play-passet, filen finns inte
+  än) och prefixen `/nav2/fonts/` och `/nav2/ikon/`. `/`, `/nav2` och `/nav2/version` kräver
+  fortfarande inloggning (`tests/app-vagar.mjs`).
+- **Appens service worker** `public/app-sw.js`, räckvidd `/`: tar bara navigeringar, med
+  navigation preload, och visar en offline-sida när nätet saknas. Pushens `/nav2/sw.js` med
+  räckvidd `/nav2/` är orörd, så två registreringar är rätt.
+- **`/nav2/version`** svarar byggets sha, och `/nav2` bär den i `<meta name="nav-version">`.
+- **`moduler/ndapp.js`** (sist i ndpatch-listan, bara i Nav 2.0):
+  - Bakåt i appen går en vy tillbaka eller stänger ett öppet lager.
+  - Efter 20 minuter borta laddas sidan om för färsk data, men aldrig mitt i något osparat:
+    skrivna fält, en påbörjad rättning i Utbildning.
+  - Var 30:e minut, och när appen tas fram, jämförs versionen. En ny version laddar om, eller
+    visar "Nav har uppdaterats." när något är osparat. Vyn står kvar efter omladdningen.
+  - Siffran på ikonen är olästa i klockan (`setAppBadge`).
+  - Tipset om hemskärmen visas en gång i Safari på iPhone.
+- **Nödbroms:** se HANDOFF, `## Del: Appen`.
+- Prov: `test:app-manifest`, `test:app-vagar`, `test:app-sw` och `test:app-huvud`, samt
+  `probe/app-prov.mjs` i arbetsmappen (headless Chrome, 105 rader).
+
 ## 2026-10-29 · Utskicken: en inställning för mejl, klockan, telefonen och morgonbrevet
 
 Beställaren ville kunna stänga av vem som får mejl, på vad, och notiserna — i båda naven.

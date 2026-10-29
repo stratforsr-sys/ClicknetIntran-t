@@ -8,21 +8,7 @@ import { MFA_REQUIRED_ROLES } from "@/lib/roles";
 import { BYTESVAG, kraverByte } from "@/lib/losenordsbyte";
 import { rensaIdentitet, skrivIdentitet } from "@/lib/identitet";
 import { sakerNasta } from "@/lib/inloggning";
-
-/**
- * Publika vagar. Allt annat kraver session.
- *
- * /api star med eftersom rutterna dar autentiserar sig sjalva — det
- * schemalagda jobbet har ingen session att visa upp, och skulle annars
- * omdirigeras till inloggningssidan och tyst gora ingenting.
- *
- * /salesboard star med av samma skal: saljtavlan hanger pa en TV utan session.
- * Varje rutt och sida under /salesboard provar sjalv vem som fragar, en parad
- * skarm eller en inloggad anstalld (src/lib/salesboard/atkomst.ts). Sessionen
- * fornyas fortfarande har for den som ar inloggad, och steg tva och
- * losenordsbytet galler som forut.
- */
-const PUBLIC = ["/logga-in", "/auth", "/uppstart", "/api", "/salesboard"];
+import { arPublik } from "@/lib/publikavagar";
 
 /** E6.5. Kakan som haller nere dagsstamplingen. Bar ett datum, inget mer. */
 const AKTIVITETSKAKA = "nav_dag";
@@ -152,7 +138,7 @@ export async function updateSession(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser();
   const path = request.nextUrl.pathname;
-  const isPublic = PUBLIC.some((p) => path === p || path.startsWith(p + "/"));
+  const isPublic = arPublik(path);
 
   /**
    * Identiteten ar verifierad har och ingen annanstans. Efter den har raden

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { APP_METADATA } from "@/lib/nav2/app";
 
 /**
  * UI-PRD §4.4. Plus Jakarta Sans ar sajtens eget typsnitt (avlast fran
@@ -33,6 +34,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Clicknet Nav",
   description: "Intranät för Clicknet.",
+  ...APP_METADATA,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

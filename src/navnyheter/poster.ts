@@ -14,6 +14,32 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "nav-som-app",
+    rubrik: "Nav går att lägga på hemskärmen som app",
+    ingress: "Lägg Nav på hemskärmen, så öppnas det som en egen app med ikon och bakåt.",
+    text: `Nav går att lägga på hemskärmen i telefonen. Då öppnas det som en egen app,
+utan webbläsarens adressfält.
+
+**iPhone:** öppna Nav i Safari, tryck på **Dela** och välj **Lägg till på hemskärmen**.
+
+**Android:** öppna Nav i Chrome. Erbjudandet att installera appen kommer av sig
+självt. Annars finns **Installera app** i Chromes meny.
+
+I appen går bakåt (knappen på Android, svepet från vänsterkanten på iPhone)
+tillbaka en vy. På Android tar ett långt tryck på ikonen dig direkt till
+Kalendern, Tid eller Uppgifter.
+
+Ikonen visar hur många olästa du har, samma tal som klockan i Nav. På iPhone
+syns talet bara när notiserna är påslagna (under **Profil**).
+
+Har du varit borta en stund hämtas färsk data när du tar fram appen igen. Har Nav
+uppdaterats laddas appen om av sig själv, utom när du är mitt i något. Då står det
+"Nav har uppdaterats." med en knapp för att ladda om.`,
+    datum: "2026-10-29",
+    roller: [],
+    href: "/nav2",
+  },
+  {
     slug: "utskick-installning",
     rubrik: "Välj själv vad du får mejl och notiser om",
     ingress: "Stäng av det du inte behöver, i klockan, mejlet, telefonen och morgonbrevet.",

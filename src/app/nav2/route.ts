@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { byggNav2Data, type Nav2Matt } from "@/lib/nav2/data";
 import { lasUtkast } from "@/lib/nav2/mall";
 import { lasIdentitet } from "@/lib/identitet";
+import { skal } from "@/lib/nav2/app";
 
 export const dynamic = "force-dynamic";
 
@@ -43,8 +44,6 @@ export const dynamic = "force-dynamic";
  * /api-rutt och passerar alltsa samma kontroller som varje sida.
  */
 
-const SKAL = `<!doctype html><html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">`;
-
 const TYPSNITT = `<style>
 @font-face{font-family:"Geist";src:url(/nav2/fonts/geist.woff2) format("woff2");font-weight:100 900;font-display:swap}
 @font-face{font-family:"Geist Mono";src:url(/nav2/fonts/geist-mono.woff2) format("woff2");font-weight:100 900;font-display:swap}
@@ -60,11 +59,13 @@ export async function GET(request: Request) {
 
   const [d, h] = await Promise.all([lasUtkast(), headers()]);
   const nonce = h.get("x-nonce") ?? "";
+  const ua = h.get("user-agent") ?? "";
+  const version = process.env.VERCEL_GIT_COMMIT_SHA ?? null;
   const svar = { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "private, no-store, max-age=0" };
 
   // Startsidan / skickar hit, sa ett konto utan anstalld far ett besked har, inte en omdirigering tillbaka.
   if (!user.employee) {
-    return new NextResponse(SKAL + "<title>Nav</title></head><body>" + BESKED("Ditt konto saknar en anställd i Nav", "Kontakta den som administrerar Nav, så kopplas kontot till dig.") + "</body></html>", { headers: svar });
+    return new NextResponse(skal(ua, version) + "<title>Nav</title></head><body>" + BESKED("Ditt konto saknar en anställd i Nav", "Kontakta den som administrerar Nav, så kopplas kontot till dig.") + "</body></html>", { headers: svar });
   }
 
   // Datan borjar byggas innan nagot skickas.
@@ -80,7 +81,7 @@ export async function GET(request: Request) {
 
   const fore = d.fore.replace(/<link rel="preconnect"[^>]*>\s*/g, "").replace(/<link rel="stylesheet" href="https:\/\/fonts\.googleapis\.com[^>]*>/, TYPSNITT);
   const borjan =
-    SKAL +
+    skal(ua, version) +
     fore +
     `<link rel="stylesheet" href="/nav2/stil.css?v=${d.vStil}">` +
     // Riktigt läge från första ritningen (G3): utkastets regel `body.nd-riktig .proto` döljer demoraden
