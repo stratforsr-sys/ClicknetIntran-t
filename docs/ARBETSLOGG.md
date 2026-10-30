@@ -5,6 +5,32 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-30 · Produktionsprovet efter mergen (main `35f04ba`)
+
+Beställaren ville ha bevis på att Nav 2.0 fungerar i produktionen, inte ett intryck. Varje punkt krävde därför en SQL-rad, en HTTP-status
+eller en logglinje. Navet är stängt (bara Zen och Simon), och det finns en enda databas. Därför provades skrivvägarna i transaktioner som
+rullades tillbaka, som Mick, Lucas och Zen med `set local role authenticated`. HTTP gick bara som Zen eller Simon, och högst fem riktiga
+skrivningar per område gjordes, alla märkta `PROV — produktionsprov`. Inga order skickades in, och Inkio fick bara GET. Agenterna var sju
+(Sonnet) med en sammanställning (Opus). Rapporten och delrapporterna ligger i `~/nav2-utkast/delar/prodprov/`.
+
+**Röda:**
+- R1, att ställa in en godkänd ledighet, är en motsägelse mellan CHECK-villkoret i 0019 och triggern i 0048. Det har aldrig fungerat:
+  ingen rad har någonsin blivit `cancelled`.
+- R2, den tomma klockan. Agenten misstänkte att `hamtaNotiser` läste via REST, men `supabaseServer()` går redan via pg-vägen under bygget.
+  En lokal körning av samma funktion mot samma databas gav 25 notiser, mot 0 i produktionen. Felet ligger i produktionens körväg, och nästa
+  steg är att logga per delfråga på en gren.
+- R3, fyra Inkio-order utan Nav-rad. 00097 är ny sedan FYND-2026-10-30.
+- R4, en Lynes-agent (`franniel@`) utan anställd. Dess inspelningar hämtas inte.
+
+**Lärdom: sju samtidiga agenter mot Supabase free räcker för att ge 504.** Auth svarade på 17–20 s och REST på 31 s mellan 23:02 och 23:18.
+Det såg ut som ett produktionsfel men gick inte att återskapa i lugnt läge (200 på 1,8–4,6 s). Nästa prov bör ha färre agenter mot
+databasen samtidigt, eller köra HTTP-delarna i följd.
+
+**Städat** i en transaktion med triggrarna på: 22 rader i 16 tabeller, och skanningen efteråt gav 0 markerade rader utanför audit_log. De fem
+provsessionerna och ett `recovery_token` för Mick är borttagna. file_access_log 210–212 står kvar, eftersom de är sanna filöppningar.
+
+---
+
 ## 2026-10-30 · Nav 2.0 mergad till main (`053e62c`)
 
 Beställaren sa ja till mergen och valde att ta EMAIL_FROM efter den. Skälet till att den alls var en
