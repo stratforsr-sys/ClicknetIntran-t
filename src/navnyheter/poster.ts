@@ -14,6 +14,23 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "appen-finslipad-for-telefonen",
+    rubrik: "Appen är finslipad för telefonen",
+    ingress: "I appen zoomar fälten inte in längre, små knappar är lättare att träffa och Mer går först till vyerna.",
+    text: `Det här gäller Nav som app på hemskärmen. Nav i webbläsaren ser ut precis som förut.
+
+- Sökfält och textfält zoomar inte längre in på iPhone. Du kan fortfarande nypa för att zooma.
+- Små knappar och kryssrutor tar emot trycket även strax utanför kanten.
+- Tangentbordstips (som ⌘K och /) syns inte, eftersom telefonen inte har något tangentbord.
+- Flikarna i **Uppgifter** ligger på en rad som du sveper i.
+- I **Frånvaro** står ett + i varje tom ruta. Tryck där för att registrera frånvaro.
+- **Kalendern** går ända ner till menyn, och vyn du valt syns alltid i verktygsraden.
+- **Mer** visar Gå till först.`,
+    datum: "2026-10-30",
+    roller: [],
+    href: "/nav2",
+  },
+  {
     slug: "motesstatistik",
     rubrik: "Min statistik: veckans möten i sex tal",
     ingress: "Startsidan visar dina samtal, bokade möten och affärer den här veckan, jämfört med förra.",

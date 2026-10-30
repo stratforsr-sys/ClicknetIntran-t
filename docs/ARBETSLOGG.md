@@ -5,6 +5,33 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-30 · Appläget: Nav som app finslipat för telefonen, webben orörd
+
+Beställaren ville att appen skulle granskas för telefonen, men webben fick inte ändras alls. Allt ligger
+därför i `moduler/ndapp.js` och gäller bara när `<html>` har klassen `ndapplage`. Den sätts vid
+`display-mode: standalone` (Android, och iPhone via `navigator.standalone`), eller med `?app=1` i fliken
+för att visa läget i previewen (`sessionStorage`, `?app=0` stänger av). Ingen migration och ingen ny fil i
+repot: bara `utkast.html`.
+
+- **Granskningen** gick genom 21 vyer i 390 px med pekskärm, och skärmbilder lästes. Ingen vy rann ut i sidled
+  och inga skriptfel uppstod. Fynden: iPhone zoomade in i fält under 16 px (9 vyer), tryckytor under 32 px,
+  tangenttips på pekskärm, Uppgifters flikar i tre rader, frånvarorutorna syntes bara vid hovring, kalendern
+  slutade 36 px ovanför flikraden med vald vy utanför kanten, och "Gå till" låg sist i Mer.
+- **I appen nu:**
+  - `maximum-scale=1` bara på iPhone. Den stoppar zoomen in i fält, och nypzoom fungerar ändå.
+  - Osynliga `::after`-ytor på kryssrutor, bockar, små knappar, kalenderns vyknappar och filterchipsen
+    (i täta rader bara på höjden).
+  - `kbd`, palettens tangentrad och kortet "Snabbare med tangentbordet" är dolda på pekskärm.
+  - Uppgifters flikar ligger på en svepbar rad. Frånvarorutorna visar ett svagt +.
+  - Kalendern räcker till flikraden (`100dvh` minus `#bnav`), och vald vy rullas fram i verktygsraden.
+  - Mer visar Gå till först och utan adresser, och utan tangentbordets markering. Trycket ger återkoppling.
+- **Webben:** utan klassen läggs ingen stil in, `render` lindas inte och viewporten är orörd. Skärmbilder före
+  och efter är identiska, utom klockan och Utbildningens blandade svarsordning.
+- Prov: `probe/applage-prov.mjs` i arbetsmappen (32 rader, motprov mot det gamla bygget: 22 fel) och
+  `probe/app-prov.mjs` (105 rader), båda gröna. Mätverktyget är `probe/mobil-granskning.mjs`.
+- Kvar till ett eget pass: "Visa fler" i Tid (61 skärmar lång i telefonen), Händelseloggen och Nyheter,
+  Lönerapporten som kort, och dra-för-att-ladda-om i iPhone-appen.
+
 ## 2026-10-30 · Möten, statistiken: min vecka på startsidan och chefens tabell
 
 Session B av Möten (DESIGN 5.7–5.9, PLAN B1–B5 i `~/nav2-utkast/delar/moten/`). Allt räknas ur

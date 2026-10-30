@@ -36046,8 +36046,49 @@ document.addEventListener('input', e => {
    Tipset: på iPhone, när Nav inte är lagt på hemskärmen (ndHemIos), visas en gång per enhet hur man gör.
    Att det visats sparas i localStorage['nav-app-tips'], när tipset visas (inte medan sidan är dold). Android får inget: Chrome visar sin egen rad.
 
+   Appläget: när Nav körs från hemskärmen (display-mode standalone, iPhones navigator.standalone) får <html>
+   klassen ndapplage, och bara då gäller NDAPP_STIL och det som hör till: ingen zoom in i fält på iPhone,
+   större osynliga tryckytor, inga tangenttips på pekskärm, svepbara flikar i Uppgifter, synliga
+   frånvarorutor, kalendern ända ner till flikraden och "Gå till" först i Mer. Webben i en webbläsare får
+   aldrig klassen och ser ut precis som förut. ?app=1 slår på läget i fliken (sessionStorage) så att det går
+   att se i previewen, och ?app=0 stänger av det.
+
    Allt sker bara när ND finns: demot är orört.
    ===================================================================== */
+
+// Sant när Nav körs som app. ?app=1 och ?app=0 läses före historiken, som tar bort sökdelen ur adressen.
+function ndAppLaget(){
+  try {
+    const q = new URLSearchParams(location.search).get('app');
+    if (q === '1') sessionStorage.setItem('nav-applage', '1');
+    else if (q === '0') sessionStorage.removeItem('nav-applage');
+    if (sessionStorage.getItem('nav-applage') === '1') return true;
+  } catch(_){}
+  try { return !!((window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true); } catch(_){ return false; }
+}
+
+// Bara under html.ndapplage. Tryckytorna växer med en osynlig ::after, så ingenting flyttar sig; i rader där
+// knapparna står tätt växer de bara på höjden. position:relative ligger i :where, så att en vy som redan placerar
+// knappen behåller sitt (sökfältets rensknapp i Order är absolut, och .ibtn är relativ från början). Pekskärmsreglerna gäller inte en installerad app på en dator.
+const NDAPP_STIL = `
+@media (hover:none) and (pointer:coarse){
+  html.ndapplage :where(.aeck,.tick,.kebab,.upg-qa,.toast .tx,.olvy,.olib,.olnewdd,.smp-lg button){position:relative}
+  html.ndapplage :is(.aeck,.tick,.ibtn,.kebab,.upg-qa,.toast .tx)::after{content:"";position:absolute;inset:-10px}
+  html.ndapplage :is(.olvy,.olib,.olnewdd,.smp-lg button)::after{content:"";position:absolute;inset:-8px 0}
+  html.ndapplage kbd,html.ndapplage #pal .ft span:has(kbd),html.ndapplage .card.keys,html.ndapplage .rskeys{display:none}
+  html.ndapplage .frtom{opacity:1}
+  html.ndapplage .frtom::after{content:"+";font-size:13px;color:var(--line-2)}
+  html.ndapplage .upg-flikar{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  html.ndapplage .upg-flikar::-webkit-scrollbar{display:none}
+  html.ndapplage .upg-flikar>*{flex:none}
+  html.ndapplage #pal .opt[aria-selected="true"]{background:none}
+  html.ndapplage #pal .opt[aria-selected="true"]:not(.ai) svg{color:var(--ink-3)}
+  html.ndapplage #pal .opt:active{background:var(--surface-2)}
+  html.ndapplage #pal .ndapp-rutt{display:none}
+}
+@media (max-width:900px){
+  html.ndapplage .ol{height:calc(100vh - var(--ndapp-bnav,62px));height:calc(100dvh - var(--ndapp-bnav,62px))}
+}`;
 
 // Sant när något ligger över vyn som bakåt ska stänga före allt annat.
 function ndAppLagerOppet(){
@@ -36133,6 +36174,55 @@ if (ND){
   };
   if (document.readyState === 'complete') ndAppRegistrera();
   else window.addEventListener('load', ndAppRegistrera);
+
+  // Appläget
+  try {
+    if (ndAppLaget()){
+      document.documentElement.classList.add('ndapplage');
+      const stil = document.createElement('style');
+      stil.id = 'ndAppStil';
+      stil.textContent = NDAPP_STIL;
+      document.head.appendChild(stil);
+
+      // iPhone zoomar in i fält med mindre än 16 px text och stannar där. maximum-scale stoppar det,
+      // och iOS låter ändå personen nypzooma. Android läser regeln som ett förbud mot zoom, så bara iPhone.
+      const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      const vp = document.querySelector('meta[name="viewport"]');
+      if (ios && vp && !/maximum-scale/.test(vp.content)) vp.content += ', maximum-scale=1';
+
+      // Efter varje render: kalendern slutar vid flikraden, och vald vy i kalenderns verktygsrad syns.
+      const ndAppEfter = () => {
+        const bn = document.getElementById('bnav');
+        document.documentElement.style.setProperty('--ndapp-bnav', (bn && bn.offsetHeight ? bn.offsetHeight : 0) + 'px');
+        const rad = document.querySelector('.olcmd'), on = rad && rad.querySelector('.olvy.on');
+        if (on){
+          const r = on.getBoundingClientRect(), k = rad.getBoundingClientRect();
+          if (r.right > k.right) rad.scrollLeft += r.right - k.right + 8;
+        }
+      };
+      const _ndAppRenderLage = render;
+      render = function(){ _ndAppRenderLage(); try { ndAppEfter(); } catch(_){} };
+      window.addEventListener('resize', () => { try { ndAppEfter(); } catch(_){} });
+      ndAppEfter();
+
+      // Mer (paletten utan sökord): "Gå till" först, eftersom Mer är vägen till vyerna i telefonen, och utan
+      // adresserna (/tid), som inte säger något i en app. Klicket går på data-pi, inte på ordningen, så att flytta
+      // raderna ändrar inte vad de gör. Tangentbordets markering och adresserna döljs med NDAPP_STIL.
+      const rot = document.getElementById('palRoot');
+      // Bara på pekskärm: med tangentbord markerar paletten rader efter sin egen ordning (palSel), inte DOM:ens.
+      const pek = window.matchMedia && matchMedia('(hover:none) and (pointer:coarse)').matches;
+      if (rot && pek) new MutationObserver(() => {
+        const res = document.getElementById('palRes'), inp = document.getElementById('palIn');
+        if (!res || !inp) return;
+        const rub = [...res.children].find(e => e.classList.contains('gh') && e.textContent.trim() === 'Gå till');
+        if (!rub) return;
+        const grupp = [rub];
+        for (let e = rub.nextElementSibling; e && !e.classList.contains('gh'); e = e.nextElementSibling) grupp.push(e);
+        for (const o of grupp){ const p = o.querySelector && o.querySelector('.p'); if (p && !p.classList.contains('ndapp-rutt')) p.classList.add('ndapp-rutt'); }
+        if (!inp.value && rub !== res.firstElementChild) res.prepend(...grupp);
+      }).observe(rot, {childList:true, subtree:true});
+    }
+  } catch(_){}
 
   // Historiken
   try {
