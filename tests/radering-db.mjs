@@ -63,7 +63,8 @@ try {
      values ('Provnyhet','radprov-nyhet','Text',$1,'draft')`,
     [skyltad],
   );
-  // En stampling. Den ska DAREMOT forsvinna: arbetstiden ar personens egen.
+  // En stampling. Sedan 0170 star den KVAR: stamplingarna ar loneunderlaget
+  // (bestallaren 2026-10-21), som personalposten med "(borttagen anställd)".
   await db.query(
     `insert into time_event (employee_id, kind, occurred_at) values ($1,'in', now())`,
     [skyltad],
@@ -73,7 +74,7 @@ try {
     "select * from referenser_till_anstalld($1) order by tabell", [skyltad]);
   const stampling = fore.rows.find((r) => r.tabell === "time_event");
   const nyhet = fore.rows.find((r) => r.tabell === "news_post");
-  ok("stamplingen listas som 'raderas'", stampling?.atgard === "raderas");
+  ok("stamplingen listas som 'behalls'", stampling?.atgard === "behalls");
   ok("nyheten listas som 'behalls'", nyhet?.atgard === "behalls");
 
   const svar = (await db.query("select ta_bort_anstalld($1) as r", [skyltad])).rows[0].r;
@@ -98,7 +99,7 @@ try {
 
   const stamplingarKvar = await db.query(
     "select count(*)::int as n from time_event where employee_id=$1", [skyltad]);
-  ok("stamplingen ar raderad", stamplingarKvar.rows[0].n === 0);
+  ok("stamplingen star kvar", stamplingarKvar.rows[0].n === 1);
 
   const nyhetKvar = await db.query(
     "select count(*)::int as n from news_post where author_id=$1", [skyltad]);

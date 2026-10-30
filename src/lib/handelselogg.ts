@@ -170,6 +170,8 @@ export const MODUL: Record<string, string> = {
   salesboard: "Säljtavlan",
   // Utskicken (0255): vem som får vad i klockan, mejlet, telefonen och morgonbrevet.
   notification_rule: "Utskick",
+  // Gallringen (nattsteget `gallring`, gdpr.gallring): vad som rensats enligt reglerna.
+  gdpr: "Gallring",
 };
 
 /**
