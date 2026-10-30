@@ -5,6 +5,29 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-30 · Nav 2.0 mergad till main (`053e62c`)
+
+Beställaren sa ja till mergen och valde att ta EMAIL_FROM efter den. Skälet till att den alls var en
+fråga: Nav 2.0 mejlar inloggningskoden själv bara när EMAIL_FROM finns, och den togs bort ur Production
+2026-10-29 för att stänga gamla Navs mejl. Utan den går koden via Supabases mall, som i augusti bara
+bar en länk. Registreringen (Supabase `disable_signup`) lämnades öppen på beställarens besked.
+
+Mergen gjordes som snabbspolning (`PATCH refs/heads/main`, `force=false`) från `453f792`. Main
+hade inte rört sig sedan 2026-10-10, så ingen flätning behövdes. Före den rättades tre saker i en
+commit på grenen, eftersom proven sa till: gallringens händelse saknade modul i Händelseloggen,
+radering-provet väntade sig fortfarande att stämplingarna raderas (0170 behåller dem), och Nytt i
+navet-posten fick mergedagen.
+
+Två provlärdomar. `inbaddningar-db` larmar på två frågor som svarar 200: tolkaren tar grannfrågans
+select när en `.from()` saknar egen eller väljer en konstant. Bron skickar bara hela sidladdningar
+vidare, så ett curl-prov utan `Sec-Fetch-Dest: document` får gamla sidan och ser ut som att bron
+inte fungerar.
+
+0235 och 0236 kördes direkt efter mergen med filnamn. `apply-sql.mjs` utan argument hade också tagit
+0224.
+
+---
+
 ## 2026-10-30 · Appläget: Nav som app finslipat för telefonen, webben orörd
 
 Beställaren ville att appen skulle granskas för telefonen, men webben fick inte ändras alls. Allt ligger
