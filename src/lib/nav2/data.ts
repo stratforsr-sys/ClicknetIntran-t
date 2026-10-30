@@ -27,6 +27,7 @@ import type { NdLogg } from "./loggforma";
 import { byggProfil, type NdProfil } from "./profil";
 import { byggLeads, type NdLeads } from "./leads";
 import { byggMoten, type NdMoten } from "./moten";
+import { byggMotesstat, type NdMotesstat } from "./motesstat";
 import { byggAdoption, type NdAdoption } from "./adoption";
 import { byggNyheter, type NdNyheter } from "./nyheter";
 import type { NdFel } from "./felforma";
@@ -104,6 +105,8 @@ export type Nav2Data = {
   leads: NdLeads;
   /** Möten (0260–0262): kortkedjorna på tavlan, veckans affärer och nej, de som kan hålla ett möte. */
   moten: NdMoten;
+  /** Möten, statistiken (0263): min vecka mot förra, och chefens tabell per person (null för säljaren). */
+  motesstat: NdMotesstat;
   /** Adoption (0029): antal, aldrig vem. Null för alla utom superadmin. */
   adoption: NdAdoption | null;
   /** Nyheter (0130): inläggen, kvittenserna, läskvittot för den som skrev, och Nytt i navet. */
@@ -151,7 +154,7 @@ async function bygg(user: CurrentUser, m?: Nav2Matt): Promise<Nav2Data | null> {
   if (!user.employee) return null;
   const supabase = await supabaseServer();
 
-  const [{ data: personRader }, { data: teamRader }, { data: satsRader, error: satsFel }, { data: lonRader, error: lonFel }, notiser, tid, franvaro, uppgifter, order, provision, kalender, arenden, fel, rutiner, utbildning, hem, rekrytering, anstallda, coachning, avtal, profil, adoption, nyheter, logg, leads, moten, sakerhet, satsdata, saljtavlan] =
+  const [{ data: personRader }, { data: teamRader }, { data: satsRader, error: satsFel }, { data: lonRader, error: lonFel }, notiser, tid, franvaro, uppgifter, order, provision, kalender, arenden, fel, rutiner, utbildning, hem, rekrytering, anstallda, coachning, avtal, profil, adoption, nyheter, logg, leads, moten, motesstat, sakerhet, satsdata, saljtavlan] =
     await Promise.all([
       matt(m, "personer", supabase.from("employee").select(PERSONKOLUMNER).order("first_name")),
       matt(m, "team", supabase.from("team").select("id, name")),
@@ -186,6 +189,7 @@ async function bygg(user: CurrentUser, m?: Nav2Matt): Promise<Nav2Data | null> {
       matt(m, "logg", byggLogg(supabase, user)),
       matt(m, "leads", byggLeads(supabase, user)),
       matt(m, "moten", byggMoten(supabase, user)),
+      matt(m, "motesstat", byggMotesstat(supabase, user)),
       matt(m, "sakerhet", byggSakerhet(user)),
       matt(m, "satsdata", byggSatser(supabase, user)),
       matt(m, "saljtavlan", byggSaljtavlan(user)),
@@ -280,6 +284,7 @@ async function bygg(user: CurrentUser, m?: Nav2Matt): Promise<Nav2Data | null> {
     logg,
     leads,
     moten,
+    motesstat,
     sakerhet,
     satsdata,
     saljtavlan,

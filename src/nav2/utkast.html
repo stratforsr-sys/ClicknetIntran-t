@@ -7712,6 +7712,128 @@ body.nd-riktig :is(.pv-lagrad,.arow[data-agenda],.pv-tab tbody tr[data-pvupers],
 .mo-hnasta{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin:12px 0 0;font-size:13px;color:var(--ink-2)}
 .mo-hnasta b{font-weight:550;color:var(--ink);min-width:0;overflow-wrap:anywhere}
 .mo-hnasta .num{margin-left:auto;font-size:12px;color:var(--ink-3)}
+/* Mötesstatistiken (ndms.js): raden på startsidan och chefens vy. Utkastets egna variabler, inga egna färger. */
+
+/* Raden på startsidan: sex rutor. Panelen med raderna bakom ett tal tar en hel rad direkt under rutans rad (dense fyller hålen). */
+.ms-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-flow:row dense;gap:8px}
+.ms-t{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0;padding:10px 12px 11px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface);text-align:left;color:var(--ink-3);transition:background .15s,border-color .15s}
+button.ms-t{cursor:pointer}
+button.ms-t:hover{background:var(--surface-2);border-color:var(--line-2,var(--line))}
+button.ms-t[aria-expanded="true"]{background:var(--brand-soft);border-color:var(--brand)}
+button.ms-t:focus-visible,.ms-c:focus-visible,.ms-uc:focus-visible,.ms-tabell:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.ms-l{font-size:12px;line-height:1.3;color:var(--ink-3)}
+.ms-v{font:600 28px/1.1 var(--f-mono,inherit);letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:var(--ink);margin-top:2px}
+.ms-n{font-size:12px;min-height:16px;line-height:16px;color:var(--ink-3)}
+.ms-t .ms-n{font-size:12px}
+/* Stapeln: raden är denna veckas värde, strecket är förra veckans. Skalan är 0–100 % för kvoter, annars det största av de två. */
+.ms-bar{position:relative;display:block;width:100%;height:4px;margin:5px 0 6px;border-radius:2px;background:var(--line)}
+.ms-bar i{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:var(--brand)}
+.ms-bar u{position:absolute;top:-3px;bottom:-3px;width:2px;margin-left:-1px;background:var(--ink-2);text-decoration:none;border-radius:1px}
+button.ms-t[aria-expanded="true"] .ms-bar{background:var(--surface)}
+.ms-pil{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;color:var(--ink-3);white-space:nowrap}
+.ms-pil svg{width:11px;height:11px;flex:none}
+.ms-pil[data-rikt="ingen"]{min-height:14px}
+.ms-t .ms-pil{min-height:14px}
+.ms-fot{margin:10px 0 0;font-size:12px;color:var(--ink-3)}
+.ms-hem .chead{margin-bottom:12px}
+.ms-hem .chead .meta{margin-left:auto}
+
+/* Listan under talet */
+.ms-pan{grid-column:1 / -1;padding:12px 14px 6px;border:1px solid var(--line);border-left:3px solid var(--info);border-radius:var(--r-md);background:var(--surface);font-size:13px;color:var(--ink-2);animation:tin .25s var(--ease)}
+.ms-ph{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.ms-ph b{font-size:13.5px;font-weight:600;color:var(--ink)}
+.ms-ph .muted{font-size:12.5px}
+.ms-ant{margin-left:auto;font-size:12px;color:var(--ink-3)}
+.ms-ph .tlink{display:grid;place-items:center;padding:4px;align-self:center}
+.ms-ph .tlink svg{width:14px;height:14px}
+.ms-fork{margin:4px 0 8px;font-size:12px;line-height:1.4;color:var(--ink-3)}
+.ms-pan .ms-fork{margin:4px 0 6px}
+.ms-lista{list-style:none;margin:0;padding:0;max-height:320px;overflow:auto}
+.ms-r{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:baseline;gap:1px 12px;padding:7px 0;border-top:1px solid var(--line)}
+.ms-r b{font-weight:550;color:var(--ink);overflow-wrap:anywhere}
+.ms-r .num{font-size:12.5px;color:var(--ink-2);white-space:nowrap}
+.ms-r small{grid-column:1 / -1;font-size:12px;color:var(--ink-3)}
+.ms-sam{grid-template-columns:minmax(0,1fr) auto minmax(64px,auto)}
+.ms-sam .ms-len{text-align:right}
+.ms-vant{margin:8px 0 10px;font-size:12.5px}
+.ms-fel{margin:8px 0 10px;padding:8px 10px;border-radius:8px;background:var(--danger-soft,var(--warn-soft));color:var(--danger-ink);font-size:13px;line-height:1.4}
+.ms-fel .inl{padding:0;margin-left:4px;text-decoration:underline;color:inherit;font-size:inherit}
+
+/* Chefens vy */
+.ms-tabell{position:relative;overflow-x:auto;border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface)}
+.ms-tab{width:100%;min-width:820px;border-collapse:separate;border-spacing:0;font-size:13px}
+.ms-tab th,.ms-tab td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;vertical-align:top}
+.ms-tab thead th{padding:9px 8px;font-size:11.5px;font-weight:550;letter-spacing:.02em;color:var(--ink-3);white-space:nowrap;background:var(--surface-2)}
+.ms-tab tbody tr:last-child>th,.ms-tab tbody tr:last-child>td{border-bottom:0}
+.ms-tab th:first-child{text-align:left;position:sticky;left:0;z-index:1;padding-left:12px;background:var(--surface);font-weight:550;color:var(--ink);white-space:nowrap;border-right:1px solid var(--line)}
+.ms-tab thead th:first-child{background:var(--surface-2);z-index:2}
+.ms-tab tbody tr[data-p]:hover>*{background:var(--surface-2)}
+.ms-c{display:flex;flex-direction:column;align-items:flex-end;margin-left:auto;padding:2px 6px;border-radius:7px;min-width:64px;transition:background .15s}
+button.ms-c:hover{background:var(--brand-soft)}
+button.ms-c[aria-expanded="true"]{background:var(--brand-soft);box-shadow:inset 0 -2px 0 var(--brand)}
+.ms-l1{display:inline-flex;align-items:center;gap:5px}
+.ms-c .ms-v{font:500 14px/1.4 var(--f-mono,inherit);letter-spacing:-.01em;margin:0}
+.ms-c .ms-n{font-size:11.5px;line-height:15px;min-height:15px;white-space:nowrap}
+.ms-c .ms-pil{min-height:0}
+.ms-v.ms-obs{color:var(--danger-ink)}
+.ms-prad>td{padding:0;text-align:left;border-bottom:1px solid var(--line);background:var(--surface-2)}
+.ms-prad .ms-pan{position:sticky;left:0;width:var(--msw,100%);max-width:100%;margin:8px 0;border-radius:0 var(--r-md) var(--r-md) 0;animation:none;box-sizing:border-box}
+
+.ms-del{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px;align-items:start}
+.ms-blk{min-width:0;padding:12px 14px 12px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface);font-size:13px;color:var(--ink-2)}
+.ms-blk h3{margin:0 0 10px;font-size:12px;font-weight:600;letter-spacing:.03em;color:var(--ink-3)}
+.ms-blk .ms-fork{margin:10px 0 0}
+.ms-blk .ms-pan{margin-top:10px;animation:tin .25s var(--ease)}
+.ms-stor{display:flex;align-items:baseline;gap:10px;margin:0 0 8px}
+.ms-stor b{font:600 28px/1.1 var(--f-mono,inherit);letter-spacing:-.02em;color:var(--ink)}
+.ms-stor span{font-size:12.5px;color:var(--ink-3);line-height:1.35}
+.ms-ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.ms-uc{display:grid;grid-template-columns:minmax(0,1fr) 76px auto;align-items:center;gap:10px;width:100%;padding:5px 6px;border-radius:7px;text-align:left;transition:background .15s}
+.ms-uc:hover,.ms-uc[aria-expanded="true"]{background:var(--brand-soft)}
+.ms-uc span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}
+.ms-uc b{font:600 13px var(--f-mono,inherit);color:var(--danger-ink);min-width:1.5ch;text-align:right}
+.ms-ub,.ms-sp{display:block;height:4px;border-radius:2px;background:var(--line);position:relative}
+.ms-ub i,.ms-sp i{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:var(--danger)}
+.ms-sp i{background:var(--brand)}
+.ms-dl{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0}
+.ms-dl div{padding:8px 10px;border-radius:var(--r-sm);background:var(--surface-2)}
+.ms-dl dt{font-size:11.5px;color:var(--ink-3)}
+.ms-dl dd{margin:2px 0 0;font:600 20px/1.2 var(--f-mono,inherit);letter-spacing:-.02em;color:var(--ink)}
+.ms-med{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:10px 0 0;padding-top:8px;border-top:1px solid var(--line)}
+.ms-med span{font-size:12.5px;color:var(--ink-3)}
+.ms-med b{font:600 14px var(--f-mono,inherit);color:var(--ink)}
+.ms-dg,.ms-kl{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+.ms-dg li{display:grid;grid-template-columns:64px minmax(0,1fr) 42px 52px;align-items:center;gap:10px}
+.ms-dg .ms-hl{font-size:12.5px;color:var(--ink-2);white-space:nowrap}
+.ms-dg b{font:600 13px var(--f-mono,inherit);color:var(--ink);text-align:right}
+.ms-dg small{font-size:11.5px;color:var(--ink-3);text-align:right;white-space:nowrap}
+.ms-kl li{display:grid;grid-template-columns:minmax(64px,.9fr) minmax(0,1fr) 46px 46px 46px;align-items:center;gap:8px}
+.ms-kl .ms-kn{color:var(--ink);font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ms-kl b{font:500 13px var(--f-mono,inherit);text-align:right;color:var(--ink)}
+.ms-kh span{font-size:11.5px;color:var(--ink-3);text-align:right}
+
+@media (max-width:760px){
+  .ms-del{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:640px){
+  .ms-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ms-v{font-size:26px}
+  .ms-dl{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ms-r{grid-template-columns:minmax(0,1fr) auto}
+  .ms-r>.pill{grid-column:2;grid-row:1}
+  .ms-r>.ms-tid{grid-column:1}
+  .ms-sam{grid-template-columns:minmax(0,1fr) auto}
+  .ms-sam .ms-len{grid-column:2;grid-row:1}
+  .ms-sam .ms-nr{grid-column:1;grid-row:1}
+  .ms-sam .ms-tid{grid-column:1 / -1;grid-row:2;text-align:left}
+  .ms-ph b{order:0}
+  .ms-ant{order:1;margin-left:auto}
+  .ms-ph .tlink{order:2}
+  .ms-ph .muted{order:3;flex-basis:100%}
+}
+@media (prefers-reduced-motion:reduce){ .ms-pan{animation:none} .ms-t,.ms-c,.ms-uc{transition:none} }
+.ms-r .pill{font-style:normal}
+.ms-tab tbody th{padding-top:9px}
 </style>
 
 <div class="proto" role="region" aria-label="Prototypinställningar">
@@ -30718,7 +30840,7 @@ if (ND && ND.hem){
 }
 // Möten (ndmo.js): kortet med tre tal i vänsterkolumnen, direkt under Golvet. Mötesstatistikens rad (ndMsHemRad) monteras här efter.
 const _ndHemGolvMo = renderGolvet;
-renderGolvet = function(){ return _ndHemGolvMo() + (typeof ndMoHemKort === 'function' ? ndMoHemKort() : ''); };
+renderGolvet = function(){ return _ndHemGolvMo() + (typeof ndMoHemKort === 'function' ? ndMoHemKort() : '') + (typeof ndMsHemRad === 'function' ? ndMsHemRad() : ''); };
 
 /* =====================================================================
    NAV 2.0 I RIKTIGT LÄGE: ANSTÄLLDA (prefix nd), v47
@@ -34441,6 +34563,307 @@ if (typeof ndHemRader === 'function'){
 }
 
 if (ndLd()) NDKOPPLAD.add('leads');
+
+/* =====================================================================
+   NAV 2.0 I RIKTIGT LÄGE: MÖTESSTATISTIKEN (prefix ndMs / ms)
+
+   Serverns ND.motesstat (src/lib/nav2/motesstat.ts, B3) har redan räknat allt: sex tal per
+   person och vecka med pil mot förra veckan, de tre uppdelningarna och id:na bakom varje tal
+   (ND.motesstat.bakom). Här ritas bara det, och id:na slås upp i `moten` och `kedjor`. Inget
+   räknas om i klienten, så siffran och listan under den kan inte bli oense.
+
+   Två ytor:
+   - ndMsHemRad(): min egen rad på startsidan (för säljare och chef). '' om motesstat saknas
+     eller om alla sex talen är 0/null båda veckorna.
+   - ndMsChef(el): chefens vy i Möten (ndmo.js ritar #moStat när chefen tryckt Statistik och
+     anropar ndMsChef efter render): tabell per person, räknetalet över möten utan utfall,
+     Offerter, Dagar mellan bokning och möte, Källa.
+
+   Klick på ett tal fäller ut listan med raderna bakom, under talet. Samtal hämtas ur
+   /nav2/moten (handlingen `samtal`, en läsning, inte spärrad i läsläge) vid varje öppning.
+   null visas som –, aldrig NaN, 0 % eller Infinity. Pilen värderar inte: fler samtal eller
+   bokade är inte alltid bättre.
+   ===================================================================== */
+
+const msD = () => ND && ND.motesstat;
+const MSTAL = [
+  ['samtal', 'Samtal', 'Samtal'],
+  ['bokade', 'Bokade', 'Bokade'],
+  ['per100', 'Bokade per 100 samtal', 'Per 100'],
+  ['hallna', 'Andel hållna', 'Hållna'],
+  ['affarer', 'Andel affärer', 'Affärer'],
+  ['forstaMote', 'Affär på första mötet', 'Första mötet']
+];
+const MSKVOT = ['hallna', 'affarer', 'forstaMote'];
+const MSFORKL = {
+  samtal: 'Utgående samtal under veckan.',
+  bokade: 'Möten som bokades under veckan. Ombokningar och uppföljningsmöten räknas inte som nya bokningar.',
+  hallna: 'Möten bokade av personen, med mötesdatum i veckan och ett utfall. Hållna delat med alla i listan.',
+  affarer: 'Bolag som slutade i affär eller nej under veckan, där personen höll det första hållna mötet. Affärer delat med alla i listan.',
+  forstaMote: 'Bolagen som blev affär under veckan. Andelen är de som kom direkt på första mötet, utan offert.',
+  utanUtfall: 'Möten personen höll som ännu inte har fått något utfall.'
+};
+const MSNOMEN = {samtal: 'samtal', bokade: 'möten', hallna: 'möten', utanUtfall: 'möten', affarer: 'bolag', forstaMote: 'bolag'};
+const MSUTFALL = {hallet: ['Hållet', 'ok'], uteblev: ['Uteblev', 'danger'], avbokat: ['Avbokat', 'neutral']};
+const MSART = {ny: '', ombokning: 'Ombokning', uppfoljning: 'Uppföljningsmöte'};
+const MSAVSLUT = {affar: ['Affär', 'ok'], nej: ['Nej', 'neutral'], avbokat: ['Avbokat', 'neutral']};
+const MSKOLUMN = {bokat: 'Bokat', bekraftat: 'Bekräftat', utfall_saknas: 'Utfall saknas', folj_upp: 'Följ upp', tyst: 'Tyst'};
+const MS = {open: null, tok: 0, sam: null};   // open: {yta:'hem'|'chef', person, tal, src}; sam: {laddar} | {fel} | {samtal, kapat}
+
+/* ---------- Format ---------- */
+const msProc = a => a === null || a === undefined ? '–' : Math.round(a * 100) + ' %';
+const msDec = v => v === null || v === undefined ? '–' : v.toFixed(1).replace('.', ',');
+function msFm(t, v){
+  if (t === 'per100') return msDec(v);
+  if (v !== null && typeof v === 'object') return msProc(v.andel);
+  return v === null || v === undefined ? '–' : String(v);
+}
+// Värdet pilen jämför: hela procent för kvoter (det som visas), annars talet.
+const msJamf = v => v === null || v === undefined ? null : typeof v === 'object' ? (v.andel === null ? null : Math.round(v.andel * 100)) : v;
+const msSvDag = (iso, medTid) => {
+  if (!iso) return '–';
+  const d = new Date(iso); if (isNaN(d)) return '–';
+  const p = Object.fromEntries(new Intl.DateTimeFormat('sv-SE', {timeZone: 'Europe/Stockholm', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'}).formatToParts(d).map(x => [x.type, x.value]));
+  const mon = String(p.month).replace('.', ''), wd = String(p.weekday).replace('.', '');
+  return `${wd} ${p.day} ${mon}${medTid ? ` ${p.hour}:${p.minute}` : ''}`;
+};
+const msKortDag = d => d ? msSvDag(d + 'T12:00:00Z', false).replace(/^\S+ /, '') : '';
+function msVeckonr(dag){   // ISO-veckan för ett YYYY-MM-DD
+  const d = new Date(dag + 'T00:00:00Z'); if (isNaN(d)) return null;
+  d.setUTCDate(d.getUTCDate() + 3 - ((d.getUTCDay() + 6) % 7));
+  const v1 = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
+  return 1 + Math.round(((d - v1) / 86400000 - 3 + ((v1.getUTCDay() + 6) % 7)) / 7);
+}
+function msPeriod(){
+  const p = (msD() || {}).perioder; if (!p || !p.denna || !p.forra) return {kort: '', lang: ''};
+  const a = msVeckonr(p.denna.fran), b = msVeckonr(p.forra.fran);
+  return {kort: `v. ${a} mot v. ${b}`, lang: `v. ${a} · ${msKortDag(p.denna.fran)}–${msKortDag(p.denna.till)} · pil mot v. ${b}`, a, b};
+}
+function msNummer(n){
+  if (!n) return 'Okänt nummer';
+  const m = /^\+467(\d)(\d{3})(\d{2})(\d{2})$/.exec(n);
+  return m ? `+46 7${m[1]} ${m[2]} ${m[3]} ${m[4]}` : n;
+}
+function msLangd(sek){
+  if (sek === null || sek === undefined) return '–';
+  if (sek < 60) return sek + ' s';
+  const m = Math.floor(sek / 60), s = sek % 60;
+  return s ? `${m} min ${s} s` : `${m} min`;
+}
+
+/* ---------- Pilen och jämförelsestapeln ---------- */
+const MSPIL = {upp: 'M12 19V5M6.5 10.5 12 5l5.5 5.5', ner: 'M12 5v14M6.5 13.5 12 19l5.5-5.5', lika: 'M5 12h14'};
+function msRikt(t, d, f){
+  const a = msJamf(d[t]), b = msJamf(f[t]);
+  return a === null || b === null ? 'ingen' : a > b ? 'upp' : a < b ? 'ner' : 'lika';
+}
+// med text = "från 529" (rutorna på startsidan); utan = bara pilen, jämförvärdet står i title (tabellen)
+function msPil(t, d, f, medText){
+  const r = msRikt(t, d, f), fv = msFm(t, f[t]);
+  if (r === 'ingen') return `<span class="ms-pil" data-rikt="ingen" title="${d[t] === null ? 'Inget att visa den här veckan' : 'Förra veckan: ' + esc(fv) + '. Inget att jämföra med.'}"></span>`;
+  const ord = {upp: 'upp', ner: 'ner', lika: 'lika'}[r];
+  return `<span class="ms-pil" data-rikt="${r}" title="Förra veckan: ${esc(fv)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${MSPIL[r]}"/></svg>${medText ? `<span>${r === 'lika' ? 'lika som' : 'från'} ${esc(fv)}</span>` : ''}<span class="mo-dold">${ord} mot förra veckan, ${esc(fv)}</span></span>`;
+}
+function msBar(t, d, f){
+  const kv = MSKVOT.includes(t), a = msJamf(d[t]), b = msJamf(f[t]);
+  const max = kv ? 100 : Math.max(a || 0, b || 0, 1);
+  const pct = v => Math.min(100, Math.max(0, v / max * 100)).toFixed(1);
+  return `<span class="ms-bar" aria-hidden="true">${a === null ? '' : `<i style="width:${pct(a)}%"></i>`}${b === null ? '' : `<u style="left:${pct(b)}%"></u>`}</span>`;
+}
+// Är något att visa bakom talet? Räknetal > 0, kvoter med nämnare. per100 är en kvot av två tal och klickas inte.
+function msKlickbar(t, d){
+  if (t === 'per100') return false;
+  const v = d[t];
+  return v !== null && typeof v === 'object' ? v.av > 0 : (v || 0) > 0;
+}
+const msNamnAv = id => { const c = (msD() || {}).chef; const p = c && c.personer.find(x => x.id === id); return p ? p.namn : (ND.jag && ND.jag.id === id ? (ND.jag.namn || 'Jag') : ''); };
+const msFor = n => String(n || '').split(' ')[0];
+
+/* ---------- Listan under talet ---------- */
+const msKnapp = (yta, person, tal, src) => `data-ms="${esc(yta)}|${esc(person)}|${esc(tal)}"${src ? ` data-src="${esc(src)}"` : ''}`;
+const msOppen = (yta, person, tal, src) => { const o = MS.open; return !!o && o.yta === yta && o.person === person && o.tal === tal && (o.src || '') === (src || ''); };
+
+function msMoteRad(m, tal, B){
+  const u = m.utfall ? MSUTFALL[m.utfall] : null;
+  const smaa = [MSART[m.art] || '', tal === 'bokade' ? 'bokat ' + msSvDag(m.bokatNar, false) : ''].filter(Boolean).join(' · ');
+  return `<li class="ms-r"><b>${esc(B[m.kedja] || 'Okänt bolag')}</b><span class="num ms-tid">${msSvDag(m.moteTid, true)}</span>${u ? `<i class="pill t-${u[1]}">${u[0]}</i>` : '<i class="pill t-warn">Utfall saknas</i>'}${smaa ? `<small>${esc(smaa)}</small>` : ''}</li>`;
+}
+function msKedjaRad(k, tal, B){
+  const a = k.avslut ? MSAVSLUT[k.avslut] : null;
+  const smaa = [
+    tal === 'forstaMote' ? (k.affarForstaMote ? 'Direkt på första mötet' : 'Efter offert') : '',
+    k.offertNar && tal !== 'forstaMote' ? 'offert ' + msSvDag(k.offertNar, false) : '',
+    !k.avslut && k.kolumn ? MSKOLUMN[k.kolumn] || '' : ''
+  ].filter(Boolean).join(' · ');
+  return `<li class="ms-r"><b>${esc(B[k.id] || 'Okänt bolag')}</b><span class="num ms-tid">${k.avslutNar ? msSvDag(k.avslutNar, false) : k.forstaMoteTid ? msSvDag(k.forstaMoteTid, false) : ''}</span>${a ? `<i class="pill t-${a[1]}">${a[0]}</i>` : '<i class="pill t-info">Öppen</i>'}${smaa ? `<small>${esc(smaa)}</small>` : ''}</li>`;
+}
+function msRader(o){
+  const D = msD(), B = D.bolag || {};
+  if (o.tal === 'samtal'){
+    const s = MS.sam;
+    if (!s || s.laddar) return {antal: null, html: '<p class="ms-vant muted">Hämtar samtalen …</p>'};
+    if (s.fel) return {antal: null, html: `<p class="ms-fel" role="alert">Samtalen gick inte att hämta: ${esc(s.fel)} <button class="tlink inl" data-ms-igen>Försök igen</button></p>`};
+    const l = s.samtal.length ? s.samtal.map(c => `<li class="ms-r ms-sam"><b class="num ms-nr">${esc(msNummer(c.nummer))}</b><span class="num ms-tid">${esc(c.tid || '–')}</span><span class="num ms-len">${msLangd(c.sek)}</span></li>`).join('') : '';
+    return {antal: s.samtal.length, html: (l ? `<ul class="ms-lista">${l}</ul>` : '<p class="ms-vant muted">Inga samtal registrerade i veckan.</p>') + (s.kapat ? '<p class="ms-vant muted">Listan är kapad vid de senaste samtalen. Det finns fler.</p>' : '')};
+  }
+  const ids = ((((D.bakom || {})[o.person] || {})[o.vecka || 'denna']) || {})[o.tal] || [];
+  const M = new Map((D.moten || []).map(m => [m.id, m])), K = new Map((D.kedjor || []).map(k => [k.id, k]));
+  const rader = ids.map(id => M.has(id) ? {t: M.get(id).moteTid, h: msMoteRad(M.get(id), o.tal, B)} : K.has(id) ? {t: K.get(id).avslutNar || K.get(id).forstaMoteTid || '', h: msKedjaRad(K.get(id), o.tal, B)} : {t: '', h: '<li class="ms-r"><b class="muted">Raden finns inte kvar i underlaget</b></li>'});
+  rader.sort((a, b) => String(b.t).localeCompare(String(a.t)));
+  return {antal: rader.length, html: rader.length ? `<ul class="ms-lista">${rader.map(r => r.h).join('')}</ul>` : '<p class="ms-vant muted">Inga rader bakom talet.</p>'};
+}
+function msPanel(o){
+  const namn = (MSTAL.find(x => x[0] === o.tal) || [o.tal, o.tal === 'utanUtfall' ? 'Möten utan utfall' : o.tal])[1];
+  const r = msRader(o), per = msPeriod();
+  const antal = r.antal === null ? '' : `<span class="ms-ant num">${r.antal} ${r.antal === 1 ? {samtal: 'samtal', möten: 'möte', bolag: 'bolag'}[MSNOMEN[o.tal]] || 'rad' : MSNOMEN[o.tal] || 'rader'}</span>`;
+  return `<div class="ms-pan" id="msPan" role="region" aria-live="polite" aria-label="${esc(namn)}, raderna bakom talet">
+    <div class="ms-ph"><b>${esc(namn)}</b><span class="muted">${esc(msFor(msNamnAv(o.person)) || 'Jag')} · ${o.vecka === 'forra' ? 'förra veckan' : 'denna vecka'}${per.a ? ' (v. ' + (o.vecka === 'forra' ? per.b : per.a) + ')' : ''}</span>${antal}<button class="tlink" data-ms-x aria-label="Stäng listan">${I('x')}</button></div>
+    <p class="ms-fork">${esc(MSFORKL[o.tal] || '')}</p>${r.html}</div>`;
+}
+
+/* ---------- Startsidans rad ---------- */
+const msTomtTal = d => !d || !(d.samtal || d.bokade || d.per100 || MSKVOT.some(k => d[k] && d[k].av));
+function ndMsHemRad(){
+  // Som Möten-kortet: inget syns förrän Möten är kopplat (moSyns i ndmo.js).
+  if (typeof moSyns !== 'function' || !moSyns()) return '';
+  const D = msD(); if (!D || !D.jag || !D.jag.denna || !D.jag.forra) return '';
+  if (msTomtTal(D.jag.denna) && msTomtTal(D.jag.forra)) return '';
+  const d = D.jag.denna, f = D.jag.forra, id = (ND.jag || {}).id, per = msPeriod();
+  const o = MS.open && MS.open.yta === 'hem' ? MS.open : null;
+  const rutor = MSTAL.map(([t, namn]) => {
+    const kv = MSKVOT.includes(t), klick = msKlickbar(t, d);
+    const n = kv ? `<span class="ms-n num">${d[t].av ? `${d[t].n} av ${d[t].av}` : 'inget att räkna på än'}</span>` : t === 'per100' ? `<span class="ms-n num">${d.bokade} av ${d.samtal}</span>` : '<span class="ms-n"></span>';
+    const inre = `<span class="ms-l">${namn}</span><b class="ms-v num">${msFm(t, d[t])}</b>${n}${msBar(t, d, f)}${msPil(t, d, f, true)}`;
+    const oppen = !!o && o.tal === t && o.person === id;
+    const ruta = klick ? `<button class="ms-t" data-tal="${t}" ${msKnapp('hem', id, t)} aria-expanded="${oppen}"${oppen ? ' aria-controls="msPan"' : ''}>${inre}</button>` : `<div class="ms-t" data-tal="${t}">${inre}</div>`;
+    return ruta + (oppen ? msPanel({yta: 'hem', person: id, tal: t, vecka: 'denna'}) : '');
+  }).join('');
+  return `<section class="card ms-hem" id="msHem" aria-label="Mötesstatistik">
+    <div class="chead"><h2>Min statistik</h2><span class="meta num">${esc(per.kort)}</span></div>
+    <div class="ms-grid">${rutor}</div>
+    <p class="ms-fot">Pilen jämför med förra veckan. Ett tal du trycker på visar raderna bakom det.</p></section>`;
+}
+
+/* ---------- Chefens vy ---------- */
+function msCell(p, t){
+  const d = p.denna, f = p.forra, utan = t === 'utanUtfall';
+  const klick = msKlickbar(t, d), oppen = MS.open && MS.open.yta === 'chef' && MS.open.person === p.id && MS.open.tal === t && !MS.open.src;
+  const kv = MSKVOT.includes(t);
+  const v = `<b class="ms-v num${utan && d[t] ? ' ms-obs' : ''}">${msFm(t, d[t])}</b>`;
+  const pil = utan ? '' : msPil(t, d, f, false);
+  const sub = utan ? '<small class="ms-n"></small>' : kv ? `<small class="ms-n num">${d[t].av ? `${d[t].n} av ${d[t].av}` : ''}</small>` : f[t] === null || f[t] === undefined ? '<small class="ms-n"></small>' : `<small class="ms-n num">förra ${msFm(t, f[t])}</small>`;
+  const inre = `<span class="ms-l1">${v}${pil}</span>${sub}`;
+  return `<td data-tal="${t}">${klick ? `<button class="ms-c" ${msKnapp('chef', p.id, t)} aria-expanded="${!!oppen}">${inre}</button>` : `<span class="ms-c">${inre}</span>`}</td>`;
+}
+function msUtanBlock(C){
+  const lista = [...(C.utanUtfall || [])].filter(x => x.antal > 0).sort((a, b) => b.antal - a.antal);
+  const tot = lista.reduce((s, x) => s + x.antal, 0), max = Math.max(1, ...lista.map(x => x.antal));
+  const o = MS.open && MS.open.yta === 'chef' && MS.open.src === 'utan' ? MS.open : null;
+  const rader = lista.map(x => `<li><button class="ms-uc" ${msKnapp('chef', x.id, 'utanUtfall', 'utan')} aria-expanded="${!!o && o.person === x.id}"><span>${esc(x.namn)}</span><span class="ms-ub" aria-hidden="true"><i style="width:${(x.antal / max * 100).toFixed(0)}%"></i></span><b class="num">${x.antal}</b></button></li>`).join('');
+  return `<section class="ms-blk" data-blk="utan"><h3>Möten utan utfall</h3>
+    ${lista.length ? `<p class="ms-stor"><b class="num">${tot}</b><span>möten som hållits utan att något utfall förts in</span></p><ul class="ms-ul">${rader}</ul>` : '<p class="ms-vant muted">Alla möten som hållits har fått ett utfall.</p>'}
+    ${o ? msPanel({yta: 'chef', person: o.person, tal: 'utanUtfall', vecka: 'denna'}) : ''}</section>`;
+}
+function msOffBlock(C){
+  const O = C.offerter || {}, m = O.medianDagar;
+  const st = [['Skickade', O.skickade], ['Affär', O.affar], ['Nej', O.nej], ['Tysta', O.tysta]].map(([l, v]) => `<div><dt>${l}</dt><dd class="num">${v === null || v === undefined ? '–' : v}</dd></div>`).join('');
+  return `<section class="ms-blk" data-blk="offerter"><h3>Offerter</h3><dl class="ms-dl">${st}</dl>
+    <p class="ms-med"><span>Mediantid offert till affär</span><b class="num">${m === null || m === undefined ? '–' : (Math.round(m * 10) / 10).toString().replace('.', ',') + (m === 1 ? ' dag' : ' dagar')}</b></p>
+    <p class="ms-fork">Skickade och stängda gäller veckan, tysta är läget just nu. Visar om offertspåret lönar sig eller bara skjuter upp nejen.</p></section>`;
+}
+function msDagBlock(C){
+  const rader = ['0–1', '2–3', '4–7', '8+'].map(h => {
+    const k = (C.dagar || {})[h] || {andel: null, n: 0, av: 0};
+    return `<li data-hink="${h}"><span class="ms-hl num">${h} dagar</span><span class="ms-sp" aria-hidden="true">${k.andel === null ? '' : `<i style="width:${(k.andel * 100).toFixed(0)}%"></i>`}</span><b class="num">${msProc(k.andel)}</b><small class="num">${k.n} av ${k.av}</small></li>`;
+  }).join('');
+  return `<section class="ms-blk" data-blk="dagar"><h3>Dagar mellan bokning och möte</h3><ul class="ms-dg">${rader}</ul>
+    <p class="ms-fork">Andel hållna efter hur lång tid det gick mellan bokning och möte. Visar om korta bokningar fungerar.</p></section>`;
+}
+function msKallBlock(C){
+  // Rader där bokade, hållna och affärer alla är 0 (gamla öppna möten utanför veckan) säger ingenting om källan.
+  const ks = (C.kallor || []).filter(k => k.bokade || k.hallna || k.affarer), max = Math.max(1, ...ks.map(k => k.bokade));
+  const rader = ks.map(k => `<li data-kalla="${esc(k.kalla)}"><span class="ms-kn">${esc(k.kalla || 'Okänd')}</span><span class="ms-sp" aria-hidden="true"><i style="width:${(k.bokade / max * 100).toFixed(0)}%"></i></span><b class="num">${k.bokade}</b><b class="num">${k.hallna}</b><b class="num">${k.affarer}</b></li>`).join('');
+  return `<section class="ms-blk" data-blk="kalla"><h3>Källa</h3>
+    ${ks.length ? `<ul class="ms-kl"><li class="ms-kh" aria-hidden="true"><span></span><span></span><span class="num">Bokade</span><span class="num">Hållna</span><span class="num">Affärer</span></li>${rader}</ul>` : '<p class="ms-vant muted">Ingen källa har bokade, hållna eller affärer under veckan.</p>'}
+    <p class="ms-fork">Visar vilken sajt det lönar sig att prospektera på.</p></section>`;
+}
+function ndMsChef(el){
+  const D = msD(); if (!el) return;
+  if (!D || !D.chef){ el.innerHTML = '<p class="ms-vant muted">Statistiken är inte tillgänglig.</p>'; return; }
+  const C = D.chef, per = msPeriod();
+  const rull = el.querySelector('.ms-tabell'), sx = rull ? rull.scrollLeft : 0;
+  const KOL = [...MSTAL, ['utanUtfall', 'Möten utan utfall', 'Utan utfall']];
+  const o = MS.open && MS.open.yta === 'chef' && !MS.open.src ? MS.open : null;
+  const rader = C.personer.map(p => `<tr data-p="${esc(p.id)}"><th scope="row">${esc(p.namn)}</th>${KOL.map(([t]) => msCell(p, t)).join('')}</tr>` +
+    (o && o.person === p.id ? `<tr class="ms-prad"><td colspan="${KOL.length + 1}">${msPanel({yta: 'chef', person: p.id, tal: o.tal, vecka: 'denna'})}</td></tr>` : '')).join('');
+  el.innerHTML = `<div class="chead"><h2>Statistik</h2><span class="meta num">${esc(per.lang)}</span></div>
+    <div class="ms-tabell" tabindex="0" role="region" aria-label="Tal per person, rullas sidledes"><table class="ms-tab">
+      <caption class="mo-dold">Mötesstatistik per person, denna vecka mot förra veckan</caption>
+      <thead><tr><th scope="col">Person</th>${KOL.map(([, lang, kort]) => `<th scope="col" title="${esc(lang)}">${kort}</th>`).join('')}</tr></thead>
+      <tbody>${rader}</tbody></table></div>
+    <div class="ms-del">${msUtanBlock(C)}${msOffBlock(C)}${msDagBlock(C)}${msKallBlock(C)}</div>`;
+  const ny = el.querySelector('.ms-tabell');
+  if (ny){ if (sx) ny.scrollLeft = sx; ny.style.setProperty('--msw', Math.max(0, ny.clientWidth - 2) + 'px'); }
+}
+
+/* ---------- Ritning, klick och samtal ---------- */
+function msRita(tillFokus){
+  const a = document.activeElement, fokus = tillFokus || (a && a.dataset && a.dataset.ms ? [a.dataset.ms, a.dataset.src || ''] : null);
+  const h = document.getElementById('msHem'); if (h) h.outerHTML = ndMsHemRad();
+  const c = document.getElementById('moStat'); if (c && typeof ndMsChef === 'function') ndMsChef(c);
+  if (fokus){
+    const e = [...document.querySelectorAll('[data-ms]')].find(x => x.dataset.ms === fokus[0] && (x.dataset.src || '') === fokus[1]);
+    if (e) e.focus({preventScroll: true});
+  }
+}
+MS.grans = 10000;   // ms innan samtalsanropet ges upp
+async function msHamtaSamtal(person, tok){
+  const D = msD(), per = D && D.perioder && D.perioder.denna;
+  let s;
+  if (!per) s = {fel: 'Veckans datum saknas i svaret.'};
+  else {
+    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), MS.grans);
+    try {
+      const r = await fetch('/nav2/moten', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({handling: 'samtal', person, fran: per.fran, till: per.till}), signal: ctl.signal});
+      let b = null; try { b = await r.json(); } catch (e) { if (e && e.name === 'AbortError') throw e; }
+      s = r.ok && !b ? {fel: 'Svaret gick inte att läsa.'}
+        : r.ok ? {samtal: Array.isArray(b && b.samtal) ? b.samtal : [], kapat: !!(b && b.kapat)}
+        : r.status === 401 ? {fel: 'Din inloggning har gått ut. Ladda om sidan och logga in igen.'}
+        : {fel: (b && b.fel) || `Servern svarade ${r.status}.`};
+    } catch (e) { s = {fel: e && e.name === 'AbortError' ? `Servern svarade inte inom ${Math.round(MS.grans / 1000)} sekunder.` : 'Ingen kontakt med servern.'}; }
+    finally { clearTimeout(t); }
+  }
+  if (tok !== MS.tok) return;   // listan har stängts eller bytts under tiden
+  MS.sam = s; msRita();
+}
+// Stänger listan och ger fokus tillbaka till talet som öppnade den (även efter ✕ och Escape).
+function msStang(){
+  const o = MS.open; MS.open = null; MS.sam = null; MS.tok++;
+  msRita(o ? [`${o.yta}|${o.person}|${o.tal}`, o.src || ''] : null);
+}
+function msOppna(yta, person, tal, src){
+  if (msOppen(yta, person, tal, src)) return msStang();
+  MS.open = {yta, person, tal, src: src || ''}; MS.tok++; MS.sam = null;
+  if (tal === 'samtal'){ MS.sam = {laddar: true}; const tok = MS.tok; msRita(); msHamtaSamtal(person, tok); }
+  else msRita();
+}
+document.addEventListener('click', e => {
+  if (!msD() || !e.target.closest) return;
+  const x = e.target.closest('[data-ms-x]');
+  if (x){ e.preventDefault(); msStang(); return; }
+  const igen = e.target.closest('[data-ms-igen]');
+  if (igen && MS.open){ e.preventDefault(); const o = MS.open; MS.sam = {laddar: true}; MS.tok++; const tok = MS.tok; msRita(); msHamtaSamtal(o.person, tok); return; }
+  const b = e.target.closest('[data-ms]'); if (!b) return;
+  e.preventDefault();
+  const [yta, person, tal] = b.dataset.ms.split('|');
+  msOppna(yta, person, tal, b.dataset.src || '');
+});
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape' || !MS.open || !msD()) return;
+  const i = document.activeElement; if (!i || !i.closest || !i.closest('.ms-pan, [data-ms]')) return;
+  e.preventDefault(); msStang();
+});
+window.addEventListener('resize', () => { const t = document.querySelector('#moStat .ms-tabell'); if (t) t.style.setProperty('--msw', Math.max(0, t.clientWidth - 2) + 'px'); });
 
 /* =====================================================================
    NAV 2.0 I RIKTIGT LÄGE: MÖTEN (prefix ndMo / mo)

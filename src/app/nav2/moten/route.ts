@@ -1,7 +1,7 @@
 import { NextResponse, after } from "next/server";
 import { fullName, getCurrentUser } from "@/lib/auth";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
-import { svenskaMinuter, svensktDatum, svenskTidpunkt } from "@/lib/klocka";
+import { svenskDygnsslut, svenskaMinuter, svensktDatum, svenskTidpunkt } from "@/lib/klocka";
 import { notifiera } from "@/lib/notishandelse-server";
 import { skrivHandelse } from "@/lib/handelselogg-server";
 import { dagPlus } from "@/lib/saljtakt";
@@ -9,6 +9,7 @@ import { lk } from "@/lib/leveranskalender-server";
 import { tomEfterFonstret } from "@/lib/utkorg-server";
 import { flytta, hamtaUpptaget, skapaMote, stallIn } from "@/app/(app)/kalender/moten/actions";
 import {
+  CHEF_ROLLER,
   MOTE_PLATS,
   TYST_EFTER_INGET_SVAR,
   andringForKund,
@@ -55,7 +56,7 @@ export const dynamic = "force-dynamic";
  * DEL 1 (A6): `uppslag`, `lediga`, `boka` och `paminn`.
  * DEL 2 (A7): mötets knappar `bekrafta`, `flytta`, `avboka`, `utfall`, `kund`, `nej`.
  * DEL 3 (A8): uppföljningen `inget_svar` och `prova_igen`.
- * `samtal` (B4) läggs till som eget `case`. En okänd handling svarar 400.
+ * `samtal` (B4): samtalen bakom statistikens tal, sina egna eller (chef) allas. En okänd handling svarar 400.
  *
  * SKRIVNING: bara service role skriver i Mötens tabeller (0260 har bara
  * select-policyer). Aktören är alltid den inloggade (`mig`), aldrig något ur
@@ -290,6 +291,35 @@ export async function POST(request: Request) {
 
     case "prova_igen":
       return await uppfoljning("prova_igen");
+
+    case "samtal": {
+      // B4: samtalen bakom statistikens tal Samtal. Samma krets som mote_samtal_vecka (0263): sina egna, chefen allas.
+      const person = String(b.person ?? "");
+      const fran = String(b.fran ?? "");
+      const till = String(b.till ?? "");
+      const DATUM = /^\d{4}-\d{2}-\d{2}$/;
+      if (!UUID.test(person) || !DATUM.test(fran) || !DATUM.test(till) || till < fran) return svar({ fel: "Ogiltig begäran." }, 400);
+      if (Date.parse(till) - Date.parse(fran) > 13 * 86_400_000) return svar({ fel: "Högst två veckor åt gången." }, 400);
+      const chef = aktorn.roller.some((r) => (CHEF_ROLLER as readonly string[]).includes(r));
+      if (person !== mig && !chef) return svar({ fel: "Du ser bara dina egna samtal." }, 403);
+      const MAX_SAMTAL = 1000;
+      const { data, error } = await db
+        .from("phone_call")
+        .select("started_at, counterpart_e164, duration_seconds")
+        .eq("employee_id", person)
+        .eq("direction", "ut")
+        .gte("started_at", svenskTidpunkt(fran, "00:00").toISOString())
+        .lte("started_at", svenskDygnsslut(till))
+        .order("started_at", { ascending: false })
+        .limit(MAX_SAMTAL);
+      if (error) return svar({ fel: "Samtalen gick inte att läsa." }, 500);
+      const rader = (data ?? []) as { started_at: string; counterpart_e164: string | null; duration_seconds: number | null }[];
+      return svar({
+        ok: "Samtal.",
+        samtal: rader.map((r) => ({ tid: nar(r.started_at), nummer: r.counterpart_e164, sek: r.duration_seconds })),
+        kapat: rader.length === MAX_SAMTAL,
+      });
+    }
 
     default:
       return svar({ fel: "Okänd handling." }, 400);

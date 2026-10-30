@@ -5,6 +5,38 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-30 · Möten, statistiken: min vecka på startsidan och chefens tabell
+
+Session B av Möten (DESIGN 5.7–5.9, PLAN B1–B5 i `~/nav2-utkast/delar/moten/`). Allt räknas ur
+raderna vid läsning, inga sparade summor.
+
+**Vad ett samtal är (B1).** Alla utgående Lynes-samtal (`phone_call.direction = 'ut'`). Lynes säger
+inte om ett samtal besvarades (`outcome` är alltid `okant`, `talk_seconds` = hela fönstret), och
+fördelningen har ingen ringtidstopp vid 20–40 s. 38 % är kortare än 10 s, så en längdgräns är en
+öppen fråga till beställaren (HANDOFF).
+
+**0263 (KÖRD 2026-10-29)** är SECURITY DEFINER-funktionen `mote_samtal_vecka(p_fran, p_till)`, inte
+en vy: en vy med `security_invoker` tog ~2 s för en chef (`phone_call_read` kör `leads_employee()`
+per rad), läckte en kollegas samtal via `manager_id` och orderkoppling, och stängde ute rollen
+admin. Funktionen ger den inloggades egen rad, eller alla för team_lead, sales_manager, ceo och
+admin, på 5–20 ms. Vakten har raden.
+
+**Talen (B2, `motesstatforma.ts`)** är rena: veckotal, offerter, dagar mellan bokning och möte,
+källor och `bakom()` (id:n bakom varje tal). En kvot med nämnaren 0 är `null` och visas som `–`.
+**Läsningen (B3, `motesstat.ts`)** läser `mote` och `mote_kedja_utfall` med RLS för förra och denna
+veckan (plus öppna kedjor och möten utan utfall), sidvis med `order` + `range`, eftersom REST och
+pgrest kapar vid 1000 rader. Id:n bakom talen räknas i servern (`bakom`), så klienten har ingen
+kopia av reglerna. **Utkastet (B4, `ndms.js`)**: kortet *Min statistik* under Möten-kortet på
+startsidan, och chefens Statistik i Möten (tabell per person, möten utan utfall, offerter, dagar,
+källa). Ett klick fäller ut raderna bakom talet; samtalen hämtas med `samtal` i `/nav2/moten`
+(en läsning, samma krets som 0263, 400/403 annars). Allt syns först när Möten är kopplat
+(`moSyns()`), som A:s kort.
+
+**Prov:** `motesstat.mjs` (92), `motesstat-db.mjs` (mot den körda funktionen, i en transaktion:
+veckogränser, sommar/vintertid, roller, anon/public utan EXECUTE, 42501 utan anställd),
+`navnyheter.mjs`. Klienten provad i 1280 och 390 px (424/425 kontroller, 0 JS-fel), med påhittade
+`PROV`-möten eftersom produktionen ännu inte har några möten.
+
 ## 2026-10-30 · Möten: boka, bekräfta och följ upp SEO-möten på en tavla som flyttar sig själv
 
 Beställaren valde en egen tavla (DESIGN 5.6) i stället för att bygga in mötena i Leads. Leads är

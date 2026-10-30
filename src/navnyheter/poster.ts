@@ -14,6 +14,23 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "motesstatistik",
+    rubrik: "Min statistik: veckans möten i sex tal",
+    ingress: "Startsidan visar dina samtal, bokade möten och affärer den här veckan, jämfört med förra.",
+    text: `På startsidan, under Möten, står **Min statistik**: samtal, bokade möten,
+bokade per 100 samtal, andel hållna, andel affärer och affär på första mötet.
+Pilen visar om talet gick upp eller ner sedan förra veckan, och ett streck i
+stället för ett tal betyder att det inte finns något att räkna på än.
+
+Tryck på ett tal, så ser du mötena eller samtalen bakom det.
+
+Du ser bara dina egna tal. Chefen trycker **Statistik** i Möten och ser hela
+lagets tabell, offerterna, hur lång tid det gick mellan bokning och möte, och
+vilka källor som ger affärer.`,
+    datum: "2026-10-30",
+    roller: [],
+  },
+  {
     slug: "moten",
     rubrik: "Möten: en tavla som flyttar sig själv",
     ingress: "Boka, bekräfta och följ upp SEO-möten på en tavla där kortet flyttar sig när du gör något.",
