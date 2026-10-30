@@ -82,10 +82,10 @@ ok("preview: bron av, allt visas som i dag", prev.bro === false && Object.keys(S
 ok("lokalt (ingen VERCEL_ENV): bron av", lage({}).bro === false);
 
 rubrik("vagar.ts: SJALV vet vyn för varje mönster");
-const NDVY = ["hem", "uppgifter", "rutiner", "utbildning", "tid", "kalender", "arenden", "franvaro", "fel", "order", "provision", "coachning", "anstallda", "rekrytering", "leads", "nyheter", "avtal", "kv", "logg", "adoption"];
+const NDVY = ["hem", "uppgifter", "rutiner", "utbildning", "tid", "kalender", "arenden", "franvaro", "fel", "order", "provision", "coachning", "anstallda", "rekrytering", "leads", "nyheter", "avtal", "kv", "logg", "adoption", "moten"]; // moten: ndmo.js lägger den i NDVY
 const VYER = new Set([...NDVY, "sok", "profil", "satser"]);
 ok("SJALV är par [vy, mönster]", Array.isArray(pa.sjalv) && pa.sjalv.length > 0);
-ok("SJALV har 31 mönster", pa.sjalv.length === 31, String(pa.sjalv.length));
+ok("SJALV har 32 mönster", pa.sjalv.length === 32, String(pa.sjalv.length));
 ok("varje mönster har en känd vy", pa.sjalv.every(([vy]) => VYER.has(vy)), JSON.stringify(pa.sjalv.filter(([vy]) => !VYER.has(vy))));
 const vyFor = (m) => (pa.sjalv.find(([, r]) => r.includes(m)) ?? [])[0];
 ok("/personal hör till anstallda", vyFor("personal") === "anstallda");

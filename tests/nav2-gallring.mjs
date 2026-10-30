@@ -11,11 +11,13 @@
  */
 import {
   GALLRA,
+  MOTESBOLAG_MANADER,
   PALETT_DAGAR,
   TALANGPOOL_MANADER,
   foraldralosa,
   kandidaterAttRadera,
   maskera,
+  motesbolagAttRadera,
   palettAttRadera,
   svenskDag,
 } from "../src/lib/nav2/gallring.ts";
@@ -33,6 +35,7 @@ console.log("\n\x1b[1mBrytaren och lagringstiderna (B5)\x1b[0m");
 ok("gallringen ar avstangd tills bestallaren sagt ja", GALLRA === false);
 ok("palettens fragor sparas i 90 dagar", PALETT_DAGAR === 90);
 ok("talangpoolen sparas i 24 manader", TALANGPOOL_MANADER === 24);
+ok("motesbolag sparas i 24 manader", MOTESBOLAG_MANADER === 24);
 
 console.log("\n\x1b[1mMaskeringen (F2-7)\x1b[0m");
 {
@@ -102,6 +105,33 @@ console.log("\n\x1b[1mKandidaterna (F1-6, 0110:231-239, B5)\x1b[0m");
   ok("en anstalld kandidat vars person finns kvar gallras inte", !ut2.includes("anstalld-aktiv"));
   ok("utan beslutad frist gallras ingen utanfor poolen",
     lika(kandidaterAttRadera(rader, nu, { fristDagar: null, poolManader: 24 }).sort(), ["pool-25-man", "pool-utan-samtycke-gammal"]));
+}
+
+console.log("\n\x1b[1mMotesbolag (Moten A11): 24 manader efter senaste handelsen\x1b[0m");
+{
+  const nu = new Date("2026-10-29T03:00:00Z");
+  const b = (id, senast_handelse, affar = false) => ({ id, senast_handelse, affar });
+  const rader = [
+    b("24-man-1-dag", "2024-10-28T03:00:00Z"),            // 24 manader och 1 dag
+    b("24-man-1-sek", "2024-10-29T02:59:59Z"),            // en sekund over gransen
+    b("23-man", "2024-11-29T03:00:00Z"),                  // 23 manader
+    b("pa-gransen", "2024-10-29T03:00:00Z"),              // exakt 24 manader
+    b("ny", "2026-10-01T10:00:00Z"),
+    b("affar-gammal", "2022-01-01T00:00:00Z", true),      // affar: orderns regler galler
+    b("affar-24-man-1-dag", "2024-10-28T03:00:00Z", true),
+    b("gammal", "2023-03-15T12:00:00Z"),
+  ];
+  const ut = motesbolagAttRadera(rader, nu);
+  ok("24 manader och 1 dag sedan, utan affar: raderas", ut.includes("24-man-1-dag"));
+  ok("en sekund over 24 manader, utan affar: raderas", ut.includes("24-man-1-sek"));
+  ok("23 manader sedan: star kvar", !ut.includes("23-man"));
+  ok("exakt pa gransen star kvar (som talangpoolen: strikt aldre)", !ut.includes("pa-gransen"));
+  ok("ett ungt bolag star kvar", !ut.includes("ny"));
+  ok("med affar star bolaget kvar oavsett alder", !ut.includes("affar-gammal") && !ut.includes("affar-24-man-1-dag"));
+  ok("ett mycket gammalt bolag utan affar raderas", ut.includes("gammal"));
+  ok("bara de utan affar och aldre an 24 manader", lika([...ut].sort(), ["24-man-1-dag", "24-man-1-sek", "gammal"].sort()), JSON.stringify(ut));
+  ok("tom lista ger tom lista", lika(motesbolagAttRadera([], nu), []));
+  ok("en tidsstampel som inte gar att tolka raderar inte", lika(motesbolagAttRadera([b("trasig", "inte ett datum")], nu), []));
 }
 
 console.log("\n\x1b[1mForaldralosa filer i lagringen (F1-5, C7)\x1b[0m");

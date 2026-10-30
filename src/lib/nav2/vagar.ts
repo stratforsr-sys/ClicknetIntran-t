@@ -51,6 +51,7 @@ export const SJALV: ReadonlyArray<readonly [vy: string, monster: RegExp]> = [
   ["rekrytering", /^\/rekrytering(\/(?!ny$)[^/]+)?$/],
   ["avtal", /^\/avtal$/],
   ["leads", /^\/leads(\/[^/]+)?$/],
+  ["moten", /^\/moten$/],
   ["logg", /^\/logg$/],
   ["adoption", /^\/adoption$/],
   ["nyheter", /^\/nyheter(\/[^/]+)?$/],

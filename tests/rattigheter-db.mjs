@@ -57,6 +57,10 @@ import pg from "pg";
  * egen rad. `md5` ar de 12 forsta tecknen i `md5(pg_get_functiondef(oid))`.
  */
 export const TILLATNA = {
+  "mote_samtal_vecka(date,date)": { roller: "authenticated", md5: "f48a652abb95" }, // 0263 (session B, körd): samtal per vecka
+  "mote_ar_chef()": { roller: "authenticated", md5: "c77a92a81a70" }, // 0260: Möten, chefens läsrätt i policyerna
+  // 0262: Möten, uppslaget mot Lynes för ett givet nummer
+  "mote_uppslag(text,text,text)": { roller: "authenticated", md5: "b85fbc91c627" },
   // Behorighetshjalpare om den inloggade sjalv: i policyer eller i appen.
   "can_edit_documents()": { roller: "authenticated", md5: "21a6d32c64c5" },
   "can_read_all_employees()": { roller: "authenticated", md5: "1e7bbf27b48b" },

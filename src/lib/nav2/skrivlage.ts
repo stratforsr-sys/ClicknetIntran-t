@@ -56,6 +56,8 @@ export const SKRIVLAGE = {
   // Beställaren 2026-10-29: en allomfattande inställning för mejl, klockan, telefonen och
   // morgonbrevet (utskicken, 0255). Skrivningen svarar med ett begripligt fel tills 0255 körts.
   utskick: true,
+  // Möten (Nav 2.0, 2026-10-29): läsläge tills beställaren säger ja (A14). 0260–0262 körda.
+  moten: false,
 } as const;
 
 export type Skrivvy = keyof typeof SKRIVLAGE;

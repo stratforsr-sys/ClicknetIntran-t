@@ -138,6 +138,9 @@ export const MODUL: Record<string, string> = {
   cost: "Lönekostnad",
   sales_order: "Kundorder",
   lead: "Lead",
+  // Möten (0260): bokningar, kedjor och uppföljning i /nav2/moten (mote.created, confirmed, moved, cancelled,
+  // outcome_set, chain_won, chain_lost, no_answer, retry, reminder_created). typFor klassar alla rätt.
+  mote: "Möte",
   sales_target: "Månadsmål",
   kv_call: "K&V-samtal",
   kv_criterion: "K&V-kriterium",

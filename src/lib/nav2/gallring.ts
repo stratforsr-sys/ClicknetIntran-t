@@ -1,7 +1,7 @@
 /**
  * S09 · GDPR (2026-10-23): nattjobbets gallring.
  *
- * Fyra saker ska inte sparas langre an de behovs (art. 5.1 e):
+ * Fem saker ska inte sparas langre an de behovs (art. 5.1 e):
  *
  *   kandidater  Ej anstallda kandidater: gallringsdagen (`gdpr_purge_at`, satt
  *               av 0030:s utlosare vid avslag, 12 manader enligt 0110:231-239),
@@ -14,6 +14,10 @@
  *               aldrig fyllas (C16), sa antalet ar 0 tills ett CV-andamal finns.
  *   palett      Palettens fragor utan svar (0125), 90 dagar efter dagen de
  *               senast stalldes (B5).
+ *   moten       Motesbolag (A11, Moten): 24 manader efter bolagets senaste
+ *               handelse, om ingen av dess kedjor slutade i en affar. Kedjor och
+ *               moten foljer med i kaskaden. Ett bolag med affar sparas: orderns
+ *               egna regler galler da.
  *   filer       Filer i lagringen (Supabase och R2) som ingen rad pekar pa:
  *               lakarintyg efter raderade sjukanmalningar, arendebilagor efter
  *               borttagna personer, uppladdningar som aldrig registrerades.
@@ -37,6 +41,8 @@ export const GALLRA = false;
 export const PALETT_DAGAR = 90;
 /** B5: talangpoolen sparas i 24 manader, raknat fran samtycket. */
 export const TALANGPOOL_MANADER = 24;
+/** A11: ett motesbolag sparas i 24 manader, raknat fran bolagets senaste handelse. */
+export const MOTESBOLAG_MANADER = 24;
 /** En fil yngre an sa har kan vara en uppladdning som inte hunnit registreras. */
 export const FIL_MOGEN_TIMMAR = 24;
 
@@ -144,6 +150,24 @@ export function kandidaterAttRadera(
   return ut;
 }
 
+export type Motesbolagsrad = {
+  id: string;
+  /** `mote_bolag.senast_handelse` (timestamptz, satt av trigger). */
+  senast_handelse: string;
+  /** Bolaget har en kedja med avslut = 'affar': orderns regler galler da. */
+  affar: boolean;
+};
+
+/**
+ * Motesbolagen som ska gallras: senaste handelsen for mer an `manader` sedan
+ * (samma raknesatt som talangpoolen: strikt aldre, exakt pa gransen sparas) och
+ * ingen affar. En tidsstampel som inte gar att tolka raderar aldrig.
+ */
+export function motesbolagAttRadera(rader: Motesbolagsrad[], nu: Date, manader = MOTESBOLAG_MANADER): string[] {
+  const t = nu.getTime();
+  return rader.filter((r) => !r.affar && plusManader(r.senast_handelse, manader) < t).map((r) => r.id);
+}
+
 export type Lagringsobjekt = { lager: "supabase" | "r2"; bucket: string; path: string; andrad: string | null };
 
 export const lagringsnyckel = (lager: string, bucket: string, path: string) => `${lager}|${bucket}|${path}`;
@@ -171,6 +195,7 @@ export type Gallringskvitto = {
   cv: number;
   palett: number;
   filer: number;
+  motesbolag: number;
   /** Sant bara nar GALLRA ar pa och anroparen bad om det. Annars ar antalen det som SKULLE ha raderats. */
   raderade: boolean;
   fel: string[];
@@ -241,6 +266,32 @@ export async function gallra(nu: Date, { kor }: { kor: boolean }): Promise<Gallr
     nu,
   );
 
+  // ---- Motesbolag (A11) ----------------------------------------------------
+  // Bara bolag vars senaste handelse ar aldre an gransen lases, med en uttrycklig
+  // begransning: motesbolagAttRadera avgor sedan pa riktigt.
+  const motesgrans = new Date(nu);
+  motesgrans.setUTCMonth(motesgrans.getUTCMonth() - MOTESBOLAG_MANADER);
+  const motesbolag = await lasSidvis<Record<string, unknown>>((fran, till) =>
+    db.from("mote_bolag").select("id, senast_handelse").lt("senast_handelse", motesgrans.toISOString()).order("id").range(fran, till),
+  );
+  const affarsbolag = new Set<string>();
+  const AFFARSGRANS = 1000; // Supabase kapar tyst vid 1000 rader: ett fullt svar ar aldrig ett helt svar
+  for (const omgang of delaUpp(motesbolag.map((b) => String(b.id)), 100)) {
+    const { data, error } = await db.from("mote_kedja").select("bolag_id").eq("avslut", "affar").in("bolag_id", omgang).limit(AFFARSGRANS);
+    if (error || (data ?? []).length >= AFFARSGRANS) {
+      // Gick det inte att se vilka som har en affar, eller kapades svaret,
+      // raderas inget av dem.
+      fel.push(`motesbolag: ${error?.message ?? "for manga affarskedjor i en omgang"}`);
+      for (const id of omgang) affarsbolag.add(id);
+      continue;
+    }
+    for (const k of data ?? []) affarsbolag.add(String(k.bolag_id));
+  }
+  const bortMotesbolag = motesbolagAttRadera(
+    motesbolag.map((b) => ({ id: String(b.id), senast_handelse: String(b.senast_handelse), affar: affarsbolag.has(String(b.id)) })),
+    nu,
+  );
+
   // ---- Filerna i lagringen -------------------------------------------------
   const kanda = new Set<string>();
   const filrader = await lasSidvis<Record<string, unknown>>((fran, till) =>
@@ -292,6 +343,16 @@ export async function gallra(nu: Date, { kor }: { kor: boolean }): Promise<Gallr
       const { error } = await db.from("nav_question_miss").delete().eq("q", r.q).eq("week", r.week);
       if (error) fel.push(`palett: ${error.message}`);
     }
+    for (let i = 0; i < bortMotesbolag.length; i += 100) {
+      // Kaskaden tar kedjorna och motena.
+      const { error } = await db
+        .from("mote_bolag")
+        .delete()
+        .in("id", bortMotesbolag.slice(i, i + 100))
+        // Fick bolaget en handelse sedan det lastes raderas det inte.
+        .lt("senast_handelse", motesgrans.toISOString());
+      if (error) fel.push(`motesbolag: ${error.message}`);
+    }
     if (!fel.some((f) => /^(supabase|r2)\//.test(f))) {
       // Kontrollen gors om direkt fore borttagningen: listan ovan lastes sidvis
       // och en rad som andrades under tiden kan ha hoppats over. En fil med en
@@ -319,9 +380,9 @@ export async function gallra(nu: Date, { kor }: { kor: boolean }): Promise<Gallr
       action: "gdpr.gallring",
       object_type: "gallring",
       object_id: svenskDag(nu),
-      meta: { kandidater: bortKandidater.length, cv: cvIds.length, palett: bortPalett.length, filer: bortFiler.length, fel: fel.length },
+      meta: { kandidater: bortKandidater.length, cv: cvIds.length, palett: bortPalett.length, filer: bortFiler.length, motesbolag: bortMotesbolag.length, fel: fel.length },
     });
   }
 
-  return { kandidater: bortKandidater.length, cv: cvIds.length, palett: bortPalett.length, filer: bortFiler.length, raderade: radera, fel };
+  return { kandidater: bortKandidater.length, cv: cvIds.length, palett: bortPalett.length, filer: bortFiler.length, motesbolag: bortMotesbolag.length, raderade: radera, fel };
 }

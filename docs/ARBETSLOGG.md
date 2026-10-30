@@ -5,6 +5,45 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-30 · Möten: boka, bekräfta och följ upp SEO-möten på en tavla som flyttar sig själv
+
+Beställaren valde en egen tavla (DESIGN 5.6) i stället för att bygga in mötena i Leads. Leads är
+fortfarande hemsidans leads. Spec och plan står i `~/nav2-utkast/delar/moten/` (DESIGN.md är
+godkänd 2026-10-29, PLAN.md). Det här är session A, kontraktet och flödet. Session B gör
+statistiken (0263 körd).
+
+**Datan.** `mote_bolag` (ett bolag, normaliserat på telefon och domän), `mote_kedja` (bolagets
+väg från första bokning till affär eller nej) och `mote` (varje bokat möte), med RLS: säljaren
+ser kedjor där den är deltagare, chefen alla (`mote_ar_chef()`). Kolumnen på tavlan räknas i
+databasen (`mote_kolumn`, 0261), så ingen drar korten. Uppslaget mot Lynes (`mote_uppslag`, 0262)
+är SECURITY DEFINER och tar aktören ur `current_employee_id()`. Vakten har raderna.
+
+**Skrivningarna** går genom `/nav2/moten` (boka, påminn, bekräfta, flytta, avboka, utfall,
+kund, nej, inget svar, prova igen). Varje skrivning på en kedja villkoras på
+`uppfoljning_andrad`, som skickas ordagrant (mikrosekunder) som `fore`. Svarar villkoret 0 rader
+blir det 409 och tavlan laddas om. Läsläget ger 423. Behörigheten följer `farSe`: det öppna
+mötets bokare och hållare, eller en chef. Utfallet sätts av den som höll mötet eller av
+sales_manager, ceo och admin. **Affär** öppnar Orders formulär med bolaget ifyllt, och `kund`
+stänger kedjan när ordern är lagd. Ordern får inte redan vara kopplad till en annan kedja.
+
+**Utkastet.** `ndmo.js` registrerar sig själv: NDVY, NDKOPPLAD, menyvalet under Försäljning
+efter Leads (med ett eget ikonmärke och talet som startkortet visar), `RLS_VY` för
+sidopanelens markering, och `moGa()`. I delade moduler står bara `case 'moten'` i skalets `ndGa`,
+palettens "Slå upp i Möten" och startsidans montering i `ndhem.js`.
+
+**Fällor som hittades på vägen.**
+- Tidväljaren antog att `lediga` gav "YYYY-MM-DD HH:MM". Rutten ger `{dag, start:"HH:MM"}`.
+  Stubben i provsidan hade samma fel, så den genereras nu ur `ledigaTider`.
+- Bron: med `moten: false` hamnar vyn i `ND.iNuvarande`, och skalet skickar den till nuvarande
+  Nav. Där finns ingen `/moten`. Därför syns Möten i produktionen först när vyn sparar.
+- Sidopanelen (`rls`) markerar aktiv vy ur `RLS_VY`, inte ur `aria-current`. En ny vy måste
+  in där.
+
+**Prov:** `moten.mjs`, `moten-db.mjs` (116/116 och båda skrivproven, städat till 0 rader),
+`nav2-gallring.mjs` (44/44), `bro.mjs`, `navnyheter.mjs`, `notiser.mjs`, `notiser-tackning.mjs`,
+`utskick.mjs` och `app-vagar.mjs` är gröna. Vakten säger "inga nya rättigheter". Utkastet
+provades i webbläsaren som säljare och som chef i 1440 och 390 px, utan JS-fel.
+
 ## 2026-10-29 · Appen: Nav på hemskärmen (iPhone och Android), utan nytt utseende
 
 Beställaren ville kunna ha Nav som app i telefonen. Utseendet är oförändrat: inga nya färger,

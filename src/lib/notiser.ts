@@ -570,6 +570,8 @@ export const NOTIS_KALLOR = [
   "lead-tilldelad",
   /** Nav 2.0 (0135): chefen påminner säljaren om leads som väntat på samtal. Händelse: den är menad att avbryta. */
   "lead-paminn",
+  /** Nav 2.0, Möten: någon annan bokade ett möte åt dig. Händelse: du ska veta det innan det är dags. */
+  "mote-bokat",
 
   /**
    * Fel i Nav 2.0 (0082). Båda är HÄNDELSER: ett svar i tråden och att ett fel
@@ -768,6 +770,7 @@ export const HANDELSEKALLOR = [
   "lead-ny",
   "lead-tilldelad",
   "lead-paminn",
+  "mote-bokat",
   "fel-meddelande",
   "fel-lagad",
   "kampanjsida-nere",

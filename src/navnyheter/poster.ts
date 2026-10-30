@@ -14,6 +14,32 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "moten",
+    rubrik: "Möten: en tavla som flyttar sig själv",
+    ingress: "Boka, bekräfta och följ upp SEO-möten på en tavla där kortet flyttar sig när du gör något.",
+    text: `Under **Försäljning** finns **Möten**. Varje bolag du har bokat ett möte med är
+ett kort, och kortet står i en av fem kolumner: Bokat, Bekräftat, Utfall saknas,
+Följ upp och Tyst. Ingen drar korten. De flyttar sig när du gör något.
+
+Tryck **Bekräftat** när kunden har svarat dagen före. Efter mötet trycker du
+**Hållet** eller **Uteblev**, och efter Hållet väljer du Affär, Nej, Offert skickad
+eller Uppföljning. Svarar kunden inte trycker du **Inget svar**. Efter tre gånger
+utan svar hamnar kortet under Tyst.
+
+**Boka möte** uppe till höger visar de närmaste lediga tiderna för den som ska
+hålla mötet. Skriv in telefonnumret, så ser du direkt om någon redan har ringt
+eller bokat bolaget. Ett nummer som du klistrar in i sökrutan slås upp på samma
+sätt.
+
+**Affär** öppnar orderformuläret med bolaget ifyllt, och kortet stängs när ordern
+är lagd. På startsidan ser du hur många möten som ska bekräftas, hur många som
+saknar utfall och vilka kunder du ska följa upp i dag. Chefen ser hela lagets
+tavla och kan välja en säljare i taget.`,
+    datum: "2026-10-30",
+    roller: [],
+    href: "/moten",
+  },
+  {
     slug: "nav-som-app",
     rubrik: "Nav går att lägga på hemskärmen som app",
     ingress: "Lägg Nav på hemskärmen, så öppnas det som en egen app med ikon och bakåt.",
