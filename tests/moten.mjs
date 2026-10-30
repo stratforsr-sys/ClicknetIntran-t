@@ -323,9 +323,11 @@ rubrik("tolkaUppslag och uppslagsVarning");
 
 rubrik("A6 fix: vem som får hålla ett möte");
 {
-  ok("HALLARE_ROLLER = säljarkretsen", JSON.stringify(M.HALLARE_ROLLER) === JSON.stringify(["salesperson", "team_lead", "sales_manager"]));
+  // Beställaren 2026-10-30: VD och admin ska också kunna hålla ett möte.
+  ok("HALLARE_ROLLER = säljarkretsen, VD och admin", JSON.stringify(M.HALLARE_ROLLER) === JSON.stringify(["salesperson", "team_lead", "sales_manager", "ceo", "admin"]));
   ok("säljare, teamledare och säljchef får hålla", M.arHallare(["salesperson"]) && M.arHallare(["team_lead"]) && M.arHallare(["x", "sales_manager"]));
-  ok("andra roller och inga roller får inte", !M.arHallare(["admin"]) && !M.arHallare(["ceo"]) && !M.arHallare([]) && !M.arHallare(null));
+  ok("VD och admin får hålla", M.arHallare(["ceo"]) && M.arHallare(["admin"]));
+  ok("andra roller och inga roller får inte", !M.arHallare(["onboarding"]) && !M.arHallare(["x"]) && !M.arHallare([]) && !M.arHallare(null));
 }
 
 rubrik("A6 fix 2: paminnIndata håller rubriken under 200 tecken");

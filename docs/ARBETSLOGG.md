@@ -39,6 +39,12 @@ palettens "Slå upp i Möten" och startsidans montering i `ndhem.js`.
 - Sidopanelen (`rls`) markerar aktiv vy ur `RLS_VY`, inte ur `aria-current`. En ny vy måste
   in där.
 
+**Beställarens svar samma dag (2026-10-30).** VD och admin får hålla ett möte (`HALLARE_ROLLER`
+har nu `ceo` och `admin`, och säljarlistan på tavlan läser samma lista). Gallringen sparar ett
+mötesbolag så länge något av dess möten står kvar i kalendern (`mote.event_id` satt).
+Flyttat nollställer Bekräftat, bokning åt en kollega, det öppna uppslaget och olika bolag för
+IDN-domäner står som de är. Efter mergen av Nav 2.0 byggs Möten direkt på main.
+
 **Prov:** `moten.mjs`, `moten-db.mjs` (116/116 och båda skrivproven, städat till 0 rader),
 `nav2-gallring.mjs` (44/44), `bro.mjs`, `navnyheter.mjs`, `notiser.mjs`, `notiser-tackning.mjs`,
 `utskick.mjs` och `app-vagar.mjs` är gröna. Vakten säger "inga nya rättigheter". Utkastet

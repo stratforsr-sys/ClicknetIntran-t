@@ -15,9 +15,11 @@
  *   palett      Palettens fragor utan svar (0125), 90 dagar efter dagen de
  *               senast stalldes (B5).
  *   moten       Motesbolag (A11, Moten): 24 manader efter bolagets senaste
- *               handelse, om ingen av dess kedjor slutade i en affar. Kedjor och
- *               moten foljer med i kaskaden. Ett bolag med affar sparas: orderns
- *               egna regler galler da.
+ *               handelse, om ingen av dess kedjor slutade i en affar och inget
+ *               av dess moten star kvar i kalendern. Kedjor och moten foljer med
+ *               i kaskaden. Ett bolag med affar sparas: orderns egna regler galler
+ *               da. Ett bolag med ett mote i kalendern sparas (bestallaren
+ *               2026-10-30): kalenderns egna regler galler da.
  *   filer       Filer i lagringen (Supabase och R2) som ingen rad pekar pa:
  *               lakarintyg efter raderade sjukanmalningar, arendebilagor efter
  *               borttagna personer, uppladdningar som aldrig registrerades.
@@ -156,16 +158,19 @@ export type Motesbolagsrad = {
   senast_handelse: string;
   /** Bolaget har en kedja med avslut = 'affar': orderns regler galler da. */
   affar: boolean;
+  /** Nagot av bolagets moten star kvar i kalendern (`mote.event_id` ar satt). */
+  kalender: boolean;
 };
 
 /**
  * Motesbolagen som ska gallras: senaste handelsen for mer an `manader` sedan
- * (samma raknesatt som talangpoolen: strikt aldre, exakt pa gransen sparas) och
- * ingen affar. En tidsstampel som inte gar att tolka raderar aldrig.
+ * (samma raknesatt som talangpoolen: strikt aldre, exakt pa gransen sparas),
+ * ingen affar och inget mote kvar i kalendern. En tidsstampel som inte gar att
+ * tolka raderar aldrig.
  */
 export function motesbolagAttRadera(rader: Motesbolagsrad[], nu: Date, manader = MOTESBOLAG_MANADER): string[] {
   const t = nu.getTime();
-  return rader.filter((r) => !r.affar && plusManader(r.senast_handelse, manader) < t).map((r) => r.id);
+  return rader.filter((r) => !r.affar && !r.kalender && plusManader(r.senast_handelse, manader) < t).map((r) => r.id);
 }
 
 export type Lagringsobjekt = { lager: "supabase" | "r2"; bucket: string; path: string; andrad: string | null };
@@ -287,8 +292,38 @@ export async function gallra(nu: Date, { kor }: { kor: boolean }): Promise<Gallr
     }
     for (const k of data ?? []) affarsbolag.add(String(k.bolag_id));
   }
+  // Ett bolag med ett mote kvar i kalendern sparas (bestallaren 2026-10-30).
+  // `mote.event_id` nollas nar kalenderhandelsen raderas, sa ett satt id ar en
+  // handelse som finns. Gar det inte att se raderas inget av bolagen.
+  const kalenderbolag = new Set<string>();
+  for (const omgang of delaUpp(motesbolag.map((b) => String(b.id)), 100)) {
+    const kedjor = await db.from("mote_kedja").select("id, bolag_id").in("bolag_id", omgang).limit(AFFARSGRANS);
+    if (kedjor.error || (kedjor.data ?? []).length >= AFFARSGRANS) {
+      fel.push(`motesbolag: ${kedjor.error?.message ?? "for manga kedjor i en omgang"}`);
+      for (const id of omgang) kalenderbolag.add(id);
+      continue;
+    }
+    const bolagFor = new Map((kedjor.data ?? []).map((k) => [String(k.id), String(k.bolag_id)]));
+    for (const del of delaUpp([...bolagFor.keys()], 100)) {
+      const { data, error } = await db.from("mote").select("kedja_id").in("kedja_id", del).not("event_id", "is", null).limit(AFFARSGRANS);
+      if (error || (data ?? []).length >= AFFARSGRANS) {
+        fel.push(`motesbolag: ${error?.message ?? "for manga moten i en omgang"}`);
+        for (const k of del) kalenderbolag.add(bolagFor.get(k) as string);
+        continue;
+      }
+      for (const m of data ?? []) {
+        const bolag = bolagFor.get(String(m.kedja_id));
+        if (bolag) kalenderbolag.add(bolag);
+      }
+    }
+  }
   const bortMotesbolag = motesbolagAttRadera(
-    motesbolag.map((b) => ({ id: String(b.id), senast_handelse: String(b.senast_handelse), affar: affarsbolag.has(String(b.id)) })),
+    motesbolag.map((b) => ({
+      id: String(b.id),
+      senast_handelse: String(b.senast_handelse),
+      affar: affarsbolag.has(String(b.id)),
+      kalender: kalenderbolag.has(String(b.id)),
+    })),
     nu,
   );
 

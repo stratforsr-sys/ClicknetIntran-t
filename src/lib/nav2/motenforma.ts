@@ -102,8 +102,11 @@ export const CHEF_ROLLER = ["team_lead", "sales_manager", "ceo", "admin"] as con
 /** Admin och Superadmin: får sätta utfall åt någon annan (en teamledare får det inte). */
 export const UTFALL_ROLLER = ["sales_manager", "ceo", "admin"] as const;
 
-/** Rollerna som får hålla ett möte (samma krets som säljarlistan på tavlan). Ingen annans kalender får fyllas med möten. */
-export const HALLARE_ROLLER = ["salesperson", "team_lead", "sales_manager"] as const;
+/**
+ * Rollerna som får hålla ett möte (samma krets som säljarlistan på tavlan). Ingen annans kalender får fyllas med möten.
+ * VD och admin är med sedan beställarens svar 2026-10-30.
+ */
+export const HALLARE_ROLLER = ["salesperson", "team_lead", "sales_manager", "ceo", "admin"] as const;
 export const arHallare = (roller: readonly string[] | null | undefined): boolean => (roller ?? []).some((r) => (HALLARE_ROLLER as readonly string[]).includes(r));
 
 const harRoll = (u: Aktor, lista: readonly string[]): boolean => u.roller.some((r) => lista.includes(r));

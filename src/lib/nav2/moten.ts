@@ -5,7 +5,7 @@ import { fullName, hasRole, type CurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { dagarBakat, svenskTidpunkt, svenskVeckodag, svensktDatum } from "@/lib/klocka";
 import { lokal } from "./leads";
-import { KOLUMNER, type Kolumn } from "./motenforma";
+import { arHallare, KOLUMNER, type Kolumn } from "./motenforma";
 
 /**
  * Nav 2.0: Möten i utkastets former (moduler/ndmo.js), läsningen (A5).
@@ -66,7 +66,6 @@ export type NdMoten = {
 };
 
 const CHEFSROLLER = ["team_lead", "sales_manager", "ceo", "admin"] as const;
-const SALJARROLLER = ["salesperson", "team_lead", "sales_manager"];
 
 /** Tavlan visar öppna kedjor. REST-vägen kapar tyst vid 1000 rader, så taket sätts uttryckligen. */
 const MAX_KORT = 1000;
@@ -147,7 +146,7 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
   const personer = (personSvar.data ?? []) as unknown as PersonRad[];
 
   const saljare = personer
-    .filter((p) => (p.employee_role ?? []).some((r) => SALJARROLLER.includes(r.role)))
+    .filter((p) => arHallare((p.employee_role ?? []).map((r) => r.role)))
     .map((p) => ({ id: p.id, namn: fullName(p) }))
     .sort((a, b) => a.namn.localeCompare(b.namn, "sv"));
   const namn = new Map(personer.map((p) => [p.id, fullName(p)]));
