@@ -24,7 +24,7 @@ Säljtavlans fem `salesboard_*`-kolumner, som inte är Mötens.
 
 ---
 
-## 2026-10-31 kväll · Säljsamtalet i orderformuläret (gren `saljsamtal-saljaren`, EJ MERGAD)
+## 2026-10-31 kväll · Säljsamtalet i orderformuläret (MERGAD `34e14f4`, 2026-10-31 23:09)
 
 **Varför.** Beställaren lade in Edvins order på Städservice Ale AB (signerad 2026-10-22) och fick "Det finns inget
 samtal från Lynes på kundens nummer" fyra gånger, och fick fyra utkast (#33–#36). Datan: numret på ordern,
