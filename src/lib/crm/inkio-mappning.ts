@@ -8,7 +8,8 @@
  * OpenAPI-beskrivningen (Downloads/inkio-openapi.json, 2026-10-07) säger bara
  * `customer: {}` och `doc: {}`. Fälten nedan är de Inkios egen kundvy och
  * orderformulär skickar, lästa ur crm.inkio.se:s klientpaket samma dag. Ändras
- * Inkios formulär är det här filen som ska följa med.
+ * Inkios formulär är det här filen som ska följa med — som 2026-10-31, när
+ * orderns värde och längd flyttade till orderhuvudet (`ordervarde`).
  * =============================================================================
  */
 
@@ -191,6 +192,20 @@ export function orderrader(
   return rader;
 }
 
+/**
+ * ORDERNS VÄRDE BOR PÅ ORDERN SEDAN 2026-10, INTE PÅ RADERNA.
+ *
+ * Inkio flyttade priset till orderhuvudet: formuläret skickar `order_value`
+ * (hela avtalets värde exkl. moms) och `term_months`, och en order utan dem
+ * nekas med 422 "Ange orderns värde och avtalets längd i månader". Order #32
+ * fastnade så 2026-10-31. Värdet är radernas summa över löptiden — 1 495 kr i
+ * tolv månader blir 17 940, det Inkio självt räknade fram ur raderna förut.
+ */
+export function ordervarde(rader: Orderrad[]): number {
+  const summa = rader.reduce((s, r) => s + r.rate * r.quantity * (r.type === "Recurring" ? r.term_length : 1), 0);
+  return Math.round(summa * 100) / 100;
+}
+
 /** `doc` till `POST /api/salesorder/create-sales-order`. */
 export function nyOrder(o: Orderunderlag, kundId: string, saljareId: string | null, rader: Orderrad[]) {
   const anteckning = [
@@ -212,6 +227,8 @@ export function nyOrder(o: Orderunderlag, kundId: string, saljareId: string | nu
     // Nav-orderns id. Det är så ett andra försök ser att ordern redan finns.
     external_order_id: o.navId,
     notes: anteckning,
+    order_value: ordervarde(rader),
+    term_months: o.bindningManader,
     split_contracts: 0,
     items: rader,
   };

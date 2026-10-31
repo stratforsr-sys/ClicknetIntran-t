@@ -4,8 +4,9 @@
  *
  *   1. ORGANISATIONSNUMRET blir XXXXXX-XXXX, och en enskild firma (personnummer)
  *      känns igen — Bolagsverket i Inkio slår bara upp juridiska personer.
- *   2. PAKETET blir en löpande rad med månadsbeloppet och bindningstiden —
- *      inte ordervärdet, som Inkio räknar fram själv.
+ *   2. PAKETET blir en löpande rad med månadsbeloppet och bindningstiden, och
+ *      ordern får hela värdet och längden i huvudet (`order_value`,
+ *      `term_months`) — Inkio nekar sedan 2026-10 en order utan dem.
  *   3. EN TJÄNST UTAN MOTSVARIGHET hamnar på "Övrigt" med namnet som text, i
  *      stället för att tappas.
  *   4. NAV-ORDERNS ID står i `external_order_id`. Det är det som gör ett andra
@@ -34,6 +35,7 @@ import {
   nyKund,
   nyOrder,
   orderrader,
+  ordervarde,
   overenskommet,
   sakerAdress,
   sidlage,
@@ -100,6 +102,11 @@ ok("Nav-id i external_order_id", doc.external_order_id === underlag.navId);
 ok("signeringen är orderdatum, starten leveransdatum", doc.order_date === "2026-10-07" && doc.delivery_date === "2026-10-15");
 ok("utan säljare: tom sträng, inte null", doc.sales_person === "");
 ok("länken och utköpet i anteckningen", doc.notes.includes(underlag.navlank) && doc.notes.includes("Utköp: 2500 kr."));
+// 1 495 × 12 + 200 × 12 + 3 000 en gång. Utköpet är inte ordervärde.
+ok("ordervärdet är radernas summa över löptiden", doc.order_value === 23340, `fick ${doc.order_value}`);
+ok("längden är bindningstiden", doc.term_months === 12);
+ok("bara paketet: 1 495 kr i tolv månader är 17 940", ordervarde(orderrader({ ...underlag, tjanster: [] }, tj)) === 17940);
+ok("öresbelopp avrundas till ören", ordervarde([{ ...rader[0], rate: 1038.75 }]) === 12465);
 
 const avtalat = overenskommet(underlag, "Mick Corneliusson", "2026-10-07");
 ok("överenskommet säger paket, belopp, bindning och godkännare", avtalat.includes("Paket 2") && avtalat.includes("/mån") && avtalat.includes("12 mån") && avtalat.includes("Mick Corneliusson"), avtalat);

@@ -5,6 +5,35 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-31 · Inkio: orderns värde och längd på ordern (gren `inkio-ordervarde`, EJ MERGAD)
+
+Beställaren bad om en genomgång av Inkio-kopplingen mot den nya OpenAPI-specen (617 operationer, samma som
+crm.inkio.se/api/openapi i dag) och en lista över avtal i Nav som saknas i Inkio.
+
+**Specen:** alla 13 anrop Nav gör finns kvar med samma parametrar (`get-comments` fick en valfri `with_deleted`).
+Varje läsanrop provades live med tjänstekontot: 200 och fälten Nav läser finns.
+
+**Felet:** order #32 Roos Alltjänst AB godkändes 2026-10-31 17:10 UTC, och Inkio nekade den tre gånger med
+422 "Ange orderns värde och avtalets längd i månader". Inkio har flyttat priset från orderraderna till orderhuvudet.
+Inkios eget formulär (klientpaketet, `rG`/`tG`) skickar nu `order_value` (hela avtalets värde exkl. moms) och
+`term_months`, och raderna bara tjänst, antal och beskrivning. Nav skickade inget av fälten. Senaste lyckade
+ordern från Nav var 2026-10-09. Kunden CUST-00090 hann skapas, så ett nytt försök hittar den på org.nr.
+
+**Rättelsen:** `ordervarde(rader)` i `inkio-mappning.ts` (radernas summa över löptiden: löpande pris × månader,
+engångspris en gång) och `term_months` = bindningstiden i `nyOrder`. Raderna skickas som förut. 1 495 kr i tolv
+månader blir 17 940, samma som Inkio själv räknade ur raderna på de äldre ordrarna. `tests/inkio.mjs` har fyra nya
+kontroller. Fakturering (`invoicing`) skickas inte; den sätts i Inkios orderhantering, som förut.
+
+**Inte provat mot Inkio:** ett utkast på en märkt provkund stoppades av automatlägets spärr (skrivning i det
+delade CRM:et). Beviset är alltså klientpaketet och 422-texten, inte ett svar från Inkio. Efter mergen: tryck
+"Försök igen" på order #32 och läs `crm_order`.
+
+**Avtal i Nav som saknas i Inkio** (31 order i Nav mot 91 order och 89 avtal i Inkio, matchade på
+Inkio-koppling, `external_order_id` och org.nr): bara #32 Roos Alltjänst (signerad 10-28, Fredrik), av felet ovan.
+I övrigt: #24 IE Cleaning (enskild firma) är inskickad men inte godkänd i Nav, #30 Mbix (Edvin, 10-29) och
+#28 SweAuto är utkast i Nav (SweAuto finns i Inkio som SO-2026-00097), #27 Stockholms Clean Space är makulerad
+i båda. De 25 andra signerade eller betalda ordrarna har var sin order och ett aktivt avtal i Inkio.
+
 ## 2026-10-30 · Produktionsprovet efter mergen (main `35f04ba`)
 
 Beställaren ville ha bevis på att Nav 2.0 fungerar i produktionen, inte ett intryck. Varje punkt krävde därför en SQL-rad, en HTTP-status
