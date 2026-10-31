@@ -14,6 +14,49 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "moten",
+    rubrik: "Möten: en tavla som flyttar sig själv",
+    ingress: "Boka, bekräfta och följ upp SEO-möten på en tavla där kortet flyttar sig när du gör något.",
+    text: `Under **Försäljning** finns **Möten**. Varje bolag du har bokat ett möte med är
+ett kort, och kortet står i en av fem kolumner: Bokat, Bekräftat, Utfall saknas,
+Följ upp och Tyst. Ingen drar korten. De flyttar sig när du gör något.
+
+Tryck **Bekräftat** när kunden har svarat dagen före. Efter mötet trycker du
+**Hållet** eller **Uteblev**, och efter Hållet väljer du Affär, Nej, Offert skickad
+eller Uppföljning. Svarar kunden inte trycker du **Inget svar**. Efter tre gånger
+utan svar hamnar kortet under Tyst.
+
+**Boka möte** uppe till höger visar de närmaste lediga tiderna för den som ska
+hålla mötet. Skriv in telefonnumret, så ser du direkt om någon redan har ringt
+eller bokat bolaget. Ett nummer som du klistrar in i sökrutan slås upp på samma
+sätt.
+
+**Affär** öppnar orderformuläret med bolaget ifyllt, och kortet stängs när ordern
+är lagd. På startsidan ser du hur många möten som ska bekräftas, hur många som
+saknar utfall och vilka kunder du ska följa upp i dag. Chefen ser hela lagets
+tavla och kan välja en säljare i taget.`,
+    datum: "2026-10-31",
+    roller: [],
+    href: "/moten",
+  },
+  {
+    slug: "motesstatistik",
+    rubrik: "Min statistik: veckans möten i sex tal",
+    ingress: "Startsidan visar dina samtal, bokade möten och affärer den här veckan, jämfört med förra.",
+    text: `På startsidan, under Möten, står **Min statistik**: samtal, bokade möten,
+bokade per 100 samtal, andel hållna, andel affärer och affär på första mötet.
+Pilen visar om talet gick upp eller ner sedan förra veckan, och ett streck i
+stället för ett tal betyder att det inte finns något att räkna på än.
+
+Tryck på ett tal, så ser du mötena eller samtalen bakom det.
+
+Du ser bara dina egna tal. Chefen trycker **Statistik** i Möten och ser hela
+lagets tabell, offerterna, hur lång tid det gick mellan bokning och möte, och
+vilka källor som ger affärer.`,
+    datum: "2026-10-31",
+    roller: [],
+  },
+  {
     slug: "saljsamtalet-fran-saljaren",
     rubrik: "Säljsamtalet hämtas från säljaren du väljer",
     ingress: "Orderformuläret visar den valda säljarens samtal fram till signeringsdagen, och en order som stoppas sparas inte som utkast.",
@@ -66,49 +109,6 @@ Vill du se filmen igen trycker du på den här nyheten.`,
     datum: "2026-10-30",
     roller: [],
     href: "/nav2",
-  },
-  {
-    slug: "motesstatistik",
-    rubrik: "Min statistik: veckans möten i sex tal",
-    ingress: "Startsidan visar dina samtal, bokade möten och affärer den här veckan, jämfört med förra.",
-    text: `På startsidan, under Möten, står **Min statistik**: samtal, bokade möten,
-bokade per 100 samtal, andel hållna, andel affärer och affär på första mötet.
-Pilen visar om talet gick upp eller ner sedan förra veckan, och ett streck i
-stället för ett tal betyder att det inte finns något att räkna på än.
-
-Tryck på ett tal, så ser du mötena eller samtalen bakom det.
-
-Du ser bara dina egna tal. Chefen trycker **Statistik** i Möten och ser hela
-lagets tabell, offerterna, hur lång tid det gick mellan bokning och möte, och
-vilka källor som ger affärer.`,
-    datum: "2026-10-30",
-    roller: [],
-  },
-  {
-    slug: "moten",
-    rubrik: "Möten: en tavla som flyttar sig själv",
-    ingress: "Boka, bekräfta och följ upp SEO-möten på en tavla där kortet flyttar sig när du gör något.",
-    text: `Under **Försäljning** finns **Möten**. Varje bolag du har bokat ett möte med är
-ett kort, och kortet står i en av fem kolumner: Bokat, Bekräftat, Utfall saknas,
-Följ upp och Tyst. Ingen drar korten. De flyttar sig när du gör något.
-
-Tryck **Bekräftat** när kunden har svarat dagen före. Efter mötet trycker du
-**Hållet** eller **Uteblev**, och efter Hållet väljer du Affär, Nej, Offert skickad
-eller Uppföljning. Svarar kunden inte trycker du **Inget svar**. Efter tre gånger
-utan svar hamnar kortet under Tyst.
-
-**Boka möte** uppe till höger visar de närmaste lediga tiderna för den som ska
-hålla mötet. Skriv in telefonnumret, så ser du direkt om någon redan har ringt
-eller bokat bolaget. Ett nummer som du klistrar in i sökrutan slås upp på samma
-sätt.
-
-**Affär** öppnar orderformuläret med bolaget ifyllt, och kortet stängs när ordern
-är lagd. På startsidan ser du hur många möten som ska bekräftas, hur många som
-saknar utfall och vilka kunder du ska följa upp i dag. Chefen ser hela lagets
-tavla och kan välja en säljare i taget.`,
-    datum: "2026-10-30",
-    roller: [],
-    href: "/moten",
   },
   {
     slug: "nav-som-app",

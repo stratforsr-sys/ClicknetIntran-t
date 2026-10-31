@@ -5,6 +5,23 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-31 natt · Möten får spara (direkt på `main`)
+
+**Beställarens ja 2026-10-31** ("1. Ja" på frågan om Möten ska få spara). `SKRIVLAGE.moten = true` i
+`src/lib/nav2/skrivlage.ts`. Med det står `moten` inte längre i `ND.iNuvarande`, så bron släpper fram
+menyvalet, startkortet, palettens "Slå upp i Möten" och statistiken i produktionen. Mötens två poster i
+`poster.ts` (tavlan och statistiken) fick dagens datum och står överst, eftersom datumet är dagen
+funktionen slås på i produktionen.
+
+Samma svar: spärren mot att två kort kopplas till samma order (unikt index på `mote_kedja.order_id`)
+byggs inte ("Okej" på rekommendationen). I registerutdraget görs inget nytt: `mote.bokat_av` står kvar i
+UNDANTAG.
+
+**Prov:** `bro.mjs` 58, `moten.mjs` 195, `motesstat.mjs` 92, `nav2-skriv.mjs` 51, `app-vagar.mjs` 49 och
+`navnyheter.mjs` 532, alla gröna med raden på. Provkedjan i produktionen (A13) står i HANDOFF.
+
+---
+
 ## 2026-10-31 natt · Möten i registerutdraget (direkt på `main`)
 
 **Varför.** Möten (0260) gav åtta nya nycklar mot `employee` utan rad i `registerutdrag.ts`, så en
