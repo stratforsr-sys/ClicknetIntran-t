@@ -29,6 +29,7 @@ import {
   GALLRINGSFRIST_DYGN,
   bedomSaljsamtal,
   MIN_SALJSAMTAL_SEKUNDER,
+  samtalForNyOrder,
 } from "../src/lib/samtal-order.ts";
 import { normaliseraNummer } from "../src/lib/samtal.ts";
 
@@ -266,6 +267,37 @@ console.log("\n\x1b[1mSALJSAMTALET — sparren for att en order ska ga vidare\x1
 
   const utanTid = bedomSaljsamtal({ samtal: [s("T", SALJ, 1800, null)], saljareId: SALJ, orderSkapad: SKAPAD });
   ok("ett samtal utan tidpunkt kan inte styrkas som fore ordern", !utanTid.ok);
+}
+
+console.log("\n\x1b[1mSPARREN FORE ORDERN — samma svar som svepningen, utan att nagot sparas (2026-10-31)\x1b[0m");
+{
+  // Stadservice Ale: fyra forsok gav fyra utkast (#33–#36), for sparren kordes
+  // forst nar ordern redan var sparad. Nu provas den fore, och svaret maste
+  // vara detsamma som svepningen ger nar ordern val finns — annars sparas ett
+  // utkast anda, eller sa nekas en order som hade gatt igenom.
+  const NU = "2026-10-31T17:47:00Z";
+  const ny = { telefonE164: KUND, skapad: NU };
+
+  ok("ett samtal pa numret, ingen annan order: det hamnar pa den nya",
+    samtalForNyOrder([samtal("S1", KUND, "2026-10-22T06:51:00Z")], [], ny).join() === "S1");
+
+  ok("ett samtal pa ett annat nummer hamnar inte dar",
+    samtalForNyOrder([samtal("S2", ANNAN, "2026-10-22T06:51:00Z")], [], ny).length === 0);
+
+  ok("utan nummer pa ordern hittas inget",
+    samtalForNyOrder([samtal("S3", KUND, "2026-10-22T06:51:00Z")], [], { telefonE164: null, skapad: NU }).length === 0);
+
+  ok("ett samtal som en manniska kopplat till en annan order stannar dar",
+    samtalForNyOrder([samtal("S4", KUND, "2026-10-22T06:51:00Z", { salesOrderId: "X", orderLinkedBy: "E-chef" })], [order("X", KUND, "2026-10-23T08:00:00Z", "signerad")], ny).length === 0);
+
+  ok("ett kvarglomt utkast pa numret tar samtalen fore sig, som i svepningen",
+    samtalForNyOrder([samtal("S5", KUND, "2026-10-22T06:51:00Z")], [order("U", KUND, "2026-10-31T17:45:00Z", "utkast")], ny).length === 0);
+
+  ok("en levande order pa numret gar fore den nya, som ar ett utkast nar sparren kors",
+    samtalForNyOrder([samtal("S6", KUND, "2026-10-30T09:00:00Z")], [order("L", KUND, "2025-10-01T08:00:00Z", "signerad")], ny).length === 0);
+
+  ok("en makulerad order pa numret tar inte samtalet",
+    samtalForNyOrder([samtal("S7", KUND, "2026-10-22T06:51:00Z")], [order("M", KUND, "2026-10-25T08:00:00Z", "makulerad")], ny).join() === "S7");
 }
 
 console.log("\n\x1b[1mGallringsfristen\x1b[0m");

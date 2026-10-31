@@ -14,6 +14,25 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "saljsamtalet-fran-saljaren",
+    rubrik: "Säljsamtalet hämtas från säljaren du väljer",
+    ingress: "Orderformuläret visar den valda säljarens samtal fram till signeringsdagen, och en order som stoppas sparas inte som utkast.",
+    text: `I **Ny order** står säljarens samtal från Lynes under **Säljsamtal**: de
+senaste på minst fem minuter fram till signeringsdagen. Lägger du in ordern åt
+en säljare, välj säljaren längst ner så hämtar Nav hens samtal. Förut visade
+listan bara dina egna samtal från i dag och i går.
+
+Ringdes kunden på numret i formuläret väljer Nav samtalet själv. Ringdes kunden
+på ett annat nummer väljer du samtalet i listan, så kopplas det innan ordern
+skickas in.
+
+Saknas säljsamtalet sparas ingenting. Formuläret står kvar som det var, så du
+kan välja samtalet och skicka igen. Förut blev varje försök ett nytt utkast.`,
+    datum: "2026-10-31",
+    roller: [],
+    href: "/order",
+  },
+  {
     slug: "appen-finslipad-for-telefonen",
     rubrik: "Appen är finslipad för telefonen",
     ingress: "I appen zoomar fälten inte in längre, små knappar är lättare att träffa och Mer går först till vyerna.",

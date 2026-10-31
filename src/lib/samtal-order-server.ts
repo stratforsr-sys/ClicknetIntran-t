@@ -8,11 +8,13 @@ import {
   MIN_SALJSAMTAL_SEKUNDER,
   parIhop,
   saljsamtalsgrans,
+  samtalForNyOrder,
   type OrderForKoppling,
   type SamtalForBedomning,
   type SamtalForKoppling,
   type Saljsamtalsbedomning,
 } from "@/lib/samtal-order";
+import { normaliseraNummer } from "@/lib/samtal";
 
 /**
  * Skriver kopplingen mellan samtal och affär.
@@ -377,6 +379,93 @@ export async function provaSaljsamtal(orderId: string): Promise<Saljsamtalsbedom
   });
 }
 
+/**
+ * Spärren INNAN ordern sparas (2026-10-31). Samma svar som `provaSaljsamtal`
+ * ger på den sparade ordern, men utan att något skrivs: en order som faller
+ * lämnar inget utkast efter sig. Städservice Ale gav fyra utkast på fyra försök.
+ *
+ * Två vägar:
+ *   - Ett samtal är valt i formuläret. Det ska vara en av säljarens kandidater
+ *     (`saljarensKandidater`), och då är det säljsamtalet — `skapaOrder` kopplar
+ *     det för hand innan `provaSaljsamtal` körs på den sparade ordern.
+ *   - Inget är valt. Samtalen på kundens nummer, fördelade som svepningen skulle
+ *     fördela dem (`samtalForNyOrder`) och bedömda med `bedomSaljsamtal`.
+ *
+ * Felar läsningen blir svaret nej, som i `provaSaljsamtal`.
+ */
+export async function forprovaSaljsamtal(args: {
+  saljareId: string;
+  telefon: string;
+  /** `YYYY-MM-DD`. */
+  signerad: string;
+  samtalId: string | null;
+}): Promise<Saljsamtalsbedomning> {
+  const nu = new Date().toISOString();
+
+  if (args.samtalId) {
+    const kandidater = await saljarensKandidater({ saljareId: args.saljareId, orderSkapad: nu, signerad: args.signerad });
+    const vald = kandidater.find((k) => k.id === args.samtalId);
+    if (!vald) {
+      return {
+        ok: false,
+        skal: "Det valda samtalet går inte att koppla: det är inte säljarens eget, är redan kopplat till en annan order eller ringdes efter signeringsdagen.",
+      };
+    }
+    return { ok: true, samtalId: vald.id, sekunder: vald.talkSeconds ?? 0, harLjud: vald.harLjud };
+  }
+
+  const bedom = (samtal: SamtalForBedomning[]) =>
+    bedomSaljsamtal({ samtal, saljareId: args.saljareId, orderSkapad: nu, signerad: args.signerad });
+
+  // Ett nummer som inte går att normalisera får ingen genererad kolumn heller,
+  // och svepningen hittar då inget på det.
+  const telefonE164 = normaliseraNummer(args.telefon);
+  if (!telefonE164) return bedom([]);
+
+  const db = supabaseAdmin();
+  const [ordrar, samtal] = await Promise.all([
+    db.from("sales_order").select("id, contact_phone_e164, created_at, status").eq("contact_phone_e164", telefonE164),
+    db
+      .from("phone_call")
+      .select("id, counterpart_e164, started_at, sales_order_id, order_linked_by, employee_id, talk_seconds, recording_state")
+      .eq("counterpart_e164", telefonE164),
+  ]);
+  const lasfel = ordrar.error ?? samtal.error;
+  if (lasfel) return { ok: false, skal: `Samtalen gick inte att läsa: ${lasfel.message}` };
+
+  const rader = (samtal.data ?? []) as Record<string, unknown>[];
+  const paNya = new Set(
+    samtalForNyOrder(
+      rader.map((s) => ({
+        id: s.id as string,
+        counterpartE164: s.counterpart_e164 as string | null,
+        startedAt: s.started_at as string | null,
+        salesOrderId: s.sales_order_id as string | null,
+        orderLinkedBy: s.order_linked_by as string | null,
+      })),
+      ((ordrar.data ?? []) as Record<string, unknown>[]).map((o) => ({
+        id: o.id as string,
+        contactPhoneE164: o.contact_phone_e164 as string | null,
+        createdAt: o.created_at as string,
+        status: o.status as string,
+      })),
+      { telefonE164, skapad: nu },
+    ),
+  );
+
+  return bedom(
+    rader
+      .filter((s) => paNya.has(s.id as string))
+      .map((s) => ({
+        id: s.id as string,
+        employeeId: s.employee_id as string | null,
+        talkSeconds: s.talk_seconds as number | null,
+        startedAt: s.started_at as string | null,
+        recordingState: s.recording_state as string,
+      })),
+  );
+}
+
 /** Hur långt före ordern en kandidat till säljsamtalet får ligga. */
 const KANDIDATFONSTER_DYGN = 30;
 
@@ -405,13 +494,37 @@ export async function samtalskandidater(orderId: string): Promise<Samtalskandida
     .maybeSingle();
   if (!order) return [];
 
-  const till = saljsamtalsgrans(order.created_at as string, order.signed_on as string | null);
+  return saljarensKandidater({
+    saljareId: order.salesperson_id as string,
+    orderSkapad: order.created_at as string,
+    signerad: order.signed_on as string | null,
+  });
+}
+
+/**
+ * Samma kandidater för en order som inte finns än: formuläret i Nav 2.0 visar
+ * den VALDA säljarens samtal kring signeringsdagen (beställaren 2026-10-31).
+ * Förut visade det den inloggades egna från i dag och i går, så chefen som lade
+ * in Edvins order från förra veckan såg sina egna samtal och aldrig hans.
+ *
+ * Samma urval som `samtalskandidater`, så att det formuläret visar är det
+ * `kopplaSaljsamtal` och spärren sedan godtar.
+ */
+export async function saljarensKandidater(args: {
+  saljareId: string;
+  /** ISO. När ordern lades upp, eller nu för en order som inte finns än. */
+  orderSkapad: string;
+  /** `YYYY-MM-DD`. */
+  signerad: string | null;
+}): Promise<Samtalskandidat[]> {
+  const db = supabaseAdmin();
+  const till = saljsamtalsgrans(args.orderSkapad, args.signerad);
   const fran = new Date(new Date(till).getTime() - KANDIDATFONSTER_DYGN * 86_400_000).toISOString();
 
   const { data } = await db
     .from("phone_call")
     .select("id, started_at, talk_seconds, counterpart_e164, recording_state")
-    .eq("employee_id", order.salesperson_id as string)
+    .eq("employee_id", args.saljareId)
     .is("sales_order_id", null)
     .gte("talk_seconds", MIN_SALJSAMTAL_SEKUNDER)
     .gte("started_at", fran)

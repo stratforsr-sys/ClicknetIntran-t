@@ -146,6 +146,31 @@ export function parIhop(
   return ut;
 }
 
+/** Platshållarens id i `samtalForNyOrder`. Kan aldrig krocka med ett uuid. */
+const NY_ORDER = "ny-order";
+
+/**
+ * Samtalen svepningen skulle ge en order som läggs upp NU — utan att ordern
+ * finns. Id:n, i samtalens ordning.
+ *
+ * Spärren kördes fram till 2026-10-31 först när ordern redan var sparad, och
+ * en order som föll stod kvar som utkast. Städservice Ale gav fyra utkast på
+ * fyra försök (#33–#36). Nu prövas den innan något sparas, och då måste svaret
+ * vara exakt det svepningen ger efteråt: ordern är ett UTKAST när spärren körs
+ * (se `skapaOrder`), så den tävlar här som ett utkast, med samma `valjOrder()`.
+ * Ett eget, snällare svar hade släppt igenom order som spärren sedan stoppar —
+ * och då står utkastet där igen.
+ */
+export function samtalForNyOrder(
+  samtal: SamtalForKoppling[],
+  ordrar: OrderForKoppling[],
+  ny: { telefonE164: string | null; skapad: string },
+): string[] {
+  if (!ny.telefonE164) return [];
+  const medNy = [...ordrar, { id: NY_ORDER, contactPhoneE164: ny.telefonE164, createdAt: ny.skapad, status: "utkast" }];
+  return samtal.filter((s) => !s.orderLinkedBy && valjOrder(s, medNy) === NY_ORDER).map((s) => s.id);
+}
+
 /**
  * Hur länge en inspelning utan affär sparas.
  *

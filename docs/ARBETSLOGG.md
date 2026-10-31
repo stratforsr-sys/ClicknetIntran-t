@@ -5,6 +5,47 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-31 kväll · Säljsamtalet i orderformuläret (gren `saljsamtal-saljaren`, EJ MERGAD)
+
+**Varför.** Beställaren lade in Edvins order på Städservice Ale AB (signerad 2026-10-22) och fick "Det finns inget
+samtal från Lynes på kundens nummer" fyra gånger, och fick fyra utkast (#33–#36). Datan: numret på ordern,
++46760187482, finns inte på något av 10 187 Lynes-samtal. Edvins samtal kommer in (2 181, senast 10-30). På
+signeringsdagen ringde han +46760223990 i 38, 17 och 9 minuter. Dialern gick inte att fråga ("exceeded the quota").
+
+**Tre fel i Nav 2.0, inget i spärren själv:**
+1. Formulärets lista (`ND.order.kandidater`) var den INLOGGADES egna samtal från i dag och i går. Chefen som lägger in
+   en säljares order från förra veckan såg aldrig säljarens samtal.
+2. Det valda samtalet kopplades först efter `skapa`. `skapaOrder` kör spärren innan dess, så den sa nej och klienten
+   kopplade aldrig. Valet hjälpte bara när numret redan stämde, alltså när det inte behövdes. Samma sak i
+   `ratta` + `skicka-in` på ett utkast.
+3. Spärren kördes på den sparade ordern, och ett nej lämnade ordern som utkast. Varje försök blev ett nytt.
+   Ett kvarglömt utkast tar dessutom samtalen på numret före en ny order (`valjOrder`, samma rang), så nästa
+   försök på samma nummer hade nekats även med rätt nummer.
+
+**Rättelsen:**
+- `saljarensKandidater()` (samma urval som `samtalskandidater`, som nu går genom den) och rutthandlingen
+  `saljarens-samtal` (läsning, fungerar i läsläge; säljaren ser bara sina egna). Formuläret hämtar listan för den valda
+  säljaren och signeringsdagen (`ndSamtalFor`), och väljer själv säljarens längsta samtal på numret i formuläret.
+  `onSammaNr()` jämför +46/0046/0-formerna, som förut aldrig matchade (Lynes skriver +46, säljaren 070).
+- `samtal_id` i `FALT.skapa`. `skapaOrder` prövar det och kopplar det för hand (`order_linked_by`) innan
+  `provaSaljsamtal`. Klienten kopplar ett rättat utkast före `skicka-in`.
+- `forprovaSaljsamtal()` före insert: ett valt samtal ska vara en av säljarens kandidater, annars bedöms samtalen på
+  numret med `samtalForNyOrder()` (svepningens `valjOrder` med den nya ordern som utkast, alltså samma svar som
+  spärren ger efteråt). Nej = inget sparas, formuläret står kvar. Spärren efter insert står kvar för det som hinner
+  ändras emellan.
+- Rättningens platshållare `'s4'` för ett redan kopplat samtal pekade på ingenting i Nav 2.0 (OSAMTAL saknade det).
+  Det kopplade samtalet står nu först i listan.
+
+**Prov:** `tests/samtal-order.mjs` (7 nya), `tests/nav2-orderfalt.mjs` (V2 omskriven + 2 nya), `nav2-order`, `order`
+och `navnyheter` gröna. `forprovaSaljsamtal`/`saljarensKandidater` körda lokalt mot produktionsdatan (bara läsning)
+för Städservice Ale: utan valt samtal nej, med 38-minuterssamtalet ja, Edvins samtal med Zen som säljare nej, numret
+0760-22 39 90 hittar samtalet själv, signerad dagen före nej.
+
+**Inte byggt:** uppladdning av en inspelning som inte finns i Lynes och "skicka in utan samtal, chefen godkänner". Det
+väntar på svar om var de inspelningarna kommer ifrån.
+
+---
+
 ## 2026-10-31 kväll · Inkio: faktureringen på ordern (MERGAD `62720d6`)
 
 `424fcc5` (värde och längd) mergades till main på beställarens ja och byggdes grönt i produktionen. Order #32 skickades om

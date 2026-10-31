@@ -34,6 +34,7 @@ import { tolkaLager } from "@/lib/lagring";
 import { pdfText } from "@/lib/pdf";
 import { tolkaAvtalstext, type Orderforslag } from "@/lib/orderbilaga";
 import {
+  forprovaSaljsamtal,
   kopplaForHand,
   provaSaljsamtal,
   samtalskandidater,
@@ -716,6 +717,21 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
     // i samma steg. Det ar den vanligaste vagen in for en order som legat kvar.
     const forSent = godkannDirekt && harStangdPeriod(signerad, await stangdaManader());
 
+    // SÄLJSAMTALET PRÖVAS INNAN NÅGOT SPARAS (2026-10-31). Spärren längre ned
+    // körs på den sparade ordern, och fram till i dag stod en order som föll
+    // kvar som utkast — Städservice Ale gav fyra utkast på fyra försök.
+    // `forprovaSaljsamtal` ger samma svar utan att skriva, så ett nej lämnar
+    // ingenting efter sig och formuläret står kvar som det var.
+    //
+    // `samtal_id` är samtalet som valdes i formuläret (Nav 2.0), när kunden
+    // ringdes på ett annat nummer än det på ordern. Det kopplas för hand innan
+    // spärren körs, nedan.
+    const valtSamtal = String(form.get("samtal_id") ?? "").trim() || null;
+    const forprov = await forprovaSaljsamtal({ saljareId: saljare, telefon, signerad, samtalId: valtSamtal });
+    if (!forprov.ok) {
+      return { fel: `${forprov.skal} Ordern är inte sparad. Välj säljarens samtal i formuläret och försök igen.` };
+    }
+
     // ===========================================================================
     // TRE SKRIVNINGAR I EN BESTAMD ORDNING, OCH ORDNINGEN AR HELA POANGEN.
     //
@@ -808,10 +824,23 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
       };
     }
 
+    // Samtalet som valdes i formuläret, prövat ovan. Kopplingen bär
+    // `order_linked_by`, så svepningen i `provaSaljsamtal` lämnar den i fred.
+    if (valtSamtal) {
+      const koppling = await kopplaForHand({ samtalId: valtSamtal, orderId: rad.id, beslutadAv: user.employee!.id });
+      if (koppling.fel) {
+        return {
+          fel: `Säljsamtalet kunde inte kopplas: ${koppling.fel} Ordern ligger kvar som utkast på ${bolag} — koppla säljsamtalet där och skicka in den.`,
+          orderId: rad.id,
+        };
+      }
+      await logga(user, "sales_order.call_linked", rad.id, { samtal: valtSamtal });
+    }
+
     // SÄLJSAMTALET (beställaren 2026-10-08): ingen order lämnar utkastet utan
-    // säljarens eget samtal från Lynes på kundens nummer. Samma skäl som
-    // avtalet ovan — faller det står ett utkast kvar, och på det finns
-    // "Koppla säljsamtal" för fallet att kunden ringde från ett annat nummer.
+    // säljarens eget samtal från Lynes på kundens nummer. Prövat redan innan
+    // ordern sparades (`forprovaSaljsamtal`), så det här nejet kommer bara om
+    // något hann ändras emellan — då står ett utkast kvar, som förut.
     const saljsamtal = await provaSaljsamtal(rad.id);
     if (!saljsamtal.ok) {
       return {

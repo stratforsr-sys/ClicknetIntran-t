@@ -204,7 +204,8 @@ const IGNORERAS = {
   },
 };
 const HANDLINGAR = [
-  ["skapa", "skapaOrder", ["godkann", "avtal_fil_id", "avtal_store", "avtal_filnamn"]],
+  // Säljsamtalet som valdes i formuläret följer bara med en NY order; en rättad kopplas med `koppla` (2026-10-31).
+  ["skapa", "skapaOrder", ["godkann", "avtal_fil_id", "avtal_store", "avtal_filnamn", "samtal_id"]],
   ["rattaOgodkand", "redigeraOgodkand", []],
   ["rattaGodkand", "redigeraOrder", ["reason"]],
 ];
@@ -318,7 +319,10 @@ rubrik("Granskarens fynd i klienten (S10b omgång 2)");
 {
   const sk = html.slice(html.indexOf("async function ndOrdSkicka("), html.indexOf("const NDORD_RATTA_GODKAND"));
   ok("V3: en godkänd rättelse stoppas inte av avtal eller säljsamtal", /godkandRatta[\s\S]{0,200}'avtal'[\s\S]{0,40}'samtal'/.test(sk));
-  ok("V2: bara ett riktigt samtals-id kopplas, aldrig efter en godkänd rättelse", /n\.samtal && id && !godkandRatta && \/\^\[0-9a-f-\]\{36\}\$\/\.test\(n\.samtal\)/.test(sk));
+  ok("V2: bara ett riktigt samtals-id kopplas, aldrig efter en godkänd rättelse", /const samtalId = n\.samtal && \/\^\[0-9a-f-\]\{36\}\$\/\.test\(n\.samtal\) && !godkandRatta/.test(sk));
+  // 2026-10-31: kopplades samtalet efter inskicket nekade spärren först, och valet hjälpte bara när numret stämde.
+  ok("säljsamtalet kopplas före inskicket av ett rättat utkast", /koppla\(ratta\.id\)[\s\S]{0,120}'skicka-in'/.test(sk));
+  ok("en ny order tar säljsamtalet med sig till servern", /falt\.samtal_id = samtalId[\s\S]{0,80}'skapa'/.test(sk));
   ok("M7: rättelsen tar med orderns tilläggsmärke", /fran && fran\.ratta[\s\S]{0,160}addon/.test(html));
   ok("M8: knapparna kräver hanterare", /ndOrdKanTaBort = x => [^\n]*ndO\(\)\.hanterare/.test(html) && /S\.role === 'chef' && ndO\(\)\.hanterare \? h\.replace/.test(html));
   ok("Boka i kundkortet: Kalendern sparar (S15:s text)", /kkboka:'Boka samtalet i Kalendern\.'/.test(html));

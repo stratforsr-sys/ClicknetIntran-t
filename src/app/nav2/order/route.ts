@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser, hasRole, fullName } from "@/lib/auth";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
-import { kopplaForHand } from "@/lib/samtal-order-server";
+import { kopplaForHand, saljarensKandidater } from "@/lib/samtal-order-server";
+import { svenskTid } from "@/lib/nav2/orderforma";
 import { notifieraFlera } from "@/lib/notishandelse-server";
 import { skrivKundanteckning } from "@/lib/crm/inkio";
 import { LOPTIDER, giltigBindningstid, giltigTelefon, giltigtSigneringsdatum, normaliseraOrgnr } from "@/lib/order";
@@ -57,7 +58,7 @@ export const dynamic = "force-dynamic";
  *
  * LÄSLÄGE: står `SKRIVLAGE.order` på false svarar rutten 423 innan något
  * skrivs. Att läsa avtalets förslag och samtalskandidaterna är läsningar och
- * fungerar alltid.
+ * fungerar alltid. Det gäller också formulärets lista över säljarens samtal.
  */
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -72,7 +73,7 @@ const ORGNR = /^\d{6}-\d{4}$/;
  * (K4). `tests/nav2-orderfalt.mjs` jämför listorna med det klienten skickar.
  */
 const FALT = {
-  skapa: ["salesperson_id", "company_name", "org_number", "contact_name", "contact_phone", "contact_email", "customer_street", "customer_postal_code", "customer_city", "avtal_fil_id", "avtal_store", "avtal_filnamn", "package_id", "term_months", "fri_order", "monthly_amount", "signed_on", "starts_on", "note", "is_addon", "godkann", "forlanger_id", "provision_form", "commission_percent", "commission_amount", "tjanster", "finans", "har_utkop", "buyout_amount", "finans_ritad", "har_utkop_ritad", "fri_order_ritad", "fri_skal", "pris_ritad", "rabatt_skal"],
+  skapa: ["salesperson_id", "company_name", "org_number", "contact_name", "contact_phone", "contact_email", "customer_street", "customer_postal_code", "customer_city", "avtal_fil_id", "avtal_store", "avtal_filnamn", "package_id", "term_months", "fri_order", "monthly_amount", "signed_on", "starts_on", "note", "is_addon", "godkann", "forlanger_id", "provision_form", "commission_percent", "commission_amount", "tjanster", "finans", "har_utkop", "buyout_amount", "finans_ritad", "har_utkop_ritad", "fri_order_ritad", "fri_skal", "pris_ritad", "rabatt_skal", "samtal_id"],
   rattaOgodkand: ["company_name", "org_number", "contact_name", "contact_phone", "contact_email", "customer_street", "customer_postal_code", "customer_city", "package_id", "term_months", "fri_order", "monthly_amount", "signed_on", "starts_on", "salesperson_id", "is_addon", "note", "tjanster", "finans", "har_utkop", "buyout_amount", "provision_form", "commission_percent", "commission_amount", "finans_ritad", "har_utkop_ritad", "fri_order_ritad", "fri_skal", "pris_ritad", "rabatt_skal"],
   // D10: allt `redigeraOrder` läser (se tests/nav2-orderfalt.mjs för det som medvetet inte går fram).
   rattaGodkand: ["company_name", "org_number", "contact_name", "contact_phone", "contact_email", "reason", "note", "package_id", "term_months", "monthly_amount", "signed_on", "starts_on", "salesperson_id", "is_addon", "tjanster", "finans", "har_utkop", "buyout_amount", "finans_ritad", "har_utkop_ritad", "pris_ritad", "provision_form", "commission_percent", "commission_amount", "rabatt_skal"],
@@ -97,7 +98,7 @@ function form(falt: Record<string, unknown>, tillatna?: readonly string[]): Form
 async function ordern(id: string) {
   if (!UUID.test(id)) return null;
   const rls = await supabaseServer();
-  const { data } = await rls.from("sales_order").select("id, status, salesperson_id, org_number").eq("id", id).maybeSingle();
+  const { data } = await rls.from("sales_order").select("id, status, salesperson_id, org_number, created_at").eq("id", id).maybeSingle();
   return data;
 }
 
@@ -131,6 +132,21 @@ export async function POST(request: Request) {
     if (handling === "kandidater") {
       const s = await hamtaSamtalskandidater(id);
       return "fel" in s ? svar({ fel: s.fel }, 400) : svar({ kandidater: s.kandidater });
+    }
+    if (handling === "saljarens-samtal") {
+      // Formulärets säljsamtal: den VALDA säljarens samtal före signeringsdagens
+      // slut (beställaren 2026-10-31). Säljaren ser bara sina egna. Rättas ett
+      // utkast räknas fönstret från när det lades upp, som i `kopplaSaljsamtal`.
+      const saljare = hanterare && UUID.test(String(b.saljare ?? "")) ? String(b.saljare) : mig;
+      const sign = String(b.sign ?? "");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(sign)) return svar({ fel: "Välj när avtalet signerades." }, 400);
+      const o = id ? await ordern(id) : null;
+      const kandidater = await saljarensKandidater({ saljareId: saljare, orderSkapad: (o?.created_at as string | undefined) ?? new Date().toISOString(), signerad: sign });
+      return svar({
+        samtal: kandidater
+          .filter((k) => k.startedAt)
+          .map((k) => ({ id: k.id, nar: svenskTid(k.startedAt!), sek: Number(k.talkSeconds ?? 0), nr: k.counterpartE164 ?? "", ljud: k.harLjud })),
+      });
     }
     if (handling === "las-avtal") {
       const s = await lasAvtalsforslag(id, String(b.fil ?? ""));
