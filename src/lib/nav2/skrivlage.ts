@@ -58,6 +58,8 @@ export const SKRIVLAGE = {
   utskick: true,
   // Möten (Nav 2.0, 2026-10-29): läsläge tills beställaren säger ja (A14). 0260–0262 körda.
   moten: false,
+  // Introfilmen (beställaren 2026-10-31, 0270): "sedd" måste sparas från första dagen, annars ser alla filmen varje gång.
+  introfilm: true,
 } as const;
 
 export type Skrivvy = keyof typeof SKRIVLAGE;

@@ -5,6 +5,41 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-31 kväll · Introfilmen: grinden före första vyn (gren `introfilm`, 0270 KÖRD)
+
+Den godkända introfilmen (`~/nav2-film/ut/nav2-intro-v7.mp4`, 178 s) är inbyggd som en grind efter inloggningen. Planen, besluten
+och provbänken ligger hos beställaren i `~/nav2-utkast/delar/introfilm/` (PLAN.md, BESLUT.md, verktyg/), inte i repot.
+
+**Beställarens tre beslut:** "Senare" räknas inte (filmen kommer igen); Zen får filmen vid varje nytt besök; rubriken är
+"Vi leder dig mot din vision" och knappen "Fortsätt till navet".
+
+**Varför det ser ut som det gör:**
+- **Ingen blinkning:** grinden är en `<dialog>` med `showModal()` som öppnas i skriptets första steg, före `/* Start */`. Resten av
+  sidan är inert bakom den, och `render()` körs under. Provet såg att `#wrap` fick innehåll först när dialogen var öppen.
+- **Sedd = 95 % uppspelat**, räknat på `video.played`. Annars hade spolning till slutet räknats. Rutten provar talet en gång till
+  (`arSedd`) och skriver med service role, eftersom RLS bara ger läsning (`introfilm_read`, egna raden).
+- **Progressiv MP4 från R2, ingen HLS och ingen proxy:** det är en film på tre minuter för ett tjugotal personer, och R2 svarar
+  206 på Range. En proxy genom Vercel hade räknats mot funktionstiden. Adressen signeras per hämtning och lever 3 h. Spelaren
+  hämtar en ny om den skulle gå ut mitt i, och 720p väljs när `saveData` är på eller skärmens kortsida är under 600 px.
+- **Djuplänken:** `ndapp.js` tar bort frågan ur adressen vid start. Grinden läser därför navigeringens adress
+  (`performance.getEntriesByType('navigation')`), och `ndGa` köas medan filmen visas: `/nav2?till=…` hamnar rätt efter filmen.
+- **Fokus:** efter Spela flyttas fokus till Pausa (tangentbord) eller dialogen (pek), och en `keydown`-vakt i fångstfasen
+  hindrar navets kortkommandon (`/`, paletten) bakom grinden.
+- Pushens `/nav2/sw.js` och appens `/app-sw.js` är orörda. Ingen av dem fångar videohämtningar.
+- **Registerutdraget:** raden i KALLOR och en rad i ORDNING (`introfilm: ["employee_id"]`, ingen `id`). Utan ORDNING-raden hade
+  utdraget inte kunnat läsa källan, och provet fångade det. Provets andra röda (Mötens, säljtavlans och `calendar_attachment`s
+  kolumner) fanns redan på main.
+
+**Prov:** `test:introfilm` (12 kontroller, ren logik). Provbänken (produktionens `/nav2` som Zen, produktionens CSP, den riktiga
+filmen från R2, inga skrivningar) körde 65 av 65 i headless Chrome: första gången, andra gången, Zen, djuplänk, blockerad film,
+telefon stående, hela vägen med tangentbord, reducerad rörelse och se igen. Det gav noll konsolfel och noll CSP-brott. Ljudet i
+Chrome provades efter ett tryck (`webkitAudioDecodedByteCount` > 0). 0270:s RLS provades efter körningen: Zen ser sin rad, Simon
+ingen, och skrivningar nekas (42501).
+
+**Kvar:** musikens licens är outredd (Zerb – Mwaki, kommersiell låt). Beställaren avgör det.
+
+---
+
 ## 2026-10-31 kväll · Inkio: faktureringen på ordern (MERGAD `62720d6`)
 
 `424fcc5` (värde och längd) mergades till main på beställarens ja och byggdes grönt i produktionen. Order #32 skickades om

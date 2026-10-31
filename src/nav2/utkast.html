@@ -7834,6 +7834,153 @@ button.ms-c[aria-expanded="true"]{background:var(--brand-soft);box-shadow:inset 
 @media (prefers-reduced-motion:reduce){ .ms-pan{animation:none} .ms-t,.ms-c,.ms-uc{transition:none} }
 .ms-r .pill{font-style:normal}
 .ms-tab tbody th{padding-top:9px}
+/* ===================== Introfilmen (prefix itf), beställaren 2026-10-31 =====================
+   Grinden före första vyn (moduler/nditf.js). Inloggningens mörka hub-yta och dess formspråk:
+   rubriken öppnas från mitten och blir skarp som urtavlans devis, navmärket är spelknappen
+   (ekrarna snurrar medan filmen laddar, som inloggningens väntesymbol), och filmen öppnas som en
+   iris ur navet. Tidslinjen är filmens kapitel och fylls med det som FAKTISKT spelats, alltså
+   samma mått som avgör när "Fortsätt till navet" öppnas. Allt rörligt stängs av med
+   prefers-reduced-motion. */
+html.itf-oppen{overflow:hidden}
+.itf{position:fixed;inset:0;width:100%;height:100%;max-width:none;max-height:none;margin:0;padding:0;border:0;
+  background:var(--hub);color:var(--hub-ink);overflow:auto;overscroll-behavior:contain;color-scheme:dark;
+  font:400 14px/1.5 var(--f-body);-webkit-font-smoothing:antialiased}
+.itf::backdrop{background:var(--hub)}
+.itf:focus{outline:none}
+.itf :focus-visible{outline:2px solid var(--hub-brand);outline-offset:2px}
+.itf button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.itf-in{--itf-g:max(16px, env(safe-area-inset-left), env(safe-area-inset-right));
+  --itf-b:min(1120px, calc(100vw - 2 * var(--itf-g)), max(560px, calc((100dvh - 360px) * 16 / 9)));
+  width:var(--itf-b);min-height:100%;margin:0 auto;display:flex;flex-direction:column;justify-content:center;
+  padding:max(20px, env(safe-area-inset-top)) 0 max(20px, env(safe-area-inset-bottom))}
+
+/* Huvudet: märket, var vi är och hur lång filmen är */
+.itf-topp{display:flex;align-items:center;gap:8px;margin:0 0 16px;font:500 11px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--hub-ink-3)}
+.itf-topp svg{flex:none;border-radius:7px;box-shadow:0 0 0 1px var(--hub-line)}
+.itf-pkt{width:3px;height:3px;border-radius:50%;background:currentColor;opacity:.7}
+.itf-rub{margin:0;font:700 clamp(30px, 2.2vw + 18px, 56px)/1.02 var(--f-display);letter-spacing:-.035em;color:var(--hub-ink);font-variation-settings:"opsz" 96}
+.itf-rub>span{display:inline-block;animation:itf-rub .8s var(--ease) .1s backwards}
+.itf-under{margin:10px 0 20px;color:var(--hub-ink-2);font-size:15px;animation:itf-in .5s var(--ease) .45s backwards}
+
+/* Scenen: affischen, filmen och felrutan i samma ruta */
+.itf-scen{position:relative;width:100%;aspect-ratio:16/9;border-radius:14px;overflow:hidden;background:var(--hub-2);box-shadow:0 0 0 1px var(--hub-line);isolation:isolate;animation:itf-in .5s var(--ease) .2s backwards}
+.itf-vid{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:var(--hub-2);clip-path:circle(0 at 50% 50%);transition:clip-path .75s var(--ease)}
+.itf-scen:is([data-lage="spelar"],[data-lage="paus"],[data-lage="klar"]) .itf-vid{clip-path:circle(75% at 50% 50%)}
+.itf-affisch{position:absolute;inset:0;width:100%;display:grid;place-content:center;justify-items:center;gap:14px;border-radius:inherit;cursor:pointer;transition:opacity .35s var(--ease),visibility 0s}
+.itf-affisch:focus-visible{outline-offset:-6px}
+.itf-scen:not([data-lage="affisch"]):not([data-lage="laddar"]) .itf-affisch{opacity:0;visibility:hidden;transition:opacity .35s var(--ease),visibility 0s .35s}
+.itf-play{width:clamp(84px, calc(var(--itf-b) * .15), 168px);aspect-ratio:1;display:grid;place-items:center}
+.itf-marke{width:100%;height:100%;overflow:visible}
+.itf-ring{fill:none;stroke:var(--hub-brand);stroke-width:4.5;stroke-dasharray:100;animation:itf-ring .9s var(--ease) .25s backwards}
+.itf-ekrar{transform-box:view-box;transform-origin:72px 72px;transition:transform .5s var(--ease)}
+.itf-ekrar line{stroke:var(--hub-ink);stroke-width:4.5;stroke-linecap:round;stroke-dasharray:20;animation:itf-eker .45s var(--ease) backwards;animation-delay:calc(.5s + var(--itf-k) * 70ms)}
+.itf-nav{fill:var(--hub-signal);transform-box:fill-box;transform-origin:center;transition:transform .25s var(--ease);animation:itf-nav .4s var(--ease) 1s backwards}
+.itf-tri{fill:var(--hub);transform-box:fill-box;transform-origin:center;animation:itf-nav .3s var(--ease) 1.15s backwards}
+.itf-affisch:hover .itf-ekrar,.itf-affisch:focus-visible .itf-ekrar{transform:rotate(30deg)}
+.itf-affisch:hover .itf-nav,.itf-affisch:focus-visible .itf-nav{transform:scale(1.08)}
+.itf-scen[data-lage="laddar"] .itf-ekrar{animation:itf-snurr 1.2s linear infinite}
+.itf-affisch-t{display:grid;justify-items:center;gap:3px;text-align:center}
+.itf-affisch-t b{font:600 16px/1.3 var(--f-body);color:var(--hub-ink)}
+.itf-affisch-t span{font:500 12px/1.3 var(--f-mono);color:var(--hub-ink-3)}
+.itf-affisch-t .itf-laddtext{display:none;color:var(--hub-ink-2)}
+/* Vad filmen visar, ur kapitlen: den som vet vad som kommer ser oftare klart. */
+.itf-innehall{position:absolute;left:0;right:0;bottom:0;padding:14px 18px;display:flex;flex-wrap:wrap;justify-content:center;gap:4px 14px;font:500 11px/1.4 var(--f-mono);letter-spacing:.04em;color:var(--hub-ink-3);pointer-events:none}
+.itf-innehall span{white-space:nowrap}
+.itf-innehall span+span::before{content:"·";margin-right:14px;opacity:.6}
+.itf-scen[data-lage="laddar"] .itf-affisch-t :not(.itf-laddtext){display:none}
+.itf-scen[data-lage="laddar"] .itf-affisch-t .itf-laddtext{display:block}
+.itf-felruta{position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:18px;padding:24px;text-align:center;visibility:hidden;opacity:0;transition:opacity .3s var(--ease)}
+.itf-scen[data-lage="fel"] .itf-felruta{visibility:visible;opacity:1}
+.itf-felruta p{margin:0;display:grid;gap:4px}
+.itf-felruta b{font:600 17px/1.3 var(--f-body);color:var(--hub-ink)}
+.itf-felruta span{color:var(--hub-ink-2)}
+.itf-felruta .itf-felknappar{display:flex;flex-wrap:wrap;justify-content:center;gap:8px 12px}
+.itf-fylld{height:44px;padding:0 18px;border-radius:12px;background:var(--hub-brand);color:var(--hub);font-weight:600}
+.itf-lank{height:44px;padding:0 10px;color:var(--hub-ink-2);text-decoration:underline;text-underline-offset:3px}
+.itf-lank:hover{color:var(--hub-ink)}
+.itf-fylld:hover,.itf-vidare.itf-ok:hover{filter:brightness(1.08)}
+
+/* Styrraden och kapitlen */
+.itf-styr{margin-top:8px}
+.itf-rad{display:flex;align-items:center;gap:2px;min-height:44px}
+.itf-ikon{flex:none;width:40px;height:40px;display:grid;place-items:center;border-radius:10px;color:var(--hub-ink-2);transition:background .15s,color .15s}
+.itf-ikon svg{width:20px;height:20px}
+.itf-ikon:hover{background:var(--hub-track);color:var(--hub-ink)}
+.itf-ikon[aria-pressed="true"]{color:var(--hub-signal)}
+.itf-tid{flex:none;margin-left:8px;font:500 13px/1 var(--f-mono);font-variant-numeric:tabular-nums;color:var(--hub-ink)}
+.itf-tid span{color:var(--hub-ink-3)}
+.itf-kapnamn{flex:1;min-width:0;margin-left:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:var(--hub-ink-2)}
+.itf-kap{display:flex;align-items:center;gap:3px;height:16px}
+.itf-seg{position:relative;flex:1 1 0;height:4px;padding:0;border-radius:2px;background:var(--hub-track);transition:background-color .2s}
+.itf-seg.itf-nu,button.itf-seg:hover{background:rgba(220,245,232,.2)}
+.itf-seg i{position:absolute;inset:0;border-radius:inherit;background:var(--hub-brand);transform-origin:left;transform:scaleX(var(--itf-d, 0));transition:transform .3s linear}
+.itf-seg b{position:absolute;top:-4px;bottom:-4px;width:2px;margin-left:-1px;border-radius:1px;background:var(--hub-ink)}
+button.itf-seg{cursor:pointer}
+button.itf-seg::after{content:"";position:absolute;inset:-12px 0}
+
+/* Foten: Senare till vänster, Fortsätt till höger. Knappen fylls med det som är sett och öppnas vid 95 %. */
+.itf-fot{display:flex;align-items:center;gap:16px;margin-top:16px}
+.itf-senare{margin:0;display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;font-size:13px;color:var(--hub-ink-3)}
+.itf-senare[hidden]{display:none}
+.itf-senare button{padding:12px 2px;font-weight:500;color:var(--hub-ink-2);text-decoration:underline;text-underline-offset:3px}
+.itf-senare button:hover{color:var(--hub-ink)}
+.itf-vidare{position:relative;isolation:isolate;overflow:hidden;flex:none;margin-left:auto;display:inline-flex;align-items:center;gap:12px;height:48px;padding:0 20px;border:1px solid var(--hub-line);border-radius:12px;color:var(--hub-ink-2);font:600 15px/1 var(--f-body);transition:background .35s var(--ease),color .35s var(--ease),border-color .35s var(--ease)}
+.itf-vidare::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--hub-track);transform-origin:left;transform:scaleX(var(--itf-fyll, 0));transition:transform .3s linear}
+.itf-vidare[aria-disabled="true"]{cursor:default}
+.itf-kvar{font:500 12px/1 var(--f-mono);color:var(--hub-ink-3)}
+.itf-vidare.itf-ok{background:var(--hub-brand);border-color:transparent;color:var(--hub)}
+.itf-vidare.itf-ok::before{display:none}
+.itf-vidare.itf-ok svg{width:18px;height:18px;transition:transform .2s var(--ease)}
+.itf-vidare.itf-ok:hover svg{transform:translateX(3px)}
+
+/* Filmen i text */
+.itf-text{margin-top:14px;font-size:13px;color:var(--hub-ink-2)}
+.itf-text summary{width:max-content;padding:8px 0;cursor:pointer;list-style:none;color:var(--hub-ink-3)}
+.itf-text summary::-webkit-details-marker{display:none}
+.itf-text summary::before{content:"+";display:inline-block;width:1.1em;font-family:var(--f-mono)}
+.itf-text[open] summary::before{content:"–"}
+.itf-text summary:hover{color:var(--hub-ink-2)}
+.itf-text ol{margin:6px 0 0;padding:0;list-style:none}
+.itf-text li{display:grid;grid-template-columns:44px 112px 1fr;gap:12px;padding:9px 0;border-top:1px solid var(--hub-line)}
+.itf-text li .num{color:var(--hub-ink-3)}
+.itf-text li b{font-weight:600;color:var(--hub-ink)}
+
+/* Stängningen: grinden dras upp som en ridå och navet står under */
+.itf.itf-ut{animation:itf-ut .5s var(--ease) forwards}
+.itf.itf-ut::backdrop{animation:itf-ut-b .5s var(--ease) forwards}
+
+@keyframes itf-rub{from{clip-path:inset(-.3em 50%);filter:blur(6px)}to{clip-path:inset(-.3em -.2em);filter:blur(0)}}
+@keyframes itf-in{from{opacity:0;transform:translateY(6px)}}
+@keyframes itf-ring{from{stroke-dashoffset:100}}
+@keyframes itf-eker{from{stroke-dashoffset:20}}
+@keyframes itf-nav{from{transform:scale(0)}}
+@keyframes itf-snurr{to{transform:rotate(360deg)}}
+@keyframes itf-ut{from{clip-path:inset(0)}to{clip-path:inset(0 0 100% 0)}}
+@keyframes itf-ut-b{to{opacity:0}}
+
+@media (max-width:600px){
+  .itf-in{justify-content:flex-start}
+  .itf-topp{margin-bottom:12px}
+  .itf-rub{font-size:clamp(28px, 8.2vw, 36px)}
+  .itf-under{margin:8px 0 16px;font-size:14px}
+  .itf-scen{border-radius:12px}
+  .itf-kapnamn{margin-left:8px;font-size:12px}
+  .itf-innehall{display:none}
+  .itf-fot{flex-direction:column;align-items:stretch;gap:4px}
+  .itf-senare{justify-content:center;text-align:center}
+  .itf-vidare{width:100%;margin-left:0;justify-content:center}
+  .itf-text li{grid-template-columns:44px 1fr}
+  .itf-text li>span:last-child{grid-column:2}
+}
+@media (max-height:520px) and (orientation:landscape){
+  .itf-in{--itf-b:min(calc(100vw - 2 * var(--itf-g)), max(400px, calc((100dvh - 140px) * 16 / 9)))}
+  .itf-topp,.itf-under{display:none}
+  .itf-rub{font-size:22px;margin-bottom:10px}
+}
+@media (prefers-reduced-motion:reduce){
+  .itf,.itf *,.itf::backdrop{animation:none!important;transition:none!important}
+}
+.itf.itf-lugn,.itf.itf-lugn *{animation:none!important;transition:none!important}
 </style>
 
 <div class="proto" role="region" aria-label="Prototypinställningar">
@@ -36358,6 +36505,371 @@ if (ND){
       }, 2000);
     }
   } catch(_){}
+}
+
+/* ===================== Introfilmen (prefix itf), beställaren 2026-10-31 =====================
+   Den som går in i navet och inte har sett filmen får den före första vyn. Grinden är en <dialog> som
+   öppnas med showModal i skriptets första uppgift, före /* Start *\/-ritningen, så att navets vyer aldrig
+   syns före filmen. Beslutet kommer från servern: ND.introfilm = {visa, sedd, varjeGang, sekunder, andel,
+   film} (0270, src/lib/nav2/introfilm.ts).
+
+   - Sedd = minst 95 % FAKTISKT uppspelat (video.played), så att spolning aldrig räknas. Då skrivs
+     POST /nav2/introfilm, och "Fortsätt till navet" öppnas. "Senare" och "Fortsätt utan film" räknas inte:
+     filmen kommer igen vid nästa besök.
+   - Den som har sett filmen (sedd) kan fortsätta direkt. varjeGang (Zen) visar den vid varje nytt besök.
+     sessionStorage 'itf-flik' sätts när grinden stängs, så att en omladdning i samma flik (appens egen,
+     eller en tur till gamla Nav) inte visar den igen. En ny flik, ett nytt fönster eller en appstart gör det.
+   - Filmen är en signerad R2-adress från GET /nav2/introfilm?k=stor|liten (tre timmar). Ingen autoplay:
+     första trycket startar med ljud. Safari för inte med klicket från inloggningen, och på ett säljgolv
+     ska ingen musik dra igång av sig själv.
+   - Ingen blir utestängd. Fel i adressen, ett error på videon, ingen start på 10 s eller ett stopp i 12 s
+     ger "Fortsätt utan film". Ett fel i grindens egna hanterare stänger grinden.
+   - Djuplänken (?till=, ndskal.js): ndGa köas medan grinden är öppen och körs när den stängs.
+   - Återsyn: /nav2?intro=1 och ndGa('/nav2?intro=1') (Nytt i navet).
+   - Händelserna är en lyssnare per sort på dialogen (delegering). Videons händelser bubblar inte, så de
+     sitter på videon, som skapas en gång och aldrig ritas om. Styrraden och foten ritas med morfa (MORF).
+     Medan filmen spelar ändras bara text och style där, och dem lyssnar skalets MutationObserver inte på.
+   ===================================================================================== */
+const ITFFLIK = 'itf-flik';
+// Filmens kapitel: start i sekunder (slag × 0,5 vid 120 BPM), namn och texterna i bild (ur ~/nav2-film/src/v7).
+const ITFKAP = {'nav2-intro-v7': [
+  [0, 'Ett nav', ['Ännu ett system', 'Samla i ett nav', 'Ett nav.']],
+  [18.5, 'Din dag', ['Känner du dig oproduktiv', 'Det som brinner. Först.', 'Skriv som du tänker.', 'En sak i taget.', 'Inget skjuts upp i tysthet.', 'I tid.']],
+  [32, 'Säljet', ['Hur långt kvar till nästa bonus', '1 order kvar.', 'Nästa: 5 order kvar till nivå 10.']],
+  [40, 'Kedjan', ['Från samtal till leverans.']],
+  [48, 'Appen', ['Ett nav med ett liv i fickan.', 'Alla notiser i fickan.', 'Ett tryck. Leveransen vet.']],
+  [62, 'Möten', ['Snart dags för säljmöten', 'Tavlan flyttar sig själv.', 'Inget möte faller bort.', 'Boka åt dig eller en kollega.', 'Som Outlook. Fast i Nav.', 'Svara direkt.']],
+  [80, 'Kunskap', ['Osäker på vad du ska jobba på', 'Kartan visar var du är svag.', 'Två minuter om dagen.', 'Öva på riktiga samtal.', 'Mycket information att hålla koll på', 'Sälj. Eftersälj. Kunden.', 'Allt här.']],
+  [96, 'Laget', ['Leder du ett säljteam', 'Nav visar vem som behöver dig.', 'Och vad ni ska träna på.', 'Nästa 1:1 med ett klick.', 'Hela laget blir vassare.']],
+  [110, 'Säljtavlan', ['Laget ser tavlan.']],
+  [134, 'Allt det andra', ['Och allt det andra.', 'Allt i ett nav.']],
+  [153, 'Gjort av Nav', ['Gjort av Nav i dag.', 'Medan du sålde.']],
+  [168, 'Välkommen', ['Mer tid att sälja.', 'Välkommen till Nav 2.0.']],
+]};
+const ITF = {oppen:false, laget:'forsta', lage:'affisch', d:null, ko:null, sedd:false, skickat:false, startad:false, vill:false, hamtar:false, fornyad:false, byter:false, atervand:null, vakt:0, stopp:0, tick:-1, pek:false};
+let itfDlg = null, itfVid = null;
+// Styrraden och foten ritas om flera gånger i sekunden medan filmen spelar: morfa behåller knapparna och fokus.
+MORF.add('itfStyr'); MORF.add('itfFot');
+
+const itfTid = s => { s = Math.max(0, Math.floor(s || 0)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+const itfLugn = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch(_){ return false; } };
+const itfKap = () => ITFKAP[ITF.d && ITF.d.film] || null;
+const itfKrav = () => ITF.d.sekunder * ITF.d.andel;
+const itfKanVidare = () => ITF.laget !== 'forsta' || ITF.sedd;
+function itfSpelat(fran = 0, till = Infinity){
+  const r = itfVid && itfVid.played; let s = 0;
+  if (r) for (let i = 0; i < r.length; i++){ const a = Math.max(fran, r.start(i)), b = Math.min(till, r.end(i)); if (b > a) s += b - a; }
+  return s;
+}
+// Telefonen (kortsidan under 600 px) och spara data får 720p60, resten originalet i 1080p60.
+function itfStorlek(){
+  try { if (navigator.connection && navigator.connection.saveData) return 'liten'; } catch(_){}
+  return Math.min(screen.width || 9999, screen.height || 9999) < 600 ? 'liten' : 'stor';
+}
+function itfStatus(t){
+  const s = document.getElementById('itfStatus'); if (!s) return;
+  s.textContent = ''; setTimeout(() => { if (s.isConnected) s.textContent = t; }, 60);
+}
+
+/* ---------- Ritningen ---------- */
+const ITFIKON = {
+  spela:'<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 4.2v11.6a.6.6 0 0 0 .9.5l9.3-5.8a.6.6 0 0 0 0-1L6.9 3.7a.6.6 0 0 0-.9.5z" fill="currentColor"/></svg>',
+  paus:'<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="4" width="3.4" height="12" rx="1" fill="currentColor"/><rect x="11.6" y="4" width="3.4" height="12" rx="1" fill="currentColor"/></svg>',
+  igen:'<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 10a5.5 5.5 0 1 0 1.8-4.1M4.5 3.5v3h3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  ljud:'<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 7.5h2.8L10 4.4v11.2l-3.7-3.1H3.5z" fill="currentColor"/><path d="M13 7.2a4 4 0 0 1 0 5.6M15.2 5a7 7 0 0 1 0 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+  tyst:'<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 7.5h2.8L10 4.4v11.2l-3.7-3.1H3.5z" fill="currentColor"/><path d="M13 7.5l4 5m0-5l-4 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+  hel:'<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 7.5v-4h4M16.5 7.5v-4h-4M3.5 12.5v4h4M16.5 12.5v4h-4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  pil:'<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11m-4.5-4.5L15 10l-4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+};
+// Navmärket i stort (samma geometri som hubMark, skala 4,5): ringen, sex ekrar och spelknappen i navet.
+function itfMarke(){
+  let ekrar = '';
+  for (let k = 0; k < 6; k++){ const a = k * Math.PI / 3 + Math.PI / 6, r = n => Math.round(n * 100) / 100; ekrar += `<line x1="${r(72 + Math.cos(a) * 23.4)}" y1="${r(72 + Math.sin(a) * 23.4)}" x2="${r(72 + Math.cos(a) * 42.3)}" y2="${r(72 + Math.sin(a) * 42.3)}" style="--itf-k:${k}"/>`; }
+  return `<svg class="itf-marke" viewBox="0 0 144 144" aria-hidden="true"><circle class="itf-ring" cx="72" cy="72" r="54" pathLength="100"/><g class="itf-ekrar">${ekrar}</g><circle class="itf-nav" cx="72" cy="72" r="15"/><path class="itf-tri" d="M67 64.5v15a1 1 0 0 0 1.5.86l12.6-7.5a1 1 0 0 0 0-1.72l-12.6-7.5a1 1 0 0 0-1.5.86z"/></svg>`;
+}
+function itfStyrHtml(){
+  const v = itfVid, t = v ? v.currentTime || 0 : 0, sek = ITF.d.sekunder, kap = itfKap();
+  const spelar = ITF.lage === 'spelar' || ITF.lage === 'laddar', klar = ITF.lage === 'klar';
+  const handling = klar ? 'igen' : spelar ? 'paus' : 'spela', etikett = klar ? 'Spela igen' : spelar ? 'Pausa' : 'Spela';
+  let nu = -1; if (kap) kap.forEach((k, i) => { if (t >= k[0]) nu = i; });
+  const sett = Math.min(sek, itfSpelat());
+  const seg = kap ? kap.map((k, i) => {
+    const fran = k[0], till = i + 1 < kap.length ? kap[i + 1][0] : sek, del = Math.min(1, itfSpelat(fran, till) / (till - fran));
+    const huvud = i === nu ? `<b style="left:${((t - fran) / (till - fran) * 100).toFixed(2)}%"></b>` : '';
+    const inre = `<i style="--itf-d:${del.toFixed(4)}"></i>${huvud}`, kl = `itf-seg${i === nu ? ' itf-nu' : ''}`;
+    // Den som får fortsätta direkt kan hoppa mellan kapitlen. Första gången går det inte: bara uppspelat räknas.
+    return ITF.laget === 'forsta' ? `<span class="${kl}" style="flex-grow:${till - fran}" title="${esc(k[1])}">${inre}</span>`
+      : `<button class="${kl}" style="flex-grow:${till - fran}" data-itf="kap" data-t="${fran}" aria-label="${esc(`Hoppa till ${k[1]}, ${itfTid(fran)}`)}">${inre}</button>`;
+  }).join('') : `<span class="itf-seg itf-nu" style="flex-grow:1"><i style="--itf-d:${(sett / sek).toFixed(4)}"></i></span>`;
+  return `<div class="itf-rad">
+    <button class="itf-ikon" data-itf="${handling}" aria-label="${etikett}">${ITFIKON[handling === 'paus' ? 'paus' : handling === 'igen' ? 'igen' : 'spela']}</button>
+    <button class="itf-ikon" data-itf="ljud" aria-label="Stäng av ljudet" aria-pressed="${v && v.muted ? 'true' : 'false'}">${ITFIKON[v && v.muted ? 'tyst' : 'ljud']}</button>
+    <span class="itf-tid num" aria-hidden="true">${itfTid(t)}<span> / ${itfTid(sek)}</span></span>
+    <span class="itf-kapnamn">${nu >= 0 ? esc(kap[nu][1]) : ''}</span>
+    <button class="itf-ikon" data-itf="helskarm" aria-label="Helskärm">${ITFIKON.hel}</button>
+  </div>
+  ${ITF.laget === 'forsta'
+    ? `<div class="itf-kap" role="progressbar" aria-label="Sett av filmen" aria-valuemin="0" aria-valuemax="${sek}" aria-valuenow="${Math.floor(sett)}" aria-valuetext="${itfTid(sett)} av ${itfTid(sek)} sett">${seg}</div>`
+    : `<div class="itf-kap" role="group" aria-label="Kapitel">${seg}</div>`}`;
+}
+function itfFotHtml(){
+  const ok = itfKanVidare(), kvar = Math.max(0, itfKrav() - itfSpelat()), fyll = ok ? 1 : Math.min(1, itfSpelat() / itfKrav());
+  const vidare = ok
+    ? `<button class="itf-vidare itf-ok" data-itf="vidare"><span>Fortsätt till navet</span>${ITFIKON.pil}</button>`
+    : `<button class="itf-vidare" data-itf="vidare" aria-disabled="true" aria-describedby="itfKvar" style="--itf-fyll:${fyll.toFixed(4)}"><span>Fortsätt till navet</span><span class="itf-kvar num" id="itfKvar">${itfTid(Math.ceil(kvar))} kvar</span></button>`;
+  // Platsen står kvar tom när Senare försvinner, så att morfa behåller knappen bredvid (och fokus på den).
+  const senare = ok ? '<p class="itf-senare" hidden></p>' : `<p class="itf-senare"><button data-itf="senare">Senare</button><span>Filmen kommer igen nästa gång du går in.</span></p>`;
+  return senare + vidare;
+}
+function itfRita(){
+  if (!itfDlg) return;
+  const scen = itfDlg.querySelector('.itf-scen');
+  if (scen.dataset.lage !== ITF.lage) scen.dataset.lage = ITF.lage;
+  const styr = document.getElementById('itfStyr'), fot = document.getElementById('itfFot');
+  if (styr) styr.innerHTML = itfStyrHtml();
+  if (fot) fot.innerHTML = itfFotHtml();
+}
+
+/* ---------- Grinden ---------- */
+function itfOppna(laget, d){
+  if (ITF.oppen || !d || !(d.sekunder > 0) || !(d.andel > 0)) return;
+  const dlg = document.createElement('dialog');
+  dlg.className = 'itf';
+  dlg.tabIndex = -1;
+  dlg.setAttribute('aria-labelledby', 'itfRub');
+  dlg.setAttribute('aria-describedby', 'itfOm');
+  const kap = ITFKAP[d.film] || null, sub = laget === 'forsta' ? 'Se filmen innan du börjar. Den har ljud.' : d.sedd ? 'Du har sett filmen. Fortsätt när du vill.' : 'Fortsätt när du vill.';
+  dlg.innerHTML = `<div class="itf-in">
+    <p class="itf-topp">${hubMark(22)}<span>Nav 2.0</span><span class="itf-pkt" aria-hidden="true"></span><span>Introfilm</span><span class="itf-pkt" aria-hidden="true"></span><span class="num">${itfTid(d.sekunder)}</span></p>
+    <h1 class="itf-rub" id="itfRub"><span>Vi leder dig mot din vision</span></h1>
+    <p class="itf-under">${sub}</p>
+    <p class="sr" id="itfOm">Introfilmen om Nav 2.0, ${Math.floor(d.sekunder / 60)} minuter och ${d.sekunder % 60} sekunder. Musik och text i bild, ingen berättarröst. Texterna finns under Filmen i text.</p>
+    <div class="itf-scen" data-lage="affisch">
+      <video class="itf-vid" data-itf="vaxla" playsinline preload="metadata" disablepictureinpicture disableremoteplayback controlslist="nodownload noplaybackrate noremoteplayback" tabindex="-1" aria-hidden="true"></video>
+      <button class="itf-affisch" data-itf="spela" aria-label="Spela filmen, med ljud">
+        <span class="itf-play">${itfMarke()}</span>
+        <span class="itf-affisch-t"><b>Spela filmen</b><span class="num">${itfTid(d.sekunder)} · med ljud</span><span class="itf-laddtext">Startar filmen …</span></span>
+        ${kap ? `<span class="itf-innehall">${kap.slice(1, -1).map(k => `<span>${esc(k[1])}</span>`).join('')}</span>` : ''}
+      </button>
+      <div class="itf-felruta">
+        <p><b>Filmen går inte att spela just nu.</b><span>Du får se den nästa gång.</span></p>
+        <p class="itf-felknappar"><button class="itf-fylld" data-itf="utan">Fortsätt utan film</button><button class="itf-lank" data-itf="forsok">Försök igen</button></p>
+      </div>
+    </div>
+    <div class="itf-styr" id="itfStyr"></div>
+    <div class="itf-fot" id="itfFot"></div>
+    ${kap ? `<details class="itf-text"><summary>Filmen i text</summary><ol>${kap.map(k => `<li><span class="num">${itfTid(k[0])}</span><b>${esc(k[1])}</b><span>${k[2].map(esc).join(' · ')}</span></li>`).join('')}</ol></details>` : ''}
+    <p class="sr" role="status" id="itfStatus"></p>
+  </div>`;
+  document.body.appendChild(dlg);
+  itfDlg = dlg; itfVid = dlg.querySelector('.itf-vid');
+  Object.assign(ITF, {oppen:true, pek:false, laget, lage:'affisch', d, ko:null, sedd:false, skickat:false, startad:false, vill:false, hamtar:false, fornyad:false, byter:false, atervand:null, tick:-1});
+  dlg.addEventListener('click', itfKlick);
+  dlg.addEventListener('keydown', itfTangent);
+  // Esc stänger inte grinden första gången (då är "Senare" vägen förbi); den som får fortsätta direkt kommer vidare.
+  dlg.addEventListener('cancel', e => { e.preventDefault(); if (itfKanVidare()) itfStang(); });
+  // Stängs dialogen ändå (Chrome stänger efter två Esc utan tryck emellan) städas allt som efter "Senare".
+  dlg.addEventListener('close', () => { if (ITF.oppen && itfDlg === dlg) itfStang(true); });
+  // Filmen ska inte kunna sparas med högerklick (musiken är inte licensierad för spridning).
+  dlg.addEventListener('contextmenu', e => { if (e.target.closest && e.target.closest('.itf-scen')) e.preventDefault(); });
+  itfKoppla(itfVid);
+  try { dlg.showModal(); }
+  catch(_){ dlg.remove(); itfDlg = itfVid = null; ITF.oppen = false; return; }
+  document.documentElement.classList.add('itf-oppen');
+  if (itfLugn()) dlg.classList.add('itf-lugn');
+  itfRita();
+  const p = dlg.querySelector('.itf-affisch'); if (p) try { p.focus({preventScroll:true}); } catch(_){}
+  itfHamta();
+}
+function itfStang(direkt){
+  if (!ITF.oppen) return;
+  ITF.oppen = false;
+  clearTimeout(ITF.vakt); clearTimeout(ITF.stopp);
+  try { sessionStorage.setItem(ITFFLIK, '1'); } catch(_){}
+  const dlg = itfDlg, v = itfVid;
+  // Hämtningen slutar direkt: en film som stängts ska inte ladda vidare i bakgrunden.
+  ITF.byter = true; try { v.pause(); v.removeAttribute('src'); v.load(); } catch(_){}
+  let gjort = false;
+  const klar = () => {
+    if (gjort) return; gjort = true;
+    try { if (dlg.open) dlg.close(); } catch(_){}
+    dlg.remove(); itfDlg = itfVid = null;
+    document.documentElement.classList.remove('itf-oppen');
+    const m = document.getElementById('main'); if (m) try { m.focus({preventScroll:true}); } catch(_){}
+    const ko = ITF.ko; ITF.ko = null;
+    if (ko) setTimeout(() => ndGa(ko), 0);
+  };
+  if (direkt === true || itfLugn()) return klar();
+  dlg.classList.add('itf-ut');
+  dlg.addEventListener('animationend', klar, {once:true});
+  setTimeout(klar, 700);
+}
+// Ett fel i grindens egna hanterare får aldrig låsa ute någon.
+function itfNod(fel){ try { console.error('introfilmen', fel); } catch(_){} itfStang(true); }
+
+/* ---------- Filmen ---------- */
+async function itfHamta(){
+  if (ITF.hamtar) return;
+  ITF.hamtar = true;
+  const r = await ndLas('/nav2/introfilm?k=' + itfStorlek(), {tid:10000});
+  ITF.hamtar = false;
+  if (!ITF.oppen) return;
+  try {
+    if (!r.ok || !r.data || typeof r.data.url !== 'string' || !/^https:\/\//.test(r.data.url)) return itfFel('Adressen till filmen gick inte att hämta.');
+    ITF.byter = false;
+    itfVid.src = r.data.url;
+    if (ITF.vill){ ITF.vill = false; itfSpela(); }
+  } catch(fel){ itfNod(fel); }
+}
+function itfSpela(){
+  const v = itfVid; if (!v) return;
+  if (ITF.lage === 'fel') return itfForsok();
+  if (!v.getAttribute('src')){ ITF.vill = true; ITF.lage = 'laddar'; itfRita(); itfHamta(); return; }
+  if (v.ended) v.currentTime = 0;
+  if (!ITF.startad){
+    ITF.lage = 'laddar'; itfRita();
+    clearTimeout(ITF.vakt); ITF.vakt = setTimeout(() => { if (ITF.oppen && !ITF.startad) itfFel('Filmen startade inte på tio sekunder.'); }, 10000);
+  }
+  let p; try { p = v.play(); } catch(_){ return itfFel('Webbläsaren kunde inte starta filmen.'); }
+  if (p && p.catch) p.catch(e => {
+    if (!ITF.oppen) return;
+    if (e && e.name === 'NotAllowedError'){ clearTimeout(ITF.vakt); ITF.lage = ITF.startad ? 'paus' : 'affisch'; itfRita(); itfStatus('Tryck på Spela för att starta filmen.'); }
+    else if (!(e && e.name === 'AbortError')) itfFel('Webbläsaren kunde inte starta filmen.');
+  });
+}
+function itfFel(varfor){
+  if (!ITF.oppen) return;
+  clearTimeout(ITF.vakt); clearTimeout(ITF.stopp);
+  try { itfVid.pause(); } catch(_){}
+  try { console.warn('introfilmen:', varfor); } catch(_){}
+  ITF.lage = 'fel'; ITF.vill = false; itfRita();
+  itfStatus('Filmen går inte att spela just nu. Fortsätt utan film, så får du se den nästa gång.');
+  const b = itfDlg && itfDlg.querySelector('[data-itf="utan"]'); if (b) try { b.focus({preventScroll:true}); } catch(_){}
+}
+function itfForsok(){
+  const v = itfVid; if (!v) return;
+  ITF.atervand = ITF.startad ? v.currentTime : null;
+  ITF.lage = 'laddar'; ITF.startad = false; ITF.fornyad = false; ITF.vill = true;
+  ITF.byter = true; try { v.removeAttribute('src'); v.load(); } catch(_){}
+  itfRita(); itfHamta();
+}
+// Videons händelser bubblar inte: de kopplas här, en gång, på videon som aldrig ritas om.
+function itfKoppla(v){
+  const vakta = fn => function(e){ if (!ITF.oppen || v !== itfVid) return; try { fn(e); } catch(fel){ itfNod(fel); } };
+  v.addEventListener('loadedmetadata', vakta(() => { if (ITF.atervand != null){ try { v.currentTime = ITF.atervand; } catch(_){} ITF.atervand = null; } }));
+  v.addEventListener('playing', vakta(() => {
+    clearTimeout(ITF.vakt); clearTimeout(ITF.stopp); ITF.startad = true; ITF.lage = 'spelar'; itfRita();
+    // Affischen döljs: fokus följer med till Pausa, annars hamnar det på body och tangenterna når inte grinden.
+    const a = document.activeElement;
+    if (!a || a === document.body || a === itfDlg || itfDlg.querySelector('.itf-affisch').contains(a)){ const p = ITF.pek ? itfDlg : itfDlg.querySelector('#itfStyr [data-itf="paus"]'); if (p) try { p.focus({preventScroll:true}); } catch(_){} }
+  }));
+  v.addEventListener('pause', vakta(() => { if (!v.ended && ITF.lage === 'spelar'){ ITF.lage = 'paus'; itfRita(); } }));
+  const stopp = vakta(() => { if (v.paused) return; clearTimeout(ITF.stopp); ITF.stopp = setTimeout(() => { if (ITF.oppen && !v.paused && v.readyState < 3) itfFel('Filmen stod still i tolv sekunder.'); }, 12000); });
+  v.addEventListener('waiting', stopp); v.addEventListener('stalled', stopp);
+  v.addEventListener('timeupdate', vakta(itfTick));
+  v.addEventListener('ended', vakta(() => { itfTick(); ITF.lage = 'klar'; itfRita(); if (itfKanVidare()){ const b = itfDlg.querySelector('[data-itf="vidare"]'); if (b && (document.activeElement === document.body || itfDlg.contains(document.activeElement))) try { b.focus({preventScroll:true}); } catch(_){} } }));
+  v.addEventListener('webkitendfullscreen', vakta(itfTick));
+  v.addEventListener('error', vakta(() => {
+    if (ITF.byter) return;
+    // En adress som gått ut mitt i (efter tre timmar i paus) hämtas om en gång, och filmen fortsätter där den var.
+    if (ITF.startad && !ITF.fornyad){ ITF.fornyad = true; ITF.atervand = v.currentTime; ITF.vill = !v.paused || ITF.lage === 'spelar'; ITF.byter = true; itfHamta(); return; }
+    itfFel('Filmen gick inte att läsa (' + ((v.error && v.error.code) || '?') + ').');
+  }));
+}
+function itfTick(){
+  const v = itfVid; if (!v) return;
+  clearTimeout(ITF.stopp);
+  const s = itfSpelat();
+  if (!ITF.sedd && s >= itfKrav()) itfSedd(s);
+  const t = Math.floor(v.currentTime * 4);
+  if (t !== ITF.tick){ ITF.tick = t; itfRita(); }
+}
+function itfSedd(s){
+  ITF.sedd = true;
+  itfRita();
+  itfStatus('Filmen är sedd. Du kan fortsätta till navet.');
+  if (ITF.skickat) return;
+  ITF.skickat = true;
+  ndSkriv('/nav2/introfilm', {handling:'sedd', spelat:Math.round(s * 10) / 10}).then(r => { if (!r.ok) try { console.warn('introfilmen: sedd sparades inte', r.status, r.fel); } catch(_){} });
+}
+// Helskärmen får aldrig fälla grinden: äldre Safari ger inget promise, och iPhone har bara webkitEnterFullscreen.
+function itfHelskarm(){
+  const v = itfVid; if (!v) return;
+  const ios = () => { try { if (v.webkitEnterFullscreen) v.webkitEnterFullscreen(); } catch(_){} };
+  try {
+    if (document.fullscreenElement){ const p = document.exitFullscreen && document.exitFullscreen(); if (p && p.catch) p.catch(() => {}); return; }
+    if (v.requestFullscreen){ const p = v.requestFullscreen(); if (p && p.catch) p.catch(ios); }
+    else ios();
+  } catch(_){ ios(); }
+}
+
+/* ---------- Händelserna (delegering på dialogen) ---------- */
+function itfKlick(e){
+  const el = e.target.closest && e.target.closest('[data-itf]');
+  if (!el || !itfDlg || !itfDlg.contains(el)) return;
+  const h = el.dataset.itf, v = itfVid;
+  // Ett tryck med mus eller finger har detail ≥ 1, ett tangenttryck 0. Styr vart fokus går när affischen döljs.
+  ITF.pek = e.detail > 0;
+  try {
+    if (h === 'spela') itfSpela();
+    else if (h === 'paus') v.pause();
+    else if (h === 'vaxla'){ if (ITF.lage === 'spelar') v.pause(); else if (ITF.lage === 'paus') itfSpela(); }
+    else if (h === 'igen'){ v.currentTime = 0; itfSpela(); }
+    else if (h === 'ljud'){ v.muted = !v.muted; itfRita(); }
+    else if (h === 'helskarm') itfHelskarm();
+    else if (h === 'kap'){ v.currentTime = +el.dataset.t || 0; if (v.paused) itfSpela(); else itfRita(); }
+    else if (h === 'forsok') itfForsok();
+    else if (h === 'senare' || h === 'utan') itfStang();
+    else if (h === 'vidare'){
+      if (itfKanVidare()) return itfStang();
+      itfStatus(`Fortsätt blir valbar när filmen är sedd. ${itfTid(Math.ceil(Math.max(0, itfKrav() - itfSpelat())))} kvar.`);
+      if (v.paused && ITF.lage !== 'fel'){ const p = itfDlg.querySelector(ITF.lage === 'affisch' ? '.itf-affisch' : '#itfStyr [data-itf="spela"]'); if (p) p.focus(); }
+    }
+  } catch(fel){ itfNod(fel); }
+}
+function itfTangent(e){
+  // Navets egna kortkommandon (paletten, Esc i panelerna) ska inte se tangenter som trycks i grinden.
+  e.stopPropagation();
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const k = e.key, iKnapp = e.target.closest && e.target.closest('button,summary,a');
+  try {
+    if ((k === ' ' && !iKnapp) || k === 'k' || k === 'K'){ e.preventDefault(); if (ITF.lage === 'spelar' || ITF.lage === 'laddar') itfVid.pause(); else if (ITF.lage === 'klar'){ itfVid.currentTime = 0; itfSpela(); } else itfSpela(); }
+    else if (k === 'm' || k === 'M'){ itfVid.muted = !itfVid.muted; itfRita(); }
+    else if (k === 'f' || k === 'F') itfHelskarm();
+    else if ((k === 'ArrowLeft' || k === 'ArrowRight') && ITF.laget !== 'forsta' && !iKnapp){ e.preventDefault(); itfVid.currentTime = Math.max(0, itfVid.currentTime + (k === 'ArrowLeft' ? -5 : 5)); itfRita(); }
+  } catch(fel){ itfNod(fel); }
+}
+// Helskärm på datorn: webbläsarens egna kontroller medan videon fyller skärmen (den har inga andra där).
+document.addEventListener('fullscreenchange', () => { if (itfVid) itfVid.controls = document.fullscreenElement === itfVid; });
+// Står fokus utanför grinden (body efter en helskärm eller ett klick på en tom yta) tar grinden ändå tangenterna,
+// och navet bakom (paletten på /, Esc i panelerna) får dem inte.
+document.addEventListener('keydown', e => { if (ITF.oppen && itfDlg && !itfDlg.contains(e.target)){ e.stopImmediatePropagation(); itfTangent(e); } }, true);
+
+/* ---------- Djuplänken och återsynen ---------- */
+if (typeof ndGa === 'function'){
+  const _itfGa = ndGa;
+  ndGa = function(h){
+    if (/^\/nav2\?intro=1(&|#|$)/.test(String(h || ''))){ const d = ND && ND.introfilm; if (d && !ITF.oppen) itfOppna(d.visa && !d.sedd ? 'forsta' : 'igen', d); return; }
+    if (ITF.oppen){ ITF.ko = h; return; }
+    return _itfGa(h);
+  };
+}
+
+/* ---------- Start: före första ritningen ---------- */
+// ?intro=1 läses ur navigeringsposten: ndapp.js skriver om adressen till /nav2 innan den här modulen körs.
+// Posten bär adressen som laddades och ändras inte av replaceState, så en omladdning visar inte filmen igen.
+function itfStartadress(){
+  try { const n = performance.getEntriesByType('navigation')[0]; if (n && n.name) return new URL(n.name); } catch(_){}
+  return new URL(location.href);
+}
+if (ND && ND.introfilm){
+  try {
+    const d = ND.introfilm, igen = itfStartadress().searchParams.get('intro') === '1', q = new URLSearchParams(location.search);
+    if (q.has('intro')){ q.delete('intro'); try { history.replaceState(history.state, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash); } catch(_){} }
+    let flik = false; try { flik = sessionStorage.getItem(ITFFLIK) === '1'; } catch(_){}
+    if (igen) itfOppna(d.visa && !d.sedd ? 'forsta' : 'igen', d);
+    else if (d.visa && !flik) itfOppna(d.sedd ? 'igen' : 'forsta', d);
+  } catch(fel){ itfNod(fel); }
 }
 
 /* Start */

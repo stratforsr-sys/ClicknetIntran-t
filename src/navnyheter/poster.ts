@@ -14,6 +14,24 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "introfilmen",
+    rubrik: "Introfilmen: Nav 2.0 på tre minuter",
+    ingress: "Första gången du går in i Nav visas en film om vad Nav gör åt dig. Här kan du se den igen.",
+    text: `Filmen visar Nav 2.0 på tre minuter: din dag, säljet, appen, möten, kunskap, laget och
+säljtavlan. Den har ljud, så sätt på högtalaren eller hörlurarna.
+
+Första gången du går in i Nav visas filmen före startsidan. När du har sett den trycker du
+**Fortsätt till navet**, och sedan visas den inte igen, varken på datorn, i telefonen eller i appen.
+Har du inte tid trycker du **Senare**. Då kommer filmen nästa gång du går in.
+
+Under filmen finns **Filmen i text** med allt som står i bild.
+
+Vill du se filmen igen trycker du på den här nyheten.`,
+    datum: "2026-10-31",
+    roller: [],
+    href: "/nav2?intro=1",
+  },
+  {
     slug: "appen-finslipad-for-telefonen",
     rubrik: "Appen är finslipad för telefonen",
     ingress: "I appen zoomar fälten inte in längre, små knappar är lättare att träffa och Mer går först till vyerna.",
