@@ -40,6 +40,7 @@ export const ORDNING: Record<string, readonly string[]> = {
   guide_progress: ["employee_id", "guide_slug"],
   hr_case_confirmation: ["case_id"],
   hr_case_read: ["case_id", "employee_id"],
+  introfilm: ["employee_id"],
   late_arrival_month: ["employee_id", "month"],
   learning_note: ["employee_id", "key"],
   lecture_followup: ["lecture_id", "employee_id", "step"],
