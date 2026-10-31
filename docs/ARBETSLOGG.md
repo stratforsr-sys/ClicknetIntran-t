@@ -5,6 +5,47 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-01 natt · Möten-statistiken, varv 2: teamledaren ser sitt team, sju småfel (direkt på `main`, 0264 KÖRD)
+
+**Beställarens svar 2026-10-31:** "Ja bara sitt eget team" (en teamledare ser bara sitt eget team i
+statistiken) och "fixa allt det här också" (de sju parkerade småfelen, läsprovet med möten mot
+produktionen och säljarvyn i produktionen).
+
+**Kretsen (0264, KÖRD 2026-11-01 00:14).** `public.mote_statkrets()` ger vems tal den inloggade får se:
+`null` = alla (sales_manager, ceo, admin), team_lead sig själv plus dem hen leder
+(`leads_employee()`, alltså `manager_id` eller `team.lead_id`, samma definition som `phone_call_read`),
+alla andra bara sig själva. Den inloggade tas ur `current_employee_id()`, aldrig ur ett argument.
+`mote_samtal_vecka` (0263) har fått samma krets, med oförändrad signatur. Rutten (`case "samtal"`) och
+`motesstat.ts` frågar samma funktion. Ett fel stänger alltid, det öppnar aldrig. `null` godtas som
+"alla" bara för de tre chefsrollerna (`samtalTillatet`, `kretsFor`). För en ren teamledare begränsas
+möten, kedjor, personer, bolag och raderna bakom talen till teamet. Teamets block (Offerter, Dagar,
+Källa) räknar bara rader som teamet äger, med samma fält som personraderna i `underlag()`. A:s tavla
+ändras inte: där ser en teamledare fortfarande alla möten.
+
+**Småfelen.**
+- Ett omöjligt datum ger 400, inte 500.
+- Fönstret slutar vid nästa dags 00:00 svensk tid, som 0263.
+- Samtalslistan tar bara samtal som fanns när talen lästes (`las`/`fore` mot `created_at`).
+- Ett kast i bygget ger tomma tal i stället för en trasig startsida.
+- Ett läsfel eller taket ger raden "Talen kan vara ofullständiga".
+- Källor där allt är 0 visas inte.
+- En stängd samtalslista avbryter sin hämtning.
+- `fore` kräver en tidszon.
+
+**Prov:**
+- `motesstat.mjs`: 163.
+- `motesstat-db.mjs`: 41, mot den körda 0264.
+- `moten.mjs`: 195.
+- `navnyheter.mjs`: 532.
+- `behorighet-b13`, `guider`, `nav2-*`: gröna.
+- `rattigheter-db.mjs` mot 0264: inga nya rättigheter.
+- B:s prov utanför repot:
+  - `byggMotesstat` med stubbar: 34. Där provas felvägarna.
+  - Läsprovet med påhittade möten mot produktionsdatabasen i en transaktion som rullas tillbaka: 58.
+  - Klienten i Chrome i 1280 och 390 px: 0 fel.
+
+---
+
 ## 2026-10-31 natt · Möten får spara (direkt på `main`)
 
 **Beställarens ja 2026-10-31** ("1. Ja" på frågan om Möten ska få spara). `SKRIVLAGE.moten = true` i

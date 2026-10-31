@@ -7736,6 +7736,7 @@ button.ms-t[aria-expanded="true"] .ms-bar{background:var(--surface)}
 .ms-t .ms-pil{min-height:14px}
 .ms-fot{margin:10px 0 0;font-size:12px;color:var(--ink-3)}
 .ms-hem .chead{margin-bottom:12px}
+.ms-team{margin-left:8px;font-size:12px;font-weight:400;color:var(--ink-3)}
 .ms-hem .chead .meta{margin-left:auto}
 
 /* Listan under talet */
@@ -34807,7 +34808,8 @@ const MSUTFALL = {hallet: ['Hållet', 'ok'], uteblev: ['Uteblev', 'danger'], avb
 const MSART = {ny: '', ombokning: 'Ombokning', uppfoljning: 'Uppföljningsmöte'};
 const MSAVSLUT = {affar: ['Affär', 'ok'], nej: ['Nej', 'neutral'], avbokat: ['Avbokat', 'neutral']};
 const MSKOLUMN = {bokat: 'Bokat', bekraftat: 'Bekräftat', utfall_saknas: 'Utfall saknas', folj_upp: 'Följ upp', tyst: 'Tyst'};
-const MS = {open: null, tok: 0, sam: null};   // open: {yta:'hem'|'chef', person, tal, src}; sam: {laddar} | {fel} | {samtal, kapat}
+const MS = {open: null, tok: 0, sam: null, ctl: null};   // open: {yta:'hem'|'chef', person, tal, src}; sam: {laddar} | {fel} | {samtal, kapat}; ctl: AbortController för samtalsanropet som pågår
+const MSOFULL = 'Talen kan vara ofullständiga: allt gick inte att läsa.';   // D.ofullstandig (taket nått, 10 000 rader eller 1000 samtal, eller en läsning som gav fel)
 
 /* ---------- Format ---------- */
 const msProc = a => a === null || a === undefined ? '–' : Math.round(a * 100) + ' %';
@@ -34940,6 +34942,7 @@ function ndMsHemRad(){
   return `<section class="card ms-hem" id="msHem" aria-label="Mötesstatistik">
     <div class="chead"><h2>Min statistik</h2><span class="meta num">${esc(per.kort)}</span></div>
     <div class="ms-grid">${rutor}</div>
+    ${D.ofullstandig ? `<p class="ms-fot" data-ms-ofull>${MSOFULL}</p>` : ''}
     <p class="ms-fot">Pilen jämför med förra veckan. Ett tal du trycker på visar raderna bakom det.</p></section>`;
 }
 
@@ -34995,7 +34998,8 @@ function ndMsChef(el){
   const o = MS.open && MS.open.yta === 'chef' && !MS.open.src ? MS.open : null;
   const rader = C.personer.map(p => `<tr data-p="${esc(p.id)}"><th scope="row">${esc(p.namn)}</th>${KOL.map(([t]) => msCell(p, t)).join('')}</tr>` +
     (o && o.person === p.id ? `<tr class="ms-prad"><td colspan="${KOL.length + 1}">${msPanel({yta: 'chef', person: p.id, tal: o.tal, vecka: 'denna'})}</td></tr>` : '')).join('');
-  el.innerHTML = `<div class="chead"><h2>Statistik</h2><span class="meta num">${esc(per.lang)}</span></div>
+  el.innerHTML = `<div class="chead"><h2>Statistik${C.krets === 'team' ? '<span class="ms-team">Ditt team</span>' : ''}</h2><span class="meta num">${esc(per.lang)}</span></div>
+    ${D.ofullstandig ? `<p class="ms-fot" data-ms-ofull>${MSOFULL}</p>` : ''}
     <div class="ms-tabell" tabindex="0" role="region" aria-label="Tal per person, rullas sidledes"><table class="ms-tab">
       <caption class="mo-dold">Mötesstatistik per person, denna vecka mot förra veckan</caption>
       <thead><tr><th scope="col">Person</th>${KOL.map(([, lang, kort]) => `<th scope="col" title="${esc(lang)}">${kort}</th>`).join('')}</tr></thead>
@@ -35021,28 +35025,37 @@ async function msHamtaSamtal(person, tok){
   let s;
   if (!per) s = {fel: 'Veckans datum saknas i svaret.'};
   else {
-    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), MS.grans);
+    msAvbryt();
+    // Samma controller avbryter både tidsgränsen och stängningen av listan (msAvbryt); bara tidsgränsen ger ett fel.
+    const ctl = MS.ctl = new AbortController();
+    let tidsut = false;
+    const t = setTimeout(() => { tidsut = true; ctl.abort(); }, MS.grans);
     try {
-      const r = await fetch('/nav2/moten', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({handling: 'samtal', person, fran: per.fran, till: per.till}), signal: ctl.signal});
+      const r = await fetch('/nav2/moten', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({handling: 'samtal', person, fran: per.fran, till: per.till, fore: D.las || undefined}), signal: ctl.signal});
       let b = null; try { b = await r.json(); } catch (e) { if (e && e.name === 'AbortError') throw e; }
       s = r.ok && !b ? {fel: 'Svaret gick inte att läsa.'}
         : r.ok ? {samtal: Array.isArray(b && b.samtal) ? b.samtal : [], kapat: !!(b && b.kapat)}
         : r.status === 401 ? {fel: 'Din inloggning har gått ut. Ladda om sidan och logga in igen.'}
         : {fel: (b && b.fel) || `Servern svarade ${r.status}.`};
-    } catch (e) { s = {fel: e && e.name === 'AbortError' ? `Servern svarade inte inom ${Math.round(MS.grans / 1000)} sekunder.` : 'Ingen kontakt med servern.'}; }
-    finally { clearTimeout(t); }
+    } catch (e) {
+      if (e && e.name === 'AbortError' && !tidsut) return;   // avbrutet av stängningen: inget fel att rita
+      s = {fel: e && e.name === 'AbortError' ? `Servern svarade inte inom ${Math.round(MS.grans / 1000)} sekunder.` : 'Ingen kontakt med servern.'};
+    }
+    finally { clearTimeout(t); if (MS.ctl === ctl) MS.ctl = null; }
   }
   if (tok !== MS.tok) return;   // listan har stängts eller bytts under tiden
   MS.sam = s; msRita();
 }
+// Avbryter samtalsanropet som pågår (listan stängs eller ett annat tal öppnas), så att ett sent svar inte ritar något.
+function msAvbryt(){ if (MS.ctl){ const c = MS.ctl; MS.ctl = null; c.abort(); } }
 // Stänger listan och ger fokus tillbaka till talet som öppnade den (även efter ✕ och Escape).
 function msStang(){
-  const o = MS.open; MS.open = null; MS.sam = null; MS.tok++;
+  const o = MS.open; MS.open = null; MS.sam = null; MS.tok++; msAvbryt();
   msRita(o ? [`${o.yta}|${o.person}|${o.tal}`, o.src || ''] : null);
 }
 function msOppna(yta, person, tal, src){
   if (msOppen(yta, person, tal, src)) return msStang();
-  MS.open = {yta, person, tal, src: src || ''}; MS.tok++; MS.sam = null;
+  MS.open = {yta, person, tal, src: src || ''}; MS.tok++; MS.sam = null; msAvbryt();
   if (tal === 'samtal'){ MS.sam = {laddar: true}; const tok = MS.tok; msRita(); msHamtaSamtal(person, tok); }
   else msRita();
 }
@@ -35051,7 +35064,7 @@ document.addEventListener('click', e => {
   const x = e.target.closest('[data-ms-x]');
   if (x){ e.preventDefault(); msStang(); return; }
   const igen = e.target.closest('[data-ms-igen]');
-  if (igen && MS.open){ e.preventDefault(); const o = MS.open; MS.sam = {laddar: true}; MS.tok++; const tok = MS.tok; msRita(); msHamtaSamtal(o.person, tok); return; }
+  if (igen && MS.open){ e.preventDefault(); const o = MS.open; MS.sam = {laddar: true}; MS.tok++; msAvbryt(); const tok = MS.tok; msRita(); msHamtaSamtal(o.person, tok); return; }
   const b = e.target.closest('[data-ms]'); if (!b) return;
   e.preventDefault();
   const [yta, person, tal] = b.dataset.ms.split('|');

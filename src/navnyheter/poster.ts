@@ -52,7 +52,7 @@ Tryck på ett tal, så ser du mötena eller samtalen bakom det.
 
 Du ser bara dina egna tal. Chefen trycker **Statistik** i Möten och ser hela
 lagets tabell, offerterna, hur lång tid det gick mellan bokning och möte, och
-vilka källor som ger affärer.`,
+vilka källor som ger affärer. En teamledare ser samma sak för sitt eget team.`,
     datum: "2026-10-31",
     roller: [],
   },

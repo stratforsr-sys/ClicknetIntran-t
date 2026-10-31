@@ -7,6 +7,7 @@
  *   TZ=UTC node --experimental-strip-types tests/motesstat.mjs
  */
 import { vecka, veckotal, offerter, dagarTillMote, perKalla, bakom } from "../src/lib/nav2/motesstatforma.ts";
+import * as forma from "../src/lib/nav2/motesstatforma.ts";
 
 let fel = 0;
 const ok = (namn, villkor) => {
@@ -178,6 +179,190 @@ lika("hallna pekar på nämnaren, alltså även uteblivna och avbokade", bakom("
 lika("affarer pekar på kedje-id", bakom("affarer", S2, V, moten, kedjor).sort(), ["k1", "k2", "k3"]);
 lika("utanUtfall med nu 08:00Z: bara m6 är över (m8 + 30 min ligger efter nu)", bakom("utanUtfall", S2, V, moten, kedjor, NU), ["m6"]);
 lika("utanUtfall med senare nu: m8 hinner bli över", bakom("utanUtfall", S2, V, moten, kedjor, new Date("2026-11-02T08:11:00Z")).sort(), ["m6", "m8"]);
+
+console.log("\n\x1b[1mperKalla: inga nollrader (S6)\x1b[0m");
+{
+  // Ett gammalt öppet möte utanför veckan: källan förekommer men har varken bokade, hållna eller affärer i veckan.
+  const gammalt = [...moten, m("m90", "k90", { bokatNar: "2026-09-01T10:00:00Z", moteTid: "2026-09-03T10:00:00Z", kalla: "gammal" })];
+  const rader = perKalla(gammalt, kedjor, V);
+  ok("källan 'gammal' har bara nollor och är borta", !rader.some((r) => r.kalla === "gammal"));
+  ok("ingen rad har bokade, hållna och affärer lika med 0", rader.every((r) => r.bokade + r.hallna + r.affarer > 0));
+  lika("övriga rader är oförändrade", rader.map((r) => r.kalla), ["dialer", "hemsida", "tips"]);
+}
+
+console.log("\n\x1b[1minomKrets: teamledarens krets (K2)\x1b[0m");
+{
+  const T1 = "t1", T2 = "t2", UTE = "ute", UTE2 = "ute2";
+  const krets = [T1, T2];
+  const mm = [
+    m("a1", "ka", { bokatAv: T1, hallsAv: T1 }),
+    m("a2", "kb", { bokatAv: T1, hallsAv: UTE }), // bokat i teamet, hållet utanför: står kvar
+    m("a3", "kc", { bokatAv: UTE, hallsAv: T2 }), // hållet i teamet: står kvar
+    m("a4", "kd", { bokatAv: UTE, hallsAv: UTE2 }), // helt utanför: faller bort
+    m("a5", "ke", { bokatAv: UTE2, hallsAv: UTE }), // helt utanför, kedjan har ingen i teamet: faller bort
+  ];
+  const kk = [
+    k("ka", { forstaBokatAv: T1, forstaHallnaHallsAv: T1 }),
+    k("kb", { forstaBokatAv: T1, forstaHallnaHallsAv: UTE }),
+    k("kc", { forstaBokatAv: UTE, forstaHallnaHallsAv: T2 }),
+    k("kd", { forstaBokatAv: UTE, forstaHallnaHallsAv: UTE2 }),
+    k("ke", { forstaBokatAv: UTE2, forstaHallnaHallsAv: UTE }),
+    k("kf", { forstaBokatAv: UTE, forstaHallnaHallsAv: UTE2 }), // inget möte och ingen i teamet: faller bort
+    k("kg", { forstaBokatAv: T2, forstaHallnaHallsAv: UTE }), // inget möte i listan men teamets bokning: står kvar
+  ];
+  ok("inomKrets finns som export", typeof forma.inomKrets === "function");
+  const r = forma.inomKrets?.(mm, kk, krets) ?? { moten: [], kedjor: [] };
+  lika("möten: bokat ELLER hållet i teamet står kvar", r.moten.map((x) => x.id), ["a1", "a2", "a3"]);
+  lika("kedjor: ett behållet möte pekar på dem, eller en i teamet är första bokare/hållare", r.kedjor.map((x) => x.id), ["ka", "kb", "kc", "kg"]);
+  ok("säljare i ett annat team faller bort ur möten", !r.moten.some((x) => x.bokatAv === UTE2 || x.hallsAv === UTE2));
+  const alla = forma.inomKrets?.(mm, kk, null) ?? { moten: [], kedjor: [] };
+  ok("krets null (chef) släpper igenom allt", alla.moten.length === 5 && alla.kedjor.length === 7);
+  const tom = forma.inomKrets?.(mm, kk, []) ?? { moten: [1], kedjor: [1] };
+  ok("tom krets ger inget", tom.moten.length === 0 && tom.kedjor.length === 0);
+  // Talen: teamets person får samma tal som utan begränsning, den utanför försvinner ur underlaget.
+  const tFore = veckotal(T1, V, mm, kk, 0, NU), tEfter = veckotal(T1, V, r.moten, r.kedjor, 0, NU);
+  lika("T1:s tal ändras inte av begränsningen", tEfter, tFore);
+  ok("UTE2 har inga bokade kvar efter begränsningen", veckotal(UTE2, V, r.moten, r.kedjor, 0, NU).bokade === 0);
+}
+
+console.log("\n\x1b[1mI2: teamets block räknar bara teamets rader\x1b[0m");
+{
+  const T1 = "t1", T2 = "t2", UTE = "ute", UTE2 = "ute2";
+  const krets = [T1, T2];
+  const tid = (dag) => `2026-10-${dag}T10:00:00Z`;
+  const mm = [
+    // Teamets egna: T1 bokar (hemsida), T2 håller. Hållet. Bokad och hållen i veckan.
+    m("t-a", "kt1", { bokatAv: T1, hallsAv: T2, kalla: "hemsida", bokatNar: tid(26), moteTid: tid(28), utfall: "hallet", resultat: "offert" }),
+    // T1 bokar, UTE håller: bokartalet är T1:s, ingen annan.
+    m("t-b", "kt2", { bokatAv: T1, hallsAv: UTE, kalla: "dialer", bokatNar: tid(27), moteTid: tid(29), utfall: "uteblev" }),
+    // T2 bokar och håller, dialer, hållet, affär i kedjan.
+    m("t-c", "kt3", { bokatAv: T2, hallsAv: T2, kalla: "dialer", bokatNar: tid(26), moteTid: tid(27), utfall: "hallet", resultat: "affar" }),
+    // Ombokning hållen av T2 i kedja som T1 först bokade: T1:s räddade.
+    m("t-d", "kt1", { bokatAv: T2, hallsAv: T2, art: "ombokning", kalla: "hemsida", bokatNar: tid(28), moteTid: tid(30), utfall: "hallet" }),
+    // Felscenario 2: bokat av UTE (hemsida), hållet av T2. Båda är UTE:s bokartal.
+    m("u-a", "ku1", { bokatAv: UTE, hallsAv: T2, kalla: "hemsida", bokatNar: tid(27), moteTid: tid(29), utfall: "hallet" }),
+    // Felscenario 1: UTE:s kedja ku2, T1 höll ett uppföljningsmöte.
+    m("u-b", "ku2", { bokatAv: T1, hallsAv: T1, art: "uppfoljning", kalla: "tips", bokatNar: tid(28), moteTid: tid(30), utfall: "hallet" }),
+    // Helt utanför.
+    m("u-c", "ku3", { bokatAv: UTE2, hallsAv: UTE, kalla: "tips", bokatNar: tid(26), moteTid: tid(28), utfall: "hallet" }),
+  ];
+  const kk = [
+    k("kt1", { forstaBokatAv: T1, forstaHallnaHallsAv: T2, kalla: "hemsida", offertNar: tid(28), kolumn: "folj_upp" }),
+    k("kt2", { forstaBokatAv: T1, forstaHallnaHallsAv: UTE, kalla: "dialer", offertNar: tid(29), kolumn: "tyst" }),
+    k("kt3", { forstaBokatAv: T2, forstaHallnaHallsAv: T2, kalla: "dialer", offertNar: tid(27), avslut: "affar", avslutNar: tid(30) }),
+    k("ku1", { forstaBokatAv: UTE, forstaHallnaHallsAv: T2, kalla: "hemsida" }),
+    k("ku2", { forstaBokatAv: UTE, forstaHallnaHallsAv: UTE, kalla: "tips", offertNar: tid(28), avslut: "affar", avslutNar: tid(30) }),
+    k("ku3", { forstaBokatAv: UTE2, forstaHallnaHallsAv: UTE, kalla: "tips", offertNar: tid(27), avslut: "affar", avslutNar: tid(29) }),
+  ];
+  const r = forma.inomKrets(mm, kk, krets);
+  const kol = (rader, kalla) => rader.find((x) => x.kalla === kalla) ?? { bokade: 0, hallna: 0, affarer: 0 };
+
+  const off = offerter(r.kedjor, V, krets);
+  lika("offerter: UTE:s och kt2:s (UTE håller) offerter och affärer räknas inte", off,
+    { skickade: 2, affar: 1, nej: 0, tysta: 0, medianDagar: 3 });
+  const offUtanKrets = offerter(r.kedjor, V);
+  ok("offerter utan krets räknar som förut (ku2 med)", offUtanKrets.affar === 2);
+  lika("offerter: krets null är oförändrat", offerter(kk, V, null), offerter(kk, V));
+
+  const pk2 = perKalla(r.moten, r.kedjor, V, krets);
+  ok("hemsida: u-a (bokat av UTE, hållet av T2) ger varken bokade eller hållna", kol(pk2, "hemsida").bokade === 1 && kol(pk2, "hemsida").hallna === 2,
+    text(kol(pk2, "hemsida")));
+  ok("tips: bara u-b (uppföljning, kedjan är UTE:s) och ku2:s affär: allt UTE:s, ingen rad", !pk2.some((x) => x.kalla === "tips"), text(pk2));
+  ok("dialer: affär bara kt3 (UTE:s ku2 är tips)", kol(pk2, "dialer").affarer === 1, text(kol(pk2, "dialer")));
+  lika("perKalla: krets null är oförändrat", perKalla(mm, kk, V, null), perKalla(mm, kk, V));
+
+  const dg = dagarTillMote(r.moten, V, krets);
+  const dgAlla = dagarTillMote(r.moten, V);
+  const antalDg = (d) => Object.values(d).reduce((s, x) => s + x.av, 0);
+  ok("dagarTillMote: bara teamets bokartal (t-a, t-b, t-c; inte u-a)", antalDg(dg) === 3 && antalDg(dgAlla) === 4, `${antalDg(dg)} resp ${antalDg(dgAlla)}`);
+  lika("dagarTillMote: krets null är oförändrat", dagarTillMote(mm, V, null), dagarTillMote(mm, V));
+
+  // Summan per kolumn i Källa ska vara lika med personradernas summa för teamet.
+  const personer = krets.map((id) => veckotal(id, V, r.moten, r.kedjor, 0, NU));
+  const sBokade = personer.reduce((s, p) => s + p.bokade, 0);
+  const sHallna = personer.reduce((s, p) => s + p.hallna.n + p.raddade, 0);
+  const sAffarer = personer.reduce((s, p) => s + p.affarer.n, 0);
+  const sum = (kolnamn) => pk2.reduce((s, x) => s + x[kolnamn], 0);
+  ok("Källa: summan Bokade = Σ bokade i personraderna", sum("bokade") === sBokade && sBokade > 0, `${sum("bokade")} mot ${sBokade}`);
+  ok("Källa: summan Affärer = Σ affarer.n i personraderna", sum("affarer") === sAffarer && sAffarer > 0, `${sum("affarer")} mot ${sAffarer}`);
+  // u-b är en uppföljning i UTE:s kedja: den hör inte till teamet och ingen personrad räknar den.
+  ok("Källa: summan Hållna = Σ (hallna.n + raddade)", sum("hallna") === sHallna && sHallna > 0, `${sum("hallna")} mot ${sHallna}`);
+
+  // Uppföljningar har ingen ägare i personraderna; närmast är kedjans första bokare (som ombokningar).
+  const uppf = [
+    m("v-a", "kv1", { bokatAv: T1, hallsAv: T2, art: "uppfoljning", kalla: "mässa", bokatNar: tid(28), moteTid: tid(30), utfall: "hallet" }),
+    m("v-b", "kv2", { bokatAv: T1, hallsAv: T1, art: "uppfoljning", kalla: "mässa", bokatNar: tid(28), moteTid: tid(30), utfall: "hallet" }),
+  ];
+  const ukk = [k("kv1", { forstaBokatAv: T2 }), k("kv2", { forstaBokatAv: UTE })];
+  lika("uppföljning hålls: räknas hos kedjans första bokare (kv1 ja, kv2 nej)", kol(perKalla(uppf, ukk, V, krets), "mässa").hallna, 1);
+}
+
+console.log("\n\x1b[1mI1: null är alla bara för en chefsroll\x1b[0m");
+{
+  ok("kretsFor finns", typeof forma.kretsFor === "function");
+  ok("samtalTillatet finns", typeof forma.samtalTillatet === "function");
+  const kf = forma.kretsFor ?? (() => "saknas");
+  lika("kretsFor: undefined (fel) förblir undefined", kf(undefined, ["sales_manager"]), undefined);
+  lika("kretsFor: null + team_lead ensam är fel (undefined)", kf(null, ["team_lead"]), undefined);
+  lika("kretsFor: null + ingen roll är fel", kf(null, []), undefined);
+  for (const roll of ["sales_manager", "ceo", "admin"]) lika(`kretsFor: null + ${roll} är alla`, kf(null, [roll]), null);
+  lika("kretsFor: null + team_lead + sales_manager är alla", kf(null, ["team_lead", "sales_manager"]), null);
+  lika("kretsFor: en lista förblir listan", kf(["a", "b"], ["team_lead"]), ["a", "b"]);
+  const st = forma.samtalTillatet ?? (() => ({ status: 0, fel: "saknas" }));
+  const FEL500 = { status: 500, fel: "Samtalen gick inte att läsa." };
+  lika("samtalTillatet: undefined ger 500", st(undefined, ["admin"], "x"), FEL500);
+  lika("samtalTillatet: null + team_lead ger 500", st(null, ["team_lead"], "x"), FEL500);
+  lika("samtalTillatet: null + roll saknas ger 500", st(null, [], "x"), FEL500);
+  lika("samtalTillatet: null + ceo ger ok", st(null, ["ceo"], "x"), { ok: true });
+  lika("samtalTillatet: null + admin ger ok", st(null, ["admin"], "x"), { ok: true });
+  lika("samtalTillatet: null + sales_manager ger ok", st(null, ["sales_manager"], "x"), { ok: true });
+  lika("samtalTillatet: personen i listan ger ok", st(["a", "b"], ["team_lead"], "b"), { ok: true });
+  lika("samtalTillatet: utanför listan med flera ger teamtexten", st(["a", "b"], ["team_lead"], "c"), { status: 403, fel: "Du ser bara samtalen i ditt team." });
+  lika("samtalTillatet: utanför listan med en ger egna-texten", st(["a"], ["sales_rep"], "c"), { status: 403, fel: "Du ser bara dina egna samtal." });
+}
+
+console.log("\n\x1b[1mM2: fore kräver tidszon\x1b[0m");
+{
+  const f = (fore) => forma.samtalsfonster({ fran: "2026-10-26", till: "2026-11-01", fore });
+  ok("fore utan zon är fel", "fel" in f("2026-10-31T10:00"));
+  ok("fore med sekunder men utan zon är fel", "fel" in f("2026-10-31T10:00:00"));
+  ok("fore med Z är ok", !("fel" in f("2026-10-31T10:00:00Z")));
+  ok("fore med millisekunder och Z är ok", !("fel" in f("2026-10-31T10:00:00.123Z")));
+  ok("fore med +02:00 är ok", f("2026-10-31T12:00:00+02:00").fore === "2026-10-31T10:00:00.000Z");
+  ok("fore med -05:00 är ok", !("fel" in f("2026-10-31T05:00:00-05:00")));
+  ok("fore med +0200 (utan kolon) är fel", "fel" in f("2026-10-31T12:00:00+0200"));
+}
+
+console.log("\n\x1b[1msamtalsfönster (S1–S3)\x1b[0m");
+{
+  ok("samtalsfonster finns som export", typeof forma.samtalsfonster === "function");
+  const f = (o) => forma.samtalsfonster?.(o) ?? { fel: "saknas" };
+  ok("2026-99-99 är fel", "fel" in f({ fran: "2026-99-99", till: "2026-99-99" }));
+  ok("2026-02-30 är fel (går inte fram och tillbaka)", "fel" in f({ fran: "2026-02-30", till: "2026-03-01" }));
+  ok("till 2026-02-30 är fel", "fel" in f({ fran: "2026-02-20", till: "2026-02-30" }));
+  ok("fel format är fel", "fel" in f({ fran: "26-10-26", till: "2026-10-27" }));
+  ok("saknade datum är fel", "fel" in f({ fran: undefined, till: undefined }));
+  ok("till före fran är fel", "fel" in f({ fran: "2026-10-27", till: "2026-10-26" }));
+  ok("14 dagar (inräknat) är ok", !("fel" in f({ fran: "2026-10-19", till: "2026-11-01" })));
+  ok("15 dagar är fel", "fel" in f({ fran: "2026-10-19", till: "2026-11-02" }));
+  const cet = f({ fran: "2026-10-26", till: "2026-11-02" });
+  ok("slutet i CET: till 2026-11-02 ger 2026-11-02T23:00:00.000Z", cet.slut === "2026-11-02T23:00:00.000Z", cet.slut);
+  ok("början i CET: fran 2026-10-26 ger 2026-10-25T23:00:00.000Z", cet.fran === "2026-10-25T23:00:00.000Z", cet.fran);
+  ok("början i CEST: fran 2026-06-29 ger 2026-06-28T22:00:00.000Z", f({ fran: "2026-06-29", till: "2026-07-06" }).fran === "2026-06-28T22:00:00.000Z");
+  const cest = f({ fran: "2026-06-29", till: "2026-07-06" });
+  ok("slutet i CEST: till 2026-07-06 ger 2026-07-06T22:00:00.000Z", cest.slut === "2026-07-06T22:00:00.000Z", cest.slut);
+  const om = f({ fran: "2026-10-19", till: "2026-10-25" });
+  ok("slutet över höstens omställning (25 okt, 25 timmar): 2026-10-25T23:00:00.000Z", om.slut === "2026-10-25T23:00:00.000Z", om.slut);
+  const vår = f({ fran: "2026-03-23", till: "2026-03-29" });
+  ok("slutet över vårens omställning (29 mars, 23 timmar): 2026-03-29T22:00:00.000Z", vår.slut === "2026-03-29T22:00:00.000Z", vår.slut);
+  ok("utan fore: fore är null (ingen filtrering)", f({ fran: "2026-10-26", till: "2026-11-01" }).fore === null);
+  const fo = f({ fran: "2026-10-26", till: "2026-11-01", fore: "2026-11-02T08:00:00Z" });
+  ok("giltig fore ges tillbaka som ISO", fo.fore === "2026-11-02T08:00:00.000Z", fo.fore);
+  ok("en fore som inte går att tolka är fel", "fel" in f({ fran: "2026-10-26", till: "2026-11-01", fore: "i går" }));
+  ok("en fore som '15' är fel", "fel" in f({ fran: "2026-10-26", till: "2026-11-01", fore: "15" }));
+  ok("en fore som inte är en sträng är fel", "fel" in f({ fran: "2026-10-26", till: "2026-11-01", fore: 12345 }));
+  ok("tom fore räknas som saknad", f({ fran: "2026-10-26", till: "2026-11-01", fore: "" }).fore === null);
+}
 
 console.log("");
 process.exit(fel ? 1 : 0);

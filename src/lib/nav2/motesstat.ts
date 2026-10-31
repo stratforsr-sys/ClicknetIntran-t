@@ -5,7 +5,7 @@ import { fullName, hasRole, type CurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { dagarBakat, svenskDygnsslut, svenskTidpunkt, svensktDatum } from "@/lib/klocka";
 import {
-  bakom, dagarTillMote, offerter, perKalla, vecka, veckotal,
+  bakom, dagarTillMote, inomKrets, kretsFor, offerter, perKalla, vecka, veckotal,
   type Period, type StatKedja, type StatMote, type Veckotal,
 } from "./motesstatforma";
 
@@ -15,9 +15,14 @@ import {
  * ===========================================================================
  * RLS AVGÖR (0260-0261): mötena och kedjorna läses genom den inloggades klient.
  * Säljaren får de möten och kedjor hen är deltagare i, chefen (team_lead,
- * sales_manager, ceo, admin) alla. Här filtreras ingenting som ersätter det.
- * Samtalen kommer ur mote_samtal_vecka (0263), en SECURITY DEFINER-funktion som
- * själv ger säljaren sin egen rad och chefen alla.
+ * sales_manager, ceo, admin) alla. Här filtreras ingenting som ersätter det,
+ * med ett undantag (0264): en ren teamledare ska enligt beställaren
+ * (2026-10-31) bara se sitt eget team. Kretsen hämtas ur mote_statkrets()
+ * (null = alla, annars de id:n personen leder, och sig själv), och möten, kedjor
+ * och personer begränsas till den INNAN något räknas eller skickas till
+ * klienten. Misslyckas kretsen stänger vi chefsvyn i stället för att öppna den.
+ * Samtalen kommer ur mote_samtal_vecka (0263/0264), en SECURITY DEFINER-funktion
+ * som själv ger säljaren sin egen rad, teamledaren teamets och övriga chefer alla.
  *
  * Alla tal räknas i motesstatforma.ts (B2). Den här filen hämtar bara raderna
  * talen behöver: perioden P är förra veckans måndag till denna veckans söndag,
@@ -47,6 +52,8 @@ const BIT = 100;
 export type NdMotesstat = {
   jag: { denna: Veckotal; forra: Veckotal };
   chef: null | {
+    /** "team": en teamledare ser bara sitt eget team (0264). "alla": säljchef, vd och admin. */
+    krets: "alla" | "team";
     personer: { id: string; namn: string; denna: Veckotal; forra: Veckotal }[];
     offerter: ReturnType<typeof offerter>;
     dagar: ReturnType<typeof dagarTillMote>;
@@ -55,6 +62,10 @@ export type NdMotesstat = {
   };
   /** De två veckorna talen gäller (måndag-söndag, YYYY-MM-DD), så att klienten inte räknar om dem. */
   perioder: { denna: Period; forra: Period };
+  /** Tidpunkten (ISO) då raderna lästes. Klienten skickar den som `fore`, så att samtalslistan inte visar samtal som kom efter talen. */
+  las: string;
+  /** True när en läsning nådde sitt tak (10 000 rader, eller 1000 samtalsrader) eller gav fel: talen kan vara för låga. */
+  ofullstandig: boolean;
   moten: StatMote[];
   kedjor: StatKedja[]; // för bakom() i klienten
   /** Kedje-id till bolagets namn, för alla kedjor i `kedjor` och alla `kedja` i `moten`. Saknas namnet utelämnas nyckeln. */
@@ -95,14 +106,17 @@ const datum = (v: string | Date): string =>
 
 /**
  * Läser en fråga sidvis (`sida(fran, till)` ska ha en stabil `order` och `.range(fran, till)`).
- * Tål en fråga som misslyckas (saknad vy eller annat): tom lista, och felet loggas.
+ * Tål en fråga som misslyckas (saknad vy eller annat): tom lista, felet loggas och `kapad.v` sätts.
  */
-async function sidvis<T>(namn: string, sida: (fran: number, till: number) => PromiseLike<unknown>): Promise<T[]> {
+async function sidvis<T>(
+  namn: string, sida: (fran: number, till: number) => PromiseLike<unknown>, kapad: { v: boolean },
+): Promise<T[]> {
   const alla: T[] = [];
   for (let i = 0; i < MAX_SIDOR; i++) {
     const svar = (await sida(i * SIDA, (i + 1) * SIDA - 1)) as Svar<T>;
     if (svar.error) {
       console.error(`motesstat: ${namn} misslyckades: ${svar.error.message ?? "okänt fel"}`);
+      kapad.v = true; // talen bygger på färre rader än de borde (M3)
       return [];
     }
     const data = svar.data ?? [];
@@ -110,17 +124,22 @@ async function sidvis<T>(namn: string, sida: (fran: number, till: number) => Pro
     if (data.length < SIDA) return alla;
   }
   console.error(`motesstat: ${namn} nådde taket (${MAX_SIDOR * SIDA} rader) och är kapad`);
+  kapad.v = true;
   return alla;
 }
 
 /** Svar från rpc:n: tom lista vid fel (loggas), varning om svaret är lika långt som gränsen. */
-function samtalsrader(svar: Svar<SamtalRad>): SamtalRad[] {
+function samtalsrader(svar: Svar<SamtalRad>, kapad: { v: boolean }): SamtalRad[] {
   if (svar.error) {
     console.error(`motesstat: samtal misslyckades: ${svar.error.message ?? "okänt fel"}`);
+    kapad.v = true; // utan samtalen blir Samtal 0 och Bokade per 100 –: säg att talen inte är hela bilden (M3)
     return [];
   }
   const data = svar.data ?? [];
-  if (data.length >= MAX_SAMTAL) console.error(`motesstat: samtal gav ${MAX_SAMTAL} rader och kan vara kapad`);
+  if (data.length >= MAX_SAMTAL) {
+    console.error(`motesstat: samtal gav ${MAX_SAMTAL} rader och kan vara kapad`);
+    kapad.v = true;
+  }
   return data;
 }
 
@@ -137,8 +156,40 @@ const TAL_MED_RADER = [
 
 const tomtTal = (nu: Date): Veckotal => veckotal("", { fran: "", till: "" }, [], [], 0, nu);
 
+/** Svaret från mote_statkrets(): en lista id:n, null (= alla), eller undefined om svaret är fel eller konstigt format. */
+function kretsAv(svar: { data: unknown; error: { message?: string } | null }): string[] | null | undefined {
+  if (svar.error) {
+    console.error(`motesstat: kretsen misslyckades: ${svar.error.message ?? "okänt fel"}`);
+    return undefined;
+  }
+  if (svar.data === null || svar.data === undefined) return null;
+  if (Array.isArray(svar.data) && svar.data.every((x) => typeof x === "string")) return svar.data as string[];
+  console.error("motesstat: kretsen hade ett oväntat format");
+  return undefined;
+}
+
+/**
+ * Hela läsningen i try/catch (S4): ett kast ger en tom NdMotesstat i stället för att fälla startsidan.
+ * Perioderna räknas ur klockan och kan inte kasta.
+ */
 export async function byggMotesstat(supabase: SupabaseClient, user: CurrentUser): Promise<NdMotesstat> {
+  try {
+    return await bygg(supabase, user);
+  } catch (e) {
+    console.error(`motesstat: bygget kastade: ${e instanceof Error ? e.message : String(e)}`);
+    const nu = new Date();
+    const denna = vecka(svensktDatum(nu));
+    const forra = vecka(dagarBakat(denna.fran, 7));
+    return {
+      jag: { denna: tomtTal(nu), forra: tomtTal(nu) }, chef: null, perioder: { denna, forra },
+      las: nu.toISOString(), ofullstandig: false, moten: [], kedjor: [], bolag: {}, bakom: {},
+    };
+  }
+}
+
+async function bygg(supabase: SupabaseClient, user: CurrentUser): Promise<NdMotesstat> {
   const nu = new Date();
+  const kapad = { v: false };
   const denna: Period = vecka(svensktDatum(nu));
   const forra: Period = vecka(dagarBakat(denna.fran, 7));
   const perioder = { denna, forra };
@@ -149,13 +200,13 @@ export async function byggMotesstat(supabase: SupabaseClient, user: CurrentUser)
   // Villkoren är filtermetoder på frågebyggaren; typen är lös med flit, de ligger i anropen nedan.
   /* eslint-disable @typescript-eslint/no-explicit-any */
   const motenFraga = (namn: string, villkor: (q: any) => any) =>
-    sidvis<MoteRad>(namn, (a, b) => villkor(supabase.from("mote").select(MOTE_KOLUMNER)).order("id").range(a, b));
+    sidvis<MoteRad>(namn, (a, b) => villkor(supabase.from("mote").select(MOTE_KOLUMNER)).order("id").range(a, b), kapad);
   const kedjeFraga = (namn: string, villkor: (q: any) => any) =>
-    sidvis<KedjaRad>(namn, (a, b) => villkor(supabase.from("mote_kedja_utfall").select(KEDJA_KOLUMNER)).order("kedja_id").range(a, b));
+    sidvis<KedjaRad>(namn, (a, b) => villkor(supabase.from("mote_kedja_utfall").select(KEDJA_KOLUMNER)).order("kedja_id").range(a, b), kapad);
 
   /* eslint-enable @typescript-eslint/no-explicit-any */
 
-  const [bokat, tid, oppnaMoten, oppnaKedjor, avslutade, offert, bokadeKedjor, samtalSvar] = await Promise.all([
+  const [bokat, tid, oppnaMoten, oppnaKedjor, avslutade, offert, bokadeKedjor, samtalSvar, kretsSvar] = await Promise.all([
     motenFraga("möten (bokade i perioden)", (q) => q.gte("bokat_nar", fran).lte("bokat_nar", till)),
     motenFraga("möten (i perioden)", (q) => q.gte("mote_tid", fran).lte("mote_tid", till)),
     motenFraga("möten (öppna)", (q) => q.is("utfall", null)),
@@ -164,18 +215,21 @@ export async function byggMotesstat(supabase: SupabaseClient, user: CurrentUser)
     kedjeFraga("kedjor (offert i perioden)", (q) => q.gte("offert_nar", fran).lte("offert_nar", till)),
     kedjeFraga("kedjor (bokade i perioden)", (q) => q.gte("forsta_bokat_nar", fran).lte("forsta_bokat_nar", till)),
     supabase.rpc("mote_samtal_vecka", { p_fran: forra.fran, p_till: denna.till }).limit(MAX_SAMTAL),
+    supabase.rpc("mote_statkrets"),
   ]);
+  // Tas direkt när läsningarna kommit tillbaka: samtal som Lynes skriver in efter detta hör inte till talen (S3).
+  const las = new Date().toISOString();
 
   const moteRader = unika([bokat, tid, oppnaMoten], (m) => m.id);
   const kedjaRader = unika([oppnaKedjor, avslutade, offert, bokadeKedjor], (k) => k.kedja_id);
-  const samtalRader = samtalsrader(samtalSvar as unknown as Svar<SamtalRad>);
+  let samtalRader = samtalsrader(samtalSvar as unknown as Svar<SamtalRad>, kapad);
 
-  const moten: StatMote[] = moteRader.map((m) => ({
+  const allaMoten: StatMote[] = moteRader.map((m) => ({
     id: m.id, kedja: m.kedja_id, bokatAv: m.bokat_av, hallsAv: m.halls_av,
     bokatNar: iso(m.bokat_nar), moteTid: iso(m.mote_tid),
     art: m.art, utfall: m.utfall, resultat: m.resultat, kalla: m.kalla,
   }));
-  const kedjor: StatKedja[] = kedjaRader.map((k) => ({
+  const allaKedjor: StatKedja[] = kedjaRader.map((k) => ({
     id: k.kedja_id,
     forstaBokatAv: k.forsta_bokat_av ?? "",
     forstaBokatNar: isoEllerNull(k.forsta_bokat_nar) ?? "",
@@ -189,6 +243,24 @@ export async function byggMotesstat(supabase: SupabaseClient, user: CurrentUser)
     kalla: k.kalla ?? "",
   }));
 
+  // Teamledarens krets (0264). Bara en chefsroll begränsas av den; säljaren har RLS. null = alla.
+  // Ett fel eller ett konstigt svar stänger chefsvyn och begränsar till sig själv, det öppnar den aldrig.
+  const jagId = user.employee?.id ?? null;
+  const arChef = hasRole(user, ...CHEFSROLLER);
+  // null gäller som "alla" bara för sales_manager, ceo och admin (I1): för en ren teamledare är det ett fel.
+  const kretsLast = kretsAv(kretsSvar as unknown as { data: unknown; error: { message?: string } | null });
+  const kretsRå = arChef ? kretsFor(kretsLast, user.roles) : kretsLast;
+  if (arChef && kretsLast === null && kretsRå === undefined) {
+    console.error("motesstat: kretsen var null men rollen är inte sales_manager, ceo eller admin; chefsvyn stängs");
+  }
+  const kretsFel = arChef && kretsRå === undefined;
+  const krets: string[] | null = !arChef ? null : kretsRå === undefined ? (jagId ? [jagId] : []) : kretsRå;
+  const iKretsen = (id: string) => krets === null || krets.includes(id);
+  const begransad = inomKrets(allaMoten, allaKedjor, krets);
+  const moten = begransad.moten;
+  const kedjor = begransad.kedjor;
+  if (krets !== null) samtalRader = samtalRader.filter((s) => iKretsen(s.employee_id));
+
   // Samtal per person och vecka (veckans måndag). Två veckor, så en person kan ha flera rader.
   const samtal = new Map<string, number>();
   for (const s of samtalRader) {
@@ -196,33 +268,42 @@ export async function byggMotesstat(supabase: SupabaseClient, user: CurrentUser)
     samtal.set(nyckel, (samtal.get(nyckel) ?? 0) + s.antal);
   }
   const antalSamtal = (id: string, v: Period) => samtal.get(`${id}|${v.fran}`) ?? 0;
-  const talFor = (id: string) => ({
-    denna: veckotal(id, denna, moten, kedjor, antalSamtal(id, denna), nu),
-    forra: veckotal(id, forra, moten, kedjor, antalSamtal(id, forra), nu),
+  const talFor = (id: string, m: StatMote[] = moten, k: StatKedja[] = kedjor) => ({
+    denna: veckotal(id, denna, m, k, antalSamtal(id, denna), nu),
+    forra: veckotal(id, forra, m, k, antalSamtal(id, forra), nu),
   });
 
-  // Utan anställningsrad finns inget id att räkna på: tomma tal, inga kast.
-  const jagId = user.employee?.id ?? null;
-  const jag = jagId ? talFor(jagId) : { denna: tomtTal(nu), forra: tomtTal(nu) };
+  // De egna talen räknas på alla lästa rader, också när chefsvyn begränsas till teamet: hen ska se
+  // samma tal som en säljare med samma rader. Utan anställningsrad finns inget id: tomma tal, inga kast.
+  const jag = jagId ? talFor(jagId, allaMoten, allaKedjor) : { denna: tomtTal(nu), forra: tomtTal(nu) };
 
   // Bakom-listorna för `jag` och, nedan, för varje person i chefsvyn.
-  const bakomFor = (id: string) => {
+  const bakomFor = (id: string, m: StatMote[] = moten, k: StatKedja[] = kedjor) => {
     const per = (v: Period): BakomTal => {
       const ut: BakomTal = {};
       for (const tal of TAL_MED_RADER) {
-        const lista = bakom(tal, id, v, moten, kedjor, nu);
+        const lista = bakom(tal, id, v, m, k, nu);
         if (lista.length) ut[tal] = lista;
       }
       return ut;
     };
     return { denna: per(denna), forra: per(forra) };
   };
-  const bakomAlla: NdMotesstat["bakom"] = jagId ? { [jagId]: bakomFor(jagId) } : {};
+  const bakomAlla: NdMotesstat["bakom"] = jagId ? { [jagId]: bakomFor(jagId, allaMoten, allaKedjor) } : {};
+
+  // Det som skickas till klienten: de begränsade raderna, plus de egna talens rader (de kan röra
+  // någon utanför teamet, men hen får se dem som sina egna). Utan begränsning är det allt.
+  const jagIds = new Set(Object.values(bakomAlla[jagId ?? ""] ?? {}).flatMap((v) => Object.values(v).flat()));
+  const motenIds = new Set(moten.map((m) => m.id)), kedjorIds = new Set(kedjor.map((k) => k.id));
+  const skickadeMoten = krets === null ? moten : allaMoten.filter((m) => jagIds.has(m.id) || motenIds.has(m.id));
+  const skickadeKedjor = krets === null ? kedjor : allaKedjor.filter((k) => jagIds.has(k.id) || kedjorIds.has(k.id));
+  const skickadeKedjeIds = new Set(skickadeKedjor.map((k) => k.id));
+  const skickadeKedjaRader = krets === null ? kedjaRader : kedjaRader.filter((k) => skickadeKedjeIds.has(k.kedja_id));
 
   // Kedjornas bolagsnamn (RLS: samma rader som kedjorna). Kedjor som mötena pekar på men som
   // inte kom med i kedjefrågorna (gamla, stängda) slås upp för sig.
-  const bolagAv = new Map(kedjaRader.map((k) => [k.kedja_id, k.bolag_id]));
-  const saknadeKedjor = [...new Set(moten.map((m) => m.kedja))].filter((id) => !bolagAv.has(id));
+  const bolagAv = new Map(skickadeKedjaRader.map((k) => [k.kedja_id, k.bolag_id]));
+  const saknadeKedjor = [...new Set(skickadeMoten.map((m) => m.kedja))].filter((id) => !bolagAv.has(id));
   const bitar = <T,>(lista: T[]) => Array.from({ length: Math.ceil(lista.length / BIT) }, (_, i) => lista.slice(i * BIT, (i + 1) * BIT));
   await Promise.all(bitar(saknadeKedjor).map(async (del) => {
     const { data, error } = await supabase.from("mote_kedja_utfall").select("kedja_id, bolag_id").in("kedja_id", del).limit(del.length);
@@ -241,12 +322,15 @@ export async function byggMotesstat(supabase: SupabaseClient, user: CurrentUser)
     if (n) bolag[kedja] = n;
   }
 
-  if (!hasRole(user, ...CHEFSROLLER)) return { jag, chef: null, perioder, moten, kedjor, bolag, bakom: bakomAlla };
+  const ofullstandig = kapad.v;
+  const utan = { jag, perioder, las, ofullstandig, moten: skickadeMoten, kedjor: skickadeKedjor, bolag, bakom: bakomAlla };
+  if (!arChef || kretsFel) return { ...utan, chef: null };
 
-  // Bara de som har gjort något: bokat eller hållit ett möte, eller ringt i perioden.
+  // Bara de som har gjort något: bokat eller hållit ett möte, eller ringt i perioden, och bara i kretsen.
   const ids = new Set<string>();
   for (const m of moten) { ids.add(m.bokatAv); ids.add(m.hallsAv); }
   for (const s of samtalRader) ids.add(s.employee_id);
+  for (const id of [...ids]) if (!iKretsen(id)) ids.delete(id);
 
   const namn = new Map<string, string>();
   if (ids.size) {
@@ -262,11 +346,11 @@ export async function byggMotesstat(supabase: SupabaseClient, user: CurrentUser)
   const namnPa = (id: string) => namn.get(id) ?? "Okänd";
 
   const personer = [...ids]
-    .map((id) => ({ id, namn: namnPa(id), ...talFor(id) }))
+    .map((id) => ({ id, namn: namnPa(id), ...(id === jagId ? jag : talFor(id)) }))
     .sort((a, b) => a.namn.localeCompare(b.namn, "sv"));
 
-  // Möten utan utfall per hållare, ur B2:s veckotal (regeln +30 min står bara där). Varje hållare av
-  // ett möte i `moten` ligger i `ids` och därmed i `personer`.
+  // Möten utan utfall per hållare, ur B2:s veckotal (regeln +30 min står bara där). Varje hållare i
+  // kretsen av ett möte i `moten` ligger i `ids` och därmed i `personer`.
   const utanUtfall = personer
     .filter((p) => p.denna.utanUtfall > 0)
     .map((p) => ({ id: p.id, namn: p.namn, antal: p.denna.utanUtfall }))
@@ -275,18 +359,15 @@ export async function byggMotesstat(supabase: SupabaseClient, user: CurrentUser)
   for (const p of personer) bakomAlla[p.id] ??= bakomFor(p.id);
 
   return {
-    jag,
+    ...utan,
     chef: {
+      krets: krets === null ? "alla" : "team",
       personer,
-      offerter: offerter(kedjor, denna),
-      dagar: dagarTillMote(moten, denna),
-      kallor: perKalla(moten, kedjor, denna),
+      // Teamets block räknar bara rader som någon i kretsen äger (I2); moten/kedjor ovan är mängden som visas.
+      offerter: offerter(kedjor, denna, krets),
+      dagar: dagarTillMote(moten, denna, krets),
+      kallor: perKalla(moten, kedjor, denna, krets),
       utanUtfall,
     },
-    perioder,
-    moten,
-    kedjor,
-    bolag,
-    bakom: bakomAlla,
   };
 }

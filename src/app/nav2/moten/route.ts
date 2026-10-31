@@ -1,7 +1,8 @@
 import { NextResponse, after } from "next/server";
 import { fullName, getCurrentUser } from "@/lib/auth";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
-import { svenskDygnsslut, svenskaMinuter, svensktDatum, svenskTidpunkt } from "@/lib/klocka";
+import { svenskaMinuter, svensktDatum, svenskTidpunkt } from "@/lib/klocka";
+import { samtalsfonster, samtalTillatet } from "@/lib/nav2/motesstatforma";
 import { notifiera } from "@/lib/notishandelse-server";
 import { skrivHandelse } from "@/lib/handelselogg-server";
 import { dagPlus } from "@/lib/saljtakt";
@@ -9,7 +10,6 @@ import { lk } from "@/lib/leveranskalender-server";
 import { tomEfterFonstret } from "@/lib/utkorg-server";
 import { flytta, hamtaUpptaget, skapaMote, stallIn } from "@/app/(app)/kalender/moten/actions";
 import {
-  CHEF_ROLLER,
   MOTE_PLATS,
   TYST_EFTER_INGET_SVAR,
   andringForKund,
@@ -293,25 +293,38 @@ export async function POST(request: Request) {
       return await uppfoljning("prova_igen");
 
     case "samtal": {
-      // B4: samtalen bakom statistikens tal Samtal. Samma krets som mote_samtal_vecka (0263): sina egna, chefen allas.
+      // B4/varv 2: samtalen bakom statistikens tal Samtal. Samma krets som mote_samtal_vecka (0264): mote_statkrets()
+      // anropas som den inloggade, null = alla (säljchef, vd, admin), en teamledare får sitt team, övriga sig själva.
       const person = String(b.person ?? "");
-      const fran = String(b.fran ?? "");
-      const till = String(b.till ?? "");
-      const DATUM = /^\d{4}-\d{2}-\d{2}$/;
-      if (!UUID.test(person) || !DATUM.test(fran) || !DATUM.test(till) || till < fran) return svar({ fel: "Ogiltig begäran." }, 400);
-      if (Date.parse(till) - Date.parse(fran) > 13 * 86_400_000) return svar({ fel: "Högst två veckor åt gången." }, 400);
-      const chef = aktorn.roller.some((r) => (CHEF_ROLLER as readonly string[]).includes(r));
-      if (person !== mig && !chef) return svar({ fel: "Du ser bara dina egna samtal." }, 403);
+      if (!UUID.test(person)) return svar({ fel: "Ogiltig begäran." }, 400);
+      // Datumen (omöjliga datum ger 400, inte 500), fönstret [fran, slut) och `fore` valideras på ett ställe.
+      const fonster = samtalsfonster({ fran: b.fran, till: b.till, fore: b.fore });
+      if ("fel" in fonster) return svar({ fel: fonster.fel }, 400);
+      // `undefined` = rpc:n felade eller svaret hade fel format. samtalTillatet() ger 500 också när `null` kommer
+      // till någon som inte är sales_manager, ceo eller admin (aktörens roller), så ett tyst null blir aldrig "alla".
+      let krets: string[] | null | undefined;
+      try {
+        const sb = await supabaseServer();
+        const { data, error } = await sb.rpc("mote_statkrets");
+        krets = error || !(data === null || (Array.isArray(data) && data.every((x) => typeof x === "string"))) ? undefined : (data as string[] | null);
+      } catch {
+        krets = undefined;
+      }
+      const tillatet = samtalTillatet(krets, aktorn.roller, person);
+      if (!("ok" in tillatet)) return svar({ fel: tillatet.fel }, tillatet.status);
       const MAX_SAMTAL = 1000;
-      const { data, error } = await db
+      // Fönstret är [fran, slut): slut är nästa dygns 00:00 svensk tid, som 0263:s `< p_till + 1`. `fore` är
+      // tidpunkten då statistikens tal lästes; Lynes skriver in samtalet först när det är slut (created_at),
+      // så samtal som kom efter talen ska inte stå i listan under dem.
+      let fraga = db
         .from("phone_call")
         .select("started_at, counterpart_e164, duration_seconds")
         .eq("employee_id", person)
         .eq("direction", "ut")
-        .gte("started_at", svenskTidpunkt(fran, "00:00").toISOString())
-        .lte("started_at", svenskDygnsslut(till))
-        .order("started_at", { ascending: false })
-        .limit(MAX_SAMTAL);
+        .gte("started_at", fonster.fran)
+        .lt("started_at", fonster.slut);
+      if (fonster.fore) fraga = fraga.lte("created_at", fonster.fore);
+      const { data, error } = await fraga.order("started_at", { ascending: false }).limit(MAX_SAMTAL);
       if (error) return svar({ fel: "Samtalen gick inte att läsa." }, 500);
       const rader = (data ?? []) as { started_at: string; counterpart_e164: string | null; duration_seconds: number | null }[];
       return svar({

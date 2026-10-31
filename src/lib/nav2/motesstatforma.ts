@@ -125,10 +125,19 @@ const median = (tal: number[]): number | null => {
   return s.length % 2 === 1 ? s[mitt] : (s[mitt - 1] + s[mitt]) / 2;
 };
 
+// "Äger" den här personen raden? Teamledarens block (I2) räknar bara rader som någon i kretsen äger, med
+// samma ägare som personraderna i underlag(). krets null = alla (säljchef, vd, admin): allt ägs.
+const iKrets = (krets: readonly string[] | null) => {
+  const i = krets === null ? null : new Set(krets);
+  return (id: string | null | undefined): boolean => i === null || (id !== null && id !== undefined && i.has(id));
+};
+
 // Offertläget i stort. Tysta är en ögonblicksbild (hur många som ligger och
 // väntar just nu), de övriga talen gäller veckan.
-export function offerter(kedjor: StatKedja[], v: Period) {
-  const medOffert = kedjor.filter((k) => k.offertNar !== null);
+export function offerter(kedjor: StatKedja[], v: Period, krets: readonly string[] | null = null) {
+  // Med krets räknas bara kedjor vars första hållare ligger i den (som oppnaOfferter och tysta i underlag()).
+  const agd = iKrets(krets);
+  const medOffert = kedjor.filter((k) => k.offertNar !== null && agd(k.forstaHallnaHallsAv));
   const avslutade = (avslut: "affar" | "nej") => medOffert.filter((k) => k.avslut === avslut && iVeckan(k.avslutNar, v));
   const affarer = avslutade("affar");
   return {
@@ -145,10 +154,11 @@ const hinkFor = (dagar: number): Hink => (dagar <= 1 ? "0–1" : dagar <= 3 ? "2
 
 // Håller mötet oftare ju närmare bokningen det ligger? Bara nya möten med
 // utfall, så att ombokningar och uppföljningar inte förvränger bilden.
-export function dagarTillMote(moten: StatMote[], v: Period): Record<Hink, Kvot> {
+export function dagarTillMote(moten: StatMote[], v: Period, krets: readonly string[] | null = null): Record<Hink, Kvot> {
+  const agd = iKrets(krets); // ägaren är den som bokade (hallnaAlla i underlag())
   const rader: Record<Hink, StatMote[]> = { "0–1": [], "2–3": [], "4–7": [], "8+": [] };
   for (const m of moten) {
-    if (m.art !== "ny" || m.utfall === null || !iVeckan(m.moteTid, v)) continue;
+    if (m.art !== "ny" || m.utfall === null || !iVeckan(m.moteTid, v) || !agd(m.bokatAv)) continue;
     rader[hinkFor(dagarMellan(m.bokatNar, m.moteTid))].push(m);
   }
   const tal = (h: Hink) => kvot(rader[h].filter((m) => m.utfall === "hallet").length, rader[h].length);
@@ -157,7 +167,12 @@ export function dagarTillMote(moten: StatMote[], v: Period): Record<Hink, Kvot> 
 
 // Varifrån kommer bokningarna, möten och affärerna? En rad per källa som
 // förekommer i något av underlagen, flest bokade först och sedan på namn.
-export function perKalla(moten: StatMote[], kedjor: StatKedja[], v: Period) {
+export function perKalla(moten: StatMote[], kedjor: StatKedja[], v: Period, krets: readonly string[] | null = null) {
+  // Ägare per kolumn, som personraderna i underlag(): bokade och hållna nya möten = den som bokade, hållna
+  // ombokningar (och uppföljningar, som ingen personrad räknar) = kedjans första bokare, affärer = kedjans
+  // första hållare. Med krets null äger "alla" allt och inget ändras.
+  const agd = iKrets(krets);
+  const kedjaPerId = new Map(kedjor.map((k) => [k.id, k]));
   const rader = new Map<string, { kalla: string; bokade: number; hallna: number; affarer: number }>();
   const rad = (kalla: string) => {
     if (!rader.has(kalla)) rader.set(kalla, { kalla, bokade: 0, hallna: 0, affarer: 0 });
@@ -165,14 +180,129 @@ export function perKalla(moten: StatMote[], kedjor: StatKedja[], v: Period) {
   };
   for (const m of moten) {
     const r = rad(m.kalla);
-    if (m.art === "ny" && iVeckan(m.bokatNar, v)) r.bokade++;
-    if (m.utfall === "hallet" && iVeckan(m.moteTid, v)) r.hallna++;
+    if (m.art === "ny" && iVeckan(m.bokatNar, v) && agd(m.bokatAv)) r.bokade++;
+    if (m.utfall === "hallet" && iVeckan(m.moteTid, v)) {
+      const agare = m.art === "ny" ? m.bokatAv : kedjaPerId.get(m.kedja)?.forstaBokatAv;
+      if (agd(agare)) r.hallna++;
+    }
   }
   for (const k of kedjor) {
     const r = rad(k.kalla);
-    if (k.avslut === "affar" && iVeckan(k.avslutNar, v)) r.affarer++;
+    if (k.avslut === "affar" && iVeckan(k.avslutNar, v) && agd(k.forstaHallnaHallsAv)) r.affarer++;
   }
-  return [...rader.values()].sort((a, b) => b.bokade - a.bokade || a.kalla.localeCompare(b.kalla, "sv"));
+  // Källor där allt är 0 (ett gammalt öppet möte utanför veckan drar in sin källa) säger ingenting om veckan.
+  return [...rader.values()]
+    .filter((r) => r.bokade > 0 || r.hallna > 0 || r.affarer > 0)
+    .sort((a, b) => b.bokade - a.bokade || a.kalla.localeCompare(b.kalla, "sv"));
+}
+
+/**
+ * Teamledarens krets (0264, `mote_statkrets`): bara möten och kedjor som rör någon i `krets`.
+ * `krets` null betyder alla (säljchef, vd, admin) och släpper igenom allt.
+ *
+ * - Ett möte behålls om `bokatAv` ELLER `hallsAv` ligger i kretsen. Bokat av en i teamet men hållet
+ *   av någon utanför står alltså kvar, eftersom det är teamets bokning.
+ * - En kedja behålls om ett behållet möte pekar på den, ELLER om `forstaBokatAv` eller
+ *   `forstaHallnaHallsAv` ligger i kretsen. Det andra villkoret behövs eftersom statistiken bara
+ *   läser möten bokade eller hållna i perioden: en kedja som avslutas i veckan efter ett möte långt
+ *   tillbaka har inget möte med bland raderna, men dess affär tillhör ändå den som hållit det första
+ *   mötet (kedjetalen i veckotal() sorterar på de två personfälten).
+ */
+export function inomKrets<M extends Pick<StatMote, "kedja" | "bokatAv" | "hallsAv">, K extends Pick<StatKedja, "id" | "forstaBokatAv" | "forstaHallnaHallsAv">>(
+  moten: M[], kedjor: K[], krets: readonly string[] | null,
+): { moten: M[]; kedjor: K[] } {
+  if (krets === null) return { moten, kedjor };
+  const i = new Set(krets);
+  const motena = moten.filter((m) => i.has(m.bokatAv) || i.has(m.hallsAv));
+  const pekade = new Set(motena.map((m) => m.kedja));
+  const kedjorna = kedjor.filter(
+    (k) => pekade.has(k.id) || i.has(k.forstaBokatAv) || (k.forstaHallnaHallsAv !== null && i.has(k.forstaHallnaHallsAv)),
+  );
+  return { moten: motena, kedjor: kedjorna };
+}
+
+// ---------------------------------------------------------------------------
+// Teamledarens krets och "alla" (I1): ett tyst `null` blir aldrig bredare än rollen.
+
+/** Rollerna för vilka `null` ur mote_statkrets() betyder "alla". En ren team_lead hör inte hit. */
+const ALLA_ROLLER = ["sales_manager", "ceo", "admin"] as const;
+const harAllaRoll = (roller: readonly string[]) => ALLA_ROLLER.some((r) => roller.includes(r));
+const SAMTAL_FEL = "Samtalen gick inte att läsa.";
+
+/**
+ * Kretsen ur mote_statkrets() (`undefined` = fel) mot rollerna. `null` gäller som "alla" bara för
+ * sales_manager, ceo eller admin; för alla andra är `null` ett fel (`undefined`), så att en brygga som
+ * tyst ger `null` inte öppnar hela företaget för en teamledare.
+ */
+export function kretsFor(
+  kretsRå: string[] | null | undefined, roller: readonly string[],
+): string[] | null | undefined {
+  if (kretsRå === null) return harAllaRoll(roller) ? null : undefined;
+  return kretsRå;
+}
+
+/** Får `person` läsas? `krets` som kretsFor(), efter rpc-kontrollen i rutten (`undefined` = rpc:n felade). */
+export function samtalTillatet(
+  krets: readonly string[] | null | undefined, roller: readonly string[], person: string,
+): { ok: true } | { status: 403 | 500; fel: string } {
+  if (krets === undefined || (krets === null && !harAllaRoll(roller))) return { status: 500, fel: SAMTAL_FEL };
+  if (krets === null || krets.includes(person)) return { ok: true };
+  return { status: 403, fel: krets.length === 1 ? "Du ser bara dina egna samtal." : "Du ser bara samtalen i ditt team." };
+}
+
+// ---------------------------------------------------------------------------
+// Samtalsfönstret (S1–S3): indatan till handlingen `samtal` i rutten, validerad på ett ställe.
+
+const DATUM_RE = /^\d{4}-\d{2}-\d{2}$/;
+// Zonen krävs (Z eller ±hh:mm): en tid utan zon skulle tolkas i serverns lokala tid (M2).
+const ISO_TID_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/;
+/** YYYY-MM-DD som finns i kalendern: 2026-02-30 och 2026-99-99 går inte fram och tillbaka. */
+export const giltigtDatum = (d: unknown): d is string => {
+  if (typeof d !== "string" || !DATUM_RE.test(d)) return false;
+  const t = Date.parse(`${d}T00:00:00Z`);
+  // toISOString() kastar RangeError på ett ogiltigt datum (2026-99-99), så NaN prövas först.
+  return !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === d;
+};
+
+// Midnatt svensk tid på dagen `dag`, som ISO. Prövar de två möjliga offseterna (+1 h vinter, +2 h
+// sommar) och tar den där Stockholm verkligen visar 00:00 den dagen. Importfri så att provet kan köras
+// utan alias (klocka.ts har samma sak som svenskTidpunkt).
+const stockholmsMidnatt = (dag: string): string => {
+  const klockan = (t: number) => {
+    const p = Object.fromEntries(
+      new Intl.DateTimeFormat("sv-SE", {
+        timeZone: "Europe/Stockholm", year: "numeric", month: "2-digit", day: "2-digit",
+        hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+      }).formatToParts(new Date(t)).map((x) => [x.type, x.value]),
+    );
+    return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
+  };
+  const utc = Date.parse(`${dag}T00:00:00Z`);
+  for (const timmar of [2, 1]) {
+    const t = utc - timmar * 3_600_000;
+    if (klockan(t) === `${dag}T00:00`) return new Date(t).toISOString();
+  }
+  return new Date(utc - 3_600_000).toISOString();
+};
+
+/**
+ * Fönstret för samtalslistan: `fran` och `till` är svenska dagar och båda räknas in. Ger `fran` (dygnets
+ * start), `slut` (nästa dygns 00:00, uteslutet: `started_at < slut`, som 0263:s `< p_till + 1`) och
+ * `fore` (tidpunkten då talen lästes, eller null om klienten inte skickade någon).
+ * Fel: omöjligt datum (S1), till före fran, mer än 14 dagar, eller en `fore` som inte går att tolka (S3).
+ */
+export function samtalsfonster(
+  i: { fran?: unknown; till?: unknown; fore?: unknown },
+): { fel: string } | { fran: string; fore: string | null; slut: string } {
+  if (!giltigtDatum(i.fran) || !giltigtDatum(i.till) || i.till < i.fran) return { fel: "Ogiltig begäran." };
+  if (Date.parse(i.till) - Date.parse(i.fran) > 13 * MS_PER_DAG) return { fel: "Högst två veckor åt gången." };
+  let fore: string | null = null;
+  if (i.fore !== undefined && i.fore !== null && i.fore !== "") {
+    if (typeof i.fore !== "string" || !ISO_TID_RE.test(i.fore) || Number.isNaN(Date.parse(i.fore))) return { fel: "Ogiltig begäran." };
+    fore = new Date(i.fore).toISOString();
+  }
+  const nasta = new Date(Date.parse(`${i.till}T00:00:00Z`) + MS_PER_DAG).toISOString().slice(0, 10);
+  return { fran: stockholmsMidnatt(i.fran), fore, slut: stockholmsMidnatt(nasta) };
 }
 
 // Id:n bakom ett tal: mötes-id för mötestal och kedje-id för kedjetal. För
