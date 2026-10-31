@@ -32,6 +32,7 @@ type Orderrad = {
   monthly_amount: number | string | null;
   buyout_amount: number | string | null;
   finance_amount: number | string | null;
+  financed: boolean | null;
   note: string | null;
   status: string;
   approved_at: string | null;
@@ -45,7 +46,7 @@ type Orderrad = {
 
 const FALT =
   "id, company_name, org_number, contact_name, contact_phone, contact_phone_e164, contact_email, package_id, " +
-  "term_months, signed_on, starts_on, monthly_amount, buyout_amount, finance_amount, note, status, approved_at, approved_by, " +
+  "term_months, signed_on, starts_on, monthly_amount, buyout_amount, finance_amount, financed, note, status, approved_at, approved_by, " +
   "salesperson_id, cancel_reason, customer_street, customer_postal_code, customer_city";
 
 function tal(v: number | string | null): number | null {
@@ -122,6 +123,7 @@ async function underlag(o: Orderrad): Promise<Crmorder> {
       paketnamn: (paket?.label as string | undefined) ?? `Paket ${o.package_id}`,
       utkop: tal(o.buyout_amount),
       finans: tal(o.finance_amount),
+      finansierad: o.financed === true,
       anteckning: o.note,
       navlank: `${siteUrl().replace(/\/+$/, "")}/order?kund=${o.id}`,
       tjanster: ((tjanster ?? []) as { name: string; billing: "manad" | "engang"; amount: number | string; term_months: number | null }[]).map(

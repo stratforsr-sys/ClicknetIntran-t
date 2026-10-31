@@ -122,6 +122,8 @@ export type Orderunderlag = {
   utkop: number | null;
   /** 0079. Finansavgiften i kronor. Frivillig: underlag byggda fore 0079 saknar den. */
   finans?: number | null;
+  /** 0079 `financed`: affären går via finanspartnern — Inkio fakturerar den som finansierad. */
+  finansierad?: boolean;
   anteckning: string | null;
   navlank: string;
   tjanster: {
@@ -202,16 +204,94 @@ export function orderrader(
  * tolv månader blir 17 940, det Inkio självt räknade fram ur raderna förut.
  */
 export function ordervarde(rader: Orderrad[]): number {
-  const summa = rader.reduce((s, r) => s + r.rate * r.quantity * (r.type === "Recurring" ? r.term_length : 1), 0);
-  return Math.round(summa * 100) / 100;
+  // I ören, så att värdet och fakturaplanen (`fakturering`) summerar lika.
+  return rader.reduce((s, r) => s + radOre(r) * (r.type === "Recurring" ? r.term_length : 1), 0) / 100;
+}
+
+function radOre(r: Orderrad): number {
+  return Math.round(r.rate * r.quantity * 100);
+}
+
+/**
+ * Avtalets längd: bindningstiden, eller en tjänst som löper längre. Inkio
+ * nekar en faktura efter avtalets slut, så längden måste täcka varje rad.
+ */
+export function avtalsmanader(o: Orderunderlag, rader: Orderrad[]): number {
+  return Math.max(o.bindningManader, ...rader.filter((r) => r.type === "Recurring").map((r) => r.term_length));
+}
+
+/** Ett datum plus hela månader, som Inkios fakturaplan räknar: 31 jan + 1 blir sista februari. */
+export function plusManader(dag: string, manader: number): string {
+  const [ar, man, d] = dag.slice(0, 10).split("-").map(Number);
+  const mal = new Date(Date.UTC(ar, man - 1 + manader, 1));
+  const sista = new Date(Date.UTC(mal.getUTCFullYear(), mal.getUTCMonth() + 1, 0)).getUTCDate();
+  mal.setUTCDate(Math.min(d, sista));
+  return mal.toISOString().slice(0, 10);
+}
+
+/** Inkios förval för en intern order, samma som formulärets. */
+export const INKIO_BETALVILLKOR_DAGAR = 15;
+
+export type Inkiofakturering = {
+  invoicing: "Internal" | "Financed";
+  financing_company: string | null;
+  invoice_schedule: "Monthly" | "Custom" | null;
+  payment_terms_days: number | null;
+  invoice_plan: { invoice_date: string; amount: number }[];
+};
+
+/**
+ * HUR ORDERN FAKTURERAS — INKIO KRÄVER VALET SEDAN 2026-10.
+ *
+ * Utan det nekas ordern med 422 "Välj hur ordern faktureras: finansierad eller
+ * intern" (order #32, 2026-10-31). Fälten är de Inkios formulär skickar
+ * (klientpaketets `invoicePlan`). Valet är Navs förval och står i orderns
+ * anteckning; ekonomin ändrar det i Inkios orderhantering så länge ordern väntar.
+ *
+ *   - Finansierad (`financed`, 0079): finansbolaget, inget annat.
+ *   - Intern, alla rader löpande lika länge: månadsvis — Inkio delar värdet i
+ *     lika delar, och varje del blir precis månadsbeloppet.
+ *   - Intern med engångsbelopp eller olika löptider: en egen plan, en faktura
+ *     i månaden. Engångsbeloppet ligger på den första i stället för att spridas
+ *     ut, och planen summerar exakt till `ordervarde`, som Inkio kräver.
+ */
+export function fakturering(o: Orderunderlag, rader: Orderrad[], finansbolag: string | null): Inkiofakturering {
+  if (o.finansierad) {
+    if (!finansbolag?.trim()) throw new Error("Ordern är finansierad, men inget finansbolag är valt för Inkio.");
+    return { invoicing: "Financed", financing_company: finansbolag.trim(), invoice_schedule: null, payment_terms_days: null, invoice_plan: [] };
+  }
+
+  const manader = avtalsmanader(o, rader);
+  const intern = { invoicing: "Internal" as const, financing_company: null, payment_terms_days: INKIO_BETALVILLKOR_DAGAR };
+  if (rader.every((r) => r.type === "Recurring" && r.term_length === manader)) {
+    return { ...intern, invoice_schedule: "Monthly", invoice_plan: [] };
+  }
+
+  const start = o.startar ?? o.signerad;
+  const plan: Inkiofakturering["invoice_plan"] = [];
+  for (let m = 0; m < manader; m++) {
+    const ore = rader.reduce((s, r) => s + ((r.type === "Recurring" ? m < r.term_length : m === 0) ? radOre(r) : 0), 0);
+    if (ore > 0) plan.push({ invoice_date: plusManader(start, m), amount: ore / 100 });
+  }
+  return { ...intern, invoice_schedule: "Custom", invoice_plan: plan };
+}
+
+function faktureringstext(f: Inkiofakturering): string {
+  const andra = "Ändra i orderhanteringen om den ska vara en annan.";
+  if (f.invoicing === "Financed") return `Fakturering: finansierad via ${f.financing_company} (Navs förval). ${andra}`;
+  return f.invoice_schedule === "Monthly"
+    ? `Fakturering: intern, månadsvis, ${f.payment_terms_days} dagar (Navs förval). ${andra}`
+    : `Fakturering: intern, en faktura i månaden med engångsbeloppet på den första, ${f.payment_terms_days} dagar (Navs förval). ${andra}`;
 }
 
 /** `doc` till `POST /api/salesorder/create-sales-order`. */
-export function nyOrder(o: Orderunderlag, kundId: string, saljareId: string | null, rader: Orderrad[]) {
+export function nyOrder(o: Orderunderlag, kundId: string, saljareId: string | null, rader: Orderrad[], finansbolag: string | null = null) {
+  const fakt = fakturering(o, rader, finansbolag);
   const anteckning = [
     `Från Clicknet Nav: ${o.navlank}`,
     o.utkop ? `Utköp: ${o.utkop} kr.` : null,
     o.finans ? `Finans: ${o.finans} kr till finanspartnern.` : null,
+    faktureringstext(fakt),
     o.anteckning?.trim() || null,
   ]
     .filter(Boolean)
@@ -228,7 +308,8 @@ export function nyOrder(o: Orderunderlag, kundId: string, saljareId: string | nu
     external_order_id: o.navId,
     notes: anteckning,
     order_value: ordervarde(rader),
-    term_months: o.bindningManader,
+    term_months: avtalsmanader(o, rader),
+    ...fakt,
     split_contracts: 0,
     items: rader,
   };

@@ -6,7 +6,9 @@
  *      känns igen — Bolagsverket i Inkio slår bara upp juridiska personer.
  *   2. PAKETET blir en löpande rad med månadsbeloppet och bindningstiden, och
  *      ordern får hela värdet och längden i huvudet (`order_value`,
- *      `term_months`) — Inkio nekar sedan 2026-10 en order utan dem.
+ *      `term_months`) och hur den faktureras (intern månadsvis, en egen plan
+ *      med engångsbeloppet först, eller finansierad) — Inkio nekar sedan
+ *      2026-10 en order utan dem.
  *   3. EN TJÄNST UTAN MOTSVARIGHET hamnar på "Övrigt" med namnet som text, i
  *      stället för att tappas.
  *   4. NAV-ORDERNS ID står i `external_order_id`. Det är det som gör ett andra
@@ -36,6 +38,9 @@ import {
   nyOrder,
   orderrader,
   ordervarde,
+  avtalsmanader,
+  fakturering,
+  plusManader,
   overenskommet,
   sakerAdress,
   sidlage,
@@ -107,6 +112,42 @@ ok("ordervärdet är radernas summa över löptiden", doc.order_value === 23340,
 ok("längden är bindningstiden", doc.term_months === 12);
 ok("bara paketet: 1 495 kr i tolv månader är 17 940", ordervarde(orderrader({ ...underlag, tjanster: [] }, tj)) === 17940);
 ok("öresbelopp avrundas till ören", ordervarde([{ ...rader[0], rate: 1038.75 }]) === 12465);
+
+console.log("\nFaktureringen (Inkio kräver valet sedan 2026-10)");
+const paketet = orderrader({ ...underlag, tjanster: [] }, tj);
+const vanlig = nyOrder({ ...underlag, tjanster: [] }, "kund-1", null, paketet);
+ok("vanlig order: intern, månadsvis, 15 dagar", vanlig.invoicing === "Internal" && vanlig.invoice_schedule === "Monthly" && vanlig.payment_terms_days === 15);
+ok("månadsvis: ingen egen plan, inget finansbolag", vanlig.invoice_plan.length === 0 && vanlig.financing_company === null);
+ok("månadsvis delar värdet i precis månadsbeloppet", vanlig.order_value / vanlig.term_months === 1495);
+ok("anteckningen säger att faktureringen är Navs förval", vanlig.notes.includes("intern, månadsvis, 15 dagar (Navs förval)"));
+
+ok("med engångsbelopp: egen plan", doc.invoicing === "Internal" && doc.invoice_schedule === "Custom" && doc.payment_terms_days === 15);
+ok("en faktura i månaden under avtalet", doc.invoice_plan.length === 12, `fick ${doc.invoice_plan.length}`);
+ok("engångsbeloppet ligger på den första", doc.invoice_plan[0].amount === 1495 + 200 + 3000 && doc.invoice_plan[1].amount === 1695);
+ok("planen börjar på leveransdagen och slutar inom avtalet", doc.invoice_plan[0].invoice_date === "2026-10-15" && doc.invoice_plan[11].invoice_date === "2027-09-15");
+const planOre = doc.invoice_plan.reduce((s, f) => s + Math.round(f.amount * 100), 0);
+ok("planen summerar exakt till ordervärdet", planOre === Math.round(doc.order_value * 100), `${planOre} mot ${doc.order_value}`);
+
+const langre = { ...underlag, tjanster: [{ namn: "Google My Business", fakturering: "manad", belopp: 200, manader: 24 }] };
+const langreRader = orderrader(langre, tj);
+const langreDoc = nyOrder(langre, "kund-1", null, langreRader);
+ok("en tjänst som löper längre förlänger avtalet", avtalsmanader(langre, langreRader) === 24 && langreDoc.term_months === 24);
+ok("efter bindningstiden faktureras bara tjänsten", langreDoc.invoice_plan.length === 24 && langreDoc.invoice_plan[12].amount === 200 && langreDoc.invoice_plan[11].amount === 1695);
+ok("och planen summerar ändå till värdet", langreDoc.invoice_plan.reduce((s, f) => s + Math.round(f.amount * 100), 0) === Math.round(langreDoc.order_value * 100));
+
+const fin = nyOrder({ ...underlag, tjanster: [], finansierad: true }, "kund-1", null, paketet, "Novo");
+ok("finansierad: finansbolaget och inget annat", fin.invoicing === "Financed" && fin.financing_company === "Novo" && fin.invoice_schedule === null && fin.payment_terms_days === null && fin.invoice_plan.length === 0);
+ok("finansierad: anteckningen säger vilket bolag", fin.notes.includes("finansierad via Novo"));
+let kastade = false;
+try {
+  fakturering({ ...underlag, finansierad: true }, paketet, null);
+} catch {
+  kastade = true;
+}
+ok("finansierad utan finansbolag stoppas i Nav, inte i Inkio", kastade);
+
+ok("31 januari plus en månad är sista februari", plusManader("2026-01-31", 1) === "2026-02-28" && plusManader("2028-01-31", 1) === "2028-02-29");
+ok("över årsskiftet", plusManader("2026-10-15", 11) === "2027-09-15");
 
 const avtalat = overenskommet(underlag, "Mick Corneliusson", "2026-10-07");
 ok("överenskommet säger paket, belopp, bindning och godkännare", avtalat.includes("Paket 2") && avtalat.includes("/mån") && avtalat.includes("12 mån") && avtalat.includes("Mick Corneliusson"), avtalat);

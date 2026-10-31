@@ -5,7 +5,35 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
-## 2026-10-31 · Inkio: orderns värde och längd på ordern (gren `inkio-ordervarde`, EJ MERGAD)
+## 2026-10-31 kväll · Inkio: faktureringen på ordern (gren `inkio-fakturering`)
+
+`424fcc5` (värde och längd) mergades till main på beställarens ja och byggdes grönt i produktionen. Order #32 skickades om
+(utkorgsrad 2309, samma rad som knappen skriver) och kom ett steg längre: Inkio nekade tre gånger med 422 "Välj hur ordern
+faktureras: finansierad eller intern". Ingen order skapades i Inkio.
+
+Inkios formulär (klientpaketets `invoicePlan`, funktionen `k()`) skickar `invoicing` (Internal/Financed), `financing_company`,
+`invoice_schedule` (Monthly…Custom), `payment_terms_days` och `invoice_plan` (bara för Custom). Formulärets förval för intern
+fakturering är månadsvis och 15 dagar. **`fakturering()` i `inkio-mappning.ts`** gör samma val:
+- `financed` (0079) → Financed med finansbolaget: `INKIO_FINANSBOLAG`, annars det Inkio använt mest
+  (`get-known-financing-companies`, i dag Novo och Kronans; bara Novo står på avtal). Ingen Nav-order har varit finansierad.
+- Alla rader löpande lika länge → Internal, Monthly, 15 dagar. Inkio delar värdet i lika delar, och varje del blir
+  precis månadsbeloppet.
+- Engångsbelopp eller olika löptider → Internal, Custom, en faktura i månaden. Engångsbeloppet ligger på den första,
+  och planen summerar i ören exakt till `order_value` (Inkio nekar annars). `term_months` = den längsta raden, så att
+  ingen faktura hamnar efter avtalets slut. Ingen Nav-order har hittills haft tilläggstjänster.
+
+Valet står i orderns anteckning ("Navs förval") och ändras i Inkios orderhantering (`set_invoicing`) så länge ordern väntar.
+18 nya kontroller i `tests/inkio.mjs`, strikt tsc på mappningen och adaptern.
+
+**#24 IE Cleaning** godkändes 2026-10-31 17:43 UTC men kom aldrig i utkorgen: den skapades 2026-10-01, före
+`crm_installning.aktiv_fran` (2026-10-08), och `crm_order_till_utkorg` hoppar med flit över sådana order (de importerades).
+#24 var bara inskickad vid importen och finns inte i Inkio. Den köas för hand efter mergen. Regeln står kvar: #28 SweAuto
+(skapad 09-24) finns redan i Inkio och ska inte dit igen om den godkänns.
+
+**#33–#36** är fyra utkast för Städservice Ale AB, skapade inom två minuter 2026-10-31. Godkänns alla blir det fyra order i
+Inkio (`external_order_id` skiljer dem åt). Säljaren eller godkännaren bör ta bort dubbletterna.
+
+## 2026-10-31 · Inkio: orderns värde och längd på ordern (gren `inkio-ordervarde`, MERGAD 424fcc5)
 
 Beställaren bad om en genomgång av Inkio-kopplingen mot den nya OpenAPI-specen (617 operationer, samma som
 crm.inkio.se/api/openapi i dag) och en lista över avtal i Nav som saknas i Inkio.

@@ -183,6 +183,22 @@ async function saljareMedEpost(epost: string | null): Promise<string | null> {
   return rader.find((r) => r.email.trim().toLowerCase() === epost.trim().toLowerCase())?.id ?? null;
 }
 
+/**
+ * Finansbolaget för en finansierad order. Nav vet bara ATT affären går via
+ * finanspartnern, inte vilken — `INKIO_FINANSBOLAG` om den är satt, annars det
+ * bolag Inkio själv har använt mest (listan kommer mest använd först).
+ */
+async function finansbolag(): Promise<string> {
+  const satt = process.env.INKIO_FINANSBOLAG?.trim();
+  if (satt) return satt;
+  const kanda = await anrop<unknown[]>("GET", "/api/contracts/get-known-financing-companies");
+  const forst = (kanda ?? []).find((n): n is string => typeof n === "string" && n.trim() !== "");
+  if (!forst) {
+    throw new Error("Ordern är finansierad, men Inkio har inget finansbolag att välja. Lägg upp ordern i Inkio för hand eller sätt INKIO_FINANSBOLAG.");
+  }
+  return forst.trim();
+}
+
 type Bolagsverket = {
   found: boolean;
   company_name: string | null;
@@ -275,7 +291,11 @@ export const inkio: CrmAdapter = {
       };
     }
 
-    const [tj, saljare] = await Promise.all([tjanster(), saljareMedEpost(o.saljarEpost)]);
+    const [tj, saljare, bolag] = await Promise.all([
+      tjanster(),
+      saljareMedEpost(o.saljarEpost),
+      o.underlag.finansierad ? finansbolag() : Promise.resolve(null),
+    ]);
     const rader = orderrader(o.underlag, tj);
     if (rader.length === 0) throw new Error("Ordern har varken månadsbelopp eller tjänster — det finns inget att lägga in.");
 
@@ -285,7 +305,7 @@ export const inkio: CrmAdapter = {
     const bevis = o.bevis && o.bevis.data.byteLength <= INKIO_MAX_BYTE ? o.bevis : null;
 
     const form = new FormData();
-    form.append("doc", JSON.stringify(nyOrder(o.underlag, kund.id, saljare, rader)));
+    form.append("doc", JSON.stringify(nyOrder(o.underlag, kund.id, saljare, rader, bolag)));
     form.append("submit", bevis ? "1" : "0");
     if (bevis) {
       form.append("agreed", overenskommet(o.underlag, o.godkandAv, o.godkandDag));
