@@ -5,6 +5,25 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-10-31 natt · Möten i registerutdraget (direkt på `main`)
+
+**Varför.** Möten (0260) gav åtta nya nycklar mot `employee` utan rad i `registerutdrag.ts`, så en
+anställds möten följde inte med i utdraget enligt artikel 15, och `tests/registerutdrag.mjs` föll på dem.
+Raden skulle ha kommit med i `b077c11`.
+
+**Klassningen.** KALLOR har en rad per tabell (slingan i `registerutdrag-server.ts` nycklar på
+tabellnamnet), så mötet följer med den som håller det: `mote.halls_av`, "Möten du håller, och hur de
+gick". I UNDANTAG: `mote.bokat_av`, `bekraftat_av`, `utfall_av`, `resultat_av`, `mote_bolag.skapad_av`,
+`mote_kedja.offert_av` och `avslut_av`. Den som bokar åt en kollega får bokningen i sitt utdrag via
+händelseloggen (`mote.created`, `actorId`), samma linje som `coaching_session` (coachen) och
+`calendar_event` (`created_by`).
+
+**Prov.** `tests/registerutdrag.mjs` mot mains träd: Mötens åtta kolumner borta ur "saknas"; 136 källor
+ordnas på sin primärnyckel. Provet är fortfarande rött på `calendar_attachment.uploaded_by` och
+Säljtavlans fem `salesboard_*`-kolumner, som inte är Mötens.
+
+---
+
 ## 2026-10-31 kväll · Säljsamtalet i orderformuläret (gren `saljsamtal-saljaren`, EJ MERGAD)
 
 **Varför.** Beställaren lade in Edvins order på Städservice Ale AB (signerad 2026-10-22) och fick "Det finns inget

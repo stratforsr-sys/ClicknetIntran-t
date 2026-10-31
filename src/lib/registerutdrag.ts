@@ -291,6 +291,9 @@ export const KALLOR: Kalla[] = [
   { tabell: "coaching_meeting_request", kolumn: "employee_id", andamal: "Dina förfrågningar om ett samtal med chefen" },
   { tabell: "coaching_task_note", kolumn: "by_employee_id", andamal: "Anteckningar i dina coachningsuppgifter, och det du skrivit i andras" },
   { tabell: "nav_skrivnyckel", kolumn: "aktor", andamal: "Dina senaste sparningar i Nav 2.0 och navets svar (sparas ett dygn)" },
+  // Möten (0260). Mötet följer med den som håller det, som calendar_event med organisatören.
+  // Den som bokade åt en kollega får bokningen via händelseloggen (mote.created), se UNDANTAG.
+  { tabell: "mote", kolumn: "halls_av", andamal: "Möten du håller, och hur de gick" },
 ];
 
 /**
@@ -575,4 +578,13 @@ export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
   { tabell: "cost_rate_replaced", kolumn: "owner_id", skal: "Vem som ägde en ersatt sats (som cost_rate.owner_id, K28)" },
   { tabell: "cost_rate_replaced", kolumn: "created_by", skal: "Vem som satte den ersatta satsen" },
   { tabell: "cost_rate_replaced", kolumn: "replaced_by", skal: "Vem som ersatte satsen" },
+  // Möten (0260): vem som gjorde något på ett möte, ett kort eller ett bolag. Det man själv gjort
+  // står i händelseloggen (mote.*), och bolagets uppgifter handlar om kunden.
+  { tabell: "mote", kolumn: "bokat_av", skal: "Vem som bokade mötet; mötet följer med den som håller det" },
+  { tabell: "mote", kolumn: "bekraftat_av", skal: "Vem som bekräftade tiden med kunden" },
+  { tabell: "mote", kolumn: "utfall_av", skal: "Vem som satte utfallet (hållet, uteblev, avbokat)" },
+  { tabell: "mote", kolumn: "resultat_av", skal: "Vem som satte resultatet efter ett hållet möte" },
+  { tabell: "mote_bolag", kolumn: "skapad_av", skal: "Vem som lade upp bolaget — uppgifterna handlar om kunden" },
+  { tabell: "mote_kedja", kolumn: "offert_av", skal: "Vem som skickade offerten — kortet handlar om kunden" },
+  { tabell: "mote_kedja", kolumn: "avslut_av", skal: "Vem som stängde kortet (affär, nej, avbokat) — kortet handlar om kunden" },
 ];
