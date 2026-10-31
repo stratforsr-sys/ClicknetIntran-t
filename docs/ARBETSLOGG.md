@@ -5,7 +5,7 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
-## 2026-10-31 kväll · Inkio: faktureringen på ordern (gren `inkio-fakturering`)
+## 2026-10-31 kväll · Inkio: faktureringen på ordern (MERGAD `62720d6`)
 
 `424fcc5` (värde och längd) mergades till main på beställarens ja och byggdes grönt i produktionen. Order #32 skickades om
 (utkorgsrad 2309, samma rad som knappen skriver) och kom ett steg längre: Inkio nekade tre gånger med 422 "Välj hur ordern
@@ -33,6 +33,15 @@ Valet står i orderns anteckning ("Navs förval") och ändras i Inkios orderhant
 **#33–#36** är fyra utkast för Städservice Ale AB, skapade inom två minuter 2026-10-31. Godkänns alla blir det fyra order i
 Inkio (`external_order_id` skiljer dem åt). Säljaren eller godkännaren bör ta bort dubbletterna.
 
+**Resultatet:** `62720d6` mergades på beställarens ja och byggdes grönt. #32 skickades om (utkorgsrad 2310) och blev
+SO-2026-00098 på första försöket: 17 940 kr, 12 mån, intern månadsvis 15 dagar, 12 fakturor à 1 495 kr från 2026-11-02 som
+stämmer mot värdet, avtal CTR-2026-00090, orderhantering OH-2026-00007 och beviset bifogat. Inkio sparar 0 kr på raderna,
+så radernas priser räknas inte dubbelt. #24 köades inte: automatläget stoppade det, och den stannar ändå på adressen tills
+kunden finns i Inkio.
+
+Rättelse: datumen i jämförelsen nedan lästes i UTC och kom en dag tidigt. #32 är signerad 2026-10-29, inte 10-28, och de
+manuellt inlagda Inkio-ordrarna har samma datum som Nav, inte dagen efter.
+
 ## 2026-10-31 · Inkio: orderns värde och längd på ordern (gren `inkio-ordervarde`, MERGAD 424fcc5)
 
 Beställaren bad om en genomgång av Inkio-kopplingen mot den nya OpenAPI-specen (617 operationer, samma som
@@ -57,7 +66,7 @@ delade CRM:et). Beviset är alltså klientpaketet och 422-texten, inte ett svar 
 "Försök igen" på order #32 och läs `crm_order`.
 
 **Avtal i Nav som saknas i Inkio** (31 order i Nav mot 91 order och 89 avtal i Inkio, matchade på
-Inkio-koppling, `external_order_id` och org.nr): bara #32 Roos Alltjänst (signerad 10-28, Fredrik), av felet ovan.
+Inkio-koppling, `external_order_id` och org.nr): bara #32 Roos Alltjänst (signerad 10-29, Fredrik), av felet ovan.
 I övrigt: #24 IE Cleaning (enskild firma) är inskickad men inte godkänd i Nav, #30 Mbix (Edvin, 10-29) och
 #28 SweAuto är utkast i Nav (SweAuto finns i Inkio som SO-2026-00097), #27 Stockholms Clean Space är makulerad
 i båda. De 25 andra signerade eller betalda ordrarna har var sin order och ett aktivt avtal i Inkio.
