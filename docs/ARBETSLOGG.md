@@ -119,7 +119,8 @@ registerutdraget och raderas med personen (kaskad). Läses med SQL tills vidare.
 jobbet och ur källistorna, kortet **Påminn mig** i Tid borttaget. Kvar: chefens egen fråga "Är allt
 okej?" (`tid-ostamplad`, en människas fråga, mejlas), fredagens veckokoll och chefens morgonnotis och
 16:00-samling (morgonnotisen räknar fortfarande "N har inte stämplat in" — inte en påminnelse till
-personen; ta bort på beställarens ord).
+personen; ta bort på beställarens ord). De 167 gamla "Du har inte stämplat in" i klockan
+(`tid-ostamplad`, 15 september–30 oktober, ingen öppnad) raderade samma kväll på beställarens ja.
 
 **3. Varje notis länkar till sin post.** Server: alla `notifiera*`-anrop och klockans härledda poster
 (order → `/order/<id>`, kampanjsida → `/order/kund/<org>`, bonus/mål/hävd → `/provision/manad/<m>`,
