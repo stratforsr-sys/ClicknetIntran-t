@@ -55,7 +55,7 @@ export type NdMoteKort = {
     nulage: string | null;
   } | null;
   uppfoljning: { datum: string; text: string | null; offert: boolean; ingetSvar: number; andrad: string | null } | null;
-  historik: { tid: string; text: string }[];
+  historik: { id: string; tid: string; text: string }[];
 };
 
 export type NdMoten = {
@@ -103,7 +103,7 @@ type KortRad = {
   kolumn: string;
   idag: boolean | null;
 };
-type MoteRad = { kedja_id: string; mote_tid: string; utfall: string | null; resultat: string | null };
+type MoteRad = { id: string; kedja_id: string; mote_tid: string; utfall: string | null; resultat: string | null };
 type PersonRad = { id: string; first_name: string; last_name: string; employee_role: { role: string }[] | null };
 
 /** "28 okt" ur en svensk lokal tid "2026-10-28 10:00". */
@@ -113,11 +113,11 @@ function dagManad(lokalTid: string): string {
 }
 
 /** Historikens rad för ett avslutat möte: "28 okt · Uteblev", "30 okt · Hållet · Offert skickad". */
-function historikRad(m: MoteRad): { tid: string; text: string } {
+function historikRad(m: MoteRad): { id: string; tid: string; text: string } {
   const tid = lokal(m.mote_tid);
   const delar = [dagManad(tid), UTFALL[m.utfall ?? ""] ?? m.utfall ?? ""];
   if (m.resultat) delar.push(RESULTAT[m.resultat] ?? m.resultat);
-  return { tid, text: delar.filter(Boolean).join(" · ") };
+  return { id: m.id, tid, text: delar.filter(Boolean).join(" · ") };
 }
 
 /** Veckans gränser: måndag 00:00 svensk tid till nästa måndag 00:00, som ISO. */
@@ -160,11 +160,11 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
   }
 
   // Historiken: kedjornas avslutade möten (utfall satt), äldst först. Det öppna mötet står redan i `mote`.
-  const historik = new Map<string, { tid: string; text: string }[]>();
+  const historik = new Map<string, { id: string; tid: string; text: string }[]>();
   if (rader.length) {
     const { data } = await supabase
       .from("mote")
-      .select("kedja_id, mote_tid, utfall, resultat")
+      .select("id, kedja_id, mote_tid, utfall, resultat")
       .in("kedja_id", rader.map((r) => r.kedja_id))
       .not("utfall", "is", null)
       .order("mote_tid", { ascending: true })

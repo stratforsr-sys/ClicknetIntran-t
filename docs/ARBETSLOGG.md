@@ -5,6 +5,49 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-01 kväll · Möten, varv 3: radera ett möte, och samtal räknas från 5 minuter (direkt på `main`, 0267 + 0268 KÖRDA)
+
+**Beställarens svar 2026-11-01:** "5 minuter" (från vilken längd ett samtal räknas), "Det är ett prov,
+du kan ta bort den" (mötet med Test AB) och "Lägg också till bara så att man kan radera och ta bort möten
+när man har lagt till dem".
+
+**Samtal från 5 minuter (0267).** `mote_samtal_vecka` räknar bara utgående samtal med
+`duration_seconds >= 300`. Kretsen, signaturen och rättigheterna är som i 0264. Samma gräns gäller
+samtalslistan i rutten (`case "samtal"`) och konstanten `SAMTAL_MIN_SEK` i `motesstatforma.ts`.
+Proven kontrollerar att SQL och TS säger samma sak och att gränsen går vid 299, 300 och 301 s. Två
+veckor i produktionen (v. 43–44): 3099 utgående samtal, och 311 av dem var minst 5 minuter. Talet blir
+alltså ungefär en tiondel av det förra. Etiketten "Samtal" står kvar, och förklaringen och Nytt i navet
+säger "minst fem minuter". md5 för `mote_samtal_vecka` i TILLATNA är nu `fa7fe628cbe4`.
+
+**Radera ett möte (0268).** `public.mote_radera(p_mote, p_bara_oppet)` är security definer, och bara
+service_role får köra den. Funktionen låser kedjan och sedan bolaget, i samma ordning som triggrarna.
+Sedan raderar den mötet: villkorat på `utfall is null` om mötet var öppet, och 0 rader ger 409. Har
+kedjan inga möten kvar försvinner den, och har bolaget inga kedjor kvar försvinner det också. Annars
+räknas `deltagare` om ur de kvarvarande mötena. Bolagets `senast_handelse` sätts tillbaka, eftersom
+en radering inte ska förlänga gallringen. Allt sker i en transaktion.
+
+Rättigheten är `farRadera`. Ett öppet möte får raderas av bokaren eller av sales_manager, ceo och admin.
+Ett möte med utfall får bara raderas av sales_manager, ceo och admin. En teamledare som inte själv
+bokat mötet får inte radera det, och det får inte heller en hållare som inte bokat det.
+
+Rutten (`radera`) loggar `mote.deleted` och ställer in ett öppet möte i kalendern, som Avbokat, så att
+gästen får en avbokning. Misslyckas kalendern blir svaret ändå ok, men med en varning.
+
+I tavlans panel finns "Radera mötet" som en tyst länk under knapparna. Den kräver två tryck, med minst
+400 ms och högst 4 s mellan dem, och visar "<epost> får en avbokning". Historikens rader har "Radera"
+för sales_manager, ceo och admin. `historik` har fått `id`.
+
+**Prov:** moten 208, moten-db 127, motesstat 165, motesstat-db 45, navnyheter 586, bro 58, nav2-skriv
+51, app-vagar 49, handelselogg 62, nav2-gallring 60, och rattigheter-db visade inga nya rättigheter.
+Gränssnittsprovet i Chrome (`delar/moten/b/v6/prov.mjs`) gav 60/60. Varje del granskades. Två fynd var
+viktiga, och båda är lagade: bolaget saknade lås, och ett dubbelklick raderade direkt.
+
+**Test AB:** mötet var beställarens eget prov från 2026-10-31. Det raderas efter deployen i produktionen
+genom gränssnittet som Zen, och det blir raderingens produktionsprov. Utfallet står i
+`~/nav2-utkast/HANDOFF.md`, Del: Möten statistik.
+
+---
+
 ## 2026-11-01 · Notiserna: utskicksloggen, ingen stämplingspåminnelse, varje notis till sin post (direkt på `main`, 0271 KÖRD)
 
 Beställaren efter undersökningen om notiströtthet (rapporten `~/reports/Notiströtthet i Nav.md`):

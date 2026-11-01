@@ -14,6 +14,35 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "moten-radera",
+    rubrik: "Möten: radera ett möte som blev fel",
+    ingress: "Ett möte du har bokat går att ta bort, och kunden får en avbokning.",
+    text: `Öppna kortet i **Möten** och tryck **Radera mötet** under knapparna. Tryck en
+gång till för att bekräfta. Mötet försvinner från tavlan och statistiken. Står
+det i kalendern ställs det in där, så att kunden får en avbokning. Var det
+kortets enda möte försvinner kortet också.
+
+Du kan radera ett möte du själv har bokat, så länge det inte har fått något
+utfall. Ett möte som redan har hållits, uteblivit eller avbokats raderas av en
+säljchef, under **Historik** på kortet.`,
+    datum: "2026-11-01",
+    roller: [],
+    href: "/moten",
+  },
+  {
+    slug: "samtal-fran-fem-minuter",
+    rubrik: "Min statistik räknar samtal från fem minuter",
+    ingress: "Talet Samtal räknar bara samtal på minst fem minuter, så det är lägre än förut.",
+    text: `Korta samtal, där ingen svarar eller kunden lägger på direkt, räknas inte
+längre i **Min statistik** på startsidan eller i chefens tabell under
+**Statistik** i Möten. Bokade per 100 samtal räknas på samma samtal.
+
+Tryck på talet, så ser du samtalen bakom det. Listan visar samma samtal som
+talet räknar.`,
+    datum: "2026-11-01",
+    roller: [],
+  },
+  {
     slug: "ledighet-gar-att-stalla-in",
     rubrik: "En godkänd ledighet går att ställa in",
     ingress: "Chefen kan nu ställa in en ledighet som redan är godkänd, och den som hade ledigheten får besked i klockan.",
@@ -131,8 +160,8 @@ tavla och kan välja en säljare i taget.`,
     slug: "motesstatistik",
     rubrik: "Min statistik: veckans möten i sex tal",
     ingress: "Startsidan visar dina samtal, bokade möten och affärer den här veckan, jämfört med förra.",
-    text: `På startsidan, under Möten, står **Min statistik**: samtal, bokade möten,
-bokade per 100 samtal, andel hållna, andel affärer och affär på första mötet.
+    text: `På startsidan, under Möten, står **Min statistik**: samtal på minst fem minuter,
+bokade möten, bokade per 100 samtal, andel hållna, andel affärer och affär på första mötet.
 Pilen visar om talet gick upp eller ner sedan förra veckan, och ett streck i
 stället för ett tal betyder att det inte finns något att räkna på än.
 

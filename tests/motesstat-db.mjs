@@ -37,8 +37,14 @@
  *   7. Prestanda: en chefsläsning av två veckor tar under 200 ms (som vy mot
  *      `phone_call_read` tog den cirka 2 s).
  *
- * 0264 läses från disk och körs alltid inne i transaktionen (`create or replace`,
- * så provet går lika bra före som efter att migrationen körts på riktigt, och
+ *   8. Minst 5 minuter (0267, beställaren 2026-11-01): ett samtal räknas bara om
+ *      `duration_seconds >= 300`. Samtal på 299 s räknas inte, 300 s och 301 s
+ *      gör det. Gränsen i 0267 är samma tal som `SAMTAL_MIN_SEK` i
+ *      motesstatforma.ts (läses som text). De övriga provsamtalen är 400 s
+ *      långa, så att de räknas; det var 60 s före 0267.
+ *
+ * 0264 och 0267 läses från disk och körs alltid inne i transaktionen (`create or replace`,
+ * så provet går lika bra före som efter att migrationerna körts på riktigt, och
  * det är filens text som prövas). Saknas `mote_samtal_vecka` helt körs 0263
  * först. Provet skriver ut vilket av fallen det var. Allt sker i en
  * transaktion som rullas tillbaka, ingen driftdata ändras, och frågorna går
@@ -52,6 +58,8 @@ import pg from "pg";
 const MAPP = join(dirname(fileURLToPath(import.meta.url)), "..", "supabase/migrations");
 const MIGRATION_0263 = join(MAPP, "0263_motesstat_samtal.sql");
 const MIGRATION = join(MAPP, "0264_motesstat_krets.sql");
+const MIGRATION_0267 = join(MAPP, "0267_motesstat_samtal_5min.sql");
+const FORMA = join(MAPP, "..", "..", "src/lib/nav2/motesstatforma.ts");
 
 let fel = 0;
 const ok = (namn, villkor, extra = "") => {
@@ -62,6 +70,8 @@ const ok = (namn, villkor, extra = "") => {
 // Läses först: saknas filen är provet rött innan databasen rörs.
 const sql = readFileSync(MIGRATION, "utf8");
 const sql0263 = readFileSync(MIGRATION_0263, "utf8");
+const sql0267 = readFileSync(MIGRATION_0267, "utf8");
+const forma = readFileSync(FORMA, "utf8");
 
 const db = new pg.Client({
   connectionString: process.env.DATABASE_URL,
@@ -76,9 +86,10 @@ try {
       `select to_regprocedure('public.mote_samtal_vecka(date,date)') is not null as samtal,
               to_regprocedure('public.mote_statkrets()') is not null as krets`,
     );
-    console.log(`  (före provet: mote_samtal_vecka ${f.samtal ? "finns" : "saknas"}, mote_statkrets ${f.krets ? "finns" : "saknas"}; 0264 körs i transaktionen)`);
+    console.log(`  (före provet: mote_samtal_vecka ${f.samtal ? "finns" : "saknas"}, mote_statkrets ${f.krets ? "finns" : "saknas"}; 0264 och 0267 körs i transaktionen)`);
     if (!f.samtal) await db.query(sql0263);
     await db.query(sql);
+    await db.query(sql0267);
   }
 
   const nyAnstalld = async (etikett, roll = null) => {
@@ -118,11 +129,12 @@ try {
   await db.query(`update employee set team_id = $2::uuid where id = $1::uuid`, [e.id, team.id]);
 
   let antalA = 0;
-  const samtal = async (emp, riktning, startad, talk = 30) => {
+  // Längden är 400 s om inget annat sägs: ett samtal räknas först från SAMTAL_MIN_SEK (300 s, 0267).
+  const samtal = async (emp, riktning, startad, talk = 30, langd = 400) => {
     await db.query(
       `insert into phone_call (employee_id, direction, started_at, talk_seconds, duration_seconds)
-       values ($1::uuid, $2, $3::timestamptz, $4::int, 60)`,
-      [emp, riktning, startad, talk],
+       values ($1::uuid, $2, $3::timestamptz, $4::int, $5::int)`,
+      [emp, riktning, startad, talk, langd],
     );
     if (emp === a.id) antalA++;
   };
@@ -144,8 +156,20 @@ try {
   await samtal(e.id, "ut", "2027-01-13T09:00:00Z");
   await db.query(
     `insert into phone_call (employee_id, direction, started_at, talk_seconds, duration_seconds)
-     values (null, 'ut', '2027-01-11T09:00:00Z', 30, 60)`,
+     values (null, 'ut', '2027-01-11T09:00:00Z', 30, 400)`,
   ); // ingen säljare: räknas inte
+
+  // Gränsen på 5 minuter (0267): en egen säljare, så att de andra talen inte rubbas. Alla i veckan 2027-02-08.
+  const g = await nyAnstalld("gr");
+  await samtal(g.id, "ut", "2027-02-08T09:00:00Z", 30, 299); // 299 s: räknas inte
+  await samtal(g.id, "ut", "2027-02-08T09:10:00Z", 30, 300); // 300 s: räknas (gränsen ingår)
+  await samtal(g.id, "ut", "2027-02-08T09:20:00Z", 30, 301); // 301 s: räknas
+  await samtal(g.id, "ut", "2027-02-08T09:30:00Z", 0, 0); // 0 s: räknas inte
+  await samtal(g.id, "in", "2027-02-08T09:40:00Z", 30, 900); // inkommande räknas inte, hur långt det än är
+  await db.query(
+    `insert into phone_call (employee_id, direction, started_at, talk_seconds, duration_seconds)
+     values ($1::uuid, 'ut', '2027-02-08T09:50:00Z', 30, null)`, [g.id],
+  ); // okänd längd räknas inte (null >= 300 är inte sant)
 
   // Omställningarna. Vecka som text, så att datumet inte flyttas av tidszon.
   await samtal(a.id, "ut", "2026-03-28T23:30:00Z"); // lördag 23:30 UTC = söndag 00:30 CET, före 02:00-omställningen: veckan 03-23
@@ -182,6 +206,20 @@ try {
     const dst = await somAnvandare(c.auth_user_id, FUNK, ["2026-03-01", "2026-10-31", [a.id]]);
     ok("sommar- och vintertid: 03-23, 06-08, 06-15, 10-19 och 10-26, ett samtal var",
       tabell(dst) === "2026-03-23:1 2026-06-08:1 2026-06-15:1 2026-10-19:1 2026-10-26:1", tabell(dst));
+  }
+
+  console.log("\n\x1b[1mMinst 5 minuter (0267)\x1b[0m");
+  {
+    const rader = await somAnvandare(c.auth_user_id, FUNK, ["2027-02-08", "2027-02-14", [g.id]]);
+    ok("299 s räknas inte, 300 s och 301 s gör det: 2027-02-08:2", tabell(rader) === "2027-02-08:2", tabell(rader));
+    const talen = await somAnvandare(c.auth_user_id,
+      `select count(*)::int as n from public.phone_call where employee_id = $1::uuid and direction = 'ut'`, [g.id]);
+    ok("alla fem utgående rader finns i phone_call (de korta och den utan längd är bara inte räknade)", talen[0].n === 5, `${talen[0].n}`);
+    const m = /export const SAMTAL_MIN_SEK\s*=\s*(\d+)\s*;/.exec(forma);
+    ok("SAMTAL_MIN_SEK finns i motesstatforma.ts", !!m, m ? m[1] : "saknas");
+    ok(`0267 har samma gräns som SAMTAL_MIN_SEK: duration_seconds >= ${m?.[1]}`,
+      // Bara själva villkoret i funktionen räknas, inte filhuvudets kommentar.
+      !!m && new RegExp(`^\\s*and pc\\.duration_seconds >= ${m[1]}\\s*$`, "m").test(sql0267) && !new RegExp(`duration_seconds >= (?!${m[1]}\\b)\\d+`).test(sql0267));
   }
 
   console.log("\n\x1b[1mFönstret [p_fran, p_till]\x1b[0m");

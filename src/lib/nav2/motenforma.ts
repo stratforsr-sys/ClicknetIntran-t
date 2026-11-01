@@ -115,6 +115,13 @@ export const farSe = (u: Aktor, m: MoteParter): boolean => u.id === m.bokat_av |
 /** Samma krets som får se mötet får bekräfta det. */
 export const farBekrafta = (u: Aktor, m: MoteParter): boolean => farSe(u, m);
 export const farSattaUtfall = (u: Aktor, m: MoteParter): boolean => u.id === m.halls_av || harRoll(u, UTFALL_ROLLER);
+/**
+ * Radera ett möte (V6a). Utan utfall: den som bokade det, eller en säljchef. Med utfall: bara en säljchef, eftersom ett
+ * avslutat möte är underlag för statistiken och historiken. En teamledare räcker inte, och att hålla mötet utan att ha bokat
+ * det räcker inte heller.
+ */
+export const farRadera = (u: Aktor, m: MoteParter & { utfall: string | null }): boolean =>
+  harRoll(u, UTFALL_ROLLER) || (m.utfall === null && u.id === m.bokat_av);
 
 /* ------------------------------------------------------------------------ */
 /* Art och datum                                                             */
@@ -518,7 +525,7 @@ export const SQL_INGET_SVAR = `update public.mote_kedja
  * igenom resten (`uppslag`, `lediga`, och `samtal` från B4), som bara läser. En okänd handling är
  * ingen skrivning och får sitt vanliga 400.
  */
-export const SKRIVANDE_HANDLINGAR = ["boka", "paminn", "bekrafta", "flytta", "avboka", "utfall", "kund", "nej", "inget_svar", "prova_igen"] as const;
+export const SKRIVANDE_HANDLINGAR = ["boka", "paminn", "bekrafta", "flytta", "avboka", "utfall", "kund", "nej", "inget_svar", "prova_igen", "radera"] as const;
 export const arSkrivning = (handling: string): boolean => (SKRIVANDE_HANDLINGAR as readonly string[]).includes(handling);
 
 /**

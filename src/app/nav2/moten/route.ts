@@ -2,7 +2,7 @@ import { NextResponse, after } from "next/server";
 import { fullName, getCurrentUser } from "@/lib/auth";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { svenskaMinuter, svensktDatum, svenskTidpunkt } from "@/lib/klocka";
-import { samtalsfonster, samtalTillatet } from "@/lib/nav2/motesstatforma";
+import { SAMTAL_MIN_SEK, samtalsfonster, samtalTillatet } from "@/lib/nav2/motesstatforma";
 import { notifiera } from "@/lib/notishandelse-server";
 import { skrivHandelse } from "@/lib/handelselogg-server";
 import { dagPlus } from "@/lib/saljtakt";
@@ -24,6 +24,7 @@ import {
   farAndraKedja,
   farKopplaOrder,
   farBekrafta,
+  farRadera,
   farSattaUtfall,
   farSe,
   flyttaIndata,
@@ -55,6 +56,7 @@ export const dynamic = "force-dynamic";
  * ===========================================================================
  * DEL 1 (A6): `uppslag`, `lediga`, `boka` och `paminn`.
  * DEL 2 (A7): mötets knappar `bekrafta`, `flytta`, `avboka`, `utfall`, `kund`, `nej`.
+ *   `radera` (V6a): den som bokade ett öppet möte, eller en säljchef (också när mötet har utfall), raderar det. Allt i databasen i `mote_radera` (0268).
  * DEL 3 (A8): uppföljningen `inget_svar` och `prova_igen`.
  * `samtal` (B4): samtalen bakom statistikens tal, sina egna eller (chef) allas. En okänd handling svarar 400.
  *
@@ -280,6 +282,9 @@ export async function POST(request: Request) {
     case "utfall":
       return await utfallHandling(false);
 
+    case "radera":
+      return await radera();
+
     case "kund":
       return await kund();
 
@@ -293,7 +298,7 @@ export async function POST(request: Request) {
       return await uppfoljning("prova_igen");
 
     case "samtal": {
-      // B4/varv 2: samtalen bakom statistikens tal Samtal. Samma krets som mote_samtal_vecka (0264): mote_statkrets()
+      // B4/varv 2: samtalen bakom statistikens tal Samtal, bara de på minst SAMTAL_MIN_SEK (varv 3, 0267). Samma krets som mote_samtal_vecka (0264): mote_statkrets()
       // anropas som den inloggade, null = alla (säljchef, vd, admin), en teamledare får sitt team, övriga sig själva.
       const person = String(b.person ?? "");
       if (!UUID.test(person)) return svar({ fel: "Ogiltig begäran." }, 400);
@@ -321,6 +326,7 @@ export async function POST(request: Request) {
         .select("started_at, counterpart_e164, duration_seconds")
         .eq("employee_id", person)
         .eq("direction", "ut")
+        .gte("duration_seconds", SAMTAL_MIN_SEK)
         .gte("started_at", fonster.fran)
         .lt("started_at", fonster.slut);
       if (fonster.fore) fraga = fraga.lte("created_at", fonster.fore);
@@ -828,6 +834,42 @@ export async function POST(request: Request) {
     }
     const text = inn.utfall === "avbokat" ? "Mötet är avbokat." : inn.utfall === "uteblev" ? "Uteblev sparat." : "Utfallet är sparat.";
     return svar({ ok: `${text}${bokat ? " " + bokat : ""}`, mote: m.id, ...(nyttMoteId ? { nytt_mote: nyttMoteId } : {}), ...(varning ? { varning } : {}) });
+  }
+
+  /**
+   * Radera ett möte (V6a). Rättigheten prövas här (`farRadera`); databasfunktionen `mote_radera` (0268) gör själva
+   * raderingen atomärt, med kedjan och bolaget om mötet var det enda, och räknar om deltagarna annars.
+   *
+   * Har mötet inget utfall ställs kalenderhändelsen in (gästen får en avbokning), som för Avbokat. Misslyckas det är mötet
+   * ändå raderat på tavlan, så svaret är ok med en varning. Ett möte med utfall rör inte kalendern: det har redan hänt
+   * eller redan ställts in. `p_bara_oppet` följer med, så att ett utfall som sätts mellan läsningen och raderingen ger 409.
+   */
+  async function radera(): Promise<Response> {
+    const r = moteIndata(b);
+    if (!r.ok) return svar({ fel: r.fel }, 400);
+    const m = await hamtaMote(r.varden.mote);
+    if (!m) return svar({ fel: "Mötet finns inte." }, 404);
+    if (!farRadera(aktorn, m)) return svar({ fel: "Bara den som bokade mötet kan radera det, och bara innan det fått ett utfall. Ett möte med utfall raderas av en säljchef." }, 403);
+
+    const { data, error } = await db.rpc("mote_radera", { p_mote: m.id, p_bara_oppet: m.utfall === null });
+    if (error) return svar({ fel: "Mötet kunde inte raderas." }, 500);
+    if (data === null) return svar({ fel: "Mötet har ändrats. Ladda om tavlan." }, 409);
+    const res = data as { kedja: string; bolag: string; kedja_borta: boolean; bolag_borta: boolean };
+
+    await skrivHandelse({
+      actorId: mig,
+      action: "mote.deleted",
+      objectType: "mote",
+      objectId: m.id,
+      meta: { kedja: res.kedja, bolag: res.bolag, utfall: m.utfall, mote_tid: m.mote_tid, bokat_av: m.bokat_av, halls_av: m.halls_av, kedja_borta: res.kedja_borta, bolag_borta: res.bolag_borta },
+    });
+
+    let varning: string | null = null;
+    if (m.utfall === null) {
+      const kalFel = await stallInIKalender(m);
+      if (kalFel) varning = `Mötet är raderat, men kunde inte ställas in i kalendern (${kalFel}). Ställ in det där.`;
+    }
+    return svar({ ok: "Mötet är raderat.", mote: m.id, kedja_borta: res.kedja_borta, ...(varning ? { varning } : {}) });
   }
 
   /** Kedjans id och rätten att ändra den utan möte: med i kedjan, eller chef. */

@@ -364,5 +364,15 @@ console.log("\n\x1b[1msamtalsfönster (S1–S3)\x1b[0m");
   ok("tom fore räknas som saknad", f({ fran: "2026-10-26", till: "2026-11-01", fore: "" }).fore === null);
 }
 
+console.log("\n\x1b[1mSamtal räknas först från 5 minuter\x1b[0m");
+ok("SAMTAL_MIN_SEK är 300 (beställaren 2026-11-01)", forma.SAMTAL_MIN_SEK === 300);
+{
+  // Listan under talet ska ha samma gräns som talet: rutten filtrerar phone_call på SAMTAL_MIN_SEK i `case "samtal"`.
+  const { readFileSync } = await import("node:fs");
+  const rutt = readFileSync(new URL("../src/app/nav2/moten/route.ts", import.meta.url), "utf8");
+  const samtal = rutt.slice(rutt.indexOf('case "samtal"'), rutt.indexOf("default:", rutt.indexOf('case "samtal"')));
+  ok("rutten: samtalslistan filtrerar på SAMTAL_MIN_SEK", /\.gte\("duration_seconds", SAMTAL_MIN_SEK\)/.test(samtal));
+}
+
 console.log("");
 process.exit(fel ? 1 : 0);

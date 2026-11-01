@@ -57,7 +57,7 @@ import pg from "pg";
  * egen rad. `md5` ar de 12 forsta tecknen i `md5(pg_get_functiondef(oid))`.
  */
 export const TILLATNA = {
-  "mote_samtal_vecka(date,date)": { roller: "authenticated", md5: "50887b5903ad" }, // 0263, kroppen omskriven i 0264: samma krets som mote_statkrets()
+  "mote_samtal_vecka(date,date)": { roller: "authenticated", md5: "fa7fe628cbe4" }, // 0263, krets i 0264, minst 5 min (300 s) i 0267
   // Varv 2 (0264): vems tal i Möten-statistiken den inloggade får se. Den inloggade tas ur
   // current_employee_id() (kastar 42501 utan anställd), aldrig ur ett argument. null = alla
   // (sales_manager/ceo/admin), team_lead sitt team (leads_employee), alla andra bara sig själva.

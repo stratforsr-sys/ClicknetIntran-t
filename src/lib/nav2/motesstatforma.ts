@@ -27,6 +27,9 @@ export type Veckotal = {
 };
 export type Period = { fran: string; till: string };
 
+// Beställaren 2026-11-01: samtal kortare än 5 minuter räknas inte (samma 300 i 0267 och i rutten).
+export const SAMTAL_MIN_SEK = 300;
+
 const MS_PER_DAG = 86_400_000;
 const TRETTIO_MIN = 30 * 60_000;
 

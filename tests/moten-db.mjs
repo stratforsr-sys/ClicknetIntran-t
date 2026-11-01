@@ -33,6 +33,8 @@ import pg from "pg";
 const HAR = dirname(fileURLToPath(import.meta.url));
 const MIGRATIONER = join(HAR, "..", "supabase", "migrations");
 const FILER = ["0260_moten.sql", "0261_moten_kolumn.sql", "0262_moten_uppslag.sql"];
+// V6a: mote_radera. Läses alltid från disk och körs inne i transaktionen (create or replace), så att det är filens text som provas.
+const MIGRATION_0268 = join(MIGRATIONER, "0268_moten_radera.sql");
 
 if (!process.env.DATABASE_URL) {
   console.error("DATABASE_URL behovs.\n  set -a; . ~/.clicknet/nav.env; set +a; TZ=UTC node tests/moten-db.mjs");
@@ -802,6 +804,159 @@ async function main() {
            from pg_proc p where p.oid = 'public.mote_uppslag(text,text,text)'::regprocedure`,
       );
       return r.prosecdef === true && (r.proconfig ?? []).some((c) => c.startsWith("search_path=")) && r.anon === false && r.auth === true;
+    });
+
+    // ---- V6a: mote_radera (0268) -------------------------------------------
+    sektion("V6a: mote_radera (0268)");
+    if (!existsSync(MIGRATION_0268)) throw new Error("0268_moten_radera.sql saknas");
+    const sql0268 = readFileSync(MIGRATION_0268, "utf8");
+    await db.query(sql0268);
+    console.log("  (0268 körd i transaktionen)");
+
+    const radera = async (mote, bara) => (await ett(`select public.mote_radera($1, $2) as r`, [mote, bara])).r;
+    const nyttBolag = async (namn) => (await ett(`insert into mote_bolag (namn, kalla) values ($1, 'prov') returning id`, [namn])).id;
+    const nyKedja = async (bolagId, stangd = false) =>
+      (await ett(
+        stangd
+          ? `insert into mote_kedja (bolag_id, avslut, avslut_nar) values ($1, 'nej', now()) returning id`
+          : `insert into mote_kedja (bolag_id) values ($1) returning id`,
+        [bolagId],
+      )).id;
+    /** Ett möte; med `utfall` sätts utfall och utfall_nar (villkoret mote_utfall_par kräver båda). */
+    const moteMed = async (kedjaId, bokat, halls, utfall = null) =>
+      (await ett(
+        `insert into mote (kedja_id, bokat_av, halls_av, mote_tid, kalla, art, utfall, utfall_nar)
+         values ($1, $2, $3, now() + interval '3 days', 'prov', 'ny', $4::text, case when $4::text is null then null else now() end) returning id`,
+        [kedjaId, bokat, halls, utfall],
+      )).id;
+    const radFinns = async (tabell, id) => (await ett(`select count(*)::int as n from ${tabell} where id = $1`, [id])).n === 1;
+
+    const RA = await anstalld("salesperson", "RA");
+    const RB = await anstalld("salesperson", "RB");
+    const RC = await anstalld("salesperson", "RC");
+
+    await ok("(a) kedjans enda möte: möte, kedja och bolag försvinner, och svaret säger det", async () => {
+      const b = await nyttBolag("PROV moten Radera a AB");
+      const k = await nyKedja(b);
+      const m = await moteMed(k, RA.id, RB.id);
+      const r = await radera(m, true);
+      return r && r.kedja === k && r.bolag === b && r.kedja_borta === true && r.bolag_borta === true
+        && !(await radFinns("mote", m)) && !(await radFinns("mote_kedja", k)) && !(await radFinns("mote_bolag", b));
+    });
+
+    await ok("(b) bolaget har en annan, stängd kedja: kedjan försvinner men bolaget blir kvar", async () => {
+      const b = await nyttBolag("PROV moten Radera b AB");
+      await nyKedja(b, true);
+      const k = await nyKedja(b);
+      const m = await moteMed(k, RA.id, RB.id);
+      const r = await radera(m, true);
+      return r && r.kedja === k && r.bolag === b && r.kedja_borta === true && r.bolag_borta === false
+        && !(await radFinns("mote", m)) && !(await radFinns("mote_kedja", k)) && (await radFinns("mote_bolag", b));
+    });
+
+    await ok("(c) kedjan har två möten: bara det andra försvinner, och deltagare blir {A}", async () => {
+      const b = await nyttBolag("PROV moten Radera c AB");
+      const k = await nyKedja(b);
+      const m1 = await moteMed(k, RA.id, RA.id, "uteblev");
+      const m2 = await moteMed(k, RB.id, RC.id);
+      const fore = (await ett(`select deltagare from mote_kedja where id = $1`, [k])).deltagare;
+      const r = await radera(m2, true);
+      const efter = (await ett(`select deltagare from mote_kedja where id = $1`, [k])).deltagare;
+      return fore.length === 3 && r && r.kedja === k && r.kedja_borta === false && r.bolag_borta === false
+        && (await radFinns("mote", m1)) && !(await radFinns("mote", m2)) && (await radFinns("mote_kedja", k)) && (await radFinns("mote_bolag", b))
+        && efter.length === 1 && efter[0] === RA.id;
+    });
+
+    await ok("(c2) deltagare räknas om till bokat_av och halls_av, distinkta, också när de skiljer sig åt", async () => {
+      const b = await nyttBolag("PROV moten Radera c2 AB");
+      const k = await nyKedja(b);
+      await moteMed(k, RA.id, RB.id, "hallet");
+      const m2 = await moteMed(k, RC.id, RC.id);
+      const r = await radera(m2, false);
+      const efter = (await ett(`select deltagare from mote_kedja where id = $1`, [k])).deltagare;
+      return r && r.kedja_borta === false && efter.length === 2 && efter.includes(RA.id) && efter.includes(RB.id) && !efter.includes(RC.id);
+    });
+
+    await ok("(c3) en radering flyttar inte bolagets senast_handelse (gallringen)", async () => {
+      const b = await nyttBolag("PROV moten Radera c3 AB");
+      const k = await nyKedja(b);
+      await moteMed(k, RA.id, RB.id, "hallet");
+      const m2 = await moteMed(k, RC.id, RC.id);
+      await db.query(`update mote_bolag set senast_handelse = now() - interval '30 days' where id = $1`, [b]);
+      const fore = (await ett(`select senast_handelse from mote_bolag where id = $1`, [b])).senast_handelse;
+      await radera(m2, true);
+      const efter = (await ett(`select senast_handelse, now() as nu from mote_bolag where id = $1`, [b]));
+      return efter.senast_handelse.getTime() === fore.getTime() && efter.senast_handelse < efter.nu;
+    });
+
+    await ok("(d) p_bara_oppet = true på ett möte med utfall: svaret är null och raden finns kvar", async () => {
+      const b = await nyttBolag("PROV moten Radera d AB");
+      const k = await nyKedja(b);
+      const m = await moteMed(k, RA.id, RB.id, "hallet");
+      const r = await radera(m, true);
+      return r === null && (await radFinns("mote", m)) && (await radFinns("mote_kedja", k)) && (await radFinns("mote_bolag", b));
+    });
+
+    await ok("(d2) p_bara_oppet = false raderar ett möte med utfall (säljchefens väg)", async () => {
+      const b = await nyttBolag("PROV moten Radera d2 AB");
+      const k = await nyKedja(b);
+      const m = await moteMed(k, RA.id, RB.id, "avbokat");
+      const r = await radera(m, false);
+      return r && r.kedja_borta === true && r.bolag_borta === true && !(await radFinns("mote", m));
+    });
+
+    await ok("(e) ett okänt id ger null och rör ingenting", async () => {
+      const fore = (await ett(`select count(*)::int as n from mote_bolag where namn like 'PROV moten%'`)).n;
+      const r = await radera(randomUUID(), true);
+      const efter = (await ett(`select count(*)::int as n from mote_bolag where namn like 'PROV moten%'`)).n;
+      return r === null && fore === efter;
+    });
+
+    await ok("(f) anon och authenticated får permission denied (42501)", async () => {
+      const b = await nyttBolag("PROV moten Radera f AB");
+      const k = await nyKedja(b);
+      const m = await moteMed(k, RA.id, RB.id);
+      const koda = {};
+      for (const roll of ["anon", "authenticated"]) {
+        const namn = `sp${++sp}`;
+        await db.query(`savepoint ${namn}`);
+        await db.query(`set local role ${roll}`);
+        try {
+          await db.query(`select public.mote_radera($1, true)`, [m]);
+          koda[roll] = null;
+        } catch (e) {
+          koda[roll] = e.code ?? "?";
+        }
+        await db.query(`rollback to savepoint ${namn}`); // återställer också rollen
+      }
+      return koda.anon === "42501" && koda.authenticated === "42501" && (await radFinns("mote", m));
+    });
+
+    await ok("(g) bara service_role har execute; funktionen är security definer med search_path", async () => {
+      const r = await ett(
+        `select p.prosecdef, p.proconfig,
+                has_function_privilege('anon', p.oid, 'execute') as anon,
+                has_function_privilege('authenticated', p.oid, 'execute') as auth,
+                has_function_privilege('service_role', p.oid, 'execute') as service
+           from pg_proc p where p.oid = 'public.mote_radera(uuid,boolean)'::regprocedure`,
+      );
+      return r.prosecdef === true && (r.proconfig ?? []).some((c) => c.startsWith("search_path=")) && !r.anon && !r.auth && r.service === true;
+    });
+
+    await ok("(h) service_role kan anropa funktionen", async () => {
+      const b = await nyttBolag("PROV moten Radera h AB");
+      const k = await nyKedja(b);
+      const m = await moteMed(k, RA.id, RB.id);
+      const namn = `sp${++sp}`;
+      await db.query(`savepoint ${namn}`);
+      await db.query("set local role service_role");
+      let r;
+      try {
+        r = (await db.query(`select public.mote_radera($1, true) as r`, [m])).rows[0].r;
+      } finally {
+        await db.query(`rollback to savepoint ${namn}`);
+      }
+      return r && r.kedja_borta === true;
     });
 
     // ---- B lagger till sina sektioner har ----

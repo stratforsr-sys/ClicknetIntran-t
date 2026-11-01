@@ -395,5 +395,28 @@ rubrik("Slutgranskningen: farKopplaOrder");
   ok("en chef får koppla vilken order som helst", M.farKopplaOrder({ id: C, roller: ["team_lead"] }, [A], { salesperson_id: B, created_by: B }) && M.farKopplaOrder({ id: C, roller: ["admin"] }, [], { salesperson_id: null, created_by: null }));
 }
 
+rubrik("V6a: farRadera (radera ett möte)");
+{
+  // Bokaren (b) och hållaren (h) är olika personer. Ett öppet möte raderas av den som bokade det eller en säljchef;
+  // ett möte med utfall bara av en säljchef (sales_manager, ceo, admin). En teamledare räcker aldrig.
+  const oppet = { bokat_av: "b", halls_av: "h", utfall: null };
+  const klart = { bokat_av: "b", halls_av: "h", utfall: "hallet" };
+  const ceo = { id: "c", roller: ["ceo"] };
+  const admin = { id: "a", roller: ["admin"] };
+  ok("öppet möte: bokaren får", M.farRadera(bokare, oppet) === true);
+  ok("öppet möte: hållaren som inte bokade får inte", M.farRadera(hallare, oppet) === false);
+  ok("öppet möte: en annan säljare får inte", M.farRadera(annan, oppet) === false);
+  ok("öppet möte: team_lead som inte bokade får inte", M.farRadera(tl, oppet) === false);
+  ok("öppet möte: sales_manager, ceo och admin får", [sm, ceo, admin].every((u) => M.farRadera(u, oppet) === true));
+  ok("möte med utfall: bokaren får inte", M.farRadera(bokare, klart) === false);
+  ok("möte med utfall: hållaren får inte", M.farRadera(hallare, klart) === false);
+  ok("möte med utfall: en annan säljare och team_lead får inte", M.farRadera(annan, klart) === false && M.farRadera(tl, klart) === false);
+  ok("möte med utfall: sales_manager, ceo och admin får", [sm, ceo, admin].every((u) => M.farRadera(u, klart) === true));
+  ok("alla tre utfallen räknas som utfall (hallet, uteblev, avbokat)", ["hallet", "uteblev", "avbokat"].every((u) => M.farRadera(bokare, { ...oppet, utfall: u }) === false && M.farRadera(sm, { ...oppet, utfall: u }) === true));
+  ok("en team_lead som själv bokade ett öppet möte får (bokaren får)", M.farRadera({ id: "b", roller: ["team_lead"] }, oppet) === true);
+  ok("en team_lead som själv bokade ett möte med utfall får inte", M.farRadera({ id: "b", roller: ["team_lead"] }, klart) === false);
+  ok("arSkrivning('radera'): spärras i läsläge", M.arSkrivning("radera") === true);
+}
+
 console.log(fel ? `\n\x1b[31m${fel} fel\x1b[0m` : "\n\x1b[32mAlla ✓\x1b[0m");
 process.exit(fel ? 1 : 0);
