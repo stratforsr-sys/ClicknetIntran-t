@@ -74,6 +74,8 @@ export async function GET(request: Request) {
   // Läsningarna direkt i Postgres med den identitet mellanvaran verifierat; aldrig för ett konto med lösenordstvång (0017).
   const id = lasIdentitet(h);
   const pg = id && !id.kraverLosenordsbyte && id.authUserId === user.authUserId ? { authUserId: id.authUserId, email: id.email } : null;
+  // Gul 15 (produktionsprovet 2026-10-30): varför pg-vägen uteblev. Aldrig e-post eller token i loggen.
+  if (!pg) console.warn("nav2: utan pg", { id: !!id, losen: id?.kraverLosenordsbyte ?? null, samma: id?.authUserId === user.authUserId });
   const data = byggNav2Data(user, matt, pg).then(
     (v) => ({ v, fel: null as unknown }),
     (fel: unknown) => ({ v: null, fel }),

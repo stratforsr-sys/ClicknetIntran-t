@@ -14,6 +14,24 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "ledighet-gar-att-stalla-in",
+    rubrik: "En godkänd ledighet går att ställa in",
+    ingress: "Chefen kan nu ställa in en ledighet som redan är godkänd, och den som hade ledigheten får besked i klockan.",
+    text: `Under **Frånvaro** kan den som godkänner ledigheter nu ställa in en ledighet som
+redan är godkänd. Förut stoppades det med ett felmeddelande.
+
+Den inställda ledigheten räknas inte längre i saldot och syns inte i kalendern. Den
+som hade ledigheten får besked i klockan. Vem som godkände den, och när, står kvar.
+
+Gäller det din egen ledighet trycker du **Be att få ställa in**, så får chefen frågan.
+
+Klockan uppe till höger visar dina notiser igen. Den var avstängd för alla i
+inställningen för utskick sedan den 29 oktober.`,
+    datum: "2026-11-01",
+    roller: [],
+    href: "/franvaro",
+  },
+  {
     slug: "notiserna-oppnar-posten",
     rubrik: "Notiserna öppnar det de handlar om",
     ingress: "Tryck på en notis, så öppnas ordern, dagen eller rapporten den gäller. Nav påminner inte längre om att stämpla.",

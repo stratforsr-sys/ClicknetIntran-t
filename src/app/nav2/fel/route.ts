@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { getCurrentUser, hasRole } from "@/lib/auth";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { skrivFel } from "@/lib/fel-server";
-import { MAX_BODY, rensaDigest } from "@/lib/fel";
+import { MAX_BODY, rensaDigest, rensaSokvag } from "@/lib/fel";
 import { normaliseraFel } from "@/lib/jobb/larm";
 import { notifiera, notifieraFlera } from "@/lib/notishandelse-server";
 import { sattStatus } from "@/app/(app)/fel/actions";
@@ -107,6 +107,9 @@ export async function POST(request: Request) {
           pointedAt: String(b.pek ?? "").trim().slice(0, 300) || null,
         });
         if (!ok) return svar({ fel: "Rapporten kunde inte sparas. Försök igen." }, 500);
+        // Gul 17 (produktionsprovet 2026-10-30): felrapporten lämnade ingen rad i händelseloggen. `skrivFel`
+        // ger inget id (en rapport kan läggas ihop med en tidigare på digesten), så raden bär sidan.
+        await db.from("audit_log").insert({ actor_id: mig, action: "error.reported", object_type: "error_report", object_id: null, meta: { sida: rensaSokvag(String(b.sida ?? "/")), blocking: b.blocking === true } });
         revalidatePath("/fel");
         return svar({ ok: "Tack, den är skickad." });
       }

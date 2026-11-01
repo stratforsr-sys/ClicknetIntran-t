@@ -251,13 +251,21 @@ export async function mejlaHandelse(
 ): Promise<number> {
   try {
     if (mottagare.length === 0) return 0;
-    if (!epostArKonfigurerad()) return 0;
 
     // Utskicken (0255): `MEJLKALLOR` är bara standardläget. Superadmin och
     // personen själv kan stänga en sort, ett område eller hela mejlet — och
     // slå på en sort som inte mejlas annars.
     const unika = await vilkaFar(mottagare, "mejl", utskick.kalla, kallanMejlas(utskick.kalla));
     if (unika.length === 0) return 0;
+
+    // Gul 12 (produktionsprovet 2026-10-30): utan EMAIL_FROM tappades breven tyst. En rad per
+    // anrop med antalet som skulle ha fått brevet, aldrig en rad per mottagare.
+    if (!epostArKonfigurerad()) {
+      await supabaseAdmin()
+        .from("integration_log")
+        .insert({ system: "resend", direction: "ut", body: { orsak: "EMAIL_FROM saknas", antal: unika.length, kalla: utskick.kalla } });
+      return 0;
+    }
 
     const { data: personer } = await supabaseAdmin()
       .from("employee")

@@ -176,6 +176,58 @@ async function filer(katalog) {
   }
 }
 
+console.log("\n\x1b[1mVarje action i koden har en rubrik i Nav 2.0:s händelselogg\x1b[0m");
+{
+  // Granskningen av rättelserna 2026-11-01: `rubrikFor` (src/lib/nav2/loggforma.ts)
+  // faller tillbaka på "Modul · ändelse" när en action saknas i RUBRIK och
+  // ändelsen inte står i VERB. Superadmin ser då "Rutin · note created". Filen
+  // importerar med `@/`, så tabellerna läses som text.
+  //
+  // KANDA_LUCKOR är de som saknade rubrik på main 2026-11-01 (df6a114). Listan
+  // får bara krympa: en ny action utan rubrik är rött.
+  const KANDA_LUCKOR = new Set([
+    "coaching_template.paused",
+    "coaching_template.resumed",
+    "coaching_template.undone",
+    "employee.offboarding_scheduled",
+    "employee.offboarding_withdrawn",
+    "gdpr.gallring",
+    "lead.attempt",
+    "lead.auto",
+    "lead.reminded",
+    "lead.undone",
+    "mote.chain_lost",
+    "mote.chain_won",
+    "mote.confirmed",
+    "mote.moved",
+    "mote.no_answer",
+    "mote.outcome_set",
+    "mote.reminder_created",
+    "mote.retry",
+    "notification_rule.changed",
+  ]);
+  const lf = await readFile("src/lib/nav2/loggforma.ts", "utf8");
+  const tabell = (namn) => {
+    const fran = lf.indexOf(`const ${namn}: Record<string, string> = {`);
+    return lf.slice(fran, lf.indexOf("};", fran));
+  };
+  const rubrik = new Set([...tabell("RUBRIK").matchAll(/"([a-z_]+\.[a-z_.]+)":/g)].map((m) => m[1]));
+  const verb = new Set([...tabell("VERB").matchAll(/\b([a-z_]+):\s*"/g)].map((m) => m[1]));
+  ok("rubrikerna gick att läsa", rubrik.size > 200 && verb.size > 10, `${rubrik.size} rubriker, ${verb.size} ändelser`);
+
+  const utan = new Set();
+  for (const f of await filer("src")) {
+    const text = await readFile(f, "utf8");
+    // `action: "a.b"` och `action: x ? "a.b" : "c.d"`, fram till första kommatecknet.
+    for (const m of text.matchAll(/\baction:\s*([^,\n}]+)/g)) {
+      for (const [, a] of m[1].matchAll(/"([a-z_]+\.[a-z_.]+)"/g)) {
+        if (!rubrik.has(a) && !verb.has(a.split(".").slice(1).join(".")) && !KANDA_LUCKOR.has(a)) utan.add(a);
+      }
+    }
+  }
+  ok("ingen ny action utan rubrik i händelseloggen", utan.size === 0, [...utan].sort().join(", "));
+}
+
 console.log("\n\x1b[1mVarje action i DATABASEN kommer ur en registrerad modul\x1b[0m");
 {
   const db = new pg.Client({

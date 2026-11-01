@@ -97,39 +97,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
   const chattP = projektchattnotiser(user);
   for (const p of [coachningP, uppgifterP, chattP]) p.catch(() => {});
 
-  const [
-    { data: seddRad },
-    { data: avfardade },
-    { data: nyheter },
-    { data: kravDok },
-    { data: minaAck },
-    { data: kurser },
-    { data: kursModuler },
-    { data: minProgress },
-    { data: minaCert },
-    { data: meddelanden },
-    { data: personer },
-    { data: ansokningar },
-    { data: obekraftadSjuk },
-    { data: paminnelser },
-    { data: franvarotyper },
-    { data: rollspel },
-    { data: felrapporter },
-    { data: handelser },
-    { data: konsekvensregler },
-    { data: guiderader },
-    { data: knuffar },
-    { data: notishandelser },
-    { data: avtalen },
-    { data: sjukfrister },
-    { data: certifikat },
-    { data: minaDokument },
-    { data: bedomningar },
-    { data: provisionsposter },
-    { data: skriftligaProv },
-    { data: avtalsslutRader },
-    { data: tjanstslutRader },
-  ] = await Promise.all([
+  const delsvar = await Promise.all([
     supabase.from("notification_seen").select("seen_at").eq("employee_id", mig).maybeSingle(),
     // 0038. Poster den har personen redan klickat pa. Hamtas med hennes egen
     // token som allt annat i filen — RLS ger bara hennes egna rader, sa ett
@@ -407,6 +375,45 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
       .order("ends_on", { ascending: true })
       .limit(MAX_NOTISER),
   ]);
+  // R2 (produktionsprovet 2026-10-30): varje delfråga destruktureras till `{ data }`, så ett fel gav
+  // en tom lista utan spår. Felet ändrar fortfarande ingenting i klockan, men det syns i loggen.
+  delsvar.forEach((d, i) => {
+    const fel = (d as { error?: { message?: string } | null }).error;
+    if (fel) console.error("notiser: delfråga", i, fel.message);
+  });
+  const [
+    { data: seddRad },
+    { data: avfardade },
+    { data: nyheter },
+    { data: kravDok },
+    { data: minaAck },
+    { data: kurser },
+    { data: kursModuler },
+    { data: minProgress },
+    { data: minaCert },
+    { data: meddelanden },
+    { data: personer },
+    { data: ansokningar },
+    { data: obekraftadSjuk },
+    { data: paminnelser },
+    { data: franvarotyper },
+    { data: rollspel },
+    { data: felrapporter },
+    { data: handelser },
+    { data: konsekvensregler },
+    { data: guiderader },
+    { data: knuffar },
+    { data: notishandelser },
+    { data: avtalen },
+    { data: sjukfrister },
+    { data: certifikat },
+    { data: minaDokument },
+    { data: bedomningar },
+    { data: provisionsposter },
+    { data: skriftligaProv },
+    { data: avtalsslutRader },
+    { data: tjanstslutRader },
+  ] = delsvar;
   const lage = await lageP;
 
   // Ingen rad = allt ar olast. Ratt hall att fela at: en nyanstalld ska se
