@@ -59,7 +59,26 @@ byggs inte ("Okej" på rekommendationen). I registerutdraget görs inget nytt: `
 UNDANTAG.
 
 **Prov:** `bro.mjs` 58, `moten.mjs` 195, `motesstat.mjs` 92, `nav2-skriv.mjs` 51, `app-vagar.mjs` 49 och
-`navnyheter.mjs` 532, alla gröna med raden på. Provkedjan i produktionen (A13) står i HANDOFF.
+`navnyheter.mjs` 532, alla gröna med raden på. Produktionsbygget av `db8181f` grönt.
+
+**Provkedjan (A13) i produktionen som Zen.** Det finns ingen preview för Möten sedan mergen, och navet är
+stängt utom för Zen och Simon. Med märkta bolag "PROV moten A13" och "… b":
+- boka → Bokat, med kalenderhändelsen hos hållaren; Bekräftat;
+- flytta till fredag bakåt → Bekräftat nollställt, händelsen flyttad med, Utfall saknas;
+- Hållet + Offert → Följ upp tre arbetsdagar fram; Inget svar ×3 → Tyst; en gammal version → 409;
+  Prova igen → Följ upp;
+- boka nytt i kedjan → art `uppfoljning`; Avbokat → Följ upp; Nej → av tavlan;
+- Affär från Följ upp → stängd som affär med ordern, och ordern orörd; veckoraden "affär 1, nej 1".
+
+Två fel var provets egna: lördag nekas ("Välj en vardag."), och `fore` måste vara läsningens värde, eftersom
+Postgres textform `+00` ger `NaN` i `Date.parse`.
+
+**Städat** i en transaktion med väntade antal: 2 bolag, 2 kedjor, 3 möten, 3 kalenderhändelser, 5 ångraposter
+och 3 skrivnycklar. Inga notiser, push eller utkorgsrader uppstod. Händelseloggens rader står kvar som
+historik.
+
+**Parkerat:** Hållet och Uteblev går att sätta på ett möte som inte har varit än. Rutten prövar inte
+`mote_tid`, men knappen visas bara i Utfall saknas.
 
 ---
 
