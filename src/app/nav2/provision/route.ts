@@ -104,20 +104,25 @@ export async function POST(request: Request) {
         if (!hasRole(user, "sales_manager", "finance", "ceo")) return svar({ fel: "Bara säljchef, ekonomi och VD får ta bort en övrig bonus." }, 403);
         const id = String(b.id ?? "");
         if (!UUID.test(id)) return svar({ fel: "Okänd bonus." }, 400);
-        // Granskningen S06 (D4/C5): låset, prövningen, motposten och kopplingen
-        // i en transaktion (0215). Ett andra anrop väntar på det första och får
-        // pv:redan_borttagen; faller kopplingen rullas motposten tillbaka.
-        const { data: motpost, error } = await db.rpc("ta_bort_ovrig_bonus", { p_aktor: mig, p_post: id });
-        if (error || typeof motpost !== "string") {
-          const kod = error?.message ?? "";
-          if (kod.includes("pv:ogiltig")) return svar({ fel: "Bonusen finns inte." }, 404);
-          if (kod.includes("pv:redan_borttagen")) return svar({ fel: "Bonusen är redan borttagen." }, 400);
-          if (kod.includes("pv:faststalld")) return svar({ fel: "Månaden är fastställd. En bonus i en fastställd månad rättas med en ny post i den öppna månaden." }, 400);
-          return svar({ fel: `Bonusen togs inte bort: ${kod || "okänt fel"}` }, 500);
-        }
-        await db.from("audit_log").insert({ actor_id: mig, action: "commission.bonus_removed", object_type: "commission_entry", object_id: id, meta: { reversal: motpost } });
-        revalidatePath("/provision");
-        return svar({ ok: "Bonusen är borttagen. Huvudboken visar en negativ post med samma skäl." });
+        // Granskningen S06 (M2): ett nytt försök efter tidsgränsen bär samma
+        // X-Nav-Nyckel och får det första svaret ("Bonusen är borttagen.") i stället
+        // för "redan borttagen", så att sidan laddas om och bonusen går ur vyn.
+        return medNyckel(request, mig, async () => {
+          // Granskningen S06 (D4/C5): låset, prövningen, motposten och kopplingen
+          // i en transaktion (0215). Ett andra anrop väntar på det första och får
+          // pv:redan_borttagen; faller kopplingen rullas motposten tillbaka.
+          const { data: motpost, error } = await db.rpc("ta_bort_ovrig_bonus", { p_aktor: mig, p_post: id });
+          if (error || typeof motpost !== "string") {
+            const kod = error?.message ?? "";
+            if (kod.includes("pv:ogiltig")) return svar({ fel: "Bonusen finns inte." }, 404);
+            if (kod.includes("pv:redan_borttagen")) return svar({ fel: "Bonusen är redan borttagen." }, 400);
+            if (kod.includes("pv:faststalld")) return svar({ fel: "Månaden är fastställd. En bonus i en fastställd månad rättas med en ny post i den öppna månaden." }, 400);
+            return svar({ fel: `Bonusen togs inte bort: ${kod || "okänt fel"}` }, 500);
+          }
+          await db.from("audit_log").insert({ actor_id: mig, action: "commission.bonus_removed", object_type: "commission_entry", object_id: id, meta: { reversal: motpost } });
+          revalidatePath("/provision");
+          return svar({ ok: "Bonusen är borttagen. Huvudboken visar en negativ post med samma skäl." });
+        });
       }
 
       case "mal": {

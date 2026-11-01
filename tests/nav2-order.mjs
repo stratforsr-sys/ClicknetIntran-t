@@ -295,5 +295,13 @@ rubrik("Granskarens fynd (S10b omgång 2)");
   ok("V1: redigeraOrder skickar den angivna procenten till rattelseProvision", /proposed_commission_percent/.test(red));
 }
 
+rubrik("Orderns extra kolumner läses för urvalet, inte för alla order (D9a, granskningen S08)");
+{
+  const kalla = readFileSync(fileURLToPath(new URL("../src/lib/nav2/order.ts", import.meta.url)), "utf8");
+  const rader = kalla.split("\n").filter((r) => /from\("sales_order"\)\.select\("id, order_number, approved_by/.test(r));
+  ok("sales_order läses för extra kolumner på ett ställe", rader.length === 1);
+  ok("... och bara för urvalets id i omgångar", rader.length === 1 && /\.in\("id", del\)/.test(rader[0]) && /delaUpp\(ids, 100\)/.test(kalla));
+}
+
 console.log(fel ? `\n\x1b[31m${fel} prov föll.\x1b[0m` : "\n\x1b[32mAlla prov gick igenom.\x1b[0m");
 process.exit(fel ? 1 : 0);

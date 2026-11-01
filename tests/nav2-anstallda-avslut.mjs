@@ -97,5 +97,23 @@ rubrik("Nattjobbet stänger det som passerat");
   ok("utfallet räknar två", u.stangda === 2, JSON.stringify(u));
 }
 
+console.log("\n\x1b[1mAtt dra tillbaka ett planerat avslut (beställaren 2026-10-31)\x1b[0m");
+{
+  const { kanDraTillbaka } = await import(pathToFileURL(join(rot, "src/lib/nav2/avslutforma.ts")).href);
+  ok("ett planerat avslut går att dra tillbaka", kanDraTillbaka({ status: "active", end_date: "2026-12-31" }, true) === null);
+  ok("ett stängt konto går inte", /redan avslutad/.test(kanDraTillbaka({ status: "offboarded", end_date: "2026-10-01" }, true) ?? ""));
+  ok("en visstid utan avslutslista är inget avslut", /inget planerat avslut/.test(kanDraTillbaka({ status: "active", end_date: "2026-12-31" }, false) ?? ""));
+  ok("utan sista dag finns inget att dra tillbaka", /inget planerat avslut/.test(kanDraTillbaka({ status: "active", end_date: null }, true) ?? ""));
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(join(rot, "src/app/nav2/anstallda/route.ts"), "utf8");
+  const a = src.indexOf('case "avslut-tillbaka"'), e = src.indexOf("case \"radera\"", a);
+  const f = a >= 0 && e > a ? src.slice(a, e) : "";
+  ok("rutten har handlingen", f.length > 0);
+  ok("prövar regeln först", f.indexOf("kanDraTillbaka(") > 0 && f.indexOf("kanDraTillbaka(") < f.indexOf('.from("employee")'));
+  ok("nollar slutdagen bara på ett konto som inte stängts", /end_date: null[\s\S]*?\.neq\("status", "offboarded"\)/.test(f));
+  ok("listan tas bort efter att personen nollats", f.indexOf('.from("offboarding_task").delete()') > f.indexOf("end_date: null"));
+  ok("loggas i Händelseloggen", /employee\.offboarding_withdrawn/.test(f));
+}
+
 console.log(fel === 0 ? "\n\x1b[32mAlla prov gick igenom.\x1b[0m" : `\n\x1b[31m${fel} prov föll.\x1b[0m`);
 process.exit(fel === 0 ? 0 : 1);

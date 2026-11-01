@@ -154,5 +154,27 @@ rubrik("Övrig bonus i Provision (S06, G1)");
   ok("provisionsruttens bonus går genom medNyckel", /import \{[^}]*\bmedNyckel\b[^}]*\} from "@\/lib\/nav2\/nyckel"/.test(kalla) && /return medNyckel\(request, mig,/.test(gren));
 }
 
+// Granskningen S06 (M2): "Ta bort" på en övrig bonus går genom medNyckel, så ett nytt
+// försök efter tidsgränsen får det första svaret och inte "redan borttagen".
+rubrik("Ta bort övrig bonus i Provision (S06, M2)");
+{
+  const l = minne();
+  let borttagen = false;
+  // Som ta_bort_ovrig_bonus: andra anropet ger pv:redan_borttagen.
+  const gor = async () => {
+    if (borttagen) return Response.json({ fel: "Bonusen är redan borttagen." }, { status: 400 });
+    borttagen = true;
+    return Response.json({ ok: "Bonusen är borttagen." });
+  };
+  const pv = (nyckel) => new Request("https://nav.test/nav2/provision", { method: "POST", headers: { "x-nav-nyckel": nyckel } });
+  await medNyckel(pv("k-bort-0001"), ZEN, gor, l);
+  const b = await medNyckel(pv("k-bort-0001"), ZEN, gor, l);
+  ok("samma nyckel igen: det första svaret, inte redan borttagen", b.status === 200 && (await b.json()).ok === "Bonusen är borttagen.");
+  const { readFileSync } = await import("node:fs");
+  const kalla = readFileSync(new URL("../src/app/nav2/provision/route.ts", import.meta.url), "utf8");
+  const gren = kalla.slice(kalla.indexOf('case "bonus-bort"'), kalla.indexOf('case "mal"'));
+  ok("provisionsruttens bonus-bort går genom medNyckel", /return medNyckel\(request, mig,/.test(gren));
+}
+
 console.log(fel === 0 ? "\n\x1b[32mAlla prov gick igenom.\x1b[0m" : `\n\x1b[31m${fel} prov föll.\x1b[0m`);
 process.exit(fel === 0 ? 0 : 1);

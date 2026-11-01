@@ -5,7 +5,7 @@ import { FORINSTALLNINGAR, STEG, UPPREPA, WDL, arDatum, arVy, kvittoFlyttad, kvi
 import { fonsterFran, fornamn, hamtaHandelsedetalj, lk, upptagetFor } from "@/lib/leveranskalender-server";
 import { KATEGORIFARGER, KATEGORINYCKEL, hamtaKalposter, kalDetalj, lasKategorier, ombudFor, sokKalender } from "@/lib/nav2/kalender";
 import { kalPushNasta } from "@/lib/nav2/kalender-push";
-import { andradeDelar, ombudetsFalt, type KalMote } from "@/lib/nav2/kalender-andring";
+import { INGET_ANDRADES, andradeDelar, kvittoMedGaster, ombudetsFalt, type KalMote } from "@/lib/nav2/kalender-andring";
 import { svensktDatum } from "@/lib/klocka";
 import { bucketen, huvudUppgifter, lagerForNyaFiler, signeraLank, signeraUppladdning, taBort } from "@/lib/lagring-server";
 import { HORISONT_DAGAR, forekomster } from "@/lib/upprepning";
@@ -180,7 +180,7 @@ async function bjudIn(r: Resultat, eventId: string | null | undefined, epost: st
     (error ? inte : fick).push(adress);
   }
   const text = [fick.length ? `${lista(fick)} får en inbjudan med mejl.` : "", inte.length ? `Inbjudan till ${lista(inte)} gick inte att skicka.` : ""].filter(Boolean).join(" ");
-  return text ? { ...r, kvitto: `${r.kvitto ?? "Sparat."} ${text}` } : r;
+  return text ? { ...r, kvitto: kvittoMedGaster(r.kvitto, text) } : r;
 }
 
 /**
@@ -585,7 +585,7 @@ async function sparaMote(user: CurrentUser, id: string, f: Falt, deltagare: stri
     is_private: f.priv === undefined ? fore.is_private : Boolean(f.priv),
   };
   if (!efter.title) return { fel: "Skriv en rubrik först." };
-  if (!andradeDelar(fore, efter).size) return { ok: true, eventId: id, dag: fore.dag, kvitto: "Inget ändrades." };
+  if (!andradeDelar(fore, efter).size) return { ok: true, eventId: id, dag: fore.dag, kvitto: INGET_ANDRADES };
   const r = await lk<Sparat>("lk_spara_mote", {
     p_aktor: user.employee!.id,
     p_event: id,

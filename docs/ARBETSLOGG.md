@@ -5,6 +5,74 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-01 · Resterna efter mergen (gren `rester-efter-mergen`, till `main` på beställarens ja efter previewen)
+
+Beställaren svarade 2026-10-31 sent på listan "vad är kvar": fixa resterna, ångra på leadtilldelning och
+på ett planerat avslut, 6 månader för en anställd som blivit uppsagd, appens grupp C, och skyddet (backup,
+bevakning, testdatabas). Produktionsprovets röda tas av rättelsesessionen (`delar/rattelser/`), Möten
+får spara av Möten-sessionen (`db8181f`). Åldersgränsen för arbetsgivaravgiften var redan rättad: Satser
+ersatte 66 med 67 den 25 oktober (`cost_rate_replaced`), vilket stämmer med Skatteverket 2026.
+
+**Ångra på leadtilldelningen.** `tilldelaLead` notifierar inte längre direkt utan med
+`notifieraSenare` (`notishandelse-server.ts`): raden väntar i utkorgen (`kind = 'notis'`,
+`payload.mall = 'handelse'`) i `NOTIS_VANTAR_SEK` = 120 s, och minutjobbet skickar den med
+`notifieraFranUtkorgen`. Leads `angra` tar bort den väntande raden (`idempotency_key` börjar med
+`tilldelningsprefix(lead)`, bara obegärd och oskickad). Två minuter och inte tio: Ångra-rutan står i nio
+sekunder, och tio minuter hade gjort varje lead tio minuter sent hos säljaren. `notiser-tackning.mjs`
+godtar `notifieraSenare(`.
+
+**Dra tillbaka ett planerat avslut.** Handlingen `avslut-tillbaka` i Anställda (superadmin, som allt i
+Anställda): `kanDraTillbaka` (`avslutforma.ts`) kräver att kontot inte är stängt, att sista dagen är satt
+och att avslutslistan finns. Slutdagen, orsaken och vem som avslutade nollas villkorat (`neq offboarded`),
+sedan tas listan bort, så att nattjobbets markör försvinner. `employee.offboarding_withdrawn` i
+Händelseloggen och en rad till superadmin. Mejl som gick ut vid avslutet går inte att ta tillbaka; det står
+i nyhetsposten. Knappen i `ndae.js` kräver två tryck.
+
+**Kalenderns påminnelser** (agent, granskad): `resend_schedule` schemalägger inte längre hos Resend
+(nyckeln är send-only, så ett schemalagt brev gick inte att avboka). Raden väntar med
+`not_before = send_at`, `paminnelsebeslut` (`src/lib/paminnelse-tid.ts`) hoppar över ett inställt,
+flyttat eller avklarat möte, påminnelsen tas villkorat (`vantar` → `skickad`) före brevet, och en
+preview lämnar tillbaka raden till produktionen. `stadaVantandePaminnelser` i dagtidsjobbet. Kontrollerat
+mot databasen: `calendar_event.starts_at` finns, och `calendar_reminder_status_check` tillåter `skickad`.
+Brev som schemalades hos Resend före ändringen går fortfarande inte att avboka.
+
+**Rekrytering**: `boka` prövar vägen först (`stegvagTill`) och flyttar steget efter bokningen; `avslag`
+flyttar steget och avbokar sedan bokade intervjuer med METHOD:CANCEL (samma UID, SEQUENCE+1).
+
+**F2-18** (agent, granskad): Rutiners `skicka` prövar att mottagaren får läsa dokumentet
+(`malgrupp.ts`, speglar `matches_audience`); Fels `beskriv` läser rapporten med den inloggades RLS;
+push-adresser bara till pushtjänsternas värdar (`pushvard.ts`, både när de sparas och när något skickas);
+tak för anonyma rader (`tak.ts`): Rutiners sökmissar 60 per minut, palettens frågor 1 000 per dag.
+**Fallgrop:** `nav_question_miss` har ingen tidpunkt (q, week, dag, occurrences). Agentens första version
+räknade på `first_seen`, som inte finns, och hade nekat varje palettfråga med 429. Rättat före commit.
+
+**Gallringen**: en kandidat som blev anställd och vars anställning slutat gallras 6 månader efter
+`end_date` (annars `removed_at`), `ANSTALLD_SLUTAT_MANADER`. `GALLRA` är fortfarande `false`. Träffar i
+dag: 0.
+
+**Småfynden ur granskningarna S05–S08** (agent, granskad): S06 M2 (`bonus-bort` genom `medNyckel`),
+S06 M5 (efterföljarens slutdatum, `kedjeFel` i Satser), S07 M1 (`gaEtt`), S07 M3 (Blev kund ger
+otilldelat lead till fördelaren), S05 M5 (kvittot vid gästinbjudan), S08 D9a (orderns extrakolumner i
+omgångar om 100). I utkastet (agent, granskad, 17 exakta ersättningar i `ndkal.js`, `ndpv.js` och
+`sats.js`): S05 M3 ("10 min före" i påminnelsevalen), S05 M4 (`ndKPamEtikett`/`ndKPamMin`: 0, 45 och
+hela timmar får en riktig etikett och tappas inte vid sparning), S06 M3 (`NDPVSALJ`: Laget och Månadsmål
+räknar bara säljare, inte den som bara har underlag; i provdatan 12 → 11 i Laget och 11 → 10 utan mål),
+S06 M6 (förhandsvisningen i Satser visar serverns anmärkning i stället för 0 kr när full avgift saknas).
+
+**Appläget, grupp C** (`ndapp.js`, bara under `html.ndapplage`): Visa fler i Tid (Beslut), Nyheter och
+Händelseloggen; Lönerapporten som kort på telefon (etiketter ur tabellhuvudet, namnet först, perioden
+dold); dra för att ladda om (ringen fylls till 72 px, laddar bara om när `ndAppLagerOppet` och
+`ndAppOsparat` är falska; `overscroll-behavior-y: contain` stänger webbläsarens egen).
+
+**Prov** (efter merge av main `f1eb14e`): 91 rena enhetsprov gröna (alla utan DATABASE_URL), `tsc --noEmit` utan nya fel (bara
+Pling/pling-skiftläget som finns på main på macOS). Typkontrollen fångade att `resend()` returnerade
+`"vanta"` som boolean, vilket hade stoppat Vercels bygge. `probe/applage-c-prov.mjs` 34/34,
+`app-prov.mjs` 105/105, `applage-prov.mjs` 32/33: den som faller (filterchipen på hem) faller likadant
+på main, för startsidan har inga `.smp-lg`-chips i provdatan längre.
+
+**Kvar, frågor:** kalenderns SQL-fynd (S05 M2, M6, M7, E7) kräver en migration av `lk_*`-funktionerna;
+S06 M4 (vilken krets Laget räknar) och S06 M7 (låset vid Fastställ) kräver beslut.
+
 ## 2026-11-01 natt · Möten-statistiken, varv 2: teamledaren ser sitt team, sju småfel (direkt på `main`, 0264 KÖRD)
 
 **Beställarens svar 2026-10-31:** "Ja bara sitt eget team" (en teamledare ser bara sitt eget team i

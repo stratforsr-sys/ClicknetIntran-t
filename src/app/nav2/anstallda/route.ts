@@ -28,7 +28,7 @@ import { skapaMote } from "@/app/(app)/kalender/moten/actions";
 import { aeDue, arbetsdagar, AE_TYPER, frist, fyll } from "@/lib/nav2/anstalldaforma";
 import { type Niva } from "@/lib/nav2/forma";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
-import { avslutNu, harPersonnummer, PNR_TEXT } from "@/lib/nav2/avslutforma";
+import { avslutNu, harPersonnummer, kanDraTillbaka, PNR_TEXT } from "@/lib/nav2/avslutforma";
 import { CHECKLISTA } from "@/lib/offboarding-server";
 
 export const dynamic = "force-dynamic";
@@ -319,6 +319,32 @@ export async function POST(request: Request) {
         await meddelaSuperadmin(`${namnPa(p)} avslutas`, `${jagNamn} avslutade${planerat ? " i förtid" : ""} · sista dag ${slut} · ${SLUTORSAK_TEXT[orsak]}`, p.id);
         await logga(p.id, planerat ? `stängde anställningen i förtid, sista dag ${slut} (${SLUTORSAK_TEXT[orsak]}).` : `startade avslutslistan (${SLUTORSAK_TEXT[orsak]})${mejl ? `. ${mejl} mejl gick ut` : ""}.`, { end_reason: orsak });
         return svar({ ok: `Anställningen är avslutad med sista dag ${slut}.${mejl ? ` ${mejl} mejl gick ut.` : ""}` });
+      }
+      case "avslut-tillbaka": {
+        // Beställaren 2026-10-31: ett planerat avslut går att ångra helt. Slutdagen, orsaken och vem som
+        // avslutade nollas, och avslutslistan tas bort, så att nattjobbet inte längre har någon markör att
+        // stänga på (`attStangaINatt`). Mejl som gick ut när avslutet registrerades går inte att ta tillbaka.
+        const p = await personen(b.pid);
+        if (!p) return svar({ fel: "Personen finns inte." }, 404);
+        const { count: listor } = await db.from("offboarding_task").select("id", { count: "exact", head: true }).eq("employee_id", p.id);
+        const nej = kanDraTillbaka(p, (listor ?? 0) > 0);
+        if (nej) return svar({ fel: nej }, 400);
+        const { data: andrad, error } = await db
+          .from("employee")
+          .update({ end_date: null, end_reason: null, end_reason_by: null, end_reason_at: null })
+          .eq("id", p.id)
+          .neq("status", "offboarded")
+          .select("id");
+        if (error || !(andrad ?? []).length) return svar({ fel: "Avslutet kunde inte dras tillbaka. Ingenting ändrades." }, 500);
+        const { error: listfel } = await db.from("offboarding_task").delete().eq("employee_id", p.id);
+        await db.from("audit_log").insert({ actor_id: mig, action: "employee.offboarding_withdrawn", object_type: "employee", object_id: p.id, meta: { slutdatum: p.end_date, punkter: listor ?? 0 } });
+        await logga(p.id, `drog tillbaka avslutet med sista dag ${p.end_date}. Anställningen fortsätter.`);
+        await meddelaSuperadmin(`${namnPa(p)} stannar`, `${jagNamn} drog tillbaka avslutet · sista dag var ${p.end_date}`, p.id);
+        return svar({
+          ok: listfel
+            ? `Avslutet är tillbakadraget, men avslutslistan kunde inte tas bort. Ta bort punkterna för hand.`
+            : `Avslutet är tillbakadraget. ${namnPa(p)} är anställd som förut, och avslutslistan är borttagen.`,
+        });
       }
       case "radera": {
         const p = await personen(b.pid);

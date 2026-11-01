@@ -3,11 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { getCurrentUser, hasRole } from "@/lib/auth";
-import { notifiera } from "@/lib/notishandelse-server";
+import { notifieraSenare } from "@/lib/notishandelse-server";
 import { skrivHandelse } from "@/lib/handelselogg-server";
 import { sattKvitto } from "@/lib/toast-server";
 import { arLeadstatus, leadTitel, maskeraPersonnummer, STATUS_ETIKETT } from "@/lib/leads";
-import { tilldelaVillkorat } from "@/lib/nav2/leadsforma";
+import { NOTIS_VANTAR_SEK, tilldelaVillkorat, tilldelningsnyckel } from "@/lib/nav2/leadsforma";
 
 /**
  * Den som fördelar leads: säljchef, VD, teamledare och superadmin (`admin`,
@@ -93,18 +93,22 @@ export async function tilldelaLead(form: FormData): Promise<void> {
         });
 
         // Den som tar ett lead själv får ingen notis — `notifiera()` hoppar över
-        // aktören, och det är rätt: hen vet redan.
+        // aktören, och det är rätt: hen vet redan. Notisen väntar ut ångerfönstret
+        // (beställaren 2026-10-31): Ångra i Leads tar bort den innan den gått ut.
         if (till) {
-          await notifiera({
-            till,
-            av: aktor,
-            kalla: "lead-tilldelad",
-            typ: "lead",
-            rubrik: `Lead till dig: ${leadTitel(lead)}`,
-            detalj: [lead.company ? lead.name : null, lead.phone ?? lead.email].filter(Boolean).join(" · "),
-            href: `/leads/${id}`,
-            objekt: { typ: "lead", id },
-          });
+          await notifieraSenare(
+            {
+              till,
+              av: aktor,
+              kalla: "lead-tilldelad",
+              typ: "lead",
+              rubrik: `Lead till dig: ${leadTitel(lead)}`,
+              detalj: [lead.company ? lead.name : null, lead.phone ?? lead.email].filter(Boolean).join(" · "),
+              href: `/leads/${id}`,
+              objekt: { typ: "lead", id },
+            },
+            { sekunder: NOTIS_VANTAR_SEK, nyckel: tilldelningsnyckel(id, till, Date.now()) },
+          );
         }
       },
     },

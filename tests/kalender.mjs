@@ -68,6 +68,8 @@ import {
   veckonummer,
   veckostart,
 } from "../src/lib/kalender.ts";
+import { readFileSync } from "node:fs";
+import { paminnelsebeslut } from "../src/lib/paminnelse-tid.ts";
 
 let fel = 0;
 const ok = (namn, villkor, extra = "") => {
@@ -531,6 +533,45 @@ ok(
   plingtext(post({ tid: "09:10", minuter: 30 }), 9 * 60) === "Om 10 min · 09:10 · 30 min",
   plingtext(post({ tid: "09:10", minuter: 30 }), 9 * 60),
 );
+
+rubrik("Mejlpåminnelsen väntar i utkorgen och kan tas tillbaka (Resend-nyckeln får inte avboka)");
+{
+  // Mötet 2026-11-20 kl 10:00, påminnelsen 30 min före. Resend-nyckeln får bara skicka, så
+  // påminnelsen får aldrig lämna navet före sin tid: den ska gå att avboka tills dess.
+  const mote = { cancelled_at: null, outcome: null, starts_at: "2026-11-20T10:00:00Z" };
+  const pam = { status: "vantar", resend_id: null, send_at: "2026-11-20T09:30:00Z" };
+  const vid = (t) => new Date(t);
+
+  const tidigt = paminnelsebeslut(pam, mote, null, vid("2026-11-19T12:00:00Z"));
+  ok("två timmar före: raden väntar, inget skickas", tidigt.gor === "vanta" && tidigt.till === "2026-11-20T09:30:00.000Z", JSON.stringify(tidigt));
+  ok("en dag före: raden väntar", paminnelsebeslut(pam, mote, null, vid("2026-11-19T09:30:00Z")).gor === "vanta");
+  ok("tio minuter före: raden väntar", paminnelsebeslut(pam, mote, null, vid("2026-11-20T09:20:00Z")).gor === "vanta");
+  ok("på tiden: skickas", paminnelsebeslut(pam, mote, null, vid("2026-11-20T09:30:00Z")).gor === "skicka");
+  ok("minutjobbet en halv minut före: skickas", paminnelsebeslut(pam, mote, null, vid("2026-11-20T09:29:30Z")).gor === "skicka");
+  ok("fem minuter sent men före mötet: skickas", paminnelsebeslut(pam, mote, null, vid("2026-11-20T09:35:00Z")).gor === "skicka");
+  ok("efter att mötet börjat: skickas inte, markeras fel", paminnelsebeslut(pam, mote, null, vid("2026-11-20T10:01:00Z")).gor === "fel");
+
+  // Det som är hela skälet: mötet ställs in eller flyttas efter att raden lagts.
+  ok("mötet inställt: ingen påminnelse", paminnelsebeslut(pam, { ...mote, cancelled_at: "2026-11-19T13:00:00Z" }, null, vid("2026-11-20T09:30:00Z")).gor === "hoppa");
+  ok("mötet inställt, långt före: raden städas", paminnelsebeslut(pam, { ...mote, cancelled_at: "2026-11-19T13:00:00Z" }, null, vid("2026-11-19T14:00:00Z")).gor === "hoppa");
+  ok("mötet genomfört i förväg: ingen påminnelse", paminnelsebeslut(pam, { ...mote, outcome: "klart" }, null, vid("2026-11-20T09:30:00Z")).gor === "hoppa");
+  ok("påminnelsen avbokad: ingen påminnelse", paminnelsebeslut({ ...pam, status: "avbokad" }, mote, null, vid("2026-11-20T09:30:00Z")).gor === "hoppa");
+  ok("påminnelsen redan skickad: inte två gånger", paminnelsebeslut({ ...pam, status: "skickad" }, mote, null, vid("2026-11-20T09:30:00Z")).gor === "hoppa");
+  ok("schemalagd hos Resend förut: raden rör den inte", paminnelsebeslut({ ...pam, status: "schemalagd", resend_id: "re_1" }, mote, null, vid("2026-11-20T09:30:00Z")).gor === "hoppa");
+  ok("påminnelsen finns inte: hoppas", paminnelsebeslut(null, mote, null, vid("2026-11-20T09:30:00Z")).gor === "hoppa");
+  ok("mötet finns inte: hoppas", paminnelsebeslut(pam, null, null, vid("2026-11-20T09:30:00Z")).gor === "hoppa");
+
+  // Mötet flyttas en timme senare: den gamla raden (väntar på 09:30) får inte skicka kl 09:30.
+  const flyttad = { ...pam, send_at: "2026-11-20T10:30:00Z" };
+  const gammal = paminnelsebeslut(flyttad, { ...mote, starts_at: "2026-11-20T11:00:00Z" }, "2026-11-20T09:30:00Z", vid("2026-11-20T09:30:00Z"));
+  ok("flyttat möte: den gamla radens tid skickar inget", gammal.gor === "hoppa", JSON.stringify(gammal));
+  const ny = paminnelsebeslut(flyttad, { ...mote, starts_at: "2026-11-20T11:00:00Z" }, "2026-11-20T10:30:00Z", vid("2026-11-20T10:30:00Z"));
+  ok("flyttat möte: den nya raden skickar på den nya tiden", ny.gor === "skicka", JSON.stringify(ny));
+  // Utkorgen får aldrig be Resend schemalägga ett nytt brev: det går inte att avboka.
+  const kalla = readFileSync(new URL("../src/lib/utkorg-server.ts", import.meta.url), "utf8");
+  ok("utkorgen schemalägger inget hos Resend", !/schemalagtVid\s*:/.test(kalla));
+  ok("samma tid i annat format räknas som samma", paminnelsebeslut(pam, mote, "2026-11-20T09:30:00+00:00", vid("2026-11-20T09:30:00Z")).gor === "skicka");
+}
 
 console.log(fel === 0 ? "\n\x1b[32mAlla kontroller gick igenom.\x1b[0m" : `\n\x1b[31m${fel} fel.\x1b[0m`);
 process.exit(fel === 0 ? 0 : 1);

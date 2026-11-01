@@ -18,6 +18,7 @@ import {
   raknaKo,
 } from "@/lib/order-server";
 import { hamtaPerioder } from "@/lib/bonus-server";
+import { delaUpp } from "@/lib/sidvis";
 import { hamtaOrdersamtal } from "@/lib/samtal-order-server";
 import { MIN_SALJSAMTAL_SEKUNDER } from "@/lib/samtal-order";
 import { ORDERTAK, TOMT_FILTER } from "@/lib/ordervy";
@@ -99,6 +100,16 @@ export type NdOrderdata = {
   skriv: boolean;
 };
 
+/** Raderna som urvalet saknar kolumner för, för just de order som visas. */
+async function hamtaOrderExtra(supabase: SupabaseClient, ids: string[]): Promise<Record<string, unknown>[]> {
+  const svar = await Promise.all(
+    delaUpp(ids, 100).map((del) =>
+      supabase.from("sales_order").select("id, order_number, approved_by, cancelled_by, free_order_reason, discounted_monthly_amount").in("id", del),
+    ),
+  );
+  return svar.flatMap((s) => (s.data ?? []) as Record<string, unknown>[]);
+}
+
 const SALJANDE_ROLLER = new Set(["salesperson", "sales_manager", "ceo"]);
 
 export async function byggOrder(supabase: SupabaseClient, user: CurrentUser): Promise<NdOrderdata> {
@@ -110,7 +121,7 @@ export async function byggOrder(supabase: SupabaseClient, user: CurrentUser): Pr
 
   const igar = new Date(Date.parse(`${idag}T00:00:00Z`) - 864e5 - 2 * 3600e3).toISOString();
 
-  const [urval, manadens, ko, loperUt, paket, satser, chefssatser, utkopssatser, finanssatser, perioder, { data: extra }, { data: personer }, { data: egnaSamtal }] =
+  const [urval, manadens, ko, loperUt, paket, satser, chefssatser, utkopssatser, finanssatser, perioder, { data: personer }, { data: egnaSamtal }] =
     await Promise.all([
       hamtaOrderUrval(TOMT_FILTER),
       hamtaOrder(manad),
@@ -122,8 +133,6 @@ export async function byggOrder(supabase: SupabaseClient, user: CurrentUser): Pr
       hamtaUtkopssatser(),
       hamtaFinanssatser(),
       hamtaPerioder(manadFore(manad, 11)),
-      // 0080 och vem som godkant och makulerat — `FALT` i order-server.ts bar dem inte.
-      supabase.from("sales_order").select("id, order_number, approved_by, cancelled_by, free_order_reason, discounted_monthly_amount"),
       supabase.from("employee").select("id, first_name, last_name, status, employee_role!employee_role_employee_id_fkey(role)"),
       supabase
         .from("phone_call")
@@ -137,7 +146,7 @@ export async function byggOrder(supabase: SupabaseClient, user: CurrentUser): Pr
     ]);
 
   const ids = urval.order.map((o) => o.id);
-  const [tjanster, bilagor, samtal, crm, { data: filinfo }] = await Promise.all([
+  const [tjanster, bilagor, samtal, crm, { data: filinfo }, extra] = await Promise.all([
     hamtaTjanster(ids),
     hamtaOrderbilagor(ids),
     hamtaOrdersamtal(ids),
@@ -145,6 +154,9 @@ export async function byggOrder(supabase: SupabaseClient, user: CurrentUser): Pr
     ids.length
       ? supabase.from("file_object").select("id, size_bytes, uploaded_by").eq("purpose", "sales_order").in("sales_order_id", ids)
       : Promise.resolve({ data: [] as { id: string; size_bytes: number | null; uploaded_by: string | null }[] }),
+    // 0080 och vem som godkant och makulerat — `FALT` i order-server.ts bar dem inte.
+    // Bara urvalets order (granskningen S08, D9a), i omgångar om 100 så att adressen inte växer med antalet.
+    hamtaOrderExtra(supabase, ids),
   ]);
 
   // 0083/0084: utskrifterna for samtalen pa listans order, de fasta anteckningarna,
@@ -164,7 +176,7 @@ export async function byggOrder(supabase: SupabaseClient, user: CurrentUser): Pr
 
   const namnFor = new Map((personer ?? []).map((p) => [p.id as string, fullName(p)]));
   const namn = (id: string | null | undefined) => (id ? namnFor.get(id) ?? null : null);
-  const extraFor = new Map((extra ?? []).map((r) => [r.id as string, r]));
+  const extraFor = new Map(extra.map((r) => [r.id as string, r]));
   const filFor = new Map((filinfo ?? []).map((f) => [f.id as string, f]));
 
   const satserna = { paket, satser, chefssatser, utkopssatser, finanssatser };

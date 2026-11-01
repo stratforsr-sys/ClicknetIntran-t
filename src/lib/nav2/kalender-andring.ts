@@ -91,3 +91,16 @@ export function ombudetsFalt(a: { arrangor: boolean; privat: boolean; deltar: bo
   if (a.privat) return { fel: "Ett privat möte ändras av arrangören." };
   return { video: a.video === null ? undefined : a.video };
 }
+
+/** Kvittot när inget på mötet ändrats (rutten svarar så utan anrop). */
+export const INGET_ANDRADES = "Inget ändrades.";
+
+/**
+ * Gästernas inbjudningstext efter mötets eget kvitto (granskningen S05, M5). Lades bara en gäst till
+ * ändrades inget annat, och "Inget ändrades. x får en inbjudan med mejl." säger emot sig självt:
+ * då blir det "Sparat. x får en inbjudan med mejl.".
+ */
+export function kvittoMedGaster(kvitto: string | undefined, gasttext: string): string {
+  const bas = !kvitto || kvitto === INGET_ANDRADES ? "Sparat." : kvitto;
+  return gasttext ? `${bas} ${gasttext}` : kvitto ?? "Sparat.";
+}

@@ -17,7 +17,8 @@
  * REGELN: varje exporterad server action i `src/app/**\/actions.ts` ska sta i
  * `TACKNING` nedan med ett av tre varden:
  *
- *   "notifierar"  — anropar `notifiera()` eller `notifieraFlera()`. Provet
+ *   "notifierar"  — anropar `notifiera()`, `notifieraFlera()` eller
+ *                   `notifieraSenare()` (vantar ut ett angerfonster). Provet
  *                   LASER FILEN och faller om anropet inte finns pa riktigt.
  *   "harledd"     — posten raknas fram i `notiser-server.ts` eller
  *                   `coachning-server.ts` ur raderna handlingen skriver.
@@ -517,7 +518,7 @@ console.log("\n\x1b[1mBokforingen stammer med koden\x1b[0m");
     const text = kropp(kalla, namn);
     if (!text) continue;
 
-    const anropar = /\bnotifiera(Flera)?\(/.test(text);
+    const anropar = /\bnotifiera(Flera|Senare)?\(/.test(text);
     // `laggUppAnstalld` notifierar via lib-funktionen och inte i sin egen kropp.
     const viaLib = varde.startsWith("notifierar via");
 

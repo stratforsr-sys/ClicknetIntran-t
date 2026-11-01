@@ -10,10 +10,12 @@
  * ocksa: ett ja far inte sla igenom av misstag.
  */
 import {
+  ANSTALLD_SLUTAT_MANADER,
   GALLRA,
   MOTESBOLAG_MANADER,
   PALETT_DAGAR,
   TALANGPOOL_MANADER,
+  anstallningSlutade,
   foraldralosa,
   kandidaterAttRadera,
   maskera,
@@ -36,6 +38,7 @@ ok("gallringen ar avstangd tills bestallaren sagt ja", GALLRA === false);
 ok("palettens fragor sparas i 90 dagar", PALETT_DAGAR === 90);
 ok("talangpoolen sparas i 24 manader", TALANGPOOL_MANADER === 24);
 ok("motesbolag sparas i 24 manader", MOTESBOLAG_MANADER === 24);
+ok("en anstalld som slutat sparas i 6 manader (bestallaren 2026-10-31)", ANSTALLD_SLUTAT_MANADER === 6);
 
 console.log("\n\x1b[1mMaskeringen (F2-7)\x1b[0m");
 {
@@ -99,10 +102,52 @@ console.log("\n\x1b[1mKandidaterna (F1-6, 0110:231-239, B5)\x1b[0m");
     k("anstalld-som-slutat-helt", { stage: "hired", hired_employee_id: "e9", gdpr_purge_at: "2025-01-01T00:00:00Z", senaste: "2024-01-01T00:00:00Z" }),
     k("anstalld-aktiv", { stage: "hired", hired_employee_id: "e1", gdpr_purge_at: "2025-01-01T00:00:00Z", senaste: "2024-01-01T00:00:00Z" }),
   ];
-  const ut2 = kandidaterAttRadera(borttagna, nu, { fristDagar: 365, poolManader: 24, aktivaAnstallda: new Set(["e1"]) });
+  // Bestallaren 2026-10-31: "en som ar anstalld och blev uppsagd: 6 manader".
+  const aktiv = { end_date: null, status: "active", removed_at: null };
+  const anst = new Map([
+    ["e1", aktiv],
+    ["e-slutdag-7", { end_date: "2026-03-20", status: "offboarded", removed_at: null }],            // slutade for drygt 7 manader sedan
+    ["e-slutdag-5", { end_date: "2026-05-20", status: "offboarded", removed_at: null }],            // slutade for 5 manader sedan
+    ["e-grans", { end_date: "2026-04-23", status: "offboarded", removed_at: null }],                // exakt 6 manader: sparas
+    ["e-framtida", { end_date: "2026-12-31", status: "active", removed_at: null }],                 // slutar i framtiden: pagar
+    ["e-passerad", { end_date: "2026-01-31", status: "active", removed_at: null }],                 // slutdag passerad, status ej hunnit andras
+    ["e-offboarded-utan-dag", { end_date: null, status: "offboarded", removed_at: null }],          // ingen dag att rakna fran
+    ["e-borttagen-8", { end_date: null, status: "active", removed_at: "2026-02-01T10:00:00Z" }],    // ingen slutdag: removed_at
+    ["e-borttagen-3", { end_date: null, status: "active", removed_at: "2026-07-20T10:00:00Z" }],
+    ["e-slutdag-trumfar", { end_date: "2026-08-01", status: "offboarded", removed_at: "2026-01-01T10:00:00Z" }], // slutdagen gar fore removed_at
+  ]);
+  const h = (id, emp, x = {}) => k(id, { stage: "hired", hired_employee_id: emp, gdpr_purge_at: null, senaste: "2024-01-01T00:00:00Z", ...x });
+  const ut2 = kandidaterAttRadera(
+    [
+      borttagna[0], borttagna[2],
+      h("slutdag-7", "e-slutdag-7"), h("slutdag-5", "e-slutdag-5"), h("grans", "e-grans"),
+      h("framtida", "e-framtida"), h("passerad", "e-passerad"), h("utan-dag", "e-offboarded-utan-dag"),
+      h("borttagen-8", "e-borttagen-8"), h("borttagen-3", "e-borttagen-3"), h("slutdag-trumfar", "e-slutdag-trumfar"),
+      h("pool-slutat", "e-slutdag-7", { talent_pool: true, talent_pool_consent: "2026-01-01T00:00:00Z" }),
+      h("pool-slutat-gammal", "e-slutdag-7", { talent_pool: true, talent_pool_consent: "2024-01-01T00:00:00Z" }),
+      h("pool-pagar", "e1", { talent_pool: true, talent_pool_consent: "2024-01-01T00:00:00Z" }),
+    ],
+    nu,
+    { fristDagar: 365, poolManader: 24, anstallningar: anst },
+  );
   ok("en anstalld kandidat vars person tagits bort helt gallras efter gallringsdagen", ut2.includes("anstalld-borttagen"));
-  ok("en anstalld kandidat vars person star som borttagen gallras", ut2.includes("anstalld-som-slutat-helt"));
   ok("en anstalld kandidat vars person finns kvar gallras inte", !ut2.includes("anstalld-aktiv"));
+  ok("slutade for 7 manader sedan: gallras (aven utan gdpr_purge_at)", ut2.includes("slutdag-7"));
+  ok("slutade for 5 manader sedan: sparas", !ut2.includes("slutdag-5"));
+  ok("slutade for exakt 6 manader sedan: sparas (strikt aldre)", !ut2.includes("grans"));
+  ok("slutdag i framtiden: anstallningen pagar, sparas", !ut2.includes("framtida"));
+  ok("slutdag passerad fore 6 manader, status ej andrad: gallras", ut2.includes("passerad"));
+  ok("offboarded utan slutdag och borttagning: ingen dag att rakna fran, sparas", !ut2.includes("utan-dag"));
+  ok("utan slutdag raknas removed_at: 8 manader gallras", ut2.includes("borttagen-8"));
+  ok("utan slutdag raknas removed_at: 3 manader sparas", !ut2.includes("borttagen-3"));
+  ok("slutdagen gar fore removed_at", !ut2.includes("slutdag-trumfar"));
+  ok("talangpool efter slutad anstallning foljer samtyckets frist, inte 6 manader", !ut2.includes("pool-slutat") && ut2.includes("pool-slutat-gammal"));
+  ok("talangpool medan anstallningen pagar sparas", !ut2.includes("pool-pagar"));
+  ok("anstallningSlutade: pagande ger null", anstallningSlutade(aktiv, nu) === null);
+  ok("anstallningSlutade: slutdag ur end_date", anstallningSlutade(anst.get("e-slutdag-7"), nu) === "2026-03-20");
+  ok("anstallningSlutade: dagen sjalv raknas som slutad", anstallningSlutade({ end_date: "2026-10-23", status: "active", removed_at: null }, nu) === "2026-10-23");
+  // Utan anstallningsuppgifter skyddar varje hired_employee_id (som forr).
+  ok("utan anstallningsuppgifter skyddas varje anstalld", !kandidaterAttRadera([h("x", "e-slutdag-7")], nu, { fristDagar: 365 }).includes("x"));
   ok("utan beslutad frist gallras ingen utanfor poolen",
     lika(kandidaterAttRadera(rader, nu, { fristDagar: null, poolManader: 24 }).sort(), ["pool-25-man", "pool-utan-samtycke-gammal"]));
 }
