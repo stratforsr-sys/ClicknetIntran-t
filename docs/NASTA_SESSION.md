@@ -16,7 +16,9 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
 - **Ingen påminnelse om att stämpla** (beställaren). `jobb/dagtid.ts` raderad, `tid-paminnelse-ut` borta, kortet Påminn mig borta.
   Kvar och värt en fråga: chefens morgonnotis räknar "N har inte stämplat in".
 - **Varje notis till sin post**: se ARBETSLOGG och `tests/notislankar.mjs` (undantagen med skäl).
-  Provriggen: `~/nav2-utkast/delar/notislankar/` (`node rigg.mjs prod` med Zens kaka).
+  Provriggen: `~/nav2-utkast/delar/notislankar/`. Produktionsprovet 13 av 13 grönt (se ARBETSLOGG). Mot
+  produktionen bara `node rigg.mjs prod fall-klocka.json` (en sidladdning): /nav2 tar ~10 s, och en sidladdning
+  per fall ger 504.
 - Gamla "Du har inte stämplat in" (167 rader, senast 29 okt) står kvar i klockan tills de gallras (30 dagar i klockan, 90 i tabellen).
 - Nästa steg i rapporten (ej beställt): förberedelsepåminnelsen till morgonbrevet, tre nivåer, mejla bara oläst.
 

@@ -43,8 +43,25 @@ Medvetna undantag (vyn är posten, eller posten finns inte) står med skäl i `t
 **Prov.** Nya `tests/notislankar.mjs` (varje anrop, mallarna och växeln) och `tests/tid-paminnelser.mjs`
 (ingen påminnelse om att stämpla), båda i `npm test`. Rena prov: alla gröna (databasproven inte körda).
 Klienten: provriggen `~/nav2-utkast/delar/notislankar/` (headless Chrome, `/nav2?till=`) med
-produktionens data som Zen, 18 av 18 lokalt och som säljare 5 av 5; samma rigg mot produktionen efter
-deployen. Grenen lades ovanpå `df6a114` (annan sessions rester) före push.
+produktionens data som Zen, 18 av 18 lokalt och som säljare 5 av 5. Grenen lades ovanpå `df6a114`
+(annan sessions rester) före push.
+
+**Produktionsprovet efter `b56fd1c` (2026-11-01 17:20–17:50), allt grönt:**
+- Klockan: tolv märkta provnotiser (`object_type 'notisprov'`, raderade efteråt), en sidladdning och ett
+  tryck per notis: 13 av 13 öppnade exakt sin post (order, kampanjsida, provisionsmånad, Att göra-raden,
+  sjukanmälan, felrapport, möte, avtal, repetition, kollegans kalender, leveranskön, profilen), och alla
+  tolv fick `opened_at` med `opened_via = 'klocka'`.
+- Pushens tryck (`/nav2/notis?id=&via=push`) → mötet, `opened_via = 'push'`. Mejlets länk → 303 till
+  `/nav2?till=/order/<id>`, `opened_via = 'mejl'`. Någon annans notis och ett okänt `via` → `/nav2`,
+  ingenting bokfört; utloggad → inloggningen med länken i `nasta`; POST utan ursprung → 403.
+- Utskicksloggen: "Skicka ett prov" i Hem gav två push-rader (Macen och Samsungen, 201), och Anställdas
+  testmejl (en avstängd provregel, raderad direkt) gav en mejlrad med Resends id.
+- Dagtidsjobbet (`net._http_response`): svaret 17:00 hade `helg/provade/paminda`, svaren 17:30 och 17:45
+  saknar dem.
+
+**Lärdom: /nav2 tar ~10 s att bygga i produktionen, och tjugo sidladdningar på några minuter ger 504 i en
+kvart** (samma tider på deployen före, alltså inte den här ändringen). Prova därför i produktionen med EN
+sidladdning och klockans tryck (`fall-klocka.json`), aldrig en ny sidladdning per fall.
 
 ## 2026-11-01 · Resterna efter mergen (gren `rester-efter-mergen`, till `main` på beställarens ja efter previewen)
 
