@@ -7,9 +7,14 @@
  *               av 0030:s utlosare vid avslag, 12 manader enligt 0110:231-239),
  *               en oppen process utan handelse pa 12 manader, och talangpoolen
  *               24 manader efter samtycket (B5). En anstalld kandidat gallras
- *               inte medan personen finns kvar: raden hor till anstallningen.
- *               Ar personen borttagen (`hired_employee_id` ar "on delete set
- *               null", eller personalposten har `removed_at`) galler fristen.
+ *               inte medan anstallningen pagar: raden hor till anstallningen.
+ *               En anstalld som slutat gallras 6 manader efter att
+ *               anstallningen slutade (bestallaren 2026-10-31: "en som ar
+ *               anstalld och blev uppsagd: 6 manader"), raknat fran
+ *               `employee.end_date` (nar den passerats, eller status
+ *               `offboarded`), annars fran `removed_at`. Ar personen helt
+ *               borttagen (`hired_employee_id` ar "on delete set null")
+ *               galler fristen (12 manader) som for andra kandidater.
  *   cv          CV-filerna for de kandidaterna. `candidate.cv_file_id` kan i dag
  *               aldrig fyllas (C16), sa antalet ar 0 tills ett CV-andamal finns.
  *   palett      Palettens fragor utan svar (0125), 90 dagar efter dagen de
@@ -45,6 +50,8 @@ export const PALETT_DAGAR = 90;
 export const TALANGPOOL_MANADER = 24;
 /** A11: ett motesbolag sparas i 24 manader, raknat fran bolagets senaste handelse. */
 export const MOTESBOLAG_MANADER = 24;
+/** Bestallaren 2026-10-31: en anstalld som slutat gallras 6 manader efter slutdagen. */
+export const ANSTALLD_SLUTAT_MANADER = 6;
 /** En fil yngre an sa har kan vara en uppladdning som inte hunnit registreras. */
 export const FIL_MOGEN_TIMMAR = 24;
 
@@ -115,9 +122,35 @@ function plusManader(tid: string, manader: number): number {
   return d.getTime();
 }
 
+/** Det gallringen behover veta om en anstallning (`employee`). */
+export type Anstallning = { end_date: string | null; status: string; removed_at: string | null };
+
+/**
+ * Dagen anstallningen slutade, eller null om den pagar. Slutdagen (`end_date`)
+ * raknas nar den passerats eller personen star som `offboarded`; saknas den
+ * raknas borttagningen (`removed_at`). `undefined` = anstallningen har slutat
+ * men ingen dag gar att namna (offboarded utan slutdag och borttagning): da
+ * gallras ingenting, hellre for sent an for tidigt.
+ */
+export function anstallningSlutade(a: Anstallning, nu: Date): string | null | undefined {
+  const idag = svenskDag(nu);
+  const slut = a.end_date ? String(a.end_date).slice(0, 10) : null;
+  const slutat = a.removed_at != null || a.status === "offboarded" || (slut != null && slut <= idag);
+  if (!slutat) return null;
+  if (slut) return slut;
+  const rem = a.removed_at ? Date.parse(a.removed_at) : NaN;
+  return Number.isNaN(rem) ? undefined : svenskDag(new Date(rem));
+}
+
 /**
  * Kandidaterna som ska gallras. `fristDagar` ar `recruitment_policy.purge_after_days`;
  * ar den inte satt gallras ingen utanfor talangpoolen (0030: "utan varde raderas inget").
+ *
+ * En anstalld kandidat (`hired_employee_id`): pagar anstallningen gallras den
+ * inte, har den slutat gallras den `slutatManader` efter slutdagen (och inte
+ * efter nagon annan regel). Finns personen inte i `anstallningar` alls (helt
+ * borttagen) galler de vanliga reglerna. Utan `anstallningar` skyddar varje
+ * hired_employee_id.
  */
 export function kandidaterAttRadera(
   rader: Kandidatrad[],
@@ -125,18 +158,33 @@ export function kandidaterAttRadera(
   {
     fristDagar,
     poolManader = TALANGPOOL_MANADER,
-    aktivaAnstallda,
+    slutatManader = ANSTALLD_SLUTAT_MANADER,
+    anstallningar,
   }: {
     fristDagar: number | null;
     poolManader?: number;
-    /** Anstallda som finns kvar (removed_at is null). Utelamnad: varje hired_employee_id skyddar. */
-    aktivaAnstallda?: Set<string>;
+    slutatManader?: number;
+    /** employee-id -> anstallningen. Utelamnad: varje hired_employee_id skyddar. */
+    anstallningar?: Map<string, Anstallning>;
   },
 ): string[] {
   const t = nu.getTime();
   const ut: string[] = [];
   for (const r of rader) {
-    if (r.hired_employee_id && (!aktivaAnstallda || aktivaAnstallda.has(r.hired_employee_id))) continue;
+    if (r.hired_employee_id) {
+      if (!anstallningar) continue;
+      const a = anstallningar.get(r.hired_employee_id);
+      if (a) {
+        const slut = anstallningSlutade(a, nu);
+        if (slut == null) continue; // pagar (null), eller slutdag okand (undefined)
+        // Talangpoolen har eget samtycke och egen frist: den galler fortfarande.
+        if (!r.talent_pool) {
+          // Dagsgranul: pa dagen sex manader efter slutdagen sparas den annu.
+          if (new Date(plusManader(slut, slutatManader)).toISOString().slice(0, 10) < svenskDag(nu)) ut.push(r.id);
+          continue;
+        }
+      }
+    }
     if (r.talent_pool) {
       const fran = r.talent_pool_consent ?? r.senaste;
       if (fran && plusManader(fran, poolManader) < t) ut.push(r.id);
@@ -251,11 +299,17 @@ export async function gallra(nu: Date, { kor }: { kor: boolean }): Promise<Gallr
     cv_file_id: (k.cv_file_id as string | null) ?? null,
   }));
   const fristDagar = policy?.purge_after_days ? Number(policy.purge_after_days) : null;
+  // Bara de anstallda som en kandidat pekar pa; resten av personalen behovs inte.
   const anstallda = await lasSidvis<Record<string, unknown>>((fran, till) =>
-    db.from("employee").select("id").is("removed_at", null).order("id").range(fran, till),
+    db.from("employee").select("id, end_date, status, removed_at").order("id").range(fran, till),
   );
-  const aktivaAnstallda = new Set(anstallda.map((e) => String(e.id)));
-  const bortKandidater = kandidaterAttRadera(kandidatrader, nu, { fristDagar, aktivaAnstallda });
+  const pekade = new Set(kandidatrader.map((k) => k.hired_employee_id).filter((x): x is string => !!x));
+  const anstallningar = new Map<string, Anstallning>(
+    anstallda
+      .filter((e) => pekade.has(String(e.id)))
+      .map((e) => [String(e.id), { end_date: (e.end_date as string | null) ?? null, status: String(e.status ?? ""), removed_at: (e.removed_at as string | null) ?? null }]),
+  );
+  const bortKandidater = kandidaterAttRadera(kandidatrader, nu, { fristDagar, anstallningar });
   const cvIds = kandidatrader.filter((k) => bortKandidater.includes(k.id) && k.cv_file_id).map((k) => k.cv_file_id!);
 
   // ---- Palettens fragor ----------------------------------------------------

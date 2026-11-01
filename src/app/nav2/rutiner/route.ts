@@ -10,6 +10,8 @@ import { skapaUppgift } from "@/app/(app)/uppgifter/actions";
 import { franMarkdown, tillMarkdown, type Rutinfalt } from "@/lib/nav2/rutinformat";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
 import { maskera } from "@/lib/nav2/gallring";
+import { mottagarenFarLasa } from "@/lib/nav2/malgrupp";
+import { SOKMISSAR_PER_MINUT, senasteMinuten, underTak } from "@/lib/nav2/tak";
 
 export const dynamic = "force-dynamic";
 
@@ -100,7 +102,7 @@ export async function POST(request: Request) {
     if (!slug) return null;
     const { data } = await (await supabaseServer())
       .from("document")
-      .select("id, slug, title, body_md, version, status, owner_id, requires_ack, routine_meta, category_path, review_due, doc_type, audience_roles, decided_on")
+      .select("id, slug, title, body_md, version, status, owner_id, requires_ack, routine_meta, category_path, review_due, doc_type, audience_roles, audience_teams, audience_employees, decided_on")
       .eq("slug", slug)
       .maybeSingle();
     return data;
@@ -127,7 +129,8 @@ export async function POST(request: Request) {
         const { data: pref } = await db.from("nav_preference").select("value").eq("employee_id", mig).eq("key", "rutiner.sok").maybeSingle();
         const fore = Array.isArray(pref?.value) ? (pref.value as string[]) : [];
         await db.from("nav_preference").upsert({ employee_id: mig, key: "rutiner.sok", value: [q, ...fore.filter((x) => x.toLowerCase() !== q.toLowerCase())].slice(0, 5), updated_at: new Date().toISOString() }, { onConflict: "employee_id,key" });
-        if (b.traffar === 0) await db.from("document_search_miss").insert({ query: q });
+        // Taket per minut (F2-18): raden har ingen person, så spärren är global och räknas i databasen.
+        if (b.traffar === 0 && (await underTak(db, { tabell: "document_search_miss", kolumn: "searched_at", fran: senasteMinuten() }, SOKMISSAR_PER_MINUT))) await db.from("document_search_miss").insert({ query: q });
         return svar({ ok: "" });
       }
 
@@ -210,8 +213,12 @@ export async function POST(request: Request) {
         if (!d || !UUID.test(till)) return svar({ fel: "Rutinen eller mottagaren finns inte." }, 404);
         // Bara en publicerad rutin skickas (granskningen F2-18): ett utkast syns bara för redaktörerna.
         if (d.status !== "published") return svar({ fel: "Bara en publicerad rutin går att skicka." }, 400);
-        const { data: p } = await db.from("employee").select("first_name").eq("id", till).maybeSingle();
+        const { data: p } = await db.from("employee").select("first_name, status, team_id").eq("id", till).maybeSingle();
         if (!p) return svar({ fel: "Mottagaren finns inte." }, 404);
+        // ... och bara till en som själv får läsa den: dokumentets målgrupp prövas för mottagaren, inte för avsändaren.
+        const { data: roller } = await db.from("employee_role").select("role").eq("employee_id", till);
+        const lasbar = mottagarenFarLasa(d, { id: till, status: String(p.status ?? ""), team_id: (p.team_id as string | null) ?? null, roller: (roller ?? []).map((r) => String(r.role)) });
+        if (!lasbar) return svar({ fel: "Mottagaren kan inte läsa den rutinen." }, 403);
         await notifiera({ till, av: mig, kalla: "rutin-delad", typ: "rutin", rubrik: `${jagNamn} skickade en rutin till dig`, detalj: d.title as string, href: `/rutiner/${d.slug}` });
         return svar({ ok: `${p.first_name} fick rutinen i Nav.` });
       }

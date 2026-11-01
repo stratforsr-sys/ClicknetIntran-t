@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { fullName, getCurrentUser } from "@/lib/auth";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { svenskaMinuter, svensktDatum } from "@/lib/klocka";
-import { STEG_ETIKETT, nastaSteg, type Steg } from "@/lib/rekrytering";
+import { STEG_ETIKETT, nastaSteg, stegvagTill, type Steg } from "@/lib/rekrytering";
 import { notifieraFlera, rekryteringskretsen } from "@/lib/notishandelse-server";
 import { laggUppAnstalld } from "@/lib/anstallning-server";
 import { anstalldaVerktyg, startFran } from "@/lib/nav2/anstallda-start";
@@ -54,6 +54,8 @@ const HM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const PNR = /\d{6}[-+]?\d{4}/;
 const BOKNAMN: Record<string, string> = { tel: "Telefonscreening", int1: "Intervju 1", int2: "Intervju 2" };
 const BOKSTEG: Record<string, Steg> = { tel: "screening", int1: "interview_1", int2: "interview_2" };
+/** Avbokningsmejlet när kandidaten får avslag: säger inte själv att det är ett avslag, det gör avslagsmejlet. */
+const AVSLAG_AVBOKNING = "Vi återkommer separat.";
 const KALLOR = ["ansokningssida", "platsbanken", "linkedin", "tips", "spontan", "annat"];
 const SKAL = ["Passade inte kraven", "Vi gick vidare med en annan kandidat", "Tackade nej", "Kom inte till intervjun", "Annat"];
 const MALLAR = ["bekr", "bokad", "sms24", "sms2", "avslag1", "avslag2", "erbj", "pool"];
@@ -188,9 +190,9 @@ export async function POST(request: Request) {
   };
   /** Stegen följer bokningen: en bokad intervju 1 betyder att kandidaten är på intervju 1. */
   const stegTill = async (k: { id: string; first_name: string; last_name: string; role_title: string; stage: Steg }, mal: Steg) => {
-    const ordning: Steg[] = ["new", "screening", "interview_1", "interview_2"];
-    while (ordning.indexOf(k.stage) >= 0 && ordning.indexOf(k.stage) < ordning.indexOf(mal)) {
-      const nasta = ordning[ordning.indexOf(k.stage) + 1];
+    const vag = stegvagTill(k.stage, mal);
+    if (typeof vag === "string") return vag;
+    for (const nasta of vag) {
       const f = await flytta(k, nasta);
       if (f) return f;
     }
@@ -320,8 +322,10 @@ export async function POST(request: Request) {
         const med = (Array.isArray(b.med) ? b.med : []).map(String).filter((x) => UUID.test(x) && x !== mig).slice(0, 10);
         const { data: slot } = await db.from("interview_slot").select("id, day, start_min, end_min, place").eq("id", slotId).maybeSingle();
         if (!slot) return svar({ fel: "Tiden finns inte längre." }, 404);
-        const f = await stegTill(k, BOKSTEG[btyp]);
-        if (f) return svar({ fel: f }, 400);
+        // Vägen kontrolleras nu, men steget flyttas först när bokningen sitter: hinner tiden tas av någon annan
+        // ska kandidaten inte stå på intervju 1 utan en intervju.
+        const vag = stegvagTill(k.stage, BOKSTEG[btyp]);
+        if (typeof vag === "string") return svar({ fel: vag }, 400);
         // Den nya bokningen skrivs först. Går den inte (tiden hann tas) står den gamla kvar (granskningen F1-10).
         const mote = await skapaMote({
           rubrik: `${BOKNAMN[btyp]} · ${namnPa(k)}`, dag: slot.day, start: slot.start_min, minuter: slot.end_min - slot.start_min, deltagare: med, plats: slot.place,
@@ -335,6 +339,7 @@ export async function POST(request: Request) {
           if (mote.eventId) await stallIn(mote.eventId);
           return svar({ fel: dbFel(error, "Tiden kunde inte bokas.") === "Det finns redan." ? "Tiden hann bokas av någon annan. Välj en annan." : dbFel(error, "Tiden kunde inte bokas.") }, 409);
         }
+        const stegFel = await stegTill(k, BOKSTEG[btyp]);
         // Sedan avbokas det som den nya ersätter, med avbokningen i kandidatens kalender.
         await avbokaKommande(k.id, { utom: bok.id as string, foljd: "Den nya tiden kommer i ett eget mejl." });
         if (k.email) {
@@ -346,7 +351,7 @@ export async function POST(request: Request) {
             if (Date.parse(tvaTimmar) > Date.now()) await meddela(k.id, "sms2", text("sms2"), { booking: bok.id, efter: tvaTimmar });
           }
         }
-        return klart(`Bokat ${slot.day} kl. ${hm(slot.start_min)}, och mötet ligger i kalendern.${mote.fel ? ` Kalendermötet skapades inte: ${mote.fel}` : ""}${k.email ? "" : ` ${fornamn(namnPa(k))} har ingen e-postadress, så ring och berätta tiden.`}`);
+        return klart(`Bokat ${slot.day} kl. ${hm(slot.start_min)}, och mötet ligger i kalendern.${mote.fel ? ` Kalendermötet skapades inte: ${mote.fel}` : ""}${stegFel ? ` Steget kunde inte flyttas: ${stegFel}` : ""}${k.email ? "" : ` ${fornamn(namnPa(k))} har ingen e-postadress, så ring och berätta tiden.`}`);
       }
 
       case "avboka": {
@@ -369,9 +374,12 @@ export async function POST(request: Request) {
         if (!SKAL.includes(skal)) return svar({ fel: "Välj ett skäl. Det syns bara här, men tratten behöver det." }, 400);
         const notText = str(b.not);
         if (PNR.test(notText)) return svar({ fel: "Det ser ut som ett personnummer. Navet sparar inga, så ta bort det." }, 400);
-        await avbokaKommande(k.id);
+        // Steget först: går avslaget inte (redan avslutad) ska inga bokningar avbokas.
         const f = await flytta(k, "rejected", { rejected_reason: skal });
         if (f) return svar({ fel: f }, 400);
+        // En bokad intervju som kandidaten fått kalenderfilen till avbokas med en CANCEL (samma UID, nästa sekvens),
+        // annars ligger den kvar i kandidatens kalender. Går via samma utskick som inbjudan.
+        await avbokaKommande(k.id, { foljd: AVSLAG_AVBOKNING });
         if (notText) await db.from("candidate_note").insert({ candidate_id: k.id, kind: "not", body: notText, by_employee: mig });
         const mall = String(b.mall ?? "");
         if (k.email && b.mejl === true && ["avslag1", "avslag2"].includes(mall)) await meddela(k.id, mall, text(mall));

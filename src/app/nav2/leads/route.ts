@@ -9,7 +9,7 @@ import { leadTitel, maskeraPersonnummer } from "@/lib/leads";
 import { tilldelaLead, uppdateraLead } from "@/app/(app)/leads/actions";
 import { skapaMote, stallIn } from "@/app/(app)/kalender/moten/actions";
 import { farFordela } from "@/lib/nav2/leads";
-import { ANGRA_MIN, FORE_KOLUMNER, MOTE_SPARR_SEK, PLATSER, SKAL, moteNyss, nyTilldelning, type Fore } from "@/lib/nav2/leadsforma";
+import { ANGRA_MIN, FORE_KOLUMNER, MOTE_SPARR_SEK, PLATSER, SKAL, gaEtt, moteNyss, nyTilldelning, tilldelningsprefix, type Fore } from "@/lib/nav2/leadsforma";
 import { medNyckel } from "@/lib/nav2/nyckel";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
 
@@ -305,6 +305,7 @@ export async function POST(request: Request) {
         const per: Record<string, number> = {};
         const handelser: string[] = [];
         let hunnit = 0;
+        let utanSteg = 0;
         let fore: boolean | null = null;
         if (handling === "auto") {
           const { data: inst } = await db.from("nav_setting").select("value").eq("key", "leads.auto").maybeSingle();
@@ -322,15 +323,22 @@ export async function POST(request: Request) {
           const vem = await namnPa(till);
           if (!vem) continue;
           // Ett lead som någon annan hann ge bort hoppas över; resten fördelas och kan ångras (F2-4).
-          try {
-            handelser.push(await ge(l, till, null));
-          } catch {
+          // Kastar bara steget är leadet ändå fördelat (S07, M1): det räknas inte som "hade redan fått en säljare".
+          const r = await gaEtt({
+            tilldela: () => tilldelaLead(form({ lead_id: l.id, assigned_to: till, fore: "" })),
+            steg: () => steg(l, "tilldelad", { till, actor: mig }),
+          });
+          if (r.utfall === "hunnit") {
             hunnit++;
             continue;
           }
+          if (r.utfall === "klart") handelser.push(r.handelse);
+          else utanSteg++;
           per[vem] = (per[vem] ?? 0) + 1;
         }
-        const ochHunnit = hunnit ? ` ${hunnit === 1 ? "Ett lead" : `${hunnit} leads`} hade redan fått en säljare.` : "";
+        const ochHunnit =
+          (hunnit ? ` ${hunnit === 1 ? "Ett lead" : `${hunnit} leads`} hade redan fått en säljare.` : "") +
+          (utanSteg ? ` ${utanSteg === 1 ? "Ett lead" : `${utanSteg} leads`} fördelades men går inte att ångra.` : "");
         const lista = Object.entries(per).map(([n, a]) => `${forFor(n)} ${a}`);
         const och = lista.length > 1 ? `${lista.slice(0, -1).join(", ")} och ${lista[lista.length - 1]}` : lista[0] ?? "";
         if (handling === "jamt") return klart(handelser.length ? `Fördelat: ${och}.${ochHunnit}` : `Inget att fördela.${ochHunnit}`, handelser);
@@ -405,7 +413,8 @@ export async function POST(request: Request) {
         const order = o as { id: string; order_number: number | null; salesperson_id: string | null; created_at: string } | null;
         if (!order || Date.parse(order.created_at) < Date.now() - 3600_000) return svar({ fel: "Ordern finns inte." }, 400);
         if (!fordelar && order.salesperson_id !== mig) return svar({ fel: "Ordern är inte din." }, 403);
-        await andra(l, { status: "won", next_call_at: null, order_id: order.id });
+        // S07 (M3): som i forsok får en fördelare ett otilldelat lead när hen sparar steget.
+        await andra(l, { status: "won", next_call_at: null, order_id: order.id, ...(nyTilldelning(l, mig, fordelar, new Date().toISOString()) ?? {}) });
         await steg(l, "kund");
         await skrivHandelse({ actorId: mig, action: "lead.status_changed", objectType: "lead", objectId: l.id, meta: { fran: l.status, till: "won", order: order.id } });
         return klart(`Leadet blev kund: order #${order.order_number}.`, []);
@@ -442,6 +451,10 @@ export async function POST(request: Request) {
           }
           const { error } = await db.from("lead").update(s.fore).eq("id", s.lead_id);
           if (error) throw new Error(`${n ? `${n} av ${rader.length} steg är ångrade. ` : ""}Leadet kunde inte läggas tillbaka: ${error.message}`);
+          // Notisen till säljaren väntar i utkorgen (`notifieraSenare`). Den som inte hunnit tas tas bort,
+          // så att säljaren aldrig får veta om ett lead som inte längre är hens.
+          if (s.kind === "tilldelad")
+            await db.from("outbox").delete().like("idempotency_key", `${tilldelningsprefix(s.lead_id)}%`).is("claimed_at", null).is("sent_at", null);
           await db.from("lead_event").delete().eq("id", s.id);
           await skrivHandelse({ actorId: mig, action: "lead.undone", objectType: "lead", objectId: s.lead_id, meta: { steg: s.kind } });
           n++;

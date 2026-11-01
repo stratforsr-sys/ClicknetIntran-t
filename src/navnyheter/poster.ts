@@ -14,6 +14,61 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "appen-langa-listor-och-lonekort",
+    rubrik: "Appen: kortare listor, lönekort och dra för att ladda om",
+    ingress: "I appen visar långa listor tio i taget, lönerapporten blir ett kort per person och du drar ner för att hämta det senaste.",
+    text: `Det här gäller Nav som app på hemskärmen. Nav i webbläsaren ser ut precis som förut.
+
+- **Tid**, **Nyheter** och **Händelseloggen** visar en bit i taget. Tryck **Visa 10 till** under listan för att se fler. Talet bredvid säger hur många som finns kvar.
+- **Lönerapporten** visar ett kort per person i stället för en bred tabell: namnet överst och arbetad tid, justering, netto och avvikelser under.
+- **Dra ner** högst upp på sidan för att hämta det senaste. Ringen fylls medan du drar, och när den är full släpper du. Håller du på att skriva något eller har en ruta öppen säger appen till i stället, så att inget försvinner.`,
+    datum: "2026-11-01",
+    roller: [],
+    href: "/nav2",
+  },
+  {
+    slug: "leads-angra-innan-saljaren-far-veta",
+    rubrik: "Leads: Ångra hinner före notisen",
+    ingress: "När du ger bort ett lead och ångrar dig inom två minuter får säljaren varken notis, mejl eller push.",
+    text: `När du ger ett lead till en säljare väntar notisen två minuter innan den går
+ut. Trycker du **Ångra** under den tiden tas den bort, och säljaren får aldrig veta
+att leadet var hens en stund. Efter två minuter går notisen, mejlet och pushen ut
+som vanligt.
+
+Det gäller också **Fördela jämnt**.`,
+    datum: "2026-11-01",
+    roller: ["sales_manager", "ceo", "team_lead", "admin"],
+    href: "/leads",
+  },
+  {
+    slug: "anstallda-dra-tillbaka-avslut",
+    rubrik: "Anställda: dra tillbaka ett avslut",
+    ingress: "Ett avslut med sista dag framåt går att dra tillbaka helt, så länge kontot inte har stängts.",
+    text: `Öppna personen i **Anställda**, välj **Avsluta anställningen** i menyn och tryck
+**Dra tillbaka avslutet**. Tryck en gång till för att bekräfta. Sista dagen och
+orsaken tas bort, avslutslistan försvinner och personen är anställd som förut.
+
+Det går fram till natten efter sista dagen, när kontot stängs. Mejl som gick ut
+när avslutet registrerades går inte att ta tillbaka, så säg till dem som fick dem.`,
+    datum: "2026-11-01",
+    roller: ["admin", "ceo"],
+    href: "/personal",
+  },
+  {
+    slug: "kalender-paminnelser-foljer-motet",
+    rubrik: "Kalendern: påminnelsen följer med när mötet flyttas",
+    ingress: "Mejlpåminnelser till kunder skickas nu av Nav när det är dags, så en flyttad eller inställd träff får aldrig en gammal påminnelse.",
+    text: `Förut lämnades påminnelsen till kunden över i förväg, och den gick inte att ta
+tillbaka. Nu ligger den kvar i Nav tills det är dags. Flyttar du mötet följer
+påminnelsen med, och ställer du in det skickas ingen.
+
+I **Rekrytering** får en kandidat som får avslag nu också en avbokning av
+intervjun, så att den försvinner ur kandidatens kalender.`,
+    datum: "2026-11-01",
+    roller: [],
+    href: "/kalender",
+  },
+  {
     slug: "moten",
     rubrik: "Möten: en tavla som flyttar sig själv",
     ingress: "Boka, bekräfta och följ upp SEO-möten på en tavla där kortet flyttar sig när du gör något.",

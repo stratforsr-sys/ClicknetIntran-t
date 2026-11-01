@@ -35,15 +35,39 @@ export function dagenEfter(datum: string): string {
 /**
  * Får raden sluta gälla `giltig_till`? Sant utan slutdatum, och annars bara om
  * en annan rad med samma nyckel tar vid: den börjar efter raden och senast
- * dagen efter slutdatumet. Då finns ingen dag utan sats.
+ * dagen efter slutdatumet, och gäller själv den dagen (inget eget slutdatum
+ * före den). Efterföljaren får i sin tur bara ha ett slutdatum om den har en
+ * egen efterföljare (granskningen S06, M5). Då finns ingen dag utan sats.
+ * `giltig_till` på `alla` är valfritt: utan det räknas raden som öppen.
  */
 export function kanSluta(
   rad: { nyckel: string; giltig_fran: string; giltig_till: string | null },
-  alla: { nyckel: string; giltig_fran: string }[],
+  alla: { nyckel: string; giltig_fran: string; giltig_till?: string | null }[],
 ): boolean {
   if (!rad.giltig_till) return true;
   const senast = dagenEfter(rad.giltig_till);
-  return alla.some((r) => r.nyckel === rad.nyckel && r.giltig_fran > rad.giltig_fran && r.giltig_fran <= senast);
+  return alla.some(
+    (r) =>
+      r.nyckel === rad.nyckel &&
+      r.giltig_fran > rad.giltig_fran &&
+      r.giltig_fran <= senast &&
+      (!r.giltig_till || r.giltig_till >= senast) &&
+      kanSluta({ nyckel: r.nyckel, giltig_fran: r.giltig_fran, giltig_till: r.giltig_till ?? null }, alla),
+  );
+}
+
+/**
+ * Slutdatumen som en ändring bryter: rader med slutdatum som hade en efterföljare
+ * i `fore` men inte längre har det i `efter` (granskningen S06, M5: en Skatteverket-rättelse
+ * kan ta bort efterföljaren). Ett glapp som redan fanns före ändringen räknas inte.
+ */
+export function brutnaSlut(
+  fore: { nyckel: string; giltig_fran: string; giltig_till: string | null }[],
+  efter: { nyckel: string; giltig_fran: string; giltig_till: string | null }[],
+): string[] {
+  return efter
+    .filter((r) => r.giltig_till && !kanSluta(r, efter) && fore.some((f) => f.nyckel === r.nyckel && f.giltig_fran === r.giltig_fran && kanSluta(f, fore)))
+    .map((r) => r.giltig_till as string);
 }
 
 /** Texten rutten svarar med när ett slutdatum nekas. */

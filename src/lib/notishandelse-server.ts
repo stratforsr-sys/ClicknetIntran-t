@@ -96,6 +96,35 @@ export async function notifiera(handelse: Handelse): Promise<boolean> {
 }
 
 /**
+ * Samma handelse, men forst nar `sekunder` gatt: raden vantar i utkorgen
+ * (`kind = 'notis'`, `payload.mall = 'handelse'`) och minutjobbet skickar den
+ * med `notifieraFranUtkorgen`. Under tiden kan den som gjorde saken angra, och
+ * da tas raden bort innan nagon fatt nagot (se Leads `angra`). `nyckel` blir
+ * `idempotency_key`; den som angrar letar upp raden pa den.
+ *
+ * Samma regler som `notifiera()`, provade redan har, sa att en rad som aldrig
+ * skulle ha skickats inte heller vantar.
+ */
+export async function notifieraSenare(handelse: Handelse, { sekunder, nyckel }: { sekunder: number; nyckel: string }): Promise<boolean> {
+  try {
+    if (!handelse.till) return false;
+    if (handelse.av && handelse.av === handelse.till) return false;
+    if (!KALLOR.has(handelse.kalla)) return false;
+    if (!handelse.href.startsWith("/") || /\s/.test(handelse.href)) return false;
+
+    const { error } = await supabaseAdmin().from("outbox").insert({
+      kind: "notis",
+      payload: { mall: "handelse", kalla: handelse.kalla, till: handelse.till, handelse },
+      idempotency_key: nyckel,
+      not_before: new Date(Date.now() + sekunder * 1000).toISOString(),
+    });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * BREVET, OM KALLAN FORTJANAR ETT.
  *
  * ===========================================================================

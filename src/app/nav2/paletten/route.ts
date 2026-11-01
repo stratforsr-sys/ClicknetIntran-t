@@ -4,6 +4,8 @@ import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { PAL_VYER, palettKalender, palettObesvarade, sokPaletten, type PalVy } from "@/lib/nav2/paletten";
 import { svaraPaletten } from "@/lib/nav2/palettsvar";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
+import { FRAGOR_PER_DAG, underTak } from "@/lib/nav2/tak";
+import { svensktDatum } from "@/lib/klocka";
 
 export const dynamic = "force-dynamic";
 
@@ -70,7 +72,11 @@ export async function POST(request: Request) {
         // Bara texten. Ingen person följer med, och tabellen har ingen kolumn för den (0125).
         const text = String(b.text ?? "").trim().slice(0, 200);
         if (text.length < 3) return svar({ fel: "Frågan är för kort." }, 400);
-        const { error } = await supabaseAdmin().rpc("registrera_fragemiss", { p_q: text });
+        // Taket per dag (F2-18): raden har ingen person och ingen tidpunkt, bara dagen, så spärren är global.
+        const db = supabaseAdmin();
+        if (!(await underTak(db, { tabell: "nav_question_miss", kolumn: "dag", fran: svensktDatum() }, FRAGOR_PER_DAG)))
+          return svar({ fel: "Det har kommit väldigt många frågor i dag. Försök igen i morgon." }, 429);
+        const { error } = await db.rpc("registrera_fragemiss", { p_q: text });
         if (error) return svar({ fel: `Frågan sparades inte: ${error.message}` }, 500);
         return svar({ ok: "Frågan är sparad utan ditt namn." });
       }

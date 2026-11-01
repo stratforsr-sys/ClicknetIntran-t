@@ -1,12 +1,13 @@
 import "server-only";
 
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { medRoll, notifiera, notifieraFranUtkorgen } from "@/lib/notishandelse-server";
+import { medRoll, notifiera, notifieraFranUtkorgen, type Handelse } from "@/lib/notishandelse-server";
 import { HANDELSEKALLOR, type Handelsekalla } from "@/lib/notiser";
 import { ANGER_SEKUNDER, FORINSTALLNINGAR, arSteg, datumLang, dayLabel, hm, kundbrev, minuter, notistext, type Notisrad } from "@/lib/leveranskalender";
 import { andraSchemalagt, avbrytSchemalagt, skickaEpost, type Bilaga } from "@/lib/epost";
 import { inbjudan, type Mote } from "@/lib/ical";
 import { icsGaller } from "@/lib/utkorg-ics";
+import { paminnelsebeslut } from "@/lib/paminnelse-tid";
 import { adapter, type Crmstatus } from "@/lib/crm/adapter";
 import { crmKundId, leveransICrm, makuleraICrm, skapaICrm } from "@/lib/crm/synk-server";
 
@@ -30,6 +31,14 @@ import { crmKundId, leveransICrm, makuleraICrm, skapaICrm } from "@/lib/crm/synk
  * aldrig skrivas två gånger. En rad som Ångra hunnit ta bort finns inte kvar
  * att ta, och en rad som tagits går inte längre att ångra (`lk_angra` vägrar).
  *
+ * MEJLPÅMINNELSERNA (`resend_schedule`) schemaläggs INTE hos Resend. Nyckeln
+ * får bara skicka, så ett schemalagt brev går inte att avboka. Raden väntar i
+ * utkorgen med `not_before = send_at`, och den som tar den före tiden lämnar
+ * tillbaka den (`paminnelse-tid.ts`). Flyttas eller ställs mötet in ändras
+ * påminnelsen i databasen och raden skickar ingenting; `stadaVantandePaminnelser`
+ * tar bort den. Brev som schemalades hos Resend före ändringen går inte att
+ * avboka (`resend_cancel` skickar ett avbokningsmejl i stället).
+ *
  * TRE MISSLYCKADE FÖRSÖK ger `error`, och admin får en notis. Raden försöks
  * inte igen — ett fel som kvarstår efter tre minuter är ett fel en människa
  * ska titta på.
@@ -46,6 +55,9 @@ type Utkorgsrad = {
 };
 
 export type Tomning = { skickade: number; hoppade: number; fel: number; igen: number };
+
+/** `"vanta"`: raden är inte klar och lämnades tillbaka till utkorgen med en ny tid (en påminnelse som inte är dags än). */
+type Skickat = boolean | "vanta";
 
 /** Töm det som är dags att skicka. Kastar aldrig. */
 export async function tomUtkorgen(antal = 50): Promise<Tomning> {
@@ -70,6 +82,11 @@ export async function tomUtkorgen(antal = 50): Promise<Tomning> {
     let fel: string | null = null;
     try {
       const gick = await skicka(rad);
+      if (gick === "vanta") {
+        // Lämnad tillbaka med sin nya tid (påminnelsen väntar på sin tid). Inget `lk_utkorg_klar`: raden är inte klar.
+        utfall.hoppade++;
+        continue;
+      }
       if (gick) utfall.skickade++;
       else utfall.hoppade++;
     } catch (e) {
@@ -98,7 +115,7 @@ export async function tomEfterFonstret(): Promise<void> {
 }
 
 /** En rad. `true` = skickad, `false` = sållad av reglerna (inget att skicka). */
-async function skicka(rad: Utkorgsrad): Promise<boolean> {
+async function skicka(rad: Utkorgsrad): Promise<Skickat> {
   if (rad.kind === "resend_schedule" || rad.kind === "resend_patch" || rad.kind === "resend_cancel") {
     return resend(rad);
   }
@@ -107,6 +124,14 @@ async function skicka(rad: Utkorgsrad): Promise<boolean> {
   if (rad.kind !== "notis") {
     // En okänd sort är ett fel, inte något att tyst markera som skickat.
     throw new Error(`Okänd sort i utkorgen: ${rad.kind}`);
+  }
+
+  // En färdig händelse som väntat ut ett ångerfönster (`notifieraSenare`).
+  if ((rad.payload as { mall?: unknown }).mall === "handelse") {
+    const h = (rad.payload as { handelse?: Handelse }).handelse;
+    if (!h || typeof h.till !== "string" || typeof h.href !== "string" || typeof h.rubrik !== "string") throw new Error("Händelsen i utkorgen saknar fält.");
+    if (!KALLOR.has(h.kalla)) throw new Error(`Okänd källa: ${h.kalla}`);
+    return notifieraFranUtkorgen(h);
   }
 
   const n = rad.payload as unknown as Notisrad;
@@ -239,7 +264,7 @@ type Paminnelse = {
 const kundmejlTillatet = (adress?: string | null) =>
   process.env.VERCEL_ENV === "production" || /@resend\.dev$/i.test(adress?.trim() ?? "");
 
-async function resend(rad: Utkorgsrad): Promise<boolean> {
+async function resend(rad: Utkorgsrad): Promise<Skickat> {
   const db = supabaseAdmin();
   const id = String(rad.payload.reminder_id ?? "");
   const { data: r } = await db.from("calendar_reminder").select("*").eq("id", id).maybeSingle();
@@ -265,19 +290,41 @@ async function resend(rad: Utkorgsrad): Promise<boolean> {
     return true;
   }
 
-  // resend_schedule
-  if (p.status !== "vantar" || p.resend_id) return false;
-  if (Date.parse(p.send_at) <= Date.now() + 60_000) {
-    await db.rpc("lk_resend_satt", { p_reminder: p.id, p_resend_id: null, p_status: "fel", p_fel: "Tiden hade redan passerat" });
-    return false;
-  }
-
+  // resend_schedule: påminnelsen skickas av navet SJÄLVT när det är dags (se `paminnelse-tid.ts`).
+  // Resend-nyckeln är send-only, så ett schemalagt brev hos Resend går inte att avboka. Raden väntar
+  // i utkorgen med `not_before = send_at`, och ett möte som flyttas eller ställs in hinner ändra
+  // påminnelsen innan något har lämnat navet.
   const { data: e } = await db
     .from("calendar_event")
-    .select("id, title, dag, tid, cancelled_at, outcome, organizer_id, order_id")
+    .select("id, title, dag, tid, cancelled_at, outcome, organizer_id, order_id, starts_at")
     .eq("id", p.event_id)
     .maybeSingle();
-  if (!e || e.cancelled_at || e.outcome) return false;
+
+  const beslut = paminnelsebeslut(p, e as { cancelled_at: string | null; outcome: string | null; starts_at: string } | null, (rad.payload.send_at as string | undefined) ?? null, new Date());
+  if (beslut.gor === "hoppa") return false;
+  if (beslut.gor === "fel") {
+    await db.rpc("lk_resend_satt", { p_reminder: p.id, p_resend_id: null, p_status: "fel", p_fel: beslut.skal });
+    return false;
+  }
+  if (!e) return false;
+
+  // PÅMINNELSERNA ÄR PRODUKTIONENS, som CRM-raderna. En förhandsvisning delar databas med
+  // produktionen och tömmer utkorgen efter sin egen åtgärd; den hade annars kunnat ta en riktig
+  // kunds påminnelse och märka den `fel`. Raden lämnas tillbaka, och produktionens tömning tar den.
+  if (beslut.gor === "vanta" || process.env.VERCEL_ENV !== "production") {
+    const till = beslut.gor === "vanta" ? beslut.till : new Date().toISOString();
+    await db
+      .from("outbox")
+      .update({
+        claimed_at: null,
+        attempts: Math.max(0, rad.attempts - 1),
+        not_before: till,
+        payload: { ...rad.payload, send_at: p.send_at },
+      })
+      .eq("id", rad.id)
+      .is("sent_at", null);
+    return "vanta";
+  }
 
   const [{ data: org }, { data: o }] = await Promise.all([
     db.from("employee").select("first_name, email").eq("id", e.organizer_id).maybeSingle(),
@@ -324,11 +371,78 @@ async function resend(rad: Utkorgsrad): Promise<boolean> {
     return false;
   }
 
-  const u = await skickaEpost({ till, amne, text, schemalagtVid: new Date(p.send_at).toISOString() });
-  await logga("ut", { handling: "schedule", reminder: p.id, mottagare: p.recipient, scheduled_at: p.send_at, ok: u.skickat, id: u.skickat ? u.id : null });
-  if (!u.skickat) throw new Error(u.orsak);
-  await db.rpc("lk_resend_satt", { p_reminder: p.id, p_resend_id: u.id, p_status: "schemalagd", p_fel: null });
+  // Ta påminnelsen innan brevet går (vantar -> skickad, villkorat): två rader för samma påminnelse
+  // (en flyttning har köat en ny) eller två tömningar får aldrig skicka två brev.
+  const { data: tagen } = await db
+    .from("calendar_reminder")
+    .update({ status: "skickad", error: null })
+    .eq("id", p.id)
+    .eq("status", "vantar")
+    .is("resend_id", null)
+    .select("id");
+  if (!tagen?.length) return false;
+
+  let u: Awaited<ReturnType<typeof skickaEpost>>;
+  try {
+    u = await skickaEpost({ till, amne, text });
+  } catch (err) {
+    u = { skickat: false, orsak: err instanceof Error ? err.message : String(err) };
+  }
+  await logga("ut", { handling: "send", reminder: p.id, mottagare: p.recipient, ok: u.skickat, id: u.skickat ? u.id : null });
+  if (!u.skickat) {
+    // Misslyckat: tillbaka till `vantar` så att nästa försök får skicka. Sista försöket ger `fel`,
+    // så att panelen inte påstår att brevet gått.
+    await db.rpc("lk_resend_satt", { p_reminder: p.id, p_resend_id: null, p_status: rad.attempts >= 3 ? "fel" : "vantar", p_fel: u.orsak });
+    throw new Error(u.orsak);
+  }
+  // Resends id sparas så att webhooken (studs) hittar påminnelsen.
+  await db.rpc("lk_resend_satt", { p_reminder: p.id, p_resend_id: u.id, p_status: "skickad", p_fel: null });
   return true;
+}
+
+/**
+ * Städa utkorgen på påminnelser som väntar på sin tid men inte längre gäller:
+ * mötet är inställt eller klart, påminnelsen avbokad eller flyttad. De skulle
+ * inte skicka något (se `paminnelsebeslut`) men ligger kvar tills tiden är ute.
+ * Bara rader som ingen tagit och som väntar längre än två minuter berörs.
+ */
+export async function stadaVantandePaminnelser(): Promise<number> {
+  const db = supabaseAdmin();
+  const nu = new Date();
+  const { data: rader } = await db
+    .from("outbox")
+    .select("id, payload")
+    .eq("kind", "resend_schedule")
+    .is("sent_at", null)
+    .is("claimed_at", null)
+    .is("error", null)
+    .gt("not_before", new Date(nu.getTime() + 120_000).toISOString())
+    .limit(200);
+  const vantande = (rader ?? []) as unknown as { id: number; payload: Record<string, unknown> }[];
+  if (vantande.length === 0) return 0;
+
+  const ids = [...new Set(vantande.map((r) => String(r.payload.reminder_id ?? "")).filter(Boolean))];
+  const { data: pam } = await db.from("calendar_reminder").select("id, event_id, status, resend_id, send_at").in("id", ids);
+  const paminnelser = new Map((pam ?? []).map((p) => [p.id as string, p]));
+  const handelseIds = [...new Set((pam ?? []).map((p) => p.event_id as string))];
+  const { data: hand } = await db.from("calendar_event").select("id, cancelled_at, outcome, starts_at").in("id", handelseIds);
+  const handelser = new Map((hand ?? []).map((h) => [h.id as string, h]));
+
+  const bort: number[] = [];
+  for (const r of vantande) {
+    const p = paminnelser.get(String(r.payload.reminder_id ?? "")) ?? null;
+    const e = p ? (handelser.get(p.event_id as string) ?? null) : null;
+    const b = paminnelsebeslut(
+      p as { status: string; resend_id: string | null; send_at: string } | null,
+      e as { cancelled_at: string | null; outcome: string | null; starts_at: string } | null,
+      (r.payload.send_at as string | undefined) ?? null,
+      nu,
+    );
+    if (b.gor === "hoppa") bort.push(r.id);
+  }
+  if (bort.length === 0) return 0;
+  await db.from("outbox").delete().in("id", bort).is("sent_at", null).is("claimed_at", null);
+  return bort.length;
 }
 
 /**

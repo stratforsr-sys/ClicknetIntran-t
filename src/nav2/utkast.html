@@ -24470,8 +24470,9 @@ function satsGaller(datum){
   const franvarofaktor = {};
   satsRaderPa(datum).forEach(r => { if (r.kind === 'absence_cost_factor' && r.applies_to && !(r.applies_to in franvarofaktor)) franvarofaktor[r.applies_to] = Number(r.value); });
   // Aldrig ett dolt standardvärde (repots E15.2). En saknad nedsatt avgift eller ett saknat tak är null och ger ingen
-  // nedsättning, som servern (granskningen S06, D8). Saknas full avgift räknar servern inte alls; här blir den noll, som syns.
-  return {standard:v('employer_fee_standard') ?? 0, reducerad:v('employer_fee_reduced'), reduceradTak:v('employer_fee_reduced_cap'),
+  // nedsättning, som servern (granskningen S06, D8). Saknas full avgift räknar servern inte alls, och förhandsvisningen
+  // visar då servers anmärkning i stället för 0 kr (granskningen S06 M6): saknasFull, se satsRakna.
+  return {standard:v('employer_fee_standard') ?? 0, saknasFull:v('employer_fee_standard') === null, reducerad:v('employer_fee_reduced'), reduceradTak:v('employer_fee_reduced_cap'),
     ungMin:v('young_age_min'), ungMax:v('young_age_max'), ung:v('employer_fee_young'), seniorMin:v('senior_age_min'), ingenMin:v('no_fee_age_min'),
     tackningsgrad:v('contribution_margin'), franvarofaktor};
 }
@@ -24484,9 +24485,13 @@ function satsAvgift(alder, s){
 }
 const SATSGRUND = {full:'Full', ung:'Unga', aldre:'Äldre', ingen:'Ingen avgift'};
 const SATSGRUNDT = {full:'full avgift', ung:'avgift för unga', aldre:'avgift för äldre', ingen:'ingen avgift'};
+// Samma text som servern (SAKNAR_STANDARD i lonekostnad.ts).
+const SATSSAKNAR_FULL = 'Arbetsgivaravgiften (full avgift) saknas för perioden, så lönekostnaden räknas inte. Lägg in satsen under Satser och löner.';
 // Repots raknaLonekostnad, steg för steg: frånvaroavdrag, bruttolön, avgift per kalendermånad med tak, break-even.
 function satsRakna(u, s){
   const anm = [];
+  // Utan full avgift räknar servern inte alls (granskningen S06 M6): ingen siffra, bara anmärkningen.
+  if (s.saknasFull) return {brutto:null, avgift:null, total:null, breakEven:null, manader:[], anm:[SATSSAKNAR_FULL], saknas:true};
   const franvaro = Object.values(u.franvarominuter || {}).reduce((a, m) => a + m, 0), redovisad = (u.arbetadeMinuter || 0) + franvaro;
   let avdrag = 0;
   if (redovisad > 0) Object.entries(u.franvarominuter || {}).forEach(([typ, min]) => { if (min > 0) avdrag += u.manadslon * (min / redovisad) * ((100 - (s.franvarofaktor[typ] ?? 100)) / 100); });
@@ -24592,7 +24597,7 @@ function satsEffekt(u){
   if (u.kind === 'absence_cost_factor'){ return {fran:u.fran, n:0, diff:0, bara:'Frånvarofaktorn påverkar bara månader med frånvaro, så den syns först i lönekostnaden för en löneperiod.'}; }
   efter[m[u.kind]] = v;
   let n = 0, diff = 0, beFore = 0, beEfter = 0; const per = [];
-  satsAktiva().forEach(p => { const a = satsPerson(p, u.fran, fore), b = satsPerson(p, u.fran, efter); if (!a || !b) return;
+  satsAktiva().forEach(p => { const a = satsPerson(p, u.fran, fore), b = satsPerson(p, u.fran, efter); if (!a || !b || a.saknas || b.saknas) return;
     const d = b.total - a.total; if (Math.abs(d) >= .5){ n++; diff += d; per.push([p, d]); } beFore += a.breakEven || 0; beEfter += b.breakEven || 0; });
   return {fran:u.fran, n, diff, per, be:u.kind === 'contribution_margin' ? {fore:fore.tackningsgrad ? beFore : null, efter:beEfter} : null};
 }
@@ -24757,10 +24762,11 @@ function satsLonerHtml(){
   const idag = kIdag(), s = satsGaller(idag), alla = satsAktiva(), med = alla.filter(p => satsLonPa(p.id, idag));
   const vis = (S.satsLonVisa === 'lon' ? med : alla).slice().sort((a, b) => (satsLonPa(b.id, idag) ? 1 : 0) - (satsLonPa(a.id, idag) ? 1 : 0) || a.namn.localeCompare(b.namn, 'sv'));
   let sumLon = 0, sumAvg = 0;
-  med.forEach(p => { const x = satsPerson(p, idag, s); if (x){ sumLon += x.brutto; sumAvg += x.avgift; } });
+  med.forEach(p => { const x = satsPerson(p, idag, s); if (x){ sumLon += x.saknas ? x.lon.belopp : x.brutto; if (!x.saknas) sumAvg += x.avgift; } });
   const L = S.satsLon;
   return prfKort('sats-lon', 'Månadslöner', 'Matas in för hand. Nav räknar ingen lön och förhandlar ingen, det tar emot ett tal någon annan bestämt.', `<div class="prf-kb">
-    <div class="sats-sum"><div><span>Har en lön</span><b class="num">${med.length} av ${alla.length}</b></div><div><span>Lön per månad</span><b class="num">${satsKr(sumLon)}</b></div><div><span>Arbetsgivaravgift</span><b class="num">${satsKr(sumAvg)}</b></div><div><span>Lönekostnad</span><b class="num">${satsKr(sumLon + sumAvg)}</b></div></div>
+    <div class="sats-sum"><div><span>Har en lön</span><b class="num">${med.length} av ${alla.length}</b></div><div><span>Lön per månad</span><b class="num">${satsKr(sumLon)}</b></div><div><span>Arbetsgivaravgift</span><b class="num">${s.saknasFull ? '–' : satsKr(sumAvg)}</b></div><div><span>Lönekostnad</span><b class="num">${s.saknasFull ? '–' : satsKr(sumLon + sumAvg)}</b></div></div>
+    ${s.saknasFull ? `<p class="prf-hj">${esc(SATSSAKNAR_FULL)}</p>` : ''}
     <p class="prf-hj">${alla.length - med.length} saknar lön och räknas inte. Utan månadslön finns ingen kostnad att räkna, och en rad på noll hade sett ut som en gratis säljare.</p>
     <div class="sats-lonf" role="radiogroup" aria-label="Visa">${[['alla', `Alla aktiva`, alla.length], ['lon', 'Med lön', med.length]].map(([k, l, n]) => `<button type="button" role="radio" aria-checked="${S.satsLonVisa === k}" tabindex="${S.satsLonVisa === k ? 0 : -1}" data-satslonvisa="${k}">${l}<span class="num">${n}</span></button>`).join('')}</div>
     <ul class="sats-loner">${vis.map(p => { const x = satsPerson(p, idag, s), k = satsKommande(p.id, idag), open = L && L.pid === p.id, ar = S.sats.ar[p.id];
@@ -24768,7 +24774,7 @@ function satsLonerHtml(){
         <button type="button" class="sats-lk" data-satslonrad="${p.id}" aria-expanded="${!!open}">
           ${avatar(p.namn, 28)}<span class="sats-ln"><b>${esc(p.namn)}</b><small>${x ? `Från ${satsDatumK(x.lon.fran)}` : 'Saknar lön'}${k ? ` · ${satsKr(k.belopp)} från ${satsDatumK(k.fran)}` : ''}</small></span>
           <span class="sats-lv num">${x ? satsKr(x.lon.belopp) : '–'}</span>
-          <span class="sats-lg">${x ? `<span class="sats-lgs">${SATSGRUND[x.manader[0].grund]} <span class="num">${satsTal(x.manader[0].procent)} %</span></span>` : ar ? '' : '<span class="sats-gra2">Inget år</span>'}${ar ? `<small class="num">född ${ar}</small>` : ''}</span>
+          <span class="sats-lg">${x && x.saknas ? '' : x ? `<span class="sats-lgs">${SATSGRUND[x.manader[0].grund]} <span class="num">${satsTal(x.manader[0].procent)} %</span></span>` : ar ? '' : '<span class="sats-gra2">Inget år</span>'}${ar ? `<small class="num">född ${ar}</small>` : ''}</span>
           <span class="sats-lt num">${x ? satsKr(x.total) : ''}</span>
           ${I('chev', 'sats-chev')}
         </button>
@@ -24782,13 +24788,13 @@ function satsLonDetalj(p, x){
   const inv = f => visa(f) ? `aria-invalid="true" aria-describedby="satsL-${f}F"` : '', felP = f => visa(f) ? `<p class="prf-fel" id="satsL-${f}F">${I('prfvarn')}<span>${esc(visa(f))}</span></p>` : '';
   const v = String(L.belopp).replace(/\s/g, ''), prov = L.lage !== 'ar' && !fel.belopp && !fel.fran ? satsRakna({manadslon:+v, fodelsear:S.sats.ar[p.id] ?? null, periodStart:L.fran.slice(0, 7) + '-01', periodSlut:satsManadSlut(L.fran), franvarominuter:{}, arbetadeMinuter:1}, satsGaller(L.fran)) : null;
   return `<div class="sats-d">
-    ${x ? `<p class="sats-kalk num">${satsKr(x.brutto)} lön + ${satsKr(x.avgift)} (${SATSGRUNDT[x.manader[0].grund]}, ${satsTal(x.manader[0].procent)} %${x.manader[0].tak && x.brutto > x.manader[0].tak ? `, full över ${satsKr(x.manader[0].tak)}` : ''}) = <b>${satsKr(x.total)}</b> per månad${x.breakEven ? ` · break-even ${satsKr(x.breakEven)} sålt` : ''}</p>${x.anm.map(a => `<p class="prf-hj">${esc(a)}</p>`).join('')}` : ''}
+    ${x && x.saknas ? x.anm.map(a => `<p class="prf-hj">${esc(a)}</p>`).join('') : x ? `<p class="sats-kalk num">${satsKr(x.brutto)} lön + ${satsKr(x.avgift)} (${SATSGRUNDT[x.manader[0].grund]}, ${satsTal(x.manader[0].procent)} %${x.manader[0].tak && x.brutto > x.manader[0].tak ? `, full över ${satsKr(x.manader[0].tak)}` : ''}) = <b>${satsKr(x.total)}</b> per månad${x.breakEven ? ` · break-even ${satsKr(x.breakEven)} sålt` : ''}</p>${x.anm.map(a => `<p class="prf-hj">${esc(a)}</p>`).join('')}` : ''}
     ${hist.length ? `<ol class="sats-hist">${hist.map(l => `<li><span class="num sats-hv">${satsKr(l.belopp)}</span><span class="sats-hd">${satsDatumK(l.fran)}</span>${l.fran > idag ? satsDot('sats-bla', 'Kommer') : l === satsLonPa(p.id, idag) ? satsDot('sats-gron', 'Gäller') : satsDot('sats-gra', 'Tidigare')}<small>Inlagd ${satsDatumK(l.inlagd)} av ${esc(l.av)}</small></li>`).join('')}</ol>` : '<p class="prf-hj">Ingen löneuppgift än.</p>'}
     ${!satsAndra() ? `<p class="prf-hj">${ND ? 'En superadmin med behörigheten för lönekostnad ändrar lönen och födelseåret.' : 'En superadmin ändrar lönen.'}</p>` : `<div class="sats-lflik" role="radiogroup" aria-label="Vad vill du lägga in">${[['lon', 'Ny månadslön'], ['ar', 'Födelseår']].map(([k, l]) => `<button type="button" role="radio" aria-checked="${(L.lage || 'lon') === k}" tabindex="${(L.lage || 'lon') === k ? 0 : -1}" data-satsllage="${k}">${l}</button>`).join('')}</div>
     ${L.lage === 'ar' ? `<div class="sats-par"><div class="prf-f"><label for="satsL-ar">Födelseår</label><input id="satsL-ar" class="prf-in num" data-satsl="ar" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="1995" value="${esc(L.ar)}" ${inv('ar')}>${felP('ar')}<p class="prf-hj">${/^\d{4}$/.test(String(L.ar)) ? `${satsAlder(+kIdag().slice(0, 4), +L.ar)} år vid årets ingång: ${SATSGRUNDT[satsAvgift(satsAlder(+kIdag().slice(0, 4), +L.ar), satsGaller(kIdag())).grund]}.` : 'Bara året. Aldrig datum eller personnummer.'}</p></div></div>`
       : `<div class="sats-par"><div class="prf-f"><label for="satsL-belopp">Månadslön</label><span class="sats-enh"><input id="satsL-belopp" class="prf-in num" data-satsl="belopp" inputmode="numeric" autocomplete="off" placeholder="${x ? x.lon.belopp : '27500'}" value="${esc(L.belopp)}" ${inv('belopp')}><span aria-hidden="true">kr</span></span>${felP('belopp')}</div>
         <div class="prf-f"><label for="satsL-fran">Gäller från</label><input id="satsL-fran" type="date" class="prf-in" data-satsl="fran" value="${esc(L.fran)}" ${inv('fran')}>${felP('fran')}</div></div>
-        ${prov ? `<p class="sats-eff" aria-live="polite">Lönekostnad från ${satsManadNamn(L.fran)}: <b class="num">${satsKr(prov.total)}</b> per månad${x ? `, ${prov.total >= x.total ? '+' : '−'}${satsKr(Math.abs(prov.total - x.total))} mot i dag` : ''}.</p>` : ''}
+        ${prov && prov.saknas ? (x && x.saknas ? '' : `<p class="prf-hj" aria-live="polite">${esc(prov.anm[0])}</p>`) : prov ? `<p class="sats-eff" aria-live="polite">Lönekostnad från ${satsManadNamn(L.fran)}: <b class="num">${satsKr(prov.total)}</b> per månad${x && !x.saknas ? `, ${prov.total >= x.total ? '+' : '−'}${satsKr(Math.abs(prov.total - x.total))} mot i dag` : ''}.</p>` : ''}
         <p class="prf-hj">Löneuppgiften skrivs aldrig om. En ändring är en ny rad med ett nytt datum, annars går en gammal lönekostnad inte att förklara.</p>`}
     <div class="prf-knappar sats-lk2"><button type="button" class="btn btn-s btn-sm" data-satslonx>Avbryt</button><button type="button" class="btn btn-s btn-sm" data-satslonok="${p.id}">${L.lage === 'ar' ? 'Spara året' : 'Spara lönen'}</button></div>`}
   </div>`;
@@ -27609,6 +27615,10 @@ const ndPvIdFor = namn => { if (namn === ND.jag.namn) return ND.jag.id; const p 
 const ndPvNiva = n => n ? {t:n.t, a:n.a, enhet:n.enhet} : null;
 
 /* ---------- Hydrering ---------- */
+// Säljarna ensamma: de som är säljare nu. PVSALJARE har också alla med underlag (en bonus, en säljare som slutat, en
+// leveransperson), för huvudboken och underlaget. Laget-listan, Månadsmålen och "utan mål" räknar bara de här
+// (granskningen S06 M3).
+const NDPVSALJ = [];
 function ndPvStart(){
   const P = ndP();
   PVIDAG = kIdag(); PVMAN = P.manad;
@@ -27624,7 +27634,9 @@ function ndPvStart(){
   // Laget är som underlagForAlla: alla med underlag någon av månaderna, och de aktiva säljarna.
   const medUnderlag = new Set(Object.values(P.underlag).flatMap(m => Object.entries(m).filter(([, u]) => u.summa || u.antal.netto || u.rader.length).map(([id]) => id)));
   P.personer.filter(p => (p.saljare || medUnderlag.has(p.id)) && p.id !== ND.jag.id).forEach(p => PVSALJARE.push(p.namn));
-  if (!P.chefsvy){ PVSALJARE.length = 0; PVSALJARE.push(ND.jag.namn); }
+  NDPVSALJ.length = 0;
+  P.personer.filter(p => p.saljare && p.id !== ND.jag.id).forEach(p => NDPVSALJ.push(p.namn));
+  if (!P.chefsvy){ PVSALJARE.length = 0; PVSALJARE.push(ND.jag.namn); NDPVSALJ.length = 0; NDPVSALJ.push(ND.jag.namn); }
   Object.keys(PVANST).forEach(k => delete PVANST[k]);
   P.personer.forEach(p => { if (p.anst) PVANST[p.namn] = p.anst; });
   PVTRAPPA.length = 0;
@@ -27960,6 +27972,25 @@ const ndPvRoll = fn => function(...a){
 };
 renderPvView = ndPvRoll(renderPvView);
 
+/* Laget-listan och Månadsmålen visar säljarna, inte alla som har underlag (granskningen S06 M3). Vyerna läser
+   PVSALJARE direkt, så listan byts under själva ritningen och sätts tillbaka. Fliken Månadsmål och Profilens rad
+   räknar "utan mål" på samma lista. Huvudboken, underlaget och summorna är som förut. */
+const ndPvSaljKrets = fn => function(...a){
+  if (!ndP()) return fn.apply(this, a);
+  const hela = PVSALJARE.slice(); PVSALJARE.length = 0; PVSALJARE.push(...NDPVSALJ);
+  try { return fn.apply(this, a); } finally { PVSALJARE.length = 0; PVSALJARE.push(...hela); }
+};
+pvLagetVy = ndPvSaljKrets(pvLagetVy);
+pvMalVy = ndPvSaljKrets(pvMalVy);
+const ndPvUtanMal = () => NDPVSALJ.filter(v => { const x = pvMalFor(v, PVMAN); return !x || (x.o === null && x.k === null); }).length;
+const _ndPvFlikar = pvFlikar;
+pvFlikar = function(chef){
+  const f = _ndPvFlikar(chef);
+  if (ndP()){ const mal = f.find(x => x[0] === 'mal'); if (mal) mal[2] = ndPvUtanMal(); }
+  return f;
+};
+if (ndP()) PRFADM.forEach(g => g[1].forEach(rad => { if (rad[0] === 'mal' && rad[5]) rad[5] = () => { pvSt(); const n = ndPvUtanMal(); return n ? `${n} utan mål i ${pvManNamn(PVMAN).toLowerCase()}` : 'Alla har mål'; }; }));
+
 if (ndP()){ ndPvStart(); NDKOPPLAD.add('provision'); }
 
 /* =====================================================================
@@ -27983,6 +28014,23 @@ const NDKGRUPP = {salj:'Säljteamet', lev:'Leverans', ovr:'Övriga'};
 const NDKSLAG = {mote:'mote', enskilt:'enskilt', coachning:'coachning', leverans:'leverans', uppgift:'uppgift', ledig:'ledig', order:'frist', frist:'frist'};
 // 10 minuter är navets förval (repots skapaMote), så det måste gå att visa (granskningen E4).
 const NDKPAM = {5:'5 min före', 10:'10 min före', 15:'15 min före', 30:'30 min före', 60:'1 timme före', 1440:'1 dag före'};
+// Påminnelsens minuter som etikett (granskningen S05 M4). Listan har bara sex värden; servern tar vilka minuter som
+// helst (0, 45, 120 ...), och de ska heta något i stället för "Ingen".
+function ndKPamEtikett(min){
+  if (min === null || min === undefined) return 'Ingen';
+  if (NDKPAM[min]) return NDKPAM[min];
+  if (min === 0) return 'När det börjar';
+  if (min % 1440 === 0) return `${min / 1440} dagar före`;
+  if (min % 60 === 0) return `${min / 60} timmar före`;
+  return `${min} min före`;
+}
+// Utkastets väljare för påminnelser (KPAM, i baskoden) saknar "10 min före", navets förval (granskningen S05 M3).
+// Objektet byggs om så att 10 hamnar efter 5 i Object.keys(KPAM), som väljaren i Profilen läser.
+if (ndK() && !('10 min före' in KPAM)){
+  const rad = Object.entries(KPAM);
+  rad.forEach(([k]) => { delete KPAM[k]; });
+  rad.forEach(([k, v]) => { KPAM[k] = v; if (k === '5 min före') KPAM['10 min före'] = 10; });
+}
 const NDKAL = {laddat:new Map(), hamtar:new Set(), detalj:new Map()};
 // "Visa som" i navet (calendar_event.show_as) → utkastets namn. Upptagen är förvalet.
 const NDKVISAFRAN = {preliminar:'prel', ledig:'ledig', borta:'borta', annan:'annan'};
@@ -27997,7 +28045,7 @@ function ndKEv(p){
   if (agare !== org) add(agare, p.agare === ND.jag.id && p.svar && p.svar !== 'org' ? p.svar : null);
   (p.deltagare || []).forEach(id => add(ndKNamn(id), null));
   return {id:p.id, ref:p.ref, href:p.href, d:p.dag, s, e, allday, t:p.rubrik ?? (allday ? 'Borta' : 'Upptagen'), kat:NDKSLAG[p.slag] || 'mote', org, delt,
-    plats:'', agenda:'', visa:p.slag === 'ledig' ? 'borta' : NDKVISAFRAN[p.visaSom] || 'upptagen', video:!!p.online, online:p.online || null, rep:!!p.serie, priv:!!p.privat, klar:!!p.klar, pamin:NDKPAM[p.paminnelse] || 'Ingen', nd:true, agareId:p.agare, serieId:p.serieId || null, heldagFran:p.heldag ? p.heldag.fran : null, heldagTill:p.heldag ? p.heldag.till : null};
+    plats:'', agenda:'', visa:p.slag === 'ledig' ? 'borta' : NDKVISAFRAN[p.visaSom] || 'upptagen', video:!!p.online, online:p.online || null, rep:!!p.serie, priv:!!p.privat, klar:!!p.klar, pamin:ndKPamEtikett(p.paminnelse), nd:true, agareId:p.agare, serieId:p.serieId || null, heldagFran:p.heldag ? p.heldag.fran : null, heldagTill:p.heldag ? p.heldag.till : null};
 }
 // 1:1 heter som i navet (enskildTitel): "1:1 Elin" för de två, "1:1 Zen · Elin" för en tredje.
 function ndKTitel(ev){
@@ -28242,11 +28290,25 @@ function ndKVanta(e, sel, namn, fran, dagar){
 /* ---------- Skrivningar: /nav2/kalender (POST) ---------- */
 const ndKLank = e => e && e.href ? e.href : `/kalender?dag=${e ? e.d : kIdag()}${e && e.ref && e.nd && ['mote', 'enskilt', 'leverans', 'coachning'].includes(e.kat) ? `&handelse=${e.ref}` : ''}`;
 const NDKPAMMIN = {'Ingen':null, '5 min före':5, '10 min före':10, '15 min före':15, '30 min före':30, '1 timme före':60, '1 dag före':1440};
-/* Utkastets listor har inget "10 min före". Står mötet på 10 minuter läggs valet in, valt, så att listan inte visar
-   "Ingen" för ett möte som påminner (granskningen E4). Bara för det mötet; andra listor är som förut. */
+/* Etiketten som en påminnelse har i navet tillbaka till minuter: de fasta valen, "När det börjar" och "N min/timmar/dagar
+   före". Undefined för en etikett som inte går att tolka (granskningen S05 M4). */
+function ndKPamMin(l){
+  if (NDKPAMMIN[l] !== undefined) return NDKPAMMIN[l];
+  if (l === 'När det börjar') return 0;
+  const t = /^(\d+) (min|timmar|dagar) före$/.exec(l || '');
+  return t ? +t[1] * {min:1, timmar:60, dagar:1440}[t[2]] : undefined;
+}
+/* Utkastets listor har bara sex val. Står mötet på en påminnelse som inte finns där (10 min, 45 min, 0, 2 timmar ...)
+   läggs valet in, valt, på sin plats i ordningen, så att listan inte visar något annat för ett möte som påminner
+   (granskningarna E4 och S05 M4). Bara för det mötet; andra listor är som förut. */
 function ndKPam10(h, varde, fore){
-  if (varde !== '10 min före') return h;
-  return h.replace(`<option >${fore}5 min före</option>`, `$&<option selected>${fore}10 min före</option>`);
+  const m = ndKPamMin(varde);
+  if (!varde || m === undefined || m === null || ['5 min före', '15 min före', '30 min före', '1 timme före', '1 dag före'].includes(varde)) return h;
+  const efter = [[5, '5 min före'], [15, '15 min före'], [30, '30 min före'], [60, '1 timme före'], [1440, '1 dag före']].filter(x => x[0] < m).pop();
+  const val = `<option selected>${fore}${varde}</option>`;
+  if (efter) return h.replace(`<option >${fore}${efter[1]}</option>`, `$&${val}`);
+  // Före det första valet (0 till 4 minuter): strax före "5 min före".
+  return h.replace(`<option >${fore}5 min före</option>`, `${val}$&`);
 }
 const NDKVISA = {upptagen:'upptagen', prel:'preliminar', ledig:'ledig', borta:'borta', annan:'annan'};
 async function ndKPost(handling, data = {}, {ladda = true} = {}){
@@ -28269,7 +28331,7 @@ function ndKFalt(f){
     delt:(f.delt || []).map(n => ndKId(n)).filter(Boolean), ...ndKPlatsLank(f, ev), agenda:f.agenda || '', visa:NDKVISA[f.visa] || 'upptagen',
     // Påminnelsen skickas bara när den ändrats (granskningen E3): ett befintligt möte öppnas med sin egen, och en
     // sparning av något annat skriver inte om den för alla. null = "Ingen" (E4).
-    pamin:f.id && f.pamin === f.paminFore ? undefined : NDKPAMMIN[f.pamin] !== undefined ? NDKPAMMIN[f.pamin] : 15, upprepa:f.upprepa || 'Upprepas inte', slut:f.upprepa && f.upprepa !== 'Upprepas inte' ? (f.slut || '') : undefined, slutdag:f.heldag ? (f.slutdag || '') : undefined, valfria:f.typ === 'uppgift' ? undefined : (f.valfria || []).filter(n => (f.delt || []).includes(n)).map(n => ndKId(n)).filter(Boolean), for:!f.id && f.typ === 'mote' && f.for ? f.for : undefined, priv:!!f.priv, lev:f.lev || undefined, order:f.order || undefined,
+    pamin:f.id && f.pamin === f.paminFore ? undefined : ndKPamMin(f.pamin) !== undefined ? ndKPamMin(f.pamin) : 15, upprepa:f.upprepa || 'Upprepas inte', slut:f.upprepa && f.upprepa !== 'Upprepas inte' ? (f.slut || '') : undefined, slutdag:f.heldag ? (f.slutdag || '') : undefined, valfria:f.typ === 'uppgift' ? undefined : (f.valfria || []).filter(n => (f.delt || []).includes(n)).map(n => ndKId(n)).filter(Boolean), for:!f.id && f.typ === 'mote' && f.for ? f.for : undefined, priv:!!f.priv, lev:f.lev || undefined, order:f.order || undefined,
     gaster:f.typ === 'mote' ? (f.gaster || []).filter(a => !(f.gastFore || []).includes(a)) : []};
 }
 /* Möteslänken (beslutsrundan 2026-10-20: Nav sparar en länk som skrivs in, men skapar ingen). En länk som klistras
@@ -28489,7 +28551,7 @@ document.addEventListener('change', e => {
   const d = e.target.dataset;
   if (d.kpeekpamin !== undefined){ e.stopImmediatePropagation(); const ev = KEV.find(x => x.id === d.kpeekpamin), ref = ndKRef(ev); if (!ref) return;
     const l = e.target.value.replace('Påminnelse ', '').replace('Ingen påminnelse', 'Ingen');
-    ndKPost('pamin', {id:ref, min:NDKPAMMIN[l] !== undefined ? NDKPAMMIN[l] : null}, {ladda:false}).then(s => { if (s.ok){ ev.pamin = l; S.kRemIgn.delete(ev.id); delete S.kRemSnz[ev.id]; kRemRender(); } else render(); }); return; }
+    ndKPost('pamin', {id:ref, min:ndKPamMin(l) !== undefined ? ndKPamMin(l) : null}, {ladda:false}).then(s => { if (s.ok){ ev.pamin = l; S.kRemIgn.delete(ev.id); delete S.kRemSnz[ev.id]; kRemRender(); } else render(); }); return; }
   if (d.kdniva !== undefined){ e.stopImmediatePropagation(); const r = KDELNING[S.role === 'chef' ? 'chef' : 'saljare'][+d.kdniva], id = r && ndKId(r[0]); if (id) ndKPost('delning', {person:id, niva:e.target.value}, {ladda:false}).then(s => { if (s.ok){ r[1] = e.target.value; render(); } }); return; }
 }, true);
 
@@ -31268,7 +31330,11 @@ aeAvslutRuta = function(p){
   // Sista dag framåt: kontot stängs natten efter sista dagen, inte direkt (granskningen F1-8).
   // Rutan ritas inte om när datumet byts, så texten säger båda fallen.
   return h.replace('Inloggningen stängs och rollerna återkallas.', 'Inloggningen stängs och rollerna återkallas: i dag, eller natten efter sista dagen om den ligger framåt.').replace('<ul class="aesum">', `<label class="aelab" for="ndAeOrsak">Varför tar anställningen slut?</label><select id="ndAeOrsak" class="uin" data-ndaeorsak aria-invalid="${!!fel}"><option value="">Välj</option>${NDAE_ORSAK.map(([k, l]) => `<option value="${k}" ${A.orsak === k ? 'selected' : ''}>${l}</option>`).join('')}</select>${fel ? `<p class="aefel" role="alert">${fel}</p>` : ''}
-    <ul class="aesum">`);
+    <ul class="aesum">`).replace('<div class="aek"><button class="btn btn-s btn-sm" data-aeavslutx>Avbryt</button>', ndAePlanerat(p)
+    // Beställaren 2026-10-31: ett planerat avslut går att dra tillbaka helt. Två tryck, eftersom regelmejlen
+    // som gick ut vid avslutet inte går att ta tillbaka och ett nytt avslut skickar dem igen.
+    ? `<div class="aek"><button class="btn btn-s btn-sm" data-ndaetillbaka="${p.id}">${S.ndAeTillbaka === p.id ? 'Ja, dra tillbaka avslutet' : 'Dra tillbaka avslutet'}</button><button class="btn btn-s btn-sm" data-aeavslutx>Avbryt</button>`
+    : '<div class="aek"><button class="btn btn-s btn-sm" data-aeavslutx>Avbryt</button>');
 };
 
 /* ---------- Ett planerat avslut visar sin avslutslista (granskningen F1-8) ----------
@@ -31312,6 +31378,9 @@ document.addEventListener('click', e => {
   // Personkortet
   if (d.aelosen !== undefined){ stopp(); const p = P(); S.aeMeny = false; ndAePost('losen', {pid:p.id}, {ladda:false}).then(s => { if (s.losenord){ S.aeLosen = {pid:p.id, ord:s.losenord}; render(); window.scrollTo(0, 0); } }); return; }
   if (d.aeaktiv !== undefined){ stopp(); ndAePost('aktiv', {pid:S.aePers}); return; }
+  if (d.ndaetillbaka){ stopp();
+    if (S.ndAeTillbaka !== d.ndaetillbaka){ S.ndAeTillbaka = d.ndaetillbaka; render(); return; }
+    S.ndAeTillbaka = null; ndAePost('avslut-tillbaka', {pid:d.ndaetillbaka}, {minns:{pers:d.ndaetillbaka}}); return; }
   if (d.aeavslutok){ stopp(); const p = aeP(d.aeavslutok), A = S.aeAvslut;
     if (!A.slut || (p.start && A.slut < p.start)){ A.fel = {slut:`Välj en dag från ${p.start ? frKort(p.start) : 'startdagen'}.`}; render(); aeFokusFel(); return; }
     if (!A.orsak){ A.fel = {orsak:'Välj varför anställningen tar slut. Rekrytering kollar företrädesrätten mot den.'}; render(); aeFokusFel(); return; }
@@ -36265,6 +36334,12 @@ document.addEventListener('input', e => {
    aldrig klassen och ser ut precis som förut. ?app=1 slår på läget i fliken (sessionStorage) så att det går
    att se i previewen, och ?app=0 stänger av det.
 
+   Appläget, grupp C (2026-11-01): långa listor visar en bit i taget med "Visa fler" (Tid: Beslut, Nyheter: Nytt
+   i Nav, Händelseloggen), Lönerapportens tabell blir ett kort per person på en telefon, och appen får dra för
+   att ladda om. Dra-för-att-ladda-om laddar bara om när inget lager är öppet och inget är halvskrivet, samma
+   villkor som omladdningen efter frånvaro; annars säger den varför. Webbläsarens egen stängs med
+   overscroll-behavior, så att det inte blir två.
+
    Allt sker bara när ND finns: demot är orört.
    ===================================================================== */
 
@@ -36300,7 +36375,31 @@ const NDAPP_STIL = `
 }
 @media (max-width:900px){
   html.ndapplage .ol{height:calc(100vh - var(--ndapp-bnav,62px));height:calc(100dvh - var(--ndapp-bnav,62px))}
-}`;
+}
+html.ndapplage{overscroll-behavior-y:contain}
+html.ndapplage .ndapp-dold{display:none!important}
+html.ndapplage .ndapp-fler{display:flex;justify-content:center;padding:10px 0 4px}
+html.ndapplage .ndapp-fler .muted{margin-left:6px}
+@media (max-width:700px){
+  html.ndapplage .titabwrap:has(.ndapp-kort){overflow:visible}
+  html.ndapplage .titab.ndapp-kort,html.ndapplage .titab.ndapp-kort tbody{display:block;width:auto}
+  html.ndapplage .titab.ndapp-kort thead{display:none}
+  html.ndapplage .titab.ndapp-kort tr{display:flex;flex-direction:column;padding:10px 14px 8px;margin:0 0 8px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+  html.ndapplage .titab.ndapp-kort tr.kolla{background:var(--warn-soft);border-color:var(--warn-soft)}
+  html.ndapplage .titab.ndapp-kort td{display:flex;justify-content:space-between;gap:12px;padding:3px 0;border:0;background:none;white-space:normal;text-align:right}
+  html.ndapplage .titab.ndapp-kort td::before{content:attr(data-ndapp-l);color:var(--ink-3);text-align:left;font-family:var(--f-body);letter-spacing:0}
+  html.ndapplage .titab.ndapp-kort td.ndapp-namn{order:-1;font-size:15px;font-weight:600;color:var(--ink);padding:0 0 6px;text-align:left}
+  html.ndapplage .titab.ndapp-kort td.ndapp-namn::before,html.ndapplage .titab.ndapp-kort td:empty{display:none}
+  html.ndapplage .titab.ndapp-kort td.ndapp-period{display:none}
+  html.ndapplage .titab.ndapp-kort td[data-ndapp-l=""]{justify-content:flex-start;text-align:left;color:var(--ink-2)}
+  html.ndapplage .titab.ndapp-kort td[data-ndapp-l=""]::before{display:none}
+}
+html.ndapplage .ndapp-dra{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 8px);width:36px;height:36px;padding:7px;box-sizing:border-box;border-radius:50%;background:var(--surface);box-shadow:var(--shadow);z-index:60;pointer-events:none;opacity:0;color:var(--ink-3);transform:translateX(-50%)}
+html.ndapplage .ndapp-dra svg{display:block;width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-dasharray:56.6;stroke-dashoffset:calc(56.6 - 56.6 * var(--ndapp-p,0));transform:rotate(-90deg)}
+html.ndapplage .ndapp-dra.redo{color:var(--ink)}
+html.ndapplage .ndapp-dra.laddar svg{stroke-dasharray:38 19;animation:ndappsnurr .8s linear infinite}
+@keyframes ndappsnurr{to{transform:rotate(270deg)}}
+@media (prefers-reduced-motion:reduce){html.ndapplage .ndapp-dra.laddar svg{animation:none}}`;
 
 // Sant när något ligger över vyn som bakåt ska stänga före allt annat.
 function ndAppLagerOppet(){
@@ -36412,10 +36511,118 @@ if (ND){
           if (r.right > k.right) rad.scrollLeft += r.right - k.right + 8;
         }
       };
+      // Långa listor en bit i taget. Antalet som visas minns per lista så länge sidan lever, så att en render
+      // (ett beslut, ett filter) inte fäller ihop det man redan visat. Ett kort längre ner som har fokus visas alltid.
+      const NDAPP_FLER = [['.tigolist', 10], ['ul.nhnav', 10]];
+      const ndAppVisas = new Map();
+      const ndAppFlerKnapp = (nyckel, steg, kvar) => {
+        const d = document.createElement('div');
+        d.className = 'ndapp-fler';
+        d.innerHTML = `<button class="btn btn-s btn-sm" data-ndappfler="${nyckel}" data-ndappsteg="${steg}">Visa ${Math.min(steg, kvar)} till<span class="muted">· ${kvar} kvar</span></button>`;
+        return d;
+      };
+      const ndAppKorta = (rader, nyckel, steg, efter) => {
+        let n = ndAppVisas.get(nyckel) || steg;
+        const fokus = rader.findIndex(e => document.activeElement && document.activeElement !== document.body && e.contains(document.activeElement));
+        if (fokus >= n) n = fokus + 1;
+        rader.forEach((e, i) => e.classList.toggle('ndapp-dold', i >= n));
+        if (rader.length > n) efter.after(ndAppFlerKnapp(nyckel, steg, rader.length - n));
+      };
+      const ndAppListor = () => {
+        document.querySelectorAll('#main .ndapp-fler').forEach(e => e.remove());
+        for (const [sel, steg] of NDAPP_FLER)
+          document.querySelectorAll('#main ' + sel).forEach((l, i) => ndAppKorta([...l.children], `${S.view}${sel}${i}`, steg, l));
+        // Händelseloggen: raderna ligger i en lista per dag. En dag vars alla rader är dolda döljs med sin rubrik.
+        const kort = document.querySelector('#main section.rls-kort');
+        if (kort){
+          const listor = [...kort.querySelectorAll('ol.rls-logg')];
+          const rader = listor.flatMap(o => [...o.children]);
+          if (rader.length){
+            const sista = listor[listor.length - 1];
+            ndAppKorta(rader, 'logg', 30, sista);
+            listor.forEach(o => {
+              const dold = [...o.children].every(e => e.classList.contains('ndapp-dold'));
+              o.classList.toggle('ndapp-dold', dold);
+              if (o.previousElementSibling && o.previousElementSibling.classList.contains('rls-dag')) o.previousElementSibling.classList.toggle('ndapp-dold', dold);
+            });
+            const k = kort.querySelector(':scope > .ndapp-fler'), fot = kort.querySelector('.rls-fotn');
+            if (k && fot) fot.before(k);
+          }
+        }
+      };
+      // Lönerapporten: en tabell med nio kolumner blir ett kort per person. Etiketterna tas ur tabellhuvudet,
+      // och perioden (samma för alla) står redan ovanför.
+      const ndAppLonekort = () => {
+        for (const t of document.querySelectorAll('#main table.titab')){
+          const huvud = t.tHead ? [...t.tHead.rows[0].cells].map(c => c.textContent.trim()) : [];
+          if (!huvud.includes('Namn') || !huvud.some(h => /^Netto/.test(h))) continue;
+          t.classList.add('ndapp-kort');
+          for (const r of t.tBodies[0] ? t.tBodies[0].rows : []) [...r.cells].forEach((c, i) => {
+            c.dataset.ndappL = huvud[i] || '';
+            c.classList.toggle('ndapp-namn', huvud[i] === 'Namn');
+            c.classList.toggle('ndapp-period', /^Period/.test(huvud[i] || ''));
+          });
+        }
+      };
+      document.addEventListener('click', e => {
+        const b = e.target.closest && e.target.closest('[data-ndappfler]');
+        if (!b) return;
+        e.preventDefault();
+        const nyckel = b.dataset.ndappfler, steg = Number(b.dataset.ndappsteg) || 10;
+        ndAppVisas.set(nyckel, (ndAppVisas.get(nyckel) || steg) + steg);
+        try { ndAppListor(); } catch(_){}
+      });
+
       const _ndAppRenderLage = render;
-      render = function(){ _ndAppRenderLage(); try { ndAppEfter(); } catch(_){} };
+      render = function(){ _ndAppRenderLage(); try { ndAppEfter(); ndAppListor(); ndAppLonekort(); } catch(_){} };
       window.addEventListener('resize', () => { try { ndAppEfter(); } catch(_){} });
       ndAppEfter();
+      try { ndAppListor(); ndAppLonekort(); } catch(_){}
+
+      // Dra för att ladda om. Bara högst upp på sidan, med ett finger, utanför kalendern (som har sin egen
+      // rullning) och utanför något som självt är nedrullat. Ringen fylls med dragningen och är full vid
+      // NDAPP_DRA_PX; släpps den då laddas sidan om och landar i samma vy (historiken ovan).
+      const NDAPP_DRA_PX = 72;
+      let draStart = null, draDy = 0, draRing = null, draSurr = false;
+      const ring = () => {
+        if (!draRing){
+          draRing = document.createElement('div');
+          draRing.className = 'ndapp-dra';
+          draRing.setAttribute('aria-hidden', 'true');
+          draRing.innerHTML = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></svg>';
+          document.body.appendChild(draRing);
+        }
+        return draRing;
+      };
+      const nedrullad = el => { for (let e = el; e && e !== document.body; e = e.parentElement) if (e.scrollTop > 0) return true; return false; };
+      document.addEventListener('touchstart', e => {
+        draStart = null; draDy = 0;
+        if (e.touches.length !== 1 || window.scrollY > 0 || ndAppLagerOppet()) return;
+        if (e.target.closest && e.target.closest('.ol, input, textarea, select, [contenteditable]')) return;
+        if (nedrullad(e.target)) return;
+        draStart = e.touches[0].clientY;
+      }, {passive:true});
+      document.addEventListener('touchmove', e => {
+        if (draStart === null) return;
+        draDy = e.touches[0].clientY - draStart;
+        const r = ring();
+        if (draDy <= 0 || window.scrollY > 0){ r.style.opacity = '0'; return; }
+        const p = Math.min(draDy / NDAPP_DRA_PX, 1);
+        r.style.opacity = String(Math.min(1, p * 1.4));
+        r.style.setProperty('--ndapp-p', p.toFixed(3));
+        r.style.transform = `translate(-50%, ${Math.round(Math.min(draDy, NDAPP_DRA_PX) * 0.5)}px)`;
+        if (p >= 1 && !draSurr){ draSurr = true; r.classList.add('redo'); try { navigator.vibrate && navigator.vibrate(8); } catch(_){} }
+        else if (p < 1 && draSurr){ draSurr = false; r.classList.remove('redo'); }
+      }, {passive:true});
+      document.addEventListener('touchend', () => {
+        if (draStart === null) return;
+        draStart = null;
+        const full = draDy >= NDAPP_DRA_PX;
+        draDy = 0; draSurr = false;
+        if (full && !ndAppLagerOppet() && !ndAppOsparat()){ ring().classList.add('laddar'); location.reload(); return; }
+        if (draRing){ draRing.style.opacity = '0'; draRing.classList.remove('redo'); }
+        if (full && typeof toast === 'function') toast('Spara eller stäng det du håller på med först, sedan kan du dra igen.');
+      }, {passive:true});
 
       // Mer (paletten utan sökord): "Gå till" först, eftersom Mer är vägen till vyerna i telefonen, och utan
       // adresserna (/tid), som inte säger något i en app. Klicket går på data-pi, inte på ordningen, så att flytta

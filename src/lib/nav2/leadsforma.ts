@@ -13,6 +13,18 @@ export type Utfall = (typeof UTFALL)[number] | "kund";
 /** Hur länge Ångra gäller, som i Coachning (beställaren 2026-10-19: "Ångra överallt"). */
 export const ANGRA_MIN = 10;
 
+/**
+ * Notisen till den som får ett lead väntar så här länge (beställaren 2026-10-31:
+ * tilldelningen ska gå att ångra). Ångra-rutan i vyn står i nio sekunder, så två
+ * minuter täcker den med marginal utan att varje lead når säljaren tio minuter
+ * för sent. Ångrar fördelaren inom tiden får säljaren varken notis, mejl eller push.
+ */
+export const NOTIS_VANTAR_SEK = 120;
+
+/** Utkorgens nyckel för tilldelningsnotisen. Ångra tar bort det som väntar under `tilldelningsprefix`. */
+export const tilldelningsprefix = (leadId: string) => `lead-tilldelad:${leadId}:`;
+export const tilldelningsnyckel = (leadId: string, till: string, nu: number) => `${tilldelningsprefix(leadId)}${till}:${nu}`;
+
 /** Leadets läge före ett steg (`lead_event.fore`): det Ångra lägger tillbaka. */
 export const FORE_KOLUMNER = [
   "status",
@@ -138,6 +150,29 @@ export async function tilldelaVillkorat<L extends { assigned_to: string | null }
   }
   await dep.efter(lead, vantad);
   return { andrad: true };
+}
+
+/**
+ * Fördela jämnt / automatiskt, ett lead i taget (granskningen S07, M1). Tilldelningen
+ * och steget är två skrivningar: kastar tilldelningen hade någon annan hunnit ge
+ * bort leadet ("hunnit"), men kastar bara steget är leadet redan tilldelat och
+ * får inte räknas som att någon annan hann före ("utan_steg": fördelat, men utan
+ * en händelse att ångra).
+ */
+export async function gaEtt(dep: {
+  tilldela: () => Promise<void>;
+  steg: () => Promise<string>;
+}): Promise<{ utfall: "klart"; handelse: string } | { utfall: "hunnit" } | { utfall: "utan_steg" }> {
+  try {
+    await dep.tilldela();
+  } catch {
+    return { utfall: "hunnit" };
+  }
+  try {
+    return { utfall: "klart", handelse: await dep.steg() };
+  } catch {
+    return { utfall: "utan_steg" };
+  }
 }
 
 /** Hur länge ett andra "Möte bokat" på samma lead av samma person nekas (granskningen F2-3). */

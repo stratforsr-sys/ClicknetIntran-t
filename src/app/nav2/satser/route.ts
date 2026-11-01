@@ -6,7 +6,7 @@ import { farSeLonekostnad } from "@/lib/lonekostnad-server";
 import { raknaPeriod, sparaFodelsear, sparaIntakt, sparaLon, sparaSats } from "@/app/(app)/lonekostnad/actions";
 import { nivaFor } from "@/lib/nav2/forma";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
-import { BARANDE, kanSluta, satsNyckel, slutNekas } from "@/lib/nav2/satsforma";
+import { BARANDE, brutnaSlut, kanSluta, satsNyckel, slutNekas } from "@/lib/nav2/satsforma";
 
 export const dynamic = "force-dynamic";
 
@@ -144,19 +144,47 @@ export async function POST(request: Request) {
     applies: string | null,
     fran: string,
     till: string | null,
-    extra: { kind: string; applies: string | null; fran: string }[] = [],
+    extra: { kind: string; applies: string | null; fran: string; till?: string | null }[] = [],
     utom: { kind: string; fran: string }[] = [],
   ): Promise<string | null> {
     if (!till || !BARANDE.has(kind)) return null;
-    const q = db.from("cost_rate").select("kind, applies_to, valid_from").eq("kind", kind);
-    const { data } = await (applies === null ? q.is("applies_to", null) : q.eq("applies_to", applies));
-    const alla = [
-      ...((data ?? []) as { kind: string; applies_to: string | null; valid_from: string }[])
-        .filter((r) => !utom.some((u) => u.kind === r.kind && u.fran === String(r.valid_from).slice(0, 10)))
-        .map((r) => ({ nyckel: satsNyckel(r.kind, r.applies_to), giltig_fran: String(r.valid_from).slice(0, 10) })),
-      ...extra.map((r) => ({ nyckel: satsNyckel(r.kind, r.applies), giltig_fran: r.fran })),
-    ];
+    const alla = await radernaFor(kind, applies, extra, utom);
     return kanSluta({ nyckel: satsNyckel(kind, applies), giltig_fran: fran, giltig_till: till }, alla) ? null : slutNekas(till);
+  }
+
+  /** Raderna för slaget som de blir efter begäran: de som finns minus `utom`, plus `extra`. Med slutdatum (M5). */
+  async function radernaFor(
+    kind: string,
+    applies: string | null,
+    extra: { kind: string; applies: string | null; fran: string; till?: string | null }[] = [],
+    utom: { kind: string; fran: string }[] = [],
+  ) {
+    const q = db.from("cost_rate").select("kind, applies_to, valid_from, valid_to").eq("kind", kind);
+    const { data } = await (applies === null ? q.is("applies_to", null) : q.eq("applies_to", applies));
+    return [
+      ...((data ?? []) as { kind: string; applies_to: string | null; valid_from: string; valid_to: string | null }[])
+        .filter((r) => !utom.some((u) => u.kind === r.kind && u.fran === String(r.valid_from).slice(0, 10)))
+        .filter((r) => !extra.some((e) => e.kind === r.kind && e.applies === r.applies_to && e.fran === String(r.valid_from).slice(0, 10)))
+        .map((r) => ({ nyckel: satsNyckel(r.kind, r.applies_to), giltig_fran: String(r.valid_from).slice(0, 10), giltig_till: r.valid_to ? String(r.valid_to).slice(0, 10) : null })),
+      ...extra.filter((r) => r.kind === kind).map((r) => ({ nyckel: satsNyckel(r.kind, r.applies), giltig_fran: r.fran, giltig_till: r.till ?? null })),
+    ];
+  }
+
+  /**
+   * Granskningen S06 (M5): efter en Skatteverket-rättelse ska varje bärande rad
+   * med slutdatum ha en efterföljare. Rättelsen kan ta bort den rad som var
+   * efterföljare till en annan, och det prövar `slutFel` inte (den prövar bara
+   * de nya raderna). Null betyder att kedjan håller.
+   */
+  async function kedjeFel(kinder: string[], extra: { kind: string; applies: string | null; fran: string; till?: string | null }[], utom: { kind: string; fran: string }[]): Promise<string | null> {
+    for (const kind of kinder) {
+      if (!BARANDE.has(kind)) continue;
+      const fore = await radernaFor(kind, null);
+      const alla = await radernaFor(kind, null, extra, utom);
+      const till = brutnaSlut(fore, alla)[0];
+      if (till) return slutNekas(till);
+    }
+    return null;
   }
 
   /** En ny rad med repots sparaSats, och slutdatumet på den. */
@@ -227,6 +255,10 @@ export async function POST(request: Request) {
             const nej = await slutFel(x.kind, x.applies, x.fran, x.till, nya.filter((y) => y !== x), utom);
             if (nej) return svar({ fel: nej }, 400);
           }
+          // Rättelsen kan också ta bort efterföljaren till en rad som slutar.
+          const kinder = [...new Set(utom.map((u) => u.kind))];
+          const kedja = await kedjeFel(kinder, nya, utom);
+          if (kedja) return svar({ fel: kedja }, 400);
         }
         for (const r of bort) {
           const [kind, fran] = Array.isArray(r) ? (r as unknown[]).map(String) : ["", ""];

@@ -25,7 +25,7 @@ import {
   STATUS_TON,
   OPPNA,
 } from "../src/lib/leads.ts";
-import { moteNyss, nyTilldelning, tilldelaVillkorat } from "../src/lib/nav2/leadsforma.ts";
+import { ANGRA_MIN, NOTIS_VANTAR_SEK, gaEtt, moteNyss, nyTilldelning, tilldelaVillkorat, tilldelningsnyckel, tilldelningsprefix } from "../src/lib/nav2/leadsforma.ts";
 import { readFileSync } from "node:fs";
 
 let fel = 0;
@@ -303,6 +303,49 @@ console.log("\n\x1b[1mNav 2.0: ordningen i Efter samtalet (granskningen S07, V1)
   ok("steget skrivs före mötet", steg >= 0 && mote > steg);
   ok("ett möte som inte gick att boka tar bort steget igen", /if \(m\.fel \|\| !m\.eventId\) \{[\s\S]*?lead_event"\)\.delete\(\)\.eq\("id", h\)/.test(f));
   ok("ingenting kastas efter att mötet skapats", !/throw /.test(f.slice(mote)));
+}
+
+console.log("\n\x1b[1mNav 2.0: tilldelningen går att ångra innan säljaren får veta (beställaren 2026-10-31)\x1b[0m");
+{
+  const A = "11111111-1111-4111-8111-111111111111", B = "22222222-2222-4222-8222-222222222222";
+  const k = tilldelningsnyckel(A, B, 1767225600000);
+  ok("nyckeln börjar med leadets prefix", k.startsWith(tilldelningsprefix(A)));
+  ok("ett annat leads prefix träffar inte", !k.startsWith(tilldelningsprefix(B)));
+  ok("två tilldelningar av samma lead får olika nycklar", k !== tilldelningsnyckel(A, B, 1767225600001));
+  ok("notisen väntar längre än Ångra-rutan står (9 s)", NOTIS_VANTAR_SEK > 9);
+  ok("och kortare än serverns ångerfönster", NOTIS_VANTAR_SEK < ANGRA_MIN * 60);
+
+  // Rutten och actionen går inte att köra utan Next, så kopplingen läses ur källan.
+  const act = readFileSync(new URL("../src/app/(app)/leads/actions.ts", import.meta.url), "utf8");
+  const a = act.indexOf("export async function tilldelaLead"), e = act.indexOf("\nexport async function", a + 1);
+  const t = act.slice(a, e).replace(/^\s*\/\/.*$/gm, "");
+  ok("tilldelaLead notifierar inte direkt", !/\bnotifiera\(/.test(t));
+  ok("tilldelaLead väntar ut ångerfönstret", /notifieraSenare\([\s\S]*?sekunder: NOTIS_VANTAR_SEK, nyckel: tilldelningsnyckel\(id, till,/.test(t));
+  const rutt = readFileSync(new URL("../src/app/nav2/leads/route.ts", import.meta.url), "utf8");
+  const g = rutt.slice(rutt.indexOf('case "angra"'));
+  ok("Ångra tar bort den väntande notisen för en tilldelning", /s\.kind === "tilldelad"\)\s*await db\.from\("outbox"\)\.delete\(\)\.like\("idempotency_key", `\$\{tilldelningsprefix\(s\.lead_id\)\}%`\)\.is\("claimed_at", null\)\.is\("sent_at", null\)/.test(g));
+  const ut = readFileSync(new URL("../src/lib/utkorg-server.ts", import.meta.url), "utf8");
+  ok("utkorgen skickar en väntande händelse", /mall === "handelse"[\s\S]{0,400}return notifieraFranUtkorgen\(h\)/.test(ut));
+}
+
+console.log("\n\x1b[1mNav 2.0: Fördela jämnt räknar rätt (granskningen S07, M1)\x1b[0m");
+{
+  const nej = async () => { throw new Error("Leadet har redan getts till Anna."); };
+  const stegFel = async () => { throw new Error("Steget kunde inte sparas"); };
+  const a = await gaEtt({ tilldela: nej, steg: async () => "h1" });
+  ok("tilldelningen nekas: någon annan hann före", a.utfall === "hunnit");
+  const b = await gaEtt({ tilldela: async () => {}, steg: stegFel });
+  ok("bara steget kastar: leadet är fördelat, inte 'hade redan fått en säljare'", b.utfall === "utan_steg");
+  const c = await gaEtt({ tilldela: async () => {}, steg: async () => "h3" });
+  ok("allt lyckas: händelsen följer med", c.utfall === "klart" && c.handelse === "h3");
+  let steg = 0;
+  await gaEtt({ tilldela: nej, steg: async () => { steg++; return "x"; } });
+  ok("nekad tilldelning skriver inget steg", steg === 0);
+  const src = readFileSync(new URL("../src/app/nav2/leads/route.ts", import.meta.url), "utf8");
+  const gren = src.slice(src.indexOf('case "jamt":'), src.indexOf('case "paminn":'));
+  const kund = src.slice(src.indexOf('case "kund":'), src.indexOf('case "angra":'));
+  ok("Blev kund på ett otilldelat lead ger det till fördelaren (M3)", /await andra\(l, \{[^\n]*nyTilldelning\(l, mig, fordelar,/.test(kund));
+  ok("jamt/auto går genom gaEtt", /await gaEtt\(/.test(gren) && !/catch \{\s*hunnit\+\+/.test(gren));
 }
 
 console.log(fel === 0

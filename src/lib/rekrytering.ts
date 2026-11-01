@@ -67,6 +67,29 @@ export function nastaSteg(fran: Steg): Steg[] {
   }
 }
 
+/**
+ * Stegen en bokad intervju för kandidaten framåt: screening, intervju 1 och
+ * intervju 2 i ordning, ett steg i taget och bara om varje hopp är tillåtet.
+ * Tom lista när kandidaten redan är där eller längre (eller på ett steg
+ * utanför bokningsstegen, som erbjudande och avslag). En text är felet.
+ *
+ * Rutten kontrollerar vägen FÖRE bokningen och flyttar steget EFTER den: går
+ * bokningen inte (tiden hann tas) ska kandidaten inte stå på intervju 1 utan
+ * en intervju.
+ */
+export function stegvagTill(fran: Steg, mal: Steg): Steg[] | string {
+  const ordning: Steg[] = ["new", "screening", "interview_1", "interview_2"];
+  const vag: Steg[] = [];
+  let nu = fran;
+  while (ordning.indexOf(nu) >= 0 && ordning.indexOf(nu) < ordning.indexOf(mal)) {
+    const nasta = ordning[ordning.indexOf(nu) + 1];
+    if (!nastaSteg(nu).includes(nasta)) return `Från ${STEG_ETIKETT[nu].toLowerCase()} går det inte till ${STEG_ETIKETT[nasta].toLowerCase()}.`;
+    vag.push(nasta);
+    nu = nasta;
+  }
+  return vag;
+}
+
 /** En process som fortfarande pagar. */
 export function arOppen(steg: Steg): boolean {
   return steg !== "hired" && steg !== "rejected";

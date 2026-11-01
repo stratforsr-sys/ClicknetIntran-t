@@ -10,7 +10,7 @@
  * besked till alla och en ny .ics, rubrik och agenda bara en tyst notis, och
  * påminnelse, Visa som, Privat och valfria ingenting till någon.
  */
-import { andradeDelar, motesBesked, ombudetsFalt } from "../src/lib/nav2/kalender-andring.ts";
+import { INGET_ANDRADES, andradeDelar, kvittoMedGaster, motesBesked, ombudetsFalt } from "../src/lib/nav2/kalender-andring.ts";
 
 let fel = 0;
 const ok = (namn, villkor, extra = "") => {
@@ -76,6 +76,12 @@ ok("ombud som inte är med: en ny länk gäller", ombudetsFalt({ arrangor: false
 ok("ombud som är med: tom länk tar bort den (hen såg den)", ombudetsFalt({ arrangor: false, privat: false, deltar: true, video: null }).video === null);
 ok("ombud, privat möte hen inte är med på: nej (formuläret visade Privat, inga deltagare)", "fel" in ombudetsFalt({ arrangor: false, privat: true, deltar: false, video: undefined }));
 ok("ombud, privat möte hen är med på: går", !("fel" in ombudetsFalt({ arrangor: false, privat: true, deltar: true, video: undefined })));
+
+rubrik("Kvittot när bara en gäst läggs till (granskningen S05, M5)");
+ok("inget ändrades + en gäst: Sparat. och inbjudan", kvittoMedGaster(INGET_ANDRADES, "x@y.se får en inbjudan med mejl.") === "Sparat. x@y.se får en inbjudan med mejl.");
+ok("något ändrades + en gäst: kvittot står kvar", kvittoMedGaster("Sparat. Deltagarna ser ändringen i Nav.", "x@y.se får en inbjudan med mejl.") === "Sparat. Deltagarna ser ändringen i Nav. x@y.se får en inbjudan med mejl.");
+ok("ingen gäst: kvittot orört", kvittoMedGaster(INGET_ANDRADES, "") === INGET_ANDRADES);
+ok("saknat kvitto + gäst", kvittoMedGaster(undefined, "x@y.se får en inbjudan med mejl.") === "Sparat. x@y.se får en inbjudan med mejl.");
 
 console.log(fel ? `\n\x1b[31m${fel} prov foll.\x1b[0m` : "\n\x1b[32mAlla prov gick igenom.\x1b[0m");
 process.exit(fel ? 1 : 0);

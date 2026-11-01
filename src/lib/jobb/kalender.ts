@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { svensktDatum } from "@/lib/klocka";
 import { HORISONT_DAGAR, forekomster, type Serieregel } from "@/lib/upprepning";
 import { plus } from "@/lib/leveranskalender";
-import { tomUtkorgen, type Tomning } from "@/lib/utkorg-server";
+import { stadaVantandePaminnelser, tomUtkorgen, type Tomning } from "@/lib/utkorg-server";
 
 /**
  * Leveranskalenderns steg i dagtidsjobbet (0070): var kvart, vardagar.
@@ -19,7 +19,8 @@ import { tomUtkorgen, type Tomning } from "@/lib/utkorg-server";
  *    och ett mejl till leveransen och säljchefen, en gång per kund; och
  *    mejlpåminnelser som kommit inom 29 dagar schemaläggs hos Resend.
  * 4. UTKORGEN töms, så att allt det når fram direkt och inte först när
- *    reservjobbet `nav-utkorg` kört.
+ *    reservjobbet `nav-utkorg` kört. Därefter städas väntande mejlpåminnelser
+ *    som inte längre gäller (flyttat eller inställt möte).
  */
 export type Kalendersteg = {
   serier: number;
@@ -28,6 +29,7 @@ export type Kalendersteg = {
   frister: number | string;
   resend: number | string;
   utkorg: Tomning;
+  stadat: number;
 };
 
 export async function korKalendersteget(db: SupabaseClient, nu = new Date()): Promise<Kalendersteg> {
@@ -66,6 +68,8 @@ export async function korKalendersteget(db: SupabaseClient, nu = new Date()): Pr
   const { data: frist, error: fristfel } = await db.rpc("lk_leverans_frister");
   const { data: res, error: resfel } = await db.rpc("lk_resend_att_schemalagga");
   const utkorg = await tomUtkorgen(200);
+  // Påminnelser som väntar på sin tid men inte längre gäller (mötet flyttat eller inställt).
+  const stadat = await stadaVantandePaminnelser().catch(() => 0);
 
   return {
     serier: rader.length,
@@ -74,5 +78,6 @@ export async function korKalendersteget(db: SupabaseClient, nu = new Date()): Pr
     frister: fristfel ? `fel: ${fristfel.message}` : Number(frist ?? 0),
     resend: resfel ? `fel: ${resfel.message}` : Number(res ?? 0),
     utkorg,
+    stadat,
   };
 }

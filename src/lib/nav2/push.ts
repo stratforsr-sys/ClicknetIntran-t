@@ -2,6 +2,7 @@ import "server-only";
 
 import { createPrivateKey, sign } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { arPushtjanst } from "./pushvard";
 
 /**
  * Nav 2.0: Web Push (0121), för kvällsnotisen (E5.8).
@@ -48,6 +49,8 @@ export type Pushutfall = { ok: boolean; status: number; borta: boolean; fel: str
 
 /** En tom push till en enhet. `borta` = enheten finns inte längre (404/410) och ska tas bort. */
 export async function skickaPush(endpoint: string): Promise<Pushutfall> {
+  // Granskningen F2-18: bara pushtjänsternas värdar. Rader som sparades före spärren stoppas här.
+  if (!arPushtjanst(endpoint)) return { ok: false, status: 0, borta: false, fel: "Adressen är ingen pushtjänst." };
   const jwt = vapidJwt(endpoint);
   if (!jwt) return { ok: false, status: 0, borta: false, fel: "VAPID-nycklarna saknas." };
   try {

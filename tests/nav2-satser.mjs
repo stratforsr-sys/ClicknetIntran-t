@@ -14,7 +14,7 @@
  *   TZ=UTC node --experimental-strip-types tests/nav2-satser.mjs
  */
 import { readFileSync } from "node:fs";
-import { BARANDE, kanSluta } from "../src/lib/nav2/satsforma.ts";
+import { BARANDE, brutnaSlut, kanSluta } from "../src/lib/nav2/satsforma.ts";
 import { raknaLonekostnad, satserUrRader } from "../src/lib/lonekostnad.ts";
 
 let fel = 0;
@@ -43,6 +43,22 @@ rubrik("kanSluta");
   for (const k of ["employer_fee_young", "young_age_min", "young_age_max", "employer_fee_reduced", "employer_fee_reduced_cap", "no_fee_age_min"]) {
     ok(`${k} får sluta utan efterföljare (Skatteverkets regel för unga och null-regeln)`, !BARANDE.has(k));
   }
+}
+
+// Granskningen S06 (M5): efterföljaren får inte själv sluta utan efterföljare, och en
+// rättelse som tar bort efterföljaren bryter kedjan.
+rubrik("kanSluta, efterföljarens eget slutdatum (M5)");
+{
+  const N = "senior_age_min|";
+  const a = { nyckel: N, giltig_fran: "2026-01-01", giltig_till: "2026-12-31" };
+  const f1 = { nyckel: N, giltig_fran: "2027-01-01", giltig_till: "2027-06-30" };
+  ok("efterföljare som själv slutar 2027-06-30 utan efterföljare: nej", kanSluta(a, [a, f1]) === false);
+  ok("... men med en egen efterföljare från 2027-07-01: ja", kanSluta(a, [a, f1, { nyckel: N, giltig_fran: "2027-07-01", giltig_till: null }]) === true);
+  ok("efterföljare som slutar före dagen den ska ta vid täcker inte: nej", kanSluta(a, [a, { nyckel: N, giltig_fran: "2026-06-01", giltig_till: "2026-06-30" }]) === false);
+  const fore = [a, { nyckel: N, giltig_fran: "2027-01-01", giltig_till: null }];
+  ok("tas efterföljaren bort bryts slutdatumet 2026-12-31", brutnaSlut(fore, [a]).join() === "2026-12-31");
+  ok("byts efterföljaren mot en annan som tar vid bryts inget", brutnaSlut(fore, [a, { nyckel: N, giltig_fran: "2026-12-31", giltig_till: null }]).length === 0);
+  ok("ett glapp som fanns före räknas inte", brutnaSlut([a], [a]).length === 0);
 }
 
 rubrik("Förhandsvisningen räknar som servern");

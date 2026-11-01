@@ -236,7 +236,9 @@ export async function POST(request: Request) {
         // "Beskriv vad du gjorde" på felsidan: på samma rad som felet Nav fångade.
         const text = String(b.text ?? "").trim();
         if (text.length < 3) return svar({ fel: "Skriv några ord." }, 400);
-        const { data: rad } = await db
+        // Raden letas med den inloggades RLS (granskningen F2-18): bara den som får se rapporten
+        // (chefskretsen eller den som rapporterade) skriver i den eller följer den.
+        const { data: rad } = await (await supabaseServer())
           .from("error_report")
           .select("id")
           .eq("kind", "automatic")

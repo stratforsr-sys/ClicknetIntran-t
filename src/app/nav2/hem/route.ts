@@ -6,6 +6,7 @@ import { notifiera } from "@/lib/notishandelse-server";
 import { byggGolvet } from "@/lib/nav2/hem";
 import { byggKvall } from "@/lib/nav2/hem-kvall";
 import { pushaTill, vapidPublik } from "@/lib/nav2/push";
+import { arPushtjanst } from "@/lib/nav2/pushvard";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
 
 export const dynamic = "force-dynamic";
@@ -160,7 +161,7 @@ export async function POST(request: Request) {
         const sub = (b.sub ?? {}) as { endpoint?: unknown; keys?: { p256dh?: unknown; auth?: unknown } };
         const endpoint = String(sub.endpoint ?? ""), p256dh = String(sub.keys?.p256dh ?? ""), auth = String(sub.keys?.auth ?? "");
         if (!vapidPublik()) return svar({ fel: "Pushnotiser är inte inställda i Nav än." }, 503);
-        if (!/^https:\/\/[^\s]+$/.test(endpoint) || endpoint.length > 1000 || !p256dh || !auth) return svar({ fel: "Enheten gick inte att registrera." }, 400);
+        if (!/^https:\/\/[^\s]+$/.test(endpoint) || !arPushtjanst(endpoint) || !p256dh || !auth) return svar({ fel: "Enheten gick inte att registrera." }, 400);
         const { error } = await db.from("push_subscription").upsert(
           { employee_id: mig, endpoint, p256dh, auth, user_agent: (request.headers.get("user-agent") ?? "").slice(0, 300), created_at: nu, last_error: null },
           { onConflict: "endpoint" },

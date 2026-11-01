@@ -12,6 +12,7 @@
 import { registerHooks } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { join } from "node:path";
+import { readFileSync } from "node:fs";
 
 const rot = join(fileURLToPath(import.meta.url), "..", "..");
 const stubbar = {
@@ -57,7 +58,7 @@ rubrik("En ombokning avbokar bara det som ligger framför (F1-10)");
 
 // ---------------------------------------------------------------------------
 // Attrappen: candidate_message, candidate, employee, candidate_booking.
-function attrapp(meddelanden) {
+function attrapp(meddelanden, bokningar = []) {
   const t = {
     candidate_message: meddelanden,
     candidate: [
@@ -65,7 +66,7 @@ function attrapp(meddelanden) {
       { id: "k2", first_name: "Riktig", last_name: "Person", email: "riktig@example.se" },
     ],
     employee: [{ id: "e1", first_name: "Zen", last_name: "Test", email: "zen@clicknet.se" }],
-    candidate_booking: [],
+    candidate_booking: bokningar,
   };
   return {
     from(tabell) {
@@ -168,6 +169,45 @@ rubrik("Förhandsvisningen mejlar aldrig en riktig kandidat");
   ok("den riktiga adressen får inget brev", !globalThis.__brev.some((b) => b.till === "riktig@example.se"));
   ok("raden blir fel med orsaken", m[0].status === "fel" && /Förhandsvisningen/.test(m[0].error ?? ""), `${m[0].status} ${m[0].error}`);
   ok("en adress på resend.dev går ut för provets skull", globalThis.__brev.some((b) => b.till === "kim@resend.dev"));
+}
+
+rubrik("Avslag på en bokad intervju avbokar den med en CANCEL (rester efter våg 2)");
+{
+  process.env.VERCEL_ENV = "production";
+  const bok = { id: "b9", kind: "int1", day: "2026-11-24", start_min: 9 * 60, end_min: 9 * 60 + 45, place: "Kontoret" };
+  // Bekräftelsen (REQUEST) och avbokningen (CANCEL) går via samma utskick och samma bokning.
+  const m = [rad(20, { template: "bokad", channel: "mejl_ics", booking_id: "b9" }), rad(21, { template: "avbokad", channel: "mejl_ics", booking_id: "b9", body: "Hej! Intervju 1 2026-11-24 kl. 09:00 är avbokad. Vi återkommer separat." })];
+  globalThis.__db = attrapp(m, [bok]);
+  globalThis.__brev = [];
+  await skickaKandidatmejl([20, 21]);
+  const ics = globalThis.__brev.map((b) => b.bilagor?.[0]?.innehall ?? "");
+  const uid = (t) => /UID:([^\r\n]+)/.exec(t)?.[1];
+  const sekv = (t) => /SEQUENCE:(\d+)/.exec(t)?.[1];
+  ok("båda breven bär en kalenderfil", ics.every((t) => t.includes("BEGIN:VCALENDAR")), String(ics.length));
+  ok("inbjudan är REQUEST och avbokningen CANCEL", /METHOD:REQUEST/.test(ics[0]) && /METHOD:CANCEL/.test(ics[1]), ics.map((t) => /METHOD:(\w+)/.exec(t)?.[1]).join(","));
+  ok("samma UID, så att kandidatens kalender tar bort rätt post", !!uid(ics[0]) && uid(ics[0]) === uid(ics[1]), `${uid(ics[0])} / ${uid(ics[1])}`);
+  ok("sekvensen är högre i avbokningen", Number(sekv(ics[1])) === Number(sekv(ics[0])) + 1, `${sekv(ics[0])} -> ${sekv(ics[1])}`);
+  ok("avbokningen är markerad CANCELLED", /STATUS:CANCELLED/.test(ics[1]));
+}
+
+rubrik("Steget flyttas efter bokningen och avslaget skickar en CANCEL (rutten)");
+{
+  const { stegvagTill } = await import("../src/lib/rekrytering.ts");
+  ok("ny kandidat till intervju 1: screening, sedan intervju 1", JSON.stringify(stegvagTill("new", "interview_1")) === '["screening","interview_1"]', JSON.stringify(stegvagTill("new", "interview_1")));
+  ok("redan på intervju 1: inget steg", JSON.stringify(stegvagTill("interview_1", "interview_1")) === "[]");
+  ok("på erbjudande: inget att flytta", JSON.stringify(stegvagTill("offer", "interview_1")) === "[]");
+  ok("avslutad kandidat: inget att flytta", JSON.stringify(stegvagTill("rejected", "screening")) === "[]");
+
+  const kalla = readFileSync(join(rot, "src/app/nav2/rekrytering/route.ts"), "utf8");
+  const fall = (namn, nasta) => kalla.slice(kalla.indexOf(`case "${namn}": {`), kalla.indexOf(`case "${nasta}": {`));
+  const boka = fall("boka", "avboka");
+  const forst = (t, a, b) => t.indexOf(a) >= 0 && t.indexOf(b) >= 0 && t.indexOf(a) < t.indexOf(b);
+  ok("boka: bokningen skrivs före steget flyttas", forst(boka, 'from("candidate_booking").insert', "await stegTill("), "");
+  ok("boka: ingen flytt av steget före bokningen", boka.indexOf("await stegTill(") > boka.indexOf('from("candidate_booking").insert'));
+  ok("boka: vägen kontrolleras ändå före bokningen", forst(boka, "stegvagTill(k.stage", "skapaMote("));
+  const avslag = fall("avslag", "erbjudande");
+  ok("avslag: steget flyttas först, sedan avbokas bokningarna", forst(avslag, 'flytta(k, "rejected"', "avbokaKommande("));
+  ok("avslag: avbokningen får ett mejl (CANCEL) till kandidaten", /avbokaKommande\(k\.id, \{ foljd:/.test(avslag));
 }
 
 rubrik("Lägestexten för en rad som skickas");
