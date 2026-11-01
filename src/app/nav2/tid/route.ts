@@ -254,6 +254,11 @@ export async function POST(request: Request) {
         const ja = handling === "beslut-stod" || b.beslut === "ja";
         const skal = String(b.skal ?? "").trim().slice(0, 500);
         if (!ja && !skal) return svar({ fel: "Skriv ett skäl. Utan skäl går avslaget inte iväg." }, 400);
+        // Gul 18 (produktionsprovet 2026-10-30): ett id som inte finns fick "redan beslutad".
+        if (handling === "beslut") {
+          const { data: finns } = UUID.test(id) ? await db.from("time_event").select("id").eq("id", id).maybeSingle() : { data: null };
+          if (!finns) return svar({ fel: "Rättelsen finns inte." }, 404);
+        }
         let ids = handling === "beslut-stod" ? (Array.isArray(b.ids) ? (b.ids as string[]) : []).filter((x) => UUID.test(String(x))) : [id];
         if (handling === "beslut-stod") {
           const { data: medStod } = await db.from("time_correction_extra").select("time_event_id").in("time_event_id", ids).not("support", "is", null);

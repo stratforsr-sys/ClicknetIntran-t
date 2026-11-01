@@ -33,6 +33,15 @@ const nextConfig: NextConfig = {
    * sager vad anvandaren gjorde. Se src/components/Filuppladdning.tsx.
    */
 
+  /**
+   * Gul 29 (produktionsprovet 2026-10-30): `/favicon.ico` gav 404. Webbläsare som
+   * frågar efter den utan att läsa `<link rel="icon">` får appens ikon (src/app/icon.png).
+   * Middleware rör den inte: matchern hoppar över favicon.ico, så bron fångar den inte.
+   */
+  async redirects() {
+    return [{ source: "/favicon.ico", destination: "/icon.png", permanent: true }];
+  },
+
   async headers() {
     return [
       {

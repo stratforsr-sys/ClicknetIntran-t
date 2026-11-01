@@ -86,7 +86,8 @@ console.log("\n\x1b[1mEtt samtal ur en Lynes-liknande pase\x1b[0m");
 
 console.log("\x1b[1m\n1. Somsvardet plockas inte ur ett nastlat id\x1b[0m");
 {
-  const utan = tolkaSamtal({ user: { id: "u-9" }, itemType: "answered", duration: 10 });
+  // Starttiden är med för att påsen ska vara ett samtal alls (gul 10, nedan).
+  const utan = tolkaSamtal({ user: { id: "u-9" }, itemType: "answered", duration: 10, startTime: 1_757_491_200_000 });
   ok("nastlat user.id blir inte somsvarde", utan.externalRef !== "u-9",
     "annars skriver varje nytt samtal over det forra");
 
@@ -242,7 +243,7 @@ console.log("\x1b[1m\n2. Millisekunder gissas inte, de lases ur namnet\x1b[0m");
   ok("ISO 8601", sekunder("PT1M33S") === 93);
   ok("skrap ger null", sekunder("i gar") === null, "hellre ingen langd an fel langd");
 
-  const t = tolkaSamtal({ durationMs: 93000, itemType: "answered" });
+  const t = tolkaSamtal({ id: "x", durationMs: 93000, itemType: "answered" });
   ok("durationMs raknas om", t.durationSeconds === 93, `fick ${t.durationSeconds}`);
 
   // ANDRAT 2026-09-11. Provet krade forut att `duration: 93000` star kvar som
@@ -250,12 +251,12 @@ console.log("\x1b[1m\n2. Millisekunder gissas inte, de lases ur namnet\x1b[0m");
   // Insights-pase bevisade motsatsen: den bar `duration: 62000` for ett samtal
   // som inspelningsflodet samtidigt redovisade som 62 sekunder. Hos Lynes ar
   // ALLA tider millisekunder, ocksa de som inte heter sa.
-  const u = tolkaSamtal({ duration: 93000, itemType: "answered" });
+  const u = tolkaSamtal({ id: "x", duration: 93000, itemType: "answered" });
   ok("duration utan fonster lases som millisekunder", u.durationSeconds === 93,
     `fick ${u.durationSeconds}`);
 
   // Men en langd som rundar till noll som ms var aldrig ms.
-  const v = tolkaSamtal({ duration: 93, itemType: "answered" });
+  const v = tolkaSamtal({ id: "x", duration: 93, itemType: "answered" });
   ok("en liten duration star kvar som sekunder", v.durationSeconds === 93,
     "93 ms hade blivit ett nollat samtal, och det ar en uppgift som forsvunnit");
 }
@@ -274,7 +275,7 @@ console.log("\x1b[1m\n3. En anknytning blir inte ett telefonnummer\x1b[0m");
 
 console.log("\x1b[1m\n4. Taltid langre an samtalet skrivs inte\x1b[0m");
 {
-  const t = tolkaSamtal({ duration: 30, talkTime: 300, itemType: "answered" });
+  const t = tolkaSamtal({ id: "x", duration: 30, talkTime: 300, itemType: "answered" });
   ok("orimlig taltid blir null", t.talkSeconds === null,
     "villkoret i 0052 hade annars avvisat hela samtalet");
   ok("langden star kvar", t.durationSeconds === 30);
@@ -289,9 +290,18 @@ console.log("\x1b[1m\n5. Okanda varden blir okand, inte noll\x1b[0m");
     "det ar sa vi far veta vad vaxeln egentligen skickar");
   ok("ravardet star kvar for itemType", t.rawItemType === "krumelur");
 
-  const tom = tolkaSamtal({});
-  ok("en tom pase kastar inte", tom.direction === "okand" && tom.outcome === "okant");
-  ok("en tom pase har inget somsvarde", tom.externalRef === null,
+  // ANDRAT 2026-10-31 (gul 10). Förut kastade en tom påse inte, och servern gav
+  // den ett avtryck. Då blev `{"prov":"…"}` ett samtal. Nu är den ett tolkfel:
+  // råraden står kvar i call_ingest, och inget phone_call skrivs.
+  let tomKastade = false;
+  try {
+    tolkaSamtal({});
+  } catch {
+    tomKastade = true;
+  }
+  ok("en tom pase kastar", tomKastade, "varken samtals-id eller starttid");
+  const baraTid = tolkaSamtal({ startTime: 1_757_491_200_000 });
+  ok("en pase med bara tiden har inget somsvarde", baraTid.externalRef === null,
     "servern satter da ett avtryck i stallet");
 }
 
@@ -330,6 +340,31 @@ console.log("\n\x1b[1mInspelningen maste vara en adress\x1b[0m");
     "steg 2 hade forsokt hamta den och misslyckats en gang per samtal");
   ok("tom strang ar franvaro", tolkaSamtal({ recordingUrl: "", id: "x" }).recordingUrl === null);
   ok("utan inspelning blir laget ingen", inspelningslage(tolkaSamtal({ id: "x" })) === "ingen");
+}
+
+console.log("\n\x1b[1mUtan både samtals-id och starttid är påsen inte ett samtal (gul 10)\x1b[0m");
+{
+  // Produktionsprovet 2026-10-30: {"prov":"…"} blev ett phone_call med riktning okand.
+  let kastade = null;
+  try {
+    tolkaSamtal({ prov: "x" });
+  } catch (e) {
+    kastade = e.message;
+  }
+  ok("en påse utan id och tid kastar", kastade === "Påsen har varken samtals-id eller starttid.", kastade ?? "kastade inte");
+  ok("bara id:t räcker", tolkaSamtal({ id: "515293370" }).externalRef === "515293370");
+  ok("bara starttiden räcker", tolkaSamtal({ startTime: 1_757_491_200_000 }).startedAt === new Date(1_757_491_200_000).toISOString());
+  // En påse som inspelningsflödets (formen 2026-10-30, påhittade nummer): tolkas som förut.
+  const riktig = tolkaSamtal({
+    id: 515339662, userId: "82b1d6be-4f94-463c-af3c-3c21052031a1", recorderId: "fredrik@clicknet.se",
+    direction: "OUTGOING_CALL", startTime: 1_761_854_400_000, endTime: 1_761_854_807_000, talkTime: 407_000,
+    fromNumber: "+46700000000", toNumber: "+46701234567",
+  });
+  ok(
+    "en riktig påse tolkas som förut",
+    riktig.externalRef === "515339662" && riktig.direction === "ut" && riktig.durationSeconds === 407 && riktig.agentRef === "fredrik@clicknet.se",
+    JSON.stringify({ ref: riktig.externalRef, dir: riktig.direction, s: riktig.durationSeconds, agent: riktig.agentRef }),
+  );
 }
 
 console.log(fel === 0 ? "\n\x1b[32mAlla prov gick igenom\x1b[0m\n" : `\n\x1b[31m${fel} prov foll\x1b[0m\n`);

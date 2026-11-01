@@ -568,6 +568,13 @@ export function tolkaSamtal(payload: unknown): Tolkning {
     text(hamta(k, ["callid", "call_id", "sessionid", "session_id", "externalid", "external_id", "uuid", "reference"])) ??
     text(hamta(k, ["id"], false));
 
+  // UTAN BÅDE SAMTALS-ID OCH STARTTID ÄR PÅSEN INTE ETT SAMTAL. Produktionsprovet
+  // 2026-10-30 (gul 10): `{"prov":"…"}` blev ett phone_call med riktning `okand`
+  // och ingen person. Ett av de två räcker, för en växel som skickar om utan id
+  // har ändå tiden, och sömmen tar då avtrycket (`somsvarde`). Provad mot sju
+  // dygns riktiga påsar 2026-10-31: ingen saknade båda.
+  if (!externalRef && !startedAt) throw new Error("Påsen har varken samtals-id eller starttid.");
+
   return {
     externalRef,
     direction: riktning,

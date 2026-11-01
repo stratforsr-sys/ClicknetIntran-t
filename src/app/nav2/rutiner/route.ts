@@ -151,8 +151,14 @@ export async function POST(request: Request) {
         const d = await dokument();
         if (!d) return svar({ fel: "Rutinen finns inte." }, 404);
         const text = String(b.text ?? "").slice(0, 2000);
+        const { data: fanns } = await db.from("document_note").select("document_id").eq("employee_id", mig).eq("document_id", d.id).maybeSingle();
         if (text.trim()) await db.from("document_note").upsert({ employee_id: mig, document_id: d.id, text, updated_at: new Date().toISOString() });
         else await db.from("document_note").delete().eq("employee_id", mig).eq("document_id", d.id);
+        // Gul 17 (produktionsprovet 2026-10-30): anteckningen lämnade ingen rad i händelseloggen. Den sparas
+        // medan man skriver (900 ms efter sista tangenten), så loggen tar att den kom till och att den togs
+        // bort, inte varje sparning. Texten är personens egen och står aldrig i loggen.
+        if (Boolean(fanns) !== Boolean(text.trim()))
+          await db.from("audit_log").insert({ actor_id: mig, action: text.trim() ? "document.note_created" : "document.note_deleted", object_type: "document", object_id: d.id });
         return svar({ ok: "" });
       }
 
