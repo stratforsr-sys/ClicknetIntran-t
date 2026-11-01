@@ -288,14 +288,18 @@ beslut. Se ARBETSLOGG 2026-11-01.
 
 - **`~/nav2-utkast` säkerhetskopieras** krypterat till R2 (bucket `nav-backup`, `nav2-utkast/dag-N` och
   `manad-ÅÅÅÅ-MM`) med `verktyg/backup/sakra-utkast.sh`. Återställning provad: 5 414 filer, byte för
-  byte. Det nattliga jobbet på datorn (launchd, `verktyg/backup/se.clicknet.nav2-utkast-backup.plist`)
-  slås på av beställaren; automatläget stoppar det.
+  byte. Det nattliga jobbet på datorn (launchd, `verktyg/backup/se.clicknet.nav2-utkast-backup.plist`,
+  03.15) är PÅ sedan 2026-11-01 (session f8); logg i `~/Library/Logs/nav2-utkast-backup.log`.
 - **Databasen:** rollen `nav_backup` (bara läsning, BYPASSRLS, `pg_read_all_data`; nyckeln i
   `~/.clicknet/nav-backup.env`). Första backupen och återställningsprovet är gjorda: 259 tabeller och
   37 227 rader återställda med samma antal som produktionen. Nyckeln för krypteringen ligger i
   `~/.clicknet/backup-nyckel` och måste också finnas i beställarens lösenordshanterare.
-- **GitHub Actions** (`backup.yml` varje natt 01.30 UTC, `bevakning.yml` varje timme) väntar på att
-  beställaren kör `verktyg/backup/satt-github-hemligheter.sh`; därefter pushas de.
+- **GitHub Actions** (`.github/workflows/`, `scripts/drift/`): `backup.yml` varje natt 01.30 UTC (dump som
+  `nav_backup`, återställningsprov i en tom Postgres 17, krypterat till R2 `databas/dag-N` och
+  `manad-ÅÅÅÅ-MM`), `bevakning.yml` varje timme (sidan, databasen, nattjobbet, utkorgen, dagtidsjobben,
+  backupen och utkastets backup; mejl via Resend till `LARM_TILL` bara när läget ändras, läget i R2
+  `bevakning/lage.json`). Hemligheterna sattes 2026-11-01 15:54 UTC. Starta för hand med
+  `gh workflow run backup.yml` och `gh workflow run bevakning.yml -f provmejl=true`.
 
 ---
 

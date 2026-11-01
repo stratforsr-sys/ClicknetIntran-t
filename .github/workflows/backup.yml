@@ -1,0 +1,73 @@
+# Nattens backup av databasen, med aterstallningsprov. Se scripts/drift/backup.sh.
+#
+# 01.30 UTC ligger fore nattjobbet (02.30 UTC) och langt fran dagtidsjobben, sa
+# att dumpen tas nar databasen ar tyst. Gar den inte igenom mejlas LARM_TILL.
+name: Backup av databasen
+
+on:
+  schedule:
+    - cron: "30 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      # Den tomma databasen som dumpen aterstalls i. Den forsvinner med korningen.
+      prov:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: prov
+          POSTGRES_DB: navprov
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/drift
+
+      # pg_dump maste vara minst lika ny som servern (17).
+      - name: Postgres 17-klienten
+        run: |
+          sudo apt-get install -y -qq postgresql-common >/dev/null
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
+          sudo apt-get install -y -qq postgresql-client-17 >/dev/null
+          echo /usr/lib/postgresql/17/bin >> "$GITHUB_PATH"
+
+      - name: Dump, aterstallningsprov och R2
+        env:
+          NAV_BACKUP_URL: ${{ secrets.NAV_BACKUP_URL }}
+          PROV_URL: postgresql://postgres:prov@localhost:5432/navprov
+          BACKUP_NYCKEL: ${{ secrets.BACKUP_NYCKEL }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: bash scripts/drift/backup.sh
+
+      - name: Larm
+        if: failure()
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          LARM_TILL: ${{ secrets.LARM_TILL }}
+          KORNING: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          jq -n --arg till "$LARM_TILL" --arg korning "$KORNING" '{
+            from: "Nav-bevakningen <nav@clicknet.se>",
+            to: [$till],
+            subject: "Nav: nattens backup av databasen misslyckades",
+            text: ("Backupen eller återställningsprovet gick inte igenom i natt. Loggen:\n" + $korning)
+          }' | curl -sSf -X POST https://api.resend.com/emails \
+                 -H "Authorization: Bearer $RESEND_API_KEY" -H 'Content-Type: application/json' --data-binary @- -o /dev/null

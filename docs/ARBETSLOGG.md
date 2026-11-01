@@ -5,6 +5,21 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-02 · Driften: backup och bevakning (direkt på `main`, byggd 2026-11-01)
+
+Beställaren 2026-10-31: databasen hade ingen backup och ingenting bevakade navet ("Kan du fixa det själv",
+"Fixa det"). `scripts/drift/backup.sh` dumpar som rollen `nav_backup` (bara läsning), räknar raderna,
+återställer dumpen i en tom Postgres 17 med stubbade roller och scheman (`extensions`, `auth`, `storage`),
+jämför antalen och laddar upp den krypterat (AES-256-CBC, PBKDF2 200 000 varv, `BACKUP_NYCKEL`) till R2.
+Första körningen lokalt: 259 tabeller och 37 227 rader med samma antal som produktionen.
+`scripts/drift/bevakning.sh` mejlar `LARM_TILL` när läget ändras (nytt fel direkt, ett kvarstående var
+tolfte timme, ett sista när allt är bra igen) och tiger annars. Sidan får två försök med 30 s emellan, och
+ett delvis nattjobb (`job.night_partial`) är ett eget larm. Arbetsflödena
+fanns inte på `main` förrän hemligheterna satts (session f8 körde `satt-github-hemligheter.sh` och
+launchd-jobbet för `~/nav2-utkast` på beställarens uppdrag). Ingen ändring i appen.
+
+---
+
 ## 2026-11-02 kväll · Inkio: mejl bara om ärenden, makulerat och uppsagt (MERGAD till `main` `ed04ae7` på beställarens ja, ingen migration)
 
 **Beställaren:** "Just nu får jag mejl på allting som händer i inkio. Jag vill ha de viktigaste i mejlen men allt annat
