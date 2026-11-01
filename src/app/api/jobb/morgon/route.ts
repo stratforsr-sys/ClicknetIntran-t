@@ -30,5 +30,24 @@ export async function GET(request: NextRequest) {
   const nekad = kontrolleraCron(request);
   if (nekad) return nekad;
 
-  return NextResponse.json(await korMorgonjobbet(supabaseAdmin()));
+  const db = supabaseAdmin();
+  const start = Date.now();
+  const resultat = await korMorgonjobbet(db);
+
+  // Gul 24 (produktionsprovet 2026-10-30): kvittot, som nattjobbets (natt/route.ts). Utan det går
+  // "inget brev i dag" inte att skilja från "jobbet kördes aldrig". Dagtidsjobbet larmar om det
+  // saknas efter 06:30 UTC (`hamtaMorgonkvitto`). Ett brev som inte gick fram står i `fel` som
+  // "<adress>: orsak", och audit_log går inte att rensa, så adressen tas bort ur kvittot.
+  await db.from("audit_log").insert({
+    actor_id: null,
+    action: resultat.fel.length > 0 ? "job.morning_partial" : "job.morning_ok",
+    object_type: "job",
+    object_id: "morgon",
+    meta: {
+      sekunder: Math.round((Date.now() - start) / 100) / 10,
+      resultat: { ...resultat, fel: resultat.fel.map((f) => f.replace(/[^\s:<>]+@[^\s:<>]+/g, "<adress>")) },
+    },
+  });
+
+  return NextResponse.json(resultat);
 }

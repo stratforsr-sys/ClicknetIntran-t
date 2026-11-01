@@ -555,6 +555,61 @@ console.log("\n\x1b[1mBokforingen har inga doda rader\x1b[0m");
   );
 }
 
+console.log("\n\x1b[1mKallorna i nav2-rutterna finns i HANDELSEKALLOR\x1b[0m");
+{
+  // Gul 19 (produktionsprovet 2026-10-30): over trettio kallor notifieras bara i
+  // `src/app/nav2/**/route.ts`, som bokforingen ovan inte ser — den laser bara
+  // actions.ts. `notifiera()` tar `kalla: Handelsekalla`, men en `as` eller en
+  // kalla som byggs av en strang gar forbi typen, och da slapper `notifiera()`
+  // tyst raden (`KALLOR.has`). Har lases kallan ur varje anrop och jamfors med
+  // listan. Ett anrop utan en kalla i klartext ar ocksa ett fel: det gar inte
+  // att se vad det skickar.
+  const notiser = readFileSync(new URL("../src/lib/notiser.ts", import.meta.url), "utf8");
+  const fran = notiser.indexOf("export const HANDELSEKALLOR = [");
+  const kanda = new Set([...notiser.slice(fran, notiser.indexOf("] as const", fran)).matchAll(/"([a-z0-9-]+)"/g)].map((m) => m[1]));
+
+  const rutter = [];
+  const samlaRutter = (katalog) => {
+    for (const post of readdirSync(katalog)) {
+      const vag = join(katalog, post);
+      if (statSync(vag).isDirectory()) samlaRutter(vag);
+      else if (post === "route.ts") rutter.push(vag);
+    }
+  };
+  samlaRutter(join(ROT, "nav2"));
+
+  // Anropets slut: parentesen som stanger det.
+  const slutet = (text, fran) => {
+    let djup = 0;
+    for (let i = text.indexOf("(", fran); i < text.length; i++) {
+      if (text[i] === "(") djup++;
+      else if (text[i] === ")" && --djup === 0) return i;
+    }
+    return text.length;
+  };
+
+  const okanda = [];
+  const utanKalla = [];
+  const sedda = new Set();
+  let anrop = 0;
+  for (const vag of rutter) {
+    const text = readFileSync(vag, "utf8");
+    for (const m of text.matchAll(/\bnotifiera(?:Flera)?\(/g)) {
+      anrop++;
+      const plats = `${vag.slice(ROT.length + 1)}:${text.slice(0, m.index).split("\n").length}`;
+      // Vardet fram till forsta kommatecknet: `kalla: "x"` eller `kalla: a ? "x" : "y"`.
+      const kalla = text.slice(m.index, slutet(text, m.index) + 1).match(/\bkalla:\s*([^,\n]+)/);
+      const namn = kalla ? [...kalla[1].matchAll(/"([a-z0-9-]+)"/g)].map((x) => x[1]) : [];
+      if (!namn.length) utanKalla.push(plats);
+      for (const n of namn) (kanda.has(n) ? sedda.add(n) : okanda.push(`${n} (${plats})`));
+    }
+  }
+
+  ok("varje kalla i en nav2-rutt finns i HANDELSEKALLOR", okanda.length === 0,
+    okanda.length ? `\n      okand: ${okanda.join("\n      okand: ")}` : `${anrop} anrop, ${sedda.size} kallor`);
+  ok("varje notifiera() i en nav2-rutt har kallan i klartext", utanKalla.length === 0, utanKalla.join(", "));
+}
+
 console.log("");
 if (fel > 0) {
   console.log(`\x1b[31m${fel} fel\x1b[0m\n`);

@@ -59,6 +59,7 @@ export const ORDNING: Record<string, readonly string[]> = {
   project_message_read: ["project_id", "employee_id"],
   push_sent: ["employee_id", "kind", "day"],
   roleplay_self: ["employee_id", "criterion_id"],
+  salesboard_person: ["employee_id"],
   sick_signal_ack: ["employee_id"],
   task_day: ["employee_id", "dag"],
   task_focus: ["employee_id", "dag", "position"],

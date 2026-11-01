@@ -10,6 +10,8 @@ import { skickaKvallsnotiser } from "@/lib/nav2/hem-kvall";
 import { korAnstalldaPaminnelser } from "@/lib/nav2/anstallda-paminnelser";
 import { publiceraSchemalagda } from "@/lib/nav2/nyheter-jobb";
 import { korUtbildningsPaminnelser } from "@/lib/nav2/utbildning-paminnelser";
+import { hamtaMorgonkvitto } from "@/lib/jobb/drift-server";
+import { skrivFel } from "@/lib/fel-server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -65,7 +67,7 @@ async function kor(request: NextRequest) {
     }
   }
   // Nav 2.0 (0121, E5.8): kvällsnotisen till ledarna, vardagar från 17:00 och söndagar från 18:00.
-  // Bakom SKRIVLAGE.hem (i funktionen). Söndagens anrop kräver supabase/vantar/hem_sondag.sql.
+  // Bakom SKRIVLAGE.hem (i funktionen). Söndagens anrop är cron-jobbet `nav-dagtid-sondag` (0235_hem_sondag).
   let kvall: unknown = null;
   try {
     kvall = await skickaKvallsnotiser(db);
@@ -94,7 +96,29 @@ async function kor(request: NextRequest) {
   } catch (e) {
     nyheter = { fel: e instanceof Error ? e.message : String(e) };
   }
-  return NextResponse.json({ ...stampling, kalender, runda, tid, kvall, anstallda, utbildning, nyheter });
+  // Gul 24 (produktionsprovet 2026-10-30): morgonbrevets kvitto. Saknas det efter 06:30 UTC larmas det
+  // i Fel, en rad per dag (digesten bär datumet), som den uteblivna natten. Jobbet går var 15:e minut,
+  // så larmet skrivs bara om dagens rad inte redan finns: annars blev det ~50 förekomster per dag.
+  let morgon: unknown = null;
+  try {
+    const k = await hamtaMorgonkvitto(db);
+    morgon = k;
+    const dag = new Date().toISOString().slice(0, 10);
+    const digest = `morgon-kvitto-${dag}`;
+    const { data: larmat } = k.saknas ? await db.from("error_report").select("id").eq("digest", digest).limit(1) : { data: null };
+    if (k.saknas && !larmat?.length) {
+      await skrivFel({
+        kind: "automatic",
+        path: "/api/jobb/morgon/kvitto",
+        digest,
+        message: `Morgonjobbet har inget kvitto i dag (${dag}). Det senaste är från ${k.senaste}.`,
+        blocking: false,
+      });
+    }
+  } catch (e) {
+    morgon = { fel: e instanceof Error ? e.message : String(e) };
+  }
+  return NextResponse.json({ ...stampling, kalender, runda, tid, kvall, anstallda, utbildning, nyheter, morgon });
 }
 
 export async function POST(request: NextRequest) {

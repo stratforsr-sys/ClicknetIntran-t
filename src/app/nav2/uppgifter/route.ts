@@ -151,12 +151,13 @@ export async function POST(request: Request) {
 
   try {
     switch (handling) {
-      case "skapa":
+      case "skapa": {
         // Snabbraden tolkas av repots tolkaSnabbrad; en deluppgift har parent_id.
-        return fran(
-          await skapaUppgift({}, form(b.rad ? { rad: b.rad } : { title: b.titel, parent_id: b.foralder ?? null, priority: b.prio ?? 3, due_date: b.dag ?? null })),
-          "Uppgiften är upplagd.",
-        );
+        const s = await skapaUppgift({}, form(b.rad ? { rad: b.rad } : { title: b.titel, parent_id: b.foralder ?? null, priority: b.prio ?? 3, due_date: b.dag ?? null }));
+        // Gul 17 (produktionsprovet 2026-10-30): uppgiften lämnade ingen rad i händelseloggen.
+        if (!s.fel) await db.from("audit_log").insert({ actor_id: mig, action: "task.created", object_type: "task", object_id: s.id ?? null });
+        return fran(s, "Uppgiften är upplagd.");
+      }
       case "dela-upp": {
         const steg = Array.isArray(b.steg) ? (b.steg as string[]).map((s) => String(s).trim()).filter(Boolean).slice(0, 10) : [];
         if (!steg.length) return svar({ fel: "Inga steg att lägga till." }, 400);
@@ -166,8 +167,13 @@ export async function POST(request: Request) {
         }
         return svar({ ok: `Uppgiften är uppdelad i ${steg.length} steg. Ändra fritt.` });
       }
-      case "bocka":
-        return fran(await bocka({}, form({ id })), "Klar.");
+      case "bocka": {
+        const s = await bocka({}, form({ id }));
+        // bocka() svarar "Klar.", "Inlämnad för godkännande." (uppgiften har en granskare) eller "Redan klar.", som inte loggas.
+        const handelse = s.ok === "Klar." ? "task.completed" : s.ok === "Inlämnad för godkännande." ? "task.submitted" : null;
+        if (handelse) await db.from("audit_log").insert({ actor_id: mig, action: handelse, object_type: "task", object_id: id });
+        return fran(s, "Klar.");
+      }
       case "ateroppna":
         return fran(await ateroppna({}, form({ id })), "Öppnad igen.");
       case "godkann":

@@ -181,6 +181,8 @@ export const KALLOR: Kalla[] = [
   { tabell: "calendar_event", kolumn: "organizer_id", andamal: "Möten du har bokat" },
   { tabell: "calendar_attendee", kolumn: "employee_id", andamal: "Möten du är inbjuden till, med dina svar och förslag" },
   { tabell: "calendar_series", kolumn: "organizer_id", andamal: "Återkommande möten och 1:1:or du håller" },
+  // 0201. Kalenderns bilagor. Gul 11 (produktionsprovet 2026-10-30).
+  { tabell: "calendar_attachment", kolumn: "uploaded_by", andamal: "Bilagor du laddat upp i kalendern" },
   { tabell: "one_on_one_item", kolumn: "author_id", andamal: "Punkter du skrivit på en 1:1" },
   // 0071. Leveransen.
   { tabell: "delivery", kolumn: "owner_id", andamal: "Kunder du är ansvarig för i leveransen" },
@@ -294,6 +296,8 @@ export const KALLOR: Kalla[] = [
   // Möten (0260). Mötet följer med den som håller det, som calendar_event med organisatören.
   // Den som bokade åt en kollega får bokningen via händelseloggen (mote.created), se UNDANTAG.
   { tabell: "mote", kolumn: "halls_av", andamal: "Möten du håller, och hur de gick" },
+  // Säljtavlan (0250). Gul 11 (produktionsprovet 2026-10-30): hur personen visas på tavlan.
+  { tabell: "salesboard_person", kolumn: "employee_id", andamal: "Hur du visas på Säljtavlan" },
 ];
 
 /**
@@ -587,4 +591,9 @@ export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
   { tabell: "mote_bolag", kolumn: "skapad_av", skal: "Vem som lade upp bolaget — uppgifterna handlar om kunden" },
   { tabell: "mote_kedja", kolumn: "offert_av", skal: "Vem som skickade offerten — kortet handlar om kunden" },
   { tabell: "mote_kedja", kolumn: "avslut_av", skal: "Vem som stängde kortet (affär, nej, avbokat) — kortet handlar om kunden" },
+  // Säljtavlan (0250), gul 11: vem som ställde in tavlan åt någon annan. Personens egen visning står i KALLOR.
+  { tabell: "salesboard_person", kolumn: "updated_by", skal: "Vem som ändrade hur en säljare visas på tavlan" },
+  { tabell: "salesboard_screen", kolumn: "created_by", skal: "Vem som parkopplade en skärm med tavlan" },
+  { tabell: "salesboard_screen", kolumn: "revoked_by", skal: "Vem som återkallade en skärm" },
+  { tabell: "salesboard_event", kolumn: "created_by", skal: "Vem som skickade en testhändelse till tavlan" },
 ];

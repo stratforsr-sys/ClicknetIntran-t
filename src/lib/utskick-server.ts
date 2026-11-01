@@ -37,7 +37,10 @@ export async function hamtaLager(db: SupabaseClient, ids: readonly string[]): Pr
       db.from("notification_rule").select("lager, niva, employee_id, regler").or(`employee_id.is.null,employee_id.in.(${unika.join(",")})`),
       db.from("employee_role").select("employee_id, role").in("employee_id", unika),
     ]);
-    if (error) return ut;
+    if (error) {
+      console.error("utskick: reglerna gick inte att läsa", error.message);
+      return ut;
+    }
     const rollerAv = new Map<string, string[]>();
     for (const r of (roller ?? []) as { employee_id: string; role: string }[]) {
       rollerAv.set(r.employee_id, [...(rollerAv.get(r.employee_id) ?? []), r.role]);
@@ -56,8 +59,9 @@ export async function hamtaLager(db: SupabaseClient, ids: readonly string[]): Pr
     for (const id of unika) {
       ut.set(id, { alla, niva: niva.get(nivaFor(rollerAv.get(id) ?? [])), person: person.get(id), egen: egen.get(id) });
     }
-  } catch {
-    // Se rubriken: ingenting stängs.
+  } catch (e) {
+    // Se rubriken: ingenting stängs. Men felet syns, så att en tom regel inte ser ut som "inga regler".
+    console.error("utskick: reglerna gick inte att läsa", e instanceof Error ? e.message : e);
   }
   return ut;
 }

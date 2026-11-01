@@ -156,6 +156,8 @@ export const MODUL: Record<string, string> = {
   coaching_template: "Coachningsmall",
   // Uppgiftsserier och uppgiftsmallar (kalenderns pass 3) och skriftliga prov
   // (0067) loggade utan att stå här; provet var rött på main av det.
+  // Gul 17 (produktionsprovet 2026-10-30): uppgifterna i Nav 2.0 (task.created, task.completed).
+  task: "Uppgift",
   task_series: "Uppgiftsserie",
   task_template: "Uppgiftsmall",
   prov: "Skriftligt prov",

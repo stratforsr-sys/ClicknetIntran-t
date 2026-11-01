@@ -262,8 +262,13 @@ export async function POST(request: Request) {
         const key = String(b.key ?? "");
         if (!NYCKEL.test(key)) return svar({ fel: "Okänd anteckning." }, 400);
         const t = String(b.text ?? "").slice(0, 4000);
+        const { data: fanns } = await db.from("learning_note").select("key").eq("employee_id", mig).eq("key", key).maybeSingle();
         if (!t.trim()) await db.from("learning_note").delete().eq("employee_id", mig).eq("key", key);
         else await db.from("learning_note").upsert({ employee_id: mig, key, text: t, updated_at: new Date().toISOString() }, { onConflict: "employee_id,key" });
+        // Gul 17 (produktionsprovet 2026-10-30): som rutinens anteckning: att den kom till och togs bort, inte
+        // varje sparning medan man skriver, och aldrig texten.
+        if (Boolean(fanns) !== Boolean(t.trim()))
+          await db.from("audit_log").insert({ actor_id: mig, action: t.trim() ? "course.note_created" : "course.note_deleted", object_type: "learning_note", object_id: key });
         return svar({ ok: "Sparat." });
       }
 
