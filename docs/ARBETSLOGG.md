@@ -5,6 +5,54 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-01 kväll · Rättelserna efter produktionsprovet (grenen `rattelser-prodprov` → `main` `29b7c64`, 0272 + 0273 + 0274 + 0224 KÖRDA)
+
+**Beställarens svar:** frågorna 1–24 i `~/nav2-utkast/delar/rattelser/PLAN.md` (2026-10-31), och 2026-11-01 ca 16:00 UTC
+"Ja, merga och kör", "Ja, koppla" (SweAuto) och "Ja, märk dem" (de 234 samtalen). Planen, loggen med varje bevis och rapporten
+ligger i `~/nav2-utkast/delar/rattelser/` (`PLAN.md`, `LOGG.md`, `RAPPORT.md`), inte i repot.
+
+**R2, den tomma klockan, var en inställning, inte kod.** Bolagets regel i `notification_rule` (lager `alla`) hade
+`klocka: {"*": false}`, satt från Zens konto 2026-10-29 19:01 UTC. Produktionsprovets "25 lokalt" kom av att provverktyget
+saknade `.or()`, så `hamtaLager` kastade och dess `catch` gav inga regler. Hittat genom att köra den riktiga `medPg` lokalt
+och halvera mot RLS-vägen (`delar/rattelser/F1/`). Återställt i appen (20 × `POST /nav2/utskick`). Koden fick bara
+diagnostik: ett fel i en av `hamtaNotiser`s 31 delfrågor och i `hamtaLager` loggas nu i stället för att bli en tom lista.
+
+**R1 (0272):** `absence_request_beslut` krävde tomt beslut för `cancelled`, och triggern 0048 förbjöd att det töms. Nu
+behåller en inställd ledighet sitt beslut. Antingen båda fälten eller inget, så ett halvt beslut går fortfarande inte att skriva.
+**Gul 3 (0273):** TRUNCATE, TRIGGER, REFERENCES och MAINTAIN (Postgres 17) indragna för anon och authenticated, också i
+förvalet. TRUNCATE gick förbi både RLS och oföränderlighetstriggrarna. **Gul 8 (0274):** `sick_note_orubblig` nekar
+också DELETE. `ta_bort_anstalld` går igenom, eftersom den slår av användartriggrarna på varje tabell med FK mot employee.
+
+**Koden:**
+- `tolkaSamtal` kastar när påsen saknar både samtals-id och starttid. Webhooken svarar då `200 tolkat:false` och råraden står kvar.
+- Registerutdraget tar `calendar_attachment` och `salesboard_person`.
+- `epost-notis` skriver en `integration_log`-rad i stället för en tyst nolla utan EMAIL_FROM.
+- `nav2/route` loggar varför pg-vägen uteblev.
+- Fem skrivningar loggar i `audit_log`: `task.created/completed/submitted`, `document.note_*`, `course.note_*` och `error.reported`. Anteckningarna loggas bara när de kommer till och tas bort, aldrig texten.
+- `nav2/tid` ger 404 för en okänd rättelse.
+- Morgonjobbet skriver kvitto (`job.morning_ok/partial`, med mottagarnas adresser maskade), och dagtidsjobbet larmar en gång per dag om det saknas efter 06:30 UTC.
+- `/favicon.ico` → `/icon.png`.
+
+**Två nya prov:**
+- `tests/handelselogg.mjs`: en action i koden utan rubrik i `src/lib/nav2/loggforma.ts` är rött. De 19 som saknade rubrik på main står i `KANDA_LUCKOR`, och listan får bara krympa.
+- `tests/notiser-tackning.mjs`: varje `notifiera()` i `src/app/nav2/**/route.ts` ska ha en källa i klartext som finns i `HANDELSEKALLOR`. Kommentarer räknas inte.
+
+**Data:**
+- **D1:** `crm_order` #28 → SO-2026-00097. #28 är fortfarande ett utkast som beställaren godkänner i Nav, och `skapaICrm` hoppar då över den.
+- **D4:** 234 samtal från 2026-09-10–14 har gått från `hos_vaxeln` till `misslyckad`, med skälet. Lynes länkar gäller 30 minuter (`X-Amz-Expires 1800`) och svarar nu `403 Request has expired`.
+- **D7:** 0224 är körd, efter att md5 på `ta_bort_anstalld` var kontrollerad.
+
+**Lärdomar:**
+- **Numret är taget när det körts.** 0271 togs av utskicksloggen en minut före körningen här, så migrationerna blev 0272–0274.
+- **Main rörde sig fyra gånger under passet.** Grenen lades om ovanpå main med EN commit (taggar `rattelser-prodprov-v1`/`-v2`). Det blev ingen force-push, eftersom den inte byggs.
+- **Provkopian måste synkas med commitens filer.** Första provkörningen gick mot en kopia där 9 filer var gamla. Upptäckt och omkört.
+
+**Ej gjort:**
+- **Gul 4 och Gul 5 (miljövariabler i Vercel)** stoppades av behörighetsspärren och ligger hos beställaren.
+- **R4, franniel@:** personen ska läggas upp. De 167 inspelningarna går troligen inte att hämta, eftersom länkarna gäller 30 minuter.
+
+---
+
 ## 2026-11-01 kväll · Möten, varv 3: radera ett möte, och samtal räknas från 5 minuter (direkt på `main`, 0267 + 0268 KÖRDA)
 
 **Beställarens svar 2026-11-01:** "5 minuter" (från vilken längd ett samtal räknas), "Det är ett prov,
