@@ -14157,7 +14157,7 @@ function felSaljare(){
     <div class="tgrid"><div class="col">
       <section class="card felcta">${note(222)}<div><h2>Hittat något som inte fungerar?</h2><p class="muted">Tryck på <b>Rapportera fel</b> i menyn på den sida där det hände, så följer sidan med. En mening räcker.</p></div><button class="btn btn-p" data-felny>Rapportera fel</button></section>
       <section class="card">${note(228)}<div class="chead"><h2>Mina felrapporter</h2><span class="end muted" style="font-size:12.5px">${mina.length} skickade · ${lagade} lagade</span></div>
-        ${mina.length ? mina.map(r => `<article class="felmin felst-${r.status}">
+        ${mina.length ? mina.map(r => `<article class="felmin felst-${r.status}" data-felid="${esc(r.id)}">
           <div class="felmh"><b>${esc(felRubrik(r))}</b>${r.blocking ? '<span class="pill t-danger">Stoppade dig</span>' : ''}${(r.svar || []).length && r.status === 'ack' && !S.felLast?.[r.id] ? '<span class="pill t-signal">Nytt svar</span>' : r.status === 'closed' && r.fraga && !r.tackad ? '<span class="pill t-ok">Lagad, kolla gärna</span>' : ''}</div>
           <small class="muted">${esc(FELSIDA[r.path.split('/')[1]] || 'Startsidan')} · ${esc(r.nar)}${r.pek ? ' · ' + esc(r.pek) : ''}</small>
           ${felSpar(r)}
@@ -25510,7 +25510,7 @@ function ndTidSaljare(){
     <p class="tisub2">${vantar.length ? `<button class="tivbtn" data-tiscroll="tiVantar"><b class="num">${vantar.length}</b> ${vantar.length === 1 ? 'sak väntar på dig' : 'saker väntar på dig'} →</button>` : `<span class="pill t-ok">${I('check')}Inget väntar på dig</span>`}${t.stamplar && ff > 0 ? `<span class="pill t-neutral" title="Arbetsdagar i rad utan en dag som navet fick stänga">${ff} ${ff === 1 ? 'dag' : 'dagar'} utan glömd stämpling</span>` : ''}</p></div>
     <div class="tools">${t.stamplar ? `<button class="btn btn-p tistamp" data-act="${l === 'in' ? 'ut' : 'in'}">${I(l === 'in' ? 'ut' : 'tid')}${l === 'in' ? 'Stämpla ut' : S.events.length ? 'Stämpla in igen' : 'Stämpla in'}</button>` : ''}</div></header>
     <div class="tgrid"><div class="col">${t.stamplar ? ndTidIdag() + ndTidVeckan() : ndTidEjStampel()}</div>
-    <div class="col">${ndTidVantarKort(vantar)}${ndTidSchemaKort()}${ndTidRegistrerat()}${t.stamplar ? ndTidPaminnelser() : ''}${tidVemSer()}</div></div>`;
+    <div class="col">${ndTidVantarKort(vantar)}${ndTidSchemaKort()}${ndTidRegistrerat()}${tidVemSer()}</div></div>`;
 }
 function ndTidEjStampel(){
   return `<section class="card"><div class="chead"><h2>Stämpling</h2></div><p class="muted tismall">${ND.tid.modulPa ? 'Din roll har ingen arbetstid som stämplas in och ut. Därför finns inga stämplingar här.' : 'Stämplingen är byggd men inte påslagen i Nav.'}</p></section>`;
@@ -25611,20 +25611,7 @@ function ndTidRegistrerat(){
     ${tittat.length ? `<ul class="tilist">${tittat.map(t => `<li class="col"><span>${esc(t.vem)} ${esc(t.vad)}</span><span class="muted num">${esc(ndKortNar(t.nar))}</span></li>`).join('')}</ul>` : '<p class="muted tismall">Ingen har öppnat dina sena dagar eller tagit med dig i en lönerapport de senaste 90 dagarna.</p>'}
     <a class="btn btn-s btn-sm" style="margin-top:10px" href="/personal/${ND.jag.id}/registerutdrag">${I('logg')}Ladda ner allt om min tid</a></section>`;
 }
-// Påminn mig: navets val per person (0094), skickas av dagtidsjobbet.
-function ndTidPaminnelser(){
-  const p = S.ndPaminn, sch = ndSchemaIdag() || ND.tid.schema[0]; if (!sch) return '';
-  const P = [['in', 'Om jag inte stämplat in', tmin(sch.start)], ['ut', 'Om jag fortfarande är instämplad', tmin(sch.slut)]];
-  let d = kIdag(), nastaDag = null; if (now() > tmin(sch.start)) d = ndPlusDag(d, 1);
-  for (let i = 0; i < 7 && !nastaDag; i++, d = ndPlusDag(d, 1)) if (ndSchemaFor(d)) nastaDag = d;
-  const dagNamn = nastaDag === kIdag() ? 'i dag' : nastaDag ? NDDAG[new Date(nastaDag + 'T12:00:00Z').getUTCDay() || 7].toLowerCase() : '';
-  const nasta = stampLage() === 'in' && p.ut.pa ? `i dag ${hm(tmin(sch.slut) + p.ut.min)}, om du fortfarande är instämplad` : p.in.pa && nastaDag ? `${dagNamn} ${hm(tmin(ndSchemaFor(nastaDag).start) + p.in.min)}, om du inte stämplat in` : null;
-  return `<section class="card"><div class="chead"><h2>Påminn mig</h2></div>${nasta ? `<p class="tinasta">${I('bell')}Nästa: ${nasta}.</p>` : ''}
-    ${P.map(([k, l, bas]) => `<div class="tipam"><button class="tiswitch" data-tipamin="${k}" aria-pressed="${p[k].pa}"><span>${l} <b class="num">${hm(bas + p[k].min)}</b></span><i></i></button>
-      ${p[k].pa ? `<span class="usak">${[5, 10, 15].map(m => `<button data-tipammin="${k}:${m}" aria-pressed="${p[k].min === m}">${m} min efter</button>`).join('')}</span>` : ''}</div>`).join('')}
-    <div class="tinotis"><span class="hm">${hubMark(22)}</span><div><b>Nav · ${hm(tmin(sch.slut) + p.ut.min)}</b><span>Du är fortfarande instämplad. Schemat slutade ${sch.slut}.</span><span class="tinb"><i>Stämpla ut nu</i><i>Jobbar kvar</i></span></div></div>
-    <p class="muted tismall" style="margin-top:8px">Så ser notisen ut. Den tystnar de dagar du är sjuk eller ledig. Påminnelserna går på klockslag, aldrig på var du befinner dig.</p></section>`;
-}
+// Påminn mig (0094) är borta: Nav påminner inte längre om att stämpla (beställaren 2026-11-01).
 
 /* ---------- Chefen ---------- */
 const ndChefTid = () => ND.tid.chef;
@@ -35815,6 +35802,86 @@ function skalVy(h){
   return Object.keys(NDVY).find(k => NDVY[k][1] === f) || null;
 }
 // En väg i navet: en kopplad vy öppnas här med rätt flik eller post, allt annat i nuvarande Nav.
+/* ---------- Notisernas djuplänkar (beställaren 2026-11-01) ----------
+   "Alla notiser ska gå exakt dit notisen kommer ifrån." Varje sorts adress öppnar sin post, inte bara listan:
+   /order/<id> och /order/kund/<org>, /provision/manad/<YYYY-MM>, /tid/gora[/<id>], /tid?dag=, /tid?vecka=,
+   /tid/avvikelser?vem=, /franvaro/sjuk/<id>, /franvaro/ny/<typ>, /fel/<id>, /moten/<id>, /avtal/<id>,
+   /utbildning/repetition, /utbildning/forelasning/<id>, /utbildning/rollspel/<id>, /kalender?vem= och ?ko=1&order=.
+   Posten man landar på lyfts en kort stund (ndLyft), som en ansökan i Frånvaro redan gör. Finns posten inte
+   (gallrad, utanför det som laddats) öppnas vyn, aldrig en tom sida. */
+const NDUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const NDDATUM = /^\d{4}-\d{2}-\d{2}$/;
+function ndLyft(el){
+  if (!el) return false;
+  el.scrollIntoView({block:'center', behavior:'smooth'});
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches && el.animate) el.animate([{boxShadow:'0 0 0 3px var(--accent, #1f7a5a)'}, {boxShadow:'0 0 0 0 transparent'}], {duration:1400, easing:'ease-out'});
+  return true;
+}
+// Efter ritningen: det första av urvalen som finns lyfts.
+const ndLyftSen = (...val) => setTimeout(() => { for (const v of val){ const el = typeof v === 'function' ? v() : document.querySelector(v); if (ndLyft(el)) return; } }, 60);
+function ndTidGaGora(id){
+  if (S.role !== 'chef' || !ND.tid || !ND.tid.chef){ gaTid(null); return; }
+  gaTid('gora');
+  if (id) ndLyftSen(() => document.querySelector(`[data-tibeslut="${CSS.escape(id)}"], [data-ndtiogiltig="${CSS.escape(id)}"]`)?.closest('.tigo'));
+}
+function ndTidGaDag(dag, vecka){
+  const d = NDDATUM.test(dag || '') ? dag : null, v = NDDATUM.test(vecka || '') ? vecka : null;
+  if (S.role !== 'chef' && (d || v)){ S.tVecka = ndMandag(d || v); S.tDag = d; }
+  gaTid(null);
+  if (d) ndLyftSen(() => document.querySelector(`[data-tidag="${d}"]`)?.closest('li'));
+}
+function ndTidGaSena(vem){
+  gaTid('sena');
+  const a = S.role === 'chef' && ND.tid && ND.tid.chef && (ND.tid.chef.sena30 || []).find(x => String(x.pid) === vem);
+  if (!a) return;
+  // Genom knappen och inte S.tSenaOpen: öppningen loggas och syns för personen (sena-visad).
+  setTimeout(() => { const k = document.querySelector(`[data-tisenaperson][data-pid="${CSS.escape(vem)}"]`); if (k && S.tSenaOpen !== a.namn) k.click();
+    ndLyftSen(() => [...document.querySelectorAll('.tiavv')].find(x => x.querySelector('.tigh b')?.textContent === a.namn)); }, 40);
+}
+function ndFrGaSjuk(id){
+  if (ndFrChef()){ frGa('sjuk'); ndLyftSen(() => document.querySelector(`[data-frnotspara="${CSS.escape(id)}"], [data-frbekr="${CSS.escape(id)}"]`)?.closest('.frsjukkort')); return; }
+  frGa(); ndLyftSen('.frsjukst');
+}
+function ndFelGaRapport(id){
+  felGa();
+  const r = FELR.find(x => String(x.id) === id);
+  if (ndFelHanterar()){ S.felSel = id; S.felFilt = r && r.status === 'closed' ? 'lagade' : null; render(); ndLyftSen('.felrad.vald'); return; }
+  ndLyftSen(`.felmin[data-felid="${CSS.escape(id)}"]`);
+}
+function ndOrdGaKund(org){
+  const sif = x => String(x || '').replace(/\D/g, ''), o = ORDER.filter(x => sif(x.org) && sif(x.org) === sif(org)).sort((a, b) => b.nr - a.nr)[0];
+  if (!o){ ordGa(null); return; }
+  kkSt(); ordGa(o.nr); S.kkFlik = 'aktivitet'; render();
+}
+function ndPvGaManad(m){
+  pvGa();
+  if (pvManader().includes(m)){ S.pvM = m; render(); }
+}
+function ndMoGaMote(id){
+  moGa();
+  const k = ((ND.moten && ND.moten.kort) || []).find(x => String(x.kedja) === id || (x.mote && String(x.mote.id) === id));
+  if (k){ S.moOpen = k.kedja; render(); }
+}
+function ndUtbGaNotis(d){
+  const sub = d[1], id = d[2] || null, u = ndUtb(), visa = tab => { S.view = 'utbildning'; S.uPlay = null; S.uOpen = null; S.rpOpen = null; S.uTab = tab; render(); window.scrollTo(0, 0); };
+  if (!u) return false;
+  if (sub === 'repetition' && !id){ visa('mina'); ndLyftSen('section.urep'); return true; }
+  if (sub === 'forelasning' && id && !d[3]){ visa('forel'); const q = CSS.escape(id); ndLyftSen(() => document.querySelector(`[data-ufraga="${q}"], [data-uanmal="${q}"], [data-ndusev="${q}"], [data-urepforel="${q}"], [data-udela="${q}"]`)?.closest('.ufor')); return true; }
+  if (sub === 'rollspel' && id && !d[3]){
+    if (u.team){ visa('team'); if ((u.team.attBedoma || []).some(x => String(x.id) === id)){ S.uBedom = id; render(); ndLyftSen(() => document.querySelector(`[data-ubedom="${CSS.escape(id)}"]`)?.closest('.frow')); } return true; }
+    visa('rollspel'); return true;
+  }
+  return false;
+}
+// Klockan: den som öppnar en notis bokförs (0271, /nav2/notis). Pushen och mejlet bokförs av rutten själv.
+function ndNotisOppnad(id){
+  try { fetch('/nav2/notis', {method:'POST', credentials:'same-origin', keepalive:true, headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})}).catch(() => {}); } catch(_){}
+}
+document.addEventListener('click', e => {
+  const g = ND && e.target.closest && e.target.closest('[data-bellgo]'); if (!g) return;
+  const n = (ND.notiser || []).find(x => 'nd-' + x.id === g.dataset.bellgo);
+  if (n && n.handelseId) ndNotisOppnad(n.handelseId);
+}, true);
 const _skalNdGa = ndGa;
 ndGa = function(href){
   if (!ND) return _skalNdGa(href);
@@ -35835,9 +35902,15 @@ ndGa = function(href){
     case 'uppgifter': { if (sub === 'projekt' && !d[3]){ ndUpgGaProjekt(d[2] || null); return; } if (sub === 'mallar' && !d[2]){ ndUpgGaMallar(); return; } if (sub === 'genomgang' && !d[2]){ ndUpgGaGenomgang(); return; } const t = sub && TASKS.find(x => String(x.id) === sub); if (sub && !t) return nav(); S.view = 'uppgifter'; S.todoOpen = false; S.panel = t ? t.id : null; render(); window.scrollTo(0, 0); return; }
     // Gamla Nav E: /rutiner/ny (redaktören), /rutiner/<slug>/redigera och /rutiner/<slug>/kvittenser (Förvaltning).
     case 'rutiner': { if (sub === 'ny' || (sub && ['redigera', 'kvittenser'].includes(d[2]) && !d[3])){ ndRutGa(sub, d[2]); return; } if (sub && !(typeof rutin === 'function' && rutin(sub))) return nav(); if (sub){ rOppna(sub); return; } S.view = 'rutiner'; S.rOpen = null; render(); window.scrollTo(0, 0); return; }
-    case 'utbildning': if (ndUtbGa(d)) return; return nav();
+    case 'utbildning': if (ndUtbGaNotis(d) || ndUtbGa(d)) return; return nav();
     // Gamla Nav A: /tid/schema (chefens Scheman och regler, säljarens Ditt schema) och /tid/lonerapport/<id> (perioden).
-    case 'tid': { if (sub === 'schema' && !d[2]){ ndTidSchemaGa(); return; } if (sub === 'lonerapport' && d[2] && !d[3]){ ndTidPeriod(d[2]); return; } const tab = {lonerapport:'lon', avvikelser:'sena', 'ogiltig-franvaro':'sena'}[sub]; if (sub && (!tab || d[2])) return nav(); gaTid(tab || null); return; }
+    // Notiserna: /tid/gora[/<id>] (chefens Att göra med raden lyft), /tid?dag= och /tid?vecka= (din dag och vecka), /tid/avvikelser?vem= (personens sena dagar).
+    case 'tid': { const q = new URLSearchParams(h.split('?')[1] || '');
+      if (sub === 'schema' && !d[2]){ ndTidSchemaGa(); return; } if (sub === 'lonerapport' && d[2] && !d[3]){ ndTidPeriod(d[2]); return; }
+      if (sub === 'gora' && !d[3]){ ndTidGaGora(d[2] || null); return; }
+      if (sub === 'avvikelser' && !d[2] && q.get('vem')){ ndTidGaSena(q.get('vem')); return; }
+      if (!sub && (q.get('dag') || q.get('vecka'))){ ndTidGaDag(q.get('dag'), q.get('vecka')); return; }
+      const tab = {lonerapport:'lon', avvikelser:'sena', 'ogiltig-franvaro':'sena'}[sub]; if (sub && (!tab || d[2])) return nav(); gaTid(tab || null); return; }
     case 'kalender': {
       // Klockans adresser är /kalender?dag=…&handelse=…: dagen och händelsen öppnas som utkastets egen påminnelse gör.
       if (sub) return nav();
@@ -35847,22 +35920,30 @@ ndGa = function(href){
       if (ev && !ev.allday) S.kScroll = Math.max(0, (ev.s - 90) / 60 * KPX);
       render(); window.scrollTo(0, 0);
       if (ev) setTimeout(() => { const el = document.querySelector(`.olev[data-kev="${ev.id}"]`); if (el) kPeekOppna(ev.id, el); }, 30);
+      // ?vem=<id>: kollegans kalender bredvid din (kalender-delad). ?ko=1&order=<id>: leveranskön, med kunden lyft.
+      const vem = q.get('vem'), p = vem && kPers().find(x => String(x.id) === vem);
+      if (p){ S.kVisa = S.kVisa || new Set(); S.kVisa.add(p.n); render(); }
+      if (q.get('ko')){ if (S.kGrpSt) S.kGrpSt.delete('ko'); render(); const o = q.get('order'); ndLyftSen(...(o ? [`[data-kq="${CSS.escape(o)}"]`] : []), '.olko'); }
       return; }
     case 'arenden': { if (sub === 'nytt'){ arNytt(''); return; } if (sub && !ARENDEN.some(x => String(x.id) === sub)) return nav(); arGa(sub); return; }
     // Gamla Nav B: /franvaro/<id> öppnar ansökan (notiserna om beslut, ny ansökan, ändringsfråga och inställd ledighet).
-    case 'franvaro': { if (sub && /^[0-9a-f-]{36}$/.test(sub) && !d[2]){ ndFrGaAnsokan(sub); return; } if (sub && !['attest', 'sjuk', 'planering', 'ny'].includes(sub)) return nav(); frGa(sub === 'ny' ? null : sub); return; }
-    case 'fel': if (sub === 'nytt'){ felRapportera(); return; } if (sub) return nav(); felGa(); return;
-    case 'order': { const o = sub && ORDER.find(x => String(x.nr) === sub || String(x.id) === sub); if (sub && !o) return nav(); ordGa(o ? o.nr : null); return; }
+    case 'franvaro': { if (sub && /^[0-9a-f-]{36}$/.test(sub) && !d[2]){ ndFrGaAnsokan(sub); return; }
+      // /franvaro/sjuk/<id> lyfter sjukanmälan, /franvaro/ny/<typ> öppnar formuläret med typen vald (sommarrundan: semester).
+      if (sub === 'sjuk' && NDUUID.test(d[2] || '') && !d[3]){ ndFrGaSjuk(d[2]); return; }
+      if (sub === 'ny' && /^[a-z_]+$/.test(d[2] || '') && !d[3]){ frGa(null, d[2]); return; } if (sub && !['attest', 'sjuk', 'planering', 'ny'].includes(sub)) return nav(); frGa(sub === 'ny' ? null : sub); return; }
+    case 'fel': if (sub === 'nytt'){ felRapportera(); return; } if (NDUUID.test(sub || '') && !d[2]){ ndFelGaRapport(sub); return; } if (sub) return nav(); felGa(); return;
+    case 'order': { if (sub === 'kund' && d[2] && !d[3]){ ndOrdGaKund(decodeURIComponent(d[2])); return; } const o = sub && ORDER.find(x => String(x.nr) === sub || String(x.id) === sub); if (sub && !o) return nav(); ordGa(o ? o.nr : null); return; }
     // Gamla Nav G: /provision/regler, /provision/mal och /provision/underlag/<månad> (ndPvGa i ndpv.js).
-    case 'provision': if (sub && !ndPvGa(sub, d[2], d[3])) return nav(); if (!sub) pvGa(); return;
+    case 'provision': if (sub === 'manad' && /^\d{4}-\d{2}$/.test(d[2] || '') && !d[3]){ ndPvGaManad(d[2]); return; } if (sub && !ndPvGa(sub, d[2], d[3])) return nav(); if (!sub) pvGa(); return;
     case 'coachning': cnGa(h); return;
     // Gamla Nav C: /personal/team (teamen i fliken Personal) och /personal/ny (Lägg upp).
     case 'anstallda': { if (sub === 'team' && !d[2]){ ndAeGaTeam(); return; } if (sub === 'ny' && !d[2]){ ndAeGaNy(); return; } if (sub && (!AEPERS.some(p => String(p[0]) === sub) || d[2] === 'registerutdrag')) return nav(); aeGaSrc(bas); return; }
     case 'rekrytering': { if (sub){ rxSt(); if (!S.rx.kand.some(c => String(c.id) === sub)) return nav(); } rxGaSrc(bas); return; }
-    case 'avtal': if (sub) return nav(); maGa(); return;
+    // /avtal/<avtalets id>: den som hanterar avtal får personens avtal öppet, alla andra sitt eget.
+    case 'avtal': { if (NDUUID.test(sub || '') && !d[2]){ const a = ndMa() && (ndMa().avtal || []).find(x => String(x.id) === sub); maGa(a && ndMa().hanterar ? a.personId : null); return; } if (sub) return nav(); maGa(); return; }
     case 'leads': { if (sub){ ldSt(); if (!ldL(sub)) return nav(); } ldGa(sub || null); return; }
-    // Möten (ndmo.js): /moten är tavlan. Den har inga undersidor, så en längre väg öppnar tavlan.
-    case 'moten': moGa(); return;
+    // Möten (ndmo.js): /moten är tavlan, /moten/<mötets eller kedjans id> öppnar mötet (notisen mote-bokat).
+    case 'moten': if (sub && !d[2]){ ndMoGaMote(sub); return; } moGa(); return;
     // /logg och /logg?typ=radering: filtret står i adressen, som i repots /logg.
     case 'logg': { if (sub) return nav();
       const typ = new URLSearchParams(h.split('?')[1] || '').get('typ'); rlsGaVy('logg'); if (RLSTYP.some(([k]) => k === typ)){ S.rlsLoggTyp = typ; render(); } return; }

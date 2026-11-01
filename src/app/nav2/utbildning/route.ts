@@ -386,7 +386,7 @@ export async function POST(request: Request) {
         if (!f) return svar({ fel: "Föreläsningen finns inte." }, 404);
         await db.from("lecture_question").insert({ lecture_id: id, employee_id: mig, text: t, kind: handling });
         if (handling === "fraga" && f.presenter_id)
-          await notifiera({ till: f.presenter_id, av: mig, kalla: "utbildning-fraga", typ: "kurs", rubrik: `${jagNamn} har en fråga inför ${f.title}`, detalj: t.slice(0, 200), href: "/utbildning" });
+          await notifiera({ till: f.presenter_id, av: mig, kalla: "utbildning-fraga", typ: "kurs", rubrik: `${jagNamn} har en fråga inför ${f.title}`, detalj: t.slice(0, 200), href: `/utbildning/forelasning/${f.id}` });
         return svar({ ok: handling === "fraga" ? "Frågan är skickad. Den tas upp på föreläsningen." : "Delat med teamet." });
       }
       case "uppfoljning": {

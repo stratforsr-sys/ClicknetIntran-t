@@ -295,7 +295,7 @@ export async function POST(request: Request) {
         const sida = String(b.sida ?? "").slice(0, 200);
         await notifieraFlera(
           (roller ?? []).map((r) => r.employee_id as string),
-          { av: mig, kalla: "kampanjsida-nere", typ: "order", rubrik: `Kampanjsidan för ${bolag} svarar inte`, detalj: sida || org, href: "/order", objekt: { typ: "customer", id: org } },
+          { av: mig, kalla: "kampanjsida-nere", typ: "order", rubrik: `Kampanjsidan för ${bolag} svarar inte`, detalj: sida || org, href: `/order/kund/${encodeURIComponent(org)}`, objekt: { typ: "customer", id: org } },
         );
         await db.from("audit_log").insert({ actor_id: mig, action: "customer.landing_page_reported", object_type: "customer", object_id: org, meta: {} });
         return svar({ ok: "Leveransen har fått beskedet. Du får besked när sidan är uppe." });

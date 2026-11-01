@@ -87,7 +87,7 @@ export async function POST(request: Request) {
     await notifiera({
       till: chef, av: mig, kalla: "personal-klart", typ: "uppgift", rubrik: `${x.label} klart för ${namn}`,
       // Värdet står inte i notisen (granskningen F1-9): det finns i Anställda för den som får se det.
-      detalj: varde && x.ask_for ? `${x.ask_for} är ifyllt` : tabell === "onboarding_task" ? "Onboarding" : "Avslut", href: "/nav2", objekt: { typ: "employee", id: x.employee_id },
+      detalj: varde && x.ask_for ? `${x.ask_for} är ifyllt` : tabell === "onboarding_task" ? "Onboarding" : "Avslut", href: `/personal/${x.employee_id}`, objekt: { typ: "employee", id: x.employee_id },
     });
   return sida("Tack!", `<p>${esc(x.label)} för ${esc(namn)} är bockat${varde ? `: ${esc(varde)}` : ""}. ${chef ? "Närmaste chef ser det i Nav." : ""}</p>`);
 }

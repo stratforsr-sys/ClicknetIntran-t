@@ -14,6 +14,21 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "notiserna-oppnar-posten",
+    rubrik: "Notiserna öppnar det de handlar om",
+    ingress: "Tryck på en notis, så öppnas ordern, dagen eller rapporten den gäller. Nav påminner inte längre om att stämpla.",
+    text: `En notis om en order öppnar nu ordern, inte orderlistan. Samma sak gäller de
+andra notiserna: en rättelse i Tid öppnar dagen, en bonus öppnar månaden i
+Provision, ett svar på en felrapport öppnar rapporten och ett bokat möte öppnar
+mötet. Det fungerar likadant i klockan, i mejlet och i telefonen.
+
+Nav skickar inte längre **Du har inte stämplat in** eller **Du är fortfarande
+instämplad**, och kortet **Påminn mig** i Tid är borta. Din chef kan fortfarande
+fråga om allt är okej en dag du inte har stämplat in.`,
+    datum: "2026-11-01",
+    roller: [],
+  },
+  {
     slug: "appen-langa-listor-och-lonekort",
     rubrik: "Appen: kortare listor, lönekort och dra för att ladda om",
     ingress: "I appen visar långa listor tio i taget, lönerapporten blir ett kort per person och du drar ner för att hämta det senaste.",

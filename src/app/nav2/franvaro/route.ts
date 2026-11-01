@@ -216,7 +216,7 @@ export async function POST(request: Request) {
         revalidatePath("/franvaro");
         if (!godkand)
           return svar({ ok: `${pr.texter.join(" ")} Registreringen ligger därför som en ansökan i kön. Besluta den där, med en motivering.` });
-        await notifiera({ till: vem, av: mig, kalla: "franvaro-registrerad", typ: "franvaro", rubrik: `${fullName(user.employee)} registrerade frånvaro för dig`, detalj: dag, href: "/franvaro", objekt: { typ: "absence_request", id: rad.id } });
+        await notifiera({ till: vem, av: mig, kalla: "franvaro-registrerad", typ: "franvaro", rubrik: `${fullName(user.employee)} registrerade frånvaro för dig`, detalj: dag, href: `/franvaro/${rad.id}`, objekt: { typ: "absence_request", id: rad.id } });
         return svar({ ok: "Registrerat. Personen får en notis." });
       }
       case "forslag": {
@@ -228,7 +228,7 @@ export async function POST(request: Request) {
         if (ans.employee_id === mig) return svar({ fel: "Du kan inte föreslå på din egen ansökan." }, 400);
         if (!(await farLeda(ans.employee_id as string))) return svar({ fel: "Du beslutar inte om den här ansökan." }, 403);
         await db.from("absence_proposal").insert({ request_id: id, starts_on: a, ends_on: t, note: String(b.note ?? "").trim() || null, proposed_by: mig });
-        await notifiera({ till: ans.employee_id as string, av: mig, kalla: "franvaro-annan-period", typ: "franvaro", rubrik: `${fullName(user.employee)} föreslår en annan period`, detalj: `${a} – ${t}`, href: "/franvaro", objekt: { typ: "absence_request", id } });
+        await notifiera({ till: ans.employee_id as string, av: mig, kalla: "franvaro-annan-period", typ: "franvaro", rubrik: `${fullName(user.employee)} föreslår en annan period`, detalj: `${a} – ${t}`, href: `/franvaro/${id}`, objekt: { typ: "absence_request", id } });
         return svar({ ok: "Förslaget är skickat. Ansökan står kvar tills det är besvarat." });
       }
       case "rehab-ok": {

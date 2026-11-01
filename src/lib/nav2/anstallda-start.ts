@@ -101,7 +101,7 @@ export function anstalldaVerktyg(db: SupabaseClient, jag: { id: string; namn: st
   /** Mejlet till den som ska göra något, med Klart-länken. */
   const mejla = async (till: string, amne: string, text: string, rad: string | null, due: string | null) => {
     const html = `<div style="font-family:system-ui,sans-serif;font-size:15px;line-height:1.5">${esc(text).replace(/\n/g, "<br>")}${due ? `<p style="color:#666">Klart senast ${esc(due)}.</p>` : ""}${rad ? `<p><a href="${klartLank(rad)}" style="display:inline-block;background:#1f6f5c;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Klart</a></p>` : ""}</div>`;
-    return skickaEpost({ till, amne, text: `${text}${due ? `\n\nKlart senast ${due}.` : ""}${rad ? `\n\nTryck Klart här: ${klartLank(rad)}` : ""}`, html, svaraTill: jag.epost });
+    return skickaEpost({ till, amne, text: `${text}${due ? `\n\nKlart senast ${due}.` : ""}${rad ? `\n\nTryck Klart här: ${klartLank(rad)}` : ""}`, html, svaraTill: jag.epost, logg: { sort: "anstallning" } });
   };
   /** Regelpunkterna för en person, och mejlen till mottagarna. */
   /** `fp` läses före avslutet: offboarda tar bort rollerna, och reglerna väljs på dem. */
@@ -201,7 +201,7 @@ export function anstalldaVerktyg(db: SupabaseClient, jag: { id: string; namn: st
     const mejl = await regelPunkter(p, "start", o.regAv, "onboarding_task", rader.length);
     const borjar = p.start_date ? ` · börjar ${p.start_date}` : "";
     if (o.chefId && o.chefId !== mig)
-      await notifiera({ till: o.chefId, av: mig, kalla: "personal-uppdrag", typ: "uppgift", rubrik: `${namnPa(p)} är upplagd i navet`, detalj: `Du är närmaste chef${borjar}`, href: "/nav2", objekt: { typ: "employee", id: pid } });
+      await notifiera({ till: o.chefId, av: mig, kalla: "personal-uppdrag", typ: "uppgift", rubrik: `${namnPa(p)} är upplagd i navet`, detalj: `Du är närmaste chef${borjar}`, href: `/personal/${pid}`, objekt: { typ: "employee", id: pid } });
     await meddelaSuperadmin(`${namnPa(p)} är upplagd i navet`, `${jagNamn} lade upp${borjar}`, pid, o.utom);
     await logga(pid, `startade checklistan${mejl ? ` och ${mejl} mejl gick ut` : ""}.`);
     return { p, mejl };

@@ -58,6 +58,18 @@ export const SJALV: ReadonlyArray<readonly [vy: string, monster: RegExp]> = [
   ["nyheter", /^\/nyheter\/nav\/[^/]+$/],
   ["profil", /^\/profil(\/[^/]+)?$/],
   ["sok", /^\/sok$/],
+  // Notisernas djuplänkar (2026-11-01): varje notis öppnar sin post, inte listan.
+  // Adresserna finns bara i Nav 2.0 (`ndGa`), utom /order/<id> och /avtal/<id>.
+  ["order", /^\/order\/[0-9a-f-]{36}$/],
+  ["order", /^\/order\/kund\/[^/]+$/],
+  ["provision", /^\/provision\/manad\/\d{4}-\d{2}$/],
+  ["tid", /^\/tid\/gora(\/[0-9a-f-]{36})?$/],
+  ["franvaro", /^\/franvaro\/sjuk\/[0-9a-f-]{36}$/],
+  ["franvaro", /^\/franvaro\/ny\/[a-z_]+$/],
+  ["fel", /^\/fel\/[0-9a-f-]{36}$/],
+  ["avtal", /^\/avtal\/[0-9a-f-]{36}$/],
+  ["moten", /^\/moten\/[0-9a-f-]{36}$/],
+  ["utbildning", /^\/utbildning\/(forelasning|rollspel)\/[^/]+$/],
 ];
 
 /** Adressen i Nav 2.0 for en gammal sida, eller null om sidan stannar i nuvarande Nav. */

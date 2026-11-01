@@ -36,7 +36,7 @@ self.addEventListener('push', e => {
       const r = await fetch('/nav2/utbildning?push=1', {credentials:'include', cache:'no-store'});
       const s = r.ok ? await r.json() : null;
       if (s && s.rep){
-        await self.registration.showNotification(s.rep.titel, {body:s.rep.text, icon:'/clicknet-symbol.png', badge:'/clicknet-symbol.png', tag:'nav-rep', renotify:true, data:{url:'/nav2?till=/utbildning'}});
+        await self.registration.showNotification(s.rep.titel, {body:s.rep.text, icon:'/clicknet-symbol.png', badge:'/clicknet-symbol.png', tag:'nav-rep', renotify:true, data:{url:'/nav2?till=/utbildning/repetition'}});
         return;
       }
     } catch (_) {}

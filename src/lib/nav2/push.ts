@@ -3,6 +3,7 @@ import "server-only";
 import { createPrivateKey, sign } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { arPushtjanst } from "./pushvard";
+import { loggaUtskick, type Utskicksrad } from "@/lib/utskickslogg-server";
 
 /**
  * Nav 2.0: Web Push (0121), för kvällsnotisen (E5.8).
@@ -65,14 +66,25 @@ export async function skickaPush(endpoint: string): Promise<Pushutfall> {
   }
 }
 
-/** Pushar till alla en persons enheter. Enheter som är borta tas bort. Svarar med antalet som tog emot. */
-export async function pushaTill(db: SupabaseClient, employeeId: string): Promise<{ enheter: number; ok: number; fel: string[] }> {
+/**
+ * Pushar till alla en persons enheter. Enheter som är borta tas bort. Svarar med antalet som tog emot.
+ *
+ * Varje försök loggas, en rad per enhet (0271). `logg.sort` är obligatorisk:
+ * notiskällan, eller 'kvallsnotis', 'utbildning-repetition', 'push-prov'.
+ */
+export async function pushaTill(
+  db: SupabaseClient,
+  employeeId: string,
+  logg: { sort: string; notisId?: number | null },
+): Promise<{ enheter: number; ok: number; fel: string[] }> {
   const { data } = await db.from("push_subscription").select("id, endpoint").eq("employee_id", employeeId);
   const enheter = (data ?? []) as { id: string; endpoint: string }[];
   const fel: string[] = [];
+  const rader: Utskicksrad[] = [];
   let ok = 0;
   for (const e of enheter) {
     const u = await skickaPush(e.endpoint);
+    rader.push({ kanal: "push", sort: logg.sort, employeeId, notisId: logg.notisId ?? null, ok: u.ok, status: u.status || null, fel: u.ok ? null : u.fel, externId: e.id });
     if (u.ok) {
       ok++;
       await db.from("push_subscription").update({ last_ok_at: new Date().toISOString(), last_error: null }).eq("id", e.id);
@@ -83,5 +95,6 @@ export async function pushaTill(db: SupabaseClient, employeeId: string): Promise
       await db.from("push_subscription").update({ last_error: u.fel }).eq("id", e.id);
     }
   }
+  await loggaUtskick(rader);
   return { enheter: enheter.length, ok, fel };
 }

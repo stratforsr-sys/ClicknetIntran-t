@@ -129,7 +129,7 @@ export async function POST(request: Request) {
           // Den som rapporterade får redan den härledda "Din felrapport är avslutad".
           await notifieraFlera(
             (foljare ?? []).map((f) => f.employee_id as string).filter((x) => x !== r.reporter_id),
-            { av: mig, kalla: "fel-lagad", typ: "fel", rubrik: `Lagat: ${kort(rubrik)}`, detalj: kort(losning, 200), href: "/fel", objekt: { typ: "error_report", id } },
+            { av: mig, kalla: "fel-lagad", typ: "fel", rubrik: `Lagat: ${kort(rubrik)}`, detalj: kort(losning, 200), href: `/fel/${id}`, objekt: { typ: "error_report", id } },
           );
         }
         return svar({ ok: status === "closed" ? "Markerad som lagad." : status === "ack" ? "Du tittar på den." : "Öppnad igen." });
@@ -163,7 +163,7 @@ export async function POST(request: Request) {
           .eq("id", id);
         await logg("error.replied", id);
         if (r.reporter_id) {
-          await notifiera({ till: r.reporter_id, av: mig, kalla: "fel-meddelande", typ: "fel", rubrik: "Svar på din felrapport", detalj: kort(text, 200), href: "/fel", objekt: { typ: "error_report", id } });
+          await notifiera({ till: r.reporter_id, av: mig, kalla: "fel-meddelande", typ: "fel", rubrik: "Svar på din felrapport", detalj: kort(text, 200), href: `/fel/${id}`, objekt: { typ: "error_report", id } });
         }
         return svar({ ok: "Svaret syns under Mina felrapporter." });
       }
@@ -182,7 +182,7 @@ export async function POST(request: Request) {
         if (!ok) {
           await db.from("error_report_message").insert({ error_id: id, author_id: mig, body: "Det är fortfarande trasigt." });
           const till = r.assigned_to ?? r.handled_by;
-          if (till) await notifiera({ till, av: mig, kalla: "fel-meddelande", typ: "fel", rubrik: "Fortfarande trasigt", detalj: r.path, href: "/fel", objekt: { typ: "error_report", id } });
+          if (till) await notifiera({ till, av: mig, kalla: "fel-meddelande", typ: "fel", rubrik: "Fortfarande trasigt", detalj: r.path, href: `/fel/${id}`, objekt: { typ: "error_report", id } });
         }
         await logg(ok ? "error.confirmed" : "error.reopened", id);
         revalidatePath("/fel");

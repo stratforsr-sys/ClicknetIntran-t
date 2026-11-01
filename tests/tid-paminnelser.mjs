@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Chefens morgonnotis i Tid räknar inte ledig eller sjuk personal som
- * "har inte stämplat in" (granskningen D24).
+ * "har inte stämplat in" (granskningen D24), och ingen påminns om att stämpla
+ * (beställaren 2026-11-01: "skippa påminnelse om stämpling helt och hållet").
  *
  *   TZ=UTC node --experimental-strip-types tests/tid-paminnelser.mjs
  *
@@ -11,6 +12,7 @@
 import { registerHooks } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { join } from "node:path";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 
 const rot = join(fileURLToPath(import.meta.url), "..", "..");
 const notisStubbe = `
@@ -40,7 +42,7 @@ const ok = (namn, villkor, extra = "") => {
 const NU = new Date("2026-10-26T08:00:00.000Z");
 const IDAG = "2026-10-26";
 
-function attrapp({ ledighet = [], sjuk = [] }) {
+function attrapp({ ledighet = [], sjuk = [], stamplar = [] }) {
   const personal = ["anna", "bo", "cia", "dan"].map((id) => ({ id, team_id: "t1", status: "active" }));
   const db = {
     from(tabell) {
@@ -51,7 +53,7 @@ function attrapp({ ledighet = [], sjuk = [] }) {
         if (tabell === "work_schedule") return { data: [{ id: "s1", scope: "company", employee_id: null, team_id: null, weekday: 1, start_time: "08:00:00", end_time: "17:00:00", valid_from: "2026-01-01" }], error: null };
         if (tabell === "time_event") {
           if (v("select")?.[2]?.head) return { count: 0, data: null, error: null };
-          return { data: [], error: null };
+          return { data: stamplar, error: null };
         }
         if (tabell === "attendance_incident") return { count: 0, data: null, error: null };
         if (tabell === "absence_request") {
@@ -79,7 +81,7 @@ const morgon = () => globalThis.__skickat.filter((h) => h.kalla === "tid-chef-mo
 console.log("\n\x1b[1mMorgonnotisen: ledig och sjuk räknas inte som ej instämplade\x1b[0m");
 {
   globalThis.__skickat.length = 0;
-  await korTidpaminnelser(attrapp({}), new Map(), NU);
+  await korTidpaminnelser(attrapp({}), NU);
   const m = morgon();
   ok("utan frånvaro: fyra har inte stämplat in", m.length === 1 && m[0].detalj === "4 har inte stämplat in", m[0]?.detalj);
 }
@@ -96,7 +98,6 @@ console.log("\n\x1b[1mMorgonnotisen: ledig och sjuk räknas inte som ej instämp
         { employee_id: "cia", first_sick_day: "2026-10-20", last_sick_day: "2026-10-23", cancelled_at: null },
       ],
     }),
-    new Map(),
     NU,
   );
   const m = morgon();
@@ -110,10 +111,40 @@ console.log("\n\x1b[1mMorgonnotisen: ledig och sjuk räknas inte som ej instämp
       ledighet: ["anna", "bo"].map((employee_id) => ({ employee_id, status: "approved", starts_on: "2026-10-26", ends_on: "2026-10-26" })),
       sjuk: ["cia", "dan"].map((employee_id) => ({ employee_id, first_sick_day: "2026-10-26", last_sick_day: "2026-10-26", cancelled_at: null })),
     }),
-    new Map(),
     NU,
   );
   ok("alla frånvarande: ingen morgonnotis", morgon().length === 0, JSON.stringify(morgon()));
+}
+
+console.log("\n\x1b[1mIngen påminnelse om att stämpla\x1b[0m");
+{
+  // Anna stämplade in 08:00 och är kvar 17:30; schemat slutade 17:00. Förut fick
+  // den som slagit på det "Du är fortfarande instämplad" efter femton minuter.
+  globalThis.__skickat.length = 0;
+  const kvall = new Date("2026-10-26T16:30:00.000Z");
+  await korTidpaminnelser(attrapp({ stamplar: [{ id: "e1", employee_id: "anna", kind: "in", occurred_at: "2026-10-26T07:00:00.000Z", source: "web", supersedes_id: null, correction_state: null }] }), kvall);
+  const till = globalThis.__skickat.filter((h) => h.till !== "chef");
+  ok("ingen notis till den som är kvar efter schemat", till.length === 0, JSON.stringify(till));
+  ok("ingen tid-paminnelse-ut", !globalThis.__skickat.some((h) => h.kalla === "tid-paminnelse-ut"));
+}
+{
+  // 09:15, ingen har stämplat in: ingen får "Du har inte stämplat in".
+  globalThis.__skickat.length = 0;
+  await korTidpaminnelser(attrapp({}), new Date("2026-10-26T08:15:00.000Z"));
+  ok("ingen påminnelse till den som inte stämplat in", !globalThis.__skickat.some((h) => h.till !== "chef"), JSON.stringify(globalThis.__skickat));
+}
+{
+  // Repots jobb som skrev "Du har inte stämplat in" är borttaget, och ingen
+  // annan fil skriver den raden. Chefens egen fråga ("Är allt okej?") är kvar.
+  ok("src/lib/jobb/dagtid.ts finns inte längre", !existsSync(join(rot, "src/lib/jobb/dagtid.ts")));
+  const rutt = readFileSync(join(rot, "src/app/api/jobb/dagtid/route.ts"), "utf8");
+  ok("dagtidsjobbet anropar inte korDagtidsjobbet", !/korDagtidsjobbet|egnaPaminnelser/.test(rutt));
+  const traffar = [];
+  const ga = (d) => { for (const f of readdirSync(d)) { const p = join(d, f); if (statSync(p).isDirectory()) ga(p); else if (/\.(ts|tsx)$/.test(f) && /rubrik:\s*"Du har inte stämplat in"|kalla:\s*"tid-paminnelse-ut"/.test(readFileSync(p, "utf8"))) traffar.push(p.slice(rot.length + 1)); } };
+  ga(join(rot, "src"));
+  ok("ingen fil skriver en påminnelse om att stämpla", traffar.length === 0, traffar.join(", "));
+  const html = readFileSync(join(rot, "src/nav2/utkast.html"), "utf8");
+  ok("Tid visar inte kortet Påminn mig", !/\$\{t\.stamplar \? ndTidPaminnelser\(\) : ''\}/.test(html));
 }
 
 console.log(fel === 0 ? "\n\x1b[32mAlla kontroller godkända.\x1b[0m\n" : `\n\x1b[31m${fel} underkända.\x1b[0m\n`);

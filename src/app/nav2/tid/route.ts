@@ -183,7 +183,7 @@ export async function POST(request: Request) {
           typ: "tid",
           rubrik: `${jagNamn} vill lägga till en stämpling`,
           detalj: `${typ === "in" ? "In" : "Ut"} ${dag} ${tid} · ${skal}`,
-          href: "/tid",
+    href: `/tid/gora/${rad.id}`,
           objekt: { typ: "time_event", id: rad.id },
         });
         revalidatePath("/tid", "layout");
@@ -229,7 +229,7 @@ export async function POST(request: Request) {
         await db.from("audit_log").insert({ actor_id: mig, action: "late_arrival.commented", object_type: "late_arrival", object_id: id });
         const jag = await person(mig);
         const till = jag?.manager_id ? [jag.manager_id as string] : await medRoll("sales_manager");
-        await notifieraFlera(till, { av: mig, kalla: "tid-sen-forklaring", typ: "tid", rubrik: `${jagNamn} förklarade en sen dag`, detalj: `${sen.work_date} · ${text}`, href: "/tid", objekt: { typ: "late_arrival", id } });
+        await notifieraFlera(till, { av: mig, kalla: "tid-sen-forklaring", typ: "tid", rubrik: `${jagNamn} förklarade en sen dag`, detalj: `${sen.work_date} · ${text}`, href: `/tid/avvikelser?vem=${mig}`, objekt: { typ: "late_arrival", id } });
         return svar({ ok: "Förklaringen är sparad. Din chef ser den bredvid dagen." });
       }
 
@@ -282,7 +282,7 @@ export async function POST(request: Request) {
           const { data: o } = await db.from("attendance_incident").select("employee_id, occurred_on, status").eq("id", id).maybeSingle();
           if (!o || o.status !== "foreslagen") return svar({ fel: "Förslaget finns inte." }, 404);
           if (!chef) return svar({ fel: "Bara chef får fråga." }, 403);
-          await notifiera({ till: o.employee_id as string, av: mig, kalla: "tid-fraga", typ: "tid", rubrik: `${jagNamn} undrar om ${o.occurred_on}`, detalj: "Var du på plats? Svara i Ärenden eller direkt till din chef.", href: "/tid" });
+          await notifiera({ till: o.employee_id as string, av: mig, kalla: "tid-fraga", typ: "tid", rubrik: `${jagNamn} undrar om ${o.occurred_on}`, detalj: "Var du på plats? Svara i Ärenden eller direkt till din chef.", href: `/tid?dag=${o.occurred_on}` });
           return svar({ ok: "Frågan är skickad." });
         }
         return svar({ fel: "Okänd handling." }, 400);
@@ -308,7 +308,7 @@ export async function POST(request: Request) {
         const p = await person(String(b.vem ?? ""));
         const dag = String(b.dag ?? "");
         if (!p || !DATUM.test(dag)) return svar({ fel: "Personen eller dagen finns inte." }, 404);
-        await notifiera({ till: p.id as string, av: mig, kalla: "tid-be-ratta", typ: "tid", rubrik: `${dag} saknar utstämpling`, detalj: `${jagNamn} ber dig lägga till när du gick. Rättelsen hamnar hos din chef.`, href: "/tid" });
+        await notifiera({ till: p.id as string, av: mig, kalla: "tid-be-ratta", typ: "tid", rubrik: `${dag} saknar utstämpling`, detalj: `${jagNamn} ber dig lägga till när du gick. Rättelsen hamnar hos din chef.`, href: `/tid?dag=${dag}` });
         return svar({ ok: `${p.first_name} är ombedd att rätta. Rättelsen hamnar här.` });
       }
 
@@ -365,7 +365,7 @@ export async function POST(request: Request) {
         const berorda = (pers ?? []).filter((p) => (rader ?? []).some((r) => r.scope === "company" || (r.scope === "team" && r.team_id === p.team_id) || (r.scope === "employee" && r.employee_id === p.id)));
         const till = berorda.filter((p) => !harSett.has(p.id as string)).map((p) => p.id as string);
         if (!till.length) return svar({ ok: "Alla har sett schemat." });
-        await notifieraFlera(till, { av: mig, kalla: "tid-schema-sett", typ: "tid", rubrik: `Nytt schema från ${f}`, detalj: "Titta på det i Tid. Ingen sen ankomst bedöms mot det förrän du sett det.", href: "/tid" });
+        await notifieraFlera(till, { av: mig, kalla: "tid-schema-sett", typ: "tid", rubrik: `Nytt schema från ${f}`, detalj: "Titta på det i Tid. Ingen sen ankomst bedöms mot det förrän du sett det.", href: "/tid/schema" });
         return svar({ ok: `${till.length} ${till.length === 1 ? "person är påmind" : "personer är påminda"}.` });
       }
 

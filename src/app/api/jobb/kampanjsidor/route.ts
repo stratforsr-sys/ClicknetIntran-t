@@ -61,7 +61,7 @@ async function kor(request: NextRequest) {
             if (anmalan) {
               await db.from("landing_page_report").update({ resolved_at: new Date().toISOString() }).eq("id", anmalan.id);
               if (anmalan.reported_by) {
-                await notifiera({ till: anmalan.reported_by as string, av: null, kalla: "kampanjsida-uppe", typ: "order", rubrik: "Kampanjsidan svarar igen", detalj: sida.url as string, href: "/order", objekt: { typ: "customer", id: org } });
+                await notifiera({ till: anmalan.reported_by as string, av: null, kalla: "kampanjsida-uppe", typ: "order", rubrik: "Kampanjsidan svarar igen", detalj: sida.url as string, href: `/order/kund/${encodeURIComponent(org)}`, objekt: { typ: "customer", id: org } });
               }
             }
           }

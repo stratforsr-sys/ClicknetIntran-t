@@ -171,8 +171,8 @@ async function repetitionen(db: SupabaseClient, nu: Date): Promise<Utbkvitto["re
     const { error } = await db.from("push_sent").insert({ employee_id: id, kind: "utb-rep", day: k.dag });
     if (error) { ut.fel.push(error.message); continue; }
     const t = repText(forfallerSenast(fragor.get(id) ?? [], k.dag));
-    await notifiera({ till: id, av: null, kalla: "utbildning-repetition", typ: "kurs", rubrik: t.titel, detalj: t.text, href: "/utbildning" });
-    const p = pushas.has(id) ? await pushaTill(db, id) : { enheter: 0, ok: 0, fel: [] as string[] };
+    await notifiera({ till: id, av: null, kalla: "utbildning-repetition", typ: "kurs", rubrik: t.titel, detalj: t.text, href: "/utbildning/repetition" });
+    const p = pushas.has(id) ? await pushaTill(db, id, { sort: "utbildning-repetition" }) : { enheter: 0, ok: 0, fel: [] as string[] };
     if (p.enheter) await db.from("push_sent").update({ devices: p.ok }).eq("employee_id", id).eq("kind", "utb-rep").eq("day", k.dag);
     ut.skickade++;
     ut.enheter += p.ok;

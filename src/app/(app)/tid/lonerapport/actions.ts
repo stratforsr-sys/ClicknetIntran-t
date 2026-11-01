@@ -471,7 +471,7 @@ export async function avslutaAvvikelse(form: FormData): Promise<void> {
       typ: "tid",
       rubrik: `Din rastavvikelse ${avvikelse.work_date} är avslutad`,
       detalj: anteckning ?? "Omhändertagen. Ingen konsekvens är kopplad till den.",
-      href: "/tid/avvikelser",
+      href: `/tid?dag=${avvikelse.work_date}`,
       objekt: { typ: "break_deviation", id },
     });
   }

@@ -9,7 +9,12 @@
  * Modulen kastar aldrig. Ett nattjobb som mejlar trettio personer far inte
  * avbrytas for att den fjortonde adressen studsar — den ska skriva klart och
  * radovisa vad som inte gick fram.
+ *
+ * Varje brev loggas (0271, `utskickslogg-server.ts`): `logg` ar obligatorisk,
+ * sa ett nytt utskick kan inte ga ut utan att synas i loggen.
  */
+
+import type { Utskicksmarkning } from "@/lib/utskickslogg-server";
 
 const RESEND_URL = "https://api.resend.com/emails";
 
@@ -42,6 +47,8 @@ export type Brev = {
    */
   schemalagtVid?: string;
   bilagor?: Bilaga[];
+  /** Vad brevet var och till vem, for utskicksloggen (0271). */
+  logg: Utskicksmarkning;
 };
 
 export type Utfall =
@@ -65,6 +72,37 @@ const vila = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const gerNyttForsok = (status: number) => status === 429 || status >= 500;
 
 export async function skickaEpost(brev: Brev): Promise<Utfall> {
+  const utfall = await skicka(brev);
+  await loggaBrev(brev, utfall);
+  return utfall;
+}
+
+/**
+ * Loggraden for brevet. Modulen laddas forst har, sa att `epost.ts` gar att
+ * importera i ett prov utan databas, och den kastar aldrig.
+ */
+async function loggaBrev(brev: Brev, utfall: Utfall): Promise<void> {
+  try {
+    const { loggaUtskick } = await import("@/lib/utskickslogg-server");
+    const status = utfall.skickat ? 200 : Number(/^Resend (\d{3})/.exec(utfall.orsak)?.[1] ?? 0) || null;
+    await loggaUtskick([
+      {
+        kanal: "mejl",
+        sort: brev.logg.sort,
+        employeeId: brev.logg.employeeId ?? null,
+        notisId: brev.logg.notisId ?? null,
+        ok: utfall.skickat,
+        status,
+        fel: utfall.skickat ? null : utfall.orsak,
+        externId: utfall.skickat ? utfall.id || null : null,
+      },
+    ]);
+  } catch {
+    // Loggen ar ett vittne. Brevet har redan gatt, eller inte.
+  }
+}
+
+async function skicka(brev: Brev): Promise<Utfall> {
   const nyckel = process.env.RESEND_API_KEY?.trim();
   const fran = avsandare();
 

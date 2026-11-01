@@ -254,8 +254,8 @@ export async function stallInDelning(_prev: KalenderState, form: FormData): Prom
         typ: "kalender",
         rubrik: `${user.employee.first_name} delar inte längre sin kalender`,
         detalj: "Du ser fortfarande när tiden är bokad, men inte vad den gäller.",
-        href: "/kalender",
-        objekt: { typ: "employee", id: mig },
+        href: `/kalender?vem=${mig}`,
+    objekt: { typ: "employee", id: mig },
       });
 
       revalidera();
@@ -286,8 +286,8 @@ export async function stallInDelning(_prev: KalenderState, form: FormData): Prom
       // Nivåns etikett i klartext. "Nivå 4" säger ingenting till mottagaren, och
       // det är mottagaren som ska kunna avgöra om hon fått något hon inte bett om.
       detalj: NIVA_ETIKETT[niva],
-      href: "/kalender",
-      objekt: { typ: "employee", id: mig },
+      href: `/kalender?vem=${mig}`,
+    objekt: { typ: "employee", id: mig },
     });
 
     revalidera();

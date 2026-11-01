@@ -72,23 +72,28 @@ export async function notifiera(handelse: Handelse): Promise<boolean> {
     // det som gor att skrivningen tyst uteblir i stallet for att fella.
     if (!handelse.href.startsWith("/") || /\s/.test(handelse.href)) return false;
 
-    const { error } = await supabaseAdmin().from("notification_event").insert({
-      employee_id: handelse.till,
-      actor_id: handelse.av,
-      kalla: handelse.kalla,
-      typ: handelse.typ,
-      rubrik: klipp(handelse.rubrik, 200),
-      detalj: klipp(handelse.detalj ?? "", 300),
-      href: handelse.href,
-      object_type: handelse.objekt?.typ ?? null,
-      object_id: handelse.objekt?.id ?? null,
-    });
+    const { data, error } = await supabaseAdmin()
+      .from("notification_event")
+      .insert({
+        employee_id: handelse.till,
+        actor_id: handelse.av,
+        kalla: handelse.kalla,
+        typ: handelse.typ,
+        rubrik: klipp(handelse.rubrik, 200),
+        detalj: klipp(handelse.detalj ?? "", 300),
+        href: handelse.href,
+        object_type: handelse.objekt?.typ ?? null,
+        object_id: handelse.objekt?.id ?? null,
+      })
+      .select("id, employee_id");
 
     if (error) return false;
 
     // Raden finns. Brevet — om kallan ar en av dem som mejlas — gar efterat.
-    kanskeMejla([handelse.till], handelse);
-    kanskePusha([handelse.till], handelse.kalla);
+    // Radens id foljer med: brevets lank och utskicksloggen pekar pa den (0271).
+    const idn = notisIdn(data);
+    kanskeMejla([handelse.till], handelse, idn);
+    kanskePusha([handelse.till], handelse.kalla, idn);
     return true;
   } catch {
     return false;
@@ -154,7 +159,7 @@ export async function notifieraSenare(handelse: Handelse, { sekunder, nyckel }: 
  * `after()` att haka i, och DET FAR INTE BLI FELET SOM TYSTAR NOTISEN. Da
  * skrivs raden anda och brevet uteblir.
  */
-function kanskeMejla(mottagare: readonly string[], handelse: Omit<Handelse, "till">): void {
+function kanskeMejla(mottagare: readonly string[], handelse: Omit<Handelse, "till">, idn: ReadonlyMap<string, number>): void {
   // Utskicken (0255): en sort som inte mejlas som standard kan vara påslagen
   // för någon, så frågan ställs i `mejlaHandelse` — efter svaret, i `after()`.
   const utskick = {
@@ -162,6 +167,7 @@ function kanskeMejla(mottagare: readonly string[], handelse: Omit<Handelse, "til
     rubrik: handelse.rubrik,
     detalj: handelse.detalj,
     href: handelse.href,
+    notisIdn: idn,
   };
 
   try {
@@ -178,9 +184,9 @@ function kanskeMejla(mottagare: readonly string[], handelse: Omit<Handelse, "til
  * Samma skal som brevet att den gar i `after()`: varje enhet ar ett anrop till
  * Google eller Apple, och det ska inte laggas pa den som vantar pa svaret.
  */
-function kanskePusha(mottagare: readonly string[], kalla: string): void {
+function kanskePusha(mottagare: readonly string[], kalla: string, idn: ReadonlyMap<string, number>): void {
   try {
-    after(() => pushaHandelse(mottagare, kalla));
+    after(() => pushaHandelse(mottagare, kalla, idn));
   } catch {
     // Ingen begaran att haka i. Notisen star kvar i klockan.
   }
@@ -205,7 +211,7 @@ export async function notifieraFlera(
     const unika = [...new Set(mottagare)].filter((id) => id && id !== handelse.av);
     if (unika.length === 0) return 0;
 
-    const { error } = await supabaseAdmin()
+    const { data, error } = await supabaseAdmin()
       .from("notification_event")
       .insert(
         unika.map((till) => ({
@@ -219,12 +225,14 @@ export async function notifieraFlera(
           object_type: handelse.objekt?.typ ?? null,
           object_id: handelse.objekt?.id ?? null,
         })),
-      );
+      )
+      .select("id, employee_id");
 
     if (error) return 0;
 
-    kanskeMejla(unika, handelse);
-    kanskePusha(unika, handelse.kalla);
+    const idn = notisIdn(data);
+    kanskeMejla(unika, handelse, idn);
+    kanskePusha(unika, handelse.kalla, idn);
     return unika.length;
   } catch {
     return 0;
@@ -257,18 +265,22 @@ export async function notifieraFranUtkorgen(handelse: Handelse): Promise<boolean
   if (!KALLOR.has(handelse.kalla)) return false;
   if (!handelse.href.startsWith("/") || /\s/.test(handelse.href)) return false;
 
-  const { error } = await supabaseAdmin().from("notification_event").insert({
-    employee_id: handelse.till,
-    actor_id: handelse.av,
-    kalla: handelse.kalla,
-    typ: handelse.typ,
-    rubrik: klipp(handelse.rubrik, 200),
-    detalj: klipp(handelse.detalj ?? "", 300),
-    href: handelse.href,
-    object_type: handelse.objekt?.typ ?? null,
-    object_id: handelse.objekt?.id ?? null,
-  });
+  const { data, error } = await supabaseAdmin()
+    .from("notification_event")
+    .insert({
+      employee_id: handelse.till,
+      actor_id: handelse.av,
+      kalla: handelse.kalla,
+      typ: handelse.typ,
+      rubrik: klipp(handelse.rubrik, 200),
+      detalj: klipp(handelse.detalj ?? "", 300),
+      href: handelse.href,
+      object_type: handelse.objekt?.typ ?? null,
+      object_id: handelse.objekt?.id ?? null,
+    })
+    .select("id, employee_id");
   if (error) throw new Error(`notification_event: ${error.message}`);
+  const idn = notisIdn(data);
 
   // Raden står. Ett brev som inte går fram försöks inte igen — då hade
   // klockan fått raden två gånger. `mejlaHandelse` kastar aldrig.
@@ -278,10 +290,16 @@ export async function notifieraFranUtkorgen(handelse: Handelse): Promise<boolean
     detalj: handelse.detalj,
     href: handelse.href,
     bilagor: handelse.bilagor,
+    notisIdn: idn,
   });
   // Kalenderns notiser kommer också i telefonen (Nav 2.0). `pushaHandelse` kastar aldrig.
-  await pushaHandelse([handelse.till], handelse.kalla);
+  await pushaHandelse([handelse.till], handelse.kalla, idn);
   return true;
+}
+
+/** Notisraden per mottagare, ur insertens svar. */
+function notisIdn(rader: { id: unknown; employee_id: unknown }[] | null): Map<string, number> {
+  return new Map((rader ?? []).map((r) => [String(r.employee_id), Number(r.id)]));
 }
 
 /**

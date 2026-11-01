@@ -232,6 +232,7 @@ export async function korMorgonjobbet(db: SupabaseClient, nu = new Date()): Prom
       till: person.email,
       amne: amne(avsnitten),
       text: brevtext(person.first_name, avsnitten),
+      logg: { sort: "morgonbrev", employeeId: person.id },
     });
   }
 

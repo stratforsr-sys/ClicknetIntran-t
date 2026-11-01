@@ -57,7 +57,8 @@ export async function skickaRundor(db: SupabaseClient): Promise<{ rundor: number
       typ: "uppgift",
       rubrik: `Önska tre sommarveckor ${r.summer_year}`,
       detalj: `senast ${r.answer_by}`,
-      href: "/franvaro",
+    // Svaret är en semesteransökan: länken öppnar formuläret med semester vald.
+    href: "/franvaro/ny/vacation",
     });
   }
   return { rundor: (rundor ?? []).length, uppgifter };

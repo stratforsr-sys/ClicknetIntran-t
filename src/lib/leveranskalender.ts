@@ -674,6 +674,9 @@ export function notistext(
     : rad.task_id
       ? `/uppgifter/${rad.task_id}`
       : "/kalender";
+  // Leveranskön, med kundens order markerad.
+  const ordern = String(d.order_id ?? rad.order_id ?? "");
+  const kon = `/kalender?ko=1${ordern ? `&order=${ordern}` : ""}`;
 
   switch (rad.mall) {
     case "inbjudan":
@@ -689,7 +692,8 @@ export function notistext(
           }
         : { rubrik: `${av} flyttade ${t}`, detalj: `ny tid ${nar}`, href };
     case "installd":
-      return { rubrik: `${av} ställde in ${t}`, detalj: nar, href: "/kalender" };
+      // Mötet är inställt och syns inte längre, men dagen gör det.
+      return { rubrik: `${av} ställde in ${t}`, detalj: nar, href: `/kalender?dag=${nyDag}` };
     // Nav 2.0 (0088): rubrik, plats, agenda eller deltagare ändrades. Tiden är densamma.
     case "andrad":
       return { rubrik: `${av} ändrade ${t}`, detalj: nar, href };
@@ -741,11 +745,11 @@ export function notistext(
     case "forberedelse":
       return { rubrik: "Inför er 1:1: lägg till det du vill ta upp", detalj: nar, href };
     case "leverans-ny":
-      return { rubrik: `Ny kund i kön: ${u.rubrik}`, detalj: "välkomstsamtal inom 24 timmar", href: "/kalender?ko=1" };
+      return { rubrik: `Ny kund i kön: ${u.rubrik}`, detalj: "välkomstsamtal inom 24 timmar", href: kon };
     case "leverans-frist":
-      return { rubrik: `${u.rubrik} har snart väntat 24 h`, detalj: "välkomstsamtal saknas · 4 h kvar", href: "/kalender?ko=1" };
+      return { rubrik: `${u.rubrik} har snart väntat 24 h`, detalj: "välkomstsamtal saknas · 4 h kvar", href: kon };
     case "leverans-makulerad":
-      return { rubrik: `${u.rubrik} är makulerad`, detalj: "välkomstsamtalet är bokat — ställ in det om det inte ska hållas", href: "/kalender" };
+      return { rubrik: `${u.rubrik} är makulerad`, detalj: "välkomstsamtalet är bokat — ställ in det om det inte ska hållas", href };
     case "leverans-bokad-agare":
       return { rubrik: `Välkomstsamtal med ${kundUr(u.rubrik)} bokat åt dig`, detalj: nar, href };
     case "leverans-bokad-saljare":

@@ -384,7 +384,7 @@ async function resend(rad: Utkorgsrad): Promise<Skickat> {
 
   let u: Awaited<ReturnType<typeof skickaEpost>>;
   try {
-    u = await skickaEpost({ till, amne, text });
+    u = await skickaEpost({ till, amne, text, logg: { sort: "utkorg-paminnelse" } });
   } catch (err) {
     u = { skickat: false, orsak: err instanceof Error ? err.message : String(err) };
   }
@@ -505,6 +505,7 @@ async function avbokningsmejl(p: Paminnelse): Promise<boolean> {
       ...(kund ? ["", "Hälsningar,", "Clicknet"] : []),
     ].join("\n"),
     ...(kund && org?.email ? { svaraTill: org.email as string } : {}),
+    logg: { sort: "utkorg-avbokning" },
   });
   await logga("ut", { handling: "avbokningsmejl", reminder: p.id, mottagare: p.recipient, ok: u.skickat, id: u.skickat ? u.id : null });
   if (!u.skickat) throw new Error(u.orsak);
@@ -676,7 +677,7 @@ async function ics(rad: Utkorgsrad): Promise<boolean> {
   );
 
   const { amne, text } = kundbrev({ metod, sekvens, rubrik, nar, kontakt, plats: e.plats, url: e.online_url, avsandare: org.first_name as string });
-  const u = await skickaEpost({ till: epost, amne, text, svaraTill: org.email as string, bilagor: [icsBilaga(ics, metod)] });
+  const u = await skickaEpost({ till: epost, amne, text, svaraTill: org.email as string, bilagor: [icsBilaga(ics, metod)], logg: { sort: "utkorg-inbjudan" } });
   await logga("ut", { handling: "ics", event: e.id, metod, sekvens, ok: u.skickat, id: u.skickat ? u.id : null });
   if (!u.skickat) throw new Error(u.orsak);
   return true;

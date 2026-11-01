@@ -187,7 +187,7 @@ export async function sparaMal(_prev: MalState, form: FormData): Promise<MalStat
         ? `Ditt mål för ${manadsnamn(manad)} har ändrats`
         : `Du har fått ett mål för ${manadsnamn(manad)}`,
       detalj: beskrivMal(malOrder, malKronor),
-      href: "/provision",
+      href: `/provision/manad/${String(manad).slice(0, 7)}`,
       objekt: { typ: "sales_target", id: employeeId },
     });
 
@@ -269,8 +269,8 @@ async function taBort(
     typ: "provision",
     rubrik: `Ditt mål för ${manadsnamn(manad)} är borttaget`,
     detalj: "Takten i provisionsvyn räknas fortfarande, men utan något mål att ställas mot.",
-    href: "/provision",
-    objekt: { typ: "sales_target", id: employeeId },
+    href: `/provision/manad/${String(manad).slice(0, 7)}`,
+      objekt: { typ: "sales_target", id: employeeId },
   });
 
   revalidatePath("/provision");

@@ -615,7 +615,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
       detalj: s.escalated_at
         ? `Sedan ${periodtext(s.first_sick_day, s.first_sick_day)} · sjukdag ${sjukdag(s.first_sick_day, idagSvenskt)} · ingen har bekräftat`
         : `Sedan ${periodtext(s.first_sick_day, s.first_sick_day)} · sjukdag ${sjukdag(s.first_sick_day, idagSvenskt)} · bekräfta att du sett den`,
-      href: "/franvaro/sjuk",
+      href: `/franvaro/sjuk/${s.id}`,
       tidpunkt: s.registered_at,
       olast: arNy(s.registered_at),
     });
@@ -635,7 +635,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
         typ: "kurs",
         rubrik: `${namn.get(r.employee_id) ?? "En medarbetare"} har lämnat in ett rollspel`,
         detalj: `${kurs?.title ?? "Kurs"} · lyssna och bedöm mot rubriken`,
-        href: "/utbildning/rollspel",
+        href: `/utbildning/rollspel/${r.id}`,
         tidpunkt: r.submitted_at,
         olast: arNy(r.submitted_at),
       });
@@ -726,7 +726,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
         typ: "franvaro",
         rubrik: `${namn.get(h.employee_id) ?? "En medarbetare"} saknar instämpling`,
         detalj: `${dag} · var personen på plats? Ingenting registreras förrän du svarat`,
-        href: "/tid/ogiltig-franvaro",
+        href: `/tid/gora/${h.id}`,
         tidpunkt: h.suggested_at,
         olast: arNy(h.suggested_at),
       });
@@ -739,7 +739,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
         typ: "franvaro",
         rubrik: `Ogiltig frånvaro registrerad ${dag}`,
         detalj: ATGARDSTEXT[String(h.atgard)] ?? "Beslutad av din chef",
-        href: "/provision",
+        href: `/provision/manad/${String(h.occurred_on).slice(0, 7)}`,
         tidpunkt: h.decided_at ?? h.suggested_at,
         olast: arNy(h.decided_at ?? h.suggested_at),
       });
@@ -761,7 +761,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
       detalj: mitt
         ? "Du var schemalagd men stämplade inte. Registrera din frånvaro."
         : "Schemalagd dag utan stämpling eller frånvaro",
-      href: "/franvaro",
+      href: mitt ? "/franvaro/ny" : "/franvaro",
       tidpunkt: p.created_at,
       olast: arNy(p.created_at),
     });
@@ -791,7 +791,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
         rubrik:
           f.status === "closed" ? "Din felrapport är avslutad" : "Någon tittar på din felrapport",
         detalj: f.path,
-        href: "/fel",
+        href: `/fel/${f.id}`,
         tidpunkt: f.handled_at,
         olast: arNy(f.handled_at),
       });
@@ -807,7 +807,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
         f.kind === "manual"
           ? `${namn.get(f.reporter_id ?? "") ?? "En medarbetare"} · ${f.path}`
           : `Navet fångade ett fel på ${f.path}`,
-      href: "/fel",
+      href: `/fel/${f.id}`,
       tidpunkt: f.first_seen_at,
       olast: arNy(f.first_seen_at),
     });
@@ -991,6 +991,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
       href: h.href,
       tidpunkt: h.created_at,
       olast: arNy(h.created_at),
+      handelseId: Number(h.id),
       ...(medKnappar ? { svara: { eventId: eventId!, nu: svar as "vantar" | "kanske" } } : {}),
     });
   }
@@ -1027,6 +1028,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
   const idag = svensktDatum();
   for (const f of (sjukfrister ?? []) as unknown as {
     id: string;
+    report_id: string;
     kind: string;
     due_on: string;
     created_at: string;
@@ -1053,7 +1055,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
         : dagarKvar < 0
           ? "Fristen har passerat"
           : `${dagarKvar} dagar kvar`,
-      href: "/franvaro/sjuk",
+      href: `/franvaro/sjuk/${f.report_id}`,
       // Tidpunkten ar nar fristen SKAPADES och inte nar den forfaller. En
       // tidpunkt i framtiden hade lagt posten overst i klockan i flera dygn
       // innan den blev aktuell — sorteringen ar nyast forst, inte narmast forst.
@@ -1148,7 +1150,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
       detalj: min
         ? `Ring och förläng · ${o.term_months} månader, löper till ${String(o.ends_on).slice(0, 10)}`
         : `${saljaren ?? "En säljare"}s kund · löper till ${String(o.ends_on).slice(0, 10)}`,
-      href: "/order",
+      href: `/order/${o.id}`,
       // TIDPUNKTEN AR NAR POSTEN BLEV AKTUELL — nittio dagar fore slutet — och
       // inte "nu minus nagot". En stabil tidpunkt gar att jamfora med "senast
       // oppnad"; en som raknas om vid varje sidvisning gor det inte.
@@ -1165,6 +1167,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
   // slut ett ar efter huvudavtalet, och utan en egen rad hade den loept ut tyst.
   const tjanstslut = (tjanstslutRader ?? []) as unknown as {
     id: string;
+    order_id: string;
     name: string;
     ends_on: string | null;
     sales_order: { company_name: string; salesperson_id: string; status: string } | null;
@@ -1194,7 +1197,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
       detalj: min
         ? `Tjänsten har egen bindningstid och löper till ${slut}`
         : `${namn.get(order.salesperson_id) ?? "En säljare"}s kund · egen bindningstid till ${slut}`,
-      href: "/order",
+      href: `/order/${t.order_id}`,
       tidpunkt: new Date(
         Date.parse(`${slut}T12:00:00Z`) - AVTALSSLUT_VARSEL_DAGAR * 86_400_000,
       ).toISOString(),
@@ -1267,7 +1270,7 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
           ? `Rättelse på din provision: ${belopp.toLocaleString("sv-SE")} kr`
           : `Provision bokförd: ${belopp.toLocaleString("sv-SE")} kr`,
       detalj: `${manad} · av ${namn.get(p.entered_by) ?? "provisionsansvarig"}`,
-      href: "/provision",
+      href: `/provision/manad/${manad}`,
       tidpunkt: p.entered_at,
       olast: arNy(p.entered_at),
     });

@@ -1486,7 +1486,7 @@ async function skrivOvertack(
     typ: "provision",
     rubrik: `Övertäck ${kronor(overtack.amount)}: ${bolag}`,
     detalj: `${overtack.percent} % på ${kronor(overtack.base)} · räknas i orderns månad`,
-    href: "/provision",
+    href: `/order/${orderId}`,
     objekt: { typ: "sales_order", id: orderId },
   });
 }
@@ -1534,7 +1534,7 @@ export async function skickaInOrder(_prev: Orderstate, form: FormData): Promise<
       typ: "order",
       rubrik: `Order att godkänna: ${rad.company_name}`,
       detalj: `Tecknad ${rad.signed_on} · väntar på godkännande`,
-      href: "/order",
+      href: `/order/${id}`,
       objekt: { typ: "sales_order", id },
     });
 
@@ -1693,7 +1693,7 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
           : provision.finansen
             ? `Provision ${kronor(provision.satt.commission_amount)} · finans ${kronor(provision.finansen.avgift)} avdragen från ordervärdet`
             : `Provision ${Number(provision.satt.commission_amount).toLocaleString("sv-SE")} kr · räknas från ${rad.signed_on}`,
-      href: "/order",
+      href: `/order/${id}`,
       objekt: { typ: "sales_order", id },
     });
 
@@ -2226,7 +2226,7 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
                 belopp === 0 ? "ingen skillnad" : kronor(belopp)
               } bokförs i ${manadsnamn(bokforingsmanad)}. ${skal}`
             : `${skal} · räknas om i ${manadsnamn(String(rad.period_month))}`,
-          href: "/order",
+          href: `/order/${id}`,
           objekt: { typ: "sales_order", id },
         });
       }
@@ -2281,7 +2281,7 @@ export async function returneraOrder(_prev: Orderstate, form: FormData): Promise
       typ: "order",
       rubrik: `Din order behöver rättas: ${rad.company_name}`,
       detalj: skal,
-      href: "/order",
+      href: `/order/${id}`,
       objekt: { typ: "sales_order", id },
     });
 
@@ -2351,7 +2351,7 @@ export async function makuleraOrder(_prev: Orderstate, form: FormData): Promise<
       typ: "order",
       rubrik: `Din order är makulerad: ${rad.company_name}`,
       detalj: `${rad.commission_amount ? `Avdrag ${Number(rad.commission_amount).toLocaleString("sv-SE")} kr i ${idag.slice(0, 7)}` : "Provisionen dras tillbaka"} · ${skal}`,
-      href: "/provision",
+      href: `/order/${id}`,
       objekt: { typ: "sales_order", id },
     });
 
@@ -2458,7 +2458,7 @@ export async function markeraBetald(_prev: Orderstate, form: FormData): Promise<
       typ: "order",
       rubrik: `Betald: ${rad.company_name}`,
       detalj: "Kunden har betalat. Provisionen är oförändrad — den utgår från signeringen.",
-      href: "/order",
+      href: `/order/${id}`,
       objekt: { typ: "sales_order", id },
     });
 
@@ -2590,6 +2590,7 @@ async function raderaGenomDatabasen(
       typ: "order",
       rubrik: `Din order är borttagen: ${rad.company_name}`,
       detalj: skal ? `${skal} · provisionen räknas inte längre` : "Provisionen räknas inte längre",
+      // Ordern finns inte längre (radera_order), så listan är det närmaste.
       href: "/order",
       objekt: { typ: "sales_order", id: rad.id },
     });

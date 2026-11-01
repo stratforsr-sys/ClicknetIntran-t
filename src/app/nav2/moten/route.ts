@@ -542,8 +542,8 @@ export async function POST(request: Request) {
         typ: "kalender",
         rubrik: `${forFor(fullName(user!.employee!))} bokade ett möte åt dig`,
         detalj: `${v.namn} · ${nar(motetid)}`,
-        href: "/moten",
-        objekt: { typ: "mote", id: moteId },
+        href: `/moten/${moteId}`,
+      objekt: { typ: "mote", id: moteId },
       });
     }
 

@@ -503,7 +503,7 @@ export async function uppgiftsnotiser(user: CurrentUser): Promise<Notis[]> {
               .slice(0, 3)
               .map((u) => u.title)
               .join(" · "),
-      href: "/uppgifter",
+      href: forsenade.length === 1 ? `/uppgifter/${forsenade[0].id}` : "/uppgifter",
       tidpunkt: nu,
       olast: true,
     });
@@ -521,7 +521,7 @@ export async function uppgiftsnotiser(user: CurrentUser): Promise<Notis[]> {
               .slice(0, 3)
               .map((u) => u.title)
               .join(" · "),
-      href: "/uppgifter",
+      href: idagsrader.length === 1 ? `/uppgifter/${idagsrader[0].id}` : "/uppgifter",
       tidpunkt: nu,
       olast: true,
     });
@@ -852,7 +852,7 @@ function tolkaKoppling(rad: Lankrad, namn: Map<string, string>): Koppling | null
       ...bas,
       slag: "order",
       etikett: rad.sales_order?.company_name ?? "Order",
-      href: "/order",
+      href: rad.order_id ? `/order/${rad.order_id}` : "/order",
     };
   }
   if (rad.case_id) {

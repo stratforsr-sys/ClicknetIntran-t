@@ -474,7 +474,7 @@ export async function POST(request: Request) {
         await klarMarkera("onboarding_task", p.id, "fadder");
         if (f.id !== mig) {
           await mejla(f.email, `Du är fadder för ${namnPa(p)}`, `Hej ${f.first_name},\n\nDu är fadder för ${namnPa(p)}${p.start_date ? `, som börjar ${p.start_date}` : ""}. Ni ses minst åtta gånger de första 90 dagarna.`, null, null);
-          await notifiera({ till: f.id, av: mig, kalla: "personal-uppdrag", typ: "uppgift", rubrik: `Du är fadder för ${namnPa(p)}`, detalj: "Minst åtta träffar de första 90 dagarna", href: "/nav2", objekt: { typ: "employee", id: p.id } });
+          await notifiera({ till: f.id, av: mig, kalla: "personal-uppdrag", typ: "uppgift", rubrik: `Du är fadder för ${namnPa(p)}`, detalj: "Minst åtta träffar de första 90 dagarna", href: "/", objekt: { typ: "employee", id: p.id } });
         }
         await logga(p.id, `gjorde ${namnPa(f)} till fadder.`);
         return svar({ ok: `${f.first_name} är fadder för ${p.first_name} och har fått ett mejl om uppdraget.` });
@@ -497,7 +497,7 @@ export async function POST(request: Request) {
         const v = { tid: str(b.tid, 5), plats: str(b.plats, 120), rad: str(b.rad, 300) };
         const schema = (Array.isArray(b.schema) ? (b.schema as unknown[][]) : []).slice(0, 10).map((r) => `${str(r[0], 5)}  ${str(r[1], 120)}`).join("\n");
         const text = `Hej ${p.first_name},\n\nVälkommen till Clicknet! Vi ses ${p.start_date ?? ""} klockan ${v.tid}${v.plats ? `, ${v.plats}` : ""}.${v.rad ? `\n\n${v.rad}` : ""}${schema ? `\n\nFörsta dagen:\n${schema}` : ""}\n\nHälsningar\n${jagNamn}`;
-        const u = await skickaEpost({ till: privat, amne: "Välkommen till Clicknet", text, svaraTill: user.employee.email });
+        const u = await skickaEpost({ till: privat, amne: "Välkommen till Clicknet", text, svaraTill: user.employee.email, logg: { sort: "valkomst", employeeId: p.id as string } });
         if (!u.skickat) return svar({ fel: `Brevet gick inte iväg: ${u.orsak}` }, 502);
         await db.from("employee_onboarding").upsert({ employee_id: p.id, welcome: v, welcome_sent_at: new Date().toISOString(), welcome_sent_to: privat, updated_by: mig, updated_at: new Date().toISOString() });
         await klarMarkera("onboarding_task", p.id, "valkomst");
@@ -646,7 +646,7 @@ export async function POST(request: Request) {
         // Nivån räknas ur befattningen från och med nu. En nivå satt för hand vore en andra sanning.
         await db.from("employee_access_level").delete().eq("employee_id", p.id);
         const namn = ny === "superadmin" ? "Superadmin" : ny === "admin" ? "Admin" : "Säljare";
-        await notifiera({ till: p.id, av: mig, kalla: "konto-roll", typ: "konto", rubrik: `Din behörighet i Nav är nu ${namn}`, detalj: "Menyn kan se annorlunda ut vid nästa sidbyte", href: "/nav2", objekt: { typ: "employee", id: p.id } });
+        await notifiera({ till: p.id, av: mig, kalla: "konto-roll", typ: "konto", rubrik: `Din behörighet i Nav är nu ${namn}`, detalj: "Menyn kan se annorlunda ut vid nästa sidbyte", href: "/profil", objekt: { typ: "employee", id: p.id } });
         await logga(p.id, `ändrade behörigheten i Nav till ${namn.toLowerCase()}.`, { niva: ny });
         revalidatePath(`/personal/${p.id}`);
         return svar({ ok: `${p.first_name} är nu ${namn.toLowerCase()}.` });
@@ -668,7 +668,7 @@ export async function POST(request: Request) {
             : await db.from("employee_permission").delete().eq("employee_id", p.id).eq("permission", beh);
           if (error) return svar({ fel: "Behörigheten kunde inte sparas." }, 500);
           await db.from("audit_log").insert({ actor_id: mig, action: b.pa === true ? "permission.granted" : "permission.revoked", object_type: "employee", object_id: p.id, meta: { behorighet: beh } });
-          await notifiera({ till: p.id, av: mig, kalla: "konto-behorighet", typ: "konto", rubrik: b.pa === true ? `Du har fått behörigheten ${PERMISSION_LABEL[beh]}` : `Behörigheten ${PERMISSION_LABEL[beh]} är borttagen`, detalj: b.pa === true ? "Den öppnar en ny vy för dig" : "Vyn den öppnade är stängd igen", href: `/personal/${p.id}`, objekt: { typ: "employee", id: p.id } });
+          await notifiera({ till: p.id, av: mig, kalla: "konto-behorighet", typ: "konto", rubrik: b.pa === true ? `Du har fått behörigheten ${PERMISSION_LABEL[beh]}` : `Behörigheten ${PERMISSION_LABEL[beh]} är borttagen`, detalj: b.pa === true ? "Den öppnar en ny vy för dig" : "Vyn den öppnade är stängd igen", href: "/profil", objekt: { typ: "employee", id: p.id } });
           revalidatePath(`/personal/${p.id}`);
         }
         return svar({ ok: b.pa === true ? `${namnPa(p)} har fått behörigheten. Den loggas, och ${namnPa(p).split(" ")[0]} får en notis.` : "Behörigheten är borttagen och loggad." });
@@ -712,7 +712,7 @@ export async function POST(request: Request) {
       case "utbpamin": {
         const p = await personen(b.pid);
         if (!p) return svar({ fel: "Personen finns inte." }, 404);
-        await notifiera({ till: p.id, av: mig, kalla: "personal-paminn", typ: "kurs", rubrik: "Påminnelse: kurser och rutiner", detalj: `${jagNamn} påminner om det som är kvar`, href: "/nav2", objekt: { typ: "employee", id: p.id } });
+        await notifiera({ till: p.id, av: mig, kalla: "personal-paminn", typ: "kurs", rubrik: "Påminnelse: kurser och rutiner", detalj: `${jagNamn} påminner om det som är kvar`, href: "/utbildning", objekt: { typ: "employee", id: p.id } });
         await logga(p.id, "påminde om kurserna och rutinerna.");
         return svar({ ok: `${p.first_name} får en påminnelse i Nav om det som är kvar.` });
       }
@@ -819,7 +819,7 @@ export async function POST(request: Request) {
         const regel = r as { subject: string; body: string; recipient_id: string | null };
         const mott = await namnFor(regel.recipient_id);
         const amne = fyll(regel.subject, fp, mott?.namn ?? "", jagNamn);
-        const u = await skickaEpost({ till: user.employee.email, amne: `Test: ${amne}`, text: `${fyll(regel.body, fp, mott?.namn ?? "", jagNamn)}\n\n(Ett test med ${fp.namn}. Ingen punkt skapades.)` });
+        const u = await skickaEpost({ till: user.employee.email, amne: `Test: ${amne}`, text: `${fyll(regel.body, fp, mott?.namn ?? "", jagNamn)}\n\n(Ett test med ${fp.namn}. Ingen punkt skapades.)`, logg: { sort: "anstallning-prov", employeeId: mig } });
         if (!u.skickat) return svar({ fel: `Testet gick inte iväg: ${u.orsak}` }, 502);
         return svar({ ok: `Ett testmejl är skickat till dig: ”${amne}”.` });
       }

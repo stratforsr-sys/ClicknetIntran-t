@@ -14,6 +14,7 @@ import { hamtaDrift, type Drift } from "@/lib/jobb/drift-server";
 import { kvittoLarmtext, larmDigest, larmSokvag } from "@/lib/jobb/larm";
 import { skrivFel } from "@/lib/fel-server";
 import { rensaGamlaNotiser } from "@/lib/notishandelse-server";
+import { rensaGammalUtskickslogg } from "@/lib/utskickslogg-server";
 import { svepKoppling } from "@/lib/samtal-order-server";
 import { tolkaOmOtolkade } from "@/lib/samtal-server";
 import { gallraInspelningar } from "@/lib/inspelning-server";
@@ -154,6 +155,8 @@ export async function GET(request: NextRequest) {
     // langden. Klockan visar dem i trettio dagar, sa nittio ar rikligt med
     // marginal for den som vill kunna backa och titta.
     ["notiser", () => rensaGamlaNotiser(db)],
+    // 0271: utskicksloggen, samma nittio dagar som notiserna den pekar på.
+    ["utskickslogg", () => rensaGammalUtskickslogg(db)],
     // 0056. Samtalen paras ihop med sina affarer.
     //
     // Mottagningen kopplar redan varje NYTT samtal, sa steget finns for det

@@ -41,6 +41,10 @@ const ADRESSER = [
   "/", "/tid", "/tid/lonerapport", "/franvaro/attest", "/kalender", "/logg", "/adoption", "/sok", "/personal", "/personal/ny",
   "/lonekostnad", "/lonekostnad/satser", "/order", "/provision", "/avtal", "/leads", "/nyheter", "/profil", "/coachning/uppgift/x",
   "/rekrytering", "/rekrytering/ny", "/arenden", "/arenden/statistik", "/fel/nytt", "/uppgifter", "/rutiner/x/kvittenser", "/utbildning", "/okand",
+  // Notisernas djuplänkar (2026-11-01).
+  "/order/0b0e5c1a-4b7e-4c55-9d7e-2b1f6a0c9e11", "/order/kund/556677-8899", "/provision/manad/2026-10", "/tid/gora", "/tid/gora/0b0e5c1a-4b7e-4c55-9d7e-2b1f6a0c9e11",
+  "/franvaro/sjuk/0b0e5c1a-4b7e-4c55-9d7e-2b1f6a0c9e11", "/franvaro/ny/vacation", "/fel/0b0e5c1a-4b7e-4c55-9d7e-2b1f6a0c9e11", "/avtal/0b0e5c1a-4b7e-4c55-9d7e-2b1f6a0c9e11",
+  "/moten/0b0e5c1a-4b7e-4c55-9d7e-2b1f6a0c9e11", "/utbildning/forelasning/x", "/utbildning/rollspel/x", "/utbildning/repetition",
 ];
 
 function lage(env) {
@@ -85,7 +89,7 @@ rubrik("vagar.ts: SJALV vet vyn för varje mönster");
 const NDVY = ["hem", "uppgifter", "rutiner", "utbildning", "tid", "kalender", "arenden", "franvaro", "fel", "order", "provision", "coachning", "anstallda", "rekrytering", "leads", "nyheter", "avtal", "kv", "logg", "adoption", "moten"]; // moten: ndmo.js lägger den i NDVY
 const VYER = new Set([...NDVY, "sok", "profil", "satser"]);
 ok("SJALV är par [vy, mönster]", Array.isArray(pa.sjalv) && pa.sjalv.length > 0);
-ok("SJALV har 32 mönster", pa.sjalv.length === 32, String(pa.sjalv.length));
+ok("SJALV har 42 mönster", pa.sjalv.length === 42, String(pa.sjalv.length));
 ok("varje mönster har en känd vy", pa.sjalv.every(([vy]) => VYER.has(vy)), JSON.stringify(pa.sjalv.filter(([vy]) => !VYER.has(vy))));
 const vyFor = (m) => (pa.sjalv.find(([, r]) => r.includes(m)) ?? [])[0];
 ok("/personal hör till anstallda", vyFor("personal") === "anstallda");

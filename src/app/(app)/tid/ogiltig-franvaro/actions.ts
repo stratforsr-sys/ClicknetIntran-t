@@ -335,7 +335,8 @@ export async function havHandelse(
       rubrik: `Den ogiltiga frånvaron ${String(rad.occurred_on).slice(0, 10)} är hävd`,
       detalj:
         "Den räknas inte längre i trappan, och en bonus som fallit på grund av den räknas om.",
-      href: "/provision",
+      // Trappan och bonusen räknas om i den månaden: det är där hävningen syns.
+      href: `/provision/manad/${String(rad.occurred_on).slice(0, 7)}`,
       objekt: { typ: "attendance_incident", id },
     });
 

@@ -269,7 +269,7 @@ export async function draTillbaka(_prev: FranvaroState, form: FormData): Promise
     typ: "franvaro",
     rubrik: `${user.employee.first_name} ${user.employee.last_name} drog tillbaka sin ansökan`,
     detalj: `${periodtext(ansokan.starts_on, ansokan.ends_on)} · ${omfattning(ansokan)} · inget beslut behövs längre`,
-    href: "/franvaro/attest",
+    href: `/franvaro/${id}`,
     objekt: { typ: "absence_request", id },
   });
 
@@ -569,7 +569,7 @@ export async function bekraftaSjuk(_prev: FranvaroState, form: FormData): Promis
     typ: "franvaro",
     rubrik: "Din sjukanmälan är bekräftad",
     detalj: `Sjuk sedan ${periodtext(anmalan.first_sick_day, anmalan.first_sick_day)} · din chef har sett den`,
-    href: "/franvaro/sjuk",
+    href: `/franvaro/sjuk/${id}`,
     objekt: { typ: "sick_report", id },
   });
 
@@ -629,7 +629,7 @@ export async function avslutaSjuk(_prev: FranvaroState, form: FormData): Promise
     typ: "franvaro",
     rubrik: "Din sjukperiod är avslutad",
     detalj: `Sista sjukdagen är registrerad som ${periodtext(sistaDag, sistaDag)}`,
-    href: "/franvaro/sjuk",
+    href: `/franvaro/sjuk/${id}`,
     objekt: { typ: "sick_report", id },
   });
 
@@ -841,7 +841,7 @@ export async function laggSjukanteckning(_prev: FranvaroState, form: FormData): 
     typ: "franvaro",
     rubrik: `Ny anteckning om ${(await namnPa(db, anmalan.employee_id)) ?? "en sjukanmäld"}`,
     detalj: `Sjuk sedan ${periodtext(anmalan.first_sick_day, anmalan.first_sick_day)} · ${user.employee.first_name} har antecknat något om läget`,
-    href: "/franvaro/attest",
+    href: `/franvaro/sjuk/${id}`,
     objekt: { typ: "sick_report", id },
   });
 

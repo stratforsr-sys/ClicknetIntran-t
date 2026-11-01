@@ -307,7 +307,7 @@ export async function rattaProv(_prev: KursState, form: FormData): Promise<KursS
 
   const [{ data: fragor }, { data: kurs }] = await Promise.all([
     db.from("essay_question").select("id, sort, max_points").eq("module_id", inlamning.module_id).order("sort"),
-    db.from("course").select("pass_threshold, valid_months").eq("id", inlamning.course_id).maybeSingle(),
+    db.from("course").select("pass_threshold, valid_months, slug").eq("id", inlamning.course_id).maybeSingle(),
   ]);
 
   const lista = fragor ?? [];
@@ -413,7 +413,7 @@ export async function rattaProv(_prev: KursState, form: FormData): Promise<KursS
     typ: "kurs",
     rubrik: godkant ? "Ditt skriftliga prov är godkänt" : "Ditt skriftliga prov är rättat",
     detalj: `${resultat} % · ${godkant ? "godkänt" : `gränsen är ${kurs?.pass_threshold ?? 80} %`} · återkopplingen finns i modulen`,
-    href: "/utbildning",
+      href: kurs?.slug ? `/utbildning/${kurs.slug}` : "/utbildning",
     objekt: { typ: "essay_submission", id: inlamning.id },
   });
 

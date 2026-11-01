@@ -108,7 +108,7 @@ export async function POST(request: Request) {
             typ: "order",
             rubrik: `${fullName(user.employee)} gratulerar`,
             detalj: (o.company_name as string | null) ?? "",
-            href: "/",
+      href: `/order/${id}`,
             objekt: { typ: "sales_order", id },
           });
         }
@@ -178,7 +178,7 @@ export async function POST(request: Request) {
       }
 
       case "push-prov": {
-        const u = await pushaTill(db, mig);
+        const u = await pushaTill(db, mig, { sort: "push-prov" });
         if (!u.enheter) return svar({ fel: "Ingen enhet har slagit på kvällsnotisen." }, 400);
         await db.from("push_sent").upsert({ employee_id: mig, kind: "prov", day: nu.slice(0, 10), sent_at: nu, devices: u.ok }, { onConflict: "employee_id,kind,day" });
         if (!u.ok) return svar({ fel: `Notisen kom inte fram${u.fel.length ? `: ${u.fel[0]}` : "."}` }, 502);

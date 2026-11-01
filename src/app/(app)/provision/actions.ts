@@ -183,7 +183,7 @@ export async function laggOvrigBonus(
         typ: "provision",
         rubrik: `${belopp > 0 ? "Bonus" : "Justering"} ${kronor(belopp)}`,
         detalj: `${skal} · ${manad.slice(0, 7)}`,
-        href: "/provision",
+        href: `/provision/manad/${manad.slice(0, 7)}`,
         objekt: { typ: "commission_entry", id: rad.id },
       });
     }

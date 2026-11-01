@@ -156,7 +156,7 @@ export async function skickaKvallsnotiser(db: SupabaseClient, nu: Date = new Dat
     // Raden först: hellre en missad notis än två samma kväll om jobbet körs två gånger samtidigt.
     const { error } = await db.from("push_sent").insert({ employee_id: id, kind: slag, day: k.dag });
     if (error) continue;
-    const u = await pushaTill(db, id);
+    const u = await pushaTill(db, id, { sort: "kvallsnotis" });
     await db.from("push_sent").update({ devices: u.ok }).eq("employee_id", id).eq("kind", slag).eq("day", k.dag);
     if (u.ok) skickade++;
     fel.push(...u.fel);

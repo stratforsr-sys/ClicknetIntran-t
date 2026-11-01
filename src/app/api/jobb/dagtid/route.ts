@@ -1,11 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { kontrolleraCron } from "@/lib/jobb/behorighet";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { korDagtidsjobbet } from "@/lib/jobb/dagtid";
 import { korKalendersteget } from "@/lib/jobb/kalender";
 import { SKRIVLAGE } from "@/lib/nav2/skrivlage";
 import { skickaRundor } from "@/lib/nav2/franvaro-runda";
-import { egnaPaminnelser, korTidpaminnelser } from "@/lib/nav2/tid-paminnelser";
+import { korTidpaminnelser } from "@/lib/nav2/tid-paminnelser";
 import { skickaKvallsnotiser } from "@/lib/nav2/hem-kvall";
 import { korAnstalldaPaminnelser } from "@/lib/nav2/anstallda-paminnelser";
 import { publiceraSchemalagda } from "@/lib/nav2/nyheter-jobb";
@@ -17,10 +16,11 @@ export const maxDuration = 60;
 /**
  * Dagtidsjobbet. DEN ENDA JOBBRUTT SOM INTE RINGS UPP AV VERCEL.
  *
- * Hobby-planens två cron-poster är slut (natt 02:30, morgon 05:30 UTC), och en
- * post som kör en gång per dygn hade ändå inte kunnat påminna någon en kvart
- * efter att skiftet började. `pg_cron` i Supabase ringer i stället var kvart —
- * se migration 0059 och rubriken i `src/lib/jobb/dagtid.ts`.
+ * Hobby-planens två cron-poster är slut (natt 02:30, morgon 05:30 UTC), och
+ * stegen här måste gå flera gånger om dagen (mötenas påminnelser, utkorgen,
+ * kvällsnotisen). `pg_cron` i Supabase ringer i stället var kvart — se
+ * migration 0059. Stämplingspåminnelsen som jobbet byggdes för är borttagen
+ * (2026-11-01), men schemat och rutten står kvar för de andra stegen.
  *
  * BÅDE POST OCH GET, och de två har olika anropare:
  *
@@ -36,9 +36,10 @@ async function kor(request: NextRequest) {
   if (nekad) return nekad;
 
   const db = supabaseAdmin();
-  // Nav 2.0 (0094): var och ens val under "Påminn mig", bara när Tid i Nav 2.0 är påslagen.
-  const val = SKRIVLAGE.tid ? await egnaPaminnelser(db) : null;
-  const stampling = await korDagtidsjobbet(db, new Date(), val ? new Map([...val].map(([k, v]): [string, { pa: boolean; min: number }] => [k, v.in])) : undefined);
+  // Påminnelsen "Du har inte stämplat in" är borta (beställaren 2026-11-01:
+  // "skippa påminnelse om stämpling helt och hållet"). Den stod för nästan
+  // hälften av klockan, och nio av tio följdes inte av en instämpling.
+
   // 0070: Leveranskalenderns serier, förberedelser och utkorg. Eget steg med
   // eget kvitto, så att ett fel i det ena inte döljer det andra.
   let kalender: unknown;
@@ -57,9 +58,9 @@ async function kor(request: NextRequest) {
     }
   }
   let tid: unknown = null;
-  if (val) {
+  if (SKRIVLAGE.tid) {
     try {
-      tid = await korTidpaminnelser(db, val);
+      tid = await korTidpaminnelser(db);
     } catch (e) {
       tid = { fel: e instanceof Error ? e.message : String(e) };
     }
@@ -94,7 +95,7 @@ async function kor(request: NextRequest) {
   } catch (e) {
     nyheter = { fel: e instanceof Error ? e.message : String(e) };
   }
-  return NextResponse.json({ ...stampling, kalender, runda, tid, kvall, anstallda, utbildning, nyheter });
+  return NextResponse.json({ kalender, runda, tid, kvall, anstallda, utbildning, nyheter });
 }
 
 export async function POST(request: NextRequest) {

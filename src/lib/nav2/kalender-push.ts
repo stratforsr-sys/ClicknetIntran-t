@@ -51,8 +51,11 @@ export const PUSHKALLOR = new Set<string>([
   "leverans-studs",
 ]);
 
-/** Pushar till mottagarnas enheter, om källan är kalenderns. Kastar aldrig: notisraden står redan. */
-export async function pushaHandelse(mottagare: readonly string[], kalla: string): Promise<void> {
+/**
+ * Pushar till mottagarnas enheter, om källan är kalenderns. Kastar aldrig: notisraden står redan.
+ * `notisIdn` är notisraden per mottagare, för utskicksloggen (0271).
+ */
+export async function pushaHandelse(mottagare: readonly string[], kalla: string, notisIdn?: ReadonlyMap<string, number>): Promise<void> {
   // Dagens repetition pushas av sitt eget jobb (`utbildning-paminnelser.ts`), med sin egen text.
   if (kalla === "utbildning-repetition") return;
   const db = supabaseAdmin();
@@ -61,7 +64,7 @@ export async function pushaHandelse(mottagare: readonly string[], kalla: string)
   const fa = await vilkaFar(mottagare, "push", kalla, PUSHKALLOR.has(kalla), db);
   for (const id of fa) {
     try {
-      await pushaTill(db, id);
+      await pushaTill(db, id, { sort: kalla, notisId: notisIdn?.get(id) ?? null });
     } catch {
       // En enhet som inte svarar får inte stoppa nästa.
     }
@@ -185,5 +188,7 @@ export async function kalPushNasta(mig: string, endpoint: string): Promise<Pushn
   const n = (data ?? [])[0] as { id: number; rubrik: string; detalj: string | null; href: string } | undefined;
   if (!n) return null;
   await db.from("nav_preference").upsert({ employee_id: mig, key: nyckel, value: { id: n.id }, updated_at: new Date().toISOString() }, { onConflict: "employee_id,key" });
-  return { id: n.id, titel: n.rubrik, text: n.detalj ?? "", url: `/nav2?till=${encodeURIComponent(n.href)}` };
+  // Trycket går via /nav2/notis, som bokför att notisen öppnades från telefonen (0271)
+  // och skickar vidare till /nav2?till=<href>.
+  return { id: n.id, titel: n.rubrik, text: n.detalj ?? "", url: `/nav2/notis?id=${n.id}&via=push` };
 }

@@ -263,6 +263,8 @@ export const KALLOR: Kalla[] = [
   { tabell: "nav_preference", kolumn: "employee_id", andamal: "Dina val i Nav 2.0" },
   // Introfilmen (0270): när du sett den, och om den visas för dig vid varje besök.
   { tabell: "introfilm", kolumn: "employee_id", andamal: "När du sett introfilmen i Nav 2.0" },
+  // Utskicksloggen (0271): mejl och pushnotiser som gått till dig, och om de kom fram.
+  { tabell: "notification_delivery", kolumn: "employee_id", andamal: "Mejl och pushnotiser som skickats till dig" },
   { tabell: "notification_event", kolumn: "employee_id", andamal: "Notiser till dig" },
   { tabell: "notification_rule", kolumn: "employee_id", andamal: "Vad du får i klockan, mejlet, telefonen och morgonbrevet" },
   { tabell: "one_on_one_point", kolumn: "employee_id", andamal: "Punkter till dina 1:1-samtal" },

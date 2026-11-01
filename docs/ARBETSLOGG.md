@@ -5,6 +5,47 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-01 · Notiserna: utskicksloggen, ingen stämplingspåminnelse, varje notis till sin post (direkt på `main`, 0271 KÖRD)
+
+Beställaren efter undersökningen om notiströtthet (rapporten `~/reports/Notiströtthet i Nav.md`):
+"1. Fixa den [loggen] 2. Skippa påminnelse om stämpling helt och hållet 3. Exakt, inte bara order notis
+utan alla notiser ska gå exakt dit notisen kommer ifrån. Bygg dem direkt i produktionen, men gör
+ordentliga prover."
+
+**1. Utskicksloggen (0271).** `notification_delivery`: en rad per mejl och per push till en enhet, med
+utfallet (Resends id eller enhetens id, status, fel). Skrivs i `epost.ts` (`skickaEpost`, `logg` är
+obligatorisk på `Brev`, så ett nytt utskick kompilerar inte utan den) och i `nav2/push.ts` (`pushaTill`
+kräver en sort). Sorterna: notiskällan, `morgonbrev`, `kvallsnotis`, `utbildning-repetition`,
+`push-prov`, `inloggningskod`, `utkorg-*`, `rekrytering`, `valkomst`, `anstallning(-prov)`.
+`notification_event` fick `opened_at`/`opened_via` (klocka, push, mejl): klockan postar till
+`/nav2/notis`, pushens tryck och mejlets länk går via `GET /nav2/notis?id=&via=`, som bokför och skickar
+vidare till `/nav2?till=<href>`. Notisens id följer med från inserten (`notishandelse-server.ts`) till
+mejlet och pushen. RLS på utan policy (bara service role), gallras efter 90 dagar i nattjobbet, med i
+registerutdraget och raderas med personen (kaskad). Läses med SQL tills vidare.
+
+**2. Stämplingspåminnelserna är borta.** `src/lib/jobb/dagtid.ts` (repots "Du har inte stämplat in",
+46 % av klockan, 9 % träff) raderad, `tid-paminnelse-ut` ("Du är fortfarande instämplad") borttagen ur
+jobbet och ur källistorna, kortet **Påminn mig** i Tid borttaget. Kvar: chefens egen fråga "Är allt
+okej?" (`tid-ostamplad`, en människas fråga, mejlas), fredagens veckokoll och chefens morgonnotis och
+16:00-samling (morgonnotisen räknar fortfarande "N har inte stämplat in" — inte en påminnelse till
+personen; ta bort på beställarens ord).
+
+**3. Varje notis länkar till sin post.** Server: alla `notifiera*`-anrop och klockans härledda poster
+(order → `/order/<id>`, kampanjsida → `/order/kund/<org>`, bonus/mål/hävd → `/provision/manad/<m>`,
+tidsrättelse → `/tid/gora/<id>`, beslut/be-rätta/avvikelse → `/tid?dag=`, veckokoll → `/tid?vecka=`,
+sjukanmälan → `/franvaro/sjuk/<id>`, frånvaro → `/franvaro/<id>`, sommarrundan → `/franvaro/ny/vacation`,
+fel → `/fel/<id>`, möte → `/moten/<id>`, avtal → `/avtal/<id>`, konto → `/profil`, föreläsning,
+repetition, rollspel, kollegans kalender `?vem=`, leveranskön `?ko=1&order=`, inställt möte → dagen).
+Klient (`ndGa` i utkastet): en väg per adress, posten lyfts (`ndLyft`); finns den inte öppnas vyn.
+`vagar.ts` SJALV +10 mönster. Befintliga rader i klockan bytte länk i 0271 när posten finns kvar.
+Medvetna undantag (vyn är posten, eller posten finns inte) står med skäl i `tests/notislankar.mjs`.
+
+**Prov.** Nya `tests/notislankar.mjs` (varje anrop, mallarna och växeln) och `tests/tid-paminnelser.mjs`
+(ingen påminnelse om att stämpla), båda i `npm test`. Rena prov: alla gröna (databasproven inte körda).
+Klienten: provriggen `~/nav2-utkast/delar/notislankar/` (headless Chrome, `/nav2?till=`) med
+produktionens data som Zen, 18 av 18 lokalt och som säljare 5 av 5; samma rigg mot produktionen efter
+deployen. Grenen lades ovanpå `df6a114` (annan sessions rester) före push.
+
 ## 2026-11-01 · Resterna efter mergen (gren `rester-efter-mergen`, till `main` på beställarens ja efter previewen)
 
 Beställaren svarade 2026-10-31 sent på listan "vad är kvar": fixa resterna, ångra på leadtilldelning och

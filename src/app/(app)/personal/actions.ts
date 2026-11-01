@@ -204,7 +204,7 @@ export async function andraRoll(form: FormData): Promise<void> {
     typ: "konto",
     rubrik: pa ? `Du har fått rollen ${ROLE_LABEL[roll]}` : `Rollen ${ROLE_LABEL[roll]} är borttagen`,
     detalj: pa ? "Nya vyer kan ha dykt upp i menyn" : "Vissa vyer kan ha försvunnit ur menyn",
-    href: `/personal/${employeeId}`,
+    href: "/profil",
     objekt: { typ: "employee", id: employeeId },
   });
 
@@ -537,7 +537,7 @@ export async function sattOrganisation(form: FormData): Promise<void> {
     detalj: nyttTeam.data?.name
       ? `Team ${nyttTeam.data.name} · din chef beslutar om ledighet och coachning`
       : "Se personkortet för vem som är din chef",
-    href: `/personal/${employeeId}`,
+    href: "/profil",
     objekt: { typ: "employee", id: employeeId },
   });
 
@@ -619,7 +619,7 @@ export async function andraBehorighet(form: FormData): Promise<void> {
       ? `Du har fått behörigheten ${PERMISSION_LABEL[behorighet as Permission]}`
       : `Behörigheten ${PERMISSION_LABEL[behorighet as Permission]} är borttagen`,
     detalj: pa ? "Den öppnar en ny vy för dig" : "Vyn den öppnade är stängd igen",
-    href: `/personal/${employeeId}`,
+    href: "/profil",
     objekt: { typ: "employee", id: employeeId },
   });
 

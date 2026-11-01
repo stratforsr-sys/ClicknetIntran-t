@@ -50,7 +50,7 @@ export async function korAnstalldaPaminnelser(db: SupabaseClient, nu = new Date(
       }
       if (!r.escalated_on && idag >= arbetsdagar(due, 1)) {
         if (p.manager_id)
-          await notifiera({ till: p.manager_id, av: null, kalla: "personal-paminn", typ: "uppgift", rubrik: `Inte gjort: ${r.label}`, detalj: `${namn} · fristen var ${due}`, href: "/nav2", objekt: { typ: "employee", id: p.id } });
+          await notifiera({ till: p.manager_id, av: null, kalla: "personal-paminn", typ: "uppgift", rubrik: `Inte gjort: ${r.label}`, detalj: `${namn} · fristen var ${due}`, href: `/personal/${p.id}`, objekt: { typ: "employee", id: p.id } });
         await db.from(tabell).update({ escalated_on: idag }).eq("id", r.id);
         eskalerade++;
       }

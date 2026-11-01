@@ -152,7 +152,7 @@ export async function skickaKandidatmejl(ids: number[]): Promise<Utskicksutfall>
     }
     const amne = r.template === "bokad" && b ? `${AMNE.bokad} ${b.day} kl. ${hm(b.start_min)}` : AMNE[r.template] ?? "Från Clicknet";
 
-    const u = await skickaEpost({ till: k.email, amne, text: r.body, svaraTill: fran?.email ?? undefined, bilagor });
+    const u = await skickaEpost({ till: k.email, amne, text: r.body, svaraTill: fran?.email ?? undefined, bilagor, logg: { sort: "rekrytering" } });
     if (!u.skickat) { await fel(r, u.orsak); continue; }
     const { error: efter } = await db.from("candidate_message").update({ status: "skickad", resend_id: u.id || null, sent_at: new Date().toISOString(), error: null }).eq("id", r.id);
     // Mejlet har gått. Raden står kvar som `skickar` och skickas aldrig igen; felet syns i svaret.

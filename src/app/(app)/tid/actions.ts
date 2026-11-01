@@ -11,7 +11,7 @@ import {
   type Stamptyp,
 } from "@/lib/tid";
 import { hamtaLage } from "@/lib/sparrar";
-import { svenskKlocka } from "@/lib/klocka";
+import { svenskKlocka, svensktDatum } from "@/lib/klocka";
 import { medRoll, notifiera, notifieraFlera } from "@/lib/notishandelse-server";
 
 export type TidState = { fel?: string; ok?: string };
@@ -190,7 +190,7 @@ export async function begarRattelse(_prev: TidState, form: FormData): Promise<Ti
     typ: "tid",
     rubrik: `${user.employee.first_name} ${user.employee.last_name} vill rätta en stämpling`,
     detalj: `${svenskKlocka(original.occurred_at)} → ${svenskKlocka(ny)} · ${motivering}`,
-    href: "/tid",
+    href: `/tid/gora/${rad.id}`,
     objekt: { typ: "time_event", id: rad.id },
   });
 
@@ -246,7 +246,7 @@ export async function beslutaRattelse(form: FormData): Promise<void> {
       typ: "tid",
       rubrik: godkann ? "Din rättelse är godkänd" : "Din rättelse avslogs",
       detalj: `${rattelse.kind === "in" ? "Instämpling" : "Utstämpling"} ${svenskKlocka(rattelse.occurred_at)}${godkann ? " · journalen är uppdaterad" : " · den ursprungliga tiden står kvar"}`,
-      href: "/tid",
+      href: `/tid?dag=${svensktDatum(rattelse.occurred_at)}`,
       objekt: { typ: "time_event", id },
     });
   }

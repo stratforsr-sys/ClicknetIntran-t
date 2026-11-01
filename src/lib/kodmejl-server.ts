@@ -108,7 +108,7 @@ export async function skickaKodmejl(epost: string, syfte: Kodsyfte): Promise<Kod
   if (error || !kod) return "fel";
 
   const brev = kodbrev(kod, person.first_name ?? null, syfte, klockslag(new Date(nu + KOD_GILTIG_MIN * 60 * 1000)));
-  const utfall = await skickaEpost({ till: epost, amne: brev.amne, text: brev.text, html: brev.html });
+  const utfall = await skickaEpost({ till: epost, amne: brev.amne, text: brev.text, html: brev.html, logg: { sort: "inloggningskod", employeeId: person.id as string } });
   if (!utfall.skickat) return "fel";
 
   // Koden står aldrig i loggen. Bara att den skickades, till vem och varför.

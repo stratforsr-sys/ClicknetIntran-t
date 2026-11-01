@@ -111,12 +111,12 @@ export const MEJLKALLOR = [
   "tid-schema",
 
   /**
-   * Du har inte stämplat in och ditt skift har börjat.
+   * Chefen undrar om allt är okej, när någon inte stämplat in. Den som inte
+   * kommit in har inte navet öppet, så frågan behöver brevet för att nå fram.
    *
-   * Den enda källan på listan som skrivs av ett JOBB och inte av en människas
-   * handling — och den som starkast motiverar ett brev: den som glömt stämpla
-   * in har per definition inte navet öppet. En notis i klockan når exakt den
-   * krets som inte behöver den.
+   * Förut var det här dagtidsjobbets "Du har inte stämplat in", varje
+   * arbetsdag till var och en. Den påminnelsen är borttagen (beställaren
+   * 2026-11-01) — den stod för ungefär tre av fyra händelsemejl.
    */
   "tid-ostamplad",
 
@@ -208,6 +208,15 @@ function navadress(): string {
   );
 }
 
+/**
+ * Länken i brevet. Med notisens id går den via /nav2/notis (0271), som bokför
+ * att notisen öppnades från mejlet och skickar vidare till posten. Utan id
+ * (ett brev utan notisrad) går den direkt till posten, som förut.
+ */
+export function notislank(href: string, notisId: number | null): string {
+  return notisId ? `${navadress()}/nav2/notis?id=${notisId}&via=mejl` : `${navadress()}${href}`;
+}
+
 /** Aktiva anställda. Samma spärr som morgonbrevet och iCal-flödet drar: en
  *  offboardad person får inga brev, och den regeln ska inte kräva att
  *  offboardingkoden kommer ihåg den här filen. */
@@ -220,6 +229,11 @@ type Utskick = {
   href: string;
   /** Leveranskalendern (pass 4): inbjudans `.ics`. Följer med bara när källan mejlas. */
   bilagor?: Bilaga[];
+  /**
+   * Notisraden per mottagare (0271). Brevets länk går då via /nav2/notis, som
+   * bokför att notisen öppnades från mejlet, och loggraden pekar på notisen.
+   */
+  notisIdn?: ReadonlyMap<string, number>;
 };
 
 /**
@@ -260,11 +274,13 @@ export async function mejlaHandelse(
       status: string;
     }[]) {
       if (!p.email) continue;
+      const notisId = utskick.notisIdn?.get(p.id) ?? null;
       brevlada.push({
         till: p.email,
         amne: `Clicknet Nav: ${utskick.rubrik}`,
-        text: brevtext(p.first_name ?? "", utskick),
+        text: brevtext(p.first_name ?? "", utskick, notisId),
         ...(utskick.bilagor?.length ? { bilagor: utskick.bilagor } : {}),
+        logg: { sort: utskick.kalla, employeeId: p.id, notisId },
       });
     }
 
@@ -286,7 +302,7 @@ export async function mejlaHandelse(
  * — och den i brevet hade varit den som åldrades, eftersom ingen ser den när
  * hon ändrar texten i actionen.
  */
-function brevtext(fornamn: string, utskick: Utskick): string {
+function brevtext(fornamn: string, utskick: Utskick, notisId: number | null): string {
   const rader: string[] = [];
 
   rader.push(fornamn ? `Hej ${fornamn},` : "Hej,");
@@ -299,7 +315,7 @@ function brevtext(fornamn: string, utskick: Utskick): string {
   }
 
   rader.push("");
-  rader.push(`Öppna i navet: ${navadress()}${utskick.href}`);
+  rader.push(`Öppna i navet: ${notislank(utskick.href, notisId)}`);
   rader.push("");
   rader.push("Det här brevet går bara ut på det som kräver att du gör något.");
 

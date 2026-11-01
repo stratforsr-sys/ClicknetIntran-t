@@ -279,21 +279,12 @@ export const NOTIS_KALLOR = [
   "tid-rattelse-beslut",
 
   /**
-   * Du har inte stamplat in, och ditt skift har borjat (0059).
+   * Chefens fråga till den som inte stämplat in: "Är allt okej? Hör av dig om
+   * du inte kommer i dag." (Nav 2.0, Frånvaro). En människas fråga, en gång.
    *
-   * EN HANDELSE OCH INTE EN HARLEDNING, trots att "saknar instampling" ar ett
-   * tillstand som star i tabellen hela dagen. Regeln overst i filen sager att
-   * man ska valja halva efter vad posten SAGER, och det gor den har:
-   * harledningen hade legat kvar i klockan till midnatt aven for den som
-   * stamplade in tre minuter efter att ha last den, eftersom `time_event` far
-   * sin rad med tidpunkten da man stamplade och inte da man borde ha gjort det.
-   *
-   * Den skrivs av dagtidsjobbet, som kors av pg_cron var kvart — inte av en
-   * server action. Aktoren ar `null`, sa `notifiera()` har ingen att salla bort.
-   *
-   * SPARREN MOT TOLV NOTISER FORE LUNCH LIGGER I JOBBET: det fragar
-   * `notification_event` om personen redan fatt raden idag innan det skriver.
-   * Se `src/lib/jobb/dagtid.ts`.
+   * Källan var förut dagtidsjobbets automatiska "Du har inte stämplat in"
+   * (0059), var kvart för var och en. Den är borttagen (beställaren
+   * 2026-11-01), och källans gamla rader står kvar i klockan tills de gallras.
    */
   "tid-ostamplad",
 
@@ -600,14 +591,13 @@ export const NOTIS_KALLOR = [
   /**
    * Nav 2.0 (0094), Tid: chefens fråga till den som inte stämplat in eller
    * har en dag som föreslås som ogiltig frånvaro (`tid-fraga`), "Be X rätta"
-   * en öppen dag (`tid-be-ratta`), påminnelsen om att man fortfarande är
-   * instämplad, fredagens veckokoll, chefens morgonnotis och 16:00-samlingen
+   * en öppen dag (`tid-be-ratta`), fredagens veckokoll, chefens morgonnotis
+   * och 16:00-samlingen
    * (skrivs av dagtidsjobbet bakom `SKRIVLAGE.tid`), påminnelsen om ett nytt
    * schema som inte setts, och en förklaring till en sen dag (till chefen).
    */
   "tid-fraga",
   "tid-be-ratta",
-  "tid-paminnelse-ut",
   "tid-veckokoll",
   "tid-chef-morgon",
   "tid-chef-kvar",
@@ -779,7 +769,6 @@ export const HANDELSEKALLOR = [
   "franvaro-annan-period",
   "tid-fraga",
   "tid-be-ratta",
-  "tid-paminnelse-ut",
   "tid-veckokoll",
   "tid-chef-morgon",
   "tid-chef-kvar",
@@ -866,6 +855,12 @@ export type Notis = {
    * Bara på en inbjudan eller en ny tid som jag inte svarat ja eller nej på.
    */
   svara?: { eventId: string; nu: "vantar" | "kanske" };
+  /**
+   * Raden i `notification_event`, för de notiser som är händelser. Klockan i
+   * Nav 2.0 bokför med den att notisen öppnades (0271, /nav2/notis). De
+   * härledda posterna har ingen rad och ingen öppning att bokföra.
+   */
+  handelseId?: number;
 };
 
 export const TYP_ETIKETT: Record<Notistyp, string> = {
