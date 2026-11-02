@@ -5,6 +5,32 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-02 kväll · Inkio-provet i produktionen, och tre rättelser efter det (grenen `inkio-rattelser`, ingen migration)
+
+**Provet** (`~/nav2-utkast/delar/inkio-inflode/TESTPROMPT.md`, rapporten `RAPPORT.md` bredvid): bevakningen kördes för
+hand mot produktionen med `inflode` på, `utflode` av och `NOTIS_PROV_TILL` = Zen. Bara GET mot Inkio. 28 av 29 kunder
+fanns i Inkio, 163 poster kom in och stämde post för post, 20 order kopplades, alla notiser gick till Zen, ett samtidigt
+varv stoppades av låset, kundkortets Aktivitet visade historiken och en anteckning från Nav stannade i Nav. Allt står
+av igen. **Inte redo att slås på för alla:** `lk_inkio_andra_order` (0277) sätter `cancelled_by = null` och
+`renewal_by = null`, och villkoren `sales_order_makulerad_av` (0034) och `sales_order_fornyelse` (0068) avvisar det.
+`tillampa` sväljer felet, och övergången är redan sparad, så den provas aldrig igen. Rättat i ett eget pass
+(`f0e10f4`, 0279, posten nedan).
+
+**Rättat här** (beställaren: "Fixa dessa"):
+- **En rad som försvann ur kopian kom inte tillbaka** förrän något ändrades hos kunden i Inkio: ett oförändrat avtryck
+  hoppade över jämförelsen med `crm_handelse`. Nu jämförs varje kund rad för rad en gång i timmen ändå (`attJamfora`
+  i inflode.ts; timmen slår om på olika minut per kund, högst två i samma minut av trettio). En lagning skriver bara
+  raderna, utan notis, status eller koppling, eftersom det redan hänt en gång, och räknas som `lagade` i varvets svar.
+- **Varvet räknade 10 kopplingar men gjorde 20:** `ut.kopplade += await koppla(…)` läste summan före väntan, och fyra
+  kunder i taget skrev över varandra.
+- **`NOTIS_PROV_TILL` med bara blanksteg eller kommatecken gav alla notis** i produktionen. Nu är en satt variabel
+  alltid provläge; bara en borttagen släpper ut notiserna till alla.
+- Omnämnandena (`@[Namn](ref:User/…)`) i notisen var redan rättade i `ed04ae7` (`renText`).
+- Prov: inkio-inflode (nytt: "Kopian lagas även när Inkio är tyst", två i Provfiltret), inkio, notiser, utskick,
+  notiser-tackning, notislankar gröna. Delen i inflode-server.ts provas i produktionen efter mergen.
+
+---
+
 ## 2026-11-02 kväll · Rättelser varv 2: larm för otolkade samtal och morgonkvittot, egen databasroll (MERGAD till `main` `c68d4ee`, 0282 KÖRD)
 
 **Beställaren** svarade punkt för punkt på restlistan efter produktionsprovets rättelser: gul 4 och 5 "Du får göra
