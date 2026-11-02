@@ -252,13 +252,16 @@ Plan, logg och rapport finns i `~/nav2-utkast/delar/rattelser/` (`RAPPORT.md` f�
   `select employee_id, kanal, count(*) from notification_delivery where created_at > now() - interval '7 days' group by 1, 2;`
   Öppnade per sort: `select kalla, count(*), count(opened_at) from notification_event group by 1;`
 - **Ingen påminnelse om att stämpla** (beställaren). `jobb/dagtid.ts` raderad, `tid-paminnelse-ut` borta, kortet Påminn mig borta.
-  Kvar och värt en fråga: chefens morgonnotis räknar "N har inte stämplat in".
+  Chefens morgonnotis räknar fortfarande "N har inte stämplat in", och ska göra det (beställaren 2026-11-02).
+- **Fredagens veckokoll "Stämmer veckan?" borta** (beställaren 2026-11-02): notisen, rutan och åtgärden `vecka`.
+  `time_week_check` står kvar tom.
 - **Varje notis till sin post**: se ARBETSLOGG och `tests/notislankar.mjs` (undantagen med skäl).
   Provriggen: `~/nav2-utkast/delar/notislankar/`. Produktionsprovet 13 av 13 grönt (se ARBETSLOGG). Mot
   produktionen bara `node rigg.mjs prod fall-klocka.json` (en sidladdning): /nav2 tar ~10 s, och en sidladdning
   per fall ger 504.
-- Gamla "Du har inte stämplat in" (167 rader, senast 29 okt) står kvar i klockan tills de gallras (30 dagar i klockan, 90 i tabellen).
-- Nästa steg i rapporten (ej beställt): förberedelsepåminnelsen till morgonbrevet, tre nivåer, mejla bara oläst.
+- Gamla "Du har inte stämplat in" (167 rader) raderade 2026-11-01 kväll på beställarens ja.
+- Nästa steg i rapporten (ej beställt, beställaren "okej" 2026-11-02): förberedelsepåminnelsen till morgonbrevet, tre
+  nivåer, mejla bara oläst. En vy för loggen i Nav: ej beställt, SQL tills vidare.
 
 ## RESTERNA EFTER MERGEN (2026-11-01): till `main` från grenen `rester-efter-mergen`
 

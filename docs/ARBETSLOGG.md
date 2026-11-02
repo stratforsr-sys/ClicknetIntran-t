@@ -5,6 +5,28 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-02 kväll · Fredagens veckokoll "Stämmer veckan?" borttagen (direkt på `main` på beställarens ja, ingen migration)
+
+**Beställaren** om veckokollen: "Varför finns den, förstår ej värdet", och efter svaret: "okej då ta bort den".
+
+**Varför den gick:** den kom med utkastet (0094, 2026-10-15) som en fredagskontroll av veckans stämplingar, men svaret
+lästes bara av personen själv. Chefen såg inte vem som kollat, lönerapporten väntade inte på det, och "Något är fel"
+sparade ingenting. I produktionen hade notisen aldrig gått ut och `time_week_check` var tom.
+
+- `tid-paminnelser.ts`: fredagsblocket borta, `VECKOKOLL_KL` ur `tidregler.ts`. Jobbet skickar bara chefens
+  morgonnotis och 16:00-samlingen.
+- `tid-veckokoll` ur `NOTIS_KALLOR`, `HANDELSEKALLOR` och Utskicks etiketter. Åtgärden `vecka` i `/nav2/tid` och
+  `veckokoll` i `byggTid` borta.
+- Utkastet: rutan, "Kollad"-märket i rubriken och klickvägarna borta ur `ndTidVeckan` (det levande lagret). Demolagret
+  `tidVeckan` och not 135 står kvar, som med Påminn mig.
+- Tabellen `time_week_check` står kvar tom (i registerutdraget och raderingen). Ingen migration; den kan droppas i ett
+  senare städpass.
+- Chefens morgonnotis behåller "N har inte stämplat in" (beställaren: "inte om chefen vill ha sin morgonnotis").
+- Prov: notislankar, tid-paminnelser, bro, nav2-till, kalender-push, app-sw, notiser, utskick, notiser-tackning,
+  navnyheter gröna. Nytt i navet: en post.
+
+---
+
 ## 2026-11-02 · Driften: backup och bevakning (direkt på `main`, byggd 2026-11-01)
 
 Beställaren 2026-10-31: databasen hade ingen backup och ingenting bevakade navet ("Kan du fixa det själv",

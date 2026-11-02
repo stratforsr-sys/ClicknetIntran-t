@@ -25812,13 +25812,8 @@ function ndTidVeckan(){
       <span class="tiflag">${d.idag ? '<span class="pill t-ok">I dag</span>' : ''}${d.auto ? '<span class="pill t-neutral">Stängd av navet</span>' : ''}${d.auto && (ND.tid.autoOk || []).includes(d.datum) ? `<span class="pill t-ok">${I('check')}Bekräftad</span>` : ''}${ND.tid.egna.filter(h => h.korr && h.dag === d.datum).map(h => `<span class="pill ${h.korr === 'pending' ? 't-warn' : h.korr === 'approved' ? 't-ok' : 't-neutral'}">${h.korr === 'pending' ? `Väntar på ${ndChefF()} · ${h.kl}` : h.korr === 'approved' ? `${I('check')}Rättad · ${h.kl}` : 'Avslagen'}</span>`).join('')}</span>
       ${open ? `<ul class="tidagrader">${d.rader.map(h => `<li><span class="num">${h.kl}</span>${h.kind === 'in' ? 'Stämplade in' : h.source === 'system_auto_close' ? 'Stängd av navet vid schemaslut' : 'Stämplade ut'}${d.idag ? '' : ndRattKnapp(h)}${S.tRatt === h.id ? ndRattForm(h) : ''}</li>`).join('')}</ul>` : ''}</li>`;
   };
-  const kollad = v => (ND.tid.veckokoll || []).find(k => k.vecka === v && k.ok);
-  const rad2 = (() => { let n = 0, v = kollad(denna) ? denna : forra; while (kollad(v)){ n++; v = ndPlusDag(v, -7); } return n; })();
-  const koll = vk === denna ? `<div class="tikoll ${kollad(denna) ? 'ok' : ''}">${kollad(denna) ? `<span class="tic ok">${I('check')}</span><span><b>Veckan är kollad</b><span class="muted">${rad2 === 1 ? 'Första veckan i rad.' : `${rad2} veckor i rad.`} Det du rättar nu stoppar aldrig lönerapporten.</span></span>`
-      : `<span><b>Stämmer veckan?</b><span class="muted">Trettio sekunder på fredagen. Tryck på en dag för att se raderna. Nav påminner dig 16:30.</span></span><div class="pacts"><button class="btn btn-p btn-sm" data-tiveckaok>Ja, den stämmer</button><button class="btn btn-s btn-sm" data-tinagotfel>Något är fel</button></div>${S.tFelHint ? '<span class="tifelhint">Tryck på dagen som är fel och rätta raden.</span>' : ''}`}</div>`
-    : kollad(vk) ? `<p class="muted tismall" style="margin-top:10px">Vecka ${ndVecka(vk)} kollade du ${esc(ndKortNar(kollad(vk).nar))}.${rad2 > 1 ? ` ${rad2} veckor i rad.` : ''}</p>` : '';
-  return `<section class="card"><div class="chead"><h2>Veckan</h2><span class="tiwknav"><button class="ibtn tiv-s" data-tivecka="${forra}" ${vk === forra ? 'disabled' : ''} aria-label="Förra veckan">‹</button><span class="num">v. ${ndVecka(vk)}</span><button class="ibtn tiv-s" data-tivecka="${denna}" ${vk === denna ? 'disabled' : ''} aria-label="Den här veckan">›</button></span>${kollad(vk) ? `<span class="pill t-ok">${I('check')}Kollad</span>` : ''}<span class="end"><span class="num tiwk"><b>${dur(tot)}</b>${vk === denna ? `<small class="tiwkf">förra veckan ${dur(forraTot)}</small>` : ''}</span></span></div>
-    <ul class="tivecka">${dagar.map(rad).join('')}</ul>${koll}</section>`;
+  return `<section class="card"><div class="chead"><h2>Veckan</h2><span class="tiwknav"><button class="ibtn tiv-s" data-tivecka="${forra}" ${vk === forra ? 'disabled' : ''} aria-label="Förra veckan">‹</button><span class="num">v. ${ndVecka(vk)}</span><button class="ibtn tiv-s" data-tivecka="${denna}" ${vk === denna ? 'disabled' : ''} aria-label="Den här veckan">›</button></span><span class="end"><span class="num tiwk"><b>${dur(tot)}</b>${vk === denna ? `<small class="tiwkf">förra veckan ${dur(forraTot)}</small>` : ''}</span></span></div>
+    <ul class="tivecka">${dagar.map(rad).join('')}</ul></section>`;
 }
 const ndKortNar = n => { const [d, k] = n.split(' '); return `${frKort(d)} ${k}`; };
 function ndTidVantarKort(vantar){
@@ -26276,8 +26271,6 @@ document.addEventListener('click', e => {
   if (d.ndtiavslagok){ stopp(); ndTidPost('avslag-sett', {id:d.ndtiavslagok}); return; }
   if (d.ndtiautook){ stopp(); ndTidPost('auto-ok', {dag:d.ndtiautook}); return; }
   if (d.ndtischemasett){ stopp(); ndTidPost('schema-sett', {fran:d.ndtischemasett}); return; }
-  if (d.tiveckaok !== undefined){ stopp(); ndTidPost('vecka', {vecka:ndMandag(kIdag()), ok:true}); return; }
-  if (d.tinagotfel !== undefined){ stopp(); S.tFelHint = true; render(); return; }
   if (d.tisenasvar){ stopp(); const v = (document.querySelector(`[data-tisenatext="${d.tisenasvar}"]`)?.value || '').trim(); if (!v){ toast('Skriv vad som hände, en mening räcker.'); return; } ndTidPost('sen-forklaring', {id:d.tisenasvar, text:v}); return; }
   if (d.tipamin || d.tipammin){ stopp(); const fore = JSON.parse(JSON.stringify(S.ndPaminn));
     if (d.tipamin) S.ndPaminn[d.tipamin].pa = !S.ndPaminn[d.tipamin].pa; else { const [k, m] = d.tipammin.split(':'); S.ndPaminn[k].min = +m; }

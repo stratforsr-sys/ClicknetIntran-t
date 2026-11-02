@@ -14,6 +14,20 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "fredagskollen-borta",
+    rubrik: "Tid frågar inte längre om veckan stämmer",
+    ingress: "Rutan Stämmer veckan? och fredagsnotisen 16:30 är borta.",
+    text: `Under **Veckan** i Tid fanns rutan **Stämmer veckan?**, och på fredagar kom en
+notis 16:30 om den. Båda är borttagna. Svaret syntes bara för dig själv, så
+frågan gjorde ingen nytta.
+
+Ser du ett fel i din tid rättar du det som förut: tryck på dagen och sedan
+**Rätta**.`,
+    datum: "2026-11-02",
+    roller: [],
+    href: "/tid",
+  },
+  {
     slug: "inkio-mejl-bara-det-viktiga",
     rubrik: "Inkio: mejl bara om det viktiga",
     ingress: "Ärenden, makulerade order och uppsagda avtal kommer som mejl. Resten är notiser.",

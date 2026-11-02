@@ -609,14 +609,12 @@ export const NOTIS_KALLOR = [
   /**
    * Nav 2.0 (0094), Tid: chefens fråga till den som inte stämplat in eller
    * har en dag som föreslås som ogiltig frånvaro (`tid-fraga`), "Be X rätta"
-   * en öppen dag (`tid-be-ratta`), fredagens veckokoll, chefens morgonnotis
-   * och 16:00-samlingen
+   * en öppen dag (`tid-be-ratta`), chefens morgonnotis och 16:00-samlingen
    * (skrivs av dagtidsjobbet bakom `SKRIVLAGE.tid`), påminnelsen om ett nytt
    * schema som inte setts, och en förklaring till en sen dag (till chefen).
    */
   "tid-fraga",
   "tid-be-ratta",
-  "tid-veckokoll",
   "tid-chef-morgon",
   "tid-chef-kvar",
   "tid-schema-sett",
@@ -794,7 +792,6 @@ export const HANDELSEKALLOR = [
   "franvaro-annan-period",
   "tid-fraga",
   "tid-be-ratta",
-  "tid-veckokoll",
   "tid-chef-morgon",
   "tid-chef-kvar",
   "tid-schema-sett",

@@ -62,8 +62,6 @@ export type NdTid = {
   autoOk: string[];
   /** 0094: nya scheman (från SCHEMA_KVITTENS_FRAN) och om de setts. */
   schemaKvittens: { fran: string; sett: boolean }[];
-  /** 0094: veckokollen, nyast först. `vecka` är måndagen. */
-  veckokoll: { vecka: string; ok: boolean; nar: string }[];
   paminn: Paminn;
   /** 0094: vem som öppnat dina sena dagar, och vem som tagit med dig i en lönerapport. */
   tittat: { vem: string; vad: string; nar: string }[];
@@ -149,7 +147,6 @@ export async function byggTid(supabase: SupabaseClient, user: CurrentUser): Prom
   const andraP = tidig(Promise.all([
     supabase.from("time_day_ack").select("work_date").eq("employee_id", mig).eq("kind", "auto_close_ok"),
     supabase.from("work_schedule_seen").select("valid_from").eq("employee_id", mig),
-    supabase.from("time_week_check").select("week_start, ok, checked_at").eq("employee_id", mig).order("week_start", { ascending: false }).limit(26),
     supabase.from("nav_preference").select("value").eq("employee_id", mig).eq("key", "tid.paminn").maybeSingle(),
     supabase.from("tid_view_log").select("viewer_id, what, viewed_at").eq("employee_id", mig).gte("viewed_at", new Date(Date.parse(svenskDygnsstart(nu)) - 90 * 86400000).toISOString()).order("viewed_at", { ascending: false }).limit(30),
     admin.from("compliance_gate").select("staff_information_id").eq("key", "stampling").maybeSingle(),
@@ -254,7 +251,6 @@ export async function byggTid(supabase: SupabaseClient, user: CurrentUser): Prom
     extra: {},
     autoOk: [],
     schemaKvittens: [],
-    veckokoll: [],
     paminn: PAMINN_STANDARD,
     tittat: [],
     info: null,
@@ -263,7 +259,7 @@ export async function byggTid(supabase: SupabaseClient, user: CurrentUser): Prom
 
   // 0094: det utkastet har och navet saknade. Startade överst; bara rättelsernas extra beror på stämplingarna.
   const egnaKorr = egnaStamplar.filter((h) => h.korr).map((h) => h.id);
-  const [{ data: autoOk }, { data: sett }, { data: veckor }, { data: pref }, { data: tittat }, { data: grind }, { data: samtal }, { data: exporter }] = await andraP;
+  const [{ data: autoOk }, { data: sett }, { data: pref }, { data: tittat }, { data: grind }, { data: samtal }, { data: exporter }] = await andraP;
   // Vem har tittat: öppnade sena dagar, och uttag av lönerapporter där du finns med.
   const exp = (exporter ?? []) as { actor_id: string | null; object_id: string; ts: string }[];
   const tittare = [...new Set([...(tittat ?? []).map((t) => t.viewer_id as string), ...exp.map((e) => e.actor_id).filter((x): x is string => !!x)])];
@@ -281,7 +277,6 @@ export async function byggTid(supabase: SupabaseClient, user: CurrentUser): Prom
     .filter((f) => f >= dagarBakat(idag, 30))
     .sort()
     .map((fran) => ({ fran, sett: settSet.has(fran) }));
-  ut.veckokoll = (veckor ?? []).map((v) => ({ vecka: String(v.week_start), ok: !!v.ok, nar: `${svensktDatum(v.checked_at)} ${svenskKlocka(v.checked_at)}` }));
   if (pref?.value) {
     const v = pref.value as Partial<Paminn>;
     ut.paminn = { in: { ...PAMINN_STANDARD.in, ...(v.in ?? {}) }, ut: { ...PAMINN_STANDARD.ut, ...(v.ut ?? {}) } };

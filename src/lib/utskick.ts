@@ -255,7 +255,6 @@ export const SORT_NAMN: Record<string, string> = {
   "tid-avvikelse-avslutad": "Avvikelse avslutad",
   "tid-fraga": "Fråga om din tid",
   "tid-be-ratta": "Ombedd att rätta tid",
-  "tid-veckokoll": "Veckans tidskoll",
   "tid-chef-morgon": "Morgonläget för chefen",
   "tid-chef-kvar": "Kvar att se över",
   "tid-schema-sett": "Schemat har setts",

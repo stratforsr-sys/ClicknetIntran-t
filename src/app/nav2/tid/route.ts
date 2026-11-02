@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { canManageEmployees, fullName, getCurrentUser, hasRole } from "@/lib/auth";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
-import { dagarBakat, svensktDatum, svenskTidpunkt, svenskVeckodag } from "@/lib/klocka";
+import { dagarBakat, svensktDatum, svenskTidpunkt } from "@/lib/klocka";
 import { gallandeSchema } from "@/lib/raster";
 import { hamtaLage } from "@/lib/sparrar";
 import { medRoll, notifiera, notifieraFlera } from "@/lib/notishandelse-server";
@@ -33,7 +33,7 @@ export const dynamic = "force-dynamic";
  * Det nya (0094): en saknad stämpling som rättelse utan en rad att ersätta,
  * stödet och avslagets skäl (`time_correction_extra`), "Okej" på ett avslag,
  * "Ja, det stämmer" på en stängd dag, "Jag har sett det" på ett nytt schema,
- * veckokollen, förklaringen till en sen dag (`late_arrival.employee_comment`,
+ * förklaringen till en sen dag (`late_arrival.employee_comment`,
  * som repot visar men inte låter skriva), påminnelserna, chefens frågor,
  * "Ta upp på 1:1", loggen när sena dagar öppnas, "Påminn dem", morgonnotisen,
  * senaste besöket, exportkolumnerna och "Skickad till lön".
@@ -211,13 +211,6 @@ export async function POST(request: Request) {
         if (!DATUM.test(f)) return svar({ fel: "Okänt schema." }, 400);
         await db.from("work_schedule_seen").upsert({ employee_id: mig, valid_from: f });
         return svar({ ok: "Tack. Schemat räknas från den dag det börjar gälla." });
-      }
-
-      case "vecka": {
-        const v = String(b.vecka ?? "");
-        if (!DATUM.test(v) || svenskVeckodag(svenskTidpunkt(v, "12:00")) !== 1) return svar({ fel: "Okänd vecka." }, 400);
-        await db.from("time_week_check").upsert({ employee_id: mig, week_start: v, ok: b.ok !== false, checked_at: new Date().toISOString() });
-        return svar({ ok: b.ok === false ? "Tryck på dagen som är fel och rätta den." : "Veckan är kollad." });
       }
 
       case "sen-forklaring": {
