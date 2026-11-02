@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { arSuperadmin, getCurrentUser } from "@/lib/auth";
-import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { bolagsuppslag, inkioKonfigurerad, landningssida } from "@/lib/crm/inkio";
 import { kundaktivitetForKortet, kundaktivitetUrNav } from "@/lib/crm/inflode-server";
+import { hamtaOrderekonomi } from "@/lib/crm/ekonomi-server";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,7 @@ export const dynamic = "force-dynamic";
  *
  *   ?vad=kund&order=<uuid>   aktiviteten och landningssidan (kundkortets Aktivitet)
  *   ?vad=bolag&orgnr=<nr>    namn och adress fran Bolagsverket (formularets uppslag)
+ *   ?vad=ekonomi&order=<uuid> orderns ekonomi i Inkio, nar ordern falls ut (ekonomi.ts)
  *
  * AKTIVITETEN LASES UR NAVS KOPIA (0277): bevakningen tar in allt fran Inkio
  * varje minut (`crm_handelse`), och anteckningar skrivna i Nav star i
@@ -49,6 +51,22 @@ export async function GET(request: Request) {
         landningssida(orgnr).catch((e: unknown) => ({ fel: e instanceof Error ? `Inkio svarade inte: ${e.message}` : "Inkio svarade inte." })),
       ]);
       return svar({ kopplat, aktivitet, sida, hamtad: new Date().toISOString() });
+    }
+
+    // Orderns ekonomi, när ordern fälls ut på kortet: faktureringen, orderhanteringen,
+    // utbetalningen, avtalen, leveransen, fakturorna, filerna och samtalen (`ekonomi.ts`).
+    if (vad === "ekonomi") {
+      const id = url.searchParams.get("order") ?? "";
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return svar({ fel: "Ordern finns inte." }, 400);
+      const rls = await supabaseServer();
+      const { data } = await rls.from("sales_order").select("id").eq("id", id).maybeSingle();
+      if (!data) return svar({ fel: "Ordern finns inte, eller så får du inte se den." }, 404);
+      // Kopplingen läses som tjänst: RLS har redan sagt att hen får se ordern.
+      const { data: k } = await supabaseAdmin().from("crm_order").select("crm_order_id").eq("order_id", id).maybeSingle();
+      if (!k?.crm_order_id) return svar({ kopplat, iInkio: false });
+      if (!kopplat) return svar({ kopplat });
+      const ekonomi = await hamtaOrderekonomi(String(k.crm_order_id));
+      return svar({ kopplat, iInkio: !!ekonomi, ekonomi, hamtad: new Date().toISOString() });
     }
 
     if (vad === "bolag") {

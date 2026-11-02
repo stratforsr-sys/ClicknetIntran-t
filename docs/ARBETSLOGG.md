@@ -5,6 +5,35 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-02 kväll · Orderns ekonomi ur Inkio, och betald = slutbetald (grenen `inkio-fakturering`, till `main` på beställarens ja, ingen migration)
+
+**Beställaren** frågade vad Inkio har på en order som Nav saknar, och hur man ser om fakturor är betalda. Svaret:
+faktureringen, orderhanteringen, finansbolagets utbetalning, avtalets uppsägning och nästa faktura, leveransen,
+fakturorna med indrivning, och filer och samtal. Inkio har noll fakturor, eftersom varken Fortnox eller Visma är
+kopplat i Inkio. Beställaren: "Fixa så att alla dem finns med, gör det exakt på samma backend som inkio, läs backend.
+Sen gör det som inkio med gränssnittet men med navs utseende." Fortnox: "skit i den nu". Betald: "Gör det som inkio".
+
+**Varför en läsväg och ingen kopia:** "samma backend som inkio". Kortet läser Inkio när ordern fälls ut, med samma
+anrop som Inkios ordersida, orderhantering, avtalssida och fakturasida gör (lästa ur Inkios webbklient:
+`SalesOrders-*.js`, `handlingTypes-*.js`, `statusMaps-*.js`, `InvoicingBadge-*.js`). En kopia i Nav hade kunnat glida
+isär, som `financed` på TLS gjorde. Varje anrop tar ~250 ms, och de går parallellt.
+
+**Varför betald = slutbetald:** Inkio har ingen orderstatus betald. Fakturaplanen har lägen per faktura, och
+orderhanteringens sista steg, Slutbetald, är klart när `paid >= total`, bara för intern fakturering (en finansierad
+order betalas av finansbolaget). Grenens förra regel satte hela ordern betald på den första betalda fakturan, vilket
+blir fel för månadsfakturering (Navs nya order faktureras månadsvis, 15 dagar).
+
+- `ekonomi.ts` (ren), `ekonomi-server.ts`, `inkioLas` i `inkio.ts`, `vad=ekonomi` i `/nav2/inkio`, `arSlutbetald` i
+  `tillampa`.
+- Utkastet: krokarna `kkEkonomi` och `kkHalsaEkonomi`, rutan i Nav 2.0-lagret, stegen (det som väntar nu andas och
+  stängs av med reducerad rörelse), fakturaplanen som remsa, tabellen bakom en knapp.
+- Prov: `tests/inkio-ekonomi.mjs` (ny, i `npm test`), `inkio-inflode`, `navnyheter`; skriptet tolkas med `vm.Script`.
+- **Avvikelser som rättas med data, inte kod:** #29 TLS är finansierad via Novo i Inkio men `financed = false` i Nav;
+  #28 SweAuto är utkast utan värde i Nav men inskickad (13 140 kr, kvartalsvis) i Inkio. Skriptet är provkört med
+  rollback men inte skrivet (behörighetsspärren). Fyra order väntar i Inkios orderhantering; beställaren: skit i den.
+
+---
+
 ## 2026-11-02 kväll · Inkio-provet i produktionen, och tre rättelser efter det (MERGADE till `main` `e0190d3` på beställarens ja, ingen migration)
 
 **Provet** (`~/nav2-utkast/delar/inkio-inflode/TESTPROMPT.md`, rapporten `RAPPORT.md` bredvid): bevakningen kördes för

@@ -14,6 +14,28 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "orderns-ekonomi-ur-inkio",
+    rubrik: "Ordern visar ekonomin i Inkio: fakturering, utbetalning och betalningar",
+    ingress: "Var ordern står hos ekonomi, fakturaplanen, finansbolagets utbetalning, avtalet och leveransen, direkt ur Inkio.",
+    text: `Öppna en order, gå till **Order** och fäll ut den. Under Inkio-raden står
+**Ekonomi**, läst ur Inkio när du öppnar den:
+
+- hur ordern faktureras (intern eller finansierad, hur ofta och betalningsvillkoren)
+- var den står hos ekonomi, steg för steg som i Inkios orderhantering
+- fakturaplanen, med vilka fakturor som är betalda, förfallna eller saknas i Fortnox
+- om finansbolaget har betalat ut, och hur länge det har väntat
+- avtalet: status, nästa faktura, fakturerade perioder och om kunden sagt upp
+- produktionskortet och leveransdatumet
+- fakturorna med påminnelser och indrivning, och filerna och samtalen i Inkio
+
+Rutan **Ekonomi** högst upp på kortet säger det viktigaste, till exempel
+**väntar på ekonomi** eller **3 av 12 betalda**. En order räknas som betald först
+när alla fakturor i planen är betalda, som i Inkio.`,
+    datum: "2026-11-02",
+    roller: [],
+    href: "/order",
+  },
+  {
     slug: "fel-larmar-om-samtal-och-morgonkvitto",
     rubrik: "Fel larmar när ett samtal inte går att läsa",
     ingress: "Ett samtal från växeln som inte blir ett samtal i Nav syns nu i Fel, och felrapporter står under rätt typ i händelseloggen.",

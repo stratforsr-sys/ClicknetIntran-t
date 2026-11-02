@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 import { notifieraFlera } from "@/lib/notishandelse-server";
 import { nivaFor } from "@/lib/nav2/forma";
 import { avtaletsOrder, inkioKonfigurerad, inkioKund, inkioLank, inkioUrl, kundhistorik, type Kundaktivitet } from "./inkio";
+import { arSlutbetald } from "./ekonomi-server";
 import {
   aktivitetsrader,
   attJamfora,
@@ -49,7 +50,8 @@ import {
  *   - ger notis till kretsen (`kretsen` i inflode.ts) — aldrig till den som
  *     skrev, aldrig om Navs eget eko, aldrig om det gamla (tolv timmar);
  *   - makulerar, markerar betald eller avslutar avtalsbevakningen när Inkio
- *     säger det om en kopplad order (`styr_status`);
+ *     säger det om en kopplad order (`styr_status`); betald först när ordern är
+ *     slutbetald, alla fakturor i planen betalda (`arSlutbetald`, som Inkio);
  *   - kopplar äldre order på organisationsnummer när det är entydigt.
  *
  * Kastar aldrig. Fel per kund står på `crm_kund.fel`; står hela bevakningen
@@ -529,6 +531,15 @@ async function tillampa(s: Statusandring, bolag: string, personer: Personer): Pr
     }
   }
 
+  // BETALD = SLUTBETALD, som i Inkio (`ekonomi.ts`): en betald faktura av tolv gör inte ordern
+  // betald. Ordern sätts betald först när Inkio säger att varje faktura i planen är betald;
+  // fram till dess syns betalningarna på kortet ("3 av 12 betalda").
+  if (s.vad === "betald") {
+    const b = await arSlutbetald(inkioOrder);
+    if (!b?.slutbetald) return false;
+    s = { ...s, skal: `Slutbetald i Inkio: ${b.betalda} av ${b.totalt} fakturor betalda.` };
+  }
+
   const { data: andrad, error } = await db.rpc("lk_inkio_andra_order", { p_order: orderId, p_vad: s.vad, p_skal: s.skal });
   if (error) {
     // Aldrig tyst igen: raden står redan i crm_handelse med det nya läget, så
@@ -570,7 +581,7 @@ async function tillampa(s: Statusandring, bolag: string, personer: Personer): Pr
       av: null,
       kalla: "order-betald",
       typ: "order",
-      rubrik: `Betald: ${o?.company_name ?? bolag}`,
+      rubrik: `Slutbetald: ${o?.company_name ?? bolag}`,
       detalj: `${s.skal} Provisionen är oförändrad — den utgår från signeringen.`,
       href: `/order/${orderId}`,
       objekt: { typ: "sales_order", id: orderId },
