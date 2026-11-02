@@ -14,6 +14,23 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "tillagg-med-kundens-uppgifter",
+    rubrik: "Ett tillägg får kundens adress och kontakt",
+    ingress: "En ny order på en befintlig kund fylls i med allt Nav vet om kunden, och avtalet följer med ett sparat utkast.",
+    text: `Trycker du **Ny order för kunden** på kundkortet, eller **Lägg som tillägg** i
+formuläret, fylls kontakten, telefonen, mejlen och adressen i från kundens tidigare
+order. Saknar alla order adressen hämtar Nav den från Bolagsverket. Förut följde
+bara orten med, och ordern stoppades på adressen när den skickades. Rätta och
+Förläng tar också med hela adressen.
+
+Avtalet laddas upp när du väljer det. Stänger du formuläret och kommer tillbaka
+med **Fortsätt där du var** är avtalet kvar. Förut fick du "Ladda upp det
+påskrivna avtalet" fast det var bifogat, och fick välja filen igen.`,
+    datum: "2026-11-02",
+    roller: [],
+    href: "/order",
+  },
+  {
     slug: "snabbraden-i-dag",
     rubrik: "Uppgifter: en ny rad hamnar i dag",
     ingress: "Det du skriver i Att göra i dag läggs i dag, och fältet töms när du trycker Lägg till.",
