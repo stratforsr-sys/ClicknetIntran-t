@@ -577,7 +577,7 @@ async function motetNu(id: string): Promise<(KalMote & { organizer_id: string })
   };
 }
 
-type Sparat = { event_id: string; undo_id: string | null; andrat: string[]; skickat: { inbjudna?: number; installd?: number; besked?: number; kalla?: string | null; svara_igen?: string[] } };
+type Sparat = { event_id: string; undo_id: string | null; andrat: string[]; skickat: { inbjudna?: number; installd?: number; besked?: number; kalla?: string | null; svara_igen?: string[]; arrangoren?: boolean } };
 
 /**
  * Formulärets sparning av ett möte (granskningen E2, 0212): det som ändrats, i ett anrop och med en ångerrad. Ingen
@@ -638,6 +638,8 @@ async function sparaMote(user: CurrentUser, id: string, f: Falt, deltagare: stri
   if (k.inbjudna) delar.push(k.inbjudna === 1 ? "En ny deltagare får en inbjudan." : `${k.inbjudna} nya deltagare får en inbjudan.`);
   if (k.installd) delar.push(k.installd === 1 ? "Den som togs bort får veta att mötet är inställt." : `De ${k.installd} som togs bort får veta att mötet är inställt.`);
   if (!r.data.andrat.includes("tid") && k.besked) delar.push(k.kalla === "kalender-flyttad" ? "Deltagarna får besked om ändringen." : "Deltagarna ser ändringen i Nav.");
+  // 0281: ett ombud som bara ändrade deltagarna. Arrangören får ett besked i klockan.
+  if (k.arrangoren) delar.push("Arrangören ser ändringen i Nav.");
   return { ok: true, eventId: id, dag: efter.dag, angra: r.data.undo_id ?? undefined, kvitto: delar.join(" ") };
 }
 

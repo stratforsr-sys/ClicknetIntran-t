@@ -556,7 +556,7 @@ export async function flyttaSerie(eventId: string, dag: string, start: number): 
     if (!arMinut(start, 0, 1439) || start % 5 !== 0) return { fel: "Välj en starttid." };
 
     const db = supabaseAdmin();
-    const { data: e } = await db.from("calendar_event").select("dag, series_id").eq("id", eventId).maybeSingle();
+    const { data: e } = await db.from("calendar_event").select("series_id").eq("id", eventId).maybeSingle();
     if (!e?.series_id) return { fel: "Händelsen är inte en del av en serie." };
     const { data: s } = await db
       .from("calendar_series")
@@ -565,7 +565,9 @@ export async function flyttaSerie(eventId: string, dag: string, start: number): 
       .maybeSingle();
     if (!s) return { fel: "Serien finns inte längre." };
 
-    const fran = [e.dag as string, dag].sort()[0] < svensktDatum() ? svensktDatum() : [e.dag as string, dag].sort()[0];
+    // Hela serien gäller från i dag, som lk_flytta_serie sedan 0281 (granskningen E7). Förut från den dragna
+    // gången, och gångarna mellan i dag och den fick den nya veckodagen bredvid den gamla.
+    const fran = svensktDatum();
     const dagar = forekomster(
       {
         monster: s.monster as "vardagar" | "veckovis" | "manadsvis",

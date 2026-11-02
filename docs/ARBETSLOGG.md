@@ -5,6 +5,67 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-02 kväll · S05/S06-resterna: kalenderns SQL-fynd, Lagets krets och månadens lås (MERGAD till `main` på beställarens ja, 0281 KÖRD)
+
+Sex frågor stod kvar efter resterna (2026-11-01). Beställaren svarade 2026-11-02 via session f8: "fixa allting",
+alltså ja till förslagen. Allt utgår från `pg_proc` efter 0278, inte från de gamla migrationsfilerna. 0276 hade redan
+skrivit om `lk_angra`.
+
+**S05 M2, delningen.** `lk_andra_serie` raderade vid "den här och följande" alla gångar från delningen, också
+undantagen (`avviker`, inte inställda). Nu ställs undantagen in (`cancelled_at`, `ics_sequence + 1`, som `lk_stall_in`):
+`calendar_event_ics` köar CANCEL till gästerna och påminnelserna avbokas. Den som var med på ett undantag men inte är med
+i den nya serien får en notis (`installd`, den första gången). De andra har fått `flyttad-serie`. Raderna står kvar
+inställda, eftersom en CANCEL för en raderad händelse aldrig går ut: `ics()` i utkorgen läser händelsen. Ångerraden bär
+`gangbilagor` och `gangpaminnelser` (det som försvann i kaskaden med de raderade gångarna) och `undantag` och
+`reminders`. `lk_angra` (dela_serie) lägger tillbaka dem. En ångerrad från före 0281 saknar nycklarna och ångras som
+förut.
+
+**S05 M6, ombudet.** `lk_notis` hoppade redan över den som gör ändringen, så ombudet fick ingen notis. Det som återstod
+var att ombudets eget svar nollställdes vid en flytt, så att hen ombads svara på sin egen flytt. Nu undantas
+`p_aktor`. Ändrar ett ombud bara deltagarna får arrangören `andrad` med `data.deltagare` (kalla
+`kalender-flyttad-tyst`, alltså klockan och inget mejl), och svaret bär `skickat.arrangoren`. Texten är
+"… ändrade deltagarna i …" och kvittot "Arrangören ser ändringen i Nav.".
+
+**S05 M7.** `lk_andra_serie` och `lk_flytta_serie` räknar i dag som `(now() at time zone 'Europe/Stockholm')::date`.
+
+**E7, flyttbannerns Hela serien.** `lk_flytta_serie` bytte veckodag för hela serien men raderade från den dragna
+gången. Gångarna mellan i dag och den stod kvar, och `korKalendersteget` födde den nya veckodagen bredvid dem. Nu gäller
+Hela serien från i dag, som i `lk_andra_serie`. `flyttaSerie` (actions.ts, både gamla Nav och Nav 2.0) räknar dagarna
+från i dag. **0281 måste köras före mergen:** den nya rutten mot den gamla funktionen föder dubbletterna direkt, medan
+mains rutt mot den nya funktionen bara lämnar en lucka som jobbet fyller.
+
+**S06 M4, Laget.** Sedan D5 räknade Lagets summa och delar alla i månadens underlag (chefens egen försäljning,
+övertäcket, bonusar till icke-säljare), medan takten, "Nått en nivå" och listan bara räknade säljarna. Beställarens
+beslut: bara säljarna. `ndPvSaljKrets` sätter `NDPVBARASALJ` under Lagets och Månadsmålens ritning, och
+`pvLaget`-överlagringen lämnar då radernas summa. Perioder och Fastställ räknar alla som förut.
+
+**S06 M7, månadens lås.** `ta_bort_ovrig_bonus` (0215) och `commission_period_stangs` (INSERT, alltså Fastställ) tar
+samma `pg_advisory_xact_lock(hashtextextended('commission_period:' || månad, 0))` före sin prövning. Ett allmänt
+stopp för alla poster i en fastställd månad gjordes INTE. `laggOvrigBonus` och `bokforProvision` prövar inte månaden i
+dag, och att stänga dem är ett nytt beslut. I produktionen har ingen post bokförts efter att dess månad stängdes.
+
+**Prov.** `~/nav2-utkast/delar/s05-s06-rester/prov-0281.mjs` kör varje fynd i en transaktion mot produktionen, först med
+funktionerna som de är och sedan med 0281, och rullar tillbaka. Det ger 16 röda före och 26 av 26 gröna efter. Låset
+provas med en andra anslutning (`pg_try_advisory_xact_lock` nekas). `prov-laget.mjs` kör utkastets egna rader i en vm:
+rött på main, grönt på grenen. `leveranskalender.mjs` har två nya kontroller (röd, sedan grön). Enhetsproven
+(navnyheter, leveranskalender, kalender, kalender-andring, upprepning, notiser, notiser-tackning, notislankar, utskick,
+provision) är gröna. `tsc --noEmit` ger bara Pling-felen som finns på main.
+
+**Fallgropar.** Skalets `grep` är en funktion som tyst hoppar över filer den tror är binära, och `route.ts` i kalendern
+(56 kB, `file` säger "data") gav noll träffar. Använd `command grep -a`. En kommentar som innehöll ordet `current_date`
+fällde provet som läser `prosrc`. Loopvariabeln `x` krockade med aliaset `x` i `jsonb_array_elements_text(...) x` i
+samma funktion.
+
+**Körning och merge.** Beställaren: "Pusha nu", och sedan "Ja" till både 0281 och mergen. Main hade dragit ifrån två
+gånger: rättelser varv 2 (`c68d4ee`, 0282) och Inkio-ekonomin (`5d5178f`). Grenen lades om på `5aee3a0` och pushades
+(`9639eb2`, previewen grön), och sedan flätades main in så att previewen byggde det sammanslagna trädet innan main rördes.
+Före körningen frågades `schema_migrations` igen (0280 ej körd, 0281 ledig), de sex funktionerna i `pg_proc` jämfördes
+med kopiorna från provet (oförändrade), och torrprovet kördes om: 26 av 26 gröna. 0281 kördes 2026-11-02 20:26 UTC med
+`apply-sql` (vakten godkände), och alla sju kontrollerna i `prosrc` hittade de nya delarna. Kvar: provet i produktionens
+gränssnitt (en serie med ett undantag och "den här och följande", Hela serien till ny veckodag, ombudets sparning).
+
+---
+
 ## 2026-11-02 kväll · Inkio påslaget åt båda hållen, notiserna bara till Zen och Simon (ingen kod, ingen migration)
 
 Beställaren frågade vad det betyder att slå på Inkio, och svarade sedan "Ja sätt på inkio" och "Gör detta" om

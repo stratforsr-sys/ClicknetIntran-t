@@ -14,6 +14,41 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "kalendern-serier-och-ombud",
+    rubrik: "Kalendern: serier och ombud som i Outlook",
+    ingress: "Hela serien flyttar alla gångar från i dag, och ingen gång försvinner utan besked.",
+    text: `Drar du ett möte i en serie till en annan dag och väljer **Hela serien** flyttas
+alla gångar från i dag. Förut flyttades bara gångarna från den du drog, och
+veckorna före kunde få två möten.
+
+Ändrar du **den här och följande**, och en gång längre fram har ändrats för sig,
+ställs den gången in, som i Outlook. Gäster utifrån får ett mejl om att den är
+inställd, och den som bara var med på just den gången får en notis. **Ångra**
+tar tillbaka allt, också gångens bilagor och påminnelser.
+
+Får du ändra i någon annans kalender och flyttar ett möte som du själv är med på,
+står ditt eget svar kvar. Ändrar du bara vilka som är med får arrangören veta
+det i klockan.`,
+    datum: "2026-11-02",
+    roller: [],
+    href: "/kalender",
+  },
+  {
+    slug: "laget-bara-saljarna",
+    rubrik: "Laget räknar bara säljarna",
+    ingress: "Summan i Laget är säljarnas och går ihop med takten och listan.",
+    text: `Under **Provision → Laget** räknade summan och delarna med allas provision:
+också din egen försäljning, ditt övertäck och bonusar till andra än säljare.
+Takten, **Nått en nivå** och listan räknade bara säljarna. Nu räknar hela Laget
+bara säljarna, så att siffrorna går ihop.
+
+**Perioder** och **Fastställ** tar med alla som förut, eftersom det är det som
+betalas ut.`,
+    datum: "2026-11-02",
+    roller: ["sales_manager", "ceo", "finance"],
+    href: "/provision",
+  },
+  {
     slug: "orderns-ekonomi-ur-inkio",
     rubrik: "Ordern visar ekonomin i Inkio: fakturering, utbetalning och betalningar",
     ingress: "Var ordern står hos ekonomi, fakturaplanen, finansbolagets utbetalning, avtalet och leveransen, direkt ur Inkio.",
