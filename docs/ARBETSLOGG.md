@@ -5,7 +5,7 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
-## 2026-11-02 kväll · Inkio-provet i produktionen, och tre rättelser efter det (grenen `inkio-rattelser`, ingen migration)
+## 2026-11-02 kväll · Inkio-provet i produktionen, och tre rättelser efter det (MERGADE till `main` `e0190d3` på beställarens ja, ingen migration)
 
 **Provet** (`~/nav2-utkast/delar/inkio-inflode/TESTPROMPT.md`, rapporten `RAPPORT.md` bredvid): bevakningen kördes för
 hand mot produktionen med `inflode` på, `utflode` av och `NOTIS_PROV_TILL` = Zen. Bara GET mot Inkio. 28 av 29 kunder
@@ -27,7 +27,15 @@ av igen. **Inte redo att slås på för alla:** `lk_inkio_andra_order` (0277) s�
   alltid provläge; bara en borttagen släpper ut notiserna till alla.
 - Omnämnandena (`@[Namn](ref:User/…)`) i notisen var redan rättade i `ed04ae7` (`renText`).
 - Prov: inkio-inflode (nytt: "Kopian lagas även när Inkio är tyst", två i Provfiltret), inkio, notiser, utskick,
-  notiser-tackning, notislankar gröna. Delen i inflode-server.ts provas i produktionen efter mergen.
+  notiser-tackning, notislankar, larm gröna efter att `main` slagits ihop (krock bara i de två docs-filerna).
+
+**Mergad och provad.** Pushkvoten höjd till 100; beställaren: "Ja kör". Grenen slogs ihop till en commit ovanpå
+`5aee3a0`, previewen grön, `main` snabbspolad till samma commit `e0190d3`, produktionen grön. Provet för en kund
+(559275-2694, `/api/jobb/inkio?kund=`, `inflode` på bara runt anropet): utan ändring `lagade: 0`; med den äldsta
+raden raderad och `senast_last` två timmar bakåt `lagade: 1` och inga notiser, ingen status, ingen koppling. Raden
+kom tillbaka med samma `extern_id` och avtryck; enda skillnaden mot den raderade är `data.omrade`, som tolkningen
+skriver sedan 0278 (162 äldre rader saknar det, `omradeFor` härleder området ur `om_typ`). Räknarna för notiser,
+`integration_log` och `crm_handelse` lika före och efter. Allt står AV.
 
 ---
 
