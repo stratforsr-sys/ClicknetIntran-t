@@ -21,6 +21,7 @@ import {
   navForfattare,
   notisFor,
   posttext,
+  provfilter,
   renText,
   senastHant,
   statusFranInkio,
@@ -164,6 +165,18 @@ rubrik("Kretsen");
   ok("en ledare som bara är säljare får inte", !k.includes("kollega"));
   const ingen = kretsen({ superadmin: ["zen"], saljare: [], chefer: new Map(), niva });
   ok("utan säljare: bara superadmin", ingen.length === 1 && ingen[0] === "zen");
+}
+
+rubrik("Provfiltret");
+{
+  const ids = ["zen", "fredrik", null, "zen", undefined];
+  const prov = "zen , annan";
+  ok("previewen utan NOTIS_PROV_TILL: ingen", provfilter(ids, { VERCEL_ENV: "preview" }).length === 0);
+  ok("previewen med: bara de listade", JSON.stringify(provfilter(ids, { VERCEL_ENV: "preview", NOTIS_PROV_TILL: prov })) === '["zen"]');
+  ok("produktionen utan: alla, en gång var", JSON.stringify(provfilter(ids, { VERCEL_ENV: "production" })) === '["zen","fredrik"]');
+  ok("produktionen med: bara de listade", JSON.stringify(provfilter(ids, { VERCEL_ENV: "production", NOTIS_PROV_TILL: prov })) === '["zen"]');
+  ok("produktionen med en tom variabel: alla", provfilter(ids, { VERCEL_ENV: "production", NOTIS_PROV_TILL: " , " }).length === 2);
+  ok("lokalt utan miljö: ingen", provfilter(ids, {}).length === 0);
 }
 
 rubrik("Ändringar i Inkio som ändrar Nav");

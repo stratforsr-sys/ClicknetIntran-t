@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser, type CurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { FORINSTALLNINGAR, STEG, UPPREPA, WDL, arDatum, arVy, kvittoFlyttad, kvittoKopierad, plus, wd, type Upprepa, type Upptaget } from "@/lib/leveranskalender";
+import { FORINSTALLNINGAR, STEG, UPPREPA, WDL, arDatum, arVy, kvittoFlyttad, kvittoKopierad, kvittoSerieInstalld, plus, wd, type Upprepa, type Upptaget } from "@/lib/leveranskalender";
 import { fonsterFran, fornamn, hamtaHandelsedetalj, lk, upptagetFor } from "@/lib/leveranskalender-server";
 import { KATEGORIFARGER, KATEGORINYCKEL, hamtaKalposter, kalDetalj, lasKategorier, ombudFor, sokKalender } from "@/lib/nav2/kalender";
 import { kalPushNasta } from "@/lib/nav2/kalender-push";
@@ -383,6 +383,31 @@ async function andraSerie(user: CurrentUser, id: string, a: Serieandring): Promi
     angra: r.data.undo_id,
     dag: a.dag,
     kvitto: `${vem} ändrad: ${text}${slut ? ` till ${slut}` : ""}.${igen ? ` ${igen === 1 ? "En deltagare behöver" : `${igen} deltagare behöver`} svara igen.` : ""}`,
+  };
+}
+
+/**
+ * Ställ in en gång i en serie som i Outlook (beställaren 2026-11-02): "Den här och följande" eller "Hela serien"
+ * (0276, `lk_stall_in_serie`). "Bara den här gången" går som förut genom `stallIn`. Varje deltagare får en notis och
+ * ett mejl för hela inställningen, inte ett per gång, och Ångra tar tillbaka alla gångarna.
+ */
+async function stallInSerie(user: CurrentUser, id: string, fran: "har" | "alla"): Promise<Resultat> {
+  if (!UUID.test(id)) return { fel: "Händelsen finns inte längre." };
+  const r = await lk<{ undo_id: string; mottagare: string[]; paminnelse: boolean; antal: number; fran: string; event_id: string }>("lk_stall_in_serie", {
+    p_aktor: user.employee!.id,
+    p_event: id,
+    p_fran_har: fran === "har",
+  });
+  if (!r.ok) return { fel: /lk_stall_in_serie/.test(r.fel) ? "Serien ställs in när databasen fått 0276. Bara den här gången går än." : r.fel };
+  const namn = await fornamn(r.data.mottagare);
+  return {
+    ok: true,
+    kvitto:
+      kvittoSerieInstalld(fran, r.data.antal, r.data.fran, r.data.mottagare.map((m) => namn.get(m) ?? "")) +
+      (r.data.paminnelse ? " Den som skulle få mejlpåminnelsen får ett mejl om att mötet är avbokat." : ""),
+    angra: r.data.undo_id,
+    eventId: r.data.event_id,
+    dag: r.data.fran,
   };
 }
 
@@ -820,6 +845,8 @@ async function utfor(user: Inloggad, b: Record<string, unknown>): Promise<Respon
       case "bocka":
         return ut(await bockaAv(String(b.punkt ?? ""), b.klar === true));
       case "stallin":
+        // Med serie: "Den här och följande" (har) eller "Hela serien" (alla). Utan: bara den här gången.
+        if (b.serie === "har" || b.serie === "alla") return ut(await stallInSerie(user, id, b.serie));
         return ut(await stallIn(id));
       case "kopiera":
         // Med dag och start: Ctrl- eller Alt-dra. Utan: "Kopiera till nästa vecka", repots kopiera.

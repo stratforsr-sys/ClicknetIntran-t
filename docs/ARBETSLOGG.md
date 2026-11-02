@@ -5,6 +5,37 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-02 kväll · Inkio in i Nav MERGAD till `main` (beställarens ja), allt AV tills provet i produktionen
+
+**Beställaren:** "Pusha till main istället så slipper du lägga in nycklar i previewen." Previewen saknade
+`INKIO_API_KEY`/`INKIO_API_SECRET` för grenen, och automatläget nekade att lägga dit dem. Produktionen har dem redan.
+
+**Vad som gjordes:**
+- `main` (`469af3c`, kalenderns serie) mergades in i grenen först. Krockarna gällde bara texter: navnyheterna (båda
+  posterna står kvar), NASTA_SESSION och arbetsloggen. Utkorgen slogs ihop av git (serien utan `.ics` och de nya
+  CRM-handlingarna rör olika ställen).
+- `provfilter` flyttades till `inflode.ts` och gäller nu i produktionen också, så länge `NOTIS_PROV_TILL` är satt
+  där. Utan variabeln i produktionen går notiserna till alla som förut. Sex nya fall i provet (74 gröna).
+- `NOTIS_PROV_TILL` = Zens id sattes i Vercel Production FÖRE pushen, så att mergens bygge har den. Alla notisvägar
+  går genom filtret: bevakningens notiser (`kretsFor`), Inkios ändringar av ordern (`tillampa`), anteckningen från
+  kundkortet (`kretsForKund`) och larmet "Inkio-bevakningen står still".
+- Brytarna `inflode` och `utflode` står av och `nav-inkio` är avstängt. Med `utflode` av köar triggrarna ingenting och
+  `anteckningICrm` skriver inte, så produktionen skriver ingenting nytt i Inkio. Det som redan gick dit förut (skapa,
+  makulera, leverans) går som förut.
+
+**En skillnad tills `utflode` slås på:** en anteckning från kundkortet gick förut direkt till Inkio. Nu sparas den i
+`kundanteckning` och väntar i kö. `kaOmAnteckningar` skickar den när `utflode` slås på. Nav är stängt för alla utom
+Zen och Simon, så det gäller bara dem.
+
+**Provet** görs nu i produktionen. `TESTPROMPT.md` är omskriven: bevakningen körs för hand med `curl` mot
+produktionen och `CRON_SECRET`, `utflode` står av hela tiden, och anteckningsprovet raderas innan sessionen slutar,
+annars skickas det till Inkio när `utflode` slås på.
+
+**Slå på för alla** (efter rapporten och beställarens ja): ta bort `NOTIS_PROV_TILL` ur Production och bygg om, sedan
+brytarna och jobbet. Se NASTA_SESSION.
+
+---
+
 ## 2026-11-02 eftermiddag · Inkio in i Nav, svaren: 0277 körd, Lucas admin, Strajv rättad, varma och tysta kunder
 
 **Beställaren svarade:** "Ta bort lucas från Superadmin, gör han bara admin." Om Strajv: "Den som är i inkio är rätt.
@@ -91,6 +122,53 @@ få rätt:
 **Inte gjort:** 0277 kördes inte (automatläget nekade och det kräver ja). Ingen skrivning gjordes i Inkio, så
 `correct-sales-order`, anteckningen till Inkio och raderna på ordern är provade i logiken men inte mot Inkio. Inkio
 har inga fakturor än, så "betald från Inkio" bygger på en gissning om fältet för ordern.
+
+---
+
+## 2026-11-02 · Kalendern: kortet får plats, och Ställ in frågar om serien (MERGAD till `main` på beställarens ja, 0276 KÖRD)
+
+**Beställaren:** (1) kortet som öppnas när man trycker på en händelse långt ner i kalendern hamnade under skärmen, så
+knapparna gick inte att nå. (2) En återkommande händelse gick bara att ställa in en gång i taget, och det ska gå att
+välja serien eller bara den gången, som i Outlook.
+
+**(1) Varför kortet hamnade utanför.** Läget räknades före ritningen med en fast höjd: `top = min(y, innerHeight − 420)`.
+Ett kort med svar, påminnelse och Ställ in-frågan är högre än så (546 px i provet), och nederkanten hamnade under skärmen.
+Höjden går bara att veta efter ritningen. Därför mäter `kPeekPassa()` efter varje `render()` och flyttar upp kortet så
+att nederkanten står 12 px ovanför skärmens, och aldrig över sidhuvudet (60 px). Det gäller också snabbskapa. I mobilen
+sitter kortet fast nedtill (`top:auto!important`) och påverkas inte.
+
+**(2) Varför det krävde en databasfunktion.** `lk_stall_in` ställer in en gång och skickar en notis och ett mejl per gång
+till varje deltagare. Att loopa den över en serie hade gett åtta mejl per person, och jobbet hade fortsatt föda gångar
+eftersom serien saknade slut. `lk_stall_in_serie` (0276) gör allt i en transaktion:
+- **Den här och följande** går efter seriens ordning (`occurrence_of`), inte dagen, så att en flyttad gång följer sin
+  plats i serien. Delar som 0211 delat av efter gången ställs in helt. Serien slutar dagen före.
+- **Hela serien** ställer in allt som inte har börjat än (svensk tid), i hela kedjan av delar (`fortsatter_i` åt båda
+  hållen). Det som varit står kvar, som i Outlook. Serien slutar i dag.
+- `calendar_series_slut_efter_start` hindrar ett slut före början. En del som ställs in helt slutar därför på sin första
+  dag. Finns inte den gången än (en del som börjar bortom horisonten) föds den nu och ställs in, annars hade jobbet fött
+  den senare. Ångra tar bort den igen.
+- En notis per person (`installd`, `data.serie` och `antal`). Notisen säger "ställde in hela serien" eller "… och
+  gångerna efter". Mejlet får ingen `.ics`: serieinbjudan skickades aldrig som fil, och en CANCEL för första gången
+  hade sagt fel om resten.
+- Ångra (`stall_in_serie` i `lk_angra`, skriven ur pg_proc med en gren till) sätter tillbaka gångarna, påminnelserna och
+  seriernas slut.
+
+**Gränssnittet.** Frågan i kortet har tre val med vad var och ett träffar ("fre 20 nov", "från fre 20 nov",
+"alla kommande"). Medan ett val är markerat bleknar och stryks gångarna det träffar i kalendern (`kSerieGanger`), så att
+följden syns innan man trycker. En händelse som inte upprepas frågar som förut. Utkastets egen demo gör samma sak lokalt.
+
+**Prov.**
+- 0276 i en transaktion mot produktionen med ROLLBACK (`~/nav2-utkast/delar/kalender-stall-in/prov-0276*.mjs`, inget sparat; kör från en katalog med `pg`): rättigheten
+  (bara service_role), har/alla på K&V Protokoll, en notis för nio gånger på en 1:1, en avdelad del bortom horisonten,
+  Ångra (utkorgen som före), `lk:installd` en gång till och `lk:behorighet` för fel person. Allt grönt.
+- `~/nav2-utkast/probe/kalender-kort-prov.mjs` (headless Chrome, Zens provdata): 20/20 på grenen. Mot main slutar kortet
+  med frågan på 830 px när skärmen är 813 px, och de tre valen saknas.
+- `tests/leveranskalender.mjs`: kvittot och notisens två nya former.
+- Efter körningen av 0276: samma rullade prov mot den installerade funktionen, 20/20 gröna. Inga `stall_in_serie`-rader
+  i `calendar_undo` och inga nya notiser i utkorgen efteråt.
+
+**Körning och merge.** Första försöket att köra 0276 stoppades av behörighetsspärren. Beställaren sa ja till båda,
+så 0276 kördes efter en ny kontroll av `schema_migrations` och pg_proc. Grenen lades sedan på `main` som en commit.
 
 ---
 

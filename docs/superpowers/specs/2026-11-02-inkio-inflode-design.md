@@ -100,8 +100,8 @@ idempotens på källans id, inget eko och en utkorg för det som går ut.
 
 | Kolumn | Vad | Från början |
 |---|---|---|
-| `inflode` | bevakningen läser Inkio | av, slås på vid mergen |
-| `utflode` | Nav → Inkio (triggrarna, anteckningarna) | av, slås på vid mergen |
+| `inflode` | bevakningen läser Inkio | av, slås på efter provet i produktionen |
+| `utflode` | Nav → Inkio (triggrarna, anteckningarna) | av, slås på efter provet i produktionen |
 | `styr_status` | makulerad, betald och uppsagt i Inkio ändrar Nav | på |
 | `ratta_i_inkio` | en rättning rättar Inkio-ordern | på |
 
@@ -130,6 +130,9 @@ påslaget. Det redan befintliga `nav-utkorg` anropar Vercel lika ofta.
   databas `read only`, och skriver ut rader, notiser med mottagare, statusändringar och kopplingar.
 - Previewen notifierar ingen utom personerna i `NOTIS_PROV_TILL` (`provfilter`), och den skriver aldrig i
   Inkio (`inkioFarSkriva`, utkorgen lämnar tillbaka CRM-raderna).
+- Produktionen gör samma sak så länge `NOTIS_PROV_TILL` är satt där. Beställaren 2026-11-02: "Pusha till main
+  istället så slipper du lägga in nycklar i previewen." Provet görs därför i produktionen med brytarna av,
+  variabeln tas bort när bevakningen slås på för alla.
 
 ## Mina val (beställaren har inte sagt dem)
 

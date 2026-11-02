@@ -423,6 +423,25 @@ export function kretsen(o: { superadmin: readonly string[]; saljare: readonly st
   return [...ut];
 }
 
+/**
+ * PREVIEWEN NOTIFIERAR INGEN (utom den som provar). Den delar databas med
+ * produktionen, och en prövning av bevakningen eller en anteckning där hade
+ * annars gett riktiga notiser till riktiga säljare. Utanför produktionen går
+ * notiserna bara till dem i `NOTIS_PROV_TILL` (anställningarnas id, kommaskilda),
+ * och utan den till ingen.
+ *
+ * I PRODUKTIONEN gäller samma filter så länge `NOTIS_PROV_TILL` är satt där
+ * (beställaren 2026-11-02: provet görs i produktionen, där Inkio-nycklarna
+ * finns, och ingen annan får en notis). Ta bort variabeln när bevakningen
+ * slås på för alla.
+ */
+export function provfilter(ids: readonly (string | null | undefined)[], env: { VERCEL_ENV?: string; NOTIS_PROV_TILL?: string } = process.env): string[] {
+  const rena = [...new Set(ids.filter((x): x is string => Boolean(x)))];
+  const till = new Set((env.NOTIS_PROV_TILL ?? "").split(",").map((x) => x.trim()).filter(Boolean));
+  if (env.VERCEL_ENV === "production" && !till.size) return rena;
+  return rena.filter((id) => till.has(id));
+}
+
 // -----------------------------------------------------------------------------
 // Ändringar i Inkio som ändrar ordern i Nav
 // -----------------------------------------------------------------------------

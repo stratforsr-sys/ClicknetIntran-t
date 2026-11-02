@@ -31,6 +31,7 @@ import {
   kvittoFlyttad,
   kvittoForslag,
   kvittoInstallt,
+  kvittoSerieInstalld,
   kvittoKopierad,
   kvittoLangd,
   kvittoSvar,
@@ -163,6 +164,8 @@ lika("svar", kvittoSvar("ja", "Zen"), "Svar skickat: ja. Zen ser det i sin klock
 lika("svar för en förekomst", kvittoSvar("nej", "Zen", "2026-09-30"), "Svar skickat för ons 30 sep: nej. Zen ser det i sin klocka.");
 lika("förslag", kvittoForslag("Zen", "2026-09-30", 780, 45), "Förslaget skickat till Zen: ons 30 sep 13:00–13:45.");
 lika("inställt", kvittoInstallt(["Elin"]), "Inställt. Elin får en notis och ett mejl.");
+lika("hela serien inställd (0276)", kvittoSerieInstalld("alla", 8, "2026-11-06", ["Elin"]), "Hela serien inställd, 8 gånger från fre 6 nov. Elin får en notis och ett mejl.");
+lika("den här och följande, en gång, ingen annan", kvittoSerieInstalld("har", 1, "2026-11-20", []), "Den här och följande inställd, 1 gång från fre 20 nov.");
 lika("kopierad", kvittoKopierad("2026-10-07", 540, true), "Kopierad till ons 7 okt 09:00. Inbjudan skickad igen.");
 
 console.log("\n\x1b[1mFelkoderna från databasen\x1b[0m");
@@ -209,6 +212,12 @@ console.log("\n\x1b[1mSerier och 1:1 (pass 2)\x1b[0m");
   lika("och säger när första gången är", notistext(rad("inbjudan-serie", { regel: "varje vecka", dag: "2026-10-07", tid: "10:00" }), u).detalj, "första gången ons 7 okt 10:00");
   lika("hela serien flyttad, notisen", notistext(rad("flyttad-serie", { regel: "torsdagar", tid: "10:00", svara_igen: true }), u).rubrik, "Zen flyttade hela serien 1:1. Svara igen");
   lika("ny punkt", notistext(rad("punkt", { text: "Invändningar" }), u).detalj, "“Invändningar”");
+  // 0276: en notis för en hel inställd serie, inte en per gång.
+  const hela = notistext(rad("installd", { dag: "2026-11-06", tid: "10:00", serie: "alla", antal: 8 }), u);
+  lika("hela serien inställd, notisen", hela.rubrik, "Zen ställde in hela serien 1:1");
+  lika("och från när, hur många", hela.detalj, "från fre 6 nov 10:00 · 8 gånger");
+  lika("den här och följande, notisen", notistext(rad("installd", { dag: "2026-11-20", tid: "10:00", serie: "har", antal: 1 }), u).rubrik, "Zen ställde in 1:1 och gångerna efter");
+  lika("en gång som förut", notistext(rad("installd", { dag: "2026-11-20", tid: "10:00" }), u).rubrik, "Zen ställde in 1:1");
   lika("förberedelsen", notistext({ ...rad("forberedelse"), av: null }, { ...u, avNamn: null }).rubrik, "Inför er 1:1: lägg till det du vill ta upp");
   lika("be om förberedelse", notistext(rad("forbered-be"), u).rubrik, "Zen vill att du förbereder er 1:1");
 }

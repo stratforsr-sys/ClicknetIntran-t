@@ -12,6 +12,7 @@ import {
   kopplaPaOrgnr,
   kretsen,
   notisFor,
+  provfilter,
   senastHant,
   statusFranInkio,
   tolkaPost,
@@ -93,20 +94,6 @@ type Kundrad = {
 };
 
 type Person = { id: string; email: string | null; status: string; manager_id: string | null; team_id: string | null };
-
-/**
- * PREVIEWEN NOTIFIERAR INGEN (utom den som provar). Den delar databas med
- * produktionen, och en prövning av bevakningen eller en anteckning där hade
- * annars gett riktiga notiser till riktiga säljare. Utanför produktionen går
- * notiserna bara till dem i `NOTIS_PROV_TILL` (anställningarnas id, kommaskilda),
- * och utan den till ingen.
- */
-export function provfilter(ids: readonly (string | null | undefined)[]): string[] {
-  const rena = [...new Set(ids.filter((x): x is string => Boolean(x)))];
-  if (process.env.VERCEL_ENV === "production") return rena;
-  const till = new Set((process.env.NOTIS_PROV_TILL ?? "").split(",").map((x) => x.trim()).filter(Boolean));
-  return rena.filter((id) => till.has(id));
-}
 
 /** Supabase-API:t kapar tyst vid 1000 rader. Läs sidvis. */
 async function allaOrder(): Promise<Order[]> {

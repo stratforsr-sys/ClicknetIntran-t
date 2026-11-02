@@ -38,6 +38,23 @@ betald, förlängd eller inte, nya bilagor och kampanjsidan. Notiserna styrs und
     href: "/order",
   },
   {
+    slug: "kalender-stall-in-serie",
+    rubrik: "Kalendern: ställ in en hel serie",
+    ingress: "Ett återkommande möte går att ställa in en gång, från en viss gång och framåt eller helt.",
+    text: `Öppna mötet i **Kalendern** och tryck **Ställ in**. Är mötet återkommande väljer
+du **Bara den här gången**, **Den här och följande** eller **Hela serien**. Håller du
+musen över ett val bleknar de gånger det gäller i kalendern.
+
+Deltagarna får en notis och ett mejl för hela inställningen, inte ett för varje
+gång. Möten som redan har varit står kvar. Ångra finns i kvittot i fem minuter.
+
+Kortet som öppnas när du trycker på ett möte får nu alltid plats på skärmen, också
+när mötet ligger långt ner i kalendern.`,
+    datum: "2026-11-02",
+    roller: [],
+    href: "/kalender",
+  },
+  {
     slug: "order-utan-provision",
     rubrik: "Lägg upp en order utan provision",
     ingress: "När provisionen inte är bestämd går ordern att lägga upp ändå, och provisionen läggs till senare.",
