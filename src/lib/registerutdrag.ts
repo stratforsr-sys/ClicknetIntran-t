@@ -528,6 +528,8 @@ export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
   { tabell: "commission_entry_reversal", kolumn: "created_by", skal: "Vem som backade en provisionspost" },
   { tabell: "commission_history", kolumn: "entered_by", skal: "Vem som förde in historiken" },
   { tabell: "customer_note_pin", kolumn: "pinned_by", skal: "Vem som fäste en anteckning om en kund" },
+  { tabell: "kundanteckning", kolumn: "skriven_av", skal: "Vem som skrev en anteckning om en kund; texten gäller kunden" },
+  { tabell: "crm_handelse", kolumn: "forfattare_id", skal: "Vem i Nav som skrev en post i Inkio (kopplat på mejl); posten gäller kunden" },
   { tabell: "document_feedback", kolumn: "answered_by", skal: "Ägaren som svarade på någon annans återkoppling" },
   { tabell: "employee_access_level", kolumn: "set_by", skal: "Vem som satte nivån" },
   { tabell: "employee_onboarding", kolumn: "mentor_id", skal: "Faddern; introduktionen följer med den nyanställda" },

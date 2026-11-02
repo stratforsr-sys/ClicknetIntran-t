@@ -9,7 +9,7 @@ import { inbjudan, type Mote } from "@/lib/ical";
 import { icsGaller } from "@/lib/utkorg-ics";
 import { paminnelsebeslut } from "@/lib/paminnelse-tid";
 import { adapter, type Crmstatus } from "@/lib/crm/adapter";
-import { crmKundId, leveransICrm, makuleraICrm, skapaICrm } from "@/lib/crm/synk-server";
+import { anteckningICrm, crmKundId, leveransICrm, makuleraICrm, navHandelseICrm, skapaICrm } from "@/lib/crm/synk-server";
 
 /**
  * Utkorgen (0069): allt som lämnar en kalenderändring.
@@ -693,6 +693,9 @@ async function ics(rad: Utkorgsrad): Promise<boolean> {
  *   skapa    (0074) — ordern godkändes: in i Inkio, kunden också om den saknas
  *   makulera (0074) — ordern makulerades och bocken var kvar: makulera i Inkio
  *   leverans (0075) — ett leveranssteg bokades, genomfördes, flyttades …
+ *   anteckning   (0277) — en anteckning från kundkortet, till kunden i Inkio
+ *   nav-handelse (0277) — betald, rättad, förlängning, bilaga, säljsamtal,
+ *                         kampanjsidan: en rad på ordern (eller kunden) i Inkio
  *   (ingen)  (0071) — "välkomnad". Ersatt av `leverans` för Inkio-order: den
  *                     raden säger samma sak och mer, och två hade blivit dubbelt.
  */
@@ -702,6 +705,8 @@ async function crm(rad: Utkorgsrad): Promise<boolean> {
   if (handling === "skapa") return skapaICrm(orderId);
   if (handling === "makulera") return makuleraICrm(orderId);
   if (handling === "leverans") return leveransICrm(rad.payload);
+  if (handling === "anteckning") return anteckningICrm(String(rad.payload.id ?? ""));
+  if (handling === "nav-handelse") return navHandelseICrm(rad.payload);
 
   const db = supabaseAdmin();
   const status = String(rad.payload.status ?? "") as Crmstatus;

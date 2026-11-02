@@ -118,6 +118,8 @@ const TABELL: Record<string, string> = {
   commission_history: "Provisionshistorik",
   course_wish: "Kursönskemål",
   customer_note_pin: "Fästa kundanteckningar",
+  crm_handelse: "Kundhändelser från Inkio",
+  kundanteckning: "Anteckningar om kunder",
   delivery: "Leveranser",
   delivery_handoff: "Överlämningar till leveransen",
   document_area_watch: "Bevakade rutinområden",

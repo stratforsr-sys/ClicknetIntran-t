@@ -130,6 +130,7 @@ const OMRADE_UNDANTAG: Record<string, string> = {
   "utkorg-fel": "kalender",
   "kampanjsida-nere": "fel",
   "kampanjsida-uppe": "fel",
+  "inkio-bevakning": "fel",
   kvallsnotis: "hem",
 };
 
@@ -229,6 +230,10 @@ export const SORT_NAMN: Record<string, string> = {
   "order-betald": "Order betald",
   "order-overtack": "Order övertagen",
   "order-rattad": "Order rättad",
+  "order-inkio-anteckning": "Anteckning i Inkio",
+  "order-inkio-handelse": "Händelse i Inkio",
+  "order-anteckning": "Anteckning om en kund i Nav",
+  "inkio-bevakning": "Inkio-bevakningen står still",
   "order-grattis": "Grattis till en order",
   "tid-rattelse": "Rättelse av tid att besluta",
   "tid-rattelse-beslut": "Beslut om din tidsrättelse",

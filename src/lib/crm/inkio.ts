@@ -6,6 +6,8 @@ import {
   aktivitetstext,
   INKIO_MAX_BYTE,
   INKIO_STANDARD_URL,
+  INKIO_CLICKNET,
+  rattning,
   arJuridiskPerson,
   inkioOrgnr,
   inkioBolagsform,
@@ -60,6 +62,11 @@ export function inkioFarSkriva(): boolean {
   return inkioKonfigurerad() && process.env.VERCEL_ENV === "production";
 }
 
+/** Inkio-bolaget Clicknet. Bytbart med `INKIO_COMPANY_ID`; ett okänt id ger 404 från Inkio, inte ett annat bolag. */
+export function inkioForetag(): string {
+  return process.env.INKIO_COMPANY_ID?.trim() || INKIO_CLICKNET;
+}
+
 export function inkioUrl(): string {
   return (process.env.INKIO_URL?.trim() || INKIO_STANDARD_URL).replace(/\/+$/, "");
 }
@@ -94,6 +101,10 @@ async function anrop<T>(metod: "GET" | "POST" | "PUT" | "DELETE", sokvag: string
   const headers: Record<string, string> = {
     Authorization: `token ${process.env.INKIO_API_KEY?.trim()}:${process.env.INKIO_API_SECRET?.trim()}`,
     Accept: "application/json",
+    // Bolaget uttryckligen (0277). Utan rubriken går anropet till det bolag
+    // kontot senast hade öppet i Inkio — och den dag någon öppnar EffektivMedia
+    // med tjänstekontot hade Nav läst och skrivit där.
+    "X-Inkio-Company": inkioForetag(),
   };
   let body: BodyInit | undefined;
   if (a.json !== undefined) {
@@ -130,6 +141,11 @@ async function anrop<T>(metod: "GET" | "POST" | "PUT" | "DELETE", sokvag: string
 // -----------------------------------------------------------------------------
 
 type Kundrad = { id: string; number: string; customer_name: string; status: string | null; website?: string | null };
+
+/** Kunden i Inkio för ett organisationsnummer, eller null (bevakningen, 0277). */
+export async function inkioKund(orgnr: string): Promise<Kundrad | null> {
+  return kundMedOrgnr(orgnr);
+}
 
 async function kundMedOrgnr(orgnr: string): Promise<Kundrad | null> {
   const siffror = orgnrSiffror(orgnr);
@@ -591,24 +607,6 @@ async function provaSidan(adress: string): Promise<Sidlage> {
 // Nav 2.0 (0083): anteckningen från kundkortet och kontrollen av kampanjsidan
 // -----------------------------------------------------------------------------
 
-/**
- * En anteckning om kunden, i Inkio (`add-comment` på kunden). Den syns i
- * kundens tidslinje där och i kundkortets aktivitet här, och skrivs av
- * tjänstekontot med personens namn först — Inkio vet inte vem i Nav som skrev.
- *
- * Skriver bara där `inkioFarSkriva()` säger ja (produktionen), som resten av
- * kopplingen. Returnerar kommentarens id när Inkio ger det, för fästningen.
- */
-export async function skrivKundanteckning(orgnr: string, text: string, namn: string): Promise<{ id: string | null } | { fel: string }> {
-  if (!inkioFarSkriva()) return { fel: "Inkio tar bara emot anteckningar från Nav i produktionen." };
-  const kund = await kundMedOrgnr(orgnr);
-  if (!kund) return { fel: "Kunden finns inte i Inkio än. Den läggs in när en order godkänns." };
-  const svar = await anrop<{ id?: string; name?: string } | null>("POST", "/api/comments/add-comment", {
-    json: { reference_doctype: "Customer", reference_id: kund.id, content: `**${namn}** (via Nav): ${text}` },
-  });
-  return { id: svar?.id ?? svar?.name ?? null };
-}
-
 /** Kampanjsidans adress: kundens Webbplats i Inkio, eller null. */
 export async function kampanjadress(orgnr: string): Promise<{ kund: boolean; adress: string | null }> {
   const kund = await kundMedOrgnr(orgnr);
@@ -620,4 +618,83 @@ export async function kollaSida(adress: string): Promise<Sidlage & { ms: number 
   const start = Date.now();
   const lage = await provaSidan(adress);
   return { ...lage, ms: Date.now() - start };
+}
+
+// -----------------------------------------------------------------------------
+// Inkio in i Nav (0277): historiken, och det Nav skriver på en order
+// -----------------------------------------------------------------------------
+
+export type Kundhistorik = { items: import("./inflode").Historikpost[] };
+
+/**
+ * ALLT som hänt med kunden i Inkio, raderat inräknat (`with_deleted`), i ett
+ * anrop per sida. En kund har sällan mer än tjugo poster; sidorna följs ändå
+ * till slutet (högst tio), så att en kund med lång historik inte tappar den
+ * äldsta raden en ändring kan gälla.
+ */
+export async function kundhistorik(kundId: string): Promise<Kundhistorik> {
+  const items: Kundhistorik["items"] = [];
+  let fore: string | null = null;
+  for (let sida = 0; sida < 10; sida++) {
+    const svar = await anrop<{ items?: Kundhistorik["items"]; more?: boolean; next?: string | null }>("GET", "/api/customers/get-customer-history", {
+      query: { id: kundId, with_deleted: "1", ...(fore ? { before: fore } : {}) },
+    });
+    items.push(...(svar.items ?? []));
+    if (!svar.more || !svar.next) break;
+    fore = svar.next;
+  }
+  return { items };
+}
+
+/** Avtalets order i Inkio — när ett avtal sägs upp hittas Nav-ordern genom den. */
+export async function avtaletsOrder(avtalId: string): Promise<string | null> {
+  try {
+    const a = await anrop<{ source_sales_order?: string | null }>("GET", `/api/records/contract/${encodeURIComponent(avtalId)}`);
+    return a?.source_sales_order ?? null;
+  } catch (e) {
+    if (e instanceof Inkiofel && e.status === 404) return null;
+    throw e;
+  }
+}
+
+/** Orderhuvudet i Inkio, eller null om ordern är borta. */
+export async function inkioOrder(orderId: string): Promise<{ id: string; state: string; external_order_id: string | null; number: string } | null> {
+  try {
+    return await anrop<{ id: string; state: string; external_order_id: string | null; number: string }>("GET", `/api/records/sales-order/${encodeURIComponent(orderId)}`);
+  } catch (e) {
+    if (e instanceof Inkiofel && e.status === 404) return null;
+    throw e;
+  }
+}
+
+/** En rad på en orders tidslinje i Inkio. Bara produktionen. */
+export async function skrivPaOrder(orderId: string, text: string): Promise<void> {
+  if (!inkioFarSkriva()) throw new Error("Inkio skrivs bara från produktionen.");
+  await anrop("POST", "/api/activity/log-activity", { json: { doctype: "Sales Order", record_id: orderId, content: text } });
+}
+
+/** En anteckning på kunden i Inkio, med namnet först (Inkio vet inte vem i Nav som skrev). Returnerar kommentarens id. */
+export async function skrivAnteckningPaKund(kundId: string, text: string, namn: string): Promise<string | null> {
+  if (!inkioFarSkriva()) throw new Error("Inkio skrivs bara från produktionen.");
+  const svar = await anrop<{ id?: string; name?: string } | null>("POST", "/api/comments/add-comment", {
+    json: { reference_doctype: "Customer", reference_id: kundId, content: `**${namn}** (via Nav): ${text}` },
+  });
+  return svar?.id ?? svar?.name ?? null;
+}
+
+/**
+ * Rätta en inskickad order i Inkio (`correct-sales-order`, samma anrop som
+ * Inkios eget "Rätta order"): raderna ersätts, värdet, längden och
+ * faktureringen sätts om, och skälet står i Inkios historik.
+ *
+ * Bara för order Nav själv lade i Inkio — en importerad order har rader Nav
+ * inte känner, och dem skriver Nav inte över (`rattaICrm`).
+ */
+export async function rattaIInkio(orderId: string, o: Crmorder, skal: string): Promise<void> {
+  if (!inkioFarSkriva()) throw new Error("Inkio skrivs bara från produktionen.");
+  const [tj, bolag] = await Promise.all([tjanster(), o.underlag.finansierad ? finansbolag() : Promise.resolve(null)]);
+  const rader = orderrader(o.underlag, tj);
+  if (rader.length === 0) throw new Error("Ordern har varken månadsbelopp eller tjänster — det finns inget att rätta till.");
+  const r = rattning(o.underlag, rader, bolag);
+  await anrop("POST", "/api/salesorder/correct-sales-order", { json: { id: orderId, items: r.items, order: r.order, reason: skal } });
 }

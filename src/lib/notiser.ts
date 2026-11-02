@@ -273,6 +273,17 @@ export const NOTIS_KALLOR = [
    * per person och inte en gang per order.
    */
   "order-rattad",
+  /**
+   * Inkio in i Nav (0277). Allt som hander i Inkio med en kund som har en order
+   * i Nav, och anteckningar skrivna i Nav. HANDELSER: beställaren 2026-11-02,
+   * "vi får aldrig missa något". Kretsen ar alla superadmin, saljaren och admin
+   * som leder saljaren (`kretsen` i crm/inflode.ts). Larmet nar bevakningen
+   * star still gar till superadmin.
+   */
+  "order-inkio-anteckning",
+  "order-inkio-handelse",
+  "order-anteckning",
+  "inkio-bevakning",
 
   /** Stamplingens rattelser. Begaran till chefen, beslutet till den anstallda. */
   "tid-rattelse",
@@ -700,6 +711,10 @@ export const HANDELSEKALLOR = [
   "order-betald",
   "order-overtack",
   "order-rattad",
+  "order-inkio-anteckning",
+  "order-inkio-handelse",
+  "order-anteckning",
+  "inkio-bevakning",
   "tid-rattelse",
   "tid-rattelse-beslut",
   "tid-ostamplad",

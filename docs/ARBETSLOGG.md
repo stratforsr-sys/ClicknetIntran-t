@@ -5,6 +5,58 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-02 · Inkio in i Nav, och Nav ut till Inkio (grenen `inkio-inflode`, 0277 skriven, EJ körd, EJ mergad)
+
+**Beställaren 2026-11-02:** en säljare ringde en kund utan svar och skrev det i Inkio, men det kom inte in i Nav och
+ingen fick notis. "Det är SUUUPER viktigt att allting som händer i inkio crmet med dem ordrarna som vi har i navet måste
+jag och den personen som står på ordern få notis och det måste gå in i navet, under anteckningar." Superadmin får allt,
+admin bara sitt team. Efter genomgången av undersökningen: "Om något ändras i inkio så ska det ändras i navet också
+såklart", och "Fixa hela bygget nu".
+
+**Orsaken** var att inflödet aldrig hade byggts. Kundkortets Aktivitet läste Inkio när den öppnades, och inget sparades eller
+notifierades. Hedboms (#15) saknade dessutom koppling till sin Inkio-order: 22 av 30 kunder importerades till Inkio
+2026-10-01 utan Navs id.
+
+**Valet av väg.** Inkios webhooks täcker 11 händelser och ingen av dem gäller anteckningar, samtal, filer eller
+kortflyttar. `get-customer-history` ger däremot allt per kund på ~130 ms, raderat inräknat, med stabila id:n. Därför
+är bevakningen varje minut ryggraden och webhooken bara en knuff. Det följer best practice för synk åt båda håll:
+avstämning mot källan, idempotens på källans id, eko som känns igen på tjänstekontot och en utkorg för det som går ut.
+
+**Det som gjordes** står i specen `docs/superpowers/specs/2026-11-02-inkio-inflode-design.md`. Det som tog tid att
+få rätt:
+- **Tolv timmar.** Första läsningen av en kund får inte ge femtio notiser om september. En bevakning som stått still en
+  natt ska ändå säga till om det som hände då. Regeln "notis om posten är högst tolv timmar gammal" gör båda. Ett avtal
+  med startdag framåt har `at` i framtiden. Det sades först ha "startat" och gav notis vid första läsningen. Nu står
+  det "startar <dag>", och vid kundens första läsning är det tyst.
+- **Status bara på övergångar.** En order som makulerats i Inkio för länge sedan ska inte makuleras i Nav i dag och dra
+  provisionen i november. `statusFranInkio` tar bara en ändring Nav såg hända, eller en ny post från de senaste tolv
+  timmarna.
+- **Ingen ekoslinga.** Ändringar från Inkio går genom `lk_inkio_andra_order`, som sätter `nav.fran_inkio`. Triggern
+  som skriver Nav-händelser till Inkio hoppar då över. Det är provat i en transaktion som rullades tillbaka: betald
+  i Nav gav en rad i utkorgen, samma sak från Inkio gav ingen.
+- **Kopplingen kräver samma värde.** Den första versionen kopplade också "en order på var sida". Torrkörningen visade
+  Strajv AB med 11 940 kr i Nav och 5 970 kr i Inkio. En felkoppling hade gett fel rader i Inkio, och en makulering där
+  hade makulerat fel order här. Nu kopplas 20 order, alla med samma värde.
+- **Ett ändrat belopp ändrar inte Nav.** Beloppet styr provisionen, och Inkios rader motsvarar inte Navs paket. Det
+  blir en notis med länk.
+- **Previewen notifierar ingen.** Den delar databas med produktionen. `provfilter` släpper bara igenom
+  `NOTIS_PROV_TILL` utanför produktionen.
+- **Allt står av tills mergen** (`inflode`, `utflode`, jobbet). Annars hade triggrarna köat rader som produktionens
+  kod inte känner igen och tyst markerat dem som skickade.
+
+**Torrkörningen 2026-11-02** (riktig data, GET mot Inkio, `read only` i Nav):
+- 28 av 29 kunder finns i Inkio; IE Cleaning saknas som förut.
+- 159 poster, 51 notiser om det som hänt de senaste tolv timmarna (Nenads inkasso på Strajv, VästRent och Primus,
+  Dennis och Simons kommentarer på Wallgrens ärende, Andreas leveranskort på Roos, tre avtal som startade i dag).
+- 0 statusändringar och 20 kopplingar.
+- Superadmin är Simon Menduza, Zen och Lucas Pohl. "Simon Omar" i Inkio är Simon Menduza i Nav (samma mejl).
+
+**Inte gjort:** 0277 kördes inte (automatläget nekade och det kräver ja). Ingen skrivning gjordes i Inkio, så
+`correct-sales-order`, anteckningen till Inkio och raderna på ordern är provade i logiken men inte mot Inkio. Inkio
+har inga fakturor än, så "betald från Inkio" bygger på en gissning om fältet för ordern.
+
+---
+
 ## 2026-11-02 · Order utan provision, provisionen läggs till senare (direkt på `main` på beställarens ja, 0275 KÖRD)
 
 **Beställaren 2026-11-02:** "gör så att man kan välja att lägga upp en order utan provision och i såfall kunna lägga till
