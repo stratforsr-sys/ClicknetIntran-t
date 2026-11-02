@@ -5,6 +5,27 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-02 kväll · Inkio påslaget åt båda hållen, notiserna bara till Zen och Simon (ingen kod, ingen migration)
+
+Beställaren frågade vad det betyder att slå på Inkio, och svarade sedan "Ja sätt på inkio" och "Gör detta" om
+förslaget: slå på åt båda hållen, men låt notiser och mejl gå bara till Zen och Simon tills navet öppnas. Skälet: navet
+är stängt för alla utom dem, och säljarna med Inkio-kunder (Fredrik 17, Edvin 5, Mick 4, Eve 2) hade annars fått
+notiser de inte kan läsa och mejl om ärenden med länkar de inte kommer in på.
+
+- `NOTIS_PROV_TILL` i Production byttes från bara Zen till Zen och Simon (20:12 UTC). Den första produktionsdeployen
+  av `e0190d3` (från det andra passets push) skapades 20:11:45, alltså före bytet, så produktionen byggdes om:
+  `dpl_GyAJecFDsNWucDF7K6pcu2wL8YUt`, 20:16 UTC.
+- 20:21:48 UTC: `inflode` och `utflode` på, `nav-inkio` aktivt, i en transaktion.
+- Första varven: alla 29 kunder lästa på fyra minuter utan fel. 170 rader i `crm_handelse` (163 förut). En notis:
+  Simon Omars kommentar i ärendet "Kunden vill bestrida" på Wallgrens, med mejl (200) och push till Zen. Simon
+  sållades som författare, och Edvin och Eve (säljarna på Wallgrens) fick ingenting, alltså höll spärren. IE Cleaning,
+  som saknades i Inkio vid provet, finns nu där (Nav lade upp den 19:33 UTC), och dess poster var tysta.
+- Utkorgen: inga nya `crm`-rader de första minuterna, eftersom ingenting hänt i Nav som ska till Inkio.
+
+När navet öppnas tas `NOTIS_PROV_TILL` bort och produktionen byggs om (se NASTA_SESSION, INKIO PÅSLAGET).
+
+---
+
 ## 2026-11-02 kväll · Orderns ekonomi ur Inkio, och betald = slutbetald (grenen `inkio-fakturering`, till `main` på beställarens ja, ingen migration)
 
 **Beställaren** frågade vad Inkio har på en order som Nav saknar, och hur man ser om fakturor är betalda. Svaret:
