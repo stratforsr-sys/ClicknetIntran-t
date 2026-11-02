@@ -43,7 +43,7 @@ nekas. Ingen provorder kvar. Gränssnittet var inte ritat före pushen.
 
 ---
 
-## 2026-11-02 · Sparningar utan omladdning (grenen `utan-omladdning`, ingen migration)
+## 2026-11-02 · Sparningar utan omladdning (grenen `utan-omladdning` → `main` `3852c87`, ingen migration)
 
 **Beställaren:** varje val i rutan i Uppgifter laddade om sidan, och vyns guide kom upp igen. Det gällde hela Nav 2.0.
 
