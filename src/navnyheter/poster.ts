@@ -32,6 +32,27 @@ Allt från Inkio har ett eget område, **Inkio och kundanteckningar**, under
     href: "/profil",
   },
   {
+    slug: "kundens-tidslinje",
+    rubrik: "Kundkortet visar kundens hela historik, som i Inkio",
+    ingress: "Ordrar, avtal, anteckningar, leveranskort och samtal i en tidslinje, med sök, filter och anteckningar per roll.",
+    text: `Öppna en order och gå till **Aktivitet**. Där står allt om kunden i en lista,
+nyast först: ordrar och avtal med belopp och status, anteckningar från Nav och från
+Inkio, flyttade leveranskort, samtalen och det som hänt med ordern i Nav. Ett avtal
+visar hur långt det har gått och när Nav påminner om förlängningen.
+
+Filtrera på **Anteckningar**, **Order och avtal**, **Ärenden och produktion** eller
+**Samtal**, eller sök på ett namn, ett ord eller ett ordernummer. **Per roll** visar
+anteckningarna uppdelade på säljare, admin, superadmin och de som bara finns i Inkio.
+
+Anteckningen skriver du med fetstil, kursiv, länkar och listor, som i Inkio. Välj
+under **Gäller** om den handlar om kunden eller om en av kundens order, så hamnar den
+på rätt ställe i Inkio. Enter sparar och Skift+Enter ger en ny rad. Trycker du på
+"om #15" öppnas ordern.`,
+    datum: "2026-11-02",
+    roller: [],
+    href: "/order",
+  },
+  {
     slug: "snabbraden-i-dag",
     rubrik: "Uppgifter: en ny rad hamnar i dag",
     ingress: "Det du skriver i Att göra i dag läggs i dag, och fältet töms när du trycker Lägg till.",

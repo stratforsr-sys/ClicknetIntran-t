@@ -256,12 +256,18 @@ export async function POST(request: Request) {
         if (!text) return svar({ fel: "Skriv något först." }, 400);
         if (text.length > 2000) return svar({ fel: "Anteckningen är för lång." }, 400);
         if (!(await serKunden(org))) return svar({ fel: "Kunden finns inte, eller så är den inte din." }, 404);
+        // 0278: anteckningen kan gälla en av kundens order, som i Inkio.
+        const omOrder = typeof b.order === "string" && b.order ? b.order : null;
+        if (omOrder) {
+          const { data: x } = await (await supabaseServer()).from("sales_order").select("id").eq("id", omOrder).eq("org_number", org).maybeSingle();
+          if (!x) return svar({ fel: "Ordern hör inte till kunden." }, 400);
+        }
         // 0277: i Nav FÖRST, sedan via utkorgen till kunden i Inkio. Förut gick
         // den direkt dit, och svarade inte Inkio fanns anteckningen ingenstans.
         const namn = fullName(user.employee);
         const { data: a, error } = await db
           .from("kundanteckning")
-          .insert({ org_number: org, text, skriven_av: mig, skriven_namn: namn })
+          .insert({ org_number: org, text, skriven_av: mig, skriven_namn: namn, ...(omOrder ? { om_order: omOrder } : {}) })
           .select("id")
           .single();
         if (error || !a) return svar({ fel: `Anteckningen sparades inte${error ? `: ${error.message}` : "."}` }, 500);

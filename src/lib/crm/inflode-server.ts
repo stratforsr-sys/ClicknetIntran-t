@@ -3,7 +3,7 @@ import "server-only";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { notifieraFlera } from "@/lib/notishandelse-server";
 import { nivaFor } from "@/lib/nav2/forma";
-import { avtaletsOrder, inkioKonfigurerad, inkioKund, inkioLank, inkioUrl, kundaktivitet, kundhistorik, type Kundaktivitet } from "./inkio";
+import { avtaletsOrder, inkioKonfigurerad, inkioKund, inkioLank, inkioUrl, kundhistorik, type Kundaktivitet } from "./inkio";
 import {
   aktivitetsrader,
   attLasa,
@@ -16,6 +16,7 @@ import {
   senastHant,
   statusFranInkio,
   tolkaPost,
+  type Forfattarnyckel,
   type Lagrad,
   type Navanteckning,
   type Niva,
@@ -93,7 +94,7 @@ type Kundrad = {
   andrad_at: string | null;
 };
 
-type Person = { id: string; email: string | null; status: string; manager_id: string | null; team_id: string | null };
+type Person = { id: string; email: string | null; status: string; manager_id: string | null; team_id: string | null; first_name: string | null; last_name: string | null };
 
 /** Supabase-API:t kapar tyst vid 1000 rader. Läs sidvis. */
 async function allaOrder(): Promise<Order[]> {
@@ -124,7 +125,7 @@ class Personer {
     if (!this.las) this.las = (async () => {
       const db = supabaseAdmin();
       const [{ data: p }, { data: r }, { data: t }] = await Promise.all([
-        db.from("employee").select("id, email, status, manager_id, team_id"),
+        db.from("employee").select("id, email, status, manager_id, team_id, first_name, last_name"),
         db.from("employee_role").select("employee_id, role"),
         db.from("team").select("id, lead_id"),
       ]);
@@ -139,6 +140,24 @@ class Personer {
       return { personer, epost, niva, lead };
     })();
     return this.las;
+  }
+
+  /**
+   * Författarens nivå i Nav, för kundkortets Per roll: anställnings-id:t för en
+   * anteckning skriven i Nav, e-posten för en i Inkio, namnet för Navs eko.
+   * Null när hen inte finns i Nav (EffektivMedias personal).
+   */
+  async nivaAv(): Promise<(k: Forfattarnyckel) => Niva | null> {
+    const { personer, epost, niva } = await this.hamta();
+    const namn = new Map<string, string>();
+    for (const p of personer.values()) {
+      const n = `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim().toLowerCase();
+      if (n && (AKTIV.has(p.status) || !namn.has(n))) namn.set(n, p.id);
+    }
+    return (k) => {
+      const id = (k.id && personer.has(k.id) ? k.id : null) ?? (k.epost ? epost.get(k.epost.toLowerCase()) : null) ?? (k.namn ? namn.get(k.namn.trim().toLowerCase()) : null) ?? null;
+      return id ? (niva.get(id) ?? "salesperson") : null;
+    };
   }
 
   async fran(epost: string | null): Promise<string | null> {
@@ -296,7 +315,7 @@ async function varv(o: { bara?: readonly string[] }, ut: Bevakning, styrStatus: 
         return;
       }
 
-      await lasIn(org, kund, historik.items, perKund.get(org) ?? [], personer, styrStatus, ut);
+      await lasIn(org, kund, historik.items, historik.roller, perKund.get(org) ?? [], personer, styrStatus, ut);
       const nuIso = new Date().toISOString();
       await db
         .from("crm_kund")
@@ -365,9 +384,9 @@ async function kaOmAnteckningar(): Promise<void> {
 }
 
 /** En kunds historik in i `crm_handelse`, med notiser, status och koppling. */
-async function lasIn(org: string, kund: Kundrad, items: Parameters<typeof tolkaPost>[0][], ordrar: Order[], personer: Personer, styrStatus: boolean, ut: Bevakning) {
+async function lasIn(org: string, kund: Kundrad, items: Parameters<typeof tolkaPost>[0][], roller: Readonly<Record<string, string>>, ordrar: Order[], personer: Personer, styrStatus: boolean, ut: Bevakning) {
   const db = supabaseAdmin();
-  const rader = items.map(tolkaPost).filter((r): r is Rad => r !== null);
+  const rader = items.map((p) => tolkaPost(p, roller)).filter((r): r is Rad => r !== null);
   const sedda = new Set<string>();
   const unika = rader.filter((r) => !sedda.has(r.extern_id) && sedda.add(r.extern_id));
 
@@ -602,11 +621,14 @@ export async function kaAnteckning(id: string, sekunder = 2): Promise<void> {
 
 /**
  * Fliken ur Navs kopia: snabb, och kvar när Inkio inte svarar. Null när
- * bevakningen inte läst kunden än — då läser kortet Inkio direkt som förut.
+ * bevakningen inte läst kunden än — då läser kortet Inkio direkt.
+ *
+ * `kundanteckning` läses med `*`: kolumnen `om_order` (0278) finns först när
+ * migrationen körts, och fliken ska fungera före dess.
  */
 export async function kundaktivitetUrNav(org: string, superadmin: boolean): Promise<Kundaktivitet | null> {
   const db = supabaseAdmin();
-  const [{ data: k }, { data: rader }, { data: anteckningar }] = await Promise.all([
+  const [{ data: k }, { data: rader }, { data: anteckningar }, nivaAv] = await Promise.all([
     db.from("crm_kund").select("customer_id, customer_number, customer_name, forsta_klar").eq("org_number", org).maybeSingle(),
     db
       .from("crm_handelse")
@@ -615,12 +637,13 @@ export async function kundaktivitetUrNav(org: string, superadmin: boolean): Prom
       .eq("org_number", org)
       .order("skapad", { ascending: false })
       .limit(400),
-    db.from("kundanteckning").select("id, text, skriven_namn, skriven_at, crm_id, crm_state").eq("org_number", org).order("skriven_at", { ascending: false }).limit(200),
+    db.from("kundanteckning").select("*").eq("org_number", org).order("skriven_at", { ascending: false }).limit(200),
+    new Personer().nivaAv(),
   ]);
 
   const nav = (anteckningar ?? []) as Navanteckning[];
   if (!k?.forsta_klar && !nav.length) return null;
-  const lista = aktivitetsrader((rader ?? []) as Lagrad[], nav, { superadmin, inkioBas: inkioUrl() });
+  const lista = aktivitetsrader((rader ?? []) as Lagrad[], nav, { superadmin, inkioBas: inkioUrl(), nivaAv });
   if (!k?.customer_id) {
     return nav.length ? { kund: { id: "", nummer: "", namn: "", lank: "" }, rader: lista, avkortad: false } : { kund: null };
   }
@@ -631,9 +654,26 @@ export async function kundaktivitetUrNav(org: string, superadmin: boolean): Prom
   };
 }
 
+/**
+ * Innan bevakningen läst kunden: samma historik direkt ur Inkio, tolkad på
+ * samma sätt, så att kortet ser likadant ut före och efter. Förut läste den
+ * här vägen två andra anrop och gav platta rader.
+ */
+export async function kundaktivitetUrInkio(org: string, superadmin: boolean): Promise<Kundaktivitet> {
+  const kund = await inkioKund(org);
+  if (!kund) return { kund: null };
+  const [historik, nivaAv] = await Promise.all([kundhistorik(kund.id), new Personer().nivaAv()]);
+  const rader = historik.items.map((p) => tolkaPost(p, historik.roller)).filter((r): r is Rad => r !== null);
+  return {
+    kund: { id: kund.id, nummer: kund.number, namn: kund.customer_name, lank: inkioLank("kund", kund.id) },
+    rader: aktivitetsrader(rader, [], { superadmin, inkioBas: inkioUrl(), nivaAv }),
+    avkortad: false,
+  };
+}
+
 /** Navs kopia om den finns, annars Inkio direkt (förstagångsläsningen). */
 export async function kundaktivitetForKortet(org: string, superadmin: boolean): Promise<Kundaktivitet> {
-  return (await kundaktivitetUrNav(org, superadmin)) ?? kundaktivitet(org);
+  return (await kundaktivitetUrNav(org, superadmin)) ?? kundaktivitetUrInkio(org, superadmin);
 }
 
 // -----------------------------------------------------------------------------

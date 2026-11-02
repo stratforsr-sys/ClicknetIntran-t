@@ -628,7 +628,11 @@ export async function kollaSida(adress: string): Promise<Sidlage & { ms: number 
 // Inkio in i Nav (0277): historiken, och det Nav skriver på en order
 // -----------------------------------------------------------------------------
 
-export type Kundhistorik = { items: import("./inflode").Historikpost[] };
+export type Kundhistorik = {
+  items: import("./inflode").Historikpost[];
+  /** Inkios användar-id → roll ("Utvecklare"), för författarna i `items`. */
+  roller: Record<string, string>;
+};
 
 /**
  * ALLT som hänt med kunden i Inkio, raderat inräknat (`with_deleted`), i ett
@@ -636,10 +640,11 @@ export type Kundhistorik = { items: import("./inflode").Historikpost[] };
  * till slutet (högst tio), så att en kund med lång historik inte tappar den
  * äldsta raden en ändring kan gälla.
  */
-type Historiksida = { items?: Kundhistorik["items"]; more?: boolean; next?: string | null };
+type Historiksida = { items?: Kundhistorik["items"]; roles?: Record<string, string> | null; more?: boolean; next?: string | null };
 
 export async function kundhistorik(kundId: string): Promise<Kundhistorik> {
   const items: Kundhistorik["items"] = [];
+  const roller: Record<string, string> = {};
   let fore: string | null = null;
   for (let sida = 0; sida < 10; sida++) {
     // Typen uttryckligen: `fore` sätts ur svaret, och utan den ser TypeScript en cirkel.
@@ -647,10 +652,11 @@ export async function kundhistorik(kundId: string): Promise<Kundhistorik> {
     if (fore) query.before = fore;
     const svar: Historiksida = await anrop<Historiksida>("GET", "/api/customers/get-customer-history", { query });
     items.push(...(svar.items ?? []));
+    Object.assign(roller, svar.roles ?? {});
     if (!svar.more || !svar.next) break;
     fore = svar.next;
   }
-  return { items };
+  return { items, roller };
 }
 
 /** Avtalets order i Inkio — när ett avtal sägs upp hittas Nav-ordern genom den. */
@@ -682,9 +688,17 @@ export async function skrivPaOrder(orderId: string, text: string): Promise<void>
 
 /** En anteckning på kunden i Inkio, med namnet först (Inkio vet inte vem i Nav som skrev). Returnerar kommentarens id. */
 export async function skrivAnteckningPaKund(kundId: string, text: string, namn: string): Promise<string | null> {
+  return skrivAnteckning("Customer", kundId, text, namn);
+}
+
+/**
+ * En anteckning på kunden eller på en av dess order i Inkio (0278: "om Order ·
+ * Optimerad Kampanjsida" i Inkios historik). Texten är Markdown, som Inkios egen.
+ */
+export async function skrivAnteckning(doctype: "Customer" | "Sales Order", id: string, text: string, namn: string): Promise<string | null> {
   if (!inkioFarSkriva()) throw new Error("Inkio skrivs bara från produktionen.");
   const svar = await anrop<{ id?: string; name?: string } | null>("POST", "/api/comments/add-comment", {
-    json: { reference_doctype: "Customer", reference_id: kundId, content: `**${namn}** (via Nav): ${text}` },
+    json: { reference_doctype: doctype, reference_id: id, content: `**${namn}** (via Nav): ${text}` },
   });
   return svar?.id ?? svar?.name ?? null;
 }

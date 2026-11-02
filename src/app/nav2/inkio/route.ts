@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { arSuperadmin, getCurrentUser } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
 import { bolagsuppslag, inkioKonfigurerad, landningssida } from "@/lib/crm/inkio";
-import { kundaktivitetForKortet } from "@/lib/crm/inflode-server";
+import { kundaktivitetForKortet, kundaktivitetUrNav } from "@/lib/crm/inflode-server";
 
 export const dynamic = "force-dynamic";
 
@@ -41,8 +41,9 @@ export async function GET(request: Request) {
       const rls = await supabaseServer();
       const { data } = await rls.from("sales_order").select("org_number").eq("id", id).maybeSingle();
       if (!data) return svar({ fel: "Ordern finns inte, eller så får du inte se den." }, 404);
-      if (!kopplat) return svar({ kopplat });
       const orgnr = String(data.org_number ?? "");
+      // Utan Inkio (previewen): det Nav själv har, så att en anteckning syns när den sparats.
+      if (!kopplat) return svar({ kopplat, aktivitet: (await kundaktivitetUrNav(orgnr, arSuperadmin(user)).catch(() => null)) ?? { kund: null } });
       const [aktivitet, sida] = await Promise.all([
         kundaktivitetForKortet(orgnr, arSuperadmin(user)).catch((e: unknown) => ({ fel: e instanceof Error ? `Inkio svarade inte: ${e.message}` : "Inkio svarade inte." })),
         landningssida(orgnr).catch((e: unknown) => ({ fel: e instanceof Error ? `Inkio svarade inte: ${e.message}` : "Inkio svarade inte." })),

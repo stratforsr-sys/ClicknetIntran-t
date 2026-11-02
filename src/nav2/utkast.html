@@ -3614,6 +3614,101 @@ mark.o7m{background:color-mix(in srgb,var(--signal) 38%,transparent);color:inher
 .kkhist li.o7hd::before{display:none}
 .kkhist li.o7hd .kkdag{margin:0}
 .o7histmer{font-size:12.5px;margin:2px 0 6px;align-self:flex-start}
+/* Kundkortets tidslinje (0278): Inkios historik i Navs formspråk. Tre sorters rader: posten, anteckningen, systemraden. */
+.kkt{display:flex;flex-direction:column;gap:12px}
+.kkt-skriv{display:flex;gap:10px;align-items:flex-start}
+.kkt-skriv>.av{margin-top:5px}
+.kkt-ruta{flex:1;min-width:0;border:1px solid var(--line);border-radius:12px;background:var(--surface);transition:border-color .15s,box-shadow .15s}
+.kkt-ruta:focus-within{border-color:var(--brand);box-shadow:0 0 0 3px color-mix(in srgb,var(--brand) 16%,transparent)}
+.kkt-verktyg{display:flex;align-items:center;gap:2px;padding:4px 6px;border-bottom:1px solid var(--line)}
+.kkt-vk{width:28px;height:26px;display:grid;place-items:center;border-radius:7px;color:var(--ink-2);font:650 13px var(--f-body)}
+.kkt-vk:hover{background:var(--surface-2);color:var(--ink)}
+.kkt-vk svg{width:15px;height:15px}
+.kkt-vk-i{font-style:italic;font-weight:500}
+.kkt-vk-s{text-decoration:line-through;font-weight:500}
+.kkt-vk-lank{margin-left:8px}
+.kkt-in{display:block;width:100%;border:0;background:none;resize:none;outline:none;padding:9px 12px 4px;font:400 13.5px/1.5 var(--f-body);color:var(--ink);min-height:46px;max-height:260px}
+.kkt-in::placeholder{color:var(--ink-3)}
+.kkt-fot{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:4px 8px 8px 12px}
+.kkt-galler{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-3);min-width:0}
+.kkt-galler select{font:500 12.5px var(--f-body);color:var(--ink);background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:4px 8px;max-width:250px;min-width:0}
+.kkt-hj{font-size:11.5px;margin-left:auto}
+.kkt-rad1{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.kkt-vy{display:inline-flex;padding:2px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line)}
+.kkt-vy button{padding:5px 11px;border-radius:8px;font-size:12.5px;font-weight:500;color:var(--ink-2)}
+.kkt-vy button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+.kkt-sok{flex:1;min-width:180px;position:relative;display:flex;align-items:center}
+.kkt-sok svg{position:absolute;left:10px;width:15px;height:15px;color:var(--ink-3);pointer-events:none}
+.kkt-sok .uin{padding:7px 10px 7px 32px;font-size:13px}
+.kkt .kkfilter{margin-top:-6px}
+.kkt .kkfilter .num{margin-left:2px}
+.kkt-lage{font-size:12.5px;margin:0}
+.kkt-lista{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:16px}
+.kkt-lista>li>ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.kkt-lista .kkdag{margin:0 0 8px}
+.kkt-tid{margin-left:auto;font-size:11.5px;color:var(--ink-3);white-space:nowrap}
+.kkt-post{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.kkt-ik{width:32px;height:32px;flex:none;border-radius:9px;display:grid;place-items:center;background:var(--surface-2);color:var(--ink-2)}
+.kkt-ik svg{width:17px;height:17px}
+.kkt-post.ton-ok .kkt-ik{background:var(--brand-soft);color:var(--brand-ink)}
+.kkt-post.ton-signal .kkt-ik{background:var(--signal-soft);color:var(--signal-ink)}
+.kkt-post.ton-danger .kkt-ik{background:var(--danger-soft);color:var(--danger-ink)}
+.kkt-pk{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.kkt-pr{display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;margin:0}
+.kkt-typ{font-size:11.5px;color:var(--ink-3);font-weight:500}
+.kkt-titel{font-weight:600;font-size:14px;color:var(--ink);min-width:0;overflow-wrap:anywhere}
+a.kkt-titel:hover{text-decoration:underline;text-underline-offset:2px}
+.kkt-pr .pill{margin-left:auto}
+.kkt-meta{margin:0;font-size:12.5px;color:var(--ink-2);display:flex;flex-wrap:wrap;gap:2px 10px;align-items:baseline}
+.kkt-post .kktl{margin-top:8px}
+.kkt-post.ton-danger .kkt-titel{text-decoration:line-through;text-decoration-color:var(--danger)}
+.kkt-not{display:flex;gap:10px;align-items:flex-start}
+.kkt-not>.av{margin-top:2px}
+.kkt-k{flex:1;min-width:0}
+.kkt-m{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin:0 0 4px;font-size:12px;color:var(--ink-3)}
+.kkt-m b{font-size:13px;color:var(--ink);font-weight:600}
+.kkt-om{display:inline-block;font:500 11.5px var(--f-body);padding:1px 7px;border-radius:6px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink-2);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
+button.kkt-om:hover,a.kkt-om:hover{border-color:var(--line-2);color:var(--ink)}
+.kkt-bubbla{padding:9px 12px;border-radius:4px 12px 12px 12px;background:var(--surface-2);font-size:13.5px;line-height:1.55;color:var(--ink);overflow-wrap:anywhere}
+.kkt-bubbla p{margin:0}
+.kkt-bubbla>*+*{margin-top:6px}
+.kkt-bubbla ul,.kkt-bubbla ol{margin:0;padding-left:20px}
+.kkt-bubbla a{color:var(--brand-ink);text-decoration:underline;text-underline-offset:2px}
+.kkt-not.egen .kkt-bubbla{background:var(--brand-soft)}
+.kkt-not.fast .kkt-bubbla{box-shadow:inset 3px 0 0 var(--warn)}
+.kkt-not.rad .kkt-bubbla{opacity:.65;text-decoration:line-through}
+.kkt-rad{color:var(--danger-ink)}
+.kkt-fast{margin-left:auto;padding:1px 6px;font-size:12px;opacity:0;transition:opacity .15s}
+.kkt-not:hover .kkt-fast,.kkt-not:focus-within .kkt-fast,.kkt-not.fast .kkt-fast{opacity:1}
+@media (hover:none){.kkt-fast{opacity:1}}
+.kkt-fast+.kkt-tid{margin-left:0}
+.kkt-sys{display:flex;gap:10px;align-items:baseline;padding:0 2px 0 12px;font-size:12.5px;color:var(--ink-2)}
+.kkt-sys>i{width:7px;height:7px;border-radius:50%;background:var(--line-2);flex:none;transform:translateY(-1px)}
+.kkt-sys.ton-ok>i{background:var(--brand)}
+.kkt-sys.ton-danger>i{background:var(--danger)}
+.kkt-sys.ton-brand>i{background:var(--info)}
+.kkt-sys.ton-signal>i{background:var(--warn)}
+.kkt-sys p{margin:0;flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:2px 8px;align-items:baseline}
+.kkt-sys small{color:var(--ink-3);font-size:12px}
+.kkt-sysk{font:inherit;color:inherit;padding:0;text-align:left}
+.kkt-sysk:hover{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
+.kkt-roller{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.kkt-kol{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--surface);display:flex;flex-direction:column;gap:8px;min-width:0}
+.kkt-kol h4{margin:0;font-size:13px;font-weight:600;display:flex;gap:6px;align-items:baseline}
+.kkt-kolm{margin:-4px 0 2px;font-size:12px}
+.kkt-kol>ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.kkt-kol>ol>li{display:flex;gap:8px;align-items:flex-start}
+.kkt-kol>ol>li>div{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+.kkt-kol .kkt-m{margin:0}
+.kkt-kol .kkt-bubbla{font-size:13px;padding:7px 10px;align-self:stretch}
+.kkt-tom{margin:4px 0}
+.kkt-mer{align-self:flex-start;font-size:12.5px}
+.kkt-post .kktlbar>span{transform-origin:left center;animation:kktv .9s var(--ease) both}
+.kkt-post .kktlnu{animation:kktn .3s .75s ease-out both}
+@keyframes kktv{from{transform:scaleX(0)}}
+@keyframes kktn{from{opacity:0;transform:scale(.4)}}
+@media (prefers-reduced-motion:reduce){.kkt-post .kktlbar>span,.kkt-post .kktlnu{animation:none}}
+@media (max-width:640px){.kkt-hj{display:none}.kkt-post{padding:10px 12px;gap:10px}.kkt-ik{width:28px;height:28px}.kkt-galler select{max-width:180px}}
 /* Ny order */
 .o7kvar{font:500 10.5px var(--f-mono);color:var(--warn-ink);margin-left:1px}
 .ordnysteg li.ok .o7kvar{display:none}
@@ -15222,6 +15317,11 @@ function kkClick(t, e){
   if (d.kkvaxla){ const n = +d.kkvaxla, oppen = S.kkOppna.has(n) || (n === o.nr && !S.kkStangda.has(n)); if (oppen){ S.kkOppna.delete(n); S.kkStangda.add(n); } else { S.kkOppna.add(n); S.kkStangda.delete(n); } kkRender(); return true; }
   if (d.kkkopiera){ kopiera(d.kkkopiera, 'Kopierat.'); return true; }
   if (d.kkaktf){ S.kkAktF = d.kkaktf; kkRender(); return true; }
+  if (d.kktlvy){ S.kkTlVy = d.kktlvy; kkRender(); return true; }
+  if (d.kktlordning !== undefined){ S.kkTlAldst = !S.kkTlAldst; kkRender(); return true; }
+  if (d.kktlalla !== undefined){ S.kkTlAlla = o.org; kkRender(); return true; }
+  if (d.o7omorder){ const n = +d.o7omorder; S.kkFlik = 'order'; S.kkOppna.add(n); S.kkStangda.delete(n); kkRender(); document.querySelector('.kkb')?.scrollTo(0, 0); return true; }
+  if (d.kktlmd){ kkMd(d.kktlmd); return true; }
   if (d.kksamf){ S.kkSamF = d.kksamf; kkRender(); return true; }
   if (d.kkhistf){ S.kkHistF = d.kkhistf; kkRender(); return true; }
   if (d.kkkolla !== undefined){ S.kkKollar = o.org; kkRender(); setTimeout(() => { S.kkKollar = null; S.kkKollad[o.org] = hm(now()); const k = kkData(o.org); kkRender(); toast(k.nere ? `${k.webb} svarar fortfarande inte.` : `${k.webb} svarar, ${k.ms} ms.`); }, 1200); return true; }
@@ -15245,9 +15345,39 @@ function kkClick(t, e){
 }
 document.addEventListener('change', e => { const t = e.target; if (S.view !== 'order' || !t.dataset || t.dataset.kkfil === undefined || !t.files || !t.files[0]) return; kkSt(); const o = ORDER.find(x => x.nr === S.ordOpen), nr = +t.dataset.kkfil; if (o) o7Bifoga(nr, t.files); });
 document.addEventListener('input', e => { if (e.target.dataset && e.target.dataset.kknot !== undefined) S.kkNotUtk = e.target.value; });
+/* Tidslinjens skrivruta och sökning (0278). */
+// Rutan växer med texten, upp till en gräns.
+const kkVax = t => { if (!t) return; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight + 2, 260) + 'px'; };
+document.addEventListener('input', e => { const t = e.target; if (!t.dataset) return; if (t.dataset.kknot !== undefined && t.tagName === 'TEXTAREA') kkVax(t);
+  if (t.dataset.kktlsok !== undefined){ S.kkTlSok = t.value; clearTimeout(kkVax.sok); kkVax.sok = setTimeout(kkRender, 120); } });
+document.addEventListener('change', e => { const t = e.target; if (t.dataset && t.dataset.kknotom !== undefined){ const o = ORDER.find(x => x.nr === S.ordOpen); if (o) (S.kkNotOm = S.kkNotOm || {})[o.org] = t.value; } });
+// Verktygsraden tar inte fokus från rutan: markeringen står kvar.
+document.addEventListener('mousedown', e => { if (e.target.closest && e.target.closest('[data-kktlmd]')) e.preventDefault(); });
+// Skift+Enter i en lista fortsätter listan, som i Inkio.
+document.addEventListener('keydown', e => { const t = e.target; if (e.key !== 'Enter' || !e.shiftKey || !t.dataset || t.dataset.kknot === undefined || t.tagName !== 'TEXTAREA') return;
+  const fore = t.value.slice(0, t.selectionStart), rad = fore.slice(fore.lastIndexOf('\n') + 1), m = /^(\s*)(?:([-*•])|(\d+)([.)]))\s+(.*)$/.exec(rad); if (!m) return;
+  e.preventDefault();
+  if (!m[5].trim()){ t.setRangeText('', t.selectionStart - rad.length, t.selectionStart, 'end'); }
+  else t.setRangeText(`\n${m[1]}${m[2] ? m[2] + ' ' : `${+m[3] + 1}${m[4]} `}`, t.selectionStart, t.selectionEnd, 'end');
+  S.kkNotUtk = t.value; kkVax(t); });
+// Markdown som Inkios: fetstil, kursiv, genomstruket, länk och listor runt markeringen.
+function kkMd(k){
+  const t = document.querySelector('[data-kknot]'); if (!t) return;
+  const a = t.selectionStart, b = t.selectionEnd, val = t.value, mark = val.slice(a, b);
+  const runt = (f, e2 = f, tom = '') => { const x = mark || tom; t.setRangeText(f + x + e2, a, b, 'select'); if (!mark) t.setSelectionRange(a + f.length, a + f.length + x.length); };
+  if (k === 'b') runt('**', '**', 'fetstil');
+  else if (k === 'i') runt('_', '_', 'kursiv');
+  else if (k === 's') runt('~~', '~~', 'genomstruket');
+  else if (k === 'lank'){ const url = /^https?:\/\/\S+$/.test(mark) ? mark : 'https://'; const txt = mark && url !== mark ? mark : 'länktext'; t.setRangeText(`[${txt}](${url})`, a, b, 'end'); const p = a + txt.length + 3; t.setSelectionRange(url === mark ? a + 1 : p, url === mark ? a + 1 + txt.length : p + url.length); }
+  else if (k === 'ul' || k === 'ol'){ const start = val.lastIndexOf('\n', a - 1) + 1, slut = val.indexOf('\n', b) < 0 ? val.length : val.indexOf('\n', b);
+    const rader = val.slice(start, slut).split('\n'), lista = rader.every(r => k === 'ul' ? /^\s*[-*•]\s/.test(r) : /^\s*\d+[.)]\s/.test(r));
+    const ny = rader.map((r, i) => lista ? r.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, '') : `${k === 'ul' ? '- ' : `${i + 1}. `}${r.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, '')}`).join('\n');
+    t.setRangeText(ny, start, slut, 'end'); }
+  t.focus(); S.kkNotUtk = t.value; kkVax(t);
+}
 document.addEventListener('keydown', e => {
   if (S.view !== 'order' || !S.ordOpen || S.ordNy || e.metaKey || e.ctrlKey || e.altKey) return;
-  if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')){ if (e.key === 'Enter' && e.target.dataset && e.target.dataset.kknot !== undefined){ e.preventDefault(); document.querySelector('[data-kknotspara]')?.click(); } return; }
+  if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')){ if (e.key === 'Enter' && !e.shiftKey && e.target.dataset && e.target.dataset.kknot !== undefined){ e.preventDefault(); document.querySelector('[data-kknotspara]')?.click(); } return; }
   const flikar = ['oversikt', 'aktivitet', 'order', 'samtal', 'bilagor', 'historik'];
   if (/^[1-6]$/.test(e.key)){ e.preventDefault(); kkSt(); S.kkFlik = flikar[+e.key - 1]; render(); }
   if (e.key === ' ' && S.kkFlik === 'samtal'){ const b = document.querySelector('.kkplay'); if (b){ e.preventDefault(); b.click(); } }
@@ -23113,6 +23243,7 @@ const rtnFlikar = () => [['omraden','Områden'],['resa','Säljresan'],['ny','Ny 
 const rtnFlik = () => { const t = rtab(); return rtnFlikar().some(f => f[0] === t) ? t : 'omraden'; };
 // Ett områdes rutiner i den ordning de står i området: kategori för kategori.
 const rtnOmrOrd = id => { const rr = RUT.filter(r => r.omr === id), kat = [...new Set(rr.map(r => r.kat))]; return kat.flatMap(k => rr.filter(r => r.kat === k)); };
+// Ingen publicerad rutin, ingen veckans rutin: raden ritas inte. De tre första arkiverades 2026-11-01 och hela vyn kraschade.
 const rtnVeckans = () => rutin(S.rtnVeckans) || rutin(VECKANS) || RUT[0];
 const rtnDatum = iso => new Date(iso).toLocaleDateString('sv-SE', {day:'numeric', month:'short', year:'numeric'});
 const rtnLasta = rr => rr.filter(lastAv).length;
@@ -23322,8 +23453,8 @@ renderRutinerView = function(){
   return `
     <header class="top"><div class="hello"><h1>Rutiner</h1><p class="rtn-nu">${RUT.length} rutiner${kv.length ? ` · <button type="button" class="rtn-lk rtn-varn" data-ropen="${kv[0].id}" data-rtokvitt="1">${kv.length} att kvittera</button>` : ''}${nyAntal ? ` · <button type="button" class="rtn-lk" data-rtab="ny">${nyAntal} nya för dig</button>` : ''}${chef && forf ? ` · <button type="button" class="rtn-lk rtn-fel" data-rtab="forv">${forf} ej granskad</button>` : ''}</p></div>
       <div class="tools">${note(60)}<button type="button" class="rtn-mat" data-rtab="ny" title="Visa det du inte läst"><span class="num"><b>${lasta}</b> av ${RUT.length} lästa</span>${rtnBar(lasta, RUT.length)}</button>${chef ? `<button type="button" class="btn btn-s" data-rtnny="">${I('plus')}Ny rutin</button>` : ''}</div></header>
-    <div class="rtn-vk">${note(187)}<span class="rtn-et rtn-ok">Veckans rutin</span><button type="button" class="rtn-vkt" data-ropen="${v.id}"><b>${esc(v.t)}</b><span>${esc(v.tldr)}</span></button><span class="rtn-rm">${lastAv(v) ? `${I('check')}Läst` : `${lasMin(v)} min att läsa`}</span>
-      ${chef ? (S.rtnVeckVal ? `<select class="rtn-in rtn-sel" data-rtnveckans aria-label="Veckans rutin">${RUT.map(r => `<option value="${r.id}" ${r.id === v.id ? 'selected' : ''}>${esc(r.t)}</option>`).join('')}</select><button type="button" class="tlink" data-rtnveckval>Klar</button>` : '<button type="button" class="tlink" data-rtnveckval>Byt</button>') : ''}</div>
+    ${v ? `<div class="rtn-vk">${note(187)}<span class="rtn-et rtn-ok">Veckans rutin</span><button type="button" class="rtn-vkt" data-ropen="${v.id}"><b>${esc(v.t)}</b><span>${esc(v.tldr)}</span></button><span class="rtn-rm">${lastAv(v) ? `${I('check')}Läst` : `${lasMin(v)} min att läsa`}</span>
+      ${chef ? (S.rtnVeckVal ? `<select class="rtn-in rtn-sel" data-rtnveckans aria-label="Veckans rutin">${RUT.map(r => `<option value="${r.id}" ${r.id === v.id ? 'selected' : ''}>${esc(r.t)}</option>`).join('')}</select><button type="button" class="tlink" data-rtnveckval>Klar</button>` : '<button type="button" class="tlink" data-rtnveckval>Byt</button>') : ''}</div>` : ''}
     <div class="tgrid rtn-vy">
       <div class="col">
         <section class="rtn-kort rtn-sok">${note(61)}
@@ -27238,7 +27369,11 @@ kkData = function(org){
     ms:lagrad && lagrad.ms !== null ? lagrad.ms : null, vecka:lagrad ? lagrad.vecka.map(v => v.v !== false) : [],
     // Kund sedan: tidigaste signeringsdatum, som slaSammanKund.
     sedan:alla.length ? alla.reduce((a, o) => o.sign < a ? o.sign : a, alla[0].sign) : null,
-    akt:akt ? akt.rader.map(r => ({id:r.id, nar:ndTidText(r.nar), vem:r.vem, kalla:r.kalla.etikett, text:r.text, not:r.anteckning, lank:r.kalla.lank})) : [],
+    // 0278: sort, område, vad raden gäller, posten (belopp, tid, status), roll och nivå. En post utan klockslag (Inkios
+    // heldag, lagrad som midnatt UTC) visas utan tid.
+    akt:akt ? akt.rader.map(r => ({id:r.id, nar:ndTidText(r.nar), vem:r.vem, kalla:r.kalla.etikett, text:r.text, not:r.anteckning, lank:r.kalla.lank,
+      sort:r.sort || (r.anteckning ? 'anteckning' : 'aktivitet'), omrade:r.omrade || 'kund', om:r.om || null, post:r.post || null, roll:r.roll || null, niva:r.niva || null,
+      nav:!!r.nav, tjanst:!!r.tjanst, andrad:!!r.andrad, raderad:!!r.raderad, order:r.order || null, heldag:!!r.post && /T00:00:00(\.0+)?(Z|\+00:?00)$/.test(r.nar)})) : [],
     samtal, nd:f, sida
   };
 };
@@ -27317,14 +27452,169 @@ kkKort = function(o){
   h = h.replace(/<button class="btn btn-s btn-sm" data-act="toast" data-msg="[^"]*öppnas i Inkio i en ny flik\."[^>]*>Inkio ↗<\/button>/, d.inkioLank ? `<a class="btn btn-s btn-sm" href="${esc(d.inkioLank)}" target="_blank" rel="noopener" title="Öppna i Inkio">Inkio ↗</a>` : '');
   return h;
 };
+/* ---------- Aktivitet: kundens tidslinje, som Inkios historik (0278) ---------- */
+// Beställaren 2026-11-02: "så som det finns i inkio … men följer såklart navet". En lista för allt om kunden:
+// Inkios order, avtal, ärenden, anteckningar och händelser, och Navs egna (lades upp, godkänd, makulerad,
+// samtalen, kampanjsidan). Tre sorters rader som i Inkio: posten, anteckningen och systemraden. Skrivrutan
+// skriver Markdown som Inkios, och anteckningen kan gälla en av kundens order.
+Object.assign(P, {
+  kktul:'<path d="M9.5 6.5H20M9.5 12H20M9.5 17.5H20"/><circle cx="5" cy="6.5" r="1.1" fill="currentColor" stroke="none"/><circle cx="5" cy="12" r="1.1" fill="currentColor" stroke="none"/><circle cx="5" cy="17.5" r="1.1" fill="currentColor" stroke="none"/>',
+  kktol:'<path d="M10 6.5h10M10 12h10M10 17.5h10M4.2 5.2 5.6 4.4v4.2M4 13.4c.2-.9.8-1.3 1.5-1.3.8 0 1.3.5 1.3 1.1 0 1.1-2.8 1.8-2.8 3.2h2.9"/>'
+});
+/* kktMd: start — Markdown som Inkios anteckningar. Texten escapas först, så ingen HTML går igenom; länkar bara http(s). */
+function kktMd(t){
+  const lankar = [], a = (u, x) => `\u0000${lankar.push(`<a href="${u}" target="_blank" rel="noopener noreferrer">${x}</a>`) - 1}\u0000`;
+  const rad = l => {
+    let h = esc(l).replace(/'/g, '&#39;');
+    // En adress slutar vid ett escapat citattecken eller vinkelparentes: de hör till texten, inte till länken.
+    const U = '(?:(?!&(?:quot|lt|gt|#39);)[^\\s()<])';
+    h = h.replace(new RegExp(`\\[([^\\]\\n]+)\\]\\((https?:\\/\\/${U}+)\\)`, 'g'), (m, x, u) => a(u, x));
+    h = h.replace(new RegExp(`(^|[\\s(])(https?:\\/\\/${U}*[^\\s<.,;:!?()&])`, 'g'), (m, f, u) => f + a(u, u));
+    h = h.replace(/\*\*([^*\n]+?)\*\*/g, '<b>$1</b>').replace(/~~([^~\n]+?)~~/g, '<s>$1</s>')
+      .replace(/(^|[\s(])[*_]([^\s*_](?:[^*_\n]*[^\s*_])?)[*_](?=$|[\s).,;:!?])/g, '$1<i>$2</i>');
+    return h.replace(/\u0000(\d+)\u0000/g, (m, i) => lankar[+i]);
+  };
+  const ut = [];
+  let lista = null;
+  String(t ?? '').replace(/\u0000/g, '').replace(/\r/g, '').split('\n').forEach(l => {
+    const m = /^\s*(?:([-*•])|(\d+)[.)])\s+(.*)$/.exec(l), typ = m ? (m[1] ? 'ul' : 'ol') : null;
+    if (typ){ if (!lista || lista.typ !== typ){ lista = {typ, rader:[]}; ut.push(lista); } lista.rader.push(rad(m[3])); return; }
+    lista = null;
+    if (!l.trim()){ ut.push(null); return; }
+    const sista = ut[ut.length - 1];
+    if (typeof sista === 'string') ut[ut.length - 1] = `${sista}<br>${rad(l)}`; else ut.push(rad(l));
+  });
+  return ut.filter(x => x !== null).map(x => typeof x === 'string' ? `<p>${x}</p>` : `<${x.typ}>${x.rader.map(r => `<li>${r}</li>`).join('')}</${x.typ}>`).join('');
+}
+/* kktMd: slut */
+// NDNIVA (Säljare, Admin, Superadmin) finns redan, från Inställningar.
+const NDTLF = [['allt', 'Allt'], ['anteckningar', 'Anteckningar'], ['forsaljning', 'Order och avtal'], ['arbete', 'Ärenden och produktion'], ['samtal', 'Samtal'], ['sida', 'Kampanjsida']];
+const ndTlPassar = (r, f) => f === 'allt' || (f === 'anteckningar' ? r.typ === 'not' : r.omrade === f);
+const ndTlTraff = (r, q) => !q || [r.vem, r.text, r.sub, r.roll, r.niva && NDNIVA[r.niva], r.om && r.om.titel, r.om && r.om.nummer, r.post && r.post.nummer, r.post && r.post.tjanster.join(' '), r.nr && `#${r.nr}`].some(v => v && String(v).toLowerCase().includes(q));
+// Inkios rader och Navs egna händelser i en lista. "#15 skrevs till Inkio" står inte bredvid Inkios egen
+// orderpost med samma nummer: det är samma sak.
+function ndTlRader(o, d){
+  const alla = ORDER.filter(x => x.org === o.org), vem = n => n ? fornamn(n) : '', ut = [];
+  const inkioNr = new Set(d.akt.filter(r => r.post && r.post.nummer).map(r => r.post.nummer));
+  const sys = (nar, text, omrade, ton, ovr = {}) => ut.push({id:`nav-${ut.length}`, typ:'sys', nar, text, omrade, ton, ...ovr});
+  alla.forEach(x => {
+    sys(ndTidText(x.skapad), `Order #${x.nr} lades upp${x.skapadAv ? ` av ${vem(x.skapadAv)}` : ''}`, 'forsaljning', 'neutral', {sub:oAffar(x), nr:x.nr});
+    if (x.sign !== ndDagAv(x.skapad)) sys(`${x.sign} `, `#${x.nr} signerades av kunden`, 'forsaljning', 'neutral', {nr:x.nr});
+    if (x.samtal) sys(`${x.samtal.dag} ${x.samtal.t}`, `Säljsamtalet för #${x.nr}`, 'samtal', 'brand', {sub:`${x.samtal.min} min · ${vem(x.vem)}`, flik:'samtal'});
+    if (x.godkand) sys(ndTidText(x.godkand), `#${x.nr} godkändes${x.godkandAv ? ` av ${vem(x.godkandAv)}` : ''}`, 'forsaljning', 'ok', {sub:x.prov !== null ? `Provisionen frystes: ${oKr(x.prov)}` : '', nr:x.nr});
+    const ik = x.ndInkio;
+    if (ik && ik.state !== 'makulerad' && (ik.state === 'fel' || !inkioNr.has(ik.ordernummer))) sys(ndTidText(ik.synkad), ik.state === 'fel' ? `#${x.nr} gick inte att skriva till Inkio` : `#${x.nr} skrevs till Inkio`, 'forsaljning', ik.state === 'fel' ? 'danger' : 'ok', {sub:ik.state === 'fel' ? (ik.fel || '') : (ik.ordernummer || ''), nr:x.nr});
+    if (x.mak) sys(`${x.mak.dag} `, `#${x.nr} makulerades${x.mak.av ? ` av ${vem(x.mak.av)}` : ''}`, 'forsaljning', 'danger', {sub:x.mak.skal, nr:x.nr});
+    if (x.fornyelse && x.fornyelse.nar) sys(ndTidText(x.fornyelse.nar), x.fornyelse.utfall === 'forlangd' ? `Avtalet på #${x.nr} förlängdes` : `Kunden förlängde inte #${x.nr}`, 'forsaljning', x.fornyelse.utfall === 'forlangd' ? 'brand' : 'danger', {sub:x.fornyelse.skal || '', nr:x.nr});
+  });
+  d.samtal.filter(c => !c.order).forEach(c => sys(c.nar, c.dir === 'in' ? 'Kunden ringde' : `${vem(c.vem) || 'Nav'} ringde kunden`, 'samtal', 'neutral', {sub:`${kkLen(c.sek)}${c.dir === 'in' && c.vem ? ' · svarade ' + vem(c.vem) : ''}`, flik:'samtal'}));
+  const sida = (ndO().sidor || {})[o.org];
+  if (sida && sida.ok === false && sida.nereSedan) sys(ndTidText(sida.nereSedan), 'Kampanjsidan slutade svara', 'sida', 'danger', {sub:(sida.url || '').replace(/^https?:\/\//, '')});
+  d.akt.forEach(r => ut.push(r.post ? {...r, typ:'post'} : r.not && !r.tjanst ? {...r, typ:'not'} : {...r, typ:'sys', ton:r.tjanst ? 'ok' : 'neutral', inkio:true}));
+  return ut;
+}
+// Vad raden gäller: Nav-ordern när den finns här (öppnar den i fliken Order), annars posten i Inkio.
+const NDOMTYP = {'Sales Order':'Order', Contract:'Avtal', Task:'Leveranskort', Ticket:'Ärende', Invoice:'Faktura'};
+function ndTlOm(o, r){
+  const nav = r.order ? ORDER.find(y => y.id === r.order) : r.om && r.om.typ === 'Sales Order' && r.om.nummer ? ORDER.find(y => y.org === o.org && y.ndInkio && y.ndInkio.ordernummer === r.om.nummer) : null;
+  if (nav) return `<button class="kkt-om" data-o7omorder="${nav.nr}" title="Öppna #${nav.nr} i fliken Order">om #${nav.nr} · ${esc((r.om && r.om.titel) || oAffar(nav))}</button>`;
+  if (!r.om) return '';
+  const t = `om ${NDOMTYP[r.om.typ] || r.om.typ} · ${r.om.titel || r.om.nummer || ''}`;
+  return r.lank ? `<a class="kkt-om" href="${esc(r.lank)}" target="_blank" rel="noopener" title="Öppna i Inkio">${esc(t)} ↗</a>` : `<span class="kkt-om">${esc(t)}</span>`;
+}
+// Avtalets mätare: hur långt avtalet har gått, och när Nav påminner. Samma som Översiktens.
+function ndAvtalMatare(start, slut){
+  const dag = x => Date.parse(x + 'T12:00:00Z'), a = dag(start), b = dag(slut), nu = dag(kIdag()), v = ndO().varselDagar;
+  const tot = Math.max(1, Math.round((b - a) / 864e5)), kvar = Math.round((b - nu) / 864e5), andel = Math.max(0, Math.min(1, (nu - a) / (b - a || 1))), p90 = Math.max(0, 1 - v / tot);
+  const ton = kvar < 0 ? 'fara' : kvar <= v ? 'varn' : '';
+  return `<div class="kktl ${ton}"><div class="kktlbar"><span style="width:${andel * 100}%"></span><i class="kktl90" style="left:${p90 * 100}%" title="Nav påminner ${v} dagar innan"></i>${andel > 0 && andel < 1 ? `<b class="kktlnu" style="left:${andel * 100}%" title="I dag"></b>` : ''}</div>
+    <div class="kktlrad"><span class="num muted">${oDat(start)}</span><span class="${ton ? 'kktlvarn' : 'muted'}">${start > kIdag() ? `börjar om ${Math.round((a - nu) / 864e5)} dagar` : kvar < 0 ? `gick ut för ${-kvar} dagar sedan` : `${kvar} av ${tot} dagar kvar`}</span><b class="num">${oDat(slut)}</b></div></div>`;
+}
+const NDPOST = {order:['Order', 'order'], avtal:['Avtal', 'avtal'], arende:['Ärende', 'kv'], faktura:['Faktura', 'lon'], post:['Post', 'logg']};
+const NDAVTAL = {terminated:'sades upp', notice:'sades upp', notice_given:'sades upp', ended:'löpte ut', expired:'löpte ut', renewed:'förnyades', amended:'ändrades', cancelled:'makulerades'};
+const NDSTATUSTON = {confirmed:'ok', active:'ok', paid:'ok', solved:'ok', resolved:'ok', submitted:'signal', open:'signal', pending:'signal', unpaid:'signal', scheduled:'signal', replied:'signal', terminated:'danger', overdue:'danger'};
+function ndTlStatus(r){
+  const p = r.post, k = p.kod || '';
+  if (p.makulerad || k === 'cancelled') return ['Makulerad', 'danger'];
+  if (r.sort === 'avtal' && p.start && p.start > kIdag() && k !== 'terminated') return [`Startar ${oDat(p.start)}`, 'signal'];
+  return p.status ? [p.status[0].toUpperCase() + p.status.slice(1), NDSTATUSTON[k] || 'neutral'] : null;
+}
+function ndTlPost(o, r, tid){
+  const p = r.post, [typ, ik] = NDPOST[r.sort] || NDPOST.post, st = ndTlStatus(r), ton = st ? st[1] : 'neutral';
+  const titel = (r.om && r.om.titel) || p.tjanster.join(', ') || `${typ} ${p.nummer || ''}`;
+  const nav = r.sort === 'order' && p.nummer ? ORDER.find(y => y.org === o.org && y.ndInkio && y.ndInkio.ordernummer === p.nummer) : null;
+  const meta = [];
+  if (r.sort === 'avtal'){ if (p.manad !== null) meta.push(`<b class="num">${oKr(p.manad)}/mån</b>`); }
+  else if (p.varde !== null) meta.push(`<b class="num">${oKr(p.varde)}</b>`);
+  if (r.sort === 'order' && p.saljare) meta.push(`såld av ${esc(fornamn(p.saljare.replace(/\s*\.$/, '')))}`);
+  if (r.sort === 'arende' || r.sort === 'faktura' || r.sort === 'post') meta.push(esc(r.text));
+  if (nav) meta.push(`<button class="kkt-om" data-o7omorder="${nav.nr}" title="Öppna #${nav.nr} i fliken Order">#${nav.nr} i Nav</button>`);
+  const verb = r.sort === 'avtal' && p.andring && p.andring !== 'started' ? ` · ${NDAVTAL[p.andring] || esc(p.andring)}` : '';
+  const matare = r.sort === 'avtal' && p.start && p.slut && !['terminated', 'cancelled'].includes(p.kod || '') && !NDAVTAL[p.andring || ''] ? ndAvtalMatare(p.start, p.slut) : '';
+  return `<li class="kkt-post ton-${ton}"><span class="kkt-ik">${I(ik)}</span><div class="kkt-pk">
+    <p class="kkt-pr"><span class="kkt-typ">${typ}${p.nummer ? ` <span class="num">${esc(p.nummer)}</span>` : ''}${verb}</span>${tid ? `<span class="num kkt-tid">${tid}</span>` : ''}</p>
+    <p class="kkt-pr">${r.lank ? `<a class="kkt-titel" href="${esc(r.lank)}" target="_blank" rel="noopener" title="Öppna i Inkio">${esc(titel)} ↗</a>` : `<span class="kkt-titel">${esc(titel)}</span>`}${st ? `<span class="pill t-${st[1]}">${esc(st[0])}</span>` : ''}</p>
+    ${meta.length ? `<p class="kkt-meta">${meta.join('<span aria-hidden="true">·</span>')}</p>` : ''}${matare}</div></li>`;
+}
+function ndTlNot(o, r, tid){
+  const fast = (ndO().fasta || {})[o.org], fastad = !!fast && fast.kommentar === r.id, jag = ND && ND.jag && ND.jag.namn === r.vem;
+  const roll = r.niva ? NDNIVA[r.niva] : r.roll ? `${r.roll} i Inkio` : '';
+  const lage = r.nav ? (/skrivs till Inkio/.test(r.kalla) ? '<span class="pill t-signal">Skrivs till Inkio</span>' : /bara i Nav/.test(r.kalla) ? '<span class="pill t-neutral">Bara i Nav</span>' : '') : '';
+  const text = r.raderad ? r.text.replace(/^Raderad i Inkio: /, '') : r.text;
+  return `<li class="kkt-not ${jag ? 'egen' : ''} ${fastad ? 'fast' : ''} ${r.raderad ? 'rad' : ''}">${avatar(r.vem.replace(/ \(import\)$/, ''), 28)}<div class="kkt-k">
+    <p class="kkt-m"><b>${esc(r.vem)}</b>${roll ? `<span>${esc(roll)}</span>` : ''}${ndTlOm(o, r)}${r.andrad ? '<span>ändrad</span>' : ''}${r.raderad ? '<span class="kkt-rad">raderad i Inkio</span>' : ''}${lage}<button class="tlink kkt-fast" data-o7fast="${esc(r.id)}">${fastad ? 'Lossa' : 'Fäst överst'}</button>${tid ? `<span class="num kkt-tid">${tid}</span>` : ''}</p>
+    <div class="kkt-bubbla">${kktMd(text)}</div></div></li>`;
+}
+function ndTlRad(o, r){
+  const tid = r.heldag || /^\d{4}-\d{2}-\d{2} $/.test(r.nar) ? '' : r.nar.slice(11, 16);
+  if (r.typ === 'post') return ndTlPost(o, r, tid);
+  if (r.typ === 'not') return ndTlNot(o, r, tid);
+  const lank = r.flik ? `data-kkflik="${r.flik}"` : r.nr ? `data-o7omorder="${r.nr}"` : '';
+  return `<li class="kkt-sys ton-${r.ton || 'neutral'}"><i aria-hidden="true"></i><p>${lank ? `<button class="kkt-sysk" ${lank}>${esc(r.text)}</button>` : `<span>${esc(r.text)}</span>`}${r.sub ? `<small>${esc(r.sub)}</small>` : ''}${r.inkio ? ndTlOm(o, r) : ''}</p>${tid ? `<span class="num kkt-tid">${tid}</span>` : ''}</li>`;
+}
+// Per roll, som Inkios "Anteckningar per roll": Navs nivåer, och de som bara finns i Inkio för sig.
+function ndTlRoller(o, rader){
+  const not = rader.filter(r => r.typ === 'not').sort((a, b) => b.nar.localeCompare(a.nar));
+  const grupper = [['superadmin', 'Superadmin'], ['admin', 'Admin'], ['salesperson', 'Säljare'], ['ute', 'Utanför Nav']].map(([k, l]) => ({k, l, r:not.filter(r => (r.niva || 'ute') === k)})).filter(g => g.r.length);
+  if (!grupper.length) return `<p class="muted kkt-tom">Ingen har skrivit något om kunden än.</p>`;
+  const nar = r => `${kkDagRub(r.nar.slice(0, 10))}${/^\d{4}-\d{2}-\d{2} \d/.test(r.nar) ? ' ' + r.nar.slice(11, 16) : ''}`;
+  return `<div class="kkt-roller">${grupper.map(g => `<section class="kkt-kol"><h4>${g.l} <span class="num muted">${g.r.length}</span></h4>
+    <p class="muted kkt-kolm">Senast ${esc(kkDagRub(g.r[0].nar.slice(0, 10)).toLowerCase())} · ${esc([...new Set(g.r.map(r => fornamn(r.vem)))].join(', '))}</p>
+    <ol>${g.r.map(r => `<li>${avatar(r.vem.replace(/ \(import\)$/, ''), 24)}<div><p class="kkt-m"><b>${esc(fornamn(r.vem))}</b>${!r.niva && r.roll ? `<span>${esc(r.roll)}</span>` : ''}<span class="num kkt-tid">${esc(nar(r))}</span></p><div class="kkt-bubbla">${kktMd(r.text)}</div>${ndTlOm(o, r)}</div></li>`).join('')}</ol></section>`).join('')}</div>`;
+}
+function ndTlSkriv(o){
+  const om = (S.kkNotOm || {})[o.org] || '', ordrar = ORDER.filter(x => x.org === o.org && x.st !== 'utkast');
+  const vk = [['b', 'Fetstil', 'B'], ['i', 'Kursiv', 'I'], ['s', 'Genomstruket', 'S'], ['lank', 'Länk', I('lank')], ['ul', 'Punktlista', I('kktul')], ['ol', 'Numrerad lista', I('kktol')]];
+  return `<div class="kkt-skriv">${avatar(ME[S.role].namn, 28)}<div class="kkt-ruta">
+    <div class="kkt-verktyg" role="toolbar" aria-label="Formatering">${vk.map(([k, l, ik]) => `<button type="button" class="kkt-vk kkt-vk-${k}" data-kktlmd="${k}" title="${l}" aria-label="${l}">${ik}</button>`).join('')}</div>
+    <textarea class="kkt-in" data-kknot rows="2" placeholder="Skriv en anteckning om kunden…" aria-label="Ny anteckning">${esc(S.kkNotUtk || '')}</textarea>
+    <div class="kkt-fot">${ordrar.length ? `<label class="kkt-galler">Gäller <select data-kknotom aria-label="Vad anteckningen gäller"><option value="">kunden</option>${ordrar.map(x => `<option value="${esc(x.id)}" ${om === x.id ? 'selected' : ''}>#${x.nr} · ${esc(oAffar(x))}</option>`).join('')}</select></label>` : ''}<span class="muted kkt-hj">Enter sparar · Skift+Enter ny rad</span><button class="btn btn-p btn-sm" data-kknotspara>Spara</button></div></div></div>`;
+}
 const _ndKkAktivitet = kkAktivitet;
 kkAktivitet = function(o, d){
-  let h = _ndKkAktivitet(o, d); if (!ndO()) return h;
-  const f = d.nd || {};
-  h = h.replace(/<button class="tlink" data-act="toast" data-msg="[^"]*öppnas i Inkio\.">Öppna [^<]*<\/button>/, ndInkioLank(d.inkioLank, `Öppna ${d.inkio || 'i Inkio'}`));
-  if (f.kopplat === false) h = h.replace('Kunden finns inte i Inkio än. Den läggs in när ordern godkänns.', 'Inkio är inte kopplat i den här miljön, så aktiviteten går inte att läsa här. Den finns i Inkio och i Nav.');
-  if (f.laddar) h = h.replace('Kunden finns inte i Inkio än. Den läggs in när ordern godkänns.', 'Hämtar från Inkio…');
-  return h;
+  if (!ndO()) return _ndKkAktivitet(o, d);
+  const f = d.nd || {}, vy = S.kkTlVy === 'roll' ? 'roll' : 'tidslinje', q = (S.kkTlSok || '').trim().toLowerCase();
+  const fl = NDTLF.some(([k]) => k === S.kkAktF) ? S.kkAktF : 'allt';
+  const traff = ndTlRader(o, d).filter(r => ndTlTraff(r, q)), antal = k => traff.filter(r => ndTlPassar(r, k)).length;
+  const synl = traff.filter(r => ndTlPassar(r, fl)).sort((a, b) => S.kkTlAldst ? a.nar.localeCompare(b.nar) : b.nar.localeCompare(a.nar));
+  const MAX = 40, rader = S.kkTlAlla === o.org || synl.length <= MAX + 5 ? synl : synl.slice(0, MAX), dolda = synl.length - rader.length;
+  let lista = '', sist = '';
+  rader.forEach(r => { const dag = r.nar.slice(0, 10); if (dag !== sist){ lista += `${sist ? '</ol></li>' : ''}<li><p class="kkdag">${kkDagRub(dag)}</p><ol>`; sist = dag; } lista += ndTlRad(o, r); });
+  if (sist) lista += '</ol></li>';
+  const akt = f.aktivitet || null;
+  const lage = f.laddar ? 'Hämtar från Inkio…' : f.kopplat === false ? 'Inkio är inte kopplat här. Det Nav själv vet om kunden syns ändå.' : f.fel ? f.fel : akt && akt.fel ? akt.fel : akt && !akt.kund ? 'Kunden finns inte i Inkio än. Den läggs in när ordern godkänns, och anteckningarna skrivs dit då.' : '';
+  const chips = NDTLF.filter(([k]) => k === 'allt' || k === 'anteckningar' || k === fl || antal(k)).map(([k, l]) => `<button class="chip ${fl === k ? 'on' : ''}" data-kkaktf="${k}" aria-pressed="${fl === k}">${l} <span class="num muted">${antal(k)}</span></button>`).join('');
+  const tom = q ? `Inget i historiken matchar ”${esc(S.kkTlSok.trim())}”.` : fl === 'anteckningar' ? 'Ingen har skrivit något om kunden än.' : 'Inget här än.';
+  return `${ndKkSida(o, d)}
+    <section class="kksek kkinkio kkt"><div class="kkinkioh"><h3>Tidslinje</h3>${f.kl ? `<span class="muted o7hamt">hämtat ${esc(f.kl)}</span>` : ''}${ndInkioLank(d.inkioLank, `Öppna ${d.inkio || 'i Inkio'}`)}<button class="tlink" data-kkuppd>Uppdatera</button></div>
+      ${ndTlSkriv(o)}
+      <div class="qchips o7snabb" role="group" aria-label="Snabbval">${['Ringde, inget svar', 'Skickade offert', 'Bokade möte', 'Vill bli uppringd'].map(x => `<button class="chip" data-o7snabbnot="${x}">${x}</button>`).join('')}</div>
+      <div class="kkt-rad1"><span class="kkt-vy" role="group" aria-label="Visa som">${[['tidslinje', 'Tidslinje'], ['roll', 'Per roll']].map(([k, l]) => `<button data-kktlvy="${k}" aria-pressed="${vy === k}">${l}</button>`).join('')}</span><label class="kkt-sok">${I('sok')}<input class="uin" type="search" data-kktlsok value="${esc(S.kkTlSok || '')}" placeholder="Sök i historiken" aria-label="Sök i historiken"></label></div>
+      ${vy === 'roll' ? '' : `<div class="qchips kkfilter" role="group" aria-label="Visa">${chips}</div>`}
+      ${lage ? `<p class="muted kkt-lage">${esc(lage)}</p>` : ''}
+      ${vy === 'roll' ? ndTlRoller(o, traff) : rader.length ? `<ol class="kkt-lista">${lista}</ol>${dolda ? `<button class="tlink kkt-mer" data-kktlalla>Visa ${dolda} ${S.kkTlAldst ? 'senare' : 'äldre'}</button>` : ''}` : `<p class="muted kkt-tom">${tom}</p>`}
+      ${vy === 'roll' ? '' : `<p class="muted kkhj">${S.kkTlAldst ? 'Äldst först.' : 'Nyast först.'} <button class="tlink inl" data-kktlordning>${S.kkTlAldst ? 'Visa nyast först' : 'Visa äldst först'}</button></p>`}
+    </section>`;
 };
 
 /* ---------- Den fästa anteckningen (0083) ---------- */
@@ -27725,7 +28015,7 @@ document.addEventListener('click', e => {
     const f = {}; NDLASFALT.forEach(([k, , nu]) => { const v = val.has(k) && l.forslag[k] ? l.forslag[k].varde : nu(x); f[k === 'phone' ? 'contact_phone' : k] = v; });
     if (!val.size){ S.kkLas = null; kkRender(); return; } ndOrdPost('ratta-fran-avtal', {id:x.id, falt:f}); return; }
   if (ds.kknotspara !== undefined){ stopp(); const o = oppen(), t = (document.querySelector('[data-kknot]')?.value || '').trim(); if (!t){ document.querySelector('[data-kknot]')?.focus(); return; }
-    ndOrdPost('anteckning', {org:o.org, text:t}, {ladda:false}).then(s => { if (s.ok){ S.kkNotUtk = ''; ndKundHamta(o, true); kkRender(); } }); return; }
+    ndOrdPost('anteckning', {org:o.org, text:t, order:(S.kkNotOm || {})[o.org] || ''}, {ladda:false}).then(s => { if (s.ok){ S.kkNotUtk = ''; ndKundHamta(o, true); kkRender(); } }); return; }
   if (ds.o7fast){ stopp(); const o = oppen(), fast = (ndO().fasta || {})[o.org], r = kkData(o.org).akt.find(x => x.id === ds.o7fast);
     if (fast && fast.kommentar === ds.o7fast){ ndOrdPost('lossa-fast', {org:o.org}, {ladda:false}).then(s => { if (s.ok){ delete ndO().fasta[o.org]; kkRender(); } }); return; }
     if (!r) return;
