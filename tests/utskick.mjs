@@ -59,6 +59,14 @@ prov("alla klockans sorter är med", NOTIS_KALLOR.every((s) => SORTER.includes(s
 prov("varje område har minst en sort", OMRADEN.every((o) => SORTER.some((s) => omradeFor(s) === o.id)));
 prov("en härledd sort mejlas inte", !kanalerFor("rutin").includes("mejl") && kanalerFor("order-makulerad").includes("mejl"));
 prov("kvällsnotisen är bara push", kanalerFor("kvallsnotis").join() === "push");
+
+// Inkio är ett eget område (2026-11-02): Orders mejl gav ett brev per anteckning.
+const inkio = ["order-inkio-anteckning", "order-inkio-arende", "order-inkio-makulerad", "order-inkio-uppsagt", "order-inkio-handelse", "order-anteckning"];
+prov("Inkios sorter ligger under Inkio", inkio.every((s) => omradeFor(s) === "inkio"));
+prov("Orders mejl når inte en anteckning i Inkio",
+  !far({ alla: { mejl: { "*": false, "omrade:order": true } } }, "mejl", nycklarFor("order-inkio-anteckning"), false));
+prov("en sort i Inkio kan slås på för sig",
+  far({ alla: { mejl: { "*": false, "sort:order-inkio-arende": true } } }, "mejl", nycklarFor("order-inkio-arende"), true));
 prov("avsnitten har unika id", new Set(MORGON_AVSNITT.map((a) => a.id)).size === MORGON_AVSNITT.length);
 
 prov("okänd nyckel nekas", !arNyckel("mejl", "sort:finns-inte") && !arNyckel("mejl", "omrade:x") && !arNyckel("klocka", "avsnitt:idag"));

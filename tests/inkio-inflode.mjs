@@ -108,6 +108,7 @@ rubrik("Tolkningen");
   const k = tolkaPost(kortflytt);
   ok("en kortflytt är en aktivitet på leveranskortet", k.slag === "aktivitet" && etikett(k) === "Leveranskort Roos Alltjänst");
   ok("taggar och entiteter tas bort", renText("<p>Hej&nbsp;där</p><p>&amp; mer</p>") === "Hej där\n& mer");
+  ok("ett omnämnande blir @Namn", renText("@[Simon Omar](ref:User/01a10ffe-8e2c-74dd-a6de-1fb0b10f0a49) kolla") === "@Simon Omar kolla");
   ok("avtrycket är stabilt oavsett nyckelordning", avtryck({ a: 1, b: [2, { c: 3, d: 4 }] }) === avtryck({ b: [2, { d: 4, c: 3 }], a: 1 }));
   ok("ett ärende i en mening", posttext({ id: "ticket:x", kind: "ticket", about: { title: "Kunden vill bestrida", subtitle: "TKT-2026-00003" }, data: { number: "TKT-2026-00003", subject: "Kunden vill bestrida", status: "Open" } }) === "Ärende TKT-2026-00003: Kunden vill bestrida · öppet");
   ok("en post utan id ger ingen rad", tolkaPost({ kind: "comment", at: timmeSedan }) === null);
@@ -148,6 +149,9 @@ rubrik("Notisen");
   const makulerad = tolkaPost(order({ cancelled: true }));
   const m = notisFor(makulerad, { typ: "andrad", vad: ["Order SO-2026-00046 makulerades i Inkio"] }, { bolag: "Hedboms", nu: NU, navSkapadeNyss: false });
   ok("ändrad order: notis om ändringen", m && m.rubrik === "Hedboms: Order SO-2026-00046 makulerades i Inkio");
+  ok("makulerad order: egen sort (mejlas)", m && m.kalla === "order-inkio-makulerad", JSON.stringify(m));
+  const nyttVardeN = notisFor(tolkaPost(order({ value: 150000 })), { typ: "andrad", vad: ["Ordervärdet på SO-2026-00046 ändrades i Inkio: 167 880 kr → 150 000 kr"] }, { bolag: "X", nu: NU, navSkapadeNyss: false });
+  ok("nytt ordervärde: händelse (bara klockan)", nyttVardeN && nyttVardeN.kalla === "order-inkio-handelse", JSON.stringify(nyttVardeN));
   const nyOrder = tolkaPost(order({}, timmeSedan));
   ok("ny order som Nav nyss lade: tyst", notisFor(nyOrder, { typ: "ny" }, { bolag: "X", nu: NU, navSkapadeNyss: true }) === null);
   ok("ny order som någon annan lade: notis", notisFor(nyOrder, { typ: "ny" }, { bolag: "X", nu: NU, navSkapadeNyss: false }) !== null);
@@ -155,6 +159,28 @@ rubrik("Notisen");
   ok("avtal med startdag framåt: 'startar', inte 'startade'", framat.text.startsWith("Avtal CTR-9 startar 2099-01-01"), framat.text);
   ok("avtal med startdag framåt vid första läsningen: tyst", notisFor(framat, { typ: "ny" }, { bolag: "X", nu: NU, navSkapadeNyss: false, forsta: true }) === null);
   ok("avtal med startdag framåt som dyker upp senare: notis", notisFor(framat, { typ: "ny" }, { bolag: "X", nu: NU, navSkapadeNyss: false, forsta: false }) !== null);
+}
+
+rubrik("Sorten: ärendet, makulerat och uppsagt mejlas, resten står i klockan");
+{
+  // Riktiga rader ur crm_handelse (2026-11-02): anteckningar på TKT-2026-00003.
+  const ticketAnteckning = anteckning(timmeSedan, { content: "Alexander ska kika på ärendet nu.", reference_doctype: "Ticket", reference_id: "01a1535c-d7a0-70fe-94dd-2f69810e26eb" });
+  ticketAnteckning.about = { doctype: "Ticket", id: "01a1535c-d7a0-70fe-94dd-2f69810e26eb", title: "Kunden vill bestrida", subtitle: "TKT-2026-00003 · 2026-10-20", route: "/tickets/01a1535c-d7a0-70fe-94dd-2f69810e26eb" };
+  const t = notisFor(tolkaPost(ticketAnteckning), { typ: "ny" }, { bolag: "Hedboms Måleri AB", nu: NU, navSkapadeNyss: false });
+  ok("anteckning på ett ärende: ärendet", t && t.kalla === "order-inkio-arende", JSON.stringify(t));
+  ok("anteckning på ett ärende: säger vilket", t && t.rubrik === "Hedboms Måleri AB: Matias Lopez skrev i ärendet Kunden vill bestrida" && t.detalj === "Alexander ska kika på ärendet nu.", JSON.stringify(t));
+
+  const kund = notisFor(tolkaPost(anteckning()), { typ: "ny" }, { bolag: "X", nu: NU, navSkapadeNyss: false });
+  ok("anteckning på kunden: anteckning (bara klockan)", kund && kund.kalla === "order-inkio-anteckning");
+  ok("aktivitet: händelse (bara klockan)", notisFor(tolkaPost(kortflytt), { typ: "ny" }, { bolag: "X", nu: NU, navSkapadeNyss: false })?.kalla === "order-inkio-handelse");
+
+  const arende = (data = {}) => ({ id: "ticket:01a1535c", kind: "ticket", area: "support", at: timmeSedan, about: { doctype: "Ticket", id: "01a1535c", title: "Kunden vill bestrida", subtitle: "TKT-2026-00003 · 2026-11-02" }, data: { number: "TKT-2026-00003", subject: "Kunden vill bestrida", status: "Open", ...data } });
+  ok("nytt ärende: ärendet", notisFor(tolkaPost(arende()), { typ: "ny" }, { bolag: "X", nu: NU, navSkapadeNyss: false })?.kalla === "order-inkio-arende");
+  ok("ärendet byter status: ärendet", notisFor(tolkaPost(arende({ status: "Solved" })), { typ: "andrad", vad: ["Ärende TKT-2026-00003 är löst: Kunden vill bestrida"] }, { bolag: "X", nu: NU, navSkapadeNyss: false })?.kalla === "order-inkio-arende");
+
+  const avtal = (andring, status) => ({ id: `agreement:01a1933c:${andring}`, kind: "agreement", at: timmeSedan, about: { doctype: "Contract", id: "01a1933c", subtitle: "CTR-2026-00090" }, data: { change: andring, number: "CTR-2026-00090", status, start_date: "2026-11-02", end_date: "2027-11-02" } });
+  ok("avtal som sägs upp: uppsagt", notisFor(tolkaPost(avtal("terminated", "Terminated")), { typ: "ny" }, { bolag: "X", nu: NU, navSkapadeNyss: false })?.kalla === "order-inkio-uppsagt");
+  ok("avtal som startar: händelse (bara klockan)", notisFor(tolkaPost(avtal("started", "Active")), { typ: "ny" }, { bolag: "X", nu: NU, navSkapadeNyss: false })?.kalla === "order-inkio-handelse");
 }
 
 rubrik("Kretsen");

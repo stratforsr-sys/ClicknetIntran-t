@@ -87,6 +87,20 @@ export const MEJLKALLOR = [
   "order-makulerad",
 
   /**
+   * Inkio (0277): bara det någon måste göra något åt. Ärendet är en kund som
+   * väntar på svar, och en anteckning på ett ärende räknas som ärendet. En order
+   * som makuleras och ett avtal som sägs upp kostar pengar.
+   *
+   * Alla andra anteckningar och aktiviteter, nya order och avtal och övriga
+   * ändringar står i klockan och telefonen. De mejlades förut, eftersom de låg
+   * under Order, och det blev tio brev på tre minuter (beställaren 2026-11-02:
+   * "så jag inte får 100 mejl").
+   */
+  "order-inkio-arende",
+  "order-inkio-makulerad",
+  "order-inkio-uppsagt",
+
+  /**
    * Frånvaron: de tre besked som RIVER UPP något den anställda redan planerat
    * efter. En godkänd ledighet som ställs in är det tydligaste fallet i hela
    * navet — personen har bokat resa på ett besked som inte längre gäller.
