@@ -14,6 +14,21 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "fel-larmar-om-samtal-och-morgonkvitto",
+    rubrik: "Fel larmar när ett samtal inte går att läsa",
+    ingress: "Ett samtal från växeln som inte blir ett samtal i Nav syns nu i Fel, och felrapporter står under rätt typ i händelseloggen.",
+    text: `Under **Fel** kommer ett larm när ett samtal från växeln inte går att läsa in, också
+efter nattens nya försök. Förut låg det kvar i två veckor utan att någon fick veta. Samma
+larm kommer om morgonjobbets kvitto inte går att läsa.
+
+I **Händelseloggen** står en felrapport som någon skrivit under **Skapande**, och den som
+tilldelar, svarar på eller följer ett fel under **Ändring**. Bara fel som navet fångat
+självt står under **System**.`,
+    datum: "2026-11-03",
+    roller: ["sales_manager", "ceo", "admin"],
+    href: "/fel",
+  },
+  {
     slug: "tillagg-med-kundens-uppgifter",
     rubrik: "Ett tillägg får kundens adress och kontakt",
     ingress: "En ny order på en befintlig kund fylls i med allt Nav vet om kunden, och avtalet följer med ett sparat utkast.",

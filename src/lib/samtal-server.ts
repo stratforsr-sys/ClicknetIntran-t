@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { inspelningslage, tolkaSamtal, type Tolkning } from "@/lib/samtal";
+import { inspelningslage, omtagIOmgangar, tolkaSamtal, type Omtag, type Tolkning } from "@/lib/samtal";
 import { hamtaInspelning } from "@/lib/inspelning-server";
 import { svepKoppling } from "@/lib/samtal-order-server";
 
@@ -396,33 +396,33 @@ export async function taEmotSamtal(ratext: string, headers: Headers): Promise<Mo
  * hem, men SAMTALET finns: tid, längd, motpart och säljare. Det är vad
  * kopplingen till ordern och spärren för säljsamtalet läser.
  */
-export async function tolkaOmOtolkade(): Promise<{ tolkade: number; fel: string[] }> {
+export async function tolkaOmOtolkade(): Promise<Omtag> {
   const db = supabaseAdmin();
   const fran = new Date(Date.now() - 14 * 86_400_000).toISOString();
 
-  const { data, error } = await db
-    .from("call_ingest")
-    .select("id, payload, fingerprint")
-    .is("normalized_at", null)
-    .gte("received_at", fran)
-    .order("id")
-    .limit(200);
-
-  if (error) return { tolkade: 0, fel: [error.message] };
-
-  let tolkade = 0;
-  const fel: string[] = [];
-
-  for (const r of data ?? []) {
-    try {
-      await behandla(db, r.id as number, r.payload, r.fingerprint as string);
-      tolkade++;
-    } catch (e) {
-      const skal = e instanceof Error ? e.message : String(e);
-      fel.push(`${r.id}: ${skal}`);
-      await db.from("call_ingest").update({ normalize_error: skal.slice(0, 1000) }).eq("id", r.id);
-    }
-  }
-
-  return { tolkade, fel };
+  return omtagIOmgangar(
+    async (efterId, antal) => {
+      const { data, error } = await db
+        .from("call_ingest")
+        .select("id, payload, fingerprint")
+        .is("normalized_at", null)
+        .gte("received_at", fran)
+        .gt("id", efterId)
+        .order("id")
+        .limit(antal);
+      if (error) throw new Error(`call_ingest gick inte att läsa: ${error.message}`);
+      return (data ?? []).map((r) => ({ id: Number(r.id), payload: r.payload as unknown, fingerprint: r.fingerprint as string }));
+    },
+    async (r) => {
+      try {
+        await behandla(db, r.id, r.payload, r.fingerprint);
+      } catch (e) {
+        const skal = e instanceof Error ? e.message : String(e);
+        await db.from("call_ingest").update({ normalize_error: skal.slice(0, 1000) }).eq("id", r.id);
+        throw e;
+      }
+    },
+    // Nattjobbet har 300 sekunder för alla steg. Omtaget får en och en halv minut av dem.
+    { antal: 200, senast: Date.now() + 90_000 },
+  );
 }

@@ -24,6 +24,7 @@ import { arKlar, dagarSedan, personlage, type Progress } from "@/lib/guider";
 import { coachningsnotiser } from "@/lib/coachning-server";
 import { projektchattnotiser, uppgiftsnotiser } from "@/lib/uppgifter-server";
 import { filtreraKlockan } from "@/lib/utskick-server";
+import { loggaSallan } from "@/lib/sallanlogg";
 
 /** G6. Sa lange far det sta stilla innan klockan sager till. */
 const TYST_DAGAR = 3;
@@ -376,10 +377,11 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
       .limit(MAX_NOTISER),
   ]);
   // R2 (produktionsprovet 2026-10-30): varje delfråga destruktureras till `{ data }`, så ett fel gav
-  // en tom lista utan spår. Felet ändrar fortfarande ingenting i klockan, men det syns i loggen.
+  // en tom lista utan spår. Felet ändrar fortfarande ingenting i klockan, men det syns i loggen, en
+  // gång per kvart och fel (`loggaSallan`).
   delsvar.forEach((d, i) => {
     const fel = (d as { error?: { message?: string } | null }).error;
-    if (fel) console.error("notiser: delfråga", i, fel.message);
+    if (fel) loggaSallan(`notiser:${i}:${fel.message}`, "notiser: delfråga", i, fel.message);
   });
   const [
     { data: seddRad },

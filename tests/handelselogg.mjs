@@ -70,6 +70,10 @@ console.log("\n\x1b[1mOrdningen mellan reglerna\x1b[0m");
 
   ok("job.night_ok är system", typFor("job.night_ok") === "system");
   ok("error.new är system", typFor("error.new") === "system");
+  // Rättelserna 2026-11-02: resten av `error.*` gör en människa i Fel (0082), och då gäller ändelsen.
+  ok("error.reported är skapande, inte system", typFor("error.reported") === "skapande", String(typFor("error.reported")));
+  ok("error.assigned är ändring, inte system", typFor("error.assigned") === "andring", String(typFor("error.assigned")));
+  ok("job.morning_ok är system", typFor("job.morning_ok") === "system");
 
   ok("role.granted är behörighet", typFor("role.granted") === "behorighet");
   ok("permission.revoked är behörighet", typFor("permission.revoked") === "behorighet");

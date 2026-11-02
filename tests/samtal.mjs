@@ -26,6 +26,8 @@ import {
   flatta,
   inspelningslage,
   normaliseraNummer,
+  omtagIOmgangar,
+  omtagsLarm,
   sekunder,
   tidpunkt,
   tolkaSamtal,
@@ -365,6 +367,40 @@ console.log("\n\x1b[1mUtan både samtals-id och starttid är påsen inte ett sam
     riktig.externalRef === "515339662" && riktig.direction === "ut" && riktig.durationSeconds === 407 && riktig.agentRef === "fredrik@clicknet.se",
     JSON.stringify({ ref: riktig.externalRef, dir: riktig.direction, s: riktig.durationSeconds, agent: riktig.agentRef }),
   );
+}
+
+console.log("\n\x1b[1mNattens omtag går igenom alla råpåsar, i omgångar (rättelserna 2026-11-02)\x1b[0m");
+{
+  // 450 otolkade rader, där de 210 äldsta aldrig går att tolka. Förut tog natten de 200 äldsta och
+  // inget mer: de nyare kom aldrig fram, och felen syntes inte någonstans.
+  const rader = Array.from({ length: 450 }, (_, i) => ({ id: 1000 + i }));
+  const hamta = async (efter, antal) => rader.filter((r) => r.id > efter).slice(0, antal);
+  const tolkade = [];
+  const tolka = async (r) => {
+    if (r.id < 1210) throw new Error(`new row for relation "phone_call" violates check constraint "phone_call_inspelning"`);
+    tolkade.push(r.id);
+  };
+  const r = await omtagIOmgangar(hamta, tolka, { antal: 200, senast: Infinity });
+  ok("alla 450 rader prövas", r.tolkade + r.fel.length === 450, `${r.tolkade} + ${r.fel.length}`);
+  ok("de nyaste blir samtal trots 210 trasiga före dem", tolkade.includes(1449) && r.tolkade === 240, String(r.tolkade));
+  ok("och omtaget hann igenom", r.hann === true);
+
+  let klocka = 0;
+  const tidsbrist = await omtagIOmgangar(hamta, async () => { klocka += 10; }, { antal: 200, senast: 1000, nu: () => klocka });
+  ok("tiden tar slut: det sägs, i stället för att jobbet tystnar", tidsbrist.hann === false && tidsbrist.tolkade === 100, JSON.stringify({ hann: tidsbrist.hann, n: tidsbrist.tolkade }));
+
+  let felIFragan = "";
+  try {
+    await omtagIOmgangar(async () => { throw new Error("call_ingest: timeout"); }, tolka, { antal: 200, senast: Infinity });
+  } catch (e) {
+    felIFragan = e.message;
+  }
+  ok("ett fel i frågan kastas, så att natten larmar", felIFragan === "call_ingest: timeout", felIFragan || "kastade inte");
+
+  ok("inget att larma om när allt gick", omtagsLarm({ tolkade: 3, fel: [], hann: true }) === null);
+  const larm = omtagsLarm(r);
+  ok("trasiga påsar ger ett larm med antal och det första felet", larm !== null && larm.includes("210") && larm.includes("phone_call_inspelning"), String(larm));
+  ok("tidsbrist ger ett larm", (omtagsLarm(tidsbrist) ?? "").includes("hann inte"), String(omtagsLarm(tidsbrist)));
 }
 
 console.log(fel === 0 ? "\n\x1b[32mAlla prov gick igenom\x1b[0m\n" : `\n\x1b[31m${fel} prov foll\x1b[0m\n`);

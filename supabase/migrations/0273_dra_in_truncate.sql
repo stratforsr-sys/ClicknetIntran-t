@@ -24,9 +24,21 @@
 -- Rollen supabase_admin går inte att ändra (permission denied, se 0240), och
 -- den skapar inga av navets tabeller. SELECT, INSERT, UPDATE och DELETE rörs
 -- inte.
+--
+-- MAINTAIN finns från Postgres 17. Ändrad 2026-11-02, efter körningen: MAINTAIN
+-- står bakom en versionskontroll, så att filen går att köra mot en äldre
+-- Postgres. Mot produktionen (17.6) gör den exakt det den gjorde 2026-11-01.
 -- =============================================================================
 
-revoke truncate, trigger, references, maintain on all tables in schema public from anon, authenticated;
+revoke truncate, trigger, references on all tables in schema public from anon, authenticated;
 
 alter default privileges for role postgres in schema public
-  revoke truncate, trigger, references, maintain on tables from anon, authenticated;
+  revoke truncate, trigger, references on tables from anon, authenticated;
+
+do $$
+begin
+  if current_setting('server_version_num')::int >= 170000 then
+    execute 'revoke maintain on all tables in schema public from anon, authenticated';
+    execute 'alter default privileges for role postgres in schema public revoke maintain on tables from anon, authenticated';
+  end if;
+end $$;
