@@ -40,7 +40,7 @@ sparning med vald order, "om #15", mörkt och mobilt).
 
 ---
 
-## 2026-11-02 kväll · Rutiner kraschade utan en enda rutin (grenen `rutiner-tom`, ingen migration, EJ mergad)
+## 2026-11-02 kväll · Rutiner kraschade utan en enda rutin (på `main` `92a6d91`, ingen migration)
 
 **Beställaren:** "så fort jag går in i nav" kom "Sidan gick inte att visa", felkod `nav2-873ac63a9dca`.
 
@@ -57,6 +57,9 @@ förutsatte en rutin: alla flikar, Förvaltning och arkivet ritas med noll rutin
 2/8 på `main` med samma stack som i produktionen, 13/13 med lagningen. `prov-med-rutiner.mjs`: 13/13, raden
 Veckans rutin syns som förut när det finns rutiner. Patchen: `delar/rutiner-tom/patch.py` (idempotent, `cmp` mot
 den provade filen). Ingen navnyhet: inget nytt för användaren, bara en krasch mindre.
+
+**Mergad** på beställarens ja: `main` snabbspolad `37af957` → `92a6d91` (samma commit som previewen byggde),
+produktionsbygget `dpl_5sHAgnGm9TGULbYz4k6NMJDHYcLQ` grönt och aktivt på `clicknet-nav.vercel.app`.
 
 ---
 

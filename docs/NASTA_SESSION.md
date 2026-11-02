@@ -42,7 +42,7 @@ såklart navet". Planen godkändes i chatten ("okej starta bygget"). Byggplanen:
 
 ---
 
-## RUTINER UTAN RUTINER (2026-11-02 kväll): på `main` (`92a6d91`), ingen migration
+## RUTINER UTAN RUTINER (2026-11-02 kväll): på `main` (`92a6d91`, beställarens ja, produktionen grön), ingen migration
 
 Felkod `nav2-873ac63a9dca`: alla tre dokumenten är arkiverade sedan 2026-11-01, `RUT` är tom, och raden Veckans
 rutin läste `.id` på `RUT[0]`. Rutiner kraschade, och omladdningen öppnade Rutiner igen. Nu ritas raden bara när
