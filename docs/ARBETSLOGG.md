@@ -5,6 +5,51 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-02 kväll · Rättelser varv 2: larm för otolkade samtal och morgonkvittot, egen databasroll (MERGAD till `main` `c68d4ee`, 0282 KÖRD)
+
+**Beställaren** svarade punkt för punkt på restlistan efter produktionsprovets rättelser: gul 4 och 5 "Du får göra
+det", de sex mindre fynden och IE Cleaning #24 "Fixa". Körningen var planerad efter midnatt för pushkvotens skull. När
+taket höjts till 100 frågade beställaren "Kan du inte köra migrationen nu?", och hela listan
+(`~/nav2-utkast/delar/rattelser/varv2/NATT.md`) kördes direkt med samma villkor: merga bara om previewen och proven är
+gröna.
+
+**Ändringarna** (17 filer, +337 −67):
+- `samtal.ts`/`samtal-server.ts`: `tolkaOmOtolkade` går i omgångar om 200 med markör på id och slutar efter 90 s
+  (`omtagIOmgangar`). Ett fel i hämtningen kastas, ett fel i tolkningen samlas som `<id>: <fel>`. `omtagsLarm` gör en
+  text av dem, och nattjobbets steg `samtalsomtag` kastar den.
+- `larm.ts`/`drift-server.ts`/`dagtid`: `bedomMorgonkvitto` (ren funktion, provad). Dagtidsjobbet larmar en gång per
+  dag med ett daterat digest, eftersom det går var 15:e minut.
+- `handelselogg.ts`: `reported` räknas som skapande; bara `error.new` och `job.*` är system.
+- `sallanlogg.ts` (ny): samma loggrad en gång per kvart per nyckel, högst 500 nycklar.
+- 0273: MAINTAIN dras in i ett `do`-block bara när `server_version_num >= 170000`. På en ny databas med Postgres 15/16
+  föll filen annars. Produktionen (17.6) har redan fått satsen.
+- 0282 (ny, idempotent): rollen `nav2_pg`, login, NOINHERIT, NOBYPASSRLS, `search_path` som postgres, medlem i
+  `authenticated` och `service_role`. Inget lösenord i filen.
+
+**Valen:**
+- Omtaget kastar i stället för att få en egen larmväg: nattjobbet larmar redan genom `skrivFel` när ett steg kastar, och
+  `larmDigest` slår ihop samma fel till en rad med räknare.
+- Rollen skapades i produktionen före mergen, med lösenordet som SCRAM-verifierare (klartexten nådde aldrig servern),
+  och `NAV2_PG_URL` byttes i Production och Preview (nav2-utkast) med printf. Provad i en rullad tx först: utan roll
+  nekad till employee, vault, auth och create table; som Zen och service_role samma svar som postgres.
+- Numret blev 0282, eftersom 0280 och 0281 är lovade till andra grenar.
+
+**Prov:** samtal, larm, notiser, handelselogg, notiser-tackning, notislankar, utskick, fel, klocka, samtal-order,
+registerutdrag och navnyheter gröna på den nya basen (`ce2622a`, trevägssammanslagning, en konflikt i `poster.ts`:
+båda sidor hade lagt en post överst). TS-parsningen 0 fel.
+
+**Körningen:** 0282 KÖRD 20:50 (`apply-sql 0282_nav2_pg_roll`, före mergen; checksumman `2e9addcf1d745987` = filen).
+Previewen grön 20:54, `main` snabbspolad `ce2622a` → `c68d4ee` 20:55 (`force: false`). 0273:s checksumma
+`c95408e6f0b987bd` → `29e7863be850ee82` (= filen på main). Produktionen `dpl_3dudo1FUNwvs7T5RghFECgMc968h` Ready
+20:57. Som Zen, en sidladdning: `/nav2` 200, notiser 25, pg 420, pg-fel 0, pg-rest 0, och `pg_stat_activity` visar 10
+anslutningar som `nav2_pg` öppnade under sidladdningen. Provsessionen raderad (1 token, kvar 0/0), kakfilen raderad.
+Navnyhetens datum rättat till 2026-11-02 i docs-commiten (fältet är dagen det gick ut i produktion).
+
+**Kvar:** i natt larmar omtaget om sju råpåsar (id 7301–7318, 2026-10-20) som faller på `phone_call_inspelning`, tills
+de lämnar fjortondygnsfönstret 2026-11-04. Varför de faller är inte utrett.
+
+---
+
 ## 2026-11-02 kväll · Inkio: makulerad och uppsagt når Nav (MERGAD till `main` `f0e10f4` på beställarens ja, 0279 KÖRD)
 
 **Beställaren:** "Fixa det här", om provets röda: Inkio-statusen makulerad och uppsagt ändrade aldrig ordern i Nav.

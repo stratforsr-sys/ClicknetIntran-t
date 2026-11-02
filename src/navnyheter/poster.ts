@@ -24,7 +24,7 @@ larm kommer om morgonjobbets kvitto inte går att läsa.
 I **Händelseloggen** står en felrapport som någon skrivit under **Skapande**, och den som
 tilldelar, svarar på eller följer ett fel under **Ändring**. Bara fel som navet fångat
 självt står under **System**.`,
-    datum: "2026-11-03",
+    datum: "2026-11-02",
     roller: ["sales_manager", "ceo", "admin"],
     href: "/fel",
   },
