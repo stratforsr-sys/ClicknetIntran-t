@@ -500,7 +500,7 @@ async function tillampa(s: Statusandring, bolag: string, personer: Personer): Pr
       const krets = await personer.kretsFor([]);
       await notifieraFlera(krets, {
         av: null,
-        kalla: "order-inkio-handelse",
+        kalla: "order-inkio-makulerad",
         typ: "order",
         rubrik: `${bolag}: ordern makulerades i Inkio strax efter en rättning i Nav`,
         detalj: "Nav makulerade den inte. Kontrollera i Inkio och makulera i Nav om den ska bort.",

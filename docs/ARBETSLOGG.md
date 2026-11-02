@@ -5,6 +5,43 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-02 kväll · Inkio: mejl bara om ärenden, makulerat och uppsagt (grenen `inkio-notiser`, ingen migration, beställarens ja till mergen)
+
+**Beställaren:** "Just nu får jag mejl på allting som händer i inkio. Jag vill ha de viktigaste i mejlen men allt annat
+som notis i appen så jag inte får 100 mejl." Anteckningar som notis, ärenden i mejl och notis, och "en anteckning på
+ett ärende ska räknas som ett ärende".
+
+**Orsaken.** Inkio-sorterna heter `order-inkio-*` och hamnade därför i området Order (`omradeFor` tar prefixet).
+Superadmins lager `alla` i `notification_rule` har `mejl: { "*": false, "omrade:order": true, … }`, så varje
+Inkio-anteckning mejlades: tio brev till Zen 13:11–13:14 UTC (`notification_delivery`, provet i produktionen).
+`order-anteckning` (en anteckning skriven i Nav) mejlades av samma skäl.
+
+**Lagat.**
+- Tre nya sorter: `order-inkio-arende` (ett nytt ärende, en statusändring och varje anteckning på ett ärende),
+  `order-inkio-makulerad` och `order-inkio-uppsagt`. Makulerat och uppsagt avgörs av `statusFranInkio`, samma
+  övergång som ändrar ordern i Nav (`postkalla` i `crm/inflode.ts`). De tre står i `MEJLKALLOR`.
+- Ett nytt område, **Inkio och kundanteckningar** (`inkio`), med alla `order-inkio-*` och `order-anteckning`
+  (`OMRADE_UNDANTAG`). Orders mejl når dem inte längre.
+- Larmet "ordern makulerades i Inkio strax efter en rättning i Nav" är `order-inkio-makulerad`, eftersom superadmin
+  måste göra något åt det.
+- Mejlrubriken för en anteckning på ett ärende: "Bolag: Namn skrev i ärendet Kunden vill bestrida", och texten.
+- `renText`: Inkios omnämnanden `@[Simon Omar](ref:User/…)` blir `@Simon Omar` (sju rader i `crm_handelse` hade dem).
+  De gamla raderna skrivs om tyst nästa gång kunden läses: en ändrad anteckning ger ingen notis.
+
+**Det som inte är kod.** Superadmins `"*": false` i mejlet stänger också det nya området. Ärenden, makulerat och
+uppsagt mejlas därför inte förrän de slås på i Inställningar → Utskick, eller med en rad SQL som sätter
+`sort:order-inkio-arende`, `sort:order-inkio-makulerad` och `sort:order-inkio-uppsagt` till `true` i lagret `alla`.
+Det görs efter mergen: före den hade `rensa` strukit nycklarna vid nästa sparning, eftersom sorterna inte fanns.
+
+**Mitt val:** en aktivitet på ett ärende (Inkio loggar t.ex. en tilldelning) är fortfarande en händelse och mejlas
+inte. Ärendets statusändring kommer redan som post, och två brev om samma sak var det beställaren ville bort ifrån.
+Inga sådana aktiviteter fanns i `crm_handelse` den 2 november.
+
+- Prov: `npm run test:inkio-inflode` (85, varav 11 nya), `npm run test:utskick` (3 nya), notiser, klocka, täckningen
+  och notislänkarna gröna.
+
+---
+
 ## 2026-11-02 kväll · Kundens tidslinje i Inkios form (grenen `kund-tidslinje`, 0278 KÖRD, beställarens ja till mergen)
 
 **Beställaren** delade en skärmbild av Inkios History-sida för Hedbloms Måleri AB: "kan du hjälpa mig bygga ut

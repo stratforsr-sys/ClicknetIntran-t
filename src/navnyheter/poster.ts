@@ -14,6 +14,24 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "inkio-mejl-bara-det-viktiga",
+    rubrik: "Inkio: mejl bara om det viktiga",
+    ingress: "Ärenden, makulerade order och uppsagda avtal kommer som mejl. Resten är notiser.",
+    text: `Navet mejlar dig när något händer i ett ärende i Inkio: ett nytt ärende, en ny
+status eller en anteckning i ärendet. Du får också mejl när en order makuleras och
+när ett avtal sägs upp, eftersom båda kostar pengar.
+
+Andra anteckningar, flyttade leveranskort, nya order och avtal och andra
+ändringar kommer bara som notis, i klockan och i telefonen. Förut kom de också
+som mejl.
+
+Allt från Inkio har ett eget område, **Inkio och kundanteckningar**, under
+**Inställningar → Notiser**. Där väljer du vad du vill ha för varje sort.`,
+    datum: "2026-11-02",
+    roller: [],
+    href: "/profil",
+  },
+  {
     slug: "kundens-tidslinje",
     rubrik: "Kundkortet visar kundens hela historik, som i Inkio",
     ingress: "Ordrar, avtal, anteckningar, leveranskort och samtal i en tidslinje, med sök, filter och anteckningar per roll.",

@@ -25,6 +25,15 @@
  * ÄNDRING av en order, ett avtal eller ett ärende ger alltid notis; en ändrad
  * eller raderad anteckning gör det inte (den uppdateras och märks).
  * =============================================================================
+ *
+ * =============================================================================
+ * SORTEN AVGÖR OM DEN MEJLAS (beställaren 2026-11-02)
+ *
+ * Ärendet (posten, och varje anteckning på det), en makulerad order och ett
+ * uppsagt avtal har egna sorter och mejlas. Allt annat är `order-inkio-anteckning`
+ * eller `order-inkio-handelse` och står bara i klockan och telefonen. Vad som
+ * mejlas bestäms i `MEJLKALLOR` och i Utskick, inte här.
+ * =============================================================================
  */
 import { aktivitetstext } from "./inkio-mappning.ts";
 
@@ -86,9 +95,9 @@ export type Rad = {
 // Tolkningen
 // -----------------------------------------------------------------------------
 
-/** Inkios rika text som ren text: radbrytningar behålls, taggar och entiteter försvinner. */
+/** Inkios rika text som ren text: radbrytningar behålls, taggar och entiteter försvinner, "@[Namn](ref:User/…)" blir "@Namn". */
 export function renText(s: string | null | undefined): string {
-  let t = String(s ?? "");
+  let t = String(s ?? "").replace(/@\[([^\]]+)\]\(ref:[^)]*\)/g, "@$1");
   if (/<[a-z/][^>]*>/i.test(t)) {
     t = t
       .replace(/<br\s*\/?>/gi, "\n")
@@ -341,7 +350,7 @@ export function jamfor(gammal: Tidigare | undefined, ny: Rad): Forandring {
 // -----------------------------------------------------------------------------
 
 export type Notisbeslut = {
-  kalla: "order-inkio-anteckning" | "order-inkio-handelse";
+  kalla: "order-inkio-anteckning" | "order-inkio-arende" | "order-inkio-makulerad" | "order-inkio-uppsagt" | "order-inkio-handelse";
   rubrik: string;
   detalj: string;
 };
@@ -387,6 +396,15 @@ export function notisFor(r: Rad, f: Forandring, o: { bolag: string; nu: number; 
 
   if (r.slag === "anteckning") {
     if (f.typ !== "ny" || !farsk || !r.text) return null;
+    // En anteckning på ett ärende räknas som ärendet, och mejlas.
+    if (r.om_typ === "Ticket") {
+      const arende = r.om_titel || r.om_nummer;
+      return {
+        kalla: "order-inkio-arende",
+        rubrik: `${o.bolag}: ${r.forfattare ?? "Någon"} skrev i ${arende ? `ärendet ${arende}` : "ett ärende"}`,
+        detalj: r.text,
+      };
+    }
     return {
       kalla: "order-inkio-anteckning",
       rubrik: `${o.bolag}: ${r.forfattare ?? "Någon"} skrev i Inkio`,
@@ -407,10 +425,23 @@ export function notisFor(r: Rad, f: Forandring, o: { bolag: string; nu: number; 
   if (f.typ === "ny") {
     if (!farsk) return null;
     if (o.navSkapadeNyss && (r.sort === "order" || r.sort === "agreement")) return null;
-    return { kalla: "order-inkio-handelse", rubrik: `${o.bolag}: ${r.text}`, detalj: "Nytt i Inkio" };
+    return { kalla: postkalla(r, f, o.nu), rubrik: `${o.bolag}: ${r.text}`, detalj: "Nytt i Inkio" };
   }
   if (!f.vad.length) return null;
-  return { kalla: "order-inkio-handelse", rubrik: `${o.bolag}: ${f.vad[0]}`, detalj: f.vad.slice(1).join(" · ") || r.text };
+  return { kalla: postkalla(r, f, o.nu), rubrik: `${o.bolag}: ${f.vad[0]}`, detalj: f.vad.slice(1).join(" · ") || r.text };
+}
+
+/**
+ * Sorten för en post. Makulerad och uppsagt avgörs av samma övergång som
+ * ändrar ordern i Nav (`statusFranInkio`), så att brevet och ändringen alltid
+ * gäller samma sak.
+ */
+function postkalla(r: Rad, f: Forandring, nu: number): Notisbeslut["kalla"] {
+  if (r.sort === "ticket") return "order-inkio-arende";
+  const s = statusFranInkio(r, f, nu);
+  if (s?.vad === "makulerad") return "order-inkio-makulerad";
+  if (s?.vad === "uppsagt") return "order-inkio-uppsagt";
+  return "order-inkio-handelse";
 }
 
 /**

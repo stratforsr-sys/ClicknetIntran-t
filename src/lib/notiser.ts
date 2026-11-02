@@ -279,8 +279,15 @@ export const NOTIS_KALLOR = [
    * "vi får aldrig missa något". Kretsen ar alla superadmin, saljaren och admin
    * som leder saljaren (`kretsen` i crm/inflode.ts). Larmet nar bevakningen
    * star still gar till superadmin.
+   *
+   * Ärendet, makuleringen och uppsägningen är egna sorter (beställaren
+   * 2026-11-02, "jag vill inte få 100 mejl"): de mejlas, resten står i klockan
+   * och telefonen. En anteckning på ett ärende räknas som ärendet.
    */
   "order-inkio-anteckning",
+  "order-inkio-arende",
+  "order-inkio-makulerad",
+  "order-inkio-uppsagt",
   "order-inkio-handelse",
   "order-anteckning",
   "inkio-bevakning",
@@ -712,6 +719,9 @@ export const HANDELSEKALLOR = [
   "order-overtack",
   "order-rattad",
   "order-inkio-anteckning",
+  "order-inkio-arende",
+  "order-inkio-makulerad",
+  "order-inkio-uppsagt",
   "order-inkio-handelse",
   "order-anteckning",
   "inkio-bevakning",
