@@ -23113,6 +23113,7 @@ const rtnFlikar = () => [['omraden','Områden'],['resa','Säljresan'],['ny','Ny 
 const rtnFlik = () => { const t = rtab(); return rtnFlikar().some(f => f[0] === t) ? t : 'omraden'; };
 // Ett områdes rutiner i den ordning de står i området: kategori för kategori.
 const rtnOmrOrd = id => { const rr = RUT.filter(r => r.omr === id), kat = [...new Set(rr.map(r => r.kat))]; return kat.flatMap(k => rr.filter(r => r.kat === k)); };
+// Ingen publicerad rutin, ingen veckans rutin: raden ritas inte. De tre första arkiverades 2026-11-01 och hela vyn kraschade.
 const rtnVeckans = () => rutin(S.rtnVeckans) || rutin(VECKANS) || RUT[0];
 const rtnDatum = iso => new Date(iso).toLocaleDateString('sv-SE', {day:'numeric', month:'short', year:'numeric'});
 const rtnLasta = rr => rr.filter(lastAv).length;
@@ -23322,8 +23323,8 @@ renderRutinerView = function(){
   return `
     <header class="top"><div class="hello"><h1>Rutiner</h1><p class="rtn-nu">${RUT.length} rutiner${kv.length ? ` · <button type="button" class="rtn-lk rtn-varn" data-ropen="${kv[0].id}" data-rtokvitt="1">${kv.length} att kvittera</button>` : ''}${nyAntal ? ` · <button type="button" class="rtn-lk" data-rtab="ny">${nyAntal} nya för dig</button>` : ''}${chef && forf ? ` · <button type="button" class="rtn-lk rtn-fel" data-rtab="forv">${forf} ej granskad</button>` : ''}</p></div>
       <div class="tools">${note(60)}<button type="button" class="rtn-mat" data-rtab="ny" title="Visa det du inte läst"><span class="num"><b>${lasta}</b> av ${RUT.length} lästa</span>${rtnBar(lasta, RUT.length)}</button>${chef ? `<button type="button" class="btn btn-s" data-rtnny="">${I('plus')}Ny rutin</button>` : ''}</div></header>
-    <div class="rtn-vk">${note(187)}<span class="rtn-et rtn-ok">Veckans rutin</span><button type="button" class="rtn-vkt" data-ropen="${v.id}"><b>${esc(v.t)}</b><span>${esc(v.tldr)}</span></button><span class="rtn-rm">${lastAv(v) ? `${I('check')}Läst` : `${lasMin(v)} min att läsa`}</span>
-      ${chef ? (S.rtnVeckVal ? `<select class="rtn-in rtn-sel" data-rtnveckans aria-label="Veckans rutin">${RUT.map(r => `<option value="${r.id}" ${r.id === v.id ? 'selected' : ''}>${esc(r.t)}</option>`).join('')}</select><button type="button" class="tlink" data-rtnveckval>Klar</button>` : '<button type="button" class="tlink" data-rtnveckval>Byt</button>') : ''}</div>
+    ${v ? `<div class="rtn-vk">${note(187)}<span class="rtn-et rtn-ok">Veckans rutin</span><button type="button" class="rtn-vkt" data-ropen="${v.id}"><b>${esc(v.t)}</b><span>${esc(v.tldr)}</span></button><span class="rtn-rm">${lastAv(v) ? `${I('check')}Läst` : `${lasMin(v)} min att läsa`}</span>
+      ${chef ? (S.rtnVeckVal ? `<select class="rtn-in rtn-sel" data-rtnveckans aria-label="Veckans rutin">${RUT.map(r => `<option value="${r.id}" ${r.id === v.id ? 'selected' : ''}>${esc(r.t)}</option>`).join('')}</select><button type="button" class="tlink" data-rtnveckval>Klar</button>` : '<button type="button" class="tlink" data-rtnveckval>Byt</button>') : ''}</div>` : ''}
     <div class="tgrid rtn-vy">
       <div class="col">
         <section class="rtn-kort rtn-sok">${note(61)}
