@@ -28220,11 +28220,14 @@ pvUnderlag = function(vem, m, raknaLive){
    räknas summorna på alla personer i månadens underlag, också den inloggade
    (chefens egen försäljning och övertäck), en säljare som slutat och en
    icke-säljare med en övrig bonus. Listan (rader) börjar fortfarande med
-   säljarna, men summan vid Fastställ utesluter ingen. */
+   säljarna, men summan vid Fastställ utesluter ingen. Fliken Laget räknar
+   bara säljarna, i summan som i takten (S06 M4, beställaren 2026-11-02):
+   under dess ritning är NDPVBARASALJ satt och summan är radernas. */
+let NDPVBARASALJ = false;
 const _ndPvLaget = pvLaget;
 pvLaget = function(m){
   const L = _ndPvLaget(m), P = ndP();
-  if (!P || !P.chefsvy || m < NDPVFORE) return L;
+  if (!P || !P.chefsvy || m < NDPVFORE || NDPVBARASALJ) return L;
   const alla = Object.values(P.underlag[m] || {});
   const sum = f => alla.reduce((s, x) => s + (f(x) || 0), 0);
   return {...L, summa:sum(x => x.summa), grund:sum(x => x.grund), volym:sum(x => x.volym), kv:sum(x => x.kv ? x.kv.belopp : 0), ovrig:sum(x => x.ovrig), varde:sum(x => x.varde), antal:sum(x => x.antal.netto)};
@@ -28497,11 +28500,13 @@ renderPvView = ndPvRoll(renderPvView);
 
 /* Laget-listan och Månadsmålen visar säljarna, inte alla som har underlag (granskningen S06 M3). Vyerna läser
    PVSALJARE direkt, så listan byts under själva ritningen och sätts tillbaka. Fliken Månadsmål och Profilens rad
-   räknar "utan mål" på samma lista. Huvudboken, underlaget och summorna är som förut. */
+   räknar "utan mål" på samma lista. Lagets summa och delar räknar också bara säljarna (S06 M4), så att de går
+   ihop med takten, "Nått en nivå" och listan. Huvudboken, underlaget, Perioder och Fastställ är som förut. */
 const ndPvSaljKrets = fn => function(...a){
   if (!ndP()) return fn.apply(this, a);
   const hela = PVSALJARE.slice(); PVSALJARE.length = 0; PVSALJARE.push(...NDPVSALJ);
-  try { return fn.apply(this, a); } finally { PVSALJARE.length = 0; PVSALJARE.push(...hela); }
+  NDPVBARASALJ = true;
+  try { return fn.apply(this, a); } finally { NDPVBARASALJ = false; PVSALJARE.length = 0; PVSALJARE.push(...hela); }
 };
 pvLagetVy = ndPvSaljKrets(pvLagetVy);
 pvMalVy = ndPvSaljKrets(pvMalVy);

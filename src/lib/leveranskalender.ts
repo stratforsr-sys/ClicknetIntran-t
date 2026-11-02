@@ -707,8 +707,9 @@ export function notistext(
       return { rubrik: `${av} ställde in ${t}`, detalj: nar, href: `/kalender?dag=${nyDag}` };
     }
     // Nav 2.0 (0088): rubrik, plats, agenda eller deltagare ändrades. Tiden är densamma.
+    // 0281: ett ombud som bara ändrade deltagarna. Arrangören får veta det, och de andra har fått sitt.
     case "andrad":
-      return { rubrik: `${av} ändrade ${t}`, detalj: nar, href };
+      return { rubrik: d.deltagare ? `${av} ändrade deltagarna i ${t}` : `${av} ändrade ${t}`, detalj: nar, href };
     case "svar": {
       const svar = String(d.svar ?? "");
       const note = typeof d.note === "string" && d.note ? ` · “${d.note}”` : "";
