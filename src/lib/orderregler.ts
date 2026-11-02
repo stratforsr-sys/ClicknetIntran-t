@@ -304,6 +304,47 @@ export function rattelseProvision(
 }
 
 // =============================================================================
+// UTAN PROVISION, LÄGGS TILL SENARE (0275, beställaren 2026-11-02)
+//
+// En order kan läggas upp utan provision. Godkänd står den på 0 kr, för hand
+// (`sales_order_provision_satt` kräver ett belopp från `signerad`), med
+// `commission_pending` som säger att någon ska tillbaka. Provisionen läggs till
+// med Rätta, som räknar om affären och bokför skillnaden i den öppna månaden när
+// orderns månad redan är fastställd.
+// =============================================================================
+
+/**
+ * Väntar provisionen efter den här skrivningen?
+ *
+ * Ritade formuläret valet (`utan_provision_ritad`, Nav 2.0) är det svaret. Annars
+ * står orderns läge (`vantar`) kvar, utom när formuläret bär en provision skriven
+ * för hand: den lägger till provisionen (gamla /order, "Godkänn utanför
+ * paketreglerna"). Ett formulär som inte vet om valet kan alltså inte slå på det,
+ * och inte heller tyst slå av det.
+ */
+export function provisionSenare(form: FormData, vantar = false): boolean {
+  if (form.has("utan_provision_ritad")) return form.get("utan_provision") === "on";
+  if (!vantar) return false;
+  const formen = String(form.get("provision_form") ?? "").trim();
+  const tal = String(form.get(formen === "procent" ? "commission_percent" : "commission_amount") ?? "").trim();
+  return formen === "" || tal === "";
+}
+
+/**
+ * Formuläret som en order utan provision räknas på: 0 kr, skrivet för hand.
+ * Samma väg som en handsatt provision i `raknaFramProvision`, så en fri order
+ * behöver inget belopp och chefens egen order inte sin procentsats.
+ */
+export function utanProvision(form: FormData): FormData {
+  const kopia = new FormData();
+  for (const [k, v] of form.entries()) kopia.append(k, v);
+  kopia.set("provision_form", "belopp");
+  kopia.set("commission_amount", "0");
+  kopia.delete("commission_percent");
+  return kopia;
+}
+
+// =============================================================================
 // TA BORT EN ORDERBILAGA (granskningen S10b, D23; beställarens ja 2026-10-23)
 //
 // Filen måste vara en orderbilaga PÅ DEN ORDERN. Förut prövades bara ordern, så

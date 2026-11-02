@@ -93,6 +93,8 @@ export type RaOrder = {
   free_order_reason?: string | null;
   /** 0221 (granskningen S08, B2): rabatterat pris på en paketorder. */
   discounted_monthly_amount?: number | null;
+  /** 0275: lagd utan provision, som läggs till senare. */
+  commission_pending?: boolean | null;
 };
 
 export type RaSamtal = {
@@ -246,6 +248,8 @@ export type NdOrder = {
   provProcent: number | null;
   provFryst: boolean;
   provFel: string | null;
+  /** 0275: lagd utan provision. Provisionen (0 kr) läggs till med Rätta. */
+  provSenare: boolean;
   fri: { varde: number | null; prov: number | null; typ: "kr" | "%"; skal: string } | null;
   samtal: { id: string; t: string; dag: string; min: number; sek: number; ljud: boolean } | null;
   samtalSkal: string | null;
@@ -456,7 +460,11 @@ export function formaOrder(
   const s = ctx.satser;
   const nr = Number(o.order_number ?? 0);
   const fryst = harGodkants(o.status);
-  const fh = fryst ? null : forhandsprovision(o, ctx.tjanster, s);
+  // 0275: utan provision räknar godkännandet med 0 kr för hand (`utanProvision`), och det gör förhandsberäkningen också.
+  const senare = o.commission_pending === true;
+  const fh = fryst
+    ? null
+    : forhandsprovision(senare ? { ...o, proposed_commission_amount: 0, proposed_commission_percent: null } : o, ctx.tjanster, s);
 
   // Fri order: utanfor paketen. Godkand: vardet sattes for hand. Annars: ett angivet manadsbelopp.
   const fri = fryst ? o.order_value_source === "manual" : o.monthly_amount !== null;
@@ -519,10 +527,11 @@ export function formaOrder(
     provProcent: fryst ? frystProcent(o, s) : fh!.procent,
     provFryst: fryst,
     provFel: fh?.fel ?? null,
+    provSenare: senare,
     fri: fri
       ? {
           varde,
-          prov: o.proposed_commission_percent != null ? Number(o.proposed_commission_percent) : (prov ?? null),
+          prov: senare ? null : o.proposed_commission_percent != null ? Number(o.proposed_commission_percent) : (prov ?? null),
           typ: o.proposed_commission_percent != null ? "%" : "kr",
           skal: o.free_order_reason ?? "",
         }
