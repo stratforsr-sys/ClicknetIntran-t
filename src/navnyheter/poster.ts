@@ -14,6 +14,24 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "saljsamtal-utan-lynes",
+    rubrik: "Säljsamtalet när Lynes inte har det",
+    ingress: "Ladda upp inspelningen som mp3, eller skicka in ordern utan inspelning och låt chefen godkänna den.",
+    text: `En order går fortfarande inte vidare utan sitt säljsamtal. Ringde du kunden
+utanför Lynes finns nu två vägar, under **Säljsamtal** i orderformuläret:
+
+- **Ladda upp inspelningen (mp3).** Skriv när samtalet ringdes. Nav mäter
+  längden i filen, och samtalet blir orderns säljsamtal precis som ett från
+  Lynes: ditt eget, minst fem minuter, senast på signeringsdagen.
+- **Spelades inte in.** Skriv varför. Ordern går till godkännandet med skälet,
+  och chefen godkänner den utan säljsamtal.
+
+Är ordern redan stoppad trycker du **Finns inte i Lynes** i orderkortet.`,
+    datum: "2026-11-03",
+    roller: [],
+    href: "/order",
+  },
+  {
     slug: "tillagg-med-kundens-uppgifter",
     rubrik: "Ett tillägg får kundens adress och kontakt",
     ingress: "En ny order på en befintlig kund fylls i med allt Nav vet om kunden, och avtalet följer med ett sparat utkast.",

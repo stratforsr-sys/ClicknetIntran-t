@@ -425,6 +425,8 @@ export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
   { tabell: "sales_order", kolumn: "created_by", skal: "Vem som lade in ordern" },
   { tabell: "sales_order", kolumn: "approved_by", skal: "Vem som godkände ordern" },
   { tabell: "sales_order", kolumn: "cancelled_by", skal: "Vem som makulerade ordern" },
+  { tabell: "saljsamtal_undantag", kolumn: "begart_av", skal: "Vem som bad om att ordern får gå utan inspelning (0280); skälet gäller ordern" },
+  { tabell: "saljsamtal_undantag", kolumn: "godkant_av", skal: "Vem som godkände ordern utan inspelning (0280)" },
   { tabell: "commission_rate", kolumn: "set_by", skal: "Vem som satte provisionssatsen" },
 
   // 0035 E13 steg 3. Tre roller kring reglerna och perioden, ingen av dem en

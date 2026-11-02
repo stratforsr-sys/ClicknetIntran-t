@@ -253,6 +253,8 @@ export type NdOrder = {
   fri: { varde: number | null; prov: number | null; typ: "kr" | "%"; skal: string } | null;
   samtal: { id: string; t: string; dag: string; min: number; sek: number; ljud: boolean } | null;
   samtalSkal: string | null;
+  /** 0280: ordern går utan inspelning, med säljarens skäl. Chefens godkännande av ordern godkänner undantaget. */
+  utan: { skal: string; av: string; godkand: boolean; godkandAv: string | null } | null;
   avtal: boolean;
   bilagor: { id: string; namn: string; kb: number | null; av: string; nar: string }[];
   inkio: RaCrm | null;
@@ -455,6 +457,8 @@ export function formaOrder(
     namn: (id: string | null | undefined) => string | null;
     /** 0083: utskrifterna per samtal. */
     utskrifter?: Map<string, NdUtskrift>;
+    /** 0280: `saljsamtal_undantag` för ordern. */
+    undantag?: { skal: string; begart_av: string; godkant_av: string | null } | null;
   },
 ): { order: NdOrder; samtal: NdSamtal[] } {
   const s = ctx.satser;
@@ -548,6 +552,16 @@ export function formaOrder(
           }
         : null,
     samtalSkal: bedomning.ok ? null : bedomning.skal,
+    // Ett säljsamtal som kopplats efteråt går före undantaget, som i spärren.
+    utan:
+      !bedomning.ok && ctx.undantag
+        ? {
+            skal: ctx.undantag.skal,
+            av: ctx.namn(ctx.undantag.begart_av) ?? "",
+            godkand: ctx.undantag.godkant_av !== null,
+            godkandAv: ctx.namn(ctx.undantag.godkant_av),
+          }
+        : null,
     avtal: ctx.bilagor.length > 0,
     bilagor: ctx.bilagor.map((b) => ({
       id: b.id,
