@@ -26,7 +26,7 @@ När navet öppnas tas `NOTIS_PROV_TILL` bort och produktionen byggs om (se NAST
 
 ---
 
-## 2026-11-02 kväll · Orderns ekonomi ur Inkio, och betald = slutbetald (grenen `inkio-fakturering`, till `main` på beställarens ja, ingen migration)
+## 2026-11-02 kväll · Orderns ekonomi ur Inkio, och betald = slutbetald (MERGAD till `main` `5d5178f` på beställarens ja, ingen migration)
 
 **Beställaren** frågade vad Inkio har på en order som Nav saknar, och hur man ser om fakturor är betalda. Svaret:
 faktureringen, orderhanteringen, finansbolagets utbetalning, avtalets uppsägning och nästa faktura, leveransen,
@@ -52,6 +52,15 @@ blir fel för månadsfakturering (Navs nya order faktureras månadsvis, 15 dagar
 - **Avvikelser som rättas med data, inte kod:** #29 TLS är finansierad via Novo i Inkio men `financed = false` i Nav;
   #28 SweAuto är utkast utan värde i Nav men inskickad (13 140 kr, kvartalsvis) i Inkio. Skriptet är provkört med
   rollback men inte skrivet (behörighetsspärren). Fyra order väntar i Inkios orderhantering; beställaren: skit i den.
+
+**Körningen:** beställaren: "Du har fler pushar upp till 100 så kör på pushen". Grenen hoptryckt till en commit och
+pushad som `orderns-ekonomi` (namnet `inkio-fakturering` var redan taget på GitHub av rättelsen 2026-10-31). Previewen
+föll på ett typfel som proven inte såg: `lop.nasta` gick vidare som Inkios `{invoice_date, amount}` mot typen
+`{datum, belopp}` (sidan läser inte fältet). Rättat i `98a4931`, och `ekonomi.ts` + `ekonomi-server.ts` typkontrollerade
+för sig med `tsc` (stubbe för `inkio.ts`), 0 fel. Main slogs in två gånger medan bygget gick (`c68d4ee`, `e0190d3`),
+utan konflikt i koden. Previewen grön på `e7490dc`; `main` snabbspolad `35eb4a6` → `5d5178f` med samma träd som en
+commit. Production Ready 20:28 UTC. Som Zen, en engångssession: `vad=ekonomi` 200 på 0,8–2,0 s för #29, #28, #33 och
+#14, inga saknade delar, märkena som lokalt. Sessionen raderad (0 tokens kvar).
 
 ---
 
