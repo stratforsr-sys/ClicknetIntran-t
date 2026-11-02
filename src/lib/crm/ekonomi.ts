@@ -626,7 +626,7 @@ export function orderekonomi(r: Ravara): Orderekonomi {
               forfallna: f.progress.overdue ?? 0,
               saknas: f.progress.missing ?? 0,
               krediterade: f.progress.credited ?? 0,
-              nasta: f.progress.next ?? null,
+              nasta: f.progress.next ? { datum: f.progress.next.invoice_date, belopp: f.progress.next.amount } : null,
             }
           : null,
         lopText: lopText(f),
