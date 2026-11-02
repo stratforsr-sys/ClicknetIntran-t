@@ -29,7 +29,7 @@ tar tillbaka allt, också gångens bilagor och påminnelser.
 Får du ändra i någon annans kalender och flyttar ett möte som du själv är med på,
 står ditt eget svar kvar. Ändrar du bara vilka som är med får arrangören veta
 det i klockan.`,
-    datum: "2026-11-03",
+    datum: "2026-11-02",
     roller: [],
     href: "/kalender",
   },
@@ -44,9 +44,31 @@ bara säljarna, så att siffrorna går ihop.
 
 **Perioder** och **Fastställ** tar med alla som förut, eftersom det är det som
 betalas ut.`,
-    datum: "2026-11-03",
+    datum: "2026-11-02",
     roller: ["sales_manager", "ceo", "finance"],
     href: "/provision",
+  },
+  {
+    slug: "orderns-ekonomi-ur-inkio",
+    rubrik: "Ordern visar ekonomin i Inkio: fakturering, utbetalning och betalningar",
+    ingress: "Var ordern står hos ekonomi, fakturaplanen, finansbolagets utbetalning, avtalet och leveransen, direkt ur Inkio.",
+    text: `Öppna en order, gå till **Order** och fäll ut den. Under Inkio-raden står
+**Ekonomi**, läst ur Inkio när du öppnar den:
+
+- hur ordern faktureras (intern eller finansierad, hur ofta och betalningsvillkoren)
+- var den står hos ekonomi, steg för steg som i Inkios orderhantering
+- fakturaplanen, med vilka fakturor som är betalda, förfallna eller saknas i Fortnox
+- om finansbolaget har betalat ut, och hur länge det har väntat
+- avtalet: status, nästa faktura, fakturerade perioder och om kunden sagt upp
+- produktionskortet och leveransdatumet
+- fakturorna med påminnelser och indrivning, och filerna och samtalen i Inkio
+
+Rutan **Ekonomi** högst upp på kortet säger det viktigaste, till exempel
+**väntar på ekonomi** eller **3 av 12 betalda**. En order räknas som betald först
+när alla fakturor i planen är betalda, som i Inkio.`,
+    datum: "2026-11-02",
+    roller: [],
+    href: "/order",
   },
   {
     slug: "fel-larmar-om-samtal-och-morgonkvitto",

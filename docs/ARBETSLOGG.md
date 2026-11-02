@@ -5,7 +5,7 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
-## 2026-11-02 natt · S05/S06-resterna: kalenderns SQL-fynd, Lagets krets och månadens lås (grenen `s05-s06-rester`, 0281 EJ KÖRD)
+## 2026-11-02 kväll · S05/S06-resterna: kalenderns SQL-fynd, Lagets krets och månadens lås (MERGAD till `main` på beställarens ja, 0281 KÖRD)
 
 Sex frågor stod kvar efter resterna (2026-11-01). Beställaren svarade 2026-11-02 via session f8: "fixa allting",
 alltså ja till förslagen. Allt utgår från `pg_proc` efter 0278, inte från de gamla migrationsfilerna. 0276 hade redan
@@ -55,6 +55,98 @@ provision) är gröna. `tsc --noEmit` ger bara Pling-felen som finns på main.
 (56 kB, `file` säger "data") gav noll träffar. Använd `command grep -a`. En kommentar som innehöll ordet `current_date`
 fällde provet som läser `prosrc`. Loopvariabeln `x` krockade med aliaset `x` i `jsonb_array_elements_text(...) x` i
 samma funktion.
+
+**Körning och merge.** Beställaren: "Pusha nu", och sedan "Ja" till både 0281 och mergen. Main hade dragit ifrån två
+gånger: rättelser varv 2 (`c68d4ee`, 0282) och Inkio-ekonomin (`5d5178f`). Grenen lades om på `5aee3a0` och pushades
+(`9639eb2`, previewen grön), och sedan flätades main in så att previewen byggde det sammanslagna trädet innan main rördes.
+Före körningen frågades `schema_migrations` igen (0280 ej körd, 0281 ledig), de sex funktionerna i `pg_proc` jämfördes
+med kopiorna från provet (oförändrade), och torrprovet kördes om: 26 av 26 gröna. 0281 kördes 2026-11-02 20:26 UTC med
+`apply-sql` (vakten godkände), och alla sju kontrollerna i `prosrc` hittade de nya delarna. Kvar: provet i produktionens
+gränssnitt (en serie med ett undantag och "den här och följande", Hela serien till ny veckodag, ombudets sparning).
+
+---
+
+## 2026-11-02 kväll · Inkio påslaget åt båda hållen, notiserna bara till Zen och Simon (ingen kod, ingen migration)
+
+Beställaren frågade vad det betyder att slå på Inkio, och svarade sedan "Ja sätt på inkio" och "Gör detta" om
+förslaget: slå på åt båda hållen, men låt notiser och mejl gå bara till Zen och Simon tills navet öppnas. Skälet: navet
+är stängt för alla utom dem, och säljarna med Inkio-kunder (Fredrik 17, Edvin 5, Mick 4, Eve 2) hade annars fått
+notiser de inte kan läsa och mejl om ärenden med länkar de inte kommer in på.
+
+- `NOTIS_PROV_TILL` i Production byttes från bara Zen till Zen och Simon (20:12 UTC). Den första produktionsdeployen
+  av `e0190d3` (från det andra passets push) skapades 20:11:45, alltså före bytet, så produktionen byggdes om:
+  `dpl_GyAJecFDsNWucDF7K6pcu2wL8YUt`, 20:16 UTC.
+- 20:21:48 UTC: `inflode` och `utflode` på, `nav-inkio` aktivt, i en transaktion.
+- Första varven: alla 29 kunder lästa på fyra minuter utan fel. 170 rader i `crm_handelse` (163 förut). En notis:
+  Simon Omars kommentar i ärendet "Kunden vill bestrida" på Wallgrens, med mejl (200) och push till Zen. Simon
+  sållades som författare, och Edvin och Eve (säljarna på Wallgrens) fick ingenting, alltså höll spärren. IE Cleaning,
+  som saknades i Inkio vid provet, finns nu där (Nav lade upp den 19:33 UTC), och dess poster var tysta.
+- Utkorgen: inga nya `crm`-rader de första minuterna, eftersom ingenting hänt i Nav som ska till Inkio.
+
+När navet öppnas tas `NOTIS_PROV_TILL` bort och produktionen byggs om (se NASTA_SESSION, INKIO PÅSLAGET).
+
+---
+
+## 2026-11-02 kväll · Orderns ekonomi ur Inkio, och betald = slutbetald (grenen `inkio-fakturering`, till `main` på beställarens ja, ingen migration)
+
+**Beställaren** frågade vad Inkio har på en order som Nav saknar, och hur man ser om fakturor är betalda. Svaret:
+faktureringen, orderhanteringen, finansbolagets utbetalning, avtalets uppsägning och nästa faktura, leveransen,
+fakturorna med indrivning, och filer och samtal. Inkio har noll fakturor, eftersom varken Fortnox eller Visma är
+kopplat i Inkio. Beställaren: "Fixa så att alla dem finns med, gör det exakt på samma backend som inkio, läs backend.
+Sen gör det som inkio med gränssnittet men med navs utseende." Fortnox: "skit i den nu". Betald: "Gör det som inkio".
+
+**Varför en läsväg och ingen kopia:** "samma backend som inkio". Kortet läser Inkio när ordern fälls ut, med samma
+anrop som Inkios ordersida, orderhantering, avtalssida och fakturasida gör (lästa ur Inkios webbklient:
+`SalesOrders-*.js`, `handlingTypes-*.js`, `statusMaps-*.js`, `InvoicingBadge-*.js`). En kopia i Nav hade kunnat glida
+isär, som `financed` på TLS gjorde. Varje anrop tar ~250 ms, och de går parallellt.
+
+**Varför betald = slutbetald:** Inkio har ingen orderstatus betald. Fakturaplanen har lägen per faktura, och
+orderhanteringens sista steg, Slutbetald, är klart när `paid >= total`, bara för intern fakturering (en finansierad
+order betalas av finansbolaget). Grenens förra regel satte hela ordern betald på den första betalda fakturan, vilket
+blir fel för månadsfakturering (Navs nya order faktureras månadsvis, 15 dagar).
+
+- `ekonomi.ts` (ren), `ekonomi-server.ts`, `inkioLas` i `inkio.ts`, `vad=ekonomi` i `/nav2/inkio`, `arSlutbetald` i
+  `tillampa`.
+- Utkastet: krokarna `kkEkonomi` och `kkHalsaEkonomi`, rutan i Nav 2.0-lagret, stegen (det som väntar nu andas och
+  stängs av med reducerad rörelse), fakturaplanen som remsa, tabellen bakom en knapp.
+- Prov: `tests/inkio-ekonomi.mjs` (ny, i `npm test`), `inkio-inflode`, `navnyheter`; skriptet tolkas med `vm.Script`.
+- **Avvikelser som rättas med data, inte kod:** #29 TLS är finansierad via Novo i Inkio men `financed = false` i Nav;
+  #28 SweAuto är utkast utan värde i Nav men inskickad (13 140 kr, kvartalsvis) i Inkio. Skriptet är provkört med
+  rollback men inte skrivet (behörighetsspärren). Fyra order väntar i Inkios orderhantering; beställaren: skit i den.
+
+---
+
+## 2026-11-02 kväll · Inkio-provet i produktionen, och tre rättelser efter det (MERGADE till `main` `e0190d3` på beställarens ja, ingen migration)
+
+**Provet** (`~/nav2-utkast/delar/inkio-inflode/TESTPROMPT.md`, rapporten `RAPPORT.md` bredvid): bevakningen kördes för
+hand mot produktionen med `inflode` på, `utflode` av och `NOTIS_PROV_TILL` = Zen. Bara GET mot Inkio. 28 av 29 kunder
+fanns i Inkio, 163 poster kom in och stämde post för post, 20 order kopplades, alla notiser gick till Zen, ett samtidigt
+varv stoppades av låset, kundkortets Aktivitet visade historiken och en anteckning från Nav stannade i Nav. Allt står
+av igen. **Inte redo att slås på för alla:** `lk_inkio_andra_order` (0277) sätter `cancelled_by = null` och
+`renewal_by = null`, och villkoren `sales_order_makulerad_av` (0034) och `sales_order_fornyelse` (0068) avvisar det.
+`tillampa` sväljer felet, och övergången är redan sparad, så den provas aldrig igen. Rättat i ett eget pass
+(`f0e10f4`, 0279, posten nedan).
+
+**Rättat här** (beställaren: "Fixa dessa"):
+- **En rad som försvann ur kopian kom inte tillbaka** förrän något ändrades hos kunden i Inkio: ett oförändrat avtryck
+  hoppade över jämförelsen med `crm_handelse`. Nu jämförs varje kund rad för rad en gång i timmen ändå (`attJamfora`
+  i inflode.ts; timmen slår om på olika minut per kund, högst två i samma minut av trettio). En lagning skriver bara
+  raderna, utan notis, status eller koppling, eftersom det redan hänt en gång, och räknas som `lagade` i varvets svar.
+- **Varvet räknade 10 kopplingar men gjorde 20:** `ut.kopplade += await koppla(…)` läste summan före väntan, och fyra
+  kunder i taget skrev över varandra.
+- **`NOTIS_PROV_TILL` med bara blanksteg eller kommatecken gav alla notis** i produktionen. Nu är en satt variabel
+  alltid provläge; bara en borttagen släpper ut notiserna till alla.
+- Omnämnandena (`@[Namn](ref:User/…)`) i notisen var redan rättade i `ed04ae7` (`renText`).
+- Prov: inkio-inflode (nytt: "Kopian lagas även när Inkio är tyst", två i Provfiltret), inkio, notiser, utskick,
+  notiser-tackning, notislankar, larm gröna efter att `main` slagits ihop (krock bara i de två docs-filerna).
+
+**Mergad och provad.** Pushkvoten höjd till 100; beställaren: "Ja kör". Grenen slogs ihop till en commit ovanpå
+`5aee3a0`, previewen grön, `main` snabbspolad till samma commit `e0190d3`, produktionen grön. Provet för en kund
+(559275-2694, `/api/jobb/inkio?kund=`, `inflode` på bara runt anropet): utan ändring `lagade: 0`; med den äldsta
+raden raderad och `senast_last` två timmar bakåt `lagade: 1` och inga notiser, ingen status, ingen koppling. Raden
+kom tillbaka med samma `extern_id` och avtryck; enda skillnaden mot den raderade är `data.omrade`, som tolkningen
+skriver sedan 0278 (162 äldre rader saknar det, `omradeFor` härleder området ur `om_typ`). Räknarna för notiser,
+`integration_log` och `crm_handelse` lika före och efter. Allt står AV.
 
 ---
 
