@@ -642,6 +642,14 @@ export type Aktivitetsrad = {
   raderad: boolean;
   /** Nav-ordern en anteckning från Nav gäller (`kundanteckning.om_order`). */
   order: string | null;
+  // Ändra och ta bort sin egen anteckning (0279). Bara för anteckningar skrivna i Nav.
+  /** Vem i Nav som skrev den (`employee.id`): kortet visar Ändra och Ta bort för hen. */
+  av: string | null;
+  /** Det den sagt förut, äldst först. */
+  versioner: { text: string; nar: string }[];
+  /** När den togs bort och av vem (bara superadmin ser en borttagen). */
+  raderadNar: string | null;
+  raderadAv: string | null;
 };
 
 export type Lagrad = Rad & { id?: number | string };
@@ -655,7 +663,21 @@ export type Navanteckning = {
   crm_state: string;
   skriven_av?: string | null;
   om_order?: string | null;
+  // 0279: finns först när migrationen körts (kortet läser med `*`).
+  andrad_at?: string | null;
+  versioner?: unknown;
+  raderad_at?: string | null;
+  raderad_av?: string | null;
 };
+
+/** Versionerna som de står i `kundanteckning.versioner` (0279), tåliga mot det som inte är en lista. */
+export function anteckningsversioner(v: unknown): { text: string; nar: string }[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .filter((x): x is { text: unknown; at: unknown } => typeof x === "object" && x !== null)
+    .map((x) => ({ text: String(x.text ?? ""), nar: String(x.at ?? "") }))
+    .filter((x) => x.text && x.nar);
+}
 
 /** Vem som skrev, för Navs nivå: e-posten (Inkio), anställnings-id:t (Nav) eller namnet (Navs eko i Inkio). */
 export type Forfattarnyckel = { epost?: string | null; id?: string | null; namn?: string | null };
@@ -726,17 +748,20 @@ export function postuppgifter(r: Pick<Rad, "om_nummer" | "data">): Postuppgifter
  *
  * `nivaAv` säger vilken nivå i Nav författaren har (Per roll i kortet), eller
  * null när hen inte finns i Nav — EffektivMedias personal, till exempel.
+ * `namnAv` ger namnet på den som tog bort en anteckning (0279).
  */
 export function aktivitetsrader(
   rader: readonly Lagrad[],
   anteckningar: readonly Navanteckning[],
-  o: { superadmin: boolean; inkioBas: string; nivaAv?: (k: Forfattarnyckel) => Niva | null },
+  o: { superadmin: boolean; inkioBas: string; nivaAv?: (k: Forfattarnyckel) => Niva | null; namnAv?: (id: string) => string | null },
 ): Aktivitetsrad[] {
+  // En borttagen antecknings eko i Inkio göms också: den är borttagen där med, eller på väg att bli det.
   const ekon = new Set(anteckningar.map((a) => a.crm_id).filter(Boolean) as string[]);
   const nivaAv = o.nivaAv ?? (() => null);
   const ut: Aktivitetsrad[] = [];
 
   for (const a of anteckningar) {
+    if (a.raderad_at && !o.superadmin) continue;
     const order = a.om_order ?? null;
     ut.push({
       id: `nav:${a.id}`,
@@ -744,7 +769,7 @@ export function aktivitetsrader(
       vem: a.skriven_namn,
       anteckning: true,
       text: a.text,
-      kalla: { etikett: a.crm_state === "skickad" ? "Kunden" : a.crm_state === "ko" ? "Kunden · skrivs till Inkio" : "Kunden · bara i Nav", lank: null },
+      kalla: { etikett: a.raderad_at ? "Kunden · borttagen" : a.crm_state === "skickad" ? "Kunden" : a.crm_state === "ko" ? "Kunden · skrivs till Inkio" : "Kunden · bara i Nav", lank: null },
       sort: "anteckning",
       omrade: order ? "forsaljning" : "kund",
       om: null,
@@ -753,9 +778,13 @@ export function aktivitetsrader(
       niva: nivaAv({ id: a.skriven_av ?? null, namn: a.skriven_namn }),
       nav: true,
       tjanst: false,
-      andrad: false,
-      raderad: false,
+      andrad: Boolean(a.andrad_at),
+      raderad: Boolean(a.raderad_at),
       order,
+      av: a.skriven_av ?? null,
+      versioner: anteckningsversioner(a.versioner),
+      raderadNar: a.raderad_at ?? null,
+      raderadAv: a.raderad_at && a.raderad_av ? (o.namnAv?.(a.raderad_av) ?? null) : null,
     });
   }
 
@@ -787,6 +816,10 @@ export function aktivitetsrader(
       andrad: Boolean(r.andrad) && r.slag !== "post",
       raderad: Boolean(r.raderad),
       order: null,
+      av: null,
+      versioner: [],
+      raderadNar: null,
+      raderadAv: null,
     });
   }
 

@@ -6,7 +6,8 @@ import { tolkaLager } from "@/lib/lagring";
 import { siteUrl } from "@/lib/env";
 import { adapter, type Crmorder, type Crmstatus } from "./adapter";
 import { kr, leveransrad, orderadress, type Leveranshandelse } from "./inkio-mappning";
-import { inkioFarSkriva, inkioKund, inkioOrder, rattaIInkio, skrivAnteckning, skrivPaOrder } from "./inkio";
+import { andraAnteckning, inkioFarSkriva, inkioKund, inkioOrder, rattaIInkio, skrivAnteckning, skrivPaOrder, taBortAnteckning } from "./inkio";
+import { kaAnteckning } from "./inflode-server";
 
 /**
  * Nav-sidan av CRM-synken: läser ordern, anropar adaptern och skriver vad den
@@ -307,12 +308,16 @@ async function vemGjorde(orderId: string, action: string): Promise<{ namn: strin
  * Ett andra försök får inte skriva den två gånger: har bevakningen redan sett
  * texten från tjänstekontot (svaret kom aldrig fram, men anteckningen gjorde
  * det) tas den raden i stället.
+ *
+ * En borttagen anteckning skrivs aldrig dit (0279). Ändras eller tas den bort
+ * medan den är på väg köas ändringen efteråt, så att Inkio inte står kvar med
+ * den gamla texten.
  */
 export async function anteckningICrm(id: string): Promise<boolean> {
   const db = supabaseAdmin();
-  // `*`: `om_order` (0278) finns först när migrationen körts.
+  // `*`: `om_order` (0278) och `raderad_at` (0279) finns först när migrationerna körts.
   const { data: a } = await db.from("kundanteckning").select("*").eq("id", id).maybeSingle();
-  if (!a || a.crm_id) return false;
+  if (!a || a.crm_id || a.raderad_at) return false;
   const { data: inst } = await db.from("crm_installning").select("aktiv, utflode").eq("id", true).maybeSingle();
   if (!inst?.aktiv || !inst.utflode || !inkioFarSkriva()) return false;
 
@@ -348,12 +353,43 @@ export async function anteckningICrm(id: string): Promise<boolean> {
   try {
     const crmId = await skrivAnteckning(paOrder ? "Sales Order" : "Customer", paOrder ?? kundId, a.text, a.skriven_namn);
     await db.from("kundanteckning").update({ crm_id: crmId, crm_state: "skickad", crm_fel: null }).eq("id", id);
+    const { data: nu } = await db.from("kundanteckning").select("*").eq("id", id).maybeSingle();
+    if (crmId && nu?.raderad_at) await kaAnteckning(id, 0, "anteckning-borttagen");
+    else if (crmId && nu && nu.text !== a.text) await kaAnteckning(id, 0, "anteckning-andrad");
     return true;
   } catch (e) {
     const fel = e instanceof Error ? e.message : String(e);
     await db.from("kundanteckning").update({ crm_state: "fel", crm_fel: fel.slice(0, 500) }).eq("id", id);
     throw new Error(fel);
   }
+}
+
+/**
+ * En ändrad anteckning → samma anteckning i Inkio (0279), med den text som
+ * gäller nu. Står den inte i Inkio än gör den inget: `anteckningICrm` skriver
+ * den nya texten när den skrivs dit.
+ */
+export async function anteckningAndradICrm(id: string): Promise<boolean> {
+  const db = supabaseAdmin();
+  const { data: a } = await db.from("kundanteckning").select("*").eq("id", id).maybeSingle();
+  if (!a || !a.crm_id || a.raderad_at) return false;
+  const { data: inst } = await db.from("crm_installning").select("aktiv, utflode").eq("id", true).maybeSingle();
+  if (!inst?.aktiv || !inst.utflode || !inkioFarSkriva()) return false;
+  await logga({ system: "inkio", handling: "anteckning-andrad", anteckning: id, org: a.org_number, crm_id: a.crm_id });
+  await andraAnteckning(String(a.crm_id), String(a.text), String(a.skriven_namn));
+  return true;
+}
+
+/** En borttagen anteckning → borttagen i Inkio också (0279). Stod den aldrig där finns inget att ta bort. */
+export async function anteckningBorttagenICrm(id: string): Promise<boolean> {
+  const db = supabaseAdmin();
+  const { data: a } = await db.from("kundanteckning").select("*").eq("id", id).maybeSingle();
+  if (!a || !a.crm_id || !a.raderad_at) return false;
+  const { data: inst } = await db.from("crm_installning").select("aktiv, utflode").eq("id", true).maybeSingle();
+  if (!inst?.aktiv || !inst.utflode || !inkioFarSkriva()) return false;
+  await logga({ system: "inkio", handling: "anteckning-borttagen", anteckning: id, org: a.org_number, crm_id: a.crm_id });
+  await taBortAnteckning(String(a.crm_id));
+  return true;
 }
 
 /**

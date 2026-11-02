@@ -3682,6 +3682,30 @@ button.kkt-om:hover,a.kkt-om:hover{border-color:var(--line-2);color:var(--ink)}
 .kkt-not:hover .kkt-fast,.kkt-not:focus-within .kkt-fast,.kkt-not.fast .kkt-fast{opacity:1}
 @media (hover:none){.kkt-fast{opacity:1}}
 .kkt-fast+.kkt-tid{margin-left:0}
+/* Ändra och ta bort sin egen anteckning (0279). Knapparna syns när man pekar på anteckningen, som Fäst överst. */
+.kkt-atg{margin-left:auto;display:inline-flex;align-items:center;gap:2px;opacity:0;transition:opacity .15s}
+.kkt-not:hover .kkt-atg,.kkt-not:focus-within .kkt-atg,.kkt-not.fast .kkt-atg{opacity:1}
+@media (hover:none){.kkt-atg{opacity:1}}
+.kkt-atg .tlink{padding:1px 6px;font-size:12px}
+.kkt-atg .kkt-fast{margin-left:0;opacity:1}
+.kkt-atg+.kkt-tid{margin-left:0}
+.kkt-atg .kkt-bort:hover{color:var(--danger-ink)}
+.kkt-verk{font:inherit;color:inherit;padding:0;text-decoration:underline dotted;text-underline-offset:3px}
+.kkt-verk:hover,.kkt-verk[aria-expanded="true"]{color:var(--ink)}
+.kkt-ver{list-style:none;margin:8px 0 0;padding:0 0 0 12px;border-left:2px solid var(--line);display:flex;flex-direction:column;gap:6px}
+.kkt-ver>li{display:flex;flex-direction:column;gap:2px;font-size:11.5px;color:var(--ink-3)}
+.kkt-not .kkt-ver .kkt-bubbla{background:none;padding:0;font-size:12.5px;color:var(--ink-2)}
+.kkt-andra .kkt-fot{justify-content:flex-end}
+.kkt-andra .kkt-hj{margin:0 auto 0 0}
+.kkt-fraga{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;margin:0 0 6px;padding:7px 8px 7px 12px;border-radius:9px;background:var(--danger-soft);color:var(--danger-ink);font-size:12.5px}
+.kkt-fraga .pacts{margin-left:auto;display:inline-flex;align-items:center;gap:8px}
+.kkt-fraga .tlink{color:var(--danger-ink)}
+.kkt-bortja{background:var(--danger);color:#fff;border-color:transparent}
+.kkt-bortja:hover{filter:brightness(1.08)}
+/* Den sparade ändringen lyser upp en gång, så att man ser var den hamnade. */
+.kkt-bubbla.nyss{animation:kktnyss 1.4s var(--ease) both}
+@keyframes kktnyss{from{box-shadow:0 0 0 3px color-mix(in srgb,var(--brand) 35%,transparent)}to{box-shadow:0 0 0 3px transparent}}
+@media (prefers-reduced-motion:reduce){.kkt-bubbla.nyss{animation:none}}
 .kkt-sys{display:flex;gap:10px;align-items:baseline;padding:0 2px 0 12px;font-size:12.5px;color:var(--ink-2)}
 .kkt-sys>i{width:7px;height:7px;border-radius:50%;background:var(--line-2);flex:none;transform:translateY(-1px)}
 .kkt-sys.ton-ok>i{background:var(--brand)}
@@ -15069,6 +15093,7 @@ function kkKort(o){
   const vantar = alla.filter(x => ['inskickad', 'utkast'].includes(x.st)), varde = lev.reduce((s, x) => s + oVarde(x), 0), manad = lev.reduce((s, x) => s + (x.man || 0) + x.tj.filter(t => t[1] === 'manad').reduce((a, t) => a + t[2], 0), 0), prov = lev.reduce((s, x) => s + oProv(x), 0);
   const bar = lev.reduce((b, x) => !b || oSlut(x) > oSlut(b) ? x : b, null), kvar = bar ? oDagarTillSlut(bar) : null;
   const lista = ordSortera(ordFiltrera(oMina())), i = lista.findIndex(x => x.nr === o.nr), s = oStatus(o), chef = S.role === 'chef';
+  if (S.kkFlik === 'historik' && ndO()) S.kkFlik = 'aktivitet';
   const n = kkNasta(o, d), flik = S.kkFlik || 'oversikt';
   const sam = d.samtal, bil = alla.filter(x => x.avtal).length + (S.kkBil[o.org] || []).length;
   const halsa = [
@@ -15077,7 +15102,8 @@ function kkKort(o){
     ['Säljsamtal', o.samtal ? `kopplat, ${o.samtal.min} min` : 'saknas', o.samtal ? 'ok' : o.st === 'makulerad' ? 'neutral' : 'danger', 'samtal'],
     ['Avtal', o.avtal ? 'bifogat' : 'saknas', o.avtal ? 'ok' : o.st === 'makulerad' ? 'neutral' : 'warn', 'bilagor']];
   const prickar = {aktivitet:d.webb && d.nere, samtal:!o.samtal && o.st !== 'makulerad', bilagor:!o.avtal && o.st !== 'makulerad'};
-  const flikar = [['oversikt', 'Översikt', null], ['aktivitet', 'Aktivitet', d.akt.length || null], ['order', 'Order', alla.length], ['samtal', 'Samtal', sam.length], ['bilagor', 'Bilagor', bil], ['historik', 'Historik', null]];
+  const flikar = ndO() ? [['oversikt', 'Översikt', null], ['aktivitet', 'Historik', null], ['order', 'Order', alla.length], ['samtal', 'Samtal', sam.length], ['bilagor', 'Bilagor', bil]]
+    : [['oversikt', 'Översikt', null], ['aktivitet', 'Aktivitet', d.akt.length || null], ['order', 'Order', alla.length], ['samtal', 'Samtal', sam.length], ['bilagor', 'Bilagor', bil], ['historik', 'Historik', null]];
   const tona = S._kkTonad !== o.nr; S._kkTonad = o.nr;
   return `<div class="kk ${tona ? 'in' : ''} ${S.o7Bred ? 'o7bred' : ''}" role="dialog" aria-label="${esc(o.bolag)}">
     <div class="kkh">${note(255)}
@@ -15307,6 +15333,8 @@ function kkRender(){
   if (!ny) return render();
   morfNod(el, ny); el.scrollTop = y; renderPlayer();
 }
+// Flikarna i ordning, för siffrorna och pilarna. I navet är Aktivitet och Historik en flik, Historik, som i Inkio.
+const kkFlikar = () => ndO() ? ['oversikt', 'aktivitet', 'order', 'samtal', 'bilagor'] : ['oversikt', 'aktivitet', 'order', 'samtal', 'bilagor', 'historik'];
 function kkSt(){ if (S.kkInit) return; S.kkInit = true; Object.assign(S, {kkFlik:'oversikt', kkOppna:new Set(), kkStangda:new Set(), kkBil:{}, kkLyssnat:{}, kkFilOppnad:{}, kkKollad:{}}); }
 function kkClick(t, e){
   const d = t.dataset;
@@ -15321,7 +15349,7 @@ function kkClick(t, e){
   if (d.kktlordning !== undefined){ S.kkTlAldst = !S.kkTlAldst; kkRender(); return true; }
   if (d.kktlalla !== undefined){ S.kkTlAlla = o.org; kkRender(); return true; }
   if (d.o7omorder){ const n = +d.o7omorder; S.kkFlik = 'order'; S.kkOppna.add(n); S.kkStangda.delete(n); kkRender(); document.querySelector('.kkb')?.scrollTo(0, 0); return true; }
-  if (d.kktlmd){ kkMd(d.kktlmd); return true; }
+  if (d.kktlmd){ kkMd(d.kktlmd, t.closest('.kkt-ruta')?.querySelector('textarea') || undefined); return true; }
   if (d.kksamf){ S.kkSamF = d.kksamf; kkRender(); return true; }
   if (d.kkhistf){ S.kkHistF = d.kkhistf; kkRender(); return true; }
   if (d.kkkolla !== undefined){ S.kkKollar = o.org; kkRender(); setTimeout(() => { S.kkKollar = null; S.kkKollad[o.org] = hm(now()); const k = kkData(o.org); kkRender(); toast(k.nere ? `${k.webb} svarar fortfarande inte.` : `${k.webb} svarar, ${k.ms} ms.`); }, 1200); return true; }
@@ -15349,20 +15377,23 @@ document.addEventListener('input', e => { if (e.target.dataset && e.target.datas
 // Rutan växer med texten, upp till en gräns.
 const kkVax = t => { if (!t) return; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight + 2, 260) + 'px'; };
 document.addEventListener('input', e => { const t = e.target; if (!t.dataset) return; if (t.dataset.kknot !== undefined && t.tagName === 'TEXTAREA') kkVax(t);
+  if (t.dataset.kktandtext !== undefined){ kkUtk(t); kkVax(t); }
   if (t.dataset.kktlsok !== undefined){ S.kkTlSok = t.value; clearTimeout(kkVax.sok); kkVax.sok = setTimeout(kkRender, 120); } });
 document.addEventListener('change', e => { const t = e.target; if (t.dataset && t.dataset.kknotom !== undefined){ const o = ORDER.find(x => x.nr === S.ordOpen); if (o) (S.kkNotOm = S.kkNotOm || {})[o.org] = t.value; } });
 // Verktygsraden tar inte fokus från rutan: markeringen står kvar.
 document.addEventListener('mousedown', e => { if (e.target.closest && e.target.closest('[data-kktlmd]')) e.preventDefault(); });
 // Skift+Enter i en lista fortsätter listan, som i Inkio.
-document.addEventListener('keydown', e => { const t = e.target; if (e.key !== 'Enter' || !e.shiftKey || !t.dataset || t.dataset.kknot === undefined || t.tagName !== 'TEXTAREA') return;
+document.addEventListener('keydown', e => { const t = e.target; if (e.key !== 'Enter' || !e.shiftKey || !t.dataset || (t.dataset.kknot === undefined && t.dataset.kktandtext === undefined) || t.tagName !== 'TEXTAREA') return;
   const fore = t.value.slice(0, t.selectionStart), rad = fore.slice(fore.lastIndexOf('\n') + 1), m = /^(\s*)(?:([-*•])|(\d+)([.)]))\s+(.*)$/.exec(rad); if (!m) return;
   e.preventDefault();
   if (!m[5].trim()){ t.setRangeText('', t.selectionStart - rad.length, t.selectionStart, 'end'); }
   else t.setRangeText(`\n${m[1]}${m[2] ? m[2] + ' ' : `${+m[3] + 1}${m[4]} `}`, t.selectionStart, t.selectionEnd, 'end');
-  S.kkNotUtk = t.value; kkVax(t); });
+  kkUtk(t); kkVax(t); });
 // Markdown som Inkios: fetstil, kursiv, genomstruket, länk och listor runt markeringen.
-function kkMd(k){
-  const t = document.querySelector('[data-kknot]'); if (!t) return;
+// Texten i en ruta sparas i läget, så att den står kvar när kortet ritas om: skrivrutan eller rutan att ändra i.
+const kkUtk = t => { if (t.dataset.kktandtext !== undefined){ if (S.kktAndra) S.kktAndra.text = t.value; } else S.kkNotUtk = t.value; };
+function kkMd(k, t = document.querySelector('[data-kknot]')){
+  if (!t) return;
   const a = t.selectionStart, b = t.selectionEnd, val = t.value, mark = val.slice(a, b);
   const runt = (f, e2 = f, tom = '') => { const x = mark || tom; t.setRangeText(f + x + e2, a, b, 'select'); if (!mark) t.setSelectionRange(a + f.length, a + f.length + x.length); };
   if (k === 'b') runt('**', '**', 'fetstil');
@@ -15373,13 +15404,13 @@ function kkMd(k){
     const rader = val.slice(start, slut).split('\n'), lista = rader.every(r => k === 'ul' ? /^\s*[-*•]\s/.test(r) : /^\s*\d+[.)]\s/.test(r));
     const ny = rader.map((r, i) => lista ? r.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, '') : `${k === 'ul' ? '- ' : `${i + 1}. `}${r.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, '')}`).join('\n');
     t.setRangeText(ny, start, slut, 'end'); }
-  t.focus(); S.kkNotUtk = t.value; kkVax(t);
+  t.focus(); kkUtk(t); kkVax(t);
 }
 document.addEventListener('keydown', e => {
   if (S.view !== 'order' || !S.ordOpen || S.ordNy || e.metaKey || e.ctrlKey || e.altKey) return;
   if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')){ if (e.key === 'Enter' && !e.shiftKey && e.target.dataset && e.target.dataset.kknot !== undefined){ e.preventDefault(); document.querySelector('[data-kknotspara]')?.click(); } return; }
-  const flikar = ['oversikt', 'aktivitet', 'order', 'samtal', 'bilagor', 'historik'];
-  if (/^[1-6]$/.test(e.key)){ e.preventDefault(); kkSt(); S.kkFlik = flikar[+e.key - 1]; render(); }
+  const flikar = kkFlikar();
+  if (/^[1-9]$/.test(e.key) && +e.key <= flikar.length){ e.preventDefault(); kkSt(); S.kkFlik = flikar[+e.key - 1]; render(); }
   if (e.key === ' ' && S.kkFlik === 'samtal'){ const b = document.querySelector('.kkplay'); if (b){ e.preventDefault(); b.click(); } }
 });
 document.addEventListener('click', e => { const v = e.target.closest && e.target.closest('[data-kksok]'); if (!v || S.view !== 'order') return; const id = v.dataset.kksok, sp = S.kkSpel; const r = v.getBoundingClientRect(), andel = (e.clientX - r.left) / r.width; const o = ORDER.find(x => x.nr === S.ordOpen), n = kkManus(kkData(o.org).samtal.find(x => x.id === id), o).length; if (!sp || sp.id !== id){ S.kkSpel = {id, i:Math.floor(andel * n), igang:false, hast:S.kkHast || 1}; } else S.kkSpel.i = Math.floor(andel * n); const igang = S.kkSpel.igang; if (igang){ try { speechSynthesis.cancel(); } catch(_){} S.kkSpel.igang = false; kkSpela(id); } else kkRender(); });
@@ -15813,7 +15844,7 @@ window.addEventListener('keydown', e => {
   }
   if (S.ordOpen && ae && ae.matches && ae.matches('.kktabs [data-kkflik]') && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')){
     e.preventDefault(); e.stopPropagation();
-    const fl = ['oversikt', 'aktivitet', 'order', 'samtal', 'bilagor', 'historik'], i = fl.indexOf(S.kkFlik || 'oversikt');
+    const fl = kkFlikar(), i = fl.indexOf(S.kkFlik || 'oversikt');
     S.kkFlik = fl[(i + (e.key === 'ArrowRight' ? 1 : -1) + fl.length) % fl.length]; render(); document.querySelector(`.kktabs [data-kkflik="${S.kkFlik}"]`)?.focus(); return;
   }
   if (skriver || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -27373,7 +27404,8 @@ kkData = function(org){
     // heldag, lagrad som midnatt UTC) visas utan tid.
     akt:akt ? akt.rader.map(r => ({id:r.id, nar:ndTidText(r.nar), vem:r.vem, kalla:r.kalla.etikett, text:r.text, not:r.anteckning, lank:r.kalla.lank,
       sort:r.sort || (r.anteckning ? 'anteckning' : 'aktivitet'), omrade:r.omrade || 'kund', om:r.om || null, post:r.post || null, roll:r.roll || null, niva:r.niva || null,
-      nav:!!r.nav, tjanst:!!r.tjanst, andrad:!!r.andrad, raderad:!!r.raderad, order:r.order || null, heldag:!!r.post && /T00:00:00(\.0+)?(Z|\+00:?00)$/.test(r.nar)})) : [],
+      nav:!!r.nav, tjanst:!!r.tjanst, andrad:!!r.andrad, raderad:!!r.raderad, order:r.order || null,
+      av:r.av || null, versioner:r.versioner || [], raderadNar:r.raderadNar || null, raderadAv:r.raderadAv || null, heldag:!!r.post && /T00:00:00(\.0+)?(Z|\+00:?00)$/.test(r.nar)})) : [],
     samtal, nd:f, sida
   };
 };
@@ -27556,14 +27588,46 @@ function ndTlPost(o, r, tid){
     <p class="kkt-pr">${r.lank ? `<a class="kkt-titel" href="${esc(r.lank)}" target="_blank" rel="noopener" title="Öppna i Inkio">${esc(titel)} ↗</a>` : `<span class="kkt-titel">${esc(titel)}</span>`}${st ? `<span class="pill t-${st[1]}">${esc(st[0])}</span>` : ''}</p>
     ${meta.length ? `<p class="kkt-meta">${meta.join('<span aria-hidden="true">·</span>')}</p>` : ''}${matare}</div></li>`;
 }
+// 0279: raden ur hämtningen (den kortet ritas av), så att en ändring syns innan nästa hämtning.
+const ndTlKalla = (o, id) => { const a = (NDKUND[o.org] || {}).aktivitet; return a && a.rader ? a.rader.find(x => x.id === id) || null : null; };
+// "i dag 14:05", "mån 2 nov 09:30": när en version skrevs eller anteckningen togs bort.
+const ndTlNar = iso => { const t = ndTidText(iso); return `${kkDagRub(t.slice(0, 10)).toLowerCase()} ${t.slice(11, 16)}`; };
+// Fokus i rutan eller på knappen när kortet ritats, med markören sist i texten.
+const ndTlFokus = (sel, sist) => requestAnimationFrame(() => { const t = document.querySelector(sel); if (!t) return; t.focus(); if (sist && t.setSelectionRange){ t.setSelectionRange(t.value.length, t.value.length); kkVax(t); } });
+// Enter sparar och Esc avbryter i rutan att ändra i; Esc i frågan om att ta bort ångrar. Före kortets egna tangenter.
+window.addEventListener('keydown', e => { const t = e.target;
+  if (t && t.dataset && t.dataset.kktandtext !== undefined){
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); document.querySelector('[data-kktandraspara]')?.click(); }
+    else if (e.key === 'Escape'){ e.preventDefault(); e.stopImmediatePropagation(); document.querySelector('[data-kktandranej]')?.click(); }
+    return; }
+  if (e.key === 'Escape' && S.kktBort && t && t.closest && t.closest('.kkt-fraga')){ e.preventDefault(); e.stopImmediatePropagation(); S.kktBort = null; kkRender(); }
+}, true);
+const NDTLVK = [['b', 'Fetstil', 'B'], ['i', 'Kursiv', 'I'], ['s', 'Genomstruket', 'S'], ['lank', 'Länk', 'lank'], ['ul', 'Punktlista', 'kktul'], ['ol', 'Numrerad lista', 'kktol']];
+function ndTlAndraRuta(r){
+  return `<div class="kkt-ruta kkt-andra">
+    <div class="kkt-verktyg" role="toolbar" aria-label="Formatering">${NDTLVK.map(([k, l, ik]) => `<button type="button" class="kkt-vk kkt-vk-${k}" data-kktlmd="${k}" title="${l}" aria-label="${l}">${ik.length > 1 ? I(ik) : ik}</button>`).join('')}</div>
+    <textarea class="kkt-in" data-kktandtext rows="2" aria-label="Ändra anteckningen">${esc(S.kktAndra.text)}</textarea>
+    <div class="kkt-fot"><span class="muted kkt-hj">Enter sparar · Esc avbryter</span><button class="tlink" data-kktandranej>Avbryt</button><button class="btn btn-p btn-sm" data-kktandraspara="${esc(r.id)}">Spara</button></div></div>`;
+}
 function ndTlNot(o, r, tid){
-  const fast = (ndO().fasta || {})[o.org], fastad = !!fast && fast.kommentar === r.id, jag = ND && ND.jag && ND.jag.namn === r.vem;
+  const fast = (ndO().fasta || {})[o.org], fastad = !!fast && fast.kommentar === r.id;
+  // Egen: skriven i Nav av den inloggade (anställningen), annars som förut på namnet.
+  const jag = !!(ND && ND.jag && (r.nav && r.av ? r.av === ND.jag.id : ND.jag.namn === r.vem));
+  const sa = !!(ND && ND.jag && ND.jag.niva === 'superadmin');
+  const kanAndra = r.nav && !r.raderad && jag, kanTaBort = r.nav && !r.raderad && (jag || sa);
+  const andras = kanAndra && S.kktAndra && S.kktAndra.id === r.id, fragar = kanTaBort && S.kktBort === r.id;
   const roll = r.niva ? NDNIVA[r.niva] : r.roll ? `${r.roll} i Inkio` : '';
-  const lage = r.nav ? (/skrivs till Inkio/.test(r.kalla) ? '<span class="pill t-signal">Skrivs till Inkio</span>' : /bara i Nav/.test(r.kalla) ? '<span class="pill t-neutral">Bara i Nav</span>' : '') : '';
+  const lage = r.nav && !r.raderad ? (/skrivs till Inkio/.test(r.kalla) ? '<span class="pill t-signal">Skrivs till Inkio</span>' : /bara i Nav/.test(r.kalla) ? '<span class="pill t-neutral">Bara i Nav</span>' : '') : '';
   const text = r.raderad ? r.text.replace(/^Raderad i Inkio: /, '') : r.text;
+  const ver = r.versioner && r.versioner.length ? r.versioner : null;
+  const andrad = r.andrad ? (ver ? `<button class="kkt-verk" data-kktver="${esc(r.id)}" aria-expanded="${S.kktVer === r.id}" title="Visa vad den sa förut">ändrad</button>` : '<span>ändrad</span>') : '';
+  const borta = r.raderad ? (r.nav ? `borttagen${r.raderadNar ? ' ' + ndTlNar(r.raderadNar) : ''}${r.raderadAv ? ` av ${fornamn(r.raderadAv)}` : ''}` : 'raderad i Inkio') : '';
+  const atg = `<span class="kkt-atg">${kanAndra ? `<button class="tlink" data-kktandra="${esc(r.id)}">Ändra</button>` : ''}${kanTaBort ? `<button class="tlink kkt-bort" data-kktbort="${esc(r.id)}">Ta bort</button>` : ''}${r.raderad ? '' : `<button class="tlink kkt-fast" data-o7fast="${esc(r.id)}">${fastad ? 'Lossa' : 'Fäst överst'}</button>`}</span>`;
+  const fraga = fragar ? `<p class="kkt-fraga" role="alert">Ta bort anteckningen?${r.kalla === 'Kunden' ? ' Den tas bort i Inkio också.' : ''}<span class="pacts"><button class="tlink" data-kktbortnej>Avbryt</button><button class="btn btn-sm kkt-bortja" data-kktbortja="${esc(r.id)}">Ta bort</button></span></p>` : '';
+  const versioner = ver && S.kktVer === r.id ? `<ol class="kkt-ver" aria-label="Det den sa förut">${ver.slice().reverse().map(v => `<li><span class="num">${esc(ndTlNar(v.nar))}</span><div class="kkt-bubbla">${kktMd(v.text)}</div></li>`).join('')}</ol>` : '';
   return `<li class="kkt-not ${jag ? 'egen' : ''} ${fastad ? 'fast' : ''} ${r.raderad ? 'rad' : ''}">${avatar(r.vem.replace(/ \(import\)$/, ''), 28)}<div class="kkt-k">
-    <p class="kkt-m"><b>${esc(r.vem)}</b>${roll ? `<span>${esc(roll)}</span>` : ''}${ndTlOm(o, r)}${r.andrad ? '<span>ändrad</span>' : ''}${r.raderad ? '<span class="kkt-rad">raderad i Inkio</span>' : ''}${lage}<button class="tlink kkt-fast" data-o7fast="${esc(r.id)}">${fastad ? 'Lossa' : 'Fäst överst'}</button>${tid ? `<span class="num kkt-tid">${tid}</span>` : ''}</p>
-    <div class="kkt-bubbla">${kktMd(text)}</div></div></li>`;
+    <p class="kkt-m"><b>${esc(r.vem)}</b>${roll ? `<span>${esc(roll)}</span>` : ''}${ndTlOm(o, r)}${andrad}${borta ? `<span class="kkt-rad">${esc(borta)}</span>` : ''}${lage}${andras ? '' : atg}${tid ? `<span class="num kkt-tid">${tid}</span>` : ''}</p>
+    ${fraga}${andras ? ndTlAndraRuta(r) : `<div class="kkt-bubbla ${S.kktNyss === r.id ? 'nyss' : ''}">${kktMd(text)}</div>`}${versioner}</div></li>`;
 }
 function ndTlRad(o, r){
   const tid = r.heldag || /^\d{4}-\d{2}-\d{2} $/.test(r.nar) ? '' : r.nar.slice(11, 16);
@@ -27606,7 +27670,7 @@ kkAktivitet = function(o, d){
   const chips = NDTLF.filter(([k]) => k === 'allt' || k === 'anteckningar' || k === fl || antal(k)).map(([k, l]) => `<button class="chip ${fl === k ? 'on' : ''}" data-kkaktf="${k}" aria-pressed="${fl === k}">${l} <span class="num muted">${antal(k)}</span></button>`).join('');
   const tom = q ? `Inget i historiken matchar ”${esc(S.kkTlSok.trim())}”.` : fl === 'anteckningar' ? 'Ingen har skrivit något om kunden än.' : 'Inget här än.';
   return `${ndKkSida(o, d)}
-    <section class="kksek kkinkio kkt"><div class="kkinkioh"><h3>Tidslinje</h3>${f.kl ? `<span class="muted o7hamt">hämtat ${esc(f.kl)}</span>` : ''}${ndInkioLank(d.inkioLank, `Öppna ${d.inkio || 'i Inkio'}`)}<button class="tlink" data-kkuppd>Uppdatera</button></div>
+    <section class="kksek kkinkio kkt"><div class="kkinkioh"><h3>Historik</h3>${f.kl ? `<span class="muted o7hamt">hämtat ${esc(f.kl)}</span>` : ''}${ndInkioLank(d.inkioLank, `Öppna ${d.inkio || 'i Inkio'}`)}<button class="tlink" data-kkuppd>Uppdatera</button></div>
       ${ndTlSkriv(o)}
       <div class="qchips o7snabb" role="group" aria-label="Snabbval">${['Ringde, inget svar', 'Skickade offert', 'Bokade möte', 'Vill bli uppringd'].map(x => `<button class="chip" data-o7snabbnot="${x}">${x}</button>`).join('')}</div>
       <div class="kkt-rad1"><span class="kkt-vy" role="group" aria-label="Visa som">${[['tidslinje', 'Tidslinje'], ['roll', 'Per roll']].map(([k, l]) => `<button data-kktlvy="${k}" aria-pressed="${vy === k}">${l}</button>`).join('')}</span><label class="kkt-sok">${I('sok')}<input class="uin" type="search" data-kktlsok value="${esc(S.kkTlSok || '')}" placeholder="Sök i historiken" aria-label="Sök i historiken"></label></div>
@@ -28016,6 +28080,23 @@ document.addEventListener('click', e => {
     if (!val.size){ S.kkLas = null; kkRender(); return; } ndOrdPost('ratta-fran-avtal', {id:x.id, falt:f}); return; }
   if (ds.kknotspara !== undefined){ stopp(); const o = oppen(), t = (document.querySelector('[data-kknot]')?.value || '').trim(); if (!t){ document.querySelector('[data-kknot]')?.focus(); return; }
     ndOrdPost('anteckning', {org:o.org, text:t, order:(S.kkNotOm || {})[o.org] || ''}, {ladda:false}).then(s => { if (s.ok){ S.kkNotUtk = ''; ndKundHamta(o, true); kkRender(); } }); return; }
+  // 0279: ändra och ta bort sin egen anteckning. Raden i kortet ändras direkt; hämtningen efteråt ger versionerna.
+  if (ds.kktandra){ stopp(); const o = oppen(), r = o && kkData(o.org).akt.find(x => x.id === ds.kktandra); if (!r) return;
+    S.kktAndra = {id:r.id, text:r.text}; S.kktBort = null; kkRender(); ndTlFokus('[data-kktandtext]', true); return; }
+  if (ds.kktandranej !== undefined){ stopp(); S.kktAndra = null; kkRender(); return; }
+  if (ds.kktandraspara){ stopp(); const o = oppen(), a = S.kktAndra, r = o && a && ndTlKalla(o, a.id); if (!r) return; const t = a.text.trim();
+    if (!t){ toast('Skriv något, eller ta bort anteckningen.'); return; }
+    if (t === r.text){ S.kktAndra = null; kkRender(); return; }
+    b.disabled = true;
+    ndOrdPost('anteckning-andra', {id:r.id, text:t}, {ladda:false}).then(s => { b.disabled = false; if (!s.ok) return;
+      r.text = t; r.andrad = true; S.kktAndra = null; S.kktNyss = r.id; kkRender(); ndKundHamta(o, true); setTimeout(() => { if (S.kktNyss === r.id) S.kktNyss = null; }, 1600); }); return; }
+  if (ds.kktbort){ stopp(); S.kktBort = ds.kktbort; S.kktAndra = null; kkRender(); ndTlFokus('[data-kktbortja]'); return; }
+  if (ds.kktbortnej !== undefined){ stopp(); S.kktBort = null; kkRender(); return; }
+  if (ds.kktbortja){ stopp(); const o = oppen(), r = o && ndTlKalla(o, ds.kktbortja); if (!r) return; b.disabled = true;
+    ndOrdPost('anteckning-ta-bort', {id:r.id}, {ladda:false}).then(s => { b.disabled = false; if (!s.ok) return;
+      const f = ndO().fasta || {}, akt = NDKUND[o.org].aktivitet; if (f[o.org] && f[o.org].kommentar === r.id) delete f[o.org];
+      akt.rader = akt.rader.filter(x => x !== r); S.kktBort = null; kkRender(); ndKundHamta(o, true); }); return; }
+  if (ds.kktver){ stopp(); S.kktVer = S.kktVer === ds.kktver ? null : ds.kktver; kkRender(); return; }
   if (ds.o7fast){ stopp(); const o = oppen(), fast = (ndO().fasta || {})[o.org], r = kkData(o.org).akt.find(x => x.id === ds.o7fast);
     if (fast && fast.kommentar === ds.o7fast){ ndOrdPost('lossa-fast', {org:o.org}, {ladda:false}).then(s => { if (s.ok){ delete ndO().fasta[o.org]; kkRender(); } }); return; }
     if (!r) return;
