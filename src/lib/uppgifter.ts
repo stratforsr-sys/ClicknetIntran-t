@@ -519,7 +519,7 @@ const PRIORITETSORD: Record<string, Prioritet> = {
   "4": 4, "låg": 4, "lag": 4,
 };
 
-export function tolkaSnabbrad(rad: string, idag: string): Snabbrad {
+export function tolkaSnabbrad(rad: string, idag: string, utanDag?: string): Snabbrad {
   let text = ` ${rad} `;
 
   const ut: Snabbrad = {
@@ -662,6 +662,22 @@ export function tolkaSnabbrad(rad: string, idag: string): Snabbrad {
       ut.due_date = datumPlusDagar(idag, till);
       return true;
     });
+  }
+
+  if (!ut.due_date && utanDag) {
+    /**
+     * Raden utan dag. Nav 2.0 skickar `utanDag` (i dag): raden skrivs i
+     * "Att göra i dag", och en uppgift som hamnar under Någon gång syns inte
+     * där (beställaren 2026-11-02 lade samma rad fyra gånger). "Någon gång"
+     * säger då uttryckligen att raden saknar dag. Gamla snabbraden skickar
+     * ingen, och där blir raden utan datum som förut.
+     */
+    let nagonGang = false;
+    plocka(/\s(någon\s?gång|nagon\s?gang)\b/iu, () => {
+      nagonGang = true;
+      return true;
+    });
+    if (!nagonGang) ut.due_date = utanDag;
   }
 
   // --- Klockslag -----------------------------------------------------------

@@ -5,6 +5,36 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-02 kväll · Snabbraden: en rad utan dag hamnar i dag, och fältet töms (grenen `snabbrad-idag`, ingen migration)
+
+**Beställaren:** skrev "Prata med Hedboms och fixa avtal och lägg upp för ADS" i att göra-listan som hovrar över Order,
+tryckte Lägg till flera gånger, och ingenting hände.
+
+**Det som hände.** Raden sparades varje gång: fyra rader i `task` 12:44–12:46 UTC, alla med `due_date` null. Två fel
+gjorde det osynligt:
+- **Servern lade raden utan dag.** `tolkaSnabbrad` ger null när raden saknar dag (gamla snabbraden: inkorgen/Någon gång),
+  men utkastets `laggTill` lägger den i dag (`d = 0`, "Lagd i I dag."). Raden hamnade under Någon gång och syntes
+  aldrig i "Att göra i dag", där den skrevs.
+- **Fältet stod kvar ifyllt.** Navets `laggTill` (ndupg) nollställde aldrig `S.quick`, så omritningen efter sparningen
+  satte tillbaka texten. Kvittot kom längst ner mitt på skärmen, långt från panelen. Fältet såg osparat ut och
+  trycktes igen.
+
+**Lagat.**
+- `tolkaSnabbrad(rad, idag, utanDag?)`: med `utanDag` får en rad utan dag den dagen, och "någon gång"/"nagon gang"
+  ger uttryckligen ingen dag (och lämnar rubriken). Standarddagen sätts före klockslaget, så "Möte 14:00" blir i dag
+  14:00. `skapaUppgift` skickar den när formuläret har `utan_dag=idag`, och `/nav2/uppgifter` (skapa med rad) sätter
+  det. Gamla snabbraden skickar det inte och är oförändrad.
+- `utkast.html` (`delar/snabbrad-idag/patch.py`): fältet töms genast vid Lägg till. Säger Nav nej kommer det som inte
+  sparades tillbaka (bara om fältet fortfarande är tomt; vid flera rader med `;` bara resten). Ett andra tryck på
+  tomt fält visar "Skriv vad som behöver göras först." och sparar ingenting.
+
+**Prov.** `tests/uppgifter.mjs` (12 nya rader, 5 röda före lagningen). `~/nav2-utkast/delar/snabbrad-idag/prov.mjs`
+(headless Chrome, Order med panelen öppen: 13/17 på main, 17/17 lagat). `probe/omladdning-prov.mjs` 80/80,
+`tests/nav2-omladdning.mjs` grönt.
+
+**Kvar.** De fyra raderna från provet i produktionen står kvar under Någon gång tills beställaren säger vad som ska
+göras med dem.
+
 ## 2026-11-02 kväll · Inkio in i Nav MERGAD till `main` (beställarens ja), allt AV tills provet i produktionen
 
 **Beställaren:** "Pusha till main istället så slipper du lägga in nycklar i previewen." Previewen saknade

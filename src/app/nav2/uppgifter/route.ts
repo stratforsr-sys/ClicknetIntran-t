@@ -153,7 +153,8 @@ export async function POST(request: Request) {
     switch (handling) {
       case "skapa": {
         // Snabbraden tolkas av repots tolkaSnabbrad; en deluppgift har parent_id.
-        const s = await skapaUppgift({}, form(b.rad ? { rad: b.rad } : { title: b.titel, parent_id: b.foralder ?? null, priority: b.prio ?? 3, due_date: b.dag ?? null }));
+        // En rad utan dag läggs i dag, som utkastet lovar (beställaren 2026-11-02).
+        const s = await skapaUppgift({}, form(b.rad ? { rad: b.rad, utan_dag: "idag" } : { title: b.titel, parent_id: b.foralder ?? null, priority: b.prio ?? 3, due_date: b.dag ?? null }));
         // Gul 17 (produktionsprovet 2026-10-30): uppgiften lämnade ingen rad i händelseloggen.
         if (!s.fel) await db.from("audit_log").insert({ actor_id: mig, action: "task.created", object_type: "task", object_id: s.id ?? null });
         return fran(s, "Uppgiften är upplagd.");
