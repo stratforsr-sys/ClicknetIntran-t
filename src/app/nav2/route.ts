@@ -5,6 +5,7 @@ import { byggNav2Data, type Nav2Matt } from "@/lib/nav2/data";
 import { lasUtkast } from "@/lib/nav2/mall";
 import { lasIdentitet } from "@/lib/identitet";
 import { skal } from "@/lib/nav2/app";
+import { forvarmPg } from "@/lib/nav2/pgrest";
 
 export const dynamic = "force-dynamic";
 
@@ -44,24 +45,42 @@ export const dynamic = "force-dynamic";
  * /api-rutt och passerar alltsa samma kontroller som varje sida.
  */
 
-const TYPSNITT = `<style>
-@font-face{font-family:"Geist";src:url(/nav2/fonts/geist.woff2) format("woff2");font-weight:100 900;font-display:swap}
-@font-face{font-family:"Geist Mono";src:url(/nav2/fonts/geist-mono.woff2) format("woff2");font-weight:100 900;font-display:swap}
-@font-face{font-family:"Bricolage Grotesque";src:url(/nav2/fonts/bricolage.woff2) format("woff2");font-weight:200 800;font-display:swap}
-</style>`;
+/**
+ * Typsnitten (F1 i prestandaprovet 2026-11-02). Förut upptäckte webbläsaren
+ * dem först när skriptet ritat text, och de bytte typsnitt synligt 130–370 ms
+ * efter första ritningen; vid varje återbesök frågades de om (0,3–0,45 s).
+ * Nu förladdas de i huvudet, och adressen bär `?v=` så att next.config.ts kan
+ * cacha dem för alltid. Byts en fil i public/nav2/fonts byts TYPSNITT_V.
+ */
+const TYPSNITT_V = "1";
+const TYPSNITTEN: [familj: string, fil: string, vikt: string][] = [
+  ["Geist", "geist", "100 900"],
+  ["Geist Mono", "geist-mono", "100 900"],
+  ["Bricolage Grotesque", "bricolage", "200 800"],
+];
+const TYPSNITT =
+  TYPSNITTEN.map(([, fil]) => `<link rel="preload" href="/nav2/fonts/${fil}.woff2?v=${TYPSNITT_V}" as="font" type="font/woff2" crossorigin>`).join("") +
+  "<style>\n" +
+  TYPSNITTEN.map(([familj, fil, vikt]) => `@font-face{font-family:"${familj}";src:url(/nav2/fonts/${fil}.woff2?v=${TYPSNITT_V}) format("woff2");font-weight:${vikt};font-display:swap}`).join("\n") +
+  "\n</style>";
 
 const BESKED = (rubrik: string, text: string) =>
   `<div id="ndFel" role="alert" style="max-width:560px;margin:64px auto;padding:0 16px;font:15px/1.5 system-ui,sans-serif;color:#1d2a25"><h1 style="font-size:20px;margin:0 0 8px">${rubrik}</h1><p style="margin:0">${text}</p></div>`;
 
 export async function GET(request: Request) {
+  // Schemat och den första anslutningen medan inloggningen läses (pgrest.ts).
+  forvarmPg();
+  const tAuth = performance.now();
   const user = await getCurrentUser();
   if (!user) return NextResponse.redirect(new URL("/logga-in?nasta=%2Fnav2", request.url));
+  const auth = Math.round(performance.now() - tAuth);
 
   const [d, h] = await Promise.all([lasUtkast(), headers()]);
   const nonce = h.get("x-nonce") ?? "";
   const ua = h.get("user-agent") ?? "";
   const version = process.env.VERCEL_GIT_COMMIT_SHA ?? null;
-  const svar = { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "private, no-store, max-age=0" };
+  // Server-Timing: inloggningen syns i webbläsarens nätverksflik. Datans tider kommer i `matt`, eftersom huvudena går före den.
+  const svar = { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "private, no-store, max-age=0", "Server-Timing": `auth;dur=${auth}` };
 
   // Startsidan / skickar hit, sa ett konto utan anstalld far ett besked har, inte en omdirigering tillbaka.
   if (!user.employee) {

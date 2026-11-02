@@ -63,6 +63,14 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        // Typsnitten (F1 i prestandaprovet 2026-11-02). Sidan begär dem med ?v= (src/app/nav2/route.ts),
+        // så adressen byts när filen byts, och de cachas för alltid i stället för att frågas om vid varje
+        // besök. Utan ?v= (offline-sidan, public/app-sw.js) som förut.
+        source: "/nav2/fonts/:fil",
+        has: [{ type: "query", key: "v" }],
+        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+      },
+      {
         // Persondata far aldrig cachas av en mellanliggande proxy.
         source: "/(personal|logg|uppstart)/:path*",
         headers: [{ key: "Cache-Control", value: "private, no-store, max-age=0" }],

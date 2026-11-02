@@ -25164,7 +25164,7 @@ const ndSvar = s => s.ok ? s.data : {...(s.data || {}), fel:s.fel, utloggad:s.ut
      lage    det som ska stå kvar, samma som omladdningen sparade; in(m) sätter tillbaka det
      nyckel  omladdningens sessionStorage: går hämtningen inte, sparas läget där och sidan laddas om som förut */
 const NDOMLAS = {}, NDOMLASKO = new Map();
-let ndOmlasPagar = null;
+let ndOmlasPagar = null, NDOMLASSTART = 0;
 function ndOmlasAnmal(vy, v){ NDOMLAS[vy] = {laser:[v.delar[0]], init:[], ...v}; }
 // extra läggs till läget, till exempel ett kvitto som visas när datan är inne.
 function ndOmlas(vy, extra){
@@ -25178,6 +25178,7 @@ async function ndOmlasKor(){
   while (NDOMLASKO.size){
     const ko = new Map(NDOMLASKO); NDOMLASKO.clear();
     const delar = [...new Set([...ko.keys()].flatMap(vy => NDOMLAS[vy].delar))];
+    NDOMLASSTART = Date.now();
     const s = await ndLas('/nav2/data?delar=' + delar.join(','));
     if (!s.ok || !s.data || !s.data.data){ ndOmlasReserv(ko); return false; }
     try {
@@ -26678,18 +26679,79 @@ upgRutaHtml = function(t){
 
 /* ---------- Skrivningar: /nav2/uppgifter ---------- */
 async function ndUpgPost(handling, data = {}, {ladda = true, tyst = false} = {}){
+  // Ett dubbelklick på bocken är ett klick: det andra trycket inom en halv sekund görs inte.
+  if (ladda && ndUpgDubbel(handling, data)) return {fel:NDSKRIVTEXT.pagar, pagar:true, sagt:true};
+  const v = ladda ? ndUpgGenast(handling, data) : null;
   try {
-    const s = ndSvar(await ndSkriv('/nav2/uppgifter', {handling, ...data}));
-    if (s.ok){ if (!tyst) toast(s.ok); if (ladda) ndOmlas('upg'); return s; }
-    if (!tyst) ndSkrivFel(s); return s;
-  } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
+    const s = ndSvar(await (v ? ndUpgITur(v.id, () => ndSkriv('/nav2/uppgifter', {handling, ...data}, {knapp:null})) : ndSkriv('/nav2/uppgifter', {handling, ...data})));
+    if (s.ok){ ndUpgSvarat(v, true); if (!tyst) toast(s.ok); if (ladda) ndOmlas('upg'); return s; }
+    ndUpgSvarat(v, false); if (!tyst) ndSkrivFel(s); return s;
+  } catch(_){ ndUpgSvarat(v, false); if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
+}
+/* Ändringen syns direkt (beställaren 2026-11-02, "allting tar tid"). Förut ändrades raden först när servern
+   sparat och delarna hämtats om, 1–5 s. Nu får raden genast det servern väntas svara, sparningen går i
+   bakgrunden och omhämtningen rättar det som blev annorlunda. Går sparningen inte blir raden som förut, och
+   felet visas som förut. Bara det som går att förutse ändras direkt (bocka, öppna igen, stryka, dag, tid,
+   tidsåtgång, prioritet och titel); resten väntar på servern som förut.
+   En ändring ligger kvar tills en omhämtning som började efter svaret har landat, och läggs på igen efter
+   varje omhämtning dessförinnan, så att den inte blinkar bort när en annan sparning hämtas om med äldre data.
+   Sparningarna för samma uppgift går i tur och ordning, så att bocka och öppna igen kommer fram i den ordning
+   de gjordes. */
+const NDUPGVANTAR = new Set(), NDUPGTUR = new Map();
+let ndUpgNr = 0;
+const ndUpgDubbel = (handling, data) => (handling === 'bocka' || handling === 'ateroppna') && [...NDUPGVANTAR].some(x => x.id === (data && data.id) && x.vaxel && Date.now() - x.at < 500);
+function ndUpgForutse(t, handling, data){
+  const f = {};
+  // Med granskare avgör servern: inlämnad, eller klar när den som bockar är den enda granskaren.
+  if (handling === 'bocka'){ if (t.lage !== 'oppen' || t.granskare) return null; f.lage = 'klar'; f.klarTid = hm(now()); }
+  else if (handling === 'ateroppna'){ if (t.lage !== 'klar') return null; f.lage = 'oppen'; f.klarTid = undefined; }
+  else if (handling === 'avbryt') f.lage = 'avbruten';
+  else if (handling === 'planera'){
+    if ('dag' in data) f.d = ndDagarTill(data.dag);
+    if ('tid' in data){ f.nar = data.tid || undefined; f.tid = data.tid || undefined; }
+    if ('est' in data) f.est = data.est || undefined;
+  }
+  else if (handling === 'andra' && data.falt){ if ('priority' in data.falt) f.prio = data.falt.priority; if ('title' in data.falt) f.t = data.falt.title; }
+  return Object.keys(f).length ? f : null;
+}
+function ndUpgGenast(handling, data){
+  const t = data && data.id ? ndUpgT(data.id) : null;
+  const falt = t && t.id === data.id && ndUpgNav(t.id) && ndUp().skriv ? ndUpgForutse(t, handling, data) : null;
+  if (!falt) return null;
+  const v = {id:t.id, nr:++ndUpgNr, at:Date.now(), vaxel:handling === 'bocka' || handling === 'ateroppna', klar:0, falt, fore:Object.fromEntries(Object.keys(falt).map(k => [k, t[k]]))};
+  NDUPGVANTAR.add(v); Object.assign(t, falt);
+  if (falt.lage === 'avbruten' && S.panel === t.id) S.panel = null;
+  // En bock stryks som i utkastet (380 ms), och raden flyttas när strecket är draget.
+  const rad = falt.lage === 'klar' && document.querySelector(`.trow[data-tid="${t.id}"]`);
+  if (rad){ rad.classList.add('ticked'); setTimeout(render, 380); } else render();
+  return v;
+}
+function ndUpgITur(id, f){
+  const p = (NDUPGTUR.get(id) || Promise.resolve()).then(f);
+  const klar = p.catch(() => {}); NDUPGTUR.set(id, klar);
+  klar.then(() => { if (NDUPGTUR.get(id) === klar) NDUPGTUR.delete(id); });
+  return p;
+}
+function ndUpgSvarat(v, ok){
+  if (!v || !NDUPGVANTAR.has(v)) return;
+  if (ok){ v.klar = Date.now(); return; }
+  NDUPGVANTAR.delete(v);
+  // Blev det inte av: varje fält som förut, utom där en senare ändring av samma uppgift väntar; den utgår då från det.
+  const t = ndUpgT(v.id), senare = [...NDUPGVANTAR].filter(x => x.id === v.id && x.nr > v.nr);
+  Object.keys(v.falt).forEach(k => { const x = senare.find(y => k in y.falt); if (x) x.fore[k] = v.fore[k]; else if (t) t[k] = v.fore[k]; });
+  render();
+}
+// Efter en omhämtning: det som sparats innan hämtningen började finns i datan. Resten läggs på igen.
+function ndUpgIgen(){
+  NDUPGVANTAR.forEach(v => { if (v.klar && v.klar < NDOMLASSTART) NDUPGVANTAR.delete(v); });
+  NDUPGVANTAR.forEach(v => { const t = ndUpgT(v.id); if (t) Object.assign(t, v.falt); });
 }
 (() => { if (!ndUp()) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-upg') || 'null'); sessionStorage.removeItem('nd-upg'); } catch(_){}
   if (m) setTimeout(() => { if (m.view) S.view = m.view; if (m.tab) S.tab = m.tab; if (m.panel && TASKS.some(t => t.id === m.panel)) S.panel = m.panel; render(); }, 0); })();
 // Efter en sparning: rutan står kvar öppen. En uppgift med tid syns i Kalendern, och en coachningsuppgift i Coachning.
 if (ndUp()) ndOmlasAnmal('upg', {delar:['uppgifter', 'kalender', 'coachning'], start:() => { ndUpgStart(); if (ndK()) ndKMoten(); }, nyckel:'nd-upg',
   lage:() => ({view:S.view, tab:S.tab, panel:S.panel}),
-  in:() => { if (S.panel && !TASKS.some(t => t.id === S.panel)) S.panel = null; if (S.fokusMode && !TASKS.some(t => t.id === S.fokusMode.id)) S.fokusMode = null; }});
+  in:() => { ndUpgIgen(); if (S.panel && !TASKS.some(t => t.id === S.panel)) S.panel = null; if (S.fokusMode && !TASKS.some(t => t.id === S.fokusMode.id)) S.fokusMode = null; }});
 const ndUpgT = id => TASKS.find(x => x.id === String(id || '').split('|')[0]);
 const ndUpgNav = id => ndUp() && ndUp().uppgifter.some(x => x.id === id);
 const ndIUpg = el => S.view === 'uppgifter' || !!(el.closest && el.closest('#todoPanel, #upgRuta, #focusOv'));
