@@ -6,7 +6,7 @@ import { tolkaLager } from "@/lib/lagring";
 import { siteUrl } from "@/lib/env";
 import { adapter, type Crmorder, type Crmstatus } from "./adapter";
 import { kr, leveransrad, orderadress, type Leveranshandelse } from "./inkio-mappning";
-import { inkioFarSkriva, inkioKund, inkioOrder, rattaIInkio, skrivAnteckningPaKund, skrivPaOrder } from "./inkio";
+import { inkioFarSkriva, inkioKund, inkioOrder, rattaIInkio, skrivAnteckning, skrivPaOrder } from "./inkio";
 
 /**
  * Nav-sidan av CRM-synken: läser ordern, anropar adaptern och skriver vad den
@@ -310,7 +310,8 @@ async function vemGjorde(orderId: string, action: string): Promise<{ namn: strin
  */
 export async function anteckningICrm(id: string): Promise<boolean> {
   const db = supabaseAdmin();
-  const { data: a } = await db.from("kundanteckning").select("id, org_number, text, skriven_namn, skriven_at, crm_id").eq("id", id).maybeSingle();
+  // `*`: `om_order` (0278) finns först när migrationen körts.
+  const { data: a } = await db.from("kundanteckning").select("*").eq("id", id).maybeSingle();
   if (!a || a.crm_id) return false;
   const { data: inst } = await db.from("crm_installning").select("aktiv, utflode").eq("id", true).maybeSingle();
   if (!inst?.aktiv || !inst.utflode || !inkioFarSkriva()) return false;
@@ -338,9 +339,14 @@ export async function anteckningICrm(id: string): Promise<boolean> {
     return false;
   }
 
-  await logga({ system: "inkio", handling: "anteckning", anteckning: id, org: a.org_number });
+  // Gäller den en order som finns i Inkio skrivs den där, annars på kunden.
+  const omOrder = (a as { om_order?: string | null }).om_order ?? null;
+  const { data: o } = omOrder ? await db.from("crm_order").select("crm_order_id, state").eq("order_id", omOrder).maybeSingle() : { data: null };
+  const paOrder = o?.crm_order_id && o.state !== "makulerad" ? (o.crm_order_id as string) : null;
+
+  await logga({ system: "inkio", handling: "anteckning", anteckning: id, org: a.org_number, ...(paOrder ? { crm_order_id: paOrder } : {}) });
   try {
-    const crmId = await skrivAnteckningPaKund(kundId, a.text, a.skriven_namn);
+    const crmId = await skrivAnteckning(paOrder ? "Sales Order" : "Customer", paOrder ?? kundId, a.text, a.skriven_namn);
     await db.from("kundanteckning").update({ crm_id: crmId, crm_state: "skickad", crm_fel: null }).eq("id", id);
     return true;
   } catch (e) {

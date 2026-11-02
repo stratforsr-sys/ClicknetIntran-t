@@ -5,6 +5,41 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-02 kväll · Kundens tidslinje i Inkios form (grenen `kund-tidslinje`, 0278 KÖRD, beställarens ja till mergen)
+
+**Beställaren** delade en skärmbild av Inkios History-sida för Hedbloms Måleri AB: "kan du hjälpa mig bygga ut
+anteckningar och tidslinjen och allt sånt som finns i nav idag så som det finns i inkio … Så att det ser rätt så
+likadant ut men följer såklart navet då." Planen lades fram i chatten och godkändes ("okej starta bygget").
+
+**Hur Inkio är byggt** (läst med GET): ett anrop, `get-customer-history`, ger varje post med `kind` (comment,
+activity, order, agreement …), `area` (customer, sales, work = Inkios tre filter), `about` (vad posten gäller),
+`data` (nummer, värde, månadsbelopp, start, slut, status) och `entry` (författaren), och svaret har `roles`
+(användar-id → roll) för vyn "Anteckningar per roll". Anteckningar skrivs i Markdown med `add-comment`.
+
+**Varför datan redan räckte:** 0277 sparar nästan allt i `crm_handelse`, men `aktivitetsrader()` plattade till det
+till namn, tid, källa och text. Raden fick fler fält i stället för att Inkio lästes igen. Två saker saknades: rollen
+(sparas nu i `data`, inte i avtrycket, så att en ny roll i Inkio inte räknas som en ändring) och vilken order en
+anteckning från Nav gäller (0278). Navs nivå för författaren tas ur e-posten (Inkio), anställnings-id:t (Nav) eller
+namnet (Navs eko, "**Zen** (via Nav)"); den som bara finns i Inkio hamnar under "Utanför Nav" med sin Inkio-roll.
+
+**Besluten (mina, sagda i planen):** Historik-fliken står kvar orörd (ingen funktion försvinner), och Aktivitet
+blir den nya tidslinjen. Inkios faktarutor byggdes inte: kortets huvud har redan Order, Ordervärde, Provision och
+Avtalet löper till. Per roll grupperas efter Navs nivåer. Navs eget eko via tjänstekontot ("Paket 3 · 5 999 kr/mån
+… Godkänd i Clicknet Nav av Zen") ritas som systemrad, inte som en persons anteckning.
+
+**Fallgropar:** `ndMd` och `NDNIVA` fanns redan i utkastet (Rutinernas Markdown, Inställningarnas nivåer); en andra
+`function ndMd` hade tyst ersatt Rutinernas, så tolken heter `kktMd`. Patchskriptets idempotens måste fråga om den
+NYA texten finns, inte om den gamla saknas: ett ankare som bara får något tillagt efter sig innehåller fortfarande
+den gamla texten. `.kkt-kol ol`/`li` slog igenom på listorna i bubblorna; barn-väljare. En lös adress i en anteckning
+slutar vid ett escapat citattecken, så att `&quot` inte följer med i länken.
+
+**Prov:** `npm run test:inkio-inflode` (nya kontroller med Hedbloms riktiga poster), `npm run test:nav2-tidslinje`
+(Markdown-tolken mot nio försök att smyga in kod), webbläsarprovet i `~/nav2-utkast/delar/kund-tidslinje/prov.mjs`
+38/38 (Hedbloms historik tolkad av repots egen kod, Navs anteckningar, sök, filter, Per roll, Skift+Enter i en lista,
+sparning med vald order, "om #15", mörkt och mobilt).
+
+---
+
 ## 2026-11-02 kväll · Rutiner kraschade utan en enda rutin (grenen `rutiner-tom`, ingen migration, EJ mergad)
 
 **Beställaren:** "så fort jag går in i nav" kom "Sidan gick inte att visa", felkod `nav2-873ac63a9dca`.
@@ -55,6 +90,8 @@ gjorde det osynligt:
 **Dubbletterna.** På beställarens besked ("ta bort alla, behåll 1"): den första (`62177387…`) står kvar, flyttad
 till 2026-11-02. De tre andra är raderade (kaskad till task_event), med kopia i
 `~/nav2-utkast/delar/snabbrad-idag/borttagna-dubbletter.json`.
+
+---
 
 ## 2026-11-02 kväll · Inkio in i Nav MERGAD till `main` (beställarens ja), allt AV tills provet i produktionen
 

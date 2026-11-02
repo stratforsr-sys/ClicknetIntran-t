@@ -43,6 +43,7 @@ export type Historikpost = {
   entry?: {
     id: string;
     content?: string | null;
+    created_by?: string | null;
     created_by_full_name?: string | null;
     created_by_email?: string | null;
     created_by_is_service_account?: boolean | null;
@@ -222,8 +223,15 @@ export function posttext(p: Pick<Historikpost, "kind" | "about" | "data" | "id">
   return [str(p.about?.title), nr].filter(Boolean).join(" · ") || p.kind;
 }
 
-/** En historikpost → en rad i `crm_handelse`. Null när posten saknar id eller tid. */
-export function tolkaPost(p: Historikpost): Rad | null {
+/**
+ * En historikpost → en rad i `crm_handelse`. Null när posten saknar id eller tid.
+ *
+ * `roller` är svarets `roles` (Inkios användar-id → roll, "Utvecklare"). Rollen
+ * och Inkios område (`area`: customer, sales, work) sparas i `data`, så att
+ * kundkortet kan visa Inkios filter och vyn Per roll utan att fråga Inkio igen.
+ * De ingår inte i avtrycket: en ny roll i Inkio är ingen ändring av posten.
+ */
+export function tolkaPost(p: Historikpost, roller: Readonly<Record<string, string>> = {}): Rad | null {
   if (!p || !p.id) return null;
   const e = p.entry ?? null;
   const om = p.about ?? null;
@@ -245,6 +253,8 @@ export function tolkaPost(p: Historikpost): Rad | null {
         ...(e.import_unattributed ? { import: true } : {}),
         ...(om?.route ? { route: om.route } : {}),
         ...(e.deleted_by_full_name ? { raderad_av: e.deleted_by_full_name } : {}),
+        ...(p.area ? { omrade: p.area } : {}),
+        ...(e.created_by && roller[e.created_by] ? { roll: roller[e.created_by] } : {}),
       },
       forfattare: e.created_by_full_name ?? null,
       forfattare_epost: e.created_by_email ? String(e.created_by_email).toLowerCase() : null,
@@ -259,7 +269,7 @@ export function tolkaPost(p: Historikpost): Rad | null {
   }
 
   if (!p.at) return null;
-  const data = { ...(p.data ?? {}), ...(om?.route ? { route: om.route } : {}) };
+  const data = { ...(p.data ?? {}), ...(om?.route ? { route: om.route } : {}), ...(p.area ? { omrade: p.area } : {}) };
   const rad: Rad = {
     extern_id: String(p.id),
     slag: "post",
@@ -585,6 +595,29 @@ export function kopplaPaOrgnr(nav: readonly NavOrder[], inkio: readonly InkioOrd
 // Kundkortets flik Aktivitet, ur Navs kopia
 // -----------------------------------------------------------------------------
 
+/** Inkios tre områden, som filtren i Inkios historik: Kunden, Ordrar och avtal, Ärenden och produktion. */
+export type Omrade = "kund" | "forsaljning" | "arbete";
+
+/** Vad raden är, för kortets tre sorters rader: post (order, avtal …), anteckning, och systemrad (aktivitet). */
+export type Radsort = "anteckning" | "aktivitet" | "order" | "avtal" | "arende" | "faktura" | "post";
+
+/** En order, ett avtal, ett ärende eller en faktura, som kortet ritar den: nummer, belopp, tid och status. */
+export type Postuppgifter = {
+  nummer: string | null;
+  tjanster: string[];
+  varde: number | null;
+  manad: number | null;
+  start: string | null;
+  slut: string | null;
+  /** Avtalets händelse: started, terminated … */
+  andring: string | null;
+  /** Statusen på svenska ("bekräftad"), och Inkios kod i gemener ("confirmed"). */
+  status: string | null;
+  kod: string | null;
+  makulerad: boolean;
+  saljare: string | null;
+};
+
 export type Aktivitetsrad = {
   id: string;
   nar: string;
@@ -592,6 +625,23 @@ export type Aktivitetsrad = {
   anteckning: boolean;
   text: string;
   kalla: { etikett: string; lank: string | null };
+  // Kundkortets tidslinje (0278). Fälten ovan står kvar för dem som läser dem.
+  sort: Radsort;
+  omrade: Omrade;
+  /** Det raden gäller i Inkio, när det inte är kunden själv. */
+  om: { typ: string; titel: string | null; nummer: string | null } | null;
+  post: Postuppgifter | null;
+  /** Författarens roll i Inkio ("Utvecklare"), och nivån i Nav när hen finns där. */
+  roll: string | null;
+  niva: Niva | null;
+  /** Skriven i Nav (`kundanteckning`). */
+  nav: boolean;
+  /** Navs eget eko i Inkio (godkänd, rättad …), skrivet av tjänstekontot och inte av en person: en systemrad. */
+  tjanst: boolean;
+  andrad: boolean;
+  raderad: boolean;
+  /** Nav-ordern en anteckning från Nav gäller (`kundanteckning.om_order`). */
+  order: string | null;
 };
 
 export type Lagrad = Rad & { id?: number | string };
@@ -603,7 +653,12 @@ export type Navanteckning = {
   skriven_at: string;
   crm_id: string | null;
   crm_state: string;
+  skriven_av?: string | null;
+  om_order?: string | null;
 };
+
+/** Vem som skrev, för Navs nivå: e-posten (Inkio), anställnings-id:t (Nav) eller namnet (Navs eko i Inkio). */
+export type Forfattarnyckel = { epost?: string | null; id?: string | null; namn?: string | null };
 
 /** "**Zen Alzzabti** (via Nav): Ringde, inget svar" → namnet och texten. */
 export function navForfattare(text: string): { namn: string; text: string } | null {
@@ -611,17 +666,78 @@ export function navForfattare(text: string): { namn: string; text: string } | nu
   return m ? { namn: m[1].trim(), text: m[2].trim() } : null;
 }
 
+const OMRADE_FRAN: Record<string, Omrade> = { customer: "kund", sales: "forsaljning", work: "arbete" };
+
+/** Inkios område, eller härlett ur vad raden gäller för rader lästa före 0278. */
+export function omradeFor(r: Pick<Rad, "om_typ" | "data">): Omrade {
+  const a = typeof r.data?.omrade === "string" ? OMRADE_FRAN[String(r.data.omrade)] : undefined;
+  if (a) return a;
+  switch (r.om_typ) {
+    case "Sales Order":
+    case "Contract":
+    case "Invoice":
+      return "forsaljning";
+    case "Task":
+    case "Ticket":
+      return "arbete";
+    default:
+      return "kund";
+  }
+}
+
+const SORT_FRAN: Record<string, Radsort> = { order: "order", agreement: "avtal", ticket: "arende", invoice: "faktura" };
+
+function radsort(r: Pick<Rad, "slag" | "sort">): Radsort {
+  if (r.slag === "anteckning") return "anteckning";
+  if (r.slag === "aktivitet") return "aktivitet";
+  return SORT_FRAN[r.sort] ?? "post";
+}
+
+function tal(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Postens uppgifter ur det Inkio skickade (`data`), för kortets postrad. */
+export function postuppgifter(r: Pick<Rad, "om_nummer" | "data">): Postuppgifter {
+  const d = r.data ?? {};
+  const status = str(d.status);
+  return {
+    nummer: r.om_nummer ?? str(d.number),
+    tjanster: Array.isArray(d.services) ? (d.services as unknown[]).map(String).filter(Boolean) : [],
+    varde: tal(d.value ?? d.amount ?? d.total ?? d.grand_total),
+    manad: tal(d.monthly),
+    start: str(d.start_date),
+    slut: str(d.end_date),
+    andring: str(d.change),
+    status: status ? statusSv(status) : null,
+    kod: status ? status.toLowerCase() : null,
+    makulerad: d.cancelled === true,
+    saljare: str(d.sold_by),
+  };
+}
+
 /**
  * Raderna i fliken, i samma form som Inkio-läsningen gav (`Aktivitetsrad`),
  * så att kundkortet inte märker skillnaden. Navs egna anteckningar står med
  * sitt riktiga namn; ekot av dem i Inkio visas inte två gånger. En raderad
  * post visas bara för superadmin.
+ *
+ * `nivaAv` säger vilken nivå i Nav författaren har (Per roll i kortet), eller
+ * null när hen inte finns i Nav — EffektivMedias personal, till exempel.
  */
-export function aktivitetsrader(rader: readonly Lagrad[], anteckningar: readonly Navanteckning[], o: { superadmin: boolean; inkioBas: string }): Aktivitetsrad[] {
+export function aktivitetsrader(
+  rader: readonly Lagrad[],
+  anteckningar: readonly Navanteckning[],
+  o: { superadmin: boolean; inkioBas: string; nivaAv?: (k: Forfattarnyckel) => Niva | null },
+): Aktivitetsrad[] {
   const ekon = new Set(anteckningar.map((a) => a.crm_id).filter(Boolean) as string[]);
+  const nivaAv = o.nivaAv ?? (() => null);
   const ut: Aktivitetsrad[] = [];
 
   for (const a of anteckningar) {
+    const order = a.om_order ?? null;
     ut.push({
       id: `nav:${a.id}`,
       nar: a.skriven_at,
@@ -629,6 +745,17 @@ export function aktivitetsrader(rader: readonly Lagrad[], anteckningar: readonly
       anteckning: true,
       text: a.text,
       kalla: { etikett: a.crm_state === "skickad" ? "Kunden" : a.crm_state === "ko" ? "Kunden · skrivs till Inkio" : "Kunden · bara i Nav", lank: null },
+      sort: "anteckning",
+      omrade: order ? "forsaljning" : "kund",
+      om: null,
+      post: null,
+      roll: null,
+      niva: nivaAv({ id: a.skriven_av ?? null, namn: a.skriven_namn }),
+      nav: true,
+      tjanst: false,
+      andrad: false,
+      raderad: false,
+      order,
     });
   }
 
@@ -641,6 +768,7 @@ export function aktivitetsrader(rader: readonly Lagrad[], anteckningar: readonly
     const vem = r.slag === "post" ? "Inkio" : fran ? fran.namn : r.fran_nav ? "Clicknet Nav" : r.data?.import ? `${r.forfattare ?? "Inkio"} (import)` : (r.forfattare ?? "Inkio");
     const text = fran ? fran.text : r.text;
     const tillagg = r.raderad ? " · raderad i Inkio" : r.andrad && r.slag !== "post" ? " · ändrad" : "";
+    const sort = radsort(r);
     ut.push({
       id: r.extern_id,
       nar: r.skapad,
@@ -648,6 +776,17 @@ export function aktivitetsrader(rader: readonly Lagrad[], anteckningar: readonly
       anteckning: r.slag === "anteckning",
       text: r.raderad ? `Raderad i Inkio: ${text}` : text,
       kalla: { etikett: `${etikett(r)}${tillagg}`, lank },
+      sort,
+      omrade: omradeFor(r),
+      om: r.om_typ && r.om_typ !== "Customer" ? { typ: r.om_typ, titel: r.om_titel, nummer: r.om_nummer } : null,
+      post: r.slag === "post" ? postuppgifter(r) : null,
+      roll: typeof r.data?.roll === "string" && !r.fran_nav ? String(r.data.roll) : null,
+      niva: r.slag === "post" ? null : fran ? nivaAv({ namn: fran.namn }) : r.fran_nav ? null : nivaAv({ epost: r.forfattare_epost, namn: r.forfattare }),
+      nav: false,
+      tjanst: r.fran_nav && !fran,
+      andrad: Boolean(r.andrad) && r.slag !== "post",
+      raderad: Boolean(r.raderad),
+      order: null,
     });
   }
 

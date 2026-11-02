@@ -20,7 +20,9 @@ import {
   kretsen,
   navForfattare,
   notisFor,
+  omradeFor,
   posttext,
+  postuppgifter,
   provfilter,
   renText,
   senastHant,
@@ -232,6 +234,49 @@ rubrik("Kundkortets rader");
   ok("raderad syns för superadmin, märkt", sa.length === 1 && sa[0].text.startsWith("Raderad i Inkio: ") && sa[0].kalla.etikett.endsWith("raderad i Inkio"));
   ok("nyast först", rader[0].nar >= rader[rader.length - 1].nar);
   ok("formen är kundkortets", ["id", "nar", "vem", "anteckning", "text", "kalla"].every((k) => k in rader[0]) && "etikett" in rader[0].kalla);
+}
+
+rubrik("Kundkortets tidslinje: Inkios sort, område, roll och post (0278)");
+{
+  // Hedbloms Måleri AB, ur get-customer-history 2026-11-02 (telefon och bild borttagna).
+  const roller = { "01a1109f-27d8-7106-9db8-14e2d2c176fb": "Administratör", "01a0f896-1e64-74d1-9a7e-e0f9e7899038": "Utvecklare" };
+  const avtal = { id: "agreement:01a19c49-c203-748d-bed4-972c19af112d:started", kind: "agreement", area: "sales", at: "2026-11-02", about: { doctype: "Contract", id: "01a19c49-c203-748d-bed4-972c19af112d", title: "Optimerad Kampanjsida", subtitle: "CTR-2026-00094", route: "/contracts/01a19c49-c203-748d-bed4-972c19af112d" }, data: { change: "started", number: "CTR-2026-00094", services: ["Optimerad Kampanjsida"], term_length: 23, term_unit: "Month", start_date: "2026-11-02", end_date: "2028-10-02", monthly: 5999.0, currency: "SEK", status: "Active", financed_by: null }, all_day: true };
+  const ny = { id: "order:01a19c49-c1dc-70b2-a32e-2f4abb0b570f", kind: "order", area: "sales", at: "2026-10-23", about: { doctype: "Sales Order", id: "01a19c49-c1dc-70b2-a32e-2f4abb0b570f", title: "Optimerad Kampanjsida", subtitle: "SO-2026-00102 · 2026-10-23", route: "/sales-orders/01a19c49-c1dc-70b2-a32e-2f4abb0b570f" }, data: { number: "SO-2026-00102", services: ["Optimerad Kampanjsida"], value: 137977.0, currency: "SEK", deal_type: "New", status: "Confirmed", cancelled: false, sold_by: "Zen ." }, all_day: true };
+  const tjanst = { created_by: "01a1109f-27d8-7106-9db8-14e2d2c176fb", created_by_full_name: "Intranätet Clicknet", created_by_email: "intran-tet-clicknet@service.account", created_by_is_service_account: true, import_unattributed: false, edited_at: null, deleted_at: null, deleted_by_full_name: null };
+  const kort = { id: "01a19c49-c25a-76f3-baac-880acd0677ef", kind: "activity", area: "work", at: "2026-11-02T12:44:02.009746Z", about: { doctype: "Task", id: "01a19c49-c252-7655-a3aa-824ea6a561de", title: "Hedbloms Måleri AB - Optimerad Kampanjsida 23 mån", subtitle: null, route: "/tasks/01a19c49-c252-7655-a3aa-824ea6a561de" }, entry: { ...tjanst, id: "01a19c49-c25a-76f3-baac-880acd0677ef", content: "Intranätet Clicknet created this card from order SO-2026-00102", created_at: "2026-11-02T12:44:02.009746Z", comment_type: "Info", activity_template: "{0} created this card from order {1}", activity_args: '["Intranätet Clicknet", "SO-2026-00102"]', reference_doctype: "Task", reference_id: "01a19c49-c252-7655-a3aa-824ea6a561de" } };
+  const paOrdern = { id: "01a19c49-c24a-7261-a3a5-b415ed0723c5", kind: "comment", area: "sales", at: "2026-11-02T12:44:01.993203Z", about: { doctype: "Sales Order", id: "01a19c49-c1dc-70b2-a32e-2f4abb0b570f", title: "Optimerad Kampanjsida", subtitle: "SO-2026-00102 · 2026-10-23", route: "/sales-orders/01a19c49-c1dc-70b2-a32e-2f4abb0b570f" }, entry: { ...tjanst, id: "01a19c49-c24a-7261-a3a5-b415ed0723c5", content: "Paket 3 · 5 999 kr/mån · 23 mån · signerad 2026-10-23. Godkänd i Clicknet Nav av Zen 2026-11-02.", created_at: "2026-11-02T12:44:01.993203Z", comment_type: "Comment", activity_template: null, activity_args: null, reference_doctype: "Sales Order", reference_id: "01a19c49-c1dc-70b2-a32e-2f4abb0b570f" } };
+  const matias = { id: "01a17da3-1027-708d-8fe6-9e16eaab9930", kind: "comment", area: "customer", at: "2026-10-27T13:53:20.935442Z", about: null, entry: { id: "01a17da3-1027-708d-8fe6-9e16eaab9930", content: "Inget svar från kunden! vid samtal igen. Går direkt till telefonsvarare.", created_by: "01a0f896-1e64-74d1-9a7e-e0f9e7899038", created_by_full_name: "Matias Lopez", created_by_email: "matias@effektivmedia.nu", created_by_is_service_account: false, created_at: "2026-10-27T13:53:20.935442Z", comment_type: "Comment", import_unattributed: false, activity_template: null, activity_args: null, reference_doctype: "Customer", reference_id: "01a10ffe-ddb9-7491-9a49-d58ba88061f7", edited_at: null, deleted_at: null, deleted_by_full_name: null } };
+
+  const m = tolkaPost(matias, roller);
+  ok("rollen sparas i data", m.data.roll === "Utvecklare");
+  ok("Inkios område sparas i data", m.data.omrade === "customer" && tolkaPost(ny, roller).data.omrade === "sales");
+  ok("rollen ingår inte i avtrycket", m.avtryck === tolkaPost(matias).avtryck);
+
+  const niva = new Map([["zen alzzabti", "superadmin"], ["emp-fredrik", "salesperson"]]);
+  const nivaAv = (k) => niva.get(k.id ?? "") ?? niva.get((k.namn ?? "").toLowerCase()) ?? null;
+  const nav = [{ id: "a1", text: "Kunden vill ha **fler** bilder.", skriven_namn: "Fredrik Pernehed", skriven_av: "emp-fredrik", skriven_at: "2026-11-02T13:00:00Z", crm_id: null, crm_state: "ko", om_order: "6b9c0000-0000-4000-8000-000000000015" }];
+  const eko = { ...tolkaPost(anteckning(timmeSedan, { created_by_is_service_account: true, content: "**Zen Alzzabti** (via Nav): Ringde, inget svar" })), extern_id: "eko-zen" };
+  const rader = aktivitetsrader([avtal, ny, kort, paOrdern, matias].map((p) => tolkaPost(p, roller)).concat(eko), nav, { superadmin: false, inkioBas: "https://crm.inkio.se", nivaAv });
+  const id = (x) => rader.find((r) => r.id === x);
+
+  ok("sorten: avtal, order, systemrad, anteckning", id(avtal.id).sort === "avtal" && id(ny.id).sort === "order" && id(kort.id).sort === "aktivitet" && id(matias.id).sort === "anteckning");
+  ok("området: ordern och anteckningen på ordern = försäljning, kortet = arbete, kunden = kund", id(ny.id).omrade === "forsaljning" && id(paOrdern.id).omrade === "forsaljning" && id(kort.id).omrade === "arbete" && id(matias.id).omrade === "kund");
+  ok("vad anteckningen gäller: ordern med nummer", JSON.stringify(id(paOrdern.id).om) === JSON.stringify({ typ: "Sales Order", titel: "Optimerad Kampanjsida", nummer: "SO-2026-00102" }));
+  ok("en anteckning på kunden gäller inget särskilt", id(matias.id).om === null);
+  const p = id(ny.id).post;
+  ok("ordern: nummer, värde, status och säljare", p.nummer === "SO-2026-00102" && p.varde === 137977 && p.kod === "confirmed" && p.status === "bekräftad" && p.saljare === "Zen ." && !p.makulerad);
+  const a = id(avtal.id).post;
+  ok("avtalet: månadsbelopp, start, slut och händelse", a.manad === 5999 && a.start === "2026-11-02" && a.slut === "2028-10-02" && a.andring === "started" && a.status === "aktivt");
+  ok("bara poster har postuppgifter", id(matias.id).post === null && id(kort.id).post === null);
+  ok("Inkios roll för Matias, ingen för Navs tjänstekonto", id(matias.id).roll === "Utvecklare" && id(paOrdern.id).roll === null);
+  ok("Matias finns inte i Nav: ingen nivå", id(matias.id).niva === null);
+  ok("Navs eko får nivån ur namnet", rader.find((r) => r.id === "eko-zen").niva === "superadmin");
+  ok("Navs eget eko via tjänstekontot är en systemrad, en persons eko är det inte", id(paOrdern.id).tjanst === true && rader.find((r) => r.id === "eko-zen").tjanst === false && id(matias.id).tjanst === false);
+  const egen = id("nav:a1");
+  ok("anteckning från Nav: nivån ur anställningen, ordern den gäller", egen.nav === true && egen.niva === "salesperson" && egen.order === "6b9c0000-0000-4000-8000-000000000015" && egen.omrade === "forsaljning");
+  ok("äldre rader utan område härleds ur vad de gäller", omradeFor({ om_typ: "Task", data: {} }) === "arbete" && omradeFor({ om_typ: "Contract", data: null }) === "forsaljning" && omradeFor({ om_typ: null, data: {} }) === "kund");
+  ok("postuppgifter klarar en post utan data", postuppgifter({ om_nummer: "X-1", data: null }).nummer === "X-1");
+  ok("de gamla fälten står kvar", ["id", "nar", "vem", "anteckning", "text", "kalla"].every((k) => k in egen));
 }
 
 rubrik("Rättningen till Inkio (correct-sales-order)");
