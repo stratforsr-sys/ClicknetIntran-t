@@ -22,11 +22,13 @@ import {
   giltigRabatt,
   godkannandeSkrevs,
   paketManadsbelopp,
+  provisionSenare,
   rabattAnteckning,
   rabattUrFormular,
   rattelsePris,
   rattelseProvision,
   tjansterUrFormular,
+  utanProvision,
 } from "@/lib/orderregler";
 import { forberedUppladdning, registreraFil, taBortInnehall } from "@/lib/filer-server";
 import { las, taBort } from "@/lib/lagring-server";
@@ -298,6 +300,8 @@ type Orderrad_skrivning = {
   proposed_commission_percent: number | string | null;
   /** 0221 (S08, B2). Rabatterat pris pa en paketorder, annars null. */
   discounted_monthly_amount: number | string | null;
+  /** 0275. Ordern lades upp utan provision; den laggs till senare. */
+  commission_pending: boolean | null;
 };
 
 async function hamtaRad(id: string): Promise<Orderrad_skrivning | null> {
@@ -314,11 +318,26 @@ async function hamtaRad(id: string): Promise<Orderrad_skrivning | null> {
         " monthly_amount, commission_amount, buyout_amount, financed," +
         // 0078. Godkannandet laser dem nar dess eget formular inte bar nagon
         // provision — se `medAngivenProvision`.
-        " proposed_commission_amount, proposed_commission_percent, discounted_monthly_amount",
+        " proposed_commission_amount, proposed_commission_percent, discounted_monthly_amount, commission_pending",
     )
     .eq("id", id)
     .maybeSingle();
   return (data as unknown as Orderrad_skrivning | null) ?? null;
+}
+
+/**
+ * 0275. En order utan provision raknas pa `utanProvision(form)`, alltsa 0 kr
+ * for hand, och darefter tas det bort som bara galler en provision som finns.
+ *
+ * OVERTACKET VANTAR MED PROVISIONEN. Det ar en procent av det som blir kvar
+ * efter saljarens provision, och med 0 kr hade det raknats pa hela affaren.
+ * Rätta skriver det nar provisionen laggs till.
+ *
+ * Utkopets procent stryks av samma skal: kvittensen hade annars sagt att
+ * provisionen ar 12 % av nettot, och den ar ingenting an.
+ */
+function provisionenVantar(r: Extract<Framrakning, { klar: true }>): Extract<Framrakning, { klar: true }> {
+  return { ...r, overtack: null, utkopet: null, handsattProcent: null, restpostenKlipptes: false };
 }
 
 
@@ -633,9 +652,14 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
     // Chefen kan godkanna i samma steg. Saljaren skickar in.
     const godkannDirekt = hanterare && form.get("godkann") === "on";
 
+    // 0275 (bestallaren 2026-11-02): ordern kan laggas upp utan provision, och
+    // provisionen laggs till senare med Rätta. Galler bade paket och fri order.
+    const senare = provisionSenare(form);
+
     // 0078. En fri order som SKICKAS IN bar provisionen som skrevs till
     // godkannandet. Fore 2026-10-09 kastades den har — se `angivenProvision`.
-    const angiven = friOrder && !godkannDirekt ? angivenProvision(form) : null;
+    // Utan provision finns ingen att bara.
+    const angiven = friOrder && !godkannDirekt && !senare ? angivenProvision(form) : null;
     if (angiven && "fel" in angiven) return { fel: angiven.fel };
 
     const insats: Record<string, unknown> = {
@@ -668,6 +692,8 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
       financed: finans,
       proposed_commission_amount: angiven?.belopp ?? null,
       proposed_commission_percent: angiven?.procent ?? null,
+      // 0275: bara nar valet ar gjort, sa att en vanlig order skrivs som forut.
+      ...(senare ? { commission_pending: true } : {}),
       // 0085: skälet till en fri order, när det skrivits.
       ...(friOrder && friSkal ? { free_order_reason: friSkal } : {}),
       // 0221: rabatterat paketpris. Bara när det finns, så att en vanlig order skrivs som förut.
@@ -680,16 +706,17 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
     let affar: Extract<Framrakning, { klar: true }> | null = null;
 
     if (godkannDirekt) {
-      const provision = await raknaFramProvision(
+      const raknat = await raknaFramProvision(
         paket,
         loptid,
         signerad,
         saljare,
-        form,
+        senare ? utanProvision(form) : form,
         utkopsval.utkop,
         { manadsbelopp, tjanster: tjansteval.tjanster, finans, rabatt },
       );
-      if (!provision.klar) return { fel: provision.fel };
+      if (!raknat.klar) return { fel: raknat.fel };
+      const provision = senare ? provisionenVantar(raknat) : raknat;
 
       // ANTECKNINGSKRAVET ÄR BORTA (0060, bestallarens besked 2026-09-15).
       //
@@ -715,7 +742,9 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
     // SAMMA GRANS SOM I `godkannOrder`, och den maste sta har ocksa: chefen kan
     // lagga in en fardig order med ett gammalt signeringsdatum och godkanna den
     // i samma steg. Det ar den vanligaste vagen in for en order som legat kvar.
-    const forSent = godkannDirekt && harStangdPeriod(signerad, await stangdaManader());
+    // En order utan provision har inget att bokfora: provisionen ar 0 kr, och
+    // Rätta bokfor den i den oppna manaden nar den laggs till.
+    const forSent = godkannDirekt && !senare && harStangdPeriod(signerad, await stangdaManader());
 
     // SÄLJSAMTALET PRÖVAS INNAN NÅGOT SPARAS (2026-10-31). Spärren längre ned
     // körs på den sparade ordern, och fram till i dag stod en order som föll
@@ -875,6 +904,7 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
       // sa loggen bar fram till 2026-10-09 null for bada aven pa ett godkannande.
       commission_amount: slutligt.commission_amount ?? angiven?.belopp ?? null,
       commission_percent: affar?.handsattProcent ?? angiven?.procent ?? null,
+      ...(senare ? { commission_pending: true } : {}),
       order_value: slutligt.order_value ?? null,
       buyout_amount: utkopsval.utkop,
       financed: finans,
@@ -959,9 +989,11 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
       orderId: rad.id,
       ok: efterslapning
         ? `Ordern på ${bolag} är godkänd. ${manadsnamn(periodFor(signerad))} var fastställd, så provisionen bokfördes på ${manadsnamn(efterslapning)}.${utkopet}${klippt}${loper}`
-        : godkannDirekt
-          ? `Ordern på ${bolag} är godkänd.${utkopet}${klippt}${loper}`
-          : `Ordern på ${bolag} är inskickad och väntar på godkännande.${inskickatUtkop}${loper}`,
+        : godkannDirekt && senare
+          ? `Ordern på ${bolag} är godkänd utan provision. Lägg till provisionen med Rätta när den är bestämd.${utkopet}${loper}`
+          : godkannDirekt
+            ? `Ordern på ${bolag} är godkänd.${utkopet}${klippt}${loper}`
+            : `Ordern på ${bolag} är inskickad och väntar på godkännande${senare ? ", utan provision. Provisionen läggs till senare" : ""}.${inskickatUtkop}${loper}`,
     };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
@@ -1590,7 +1622,12 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
     const rabattPaOrdern =
       manadsbeloppPaOrdern === null && rad.discounted_monthly_amount != null ? Number(rad.discounted_monthly_amount) : null;
 
-    const provision = await raknaFramProvision(
+    // 0275. Lades ordern upp utan provision godkanns den utan, om inte
+    // godkannaren skriver in en provision for hand (da ar den tillagd).
+    const vantade = rad.commission_pending === true;
+    const senare = provisionSenare(form, vantade);
+
+    const raknat = await raknaFramProvision(
       rad.package_id,
       rad.term_months,
       rad.signed_on,
@@ -1598,7 +1635,7 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
       // 0078. Provisionen som skrevs nar ordern lades in, om knappen inte bar
       // nagon egen. Utan den blev en fri order pa chefen 40 % i stallet for de
       // 20 som stod i faltet.
-      medAngivenProvision(form, rad),
+      senare ? utanProvision(form) : medAngivenProvision(form, rad),
       utkopPaOrdern,
       {
         manadsbelopp: manadsbeloppPaOrdern,
@@ -1608,7 +1645,8 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
         rabatt: rabattPaOrdern,
       },
     );
-    if (!provision.klar) return { fel: provision.fel };
+    if (!raknat.klar) return { fel: raknat.fel };
+    const provision = senare ? provisionenVantar(raknat) : raknat;
 
     // Anteckningskravet ar borta sedan 0060 — se `skapaOrder` for resonemanget.
     const note = String(form.get("note") ?? "").trim() || null;
@@ -1620,13 +1658,15 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
       approved_at: new Date().toISOString(),
     };
     if (note) andring.note = note;
+    if (senare !== vantade) andring.commission_pending = senare;
 
     // ORDNINGEN AR MEDVETEN: kontrollen fore skrivningen.
     //
     // Ar bade orderns manad och den oppna manaden stangda gar posten ingenstans,
     // och da ska ordern INTE godkannas — en godkand order utan provision ar
     // precis den tysta forlusten som rattas har. Se `bokforEfterslapning`.
-    const forSent = harStangdPeriod(rad.signed_on, await stangdaManader());
+    // Utan provision (0275) finns ingen post: Rätta bokfor den nar den laggs till.
+    const forSent = !senare && harStangdPeriod(rad.signed_on, await stangdaManader());
 
     // EN GÅNG (granskningen S08, D6). Statusen som lästes står i villkoret, och
     // raden läses tillbaka. Två tryck på Godkänn läser båda `inskickad`; den
@@ -1646,6 +1686,7 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
       commission_amount: provision.satt.commission_amount,
       commission_source: provision.satt.commission_source,
       commission_percent: provision.handsattProcent,
+      ...(senare ? { commission_pending: true } : {}),
       order_value: provision.satt.order_value,
       finance_amount: provision.satt.finance_amount,
     });
@@ -1686,7 +1727,9 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
       rubrik: `Din order är godkänd: ${rad.company_name}`,
       // UTKOPET STAR MED I NOTISEN. Saljaren ser annars ett belopp som inte
       // stammer med matrisen och har ingen forklaring i handen.
-      detalj: efterslapning
+      detalj: senare
+        ? `Provisionen läggs till senare · räknas från ${rad.signed_on}`
+        : efterslapning
         ? `Provision ${kronor(provision.satt.commission_amount)} · ${manadsnamn(periodFor(rad.signed_on))} var redan fastställd, så beloppet bokförs på ${manadsnamn(efterslapning)}`
         : provision.utkopet
           ? `Provision ${kronor(provision.satt.commission_amount)} · ${provision.utkopet.procent} % av ${kronor(provision.utkopet.netto)} efter utköp ${kronor(provision.utkopet.utkop)}${provision.finansen ? ` och finans ${kronor(provision.finansen.avgift)}` : ""}`
@@ -1707,9 +1750,11 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
     const utkopet = finanstext(provision.finansen) + utkopstext(provision.utkopet);
 
     return {
-      ok: efterslapning
-        ? `Ordern är godkänd. ${manadsnamn(periodFor(rad.signed_on))} var fastställd, så ${kronor(provision.satt.commission_amount)} bokfördes på ${manadsnamn(efterslapning)} med en anteckning om varför.${utkopet}${klippt}`
-        : `Ordern är godkänd och räknas från och med nu.${utkopet}${klippt}`,
+      ok: senare
+        ? `Ordern är godkänd utan provision. Lägg till provisionen med Rätta när den är bestämd.${utkopet}`
+        : efterslapning
+          ? `Ordern är godkänd. ${manadsnamn(periodFor(rad.signed_on))} var fastställd, så ${kronor(provision.satt.commission_amount)} bokfördes på ${manadsnamn(efterslapning)} med en anteckning om varför.${utkopet}${klippt}`
+          : `Ordern är godkänd och räknas från och med nu.${utkopet}${klippt}`,
     };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
@@ -1759,7 +1804,7 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
           " contact_email, package_id, term_months, signed_on, starts_on, period_month," +
           " is_addon, note, monthly_amount, commission_amount, commission_source," +
           " order_value, order_value_source, buyout_amount, financed, finance_amount, created_by," +
-          " discounted_monthly_amount, proposed_commission_percent",
+          " discounted_monthly_amount, proposed_commission_percent, commission_pending",
       )
       .eq("id", id)
       .maybeSingle();
@@ -2017,20 +2062,34 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
     // EN HANDSATT PROVISION STÅR KVAR (S10b, D10). Nav 2.0:s formulär har inget
     // provisionsfält för en paketorder, så utan eget val i formuläret läggs
     // orderns frysta belopp tillbaka i stället för att matrisen räknar om det.
-    const provisionsformular = rattelseProvision(form, {
-      commission_source: rad.commission_source as string | null,
-      commission_amount: rad.commission_amount as number | string | null,
-      proposed_commission_percent: rad.proposed_commission_percent as number | string | null,
-    });
+    //
+    // UTOM NÄR PROVISIONEN LÄGGS TILL (0275). Ordern står på 0 kr för hand, och
+    // de nollorna är ingen provision någon satt: slås "Utan provision" av räknas
+    // affären fram som en ny order, med matrisen, chefens sats, utköpssatsen
+    // eller provisionen i formuläret. Står valet kvar förblir den 0 kr.
+    const vantade = rad.commission_pending === true;
+    const senare = provisionSenare(form, vantade);
+    const provisionsformular = senare
+      ? utanProvision(form)
+      : vantade
+        ? form
+        : rattelseProvision(form, {
+            commission_source: rad.commission_source as string | null,
+            commission_amount: rad.commission_amount as number | string | null,
+            proposed_commission_percent: rad.proposed_commission_percent as number | string | null,
+          });
 
-    const nya = await raknaFramProvision(paket, loptid, signerad, saljare, provisionsformular, utkopet, {
+    const raknat = await raknaFramProvision(paket, loptid, signerad, saljare, provisionsformular, utkopet, {
       manadsbelopp: friOrder ? manadsbelopp : null,
       tjanster: await tjansterPaOrder(id),
       finans,
       rabatt,
       fryst,
     });
-    if (!nya.klar) return { fel: nya.fel };
+    if (!raknat.klar) return { fel: raknat.fel };
+    const nya = senare ? provisionenVantar(raknat) : raknat;
+    // Läggs provisionen till står det i notisen, inte bara att ordern rättats.
+    const tillagd = vantade && !senare;
 
     // Anteckningskravet ar borta sedan 0060 — se `skapaOrder` for resonemanget.
 
@@ -2141,6 +2200,11 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
         // svar som star pa ordern och inte formularets rader — de tva ar samma
         // tal, men bara ett av dem har gatt genom kontrollerna.
         ...nya.satt,
+        // 0275. Bara nar lage andras, sa att en vanlig rattelse skrivs som forut.
+        // `sales_order_provision_senare` kraver da att ingen angiven provision star kvar.
+        ...(senare !== vantade
+          ? { commission_pending: senare, ...(senare ? { proposed_commission_amount: null, proposed_commission_percent: null } : {}) }
+          : {}),
       })
       .eq("id", id);
 
@@ -2181,10 +2245,12 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
         signed_on: rad.signed_on,
         starts_on: rad.starts_on,
         overtack: fore.chef ? { manager_id: fore.chef, amount: fore.overtack } : null,
+        ...(vantade ? { commission_pending: true } : {}),
       },
       efter: {
         salesperson_id: efter.saljare,
         commission_amount: efter.provision,
+        ...(senare ? { commission_pending: true } : {}),
         order_value: nya.satt.order_value,
         buyout_amount: nya.satt.buyout_amount,
         financed: nya.satt.financed,
@@ -2220,7 +2286,7 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
           av: user.employee!.id,
           kalla: "order-rattad",
           typ: "order",
-          rubrik: `Ordern ${bolag} är rättad`,
+          rubrik: tillagd && person === efter.saljare ? `Provisionen är tillagd: ${bolag}, ${kronor(efter.provision)}` : `Ordern ${bolag} är rättad`,
           detalj: stangd
             ? `${manadsnamn(String(rad.period_month))} är fastställd, så ${
                 belopp === 0 ? "ingen skillnad" : kronor(belopp)
@@ -2234,11 +2300,12 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
 
     revalidatePath("/order");
     revalidatePath("/provision");
+    const vad = tillagd ? `Provisionen är tillagd: ${kronor(efter.provision)}.` : "Ordern är rättad.";
     return {
       ok:
         rattelser.length > 0
-          ? `Ordern är rättad. ${manadsnamn(String(rad.period_month))} står orörd — skillnaden är bokförd i ${manadsnamn(bokforingsmanad)} som ${rattelser.length} ${rattelser.length === 1 ? "post" : "poster"}.`
-          : "Ordern är rättad.",
+          ? `${vad} ${manadsnamn(String(rad.period_month))} står orörd — skillnaden är bokförd i ${manadsnamn(bokforingsmanad)} som ${rattelser.length} ${rattelser.length === 1 ? "post" : "poster"}.`
+          : vad,
     };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
@@ -2637,7 +2704,7 @@ export async function redigeraOgodkand(_prev: Orderstate, form: FormData): Promi
     const { data: raddata } = await db
       .from("sales_order")
       .select(
-        "id, status, salesperson_id, company_name, org_number, contact_name, contact_phone, contact_email, customer_street, customer_postal_code, customer_city, package_id, term_months, signed_on, starts_on, is_addon, monthly_amount, buyout_amount, financed, note, proposed_commission_amount, proposed_commission_percent, discounted_monthly_amount",
+        "id, status, salesperson_id, company_name, org_number, contact_name, contact_phone, contact_email, customer_street, customer_postal_code, customer_city, package_id, term_months, signed_on, starts_on, is_addon, monthly_amount, buyout_amount, financed, note, proposed_commission_amount, proposed_commission_percent, discounted_monthly_amount, commission_pending",
       )
       .eq("id", id)
       .maybeSingle();
@@ -2762,6 +2829,11 @@ export async function redigeraOgodkand(_prev: Orderstate, form: FormData): Promi
         angiven = tolkad;
       }
     }
+    // 0275. Utan provision bär ordern ingen angiven provision heller
+    // (`sales_order_provision_senare`). Valet ändras bara av ett formulär som ritar det.
+    const vantade = rad.commission_pending === true;
+    const senare = provisionSenare(form, vantade);
+    if (senare) angiven = { belopp: null, procent: null };
 
     const efter = {
       company_name: bolag,
@@ -2789,6 +2861,7 @@ export async function redigeraOgodkand(_prev: Orderstate, form: FormData): Promi
             proposed_commission_percent: angiven.procent,
           }
         : {}),
+      ...(senare !== vantade ? { commission_pending: senare } : {}),
       // 0085: skälet till en fri order, när /nav2 skickat fältet.
       ...(form.has("fri_skal") ? { free_order_reason: friOrder ? String(form.get("fri_skal") ?? "").trim().slice(0, 500) || null : null } : {}),
     };

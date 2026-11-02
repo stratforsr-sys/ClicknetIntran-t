@@ -104,7 +104,7 @@ export type NdOrderdata = {
 async function hamtaOrderExtra(supabase: SupabaseClient, ids: string[]): Promise<Record<string, unknown>[]> {
   const svar = await Promise.all(
     delaUpp(ids, 100).map((del) =>
-      supabase.from("sales_order").select("id, order_number, approved_by, cancelled_by, free_order_reason, discounted_monthly_amount").in("id", del),
+      supabase.from("sales_order").select("id, order_number, approved_by, cancelled_by, free_order_reason, discounted_monthly_amount, commission_pending").in("id", del),
     ),
   );
   return svar.flatMap((s) => (s.data ?? []) as Record<string, unknown>[]);
@@ -192,6 +192,8 @@ export async function byggOrder(supabase: SupabaseClient, user: CurrentUser): Pr
       free_order_reason: (x?.free_order_reason as string | null) ?? null,
       // 0221 (S08): numeric kommer som sträng.
       discounted_monthly_amount: x?.discounted_monthly_amount == null ? null : Number(x.discounted_monthly_amount),
+      // 0275.
+      commission_pending: x?.commission_pending === true,
     } as unknown as RaOrder;
     const { order: ut, samtal: s } = formaOrder(rad, {
       satser: satserna,

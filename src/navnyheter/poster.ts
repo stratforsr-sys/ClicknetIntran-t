@@ -31,6 +31,26 @@ när mötet ligger långt ner i kalendern.`,
     href: "/kalender",
   },
   {
+    slug: "order-utan-provision",
+    rubrik: "Lägg upp en order utan provision",
+    ingress: "När provisionen inte är bestämd går ordern att lägga upp ändå, och provisionen läggs till senare.",
+    text: `I **Ny order** finns valet **Utan provision** under Utköp och Finans. Det fungerar
+för både paket och fri order. Ordern godkänns som vanligt, men provisionen står på
+0 kr tills den läggs till. Säljchefens övertäck väntar också.
+
+En sådan order står med "senare" i provisionskolumnen och med "läggs till senare"
+på kundkortet. Säljchef, VD och ekonomi trycker **Lägg till provision** på kortet,
+och då öppnas Rätta med valet avslaget. Provisionen räknas sedan som på en ny order,
+och säljaren får en notis med beloppet.
+
+Har ordern hunnit hamna i en fastställd månad bokförs provisionen i den öppna
+månaden, som varje rättelse. Under **Provision** syns orderna som väntar, och
+Perioder säger till innan en sådan månad fastställs.`,
+    datum: "2026-11-02",
+    roller: [],
+    href: "/order",
+  },
+  {
     slug: "sparar-utan-omladdning",
     rubrik: "Nav sparar utan att ladda om sidan",
     ingress: "Det du väljer sparas direkt, och du står kvar där du var.",

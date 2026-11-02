@@ -8,7 +8,7 @@ import { notifieraFlera } from "@/lib/notishandelse-server";
 import { skrivKundanteckning } from "@/lib/crm/inkio";
 import { LOPTIDER, giltigBindningstid, giltigTelefon, giltigtSigneringsdatum, normaliseraOrgnr } from "@/lib/order";
 import { tolkaBelopp } from "@/lib/provision";
-import { angivenProvision, bevakaIgen, rabattAnteckning, rabattUrFormular, tjansterUrFormular } from "@/lib/orderregler";
+import { angivenProvision, bevakaIgen, provisionSenare, rabattAnteckning, rabattUrFormular, tjansterUrFormular } from "@/lib/orderregler";
 import { medNyckel } from "@/lib/nav2/nyckel";
 import {
   aterupptaBevakning,
@@ -73,10 +73,10 @@ const ORGNR = /^\d{6}-\d{4}$/;
  * (K4). `tests/nav2-orderfalt.mjs` jämför listorna med det klienten skickar.
  */
 const FALT = {
-  skapa: ["salesperson_id", "company_name", "org_number", "contact_name", "contact_phone", "contact_email", "customer_street", "customer_postal_code", "customer_city", "avtal_fil_id", "avtal_store", "avtal_filnamn", "package_id", "term_months", "fri_order", "monthly_amount", "signed_on", "starts_on", "note", "is_addon", "godkann", "forlanger_id", "provision_form", "commission_percent", "commission_amount", "tjanster", "finans", "har_utkop", "buyout_amount", "finans_ritad", "har_utkop_ritad", "fri_order_ritad", "fri_skal", "pris_ritad", "rabatt_skal", "samtal_id"],
-  rattaOgodkand: ["company_name", "org_number", "contact_name", "contact_phone", "contact_email", "customer_street", "customer_postal_code", "customer_city", "package_id", "term_months", "fri_order", "monthly_amount", "signed_on", "starts_on", "salesperson_id", "is_addon", "note", "tjanster", "finans", "har_utkop", "buyout_amount", "provision_form", "commission_percent", "commission_amount", "finans_ritad", "har_utkop_ritad", "fri_order_ritad", "fri_skal", "pris_ritad", "rabatt_skal"],
+  skapa: ["salesperson_id", "company_name", "org_number", "contact_name", "contact_phone", "contact_email", "customer_street", "customer_postal_code", "customer_city", "avtal_fil_id", "avtal_store", "avtal_filnamn", "package_id", "term_months", "fri_order", "monthly_amount", "signed_on", "starts_on", "note", "is_addon", "godkann", "forlanger_id", "provision_form", "commission_percent", "commission_amount", "tjanster", "finans", "har_utkop", "buyout_amount", "finans_ritad", "har_utkop_ritad", "fri_order_ritad", "fri_skal", "pris_ritad", "rabatt_skal", "samtal_id", "utan_provision", "utan_provision_ritad"],
+  rattaOgodkand: ["company_name", "org_number", "contact_name", "contact_phone", "contact_email", "customer_street", "customer_postal_code", "customer_city", "package_id", "term_months", "fri_order", "monthly_amount", "signed_on", "starts_on", "salesperson_id", "is_addon", "note", "tjanster", "finans", "har_utkop", "buyout_amount", "provision_form", "commission_percent", "commission_amount", "finans_ritad", "har_utkop_ritad", "fri_order_ritad", "fri_skal", "pris_ritad", "rabatt_skal", "utan_provision", "utan_provision_ritad"],
   // D10: allt `redigeraOrder` läser (se tests/nav2-orderfalt.mjs för det som medvetet inte går fram).
-  rattaGodkand: ["company_name", "org_number", "contact_name", "contact_phone", "contact_email", "reason", "note", "package_id", "term_months", "monthly_amount", "signed_on", "starts_on", "salesperson_id", "is_addon", "tjanster", "finans", "har_utkop", "buyout_amount", "finans_ritad", "har_utkop_ritad", "pris_ritad", "provision_form", "commission_percent", "commission_amount", "rabatt_skal"],
+  rattaGodkand: ["company_name", "org_number", "contact_name", "contact_phone", "contact_email", "reason", "note", "package_id", "term_months", "monthly_amount", "signed_on", "starts_on", "salesperson_id", "is_addon", "tjanster", "finans", "har_utkop", "buyout_amount", "finans_ritad", "har_utkop_ritad", "pris_ritad", "provision_form", "commission_percent", "commission_amount", "rabatt_skal", "utan_provision", "utan_provision_ritad"],
   rattaFranAvtal: ["company_name", "org_number", "contact_name", "contact_phone", "package_id", "term_months", "signed_on"],
 } as const;
 
@@ -353,7 +353,9 @@ async function sparaUtkast(falt: Record<string, unknown>, mig: string, hanterare
   const f = form(falt, FALT.skapa);
   const manad = fri ? tolkaBelopp(String(falt.monthly_amount ?? "")) : null;
   if (fri && (manad === null || manad <= 0)) return svar({ fel: "Skriv vad kunden betalar per månad." }, 400);
-  const angiven = fri ? angivenProvision(f) : null;
+  // 0275: utan provision bär utkastet ingen angiven provision heller.
+  const senare = provisionSenare(f);
+  const angiven = fri && !senare ? angivenProvision(f) : null;
   if (angiven && "fel" in angiven) return svar({ fel: angiven.fel }, 400);
   const tjansteval = tjansterUrFormular(f);
   if ("fel" in tjansteval) return svar({ fel: tjansteval.fel }, 400);
@@ -395,6 +397,7 @@ async function sparaUtkast(falt: Record<string, unknown>, mig: string, hanterare
       free_order_reason: fri ? String(falt.fri_skal ?? "").trim().slice(0, 500) || null : null,
       proposed_commission_amount: angiven?.belopp ?? null,
       proposed_commission_percent: angiven?.procent ?? null,
+      ...(senare ? { commission_pending: true } : {}),
       note,
       status: "utkast",
       created_by: mig,

@@ -108,7 +108,7 @@ if (sk) for (const m of sk.matchAll(/\bfalt\.([a-z][a-z0-9_]*)\s*=\s*('([^']*)')
 }
 
 rubrik("Klienten skickar markörerna (K4)");
-for (const k of ["finans_ritad", "har_utkop_ritad", "fri_order_ritad", "fri_skal", "pris_ritad", "monthly_amount", "rabatt_skal"]) {
+for (const k of ["finans_ritad", "har_utkop_ritad", "fri_order_ritad", "fri_skal", "pris_ritad", "monthly_amount", "rabatt_skal", "utan_provision_ritad", "utan_provision"]) {
   ok(`ndOrdFalt sätter ${k}`, klientVarden.has(k));
 }
 
@@ -131,6 +131,13 @@ rubrik("ndOrdFalt körd (K5, B2)");
   ok("fri order: ingen prismarkör", fri.pris_ritad === undefined && fri.fri_order === "on" && fri.monthly_amount === "2000");
   const friTom = ctx.ndOrdFalt({ ...bas, p: 0, lop: "24", friVarde: "48000", friSkal: "x", friTyp: "kr", friProv: "" });
   ok("fri order utan provision: inget 0 skickas", friTom.commission_amount === undefined && friTom.commission_percent === undefined);
+
+  // 0275: valet ritas alltid, och "Utan provision" skickar 'on' och ingen provision.
+  ok("valet ritas: utan_provision_ritad = '1'", paket.utan_provision_ritad === "1" && paket.utan_provision === undefined);
+  const senPaket = ctx.ndOrdFalt({ ...bas, p: 2, man: "1495", utanProv: true });
+  ok("paketorder utan provision: utan_provision = 'on'", senPaket.utan_provision === "on" && senPaket.utan_provision_ritad === "1");
+  const senFri = ctx.ndOrdFalt({ ...bas, p: 0, lop: "24", friVarde: "48000", friSkal: "x", friTyp: "%", friProv: "10", utanProv: true });
+  ok("fri order utan provision: ingen provision skickas", senFri.utan_provision === "on" && senFri.provision_form === undefined && senFri.commission_percent === undefined && senFri.commission_amount === undefined);
 
   // Paketbytet (granskningen I3): priset följer med när det stod på det förra paketets listpris.
   const i = html.indexOf("document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-onp]')");
@@ -166,6 +173,8 @@ const HJALPARE = {
   "rabattUrFormular(form": ["pris_ritad", "monthly_amount"],
   "rattelsePris(form": ["pris_ritad", "monthly_amount"],
   "rattelseProvision(form": ["provision_form", "commission_percent", "commission_amount"],
+  // 0275: valet "Utan provision", och provisionen i formuläret när valet inte ritats.
+  "provisionSenare(form": ["utan_provision_ritad", "utan_provision", "provision_form", "commission_percent", "commission_amount"],
 };
 function laser(fn) {
   const s = act.indexOf(`export async function ${fn}(`);

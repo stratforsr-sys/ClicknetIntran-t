@@ -7995,6 +7995,11 @@ button.itf-seg::after{content:"";position:absolute;inset:-12px 0}
   .itf,.itf *,.itf::backdrop{animation:none!important;transition:none!important}
 }
 .itf.itf-lugn,.itf.itf-lugn *{animation:none!important;transition:none!important}
+/* Utan provision (0275): valet på egen rad under Utköp och Finans, och "läggs till senare" i varningens bläck. */
+.onval [data-ndutanprov]{grid-column:1/-1}
+.ndprovsen{color:var(--warn-ink);font-weight:550}
+td .ndprovsen{font-size:12.5px}
+.kkb-b.ndprovsen small{color:var(--warn-ink);font-weight:550}
 </style>
 
 <div class="proto" role="region" aria-label="Prototypinställningar">
@@ -27506,6 +27511,9 @@ function ndOrdFalt(n){
   // med skälet ur snabbvalen; servern skriver "Rabatt X kr/mån: skäl." i anteckningen som utkastets ordSkapa.
   else { f.pris_ritad = '1'; if (ndTal(n.man) > 0) f.monthly_amount = String(ndTal(n.man)); if (n.o7rabatt) f.rabatt_skal = n.o7rabatt; }
   if (S.ndForlang) f.forlanger_id = S.ndForlang;
+  // Utan provision (0275): valet ritas alltid, och utan provision skickas ingen provision.
+  f.utan_provision_ritad = '1';
+  if (n.utanProv){ f.utan_provision = 'on'; delete f.provision_form; delete f.commission_amount; delete f.commission_percent; }
   return f;
 }
 // Byts paketet medan priset står på det förra paketets listpris följer priset med till det nya
@@ -27602,6 +27610,71 @@ kkAtg = function(o){ const a = _ndKkAtg(o); if (!NDORD_RATTA_GODKAND || !ndO() |
   const i = a.findIndex(x => x.includes('data-ordmak=')); a.splice(i < 0 ? a.length : i, 0, `<button class="btn btn-s btn-sm" data-ordratta="${o.nr}">Rätta</button>`); return a; };
 const _ndO7Godkann = o7Godkann;
 o7Godkann = function(nr){ if (!ndO()) return _ndO7Godkann(nr); const o = ORDER.find(x => x.nr === nr); if (o) ndOrdPost('godkann', {id:o.id}); };
+
+/* ---------- Utan provision, läggs till senare (0275, beställaren 2026-11-02) ----------
+   Ett val i formuläret, för paket och fri order. Godkänd står ordern på 0 kr och märkt (provSenare), utan övertäck;
+   säljchef, VD och ekonomi lägger till provisionen med Rätta, där valet är avslaget. Är månaden fastställd bokförs
+   provisionen i den öppna månaden, som varje rättelse. */
+const ndProvSenare = o => !!(ndO() && o && o.provSenare);
+const _ndUpOnFel = onFel;
+onFel = function(n){ const e = _ndUpOnFel(n); if (ndO() && n && n.utanProv) delete e.friProv; return e; };
+// Formuläret: valet under Utköp och Finans, på egen rad. Utan provision ritas inget provisionsfält och ingen siffra.
+const _ndUpOrdFormular = ordFormular;
+ordFormular = function(){
+  const h = _ndUpOrdFormular(), n = S.ordNy; if (!ndO() || !n || n.p === null) return h;
+  const hanterar = S.role === 'chef' && ndO().hanterare;
+  const sw = `<button type="button" class="tiswitch" data-ndutanprov aria-pressed="${!!n.utanProv}"><span><b>Utan provision</b><small class="muted">${n.utanProv ? (hanterar ? 'Läggs till med Rätta när den är bestämd' : 'Säljchefen lägger till den senare') : 'Provisionen läggs till senare, med Rätta'}</small></span><i></i></button>`;
+  let u = h.replace(/(<button type="button" class="tiswitch" data-onfinans [\s\S]*?<\/button>)(<\/div>)/, `$1${sw}$2`);
+  if (!n.utanProv) return u;
+  u = u.replace(/<div class="onf[^"]*"><label for="on-friProv">[\s\S]*?<\/div><\/div>(?:<p class="onfel"[\s\S]*?<\/p>)?<\/div>/, '');
+  u = u.replace(/(<div class="onprov"><dt>[^<]*<\/dt><dd class="num">)[^<]*(<\/dd><\/div>)(?:<div><dt class="muted">[^<]*<\/dt><dd><\/dd><\/div>)?/, '$1–$2<div><dt class="muted">läggs till senare</dt><dd></dd></div>');
+  return u.replace('. Provisionen fryses då.</li>', '. Provisionen läggs till senare, med Rätta.</li>');
+};
+// Rätta: valet följer ordern. "Lägg till provision" öppnar Rätta med valet avslaget, vid affären.
+let ndUpLagg = false;
+const _ndUpOrdNyStart = ordNyStart;
+ordNyStart = function(fran){
+  const r = _ndUpOrdNyStart(fran), n = S.ordNy;
+  if (ndO() && n){
+    const o = fran && fran.ratta ? ORDER.find(x => x.nr === fran.ratta) : null;
+    n.utanProv = fran && 'utanProv' in fran ? !!fran.utanProv : !!(o && o.provSenare);
+    if (ndUpLagg && o && o.provSenare){ n.utanProv = false; setTimeout(() => document.getElementById('ons-affar')?.scrollIntoView({block:'start'}), 60); }
+  }
+  ndUpLagg = false;
+  return r;
+};
+document.addEventListener('click', e => {
+  if (!ndO() || !e.target.closest) return;
+  if (e.target.closest('[data-ndprovlagg]')){ ndUpLagg = true; return; }
+  const b = e.target.closest('[data-ndutanprov]'), n = S.ordNy; if (!b || !n) return;
+  e.preventDefault(); n.utanProv = !n.utanProv; ordUppdatera();
+}, true);
+const _ndUpO7Diff = o7Diff;
+o7Diff = function(o, n){
+  const ch = _ndUpO7Diff(o, n); if (!ndO() || !o || !n) return ch;
+  if (o.provSenare && !n.utanProv) ch.push('provisionen tillagd');
+  else if (!o.provSenare && n.utanProv) ch.push('provisionen läggs till senare');
+  return ch;
+};
+// Kundkortet, listan och provisionsvyns rader: "läggs till senare" i stället för 0 kr.
+const _ndUpPvKalla = pvKalla;
+pvKalla = function(o){ return ndProvSenare(o) ? 'utan provision, läggs till senare' : _ndUpPvKalla(o); };
+const _ndUpKkKalkyl = kkKalkyl;
+kkKalkyl = function(x){
+  const h = _ndUpKkKalkyl(x); if (!ndProvSenare(x)) return h;
+  return h.replace(/<div class="kkb-b prov"><b class="num">[^<]*<\/b><span>Provision<\/span><small>[^<]*<\/small><\/div>/, '<div class="kkb-b prov ndprovsen"><b class="num">–</b><span>Provision</span><small>läggs till senare</small></div>');
+};
+const _ndUpKkAtg = kkAtg;
+kkAtg = function(o){
+  const a = _ndUpKkAtg(o);
+  if (ndProvSenare(o) && S.role === 'chef' && ndO().hanterare && ['signerad', 'betald'].includes(o.st)) a.unshift(`<button class="btn btn-p btn-sm" data-ordratta="${o.nr}" data-ndprovlagg>Lägg till provision</button>`);
+  return a;
+};
+const _ndUpOrdRad = ordRad;
+ordRad = function(o, chef){
+  const h = _ndUpOrdRad(o, chef); if (!ndProvSenare(o) || o.st === 'makulerad') return h;
+  return h.replace(/(<td class="num"><b>[^<]*<\/b><\/td>\s*)<td class="num">[^<]*<\/td>/, '$1<td class="num"><span class="ndprovsen" title="Provisionen läggs till senare">senare</span></td>');
+};
 // "Ny sedan du tittade": navet minns när listan senast öppnades (0083).
 function ndOrdNy(o){ const s = ndO().sett; return !!(s && o.skapad && o.skapad > s && o.vem !== ME[S.role === 'chef' ? 'chef' : 'saljare'].namn); }
 let ndOrdSett = false;
@@ -28087,6 +28160,36 @@ const ndPvSaljKrets = fn => function(...a){
 };
 pvLagetVy = ndPvSaljKrets(pvLagetVy);
 pvMalVy = ndPvSaljKrets(pvMalVy);
+
+/* ---------- Provision som väntar (0275) ----------
+   En order godkänd utan provision räknas som 0 kr tills provisionen läggs till med Rätta. Säljaren ser sina,
+   chefen ser alla i Laget, och Perioder säger det innan en månad med sådana order fastställs. */
+const ndUpSenare = vem => ORDER.filter(o => o.provSenare && ['signerad', 'betald'].includes(o.st) && (!vem || o.vem === vem));
+const _ndUpPvAtgarder = pvAtgarder;
+pvAtgarder = function(u, jag, t, mal){
+  const h = _ndUpPvAtgarder(u, jag, t, mal); if (!ndP()) return h;
+  const sen = ndUpSenare(u.vem); if (!sen.length) return h;
+  const rad = sen.map(o => `<li class="warn"><span><b>#${o.nr} ${esc(o.bolag)}</b> är godkänd utan provision. ${jag ? 'Säljchefen lägger till den' : 'Den läggs till med Rätta'}, och tills dess räknas den som 0 kr.</span><span class="pacts"><button class="btn btn-s btn-sm" data-pvorder="${o.nr}">Öppna</button></span></li>`).join('');
+  return h ? h.replace(/(<span class="meta">[^<]*<\/span><\/div>\s*)<ul>/, `$1<ul>${rad}`)
+    : `<section class="card pv-atg" aria-label="Provision som väntar"><div class="chead"><h2>Provision som väntar</h2><span class="meta">${sen.length} order</span></div><ul>${rad}</ul></section>`;
+};
+const _ndUpPvLagetVy = pvLagetVy;
+pvLagetVy = function(...a){
+  const h = _ndUpPvLagetVy.apply(this, a);
+  if (!ndP() || !ndP().chefsvy || S.pvM !== PVMAN) return h;
+  const sen = ndUpSenare(null), i = h.indexOf('</section>'); if (!sen.length || i < 0) return h;
+  const kort = `<section class="card pv-atg"><ul><li class="warn"><span><b>${sen.length} order väntar på provision.</b> De är godkända utan provision och räknas som 0 kr tills den läggs till med Rätta.<small>${sen.slice(0, 6).map(o => `<button class="tlink" data-pvorder="${o.nr}">#${o.nr} ${esc(o.bolag)}</button>`).join(' · ')}${sen.length > 6 ? ` · ${sen.length - 6} till` : ''}</small></span><span class="pacts"><button class="btn btn-p btn-sm" data-pvorder="${sen[0].nr}">Öppna #${sen[0].nr}</button></span></li></ul></section>`;
+  return h.slice(0, i + 10) + kort + h.slice(i + 10);
+};
+const _ndUpPvPerioder = pvPerioderVy;
+pvPerioderVy = function(){
+  const h = _ndUpPvPerioder(); if (!ndP()) return h;
+  return h.split('<li>').map(c => {
+    const m = (/data-pvunderlag="(\d{4}-\d{2})"/.exec(c) || [])[1]; if (!m || (S.pvPerioder || {})[m]) return c;
+    const k = ndUpSenare(null).filter(o => o.period === m).length; if (!k) return c;
+    return c.replace('<span class="pv-pertxt">', `<span class="pv-pertxt"><b class="ndprovsen">${k} order saknar provision.</b> Läggs den till efter att månaden fastställts bokförs den i den öppna månaden. `);
+  }).join('<li>');
+};
 const ndPvUtanMal = () => NDPVSALJ.filter(v => { const x = pvMalFor(v, PVMAN); return !x || (x.o === null && x.k === null); }).length;
 const _ndPvFlikar = pvFlikar;
 pvFlikar = function(chef){

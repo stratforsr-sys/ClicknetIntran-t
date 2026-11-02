@@ -47,7 +47,45 @@ följden syns innan man trycker. En händelse som inte upprepas frågar som för
 
 ---
 
-## 2026-11-02 · Sparningar utan omladdning (grenen `utan-omladdning`, ingen migration)
+## 2026-11-02 · Order utan provision, provisionen läggs till senare (direkt på `main` på beställarens ja, 0275 KÖRD)
+
+**Beställaren 2026-11-02:** "gör så att man kan välja att lägga upp en order utan provision och i såfall kunna lägga till
+provision senare". Hen bad om att bygga direkt, utan frågor. Valen nedan är därför mina, inte beställarens.
+Sedan: "Kör pusha mot main jag ger mitt ja", alltså ingen preview, och 0275 kördes 09:13 UTC strax före pushen.
+
+**Modellen.** `sales_order_provision_satt` (0034) kräver ett belopp från `signerad` och står kvar. En order utan provision
+godkänns därför på **0 kr, `manual`**, och den nya kolumnen `commission_pending` (0275) säger att någon ska tillbaka. Villkoret
+`sales_order_provision_senare` tillåter den bara med 0 kr eller inget belopp, och utan angiven provision (`proposed_*`).
+**Övertäcket väntar också.** Det räknas på det som blir kvar efter säljarens provision, och på 0 kr hade det blivit hela affären.
+Ingen eftersläpningspost skrivs för en sådan order, eftersom det inte finns något belopp att bokföra.
+
+**Reglerna** står i `orderregler.ts`: `provisionSenare(form, vantar)` avgör läget (ett formulär som ritar valet,
+`utan_provision_ritad`, bestämmer; annars står orderns läge kvar, utom när en provision skrivs för hand i gamla /order) och
+`utanProvision(form)` ger formuläret som `raknaFramProvision` räknar på: 0 kr för hand. `provisionenVantar` i actions.ts
+tar bort övertäcket och utköpets procent ur räkningen. Skrivningen sker i `skapaOrder`, `godkannOrder`, `redigeraOgodkand`,
+`redigeraOrder` och Nav 2.0:s `sparaUtkast`. Prov: `tests/provision-senare.mjs` och nya kontroller i `nav2-orderfalt.mjs`.
+
+**Att lägga till provisionen är Rätta.** `redigeraOrder` räknar då affären som en ny order (matrisen, chefens sats,
+utköpssatsen eller provisionen i formuläret), i stället för att `rattelseProvision` lägger tillbaka de frysta nollorna. Övertäcket
+skrivs, och är månaden fastställd bokförs skillnaden i den öppna månaden som rättelseposter. Säljaren får notisen
+"Provisionen är tillagd: <bolag>, <belopp>".
+
+**Gränssnittet** är ett patchskript, `~/nav2-utkast/delar/order-utan-provision/patch.py`, mot repots `src/nav2/utkast.html`.
+`ndpatch.py`-bygget ligger efter main (507 rader skiljer 2026-11-02), och passen efter mergen har patchat repots fil direkt.
+Valet "Utan provision" ligger på egen rad under Utköp och Finans, för paket och fri order. Kundkortet visar "läggs till
+senare", listan "senare", och säljchef, VD och ekonomi får **Lägg till provision** (öppnar Rätta med valet avslaget).
+I Provision syns orderna i säljarens "Det här höjer din månad" och i chefens Laget, och Perioder säger till på en öppen
+månad med sådana order innan den fastställs. Fastställandet stoppas inte.
+
+**Provat före pushen:** typkontroll (inga fel i de ändrade filerna), `order`, `nav2-orderfalt`, `nav2-order`, `ordervy`,
+`provision`, `chefsprovision`, `notiser-tackning`, `navnyheter` och nya `provision-senare` gröna. Databasen provad i en
+transaktion som rullades tillbaka, med exakt de värden koden skriver, i en öppen (november) och en fastställd månad (juli):
+utkast väntande, godkänd på 0 kr `manual`, 1 500 kr på en väntande nekas, Rätta till matrisens 4 000 kr går igenom, null
+nekas. Ingen provorder kvar. Gränssnittet var inte ritat före pushen.
+
+---
+
+## 2026-11-02 · Sparningar utan omladdning (grenen `utan-omladdning` → `main` `3852c87`, ingen migration)
 
 **Beställaren:** varje val i rutan i Uppgifter laddade om sidan, och vyns guide kom upp igen. Det gällde hela Nav 2.0.
 
