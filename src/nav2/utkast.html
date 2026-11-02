@@ -1874,6 +1874,12 @@ button.tidrow:hover{background:var(--surface-2)}
 .olrsvp button:hover{background:var(--surface-2)}
 .olforslag,.olstall{display:flex;flex-direction:column;gap:6px;padding:10px;border-radius:6px;background:var(--surface-2)}
 .olstall{background:var(--danger-soft)}
+.olstallval{display:flex;flex-direction:column;gap:4px}
+.olstallval .olbtn{display:flex;justify-content:space-between;align-items:baseline;gap:10px;text-align:left;border-radius:6px}
+.olstallval .olbtn small{color:var(--ink-3);font-size:12px}
+.olstallval .olbtn:hover,.olstallval .olbtn:focus-visible{border-color:var(--danger-ink)}
+[data-kev].olinst{opacity:.35;transition:opacity .15s}
+[data-kev].olinst b{text-decoration:line-through}
 .olrow{display:flex;gap:6px}
 .olrow .uin,.olforslag .uin{padding:6px 8px;font-size:13px}
 .olenskild{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
@@ -12670,10 +12676,25 @@ function kPeekKort(){
       ${egen && !e.allday ? `<p class="olpkr">${I('bell')}<span><select class="olpksel" data-kpeekpamin="${e.id}">${['Ingen','5 min före','15 min före','30 min före','1 timme före','1 dag före'].map(l => `<option ${(e.pamin || prfPamStd()) === l ? 'selected' : ''}>${l === 'Ingen' ? 'Ingen påminnelse' : 'Påminnelse ' + l}</option>`).join('')}</select></span></p>` : ''}
       ${sv && sv !== 'org' ? `<div class="olrsvp">${[['ja','Acceptera'],['kanske','Preliminärt'],['nej','Avböj']].map(([k, l]) => `<button class="${sv === k ? 'on' : ''}" data-krsvp="${k}">${k === 'ja' ? I('check') : k === 'nej' ? I('x') : '<span class="olfr">?</span>'}${l}</button>`).join('')}<button data-kforslag>Föreslå ny tid</button></div>${S.kRsvpKom ? `<input class="uin olkom" data-krsvpkom placeholder="Kommentar till ${esc(fornamn(e.org))}, skickas med svaret">` : `<button class="tlink inl olkoml" data-krsvpkomv>Svara med en kommentar</button>`}${sv === 'vantar' ? `<p class="olmut">Du har inte svarat. ${esc(fornamn(e.org))} ser svaret i sin klocka.</p>` : ''}` : ''}
       ${fp ? `<div class="olforslag"><b>Föreslå ny tid</b><div class="olrow"><input type="date" class="uin" data-kfd value="${e.d}"><input type="time" class="uin num" step="900" data-kfs value="${hm(e.s + 60)}"></div><input class="uin" data-kfm placeholder="Meddelande till ${esc(fornamn(e.org))} (valfritt)"><div class="pacts"><button class="btn btn-p btn-sm" data-kforslagskicka>Skicka förslaget</button><button class="btn btn-s btn-sm" data-kforslag>Avbryt</button></div></div>` : ''}
-      ${S.kStall === e.id ? `<div class="olstall"><b>Ställa in ${esc(e.t)}?</b><span>${e.delt.length ? `${e.delt.map(d => fornamn(d[0])).slice(0, 3).join(', ')}${e.delt.length > 3 ? ` och ${e.delt.length - 3} till` : ''} får en notis och ett mejl.` : 'Ingen annan berörs.'}</span><div class="pacts"><button class="btn btn-sm olfarlig" data-kstalljs>Ställ in</button><button class="btn btn-s btn-sm" data-kstall="">Behåll</button></div></div>` : ''}
+      ${S.kStall === e.id ? kStallFraga(e) : ''}
     </div>
     <div class="olpkf">${e.ld ? `<button class="olbtn" data-ldopen="${e.ld}">Öppna leadet</button>` : ''}${e.rx && S.role === 'chef' ? `<button class="olbtn" data-rxkand="${e.rx}">Öppna kandidaten</button>` : ''}${org && !e.allday ? `<button class="olbtn" data-kred>Redigera</button><button class="olbtn" data-kflytta>Flytta</button><button class="olbtn" data-kkopiera>Kopiera till nästa vecka</button>${e.kat === 'uppgift' ? `<button class="olbtn" data-kklar>${e.klar ? 'Ångra klar' : 'Markera klar'}</button>` : ''}<button class="olbtn olfarlig" data-kstall="${e.id}">Ställ in</button>` : e.kat === 'leverans' && S.role === 'chef' ? `<button class="olbtn" data-act="toast" data-msg="Leveranspanelen öppnas: utfall, mejlpåminnelse, CRM och överlämningen.">Öppna leveranspanelen</button>` : `<button class="olbtn" data-act="toast" data-msg="Händelsen öppnas i Nav.">Öppna</button>`}</div>
   </div>`;
+}
+/* Ställ in, som i Outlook: en återkommande post frågar om det gäller den här gången, den här och följande eller
+   hela serien. Varje val säger vad det träffar, och medan ett val är markerat bleknar de gångarna i kalendern. */
+function kStallFraga(e){
+  const vem = e.delt.length ? `${e.delt.map(d => fornamn(d[0])).slice(0, 3).join(', ')}${e.delt.length > 3 ? ` och ${e.delt.length - 3} till` : ''} får en notis och ett mejl.` : 'Ingen annan berörs.';
+  if (!e.rep || e.kat === 'uppgift') return `<div class="olstall"><b>Ställa in ${esc(e.t)}?</b><span>${vem}</span><div class="pacts"><button class="btn btn-sm olfarlig" data-kstalljs>Ställ in</button><button class="btn btn-s btn-sm" data-kstall="">Behåll</button></div></div>`;
+  const val = [['', 'Bara den här gången', kKort(e.d)], ['har', 'Den här och följande', `från ${kKort(e.d)}`], ['alla', 'Hela serien', 'alla kommande']];
+  return `<div class="olstall"><b>Ställa in ${esc(e.t)}?</b><span>Den är återkommande. ${vem}</span><div class="olstallval" role="group" aria-label="Vad ska ställas in?">${val.map(([k, l, d]) => `<button class="olbtn olfarlig" data-kstalljs="${k}"><span>${l}</span><small class="num">${d}</small></button>`).join('')}</div><div class="pacts"><button class="btn btn-s btn-sm" data-kstall="">Behåll</button></div></div>`;
+}
+// Gångarna ett val träffar bland de inlästa: '' den här, 'har' den och de efter, 'alla' det som inte börjat än.
+function kSerieGanger(e, val){
+  if (!val) return [e];
+  const samma = x => x.rep && !x.inst && (e.serieId ? x.serieId === e.serieId : x.t === e.t && x.org === e.org && x.kat === e.kat);
+  const idag = kIdag(), nu = now();
+  return KEV.filter(x => samma(x) && (val === 'har' ? x.d >= e.d : x.d > idag || (x.d === idag && (x.allday || x.s > nu))));
 }
 function kEnskild(e){
   const s = e.t.includes('Amira') ? ['6 120 kr av 20 000 kr', '4,1', 'Invändningar'] : e.t.includes('Elin') ? ['14 300 kr av 20 000 kr', '4,6', 'Avslut'] : ['8 900 kr av 18 000 kr', '3,8', 'Behovsanalys'];
@@ -12883,7 +12904,7 @@ function kalClick(t, e){
   if (d.kkopiera !== undefined){ const ev = KEV.find(x => x.id === S.kPeek.id), ny = {...ev, id:'kn' + Date.now(), d:kPlus(ev.d, 7), rep:false, delt:ev.delt.map(x => [x[0], 'vantar'])}; KEV.push(ny); S.kPeek = null; render(); toast(`Kopierad till ${kKort(ny.d)} ${hm(ny.s)}. Inbjudan skickad igen.`, () => { KEV.splice(KEV.indexOf(ny), 1); render(); }); return true; }
   if (d.kklar !== undefined){ const ev = KEV.find(x => x.id === S.kPeek.id); ev.klar = !ev.klar; render(); return true; }
   if (d.kstall !== undefined){ S.kStall = d.kstall || null; render(); return true; }
-  if (d.kstalljs !== undefined){ const ev = KEV.find(x => x.id === S.kPeek.id); ev.inst = true; S.kPeek = null; S.kStall = null; render(); toast(`Inställt. ${ev.delt.length ? `${ev.delt.length === 1 ? fornamn(ev.delt[0][0]) : ev.delt.length + ' deltagare'} får en notis och ett mejl.` : ''}${ev.kat === 'leverans' ? ' Mejlpåminnelsen avbokas hos Resend.' : ''}`, () => { ev.inst = false; render(); }); return true; }
+  if (d.kstalljs !== undefined){ const ev = KEV.find(x => x.id === S.kPeek.id), ganger = kSerieGanger(ev, d.kstalljs); ganger.forEach(x => x.inst = true); S.kPeek = null; S.kStall = null; render(); toast(`${d.kstalljs ? `${d.kstalljs === 'alla' ? 'Hela serien' : 'Den här och följande'} inställd, ${ganger.length} ${ganger.length === 1 ? 'gång' : 'gånger'}.` : 'Inställt.'} ${ev.delt.length ? `${ev.delt.length === 1 ? fornamn(ev.delt[0][0]) : ev.delt.length + ' deltagare'} får en notis och ett mejl.` : ''}${ev.kat === 'leverans' ? ' Mejlpåminnelsen avbokas hos Resend.' : ''}`, () => { ganger.forEach(x => x.inst = false); render(); }); return true; }
   // Snabbskapa
   if (d.knyskiftyp){ S.kNy.typ = d.knyskiftyp; S.kNy.t = document.querySelector('[data-knyt]').value; render(); return true; }
   if (d.knydelt){ const n = S.kNy; n.t = document.querySelector('[data-knyt]').value; n.delt = n.delt.includes(d.knydelt) ? n.delt.filter(p => p !== d.knydelt) : [...n.delt, d.knydelt]; render(); return true; }
@@ -12927,6 +12948,27 @@ document.addEventListener('change', e => {
   if (e.target.dataset.kpeekpamin){ const ev = KEV.find(x => x.id === e.target.dataset.kpeekpamin); ev.pamin = e.target.value.replace('Påminnelse ', '').replace('Ingen påminnelse', 'Ingen'); S.kRemIgn.delete(ev.id); delete S.kRemSnz[ev.id]; kRemRender(); toast(ev.pamin === 'Ingen' ? 'Ingen påminnelse för den här posten.' : `Du påminns ${ev.pamin}.`); }
 });
 document.addEventListener('input', e => { if (S.view === 'kalender' && e.target.dataset && e.target.dataset.ksok !== undefined){ S.kQ = e.target.value; const pos = e.target.selectionStart; render(); const i = document.querySelector('[data-ksok]'); if (i){ i.focus(); i.setSelectionRange(pos, pos); } } });
+/* Kortet vid posten får plats på skärmen (beställaren 2026-11-02: "panelen går förbi skärmen och jag kan inte
+   trycka på knapparna"). Höjden är känd först när kortet ritats: svaren, påminnelsen och Ställ in-frågan gör det
+   högre än de 420 px läget räknades med. Det flyttas därför upp efteråt, så att nederkanten står 12 px ovanför
+   skärmens. I mobilen sitter kortet fast nedtill och påverkas inte. */
+function kPeekPassa(){
+  document.querySelectorAll('.olpeek').forEach(p => {
+    const r = p.getBoundingClientRect(), golv = innerHeight - 12;
+    if (r.bottom > golv) p.style.top = `${Math.max(60, golv - r.height)}px`;
+  });
+}
+const _kPeekRender = render;
+render = function(){ const r = _kPeekRender.apply(this, arguments); kPeekPassa(); return r; };
+let kInstKnapp = null;
+['mouseover', 'focusin'].forEach(typ => document.addEventListener(typ, e => {
+  const b = e.target.closest ? e.target.closest('[data-kstalljs]') : null;
+  if (b === kInstKnapp) return;
+  kInstKnapp = b;
+  document.querySelectorAll('[data-kev].olinst').forEach(x => x.classList.remove('olinst'));
+  const ev = b && S.kPeek ? KEV.find(x => x.id === S.kPeek.id) : null;
+  if (ev) kSerieGanger(ev, b.dataset.kstalljs).forEach(x => document.querySelectorAll(`[data-kev="${CSS.escape(x.id)}"]`).forEach(el => el.classList.add('olinst')));
+}));
 document.addEventListener('scroll', e => { if (e.target && e.target.id === 'olScroll'){ if (Math.abs(e.target.scrollTop - (S.kScroll ?? -1)) < 1) return; S.kScroll = e.target.scrollTop; if (S.kPeek || S.kNy){ S.kPeek = null; S.kNy = null; document.querySelectorAll('.olpeek').forEach(x => x.remove()); document.querySelectorAll('.olev.sel').forEach(x => x.classList.remove('sel')); } } }, true);
 function kEfterRender(){
   const sc = document.getElementById('olScroll');
@@ -28588,7 +28630,7 @@ document.addEventListener('click', e => {
   if (ds.krsvp){ stopp(); if (!ref) return; ndKPost('svara', {id:ref, svar:ds.krsvp, kommentar:(document.querySelector('[data-krsvpkom]')?.value || '').trim()}); return; }
   if (ds.kforslagskicka !== undefined){ stopp(); if (!ref) return; const dd = document.querySelector('[data-kfd]').value, ss = document.querySelector('[data-kfs]').value;
     ndKPost('foresla', {id:ref, dag:dd, start:tmin(ss), langd:ev.e - ev.s, kommentar:(document.querySelector('[data-kfm]')?.value || '').trim()}); return; }
-  if (ds.kstalljs !== undefined){ stopp(); if (!ref) return; ndKPost('stallin', {id:ref}); return; }
+  if (ds.kstalljs !== undefined){ stopp(); if (!ref) return; ndKPost('stallin', ds.kstalljs === 'har' || ds.kstalljs === 'alla' ? {id:ref, serie:ds.kstalljs} : {id:ref}); return; }
   if (ds.ndkforbered !== undefined){ stopp(); if (ref) ndKPost('forbered', {id:ref}, {ladda:false}); return; }
   if (ds.ndkpunktny !== undefined){ stopp(); S.ndKPunkt = S.ndKPunkt === S.kPeek.id ? null : S.kPeek.id; render(); document.querySelector('[data-ndkpunkt]')?.focus(); return; }
   if (ds.ndkbocka){ stopp(); ndKPost('bocka', {punkt:ds.ndkbocka, klar:true}, {ladda:false}).then(s => { if (s.ok && ev){ ndKEnskildOm(ev); render(); } }); return; }

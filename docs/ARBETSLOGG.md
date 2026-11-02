@@ -5,6 +5,48 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-02 · Kalendern: kortet får plats, och Ställ in frågar om serien (grenen `kalender-stall-in-serie`, 0276 skriven, EJ körd)
+
+**Beställaren:** (1) kortet som öppnas när man trycker på en händelse långt ner i kalendern hamnade under skärmen, så
+knapparna gick inte att nå. (2) En återkommande händelse gick bara att ställa in en gång i taget, och det ska gå att
+välja serien eller bara den gången, som i Outlook.
+
+**(1) Varför kortet hamnade utanför.** Läget räknades före ritningen med en fast höjd: `top = min(y, innerHeight − 420)`.
+Ett kort med svar, påminnelse och Ställ in-frågan är högre än så (546 px i provet), och nederkanten hamnade under skärmen.
+Höjden går bara att veta efter ritningen. Därför mäter `kPeekPassa()` efter varje `render()` och flyttar upp kortet så
+att nederkanten står 12 px ovanför skärmens, och aldrig över sidhuvudet (60 px). Det gäller också snabbskapa. I mobilen
+sitter kortet fast nedtill (`top:auto!important`) och påverkas inte.
+
+**(2) Varför det krävde en databasfunktion.** `lk_stall_in` ställer in en gång och skickar en notis och ett mejl per gång
+till varje deltagare. Att loopa den över en serie hade gett åtta mejl per person, och jobbet hade fortsatt föda gångar
+eftersom serien saknade slut. `lk_stall_in_serie` (0276) gör allt i en transaktion:
+- **Den här och följande** går efter seriens ordning (`occurrence_of`), inte dagen, så att en flyttad gång följer sin
+  plats i serien. Delar som 0211 delat av efter gången ställs in helt. Serien slutar dagen före.
+- **Hela serien** ställer in allt som inte har börjat än (svensk tid), i hela kedjan av delar (`fortsatter_i` åt båda
+  hållen). Det som varit står kvar, som i Outlook. Serien slutar i dag.
+- `calendar_series_slut_efter_start` hindrar ett slut före början. En del som ställs in helt slutar därför på sin första
+  dag. Finns inte den gången än (en del som börjar bortom horisonten) föds den nu och ställs in, annars hade jobbet fött
+  den senare. Ångra tar bort den igen.
+- En notis per person (`installd`, `data.serie` och `antal`). Notisen säger "ställde in hela serien" eller "… och
+  gångerna efter". Mejlet får ingen `.ics`: serieinbjudan skickades aldrig som fil, och en CANCEL för första gången
+  hade sagt fel om resten.
+- Ångra (`stall_in_serie` i `lk_angra`, skriven ur pg_proc med en gren till) sätter tillbaka gångarna, påminnelserna och
+  seriernas slut.
+
+**Gränssnittet.** Frågan i kortet har tre val med vad var och ett träffar ("fre 20 nov", "från fre 20 nov",
+"alla kommande"). Medan ett val är markerat bleknar och stryks gångarna det träffar i kalendern (`kSerieGanger`), så att
+följden syns innan man trycker. En händelse som inte upprepas frågar som förut. Utkastets egen demo gör samma sak lokalt.
+
+**Prov.**
+- 0276 i en transaktion mot produktionen med ROLLBACK (`~/nav2-utkast/delar/kalender-stall-in/prov-0276*.mjs`, inget sparat; kör från en katalog med `pg`): rättigheten
+  (bara service_role), har/alla på K&V Protokoll, en notis för nio gånger på en 1:1, en avdelad del bortom horisonten,
+  Ångra (utkorgen som före), `lk:installd` en gång till och `lk:behorighet` för fel person. Allt grönt.
+- `~/nav2-utkast/probe/kalender-kort-prov.mjs` (headless Chrome, Zens provdata): 20/20 på grenen. Mot main slutar kortet
+  med frågan på 830 px när skärmen är 813 px, och de tre valen saknas.
+- `tests/leveranskalender.mjs`: kvittot och notisens två nya former.
+
+---
+
 ## 2026-11-02 · Sparningar utan omladdning (grenen `utan-omladdning`, ingen migration)
 
 **Beställaren:** varje val i rutan i Uppgifter laddade om sidan, och vyns guide kom upp igen. Det gällde hela Nav 2.0.

@@ -147,7 +147,10 @@ async function skicka(rad: Utkorgsrad): Promise<Skickat> {
   const text = notistext(n, underlag);
   if (!text) throw new Error(`Okänd mall: ${n.mall}`);
 
-  const bilagor = n.event_id && ICS_MALLAR[n.mall] ? await kollegansIcs(n.event_id, n.till, ICS_MALLAR[n.mall]) : null;
+  // En inställd serie (0276) får ingen fil: serien kom aldrig som fil (inbjudan-serie har ingen), och en CANCEL
+  // för den första gången vore fel om resten.
+  const serie = (n.data as { serie?: string } | null)?.serie;
+  const bilagor = n.event_id && ICS_MALLAR[n.mall] && !serie ? await kollegansIcs(n.event_id, n.till, ICS_MALLAR[n.mall]) : null;
 
   return notifieraFranUtkorgen({
     till: n.till,
