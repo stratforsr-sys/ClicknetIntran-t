@@ -5,7 +5,7 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
-## 2026-11-02 kväll · Inkio: makulerad och uppsagt når Nav (grenen `inkio-status`, 0279 KÖRD, EJ mergad)
+## 2026-11-02 kväll · Inkio: makulerad och uppsagt når Nav (MERGAD till `main` `f0e10f4` på beställarens ja, 0279 KÖRD)
 
 **Beställaren:** "Fixa det här", om provets röda: Inkio-statusen makulerad och uppsagt ändrade aldrig ordern i Nav.
 
@@ -36,6 +36,8 @@ grönt utom detta, plus gula punkter som inte är gjorda (en raderad `crm_handel
 avtrycket är oförändrat, `ut.kopplade += await` räknar fel, `NOTIS_PROV_TILL=" , "` öppnar för alla).
 
 **0279 KÖRD** 2026-11-02 20:08 på beställarens ja. Provet mot den riktiga funktionen efteråt, med rollback: 18/18.
+Dagens 30 pushar var slut; beställaren höjde taket till Vercels 100 ("höj gränsen till max gränsen för vercel").
+Grenens preview grön, `main` snabbspolad `5096b8a` → `f0e10f4`, produktionen `dpl_5txr14KZey5AYZxtANXzX6NDgwRB` grön.
 
 ---
 
