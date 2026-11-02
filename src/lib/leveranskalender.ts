@@ -621,6 +621,14 @@ export function kvittoInstallt(mottagare: readonly string[]): string {
   return `Inställt.${mottagare.length ? ` ${lista(mottagare)} får en notis och ett mejl.` : ""}`;
 }
 
+/** En serie (0276): "Den här och följande" (har) eller "Hela serien" (alla), med antalet gånger och den första. */
+export function kvittoSerieInstalld(fran: "har" | "alla", antal: number, dag: string, mottagare: readonly string[]): string {
+  const ganger = `${antal} ${antal === 1 ? "gång" : "gånger"}`;
+  return `${fran === "alla" ? "Hela serien" : "Den här och följande"} inställd, ${ganger} från ${dayLabel(dag)}.${
+    mottagare.length ? ` ${lista(mottagare)} får en notis och ett mejl.` : ""
+  }`;
+}
+
 export function kvittoKopierad(dag: string, tid: number, medDeltagare: boolean): string {
   return `Kopierad till ${dayLabel(dag)} ${hm(tid)}.${medDeltagare ? " Inbjudan skickad igen." : ""}`;
 }
@@ -691,9 +699,13 @@ export function notistext(
             href,
           }
         : { rubrik: `${av} flyttade ${t}`, detalj: `ny tid ${nar}`, href };
-    case "installd":
-      // Mötet är inställt och syns inte längre, men dagen gör det.
+    case "installd": {
+      // Mötet är inställt och syns inte längre, men dagen gör det. En serie (0276) är en notis för alla gångarna.
+      const antal = typeof d.antal === "number" ? ` · ${d.antal} ${d.antal === 1 ? "gång" : "gånger"}` : "";
+      if (d.serie === "alla") return { rubrik: `${av} ställde in hela serien ${t}`, detalj: `från ${nar}${antal}`, href: `/kalender?dag=${nyDag}` };
+      if (d.serie === "har") return { rubrik: `${av} ställde in ${t} och gångerna efter`, detalj: `från ${nar}${antal}`, href: `/kalender?dag=${nyDag}` };
       return { rubrik: `${av} ställde in ${t}`, detalj: nar, href: `/kalender?dag=${nyDag}` };
+    }
     // Nav 2.0 (0088): rubrik, plats, agenda eller deltagare ändrades. Tiden är densamma.
     case "andrad":
       return { rubrik: `${av} ändrade ${t}`, detalj: nar, href };
