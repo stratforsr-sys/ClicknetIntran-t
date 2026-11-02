@@ -3379,6 +3379,91 @@ button.kkh-p:hover{border-color:var(--line-2)}
 .kkfakta dt{font-size:11.5px;color:var(--ink-3)}
 .kkfakta dd{margin:0;font-size:13px}
 .kkinkior{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+/* Ekonomin på ordern, som i Inkio: faktureringen, stegen, fakturaplanen, avtalen och leveransen. */
+.kkeko{display:flex;flex-direction:column;gap:12px;padding:14px 16px 16px;border-radius:12px;border:1px solid var(--line);background:var(--surface);min-width:0}
+.kkekoh{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.kkekoh h4{margin:0;font-size:13.5px;font-weight:600}
+.kkekoh h4 .muted{font-weight:500}
+.kkekom{margin-left:auto;display:inline-flex;align-items:center;gap:10px;font-size:12px;flex-wrap:wrap}
+.kkeko h5{margin:6px 0 -4px;font-size:12px;font-weight:600;color:var(--ink-2);display:flex;gap:6px;align-items:baseline}
+.kkekoskel{display:flex;flex-direction:column;gap:8px}
+.kkekoskel i{height:10px;border-radius:5px;background:var(--surface-2);animation:kkekoblink 1.1s ease-in-out infinite alternate}
+.kkekoskel i:nth-child(1){width:70%}.kkekoskel i:nth-child(2){width:100%;height:12px}.kkekoskel i:nth-child(3){width:55%}.kkekoskel i:nth-child(4){width:80%}
+@keyframes kkekoblink{from{opacity:.45}to{opacity:1}}
+/* Stegen: prickarna förbundna av en linje som fylls när steget är klart. Steget som väntar nu andas. */
+.kksteg{list-style:none;margin:2px 0 0;padding:0;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr)}
+.kksteg li{position:relative;display:flex;flex-direction:column;gap:2px;padding:26px 10px 0 0;font-size:12px;min-width:0}
+.kksteg li::before{content:"";position:absolute;top:8px;left:24px;right:6px;height:2px;border-radius:2px;background:var(--line)}
+.kksteg li.klar::before{background:var(--brand)}
+.kksteg li:last-child::before{display:none}
+.kksteg li>i{position:absolute;top:0;left:0;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:2px solid var(--line-2);color:var(--on-brand)}
+.kksteg li>i svg{width:11px;height:11px;stroke-width:2.6}
+.kksteg li.klar>i{background:var(--brand);border-color:var(--brand)}
+.kksteg li.nu>i{border-color:var(--brand)}
+.kksteg li.nu>i::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:2px solid var(--brand);opacity:0;animation:kkekopuls 2.6s var(--ease) infinite}
+.kksteg li.nu.vanta>i,.kksteg li.nu.vanta>i::after{border-color:var(--signal)}
+.kksteg li.fel>i,.kksteg li.fel>i::after{border-color:var(--danger)}
+.kksteg li.stopp>i{background:var(--danger);border-color:var(--danger)}
+.kksteg li b{font-weight:600;font-size:12.5px;line-height:1.3}
+.kksteg li.kvar b{color:var(--ink-3);font-weight:500}
+.kksteg li small{color:var(--ink-3);font-size:11.5px;line-height:1.35}
+.kksteg li.fel small,.kksteg li.stopp small{color:var(--danger-ink)}
+.kksteg li.vanta small{color:var(--signal-ink)}
+@keyframes kkekopuls{0%{transform:scale(.7);opacity:.6}70%,100%{transform:scale(1.4);opacity:0}}
+.kkekolop{margin:0;font-size:13px;display:flex;flex-wrap:wrap;align-items:center;gap:0 4px;font-variant-numeric:tabular-nums}
+.kkekolop b{font-weight:600}
+/* Fakturaplanen som remsa: en bit per faktura, bredd efter belopp, färg efter läge; strecket är i dag. */
+.kkremsa{position:relative;display:flex;gap:2px;height:10px}
+.kkremsa>span{flex:1 1 0;min-width:3px;border-radius:3px;background:var(--line-2);transition:transform .15s var(--ease)}
+.kkremsa>span:hover{transform:scaleY(1.5)}
+.kkremsa>span.t-ok{background:var(--brand)}.kkremsa>span.t-info{background:var(--info)}.kkremsa>span.t-warn{background:var(--warn)}.kkremsa>span.t-danger{background:var(--danger)}.kkremsa>span.t-neutral{background:var(--line-2)}
+.kkremsa>b{position:absolute;top:-4px;bottom:-4px;width:2px;border-radius:2px;background:var(--ink);transform:translateX(-1px)}
+.kkremsal{margin:-4px 0 0;display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11.5px;color:var(--ink-2)}
+.kkremsal span{display:inline-flex;align-items:center;gap:5px;background:none}
+.kkremsal i{width:8px;height:8px;border-radius:2px;background:var(--line-2)}
+.kkremsal .t-ok i{background:var(--brand)}.kkremsal .t-info i{background:var(--info)}.kkremsal .t-warn i{background:var(--warn)}.kkremsal .t-danger i{background:var(--danger)}
+.kkekoplanb{display:flex;align-items:baseline;gap:8px;width:100%;text-align:left;padding:8px 0;border-top:1px solid var(--line);font-size:13px}
+.kkekoplanb b{font-weight:600}
+.kkekoplanb i{margin-left:auto;font-style:normal;font-size:16px;color:var(--ink-3);line-height:1}
+.kkekoplanb:hover b{text-decoration:underline;text-underline-offset:2px}
+.kkekotab{max-height:22rem;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.kkekotab .kktj th,.kkekotab .kktj td{padding-left:10px;padding-right:10px}
+.kkekotab .kktj thead th{position:sticky;top:0;background:var(--surface);padding-top:8px;z-index:1}
+.kkekotab .kktj tr.nasta td{background:color-mix(in srgb,var(--brand-soft) 45%,transparent)}
+.kkekotab .kktj td small{display:block;font-size:11px}
+.kkekotab .kktj th,.kkekotab .kktj td{white-space:nowrap}
+.kkekotab .kktj .kkekod{font-variant-numeric:tabular-nums}
+.kkekoutanfor{border:1px dashed var(--line-2);border-radius:10px;padding:10px 12px;font-size:13px}
+.kkekoutanfor p{margin:0 0 6px;font-size:12px}
+.kkekoutanfor ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.kkekoutanfor li{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px}
+.kkekodl dd{flex-wrap:wrap;justify-content:flex-end;text-align:right}
+.kkekodl dd small{flex-basis:100%;font-size:11.5px}
+.kkekodl>div.varn dt{color:var(--signal-ink)}
+.kkekoavt{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:10px;background:var(--surface-2)}
+.kkekoavt.slut{background:color-mix(in srgb,var(--danger-soft) 55%,var(--surface-2))}
+.kkekoavt>small{font-size:12px}
+.kkekorad{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;font-size:13px}
+.kkekorad>b{margin-left:auto;font-variant-numeric:tabular-nums}
+.kkekofakta{margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px}
+.kkekofakta dt{font-size:11px;color:var(--ink-3)}
+.kkekofakta dd{margin:0;font-size:13px}
+.kkekofakta .fara dt,.kkekofakta .fara dd{color:var(--danger-ink)}
+.kkekofil{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.kkekofil li{display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
+.kkekofil li:last-child{border-bottom:0}
+.kkekofil li>svg{width:15px;height:15px;flex:none;margin-top:2px;color:var(--ink-3)}
+.kkekofil li>span{display:flex;flex-direction:column;min-width:0}
+.kkekofil small{font-size:11.5px}
+.kkekosak{margin:0;font-size:12px}
+@media (max-width:640px){
+  .kkeko{padding:12px}
+  .kksteg{grid-auto-flow:row;grid-auto-columns:auto;gap:12px}
+  .kksteg li{padding:0 0 0 28px}
+  .kksteg li::before{top:22px;bottom:-12px;left:8px;right:auto;width:2px;height:auto}
+  .kkekom{margin-left:0}
+}
+@media (prefers-reduced-motion:reduce){.kksteg li.nu>i::after,.kkekoskel i{animation:none}.kkremsa>span{transition:none}}
 .kksam{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
 .kksamr{padding:12px 14px;border-radius:12px;border:1px solid var(--line);display:flex;flex-direction:column;gap:10px}
 .kksamr.pinnad{border-color:color-mix(in srgb,var(--brand) 50%,var(--line));background:color-mix(in srgb,var(--brand-soft) 30%,var(--surface))}
@@ -15074,6 +15159,7 @@ function kkKort(o){
   const halsa = [
     ['Kampanjsida', ND && (!d.nd || d.nd.laddar) ? 'hämtas' : ND && d.nd.kopplat === false ? 'Inkio ej kopplat' : !d.webb ? (lev.length ? 'saknas' : 'efter godkännandet') : d.nere ? (ND ? (d.nereSedan ? `svarar inte sedan ${d.nereSedan}` : 'svarar inte') : `svarar inte sedan ${d.nere}`) : 'aktiv', !d.webb ? (lev.length ? 'warn' : 'neutral') : d.nere ? 'danger' : 'ok', 'aktivitet'],
     ['Inkio', o.inkio === 'ok' ? 'inlagd' : o.inkio === 'ko' ? 'i kö' : o.inkio === 'fel' ? 'misslyckades' : o.st === 'makulerad' ? 'makulerad' : ND && ['signerad', 'betald'].includes(o.st) ? 'inte i Inkio' : 'vid godkännandet', o.inkio === 'ok' ? 'ok' : o.inkio === 'ko' ? 'signal' : 'neutral', 'order'],
+    ...kkHalsaEkonomi(o),
     ['Säljsamtal', o.samtal ? `kopplat, ${o.samtal.min} min` : 'saknas', o.samtal ? 'ok' : o.st === 'makulerad' ? 'neutral' : 'danger', 'samtal'],
     ['Avtal', o.avtal ? 'bifogat' : 'saknas', o.avtal ? 'ok' : o.st === 'makulerad' ? 'neutral' : 'warn', 'bilagor']];
   const prickar = {aktivitet:d.webb && d.nere, samtal:!o.samtal && o.st !== 'makulerad', bilagor:!o.avtal && o.st !== 'makulerad'};
@@ -15176,6 +15262,10 @@ function kkAktivitet(o, d){
 }
 
 /* ---------- Order ---------- */
+// Orderns ekonomi i Inkio (fakturering, orderhantering, avtal, leverans) och huvudets ruta för den.
+// Utkastet har ingen; Nav 2.0 läser den ur Inkio när ordern fälls ut.
+function kkEkonomi(x){ return ''; }
+function kkHalsaEkonomi(o){ return []; }
 function kkOrder(o, alla){
   const chef = S.role === 'chef';
   return `<div class="kkord">${note(264)}<div class="kkordtopp">${note(301)}<span class="muted">${o7OrdSum(alla)}</span><span class="pacts"><button class="tlink" data-o7allaut>${o7AllaOppna(o, alla) ? 'Fäll ihop alla' : 'Fäll ut alla'}</button><button class="btn btn-s btn-sm" data-kknyorder="${o.nr}">${I('plus')}Ny order för kunden</button></span></div>${alla.map(x => { const s = oStatus(x), oppen = S.kkOppna.has(x.nr) || (x.nr === o.nr && !S.kkStangda.has(x.nr));
@@ -15190,6 +15280,7 @@ function kkOrder(o, alla){
         ${x.mak ? `<p class="frb danger">${I('fel')}<span><b>Makulerad ${oDat(x.mak.dag)}.</b> Avdraget belastar ${FRMAN[+(x.makPeriod || x.mak.dag).slice(5, 7)]}, inte månaden ordern tecknades. ${esc(x.mak.skal)}</span></p>` : ''}
         ${x.note && x.st !== 'makulerad' ? `<p class="kknote">${I('notes')}${esc(x.note)}</p>` : ''}
         <div class="kkinkior"><span class="kkh-p t-${x.inkio === 'ok' ? 'ok' : x.inkio === 'ko' ? 'signal' : x.inkio === 'fel' ? 'danger' : 'neutral'}"><i></i><b>Inkio</b>${ik}</span>${ND ? (x.ndInkio && x.ndInkio.ordernummer ? ndInkioLank(x.ndInkio.orderLank, x.ndInkio.ordernummer) || `<span class="muted num">${esc(x.ndInkio.ordernummer)}</span>` : '') : x.inkio === 'ok' ? `<button class="tlink" data-act="toast" data-msg="Order O-${2900 + x.nr % 400} öppnas i Inkio.">O-${2900 + x.nr % 400} ↗</button>` : ''}${x.inkio === 'fel' && chef ? `<button class="btn btn-s btn-sm" data-kkinkioigen="${x.nr}">Försök igen</button>` : ''}</div>
+        ${kkEkonomi(x)}
         ${kkAtg(x).length ? `<div class="pacts kkatg">${kkAtg(x).join('')}</div>` : ''}${x.nr !== o.nr ? `<button class="tlink o7byt" data-o7byt="${x.nr}">Gå till #${x.nr}</button>` : ''}</div>` : ''}</article>`; }).join('')}</div>`;
 }
 
@@ -27447,6 +27538,131 @@ kkKort = function(o){
   h = h.replace(/<button class="btn btn-s btn-sm" data-act="toast" data-msg="[^"]*öppnas i Inkio i en ny flik\."[^>]*>Inkio ↗<\/button>/, d.inkioLank ? `<a class="btn btn-s btn-sm" href="${esc(d.inkioLank)}" target="_blank" rel="noopener" title="Öppna i Inkio">Inkio ↗</a>` : '');
   return h;
 };
+/* ---------- Ekonomin på ordern, som i Inkio (ekonomi.ts) ----------
+   Beställaren 2026-11-02: det Inkio vet om en order och Nav saknade, "exakt på samma backend som
+   inkio" och "som inkio med gränssnittet men med navs utseende". Läses ur Inkio när ordern fälls ut
+   (/nav2/inkio?vad=ekonomi), med Inkios egna anrop och ord: faktureringen, orderhanteringens steg,
+   fakturaplanen, finansbolagets utbetalning, avtalen, produktionskortet, fakturorna med påminnelser
+   och indrivning, filerna och samtalen. Nav sparar ingenting av det. Betald = slutbetald, som i Inkio. */
+const NDEKO = {};
+const ndEkoKan = x => !!(x && x.id && x.ndInkio && x.ndInkio.ordernummer && x.ndInkio.state !== 'fel');
+function ndEkoHamta(x, om){
+  if (!ndEkoKan(x) || (NDEKO[x.id] && !om)) return;
+  NDEKO[x.id] = {...(NDEKO[x.id] || {}), laddar:true};
+  const klar = s => { NDEKO[x.id] = {...s, kl:ndKl(new Date().toISOString())}; if (S.view === 'order' && S.ordOpen) kkRender(); };
+  ndLas(`/nav2/inkio?vad=ekonomi&order=${encodeURIComponent(x.id)}`).then(ndSvar).then(klar).catch(() => klar({fel:'Inkio svarade inte.'}));
+}
+const ndEkoDag = t => esc(String(t || '').replace(/\d{4}-\d{2}-\d{2}/g, d => oDat(d)));
+const ndEkoKr = (n, v) => n === null || n === undefined ? '–' : v && v !== 'SEK' ? `${Math.round(n).toLocaleString('sv-SE')} ${esc(v)}` : oKr(n);
+const ndEkoMoms = n => Math.round(n * 125) / 100;
+const ndEkoUt = (lank, text, cls = 'tlink') => lank ? `<a class="${cls}" href="${esc(lank)}" target="_blank" rel="noopener" title="Öppna i Inkio">${esc(text)} ↗</a>` : `<span class="num">${esc(text)}</span>`;
+const NDEKOINT = {1:'Månadsvis', 3:'Kvartalsvis', 6:'Halvårsvis', 12:'Årsvis'};
+const ndEkoStorlek = b => b === null || b === undefined ? '' : b < 1024 * 1024 ? `${Math.max(1, Math.round(b / 1024))} kB` : `${(b / 1024 / 1024).toLocaleString('sv-SE', {maximumFractionDigits:1})} MB`;
+const NDEKOTON = {ok:'ok', warn:'warn', danger:'danger', signal:'signal'};
+// Huvudets ruta bredvid Inkio och Säljsamtal: samma märke som rutan på ordern.
+kkHalsaEkonomi = function(o){
+  if (!ndO() || !ndEkoKan(o)) return [];
+  ndEkoHamta(o);
+  const f = NDEKO[o.id] || {};
+  if (f.laddar && !f.ekonomi) return [['Ekonomi', 'hämtas', 'neutral', 'order']];
+  if (!f.ekonomi) return [['Ekonomi', f.kopplat === false ? 'Inkio ej kopplat' : 'Inkio svarade inte', 'neutral', 'order']];
+  return [['Ekonomi', f.ekonomi.marke.text, NDEKOTON[f.ekonomi.marke.ton] || 'neutral', 'order']];
+};
+// Stegen i orderhanteringen, som Inkios: klar, nu, kvar eller stoppad. Steget som väntar nu andas.
+function ndEkoSteg(steg){
+  if (!steg.length) return '';
+  return `<ol class="kksteg" aria-label="Orderhanteringen i Inkio">${steg.map(s => `<li class="${s.lage}${s.ton ? ' ' + s.ton : ''}"${s.lage === 'nu' ? ' aria-current="step"' : ''}><i aria-hidden="true">${s.lage === 'klar' ? I('check') : s.lage === 'stopp' ? I('x') : ''}</i><b>${esc(s.text)}</b>${s.detalj ? `<small>${ndEkoDag(s.detalj)}</small>` : ''}</li>`).join('')}</ol>`;
+}
+// Fakturaplanen som en remsa: en bit per faktura, bredd efter belopp, färg efter läge. Strecket är i dag.
+function ndEkoRemsa(fk){
+  const plan = fk.plan; if (!plan.length) return '';
+  const sum = plan.reduce((a, p) => a + Math.max(p.belopp, 0), 0) || 1, idag = kIdag();
+  let fore = 0; plan.forEach(p => { if (p.datum <= idag) fore += Math.max(p.belopp, 0); });
+  const nu = plan[0].datum <= idag && plan[plan.length - 1].datum >= idag ? `<b style="left:${(fore / sum * 100).toFixed(2)}%" title="I dag"></b>` : '';
+  const antal = {}; plan.forEach(p => { antal[p.lage || ''] = (antal[p.lage || ''] || 0) + 1; });
+  const ord = ['paid', 'invoiced', 'overdue', 'missing', 'expected', 'planned', 'credited'].filter(k => antal[k]);
+  return `<div class="kkremsa" role="img" aria-label="Fakturaplanen: ${plan.length} fakturor${fk.lop ? `, ${fk.lop.betalda} betalda` : ''}">${plan.map(p => `<span class="t-${p.ton}" style="flex-grow:${Math.max(p.belopp, 1)}" title="#${p.nr} · ${oDat(p.datum)} · ${oKr(p.belopp)} · ${esc(p.text)}"></span>`).join('')}${nu}</div>
+    <p class="kkremsal">${ord.map(k => { const p = plan.find(x => x.lage === k); return `<span class="t-${p.ton}"><i></i>${antal[k]} ${esc(p.text.toLowerCase())}</span>`; }).join('')}</p>`;
+}
+function ndEkoPlan(x, fk){
+  const plan = fk.plan, oppen = S.kkEkoPlan && S.kkEkoPlan.has(x.id), sum = plan.reduce((a, p) => a + p.belopp, 0), v = fk.valuta;
+  if (!plan.length) return fk.typ === 'Internal' ? '<p class="muted">Inga fakturor planerade ännu.</p>' : '';
+  const nasta = fk.lop && fk.lop.nasta ? fk.lop.nasta.invoice_date : null;
+  return `<button class="kkekoplanb" data-kkekoplan="${x.nr}" aria-expanded="${!!oppen}"><b>Fakturaplanen</b><span class="muted num">${plan.length} ${plan.length === 1 ? 'faktura' : 'fakturor'} · ${ndEkoKr(sum, v)} exkl. moms</span><i aria-hidden="true">${oppen ? '−' : '+'}</i></button>
+    ${oppen ? `<div class="kkekotab"><table class="kktj"><thead><tr><th class="num">#</th><th>Fakturadatum</th><th>Förfallodatum</th><th class="num">Exkl. moms</th><th class="num">Inkl. moms</th>${fk.stammer ? '<th>I Fortnox</th>' : ''}</tr></thead>
+      <tbody>${plan.map(p => `<tr class="${p.datum === nasta ? 'nasta' : ''}"><td class="num muted">${p.nr}</td><td class="kkekod">${oDat(p.datum)}</td><td class="kkekod muted">${p.forfaller ? oDat(p.forfaller) : '–'}</td><td class="num"><b>${ndEkoKr(p.belopp, v)}</b></td><td class="num muted">${ndEkoKr(ndEkoMoms(p.belopp), v)}</td>${fk.stammer ? `<td><span class="pill t-${p.ton}">${esc(p.text)}</span>${p.faktura || p.betaldDen ? `<small class="muted">${[p.faktura ? '#' + esc(p.faktura) : '', p.betaldDen ? oDat(p.betaldDen) : ''].filter(Boolean).join(' · ')}</small>` : ''}</td>` : ''}</tr>`).join('')}</tbody>
+      ${plan.length > 1 ? `<tfoot><tr><td colspan="3" class="muted">${plan.length} fakturor</td><td class="num">${ndEkoKr(sum, v)}</td><td class="num muted">${ndEkoKr(ndEkoMoms(sum), v)}</td>${fk.stammer ? '<td></td>' : ''}</tr></tfoot>` : ''}</table></div>` : ''}
+    ${fk.utanforPlan.length ? `<div class="kkekoutanfor"><p class="muted">Fakturor utanför planen</p><ul>${fk.utanforPlan.map(u => `<li><span class="num">Faktura ${esc(u.nummer || '–')}</span><span class="num muted">${u.datum ? oDat(u.datum) : ''}</span><span class="num">${ndEkoKr(u.belopp, v)}</span><span class="pill t-${u.status.ton}">${esc(u.status.text)}</span></li>`).join('')}</ul></div>` : ''}`;
+}
+function ndEkoAvtal(e){
+  if (!e.avtal.length) return '';
+  return `<h5>Länkade avtal <span class="muted num">${e.avtal.length}</span></h5>${e.avtal.map(a => {
+    const fakt = a.externFakturering ? 'Faktureras av Fortnox' : a.finansierat ? `Finansiären fakturerar kunden` : a.intervall ? (NDEKOINT[a.intervall] || `Var ${a.intervall}:e månad`) : '–';
+    return `<div class="kkekoavt ${a.uppsagtDen || a.avslutatDen ? 'slut' : ''}"><div class="kkekorad">${ndEkoUt(a.lank, a.nummer || 'Avtalet')}<span class="pill t-${a.status.ton}">${esc(a.status.text)}</span>${a.finansierat ? `<span class="pill t-info">Finansierad${a.finansbolag ? ' av ' + esc(a.finansbolag) : ''}</span>` : ''}<b class="num">${ndEkoKr(a.varde, a.valuta)}</b></div>
+      <small class="muted">${esc(a.tjanster.join(', ') || 'Ingen tjänst')}${a.start ? ` · ${oDat(a.start)} – ${a.slut ? oDat(a.slut) : 'tills vidare'}` : ''}</small>
+      <dl class="kkekofakta"><div><dt>Nästa faktura</dt><dd class="num">${a.nastaFaktura ? oDat(a.nastaFaktura) : '–'}</dd></div><div><dt>Fakturerade perioder</dt><dd class="num">${a.faktureradePerioder ?? '–'}</dd></div><div><dt>Fakturering</dt><dd>${esc(fakt)}</dd></div>${a.faktureringSlutar ? `<div><dt>Faktureringen slutar</dt><dd class="num">${oDat(a.faktureringSlutar)}</dd></div>` : ''}
+      ${a.uppsagtDen ? `<div class="fara"><dt>Uppsagt den</dt><dd class="num">${oDat(a.uppsagtDen)}</dd></div>` : ''}${a.avslutatDen ? `<div class="fara"><dt>Avslutat i förtid</dt><dd class="num">${oDat(a.avslutatDen)}</dd></div>` : ''}</dl></div>`; }).join('')}`;
+}
+function ndEkoLeverans(e){
+  const l = e.leverans, o = e.order;
+  if (!l && !o.leveransdag) return '';
+  const om = l ? [l.projekt, l.tavla, l.ansvariga.join(', '), l.forfaller ? `förfaller ${oDat(l.forfaller)}` : '', l.checklista ? `checklista ${l.checklista.klara}/${l.checklista.totalt}` : ''].filter(Boolean).join(' · ') : '';
+  return `<h5>Leverans</h5><div class="kkekoavt"><div class="kkekorad">${l ? (l.stangt ? `<span class="muted">Produktionskortet ligger på en tavla Nav inte når.</span>${ndEkoUt(l.lank, 'Öppna')}` : `${ndEkoUt(l.lank, l.titel || l.nummer || 'Produktionskortet')}${l.kolumn ? `<span class="pill t-${l.klar ? 'ok' : 'info'}">${esc(l.kolumn)}</span>` : ''}${l.arkiverad ? '<span class="pill t-neutral">Arkiverat</span>' : ''}`) : '<span class="muted">Inget produktionskort</span>'}<span class="pill t-${o.status.ton}" title="Orderns status i Inkio">${esc(o.status.text)}</span></div>
+    ${om || o.leveransdag ? `<small class="muted">${esc(om)}${om && o.leveransdag ? ' · ' : ''}${o.leveransdag ? `leveransdatum ${oDat(o.leveransdag)}` : ''}</small>` : ''}</div>`;
+}
+function ndEkoFakturor(e){
+  const v = e.fakturering ? e.fakturering.valuta : 'SEK';
+  const fk = e.fakturering, plan = fk && fk.plan.length;
+  if (!e.fakturor.length) return `<h5>Fakturor</h5><p class="muted">${fk && fk.typ === 'Financed' ? `Finansiären fakturerar kunden${fk.finansbolag ? ` (${esc(fk.finansbolag)})` : ''}, så ordern har inga egna fakturor i Inkio.`
+    : e.fortnox && !e.fortnox.kopplat ? `Fortnox är inte kopplat i Inkio, så inga fakturor eller betalningar syns än.${plan ? ' Planen ovan visar vad som ska faktureras.' : ''}` : 'Inga fakturor i Inkio för ordern än.'}</p>`;
+  return `<h5>Fakturor <span class="muted num">${e.fakturor.length}</span></h5><div class="kkekotab"><table class="kktj"><thead><tr><th>Faktura</th><th>Fakturadatum</th><th>Förfallodatum</th><th class="num">Belopp</th><th class="num">Betalt</th><th>Status</th></tr></thead><tbody>${e.fakturor.map(f => `<tr><td>${ndEkoUt(f.lank, f.nummer ? '#' + f.nummer : 'Faktura')}${f.slutfaktura ? '<small class="muted">Slutfaktura</small>' : ''}${f.kredit ? '<small class="muted">Kreditfaktura</small>' : ''}</td><td class="kkekod">${f.datum ? oDat(f.datum) : '–'}</td><td class="kkekod muted">${f.forfaller ? oDat(f.forfaller) : '–'}</td><td class="num">${ndEkoKr(f.belopp, v)}</td><td class="num">${ndEkoKr(f.betalt, v)}${f.betaldDen ? `<small class="muted">${oDat(f.betaldDen)}</small>` : ''}</td><td><span class="pill t-${f.status.ton}">${esc(f.status.text)}</span>${f.stand && f.stand.kod !== 'normal' && f.stand.kod !== 'paid' ? ` <span class="pill t-${f.stand.ton}">${esc(f.stand.text)}</span>` : ''}${f.paminnelser ? `<small class="muted">${f.paminnelser} ${f.paminnelser === 1 ? 'påminnelse' : 'påminnelser'}${f.senastPaminnelse ? `, senast ${oDat(f.senastPaminnelse)}` : ''}</small>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
+}
+function ndEkoFiler(e){
+  if (!e.filer.length && !e.samtal.length) return '';
+  return `<h5>Filer och samtal i Inkio <span class="muted num">${e.filer.length + e.samtal.length}</span></h5><ul class="kkekofil">${e.filer.map(f => `<li>${I('avtal')}<span>${ndEkoUt(f.lank, f.titel)}<small class="muted">${[f.kategori && f.kategori !== 'Other' ? f.kategori : '', ndEkoStorlek(f.storlek), f.nar ? oDat(ndDagAv(f.nar)) : ''].filter(Boolean).map(esc).join(' · ')}</small></span></li>`).join('')}${e.samtal.map(c => `<li>${I('phone')}<span><b>${esc(c.rubrik || (c.riktning === 'inbound' ? 'Kunden ringde' : 'Samtal'))}</b><small class="muted">${[c.vem, c.nummer, c.sek ? kkLen(c.sek) : '', c.nar ? ndTidKort(c.nar) : ''].filter(Boolean).map(esc).join(' · ')}</small></span></li>`).join('')}</ul>`;
+}
+kkEkonomi = function(x){
+  if (!ndO() || !ndEkoKan(x)) return '';
+  ndEkoHamta(x);
+  const f = NDEKO[x.id] || {};
+  const huvud = (marke, hoger) => `<header class="kkekoh"><h4>Ekonomi <span class="muted">i Inkio</span></h4>${marke}<span class="kkekom">${hoger}</span></header>`;
+  if (f.laddar && !f.ekonomi) return `<section class="kkeko laddar" aria-busy="true">${huvud('', '<span class="muted">hämtar ur Inkio…</span>')}<div class="kkekoskel" aria-hidden="true"><i></i><i></i><i></i><i></i></div></section>`;
+  if (f.kopplat === false) return `<section class="kkeko">${huvud('', '')}<p class="muted">Inkio är inte kopplat i den här miljön, så ekonomin går inte att läsa här.</p></section>`;
+  if (!f.ekonomi) return `<section class="kkeko">${huvud('', `<button class="tlink" data-kkekoigen="${x.nr}">Försök igen</button>`)}<p class="muted">${esc(f.iInkio === false ? 'Ordern finns inte i Inkio längre.' : f.fel || 'Inkio svarade inte.')}</p></section>`;
+  const e = f.ekonomi, fk = e.fakturering, h = e.hantering, ut = e.utbetalning, v = fk ? fk.valuta : 'SEK';
+  const hoger = `<span class="muted">hämtat ${esc(f.kl || '')}</span><button class="tlink" data-kkekoigen="${x.nr}" ${f.laddar ? 'disabled' : ''}>${f.laddar ? 'Hämtar…' : 'Uppdatera'}</button>${ndEkoUt(e.order.lank, e.order.nummer || 'Ordern')}`;
+  const rad = (dt, dd, cls = '') => dd ? `<div class="${cls}"><dt>${dt}</dt><dd>${dd}</dd></div>` : '';
+  const fakta = [
+    fk && fk.varde !== null ? rad('Värde', `<span class="num">${ndEkoKr(fk.varde, v)} exkl. moms${fk.manader ? ` över ${fk.manader} mån` : ''}</span>${fk.start && fk.slut ? `<small class="muted num">${oDat(fk.start)} – ${oDat(fk.slut)}</small>` : ''}`) : '',
+    fk && fk.typ === 'Financed' ? rad('Finansbolag', `<b>${esc(fk.finansbolag || '–')}</b><small class="muted">De betalar ut ordern; kunden betalar dem.</small>`) : '',
+    ut ? rad('Utbetalning', ut.lage === 'registrerad' ? `<span class="pill t-ok">Utbetald${ut.datum ? ' ' + oDat(ut.datum) : ''}</span><span class="num">${ndEkoKr(ut.belopp, v)}</span>${ut.referens ? `<small class="muted num">${esc(ut.referens)}</small>` : ''}`
+      : `<span class="pill t-signal">Väntar${ut.dagar !== null ? ` i ${ut.dagar === 1 ? '1 dag' : ut.dagar + ' dagar'}` : ''}</span><small class="muted">${esc(ut.finansbolag || 'Finansbolaget')} har inte betalat ut ${ndEkoKr(ut.belopp, v)}${ut.sedan ? `, hanterad ${oDat(ut.sedan)}` : ''}</small>`, ut.lage === 'vantar' ? 'varn' : '') : '',
+    fk && fk.typ === 'Internal' && e.order.fakturamejl ? rad('Fakturorna mejlas till', `<a href="mailto:${esc(e.order.fakturamejl)}">${esc(e.order.fakturamejl)}</a>`) : '',
+    e.order.fakturakontakt ? rad('Faktureringskontakt', esc(e.order.fakturakontakt)) : '',
+    h ? rad('Orderhantering', `${ndEkoUt(h.lank, h.nummer || 'Öppna')}<span class="pill t-${h.status.kod === 'Pending' ? 'warn' : h.status.ton}">${esc(h.marke)}</span>`) : rad('Orderhantering', '<span class="muted">Ordern finns inte i Inkios orderhantering.</span>'),
+    h && h.fortnoxReferens ? rad('Referens i Fortnox', `<span class="num">${esc(h.fortnoxReferens)}</span>`) : '',
+  ].join('');
+  return `<section class="kkeko" aria-label="Ekonomin i Inkio">${huvud(`<span class="pill t-${fk ? fk.ton : 'neutral'}" title="Faktureringen i Inkio">${esc(fk ? fk.text : 'Fakturering inte angiven')}</span>`, hoger)}
+    ${h ? ndEkoSteg(h.steg) : ''}
+    ${fk && !fk.typ ? '<p class="frb warn"><span>Inte valt ännu i Inkio: Finansierad eller Intern.</span></p>' : ''}
+    ${fk && fk.lopText ? `<p class="kkekolop"><b>${esc(fk.lopText)}</b>${fk.lop && fk.lop.nasta ? `<span class="muted"> · nästa ${oDat(fk.lop.nasta.invoice_date)}, ${ndEkoKr(fk.lop.nasta.amount, v)}</span>` : ''}${fk.slutbetald ? ' <span class="pill t-ok">Slutbetald</span>' : ''}</p>` : ''}
+    ${fk ? ndEkoRemsa(fk) : ''}
+    ${fk ? ndEkoPlan(x, fk) : ''}
+    <dl class="kkdl kkekodl">${fakta}</dl>
+    ${h && h.notering ? `<p class="kknote">${I('notes')}<span><b>Ekonomi:</b> ${esc(h.notering)}</span></p>` : ''}
+    ${ndEkoAvtal(e)}${ndEkoLeverans(e)}${ndEkoFakturor(e)}${ndEkoFiler(e)}
+    ${e.saknas && e.saknas.length ? `<p class="muted kkekosak">Gick inte att läsa ur Inkio just nu: ${esc(e.saknas.join(', '))}. <button class="tlink inl" data-kkekoigen="${x.nr}">Försök igen</button></p>` : ''}</section>`;
+};
+document.addEventListener('click', ev => {
+  const t = ev.target && ev.target.closest ? ev.target.closest('[data-kkekoigen],[data-kkekoplan]') : null;
+  if (!t || S.view !== 'order') return;
+  const x = ORDER.find(y => y.nr === +(t.dataset.kkekoigen || t.dataset.kkekoplan)); if (!x) return;
+  ev.preventDefault(); ev.stopPropagation();
+  if (t.dataset.kkekoigen){ ndEkoHamta(x, true); kkRender(); return; }
+  S.kkEkoPlan = S.kkEkoPlan || new Set();
+  if (S.kkEkoPlan.has(x.id)) S.kkEkoPlan.delete(x.id); else S.kkEkoPlan.add(x.id);
+  kkRender();
+}, true);
 /* ---------- Aktivitet: kundens tidslinje, som Inkios historik (0278) ---------- */
 // Beställaren 2026-11-02: "så som det finns i inkio … men följer såklart navet". En lista för allt om kunden:
 // Inkios order, avtal, ärenden, anteckningar och händelser, och Navs egna (lades upp, godkänd, makulerad,
