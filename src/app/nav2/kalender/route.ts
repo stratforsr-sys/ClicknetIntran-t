@@ -767,6 +767,11 @@ async function utfor(user: Inloggad, b: Record<string, unknown>): Promise<Respon
           }
           return ut(await bjudIn(r, r.eventId, g.epost));
         }
+        // En 1:1 är alltid en serie i databasen, också en enda gång ("Upprepas inte" = serieregel med ends_on = dagen),
+        // för agendan och Be om förberedelse hänger på serien. Som i navets regel för serier: aldrig, varje eller varannan vecka.
+        if (f.typ === "enskilt" && upprepa !== "aldrig" && upprepa !== "vecka" && upprepa !== "varannan") {
+          return svar2({ fel: "En 1:1 är en gång, varje vecka eller varannan vecka." }, 400);
+        }
         if (f.typ === "enskilt" || upprepa !== "aldrig") {
           // En serie är många möten, och var och en vore ett eget mejl.
           if (g.epost.length) return svar2({ fel: "En person utanför Clicknet bjuds in till ett möte som inte upprepas." }, 400);
@@ -777,7 +782,7 @@ async function utfor(user: Inloggad, b: Record<string, unknown>): Promise<Respon
             dag: f.d ?? "",
             start: f.s ?? 0,
             minuter,
-            upprepa: f.typ === "enskilt" && upprepa === "aldrig" ? "varannan" : upprepa,
+            upprepa,
             agenda: f.agenda ?? null,
             plats: f.plats ?? null,
             visaSom: f.visa,

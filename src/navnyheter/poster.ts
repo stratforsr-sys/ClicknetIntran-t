@@ -14,6 +14,21 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "kalendern-1-1-en-gang-eller-serie",
+    rubrik: "1:1 en gång eller som serie, med vem som helst",
+    ingress: "En 1:1 kan bokas en enda gång, och alla anställda går att välja.",
+    text: `Välj **Ny händelse → 1:1** i Kalendern. Under **Upprepas** är **Upprepas inte**
+förvalt, och **Varje vecka** eller **Varannan vecka** gör den till en serie. Förut
+blev varje 1:1 en serie varannan vecka, också när du bara ville boka en gång.
+
+Efter de tre förslagen på personer finns nu ett sökfält med alla anställda. Skriv
+några bokstäver och välj i listan, eller tryck Enter. Fältet finns också för möten
+och i rutan som öppnas när du klickar i kalendern.`,
+    datum: "2026-11-02",
+    roller: [],
+    href: "/kalender",
+  },
+  {
     slug: "kalendern-serier-och-ombud",
     rubrik: "Kalendern: serier och ombud som i Outlook",
     ingress: "Hela serien flyttar alla gångar från i dag, och ingen gång försvinner utan besked.",

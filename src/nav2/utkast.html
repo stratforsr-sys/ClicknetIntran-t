@@ -12704,7 +12704,7 @@ function kKommando(){
   return `<div class="olcmd" role="toolbar" aria-label="Kalender">
     <button class="olib olham" data-kpane aria-label="Visa eller dölj vänsterfältet" title="Vänsterfältet">${KI('meny')}</button>
     <span class="olsplit">${note(151)}<button class="olnew" data-kny title="Ny händelse (N)">${I('plus')}Ny händelse</button><button class="olnewdd" data-kmenu="ny" aria-label="Fler sorters händelser">${KI('pil')}</button></span>
-    ${S.kMenu === 'ny' ? `<div class="olpop olnymeny">${[['mote','Möte','Med deltagare och svar'],['enskilt','1:1','Återkommande samtal med en säljare'],['uppgift','Uppgift','Blir en uppgift i Uppgifter'],...(chef ? [['leverans','Leveranspost','Välkomstsamtal, kickoff och de andra'],['ledig','Ledighet','Ansökan går till attest']] : [['ledig','Ledighet', ND ? 'Ansökan går till attest' : 'Ansökan går till Johanna']])].map(([k, l, s]) => `<button data-knytyp="${k}"><i style="background:${KKAT[k].c}"></i><span><b>${l}</b><small>${s}</small></span></button>`).join('')}</div>` : ''}
+    ${S.kMenu === 'ny' ? `<div class="olpop olnymeny">${[['mote','Möte','Med deltagare och svar'],['enskilt','1:1','Med en person, en gång eller som serie'],['uppgift','Uppgift','Blir en uppgift i Uppgifter'],...(chef ? [['leverans','Leveranspost','Välkomstsamtal, kickoff och de andra'],['ledig','Ledighet','Ansökan går till attest']] : [['ledig','Ledighet', ND ? 'Ansökan går till attest' : 'Ansökan går till Johanna']])].map(([k, l, s]) => `<button data-knytyp="${k}"><i style="background:${KKAT[k].c}"></i><span><b>${l}</b><small>${s}</small></span></button>`).join('')}</div>` : ''}
     <span class="olsep"></span>
     ${KVYER.map(([k, l, n]) => `<button class="olvy ${S.kVy === k ? 'on' : ''}" data-kvy="${k}" title="${l} (Ctrl+Alt+${n})">${KI(k)}<span>${l}</span></button>`).join('')}
     <span class="olsep"></span>
@@ -12937,12 +12937,12 @@ function kFormular(){
       <div class="olseg olftyp">${[['mote','Möte'],['enskilt','1:1'],['uppgift','Uppgift']].map(([k, l]) => `<button class="${f.typ === k ? 'on' : ''}" data-kftyp="${k}">${l}</button>`).join('')}</div>
       ${chef ? `<div class="olfrad olfleverans"><span class="olflbl" style="color:var(--lev)">Leverans</span><span class="olchips">${KLEV.map(([l, m]) => `<button class="olpchip lev ${f.lev === l ? 'on' : ''}" data-kflev="${l}" data-min="${m}">${l} <small>${m} min</small></button>`).join('')}</span></div>` : ''}
       <input class="olfrubrik" data-kff="t" placeholder="Lägg till en rubrik" value="${esc(f.t || '')}">
-      ${f.typ !== 'uppgift' ? `<div class="olfrad">${KI('pers')}<div class="olfdelt"><span class="olchips">${(f.delt || []).map(p => `<span class="olpchip fast">${avatar(p, 18)}${esc(p)}<button data-kfdelt="${esc(p)}" aria-label="Ta bort ${esc(p)}">×</button></span>`).join('')}${kForslagPers(f.delt || [], 'kfdelt')}</span><small class="olmut">${f.typ === 'enskilt' ? 'En säljare. 1:1 blir alltid en serie.' : 'Inbjudna får en notis och ett mejl med .ics.'}</small></div></div>` : ''}
+      ${f.typ !== 'uppgift' ? `<div class="olfrad">${KI('pers')}<div class="olfdelt"><span class="olchips">${(f.delt || []).map(p => `<span class="olpchip fast">${avatar(p, 18)}${esc(p)}<button data-kfdelt="${esc(p)}" aria-label="Ta bort ${esc(p)}">×</button></span>`).join('')}${kForslagPers(f.delt || [], 'kfdelt')}</span><small class="olmut">${f.typ === 'enskilt' ? 'En person.' : 'Inbjudna får en notis och ett mejl med .ics.'}</small></div></div>` : ''}
       <div class="olfrad">${KI('klocka')}<div class="olftid"><input type="date" class="uin" data-kff="d" value="${f.d}"><span class="olmut">${kLang(f.d)} · v. ${kV(f.d)}</span>
         ${f.heldag ? '' : `<select class="uin num" data-kff="s">${tider.map(m => `<option value="${m}" ${f.s === m ? 'selected' : ''}>${hm(m)}</option>`).join('')}</select><span>till</span><select class="uin num" data-kff="e">${tider.filter(m => m > f.s && m <= f.s + 8 * 60).map(m => `<option value="${m}" ${f.e === m ? 'selected' : ''}>${hm(m)} (${kLen(m - f.s)})</option>`).join('')}</select>`}
         <label class="olfchk"><input type="checkbox" data-kff="heldag" ${f.heldag ? 'checked' : ''}>Heldag</label>
         ${f.heldag ? '' : `<span class="olseg sm">${[15, 30, 60].map(m => `<button class="${f.e - f.s === m ? 'on' : ''}" data-kflangd="${m}">${m === 60 ? '1 timme' : m + ' min'}</button>`).join('')}</span>`}</div></div>
-      <div class="olfrad">${KI('upprepa')}<div class="olfupp"><select class="uin" data-kff="upprepa">${(f.typ === 'enskilt' ? ['Varje vecka','Varannan vecka'] : ['Upprepas inte','Varje vardag','Varje vecka','Varannan vecka','Varje månad']).map(l => `<option ${f.upprepa === l ? 'selected' : ''}>${l}</option>`).join('')}</select>${f.upprepa && f.upprepa !== 'Upprepas inte' ? `<small class="olmut">${f.upprepa === 'Varje vardag' ? 'Måndag–fredag' : f.upprepa === 'Varje månad' ? `Den ${kDd(f.d)} varje månad` : `${f.upprepa} på ${KWDL[kWd(f.d)]}`}${f.heldag ? '' : ` ${hm(f.s)}–${hm(f.e)}`}, från ${kKort(f.d)}. ${f.typ === 'enskilt' ? 'Förekomsterna läggs ut åtta veckor framåt.' : ''}</small>` : ''}</div></div>
+      <div class="olfrad">${KI('upprepa')}<div class="olfupp"><select class="uin" data-kff="upprepa">${(f.typ === 'enskilt' ? ['Upprepas inte','Varje vecka','Varannan vecka'] : ['Upprepas inte','Varje vardag','Varje vecka','Varannan vecka','Varje månad']).map(l => `<option ${f.upprepa === l ? 'selected' : ''}>${l}</option>`).join('')}</select>${f.upprepa && f.upprepa !== 'Upprepas inte' ? `<small class="olmut">${f.upprepa === 'Varje vardag' ? 'Måndag–fredag' : f.upprepa === 'Varje månad' ? `Den ${kDd(f.d)} varje månad` : `${f.upprepa} på ${KWDL[kWd(f.d)]}`}${f.heldag ? '' : ` ${hm(f.s)}–${hm(f.e)}`}, från ${kKort(f.d)}. ${f.typ === 'enskilt' ? 'Förekomsterna läggs ut åtta veckor framåt.' : ''}</small>` : ''}</div></div>
       <div class="olfrad">${KI('plats')}<input class="uin" data-kff="plats" placeholder="Sök efter ett rum eller en plats" value="${esc(f.plats || '')}" list="olplatser"><datalist id="olplatser"><option>Stora rummet</option><option>Lilla rummet</option><option>Konferensrum Nord</option><option>Telefon</option></datalist>
         <label class="olfchk olvid"><input type="checkbox" data-kff="video" ${f.video ? 'checked' : ''}>${KI('video')}Videolänk</label></div>
       ${krock ? `<div class="olmsg">${I('tid')}<span>Krockar med <b>${esc(krock.t)}</b> ${hm(krock.s)}–${hm(krock.e)}.</span><button class="olbtn" data-kfforesla>Föreslå en ledig tid</button></div>` : f.delt && f.delt.length && !f.heldag ? `<div class="olmsg ok">${I('check')}<span>${f.delt.every(p => !kUpptagen(p, f.d, f.s, f.e)) ? 'Alla är lediga.' : `${f.delt.filter(p => kUpptagen(p, f.d, f.s, f.e)).map(fornamn).join(', ')} är upptagen.`}</span><button class="tlink" data-kftab="sa">Öppna assistenten</button></div>` : ''}
@@ -13001,13 +13001,13 @@ function kDela(){
 
 /* ---------- Ändringar ---------- */
 function kSkapaFranForm(f){
-  const ev = {id:'kn' + Date.now(), d:f.d, s:f.heldag ? 0 : f.s, e:f.heldag ? 1440 : f.e, allday:!!f.heldag, t:(f.t || '').trim() || (f.lev ? `${f.lev}` : ''), kat:f.lev ? 'leverans' : f.typ, org:kJag(), delt:(f.delt || []).map(p => [p, 'vantar']), plats:f.video ? 'Videolänk' : (f.plats || ''), visa:f.visa || 'upptagen', pamin:f.pamin || prfPamStd(), video:!!f.video, rep:f.typ === 'enskilt' || (f.upprepa && f.upprepa !== 'Upprepas inte'), priv:!!f.priv, agenda:f.agenda || '', klar:false};
+  const ev = {id:'kn' + Date.now(), d:f.d, s:f.heldag ? 0 : f.s, e:f.heldag ? 1440 : f.e, allday:!!f.heldag, t:(f.t || '').trim() || (f.lev ? `${f.lev}` : ''), kat:f.lev ? 'leverans' : f.typ, org:kJag(), delt:(f.delt || []).map(p => [p, 'vantar']), plats:f.video ? 'Videolänk' : (f.plats || ''), visa:f.visa || 'upptagen', pamin:f.pamin || prfPamStd(), video:!!f.video, rep:!!(f.upprepa && f.upprepa !== 'Upprepas inte'), priv:!!f.priv, agenda:f.agenda || '', klar:false};
   return ev;
 }
 function kSpara(f){
   if (!(f.t || '').trim() && !f.lev){ toast('Skriv en rubrik först.'); document.querySelector('[data-kff="t"],[data-knyt]')?.focus(); return false; }
   if (f.typ !== 'uppgift' && !f.heldag && kWd(f.d) > 5){ toast('Välj en vardag.'); return false; }
-  if (f.typ === 'enskilt' && (!f.delt || f.delt.length !== 1)){ toast('Välj en säljare för 1:1.'); return false; }
+  if (f.typ === 'enskilt' && (!f.delt || f.delt.length !== 1)){ toast('Välj vem 1:1:an är med.'); return false; }
   if (f.id){
     const e = KEV.find(x => x.id === f.id), prev = {...e, delt:e.delt.map(d => [...d])};
     const flyttad = e.d !== f.d || e.s !== f.s || e.e !== f.e;
@@ -13038,7 +13038,6 @@ function kOppnaForm(over){
   const d = n.d || (S.kVy === 'dag' ? S.kDag : kIdag());
   const fri = n.s != null ? null : kForslaTid([kJag()], 30, d);
   S.kForm = {typ:'mote', t:'', d: n.d || fri?.d || d, s: n.s ?? fri?.s ?? 9 * 60, e: n.e ?? fri?.e ?? 9 * 60 + 30, delt:[], visa:'upptagen', pamin:prfPamStd(), upprepa:'Upprepas inte', plats:'', video:false, priv:false, agenda:'', tab:'h', heldag:false, ...n};
-  if (S.kForm.typ === 'enskilt') S.kForm.upprepa = 'Varannan vecka';
   S.kNy = null; S.kPeek = null; S.kMenu = null; render();
   setTimeout(() => document.querySelector('[data-kff="t"]')?.focus(), 30);
 }
@@ -13091,9 +13090,9 @@ function kalClick(t, e){
   if (d.kstall !== undefined){ S.kStall = d.kstall || null; render(); return true; }
   if (d.kstalljs !== undefined){ const ev = KEV.find(x => x.id === S.kPeek.id), ganger = kSerieGanger(ev, d.kstalljs); ganger.forEach(x => x.inst = true); S.kPeek = null; S.kStall = null; render(); toast(`${d.kstalljs ? `${d.kstalljs === 'alla' ? 'Hela serien' : 'Den här och följande'} inställd, ${ganger.length} ${ganger.length === 1 ? 'gång' : 'gånger'}.` : 'Inställt.'} ${ev.delt.length ? `${ev.delt.length === 1 ? fornamn(ev.delt[0][0]) : ev.delt.length + ' deltagare'} får en notis och ett mejl.` : ''}${ev.kat === 'leverans' ? ' Mejlpåminnelsen avbokas hos Resend.' : ''}`, () => { ganger.forEach(x => x.inst = false); render(); }); return true; }
   // Snabbskapa
-  if (d.knyskiftyp){ S.kNy.typ = d.knyskiftyp; S.kNy.t = document.querySelector('[data-knyt]').value; render(); return true; }
-  if (d.knydelt){ const n = S.kNy; n.t = document.querySelector('[data-knyt]').value; n.delt = n.delt.includes(d.knydelt) ? n.delt.filter(p => p !== d.knydelt) : [...n.delt, d.knydelt]; render(); return true; }
-  if (d.knyspara !== undefined){ const n = S.kNy; n.t = document.querySelector('[data-knyt]').value; kSpara({...n, visa:'upptagen', pamin:prfPamStd(), upprepa:n.typ === 'enskilt' ? 'Varannan vecka' : 'Upprepas inte'}); return true; }
+  if (d.knyskiftyp){ S.kNy.typ = d.knyskiftyp; if (d.knyskiftyp === 'enskilt') S.kNy.delt = (S.kNy.delt || []).slice(0, 1); S.kNy.t = document.querySelector('[data-knyt]').value; render(); return true; }
+  if (d.knydelt){ const n = S.kNy; n.t = document.querySelector('[data-knyt]').value; n.delt = n.delt.includes(d.knydelt) ? n.delt.filter(p => p !== d.knydelt) : n.typ === 'enskilt' ? [d.knydelt] : [...n.delt, d.knydelt]; render(); return true; }
+  if (d.knyspara !== undefined){ const n = S.kNy; n.t = document.querySelector('[data-knyt]').value; kSpara({...n, visa:'upptagen', pamin:prfPamStd(), upprepa:'Upprepas inte'}); return true; }
   if (d.knymer !== undefined){ const n = S.kNy; kOppnaForm({typ:n.typ, t:document.querySelector('[data-knyt]').value, d:n.d, s:n.s, e:n.e, delt:n.delt}); return true; }
   if (d.knystang !== undefined){ S.kNy = null; render(); return true; }
   // Formuläret
@@ -13101,7 +13100,7 @@ function kalClick(t, e){
   if (d.kfbehall !== undefined){ S.kFormStang = false; render(); return true; }
   if (d.kfspara !== undefined){ kLasForm(); kSpara(S.kForm); return true; }
   if (d.kftab){ kLasForm(); S.kForm.tab = d.kftab; render(); return true; }
-  if (d.kftyp){ kLasForm(); S.kForm.typ = d.kftyp; S.kForm.lev = undefined; if (d.kftyp === 'enskilt'){ S.kForm.upprepa = 'Varannan vecka'; S.kForm.delt = (S.kForm.delt || []).slice(0, 1); } else if (S.kForm.upprepa === 'Varannan vecka') S.kForm.upprepa = 'Upprepas inte'; render(); return true; }
+  if (d.kftyp){ kLasForm(); S.kForm.typ = d.kftyp; S.kForm.lev = undefined; if (d.kftyp === 'enskilt'){ if (['Varje vardag','Varje månad'].includes(S.kForm.upprepa)) S.kForm.upprepa = 'Upprepas inte'; S.kForm.delt = (S.kForm.delt || []).slice(0, 1); } render(); return true; }
   if (d.kflev){ kLasForm(); const f = S.kForm; f.lev = d.kflev; f.typ = 'mote'; f.e = f.s + +d.min; if (!f.t || KLEV.some(([l]) => f.t === l)) f.t = d.kflev; render(); return true; }
   if (d.kfdelt){ kLasForm(); const f = S.kForm; f.delt = f.delt.includes(d.kfdelt) ? f.delt.filter(p => p !== d.kfdelt) : f.typ === 'enskilt' ? [d.kfdelt] : [...f.delt, d.kfdelt]; render(); return true; }
   if (d.kflangd){ kLasForm(); S.kForm.e = S.kForm.s + +d.kflangd; render(); return true; }
@@ -28968,7 +28967,32 @@ document.addEventListener('keydown', e => {
 // Leveranskön: en order som väntar på godkännande har ingen frist än.
 const _ndKKo = kKoHtml;
 kKoHtml = function(){ const h = _ndKKo(); return ndK() ? h.split(`${kLen(1e6)} kvar`).join('Väntar på godkännande') : h; };
-kForslagPers = (valda, attr) => (ndK() ? kPers().map(p => p.n) : S.role === 'chef' ? ['Elin Berg','Amira Haddad','Mohammed Aziz','Sara Lind'] : ['Johanna Ek','Elin Berg','Mohammed Aziz']).filter(p => !valda.includes(p)).slice(0, 3).map(p => `<button class="olpchip lagg" data-${attr}="${esc(p)}">+ ${esc(fornamn(p))}</button>`).join('');
+/* Alla i navet går att bjuda in (beställaren 2026-11-02: "jag kan bara välja mellan 3 st"). De tre förslagen står
+   kvar, och efter dem ett fält som söker bland alla anställda. Ett namn ur listan, eller Enter på det första som
+   passar, gör samma sak som ett klick på ett förslag: i en 1:1 byts personen, i ett möte läggs den till. */
+kForslagPers = (valda, attr) => {
+  const kvar = (ndK() ? kPers().map(p => p.n) : S.role === 'chef' ? ['Elin Berg','Amira Haddad','Mohammed Aziz','Sara Lind'] : ['Johanna Ek','Elin Berg','Mohammed Aziz']).filter(p => !valda.includes(p));
+  const chips = kvar.slice(0, 3).map(p => `<button class="olpchip lagg" data-${attr}="${esc(p)}">+ ${esc(fornamn(p))}</button>`).join('');
+  if (!ndK() || kvar.length <= 3) return chips;
+  return chips + `<input class="uin" data-ndkpers="${attr}" list="ndkpers-${attr}" placeholder="Sök bland alla ${kvar.length}" aria-label="Lägg till en person" autocomplete="off" style="padding:4px 10px;font-size:13px;width:170px"><datalist id="ndkpers-${attr}">${kvar.map(p => `<option value="${esc(p)}">`).join('')}</datalist>`;
+};
+function ndKPersVal(el, forsta){
+  const attr = el.dataset.ndkpers, q = el.value.trim().toLowerCase();
+  if (!q) return false;
+  const valda = ((attr === 'knydelt' ? S.kNy : S.kForm) || {}).delt || [];
+  const kvar = kPers().map(p => p.n).filter(n => !valda.includes(n));
+  const namn = kvar.find(n => n.toLowerCase() === q) || (forsta ? kvar.find(n => n.toLowerCase().includes(q)) : null);
+  if (!namn) return false;
+  const b = document.createElement('button'); b.dataset[attr] = namn; kalClick(b, new Event('click'));
+  setTimeout(() => document.querySelector(`[data-ndkpers="${attr}"]`)?.focus(), 0);
+  return true;
+}
+document.addEventListener('input', e => { if (ndK() && e.target.dataset && e.target.dataset.ndkpers) ndKPersVal(e.target, false); });
+document.addEventListener('keydown', e => {
+  if (!ndK() || e.key !== 'Enter' || !e.target.dataset || !e.target.dataset.ndkpers) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  if (!ndKPersVal(e.target, true) && e.target.value.trim()) toast('Ingen i navet heter så.');
+}, true);
 
 /* ---------- Ledig/upptagen ur navet (Outlooks schemaassistent) ----------
    kUpptagen räknade bara på KEV: den egna kalendern och de kollegor som är ikryssade. För alla andra sa
@@ -29179,7 +29203,7 @@ kSpara = function(f){
   if (!ndK()) return _ndKSpara(f);
   if (!(f.t || '').trim() && !f.lev){ toast('Skriv en rubrik först.'); document.querySelector('[data-kff="t"],[data-knyt]')?.focus(); return false; }
   if (f.typ !== 'uppgift' && !f.heldag && kWd(f.d) > 5){ toast('Välj en vardag.'); return false; }
-  if (f.typ === 'enskilt' && (!f.delt || f.delt.length !== 1)){ toast('Välj en säljare för 1:1.'); return false; }
+  if (f.typ === 'enskilt' && (!f.delt || f.delt.length !== 1)){ toast('Välj vem 1:1:an är med.'); return false; }
   if (f.typ === 'ledig'){ toast('Ledighet söks i Frånvaro.'); frGa(null, 'vacation'); return false; }
   if (f.typ === 'mote' && !ndKGastLas(f)){ toast(NDKGASTFEL); render(); document.querySelector('[data-kff="gastny"]')?.focus(); return false; }
   if (f.typ === 'mote' && !f.id && (f.gaster || []).length && f.upprepa && f.upprepa !== 'Upprepas inte'){ toast('En person utanför Clicknet bjuds in till ett möte som inte upprepas.'); return false; }

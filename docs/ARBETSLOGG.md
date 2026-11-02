@@ -5,6 +5,34 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-02 kväll · 1:1 en gång eller som serie, och alla anställda att välja (grenen `enskilt-en-gang`, EJ MERGAD, ingen migration)
+
+Beställaren frågade varför en 1:1 alltid blir en serie ("man ska kunna välja antingen en serie eller bara en gång. Som
+vanligt liksom") och varför bara tre personer gick att välja.
+
+**Serien satt på tre ställen.** Formulärets Upprepas hade bara Varje vecka och Varannan vecka för 1:1, och
+`kOppnaForm` och typbytet satte Varannan vecka (också över en veckoserie som öppnades för redigering). Snabbkortet
+skickade Varannan vecka. Rutten gjorde om `aldrig` till `varannan` för `enskilt`. Databasen hade aldrig krävt det:
+`serieregel("aldrig")` ger ends_on = starts_on, `lk_skapa_serie` och `lk_fod_forekomster` filtrerar dagarna mot
+ends_on (provat i en rullad transaktion: en gång, och jobbet föder 0). En 1:1 förblir alltså en serie i databasen, för
+punkterna och Be om förberedelse hänger på `series_id`. Förvalet är nu Upprepas inte, som för ett möte. Varje vardag och
+Varje månad blir Upprepas inte vid byte till 1:1, och rutten nekar dem (samma regel som `serie`-handlingen).
+
+**En serie med en gång ska inte se ut som en serie.** `kalender_handelser` ger bara `series_id`, så posten fick ↻ och
+Redigera och Ställ in frågade om serien. `privataIds` läser nu också `calendar_series` (start och slut) för serierna i
+vyn, parallellt med `calendar_event`, och `markeraPrivata` ger `serie: false` när ends_on = starts_on. `serieId` står
+kvar, så 1:1-delen i kortet fungerar.
+
+**Tre personer.** Navets `kForslagPers` tog `kPers()` (alla som inte är avslutade, `hamtaPersoner`) och kapade till
+tre. Förslagen står kvar, och efter dem ett sökfält med en datalist över alla som inte redan är valda. Ett helt namn
+(valt i listan) eller Enter på det första som passar skickar en fristående knapp till `kalClick`, så att samma kod som
+för ett förslag körs (kalClick läser `t.matches`, därför en riktig knapp). I snabbkortet byter en 1:1 nu personen i
+stället för att lägga till.
+
+**Prov:** `probe/kalender-enskilt-prov.mjs` rött på main (bara två val, inget sökfält), 32 av 32 på grenen;
+`kalender-kort-prov.mjs` 20 av 20; `delar/enskilt-en-gang/prov-engang.mjs` 6 av 6 (rullad). Provets musklick på menyn
+träffade minimånaden i det headless fönstret, så knapparna trycks med `click()`.
+
 ## 2026-11-02 kväll · S05/S06-resterna: kalenderns SQL-fynd, Lagets krets och månadens lås (MERGAD till `main` på beställarens ja, 0281 KÖRD)
 
 Sex frågor stod kvar efter resterna (2026-11-01). Beställaren svarade 2026-11-02 via session f8: "fixa allting",
