@@ -26741,7 +26741,11 @@ laggTill = function(rad){
   rad = String(rad || '').trim(); if (!rad) return;
   if (/^\//.test(rad)){ const f = forslag(rad)[0]; if (f){ const m = ndUp().mallar.find(x => x.namn === f.varde); toast(m ? 'Mallen läggs som uppgifter i Nav.' : 'Mallen finns inte.'); } return; }
   const delar = rad.split(/\s*;\s*/).filter(Boolean);
-  (async () => { for (const r of delar){ const s = await ndUpgPost('skapa', {rad:r}, {ladda:false, tyst:true}); if (!s.ok){ ndSkrivFel(s, 'Uppgiften lades inte upp.'); return; } } toast(delar.length > 1 ? `${delar.length} uppgifter upplagda.` : 'Uppgiften är upplagd.'); ndOmlas('upg'); })();
+  // Fältet töms genast, som i utkastet. Ett fält som står kvar ifyllt ser osparat ut och trycks igen: beställaren lade
+  // samma rad fyra gånger (2026-11-02). Säger Nav nej kommer det som inte sparades tillbaka, om fältet fortfarande är tomt.
+  const falt = v => { S.quick = v; render(); setTimeout(() => document.getElementById(S.todoOpen ? 'qinTodo' : 'qinMain')?.focus(), 0); };
+  falt('');
+  (async () => { for (let i = 0; i < delar.length; i++){ const s = await ndUpgPost('skapa', {rad:delar[i]}, {ladda:false, tyst:true}); if (!s.ok){ if (!S.quick) falt(delar.slice(i).join('; ')); ndSkrivFel(s, 'Uppgiften lades inte upp.'); if (i) ndOmlas('upg'); return; } } toast(delar.length > 1 ? `${delar.length} uppgifter upplagda.` : 'Uppgiften är upplagd.'); ndOmlas('upg'); })();
 };
 
 document.addEventListener('click', e => {

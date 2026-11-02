@@ -14,6 +14,21 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "snabbraden-i-dag",
+    rubrik: "Uppgifter: en ny rad hamnar i dag",
+    ingress: "Det du skriver i Att göra i dag läggs i dag, och fältet töms när du trycker Lägg till.",
+    text: `Skriv i fältet överst i **Att göra i dag** eller i **Uppgifter** och tryck **Lägg till**.
+En rad utan dag läggs nu i dag och syns direkt i listan. Förut hamnade den under
+**Någon gång**, så den syntes inte där du skrev den. Vill du inte bestämma en dag
+skriver du **någon gång** på raden.
+
+Fältet töms så fort du trycker, så att samma rad inte läggs två gånger. Går raden
+inte att spara kommer texten tillbaka i fältet.`,
+    datum: "2026-11-02",
+    roller: [],
+    href: "/uppgifter",
+  },
+  {
     slug: "inkio-i-nav",
     rubrik: "Allt som händer i Inkio syns i Nav",
     ingress: "Anteckningar, kortflyttar, ärenden och ordrar i Inkio kommer in i Nav inom några minuter, med en notis.",

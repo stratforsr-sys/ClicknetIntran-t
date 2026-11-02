@@ -331,6 +331,26 @@ ok("ordet manus blir ingen mandag", t("Läs manus").due_date === null);
 
 ok("tom rad ger tom titel", t("   ").titel === "");
 
+// =============================================================================
+rubrik("Snabbinmatningen i Nav 2.0 — en rad utan dag hamnar i dag");
+
+// Beställaren 2026-11-02: raden i "Att göra i dag" sparades fyra gånger utan
+// datum, under Någon gång, och syntes aldrig i listan den skrevs i.
+const n = (text) => tolkaSnabbrad(text, IDAG, IDAG);
+const hedboms = n("Prata med Hedboms och fixa avtal och lägg upp för ADS");
+ok("utan dag blir i dag", hedboms.due_date === IDAG, String(hedboms.due_date));
+ok("och rubriken står kvar hel", hedboms.titel === "Prata med Hedboms och fixa avtal och lägg upp för ADS", hedboms.titel);
+ok("en utskriven dag går före", n("Skriv offert imorgon").due_date === "2026-09-12");
+ok("nästa vecka också", n("Skriv offert nästa vecka").due_date === "2026-09-14");
+ok("ett klockslag utan dag blir i dag den tiden", n("Möte 14:00").due_date === IDAG && n("Möte 14:00").due_time === "14:00");
+ok("och klockslaget lämnar rubriken", n("Möte 14:00").titel === "Möte");
+ok("någon gång blir utan dag", n("Ring Nordic någon gång").due_date === null);
+ok("och lämnar rubriken", n("Ring Nordic någon gång").titel === "Ring Nordic");
+ok("nagon gang utan prickar", n("Ring Nordic nagon gang").due_date === null && n("Ring Nordic nagon gang").titel === "Ring Nordic");
+ok("ring 20 bolag får fortfarande ingen tid", n("Ring 20 bolag").due_time === null && n("Ring 20 bolag").titel === "Ring 20 bolag");
+// Gamla snabbraden skickar ingen dag för raden utan dag, och den lämnas som förut.
+ok("utan tredje argumentet är det som förut", t("Ring Nordic någon gång").due_date === null && t("Ring Nordic någon gång").titel === "Ring Nordic någon gång");
+
 // En tolk som tappar raden ar varre an en som inte tolkar alls.
 ok(
   "allt som inte kands igen blir alltid titel",
