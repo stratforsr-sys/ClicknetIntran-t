@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { arSuperadmin, getCurrentUser } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
-import { bolagsuppslag, inkioKonfigurerad, kundaktivitet, landningssida } from "@/lib/crm/inkio";
+import { bolagsuppslag, inkioKonfigurerad, landningssida } from "@/lib/crm/inkio";
+import { kundaktivitetForKortet } from "@/lib/crm/inflode-server";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,11 @@ export const dynamic = "force-dynamic";
  *
  *   ?vad=kund&order=<uuid>   aktiviteten och landningssidan (kundkortets Aktivitet)
  *   ?vad=bolag&orgnr=<nr>    namn och adress fran Bolagsverket (formularets uppslag)
+ *
+ * AKTIVITETEN LASES UR NAVS KOPIA (0277): bevakningen tar in allt fran Inkio
+ * varje minut (`crm_handelse`), och anteckningar skrivna i Nav star i
+ * `kundanteckning`. Har bevakningen inte last kunden an lases Inkio direkt,
+ * som forut. Superadmin ser ocksa det som raderats i Inkio.
  *
  * BARA LASNING. Samma funktioner som /order anropar via `hamtaInkioAktivitet`,
  * `hamtaLandningssida` och `slaUppBolag`, och samma kontroll fore: ordern lases
@@ -38,7 +44,7 @@ export async function GET(request: Request) {
       if (!kopplat) return svar({ kopplat });
       const orgnr = String(data.org_number ?? "");
       const [aktivitet, sida] = await Promise.all([
-        kundaktivitet(orgnr).catch((e: unknown) => ({ fel: e instanceof Error ? `Inkio svarade inte: ${e.message}` : "Inkio svarade inte." })),
+        kundaktivitetForKortet(orgnr, arSuperadmin(user)).catch((e: unknown) => ({ fel: e instanceof Error ? `Inkio svarade inte: ${e.message}` : "Inkio svarade inte." })),
         landningssida(orgnr).catch((e: unknown) => ({ fel: e instanceof Error ? `Inkio svarade inte: ${e.message}` : "Inkio svarade inte." })),
       ]);
       return svar({ kopplat, aktivitet, sida, hamtad: new Date().toISOString() });

@@ -14,6 +14,30 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "inkio-i-nav",
+    rubrik: "Allt som händer i Inkio syns i Nav",
+    ingress: "Anteckningar, kortflyttar, ärenden och ordrar i Inkio kommer in i Nav inom några minuter, med en notis.",
+    text: `Skriver någon i Inkio om en kund som har en order i Nav, står det i kundkortet
+under **Aktivitet** inom en minut, och inom fem för en kund där inget hänt på två
+dygn. Det gäller anteckningar, flyttade leveranskort,
+ärenden och ändrade ordrar och avtal. Säljaren på ordern får en notis, och det gör
+alla superadmin och den som leder säljaren. Den som skrev får ingen.
+
+Ändras en anteckning i Inkio ändras den i Nav också, och den märks "ändrad".
+Makuleras en order i Inkio makuleras den i Nav. Har Inkio fått betalt markeras den
+betald, och sägs avtalet upp slutar Nav bevaka förlängningen. Ett ändrat belopp
+ändras inte av sig självt, eftersom det ändrar provisionen. Du får en notis och
+rättar ordern i Nav.
+
+En anteckning du skriver i kundkortet sparas i Nav först och skrivs sedan till
+kunden i Inkio. Det som händer med ordern i Nav kommer också in i Inkio: rättad,
+betald, förlängd eller inte, nya bilagor och kampanjsidan. Notiserna styrs under
+**Utskick**.`,
+    datum: "2026-11-02",
+    roller: [],
+    href: "/order",
+  },
+  {
     slug: "kalender-stall-in-serie",
     rubrik: "Kalendern: ställ in en hel serie",
     ingress: "Ett återkommande möte går att ställa in en gång, från en viss gång och framåt eller helt.",

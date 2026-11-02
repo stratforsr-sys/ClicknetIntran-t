@@ -316,6 +316,30 @@ export function nyOrder(o: Orderunderlag, kundId: string, saljareId: string | nu
 }
 
 /**
+ * En rättning (`correct-sales-order`, 0277), i den form Inkios eget "Rätta
+ * order" skickar: raderna som tjänst, antal och text, och orderhuvudets värde,
+ * längd, fakturering och startdag. Samma uträkning som när ordern skapades
+ * (`nyOrder`), så att en rättning i Nav ger exakt den order Nav hade lagt.
+ * Fakturamejlet skickas inte: det sätts i Inkio, och Nav ska inte nolla det.
+ */
+export function rattning(o: Orderunderlag, rader: Orderrad[], finansbolag: string | null) {
+  const doc = nyOrder(o, "", null, rader, finansbolag);
+  return {
+    items: rader.map((r) => ({ service: r.service, quantity: r.quantity || 1, ...(r.description ? { description: r.description } : {}) })),
+    order: {
+      order_value: doc.order_value,
+      term_months: doc.term_months,
+      invoicing: doc.invoicing,
+      financing_company: doc.financing_company,
+      invoice_schedule: doc.invoice_schedule,
+      payment_terms_days: doc.payment_terms_days,
+      invoice_plan: doc.invoice_plan,
+      delivery_date: doc.delivery_date,
+    },
+  };
+}
+
+/**
  * "Vad som avtalats" — fältet Inkio kräver när en order skickas in. Det är
  * det kunden sa ja till, så som Nav godkände det.
  */
@@ -331,12 +355,15 @@ export function overenskommet(o: Orderunderlag, godkandAv: string | null, godkan
   return `${delar.join(" · ")}${tillagg.length ? ` + ${tillagg.join(", ")}` : ""}.${godkand}`;
 }
 
-function kr(n: number): string {
+export function kr(n: number): string {
   return `${new Intl.NumberFormat("sv-SE", { maximumFractionDigits: 2 }).format(n)} kr`;
 }
 
 /** Inkios adress när `INKIO_URL` inte säger annat. Länkarna i klientkomponenter använder den. */
 export const INKIO_STANDARD_URL = "https://crm.inkio.se";
+
+/** Inkio-bolaget Clicknet (`company` på varje post, 2026-11-02). Skickas som `X-Inkio-Company`. */
+export const INKIO_CLICKNET = "01a10ffa-f9b5-717a-91c5-6e7e033eb118";
 
 /** Inkio tar bevis upp till 10 MB per fil (tenantens gräns, standardvärdet). */
 export const INKIO_MAX_BYTE = 10 * 1024 * 1024;
@@ -413,6 +440,11 @@ export const AKTIVITETSMALLAR: Record<string, string> = {
   "Customer {0} was created": "Kunden {0} lades upp",
   "Order {0} was submitted ({1})": "Order {0} skickades in ({1})",
   "Order {0} was created ({1})": "Order {0} skapades ({1})",
+  // Leveranskorten (Task), sedda i kundernas historik 2026-11-02 (0277).
+  "{0} moved this card from {1} to {2}": "{0} flyttade kortet från {1} till {2}",
+  "{0} moved this card from {1} › {2} to {3} › {4}": "{0} flyttade kortet från {1} › {2} till {3} › {4}",
+  "{0} created this card from order {1}": "{0} skapade kortet från order {1}",
+  "{0}'s assignment ended: order {1} was sent": "{0} är klar med uppdraget: order {1} skickades",
 };
 
 /** Raden på svenska när mallen är känd, annars som Inkio skrev den. */

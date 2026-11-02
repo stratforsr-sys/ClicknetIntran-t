@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 import { tomUtkorgen } from "@/lib/utkorg-server";
 import { tomKandidatko } from "@/lib/nav2/rekrytering-utskick";
 import { motespaminnelser } from "@/lib/nav2/kalender-push";
+import { larmaOmBevakningenStar } from "@/lib/crm/inflode-server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -33,12 +34,15 @@ async function kor(request: NextRequest) {
   const tomning = await tomUtkorgen(200);
   // Rekryteringens mejl till kandidater som låg mer än 29 dagar fram (Resends gräns).
   const kandidater = await tomKandidatko();
+  // Inkio-bevakningen (0277) är ett annat jobb. Står den still säger det här till.
+  const inkio = await larmaOmBevakningenStar();
 
   return NextResponse.json({
     paminnelser: error ? `fel: ${error.message}` : paminnelser,
     moten,
     ...tomning,
     kandidater,
+    inkio,
   });
 }
 
