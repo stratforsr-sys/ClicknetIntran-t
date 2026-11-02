@@ -5,6 +5,46 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-02 kväll · Säljsamtalet när Lynes inte har det: uppladdad mp3 och chefens godkännande utan inspelning (grenen `inspelning-utan-lynes`, 0280; grenen lagd om på main `e4b35d2` 2026-11-03)
+
+**Beställaren** 2026-11-01: "mp3, vissa samtal har vi över telefon och då går det inte att ladda upp en inspelning.
+Låt en chef godkänna att en order kan laddas upp utan inspelning." 2026-11-02: "Fixa allting". Utlöst av Städservice
+Ale (#33–#36), som fastnade i spärren fyra gånger eftersom Edvins samtal inte låg på kundens nummer.
+
+**Beslut och varför:**
+- **En uppladdad mp3 blir en rad i `phone_call`** (`source = 'uppladdad'`), inte en egen sorts fil. Då gäller allt som
+  redan gäller ett samtal från Lynes: kortets lista och spelare, behörigheten (`phone_call_read`, `file_object_read`),
+  gallringen när det blir orderlöst, registerutdraget och raderingen, och framför allt samma spärr
+  (`bedomSaljsamtal`): säljarens eget, minst fem minuter, senast på signeringsdagen. En egen filsort hade krävt en andra
+  spärr, en andra spelare och en andra behörighetsregel, och de hade glidit isär.
+- **Servern mäter längden** (`src/lib/mp3.ts`, ram för ram, Xing/Info/VBRI när det finns) i samma nedladdning som ger
+  kontrollsumman (`registreraFil` fick `provaInnehall`). En längd från webbläsaren är en uppgift från den som vill få
+  igenom ordern.
+- **Inget kundnummer** på det uppladdade samtalet (`counterpart_e164` null, villkoret `phone_call_uppladdad`), så
+  svepningen på numret rör det aldrig. Numret står i `counterpart_raw`. Riktningen är `okand`, så Mötens samtal per
+  vecka (`direction = 'ut'`) räknar det inte.
+- **När samtalet ringdes** skriver den som laddar upp (dag och klockslag; filens tid föreslås om den ligger inom 30
+  dygn före signeringen). Filen bär inte den uppgiften.
+- **Utan inspelning** = en rad i `saljsamtal_undantag` med skälet. Säljaren ber om det, och **chefens godkännande av
+  ordern är godkännandet av undantaget** (`godkannOrder` fyller `godkant_av`). En chef som själv lägger in och
+  godkänner godkänner undantaget i samma steg. En egen tabell och inte kolumner på `sales_order`, eftersom ordern har
+  statustriggrar och Inkio-synk som inte ska väckas av det.
+- I listan går en order utan inspelning inte att snabbgodkänna eller massgodkänna: skälet läses i kortet.
+
+**Ändrat:** `0280_saljsamtal_utan_lynes.sql`; `samtal-order-server.ts` (`registreraUppladdatSamtal`); `filer-server.ts`
+(`provaInnehall`); `order/actions.ts` (skapa, skicka in, godkänn, `forberedInspelning`, `registreraInspelning`,
+`begarUtanInspelning`); `/nav2/order` (`inspelning-forbered`, `inspelning-registrera`, `utan-inspelning`, FALT);
+`nav2/order.ts` + `orderforma.ts` (`utan` på ordern); `palettsvar.ts`; `registerutdrag.ts` (två UNDANTAG); utkastet
+(formulärets Säljsamtal, kortets "Finns inte i Lynes", tidslinjerna); `tests/mp3.mjs` (ny), `tests/nav2-orderfalt.mjs`.
+
+**Migrationen:** 0280 är torrkörd i en rullad transaktion mot produktionen (tio prov: uppladdat samtal och fil med
+uppladdare går in, kundnummer på uppladdat, okänd källa, för kort skäl och godkänt utan tid nekas, anon kan inte läsa,
+authenticated bara läsa). **Inte körd:** behörighetsspärren stoppade körningen 2026-11-02 och igen 2026-11-03 efter beställarens "ja till mergen", så beställaren kör den själv.
+0279 togs samma kväll av `0279_andrat_i_inkio` (Inkio-passet). Utan 0280 fungerar main och grenen som förut, men
+uppladdning och "Spelades inte in" ger fel, så **0280 körs före mergen**.
+
+---
+
 ## 2026-11-03 förmiddag · Möten: egen tid i tidväljaren, och bladet stängs efter en bokning (direkt på `main`, ingen migration)
 
 **Beställaren:** "när det kommer till att boka möten så kan jag bara välja hel och halv timme. Jag vill ha precis som

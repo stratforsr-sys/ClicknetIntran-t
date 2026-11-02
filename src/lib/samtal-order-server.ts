@@ -15,6 +15,8 @@ import {
   type Saljsamtalsbedomning,
 } from "@/lib/samtal-order";
 import { normaliseraNummer } from "@/lib/samtal";
+import { registreraFil, taBortInnehall } from "@/lib/filer-server";
+import { mp3Sekunder } from "@/lib/mp3";
 
 /**
  * Skriver kopplingen mellan samtal och affär.
@@ -539,4 +541,110 @@ export async function saljarensKandidater(args: {
     counterpartE164: s.counterpart_e164 as string | null,
     harLjud: s.recording_state === "hamtad",
   }));
+}
+
+/**
+ * Ett säljsamtal som Lynes inte har: en mp3 som säljaren laddat upp (0280).
+ *
+ * ===========================================================================
+ * ETT SAMTAL SOM ALLA ANDRA, MED SAMMA KRAV
+ *
+ * Beställaren 2026-11-01: "mp3, vissa samtal har vi över telefon". Filen blir
+ * en rad i `phone_call` med `source = 'uppladdad'`, och därmed ett samtal som
+ * kortet listar och spelar som de från växeln, och som spärren bedömer med
+ * samma regel: säljarens eget, minst fem minuter, senast på signeringsdagen.
+ *
+ * Längden mäts ur filen (`mp3Sekunder`), i samma nedladdning som ger
+ * kontrollsumman. När samtalet ringdes uppger den som laddar upp — det är den
+ * enda uppgift filen inte bär — och den prövas mot samma fönster som
+ * kandidaterna i formuläret (`saljarensKandidater`): de 30 dygnen fram till
+ * signeringsdagens slut. Ett samtal utanför fönstret registreras inte alls.
+ *
+ * Utan order får samtalet en gallringsfrist, som en inspelning från växeln.
+ * Formuläret laddar upp innan ordern finns, och skickas ordern aldrig blir
+ * filen inte liggande. Med `orderId` kopplas det för hand direkt.
+ *
+ * Inget kundnummer (`counterpart_e164`): svepningen kopplar på numret, och ett
+ * uppladdat samtal ska bara sitta där en människa satt det. Numret som står på
+ * ordern visas i `counterpart_raw`.
+ * ===========================================================================
+ */
+export async function registreraUppladdatSamtal(args: {
+  fileId: string;
+  store: string;
+  filnamn: string;
+  saljareId: string;
+  uppladdadAv: string;
+  /** ISO. När samtalet ringdes, enligt den som laddar upp. */
+  startat: string;
+  /** Numret på ordern, för visningen. */
+  motpart: string | null;
+  /** ISO. När ordern lades upp, eller nu för en order som inte finns än. */
+  orderSkapad: string;
+  /** `YYYY-MM-DD`. */
+  signerad: string | null;
+  orderId: string | null;
+}): Promise<{ samtalId: string; sekunder: number; startat: string } | { fel: string }> {
+  const start = new Date(args.startat);
+  if (Number.isNaN(start.getTime())) return { fel: "Skriv när samtalet ringdes." };
+  const till = saljsamtalsgrans(args.orderSkapad, args.signerad);
+  const fran = new Date(new Date(till).getTime() - KANDIDATFONSTER_DYGN * 86_400_000);
+  if (start.getTime() > Date.now() + 60_000) return { fel: "Tiden för samtalet ligger i framtiden." };
+  if (start.getTime() > new Date(till).getTime()) {
+    return { fel: "Samtalet ringdes efter signeringsdagen. Säljsamtalet ligger senast den dagen." };
+  }
+  if (start < fran) return { fel: `Samtalet ligger mer än ${KANDIDATFONSTER_DYGN} dygn före signeringen.` };
+
+  let sekunder = 0;
+  const fil = await registreraFil({
+    fileId: args.fileId,
+    andamal: "call_recording",
+    filnamn: args.filnamn,
+    store: args.store,
+    uploadedBy: args.uppladdadAv,
+    // Rösten är säljarens, som i en inspelning från växeln (0052).
+    subjectEmployeeId: args.saljareId,
+    provaInnehall: (innehall) => {
+      const s = mp3Sekunder(innehall);
+      if (s === null) return "Filen är inte en mp3. Spara inspelningen som mp3 och försök igen.";
+      sekunder = Math.round(s);
+      if (sekunder < MIN_SALJSAMTAL_SEKUNDER) {
+        const m = Math.floor(sekunder / 60);
+        return `Inspelningen är ${m > 0 ? `${m} min ${sekunder % 60} s` : `${sekunder} s`}. Ett säljsamtal är minst ${MIN_SALJSAMTAL_SEKUNDER / 60} minuter.`;
+      }
+      return null;
+    },
+  });
+  if ("fel" in fil) return { fel: fil.fel };
+
+  const db = supabaseAdmin();
+  const { data: rad, error } = await db
+    .from("phone_call")
+    .insert({
+      source: "uppladdad",
+      direction: "okand",
+      outcome: "besvarat",
+      employee_id: args.saljareId,
+      counterpart_raw: args.motpart?.slice(0, 40) || null,
+      started_at: start.toISOString(),
+      ended_at: new Date(start.getTime() + sekunder * 1000).toISOString(),
+      duration_seconds: sekunder,
+      talk_seconds: sekunder,
+      recording_state: "hamtad",
+      recording_file_id: fil.id,
+      recording_retained_until: gallringsfrist(),
+    })
+    .select("id")
+    .single();
+  if (error || !rad) {
+    await taBortInnehall(fil.id, args.uppladdadAv);
+    return { fel: `Samtalet sparades inte: ${error?.message ?? "okänt fel"}` };
+  }
+
+  if (args.orderId) {
+    const koppling = await kopplaForHand({ samtalId: rad.id as string, orderId: args.orderId, beslutadAv: args.uppladdadAv });
+    if (koppling.fel) return { fel: `Inspelningen är sparad men kunde inte kopplas: ${koppling.fel}` };
+  }
+
+  return { samtalId: rad.id as string, sekunder, startat: start.toISOString() };
 }
