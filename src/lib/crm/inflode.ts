@@ -527,6 +527,18 @@ export function statusFranInkio(r: Rad, f: Forandring, nu: number): Statusandrin
   return null;
 }
 
+/**
+ * Inkio sa makulerad, betald eller uppsagt, men databasen avvisade ändringen i
+ * Nav. Larmet till superadmin. Förut svaldes felet: 0277 kastade på två villkor
+ * för makulerad och uppsagt (rättat i 0279), och ingen märkte något.
+ */
+export function statusfelNotis(s: Statusandring, bolag: string, fel: string): { rubrik: string; detalj: string } {
+  return {
+    rubrik: `${bolag}: ${s.vad} i Inkio, men inte i Nav`,
+    detalj: `${s.skal} Nav kunde inte ändra ordern: ${fel.slice(0, 300)}. Gör det för hand i Nav.`,
+  };
+}
+
 // -----------------------------------------------------------------------------
 // Vilka kunder som läses det här varvet
 // -----------------------------------------------------------------------------

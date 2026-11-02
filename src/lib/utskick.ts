@@ -245,7 +245,7 @@ export const SORT_NAMN: Record<string, string> = {
   "order-inkio-uppsagt": "Avtal uppsagt i Inkio",
   "order-inkio-handelse": "Annat som händer i Inkio",
   "order-anteckning": "Anteckning om en kund i Nav",
-  "inkio-bevakning": "Inkio-bevakningen står still",
+  "inkio-bevakning": "Larm från Inkio-bevakningen",
   "order-grattis": "Grattis till en order",
   "tid-rattelse": "Rättelse av tid att besluta",
   "tid-rattelse-beslut": "Beslut om din tidsrättelse",

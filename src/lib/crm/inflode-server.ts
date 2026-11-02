@@ -15,6 +15,7 @@ import {
   provfilter,
   senastHant,
   statusFranInkio,
+  statusfelNotis,
   tolkaPost,
   type Forfattarnyckel,
   type Lagrad,
@@ -512,7 +513,23 @@ async function tillampa(s: Statusandring, bolag: string, personer: Personer): Pr
   }
 
   const { data: andrad, error } = await db.rpc("lk_inkio_andra_order", { p_order: orderId, p_vad: s.vad, p_skal: s.skal });
-  if (error || andrad !== true) return false;
+  if (error) {
+    // Aldrig tyst igen: raden står redan i crm_handelse med det nya läget, så
+    // övergången provas inte en gång till. Superadmin får göra det för hand.
+    await db.from("integration_log").insert({ system: "crm", direction: "in", body: { fel: error.message, kod: error.code, order_id: orderId, vad: s.vad, inkio_order: inkioOrder } });
+    const larm = statusfelNotis(s, bolag, error.message);
+    await notifieraFlera(await personer.kretsFor([]), {
+      av: null,
+      kalla: "inkio-bevakning",
+      typ: "fel",
+      rubrik: larm.rubrik,
+      detalj: larm.detalj,
+      href: `/order/${orderId}`,
+      objekt: { typ: "sales_order", id: orderId },
+    });
+    return false;
+  }
+  if (andrad !== true) return false;
 
   const { data: o } = await db.from("sales_order").select("company_name, salesperson_id, commission_amount, cancelled_on").eq("id", orderId).maybeSingle();
   const action = s.vad === "makulerad" ? "sales_order.cancelled_in_crm" : s.vad === "betald" ? "sales_order.paid_in_crm" : "sales_order.not_renewed_in_crm";

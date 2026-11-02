@@ -27,6 +27,7 @@ import {
   renText,
   senastHant,
   statusFranInkio,
+  statusfelNotis,
   tolkaPost,
 } from "../src/lib/crm/inflode.ts";
 import { nyOrder, orderrader, rattning } from "../src/lib/crm/inkio-mappning.ts";
@@ -227,6 +228,14 @@ rubrik("Ändringar i Inkio som ändrar Nav");
   ok("uppsagt avtal → avtalsbevakningen avslutas", u && u.vad === "uppsagt" && u.inkioAvtal === "a1");
   const utlopt = tolkaPost({ id: "agreement:a1:ended", kind: "agreement", at: timmeSedan, about: { doctype: "Contract", id: "a1" }, data: { change: "ended", status: "Expired" } });
   ok("ett avtal som bara löpt ut: ingenting (kan vara förnyat)", statusFranInkio(utlopt, { typ: "ny" }, NU) === null);
+
+  // Nav kunde inte ändra ordern (0279 rättade villkoren): larmet säger det.
+  const larm = statusfelNotis(s, "SPM Väst AB", 'new row for relation "sales_order" violates check constraint "sales_order_makulerad_av"');
+  ok("Nav kunde inte makulera: rubriken säger det", larm.rubrik === "SPM Väst AB: makulerad i Inkio, men inte i Nav", larm.rubrik);
+  ok("larmet har skälet, felet och vad som ska göras", larm.detalj.startsWith("Makulerad i Inkio (") && larm.detalj.includes("sales_order_makulerad_av") && larm.detalj.endsWith("Gör det för hand i Nav."), larm.detalj);
+  ok("uppsagt som inte gick: rubriken säger det", statusfelNotis(u, "SPM Väst AB", "x").rubrik === "SPM Väst AB: uppsagt i Inkio, men inte i Nav");
+  ok("betald som inte gick: rubriken säger det", statusfelNotis(b, "SPM Väst AB", "x").rubrik === "SPM Väst AB: betald i Inkio, men inte i Nav");
+  ok("ett långt fel kortas", statusfelNotis(s, "X", "f".repeat(2000)).detalj.length < 500);
 }
 
 rubrik("Kopplingen på organisationsnummer");

@@ -5,6 +5,40 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-02 kväll · Inkio: makulerad och uppsagt når Nav (grenen `inkio-status`, 0279 KÖRD, EJ mergad)
+
+**Beställaren:** "Fixa det här", om provets röda: Inkio-statusen makulerad och uppsagt ändrade aldrig ordern i Nav.
+
+**Felet** (återskapat i en transaktion som rullades tillbaka, SPM Väst #1): `lk_inkio_andra_order` satte
+`cancelled_by = null` och `renewal_by = null`, eftersom ingen i Nav gjorde ändringen. `sales_order_makulerad_av` kräver
+att `cancelled_by` och `cancelled_on` är satta tillsammans, och `sales_order_fornyelse` kräver `renewal_by` vid ett
+utfall. Båda gav 23514. `tillampa` gjorde `if (error || andrad !== true) return false`, så felet syntes ingenstans,
+och raden stod redan i `crm_handelse` med det nya läget, så övergången provades aldrig igen. Betald fungerade.
+
+**Valet:** villkoren lättas bara för Inkio, med en kolumn som säger det (`cancelled_in_crm`, `renewal_in_crm`, 0279).
+Inget systemkonto i `employee`: det hade synts i listor, registerutdraget och säljtavlan. Författaren till Inkio-posten
+som person avvisades också, eftersom posten kan vara skriven av någon annan än den som makulerade. Gränssnittet visar inte
+vem som makulerade (`mak.av` läses aldrig), och `ctx.namn(null)` ger null. Inkio-vägen sätter i övrigt samma fält som
+`makuleraOrder`; `cancel_period_month` är genererad, så avdraget hamnar i makuleringsmånaden som förut.
+
+**Larmet:** ett fel från funktionen ger nu en rad i `integration_log` (`crm`, `in`) och notisen `inkio-bevakning` till
+superadmin med rubriken "Bolag: makulerad i Inkio, men inte i Nav" och "Gör det för hand i Nav." Sorten heter nu
+"Larm från Inkio-bevakningen" i Utskick (förut "… står still", som den fortfarande också larmar om).
+
+**Prov:** `test:inkio-inflode` (5 nya), utskick, notiser, klocka, täckningen, notislänkarna, inkio, tidslinjen gröna.
+Mot produktionen i en transaktion som rullas tillbaka (`delar/inkio-inflode/prov/0279.mjs`): utan 0279 två röda, med
+0279 19/19 (makulerad, betald och uppsagt ändrar ordern utan eko till Inkio, en andra gång ändrar ingenting, en makulering
+eller ett utfall utan person UTAN Inkio-märket avvisas, alla order och kolumner oförändrade efter rollback). Ingen
+navnyhet: Inkio är inte påslaget för någon än.
+
+**Provet i produktionen** (samma dag, före rättelsen) står i `~/nav2-utkast/delar/inkio-inflode/RAPPORT.md`: allt
+grönt utom detta, plus gula punkter som inte är gjorda (en raderad `crm_handelse`-rad kommer inte tillbaka när
+avtrycket är oförändrat, `ut.kopplade += await` räknar fel, `NOTIS_PROV_TILL=" , "` öppnar för alla).
+
+**0279 KÖRD** 2026-11-02 20:08 på beställarens ja. Provet mot den riktiga funktionen efteråt, med rollback: 18/18.
+
+---
+
 ## 2026-11-02 kväll · Tillägget och avtalet i orderformuläret (MERGAD till `main` på beställarens ja), ingen migration
 
 **Beställaren:** (1) ett tillägg på en kund som redan finns hämtar inte allt från den tidigare ordern, till exempel
