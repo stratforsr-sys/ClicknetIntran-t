@@ -256,7 +256,15 @@ async function varv(o: { bara?: readonly string[] }, ut: Bevakning, styrStatus: 
           andrad_at: new Date().toISOString(),
         };
         await db.from("crm_kund").upsert(rad, { onConflict: "org_number" });
-        kund = { forsta_klar: false, avtryck: null, ...kund, ...rad };
+        kund = {
+          org_number: org,
+          customer_id: rad.customer_id,
+          customer_number: rad.customer_number,
+          customer_name: rad.customer_name,
+          senast_sokt: rad.senast_sokt,
+          forsta_klar: kund?.forsta_klar ?? false,
+          avtryck: kund?.avtryck ?? null,
+        };
         if (!hittad) return;
         // Anteckningar skrivna i Nav innan kunden fanns i Inkio går ut nu.
         await kaAnteckningarSomVantar(org);
@@ -503,7 +511,10 @@ async function koppla(org: string, kund: Kundrad, rader: Rad[], ordrar: Order[],
 
   const inkioOrdrar = rader
     .filter((r) => r.slag === "post" && r.sort === "order" && r.om_id)
-    .map((r) => ({ id: r.om_id!, nummer: r.om_nummer, varde: r.data?.value === undefined || r.data?.value === null ? null : Number(r.data.value), makulerad: r.data?.cancelled === true }));
+    .map((r) => {
+      const v = r.data?.value;
+      return { id: r.om_id as string, nummer: r.om_nummer, varde: v === undefined || v === null ? null : Number(v), makulerad: r.data?.cancelled === true };
+    });
   if (!inkioOrdrar.length) return 0;
 
   const db = supabaseAdmin();

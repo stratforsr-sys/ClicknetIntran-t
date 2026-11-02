@@ -632,13 +632,16 @@ export type Kundhistorik = { items: import("./inflode").Historikpost[] };
  * till slutet (högst tio), så att en kund med lång historik inte tappar den
  * äldsta raden en ändring kan gälla.
  */
+type Historiksida = { items?: Kundhistorik["items"]; more?: boolean; next?: string | null };
+
 export async function kundhistorik(kundId: string): Promise<Kundhistorik> {
   const items: Kundhistorik["items"] = [];
   let fore: string | null = null;
   for (let sida = 0; sida < 10; sida++) {
-    const svar = await anrop<{ items?: Kundhistorik["items"]; more?: boolean; next?: string | null }>("GET", "/api/customers/get-customer-history", {
-      query: { id: kundId, with_deleted: "1", ...(fore ? { before: fore } : {}) },
-    });
+    // Typen uttryckligen: `fore` sätts ur svaret, och utan den ser TypeScript en cirkel.
+    const query: Record<string, unknown> = { id: kundId, with_deleted: "1" };
+    if (fore) query.before = fore;
+    const svar: Historiksida = await anrop<Historiksida>("GET", "/api/customers/get-customer-history", { query });
     items.push(...(svar.items ?? []));
     if (!svar.more || !svar.next) break;
     fore = svar.next;

@@ -36,7 +36,7 @@ function giltig(request: NextRequest, kropp: string, hemlighet: string): boolean
   const egen = request.headers.get("x-nav-nyckel");
   if (egen && lika(Buffer.from(egen), Buffer.from(hemlighet))) return true;
 
-  const sig = (request.headers.get("x-inkio-signature") ?? "").trim();
+  const sig: string = (request.headers.get("x-inkio-signature") ?? "").trim();
   if (!sig) return false;
   const mac = createHmac("sha256", hemlighet).update(kropp).digest();
   const varden = sig.split(/[,\s]+/).map((s) => s.replace(/^(sha256|v1)=/, ""));
