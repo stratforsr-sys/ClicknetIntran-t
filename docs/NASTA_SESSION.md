@@ -31,6 +31,9 @@ Beställaren efter tidslinjen: "Ändra eller ta bort sin egen anteckning … Byg
   och `delar/kund-tidslinje/prov.mjs` 38/38 på samma fil.
 
 **Kvar, i ordning:**
+0. **Pusha grenen igen.** Previewen av `bd53a0f` föll på ett typfel (`{ data }` ur `navAnteckningar()`, som redan ger
+   listan). Rättelsen ligger som en lokal commit ovanpå i `~/sb-tidslinje`; den pushades inte 2026-11-02 för att
+   dygnets 30 pushar var slut. `git -C ~/sb-tidslinje push`, och vänta in previewen innan något annat.
 1. Beställarens ja till **0279** (`node scripts/apply-sql.mjs 0279_kundanteckning_andra_radera`). Utan den svarar
    Ändra och Ta bort "migration 0279" och registerutdragsprovet är rött.
 2. Beställarens ja till **mergen**. Navnyheten har datum 2026-11-02: byt det om mergen blir senare.

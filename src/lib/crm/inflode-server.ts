@@ -643,7 +643,7 @@ export async function kaAnteckning(id: string, sekunder = 2, handling: "anteckni
 export async function kundaktivitetUrNav(org: string, superadmin: boolean, o: { utanInkio?: boolean } = {}): Promise<Kundaktivitet | null> {
   const db = supabaseAdmin();
   const personer = new Personer();
-  const [{ data: k }, { data: rader }, { data: anteckningar }, nivaAv, namnAv] = await Promise.all([
+  const [{ data: k }, { data: rader }, nav, nivaAv, namnAv] = await Promise.all([
     db.from("crm_kund").select("customer_id, customer_number, customer_name, forsta_klar").eq("org_number", org).maybeSingle(),
     db
       .from("crm_handelse")
@@ -657,7 +657,6 @@ export async function kundaktivitetUrNav(org: string, superadmin: boolean, o: { 
     personer.namnAv(),
   ]);
 
-  const nav = anteckningar;
   // Utan Inkio (previewen) räcker Navs egna anteckningar; annars krävs att bevakningen läst kunden.
   if (!k?.forsta_klar && !(o.utanInkio && nav.length)) return null;
   const lista = aktivitetsrader((rader ?? []) as Lagrad[], nav, { superadmin, inkioBas: inkioUrl(), nivaAv, namnAv });
