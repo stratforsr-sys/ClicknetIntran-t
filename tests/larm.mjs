@@ -17,6 +17,7 @@
  */
 import {
   bedomDrift,
+  bedomMorgonkvitto,
   DRIFT_ETIKETT,
   kvittoLarmtext,
   larmDigest,
@@ -200,6 +201,24 @@ console.log("\n\x1b[1mLarmtexten om det uteblivna kvittot\x1b[0m");
     larmDigest("kvitto", kvittoLarmtext(aldrig)) !== larmDigest("kvitto", kvittoLarmtext(trettio)),
   );
   ok("och pekar pa cron-posten", kvittoLarmtext(aldrig).includes("vercel.json"), kvittoLarmtext(aldrig));
+}
+
+console.log("\n\x1b[1mMorgonjobbets kvitto (Gul 24, rättelserna 2026-11-02)\x1b[0m");
+{
+  const nu = new Date("2026-11-03T07:00:00Z");
+  const igar = { data: [{ ts: "2026-11-02T06:09:18Z" }], error: null };
+  ok("gårdagens kvitto efter 06:30 saknas", bedomMorgonkvitto(igar, nu).saknas === true);
+  ok("före 06:30 saknas inget", bedomMorgonkvitto(igar, new Date("2026-11-03T06:00:00Z")).saknas === false);
+  ok("dagens kvitto saknas inte", bedomMorgonkvitto({ data: [{ ts: "2026-11-03T06:05:00Z" }], error: null }, nu).saknas === false);
+  ok("aldrig ett kvitto är inte ett larm", bedomMorgonkvitto({ data: [], error: null }, nu).saknas === false);
+  // Förut gav ett fel i frågan `data: null` och därmed "aldrig": inget larm, och ingen fick veta.
+  let kastade = "";
+  try {
+    bedomMorgonkvitto({ data: null, error: { message: "canceling statement due to statement timeout" } }, nu);
+  } catch (e) {
+    kastade = e instanceof Error ? e.message : String(e);
+  }
+  ok("ett fel i frågan kastas, i stället för att se ut som inget kvitto", kastade.includes("statement timeout"), kastade || "kastade inte");
 }
 
 console.log(fel === 0 ? "\n\x1b[32mAlla kontroller godkända.\x1b[0m\n" : `\n\x1b[31m${fel} underkända.\x1b[0m\n`);

@@ -29,6 +29,70 @@ Inkio. Allt som hänt med kunden står där, och siffrorna 1–5 byter flik.`,
     href: "/order",
   },
   {
+    slug: "fel-larmar-om-samtal-och-morgonkvitto",
+    rubrik: "Fel larmar när ett samtal inte går att läsa",
+    ingress: "Ett samtal från växeln som inte blir ett samtal i Nav syns nu i Fel, och felrapporter står under rätt typ i händelseloggen.",
+    text: `Under **Fel** kommer ett larm när ett samtal från växeln inte går att läsa in, också
+efter nattens nya försök. Förut låg det kvar i två veckor utan att någon fick veta. Samma
+larm kommer om morgonjobbets kvitto inte går att läsa.
+
+I **Händelseloggen** står en felrapport som någon skrivit under **Skapande**, och den som
+tilldelar, svarar på eller följer ett fel under **Ändring**. Bara fel som navet fångat
+självt står under **System**.`,
+    datum: "2026-11-03",
+    roller: ["sales_manager", "ceo", "admin"],
+    href: "/fel",
+  },
+  {
+    slug: "tillagg-med-kundens-uppgifter",
+    rubrik: "Ett tillägg får kundens adress och kontakt",
+    ingress: "En ny order på en befintlig kund fylls i med allt Nav vet om kunden, och avtalet följer med ett sparat utkast.",
+    text: `Trycker du **Ny order för kunden** på kundkortet, eller **Lägg som tillägg** i
+formuläret, fylls kontakten, telefonen, mejlen och adressen i från kundens tidigare
+order. Saknar alla order adressen hämtar Nav den från Bolagsverket. Förut följde
+bara orten med, och ordern stoppades på adressen när den skickades. Rätta och
+Förläng tar också med hela adressen.
+
+Avtalet laddas upp när du väljer det. Stänger du formuläret och kommer tillbaka
+med **Fortsätt där du var** är avtalet kvar. Förut fick du "Ladda upp det
+påskrivna avtalet" fast det var bifogat, och fick välja filen igen.`,
+    datum: "2026-11-02",
+    roller: [],
+    href: "/order",
+  },
+  {
+    slug: "fredagskollen-borta",
+    rubrik: "Tid frågar inte längre om veckan stämmer",
+    ingress: "Rutan Stämmer veckan? och fredagsnotisen 16:30 är borta.",
+    text: `Under **Veckan** i Tid fanns rutan **Stämmer veckan?**, och på fredagar kom en
+notis 16:30 om den. Båda är borttagna. Svaret syntes bara för dig själv, så
+frågan gjorde ingen nytta.
+
+Ser du ett fel i din tid rättar du det som förut: tryck på dagen och sedan
+**Rätta**.`,
+    datum: "2026-11-02",
+    roller: [],
+    href: "/tid",
+  },
+  {
+    slug: "inkio-mejl-bara-det-viktiga",
+    rubrik: "Inkio: mejl bara om det viktiga",
+    ingress: "Ärenden, makulerade order och uppsagda avtal kommer som mejl. Resten är notiser.",
+    text: `Navet mejlar dig när något händer i ett ärende i Inkio: ett nytt ärende, en ny
+status eller en anteckning i ärendet. Du får också mejl när en order makuleras och
+när ett avtal sägs upp, eftersom båda kostar pengar.
+
+Andra anteckningar, flyttade leveranskort, nya order och avtal och andra
+ändringar kommer bara som notis, i klockan och i telefonen. Förut kom de också
+som mejl.
+
+Allt från Inkio har ett eget område, **Inkio och kundanteckningar**, under
+**Inställningar → Notiser**. Där väljer du vad du vill ha för varje sort.`,
+    datum: "2026-11-02",
+    roller: [],
+    href: "/profil",
+  },
+  {
     slug: "kundens-tidslinje",
     rubrik: "Kundkortet visar kundens hela historik, som i Inkio",
     ingress: "Ordrar, avtal, anteckningar, leveranskort och samtal i en tidslinje, med sök, filter och anteckningar per roll.",

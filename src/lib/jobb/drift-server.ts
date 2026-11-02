@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { bedomDrift, type Driftbesked } from "@/lib/jobb/larm";
+import { bedomDrift, bedomMorgonkvitto, type Driftbesked, type Morgonkvitto } from "@/lib/jobb/larm";
 
 /**
  * E0.7. Nattjobbets senaste kvitto, last ur `audit_log`.
@@ -54,18 +54,9 @@ export type Drift = {
 /** Gul 24 (produktionsprovet 2026-10-30): morgonjobbets kvitto, skrivet av `api/jobb/morgon`. */
 export const MORGON_KVITTO_ACTIONS = ["job.morning_ok", "job.morning_partial"] as const;
 
-/** Vercel kör morgonposten någon gång under timmen 05 UTC. 06:30 ger en halvtimmes marginal efter det. */
-const MORGON_SENAST_MINUT_UTC = 6 * 60 + 30;
-
-export type Morgonkvitto = { senaste: string | null; saknas: boolean };
-
-/**
- * Har morgonjobbet kvitterat i dag? `saknas` blir sant först efter 06:30 UTC och
- * bara om ett kvitto någon gång funnits: som för natten är "aldrig" inte ett fel,
- * eftersom det första kvittot skrivs först morgonen efter att koden gått ut.
- */
+/** Morgonjobbets kvitto, bedömt i `bedomMorgonkvitto` (larm.ts). Ett fel i frågan kastas därifrån. */
 export async function hamtaMorgonkvitto(db: SupabaseClient, nu: Date = new Date()): Promise<Morgonkvitto> {
-  const { data } = await db
+  const svar = await db
     .from("audit_log")
     .select("ts")
     .eq("object_type", "job")
@@ -73,10 +64,7 @@ export async function hamtaMorgonkvitto(db: SupabaseClient, nu: Date = new Date(
     .in("action", [...MORGON_KVITTO_ACTIONS])
     .order("ts", { ascending: false })
     .limit(1);
-  const senaste = (data?.[0]?.ts as string | undefined) ?? null;
-  const dygnet = Date.UTC(nu.getUTCFullYear(), nu.getUTCMonth(), nu.getUTCDate());
-  const efterGransen = nu.getTime() >= dygnet + MORGON_SENAST_MINUT_UTC * 60_000;
-  return { senaste, saknas: efterGransen && senaste !== null && new Date(senaste).getTime() < dygnet };
+  return bedomMorgonkvitto({ data: svar.data as { ts: string }[] | null, error: svar.error }, nu);
 }
 
 export async function hamtaDrift(db: SupabaseClient, nu: Date = new Date()): Promise<Drift> {

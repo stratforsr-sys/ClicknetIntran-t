@@ -3682,7 +3682,7 @@ button.kkt-om:hover,a.kkt-om:hover{border-color:var(--line-2);color:var(--ink)}
 .kkt-not:hover .kkt-fast,.kkt-not:focus-within .kkt-fast,.kkt-not.fast .kkt-fast{opacity:1}
 @media (hover:none){.kkt-fast{opacity:1}}
 .kkt-fast+.kkt-tid{margin-left:0}
-/* Ändra och ta bort sin egen anteckning (0279). Knapparna syns när man pekar på anteckningen, som Fäst överst. */
+/* Ändra och ta bort sin egen anteckning (0283). Knapparna syns när man pekar på anteckningen, som Fäst överst. */
 .kkt-atg{margin-left:auto;display:inline-flex;align-items:center;gap:2px;opacity:0;transition:opacity .15s}
 .kkt-not:hover .kkt-atg,.kkt-not:focus-within .kkt-atg,.kkt-not.fast .kkt-atg{opacity:1}
 @media (hover:none){.kkt-atg{opacity:1}}
@@ -25843,13 +25843,8 @@ function ndTidVeckan(){
       <span class="tiflag">${d.idag ? '<span class="pill t-ok">I dag</span>' : ''}${d.auto ? '<span class="pill t-neutral">Stängd av navet</span>' : ''}${d.auto && (ND.tid.autoOk || []).includes(d.datum) ? `<span class="pill t-ok">${I('check')}Bekräftad</span>` : ''}${ND.tid.egna.filter(h => h.korr && h.dag === d.datum).map(h => `<span class="pill ${h.korr === 'pending' ? 't-warn' : h.korr === 'approved' ? 't-ok' : 't-neutral'}">${h.korr === 'pending' ? `Väntar på ${ndChefF()} · ${h.kl}` : h.korr === 'approved' ? `${I('check')}Rättad · ${h.kl}` : 'Avslagen'}</span>`).join('')}</span>
       ${open ? `<ul class="tidagrader">${d.rader.map(h => `<li><span class="num">${h.kl}</span>${h.kind === 'in' ? 'Stämplade in' : h.source === 'system_auto_close' ? 'Stängd av navet vid schemaslut' : 'Stämplade ut'}${d.idag ? '' : ndRattKnapp(h)}${S.tRatt === h.id ? ndRattForm(h) : ''}</li>`).join('')}</ul>` : ''}</li>`;
   };
-  const kollad = v => (ND.tid.veckokoll || []).find(k => k.vecka === v && k.ok);
-  const rad2 = (() => { let n = 0, v = kollad(denna) ? denna : forra; while (kollad(v)){ n++; v = ndPlusDag(v, -7); } return n; })();
-  const koll = vk === denna ? `<div class="tikoll ${kollad(denna) ? 'ok' : ''}">${kollad(denna) ? `<span class="tic ok">${I('check')}</span><span><b>Veckan är kollad</b><span class="muted">${rad2 === 1 ? 'Första veckan i rad.' : `${rad2} veckor i rad.`} Det du rättar nu stoppar aldrig lönerapporten.</span></span>`
-      : `<span><b>Stämmer veckan?</b><span class="muted">Trettio sekunder på fredagen. Tryck på en dag för att se raderna. Nav påminner dig 16:30.</span></span><div class="pacts"><button class="btn btn-p btn-sm" data-tiveckaok>Ja, den stämmer</button><button class="btn btn-s btn-sm" data-tinagotfel>Något är fel</button></div>${S.tFelHint ? '<span class="tifelhint">Tryck på dagen som är fel och rätta raden.</span>' : ''}`}</div>`
-    : kollad(vk) ? `<p class="muted tismall" style="margin-top:10px">Vecka ${ndVecka(vk)} kollade du ${esc(ndKortNar(kollad(vk).nar))}.${rad2 > 1 ? ` ${rad2} veckor i rad.` : ''}</p>` : '';
-  return `<section class="card"><div class="chead"><h2>Veckan</h2><span class="tiwknav"><button class="ibtn tiv-s" data-tivecka="${forra}" ${vk === forra ? 'disabled' : ''} aria-label="Förra veckan">‹</button><span class="num">v. ${ndVecka(vk)}</span><button class="ibtn tiv-s" data-tivecka="${denna}" ${vk === denna ? 'disabled' : ''} aria-label="Den här veckan">›</button></span>${kollad(vk) ? `<span class="pill t-ok">${I('check')}Kollad</span>` : ''}<span class="end"><span class="num tiwk"><b>${dur(tot)}</b>${vk === denna ? `<small class="tiwkf">förra veckan ${dur(forraTot)}</small>` : ''}</span></span></div>
-    <ul class="tivecka">${dagar.map(rad).join('')}</ul>${koll}</section>`;
+  return `<section class="card"><div class="chead"><h2>Veckan</h2><span class="tiwknav"><button class="ibtn tiv-s" data-tivecka="${forra}" ${vk === forra ? 'disabled' : ''} aria-label="Förra veckan">‹</button><span class="num">v. ${ndVecka(vk)}</span><button class="ibtn tiv-s" data-tivecka="${denna}" ${vk === denna ? 'disabled' : ''} aria-label="Den här veckan">›</button></span><span class="end"><span class="num tiwk"><b>${dur(tot)}</b>${vk === denna ? `<small class="tiwkf">förra veckan ${dur(forraTot)}</small>` : ''}</span></span></div>
+    <ul class="tivecka">${dagar.map(rad).join('')}</ul></section>`;
 }
 const ndKortNar = n => { const [d, k] = n.split(' '); return `${frKort(d)} ${k}`; };
 function ndTidVantarKort(vantar){
@@ -26307,8 +26302,6 @@ document.addEventListener('click', e => {
   if (d.ndtiavslagok){ stopp(); ndTidPost('avslag-sett', {id:d.ndtiavslagok}); return; }
   if (d.ndtiautook){ stopp(); ndTidPost('auto-ok', {dag:d.ndtiautook}); return; }
   if (d.ndtischemasett){ stopp(); ndTidPost('schema-sett', {fran:d.ndtischemasett}); return; }
-  if (d.tiveckaok !== undefined){ stopp(); ndTidPost('vecka', {vecka:ndMandag(kIdag()), ok:true}); return; }
-  if (d.tinagotfel !== undefined){ stopp(); S.tFelHint = true; render(); return; }
   if (d.tisenasvar){ stopp(); const v = (document.querySelector(`[data-tisenatext="${d.tisenasvar}"]`)?.value || '').trim(); if (!v){ toast('Skriv vad som hände, en mening räcker.'); return; } ndTidPost('sen-forklaring', {id:d.tisenasvar, text:v}); return; }
   if (d.tipamin || d.tipammin){ stopp(); const fore = JSON.parse(JSON.stringify(S.ndPaminn));
     if (d.tipamin) S.ndPaminn[d.tipamin].pa = !S.ndPaminn[d.tipamin].pa; else { const [k, m] = d.tipammin.split(':'); S.ndPaminn[k].min = +m; }
@@ -27350,8 +27343,10 @@ ordBolagsverket = function(tyst){
   if (!ndO()) return _ndOrdBv(tyst);
   const n = S.ordNy, k = n.org.replace(/\D/g, '');
   if (n.org.length === 10 && /^\d{10}$/.test(n.org)) n.org = n.org.slice(0, 6) + '-' + n.org.slice(6);
-  const kund = ORDER.find(o => o.org.replace('-', '') === k.slice(-10));
-  if (kund){ Object.assign(n, {bolag:n.bolag || kund.bolag, ort:n.ort || kund.ort, adress:n.adress || kund.adress, postnr:n.postnr || kund.postnr, uppslag:'ok'}); return; }
+  // En befintlig kund: adressen ur kundens order (ndKundUppg). Saknar alla den (order från före 0075) frågas
+  // Bolagsverket ändå, så att ett tillägg inte stoppas på adressen när det skickas.
+  const kund = ndKundUppg(k);
+  if (kund){ ndKundFyll(n, kund, false); n.uppslag = 'ok'; if (n.adress && n.postnr && n.ort) return; }
   n.uppslag = 'hamtar';
   ndLas(`/nav2/inkio?vad=bolag&orgnr=${encodeURIComponent(n.org)}`).then(ndSvar).then(s => {
     if (S.ordNy !== n) return;
@@ -27588,7 +27583,7 @@ function ndTlPost(o, r, tid){
     <p class="kkt-pr">${r.lank ? `<a class="kkt-titel" href="${esc(r.lank)}" target="_blank" rel="noopener" title="Öppna i Inkio">${esc(titel)} ↗</a>` : `<span class="kkt-titel">${esc(titel)}</span>`}${st ? `<span class="pill t-${st[1]}">${esc(st[0])}</span>` : ''}</p>
     ${meta.length ? `<p class="kkt-meta">${meta.join('<span aria-hidden="true">·</span>')}</p>` : ''}${matare}</div></li>`;
 }
-// 0279: raden ur hämtningen (den kortet ritas av), så att en ändring syns innan nästa hämtning.
+// 0283: raden ur hämtningen (den kortet ritas av), så att en ändring syns innan nästa hämtning.
 const ndTlKalla = (o, id) => { const a = (NDKUND[o.org] || {}).aktivitet; return a && a.rader ? a.rader.find(x => x.id === id) || null : null; };
 // "i dag 14:05", "mån 2 nov 09:30": när en version skrevs eller anteckningen togs bort.
 const ndTlNar = iso => { const t = ndTidText(iso); return `${kkDagRub(t.slice(0, 10)).toLowerCase()} ${t.slice(11, 16)}`; };
@@ -27878,10 +27873,62 @@ function ndOrdFalt(n){
 // listpriset; ett eget pris står kvar (och syns som "under listpris"). Före utkastets egen hanterare.
 document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-onp]'); const n = S.ordNy; if (!b || !ndO() || !n) return;
   const ny = +b.dataset.onp, fore = n.p; if (ny && fore && ny !== fore && OPAKET[fore] && OPAKET[ny] && ndTal(n.man) === OPAKET[fore].pris) n.man = String(OPAKET[ny].pris); }, true);
-// Avtalet i formuläret: utkastet sparar namnet, navet behöver filen.
-let ndOrdAvtalFil = null;
-document.addEventListener('change', e => { if (ndO() && S.view === 'order' && S.ordNy && e.target.dataset && e.target.dataset.onfil !== undefined) ndOrdAvtalFil = e.target.files && e.target.files[0] || null; }, true);
-document.addEventListener('drop', e => { if (ndO() && S.ordNy && e.target.closest && e.target.closest('.ondrop') && e.dataTransfer.files[0]) ndOrdAvtalFil = e.dataTransfer.files[0]; }, true);
+// Kundens uppgifter ur alla order på organisationsnumret: den man kom från först, sedan den senaste. Adressen och kontakten
+// tas var för sig, hela, från första order som har dem, så att ett tillägg på en kund vars order man kom från
+// saknar adressen (order från före 0075) får den från en annan (beställaren 2026-11-02, Hedboms Måleri).
+function ndKundUppg(org, nr){
+  const k = String(org || '').replace(/\D/g, '').slice(-10); if (k.length !== 10) return null;
+  const alla = ORDER.filter(o => String(o.org || '').replace(/\D/g, '') === k).sort((a, b) => (b.nr === nr) - (a.nr === nr) || b.nr - a.nr);
+  if (!alla.length) return null;
+  const forst = v => alla.find(v) || {}, adr = forst(o => o.adress && o.postnr && o.ort), kon = forst(o => o.kontakt && o.tel);
+  return {bolag:forst(o => o.bolag).bolag || '', kontakt:kon.kontakt || '', tel:kon.tel || '', mejl:kon.mejl || forst(o => o.mejl).mejl || '',
+    adress:adr.adress || '', postnr:adr.postnr || '', ort:adr.ort || forst(o => o.ort).ort || ''};
+}
+// Fyller bara det som är tomt. Adressen går in hel eller inte alls; kontakten bara när ingen är skriven.
+function ndKundFyll(n, u, medKontakt){
+  if (!n || !u) return;
+  if (!n.bolag) n.bolag = u.bolag;
+  if (!(n.adress && n.postnr && n.ort)){ if (u.adress) Object.assign(n, {adress:u.adress, postnr:u.postnr, ort:u.ort}); else if (!n.ort) n.ort = u.ort; }
+  if (!medKontakt) return;
+  if (!n.kontakt && !n.tel) Object.assign(n, {kontakt:u.kontakt, tel:u.tel, mejl:n.mejl || u.mejl});
+  else if (!n.mejl && u.mejl && n.kontakt === u.kontakt) n.mejl = u.mejl;
+}
+// Utkastets förifyllning (tillägg från kundkortet, förlängning, Rätta) skrevs innan adressen fanns och tar bara orten.
+// Tillägg och förlängning: allt om kunden ur kundens order, och Bolagsverket om ingen har adressen. Rätta: ordens egen.
+const _ndKuOrdNyStart = ordNyStart;
+ordNyStart = function(fran){
+  const nd = ndO() && fran && fran.org;
+  if (nd && fran.ratta){ const o = ORDER.find(x => x.nr === fran.ratta); if (o) fran = {adress:o.adress || '', postnr:o.postnr || '', ...fran}; }
+  else if (nd){ const f = {...fran}, fore = S.ndForlang ? ORDER.find(x => x.id === S.ndForlang) : null; ndKundFyll(f, ndKundUppg(f.org, +f.addon || (fore && fore.nr) || 0), true); fran = f; }
+  const r = _ndKuOrdNyStart(fran), n = S.ordNy;
+  if (nd && !fran.ratta && n && !(n.adress && n.postnr && n.ort)){ ordBolagsverket(true); ordUppdatera(); }
+  return r;
+};
+// "Lägg som tillägg" i formuläret: kontakten följer med, som från kundkortet. Före utkastets egen hanterare.
+document.addEventListener('click', e => { const b = ndO() && e.target.closest && e.target.closest('[data-onaddon]'), n = S.ordNy; if (b && n) ndKundFyll(n, ndKundUppg(n.org, +b.dataset.onaddon), true); }, true);
+
+// Avtalet i formuläret: utkastet sparar namnet, navet behöver filen. Den laddas upp när den väljs, som i Nav
+// (Avtalsfalt i Nyorder.tsx), och filens id står i formuläret (avtalFil). Då följer avtalet med utkastet i
+// webbläsaren: förut fanns filen bara i minnet, så ett formulär som stängts och återställts stod med avtalet
+// bifogat men skickade ingen fil, och servern svarade "Ladda upp det påskrivna avtalet" (Hedboms Måleri,
+// 2026-11-02). En rättad order får avtalet som bilaga när den sparas, som förut.
+let ndOrdAvtalFil = null, ndOrdAvtalLoft = null;
+function ndOrdUtkastSpara(n){ if (S.ordNy !== n || n.ratta) return; try { const u = {...n, _tid:`i dag ${hm(now())}`}; delete u.uppslag; localStorage.setItem('nav2-ordutkast', JSON.stringify(u)); } catch(_){} }
+function ndOrdAvtalUpp(n, f){
+  if (!n) return; n.avtalFil = null; if (!f || n.ratta) return;
+  const loft = (async () => {
+    const p = await ndOrdPost('avtal-forbered', {id:'', filnamn:f.name, mime:f.type, storlek:f.size}, {ladda:false, tyst:true});
+    if (!p.ok || !(await ndLaddaUpp(p, f)) || S.ordNy !== n || ndOrdAvtalFil !== f) return;
+    n.avtalFil = {id:p.fileId, store:p.store, namn:f.name}; ndOrdUtkastSpara(n);
+  })().catch(() => {});
+  ndOrdAvtalLoft = loft; loft.then(() => { if (ndOrdAvtalLoft === loft) ndOrdAvtalLoft = null; });
+}
+// Ett avbrutet filval (inga filer) ändrar ingenting, som utkastets egen hanterare: förut tömdes filen men namnet stod kvar.
+document.addEventListener('change', e => { const f = ndO() && S.view === 'order' && S.ordNy && e.target.dataset && e.target.dataset.onfil !== undefined && e.target.files && e.target.files[0]; if (f){ ndOrdAvtalFil = f; ndOrdAvtalUpp(S.ordNy, f); } }, true);
+document.addEventListener('drop', e => { if (ndO() && S.ordNy && e.target.closest && e.target.closest('.ondrop') && e.dataTransfer.files[0]){ ndOrdAvtalFil = e.dataTransfer.files[0]; ndOrdAvtalUpp(S.ordNy, ndOrdAvtalFil); } }, true);
+// Ett utkast från före uppladdningen har bara filens namn. Då är avtalet inte bifogat, och formuläret säger det.
+document.addEventListener('click', e => { if (!ndO() || !e.target.closest || !e.target.closest('[data-onaterst]')) return; const n = S.ordNy;
+  if (n && n.avtal && !(n.avtalFil && n.avtalFil.namn === n.avtal) && !(ndOrdAvtalFil && ndOrdAvtalFil.name === n.avtal)){ n.avtal = null; n.avtalFil = null; ordUppdatera(); toast('Utkastet är tillbaka. Bifoga avtalet igen: filen sparades inte med utkastet.'); } });
 /* Formulärets säljsamtal: den VALDA säljarens samtal fram till signeringsdagens slut (beställaren 2026-10-31).
    Förut den inloggades egna från i dag och i går, så chefen som lade in Edvins order från förra veckan såg sina
    egna samtal och aldrig hans. Repots saljarensKandidater (/nav2/order, saljarens-samtal): minst fem minuter,
@@ -27931,8 +27978,12 @@ async function ndOrdSkicka(utkast){
   if (!utkast){ const fel = onFel(n); if (godkandRatta){ delete fel['avtal']; delete fel['samtal']; } if (Object.keys(fel).filter(k => k !== 'mejl').length){ Object.keys(fel).forEach(k => S.ordRor.add(k)); ordUppdatera(); document.querySelector(`[data-onga="${Object.keys(fel)[0]}"]`)?.click(); toast(`${Object.keys(fel).length} saker saknas. De står i rött.`); return; } }
   const falt = ndOrdFalt(n), ratta = n.ratta ? ORDER.find(x => x.nr === n.ratta) : null;
   if (S.role === 'chef' && !utkast && !ratta) falt.godkann = 'on';
-  // Avtalet laddas upp först. En ny order kräver det; en rättad får det som bilaga.
-  if (ndOrdAvtalFil && !utkast){
+  // Avtalet laddas upp först. En ny order kräver det; en rättad får det som bilaga. En ny order har oftast
+  // redan laddat upp det när det valdes (ndOrdAvtalUpp), och då skickas filens id.
+  if (ndOrdAvtalLoft && !utkast) await ndOrdAvtalLoft;
+  const uppladdat = !ratta && n.avtalFil && n.avtal === n.avtalFil.namn ? n.avtalFil : null;
+  if (uppladdat && !utkast){ falt.avtal_fil_id = uppladdat.id; falt.avtal_store = uppladdat.store; falt.avtal_filnamn = uppladdat.namn; }
+  else if (ndOrdAvtalFil && !utkast){
     const p = await ndOrdPost(ratta ? 'bilaga-forbered' : 'avtal-forbered', {id:ratta ? ratta.id : '', filnamn:ndOrdAvtalFil.name, mime:ndOrdAvtalFil.type, storlek:ndOrdAvtalFil.size}, {ladda:false, tyst:true});
     if (!p.ok){ ndSkrivFel(p, 'Avtalet gick inte att ladda upp.'); return; }
     if (!(await ndLaddaUpp(p, ndOrdAvtalFil))){ toast('Avtalet kom inte fram. Försök igen.'); return; }
@@ -28080,7 +28131,7 @@ document.addEventListener('click', e => {
     if (!val.size){ S.kkLas = null; kkRender(); return; } ndOrdPost('ratta-fran-avtal', {id:x.id, falt:f}); return; }
   if (ds.kknotspara !== undefined){ stopp(); const o = oppen(), t = (document.querySelector('[data-kknot]')?.value || '').trim(); if (!t){ document.querySelector('[data-kknot]')?.focus(); return; }
     ndOrdPost('anteckning', {org:o.org, text:t, order:(S.kkNotOm || {})[o.org] || ''}, {ladda:false}).then(s => { if (s.ok){ S.kkNotUtk = ''; ndKundHamta(o, true); kkRender(); } }); return; }
-  // 0279: ändra och ta bort sin egen anteckning. Raden i kortet ändras direkt; hämtningen efteråt ger versionerna.
+  // 0283: ändra och ta bort sin egen anteckning. Raden i kortet ändras direkt; hämtningen efteråt ger versionerna.
   if (ds.kktandra){ stopp(); const o = oppen(), r = o && kkData(o.org).akt.find(x => x.id === ds.kktandra); if (!r) return;
     S.kktAndra = {id:r.id, text:r.text}; S.kktBort = null; kkRender(); ndTlFokus('[data-kktandtext]', true); return; }
   if (ds.kktandranej !== undefined){ stopp(); S.kktAndra = null; kkRender(); return; }

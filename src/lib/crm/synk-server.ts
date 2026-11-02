@@ -309,13 +309,13 @@ async function vemGjorde(orderId: string, action: string): Promise<{ namn: strin
  * texten från tjänstekontot (svaret kom aldrig fram, men anteckningen gjorde
  * det) tas den raden i stället.
  *
- * En borttagen anteckning skrivs aldrig dit (0279). Ändras eller tas den bort
+ * En borttagen anteckning skrivs aldrig dit (0283). Ändras eller tas den bort
  * medan den är på väg köas ändringen efteråt, så att Inkio inte står kvar med
  * den gamla texten.
  */
 export async function anteckningICrm(id: string): Promise<boolean> {
   const db = supabaseAdmin();
-  // `*`: `om_order` (0278) och `raderad_at` (0279) finns först när migrationerna körts.
+  // `*`: `om_order` (0278) och `raderad_at` (0283) finns först när migrationerna körts.
   const { data: a } = await db.from("kundanteckning").select("*").eq("id", id).maybeSingle();
   if (!a || a.crm_id || a.raderad_at) return false;
   const { data: inst } = await db.from("crm_installning").select("aktiv, utflode").eq("id", true).maybeSingle();
@@ -365,7 +365,7 @@ export async function anteckningICrm(id: string): Promise<boolean> {
 }
 
 /**
- * En ändrad anteckning → samma anteckning i Inkio (0279), med den text som
+ * En ändrad anteckning → samma anteckning i Inkio (0283), med den text som
  * gäller nu. Står den inte i Inkio än gör den inget: `anteckningICrm` skriver
  * den nya texten när den skrivs dit.
  */
@@ -380,7 +380,7 @@ export async function anteckningAndradICrm(id: string): Promise<boolean> {
   return true;
 }
 
-/** En borttagen anteckning → borttagen i Inkio också (0279). Stod den aldrig där finns inget att ta bort. */
+/** En borttagen anteckning → borttagen i Inkio också (0283). Stod den aldrig där finns inget att ta bort. */
 export async function anteckningBorttagenICrm(id: string): Promise<boolean> {
   const db = supabaseAdmin();
   const { data: a } = await db.from("kundanteckning").select("*").eq("id", id).maybeSingle();

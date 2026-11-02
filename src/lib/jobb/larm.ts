@@ -202,3 +202,27 @@ export function kvittoLarmtext(besked: Driftbesked): string {
   }
   return `Nattjobbet lamnade sitt senaste kvitto for ${besked.timmar} timmar sedan, mot gransen ${MAX_TIMMAR}. Minst en natt har hoppats over.`;
 }
+
+/** Vercel kör morgonposten någon gång under timmen 05 UTC. 06:30 ger en halvtimmes marginal efter det. */
+const MORGON_SENAST_MINUT_UTC = 6 * 60 + 30;
+
+export type Morgonkvitto = { senaste: string | null; saknas: boolean };
+
+/**
+ * Gul 24 (produktionsprovet 2026-10-30): har morgonjobbet kvitterat i dag? `saknas` blir sant först
+ * efter 06:30 UTC och bara om ett kvitto någon gång funnits: som för natten är "aldrig" inte ett fel,
+ * eftersom det första kvittot skrivs först morgonen efter att koden gått ut.
+ *
+ * Ett fel i frågan KASTAS (rättelserna 2026-11-02). Förut blev det `data: null`, alltså "aldrig", och
+ * då larmade ingenting: en trasig kontroll såg ut som en kontroll utan anmärkning.
+ */
+export function bedomMorgonkvitto(
+  svar: { data: { ts: string }[] | null; error: { message: string } | null },
+  nu: Date,
+): Morgonkvitto {
+  if (svar.error) throw new Error(`Morgonkvittot gick inte att läsa: ${svar.error.message}`);
+  const senaste = svar.data?.[0]?.ts ?? null;
+  const dygnet = Date.UTC(nu.getUTCFullYear(), nu.getUTCMonth(), nu.getUTCDate());
+  const efterGransen = nu.getTime() >= dygnet + MORGON_SENAST_MINUT_UTC * 60_000;
+  return { senaste, saknas: efterGransen && senaste !== null && new Date(senaste).getTime() < dygnet };
+}

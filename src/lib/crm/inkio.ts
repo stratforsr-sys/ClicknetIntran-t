@@ -703,13 +703,13 @@ export async function skrivAnteckning(doctype: "Customer" | "Sales Order", id: s
   return svar?.id ?? svar?.name ?? null;
 }
 
-/** Ny text i en anteckning Nav skrev (`edit-comment`, 0279): Inkio sparar versionen före. Samma form som när den skrevs. */
+/** Ny text i en anteckning Nav skrev (`edit-comment`, 0283): Inkio sparar versionen före. Samma form som när den skrevs. */
 export async function andraAnteckning(kommentarId: string, text: string, namn: string): Promise<void> {
   if (!inkioFarSkriva()) throw new Error("Inkio skrivs bara från produktionen.");
   await anrop("POST", "/api/comments/edit-comment", { json: { id: kommentarId, content: `**${namn}** (via Nav): ${text}` } });
 }
 
-/** Ta bort en anteckning Nav skrev (`delete-comment`, 0279). Redan borttagen i Inkio räknas som klart. */
+/** Ta bort en anteckning Nav skrev (`delete-comment`, 0283). Redan borttagen i Inkio räknas som klart. */
 export async function taBortAnteckning(kommentarId: string): Promise<void> {
   if (!inkioFarSkriva()) throw new Error("Inkio skrivs bara från produktionen.");
   try {

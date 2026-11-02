@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
  * varje minut (`crm_handelse`), och anteckningar skrivna i Nav star i
  * `kundanteckning`. Star bevakningen av, eller har den inte last kunden an,
  * lases Inkio direkt, med Navs anteckningar. Superadmin ser ocksa det som
- * raderats i Inkio och de anteckningar som tagits bort i Nav (0279).
+ * raderats i Inkio och de anteckningar som tagits bort i Nav (0283).
  *
  * BARA LASNING. Samma funktioner som /order anropar via `hamtaInkioAktivitet`,
  * `hamtaLandningssida` och `slaUppBolag`, och samma kontroll fore: ordern lases

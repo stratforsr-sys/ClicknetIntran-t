@@ -15,6 +15,7 @@ import {
   provfilter,
   senastHant,
   statusFranInkio,
+  statusfelNotis,
   tolkaPost,
   type Forfattarnyckel,
   type Lagrad,
@@ -160,7 +161,7 @@ class Personer {
     };
   }
 
-  /** Namnet på en anställd (den som tog bort en anteckning, 0279). */
+  /** Namnet på en anställd (den som tog bort en anteckning, 0283). */
   async namnAv(): Promise<(id: string) => string | null> {
     const { personer } = await this.hamta();
     return (id) => {
@@ -362,7 +363,7 @@ async function kaOmAnteckningar(): Promise<void> {
   const db = supabaseAdmin();
   const { data: inst } = await db.from("crm_installning").select("utflode").eq("id", true).maybeSingle();
   if (!inst?.utflode) return;
-  // `*`: `raderad_at` (0279) finns först när migrationen körts. En borttagen anteckning skrivs aldrig dit.
+  // `*`: `raderad_at` (0283) finns först när migrationen körts. En borttagen anteckning skrivs aldrig dit.
   const { data } = await db
     .from("kundanteckning")
     .select("*")
@@ -510,7 +511,7 @@ async function tillampa(s: Statusandring, bolag: string, personer: Personer): Pr
       const krets = await personer.kretsFor([]);
       await notifieraFlera(krets, {
         av: null,
-        kalla: "order-inkio-handelse",
+        kalla: "order-inkio-makulerad",
         typ: "order",
         rubrik: `${bolag}: ordern makulerades i Inkio strax efter en rättning i Nav`,
         detalj: "Nav makulerade den inte. Kontrollera i Inkio och makulera i Nav om den ska bort.",
@@ -522,7 +523,23 @@ async function tillampa(s: Statusandring, bolag: string, personer: Personer): Pr
   }
 
   const { data: andrad, error } = await db.rpc("lk_inkio_andra_order", { p_order: orderId, p_vad: s.vad, p_skal: s.skal });
-  if (error || andrad !== true) return false;
+  if (error) {
+    // Aldrig tyst igen: raden står redan i crm_handelse med det nya läget, så
+    // övergången provas inte en gång till. Superadmin får göra det för hand.
+    await db.from("integration_log").insert({ system: "crm", direction: "in", body: { fel: error.message, kod: error.code, order_id: orderId, vad: s.vad, inkio_order: inkioOrder } });
+    const larm = statusfelNotis(s, bolag, error.message);
+    await notifieraFlera(await personer.kretsFor([]), {
+      av: null,
+      kalla: "inkio-bevakning",
+      typ: "fel",
+      rubrik: larm.rubrik,
+      detalj: larm.detalj,
+      href: `/order/${orderId}`,
+      objekt: { typ: "sales_order", id: orderId },
+    });
+    return false;
+  }
+  if (andrad !== true) return false;
 
   const { data: o } = await db.from("sales_order").select("company_name, salesperson_id, commission_amount, cancelled_on").eq("id", orderId).maybeSingle();
   const action = s.vad === "makulerad" ? "sales_order.cancelled_in_crm" : s.vad === "betald" ? "sales_order.paid_in_crm" : "sales_order.not_renewed_in_crm";
@@ -616,7 +633,7 @@ async function kaAnteckningarSomVantar(org: string): Promise<void> {
 /**
  * En anteckning till utkorgen. `sekunder` = när den får gå. `handling`:
  * `anteckning` skriver den till Inkio, `anteckning-andrad` och
- * `anteckning-borttagen` (0279) skriver ändringen och borttagningen dit.
+ * `anteckning-borttagen` (0283) skriver ändringen och borttagningen dit.
  */
 export async function kaAnteckning(id: string, sekunder = 2, handling: "anteckning" | "anteckning-andrad" | "anteckning-borttagen" = "anteckning"): Promise<void> {
   await supabaseAdmin()
@@ -670,7 +687,7 @@ export async function kundaktivitetUrNav(org: string, superadmin: boolean, o: { 
   };
 }
 
-/** Kundens anteckningar skrivna i Nav. `*`: kolumnerna från 0278 och 0279 finns först när migrationerna körts. */
+/** Kundens anteckningar skrivna i Nav. `*`: kolumnerna från 0278 och 0283 finns först när migrationerna körts. */
 async function navAnteckningar(org: string): Promise<Navanteckning[]> {
   const { data } = await supabaseAdmin().from("kundanteckning").select("*").eq("org_number", org).order("skriven_at", { ascending: false }).limit(200);
   return (data ?? []) as Navanteckning[];

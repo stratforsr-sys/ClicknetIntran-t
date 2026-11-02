@@ -609,3 +609,56 @@ export function tolkaSamtal(payload: unknown): Tolkning {
 export function inspelningslage(t: Tolkning): "ingen" | "hos_vaxeln" {
   return t.recordingUrl ? "hos_vaxeln" : "ingen";
 }
+
+/** Hur nattens omtag gick. `hann` är falskt när tiden tog slut innan sista råpåsen prövats. */
+export type Omtag = { tolkade: number; fel: string[]; hann: boolean };
+
+/**
+ * Nattens omtag i omgångar (rättelserna 2026-11-02). Förut tog natten de 200 äldsta otolkade
+ * råpåsarna och inget mer: 200 påsar som aldrig går att tolka hade stängt ute varje nyare, natt
+ * efter natt. Nu läses nästa omgång efter den sista radens id tills en omgång är kortare än `antal`,
+ * eller tills klockan når `senast`.
+ *
+ * Ren: `hamta` och `tolka` gör anropen. Ett fel i `hamta` KASTAS, så att nattens steg faller och
+ * larmar. Ett fel i `tolka` gäller bara den påsen och står i `fel` med radens id.
+ */
+export async function omtagIOmgangar<T extends { id: number }>(
+  hamta: (efterId: number, antal: number) => Promise<T[]>,
+  tolka: (rad: T) => Promise<void>,
+  o: { antal: number; senast: number; nu?: () => number },
+): Promise<Omtag> {
+  const nu = o.nu ?? Date.now;
+  let efter = 0;
+  let tolkade = 0;
+  const fel: string[] = [];
+  for (;;) {
+    if (nu() >= o.senast) return { tolkade, fel, hann: false };
+    const rader = await hamta(efter, o.antal);
+    for (const r of rader) {
+      if (nu() >= o.senast) return { tolkade, fel, hann: false };
+      try {
+        await tolka(r);
+        tolkade++;
+      } catch (e) {
+        fel.push(`${r.id}: ${e instanceof Error ? e.message : String(e)}`);
+      }
+      efter = r.id;
+    }
+    if (rader.length < o.antal) return { tolkade, fel, hann: true };
+  }
+}
+
+/**
+ * Larmtexten för nattens omtag, eller null när det inte finns något att larma om. En påse som inte
+ * blir ett samtal stod förut kvar i `call_ingest` i fjorton dygn utan att någon fick veta, med skälet
+ * i `normalize_error` som inget kort läser. Siffrorna byts mot `<n>` i digesten (`normaliseraFel`),
+ * så samma fel natt efter natt blir en rad i Fel med en räknare.
+ */
+export function omtagsLarm(r: Omtag): string | null {
+  const delar: string[] = [];
+  if (r.fel.length > 0) {
+    delar.push(`${r.fel.length} råpåsar från de senaste fjorton dygnen blev inte samtal (call_ingest, normalize_error). Den första: ${r.fel[0]}`);
+  }
+  if (!r.hann) delar.push("Omtaget hann inte igenom alla råpåsar i natt.");
+  return delar.length > 0 ? delar.join(" ") : null;
+}

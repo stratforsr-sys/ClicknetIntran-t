@@ -697,7 +697,7 @@ async function ics(rad: Utkorgsrad): Promise<boolean> {
  *   makulera (0074) — ordern makulerades och bocken var kvar: makulera i Inkio
  *   leverans (0075) — ett leveranssteg bokades, genomfördes, flyttades …
  *   anteckning   (0277) — en anteckning från kundkortet, till kunden i Inkio
- *   anteckning-andrad, anteckning-borttagen (0279) — samma anteckning ändrad
+ *   anteckning-andrad, anteckning-borttagen (0283) — samma anteckning ändrad
  *                         eller borttagen i Nav: ändrad eller borttagen i Inkio
  *   nav-handelse (0277) — betald, rättad, förlängning, bilaga, säljsamtal,
  *                         kampanjsidan: en rad på ordern (eller kunden) i Inkio

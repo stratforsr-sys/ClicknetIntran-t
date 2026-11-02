@@ -279,8 +279,15 @@ export const NOTIS_KALLOR = [
    * "vi får aldrig missa något". Kretsen ar alla superadmin, saljaren och admin
    * som leder saljaren (`kretsen` i crm/inflode.ts). Larmet nar bevakningen
    * star still gar till superadmin.
+   *
+   * Ärendet, makuleringen och uppsägningen är egna sorter (beställaren
+   * 2026-11-02, "jag vill inte få 100 mejl"): de mejlas, resten står i klockan
+   * och telefonen. En anteckning på ett ärende räknas som ärendet.
    */
   "order-inkio-anteckning",
+  "order-inkio-arende",
+  "order-inkio-makulerad",
+  "order-inkio-uppsagt",
   "order-inkio-handelse",
   "order-anteckning",
   "inkio-bevakning",
@@ -602,14 +609,12 @@ export const NOTIS_KALLOR = [
   /**
    * Nav 2.0 (0094), Tid: chefens fråga till den som inte stämplat in eller
    * har en dag som föreslås som ogiltig frånvaro (`tid-fraga`), "Be X rätta"
-   * en öppen dag (`tid-be-ratta`), fredagens veckokoll, chefens morgonnotis
-   * och 16:00-samlingen
+   * en öppen dag (`tid-be-ratta`), chefens morgonnotis och 16:00-samlingen
    * (skrivs av dagtidsjobbet bakom `SKRIVLAGE.tid`), påminnelsen om ett nytt
    * schema som inte setts, och en förklaring till en sen dag (till chefen).
    */
   "tid-fraga",
   "tid-be-ratta",
-  "tid-veckokoll",
   "tid-chef-morgon",
   "tid-chef-kvar",
   "tid-schema-sett",
@@ -712,6 +717,9 @@ export const HANDELSEKALLOR = [
   "order-overtack",
   "order-rattad",
   "order-inkio-anteckning",
+  "order-inkio-arende",
+  "order-inkio-makulerad",
+  "order-inkio-uppsagt",
   "order-inkio-handelse",
   "order-anteckning",
   "inkio-bevakning",
@@ -784,7 +792,6 @@ export const HANDELSEKALLOR = [
   "franvaro-annan-period",
   "tid-fraga",
   "tid-be-ratta",
-  "tid-veckokoll",
   "tid-chef-morgon",
   "tid-chef-kvar",
   "tid-schema-sett",

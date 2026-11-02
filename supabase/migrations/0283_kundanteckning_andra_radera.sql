@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0279_kundanteckning_andra_radera.sql — ändra och ta bort sin egen anteckning,
+-- 0283_kundanteckning_andra_radera.sql — ändra och ta bort sin egen anteckning,
 -- som i Inkio
 --
 -- -----------------------------------------------------------------------------
@@ -45,7 +45,7 @@ end $$;
 
 create index if not exists kundanteckning_raderad_av on public.kundanteckning (raderad_av) where raderad_av is not null;
 
-comment on column public.kundanteckning.andrad_at is 'När texten senast ändrades (0279), eller null.';
-comment on column public.kundanteckning.versioner is 'Det anteckningen sagt förut, äldst först: [{text, at}] (0279). Texten nu står i text.';
-comment on column public.kundanteckning.raderad_at is 'När anteckningen togs bort (0279). Raden står kvar; bara superadmin ser den.';
-comment on column public.kundanteckning.raderad_av is 'Vem som tog bort anteckningen (0279): författaren eller superadmin.';
+comment on column public.kundanteckning.andrad_at is 'När texten senast ändrades (0283), eller null.';
+comment on column public.kundanteckning.versioner is 'Det anteckningen sagt förut, äldst först: [{text, at}] (0283). Texten nu står i text.';
+comment on column public.kundanteckning.raderad_at is 'När anteckningen togs bort (0283). Raden står kvar; bara superadmin ser den.';
+comment on column public.kundanteckning.raderad_av is 'Vem som tog bort anteckningen (0283): författaren eller superadmin.';

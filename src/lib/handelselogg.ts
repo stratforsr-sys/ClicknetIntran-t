@@ -193,6 +193,7 @@ const SKAPANDE = [
   "suggested",
   "generated",
   "acked",
+  "reported",
   "hired",
   "in",
   "out",
@@ -215,7 +216,10 @@ function slutarPa(andelse: string, lista: string[]): boolean {
  *
  *   1. `auth.*` ar alltid autentisering. Ett losenordsbyte ar en andring i
  *      teknisk mening och en autentiseringshandelse i varje annan.
- *   2. `job.*` och `error.*` ar alltid system. Ingen manniska bad om dem.
+ *   2. `job.*` och `error.new` ar alltid system. Ingen manniska bad om dem.
+ *      Resten av `error.*` gor en manniska i Fel (0082): rapporterar,
+ *      tilldelar, svarar, foljer. Da galler andelsen som for alla andra
+ *      (rattelserna 2026-11-02; `error.reported` hamnade under system).
  *   3. `role.*` och `permission.*` ar alltid behorighet. Att indelningen gar pa
  *      PREFIXET och inte pa andelsen "revoked" ar viktigt:
  *      `attendance_incident.revoked` ar en tillbakadragen franvarohandelse och
@@ -242,7 +246,7 @@ export function typFor(action: string | null | undefined): Handelsetyp | null {
   if (prefix === "" || andelse === "") return null;
 
   if (prefix === "auth") return "autentisering";
-  if (prefix === "job" || prefix === "error") return "system";
+  if (prefix === "job" || action === "error.new") return "system";
   if (prefix === "role" || prefix === "permission") return "behorighet";
 
   if (slutarPa(andelse, UTLAMNANDE)) return "utlamnande";

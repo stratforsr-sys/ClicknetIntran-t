@@ -289,7 +289,7 @@ export async function POST(request: Request) {
         });
         return svar({ ok: "Anteckningen är sparad. Den skrivs till Inkio inom en minut.", kommentar: `nav:${a.id}` });
       }
-      // 0279: ändra och ta bort sin egen anteckning, som i Inkio. Texten förut sparas i
+      // 0283: ändra och ta bort sin egen anteckning, som i Inkio. Texten förut sparas i
       // `versioner`; en borttagen står kvar för superadmin. Utkorgen gör samma sak i Inkio.
       case "anteckning-andra":
       case "anteckning-ta-bort": {
@@ -297,7 +297,7 @@ export async function POST(request: Request) {
         if (!UUID.test(aid)) return svar({ fel: "Anteckningen finns inte." }, 400);
         const { data: a } = await db.from("kundanteckning").select("*").eq("id", aid).maybeSingle();
         if (!a || a.raderad_at || !(await serKunden(String(a.org_number)))) return svar({ fel: "Anteckningen finns inte, eller så är den redan borttagen." }, 404);
-        if (!("raderad_at" in a)) return svar({ fel: "Det går inte att ändra anteckningar än (migration 0279)." }, 503);
+        if (!("raderad_at" in a)) return svar({ fel: "Det går inte att ändra anteckningar än (migration 0283)." }, 503);
         const egen = a.skriven_av === mig;
         const org = String(a.org_number), pin = `nav:${aid}`, nu = new Date().toISOString();
 

@@ -25,6 +25,15 @@
  * ÄNDRING av en order, ett avtal eller ett ärende ger alltid notis; en ändrad
  * eller raderad anteckning gör det inte (den uppdateras och märks).
  * =============================================================================
+ *
+ * =============================================================================
+ * SORTEN AVGÖR OM DEN MEJLAS (beställaren 2026-11-02)
+ *
+ * Ärendet (posten, och varje anteckning på det), en makulerad order och ett
+ * uppsagt avtal har egna sorter och mejlas. Allt annat är `order-inkio-anteckning`
+ * eller `order-inkio-handelse` och står bara i klockan och telefonen. Vad som
+ * mejlas bestäms i `MEJLKALLOR` och i Utskick, inte här.
+ * =============================================================================
  */
 import { aktivitetstext } from "./inkio-mappning.ts";
 
@@ -86,9 +95,9 @@ export type Rad = {
 // Tolkningen
 // -----------------------------------------------------------------------------
 
-/** Inkios rika text som ren text: radbrytningar behålls, taggar och entiteter försvinner. */
+/** Inkios rika text som ren text: radbrytningar behålls, taggar och entiteter försvinner, "@[Namn](ref:User/…)" blir "@Namn". */
 export function renText(s: string | null | undefined): string {
-  let t = String(s ?? "");
+  let t = String(s ?? "").replace(/@\[([^\]]+)\]\(ref:[^)]*\)/g, "@$1");
   if (/<[a-z/][^>]*>/i.test(t)) {
     t = t
       .replace(/<br\s*\/?>/gi, "\n")
@@ -341,7 +350,7 @@ export function jamfor(gammal: Tidigare | undefined, ny: Rad): Forandring {
 // -----------------------------------------------------------------------------
 
 export type Notisbeslut = {
-  kalla: "order-inkio-anteckning" | "order-inkio-handelse";
+  kalla: "order-inkio-anteckning" | "order-inkio-arende" | "order-inkio-makulerad" | "order-inkio-uppsagt" | "order-inkio-handelse";
   rubrik: string;
   detalj: string;
 };
@@ -387,6 +396,15 @@ export function notisFor(r: Rad, f: Forandring, o: { bolag: string; nu: number; 
 
   if (r.slag === "anteckning") {
     if (f.typ !== "ny" || !farsk || !r.text) return null;
+    // En anteckning på ett ärende räknas som ärendet, och mejlas.
+    if (r.om_typ === "Ticket") {
+      const arende = r.om_titel || r.om_nummer;
+      return {
+        kalla: "order-inkio-arende",
+        rubrik: `${o.bolag}: ${r.forfattare ?? "Någon"} skrev i ${arende ? `ärendet ${arende}` : "ett ärende"}`,
+        detalj: r.text,
+      };
+    }
     return {
       kalla: "order-inkio-anteckning",
       rubrik: `${o.bolag}: ${r.forfattare ?? "Någon"} skrev i Inkio`,
@@ -407,10 +425,23 @@ export function notisFor(r: Rad, f: Forandring, o: { bolag: string; nu: number; 
   if (f.typ === "ny") {
     if (!farsk) return null;
     if (o.navSkapadeNyss && (r.sort === "order" || r.sort === "agreement")) return null;
-    return { kalla: "order-inkio-handelse", rubrik: `${o.bolag}: ${r.text}`, detalj: "Nytt i Inkio" };
+    return { kalla: postkalla(r, f, o.nu), rubrik: `${o.bolag}: ${r.text}`, detalj: "Nytt i Inkio" };
   }
   if (!f.vad.length) return null;
-  return { kalla: "order-inkio-handelse", rubrik: `${o.bolag}: ${f.vad[0]}`, detalj: f.vad.slice(1).join(" · ") || r.text };
+  return { kalla: postkalla(r, f, o.nu), rubrik: `${o.bolag}: ${f.vad[0]}`, detalj: f.vad.slice(1).join(" · ") || r.text };
+}
+
+/**
+ * Sorten för en post. Makulerad och uppsagt avgörs av samma övergång som
+ * ändrar ordern i Nav (`statusFranInkio`), så att brevet och ändringen alltid
+ * gäller samma sak.
+ */
+function postkalla(r: Rad, f: Forandring, nu: number): Notisbeslut["kalla"] {
+  if (r.sort === "ticket") return "order-inkio-arende";
+  const s = statusFranInkio(r, f, nu);
+  if (s?.vad === "makulerad") return "order-inkio-makulerad";
+  if (s?.vad === "uppsagt") return "order-inkio-uppsagt";
+  return "order-inkio-handelse";
 }
 
 /**
@@ -494,6 +525,18 @@ export function statusFranInkio(r: Rad, f: Forandring, nu: number): Statusandrin
     return { vad: "uppsagt", inkioAvtal: r.om_id, skal: `Avtal ${r.om_nummer ?? ""} ${AVTAL_SV[andring] ?? "sades upp"} i Inkio.`.replace(/\s+/g, " ") };
   }
   return null;
+}
+
+/**
+ * Inkio sa makulerad, betald eller uppsagt, men databasen avvisade ändringen i
+ * Nav. Larmet till superadmin. Förut svaldes felet: 0277 kastade på två villkor
+ * för makulerad och uppsagt (rättat i 0279), och ingen märkte något.
+ */
+export function statusfelNotis(s: Statusandring, bolag: string, fel: string): { rubrik: string; detalj: string } {
+  return {
+    rubrik: `${bolag}: ${s.vad} i Inkio, men inte i Nav`,
+    detalj: `${s.skal} Nav kunde inte ändra ordern: ${fel.slice(0, 300)}. Gör det för hand i Nav.`,
+  };
 }
 
 // -----------------------------------------------------------------------------
@@ -642,7 +685,7 @@ export type Aktivitetsrad = {
   raderad: boolean;
   /** Nav-ordern en anteckning från Nav gäller (`kundanteckning.om_order`). */
   order: string | null;
-  // Ändra och ta bort sin egen anteckning (0279). Bara för anteckningar skrivna i Nav.
+  // Ändra och ta bort sin egen anteckning (0283). Bara för anteckningar skrivna i Nav.
   /** Vem i Nav som skrev den (`employee.id`): kortet visar Ändra och Ta bort för hen. */
   av: string | null;
   /** Det den sagt förut, äldst först. */
@@ -663,14 +706,14 @@ export type Navanteckning = {
   crm_state: string;
   skriven_av?: string | null;
   om_order?: string | null;
-  // 0279: finns först när migrationen körts (kortet läser med `*`).
+  // 0283: finns först när migrationen körts (kortet läser med `*`).
   andrad_at?: string | null;
   versioner?: unknown;
   raderad_at?: string | null;
   raderad_av?: string | null;
 };
 
-/** Versionerna som de står i `kundanteckning.versioner` (0279), tåliga mot det som inte är en lista. */
+/** Versionerna som de står i `kundanteckning.versioner` (0283), tåliga mot det som inte är en lista. */
 export function anteckningsversioner(v: unknown): { text: string; nar: string }[] {
   if (!Array.isArray(v)) return [];
   return v
@@ -748,7 +791,7 @@ export function postuppgifter(r: Pick<Rad, "om_nummer" | "data">): Postuppgifter
  *
  * `nivaAv` säger vilken nivå i Nav författaren har (Per roll i kortet), eller
  * null när hen inte finns i Nav — EffektivMedias personal, till exempel.
- * `namnAv` ger namnet på den som tog bort en anteckning (0279).
+ * `namnAv` ger namnet på den som tog bort en anteckning (0283).
  */
 export function aktivitetsrader(
   rader: readonly Lagrad[],

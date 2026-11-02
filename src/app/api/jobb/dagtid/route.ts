@@ -98,28 +98,30 @@ async function kor(request: NextRequest) {
     nyheter = { fel: e instanceof Error ? e.message : String(e) };
   }
   // Gul 24 (produktionsprovet 2026-10-30): morgonbrevets kvitto. Saknas det efter 06:30 UTC larmas det
-  // i Fel, en rad per dag (digesten bär datumet), som den uteblivna natten. Jobbet går var 15:e minut,
-  // så larmet skrivs bara om dagens rad inte redan finns: annars blev det ~50 förekomster per dag.
+  // i Fel, en rad per dag (digesten bär datumet), som den uteblivna natten. Går kvittot inte att läsa
+  // larmas det också (rättelserna 2026-11-02): förut såg en trasig kontroll ut som en lugn morgon.
   let morgon: unknown = null;
+  const dag = new Date().toISOString().slice(0, 10);
   try {
     const k = await hamtaMorgonkvitto(db);
     morgon = k;
-    const dag = new Date().toISOString().slice(0, 10);
-    const digest = `morgon-kvitto-${dag}`;
-    const { data: larmat } = k.saknas ? await db.from("error_report").select("id").eq("digest", digest).limit(1) : { data: null };
-    if (k.saknas && !larmat?.length) {
-      await skrivFel({
-        kind: "automatic",
-        path: "/api/jobb/morgon/kvitto",
-        digest,
-        message: `Morgonjobbet har inget kvitto i dag (${dag}). Det senaste är från ${k.senaste}.`,
-        blocking: false,
-      });
-    }
+    if (k.saknas) await larmaEnGangOmDagen(db, `morgon-kvitto-${dag}`, `Morgonjobbet har inget kvitto i dag (${dag}). Det senaste är från ${k.senaste}.`);
   } catch (e) {
-    morgon = { fel: e instanceof Error ? e.message : String(e) };
+    const fel = e instanceof Error ? e.message : String(e);
+    morgon = { fel };
+    await larmaEnGangOmDagen(db, `morgon-kvitto-fel-${dag}`, fel);
   }
   return NextResponse.json({ kalender, runda, tid, kvall, anstallda, utbildning, nyheter, morgon });
+}
+
+/**
+ * Ett larm per dag och digest. Jobbet går var 15:e minut, så utan kontrollen blev det ~50 förekomster
+ * per dag av samma sak. `skrivFel` kastar aldrig, och går kontrollen inte att göra skrivs larmet ändå.
+ */
+async function larmaEnGangOmDagen(db: ReturnType<typeof supabaseAdmin>, digest: string, message: string): Promise<void> {
+  const { data: larmat } = await db.from("error_report").select("id").eq("digest", digest).limit(1);
+  if (larmat?.length) return;
+  await skrivFel({ kind: "automatic", path: "/api/jobb/morgon/kvitto", digest, message, blocking: false });
 }
 
 export async function POST(request: NextRequest) {
