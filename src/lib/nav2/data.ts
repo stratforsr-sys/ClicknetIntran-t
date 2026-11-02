@@ -153,23 +153,75 @@ export async function byggNav2Data(user: CurrentUser, m?: Nav2Matt, pg?: { authU
   return v;
 }
 
+type Supabase = Awaited<ReturnType<typeof supabaseServer>>;
+
+/**
+ * Delarna som går att läsa in var för sig (/nav2/data). Efter en sparning
+ * hämtar sidan bara det sparningen kan ha ändrat, i stället för att laddas om
+ * med hela datan (beställaren 2026-11-02: 418 frågor och 5–9 s per sparning).
+ * Varje del byggs med exakt samma funktion som i den stora laddningen.
+ */
+const DELAR = {
+  grund: (s: Supabase, u: CurrentUser) => byggGrund(s, u),
+  notiser: (_s: Supabase, u: CurrentUser) => hamtaNotiser(u),
+  tid: byggTid,
+  franvaro: byggFranvaro,
+  uppgifter: byggUppgifter,
+  order: byggOrder,
+  provision: byggProvision,
+  kalender: (_s: Supabase, u: CurrentUser) => byggKalender(u),
+  arenden: byggArenden,
+  fel: byggFel,
+  rutiner: byggRutiner,
+  utbildning: byggUtbildning,
+  hem: byggHem,
+  rekrytering: byggRekrytering,
+  anstallda: byggAnstallda,
+  coachning: byggCoachning,
+  avtal: byggAvtal,
+  profil: byggProfil,
+  adoption: byggAdoption,
+  nyheter: byggNyheter,
+  logg: byggLogg,
+  leads: byggLeads,
+  moten: byggMoten,
+  motesstat: byggMotesstat,
+  sakerhet: (_s: Supabase, u: CurrentUser) => byggSakerhet(u),
+  satsdata: byggSatser,
+  saljtavlan: (_s: Supabase, u: CurrentUser) => byggSaljtavlan(u),
+  introfilm: byggIntrofilm,
+} satisfies Record<string, (s: Supabase, u: CurrentUser) => Promise<unknown>>;
+
+export type Nav2Del = keyof typeof DELAR;
+export const arNav2Del = (d: string): d is Nav2Del => Object.prototype.hasOwnProperty.call(DELAR, d);
+
+/**
+ * Bara de begärda delarna, med samma RLS och samma pg-väg som byggNav2Data.
+ * `grund` ger jag, personer, satser och loner; varje annan del sin egen nyckel.
+ */
+export async function byggNav2Delar(user: CurrentUser, delar: Nav2Del[], pg?: { authUserId: string; email: string | null } | null): Promise<Partial<Nav2Data> | null> {
+  if (!user.employee) return null;
+  const las = async () => {
+    const supabase = await supabaseServer();
+    const ut: Record<string, unknown> = {};
+    const lasta = await Promise.all(delar.map(async (d) => [d, await DELAR[d](supabase, user)] as const));
+    for (const [d, v] of lasta) {
+      if (d === "grund") Object.assign(ut, v);
+      else ut[d] = v;
+    }
+    return ut as Partial<Nav2Data>;
+  };
+  if (!pg) return las();
+  return (await medPg(pg, { server: supabaseServer, admin: supabaseAdmin }, las)).v;
+}
+
 async function bygg(user: CurrentUser, m?: Nav2Matt): Promise<Nav2Data | null> {
   if (!user.employee) return null;
   const supabase = await supabaseServer();
 
-  const [{ data: personRader }, { data: teamRader }, { data: satsRader, error: satsFel }, { data: lonRader, error: lonFel }, notiser, tid, franvaro, uppgifter, order, provision, kalender, arenden, fel, rutiner, utbildning, hem, rekrytering, anstallda, coachning, avtal, profil, adoption, nyheter, logg, leads, moten, motesstat, sakerhet, satsdata, saljtavlan, introfilm] =
+  const [grund, notiser, tid, franvaro, uppgifter, order, provision, kalender, arenden, fel, rutiner, utbildning, hem, rekrytering, anstallda, coachning, avtal, profil, adoption, nyheter, logg, leads, moten, motesstat, sakerhet, satsdata, saljtavlan, introfilm] =
     await Promise.all([
-      matt(m, "personer", supabase.from("employee").select(PERSONKOLUMNER).order("first_name")),
-      matt(m, "team", supabase.from("team").select("id, name")),
-      matt(m, "satser", supabase
-        .from("cost_rate")
-        .select("id, kind, applies_to, unit, value, valid_from, valid_to, owner_id, review_due, note, created_at, created_by")
-        .order("kind")
-        .order("valid_from", { ascending: false })),
-      matt(m, "loner", supabase
-        .from("salary_basis")
-        .select("id, employee_id, monthly_salary, valid_from, entered_at, entered_by")
-        .order("valid_from", { ascending: false })),
+      byggGrund(supabase, user, m),
       matt(m, "notiser", hamtaNotiser(user)),
       matt(m, "tid", byggTid(supabase, user)),
       matt(m, "franvaro", byggFranvaro(supabase, user)),
@@ -197,6 +249,64 @@ async function bygg(user: CurrentUser, m?: Nav2Matt): Promise<Nav2Data | null> {
       matt(m, "satsdata", byggSatser(supabase, user)),
       matt(m, "saljtavlan", byggSaljtavlan(user)),
       matt(m, "introfilm", byggIntrofilm(supabase, user)),
+    ]);
+
+  return {
+    v: 1,
+    nu: new Date().toISOString(),
+    idag: svensktDatum(),
+    ...grund,
+    notiser,
+    tid,
+    franvaro,
+    uppgifter,
+    order,
+    provision,
+    kalender,
+    arenden,
+    fel,
+    rutiner,
+    utbildning,
+    hem,
+    rekrytering,
+    anstallda,
+    coachning,
+    avtal,
+    profil,
+    adoption,
+    nyheter,
+    logg,
+    leads,
+    moten,
+    motesstat,
+    sakerhet,
+    satsdata,
+    saljtavlan,
+    introfilm,
+    iNuvarande: iNuvarande(),
+  };
+}
+
+/**
+ * Registret, satserna och lönerna, och den inloggade själv: det som varje vy
+ * läser. En egen del så att den också går att läsa in på nytt efter en
+ * sparning i Anställda eller Satser (byggNav2Delar, "grund").
+ */
+async function byggGrund(supabase: Supabase, user: CurrentUser, m?: Nav2Matt): Promise<Pick<Nav2Data, "jag" | "personer" | "satser" | "loner">> {
+  if (!user.employee) throw new Error("nav2: grund utan anställd");
+  const [{ data: personRader }, { data: teamRader }, { data: satsRader, error: satsFel }, { data: lonRader, error: lonFel }] =
+    await Promise.all([
+      matt(m, "personer", supabase.from("employee").select(PERSONKOLUMNER).order("first_name")),
+      matt(m, "team", supabase.from("team").select("id, name")),
+      matt(m, "satser", supabase
+        .from("cost_rate")
+        .select("id, kind, applies_to, unit, value, valid_from, valid_to, owner_id, review_due, note, created_at, created_by")
+        .order("kind")
+        .order("valid_from", { ascending: false })),
+      matt(m, "loner", supabase
+        .from("salary_basis")
+        .select("id, employee_id, monthly_salary, valid_from, entered_at, entered_by")
+        .order("valid_from", { ascending: false })),
     ]);
 
   const ra: RaPerson[] = ((personRader ?? []) as unknown as (Omit<RaPerson, "roller"> & {
@@ -248,9 +358,6 @@ async function bygg(user: CurrentUser, m?: Nav2Matt): Promise<Nav2Data | null> {
     );
 
   return {
-    v: 1,
-    nu: new Date().toISOString(),
-    idag: svensktDatum(),
     jag: {
       ...jagPerson,
       niva: nivaFor(user.roles),
@@ -266,33 +373,5 @@ async function bygg(user: CurrentUser, m?: Nav2Matt): Promise<Nav2Data | null> {
     // dem far se ut som "inga satser". Null sager att listan inte gick att lasa.
     satser: satsFel || !user.permissions.includes("payroll_cost_viewer") ? null : ((satsRader ?? []) as RaSats[]).map((r) => formaSats(r, namn)),
     loner: lonFel || !user.permissions.includes("payroll_cost_viewer") ? null : ((lonRader ?? []) as RaLon[]).map((r) => formaLon(r, namn)),
-    notiser,
-    tid,
-    franvaro,
-    uppgifter,
-    order,
-    provision,
-    kalender,
-    arenden,
-    fel,
-    rutiner,
-    utbildning,
-    hem,
-    rekrytering,
-    anstallda,
-    coachning,
-    avtal,
-    profil,
-    adoption,
-    nyheter,
-    logg,
-    leads,
-    moten,
-    motesstat,
-    sakerhet,
-    satsdata,
-    saljtavlan,
-    introfilm,
-    iNuvarande: iNuvarande(),
   };
 }

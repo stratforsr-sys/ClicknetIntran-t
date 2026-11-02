@@ -22,7 +22,7 @@ console.log("\nAppens filer är öppna");
 for (const p of ["/nav2/manifest.webmanifest", "/nav2/sw.js", "/app-sw.js", "/nav2/fonts/geist.woff2", "/.well-known/assetlinks.json", "/nav2/ikon/ikon-512.png"]) ok(`${p} är öppen`, arPublik(p));
 
 console.log("\nAllt annat kräver inloggning");
-for (const p of ["/nav2", "/nav2/hem", "/nav2/version", "/nav2/sw.js.map", "/nav2/manifest.webmanifestx", "/app-sw.jsx", "/.well-known/annat.json", "/"]) ok(`${p} kräver inloggning`, !arPublik(p));
+for (const p of ["/nav2", "/nav2/hem", "/nav2/version", "/nav2/data", "/nav2/sw.js.map", "/nav2/manifest.webmanifestx", "/app-sw.jsx", "/.well-known/annat.json", "/"]) ok(`${p} kräver inloggning`, !arPublik(p));
 for (const p of ["/nav2/fonts", "/nav2/fontsx/a", "/nav2/ikon", "/nav2/ikonx/a.png", "/nav2/sw.jsx", "/nav2/sw.js/x", "/app-sw.js/x", "/app-sw.js.map", "/nav2/version/x", "/nav2/manifest.webmanifest/x", "/.well-known", "/.well-known/", "/.well-known/assetlinks.json/x", "/.well-known/assetlinks.jsonx", "/nav2/", "/nav2/kalender", "/nav2/api/x"]) ok(`${p} kräver inloggning`, !arPublik(p));
 
 console.log("\nDet som var öppet förut är det fortfarande");

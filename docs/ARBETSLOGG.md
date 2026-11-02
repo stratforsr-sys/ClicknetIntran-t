@@ -5,6 +5,53 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-02 · Sparningar utan omladdning (grenen `utan-omladdning`, ingen migration)
+
+**Beställaren:** varje val i rutan i Uppgifter laddade om sidan, och vyns guide kom upp igen. Det gällde hela Nav 2.0.
+
+**Varför det blev så.** Nav 2.0 är en sida med all data inbakad. Det enklaste sättet att visa färsk data efter en
+sparning var att ladda om sidan, och så gjorde varje vy: 37 `location.reload()`, med läget i sessionStorage för att
+öppna samma flik och ruta igen. Det fungerade så länge laddningen var snabb. Med 418 frågor per laddning (5–9 s när
+Supabase är segt) kostade varje klick flera sekunder. Turens självstart (`ndGuAuto`) mindes att den visats i en `Set`
+som omladdningen tömde. I gamla Nav var "kommer tillbaka vid nästa sidladdning" rimligt, eftersom server actions där
+gör `router.refresh()` och aldrig laddar om. I Nav 2.0 blev varje sparning en ny sidladdning.
+
+**Vad som byggdes.**
+- `/nav2/data?delar=…` bygger bara de delar en sparning kan ha ändrat, med exakt samma byggare som den stora laddningen
+  (`DELAR` i `data.ts`). Registret, satserna och lönerna står i `byggGrund`. `bygg` anropar den, så sidladdningen är
+  oförändrad.
+- `ndOmlas(vy)` i utkastet hämtar delarna, kör om starten för varje vy som läser dem och nollställer vyns init-flaggor
+  (`frInit` med flera), så att startläget byggs om ur den nya datan precis som efter en omladdning. Sedan sätts läget
+  tillbaka med samma fält som sessionStorage bar, och sidan ritas om. Sparningar i samma stund tas i ett varv. En
+  sparning under hämtningen tar nästa varv.
+- Vilka delar varje vy hämtar kommer ur tabellerna: vad rutten skriver mot vad byggarna läser. Loggtabellerna
+  (`audit_log`, `notification_event`, `outbox`) är brus. Exempel: Order hämtar order, provision, kalender, möten,
+  startsidan och säljtavlan. Uppgifter hämtar uppgifter, kalender och coachning.
+- **Fällor som är hanterade:**
+  - Kalenderns start tömmer `KEV`, så `NDKAL.laddat` glöms. Annars hämtas kollegornas händelser aldrig igen.
+  - Leads länkar sina möten in i `KEV` i `ldSt`, så Leads läses om när Kalendern gjort det.
+  - `ndUpgStart` tömmer `MOTEN`, som Kalendern fyller: `ndKMoten()` körs efteråt.
+  - Utbildningens start nollställer `S.rep`, vilket blandade om svaren i ett pågående repetitionskort. Kortet står nu kvar.
+- Reserven är den gamla vägen: läget i vyns sessionStorage-nyckel och `location.reload()`. Den tas om `/nav2/data`
+  inte svarar eller en start kastar.
+- Turen sparar `nd-gu-visad` i sessionStorage.
+- Kvar med flit: Säljtavlans knapp Ladda om, profilens återställning efter ett fel och appens omladdningar.
+
+**Prov.**
+- `tests/nav2-omladdning.mjs`: 77 rader gröna, och 36 fel mot main.
+- `probe/omladdning-prov.mjs` i `~/nav2-utkast`: 80/80 med Zens riktiga data. Det provar
+  - rutans prioknappar och tidsval
+  - två snabba val
+  - turen efter en sparning, en omladdning och en ny session
+  - reserven med 500 från `/nav2/data`
+  - att varje anmäld vy läses in på nytt utan fel och ritas likadant
+  - att Tid, Frånvaro och Order behåller sitt läge
+- `tsc --noEmit` är grönt. Det enda felet, `Pling`/`pling`, finns också på main och beror på macOS skiftlägesokänsliga
+  filsystem.
+- Möten och mötesstatistiken finns inte i provdatan och provas i previewen.
+
+---
+
 ## 2026-11-01 kväll · Rättelserna efter produktionsprovet (grenen `rattelser-prodprov` → `main` `29b7c64`, 0272 + 0273 + 0274 + 0224 KÖRDA)
 
 **Beställarens svar:** frågorna 1–24 i `~/nav2-utkast/delar/rattelser/PLAN.md` (2026-10-31), och 2026-11-01 ca 16:00 UTC

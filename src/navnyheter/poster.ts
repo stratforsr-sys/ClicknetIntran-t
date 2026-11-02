@@ -14,6 +14,22 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "sparar-utan-omladdning",
+    rubrik: "Nav sparar utan att ladda om sidan",
+    ingress: "Det du väljer sparas direkt, och du står kvar där du var.",
+    text: `När du ändrar något, till exempel prioriteten eller tiden på en uppgift,
+sparas det och sidan står kvar. Förut laddades hela sidan om efter varje val,
+och det kunde ta flera sekunder.
+
+Rutan du har öppen stannar öppen, och ändringen syns så fort den är sparad.
+
+Guiden för en vy startar inte om efter varje val. Pausar du den kommer den
+tillbaka nästa gång du öppnar Nav. Alla guider finns under
+**Utbildning → Lär dig Nav**.`,
+    datum: "2026-11-02",
+    roller: [],
+  },
+  {
     slug: "moten-radera",
     rubrik: "Möten: radera ett möte som blev fel",
     ingress: "Ett möte du har bokat går att ta bort, och kunden får en avbokning.",

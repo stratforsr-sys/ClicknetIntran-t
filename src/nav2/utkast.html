@@ -25105,6 +25105,52 @@ function ndSkrivFel(s, reserv = 'Det gick inte att spara.'){
 }
 // Hjälparnas gamla form: serverns JSON, med nejet i fel.
 const ndSvar = s => s.ok ? s.data : {...(s.data || {}), fel:s.fel, utloggad:s.utloggad, laslage:s.laslage, pagar:s.pagar, sagt:s.sagt};
+/* ---------- Efter en sparning: datan läses in på nytt, sidan laddas inte om ----------
+   Beställaren 2026-11-02: varje val laddade om hela sidan. Omladdningen byggde all data på nytt (418
+   frågor, 5–9 s när databasen är seg), och vyns tur startade om. Nu hämtar ndOmlas bara de delar som
+   sparningen kan ha ändrat (/nav2/data, byggNav2Delar i src/lib/nav2/data.ts), vyerna som läser dem
+   läser in dem som vid start, och sidan ritas om där man står. En vy anmäler sig med ndOmlasAnmal(vy, …):
+     delar   det vyns sparningar kan ändra, och som hämtas på nytt
+     laser   det vyns start läser (förval: den första delen); vyn läses in när någon av dem hämtats
+     start   vyns start, som tömmer och fyller sina listor
+     init    S-flaggorna för vyns startläge (frInit …), nollställda så att läget byggs om ur den nya datan
+     lage    det som ska stå kvar, samma som omladdningen sparade; in(m) sätter tillbaka det
+     nyckel  omladdningens sessionStorage: går hämtningen inte, sparas läget där och sidan laddas om som förut */
+const NDOMLAS = {}, NDOMLASKO = new Map();
+let ndOmlasPagar = null;
+function ndOmlasAnmal(vy, v){ NDOMLAS[vy] = {laser:[v.delar[0]], init:[], ...v}; }
+// extra läggs till läget, till exempel ett kvitto som visas när datan är inne.
+function ndOmlas(vy, extra){
+  if (!NDOMLAS[vy]){ setTimeout(() => location.reload(), 700); return Promise.resolve(false); }
+  NDOMLASKO.set(vy, {...(NDOMLASKO.get(vy) || {}), ...(extra || {})});
+  if (!ndOmlasPagar) ndOmlasPagar = new Promise(r => setTimeout(r, 0)).then(ndOmlasKor).finally(() => { ndOmlasPagar = null; });
+  return ndOmlasPagar;
+}
+async function ndOmlasKor(){
+  // En sparning medan datan hämtas tas i nästa varv, så att det som visas sist är det som sparades sist.
+  while (NDOMLASKO.size){
+    const ko = new Map(NDOMLASKO); NDOMLASKO.clear();
+    const delar = [...new Set([...ko.keys()].flatMap(vy => NDOMLAS[vy].delar))];
+    const s = await ndLas('/nav2/data?delar=' + delar.join(','));
+    if (!s.ok || !s.data || !s.data.data){ ndOmlasReserv(ko); return false; }
+    try {
+      Object.assign(ND, s.data.data);
+      const vyer = Object.keys(NDOMLAS).filter(vy => ko.has(vy) || NDOMLAS[vy].laser.some(d => delar.includes(d)));
+      const lagen = vyer.map(vy => ({...(NDOMLAS[vy].lage ? NDOMLAS[vy].lage() : {}), ...(ko.get(vy) || {})}));
+      vyer.forEach(vy => { const v = NDOMLAS[vy]; if (v.start) v.start(); v.init.forEach(k => { S[k] = false; }); });
+      vyer.forEach((vy, i) => { if (NDOMLAS[vy].in) NDOMLAS[vy].in(lagen[i]); });
+      render();
+    } catch(e){ console.error('ndOmlas', e); ndOmlasReserv(ko); return false; }
+  }
+  return true;
+}
+// Den gamla vägen: läget i sessionStorage, och sidan laddas om.
+function ndOmlasReserv(ko){
+  new Map([...ko, ...NDOMLASKO]).forEach((extra, vy) => { const v = NDOMLAS[vy];
+    if (v.nyckel) try { sessionStorage.setItem(v.nyckel, JSON.stringify({...(v.lage ? v.lage() : {}), ...extra})); } catch(_){} });
+  NDOMLASKO.clear();
+  setTimeout(() => location.reload(), 300);
+}
 /* ---------- Skrivvägen slut ---------- */
 
 /* ---------- Tiden ---------- */
@@ -25144,6 +25190,14 @@ function ndStart(){
   // Klockan
   const t = ndTid(); S.mode = ndLage(t); S.base = t.min; S.t0 = Date.now(); S.events = [];
   Object.values(MODES).forEach(m => { m.dag = ndDagText(t.datum); m.halsning = ndHalsning(t.min); m.base = t.min; m.events = () => []; });
+  ndGrundStart();
+  // Exempeldata som annars ritas överallt: driftraden och palettens färdiga frågor.
+  S.driftOn = false;
+  Object.values(SUG).forEach(r => Object.keys(r).forEach(k => { r[k] = []; }));
+}
+
+// Registret, satserna och lönerna (delen grund). Läses också in på nytt efter en sparning i Anställda eller Satser.
+function ndGrundStart(){
   // Registret: de personer RLS lät den inloggade se, i utkastets form.
   AEPERS.length = 0;
   ND.personer.forEach(p => AEPERS.push([p.id, p.namn, p.roller, p.team || '', p.chef || null, p.form || 'permanent', p.start || '', p.nr || '', p.senast]));
@@ -25153,10 +25207,8 @@ function ndStart(){
   SATSLONSEED.length = 0;
   Object.keys(SATSARSEED).forEach(k => delete SATSARSEED[k]);
   ND.personer.forEach(p => { if (p.fodelsear) SATSARSEED[p.id] = p.fodelsear; });
-  // Exempeldata som annars ritas överallt: driftraden och palettens färdiga frågor.
-  S.driftOn = false;
-  Object.values(SUG).forEach(r => Object.keys(r).forEach(k => { r[k] = []; }));
 }
+ndOmlasAnmal('grund', {delar:['grund'], start:ndGrundStart, init:['brhInit']});
 
 /* ---------- Registret: riktiga lägen i stället för exemplens ---------- */
 const _ndAeSt = aeSt;
@@ -26011,12 +26063,16 @@ function ndTidPeriod(id){
 async function ndTidPost(handling, data = {}, {ladda = true, tyst = false} = {}){
   try {
     const s = ndSvar(await ndSkriv('/nav2/tid', {handling, ...data}));
-    if (s.ok !== undefined && !s.fel){ if (!tyst && s.ok) toast(s.ok); if (ladda){ try { sessionStorage.setItem('nd-tid', JSON.stringify({tab:S.tTab, vecka:S.tVecka, dag:S.tDag, lon:S.ndLonPer})); } catch(_){} setTimeout(() => location.reload(), 700); } return s; }
+    if (s.ok !== undefined && !s.fel){ if (!tyst && s.ok) toast(s.ok); if (ladda) ndOmlas('tid'); return s; }
     if (!tyst) ndSkrivFel(s); return s;
   } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
 }
 (() => { if (!ND || !ND.tid) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-tid') || 'null'); sessionStorage.removeItem('nd-tid'); } catch(_){}
   if (m) setTimeout(() => { S.view = 'tid'; if (m.tab) S.tTab = m.tab; if (m.vecka) S.tVecka = m.vecka; S.tDag = m.dag || null; S.ndLonPer = m.lon || null; render(); }, 0); })();
+// Efter en sparning: Tid, och det stämplingen och rättelserna ändrar i Provision (ogiltig frånvaro) och Satser (perioderna).
+if (ND && ND.tid) ndOmlasAnmal('tid', {delar:['tid', 'provision', 'satsdata'], start:ndTidStart, nyckel:'nd-tid',
+  lage:() => ({tab:S.tTab, vecka:S.tVecka, dag:S.tDag, lon:S.ndLonPer}),
+  in:m => { if (m.tab) S.tTab = m.tab; if (m.vecka) S.tVecka = m.vecka; S.tDag = m.dag || null; S.ndLonPer = m.lon || null; }});
 // Chefens senaste besök ("Senast här i dag 08:12"), en gång per sidladdning och tyst.
 const _ndTidChefBesok = tidChef;
 tidChef = function(){ if (ND && ND.tid && ND.tid.chef && !S.ndTidBesok){ S.ndTidBesok = true; setTimeout(() => ndTidPost('besok', {}, {ladda:false, tyst:true}), 0); } return _ndTidChefBesok(); };
@@ -26356,12 +26412,15 @@ frReglerVy = function(){
 async function ndFrPost(handling, data = {}, {ladda = true, tyst = false} = {}){
   try {
     const s = ndSvar(await ndSkriv('/nav2/franvaro', {handling, ...data}));
-    if (s.ok){ if (!tyst) toast(s.ok); if (ladda){ try { sessionStorage.setItem('nd-fr', JSON.stringify({tab:S.frTab})); } catch(_){} setTimeout(() => location.reload(), 700); } return s; }
+    if (s.ok){ if (!tyst) toast(s.ok); if (ladda) ndOmlas('fr'); return s; }
     ndSkrivFel(s); return s;
   } catch(_){ toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
 }
 (() => { if (!ndFr()) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-fr') || 'null'); sessionStorage.removeItem('nd-fr'); } catch(_){}
   if (m) setTimeout(() => { frSt(); S.view = 'franvaro'; if (m.tab) S.frTab = m.tab; render(); }, 0); })();
+// Efter en sparning: frånvaron syns också i Tid, Kalendern och Uppgifter (sjukanmälans uppgifter).
+if (ndFr()) ndOmlasAnmal('fr', {delar:['franvaro', 'tid', 'kalender', 'uppgifter'], start:ndFrStart, init:['frInit'], nyckel:'nd-fr',
+  lage:() => ({tab:S.frTab}), in:m => { frSt(); if (m.tab) S.frTab = m.tab; }});
 const ndFrId = namn => ((ndFr().chef && ndFr().chef.personIds) || {})[namn] || null;
 document.addEventListener('click', e => {
   if (!ndFr() || S.view !== 'franvaro') return;
@@ -26574,12 +26633,16 @@ upgRutaHtml = function(t){
 async function ndUpgPost(handling, data = {}, {ladda = true, tyst = false} = {}){
   try {
     const s = ndSvar(await ndSkriv('/nav2/uppgifter', {handling, ...data}));
-    if (s.ok){ if (!tyst) toast(s.ok); if (ladda){ try { sessionStorage.setItem('nd-upg', JSON.stringify({view:S.view, tab:S.tab, panel:S.panel})); } catch(_){} setTimeout(() => location.reload(), 700); } return s; }
+    if (s.ok){ if (!tyst) toast(s.ok); if (ladda) ndOmlas('upg'); return s; }
     if (!tyst) ndSkrivFel(s); return s;
   } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
 }
 (() => { if (!ndUp()) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-upg') || 'null'); sessionStorage.removeItem('nd-upg'); } catch(_){}
   if (m) setTimeout(() => { if (m.view) S.view = m.view; if (m.tab) S.tab = m.tab; if (m.panel && TASKS.some(t => t.id === m.panel)) S.panel = m.panel; render(); }, 0); })();
+// Efter en sparning: rutan står kvar öppen. En uppgift med tid syns i Kalendern, och en coachningsuppgift i Coachning.
+if (ndUp()) ndOmlasAnmal('upg', {delar:['uppgifter', 'kalender', 'coachning'], start:() => { ndUpgStart(); if (ndK()) ndKMoten(); }, nyckel:'nd-upg',
+  lage:() => ({view:S.view, tab:S.tab, panel:S.panel}),
+  in:() => { if (S.panel && !TASKS.some(t => t.id === S.panel)) S.panel = null; if (S.fokusMode && !TASKS.some(t => t.id === S.fokusMode.id)) S.fokusMode = null; }});
 const ndUpgT = id => TASKS.find(x => x.id === String(id || '').split('|')[0]);
 const ndUpgNav = id => ndUp() && ndUp().uppgifter.some(x => x.id === id);
 const ndIUpg = el => S.view === 'uppgifter' || !!(el.closest && el.closest('#todoPanel, #upgRuta, #focusOv'));
@@ -26631,7 +26694,7 @@ laggTill = function(rad){
   rad = String(rad || '').trim(); if (!rad) return;
   if (/^\//.test(rad)){ const f = forslag(rad)[0]; if (f){ const m = ndUp().mallar.find(x => x.namn === f.varde); toast(m ? 'Mallen läggs som uppgifter i Nav.' : 'Mallen finns inte.'); } return; }
   const delar = rad.split(/\s*;\s*/).filter(Boolean);
-  (async () => { for (const r of delar){ const s = await ndUpgPost('skapa', {rad:r}, {ladda:false, tyst:true}); if (!s.ok){ ndSkrivFel(s, 'Uppgiften lades inte upp.'); return; } } toast(delar.length > 1 ? `${delar.length} uppgifter upplagda.` : 'Uppgiften är upplagd.'); try { sessionStorage.setItem('nd-upg', JSON.stringify({view:S.view, tab:S.tab})); } catch(_){} setTimeout(() => location.reload(), 700); })();
+  (async () => { for (const r of delar){ const s = await ndUpgPost('skapa', {rad:r}, {ladda:false, tyst:true}); if (!s.ok){ ndSkrivFel(s, 'Uppgiften lades inte upp.'); return; } } toast(delar.length > 1 ? `${delar.length} uppgifter upplagda.` : 'Uppgiften är upplagd.'); ndOmlas('upg'); })();
 };
 
 document.addEventListener('click', e => {
@@ -26660,7 +26723,7 @@ document.addEventListener('click', e => {
     else ndUpgPost('avbryt', {id, note:'Struken'}); return; }
   if (d.sub){ stopp(); const [id, i] = del('sub'); const t = ndUpgT(id), del2 = t && t.ndDelId ? t.ndDelId[+i] : null; if (!del2){ toast('Deluppgiften finns inte i Nav.'); return; } ndUpgPost(t.delar[+i][1] ? 'ateroppna' : 'bocka', {id:del2}); return; }
   if (d.upgdelbort){ stopp(); const [id, j] = del('upgdelbort'); const t = ndUpgT(id), del2 = t && t.ndDelId ? t.ndDelId[+j] : null; if (del2) ndUpgPost('avbryt', {id:del2, note:'Borttagen deluppgift'}); return; }
-  if (d.startday !== undefined){ stopp(); ndUpgPost('dag', {vad:'planera'}, {ladda:false}).then(s => { if (s.ok){ S.planned = true; S.streak[role()] = (S.streak[role()] || 0) + (S.planned ? 0 : 1); render(); setTimeout(() => location.reload(), 900); } }); return; }
+  if (d.startday !== undefined){ stopp(); ndUpgPost('dag', {vad:'planera'}, {ladda:false}).then(s => { if (s.ok){ S.planned = true; S.streak[role()] = (S.streak[role()] || 0) + (S.planned ? 0 : 1); render(); ndOmlas('upg'); } }); return; }
   if (d.closeday !== undefined){ stopp(); ndUpgPost('dag', {vad:'avsluta'}, {ladda:false}).then(s => { if (s.ok){ S.dayClosed = true; S.shutdown = false; render(); } }); return; }
   if (d.reopen !== undefined && S.dayClosed){ stopp(); ndUpgPost('dag', {vad:'oppna'}, {ladda:false}).then(s => { if (s.ok){ S.dayClosed = false; render(); } }); return; }
   if (d.wrgo === 'klar'){ stopp(); ndUpgPost('genomgang', {}); return; }
@@ -27337,7 +27400,7 @@ o7Bifoga = async function(nr, files){
     if (!r.ok){ ndSkrivFel(r, 'Filen gick inte att spara.'); return; }
     ok++;
   }
-  toast(ok > 1 ? `${ok} filer är bifogade till #${nr}.` : `${fs[0].name} är bifogad till #${nr}.`); ndOrdMinns(); setTimeout(() => location.reload(), 700);
+  toast(ok > 1 ? `${ok} filer är bifogade till #${nr}.` : `${fs[0].name} är bifogad till #${nr}.`); ndOmlas('ord');
 };
 
 /* ---------- Ta bort en bilaga och Bevaka igen (granskningen S10b, D23; beställarens ja 2026-10-23) ---------- */
@@ -27365,11 +27428,10 @@ kkOversikt = function(o, d, alla, bar){
 };
 
 /* ---------- Skrivningar: /nav2/order ---------- */
-function ndOrdMinns(){ try { sessionStorage.setItem('nd-ord', JSON.stringify({open:S.ordOpen, flik:S.kkFlik})); } catch(_){} }
 async function ndOrdPost(handling, data = {}, {ladda = true, tyst = false} = {}){
   try {
     const s = ndSvar(await ndSkriv('/nav2/order', {handling, ...data}));
-    if (s.ok){ if (!tyst) toast(s.ok); if (ladda){ ndOrdMinns(); setTimeout(() => location.reload(), 700); } return s; }
+    if (s.ok){ if (!tyst) toast(s.ok); if (ladda) ndOmlas('ord'); return s; }
     if (!tyst) ndSkrivFel(s);
     return s;
   } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
@@ -27377,6 +27439,10 @@ async function ndOrdPost(handling, data = {}, {ladda = true, tyst = false} = {})
 // Efter en omladdning: tillbaka till samma order och flik.
 (() => { if (!ndO()) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-ord') || 'null'); sessionStorage.removeItem('nd-ord'); } catch(_){}
   if (m) setTimeout(() => { S.view = 'order'; if (m.open && ORDER.some(o => o.nr === m.open)){ S.ordOpen = m.open; S.ordSel = m.open; if (m.flik) S.kkFlik = m.flik; } render(); }, 0); })();
+// Efter en sparning: ordern räknas i Provision, Möten, startsidan och Säljtavlan, och provisionsraden i Kalendern.
+if (ndO()) ndOmlasAnmal('ord', {delar:['order', 'provision', 'kalender', 'moten', 'hem', 'saljtavlan'], start:ndOrdStart, nyckel:'nd-ord',
+  lage:() => ({open:S.ordOpen, flik:S.kkFlik}),
+  in:() => { if (S.ordOpen && !ORDER.some(o => o.nr === S.ordOpen)){ S.ordOpen = null; S.ordSel = null; } }});
 // Paketet med listpris närmast månadsbeloppet (beställaren 2026-10-15, fri order).
 function ndNarmastePaket(man){ const p = ndO().paket.slice().sort((a, b) => Math.abs(a.pris - man) - Math.abs(b.pris - man))[0]; return p ? p.id : null; }
 // "10.000" och "10 000" är tiotusen; "1 295,50" och "1295.50" har decimaler (S10b: "10.000" blev 10 kr).
@@ -27484,7 +27550,7 @@ async function ndOrdSkicka(utkast){
   }
   if (!s.ok){ ndSkrivFel(s); return; }
   try { localStorage.removeItem('nav2-ordutkast'); } catch(_){}
-  toast(s.ok); S.ordNy = null; ndOrdAvtalFil = null; S.ndForlang = null; ndOrdMinns(); setTimeout(() => location.reload(), 700);
+  toast(s.ok); S.ordNy = null; ndOrdAvtalFil = null; S.ndForlang = null; ndOmlas('ord');
 }
 // D10 (granskningen S08): Rätta på en godkänd order, för säljchef, VD och ekonomi, på samma plats och i samma stil
 // som på en inskickad. Beställarens ja 2026-10-23 (B12). Det frysta priset och en handsatt provision står kvar (S10b).
@@ -27515,7 +27581,7 @@ document.addEventListener('click', e => {
   // Chefens beslut och säljarens order, med repots actions.
   if (ds.ordgodkann){ stopp(); o7Godkann(+ds.ordgodkann); return; }
   if (ds.ordbulkgodkann !== undefined){ stopp(); const val = ORDER.filter(o => S.ordVal.has(o.nr) && o.st === 'inskickad'), ok = val.filter(o => o.samtal && o.avtal);
-    (async () => { let n = 0; for (const o of ok){ const s = await ndOrdPost('godkann', {id:o.id}, {ladda:false, tyst:true}); if (s.ok) n++; else toast(`#${o.nr}: ${s.fel}`); } if (n){ toast(`${n} godkända${val.length - ok.length ? `, ${val.length - ok.length} hoppades över eftersom samtal eller avtal saknas` : ''}. Provisionen är fryst.`); ndOrdMinns(); setTimeout(() => location.reload(), 900); } })(); return; }
+    (async () => { let n = 0; for (const o of ok){ const s = await ndOrdPost('godkann', {id:o.id}, {ladda:false, tyst:true}); if (s.ok) n++; else toast(`#${o.nr}: ${s.fel}`); } if (n){ toast(`${n} godkända${val.length - ok.length ? `, ${val.length - ok.length} hoppades över eftersom samtal eller avtal saknas` : ''}. Provisionen är fryst.`); ndOmlas('ord'); } })(); return; }
   if (ds.ordavskicka){ stopp(); const t = text('ordAv'); if (!t){ toast('Skriv vad som behöver rättas.'); return; } ndOrdPost('tillbaka', {id:nr('ordavskicka').id, reason:t}); return; }
   if (ds.ordbetald){ stopp(); ndOrdPost('betald', {id:nr('ordbetald').id}); return; }
   if (ds.ordmakskicka){ stopp(); const t = text('ordMk'); if (!t){ toast('Skriv varför ordern makuleras.'); return; } ndOrdPost('makulera', {id:nr('ordmakskicka').id, reason:t, inkio:true}); return; }
@@ -27759,13 +27825,16 @@ prognos = () => { const u = pvUnderlag(ME.saljare.namn, PVMAN), t = pvTakt(u); r
 async function ndPvPost(handling, data = {}, ladda = true){
   try {
     const s = ndSvar(await ndSkriv('/nav2/provision', {handling, ...data}));
-    if (s.ok){ toast(s.ok); if (ladda){ try { sessionStorage.setItem('nd-pv', JSON.stringify({flik:S.pvFlik, m:S.pvM, vem:S.pvVem})); } catch(_){} setTimeout(() => location.reload(), 700); } return s; }
+    if (s.ok){ toast(s.ok); if (ladda) ndOmlas('pv'); return s; }
     ndSkrivFel(s); return s;
   } catch(_){ toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
 }
 // Efter en omladdning: tillbaka till samma flik och månad.
 (() => { if (!ndP()) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-pv') || 'null'); sessionStorage.removeItem('nd-pv'); } catch(_){}
   if (m) setTimeout(() => { pvSt(); S.view = 'provision'; if (m.flik) S.pvFlik = m.flik; if (m.m) S.pvM = m.m; if (m.vem) S.pvVem = m.vem; render(); }, 0); })();
+// Efter en sparning: perioderna och trappan gäller också Order, och målen och lönesamtalen Kalendern.
+if (ndP()) ndOmlasAnmal('pv', {delar:['provision', 'order', 'kalender'], start:ndPvStart, init:['pvInit'], nyckel:'nd-pv',
+  lage:() => ({flik:S.pvFlik, m:S.pvM, vem:S.pvVem}), in:m => { pvSt(); if (m.flik) S.pvFlik = m.flik; if (m.m) S.pvM = m.m; if (m.vem) S.pvVem = m.vem; }});
 // Övrig bonus: utkastets kontroller, sedan repots laggOvrigBonus.
 pvBonusLagg = function(){
   if (!ndP()) return;
@@ -28311,12 +28380,17 @@ async function ndKPost(handling, data = {}, {ladda = true} = {}){
     if (!s.ok){ ndSkrivFel(s); return s; }
     // Ångra går genom lk_angra, i fem minuter, som i Nav.
     if (s.angra) toast(s.ok, () => ndKPost('angra', {undo:s.angra})); else toast(s.ok);
-    if (ladda){ try { sessionStorage.setItem('nd-kal', JSON.stringify({dag:s.dag || S.kDag, vy:S.kVy})); } catch(_){} setTimeout(() => location.reload(), s.angra ? 2500 : 700); }
+    if (ladda) ndOmlas('kal', {dag:s.dag || S.kDag});
     return s;
   } catch(_){ toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
 }
 (() => { if (!ndK()) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-kal') || 'null'); sessionStorage.removeItem('nd-kal'); } catch(_){}
   if (m) setTimeout(() => { S.view = 'kalender'; if (m.vy) S.kVy = m.vy; if (m.dag) S.kDag = m.dag; render(); }, 0); })();
+// Efter en sparning: händelserna läses om från början, också kollegornas (de hämtas igen när de visas).
+// Ett möte kan vara en uppgift, en coachning eller ett leads möte.
+if (ndK()) ndOmlasAnmal('kal', {delar:['kalender', 'uppgifter', 'coachning', 'leads'], nyckel:'nd-kal',
+  start:() => { NDKAL.laddat.clear(); NDKAL.detalj.clear(); ndKalStart(); },
+  lage:() => ({dag:S.kDag, vy:S.kVy}), in:m => { if (m.vy) S.kVy = m.vy; if (m.dag) S.kDag = m.dag; }});
 const ndKRef = ev => ev && ev.nd ? ev.ref : null;
 // Formuläret i rutans fält (samma namn som utkastet), med navets id:n.
 function ndKFalt(f){
@@ -29015,7 +29089,7 @@ function ndArHandl(a){ const n = ndA().personer.map(p => p.namn); return [a.till
 async function ndArPost(handling, data, tyst){
   try {
     const s = ndSvar(await ndSkriv('/nav2/arenden', {handling, ...data}));
-    if (s.ok){ if (!tyst){ toast(s.ok); setTimeout(() => location.reload(), 600); } return s; }
+    if (s.ok){ if (!tyst){ toast(s.ok); ndOmlas('ar'); } return s; }
     if (!tyst) ndSkrivFel(s);
     return s;
   } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
@@ -29074,6 +29148,8 @@ const _ndArDetaljChef = arDetaljChef;
 arDetaljChef = function(a){ if (ndA() && ndA().skriv && a.olastChef) ndArPost('last', {id:a.id}, true); return _ndArDetaljChef(a); };
 
 if (ndA()){ ndArStart(); NDKOPPLAD.add('arenden'); }
+// Efter en sparning: ärendet står kvar öppet.
+if (ndA()) ndOmlasAnmal('ar', {delar:['arenden'], start:ndArStart, in:() => { if (S.arOpen && !ARENDEN.some(a => a.id === S.arOpen)) S.arOpen = null; }});
 
 /* =====================================================================
    NAV 2.0 I RIKTIGT LÄGE: FEL (prefix nd), v47
@@ -29219,7 +29295,7 @@ function ndFelMedianSub(){ const s = ndF().stat; return s && s.lagade30 ? 'media
 async function ndFelPost(handling, data, ladda = true){
   try {
     const s = ndSvar(await ndSkriv('/nav2/fel', {handling, ...data}));
-    if (s.ok){ toast(s.ok); if (ladda) setTimeout(() => location.reload(), 600); return s; }
+    if (s.ok){ toast(s.ok); if (ladda) ndOmlas('fel'); return s; }
     ndSkrivFel(s); return s;
   } catch(_){ toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
 }
@@ -29287,6 +29363,9 @@ window.addEventListener('error', e => ndFelFangat(e.message || 'Okänt fel', e.e
 window.addEventListener('unhandledrejection', e => ndFelFangat((e.reason && e.reason.message) || String(e.reason), e.reason && e.reason.stack));
 
 if (ndF()){ ndFelStart(); NDKOPPLAD.add('fel'); }
+// Efter en sparning: samma rapport och samma filter.
+if (ndF()) ndOmlasAnmal('fel', {delar:['fel'], start:ndFelStart, init:['felInit'],
+  lage:() => ({sel:S.felSel, filt:S.felFilt}), in:m => { felSt(); if (m.sel && FELR.some(r => r.id === m.sel)) S.felSel = m.sel; if (m.filt) S.felFilt = m.filt; }});
 
 /* =====================================================================
    NAV 2.0 I RIKTIGT LÄGE: RUTINER (prefix nd)
@@ -29381,12 +29460,15 @@ rtnStegHtml = function(r, stegLista, kv){ return ndRut() && !r.steg.length && r.
 async function ndRutPost(handling, data = {}, {ladda = true, tyst = false} = {}){
   try {
     const s = ndSvar(await ndSkriv('/nav2/rutiner', {handling, ...data}));
-    if (s.ok !== undefined && !s.fel){ if (!tyst && s.ok) toast(s.ok); if (ladda){ try { sessionStorage.setItem('nd-rut', JSON.stringify({open:S.rOpen, tab:S.rtab})); } catch(_){} setTimeout(() => location.reload(), 700); } return s; }
+    if (s.ok !== undefined && !s.fel){ if (!tyst && s.ok) toast(s.ok); if (ladda) ndOmlas('rut'); return s; }
     if (!tyst) ndSkrivFel(s); return s;
   } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
 }
 (() => { if (!ndRut()) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-rut') || 'null'); sessionStorage.removeItem('nd-rut'); } catch(_){}
   if (m) setTimeout(() => { S.view = 'rutiner'; if (m.tab) S.rtab = m.tab; if (m.open && rutin(m.open)) S.rOpen = m.open; render(); }, 0); })();
+// Efter en sparning: en rutin kan ha uppgifter, och kvittensen av K12/K14 styr raststämplingen i Tid.
+if (ndRut()) ndOmlasAnmal('rut', {delar:['rutiner', 'uppgifter', 'kalender', 'tid'], laser:['rutiner', 'grund'], start:ndRutStart, nyckel:'nd-rut',
+  lage:() => ({open:S.rOpen, tab:S.rtab}), in:() => { if (S.rOpen && !rutin(S.rOpen)) S.rOpen = null; }});
 // Öppnad: navets visning (document_view och loggen), tyst.
 const _ndROppna = rOppna;
 rOppna = function(id, kvitt){ _ndROppna(id, kvitt); if (ndRut() && rutin(id)) ndRutPost('visa', {id}, {ladda:false, tyst:true}); };
@@ -29665,9 +29747,15 @@ async function ndUtbPost(handling, data = {}, {ladda = true, tyst = false} = {})
     if (!tyst) ndSkrivFel(s); return s;
   } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
 }
-function ndUtbLadda(){ try { sessionStorage.setItem('nd-utb', JSON.stringify({tab:S.uTab, open:S.uOpen, rp:S.rpOpen, steg:S.rpStep})); } catch(_){} setTimeout(() => location.reload(), 700); }
+function ndUtbLadda(){ ndOmlas('utb'); }
 (() => { if (!ndUtb()) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-utb') || 'null'); sessionStorage.removeItem('nd-utb'); } catch(_){}
   if (m) setTimeout(() => { S.view = 'utbildning'; if (m.tab) S.uTab = m.tab; if (m.open && kurs(m.open)) S.uOpen = m.open; if (m.rp && ROLLSPEL.some(r => r.id === m.rp)){ S.rpOpen = m.rp; S.rpStep = m.steg || 1; } render(); }, 0); })();
+// Efter en sparning: kurserna kan ge uppgifter och kalenderposter, och rollspel och certifikat syns i Coachning.
+if (ndUtb()) ndOmlasAnmal('utb', {delar:['utbildning', 'uppgifter', 'kalender', 'coachning'], start:ndUtbStart, nyckel:'nd-utb',
+  lage:() => ({tab:S.uTab, open:S.uOpen, rp:S.rpOpen, steg:S.rpStep, rep:S.rep}),
+  // Repetitionen som pågår står kvar med samma ordning på svaren, så länge frågorna finns.
+  in:m => { if (S.uOpen && S.uOpen !== NDGU_KURS && !kurs(S.uOpen)) S.uOpen = null; if (m.rp && !ROLLSPEL.some(r => r.id === m.rp)) S.rpOpen = null;
+    if (m.rep && m.rep.ids.every(id => REPETITION.some(q => q.id === id))) S.rep = m.rep; }});
 /* ---------- Vägarna (ndGa i ndskal.js) ----------
    /utbildning, /utbildning/<kurs>, /utbildning/rollspel och /oversikt (Teamet för
    chefen), /utbildning/prov och /prov/<id> (provet öppet för rättning) och
@@ -30416,7 +30504,10 @@ if (ndUtb()){ ndUtbStart(); NDKOPPLAD.add('utbildning'); }
    ===================================================================== */
 
 const ndGu = () => ND && ND.utbildning && ND.utbildning.guider;
-const NDGU = {g:null, syn:[], i:0, lage:'dator', el:null, visad:new Set(), las:false, ram:0};
+// visad: turerna som startat av sig själva i den här fliken. Minns över en omladdning, så att turen inte
+// startar om efter varje sparning (beställaren 2026-11-02). Nästa gång Nav öppnas kommer en ogjord tur tillbaka.
+const ndGuVisad = () => { try { return new Set(JSON.parse(sessionStorage.getItem('nd-gu-visad') || '[]')); } catch(_){ return new Set(); } };
+const NDGU = {g:null, syn:[], i:0, lage:'dator', el:null, visad:ndGuVisad(), las:false, ram:0};
 const NDGU_KURS = 'navguide';
 const ndGuEtikett = {klar:'Klar', pagar:'Pågår', ej_paborjad:'Ej påbörjad', omtag:'Gör om'};
 
@@ -30462,7 +30553,7 @@ function ndGuStart(slug, auto){
   if (!syn.length) return;
   const gjorda = g.lage === 'pagar' ? g.sparat : 0;
   Object.assign(NDGU, {g, syn, lage, i:Math.min(syn.filter(x => x.full < gjorda).length, syn.length - 1)});
-  NDGU.visad.add(slug);
+  NDGU.visad.add(slug); try { sessionStorage.setItem('nd-gu-visad', JSON.stringify([...NDGU.visad])); } catch(_){}
   if (S.uPlay){ S.uPlay = null; renderPlayer(); }
   if (!auto && NDGU.i) toast(`Du fortsätter på steg ${NDGU.i + 1}, där du pausade.`);
   ndGuVisa();
@@ -31202,19 +31293,20 @@ aeNyTom = function(){
 };
 
 /* ---------- Skrivningar: /nav2/anstallda ---------- */
-function ndAeMinns(extra = {}){
-  try { sessionStorage.setItem('nd-ae', JSON.stringify({flik:S.aeFlik, pers:S.aePers, open:S.aeOpen, mall:S.aeMallVal, ...extra})); } catch(_){}
-}
 async function ndAePost(handling, data = {}, {ladda = true, tyst = false, minns = {}} = {}){
   try {
     const s = ndSvar(await ndSkriv('/nav2/anstallda', {handling, ...data}));
-    if (s.ok !== undefined && !s.fel){ if (!tyst && s.ok) toast(s.ok); if (ladda){ ndAeMinns(minns); setTimeout(() => location.reload(), 700); } return s; }
+    if (s.ok !== undefined && !s.fel){ if (!tyst && s.ok) toast(s.ok); if (ladda) ndOmlas('ae', minns); return s; }
     if (!tyst || s.laslage) ndSkrivFel(s); return s;
   } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
 }
 (() => { if (!ndAe()) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-ae') || 'null'); sessionStorage.removeItem('nd-ae'); } catch(_){}
   if (m) setTimeout(() => { aeSt(); S.view = 'anstallda'; if (m.flik) S.aeFlik = m.flik; S.aePers = m.pers && aeP(m.pers) ? m.pers : null; S.aeOpen = m.open || null;
     if (m.mall && aeMall(m.mall)) S.aeMallVal = m.mall; render(); }, 0); })();
+// Efter en sparning: registret (grund) och det en anställning bokar och lägger i Kalendern och Coachning.
+if (ndAe()) ndOmlasAnmal('ae', {delar:['anstallda', 'grund', 'kalender', 'coachning'], laser:['anstallda', 'grund'], start:ndAeStart, init:['aeInit'], nyckel:'nd-ae',
+  lage:() => ({flik:S.aeFlik, pers:S.aePers, open:S.aeOpen, mall:S.aeMallVal}),
+  in:m => { aeSt(); if (m.flik) S.aeFlik = m.flik; S.aePers = m.pers && aeP(m.pers) ? m.pers : null; S.aeOpen = m.open || null; if (m.mall && aeMall(m.mall)) S.aeMallVal = m.mall; }});
 
 // Punkten i navet: radens id. Utkastets id ("intro") kan vara mallens nyckel.
 const ndAeRad = key => { const {x} = aeHitta(key); return x && x.rad; };
@@ -31271,7 +31363,6 @@ async function ndAeBifoga(pid, fil){
   const f = await ndMaPost('bifoga-forbered', {person:pid, filnamn:fil.name, mime:fil.type, storlek:fil.size}, {ladda:false});
   if (f.fel) return;
   if (!(await ndLaddaUpp(f, fil))){ toast(`${fil.name} kom inte fram. Försök igen.`); return; }
-  ndAeMinns({pers:pid});
   ndMaPost('bifoga-registrera', {person:pid, titel:'Anställningsavtal', fil:f.fileId, filnamn:fil.name, store:f.store});
 }
 function ndAeTillAvtal(pid){
@@ -31408,9 +31499,9 @@ document.addEventListener('click', e => {
   if (d.ndaeavtal){ stopp(); ndAeTillAvtal(d.ndaeavtal); return; }
   if (d.aeutfarda){ stopp(); const p = aeP(d.aeutfarda);
     if (!(ndKopplad('avtal') && typeof ndMaPost === 'function') || !p.avtal || !p.avtal.id){ ndAeTillAvtal(p.id); return; }
-    ndAeMinns({pers:p.id}); ndMaPost('utfarda', {avtal:p.avtal.id}); return; }
+    ndMaPost('utfarda', {avtal:p.avtal.id}); return; }
   if (d.aeavtpamin){ stopp(); const p = aeP(d.aeavtpamin); if (!(ndKopplad('avtal') && typeof ndMaPost === 'function') || !p.avtal || !p.avtal.id){ ndAeTillAvtal(p.id); return; }
-    ndAeMinns({pers:p.id}); ndMaPost('paminn', {avtal:p.avtal.id}); return; }
+    ndMaPost('paminn', {avtal:p.avtal.id}); return; }
   if (d.aeavtsign){ stopp(); const p = aeP(d.aeavtsign); if (!(ndKopplad('avtal') && typeof ndMaPost === 'function') || !p.avtal || !p.avtal.id){ ndAeTillAvtal(p.id); return; }
     // B3 (beställaren 2026-10-22): det påskrivna avtalet laddas upp som ett eget avtal, med det utfärdades rubrik.
     // Avtals panel för personen öppnas med rubriken ifylld, och filväljaren direkt (klicket ger rätten att öppna den).
@@ -31427,7 +31518,7 @@ document.addEventListener('click', e => {
     if (p.roller.includes(r) && p.roller.length === 1){ toast(`${aeFor(p.namn)} behöver minst en roll för att kunna logga in. Lägg till den nya först.`); return; }
     ndAePost('roll', {pid, roll:r}, {minns:{pers:pid}}); return; }
   // Nyanställningen är klar: personen öppnas ur navet, med checklistan som servern byggde.
-  if (S.aeNy && S.aeNy.klar && S.aeNy.nd && (d.aepers || d.aenastaavtal)){ stopp(); ndAeMinns({flik:S.aeFlik, pers:d.aepers || d.aenastaavtal}); location.reload(); return; }
+  if (S.aeNy && S.aeNy.klar && S.aeNy.nd && (d.aepers || d.aenastaavtal)){ stopp(); const pers = d.aepers || d.aenastaavtal; S.aeNy = null; ndOmlas('ae', {flik:S.aeFlik, pers}); return; }
   // Checklistor
   if (d.aemdel !== undefined){ stopp(); const M = aeMall(S.aeMallVal); if (M) ndAePost('mall-ta-bort', {id:M.id}, {minns:{mall:null}}); return; }
   // Utskick
@@ -31454,7 +31545,7 @@ function ndAeMallSpara(direkt){
     punkter:M.punkter.map(x => ({id:x.id, t:x.t, off:x.off, typ:x.typ, lag:x.lag, villkor:x.villkor, ag:x.ag === 'chef' || x.ag === 'fadder' ? x.ag : 'person', agId:x.ag === 'chef' || x.ag === 'fadder' ? null : ndAeId(x.ag)}))}},
     {ladda:false, tyst:true}).then(s => {
       if (s.laslage || s.fel){ S.ae.mallar = ndAeKopia(ndAe().mallar); if (!aeMall(S.aeMallVal)) S.aeMallVal = (S.ae.mallar[0] || {}).id; render(); return; }
-      if (ny && s.id){ toast('Checklistan är sparad.'); ndAeMinns({mall:s.id}); setTimeout(() => location.reload(), 500); }
+      if (ny && s.id){ toast('Checklistan är sparad.'); ndOmlas('ae', {mall:s.id}); }
     });
   if (direkt || ny) gor(); else ndAeMallTimer = setTimeout(gor, 900);
 }
@@ -31666,7 +31757,7 @@ document.addEventListener('click', e => {
     if (U.sparar) return; U.sparar = true; render();
     ndFrPost('saldo', {pid:U.pid, typ:U.typ, dagar:String(U.dagar).trim().replace(',', '.'), asof:U.asof, ar:String(U.ar).trim()}, {ladda:false}).then(s => {
       U.sparar = false; if (!s.ok) return;
-      ndAeMinns({pers:U.pid}); setTimeout(() => location.reload(), 700);
+      ndOmlas('fr'); ndOmlas('ae', {pers:U.pid});
     });
   }
 }, true);
@@ -31725,13 +31816,16 @@ satsSt = function(){
 async function ndSatsPost(handling, data = {}, ladda = true){
   try {
     const s = ndSvar(await ndSkriv('/nav2/satser', {handling, ...data}));
-    if (s.ok){ toast(s.ok); if (ladda){ try { sessionStorage.setItem('nd-sats', JSON.stringify({open:S.satsOpen, tg:S.satsTgP || null})); } catch(_){} setTimeout(() => location.reload(), 700); } return s; }
+    if (s.ok){ toast(s.ok); if (ladda) ndOmlas('sats'); return s; }
     ndSkrivFel(s); return s;
   } catch(_){ toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
 }
 // Efter en omladdning: tillbaka till Satser och löner, med samma sats öppen.
 (() => { if (!ndSd()) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-sats') || 'null'); sessionStorage.removeItem('nd-sats'); } catch(_){}
   if (m) setTimeout(() => { prfGa('satser'); if (m.tg) S.satsTgP = m.tg; if (m.open) S.satsOpen = m.open; if (m.open || m.tg) render(); }, 0); })();
+// Efter en sparning: satserna och lönerna står i grund, Ersatta och perioderna i satsdata.
+if (ndSd()) ndOmlasAnmal('sats', {delar:['satsdata', 'grund'], laser:['satsdata', 'grund'], init:['satsInit'], nyckel:'nd-sats',
+  lage:() => ({open:S.satsOpen, tg:S.satsTgP || null}), in:m => { satsSt(); if (m.tg) S.satsTgP = m.tg; if (m.open) S.satsOpen = m.open; }});
 
 // Ny sats: utkastets kontroller (fel, och Ersätt när det redan finns en sats från dagen), sedan rutten.
 const _ndSatsSpara = satsSpara;
@@ -32698,7 +32792,7 @@ async function ndRxPost(handling, data = {}, {ladda = true, tyst = false, efter 
     const s = ndSvar(await ndSkriv('/nav2/rekrytering', {handling, ...data}));
     if (s.ok !== undefined && !s.fel){
       if (!tyst && s.ok) toast(s.ok);
-      if (ladda){ try { sessionStorage.setItem('nd-rx', JSON.stringify({flik:S.rxFlik, open:S.rxOpen, ...(efter || {})})); } catch(_){} setTimeout(() => location.reload(), 900); }
+      if (ladda) ndOmlas('rx', efter);
       return s;
     }
     if (!tyst) ndSkrivFel(s); return s;
@@ -32711,6 +32805,13 @@ async function ndRxPost(handling, data = {}, {ladda = true, tyst = false, efter 
     if (m.serie && m.serie.length){ S.rxSerie = {ids:m.serie}; const n = m.serie.find(id => { const c = rxK(id); return c && rxOppen(c) && !rxScoreFor(c, 'screening').some(s => s.av === aeMig()); }); if (n) rxFormStart('screen', n); else S.rxSerie = null; }
     if (m.ny) S.rxNy = {namn:'', epost:'', tel:'', tj:m.ny.tj, kalla:m.ny.kalla, not:'', fel:{}};
     render(); }, 0); })();
+// Efter en sparning: intervjuerna står i Kalendern, och den som anställs i Anställda och registret.
+if (ndRx()) ndOmlasAnmal('rx', {delar:['rekrytering', 'kalender', 'anstallda', 'grund'], start:ndRxStart, init:['rxInit'], nyckel:'nd-rx',
+  lage:() => ({flik:S.rxFlik, open:S.rxOpen}),
+  in:m => { rxSt(); if (m.flik) S.rxFlik = m.flik; if (m.open && rxK(m.open)) S.rxOpen = m.open;
+    if (m.form && m.open && rxK(m.open)){ rxFormStart(m.form, m.open); if (m.skal && S.rxForm) S.rxForm.skal = m.skal; }
+    if (m.serie && m.serie.length){ S.rxSerie = {ids:m.serie}; const n = m.serie.find(id => { const c = rxK(id); return c && rxOppen(c) && !rxScoreFor(c, 'screening').some(s => s.av === aeMig()); }); if (n) rxFormStart('screen', n); else S.rxSerie = null; }
+    if (m.ny) S.rxNy = {namn:'', epost:'', tel:'', tj:m.ny.tj, kalla:m.ny.kalla, not:'', fel:{}}; }});
 // Mallens text med kandidatens uppgifter, som utkastets rxFyll.
 const ndRxText = (mall, c, x) => { const m = rxMallT(mall); return m ? rxFyll(m.text, c, x) : ''; };
 const ndRxSlotX = t => t ? {datum:t.d, tid:t.s} : null;
@@ -32760,14 +32861,14 @@ function ndRxKlick(t, e){
     N.fel = fel; if (Object.keys(fel).length){ rxRita(); document.querySelector('.rxnyf [aria-invalid="true"], .rxnyf .err .chip')?.focus(); return true; }
     const tj = N.tj && !String(N.tj).startsWith('roll:') ? N.tj : '', tmp = {namn, tj:tj || 'roll:Säljare', id:'c-ny'};
     ndRxPost('ny', {namn, epost:ep, tel:N.tel.trim(), kalla:N.kalla, tj, not:N.not.trim(), texter:{bekr:ndRxText('bekr', tmp)}}, {efter:d.rxnyok === 'igen' ? {ny:{tj:N.tj, kalla:N.kalla}, open:null} : {open:null}})
-      .then(s => { if (s.id && d.rxnyok !== 'igen'){ try { sessionStorage.setItem('nd-rx', JSON.stringify({flik:S.rxFlik, open:s.id})); } catch(_){} } });
+      .then(s => { if (s.id && d.rxnyok !== 'igen') ndOmlas('rx', {open:s.id}); });
     return true;
   }
   if (d.rxbulkok !== undefined){
     const l = [...S.rxVal].map(rxK).filter(x => x && rxOppen(x)), skal = S.rxForm.skal;
     (async () => { let n = 0; for (const x of l){ const mall = ['new', 'screening'].includes(x.steg) ? 'avslag1' : 'avslag2';
         const s = await ndRxPost('avslag', {id:x.id, skal, mejl:true, mall, texter:{[mall]:ndRxText(mall, x)}}, {ladda:false, tyst:true}); if (s.fel){ ndSkrivFel(s); return; } n++; }
-      toast(`${n} avslag är sparade.${rxMallT('avslag1').text && rxMallT('avslag2').text ? ' Var och en får avslagsmejlet med sitt eget namn, om hen har en e-postadress.' : ' Avslagsmallen har ingen text än, så inga mejl gick ut.'}`); S.rxVal.clear(); S.rxForm = null; try { sessionStorage.setItem('nd-rx', JSON.stringify({flik:S.rxFlik})); } catch(_){} setTimeout(() => location.reload(), 900); })();
+      toast(`${n} avslag är sparade.${rxMallT('avslag1').text && rxMallT('avslag2').text ? ' Var och en får avslagsmejlet med sitt eget namn, om hen har en e-postadress.' : ' Avslagsmallen har ingen text än, så inga mejl gick ut.'}`); S.rxVal.clear(); S.rxForm = null; ndOmlas('rx'); })();
     return true;
   }
   if (d.rxsvarade){ const x = rxK(d.rxsvarade);
@@ -32931,15 +33032,12 @@ const ndCnFor = n => String(n || '').split(' ')[0];
 const ndCnBibR = (omr, nar, da) => ((CNBIB[omr] || []).find(b => b[0] === nar && b[1] === da) || [])[2] || null;
 
 /* ---------- Skrivningar: /nav2/coachning ---------- */
-function ndCnMinns(t){
-  try { sessionStorage.setItem('nd-cn', JSON.stringify({view:S.view, pers:S.cnPers || null, open:S.cnOpen || null, toast:t || null})); } catch(_){}
-}
 async function ndCnPost(handling, data = {}, {ladda = true, tyst = false, angra = null} = {}){
   try {
     const s = ndSvar(await ndSkriv('/nav2/coachning', {handling, ...data}));
     if (s.ok !== undefined && !s.fel){
       const ang = angra ? angra(s) : null;
-      if (ladda){ ndCnMinns(!tyst && s.ok ? {msg:s.ok, angra:ang} : null); setTimeout(() => location.reload(), 250); }
+      if (ladda) ndOmlas('cn', {toast:!tyst && s.ok ? {msg:s.ok, angra:ang} : null});
       else if (!tyst && s.ok){ if (ang) toastActs(s.ok, [['Ångra', () => ndCnPost(ang.handling, ang.data)]], 8000); else toast(s.ok); }
       return s;
     }
@@ -32954,6 +33052,12 @@ async function ndCnPost(handling, data = {}, {ladda = true, tyst = false, angra 
     render();
     if (m.toast && m.toast.msg){ const a = m.toast.angra; a ? toastActs(m.toast.msg, [['Ångra', () => ndCnPost(a.handling, a.data)]], 9000) : toast(m.toast.msg); }
   }, 0); })();
+// Efter en sparning: övningarna ger uppgifter, och 1:1 står i Kalendern.
+if (ndCn()) ndOmlasAnmal('cn', {delar:['coachning', 'kalender', 'uppgifter'], start:ndCnStart, init:['cnInit'], nyckel:'nd-cn',
+  lage:() => ({view:S.view, pers:S.cnPers || null, open:S.cnOpen || null}),
+  in:m => { cnSt();
+    if (m.view === 'coachning'){ S.cnPers = m.pers && CNSEED.some(p => p.vem === m.pers) ? m.pers : null; S.cnOpen = m.open && S.cn.avt.some(a => a.id === m.open) ? m.open : null; }
+    if (m.toast && m.toast.msg){ const a = m.toast.angra; a ? toastActs(m.toast.msg, [['Ångra', () => ndCnPost(a.handling, a.data)]], 9000) : toast(m.toast.msg); } }});
 
 /* ---------- Tillståndet ur navet ---------- */
 function ndCnStart(){
@@ -33638,9 +33742,12 @@ async function ndMaPost(handling, data = {}, {ladda = true, tyst = false} = {}){
     if (!tyst) ndSkrivFel(s); return s;
   } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
 }
-function ndMaLaddaOm(){ try { sessionStorage.setItem('nd-ma', JSON.stringify({view:S.view, open:S.maOpen || null})); } catch(_){} setTimeout(() => location.reload(), 700); }
+function ndMaLaddaOm(){ ndOmlas('ma'); }
 (() => { if (!ndMa()) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-ma') || 'null'); sessionStorage.removeItem('nd-ma'); } catch(_){}
   if (m && m.view === 'avtal') setTimeout(() => { maSt(); S.view = 'avtal'; if (m.open && S.ae.pers.some(p => p.id === m.open)) S.maOpen = m.open; render(); }, 0); })();
+// Efter en sparning: avtalet står också på personen i Anställda.
+if (ndMa()) ndOmlasAnmal('ma', {delar:['avtal', 'anstallda'], init:['maInit', 'aeInit'], nyckel:'nd-ma',
+  lage:() => ({view:S.view, open:S.maOpen || null}), in:m => { maSt(); S.maOpen = m.open && S.ae.pers.some(p => p.id === m.open) ? m.open : null; }});
 // Öppna: PDF:en i en ny flik via /filer/<id> (behörigheten prövas och öppningen loggas). Ett mallavtal sparas som text.
 function ndMaOppna(x, a){
   if (!x){ toast('Det finns inget avtal att öppna.'); return; }
@@ -34000,10 +34107,8 @@ function ndPalNyUppgift(){
 function ndPalLaggTill(text){
   ndUpgPost('skapa', {titel:text, dag:kIdag()}, {ladda:false, tyst:true}).then(s => {
     if (!s.ok){ ndSkrivFel(s, 'Uppgiften lades inte upp.'); return; }
-    let angrad = false;
-    const ladda = () => { try { sessionStorage.setItem('nd-upg', JSON.stringify({view:S.view, tab:S.tab})); } catch(_){} location.reload(); };
-    toast('Lagd i Uppgifter, i dag.', () => { angrad = true; ndUpgPost('avbryt', {id:s.id, note:'Ångrad i paletten'}, {ladda:false, tyst:true}).then(a => { toast(a.ok ? 'Ångrat.' : a.fel || 'Det gick inte att ångra.'); setTimeout(ladda, 900); }); });
-    setTimeout(() => { if (!angrad) ladda(); }, 5600);
+    toast('Lagd i Uppgifter, i dag.', () => { ndUpgPost('avbryt', {id:s.id, note:'Ångrad i paletten'}, {ladda:false, tyst:true}).then(a => { toast(a.ok ? 'Ångrat.' : a.fel || 'Det gick inte att ångra.'); ndOmlas('upg'); }); });
+    ndOmlas('upg');
   });
 }
 const _palNdDraw = drawPal;
@@ -34144,8 +34249,7 @@ function ndPalRutinAmne(a){
   ndRutPost('spara', {hur:'utkast', f}, {ladda:false, tyst:true}).then(s => {
     if (s.fel){ ndSkrivFel(s); return; }
     toast('Utkastet ligger under Rutiner. Skriv svaren i stegen och publicera.');
-    try { sessionStorage.setItem('nd-rut', JSON.stringify({open:s.id, tab:null})); } catch(_){}
-    setTimeout(() => location.reload(), 900);
+    ndOmlas('rut').then(() => { if (rutin(s.id)){ S.view = 'rutiner'; S.rtab = null; S.rOpen = s.id; render(); } });
   });
 }
 const _palNdClick2 = palClick;
@@ -34734,12 +34838,11 @@ function ndLdPlan(){
 }
 
 /* ---------- Skrivningar: /nav2/leads ---------- */
-function ndLdMinns(t){ try { sessionStorage.setItem('nd-ld', JSON.stringify({open:S.ldOpen || null, toast:t || null})); } catch(_){} }
 async function ndLdPost(handling, data = {}, {ladda = true, tyst = false} = {}){
   try {
     const s = ndSvar(await ndSkriv('/nav2/leads', {handling, ...data}));
     if (s.ok && !s.fel){
-      if (ladda){ ndLdMinns(!tyst ? {msg:s.ok, angra:s.angra || null} : null); setTimeout(() => location.reload(), 250); }
+      if (ladda) ndOmlas('ld', {toast:!tyst ? {msg:s.ok, angra:s.angra || null} : null});
       else if (!tyst) toast(s.ok);
       return s;
     }
@@ -34751,6 +34854,11 @@ async function ndLdPost(handling, data = {}, {ladda = true, tyst = false} = {}){
     ldSt(); S.view = 'leads'; S.ldOpen = m.open && ldL(m.open) ? m.open : null; render(); window.scrollTo(0, 0);
     if (m.toast && m.toast.msg){ const a = m.toast.angra; a ? toastActs(m.toast.msg, [['Ångra', () => ndLdPost(a.handling, a.data)]], 9000) : toast(m.toast.msg); }
   }, 0); })();
+// Efter en sparning: ett leads möte står i Kalendern och på Mötens tavla. Leaden kopplas till sina möten i ldSt, så den läses också om när Kalendern gjort det.
+if (ndLd()) ndOmlasAnmal('ld', {delar:['leads', 'kalender', 'moten'], laser:['leads', 'kalender'], init:['ldInit'], nyckel:'nd-ld',
+  lage:() => ({open:S.ldOpen || null}),
+  in:m => { ldSt(); S.ldOpen = m.open && ldL(m.open) ? m.open : null;
+    if (m.toast && m.toast.msg){ const a = m.toast.angra; a ? toastActs(m.toast.msg, [['Ångra', () => ndLdPost(a.handling, a.data)]], 9000) : toast(m.toast.msg); } }});
 function ndLdGe(id, namn){
   const till = ndLdId(namn);
   if (!till){ toast(`${namn} finns inte i Nav.`); return; }
@@ -35256,18 +35364,17 @@ function moInit(){
 }
 
 /* ---------- Skrivningar: /nav2/moten ---------- */
-function moMinns(m){ try { sessionStorage.setItem('nd-mo', JSON.stringify({open:S.moOpen || null, filter:S.moFilter || null, person:S.moPerson || null, ...m})); } catch(_){} }
 async function ndMoPost(handling, data = {}, {ladda = true, tyst = false, kedja = null, visaFel = !tyst, tyst409 = false} = {}){
   try {
     const r = await ndSkriv('/nav2/moten', {handling, ...data}), s = ndSvar(r);
     if (s.ok && !s.fel){
       if (ladda){ if (s.kedja_borta) S.moOpen = null;   // kortet finns inte mer: panelen öppnas inte igen efter omladdningen
-        moMinns({kedja, msg:!tyst ? s.ok : null, varning:s.varning || null}); setTimeout(() => location.reload(), 250); }
+        ndOmlas('mo', {kedja, msg:!tyst ? s.ok : null, varning:s.varning || null}); }
       else if (!tyst) toast(s.ok);
       return s;
     }
     // 409: någon annan hann före (fore stämmer inte). Ett besked, aldrig tyst, och sedan en omladdning så att det nya syns.
-    if (r.status === 409 && !(r.data && r.data.pagar)){ if (!tyst409) toast(s.fel || 'Någon hann före. Tavlan laddas om.'); moMinns({}); setTimeout(() => location.reload(), 1400); return s; }
+    if (r.status === 409 && !(r.data && r.data.pagar)){ if (!tyst409) toast(s.fel || 'Någon hann före. Tavlan laddas om.'); ndOmlas('mo'); return s; }
     if (visaFel) ndSkrivFel(s); return s;
   } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
 }
@@ -35277,6 +35384,10 @@ async function ndMoPost(handling, data = {}, {ladda = true, tyst = false, kedja 
     if (m.msg) toast(m.msg);
     setTimeout(() => { S.moNy = null; }, 2500);
   }, 0); })();
+// Efter en sparning: ett möte och dess utfall syns i statistiken, Kalendern och Leads, och en affär i Order och Provision.
+if (ndMo()) ndOmlasAnmal('mo', {delar:['moten', 'motesstat', 'kalender', 'leads', 'order', 'provision'], laser:['moten', 'motesstat'], nyckel:'nd-mo',
+  lage:() => ({open:S.moOpen || null, filter:S.moFilter || null, person:S.moPerson || null}),
+  in:m => { if (m.kedja){ S.moNy = m.kedja; setTimeout(() => { S.moNy = null; }, 2500); } if (m.varning) S.moVarn = m.varning; if (m.msg) toast(m.msg); }});
 
 /* ---------- Dialogerna (A9b): Boka, Flyttat, Hållet, Uteblev, Nej och Affär ----------
    Ett blad från höger (samma rxpanel som kortets panel), inte en modal i mitten: tavlan syns bakom.
@@ -35507,8 +35618,8 @@ if (_ndMoOrdPost) ndOrdPost = async function(handling, data, opt){
   if (s && s.ok && s.id){
     const kund = await ndMoPost('kund', {kedja, order:s.id, ...(mote ? {mote} : {})}, {ladda:false, tyst:true, tyst409:true});
     if (kund.fel) toast(`Ordern är lagd, men kortet kunde inte stängas som affär: ${kund.fel}`);
-    if (ladda){ if (typeof ndOrdMinns === 'function') ndOrdMinns(); setTimeout(() => location.reload(), 700); }
-  } else if (s && s.ok && ladda){ if (typeof ndOrdMinns === 'function') ndOrdMinns(); setTimeout(() => location.reload(), 700); }
+    if (ladda) ndOmlas('ord');
+  } else if (s && s.ok && ladda) ndOmlas('ord');
   return s;
 };
 
