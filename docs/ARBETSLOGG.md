@@ -5,6 +5,52 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-02 kväll · Tillägget och avtalet i orderformuläret (MERGAD till `main` på beställarens ja), ingen migration
+
+**Beställaren:** (1) ett tillägg på en kund som redan finns hämtar inte allt från den tidigare ordern, till exempel
+adressen. (2) Hedboms Måleri: avtalet var uppladdat, men ordern svarade "Ladda upp det påskrivna avtalet". Beställaren
+hade stängt formuläret och kommit tillbaka.
+
+**(1) Varför adressen saknades.** Utkastets förifyllning (`kknyorder` på kundkortet, `ordforny`, `ordratta`) skrevs
+innan adressen fanns (0075) och tar bara orten. ND-lagrets `ordBolagsverket` tog första order på numret och slutade
+där, även när den saknade adress. Hedboms enda order (`413202e4`, 16 sep) är från före 0075 och har ingen adress, så
+tillägget stod utan gata och postnummer. Kundsektionen fälls ihop (`o7KundIhop` räknar inte adressen), så felet syntes
+först när servern nekade. Rätta på en inskickad order fick bara orten, och `redigeraOgodkand` nekar en halv adress.
+
+Nu (ND-lagret i `utkast.html`): `ndKundUppg(org, nr)` tar kundens uppgifter ur alla order på organisationsnumret, den
+man kom från först och sedan den senaste. Adressen och kontakten tas hela från första order som har dem. `ndKundFyll`
+fyller bara tomma fält. Tillägg från kundkortet och Förläng får allt; "Lägg som tillägg" i formuläret tar också med
+kontakten. Saknar alla order adressen frågas Bolagsverket via Inkio (`/nav2/inkio?vad=bolag`). Rätta tar ordens egen
+gata och postnummer.
+
+**(2) Varför avtalet försvann.** Filen fanns bara i minnet (`ndOrdAvtalFil`). Utkastet i webbläsaren
+(`nav2-ordutkast`) sparar `S.ordNy`, och där stod bara filens namn. Efter en omladdning gav "Fortsätt där du var"
+tillbaka namnet. Formuläret visade avtalet som bifogat, `onFel` släppte igenom, och ingen `avtal_fil_id` skickades.
+`skapaOrder` svarade "Ladda upp det påskrivna avtalet (PDF) innan ordern läggs upp." I databasen finns bara en
+avtalsfil för Hedboms: den som laddades upp 12:43, när ordern till slut gick in med en nyvald fil.
+
+Nu laddas avtalet upp när det väljs, som i gamla Navs `Avtalsfalt`. Filens id står i `S.ordNy.avtalFil` och följer med
+utkastet. Skicka använder id:t (och väntar in en pågående uppladdning). Annars laddas filen i minnet upp som förut. Ett
+utkast från före lagningen har bara namnet. Då tas avtalet bort när utkastet återställs, och formuläret ber om filen.
+Ett avbrutet filval (inga filer) ändrar ingenting; förut tömdes filen i minnet medan namnet stod kvar, med samma svar från servern. En rättad order får avtalet som bilaga när den sparas, som förut. En fil som laddas upp men aldrig hamnar på en order
+blir kvar i lagringen utan rad i `file_object`, som i gamla Nav.
+
+**Prov.** `~/nav2-utkast/probe/tillagg-avtal-prov.mjs` (headless Chrome, Zens sida från 29 okt med Hedboms order
+utan adress, lokal server som svarar på uppladdning, Inkio och skapa): **28/28 på grenen och 12/28 mot main**. På main
+saknas adressen på tillägget, uppladdningen sker inte när filen väljs, och det återställda utkastet har namnet men
+ingen fil. Det provet täcker: tillägg från kundkortet, adress från en äldre order, numret skrivet och Lägg som tillägg,
+avtalet efter omladdning och skicka (id:t i `skapa`, ingen ny uppladdning), ett avbrutet filval, ett gammalt utkast och Rätta. Förläng är inte
+provat i webbläsaren, eftersom ingen order i provdatan löper ut. Det går samma väg som tillägget. `tests/navnyheter.mjs`
+och `tests/nav2-orderfalt.mjs` gröna. Patchen: `~/nav2-utkast/delar/tillagg-avtal/patch.py` (idempotent, ankare).
+
+**Mergad** på beställarens ja ("ja"). Grenens preview `47a497b` byggdes grön ovanpå `37af957`. Innan mergen hade
+`main` gått till `d800c9c` (kundens tidslinje, Rutiner utan rutiner, Inkio-mejlen, driften, veckokollen borta).
+`utkast.html` slogs ihop utan konflikt och är byte för byte `d800c9c` + `patch.py`; provet på den sammanslagna
+filen 28/28 (12/28 på `d800c9c`), `navnyheter.mjs` och `nav2-orderfalt.mjs` gröna. Dagens 30 pushar var slut, så
+ingen ny preview: en commit direkt på `main`.
+
+---
+
 ## 2026-11-02 kväll · Fredagens veckokoll "Stämmer veckan?" borttagen (direkt på `main` på beställarens ja, ingen migration)
 
 **Beställaren** om veckokollen: "Varför finns den, förstår ej värdet", och efter svaret: "okej då ta bort den".
