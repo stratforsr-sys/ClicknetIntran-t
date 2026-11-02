@@ -435,7 +435,7 @@ export function kretsen(o: { superadmin: readonly string[]; saljare: readonly st
  * finns, och ingen annan får en notis). Ta bort variabeln när bevakningen
  * slås på för alla.
  */
-export function provfilter(ids: readonly (string | null | undefined)[], env: { VERCEL_ENV?: string; NOTIS_PROV_TILL?: string } = process.env): string[] {
+export function provfilter(ids: readonly (string | null | undefined)[], env: Readonly<Record<string, string | undefined>> = process.env): string[] {
   const rena = [...new Set(ids.filter((x): x is string => Boolean(x)))];
   const till = new Set((env.NOTIS_PROV_TILL ?? "").split(",").map((x) => x.trim()).filter(Boolean));
   if (env.VERCEL_ENV === "production" && !till.size) return rena;
