@@ -1,4 +1,19 @@
 import type { NextConfig } from "next";
+import { createHash } from "node:crypto";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+
+/**
+ * Typsnittens version (src/app/nav2/route.ts) är filernas innehåll, räknat i bygget. Adressen med ?v=
+ * cachas för alltid (headers nedan), så en ny fil måste få en ny adress, utan att någon behöver minnas
+ * att byta den. Filerna i namnordning, sha256, åtta tecken.
+ */
+const TYPSNITTEN = join(process.cwd(), "public/nav2/fonts");
+const typsnittV = (() => {
+  const h = createHash("sha256");
+  for (const f of readdirSync(TYPSNITTEN).filter((f) => f.endsWith(".woff2")).sort()) h.update(readFileSync(join(TYPSNITTEN, f)));
+  return h.digest("hex").slice(0, 8);
+})();
 
 /**
  * typedRoutes ar avstangt med flit: sidopanelen byggs dynamiskt utifran roll,
@@ -10,6 +25,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  env: { NAV2_TYPSNITT_V: typsnittV },
 
   /**
    * Nav 2.0-utkastet (/nav2) laser sin sida fran disk. Utan den har raden

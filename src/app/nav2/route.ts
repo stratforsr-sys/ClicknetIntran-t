@@ -50,9 +50,10 @@ export const dynamic = "force-dynamic";
  * dem först när skriptet ritat text, och de bytte typsnitt synligt 130–370 ms
  * efter första ritningen; vid varje återbesök frågades de om (0,3–0,45 s).
  * Nu förladdas de i huvudet, och adressen bär `?v=` så att next.config.ts kan
- * cacha dem för alltid. Byts en fil i public/nav2/fonts byts TYPSNITT_V.
+ * cacha dem för alltid. Versionen är filernas innehåll, räknad i bygget (next.config.ts), så en ny
+ * fil får en ny adress av sig själv.
  */
-const TYPSNITT_V = "1";
+const TYPSNITT_V = process.env.NAV2_TYPSNITT_V || "1";
 const TYPSNITTEN: [familj: string, fil: string, vikt: string][] = [
   ["Geist", "geist", "100 900"],
   ["Geist Mono", "geist-mono", "100 900"],
@@ -68,8 +69,9 @@ const BESKED = (rubrik: string, text: string) =>
   `<div id="ndFel" role="alert" style="max-width:560px;margin:64px auto;padding:0 16px;font:15px/1.5 system-ui,sans-serif;color:#1d2a25"><h1 style="font-size:20px;margin:0 0 8px">${rubrik}</h1><p style="margin:0">${text}</p></div>`;
 
 export async function GET(request: Request) {
-  // Schemat och den första anslutningen medan inloggningen läses (pgrest.ts).
-  forvarmPg();
+  // Schemat och den första anslutningen medan inloggningen läses (pgrest.ts), bara för en inloggning som
+  // mellanvaran redan kontrollerat (identitetsrubriken, src/lib/identitet.ts).
+  if (lasIdentitet(await headers())) forvarmPg();
   const tAuth = performance.now();
   const user = await getCurrentUser();
   if (!user) return NextResponse.redirect(new URL("/logga-in?nasta=%2Fnav2", request.url));

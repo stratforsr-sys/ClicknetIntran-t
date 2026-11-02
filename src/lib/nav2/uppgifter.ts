@@ -54,6 +54,8 @@ export type NdUppgift = {
   /** Gamla Nav D: kopplingarnas id (i samma ordning som links) och om den inloggade får redigera (farRedigera). */
   linkIds: string[];
   farRed: boolean;
+  /** Om den inloggade får stryka (farBjudaIn): den som la upp uppgiften eller har den. Uppgifter ändras direkt bara då. */
+  farStryk: boolean;
   besk: string;
   skapadAv: string;
   skapadAt: string;
@@ -186,6 +188,7 @@ export async function byggUppgifter(supabase: SupabaseClient, user: CurrentUser)
         serieAgare: (() => { const s = u.series_id ? serieRad.get(u.series_id) : undefined; return !!s && (s.assignee_id === mig || s.created_by === mig); })(),
         linkIds: u.kopplingar.map((k) => k.id),
         farRed: u.created_by === mig || u.assignee_id === mig || u.minRoll === "redigerare",
+        farStryk: u.created_by === mig || u.assignee_id === mig,
         besk: u.description_md ?? "",
         skapadAv: vem(u.created_by),
         skapadAt: u.created_at,

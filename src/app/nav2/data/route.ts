@@ -20,8 +20,9 @@ export const dynamic = "force-dynamic";
  * kommer härifrån är aldrig mer än sidan redan fick.
  */
 export async function GET(request: Request) {
-  // Schemat och den första anslutningen medan inloggningen läses (pgrest.ts).
-  forvarmPg();
+  // Schemat och den första anslutningen medan inloggningen läses (pgrest.ts), bara för en inloggning som
+  // mellanvaran redan kontrollerat (identitetsrubriken, src/lib/identitet.ts).
+  if (lasIdentitet(await headers())) forvarmPg();
   const t0 = performance.now();
   const user = await getCurrentUser();
   const auth = Math.round(performance.now() - t0);

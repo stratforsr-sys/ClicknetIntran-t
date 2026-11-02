@@ -16,11 +16,15 @@
  *      går att mäta i webbläsarens nätverksflik.
  *   4. Uppgifters ändringar syns direkt (steg 2): raden ändras innan servern
  *      svarat, blir som förut vid ett nej, och står kvar under en omhämtning.
- *      Det som händer i webbläsaren provas i ~/nav2-utkast/probe/genast-prov.mjs
- *      (headless Chrome med Zens data, servern svarar efter 1,5 s: 41 rader).
+ *      Bara det servern släpper igenom gissas, ett dubbelklick är ett klick
+ *      också när raden flyttat, ett nej på Stryk öppnar rutan igen, och efter
+ *      tidsgränsen hämtas det som gäller. Det som händer i webbläsaren provas i
+ *      ~/nav2-utkast/probe/genast-prov.mjs (headless Chrome med Zens data,
+ *      servern svarar efter 1,5 s: 56 rader).
  */
 import { readFileSync, readdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { join } from "node:path";
 
 const rot = join(fileURLToPath(import.meta.url), "..", "..");
@@ -28,6 +32,8 @@ const las = (f) => readFileSync(join(rot, f), "utf8");
 const sida = las("src/app/nav2/route.ts");
 const datarutt = las("src/app/nav2/data/route.ts");
 const pgrest = las("src/lib/nav2/pgrest.ts");
+const upgData = las("src/lib/nav2/uppgifter.ts");
+const upgRegler = las("src/lib/uppgifter.ts");
 const konfig = las("next.config.ts");
 const mellan = las("src/middleware.ts");
 const utkast = las("src/nav2/utkast.html");
@@ -44,7 +50,12 @@ const filer = readdirSync(join(rot, "public/nav2/fonts")).filter((f) => f.endsWi
 const lista = sida.slice(sida.indexOf("const TYPSNITTEN"), sida.indexOf("];", sida.indexOf("const TYPSNITTEN")));
 const iSidan = [...lista.matchAll(/\["[^"]+", "([a-z-]+)", "\d+ \d+"\]/g)].map((m) => m[1]).sort();
 ok("varje fil i public/nav2/fonts står i TYPSNITTEN", JSON.stringify(iSidan) === JSON.stringify(filer), iSidan.join(" "));
-ok("versionen är satt", /const TYPSNITT_V = "\w+";/.test(sida));
+// Versionen är filernas innehåll, räknad i bygget: en ny fil får en ny adress utan att någon minns att byta den.
+const konfigObj = (await import(pathToFileURL(join(rot, "next.config.ts")).href)).default;
+const summa = createHash("sha256"); for (const f of readdirSync(join(rot, "public/nav2/fonts")).filter((f) => f.endsWith(".woff2")).sort()) summa.update(readFileSync(join(rot, "public/nav2/fonts", f)));
+const vantad = summa.digest("hex").slice(0, 8);
+ok("versionen räknas ur filernas innehåll i next.config.ts", konfigObj.env?.NAV2_TYPSNITT_V === vantad, `${konfigObj.env?.NAV2_TYPSNITT_V} / ${vantad}`);
+ok("sidan tar versionen ur bygget", /const TYPSNITT_V = process\.env\.NAV2_TYPSNITT_V \|\| "1";/.test(sida));
 ok("förladdas i huvudet med crossorigin", /<link rel="preload" href="\/nav2\/fonts\/\$\{fil\}\.woff2\?v=\$\{TYPSNITT_V\}" as="font" type="font\/woff2" crossorigin>/.test(sida));
 ok("@font-face begär samma adress som förladdningen", /src:url\(\/nav2\/fonts\/\$\{fil\}\.woff2\?v=\$\{TYPSNITT_V\}\)/.test(sida));
 ok("ingen typsnittsadress utan ?v= kvar i sidan", !/\/nav2\/fonts\/[a-z-]+\.woff2[)"]/.test(sida));
@@ -61,6 +72,8 @@ rubrik("Kall instans");
 const fore = (kalla, namn) => kalla.indexOf("forvarmPg();") > -1 && kalla.indexOf("forvarmPg();") < kalla.indexOf("await getCurrentUser()");
 ok("/nav2 startar schemat före inloggningen", fore(sida));
 ok("/nav2/data startar schemat före inloggningen", fore(datarutt));
+// Bara för en inloggning som mellanvaran redan kontrollerat: identitetsrubriken (src/lib/identitet.ts).
+for (const [namn, kalla] of [["/nav2", sida], ["/nav2/data", datarutt]]) ok(`${namn} värmer bara upp för en kontrollerad inloggning`, /if \(lasIdentitet\(await headers\(\)\)\) forvarmPg\(\);/.test(kalla));
 ok("forvarmPg finns och väntar inte", /export function forvarmPg\(\): void \{[\s\S]*?hamtaSchema\(p\)\.catch\(\(\) => \{\}\);/.test(pgrest));
 ok("schemat läses på ett ställe", (pgrest.match(/lasSchema\(p\)/g) ?? []).length === 1 && /schema = await hamtaSchema\(p\);/.test(pgrest));
 
@@ -73,11 +86,16 @@ const post = utkast.slice(utkast.indexOf("async function ndUpgPost("), utkast.in
 ok("ndUpgPost ändrar raden före sparningen", /const v = ladda \? ndUpgGenast\(handling, data\) : null;/.test(post) && post.indexOf("ndUpgGenast(") < post.indexOf("ndSkriv("));
 ok("ett ja och ett nej avslutar ändringen", /ndUpgSvarat\(v, true\)/.test(post) && (post.match(/ndUpgSvarat\(v, false\)/g) ?? []).length === 2);
 ok("samma uppgift sparas i tur och ordning", /ndUpgITur\(v\.id, /.test(post));
-ok("bara i skrivläge och för navets egna uppgifter", /ndUpgNav\(t\.id\) && ndUp\(\)\.skriv \? ndUpgForutse/.test(utkast));
+ok("bara i skrivläge och för navets egna uppgifter", /ndUpgNav\(t\.id\) && ndUp\(\)\.skriv && ndUpgFar\(t, handling\) \? ndUpgForutse/.test(utkast));
+ok("bara det servern släpper igenom gissas: stryka kräver farStryk, resten farRed", /const ndUpgFar = \(t, handling\) => handling === 'avbryt' \? !!t\.ndFarStryk : !!t\.ndFarRed;/.test(utkast) && /t\.ndFarStryk = x\.farStryk;/.test(utkast));
+ok("farStryk är serverns farBjudaIn", /farStryk: u\.created_by === mig \|\| u\.assignee_id === mig,/.test(upgData) && /export function farBjudaIn\(k: Krets\): boolean \{\s*return k\.created_by === k\.mig \|\| k\.assignee_id === k\.mig;\s*\}/.test(upgRegler));
 for (const h of ["bocka", "ateroppna", "avbryt", "planera", "andra"]) ok(`${h} förutses`, new RegExp(`handling === '${h}'`).test(utkast.slice(utkast.indexOf("function ndUpgForutse("), utkast.indexOf("function ndUpgGenast("))));
 ok("väntande ändringar läggs på igen efter en omhämtning", /in:\(\) => \{ ndUpgIgen\(\);/.test(utkast) && /NDUPGVANTAR\.forEach\(v => \{ const t = ndUpgT\(v\.id\); if \(t\) Object\.assign\(t, v\.falt\); \}\);/.test(utkast));
 ok("en sparad ändring släpps först av en omhämtning som började efter svaret", /if \(v\.klar && v\.klar < NDOMLASSTART\) NDUPGVANTAR\.delete\(v\)/.test(utkast) && /NDOMLASSTART = Date\.now\(\);\n\s*const s = await ndLas\('\/nav2\/data\?delar='/.test(utkast));
-ok("ett dubbelklick på bocken är ett klick", /if \(ladda && ndUpgDubbel\(handling, data\)\) return/.test(post) && /Date\.now\(\) - x\.at < 500/.test(utkast));
+ok("ett dubbelklick på bocken är ett klick", /if \(ladda && \(ndUpgDubbel\(handling, data\) \|\| ndUpgSammaStalle\(k\)\)\) return/.test(post) && /Date\.now\(\) - x\.at < 500/.test(utkast));
+ok("ett andra musklick på samma ställe inom en halv sekund görs inte", /e\.isTrusted && e\.detail > 0/.test(utkast) && /k\.at - NDUPGKLICK\.at < 500/.test(utkast) && /if \(v && k\) NDUPGKLICK = k;/.test(post));
+ok("ett nej på Stryk öppnar rutan igen", /S\.panel = null; v\.rutan = true;/.test(utkast) && /if \(v\.rutan && !S\.panel && t && t\.lage !== 'avbruten'\) S\.panel = v\.id;/.test(utkast));
+ok("efter tidsgränsen hämtas det som gäller, efter ett nätfel inte", /if \(ladda && r\.hangde && r\.fel === NDSKRIVTEXT\.tid\) ndOmlas\('upg'\);/.test(post));
 ok("med granskare gissas ingenting", /if \(t\.lage !== 'oppen' \|\| t\.granskare\) return null;/.test(utkast));
 ok("ett nej återställer varje fält som ingen senare ändring tagit över", /x\.nr > v\.nr/.test(utkast) && /if \(x\) x\.fore\[k\] = v\.fore\[k\]; else if \(t\) t\[k\] = v\.fore\[k\];/.test(utkast));
 
