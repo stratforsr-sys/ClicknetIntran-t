@@ -468,6 +468,67 @@ export function statusFranInkio(r: Rad, f: Forandring, nu: number): Statusandrin
 }
 
 // -----------------------------------------------------------------------------
+// Vilka kunder som läses det här varvet
+// -----------------------------------------------------------------------------
+
+/** Något nytt i Inkio de senaste två dygnen: kunden läses varje minut. */
+export const VARM_MS = 48 * 60 * 60 * 1000;
+/** En order godkänd i Nav de senaste två veckorna: Inkio fylls på (avtal, leveranskort), läses varje minut. */
+export const NAV_VARM_MS = 14 * 24 * 60 * 60 * 1000;
+/** Alla andra läses minst så här ofta. */
+export const KALL_MS = 5 * 60 * 1000;
+
+export type Lasbar = {
+  org: string;
+  /** Kunden är hittad i Inkio och läst en gång. */
+  klar: boolean;
+  /** När Nav senast såg kundens historik ändras (`crm_kund.andrad_at`). */
+  andrad: string | null;
+  /** När kunden senast lästes (`crm_kund.senast_last`). */
+  last: string | null;
+  /** Senast en order på kunden godkändes i Nav. */
+  godkand: string | null;
+};
+
+/**
+ * VARMA VARJE MINUT, KALLA VAR FEMTE (beställaren frågade 2026-11-02 vad
+ * bevakningen kostar). Inkio har ingen lista över senaste anteckningar —
+ * `get-latest-notes` gäller en kund, och kundens `modified_at` rörs inte av
+ * en anteckning — så varje kund måste läsas för sig för att inget ska missas.
+ * Men de flesta kunder är tysta en vanlig dag. En kund med något nytt de
+ * senaste två dygnen, eller en nyss godkänd order, läses varje minut. Övriga
+ * läses när de inte lästs på fem minuter, de äldsta först och högst en
+ * fjärdedel per varv, så att de sprids ut över minuterna i stället för att
+ * komma alla på en gång. Ingenting missas; det tysta kan dröja fem minuter.
+ */
+/**
+ * När något senast hände hos kunden i Inkio. Första läsningen sätter
+ * `andrad_at` till den, inte till läsningens tid — annars hade varje kund varit
+ * varm i två dygn efter påslaget. Avtal med startdag framåt räknas inte.
+ */
+export function senastHant(items: readonly Pick<Historikpost, "at">[], nu: number): string {
+  let senast = 0;
+  for (const p of items) {
+    const t = Date.parse(p.at);
+    if (Number.isFinite(t) && t <= nu && t > senast) senast = t;
+  }
+  return new Date(senast).toISOString();
+}
+
+export function attLasa(kunder: readonly Lasbar[], nu: number): string[] {
+  const varma: string[] = [];
+  const kalla: { org: string; last: number }[] = [];
+  const inom = (t: string | null, ms: number) => t !== null && nu - Date.parse(t) < ms;
+  for (const k of kunder) {
+    if (!k.klar || inom(k.andrad, VARM_MS) || inom(k.godkand, NAV_VARM_MS)) varma.push(k.org);
+    else kalla.push({ org: k.org, last: k.last ? Date.parse(k.last) : 0 });
+  }
+  // Trettio sekunders marginal: ett varv som började 4:59 efter det förra ska inte vänta till 5:59.
+  const forfallna = kalla.filter((k) => nu - k.last >= KALL_MS - 30_000).sort((a, b) => a.last - b.last);
+  return [...varma, ...forfallna.slice(0, Math.ceil(kalla.length / 4)).map((k) => k.org)];
+}
+
+// -----------------------------------------------------------------------------
 // Koppla äldre order på organisationsnummer
 // -----------------------------------------------------------------------------
 
@@ -479,7 +540,9 @@ export type InkioOrder = { id: string; nummer: string | null; varde: number | nu
  * Bevakningen kopplar dem när det är entydigt: samma värde (på kronan), och
  * bara en order med det värdet på var sida. Allt annat lämnas — en felkopplad
  * order hade fått fel rader i Inkio, och en makulering där hade makulerat fel
- * order här. Strajv AB (11 940 kr i Nav, 5 970 kr i Inkio) kopplas alltså inte.
+ * order här. Strajv AB (11 940 kr i Nav, 5 970 kr i Inkio) kopplades alltså
+ * inte; beställaren sa att Inkio var rätt, och den rättades och kopplades för
+ * hand 2026-11-02 (`kopplad = 'hand'`).
  */
 export function kopplaPaOrgnr(nav: readonly NavOrder[], inkio: readonly InkioOrder[], upptagna: ReadonlySet<string>): { navId: string; inkioId: string; nummer: string | null }[] {
   const lediga = inkio.filter((i) => !i.makulerad && !upptagna.has(i.id));

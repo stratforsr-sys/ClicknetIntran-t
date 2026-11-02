@@ -10,7 +10,9 @@
  */
 import {
   NOTIS_FONSTER_MS,
+  KALL_MS,
   aktivitetsrader,
+  attLasa,
   avtryck,
   etikett,
   jamfor,
@@ -20,6 +22,7 @@ import {
   notisFor,
   posttext,
   renText,
+  senastHant,
   statusFranInkio,
   tolkaPost,
 } from "../src/lib/crm/inflode.ts";
@@ -243,6 +246,44 @@ rubrik("Rättningen till Inkio (correct-sales-order)");
   ok("faktureringen följer med", r.order.invoicing === skapad.invoicing && JSON.stringify(r.order.invoice_plan) === JSON.stringify(skapad.invoice_plan));
   ok("startdagen följer med, fakturamejlet nollas inte", r.order.delivery_date === "2026-10-15" && !("invoice_email" in r.order));
   ok("ingen kund, säljare eller provision i rättningen", !("customer" in r.order) && !("sales_person" in r.order) && !JSON.stringify(r).includes("provision"));
+}
+
+rubrik("Vilka kunder som läses: varma varje minut, kalla var femte");
+{
+  const sedan = (ms) => new Date(NU - ms).toISOString();
+  const MIN = 60 * 1000;
+  const kall = (org, last) => ({ org, klar: true, andrad: sedan(10 * 24 * 60 * MIN), last, godkand: sedan(60 * 24 * 60 * MIN) });
+  ok("en ny kund läses", attLasa([{ org: "a", klar: false, andrad: null, last: null, godkand: null }], NU).includes("a"));
+  ok("något nytt i går: läses varje minut", attLasa([{ ...kall("a", sedan(MIN)), andrad: sedan(24 * 60 * MIN) }], NU).includes("a"));
+  ok("order godkänd för en vecka sedan: läses varje minut", attLasa([{ ...kall("a", sedan(MIN)), godkand: sedan(7 * 24 * 60 * MIN) }], NU).includes("a"));
+  ok("tyst och läst för en minut sedan: vilar", !attLasa([kall("a", sedan(MIN))], NU).includes("a"));
+  ok("tyst och läst för fem minuter sedan: läses", attLasa([kall("a", sedan(KALL_MS))], NU).includes("a"));
+  ok("tyst och aldrig läst: läses", attLasa([kall("a", null)], NU).includes("a"));
+
+  // Tjugo tysta, alla lästa samtidigt: de sprids ut, och ingen väntar längre än åtta minuter.
+  const tysta = Array.from({ length: 20 }, (_, i) => kall(`k${i}`, sedan(0)));
+  const sist = new Map(tysta.map((k) => [k.org, NU]));
+  let langst = 0;
+  let mest = 0;
+  for (let m = 1; m <= 60; m++) {
+    const nu = NU + m * MIN;
+    const valda = attLasa(tysta.map((k) => ({ ...k, last: new Date(sist.get(k.org)).toISOString() })), nu);
+    mest = Math.max(mest, valda.length);
+    for (const org of valda) {
+      langst = Math.max(langst, nu - sist.get(org));
+      sist.set(org, nu);
+    }
+  }
+  ok("tjugo tysta: högst fem per varv", mest <= 5, `${mest}`);
+  ok("tjugo tysta: ingen väntar mer än åtta minuter", langst <= 8 * MIN, `${langst / MIN} min`);
+  ok("tjugo tysta: alla läses inom en timme", [...sist.values()].every((t) => t >= NU + 50 * MIN));
+}
+
+rubrik("Första läsningen: varm efter det som hänt i Inkio, inte efter läsningen");
+{
+  const items = [{ at: "2026-08-28" }, { at: "2026-11-02T11:17:28.201356Z" }, { at: "2026-11-17" }];
+  ok("det senaste som hänt, inte avtalet som startar framåt", senastHant(items, NU) === "2026-11-02T11:17:28.201Z");
+  ok("bara gammalt: kallt", Date.parse(senastHant([{ at: "2026-08-28" }], NU)) < NU - 48 * 60 * 60 * 1000);
 }
 
 console.log(fel ? `\n\x1b[31m${fel} fel\x1b[0m` : "\n\x1b[32mAllt grönt\x1b[0m");

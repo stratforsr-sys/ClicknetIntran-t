@@ -16,9 +16,10 @@ export const POSTER: Navnyhet[] = [
   {
     slug: "inkio-i-nav",
     rubrik: "Allt som händer i Inkio syns i Nav",
-    ingress: "Anteckningar, kortflyttar, ärenden och ordrar i Inkio kommer in i Nav inom en minut, med en notis.",
+    ingress: "Anteckningar, kortflyttar, ärenden och ordrar i Inkio kommer in i Nav inom några minuter, med en notis.",
     text: `Skriver någon i Inkio om en kund som har en order i Nav, står det i kundkortet
-under **Aktivitet** inom en minut. Det gäller anteckningar, flyttade leveranskort,
+under **Aktivitet** inom en minut, och inom fem för en kund där inget hänt på två
+dygn. Det gäller anteckningar, flyttade leveranskort,
 ärenden och ändrade ordrar och avtal. Säljaren på ordern får en notis, och det gör
 alla superadmin och den som leder säljaren. Den som skrev får ingen.
 

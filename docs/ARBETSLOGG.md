@@ -5,6 +5,43 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-02 eftermiddag · Inkio in i Nav, svaren: 0277 körd, Lucas admin, Strajv rättad, varma och tysta kunder
+
+**Beställaren svarade:** "Ta bort lucas från Superadmin, gör han bara admin." Om Strajv: "Den som är i inkio är rätt.
+Lägg den." Ja till 0277 och till `NOTIS_PROV_TILL`. Och två frågor: ska en webhook läggas upp i Inkio, och kostar det
+krediter eller databas att läsa hela historiken varje minut?
+
+**Gjort:**
+- **0277 KÖRD** (`apply-sql`). Brytarna `inflode`/`utflode` av, `nav-inkio` avstängt, ingen rad i utkorgen.
+  `registerutdrag.mjs` grönt nu.
+- **Lucas Pohl → admin**: samma steg som Anställda → Behörighet → Admin (`ROLL_FOR.admin = sales_manager`). Rollen
+  `admin` borttagen, `sales_manager` tillagd, ingen handsatt nivå fanns. Loggat (`role.granted`, `role.revoked`,
+  `anstallda.handelse`) med Zen som aktör. Ingen notis till Lucas (Nav är stängt för Lucas).
+- **Strajv AB #3**: Inkios SO-2026-00043 är "Optimerad Kampanjsida 6 mån", avtal CTR-2026-00043 på sex månader,
+  5 970 kr (= 995 × 6, alltså samma månadspris som Nav; skillnaden var längden). Nav rättades för hand: 12 → 6 mån,
+  11 940 → 5 970 kr, slutdatum 2027-08-28 → 2027-02-28 (genererad kolumn). Navs Rätta kan inte göra det (en paketorder
+  blir inte fri, sex månader finns inte bland längderna), så det gjordes med SQL under `nav.fran_inkio` och loggades som
+  `sales_order.corrected`. Provisionen, 1 500 kr, står kvar som handsatt (`commission_rate_id` måste vara tom med
+  `manual`, villkoret `sales_order_satskoppling`). Augusti är inte fastställd. Kopplad till SO-2026-00043 med
+  `kopplad = 'hand'`. Ingen rad till Inkio.
+- **`NOTIS_PROV_TILL`** satt i Vercel Preview för `inkio-inflode`. **Inkio-nycklarna saknas i den previewen** (finns
+  bara för `nav2-utkast` och `inkio`); automatläget nekade skrivningen av dem, så det väntar på beställarens ja.
+- **Sista spärren i `anrop`**: allt som inte är GET kastas när `inkioFarSkriva()` är falsk, så previewen kan få
+  nycklarna utan att kunna skriva i Inkio.
+- **Varma och tysta kunder** (`attLasa`, `senastHant`): kostnadsfrågan. Inkio har inget flöde över senaste
+  anteckningar (provat med GET: ingen posttyp för kommentarer, `get-latest-notes` gäller en kund, kundens
+  `modified_at` står kvar på 6 oktober trots Nenads anteckning i dag), så varje kund måste läsas för sig. Men en kund
+  där inget hänt på två dygn läses nu var femte minut i stället för varje minut, utspritt. Med dagens data: 7 varma,
+  21 tysta, ~11 läsningar i minuten i stället för 28. Första läsningen sätter `andrad_at` till det senaste som hänt i
+  Inkio, annars hade alla varit varma i två dygn efter påslaget.
+
+**Kostnaden, uppmätt:** ett varv för 28 kunder tog 1,2 s, ~50 ms processortid och 150 kB. Inga krediter: Vercel och
+Supabase är fria planer, Inkio skickar inga kvotrubriker. Vercels fria kvot (4 h processortid, 360 GB-h minne, 1 M anrop
+i månaden) är den som räknas, och Hobby visar inte förbrukningen via API:t. Tabellen står i spec-dokumentet.
+
+**Webhooken**: inte nu. Den finns bara för order, avtal, fakturor, ärenden och nya kunder, och de kommer redan in inom
+en till fem minuter. Anteckningarna, det viktiga, har ingen webhook.
+
 ## 2026-11-02 · Inkio in i Nav, och Nav ut till Inkio (grenen `inkio-inflode`, 0277 skriven, EJ körd, EJ mergad)
 
 **Beställaren 2026-11-02:** en säljare ringde en kund utan svar och skrev det i Inkio, men det kom inte in i Nav och

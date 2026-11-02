@@ -6,11 +6,13 @@ import { nivaFor } from "@/lib/nav2/forma";
 import { avtaletsOrder, inkioKonfigurerad, inkioKund, inkioLank, inkioUrl, kundaktivitet, kundhistorik, type Kundaktivitet } from "./inkio";
 import {
   aktivitetsrader,
+  attLasa,
   avtryck,
   jamfor,
   kopplaPaOrgnr,
   kretsen,
   notisFor,
+  senastHant,
   statusFranInkio,
   tolkaPost,
   type Lagrad,
@@ -26,10 +28,11 @@ import {
  * (pg_cron → /api/jobb/inkio) och direkt av Inkios webhooks för en enda kund.
  *
  * =============================================================================
- * EN MINUT, VARJE KUND, OCH DATABASEN RÖRS BARA NÄR NÅGOT HÄNT
+ * VARJE KUND, OCH DATABASEN RÖRS BARA NÄR NÅGOT HÄNT
  *
- * Varje kund som har en order i Nav (inte utkast) läses med ett anrop. Hela
- * svaret får ett avtryck; är det samma som förra minuten skrivs bara att
+ * Varje kund som har en order i Nav (inte utkast) läses med ett anrop: den
+ * med något nytt varje minut, den tysta minst var femte (`attLasa`). Hela
+ * svaret får ett avtryck; är det samma som förra gången skrivs bara att
  * kunden lästs. Databasen är Nano och swappar (2026-11-02) — trettio kunder
  * i minuten får inte bli trettio skrivningar i minuten.
  * =============================================================================
@@ -54,6 +57,8 @@ const AKTIV = new Set(["active", "onboarding"]);
 
 export type Bevakning = {
   kunder: number;
+  /** Tysta kunder som inte stod på tur det här varvet. */
+  vilande: number;
   lasta: number;
   ororda: number;
   nya: number;
@@ -83,6 +88,8 @@ type Kundrad = {
   forsta_klar: boolean;
   avtryck: string | null;
   senast_sokt: string | null;
+  senast_last: string | null;
+  andrad_at: string | null;
 };
 
 type Person = { id: string; email: string | null; status: string; manager_id: string | null; team_id: string | null };
@@ -181,7 +188,7 @@ async function iTur<T>(lista: readonly T[], fn: (x: T) => Promise<void>): Promis
  */
 export async function bevaka(o: { bara?: readonly string[] } = {}): Promise<Bevakning> {
   const start = Date.now();
-  const ut: Bevakning = { kunder: 0, lasta: 0, ororda: 0, nya: 0, andrade: 0, notiser: 0, status: 0, kopplade: 0, fel: [], ms: 0 };
+  const ut: Bevakning = { kunder: 0, vilande: 0, lasta: 0, ororda: 0, nya: 0, andrade: 0, notiser: 0, status: 0, kopplade: 0, fel: [], ms: 0 };
   const klar = () => ({ ...ut, ms: Date.now() - start });
 
   try {
@@ -227,15 +234,34 @@ async function varv(o: { bara?: readonly string[] }, ut: Bevakning, styrStatus: 
   const ordrar = await allaOrder();
   const perKund = new Map<string, Order[]>();
   for (const x of ordrar) perKund.set(x.org_number, [...(perKund.get(x.org_number) ?? []), x]);
-  const orgnr = [...perKund.keys()].filter((k) => !o.bara || o.bara.includes(k));
-  ut.kunder = orgnr.length;
-  if (!orgnr.length) return;
+  const alla = [...perKund.keys()].filter((k) => !o.bara || o.bara.includes(k));
+  ut.kunder = alla.length;
+  if (!alla.length) return;
 
   const { data: k } = await db
     .from("crm_kund")
-    .select("org_number, customer_id, customer_number, customer_name, forsta_klar, avtryck, senast_sokt")
-    .in("org_number", orgnr);
+    .select("org_number, customer_id, customer_number, customer_name, forsta_klar, avtryck, senast_sokt, senast_last, andrad_at")
+    .in("org_number", alla);
   const kunder = new Map(((k ?? []) as Kundrad[]).map((x) => [x.org_number, x] as const));
+  // En webhook om en viss kund läser den direkt; minutjobbet väljer varma och de kalla som står på tur.
+  const nu = Date.now();
+  const orgnr = o.bara
+    ? alla
+    : attLasa(
+        alla.map((org) => {
+          const x = kunder.get(org);
+          const godkanda = (perKund.get(org) ?? []).map((y) => y.approved_at).filter((t): t is string => Boolean(t)).sort();
+          return {
+            org,
+            klar: Boolean(x?.customer_id && x.forsta_klar),
+            andrad: x?.andrad_at ?? null,
+            last: x?.senast_last ?? null,
+            godkand: godkanda[godkanda.length - 1] ?? null,
+          };
+        }),
+        nu,
+      );
+  ut.vilande = alla.length - orgnr.length;
   const personer = new Personer();
   const ororda: string[] = [];
 
@@ -264,6 +290,8 @@ async function varv(o: { bara?: readonly string[] }, ut: Bevakning, styrStatus: 
           senast_sokt: rad.senast_sokt,
           forsta_klar: kund?.forsta_klar ?? false,
           avtryck: kund?.avtryck ?? null,
+          senast_last: kund?.senast_last ?? null,
+          andrad_at: rad.andrad_at,
         };
         if (!hittad) return;
         // Anteckningar skrivna i Nav innan kunden fanns i Inkio går ut nu.
@@ -282,9 +310,17 @@ async function varv(o: { bara?: readonly string[] }, ut: Bevakning, styrStatus: 
       }
 
       await lasIn(org, kund, historik.items, perKund.get(org) ?? [], personer, styrStatus, ut);
+      const nuIso = new Date().toISOString();
       await db
         .from("crm_kund")
-        .update({ avtryck: helt, forsta_klar: true, senast_last: new Date().toISOString(), senast_ok: new Date().toISOString(), fel: null, andrad_at: new Date().toISOString() })
+        .update({
+          avtryck: helt,
+          forsta_klar: true,
+          senast_last: nuIso,
+          senast_ok: nuIso,
+          fel: null,
+          andrad_at: kund.forsta_klar ? nuIso : senastHant(historik.items, Date.now()),
+        })
         .eq("org_number", org);
     } catch (e) {
       const fel = e instanceof Error ? e.message : String(e);

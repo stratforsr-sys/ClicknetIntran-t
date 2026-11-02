@@ -37,6 +37,11 @@ idempotens på källans id, inget eko och en utkorg för det som går ut.
 
 1. **`nav-inkio` (pg_cron, varje minut) → `/api/jobb/inkio` → `bevaka()`** (`src/lib/crm/inflode-server.ts`).
    - Varje kund med en order i Nav (inte utkast) läses med ett anrop, fyra i taget.
+   - **Varma varje minut, tysta var femte** (`attLasa`). En kund där något hänt i Inkio de senaste två dygnen, eller
+     med en order godkänd i Nav de senaste två veckorna, läses varje minut. Övriga läses när de inte lästs på fem
+     minuter, de äldsta först och högst en fjärdedel per varv. Inkio har ingen lista över senaste anteckningar
+     (`get-latest-notes` gäller en kund, och kundens `modified_at` rörs inte av en anteckning), så varje kund måste
+     läsas för sig. Ingenting missas; det tysta kan dröja fem minuter.
    - Är hela svarets avtryck oförändrat skrivs bara tiden, i en skrivning för alla kunder.
    - Annars jämförs varje post med `crm_handelse` (`jamfor`) och skrivs: ny, ändrad eller raderad.
    - Ett lås (`crm_installning.las_till`) gör att två varv aldrig notifierar samma sak.
@@ -65,7 +70,9 @@ idempotens på källans id, inget eko och en utkorg för det som går ut.
 5. **Kopplingen på organisationsnummer** (`kopplaPaOrgnr`). En godkänd Nav-order utan koppling kopplas till en
    Inkio-order med **samma värde** (på kronan), när värdet är unikt på båda sidor. Kopplingen blir
    `crm_order.kopplad = 'orgnr'`. Torrkörningen 2026-11-02 gav 20 kopplingar. Strajv AB (11 940 kr i Nav,
-   5 970 kr i Inkio) kopplas inte.
+   5 970 kr i Inkio) kopplades inte. Beställaren: "Den som är i inkio är rätt." Nav #3 rättades därför för hand till
+   Inkios avtal (6 mån, 5 970 kr, slut 2027-02-28) och kopplades till SO-2026-00043 (`kopplad = 'hand'`). Fredriks
+   provision, 1 500 kr, står kvar som handsatt; provisionstabellen saknar sex månader.
 6. **Kundkortet** läser Navs kopia (`kundaktivitetForKortet`) i samma form som förut, så gränssnittet ändras
    inte. Har bevakningen inte läst kunden än läses Inkio direkt som förut. Superadmin ser det som raderats i
    Inkio.
@@ -98,6 +105,23 @@ idempotens på källans id, inget eko och en utkorg för det som går ut.
 | `styr_status` | makulerad, betald och uppsagt i Inkio ändrar Nav | på |
 | `ratta_i_inkio` | en rättning rättar Inkio-ordern | på |
 
+## Vad det kostar (beställaren frågade 2026-11-02)
+
+Inga pengar och inga krediter: Vercel och Supabase är på fria planer och Inkio tar inte betalt per anrop (inga
+kvotrubriker i svaren). Det som räknas är de fria kvoterna, och Vercels är den som betyder något: går en gräns över
+står funktionerna still i 30 dagar.
+
+| | Per varv | Per månad | Fri kvot |
+|---|---|---|---|
+| Vercel-anrop | 1 | 43 200 | 1 000 000 |
+| Processortid | ~50 ms för 28 kunder (uppmätt lokalt) | runt en timme (uppskattat) | 4 timmar |
+| Inkio-anrop | ~11 (7 varma, 21 tysta) | ~480 000 | ingen känd |
+| Data från Inkio | ~60 kB | ~2,5 GB | ingen känd |
+| Databasfrågor | ~8 små | ~350 000 | ingen gräns, men Nano |
+
+Hobby-teamet ser inte sin förbrukning via API:t; den står under Usage i Vercels panel. Titta där en vecka efter
+påslaget. Det redan befintliga `nav-utkorg` anropar Vercel lika ofta.
+
 ## Prov
 
 - `tests/inkio-inflode.mjs` (`npm run test:inkio-inflode`): tolkningen, jämförelsen, notisen, kretsen,
@@ -116,4 +140,7 @@ idempotens på källans id, inget eko och en utkorg för det som går ut.
 - Ett ändrat belopp i Inkio ändrar inte Nav. Det ger en notis.
 - Koppling på org.nr kräver samma värde.
 - Rättning med `correct-sales-order` görs bara på order som Nav själv lagt i Inkio.
-- Lucas Pohl (rollen admin) räknas som superadmin, som `nivaFor` säger.
+- ~~Lucas Pohl (rollen admin) räknas som superadmin.~~ Beställaren 2026-11-02: Lucas är admin. Rollen `admin` byttes
+  mot `sales_manager`, som Anställda → Behörighet → Admin gör. Lucas har inget team, så Lucas får notis bara om egna
+  order.
+- Varma kunder varje minut, tysta var femte (se punkt 1).

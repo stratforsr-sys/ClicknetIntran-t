@@ -93,6 +93,10 @@ type Anrop = {
 };
 
 async function anrop<T>(metod: "GET" | "POST" | "PUT" | "DELETE", sokvag: string, a: Anrop = {}): Promise<T> {
+  // SISTA SPÄRREN. Varje skrivande funktion frågar `inkioFarSkriva` själv, men
+  // previewen har nycklarna för att kunna läsa (bevakningen provas där), och en
+  // ny anropare som glömmer frågan hade då skrivit i Inkio från en gren.
+  if (metod !== "GET" && !inkioFarSkriva()) throw new Error("Inkio skrivs bara från produktionen.");
   const url = new URL(sokvag, inkioUrl());
   for (const [k, v] of Object.entries(a.query ?? {})) {
     if (v !== undefined && v !== null) url.searchParams.set(k, typeof v === "string" ? v : JSON.stringify(v));
