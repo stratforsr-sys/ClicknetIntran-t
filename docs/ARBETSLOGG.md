@@ -5,7 +5,7 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
-## 2026-11-02 kväll · Inkio: mejl bara om ärenden, makulerat och uppsagt (grenen `inkio-notiser`, ingen migration, beställarens ja till mergen)
+## 2026-11-02 kväll · Inkio: mejl bara om ärenden, makulerat och uppsagt (MERGAD till `main` `ed04ae7` på beställarens ja, ingen migration)
 
 **Beställaren:** "Just nu får jag mejl på allting som händer i inkio. Jag vill ha de viktigaste i mejlen men allt annat
 som notis i appen så jag inte får 100 mejl." Anteckningar som notis, ärenden i mejl och notis, och "en anteckning på
@@ -39,6 +39,12 @@ Inga sådana aktiviteter fanns i `crm_handelse` den 2 november.
 
 - Prov: `npm run test:inkio-inflode` (85, varav 11 nya), `npm run test:utskick` (3 nya), notiser, klocka, täckningen
   och notislänkarna gröna.
+
+**Mergad:** main hade fått kundens tidslinje (0278) och Rutiner-lagningen, som rör samma `inflode.ts` och
+`inflode-server.ts`. Koden gick ihop av sig själv; bara dokumenten och nyhetslistan krockade (båda sidor överst).
+Main slogs ihop in i grenen (`ace967a`), proven gröna, previewen grön, sedan squash `ed04ae7` på main ovanpå mains
+dokumentcommit `6819b72`. Produktionen `dpl_22zm7yoEG4aQjSP4YxzEj3yT1WXS` grön. Därefter sattes de tre sorterna till
+`true` i lagret `alla`, och `far()` mot produktionens regler gav mejl för just de tre.
 
 ---
 
