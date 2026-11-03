@@ -30,6 +30,7 @@ import {
   orderIPeriod,
   periodFor,
   provisionFor,
+  tidigasteStart,
   raknas,
   AVTALSSLUT_VARSEL_DAGAR,
   BINDNINGSTID_MAX,
@@ -270,6 +271,12 @@ console.log("\nTelefon och signeringsdatum");
     "en prognos ar inte en intjaning",
   );
   ok("fel format nekas", !giltigtSigneringsdatum("2026-8-1", "2026-08-25"));
+
+  // Starten far ligga hogst ett ar fore signeringen (0285), som Postgres raknar.
+  ok("ett ar fore signeringen", tidigasteStart("2026-11-03") === "2025-11-03");
+  ok("29 februari blir 28 februari aret fore", tidigasteStart("2028-02-29") === "2027-02-28");
+  ok("ett ar fore ar tillatet", !("2025-10-22" < tidigasteStart("2026-10-22")));
+  ok("ett ar och en dag fore nekas", "2025-10-21" < tidigasteStart("2026-10-22"));
 }
 
 console.log("\nManadslistan");

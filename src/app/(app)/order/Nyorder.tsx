@@ -15,6 +15,7 @@ import {
   avtalsslut,
   giltigBindningstid,
   periodFor,
+  tidigasteStart,
   tjanstensSlut,
   tjanstensVarde,
   type Fakturering,
@@ -760,7 +761,7 @@ export function Nyorder({
             name="starts_on"
             type="date"
             required
-            min={f.signerat || undefined}
+            min={f.signerat ? tidigasteStart(f.signerat) : undefined}
             className={KONTROLL}
             value={f.startdatum}
             onChange={(e) => satt("startdatum", e.target.value)}

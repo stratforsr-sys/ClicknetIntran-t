@@ -45,7 +45,7 @@ ok("DELAR finns och har grund", DELAR.has("grund"), [...DELAR].join(" "));
 const typ = data.slice(data.indexOf("export type Nav2Data = {"), data.indexOf("\n};", data.indexOf("export type Nav2Data = {")));
 for (const d of DELAR) if (d !== "grund") ok(`${d} är en nyckel i Nav2Data`, new RegExp(`^\\s{2}${d}:`, "m").test(typ));
 ok("rutten släpper bara igenom kända delar", /filter\(arNav2Del\)/.test(rutt) && /status: 400/.test(rutt));
-ok("rutten läser med pg-vägen som /nav2", /lasIdentitet\(h\)/.test(rutt) && /byggNav2Delar\(user, delar, pg\)/.test(rutt));
+ok("rutten läser med pg-vägen som /nav2", /lasIdentitet\(h\)/.test(rutt) && /byggNav2Delar\(user, delar, pg[,)]/.test(rutt));
 
 rubrik("Vyerna i utkastet");
 const anmalda = new Map();
