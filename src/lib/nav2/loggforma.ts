@@ -182,6 +182,8 @@ const RUBRIK: Record<string, string> = {
   "course.updated": "Kurs ändrad",
   "customer.landing_page_reported": "Kampanjsida rapporterad",
   "customer.note_added": "Kundanteckning tillagd",
+  "customer.note_edited": "Kundanteckning ändrad",
+  "customer.note_deleted": "Kundanteckning borttagen",
   "customer.note_pinned": "Kundanteckning fäst",
   "customer.note_unpinned": "Kundanteckning lossad",
   "deviation.commented": "Rastavvikelse kommenterad",

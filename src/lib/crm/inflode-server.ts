@@ -168,6 +168,15 @@ class Personer {
     };
   }
 
+  /** Namnet på en anställd (den som tog bort en anteckning, 0283). */
+  async namnAv(): Promise<(id: string) => string | null> {
+    const { personer } = await this.hamta();
+    return (id) => {
+      const p = personer.get(id);
+      return p ? `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim() || null : null;
+    };
+  }
+
   async fran(epost: string | null): Promise<string | null> {
     if (!epost) return null;
     return (await this.hamta()).epost.get(epost.toLowerCase()) ?? null;
@@ -367,14 +376,15 @@ async function kaOmAnteckningar(): Promise<void> {
   const db = supabaseAdmin();
   const { data: inst } = await db.from("crm_installning").select("utflode").eq("id", true).maybeSingle();
   if (!inst?.utflode) return;
+  // `*`: `raderad_at` (0283) finns först när migrationen körts. En borttagen anteckning skrivs aldrig dit.
   const { data } = await db
     .from("kundanteckning")
-    .select("id, crm_state")
+    .select("*")
     .in("crm_state", ["ko", "fel"])
     .is("crm_id", null)
     .lt("skriven_at", new Date(Date.now() - 5 * 60 * 1000).toISOString())
     .limit(50);
-  const vantar = (data ?? []) as { id: string; crm_state: string }[];
+  const vantar = ((data ?? []) as { id: string; crm_state: string; raderad_at?: string | null }[]).filter((a) => !a.raderad_at);
   if (!vantar.length) return;
   const { data: rader } = await db
     .from("outbox")
@@ -648,14 +658,18 @@ async function kaAnteckningarSomVantar(org: string): Promise<void> {
   }
 }
 
-/** En anteckning till utkorgen. `sekunder` = när den får gå. */
-export async function kaAnteckning(id: string, sekunder = 2): Promise<void> {
+/**
+ * En anteckning till utkorgen. `sekunder` = när den får gå. `handling`:
+ * `anteckning` skriver den till Inkio, `anteckning-andrad` och
+ * `anteckning-borttagen` (0283) skriver ändringen och borttagningen dit.
+ */
+export async function kaAnteckning(id: string, sekunder = 2, handling: "anteckning" | "anteckning-andrad" | "anteckning-borttagen" = "anteckning"): Promise<void> {
   await supabaseAdmin()
     .from("outbox")
     .insert({
       kind: "crm",
-      payload: { handling: "anteckning", id },
-      idempotency_key: `crm-anteckning:${id}:${Date.now()}`,
+      payload: { handling, id },
+      idempotency_key: `crm-${handling}:${id}:${Date.now()}`,
       not_before: new Date(Date.now() + sekunder * 1000).toISOString(),
     });
 }
@@ -671,9 +685,10 @@ export async function kaAnteckning(id: string, sekunder = 2): Promise<void> {
  * `kundanteckning` läses med `*`: kolumnen `om_order` (0278) finns först när
  * migrationen körts, och fliken ska fungera före dess.
  */
-export async function kundaktivitetUrNav(org: string, superadmin: boolean): Promise<Kundaktivitet | null> {
+export async function kundaktivitetUrNav(org: string, superadmin: boolean, o: { utanInkio?: boolean } = {}): Promise<Kundaktivitet | null> {
   const db = supabaseAdmin();
-  const [{ data: k }, { data: rader }, { data: anteckningar }, nivaAv] = await Promise.all([
+  const personer = new Personer();
+  const [{ data: k }, { data: rader }, nav, nivaAv, namnAv] = await Promise.all([
     db.from("crm_kund").select("customer_id, customer_number, customer_name, forsta_klar").eq("org_number", org).maybeSingle(),
     db
       .from("crm_handelse")
@@ -682,13 +697,14 @@ export async function kundaktivitetUrNav(org: string, superadmin: boolean): Prom
       .eq("org_number", org)
       .order("skapad", { ascending: false })
       .limit(400),
-    db.from("kundanteckning").select("*").eq("org_number", org).order("skriven_at", { ascending: false }).limit(200),
-    new Personer().nivaAv(),
+    navAnteckningar(org),
+    personer.nivaAv(),
+    personer.namnAv(),
   ]);
 
-  const nav = (anteckningar ?? []) as Navanteckning[];
-  if (!k?.forsta_klar && !nav.length) return null;
-  const lista = aktivitetsrader((rader ?? []) as Lagrad[], nav, { superadmin, inkioBas: inkioUrl(), nivaAv });
+  // Utan Inkio (previewen) räcker Navs egna anteckningar; annars krävs att bevakningen läst kunden.
+  if (!k?.forsta_klar && !(o.utanInkio && nav.length)) return null;
+  const lista = aktivitetsrader((rader ?? []) as Lagrad[], nav, { superadmin, inkioBas: inkioUrl(), nivaAv, namnAv });
   if (!k?.customer_id) {
     return nav.length ? { kund: { id: "", nummer: "", namn: "", lank: "" }, rader: lista, avkortad: false } : { kund: null };
   }
@@ -699,26 +715,39 @@ export async function kundaktivitetUrNav(org: string, superadmin: boolean): Prom
   };
 }
 
+/** Kundens anteckningar skrivna i Nav. `*`: kolumnerna från 0278 och 0283 finns först när migrationerna körts. */
+async function navAnteckningar(org: string): Promise<Navanteckning[]> {
+  const { data } = await supabaseAdmin().from("kundanteckning").select("*").eq("org_number", org).order("skriven_at", { ascending: false }).limit(200);
+  return (data ?? []) as Navanteckning[];
+}
+
 /**
- * Innan bevakningen läst kunden: samma historik direkt ur Inkio, tolkad på
- * samma sätt, så att kortet ser likadant ut före och efter. Förut läste den
- * här vägen två andra anrop och gav platta rader.
+ * Inkio direkt, tolkat på samma sätt som kopian, så att kortet ser likadant ut
+ * före och efter. Navs egna anteckningar står med, och deras eko i Inkio visas
+ * inte två gånger.
  */
 export async function kundaktivitetUrInkio(org: string, superadmin: boolean): Promise<Kundaktivitet> {
-  const kund = await inkioKund(org);
+  const personer = new Personer();
+  const [kund, nav, nivaAv, namnAv] = await Promise.all([inkioKund(org), navAnteckningar(org), personer.nivaAv(), personer.namnAv()]);
   if (!kund) return { kund: null };
-  const [historik, nivaAv] = await Promise.all([kundhistorik(kund.id), new Personer().nivaAv()]);
+  const historik = await kundhistorik(kund.id);
   const rader = historik.items.map((p) => tolkaPost(p, historik.roller)).filter((r): r is Rad => r !== null);
   return {
     kund: { id: kund.id, nummer: kund.number, namn: kund.customer_name, lank: inkioLank("kund", kund.id) },
-    rader: aktivitetsrader(rader, [], { superadmin, inkioBas: inkioUrl(), nivaAv }),
+    rader: aktivitetsrader(rader, nav, { superadmin, inkioBas: inkioUrl(), nivaAv, namnAv }),
     avkortad: false,
   };
 }
 
-/** Navs kopia om den finns, annars Inkio direkt (förstagångsläsningen). */
+/**
+ * Navs kopia när bevakningen går och har läst kunden, annars Inkio direkt.
+ * Står bevakningen av (som fram till provet i produktionen) är kopian lika
+ * gammal som den senaste läsningen, och då ska kortet inte visa den.
+ */
 export async function kundaktivitetForKortet(org: string, superadmin: boolean): Promise<Kundaktivitet> {
-  return (await kundaktivitetUrNav(org, superadmin)) ?? kundaktivitetUrInkio(org, superadmin);
+  const { data: inst } = await supabaseAdmin().from("crm_installning").select("aktiv, inflode").eq("id", true).maybeSingle();
+  const kopian = inst?.aktiv && inst.inflode ? await kundaktivitetUrNav(org, superadmin) : null;
+  return kopian ?? kundaktivitetUrInkio(org, superadmin);
 }
 
 // -----------------------------------------------------------------------------

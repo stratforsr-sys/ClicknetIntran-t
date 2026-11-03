@@ -16,8 +16,9 @@ export const dynamic = "force-dynamic";
  *
  * AKTIVITETEN LASES UR NAVS KOPIA (0277): bevakningen tar in allt fran Inkio
  * varje minut (`crm_handelse`), och anteckningar skrivna i Nav star i
- * `kundanteckning`. Har bevakningen inte last kunden an lases Inkio direkt,
- * som forut. Superadmin ser ocksa det som raderats i Inkio.
+ * `kundanteckning`. Star bevakningen av, eller har den inte last kunden an,
+ * lases Inkio direkt, med Navs anteckningar. Superadmin ser ocksa det som
+ * raderats i Inkio och de anteckningar som tagits bort i Nav (0283).
  *
  * BARA LASNING. Samma funktioner som /order anropar via `hamtaInkioAktivitet`,
  * `hamtaLandningssida` och `slaUppBolag`, och samma kontroll fore: ordern lases
@@ -45,7 +46,7 @@ export async function GET(request: Request) {
       if (!data) return svar({ fel: "Ordern finns inte, eller så får du inte se den." }, 404);
       const orgnr = String(data.org_number ?? "");
       // Utan Inkio (previewen): det Nav själv har, så att en anteckning syns när den sparats.
-      if (!kopplat) return svar({ kopplat, aktivitet: (await kundaktivitetUrNav(orgnr, arSuperadmin(user)).catch(() => null)) ?? { kund: null } });
+      if (!kopplat) return svar({ kopplat, aktivitet: (await kundaktivitetUrNav(orgnr, arSuperadmin(user), { utanInkio: true }).catch(() => null)) ?? { kund: null } });
       const [aktivitet, sida] = await Promise.all([
         kundaktivitetForKortet(orgnr, arSuperadmin(user)).catch((e: unknown) => ({ fel: e instanceof Error ? `Inkio svarade inte: ${e.message}` : "Inkio svarade inte." })),
         landningssida(orgnr).catch((e: unknown) => ({ fel: e instanceof Error ? `Inkio svarade inte: ${e.message}` : "Inkio svarade inte." })),

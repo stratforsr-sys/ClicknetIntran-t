@@ -14,6 +14,21 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "andra-eller-ta-bort-anteckning",
+    rubrik: "Ändra eller ta bort din anteckning om en kund",
+    ingress: "Skrev du fel går anteckningen att rätta eller ta bort, och Inkio får samma ändring. Aktivitet och Historik är nu en flik.",
+    text: `Öppna en order och gå till **Historik**. Peka på en anteckning du själv skrivit
+och välj **Ändra** eller **Ta bort**. Enter sparar ändringen och Esc avbryter. En ändrad
+anteckning är märkt *ändrad*: tryck på ordet så ser du vad den sa förut. Ändringen och
+borttagningen görs i Inkio också.
+
+Flikarna Aktivitet och Historik är nu en enda flik, **Historik**, som på kundsidan i
+Inkio. Allt som hänt med kunden står där, och siffrorna 1–5 byter flik.`,
+    datum: "2026-11-03",
+    roller: [],
+    href: "/order",
+  },
+  {
     slug: "kalendern-1-1-en-gang-eller-serie",
     rubrik: "1:1 en gång eller som serie, med vem som helst",
     ingress: "En 1:1 kan bokas en enda gång, och alla anställda går att välja.",
@@ -153,7 +168,7 @@ Allt från Inkio har ett eget område, **Inkio och kundanteckningar**, under
     slug: "kundens-tidslinje",
     rubrik: "Kundkortet visar kundens hela historik, som i Inkio",
     ingress: "Ordrar, avtal, anteckningar, leveranskort och samtal i en tidslinje, med sök, filter och anteckningar per roll.",
-    text: `Öppna en order och gå till **Aktivitet**. Där står allt om kunden i en lista,
+    text: `Öppna en order och gå till **Historik**. Där står allt om kunden i en lista,
 nyast först: ordrar och avtal med belopp och status, anteckningar från Nav och från
 Inkio, flyttade leveranskort, samtalen och det som hänt med ordern i Nav. Ett avtal
 visar hur långt det har gått och när Nav påminner om förlängningen.

@@ -12,6 +12,7 @@ import {
   NOTIS_FONSTER_MS,
   KALL_MS,
   aktivitetsrader,
+  anteckningsversioner,
   attJamfora,
   attLasa,
   avtryck,
@@ -314,6 +315,29 @@ rubrik("Kundkortets tidslinje: Inkios sort, område, roll och post (0278)");
   ok("äldre rader utan område härleds ur vad de gäller", omradeFor({ om_typ: "Task", data: {} }) === "arbete" && omradeFor({ om_typ: "Contract", data: null }) === "forsaljning" && omradeFor({ om_typ: null, data: {} }) === "kund");
   ok("postuppgifter klarar en post utan data", postuppgifter({ om_nummer: "X-1", data: null }).nummer === "X-1");
   ok("de gamla fälten står kvar", ["id", "nar", "vem", "anteckning", "text", "kalla"].every((k) => k in egen));
+}
+
+rubrik("Ändra och ta bort sin egen anteckning (0283)");
+{
+  const bas = { skriven_namn: "Fredrik Pernehed", skriven_av: "emp-fredrik", skriven_at: "2026-11-02T13:00:00Z", crm_state: "skickad" };
+  const andrad = { ...bas, id: "a1", text: "Ring på torsdag i stället.", crm_id: "eko-1", andrad_at: "2026-11-02T14:00:00Z", versioner: [{ text: "Ring på onsdag.", at: "2026-11-02T13:00:00Z" }, "skräp", { text: "", at: "x" }] };
+  const borta = { ...bas, id: "a2", text: "Fel kund.", crm_id: "eko-2", raderad_at: "2026-11-02T15:00:00Z", raderad_av: "emp-zen" };
+  const eko1 = { ...tolkaPost(anteckning(timmeSedan, { created_by_is_service_account: true, content: "**Fredrik Pernehed** (via Nav): Ring på torsdag i stället." })), extern_id: "eko-1" };
+  const eko2 = { ...tolkaPost(anteckning(timmeSedan, { created_by_is_service_account: true, content: "**Fredrik Pernehed** (via Nav): Fel kund." })), extern_id: "eko-2" };
+  const namnAv = (id) => ({ "emp-zen": "Zen Alzzabti" })[id] ?? null;
+  const vanlig = aktivitetsrader([eko1, eko2], [andrad, borta], { superadmin: false, inkioBas: "https://crm.inkio.se", namnAv });
+  const r = vanlig.find((x) => x.id === "nav:a1");
+  ok("den ändrade visar texten nu, märkt ändrad", r.text === "Ring på torsdag i stället." && r.andrad === true);
+  ok("versionerna står kvar, äldst först, utan skräp", JSON.stringify(r.versioner) === JSON.stringify([{ text: "Ring på onsdag.", nar: "2026-11-02T13:00:00Z" }]));
+  ok("författaren följer med, för Ändra och Ta bort", r.av === "emp-fredrik");
+  ok("en borttagen syns inte för andra än superadmin, och inte heller dess eko", !vanlig.some((x) => x.id === "nav:a2" || x.id === "eko-2"));
+  ok("ekot av den ändrade visas inte två gånger", vanlig.filter((x) => x.anteckning).length === 1);
+  const sa = aktivitetsrader([eko1, eko2], [andrad, borta], { superadmin: true, inkioBas: "https://crm.inkio.se", namnAv });
+  const b = sa.find((x) => x.id === "nav:a2");
+  ok("superadmin ser den borttagna, med när och vem", b && b.raderad === true && b.raderadNar === "2026-11-02T15:00:00Z" && b.raderadAv === "Zen Alzzabti" && b.kalla.etikett === "Kunden · borttagen");
+  ok("en anteckning före 0283 är varken ändrad eller borttagen", (() => { const x = aktivitetsrader([], [{ ...bas, id: "a3", text: "Hej", crm_id: null }], { superadmin: false, inkioBas: "" })[0]; return x.andrad === false && x.raderad === false && x.versioner.length === 0 && x.raderadAv === null; })());
+  ok("en rad ur Inkio har inga versioner och ingen författare i Nav", sa.filter((x) => !x.nav).every((x) => x.av === null && x.versioner.length === 0));
+  ok("versionerna tål det som inte är en lista", anteckningsversioner(null).length === 0 && anteckningsversioner({ text: "a" }).length === 0);
 }
 
 rubrik("Rättningen till Inkio (correct-sales-order)");

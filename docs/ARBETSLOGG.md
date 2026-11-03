@@ -5,6 +5,57 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-02 kväll · Ändra och ta bort sin egen anteckning, och en flik som i Inkio (grenen `kund-anteckning-andra`, 0283 KÖRD, beställarens ja till mergen)
+
+**Beställaren**, efter att tidslinjen mergats (`6c7c0ed`): "Ändra eller ta bort sin egen anteckning är inte byggt …
+Bygg det" och "bygg det med en flik som inkio". Inkios kundsida har fyra flikar (Översikt, Historik, Fakturor, Leads),
+och allt som hänt med kunden står under Historik; Navs gamla flik Historik fanns redan i sin helhet i den nya
+tidslinjen (lades upp, signerad, godkänd, Inkio, makulerad, förlängd, samtalen), så den gick upp i den.
+
+**Gränssnittet** (`~/nav2-utkast/delar/kund-anteckning/patch.py`): i navet fem flikar, Historik på Aktivitets plats
+(nyckeln `aktivitet` står kvar, så att länkar och notiser som öppnar `aktivitet` fungerar; `historik` leds dit).
+`kkFlikar()` ger ordningen för siffrorna och pilarna. På en egen anteckning från Nav: Ändra och Ta bort bredvid Fäst
+överst, synliga när man pekar (alltid på en pekskärm). Rutan att ändra är skrivrutans: verktygsraden verkar i den ruta
+knappen sitter i (`kkMd(k, t)`), Skift+Enter fortsätter en lista, Enter sparar, Esc avbryter (lyssnaren ligger på
+`window` i fångstfasen, så att Esc inte stänger kortet). Den sparade texten lyser upp en gång. "ändrad" är en knapp som
+visar versionerna, äldst sist, ritade med samma Markdown-tolk. Ta bort frågar i raden, och säger att den tas bort i
+Inkio när den står där. En borttagen syns för superadmin, överstruken: "borttagen i dag 19:49 av Zen".
+
+**Servern:** 0283 ger `kundanteckning` `andrad_at`, `versioner` (jsonb-lista, CHECK att det är en lista),
+`raderad_at` och `raderad_av`. `/nav2/order` `anteckning-andra` (bara `skriven_av = mig`; texten skrivs bara om den
+inte ändrats under tiden, `eq("text", gammal)`) och `anteckning-ta-bort` (författaren eller superadmin). Båda kräver
+att kunden syns (`serKunden`), skriver `audit_log` (`customer.note_edited`/`_deleted`, med etikett i loggforma) och
+följer Fäst överst. Utkorgen: `anteckning-andrad` → Inkio `edit-comment {id, content}` med samma `**Namn** (via Nav):`
+som när den skrevs, `anteckning-borttagen` → `delete-comment {id}` (404 = redan borta). Bara när `crm_id` finns:
+annars skriver `anteckningICrm` den text som gäller när den skrivs, och hoppar över en borttagen. Ändras eller tas den
+bort medan `add-comment` pågår köas ändringen efteråt. Kön (`kaOmAnteckningar`) hoppar över borttagna.
+
+**Funnet på vägen:** `kundaktivitetUrNav` gav `null` bara när kunden var oläst OCH saknade Nav-anteckningar. Med en
+Nav-anteckning på en oläst kund visade kortet bara den, utan Inkios historik (0277). Och med bevakningen av läser
+kortet en kopia som blir gammal (28 av 29 kunder lästa 13:14 i dag, `inflode = false`). Nu: Navs kopia bara när
+bevakningen går (`crm_installning.aktiv && inflode`) och kunden är läst; annars Inkio direkt med Navs anteckningar
+(`kundaktivitetUrInkio`). Previewen (Inkio ej kopplat) får Navs anteckningar med `{ utanInkio: true }`.
+
+**Prov:** `npm run test:inkio-inflode` (nio nya kontroller), övriga provfiler gröna, `tsc` utan nya fel mot main.
+Webbläsaren: `delar/kund-anteckning/prov.mjs` 35/35 två gånger (guiden stängs av i provet: den tar fokus när kortet
+ritas om) och tidslinjeprovet 38/38 på samma fil. `tests/registerutdrag.mjs` var grönt utom `kundanteckning.raderad_av`
+tills 0283 kördes, och är helt grönt efteråt. Fallgrop i patchskriptet: `one()` hoppar över när den nya texten redan finns, så en
+kort ny text (`<h3>Historik</h3>`) som finns på andra ställen i filen gör att ändringen tyst uteblir. Ankaret måste
+vara unikt även på den nya sidan.
+
+**Numret:** migrationen skrevs som 0279, men samma kväll blev 0279 `andrat_i_inkio` (Inkio-statusen,
+körd). 0280 och 0281 är skrivna på andra grenar och 0282 är körd, så den heter 0283. `main` slogs ihop in i grenen
+(Inkio-statusen rörde `inflode.ts`, `inflode-server.ts` och provet utan konflikt) och `utkast.html` provades om.
+2026-11-03 natt slogs `main` ihop en andra gång (1:1 en gång, S05/S06-resterna, orderns ekonomi): konflikter bara i
+provets import (`anteckningsversioner` och `attJamfora`, båda), navnyheterna och dokumenten. `utkast.html` är mains
+plus `patch.py` (cmp lika), 17 provfiler är gröna på den ihopslagna koden, och previewen av `9158132` var grön.
+
+**0283 KÖRD** 2026-11-02 21:26 UTC på beställarens ja ("Ja du får köra migrationen och sen till main"). Kontrollerad:
+fyra kolumner, raden i `schema_migrations`, och CHECK-villkoret avvisar `{}` och `"x"` men godtar listor (insert i en
+transaktion som rullades tillbaka; `kundanteckning` hade 0 rader före och efter).
+
+---
+
 ## 2026-11-02 kväll · 1:1 en gång eller som serie, och alla anställda att välja (grenen `enskilt-en-gang`, EJ MERGAD, ingen migration)
 
 Beställaren frågade varför en 1:1 alltid blir en serie ("man ska kunna välja antingen en serie eller bara en gång. Som
@@ -394,7 +445,7 @@ dokumentcommit `6819b72`. Produktionen `dpl_22zm7yoEG4aQjSP4YxzEj3yT1WXS` grön.
 
 ---
 
-## 2026-11-02 kväll · Kundens tidslinje i Inkios form (grenen `kund-tidslinje`, 0278 KÖRD, beställarens ja till mergen)
+## 2026-11-02 kväll · Kundens tidslinje i Inkios form (MERGAD till `main`, `6c7c0ed`, 0278 KÖRD)
 
 **Beställaren** delade en skärmbild av Inkios History-sida för Hedbloms Måleri AB: "kan du hjälpa mig bygga ut
 anteckningar och tidslinjen och allt sånt som finns i nav idag så som det finns i inkio … Så att det ser rätt så
