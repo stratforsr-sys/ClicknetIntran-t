@@ -5,7 +5,7 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
-## 2026-11-02 kväll · Ändra och ta bort sin egen anteckning, och en flik som i Inkio (grenen `kund-anteckning-andra`, 0283 KÖRD, beställarens ja till mergen)
+## 2026-11-02 kväll · Ändra och ta bort sin egen anteckning, och en flik som i Inkio (MERGAD till `main` `9478bc8` på beställarens ja, 0283 KÖRD)
 
 **Beställaren**, efter att tidslinjen mergats (`6c7c0ed`): "Ändra eller ta bort sin egen anteckning är inte byggt …
 Bygg det" och "bygg det med en flik som inkio". Inkios kundsida har fyra flikar (Översikt, Historik, Fakturor, Leads),
@@ -48,7 +48,7 @@ körd). 0280 och 0281 är skrivna på andra grenar och 0282 är körd, så den h
 (Inkio-statusen rörde `inflode.ts`, `inflode-server.ts` och provet utan konflikt) och `utkast.html` provades om.
 2026-11-03 natt slogs `main` ihop en andra gång (1:1 en gång, S05/S06-resterna, orderns ekonomi): konflikter bara i
 provets import (`anteckningsversioner` och `attJamfora`, båda), navnyheterna och dokumenten. `utkast.html` är mains
-plus `patch.py` (cmp lika), 17 provfiler är gröna på den ihopslagna koden, och previewen av `9158132` var grön.
+plus `patch.py` (cmp lika), 17 provfiler är gröna på den ihopslagna koden, och previewen av `9158132` var grön. Squash-mergad till `main` som `9478bc8` 2026-11-03 natt, produktionen grön.
 
 **0283 KÖRD** 2026-11-02 21:26 UTC på beställarens ja ("Ja du får köra migrationen och sen till main"). Kontrollerad:
 fyra kolumner, raden i `schema_migrations`, och CHECK-villkoret avvisar `{}` och `"x"` men godtar listor (insert i en
