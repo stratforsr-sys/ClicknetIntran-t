@@ -56,6 +56,7 @@ import {
   harStangdPeriod,
   normaliseraOrgnr,
   periodFor,
+  tidigasteStart,
   type Orderstatus,
   type Sats,
   type Tjanst,
@@ -630,13 +631,17 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
     // forlangning tecknas medan det gamla avtalet fortfarande loper, och da
     // borjar det nya nagon gang fram i tiden. Det ar inte en prognos utan ett
     // datum i avtalet.
+    //
+    // Och BAKAT, upp till ett ar fore signeringen (2026-11-03): ett avtal som
+    // skrivs pa i dag kan galla fran en tidigare manad. Manaden ordern raknas
+    // i ar anda signeringens. Se `tidigasteStart`.
     // ===========================================================================
     const startdatum = String(form.get("starts_on") ?? "").trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(startdatum)) {
       return { fel: "Skriv när avtalet börjar gälla." };
     }
-    if (startdatum < signerad) {
-      return { fel: "Avtalet kan inte börja gälla innan det signerades." };
+    if (startdatum < tidigasteStart(signerad)) {
+      return { fel: "Avtalet kan börja gälla högst ett år före signeringen." };
     }
 
     const tjansteval = tjansterUrFormular(form);
@@ -2004,8 +2009,8 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
     if (!/^\d{4}-\d{2}-\d{2}$/.test(startdatum)) {
       return { fel: "Skriv när avtalet börjar gälla." };
     }
-    if (startdatum < signerad) {
-      return { fel: "Avtalet kan inte börja gälla innan det signerades." };
+    if (startdatum < tidigasteStart(signerad)) {
+      return { fel: "Avtalet kan börja gälla högst ett år före signeringen." };
     }
 
     // ---------------------------------------------------------------------------
@@ -2798,7 +2803,7 @@ export async function redigeraOgodkand(_prev: Orderstate, form: FormData): Promi
     }
     const startdatum = String(form.get("starts_on") ?? "").trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(startdatum)) return { fel: "Skriv när avtalet börjar gälla." };
-    if (startdatum < signerad) return { fel: "Avtalet kan inte börja gälla innan det signerades." };
+    if (startdatum < tidigasteStart(signerad)) return { fel: "Avtalet kan börja gälla högst ett år före signeringen." };
 
     const valdSaljare = String(form.get("salesperson_id") ?? "").trim();
     const saljare = hanterare && valdSaljare ? valdSaljare : (rad.salesperson_id as string);

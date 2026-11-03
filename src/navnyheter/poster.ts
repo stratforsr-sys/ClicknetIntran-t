@@ -14,6 +14,21 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "order-start-fore-signering",
+    rubrik: "Startdatumet kan ligga bakåt i tiden",
+    ingress: "En order kan gälla från en tidigare månad, även när den signeras i dag.",
+    text: `Under **Avtalet börjar gälla** i orderformuläret går **Annat datum** nu upp till ett år
+bakåt, även före signeringen. Avtalet löper och faktureras i Inkio från det datumet.
+
+Är ordern signerad före i dag står **Signeringsdagen** först bland valen, så att en affär som
+skrevs på förra veckan kan gälla från den dagen med ett tryck.
+
+Vilken månad ordern räknas i för provision och säljtavla avgörs som förut av signeringsdatumet.`,
+    datum: "2026-11-03",
+    roller: [],
+    href: "/order",
+  },
+  {
     slug: "uppgifter-direkt",
     rubrik: "Uppgifter ändras direkt",
     ingress: "När du bockar av, flyttar eller ändrar en uppgift syns det med en gång.",
