@@ -3165,6 +3165,14 @@ body.felpekar .felhov{outline:2px solid var(--danger)!important;outline-offset:2
 .onfil{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:var(--brand-soft);color:var(--brand-ink);font-size:13.5px}
 .onfil svg{width:16px;height:16px}
 .onfil .tlink{margin-left:auto}
+/* Säljsamtalet som Nav hittar själv (2026-11-03): luren andas medan Nav letar, fyndet glider in, det som saknas står i rött. */
+.onfil .pill{margin-left:auto}
+.onfil.ndsamlet{background:var(--surface-2);color:inherit}
+.onfil.ndsamlet svg{animation:o8dot 1.1s ease-in-out infinite}
+.onfil.ndsamhit{animation:ndsamin .32s cubic-bezier(.2,.8,.2,1)}
+.onfil.ndsamsaknas{background:var(--danger-soft);color:var(--danger-ink)}
+@keyframes ndsamin{from{opacity:0;transform:translateY(-4px)}}
+@media (prefers-reduced-motion:reduce){.onfil.ndsamlet svg,.onfil.ndsamhit{animation:none}}
 .onsamtal{display:flex;flex-direction:column;gap:6px}
 .ordnyg{background:linear-gradient(to left,var(--surface) 329px,var(--line) 329px,var(--line) 330px,transparent 330px)}
 .ordnys{position:sticky;top:0;align-self:start;padding:24px 22px;display:flex;flex-direction:column;gap:14px;max-height:100%;overflow:auto}
@@ -14989,7 +14997,7 @@ function ordFormular(){
         <div class="onpar"><div class="onf"><span class="onl">Signerad</span><div class="segs">${ND ? ndSignKnappar(n) : `<button type="button" data-onsign="2026-10-09" aria-pressed="${n.sign === '2026-10-09'}">I dag</button><button type="button" data-onsign="2026-10-08" aria-pressed="${n.sign === '2026-10-08'}">I går</button>`}${o7DatumVal('sign', n)}</div>${o7DatumFalt('sign', n)}<small class="muted onhj">Avgör vilken månad ordern räknas i: ${FRMAN[+n.sign.slice(5, 7)]}.</small></div>
         <div class="onf ${visa('start') ? 'err' : ''}"><span class="onl">Avtalet börjar gälla</span><div class="segs onstart">${startVal.map(([d, l]) => `<button type="button" data-onstart="${d}" aria-pressed="${n.start === d}">${l}</button>`).join('')}${o7DatumVal('start', n)}</div>${o7DatumFalt('start', n)}${slut ? `<small class="muted onhj">Löper till ${oDat(slut)}. Nav påminner 90 dagar innan.</small>` : ''}${fel('start')}</div></div>
         <div class="onf ${visa('avtal') ? 'err' : ''}"><span class="onl">Påskrivet avtal</span>${n.avtal ? `<div class="onfil">${I('avtal')}<b>${esc(n.avtal)}</b><button type="button" class="tlink" data-onavtalbort>Byt</button></div>` : `<label class="ondrop" for="onFil">${I('ut')}<span><b>Välj filen</b> eller dra hit den<small>PDF eller bild av det påskrivna avtalet</small></span><input id="onFil" type="file" accept=".pdf,image/*" data-onfil hidden></label>`}${fel('avtal')}</div>
-        <div class="onf ${visa('samtal') ? 'err' : ''}"><span class="onl">Säljsamtal ${note(253)}</span>${ND && (typeof n.utan === 'string' || n.insp) ? ndSamAlt(n) : n.samtal ? (() => { const c = OSAMTAL.find(x => x.id === n.samtal); return `<div class="onfil">${I('phone')}<b>${c.dag ? 'I går ' : ''}${c.t} · ${c.min} min</b><span class="muted">${esc(c.nr)}</span><button type="button" class="tlink" data-onsamtal="">Byt</button></div>`; })() : `<div class="onsamtal">${samtal.map(c => `<button type="button" class="ordsrad ${c.match ? 'match' : ''}" data-onsamtal="${c.id}">${I('phone')}<span><b>${c.dag ? 'I går ' : ''}${c.t} · ${c.min} min</b><small>${esc(c.nr)} · ${esc(c.till)}</small></span>${c.match ? '<span class="pill t-ok">Matchar numret</span>' : ''}</button>`).join('')}</div><small class="muted onhj">${o7SamtalHj(n, samtal)}</small>`}${fel('samtal')}</div>
+        <div class="onf ${visa('samtal') ? 'err' : ''}"><span class="onl">Säljsamtal ${note(253)}</span>${ND ? ndSamFalt(n) : n.samtal ? (() => { const c = OSAMTAL.find(x => x.id === n.samtal); return `<div class="onfil">${I('phone')}<b>${c.dag ? 'I går ' : ''}${c.t} · ${c.min} min</b><span class="muted">${esc(c.nr)}</span><button type="button" class="tlink" data-onsamtal="">Byt</button></div>`; })() : `<div class="onsamtal">${samtal.map(c => `<button type="button" class="ordsrad ${c.match ? 'match' : ''}" data-onsamtal="${c.id}">${I('phone')}<span><b>${c.dag ? 'I går ' : ''}${c.t} · ${c.min} min</b><small>${esc(c.nr)} · ${esc(c.till)}</small></span>${c.match ? '<span class="pill t-ok">Matchar numret</span>' : ''}</button>`).join('')}</div><small class="muted onhj">${o7SamtalHj(n, samtal)}</small>`}${fel('samtal')}</div>
         ${chef ? `<div class="onf ${visa('vem') ? 'err' : ''}"><label for="on-vem">Säljare</label><select id="on-vem" class="uin" data-on="vem"><option value="">Välj säljare…</option>${(ND && ND.order ? ND.order.saljare.map(x => x.namn) : [...new Set(TEAM.map(t => t[0]).concat([ME.chef.namn]))]).map(v => `<option ${n.vem === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select>${fel('vem')}</div>` : ''}
         ${falt('note', 'Anteckning <small class="muted">valfritt</small>', `<textarea id="on-note" class="uin" data-on="note" rows="2" placeholder="${ND ? 'Något säljchefen' : 'Något Johanna'} eller leveransen behöver veta…">${esc(n.note)}</textarea>`)}
       </section>
@@ -27417,6 +27425,8 @@ const ndPaketIds = () => ndO() ? ndO().paket.map(p => p.id) : [1, 2, 3];
 
 /* ---------- Hydrering ---------- */
 function ndOrdStart(){
+  // Inskickad utan säljsamtal (2026-11-03): ordern går in ändå, märkt så, och superadmin avgör den.
+  OST.stoppad = 'Säljsamtal saknas'; OSTK.stoppad = 'Samtal saknas';
   const d = ndO();
   Object.keys(OPAKET).forEach(k => delete OPAKET[k]);
   d.paket.forEach(p => { OPAKET[p.id] = {l:p.l, pris:p.pris, inn:''}; });
@@ -28273,57 +28283,69 @@ document.addEventListener('drop', e => { if (ndO() && S.ordNy && e.target.closes
 // Ett utkast från före uppladdningen har bara filens namn. Då är avtalet inte bifogat, och formuläret säger det.
 document.addEventListener('click', e => { if (!ndO() || !e.target.closest || !e.target.closest('[data-onaterst]')) return; const n = S.ordNy;
   if (n && n.avtal && !(n.avtalFil && n.avtalFil.namn === n.avtal) && !(ndOrdAvtalFil && ndOrdAvtalFil.name === n.avtal)){ n.avtal = null; n.avtalFil = null; ordUppdatera(); toast('Utkastet är tillbaka. Bifoga avtalet igen: filen sparades inte med utkastet.'); } });
-/* Formulärets säljsamtal: den VALDA säljarens samtal fram till signeringsdagens slut (beställaren 2026-10-31).
-   Förut den inloggades egna från i dag och i går, så chefen som lade in Edvins order från förra veckan såg sina
-   egna samtal och aldrig hans. Repots saljarensKandidater (/nav2/order, saljarens-samtal): minst fem minuter,
-   inte kopplade, de 30 senaste. Listan hämtas om när säljaren eller signeringsdagen byts. */
-let ndSamNyckel = null, ndSamLaddar = false, ndSamFel = null;
+/* Formulärets säljsamtal: Nav hittar det själv (beställaren 2026-11-03): "man ska inte välja en inspelning, den ska
+   hitta den själv och ifall den inte gör det så notifierar den superadmin." Inget val längre. Nav letar med samma prov
+   som spärren gör när ordern sparas (repots forprovaSaljsamtal, /nav2/order hitta-samtal): den valda säljarens eget
+   samtal till kundens nummer, minst fem minuter, senast på signeringsdagen. Hittas inget går ordern in ändå, märkt
+   Säljsamtal saknas, och superadmin får en notis. Förut var det en lista att välja i, och efter varje omladdning av
+   ordrarna stod den inloggades egna samtal där, oavsett säljare och kund (ndOrdStart skrev om OSAMTAL). */
+let ndSam = {nyckel:null, n:null};
+const ndSa = () => !!(ND && ND.jag && ND.jag.niva === 'superadmin');
 function ndSamTid(nar){ const d = nar.slice(0, 10), t = nar.slice(11, 16); return d === kIdag() ? t : d === frPlus(kIdag(), -1) ? `I går ${t}` : `${+d.slice(8)} ${FRMK[+d.slice(5, 7)]} ${t}`; }
-// En order som rättas har kanske redan sitt samtal. Det hör inte till kandidaterna (det är kopplat), men står först.
+const ndSamNar = nar => { const t = ndSamTid(nar); return /^\d\d:\d\d$/.test(t) ? `I dag ${t}` : t; };
+// En order som rättas har kanske redan sitt samtal. Då står det kvar, och Nav letar inte.
 function ndSamKopplat(n){ const o = n.ratta ? ORDER.find(x => x.nr === n.ratta) : null, c = o && o.samtal && !o.samtal.utan ? o.samtal : null; return c ? {id:c.id, t:ndSamTid(`${c.dag} ${c.t}`), min:c.min, nr:o.tel, till:'kopplat nu'} : null; }
 function ndSamtalFor(n){
   const ratta = n.ratta ? ORDER.find(x => x.nr === n.ratta) : null, saljare = S.role === 'chef' ? ndVemId(n.vem) : ND.jag.id;
   if (ratta && ratta.samtal && ratta.samtal.utan && n.samtal === 's4'){ n.samtal = null; if (n.utan == null) n.utan = ratta.samtal.skal; }
-  const nyckel = saljare && n.sign ? [saljare, n.sign, ratta ? ratta.id : ''].join('|') : '';
-  // Rättningens 's4' är samtalet som redan är kopplat. Ett val som inte står i listan (ett återställt utkast) ritas inte.
+  // Rättningens 's4' är samtalet som redan är kopplat. Ett val ur den gamla listan (ett återställt utkast) gäller inte:
+  // bara en inspelning som laddats upp här väljs för hand.
   const kopplat = ndSamKopplat(n); if (kopplat && n.samtal === 's4') n.samtal = kopplat.id;
-  if (nyckel === ndSamNyckel){ if (n.samtal && !OSAMTAL.some(c => c.id === n.samtal)) n.samtal = null; return; }
-  ndSamNyckel = nyckel; ndSamFel = null;
-  // Det valda samtalet står kvar medan listan hämtas, så att formuläret kan rita det.
-  const vald = OSAMTAL.find(c => c.id === n.samtal) || (kopplat && kopplat.id === n.samtal ? kopplat : null);
-  OSAMTAL.length = 0; if (vald) OSAMTAL.push(vald); else n.samtal = null;
-  ndSamLaddar = !!nyckel; if (!nyckel) return;
-  ndOrdPost('saljarens-samtal', {saljare, sign:n.sign, id:ratta ? ratta.id : ''}, {ladda:false, tyst:true}).then(s => {
-    if (nyckel !== ndSamNyckel || S.ordNy !== n) return;
-    ndSamLaddar = false; ndSamFel = s.fel || null; OSAMTAL.length = 0;
-    if (kopplat) OSAMTAL.push(kopplat);
-    (s.samtal || []).forEach(c => OSAMTAL.push({id:c.id, t:ndSamTid(c.nar), min:Math.round(c.sek / 60), nr:c.nr, till:c.ljud ? 'med inspelning' : 'utan inspelning'}));
-    if (n.samtal && !OSAMTAL.some(c => c.id === n.samtal)) n.samtal = null;
-    // Nav hittar säljsamtalet själv när kunden ringdes på numret i formuläret: säljarens längsta samtal dit.
-    if (!n.samtal){ const m = OSAMTAL.filter(c => onSammaNr(c.nr, n.tel)).sort((a, b) => b.min - a.min)[0]; if (m) n.samtal = m.id; }
+  if (n.samtal && !n.uppladdat && !(kopplat && kopplat.id === n.samtal)) n.samtal = null;
+  const tel = String(n.tel || '').replace(/\D/g, '');
+  const nyckel = !n.samtal && saljare && n.sign && tel.length >= 7 ? [saljare, n.sign, tel, ratta ? ratta.id : ''].join('|') : '';
+  if (nyckel === ndSam.nyckel && ndSam.n === n) return;
+  ndSam = {nyckel, n, laddar:!!nyckel, fel:null, hittat:null, skal:null};
+  if (!nyckel) return;
+  ndOrdPost('hitta-samtal', {saljare, sign:n.sign, tel:n.tel, id:ratta ? ratta.id : ''}, {ladda:false, tyst:true}).then(s => {
+    if (nyckel !== ndSam.nyckel || ndSam.n !== n) return;
+    ndSam = {nyckel, n, laddar:false, fel:s.fel || null, hittat:s.hittat || null, skal:s.skal || null};
     if (S.view === 'order' && S.ordNy === n) ordUppdatera();
   });
 }
 const _ndOrdFormular = ordFormular;
 ordFormular = function(){ if (ndO() && S.ordNy) ndSamtalFor(S.ordNy); return _ndOrdFormular(); };
-const _ndO7SamtalHj = o7SamtalHj;
-o7SamtalHj = function(n, lista){
-  if (!ndO()) return _ndO7SamtalHj(n, lista);
-  const chef = S.role === 'chef', namn = chef && n.vem && ndVemId(n.vem) !== ND.jag.id ? fornamn(n.vem) : null, vems = namn ? (/[sxz]$/i.test(namn) ? namn : namn + 's') : 'dina';
-  if (chef && !n.vem) return 'Välj säljaren nedan, så hämtar Nav säljarens samtal från Lynes.';
-  if (ndSamLaddar) return `Hämtar ${vems} samtal från Lynes…`;
-  if (ndSamFel) return `Samtalen gick inte att hämta: ${esc(ndSamFel)}`;
-  if (!lista.length) return `${namn ? `${esc(namn)} har` : 'Du har'} inga samtal från Lynes på minst fem minuter fram till signeringsdagen som inte redan hör till en order.${ndSamAndra()}`;
-  const ingen = n.tel && n.tel.replace(/\D/g, '').length >= 7 && !lista.some(c => c.match);
-  return `${ingen ? `<b class="o7ingen">Inget samtal matchar ${esc(n.tel)}.</b> Ringdes kunden på ett annat nummer går det bra att välja samtalet ändå. ` : ''}${namn ? esc(vems[0].toUpperCase() + vems.slice(1)) : 'Dina'} samtal från Lynes, minst fem minuter, fram till signeringsdagen. Utan kopplat samtal stoppas ordern innan godkännandet.${ndSamAndra()}`;
+// Fältet: det Nav hittade, det som laddats upp eller redan är kopplat, eller att säljsamtalet saknas och varför.
+function ndSamFalt(n){
+  if (typeof n.utan === 'string' || n.insp) return ndSamAlt(n);
+  const kopplat = ndSamKopplat(n), hj = t => `<small class="muted onhj">${t}</small>`;
+  if (kopplat && n.samtal === kopplat.id) return `<div class="onfil">${I('phone')}<b>${esc(kopplat.t)} · ${kopplat.min} min</b><span class="muted">kopplat till ordern</span></div>`;
+  if (n.samtal && n.uppladdat){ const u = n.uppladdat; return `<div class="onfil">${I('phone')}<b>${esc(ndSamNar(u.nar))} · ${Math.round(u.sek / 60)} min</b><span class="muted">uppladdad inspelning</span><button type="button" class="tlink" data-onuppbort>Ta bort</button></div>`; }
+  const chef = S.role === 'chef', namn = chef && n.vem && ndVemId(n.vem) !== ND.jag.id ? fornamn(n.vem) : null, vems = namn ? (/[sxz]$/i.test(namn) ? namn : namn + 's') : 'ditt';
+  if (chef && !n.vem) return hj('Välj säljaren, så letar Nav upp säljsamtalet.');
+  if (String(n.tel || '').replace(/\D/g, '').length < 7) return hj(`Nav letar upp ${esc(vems)} samtal till kunden när telefonnumret är ifyllt.`);
+  if (!ndSam.nyckel) return hj('Nav letar upp säljsamtalet när säljaren, signeringsdagen och telefonnumret är ifyllda.');
+  if (ndSam.laddar) return `<div class="onfil ndsamlet">${I('phone')}<span class="muted">Letar efter ${esc(vems)} samtal till ${esc(n.tel)}…</span></div>`;
+  if (ndSam.hittat){ const h = ndSam.hittat; return `<div class="onfil ndsamhit">${I('phone')}<b>${h.nar ? `${esc(ndSamNar(h.nar))} · ` : ''}${Math.round(h.sek / 60)} min</b><span class="muted">${h.ljud ? 'med inspelning' : 'utan inspelning'}</span><span class="pill t-ok">Hittat</span></div>${hj('Säljarens längsta samtal till kundens nummer före signeringen. Det kopplas när ordern sparas.')}`; }
+  return `<div class="onfil ndsamsaknas">${I('phone')}<b>Säljsamtal saknas</b><span>${esc(ndSam.fel ? `Samtalen gick inte att läsa: ${ndSam.fel}` : ndSam.skal || '')}</span></div>${hj(`Ordern går in ändå, märkt Säljsamtal saknas, och superadmin får veta. Kommer samtalet in från Lynes senare kopplas det av sig självt.${ndSamAndra()}`)}`;
+}
+// Utan val är ett saknat samtal inget fel i formuläret: ordern går in och superadmin avgör den. Ett påbörjat skäl
+// eller en vald fil som inte laddats upp är däremot halvgjort.
+const _ndSaOnFel = onFel;
+onFel = function(n){
+  const e = _ndSaOnFel(n); if (!ndO() || !n) return e;
+  delete e.samtal;
+  if (typeof n.utan === 'string' && n.utan.trim().length < 3) e.samtal = 'Skriv varför samtalet inte spelades in, eller tryck Ångra.';
+  else if (n.insp) e.samtal = 'Ladda upp inspelningen, eller ta bort filen.';
+  return e;
 };
 /* Säljsamtalet när Lynes inte har det (0280, beställaren 2026-11-01): "mp3, vissa samtal har vi över telefon och då
    går det inte att ladda upp en inspelning. Låt en chef godkänna att en order kan laddas upp utan inspelning."
    Ladda upp: filen blir ett samtal i Nav (repots registreraUppladdatSamtal), servern mäter längden, och samtalet väljs
    i formuläret som ett från Lynes. Spelades inte in: skälet följer med ordern, och chefen godkänner den utan. */
-function ndSamAndra(){ return ` <span class="ndsamandra"><button type="button" class="tlink" data-oninsp>Ladda upp inspelningen (mp3)</button> · <button type="button" class="tlink" data-onutan>Spelades inte in</button></span>`; }
+function ndSamAndra(){ return ` Ringdes kunden utanför Lynes: <span class="ndsamandra"><button type="button" class="tlink" data-oninsp>Ladda upp inspelningen (mp3)</button> · <button type="button" class="tlink" data-onutan>Spelades inte in</button></span>`; }
 function ndSamAlt(n){
-  if (typeof n.utan === 'string') return `<div class="onfil">${I('phone')}<b>Utan inspelning</b><span class="muted">${S.role === 'chef' ? 'Du godkänner det när du lägger in ordern' : 'En chef godkänner ordern utan säljsamtal'}</span><button type="button" class="tlink" data-onutanbort>Ångra</button></div>
+  if (typeof n.utan === 'string') return `<div class="onfil">${I('phone')}<b>Utan inspelning</b><span class="muted">${S.role === 'chef' && ndSa() ? 'Du godkänner det när du lägger in ordern' : 'Superadmin godkänner ordern utan säljsamtal'}</span><button type="button" class="tlink" data-onutanbort>Ångra</button></div>
     <input id="on-utan" class="uin" data-on="utan" value="${esc(n.utan)}" maxlength="500" placeholder="Varför finns ingen inspelning? Till exempel: kunden ringdes på vanlig telefon.">`;
   const x = n.insp;
   return `<div class="onfil">${I('phone')}<b>${esc(x.fil.name)}</b><span class="muted">${(x.fil.size / 1048576).toFixed(1).replace('.', ',')} MB</span><button type="button" class="tlink" data-oninspbort>Ta bort</button></div>
@@ -28353,12 +28375,12 @@ async function ndInspLaddaUpp(n){
   if (!(await ndLaddaUpp(p, fil))){ klar(); toast('Inspelningen kom inte fram. Försök igen.'); return; }
   const r = await ndOrdPost('inspelning-registrera', {fil:p.fileId, store:p.store, filnamn:fil.name, nar:nar.toISOString(), saljare, sign:n.sign, tel:n.tel}, {ladda:false, tyst:true});
   if (!r.ok) return klar({s:r, t:'Inspelningen gick inte att spara.'});
-  const c = r.samtal; OSAMTAL.unshift({id:c.id, t:ndSamTid(c.nar), min:Math.round(c.sek / 60), nr:c.nr, till:'uppladdad inspelning'});
-  if (n.insp === x) n.insp = null; n.samtal = c.id; S.ordRor.add('samtal');
+  const c = r.samtal;
+  if (n.insp === x) n.insp = null; n.samtal = c.id; n.uppladdat = {nar:c.nar, sek:c.sek}; S.ordRor.add('samtal');
   if (S.ordNy === n) ordUppdatera(); toast(r.ok);
 }
 document.addEventListener('click', e => {
-  const b = e.target.closest && e.target.closest('[data-oninsp],[data-oninspbort],[data-oninspupp],[data-onutan],[data-onutanbort]'); const n = S.ordNy;
+  const b = e.target.closest && e.target.closest('[data-oninsp],[data-oninspbort],[data-oninspupp],[data-onutan],[data-onutanbort],[data-onuppbort]'); const n = S.ordNy;
   if (!b || !ndO() || !n || S.view !== 'order') return;
   e.preventDefault(); e.stopPropagation();
   const d = b.dataset;
@@ -28369,6 +28391,7 @@ document.addEventListener('click', e => {
   if (d.oninspupp !== undefined){ ndInspLaddaUpp(n); return; }
   if (d.onutan !== undefined){ n.utan = ''; n.insp = null; n.samtal = null; ordUppdatera(); setTimeout(() => document.getElementById('on-utan')?.focus(), 30); return; }
   if (d.onutanbort !== undefined){ n.utan = null; ordUppdatera(); return; }
+  if (d.onuppbort !== undefined){ n.samtal = null; n.uppladdat = null; ordUppdatera(); return; }
 }, true);
 document.addEventListener('input', e => { const n = S.ordNy, x = n && n.insp, t = e.target; if (!x || !t.dataset) return; if (t.dataset.oninspdag !== undefined) x.dag = t.value; if (t.dataset.oninsptid !== undefined) x.tid = t.value; }, true);
 async function ndOrdSkicka(utkast){
@@ -28422,6 +28445,43 @@ kkAtg = function(o){ const a = _ndKkAtg(o); if (!NDORD_RATTA_GODKAND || !ndO() |
   const i = a.findIndex(x => x.includes('data-ordmak=')); a.splice(i < 0 ? a.length : i, 0, `<button class="btn btn-s btn-sm" data-ordratta="${o.nr}">Rätta</button>`); return a; };
 const _ndO7Godkann = o7Godkann;
 o7Godkann = function(nr){ if (!ndO()) return _ndO7Godkann(nr); const o = ORDER.find(x => x.nr === nr); if (o) ndOrdPost('godkann', {id:o.id}); };
+/* En order utan säljsamtal (beställaren 2026-11-03): superadmin avgör den. Kortet säger det till alla, och superadmin
+   kopplar rätt samtal (Samtal), laddar upp inspelningen (Rätta) eller godkänner ordern utan, med ett skäl som står på
+   ordern (repots godkannOrder med utan_skal, i saljsamtal_undantag). Säljaren och chefen ser att superadmin vet. */
+const _ndSaKkNasta = kkNasta;
+kkNasta = function(o, d){
+  const r = _ndSaKkNasta(o, d); if (!ndO() || !o) return r;
+  const chef = S.role === 'chef', egen = o.vem === ME.saljare.namn, sa = chef && ndSa() && ndO().hanterare;
+  if (oStatus(o) === 'stoppad'){
+    const koppla = p => `<button class="btn btn-${p} btn-sm" data-kkflik="samtal">${I('phone')}Koppla samtal</button>`, mp3 = `<button class="btn btn-s btn-sm" data-ordratta="${o.nr}">Ladda upp inspelningen</button>`;
+    if (sa) return {ton:'danger', ik:'fel', t:'Säljsamtal saknas. Du avgör ordern.', sub:'Nav hittade inget samtal från säljaren till kundens nummer. Koppla rätt samtal, ladda upp inspelningen eller godkänn ordern utan säljsamtal.', knapp:`<button class="btn btn-p btn-sm" data-ndutangodk="${o.nr}">${I('check')}Godkänn utan säljsamtal</button>${koppla('s')}${mp3}`};
+    return {ton:'danger', ik:'fel', t:'Säljsamtal saknas. Superadmin har fått veta.', sub:'Kommer samtalet in från Lynes kopplas det av sig självt. Annars kopplar superadmin rätt samtal eller godkänner ordern utan.', knapp:egen || chef ? `${koppla('p')}${mp3}` : ''};
+  }
+  if (o.st === 'inskickad' && o.avtal && o.samtal && o.samtal.utan && chef){
+    const skal = `Ingen inspelning: ${o.samtal.skal}${o.samtal.av ? ` (${fornamn(o.samtal.av)})` : ''}.`;
+    if (sa) return {...r, sub:`${skal} Godkänner du ordern godkänner du att den går utan säljsamtal.`};
+    return {ton:'signal', ik:'tid', t:'Väntar på superadmin: ordern saknar säljsamtal.', sub:skal, knapp:`<button class="btn btn-s btn-sm" data-ordtillbaka="${o.nr}">Skicka tillbaka</button>`};
+  }
+  return r;
+};
+const _ndSaKkKort = kkKort;
+kkKort = function(o){
+  const h = _ndSaKkKort(o); if (!ndO() || !o || S.ndUtanGodk !== o.nr) return h;
+  const f = `<div class="frmotiv kkform"><label for="ndUtanSkal">Varför godkänns ordern utan säljsamtal? <small class="muted">Skälet står på ordern</small></label><textarea id="ndUtanSkal" class="uin" rows="2" maxlength="500" placeholder="Till exempel: kunden ringdes på mobilen, utanför Lynes."></textarea>${o7Chips('ndUtanSkal', ['Ringdes utanför Lynes', 'Inspelningen gick förlorad', 'Lynes var nere'])}<div class="pacts"><button class="btn btn-p btn-sm" data-ndutanskicka="${o.nr}">${I('check')}Godkänn utan säljsamtal</button><button class="tlink" data-ndutanavbryt>Avbryt</button></div></div>`;
+  return h.replace(/(\s*<\/div>\s*<nav class="kktabs")/, `${f}$1`);
+};
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('[data-ndutangodk],[data-ndutanskicka],[data-ndutanavbryt]');
+  if (!b || !ndO() || S.view !== 'order') return;
+  e.preventDefault(); e.stopPropagation();
+  const d = b.dataset;
+  if (d.ndutangodk){ S.ndUtanGodk = +d.ndutangodk; render(); setTimeout(() => document.getElementById('ndUtanSkal')?.focus(), 20); return; }
+  if (d.ndutanavbryt !== undefined){ S.ndUtanGodk = null; render(); return; }
+  const o = ORDER.find(x => x.nr === +d.ndutanskicka), t = (document.getElementById('ndUtanSkal')?.value || '').trim();
+  if (!o) return;
+  if (t.length < 3){ toast('Skriv varför ordern godkänns utan säljsamtal.'); document.getElementById('ndUtanSkal')?.focus(); return; }
+  S.ndUtanGodk = null; ndOrdPost('godkann', {id:o.id, utan:t});
+}, true);
 
 /* ---------- Utan provision, läggs till senare (0275, beställaren 2026-11-02) ----------
    Ett val i formuläret, för paket och fri order. Godkänd står ordern på 0 kr och märkt (provSenare), utan övertäck;
@@ -31719,8 +31779,8 @@ function ndHemRader(){
         act:{l:'Öppna kön'}, heat:2.5, bt:`{${o.n} order} väntar på ditt godkännande.`, src:'/order', why:`${kr(o.sum)}, äldsta från ${oDat(o.aldst)}, alla med säljsamtal`, ga:() => { ordSt(); S.ordVy = 'besluta'; S.ordF = {status:['inskickad'], vem:[], period:'alla', paket:[], lop:[], flagg:[]}; ordGa(); }});
     }
     ND.order.order.filter(o => o.vemId === mig && o.st === 'inskickad' && !o.samtal && !o.utan).forEach(o => {
-      ut.push({id:'ord-' + o.id, nar:'nu', i:'order', ton:'danger', kind:'Order', bkind:'order', t:`Order #${o.nr} saknar säljsamtal`, d:[o.bolag, `inskickad ${oDat(o.sign)}`], pill:['Stoppad', 'danger'],
-        act:{l:'Koppla samtal'}, heat:4, bt:`Order {#${o.nr}} är stoppad. Koppla säljsamtalet.`, src:'/order/' + o.nr, why:`Affären${o.varde ? ` på ${kr(o.varde)}` : ''} går inte vidare utan samtalet`,
+      ut.push({id:'ord-' + o.id, nar:'nu', i:'order', ton:'danger', kind:'Order', bkind:'order', t:`Order #${o.nr} saknar säljsamtal`, d:[o.bolag, `inskickad ${oDat(o.sign)}`], pill:['Samtal saknas', 'danger'],
+        act:{l:'Koppla samtal'}, heat:4, bt:`Order {#${o.nr}} saknar säljsamtal. Superadmin har fått veta.`, src:'/order/' + o.nr, why:`Affären${o.varde ? ` på ${kr(o.varde)}` : ''} godkänns när samtalet kopplats, eller av superadmin utan`,
         ga:() => { ordSt(); S.ordKoppla = o.nr; ordGa(o.nr); }});
     });
   }

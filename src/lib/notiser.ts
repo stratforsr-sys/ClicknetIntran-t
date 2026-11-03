@@ -255,6 +255,13 @@ export const NOTIS_KALLOR = [
   "order-makulerad",
   "order-betald",
   /**
+   * Bestallaren 2026-11-03: hittar Nav inte saljsamtalet gar ordern in anda,
+   * och superadmin far veta. Egen kalla och inte `order-inskickad`: den gar
+   * till superadmin och inte till orderkretsen, och den sager att nagot
+   * saknas, inte att nagot vantar.
+   */
+  "order-saljsamtal-saknas",
+  /**
    * E13 steg 11. Saljchefens overtack, bokfort nar en order godkanns.
    *
    * EGEN KALLA OCH INTE `order-godkand`, trots att den skrivs i samma sekund.
@@ -716,6 +723,7 @@ export const HANDELSEKALLOR = [
   "order-returnerad",
   "order-makulerad",
   "order-betald",
+  "order-saljsamtal-saknas",
   "order-overtack",
   "order-rattad",
   "order-inkio-anteckning",

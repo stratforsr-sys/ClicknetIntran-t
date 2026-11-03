@@ -20,15 +20,105 @@ Anteckningarna fick samma sort som ärendet, eftersom beställaren 2026-11-02 be
 `OMRADE_UNDANTAG` (område `inkio`) och i Utskicks namnlista, men inte i `MEJLKALLOR`. Ärendets namn i Utskick är
 nu bara "Ärende i Inkio". Bolagets lager `alla` har `mejl."*" = false` och ingen nyckel för den nya sorten.
 `superadminsVal` blir därför `false`: sorten mejlas inte till någon och är låst i allas eget lager. Push (`"*": true`)
-och klockan får den. Det gäller hela bolaget, alltså också Simon och säljarna.
+och klockan får den. Det gäller hela bolaget, alltså också Simon (vars eget lager sedan i kväll är en kopia av
+Zens) och säljarna.
 
 **Prov:** `tests/inkio-inflode.mjs` väntar sig den nya sorten. `tests/utskick.mjs` har två nya prov: ärendets
-mejlnyckel når inte anteckningen, och sorten har klocka, mejl och push. De berörda proven är gröna.
-`notiser-tackning` är rött med `order::forberedInspelning`, `registreraInspelning` och `begarUtanInspelning`,
-lika på `main`. tsc på de sju ändrade filerna: samma 28 fel (saknade moduler) som på basen.
+mejlnyckel når inte anteckningen, och sorten har klocka, mejl och push. `main` (`c51faa1`) är inmergad, och bara
+docs och `poster.ts` krockade. Elva berörda prov är gröna, också `notiser-tackning`. tsc på de sju ändrade filerna
+ger samma fel (saknade moduler) som på `main`.
 
 **Gamla notiser:** de som redan skickats behåller `order-inkio-arende` i `notification_event`. Bara nya anteckningar
 får den nya sorten.
+
+---
+
+## 2026-11-03 kväll · Simon får samma utskick som Zen (en inställning, ingen kod)
+
+**Beställaren:** "sätt samma notis inställningar för mig och för simon, som man då såklart kan sen ändra i
+inställningar". Det kom efter beskedet att `order-saljsamtal-saknas` mejlas till Simon men pushas till Zen.
+
+Zen har sedan förmiddagen ett eget lager (posten "Zens mejl" nedan): mejl bara `sort:order-inkio-arende` och
+`sort:order-inkio-makulerad`, push `"*": true`. Simon hade inget eget lager och följde bolagets (mejl för Order, Lead,
+Ärende, Kalender och tre Inkio-sorter). Nu har han ett eget lager (`lager = 'egen'`, `updated_by` Zen) med exakt Zens
+regler, i en transaktion med en rad i `audit_log` (`notification_rule.changed`, `kopia_av` Zen). Det är hans eget
+lager, så han ändrar det själv i Inställningar → Utskick. Superadmins lager hade varit låst för honom.
+
+**Provat** med riktiga `far()` (`src/lib/utskick.ts`) på produktionens rader: `order-saljsamtal-saknas`,
+`order-inskickad`, `order-inkio-uppsagt`, `lead-ny` och `kalender-inbjudan` ger push ja och mejl nej för båda,
+och `order-inkio-arende` och `order-inkio-makulerad` ger båda kanalerna för båda.
+
+**Följden för Simon:** han får inte längre mejl om order, leads, ärenden och kalendern, och **han har ingen enhet med
+push** (`push_subscription` tom). Tills han slår på notiser i Nav ser han det bara i klockan. Bolagets lager är orört.
+
+Ångra: `delete from notification_rule where lager = 'egen' and employee_id = '7b57c0be-7834-4917-93d4-0948c9d85e97';`
+
+---
+
+## 2026-11-03 eftermiddag och kväll · Säljsamtalet hittas själv, superadmin avgör det som saknas, och återanvända Lynes-platser (grenen `saljsamtal-sjalv`, på väg till `main` på beställarens ja, 0284 KÖRD)
+
+**Beställaren:** "Navet hittar inte samtalet just där jag slår upp en order, den väljer alltid samma samtal att välja
+mellan vilket är konstigt. Det borde vara så att man inte ska välja en inspelning att den ska hitta den själv och ifall
+den inte gör det så notiferar den superadmin." Ja till beskrivningen: "Ja det stämmer bygg". Sedan: "Ja för mergen …
+Kör allt som väntar".
+
+**Fyra orsaker, verifierade i koden och i produktionsdatan:**
+1. *Gammal lista.* `ndOrdStart` skrev om `OSAMTAL` med den INLOGGADES egna samtal (i dag och i går) vid varje
+   omladdning av `order`, men `ndSamNyckel` nollställdes inte, så `ndSamtalFor` hämtade aldrig om. Resultatet blev samma
+   lista oavsett säljare och kund. Nummermatchningen kördes bara när listan laddades, inte när numret skrevs in efteråt.
+2. *Återanvänd plats.* `slaUppPerson` slog upp `lynes_user` före e-posten, och Albin hade ingen e-postrad. Lynes gav
+   honom Pontus plats (`44da04ac…`), så alla 166 samtal 22–29 okt bokfördes på Pontus (offboarded). Carl hade samma
+   problem på Eves plats (2 samtal). Inget av samtalen satt på en order.
+3. *`franniel@clicknet.se`:* 245 samtal sedan 2026-10-28, 16 över fem minuter, ingen anställd, inspelningarna
+   `misslyckad` (Lynes länkar gäller 30 min). Vem det är vet bara beställaren. Frågan är ställd men obesvarad.
+4. *Ett tillägg fick aldrig sitt samtal* (hittat under provet mot produktionsdatan). Spärren kördes medan ordern var
+   ett utkast, och i `valjOrder` vinner en levande order på samma nummer över ett utkast. Varje samtal till en
+   befintlig kund gick därför till den gamla affären. Listan visade bara okopplade samtal, så det gick inte att välja
+   heller. Nu tävlar förprovet som `inskickad` (`samtalForNyOrder` fick `status`), `skapaOrder` kopplar det hittade
+   samtalet för hand, och `skickaInOrder` byter status före spärren. Ett samtal före den förra affären stannar hos den,
+   och ett kvarglömt utkast tar inte längre samtalet från den riktiga ordern. `tests/samtal-order.mjs` har fyra nya fall.
+
+**Beslut och varför:**
+- **Servern letar, och klienten visar.** `hitta-samtal` kör `forprovaSaljsamtal` utan valt samtal, alltså exakt det
+  prov `skapaOrder` gör när ordern sparas. Det formuläret visar är därför det ordern får. En ordning för en rättad order
+  (`utom`): den tävlar inte om samtalen på sitt eget nummer, och det som redan sitter på den räknas som okopplat.
+  Bedömningen bär nu `startedAt`.
+- **Ingen spärr vid sparandet.** `skapaOrder` sparar en order utan säljsamtal och skickar in den. Förprovet ligger
+  före `godkannDirekt`: en chef som valde Godkänn får den inskickad ("inskickad men inte godkänd"). Svepningen körs
+  ändå, så att samtalen på numret syns i kortet. `skickaInOrder` släpper igenom utan samtal. Orderkretsen får
+  `order-inskickad` bara när samtalet finns, och annars får superadmin `order-saljsamtal-saknas`.
+- **Superadmin avgör** (`arSuperadmin`: ceo eller admin). `godkannOrder` nekar andra utan säljsamtal. Utan ett skäl i
+  `saljsamtal_undantag` kräver den `utan_skal` och skriver det. Det ändrar "chefens godkännande" från säljsamtalet
+  utan Lynes (`400196f`). Uppladdad mp3 och "Spelades inte in" finns kvar som frivilliga vägar i formuläret när inget hittas.
+- **En egen notiskälla** och inte `order-inskickad`: den går till en annan krets och säger att något saknas. Den står
+  på de tre ställena (NOTIS_KALLOR, HANDELSEKALLOR, TACKNING) plus utskickens etikett och notislänkprovet. Den syns i
+  klockan. Mejl och push följer Utskick: sorten hör till området Order, och sedan Simon fick Zens lager samma kväll (posten
+  ovan) pushas den till båda och mejlas till ingen.
+- **Platsen följer den som är kvar.** `flyttaPlatsen`: platsen på någon som slutat och e-posten till någon annan som är
+  kvar ger den som är kvar. Platsen flyttas (`created_by` null, en gissning) och e-posten bokförs. Annars hade
+  Insights-påsarna, som bara bär platsen, fortsatt hamna fel. 0284 rättar det som redan bokförts, generellt och omkörbart.
+- Navets etikett för en inskickad order utan samtal är *Säljsamtal saknas* / *Samtal saknas* (förut Stoppad), med
+  hemvyns och paletten text efter det.
+
+**Ändrat:** `0284_lynes_plats_ateranvand.sql`; `samtal-order.ts`,
+`samtal-order-server.ts` (`forprovaSaljsamtal`), `samtal-server.ts` (`flyttaPlatsen`), `notishandelse-server.ts`
+(`superadminkretsen`), `notiser.ts`, `utskick.ts`, `order/actions.ts` (skapa, skicka in, godkänn,
+`begarUtanInspelning`, `meddelaUtanSaljsamtal`), `/nav2/order` (`hitta-samtal`, `utan` till godkänn),
+`palettsvar.ts`, utkastet (`ndSamtalFor`, `ndSamFalt`, `onFel`, `kkNasta`, `kkKort`, hemraden, etiketten),
+`poster.ts`, `tests/notiser-tackning.mjs`, `tests/notislankar.mjs`.
+
+**Migrationerna:** 0280 och 0284 torrkördes tillsammans i en rullad transaktion mot produktionen. 0280 kördes av
+beställaren 16.44 UTC (samma fil, samma checksumma, med säljsamtalet utan Lynes). **0284 körd 2026-11-03 17.02 UTC**
+härifrån på "Kör allt som väntar": Albin fick 166 samtal och filer, Carl 23 (han ringde 21 till i dag efter
+torrkörningen), platserna `44da04ac…` och `8ef3189d…` och e-postraderna kom på plats, och urvalet är tomt efteråt.
+Inget av samtalen satt på en order. `registerutdrag` är grönt nu när 0280 körts.
+
+**Mergen:** main hade under tiden fått säljsamtalet utan Lynes (`f6d9b55`, rad för rad samma patch som grenens
+`e13c7aa`, och sedan `400196f`/`609e5e8`). Grenen mergade därför main från punkten före den (`3b4156b`): bara farten,
+Möten med fler personer och kalenderns längd kom in, och konflikterna blev bara provkedjan i `package.json` och
+nyhetsposterna (båda; inspelningsposten ligger kvar under den nya). Dokumenten är mains med de här posterna överst. Medan previewen byggdes kom
+också startdatumet före signeringen (`de1c1f8`, 0285) till main. `609e5e8` bokfördes då som redan inne (`-s ours`:
+grenen hade samma kod och mains dokument), och resten mergades utan kodkrockar.
 
 ---
 

@@ -238,6 +238,7 @@ export const SORT_NAMN: Record<string, string> = {
   "order-returnerad": "Order returnerad",
   "order-makulerad": "Order makulerad",
   "order-betald": "Order betald",
+  "order-saljsamtal-saknas": "Order utan säljsamtal",
   "order-overtack": "Order övertagen",
   "order-rattad": "Order rättad",
   "order-inkio-anteckning": "Anteckning i Inkio",

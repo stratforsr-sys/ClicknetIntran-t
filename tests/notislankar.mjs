@@ -101,7 +101,7 @@ ok("varje undantag används fortfarande", gamla.length === 0, gamla.join(", "));
 rubrik("Sorterna som pekade på listan länkar nu till posten");
 const lank = (kalla) => anrop.filter((a) => a.kalla === kalla).map((a) => a.href ?? "");
 const alla = (kalla, monster) => { const l = lank(kalla); return l.length > 0 && l.every((h) => monster.test(h)); };
-for (const k of ["order-inskickad", "order-godkand", "order-rattad", "order-returnerad", "order-betald", "order-grattis", "order-overtack"])
+for (const k of ["order-inskickad", "order-godkand", "order-rattad", "order-returnerad", "order-betald", "order-grattis", "order-overtack", "order-saljsamtal-saknas"])
   ok(`${k} → /order/<id>`, alla(k, /^`\/order\/\$\{/), lank(k).join(" "));
 ok("order-makulerad → /order/<id> när ordern finns kvar", lank("order-makulerad").some((h) => /^`\/order\/\$\{/.test(h)));
 ok("kampanjsidan → kundens kort", alla("kampanjsida-uppe", /^`\/order\/kund\//) && alla("kampanjsida-nere", /^`\/order\/kund\//));
