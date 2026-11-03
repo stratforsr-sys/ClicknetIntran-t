@@ -14,6 +14,24 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "saljsamtalet-hittas-sjalv",
+    rubrik: "Nav hittar säljsamtalet själv",
+    ingress: "Du väljer inte längre samtal i orderformuläret. Hittar Nav inget går ordern in ändå, och superadmin får veta.",
+    text: `Skriv kundens telefonnummer i orderformuläret, så letar Nav under **Säljsamtal** upp
+säljarens samtal dit: minst fem minuter, senast på signeringsdagen. Hittar Nav det står
+tiden och längden där, märkt *Hittat*, och samtalet kopplas när ordern sparas.
+
+Hittar Nav inget går ordern in ändå, märkt **Säljsamtal saknas**, och superadmin får en
+notis. Kommer samtalet in från Lynes senare kopplas det av sig självt. Ringdes kunden
+utanför Lynes kan du ladda upp inspelningen som mp3, eller skriva varför den saknas.
+
+En order utan säljsamtal godkänns av superadmin: med rätt samtal kopplat, med en
+uppladdad inspelning eller utan, med ett skäl som står på ordern.`,
+    datum: "2026-11-03",
+    roller: [],
+    href: "/order",
+  },
+  {
     slug: "order-start-fore-signering",
     rubrik: "Startdatumet kan ligga bakåt i tiden",
     ingress: "En order kan gälla från en tidigare månad, även när den signeras i dag.",

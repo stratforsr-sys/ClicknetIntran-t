@@ -108,6 +108,14 @@ function identitetsformer(agentRef: string): { kind: string; value: string }[] {
  *
  * Ingen matchning är inte ett fel. Samtalet sparas okopplat och syns i
  * arbetslistan `phone_call_okopplad_idx`.
+ *
+ * EN ÅTERANVÄND PLATS (2026-11-03). Lynes ger en ny säljare platsen efter
+ * någon som slutat, och platsens id står kvar på den gamla personen. Albins
+ * samtal bokfördes så på Pontus, och hans order hittade aldrig sitt
+ * säljsamtal. Pekar platsen på någon som slutat och e-posten i påsen hör till
+ * någon som är kvar, går e-posten före, och platsen flyttas till den
+ * personen — annars hade Insights-påsarna, som bara bär platsen, fortsatt
+ * hamna fel (`flyttaPlatsen`, och 0284 för det som redan bokförts).
  */
 async function slaUppPerson(
   db: ReturnType<typeof supabaseAdmin>,
@@ -127,6 +135,10 @@ async function slaUppPerson(
       .eq("value", form.value)
       .maybeSingle();
     if (data?.employee_id) {
+      if (form.kind === "lynes_user") {
+        const ny = await flyttaPlatsen(db, form.value, data.employee_id as string, agentRef);
+        if (ny) return ny;
+      }
       // BRON BOKFÖRS ÄVEN NÄR PERSONEN REDAN ÄR KÄND, och det är inte en
       // detalj. Låg den bara i grenen nedan skrevs den aldrig för någon vars
       // e-postrad redan fanns — alltså för alla utom den allra första påsen
@@ -166,6 +178,45 @@ async function slaUppPerson(
   await bokforBron(db, person.id as string, agentUserId);
 
   return person.id as string;
+}
+
+/**
+ * Platsen hör till någon som slutat, och e-posten i påsen till någon som är
+ * kvar: platsen flyttas, e-posten bokförs som gissning, och den nya personen
+ * är svaret. Annars null, och platsen gäller som förut.
+ */
+async function flyttaPlatsen(
+  db: ReturnType<typeof supabaseAdmin>,
+  plats: string,
+  agare: string,
+  agentRef: string | null,
+): Promise<string | null> {
+  const epost = agentRef?.trim().toLowerCase();
+  if (!epost?.includes("@")) return null;
+
+  const [{ data: gammal }, { data: ny }] = await Promise.all([
+    db.from("employee").select("status").eq("id", agare).maybeSingle(),
+    db.from("employee").select("id").eq("email", epost).neq("status", "offboarded").maybeSingle(),
+  ]);
+  if (gammal?.status !== "offboarded" || !ny?.id || ny.id === agare) return null;
+
+  await db
+    .from("phone_identity")
+    .update({ employee_id: ny.id as string, created_by: null })
+    .eq("kind", "lynes_user")
+    .eq("value", plats)
+    .then(
+      () => undefined,
+      () => undefined,
+    );
+  await db
+    .from("phone_identity")
+    .insert({ employee_id: ny.id as string, kind: "epost", value: epost })
+    .then(
+      () => undefined,
+      () => undefined,
+    );
+  return ny.id as string;
 }
 
 /**

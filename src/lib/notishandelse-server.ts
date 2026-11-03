@@ -442,6 +442,17 @@ export async function orderkretsen(): Promise<string[]> {
   return medRoll("sales_manager", "ceo", "finance");
 }
 
+/**
+ * Superadmin: VD och administratör. Samma regel som `arSuperadmin` i auth.ts.
+ *
+ * Bestallaren 2026-11-03: hittar Nav inte saljsamtalet pa en order "sa
+ * notifierar den superadmin". Det ar superadmin som avgor en order utan
+ * saljsamtal, sa det ar superadmin som ska avbrytas — inte hela orderkretsen.
+ */
+export async function superadminkretsen(): Promise<string[]> {
+  return medRoll("ceo", "admin");
+}
+
 /** Den som far rekrytera: rollen `recruiter` finns inte — det ar en behorighet. */
 export async function rekryteringskretsen(): Promise<string[]> {
   const [behoriga, ledning] = await Promise.all([
