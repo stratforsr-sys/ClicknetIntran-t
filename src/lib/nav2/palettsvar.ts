@@ -142,7 +142,7 @@ async function godkann({ L, mig }: Ctx): Promise<NdPalSvar> {
   const k = kapa(
     v.map((x): Rad => [
       "exakt",
-      `#${x.nr} ${x.bolag}${o.hanterare ? ` · ${x.vem}` : ""}${x.samtal ? "" : " · säljsamtal saknas"}`,
+      `#${x.nr} ${x.bolag}${o.hanterare ? ` · ${x.vem}` : ""}${x.samtal ? "" : x.utan ? " · utan inspelning" : " · säljsamtal saknas"}`,
       `Order #${x.nr}`,
       undefined,
       `/order/${x.nr}`,
@@ -158,8 +158,9 @@ async function godkann({ L, mig }: Ctx): Promise<NdPalSvar> {
 async function stoppade({ L, mig }: Ctx): Promise<NdPalSvar> {
   const o = await L.order();
   const synlig = o.order.filter((x) => (o.hanterare || x.vemId === mig) && x.st !== "makulerad");
-  const stopp = synlig.filter((x) => x.st === "inskickad" && !x.samtal);
-  const ovriga = synlig.filter((x) => !stopp.includes(x) && x.samtalSkal);
+  // 0280: en order utan inspelning med ett skäl är inte stoppad; den väntar på chefen.
+  const stopp = synlig.filter((x) => x.st === "inskickad" && !x.samtal && !x.utan);
+  const ovriga = synlig.filter((x) => !stopp.includes(x) && x.samtalSkal && !x.utan);
   const v = [...stopp, ...ovriga];
   if (!v.length) return svar("Ingen order är stoppad, och alla har sitt säljsamtal.", [], { follow: ["godkann"] });
   const k = kapa(v.map((x): Rad => ["exakt", `#${x.nr} ${x.bolag}${stopp.includes(x) ? " (stoppad)" : ` (${x.st === "utkast" ? "utkast" : "godkänd"})`}: ${x.samtalSkal ?? "inget säljsamtal kopplat."}`, `Order #${x.nr}`, undefined, `/order/${x.nr}`]));
@@ -622,8 +623,8 @@ async function idagFraga({ L, idag, mig }: Ctx): Promise<NdPalSvar> {
   const upg = u.uppgifter.filter((x) => x.vy === "egen" && !arStangd(x.lage) && x.due && x.due <= idag);
   const sena = upg.filter((x) => x.due! < idag).length;
   if (upg.length) rows.push(["exakt", `${st(upg.length, "uppgift", "uppgifter")} med frist i dag eller tidigare${sena ? `, ${sena} försenade` : ""}.`, "Uppgifter"]);
-  const stopp = o.order.filter((x) => x.vemId === mig && x.st === "inskickad" && !x.samtal);
-  stopp.forEach((x) => rows.push(["exakt", `Order #${x.nr} ${x.bolag} är stoppad tills säljsamtalet kopplas.`, `Order #${x.nr}`, undefined, `/order/${x.nr}`]));
+  const stopp = o.order.filter((x) => x.vemId === mig && x.st === "inskickad" && !x.samtal && !x.utan);
+  stopp.forEach((x) => rows.push(["exakt", `Order #${x.nr} ${x.bolag} saknar säljsamtal. Superadmin har fått veta.`, `Order #${x.nr}`, undefined, `/order/${x.nr}`]));
   const delar = [kal.length ? st(kal.length, "post i kalendern", "poster i kalendern") : "", upg.length ? st(upg.length, "uppgift", "uppgifter") : "", stopp.length ? st(stopp.length, "stoppad order", "stoppade order") : ""].filter(Boolean);
   const r = kapa(rows);
   return svar(delar.length ? `${delar.join(", ")}.${r.till}` : "Inget i kalendern, inga uppgifter med frist och inga stoppade order i dag.", r.rows, {

@@ -2,7 +2,7 @@ import { after, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { arSuperadmin, getCurrentUser, hasRole, fullName } from "@/lib/auth";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
-import { kopplaForHand, saljarensKandidater } from "@/lib/samtal-order-server";
+import { forprovaSaljsamtal, kopplaForHand, saljarensKandidater } from "@/lib/samtal-order-server";
 import { svenskTid } from "@/lib/nav2/orderforma";
 import { notifieraFlera } from "@/lib/notishandelse-server";
 import { kaAnteckning, kretsForKund } from "@/lib/crm/inflode-server";
@@ -14,6 +14,8 @@ import { medNyckel } from "@/lib/nav2/nyckel";
 import {
   aterupptaBevakning,
   avslutaAvtal,
+  begarUtanInspelning,
+  forberedInspelning,
   forberedNyttAvtal,
   forberedOrderbilaga,
   godkannOrder,
@@ -27,6 +29,7 @@ import {
   rattaFranAvtal,
   redigeraOgodkand,
   redigeraOrder,
+  registreraInspelning,
   registreraOrderbilaga,
   returneraOrder,
   skapaOrder,
@@ -74,7 +77,7 @@ const ORGNR = /^\d{6}-\d{4}$/;
  * (K4). `tests/nav2-orderfalt.mjs` jämför listorna med det klienten skickar.
  */
 const FALT = {
-  skapa: ["salesperson_id", "company_name", "org_number", "contact_name", "contact_phone", "contact_email", "customer_street", "customer_postal_code", "customer_city", "avtal_fil_id", "avtal_store", "avtal_filnamn", "package_id", "term_months", "fri_order", "monthly_amount", "signed_on", "starts_on", "note", "is_addon", "godkann", "forlanger_id", "provision_form", "commission_percent", "commission_amount", "tjanster", "finans", "har_utkop", "buyout_amount", "finans_ritad", "har_utkop_ritad", "fri_order_ritad", "fri_skal", "pris_ritad", "rabatt_skal", "samtal_id", "utan_provision", "utan_provision_ritad"],
+  skapa: ["salesperson_id", "company_name", "org_number", "contact_name", "contact_phone", "contact_email", "customer_street", "customer_postal_code", "customer_city", "avtal_fil_id", "avtal_store", "avtal_filnamn", "package_id", "term_months", "fri_order", "monthly_amount", "signed_on", "starts_on", "note", "is_addon", "godkann", "forlanger_id", "provision_form", "commission_percent", "commission_amount", "tjanster", "finans", "har_utkop", "buyout_amount", "finans_ritad", "har_utkop_ritad", "fri_order_ritad", "fri_skal", "pris_ritad", "rabatt_skal", "samtal_id", "utan_provision", "utan_provision_ritad", "utan_inspelning", "utan_inspelning_skal"],
   rattaOgodkand: ["company_name", "org_number", "contact_name", "contact_phone", "contact_email", "customer_street", "customer_postal_code", "customer_city", "package_id", "term_months", "fri_order", "monthly_amount", "signed_on", "starts_on", "salesperson_id", "is_addon", "note", "tjanster", "finans", "har_utkop", "buyout_amount", "provision_form", "commission_percent", "commission_amount", "finans_ritad", "har_utkop_ritad", "fri_order_ritad", "fri_skal", "pris_ritad", "rabatt_skal", "utan_provision", "utan_provision_ritad"],
   // D10: allt `redigeraOrder` läser (se tests/nav2-orderfalt.mjs för det som medvetet inte går fram).
   rattaGodkand: ["company_name", "org_number", "contact_name", "contact_phone", "contact_email", "reason", "note", "package_id", "term_months", "monthly_amount", "signed_on", "starts_on", "salesperson_id", "is_addon", "tjanster", "finans", "har_utkop", "buyout_amount", "finans_ritad", "har_utkop_ritad", "pris_ritad", "provision_form", "commission_percent", "commission_amount", "rabatt_skal", "utan_provision", "utan_provision_ritad"],
@@ -149,6 +152,24 @@ export async function POST(request: Request) {
           .map((k) => ({ id: k.id, nar: svenskTid(k.startedAt!), sek: Number(k.talkSeconds ?? 0), nr: k.counterpartE164 ?? "", ljud: k.harLjud })),
       });
     }
+
+    if (handling === "hitta-samtal") {
+      // Formulärets säljsamtal (beställaren 2026-11-03): "man ska inte välja en
+      // inspelning, den ska hitta den själv." Samma prov som spärren gör när
+      // ordern sparas (`forprovaSaljsamtal` i `skapaOrder`), så det formuläret
+      // visar är det ordern får. Hittas inget svarar skälet varför.
+      const saljare = hanterare && UUID.test(String(b.saljare ?? "")) ? String(b.saljare) : mig;
+      const sign = String(b.sign ?? "");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(sign)) return svar({ fel: "Välj när avtalet signerades." }, 400);
+      const o = id ? await ordern(id) : null;
+      const utom = o && (o.status === "utkast" || o.status === "inskickad") ? { id: o.id as string, skapad: o.created_at as string } : null;
+      const s = await forprovaSaljsamtal({ saljareId: saljare, telefon: String(b.tel ?? ""), signerad: sign, samtalId: null, utom });
+      return svar(
+        s.ok
+          ? { hittat: { id: s.samtalId, nar: s.startedAt ? svenskTid(s.startedAt) : null, sek: s.sekunder, ljud: s.harLjud } }
+          : { hittat: null, skal: s.skal },
+      );
+    }
     if (handling === "las-avtal") {
       const s = await lasAvtalsforslag(id, String(b.fil ?? ""));
       return "fel" in s ? svar({ fel: s.fel }, 400) : svar({ forslag: s.forslag });
@@ -166,7 +187,7 @@ export async function POST(request: Request) {
       case "skicka-in":
         return fran(await skickaInOrder({}, form({ id })), "Ordern är inskickad.");
       case "godkann":
-        return fran(await godkannOrder({}, form({ id, note: b.note ?? "" })), "Godkänd.");
+        return fran(await godkannOrder({}, form({ id, note: b.note ?? "", utan_skal: b.utan ?? "" })), "Godkänd.");
       case "tillbaka":
         return fran(await returneraOrder({}, form({ id, reason: b.reason ?? "" })), "Skickad tillbaka.");
       case "makulera":
@@ -245,6 +266,29 @@ export async function POST(request: Request) {
         return fran(await registreraOrderbilaga(id, String(b.fil ?? ""), String(b.filnamn ?? "bilaga"), String(b.store ?? "")), "Bilagan är sparad.");
       case "bilaga-bort":
         return fran(await taBortOrderbilaga({}, form({ id, fil_id: b.fil ?? "" })), "Bilagan är borttagen.");
+      // 0280: säljsamtalet när Lynes inte har det. En mp3 blir ett samtal (med
+      // `id` kopplat till ordern, utan valt i formuläret), eller går ordern
+      // utan inspelning med ett skäl som chefen godkänner.
+      case "inspelning-forbered": {
+        const s = await forberedInspelning(id || null, String(b.filnamn ?? "inspelning.mp3"), String(b.mime ?? ""), Number(b.storlek ?? 0));
+        return "fel" in s && s.fel ? svar({ fel: s.fel }, 400) : svar({ ok: "Klar att ladda upp.", ...s, supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ?? null });
+      }
+      case "inspelning-registrera": {
+        const s = await registreraInspelning({
+          orderId: id || null,
+          fileId: String(b.fil ?? ""),
+          store: String(b.store ?? ""),
+          filnamn: String(b.filnamn ?? "inspelning.mp3"),
+          startat: String(b.nar ?? ""),
+          saljareId: hanterare && UUID.test(String(b.saljare ?? "")) ? String(b.saljare) : mig,
+          signerad: String(b.sign ?? ""),
+          telefon: String(b.tel ?? ""),
+        });
+        if ("fel" in s) return svar({ fel: s.fel }, 400);
+        return svar({ ok: s.ok, samtal: { id: s.samtalId, nar: svenskTid(s.startat), sek: s.sekunder, nr: String(b.tel ?? ""), ljud: true } });
+      }
+      case "utan-inspelning":
+        return fran(await begarUtanInspelning(id, String(b.skal ?? "")), "Skälet är sparat.");
       case "avtal-forbered": {
         const s = await forberedNyttAvtal(String(b.filnamn ?? "avtal"), String(b.mime ?? ""), Number(b.storlek ?? 0));
         return "fel" in s && s.fel ? svar({ fel: s.fel }, 400) : svar({ ok: "Klar att ladda upp.", ...s, supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ?? null });

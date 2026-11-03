@@ -256,6 +256,12 @@ export async function registreraFil(args: {
   salesOrderId?: string | null;
   /** 0073. Det uppladdade anstallningsavtalets rad i `contract`. */
   contractId?: string | null;
+  /**
+   * 0280. Provar innehallet i samma nedladdning som ger kontrollsumman. Ett
+   * svar ar ett nej: filen tas bort och svaret blir felet. Det uppladdade
+   * saljsamtalet mats har (`mp3Sekunder`), inte i webblasaren.
+   */
+  provaInnehall?: (innehall: Uint8Array) => string | null;
 }): Promise<{ id: string } | { fel: string }> {
   const db = supabaseAdmin();
   const path = bygStig(args.andamal, args.fileId);
@@ -308,6 +314,12 @@ export async function registreraFil(args: {
   if (!checksum) {
     await taBort({ lager, bucket, path });
     return { fel: "Filen gick inte att läsa tillbaka. Försök igen." };
+  }
+
+  const avslag = innehall && args.provaInnehall ? args.provaInnehall(innehall) : null;
+  if (avslag) {
+    await taBort({ lager, bucket, path });
+    return { fel: avslag };
   }
 
   const { error: radfel } = await db.from("file_object").insert({

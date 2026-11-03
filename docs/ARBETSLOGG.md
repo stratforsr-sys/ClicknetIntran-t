@@ -5,6 +5,58 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-03 eftermiddag · Säljsamtalet hittas själv, superadmin avgör det som saknas, och återanvända Lynes-platser (grenen `saljsamtal-sjalv`, EJ MERGAD, 0280 + 0284 EJ KÖRDA)
+
+**Beställaren:** "Navet hittar inte samtalet just där jag slår upp en order, den väljer alltid samma samtal att välja
+mellan vilket är konstigt. Det borde vara så att man inte ska välja en inspelning att den ska hitta den själv och ifall
+den inte gör det så notiferar den superadmin." Ja till beskrivningen: "Ja det stämmer bygg".
+
+**Tre orsaker, verifierade i koden och i produktionsdatan:**
+1. *Gammal lista.* `ndOrdStart` skrev om `OSAMTAL` med den INLOGGADES egna samtal (i dag och i går) vid varje
+   omladdning av `order`, men `ndSamNyckel` nollställdes inte, så `ndSamtalFor` hämtade aldrig om. Resultatet blev samma
+   lista oavsett säljare och kund. Nummermatchningen kördes bara när listan laddades, inte när numret skrevs in efteråt.
+2. *Återanvänd plats.* `slaUppPerson` slog upp `lynes_user` före e-posten, och Albin hade ingen e-postrad. Lynes gav
+   honom Pontus plats (`44da04ac…`), så alla 166 samtal 22–29 okt bokfördes på Pontus (offboarded). Carl hade samma
+   problem på Eves plats (2 samtal). Inget av samtalen satt på en order.
+3. *`franniel@clicknet.se`:* 245 samtal sedan 2026-10-28, 16 över fem minuter, ingen anställd, inspelningarna
+   `misslyckad` (Lynes länkar gäller 30 min). Vem det är vet bara beställaren. Frågan är ställd men obesvarad.
+
+**Beslut och varför:**
+- **Servern letar, och klienten visar.** `hitta-samtal` kör `forprovaSaljsamtal` utan valt samtal, alltså exakt det
+  prov `skapaOrder` gör när ordern sparas. Det formuläret visar är därför det ordern får. En ordning för en rättad order
+  (`utom`): den tävlar inte om samtalen på sitt eget nummer, och det som redan sitter på den räknas som okopplat.
+  Bedömningen bär nu `startedAt`.
+- **Ingen spärr vid sparandet.** `skapaOrder` sparar en order utan säljsamtal och skickar in den. Förprovet ligger
+  före `godkannDirekt`: en chef som valde Godkänn får den inskickad ("inskickad men inte godkänd"). Svepningen körs
+  ändå, så att samtalen på numret syns i kortet. `skickaInOrder` släpper igenom utan samtal. Orderkretsen får
+  `order-inskickad` bara när samtalet finns, och annars får superadmin `order-saljsamtal-saknas`.
+- **Superadmin avgör** (`arSuperadmin`: ceo eller admin). `godkannOrder` nekar andra utan säljsamtal. Utan ett skäl i
+  `saljsamtal_undantag` kräver den `utan_skal` och skriver det. Det ändrar 0280:s "chefens godkännande", som aldrig
+  mergades. Uppladdad mp3 och "Spelades inte in" finns kvar som frivilliga vägar i formuläret när inget hittas.
+- **En egen notiskälla** och inte `order-inskickad`: den går till en annan krets och säger att något saknas. Den står
+  på de tre ställena (NOTIS_KALLOR, HANDELSEKALLOR, TACKNING) plus utskickens etikett och notislänkprovet. Den syns i
+  klockan. Mejl och push följer Utskick: sorten hör till området Order, så i dag mejlas den till Simon (bolagets
+  `omrade:order`) och pushas till Zen (Zens push `"*": true`). Inga regler ändrade.
+- **Platsen följer den som är kvar.** `flyttaPlatsen`: platsen på någon som slutat och e-posten till någon annan som är
+  kvar ger den som är kvar. Platsen flyttas (`created_by` null, en gissning) och e-posten bokförs. Annars hade
+  Insights-påsarna, som bara bär platsen, fortsatt hamna fel. 0284 rättar det som redan bokförts, generellt och omkörbart.
+- Navets etikett för en inskickad order utan samtal är *Säljsamtal saknas* / *Samtal saknas* (förut Stoppad), med
+  hemvyns och paletten text efter det.
+
+**Ändrat:** 0280 (från `inspelning-utan-lynes`) och `0284_lynes_plats_ateranvand.sql`; `samtal-order.ts`,
+`samtal-order-server.ts` (`forprovaSaljsamtal`), `samtal-server.ts` (`flyttaPlatsen`), `notishandelse-server.ts`
+(`superadminkretsen`), `notiser.ts`, `utskick.ts`, `order/actions.ts` (skapa, skicka in, godkänn,
+`begarUtanInspelning`, `meddelaUtanSaljsamtal`), `/nav2/order` (`hitta-samtal`, `utan` till godkänn),
+`palettsvar.ts`, utkastet (`ndSamtalFor`, `ndSamFalt`, `onFel`, `kkNasta`, `kkKort`, hemraden, etiketten),
+`poster.ts`, `tests/notiser-tackning.mjs`, `tests/notislankar.mjs`.
+
+**Migrationerna:** 0280 och 0284 torrkördes tillsammans i en rullad transaktion mot produktionen. Albin får 166 samtal
+och filer, Carl 2, platserna och e-postraderna kommer på plats, och `saljsamtal_undantag` skapas. `apply-sql 0280` nekades
+av behörighetsspärren och väntar på beställarens uttryckliga ja. `registerutdrag` är rött tills 0280 körts (tabellen
+finns inte).
+
+---
+
 ## 2026-11-03 förmiddag · Zens mejl: bara Inkio-ärenden och makulerad order, allt annat i telefonen (en inställning, ingen kod, ingen migration)
 
 **Beställaren:** "jag har fått många mejl för inkio. Jag vill bara ha ärenden från inkio, när en order tas bort

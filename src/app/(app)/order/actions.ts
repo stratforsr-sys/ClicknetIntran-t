@@ -39,11 +39,12 @@ import {
   forprovaSaljsamtal,
   kopplaForHand,
   provaSaljsamtal,
+  registreraUppladdatSamtal,
   samtalskandidater,
   svepKoppling,
   type Samtalskandidat,
 } from "@/lib/samtal-order-server";
-import { notifiera, notifieraFlera, orderkretsen } from "@/lib/notishandelse-server";
+import { notifiera, notifieraFlera, orderkretsen, superadminkretsen } from "@/lib/notishandelse-server";
 import {
   LOPTIDER,
   affarensVarde,
@@ -649,8 +650,37 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
         : String(form.get("note") ?? "").trim() || null;
     const tillagg = form.get("is_addon") === "on";
 
-    // Chefen kan godkanna i samma steg. Saljaren skickar in.
-    const godkannDirekt = hanterare && form.get("godkann") === "on";
+    // SÄLJSAMTALET PRÖVAS INNAN NÅGOT SPARAS (2026-10-31), och före
+    // godkännandet: det avgör om ordern alls får godkännas i samma steg.
+    // `forprovaSaljsamtal` ger samma svar som spärren på den sparade ordern,
+    // utan att skriva.
+    //
+    // NAV HITTAR SAMTALET SJÄLV (beställaren 2026-11-03): "man ska inte välja
+    // en inspelning, den ska hitta den själv, och ifall den inte gör det så
+    // notifierar den superadmin." Utan `samtal_id` letar förprovet upp
+    // säljarens samtal på kundens nummer. Hittar det inget sparas ordern ändå
+    // och skickas in utan säljsamtal, och superadmin får veta (nedan). Den
+    // godkänns först när samtalet kopplats, eller av superadmin utan.
+    //
+    // `samtal_id` är en inspelning som laddats upp i formuläret (0280). Den är
+    // ett uttryckligt val, så ett nej på den är ett fel att rätta, inte ett
+    // samtal som saknas.
+    const valtSamtal = String(form.get("samtal_id") ?? "").trim() || null;
+    const forprov = await forprovaSaljsamtal({ saljareId: saljare, telefon, signerad, samtalId: valtSamtal });
+    if (valtSamtal && !forprov.ok) return { fel: `${forprov.skal} Ordern är inte sparad.` };
+
+    // UTAN INSPELNING (0280, beställaren 2026-11-01): ett skäl följer med
+    // ordern, och superadmin ser det när ordern avgörs.
+    const utanInspelning = !forprov.ok && form.get("utan_inspelning") === "on";
+    const utanSkal = String(form.get("utan_inspelning_skal") ?? "").trim();
+    if (utanInspelning && utanSkal.length < 3) return { fel: "Skriv varför samtalet inte spelades in. Ordern är inte sparad." };
+    if (utanInspelning && utanSkal.length > 500) return { fel: "Skälet är för långt. Håll det under 500 tecken." };
+
+    // Chefen kan godkanna i samma steg. Saljaren skickar in. En order utan
+    // saljsamtal godkanns bara av superadmin, och bara med ett skal (2026-11-03);
+    // annars gar den in som inskickad och vantar pa superadmin.
+    const valdeGodkann = hanterare && form.get("godkann") === "on";
+    const godkannDirekt = valdeGodkann && (forprov.ok || (utanInspelning && arSuperadmin(user)));
 
     // 0275 (bestallaren 2026-11-02): ordern kan laggas upp utan provision, och
     // provisionen laggs till senare med Rätta. Galler bade paket och fri order.
@@ -745,21 +775,6 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
     // En order utan provision har inget att bokfora: provisionen ar 0 kr, och
     // Rätta bokfor den i den oppna manaden nar den laggs till.
     const forSent = godkannDirekt && !senare && harStangdPeriod(signerad, await stangdaManader());
-
-    // SÄLJSAMTALET PRÖVAS INNAN NÅGOT SPARAS (2026-10-31). Spärren längre ned
-    // körs på den sparade ordern, och fram till i dag stod en order som föll
-    // kvar som utkast — Städservice Ale gav fyra utkast på fyra försök.
-    // `forprovaSaljsamtal` ger samma svar utan att skriva, så ett nej lämnar
-    // ingenting efter sig och formuläret står kvar som det var.
-    //
-    // `samtal_id` är samtalet som valdes i formuläret (Nav 2.0), när kunden
-    // ringdes på ett annat nummer än det på ordern. Det kopplas för hand innan
-    // spärren körs, nedan.
-    const valtSamtal = String(form.get("samtal_id") ?? "").trim() || null;
-    const forprov = await forprovaSaljsamtal({ saljareId: saljare, telefon, signerad, samtalId: valtSamtal });
-    if (!forprov.ok) {
-      return { fel: `${forprov.skal} Ordern är inte sparad. Välj säljarens samtal i formuläret och försök igen.` };
-    }
 
     // ===========================================================================
     // TRE SKRIVNINGAR I EN BESTAMD ORDNING, OCH ORDNINGEN AR HELA POANGEN.
@@ -866,16 +881,45 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
       await logga(user, "sales_order.call_linked", rad.id, { samtal: valtSamtal });
     }
 
-    // SÄLJSAMTALET (beställaren 2026-10-08): ingen order lämnar utkastet utan
-    // säljarens eget samtal från Lynes på kundens nummer. Prövat redan innan
-    // ordern sparades (`forprovaSaljsamtal`), så det här nejet kommer bara om
-    // något hann ändras emellan — då står ett utkast kvar, som förut.
-    const saljsamtal = await provaSaljsamtal(rad.id);
-    if (!saljsamtal.ok) {
-      return {
-        fel: `${saljsamtal.skal} Ordern ligger kvar som utkast på ${bolag} — koppla säljsamtalet där och skicka in den.`,
-        orderId: rad.id,
-      };
+    // SÄLJSAMTALET (beställaren 2026-10-08) på den sparade ordern. Prövat redan
+    // innan ordern sparades (`forprovaSaljsamtal`), så ett nej här betyder att
+    // något hann ändras emellan. Ett godkännande stannar då som utkast, som
+    // förut; en inskickad order går in utan säljsamtal (2026-11-03).
+    // Utan inspelning (0280) går ordern vidare med undantaget.
+    let utanSamtal = !forprov.ok;
+    if (utanInspelning) {
+      const nu = new Date().toISOString();
+      const { error: undantagsfel } = await supabaseAdmin()
+        .from("saljsamtal_undantag")
+        .upsert(
+          {
+            order_id: rad.id,
+            skal: utanSkal,
+            begart_av: user.employee!.id,
+            begart_at: nu,
+            godkant_av: godkannDirekt ? user.employee!.id : null,
+            godkant_at: godkannDirekt ? nu : null,
+          },
+          { onConflict: "order_id" },
+        );
+      if (undantagsfel) {
+        return {
+          fel: `Skälet till att inspelningen saknas sparades inte: ${undantagsfel.message} Ordern ligger kvar som utkast på ${bolag}.`,
+          orderId: rad.id,
+        };
+      }
+      await logga(user, godkannDirekt ? "sales_order.recording_waiver_approved" : "sales_order.recording_waiver_requested", rad.id, { skal: utanSkal });
+    } else {
+      // Svepningen i `provaSaljsamtal` kopplar samtalen på kundens nummer också
+      // när förprovet sa nej, så att superadmin ser dem i kortet.
+      const saljsamtal = await provaSaljsamtal(rad.id);
+      if (!saljsamtal.ok && godkannDirekt) {
+        return {
+          fel: `${saljsamtal.skal} Ordern ligger kvar som utkast på ${bolag} — koppla säljsamtalet där och skicka in den.`,
+          orderId: rad.id,
+        };
+      }
+      utanSamtal = !saljsamtal.ok;
     }
 
     const { error: stegfel } = await supabaseAdmin()
@@ -910,6 +954,8 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
       financed: finans,
       finance_amount: slutligt.finance_amount ?? null,
     });
+
+    if (utanSamtal && !godkannDirekt) await meddelaUtanSaljsamtal(user, rad.id, utanInspelning ? utanSkal : null);
 
     // OVERTACKET SKRIVS EFTER ORDERN, aldrig fore: raden pekar pa `order_id` med
     // en frammande nyckel, och triggern `order_manager_commission_inte_egen`
@@ -993,7 +1039,9 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
           ? `Ordern på ${bolag} är godkänd utan provision. Lägg till provisionen med Rätta när den är bestämd.${utkopet}${loper}`
           : godkannDirekt
             ? `Ordern på ${bolag} är godkänd.${utkopet}${klippt}${loper}`
-            : `Ordern på ${bolag} är inskickad och väntar på godkännande${senare ? ", utan provision. Provisionen läggs till senare" : ""}.${inskickatUtkop}${loper}`,
+            : utanSamtal
+              ? `Ordern på ${bolag} är inskickad${valdeGodkann ? " men inte godkänd" : ""}: Nav hittade inget säljsamtal${utanInspelning ? ", och skälet följer med" : ""}. Superadmin har fått veta och kopplar samtalet eller godkänner ordern utan.${inskickatUtkop}${loper}`
+              : `Ordern på ${bolag} är inskickad och väntar på godkännande${senare ? ", utan provision. Provisionen läggs till senare" : ""}.${inskickatUtkop}${loper}`,
     };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
@@ -1538,8 +1586,10 @@ export async function skickaInOrder(_prev: Orderstate, form: FormData): Promise<
     if (!(await harAvtal(id))) {
       return { fel: "Ladda upp det påskrivna avtalet (PDF) på ordern innan den skickas in." };
     }
+    // Utan säljsamtal går ordern in ändå, och superadmin får veta (beställaren
+    // 2026-11-03). Den godkänns när samtalet kopplats, eller av superadmin utan.
     const saljsamtal = await provaSaljsamtal(id);
-    if (!saljsamtal.ok) return { fel: `${saljsamtal.skal} Koppla säljsamtalet innan ordern skickas in.` };
+    const undantag = saljsamtal.ok ? null : await hamtaUndantag(id);
 
     const { error } = await supabaseAdmin()
       .from("sales_order")
@@ -1558,23 +1608,64 @@ export async function skickaInOrder(_prev: Orderstate, form: FormData): Promise<
      * som ligger ogodkand ligger ocksa oprovisionerad.
      *
      * Kretsen ar `far_hantera_order()`: saljchef, VD och ekonomi. Teamledaren
-     * star utanfor (bestallarbeslut 2026-08-24).
+     * star utanfor (bestallarbeslut 2026-08-24). En order utan saljsamtal kan
+     * kretsen inte godkanna, sa den notisen gar till superadmin i stallet.
      */
-    await notifieraFlera(await orderkretsen(), {
-      av: user.employee!.id,
-      kalla: "order-inskickad",
-      typ: "order",
-      rubrik: `Order att godkänna: ${rad.company_name}`,
-      detalj: `Tecknad ${rad.signed_on} · väntar på godkännande`,
-      href: `/order/${id}`,
-      objekt: { typ: "sales_order", id },
-    });
+    if (saljsamtal.ok) {
+      await notifieraFlera(await orderkretsen(), {
+        av: user.employee!.id,
+        kalla: "order-inskickad",
+        typ: "order",
+        rubrik: `Order att godkänna: ${rad.company_name}`,
+        detalj: `Tecknad ${rad.signed_on} · väntar på godkännande`,
+        href: `/order/${id}`,
+        objekt: { typ: "sales_order", id },
+      });
+    } else {
+      await meddelaUtanSaljsamtal(user, id, undantag?.skal ?? null);
+    }
 
     revalidatePath("/order");
-    return { ok: "Ordern är inskickad." };
+    return { ok: saljsamtal.ok ? "Ordern är inskickad." : "Ordern är inskickad utan säljsamtal. Superadmin har fått veta." };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
   }
+}
+
+/**
+ * Superadmin får veta att en order gick in utan säljsamtal (beställaren
+ * 2026-11-03: "ifall den inte gör det så notifierar den superadmin").
+ *
+ * Notisen säger vems order det är och varför samtalet saknas, så att den går
+ * att avgöra utan att öppna ordern först: säljarens skäl när det finns, annars
+ * numret Nav letade på. Länken öppnar ordern, där samtalet kopplas, en
+ * inspelning laddas upp eller ordern godkänns utan.
+ */
+async function meddelaUtanSaljsamtal(user: CurrentUser, orderId: string, skal: string | null): Promise<void> {
+  const db = supabaseAdmin();
+  const { data: o } = await db
+    .from("sales_order")
+    .select("company_name, signed_on, contact_phone, salesperson_id")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!o) return;
+  const { data: saljare } = await db
+    .from("employee")
+    .select("first_name, last_name")
+    .eq("id", o.salesperson_id as string)
+    .maybeSingle();
+  const vem = saljare ? `${saljare.first_name} ${saljare.last_name}`.trim() : "Säljaren";
+  await notifieraFlera(await superadminkretsen(), {
+    av: user.employee!.id,
+    kalla: "order-saljsamtal-saknas",
+    typ: "order",
+    rubrik: `Säljsamtal saknas: ${o.company_name}`,
+    detalj: skal
+      ? `${vem} · tecknad ${o.signed_on} · ingen inspelning: ${skal}`
+      : `${vem} · tecknad ${o.signed_on} · Nav hittar inget samtal till ${o.contact_phone}`,
+    href: `/order/${orderId}`,
+    objekt: { typ: "sales_order", id: orderId },
+  });
 }
 
 /**
@@ -1594,7 +1685,26 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
     // 2026-10-08 har aldrig passerat den, och ett godkännande är sista steget
     // innan provisionen fryses och ordern går till Inkio.
     const saljsamtal = await provaSaljsamtal(id);
-    if (!saljsamtal.ok) return { fel: `${saljsamtal.skal} Ordern kan inte godkännas utan säljsamtalet.` };
+    // UTAN SÄLJSAMTAL AVGÖR SUPERADMIN (beställaren 2026-11-03). Skälet står i
+    // `saljsamtal_undantag` (0280): säljarens, eller det superadmin skriver
+    // här. Godkännandet av ordern är godkännandet av undantaget.
+    let undantag = saljsamtal.ok ? null : await hamtaUndantag(id);
+    if (!saljsamtal.ok) {
+      if (!arSuperadmin(user)) return { fel: `${saljsamtal.skal} En order utan säljsamtal godkänns av superadmin.` };
+      if (!undantag) {
+        const skal = String(form.get("utan_skal") ?? "").trim();
+        if (skal.length < 3) return { fel: "Skriv varför ordern godkänns utan säljsamtal." };
+        if (skal.length > 500) return { fel: "Skälet är för långt. Håll det under 500 tecken." };
+        const { error: undantagsfel } = await supabaseAdmin()
+          .from("saljsamtal_undantag")
+          .upsert(
+            { order_id: id, skal, begart_av: user.employee!.id, begart_at: new Date().toISOString(), godkant_av: null, godkant_at: null },
+            { onConflict: "order_id" },
+          );
+        if (undantagsfel) return { fel: `Skälet sparades inte: ${undantagsfel.message}` };
+        undantag = { skal, begart_av: user.employee!.id, godkant_av: null };
+      }
+    }
 
     // SALJAREN KOMMER UR ORDERN, inte ur formularet. Det ar hen som avgor om
     // chefsregeln galler, och en order som saljaren skickat in bar redan sitt
@@ -1680,6 +1790,14 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
       .select("id");
     if (error) return { fel: error.message };
     if (!godkannandeSkrevs(skrivet)) return { fel: "Ordern är redan godkänd eller hann ändras. Ladda om sidan." };
+
+    if (undantag && !undantag.godkant_av) {
+      await supabaseAdmin()
+        .from("saljsamtal_undantag")
+        .update({ godkant_av: user.employee!.id, godkant_at: new Date().toISOString() })
+        .eq("order_id", id);
+      await logga(user, "sales_order.recording_waiver_approved", id, { skal: undantag.skal });
+    }
 
     await logga(user, "sales_order.approved", id, {
       salesperson_id: rad.salesperson_id,
@@ -3490,6 +3608,158 @@ export async function kopplaSaljsamtal(_prev: Orderstate, form: FormData): Promi
     return { ok: "Säljsamtalet är kopplat till ordern." };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Samtalet kunde inte kopplas." };
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Säljsamtalet när Lynes inte har det (0280)
+//
+// Beställaren 2026-11-01: "mp3, vissa samtal har vi över telefon och då går det
+// inte att ladda upp en inspelning. Låt en chef godkänna att en order kan
+// laddas upp utan inspelning." Två vägar, och spärren står kvar för allt annat:
+//
+//   - en mp3 som laddas upp blir ett samtal (`registreraUppladdatSamtal`) och
+//     prövas som ett från Lynes,
+//   - utan inspelning skrivs ett skäl i `saljsamtal_undantag`, och chefens
+//     godkännande av ordern är godkännandet av undantaget.
+// -----------------------------------------------------------------------------
+
+type Undantag = { skal: string; begart_av: string; godkant_av: string | null };
+
+async function hamtaUndantag(orderId: string): Promise<Undantag | null> {
+  const { data } = await supabaseAdmin()
+    .from("saljsamtal_undantag")
+    .select("skal, begart_av, godkant_av")
+    .eq("order_id", orderId)
+    .maybeSingle();
+  return (data as Undantag | null) ?? null;
+}
+
+/**
+ * Steg 1 för en uppladdad inspelning: vägen in i lagringen. På en order samma
+ * behörighet som bilagorna; i formuläret, innan ordern finns, den inloggade.
+ * Bara mp3 — det är vad servern kan mäta.
+ */
+export async function forberedInspelning(orderId: string | null, filnamn: string, mimetyp: string, storlek: number) {
+  try {
+    if (orderId) await kravBilageratt(orderId);
+    else await kravInloggad();
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Du saknar behörighet." };
+  }
+  if (mimetyp !== "audio/mpeg" && !/\.mp3$/i.test(filnamn)) return { fel: "Ladda upp inspelningen som mp3." };
+  return forberedUppladdning({ andamal: "call_recording", filnamn, mimetyp: "audio/mpeg", storlek });
+}
+
+/**
+ * Steg 2: filen blir ett samtal. Med `orderId` kopplas det till ordern direkt;
+ * utan väljs det i formuläret och följer med som `samtal_id`, som ett samtal
+ * från Lynes.
+ */
+export async function registreraInspelning(args: {
+  orderId: string | null;
+  fileId: string;
+  store: string;
+  filnamn: string;
+  /** ISO. */
+  startat: string;
+  /** Formuläret: den valda säljaren, signeringsdagen och numret. */
+  saljareId?: string;
+  signerad?: string;
+  telefon?: string;
+}): Promise<{ fel: string } | { ok: string; samtalId: string; sekunder: number; startat: string }> {
+  try {
+    const user = args.orderId ? await kravBilageratt(args.orderId) : await kravInloggad();
+    const mig = user.employee!.id;
+
+    let saljare: string;
+    let orderSkapad: string;
+    let signerad: string | null;
+    let motpart: string | null;
+    if (args.orderId) {
+      const { data: rad } = await supabaseAdmin()
+        .from("sales_order")
+        .select("status, salesperson_id, created_at, signed_on, contact_phone")
+        .eq("id", args.orderId)
+        .maybeSingle();
+      if (!rad) return { fel: "Ordern finns inte." };
+      if (rad.status !== "utkast" && rad.status !== "inskickad") return { fel: "Säljsamtalet läggs till innan ordern godkänns." };
+      saljare = rad.salesperson_id as string;
+      orderSkapad = rad.created_at as string;
+      signerad = (rad.signed_on as string | null) ?? null;
+      motpart = (rad.contact_phone as string | null) ?? null;
+    } else {
+      const vald = String(args.saljareId ?? "").trim();
+      saljare = farHantera(user) && vald ? vald : mig;
+      if (!farHantera(user) && vald && vald !== mig) return { fel: "Du kan bara ladda upp dina egna samtal." };
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(args.signerad ?? ""))) return { fel: "Välj när avtalet signerades först." };
+      orderSkapad = new Date().toISOString();
+      signerad = args.signerad!;
+      motpart = String(args.telefon ?? "").trim() || null;
+    }
+
+    const svar = await registreraUppladdatSamtal({
+      fileId: args.fileId,
+      store: args.store,
+      filnamn: args.filnamn,
+      saljareId: saljare,
+      uppladdadAv: mig,
+      startat: args.startat,
+      motpart,
+      orderSkapad,
+      signerad,
+      orderId: args.orderId,
+    });
+    if ("fel" in svar) return { fel: svar.fel };
+
+    if (args.orderId) {
+      await logga(user, "sales_order.call_linked", args.orderId, { samtal: svar.samtalId, uppladdad: true });
+      revalidatePath("/order");
+    }
+    const min = Math.round(svar.sekunder / 60);
+    return {
+      ok: args.orderId ? `Inspelningen är uppladdad och kopplad, ${min} min.` : `Inspelningen är uppladdad, ${min} min.`,
+      samtalId: svar.samtalId,
+      sekunder: svar.sekunder,
+      startat: svar.startat,
+    };
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Inspelningen kunde inte sparas." };
+  }
+}
+
+/**
+ * Ett utkast eller en inskickad order som saknar säljsamtalet går vidare utan
+ * inspelning: skälet sparas, och superadmin godkänner ordern med det. Ligger
+ * ordern redan inskickad får superadmin skälet.
+ */
+export async function begarUtanInspelning(orderId: string, skal: string): Promise<Orderstate> {
+  try {
+    const user = await kravBilageratt(orderId);
+    const rad = await hamtaRad(orderId);
+    if (!rad) return { fel: "Ordern finns inte." };
+    if (rad.status !== "utkast" && rad.status !== "inskickad") return { fel: "Det går bara innan ordern godkänns." };
+    const text = skal.trim();
+    if (text.length < 3) return { fel: "Skriv varför samtalet inte spelades in." };
+    if (text.length > 500) return { fel: "Skälet är för långt. Håll det under 500 tecken." };
+
+    const { error } = await supabaseAdmin()
+      .from("saljsamtal_undantag")
+      .upsert(
+        { order_id: orderId, skal: text, begart_av: user.employee!.id, begart_at: new Date().toISOString(), godkant_av: null, godkant_at: null },
+        { onConflict: "order_id" },
+      );
+    if (error) return { fel: error.message };
+    await logga(user, "sales_order.recording_waiver_requested", orderId, { skal: text });
+
+    if (rad.status === "inskickad") await meddelaUtanSaljsamtal(user, orderId, text);
+    revalidatePath("/order");
+    return {
+      ok: rad.status === "inskickad" ? "Skälet är sparat. Superadmin avgör ordern utan inspelning." : "Skälet är sparat. Ordern kan skickas in utan inspelning.",
+      orderId,
+    };
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Det gick inte att spara." };
   }
 }
 

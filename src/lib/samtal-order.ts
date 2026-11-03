@@ -237,7 +237,14 @@ export type SamtalForBedomning = {
 };
 
 export type Saljsamtalsbedomning =
-  | { ok: true; samtalId: string; sekunder: number; harLjud: boolean }
+  | {
+      ok: true;
+      samtalId: string;
+      sekunder: number;
+      harLjud: boolean;
+      /** ISO. När samtalet ringdes, för formuläret som visar vad Nav hittade (2026-11-03). */
+      startedAt?: string | null;
+    }
   | { ok: false; skal: string };
 
 function minuter(sekunder: number): string {
@@ -293,7 +300,7 @@ export function bedomSaljsamtal(args: {
     };
   }
 
-  return { ok: true, samtalId: langsta.id, sekunder, harLjud: langsta.recordingState === "hamtad" };
+  return { ok: true, samtalId: langsta.id, sekunder, harLjud: langsta.recordingState === "hamtad", startedAt: langsta.startedAt };
 }
 
 /** När en inspelning som hämtas nu ska gallras, om den inte fått en affär. */
