@@ -330,8 +330,12 @@ rubrik("Granskarens fynd i klienten (S10b omgång 2)");
   ok("V3: en godkänd rättelse stoppas inte av avtal eller säljsamtal", /godkandRatta[\s\S]{0,200}'avtal'[\s\S]{0,40}'samtal'/.test(sk));
   ok("V2: bara ett riktigt samtals-id kopplas, aldrig efter en godkänd rättelse", /const samtalId = n\.samtal && \/\^\[0-9a-f-\]\{36\}\$\/\.test\(n\.samtal\) && !godkandRatta/.test(sk));
   // 2026-10-31: kopplades samtalet efter inskicket nekade spärren först, och valet hjälpte bara när numret stämde.
-  ok("säljsamtalet kopplas före inskicket av ett rättat utkast", /koppla\(ratta\.id\)[\s\S]{0,120}'skicka-in'/.test(sk));
-  ok("en ny order tar säljsamtalet med sig till servern", /falt\.samtal_id = samtalId[\s\S]{0,80}'skapa'/.test(sk));
+  // 0280 lägger skälet (utan inspelning) mellan kopplingen och inskicket, därav det längre avståndet.
+  ok("säljsamtalet kopplas före inskicket av ett rättat utkast", /koppla\(ratta\.id\)[\s\S]{0,200}'skicka-in'/.test(sk));
+  ok("en ny order tar säljsamtalet med sig till servern", /falt\.samtal_id = samtalId[\s\S]{0,200}'skapa'/.test(sk));
+  ok("0280: ett rättat utkast får skälet före inskicket", /utanPa\(ratta\.id\)[\s\S]{0,120}'skicka-in'/.test(sk));
+  ok("0280: en ny order tar skälet med sig till servern", /falt\.utan_inspelning = 'on'; falt\.utan_inspelning_skal = utan;[\s\S]{0,120}'skapa'/.test(sk));
+  ok("0280: skälet skickas bara utan valt samtal", /const utan = !samtalId && !godkandRatta/.test(sk));
   ok("M7: rättelsen tar med orderns tilläggsmärke", /fran && fran\.ratta[\s\S]{0,160}addon/.test(html));
   ok("M8: knapparna kräver hanterare", /ndOrdKanTaBort = x => [^\n]*ndO\(\)\.hanterare/.test(html) && /S\.role === 'chef' && ndO\(\)\.hanterare \? h\.replace/.test(html));
   ok("Boka i kundkortet: Kalendern sparar (S15:s text)", /kkboka:'Boka samtalet i Kalendern\.'/.test(html));

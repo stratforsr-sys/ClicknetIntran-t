@@ -146,7 +146,7 @@ export async function byggOrder(supabase: SupabaseClient, user: CurrentUser): Pr
     ]);
 
   const ids = urval.order.map((o) => o.id);
-  const [tjanster, bilagor, samtal, crm, { data: filinfo }, extra] = await Promise.all([
+  const [tjanster, bilagor, samtal, crm, { data: filinfo }, extra, { data: undantagRader }] = await Promise.all([
     hamtaTjanster(ids),
     hamtaOrderbilagor(ids),
     hamtaOrdersamtal(ids),
@@ -157,7 +157,14 @@ export async function byggOrder(supabase: SupabaseClient, user: CurrentUser): Pr
     // 0080 och vem som godkant och makulerat — `FALT` i order-server.ts bar dem inte.
     // Bara urvalets order (granskningen S08, D9a), i omgångar om 100 så att adressen inte växer med antalet.
     hamtaOrderExtra(supabase, ids),
+    // 0280: order som går utan inspelning. Läsrätten är orderns egen (RLS).
+    ids.length
+      ? supabase.from("saljsamtal_undantag").select("order_id, skal, begart_av, godkant_av").in("order_id", ids)
+      : Promise.resolve({ data: [] as { order_id: string; skal: string; begart_av: string; godkant_av: string | null }[] }),
   ]);
+  const undantagFor = new Map(
+    ((undantagRader ?? []) as { order_id: string; skal: string; begart_av: string; godkant_av: string | null }[]).map((u) => [u.order_id, u]),
+  );
 
   // 0083/0084: utskrifterna for samtalen pa listans order, de fasta anteckningarna,
   // "sett senast" och kampanjsidornas lage. Allt med anvandarens token.
@@ -203,6 +210,7 @@ export async function byggOrder(supabase: SupabaseClient, user: CurrentUser): Pr
       crm: crm.get(o.id) ?? null,
       namn,
       utskrifter,
+      undantag: undantagFor.get(o.id) ?? null,
     });
     order.push(ut);
     allaSamtal.push(...s);

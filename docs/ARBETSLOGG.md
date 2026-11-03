@@ -5,7 +5,7 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
-## 2026-11-03 eftermiddag · Fyra order till oktober, och startdatumet får ligga bakåt (grenen `start-fore-signering`, EJ MERGAD, 0285 EJ KÖRD)
+## 2026-11-03 eftermiddag · Fyra order till oktober, och startdatumet får ligga bakåt (grenen `start-fore-signering`, 0285 KÖRD 17:00 UTC, EJ MERGAD)
 
 **Beställaren:** Hedboms Måleri (den nya ordern), Städservice Ale, Roos Alltjänst och Mbix (den senaste) "ska ligga på
 förra månaden på signeringsdatum … räknas in i oktober och inte i november", och "när man lägger upp en order så [är]
@@ -41,6 +41,110 @@ oktober. Skript: `~/nav2-utkast/delar/start-fore-signering/startfix.mjs` (provet
 
 **Ordningen vid merge:** 0285 kan köras FÖRE mergen. Den lättar bara på villkoret, och gammal kod spärrar fortfarande
 själv. Mergas koden utan 0285 nekar databasen en start före signeringen med ett villkorsfel.
+
+---
+
+## 2026-11-02 kväll · Säljsamtalet när Lynes inte har det: uppladdad mp3 och chefens godkännande utan inspelning (MERGAD till `main` `400196f` 2026-11-03, 0280 KÖRD)
+
+**Beställaren** 2026-11-01: "mp3, vissa samtal har vi över telefon och då går det inte att ladda upp en inspelning.
+Låt en chef godkänna att en order kan laddas upp utan inspelning." 2026-11-02: "Fixa allting". Utlöst av Städservice
+Ale (#33–#36), som fastnade i spärren fyra gånger eftersom Edvins samtal inte låg på kundens nummer.
+
+**Beslut och varför:**
+- **En uppladdad mp3 blir en rad i `phone_call`** (`source = 'uppladdad'`), inte en egen sorts fil. Då gäller allt som
+  redan gäller ett samtal från Lynes: kortets lista och spelare, behörigheten (`phone_call_read`, `file_object_read`),
+  gallringen när det blir orderlöst, registerutdraget och raderingen, och framför allt samma spärr
+  (`bedomSaljsamtal`): säljarens eget, minst fem minuter, senast på signeringsdagen. En egen filsort hade krävt en andra
+  spärr, en andra spelare och en andra behörighetsregel, och de hade glidit isär.
+- **Servern mäter längden** (`src/lib/mp3.ts`, ram för ram, Xing/Info/VBRI när det finns) i samma nedladdning som ger
+  kontrollsumman (`registreraFil` fick `provaInnehall`). En längd från webbläsaren är en uppgift från den som vill få
+  igenom ordern.
+- **Inget kundnummer** på det uppladdade samtalet (`counterpart_e164` null, villkoret `phone_call_uppladdad`), så
+  svepningen på numret rör det aldrig. Numret står i `counterpart_raw`. Riktningen är `okand`, så Mötens samtal per
+  vecka (`direction = 'ut'`) räknar det inte.
+- **När samtalet ringdes** skriver den som laddar upp (dag och klockslag; filens tid föreslås om den ligger inom 30
+  dygn före signeringen). Filen bär inte den uppgiften.
+- **Utan inspelning** = en rad i `saljsamtal_undantag` med skälet. Säljaren ber om det, och **chefens godkännande av
+  ordern är godkännandet av undantaget** (`godkannOrder` fyller `godkant_av`). En chef som själv lägger in och
+  godkänner godkänner undantaget i samma steg. En egen tabell och inte kolumner på `sales_order`, eftersom ordern har
+  statustriggrar och Inkio-synk som inte ska väckas av det.
+- I listan går en order utan inspelning inte att snabbgodkänna eller massgodkänna: skälet läses i kortet.
+
+**Ändrat:** `0280_saljsamtal_utan_lynes.sql`; `samtal-order-server.ts` (`registreraUppladdatSamtal`); `filer-server.ts`
+(`provaInnehall`); `order/actions.ts` (skapa, skicka in, godkänn, `forberedInspelning`, `registreraInspelning`,
+`begarUtanInspelning`); `/nav2/order` (`inspelning-forbered`, `inspelning-registrera`, `utan-inspelning`, FALT);
+`nav2/order.ts` + `orderforma.ts` (`utan` på ordern); `palettsvar.ts`; `registerutdrag.ts` (två UNDANTAG); utkastet
+(formulärets Säljsamtal, kortets "Finns inte i Lynes", tidslinjerna); `tests/mp3.mjs` (ny), `tests/nav2-orderfalt.mjs`.
+
+**Migrationen:** 0280 är torrkörd i en rullad transaktion mot produktionen (tio prov: uppladdat samtal och fil med
+uppladdare går in, kundnummer på uppladdat, okänd källa, för kort skäl och godkänt utan tid nekas, anon kan inte läsa,
+authenticated bara läsa). Behörighetsspärren stoppade körningen härifrån 2026-11-02 och igen 2026-11-03 efter beställarens "ja till mergen", så **beställaren körde den själv 2026-11-03 16.44 UTC**. Checksumman i `schema_migrations` (`f05e4a229b9b8075`) är grenens fil.
+0279 togs samma kväll av `0279_andrat_i_inkio` (Inkio-passet). Utan 0280 fungerar main och grenen som förut, men
+uppladdning och "Spelades inte in" ger fel, så 0280 kördes före mergen. Main (`dfeffa7`, farten, Möten med fler
+personer och kalenderns rätta längd) mergades in i grenen före snabbspolningen; konflikter bara i dokumenten,
+`package.json` (provkedjan: båda nya proven) och nyhetsposterna (båda).
+
+**Mergad 2026-11-03** på beställarens "ja till mergen": grenen `inspelning-utan-lynes-2` = `f6d9b55` (omlagd på
+`e4b35d2`), `6890904` (main `dfeffa7` inmergad, preview grön) och `400196f` (main `3b4156b` inmergad, bara dokument,
+koden densamma som i previewen). Main snabbspolad till `400196f`, produktionen grön 16:55 UTC. Den första
+sidladdningen av `/nav2` som Zen gick via pg utan fel, så session 52:s byte av `NAV2_PG_URL` till rollen `nav2_pg` håller.
+
+**Provat i produktionen** som Zen via `/nav2/order`, utan order: en tyst mp3 (MPEG 1 lager III, 32 kbit/s, 11 676
+ramar = 305,0 s) → `inspelning-forbered` 200 (R2), PUT 200, `inspelning-registrera` 200 "Inspelningen är uppladdad,
+5 min.", 305 s, 17.36 svensk tid. Raden blev `source = 'uppladdad'`, Zens eget, utan `counterpart_e164` och utan
+order, och samtalet stod i `saljarens-samtal` med ljud. Ingen rad i `outbox`, `notification_event` eller
+`notification_delivery`. Städat: `phone_call` raderad, filen borta ur R2, `file_object` fick `removed_at`
+(`file_object_last` stoppar DELETE och åtkomstloggen skrivs bara till, så städningen gör som `taBortInnehall`).
+**Inte provat:** "Spelades inte in" (notifierar orderkretsen på en inskickad order) och uppladdning på en befintlig order.
+
+**Grenen `saljsamtal-sjalv`** (session fb92d9e4, `324b5c9`) bär en äldre kopia av den här ändringen i `a0772ad`. Dess
+0280 har samma checksumma, så den är redan körd. Där återstår att merga main in och köra 0284.
+
+---
+
+## 2026-11-03 · Kalendern: posten i sin rätta längd, och nästa post börjar där förra slutar (MERGAD till `main` `dfeffa7` på beställarens ja, ingen migration)
+
+**Beställaren:** "när jag nu har lagt en händelse som är 15 minuter kl 10:00 så ska jag lägga en händelse kl 10:30 så ser det
+ut som att den händelsen kl 10:00 är 30 minuter inte 15 minuter. Gör allt sånt korrekt ... så att det ser ut exakt
+som outlook".
+
+**Orsaken:** databasen hade 10:00–10:15 som 15 minuter. Ritningen gjorde den längre: `kPost` satte
+`Math.max(18, längd / 60 * KPX - 2)` med `KPX = 48`, så en kvart blev 18 px i stället för 10 och slutade vid 10:24
+(provet mätte 601,3–623,8 minuter). Luckan till 10:30 krympte till 6 px, och två poster i följd (13:00–13:15,
+13:15–13:30) lade sig över varandra. `kLayout` var rätt: posterna stod i full bredd, den första var bara för hög.
+Klicket, svävaren och telefonens tryck valde dessutom alltid `Math.floor(m / 30) * 30`, så ett klick under en post
+som slutar 10:15 gav 10:00–10:30, alltså en krock.
+
+**Ändringen** (bara `src/nav2/utkast.html`):
+- `KPX` 48 → 60: en minut är en pixel, och en kvart (13 px plus mellanrum) rymmer en rad text. Rutnätet, timmarna,
+  halvtimmesstrecken, arbetstiden, nu-strecket, utskriften och rullningen räknas alla från `KPX`.
+- `kPost`: höjden är `max(15, längd) / 60 * KPX - 2`. Under 30 minuter får posten klassen `mini`: rubrik och tid på
+  en rad, 13 px radhöjd, smalare dragkant. `.olselm` och `.olhov` fick samma radhöjd för att få plats i en kvart.
+- `kLucka(col, m)`: halvtimmen under pekaren, men börjar vid slutet på en egen post som slutar i samma halvtimme och
+  slutar vid starten på nästa, minst en kvart. Bara egna poster i kolumnen räknas (`.olev[data-kev]`, slås upp i
+  `KEV`). Används av musens klick och drag (draget växer från luckans slut), svävaren och telefonens tryck och
+  håll in. Ett klick i ett tomt fält ger samma halvtimme som förut.
+
+**Prov:** `~/nav2-utkast/probe/kalender-hojd-prov.mjs` (nytt, 20 kontroller: höjd, lucka, följd, svävare, klick på
+fem ställen, drag, fingertryck och håll in) rött på main 8 av 20, grönt på grenen 20 av 20.
+`kalender-kort-prov.mjs` 20/20 och `kalender-enskilt-prov.mjs` 32/32 på både main och grenen. `node --check` på det
+utdragna skriptet, `test:navnyheter` grön. Skärmbild före och efter jämförd.
+
+**Fynd i provet:** Chromes touchjustering flyttar ett fingertryck några pixlar under en post till posten (pekarens
+mål blir `.olrz`). Provet skickar därför telefonens pekarhändelser direkt till kolumnen. I en riktig telefon kan ett
+tryck eller håll in mitt i en kvartslucka alltså träffa grannposten. Så var det redan på main, där luckorna var
+mindre. Att räkna träffen från `elementFromPoint` i stället skulle laga luckan men göra en kvartspost svårare att
+träffa med fingret, så det är inte gjort.
+
+**Utseendet:** en ändring av det låsta utkastet (25 % högre rutnät), sagd till beställaren före mergen.
+
+**Mergen:** `main` hade gått fram till `e4e7bbc` (farten och Möten med fler personer, 326 rader i utkast.html).
+Den slogs ihop in i grenen (`dfeffa7`). utkast.html gick ihop av sig själv och är byte för byte mains fil plus
+`kal-hojd/patch.py`; krockarna var bara de två dokumenten och nyhetslistan, där båda sidor står kvar. Efter
+ihopslagningen: `kalender-hojd-prov.mjs` 20/20, `kalender-kort-prov.mjs` 20/20, `kalender-enskilt-prov.mjs` 32/32,
+`genast-prov.mjs` 56/56, `omladdning-prov.mjs` 80/80, `test:navnyheter`, `test:nav2-fart`, `test:nav2-omladdning`
+och `node --check` gröna. Previewen grön, sedan fast-forward av `main` till `dfeffa7` på beställarens ja ("Pusha
+till main"), produktionen grön 16:46 UTC. Inte provad i produktionens gränssnitt.
 
 ---
 
@@ -170,6 +274,8 @@ säljarna också när navet öppnas, liksom områdena Order, Lead, Ärende och K
   `MEJLKALLOR` ska stå kvar i klockan. Edvin fick två mejl om godkänd order och Simon två om inskickad 2026-11-02.
 
 Ångra: `update notification_rule set regler = regler - 'mejl' where lager = 'egen' and employee_id = '826a8b10-34c4-46ff-81d1-ca797773235c';`
+
+---
 
 ## 2026-11-03 förmiddag · Möten: egen tid i tidväljaren, och bladet stängs efter en bokning (direkt på `main`, ingen migration)
 

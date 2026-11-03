@@ -29,6 +29,39 @@ Vilken månad ordern räknas i för provision och säljtavla avgörs som förut 
     href: "/order",
   },
   {
+    slug: "saljsamtal-utan-lynes",
+    rubrik: "Säljsamtalet när Lynes inte har det",
+    ingress: "Ladda upp inspelningen som mp3, eller skicka in ordern utan inspelning och låt chefen godkänna den.",
+    text: `En order går fortfarande inte vidare utan sitt säljsamtal. Ringde du kunden
+utanför Lynes finns nu två vägar, under **Säljsamtal** i orderformuläret:
+
+- **Ladda upp inspelningen (mp3).** Skriv när samtalet ringdes. Nav mäter
+  längden i filen, och samtalet blir orderns säljsamtal precis som ett från
+  Lynes: ditt eget, minst fem minuter, senast på signeringsdagen.
+- **Spelades inte in.** Skriv varför. Ordern går till godkännandet med skälet,
+  och chefen godkänner den utan säljsamtal.
+
+Är ordern redan stoppad trycker du **Finns inte i Lynes** i orderkortet.`,
+    datum: "2026-11-03",
+    roller: [],
+    href: "/order",
+  },
+  {
+    slug: "kalendern-ratt-langd",
+    rubrik: "Kalendern visar mötet i sin rätta längd",
+    ingress: "Ett möte på en kvart är en kvart högt, och ett klick under det börjar där det slutar.",
+    text: `Ett möte 10:00–10:15 slutar nu vid 10:15-strecket i **Kalendern**, så luckan till
+nästa möte syns. En halvtimme är dubbelt så hög som en kvart, och två möten i följd
+ligger kant i kant i stället för över varandra.
+
+Klicka i luckan under ett möte så börjar det nya där det förra slutar, till exempel
+10:15–10:30, och slutar senast där nästa möte börjar. Dra nedåt för ett längre möte.
+Samma sak gäller när du trycker eller håller in med fingret i telefonen.`,
+    datum: "2026-11-03",
+    roller: [],
+    href: "/kalender",
+  },
+  {
     slug: "uppgifter-direkt",
     rubrik: "Uppgifter ändras direkt",
     ingress: "När du bockar av, flyttar eller ändrar en uppgift syns det med en gång.",

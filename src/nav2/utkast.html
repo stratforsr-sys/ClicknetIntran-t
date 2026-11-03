@@ -1831,6 +1831,9 @@ button.tidrow:hover{background:var(--surface-2)}
 .oli svg{width:11px;height:11px}
 .oli+.oli{right:17px} .oli+.oli+.oli{right:30px}
 .olev.kort .oli{position:static}
+.olev.mini .olevin{height:100%;padding:0 6px}
+.olev.mini .olevin b,.olev.mini .olevt{line-height:13px}
+.olev.mini .olrz{height:4px}
 .olev.fylld{background:var(--c);color:#fff;box-shadow:none}
 .olev.fylld .olevt,.olev.fylld .olevp,.olev.fylld .oli{color:rgba(255,255,255,.85)}
 .olev.fri{border-left-color:var(--surface);box-shadow:inset 3px 0 0 -2px var(--c),0 0 0 1px color-mix(in srgb,var(--c) 30%,transparent)}
@@ -1850,7 +1853,7 @@ button.tidrow:hover{background:var(--surface-2)}
 .olrz{position:absolute;left:0;right:0;bottom:0;height:6px;cursor:ns-resize}
 .olev:hover .olrz{background:linear-gradient(transparent 2px,color-mix(in srgb,var(--c) 50%,transparent) 2px 3px,transparent 3px)}
 .olfler{position:absolute;right:2px;z-index:3;font-size:11px;font-weight:600;background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
-.olselm{position:absolute;left:2px;right:2px;background:color-mix(in srgb,var(--brand) 18%,var(--surface));border:1.5px solid var(--brand);border-radius:4px;z-index:6;font-size:11.5px;font-weight:600;color:var(--brand-ink);padding:2px 6px;pointer-events:none}
+.olselm{position:absolute;left:2px;right:2px;background:color-mix(in srgb,var(--brand) 18%,var(--surface));border:1.5px solid var(--brand);border-radius:4px;z-index:6;font-size:11.5px;font-weight:600;color:var(--brand-ink);padding:1px 6px;line-height:13px;overflow:hidden;pointer-events:none}
 /* Förhandsvisning och snabbskapa */
 .olpeek{position:fixed;z-index:60;width:360px;background:var(--surface);border-radius:8px;box-shadow:0 18px 48px -12px rgba(0,0,0,.4),0 0 0 1px var(--line);border-top:4px solid var(--c);display:flex;flex-direction:column;max-height:calc(100vh - 80px);overflow:auto;font-family:var(--f-ol)}
 .olpkh{display:flex;align-items:center;gap:6px;padding:8px 10px 0 14px}
@@ -2086,7 +2089,7 @@ button.tidrow:hover{background:var(--surface-2)}
 .olmcell{position:relative}
 .olghost{opacity:.35;outline:1.5px dashed var(--c);pointer-events:none;z-index:1}
 .olev.kopia::after{content:"+";position:absolute;top:2px;right:4px;width:16px;height:16px;border-radius:50%;background:var(--ink);color:var(--surface);font-size:12px;font-weight:700;display:grid;place-items:center}
-.olhov{position:absolute;left:2px;right:2px;height:24px;border-radius:4px;background:color-mix(in srgb,var(--brand) 8%,transparent);font-size:11px;color:var(--brand-ink);padding:3px 6px;pointer-events:none;z-index:0}
+.olhov{position:absolute;left:2px;right:2px;height:24px;border-radius:4px;background:color-mix(in srgb,var(--brand) 8%,transparent);font-size:11px;color:var(--brand-ink);padding:1px 6px;line-height:13px;overflow:hidden;pointer-events:none;z-index:0}
 .olmdatt{gap:10px}
 .olmdatt>span:nth-child(2){flex:1}
 .olmdchk{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--line-2);display:grid;place-items:center;flex:none;color:var(--on-brand)}
@@ -12573,7 +12576,7 @@ FEAT.push(
 /* Byggd som Outlooks kalender: kommandorad, vänsterfält med minimånad och kalendrar, timrutnät med arbetstid och nu-linje,
    förhandsvisning vid klick, snabbskapa genom att dra, flytta och ändra längd, schemaläggningsassistent och Min dag.
    Innehållet är Navs: möten, 1:1, leveransposter, uppgifter, coachning, ledighet och frister, med delning i fem nivåer. */
-const KPX = 48;                                  // pixlar per timme
+const KPX = 60;                                  // pixlar per timme: en minut är en pixel, så en kvart rymmer en rad
 const KD = s => Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10));
 const KF = t => new Date(t).toISOString().slice(0, 10);
 const kPlus = (s, n) => KF(KD(s) + n * 864e5);
@@ -12846,9 +12849,10 @@ function kStil(x){
   return {c, fylld: !x.kal && k.fylld};
 }
 function kPost(x, cols){
-  const e = x.e, {c, fylld} = kStil(x), sv = x.kal ? null : kSvar(e), h = Math.max(18, (e.e - e.s) / 60 * KPX - 2);
-  const w = 100 / cols, kort = e.e - e.s <= 30;
-  const cls = ['olev', fylld ? 'fylld' : '', x.kal ? 'annan' : '', sv === 'vantar' ? 'vantar' : '', sv === 'kanske' || e.visa === 'prel' ? 'prel' : '', e.visa === 'ledig' ? 'fri' : '', e.visa === 'borta' ? 'borta' : '', sv === 'nej' ? 'nej' : '', e.klar ? 'klar' : '', x.dim ? 'dim' : '', S.kPeek && S.kPeek.id === e.id ? 'sel' : '', kort ? 'kort' : ''].join(' ');
+  const e = x.e, {c, fylld} = kStil(x), sv = x.kal ? null : kSvar(e), h = Math.max(15, e.e - e.s) / 60 * KPX - 2;
+  // Höjden är längden, som i Outlook: 10:00–10:15 slutar vid 10:15-strecket, och 10:30 börjar en lucka längre ner.
+  const w = 100 / cols, kort = e.e - e.s <= 30, mini = e.e - e.s < 30;
+  const cls = ['olev', fylld ? 'fylld' : '', x.kal ? 'annan' : '', sv === 'vantar' ? 'vantar' : '', sv === 'kanske' || e.visa === 'prel' ? 'prel' : '', e.visa === 'ledig' ? 'fri' : '', e.visa === 'borta' ? 'borta' : '', sv === 'nej' ? 'nej' : '', e.klar ? 'klar' : '', x.dim ? 'dim' : '', S.kPeek && S.kPeek.id === e.id ? 'sel' : '', kort ? 'kort' : '', mini ? 'mini' : ''].join(' ');
   const ikoner = `${e.rep ? `<span class="oli" title="Återkommande">${KI('upprepa')}</span>` : ''}${e.priv ? `<span class="oli" title="Privat">${KI('las')}</span>` : ''}${e.delt.length > 1 && x.niva !== 'upptagen' ? `<span class="oli" title="${e.delt.length + 1} deltagare">${KI('pers')}</span>` : ''}`;
   const anslut = (e.video || e.plats === 'Videolänk') && !x.kal && e.d === kIdag() && S.mode !== 'sondag' && now() >= e.s - 15 && now() < e.e;
   return `<div class="${cls}" data-kev="${e.id}" style="--c:${c};top:${e.s / 60 * KPX + 1}px;height:${h}px;left:calc(${x.col * w}% + 1px);width:calc(${w}% - 3px)" role="button" tabindex="0" title="${esc(kRubrik(x))}\n${hm(e.s)}–${hm(e.e)}${e.plats && x.niva !== 'upptagen' ? '\n' + esc(e.plats) : ''}${x.kal ? '\n' + esc(x.kal.n) + 's kalender' : ''}" aria-label="${esc(kRubrik(x))}, ${hm(e.s)}–${hm(e.e)}">${anslut ? `<button class="olanslut" data-act="toast" data-msg="Videolänken öppnas för ${esc(e.t)}.">${KI('video')}Anslut</button>` : ''}
@@ -13223,6 +13227,14 @@ function kEfterRender(){
 /* ---------- Dra: skapa, flytta, ändra längd ---------- */
 let kDrag = null;
 const kMinFran = (col, y) => Math.max(0, Math.min(1440, (y - col.getBoundingClientRect().top) / KPX * 60));
+// Ett klick väljer halvtimmen, som i Outlook, men inte den del som redan är bokad: under en post som slutar 10:15
+// börjar den nya 10:15, och en post som börjar 10:30 avslutar den. Kortast en kvart.
+function kLucka(col, m){
+  const poster = [...col.querySelectorAll('.olev[data-kev]')].map(el => KEV.find(k => k.id === el.dataset.kev)).filter(x => x && !x.allday);
+  const s = Math.min(1425, Math.max(Math.floor(m / 30) * 30, ...poster.filter(x => x.e <= m).map(x => x.e)));
+  const e = Math.min(Math.floor(m / 30) * 30 + 30, ...poster.filter(x => x.s > m).map(x => x.s));
+  return {s, e:Math.min(1440, Math.max(e, s + 15))};
+}
 document.addEventListener('pointerdown', e => {
   if (S.view !== 'kalender' || e.button !== 0) return;
   if (e.target.closest('.olanslut')) return;
@@ -13233,14 +13245,14 @@ document.addEventListener('pointerdown', e => {
   const m = kMinFran(col, e.clientY);
   if (rz){ const id = ev.dataset.kev; kDrag = {typ:'rz', id, el:ev, col, y0:e.clientY, h0:ev.offsetHeight}; e.preventDefault(); return; }
   if (ev){ const id = ev.dataset.kev, x = KEV.find(k => k.id === id); kDrag = {typ:'flytt', id, el:ev, col, y0:e.clientY, x0:e.clientX, off:m - x.s, rorde:false}; return; }
-  const s = Math.floor(m / 30) * 30, sel = document.createElement('div'); sel.className = 'olselm'; sel.style.top = s / 60 * KPX + 'px'; sel.style.height = KPX / 2 + 'px';
-  sel.innerHTML = `<span>${hm(s)}–${hm(s + 30)}</span>`; col.appendChild(sel);
-  kDrag = {typ:'ny', col, s0:s, s, e:s + 30, sel}; e.preventDefault();
+  const {s, e:e0} = kLucka(col, m), sel = document.createElement('div'); sel.className = 'olselm'; sel.style.top = s / 60 * KPX + 'px'; sel.style.height = (e0 - s) / 60 * KPX + 'px';
+  sel.innerHTML = `<span>${hm(s)}–${hm(e0)}</span>`; col.appendChild(sel);
+  kDrag = {typ:'ny', col, s0:s, e0, s, e:e0, sel}; e.preventDefault();
 });
 document.addEventListener('pointermove', e => {
   if (!kDrag) return;
   const sc = document.getElementById('olScroll'); if (sc && kDrag.typ !== 'rz'){ const r = sc.getBoundingClientRect(); if (e.clientY < r.top + 28) sc.scrollTop -= 14; else if (e.clientY > r.bottom - 28) sc.scrollTop += 14; }
-  if (kDrag.typ === 'ny'){ const m = kMinFran(kDrag.col, e.clientY), a = Math.min(kDrag.s0, Math.floor(m / 15) * 15), b = Math.max(kDrag.s0 + 30, Math.ceil(m / 15) * 15); kDrag.s = a; kDrag.e = b; kDrag.sel.style.top = a / 60 * KPX + 'px'; kDrag.sel.style.height = (b - a) / 60 * KPX + 'px'; kDrag.sel.innerHTML = `<span>${hm(a)}–${hm(b)}</span>`; return; }
+  if (kDrag.typ === 'ny'){ const m = kMinFran(kDrag.col, e.clientY), a = Math.min(kDrag.s0, Math.floor(m / 15) * 15), b = Math.max(kDrag.e0, Math.ceil(m / 15) * 15); kDrag.s = a; kDrag.e = b; kDrag.sel.style.top = a / 60 * KPX + 'px'; kDrag.sel.style.height = (b - a) / 60 * KPX + 'px'; kDrag.sel.innerHTML = `<span>${hm(a)}–${hm(b)}</span>`; return; }
   if (kDrag.typ === 'rz'){ const ny = Math.max(KPX / 4, Math.round((kDrag.h0 + e.clientY - kDrag.y0) / (KPX / 4)) * (KPX / 4)); kDrag.el.style.height = ny + 'px'; kDrag.len = Math.min(480, Math.round(ny / KPX * 60 / 15) * 15); kDrag.el.querySelector('.olevt').textContent = `${hm(KEV.find(k => k.id === kDrag.id).s)}–${hm(KEV.find(k => k.id === kDrag.id).s + kDrag.len)}`; return; }
   if (kDrag.typ === 'flytt'){
     if (!kDrag.rorde && Math.abs(e.clientY - kDrag.y0) + Math.abs(e.clientX - kDrag.x0) < 5) return;
@@ -13351,9 +13363,9 @@ document.addEventListener('mousemove', e => {
   if (S.view !== 'kalender' || kDrag || !e.target.closest) return;
   const col = e.target.closest('.olcol'); let h = document.getElementById('olHov');
   if (!col || e.target.closest('.olev,.olfler')){ if (h) h.remove(); return; }
-  const m = Math.floor(kMinFran(col, e.clientY) / 30) * 30;
+  const l = kLucka(col, kMinFran(col, e.clientY));
   if (!h || h.parentElement !== col){ if (h) h.remove(); h = document.createElement('div'); h.id = 'olHov'; h.className = 'olhov'; col.appendChild(h); }
-  h.style.top = m / 60 * KPX + 'px'; h.textContent = kWd(col.dataset.kdag) > 5 ? '' : `+ ${hm(m)}`;
+  h.style.top = l.s / 60 * KPX + 'px'; h.style.height = (l.e - l.s) / 60 * KPX + 'px'; h.textContent = kWd(col.dataset.kdag) > 5 ? '' : `+ ${hm(l.s)}`;
 });
 document.addEventListener('mouseleave', e => { if (e.target && e.target.classList && e.target.classList.contains('olcols')) document.getElementById('olHov')?.remove(); }, true);
 /* ---------- Påminnelser, som Outlooks påminnelsefönster ----------
@@ -14884,7 +14896,7 @@ function ordTabell(lista, bas){
 }
 function ordRad(o, chef){
   const s = oStatus(o), kol = o7Kol, tags = [o.addon ? 'Tillägg' : '', !o.p ? 'Fri' : '', o.finans ? 'Finans' : '', o.utkop ? 'Utköp' : '', o.tj.length ? `+${o.tj.length} tjänst${o.tj.length > 1 ? 'er' : ''}` : ''].filter(Boolean);
-  const godk = ['signerad', 'betald'].includes(o.st), koll = [[o.samtal, 'Säljsamtal', o.samtal ? `kopplat, ${o.samtal.min} min` : 'saknas', 'phone', !o.samtal], [o.avtal, 'Påskrivet avtal', o.avtal ? 'bifogat' : 'saknas', 'avtal', !o.avtal], [o.inkio === 'ok', 'Inkio', o.inkio === 'ok' ? 'skrivet' : o.inkio === 'ko' ? 'i kö' : (ND && godk ? 'inte i Inkio' : 'skrivs vid godkännande'), 'logg', godk && o.inkio !== 'ok' && o.inkio !== 'ko']];
+  const godk = ['signerad', 'betald'].includes(o.st), koll = [[o.samtal, 'Säljsamtal', o.samtal ? (o.samtal.utan ? (o.samtal.godkand ? 'utan inspelning, godkänd' : 'utan inspelning') : `kopplat, ${o.samtal.min} min`) : 'saknas', 'phone', !o.samtal], [o.avtal, 'Påskrivet avtal', o.avtal ? 'bifogat' : 'saknas', 'avtal', !o.avtal], [o.inkio === 'ok', 'Inkio', o.inkio === 'ok' ? 'skrivet' : o.inkio === 'ko' ? 'i kö' : (ND && godk ? 'inte i Inkio' : 'skrivs vid godkännande'), 'logg', godk && o.inkio !== 'ok' && o.inkio !== 'ko']];
   // Varv 7: bara det som saknas syns, och säljaren kan koppla samtalet direkt på raden.
   const egenStopp = !chef && s === 'stoppad' && o.vem === ME.saljare.namn;
   const saknas = o.st === 'makulerad' ? [] : koll.filter(([, , , ik, fel]) => fel && !(egenStopp && ik === 'phone'));
@@ -14899,7 +14911,7 @@ function ordRad(o, chef){
     ${kol('prov') ? `<td class="num">${oKr(oProv(o))}</td>` : ''}
     ${chef && kol('vem') ? `<td class="ordvem"><span class="ordvemi">${avatar(o.vem, 22)}<span>${esc(fornamn(o.vem))}</span></span></td>` : ''}
     <td><span class="pill t-${OSTTON[s]}">${s === 'stoppad' ? I('fel') : ''}${OSTK[s]}</span>${oLoperUt(o) ? `<small class="ordut">löper ut om ${oDagarTillSlut(o)} d</small>` : ''}${o7Vantat(o)}</td>
-    ${kol('koll') ? `<td class="ordkoll">${chef && o.st === 'inskickad' && o.samtal && o.avtal ? `<button class="ordsnabbg" data-ordgodkann="${o.nr}" title="Godkänn #${o.nr} (G)">${I('check')}Godkänn</button>` : ''}${egenStopp ? `<button class="o7rk" data-o7koppla="${o.nr}" title="Öppna samtalen och koppla säljsamtalet">${I('phone')}Koppla samtal</button>` : ''}${saknas.map(([, l, txt, ik]) => `<span class="nej" title="${l}: ${txt}" aria-label="${l}: ${txt}">${I(ik)}</span>`).join('')}</td>` : ''}</tr>`;
+    ${kol('koll') ? `<td class="ordkoll">${chef && o.st === 'inskickad' && o.samtal && !o.samtal.utan && o.avtal ? `<button class="ordsnabbg" data-ordgodkann="${o.nr}" title="Godkänn #${o.nr} (G)">${I('check')}Godkänn</button>` : ''}${egenStopp ? `<button class="o7rk" data-o7koppla="${o.nr}" title="Öppna samtalen och koppla säljsamtalet">${I('phone')}Koppla samtal</button>` : ''}${saknas.map(([, l, txt, ik]) => `<span class="nej" title="${l}: ${txt}" aria-label="${l}: ${txt}">${I(ik)}</span>`).join('')}</td>` : ''}</tr>`;
 }
 
 /* ---------- Orderkortet ---------- */
@@ -14925,7 +14937,7 @@ function onFel(n){
   if (n.utkopOn && !(+n.utkop > 0)) e.utkop = 'Skriv utköpet i kronor, eller stäng av Utköp.';
   if (!n.start) e.start = 'Välj när avtalet börjar gälla.';
   if (!n.avtal) e.avtal = 'Bifoga det påskrivna avtalet.';
-  if (!n.samtal) e.samtal = 'Koppla säljsamtalet. Utan det stoppas ordern.';
+  if (!n.samtal && !(typeof n.utan === 'string' && n.utan.trim().length >= 3)) e.samtal = typeof n.utan === 'string' ? 'Skriv varför samtalet inte spelades in.' : 'Koppla säljsamtalet. Utan det stoppas ordern.';
   if (!n.vem) e.vem = 'Välj säljare.';
   return e;
 }
@@ -14977,7 +14989,7 @@ function ordFormular(){
         <div class="onpar"><div class="onf"><span class="onl">Signerad</span><div class="segs">${ND ? ndSignKnappar(n) : `<button type="button" data-onsign="2026-10-09" aria-pressed="${n.sign === '2026-10-09'}">I dag</button><button type="button" data-onsign="2026-10-08" aria-pressed="${n.sign === '2026-10-08'}">I går</button>`}${o7DatumVal('sign', n)}</div>${o7DatumFalt('sign', n)}<small class="muted onhj">Avgör vilken månad ordern räknas i: ${FRMAN[+n.sign.slice(5, 7)]}.</small></div>
         <div class="onf ${visa('start') ? 'err' : ''}"><span class="onl">Avtalet börjar gälla</span><div class="segs onstart">${startVal.map(([d, l]) => `<button type="button" data-onstart="${d}" aria-pressed="${n.start === d}">${l}</button>`).join('')}${o7DatumVal('start', n)}</div>${o7DatumFalt('start', n)}${slut ? `<small class="muted onhj">Löper till ${oDat(slut)}. Nav påminner 90 dagar innan.</small>` : ''}${fel('start')}</div></div>
         <div class="onf ${visa('avtal') ? 'err' : ''}"><span class="onl">Påskrivet avtal</span>${n.avtal ? `<div class="onfil">${I('avtal')}<b>${esc(n.avtal)}</b><button type="button" class="tlink" data-onavtalbort>Byt</button></div>` : `<label class="ondrop" for="onFil">${I('ut')}<span><b>Välj filen</b> eller dra hit den<small>PDF eller bild av det påskrivna avtalet</small></span><input id="onFil" type="file" accept=".pdf,image/*" data-onfil hidden></label>`}${fel('avtal')}</div>
-        <div class="onf ${visa('samtal') ? 'err' : ''}"><span class="onl">Säljsamtal ${note(253)}</span>${n.samtal ? (() => { const c = OSAMTAL.find(x => x.id === n.samtal); return `<div class="onfil">${I('phone')}<b>${c.dag ? 'I går ' : ''}${c.t} · ${c.min} min</b><span class="muted">${esc(c.nr)}</span><button type="button" class="tlink" data-onsamtal="">Byt</button></div>`; })() : `<div class="onsamtal">${samtal.map(c => `<button type="button" class="ordsrad ${c.match ? 'match' : ''}" data-onsamtal="${c.id}">${I('phone')}<span><b>${c.dag ? 'I går ' : ''}${c.t} · ${c.min} min</b><small>${esc(c.nr)} · ${esc(c.till)}</small></span>${c.match ? '<span class="pill t-ok">Matchar numret</span>' : ''}</button>`).join('')}</div><small class="muted onhj">${o7SamtalHj(n, samtal)}</small>`}${fel('samtal')}</div>
+        <div class="onf ${visa('samtal') ? 'err' : ''}"><span class="onl">Säljsamtal ${note(253)}</span>${ND && (typeof n.utan === 'string' || n.insp) ? ndSamAlt(n) : n.samtal ? (() => { const c = OSAMTAL.find(x => x.id === n.samtal); return `<div class="onfil">${I('phone')}<b>${c.dag ? 'I går ' : ''}${c.t} · ${c.min} min</b><span class="muted">${esc(c.nr)}</span><button type="button" class="tlink" data-onsamtal="">Byt</button></div>`; })() : `<div class="onsamtal">${samtal.map(c => `<button type="button" class="ordsrad ${c.match ? 'match' : ''}" data-onsamtal="${c.id}">${I('phone')}<span><b>${c.dag ? 'I går ' : ''}${c.t} · ${c.min} min</b><small>${esc(c.nr)} · ${esc(c.till)}</small></span>${c.match ? '<span class="pill t-ok">Matchar numret</span>' : ''}</button>`).join('')}</div><small class="muted onhj">${o7SamtalHj(n, samtal)}</small>`}${fel('samtal')}</div>
         ${chef ? `<div class="onf ${visa('vem') ? 'err' : ''}"><label for="on-vem">Säljare</label><select id="on-vem" class="uin" data-on="vem"><option value="">Välj säljare…</option>${(ND && ND.order ? ND.order.saljare.map(x => x.namn) : [...new Set(TEAM.map(t => t[0]).concat([ME.chef.namn]))]).map(v => `<option ${n.vem === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select>${fel('vem')}</div>` : ''}
         ${falt('note', 'Anteckning <small class="muted">valfritt</small>', `<textarea id="on-note" class="uin" data-on="note" rows="2" placeholder="${ND ? 'Något säljchefen' : 'Något Johanna'} eller leveransen behöver veta…">${esc(n.note)}</textarea>`)}
       </section>
@@ -15183,7 +15195,7 @@ function kkData(org){
     ms: spec.ms !== undefined ? spec.ms : 150 + (forsta.nr * 7) % 220, nere: spec.nere || null, vecka: spec.vecka || [1, 1, 1, 1, 1, 1, 1],
     sedan: spec.sedan !== undefined ? spec.sedan : levande.length ? levande[levande.length - 1].sign : null,
     akt: (spec.akt || [...levande.map(o => [`${o.sign} 11:40`, 'Johanna Ek', `Order O-${2900 + o.nr % 400}`, `Godkände order O-${2900 + o.nr % 400}: ${oAffar(o)}.`, false]), ...(levande.length ? [[`${forsta.sign} 10:30`, forsta.vem, 'Kund', `${forsta.kontakt} föredrar mejl före klockan 10. Vill se statistik en gång i månaden.`, true]] : [])]).map(([nar, vem, kalla, text, not], i) => ({id:'a' + i, nar, vem, kalla, text, not})),
-    samtal: (spec.samtal || ordrar.filter(o => o.samtal).map(o => [`${o.sign} ${o.samtal.t}`, 'ut', o.samtal.min * 60 + 14, o.vem, o.sign < '2026-07-01' ? 'gallrad' : 'hamtad', o.nr])).map(([nar, dir, sek, vem, ins, order], i) => ({id:`${org}-s${i}`, nar, dir, sek, vem, ins, order}))
+    samtal: (spec.samtal || ordrar.filter(o => o.samtal && !o.samtal.utan).map(o => [`${o.sign} ${o.samtal.t}`, 'ut', o.samtal.min * 60 + 14, o.vem, o.sign < '2026-07-01' ? 'gallrad' : 'hamtad', o.nr])).map(([nar, dir, sek, vem, ins, order], i) => ({id:`${org}-s${i}`, nar, dir, sek, vem, ins, order}))
   };
   KKCACHE.set(org, d); return d;
 }
@@ -15195,9 +15207,9 @@ const kkLevOrd = k => ORDER.filter(o => o.org === k && ['signerad', 'betald'].in
 /* Nästa steg: en mening och en knapp, så att ingen behöver leta. */
 function kkNasta(o, d){
   const chef = S.role === 'chef', egen = o.vem === ME.saljare.namn, s = oStatus(o);
-  if (s === 'stoppad') return {ton:'danger', ik:'fel', t:'Ordern är stoppad tills säljsamtalet är kopplat.', sub:(egen || chef) && d.samtal.some(c => !c.order) ? 'Nav har hittat ett samtal som troligen är säljsamtalet.' : '', knapp:egen || chef ? `<button class="btn btn-p btn-sm" data-kkflik="samtal">${I('phone')}Koppla säljsamtalet</button>` : ''};
+  if (s === 'stoppad') return {ton:'danger', ik:'fel', t:'Ordern är stoppad tills säljsamtalet är kopplat.', sub:(egen || chef) && d.samtal.some(c => !c.order) ? 'Nav har hittat ett samtal som troligen är säljsamtalet.' : '', knapp:egen || chef ? `<button class="btn btn-p btn-sm" data-kkflik="samtal">${I('phone')}Koppla säljsamtalet</button>${ND ? `<button class="btn btn-s btn-sm" data-ordratta="${o.nr}">Finns inte i Lynes</button>` : ''}` : ''};
   if (o.st === 'inskickad' && !o.avtal) return {ton:'warn', ik:'avtal', t:'Det påskrivna avtalet saknas.', sub:'Utan det läggs ordern som utkast i Inkio.', knapp:`<button class="btn btn-p btn-sm" data-kkflik="bilagor">Bifoga avtalet</button>`};
-  if (o.st === 'inskickad') return chef ? {ton:'signal', ik:'check', t:`Väntar på ditt godkännande sedan ${ND ? ndSedanText(o) : o.tid || oDat(o.sign)}.`, sub:'Säljsamtal och avtal är på plats.', knapp:`${note(305)}<button class="btn btn-p btn-sm" data-ordgodkann="${o.nr}" title="Godkänn (G)">${I('check')}Godkänn</button><button class="btn btn-s btn-sm" data-ordtillbaka="${o.nr}">Skicka tillbaka</button>`} : {ton:'signal', ik:'tid', t:ND ? 'Väntar på säljchefens godkännande.' : 'Väntar på Johannas godkännande.', sub:o7KoText(), knapp:''};
+  if (o.st === 'inskickad') return chef ? {ton:'signal', ik:'check', t:`Väntar på ditt godkännande sedan ${ND ? ndSedanText(o) : o.tid || oDat(o.sign)}.`, sub:o.samtal && o.samtal.utan ? `Utan inspelning: ${esc(o.samtal.skal)}${o.samtal.av ? ` (${esc(fornamn(o.samtal.av))})` : ''}. Godkänner du ordern godkänner du att den går utan säljsamtal.` : 'Säljsamtal och avtal är på plats.', knapp:`${note(305)}<button class="btn btn-p btn-sm" data-ordgodkann="${o.nr}" title="Godkänn (G)">${I('check')}Godkänn</button><button class="btn btn-s btn-sm" data-ordtillbaka="${o.nr}">Skicka tillbaka</button>`} : {ton:'signal', ik:'tid', t:ND ? 'Väntar på säljchefens godkännande.' : 'Väntar på Johannas godkännande.', sub:o7KoText(), knapp:''};
   if (o.st === 'utkast') return {ton:'neutral', ik:'avtal', t:'Ordern är ett utkast och syns bara för dig.', sub:'', knapp:egen ? `<button class="btn btn-p btn-sm" data-ordfortsatt="${o.nr}">Fortsätt med ordern</button>` : ''};
   if (d.webb && d.nere) return {ton:'danger', ik:'fel', t:ND && !d.nereSedan ? 'Kampanjsidan svarar inte.' : `Kampanjsidan svarar inte sedan ${ND ? d.nereSedan : d.nere}.`, sub:ND ? (d.nereSedan ? `${d.webb} har inte svarat sedan ${d.nereSedan}.` : `${d.webb}: ${d.nere}`) : `${d.webb} har inte svarat på tre kontroller i rad.`, knapp:`<button class="btn btn-p btn-sm" data-kkmeddela>Meddela leveransen</button><button class="btn btn-s btn-sm" data-kkkolla>Kolla igen</button>`};
   if (oLoperUt(o) && !o.fornyAvslag) return {ton:'warn', ik:'tid', t:`Avtalet löper ut om ${oDagarTillSlut(o)} dagar.`, sub:'Ring innan kunden hinner tänka på att byta.', knapp:`<button class="btn btn-p btn-sm" data-ordforny="${o.nr}">${I('trend')}Förläng avtalet</button><button class="btn btn-s btn-sm" data-kkboka="${o.nr}">${I('kal')}Boka samtal</button>`};
@@ -15221,7 +15233,7 @@ function kkKort(o){
     ['Kampanjsida', ND && (!d.nd || d.nd.laddar) ? 'hämtas' : ND && d.nd.kopplat === false ? 'Inkio ej kopplat' : !d.webb ? (lev.length ? 'saknas' : 'efter godkännandet') : d.nere ? (ND ? (d.nereSedan ? `svarar inte sedan ${d.nereSedan}` : 'svarar inte') : `svarar inte sedan ${d.nere}`) : 'aktiv', !d.webb ? (lev.length ? 'warn' : 'neutral') : d.nere ? 'danger' : 'ok', 'aktivitet'],
     ['Inkio', o.inkio === 'ok' ? 'inlagd' : o.inkio === 'ko' ? 'i kö' : o.inkio === 'fel' ? 'misslyckades' : o.st === 'makulerad' ? 'makulerad' : ND && ['signerad', 'betald'].includes(o.st) ? 'inte i Inkio' : 'vid godkännandet', o.inkio === 'ok' ? 'ok' : o.inkio === 'ko' ? 'signal' : 'neutral', 'order'],
     ...kkHalsaEkonomi(o),
-    ['Säljsamtal', o.samtal ? `kopplat, ${o.samtal.min} min` : 'saknas', o.samtal ? 'ok' : o.st === 'makulerad' ? 'neutral' : 'danger', 'samtal'],
+    ['Säljsamtal', o.samtal ? (o.samtal.utan ? (o.samtal.godkand ? 'utan inspelning, godkänd' : 'utan inspelning') : `kopplat, ${o.samtal.min} min`) : 'saknas', o.samtal ? 'ok' : o.st === 'makulerad' ? 'neutral' : 'danger', 'samtal'],
     ['Avtal', o.avtal ? 'bifogat' : 'saknas', o.avtal ? 'ok' : o.st === 'makulerad' ? 'neutral' : 'warn', 'bilagor']];
   const prickar = {aktivitet:d.webb && d.nere, samtal:!o.samtal && o.st !== 'makulerad', bilagor:!o.avtal && o.st !== 'makulerad'};
   const flikar = ndO() ? [['oversikt', 'Översikt', null], ['aktivitet', 'Historik', null], ['order', 'Order', alla.length], ['samtal', 'Samtal', sam.length], ['bilagor', 'Bilagor', bil]]
@@ -15430,7 +15442,7 @@ function kkLasUt(x){
 function kkHistorik(o, d, alla){
   const f = S.kkHistF || 'allt', h = [];
   alla.forEach(x => { h.push([x.sign + ' ' + (x.tid || '09:00'), 'order', `Order #${x.nr} lades upp av ${fornamn(x.vem)}`, oAffar(x), 'order', 'neutral']);
-    if (x.samtal) h.push([x.sign + ' ' + (x.tid || '09:05'), 'samtal', `Säljsamtalet kopplades till #${x.nr}`, `${x.samtal.min} min · ${fornamn(x.vem)}`, 'samtal', 'brand']);
+    if (x.samtal && !x.samtal.utan) h.push([x.sign + ' ' + (x.tid || '09:05'), 'samtal', `Säljsamtalet kopplades till #${x.nr}`, `${x.samtal.min} min · ${fornamn(x.vem)}`, 'samtal', 'brand']);
     if (['signerad', 'betald', 'makulerad'].includes(x.st)) h.push([x.o7godk ? '2026-10-09 ' + x.o7godk.nar : x.sign + ' 11:40', 'order', `#${x.nr} godkändes av Johanna`, `Provisionen frystes: ${oKr(oProv(x))}`, 'order', 'ok']);
     if (x.inkio === 'ok') h.push([(x.o7godk ? '2026-10-09 ' + x.o7godk.nar : x.sign + ' 11:41'), 'inkio', `#${x.nr} skrevs till Inkio av Nav`, `O-${2900 + x.nr % 400}`, 'aktivitet', 'ok']);
     if (x.st === 'betald') h.push([x.start + ' 08:00', 'order', `#${x.nr} markerades betald av Johanna`, '', 'order', 'ok']);
@@ -21445,7 +21457,7 @@ function kvSeed(omr){
   };
   const anv = {}, pool = [];
   const kund = (vem, d) => {
-    const a = anv[vem] = anv[vem] || [], o = ORDER.find(x => x.vem === vem && x.samtal && x.st !== 'utkast' && kvVs(x.sign) === kvVs(d) && x.sign <= kvT() && !a.includes(x.nr));
+    const a = anv[vem] = anv[vem] || [], o = ORDER.find(x => x.vem === vem && x.samtal && !x.samtal.utan && x.st !== 'utkast' && kvVs(x.sign) === kvVs(d) && x.sign <= kvT() && !a.includes(x.nr));
     if (o){ a.push(o.nr); return [o.bolag, o.nr, o.sign]; }
     if (pool.length >= KVKUND.length) pool.length = 0; let i = kvH(vem + d) % KVKUND.length; while (pool.includes(KVKUND[i]) || a.includes(KVKUND[i])) i = (i + 1) % KVKUND.length; a.push(KVKUND[i]); pool.push(KVKUND[i]); return [KVKUND[i], null, d];
   };
@@ -27413,7 +27425,7 @@ function ndOrdStart(){
   OFINANS = d.idag.finans; PVEGEN = d.idag.egen; PVUTKOP = d.idag.utkop; PVFINANS = d.idag.finans; PVOVERTACK = d.idag.overtack;
   const inkioLage = c => !c ? null : c.state === 'fel' ? 'fel' : c.state === 'makulerad' ? null : 'ok';
   ORDER.length = 0;
-  d.order.forEach(o => ORDER.push({...o, org:ndOrgFormat(o.org), ndInkio:o.inkio, inkio:inkioLage(o.inkio), samtal:o.samtal, avtal:o.avtal,
+  d.order.forEach(o => ORDER.push({...o, org:ndOrgFormat(o.org), ndInkio:o.inkio, inkio:inkioLage(o.inkio), samtal:o.samtal || (o.utan ? {id:null, utan:true, skal:o.utan.skal, av:o.utan.av, godkand:o.utan.godkand, min:0, sek:0, t:'', dag:'', ljud:false} : null), avtal:o.avtal,
     fornyAvslag:o.fornyelse && o.fornyelse.utfall === 'avslutad' ? (o.fornyelse.skal || 'Kunden förlänger inte.') : null}));
   // Formulärets samtal: den inloggades egna, minst fem minuter och inte kopplade (repots samtalskandidater, i dag och i går).
   OSAMTAL.length = 0;
@@ -27647,7 +27659,7 @@ kkHistorik = function(o, d, alla){
   alla.forEach(x => {
     h.push([ndTidText(x.skapad), 'order', `Order #${x.nr} lades upp${x.skapadAv ? ` av ${vem(x.skapadAv)}` : ''}`, oAffar(x), 'order', 'neutral']);
     if (x.sign !== ndDagAv(x.skapad)) h.push([`${x.sign} `, 'order', `#${x.nr} signerades av kunden`, '', 'order', 'neutral']);
-    if (x.samtal) h.push([`${x.samtal.dag} ${x.samtal.t}`, 'samtal', `Säljsamtalet för #${x.nr}`, `${x.samtal.min} min · ${vem(x.vem)}`, 'samtal', 'brand']);
+    if (x.samtal && !x.samtal.utan) h.push([`${x.samtal.dag} ${x.samtal.t}`, 'samtal', `Säljsamtalet för #${x.nr}`, `${x.samtal.min} min · ${vem(x.vem)}`, 'samtal', 'brand']);
     if (x.godkand) h.push([ndTidText(x.godkand), 'order', `#${x.nr} godkändes${x.godkandAv ? ` av ${vem(x.godkandAv)}` : ''}`, x.prov !== null ? `Provisionen frystes: ${oKr(x.prov)}` : '', 'order', 'ok']);
     if (x.ndInkio && x.ndInkio.state !== 'makulerad') h.push([ndTidText(x.ndInkio.synkad), 'inkio', x.ndInkio.state === 'fel' ? `#${x.nr} gick inte att skriva till Inkio` : `#${x.nr} skrevs till Inkio`, x.ndInkio.state === 'fel' ? (x.ndInkio.fel || '') : (x.ndInkio.ordernummer || ''), 'aktivitet', x.ndInkio.state === 'fel' ? 'danger' : 'ok']);
     if (x.mak) h.push([`${x.mak.dag} `, 'order', `#${x.nr} makulerades${x.mak.av ? ` av ${vem(x.mak.av)}` : ''}`, x.mak.skal, 'order', 'danger']);
@@ -27859,7 +27871,7 @@ function ndTlRader(o, d){
   alla.forEach(x => {
     sys(ndTidText(x.skapad), `Order #${x.nr} lades upp${x.skapadAv ? ` av ${vem(x.skapadAv)}` : ''}`, 'forsaljning', 'neutral', {sub:oAffar(x), nr:x.nr});
     if (x.sign !== ndDagAv(x.skapad)) sys(`${x.sign} `, `#${x.nr} signerades av kunden`, 'forsaljning', 'neutral', {nr:x.nr});
-    if (x.samtal) sys(`${x.samtal.dag} ${x.samtal.t}`, `Säljsamtalet för #${x.nr}`, 'samtal', 'brand', {sub:`${x.samtal.min} min · ${vem(x.vem)}`, flik:'samtal'});
+    if (x.samtal && !x.samtal.utan) sys(`${x.samtal.dag} ${x.samtal.t}`, `Säljsamtalet för #${x.nr}`, 'samtal', 'brand', {sub:`${x.samtal.min} min · ${vem(x.vem)}`, flik:'samtal'});
     if (x.godkand) sys(ndTidText(x.godkand), `#${x.nr} godkändes${x.godkandAv ? ` av ${vem(x.godkandAv)}` : ''}`, 'forsaljning', 'ok', {sub:x.prov !== null ? `Provisionen frystes: ${oKr(x.prov)}` : '', nr:x.nr});
     const ik = x.ndInkio;
     if (ik && ik.state !== 'makulerad' && (ik.state === 'fel' || !inkioNr.has(ik.ordernummer))) sys(ndTidText(ik.synkad), ik.state === 'fel' ? `#${x.nr} gick inte att skriva till Inkio` : `#${x.nr} skrevs till Inkio`, 'forsaljning', ik.state === 'fel' ? 'danger' : 'ok', {sub:ik.state === 'fel' ? (ik.fel || '') : (ik.ordernummer || ''), nr:x.nr});
@@ -28268,9 +28280,10 @@ document.addEventListener('click', e => { if (!ndO() || !e.target.closest || !e.
 let ndSamNyckel = null, ndSamLaddar = false, ndSamFel = null;
 function ndSamTid(nar){ const d = nar.slice(0, 10), t = nar.slice(11, 16); return d === kIdag() ? t : d === frPlus(kIdag(), -1) ? `I går ${t}` : `${+d.slice(8)} ${FRMK[+d.slice(5, 7)]} ${t}`; }
 // En order som rättas har kanske redan sitt samtal. Det hör inte till kandidaterna (det är kopplat), men står först.
-function ndSamKopplat(n){ const o = n.ratta ? ORDER.find(x => x.nr === n.ratta) : null, c = o && o.samtal; return c ? {id:c.id, t:ndSamTid(`${c.dag} ${c.t}`), min:c.min, nr:o.tel, till:'kopplat nu'} : null; }
+function ndSamKopplat(n){ const o = n.ratta ? ORDER.find(x => x.nr === n.ratta) : null, c = o && o.samtal && !o.samtal.utan ? o.samtal : null; return c ? {id:c.id, t:ndSamTid(`${c.dag} ${c.t}`), min:c.min, nr:o.tel, till:'kopplat nu'} : null; }
 function ndSamtalFor(n){
   const ratta = n.ratta ? ORDER.find(x => x.nr === n.ratta) : null, saljare = S.role === 'chef' ? ndVemId(n.vem) : ND.jag.id;
+  if (ratta && ratta.samtal && ratta.samtal.utan && n.samtal === 's4'){ n.samtal = null; if (n.utan == null) n.utan = ratta.samtal.skal; }
   const nyckel = saljare && n.sign ? [saljare, n.sign, ratta ? ratta.id : ''].join('|') : '';
   // Rättningens 's4' är samtalet som redan är kopplat. Ett val som inte står i listan (ett återställt utkast) ritas inte.
   const kopplat = ndSamKopplat(n); if (kopplat && n.samtal === 's4') n.samtal = kopplat.id;
@@ -28300,10 +28313,64 @@ o7SamtalHj = function(n, lista){
   if (chef && !n.vem) return 'Välj säljaren nedan, så hämtar Nav säljarens samtal från Lynes.';
   if (ndSamLaddar) return `Hämtar ${vems} samtal från Lynes…`;
   if (ndSamFel) return `Samtalen gick inte att hämta: ${esc(ndSamFel)}`;
-  if (!lista.length) return `${namn ? `${esc(namn)} har` : 'Du har'} inga samtal från Lynes på minst fem minuter fram till signeringsdagen som inte redan hör till en order.`;
+  if (!lista.length) return `${namn ? `${esc(namn)} har` : 'Du har'} inga samtal från Lynes på minst fem minuter fram till signeringsdagen som inte redan hör till en order.${ndSamAndra()}`;
   const ingen = n.tel && n.tel.replace(/\D/g, '').length >= 7 && !lista.some(c => c.match);
-  return `${ingen ? `<b class="o7ingen">Inget samtal matchar ${esc(n.tel)}.</b> Ringdes kunden på ett annat nummer går det bra att välja samtalet ändå. ` : ''}${namn ? esc(vems[0].toUpperCase() + vems.slice(1)) : 'Dina'} samtal från Lynes, minst fem minuter, fram till signeringsdagen. Utan kopplat samtal stoppas ordern innan godkännandet.`;
+  return `${ingen ? `<b class="o7ingen">Inget samtal matchar ${esc(n.tel)}.</b> Ringdes kunden på ett annat nummer går det bra att välja samtalet ändå. ` : ''}${namn ? esc(vems[0].toUpperCase() + vems.slice(1)) : 'Dina'} samtal från Lynes, minst fem minuter, fram till signeringsdagen. Utan kopplat samtal stoppas ordern innan godkännandet.${ndSamAndra()}`;
 };
+/* Säljsamtalet när Lynes inte har det (0280, beställaren 2026-11-01): "mp3, vissa samtal har vi över telefon och då
+   går det inte att ladda upp en inspelning. Låt en chef godkänna att en order kan laddas upp utan inspelning."
+   Ladda upp: filen blir ett samtal i Nav (repots registreraUppladdatSamtal), servern mäter längden, och samtalet väljs
+   i formuläret som ett från Lynes. Spelades inte in: skälet följer med ordern, och chefen godkänner den utan. */
+function ndSamAndra(){ return ` <span class="ndsamandra"><button type="button" class="tlink" data-oninsp>Ladda upp inspelningen (mp3)</button> · <button type="button" class="tlink" data-onutan>Spelades inte in</button></span>`; }
+function ndSamAlt(n){
+  if (typeof n.utan === 'string') return `<div class="onfil">${I('phone')}<b>Utan inspelning</b><span class="muted">${S.role === 'chef' ? 'Du godkänner det när du lägger in ordern' : 'En chef godkänner ordern utan säljsamtal'}</span><button type="button" class="tlink" data-onutanbort>Ångra</button></div>
+    <input id="on-utan" class="uin" data-on="utan" value="${esc(n.utan)}" maxlength="500" placeholder="Varför finns ingen inspelning? Till exempel: kunden ringdes på vanlig telefon.">`;
+  const x = n.insp;
+  return `<div class="onfil">${I('phone')}<b>${esc(x.fil.name)}</b><span class="muted">${(x.fil.size / 1048576).toFixed(1).replace('.', ',')} MB</span><button type="button" class="tlink" data-oninspbort>Ta bort</button></div>
+    <div class="ndinsp" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px"><label class="muted onhj" style="display:flex;align-items:center;gap:6px">Ringdes <input type="date" class="uin" style="width:auto" id="on-inspdag" data-oninspdag value="${esc(x.dag)}" max="${esc(n.sign || kIdag())}"></label><label class="muted onhj" style="display:flex;align-items:center;gap:6px">kl. <input type="time" class="uin" style="width:auto" id="on-insptid" data-oninsptid value="${esc(x.tid)}"></label><button type="button" class="btn btn-p btn-sm" data-oninspupp${x.laddar ? ' disabled' : ''}>${x.laddar ? 'Laddar upp…' : 'Ladda upp'}</button></div>
+    <small class="muted onhj">Nav mäter längden i filen. Säljsamtalet är ditt eget, minst fem minuter, och ringdes senast på signeringsdagen.</small>`;
+}
+function ndInspStart(n, fil){
+  // Filens tid är oftast när inspelningen sparades, alltså strax efter samtalet. Står den på en annan dag än
+  // signeringsdagen gissar Nav inte: dagen blir signeringsdagen och klockslaget skrivs in.
+  const d = fil.lastModified ? new Date(fil.lastModified) : null, p = x => String(x).padStart(2, '0');
+  const dag = d ? `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}` : '', tid = d ? `${p(d.getHours())}:${p(d.getMinutes())}` : '';
+  const passar = dag && n.sign && dag <= n.sign && frMellan(dag, n.sign) <= 30;
+  n.insp = {fil, dag:passar ? dag : n.sign || '', tid:passar ? tid : '', laddar:false}; n.utan = null; n.samtal = null;
+}
+async function ndInspLaddaUpp(n){
+  const x = n.insp; if (!x || x.laddar) return;
+  if (!x.dag || !x.tid){ toast('Skriv när samtalet ringdes.'); document.getElementById(x.dag ? 'on-insptid' : 'on-inspdag')?.focus(); return; }
+  const nar = new Date(`${x.dag}T${x.tid}`); if (isNaN(nar.getTime())){ toast('Tiden för samtalet gick inte att läsa.'); return; }
+  const saljare = S.role === 'chef' ? ndVemId(n.vem) : ND.jag.id; if (!saljare){ toast('Välj säljaren först.'); return; }
+  if (!n.sign){ toast('Välj när avtalet signerades först.'); return; }
+  x.laddar = true; ordUppdatera();
+  const klar = fel => { if (n.insp === x){ x.laddar = false; if (S.ordNy === n) ordUppdatera(); } if (fel) ndSkrivFel(fel.s, fel.t); };
+  // Typen är mp3 oavsett vad datorn kallar filen: uppladdningsadressen är signerad för audio/mpeg.
+  const fil = new File([x.fil], x.fil.name, {type:'audio/mpeg'});
+  const p = await ndOrdPost('inspelning-forbered', {filnamn:fil.name, mime:'audio/mpeg', storlek:fil.size}, {ladda:false, tyst:true});
+  if (!p.ok) return klar({s:p, t:'Inspelningen gick inte att ladda upp.'});
+  if (!(await ndLaddaUpp(p, fil))){ klar(); toast('Inspelningen kom inte fram. Försök igen.'); return; }
+  const r = await ndOrdPost('inspelning-registrera', {fil:p.fileId, store:p.store, filnamn:fil.name, nar:nar.toISOString(), saljare, sign:n.sign, tel:n.tel}, {ladda:false, tyst:true});
+  if (!r.ok) return klar({s:r, t:'Inspelningen gick inte att spara.'});
+  const c = r.samtal; OSAMTAL.unshift({id:c.id, t:ndSamTid(c.nar), min:Math.round(c.sek / 60), nr:c.nr, till:'uppladdad inspelning'});
+  if (n.insp === x) n.insp = null; n.samtal = c.id; S.ordRor.add('samtal');
+  if (S.ordNy === n) ordUppdatera(); toast(r.ok);
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('[data-oninsp],[data-oninspbort],[data-oninspupp],[data-onutan],[data-onutanbort]'); const n = S.ordNy;
+  if (!b || !ndO() || !n || S.view !== 'order') return;
+  e.preventDefault(); e.stopPropagation();
+  const d = b.dataset;
+  if (d.oninsp !== undefined){ const i = document.createElement('input'); i.type = 'file'; i.accept = 'audio/mpeg,.mp3';
+    i.addEventListener('change', () => { const f = i.files && i.files[0]; if (!f || S.ordNy !== n) return; if (!/\.mp3$/i.test(f.name) && f.type !== 'audio/mpeg'){ toast('Ladda upp inspelningen som mp3.'); return; } ndInspStart(n, f); ordUppdatera(); setTimeout(() => document.getElementById('on-insptid')?.focus(), 30); });
+    i.click(); return; }
+  if (d.oninspbort !== undefined){ n.insp = null; ordUppdatera(); return; }
+  if (d.oninspupp !== undefined){ ndInspLaddaUpp(n); return; }
+  if (d.onutan !== undefined){ n.utan = ''; n.insp = null; n.samtal = null; ordUppdatera(); setTimeout(() => document.getElementById('on-utan')?.focus(), 30); return; }
+  if (d.onutanbort !== undefined){ n.utan = null; ordUppdatera(); return; }
+}, true);
+document.addEventListener('input', e => { const n = S.ordNy, x = n && n.insp, t = e.target; if (!x || !t.dataset) return; if (t.dataset.oninspdag !== undefined) x.dag = t.value; if (t.dataset.oninsptid !== undefined) x.tid = t.value; }, true);
 async function ndOrdSkicka(utkast){
   const n = S.ordNy; if (!n) return;
   const godkandRatta = !!(n.ratta && ORDER.some(x => x.nr === n.ratta && ['signerad', 'betald'].includes(x.st)));
@@ -28328,16 +28395,20 @@ async function ndOrdSkicka(utkast){
   // efteråt, och då nekade spärren först: valet hjälpte bara när numret redan stämde. En ny order tar samtalet
   // med sig (samtal_id), och servern prövar det innan något sparas, så ett nej lämnar inget utkast efter sig.
   const samtalId = n.samtal && /^[0-9a-f-]{36}$/.test(n.samtal) && !godkandRatta && !(ratta && ratta.samtal && ratta.samtal.id === n.samtal) ? n.samtal : null;
+  const utan = !samtalId && !godkandRatta && typeof n.utan === 'string' && n.utan.trim().length >= 3 ? n.utan.trim() : null;
+  const utanPa = async id => { if (!utan || !id) return true; const u = await ndOrdPost('utan-inspelning', {id, skal:utan}, {ladda:false, tyst:true}); if (!u.ok) ndSkrivFel(u, 'Skälet till att inspelningen saknas sparades inte.'); return !!u.ok; };
   const koppla = async id => { if (!samtalId || !id) return true; const k = await ndOrdPost('koppla', {id, samtal:samtalId}, {ladda:false, tyst:true}); if (!k.ok) ndSkrivFel(k, 'Säljsamtalet kunde inte kopplas. Koppla det i kortet.'); return !!k.ok; };
   let s;
   if (ratta){
     s = await ndOrdPost('ratta', {id:ratta.id, falt}, {ladda:false, tyst:true});
     if (s.ok && !(await koppla(ratta.id))) return;
+    if (s.ok && !(await utanPa(ratta.id))) return;
     if (s.ok && ratta.st === 'utkast' && !utkast) s = await ndOrdPost('skicka-in', {id:ratta.id}, {ladda:false, tyst:true});
   } else {
     if (!utkast && samtalId) falt.samtal_id = samtalId;
+    if (!utkast && utan){ falt.utan_inspelning = 'on'; falt.utan_inspelning_skal = utan; }
     s = await ndOrdPost(utkast ? 'utkast' : 'skapa', {falt}, {ladda:false, tyst:true});
-    if (s.ok && utkast) await koppla(s.id);
+    if (s.ok && utkast){ await koppla(s.id); await utanPa(s.id); }
   }
   if (!s.ok){ ndSkrivFel(s); return; }
   try { localStorage.removeItem('nav2-ordutkast'); } catch(_){}
@@ -28436,7 +28507,7 @@ document.addEventListener('click', e => {
   const oppen = () => ORDER.find(x => x.nr === S.ordOpen);
   // Chefens beslut och säljarens order, med repots actions.
   if (ds.ordgodkann){ stopp(); o7Godkann(+ds.ordgodkann); return; }
-  if (ds.ordbulkgodkann !== undefined){ stopp(); const val = ORDER.filter(o => S.ordVal.has(o.nr) && o.st === 'inskickad'), ok = val.filter(o => o.samtal && o.avtal);
+  if (ds.ordbulkgodkann !== undefined){ stopp(); const val = ORDER.filter(o => S.ordVal.has(o.nr) && o.st === 'inskickad'), ok = val.filter(o => o.samtal && !o.samtal.utan && o.avtal);
     (async () => { let n = 0; for (const o of ok){ const s = await ndOrdPost('godkann', {id:o.id}, {ladda:false, tyst:true}); if (s.ok) n++; else toast(`#${o.nr}: ${s.fel}`); } if (n){ toast(`${n} godkända${val.length - ok.length ? `, ${val.length - ok.length} hoppades över eftersom samtal eller avtal saknas` : ''}. Provisionen är fryst.`); ndOmlas('ord'); } })(); return; }
   if (ds.ordavskicka){ stopp(); const t = text('ordAv'); if (!t){ toast('Skriv vad som behöver rättas.'); return; } ndOrdPost('tillbaka', {id:nr('ordavskicka').id, reason:t}); return; }
   if (ds.ordbetald){ stopp(); ndOrdPost('betald', {id:nr('ordbetald').id}); return; }
@@ -29640,9 +29711,9 @@ document.addEventListener('pointerdown', e => {
     const m = kMinFran(col, t.y0);
     if (rz && ev){ kDrag = {typ:'rz', id:ev.dataset.kev, el:ev, col, y0:t.y0, h0:ev.offsetHeight}; return; }
     if (ev){ const x = KEV.find(k => k.id === ev.dataset.kev); if (!x) return; ev.classList.add('drar'); kDrag = {typ:'flytt', id:x.id, el:ev, col, y0:t.y0, x0:t.x0, off:m - x.s, rorde:false}; return; }
-    const s0 = Math.floor(m / 30) * 30, sel = document.createElement('div'); sel.className = 'olselm'; sel.style.top = s0 / 60 * KPX + 'px'; sel.style.height = KPX / 2 + 'px';
-    sel.innerHTML = `<span>${hm(s0)}–${hm(s0 + 30)}</span>`; col.appendChild(sel);
-    kDrag = {typ:'ny', col, s0, s:s0, e:s0 + 30, sel};
+    const {s:s0, e:e0} = kLucka(col, m), sel = document.createElement('div'); sel.className = 'olselm'; sel.style.top = s0 / 60 * KPX + 'px'; sel.style.height = (e0 - s0) / 60 * KPX + 'px';
+    sel.innerHTML = `<span>${hm(s0)}–${hm(e0)}</span>`; col.appendChild(sel);
+    kDrag = {typ:'ny', col, s0, e0, s:s0, e:e0, sel};
   }, NDKHALL);
   ndKTouch = t;
 }, true);
@@ -29662,9 +29733,9 @@ document.addEventListener('pointerup', e => {
   // Ett tryck.
   if (t.ev){ kPeekOppna(t.ev.dataset.kev, t.ev); return; }
   if (S.kPeek || S.kNy || S.kMenu){ S.kPeek = null; S.kNy = null; S.kMenu = null; render(); return; }
-  const d = t.col.dataset.kdag, s0 = Math.floor(kMinFran(t.col, t.y0) / 30) * 30, r = t.col.getBoundingClientRect();
+  const d = t.col.dataset.kdag, {s:s0, e:e0} = kLucka(t.col, kMinFran(t.col, t.y0)), r = t.col.getBoundingClientRect();
   if (kWd(d) > 5){ toast('Välj en vardag.'); return; }
-  S.kNy = {d, s:s0, e:s0 + 30, typ:'mote', x:r.right + 8 + 340 < innerWidth ? r.right + 8 : Math.max(12, r.left - 348), y:t.y0 - 40, delt:[], t0:Date.now()}; S.kPeek = null; render();
+  S.kNy = {d, s:s0, e:e0, typ:'mote', x:r.right + 8 + 340 < innerWidth ? r.right + 8 : Math.max(12, r.left - 348), y:t.y0 - 40, delt:[], t0:Date.now()}; S.kPeek = null; render();
   setTimeout(() => document.querySelector('[data-knyt]')?.focus(), 20);
 }, true);
 
@@ -31647,7 +31718,7 @@ function ndHemRader(){
       if (o.n) ut.push({id:'ord-ko', nar:'idag', i:'order', ton:'ok', kind:'Order', bkind:'order', t:`${o.n} order väntar på godkännande`, d:[kr(o.sum), `äldsta från ${oDat(o.aldst)}`, 'alla har kopplat säljsamtal'],
         act:{l:'Öppna kön'}, heat:2.5, bt:`{${o.n} order} väntar på ditt godkännande.`, src:'/order', why:`${kr(o.sum)}, äldsta från ${oDat(o.aldst)}, alla med säljsamtal`, ga:() => { ordSt(); S.ordVy = 'besluta'; S.ordF = {status:['inskickad'], vem:[], period:'alla', paket:[], lop:[], flagg:[]}; ordGa(); }});
     }
-    ND.order.order.filter(o => o.vemId === mig && o.st === 'inskickad' && !o.samtal).forEach(o => {
+    ND.order.order.filter(o => o.vemId === mig && o.st === 'inskickad' && !o.samtal && !o.utan).forEach(o => {
       ut.push({id:'ord-' + o.id, nar:'nu', i:'order', ton:'danger', kind:'Order', bkind:'order', t:`Order #${o.nr} saknar säljsamtal`, d:[o.bolag, `inskickad ${oDat(o.sign)}`], pill:['Stoppad', 'danger'],
         act:{l:'Koppla samtal'}, heat:4, bt:`Order {#${o.nr}} är stoppad. Koppla säljsamtalet.`, src:'/order/' + o.nr, why:`Affären${o.varde ? ` på ${kr(o.varde)}` : ''} går inte vidare utan samtalet`,
         ga:() => { ordSt(); S.ordKoppla = o.nr; ordGa(o.nr); }});
