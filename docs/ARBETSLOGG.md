@@ -110,7 +110,7 @@ transaktion som rullades tillbaka; `kundanteckning` hade 0 rader före och efter
 
 ---
 
-## 2026-11-02 kväll · 1:1 en gång eller som serie, och alla anställda att välja (grenen `enskilt-en-gang`, EJ MERGAD, ingen migration)
+## 2026-11-02 kväll · 1:1 en gång eller som serie, och alla anställda att välja (MERGAD till `main` `a7d98f8` på beställarens ja, produktionen grön 2026-11-02 21:23 UTC, ingen migration)
 
 Beställaren frågade varför en 1:1 alltid blir en serie ("man ska kunna välja antingen en serie eller bara en gång. Som
 vanligt liksom") och varför bara tre personer gick att välja.
