@@ -12,6 +12,7 @@ import { flytta, hamtaUpptaget, skapaMote, stallIn } from "@/app/(app)/kalender/
 import {
   MOTE_PLATS,
   TYST_EFTER_INGET_SVAR,
+  andraIndata,
   andringForKund,
   arHallare,
   arSkrivning,
@@ -43,11 +44,13 @@ import {
   tolkaUppslag,
   upptagetTillIntervall,
   uppslagsVarning,
+  videoNamn,
   utfallIndata,
   type Aktor,
   type UtfallIn,
   type Uppslag,
 } from "@/lib/nav2/motenforma";
+import { lokal } from "@/lib/nav2/leads";
 import { medNyckel } from "@/lib/nav2/nyckel";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
 
@@ -60,6 +63,7 @@ export const dynamic = "force-dynamic";
  * DEL 1 (A6): `uppslag`, `lediga`, `boka` och `paminn`.
  * DEL 2 (A7): mötets knappar `bekrafta`, `flytta`, `avboka`, `utfall`, `kund`, `nej`.
  *   `radera` (V6a): den som bokade ett öppet möte, eller en säljchef (också när mötet har utfall), raderar det. Allt i databasen i `mote_radera` (0268).
+ *   `andra` (2026-11-03): ändra ett öppet möte, bara de fält som skickas (se `andra`).
  * DEL 3 (A8): uppföljningen `inget_svar` och `prova_igen`.
  * `samtal` (B4): samtalen bakom statistikens tal, sina egna eller (chef) allas. En okänd handling svarar 400.
  *
@@ -98,7 +102,7 @@ export const dynamic = "force-dynamic";
  * ===========================================================================
  */
 
-type LaggVarden = Pick<BokaVarden, "namn" | "kontakt" | "epost" | "kalla" | "hallsAv" | "dag" | "start" | "langd" | "mal" | "nulage" | "foregaende" | "med" | "gaster">;
+type LaggVarden = Pick<BokaVarden, "namn" | "kontakt" | "epost" | "kalla" | "hallsAv" | "dag" | "start" | "langd" | "mal" | "nulage" | "foregaende" | "med" | "gaster" | "plats" | "lank">;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const FRAMAT_DAGAR = 14;
@@ -311,6 +315,9 @@ export async function POST(request: Request) {
 
     case "radera":
       return await radera();
+
+    case "andra":
+      return await medNyckel(request, mig, () => andra());
 
     case "kund":
       return await kund();
@@ -532,13 +539,21 @@ export async function POST(request: Request) {
     const rubrik = `SEO-möte: ${v.namn}`;
     const m: { fel?: string; eventId?: string } =
       v.hallsAv === mig
-        ? await skapaMote({ organisator: v.hallsAv, rubrik, dag: v.dag, start: minuterAv(v.start), minuter: v.langd, deltagare: [v.hallsAv, ...v.med], plats: MOTE_PLATS, agenda: v.mal })
-        : await bokaAtKollega({ hallsAv: v.hallsAv, med: v.med, rubrik, dag: v.dag, start: v.start, minuter: v.langd, agenda: v.mal });
+        ? await skapaMote({ organisator: v.hallsAv, rubrik, dag: v.dag, start: minuterAv(v.start), minuter: v.langd, deltagare: [v.hallsAv, ...v.med], plats: v.plats, agenda: v.mal })
+        : await bokaAtKollega({ hallsAv: v.hallsAv, med: v.med, rubrik, dag: v.dag, start: v.start, minuter: v.langd, agenda: v.mal, plats: v.plats, lank: v.lank });
     if (m.fel || !m.eventId) {
       await db.from("mote").delete().eq("id", moteId);
       await stada();
       return ut({ fel: m.fel ?? "Mötet kunde inte bokas i kalendern." }, 400);
     }
+
+    // 6b. Teams-länken på händelsen innan någon bjuds in (`skapaMote` tar ingen länk; `bokaAtKollega` har redan skrivit den).
+    // Inbjudan läser länken när den skickas, efter ångerfönstret, så kunden får den i första mejlet.
+    if (v.lank && v.hallsAv === mig) {
+      const { error } = await db.from("calendar_event").update({ online_url: v.lank }).eq("id", m.eventId);
+      if (error) varningar.push("Teams-länken kom inte med i kalendern. Lägg till den under Ändra.");
+    }
+    if (v.plats === videoNamn(null) && !v.lank) varningar.push("Teams-länken saknas. Lägg till den under Ändra, så får kunden den med mejl.");
 
     // 7. Kopplingen till kalenderhändelsen. Mötet finns nu, så ett fel härifrån blir ett svar och inget kast.
     const { error: kopp } = await db.from("mote").update({ event_id: m.eventId }).eq("id", moteId);
@@ -609,8 +624,8 @@ export async function POST(request: Request) {
     }), kvar: moteId };
   }
 
-  /** `lk_skapa_mote` som hållaren själv. Samma argument som `skapaMote`, påminnelse 10 minuter. */
-  async function bokaAtKollega(i: { hallsAv: string; med: string[]; rubrik: string; dag: string; start: string; minuter: number; agenda: string | null }): Promise<{ fel?: string; eventId?: string }> {
+  /** `lk_skapa_mote` som hållaren själv. Samma argument som `skapaMote`, påminnelse 10 minuter, och Teams-länken. */
+  async function bokaAtKollega(i: { hallsAv: string; med: string[]; rubrik: string; dag: string; start: string; minuter: number; agenda: string | null; plats: string; lank: string | null }): Promise<{ fel?: string; eventId?: string }> {
     const svar = await lk<{ event_id: string }>("lk_skapa_mote", {
       p_aktor: i.hallsAv,
       p_organizer: i.hallsAv,
@@ -619,8 +634,8 @@ export async function POST(request: Request) {
       p_tid: `${i.start}:00`,
       p_minuter: i.minuter,
       p_deltagare: [i.hallsAv, ...i.med],
-      p_plats: MOTE_PLATS,
-      p_online_url: null,
+      p_plats: i.plats,
+      p_online_url: i.lank,
       p_agenda: (i.agenda ?? "").slice(0, 4000),
       p_reminder_min: 10,
     });
@@ -830,6 +845,9 @@ export async function POST(request: Request) {
         ? await db.from("calendar_attendee").select("employee_id, external_email").eq("event_id", m.event_id).limit(100)
         : { data: [] };
       const forra = (narvaro ?? []) as { employee_id: string | null; external_email: string | null }[];
+      // Och samma plats: telefon, Teams-länken eller adressen.
+      const { data: evRad } = m.event_id ? await db.from("calendar_event").select("plats, online_url").eq("id", m.event_id).maybeSingle() : { data: null };
+      const ev = evRad as { plats: string | null; online_url: string | null } | null;
       const med = await aktiva([...new Set(forra.map((x) => x.employee_id).filter((x): x is string => !!x && x !== m.halls_av))].slice(0, MAX_KOLLEGOR));
       const kundEpost = (bo?.epost ?? "").toLowerCase();
       const gaster = [...new Set(forra.map((x) => (x.external_email ?? "").toLowerCase()).filter((x) => x && x !== kundEpost))].slice(0, MAX_GASTER);
@@ -838,7 +856,7 @@ export async function POST(request: Request) {
         lagt = await laggMote({
           kedja: m.kedja_id,
           bolag: bo.id,
-          v: { namn: bo.namn, kontakt: bo.kontakt, epost: bo.epost, kalla: m.kalla, hallsAv: m.halls_av, dag: a.nyttMote.dag, start: a.nyttMote.start, langd: m.langd_min, mal: m.mal, nulage: m.nulage as LaggVarden["nulage"], foregaende: m.id, med, gaster },
+          v: { namn: bo.namn, kontakt: bo.kontakt, epost: bo.epost, kalla: m.kalla, hallsAv: m.halls_av, dag: a.nyttMote.dag, start: a.nyttMote.start, langd: m.langd_min, mal: m.mal, nulage: m.nulage as LaggVarden["nulage"], foregaende: m.id, med, gaster, plats: ev?.plats || MOTE_PLATS, lank: ev?.online_url ?? null },
           motetid: nyTid,
           varningar: [],
           skapadBolag: false,
@@ -921,6 +939,227 @@ export async function POST(request: Request) {
       if (kalFel) varning = `Mötet är raderat, men kunde inte ställas in i kalendern (${kalFel}). Ställ in det där.`;
     }
     return svar({ ok: "Mötet är raderat.", mote: m.id, kedja_borta: res.kedja_borta, ...(varning ? { varning } : {}) });
+  }
+
+  /**
+   * Ändra ett öppet möte (2026-11-03): bolagets uppgifter, källan, målet och nuläget, tiden, platsen, kollegorna
+   * och fler hos kunden. Bara det som står i anropet ändras (`andraIndata`), och samma rätt som Flytta (`farSe`).
+   * Hållaren byts inte här: kalenderns arrangör står fast, och ett nytt möte bokas i stället.
+   *
+   * ORDNING (och vad som tas tillbaka):
+   *  1. Mötesraden (källa, mål, nuläge, och en ny tid som i `flytta`: räknaren stegas och Bekräftat nollställs),
+   *     villkorad på att utfall saknas och på den tid klienten såg. Ingen rad = 409.
+   *  2. Kalendern i ett anrop som hållaren (`lk_spara_mote`, 0212): tid, plats, länk, rubrik, agenda och
+   *     kollegor. Funktionen räknar själv ut vad som ändrats och ger ETT besked per person; en ny tid eller plats
+   *     ger gästerna en uppdaterad inbjudan (`calendar_event_ics`). Fallerar den tas mötesraden tillbaka.
+   *  3. Bolaget. 4. Gästerna: de nya bjuds in (`lead_bjud_in`); de borttagna tas bort ur mötet och får en
+   *     avbokning (`lk_ics_ko` CANCEL, som utkorgen skickar eftersom adressen inte är med längre).
+   *  5. Loggen, och en notis till hållaren när någon annan ändrat hens möte (kalendern säger inget till
+   *     arrangören om ändringar arrangören själv står som aktör för).
+   *
+   * Rubriken följer bolagets namn bara när den är Mötens egen ("SEO-möte: <namn>"), och agendan följer målet
+   * bara när den är målet: det som ändrats i Kalendern för hand skrivs inte över.
+   */
+  async function andra(): Promise<Response> {
+    const r = andraIndata(b);
+    if (!r.ok) return svar({ fel: r.fel }, 400);
+    const v = r.varden;
+    const h = await moteForSe(v.mote);
+    if ("res" in h) return h.res;
+    const m = h.m;
+    if (m.utfall) return svar({ fel: "Mötet har redan fått ett utfall." }, 409);
+    if (lokal(m.mote_tid) !== v.fore) return svar({ fel: "Mötet har ändrats. Ladda om tavlan." }, 409);
+    const kedja = await hamtaKedja(m.kedja_id);
+    if (!kedja) return svar({ fel: "Kedjan finns inte." }, 404);
+    const { data: bolagRad } = await db.from("mote_bolag").select("id, namn, kontakt, telefon, epost, doman").eq("id", kedja.bolag_id).maybeSingle();
+    const bo = bolagRad as { id: string; namn: string; kontakt: string | null; telefon: string | null; epost: string | null; doman: string | null } | null;
+    if (!bo) return svar({ fel: "Bolaget finns inte." }, 404);
+
+    // Kalenderns läge just nu: det som inte ändras skickas tillbaka som det är.
+    type Handelse = { dag: string; tid: string | null; minuter: number | null; title: string; plats: string | null; online_url: string | null; agenda_md: string | null; cancelled_at: string | null };
+    type Narvaro = { employee_id: string | null; external_email: string | null; optional: boolean | null };
+    let kal: Handelse | null = null;
+    let narvaro: Narvaro[] = [];
+    if (m.event_id) {
+      const [e, a] = await Promise.all([
+        db.from("calendar_event").select("dag, tid, minuter, title, plats, online_url, agenda_md, cancelled_at").eq("id", m.event_id).maybeSingle(),
+        db.from("calendar_attendee").select("employee_id, external_email, optional").eq("event_id", m.event_id).limit(200),
+      ]);
+      const ev = (e.data as unknown as Handelse | null) ?? null;
+      kal = ev && !ev.cancelled_at && ev.tid ? ev : null;
+      narvaro = (a.data ?? []) as unknown as Narvaro[];
+    }
+    const eventId = m.event_id;
+
+    // Vad som ändras, mot det som står i databasen (inte mot det klienten trodde).
+    const bolagLapp: Record<string, string | null> = {};
+    for (const [k, x] of Object.entries(v.bolag)) if ((x ?? null) !== ((bo as Record<string, unknown>)[k] ?? null)) bolagLapp[k] = x ?? null;
+    const moteLapp: Record<string, unknown> = {};
+    if (v.kalla !== undefined && v.kalla !== m.kalla) moteLapp.kalla = v.kalla;
+    if (v.mal !== undefined && (v.mal ?? null) !== (m.mal ?? null)) moteLapp.mal = v.mal;
+    if (v.nulage !== undefined && (v.nulage ?? null) !== (m.nulage ?? null)) moteLapp.nulage = v.nulage;
+    let nyTid: Date | null = null;
+    if (v.tid) {
+      const t = svenskTidpunkt(v.tid.dag, v.tid.start);
+      if (!Number.isFinite(t.getTime())) return svar({ fel: "Välj en starttid." }, 400);
+      if (t.getTime() !== new Date(m.mote_tid).getTime()) nyTid = t;
+    }
+    if (nyTid) Object.assign(moteLapp, { mote_tid: nyTid.toISOString(), antal_flyttningar: m.antal_flyttningar + 1, bekraftat_nar: null, bekraftat_av: null });
+
+    // Kollegorna: hela listan som den ska bli, utan hållaren. De nya måste vara anställda (Kalenderns `lk_aktiv`).
+    const medFore = [...new Set(narvaro.map((x) => x.employee_id).filter((x): x is string => !!x && x !== m.halls_av))];
+    const medNu = v.med ? v.med.filter((x) => x !== m.halls_av) : medFore;
+    const medIn = medNu.filter((x) => !medFore.includes(x));
+    const medUt = medFore.filter((x) => !medNu.includes(x));
+    if ((await aktiva(medIn)).length !== medIn.length) return svar({ fel: "En av kollegorna finns inte längre i Nav. Ta bort namnet och försök igen." }, 400);
+
+    // Gästerna: kontakten (när hen har en adress) och fler hos kunden. Räknas bara när adressen eller listan ändras,
+    // så att en ändring av målet aldrig skickar något till kunden.
+    const epostFore = (bo.epost ?? "").toLowerCase() || null;
+    const epostNu = "epost" in bolagLapp ? bolagLapp.epost : epostFore;
+    const gastFore = [...new Set(narvaro.map((x) => (x.external_email ?? "").toLowerCase()).filter(Boolean))];
+    let gastIn: string[] = [];
+    let gastUt: string[] = [];
+    if ("epost" in bolagLapp || v.gaster) {
+      const fler = v.gaster ?? gastFore.filter((x) => x !== epostFore);
+      const gastNu = [...new Set([...(epostNu ? [epostNu] : []), ...fler])];
+      gastIn = gastNu.filter((x) => !gastFore.includes(x));
+      gastUt = gastFore.filter((x) => !gastNu.includes(x));
+    }
+
+    const platsFore = kal?.plats ?? MOTE_PLATS;
+    const lankFore = kal?.online_url ?? null;
+    const platsNu = v.plats ? v.plats.plats : platsFore;
+    const lankNu = v.plats ? v.plats.lank : lankFore;
+    const platsAndras = platsNu !== platsFore || (lankNu ?? "") !== (lankFore ?? "");
+    const egenRubrik = `SEO-möte: ${bo.namn}`;
+    const titel = kal && bolagLapp.namn && kal.title === egenRubrik ? `SEO-möte: ${bolagLapp.namn}` : kal?.title ?? egenRubrik;
+    const agenda = kal && "mal" in moteLapp && (kal.agenda_md ?? "") === (m.mal ?? "") ? String(moteLapp.mal ?? "") : kal?.agenda_md ?? "";
+    const kalAndras = !!kal && (!!nyTid || platsAndras || titel !== kal.title || agenda !== (kal.agenda_md ?? "") || medIn.length > 0 || medUt.length > 0);
+    const gastAndras = gastIn.length > 0 || gastUt.length > 0;
+
+    if (!Object.keys(bolagLapp).length && !Object.keys(moteLapp).length && !kalAndras && !gastAndras && !platsAndras) {
+      return svar({ ok: "Inget ändrades.", mote: m.id, kedja: m.kedja_id });
+    }
+    const varningar: string[] = [];
+    if (!kal && (nyTid || platsAndras || medIn.length || medUt.length || gastAndras)) {
+      varningar.push("Mötet saknar kalenderhändelse, så kalendern och inbjudningarna är orörda.");
+    }
+
+    // 1. Mötesraden, villkorad som Flytta.
+    if (Object.keys(moteLapp).length) {
+      const { data, error } = await db.from("mote").update(moteLapp).eq("id", m.id).is("utfall", null).eq("mote_tid", m.mote_tid).select("id");
+      if (error) return svar({ fel: "Ändringen kunde inte sparas." }, 500);
+      if (((data ?? []) as unknown[]).length === 0) return svar({ fel: "Mötet har ändrats. Ladda om tavlan." }, 409);
+    }
+    const tillbaka = async (): Promise<boolean> => {
+      if (!Object.keys(moteLapp).length) return true;
+      const fore = Object.fromEntries(Object.keys(moteLapp).map((k) => [k, (m as unknown as Record<string, unknown>)[k]]));
+      const { data } = await db.from("mote").update(fore).eq("id", m.id).eq("mote_tid", String(moteLapp.mote_tid ?? m.mote_tid)).select("id");
+      return ((data ?? []) as unknown[]).length > 0;
+    };
+
+    // 2. Kalendern i ett anrop, som hållaren (som `flyttaIKalender`; `farSe` är prövat på mötet ovan).
+    type Sparat = { andrat: string[]; skickat?: { besked?: number; ics?: boolean } };
+    let sparat: Sparat | null = null;
+    if (kal && eventId && kalAndras) {
+      const s = await lk<Sparat>("lk_spara_mote", {
+        p_aktor: m.halls_av,
+        p_event: eventId,
+        p_dag: nyTid && v.tid ? v.tid.dag : kal.dag,
+        p_tid: nyTid && v.tid ? `${v.tid.start}:00` : kal.tid,
+        p_minuter: kal.minuter ?? m.langd_min,
+        p_title: titel,
+        p_plats: platsNu,
+        p_online_url: lankNu,
+        p_agenda: agenda.slice(0, 4000),
+        p_deltagare: medNu,
+        p_valfria: narvaro.filter((x) => x.employee_id && x.optional && medNu.includes(x.employee_id)).map((x) => x.employee_id),
+        p_reminder_min: null,
+        p_reminder_off: null,
+        p_show_as: null,
+        p_privat: null,
+      });
+      if (!s.ok) {
+        if (!(await tillbaka())) return svar({ fel: `Kalendern tog inte emot ändringen (${s.fel}) och tavlan kunde inte tas tillbaka. Kolla mötet i kalendern.` }, 500);
+        return svar({ fel: s.fel }, 400);
+      }
+      sparat = s.data;
+    }
+
+    // 3. Bolaget. Samma uppgifter står på bolagets alla kort; ett annat nummer kan höra till ett annat bolag.
+    if (Object.keys(bolagLapp).length) {
+      const { error } = await db.from("mote_bolag").update(bolagLapp).eq("id", bo.id);
+      if (error) varningar.push("Bolagets uppgifter kunde inte sparas. Försök igen.");
+      else if (bolagLapp.telefon) {
+        const uv = uppslagsVarning(await slaUpp(bolagLapp.telefon, null, null), nar);
+        if (uv) varningar.push(uv);
+      }
+    }
+
+    // 4. Gästerna: de borttagna först (raden bort, sedan avbokningen), sedan de nya.
+    const utOk: string[] = [];
+    const inOk: string[] = [];
+    const gastFel: string[] = [];
+    if (kal && eventId) {
+      for (const g of gastUt) {
+        const { error } = await db.from("calendar_attendee").delete().eq("event_id", eventId).ilike("external_email", g.replace(/[\\%_]/g, (t) => `\\${t}`));
+        if (!error) {
+          await db.rpc("lk_ics_ko", { p_event: eventId, p_epost: g, p_metod: "CANCEL" });
+          utOk.push(g);
+        } else gastFel.push(g);
+      }
+      for (const g of gastIn) {
+        const { error } = await db.rpc("lead_bjud_in", { p_event: eventId, p_epost: g });
+        if (error) gastFel.push(g);
+        else inOk.push(g);
+      }
+    }
+    if (sparat?.andrat.length || utOk.length || inOk.length) efterKalender();
+
+    const falt = [...Object.keys(bolagLapp), ...Object.keys(moteLapp).filter((k) => !["antal_flyttningar", "bekraftat_nar", "bekraftat_av"].includes(k)), ...(platsAndras ? ["plats"] : []), ...(medIn.length || medUt.length ? ["med"] : []), ...(gastAndras ? ["gaster"] : [])];
+    await skrivHandelse({
+      actorId: mig,
+      action: "mote.edited",
+      objectType: "mote",
+      objectId: m.id,
+      meta: { kedja: m.kedja_id, falt, ...(nyTid ? { fran: m.mote_tid, till: nyTid.toISOString() } : {}), med_in: medIn, med_ut: medUt, gaster_in: inOk.length, gaster_ut: utOk.length },
+    });
+
+    // 5. Hållaren får veta när någon annan ändrat hens möte.
+    const namnNu = bolagLapp.namn ?? bo.namn;
+    if (m.halls_av !== mig) {
+      const vad = [nyTid ? "ny tid" : "", platsAndras ? "ny plats" : "", medIn.length || medUt.length ? "kollegor" : "", gastAndras ? "gäster" : "", Object.keys(bolagLapp).length ? "kunduppgifter" : "", "mal" in moteLapp || "nulage" in moteLapp || "kalla" in moteLapp ? "inför mötet" : ""].filter(Boolean);
+      await notifiera({
+        till: m.halls_av,
+        av: mig,
+        kalla: "mote-andrat",
+        typ: "kalender",
+        rubrik: `${forFor(fullName(user!.employee!))} ändrade ett möte åt dig`,
+        detalj: `${namnNu} · ${nar(nyTid ?? m.mote_tid)}${vad.length ? ` · ${lista(vad)}` : ""}`,
+        href: `/moten/${m.id}`,
+        objekt: { typ: "mote", id: m.id },
+      });
+    }
+
+    // Kvittot: vad som ändrats och vem som får veta det.
+    const kontakt = forFor(bolagLapp.kontakt ?? bo.kontakt ?? "");
+    const kvar = gastFore.filter((x) => !utOk.includes(x));
+    const kundVem = kvar.length === 1 ? (kvar[0] === epostNu && kontakt ? kontakt : kvar[0]) : kvar.length ? (epostNu && kvar.includes(epostNu) ? `${kontakt || "Kunden"} och ${kvar.length - 1} till hos kunden` : `${kvar.length} hos kunden`) : "";
+    const ics = !!sparat?.skickat?.ics;
+    const delar = [
+      nyTid ? `Mötet ligger nu ${nar(nyTid)}.` : "Ändringarna är sparade.",
+      platsAndras && kal ? `Platsen är ${lankNu ? `${platsNu}, med länk` : platsNu}.` : "",
+      medIn.length ? `${lista(await fornamnFor(medIn))} får en inbjudan i Nav.` : "",
+      medUt.length ? `${lista(await fornamnFor(medUt))} får besked om att mötet är inställt.` : "",
+      sparat?.skickat?.besked && (nyTid || platsAndras) ? (nyTid ? "Kollegorna på mötet får den nya tiden." : "Kollegorna på mötet får besked om platsen.") : "",
+      ics && kundVem ? `${kundVem} får ${nyTid ? "den nya tiden" : "den nya platsen"} med mejl.` : "",
+      inOk.length ? `${lista(inOk)} får en inbjudan med mejl.` : "",
+      utOk.length ? `${lista(utOk)} får en avbokning med mejl.` : "",
+      gastFel.length ? `${lista(gastFel)} gick inte att ändra. Försök igen, eller ändra i kalendern.` : "",
+    ].filter(Boolean);
+    if (v.plats && platsNu === videoNamn(null) && !lankNu) varningar.push("Teams-länken saknas. Lägg till den under Ändra, så får kunden den med mejl.");
+    return svar({ ok: delar.join(" "), mote: m.id, kedja: m.kedja_id, ...(varningar.length ? { varning: varningar.join(" ") } : {}) });
   }
 
   /** Kedjans id och rätten att ändra den utan möte: med i kedjan, eller chef. */

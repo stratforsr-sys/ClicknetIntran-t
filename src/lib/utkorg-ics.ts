@@ -12,12 +12,16 @@ export type IcsLage = {
   cancelled_at: string | null;
 };
 
-export function icsGaller(e: IcsLage | null, epost: string, sekvens: number, metod: "REQUEST" | "CANCEL"): boolean {
+/**
+ * `borttagen`: adressen är inte med på mötet längre (Möten, Ändra, 2026-11-03). Då gäller en avbokning också
+ * för ett möte som står kvar: den tar bort mötet ur just den gästens kalender.
+ */
+export function icsGaller(e: IcsLage | null, epost: string, sekvens: number, metod: "REQUEST" | "CANCEL", borttagen = false): boolean {
   // Ett heldagsmöte (0204) har ingen tid men en dag, och får sin fil som en
   // heldagspost (`somMote` → `heldag`). Förut krävdes `tid`, och gästen till ett
   // heldagsmöte fick ingenting fast kvittot sa att inbjudan gick ut.
   if (!e || !(e.tid || e.dag) || !epost) return false;
   if (e.ics_sequence !== sekvens) return false;
-  if ((metod === "CANCEL") !== Boolean(e.cancelled_at)) return false;
-  return true;
+  if (metod === "CANCEL") return Boolean(e.cancelled_at) || borttagen;
+  return !e.cancelled_at;
 }

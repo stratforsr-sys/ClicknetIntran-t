@@ -299,6 +299,14 @@ console.log("\n\x1b[1mPass 4: .ics och kundens brev\x1b[0m");
   lika("det inställdas ämne", kundbrev({ ...a, metod: "CANCEL", sekvens: 2 }).amne, "Inställt: Kickoff med Clicknet torsdag 8 oktober 2026 kl 09:00–10:00");
   ok("utan kontakt: bara Hej", kundbrev({ ...a, metod: "REQUEST", kontakt: null }).text.startsWith("Hej,"));
   ok("plats och länk följer med", kundbrev({ ...a, metod: "REQUEST", plats: "Kontoret", url: "https://x.se" }).text.includes("Plats: Kontoret\nLänk: https://x.se"));
+  // 2026-11-03: brevet säger vad som hänt, inte bara att sekvensen gått upp.
+  lika("en ny gäst på ett flyttat möte får en inbjudan", kundbrev({ ...a, metod: "REQUEST", sekvens: 3, slag: "ny" }).amne, "Inbjudan: Kickoff med Clicknet torsdag 8 oktober 2026 kl 09:00–10:00");
+  const andrad = kundbrev({ ...a, metod: "REQUEST", sekvens: 1, slag: "andrad", plats: "Microsoft Teams", url: "https://teams.microsoft.com/l/x" });
+  lika("samma tid, ny plats: Ändrat", andrad.amne, "Ändrat: Kickoff med Clicknet torsdag 8 oktober 2026 kl 09:00–10:00");
+  ok("Ändrat säger inte att mötet flyttats, och har länken", !/flyttat/.test(andrad.text) && andrad.text.includes("Länk: https://teams.microsoft.com/l/x"));
+  const bort = kundbrev({ ...a, metod: "CANCEL", sekvens: 1, slag: "bort" });
+  ok("en borttagen gäst: mötet står kvar, hen är inte med", bort.amne.startsWith("Ändrad inbjudan:") && bort.text.includes("Du är inte längre med på kickoff med Clicknet") && !/ställt in/.test(bort.text));
+  lika("utan slag: som förut", kundbrev({ ...a, metod: "REQUEST", sekvens: 2 }).amne.slice(0, 7), "Ny tid:");
 }
 
 console.log("\n\x1b[1mAvatarerna\x1b[0m");

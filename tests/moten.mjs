@@ -432,5 +432,45 @@ rubrik("V6a: farRadera (radera ett möte)");
   ok("arSkrivning('radera'): spärras i läsläge", M.arSkrivning("radera") === true);
 }
 
+{
+  const A = "11111111-1111-4111-8111-111111111111", B = "22222222-2222-4222-8222-222222222222", C = "33333333-3333-4333-8333-333333333333";
+rubrik("2026-11-03: platsen, som i Outlook");
+{
+  const P = (t, ad, l) => M.platsIndata(t, ad, l);
+  ok("utan typ är det Telefon, som förut", JSON.stringify(P(undefined)) === JSON.stringify({ ok: true, varden: { plats: "Telefon", lank: null } }));
+  ok("Teams med länk: Microsoft Teams och länken", P("teams", "", " https://teams.microsoft.com/l/meetup-join/19%3a ").ok && P("teams", "", "https://teams.microsoft.com/l/meetup-join/19%3a").varden.plats === "Microsoft Teams" && P("teams", "", " https://teams.microsoft.com/l/x ").varden.lank === "https://teams.microsoft.com/l/x");
+  ok("Teams utan länk går (länken kan läggas till sedan)", P("teams", "", "").ok && P("teams").varden.plats === "Microsoft Teams" && P("teams").varden.lank === null);
+  ok("en Meet- eller Zoom-länk får sitt namn", P("teams", "", "https://meet.google.com/abc").varden.plats === "Google Meet" && P("teams", "", "https://foretag.zoom.us/j/1").varden.plats === "Zoom" && P("teams", "", "https://x.se/m").varden.plats === "Videomöte");
+  ok("en länk utan https nekas", !P("teams", "", "http://teams.microsoft.com/l/x").ok && !P("teams", "", "teams.microsoft.com").ok);
+  ok("På plats kräver en adress, högst 200 tecken", !P("plats", "  ").ok && P("plats", " Storgatan 1, Malmö ").varden.plats === "Storgatan 1, Malmö" && !P("plats", "x".repeat(201)).ok);
+  ok("en okänd typ nekas", !P("video").ok);
+  ok("platsTyp läser tillbaka kalenderns fält", M.platsTyp("Telefon", null) === "telefon" && M.platsTyp(null, null) === "telefon" && M.platsTyp("Microsoft Teams", null) === "teams" && M.platsTyp("Zoom", "https://zoom.us/j/1") === "teams" && M.platsTyp("Storgatan 1", null) === "plats");
+  const boka = { namn: "Prov AB", telefon: "070-123 45 67", kalla: "Kallsamtal", hallsAv: A, dag: "2026-11-04", start: "10:00" };
+  ok("boka utan plats: Telefon", M.bokaIndata(boka).ok && M.bokaIndata(boka).varden.plats === "Telefon");
+  ok("boka med Teams: plats och länk", M.bokaIndata({ ...boka, platsTyp: "teams", lank: "https://teams.microsoft.com/l/x" }).varden.lank === "https://teams.microsoft.com/l/x");
+  ok("boka På plats utan adress nekas med en text", M.bokaIndata({ ...boka, platsTyp: "plats" }).fel === "Skriv var mötet hålls.");
+}
+
+rubrik("2026-11-03: Ändra mötet (andraIndata)");
+{
+  const bas = { mote: A, fore: "2026-11-04 10:00" };
+  const r = M.andraIndata(bas);
+  ok("bara mötet och tiden man såg: inget att ändra", r.ok && JSON.stringify(r.varden) === JSON.stringify({ ...bas, bolag: {} }));
+  ok("utan fore, eller fel form: Ladda om tavlan", M.andraIndata({ mote: A }).fel === "Mötet har ändrats. Ladda om tavlan." && !M.andraIndata({ mote: A, fore: "2026-11-04T10:00" }).ok);
+  ok("ett mötes-id som inte är ett id nekas", !M.andraIndata({ ...bas, mote: "x" }).ok);
+  ok("namn, telefon och källa måste ha ett värde", M.andraIndata({ ...bas, namn: " " }).fel === "Skriv bolagets namn." && M.andraIndata({ ...bas, telefon: "12" }).fel === "Telefonnumret går inte att tolka." && M.andraIndata({ ...bas, kalla: "" }).fel === "Skriv varifrån bolaget kommer.");
+  const tomt = M.andraIndata({ ...bas, kontakt: "", epost: "", doman: "", mal: "", nulage: "" }).varden;
+  ok("ett tomt valfritt fält tömmer det", tomt.bolag.kontakt === null && tomt.bolag.epost === null && tomt.bolag.doman === null && tomt.mal === null && tomt.nulage === null);
+  ok("bara det som skickas finns med", !("namn" in tomt.bolag) && !("kalla" in tomt) && !("tid" in tomt) && !("med" in tomt));
+  ok("telefonen och e-posten normaliseras", M.andraIndata({ ...bas, telefon: "070-123 45 67", epost: " Anna@Bolaget.SE " }).varden.bolag.telefon === "+46701234567" && M.andraIndata({ ...bas, epost: "Anna@Bolaget.SE" }).varden.bolag.epost === "anna@bolaget.se");
+  ok("en ny tid i hela femminuter", M.andraIndata({ ...bas, dag: "2026-11-05", start: "10:15" }).varden.tid.start === "10:15" && !M.andraIndata({ ...bas, dag: "2026-11-05", start: "10:12" }).ok);
+  ok("platsen prövas som i boka", M.andraIndata({ ...bas, platsTyp: "plats", adress: "Kontoret" }).varden.plats.plats === "Kontoret" && M.andraIndata({ ...bas, platsTyp: "plats" }).fel === "Skriv var mötet hålls.");
+  ok("kollegorna: hela listan, utan dubbletter; en tom lista tar bort alla", JSON.stringify(M.andraIndata({ ...bas, med: [B, B, C] }).varden.med) === JSON.stringify([B, C]) && JSON.stringify(M.andraIndata({ ...bas, med: [] }).varden.med) === "[]");
+  ok("gästerna normaliseras och kontaktens nya adress räknas inte två gånger", JSON.stringify(M.andraIndata({ ...bas, epost: "a@b.se", gaster: ["A@b.se", "c@d.se", "c@d.se"] }).varden.gaster) === JSON.stringify(["c@d.se"]));
+  ok("en gäst som inte är en adress nekas med adressen", /^E-postadressen x går inte att tolka/.test(M.andraIndata({ ...bas, gaster: ["x"] }).fel));
+  ok("arSkrivning('andra'): spärras i läsläge", M.arSkrivning("andra") === true);
+}
+}
+
 console.log(fel ? `\n\x1b[31m${fel} fel\x1b[0m` : "\n\x1b[32mAlla ✓\x1b[0m");
 process.exit(fel ? 1 : 0);

@@ -5,6 +5,42 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-03 kväll · Möten: ändra ett bokat möte, och platsen som i Outlook (direkt på `main`, ingen migration)
+
+**Beställaren:** "Du måste göra så att man kan redigera möten som man har lagt upp". Under passet: "Lägg till precis
+som outlook plats för mötet, över telefon, teams, eller plats".
+
+**Vad som byggdes.** En knapp **Ändra** i kortets panel öppnar Bokas blad ifyllt med mötet: bolagets uppgifter,
+källan, målet, nuläget, tiden (ihopfälld bakom Byt tid, men den säger vem som är upptagen då), platsen, kollegorna och
+fler hos kunden. Under **Plats** i både Boka och Ändra: Telefon, Teams (länken klistras in; "Skapa mötet i Teams"
+öppnar Teams med rubrik och tid ifyllda) eller På plats (adressen, med tidigare adresser som förslag). Kortet och
+panelen visar platsen.
+
+**Varför bara ändringarna skickas.** Två som rättar olika saker samtidigt (en kontaktperson, en tid) ska inte skriva
+över varandra. Klienten diffar mot det som stod (`D.orig`), rutten ändrar bara de nycklar som finns i anropet och
+räknar ut kalenderns ändring mot databasen, inte mot vad klienten trodde. `fore` (mötets tid som kortet visade) ger
+409 om någon flyttat mötet under tiden.
+
+**Varför `lk_spara_mote` och inte `lk_flytta` + `lk_andra_mote`.** 0212 skrevs för att en sparning i ett formulär
+skulle vara EN ändring med ett besked per person och en ny inbjudan bara när tid eller plats ändras. Med två anrop
+hade kollegorna fått två besked och kunden "Ny tid" för en rubrikändring. Den körs som hållaren (som `flyttaIKalender`),
+eftersom bokaren inte är ombud i hållarens kalender. Därför säger kalendern inget till hållaren, och Möten skickar
+`mote-andrat` när någon annan ändrat.
+
+**Varför hållaren inte byts.** Kalenderns arrangör står på händelsen och är avsändaren i kundens inbjudan. Att byta
+den hade krävt ett inställt möte och ett nytt, och kunden hade fått en avbokning och en ny inbjudan för samma möte.
+
+**Kundens brev blev fel på två ställen, och det rättades i utkorgen.** `kundbrev` valde text på sekvensen: allt efter
+den första versionen hette "Ny tid … Vi har flyttat mötet". En ny plats med samma tid, eller en ny gäst på ett möte
+som flyttats tidigare, fick alltså "Ny tid". Och en avbokning gick bara ut när hela mötet var inställt, så en
+borttagen gäst fick ingenting. Nu läser `brevslag` vad adressen senast fick (`integration_log` med `ok`, som från nu
+har `epost` och `nar`; utkorgens `sent_at` sätts också på överhoppade rader och duger inte), och `icsGaller` släpper
+en avbokning till den som inte är med längre.
+
+**Provat:** se NASTA_SESSION. Inte provat inloggad i produktionen.
+
+---
+
 ## 2026-11-03 kväll · Simon får samma utskick som Zen (en inställning, ingen kod)
 
 **Beställaren:** "sätt samma notis inställningar för mig och för simon, som man då såklart kan sen ändra i
