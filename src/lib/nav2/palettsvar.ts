@@ -624,7 +624,7 @@ async function idagFraga({ L, idag, mig }: Ctx): Promise<NdPalSvar> {
   const sena = upg.filter((x) => x.due! < idag).length;
   if (upg.length) rows.push(["exakt", `${st(upg.length, "uppgift", "uppgifter")} med frist i dag eller tidigare${sena ? `, ${sena} försenade` : ""}.`, "Uppgifter"]);
   const stopp = o.order.filter((x) => x.vemId === mig && x.st === "inskickad" && !x.samtal && !x.utan);
-  stopp.forEach((x) => rows.push(["exakt", `Order #${x.nr} ${x.bolag} är stoppad tills säljsamtalet kopplas.`, `Order #${x.nr}`, undefined, `/order/${x.nr}`]));
+  stopp.forEach((x) => rows.push(["exakt", `Order #${x.nr} ${x.bolag} saknar säljsamtal. Superadmin har fått veta.`, `Order #${x.nr}`, undefined, `/order/${x.nr}`]));
   const delar = [kal.length ? st(kal.length, "post i kalendern", "poster i kalendern") : "", upg.length ? st(upg.length, "uppgift", "uppgifter") : "", stopp.length ? st(stopp.length, "stoppad order", "stoppade order") : ""].filter(Boolean);
   const r = kapa(rows);
   return svar(delar.length ? `${delar.join(", ")}.${r.till}` : "Inget i kalendern, inga uppgifter med frist och inga stoppade order i dag.", r.rows, {

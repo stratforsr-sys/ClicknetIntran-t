@@ -244,6 +244,11 @@ const TACKNING = {
   "order::hamtaLandningssida": "Laser kundens webbplats i Inkio, anropar den och skriver ingenting.",
   "order::hamtaSamtalskandidater": "Laser saljarens egna samtal och skriver ingenting.",
   "order::kopplaSaljsamtal": "Saljaren kopplar sitt eget samtal till sin egen order, fore inskicket.",
+  // 0280 och 2026-11-03: saljsamtalet nar Lynes inte har det. Superadmin far veta
+  // nar en inskickad order saknar saljsamtal (`meddelaUtanSaljsamtal`).
+  "order::forberedInspelning": "Forbereder en uppladdning av inspelningen, pa ordern eller innan den finns.",
+  "order::registreraInspelning": "Inspelningen blir ett samtal; kopplas den till ordern star det i loggen, och den som laddade upp gjorde det sjalv.",
+  "order::begarUtanInspelning": "notifierar via meddelaUtanSaljsamtal: superadmin far skalet nar ordern redan ar inskickad.",
   // 0068. Bada slacker en HARLEDD post i stallet for att skriva en ny: utfallet
   // pa ordern ar det som gor att `order-avtalsslut` slutar raknas fram. En notis
   // om att man nyss tryckt pa en knapp man sjalv tryckte pa hade gatt till

@@ -298,6 +298,18 @@ console.log("\n\x1b[1mSPARREN FORE ORDERN — samma svar som svepningen, utan at
 
   ok("en makulerad order pa numret tar inte samtalet",
     samtalForNyOrder([samtal("S7", KUND, "2026-10-22T06:51:00Z")], [order("M", KUND, "2026-10-25T08:00:00Z", "makulerad")], ny).join() === "S7");
+
+  // 2026-11-03: formularet letar sjalv, och det som hittas kopplas for hand nar
+  // ordern sparas. Ordern tavlar da som inskickad, det den blir.
+  const ins = { ...ny, status: "inskickad" };
+  ok("inskickad: ett tillagg far samtalet efter den forra affaren",
+    samtalForNyOrder([samtal("S8", KUND, "2026-10-30T09:00:00Z")], [order("L", KUND, "2025-10-01T08:00:00Z", "signerad")], ins).join() === "S8");
+  ok("inskickad: samtalet fore den forra affaren stannar hos den",
+    samtalForNyOrder([samtal("S9", KUND, "2025-09-28T09:00:00Z")], [order("L", KUND, "2025-10-01T08:00:00Z", "signerad")], ins).length === 0);
+  ok("inskickad: ett kvarglomt utkast tar inte samtalet fran den riktiga ordern",
+    samtalForNyOrder([samtal("S10", KUND, "2026-10-22T06:51:00Z")], [order("U", KUND, "2026-10-31T17:45:00Z", "utkast")], ins).join() === "S10");
+  ok("inskickad: ett samtal en manniska kopplat stannar dar",
+    samtalForNyOrder([samtal("S11", KUND, "2026-10-22T06:51:00Z", { salesOrderId: "X", orderLinkedBy: "E-chef" })], [order("X", KUND, "2026-10-23T08:00:00Z", "signerad")], ins).length === 0);
 }
 
 console.log("\n\x1b[1mGallringsfristen\x1b[0m");

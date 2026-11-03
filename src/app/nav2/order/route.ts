@@ -2,7 +2,7 @@ import { after, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { arSuperadmin, getCurrentUser, hasRole, fullName } from "@/lib/auth";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
-import { kopplaForHand, saljarensKandidater } from "@/lib/samtal-order-server";
+import { forprovaSaljsamtal, kopplaForHand, saljarensKandidater } from "@/lib/samtal-order-server";
 import { svenskTid } from "@/lib/nav2/orderforma";
 import { notifieraFlera } from "@/lib/notishandelse-server";
 import { kaAnteckning, kretsForKund } from "@/lib/crm/inflode-server";
@@ -152,6 +152,24 @@ export async function POST(request: Request) {
           .map((k) => ({ id: k.id, nar: svenskTid(k.startedAt!), sek: Number(k.talkSeconds ?? 0), nr: k.counterpartE164 ?? "", ljud: k.harLjud })),
       });
     }
+
+    if (handling === "hitta-samtal") {
+      // Formulärets säljsamtal (beställaren 2026-11-03): "man ska inte välja en
+      // inspelning, den ska hitta den själv." Samma prov som spärren gör när
+      // ordern sparas (`forprovaSaljsamtal` i `skapaOrder`), så det formuläret
+      // visar är det ordern får. Hittas inget svarar skälet varför.
+      const saljare = hanterare && UUID.test(String(b.saljare ?? "")) ? String(b.saljare) : mig;
+      const sign = String(b.sign ?? "");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(sign)) return svar({ fel: "Välj när avtalet signerades." }, 400);
+      const o = id ? await ordern(id) : null;
+      const utom = o && (o.status === "utkast" || o.status === "inskickad") ? { id: o.id as string, skapad: o.created_at as string } : null;
+      const s = await forprovaSaljsamtal({ saljareId: saljare, telefon: String(b.tel ?? ""), signerad: sign, samtalId: null, utom });
+      return svar(
+        s.ok
+          ? { hittat: { id: s.samtalId, nar: s.startedAt ? svenskTid(s.startedAt) : null, sek: s.sekunder, ljud: s.harLjud } }
+          : { hittat: null, skal: s.skal },
+      );
+    }
     if (handling === "las-avtal") {
       const s = await lasAvtalsforslag(id, String(b.fil ?? ""));
       return "fel" in s ? svar({ fel: s.fel }, 400) : svar({ forslag: s.forslag });
@@ -169,7 +187,7 @@ export async function POST(request: Request) {
       case "skicka-in":
         return fran(await skickaInOrder({}, form({ id })), "Ordern är inskickad.");
       case "godkann":
-        return fran(await godkannOrder({}, form({ id, note: b.note ?? "" })), "Godkänd.");
+        return fran(await godkannOrder({}, form({ id, note: b.note ?? "", utan_skal: b.utan ?? "" })), "Godkänd.");
       case "tillbaka":
         return fran(await returneraOrder({}, form({ id, reason: b.reason ?? "" })), "Skickad tillbaka.");
       case "makulera":

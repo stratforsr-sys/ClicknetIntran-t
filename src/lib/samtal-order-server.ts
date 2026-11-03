@@ -394,6 +394,11 @@ export async function provaSaljsamtal(orderId: string): Promise<Saljsamtalsbedom
  *     fördela dem (`samtalForNyOrder`) och bedömda med `bedomSaljsamtal`.
  *
  * Felar läsningen blir svaret nej, som i `provaSaljsamtal`.
+ *
+ * Formuläret frågar samma sak medan det fylls i (2026-11-03, `hitta-samtal` i
+ * /nav2/order): beställaren vill inte att säljaren väljer, utan att Nav hittar
+ * samtalet själv. `utom` är ordern som rättas. Den tävlar inte om samtalen på
+ * sitt eget nummer, och det som redan sitter på den räknas som okopplat.
  */
 export async function forprovaSaljsamtal(args: {
   saljareId: string;
@@ -401,8 +406,10 @@ export async function forprovaSaljsamtal(args: {
   /** `YYYY-MM-DD`. */
   signerad: string;
   samtalId: string | null;
+  /** Ett utkast eller en inskickad order som rättas. */
+  utom?: { id: string; skapad: string } | null;
 }): Promise<Saljsamtalsbedomning> {
-  const nu = new Date().toISOString();
+  const nu = args.utom?.skapad ?? new Date().toISOString();
 
   if (args.samtalId) {
     const kandidater = await saljarensKandidater({ saljareId: args.saljareId, orderSkapad: nu, signerad: args.signerad });
@@ -413,7 +420,7 @@ export async function forprovaSaljsamtal(args: {
         skal: "Det valda samtalet går inte att koppla: det är inte säljarens eget, är redan kopplat till en annan order eller ringdes efter signeringsdagen.",
       };
     }
-    return { ok: true, samtalId: vald.id, sekunder: vald.talkSeconds ?? 0, harLjud: vald.harLjud };
+    return { ok: true, samtalId: vald.id, sekunder: vald.talkSeconds ?? 0, harLjud: vald.harLjud, startedAt: vald.startedAt };
   }
 
   const bedom = (samtal: SamtalForBedomning[]) =>
@@ -436,22 +443,25 @@ export async function forprovaSaljsamtal(args: {
   if (lasfel) return { ok: false, skal: `Samtalen gick inte att läsa: ${lasfel.message}` };
 
   const rader = (samtal.data ?? []) as Record<string, unknown>[];
+  const egen = (s: Record<string, unknown>) => Boolean(args.utom) && s.sales_order_id === args.utom!.id;
   const paNya = new Set(
     samtalForNyOrder(
       rader.map((s) => ({
         id: s.id as string,
         counterpartE164: s.counterpart_e164 as string | null,
         startedAt: s.started_at as string | null,
-        salesOrderId: s.sales_order_id as string | null,
-        orderLinkedBy: s.order_linked_by as string | null,
+        salesOrderId: egen(s) ? null : (s.sales_order_id as string | null),
+        orderLinkedBy: egen(s) ? null : (s.order_linked_by as string | null),
       })),
-      ((ordrar.data ?? []) as Record<string, unknown>[]).map((o) => ({
+      ((ordrar.data ?? []) as Record<string, unknown>[]).filter((o) => o.id !== args.utom?.id).map((o) => ({
         id: o.id as string,
         contactPhoneE164: o.contact_phone_e164 as string | null,
         createdAt: o.created_at as string,
         status: o.status as string,
       })),
-      { telefonE164, skapad: nu },
+      // Ordern tävlar som det den blir. Det som hittas kopplas för hand i
+      // `skapaOrder`, så spärren på den sparade ordern ser samma samtal.
+      { telefonE164, skapad: nu, status: "inskickad" },
     ),
   );
 
