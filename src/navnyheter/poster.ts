@@ -14,6 +14,20 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "uppgifter-direkt",
+    rubrik: "Uppgifter ändras direkt",
+    ingress: "När du bockar av, flyttar eller ändrar en uppgift syns det med en gång.",
+    text: `Bockar du av en uppgift, öppnar den igen, flyttar den till en annan dag, stryker
+den eller ändrar prioriteten, syns ändringen i listan direkt. Nav sparar den i
+bakgrunden. Går den inte att spara blir uppgiften som den var, och du ser varför.
+
+Texten får också rätt typsnitt från början när Nav öppnas, i stället för att byta
+utseende en stund efter att sidan ritats.`,
+    datum: "2026-11-03",
+    roller: [],
+    href: "/uppgifter",
+  },
+  {
     slug: "moten-flera-personer",
     rubrik: "Bjud in fler till ett möte",
     ingress: "Lägg till kollegor och fler personer hos kunden när du bokar ett möte. Tiderna visar när alla är lediga.",
