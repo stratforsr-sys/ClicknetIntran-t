@@ -5,7 +5,7 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
-## 2026-11-03 eftermiddag · Fyra order till oktober, och startdatumet får ligga bakåt (grenen `start-fore-signering`, 0285 KÖRD 17:00 UTC, EJ MERGAD)
+## 2026-11-03 eftermiddag · Fyra order till oktober, och startdatumet får ligga bakåt (MERGAD `de1c1f8`, 0285 KÖRD 17:00 UTC)
 
 **Beställaren:** Hedboms Måleri (den nya ordern), Städservice Ale, Roos Alltjänst och Mbix (den senaste) "ska ligga på
 förra månaden på signeringsdatum … räknas in i oktober och inte i november", och "när man lägger upp en order så [är]
