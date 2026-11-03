@@ -33,7 +33,7 @@ får den nya sorten.
 
 ---
 
-## 2026-11-03 förmiddag · Notiserna i telefonen bär navets märke (grenen `notiser-navets-marke`, ingen migration)
+## 2026-11-03 förmiddag och kväll · Notiserna i telefonen bär navets märke (MERGAD `9486e8c`, ingen migration)
 
 **Beställaren:** "jag vill att du kollar hur navs notiser ser ut i telefonen. Så vill jag att du ändrar på notiserna
 till navets. Gör det ordentligt och korrekt".
@@ -68,7 +68,12 @@ GRÖNT på grenen; `app-sw`, `app-vagar`, `app-manifest` och `navnyheter` gröna
 `ServiceWorker.deliverPushMessage`): notisen bär `notis-192.png` och `notis-badge-96.png`, och Chrome hämtade båda.
 Samma registrering med mains `sw.js` visade pekaren, och efter utkastraden navet, utan ny prenumeration.
 
-**Kvar:** titta i telefonen efter mergen: öppna Nav en gång och skicka en provpush till Samsungen
+**Mergad** på beställarens ja ("skicka till produktion"). Main gick fram tre gånger under mergen (start före
+signeringen, säljsamtalet hittas själv, Möten ändra ett möte), och varje gång mergades main in i grenen, proven kördes
+och previewen byggdes grön innan main snabbspolades till `9486e8c`. Produktionen serverar nya `sw.js` (ingen
+`clicknet-symbol` kvar) och båda bilderna, byte för byte som main.
+
+**Kvar:** titta i telefonen: öppna Nav en gång och skicka en provpush till Samsungen
 (`~/nav2-utkast/delar/notisprov/notisprov.mjs`). Står det "Chrome" överst i notisen ligger Nav inte som app i
 telefonen. Gamla Navs flik-pling (`Pling.tsx`) är orörd: den gäller datorn, inte telefonen, och gamla Nav ska bort.
 
