@@ -5,6 +5,31 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-03 förmiddag · Zens mejl: bara Inkio-ärenden och makulerad order, allt annat i telefonen (en inställning, ingen kod, ingen migration)
+
+**Beställaren:** "jag har fått många mejl för inkio. Jag vill bara ha ärenden från inkio, när en order tas bort
+egentligen bara det. Allt annat i telefonen".
+
+**Vad loggen säger** (`notification_delivery`, mejl till Zen): tio `order-inkio-anteckning` 2026-11-02 13:11–13:14
+UTC, alltså före `ed04ae7`. Efter rättelsen ett enda Inkio-mejl (`order-inkio-arende` 20:22). Dagens anteckningar
+från Inkio gick bara till klockan och telefonen (14 push). Övriga mejl till Zen sedan dess: `leverans-frist`
+(19:00 och 05:00) samt `kalender-paminnelse` och `kalender-forberedelse` (bolagets `omrade:kalender` = true).
+
+**Ändringen:** Zens eget lager i `notification_rule` fick
+`mejl: {"*": false, "sort:order-inkio-arende": true, "sort:order-inkio-makulerad": true}`, och `push` är orört
+(`"*": true`). Provat med `far()` mot produktionens regler, sort för sort: av 153 sorter mejlas två och alla
+pushas. Inloggningskoden går förbi reglerna (`kodmejl-server.ts`) och kommer fram som förut. Bolagets lager `alla`
+är orört. Simon får alltså fortfarande Inkios ärenden, makulerade order och uppsagda avtal i mejl, och det får
+säljarna också när navet öppnas, liksom områdena Order, Lead, Ärende och Kalender.
+
+**Två fynd, inte åtgärdade:**
+- En order som RADERAS i Inkio (`deleted_at`, inte makulerad) ger ingen notis alls, eftersom `notisFor` ger null för
+  `f.typ === "raderad"`. Det har inte hänt än: 0 av 31 order i `crm_handelse` är raderade.
+- Bolagets `omrade:order` = true mejlar hela Order-området, också `order-godkand` och `order-inskickad`, som enligt
+  `MEJLKALLOR` ska stå kvar i klockan. Edvin fick två mejl om godkänd order och Simon två om inskickad 2026-11-02.
+
+Ångra: `update notification_rule set regler = regler - 'mejl' where lager = 'egen' and employee_id = '826a8b10-34c4-46ff-81d1-ca797773235c';`
+
 ## 2026-11-03 förmiddag · Möten: egen tid i tidväljaren, och bladet stängs efter en bokning (direkt på `main`, ingen migration)
 
 **Beställaren:** "när det kommer till att boka möten så kan jag bara välja hel och halv timme. Jag vill ha precis som
