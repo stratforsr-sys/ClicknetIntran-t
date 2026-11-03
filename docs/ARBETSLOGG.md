@@ -5,7 +5,7 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
-## 2026-11-02 kväll · Säljsamtalet när Lynes inte har det: uppladdad mp3 och chefens godkännande utan inspelning (grenen `inspelning-utan-lynes-2`, 0280 KÖRD; grenen lagd om på main `e4b35d2` 2026-11-03, main `dfeffa7` inmergad)
+## 2026-11-02 kväll · Säljsamtalet när Lynes inte har det: uppladdad mp3 och chefens godkännande utan inspelning (MERGAD till `main` `400196f` 2026-11-03, 0280 KÖRD)
 
 **Beställaren** 2026-11-01: "mp3, vissa samtal har vi över telefon och då går det inte att ladda upp en inspelning.
 Låt en chef godkänna att en order kan laddas upp utan inspelning." 2026-11-02: "Fixa allting". Utlöst av Städservice
@@ -44,6 +44,22 @@ authenticated bara läsa). Behörighetsspärren stoppade körningen härifrån 2
 uppladdning och "Spelades inte in" ger fel, så 0280 kördes före mergen. Main (`dfeffa7`, farten, Möten med fler
 personer och kalenderns rätta längd) mergades in i grenen före snabbspolningen; konflikter bara i dokumenten,
 `package.json` (provkedjan: båda nya proven) och nyhetsposterna (båda).
+
+**Mergad 2026-11-03** på beställarens "ja till mergen": grenen `inspelning-utan-lynes-2` = `f6d9b55` (omlagd på
+`e4b35d2`), `6890904` (main `dfeffa7` inmergad, preview grön) och `400196f` (main `3b4156b` inmergad, bara dokument,
+koden densamma som i previewen). Main snabbspolad till `400196f`, produktionen grön 16:55 UTC. Den första
+sidladdningen av `/nav2` som Zen gick via pg utan fel, så session 52:s byte av `NAV2_PG_URL` till rollen `nav2_pg` håller.
+
+**Provat i produktionen** som Zen via `/nav2/order`, utan order: en tyst mp3 (MPEG 1 lager III, 32 kbit/s, 11 676
+ramar = 305,0 s) → `inspelning-forbered` 200 (R2), PUT 200, `inspelning-registrera` 200 "Inspelningen är uppladdad,
+5 min.", 305 s, 17.36 svensk tid. Raden blev `source = 'uppladdad'`, Zens eget, utan `counterpart_e164` och utan
+order, och samtalet stod i `saljarens-samtal` med ljud. Ingen rad i `outbox`, `notification_event` eller
+`notification_delivery`. Städat: `phone_call` raderad, filen borta ur R2, `file_object` fick `removed_at`
+(`file_object_last` stoppar DELETE och åtkomstloggen skrivs bara till, så städningen gör som `taBortInnehall`).
+**Inte provat:** "Spelades inte in" (notifierar orderkretsen på en inskickad order) och uppladdning på en befintlig order.
+
+**Grenen `saljsamtal-sjalv`** (session fb92d9e4, `324b5c9`) bär en äldre kopia av den här ändringen i `a0772ad`. Dess
+0280 har samma checksumma, så den är redan körd. Där återstår att merga main in och köra 0284.
 
 ---
 
