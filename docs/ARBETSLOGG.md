@@ -47,7 +47,7 @@ personer och kalenderns rätta längd) mergades in i grenen före snabbspolninge
 
 ---
 
-## 2026-11-03 · Kalendern: posten i sin rätta längd, och nästa post börjar där förra slutar (grenen `kal-hojd`, EJ MERGAD, ingen migration)
+## 2026-11-03 · Kalendern: posten i sin rätta längd, och nästa post börjar där förra slutar (MERGAD till `main` `dfeffa7` på beställarens ja, ingen migration)
 
 **Beställaren:** "när jag nu har lagt en händelse som är 15 minuter kl 10:00 så ska jag lägga en händelse kl 10:30 så ser det
 ut som att den händelsen kl 10:00 är 30 minuter inte 15 minuter. Gör allt sånt korrekt ... så att det ser ut exakt
@@ -82,6 +82,14 @@ mindre. Att räkna träffen från `elementFromPoint` i stället skulle laga luck
 träffa med fingret, så det är inte gjort.
 
 **Utseendet:** en ändring av det låsta utkastet (25 % högre rutnät), sagd till beställaren före mergen.
+
+**Mergen:** `main` hade gått fram till `e4e7bbc` (farten och Möten med fler personer, 326 rader i utkast.html).
+Den slogs ihop in i grenen (`dfeffa7`). utkast.html gick ihop av sig själv och är byte för byte mains fil plus
+`kal-hojd/patch.py`; krockarna var bara de två dokumenten och nyhetslistan, där båda sidor står kvar. Efter
+ihopslagningen: `kalender-hojd-prov.mjs` 20/20, `kalender-kort-prov.mjs` 20/20, `kalender-enskilt-prov.mjs` 32/32,
+`genast-prov.mjs` 56/56, `omladdning-prov.mjs` 80/80, `test:navnyheter`, `test:nav2-fart`, `test:nav2-omladdning`
+och `node --check` gröna. Previewen grön, sedan fast-forward av `main` till `dfeffa7` på beställarens ja ("Pusha
+till main"), produktionen grön 16:46 UTC. Inte provad i produktionens gränssnitt.
 
 ---
 
