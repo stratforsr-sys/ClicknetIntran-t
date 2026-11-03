@@ -29,7 +29,10 @@ import {
   farSe,
   flyttaIndata,
   kedjaFore,
+  kollegorIndata,
   kundIndata,
+  MAX_GASTER,
+  MAX_KOLLEGOR,
   ledigaTider,
   lokalTidpunkt,
   moteIndata,
@@ -95,13 +98,16 @@ export const dynamic = "force-dynamic";
  * ===========================================================================
  */
 
-type LaggVarden = Pick<BokaVarden, "namn" | "kontakt" | "epost" | "kalla" | "hallsAv" | "dag" | "start" | "langd" | "mal" | "nulage" | "foregaende">;
+type LaggVarden = Pick<BokaVarden, "namn" | "kontakt" | "epost" | "kalla" | "hallsAv" | "dag" | "start" | "langd" | "mal" | "nulage" | "foregaende" | "med" | "gaster">;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const FRAMAT_DAGAR = 14;
 
 type Svar = { ok?: string; fel?: string; [k: string]: unknown };
 const svar = (data: Svar, status = 200) => NextResponse.json(data, { status, headers: { "Cache-Control": "private, no-store, max-age=0" } });
+
+/** "Anna", "Anna och Erik", "Anna, Erik och Lisa". */
+const lista = (n: string[]) => (n.length < 2 ? n.join("") : `${n.slice(0, -1).join(", ")} och ${n[n.length - 1]}`);
 
 /** "tis 21 okt 10:00" ur en tidpunkt, för svaret. */
 function nar(d: Date | string): string {
@@ -192,6 +198,21 @@ export async function POST(request: Request) {
     const p = data as { first_name: string; last_name: string } | null;
     return p ? fullName(p) : "en kollega";
   };
+  /** De av id:na som är anställda och inte har slutat (Kalenderns `lk_aktiv` nekar annars hela mötet). */
+  const aktiva = async (ids: string[]): Promise<string[]> => {
+    if (!ids.length) return [];
+    const { data } = await db.from("employee").select("id").in("id", ids).neq("status", "offboarded").limit(ids.length);
+    const finns = new Set(((data ?? []) as { id: string }[]).map((x) => x.id));
+    return ids.filter((id) => finns.has(id));
+  };
+  /** Förnamnen, i den ordning id:na kom, för kvittot. */
+  const fornamnFor = async (ids: string[]): Promise<string[]> => {
+    if (!ids.length) return [];
+    const { data } = await db.from("employee").select("id, first_name").in("id", ids).limit(ids.length);
+    const n = new Map(((data ?? []) as { id: string; first_name: string | null }[]).map((x) => [x.id, x.first_name ?? ""]));
+    return ids.map((id) => n.get(id) || "en kollega");
+  };
+
   const harOppetMote = async (kedja: string): Promise<boolean> => {
     const { data } = await db.from("mote").select("id").eq("kedja_id", kedja).is("utfall", null).limit(1);
     return ((data ?? []) as unknown[]).length > 0;
@@ -257,11 +278,17 @@ export async function POST(request: Request) {
       const nu = new Date();
       const idag = svensktDatum(nu);
       const till = dagPlus(idag, FRAMAT_DAGAR);
-      const upptaget = await hamtaUpptaget([hallsAv], idag, till);
-      const tider = ledigaTider(upptagetTillIntervall(upptaget[hallsAv]), idag, lokalTidpunkt(idag, svenskaMinuter(nu)))
+      // Med kollegor: tiderna då alla är lediga (som Kalenderns Föreslå en tid), och var och ens upptagna tid
+      // så att en egen tid kan säga vem den krockar med. Bara block, inga rubriker.
+      const med = kollegorIndata(b.med, hallsAv);
+      if (!med.ok) return svar({ fel: med.fel }, 400);
+      const alla = [hallsAv, ...med.varden];
+      const upptaget = await hamtaUpptaget(alla, idag, till);
+      const per = Object.fromEntries(alla.map((id) => [id, upptagetTillIntervall(upptaget[id])]));
+      const tider = ledigaTider(alla.flatMap((id) => per[id]), idag, lokalTidpunkt(idag, svenskaMinuter(nu)))
         // Kalendern vet inget om dagarna efter `till`; de skulle se lediga ut.
         .filter((t) => t.dag <= till);
-      return svar({ ok: "Lediga tider.", idag, tider });
+      return svar({ ok: "Lediga tider.", idag, till, tider, upptaget: per });
     }
 
     case "boka":
@@ -349,6 +376,7 @@ export async function POST(request: Request) {
     if (!r.ok) return svar({ fel: r.fel }, 400);
     const v = r.varden;
     if (!(await anstalld(v.hallsAv))) return svar({ fel: "Den som ska hålla mötet finns inte, har slutat eller är ingen säljare." }, 400);
+    if ((await aktiva(v.med)).length !== v.med.length) return svar({ fel: "En av kollegorna finns inte längre i Nav. Ta bort namnet och försök igen." }, 400);
     const motetid = svenskTidpunkt(v.dag, v.start);
     if (!Number.isFinite(motetid.getTime())) return svar({ fel: "Välj en starttid." }, 400);
     const varningar: string[] = [];
@@ -504,8 +532,8 @@ export async function POST(request: Request) {
     const rubrik = `SEO-möte: ${v.namn}`;
     const m: { fel?: string; eventId?: string } =
       v.hallsAv === mig
-        ? await skapaMote({ organisator: v.hallsAv, rubrik, dag: v.dag, start: minuterAv(v.start), minuter: v.langd, deltagare: [v.hallsAv], plats: MOTE_PLATS, agenda: v.mal })
-        : await bokaAtKollega({ hallsAv: v.hallsAv, rubrik, dag: v.dag, start: v.start, minuter: v.langd, agenda: v.mal });
+        ? await skapaMote({ organisator: v.hallsAv, rubrik, dag: v.dag, start: minuterAv(v.start), minuter: v.langd, deltagare: [v.hallsAv, ...v.med], plats: MOTE_PLATS, agenda: v.mal })
+        : await bokaAtKollega({ hallsAv: v.hallsAv, med: v.med, rubrik, dag: v.dag, start: v.start, minuter: v.langd, agenda: v.mal });
     if (m.fel || !m.eventId) {
       await db.from("mote").delete().eq("id", moteId);
       await stada();
@@ -530,13 +558,19 @@ export async function POST(request: Request) {
       const { error } = await db.rpc("lead_bjud_in", { p_event: m.eventId, p_epost: v.epost });
       bjuden = !error;
     }
+    // Fler hos kunden: samma inbjudan till var och en. Flyttas eller ställs mötet in får alla en uppdatering (calendar_event_ics).
+    const gastFel: string[] = [];
+    for (const g of v.gaster) {
+      const { error } = await db.rpc("lead_bjud_in", { p_event: m.eventId, p_epost: g });
+      if (error) gastFel.push(g);
+    }
 
     await skrivHandelse({
       actorId: mig,
       action: "mote.created",
       objectType: "mote",
       objectId: moteId,
-      meta: { kedja, bolag, halls_av: v.hallsAv, art, bolag_skapat: skapadBolag, kedja_skapad: skapadKedja, mote_tid: motetid.toISOString() },
+      meta: { kedja, bolag, halls_av: v.hallsAv, art, bolag_skapat: skapadBolag, kedja_skapad: skapadKedja, mote_tid: motetid.toISOString(), med: v.med, gaster: v.gaster.length },
     });
 
     // 9. Notis till den som ska hålla mötet, om någon annan bokade det.
@@ -554,7 +588,16 @@ export async function POST(request: Request) {
     }
 
     const kontakt = forFor(v.kontakt ?? "") || "Kunden";
-    const inbjudan = v.epost ? (bjuden ? `${kontakt} får en inbjudan med mejl.` : `Inbjudan till ${kontakt} kunde inte skickas. Bjud in från kalendern.`) : "";
+    const gastOk = v.gaster.length - gastFel.length;
+    const kunden = v.epost && bjuden
+      ? `${gastOk ? `${forFor(v.kontakt ?? "") || v.epost} och ${gastOk} till hos kunden` : kontakt} får en inbjudan med mejl.`
+      : gastOk ? `${gastOk === 1 ? v.gaster.find((g) => !gastFel.includes(g)) : `${gastOk} hos kunden`} får en inbjudan med mejl.` : "";
+    const missade = [...(v.epost && !bjuden ? [kontakt] : []), ...gastFel];
+    const inbjudan = [
+      v.med.length ? `${lista(await fornamnFor(v.med))} får en inbjudan i Nav.` : "",
+      kunden,
+      missade.length ? `Inbjudan till ${lista(missade)} kunde inte skickas. Bjud in från kalendern.` : "",
+    ].filter(Boolean).join(" ");
     return { res: svar({
       ok: `Mötet ligger i kalendern ${nar(motetid)}. ${inbjudan}`.trim(),
       mote: moteId,
@@ -567,7 +610,7 @@ export async function POST(request: Request) {
   }
 
   /** `lk_skapa_mote` som hållaren själv. Samma argument som `skapaMote`, påminnelse 10 minuter. */
-  async function bokaAtKollega(i: { hallsAv: string; rubrik: string; dag: string; start: string; minuter: number; agenda: string | null }): Promise<{ fel?: string; eventId?: string }> {
+  async function bokaAtKollega(i: { hallsAv: string; med: string[]; rubrik: string; dag: string; start: string; minuter: number; agenda: string | null }): Promise<{ fel?: string; eventId?: string }> {
     const svar = await lk<{ event_id: string }>("lk_skapa_mote", {
       p_aktor: i.hallsAv,
       p_organizer: i.hallsAv,
@@ -575,7 +618,7 @@ export async function POST(request: Request) {
       p_dag: i.dag,
       p_tid: `${i.start}:00`,
       p_minuter: i.minuter,
-      p_deltagare: [i.hallsAv],
+      p_deltagare: [i.hallsAv, ...i.med],
       p_plats: MOTE_PLATS,
       p_online_url: null,
       p_agenda: (i.agenda ?? "").slice(0, 4000),
@@ -782,12 +825,20 @@ export async function POST(request: Request) {
     if (a.nyttMote && nyTid) {
       const { data: bolagRad } = await db.from("mote_bolag").select("id, namn, kontakt, epost").eq("id", kedja.bolag_id).maybeSingle();
       const bo = bolagRad as { id: string; namn: string; kontakt: string | null; epost: string | null } | null;
+      // Samma personer som på mötet som uteblev: kollegorna som fortfarande är anställda, och gästerna hos kunden.
+      const { data: narvaro } = m.event_id
+        ? await db.from("calendar_attendee").select("employee_id, external_email").eq("event_id", m.event_id).limit(100)
+        : { data: [] };
+      const forra = (narvaro ?? []) as { employee_id: string | null; external_email: string | null }[];
+      const med = await aktiva([...new Set(forra.map((x) => x.employee_id).filter((x): x is string => !!x && x !== m.halls_av))].slice(0, MAX_KOLLEGOR));
+      const kundEpost = (bo?.epost ?? "").toLowerCase();
+      const gaster = [...new Set(forra.map((x) => (x.external_email ?? "").toLowerCase()).filter((x) => x && x !== kundEpost))].slice(0, MAX_GASTER);
       let lagt: { res: Response; kvar: string | null } | null = null;
       if (bo) {
         lagt = await laggMote({
           kedja: m.kedja_id,
           bolag: bo.id,
-          v: { namn: bo.namn, kontakt: bo.kontakt, epost: bo.epost, kalla: m.kalla, hallsAv: m.halls_av, dag: a.nyttMote.dag, start: a.nyttMote.start, langd: m.langd_min, mal: m.mal, nulage: m.nulage as LaggVarden["nulage"], foregaende: m.id },
+          v: { namn: bo.namn, kontakt: bo.kontakt, epost: bo.epost, kalla: m.kalla, hallsAv: m.halls_av, dag: a.nyttMote.dag, start: a.nyttMote.start, langd: m.langd_min, mal: m.mal, nulage: m.nulage as LaggVarden["nulage"], foregaende: m.id, med, gaster },
           motetid: nyTid,
           varningar: [],
           skapadBolag: false,

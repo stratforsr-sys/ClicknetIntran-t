@@ -300,6 +300,20 @@ rubrik("bokaIndata");
   ok("inte ett objekt: fel", M.bokaIndata(null).ok === false && M.bokaIndata("x").ok === false);
   ok("för långt namn", fel({ namn: "x".repeat(201) }) === "Namnet är för långt.");
 
+  // Flera personer (2026-11-03): kollegor i kalendern och fler hos kunden med e-post.
+  const A = "22222222-2222-4222-8222-222222222222", B = "33333333-3333-4333-8333-333333333333";
+  ok("utan kollegor och gäster: tomma listor", Array.isArray(v?.med) && v.med.length === 0 && Array.isArray(v?.gaster) && v.gaster.length === 0);
+  const mg = M.bokaIndata({ ...bas, epost: "kalle@exempel.se", med: [A, B, A, HALLS], gaster: [" Lisa@Exempel.se", "lisa@exempel.se", "KALLE@exempel.se", "", "ola@kund.se"] });
+  ok("kollegor: utan dubbletter och utan hållaren", mg.ok && JSON.stringify(mg.varden.med) === JSON.stringify([A, B]), JSON.stringify(mg));
+  ok("gäster: normaliserade, utan dubbletter, utan kontaktens adress och tomma", mg.ok && JSON.stringify(mg.varden.gaster) === JSON.stringify(["lisa@exempel.se", "ola@kund.se"]), JSON.stringify(mg));
+  ok("kollega som inte är ett id", fel({ med: ["x"] }) === "Kollegorna stämmer inte." && fel({ med: A }) === "Kollegorna stämmer inte.");
+  ok("för många kollegor", fel({ med: Array.from({ length: M.MAX_KOLLEGOR + 1 }, (_, i) => `44444444-4444-4444-8444-${String(i).padStart(12, "0")}`) }) === `Högst ${M.MAX_KOLLEGOR} kollegor till.`);
+  ok("tio kollegor går", fel({ med: Array.from({ length: M.MAX_KOLLEGOR }, (_, i) => `44444444-4444-4444-8444-${String(i).padStart(12, "0")}`) }) === null);
+  ok("gäst som inte är en adress: felet säger vilken", fel({ gaster: ["ola@kund.se", "lisa"] }) === "E-postadressen lisa går inte att tolka.");
+  ok("gäster som inte är en lista", fel({ gaster: "ola@kund.se" }) === "Gästerna hos kunden stämmer inte.");
+  ok("för många gäster", fel({ gaster: Array.from({ length: M.MAX_GASTER + 1 }, (_, i) => `g${i}@kund.se`) }) === `Högst ${M.MAX_GASTER} till hos kunden.`);
+  ok("kollegorIndata i lediga: null och tomt är inga", M.kollegorIndata(null, HALLS).ok && M.kollegorIndata(undefined, HALLS).varden.length === 0);
+
   const p = M.paminnIndata({ namn: " Exempel AB ", telefon: "070-123 45 67", dag: "2026-11-02", start: "09:00" });
   ok("paminnIndata: ok", p.ok && p.varden.namn === "Exempel AB" && p.varden.telefon === "070-123 45 67" && p.varden.dag === "2026-11-02" && p.varden.start === "09:00", JSON.stringify(p));
   ok("paminnIndata: namn, telefon, dag, start", M.paminnIndata({ telefon: "070-123 45 67", dag: "2026-11-02", start: "09:00" }).fel === "Skriv bolagets namn." && M.paminnIndata({ namn: "A", telefon: "x", dag: "2026-11-02", start: "09:00" }).fel === "Telefonnumret går inte att tolka." && M.paminnIndata({ namn: "A", telefon: "0701234567", dag: "2026-13-02", start: "09:00" }).fel === "Välj ett datum." && M.paminnIndata({ namn: "A", telefon: "0701234567", dag: "2026-11-02", start: "9" }).fel === "Välj en starttid.");
