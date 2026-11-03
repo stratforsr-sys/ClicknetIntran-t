@@ -5,7 +5,7 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
-## 2026-11-03 kväll · Notiserna i telefonen kommer när det händer (grenen `notiser-i-tid`, EJ MERGAD, ingen migration)
+## 2026-11-03 kväll · Notiserna i telefonen kommer när det händer (MERGAD `75f705f`, ingen migration)
 
 **Beställaren:** "Ja fixa det", om två fynd från provpusharna efter navets märke.
 
@@ -40,9 +40,13 @@ minuter och att `push.ts` skickar `high`. Gröna: `pushko`, `notis-sw`, `kalende
 `utskick`, `notiser-tackning`. tsc på de fyra berörda filerna med `@supabase/supabase-js` installerat i scratchpaden:
 samma fel som `main` (saknade `next`-moduler), inga nya, och ett planterat fel i markörens kedja fångades.
 
-**Kvar:** preview, ja, merge. Ingen ändring i `sw.js`, så det gäller utan att telefonen behöver öppna Nav. Efter
-mergen: en provpush till Samsungen. Beställaren är ombedd att sätta Chrome till Obegränsad batteri och att säga om
-någon notis kom 21:02 eller 21:07.
+**Mergad:** fast-forward till `75f705f` på "ja skicka till produktion", produktionen grön 21:40 UTC. Provpushen
+22:42 hämtades av Samsungen efter 99 s, och markören flyttades av nya `kalPushNasta`. Provpusharna 21:02 och 21:07
+gick också med `high` och hämtades inte, så det som ändrades sitter i telefonen, inte i brådskan. `high` gäller ändå
+för de riktiga pusharna, som förut gick med `normal`.
+
+**Kvar:** beställarens svar om vad telefonen visade och om Chrome står på Obegränsad batteri. Se att nästa riktiga
+kalenderpåminnelse kommer i tid.
 
 ---
 
