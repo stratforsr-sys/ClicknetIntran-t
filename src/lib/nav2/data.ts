@@ -6,7 +6,7 @@ import { hamtaNotiser } from "@/lib/notiser-server";
 import type { Notis } from "@/lib/notiser";
 import { svensktDatum } from "@/lib/klocka";
 import { MFA_REQUIRED_ROLES } from "@/lib/roles";
-import { medPg } from "./pgrest";
+import { medPg, type PgMatt } from "./pgrest";
 import { byggTid, type NdTid } from "./tid";
 import { byggFranvaro, type NdFranvaro } from "./franvaro";
 import { byggUppgifter, type NdUppgifter } from "./uppgifter";
@@ -149,8 +149,12 @@ export async function byggNav2Data(user: CurrentUser, m?: Nav2Matt, pg?: { authU
   if (!user.employee) return null;
   if (!pg) return bygg(user, m);
   const { v, matt: pm } = await medPg(pg, { server: supabaseServer, admin: supabaseAdmin }, () => bygg(user, m));
-  if (m && pm) Object.assign(m, { pg: pm.pg, "pg-rest": pm.rest, "pg-fel": pm.fel, "pg-anslut": pm.anslut, "pg-minne": pm.minne, "pg-ko": pm.ko, "pg-db": pm.db });
+  pgMatt(m, pm);
   return v;
+}
+
+function pgMatt(m: Nav2Matt | undefined, pm: PgMatt) {
+  if (m && pm) Object.assign(m, { pg: pm.pg, "pg-rest": pm.rest, "pg-fel": pm.fel, "pg-anslut": pm.anslut, "pg-minne": pm.minne, "pg-ko": pm.ko, "pg-db": pm.db });
 }
 
 type Supabase = Awaited<ReturnType<typeof supabaseServer>>;
@@ -199,7 +203,7 @@ export const arNav2Del = (d: string): d is Nav2Del => Object.prototype.hasOwnPro
  * Bara de begärda delarna, med samma RLS och samma pg-väg som byggNav2Data.
  * `grund` ger jag, personer, satser och loner; varje annan del sin egen nyckel.
  */
-export async function byggNav2Delar(user: CurrentUser, delar: Nav2Del[], pg?: { authUserId: string; email: string | null } | null): Promise<Partial<Nav2Data> | null> {
+export async function byggNav2Delar(user: CurrentUser, delar: Nav2Del[], pg?: { authUserId: string; email: string | null } | null, m?: Nav2Matt): Promise<Partial<Nav2Data> | null> {
   if (!user.employee) return null;
   const las = async () => {
     const supabase = await supabaseServer();
@@ -212,7 +216,9 @@ export async function byggNav2Delar(user: CurrentUser, delar: Nav2Del[], pg?: { 
     return ut as Partial<Nav2Data>;
   };
   if (!pg) return las();
-  return (await medPg(pg, { server: supabaseServer, admin: supabaseAdmin }, las)).v;
+  const { v, matt: pm } = await medPg(pg, { server: supabaseServer, admin: supabaseAdmin }, las);
+  pgMatt(m, pm);
+  return v;
 }
 
 async function bygg(user: CurrentUser, m?: Nav2Matt): Promise<Nav2Data | null> {

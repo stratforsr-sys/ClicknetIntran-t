@@ -38,6 +38,9 @@ export const TYST_EFTER_INGET_SVAR = 3;
 export const TYST_EFTER_DAGAR = 21;
 export const MOTE_MINUTER = 30;
 export const MOTE_PLATS = "Telefon";
+/** Fler från Clicknet (kollegor i kalendern) och fler hos kunden (gäster med e-post), utöver hållaren och kontakten. */
+export const MAX_KOLLEGOR = 10;
+export const MAX_GASTER = 10;
 
 /* ------------------------------------------------------------------------ */
 /* Domän och telefon                                                         */
@@ -397,7 +400,38 @@ export type BokaVarden = {
   nulage: keyof typeof NULAGE | null;
   kedja: string | null;
   foregaende: string | null;
+  /** Kollegor som också är med: deltagare i kalendern. Aldrig hållaren, inga dubbletter. */
+  med: string[];
+  /** Fler hos kunden: e-postadresser som får kalenderinbjudan. Aldrig kontaktens `epost`, inga dubbletter. */
+  gaster: string[];
 };
+
+/**
+ * Kollegorna i `boka` och `lediga`: en lista med id, utan hållaren och utan dubbletter.
+ * Saknas listan är den tom. Felen är texter till säljaren.
+ */
+export function kollegorIndata(v: unknown, hallsAv: string): Resultat<string[]> {
+  if (tom(v)) return { ok: true, varden: [] };
+  if (!Array.isArray(v) || !v.every((x) => typeof x === "string" && UUID.test(x))) return nej("Kollegorna stämmer inte.");
+  const ut = [...new Set(v as string[])].filter((x) => x !== hallsAv);
+  if (ut.length > MAX_KOLLEGOR) return nej(`Högst ${MAX_KOLLEGOR} kollegor till.`);
+  return { ok: true, varden: ut };
+}
+
+/** Fler hos kunden: normaliserade adresser, utan kontaktens egen och utan dubbletter. */
+export function gasterIndata(v: unknown, epost: string | null): Resultat<string[]> {
+  if (tom(v)) return { ok: true, varden: [] };
+  if (!Array.isArray(v) || !v.every((x) => typeof x === "string")) return nej("Gästerna hos kunden stämmer inte.");
+  const ut: string[] = [];
+  for (const ra of v as string[]) {
+    if (!ra.trim()) continue;
+    const e = normaliseraEpost(ra);
+    if (!e) return nej(`E-postadressen ${ra.trim().slice(0, 60)} går inte att tolka.`);
+    if (e !== epost && !ut.includes(e)) ut.push(e);
+  }
+  if (ut.length > MAX_GASTER) return nej(`Högst ${MAX_GASTER} till hos kunden.`);
+  return { ok: true, varden: ut };
+}
 
 /** Det `boka` tar emot, prövat och normaliserat. Felen är texter till säljaren. */
 export function bokaIndata(body: unknown): Resultat<BokaVarden> {
@@ -452,6 +486,11 @@ export function bokaIndata(body: unknown): Resultat<BokaVarden> {
   if ((kontakt?.length ?? 0) > 200) return nej("Kontaktpersonens namn är för långt.");
   if ((mal?.length ?? 0) > 2000) return nej("Målet är för långt.");
 
+  const med = kollegorIndata(b.med, b.hallsAv);
+  if (!med.ok) return med;
+  const gaster = gasterIndata(b.gaster, epost);
+  if (!gaster.ok) return gaster;
+
   return {
     ok: true,
     varden: {
@@ -469,6 +508,8 @@ export function bokaIndata(body: unknown): Resultat<BokaVarden> {
       nulage,
       kedja,
       foregaende,
+      med: med.varden,
+      gaster: gaster.varden,
     },
   };
 }

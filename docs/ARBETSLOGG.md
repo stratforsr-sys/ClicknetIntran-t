@@ -5,7 +5,7 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
-## 2026-11-02 kväll · Säljsamtalet när Lynes inte har det: uppladdad mp3 och chefens godkännande utan inspelning (grenen `inspelning-utan-lynes`, 0280; grenen lagd om på main `e4b35d2` 2026-11-03)
+## 2026-11-02 kväll · Säljsamtalet när Lynes inte har det: uppladdad mp3 och chefens godkännande utan inspelning (grenen `inspelning-utan-lynes-2`, 0280 KÖRD; grenen lagd om på main `e4b35d2` 2026-11-03, main `dfeffa7` inmergad)
 
 **Beställaren** 2026-11-01: "mp3, vissa samtal har vi över telefon och då går det inte att ladda upp en inspelning.
 Låt en chef godkänna att en order kan laddas upp utan inspelning." 2026-11-02: "Fixa allting". Utlöst av Städservice
@@ -39,9 +39,178 @@ Ale (#33–#36), som fastnade i spärren fyra gånger eftersom Edvins samtal int
 
 **Migrationen:** 0280 är torrkörd i en rullad transaktion mot produktionen (tio prov: uppladdat samtal och fil med
 uppladdare går in, kundnummer på uppladdat, okänd källa, för kort skäl och godkänt utan tid nekas, anon kan inte läsa,
-authenticated bara läsa). **Inte körd:** behörighetsspärren stoppade körningen 2026-11-02 och igen 2026-11-03 efter beställarens "ja till mergen", så beställaren kör den själv.
+authenticated bara läsa). Behörighetsspärren stoppade körningen härifrån 2026-11-02 och igen 2026-11-03 efter beställarens "ja till mergen", så **beställaren körde den själv 2026-11-03 16.44 UTC**. Checksumman i `schema_migrations` (`f05e4a229b9b8075`) är grenens fil.
 0279 togs samma kväll av `0279_andrat_i_inkio` (Inkio-passet). Utan 0280 fungerar main och grenen som förut, men
-uppladdning och "Spelades inte in" ger fel, så **0280 körs före mergen**.
+uppladdning och "Spelades inte in" ger fel, så 0280 kördes före mergen. Main (`dfeffa7`, farten, Möten med fler
+personer och kalenderns rätta längd) mergades in i grenen före snabbspolningen; konflikter bara i dokumenten,
+`package.json` (provkedjan: båda nya proven) och nyhetsposterna (båda).
+
+---
+
+## 2026-11-03 · Kalendern: posten i sin rätta längd, och nästa post börjar där förra slutar (grenen `kal-hojd`, EJ MERGAD, ingen migration)
+
+**Beställaren:** "när jag nu har lagt en händelse som är 15 minuter kl 10:00 så ska jag lägga en händelse kl 10:30 så ser det
+ut som att den händelsen kl 10:00 är 30 minuter inte 15 minuter. Gör allt sånt korrekt ... så att det ser ut exakt
+som outlook".
+
+**Orsaken:** databasen hade 10:00–10:15 som 15 minuter. Ritningen gjorde den längre: `kPost` satte
+`Math.max(18, längd / 60 * KPX - 2)` med `KPX = 48`, så en kvart blev 18 px i stället för 10 och slutade vid 10:24
+(provet mätte 601,3–623,8 minuter). Luckan till 10:30 krympte till 6 px, och två poster i följd (13:00–13:15,
+13:15–13:30) lade sig över varandra. `kLayout` var rätt: posterna stod i full bredd, den första var bara för hög.
+Klicket, svävaren och telefonens tryck valde dessutom alltid `Math.floor(m / 30) * 30`, så ett klick under en post
+som slutar 10:15 gav 10:00–10:30, alltså en krock.
+
+**Ändringen** (bara `src/nav2/utkast.html`):
+- `KPX` 48 → 60: en minut är en pixel, och en kvart (13 px plus mellanrum) rymmer en rad text. Rutnätet, timmarna,
+  halvtimmesstrecken, arbetstiden, nu-strecket, utskriften och rullningen räknas alla från `KPX`.
+- `kPost`: höjden är `max(15, längd) / 60 * KPX - 2`. Under 30 minuter får posten klassen `mini`: rubrik och tid på
+  en rad, 13 px radhöjd, smalare dragkant. `.olselm` och `.olhov` fick samma radhöjd för att få plats i en kvart.
+- `kLucka(col, m)`: halvtimmen under pekaren, men börjar vid slutet på en egen post som slutar i samma halvtimme och
+  slutar vid starten på nästa, minst en kvart. Bara egna poster i kolumnen räknas (`.olev[data-kev]`, slås upp i
+  `KEV`). Används av musens klick och drag (draget växer från luckans slut), svävaren och telefonens tryck och
+  håll in. Ett klick i ett tomt fält ger samma halvtimme som förut.
+
+**Prov:** `~/nav2-utkast/probe/kalender-hojd-prov.mjs` (nytt, 20 kontroller: höjd, lucka, följd, svävare, klick på
+fem ställen, drag, fingertryck och håll in) rött på main 8 av 20, grönt på grenen 20 av 20.
+`kalender-kort-prov.mjs` 20/20 och `kalender-enskilt-prov.mjs` 32/32 på både main och grenen. `node --check` på det
+utdragna skriptet, `test:navnyheter` grön. Skärmbild före och efter jämförd.
+
+**Fynd i provet:** Chromes touchjustering flyttar ett fingertryck några pixlar under en post till posten (pekarens
+mål blir `.olrz`). Provet skickar därför telefonens pekarhändelser direkt till kolumnen. I en riktig telefon kan ett
+tryck eller håll in mitt i en kvartslucka alltså träffa grannposten. Så var det redan på main, där luckorna var
+mindre. Att räkna träffen från `elementFromPoint` i stället skulle laga luckan men göra en kvartspost svårare att
+träffa med fingret, så det är inte gjort.
+
+**Utseendet:** en ändring av det låsta utkastet (25 % högre rutnät), sagd till beställaren före mergen.
+
+---
+
+## 2026-11-03 · Fart: Uppgifter ändras direkt, typsnitten cachas, schemat före inloggningen, Server-Timing (MERGAD till `main` `b6fd1fd` på beställarens ja, ingen migration)
+
+**Beställaren:** "navet är super segt, allting tar tid", sedan "Låt oss testa först allt annat innan jag lägger upp en
+supabase plan" och "Ja börja bygga", efter granskningen "Okej men fixa alla dem då" (de sex småfelen), och till sist
+"Pusha allting till main".
+
+**Orsaken** (mätt 2026-11-02, `~/nav2-utkast/delar/fart-nov/PLAN.md` och `PRESTANDAPROV.md`): databasen är Nano
+(428 MB RAM) och swappar, så varje fråga väntar på disken. `matt.data` hade median 1,7 s (0,84–4,58 s över fem
+laddningar). Uppgraderingen (steg 1) är beställarens beslut och ingår inte här.
+
+**Byggt:**
+- **Typsnitten (steg 8):** förladdas i sidans huvud, adressen bär `?v=`, och `next.config.ts` ger
+  `public, max-age=31536000, immutable` bara när `?v=` finns (`has: query v`), så offline-sidans adresser är som förut.
+  `.woff2` går förbi mellanvaran. Versionen är sha256 av filerna i `public/nav2/fonts` (namnordning, 8 tecken), räknad
+  i `next.config.ts` och inbakad som `env.NAV2_TYPSNITT_V` med reserven "1". En ny fil får alltså ny adress av sig själv.
+- **Kall instans (steg 9):** `forvarmPg()` (`pgrest.ts`) startar schemaläsningen och den första anslutningen före
+  `getCurrentUser` i `/nav2` och `/nav2/data`, bara när mellanvarans identitetsrubrik finns (`lasIdentitet(await headers())`).
+- **Mätningen (steg 0):** `Server-Timing` på `/nav2` (auth) och `/nav2/data` (auth, bygge, anslut, kö, db).
+- **Uppgifter ändras direkt (steg 2):** bocka, öppna igen, flytta, stryka och prioritet ändras i listan innan servern
+  svarat (`ndUpgGenast`, `ndUpgForutse`). Ett nej återställer varje fält som ingen senare ändring tagit över
+  (`ndUpgSvarat`), väntande ändringar läggs på igen efter en omhämtning (`ndUpgIgen`, `NDOMLASSTART` i `ndOmlasKor`),
+  och samma uppgift sparas i tur och ordning (`ndUpgITur`). Utkastets egna `_ndBocka` med flera anropas inte: deras
+  Ångra ångrar bara i listan.
+  - Bara det servern släpper igenom gissas: skrivläge, navets egna uppgifter, `farRed`, och för Stryk `farStryk`
+    (= `farBjudaIn`, nytt fält i `src/lib/nav2/uppgifter.ts`). Med granskare gissas ingenting. Kan se och delegat gissas
+    aldrig, eftersom klienten inte vet kalenderns delegatnivå.
+  - Ett dubbelklick är ett klick: samma handling inom 500 ms, och ett andra riktigt musklick på samma ställe inom
+    500 ms och 8 px (`isTrusted`, `detail > 0`), så att Stryk inte träffar raden som flyttat upp.
+  - Ett nej på Stryk tar tillbaka raden och öppnar rutan igen.
+  - Efter tidsgränsen (20 s) hämtas datan om, eftersom sparningen kan ha gått fram. Efter ett nätfel görs ingen
+    omhämtning: reserven skulle ladda om sidan till en felsida.
+- Nytt i navet: `uppgifter-direkt`.
+
+**Inte byggt, med skäl i `~/nav2-utkast/delar/fart-nov/LEDGER.md`:** steg 4 (två vågor: ~20 vyer startar på hela
+datan), 5 (minifiering: vinsten bara på kall cache), 6 (minutjobbet: kräver migration) och 7 (IndexedDB: löner och
+frånvaro skulle ligga kvar i webbläsaren efter utloggning). Väntar på beställaren: steg 1 (Supabase Pro + Small),
+3 (`getClaims`: en spärrad användare behåller åtkomsten upp till en timme) och 10 (skript från CDN).
+
+**Prov:** `npm run test:nav2-fart` (ny), `~/nav2-utkast/probe/genast-prov.mjs` 56/56 (headless Chrome, riktiga
+CDP-klick för dubbelklicket), `probe/omladdning-prov.mjs` 80/80, och 25 närliggande prov gröna efter att `main` slagits
+ihop. tsc visar bara Pling-skiftläget som fanns förut. rls, identitet, rekrytering och matning är inte körda (rör
+produktionen).
+
+**Mergen:** `main` (`e4b35d2`) ihopslagen in i grenen (`14ea6bd`, krockar bara i provlistan och nyhetslistan),
+previewen grön, sedan squash till `main` som `b6fd1fd`. Previewen saknar `NAV2_PG_URL` (bara satt för `nav2-utkast`),
+så datan mäts i produktionen.
+
+**Mätt i produktionen efter mergen** (2026-11-03, Zen, fem enstaka laddningar av `/nav2` med 20 s mellanrum):
+`matt.data` 601, 635, 933, 1739 och 2438 ms, median **0,93 s** (före: median 1,7 s, 0,84–4,58 s). Hela svaret
+1,7–4,0 s, median 2,9 s. Inloggningen (`Server-Timing: auth`) 108–220 ms. `pg-anslut` 86 ms på första laddningen,
+sedan 0. Typsnitten `?v=cf8040c5` ger `immutable`, utan `?v=` som förut. Spridningen är lika stor som förut, och de
+här stegen rör inte bygget av datan (utom på en kall instans). Skillnaden i median är alltså mest databasens dagsform,
+inte ändringen. Vinsten syns i stället i Uppgifter (raden ändras direkt i stället för efter ~4–5 s) och i typsnitten
+på återbesök.
+
+---
+
+## 2026-11-03 förmiddag · Möten: fler personer på ett möte, kollegor och kunder (direkt på `main`, ingen migration)
+
+**Beställaren:** "lägg till så att man kan välja att lägga till flera personer ifall man behöver. Se över best
+practises för det och bygg det på bästa sätt", och på frågan vilka: "båda kollegor och kunder".
+
+**Ingen migration.** Kalendern bär redan allt: `lk_skapa_mote` tar upp till 50 deltagare (en `calendar_attendee`
+och en notis `kalender-inbjudan` var), och `lead_bjud_in` lägger en extern gäst med ICS-mejl. När händelsen flyttas
+eller ställs in skickar `calendar_event_ics` en uppdatering till alla externa gäster (`lk_narvaro`). Möten skickade
+bara `[hallsAv]` och kontaktens `epost`.
+
+**Servern.** `boka` tar `med` (kollegornas id, högst 10, utan hållaren) och `gaster` (e-post, högst 10, utan
+kontaktens adress), prövade i `kollegorIndata`/`gasterIndata` (motenforma.ts, 10 nya prov i tests/moten.mjs).
+Kollegorna prövas mot `status <> 'offboarded'` före allt annat, samma regel som `lk_aktiv`, så att en slutad
+kollega ger ett fel vid raden i stället för att kalendern nekar efter att mötesraden skrivits. Kalenderhändelsen
+får `[hallsAv, ...med]` (båda vägarna: `skapaMote` och `bokaAtKollega`), och varje gäst en `lead_bjud_in`. Kvittot
+säger vem som får inbjudan och vilka som inte kunde bjudas in. `lediga` tar samma `med` och ger tiderna då alla är
+lediga (kalenderns block för alla ihop), plus `upptaget` per person och `till`, så att en egen tid kan säga vem den
+krockar med. Uteblev med ny tid bokar om med samma kollegor (de som är kvar) och gäster som mötet som uteblev.
+Kortets data (`moten.ts`) har `mote.med` (namn och svar) och `mote.gaster`, ur kalenderhändelsens deltagare med
+service role (kortet syns redan genom RLS på `mote_kort`), och `kollegor`: alla som inte slutat.
+
+**Panelen.** Best practice från Google Kalender, Outlook och Calendly, i Navs form:
+- Ihopfällt tills det behövs: två textknappar, **Lägg till kollega** under Vem håller och **Lägg till fler hos
+  kunden** under E-post. Det vanliga mötet bokas som förut.
+- Kollegorna är en combobox enligt ARIA 1.2 (`role=combobox`, `aria-activedescendant`): pilarna väljer, Enter lägger
+  till, Esc stänger listan före bladet, och Backspace i ett tomt fält tar bort den sista. Sökningen tål å/ä/ö ("asa"
+  hittar Åsa) och visar träffar i början av ett namn först. Listan ligger ovanpå (absolut), så att den inte flyttar
+  innehållet när den stängs mitt i ett klick.
+- Gästerna är brickor: Enter, komma, semikolon eller mellanslag lägger till, flera adresser går att klistra in på en
+  gång, och det som inte är en adress står kvar i fältet med felet (som Kalenderns Bjud in med e-post). Det som står
+  kvar vid Boka räknas. Kontaktens egen adress och dubbletter hoppas över.
+- Tidväljaren: med kollegor står "Tider då Benny, Åsa och du är lediga." över dagarna, och en egen tid säger "Benny är
+  upptagen då" i stället för "krockar med något i kalendern". En vald lucka står kvar när den passar alla efter
+  bytet, annars "… är inte ledig för alla längre. Välj en ny tid."
+- Kortet visar "+3" efter hållaren, och panelen en rad **Med** med svaren (kommer, tackade nej, kanske).
+- Flytta letar tider för hållaren och kollegorna som inte tackat nej.
+- Skärmläsaren får "Benny Persson är med." och "… är inte med längre." ur en live-region utanför det som ritas om.
+
+**Provat.** Typkontroll av de tre serverfilerna mot repot (samma fel före och efter, alla saknade moduler), tests/moten.mjs
+och tests/nav2-omladdning.mjs gröna. Panelen i headless Chrome med en fetch-stubbe som räknar ledigt per person,
+1280 och 390 bred, 22 steg utan konsolfel: förslag, Enter, Esc, Backspace, å/ä/ö, luckorna för alla, vem som är
+upptagen, vald tid som inte passar, gästbrickor och felet, det som skickas (`med`, `gaster`, kvarvarande text),
+serverns kollegafel vid raden, kortets +3 och Med-raden, och Flytta utan den som tackat nej. **Inte provat inloggad
+i produktionen.** Patch och prov: `~/nav2-utkast/delar/moten-flera/` (patch-server.py, patch-klient.py, bygg-prov.mjs).
+
+## 2026-11-03 förmiddag · Zens mejl: bara Inkio-ärenden och makulerad order, allt annat i telefonen (en inställning, ingen kod, ingen migration)
+
+**Beställaren:** "jag har fått många mejl för inkio. Jag vill bara ha ärenden från inkio, när en order tas bort
+egentligen bara det. Allt annat i telefonen".
+
+**Vad loggen säger** (`notification_delivery`, mejl till Zen): tio `order-inkio-anteckning` 2026-11-02 13:11–13:14
+UTC, alltså före `ed04ae7`. Efter rättelsen ett enda Inkio-mejl (`order-inkio-arende` 20:22). Dagens anteckningar
+från Inkio gick bara till klockan och telefonen (14 push). Övriga mejl till Zen sedan dess: `leverans-frist`
+(19:00 och 05:00) samt `kalender-paminnelse` och `kalender-forberedelse` (bolagets `omrade:kalender` = true).
+
+**Ändringen:** Zens eget lager i `notification_rule` fick
+`mejl: {"*": false, "sort:order-inkio-arende": true, "sort:order-inkio-makulerad": true}`, och `push` är orört
+(`"*": true`). Provat med `far()` mot produktionens regler, sort för sort: av 153 sorter mejlas två och alla
+pushas. Inloggningskoden går förbi reglerna (`kodmejl-server.ts`) och kommer fram som förut. Bolagets lager `alla`
+är orört. Simon får alltså fortfarande Inkios ärenden, makulerade order och uppsagda avtal i mejl, och det får
+säljarna också när navet öppnas, liksom områdena Order, Lead, Ärende och Kalender.
+
+**Två fynd, inte åtgärdade:**
+- En order som RADERAS i Inkio (`deleted_at`, inte makulerad) ger ingen notis alls, eftersom `notisFor` ger null för
+  `f.typ === "raderad"`. Det har inte hänt än: 0 av 31 order i `crm_handelse` är raderade.
+- Bolagets `omrade:order` = true mejlar hela Order-området, också `order-godkand` och `order-inskickad`, som enligt
+  `MEJLKALLOR` ska stå kvar i klockan. Edvin fick två mejl om godkänd order och Simon två om inskickad 2026-11-02.
+
+Ångra: `update notification_rule set regler = regler - 'mejl' where lager = 'egen' and employee_id = '826a8b10-34c4-46ff-81d1-ca797773235c';`
 
 ---
 
@@ -125,7 +294,7 @@ transaktion som rullades tillbaka; `kundanteckning` hade 0 rader före och efter
 
 ---
 
-## 2026-11-02 kväll · 1:1 en gång eller som serie, och alla anställda att välja (grenen `enskilt-en-gang`, EJ MERGAD, ingen migration)
+## 2026-11-02 kväll · 1:1 en gång eller som serie, och alla anställda att välja (MERGAD till `main` `a7d98f8` på beställarens ja, produktionen grön 2026-11-02 21:23 UTC, ingen migration)
 
 Beställaren frågade varför en 1:1 alltid blir en serie ("man ska kunna välja antingen en serie eller bara en gång. Som
 vanligt liksom") och varför bara tre personer gick att välja.

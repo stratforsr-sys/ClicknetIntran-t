@@ -53,6 +53,9 @@ export type NdMoteKort = {
     flyttningar: number;
     mal: string | null;
     nulage: string | null;
+    /** Kollegorna i kalendern utöver hållaren, och gästerna hos kunden (också kontakten när hen är bjuden). `svar` som i Kalendern. */
+    med: { id: string; namn: string; svar: string }[];
+    gaster: { epost: string; svar: string }[];
   } | null;
   uppfoljning: { datum: string; text: string | null; offert: boolean; ingetSvar: number; andrad: string | null } | null;
   historik: { id: string; tid: string; text: string }[];
@@ -62,6 +65,8 @@ export type NdMoten = {
   kort: NdMoteKort[];
   vecka: { affar: number; nej: number; kedjor: { kedja: string; namn: string; avslut: "affar" | "nej"; nar: string }[] };
   saljare: { id: string; namn: string }[];
+  /** Alla som inte har slutat, att lägga till som kollegor i ett möte. */
+  kollegor: { id: string; namn: string }[];
   chef: boolean;
 };
 
@@ -130,7 +135,7 @@ export function veckansGranser(nu: Date): { fran: string; till: string } {
 
 export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Promise<NdMoten> {
   const chef = hasRole(user, ...CHEFSROLLER);
-  const tom: NdMoten = { kort: [], vecka: { affar: 0, nej: 0, kedjor: [] }, saljare: [], chef };
+  const tom: NdMoten = { kort: [], vecka: { affar: 0, nej: 0, kedjor: [] }, saljare: [], kollegor: [], chef };
   if (!user.employee) return tom;
   const nu = new Date();
   const { fran, till } = veckansGranser(nu);
@@ -150,6 +155,7 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
     .map((p) => ({ id: p.id, namn: fullName(p) }))
     .sort((a, b) => a.namn.localeCompare(b.namn, "sv"));
   const namn = new Map(personer.map((p) => [p.id, fullName(p)]));
+  const kollegor = personer.map((p) => ({ id: p.id, namn: fullName(p) })).sort((a, b) => a.namn.localeCompare(b.namn, "sv"));
 
   // Den som bokat eller håller ett möte kan ha slutat: hämta de namn som saknas.
   const saknade = new Set<string>();
@@ -172,6 +178,36 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
     for (const m of (data ?? []) as unknown as MoteRad[]) {
       const rad = historikRad(m);
       historik.set(m.kedja_id, [...(historik.get(m.kedja_id) ?? []), rad]);
+    }
+  }
+
+  // Vilka som är med på de öppna mötena: kalenderhändelsens deltagare. Kortet syns redan (RLS på mote_kort),
+  // så service role här visar inget mer än mötet självt. Hållaren står i `hallsAv` och tas inte med.
+  const narvaro = new Map<string, { med: { id: string; namn: string; svar: string }[]; gaster: { epost: string; svar: string }[] }>();
+  const moteIds = rader.map((r) => r.mote_id).filter((x): x is string => !!x);
+  if (moteIds.length) {
+    const { data: ev } = await supabaseAdmin().from("mote").select("id, event_id").in("id", moteIds).limit(MAX_KORT);
+    const tillMote = new Map(((ev ?? []) as { id: string; event_id: string | null }[]).filter((x) => x.event_id).map((x) => [x.event_id as string, x.id]));
+    if (tillMote.size) {
+      const { data: da } = await supabaseAdmin()
+        .from("calendar_attendee")
+        .select("event_id, employee_id, external_email, response")
+        .in("event_id", [...tillMote.keys()])
+        .limit(MAX_MOTEN);
+      const saknasNamn = new Set<string>();
+      for (const a of (da ?? []) as { employee_id: string | null }[]) if (a.employee_id && !namn.has(a.employee_id)) saknasNamn.add(a.employee_id);
+      if (saknasNamn.size) {
+        const { data } = await supabaseAdmin().from("employee").select("id, first_name, last_name").in("id", [...saknasNamn]).limit(saknasNamn.size);
+        for (const p of (data ?? []) as unknown as PersonRad[]) namn.set(p.id, fullName(p));
+      }
+      for (const a of (da ?? []) as { event_id: string; employee_id: string | null; external_email: string | null; response: string | null }[]) {
+        const id = tillMote.get(a.event_id);
+        if (!id) continue;
+        const n = narvaro.get(id) ?? { med: [], gaster: [] };
+        if (a.employee_id) n.med.push({ id: a.employee_id, namn: namn.get(a.employee_id) ?? "Okänd", svar: a.response ?? "vantar" });
+        else if (a.external_email) n.gaster.push({ epost: a.external_email, svar: a.response ?? "vantar" });
+        narvaro.set(id, n);
+      }
     }
   }
 
@@ -200,6 +236,8 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
             flyttningar: r.antal_flyttningar ?? 0,
             mal: r.mal,
             nulage: r.nulage,
+            med: (narvaro.get(r.mote_id)?.med ?? []).filter((p) => p.id !== r.halls_av),
+            gaster: narvaro.get(r.mote_id)?.gaster ?? [],
           }
         : null,
     uppfoljning: r.uppfoljning_datum
@@ -228,5 +266,5 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
   }
   vecka.kedjor.sort((a, b) => b.nar.localeCompare(a.nar));
 
-  return { kort, vecka, saljare, chef };
+  return { kort, vecka, saljare, kollegor, chef };
 }

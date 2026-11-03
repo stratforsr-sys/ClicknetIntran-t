@@ -32,6 +32,53 @@ utanför Lynes finns nu två vägar, under **Säljsamtal** i orderformuläret:
     href: "/order",
   },
   {
+    slug: "kalendern-ratt-langd",
+    rubrik: "Kalendern visar mötet i sin rätta längd",
+    ingress: "Ett möte på en kvart är en kvart högt, och ett klick under det börjar där det slutar.",
+    text: `Ett möte 10:00–10:15 slutar nu vid 10:15-strecket i **Kalendern**, så luckan till
+nästa möte syns. En halvtimme är dubbelt så hög som en kvart, och två möten i följd
+ligger kant i kant i stället för över varandra.
+
+Klicka i luckan under ett möte så börjar det nya där det förra slutar, till exempel
+10:15–10:30, och slutar senast där nästa möte börjar. Dra nedåt för ett längre möte.
+Samma sak gäller när du trycker eller håller in med fingret i telefonen.`,
+    datum: "2026-11-03",
+    roller: [],
+    href: "/kalender",
+  },
+  {
+    slug: "uppgifter-direkt",
+    rubrik: "Uppgifter ändras direkt",
+    ingress: "När du bockar av, flyttar eller ändrar en uppgift syns det med en gång.",
+    text: `Bockar du av en uppgift, öppnar den igen, flyttar den till en annan dag, stryker
+den eller ändrar prioriteten, syns ändringen i listan direkt. Nav sparar den i
+bakgrunden. Går den inte att spara blir uppgiften som den var, och du ser varför.
+
+Texten får också rätt typsnitt från början när Nav öppnas, i stället för att byta
+utseende en stund efter att sidan ritats.`,
+    datum: "2026-11-03",
+    roller: [],
+    href: "/uppgifter",
+  },
+  {
+    slug: "moten-flera-personer",
+    rubrik: "Bjud in fler till ett möte",
+    ingress: "Lägg till kollegor och fler personer hos kunden när du bokar ett möte. Tiderna visar när alla är lediga.",
+    text: `Tryck **Boka möte** i Möten. Under **Vem håller** står **Lägg till kollega**: sök på namnet
+och tryck Enter, eller välj i listan. Kollegan får en inbjudan i Nav och mötet i sin kalender, och de
+lediga tiderna visar bara tider då alla är lediga. Skriver du en egen tid står det vem som är upptagen.
+
+Under **E-post** står **Lägg till fler hos kunden**. Skriv en adress och tryck Enter eller komma; flera
+adresser går att klistra in på en gång. Var och en får en kalenderinbjudan med mejl, och en uppdatering
+om mötet flyttas eller avbokas.
+
+På kortet står vilka som är med och vad de svarat. Flyttar du mötet letar tidväljaren tider då alla
+som kommer är lediga, och bokar du en ny tid efter Uteblev följer alla med.`,
+    datum: "2026-11-03",
+    roller: [],
+    href: "/moten",
+  },
+  {
     slug: "moten-egen-tid",
     rubrik: "Boka möten på exakt tid",
     ingress: "Du kan skriva en egen tid när du bokar eller flyttar ett möte, inte bara hel eller halv timme.",

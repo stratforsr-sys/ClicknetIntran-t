@@ -700,6 +700,32 @@ function rpcfraga(schema: Schema, kalla: { fn: string; args: Record<string, unkn
 
 export type PgMatt = { pg: number; rest: number; fel: number; minne: number; ko: number; db: number; anslut: number } | null;
 
+/** Första gången i instansen läses schemat, och den första anslutningen öppnas med det. */
+function hamtaSchema(p: pg.Pool): Promise<Schema> {
+  if (!schemat || Date.now() - schematLast > 5 * 60_000) {
+    const nytt = lasSchema(p);
+    // Ett gammalt schema duger medan det nya läses; bara första gången väntar bygget.
+    if (!schemat) schemat = nytt;
+    schematLast = Date.now();
+    nytt.then((v) => { schemat = Promise.resolve(v); }, () => { schematLast = 0; if (schemat === nytt) schemat = null; });
+  }
+  return schemat;
+}
+
+/**
+ * Startar schemaläsningen och den första anslutningen utan att vänta på dem.
+ * Rutten anropar den överst, före `getCurrentUser()`, så att de går medan
+ * inloggningen läses. Förut började de först efter den, och på en kall
+ * instans väntade alla 420 frågor på dem: 679 ms i prestandaprovet
+ * 2026-11-02 (F2). Ett fel här märks inte; medPg försöker igen och faller
+ * tillbaka på REST som förut.
+ */
+export function forvarmPg(): void {
+  const p = pool();
+  if (!p || avstangd()) return;
+  hamtaSchema(p).catch(() => {});
+}
+
 /**
  * Kör `fn` med läsningarna direkt i Postgres. `identitet` är den mellanvaran
  * verifierat. Går det inte att ansluta körs `fn` som förut, och svaret är null.
@@ -714,15 +740,7 @@ export async function medPg<T>(
   const t0 = performance.now();
   let schema: Schema;
   try {
-    // Första gången i instansen läses schemat, och den första anslutningen öppnas med det.
-    if (!schemat || Date.now() - schematLast > 5 * 60_000) {
-      const nytt = lasSchema(p);
-      // Ett gammalt schema duger medan det nya läses; bara första gången väntar bygget.
-      if (!schemat) schemat = nytt;
-      schematLast = Date.now();
-      nytt.then((v) => { schemat = Promise.resolve(v); }, () => { schematLast = 0; if (schemat === nytt) schemat = null; });
-    }
-    schema = await schemat;
+    schema = await hamtaSchema(p);
   } catch (e) {
     stangAv(e);
     return { v: await fn(), matt: null };
