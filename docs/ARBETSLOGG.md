@@ -5,6 +5,45 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-03 förmiddag · Notiserna i telefonen bär navets märke (grenen `notiser-navets-marke`, ingen migration)
+
+**Beställaren:** "jag vill att du kollar hur navs notiser ser ut i telefonen. Så vill jag att du ändrar på notiserna
+till navets. Gör det ordentligt och korrekt".
+
+**Läget:** alla tre vägarna i `public/nav2/sw.js` (kalendern och klockan, repetitionen, kvällsnotisen) gav
+`/clicknet-symbol.png` som både `icon` och `badge`. På Android blev det Clicknets muspekare i statusraden och i
+notishuvudet (`badge` läses som alfamask) och den turkosa pekaren som notisens bild (157×200, inte kvadratisk).
+Navets egen bild av notisen på startsidan (`renderNotif`, `.app-ic`) visar `hubMark`. Två enheter tar emot push i
+produktionen, båda Zens: Macen (Chrome 154) och Samsungen (Android, Chrome 156). Ingen iPhone. iPhone läser varken
+`icon` eller `badge` och visar alltid appens ikon (`apple-touch-180.png`, redan navet).
+
+**Ändringen:**
+- `public/nav2/ikon/notis-192.png`: `hubMark` exakt (rundad ruta rx 10/32 i `--hub`, genomskinliga hörn), samma
+  märke som `.app-ic`.
+- `public/nav2/ikon/notis-badge-96.png`: navet vitt på genomskinligt, ritat för 24 dp (ringen radie 10 dp, linjer
+  2 dp, ekrarna 3,2–7,4 dp, punkten radie 2,2 dp). `hubMark`s egna mått gav 0,5 dp mellan ekrarna och ringen, och
+  de flöt ihop i statusraden.
+- `sw.js`: en `visa()` som sätter `icon`, `badge` och `lang: 'sv'`, och alla tre vägarna går genom den. Taggar,
+  länkar och texter är orörda.
+- `utkast.html` (`ndAppRegistrera`): `getRegistration('/nav2/')` + `update()` vid varje start. Pushens worker styr
+  ingen sida (`/nav2` ligger utanför `/nav2/`), så annars letar webbläsaren efter en ny `sw.js` först efter en push
+  (högst en gång per dygn) eller ett tryck på en notis, och första notisen efter mergen hade kunnat bära pekaren.
+  Prenumerationen ligger kvar (samma registrering).
+- Bilderna ritas av `~/nav2-utkast/delar/notisikon/notis-ikoner.mjs` (som `verktyg/app-ikoner.mjs`) och utkastraden
+  läggs av `patch-utkast.mjs` i samma mapp.
+
+**Prov:** `tests/notis-sw.mjs` (nytt, i `npm test`) kör `sw.js` i `node:vm`: alla fyra vägar (kalendern,
+repetitionen, kvällen, nätet borta) bär bild, märke och `lang`, och ingen `showNotification` går förbi `visa()`.
+Bilderna avkodas: notisbildens hörn är genomskinliga och färgerna `--hub`, `--hub-brand` och `--hub-signal`;
+märket är bara vitt där det syns, ringen hel och med luft mot ekrarna. Utkastraden finns. RÖTT mot main (7 fel),
+GRÖNT på grenen; `app-sw`, `app-vagar`, `app-manifest` och `navnyheter` gröna. Riktig Chrome (headless, localhost,
+`ServiceWorker.deliverPushMessage`): notisen bär `notis-192.png` och `notis-badge-96.png`, och Chrome hämtade båda.
+Samma registrering med mains `sw.js` visade pekaren, och efter utkastraden navet, utan ny prenumeration.
+
+**Kvar:** titta i telefonen efter mergen: öppna Nav en gång och skicka en provpush till Samsungen
+(`~/nav2-utkast/delar/notisprov/notisprov.mjs`). Står det "Chrome" överst i notisen ligger Nav inte som app i
+telefonen. Gamla Navs flik-pling (`Pling.tsx`) är orörd: den gäller datorn, inte telefonen, och gamla Nav ska bort.
+
 ## 2026-11-03 förmiddag · Zens mejl: bara Inkio-ärenden och makulerad order, allt annat i telefonen (en inställning, ingen kod, ingen migration)
 
 **Beställaren:** "jag har fått många mejl för inkio. Jag vill bara ha ärenden från inkio, när en order tas bort

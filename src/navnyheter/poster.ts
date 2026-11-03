@@ -14,6 +14,22 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "notiserna-bar-navets-marke",
+    rubrik: "Notiserna i telefonen bär navets märke",
+    ingress: "En notis från Nav ser nu ut som Nav: navet i statusraden och i notisen, inte Clicknets muspekare.",
+    text: `När Nav skickar en notis till telefonen visas navets märke, ringen med ekrarna
+och den gula punkten, både uppe i statusraden och i själva notisen. Det är samma märke
+som på appikonen och i notisen på startsidan. Förut visade notiserna Clicknets
+muspekare.
+
+Telefonen byter märke första gången du öppnar Nav. På iPhone visas appens ikon som
+förut. Står det **Chrome** i stället för **Nav** överst i notisen ligger Nav inte som
+app i telefonen: öppna Nav i Chrome och välj **Installera app** i menyn.`,
+    datum: "2026-11-03",
+    roller: [],
+    href: "/profil",
+  },
+  {
     slug: "moten-egen-tid",
     rubrik: "Boka möten på exakt tid",
     ingress: "Du kan skriva en egen tid när du bokar eller flyttar ett möte, inte bara hel eller halv timme.",
