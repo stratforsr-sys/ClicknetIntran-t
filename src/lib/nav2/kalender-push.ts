@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { pushaTill } from "@/lib/nav2/push";
 import { skaPaminna } from "@/lib/nav2/kalender-andring";
+import { nastaIKon } from "@/lib/nav2/pushko";
 import { HANDELSEKALLOR } from "@/lib/notiser";
 import { pushbaraFor, vilkaFar } from "@/lib/utskick-server";
 
@@ -25,7 +26,7 @@ export { skaPaminna };
  *
  * Pushen kommer tom (`push.ts`). Enhetens service worker frågar
  * `/nav2/kalender?push=<endpoint>` vad den gällde: `kalPushNasta` svarar med
- * den äldsta kalendernotisen som den enheten inte visat, en per push.
+ * en notis som den enheten inte visat, en per push (regeln i `pushko.ts`).
  */
 
 /** Källorna som pushas. Allt i kalendern; `utkorg-fel` är admins och pushas inte. */
@@ -157,8 +158,17 @@ export async function motespaminnelser(db: SupabaseClient, nu = new Date()): Pro
 
 export type Pushnotis = { id: number; titel: string; text: string; url: string };
 
+/** En push som kommer så här kort efter att markören flyttats hör till samma skur. */
+const SAMMA_SKUR_MS = 60_000;
+
+type Kort = { id: number; rubrik: string; detalj: string | null; created_at: string };
+
+// Trycket går via /nav2/notis, som bokför att notisen öppnades från telefonen (0271)
+// och skickar vidare till /nav2?till=<href>.
+const kort = (n: Kort): Pushnotis => ({ id: n.id, titel: n.rubrik, text: n.detalj ?? "", url: `/nav2/notis?id=${n.id}&via=push` });
+
 /**
- * Den äldsta pushbara notisen som den här enheten inte visat, eller null.
+ * Notisen som den här pushen ska visa, eller null.
  * Pushbar är det som utskicken (0255) släpper igenom till personens telefon:
  * kalendern som standard, plus de sorter hen eller superadmin slagit på. Varje
  * enhet har sin egen markör (`nav_preference` `push.kal.<enhet>`): personens
@@ -166,29 +176,54 @@ export type Pushnotis = { id: number; titel: string; text: string; url: string }
  * (en ny enhet) räknas bara de senaste femton minuterna, så att en nyss
  * påslagen telefon inte visar gamla notiser. Äldre än tolv timmar visas
  * aldrig: pushen lever inte längre än så (TTL i `push.ts`).
+ *
+ * Vilken notis i kön som visas står i `nastaIKon` (pushko.ts). Pushar som
+ * kommer samtidigt hämtar samtidigt, så markören flyttas bara om den står kvar
+ * där hämtningen läste den (provat mot databasen: av åtta samtidiga gick en
+ * igenom). Den som förlorar läser om markören och tar nästa.
  */
 export async function kalPushNasta(mig: string, endpoint: string): Promise<Pushnotis | null> {
   const db = supabaseAdmin();
   const { data: enhet } = await db.from("push_subscription").select("id").eq("employee_id", mig).eq("endpoint", endpoint).maybeSingle();
   if (!enhet) return null;
   const nyckel = `push.kal.${enhet.id as string}`;
-  const { data: pref } = await db.from("nav_preference").select("value").eq("employee_id", mig).eq("key", nyckel).maybeSingle();
-  const markor = Number((pref?.value as { id?: number } | null)?.id ?? 0);
-  const golv = new Date(Date.now() - (markor ? 12 * 60 : 15) * 60_000).toISOString();
+  const lasMarkor = async () => {
+    const { data } = await db.from("nav_preference").select("value, updated_at").eq("employee_id", mig).eq("key", nyckel).maybeSingle();
+    return data ? { id: Number((data.value as { id?: number } | null)?.id ?? 0), flyttad: Date.parse(data.updated_at as string) } : null;
+  };
+  let markor = await lasMarkor();
+  const golv = new Date(Date.now() - (markor?.id ? 12 * 60 : 15) * 60_000).toISOString();
 
   const { data } = await db
     .from("notification_event")
-    .select("id, rubrik, detalj, href")
+    .select("id, rubrik, detalj, created_at")
     .eq("employee_id", mig)
     .in("kalla", await pushbaraFor(mig, HANDELSEKALLOR.filter((k) => k !== "utbildning-repetition"), (k) => PUSHKALLOR.has(k)))
-    .gt("id", markor)
+    .gt("id", markor?.id ?? 0)
     .gte("created_at", golv)
-    .order("id", { ascending: true })
-    .limit(1);
-  const n = (data ?? [])[0] as { id: number; rubrik: string; detalj: string | null; href: string } | undefined;
-  if (!n) return null;
-  await db.from("nav_preference").upsert({ employee_id: mig, key: nyckel, value: { id: n.id }, updated_at: new Date().toISOString() }, { onConflict: "employee_id,key" });
-  // Trycket går via /nav2/notis, som bokför att notisen öppnades från telefonen (0271)
-  // och skickar vidare till /nav2?till=<href>.
-  return { id: n.id, titel: n.rubrik, text: n.detalj ?? "", url: `/nav2/notis?id=${n.id}&via=push` };
+    .order("id", { ascending: false })
+    .limit(50);
+  const ko = (data ?? []) as Kort[];
+
+  // Varje varv flyttar markören framåt, för oss eller för en push som kom samtidigt.
+  for (let varv = 0; varv <= ko.length; varv++) {
+    const n = nastaIKon(ko, markor?.id ?? 0);
+    if (!n) break;
+    const flytt = { value: { id: n.id }, updated_at: new Date().toISOString() };
+    const { data: tog } = markor
+      ? await db.from("nav_preference").update(flytt).eq("employee_id", mig).eq("key", nyckel).eq("value->>id", String(markor.id)).select("key")
+      : await db.from("nav_preference").upsert({ employee_id: mig, key: nyckel, ...flytt }, { onConflict: "employee_id,key", ignoreDuplicates: true }).select("key");
+    if (tog?.length) return kort(n);
+    markor = await lasMarkor();
+  }
+
+  // Kön är tom. Har markören just flyttats är det här en push ur samma skur
+  // (fler pushar än nya notiser, eller en som hoppats över): visa den senaste
+  // igen. Samma tagg i workern ersätter notisen utan ett nytt pling. null hade
+  // fått workern att visa repetitionen eller kvällsnotisen. Annars gällde pushen något annat
+  // (kvällsnotisen, repetitionen, ett prov), och workern frågar vidare.
+  if (!markor?.id || Date.now() - markor.flyttad > SAMMA_SKUR_MS) return null;
+  const { data: senast } = await db.from("notification_event").select("id, rubrik, detalj, created_at").eq("employee_id", mig).eq("id", markor.id).maybeSingle();
+  return senast ? kort(senast as Kort) : null;
 }
+
