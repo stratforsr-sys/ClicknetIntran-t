@@ -5,6 +5,47 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-03 kväll · Notiserna i telefonen kommer när det händer (grenen `notiser-i-tid`, EJ MERGAD, ingen migration)
+
+**Beställaren:** "Ja fixa det", om två fynd från provpusharna efter navets märke.
+
+**Vad telefonen gjorde:** beställaren öppnade Nav i Samsungen, och två provpushar gick 21:02 och 21:07 (en märkt rad,
+markören strax före, `Urgency: high`). Google svarade 201 båda gångerna, men markören `push.kal.8679377d…` stod
+still: telefonen hämtade aldrig texten. Samma sak tidigare under dagen: 18 pushar 13:15–16:15 togs emot av Google och
+hämtades inte, och 17:37 hämtade telefonen fyra notiser från eftermiddagen (520–525) i stället för de nya. Det hände
+före mergen av märket, och hämtningen i `sw.js` är orörd, så märket är inte orsaken. Provraderna är raderade, och
+telefonens markör står på 563, så eftermiddagens kö visas inte i efterhand.
+
+**Två fel i koden, och ändringen:**
+
+- `skickaPush` skickade `Urgency: "normal"`. En Android som ligger still (Doze) får skjuta upp sådana till nästa vakna
+  stund. Nu `"high"`. Alla pushar från Nav blir synliga notiser, så Android sänker inte brådskan.
+- `kalPushNasta` läste markören, valde den äldsta notisen efter den och skrev markören utan villkor. Pushar som kom
+  samtidigt hämtade samtidigt, läste samma markör och svarade med samma notis (samma tagg, alltså en notis), och
+  markören gick ett steg i stället för tio. Kön som blev kvar visades sedan, en i taget, före det som just hänt. Nu
+  flyttas markören med ett villkor på `value->>id` (PostgREST, ingen migration), och den som förlorar läser om och tar
+  nästa. Provat mot produktionens databas med en egen nyckel, sedan raderad: av åtta samtidiga flyttar från samma
+  markör gick en igenom, och av sex samtidiga första markörer (`ignoreDuplicates`) skrevs en.
+- `nastaIKon` (ny ren modul `pushko.ts`) väljer: den äldsta efter markören bland dem som ligger högst tio minuter före
+  den nyaste. Det som blev liggande längre än så hoppas över i telefonen och finns kvar i klockan.
+
+**Varför inte bara "nyast först":** varje push måste hitta en notis. Svarar `kalPushNasta` null frågar workern vidare
+och visar repetitionen eller kvällsnotisen, alltså fel text. Den gamla ordningen höll en push per notis, och det gör
+den nya också inom en skur. När den hoppar över något kan det bli fler pushar än notiser. Därför visas samma notis
+igen (samma tagg, inget nytt pling) om kön är tom och markören flyttades för under en minut sedan. Annars, alltså
+kvällsnotisen, repetitionen eller ett prov, blir svaret null som förut.
+
+**Prov:** `tests/pushko.mjs` (nytt, i `npm test`): ordningen i en skur, att det gamla hoppas över, gränsen på tio
+minuter och att `push.ts` skickar `high`. Gröna: `pushko`, `notis-sw`, `kalender-push`, `navnyheter`, `notiser`,
+`utskick`, `notiser-tackning`. tsc på de fyra berörda filerna med `@supabase/supabase-js` installerat i scratchpaden:
+samma fel som `main` (saknade `next`-moduler), inga nya, och ett planterat fel i markörens kedja fångades.
+
+**Kvar:** preview, ja, merge. Ingen ändring i `sw.js`, så det gäller utan att telefonen behöver öppna Nav. Efter
+mergen: en provpush till Samsungen. Beställaren är ombedd att sätta Chrome till Obegränsad batteri och att säga om
+någon notis kom 21:02 eller 21:07.
+
+---
+
 ## 2026-11-03 kväll · Inkio: en anteckning i ett ärende kommer som notis, inte som mejl (MERGAD `a0eb2d6`, ingen migration)
 
 **Beställaren:** "Gör så här, ta bort mejl på anteckning i ärendet för jag märkte att jag fick mycket. Behåll

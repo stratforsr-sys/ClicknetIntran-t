@@ -14,6 +14,23 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "notiserna-kommer-nar-de-hander",
+    rubrik: "Notiserna i telefonen kommer när det händer",
+    ingress: "En påminnelse inför ett möte väcker telefonen direkt, och kommer flera notiser på en gång syns alla.",
+    text: `Förut kunde en telefon som låg still vänta i timmar med Navs notiser, så att
+påminnelsen om ett möte kom efter mötet. Nu väcker notisen telefonen när den skickas.
+
+Kommer flera notiser på en gång visas var och en, i den ordning de hände. Förut blev de
+ofta en enda, och det som blev liggande visades sedan före det nya. Nu går det nya först.
+Det som aldrig kom fram i telefonen finns som förut i klockan i Nav.
+
+Kommer notiserna ändå sent i en Samsung: öppna **Inställningar**, **Appar**, **Chrome**,
+**Batteri** och välj **Obegränsad**.`,
+    datum: "2026-11-03",
+    roller: [],
+    href: "/profil",
+  },
+  {
     slug: "inkio-anteckning-i-arende-som-notis",
     rubrik: "Svaren i ett ärende i Inkio kommer som notis",
     ingress: "Ett nytt ärende och en ny status mejlas som förut. Anteckningarna i ärendet kommer i klockan och telefonen.",

@@ -48,7 +48,16 @@ function vapidJwt(endpoint: string): string | null {
 
 export type Pushutfall = { ok: boolean; status: number; borta: boolean; fel: string | null };
 
-/** En tom push till en enhet. `borta` = enheten finns inte längre (404/410) och ska tas bort. */
+/**
+ * En tom push till en enhet. `borta` = enheten finns inte längre (404/410) och ska tas bort.
+ *
+ * Brådskan är "high" (RFC 8030). En Android-telefon som ligger still sparar
+ * batteri (Doze) och får skjuta upp "normal" till nästa vakna stund, i timmar.
+ * 2026-11-03 hämtade Zens Samsung ingen av 18 pushar mellan 13:15 och 16:15,
+ * och påminnelsen om intervjun 13:15 kom upp 17:37. "high" väcker telefonen
+ * och ger workern nätet, som den behöver för att hämta texten. Varje push från
+ * Nav blir en synlig notis, så Android sänker inte brådskan.
+ */
 export async function skickaPush(endpoint: string): Promise<Pushutfall> {
   // Granskningen F2-18: bara pushtjänsternas värdar. Rader som sparades före spärren stoppas här.
   if (!arPushtjanst(endpoint)) return { ok: false, status: 0, borta: false, fel: "Adressen är ingen pushtjänst." };
@@ -57,7 +66,7 @@ export async function skickaPush(endpoint: string): Promise<Pushutfall> {
   try {
     const r = await fetch(endpoint, {
       method: "POST",
-      headers: { Authorization: `vapid t=${jwt}, k=${vapidPublik()}`, TTL: String(12 * 3600), Urgency: "normal", "Content-Length": "0" },
+      headers: { Authorization: `vapid t=${jwt}, k=${vapidPublik()}`, TTL: String(12 * 3600), Urgency: "high", "Content-Length": "0" },
     });
     const borta = r.status === 404 || r.status === 410;
     return { ok: r.status >= 200 && r.status < 300, status: r.status, borta, fel: r.ok ? null : (await r.text().catch(() => "")).slice(0, 200) || `HTTP ${r.status}` };
