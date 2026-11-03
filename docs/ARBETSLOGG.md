@@ -27,7 +27,7 @@ push** (`push_subscription` tom). Tills han slår på notiser i Nav ser han det 
 
 ---
 
-## 2026-11-03 eftermiddag och kväll · Säljsamtalet hittas själv, superadmin avgör det som saknas, och återanvända Lynes-platser (grenen `saljsamtal-sjalv`, på väg till `main` på beställarens ja, 0284 KÖRD)
+## 2026-11-03 eftermiddag och kväll · Säljsamtalet hittas själv, superadmin avgör det som saknas, och återanvända Lynes-platser (MERGAD till `main` `c51faa1` på beställarens ja, produktionen grön 17:16 UTC, 0284 KÖRD)
 
 **Beställaren:** "Navet hittar inte samtalet just där jag slår upp en order, den väljer alltid samma samtal att välja
 mellan vilket är konstigt. Det borde vara så att man inte ska välja en inspelning att den ska hitta den själv och ifall
