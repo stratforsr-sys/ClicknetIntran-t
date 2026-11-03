@@ -88,7 +88,48 @@ Inget av samtalen satt på en order. `registerutdrag` är grönt nu när 0280 k�
 **Mergen:** main hade under tiden fått säljsamtalet utan Lynes (`f6d9b55`, rad för rad samma patch som grenens
 `e13c7aa`, och sedan `400196f`/`609e5e8`). Grenen mergade därför main från punkten före den (`3b4156b`): bara farten,
 Möten med fler personer och kalenderns längd kom in, och konflikterna blev bara provkedjan i `package.json` och
-nyhetsposterna (båda; inspelningsposten ligger kvar under den nya). Dokumenten är mains med de här posterna överst.
+nyhetsposterna (båda; inspelningsposten ligger kvar under den nya). Dokumenten är mains med de här posterna överst. Medan previewen byggdes kom
+också startdatumet före signeringen (`de1c1f8`, 0285) till main. `609e5e8` bokfördes då som redan inne (`-s ours`:
+grenen hade samma kod och mains dokument), och resten mergades utan kodkrockar.
+
+---
+
+## 2026-11-03 eftermiddag · Fyra order till oktober, och startdatumet får ligga bakåt (MERGAD `de1c1f8`, 0285 KÖRD 17:00 UTC)
+
+**Beställaren:** Hedboms Måleri (den nya ordern), Städservice Ale, Roos Alltjänst och Mbix (den senaste) "ska ligga på
+förra månaden på signeringsdatum … räknas in i oktober och inte i november", och "när man lägger upp en order så [är]
+signeringsdatum som idag men startdatum, då ska man kunna backa till tidigare månader och då ska ordern räknas från då".
+
+**Mätt först:** de fyra (#39, #33, #32, #30) var signerade i oktober (23, 22, 29 och 30 okt) och räknades redan i
+oktober i Order, Provision och Säljtavlan (`period_month` genereras ur `signed_on`). Det enda som stod i november var
+**startdatumet, 2 nov på alla fyra**, i Nav och som leveransdatum och fakturaplan i Inkio. Formuläret tog inget
+startdatum före dagens (`o7DatumFalt` min = i dag), och servern nekade start före signering.
+
+**Beställarens val** (frågat): startdatum = signeringsdagen; rätta Inkio också; i formuläret avgörs månaden fortfarande
+av signeringsdatumet, startdatumet får bara backas.
+
+**Datafixen (KÖRD 2026-11-03 16:34 UTC):** `starts_on = signed_on` för de fyra i en transaktion, provkörd med rollback
+först, plus en `sales_order.corrected`-rad per order (Zen, skäl "Avtalet gäller från signeringsdagen i oktober, inte
+från 2 november."). Triggern `sales_order_till_inkio` lade fyra `rattad` i utkorgen, och `rattaICrm` skickade Inkios
+`correct-sales-order` 16:36, utan fel. **Första skarpa rättningen den vägen.** Inkio efteråt: leveransdatum och
+fakturaplan börjar på signeringsdagen (SO-2026-00102 23 okt, -00100 22 okt, -00098 29 okt, -00101 30 okt), värde,
+bindningstid och rader oförändrade, ordrarna fortfarande inskickade. Första fakturan står `expected` med ett datum i
+oktober. Skript: `~/nav2-utkast/delar/start-fore-signering/startfix.mjs` (provet av 0285: `prov0285.mjs`).
+
+**Byggt på grenen:**
+- **0285** byter `sales_order_start_efter_signering` (starts_on >= signed_on, 0068) mot
+  `sales_order_start_hogst_ett_ar_fore` (starts_on >= signed_on − 1 år). Provad mot produktionen med rollback: start
+  1 okt på en order signerad 29 okt går, precis ett år före går, ett år och en dag nekas, 0 befintliga rader bryter.
+- `tidigasteStart()` i `src/lib/order.ts`, samma räkning som Postgres (29 feb → 28 feb, korsprovat). De fyra
+  kontrollerna (`skapaOrder`, rätta godkänd, rätta ogodkänd, `sparaUtkast` i `/nav2/order`) använder den.
+- Utkastet (patch `~/nav2-utkast/delar/start-fore-signering/patch.mjs`, cmp-provad): Annat datum för starten går ett
+  år bakåt från signeringen, och är ordern signerad före i dag står **Signeringsdagen** först bland startvalen. Med
+  signering i dag ser valen ut som förut. Gamla `/order` fick samma `min`.
+- `tests/order.mjs` +4. `test:order`, `nav2-order`, `nav2-orderfalt`, `navnyheter`, `inkio`, `ordervy`,
+  `notiser-tackning` gröna. `tsc` på de ändrade filerna: samma 78 fel som basen (saknade moduler), inga nya.
+
+**Ordningen vid merge:** 0285 kan köras FÖRE mergen. Den lättar bara på villkoret, och gammal kod spärrar fortfarande
+själv. Mergas koden utan 0285 nekar databasen en start före signeringen med ett villkorsfel.
 
 ---
 

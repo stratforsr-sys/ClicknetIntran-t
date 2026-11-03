@@ -499,6 +499,22 @@ export function giltigtSigneringsdatum(datum: string, nu: Date | string = new Da
   return datum <= svensktDatum(nu);
 }
 
+/**
+ * Tidigaste dag avtalet far borja galla: ett ar fore signeringen.
+ *
+ * STARTEN FAR LIGGA FORE SIGNERINGEN (bestallaren 2026-11-03). En affar som
+ * signeras i dag kan galla fran en tidigare manad, och ordern loper och
+ * faktureras da darifran. Manaden ordern RAKNAS i ror det inte: den avgors
+ * fortfarande av signeringen (`periodFor`). Aret ar en grans mot skrivfel och
+ * star som `sales_order_start_hogst_ett_ar_fore` i 0285. 29 februari blir
+ * 28 februari aret fore, som i Postgres.
+ */
+export function tidigasteStart(signeringsdatum: string): string {
+  const ar = String(Number(signeringsdatum.slice(0, 4)) - 1).padStart(4, "0");
+  const resten = signeringsdatum.slice(4) === "-02-29" ? "-02-28" : signeringsdatum.slice(4);
+  return ar + resten;
+}
+
 /** Manaden ordern hor till, ur signeringsdatumet. Speglar den genererade kolumnen. */
 export function periodFor(signeringsdatum: string): string {
   return `${signeringsdatum.slice(0, 7)}-01`;

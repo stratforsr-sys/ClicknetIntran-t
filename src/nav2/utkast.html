@@ -14960,7 +14960,7 @@ function ordFormular(){
   const saknas = Object.keys(e).filter(k => !['mejl'].includes(k));
   const sekKlar = {kund:!['org', 'bolag', 'kontakt', 'tel'].some(k => e[k]), affar:!['p', 'lop', 'man', 'friVarde', 'friProv', 'friSkal', 'utkop'].some(k => e[k]) && !n.tj.some((_, i) => e['tj' + i]), avtal:!['start', 'avtal', 'samtal'].some(k => e[k])};
   const slut = n.start && sim.lop ? oSlut({start:n.start, lop:sim.lop}) : null;
-  const startVal = ND ? ndStartVal() : [['2026-10-09', 'I dag'], ['2026-10-12', 'Måndag 12 okt'], ['2026-11-01', '1 november']];
+  const startVal = ND ? ndStartVal(n) : [['2026-10-09', 'I dag'], ['2026-10-12', 'Måndag 12 okt'], ['2026-11-01', '1 november']];
   const samtal = OSAMTAL.filter(c => !c.dag || S.o7Igar || n.sign !== (ND ? kIdag() : '2026-10-09') || n.samtal === c.id).map(c => ({...c, match:onSammaNr(c.nr, n.tel)})).sort((a, b) => b.match - a.match);
   const tonaNy = !S._ordNyTonad; S._ordNyTonad = true;
   return `<div class="ordnyov ${tonaNy ? 'in' : ''}" role="dialog" aria-label="Ny order"><div class="ordny">
@@ -27540,10 +27540,13 @@ function ndSedanText(o){ return o.tid && o.sign === kIdag() ? o.tid : oDat(ndDag
 o7KoText = function(){ const k = ORDER.filter(x => x.st === 'inskickad' && x.samtal).length; return ndO() ? `${k} ${k === 1 ? 'order väntar' : 'order väntar'} på godkännande. Du får en notis när den är avgjord.` : `Johanna har ${k} order att godkänna. Hon godkänner oftast samma dag, och du får en notis.`; };
 
 /* ---------- Formuläret ---------- */
-function ndStartVal(){
+function ndStartVal(n){
   const i = kIdag(), m = frPlus(ndMandag(i), 7), f = ndManadFore(ndManad(), -1) + '-01';
-  return [[i, 'I dag'], [m, `Måndag ${+m.slice(8)} ${FRMK[+m.slice(5, 7)]}`], [f, `1 ${FRMAN[+f.slice(5, 7)].toLowerCase()}`]];
+  // Signerad före i dag: avtalet gäller oftast från signeringen (2026-11-03).
+  const s = n && n.sign && n.sign < i ? [[n.sign, 'Signeringsdagen']] : [];
+  return [...s, [i, 'I dag'], [m, `Måndag ${+m.slice(8)} ${FRMK[+m.slice(5, 7)]}`], [f, `1 ${FRMAN[+f.slice(5, 7)].toLowerCase()}`]];
 }
+const ndStartMin = n => { const d = (n && n.sign) || kIdag(); return (+d.slice(0, 4) - 1) + (d.slice(4) === '-02-29' ? '-02-28' : d.slice(4)); };
 function ndSignKnappar(n){ const i = kIdag(), g = frPlus(i, -1); return `<button type="button" data-onsign="${i}" aria-pressed="${n.sign === i}">I dag</button><button type="button" data-onsign="${g}" aria-pressed="${n.sign === g}">I går</button>`; }
 const _ndOrdNyStart = ordNyStart;
 ordNyStart = function(fran){
@@ -27554,13 +27557,13 @@ ordNyStart = function(fran){
   return r;
 };
 o7DatumVal = function(k, n){
-  const fast = k === 'sign' ? (ndO() ? [kIdag(), frPlus(kIdag(), -1)] : ['2026-10-09', '2026-10-08']) : (ndO() ? ndStartVal().map(x => x[0]) : ['2026-10-09', '2026-10-12', '2026-11-01']), v = n[k], annat = v && !fast.includes(v);
+  const fast = k === 'sign' ? (ndO() ? [kIdag(), frPlus(kIdag(), -1)] : ['2026-10-09', '2026-10-08']) : (ndO() ? ndStartVal(n).map(x => x[0]) : ['2026-10-09', '2026-10-12', '2026-11-01']), v = n[k], annat = v && !fast.includes(v);
   return `<button type="button" data-o7annat="${k}" aria-pressed="${annat || S.o7Annat === k}">${annat ? oDat(v) : 'Annat datum'}</button>`;
 };
 o7DatumFalt = function(k, n){
   if (S.o7Annat !== k) return '';
   const i = ndO() ? kIdag() : '2026-10-09';
-  const [min, max, l] = k === 'sign' ? [ndO() ? ndManadFore(ndManad(), 1) + '-01' : '2026-09-01', i, 'Signeringsdatum'] : [i, ndO() ? frPlus(i, 270) : '2027-06-30', 'Avtalet börjar gälla'];
+  const [min, max, l] = k === 'sign' ? [ndO() ? ndManadFore(ndManad(), 1) + '-01' : '2026-09-01', i, 'Signeringsdatum'] : [ndO() ? ndStartMin(n) : i, ndO() ? frPlus(i, 270) : '2027-06-30', 'Avtalet börjar gälla'];
   return `<input type="date" class="uin o7dat" data-o7dat="${k}" value="${n[k] || ''}" min="${min}" max="${max}" aria-label="${l}">`;
 };
 // Bolagsverket: repots bolagsuppslag via Inkio, när numret är skrivet.

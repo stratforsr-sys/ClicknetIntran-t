@@ -32,6 +32,21 @@ uppladdad inspelning eller utan, med ett skäl som står på ordern.`,
     href: "/order",
   },
   {
+    slug: "order-start-fore-signering",
+    rubrik: "Startdatumet kan ligga bakåt i tiden",
+    ingress: "En order kan gälla från en tidigare månad, även när den signeras i dag.",
+    text: `Under **Avtalet börjar gälla** i orderformuläret går **Annat datum** nu upp till ett år
+bakåt, även före signeringen. Avtalet löper och faktureras i Inkio från det datumet.
+
+Är ordern signerad före i dag står **Signeringsdagen** först bland valen, så att en affär som
+skrevs på förra veckan kan gälla från den dagen med ett tryck.
+
+Vilken månad ordern räknas i för provision och säljtavla avgörs som förut av signeringsdatumet.`,
+    datum: "2026-11-03",
+    roller: [],
+    href: "/order",
+  },
+  {
     slug: "saljsamtal-utan-lynes",
     rubrik: "Säljsamtalet när Lynes inte har det",
     ingress: "Ladda upp inspelningen som mp3, eller skicka in ordern utan inspelning och låt chefen godkänna den.",

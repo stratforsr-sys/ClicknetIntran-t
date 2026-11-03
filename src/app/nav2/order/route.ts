@@ -7,7 +7,7 @@ import { svenskTid } from "@/lib/nav2/orderforma";
 import { notifieraFlera } from "@/lib/notishandelse-server";
 import { kaAnteckning, kretsForKund } from "@/lib/crm/inflode-server";
 import { tomUtkorgen } from "@/lib/utkorg-server";
-import { LOPTIDER, giltigBindningstid, giltigTelefon, giltigtSigneringsdatum, normaliseraOrgnr } from "@/lib/order";
+import { LOPTIDER, giltigBindningstid, giltigTelefon, giltigtSigneringsdatum, normaliseraOrgnr, tidigasteStart } from "@/lib/order";
 import { tolkaBelopp } from "@/lib/provision";
 import { angivenProvision, bevakaIgen, provisionSenare, rabattAnteckning, rabattUrFormular, tjansterUrFormular } from "@/lib/orderregler";
 import { medNyckel } from "@/lib/nav2/nyckel";
@@ -462,7 +462,7 @@ async function sparaUtkast(falt: Record<string, unknown>, mig: string, hanterare
   // sparas är det som sedan skickas in (granskningen S08).
   if (!giltigtSigneringsdatum(signerad)) return svar({ fel: "Signeringsdatumet är ogiltigt eller ligger i framtiden." }, 400);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) return svar({ fel: "Skriv när avtalet börjar gälla." }, 400);
-  if (start < signerad) return svar({ fel: "Avtalet kan inte börja gälla innan det signerades." }, 400);
+  if (start < tidigasteStart(signerad)) return svar({ fel: "Avtalet kan börja gälla högst ett år före signeringen." }, 400);
   // Utköpet som i skapaOrder: kryssat kräver ett belopp över noll.
   const utkop = falt.har_utkop === "on" ? tolkaBelopp(String(falt.buyout_amount ?? "")) : null;
   if (falt.har_utkop === "on" && (utkop === null || utkop <= 0)) return svar({ fel: "Utköpsbeloppet gick inte att tolka. Ta bort krysset om affären inte har något utköp." }, 400);
