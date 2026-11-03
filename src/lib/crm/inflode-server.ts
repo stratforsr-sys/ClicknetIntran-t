@@ -4,8 +4,10 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 import { notifieraFlera } from "@/lib/notishandelse-server";
 import { nivaFor } from "@/lib/nav2/forma";
 import { avtaletsOrder, inkioKonfigurerad, inkioKund, inkioLank, inkioUrl, kundhistorik, type Kundaktivitet } from "./inkio";
+import { arSlutbetald } from "./ekonomi-server";
 import {
   aktivitetsrader,
+  attJamfora,
   attLasa,
   avtryck,
   jamfor,
@@ -36,8 +38,10 @@ import {
  * Varje kund som har en order i Nav (inte utkast) läses med ett anrop: den
  * med något nytt varje minut, den tysta minst var femte (`attLasa`). Hela
  * svaret får ett avtryck; är det samma som förra gången skrivs bara att
- * kunden lästs. Databasen är Nano och swappar (2026-11-02) — trettio kunder
- * i minuten får inte bli trettio skrivningar i minuten.
+ * kunden lästs, och en gång i timmen jämförs Navs kopia ändå (`attJamfora`),
+ * så att en rad som försvunnit därifrån kommer tillbaka. Databasen är Nano
+ * och swappar (2026-11-02) — trettio kunder i minuten får inte bli trettio
+ * skrivningar i minuten.
  * =============================================================================
  *
  * Det som kommer in:
@@ -46,7 +50,8 @@ import {
  *   - ger notis till kretsen (`kretsen` i inflode.ts) — aldrig till den som
  *     skrev, aldrig om Navs eget eko, aldrig om det gamla (tolv timmar);
  *   - makulerar, markerar betald eller avslutar avtalsbevakningen när Inkio
- *     säger det om en kopplad order (`styr_status`);
+ *     säger det om en kopplad order (`styr_status`); betald först när ordern är
+ *     slutbetald, alla fakturor i planen betalda (`arSlutbetald`, som Inkio);
  *   - kopplar äldre order på organisationsnummer när det är entydigt.
  *
  * Kastar aldrig. Fel per kund står på `crm_kund.fel`; står hela bevakningen
@@ -69,6 +74,8 @@ export type Bevakning = {
   notiser: number;
   status: number;
   kopplade: number;
+  /** Rader som saknades i Navs kopia och lades tillbaka (`attJamfora`). */
+  lagade: number;
   fel: string[];
   ms: number;
 };
@@ -204,7 +211,7 @@ async function iTur<T>(lista: readonly T[], fn: (x: T) => Promise<void>): Promis
  */
 export async function bevaka(o: { bara?: readonly string[] } = {}): Promise<Bevakning> {
   const start = Date.now();
-  const ut: Bevakning = { kunder: 0, vilande: 0, lasta: 0, ororda: 0, nya: 0, andrade: 0, notiser: 0, status: 0, kopplade: 0, fel: [], ms: 0 };
+  const ut: Bevakning = { kunder: 0, vilande: 0, lasta: 0, ororda: 0, nya: 0, andrade: 0, notiser: 0, status: 0, kopplade: 0, lagade: 0, fel: [], ms: 0 };
   const klar = () => ({ ...ut, ms: Date.now() - start });
 
   try {
@@ -319,13 +326,19 @@ async function varv(o: { bara?: readonly string[] }, ut: Bevakning, styrStatus: 
       const historik = await kundhistorik(kundId);
       ut.lasta++;
       const helt = avtryck(historik.items);
-      if (kund.forsta_klar && kund.avtryck === helt) {
+      const samma = kund.forsta_klar && kund.avtryck === helt;
+      if (samma && !attJamfora(org, kund.senast_last, Date.now())) {
         ut.ororda++;
         ororda.push(org);
         return;
       }
 
-      await lasIn(org, kund, historik.items, historik.roller, perKund.get(org) ?? [], personer, styrStatus, ut);
+      await lasIn(org, kund, historik.items, historik.roller, perKund.get(org) ?? [], personer, styrStatus, ut, samma);
+      if (samma) {
+        ut.ororda++;
+        ororda.push(org);
+        return;
+      }
       const nuIso = new Date().toISOString();
       await db
         .from("crm_kund")
@@ -395,7 +408,8 @@ async function kaOmAnteckningar(): Promise<void> {
 }
 
 /** En kunds historik in i `crm_handelse`, med notiser, status och koppling. */
-async function lasIn(org: string, kund: Kundrad, items: Parameters<typeof tolkaPost>[0][], roller: Readonly<Record<string, string>>, ordrar: Order[], personer: Personer, styrStatus: boolean, ut: Bevakning) {
+/** `lagaKopian`: Inkios svar är detsamma som förra gången, och bara det som saknas i Navs kopia skrivs. */
+async function lasIn(org: string, kund: Kundrad, items: Parameters<typeof tolkaPost>[0][], roller: Readonly<Record<string, string>>, ordrar: Order[], personer: Personer, styrStatus: boolean, ut: Bevakning, lagaKopian = false) {
   const db = supabaseAdmin();
   const rader = items.map((p) => tolkaPost(p, roller)).filter((r): r is Rad => r !== null);
   const sedda = new Set<string>();
@@ -421,7 +435,8 @@ async function lasIn(org: string, kund: Kundrad, items: Parameters<typeof tolkaP
     const f = jamfor(tidigare.get(r.extern_id), r);
     if (f.typ === "samma") continue;
     const av = await personer.fran(r.forfattare_epost);
-    if (f.typ === "ny") ut.nya++;
+    if (lagaKopian) ut.lagade++;
+    else if (f.typ === "ny") ut.nya++;
     else ut.andrade++;
     att.push({ r, f, av });
     skriv.push({
@@ -452,6 +467,8 @@ async function lasIn(org: string, kund: Kundrad, items: Parameters<typeof tolkaP
   // Raden först: en notis om något som inte går att se i Nav är värre än ingen.
   const { error } = await db.from("crm_handelse").upsert(skriv, { onConflict: "system,extern_id" });
   if (error) throw new Error(`crm_handelse: ${error.message}`);
+  // Inkio har inte ändrats, bara kopian: notisen, statusen och kopplingen har redan hänt en gång.
+  if (lagaKopian) return;
 
   let krets: string[] | null = null;
   for (const { r, f, av } of att) {
@@ -478,7 +495,9 @@ async function lasIn(org: string, kund: Kundrad, items: Parameters<typeof tolkaP
     }
   }
 
-  ut.kopplade += await koppla(org, kund, unika, ordrar, kopplingar);
+  // Inte `+= await`: summan lästes före väntan, och fyra kunder i taget skrev över varandra (provet räknade 10 av 20).
+  const kopplade = await koppla(org, kund, unika, ordrar, kopplingar);
+  ut.kopplade += kopplade;
 }
 
 /**
@@ -522,6 +541,15 @@ async function tillampa(s: Statusandring, bolag: string, personer: Personer): Pr
     }
   }
 
+  // BETALD = SLUTBETALD, som i Inkio (`ekonomi.ts`): en betald faktura av tolv gör inte ordern
+  // betald. Ordern sätts betald först när Inkio säger att varje faktura i planen är betald;
+  // fram till dess syns betalningarna på kortet ("3 av 12 betalda").
+  if (s.vad === "betald") {
+    const b = await arSlutbetald(inkioOrder);
+    if (!b?.slutbetald) return false;
+    s = { ...s, skal: `Slutbetald i Inkio: ${b.betalda} av ${b.totalt} fakturor betalda.` };
+  }
+
   const { data: andrad, error } = await db.rpc("lk_inkio_andra_order", { p_order: orderId, p_vad: s.vad, p_skal: s.skal });
   if (error) {
     // Aldrig tyst igen: raden står redan i crm_handelse med det nya läget, så
@@ -563,7 +591,7 @@ async function tillampa(s: Statusandring, bolag: string, personer: Personer): Pr
       av: null,
       kalla: "order-betald",
       typ: "order",
-      rubrik: `Betald: ${o?.company_name ?? bolag}`,
+      rubrik: `Slutbetald: ${o?.company_name ?? bolag}`,
       detalj: `${s.skal} Provisionen är oförändrad — den utgår från signeringen.`,
       href: `/order/${orderId}`,
       objekt: { typ: "sales_order", id: orderId },

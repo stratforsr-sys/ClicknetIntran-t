@@ -680,6 +680,15 @@ export async function inkioOrder(orderId: string): Promise<{ id: string; state: 
   }
 }
 
+/**
+ * En läsning ur Inkio, för det kortet bara visar: orderns ekonomi
+ * (`ekonomi-server.ts`) läser ett tiotal av Inkios egna sidors anrop. Bara GET:
+ * den skriver aldrig, i någon miljö.
+ */
+export function inkioLas<T>(sokvag: string, query?: Record<string, unknown>): Promise<T> {
+  return anrop<T>("GET", sokvag, { query });
+}
+
 /** En rad på en orders tidslinje i Inkio. Bara produktionen. */
 export async function skrivPaOrder(orderId: string, text: string): Promise<void> {
   if (!inkioFarSkriva()) throw new Error("Inkio skrivs bara från produktionen.");

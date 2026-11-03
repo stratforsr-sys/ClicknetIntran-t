@@ -24,6 +24,78 @@ borttagningen görs i Inkio också.
 
 Flikarna Aktivitet och Historik är nu en enda flik, **Historik**, som på kundsidan i
 Inkio. Allt som hänt med kunden står där, och siffrorna 1–5 byter flik.`,
+    datum: "2026-11-03",
+    roller: [],
+    href: "/order",
+  },
+  {
+    slug: "kalendern-1-1-en-gang-eller-serie",
+    rubrik: "1:1 en gång eller som serie, med vem som helst",
+    ingress: "En 1:1 kan bokas en enda gång, och alla anställda går att välja.",
+    text: `Välj **Ny händelse → 1:1** i Kalendern. Under **Upprepas** är **Upprepas inte**
+förvalt, och **Varje vecka** eller **Varannan vecka** gör den till en serie. Förut
+blev varje 1:1 en serie varannan vecka, också när du bara ville boka en gång.
+
+Efter de tre förslagen på personer finns nu ett sökfält med alla anställda. Skriv
+några bokstäver och välj i listan, eller tryck Enter. Fältet finns också för möten
+och i rutan som öppnas när du klickar i kalendern.`,
+    datum: "2026-11-02",
+    roller: [],
+    href: "/kalender",
+  },
+  {
+    slug: "kalendern-serier-och-ombud",
+    rubrik: "Kalendern: serier och ombud som i Outlook",
+    ingress: "Hela serien flyttar alla gångar från i dag, och ingen gång försvinner utan besked.",
+    text: `Drar du ett möte i en serie till en annan dag och väljer **Hela serien** flyttas
+alla gångar från i dag. Förut flyttades bara gångarna från den du drog, och
+veckorna före kunde få två möten.
+
+Ändrar du **den här och följande**, och en gång längre fram har ändrats för sig,
+ställs den gången in, som i Outlook. Gäster utifrån får ett mejl om att den är
+inställd, och den som bara var med på just den gången får en notis. **Ångra**
+tar tillbaka allt, också gångens bilagor och påminnelser.
+
+Får du ändra i någon annans kalender och flyttar ett möte som du själv är med på,
+står ditt eget svar kvar. Ändrar du bara vilka som är med får arrangören veta
+det i klockan.`,
+    datum: "2026-11-02",
+    roller: [],
+    href: "/kalender",
+  },
+  {
+    slug: "laget-bara-saljarna",
+    rubrik: "Laget räknar bara säljarna",
+    ingress: "Summan i Laget är säljarnas och går ihop med takten och listan.",
+    text: `Under **Provision → Laget** räknade summan och delarna med allas provision:
+också din egen försäljning, ditt övertäck och bonusar till andra än säljare.
+Takten, **Nått en nivå** och listan räknade bara säljarna. Nu räknar hela Laget
+bara säljarna, så att siffrorna går ihop.
+
+**Perioder** och **Fastställ** tar med alla som förut, eftersom det är det som
+betalas ut.`,
+    datum: "2026-11-02",
+    roller: ["sales_manager", "ceo", "finance"],
+    href: "/provision",
+  },
+  {
+    slug: "orderns-ekonomi-ur-inkio",
+    rubrik: "Ordern visar ekonomin i Inkio: fakturering, utbetalning och betalningar",
+    ingress: "Var ordern står hos ekonomi, fakturaplanen, finansbolagets utbetalning, avtalet och leveransen, direkt ur Inkio.",
+    text: `Öppna en order, gå till **Order** och fäll ut den. Under Inkio-raden står
+**Ekonomi**, läst ur Inkio när du öppnar den:
+
+- hur ordern faktureras (intern eller finansierad, hur ofta och betalningsvillkoren)
+- var den står hos ekonomi, steg för steg som i Inkios orderhantering
+- fakturaplanen, med vilka fakturor som är betalda, förfallna eller saknas i Fortnox
+- om finansbolaget har betalat ut, och hur länge det har väntat
+- avtalet: status, nästa faktura, fakturerade perioder och om kunden sagt upp
+- produktionskortet och leveransdatumet
+- fakturorna med påminnelser och indrivning, och filerna och samtalen i Inkio
+
+Rutan **Ekonomi** högst upp på kortet säger det viktigaste, till exempel
+**väntar på ekonomi** eller **3 av 12 betalda**. En order räknas som betald först
+när alla fakturor i planen är betalda, som i Inkio.`,
     datum: "2026-11-02",
     roller: [],
     href: "/order",
@@ -39,7 +111,7 @@ larm kommer om morgonjobbets kvitto inte går att läsa.
 I **Händelseloggen** står en felrapport som någon skrivit under **Skapande**, och den som
 tilldelar, svarar på eller följer ett fel under **Ändring**. Bara fel som navet fångat
 självt står under **System**.`,
-    datum: "2026-11-03",
+    datum: "2026-11-02",
     roller: ["sales_manager", "ceo", "admin"],
     href: "/fel",
   },

@@ -474,12 +474,14 @@ export function kretsen(o: { superadmin: readonly string[]; saljare: readonly st
  * I PRODUKTIONEN gäller samma filter så länge `NOTIS_PROV_TILL` är satt där
  * (beställaren 2026-11-02: provet görs i produktionen, där Inkio-nycklarna
  * finns, och ingen annan får en notis). Ta bort variabeln när bevakningen
- * slås på för alla.
+ * slås på för alla. Satt men tom (blanksteg, bara kommatecken) är provläge
+ * med ingen på listan, inte alla: ett felskrivet värde får aldrig släppa ut
+ * notiserna till alla.
  */
 export function provfilter(ids: readonly (string | null | undefined)[], env: Readonly<Record<string, string | undefined>> = process.env): string[] {
   const rena = [...new Set(ids.filter((x): x is string => Boolean(x)))];
+  if (env.VERCEL_ENV === "production" && env.NOTIS_PROV_TILL === undefined) return rena;
   const till = new Set((env.NOTIS_PROV_TILL ?? "").split(",").map((x) => x.trim()).filter(Boolean));
-  if (env.VERCEL_ENV === "production" && !till.size) return rena;
   return rena.filter((id) => till.has(id));
 }
 
@@ -549,6 +551,8 @@ export const VARM_MS = 48 * 60 * 60 * 1000;
 export const NAV_VARM_MS = 14 * 24 * 60 * 60 * 1000;
 /** Alla andra läses minst så här ofta. */
 export const KALL_MS = 5 * 60 * 1000;
+/** Varje kund jämförs rad för rad med Navs kopia minst så här ofta, även när Inkios svar är detsamma. */
+export const JAMFOR_MS = 60 * 60 * 1000;
 
 export type Lasbar = {
   org: string;
@@ -598,6 +602,23 @@ export function attLasa(kunder: readonly Lasbar[], nu: number): string[] {
   // Trettio sekunders marginal: ett varv som började 4:59 efter det förra ska inte vänta till 5:59.
   const forfallna = kalla.filter((k) => nu - k.last >= KALL_MS - 30_000).sort((a, b) => a.last - b.last);
   return [...varma, ...forfallna.slice(0, Math.ceil(kalla.length / 4)).map((k) => k.org)];
+}
+
+/**
+ * KOPIAN LAGAS ÄVEN NÄR INKIO ÄR TYST (provet i produktionen 2026-11-02). Är
+ * avtrycket detsamma hoppar varvet över jämförelsen med `crm_handelse`, så en
+ * rad som försvunnit ur Navs kopia kom inte tillbaka förrän något ändrades hos
+ * kunden i Inkio. Därför jämförs varje kund rad för rad en gång i timmen ändå,
+ * vid första läsningen efter att kundens timme slagit om. Timmen slår om på
+ * olika minut för olika kunder, så att de inte jämförs i samma varv.
+ */
+export function attJamfora(org: string, last: string | null, nu: number): boolean {
+  const t = last ? Date.parse(last) : NaN;
+  if (!Number.isFinite(t)) return true;
+  let h = 0;
+  for (let i = 0; i < org.length; i++) h = (Math.imul(h, 31) + org.charCodeAt(i)) >>> 0;
+  const timme = (x: number) => Math.floor((x + (h % JAMFOR_MS)) / JAMFOR_MS);
+  return timme(t) !== timme(nu);
 }
 
 // -----------------------------------------------------------------------------

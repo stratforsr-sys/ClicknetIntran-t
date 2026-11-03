@@ -13,6 +13,7 @@ import {
   KALL_MS,
   aktivitetsrader,
   anteckningsversioner,
+  attJamfora,
   attLasa,
   avtryck,
   etikett,
@@ -205,7 +206,8 @@ rubrik("Provfiltret");
   ok("previewen med: bara de listade", JSON.stringify(provfilter(ids, { VERCEL_ENV: "preview", NOTIS_PROV_TILL: prov })) === '["zen"]');
   ok("produktionen utan: alla, en gång var", JSON.stringify(provfilter(ids, { VERCEL_ENV: "production" })) === '["zen","fredrik"]');
   ok("produktionen med: bara de listade", JSON.stringify(provfilter(ids, { VERCEL_ENV: "production", NOTIS_PROV_TILL: prov })) === '["zen"]');
-  ok("produktionen med en tom variabel: alla", provfilter(ids, { VERCEL_ENV: "production", NOTIS_PROV_TILL: " , " }).length === 2);
+  ok("produktionen med en tom variabel: ingen, inte alla", provfilter(ids, { VERCEL_ENV: "production", NOTIS_PROV_TILL: " , " }).length === 0);
+  ok("produktionen med en helt tom variabel: ingen", provfilter(ids, { VERCEL_ENV: "production", NOTIS_PROV_TILL: "" }).length === 0);
   ok("lokalt utan miljö: ingen", provfilter(ids, {}).length === 0);
 }
 
@@ -394,6 +396,38 @@ rubrik("Vilka kunder som läses: varma varje minut, kalla var femte");
   ok("tjugo tysta: högst fem per varv", mest <= 5, `${mest}`);
   ok("tjugo tysta: ingen väntar mer än åtta minuter", langst <= 8 * MIN, `${langst / MIN} min`);
   ok("tjugo tysta: alla läses inom en timme", [...sist.values()].every((t) => t >= NU + 50 * MIN));
+}
+
+rubrik("Kopian lagas även när Inkio är tyst: rad för rad en gång i timmen");
+{
+  const MIN = 60 * 1000;
+  const sedan = (ms) => new Date(NU - ms).toISOString();
+  ok("aldrig läst: jämförs", attJamfora("556782-8743", null, NU));
+  ok("trasig tid: jämförs", attJamfora("556782-8743", "inte en tid", NU));
+  ok("läst för en timme sedan: jämförs", attJamfora("556782-8743", sedan(60 * MIN), NU));
+
+  // Trettio kunder i två timmar: varje minut (varma) och var femte (kalla).
+  const orgnr = Array.from({ length: 30 }, (_, i) => `5567${String(i).padStart(2, "0")}-${String(1000 + i * 37)}`);
+  const varv = (steg) => {
+    const per = new Map(orgnr.map((o) => [o, 0]));
+    const perMinut = new Map();
+    for (const org of orgnr) {
+      let last = NU;
+      for (let nu = NU + steg; nu <= NU + 120 * MIN; nu += steg) {
+        if (attJamfora(org, new Date(last).toISOString(), nu)) {
+          per.set(org, per.get(org) + 1);
+          perMinut.set(nu, (perMinut.get(nu) ?? 0) + 1);
+        }
+        last = nu;
+      }
+    }
+    return { per: [...per.values()], mest: Math.max(0, ...perMinut.values()) };
+  };
+  const varma = varv(MIN);
+  const kalla = varv(5 * MIN);
+  ok("varma: var och en jämförs exakt två gånger på två timmar", varma.per.every((n) => n === 2), varma.per.join(","));
+  ok("kalla: var och en jämförs exakt två gånger på två timmar", kalla.per.every((n) => n === 2), kalla.per.join(","));
+  ok("varma: högst fyra i samma minut, inte alla på en gång", varma.mest <= 4, `${varma.mest}`);
 }
 
 rubrik("Första läsningen: varm efter det som hänt i Inkio, inte efter läsningen");
