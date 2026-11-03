@@ -20,6 +20,12 @@ den inte gör det så notiferar den superadmin." Ja till beskrivningen: "Ja det 
    problem på Eves plats (2 samtal). Inget av samtalen satt på en order.
 3. *`franniel@clicknet.se`:* 245 samtal sedan 2026-10-28, 16 över fem minuter, ingen anställd, inspelningarna
    `misslyckad` (Lynes länkar gäller 30 min). Vem det är vet bara beställaren. Frågan är ställd men obesvarad.
+4. *Ett tillägg fick aldrig sitt samtal* (hittat under provet mot produktionsdatan). Spärren kördes medan ordern var
+   ett utkast, och i `valjOrder` vinner en levande order på samma nummer över ett utkast. Varje samtal till en
+   befintlig kund gick därför till den gamla affären. Listan visade bara okopplade samtal, så det gick inte att välja
+   heller. Nu tävlar förprovet som `inskickad` (`samtalForNyOrder` fick `status`), `skapaOrder` kopplar det hittade
+   samtalet för hand, och `skickaInOrder` byter status före spärren. Ett samtal före den förra affären stannar hos den,
+   och ett kvarglömt utkast tar inte längre samtalet från den riktiga ordern. `tests/samtal-order.mjs` har fyra nya fall.
 
 **Beslut och varför:**
 - **Servern letar, och klienten visar.** `hitta-samtal` kör `forprovaSaljsamtal` utan valt samtal, alltså exakt det

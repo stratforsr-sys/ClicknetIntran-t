@@ -24,6 +24,8 @@ mellan … man ska inte välja en inspelning, den ska hitta den själv och ifall
 superadmin." Ja till beskrivningen 2026-11-03 ("Ja det stämmer bygg"). Grenen bär också `inspelning-utan-lynes`
 (mp3 och utan inspelning, 0280), som aldrig mergades.
 
+- **Ett tillägg hittar sitt samtal.** Förut vann en levande order på samma nummer över den nya, som var ett utkast när
+  spärren kördes. Nu tävlar förprovet som inskickad, och det hittade kopplas för hand när ordern sparas.
 - **Inget val i formuläret.** Nav letar med spärrens eget förprov (`forprovaSaljsamtal`, ny läsning `hitta-samtal` i
   `/nav2/order`) och visar fyndet ("I dag 14:12 · 18 min, med inspelning · Hittat"). Nyckeln är säljare, signeringsdag,
   telefonnumrets siffror och formuläret (`ndSam`). Den gamla listan (OSAMTAL, `saljarens-samtal`) används inte av navet.

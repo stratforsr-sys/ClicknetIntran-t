@@ -868,17 +868,21 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
       };
     }
 
-    // Samtalet som valdes i formuläret, prövat ovan. Kopplingen bär
-    // `order_linked_by`, så svepningen i `provaSaljsamtal` lämnar den i fred.
-    if (valtSamtal) {
-      const koppling = await kopplaForHand({ samtalId: valtSamtal, orderId: rad.id, beslutadAv: user.employee!.id });
+    // Samtalet som laddades upp eller som Nav hittade, prövat ovan. Kopplingen
+    // bär `order_linked_by`, så svepningen i `provaSaljsamtal` lämnar den i
+    // fred. Det hittade kopplas för hand av samma skäl som det valda: ordern är
+    // ett utkast medan spärren körs, och som utkast förlorar den samtalet till
+    // en levande order på samma nummer. Ett tillägg fick aldrig sitt samtal.
+    const kopplas = valtSamtal ?? (forprov.ok ? forprov.samtalId : null);
+    if (kopplas) {
+      const koppling = await kopplaForHand({ samtalId: kopplas, orderId: rad.id, beslutadAv: user.employee!.id });
       if (koppling.fel) {
         return {
           fel: `Säljsamtalet kunde inte kopplas: ${koppling.fel} Ordern ligger kvar som utkast på ${bolag} — koppla säljsamtalet där och skicka in den.`,
           orderId: rad.id,
         };
       }
-      await logga(user, "sales_order.call_linked", rad.id, { samtal: valtSamtal });
+      await logga(user, "sales_order.call_linked", rad.id, { samtal: kopplas, ...(valtSamtal ? {} : { hittat: true }) });
     }
 
     // SÄLJSAMTALET (beställaren 2026-10-08) på den sparade ordern. Prövat redan
@@ -1586,16 +1590,18 @@ export async function skickaInOrder(_prev: Orderstate, form: FormData): Promise<
     if (!(await harAvtal(id))) {
       return { fel: "Ladda upp det påskrivna avtalet (PDF) på ordern innan den skickas in." };
     }
-    // Utan säljsamtal går ordern in ändå, och superadmin får veta (beställaren
-    // 2026-11-03). Den godkänns när samtalet kopplats, eller av superadmin utan.
-    const saljsamtal = await provaSaljsamtal(id);
-    const undantag = saljsamtal.ok ? null : await hamtaUndantag(id);
-
     const { error } = await supabaseAdmin()
       .from("sales_order")
       .update({ status: "inskickad" })
       .eq("id", id);
     if (error) return { fel: error.message };
+
+    // Utan säljsamtal går ordern in ändå, och superadmin får veta (beställaren
+    // 2026-11-03). Den godkänns när samtalet kopplats, eller av superadmin utan.
+    // Spärren EFTER statusbytet: svepningen i den fördelar samtalen på numret,
+    // och som utkast förlorade ordern dem till en levande order på samma nummer.
+    const saljsamtal = await provaSaljsamtal(id);
+    const undantag = saljsamtal.ok ? null : await hamtaUndantag(id);
 
     await logga(user, "sales_order.submitted", id, {});
 

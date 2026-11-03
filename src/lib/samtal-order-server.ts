@@ -459,7 +459,9 @@ export async function forprovaSaljsamtal(args: {
         createdAt: o.created_at as string,
         status: o.status as string,
       })),
-      { telefonE164, skapad: nu },
+      // Ordern tävlar som det den blir. Det som hittas kopplas för hand i
+      // `skapaOrder`, så spärren på den sparade ordern ser samma samtal.
+      { telefonE164, skapad: nu, status: "inskickad" },
     ),
   );
 

@@ -160,14 +160,20 @@ const NY_ORDER = "ny-order";
  * (se `skapaOrder`), så den tävlar här som ett utkast, med samma `valjOrder()`.
  * Ett eget, snällare svar hade släppt igenom order som spärren sedan stoppar —
  * och då står utkastet där igen.
+ *
+ * `status` (2026-11-03): formuläret letar upp säljsamtalet själv, och
+ * `skapaOrder` kopplar det som hittas för hand, så spärren efteråt ser samma
+ * samtal. Då tävlar ordern som det den blir, `inskickad`. Som utkast förlorade
+ * den varje samtal till en levande order på samma nummer, och ett tillägg
+ * fick aldrig sitt säljsamtal.
  */
 export function samtalForNyOrder(
   samtal: SamtalForKoppling[],
   ordrar: OrderForKoppling[],
-  ny: { telefonE164: string | null; skapad: string },
+  ny: { telefonE164: string | null; skapad: string; status?: string },
 ): string[] {
   if (!ny.telefonE164) return [];
-  const medNy = [...ordrar, { id: NY_ORDER, contactPhoneE164: ny.telefonE164, createdAt: ny.skapad, status: "utkast" }];
+  const medNy = [...ordrar, { id: NY_ORDER, contactPhoneE164: ny.telefonE164, createdAt: ny.skapad, status: ny.status ?? "utkast" }];
   return samtal.filter((s) => !s.orderLinkedBy && valjOrder(s, medNy) === NY_ORDER).map((s) => s.id);
 }
 
