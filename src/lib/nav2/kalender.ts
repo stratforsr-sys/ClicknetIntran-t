@@ -84,14 +84,23 @@ async function privata(mig: string, poster: NdPost[]): Promise<NdPost[]> {
   return markeraPrivata(mig, poster, await privataIds(poster));
 }
 
-type Extra = Map<string, { privat: boolean; visa: string; online: string | null; ingen: boolean }>;
+type Extra = Map<string, { privat: boolean; visa: string; online: string | null; ingen: boolean; engang: boolean }>;
 
-/** Posternas möten: privat (0090), "Visa som" och länken. Bara de möten som redan står i vyn läses. */
+/**
+ * Posternas möten: privat (0090), "Visa som", länken och om serien bara har en gång. Bara de möten som redan står i
+ * vyn läses. En 1:1 som inte upprepas är en serie med en enda gång (serieregel: ends_on = starts_on), för agendan
+ * hänger på serien. Den visas och ändras som en enstaka post: ingen upprepningssymbol och ingen fråga om serien.
+ */
 async function privataIds(poster: NdPost[]): Promise<Extra> {
   const ids = [...new Set(poster.filter((p) => ["mote", "enskilt", "leverans"].includes(p.slag)).map((p) => p.ref).filter((r): r is string => Boolean(r)))];
   if (!ids.length) return new Map();
-  const { data } = await supabaseAdmin().from("calendar_event").select("id, is_private, show_as, online_url, reminder_off").in("id", ids);
-  return new Map((data ?? []).map((r) => [r.id as string, { privat: Boolean(r.is_private), visa: String(r.show_as ?? "upptagen"), online: (r.online_url as string | null) ?? null, ingen: Boolean(r.reminder_off) }]));
+  const serier = [...new Set(poster.map((p) => p.serieId).filter((s): s is string => Boolean(s)))];
+  const [{ data }, { data: serierader }] = await Promise.all([
+    supabaseAdmin().from("calendar_event").select("id, is_private, show_as, online_url, reminder_off, series_id").in("id", ids),
+    serier.length ? supabaseAdmin().from("calendar_series").select("id, starts_on, ends_on").in("id", serier).not("ends_on", "is", null) : Promise.resolve({ data: [] }),
+  ]);
+  const engang = new Set(((serierader ?? []) as { id: string; starts_on: string; ends_on: string }[]).filter((s) => s.ends_on === s.starts_on).map((s) => s.id));
+  return new Map((data ?? []).map((r) => [r.id as string, { privat: Boolean(r.is_private), visa: String(r.show_as ?? "upptagen"), online: (r.online_url as string | null) ?? null, ingen: Boolean(r.reminder_off), engang: engang.has(r.series_id as string) }]));
 }
 
 function markeraPrivata(mig: string, poster: NdPost[], extra: Extra): NdPost[] {
@@ -103,6 +112,7 @@ function markeraPrivata(mig: string, poster: NdPost[], extra: Extra): NdPost[] {
     // Mötets "Ingen påminnelse" (0212). Den egna raden går före (egnaPaminnelser, som körs efter).
     const ut: NdPost = x.ingen ? { ...p, paminnelse: null } : { ...p };
     if (x.visa !== "upptagen") ut.visaSom = x.visa;
+    if (x.engang) ut.serie = false;
     if (x.online && insyn) ut.online = x.online;
     if (!x.privat) return ut;
     return insyn ? { ...ut, privat: true } : { ...ut, privat: true, rubrik: p.rubrik === null ? null : "Privat", href: null };

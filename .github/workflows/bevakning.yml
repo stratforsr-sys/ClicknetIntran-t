@@ -1,0 +1,42 @@
+# Bevakningen av Nav, varje timme. Se scripts/drift/bevakning.sh.
+#
+# En gang i timmen racker for ett intranat och haller korningarna inom
+# GitHubs gratiskvot aven om repot blir privat (720 minuter i manaden).
+name: Bevakning
+
+on:
+  schedule:
+    - cron: "7 * * * *"
+  workflow_dispatch:
+    inputs:
+      provmejl:
+        description: "Skicka ett provmejl oavsett lage"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bevakning
+  cancel-in-progress: false
+
+jobs:
+  bevakning:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/drift
+
+      - name: Kontrollerna
+        env:
+          NAV_BACKUP_URL: ${{ secrets.NAV_BACKUP_URL }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          LARM_TILL: ${{ secrets.LARM_TILL }}
+          PROVMEJL: ${{ inputs.provmejl && '1' || '' }}
+        run: bash scripts/drift/bevakning.sh

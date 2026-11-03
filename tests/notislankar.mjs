@@ -45,6 +45,7 @@ const UNDANTAG = {
   'tid-ostamplad "/tid"': "chefens fråga gäller i dag, och Tid öppnar dagen",
   'tid-fraga "/tid"': "chefens fråga gäller i dag, och Tid öppnar dagen",
   'utkorg-fel "/fel"': "utkorgens fel har ingen egen rapport att öppna",
+  'inkio-bevakning "/fel"': "bevakningen som står still har ingen egen rapport att öppna; larmet säger hur länge",
   'personal-uppdrag "/"': "faddern har ingen egen plats i navet; Anställda är chefens vy",
   'personal-paminn "/utbildning"': "påminnelsen gäller alla kurser och rutiner som är kvar, och Utbildning visar dem först",
 };
@@ -104,12 +105,12 @@ for (const k of ["order-inskickad", "order-godkand", "order-rattad", "order-retu
   ok(`${k} → /order/<id>`, alla(k, /^`\/order\/\$\{/), lank(k).join(" "));
 ok("order-makulerad → /order/<id> när ordern finns kvar", lank("order-makulerad").some((h) => /^`\/order\/\$\{/.test(h)));
 ok("kampanjsidan → kundens kort", alla("kampanjsida-uppe", /^`\/order\/kund\//) && alla("kampanjsida-nere", /^`\/order\/kund\//));
+ok("Inkio och kundanteckningen → kundens kort (Aktivitet)", alla("order-anteckning", /^`\/order\/kund\//) && lank(null).some((h) => /^`\/order\/kund\/\$\{encodeURIComponent\(org\)\}`$/.test(h)));
 ok("provision-bonus och provision-mal → månaden", alla("provision-bonus", /^`\/provision\/manad\//) && alla("provision-mal", /^`\/provision\/manad\//));
 ok("franvaro-havd → månaden där trappan räknas om", alla("franvaro-havd", /^`\/provision\/manad\//));
 ok("tid-rattelse → chefens Att göra med raden", alla("tid-rattelse", /^`\/tid\/gora\/\$\{/));
 ok("tid-rattelse-beslut, tid-be-ratta och tid-avvikelse-avslutad → dagen", ["tid-rattelse-beslut", "tid-be-ratta", "tid-avvikelse-avslutad"].every((k) => alla(k, /^`\/tid\?dag=/)));
 ok("tid-chef-morgon och tid-chef-kvar → Att göra", alla("tid-chef-morgon", /^"\/tid\/gora"$/) && alla("tid-chef-kvar", /^"\/tid\/gora"$/));
-ok("tid-veckokoll → veckan", alla("tid-veckokoll", /^`\/tid\?vecka=/));
 ok("sjukanmälan (bekräftad, avslutad, anteckning) → anmälan", ["sjuk-bekraftad", "sjuk-avslutad", "sjuk-anteckning"].every((k) => alla(k, /^`\/franvaro\/sjuk\/\$\{/)));
 ok("frånvaro (tillbakadragen, registrerad, annan period) → ansökan", ["franvaro-tillbakadragen", "franvaro-registrerad", "franvaro-annan-period"].every((k) => alla(k, /^`\/franvaro\/\$\{/)));
 ok("fel-lagad och fel-meddelande → rapporten", alla("fel-lagad", /^`\/fel\/\$\{/) && alla("fel-meddelande", /^`\/fel\/\$\{/));

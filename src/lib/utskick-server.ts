@@ -5,6 +5,7 @@ import type { CurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { NOTIS_KALLOR, type Notis } from "@/lib/notiser";
 import { nivaFor } from "@/lib/nav2/forma";
+import { loggaSallan } from "@/lib/sallanlogg";
 import {
   KANALER, LAGER, MORGON_AVSNITT, NIVAER, OMRADEN, SORT_NAMN, SORTER,
   andra, andraMedUnder, antalAv, avsnittId, far, kanalerFor, lastAvSuperadmin, nycklarFor, nycklarForAvsnitt, omradeFor, rensa,
@@ -38,7 +39,7 @@ export async function hamtaLager(db: SupabaseClient, ids: readonly string[]): Pr
       db.from("employee_role").select("employee_id, role").in("employee_id", unika),
     ]);
     if (error) {
-      console.error("utskick: reglerna gick inte att läsa", error.message);
+      loggaSallan(`utskick:${error.message}`, "utskick: reglerna gick inte att läsa", error.message);
       return ut;
     }
     const rollerAv = new Map<string, string[]>();
@@ -61,7 +62,8 @@ export async function hamtaLager(db: SupabaseClient, ids: readonly string[]): Pr
     }
   } catch (e) {
     // Se rubriken: ingenting stängs. Men felet syns, så att en tom regel inte ser ut som "inga regler".
-    console.error("utskick: reglerna gick inte att läsa", e instanceof Error ? e.message : e);
+    const fel = e instanceof Error ? e.message : String(e);
+    loggaSallan(`utskick:${fel}`, "utskick: reglerna gick inte att läsa", fel);
   }
   return ut;
 }

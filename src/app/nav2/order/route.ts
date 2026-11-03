@@ -1,11 +1,12 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { getCurrentUser, hasRole, fullName } from "@/lib/auth";
+import { arSuperadmin, getCurrentUser, hasRole, fullName } from "@/lib/auth";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { kopplaForHand, saljarensKandidater } from "@/lib/samtal-order-server";
 import { svenskTid } from "@/lib/nav2/orderforma";
 import { notifieraFlera } from "@/lib/notishandelse-server";
-import { skrivKundanteckning } from "@/lib/crm/inkio";
+import { kaAnteckning, kretsForKund } from "@/lib/crm/inflode-server";
+import { tomUtkorgen } from "@/lib/utkorg-server";
 import { LOPTIDER, giltigBindningstid, giltigTelefon, giltigtSigneringsdatum, normaliseraOrgnr } from "@/lib/order";
 import { tolkaBelopp } from "@/lib/provision";
 import { angivenProvision, bevakaIgen, provisionSenare, rabattAnteckning, rabattUrFormular, tjansterUrFormular } from "@/lib/orderregler";
@@ -255,10 +256,83 @@ export async function POST(request: Request) {
         if (!text) return svar({ fel: "Skriv något först." }, 400);
         if (text.length > 2000) return svar({ fel: "Anteckningen är för lång." }, 400);
         if (!(await serKunden(org))) return svar({ fel: "Kunden finns inte, eller så är den inte din." }, 404);
-        const r = await skrivKundanteckning(org, text, fullName(user.employee));
-        if ("fel" in r) return svar({ fel: r.fel }, 400);
-        await db.from("audit_log").insert({ actor_id: mig, action: "customer.note_added", object_type: "customer", object_id: org, meta: { inkio: r.id } });
-        return svar({ ok: "Anteckningen är sparad i Inkio.", kommentar: r.id });
+        // 0278: anteckningen kan gälla en av kundens order, som i Inkio.
+        const omOrder = typeof b.order === "string" && b.order ? b.order : null;
+        if (omOrder) {
+          const { data: x } = await (await supabaseServer()).from("sales_order").select("id").eq("id", omOrder).eq("org_number", org).maybeSingle();
+          if (!x) return svar({ fel: "Ordern hör inte till kunden." }, 400);
+        }
+        // 0277: i Nav FÖRST, sedan via utkorgen till kunden i Inkio. Förut gick
+        // den direkt dit, och svarade inte Inkio fanns anteckningen ingenstans.
+        const namn = fullName(user.employee);
+        const { data: a, error } = await db
+          .from("kundanteckning")
+          .insert({ org_number: org, text, skriven_av: mig, skriven_namn: namn, ...(omOrder ? { om_order: omOrder } : {}) })
+          .select("id")
+          .single();
+        if (error || !a) return svar({ fel: `Anteckningen sparades inte${error ? `: ${error.message}` : "."}` }, 500);
+        await kaAnteckning(a.id as string);
+        await db.from("audit_log").insert({ actor_id: mig, action: "customer.note_added", object_type: "customer", object_id: org, meta: { anteckning: a.id } });
+        const { data: o } = await db.from("sales_order").select("company_name").eq("org_number", org).neq("status", "utkast").order("created_at", { ascending: false }).limit(1).maybeSingle();
+        await notifieraFlera(await kretsForKund(org), {
+          av: mig,
+          kalla: "order-anteckning",
+          typ: "order",
+          rubrik: `${(o?.company_name as string | undefined) ?? org}: ${namn} skrev en anteckning`,
+          detalj: text,
+          href: `/order/kund/${encodeURIComponent(org)}`,
+          objekt: { typ: "customer", id: org },
+        });
+        after(async () => {
+          await new Promise((r) => setTimeout(r, 3_000));
+          await tomUtkorgen();
+        });
+        return svar({ ok: "Anteckningen är sparad. Den skrivs till Inkio inom en minut.", kommentar: `nav:${a.id}` });
+      }
+      // 0283: ändra och ta bort sin egen anteckning, som i Inkio. Texten förut sparas i
+      // `versioner`; en borttagen står kvar för superadmin. Utkorgen gör samma sak i Inkio.
+      case "anteckning-andra":
+      case "anteckning-ta-bort": {
+        const aid = id.replace(/^nav:/, "");
+        if (!UUID.test(aid)) return svar({ fel: "Anteckningen finns inte." }, 400);
+        const { data: a } = await db.from("kundanteckning").select("*").eq("id", aid).maybeSingle();
+        if (!a || a.raderad_at || !(await serKunden(String(a.org_number)))) return svar({ fel: "Anteckningen finns inte, eller så är den redan borttagen." }, 404);
+        if (!("raderad_at" in a)) return svar({ fel: "Det går inte att ändra anteckningar än (migration 0283)." }, 503);
+        const egen = a.skriven_av === mig;
+        const org = String(a.org_number), pin = `nav:${aid}`, nu = new Date().toISOString();
+
+        if (handling === "anteckning-ta-bort") {
+          if (!egen && !arSuperadmin(user)) return svar({ fel: "Bara den som skrev anteckningen kan ta bort den." }, 403);
+          const { data: x } = await db.from("kundanteckning").update({ raderad_at: nu, raderad_av: mig }).eq("id", aid).is("raderad_at", null).select("id");
+          if (!x?.length) return svar({ fel: "Anteckningen är redan borttagen." }, 409);
+          await db.from("customer_note_pin").delete().eq("org_number", org).eq("inkio_comment_id", pin);
+          if (a.crm_id) await kaAnteckning(aid, 2, "anteckning-borttagen");
+          await db.from("audit_log").insert({ actor_id: mig, action: "customer.note_deleted", object_type: "customer", object_id: org, meta: { anteckning: aid, egen } });
+          if (a.crm_id) after(async () => { await new Promise((r) => setTimeout(r, 3_000)); await tomUtkorgen(); });
+          return svar({ ok: a.crm_id ? "Anteckningen är borttagen. Den tas bort i Inkio inom en minut." : "Anteckningen är borttagen." });
+        }
+
+        if (!egen) return svar({ fel: "Bara den som skrev anteckningen kan ändra den." }, 403);
+        const text = String(b.text ?? "").trim();
+        if (!text) return svar({ fel: "Skriv något, eller ta bort anteckningen." }, 400);
+        if (text.length > 2000) return svar({ fel: "Anteckningen är för lång." }, 400);
+        if (text === a.text) return svar({ ok: "Ingenting ändrades." });
+        const versioner = [...(Array.isArray(a.versioner) ? a.versioner : []), { text: a.text, at: a.andrad_at ?? a.skriven_at }];
+        // Samma text som lästes: två ändringar samtidigt skriver inte över varandra.
+        const { data: x } = await db
+          .from("kundanteckning")
+          .update({ text, andrad_at: nu, versioner })
+          .eq("id", aid)
+          .eq("text", a.text)
+          .is("raderad_at", null)
+          .select("id");
+        if (!x?.length) return svar({ fel: "Anteckningen ändrades samtidigt någon annanstans. Tryck på Uppdatera och försök igen." }, 409);
+        await db.from("customer_note_pin").update({ body: text }).eq("org_number", org).eq("inkio_comment_id", pin);
+        // Står den inte i Inkio än skrivs den nya texten när den skrivs dit.
+        if (a.crm_id) await kaAnteckning(aid, 2, "anteckning-andrad");
+        await db.from("audit_log").insert({ actor_id: mig, action: "customer.note_edited", object_type: "customer", object_id: org, meta: { anteckning: aid } });
+        if (a.crm_id) after(async () => { await new Promise((r) => setTimeout(r, 3_000)); await tomUtkorgen(); });
+        return svar({ ok: a.crm_id ? "Ändringen är sparad. Den skrivs till Inkio inom en minut." : "Ändringen är sparad." });
       }
       case "fast": {
         const org = String(b.org ?? "");

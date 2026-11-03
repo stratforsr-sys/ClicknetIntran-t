@@ -17,6 +17,7 @@ import { rensaGamlaNotiser } from "@/lib/notishandelse-server";
 import { rensaGammalUtskickslogg } from "@/lib/utskickslogg-server";
 import { svepKoppling } from "@/lib/samtal-order-server";
 import { tolkaOmOtolkade } from "@/lib/samtal-server";
+import { omtagsLarm } from "@/lib/samtal";
 import { gallraInspelningar } from "@/lib/inspelning-server";
 import { fodSerier } from "@/lib/upprepning-server";
 import { SKRIVLAGE } from "@/lib/nav2/skrivlage";
@@ -169,7 +170,18 @@ export async function GET(request: NextRequest) {
     // natt utan nyheter kostar en fraga och ingen skrivning.
     // Råpåsar som aldrig blev samtal — ett databasfel mitt i mottagningen.
     // Före kopplingen, så att samtalet hinner hitta sin order samma natt.
-    ["samtalsomtag", () => tolkaOmOtolkade()],
+    // En påse som fortfarande inte går att tolka fäller steget, och då larmar
+    // natten (rättelserna 2026-11-02). Förut stod den kvar i fjorton dygn utan
+    // att någon fick veta.
+    [
+      "samtalsomtag",
+      async () => {
+        const omtag = await tolkaOmOtolkade();
+        const larm = omtagsLarm(omtag);
+        if (larm) throw new Error(larm);
+        return omtag;
+      },
+    ],
     ["samtalskoppling", () => svepKoppling()],
     // Och inspelningarna som passerat sin frist utan att bli affar.
     //

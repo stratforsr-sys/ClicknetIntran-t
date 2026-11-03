@@ -5,6 +5,686 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-03 förmiddag · Möten: egen tid i tidväljaren, och bladet stängs efter en bokning (direkt på `main`, ingen migration)
+
+**Beställaren:** "när det kommer till att boka möten så kan jag bara välja hel och halv timme. Jag vill ha precis som
+kalendern att jag kan välja exakt tid helt själv. Bygg det snabbt behöver det nu", och mitt i passet, med en
+skärmbild: "När jag har bokat ett möte så kan jag efter det inte stänga den panelen".
+
+**Egen tid.** Rutten tog redan emot vilken start som helst i hela femminuter (`dagOchStart`; kalenderns funktioner
+kräver också `start % 5`). Bara dialogen visade `lediga`s halvtimmar. Under luckorna finns nu en rad med datum och
+klockslag (`type=time step=300`) i Boka, Flytta och Uteblev → Ny tid. Fälten och luckorna följer varandra: en lucka
+fyller fälten, en skriven tid som är en lucka tänder den, och dagen byts när datumet är en av dagarna. Fälten ritas
+inte om medan man skriver (`moLuckorRita` ritar bara luckorna och raden under). Klienten prövar datum, klockslag,
+hela femminuter och att tiden inte passerat; felet visas när man lämnar fälten och vid Boka, och fokus hamnar i
+klockslaget. Serverns "Välj en vardag." hamnar nu vid tidfältet (MOFELFALT). Krockvarningen: en egen tid inom
+08:00–17:00 på en dag med lediga tider krockar när en framtida halvtimme den täcker saknas i `lediga`; den säger
+bara något när svaret är säkert, och spärrar ingenting. Raden finns också när `lediga` inte går att hämta, så
+bokningen hänger inte på den.
+
+**Bladet stod kvar.** `moDlgSkicka` gjorde bara `return` vid lyckad sparning ("sidan laddas om"), men sedan
+`3852c87` (sparar utan omladdning) ritar `ndOmlas` om på plats. Bladet stod kvar med `sparar = true`, och krysset,
+Avbryt och Esc kräver `!sparar`. Nu stängs bladet vid lyckad sparning, och tavlan ritas om när datan är inne, med
+kortet markerat och kvittot som förut. Det gällde alla dialoger som går genom `moDlgSkicka` (Boka, Flytta, Hållet,
+Uteblev, Nej). Ingen annan vy har samma antagande: `sparar = true` finns annars bara i Saldo, som redan nollställer.
+
+**Prov:** `~/nav2-utkast/delar/moten-exakt-tid/patch.py` mot mains `utkast.html`. Provsidan (`bygg-prov.mjs`:
+säljardata och en fetch-stubbe för `/nav2/moten` och `/nav2/data`) i headless Chrome: egen tid 8 av 8 lägen på
+1280 och 390 (krock, femminutersfelet, dagbyte, lucka ↔ fält, passerat, fel vid Boka, rätt `dag` + `start` i
+anropet); bladet efter en bokning: på main öppet med grå knapp och krysset stänger inte, patchad stängd och ingen
+omladdning. Inte provad i produktionen.
+
+## 2026-11-02 kväll · Ändra och ta bort sin egen anteckning, och en flik som i Inkio (MERGAD till `main` `9478bc8` på beställarens ja, 0283 KÖRD)
+
+**Beställaren**, efter att tidslinjen mergats (`6c7c0ed`): "Ändra eller ta bort sin egen anteckning är inte byggt …
+Bygg det" och "bygg det med en flik som inkio". Inkios kundsida har fyra flikar (Översikt, Historik, Fakturor, Leads),
+och allt som hänt med kunden står under Historik; Navs gamla flik Historik fanns redan i sin helhet i den nya
+tidslinjen (lades upp, signerad, godkänd, Inkio, makulerad, förlängd, samtalen), så den gick upp i den.
+
+**Gränssnittet** (`~/nav2-utkast/delar/kund-anteckning/patch.py`): i navet fem flikar, Historik på Aktivitets plats
+(nyckeln `aktivitet` står kvar, så att länkar och notiser som öppnar `aktivitet` fungerar; `historik` leds dit).
+`kkFlikar()` ger ordningen för siffrorna och pilarna. På en egen anteckning från Nav: Ändra och Ta bort bredvid Fäst
+överst, synliga när man pekar (alltid på en pekskärm). Rutan att ändra är skrivrutans: verktygsraden verkar i den ruta
+knappen sitter i (`kkMd(k, t)`), Skift+Enter fortsätter en lista, Enter sparar, Esc avbryter (lyssnaren ligger på
+`window` i fångstfasen, så att Esc inte stänger kortet). Den sparade texten lyser upp en gång. "ändrad" är en knapp som
+visar versionerna, äldst sist, ritade med samma Markdown-tolk. Ta bort frågar i raden, och säger att den tas bort i
+Inkio när den står där. En borttagen syns för superadmin, överstruken: "borttagen i dag 19:49 av Zen".
+
+**Servern:** 0283 ger `kundanteckning` `andrad_at`, `versioner` (jsonb-lista, CHECK att det är en lista),
+`raderad_at` och `raderad_av`. `/nav2/order` `anteckning-andra` (bara `skriven_av = mig`; texten skrivs bara om den
+inte ändrats under tiden, `eq("text", gammal)`) och `anteckning-ta-bort` (författaren eller superadmin). Båda kräver
+att kunden syns (`serKunden`), skriver `audit_log` (`customer.note_edited`/`_deleted`, med etikett i loggforma) och
+följer Fäst överst. Utkorgen: `anteckning-andrad` → Inkio `edit-comment {id, content}` med samma `**Namn** (via Nav):`
+som när den skrevs, `anteckning-borttagen` → `delete-comment {id}` (404 = redan borta). Bara när `crm_id` finns:
+annars skriver `anteckningICrm` den text som gäller när den skrivs, och hoppar över en borttagen. Ändras eller tas den
+bort medan `add-comment` pågår köas ändringen efteråt. Kön (`kaOmAnteckningar`) hoppar över borttagna.
+
+**Funnet på vägen:** `kundaktivitetUrNav` gav `null` bara när kunden var oläst OCH saknade Nav-anteckningar. Med en
+Nav-anteckning på en oläst kund visade kortet bara den, utan Inkios historik (0277). Och med bevakningen av läser
+kortet en kopia som blir gammal (28 av 29 kunder lästa 13:14 i dag, `inflode = false`). Nu: Navs kopia bara när
+bevakningen går (`crm_installning.aktiv && inflode`) och kunden är läst; annars Inkio direkt med Navs anteckningar
+(`kundaktivitetUrInkio`). Previewen (Inkio ej kopplat) får Navs anteckningar med `{ utanInkio: true }`.
+
+**Prov:** `npm run test:inkio-inflode` (nio nya kontroller), övriga provfiler gröna, `tsc` utan nya fel mot main.
+Webbläsaren: `delar/kund-anteckning/prov.mjs` 35/35 två gånger (guiden stängs av i provet: den tar fokus när kortet
+ritas om) och tidslinjeprovet 38/38 på samma fil. `tests/registerutdrag.mjs` var grönt utom `kundanteckning.raderad_av`
+tills 0283 kördes, och är helt grönt efteråt. Fallgrop i patchskriptet: `one()` hoppar över när den nya texten redan finns, så en
+kort ny text (`<h3>Historik</h3>`) som finns på andra ställen i filen gör att ändringen tyst uteblir. Ankaret måste
+vara unikt även på den nya sidan.
+
+**Numret:** migrationen skrevs som 0279, men samma kväll blev 0279 `andrat_i_inkio` (Inkio-statusen,
+körd). 0280 och 0281 är skrivna på andra grenar och 0282 är körd, så den heter 0283. `main` slogs ihop in i grenen
+(Inkio-statusen rörde `inflode.ts`, `inflode-server.ts` och provet utan konflikt) och `utkast.html` provades om.
+2026-11-03 natt slogs `main` ihop en andra gång (1:1 en gång, S05/S06-resterna, orderns ekonomi): konflikter bara i
+provets import (`anteckningsversioner` och `attJamfora`, båda), navnyheterna och dokumenten. `utkast.html` är mains
+plus `patch.py` (cmp lika), 17 provfiler är gröna på den ihopslagna koden, och previewen av `9158132` var grön. Squash-mergad till `main` som `9478bc8` 2026-11-03 natt, produktionen grön.
+
+**0283 KÖRD** 2026-11-02 21:26 UTC på beställarens ja ("Ja du får köra migrationen och sen till main"). Kontrollerad:
+fyra kolumner, raden i `schema_migrations`, och CHECK-villkoret avvisar `{}` och `"x"` men godtar listor (insert i en
+transaktion som rullades tillbaka; `kundanteckning` hade 0 rader före och efter).
+
+---
+
+## 2026-11-02 kväll · 1:1 en gång eller som serie, och alla anställda att välja (grenen `enskilt-en-gang`, EJ MERGAD, ingen migration)
+
+Beställaren frågade varför en 1:1 alltid blir en serie ("man ska kunna välja antingen en serie eller bara en gång. Som
+vanligt liksom") och varför bara tre personer gick att välja.
+
+**Serien satt på tre ställen.** Formulärets Upprepas hade bara Varje vecka och Varannan vecka för 1:1, och
+`kOppnaForm` och typbytet satte Varannan vecka (också över en veckoserie som öppnades för redigering). Snabbkortet
+skickade Varannan vecka. Rutten gjorde om `aldrig` till `varannan` för `enskilt`. Databasen hade aldrig krävt det:
+`serieregel("aldrig")` ger ends_on = starts_on, `lk_skapa_serie` och `lk_fod_forekomster` filtrerar dagarna mot
+ends_on (provat i en rullad transaktion: en gång, och jobbet föder 0). En 1:1 förblir alltså en serie i databasen, för
+punkterna och Be om förberedelse hänger på `series_id`. Förvalet är nu Upprepas inte, som för ett möte. Varje vardag och
+Varje månad blir Upprepas inte vid byte till 1:1, och rutten nekar dem (samma regel som `serie`-handlingen).
+
+**En serie med en gång ska inte se ut som en serie.** `kalender_handelser` ger bara `series_id`, så posten fick ↻ och
+Redigera och Ställ in frågade om serien. `privataIds` läser nu också `calendar_series` (start och slut) för serierna i
+vyn, parallellt med `calendar_event`, och `markeraPrivata` ger `serie: false` när ends_on = starts_on. `serieId` står
+kvar, så 1:1-delen i kortet fungerar.
+
+**Tre personer.** Navets `kForslagPers` tog `kPers()` (alla som inte är avslutade, `hamtaPersoner`) och kapade till
+tre. Förslagen står kvar, och efter dem ett sökfält med en datalist över alla som inte redan är valda. Ett helt namn
+(valt i listan) eller Enter på det första som passar skickar en fristående knapp till `kalClick`, så att samma kod som
+för ett förslag körs (kalClick läser `t.matches`, därför en riktig knapp). I snabbkortet byter en 1:1 nu personen i
+stället för att lägga till.
+
+**Prov:** `probe/kalender-enskilt-prov.mjs` rött på main (bara två val, inget sökfält), 32 av 32 på grenen;
+`kalender-kort-prov.mjs` 20 av 20; `delar/enskilt-en-gang/prov-engang.mjs` 6 av 6 (rullad). Provets musklick på menyn
+träffade minimånaden i det headless fönstret, så knapparna trycks med `click()`.
+
+## 2026-11-02 kväll · S05/S06-resterna: kalenderns SQL-fynd, Lagets krets och månadens lås (MERGAD till `main` på beställarens ja, 0281 KÖRD)
+
+Sex frågor stod kvar efter resterna (2026-11-01). Beställaren svarade 2026-11-02 via session f8: "fixa allting",
+alltså ja till förslagen. Allt utgår från `pg_proc` efter 0278, inte från de gamla migrationsfilerna. 0276 hade redan
+skrivit om `lk_angra`.
+
+**S05 M2, delningen.** `lk_andra_serie` raderade vid "den här och följande" alla gångar från delningen, också
+undantagen (`avviker`, inte inställda). Nu ställs undantagen in (`cancelled_at`, `ics_sequence + 1`, som `lk_stall_in`):
+`calendar_event_ics` köar CANCEL till gästerna och påminnelserna avbokas. Den som var med på ett undantag men inte är med
+i den nya serien får en notis (`installd`, den första gången). De andra har fått `flyttad-serie`. Raderna står kvar
+inställda, eftersom en CANCEL för en raderad händelse aldrig går ut: `ics()` i utkorgen läser händelsen. Ångerraden bär
+`gangbilagor` och `gangpaminnelser` (det som försvann i kaskaden med de raderade gångarna) och `undantag` och
+`reminders`. `lk_angra` (dela_serie) lägger tillbaka dem. En ångerrad från före 0281 saknar nycklarna och ångras som
+förut.
+
+**S05 M6, ombudet.** `lk_notis` hoppade redan över den som gör ändringen, så ombudet fick ingen notis. Det som återstod
+var att ombudets eget svar nollställdes vid en flytt, så att hen ombads svara på sin egen flytt. Nu undantas
+`p_aktor`. Ändrar ett ombud bara deltagarna får arrangören `andrad` med `data.deltagare` (kalla
+`kalender-flyttad-tyst`, alltså klockan och inget mejl), och svaret bär `skickat.arrangoren`. Texten är
+"… ändrade deltagarna i …" och kvittot "Arrangören ser ändringen i Nav.".
+
+**S05 M7.** `lk_andra_serie` och `lk_flytta_serie` räknar i dag som `(now() at time zone 'Europe/Stockholm')::date`.
+
+**E7, flyttbannerns Hela serien.** `lk_flytta_serie` bytte veckodag för hela serien men raderade från den dragna
+gången. Gångarna mellan i dag och den stod kvar, och `korKalendersteget` födde den nya veckodagen bredvid dem. Nu gäller
+Hela serien från i dag, som i `lk_andra_serie`. `flyttaSerie` (actions.ts, både gamla Nav och Nav 2.0) räknar dagarna
+från i dag. **0281 måste köras före mergen:** den nya rutten mot den gamla funktionen föder dubbletterna direkt, medan
+mains rutt mot den nya funktionen bara lämnar en lucka som jobbet fyller.
+
+**S06 M4, Laget.** Sedan D5 räknade Lagets summa och delar alla i månadens underlag (chefens egen försäljning,
+övertäcket, bonusar till icke-säljare), medan takten, "Nått en nivå" och listan bara räknade säljarna. Beställarens
+beslut: bara säljarna. `ndPvSaljKrets` sätter `NDPVBARASALJ` under Lagets och Månadsmålens ritning, och
+`pvLaget`-överlagringen lämnar då radernas summa. Perioder och Fastställ räknar alla som förut.
+
+**S06 M7, månadens lås.** `ta_bort_ovrig_bonus` (0215) och `commission_period_stangs` (INSERT, alltså Fastställ) tar
+samma `pg_advisory_xact_lock(hashtextextended('commission_period:' || månad, 0))` före sin prövning. Ett allmänt
+stopp för alla poster i en fastställd månad gjordes INTE. `laggOvrigBonus` och `bokforProvision` prövar inte månaden i
+dag, och att stänga dem är ett nytt beslut. I produktionen har ingen post bokförts efter att dess månad stängdes.
+
+**Prov.** `~/nav2-utkast/delar/s05-s06-rester/prov-0281.mjs` kör varje fynd i en transaktion mot produktionen, först med
+funktionerna som de är och sedan med 0281, och rullar tillbaka. Det ger 16 röda före och 26 av 26 gröna efter. Låset
+provas med en andra anslutning (`pg_try_advisory_xact_lock` nekas). `prov-laget.mjs` kör utkastets egna rader i en vm:
+rött på main, grönt på grenen. `leveranskalender.mjs` har två nya kontroller (röd, sedan grön). Enhetsproven
+(navnyheter, leveranskalender, kalender, kalender-andring, upprepning, notiser, notiser-tackning, notislankar, utskick,
+provision) är gröna. `tsc --noEmit` ger bara Pling-felen som finns på main.
+
+**Fallgropar.** Skalets `grep` är en funktion som tyst hoppar över filer den tror är binära, och `route.ts` i kalendern
+(56 kB, `file` säger "data") gav noll träffar. Använd `command grep -a`. En kommentar som innehöll ordet `current_date`
+fällde provet som läser `prosrc`. Loopvariabeln `x` krockade med aliaset `x` i `jsonb_array_elements_text(...) x` i
+samma funktion.
+
+**Körning och merge.** Beställaren: "Pusha nu", och sedan "Ja" till både 0281 och mergen. Main hade dragit ifrån två
+gånger: rättelser varv 2 (`c68d4ee`, 0282) och Inkio-ekonomin (`5d5178f`). Grenen lades om på `5aee3a0` och pushades
+(`9639eb2`, previewen grön), och sedan flätades main in så att previewen byggde det sammanslagna trädet innan main rördes.
+Före körningen frågades `schema_migrations` igen (0280 ej körd, 0281 ledig), de sex funktionerna i `pg_proc` jämfördes
+med kopiorna från provet (oförändrade), och torrprovet kördes om: 26 av 26 gröna. 0281 kördes 2026-11-02 20:26 UTC med
+`apply-sql` (vakten godkände), och alla sju kontrollerna i `prosrc` hittade de nya delarna. Kvar: provet i produktionens
+gränssnitt (en serie med ett undantag och "den här och följande", Hela serien till ny veckodag, ombudets sparning).
+
+---
+
+## 2026-11-02 kväll · Inkio påslaget åt båda hållen, notiserna bara till Zen och Simon (ingen kod, ingen migration)
+
+Beställaren frågade vad det betyder att slå på Inkio, och svarade sedan "Ja sätt på inkio" och "Gör detta" om
+förslaget: slå på åt båda hållen, men låt notiser och mejl gå bara till Zen och Simon tills navet öppnas. Skälet: navet
+är stängt för alla utom dem, och säljarna med Inkio-kunder (Fredrik 17, Edvin 5, Mick 4, Eve 2) hade annars fått
+notiser de inte kan läsa och mejl om ärenden med länkar de inte kommer in på.
+
+- `NOTIS_PROV_TILL` i Production byttes från bara Zen till Zen och Simon (20:12 UTC). Den första produktionsdeployen
+  av `e0190d3` (från det andra passets push) skapades 20:11:45, alltså före bytet, så produktionen byggdes om:
+  `dpl_GyAJecFDsNWucDF7K6pcu2wL8YUt`, 20:16 UTC.
+- 20:21:48 UTC: `inflode` och `utflode` på, `nav-inkio` aktivt, i en transaktion.
+- Första varven: alla 29 kunder lästa på fyra minuter utan fel. 170 rader i `crm_handelse` (163 förut). En notis:
+  Simon Omars kommentar i ärendet "Kunden vill bestrida" på Wallgrens, med mejl (200) och push till Zen. Simon
+  sållades som författare, och Edvin och Eve (säljarna på Wallgrens) fick ingenting, alltså höll spärren. IE Cleaning,
+  som saknades i Inkio vid provet, finns nu där (Nav lade upp den 19:33 UTC), och dess poster var tysta.
+- Utkorgen: inga nya `crm`-rader de första minuterna, eftersom ingenting hänt i Nav som ska till Inkio.
+
+När navet öppnas tas `NOTIS_PROV_TILL` bort och produktionen byggs om (se NASTA_SESSION, INKIO PÅSLAGET).
+
+---
+
+## 2026-11-02 kväll · Orderns ekonomi ur Inkio, och betald = slutbetald (MERGAD till `main` `5d5178f` på beställarens ja, ingen migration)
+
+**Beställaren** frågade vad Inkio har på en order som Nav saknar, och hur man ser om fakturor är betalda. Svaret:
+faktureringen, orderhanteringen, finansbolagets utbetalning, avtalets uppsägning och nästa faktura, leveransen,
+fakturorna med indrivning, och filer och samtal. Inkio har noll fakturor, eftersom varken Fortnox eller Visma är
+kopplat i Inkio. Beställaren: "Fixa så att alla dem finns med, gör det exakt på samma backend som inkio, läs backend.
+Sen gör det som inkio med gränssnittet men med navs utseende." Fortnox: "skit i den nu". Betald: "Gör det som inkio".
+
+**Varför en läsväg och ingen kopia:** "samma backend som inkio". Kortet läser Inkio när ordern fälls ut, med samma
+anrop som Inkios ordersida, orderhantering, avtalssida och fakturasida gör (lästa ur Inkios webbklient:
+`SalesOrders-*.js`, `handlingTypes-*.js`, `statusMaps-*.js`, `InvoicingBadge-*.js`). En kopia i Nav hade kunnat glida
+isär, som `financed` på TLS gjorde. Varje anrop tar ~250 ms, och de går parallellt.
+
+**Varför betald = slutbetald:** Inkio har ingen orderstatus betald. Fakturaplanen har lägen per faktura, och
+orderhanteringens sista steg, Slutbetald, är klart när `paid >= total`, bara för intern fakturering (en finansierad
+order betalas av finansbolaget). Grenens förra regel satte hela ordern betald på den första betalda fakturan, vilket
+blir fel för månadsfakturering (Navs nya order faktureras månadsvis, 15 dagar).
+
+- `ekonomi.ts` (ren), `ekonomi-server.ts`, `inkioLas` i `inkio.ts`, `vad=ekonomi` i `/nav2/inkio`, `arSlutbetald` i
+  `tillampa`.
+- Utkastet: krokarna `kkEkonomi` och `kkHalsaEkonomi`, rutan i Nav 2.0-lagret, stegen (det som väntar nu andas och
+  stängs av med reducerad rörelse), fakturaplanen som remsa, tabellen bakom en knapp.
+- Prov: `tests/inkio-ekonomi.mjs` (ny, i `npm test`), `inkio-inflode`, `navnyheter`; skriptet tolkas med `vm.Script`.
+- **Avvikelser som rättas med data, inte kod:** #29 TLS är finansierad via Novo i Inkio men `financed = false` i Nav;
+  #28 SweAuto är utkast utan värde i Nav men inskickad (13 140 kr, kvartalsvis) i Inkio. Skriptet är provkört med
+  rollback men inte skrivet (behörighetsspärren). Fyra order väntar i Inkios orderhantering; beställaren: skit i den.
+
+**Körningen:** beställaren: "Du har fler pushar upp till 100 så kör på pushen". Grenen hoptryckt till en commit och
+pushad som `orderns-ekonomi` (namnet `inkio-fakturering` var redan taget på GitHub av rättelsen 2026-10-31). Previewen
+föll på ett typfel som proven inte såg: `lop.nasta` gick vidare som Inkios `{invoice_date, amount}` mot typen
+`{datum, belopp}` (sidan läser inte fältet). Rättat i `98a4931`, och `ekonomi.ts` + `ekonomi-server.ts` typkontrollerade
+för sig med `tsc` (stubbe för `inkio.ts`), 0 fel. Main slogs in två gånger medan bygget gick (`c68d4ee`, `e0190d3`),
+utan konflikt i koden. Previewen grön på `e7490dc`; `main` snabbspolad `35eb4a6` → `5d5178f` med samma träd som en
+commit. Production Ready 20:28 UTC. Som Zen, en engångssession: `vad=ekonomi` 200 på 0,8–2,0 s för #29, #28, #33 och
+#14, inga saknade delar, märkena som lokalt. Sessionen raderad (0 tokens kvar).
+
+---
+
+## 2026-11-02 kväll · Inkio-provet i produktionen, och tre rättelser efter det (MERGADE till `main` `e0190d3` på beställarens ja, ingen migration)
+
+**Provet** (`~/nav2-utkast/delar/inkio-inflode/TESTPROMPT.md`, rapporten `RAPPORT.md` bredvid): bevakningen kördes för
+hand mot produktionen med `inflode` på, `utflode` av och `NOTIS_PROV_TILL` = Zen. Bara GET mot Inkio. 28 av 29 kunder
+fanns i Inkio, 163 poster kom in och stämde post för post, 20 order kopplades, alla notiser gick till Zen, ett samtidigt
+varv stoppades av låset, kundkortets Aktivitet visade historiken och en anteckning från Nav stannade i Nav. Allt står
+av igen. **Inte redo att slås på för alla:** `lk_inkio_andra_order` (0277) sätter `cancelled_by = null` och
+`renewal_by = null`, och villkoren `sales_order_makulerad_av` (0034) och `sales_order_fornyelse` (0068) avvisar det.
+`tillampa` sväljer felet, och övergången är redan sparad, så den provas aldrig igen. Rättat i ett eget pass
+(`f0e10f4`, 0279, posten nedan).
+
+**Rättat här** (beställaren: "Fixa dessa"):
+- **En rad som försvann ur kopian kom inte tillbaka** förrän något ändrades hos kunden i Inkio: ett oförändrat avtryck
+  hoppade över jämförelsen med `crm_handelse`. Nu jämförs varje kund rad för rad en gång i timmen ändå (`attJamfora`
+  i inflode.ts; timmen slår om på olika minut per kund, högst två i samma minut av trettio). En lagning skriver bara
+  raderna, utan notis, status eller koppling, eftersom det redan hänt en gång, och räknas som `lagade` i varvets svar.
+- **Varvet räknade 10 kopplingar men gjorde 20:** `ut.kopplade += await koppla(…)` läste summan före väntan, och fyra
+  kunder i taget skrev över varandra.
+- **`NOTIS_PROV_TILL` med bara blanksteg eller kommatecken gav alla notis** i produktionen. Nu är en satt variabel
+  alltid provläge; bara en borttagen släpper ut notiserna till alla.
+- Omnämnandena (`@[Namn](ref:User/…)`) i notisen var redan rättade i `ed04ae7` (`renText`).
+- Prov: inkio-inflode (nytt: "Kopian lagas även när Inkio är tyst", två i Provfiltret), inkio, notiser, utskick,
+  notiser-tackning, notislankar, larm gröna efter att `main` slagits ihop (krock bara i de två docs-filerna).
+
+**Mergad och provad.** Pushkvoten höjd till 100; beställaren: "Ja kör". Grenen slogs ihop till en commit ovanpå
+`5aee3a0`, previewen grön, `main` snabbspolad till samma commit `e0190d3`, produktionen grön. Provet för en kund
+(559275-2694, `/api/jobb/inkio?kund=`, `inflode` på bara runt anropet): utan ändring `lagade: 0`; med den äldsta
+raden raderad och `senast_last` två timmar bakåt `lagade: 1` och inga notiser, ingen status, ingen koppling. Raden
+kom tillbaka med samma `extern_id` och avtryck; enda skillnaden mot den raderade är `data.omrade`, som tolkningen
+skriver sedan 0278 (162 äldre rader saknar det, `omradeFor` härleder området ur `om_typ`). Räknarna för notiser,
+`integration_log` och `crm_handelse` lika före och efter. Allt står AV.
+
+---
+
+## 2026-11-02 kväll · Rättelser varv 2: larm för otolkade samtal och morgonkvittot, egen databasroll (MERGAD till `main` `c68d4ee`, 0282 KÖRD)
+
+**Beställaren** svarade punkt för punkt på restlistan efter produktionsprovets rättelser: gul 4 och 5 "Du får göra
+det", de sex mindre fynden och IE Cleaning #24 "Fixa". Körningen var planerad efter midnatt för pushkvotens skull. När
+taket höjts till 100 frågade beställaren "Kan du inte köra migrationen nu?", och hela listan
+(`~/nav2-utkast/delar/rattelser/varv2/NATT.md`) kördes direkt med samma villkor: merga bara om previewen och proven är
+gröna.
+
+**Ändringarna** (17 filer, +337 −67):
+- `samtal.ts`/`samtal-server.ts`: `tolkaOmOtolkade` går i omgångar om 200 med markör på id och slutar efter 90 s
+  (`omtagIOmgangar`). Ett fel i hämtningen kastas, ett fel i tolkningen samlas som `<id>: <fel>`. `omtagsLarm` gör en
+  text av dem, och nattjobbets steg `samtalsomtag` kastar den.
+- `larm.ts`/`drift-server.ts`/`dagtid`: `bedomMorgonkvitto` (ren funktion, provad). Dagtidsjobbet larmar en gång per
+  dag med ett daterat digest, eftersom det går var 15:e minut.
+- `handelselogg.ts`: `reported` räknas som skapande; bara `error.new` och `job.*` är system.
+- `sallanlogg.ts` (ny): samma loggrad en gång per kvart per nyckel, högst 500 nycklar.
+- 0273: MAINTAIN dras in i ett `do`-block bara när `server_version_num >= 170000`. På en ny databas med Postgres 15/16
+  föll filen annars. Produktionen (17.6) har redan fått satsen.
+- 0282 (ny, idempotent): rollen `nav2_pg`, login, NOINHERIT, NOBYPASSRLS, `search_path` som postgres, medlem i
+  `authenticated` och `service_role`. Inget lösenord i filen.
+
+**Valen:**
+- Omtaget kastar i stället för att få en egen larmväg: nattjobbet larmar redan genom `skrivFel` när ett steg kastar, och
+  `larmDigest` slår ihop samma fel till en rad med räknare.
+- Rollen skapades i produktionen före mergen, med lösenordet som SCRAM-verifierare (klartexten nådde aldrig servern),
+  och `NAV2_PG_URL` byttes i Production och Preview (nav2-utkast) med printf. Provad i en rullad tx först: utan roll
+  nekad till employee, vault, auth och create table; som Zen och service_role samma svar som postgres.
+- Numret blev 0282, eftersom 0280 och 0281 är lovade till andra grenar.
+
+**Prov:** samtal, larm, notiser, handelselogg, notiser-tackning, notislankar, utskick, fel, klocka, samtal-order,
+registerutdrag och navnyheter gröna på den nya basen (`ce2622a`, trevägssammanslagning, en konflikt i `poster.ts`:
+båda sidor hade lagt en post överst). TS-parsningen 0 fel.
+
+**Körningen:** 0282 KÖRD 20:50 (`apply-sql 0282_nav2_pg_roll`, före mergen; checksumman `2e9addcf1d745987` = filen).
+Previewen grön 20:54, `main` snabbspolad `ce2622a` → `c68d4ee` 20:55 (`force: false`). 0273:s checksumma
+`c95408e6f0b987bd` → `29e7863be850ee82` (= filen på main). Produktionen `dpl_3dudo1FUNwvs7T5RghFECgMc968h` Ready
+20:57. Som Zen, en sidladdning: `/nav2` 200, notiser 25, pg 420, pg-fel 0, pg-rest 0, och `pg_stat_activity` visar 10
+anslutningar som `nav2_pg` öppnade under sidladdningen. Provsessionen raderad (1 token, kvar 0/0), kakfilen raderad.
+Navnyhetens datum rättat till 2026-11-02 i docs-commiten (fältet är dagen det gick ut i produktion).
+
+**Kvar:** i natt larmar omtaget om sju råpåsar (id 7301–7318, 2026-10-20) som faller på `phone_call_inspelning`, tills
+de lämnar fjortondygnsfönstret 2026-11-04. Varför de faller är inte utrett.
+
+---
+
+## 2026-11-02 kväll · Inkio: makulerad och uppsagt når Nav (MERGAD till `main` `f0e10f4` på beställarens ja, 0279 KÖRD)
+
+**Beställaren:** "Fixa det här", om provets röda: Inkio-statusen makulerad och uppsagt ändrade aldrig ordern i Nav.
+
+**Felet** (återskapat i en transaktion som rullades tillbaka, SPM Väst #1): `lk_inkio_andra_order` satte
+`cancelled_by = null` och `renewal_by = null`, eftersom ingen i Nav gjorde ändringen. `sales_order_makulerad_av` kräver
+att `cancelled_by` och `cancelled_on` är satta tillsammans, och `sales_order_fornyelse` kräver `renewal_by` vid ett
+utfall. Båda gav 23514. `tillampa` gjorde `if (error || andrad !== true) return false`, så felet syntes ingenstans,
+och raden stod redan i `crm_handelse` med det nya läget, så övergången provades aldrig igen. Betald fungerade.
+
+**Valet:** villkoren lättas bara för Inkio, med en kolumn som säger det (`cancelled_in_crm`, `renewal_in_crm`, 0279).
+Inget systemkonto i `employee`: det hade synts i listor, registerutdraget och säljtavlan. Författaren till Inkio-posten
+som person avvisades också, eftersom posten kan vara skriven av någon annan än den som makulerade. Gränssnittet visar inte
+vem som makulerade (`mak.av` läses aldrig), och `ctx.namn(null)` ger null. Inkio-vägen sätter i övrigt samma fält som
+`makuleraOrder`; `cancel_period_month` är genererad, så avdraget hamnar i makuleringsmånaden som förut.
+
+**Larmet:** ett fel från funktionen ger nu en rad i `integration_log` (`crm`, `in`) och notisen `inkio-bevakning` till
+superadmin med rubriken "Bolag: makulerad i Inkio, men inte i Nav" och "Gör det för hand i Nav." Sorten heter nu
+"Larm från Inkio-bevakningen" i Utskick (förut "… står still", som den fortfarande också larmar om).
+
+**Prov:** `test:inkio-inflode` (5 nya), utskick, notiser, klocka, täckningen, notislänkarna, inkio, tidslinjen gröna.
+Mot produktionen i en transaktion som rullas tillbaka (`delar/inkio-inflode/prov/0279.mjs`): utan 0279 två röda, med
+0279 19/19 (makulerad, betald och uppsagt ändrar ordern utan eko till Inkio, en andra gång ändrar ingenting, en makulering
+eller ett utfall utan person UTAN Inkio-märket avvisas, alla order och kolumner oförändrade efter rollback). Ingen
+navnyhet: Inkio är inte påslaget för någon än.
+
+**Provet i produktionen** (samma dag, före rättelsen) står i `~/nav2-utkast/delar/inkio-inflode/RAPPORT.md`: allt
+grönt utom detta, plus gula punkter som inte är gjorda (en raderad `crm_handelse`-rad kommer inte tillbaka när
+avtrycket är oförändrat, `ut.kopplade += await` räknar fel, `NOTIS_PROV_TILL=" , "` öppnar för alla).
+
+**0279 KÖRD** 2026-11-02 20:08 på beställarens ja. Provet mot den riktiga funktionen efteråt, med rollback: 18/18.
+Dagens 30 pushar var slut; beställaren höjde taket till Vercels 100 ("höj gränsen till max gränsen för vercel").
+Grenens preview grön, `main` snabbspolad `5096b8a` → `f0e10f4`, produktionen `dpl_5txr14KZey5AYZxtANXzX6NDgwRB` grön.
+
+---
+
+## 2026-11-02 kväll · Tillägget och avtalet i orderformuläret (MERGAD till `main` på beställarens ja), ingen migration
+
+**Beställaren:** (1) ett tillägg på en kund som redan finns hämtar inte allt från den tidigare ordern, till exempel
+adressen. (2) Hedboms Måleri: avtalet var uppladdat, men ordern svarade "Ladda upp det påskrivna avtalet". Beställaren
+hade stängt formuläret och kommit tillbaka.
+
+**(1) Varför adressen saknades.** Utkastets förifyllning (`kknyorder` på kundkortet, `ordforny`, `ordratta`) skrevs
+innan adressen fanns (0075) och tar bara orten. ND-lagrets `ordBolagsverket` tog första order på numret och slutade
+där, även när den saknade adress. Hedboms enda order (`413202e4`, 16 sep) är från före 0075 och har ingen adress, så
+tillägget stod utan gata och postnummer. Kundsektionen fälls ihop (`o7KundIhop` räknar inte adressen), så felet syntes
+först när servern nekade. Rätta på en inskickad order fick bara orten, och `redigeraOgodkand` nekar en halv adress.
+
+Nu (ND-lagret i `utkast.html`): `ndKundUppg(org, nr)` tar kundens uppgifter ur alla order på organisationsnumret, den
+man kom från först och sedan den senaste. Adressen och kontakten tas hela från första order som har dem. `ndKundFyll`
+fyller bara tomma fält. Tillägg från kundkortet och Förläng får allt; "Lägg som tillägg" i formuläret tar också med
+kontakten. Saknar alla order adressen frågas Bolagsverket via Inkio (`/nav2/inkio?vad=bolag`). Rätta tar ordens egen
+gata och postnummer.
+
+**(2) Varför avtalet försvann.** Filen fanns bara i minnet (`ndOrdAvtalFil`). Utkastet i webbläsaren
+(`nav2-ordutkast`) sparar `S.ordNy`, och där stod bara filens namn. Efter en omladdning gav "Fortsätt där du var"
+tillbaka namnet. Formuläret visade avtalet som bifogat, `onFel` släppte igenom, och ingen `avtal_fil_id` skickades.
+`skapaOrder` svarade "Ladda upp det påskrivna avtalet (PDF) innan ordern läggs upp." I databasen finns bara en
+avtalsfil för Hedboms: den som laddades upp 12:43, när ordern till slut gick in med en nyvald fil.
+
+Nu laddas avtalet upp när det väljs, som i gamla Navs `Avtalsfalt`. Filens id står i `S.ordNy.avtalFil` och följer med
+utkastet. Skicka använder id:t (och väntar in en pågående uppladdning). Annars laddas filen i minnet upp som förut. Ett
+utkast från före lagningen har bara namnet. Då tas avtalet bort när utkastet återställs, och formuläret ber om filen.
+Ett avbrutet filval (inga filer) ändrar ingenting; förut tömdes filen i minnet medan namnet stod kvar, med samma svar från servern. En rättad order får avtalet som bilaga när den sparas, som förut. En fil som laddas upp men aldrig hamnar på en order
+blir kvar i lagringen utan rad i `file_object`, som i gamla Nav.
+
+**Prov.** `~/nav2-utkast/probe/tillagg-avtal-prov.mjs` (headless Chrome, Zens sida från 29 okt med Hedboms order
+utan adress, lokal server som svarar på uppladdning, Inkio och skapa): **28/28 på grenen och 12/28 mot main**. På main
+saknas adressen på tillägget, uppladdningen sker inte när filen väljs, och det återställda utkastet har namnet men
+ingen fil. Det provet täcker: tillägg från kundkortet, adress från en äldre order, numret skrivet och Lägg som tillägg,
+avtalet efter omladdning och skicka (id:t i `skapa`, ingen ny uppladdning), ett avbrutet filval, ett gammalt utkast och Rätta. Förläng är inte
+provat i webbläsaren, eftersom ingen order i provdatan löper ut. Det går samma väg som tillägget. `tests/navnyheter.mjs`
+och `tests/nav2-orderfalt.mjs` gröna. Patchen: `~/nav2-utkast/delar/tillagg-avtal/patch.py` (idempotent, ankare).
+
+**Mergad** på beställarens ja ("ja"). Grenens preview `47a497b` byggdes grön ovanpå `37af957`. Innan mergen hade
+`main` gått till `d800c9c` (kundens tidslinje, Rutiner utan rutiner, Inkio-mejlen, driften, veckokollen borta).
+`utkast.html` slogs ihop utan konflikt och är byte för byte `d800c9c` + `patch.py`; provet på den sammanslagna
+filen 28/28 (12/28 på `d800c9c`), `navnyheter.mjs` och `nav2-orderfalt.mjs` gröna. Dagens 30 pushar var slut, så
+ingen ny preview: en commit direkt på `main`.
+
+---
+
+## 2026-11-02 kväll · Fredagens veckokoll "Stämmer veckan?" borttagen (direkt på `main` på beställarens ja, ingen migration)
+
+**Beställaren** om veckokollen: "Varför finns den, förstår ej värdet", och efter svaret: "okej då ta bort den".
+
+**Varför den gick:** den kom med utkastet (0094, 2026-10-15) som en fredagskontroll av veckans stämplingar, men svaret
+lästes bara av personen själv. Chefen såg inte vem som kollat, lönerapporten väntade inte på det, och "Något är fel"
+sparade ingenting. I produktionen hade notisen aldrig gått ut och `time_week_check` var tom.
+
+- `tid-paminnelser.ts`: fredagsblocket borta, `VECKOKOLL_KL` ur `tidregler.ts`. Jobbet skickar bara chefens
+  morgonnotis och 16:00-samlingen.
+- `tid-veckokoll` ur `NOTIS_KALLOR`, `HANDELSEKALLOR` och Utskicks etiketter. Åtgärden `vecka` i `/nav2/tid` och
+  `veckokoll` i `byggTid` borta.
+- Utkastet: rutan, "Kollad"-märket i rubriken och klickvägarna borta ur `ndTidVeckan` (det levande lagret). Demolagret
+  `tidVeckan` och not 135 står kvar, som med Påminn mig.
+- Tabellen `time_week_check` står kvar tom (i registerutdraget och raderingen). Ingen migration; den kan droppas i ett
+  senare städpass.
+- Chefens morgonnotis behåller "N har inte stämplat in" (beställaren: "inte om chefen vill ha sin morgonnotis").
+- Prov: notislankar, tid-paminnelser, bro, nav2-till, kalender-push, app-sw, notiser, utskick, notiser-tackning,
+  navnyheter gröna. Nytt i navet: en post.
+
+---
+
+## 2026-11-02 · Driften: backup och bevakning (direkt på `main`, byggd 2026-11-01)
+
+Beställaren 2026-10-31: databasen hade ingen backup och ingenting bevakade navet ("Kan du fixa det själv",
+"Fixa det"). `scripts/drift/backup.sh` dumpar som rollen `nav_backup` (bara läsning), räknar raderna,
+återställer dumpen i en tom Postgres 17 med stubbade roller och scheman (`extensions`, `auth`, `storage`),
+jämför antalen och laddar upp den krypterat (AES-256-CBC, PBKDF2 200 000 varv, `BACKUP_NYCKEL`) till R2.
+Första körningen lokalt: 259 tabeller och 37 227 rader med samma antal som produktionen.
+`scripts/drift/bevakning.sh` mejlar `LARM_TILL` när läget ändras (nytt fel direkt, ett kvarstående var
+tolfte timme, ett sista när allt är bra igen) och tiger annars. Sidan får två försök med 30 s emellan, och
+ett delvis nattjobb (`job.night_partial`) är ett eget larm. Arbetsflödena
+fanns inte på `main` förrän hemligheterna satts (session f8 körde `satt-github-hemligheter.sh` och
+launchd-jobbet för `~/nav2-utkast` på beställarens uppdrag). Ingen ändring i appen.
+
+---
+
+## 2026-11-02 kväll · Inkio: mejl bara om ärenden, makulerat och uppsagt (MERGAD till `main` `ed04ae7` på beställarens ja, ingen migration)
+
+**Beställaren:** "Just nu får jag mejl på allting som händer i inkio. Jag vill ha de viktigaste i mejlen men allt annat
+som notis i appen så jag inte får 100 mejl." Anteckningar som notis, ärenden i mejl och notis, och "en anteckning på
+ett ärende ska räknas som ett ärende".
+
+**Orsaken.** Inkio-sorterna heter `order-inkio-*` och hamnade därför i området Order (`omradeFor` tar prefixet).
+Superadmins lager `alla` i `notification_rule` har `mejl: { "*": false, "omrade:order": true, … }`, så varje
+Inkio-anteckning mejlades: tio brev till Zen 13:11–13:14 UTC (`notification_delivery`, provet i produktionen).
+`order-anteckning` (en anteckning skriven i Nav) mejlades av samma skäl.
+
+**Lagat.**
+- Tre nya sorter: `order-inkio-arende` (ett nytt ärende, en statusändring och varje anteckning på ett ärende),
+  `order-inkio-makulerad` och `order-inkio-uppsagt`. Makulerat och uppsagt avgörs av `statusFranInkio`, samma
+  övergång som ändrar ordern i Nav (`postkalla` i `crm/inflode.ts`). De tre står i `MEJLKALLOR`.
+- Ett nytt område, **Inkio och kundanteckningar** (`inkio`), med alla `order-inkio-*` och `order-anteckning`
+  (`OMRADE_UNDANTAG`). Orders mejl når dem inte längre.
+- Larmet "ordern makulerades i Inkio strax efter en rättning i Nav" är `order-inkio-makulerad`, eftersom superadmin
+  måste göra något åt det.
+- Mejlrubriken för en anteckning på ett ärende: "Bolag: Namn skrev i ärendet Kunden vill bestrida", och texten.
+- `renText`: Inkios omnämnanden `@[Simon Omar](ref:User/…)` blir `@Simon Omar` (sju rader i `crm_handelse` hade dem).
+  De gamla raderna skrivs om tyst nästa gång kunden läses: en ändrad anteckning ger ingen notis.
+
+**Det som inte är kod.** Superadmins `"*": false` i mejlet stänger också det nya området. Ärenden, makulerat och
+uppsagt mejlas därför inte förrän de slås på i Inställningar → Utskick, eller med en rad SQL som sätter
+`sort:order-inkio-arende`, `sort:order-inkio-makulerad` och `sort:order-inkio-uppsagt` till `true` i lagret `alla`.
+Det görs efter mergen: före den hade `rensa` strukit nycklarna vid nästa sparning, eftersom sorterna inte fanns.
+
+**Mitt val:** en aktivitet på ett ärende (Inkio loggar t.ex. en tilldelning) är fortfarande en händelse och mejlas
+inte. Ärendets statusändring kommer redan som post, och två brev om samma sak var det beställaren ville bort ifrån.
+Inga sådana aktiviteter fanns i `crm_handelse` den 2 november.
+
+- Prov: `npm run test:inkio-inflode` (85, varav 11 nya), `npm run test:utskick` (3 nya), notiser, klocka, täckningen
+  och notislänkarna gröna.
+
+**Mergad:** main hade fått kundens tidslinje (0278) och Rutiner-lagningen, som rör samma `inflode.ts` och
+`inflode-server.ts`. Koden gick ihop av sig själv; bara dokumenten och nyhetslistan krockade (båda sidor överst).
+Main slogs ihop in i grenen (`ace967a`), proven gröna, previewen grön, sedan squash `ed04ae7` på main ovanpå mains
+dokumentcommit `6819b72`. Produktionen `dpl_22zm7yoEG4aQjSP4YxzEj3yT1WXS` grön. Därefter sattes de tre sorterna till
+`true` i lagret `alla`, och `far()` mot produktionens regler gav mejl för just de tre.
+
+---
+
+## 2026-11-02 kväll · Kundens tidslinje i Inkios form (MERGAD till `main`, `6c7c0ed`, 0278 KÖRD)
+
+**Beställaren** delade en skärmbild av Inkios History-sida för Hedbloms Måleri AB: "kan du hjälpa mig bygga ut
+anteckningar och tidslinjen och allt sånt som finns i nav idag så som det finns i inkio … Så att det ser rätt så
+likadant ut men följer såklart navet då." Planen lades fram i chatten och godkändes ("okej starta bygget").
+
+**Hur Inkio är byggt** (läst med GET): ett anrop, `get-customer-history`, ger varje post med `kind` (comment,
+activity, order, agreement …), `area` (customer, sales, work = Inkios tre filter), `about` (vad posten gäller),
+`data` (nummer, värde, månadsbelopp, start, slut, status) och `entry` (författaren), och svaret har `roles`
+(användar-id → roll) för vyn "Anteckningar per roll". Anteckningar skrivs i Markdown med `add-comment`.
+
+**Varför datan redan räckte:** 0277 sparar nästan allt i `crm_handelse`, men `aktivitetsrader()` plattade till det
+till namn, tid, källa och text. Raden fick fler fält i stället för att Inkio lästes igen. Två saker saknades: rollen
+(sparas nu i `data`, inte i avtrycket, så att en ny roll i Inkio inte räknas som en ändring) och vilken order en
+anteckning från Nav gäller (0278). Navs nivå för författaren tas ur e-posten (Inkio), anställnings-id:t (Nav) eller
+namnet (Navs eko, "**Zen** (via Nav)"); den som bara finns i Inkio hamnar under "Utanför Nav" med sin Inkio-roll.
+
+**Besluten (mina, sagda i planen):** Historik-fliken står kvar orörd (ingen funktion försvinner), och Aktivitet
+blir den nya tidslinjen. Inkios faktarutor byggdes inte: kortets huvud har redan Order, Ordervärde, Provision och
+Avtalet löper till. Per roll grupperas efter Navs nivåer. Navs eget eko via tjänstekontot ("Paket 3 · 5 999 kr/mån
+… Godkänd i Clicknet Nav av Zen") ritas som systemrad, inte som en persons anteckning.
+
+**Fallgropar:** `ndMd` och `NDNIVA` fanns redan i utkastet (Rutinernas Markdown, Inställningarnas nivåer); en andra
+`function ndMd` hade tyst ersatt Rutinernas, så tolken heter `kktMd`. Patchskriptets idempotens måste fråga om den
+NYA texten finns, inte om den gamla saknas: ett ankare som bara får något tillagt efter sig innehåller fortfarande
+den gamla texten. `.kkt-kol ol`/`li` slog igenom på listorna i bubblorna; barn-väljare. En lös adress i en anteckning
+slutar vid ett escapat citattecken, så att `&quot` inte följer med i länken.
+
+**Prov:** `npm run test:inkio-inflode` (nya kontroller med Hedbloms riktiga poster), `npm run test:nav2-tidslinje`
+(Markdown-tolken mot nio försök att smyga in kod), webbläsarprovet i `~/nav2-utkast/delar/kund-tidslinje/prov.mjs`
+38/38 (Hedbloms historik tolkad av repots egen kod, Navs anteckningar, sök, filter, Per roll, Skift+Enter i en lista,
+sparning med vald order, "om #15", mörkt och mobilt).
+
+---
+
+## 2026-11-02 kväll · Rutiner kraschade utan en enda rutin (på `main` `92a6d91`, ingen migration)
+
+**Beställaren:** "så fort jag går in i nav" kom "Sidan gick inte att visa", felkod `nav2-873ac63a9dca`.
+
+**Felet:** raden i `error_report`: `/nav2/rutiner`, `Cannot read properties of undefined (reading 'id')` i
+`renderRutinerView`, skript-versionen `9db87531ebb9` = `37af957`, tre gånger 15:20–16:20 UTC, bara zen@. De tre
+dokumenten arkiverades 2026-11-01 (se minnet om rutinerna från noll), så `RUT` är tom. `rtnVeckans()` faller
+tillbaka på `RUT[0]`, och raden Veckans rutin läste `v.id` på ingenting. Hela vyn kastade, och historikposten
+(`{ndv:'rutiner'}`, R12) öppnar Rutiner igen vid en omladdning, så Nav kraschade direkt varje gång.
+
+**Lagningen:** raden Veckans rutin ritas bara när det finns en rutin (`${v ? … : ''}`). Inget annat i vyn
+förutsatte en rutin: alla flikar, Förvaltning och arkivet ritas med noll rutiner.
+
+**Prov:** `~/nav2-utkast/delar/rutiner-tom/prov.mjs <utkast.html>` (Zens sida, rutinerna flyttade till arkivet):
+2/8 på `main` med samma stack som i produktionen, 13/13 med lagningen. `prov-med-rutiner.mjs`: 13/13, raden
+Veckans rutin syns som förut när det finns rutiner. Patchen: `delar/rutiner-tom/patch.py` (idempotent, `cmp` mot
+den provade filen). Ingen navnyhet: inget nytt för användaren, bara en krasch mindre.
+
+**Mergad** på beställarens ja: `main` snabbspolad `37af957` → `92a6d91` (samma commit som previewen byggde),
+produktionsbygget `dpl_5sHAgnGm9TGULbYz4k6NMJDHYcLQ` grönt och aktivt på `clicknet-nav.vercel.app`.
+
+---
+
+## 2026-11-02 kväll · Snabbraden: en rad utan dag hamnar i dag, och fältet töms (MERGAD till `main` på beställarens ja, ingen migration)
+
+**Beställaren:** skrev "Prata med Hedboms och fixa avtal och lägg upp för ADS" i att göra-listan som hovrar över Order,
+tryckte Lägg till flera gånger, och ingenting hände.
+
+**Det som hände.** Raden sparades varje gång: fyra rader i `task` 12:44–12:46 UTC, alla med `due_date` null. Två fel
+gjorde det osynligt:
+- **Servern lade raden utan dag.** `tolkaSnabbrad` ger null när raden saknar dag (gamla snabbraden: inkorgen/Någon gång),
+  men utkastets `laggTill` lägger den i dag (`d = 0`, "Lagd i I dag."). Raden hamnade under Någon gång och syntes
+  aldrig i "Att göra i dag", där den skrevs.
+- **Fältet stod kvar ifyllt.** Navets `laggTill` (ndupg) nollställde aldrig `S.quick`, så omritningen efter sparningen
+  satte tillbaka texten. Kvittot kom längst ner mitt på skärmen, långt från panelen. Fältet såg osparat ut och
+  trycktes igen.
+
+**Lagat.**
+- `tolkaSnabbrad(rad, idag, utanDag?)`: med `utanDag` får en rad utan dag den dagen, och "någon gång"/"nagon gang"
+  ger uttryckligen ingen dag (och lämnar rubriken). Standarddagen sätts före klockslaget, så "Möte 14:00" blir i dag
+  14:00. `skapaUppgift` skickar den när formuläret har `utan_dag=idag`, och `/nav2/uppgifter` (skapa med rad) sätter
+  det. Gamla snabbraden skickar det inte och är oförändrad.
+- `utkast.html` (`delar/snabbrad-idag/patch.py`): fältet töms genast vid Lägg till. Säger Nav nej kommer det som inte
+  sparades tillbaka (bara om fältet fortfarande är tomt; vid flera rader med `;` bara resten). Ett andra tryck på
+  tomt fält visar "Skriv vad som behöver göras först." och sparar ingenting.
+
+**Prov.** `tests/uppgifter.mjs` (12 nya rader, 5 röda före lagningen). `~/nav2-utkast/delar/snabbrad-idag/prov.mjs`
+(headless Chrome, Order med panelen öppen: 13/17 på main, 17/17 lagat). `probe/omladdning-prov.mjs` 80/80,
+`tests/nav2-omladdning.mjs` grönt.
+
+**Dubbletterna.** På beställarens besked ("ta bort alla, behåll 1"): den första (`62177387…`) står kvar, flyttad
+till 2026-11-02. De tre andra är raderade (kaskad till task_event), med kopia i
+`~/nav2-utkast/delar/snabbrad-idag/borttagna-dubbletter.json`.
+
+---
+
+## 2026-11-02 kväll · Inkio in i Nav MERGAD till `main` (beställarens ja), allt AV tills provet i produktionen
+
+**Beställaren:** "Pusha till main istället så slipper du lägga in nycklar i previewen." Previewen saknade
+`INKIO_API_KEY`/`INKIO_API_SECRET` för grenen, och automatläget nekade att lägga dit dem. Produktionen har dem redan.
+
+**Vad som gjordes:**
+- `main` (`469af3c`, kalenderns serie) mergades in i grenen först. Krockarna gällde bara texter: navnyheterna (båda
+  posterna står kvar), NASTA_SESSION och arbetsloggen. Utkorgen slogs ihop av git (serien utan `.ics` och de nya
+  CRM-handlingarna rör olika ställen).
+- `provfilter` flyttades till `inflode.ts` och gäller nu i produktionen också, så länge `NOTIS_PROV_TILL` är satt
+  där. Utan variabeln i produktionen går notiserna till alla som förut. Sex nya fall i provet (74 gröna).
+- `NOTIS_PROV_TILL` = Zens id sattes i Vercel Production FÖRE pushen, så att mergens bygge har den. Alla notisvägar
+  går genom filtret: bevakningens notiser (`kretsFor`), Inkios ändringar av ordern (`tillampa`), anteckningen från
+  kundkortet (`kretsForKund`) och larmet "Inkio-bevakningen står still".
+- Brytarna `inflode` och `utflode` står av och `nav-inkio` är avstängt. Med `utflode` av köar triggrarna ingenting och
+  `anteckningICrm` skriver inte, så produktionen skriver ingenting nytt i Inkio. Det som redan gick dit förut (skapa,
+  makulera, leverans) går som förut.
+
+**En skillnad tills `utflode` slås på:** en anteckning från kundkortet gick förut direkt till Inkio. Nu sparas den i
+`kundanteckning` och väntar i kö. `kaOmAnteckningar` skickar den när `utflode` slås på. Nav är stängt för alla utom
+Zen och Simon, så det gäller bara dem.
+
+**Provet** görs nu i produktionen. `TESTPROMPT.md` är omskriven: bevakningen körs för hand med `curl` mot
+produktionen och `CRON_SECRET`, `utflode` står av hela tiden, och anteckningsprovet raderas innan sessionen slutar,
+annars skickas det till Inkio när `utflode` slås på.
+
+**Slå på för alla** (efter rapporten och beställarens ja): ta bort `NOTIS_PROV_TILL` ur Production och bygg om, sedan
+brytarna och jobbet. Se NASTA_SESSION.
+
+---
+
+## 2026-11-02 eftermiddag · Inkio in i Nav, svaren: 0277 körd, Lucas admin, Strajv rättad, varma och tysta kunder
+
+**Beställaren svarade:** "Ta bort lucas från Superadmin, gör han bara admin." Om Strajv: "Den som är i inkio är rätt.
+Lägg den." Ja till 0277 och till `NOTIS_PROV_TILL`. Och två frågor: ska en webhook läggas upp i Inkio, och kostar det
+krediter eller databas att läsa hela historiken varje minut?
+
+**Gjort:**
+- **0277 KÖRD** (`apply-sql`). Brytarna `inflode`/`utflode` av, `nav-inkio` avstängt, ingen rad i utkorgen.
+  `registerutdrag.mjs` grönt nu.
+- **Lucas Pohl → admin**: samma steg som Anställda → Behörighet → Admin (`ROLL_FOR.admin = sales_manager`). Rollen
+  `admin` borttagen, `sales_manager` tillagd, ingen handsatt nivå fanns. Loggat (`role.granted`, `role.revoked`,
+  `anstallda.handelse`) med Zen som aktör. Ingen notis till Lucas (Nav är stängt för Lucas).
+- **Strajv AB #3**: Inkios SO-2026-00043 är "Optimerad Kampanjsida 6 mån", avtal CTR-2026-00043 på sex månader,
+  5 970 kr (= 995 × 6, alltså samma månadspris som Nav; skillnaden var längden). Nav rättades för hand: 12 → 6 mån,
+  11 940 → 5 970 kr, slutdatum 2027-08-28 → 2027-02-28 (genererad kolumn). Navs Rätta kan inte göra det (en paketorder
+  blir inte fri, sex månader finns inte bland längderna), så det gjordes med SQL under `nav.fran_inkio` och loggades som
+  `sales_order.corrected`. Provisionen, 1 500 kr, står kvar som handsatt (`commission_rate_id` måste vara tom med
+  `manual`, villkoret `sales_order_satskoppling`). Augusti är inte fastställd. Kopplad till SO-2026-00043 med
+  `kopplad = 'hand'`. Ingen rad till Inkio.
+- **`NOTIS_PROV_TILL`** satt i Vercel Preview för `inkio-inflode`. **Inkio-nycklarna saknas i den previewen** (finns
+  bara för `nav2-utkast` och `inkio`); automatläget nekade skrivningen av dem, så det väntar på beställarens ja.
+- **Sista spärren i `anrop`**: allt som inte är GET kastas när `inkioFarSkriva()` är falsk, så previewen kan få
+  nycklarna utan att kunna skriva i Inkio.
+- **Varma och tysta kunder** (`attLasa`, `senastHant`): kostnadsfrågan. Inkio har inget flöde över senaste
+  anteckningar (provat med GET: ingen posttyp för kommentarer, `get-latest-notes` gäller en kund, kundens
+  `modified_at` står kvar på 6 oktober trots Nenads anteckning i dag), så varje kund måste läsas för sig. Men en kund
+  där inget hänt på två dygn läses nu var femte minut i stället för varje minut, utspritt. Med dagens data: 7 varma,
+  21 tysta, ~11 läsningar i minuten i stället för 28. Första läsningen sätter `andrad_at` till det senaste som hänt i
+  Inkio, annars hade alla varit varma i två dygn efter påslaget.
+
+**Kostnaden, uppmätt:** ett varv för 28 kunder tog 1,2 s, ~50 ms processortid och 150 kB. Inga krediter: Vercel och
+Supabase är fria planer, Inkio skickar inga kvotrubriker. Vercels fria kvot (4 h processortid, 360 GB-h minne, 1 M anrop
+i månaden) är den som räknas, och Hobby visar inte förbrukningen via API:t. Tabellen står i spec-dokumentet.
+
+**Webhooken**: inte nu. Den finns bara för order, avtal, fakturor, ärenden och nya kunder, och de kommer redan in inom
+en till fem minuter. Anteckningarna, det viktiga, har ingen webhook.
+
+## 2026-11-02 · Inkio in i Nav, och Nav ut till Inkio (grenen `inkio-inflode`, 0277 skriven, EJ körd, EJ mergad)
+
+**Beställaren 2026-11-02:** en säljare ringde en kund utan svar och skrev det i Inkio, men det kom inte in i Nav och
+ingen fick notis. "Det är SUUUPER viktigt att allting som händer i inkio crmet med dem ordrarna som vi har i navet måste
+jag och den personen som står på ordern få notis och det måste gå in i navet, under anteckningar." Superadmin får allt,
+admin bara sitt team. Efter genomgången av undersökningen: "Om något ändras i inkio så ska det ändras i navet också
+såklart", och "Fixa hela bygget nu".
+
+**Orsaken** var att inflödet aldrig hade byggts. Kundkortets Aktivitet läste Inkio när den öppnades, och inget sparades eller
+notifierades. Hedboms (#15) saknade dessutom koppling till sin Inkio-order: 22 av 30 kunder importerades till Inkio
+2026-10-01 utan Navs id.
+
+**Valet av väg.** Inkios webhooks täcker 11 händelser och ingen av dem gäller anteckningar, samtal, filer eller
+kortflyttar. `get-customer-history` ger däremot allt per kund på ~130 ms, raderat inräknat, med stabila id:n. Därför
+är bevakningen varje minut ryggraden och webhooken bara en knuff. Det följer best practice för synk åt båda håll:
+avstämning mot källan, idempotens på källans id, eko som känns igen på tjänstekontot och en utkorg för det som går ut.
+
+**Det som gjordes** står i specen `docs/superpowers/specs/2026-11-02-inkio-inflode-design.md`. Det som tog tid att
+få rätt:
+- **Tolv timmar.** Första läsningen av en kund får inte ge femtio notiser om september. En bevakning som stått still en
+  natt ska ändå säga till om det som hände då. Regeln "notis om posten är högst tolv timmar gammal" gör båda. Ett avtal
+  med startdag framåt har `at` i framtiden. Det sades först ha "startat" och gav notis vid första läsningen. Nu står
+  det "startar <dag>", och vid kundens första läsning är det tyst.
+- **Status bara på övergångar.** En order som makulerats i Inkio för länge sedan ska inte makuleras i Nav i dag och dra
+  provisionen i november. `statusFranInkio` tar bara en ändring Nav såg hända, eller en ny post från de senaste tolv
+  timmarna.
+- **Ingen ekoslinga.** Ändringar från Inkio går genom `lk_inkio_andra_order`, som sätter `nav.fran_inkio`. Triggern
+  som skriver Nav-händelser till Inkio hoppar då över. Det är provat i en transaktion som rullades tillbaka: betald
+  i Nav gav en rad i utkorgen, samma sak från Inkio gav ingen.
+- **Kopplingen kräver samma värde.** Den första versionen kopplade också "en order på var sida". Torrkörningen visade
+  Strajv AB med 11 940 kr i Nav och 5 970 kr i Inkio. En felkoppling hade gett fel rader i Inkio, och en makulering där
+  hade makulerat fel order här. Nu kopplas 20 order, alla med samma värde.
+- **Ett ändrat belopp ändrar inte Nav.** Beloppet styr provisionen, och Inkios rader motsvarar inte Navs paket. Det
+  blir en notis med länk.
+- **Previewen notifierar ingen.** Den delar databas med produktionen. `provfilter` släpper bara igenom
+  `NOTIS_PROV_TILL` utanför produktionen.
+- **Allt står av tills mergen** (`inflode`, `utflode`, jobbet). Annars hade triggrarna köat rader som produktionens
+  kod inte känner igen och tyst markerat dem som skickade.
+
+**Torrkörningen 2026-11-02** (riktig data, GET mot Inkio, `read only` i Nav):
+- 28 av 29 kunder finns i Inkio; IE Cleaning saknas som förut.
+- 159 poster, 51 notiser om det som hänt de senaste tolv timmarna (Nenads inkasso på Strajv, VästRent och Primus,
+  Dennis och Simons kommentarer på Wallgrens ärende, Andreas leveranskort på Roos, tre avtal som startade i dag).
+- 0 statusändringar och 20 kopplingar.
+- Superadmin är Simon Menduza, Zen och Lucas Pohl. "Simon Omar" i Inkio är Simon Menduza i Nav (samma mejl).
+
+**Inte gjort:** 0277 kördes inte (automatläget nekade och det kräver ja). Ingen skrivning gjordes i Inkio, så
+`correct-sales-order`, anteckningen till Inkio och raderna på ordern är provade i logiken men inte mot Inkio. Inkio
+har inga fakturor än, så "betald från Inkio" bygger på en gissning om fältet för ordern.
+
+---
+
 ## 2026-11-02 · Kalendern: kortet får plats, och Ställ in frågar om serien (MERGAD till `main` på beställarens ja, 0276 KÖRD)
 
 **Beställaren:** (1) kortet som öppnas när man trycker på en händelse långt ner i kalendern hamnade under skärmen, så

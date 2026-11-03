@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
-import { supabaseServer } from "@/lib/supabase/server";
-import { bolagsuppslag, inkioKonfigurerad, kundaktivitet, landningssida } from "@/lib/crm/inkio";
+import { arSuperadmin, getCurrentUser } from "@/lib/auth";
+import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
+import { bolagsuppslag, inkioKonfigurerad, landningssida } from "@/lib/crm/inkio";
+import { kundaktivitetForKortet, kundaktivitetUrNav } from "@/lib/crm/inflode-server";
+import { hamtaOrderekonomi } from "@/lib/crm/ekonomi-server";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +12,13 @@ export const dynamic = "force-dynamic";
  *
  *   ?vad=kund&order=<uuid>   aktiviteten och landningssidan (kundkortets Aktivitet)
  *   ?vad=bolag&orgnr=<nr>    namn och adress fran Bolagsverket (formularets uppslag)
+ *   ?vad=ekonomi&order=<uuid> orderns ekonomi i Inkio, nar ordern falls ut (ekonomi.ts)
+ *
+ * AKTIVITETEN LASES UR NAVS KOPIA (0277): bevakningen tar in allt fran Inkio
+ * varje minut (`crm_handelse`), och anteckningar skrivna i Nav star i
+ * `kundanteckning`. Star bevakningen av, eller har den inte last kunden an,
+ * lases Inkio direkt, med Navs anteckningar. Superadmin ser ocksa det som
+ * raderats i Inkio och de anteckningar som tagits bort i Nav (0283).
  *
  * BARA LASNING. Samma funktioner som /order anropar via `hamtaInkioAktivitet`,
  * `hamtaLandningssida` och `slaUppBolag`, och samma kontroll fore: ordern lases
@@ -35,13 +44,30 @@ export async function GET(request: Request) {
       const rls = await supabaseServer();
       const { data } = await rls.from("sales_order").select("org_number").eq("id", id).maybeSingle();
       if (!data) return svar({ fel: "Ordern finns inte, eller så får du inte se den." }, 404);
-      if (!kopplat) return svar({ kopplat });
       const orgnr = String(data.org_number ?? "");
+      // Utan Inkio (previewen): det Nav själv har, så att en anteckning syns när den sparats.
+      if (!kopplat) return svar({ kopplat, aktivitet: (await kundaktivitetUrNav(orgnr, arSuperadmin(user), { utanInkio: true }).catch(() => null)) ?? { kund: null } });
       const [aktivitet, sida] = await Promise.all([
-        kundaktivitet(orgnr).catch((e: unknown) => ({ fel: e instanceof Error ? `Inkio svarade inte: ${e.message}` : "Inkio svarade inte." })),
+        kundaktivitetForKortet(orgnr, arSuperadmin(user)).catch((e: unknown) => ({ fel: e instanceof Error ? `Inkio svarade inte: ${e.message}` : "Inkio svarade inte." })),
         landningssida(orgnr).catch((e: unknown) => ({ fel: e instanceof Error ? `Inkio svarade inte: ${e.message}` : "Inkio svarade inte." })),
       ]);
       return svar({ kopplat, aktivitet, sida, hamtad: new Date().toISOString() });
+    }
+
+    // Orderns ekonomi, när ordern fälls ut på kortet: faktureringen, orderhanteringen,
+    // utbetalningen, avtalen, leveransen, fakturorna, filerna och samtalen (`ekonomi.ts`).
+    if (vad === "ekonomi") {
+      const id = url.searchParams.get("order") ?? "";
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return svar({ fel: "Ordern finns inte." }, 400);
+      const rls = await supabaseServer();
+      const { data } = await rls.from("sales_order").select("id").eq("id", id).maybeSingle();
+      if (!data) return svar({ fel: "Ordern finns inte, eller så får du inte se den." }, 404);
+      // Kopplingen läses som tjänst: RLS har redan sagt att hen får se ordern.
+      const { data: k } = await supabaseAdmin().from("crm_order").select("crm_order_id").eq("order_id", id).maybeSingle();
+      if (!k?.crm_order_id) return svar({ kopplat, iInkio: false });
+      if (!kopplat) return svar({ kopplat });
+      const ekonomi = await hamtaOrderekonomi(String(k.crm_order_id));
+      return svar({ kopplat, iInkio: !!ekonomi, ekonomi, hamtad: new Date().toISOString() });
     }
 
     if (vad === "bolag") {

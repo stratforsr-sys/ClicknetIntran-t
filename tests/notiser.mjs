@@ -26,6 +26,7 @@ import {
   notisId,
   sortera,
 } from "../src/lib/notiser.ts";
+import { skaLoggas } from "../src/lib/sallanlogg.ts";
 
 let fel = 0;
 const ok = (namn, villkor, extra = "") => {
@@ -208,6 +209,21 @@ console.log("\n\x1b[1mOlast betyder \"hant sedan du sist oppnade\"\x1b[0m");
   });
   ok("en tidpunkt raknad ur nuet blir last direkt", instabil.olast === false,
     "provet star kvar som forklaring till varfor tidpunkterna ar stabila");
+}
+
+console.log("\n\x1b[1mEtt fel som består loggas en gång per kvart (rättelserna 2026-11-02)\x1b[0m");
+{
+  const karta = new Map();
+  const t0 = Date.UTC(2026, 10, 2, 12, 0, 0);
+  ok("första gången loggas", skaLoggas(karta, "notiser:3:timeout", t0).logga === true);
+  ok("samma fel en minut senare tystas", skaLoggas(karta, "notiser:3:timeout", t0 + 60_000).logga === false);
+  ok("och en sekund till", skaLoggas(karta, "notiser:3:timeout", t0 + 61_000).logga === false);
+  ok("ett annat fel loggas direkt", skaLoggas(karta, "notiser:4:timeout", t0 + 62_000).logga === true);
+  const efter = skaLoggas(karta, "notiser:3:timeout", t0 + 15 * 60_000);
+  ok("efter en kvart loggas det igen", efter.logga === true);
+  ok("med antalet som tystades emellan", efter.tystade === 2, String(efter.tystade));
+  for (let i = 0; i < 600; i++) skaLoggas(karta, `nyckel-${i}`, t0);
+  ok("kartan växer inte utan gräns", karta.size <= 500, String(karta.size));
 }
 
 console.log(fel === 0 ? "\n\x1b[32mAlla kontroller godkanda.\x1b[0m\n" : `\n\x1b[31m${fel} fel.\x1b[0m\n`);

@@ -23,9 +23,235 @@ bakgrunden. Går den inte att spara blir uppgiften som den var, och du ser varf�
 
 Texten får också rätt typsnitt från början när Nav öppnas, i stället för att byta
 utseende en stund efter att sidan ritats.`,
+    datum: "2026-11-03",
+    roller: [],
+    href: "/uppgifter",
+  },
+  {
+    slug: "moten-egen-tid",
+    rubrik: "Boka möten på exakt tid",
+    ingress: "Du kan skriva en egen tid när du bokar eller flyttar ett möte, inte bara hel eller halv timme.",
+    text: `Tryck **Boka möte** i Möten. Under de lediga tiderna står **Eller skriv en egen tid**:
+välj datum och skriv klockslaget, till exempel 10:15 eller 14:35. Tiden går i hela fem
+minuter. Krockar tiden med något i kalendern står det under fälten. Samma rad finns när
+du flyttar ett möte och när du bokar en ny tid för ett möte som uteblev.
+
+Efter **Boka mötet** stängs bladet, och kortet kommer fram på tavlan. Förut blev bladet
+stående med en grå knapp.`,
+    datum: "2026-11-03",
+    roller: [],
+    href: "/moten",
+  },
+  {
+    slug: "andra-eller-ta-bort-anteckning",
+    rubrik: "Ändra eller ta bort din anteckning om en kund",
+    ingress: "Skrev du fel går anteckningen att rätta eller ta bort, och Inkio får samma ändring. Aktivitet och Historik är nu en flik.",
+    text: `Öppna en order och gå till **Historik**. Peka på en anteckning du själv skrivit
+och välj **Ändra** eller **Ta bort**. Enter sparar ändringen och Esc avbryter. En ändrad
+anteckning är märkt *ändrad*: tryck på ordet så ser du vad den sa förut. Ändringen och
+borttagningen görs i Inkio också.
+
+Flikarna Aktivitet och Historik är nu en enda flik, **Historik**, som på kundsidan i
+Inkio. Allt som hänt med kunden står där, och siffrorna 1–5 byter flik.`,
+    datum: "2026-11-03",
+    roller: [],
+    href: "/order",
+  },
+  {
+    slug: "kalendern-1-1-en-gang-eller-serie",
+    rubrik: "1:1 en gång eller som serie, med vem som helst",
+    ingress: "En 1:1 kan bokas en enda gång, och alla anställda går att välja.",
+    text: `Välj **Ny händelse → 1:1** i Kalendern. Under **Upprepas** är **Upprepas inte**
+förvalt, och **Varje vecka** eller **Varannan vecka** gör den till en serie. Förut
+blev varje 1:1 en serie varannan vecka, också när du bara ville boka en gång.
+
+Efter de tre förslagen på personer finns nu ett sökfält med alla anställda. Skriv
+några bokstäver och välj i listan, eller tryck Enter. Fältet finns också för möten
+och i rutan som öppnas när du klickar i kalendern.`,
+    datum: "2026-11-02",
+    roller: [],
+    href: "/kalender",
+  },
+  {
+    slug: "kalendern-serier-och-ombud",
+    rubrik: "Kalendern: serier och ombud som i Outlook",
+    ingress: "Hela serien flyttar alla gångar från i dag, och ingen gång försvinner utan besked.",
+    text: `Drar du ett möte i en serie till en annan dag och väljer **Hela serien** flyttas
+alla gångar från i dag. Förut flyttades bara gångarna från den du drog, och
+veckorna före kunde få två möten.
+
+Ändrar du **den här och följande**, och en gång längre fram har ändrats för sig,
+ställs den gången in, som i Outlook. Gäster utifrån får ett mejl om att den är
+inställd, och den som bara var med på just den gången får en notis. **Ångra**
+tar tillbaka allt, också gångens bilagor och påminnelser.
+
+Får du ändra i någon annans kalender och flyttar ett möte som du själv är med på,
+står ditt eget svar kvar. Ändrar du bara vilka som är med får arrangören veta
+det i klockan.`,
+    datum: "2026-11-02",
+    roller: [],
+    href: "/kalender",
+  },
+  {
+    slug: "laget-bara-saljarna",
+    rubrik: "Laget räknar bara säljarna",
+    ingress: "Summan i Laget är säljarnas och går ihop med takten och listan.",
+    text: `Under **Provision → Laget** räknade summan och delarna med allas provision:
+också din egen försäljning, ditt övertäck och bonusar till andra än säljare.
+Takten, **Nått en nivå** och listan räknade bara säljarna. Nu räknar hela Laget
+bara säljarna, så att siffrorna går ihop.
+
+**Perioder** och **Fastställ** tar med alla som förut, eftersom det är det som
+betalas ut.`,
+    datum: "2026-11-02",
+    roller: ["sales_manager", "ceo", "finance"],
+    href: "/provision",
+  },
+  {
+    slug: "orderns-ekonomi-ur-inkio",
+    rubrik: "Ordern visar ekonomin i Inkio: fakturering, utbetalning och betalningar",
+    ingress: "Var ordern står hos ekonomi, fakturaplanen, finansbolagets utbetalning, avtalet och leveransen, direkt ur Inkio.",
+    text: `Öppna en order, gå till **Order** och fäll ut den. Under Inkio-raden står
+**Ekonomi**, läst ur Inkio när du öppnar den:
+
+- hur ordern faktureras (intern eller finansierad, hur ofta och betalningsvillkoren)
+- var den står hos ekonomi, steg för steg som i Inkios orderhantering
+- fakturaplanen, med vilka fakturor som är betalda, förfallna eller saknas i Fortnox
+- om finansbolaget har betalat ut, och hur länge det har väntat
+- avtalet: status, nästa faktura, fakturerade perioder och om kunden sagt upp
+- produktionskortet och leveransdatumet
+- fakturorna med påminnelser och indrivning, och filerna och samtalen i Inkio
+
+Rutan **Ekonomi** högst upp på kortet säger det viktigaste, till exempel
+**väntar på ekonomi** eller **3 av 12 betalda**. En order räknas som betald först
+när alla fakturor i planen är betalda, som i Inkio.`,
+    datum: "2026-11-02",
+    roller: [],
+    href: "/order",
+  },
+  {
+    slug: "fel-larmar-om-samtal-och-morgonkvitto",
+    rubrik: "Fel larmar när ett samtal inte går att läsa",
+    ingress: "Ett samtal från växeln som inte blir ett samtal i Nav syns nu i Fel, och felrapporter står under rätt typ i händelseloggen.",
+    text: `Under **Fel** kommer ett larm när ett samtal från växeln inte går att läsa in, också
+efter nattens nya försök. Förut låg det kvar i två veckor utan att någon fick veta. Samma
+larm kommer om morgonjobbets kvitto inte går att läsa.
+
+I **Händelseloggen** står en felrapport som någon skrivit under **Skapande**, och den som
+tilldelar, svarar på eller följer ett fel under **Ändring**. Bara fel som navet fångat
+självt står under **System**.`,
+    datum: "2026-11-02",
+    roller: ["sales_manager", "ceo", "admin"],
+    href: "/fel",
+  },
+  {
+    slug: "tillagg-med-kundens-uppgifter",
+    rubrik: "Ett tillägg får kundens adress och kontakt",
+    ingress: "En ny order på en befintlig kund fylls i med allt Nav vet om kunden, och avtalet följer med ett sparat utkast.",
+    text: `Trycker du **Ny order för kunden** på kundkortet, eller **Lägg som tillägg** i
+formuläret, fylls kontakten, telefonen, mejlen och adressen i från kundens tidigare
+order. Saknar alla order adressen hämtar Nav den från Bolagsverket. Förut följde
+bara orten med, och ordern stoppades på adressen när den skickades. Rätta och
+Förläng tar också med hela adressen.
+
+Avtalet laddas upp när du väljer det. Stänger du formuläret och kommer tillbaka
+med **Fortsätt där du var** är avtalet kvar. Förut fick du "Ladda upp det
+påskrivna avtalet" fast det var bifogat, och fick välja filen igen.`,
+    datum: "2026-11-02",
+    roller: [],
+    href: "/order",
+  },
+  {
+    slug: "fredagskollen-borta",
+    rubrik: "Tid frågar inte längre om veckan stämmer",
+    ingress: "Rutan Stämmer veckan? och fredagsnotisen 16:30 är borta.",
+    text: `Under **Veckan** i Tid fanns rutan **Stämmer veckan?**, och på fredagar kom en
+notis 16:30 om den. Båda är borttagna. Svaret syntes bara för dig själv, så
+frågan gjorde ingen nytta.
+
+Ser du ett fel i din tid rättar du det som förut: tryck på dagen och sedan
+**Rätta**.`,
+    datum: "2026-11-02",
+    roller: [],
+    href: "/tid",
+  },
+  {
+    slug: "inkio-mejl-bara-det-viktiga",
+    rubrik: "Inkio: mejl bara om det viktiga",
+    ingress: "Ärenden, makulerade order och uppsagda avtal kommer som mejl. Resten är notiser.",
+    text: `Navet mejlar dig när något händer i ett ärende i Inkio: ett nytt ärende, en ny
+status eller en anteckning i ärendet. Du får också mejl när en order makuleras och
+när ett avtal sägs upp, eftersom båda kostar pengar.
+
+Andra anteckningar, flyttade leveranskort, nya order och avtal och andra
+ändringar kommer bara som notis, i klockan och i telefonen. Förut kom de också
+som mejl.
+
+Allt från Inkio har ett eget område, **Inkio och kundanteckningar**, under
+**Inställningar → Notiser**. Där väljer du vad du vill ha för varje sort.`,
+    datum: "2026-11-02",
+    roller: [],
+    href: "/profil",
+  },
+  {
+    slug: "kundens-tidslinje",
+    rubrik: "Kundkortet visar kundens hela historik, som i Inkio",
+    ingress: "Ordrar, avtal, anteckningar, leveranskort och samtal i en tidslinje, med sök, filter och anteckningar per roll.",
+    text: `Öppna en order och gå till **Historik**. Där står allt om kunden i en lista,
+nyast först: ordrar och avtal med belopp och status, anteckningar från Nav och från
+Inkio, flyttade leveranskort, samtalen och det som hänt med ordern i Nav. Ett avtal
+visar hur långt det har gått och när Nav påminner om förlängningen.
+
+Filtrera på **Anteckningar**, **Order och avtal**, **Ärenden och produktion** eller
+**Samtal**, eller sök på ett namn, ett ord eller ett ordernummer. **Per roll** visar
+anteckningarna uppdelade på säljare, admin, superadmin och de som bara finns i Inkio.
+
+Anteckningen skriver du med fetstil, kursiv, länkar och listor, som i Inkio. Välj
+under **Gäller** om den handlar om kunden eller om en av kundens order, så hamnar den
+på rätt ställe i Inkio. Enter sparar och Skift+Enter ger en ny rad. Trycker du på
+"om #15" öppnas ordern.`,
+    datum: "2026-11-02",
+    roller: [],
+    href: "/order",
+  },
+  {
+    slug: "snabbraden-i-dag",
+    rubrik: "Uppgifter: en ny rad hamnar i dag",
+    ingress: "Det du skriver i Att göra i dag läggs i dag, och fältet töms när du trycker Lägg till.",
+    text: `Skriv i fältet överst i **Att göra i dag** eller i **Uppgifter** och tryck **Lägg till**.
+En rad utan dag läggs nu i dag och syns direkt i listan. Förut hamnade den under
+**Någon gång**, så den syntes inte där du skrev den. Vill du inte bestämma en dag
+skriver du **någon gång** på raden.
+
+Fältet töms så fort du trycker, så att samma rad inte läggs två gånger. Går raden
+inte att spara kommer texten tillbaka i fältet.`,
     datum: "2026-11-02",
     roller: [],
     href: "/uppgifter",
+  },
+  {
+    slug: "inkio-i-nav",
+    rubrik: "Allt som händer i Inkio syns i Nav",
+    ingress: "Anteckningar, kortflyttar, ärenden och ordrar i Inkio kommer in i Nav inom några minuter, med en notis.",
+    text: `Skriver någon i Inkio om en kund som har en order i Nav, står det i kundkortet
+under **Aktivitet** inom en minut, och inom fem för en kund där inget hänt på två
+dygn. Det gäller anteckningar, flyttade leveranskort,
+ärenden och ändrade ordrar och avtal. Säljaren på ordern får en notis, och det gör
+alla superadmin och den som leder säljaren. Den som skrev får ingen.
+
+Ändras en anteckning i Inkio ändras den i Nav också, och den märks "ändrad".
+Makuleras en order i Inkio makuleras den i Nav. Har Inkio fått betalt markeras den
+betald, och sägs avtalet upp slutar Nav bevaka förlängningen. Ett ändrat belopp
+ändras inte av sig självt, eftersom det ändrar provisionen. Du får en notis och
+rättar ordern i Nav.
+
+En anteckning du skriver i kundkortet sparas i Nav först och skrivs sedan till
+kunden i Inkio. Det som händer med ordern i Nav kommer också in i Inkio: rättad,
+betald, förlängd eller inte, nya bilagor och kampanjsidan. Notiserna styrs under
+**Utskick**.`,
+    datum: "2026-11-02",
+    roller: [],
+    href: "/order",
   },
   {
     slug: "kalender-stall-in-serie",

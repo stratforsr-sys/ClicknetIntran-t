@@ -85,6 +85,7 @@ export type Omrade = { id: string; namn: string };
 /** Ordningen är den som visas. */
 export const OMRADEN: readonly Omrade[] = [
   { id: "order", namn: "Order" },
+  { id: "inkio", namn: "Inkio och kundanteckningar" },
   { id: "provision", namn: "Provision" },
   { id: "lead", namn: "Leads" },
   { id: "kalender", namn: "Kalender och leveranser" },
@@ -130,6 +131,15 @@ const OMRADE_UNDANTAG: Record<string, string> = {
   "utkorg-fel": "kalender",
   "kampanjsida-nere": "fel",
   "kampanjsida-uppe": "fel",
+  // Inkio är ett eget område (beställaren 2026-11-02): under Order fick de
+  // Orders mejl, och varje anteckning i Inkio blev ett brev.
+  "order-inkio-anteckning": "inkio",
+  "order-inkio-arende": "inkio",
+  "order-inkio-makulerad": "inkio",
+  "order-inkio-uppsagt": "inkio",
+  "order-inkio-handelse": "inkio",
+  "order-anteckning": "inkio",
+  "inkio-bevakning": "fel",
   kvallsnotis: "hem",
 };
 
@@ -229,6 +239,13 @@ export const SORT_NAMN: Record<string, string> = {
   "order-betald": "Order betald",
   "order-overtack": "Order övertagen",
   "order-rattad": "Order rättad",
+  "order-inkio-anteckning": "Anteckning i Inkio",
+  "order-inkio-arende": "Ärende i Inkio, och anteckningar på det",
+  "order-inkio-makulerad": "Order makulerad i Inkio",
+  "order-inkio-uppsagt": "Avtal uppsagt i Inkio",
+  "order-inkio-handelse": "Annat som händer i Inkio",
+  "order-anteckning": "Anteckning om en kund i Nav",
+  "inkio-bevakning": "Larm från Inkio-bevakningen",
   "order-grattis": "Grattis till en order",
   "tid-rattelse": "Rättelse av tid att besluta",
   "tid-rattelse-beslut": "Beslut om din tidsrättelse",
@@ -238,7 +255,6 @@ export const SORT_NAMN: Record<string, string> = {
   "tid-avvikelse-avslutad": "Avvikelse avslutad",
   "tid-fraga": "Fråga om din tid",
   "tid-be-ratta": "Ombedd att rätta tid",
-  "tid-veckokoll": "Veckans tidskoll",
   "tid-chef-morgon": "Morgonläget för chefen",
   "tid-chef-kvar": "Kvar att se över",
   "tid-schema-sett": "Schemat har setts",

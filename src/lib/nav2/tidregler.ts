@@ -8,8 +8,6 @@
  */
 export const SCHEMA_KVITTENS_FRAN = "2026-10-16";
 
-/** Fredagens veckokoll: påminnelsen går ut 16:30 (svensk tid). */
-export const VECKOKOLL_KL = "16:30";
 
 /** Chefens samlade notis om det som ligger kvar i Tid. */
 export const CHEF_KVAR_KL = "16:00";

@@ -218,6 +218,9 @@ console.log("\n\x1b[1mSerier och 1:1 (pass 2)\x1b[0m");
   lika("och från när, hur många", hela.detalj, "från fre 6 nov 10:00 · 8 gånger");
   lika("den här och följande, notisen", notistext(rad("installd", { dag: "2026-11-20", tid: "10:00", serie: "har", antal: 1 }), u).rubrik, "Zen ställde in 1:1 och gångerna efter");
   lika("en gång som förut", notistext(rad("installd", { dag: "2026-11-20", tid: "10:00" }), u).rubrik, "Zen ställde in 1:1");
+  // 0281 (S05 M6): ombudet ändrade bara deltagarna, och arrangören får veta vad.
+  lika("ändrad som förut", notistext(rad("andrad"), u).rubrik, "Zen ändrade 1:1");
+  lika("ombudet ändrade deltagarna", notistext(rad("andrad", { deltagare: true }), u).rubrik, "Zen ändrade deltagarna i 1:1");
   lika("förberedelsen", notistext({ ...rad("forberedelse"), av: null }, { ...u, avNamn: null }).rubrik, "Inför er 1:1: lägg till det du vill ta upp");
   lika("be om förberedelse", notistext(rad("forbered-be"), u).rubrik, "Zen vill att du förbereder er 1:1");
 }

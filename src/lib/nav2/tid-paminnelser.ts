@@ -5,14 +5,12 @@ import { gallande, type Handelse } from "@/lib/tid";
 import { gallandeSchema } from "@/lib/raster";
 import { stampelfriaAnstallda } from "@/lib/stampelfri-server";
 import { medRoll, notifiera, notifieraFlera } from "@/lib/notishandelse-server";
-import { svensktDatum, svenskaMinuter, svenskVeckodag, svenskDygnsstart, svenskDygnsslut, dagarBakat } from "@/lib/klocka";
-import { CHEF_KVAR_KL, VECKOKOLL_KL } from "@/lib/nav2/tidregler";
+import { svensktDatum, svenskaMinuter, svenskVeckodag, svenskDygnsstart, svenskDygnsslut } from "@/lib/klocka";
+import { CHEF_KVAR_KL } from "@/lib/nav2/tidregler";
 
 /**
  * Nav 2.0 (0094): påminnelserna i Tid som repot inte har.
  *
- *   - Fredagens veckokoll 16:30 (`tid-veckokoll`) till den som stämplar och
- *     inte kollat veckan.
  *   - Chefens morgonnotis på vald tid (`tid-chef-morgon`) och samlingen 16:00
  *     av det som ligger kvar (`tid-chef-kvar`).
  *
@@ -22,6 +20,12 @@ import { CHEF_KVAR_KL, VECKOKOLL_KL } from "@/lib/nav2/tidregler";
  * (`tid-paminnelse-ut`) är borttagna. Den första stod för nästan hälften av allt i
  * klockan och följdes av en instämpling i nio fall av hundra; en påminnelse
  * som oftast inte leder någonstans lär folk att sluta läsa de andra.
+ *
+ * FREDAGENS VECKOKOLL ÄR OCKSÅ BORTA (beställaren 2026-11-02). "Stämmer
+ * veckan?" (`tid-veckokoll`) frågade var och en 16:30, men svaret lästes bara
+ * av personen själv: chefen såg det inte och lönerapporten väntade inte på det.
+ * Den hade aldrig gått ut, och ingen hade kollat en vecka. Fel rättas med
+ * Rätta, och chefens morgonnotis räknar rättelserna som väntar.
  *
  * Varje notis går en gång per dag: spärren är `notification_event`.
  * Körs av dagtidsjobbet var kvart, och bara när `SKRIVLAGE.tid` är på.
@@ -38,7 +42,7 @@ async function redan(db: SupabaseClient, kalla: string, nu: Date): Promise<Set<s
 }
 
 export async function korTidpaminnelser(db: SupabaseClient, nu = new Date()) {
-  const utfall = { veckokoll: 0, morgon: 0, kvar: 0 };
+  const utfall = { morgon: 0, kvar: 0 };
   const idag = svensktDatum(nu);
   const veckodag = svenskVeckodag(nu);
   if (veckodag >= 6) return utfall;
@@ -53,18 +57,6 @@ export async function korTidpaminnelser(db: SupabaseClient, nu = new Date()) {
   const perPerson = new Map<string, Handelse[]>();
   for (const h of (stamplar ?? []) as unknown as (Handelse & { employee_id: string })[]) perPerson.set(h.employee_id, [...(perPerson.get(h.employee_id) ?? []), h]);
   const pers = ((personal ?? []) as { id: string; team_id: string | null }[]).filter((p) => !stampelfria.has(p.id));
-
-  // Fredag: stämmer veckan?
-  if (veckodag === 5 && nuMin >= min(VECKOKOLL_KL)) {
-    const mandag = dagarBakat(idag, 4);
-    const [{ data: kollade }, sagt] = await Promise.all([db.from("time_week_check").select("employee_id").eq("week_start", mandag), redan(db, "tid-veckokoll", nu)]);
-    const klara = new Set((kollade ?? []).map((k) => k.employee_id as string));
-    for (const p of pers) {
-      if (klara.has(p.id) || sagt.has(p.id)) continue;
-      if (!gallandeSchema(scheman ?? [], p.id, p.team_id, idag).length) continue;
-      if (await notifiera({ till: p.id, av: null, kalla: "tid-veckokoll", typ: "tid", rubrik: "Stämmer veckan?", detalj: "Trettio sekunder: tryck på en dag för att se raderna.", href: `/tid?vecka=${mandag}` })) utfall.veckokoll++;
-    }
-  }
 
   // Chefen: morgonnotisen på vald tid, och det som ligger kvar 16:00.
   const chefer = await medRoll("sales_manager", "admin");
