@@ -14,6 +14,16 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "fliken-bar-navets-marke",
+    rubrik: "Fliken i webbläsaren bär navets märke",
+    ingress: "Nav i en flik i datorn visar nu navet, inte Clicknets muspekare.",
+    text: `När Nav är öppet i webbläsaren visar fliken navets märke, ringen med ekrarna och
+den gula punkten, samma märke som på appikonen och i notiserna. Det gäller också
+inloggningssidan. Förut visade fliken Clicknets muspekare.`,
+    datum: "2026-11-03",
+    roller: [],
+  },
+  {
     slug: "inkio-anteckning-i-arende-som-notis",
     rubrik: "Svaren i ett ärende i Inkio kommer som notis",
     ingress: "Ett nytt ärende och en ny status mejlas som förut. Anteckningarna i ärendet kommer i klockan och telefonen.",

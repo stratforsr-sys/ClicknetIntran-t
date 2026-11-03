@@ -6,7 +6,8 @@
  *
  * /nav2 skickar sitt eget <head>, och inloggningssidorna ritas av Next med
  * rotlayouten. Båda ska ge samma app: Navs ikon, titeln Nav, appläge och ljus
- * statusrad. Utseendet är orört: ingen viewport-fit, ingen theme-color.
+ * statusrad. Utseendet är orört: ingen viewport-fit, ingen theme-color. Fliken
+ * visar navet, inte Clicknets pekare.
  */
 import { readFileSync } from "node:fs";
 import { appHuvud, skal, APP_METADATA } from "../src/lib/nav2/app.ts";
@@ -24,6 +25,10 @@ const and = appHuvud("Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.3
 
 console.log("\nHuvudet i /nav2");
 ok("apple-touch-icon", ios.includes('<link rel="apple-touch-icon" href="/nav2/ikon/apple-touch-180.png">'));
+ok("fliken: navet som SVG", and.includes('<link rel="icon" href="/nav2/ikon/flik.svg" type="image/svg+xml">'));
+ok("fliken: PNG med sizes (annars väljer Chrome den före SVG:n)", and.includes('<link rel="icon" href="/nav2/ikon/flik-32.png" sizes="32x32" type="image/png">'));
+ok("flikens PNG är 32x32", las("public/nav2/ikon/flik-32.png").readUInt32BE(16) === 32 && las("public/nav2/ikon/flik-32.png").readUInt32BE(20) === 32);
+ok("flikens SVG är navet (ring, sex ekrar, punkt)", ((s) => /<circle[^>]*stroke="#4FD1A5"/.test(s) && (s.match(/<line /g) || []).length === 6 && /<circle[^>]*fill="#F2B24C"/.test(s))(las("public/nav2/ikon/flik.svg", "utf8")));
 ok("apptitel Nav", ios.includes('<meta name="apple-mobile-web-app-title" content="Nav">'));
 ok("standalone på iPhone", ios.includes('<meta name="apple-mobile-web-app-capable" content="yes">'));
 ok("statusraden default (utseendet orört)", ios.includes('content="default"'));
@@ -40,6 +45,7 @@ console.log("\nInloggningssidorna");
 ok("inloggningssidorna länkar manifestet", APP_METADATA.manifest === "/nav2/manifest.webmanifest");
 ok("inloggningssidorna är appläge med titeln Nav och ljus statusrad", APP_METADATA.appleWebApp.capable === true && APP_METADATA.appleWebApp.title === "Nav" && APP_METADATA.appleWebApp.statusBarStyle === "default");
 ok("Nexts apple-icon är Navs ikon", lika(las("src/app/apple-icon.png"), las("public/nav2/ikon/apple-touch-180.png")));
+ok("Nexts icon (fliken, /favicon.ico) är navet, inte Clicknets pekare", lika(las("src/app/icon.png"), las("public/nav2/ikon/flik-32.png")));
 ok("layouten använder APP_METADATA", /\.\.\.APP_METADATA/.test(las("src/app/layout.tsx", "utf8")));
 ok("rutten använder skal(ua, version)", /skal\(ua, version\)/.test(las("src/app/nav2/route.ts", "utf8")) && !/\bSKAL\b/.test(las("src/app/nav2/route.ts", "utf8")));
 

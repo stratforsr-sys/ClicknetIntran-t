@@ -5,6 +5,30 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-03 kväll · Fliken i webbläsaren bär navets märke (grenen `flik-navets-marke`, EJ MERGAD, ingen migration)
+
+**Beställaren:** "kan du ändra navs klocka i webbläsaren till navs egna". Läst som flikens ikon (favicon):
+"klocka" är sannolikt "logga" i dikteringen. Webbläsaren visade Clicknets muspekare.
+
+**Varför pekaren:** `/nav2` skickar sitt eget `<head>` (`appHuvud()` i `src/lib/nav2/app.ts`) utan `<link rel="icon">`.
+Webbläsaren frågade då efter `/favicon.ico`, som `next.config.ts` skickar vidare till `/icon.png`. Det är `src/app/icon.png`,
+pekaren i 256 px. Den serveras `immutable` i ett år, så en ny bild på samma adress hade inte nått den som redan
+har pekaren sparad.
+
+**Ändringen:**
+- `public/nav2/ikon/flik.svg` och `flik-32.png`: navet i den rundade rutan (`hubMark`), skuret för 16 px. Med hubMarks
+  egna mått flyter ekrarna ihop med ringen och punkten i 16 px. Flikens version har ringen på r 12,8, linje 2,4,
+  ekrarna 6,0–8,2 och punkten r 3,2, vilket ger minst en halv bildpunkt luft mellan delarna.
+- `appHuvud()` länkar PNG:n (`sizes="32x32"`, annars väljer Chrome den före SVG:n) och SVG:n. Adresserna är nya, så
+  webbläsaren hämtar navet direkt.
+- `src/app/icon.png` har samma byte som `flik-32.png`. Det gäller inloggningssidorna (Next sätter en ny `?hash`) och `/favicon.ico`.
+- Generatorn ligger i `~/nav2-utkast/delar/flikikon/flik-ikoner.mjs <repo>`, med skissen A/B/C bredvid.
+
+**Prov:** `tests/app-huvud.mjs` har fem nya prov: båda länkarna, PNG:ns mått, SVG:ns delar och att `src/app/icon.png`
+är `flik-32.png`. Tre av dem är röda mot `main`. `app-huvud`, `app-manifest` och `navnyheter` är gröna.
+
+---
+
 ## 2026-11-03 kväll · Inkio: en anteckning i ett ärende kommer som notis, inte som mejl (MERGAD `a0eb2d6`, ingen migration)
 
 **Beställaren:** "Gör så här, ta bort mejl på anteckning i ärendet för jag märkte att jag fick mycket. Behåll

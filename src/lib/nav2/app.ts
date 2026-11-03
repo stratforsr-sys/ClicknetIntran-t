@@ -11,7 +11,8 @@ import type { Metadata } from "next";
  *
  * Utseendet är orört: statusraden är `default` (ljus), ingen viewport-fit och
  * ingen theme-color. Ikonen på inloggningssidorna kommer av Nexts apple-icon
- * (src/app/apple-icon.png, samma byte som apple-touch-180.png).
+ * (src/app/apple-icon.png, samma byte som apple-touch-180.png), och flikens
+ * ikon av Nexts icon (src/app/icon.png, samma byte som flik-32.png).
  */
 export const APP_METADATA: Pick<Metadata, "manifest" | "appleWebApp"> = {
   manifest: "/nav2/manifest.webmanifest",
@@ -26,11 +27,19 @@ const html = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").rep
  * och nypzoomen finns kvar på iOS. På Android skulle den stänga av nypzoomen,
  * så där står viewporten som förut. En iPad i skrivbordsläge säger Macintosh
  * och får Androids variant, eftersom servern inte kan se pekskärmen.
+ *
+ * Fliken visar navet: SVG:n i Chrome, Edge och Firefox, PNG:n i Safari. Utan
+ * egna taggar frågade webbläsaren efter /favicon.ico och fick Clicknets pekare,
+ * som den sparar i ett år (src/app/icon.png är immutable). Adresserna är nya, så
+ * webbläsaren hämtar navet direkt. sizes på PNG:n hindrar Chrome från att välja
+ * den före SVG:n.
  */
 export function appHuvud(ua: string, version: string | null): string {
   const iphone = /iPhone|iPad|iPod/.test(ua);
   return (
     `<meta name="viewport" content="width=device-width, initial-scale=1${iphone ? ", maximum-scale=1" : ""}">` +
+    `<link rel="icon" href="/nav2/ikon/flik-32.png" sizes="32x32" type="image/png">` +
+    `<link rel="icon" href="/nav2/ikon/flik.svg" type="image/svg+xml">` +
     `<link rel="apple-touch-icon" href="/nav2/ikon/apple-touch-180.png">` +
     `<meta name="apple-mobile-web-app-capable" content="yes">` +
     `<meta name="apple-mobile-web-app-title" content="Nav">` +
