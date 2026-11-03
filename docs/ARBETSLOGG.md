@@ -5,7 +5,7 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
-## 2026-11-03 kväll · Inkio: en anteckning i ett ärende kommer som notis, inte som mejl (grenen `inkio-arende-anteckning`, ingen migration)
+## 2026-11-03 kväll · Inkio: en anteckning i ett ärende kommer som notis, inte som mejl (MERGAD `a0eb2d6`, ingen migration)
 
 **Beställaren:** "Gör så här, ta bort mejl på anteckning i ärendet för jag märkte att jag fick mycket. Behåll
 däremot ärende och sen bara notis då och push i appen för antecknignar i ärendet".
@@ -30,6 +30,10 @@ ger samma fel (saknade moduler) som på `main`.
 
 **Gamla notiser:** de som redan skickats behåller `order-inkio-arende` i `notification_event`. Bara nya anteckningar
 får den nya sorten.
+
+**Mergen:** på beställarens ja ("Jag säger ja till mergen"). `main` hade under tiden fått navets märke och Möten
+(`9486e8c`) och sedan en docs-commit (`ca07724`). Båda mergades in i grenen, och previewen av `61e1619` var grön.
+`a0eb2d6` har samma kod som den och gick till `main` som fast-forward. Produktionen grön 17:39 UTC.
 
 ---
 
