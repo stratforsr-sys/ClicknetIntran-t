@@ -1831,6 +1831,9 @@ button.tidrow:hover{background:var(--surface-2)}
 .oli svg{width:11px;height:11px}
 .oli+.oli{right:17px} .oli+.oli+.oli{right:30px}
 .olev.kort .oli{position:static}
+.olev.mini .olevin{height:100%;padding:0 6px}
+.olev.mini .olevin b,.olev.mini .olevt{line-height:13px}
+.olev.mini .olrz{height:4px}
 .olev.fylld{background:var(--c);color:#fff;box-shadow:none}
 .olev.fylld .olevt,.olev.fylld .olevp,.olev.fylld .oli{color:rgba(255,255,255,.85)}
 .olev.fri{border-left-color:var(--surface);box-shadow:inset 3px 0 0 -2px var(--c),0 0 0 1px color-mix(in srgb,var(--c) 30%,transparent)}
@@ -1850,7 +1853,7 @@ button.tidrow:hover{background:var(--surface-2)}
 .olrz{position:absolute;left:0;right:0;bottom:0;height:6px;cursor:ns-resize}
 .olev:hover .olrz{background:linear-gradient(transparent 2px,color-mix(in srgb,var(--c) 50%,transparent) 2px 3px,transparent 3px)}
 .olfler{position:absolute;right:2px;z-index:3;font-size:11px;font-weight:600;background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
-.olselm{position:absolute;left:2px;right:2px;background:color-mix(in srgb,var(--brand) 18%,var(--surface));border:1.5px solid var(--brand);border-radius:4px;z-index:6;font-size:11.5px;font-weight:600;color:var(--brand-ink);padding:2px 6px;pointer-events:none}
+.olselm{position:absolute;left:2px;right:2px;background:color-mix(in srgb,var(--brand) 18%,var(--surface));border:1.5px solid var(--brand);border-radius:4px;z-index:6;font-size:11.5px;font-weight:600;color:var(--brand-ink);padding:1px 6px;line-height:13px;overflow:hidden;pointer-events:none}
 /* Förhandsvisning och snabbskapa */
 .olpeek{position:fixed;z-index:60;width:360px;background:var(--surface);border-radius:8px;box-shadow:0 18px 48px -12px rgba(0,0,0,.4),0 0 0 1px var(--line);border-top:4px solid var(--c);display:flex;flex-direction:column;max-height:calc(100vh - 80px);overflow:auto;font-family:var(--f-ol)}
 .olpkh{display:flex;align-items:center;gap:6px;padding:8px 10px 0 14px}
@@ -2086,7 +2089,7 @@ button.tidrow:hover{background:var(--surface-2)}
 .olmcell{position:relative}
 .olghost{opacity:.35;outline:1.5px dashed var(--c);pointer-events:none;z-index:1}
 .olev.kopia::after{content:"+";position:absolute;top:2px;right:4px;width:16px;height:16px;border-radius:50%;background:var(--ink);color:var(--surface);font-size:12px;font-weight:700;display:grid;place-items:center}
-.olhov{position:absolute;left:2px;right:2px;height:24px;border-radius:4px;background:color-mix(in srgb,var(--brand) 8%,transparent);font-size:11px;color:var(--brand-ink);padding:3px 6px;pointer-events:none;z-index:0}
+.olhov{position:absolute;left:2px;right:2px;height:24px;border-radius:4px;background:color-mix(in srgb,var(--brand) 8%,transparent);font-size:11px;color:var(--brand-ink);padding:1px 6px;line-height:13px;overflow:hidden;pointer-events:none;z-index:0}
 .olmdatt{gap:10px}
 .olmdatt>span:nth-child(2){flex:1}
 .olmdchk{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--line-2);display:grid;place-items:center;flex:none;color:var(--on-brand)}
@@ -12545,7 +12548,7 @@ FEAT.push(
 /* Byggd som Outlooks kalender: kommandorad, vänsterfält med minimånad och kalendrar, timrutnät med arbetstid och nu-linje,
    förhandsvisning vid klick, snabbskapa genom att dra, flytta och ändra längd, schemaläggningsassistent och Min dag.
    Innehållet är Navs: möten, 1:1, leveransposter, uppgifter, coachning, ledighet och frister, med delning i fem nivåer. */
-const KPX = 48;                                  // pixlar per timme
+const KPX = 60;                                  // pixlar per timme: en minut är en pixel, så en kvart rymmer en rad
 const KD = s => Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10));
 const KF = t => new Date(t).toISOString().slice(0, 10);
 const kPlus = (s, n) => KF(KD(s) + n * 864e5);
@@ -12818,9 +12821,10 @@ function kStil(x){
   return {c, fylld: !x.kal && k.fylld};
 }
 function kPost(x, cols){
-  const e = x.e, {c, fylld} = kStil(x), sv = x.kal ? null : kSvar(e), h = Math.max(18, (e.e - e.s) / 60 * KPX - 2);
-  const w = 100 / cols, kort = e.e - e.s <= 30;
-  const cls = ['olev', fylld ? 'fylld' : '', x.kal ? 'annan' : '', sv === 'vantar' ? 'vantar' : '', sv === 'kanske' || e.visa === 'prel' ? 'prel' : '', e.visa === 'ledig' ? 'fri' : '', e.visa === 'borta' ? 'borta' : '', sv === 'nej' ? 'nej' : '', e.klar ? 'klar' : '', x.dim ? 'dim' : '', S.kPeek && S.kPeek.id === e.id ? 'sel' : '', kort ? 'kort' : ''].join(' ');
+  const e = x.e, {c, fylld} = kStil(x), sv = x.kal ? null : kSvar(e), h = Math.max(15, e.e - e.s) / 60 * KPX - 2;
+  // Höjden är längden, som i Outlook: 10:00–10:15 slutar vid 10:15-strecket, och 10:30 börjar en lucka längre ner.
+  const w = 100 / cols, kort = e.e - e.s <= 30, mini = e.e - e.s < 30;
+  const cls = ['olev', fylld ? 'fylld' : '', x.kal ? 'annan' : '', sv === 'vantar' ? 'vantar' : '', sv === 'kanske' || e.visa === 'prel' ? 'prel' : '', e.visa === 'ledig' ? 'fri' : '', e.visa === 'borta' ? 'borta' : '', sv === 'nej' ? 'nej' : '', e.klar ? 'klar' : '', x.dim ? 'dim' : '', S.kPeek && S.kPeek.id === e.id ? 'sel' : '', kort ? 'kort' : '', mini ? 'mini' : ''].join(' ');
   const ikoner = `${e.rep ? `<span class="oli" title="Återkommande">${KI('upprepa')}</span>` : ''}${e.priv ? `<span class="oli" title="Privat">${KI('las')}</span>` : ''}${e.delt.length > 1 && x.niva !== 'upptagen' ? `<span class="oli" title="${e.delt.length + 1} deltagare">${KI('pers')}</span>` : ''}`;
   const anslut = (e.video || e.plats === 'Videolänk') && !x.kal && e.d === kIdag() && S.mode !== 'sondag' && now() >= e.s - 15 && now() < e.e;
   return `<div class="${cls}" data-kev="${e.id}" style="--c:${c};top:${e.s / 60 * KPX + 1}px;height:${h}px;left:calc(${x.col * w}% + 1px);width:calc(${w}% - 3px)" role="button" tabindex="0" title="${esc(kRubrik(x))}\n${hm(e.s)}–${hm(e.e)}${e.plats && x.niva !== 'upptagen' ? '\n' + esc(e.plats) : ''}${x.kal ? '\n' + esc(x.kal.n) + 's kalender' : ''}" aria-label="${esc(kRubrik(x))}, ${hm(e.s)}–${hm(e.e)}">${anslut ? `<button class="olanslut" data-act="toast" data-msg="Videolänken öppnas för ${esc(e.t)}.">${KI('video')}Anslut</button>` : ''}
@@ -13195,6 +13199,14 @@ function kEfterRender(){
 /* ---------- Dra: skapa, flytta, ändra längd ---------- */
 let kDrag = null;
 const kMinFran = (col, y) => Math.max(0, Math.min(1440, (y - col.getBoundingClientRect().top) / KPX * 60));
+// Ett klick väljer halvtimmen, som i Outlook, men inte den del som redan är bokad: under en post som slutar 10:15
+// börjar den nya 10:15, och en post som börjar 10:30 avslutar den. Kortast en kvart.
+function kLucka(col, m){
+  const poster = [...col.querySelectorAll('.olev[data-kev]')].map(el => KEV.find(k => k.id === el.dataset.kev)).filter(x => x && !x.allday);
+  const s = Math.min(1425, Math.max(Math.floor(m / 30) * 30, ...poster.filter(x => x.e <= m).map(x => x.e)));
+  const e = Math.min(Math.floor(m / 30) * 30 + 30, ...poster.filter(x => x.s > m).map(x => x.s));
+  return {s, e:Math.min(1440, Math.max(e, s + 15))};
+}
 document.addEventListener('pointerdown', e => {
   if (S.view !== 'kalender' || e.button !== 0) return;
   if (e.target.closest('.olanslut')) return;
@@ -13205,14 +13217,14 @@ document.addEventListener('pointerdown', e => {
   const m = kMinFran(col, e.clientY);
   if (rz){ const id = ev.dataset.kev; kDrag = {typ:'rz', id, el:ev, col, y0:e.clientY, h0:ev.offsetHeight}; e.preventDefault(); return; }
   if (ev){ const id = ev.dataset.kev, x = KEV.find(k => k.id === id); kDrag = {typ:'flytt', id, el:ev, col, y0:e.clientY, x0:e.clientX, off:m - x.s, rorde:false}; return; }
-  const s = Math.floor(m / 30) * 30, sel = document.createElement('div'); sel.className = 'olselm'; sel.style.top = s / 60 * KPX + 'px'; sel.style.height = KPX / 2 + 'px';
-  sel.innerHTML = `<span>${hm(s)}–${hm(s + 30)}</span>`; col.appendChild(sel);
-  kDrag = {typ:'ny', col, s0:s, s, e:s + 30, sel}; e.preventDefault();
+  const {s, e:e0} = kLucka(col, m), sel = document.createElement('div'); sel.className = 'olselm'; sel.style.top = s / 60 * KPX + 'px'; sel.style.height = (e0 - s) / 60 * KPX + 'px';
+  sel.innerHTML = `<span>${hm(s)}–${hm(e0)}</span>`; col.appendChild(sel);
+  kDrag = {typ:'ny', col, s0:s, e0, s, e:e0, sel}; e.preventDefault();
 });
 document.addEventListener('pointermove', e => {
   if (!kDrag) return;
   const sc = document.getElementById('olScroll'); if (sc && kDrag.typ !== 'rz'){ const r = sc.getBoundingClientRect(); if (e.clientY < r.top + 28) sc.scrollTop -= 14; else if (e.clientY > r.bottom - 28) sc.scrollTop += 14; }
-  if (kDrag.typ === 'ny'){ const m = kMinFran(kDrag.col, e.clientY), a = Math.min(kDrag.s0, Math.floor(m / 15) * 15), b = Math.max(kDrag.s0 + 30, Math.ceil(m / 15) * 15); kDrag.s = a; kDrag.e = b; kDrag.sel.style.top = a / 60 * KPX + 'px'; kDrag.sel.style.height = (b - a) / 60 * KPX + 'px'; kDrag.sel.innerHTML = `<span>${hm(a)}–${hm(b)}</span>`; return; }
+  if (kDrag.typ === 'ny'){ const m = kMinFran(kDrag.col, e.clientY), a = Math.min(kDrag.s0, Math.floor(m / 15) * 15), b = Math.max(kDrag.e0, Math.ceil(m / 15) * 15); kDrag.s = a; kDrag.e = b; kDrag.sel.style.top = a / 60 * KPX + 'px'; kDrag.sel.style.height = (b - a) / 60 * KPX + 'px'; kDrag.sel.innerHTML = `<span>${hm(a)}–${hm(b)}</span>`; return; }
   if (kDrag.typ === 'rz'){ const ny = Math.max(KPX / 4, Math.round((kDrag.h0 + e.clientY - kDrag.y0) / (KPX / 4)) * (KPX / 4)); kDrag.el.style.height = ny + 'px'; kDrag.len = Math.min(480, Math.round(ny / KPX * 60 / 15) * 15); kDrag.el.querySelector('.olevt').textContent = `${hm(KEV.find(k => k.id === kDrag.id).s)}–${hm(KEV.find(k => k.id === kDrag.id).s + kDrag.len)}`; return; }
   if (kDrag.typ === 'flytt'){
     if (!kDrag.rorde && Math.abs(e.clientY - kDrag.y0) + Math.abs(e.clientX - kDrag.x0) < 5) return;
@@ -13323,9 +13335,9 @@ document.addEventListener('mousemove', e => {
   if (S.view !== 'kalender' || kDrag || !e.target.closest) return;
   const col = e.target.closest('.olcol'); let h = document.getElementById('olHov');
   if (!col || e.target.closest('.olev,.olfler')){ if (h) h.remove(); return; }
-  const m = Math.floor(kMinFran(col, e.clientY) / 30) * 30;
+  const l = kLucka(col, kMinFran(col, e.clientY));
   if (!h || h.parentElement !== col){ if (h) h.remove(); h = document.createElement('div'); h.id = 'olHov'; h.className = 'olhov'; col.appendChild(h); }
-  h.style.top = m / 60 * KPX + 'px'; h.textContent = kWd(col.dataset.kdag) > 5 ? '' : `+ ${hm(m)}`;
+  h.style.top = l.s / 60 * KPX + 'px'; h.style.height = (l.e - l.s) / 60 * KPX + 'px'; h.textContent = kWd(col.dataset.kdag) > 5 ? '' : `+ ${hm(l.s)}`;
 });
 document.addEventListener('mouseleave', e => { if (e.target && e.target.classList && e.target.classList.contains('olcols')) document.getElementById('olHov')?.remove(); }, true);
 /* ---------- Påminnelser, som Outlooks påminnelsefönster ----------
@@ -29532,9 +29544,9 @@ document.addEventListener('pointerdown', e => {
     const m = kMinFran(col, t.y0);
     if (rz && ev){ kDrag = {typ:'rz', id:ev.dataset.kev, el:ev, col, y0:t.y0, h0:ev.offsetHeight}; return; }
     if (ev){ const x = KEV.find(k => k.id === ev.dataset.kev); if (!x) return; ev.classList.add('drar'); kDrag = {typ:'flytt', id:x.id, el:ev, col, y0:t.y0, x0:t.x0, off:m - x.s, rorde:false}; return; }
-    const s0 = Math.floor(m / 30) * 30, sel = document.createElement('div'); sel.className = 'olselm'; sel.style.top = s0 / 60 * KPX + 'px'; sel.style.height = KPX / 2 + 'px';
-    sel.innerHTML = `<span>${hm(s0)}–${hm(s0 + 30)}</span>`; col.appendChild(sel);
-    kDrag = {typ:'ny', col, s0, s:s0, e:s0 + 30, sel};
+    const {s:s0, e:e0} = kLucka(col, m), sel = document.createElement('div'); sel.className = 'olselm'; sel.style.top = s0 / 60 * KPX + 'px'; sel.style.height = (e0 - s0) / 60 * KPX + 'px';
+    sel.innerHTML = `<span>${hm(s0)}–${hm(e0)}</span>`; col.appendChild(sel);
+    kDrag = {typ:'ny', col, s0, e0, s:s0, e:e0, sel};
   }, NDKHALL);
   ndKTouch = t;
 }, true);
@@ -29554,9 +29566,9 @@ document.addEventListener('pointerup', e => {
   // Ett tryck.
   if (t.ev){ kPeekOppna(t.ev.dataset.kev, t.ev); return; }
   if (S.kPeek || S.kNy || S.kMenu){ S.kPeek = null; S.kNy = null; S.kMenu = null; render(); return; }
-  const d = t.col.dataset.kdag, s0 = Math.floor(kMinFran(t.col, t.y0) / 30) * 30, r = t.col.getBoundingClientRect();
+  const d = t.col.dataset.kdag, {s:s0, e:e0} = kLucka(t.col, kMinFran(t.col, t.y0)), r = t.col.getBoundingClientRect();
   if (kWd(d) > 5){ toast('Välj en vardag.'); return; }
-  S.kNy = {d, s:s0, e:s0 + 30, typ:'mote', x:r.right + 8 + 340 < innerWidth ? r.right + 8 : Math.max(12, r.left - 348), y:t.y0 - 40, delt:[], t0:Date.now()}; S.kPeek = null; render();
+  S.kNy = {d, s:s0, e:e0, typ:'mote', x:r.right + 8 + 340 < innerWidth ? r.right + 8 : Math.max(12, r.left - 348), y:t.y0 - 40, delt:[], t0:Date.now()}; S.kPeek = null; render();
   setTimeout(() => document.querySelector('[data-knyt]')?.focus(), 20);
 }, true);
 

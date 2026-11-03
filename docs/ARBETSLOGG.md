@@ -5,6 +5,42 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-03 · Kalendern: posten i sin rätta längd, och nästa post börjar där förra slutar (grenen `kal-hojd`, EJ MERGAD, ingen migration)
+
+**Beställaren:** "när jag nu har lagt en händelse som är 15 minuter kl 10:00 så ska jag lägga en händelse kl 10:30 så ser det
+ut som att den händelsen kl 10:00 är 30 minuter inte 15 minuter. Gör allt sånt korrekt ... så att det ser ut exakt
+som outlook".
+
+**Orsaken:** databasen hade 10:00–10:15 som 15 minuter. Ritningen gjorde den längre: `kPost` satte
+`Math.max(18, längd / 60 * KPX - 2)` med `KPX = 48`, så en kvart blev 18 px i stället för 10 och slutade vid 10:24
+(provet mätte 601,3–623,8 minuter). Luckan till 10:30 krympte till 6 px, och två poster i följd (13:00–13:15,
+13:15–13:30) lade sig över varandra. `kLayout` var rätt: posterna stod i full bredd, den första var bara för hög.
+Klicket, svävaren och telefonens tryck valde dessutom alltid `Math.floor(m / 30) * 30`, så ett klick under en post
+som slutar 10:15 gav 10:00–10:30, alltså en krock.
+
+**Ändringen** (bara `src/nav2/utkast.html`):
+- `KPX` 48 → 60: en minut är en pixel, och en kvart (13 px plus mellanrum) rymmer en rad text. Rutnätet, timmarna,
+  halvtimmesstrecken, arbetstiden, nu-strecket, utskriften och rullningen räknas alla från `KPX`.
+- `kPost`: höjden är `max(15, längd) / 60 * KPX - 2`. Under 30 minuter får posten klassen `mini`: rubrik och tid på
+  en rad, 13 px radhöjd, smalare dragkant. `.olselm` och `.olhov` fick samma radhöjd för att få plats i en kvart.
+- `kLucka(col, m)`: halvtimmen under pekaren, men börjar vid slutet på en egen post som slutar i samma halvtimme och
+  slutar vid starten på nästa, minst en kvart. Bara egna poster i kolumnen räknas (`.olev[data-kev]`, slås upp i
+  `KEV`). Används av musens klick och drag (draget växer från luckans slut), svävaren och telefonens tryck och
+  håll in. Ett klick i ett tomt fält ger samma halvtimme som förut.
+
+**Prov:** `~/nav2-utkast/probe/kalender-hojd-prov.mjs` (nytt, 20 kontroller: höjd, lucka, följd, svävare, klick på
+fem ställen, drag, fingertryck och håll in) rött på main 8 av 20, grönt på grenen 20 av 20.
+`kalender-kort-prov.mjs` 20/20 och `kalender-enskilt-prov.mjs` 32/32 på både main och grenen. `node --check` på det
+utdragna skriptet, `test:navnyheter` grön. Skärmbild före och efter jämförd.
+
+**Fynd i provet:** Chromes touchjustering flyttar ett fingertryck några pixlar under en post till posten (pekarens
+mål blir `.olrz`). Provet skickar därför telefonens pekarhändelser direkt till kolumnen. I en riktig telefon kan ett
+tryck eller håll in mitt i en kvartslucka alltså träffa grannposten. Så var det redan på main, där luckorna var
+mindre. Att räkna träffen från `elementFromPoint` i stället skulle laga luckan men göra en kvartspost svårare att
+träffa med fingret, så det är inte gjort.
+
+**Utseendet:** en ändring av det låsta utkastet (25 % högre rutnät), sagd till beställaren före mergen.
+
 ## 2026-11-03 förmiddag · Zens mejl: bara Inkio-ärenden och makulerad order, allt annat i telefonen (en inställning, ingen kod, ingen migration)
 
 **Beställaren:** "jag har fått många mejl för inkio. Jag vill bara ha ärenden från inkio, när en order tas bort

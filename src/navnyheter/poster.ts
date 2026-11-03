@@ -14,6 +14,21 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "kalendern-ratt-langd",
+    rubrik: "Kalendern visar mötet i sin rätta längd",
+    ingress: "Ett möte på en kvart är en kvart högt, och ett klick under det börjar där det slutar.",
+    text: `Ett möte 10:00–10:15 slutar nu vid 10:15-strecket i **Kalendern**, så luckan till
+nästa möte syns. En halvtimme är dubbelt så hög som en kvart, och två möten i följd
+ligger kant i kant i stället för över varandra.
+
+Klicka i luckan under ett möte så börjar det nya där det förra slutar, till exempel
+10:15–10:30, och slutar senast där nästa möte börjar. Dra nedåt för ett längre möte.
+Samma sak gäller när du trycker eller håller in med fingret i telefonen.`,
+    datum: "2026-11-03",
+    roller: [],
+    href: "/kalender",
+  },
+  {
     slug: "moten-egen-tid",
     rubrik: "Boka möten på exakt tid",
     ingress: "Du kan skriva en egen tid när du bokar eller flyttar ett möte, inte bara hel eller halv timme.",
