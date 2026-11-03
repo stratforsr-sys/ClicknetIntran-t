@@ -5,6 +5,63 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-03 · Fart: Uppgifter ändras direkt, typsnitten cachas, schemat före inloggningen, Server-Timing (MERGAD till `main` `b6fd1fd` på beställarens ja, ingen migration)
+
+**Beställaren:** "navet är super segt, allting tar tid", sedan "Låt oss testa först allt annat innan jag lägger upp en
+supabase plan" och "Ja börja bygga", efter granskningen "Okej men fixa alla dem då" (de sex småfelen), och till sist
+"Pusha allting till main".
+
+**Orsaken** (mätt 2026-11-02, `~/nav2-utkast/delar/fart-nov/PLAN.md` och `PRESTANDAPROV.md`): databasen är Nano
+(428 MB RAM) och swappar, så varje fråga väntar på disken. `matt.data` hade median 1,7 s (0,84–4,58 s över fem
+laddningar). Uppgraderingen (steg 1) är beställarens beslut och ingår inte här.
+
+**Byggt:**
+- **Typsnitten (steg 8):** förladdas i sidans huvud, adressen bär `?v=`, och `next.config.ts` ger
+  `public, max-age=31536000, immutable` bara när `?v=` finns (`has: query v`), så offline-sidans adresser är som förut.
+  `.woff2` går förbi mellanvaran. Versionen är sha256 av filerna i `public/nav2/fonts` (namnordning, 8 tecken), räknad
+  i `next.config.ts` och inbakad som `env.NAV2_TYPSNITT_V` med reserven "1". En ny fil får alltså ny adress av sig själv.
+- **Kall instans (steg 9):** `forvarmPg()` (`pgrest.ts`) startar schemaläsningen och den första anslutningen före
+  `getCurrentUser` i `/nav2` och `/nav2/data`, bara när mellanvarans identitetsrubrik finns (`lasIdentitet(await headers())`).
+- **Mätningen (steg 0):** `Server-Timing` på `/nav2` (auth) och `/nav2/data` (auth, bygge, anslut, kö, db).
+- **Uppgifter ändras direkt (steg 2):** bocka, öppna igen, flytta, stryka och prioritet ändras i listan innan servern
+  svarat (`ndUpgGenast`, `ndUpgForutse`). Ett nej återställer varje fält som ingen senare ändring tagit över
+  (`ndUpgSvarat`), väntande ändringar läggs på igen efter en omhämtning (`ndUpgIgen`, `NDOMLASSTART` i `ndOmlasKor`),
+  och samma uppgift sparas i tur och ordning (`ndUpgITur`). Utkastets egna `_ndBocka` med flera anropas inte: deras
+  Ångra ångrar bara i listan.
+  - Bara det servern släpper igenom gissas: skrivläge, navets egna uppgifter, `farRed`, och för Stryk `farStryk`
+    (= `farBjudaIn`, nytt fält i `src/lib/nav2/uppgifter.ts`). Med granskare gissas ingenting. Kan se och delegat gissas
+    aldrig, eftersom klienten inte vet kalenderns delegatnivå.
+  - Ett dubbelklick är ett klick: samma handling inom 500 ms, och ett andra riktigt musklick på samma ställe inom
+    500 ms och 8 px (`isTrusted`, `detail > 0`), så att Stryk inte träffar raden som flyttat upp.
+  - Ett nej på Stryk tar tillbaka raden och öppnar rutan igen.
+  - Efter tidsgränsen (20 s) hämtas datan om, eftersom sparningen kan ha gått fram. Efter ett nätfel görs ingen
+    omhämtning: reserven skulle ladda om sidan till en felsida.
+- Nytt i navet: `uppgifter-direkt`.
+
+**Inte byggt, med skäl i `~/nav2-utkast/delar/fart-nov/LEDGER.md`:** steg 4 (två vågor: ~20 vyer startar på hela
+datan), 5 (minifiering: vinsten bara på kall cache), 6 (minutjobbet: kräver migration) och 7 (IndexedDB: löner och
+frånvaro skulle ligga kvar i webbläsaren efter utloggning). Väntar på beställaren: steg 1 (Supabase Pro + Small),
+3 (`getClaims`: en spärrad användare behåller åtkomsten upp till en timme) och 10 (skript från CDN).
+
+**Prov:** `npm run test:nav2-fart` (ny), `~/nav2-utkast/probe/genast-prov.mjs` 56/56 (headless Chrome, riktiga
+CDP-klick för dubbelklicket), `probe/omladdning-prov.mjs` 80/80, och 25 närliggande prov gröna efter att `main` slagits
+ihop. tsc visar bara Pling-skiftläget som fanns förut. rls, identitet, rekrytering och matning är inte körda (rör
+produktionen).
+
+**Mergen:** `main` (`e4b35d2`) ihopslagen in i grenen (`14ea6bd`, krockar bara i provlistan och nyhetslistan),
+previewen grön, sedan squash till `main` som `b6fd1fd`. Previewen saknar `NAV2_PG_URL` (bara satt för `nav2-utkast`),
+så datan mäts i produktionen.
+
+**Mätt i produktionen efter mergen** (2026-11-03, Zen, fem enstaka laddningar av `/nav2` med 20 s mellanrum):
+`matt.data` 601, 635, 933, 1739 och 2438 ms, median **0,93 s** (före: median 1,7 s, 0,84–4,58 s). Hela svaret
+1,7–4,0 s, median 2,9 s. Inloggningen (`Server-Timing: auth`) 108–220 ms. `pg-anslut` 86 ms på första laddningen,
+sedan 0. Typsnitten `?v=cf8040c5` ger `immutable`, utan `?v=` som förut. Spridningen är lika stor som förut, och de
+här stegen rör inte bygget av datan (utom på en kall instans). Skillnaden i median är alltså mest databasens dagsform,
+inte ändringen. Vinsten syns i stället i Uppgifter (raden ändras direkt i stället för efter ~4–5 s) och i typsnitten
+på återbesök.
+
+---
+
 ## 2026-11-03 förmiddag · Möten: fler personer på ett möte, kollegor och kunder (direkt på `main`, ingen migration)
 
 **Beställaren:** "lägg till så att man kan välja att lägga till flera personer ifall man behöver. Se över best
