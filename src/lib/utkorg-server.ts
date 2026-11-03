@@ -638,17 +638,20 @@ async function ics(rad: Utkorgsrad): Promise<boolean> {
 
   const { data } = await db.from("calendar_event").select(ICS_KOLUMNER).eq("id", eventId).maybeSingle();
   const e = data as unknown as Icshandelse | null;
-  if (!e || !icsGaller(e, epost, sekvens, metod)) return false;
-  if (metod === "REQUEST") {
+  // En avbokning till ett möte som står kvar: gästen är borttagen (Möten, Ändra). Den gäller bara om adressen inte är med längre.
+  const harAdressen = async (id: string) => {
     const { data: kvar } = await db
       .from("calendar_attendee")
       .select("id")
-      .eq("event_id", e.id)
+      .eq("event_id", id)
       // ilike för versalerna; `_` och `%` i adressen är tecken, inte jokrar.
       .ilike("external_email", epost.replace(/[\\%_]/g, (t) => `\\${t}`))
       .limit(1);
-    if (!kvar?.length) return false;
-  }
+    return !!kvar?.length;
+  };
+  const borttagen = !!e && metod === "CANCEL" && !e.cancelled_at && !(await harAdressen(e.id));
+  if (!e || !icsGaller(e, epost, sekvens, metod, borttagen)) return false;
+  if (metod === "REQUEST" && !(await harAdressen(e.id))) return false;
 
   if (!kundmejlTillatet(epost)) {
     await logga("ut", { handling: "ics", event: e.id, metod, sekvens, ok: false, orsak: "Förhandsvisningen skickar inte till kunder" });
@@ -679,11 +682,36 @@ async function ics(rad: Utkorgsrad): Promise<boolean> {
     { namn: (o?.contact_name as string | null | undefined) ?? null, epost, svara: true },
   );
 
-  const { amne, text } = kundbrev({ metod, sekvens, rubrik, nar, kontakt, plats: e.plats, url: e.online_url, avsandare: org.first_name as string });
+  const slag = borttagen ? "bort" : metod === "REQUEST" ? await brevslag(e.id, epost, sekvens, nar) : undefined;
+  const { amne, text } = kundbrev({ metod, sekvens, slag, rubrik, nar, kontakt, plats: e.plats, url: e.online_url, avsandare: org.first_name as string });
   const u = await skickaEpost({ till: epost, amne, text, svaraTill: org.email as string, bilagor: [icsBilaga(ics, metod)], logg: { sort: "utkorg-inbjudan" } });
-  await logga("ut", { handling: "ics", event: e.id, metod, sekvens, ok: u.skickat, id: u.skickat ? u.id : null });
+  // `epost` och `nar` (2026-11-03): nästa brev till samma adress vet då vad gästen redan fått (`brevslag`).
+  await logga("ut", { handling: "ics", event: e.id, metod, sekvens, ok: u.skickat, id: u.skickat ? u.id : null, epost, nar });
   if (!u.skickat) throw new Error(u.orsak);
   return true;
+}
+
+/**
+ * Vad en inbjudan till en gäst gäller, ur det gästen senast fått (loggen, `ok`). Utkorgens rader duger inte:
+ * en överhoppad rad markeras också som klar. Ingenting tidigare, eller en avbokning: en första inbjudan. Samma
+ * tid som förra brevet: platsen eller länken har ändrats. Annars en ny tid. Brev från före 2026-11-03 saknar
+ * adressen i loggen; finns sådana för mötet blir det "ny tid", som förut.
+ */
+async function brevslag(eventId: string, epost: string, sekvens: number, nar: string): Promise<"ny" | "tid" | "andrad"> {
+  if (sekvens <= 0) return "ny";
+  const { data } = await supabaseAdmin()
+    .from("integration_log")
+    .select("body")
+    .eq("body->>handling", "ics")
+    .eq("body->>event", eventId)
+    .eq("body->>ok", "true")
+    .order("id", { ascending: false })
+    .limit(200);
+  const brev = ((data ?? []) as { body: Record<string, unknown> }[]).map((x) => x.body);
+  const forra = brev.find((x) => String(x.epost ?? "").toLowerCase() === epost);
+  if (!forra) return brev.some((x) => x.epost === undefined) ? "tid" : "ny";
+  if (forra.metod === "CANCEL") return "ny";
+  return forra.nar === nar ? "andrad" : "tid";
 }
 
 // -----------------------------------------------------------------------------

@@ -43,6 +43,69 @@ export const MAX_KOLLEGOR = 10;
 export const MAX_GASTER = 10;
 
 /* ------------------------------------------------------------------------ */
+/* Platsen (2026-11-03): som i Outlook, över telefon, i Teams eller på en plats */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * Var mötet hålls. Kalendern har två fält, `plats` (texten) och `online_url` (länken), och kundens inbjudan
+ * visar båda ("Plats: …", "Länk: …"). Telefon är `plats = "Telefon"` som förut. Teams är `plats = "Microsoft
+ * Teams"` med länken man klistrat in från Teams; Nav skapar inga Teams-möten själv. Klistrar man in en länk
+ * till Meet eller Zoom heter platsen det i stället, så att kunden inte får fel namn på länken. På plats är
+ * adressen som `plats`.
+ */
+export const PLATSTYPER = ["telefon", "teams", "plats"] as const;
+export type Platstyp = (typeof PLATSTYPER)[number];
+const VIDEOTJANST: [RegExp, string][] = [
+  [/(^|\.)teams\.(microsoft|live)\.com$/, "Microsoft Teams"],
+  [/(^|\.)meet\.google\.com$/, "Google Meet"],
+  [/(^|\.)zoom\.us$/, "Zoom"],
+];
+const VIDEONAMN = ["Microsoft Teams", "Google Meet", "Zoom", "Videomöte"];
+
+/** Platsens namn för en möteslänk: tjänsten ur adressen, "Microsoft Teams" utan länk, annars "Videomöte". */
+export function videoNamn(lank: string | null): string {
+  if (!lank) return "Microsoft Teams";
+  let host = "";
+  try {
+    host = new URL(lank).hostname.toLowerCase();
+  } catch {
+    return "Videomöte";
+  }
+  return VIDEOTJANST.find(([re]) => re.test(host))?.[1] ?? "Videomöte";
+}
+
+/** Platsen i formuläret, prövad: typen, adressen (På plats) och länken (Teams). Utan typ är det Telefon, som förut. */
+export function platsIndata(typ: unknown, adress: unknown, lank: unknown): Resultat<{ plats: string; lank: string | null }> {
+  if (tom(typ) || typ === "telefon") return { ok: true, varden: { plats: MOTE_PLATS, lank: null } };
+  if (typ === "teams") {
+    if (tom(lank)) return { ok: true, varden: { plats: videoNamn(null), lank: null } };
+    const l = typeof lank === "string" ? lank.trim() : "";
+    let url: URL | null = null;
+    try {
+      url = new URL(l);
+    } catch {
+      url = null;
+    }
+    if (!url || url.protocol !== "https:" || l.length > 500) return nej("Länken ska börja med https://.");
+    return { ok: true, varden: { plats: videoNamn(l), lank: l } };
+  }
+  if (typ === "plats") {
+    const a = text(adress);
+    if (!a) return nej("Skriv var mötet hålls.");
+    if (a.length > 200) return nej("Platsen är för lång.");
+    return { ok: true, varden: { plats: a, lank: null } };
+  }
+  return nej("Välj var mötet hålls.");
+}
+
+/** Tillbaka till formuläret: vilken typ kalenderns `plats` och `online_url` är. Tomt och "Telefon" är telefon. */
+export function platsTyp(plats: string | null, lank: string | null): Platstyp {
+  if (lank || VIDEONAMN.includes((plats ?? "").trim())) return "teams";
+  const p = (plats ?? "").trim();
+  return !p || p.toLowerCase() === MOTE_PLATS.toLowerCase() ? "telefon" : "plats";
+}
+
+/* ------------------------------------------------------------------------ */
 /* Domän och telefon                                                         */
 /* ------------------------------------------------------------------------ */
 
@@ -404,6 +467,9 @@ export type BokaVarden = {
   med: string[];
   /** Fler hos kunden: e-postadresser som får kalenderinbjudan. Aldrig kontaktens `epost`, inga dubbletter. */
   gaster: string[];
+  /** Kalenderns `plats` och `online_url` (`platsIndata`). */
+  plats: string;
+  lank: string | null;
 };
 
 /**
@@ -490,6 +556,8 @@ export function bokaIndata(body: unknown): Resultat<BokaVarden> {
   if (!med.ok) return med;
   const gaster = gasterIndata(b.gaster, epost);
   if (!gaster.ok) return gaster;
+  const plats = platsIndata(b.platsTyp, b.adress, b.lank);
+  if (!plats.ok) return plats;
 
   return {
     ok: true,
@@ -510,6 +578,8 @@ export function bokaIndata(body: unknown): Resultat<BokaVarden> {
       foregaende,
       med: med.varden,
       gaster: gaster.varden,
+      plats: plats.varden.plats,
+      lank: plats.varden.lank,
     },
   };
 }
@@ -566,7 +636,7 @@ export const SQL_INGET_SVAR = `update public.mote_kedja
  * igenom resten (`uppslag`, `lediga`, och `samtal` från B4), som bara läser. En okänd handling är
  * ingen skrivning och får sitt vanliga 400.
  */
-export const SKRIVANDE_HANDLINGAR = ["boka", "paminn", "bekrafta", "flytta", "avboka", "utfall", "kund", "nej", "inget_svar", "prova_igen", "radera"] as const;
+export const SKRIVANDE_HANDLINGAR = ["boka", "paminn", "bekrafta", "flytta", "avboka", "utfall", "kund", "nej", "inget_svar", "prova_igen", "radera", "andra"] as const;
 export const arSkrivning = (handling: string): boolean => (SKRIVANDE_HANDLINGAR as readonly string[]).includes(handling);
 
 /**
@@ -597,6 +667,99 @@ export function flyttaIndata(body: unknown): Resultat<{ mote: string; dag: strin
   if (!ID(b.mote)) return nej("Mötet stämmer inte.");
   const t = dagOchStart(b.dag, b.start);
   return t.ok ? { ok: true, varden: { mote: b.mote, dag: t.varden.dag, start: t.varden.start } } : t;
+}
+
+/**
+ * Ändra mötet (2026-11-03): bara de fält som står i anropet ändras, så att två som ändrar olika saker
+ * samtidigt inte skriver över varandra. Ett tomt valfritt fält (kontakt, e-post, webbadress, mål,
+ * nuläge) tömmer det; namn, telefon och källa måste ha ett värde. `med` och `gaster` är hela listan
+ * som den ska bli. `fore` är mötets tid som klienten såg ("YYYY-MM-DD HH:MM"); har mötet flyttats
+ * sedan dess svarar rutten 409. Felen är samma texter som i `boka`.
+ */
+export type AndraVarden = {
+  mote: string;
+  fore: string;
+  bolag: Partial<Pick<BokaVarden, "namn" | "kontakt" | "telefon" | "epost" | "doman">>;
+  kalla?: string;
+  mal?: string | null;
+  nulage?: BokaVarden["nulage"];
+  tid?: { dag: string; start: string };
+  plats?: { plats: string; lank: string | null };
+  med?: string[];
+  gaster?: string[];
+};
+
+export function andraIndata(body: unknown): Resultat<AndraVarden> {
+  if (!body || typeof body !== "object") return nej("Ogiltig begäran.");
+  const b = body as Record<string, unknown>;
+  const har = (k: string) => Object.prototype.hasOwnProperty.call(b, k);
+  if (!ID(b.mote)) return nej("Mötet stämmer inte.");
+  if (typeof b.fore !== "string" || !LOKAL.test(b.fore)) return nej("Mötet har ändrats. Ladda om tavlan.");
+  const v: AndraVarden = { mote: b.mote, fore: b.fore, bolag: {} };
+
+  if (har("namn")) {
+    const namn = text(b.namn);
+    if (!namn) return nej("Skriv bolagets namn.");
+    if (namn.length > 150) return nej("Namnet är för långt.");
+    v.bolag.namn = namn;
+  }
+  if (har("kontakt")) {
+    const kontakt = text(b.kontakt);
+    if ((kontakt?.length ?? 0) > 200) return nej("Kontaktpersonens namn är för långt.");
+    v.bolag.kontakt = kontakt;
+  }
+  if (har("telefon")) {
+    const telefon = telefonE164(typeof b.telefon === "string" ? b.telefon : null);
+    if (!telefon) return nej("Telefonnumret går inte att tolka.");
+    v.bolag.telefon = telefon;
+  }
+  if (har("epost")) {
+    if (tom(b.epost)) v.bolag.epost = null;
+    else {
+      const epost = normaliseraEpost(typeof b.epost === "string" ? b.epost : null);
+      if (!epost) return nej("E-postadressen går inte att tolka.");
+      v.bolag.epost = epost;
+    }
+  }
+  if (har("doman")) v.bolag.doman = bolagsDoman(typeof b.doman === "string" ? b.doman : null);
+  if (har("kalla")) {
+    const kalla = text(b.kalla);
+    if (!kalla) return nej("Skriv varifrån bolaget kommer.");
+    if (kalla.length > 80) return nej("Källan är för lång.");
+    v.kalla = kalla;
+  }
+  if (har("mal")) {
+    const mal = text(b.mal);
+    if ((mal?.length ?? 0) > 2000) return nej("Målet är för långt.");
+    v.mal = mal;
+  }
+  if (har("nulage")) {
+    if (tom(b.nulage)) v.nulage = null;
+    else if (typeof b.nulage !== "string" || !Object.prototype.hasOwnProperty.call(NULAGE, b.nulage)) return nej("Välj nuläge.");
+    else v.nulage = b.nulage as keyof typeof NULAGE;
+  }
+  if (har("dag") || har("start")) {
+    const t = dagOchStart(b.dag, b.start);
+    if (!t.ok) return t;
+    v.tid = t.varden;
+  }
+  if (har("platsTyp")) {
+    const p = platsIndata(b.platsTyp, b.adress, b.lank);
+    if (!p.ok) return p;
+    v.plats = p.varden;
+  }
+  // Hållaren och kontaktens adress tas bort i rutten, som läser dem ur databasen.
+  if (har("med")) {
+    const med = kollegorIndata(b.med === null ? [] : b.med, "");
+    if (!med.ok) return med;
+    v.med = med.varden;
+  }
+  if (har("gaster")) {
+    const gaster = gasterIndata(b.gaster === null ? [] : b.gaster, v.bolag.epost ?? null);
+    if (!gaster.ok) return gaster;
+    v.gaster = gaster.varden;
+  }
+  return { ok: true, varden: v };
 }
 
 export function utfallIndata(body: unknown): Resultat<{ mote: string; inn: UtfallIn }> {

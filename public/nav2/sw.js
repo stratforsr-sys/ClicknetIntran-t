@@ -14,7 +14,15 @@
  * frågas före allt annat. /nav2/kalender?push=<enhetens endpoint> svarar med
  * den äldsta kalendernotisen som den här enheten inte visat, en per push, eller
  * null. Varje notis har en egen tagg, så att två inbjudningar blir två notiser,
- * och trycket öppnar posten i Nav 2.0. */
+ * och trycket öppnar posten i Nav 2.0.
+ *
+ * Märket: varje notis bär navets märke, som notisen på startsidan. Bilden är
+ * hubMark (notis-192.png), och statusradens lilla märke (notis-badge-96.png)
+ * är navet i vitt på genomskinligt, eftersom Android bara läser alfakanalen.
+ * iPhone visar alltid appens egen ikon och läser ingen av dem. */
+const BILD = '/nav2/ikon/notis-192.png', MARKE = '/nav2/ikon/notis-badge-96.png';
+const visa = (titel, o) => self.registration.showNotification(titel, {icon:BILD, badge:MARKE, lang:'sv', ...o});
+
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
 
@@ -27,7 +35,7 @@ self.addEventListener('push', e => {
         const r = await fetch('/nav2/kalender?push=' + encodeURIComponent(sub.endpoint), {credentials:'include', cache:'no-store'});
         const s = r.ok ? await r.json() : null;
         if (s && s.notis){
-          await self.registration.showNotification(s.notis.titel, {body:s.notis.text, icon:'/clicknet-symbol.png', badge:'/clicknet-symbol.png', tag:'nav-kal-' + s.notis.id, data:{url:s.notis.url, kal:true}});
+          await visa(s.notis.titel, {body:s.notis.text, tag:'nav-kal-' + s.notis.id, data:{url:s.notis.url, kal:true}});
           return;
         }
       }
@@ -36,7 +44,7 @@ self.addEventListener('push', e => {
       const r = await fetch('/nav2/utbildning?push=1', {credentials:'include', cache:'no-store'});
       const s = r.ok ? await r.json() : null;
       if (s && s.rep){
-        await self.registration.showNotification(s.rep.titel, {body:s.rep.text, icon:'/clicknet-symbol.png', badge:'/clicknet-symbol.png', tag:'nav-rep', renotify:true, data:{url:'/nav2?till=/utbildning/repetition'}});
+        await visa(s.rep.titel, {body:s.rep.text, tag:'nav-rep', renotify:true, data:{url:'/nav2?till=/utbildning/repetition'}});
         return;
       }
     } catch (_) {}
@@ -45,7 +53,7 @@ self.addEventListener('push', e => {
       const s = r.ok ? await r.json() : null;
       if (s && s.kvall){ titel = s.kvall.titel; text = s.kvall.text; }
     } catch (_) {}
-    await self.registration.showNotification(titel, {body:text, icon:'/clicknet-symbol.png', badge:'/clicknet-symbol.png', tag:'nav-kvall', renotify:true, data:{url:'/nav2'}});
+    await visa(titel, {body:text, tag:'nav-kvall', renotify:true, data:{url:'/nav2'}});
   })());
 });
 

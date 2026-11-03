@@ -590,6 +590,8 @@ export const NOTIS_KALLOR = [
   "lead-paminn",
   /** Nav 2.0, Möten: någon annan bokade ett möte åt dig. Händelse: du ska veta det innan det är dags. */
   "mote-bokat",
+  /** Nav 2.0, Möten (2026-11-03): någon annan ändrade ett möte du håller (tid, plats, vilka som är med). Samma skäl. */
+  "mote-andrat",
 
   /**
    * Fel i Nav 2.0 (0082). Båda är HÄNDELSER: ett svar i tråden och att ett fel
@@ -795,6 +797,7 @@ export const HANDELSEKALLOR = [
   "lead-tilldelad",
   "lead-paminn",
   "mote-bokat",
+  "mote-andrat",
   "fel-meddelande",
   "fel-lagad",
   "kampanjsida-nere",

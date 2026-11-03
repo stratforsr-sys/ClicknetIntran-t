@@ -24,12 +24,87 @@ och klockan får den. Det gäller hela bolaget, alltså också Simon (vars eget 
 Zens) och säljarna.
 
 **Prov:** `tests/inkio-inflode.mjs` väntar sig den nya sorten. `tests/utskick.mjs` har två nya prov: ärendets
-mejlnyckel når inte anteckningen, och sorten har klocka, mejl och push. `main` (`c51faa1`) är inmergad, och bara
-docs och `poster.ts` krockade. Elva berörda prov är gröna, också `notiser-tackning`. tsc på de sju ändrade filerna
+mejlnyckel når inte anteckningen, och sorten har klocka, mejl och push. `main` (`c51faa1`, sedan `9486e8c`) är inmergad, och
+bara docs och `poster.ts` krockade. Elva berörda prov är gröna, också `notiser-tackning`. tsc på de sju ändrade filerna
 ger samma fel (saknade moduler) som på `main`.
 
 **Gamla notiser:** de som redan skickats behåller `order-inkio-arende` i `notification_event`. Bara nya anteckningar
 får den nya sorten.
+
+---
+
+## 2026-11-03 förmiddag · Notiserna i telefonen bär navets märke (grenen `notiser-navets-marke`, ingen migration)
+
+**Beställaren:** "jag vill att du kollar hur navs notiser ser ut i telefonen. Så vill jag att du ändrar på notiserna
+till navets. Gör det ordentligt och korrekt".
+
+**Läget:** alla tre vägarna i `public/nav2/sw.js` (kalendern och klockan, repetitionen, kvällsnotisen) gav
+`/clicknet-symbol.png` som både `icon` och `badge`. På Android blev det Clicknets muspekare i statusraden och i
+notishuvudet (`badge` läses som alfamask) och den turkosa pekaren som notisens bild (157×200, inte kvadratisk).
+Navets egen bild av notisen på startsidan (`renderNotif`, `.app-ic`) visar `hubMark`. Två enheter tar emot push i
+produktionen, båda Zens: Macen (Chrome 154) och Samsungen (Android, Chrome 156). Ingen iPhone. iPhone läser varken
+`icon` eller `badge` och visar alltid appens ikon (`apple-touch-180.png`, redan navet).
+
+**Ändringen:**
+- `public/nav2/ikon/notis-192.png`: `hubMark` exakt (rundad ruta rx 10/32 i `--hub`, genomskinliga hörn), samma
+  märke som `.app-ic`.
+- `public/nav2/ikon/notis-badge-96.png`: navet vitt på genomskinligt, ritat för 24 dp (ringen radie 10 dp, linjer
+  2 dp, ekrarna 3,2–7,4 dp, punkten radie 2,2 dp). `hubMark`s egna mått gav 0,5 dp mellan ekrarna och ringen, och
+  de flöt ihop i statusraden.
+- `sw.js`: en `visa()` som sätter `icon`, `badge` och `lang: 'sv'`, och alla tre vägarna går genom den. Taggar,
+  länkar och texter är orörda.
+- `utkast.html` (`ndAppRegistrera`): `getRegistration('/nav2/')` + `update()` vid varje start. Pushens worker styr
+  ingen sida (`/nav2` ligger utanför `/nav2/`), så annars letar webbläsaren efter en ny `sw.js` först efter en push
+  (högst en gång per dygn) eller ett tryck på en notis, och första notisen efter mergen hade kunnat bära pekaren.
+  Prenumerationen ligger kvar (samma registrering).
+- Bilderna ritas av `~/nav2-utkast/delar/notisikon/notis-ikoner.mjs` (som `verktyg/app-ikoner.mjs`) och utkastraden
+  läggs av `patch-utkast.mjs` i samma mapp.
+
+**Prov:** `tests/notis-sw.mjs` (nytt, i `npm test`) kör `sw.js` i `node:vm`: alla fyra vägar (kalendern,
+repetitionen, kvällen, nätet borta) bär bild, märke och `lang`, och ingen `showNotification` går förbi `visa()`.
+Bilderna avkodas: notisbildens hörn är genomskinliga och färgerna `--hub`, `--hub-brand` och `--hub-signal`;
+märket är bara vitt där det syns, ringen hel och med luft mot ekrarna. Utkastraden finns. RÖTT mot main (7 fel),
+GRÖNT på grenen; `app-sw`, `app-vagar`, `app-manifest` och `navnyheter` gröna. Riktig Chrome (headless, localhost,
+`ServiceWorker.deliverPushMessage`): notisen bär `notis-192.png` och `notis-badge-96.png`, och Chrome hämtade båda.
+Samma registrering med mains `sw.js` visade pekaren, och efter utkastraden navet, utan ny prenumeration.
+
+**Kvar:** titta i telefonen efter mergen: öppna Nav en gång och skicka en provpush till Samsungen
+(`~/nav2-utkast/delar/notisprov/notisprov.mjs`). Står det "Chrome" överst i notisen ligger Nav inte som app i
+telefonen. Gamla Navs flik-pling (`Pling.tsx`) är orörd: den gäller datorn, inte telefonen, och gamla Nav ska bort.
+
+## 2026-11-03 kväll · Möten: ändra ett bokat möte, och platsen som i Outlook (direkt på `main`, ingen migration)
+
+**Beställaren:** "Du måste göra så att man kan redigera möten som man har lagt upp". Under passet: "Lägg till precis
+som outlook plats för mötet, över telefon, teams, eller plats".
+
+**Vad som byggdes.** En knapp **Ändra** i kortets panel öppnar Bokas blad ifyllt med mötet: bolagets uppgifter,
+källan, målet, nuläget, tiden (ihopfälld bakom Byt tid, men den säger vem som är upptagen då), platsen, kollegorna och
+fler hos kunden. Under **Plats** i både Boka och Ändra: Telefon, Teams (länken klistras in; "Skapa mötet i Teams"
+öppnar Teams med rubrik och tid ifyllda) eller På plats (adressen, med tidigare adresser som förslag). Kortet och
+panelen visar platsen.
+
+**Varför bara ändringarna skickas.** Två som rättar olika saker samtidigt (en kontaktperson, en tid) ska inte skriva
+över varandra. Klienten diffar mot det som stod (`D.orig`), rutten ändrar bara de nycklar som finns i anropet och
+räknar ut kalenderns ändring mot databasen, inte mot vad klienten trodde. `fore` (mötets tid som kortet visade) ger
+409 om någon flyttat mötet under tiden.
+
+**Varför `lk_spara_mote` och inte `lk_flytta` + `lk_andra_mote`.** 0212 skrevs för att en sparning i ett formulär
+skulle vara EN ändring med ett besked per person och en ny inbjudan bara när tid eller plats ändras. Med två anrop
+hade kollegorna fått två besked och kunden "Ny tid" för en rubrikändring. Den körs som hållaren (som `flyttaIKalender`),
+eftersom bokaren inte är ombud i hållarens kalender. Därför säger kalendern inget till hållaren, och Möten skickar
+`mote-andrat` när någon annan ändrat.
+
+**Varför hållaren inte byts.** Kalenderns arrangör står på händelsen och är avsändaren i kundens inbjudan. Att byta
+den hade krävt ett inställt möte och ett nytt, och kunden hade fått en avbokning och en ny inbjudan för samma möte.
+
+**Kundens brev blev fel på två ställen, och det rättades i utkorgen.** `kundbrev` valde text på sekvensen: allt efter
+den första versionen hette "Ny tid … Vi har flyttat mötet". En ny plats med samma tid, eller en ny gäst på ett möte
+som flyttats tidigare, fick alltså "Ny tid". Och en avbokning gick bara ut när hela mötet var inställt, så en
+borttagen gäst fick ingenting. Nu läser `brevslag` vad adressen senast fick (`integration_log` med `ok`, som från nu
+har `epost` och `nar`; utkorgens `sent_at` sätts också på överhoppade rader och duger inte), och `icsGaller` släpper
+en avbokning till den som inte är med längre.
+
+**Provat:** se NASTA_SESSION. Inte provat inloggad i produktionen.
 
 ---
 
@@ -55,7 +130,7 @@ push** (`push_subscription` tom). Tills han slår på notiser i Nav ser han det 
 
 ---
 
-## 2026-11-03 eftermiddag och kväll · Säljsamtalet hittas själv, superadmin avgör det som saknas, och återanvända Lynes-platser (grenen `saljsamtal-sjalv`, på väg till `main` på beställarens ja, 0284 KÖRD)
+## 2026-11-03 eftermiddag och kväll · Säljsamtalet hittas själv, superadmin avgör det som saknas, och återanvända Lynes-platser (MERGAD till `main` `c51faa1` på beställarens ja, produktionen grön 17:16 UTC, 0284 KÖRD)
 
 **Beställaren:** "Navet hittar inte samtalet just där jag slår upp en order, den väljer alltid samma samtal att välja
 mellan vilket är konstigt. Det borde vara så att man inte ska välja en inspelning att den ska hitta den själv och ifall
