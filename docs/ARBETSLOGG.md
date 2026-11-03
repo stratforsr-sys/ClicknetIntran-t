@@ -5,6 +5,30 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-03 kväll · Uppgifter: projektets och mallens formulär stängs efter Spara (grenen `projektform-stangs`, ingen migration)
+
+**Beställaren:** "När jag lägger till ett projekt i uppgiftsvyn i nav och sen trycker på skapa projekt så stannar den
+där panelen för att skapa ett projekt kvar." Projektet skapades och stod i listan, men formuläret stod kvar ifyllt.
+
+**Orsaken.** Formulären i Uppgifter (`S.ndProj` för projektet, `S.ndMallE` för mallen) nollställdes bara av Avbryt.
+Efter Spara var det omladdningen som stängde dem, eftersom den tömde allt i minnet. Sedan `ndOmlas` (`3852c87`,
+2026-11-02) står `S` kvar efter en sparning, och bara vy, flik och ruta byggs om. Formuläret överlevde, och ett andra
+tryck på Skapa projektet hade skapat ett projekt till.
+
+**Lagningen.** Spara stänger formuläret när servern svarat ok, inte först när datan hämtats om, så att knappen inte
+hinner tryckas en gång till. Säger servern nej står formuläret kvar med det som skrivits. Det gäller Nytt projekt,
+Ändra projekt, Ny mall och Ändra mall. Ett nytt projektnamn tar filtret med sig: `S.projFilter` är namnet, så panelen
+och listan blev tomma efter ett namnbyte. Nu byts filtret i `upg`-vyns `in` när den nya datan är inne. Kopplingens
+formulär är orört. Det har Stäng, listar kopplingarna och är byggt för att stå öppet.
+
+**Prov.** `~/nav2-utkast/probe/projektform-prov.mjs` (headless Chrome, Zens data, provserver med POST och
+`/nav2/data`): rött 16/22 på main, 22/22 på grenen, och 21/22 utan filterraden. Omladdningsprovet 80/80,
+genast-provet 56/56, `nav2-omladdning` och `nav2-uppgifter-lage` gröna, och skriptet parsar. Patch:
+`~/nav2-utkast/delar/projektform/patch.py`.
+
+**Framåt.** Ett formulär i Nav 2.0 som förut stängdes av omladdningen måste stänga sig självt efter ok. Tillstånd som
+bara nollställs av Avbryt är tecknet.
+
 ## 2026-11-03 kväll · Möten: ändra ett bokat möte, och platsen som i Outlook (direkt på `main`, ingen migration)
 
 **Beställaren:** "Du måste göra så att man kan redigera möten som man har lagt upp". Under passet: "Lägg till precis

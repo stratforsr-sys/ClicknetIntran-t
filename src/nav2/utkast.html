@@ -27076,7 +27076,8 @@ function ndUpgIgen(){
 // Efter en sparning: rutan står kvar öppen. En uppgift med tid syns i Kalendern, och en coachningsuppgift i Coachning.
 if (ndUp()) ndOmlasAnmal('upg', {delar:['uppgifter', 'kalender', 'coachning'], start:() => { ndUpgStart(); if (ndK()) ndKMoten(); }, nyckel:'nd-upg',
   lage:() => ({view:S.view, tab:S.tab, panel:S.panel}),
-  in:() => { ndUpgIgen(); if (S.panel && !TASKS.some(t => t.id === S.panel)) S.panel = null; if (S.fokusMode && !TASKS.some(t => t.id === S.fokusMode.id)) S.fokusMode = null; }});
+  in:() => { ndUpgIgen(); if (S.panel && !TASKS.some(t => t.id === S.panel)) S.panel = null; if (S.fokusMode && !TASKS.some(t => t.id === S.fokusMode.id)) S.fokusMode = null;
+    if (S.ndProjNamn){ if (S.projFilter === S.ndProjNamn[0]) S.projFilter = S.ndProjNamn[1]; S.ndProjNamn = null; } }});
 const ndUpgT = id => TASKS.find(x => x.id === String(id || '').split('|')[0]);
 const ndUpgNav = id => ndUp() && ndUp().uppgifter.some(x => x.id === id);
 const ndIUpg = el => S.view === 'uppgifter' || !!(el.closest && el.closest('#todoPanel, #upgRuta, #focusOv'));
@@ -27378,8 +27379,13 @@ document.addEventListener('click', e => {
   const d = b.dataset, stopp = () => { e.preventDefault(); e.stopImmediatePropagation(); };
   if (d.ndpfarg){ stopp(); S.ndProj.farg = d.ndpfarg; render(); return; }
   if (d.ndpavbryt !== undefined){ stopp(); S.ndProj = null; render(); return; }
+  // Formuläret stängs när sparningen gått igenom. Förut stängde omladdningen det, men ndOmlas behåller S, och
+  // panelen stod kvar ifylld (beställaren 2026-11-03). Ett nytt namn tar filtret med sig när datan är inne.
   if (d.ndpspara !== undefined){ stopp(); const f = S.ndProj; if (!(f.namn || '').trim()){ toast('Ge projektet ett namn.'); return; }
-    ndUpgPost(f.id === 'ny' ? 'projekt-ny' : 'projekt-andra', {id:f.id === 'ny' ? undefined : f.id, namn:f.namn.trim(), farg:f.farg, due:f.due || '', besk:f.besk || '', agare:f.agare}); return; }
+    const gammalt = f.id === 'ny' ? null : (ndUp().projekt.find(x => x.id === f.id) || {}).namn;
+    ndUpgPost(f.id === 'ny' ? 'projekt-ny' : 'projekt-andra', {id:f.id === 'ny' ? undefined : f.id, namn:f.namn.trim(), farg:f.farg, due:f.due || '', besk:f.besk || '', agare:f.agare}).then(s => { if (!s.ok) return;
+      if (gammalt && gammalt !== f.namn.trim()) S.ndProjNamn = [gammalt, f.namn.trim()];
+      if (S.ndProj === f){ S.ndProj = null; render(); } }); return; }
   if (d.ndpandra){ stopp(); ndProjOppna(d.ndpandra); return; }
   if (d.ndparkiv){ stopp(); const p = ndUp().projekt.find(x => x.id === d.ndparkiv); toastActs(`Arkivera ${p ? p.namn : 'projektet'}? Uppgifterna står kvar, och projektet går att plocka fram.`, [['Arkivera', () => { S.projFilter = null; ndUpgPost('projekt-arkivera', {id:d.ndparkiv}); }]], 8000); return; }
   if (d.ndpframplock){ stopp(); ndUpgPost('projekt-arkivera', {id:d.ndpframplock, aterstall:true}); return; }
@@ -27391,7 +27397,7 @@ document.addEventListener('click', e => {
   if (d.ndmandra){ stopp(); const m = ndUp().mallar.find(x => x.id === d.ndmandra); if (!m) return; S.ndMallE = {id:m.id, namn:m.namn, moment:m.text, besk:m.besk, delad:m.delad}; render(); return; }
   if (d.ndmavbryt !== undefined){ stopp(); S.ndMallE = null; render(); return; }
   if (d.ndmspara !== undefined){ stopp(); const E = S.ndMallE; if (!(E.namn || '').trim()){ toast('Ge mallen ett namn.'); return; } if (!(E.moment || '').trim()){ toast('En mall behöver minst ett moment.'); return; }
-    ndUpgPost(E.id ? 'mall-andra' : 'mall-ny', {mall:E.id || undefined, namn:E.namn.trim(), moment:E.moment, besk:E.besk || '', delad:!!E.delad}); return; }
+    ndUpgPost(E.id ? 'mall-andra' : 'mall-ny', {mall:E.id || undefined, namn:E.namn.trim(), moment:E.moment, besk:E.besk || '', delad:!!E.delad}).then(s => { if (s.ok && S.ndMallE === E){ S.ndMallE = null; render(); } }); return; }
   if (d.ndmarkiv){ stopp(); ndUpgPost('mall-arkivera', {mall:d.ndmarkiv}); return; }
   if (d.ndmlagg){ stopp(); S.ndMallLagg = {id:d.ndmlagg, dag:kIdag()}; render(); return; }
   if (d.ndmlaggx !== undefined){ stopp(); S.ndMallLagg = null; render(); return; }
