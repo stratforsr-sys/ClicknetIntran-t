@@ -5,6 +5,51 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-03 förmiddag · Möten: fler personer på ett möte, kollegor och kunder (direkt på `main`, ingen migration)
+
+**Beställaren:** "lägg till så att man kan välja att lägga till flera personer ifall man behöver. Se över best
+practises för det och bygg det på bästa sätt", och på frågan vilka: "båda kollegor och kunder".
+
+**Ingen migration.** Kalendern bär redan allt: `lk_skapa_mote` tar upp till 50 deltagare (en `calendar_attendee`
+och en notis `kalender-inbjudan` var), och `lead_bjud_in` lägger en extern gäst med ICS-mejl. När händelsen flyttas
+eller ställs in skickar `calendar_event_ics` en uppdatering till alla externa gäster (`lk_narvaro`). Möten skickade
+bara `[hallsAv]` och kontaktens `epost`.
+
+**Servern.** `boka` tar `med` (kollegornas id, högst 10, utan hållaren) och `gaster` (e-post, högst 10, utan
+kontaktens adress), prövade i `kollegorIndata`/`gasterIndata` (motenforma.ts, 10 nya prov i tests/moten.mjs).
+Kollegorna prövas mot `status <> 'offboarded'` före allt annat, samma regel som `lk_aktiv`, så att en slutad
+kollega ger ett fel vid raden i stället för att kalendern nekar efter att mötesraden skrivits. Kalenderhändelsen
+får `[hallsAv, ...med]` (båda vägarna: `skapaMote` och `bokaAtKollega`), och varje gäst en `lead_bjud_in`. Kvittot
+säger vem som får inbjudan och vilka som inte kunde bjudas in. `lediga` tar samma `med` och ger tiderna då alla är
+lediga (kalenderns block för alla ihop), plus `upptaget` per person och `till`, så att en egen tid kan säga vem den
+krockar med. Uteblev med ny tid bokar om med samma kollegor (de som är kvar) och gäster som mötet som uteblev.
+Kortets data (`moten.ts`) har `mote.med` (namn och svar) och `mote.gaster`, ur kalenderhändelsens deltagare med
+service role (kortet syns redan genom RLS på `mote_kort`), och `kollegor`: alla som inte slutat.
+
+**Panelen.** Best practice från Google Kalender, Outlook och Calendly, i Navs form:
+- Ihopfällt tills det behövs: två textknappar, **Lägg till kollega** under Vem håller och **Lägg till fler hos
+  kunden** under E-post. Det vanliga mötet bokas som förut.
+- Kollegorna är en combobox enligt ARIA 1.2 (`role=combobox`, `aria-activedescendant`): pilarna väljer, Enter lägger
+  till, Esc stänger listan före bladet, och Backspace i ett tomt fält tar bort den sista. Sökningen tål å/ä/ö ("asa"
+  hittar Åsa) och visar träffar i början av ett namn först. Listan ligger ovanpå (absolut), så att den inte flyttar
+  innehållet när den stängs mitt i ett klick.
+- Gästerna är brickor: Enter, komma, semikolon eller mellanslag lägger till, flera adresser går att klistra in på en
+  gång, och det som inte är en adress står kvar i fältet med felet (som Kalenderns Bjud in med e-post). Det som står
+  kvar vid Boka räknas. Kontaktens egen adress och dubbletter hoppas över.
+- Tidväljaren: med kollegor står "Tider då Benny, Åsa och du är lediga." över dagarna, och en egen tid säger "Benny är
+  upptagen då" i stället för "krockar med något i kalendern". En vald lucka står kvar när den passar alla efter
+  bytet, annars "… är inte ledig för alla längre. Välj en ny tid."
+- Kortet visar "+3" efter hållaren, och panelen en rad **Med** med svaren (kommer, tackade nej, kanske).
+- Flytta letar tider för hållaren och kollegorna som inte tackat nej.
+- Skärmläsaren får "Benny Persson är med." och "… är inte med längre." ur en live-region utanför det som ritas om.
+
+**Provat.** Typkontroll av de tre serverfilerna mot repot (samma fel före och efter, alla saknade moduler), tests/moten.mjs
+och tests/nav2-omladdning.mjs gröna. Panelen i headless Chrome med en fetch-stubbe som räknar ledigt per person,
+1280 och 390 bred, 22 steg utan konsolfel: förslag, Enter, Esc, Backspace, å/ä/ö, luckorna för alla, vem som är
+upptagen, vald tid som inte passar, gästbrickor och felet, det som skickas (`med`, `gaster`, kvarvarande text),
+serverns kollegafel vid raden, kortets +3 och Med-raden, och Flytta utan den som tackat nej. **Inte provat inloggad
+i produktionen.** Patch och prov: `~/nav2-utkast/delar/moten-flera/` (patch-server.py, patch-klient.py, bygg-prov.mjs).
+
 ## 2026-11-03 förmiddag · Zens mejl: bara Inkio-ärenden och makulerad order, allt annat i telefonen (en inställning, ingen kod, ingen migration)
 
 **Beställaren:** "jag har fått många mejl för inkio. Jag vill bara ha ärenden från inkio, när en order tas bort

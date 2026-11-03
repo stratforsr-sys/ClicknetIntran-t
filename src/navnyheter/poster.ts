@@ -14,6 +14,24 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "moten-flera-personer",
+    rubrik: "Bjud in fler till ett möte",
+    ingress: "Lägg till kollegor och fler personer hos kunden när du bokar ett möte. Tiderna visar när alla är lediga.",
+    text: `Tryck **Boka möte** i Möten. Under **Vem håller** står **Lägg till kollega**: sök på namnet
+och tryck Enter, eller välj i listan. Kollegan får en inbjudan i Nav och mötet i sin kalender, och de
+lediga tiderna visar bara tider då alla är lediga. Skriver du en egen tid står det vem som är upptagen.
+
+Under **E-post** står **Lägg till fler hos kunden**. Skriv en adress och tryck Enter eller komma; flera
+adresser går att klistra in på en gång. Var och en får en kalenderinbjudan med mejl, och en uppdatering
+om mötet flyttas eller avbokas.
+
+På kortet står vilka som är med och vad de svarat. Flyttar du mötet letar tidväljaren tider då alla
+som kommer är lediga, och bokar du en ny tid efter Uteblev följer alla med.`,
+    datum: "2026-11-03",
+    roller: [],
+    href: "/moten",
+  },
+  {
     slug: "moten-egen-tid",
     rubrik: "Boka möten på exakt tid",
     ingress: "Du kan skriva en egen tid när du bokar eller flyttar ett möte, inte bara hel eller halv timme.",
