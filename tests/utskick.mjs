@@ -61,12 +61,16 @@ prov("en härledd sort mejlas inte", !kanalerFor("rutin").includes("mejl") && ka
 prov("kvällsnotisen är bara push", kanalerFor("kvallsnotis").join() === "push");
 
 // Inkio är ett eget område (2026-11-02): Orders mejl gav ett brev per anteckning.
-const inkio = ["order-inkio-anteckning", "order-inkio-arende", "order-inkio-makulerad", "order-inkio-uppsagt", "order-inkio-handelse", "order-anteckning"];
+const inkio = ["order-inkio-anteckning", "order-inkio-arende", "order-inkio-arende-anteckning", "order-inkio-makulerad", "order-inkio-uppsagt", "order-inkio-handelse", "order-anteckning"];
 prov("Inkios sorter ligger under Inkio", inkio.every((s) => omradeFor(s) === "inkio"));
 prov("Orders mejl når inte en anteckning i Inkio",
   !far({ alla: { mejl: { "*": false, "omrade:order": true } } }, "mejl", nycklarFor("order-inkio-anteckning"), false));
 prov("en sort i Inkio kan slås på för sig",
   far({ alla: { mejl: { "*": false, "sort:order-inkio-arende": true } } }, "mejl", nycklarFor("order-inkio-arende"), true));
+// 2026-11-03: ett brev per svar i ärendet blev för mycket.
+prov("ärendets mejl når inte en anteckning på ärendet",
+  !far({ alla: { mejl: { "*": false, "sort:order-inkio-arende": true } } }, "mejl", nycklarFor("order-inkio-arende-anteckning"), false));
+prov("en anteckning på ett ärende kan mejlas och pushas", kanalerFor("order-inkio-arende-anteckning").join() === "klocka,mejl,push");
 prov("avsnitten har unika id", new Set(MORGON_AVSNITT.map((a) => a.id)).size === MORGON_AVSNITT.length);
 
 prov("okänd nyckel nekas", !arNyckel("mejl", "sort:finns-inte") && !arNyckel("mejl", "omrade:x") && !arNyckel("klocka", "avsnitt:idag"));

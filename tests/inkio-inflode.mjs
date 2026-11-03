@@ -172,7 +172,7 @@ rubrik("Sorten: ärendet, makulerat och uppsagt mejlas, resten står i klockan")
   const ticketAnteckning = anteckning(timmeSedan, { content: "Alexander ska kika på ärendet nu.", reference_doctype: "Ticket", reference_id: "01a1535c-d7a0-70fe-94dd-2f69810e26eb" });
   ticketAnteckning.about = { doctype: "Ticket", id: "01a1535c-d7a0-70fe-94dd-2f69810e26eb", title: "Kunden vill bestrida", subtitle: "TKT-2026-00003 · 2026-10-20", route: "/tickets/01a1535c-d7a0-70fe-94dd-2f69810e26eb" };
   const t = notisFor(tolkaPost(ticketAnteckning), { typ: "ny" }, { bolag: "Hedboms Måleri AB", nu: NU, navSkapadeNyss: false });
-  ok("anteckning på ett ärende: ärendet", t && t.kalla === "order-inkio-arende", JSON.stringify(t));
+  ok("anteckning på ett ärende: egen sort (mejlas inte)", t && t.kalla === "order-inkio-arende-anteckning", JSON.stringify(t));
   ok("anteckning på ett ärende: säger vilket", t && t.rubrik === "Hedboms Måleri AB: Matias Lopez skrev i ärendet Kunden vill bestrida" && t.detalj === "Alexander ska kika på ärendet nu.", JSON.stringify(t));
 
   const kund = notisFor(tolkaPost(anteckning()), { typ: "ny" }, { bolag: "X", nu: NU, navSkapadeNyss: false });

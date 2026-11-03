@@ -282,10 +282,12 @@ export const NOTIS_KALLOR = [
    *
    * Ärendet, makuleringen och uppsägningen är egna sorter (beställaren
    * 2026-11-02, "jag vill inte få 100 mejl"): de mejlas, resten står i klockan
-   * och telefonen. En anteckning på ett ärende räknas som ärendet.
+   * och telefonen. En anteckning på ett ärende har en egen sort och mejlas inte
+   * (2026-11-03: ett brev per svar i ärendet blev för mycket).
    */
   "order-inkio-anteckning",
   "order-inkio-arende",
+  "order-inkio-arende-anteckning",
   "order-inkio-makulerad",
   "order-inkio-uppsagt",
   "order-inkio-handelse",
@@ -718,6 +720,7 @@ export const HANDELSEKALLOR = [
   "order-rattad",
   "order-inkio-anteckning",
   "order-inkio-arende",
+  "order-inkio-arende-anteckning",
   "order-inkio-makulerad",
   "order-inkio-uppsagt",
   "order-inkio-handelse",

@@ -5,6 +5,33 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-03 kväll · Inkio: en anteckning i ett ärende kommer som notis, inte som mejl (grenen `inkio-arende-anteckning`, ingen migration)
+
+**Beställaren:** "Gör så här, ta bort mejl på anteckning i ärendet för jag märkte att jag fick mycket. Behåll
+däremot ärende och sen bara notis då och push i appen för antecknignar i ärendet".
+
+**Vad loggen säger:** sedan `ed04ae7` (2026-11-02 kväll) har `order-inkio-arende` mejlats 9 gånger till Zen och
+8 till Simon. Av dem var 8 respektive 7 en anteckning ("X skrev i ärendet …"), och 1 var ett ärende som blev löst.
+Anteckningarna fick samma sort som ärendet, eftersom beställaren 2026-11-02 bestämde att "en anteckning på ett
+ärende räknas som ärendet". Zens eget lager kunde därför inte skilja dem åt.
+
+**Ändringen:** `notisFor` ger en anteckning på ett ärende (`om_typ === "Ticket"`) sorten
+`order-inkio-arende-anteckning`. Rubriken är oförändrad. Sorten finns i `NOTIS_KALLOR`, `HANDELSEKALLOR`,
+`OMRADE_UNDANTAG` (område `inkio`) och i Utskicks namnlista, men inte i `MEJLKALLOR`. Ärendets namn i Utskick är
+nu bara "Ärende i Inkio". Bolagets lager `alla` har `mejl."*" = false` och ingen nyckel för den nya sorten.
+`superadminsVal` blir därför `false`: sorten mejlas inte till någon och är låst i allas eget lager. Push (`"*": true`)
+och klockan får den. Det gäller hela bolaget, alltså också Simon och säljarna.
+
+**Prov:** `tests/inkio-inflode.mjs` väntar sig den nya sorten. `tests/utskick.mjs` har två nya prov: ärendets
+mejlnyckel når inte anteckningen, och sorten har klocka, mejl och push. De berörda proven är gröna.
+`notiser-tackning` är rött med `order::forberedInspelning`, `registreraInspelning` och `begarUtanInspelning`,
+lika på `main`. tsc på de sju ändrade filerna: samma 28 fel (saknade moduler) som på basen.
+
+**Gamla notiser:** de som redan skickats behåller `order-inkio-arende` i `notification_event`. Bara nya anteckningar
+får den nya sorten.
+
+---
+
 ## 2026-11-03 eftermiddag · Fyra order till oktober, och startdatumet får ligga bakåt (MERGAD `de1c1f8`, 0285 KÖRD 17:00 UTC)
 
 **Beställaren:** Hedboms Måleri (den nya ordern), Städservice Ale, Roos Alltjänst och Mbix (den senaste) "ska ligga på

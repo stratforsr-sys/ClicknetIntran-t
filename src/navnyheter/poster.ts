@@ -14,6 +14,20 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "inkio-anteckning-i-arende-som-notis",
+    rubrik: "Svaren i ett ärende i Inkio kommer som notis",
+    ingress: "Ett nytt ärende och en ny status mejlas som förut. Anteckningarna i ärendet kommer i klockan och telefonen.",
+    text: `Navet mejlade förut varje anteckning som skrevs i ett ärende i Inkio, så ett
+ärende som pågick gav ett mejl per svar. Nu kommer anteckningarna i ett ärende bara
+som notis, i klockan och i telefonen.
+
+Ett nytt ärende och ett ärende som byter status, till exempel när det blir löst,
+mejlas som förut. Det gör också en makulerad order och ett uppsagt avtal.`,
+    datum: "2026-11-03",
+    roller: [],
+    href: "/profil",
+  },
+  {
     slug: "order-start-fore-signering",
     rubrik: "Startdatumet kan ligga bakåt i tiden",
     ingress: "En order kan gälla från en tidigare månad, även när den signeras i dag.",

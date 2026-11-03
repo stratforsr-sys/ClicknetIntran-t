@@ -135,6 +135,7 @@ const OMRADE_UNDANTAG: Record<string, string> = {
   // Orders mejl, och varje anteckning i Inkio blev ett brev.
   "order-inkio-anteckning": "inkio",
   "order-inkio-arende": "inkio",
+  "order-inkio-arende-anteckning": "inkio",
   "order-inkio-makulerad": "inkio",
   "order-inkio-uppsagt": "inkio",
   "order-inkio-handelse": "inkio",
@@ -240,7 +241,8 @@ export const SORT_NAMN: Record<string, string> = {
   "order-overtack": "Order övertagen",
   "order-rattad": "Order rättad",
   "order-inkio-anteckning": "Anteckning i Inkio",
-  "order-inkio-arende": "Ärende i Inkio, och anteckningar på det",
+  "order-inkio-arende": "Ärende i Inkio",
+  "order-inkio-arende-anteckning": "Anteckning i ett ärende i Inkio",
   "order-inkio-makulerad": "Order makulerad i Inkio",
   "order-inkio-uppsagt": "Avtal uppsagt i Inkio",
   "order-inkio-handelse": "Annat som händer i Inkio",

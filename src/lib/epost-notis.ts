@@ -88,13 +88,14 @@ export const MEJLKALLOR = [
 
   /**
    * Inkio (0277): bara det någon måste göra något åt. Ärendet är en kund som
-   * väntar på svar, och en anteckning på ett ärende räknas som ärendet. En order
+   * väntar på svar: ett nytt ärende och ett ärende som byter status. En order
    * som makuleras och ett avtal som sägs upp kostar pengar.
    *
    * Alla andra anteckningar och aktiviteter, nya order och avtal och övriga
    * ändringar står i klockan och telefonen. De mejlades förut, eftersom de låg
    * under Order, och det blev tio brev på tre minuter (beställaren 2026-11-02:
-   * "så jag inte får 100 mejl").
+   * "så jag inte får 100 mejl"). Det gäller också en anteckning på ett ärende:
+   * den mejlades först som ärendet, och det blev ett brev per svar (2026-11-03).
    */
   "order-inkio-arende",
   "order-inkio-makulerad",

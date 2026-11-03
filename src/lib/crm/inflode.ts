@@ -27,12 +27,15 @@
  * =============================================================================
  *
  * =============================================================================
- * SORTEN AVGÖR OM DEN MEJLAS (beställaren 2026-11-02)
+ * SORTEN AVGÖR OM DEN MEJLAS (beställaren 2026-11-02 och 2026-11-03)
  *
- * Ärendet (posten, och varje anteckning på det), en makulerad order och ett
- * uppsagt avtal har egna sorter och mejlas. Allt annat är `order-inkio-anteckning`
- * eller `order-inkio-handelse` och står bara i klockan och telefonen. Vad som
- * mejlas bestäms i `MEJLKALLOR` och i Utskick, inte här.
+ * Ärendet (nytt, eller med ny status), en makulerad order och ett uppsagt
+ * avtal har egna sorter och mejlas. En anteckning på ett ärende är
+ * `order-inkio-arende-anteckning` och mejlas inte: den räknades först som
+ * ärendet, och det blev ett brev per svar i varje ärende ("ta bort mejl på
+ * anteckning i ärendet"). Allt annat är `order-inkio-anteckning` eller
+ * `order-inkio-handelse`. Det som inte mejlas står i klockan och telefonen. Vad
+ * som mejlas bestäms i `MEJLKALLOR` och i Utskick, inte här.
  * =============================================================================
  */
 import { aktivitetstext } from "./inkio-mappning.ts";
@@ -350,7 +353,7 @@ export function jamfor(gammal: Tidigare | undefined, ny: Rad): Forandring {
 // -----------------------------------------------------------------------------
 
 export type Notisbeslut = {
-  kalla: "order-inkio-anteckning" | "order-inkio-arende" | "order-inkio-makulerad" | "order-inkio-uppsagt" | "order-inkio-handelse";
+  kalla: "order-inkio-anteckning" | "order-inkio-arende" | "order-inkio-arende-anteckning" | "order-inkio-makulerad" | "order-inkio-uppsagt" | "order-inkio-handelse";
   rubrik: string;
   detalj: string;
 };
@@ -396,11 +399,11 @@ export function notisFor(r: Rad, f: Forandring, o: { bolag: string; nu: number; 
 
   if (r.slag === "anteckning") {
     if (f.typ !== "ny" || !farsk || !r.text) return null;
-    // En anteckning på ett ärende räknas som ärendet, och mejlas.
+    // En anteckning på ett ärende har en egen sort: klockan och telefonen, inget mejl.
     if (r.om_typ === "Ticket") {
       const arende = r.om_titel || r.om_nummer;
       return {
-        kalla: "order-inkio-arende",
+        kalla: "order-inkio-arende-anteckning",
         rubrik: `${o.bolag}: ${r.forfattare ?? "Någon"} skrev i ${arende ? `ärendet ${arende}` : "ett ärende"}`,
         detalj: r.text,
       };
