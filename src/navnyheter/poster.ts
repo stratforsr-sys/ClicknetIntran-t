@@ -30,6 +30,26 @@ app i telefonen: öppna Nav i Chrome och välj **Installera app** i menyn.`,
     href: "/profil",
   },
   {
+    slug: "moten-andra-och-plats",
+    rubrik: "Ändra ett bokat möte, och välj var det hålls",
+    ingress: "Rätta numret, byt tid, lägg till en kollega eller en till hos kunden. Och boka över telefon, i Teams eller på plats.",
+    text: `Öppna mötet på tavlan i **Möten** och tryck **Ändra**. Du får samma blad som när du bokade,
+ifyllt med det som står. Ändra det som ska ändras och tryck **Spara ändringar**.
+
+Bara det du ändrar sparas, och var och en får veta det som rör dem. En kollega du lägger till
+får en inbjudan i Nav, och en du tar bort får besked om att mötet är inställt. Byter du tid
+eller plats får kunden en uppdaterad inbjudan med mejl. Den du tar bort hos kunden får en
+avbokning. Håller en kollega mötet får hen en notis om vad du ändrat.
+
+Under **Plats**, både när du bokar och när du ändrar, väljer du **Telefon**, **Teams** eller
+**På plats**. För Teams klistrar du in länken till mötet; **Skapa mötet i Teams** öppnar Teams
+med rubriken och tiden ifyllda. För På plats skriver du adressen. Kunden får länken eller
+adressen i inbjudan, och på kortet når du den med **Öppna länken** eller **Karta**.`,
+    datum: "2026-11-03",
+    roller: [],
+    href: "/moten",
+  },
+  {
     slug: "saljsamtalet-hittas-sjalv",
     rubrik: "Nav hittar säljsamtalet själv",
     ingress: "Du väljer inte längre samtal i orderformuläret. Hittar Nav inget går ordern in ändå, och superadmin får veta.",

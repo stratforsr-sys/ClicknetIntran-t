@@ -32,6 +32,10 @@ prov("avbokning av möte som står kvar", icsGaller(mote, a, 0, "CANCEL"), false
 prov("tom adress", icsGaller(mote, "", 0, "REQUEST"), false);
 prov("händelsen borta", icsGaller(null, a, 0, "REQUEST"), false);
 prov("heldag utan dag", icsGaller({ ...heldag, dag: null }, a, 0, "REQUEST"), false);
+// Möten, Ändra (2026-11-03): en gäst som tas bort ur ett möte som står kvar får sin avbokning.
+prov("avbokning till en borttagen gäst, mötet står kvar", icsGaller({ ...mote, ics_sequence: 2 }, a, 2, "CANCEL", true), true);
+prov("borttagen gäst, gammal sekvens", icsGaller({ ...mote, ics_sequence: 3 }, a, 2, "CANCEL", true), false);
+prov("borttagen rör inte en inbjudan (adressen prövas i utkorgen)", icsGaller(mote, a, 0, "REQUEST", true), true);
 
 if (fel) { console.log(`\n${fel} fel`); process.exit(1); }
 console.log("\nalla gröna");

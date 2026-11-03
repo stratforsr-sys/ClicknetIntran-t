@@ -5,7 +5,7 @@ import { fullName, hasRole, type CurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { dagarBakat, svenskTidpunkt, svenskVeckodag, svensktDatum } from "@/lib/klocka";
 import { lokal } from "./leads";
-import { arHallare, KOLUMNER, type Kolumn } from "./motenforma";
+import { arHallare, KOLUMNER, MOTE_PLATS, platsTyp, type Kolumn, type Platstyp } from "./motenforma";
 
 /**
  * Nav 2.0: Möten i utkastets former (moduler/ndmo.js), läsningen (A5).
@@ -56,6 +56,10 @@ export type NdMoteKort = {
     /** Kollegorna i kalendern utöver hållaren, och gästerna hos kunden (också kontakten när hen är bjuden). `svar` som i Kalendern. */
     med: { id: string; namn: string; svar: string }[];
     gaster: { epost: string; svar: string }[];
+    /** Källan som bokningen skrevs med, för Ändra. */
+    kalla: string;
+    /** Var mötet hålls (kalenderhändelsens `plats` och `online_url`): telefon, Teams med länk, eller adressen. */
+    plats: { typ: Platstyp; text: string; lank: string | null };
   } | null;
   uppfoljning: { datum: string; text: string | null; offert: boolean; ingetSvar: number; andrad: string | null } | null;
   historik: { id: string; tid: string; text: string }[];
@@ -110,6 +114,13 @@ type KortRad = {
 };
 type MoteRad = { id: string; kedja_id: string; mote_tid: string; utfall: string | null; resultat: string | null };
 type PersonRad = { id: string; first_name: string; last_name: string; employee_role: { role: string }[] | null };
+
+/** Kortets plats ur kalenderhändelsen. Utan händelse är det Telefon, som Möten bokar som standard. */
+function platsFor(e: { plats: string | null; online_url: string | null } | undefined): { typ: Platstyp; text: string; lank: string | null } {
+  const lank = e?.online_url ?? null;
+  const text = (e?.plats ?? "").trim() || MOTE_PLATS;
+  return { typ: platsTyp(text, lank), text, lank };
+}
 
 /** "28 okt" ur en svensk lokal tid "2026-10-28 10:00". */
 function dagManad(lokalTid: string): string {
@@ -184,16 +195,27 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
   // Vilka som är med på de öppna mötena: kalenderhändelsens deltagare. Kortet syns redan (RLS på mote_kort),
   // så service role här visar inget mer än mötet självt. Hållaren står i `hallsAv` och tas inte med.
   const narvaro = new Map<string, { med: { id: string; namn: string; svar: string }[]; gaster: { epost: string; svar: string }[] }>();
+  // Källan står på mötesraden, platsen på kalenderhändelsen.
+  const kallor = new Map<string, string>();
+  const platser = new Map<string, { plats: string | null; online_url: string | null }>();
   const moteIds = rader.map((r) => r.mote_id).filter((x): x is string => !!x);
   if (moteIds.length) {
-    const { data: ev } = await supabaseAdmin().from("mote").select("id, event_id").in("id", moteIds).limit(MAX_KORT);
+    const { data: ev } = await supabaseAdmin().from("mote").select("id, event_id, kalla").in("id", moteIds).limit(MAX_KORT);
+    for (const x of (ev ?? []) as { id: string; kalla: string | null }[]) if (x.kalla) kallor.set(x.id, x.kalla);
     const tillMote = new Map(((ev ?? []) as { id: string; event_id: string | null }[]).filter((x) => x.event_id).map((x) => [x.event_id as string, x.id]));
     if (tillMote.size) {
-      const { data: da } = await supabaseAdmin()
-        .from("calendar_attendee")
-        .select("event_id, employee_id, external_email, response")
-        .in("event_id", [...tillMote.keys()])
-        .limit(MAX_MOTEN);
+      const [{ data: da }, { data: pl }] = await Promise.all([
+        supabaseAdmin()
+          .from("calendar_attendee")
+          .select("event_id, employee_id, external_email, response")
+          .in("event_id", [...tillMote.keys()])
+          .limit(MAX_MOTEN),
+        supabaseAdmin().from("calendar_event").select("id, plats, online_url").in("id", [...tillMote.keys()]).limit(MAX_KORT),
+      ]);
+      for (const e of (pl ?? []) as { id: string; plats: string | null; online_url: string | null }[]) {
+        const id = tillMote.get(e.id);
+        if (id) platser.set(id, { plats: e.plats, online_url: e.online_url });
+      }
       const saknasNamn = new Set<string>();
       for (const a of (da ?? []) as { employee_id: string | null }[]) if (a.employee_id && !namn.has(a.employee_id)) saknasNamn.add(a.employee_id);
       if (saknasNamn.size) {
@@ -238,6 +260,8 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
             nulage: r.nulage,
             med: (narvaro.get(r.mote_id)?.med ?? []).filter((p) => p.id !== r.halls_av),
             gaster: narvaro.get(r.mote_id)?.gaster ?? [],
+            kalla: kallor.get(r.mote_id) ?? "",
+            plats: platsFor(platser.get(r.mote_id)),
           }
         : null,
     uppfoljning: r.uppfoljning_datum

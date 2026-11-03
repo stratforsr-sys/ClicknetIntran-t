@@ -812,6 +812,12 @@ const liten = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 export function kundbrev(a: {
   metod: "REQUEST" | "CANCEL";
   sekvens: number;
+  /**
+   * Vad brevet gäller (2026-11-03). `ny`: första inbjudan till adressen, också när mötet flyttats förut. `tid`: en
+   * ny tid. `andrad`: samma tid, annan plats eller länk. `bort`: gästen är inte med längre, mötet står kvar.
+   * Utan den räknas den ur sekvensen och metoden, som förut.
+   */
+  slag?: "ny" | "tid" | "andrad" | "bort";
   rubrik: string;
   nar: string;
   kontakt: string | null;
@@ -823,13 +829,26 @@ export function kundbrev(a: {
   const var_ = [a.plats?.trim() ? `Plats: ${a.plats.trim()}` : "", a.url?.trim() ? `Länk: ${a.url.trim()}` : ""].filter(Boolean);
   const slut = ["", "Hälsningar,", `${a.avsandare}, Clicknet`];
 
+  const slag = a.slag ?? (a.metod === "CANCEL" ? undefined : a.sekvens > 0 ? "tid" : "ny");
+  if (a.metod === "CANCEL" && slag === "bort") {
+    return {
+      amne: `Ändrad inbjudan: ${a.rubrik} ${a.nar}`,
+      text: [halsning, "", `Du är inte längre med på ${liten(a.rubrik)} ${a.nar}.`, "Den bifogade filen tar bort mötet ur din kalender.", ...slut].join("\n"),
+    };
+  }
   if (a.metod === "CANCEL") {
     return {
       amne: `Inställt: ${a.rubrik} ${a.nar}`,
       text: [halsning, "", `Vi har ställt in ${liten(a.rubrik)} ${a.nar}.`, "Den bifogade filen tar bort mötet ur din kalender. Vi hör av oss med en ny tid.", ...slut].join("\n"),
     };
   }
-  if (a.sekvens > 0) {
+  if (slag === "andrad") {
+    return {
+      amne: `Ändrat: ${a.rubrik} ${a.nar}`,
+      text: [halsning, "", `Vi har ändrat ${liten(a.rubrik)} ${a.nar}.`, "Den bifogade inbjudan uppdaterar mötet i din kalender.", ...var_, ...slut].join("\n"),
+    };
+  }
+  if (slag === "tid") {
     return {
       amne: `Ny tid: ${a.rubrik} ${a.nar}`,
       text: [halsning, "", `Vi har flyttat ${liten(a.rubrik)} till ${a.nar}.`, "Den bifogade inbjudan uppdaterar mötet i din kalender.", ...var_, ...slut].join("\n"),

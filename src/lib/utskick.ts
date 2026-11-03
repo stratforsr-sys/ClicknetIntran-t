@@ -314,6 +314,7 @@ export const SORT_NAMN: Record<string, string> = {
   "lead-tilldelad": "Lead tilldelat dig",
   "lead-paminn": "Påminnelse om ett lead",
   "mote-bokat": "Möte bokat åt dig",
+  "mote-andrat": "Möte ändrat åt dig",
   kvallsnotis: "Kvällsnotisen om morgondagen",
 };
 

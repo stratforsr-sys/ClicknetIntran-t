@@ -115,6 +115,7 @@ ok("sjukanmälan (bekräftad, avslutad, anteckning) → anmälan", ["sjuk-bekraf
 ok("frånvaro (tillbakadragen, registrerad, annan period) → ansökan", ["franvaro-tillbakadragen", "franvaro-registrerad", "franvaro-annan-period"].every((k) => alla(k, /^`\/franvaro\/\$\{/)));
 ok("fel-lagad och fel-meddelande → rapporten", alla("fel-lagad", /^`\/fel\/\$\{/) && alla("fel-meddelande", /^`\/fel\/\$\{/));
 ok("mote-bokat → mötet", alla("mote-bokat", /^`\/moten\/\$\{/));
+ok("mote-andrat → mötet", alla("mote-andrat", /^`\/moten\/\$\{/));
 ok("konto-roll, konto-organisation och konto-behorighet → profilen", ["konto-roll", "konto-organisation", "konto-behorighet"].every((k) => alla(k, /^"\/profil"$/)));
 ok("utbildning-fraga → föreläsningen", alla("utbildning-fraga", /^`\/utbildning\/forelasning\/\$\{/));
 ok("utbildning-repetition → repetitionen", alla("utbildning-repetition", /^"\/utbildning\/repetition"$/));
