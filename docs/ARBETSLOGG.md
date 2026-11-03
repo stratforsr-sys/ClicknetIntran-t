@@ -5,7 +5,7 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
-## 2026-11-03 kväll · Fliken i webbläsaren bär navets märke (grenen `flik-navets-marke`, EJ MERGAD, ingen migration)
+## 2026-11-03 kväll · Fliken i webbläsaren bär navets märke (MERGAD `c597c6e`, ingen migration)
 
 **Beställaren:** "kan du ändra navs klocka i webbläsaren till navs egna". Läst som flikens ikon (favicon):
 "klocka" är sannolikt "logga" i dikteringen. Webbläsaren visade Clicknets muspekare.
@@ -26,6 +26,13 @@ har pekaren sparad.
 
 **Prov:** `tests/app-huvud.mjs` har fem nya prov: båda länkarna, PNG:ns mått, SVG:ns delar och att `src/app/icon.png`
 är `flik-32.png`. Tre av dem är röda mot `main`. `app-huvud`, `app-manifest` och `navnyheter` är gröna.
+
+**Mergen:** beställaren sa "skicka till produktion". Main hade fått `75f705f` (notiserna i tid) och krockade bara i
+dokumenten och `poster.ts`, där båda lagt nytt överst; båda står kvar. Flätningen `add60c7` byggdes grön som preview,
+med `app-huvud`, `app-manifest`, `navnyheter`, `pushko` och `notis-sw` gröna. Under bygget kom `05540a7` (bara
+dokumenten), så den flätades in också (`c597c6e`, ingen kod mot `add60c7`) och gick som fast-forward till `main`.
+Produktionen grön 21:48 UTC: flikens SVG och PNG och `/favicon.ico` är byte för byte navet, och `/logga-in` länkar
+`/icon.png?a1af341551ca8630`.
 
 ---
 
