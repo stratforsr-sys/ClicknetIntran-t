@@ -5,6 +5,35 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-03 förmiddag · Möten: egen tid i tidväljaren, och bladet stängs efter en bokning (direkt på `main`, ingen migration)
+
+**Beställaren:** "när det kommer till att boka möten så kan jag bara välja hel och halv timme. Jag vill ha precis som
+kalendern att jag kan välja exakt tid helt själv. Bygg det snabbt behöver det nu", och mitt i passet, med en
+skärmbild: "När jag har bokat ett möte så kan jag efter det inte stänga den panelen".
+
+**Egen tid.** Rutten tog redan emot vilken start som helst i hela femminuter (`dagOchStart`; kalenderns funktioner
+kräver också `start % 5`). Bara dialogen visade `lediga`s halvtimmar. Under luckorna finns nu en rad med datum och
+klockslag (`type=time step=300`) i Boka, Flytta och Uteblev → Ny tid. Fälten och luckorna följer varandra: en lucka
+fyller fälten, en skriven tid som är en lucka tänder den, och dagen byts när datumet är en av dagarna. Fälten ritas
+inte om medan man skriver (`moLuckorRita` ritar bara luckorna och raden under). Klienten prövar datum, klockslag,
+hela femminuter och att tiden inte passerat; felet visas när man lämnar fälten och vid Boka, och fokus hamnar i
+klockslaget. Serverns "Välj en vardag." hamnar nu vid tidfältet (MOFELFALT). Krockvarningen: en egen tid inom
+08:00–17:00 på en dag med lediga tider krockar när en framtida halvtimme den täcker saknas i `lediga`; den säger
+bara något när svaret är säkert, och spärrar ingenting. Raden finns också när `lediga` inte går att hämta, så
+bokningen hänger inte på den.
+
+**Bladet stod kvar.** `moDlgSkicka` gjorde bara `return` vid lyckad sparning ("sidan laddas om"), men sedan
+`3852c87` (sparar utan omladdning) ritar `ndOmlas` om på plats. Bladet stod kvar med `sparar = true`, och krysset,
+Avbryt och Esc kräver `!sparar`. Nu stängs bladet vid lyckad sparning, och tavlan ritas om när datan är inne, med
+kortet markerat och kvittot som förut. Det gällde alla dialoger som går genom `moDlgSkicka` (Boka, Flytta, Hållet,
+Uteblev, Nej). Ingen annan vy har samma antagande: `sparar = true` finns annars bara i Saldo, som redan nollställer.
+
+**Prov:** `~/nav2-utkast/delar/moten-exakt-tid/patch.py` mot mains `utkast.html`. Provsidan (`bygg-prov.mjs`:
+säljardata och en fetch-stubbe för `/nav2/moten` och `/nav2/data`) i headless Chrome: egen tid 8 av 8 lägen på
+1280 och 390 (krock, femminutersfelet, dagbyte, lucka ↔ fält, passerat, fel vid Boka, rätt `dag` + `start` i
+anropet); bladet efter en bokning: på main öppet med grå knapp och krysset stänger inte, patchad stängd och ingen
+omladdning. Inte provad i produktionen.
+
 ## 2026-11-02 kväll · Ändra och ta bort sin egen anteckning, och en flik som i Inkio (MERGAD till `main` `9478bc8` på beställarens ja, 0283 KÖRD)
 
 **Beställaren**, efter att tidslinjen mergats (`6c7c0ed`): "Ändra eller ta bort sin egen anteckning är inte byggt …

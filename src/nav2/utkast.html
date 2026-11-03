@@ -7887,6 +7887,15 @@ body.nd-riktig :is(.pv-lagrad,.arow[data-agenda],.pv-tab tbody tr[data-pvupers],
 .mo-t[aria-pressed="true"]{background:var(--brand);border-color:var(--brand);color:var(--on-brand)}
 .mo-vald{margin:0;font-size:13px;color:var(--ink-2)}
 .mo-vald b{color:var(--ink);font-weight:600}
+.mo-vald .mo-krock{color:var(--warn-ink)}
+/* Egen tid: datum och klockslag som man skriver själv, i hela femminuter. Följer det valda, åt båda hållen. */
+.mo-luckor{display:flex;flex-direction:column;gap:10px}
+.mo-luckor:empty{display:none}
+.mo-egen{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:10px;border-top:1px dashed var(--line)}
+.mo-egen>span{font-size:12.5px;color:var(--ink-3);margin-right:auto}
+.mo-fl .mo-egen .uin{width:auto;padding:7px 10px;font-size:13.5px;transition:border-color .15s,box-shadow .15s}
+.mo-egen.vald .uin{border-color:var(--brand);box-shadow:0 0 0 1px var(--brand)}
+@media (max-width:520px){.mo-egen>span{flex-basis:100%}}
 .mo-ingen{align-self:flex-start}
 .mo-dag:focus-visible,.mo-t:focus-visible,.mo-val:focus-visible,.mo-chips .chip:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
 
@@ -36250,30 +36259,88 @@ function moDlgRita(){   // ritar om och behåller rullning, fokus och markering
 // Tiderna för den som håller mötet. En nyare begäran (hållaren byttes) slår ut en äldre.
 function moHamtaTider(){
   const D = S.moDlg; if (!D) return;
-  const tok = ++D.tok; D.tider = {laddar:true}; D.dag = null; D.tid = null; delete D.fel.tid; moTidRita();
+  const tok = ++D.tok; D.tider = {laddar:true}; D.dag = null; D.tid = D.egen ? moEgenProva(D.egen).tid : null; delete D.fel.tid; moTidRita();
   ndMoPost('lediga', {hallsAv:D.f.hallsAv}, {ladda:false, tyst:true}).then(s => {
     if (S.moDlg !== D || D.tok !== tok) return;
     if (s.pagar){ setTimeout(() => { if (S.moDlg === D && D.tok === tok) moHamtaTider(); }, 400); return; }
     // lediga ger {dag:"YYYY-MM-DD", start:"HH:MM", nara}; `lokal` är den svenska lokaltiden "YYYY-MM-DD HH:MM" som resten av vyn räknar med.
     D.tider = s.fel ? {fel:s.fel} : {tider:(s.tider || []).map(x => ({...x, lokal:`${x.dag} ${x.start}`})), idag:s.idag};
-    if (D.tider.tider && D.tider.tider.length) D.dag = D.tider.tider[0].dag;
-    moTidRita();
+    if (D.tider.tider && D.tider.tider.length) D.dag = D.egen && moPer(D.tider)[D.egen.dag] ? D.egen.dag : D.tider.tider[0].dag;
+    // skriver man i den egna tiden när svaret kommer ritas bara luckorna om
+    if (document.activeElement?.closest?.('.mo-egen') && document.getElementById('moTidL')) moLuckorRita(); else moTidRita();
   });
 }
 function moTidRita(){ const el = document.getElementById('moDlgTid'); if (el && S.moDlg) el.innerHTML = moTidVy(S.moDlg); }
 function moTidVy(D){
-  const t = D.tider, ny = D.typ === 'uteblev';
+  const ny = D.typ === 'uteblev';
   const ingen = ny ? `<button type="button" class="chip mo-ingen" data-moingen aria-pressed="${D.ingenNy}">Ingen ny tid</button>` : '';
-  if (!t) return '';
-  if (t.laddar) return `<p class="mo-tl muted">Hämtar lediga tider …</p>${ingen}`;
-  if (t.fel) return `<p class="mo-err" role="alert">Tiderna gick inte att hämta: ${esc(t.fel)} <button type="button" class="tlink inl" data-moigent>Försök igen</button></p>${ingen}`;
-  const per = {}; t.tider.forEach(x => { (per[x.dag] = per[x.dag] || []).push(x); });
-  const dagar = Object.keys(per);
-  if (!dagar.length) return `<p class="muted">Inga lediga tider de närmaste veckorna.</p>${ingen}`;
+  if (!D.tider) return '';
+  return `<div id="moTidL" class="mo-luckor">${moLuckorVy(D)}</div>${moEgenVy(D)}<div id="moTidV">${moValdVy(D)}</div>${ingen}`;
+}
+const moPer = t => { const per = {}; (t && t.tider || []).forEach(x => { (per[x.dag] = per[x.dag] || []).push(x); }); return per; };
+function moLuckorVy(D){
+  const t = D.tider;
+  if (t.laddar) return '<p class="mo-tl muted">Hämtar lediga tider …</p>';
+  if (t.fel) return `<p class="mo-err" role="alert">Tiderna gick inte att hämta: ${esc(t.fel)} <button type="button" class="tlink inl" data-moigent>Försök igen</button></p>`;
+  const per = moPer(t), dagar = Object.keys(per);
+  if (!dagar.length) return '<p class="muted">Inga lediga tider de närmaste veckorna.</p>';
   const dag = per[D.dag] ? D.dag : dagar[0], valda = D.tid;
   return `<div class="mo-dagar" role="group" aria-label="Dag">${dagar.map(d => `<button type="button" class="mo-dag ${per[d].some(x => x.nara) ? 'nara' : ''}" data-modag="${esc(d)}" aria-pressed="${d === dag}"><b>${esc(moDag(d))}</b><small>${per[d].length} lediga</small></button>`).join('')}</div>
-    <div class="mo-tider" role="group" aria-label="Tid ${esc(moDag(dag))}">${per[dag].map(x => `<button type="button" class="mo-t num ${x.nara ? 'nara' : ''}" data-motid="${esc(x.lokal)}" aria-pressed="${valda === x.lokal}">${esc(x.start)}</button>`).join('')}</div>
-    ${valda ? `<p class="mo-vald"><b>${moNar(valda)}</b> · ${moRel(moMin(valda) - moNuMin())}</p>` : ''}${ingen}`;
+    <div class="mo-tider" role="group" aria-label="Tid ${esc(moDag(dag))}">${per[dag].map(x => `<button type="button" class="mo-t num ${x.nara ? 'nara' : ''}" data-motid="${esc(x.lokal)}" aria-pressed="${valda === x.lokal}">${esc(x.start)}</button>`).join('')}</div>`;
+}
+// Det man skrivit står kvar; annars visar fälten den valda luckan, eller dagen som visas.
+function moEgenVy(D){
+  const e = D.egen, dag = e ? e.dag : D.tid ? D.tid.slice(0, 10) : (D.dag || ''), kl = e ? e.tid : D.tid ? D.tid.slice(11, 16) : '';
+  return `<div class="mo-egen ${moEgenVald(D) ? 'vald' : ''}"><span>Eller skriv en egen tid</span><input type="date" class="uin" id="mod-tidDag" data-moegen value="${esc(dag)}" min="${ndIdag()}" aria-label="Datum"><input type="time" class="uin num" id="mod-tid" data-moegen value="${esc(kl)}" step="300" aria-label="Klockslag" ${D.fel.tid ? 'aria-invalid="true" aria-describedby="moe-tid"' : ''}></div>`;
+}
+const moEgenVald = D => !!(D.egen && D.tid && !moPer(D.tider)[D.tid.slice(0, 10)]?.some(x => x.lokal === D.tid));
+function moValdVy(D){
+  const v = D.tid; if (!v) return '';
+  return `<p class="mo-vald"><b>${moNar(v)}</b> · ${moRel(moMin(v) - moNuMin())}${moKrockar(D, v) ? ' · <span class="mo-krock">krockar med något i kalendern</span>' : ''}</p>`;
+}
+// Den egna tiden prövad med rutten regler: ett datum, ett klockslag i hela femminuter, och inte passerat.
+function moEgenProva(e){
+  const dag = e && e.dag || '', kl = e && e.tid || '';
+  if (!dag && !kl) return {tid:null, fel:''};
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dag)) return {tid:null, fel:'Välj ett datum.'};
+  if (!/^\d{2}:\d{2}$/.test(kl)) return {tid:null, fel:'Skriv ett klockslag, till exempel 10:15.'};
+  if (+kl.slice(3) % 5) return {tid:null, fel:'Tiden går i hela fem minuter, till exempel 10:05 eller 10:10.'};
+  const tid = `${dag} ${kl}`;
+  if (moMin(tid) <= moNuMin()) return {tid:null, fel:'Tiden har redan passerat.'};
+  return {tid, fel:''};
+}
+const moEgenFel = D => D.egen ? moEgenProva(D.egen).fel : '';
+// Lediga ger halvtimmarna 08:00–16:30 utan något i kalendern. En egen tid inom dem krockar när en halvtimme
+// den täcker saknas i listan. Säger bara något när svaret är säkert: en dag med lediga tider, inom arbetstiden.
+function moKrockar(D, tid){
+  const fria = new Set((moPer(D.tider)[tid.slice(0, 10)] || []).map(x => x.start));
+  if (!fria.size) return false;
+  const s = +tid.slice(11, 13) * 60 + +tid.slice(14, 16), bas = moMin(tid.slice(0, 10) + ' 00:00'), nu = moNuMin();
+  if (s < 480 || s + MOLANGD > 1020) return false;
+  for (let m = Math.floor(s / 30) * 30; m < s + MOLANGD; m += 30) if (bas + m > nu && !fria.has(hm(m))) return true;
+  return false;
+}
+const MOLANGD = 30;   // = MOTE_MINUTER (motenforma.ts); dialogen skickar ingen längd
+// Det man skriver: luckorna och raden under följer med, fälten ritas inte om. Felet visas när man lämnar fälten.
+function moEgenIn(D){
+  const d = document.getElementById('mod-tidDag'), k = document.getElementById('mod-tid');
+  D.egen = {dag:d ? d.value : '', tid:k ? k.value.slice(0, 5) : ''}; D.rort = true;
+  D.tid = moEgenProva(D.egen).tid;
+  if (D.ingenNy){ D.ingenNy = false; document.querySelector('.mo-dlg [data-moingen]')?.setAttribute('aria-pressed', 'false'); }
+  if (moPer(D.tider)[D.egen.dag]) D.dag = D.egen.dag;
+  if (D.fel.tid){ delete D.fel.tid; k?.removeAttribute('aria-invalid'); const m = document.getElementById('moe-tid'); if (m){ m.hidden = true; m.textContent = ''; } }
+  moLuckorRita();
+}
+function moLuckorRita(){
+  const D = S.moDlg, l = document.getElementById('moTidL'), v = document.getElementById('moTidV'); if (!D || !D.tider) return;
+  if (l){ l.innerHTML = moLuckorVy(D); l.querySelector('.mo-dag[aria-pressed="true"]')?.scrollIntoView({block:'nearest', inline:'nearest'}); }
+  if (v) v.innerHTML = moValdVy(D);
+  document.querySelector('.mo-dlg .mo-egen')?.classList.toggle('vald', moEgenVald(D));
+}
+function moEgenUt(D){
+  const fel = moEgenFel(D); if (!fel) return;
+  D.fel.tid = fel; document.getElementById('mod-tid')?.setAttribute('aria-invalid', 'true');
+  const m = document.getElementById('moe-tid'); if (m){ m.hidden = false; m.textContent = fel; }
 }
 // Uppslaget på telefonen, under fältet. Spärrar ingenting.
 function moDlgUppslag(){
@@ -36351,7 +36418,7 @@ function moDlgBygg(D){
   const t = v => String(v || '').trim();
   if (D.typ === 'boka'){
     if (!f.hallsAv) e.hallsAv = 'Välj vem som håller mötet.';
-    if (!tid) e.tid = 'Välj en tid.';
+    if (!tid) e.tid = moEgenFel(D) || 'Välj en tid.';
     if (!t(f.namn)) e.namn = 'Skriv bolagets namn.';
     if (t(f.telefon).replace(/\D/g, '').length < 6) e.telefon = 'Skriv ett telefonnummer.';
     if (t(f.epost) && !/^\S+@\S+\.\S+$/.test(t(f.epost))) e.epost = 'E-postadressen ser inte rätt ut.';
@@ -36363,13 +36430,13 @@ function moDlgBygg(D){
     return {handling:'boka', data};
   }
   if (D.typ === 'flyttat'){
-    if (!tid) return {e:{tid:'Välj en ny tid.'}};
+    if (!tid) return {e:{tid:moEgenFel(D) || 'Välj en ny tid.'}};
     // båda är svensk lokal tid "YYYY-MM-DD HH:MM" (NdMoteKort.mote.tid kommer ur lokal(), inte UTC-ISO)
     if (k.mote && D.tid === k.mote.tid) return {e:{tid:'Mötet ligger redan då.'}};
     return {handling:'flytta', data:{mote:k.mote.id, dag:tid.dag, start:tid.start}};
   }
   if (D.typ === 'uteblev'){
-    if (!tid && !D.ingenNy) return {e:{tid:'Välj en ny tid, eller Ingen ny tid.'}};
+    if (!tid && !D.ingenNy) return {e:{tid:moEgenFel(D) || 'Välj en ny tid, eller Ingen ny tid.'}};
     return {handling:'utfall', data:{mote:k.mote.id, utfall:'uteblev', ...(tid ? {nyTid:tid} : {})}};
   }
   if (D.typ === 'nej'){
@@ -36392,7 +36459,7 @@ function moDlgBygg(D){
   return {e:{}};
 }
 // Serverns fel hör till ett fält när texten säger det; annars står det längst ned.
-const MOFELFALT = [[/telefon/i, 'telefon'], [/e-post/i, 'epost'], [/källa|varifrån/i, 'kalla'], [/bolagets namn|namnet/i, 'namn'], [/starttid|ny tid|datum/i, 'tid']];
+const MOFELFALT = [[/telefon/i, 'telefon'], [/e-post/i, 'epost'], [/källa|varifrån/i, 'kalla'], [/bolagets namn|namnet/i, 'namn'], [/starttid|ny tid|datum|vardag|passerat/i, 'tid']];
 async function moDlgSkicka(){
   const D = S.moDlg; if (!D || D.sparar) return;
   const b = moDlgBygg(D);
@@ -36407,7 +36474,8 @@ async function moDlgSkicka(){
   if (D.typ === 'boka') moKallaMinns(String(D.f.kalla).trim());
   const s = await ndMoPost(b.handling, b.data, {kedja:D.kedja, visaFel:false});
   if (s.pagar || S.moDlg !== D) return;
-  if (s.ok && !s.fel) return;   // sidan laddas om och kortet kommer fram i sin nya kolumn
+  // Sparat: bladet stängs, och tavlan ritas om på plats när datan är inne (ndOmlas) med kortet i sin nya kolumn.
+  if (s.ok && !s.fel){ if (S.moDlg === D){ S.moDlg = null; render(); } return; }
   D.sparar = false;
   if (s.laslage){ D.laslage = true; D.fe = 'Möten är i läsläge. Inget har sparats.'; }
   else if (s.utloggad) D.fe = s.fel;
@@ -36642,8 +36710,8 @@ document.addEventListener('click', e => {
   if (D){   // dialogen ligger överst: dess knappar först
     if (ds.modlgx !== undefined){ stopp(); if (!D.sparar) moDlgStang(); return; }
     if (ds.modag){ stopp(); D.dag = ds.modag; moTidRita(); return; }
-    if (ds.motid){ stopp(); D.tid = ds.motid; D.ingenNy = false; delete D.fel.tid; D.rort = true; moTidRita(); const m = document.getElementById('moe-tid'); if (m) m.hidden = true; return; }
-    if (ds.moingen !== undefined){ stopp(); D.ingenNy = !D.ingenNy; if (D.ingenNy) D.tid = null; delete D.fel.tid; D.rort = true; moDlgRita(); return; }
+    if (ds.motid){ stopp(); D.tid = ds.motid; D.egen = null; D.ingenNy = false; delete D.fel.tid; D.rort = true; moTidRita(); const m = document.getElementById('moe-tid'); if (m) m.hidden = true; return; }
+    if (ds.moingen !== undefined){ stopp(); D.ingenNy = !D.ingenNy; if (D.ingenNy){ D.tid = null; D.egen = null; } delete D.fel.tid; D.rort = true; moDlgRita(); return; }
     if (ds.moigent !== undefined){ stopp(); moHamtaTider(); return; }
     if (ds.moval){ stopp(); D.f.val = ds.moval; D.fel = {}; D.rort = true; moDlgRita(); return; }
     if (ds.moskal !== undefined){ stopp(); D.f.skal = MONEJSKAL[+ds.moskal]; delete D.fel.skal; D.rort = true; moDlgRita(); return; }
@@ -36685,7 +36753,9 @@ document.addEventListener('input', e => {   // Formuläret behåller det som skr
   if (!ndMo() || S.view !== 'moten' || !e.target.closest) return;
   const df = e.target.closest('[data-modlg]');
   if (df && S.moDlg){   // fälten ritas inte om medan man skriver; bara felet vid fältet försvinner
-    const D = S.moDlg, n = e.target.name; if (!n) return;
+    const D = S.moDlg, n = e.target.name;
+    if (e.target.dataset.moegen !== undefined){ moEgenIn(D); return; }
+    if (!n) return;
     D.f[n] = e.target.value; D.rort = true;
     if (D.fel[n]){ delete D.fel[n]; e.target.removeAttribute('aria-invalid'); const m = document.getElementById('moe-' + n); if (m){ m.hidden = true; m.textContent = ''; } }
     if (n === 'telefon'){ clearTimeout(moDlgUppslag.t); moDlgUppslag.t = setTimeout(moDlgUppslag, 700); }
@@ -36694,6 +36764,11 @@ document.addEventListener('input', e => {   // Formuläret behåller det som skr
   const f = e.target.closest('[data-mopam]'); if (f && S.moPam) S.moPam[e.target.name] = e.target.value;
   else if (e.target.id === 'moSok') S.moQ = e.target.value;
 }, true);
+document.addEventListener('focusout', e => {   // felet för den egna tiden när man lämnar båda fälten, inte mellan dem
+  const D = S.moDlg; if (!D || !e.target.dataset || e.target.dataset.moegen === undefined) return;
+  if (e.relatedTarget && e.relatedTarget.dataset && e.relatedTarget.dataset.moegen !== undefined) return;
+  moEgenUt(D);
+});
 document.addEventListener('keydown', e => {
   if (!ndMo() || S.view !== 'moten' || e.key !== 'Escape') return;
   if (S.moDlg){ e.preventDefault(); e.stopImmediatePropagation(); if (!S.moDlg.sparar) moDlgStang(); return; }

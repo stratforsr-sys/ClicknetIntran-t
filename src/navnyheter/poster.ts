@@ -14,6 +14,21 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "moten-egen-tid",
+    rubrik: "Boka möten på exakt tid",
+    ingress: "Du kan skriva en egen tid när du bokar eller flyttar ett möte, inte bara hel eller halv timme.",
+    text: `Tryck **Boka möte** i Möten. Under de lediga tiderna står **Eller skriv en egen tid**:
+välj datum och skriv klockslaget, till exempel 10:15 eller 14:35. Tiden går i hela fem
+minuter. Krockar tiden med något i kalendern står det under fälten. Samma rad finns när
+du flyttar ett möte och när du bokar en ny tid för ett möte som uteblev.
+
+Efter **Boka mötet** stängs bladet, och kortet kommer fram på tavlan. Förut blev bladet
+stående med en grå knapp.`,
+    datum: "2026-11-03",
+    roller: [],
+    href: "/moten",
+  },
+  {
     slug: "andra-eller-ta-bort-anteckning",
     rubrik: "Ändra eller ta bort din anteckning om en kund",
     ingress: "Skrev du fel går anteckningen att rätta eller ta bort, och Inkio får samma ändring. Aktivitet och Historik är nu en flik.",
