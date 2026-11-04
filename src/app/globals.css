@@ -184,9 +184,11 @@
     outline-color: var(--color-brand-500);
   }
 
-  /* AC-U4.3: prefers-reduced-motion ersatter rorelse med direkt bytе. */
+  /* AC-U4.3: prefers-reduced-motion ersatter rorelse med direkt bytе.
+     Utom pa en parad saljtavla (.tv-skarm): dar ar onskan tv:ns fabriksinstallning,
+     och tavlans installning Rorelse bestammer (lugnRorelse i salesboard/vy.ts). */
   @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
+    :not(.tv-skarm, .tv-skarm *), :not(.tv-skarm, .tv-skarm *)::before, :not(.tv-skarm, .tv-skarm *)::after {
       animation-duration: 0.01ms !important;
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;

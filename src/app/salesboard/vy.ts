@@ -425,3 +425,13 @@ export function nattomladdning(nuMs: number, startMs: number): boolean {
 export function byggomladdning(o: { nyttBygge: boolean; lugnt: boolean; ljudUtanKlick: boolean; arbetsdag: boolean }): boolean {
   return o.nyttBygge && o.lugnt && (o.ljudUtanKlick || !o.arbetsdag);
 }
+
+/**
+ * Spelar tavlan i lugn rörelse? Inställningen "Lugn" gäller alltid. Webbläsarens
+ * `prefers-reduced-motion` gäller bara i en persons egen webbläsare: på en parad
+ * skärm är den en fabriksinställning i tv:n ("Ta bort animationer"), inte någons
+ * önskan, och där bestämmer superadmins val.
+ */
+export function lugnRorelse(o: { skarm: boolean; media: boolean; rorelse: "full" | "lugn" }): boolean {
+  return o.rorelse === "lugn" || (!o.skarm && o.media);
+}

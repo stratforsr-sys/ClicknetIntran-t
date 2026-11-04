@@ -5,6 +5,34 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-04 · Säljtavlan: en parad tv spelar firandet med full rörelse (direkt på `main`, ingen migration)
+
+**Beställaren:** "Fredrik la in en order på 55 000 kr och det kom upp på tavlan, men [ingen] animation kom upp på tv:n.
+VARFÖR." Sedan: "Kan du fixa det utan att jag går in i tv:ns inställningar." Och: "skicka det till produktion och
+skicka upp animationen på den riktiga tv:n som är kopplad"
+
+**Felsökningen.** Ordern (55 875 kr, signerad 2026-11-04, godkänd 15:00:57 UTC) uppfyller alla villkor för att firas:
+ny, från i dag, inte efterregistrerad, färsk. Tavlans riktiga `formaOgonblick` + `planera` + `aktuell` (från main,
+byggda med esbuild) körda på produktionens rader, med en bild före och en efter godkännandet, ger `["order"]` som
+spelas, variant stor (gränsen 23 000). Skärmen "Skärm 2" (Android 11 Smart TV, WebView med Chrome 156) parades
+2026-11-03 17:03 UTC och hämtar en bild i minuten (`last_seen_at`, `pg_stat_statements` för `salesboard_statistik`).
+Fredriks order var den första färska ordern efter pareringen. Orsaken: `lugn = lugnMedia || rorelse === "lugn"`.
+En Android-tv med "Ta bort animationer" på (vanligt från fabriken) svarar ja på `prefers-reduced-motion`, och då
+fryses kompositionen på sin slutbild och tonas bara in och ut. Inställningen "Full" kunde inte gå före.
+
+**Ändringen.** `lugnRorelse()` i `vy.ts`: "Lugn" gäller alltid; `prefers-reduced-motion` bara när tavlan inte är en
+parad skärm (`start.skarm === null`). Används på båda ställena i `Tavla.tsx` (tavlans egen rörelse och firandets
+props). Tv:ns önskan slog också igenom i CSS: Navs globala regel i `globals.css` (alla övergångar 0,01 ms) och
+tavlans egna lugna regler i `tavla.css`. Tavlans rot bär nu `tv-skarm` på en parad skärm, och båda reglerna
+undantar den (`:not(.tv-skarm, .tv-skarm *)` och `.tv-rot:not(.tv-skarm)`). Provat i headless Chrome med
+`--force-prefers-reduced-motion`: en vanlig sida och en egen tavla får 0,01 ms, den parade tv:n behåller 1,2 s.
+Firandena (Ordern, Serie, Målet, tävlingens scener) är orörda: tv:n spelar samma fulla version som en dator.
+Hjälptexten under Inställningar → Säljtavlan → Rörelse och specens §5 säger samma sak. Prov i
+`tests/salesboard-tavla.mjs`. Ej bekräftat på tv:n: att den faktiskt svarar ja på `prefers-reduced-motion`
+(går inte att läsa på distans); nästa riktiga order, eller en testhändelse, visar det.
+
+---
+
 ## 2026-11-04 · Möten: alla som är med på ett möte har det på tavlan och gör samma saker (direkt på `main`, 0286 KÖRD)
 
 **Beställaren:** "Möten, när de bokas, så den som bokar den och den som håller i den ska ha mötet i sina mötesvyn, och

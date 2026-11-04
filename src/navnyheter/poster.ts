@@ -14,6 +14,19 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "saljtavlan-full-rorelse-pa-tv",
+    rubrik: "Säljtavlan firar med full rörelse på tv:n",
+    ingress: "En order firas nu med hela animationen på kontorets tv, också när tv:n själv är inställd på mindre rörelse.",
+    text: `Vissa tv-apparater är från fabriken inställda på att ta bort animationer. Säljtavlan
+lydde den inställningen, så en order visades bara som ett stilla kort på tv:n.
+
+Nu bestämmer valet **Rörelse** under **Inställningar → Säljtavlan** på en parad tv. Står det på
+**Full** spelas hela firandet. Den som öppnar tavlan i sin egen webbläsare och har bett om
+mindre rörelse får fortfarande det lugna firandet.`,
+    datum: "2026-11-04",
+    roller: [],
+  },
+  {
     slug: "moten-alla-som-ar-med",
     rubrik: "Alla som är med på ett möte har det i Möten",
     ingress: "Den som bokade mötet, den som håller det och kollegorna du lagt till ser mötet på sin tavla och kan göra samma saker med det.",

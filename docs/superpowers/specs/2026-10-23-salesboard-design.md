@@ -316,7 +316,9 @@ kö i mer än cirka 20 sekunder.
   bara en kort tick, och bilden spelas ändå.
 - **Testhändelser** från inställningarna spelas på alla skärmar med märket "TEST" i
   hörnet. De har påhittad data och räknas aldrig.
-- **Lugn rörelse** gäller vid `prefers-reduced-motion` eller inställningen "Lugn":
+- **Lugn rörelse** gäller vid inställningen "Lugn", och vid `prefers-reduced-motion` i en
+  persons egen webbläsare. En parad skärm följer bara inställningen: där är önskan om
+  mindre rörelse tv:ns fabriksinställning, inte någons behov (2026-11-04).
   - Panelen tonas in och ut på 250 ms i stället för att växa och krympa.
   - Det finns ingen mask, ingen räkning och ingen våg.
   - Hållet och ljudet är desamma, och raden markeras med färg.

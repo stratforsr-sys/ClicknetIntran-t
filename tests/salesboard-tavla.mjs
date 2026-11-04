@@ -11,6 +11,7 @@ import {
   grafPlan,
   jakten,
   kronor,
+  lugnRorelse,
   matarRader,
   matarText,
   nattomladdning,
@@ -148,6 +149,8 @@ console.log("\nSkärmen");
   ok("inbränningen flyttar 0–2 px", [0, 240_000, 480_000, 2_160_000].every((t) => { const p = pixelskift(t); return p.x >= 0 && p.x <= 2 && p.y >= 0 && p.y <= 2; }));
   ok("omladdning kl. 04 efter en timme", nattomladdning(Date.parse("2026-10-23T02:10:00Z"), Date.parse("2026-10-22T20:00:00Z")) && !nattomladdning(Date.parse("2026-10-23T02:10:00Z"), Date.parse("2026-10-23T01:50:00Z")));
   ok("ett nytt bygge laddar om i lugn, utan klick eller utanför arbetsdagen", byggomladdning({ nyttBygge: true, lugnt: true, ljudUtanKlick: true, arbetsdag: true }) && !byggomladdning({ nyttBygge: true, lugnt: true, ljudUtanKlick: false, arbetsdag: true }));
+  ok("en parad tv följer inställningen, inte sin egen önskan om mindre rörelse", !lugnRorelse({ skarm: true, media: true, rorelse: "full" }) && lugnRorelse({ skarm: true, media: false, rorelse: "lugn" }));
+  ok("i en egen webbläsare vinner önskan om mindre rörelse", lugnRorelse({ skarm: false, media: true, rorelse: "full" }) && !lugnRorelse({ skarm: false, media: false, rorelse: "full" }) && lugnRorelse({ skarm: false, media: false, rorelse: "lugn" }));
 }
 
 console.log("\nStilmallen och koden hör ihop");
@@ -162,6 +165,14 @@ console.log("\nStilmallen och koden hör ihop");
   }
   const saknas = [...klasser].filter((k) => !css.includes(`.${k}`));
   ok("varje tv-klass i koden har en regel i tavla.css", saknas.length === 0, saknas.join(" "));
+  // En parad tv följer bara inställningen Rörelse, också i stilmallarna (lugnRorelse).
+  const lugnBlock = (text) => text.slice(text.indexOf("@media (prefers-reduced-motion: reduce)")).split(/\n\s*}\s*\n/)[0];
+  const tavlansLugna = lugnBlock(css).split("\n").slice(1).filter((r) => r.includes("{"));
+  ok("tavlans lugna regler gäller inte en parad tv", tavlansLugna.length > 0 && tavlansLugna.every((r) => r.trim().startsWith(".tv-rot:not(.tv-skarm)")));
+  const globals = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");
+  ok("Navs globala lugna regel gäller inte en parad tv", /:not\(\.tv-skarm, \.tv-skarm \*\)/.test(lugnBlock(globals)));
+  const tavla = readFileSync(new URL("../src/app/salesboard/Tavla.tsx", import.meta.url), "utf8");
+  ok("en parad tv bär klassen tv-skarm", tavla.includes('${arSkarm ? " tv-skarm" : ""}'));
 }
 
 console.log(fel ? `\n\x1b[31m${fel} fel\x1b[0m` : "\n\x1b[32mallt gick igenom\x1b[0m");

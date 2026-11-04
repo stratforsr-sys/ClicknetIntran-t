@@ -788,11 +788,12 @@ button.tv-ljudchip { cursor: pointer; color: var(--amber); border-color: rgba(24
   .tv-rad-huvud, .tv-kort-rubrik small, .tv-m-topp, .tv-m-stats small, .tv-teckn, .tv-live, .tv-ljudchip { font-size: max(10px, calc(14 * var(--u))); }
   .tv-pp, .tv-m-fakta, .tv-marke span, .tv-huvud-h { font-size: max(12px, calc(18 * var(--u))); }
 }
+/* En parad tv (.tv-skarm) följer bara inställningen Rörelse, inte tv:ns egen önskan (lugnRorelse i vy.ts). */
 @media (prefers-reduced-motion: reduce) {
-  .tv-live i { animation: none; }
-  .tv-live i b { display: none; }
-  .tv-post.tv-tyst-ny { animation: none; background: rgba(79,209,165,.12); }
-  .tv-scen { transition: none; }
+  .tv-rot:not(.tv-skarm) .tv-live i { animation: none; }
+  .tv-rot:not(.tv-skarm) .tv-live i b { display: none; }
+  .tv-rot:not(.tv-skarm) .tv-post.tv-tyst-ny { animation: none; background: rgba(79,209,165,.12); }
+  .tv-rot:not(.tv-skarm) .tv-scen { transition: none; }
 }
 
 /* Raden som fått en order lyser mint och tonar tillbaka (opaciteten räknas ur landningen). */

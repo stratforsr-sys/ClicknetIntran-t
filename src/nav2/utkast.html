@@ -33393,7 +33393,7 @@ function sbVisningKort(i, nu){
     <div class="prf-f"><span class="prf-l">Topplistan</span>${sbSeg('ordning', 'Topplistans ordning', i.ordning, [['varde', 'Ordervärde'], ['antal', 'Antal order']])}<p class="prf-hj">Vad som avgör ordningen. Månadsmålet är alltid ordervärde. Tangenten V växlar på en skärm utan att spara här.</p></div>
     <div class="prf-f"><span class="prf-l">Arbetsdagen</span><span class="sb-tidspar">${sbTid('arbetsdag.fran', i.arbetsdag.fran, 'Arbetsdagen börjar')}<span aria-hidden="true">–</span>${sbTid('arbetsdag.till', i.arbetsdag.till, 'Arbetsdagen slutar')}</span>
       <p class="prf-hj">Utanför arbetsdagen vilar tavlan i 55 %, så att den inte lyser upp ett tomt kontor. <span class="prf-dot ${arbetar ? 'prf-ok' : 'prf-neutral'}">${arbetar ? 'Arbetsdag nu' : 'Vilar nu'}</span></p></div>
-    <div class="prf-f"><span class="prf-l">Rörelse</span>${sbSeg('rorelse', 'Rörelse', i.rorelse, [['full', 'Full'], ['lugn', 'Lugn']])}<p class="prf-hj">Lugn: firandet står still och tonas in och ut, utan svep och räkneverk. Ljudet är detsamma. En skärm som ber om mindre rörelse får lugn ändå.</p></div>`);
+    <div class="prf-f"><span class="prf-l">Rörelse</span>${sbSeg('rorelse', 'Rörelse', i.rorelse, [['full', 'Full'], ['lugn', 'Lugn']])}<p class="prf-hj">Lugn: firandet står still och tonas in och ut, utan svep och räkneverk. Ljudet är detsamma. En parad tv följer valet här. Den som öppnar tavlan i sin egen webbläsare och ber om mindre rörelse får lugn ändå.</p></div>`);
 }
 
 /* ---------- Firande ---------- */

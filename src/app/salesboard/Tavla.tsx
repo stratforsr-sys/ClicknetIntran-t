@@ -41,7 +41,7 @@ import { Ordern, type OrderProps } from "./motion/Ordern";
 import { Serie, type SerieProps } from "./motion/Serie";
 import { Tavlingen, type TavlingenProps } from "./motion/Tavlingen";
 import { Vila, malLage, type Landning, type Ljudlage } from "./Vila";
-import { BLINK, LANDNING, OFFLINE_MS, UPP, byggomladdning, klockslag, nattomladdning, pixelskift } from "./vy.ts";
+import { BLINK, LANDNING, OFFLINE_MS, UPP, byggomladdning, klockslag, lugnRorelse, nattomladdning, pixelskift } from "./vy.ts";
 
 /** Händelser som kommer inom så lång tid samlas till ett firande (spec §5.1). */
 const SAMLA_MS = 1_000;
@@ -277,7 +277,7 @@ export default function Tavla({
   const nuMs = klientMs + offset;
   const bildNu = t.current.senaste;
   const inst = bildNu.installningar;
-  const lugn = lugnMedia || inst.rorelse === "lugn";
+  const lugn = lugnRorelse({ skarm: arSkarm, media: lugnMedia, rorelse: inst.rorelse });
   const ordning: Ordning = ordningVal ?? inst.ordning;
 
   // Kön drivs av källans prenumeration och av timers, som startas en gång. Det de
@@ -428,7 +428,7 @@ export default function Tavla({
         ordning: levande.current.ordning,
       });
       const id = tt.nastaId++;
-      const lugnNu = levande.current.lugnMedia || f.efter.installningar.rorelse === "lugn";
+      const lugnNu = lugnRorelse({ skarm: arSkarm, media: levande.current.lugnMedia, rorelse: f.efter.installningar.rorelse });
       const klocka = fryst !== undefined ? { klocka: () => fryst, ljudBas: null } : nyKlocka(ljud.current);
       const gem: Gemensamt = { id, forlopp: f, ...klocka, bytt: false };
       const { u, vw, vh } = levande.current.fonster;
@@ -458,7 +458,7 @@ export default function Tavla({
           return { ...gem, typ: "malet", props: { data: d, test: f.test, lugn: lugnNu, kort: malkortet(), u, vw, vh } };
       }
     },
-    [fryst, flodesRader, malkortet],
+    [fryst, flodesRader, malkortet, arSkarm],
   );
 
   /** Lägger förloppets spår mot ljudklockan. Hornet har sin spärrtid; resten spelas alltid. */
@@ -821,7 +821,7 @@ export default function Tavla({
   };
 
   return (
-    <div className={`sb-rot tv-rot${mus ? "" : " tv-mus-dold"}`}>
+    <div className={`sb-rot tv-rot${arSkarm ? " tv-skarm" : ""}${mus ? "" : " tv-mus-dold"}`}>
       <div className="tv-skift" style={{ transform: `translate(${skift.x}px, ${skift.y}px)` }}>
         <VilaSkydd
           nyckel={`${v.bild.nu}|${tt.visad.nu}`}
