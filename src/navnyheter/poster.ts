@@ -14,6 +14,18 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "saljtavlan-rapporterar-sina-fel",
+    rubrik: "Säljtavlans fel syns under Fel",
+    ingress: "Går ett firande sönder på en tv står det nu under Fel, med vilken skärm det gällde.",
+    text: `Säljtavlan på en tv har ingen som ser dess felmeddelanden. Föll ett firande ritades
+ingenting, och ingen fick veta varför. Nu skickar tavlan felet till **Fel** i navet, med
+skärmens namn. Efter ett testfirande från **Inställningar → Säljtavlan** skickar en parad
+tv också en mätning av vad den visade.`,
+    datum: "2026-11-04",
+    roller: ["sales_manager", "ceo", "admin"],
+    href: "/fel",
+  },
+  {
     slug: "saljtavlan-full-rorelse-pa-tv",
     rubrik: "Säljtavlan firar med full rörelse på tv:n",
     ingress: "En order firas nu med hela animationen på kontorets tv, också när tv:n själv är inställd på mindre rörelse.",

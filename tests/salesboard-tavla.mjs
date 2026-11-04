@@ -173,6 +173,13 @@ console.log("\nStilmallen och koden hör ihop");
   ok("Navs globala lugna regel gäller inte en parad tv", /:not\(\.tv-skarm, \.tv-skarm \*\)/.test(lugnBlock(globals)));
   const tavla = readFileSync(new URL("../src/app/salesboard/Tavla.tsx", import.meta.url), "utf8");
   ok("en parad tv bär klassen tv-skarm", tavla.includes('${arSkarm ? " tv-skarm" : ""}'));
+  // Skyddet runt ett firande ritar ingenting när kompositionen kastar. Felet ska ändå nå navet.
+  ok("skyddet rapporterar felet i stället för att svälja det", /componentDidCatch\(fel[^)]*\)[^}]*onFel\(fel/.test(tavla) && /onFel=\{\(fel[^)]*\) => \{\s*rapportera\(/.test(tavla));
+  let rutt = "";
+  try {
+    rutt = readFileSync(new URL("../src/app/salesboard/fel/route.ts", import.meta.url), "utf8");
+  } catch {}
+  ok("tavlans felväg prövar ursprunget och åtkomsten", rutt.includes("sammaUrsprung(request)") && rutt.includes("tavlansAtkomst(request)") && rutt.includes("skrivFel("));
 }
 
 console.log(fel ? `\n\x1b[31m${fel} fel\x1b[0m` : "\n\x1b[32mallt gick igenom\x1b[0m");

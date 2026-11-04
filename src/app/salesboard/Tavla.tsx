@@ -25,7 +25,7 @@
  * de är serverkod.
  */
 
-import { Component, useCallback, useEffect, useReducer, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { Component, useCallback, useEffect, useReducer, useRef, useState, type ErrorInfo, type ReactElement, type ReactNode } from "react";
 import { hornTillatet, inomArbetsdag, ljudTillatet, nastaStart, planera, type Minne } from "@/lib/salesboard/regler";
 import { MELLANSPEL_MS, mellanspelDags, vinnareDags } from "@/lib/salesboard/tavling";
 import type { Ogonblick, Ordning } from "@/lib/salesboard/typer";
@@ -109,6 +109,43 @@ function spara(nyckel: string, varde: unknown): void {
   }
 }
 
+/** Senaste rapporten per digest: ett fel som upprepas varje bildruta skickas en gång i minuten. */
+const RAPPORTERAT = new Map<string, number>();
+
+/**
+ * Ett fel eller en mätning till navets felrapporter (`/salesboard/fel`). Tyst om det
+ * inte går: rapporteringen får aldrig själv bli ett fel på en tv.
+ */
+function rapportera(digest: string, message: string, stack: string | null): void {
+  const nu = Date.now();
+  if (nu - (RAPPORTERAT.get(digest) ?? -Infinity) < 60_000) return;
+  RAPPORTERAT.set(digest, nu);
+  try {
+    void fetch("/salesboard/fel", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ digest, message, stack }),
+      keepalive: true,
+    }).catch(() => undefined);
+  } catch {
+    // Ingen fetch, eller en som kastar direkt: inget att göra.
+  }
+}
+
+const felText = (fel: unknown): string => (fel instanceof Error ? `${fel.name}: ${fel.message}` : String(fel));
+
+/** Vad som ligger överst mitt på skärmen, och firandets yta: det tv:n faktiskt visar. */
+function matYtan(): string {
+  const yta = document.querySelector<HTMLElement>(".tv-fira, .tv-malet, .tv-tav");
+  const overst = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 3);
+  const kedja: string[] = [];
+  for (let e: Element | null = overst; e && kedja.length < 4; e = e.parentElement) kedja.push(`${e.tagName.toLowerCase()}.${String(e.className).trim().replace(/\s+/g, ".")}`);
+  if (!yta) return `ingen firandeyta i sidan; överst: ${kedja.join(" < ")}`;
+  const r = yta.getBoundingClientRect();
+  const cs = getComputedStyle(yta);
+  return `yta ${yta.className} ${Math.round(r.x)},${Math.round(r.y)} ${Math.round(r.width)}x${Math.round(r.height)} opacity=${cs.opacity} visibility=${cs.visibility} display=${cs.display} z=${cs.zIndex} barn=${yta.childElementCount}; överst: ${kedja.join(" < ")}`;
+}
+
 /** Samma formel som --u i CSS: under 900 px är skärmen 1 000 u bred. */
 function fonstret(): Fonster {
   if (typeof window === "undefined") return { u: 1, vw: 1920, vh: 1080 };
@@ -153,13 +190,13 @@ function nyKlocka(ljud: Ljudmotor | null): { klocka: () => number; ljudBas: numb
  * laddar om. Skyddet ritar ingenting i stället för kompositionen och säger till
  * kön att förloppet är slut.
  */
-class Skydd extends Component<{ onFel: () => void; children: ReactNode }, { fel: boolean }> {
+class Skydd extends Component<{ onFel: (fel: unknown, komponenter: string | null) => void; children: ReactNode }, { fel: boolean }> {
   state = { fel: false };
   static getDerivedStateFromError(): { fel: boolean } {
     return { fel: true };
   }
-  componentDidCatch(): void {
-    this.props.onFel();
+  componentDidCatch(fel: unknown, info: ErrorInfo): void {
+    this.props.onFel(fel, info.componentStack ?? null);
   }
   render(): ReactNode {
     return this.state.fel ? null : this.props.children;
@@ -249,6 +286,8 @@ export default function Tavla({
     senastKnuff: null as number | null,
     /** Prisbilderna: adress → laddas, klar (avkodad) eller fel. En bild som felar visas inte. */
     bilder: new Map<string, "laddar" | "klar" | "fel">(),
+    /** Testfirandets mätning på en parad skärm: bildrutor, högsta ruta, start och ytan mitt i. */
+    matning: null as { id: number; rutor: number; hogst: number; startMs: number; mitt: string | null } | null,
   });
   const [, rita] = useReducer((x: number) => x + 1, 0);
   const [ruta, settRuta] = useState(0);
@@ -301,6 +340,20 @@ export default function Tavla({
       window.removeEventListener("resize", storlek);
     };
   }, []);
+
+  // Ett fel på en tv syns ingenstans annars: ingen läser dess konsol.
+  useEffect(() => {
+    if (!arSkarm) return;
+    const fel = (e: ErrorEvent) =>
+      rapportera("salesboard-fonster", felText(e.error ?? e.message), e.error instanceof Error ? (e.error.stack ?? null) : `${e.filename}:${e.lineno}:${e.colno}`);
+    const lofte = (e: PromiseRejectionEvent) => rapportera("salesboard-lofte", felText(e.reason), e.reason instanceof Error ? (e.reason.stack ?? null) : null);
+    window.addEventListener("error", fel);
+    window.addEventListener("unhandledrejection", lofte);
+    return () => {
+      window.removeEventListener("error", fel);
+      window.removeEventListener("unhandledrejection", lofte);
+    };
+  }, [arSkarm]);
 
   // --- Klockan: en gång per sekund, på sekundskiftet -------------------------
   useEffect(() => {
@@ -504,6 +557,25 @@ export default function Tavla({
       const spel = tt.spel;
       tt.spel = null;
       const f = spel.forlopp;
+      const m = tt.matning;
+      if (m && m.id === id) {
+        // Testfirandet på en parad skärm: vad tv:n gjorde, till navets felrapporter.
+        tt.matning = null;
+        const l = levande.current;
+        const vv = window.visualViewport;
+        rapportera(
+          `salesboard-diagnos-${Date.now()}`,
+          `testfirandet (${f.data.typ}) spelades: ${m.rutor} bildrutor, högsta ruta ${m.hogst} av ${f.varaktighet}`,
+          [
+            `tid ${Math.round(performance.now() - m.startMs)} ms, klockan ${spel.klocka().toFixed(2)} s`,
+            `lugn=${lugnRorelse({ skarm: arSkarm, media: l.lugnMedia, rorelse: tt.senaste.installningar.rorelse })} media=${l.lugnMedia} rorelse=${tt.senaste.installningar.rorelse}`,
+            `ljud=${ljud.current?.tillstand ?? "ingen motor"} val=${l.ljudval} utanKlick=${ljudUtanKlick.current}`,
+            `fönster ${window.innerWidth}x${window.innerHeight} @${window.devicePixelRatio} vv=${vv ? `${Math.round(vv.width)}x${Math.round(vv.height)}` : "-"} u=${l.fonster.u.toFixed(3)}`,
+            `synlig=${document.visibilityState} fokus=${document.hasFocus()} typsnitt=${document.fonts?.status ?? "-"} bygge=${start.bygge}`,
+            `mitt i: ${m.mitt ?? "nådde aldrig halva"}`,
+          ].join("\n"),
+        );
+      }
       if (!f.test && (f.data.typ === "order" || f.data.typ === "serie")) {
         // Det som kom in tyst under förloppet (för gammalt, efterregistrerat) lyser till.
         const fore = new Set(f.fore.order.map((o) => o.nyckel));
@@ -513,6 +585,8 @@ export default function Tavla({
       }
       startaNasta();
     },
+    // `arSkarm` och `start` byts aldrig under sidans liv.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [startaNasta],
   );
 
@@ -580,8 +654,15 @@ export default function Tavla({
   useEffect(() => {
     if (!spel) return;
     let id = 0;
+    if (arSkarm && spel.forlopp.test) t.current.matning = { id: spel.id, rutor: 0, hogst: 0, startMs: performance.now(), mitt: null };
     const steg = () => {
       const r = Math.floor(spel.klocka() * FPS);
+      const m = t.current.matning;
+      if (m && m.id === spel.id) {
+        m.rutor += 1;
+        m.hogst = Math.max(m.hogst, r);
+        if (m.mitt === null && r >= spel.forlopp.varaktighet / 2) m.mitt = matYtan();
+      }
       const { byt } = spel.forlopp.tider;
       // Tavlan rör sig bara under svepet (motrörelsen) och halvvägs; under resten står den still.
       const behov = spel.typ === "halvvags" || r <= 30 ? r : r >= byt ? byt : 31;
@@ -834,7 +915,13 @@ export default function Tavla({
         </VilaSkydd>
       </div>
       {spel && spel.typ !== "halvvags" ? (
-        <Skydd key={spel.id} onFel={() => avsluta(spel.id)}>
+        <Skydd
+          key={spel.id}
+          onFel={(fel: unknown, komponenter: string | null) => {
+            rapportera(`salesboard-${spel.typ}`, `firandet (${spel.typ}) föll: ${felText(fel)}`, [fel instanceof Error ? fel.stack : null, komponenter].filter(Boolean).join("\n"));
+            avsluta(spel.id);
+          }}
+        >
           {spel.typ === "order" ? (
             <Spelare key={spel.id} komposition={Ordern} props={spel.props} varaktighet={spel.forlopp.varaktighet} klocka={spel.klocka} onKlar={() => avsluta(spel.id)} />
           ) : spel.typ === "serie" ? (

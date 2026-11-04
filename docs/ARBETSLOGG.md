@@ -5,6 +5,30 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-04 · Säljtavlan rapporterar sina fel och mäter testfirandet på en parad tv (direkt på `main`, ingen migration)
+
+**Varför.** Efter `6caa0d8` skickades testhändelse 6 ("stor") 15:31 UTC. Beställaren: "tv:n fick inget", sedan "det
+hände något med tv:n men animation kom inte upp", och "tv:n ligger uppe i Google, jag är inte inne i Chrome": tavlan
+körs i Google-appens inbyggda webbläsare (WebView, därav `wv` i webbläsarsträngen). Planeringen spelar händelse 6
+(provat med tavlans riktiga kod), servern cachar inget (`private, no-store`, `x-vercel-cache: MISS`), och firandet
+ritas felfritt i Chrome på datorn i 1920×1080, 1280×720 och 960×540. "Skärm 1" parades 15:27 UTC med samma
+webbläsarsträng och hämtar alltid två sekunder efter "Skärm 2": troligen samma tv. Skyddet runt ett firande
+(`Skydd` i `Tavla.tsx`) ritade ingenting och sa ingenting när kompositionen kastade, och ingen läser en tv:s konsol.
+Lugn rörelse (`6caa0d8`) var alltså inte hela förklaringen, och orsaken på tv:n är okänd.
+
+**Ändringen.** `POST /salesboard/fel` (parad skärm eller inloggad, samma ursprung) skriver genom `skrivFel` med
+digest `salesboard-…`. Tavlan rapporterar: skyddets fel (`salesboard-<typ>`, med stack och komponentstack), och på en
+parad skärm fönstrets fel och avvisade löften (`salesboard-fonster`, `salesboard-lofte`), högst en gång i minuten
+per digest. Efter ett testfirande på en parad skärm skickas en mätning (`salesboard-diagnos-<ms>`): bildrutor, högsta
+ruta mot längden, tid och klocka, lugn/media/rörelse, ljudets läge, fönstret och `visualViewport`, synlighet, fokus,
+typsnitt, bygget, och mitt i firandet firandeytans plats, opacitet och vad som ligger överst mitt på skärmen.
+
+**Nästa steg.** Tv:n måste ladda in bygget: av sig själv först efter 18.00 (`byggomladdning`, ljudet kräver troligen
+ett klick i en WebView), eller när någon laddar om sidan. Skicka då en testhändelse och läs `error_report` där
+`path = '/salesboard'`.
+
+---
+
 ## 2026-11-04 · Säljtavlan: en parad tv spelar firandet med full rörelse (direkt på `main`, ingen migration)
 
 **Beställaren:** "Fredrik la in en order på 55 000 kr och det kom upp på tavlan, men [ingen] animation kom upp på tv:n.
