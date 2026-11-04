@@ -5,6 +5,27 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-04 · Säljtavlan: ORSAKEN. Tavlan underkände varje bild från servern och laddade om sig själv (direkt på `main`, ingen migration)
+
+**Mätningen.** Efter `2bb3b4f` startade båda skärmarna (samma tv, Google-appens webbläsare, 1132×637 @1,33) med
+rätt bygge, ~40 bildrutor/s, synliga, utan minskad rörelse och med ljudet igång utan klick. Lugn rörelse var alltså
+aldrig orsaken (`6caa0d8` får stå kvar: en parad tv följer inställningen). Men de startade om 17:04:13, 17:04:37 och
+17:06:40 svensk tid, och sa aldrig att de sett testhändelse 9.
+
+**Orsaken.** `lasBild` i `hamtning.ts` krävde `Array.isArray(manad.bidrag)`, och servern (`formaOgonblick`) har aldrig
+skickat `bidrag` på main: kravet kom med `4682872` (2026-10-25) och till main med Nav 2.0 (`053e62c`). Varje hämtning
+underkändes tyst ("tillfälligt: inte en hel ögonblicksbild" → `fel++`), och efter fyra (`FEL_FOR_OMLADDNING`) laddade
+tavlan om sig själv. Vid starten räknas allt som sett, så ingenting har firats i produktionen sedan dess, och siffrorna
+uppdaterades bara genom omladdningarna. Proven såg det inte: selen matar tavlan med en påhittad källa förbi
+`lasBild`, och inget prov skickade serverns bild genom den.
+
+**Ändringen.** Kravet på `bidrag` är borta (ingenting i tavlan läser fältet). Kontraktsprov i
+`tests/salesboard-server.mjs`: `lasBild(JSON-rundtur av formaOgonblick(...))` ska godkännas. `kalla.ts` rapporterar en
+underkänd bild (`salesboard-bild-underkand`, med bildens nycklar) och en mottagning som kastar
+(`salesboard-mottagning`) till /fel. Rapporteringen ligger i `src/app/salesboard/rapport.ts`.
+
+---
+
 ## 2026-11-04 · Säljtavlan rapporterar sina fel och mäter testfirandet på en parad tv (direkt på `main`, ingen migration)
 
 **Varför.** Efter `6caa0d8` skickades testhändelse 6 ("stor") 15:31 UTC. Beställaren: "tv:n fick inget", sedan "det

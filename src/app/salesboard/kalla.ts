@@ -37,6 +37,7 @@ import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/env";
 import { inomArbetsdag } from "@/lib/salesboard/regler";
 import type { Ogonblick } from "@/lib/salesboard/typer";
 import { TIDSGRANS_MS, VERKLIG_TID, hamtaInom, lasBild, nyForskjutning, nyHamtare } from "./hamtning.ts";
+import { felText, rapportera } from "./rapport.ts";
 
 export type Kallstatus = {
   /** Ringklockans kanal är uppe. */
@@ -100,14 +101,30 @@ export function natkalla(o: { vid401?: () => void } = {}): Kalla {
           throw new Error(`tillfälligt: ${svar.status} ${svar.type}`);
         }
         const b = lasBild(svar.kropp);
-        if (!b) throw new Error("tillfälligt: inte en hel ögonblicksbild");
+        if (!b) {
+          // Inte tillfälligt i praktiken: servern och tavlan är oense om bilden, och då laddar
+          // tavlan om sig själv var fjärde hämtning utan att fira något (2026-10-25 till 2026-11-04).
+          const k = svar.kropp as { manad?: unknown } | null;
+          rapportera(
+            "salesboard-bild-underkand",
+            "tavlan underkände serverns bild (lasBild)",
+            `bilden: ${k && typeof k === "object" ? Object.keys(k).join(", ") : typeof k}; manad: ${k?.manad && typeof k.manad === "object" ? Object.keys(k.manad).join(", ") : "-"}`,
+          );
+          throw new Error("tillfälligt: inte en hel ögonblicksbild");
+        }
         const efter = Date.now();
         if (stoppad) return;
         offset = forskjutning.lagg(efter, Date.parse(b.nu) - (fore + efter) / 2);
         senast = efter;
         fel = 0;
         arbetsdag = b.installningar.arbetsdag;
-        bild(b);
+        try {
+          bild(b);
+        } catch (e) {
+          // Tavlans mottagning kastade: ett fel i koden, inte i nätet. Det räknas som ett fel som förut.
+          rapportera("salesboard-mottagning", `tavlan kunde inte ta emot bilden: ${felText(e)}`, e instanceof Error ? (e.stack ?? null) : null);
+          throw e;
+        }
       } catch {
         fel++;
       } finally {

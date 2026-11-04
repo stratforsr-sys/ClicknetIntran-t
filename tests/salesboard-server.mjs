@@ -38,6 +38,7 @@ import { hasha, normaliseraKod, nyKod, nyToken, visaKod } from "../src/lib/sales
 import { MINSTA_UNDERLAG, RESERV_TROSKEL, storAffarTroskel } from "../src/lib/salesboard/regler.ts";
 import { formaOgonblick, lasStatistik, tavlansFonster, troskelFranStatistik, vinnarensManad } from "../src/lib/salesboard/forma.ts";
 import { nyckelFor } from "../src/lib/salesboard/nyckel.ts";
+import { lasBild } from "../src/app/salesboard/hamtning.ts";
 import { lasningen, personvalen, saknasIDatabasen } from "../src/lib/salesboard/saknas.ts";
 import {
   KAKA,
@@ -878,6 +879,16 @@ console.log("\nParningens hash");
   );
   ok("och ger samma hash", hasha(normaliseraKod("k7m4-qx9p")) === hasha("K7M4QX9P"));
   ok("koden med streck ger en annan hash, därför hashas den normaliserade", hasha("K7M4-QX9P") !== hasha("K7M4QX9P"));
+}
+
+console.log("\nTavlan tar emot serverns bild");
+{
+  // Servern formar bilden och tavlan läser den med `lasBild`. Underkändes den blev varje
+  // hämtning ett tillfälligt fel, och efter fyra laddade tavlan om sig själv utan att fira
+  // något: så var det från 2026-10-25 till 2026-11-04 (`manad.bidrag` som servern aldrig skickade).
+  const overNatet = (bild) => JSON.parse(JSON.stringify(bild));
+  ok("tavlan godkänner serverns bild som den kommer över nätet", lasBild(overNatet(forma())) !== null);
+  ok("också en parad skärms bild, och en bild utan order", lasBild(overNatet(forma({}, INST, NU, { namn: "Skärm 1", ljud: true }))) !== null && lasBild(overNatet(forma({ senaste: [], manadens: [] }))) !== null);
 }
 
 console.log(fel === 0 ? "\n\x1b[32mAllt grönt.\x1b[0m\n" : `\n\x1b[31m${fel} fel.\x1b[0m\n`);

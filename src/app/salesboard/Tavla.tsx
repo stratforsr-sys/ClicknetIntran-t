@@ -32,6 +32,7 @@ import type { Ogonblick, Ordning } from "@/lib/salesboard/typer";
 import { natkalla, type Kalla, type Kallstatus } from "./kalla";
 import { aktuell, forlopp, mottagning, nycklarFor, samlaKo, tavlansRorelse, visning as visningFor, type Forlopp, type Kopost, type Visning } from "./ko.ts";
 import { Ljudmotor } from "./ljud.ts";
+import { felText, rapportera } from "./rapport.ts";
 import { rektUtanTransform, type Rekt } from "./motion/delar";
 import { FPS } from "./motion/matte.ts";
 import { Knuffen, type KnuffenProps } from "./motion/Knuffen";
@@ -108,31 +109,6 @@ function spara(nyckel: string, varde: unknown): void {
     // Privat läge eller full lagring: tavlan minns bara till nästa omladdning.
   }
 }
-
-/** Senaste rapporten per digest: ett fel som upprepas varje bildruta skickas en gång i minuten. */
-const RAPPORTERAT = new Map<string, number>();
-
-/**
- * Ett fel eller en mätning till navets felrapporter (`/salesboard/fel`). Tyst om det
- * inte går: rapporteringen får aldrig själv bli ett fel på en tv.
- */
-function rapportera(digest: string, message: string, stack: string | null): void {
-  const nu = Date.now();
-  if (nu - (RAPPORTERAT.get(digest) ?? -Infinity) < 60_000) return;
-  RAPPORTERAT.set(digest, nu);
-  try {
-    void fetch("/salesboard/fel", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ digest, message, stack }),
-      keepalive: true,
-    }).catch(() => undefined);
-  } catch {
-    // Ingen fetch, eller en som kastar direkt: inget att göra.
-  }
-}
-
-const felText = (fel: unknown): string => (fel instanceof Error ? `${fel.name}: ${fel.message}` : String(fel));
 
 /** Vad som ligger överst mitt på skärmen, och firandets yta: det tv:n faktiskt visar. */
 function matYtan(): string {

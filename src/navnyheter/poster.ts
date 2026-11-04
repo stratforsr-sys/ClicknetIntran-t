@@ -14,6 +14,17 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "saljtavlan-firar-igen",
+    rubrik: "Säljtavlan firar varje ny order igen",
+    ingress: "En godkänd order spelas nu upp på kontorets tv med namn, belopp och ljud, som den ska.",
+    text: `Sedan Nav 2.0 kom ut har säljtavlan visat nya order i siffrorna utan att fira dem. Tavlan
+läste inte navets svar rätt, laddade om sig själv med några minuters mellanrum och räknade
+då allt som redan sett. Nu firas en ny order på tv:n när den godkänns, med namn, belopp och ljud.`,
+    datum: "2026-11-04",
+    roller: [],
+    href: "/salesboard",
+  },
+  {
     slug: "saljtavlan-rapporterar-sina-fel",
     rubrik: "Säljtavlans fel syns under Fel",
     ingress: "Går ett firande sönder på en tv står det nu under Fel, med vilken skärm det gällde.",

@@ -222,7 +222,6 @@ export function lasBild(data: unknown): Ogonblick | null {
     typeof manad.nyckel === "string" &&
     typeof manad.antal === "number" &&
     arObjekt(manad.dagar) &&
-    Array.isArray(manad.bidrag) &&
     arObjekt(idag) &&
     typeof idag.datum === "string" &&
     typeof idag.antal === "number" &&
