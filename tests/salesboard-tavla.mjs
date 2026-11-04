@@ -179,6 +179,7 @@ console.log("\nStilmallen och koden hör ihop");
   try {
     rutt = readFileSync(new URL("../src/app/salesboard/fel/route.ts", import.meta.url), "utf8");
   } catch {}
+  ok("en parad skärm rapporterar sin start, att den såg ett test, att firandet började och om det hänger", ["salesboard-start-", "salesboard-sag-", "salesboard-spelar-", "salesboard-hanger"].every((d) => tavla.includes(d)));
   ok("tavlans felväg prövar ursprunget och åtkomsten", rutt.includes("sammaUrsprung(request)") && rutt.includes("tavlansAtkomst(request)") && rutt.includes("skrivFel("));
 }
 

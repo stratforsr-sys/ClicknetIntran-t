@@ -23,6 +23,13 @@ per digest. Efter ett testfirande på en parad skärm skickas en mätning (`sale
 ruta mot längden, tid och klocka, lugn/media/rörelse, ljudets läge, fönstret och `visualViewport`, synlighet, fokus,
 typsnitt, bygget, och mitt i firandet firandeytans plats, opacitet och vad som ligger överst mitt på skärmen.
 
+**Andra varvet (samma kväll).** Beställaren laddade om sidan på tv:n 15:55 UTC; testhändelse 8 gav ingen rapport
+alls, fast skrivvägen (`registrera_fel` med service-nyckeln) svarar 204. Tv:n sa alltså ingenting: firandet började
+aldrig, tog aldrig slut, eller så nådde anropet inte fram. En parad skärm rapporterar därför också sin start efter
+5 s (`salesboard-start-…`: bygget, bildrutor per sekund från requestAnimationFrame, synlighet, fönstret, minskad
+rörelse, ljudet, lagringen), att den såg en testhändelse (`salesboard-sag-…`), att ett testfirande började
+(`salesboard-spelar-…`), och ett firande som inte tagit slut tio sekunder efter sin längd (`salesboard-hanger`).
+
 **Nästa steg.** Tv:n måste ladda in bygget: av sig själv först efter 18.00 (`byggomladdning`, ljudet kräver troligen
 ett klick i en WebView), eller när någon laddar om sidan. Skicka då en testhändelse och läs `error_report` där
 `path = '/salesboard'`.

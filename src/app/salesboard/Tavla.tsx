@@ -355,6 +355,47 @@ export default function Tavla({
     };
   }, [arSkarm]);
 
+  // Starten på en parad skärm: bygget och hur många bildrutor webbläsaren faktiskt ritar.
+  // Ett firande drivs av requestAnimationFrame; ritar webbläsaren inga rutor syns inget.
+  useEffect(() => {
+    if (!arSkarm) return;
+    let rutor = 0;
+    let id = 0;
+    const t0 = performance.now();
+    const rakna = () => {
+      rutor += 1;
+      id = requestAnimationFrame(rakna);
+    };
+    id = requestAnimationFrame(rakna);
+    const h = setTimeout(() => {
+      cancelAnimationFrame(id);
+      const sek = (performance.now() - t0) / 1000;
+      let lagring = "ok";
+      try {
+        window.localStorage.setItem("salesboard.prov", "1");
+        window.localStorage.removeItem("salesboard.prov");
+      } catch (e) {
+        lagring = felText(e);
+      }
+      rapportera(
+        `salesboard-start-${Date.now()}`,
+        `tavlan startade på skärmen: ${Math.round(rutor / sek)} bildrutor/s`,
+        [
+          `bygge=${start.bygge} synlig=${document.visibilityState} fokus=${document.hasFocus()}`,
+          `fönster ${window.innerWidth}x${window.innerHeight} @${window.devicePixelRatio} minskad rörelse=${window.matchMedia?.("(prefers-reduced-motion: reduce)").matches}`,
+          `ljud=${ljud.current?.tillstand ?? "ingen motor"} val=${levande.current.ljudval} utanKlick=${ljudUtanKlick.current}`,
+          `lagring=${lagring} typsnitt=${document.fonts?.status ?? "-"}`,
+        ].join("\n"),
+      );
+    }, 5_000);
+    return () => {
+      clearTimeout(h);
+      cancelAnimationFrame(id);
+    };
+    // `start` byts aldrig under sidans liv.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [arSkarm]);
+
   // --- Klockan: en gång per sekund, på sekundskiftet -------------------------
   useEffect(() => {
     t.current.startMs = Date.now();
@@ -545,10 +586,23 @@ export default function Tavla({
     }
     const spel = bygg(post);
     tt.spel = spel;
+    if (arSkarm) {
+      if (spel.forlopp.test) rapportera(`salesboard-spelar-${Date.now()}`, `testfirandet började (${spel.typ})`, `längd ${spel.forlopp.varaktighet} rutor, klockan ${spel.klocka().toFixed(2)} s, ljudbas ${spel.ljudBas ?? "-"}`);
+      // Ett firande som inte tagit slut tio sekunder efter sin längd hänger: det säger skärmen till om.
+      setTimeout(() => {
+        if (t.current.spel?.id !== spel.id) return;
+        const m = t.current.matning;
+        rapportera(
+          "salesboard-hanger",
+          `firandet (${spel.typ}) hänger`,
+          `klockan ${spel.klocka().toFixed(2)} s av ${(spel.forlopp.varaktighet / FPS).toFixed(1)} s; bildrutor ${m && m.id === spel.id ? `${m.rutor}, högsta ${m.hogst}` : "räknas bara vid test"}; synlig=${document.visibilityState}`,
+        );
+      }, (spel.forlopp.varaktighet / FPS) * 1000 + 10_000);
+    }
     settRuta(Math.max(0, Math.floor(spel.klocka() * FPS)));
     schemalagg(spel);
     rita();
-  }, [bygg, schemalagg, visa]);
+  }, [bygg, schemalagg, visa, arSkarm]);
 
   const avsluta = useCallback(
     (id: number) => {
@@ -609,6 +663,9 @@ export default function Tavla({
       if (beslut === "slapp") return;
       if (ny.bygge && tt.startBygge && ny.bygge !== tt.startBygge) tt.nyttBygge = true;
       const { firanden, minne } = planera(beslut === "omstart" ? null : tt.forra, ny, tt.minne);
+      if (arSkarm && firanden.some((f) => f.typ === "test")) {
+        rapportera(`salesboard-sag-${Date.now()}`, "skärmen såg testhändelsen", `firanden: ${firanden.map((f) => f.typ).join(", ")}; bilden ${ny.nu}; mottagning ${beslut}; spelar ${tt.spel ? tt.spel.typ : "inget"}, kön ${tt.ko.length}`);
+      }
       tt.forra = ny;
       tt.minne = minne;
       spara(MINNESNYCKEL, minne);
@@ -621,7 +678,7 @@ export default function Tavla({
       }
       rita();
     },
-    [samlaIn, visa],
+    [samlaIn, visa, arSkarm],
   );
 
   // Starten: allt som finns är sett (planera med ingen förra bild), och källan börjar.
