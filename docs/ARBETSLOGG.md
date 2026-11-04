@@ -5,7 +5,7 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
-## 2026-11-03 kväll · Uppgifter: projektets och mallens formulär stängs efter Spara (grenen `projektform-stangs`, ingen migration)
+## 2026-11-03 kväll och 2026-11-04 · Uppgifter: projektets och mallens formulär stängs efter Spara (MERGAD `3d63b19`, ingen migration)
 
 **Beställaren:** "När jag lägger till ett projekt i uppgiftsvyn i nav och sen trycker på skapa projekt så stannar den
 där panelen för att skapa ett projekt kvar." Projektet skapades och stod i listan, men formuläret stod kvar ifyllt.
@@ -28,6 +28,14 @@ genast-provet 56/56, `nav2-omladdning` och `nav2-uppgifter-lage` gröna, och skr
 
 **Framåt.** Ett formulär i Nav 2.0 som förut stängdes av omladdningen måste stänga sig självt efter ok. Tillstånd som
 bara nollställs av Avbryt är tecknet.
+
+**Mergen (2026-11-04).** På beställarens ja ("skicka till produktion"). Main hade gått åtta pushar förbi grenens bas
+(notiserna i tid, flikens märke), så main mergades in i grenen (`3d63b19`). Bara dokumenten krockade, och utkastet
+mergades utan krock. Proven igen på mergen: formuläret 22/22, omladdning 80/80, genast 56/56, `nav2-omladdning`,
+`nav2-uppgifter-lage`, `notis-sw` och `app-huvud` gröna. Previewen grön, main snabbspolad, produktionen grön 08:51 UTC
+och skriptet där bär lagningen. **Provat i produktionen** (Zens Chrome): Skapa projektet stängde formuläret efter
+0,75 s, projektet stod i listan efter 1,65 s, och provprojektet "Provprojekt – arkiveras" arkiverades. Inga fel i
+konsolen.
 
 ## 2026-11-03 kväll · Fliken i webbläsaren bär navets märke (MERGAD `c597c6e`, ingen migration)
 
