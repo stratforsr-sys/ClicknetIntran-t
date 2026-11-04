@@ -110,18 +110,6 @@ function spara(nyckel: string, varde: unknown): void {
   }
 }
 
-/** Vad som ligger överst mitt på skärmen, och firandets yta: det tv:n faktiskt visar. */
-function matYtan(): string {
-  const yta = document.querySelector<HTMLElement>(".tv-fira, .tv-malet, .tv-tav");
-  const overst = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 3);
-  const kedja: string[] = [];
-  for (let e: Element | null = overst; e && kedja.length < 4; e = e.parentElement) kedja.push(`${e.tagName.toLowerCase()}.${String(e.className).trim().replace(/\s+/g, ".")}`);
-  if (!yta) return `ingen firandeyta i sidan; överst: ${kedja.join(" < ")}`;
-  const r = yta.getBoundingClientRect();
-  const cs = getComputedStyle(yta);
-  return `yta ${yta.className} ${Math.round(r.x)},${Math.round(r.y)} ${Math.round(r.width)}x${Math.round(r.height)} opacity=${cs.opacity} visibility=${cs.visibility} display=${cs.display} z=${cs.zIndex} barn=${yta.childElementCount}; överst: ${kedja.join(" < ")}`;
-}
-
 /** Samma formel som --u i CSS: under 900 px är skärmen 1 000 u bred. */
 function fonstret(): Fonster {
   if (typeof window === "undefined") return { u: 1, vw: 1920, vh: 1080 };
@@ -262,8 +250,6 @@ export default function Tavla({
     senastKnuff: null as number | null,
     /** Prisbilderna: adress → laddas, klar (avkodad) eller fel. En bild som felar visas inte. */
     bilder: new Map<string, "laddar" | "klar" | "fel">(),
-    /** Testfirandets mätning på en parad skärm: bildrutor, högsta ruta, start och ytan mitt i. */
-    matning: null as { id: number; rutor: number; hogst: number; startMs: number; mitt: string | null } | null,
   });
   const [, rita] = useReducer((x: number) => x + 1, 0);
   const [ruta, settRuta] = useState(0);
@@ -329,47 +315,6 @@ export default function Tavla({
       window.removeEventListener("error", fel);
       window.removeEventListener("unhandledrejection", lofte);
     };
-  }, [arSkarm]);
-
-  // Starten på en parad skärm: bygget och hur många bildrutor webbläsaren faktiskt ritar.
-  // Ett firande drivs av requestAnimationFrame; ritar webbläsaren inga rutor syns inget.
-  useEffect(() => {
-    if (!arSkarm) return;
-    let rutor = 0;
-    let id = 0;
-    const t0 = performance.now();
-    const rakna = () => {
-      rutor += 1;
-      id = requestAnimationFrame(rakna);
-    };
-    id = requestAnimationFrame(rakna);
-    const h = setTimeout(() => {
-      cancelAnimationFrame(id);
-      const sek = (performance.now() - t0) / 1000;
-      let lagring = "ok";
-      try {
-        window.localStorage.setItem("salesboard.prov", "1");
-        window.localStorage.removeItem("salesboard.prov");
-      } catch (e) {
-        lagring = felText(e);
-      }
-      rapportera(
-        `salesboard-start-${Date.now()}`,
-        `tavlan startade på skärmen: ${Math.round(rutor / sek)} bildrutor/s`,
-        [
-          `bygge=${start.bygge} synlig=${document.visibilityState} fokus=${document.hasFocus()}`,
-          `fönster ${window.innerWidth}x${window.innerHeight} @${window.devicePixelRatio} minskad rörelse=${window.matchMedia?.("(prefers-reduced-motion: reduce)").matches}`,
-          `ljud=${ljud.current?.tillstand ?? "ingen motor"} val=${levande.current.ljudval} utanKlick=${ljudUtanKlick.current}`,
-          `lagring=${lagring} typsnitt=${document.fonts?.status ?? "-"}`,
-        ].join("\n"),
-      );
-    }, 5_000);
-    return () => {
-      clearTimeout(h);
-      cancelAnimationFrame(id);
-    };
-    // `start` byts aldrig under sidans liv.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [arSkarm]);
 
   // --- Klockan: en gång per sekund, på sekundskiftet -------------------------
@@ -563,15 +508,13 @@ export default function Tavla({
     const spel = bygg(post);
     tt.spel = spel;
     if (arSkarm) {
-      if (spel.forlopp.test) rapportera(`salesboard-spelar-${Date.now()}`, `testfirandet började (${spel.typ})`, `längd ${spel.forlopp.varaktighet} rutor, klockan ${spel.klocka().toFixed(2)} s, ljudbas ${spel.ljudBas ?? "-"}`);
       // Ett firande som inte tagit slut tio sekunder efter sin längd hänger: det säger skärmen till om.
       setTimeout(() => {
         if (t.current.spel?.id !== spel.id) return;
-        const m = t.current.matning;
         rapportera(
           "salesboard-hanger",
           `firandet (${spel.typ}) hänger`,
-          `klockan ${spel.klocka().toFixed(2)} s av ${(spel.forlopp.varaktighet / FPS).toFixed(1)} s; bildrutor ${m && m.id === spel.id ? `${m.rutor}, högsta ${m.hogst}` : "räknas bara vid test"}; synlig=${document.visibilityState}`,
+          `klockan ${spel.klocka().toFixed(2)} s av ${(spel.forlopp.varaktighet / FPS).toFixed(1)} s; synlig=${document.visibilityState}`,
         );
       }, (spel.forlopp.varaktighet / FPS) * 1000 + 10_000);
     }
@@ -587,25 +530,6 @@ export default function Tavla({
       const spel = tt.spel;
       tt.spel = null;
       const f = spel.forlopp;
-      const m = tt.matning;
-      if (m && m.id === id) {
-        // Testfirandet på en parad skärm: vad tv:n gjorde, till navets felrapporter.
-        tt.matning = null;
-        const l = levande.current;
-        const vv = window.visualViewport;
-        rapportera(
-          `salesboard-diagnos-${Date.now()}`,
-          `testfirandet (${f.data.typ}) spelades: ${m.rutor} bildrutor, högsta ruta ${m.hogst} av ${f.varaktighet}`,
-          [
-            `tid ${Math.round(performance.now() - m.startMs)} ms, klockan ${spel.klocka().toFixed(2)} s`,
-            `lugn=${lugnRorelse({ skarm: arSkarm, media: l.lugnMedia, rorelse: tt.senaste.installningar.rorelse })} media=${l.lugnMedia} rorelse=${tt.senaste.installningar.rorelse}`,
-            `ljud=${ljud.current?.tillstand ?? "ingen motor"} val=${l.ljudval} utanKlick=${ljudUtanKlick.current}`,
-            `fönster ${window.innerWidth}x${window.innerHeight} @${window.devicePixelRatio} vv=${vv ? `${Math.round(vv.width)}x${Math.round(vv.height)}` : "-"} u=${l.fonster.u.toFixed(3)}`,
-            `synlig=${document.visibilityState} fokus=${document.hasFocus()} typsnitt=${document.fonts?.status ?? "-"} bygge=${start.bygge}`,
-            `mitt i: ${m.mitt ?? "nådde aldrig halva"}`,
-          ].join("\n"),
-        );
-      }
       if (!f.test && (f.data.typ === "order" || f.data.typ === "serie")) {
         // Det som kom in tyst under förloppet (för gammalt, efterregistrerat) lyser till.
         const fore = new Set(f.fore.order.map((o) => o.nyckel));
@@ -615,8 +539,6 @@ export default function Tavla({
       }
       startaNasta();
     },
-    // `arSkarm` och `start` byts aldrig under sidans liv.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [startaNasta],
   );
 
@@ -639,9 +561,6 @@ export default function Tavla({
       if (beslut === "slapp") return;
       if (ny.bygge && tt.startBygge && ny.bygge !== tt.startBygge) tt.nyttBygge = true;
       const { firanden, minne } = planera(beslut === "omstart" ? null : tt.forra, ny, tt.minne);
-      if (arSkarm && firanden.some((f) => f.typ === "test")) {
-        rapportera(`salesboard-sag-${Date.now()}`, "skärmen såg testhändelsen", `firanden: ${firanden.map((f) => f.typ).join(", ")}; bilden ${ny.nu}; mottagning ${beslut}; spelar ${tt.spel ? tt.spel.typ : "inget"}, kön ${tt.ko.length}`);
-      }
       tt.forra = ny;
       tt.minne = minne;
       spara(MINNESNYCKEL, minne);
@@ -654,7 +573,7 @@ export default function Tavla({
       }
       rita();
     },
-    [samlaIn, visa, arSkarm],
+    [samlaIn, visa],
   );
 
   // Starten: allt som finns är sett (planera med ingen förra bild), och källan börjar.
@@ -687,15 +606,8 @@ export default function Tavla({
   useEffect(() => {
     if (!spel) return;
     let id = 0;
-    if (arSkarm && spel.forlopp.test) t.current.matning = { id: spel.id, rutor: 0, hogst: 0, startMs: performance.now(), mitt: null };
     const steg = () => {
       const r = Math.floor(spel.klocka() * FPS);
-      const m = t.current.matning;
-      if (m && m.id === spel.id) {
-        m.rutor += 1;
-        m.hogst = Math.max(m.hogst, r);
-        if (m.mitt === null && r >= spel.forlopp.varaktighet / 2) m.mitt = matYtan();
-      }
       const { byt } = spel.forlopp.tider;
       // Tavlan rör sig bara under svepet (motrörelsen) och halvvägs; under resten står den still.
       const behov = spel.typ === "halvvags" || r <= 30 ? r : r >= byt ? byt : 31;

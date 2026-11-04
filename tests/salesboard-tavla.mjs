@@ -179,7 +179,9 @@ console.log("\nStilmallen och koden hör ihop");
   try {
     rutt = readFileSync(new URL("../src/app/salesboard/fel/route.ts", import.meta.url), "utf8");
   } catch {}
-  ok("en parad skärm rapporterar sin start, att den såg ett test, att firandet började och om det hänger", ["salesboard-start-", "salesboard-sag-", "salesboard-spelar-", "salesboard-hanger"].every((d) => tavla.includes(d)));
+  ok("en parad skärm säger till om ett firande hänger", tavla.includes('"salesboard-hanger"'));
+  // Mätningarna som hittade felet 2026-11-04 skrev en rad i /fel vid varje start och varje test. De är borta.
+  ok("felsökningens mätningar är borta", ["salesboard-start-", "salesboard-sag-", "salesboard-spelar-", "salesboard-diagnos-", "matYtan"].every((d) => !tavla.includes(d)));
   ok("tavlans felväg prövar ursprunget och åtkomsten", rutt.includes("sammaUrsprung(request)") && rutt.includes("tavlansAtkomst(request)") && rutt.includes("skrivFel("));
 }
 
