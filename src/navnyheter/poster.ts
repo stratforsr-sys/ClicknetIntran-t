@@ -14,6 +14,63 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "fliken-bar-navets-marke",
+    rubrik: "Fliken i webbläsaren bär navets märke",
+    ingress: "Nav i en flik i datorn visar nu navet, inte Clicknets muspekare.",
+    text: `När Nav är öppet i webbläsaren visar fliken navets märke, ringen med ekrarna och
+den gula punkten, samma märke som på appikonen och i notiserna. Det gäller också
+inloggningssidan. Förut visade fliken Clicknets muspekare.`,
+    datum: "2026-11-03",
+    roller: [],
+  },
+  {
+    slug: "notiserna-kommer-nar-de-hander",
+    rubrik: "Notiserna i telefonen kommer när det händer",
+    ingress: "En påminnelse inför ett möte väcker telefonen direkt, och kommer flera notiser på en gång syns alla.",
+    text: `Förut kunde en telefon som låg still vänta i timmar med Navs notiser, så att
+påminnelsen om ett möte kom efter mötet. Nu väcker notisen telefonen när den skickas.
+
+Kommer flera notiser på en gång visas var och en, i den ordning de hände. Förut blev de
+ofta en enda, och det som blev liggande visades sedan före det nya. Nu går det nya först.
+Det som aldrig kom fram i telefonen finns som förut i klockan i Nav.
+
+Kommer notiserna ändå sent i en Samsung: öppna **Inställningar**, **Appar**, **Chrome**,
+**Batteri** och välj **Obegränsad**.`,
+    datum: "2026-11-03",
+    roller: [],
+    href: "/profil",
+  },
+  {
+    slug: "inkio-anteckning-i-arende-som-notis",
+    rubrik: "Svaren i ett ärende i Inkio kommer som notis",
+    ingress: "Ett nytt ärende och en ny status mejlas som förut. Anteckningarna i ärendet kommer i klockan och telefonen.",
+    text: `Navet mejlade förut varje anteckning som skrevs i ett ärende i Inkio, så ett
+ärende som pågick gav ett mejl per svar. Nu kommer anteckningarna i ett ärende bara
+som notis, i klockan och i telefonen.
+
+Ett nytt ärende och ett ärende som byter status, till exempel när det blir löst,
+mejlas som förut. Det gör också en makulerad order och ett uppsagt avtal.`,
+    datum: "2026-11-03",
+    roller: [],
+    href: "/profil",
+  },
+  {
+    slug: "notiserna-bar-navets-marke",
+    rubrik: "Notiserna i telefonen bär navets märke",
+    ingress: "En notis från Nav ser nu ut som Nav: navet i statusraden och i notisen, inte Clicknets muspekare.",
+    text: `När Nav skickar en notis till telefonen visas navets märke, ringen med ekrarna
+och den gula punkten, både uppe i statusraden och i själva notisen. Det är samma märke
+som på appikonen och i notisen på startsidan. Förut visade notiserna Clicknets
+muspekare.
+
+Telefonen byter märke första gången du öppnar Nav. På iPhone visas appens ikon som
+förut. Står det **Chrome** i stället för **Nav** överst i notisen ligger Nav inte som
+app i telefonen: öppna Nav i Chrome och välj **Installera app** i menyn.`,
+    datum: "2026-11-03",
+    roller: [],
+    href: "/profil",
+  },
+  {
     slug: "moten-andra-och-plats",
     rubrik: "Ändra ett bokat möte, och välj var det hålls",
     ingress: "Rätta numret, byt tid, lägg till en kollega eller en till hos kunden. Och boka över telefon, i Teams eller på plats.",

@@ -38113,6 +38113,10 @@ if (ND){
   // Registreringen
   const ndAppRegistrera = () => {
     try { if ('serviceWorker' in navigator) navigator.serviceWorker.register('/app-sw.js', {scope:'/'}).catch(() => {}); } catch(_){}
+    // Pushens worker (/nav2/sw.js) styr ingen av navets sidor, så webbläsaren letar efter en ny version
+    // först efter en push (högst en gång per dygn) eller ett tryck på en notis. Här hämtas den vid varje
+    // start, så att en ändrad notis (märket, texten) når telefonen första gången Nav öppnas.
+    try { if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistration('/nav2/').then(r => { if (r && new URL(r.scope).pathname === '/nav2/') return r.update(); }).catch(() => {}); } catch(_){}
   };
   if (document.readyState === 'complete') ndAppRegistrera();
   else window.addEventListener('load', ndAppRegistrera);

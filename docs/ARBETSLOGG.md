@@ -29,6 +29,158 @@ genast-provet 56/56, `nav2-omladdning` och `nav2-uppgifter-lage` gröna, och skr
 **Framåt.** Ett formulär i Nav 2.0 som förut stängdes av omladdningen måste stänga sig självt efter ok. Tillstånd som
 bara nollställs av Avbryt är tecknet.
 
+## 2026-11-03 kväll · Fliken i webbläsaren bär navets märke (MERGAD `c597c6e`, ingen migration)
+
+**Beställaren:** "kan du ändra navs klocka i webbläsaren till navs egna". Läst som flikens ikon (favicon):
+"klocka" är sannolikt "logga" i dikteringen. Webbläsaren visade Clicknets muspekare.
+
+**Varför pekaren:** `/nav2` skickar sitt eget `<head>` (`appHuvud()` i `src/lib/nav2/app.ts`) utan `<link rel="icon">`.
+Webbläsaren frågade då efter `/favicon.ico`, som `next.config.ts` skickar vidare till `/icon.png`. Det är `src/app/icon.png`,
+pekaren i 256 px. Den serveras `immutable` i ett år, så en ny bild på samma adress hade inte nått den som redan
+har pekaren sparad.
+
+**Ändringen:**
+- `public/nav2/ikon/flik.svg` och `flik-32.png`: navet i den rundade rutan (`hubMark`), skuret för 16 px. Med hubMarks
+  egna mått flyter ekrarna ihop med ringen och punkten i 16 px. Flikens version har ringen på r 12,8, linje 2,4,
+  ekrarna 6,0–8,2 och punkten r 3,2, vilket ger minst en halv bildpunkt luft mellan delarna.
+- `appHuvud()` länkar PNG:n (`sizes="32x32"`, annars väljer Chrome den före SVG:n) och SVG:n. Adresserna är nya, så
+  webbläsaren hämtar navet direkt.
+- `src/app/icon.png` har samma byte som `flik-32.png`. Det gäller inloggningssidorna (Next sätter en ny `?hash`) och `/favicon.ico`.
+- Generatorn ligger i `~/nav2-utkast/delar/flikikon/flik-ikoner.mjs <repo>`, med skissen A/B/C bredvid.
+
+**Prov:** `tests/app-huvud.mjs` har fem nya prov: båda länkarna, PNG:ns mått, SVG:ns delar och att `src/app/icon.png`
+är `flik-32.png`. Tre av dem är röda mot `main`. `app-huvud`, `app-manifest` och `navnyheter` är gröna.
+
+**Mergen:** beställaren sa "skicka till produktion". Main hade fått `75f705f` (notiserna i tid) och krockade bara i
+dokumenten och `poster.ts`, där båda lagt nytt överst; båda står kvar. Flätningen `add60c7` byggdes grön som preview,
+med `app-huvud`, `app-manifest`, `navnyheter`, `pushko` och `notis-sw` gröna. Under bygget kom `05540a7` (bara
+dokumenten), så den flätades in också (`c597c6e`, ingen kod mot `add60c7`) och gick som fast-forward till `main`.
+Produktionen grön 21:48 UTC: flikens SVG och PNG och `/favicon.ico` är byte för byte navet, och `/logga-in` länkar
+`/icon.png?a1af341551ca8630`.
+
+---
+
+## 2026-11-03 kväll · Notiserna i telefonen kommer när det händer (MERGAD `75f705f`, ingen migration)
+
+**Beställaren:** "Ja fixa det", om två fynd från provpusharna efter navets märke.
+
+**Vad telefonen gjorde:** beställaren öppnade Nav i Samsungen, och två provpushar gick 21:02 och 21:07 (en märkt rad,
+markören strax före, `Urgency: high`). Google svarade 201 båda gångerna, men markören `push.kal.8679377d…` stod
+still: telefonen hämtade aldrig texten. Samma sak tidigare under dagen: 18 pushar 13:15–16:15 togs emot av Google och
+hämtades inte, och 17:37 hämtade telefonen fyra notiser från eftermiddagen (520–525) i stället för de nya. Det hände
+före mergen av märket, och hämtningen i `sw.js` är orörd, så märket är inte orsaken. Provraderna är raderade, och
+telefonens markör står på 563, så eftermiddagens kö visas inte i efterhand.
+
+**Två fel i koden, och ändringen:**
+
+- `skickaPush` skickade `Urgency: "normal"`. En Android som ligger still (Doze) får skjuta upp sådana till nästa vakna
+  stund. Nu `"high"`. Alla pushar från Nav blir synliga notiser, så Android sänker inte brådskan.
+- `kalPushNasta` läste markören, valde den äldsta notisen efter den och skrev markören utan villkor. Pushar som kom
+  samtidigt hämtade samtidigt, läste samma markör och svarade med samma notis (samma tagg, alltså en notis), och
+  markören gick ett steg i stället för tio. Kön som blev kvar visades sedan, en i taget, före det som just hänt. Nu
+  flyttas markören med ett villkor på `value->>id` (PostgREST, ingen migration), och den som förlorar läser om och tar
+  nästa. Provat mot produktionens databas med en egen nyckel, sedan raderad: av åtta samtidiga flyttar från samma
+  markör gick en igenom, och av sex samtidiga första markörer (`ignoreDuplicates`) skrevs en.
+- `nastaIKon` (ny ren modul `pushko.ts`) väljer: den äldsta efter markören bland dem som ligger högst tio minuter före
+  den nyaste. Det som blev liggande längre än så hoppas över i telefonen och finns kvar i klockan.
+
+**Varför inte bara "nyast först":** varje push måste hitta en notis. Svarar `kalPushNasta` null frågar workern vidare
+och visar repetitionen eller kvällsnotisen, alltså fel text. Den gamla ordningen höll en push per notis, och det gör
+den nya också inom en skur. När den hoppar över något kan det bli fler pushar än notiser. Därför visas samma notis
+igen (samma tagg, inget nytt pling) om kön är tom och markören flyttades för under en minut sedan. Annars, alltså
+kvällsnotisen, repetitionen eller ett prov, blir svaret null som förut.
+
+**Prov:** `tests/pushko.mjs` (nytt, i `npm test`): ordningen i en skur, att det gamla hoppas över, gränsen på tio
+minuter och att `push.ts` skickar `high`. Gröna: `pushko`, `notis-sw`, `kalender-push`, `navnyheter`, `notiser`,
+`utskick`, `notiser-tackning`. tsc på de fyra berörda filerna med `@supabase/supabase-js` installerat i scratchpaden:
+samma fel som `main` (saknade `next`-moduler), inga nya, och ett planterat fel i markörens kedja fångades.
+
+**Mergad:** fast-forward till `75f705f` på "ja skicka till produktion", produktionen grön 21:40 UTC. Provpushen
+22:42 hämtades av Samsungen efter 99 s, och markören flyttades av nya `kalPushNasta`. Provpusharna 21:02 och 21:07
+gick också med `high` och hämtades inte, så det som ändrades sitter i telefonen, inte i brådskan. `high` gäller ändå
+för de riktiga pusharna, som förut gick med `normal`.
+
+**Kvar:** beställarens svar om vad telefonen visade och om Chrome står på Obegränsad batteri. Se att nästa riktiga
+kalenderpåminnelse kommer i tid.
+
+---
+
+## 2026-11-03 kväll · Inkio: en anteckning i ett ärende kommer som notis, inte som mejl (MERGAD `a0eb2d6`, ingen migration)
+
+**Beställaren:** "Gör så här, ta bort mejl på anteckning i ärendet för jag märkte att jag fick mycket. Behåll
+däremot ärende och sen bara notis då och push i appen för antecknignar i ärendet".
+
+**Vad loggen säger:** sedan `ed04ae7` (2026-11-02 kväll) har `order-inkio-arende` mejlats 9 gånger till Zen och
+8 till Simon. Av dem var 8 respektive 7 en anteckning ("X skrev i ärendet …"), och 1 var ett ärende som blev löst.
+Anteckningarna fick samma sort som ärendet, eftersom beställaren 2026-11-02 bestämde att "en anteckning på ett
+ärende räknas som ärendet". Zens eget lager kunde därför inte skilja dem åt.
+
+**Ändringen:** `notisFor` ger en anteckning på ett ärende (`om_typ === "Ticket"`) sorten
+`order-inkio-arende-anteckning`. Rubriken är oförändrad. Sorten finns i `NOTIS_KALLOR`, `HANDELSEKALLOR`,
+`OMRADE_UNDANTAG` (område `inkio`) och i Utskicks namnlista, men inte i `MEJLKALLOR`. Ärendets namn i Utskick är
+nu bara "Ärende i Inkio". Bolagets lager `alla` har `mejl."*" = false` och ingen nyckel för den nya sorten.
+`superadminsVal` blir därför `false`: sorten mejlas inte till någon och är låst i allas eget lager. Push (`"*": true`)
+och klockan får den. Det gäller hela bolaget, alltså också Simon (vars eget lager sedan i kväll är en kopia av
+Zens) och säljarna.
+
+**Prov:** `tests/inkio-inflode.mjs` väntar sig den nya sorten. `tests/utskick.mjs` har två nya prov: ärendets
+mejlnyckel når inte anteckningen, och sorten har klocka, mejl och push. `main` (`c51faa1`, sedan `9486e8c`) är inmergad, och
+bara docs och `poster.ts` krockade. Elva berörda prov är gröna, också `notiser-tackning`. tsc på de sju ändrade filerna
+ger samma fel (saknade moduler) som på `main`.
+
+**Gamla notiser:** de som redan skickats behåller `order-inkio-arende` i `notification_event`. Bara nya anteckningar
+får den nya sorten.
+
+**Mergen:** på beställarens ja ("Jag säger ja till mergen"). `main` hade under tiden fått navets märke och Möten
+(`9486e8c`) och sedan en docs-commit (`ca07724`). Båda mergades in i grenen, och previewen av `61e1619` var grön.
+`a0eb2d6` har samma kod som den och gick till `main` som fast-forward. Produktionen grön 17:39 UTC.
+
+---
+
+## 2026-11-03 förmiddag och kväll · Notiserna i telefonen bär navets märke (MERGAD `9486e8c`, ingen migration)
+
+**Beställaren:** "jag vill att du kollar hur navs notiser ser ut i telefonen. Så vill jag att du ändrar på notiserna
+till navets. Gör det ordentligt och korrekt".
+
+**Läget:** alla tre vägarna i `public/nav2/sw.js` (kalendern och klockan, repetitionen, kvällsnotisen) gav
+`/clicknet-symbol.png` som både `icon` och `badge`. På Android blev det Clicknets muspekare i statusraden och i
+notishuvudet (`badge` läses som alfamask) och den turkosa pekaren som notisens bild (157×200, inte kvadratisk).
+Navets egen bild av notisen på startsidan (`renderNotif`, `.app-ic`) visar `hubMark`. Två enheter tar emot push i
+produktionen, båda Zens: Macen (Chrome 154) och Samsungen (Android, Chrome 156). Ingen iPhone. iPhone läser varken
+`icon` eller `badge` och visar alltid appens ikon (`apple-touch-180.png`, redan navet).
+
+**Ändringen:**
+- `public/nav2/ikon/notis-192.png`: `hubMark` exakt (rundad ruta rx 10/32 i `--hub`, genomskinliga hörn), samma
+  märke som `.app-ic`.
+- `public/nav2/ikon/notis-badge-96.png`: navet vitt på genomskinligt, ritat för 24 dp (ringen radie 10 dp, linjer
+  2 dp, ekrarna 3,2–7,4 dp, punkten radie 2,2 dp). `hubMark`s egna mått gav 0,5 dp mellan ekrarna och ringen, och
+  de flöt ihop i statusraden.
+- `sw.js`: en `visa()` som sätter `icon`, `badge` och `lang: 'sv'`, och alla tre vägarna går genom den. Taggar,
+  länkar och texter är orörda.
+- `utkast.html` (`ndAppRegistrera`): `getRegistration('/nav2/')` + `update()` vid varje start. Pushens worker styr
+  ingen sida (`/nav2` ligger utanför `/nav2/`), så annars letar webbläsaren efter en ny `sw.js` först efter en push
+  (högst en gång per dygn) eller ett tryck på en notis, och första notisen efter mergen hade kunnat bära pekaren.
+  Prenumerationen ligger kvar (samma registrering).
+- Bilderna ritas av `~/nav2-utkast/delar/notisikon/notis-ikoner.mjs` (som `verktyg/app-ikoner.mjs`) och utkastraden
+  läggs av `patch-utkast.mjs` i samma mapp.
+
+**Prov:** `tests/notis-sw.mjs` (nytt, i `npm test`) kör `sw.js` i `node:vm`: alla fyra vägar (kalendern,
+repetitionen, kvällen, nätet borta) bär bild, märke och `lang`, och ingen `showNotification` går förbi `visa()`.
+Bilderna avkodas: notisbildens hörn är genomskinliga och färgerna `--hub`, `--hub-brand` och `--hub-signal`;
+märket är bara vitt där det syns, ringen hel och med luft mot ekrarna. Utkastraden finns. RÖTT mot main (7 fel),
+GRÖNT på grenen; `app-sw`, `app-vagar`, `app-manifest` och `navnyheter` gröna. Riktig Chrome (headless, localhost,
+`ServiceWorker.deliverPushMessage`): notisen bär `notis-192.png` och `notis-badge-96.png`, och Chrome hämtade båda.
+Samma registrering med mains `sw.js` visade pekaren, och efter utkastraden navet, utan ny prenumeration.
+
+**Mergad** på beställarens ja ("skicka till produktion"). Main gick fram tre gånger under mergen (start före
+signeringen, säljsamtalet hittas själv, Möten ändra ett möte), och varje gång mergades main in i grenen, proven kördes
+och previewen byggdes grön innan main snabbspolades till `9486e8c`. Produktionen serverar nya `sw.js` (ingen
+`clicknet-symbol` kvar) och båda bilderna, byte för byte som main.
+
+**Kvar:** titta i telefonen: öppna Nav en gång och skicka en provpush till Samsungen
+(`~/nav2-utkast/delar/notisprov/notisprov.mjs`). Står det "Chrome" överst i notisen ligger Nav inte som app i
+telefonen. Gamla Navs flik-pling (`Pling.tsx`) är orörd: den gäller datorn, inte telefonen, och gamla Nav ska bort.
+
 ## 2026-11-03 kväll · Möten: ändra ett bokat möte, och platsen som i Outlook (direkt på `main`, ingen migration)
 
 **Beställaren:** "Du måste göra så att man kan redigera möten som man har lagt upp". Under passet: "Lägg till precis
