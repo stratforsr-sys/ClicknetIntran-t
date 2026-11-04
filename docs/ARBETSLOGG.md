@@ -24,6 +24,13 @@ uppdaterades bara genom omladdningarna. Proven såg det inte: selen matar tavlan
 underkänd bild (`salesboard-bild-underkand`, med bildens nycklar) och en mottagning som kastar
 (`salesboard-mottagning`) till /fel. Rapporteringen ligger i `src/app/salesboard/rapport.ts`.
 
+**Provat på tv:n.** `d8218a8` grön 16:13 UTC; tv:n laddade in den själv 16:14:51. Testhändelse 10 (16:15:18 UTC) sågs av
+båda sidorna 16:15:19 och spelades hela vägen: 350–380 bildrutor på 6,9 s, ruta 410–411 av 414, full rörelse,
+firandeytan 1132×637 med opacitet 1 överst. Ingen omstart efteråt. Därefter togs mätningarna bort i `f22a001`
+(`salesboard-start-`, `-sag-`, `-spelar-`, `-diagnos-`), och deras rader ur `error_report`. Kvar i /fel: skyddets
+fel, fönstrets fel, `salesboard-hanger`, `-bild-underkand` och `-mottagning`. Två sidor med tavlan står öppna på
+samma tv ("Skärm 1" och "Skärm 2"), så varje firande spelas och låter två gånger.
+
 ---
 
 ## 2026-11-04 · Säljtavlan rapporterar sina fel och mäter testfirandet på en parad tv (direkt på `main`, ingen migration)
