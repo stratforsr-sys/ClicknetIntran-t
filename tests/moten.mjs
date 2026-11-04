@@ -73,9 +73,12 @@ const hallare = { id: "h", roller: ["sales"] };
 const annan = { id: "x", roller: ["sales"] };
 const tl = { id: "t", roller: ["team_lead"] };
 const sm = { id: "s", roller: ["sales_manager"] };
-const mote = { bokat_av: "b", halls_av: "h" };
+// Kollegan (k) är med i kalenderhändelsen. Beställaren 2026-11-04: bokaren, hållaren och kollegorna gör samma saker.
+const kollega = { id: "k", roller: ["sales"] };
+const mote = { bokat_av: "b", halls_av: "h", med: ["k"] };
 ok("hållaren får sätta utfall", M.farSattaUtfall(hallare, mote) === true);
-ok("bokaren som inte håller får inte", M.farSattaUtfall(bokare, mote) === false);
+ok("bokaren som inte håller får också", M.farSattaUtfall(bokare, mote) === true);
+ok("kollegan på mötet får sätta utfall", M.farSattaUtfall(kollega, mote) === true);
 ok("team_lead får inte", M.farSattaUtfall(tl, mote) === false);
 ok("sales_manager får", M.farSattaUtfall(sm, mote) === true);
 ok("ceo och admin får", M.farSattaUtfall({ id: "c", roller: ["ceo"] }, mote) && M.farSattaUtfall({ id: "a", roller: ["admin"] }, mote));
@@ -83,8 +86,11 @@ ok("en annan säljare får inte", M.farSattaUtfall(annan, mote) === false);
 ok("bokaren får bekräfta", M.farBekrafta(bokare, mote) === true);
 ok("någon annan säljare får inte", M.farBekrafta(annan, mote) === false);
 ok("team_lead får bekräfta", M.farBekrafta(tl, mote) === true);
-ok("farSe: bokare, hållare och chef", M.farSe(bokare, mote) && M.farSe(hallare, mote) && M.farSe(tl, mote) && !M.farSe(annan, mote));
-ok("farBekrafta = farSe för alla", [bokare, hallare, annan, tl, sm].every((u) => M.farBekrafta(u, mote) === M.farSe(u, mote)));
+ok("farSe: bokare, hållare, kollega och chef", M.farSe(bokare, mote) && M.farSe(hallare, mote) && M.farSe(kollega, mote) && M.farSe(tl, mote) && !M.farSe(annan, mote));
+ok("farBekrafta = farSe för alla", [bokare, hallare, kollega, annan, tl, sm].every((u) => M.farBekrafta(u, mote) === M.farSe(u, mote)));
+ok("arMedPaMote: bokare, hållare och kollega, inte en chef som inte är med", [bokare, hallare, kollega].every((u) => M.arMedPaMote(u, mote)) && !M.arMedPaMote(tl, mote) && !M.arMedPaMote(annan, mote));
+ok("utan kollegor: kollegan är inte med", M.farSe(kollega, { ...mote, med: [] }) === false && M.farSattaUtfall(kollega, { ...mote, med: [] }) === false);
+ok("hållaren i med ändrar ingenting", M.farSe(annan, { ...mote, med: ["h"] }) === false);
 ok("flera roller: en chefsroll räcker", M.farSe({ id: "q", roller: ["sales", "ceo"] }, mote) === true);
 
 rubrik("motesArt");
@@ -411,19 +417,20 @@ rubrik("Slutgranskningen: farKopplaOrder");
 
 rubrik("V6a: farRadera (radera ett möte)");
 {
-  // Bokaren (b) och hållaren (h) är olika personer. Ett öppet möte raderas av den som bokade det eller en säljchef;
-  // ett möte med utfall bara av en säljchef (sales_manager, ceo, admin). En teamledare räcker aldrig.
-  const oppet = { bokat_av: "b", halls_av: "h", utfall: null };
-  const klart = { bokat_av: "b", halls_av: "h", utfall: "hallet" };
+  // Bokaren (b), hållaren (h) och kollegan (k) är olika personer. Ett öppet möte raderas av den som är med på det eller en
+  // säljchef; ett möte med utfall bara av en säljchef (sales_manager, ceo, admin). En teamledare som inte är med räcker inte.
+  const oppet = { bokat_av: "b", halls_av: "h", med: ["k"], utfall: null };
+  const klart = { bokat_av: "b", halls_av: "h", med: ["k"], utfall: "hallet" };
   const ceo = { id: "c", roller: ["ceo"] };
   const admin = { id: "a", roller: ["admin"] };
   ok("öppet möte: bokaren får", M.farRadera(bokare, oppet) === true);
-  ok("öppet möte: hållaren som inte bokade får inte", M.farRadera(hallare, oppet) === false);
+  ok("öppet möte: hållaren som inte bokade får också", M.farRadera(hallare, oppet) === true);
+  ok("öppet möte: kollegan på mötet får", M.farRadera(kollega, oppet) === true);
   ok("öppet möte: en annan säljare får inte", M.farRadera(annan, oppet) === false);
-  ok("öppet möte: team_lead som inte bokade får inte", M.farRadera(tl, oppet) === false);
+  ok("öppet möte: team_lead som inte är med får inte", M.farRadera(tl, oppet) === false);
   ok("öppet möte: sales_manager, ceo och admin får", [sm, ceo, admin].every((u) => M.farRadera(u, oppet) === true));
   ok("möte med utfall: bokaren får inte", M.farRadera(bokare, klart) === false);
-  ok("möte med utfall: hållaren får inte", M.farRadera(hallare, klart) === false);
+  ok("möte med utfall: hållaren och kollegan får inte", M.farRadera(hallare, klart) === false && M.farRadera(kollega, klart) === false);
   ok("möte med utfall: en annan säljare och team_lead får inte", M.farRadera(annan, klart) === false && M.farRadera(tl, klart) === false);
   ok("möte med utfall: sales_manager, ceo och admin får", [sm, ceo, admin].every((u) => M.farRadera(u, klart) === true));
   ok("alla tre utfallen räknas som utfall (hallet, uteblev, avbokat)", ["hallet", "uteblev", "avbokat"].every((u) => M.farRadera(bokare, { ...oppet, utfall: u }) === false && M.farRadera(sm, { ...oppet, utfall: u }) === true));

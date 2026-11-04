@@ -36345,9 +36345,11 @@ window.addEventListener('resize', () => { const t = document.querySelector('#moS
    (uppfoljning.andrad) är nytt först då. Kortet som flyttade sig kommer fram
    i sin nya kolumn med en mjuk inglidning och en kort markering.
 
-   Rollerna: ND.jag.roller är anställningsrollerna. Utfallet sätts av den som
-   höll mötet eller av en som har rollen sales_manager, ceo eller admin
-   (en teamledare räcker inte); ND.jag.niva avgör inte.
+   Rollerna: ND.jag.roller är anställningsrollerna. De som är med på mötet
+   (bokaren, hållaren och kollegorna) gör samma saker med det: bekräftar,
+   flyttar, ändrar, sätter utfall och raderar ett öppet möte. Utfallet åt
+   någon annan sätts av sales_manager, ceo eller admin (en teamledare räcker
+   inte); ND.jag.niva avgör inte.
    ===================================================================== */
 
 const ndMo = () => ND && ND.moten;
@@ -36362,12 +36364,14 @@ const MONULAGE = {ingen:'Ingen SEO', sjalv:'Gör själv', byra:'Har byrå'};
 const MOADMIN = ['sales_manager', 'ceo', 'admin'];
 const moFor = n => String(n || '').split(' ')[0];
 const moAdmin = () => (ND.jag.roller || []).some(r => MOADMIN.includes(r));
-const moFarUtfall = k => !!k.mote && (k.mote.hallsAv === ND.jag.id || moAdmin());
-// Speglar serverns farRadera: det öppna mötets bokare eller en chef. Ett avslutat möte i historiken raderar bara en chef (moAdmin).
-const moFarRadera = m => !!m && (m.bokatAv === ND.jag.id || moAdmin());
+// Speglar serverns arMedPaMote: bokaren, hållaren eller en kollega på mötet (m.med, utan hållaren).
+const moArMed = m => m.bokatAv === ND.jag.id || m.hallsAv === ND.jag.id || (m.med || []).some(p => p.id === ND.jag.id);
+const moFarUtfall = k => !!k.mote && (moArMed(k.mote) || moAdmin());
+// Speglar serverns farRadera: de som är med på det öppna mötet, eller en chef. Ett avslutat möte i historiken raderar bara en chef (moAdmin).
+const moFarRadera = m => !!m && (moArMed(m) || moAdmin());
 const moChef = () => !!(ndMo() && ndMo().chef);
-// Serverns farSe släpper bara igenom det öppna mötets bokare och hållare, eller en chef: bara de ser Bekräftat, Flyttat och Avbokat.
-const moFarMote = k => !!k.mote && (k.mote.bokatAv === ND.jag.id || k.mote.hallsAv === ND.jag.id || moChef());
+// Serverns farSe släpper bara igenom de som är med på det öppna mötet, eller en chef: bara de ser Bekräftat, Flyttat och Avbokat.
+const moFarMote = k => !!k.mote && (moArMed(k.mote) || moChef());
 
 /* ---------- Kopplingen (A12) ----------
    Möten är en egen vy i navet: NDVY och NDKOPPLAD (som Tid), ett val under Försäljning direkt efter Leads, med en

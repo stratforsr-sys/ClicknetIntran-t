@@ -14,6 +14,20 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "moten-alla-som-ar-med",
+    rubrik: "Alla som är med på ett möte har det i Möten",
+    ingress: "Den som bokade mötet, den som håller det och kollegorna du lagt till ser mötet på sin tavla och kan göra samma saker med det.",
+    text: `Lägger du till en kollega på ett möte kommer mötet nu också på kollegans tavla i **Möten**,
+inte bara i kalendern. Tar du bort kollegan försvinner mötet från hens tavla.
+
+Alla som är med på mötet gör samma saker med det: **Bekräftat**, **Flyttat**, **Avbokat**,
+**Ändra**, **Hållet** och **Uteblev**, och **Radera mötet** så länge det inte fått ett utfall.
+Förut kunde bara den som höll mötet sätta utfallet, och bara den som bokade det kunde radera det.`,
+    datum: "2026-11-04",
+    roller: [],
+    href: "/moten",
+  },
+  {
     slug: "fliken-bar-navets-marke",
     rubrik: "Fliken i webbläsaren bär navets märke",
     ingress: "Nav i en flik i datorn visar nu navet, inte Clicknets muspekare.",

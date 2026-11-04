@@ -5,6 +5,44 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-04 · Möten: alla som är med på ett möte har det på tavlan och gör samma saker (direkt på `main`, 0286 KÖRD)
+
+**Beställaren:** "Möten, när de bokas, så den som bokar den och den som håller i den ska ha mötet i sina mötesvyn, och
+ifall man lägger till en till kollega så ska den också ha mötet i mötesvyn. Alla ska kunna göra samma saker med mötet."
+
+**Orsaken.** Vem som ser ett kort avgörs av `mote_kedja.deltagare` (RLS i 0260, vyn `mote_kort`). Triggern
+`mote_efter_andring` lade bara in `bokat_av` och `halls_av`. Kollegorna från 2cb2557 står bara som deltagare i
+kalenderhändelsen, så de fick mötet i Kalendern men inte i Möten. I produktionen: Mick var kollega på Göteborgs Premium
+Flytt, och RLS gav honom tre kort av fyra. Bokare och hållare fanns redan i deltagarna på alla öppna möten. Rättigheterna
+skilde sig också: bara hållaren satte utfall, bara bokaren raderade, och en kollega fick ingenting.
+
+**0286 (körd 2026-11-04 14:35 UTC).** `mote_kedja_deltagare(kedja)` är regeln på ett ställe: de som bokat eller hållit
+något av kedjans möten och kollegorna i mötenas händelser. `mote_efter_andring` lägger till kollegorna; byter mötet
+händelse räknas kedjan om. Den nya triggern `mote_narvaro_efter_andring` på `calendar_attendee` lägger till en kollega
+som kommer in och räknar om när en tas bort, oavsett vilken `lk_*` som skriver. `mote_radera` räknar om med regeln (förr
+tappade den kollegorna). Att lägga till är säkert vid samtidiga skrivningar, att räkna om inte helt, så omräkning sker
+bara när någon ska bort. Index `mote_event_id_idx` för uppslaget. Bakåtfyllningen lägger bara till; dagens deltagare var
+en delmängd av regeln i alla kedjor. Provad först i en återrullad transaktion: kollega in/ut, bokaren som också är
+kollega står kvar, händelsen bort/på, `mote_radera` med två möten, och att ingen ny funktion är körbar för anon eller
+authenticated.
+
+**Rättigheterna.** `arMedPaMote` (bokaren, hållaren, kollegorna) i motenforma.ts. `farSe`/`farBekrafta`, `farSattaUtfall`
+och `farRadera` för ett öppet möte gäller alla tre; chefernas regler är som förut, och ett möte med utfall raderas bara av
+en säljchef. `MoteParter.med` är obligatoriskt, så en anropare som glömmer kollegorna fälls av tsc. `hamtaMote` läser
+kollegorna ur `calendar_attendee`. Klienten: `moArMed` bakom `moFarMote`, `moFarUtfall` och `moFarRadera`
+(patch: `~/nav2-utkast/delar/moten-kollegor/patch-klient.py`).
+
+**Prov.** `tests/moten.mjs` grönt, och de nya fallen röda på den gamla motenforma. tsc på de ändrade filerna: samma 134
+fel (saknade moduler) före och efter, och ett planterat fel fälldes. Lokal provsida med fetch-stubbe: som kollega på
+någon annans möte syns Bekräftat, Flyttat, Avbokat, Hållet, Uteblev, Ändra och Radera mötet (förut "Albins möte" och
+"Väntar på Albin"); på ett möte man inte är med på står "Albins möte" kvar.
+
+**Framåt.** Kollegan får kalenderns inbjudan men ingen Möten-notis (`mote-bokat` går till hållaren). Vem som räknas som med
+står nu på två ställen som måste följas åt: `mote_kedja_deltagare` (vem ser kortet) och `arMedPaMote` (vem gör något med
+mötet).
+
+---
+
 ## 2026-11-03 kväll och 2026-11-04 · Uppgifter: projektets och mallens formulär stängs efter Spara (MERGAD `3d63b19`, ingen migration)
 
 **Beställaren:** "När jag lägger till ett projekt i uppgiftsvyn i nav och sen trycker på skapa projekt så stannar den

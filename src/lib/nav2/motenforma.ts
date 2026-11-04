@@ -161,7 +161,8 @@ export function bolagsDoman(ra: string | null): string | null {
 /* ------------------------------------------------------------------------ */
 
 export type Aktor = { id: string; roller: string[] };
-export type MoteParter = { bokat_av: string; halls_av: string };
+/** `med`: kollegorna på mötet, de anställda i kalenderhändelsen (hållaren får stå med). */
+export type MoteParter = { bokat_av: string; halls_av: string; med: readonly string[] };
 
 /** Chef: får se alla möten. */
 export const CHEF_ROLLER = ["team_lead", "sales_manager", "ceo", "admin"] as const;
@@ -177,17 +178,22 @@ export const arHallare = (roller: readonly string[] | null | undefined): boolean
 
 const harRoll = (u: Aktor, lista: readonly string[]): boolean => u.roller.some((r) => lista.includes(r));
 
-export const farSe = (u: Aktor, m: MoteParter): boolean => u.id === m.bokat_av || u.id === m.halls_av || harRoll(u, CHEF_ROLLER);
+/**
+ * Med på mötet: den som bokade det, den som håller det och kollegorna. Beställaren 2026-11-04: alla tre gör samma saker
+ * med mötet. Samma krets är med i kedjan och ser kortet (`mote_kedja_deltagare`, 0286).
+ */
+export const arMedPaMote = (u: Aktor, m: MoteParter): boolean => u.id === m.bokat_av || u.id === m.halls_av || m.med.includes(u.id);
+
+export const farSe = (u: Aktor, m: MoteParter): boolean => arMedPaMote(u, m) || harRoll(u, CHEF_ROLLER);
 /** Samma krets som får se mötet får bekräfta det. */
 export const farBekrafta = (u: Aktor, m: MoteParter): boolean => farSe(u, m);
-export const farSattaUtfall = (u: Aktor, m: MoteParter): boolean => u.id === m.halls_av || harRoll(u, UTFALL_ROLLER);
+export const farSattaUtfall = (u: Aktor, m: MoteParter): boolean => arMedPaMote(u, m) || harRoll(u, UTFALL_ROLLER);
 /**
- * Radera ett möte (V6a). Utan utfall: den som bokade det, eller en säljchef. Med utfall: bara en säljchef, eftersom ett
- * avslutat möte är underlag för statistiken och historiken. En teamledare räcker inte, och att hålla mötet utan att ha bokat
- * det räcker inte heller.
+ * Radera ett möte (V6a). Utan utfall: den som är med på mötet, eller en säljchef. Med utfall: bara en säljchef, eftersom ett
+ * avslutat möte är underlag för statistiken och historiken. En teamledare som inte är med räcker inte.
  */
 export const farRadera = (u: Aktor, m: MoteParter & { utfall: string | null }): boolean =>
-  harRoll(u, UTFALL_ROLLER) || (m.utfall === null && u.id === m.bokat_av);
+  harRoll(u, UTFALL_ROLLER) || (m.utfall === null && arMedPaMote(u, m));
 
 /* ------------------------------------------------------------------------ */
 /* Art och datum                                                             */

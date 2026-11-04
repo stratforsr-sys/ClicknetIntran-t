@@ -62,7 +62,8 @@ export const dynamic = "force-dynamic";
  * ===========================================================================
  * DEL 1 (A6): `uppslag`, `lediga`, `boka` och `paminn`.
  * DEL 2 (A7): mötets knappar `bekrafta`, `flytta`, `avboka`, `utfall`, `kund`, `nej`.
- *   `radera` (V6a): den som bokade ett öppet möte, eller en säljchef (också när mötet har utfall), raderar det. Allt i databasen i `mote_radera` (0268).
+ *   `radera` (V6a): de som är med på ett öppet möte, eller en säljchef (också när mötet har utfall), raderar det. Allt i databasen i `mote_radera` (0268).
+ *   Med på mötet (2026-11-04): bokaren, hållaren och kollegorna i kalenderhändelsen. Alla tre får göra samma saker (`arMedPaMote`).
  *   `andra` (2026-11-03): ändra ett öppet möte, bara de fält som skickas (se `andra`).
  * DEL 3 (A8): uppföljningen `inget_svar` och `prova_igen`.
  * `samtal` (B4): samtalen bakom statistikens tal, sina egna eller (chef) allas. En okänd handling svarar 400.
@@ -181,13 +182,19 @@ export async function POST(request: Request) {
     bekraftat_av: string | null;
     utfall: string | null;
     antal_flyttningar: number;
+    /** Kollegorna i kalenderhändelsen (läses av `hamtaMote`, står inte på mötesraden). */
+    med: string[];
   };
   type KedjaRad = { id: string; bolag_id: string; deltagare: string[]; avslut: string | null; uppfoljning_andrad: string | null; inget_svar_i_rad: number };
   const KEDJA_FALT = "id, bolag_id, deltagare, avslut, uppfoljning_andrad, inget_svar_i_rad";
 
   const hamtaMote = async (id: string): Promise<MoteRad | null> => {
     const { data } = await db.from("mote").select(MOTE_FALT).eq("id", id).maybeSingle();
-    return (data as unknown as MoteRad | null) ?? null;
+    const m = (data as unknown as Omit<MoteRad, "med"> | null) ?? null;
+    if (!m) return null;
+    if (!m.event_id) return { ...m, med: [] };
+    const { data: a } = await db.from("calendar_attendee").select("employee_id").eq("event_id", m.event_id).not("employee_id", "is", null).limit(200);
+    return { ...m, med: ((a ?? []) as { employee_id: string }[]).map((x) => x.employee_id) };
   };
   const hamtaKedja = async (id: string): Promise<KedjaRad | null> => {
     const { data } = await db.from("mote_kedja").select(KEDJA_FALT).eq("id", id).maybeSingle();
@@ -780,7 +787,7 @@ export async function POST(request: Request) {
     if ("res" in h) return h.res;
     const m = h.m;
     // Avboka kräver bara `farSe` (prövat ovan); ett utfall, också Avbokat som utfall, kräver `farSattaUtfall`.
-    if (!avboka && !farSattaUtfall(aktorn, m)) return svar({ fel: "Bara den som håller mötet eller en säljchef sätter utfallet." }, 403);
+    if (!avboka && !farSattaUtfall(aktorn, m)) return svar({ fel: "Bara de som är med på mötet eller en säljchef sätter utfallet." }, 403);
     if (m.utfall) return svar({ fel: "Mötet har redan fått ett utfall." }, 409);
 
     const kedja = await hamtaKedja(m.kedja_id);
@@ -918,7 +925,7 @@ export async function POST(request: Request) {
     if (!r.ok) return svar({ fel: r.fel }, 400);
     const m = await hamtaMote(r.varden.mote);
     if (!m) return svar({ fel: "Mötet finns inte." }, 404);
-    if (!farRadera(aktorn, m)) return svar({ fel: "Bara den som bokade mötet kan radera det, och bara innan det fått ett utfall. Ett möte med utfall raderas av en säljchef." }, 403);
+    if (!farRadera(aktorn, m)) return svar({ fel: "Bara de som är med på mötet kan radera det, och bara innan det fått ett utfall. Ett möte med utfall raderas av en säljchef." }, 403);
 
     const { data, error } = await db.rpc("mote_radera", { p_mote: m.id, p_bara_oppet: m.utfall === null });
     if (error) return svar({ fel: "Mötet kunde inte raderas." }, 500);
@@ -1184,7 +1191,7 @@ export async function POST(request: Request) {
       if (!m) return svar({ fel: "Mötet finns inte." }, 404);
       if (m.kedja_id !== v.kedja) return svar({ fel: "Mötet hör inte till kedjan." }, 400);
       if (!farSe(aktorn, m)) return svar({ fel: "Du har inte tillgång till det här mötet." }, 403);
-      if (!farSattaUtfall(aktorn, m)) return svar({ fel: "Bara den som håller mötet eller en säljchef sätter utfallet." }, 403);
+      if (!farSattaUtfall(aktorn, m)) return svar({ fel: "Bara de som är med på mötet eller en säljchef sätter utfallet." }, 403);
       if (m.utfall) return svar({ fel: "Mötet har redan fått ett utfall." }, 409);
       const kk = await hamtaKedja(v.kedja);
       if (!kk) return svar({ fel: "Kedjan finns inte." }, 404);
