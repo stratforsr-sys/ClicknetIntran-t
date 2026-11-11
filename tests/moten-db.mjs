@@ -959,6 +959,127 @@ async function main() {
       return r && r.kedja_borta === true;
     });
 
+    // ---- 0287: bekräftelse, nivå och mötesprovision -----------------------
+    {
+    sektion("0287: villkoren på mote");
+    const bolagP = await ett(`insert into mote_bolag (namn, kalla) values ('PROV moten 0287 AB', 'prov') returning id`);
+    const kedjaP = await ett(`insert into mote_kedja (bolag_id) values ($1) returning id`, [bolagP.id]);
+    const BOK = await anstalld("salesperson", "Bokare");
+    const HALL = await anstalld("salesperson", "Hallare");
+    const EKO = await anstalld("finance", "Ekonomi");
+    const moteP = await ett(
+      `insert into mote (kedja_id, bokat_av, halls_av, mote_tid, kalla, art)
+       values ($1, $2, $3, now() - interval '2 hours', 'prov', 'ny') returning id`,
+      [kedjaP.id, BOK.id, HALL.id],
+    );
+    await ok("forsok börjar på 0", async () => (await ett(`select forsok from mote where id = $1`, [moteP.id])).forsok === 0);
+    await ok("forsok = -1 ger 23514", async () =>
+      (await felkod(`update mote set forsok = -1 where id = $1`, [moteP.id])) === "23514");
+    await ok("nivå på ett möte utan utfall ger 23514", async () =>
+      (await felkod(`update mote set niva = 'kvalificerat', niva_nar = now() where id = $1`, [moteP.id])) === "23514");
+    await ok("okänd nivå ger 23514", async () =>
+      (await felkod(`update mote set utfall = 'hallet', utfall_nar = now(), niva = 'toppen', niva_nar = now() where id = $1`, [moteP.id])) === "23514");
+    await ok("nivå utan niva_nar ger 23514", async () =>
+      (await felkod(`update mote set utfall = 'hallet', utfall_nar = now(), niva = 'hallet' where id = $1`, [moteP.id])) === "23514");
+    await ok("nivå på ett uteblivet möte ger 23514", async () =>
+      (await felkod(`update mote set utfall = 'uteblev', utfall_nar = now(), niva = 'hallet', niva_nar = now() where id = $1`, [moteP.id])) === "23514");
+    await ok("nivå på ett hållet möte går (villkoret avvisar inte allt)", async () =>
+      (await felkod(`update mote set utfall = 'hallet', utfall_nar = now(), niva = 'kvalificerat', niva_nar = now() where id = $1`, [moteP.id])) === null);
+    await ok("moten.galler-fran finns och är en tid", async () => {
+      const r = await ett(`select value from nav_setting where key = 'moten.galler-fran'`);
+      return r && typeof r.value === "string" && !Number.isNaN(Date.parse(r.value));
+    });
+
+    sektion("0287: mote_provision");
+    const rad = (o = {}) => ({
+      mote_id: moteP.id, employee_id: BOK.id, niva: "kvalificerat", belopp: 600, mojligt: 600, skal: null,
+      satser: { kvalificerat: 600, hallet: 300 }, delat_med: null, manad: "2026-11-01", del: "hel", ...o,
+    });
+    const laggIn = (r) => felkod(
+      `insert into mote_provision (mote_id, employee_id, niva, belopp, mojligt, skal, satser, delat_med, manad, del)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [r.mote_id, r.employee_id, r.niva, r.belopp, r.mojligt, r.skal, JSON.stringify(r.satser), r.delat_med, r.manad, r.del],
+    );
+    await ok("en giltig rad går in", async () => (await laggIn(rad())) === null);
+    await ok("både nivå och skäl ger 23514", async () => (await laggIn(rad({ employee_id: HALL.id, skal: "Avbokat" }))) === "23514");
+    await ok("varken nivå eller skäl ger 23514", async () => (await laggIn(rad({ employee_id: HALL.id, niva: null }))) === "23514");
+    await ok("manad som inte är den 1:a ger 23514", async () => (await laggIn(rad({ employee_id: HALL.id, manad: "2026-11-02" }))) === "23514");
+    await ok("negativt belopp ger 23514", async () => (await laggIn(rad({ employee_id: HALL.id, belopp: -1 }))) === "23514");
+    await ok("okänd del ger 23514", async () => (await laggIn(rad({ employee_id: HALL.id, del: "tredjedel" }))) === "23514");
+    await ok("samma möte och person två gånger ger 23505", async () => (await laggIn(rad())) === "23505");
+
+    sektion("0287: RLS på mote_provision");
+    // En rad för hållaren också, så att bokaren har något att inte se.
+    await laggIn(rad({ employee_id: HALL.id, niva: null, skal: "Avbokat", belopp: 0 }));
+    const antalRader = (anst) => somAnstalld(anst.authId, async () =>
+      (await db.query(`select employee_id from mote_provision where mote_id = $1`, [moteP.id])).rows.map((r) => r.employee_id));
+    await ok("bokaren ser bara sin egen rad", async () => {
+      const r = await antalRader(BOK);
+      return r.length === 1 && r[0] === BOK.id;
+    });
+    await ok("ekonomi ser alla rader", async () => (await antalRader(EKO)).length === 2);
+    await ok("bokaren kan inte skriva", async () =>
+      somAnstalld(BOK.authId, async () => (await laggIn(rad({ employee_id: EKO.id }))) !== null));
+    await ok("ekonomi kan inte skriva", async () =>
+      somAnstalld(EKO.authId, async () => (await laggIn(rad({ employee_id: EKO.id }))) !== null));
+
+    sektion("0287: mote_las_provision");
+    const moteL = await ett(
+      `insert into mote (kedja_id, bokat_av, halls_av, mote_tid, kalla, art, utfall, utfall_nar)
+       values ($1, $2, $3, now() - interval '3 hours', 'prov', 'ny', 'hallet', now()) returning id`,
+      [kedjaP.id, BOK.id, HALL.id],
+    );
+    const raderL = JSON.stringify([{ employee_id: BOK.id, niva: "kvalificerat", belopp: 600, mojligt: 600, skal: null,
+      satser: { kvalificerat: 600, hallet: 300 }, delat_med: null, manad: "2026-11-01", del: "hel" }]);
+    const svarL = JSON.stringify([{ id: "beslutsfattare", text: "Var rätt beslutsfattare med?", ja: true }]);
+    const las = () => felkod(`select public.mote_las_provision($1, 'kvalificerat', $2::jsonb, $3, $4::jsonb)`, [moteL.id, svarL, HALL.id, raderL]);
+    await ok("första låsningen går", async () => (await las()) === null);
+    await ok("mötet har nivå, svar och låstid", async () => {
+      const r = await ett(`select niva, niva_svar, niva_av, provision_last_nar from mote where id = $1`, [moteL.id]);
+      return r.niva === "kvalificerat" && Array.isArray(r.niva_svar) && r.niva_av === HALL.id && r.provision_last_nar !== null;
+    });
+    await ok("raden finns med beloppet", async () => {
+      const r = await ett(`select belopp, del from mote_provision where mote_id = $1`, [moteL.id]);
+      return Number(r.belopp) === 600 && r.del === "hel";
+    });
+    await ok("andra låsningen ger P0409", async () => (await las()) === "P0409");
+    await ok("och inga nya rader", async () =>
+      (await ett(`select count(*)::int as n from mote_provision where mote_id = $1`, [moteL.id])).n === 1);
+    await ok("ett tappat möte låses utan nivå", async () => {
+      const t = await ett(
+        `insert into mote (kedja_id, bokat_av, halls_av, mote_tid, kalla, art, utfall, utfall_nar)
+         values ($1, $2, $3, now() - interval '4 hours', 'prov', 'ny', 'uteblev', now()) returning id`,
+        [kedjaP.id, BOK.id, HALL.id],
+      );
+      const rader = JSON.stringify([{ employee_id: BOK.id, niva: null, belopp: 0, mojligt: 600, skal: "Inte bekräftat före mötet",
+        satser: { kvalificerat: 600, hallet: 300 }, delat_med: null, manad: "2026-11-01", del: "hel" }]);
+      const kod = await felkod(`select public.mote_las_provision($1, null, null, $2, $3::jsonb)`, [t.id, HALL.id, rader]);
+      const m = await ett(`select niva, provision_last_nar from mote where id = $1`, [t.id]);
+      return kod === null && m.niva === null && m.provision_last_nar !== null;
+    });
+    await ok("nivå på ett möte som inte hölls ger P0409", async () => {
+      const t = await ett(
+        `insert into mote (kedja_id, bokat_av, halls_av, mote_tid, kalla, art, utfall, utfall_nar)
+         values ($1, $2, $3, now() - interval '5 hours', 'prov', 'ny', 'avbokat', now()) returning id`,
+        [kedjaP.id, BOK.id, HALL.id],
+      );
+      return (await felkod(`select public.mote_las_provision($1, 'hallet', '[]'::jsonb, $2, '[]'::jsonb)`, [t.id, HALL.id])) === "P0409";
+    });
+    await ok("authenticated får inte anropa funktionen", async () =>
+      somAnstalld(HALL.authId, async () => (await las()) === "42501"));
+    await ok("funktionen: security definer, search_path, bara service_role", async () => {
+      const r = await ett(
+        `select p.prosecdef, p.proconfig,
+                has_function_privilege('anon', p.oid, 'execute') as anon,
+                has_function_privilege('authenticated', p.oid, 'execute') as auth,
+                has_function_privilege('service_role', p.oid, 'execute') as service
+           from pg_proc p where p.oid = 'public.mote_las_provision(uuid,text,jsonb,uuid,jsonb)'::regprocedure`,
+      );
+      return r.prosecdef === true && (r.proconfig ?? []).some((c) => c.startsWith("search_path=")) && !r.anon && !r.auth && r.service === true;
+    });
+
+    }
+
     // ---- B lagger till sina sektioner har ----
   } finally {
     await db.query("rollback").catch(() => {});

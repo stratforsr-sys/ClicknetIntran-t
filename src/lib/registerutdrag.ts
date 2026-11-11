@@ -129,6 +129,7 @@ export const KALLOR: Kalla[] = [
   // lönekostnaden ser du den redan i navet — men den ska med här ändå, för
   // utdraget ska vara fullständigt och inte bara innehålla det som är dolt.
   { tabell: "commission_entry", kolumn: "employee_id", andamal: "Din intjänade provision" },
+  { tabell: "mote_provision", kolumn: "employee_id", andamal: "Din mötesprovision per möte: nivån, beloppet och skälet för ett tappat möte (0287)" },
 
   // 0034 E13 steg 1. Ordern bär kundens uppgifter, men raden handlar om
   // SÄLJAREN: den är underlaget för vad hen tjänat och för volymbonusen.
@@ -595,6 +596,11 @@ export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
   { tabell: "mote", kolumn: "bekraftat_av", skal: "Vem som bekräftade tiden med kunden" },
   { tabell: "mote", kolumn: "utfall_av", skal: "Vem som satte utfallet (hållet, uteblev, avbokat)" },
   { tabell: "mote", kolumn: "resultat_av", skal: "Vem som satte resultatet efter ett hållet möte" },
+  { tabell: "mote", kolumn: "niva_av", skal: "Vem som svarade på kvalificeringsfrågorna (0287); svaren handlar om mötet" },
+  { tabell: "mote_provision", kolumn: "delat_med", skal: "Vem provisionen delades med (0287); raden är den andras provision" },
+  { tabell: "mote_provision", kolumn: "last_av", skal: "Vem som låste mötesprovisionen (0287); raden är bokarens provision" },
+  { tabell: "mote_provision", kolumn: "ifragasatt_av", skal: "Vem som ifrågasatte nivån (0287); raden är bokarens provision" },
+  { tabell: "mote_provision", kolumn: "beslut_av", skal: "Vem som beslutade om en ifrågasatt nivå (0287); raden är bokarens provision" },
   { tabell: "mote_bolag", kolumn: "skapad_av", skal: "Vem som lade upp bolaget — uppgifterna handlar om kunden" },
   { tabell: "mote_kedja", kolumn: "offert_av", skal: "Vem som skickade offerten — kortet handlar om kunden" },
   { tabell: "mote_kedja", kolumn: "avslut_av", skal: "Vem som stängde kortet (affär, nej, avbokat) — kortet handlar om kunden" },

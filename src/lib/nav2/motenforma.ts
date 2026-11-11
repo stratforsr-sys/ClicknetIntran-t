@@ -651,7 +651,7 @@ export const SQL_INGET_SVAR = `update public.mote_kedja
  * igenom resten (`uppslag`, `lediga`, och `samtal` från B4), som bara läser. En okänd handling är
  * ingen skrivning och får sitt vanliga 400.
  */
-export const SKRIVANDE_HANDLINGAR = ["boka", "paminn", "bekrafta", "flytta", "avboka", "utfall", "kund", "nej", "inget_svar", "prova_igen", "radera", "andra"] as const;
+export const SKRIVANDE_HANDLINGAR = ["boka", "paminn", "forsok", "bekrafta", "flytta", "avboka", "utfall", "kund", "nej", "inget_svar", "prova_igen", "radera", "andra"] as const;
 export const arSkrivning = (handling: string): boolean => (SKRIVANDE_HANDLINGAR as readonly string[]).includes(handling);
 
 /**

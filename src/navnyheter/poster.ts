@@ -14,6 +14,20 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "moten-pipeline",
+    rubrik: "Möten är en pipeline som flyttar sig själv",
+    ingress: "Tavlan har fem kolumner: Bokat, Att bekräfta, Bekräftat, Hos säljaren och Avgjort. Ett möte flyttar sig självt när det är dags att ringa kunden och när mötet har hållits.",
+    text: `Två dagar före mötet hamnar kortet i **Att bekräfta**. En röd kant betyder att det ska vara
+bekräftat i dag, en gul i morgon. Får du inte tag på kunden trycker du **Fick inte tag**: mötet ligger kvar
+och försöket syns som en prick på kortet. Du kan också dra kortet till **Bekräftat**, på telefonen genom att
+hålla kvar fingret. När mötestiden har passerat står mötet hos den som höll det tills utfallet är satt, och
+i **Avgjort** ser du månadens möten och de kunder du följer upp. Ett möte som inte har hänt än står inte
+längre som "Utfall saknas" i statistiken.`,
+    datum: "2026-11-11",
+    roller: [],
+    href: "/moten",
+  },
+  {
     slug: "moten-kollegan-far-notis",
     rubrik: "Kollegan på mötet får en notis",
     ingress: "Lägger du in en kollega på ett möte får kollegan en notis i Nav, inte bara en inbjudan i kalendern.",

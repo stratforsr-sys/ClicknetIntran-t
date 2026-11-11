@@ -47,6 +47,7 @@ export const ORDNING: Record<string, readonly string[]> = {
   lecture_signup: ["lecture_id", "employee_id"],
   module_progress: ["employee_id", "module_id"],
   module_rating: ["employee_id", "module_id"],
+  mote_provision: ["employee_id", "mote_id"],
   nav_preference: ["employee_id", "key"],
   nav_skrivnyckel: ["nyckel"],
   news_ack: ["post_id", "employee_id"],

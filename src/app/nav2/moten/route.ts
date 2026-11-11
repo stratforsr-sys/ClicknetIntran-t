@@ -168,7 +168,7 @@ export async function POST(request: Request) {
 
   // Gemensamt för mötets knappar och uppföljningen (A7, A8). Före `switch`: `const` hissas inte.
   const aktorn: Aktor = { id: mig, roller: user.roles as string[] };
-  const MOTE_FALT = "id, kedja_id, event_id, bokat_av, halls_av, mote_tid, langd_min, kalla, mal, nulage, bekraftat_nar, bekraftat_av, utfall, antal_flyttningar";
+  const MOTE_FALT = "id, kedja_id, event_id, bokat_av, halls_av, mote_tid, langd_min, kalla, mal, nulage, bekraftat_nar, bekraftat_av, utfall, antal_flyttningar, forsok, senast_forsok, flyttad_nar";
   type MoteRad = {
     id: string;
     kedja_id: string;
@@ -184,6 +184,10 @@ export async function POST(request: Request) {
     bekraftat_av: string | null;
     utfall: string | null;
     antal_flyttningar: number;
+    /** Försöken att nå kunden (0287). En flytt nollställer dem: nytt fönster, nya försök. */
+    forsok: number;
+    senast_forsok: string | null;
+    flyttad_nar: string | null;
     /** Kollegorna i kalenderhändelsen (läses av `hamtaMote`, står inte på mötesraden). */
     med: string[];
   };
@@ -310,6 +314,8 @@ export async function POST(request: Request) {
     case "paminn":
       return await medNyckel(request, mig, () => paminn());
 
+    case "forsok":
+      return forsok();
     case "bekrafta":
       return await bekrafta();
 
@@ -723,6 +729,34 @@ export async function POST(request: Request) {
     return svar({ ok: "Mötet är bekräftat.", mote: m.id });
   }
 
+  /**
+   * Fick inte tag på kunden: försöket räknas och mötet ligger kvar. Samma rätt som Bekräftat. Villkorad på
+   * det lästa antalet, så att ett dubbelklick ger 409 i stället för två försök.
+   */
+  async function forsok(): Promise<Response> {
+    const r = moteIndata(b);
+    if (!r.ok) return svar({ fel: r.fel }, 400);
+    const h = await moteForSe(r.varden.mote);
+    if ("res" in h) return h.res;
+    const m = h.m;
+    if (!farBekrafta(aktorn, m)) return svar({ fel: "Du har inte tillgång till det här mötet." }, 403);
+    if (m.utfall) return svar({ fel: "Mötet har redan fått ett utfall." }, 409);
+    if (m.bekraftat_nar) return svar({ fel: "Mötet är redan bekräftat." }, 409);
+    const nuIso = new Date().toISOString();
+    const { data, error } = await db
+      .from("mote")
+      .update({ forsok: m.forsok + 1, senast_forsok: nuIso })
+      .eq("id", m.id)
+      .is("utfall", null)
+      .is("bekraftat_nar", null)
+      .eq("forsok", m.forsok)
+      .select("id");
+    if (error) return svar({ fel: "Försöket kunde inte sparas." }, 500);
+    if (((data ?? []) as unknown[]).length === 0) return svar({ fel: "Mötet har ändrats. Ladda om tavlan." }, 409);
+    await skrivHandelse({ actorId: mig, action: "mote.attempt", objectType: "mote", objectId: m.id, meta: { kedja: m.kedja_id, forsok: m.forsok + 1 } });
+    return svar({ ok: "Försöket är sparat. Mötet ligger kvar.", mote: m.id, forsok: m.forsok + 1 });
+  }
+
   async function flyttaMote(): Promise<Response> {
     const r = flyttaIndata(b);
     if (!r.ok) return svar({ fel: r.fel }, 400);
@@ -739,7 +773,7 @@ export async function POST(request: Request) {
     // flytt som någon annan hunnit göra ger 0 rader. Sedan kalendern; fallerar den tas tiden tillbaka.
     const { data, error } = await db
       .from("mote")
-      .update({ mote_tid: ny.toISOString(), antal_flyttningar: m.antal_flyttningar + 1, bekraftat_nar: null, bekraftat_av: null })
+      .update({ mote_tid: ny.toISOString(), antal_flyttningar: m.antal_flyttningar + 1, bekraftat_nar: null, bekraftat_av: null, flyttad_nar: new Date().toISOString(), forsok: 0, senast_forsok: null })
       .eq("id", m.id)
       .is("utfall", null)
       .eq("mote_tid", m.mote_tid)
@@ -751,7 +785,7 @@ export async function POST(request: Request) {
     if (kalFel) {
       const { data: tillbaka } = await db
         .from("mote")
-        .update({ mote_tid: m.mote_tid, antal_flyttningar: m.antal_flyttningar, bekraftat_nar: m.bekraftat_nar, bekraftat_av: m.bekraftat_av })
+        .update({ mote_tid: m.mote_tid, antal_flyttningar: m.antal_flyttningar, bekraftat_nar: m.bekraftat_nar, bekraftat_av: m.bekraftat_av, flyttad_nar: m.flyttad_nar, forsok: m.forsok, senast_forsok: m.senast_forsok })
         .eq("id", m.id)
         .eq("mote_tid", ny.toISOString())
         .select("id");
@@ -1027,7 +1061,7 @@ export async function POST(request: Request) {
       if (!Number.isFinite(t.getTime())) return svar({ fel: "Välj en starttid." }, 400);
       if (t.getTime() !== new Date(m.mote_tid).getTime()) nyTid = t;
     }
-    if (nyTid) Object.assign(moteLapp, { mote_tid: nyTid.toISOString(), antal_flyttningar: m.antal_flyttningar + 1, bekraftat_nar: null, bekraftat_av: null });
+    if (nyTid) Object.assign(moteLapp, { mote_tid: nyTid.toISOString(), antal_flyttningar: m.antal_flyttningar + 1, bekraftat_nar: null, bekraftat_av: null, flyttad_nar: new Date().toISOString(), forsok: 0, senast_forsok: null });
 
     // Kollegorna: hela listan som den ska bli, utan hållaren. De nya måste vara anställda (Kalenderns `lk_aktiv`).
     const medFore = [...new Set(narvaro.map((x) => x.employee_id).filter((x): x is string => !!x && x !== m.halls_av))];
@@ -1140,7 +1174,7 @@ export async function POST(request: Request) {
     }
     if (sparat?.andrat.length || utOk.length || inOk.length) efterKalender();
 
-    const falt = [...Object.keys(bolagLapp), ...Object.keys(moteLapp).filter((k) => !["antal_flyttningar", "bekraftat_nar", "bekraftat_av"].includes(k)), ...(platsAndras ? ["plats"] : []), ...(medIn.length || medUt.length ? ["med"] : []), ...(gastAndras ? ["gaster"] : [])];
+    const falt = [...Object.keys(bolagLapp), ...Object.keys(moteLapp).filter((k) => !["antal_flyttningar", "bekraftat_nar", "bekraftat_av", "flyttad_nar", "forsok", "senast_forsok"].includes(k)), ...(platsAndras ? ["plats"] : []), ...(medIn.length || medUt.length ? ["med"] : []), ...(gastAndras ? ["gaster"] : [])];
     await skrivHandelse({
       actorId: mig,
       action: "mote.edited",

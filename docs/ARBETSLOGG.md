@@ -5,6 +5,35 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-11 · Möten: pipelinen, byggsteg 1 av 4 (på `main`, 0287 KÖRD)
+
+**Varför.** Beställaren 2026-11-11: bokaren ska bekräfta mötet ett inställbart antal dagar före, ett möte man inte
+får tag på kunden för ska ändå ligga kvar, utfallen är hållet/uteblev/flyttat/avbokat, bokaren får mötesprovision i
+två nivåer, och tavlan ska vara en pipeline, "så likt deras system som möjligt bara byggt på navets sätt". Nav säljs:
+inget får skrivas för Clicknet ("det kan dupliceras och multipliceras"). Design och plan i
+`~/nav2-utkast/delar/moten/`.
+
+**Besluten.** Lägena och reglerna är fasta för alla installationer, bara namn och tal är inställningar
+(`nav_setting` "moten.*", förvalen neutrala: 2 dagar, två frågor, 0 kr). Reglerna står i en ren modul
+(`motesflode.ts`) som tavlan, rutten och (steg 3) provisionen delar. Fönstret: öppnar N kalenderdagar före
+mötesdagen i installationens tidszon; senast-dagen är dagen före, eller mötesdagen när mötet bokades eller flyttades
+dagen före eller samma dag. Dagaritmetik på datumsträngar, så att sommartiden aldrig flyttar en dag. `mote_kort`
+(0261) har bara öppna kedjor, så månadens avgjorda möten är en egen lista (`avgjorda`); Avgjort-kolumnen har
+uppföljningskedjorna överst ("Följ upp") och månadens möten under, och dess antal räknar bara månadens. Fick inte tag
+(`forsok`) är villkorad på det lästa antalet (dubbelklick = 409) och nekas på ett bekräftat möte. Flytt nollställer
+försöken: nytt fönster, nya försök (de gamla står i händelseloggen). `moten.galler-fran` sätts av 0287, så att gamla
+möten aldrig blir "väntar på bedömning". `mote_provision` läses av den anställda själv, ekonomi
+(`far_hantera_provision`) och admin, som `commission_entry`.
+
+**Provat.** `tests/motesflode.mjs` (midnatt, sommartid, trasiga inställningar, fördelning), `tests/moten-db.mjs`
+155/155 mot databasen (villkoren, RLS, låsningen två gånger = P0409, authenticated nekas), en headless-robot på den
+riktiga sidan med påhittade möten i varje kolumn (`~/nav2-utkast/delar/moten/pipeline-prov.mjs`: antal, kanter,
+prickar, Fick inte tag, …-menyn, dra med mus och med långt tryck på telefon, tomläget, inga konsolfel).
+`npm test` utan rls: röda som också är röda på ren main (`sidor` /kalender-efternamn, `inbaddningar`, och
+`handelselogg` som nu blev grön av rubriken "mote.edited"); `rekrytering` föll en gång och gick sedan igenom två
+gånger (skriver utan transaktion). `rls.mjs`: tre röda i AC-3.26 (sjukdata), som på main. `registerutdrag` grön med
+de nya nycklarna mot employee.
+
 ## 2026-11-11 · Möten: kollegan som läggs in på mötet får notisen (på `main`, ingen migration)
 
 **Varför.** Efter passet 2026-11-04 (alla som är med ser mötet) frågade vi om kollegorna också ska få Mötens notis.
