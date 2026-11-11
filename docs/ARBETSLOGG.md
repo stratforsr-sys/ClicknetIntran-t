@@ -5,6 +5,34 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-11 · Uppgifter: en uppgift utan deadline läggs inte i dag och blir aldrig försenad (på `main`, ingen migration)
+
+**Varför.** Beställaren: "när jag lägger upp en uppgift i nav utan tidslinje alltså deadline så kan ju inte uppgiften
+ge mig att deadline har gått ut", och "då ska de inte läggas i göra idag". `37af957` (2026-11-02) lät Nav 2.0 skicka
+`utan_dag: "idag"`, och `tolkaSnabbrad` gav då varje rad utan dag dagens datum som deadline, så att raden syntes där
+den skrevs. Dagen efter visade Hem "Försenad · skulle vara klar i går", och raden stod i Att göra i dag. Webbläsarens
+logik för `due_date` null var redan rätt: den lägger raden under Kommande och aldrig som försenad.
+
+**Ändringen.** `tolkaSnabbrad` (`src/lib/uppgifter.ts`): med `klockslagetsDag` får en rad utan dag ingen deadline;
+bara ett klockslag ("Möte 14:00", "kl 14") ger raden den dagen, och "någon gång" plockas ur rubriken. Mönstren
+`KLOCKSLAG` och `KL_TIMME` är desamma som plockar tiden. `/nav2/uppgifter` svarar på skapa med `dag` och `egen` ur
+den sparade raden. Utkastet (patchat med eget skript, som förut): snabbradens kvitto är "Upplagd utan deadline, under
+Kommande." med Visa när alla rader sparades utan dag och till en själv, annars som förut; paletten skickar ingen dag
+("Ny uppgift: … utan deadline", "Lagd i Uppgifter, utan deadline."). Kvittot bygger på serverns svar, eftersom
+webbläsarens `tolka` inte förstår "nästa vecka", "övermorgon", "3/10" eller ISO-datum och då skulle ljuga. Nyhet
+`uppgift-utan-deadline` i `poster.ts`.
+
+**Prov.** `tests/uppgifter.mjs`: utan dag → null; "i dag", "imorgon", "nästa vecka"; "Möte 14:00" och "Ring Kalle
+kl 14" → i dag 14:00; "någon gång"/"nagon gang" → null och ur rubriken; "Ring 20 bolag", "30 min" och "#Nav" ger
+ingen dag. Fyra av dem röda mot mains `uppgifter.ts`, alla gröna med ändringen. Gröna också: genomgang, mallar,
+navnyheter, toast, nav2-omladdning. Previewen byggde grön (`clicknet-6opbbrut9`); ej klickad inloggat.
+
+**Kvar.** Fyra öppna uppgifter av Zen (3–4 nov) bär datumet de fick av `utan_dag: "idag"` och står som försenade;
+de rättas bara på ja. Första steget, Kurs, Rutin och coachningsmålet lägger fortfarande i dag, eftersom knappen säger
+det: egna beslut.
+
+---
+
 ## 2026-11-04 · Säljtavlan: ORSAKEN. Tavlan underkände varje bild från servern och laddade om sig själv (direkt på `main`, ingen migration)
 
 **Mätningen.** Efter `2bb3b4f` startade båda skärmarna (samma tv, Google-appens webbläsare, 1132×637 @1,33) med

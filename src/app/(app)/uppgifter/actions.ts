@@ -257,8 +257,9 @@ export async function skapaUppgift(_prev: UppgiftState, form: FormData): Promise
     let rest = "";
 
     if (snabbrad) {
-      // Nav 2.0 skickar utan_dag: en rad utan dag laggs i dag. Gamla snabbraden
-      // skickar det inte, och dar blir raden utan datum som forut.
+      // Nav 2.0 skickar utan_dag. En rad utan dag far da ingen deadline, men ett
+      // klockslag utan dag ("Mote 14:00") blir i dag och "nagon gang" lamnar
+      // rubriken (beställaren 2026-11-11). Gamla snabbraden skickar det inte.
       const tolkad = tolkaSnabbrad(snabbrad, idag, text(form, "utan_dag") === "idag" ? idag : undefined);
       titel = tolkad.titel;
       due = tolkad.due_date;

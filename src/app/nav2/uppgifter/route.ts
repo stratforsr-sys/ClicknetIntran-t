@@ -153,10 +153,17 @@ export async function POST(request: Request) {
     switch (handling) {
       case "skapa": {
         // Snabbraden tolkas av repots tolkaSnabbrad; en deluppgift har parent_id.
-        // En rad utan dag läggs i dag, som utkastet lovar (beställaren 2026-11-02).
+        // En rad utan dag får ingen deadline och läggs inte i dag (beställaren 2026-11-11,
+        // som ersätter 2026-11-02); bara ett klockslag utan dag blir i dag. Se tolkaSnabbrad.
         const s = await skapaUppgift({}, form(b.rad ? { rad: b.rad, utan_dag: "idag" } : { title: b.titel, parent_id: b.foralder ?? null, priority: b.prio ?? 3, due_date: b.dag ?? null }));
         // Gul 17 (produktionsprovet 2026-10-30): uppgiften lämnade ingen rad i händelseloggen.
         if (!s.fel) await db.from("audit_log").insert({ actor_id: mig, action: "task.created", object_type: "task", object_id: s.id ?? null });
+        // Kvittot säger var raden hamnade, ur det som sparades: snabbraden i webbläsaren känner inte
+        // alla dagar serverns tolk gör ("nästa vecka", "3/10"), och en gissning hade lovat fel lista.
+        if (!s.fel && s.id) {
+          const { data: rad } = await db.from("task").select("due_date, assignee_id").eq("id", s.id).maybeSingle();
+          if (rad) return svar({ ok: s.ok ?? "Uppgiften är upplagd.", id: s.id, dag: rad.due_date ?? null, egen: rad.assignee_id === mig });
+        }
         return fran(s, "Uppgiften är upplagd.");
       }
       case "dela-upp": {
