@@ -5,6 +5,58 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-11 · Ordersökningen söker på allt: org.nr, telefon, fakturanummer och Inkios nummer (på `main`, ingen migration)
+
+**Varför.** Beställaren: "i order ska jag kunna söka upp ordrar på orgnummer, telefonnummer eller fakturanummer. tex i
+en order när en faktura läggs upp från inkio så står det fakturans nummer, man ska kunna söka på det också. Gör
+sökningen ordentligt så att man kan söka på typ allting." Sökfältet i Order letade bara i bolag, kontakt, ort, säljare
+och ordernummer, och ett org.nr var spärrat med en ruta ("går inte att söka på") sedan ordervyns K27-beslut.
+
+**Vad sökningen letar i nu.** Allt på ordern: ordernummer, bolag, kontakt, ort, säljare, paket, org.nr, telefon, mejl,
+gatuadress, postnummer, tjänster, anteckningen, den fria orderns skäl och makuleringens skäl. Dessutom Inkios kund-
+och ordernummer på ordern, och kundens nummer i Inkio: fakturor och kreditfakturor, avtal (CTR-), Inkio-order (SO-)
+och ärenden (TKT-). Flera ord ska alla finnas ("hedboms 1158"). Siffror jämförs utan tecken, så 070-123 45 67,
+0701234567 och +46 70 123 45 67 är samma nummer, och CTR-2026-00096 hittas som ctr202600096 eller 00096. Siffror
+kräver minst tre tecken utom för ordernumret, som börjar som förut.
+
+**Fakturanumren fanns redan i Nav.** Inkio-bevakningen (0277) läser varje post i kundens historik till `crm_handelse`,
+och en faktura har numret i `data.invoice_number` (= `om_titel`), avtal och order i `om_nummer`. Inget nytt anrop till
+Inkio, ingen ny tabell: `byggOrder` läser posterna som tjänst för urvalets organisationsnummer
+(`hamtaNummer`, typerna Invoice, Contract, Sales Order och Ticket, `raderad is null`), och `formaNummer`
+(`src/lib/nav2/ordersok.ts`) gör en rad per nummer med belopp, förfallodag och läge i Inkios ord (tabellerna exporteras
+nu ur `ekonomi.ts`). Svaret får `nummer` per org.nr, och `ndOrdStart` lägger kundens nummer på varje order. Posterna hör
+till kunden, så ett fakturanummer hittar kundens alla order (tre order delar kund i dag). Mot produktionens rader
+2026-11-11: 174 poster gav 99 nummer på 29 kunder (26 fakturor, 5 kreditfakturor, 32 avtal, 32 Inkio-order, 4 ärenden);
+faktura 1158 hittar #8.
+
+**K27.** En enskild firmas org.nr är ett personnummer, och skälet till spärren var att en träff på en del av numret låter
+någon fiska fram det siffra för siffra, och att frågan hamnade i adressen. Grenens första version (`87eb379`) släppte
+därför en enskild firmas org.nr bara på hela numret. Efter previewen bestämde beställaren samma dag: "För en enskild
+firma sätt på så att man också kan söka på bara en del av orgnummret precis som aktiebolaget." Nu hittas alla org.nr på
+hela numret eller en del (minst tre siffror), och särregeln (`oPersonnr`, sorten `personnr`) är borta. Sökningen körs i
+webbläsaren över de order RLS redan gett personen och loggas inte. Sex siffror eller fler läggs aldrig i Kopiera länk
+eller `ndOrdLank`, och kvittot säger det. Beslutet står i DECISIONS.md som D-OS1.
+
+**Gränssnittet.** Sökfältet säger "Sök bolag, org.nr, telefon, fakturanummer…". En träff i något som inte syns på raden
+står under bolaget, i tabellen och i telefonens kort: "Faktura 1158 · 7 463 kr · förfaller 19 dec · skickad", "Telefon
+070-123 45 67", eller ett utdrag runt träffen i en lång anteckning. Den bästa träffen per ord visas, högst två, och
+markeringen blinkar till en gång när träffen dyker upp (inte vid minskad rörelse). Synliga ord markeras som förut,
+nu alla ord. Utan träff säger listan vad sökningen letar i. Utkastets anteckning 245 är omskriven.
+
+**Prov.** `tests/nav2-ordersok.mjs` (i `npm test`, 89 kontroller): `formaNummer`, och sökningens rena del som plockas
+ur utkastet mellan `/* ordersok: start` och `/* ordersok: slut */`. Patchen av utkastet är skriven som ett idempotent
+skript (`~/nav2-utkast/delar/ordersok/patch_utkast.py`, `patch_utkast2.py` för den enskilda firman och `patch_server.py`
+för `order.ts`). Typkontroll med repots
+låsta versioner av Supabase, Next och TypeScript: samma fem fel som main (moduler som saknas lokalt), inga nya. I
+headless Chrome mot utkastets exempeldata som Admin: telefon med och utan +46, helt och delvis org.nr, anteckning, två
+ord, makuleringens skäl, ordernummer, ingen träff och en del av ett personnummer, i 1440 och 390 bredd, inga skriptfel.
+Repots övriga prov: 83 gröna; de nio röda är databasprov som saknar `pg` eller nycklar i klonen, likadant på main.
+
+**Kvar.** Mergad till `main` 2026-11-11 på beställarens ja ("Kör och pusha ut allting"), som en commit ihop med grenens två steg;
+ej provad i gränssnittet med riktiga data.
+
+---
+
 ## 2026-11-11 · Uppgifter: en uppgift utan deadline läggs inte i dag och blir aldrig försenad (på `main`, ingen migration)
 
 **Varför.** Beställaren: "när jag lägger upp en uppgift i nav utan tidslinje alltså deadline så kan ju inte uppgiften

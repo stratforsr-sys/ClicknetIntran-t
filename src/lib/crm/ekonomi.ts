@@ -248,14 +248,14 @@ const HANTERING: Record<string, { text: string; ton: Ton }> = {
   "Needs Undo": { text: "Stoppa faktureringen", ton: "danger" },
   Cancelled: { text: "Avbruten", ton: "neutral" },
 };
-const ORDERSTATUS: Record<string, { text: string; ton: Ton }> = {
+export const ORDERSTATUS: Record<string, { text: string; ton: Ton }> = {
   Draft: { text: "Utkast", ton: "neutral" },
   Confirmed: { text: "Bekräftad", ton: "info" },
   "To Deliver": { text: "Att leverera", ton: "signal" },
   Delivered: { text: "Levererad", ton: "ok" },
   Cancelled: { text: "Avbruten", ton: "danger" },
 };
-const AVTALSTATUS: Record<string, { text: string; ton: Ton }> = {
+export const AVTALSTATUS: Record<string, { text: string; ton: Ton }> = {
   Draft: { text: "Utkast", ton: "neutral" },
   Scheduled: { text: "Schemalagd", ton: "info" },
   Active: { text: "Aktiv", ton: "ok" },
@@ -264,7 +264,7 @@ const AVTALSTATUS: Record<string, { text: string; ton: Ton }> = {
   Superseded: { text: "Ersatt", ton: "neutral" },
   Terminated: { text: "Uppsagd", ton: "danger" },
 };
-const FAKTURASTATUS: Record<string, { text: string; ton: Ton }> = {
+export const FAKTURASTATUS: Record<string, { text: string; ton: Ton }> = {
   Draft: { text: "Utkast", ton: "neutral" },
   Sent: { text: "Skickad", ton: "info" },
   Paid: { text: "Betald", ton: "ok" },

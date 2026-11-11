@@ -28,6 +28,8 @@ import { gallandeUtkopssats } from "@/lib/utkop";
 import { gallandeFinanssats } from "@/lib/finans";
 import { manadFore, manadsnyckel } from "@/lib/provision";
 import { formaOrder, formaSida, formaUtskrift, svenskTid, type NdOrder, type NdSamtal, type NdSida, type NdUtskrift, type RaOrder, type RaSamtal } from "./orderforma";
+import { NUMMERTYPER, formaNummer, navOrgnr, type NdNummer, type RaNummer } from "./ordersok";
+import { supabaseAdmin } from "@/lib/supabase/server";
 import { SKRIVLAGE } from "./skrivlage";
 
 /**
@@ -98,6 +100,11 @@ export type NdOrderdata = {
   sidor: Record<string, NdSida>;
   /** Sparar vyn (SKRIVLAGE.order)? Annars svarar /nav2/order med lasläge. */
   skriv: boolean;
+  /**
+   * Ordersökningen (2026-11-11): kundernas nummer i Inkio per org.nr — fakturor,
+   * avtal, Inkio-order och ärenden — ur bevakningens kopia (`ordersok.ts`).
+   */
+  nummer: Record<string, NdNummer[]>;
 };
 
 /** Raderna som urvalet saknar kolumner för, för just de order som visas. */
@@ -108,6 +115,37 @@ async function hamtaOrderExtra(supabase: SupabaseClient, ids: string[]): Promise
     ),
   );
   return svar.flatMap((s) => (s.data ?? []) as Record<string, unknown>[]);
+}
+
+/**
+ * Ordersökningen (2026-11-11): kundernas nummer i Inkio, för de kunder hen redan ser.
+ *
+ * Kopian `crm_handelse` (0277) är stängd för inloggade, så den läses som tjänst.
+ * Organisationsnumren kommer ur urvalet, som lästes med användarens token: RLS har
+ * redan sagt vilka kunder hen får se, och kundkortets tidslinje visar samma poster
+ * för samma krets. Går läsningen fel söker listan ändå, bara utan Inkios nummer.
+ */
+async function hamtaNummer(orgnr: (string | null | undefined)[]): Promise<Record<string, NdNummer[]>> {
+  const kunder = [...new Set(orgnr.filter((x): x is string => !!x).map(navOrgnr))];
+  if (!kunder.length) return {};
+  try {
+    const admin = supabaseAdmin();
+    const svar = await Promise.all(
+      delaUpp(kunder, 100).map((del) =>
+        admin
+          .from("crm_handelse")
+          .select("org_number, om_typ, om_titel, om_nummer, slag, skapad, data")
+          .in("org_number", del)
+          .in("om_typ", NUMMERTYPER)
+          .is("raderad", null),
+      ),
+    );
+    for (const s of svar) if (s.error) console.error("ordersok: crm_handelse", s.error.message);
+    return formaNummer(svar.flatMap((s) => (s.data ?? []) as unknown as RaNummer[]));
+  } catch (e) {
+    console.error("ordersok: crm_handelse", e instanceof Error ? e.message : e);
+    return {};
+  }
 }
 
 const SALJANDE_ROLLER = new Set(["salesperson", "sales_manager", "ceo"]);
@@ -146,7 +184,7 @@ export async function byggOrder(supabase: SupabaseClient, user: CurrentUser): Pr
     ]);
 
   const ids = urval.order.map((o) => o.id);
-  const [tjanster, bilagor, samtal, crm, { data: filinfo }, extra, { data: undantagRader }] = await Promise.all([
+  const [tjanster, bilagor, samtal, crm, { data: filinfo }, extra, { data: undantagRader }, nummer] = await Promise.all([
     hamtaTjanster(ids),
     hamtaOrderbilagor(ids),
     hamtaOrdersamtal(ids),
@@ -161,6 +199,8 @@ export async function byggOrder(supabase: SupabaseClient, user: CurrentUser): Pr
     ids.length
       ? supabase.from("saljsamtal_undantag").select("order_id, skal, begart_av, godkant_av").in("order_id", ids)
       : Promise.resolve({ data: [] as { order_id: string; skal: string; begart_av: string; godkant_av: string | null }[] }),
+    // Ordersökningen (2026-11-11): kundernas nummer i Inkio-kopian, samtidigt med resten.
+    hamtaNummer(urval.order.map((o) => o.org_number)),
   ]);
   const undantagFor = new Map(
     ((undantagRader ?? []) as { order_id: string; skal: string; begart_av: string; godkant_av: string | null }[]).map((u) => [u.order_id, u]),
@@ -285,5 +325,6 @@ export async function byggOrder(supabase: SupabaseClient, user: CurrentUser): Pr
       ((sidRader ?? []) as (Parameters<typeof formaSida>[0] & { org_number: string })[]).map((r) => [r.org_number, formaSida(r, idag)]),
     ),
     skriv: SKRIVLAGE.order,
+    nummer,
   };
 }
