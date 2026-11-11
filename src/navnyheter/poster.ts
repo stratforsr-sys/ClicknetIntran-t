@@ -14,6 +14,22 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "ordersok-pa-allt",
+    rubrik: "Sök order på org.nr, telefon och fakturanummer",
+    ingress: "Sökfältet i Order hittar nu en order på nästan allt: org.nr, telefonnummer, mejl, adress, fakturanummer och Inkios nummer.",
+    text: `Skriv det du har framför dig i sökfältet i **Order**: ett org.nr, ett telefonnummer hur det än
+är skrivet (070-123 45 67 eller +46 70 123 45 67), en mejladress, en adress eller ett
+fakturanummer från Inkio. Inkios avtals-, order- och ärendenummer fungerar också, och du kan
+skriva flera ord på en gång, till exempel bolagets namn och ett fakturanummer.
+
+Hittas ordern på något som inte syns i listan står träffen under bolagets namn, till exempel
+**Faktura 1158 · 7 463 kr · förfaller 19 dec**. En enskild firmas org.nr är ett personnummer,
+så det hittas bara när hela numret står i sökfältet.`,
+    datum: "2026-11-11",
+    roller: [],
+    href: "/order",
+  },
+  {
     slug: "saljtavlan-firar-igen",
     rubrik: "Säljtavlan firar varje ny order igen",
     ingress: "En godkänd order spelas nu upp på kontorets tv med namn, belopp och ljud, som den ska.",

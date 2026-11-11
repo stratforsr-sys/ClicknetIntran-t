@@ -639,3 +639,39 @@ Planeringsvyn står kvar oförändrad under `/kalender?vy=planera`.
   avbokats." Påminnelsen går ändå ut på sin tid. En **flyttad** post behåller
   sin påminnelse på den gamla tiden; utkorgen försöker flytta den tre gånger och
   säger sedan till admin.
+
+---
+
+## D-OS1 · Ordersökningen söker på allt, och K27 gäller hela numret
+
+**2026-11-11**, ingen migration. Beställaren: "i order ska jag kunna söka upp
+ordrar på orgnummer, telefonnummer eller fakturanummer … Gör sökningen ordentligt
+så att man kan söka på typ allting."
+
+Sökfältet i Nav 2.0:s Order söker nu i allt på ordern (bolag, kontakt, ort,
+säljare, ordernummer, org.nr, telefon, mejl, adress, postnummer, paket, tjänster,
+anteckningen och skälen) och i kundens nummer i Inkio: fakturor, avtal,
+Inkio-order och ärenden. Det ersätter ordervyns beslut från september
+(ARBETSLOGG, "`?kund=` bär ett ORDER-ID") att sökfältet bara söker på bolagsnamn.
+
+**K27 står kvar, med en annan dörr.** Skälet då var att en träff på tio siffror
+låter någon fiska fram en enskild firmas personnummer ur listan, och att frågan
+hamnade i adressen. Nu gäller:
+
+- **Ett org.nr som är ett personnummer hittas bara på hela numret** (10 eller 12
+  siffror). En del av numret ger ingen träff, så ingen kan gissa sig fram siffra
+  för siffra. Ett bolags org.nr (månadens första siffra 2 eller högre) hittas också
+  på en del av numret.
+- **Sökningen körs i webbläsaren**, över de order RLS redan har gett personen.
+  Frågan lämnar aldrig sidan och loggas inte.
+- **Sex siffror eller fler läggs aldrig i en länk eller en adress** (Kopiera länk,
+  `ndOrdLank`), eftersom de kan vara ett personnummer eller ett telefonnummer.
+
+**Inkios nummer läses ur bevakningens kopia** (`crm_handelse`, 0277), som tjänst
+och bara för organisationsnumren i urvalet. Posterna hör till kunden, så ett
+fakturanummer hittar kundens alla order. Det är samma krets som kundkortets
+tidslinje. En ny faktura går att söka på när bevakningen har läst in den, inom
+fem minuter.
+
+Den globala sökningen (`sokning.ts`) och paletten är orörda. Där är org.nr
+fortfarande inte sökbart.
